@@ -680,6 +680,7 @@ function initialize() {
     // Bind settings events
     saveBtn.addEventListener('click', saveSettings);
     testCookieBtn.addEventListener('click', testWeiboConnection);
+    weiboCookieEl.addEventListener('blur', saveSettings);
     
     // 账号密码复选框启用/禁用逻辑
     allowUserAccountEl.addEventListener('change', () => {
