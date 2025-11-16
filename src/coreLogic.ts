@@ -10,19 +10,20 @@ import { basename } from '@tauri-apps/api/path';
 
 /**
  * 步骤 B: 备份 R2 (并行, 非阻塞性)
+ * @returns {Promise<string | null>} 成功返回 r2Key，失败或未配置返回 null
  * @throws {Error} 非阻塞性错误 "R2 备份失败"
  */
 async function backupToR2(
   fileBytes: Uint8Array, // 接受字节流
   hashName: string, 
   config: R2Config
-) {
+): Promise<string | null> {
   console.log(`[步骤 B] 开始异步备份 ${hashName} 到 R2...`);
   const { accountId, accessKeyId, secretAccessKey, bucketName, path = '' } = config;
 
   if (!accountId || !accessKeyId || !secretAccessKey || !bucketName) {
     console.log("[步骤 B] R2 未配置或配置不全，跳过备份。");
-    return; // 如果未配置，静默跳过
+    return null; // 如果未配置，返回 null
   }
 
   const endpoint = `https://${accountId}.r2.cloudflarestorage.com`;
@@ -44,6 +45,7 @@ async function backupToR2(
       Body: fileBytes, // 使用字节流
     }));
     console.log(`[步骤 B] R2 备份成功: ${key}`);
+    return key; // 返回 R2 Key
   } catch (error) {
     console.error("[步骤 B] R2 备份失败:", error);
     throw new Error("警告：R2 备份失败，请检查配置。");
@@ -116,13 +118,6 @@ export async function handleFileUpload(filePath: string, config: UserConfig) {
     // [步骤 C - 生成链接] (并行)
     const finalLink = generateLink(largeUrl, hashName, config);
 
-    // [步骤 B - 备份R2] (并行 - 异步)
-    backupToR2(fileBytes, hashName, config.r2)
-      .catch(error => {
-        // [非阻塞性错误通知]
-        showNotification(error.message);
-      });
-
     // --- [输出] ---
     await writeToClipboard(finalLink);
     await showNotification("上传成功！", "链接已复制到剪贴板。");
@@ -134,17 +129,33 @@ export async function handleFileUpload(filePath: string, config: UserConfig) {
       const historyStore = new Store('.history.dat');
       const items = await historyStore.get<HistoryItem[]>('uploads') || [];
       
-      // PRD 3.3: "本地文件名"
+      // 获取本地文件名
       const name = await basename(filePath);
       
+      // 从 hashName 提取 PID (例如: 006G4xsfgy1h8pbgtnqirj.jpg -> 006G4xsfgy1h8pbgtnqirj)
+      const weiboPid = hashName.replace(/\.jpg$/, '');
+      
+      // [步骤 B - 备份R2] (并行 - 异步，但等待结果以保存 r2Key)
+      let finalR2Key: string | null = null;
+      try {
+        finalR2Key = await backupToR2(fileBytes, hashName, config.r2);
+      } catch (r2Error: any) {
+        // [非阻塞性错误通知]
+        showNotification(r2Error.message);
+        finalR2Key = null; // 失败时保持为 null
+      }
+      
       const newItem: HistoryItem = { 
+        id: Date.now().toString(), // 使用时间戳作为唯一 ID
         timestamp: Date.now(), 
-        fileName: name, 
-        link: finalLink 
+        localFileName: name,
+        weiboPid: weiboPid,
+        generatedLink: finalLink,
+        r2Key: finalR2Key
       };
 
-      // 添加新记录并保持最近 20 条 (PRD 3.3)
-      const newItems = [newItem, ...items].slice(0, 20);
+      // 添加新记录到最前面，永久保存（不再限制 20 条）
+      const newItems = [newItem, ...items];
       
       await historyStore.set('uploads', newItems);
       await historyStore.save();

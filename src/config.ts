@@ -18,9 +18,12 @@ export interface UserConfig {
 }
 
 export interface HistoryItem {
-  timestamp: number;
-  fileName: string; // 本地文件名
-  link: string;     // 生成的链接
+  id: string;                    // 唯一标识符
+  timestamp: number;             // 上传时间
+  localFileName: string;         // 原始本地文件名
+  weiboPid: string;              // 微博返回的 PID (例如 006G4xsfgy1h8pbgtnqirj)
+  generatedLink: string;         // 最终复制到剪贴板的链接
+  r2Key: string | null;          // 如果 R2 备份成功，存储 R2 上的 Key；否则为 null
 }
 
 // 默认配置
