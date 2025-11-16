@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/settings.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>设置</title>
+</head>
+<body>
+    <div class="container">
+        <h1>设置</h1>
+
+        <div class="form-section">
+            <h2>微博 Cookie (必填)</h2>
+            <p>用于 m.weibo.cn 接口。这是项目成功的关键。</p>
+            <textarea id="weibo-cookie" rows="5" placeholder="在此粘贴从 m.weibo.cn 获取的完整 Cookie 字符串..."></textarea>
+            <button id="test-cookie-btn">测试连接</button>
+            <span id="cookie-status"></span>
+        </div>
+
+        <div class="form-section">
+            <h2>Cloudflare R2 备份 (可选)</h2>
+            <p>步骤 A 成功后，将图片异步备份到 R2。</p>
+            <label>R2 账户 ID (Account ID)</label>
+            <input type="text" id="r2-account-id" />
+
+            <label>R2 访问密钥 ID (Access Key ID)</label>
+            <input type="password" id="r2-key-id" />
+
+            <label>R2 访问密钥 (Secret Access Key)</label>
+            <input type="password" id="r2-secret-key" />
+
+            <label>R2 存储桶名称 (Bucket Name)</label>
+            <input type="text" id="r2-bucket" />
+
+            <label>R2 自定义路径 (Optional Path)</label>
+            <input type="text" id="r2-path" placeholder="例如: blog/images/ (留空则为根目录)" />
+
+            <label>R2 公开访问域名 (Public Domain)</label>
+            <input type="text" id="r2-public-domain" placeholder="例如: https://images.example.com (末尾不要加 /)" />
+        </div>
+
+        <div class="form-section">
+            <h2>输出格式 (PRD 3.2)</h2>
+            <label>百度代理前缀</label>
+            <input type="text" id="baidu-prefix" value="https://image.baidu.com/search/down?thumburl=" />
+            
+            <label>链接格式选项</label>
+            <div class="radio-group">
+                <input type="radio" id="format-baidu" name="output-format" value="baidu" checked>
+                <label for="format-baidu">百度代理链接 (用于发布)</label>
+            </div>
+            <div class="radio-group">
+                <input type="radio" id="format-weibo" name="output-format" value="weibo">
+                <label for="format-weibo">large 微博原始链接 (用于调试)</label>
+            </div>
+            <div class="radio-group">
+                <input type="radio" id="format-r2" name="output-format" value="r2">
+                <label for="format-r2">R2 公开访问链接 (用于切换灾备)</label>
+            </div>
+        </div>
+
+        <div class="footer">
+            <button id="save-btn">保存并关闭</button>
+            <span id="save-status"></span>
+        </div>
+    </div>
+    <script type="module" src="/src/settings.ts"></script>
+</body>
+</html>
+

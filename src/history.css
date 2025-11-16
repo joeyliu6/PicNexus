@@ -1,0 +1,100 @@
+/* src/history.css */
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+}
+
+body, html {
+  margin: 0;
+  padding: 0;
+  background-color: #242424;
+}
+
+.container {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 10px 20px 40px 20px;
+}
+
+h1 {
+  color: #eee;
+  border-bottom: 1px solid #444;
+  padding-bottom: 10px;
+  font-size: 1.5em;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+}
+
+th, td {
+  border-bottom: 1px solid #444;
+  padding: 12px 8px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+th {
+  color: #bbb;
+}
+
+td {
+  color: #ddd;
+  font-size: 0.9em;
+}
+
+/* 限制链接长度，防止换行 */
+td:nth-child(1), td:nth-child(2) {
+  max-width: 250px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+td a {
+  color: #58a6ff;
+  text-decoration: none;
+}
+
+td a:hover {
+  text-decoration: underline;
+}
+
+button {
+  background-color: #3498db;
+  border: none;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+button:hover {
+  background-color: #2980b9;
+}
+
+#clear-history-btn {
+  background-color: #c0392b;
+  margin-top: 20px;
+}
+
+#clear-history-btn:hover {
+  background-color: #a93226;
+}
+
+.footer {
+  text-align: right;
+}
+
+#status-message {
+  margin-left: 10px;
+  font-size: 0.9em;
+  color: #888;
+}
+

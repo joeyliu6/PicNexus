@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/history.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>上传历史记录</title>
+</head>
+<body>
+    <div class="container">
+        <h1>上传历史记录 (最近 20 条)</h1>
+        
+        <table id="history-table">
+            <thead>
+                <tr>
+                    <th>本地文件名</th>
+                    <th>生成链接</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="history-body">
+            </tbody>
+        </table>
+
+        <div class="footer">
+            <button id="clear-history-btn">清空历史</button>
+            <span id="status-message"></span>
+        </div>
+    </div>
+    <script type="module" src="/src/history.ts"></script>
+</body>
+</html>
+

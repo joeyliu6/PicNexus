@@ -1,0 +1,100 @@
+{
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devPath": "http://localhost:1420",
+    "withGlobalTauri": false
+  },
+  "package": {
+    "productName": "WeiboDR-Uploader",
+    "version": "1.0.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "all": false,
+        "open": true
+      },
+      "http": {
+        "all": false,
+        "request": true,
+        "scope": [
+          "https://picupload.weibo.com/*",
+          "https://*.r2.cloudflarestorage.com/*",
+          "https://weibo.com/*",
+          "https://*.weibo.com/*"
+        ]
+      },
+      "notification": {
+        "all": true
+      },
+      "clipboard": {
+        "all": true,
+        "writeText": true
+      },
+      "window": {
+        "all": true
+      },
+      "fs": {
+        "all": true,
+        "scope": ["**"]
+      },
+      "path": {
+        "all": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "com.weibodr.uploader",
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ]
+    },
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "fullscreen": false,
+        "resizable": true,
+        "title": "WeiboDR-Uploader (微博灾备上传器)",
+        "width": 450,
+        "height": 300,
+        "label": "main"
+      },
+      {
+        "width": 600,
+        "height": 750,
+        "resizable": true,
+        "title": "设置",
+        "label": "settings",
+        "url": "/src/settings.html",
+        "visible": false,
+        "decorations": true,
+        "alwaysOnTop": true
+      },
+      {
+        "width": 700,
+        "height": 500,
+        "resizable": true,
+        "title": "上传历史记录",
+        "label": "history",
+        "url": "/src/history.html",
+        "visible": false,
+        "decorations": true,
+        "alwaysOnTop": false
+      }
+    ],
+    "systemTray": {
+      "iconPath": "icons/icon.ico",
+      "iconAsTemplate": true
+    }
+  }
+}
+
