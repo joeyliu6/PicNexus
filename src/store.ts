@@ -3,82 +3,380 @@
 import { readTextFile, writeTextFile, exists, createDir } from '@tauri-apps/api/fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
 
+/**
+ * 自定义错误类，用于存储操作
+ */
+export class StoreError extends Error {
+  constructor(
+    message: string,
+    public readonly operation: 'read' | 'write' | 'clear' | 'init',
+    public readonly key?: string,
+    public readonly originalError?: any
+  ) {
+    super(message);
+    this.name = 'StoreError';
+  }
+}
+
 class SimpleStore {
   private filePath: string;
 
   constructor(filename: string) {
-    this.filePath = filename;
+    if (!filename || typeof filename !== 'string' || filename.trim().length === 0) {
+      throw new StoreError(
+        '文件名不能为空',
+        'init',
+        undefined,
+        new Error('Invalid filename parameter')
+      );
+    }
+    this.filePath = filename.trim();
   }
 
+  /**
+   * 获取数据文件路径
+   * @throws {StoreError} 如果无法获取应用数据目录
+   */
   private async getDataPath(): Promise<string> {
-    const appDir = await appDataDir();
-    const dataPath = await join(appDir, this.filePath);
-    return dataPath;
+    try {
+      const appDir = await appDataDir();
+      if (!appDir) {
+        throw new StoreError(
+          '无法获取应用数据目录',
+          'init',
+          undefined,
+          new Error('appDataDir returned null or undefined')
+        );
+      }
+      const dataPath = await join(appDir, this.filePath);
+      if (!dataPath) {
+        throw new StoreError(
+          '无法构建数据文件路径',
+          'init',
+          undefined,
+          new Error('join returned null or undefined')
+        );
+      }
+      return dataPath;
+    } catch (error) {
+      if (error instanceof StoreError) {
+        throw error;
+      }
+      throw new StoreError(
+        `获取数据路径失败: ${error instanceof Error ? error.message : String(error)}`,
+        'init',
+        undefined,
+        error
+      );
+    }
   }
 
+  /**
+   * 读取存储的数据
+   * @param key 数据键
+   * @returns 数据值，如果不存在或读取失败返回 null
+   * @throws {StoreError} 如果发生严重错误（如权限问题）
+   */
   async get<T>(key: string): Promise<T | null> {
+    // 输入验证
+    if (!key || typeof key !== 'string' || key.trim().length === 0) {
+      console.warn('[Store] 警告: get() 方法接收到无效的 key 参数:', key);
+      return null;
+    }
+
     try {
       const dataPath = await this.getDataPath();
       
       // 检查文件是否存在
-      if (!(await exists(dataPath))) {
+      const fileExists = await exists(dataPath);
+      if (!fileExists) {
+        console.log(`[Store] 数据文件不存在: ${this.filePath}，返回 null`);
         return null;
       }
 
-      const content = await readTextFile(dataPath);
-      const data = JSON.parse(content);
-      return data[key] || null;
+      // 读取文件内容
+      let content: string;
+      try {
+        content = await readTextFile(dataPath);
+      } catch (readError: any) {
+        // 文件读取失败可能是权限问题或文件被占用
+        const errorMsg = readError?.message || String(readError);
+        if (errorMsg.includes('Permission') || errorMsg.includes('permission')) {
+          throw new StoreError(
+            `读取文件权限不足: ${dataPath}`,
+            'read',
+            key,
+            readError
+          );
+        }
+        if (errorMsg.includes('not found') || errorMsg.includes('不存在')) {
+          console.log(`[Store] 文件不存在: ${dataPath}`);
+          return null;
+        }
+        throw new StoreError(
+          `读取文件失败: ${errorMsg}`,
+          'read',
+          key,
+          readError
+        );
+      }
+
+      // 验证文件内容不为空
+      if (!content || content.trim().length === 0) {
+        console.warn(`[Store] 警告: 数据文件为空: ${this.filePath}`);
+        return null;
+      }
+
+      // 解析 JSON
+      let data: Record<string, any>;
+      try {
+        data = JSON.parse(content);
+      } catch (parseError: any) {
+        // JSON 解析失败，文件可能损坏
+        const errorMsg = parseError?.message || String(parseError);
+        console.error(`[Store] JSON 解析失败 (${this.filePath}):`, errorMsg);
+        console.error(`[Store] 文件内容预览 (前200字符):`, content.substring(0, 200));
+        throw new StoreError(
+          `数据文件格式错误（可能已损坏）: ${errorMsg}`,
+          'read',
+          key,
+          parseError
+        );
+      }
+
+      // 验证数据是对象
+      if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+        console.warn(`[Store] 警告: 数据格式不正确，期望对象，实际: ${typeof data}`);
+        return null;
+      }
+
+      const value = data[key];
+      if (value === undefined) {
+        console.log(`[Store] 键 "${key}" 不存在于数据文件中`);
+        return null;
+      }
+
+      return value as T;
     } catch (error) {
-      console.error(`[Store] 读取失败 (${key}):`, error);
-      return null;
+      // 如果是 StoreError，直接抛出
+      if (error instanceof StoreError) {
+        console.error(`[Store] 读取失败 (${key}):`, error.message);
+        throw error;
+      }
+      // 其他未知错误
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error(`[Store] 未知错误 (${key}):`, errorMsg);
+      throw new StoreError(
+        `读取数据时发生未知错误: ${errorMsg}`,
+        'read',
+        key,
+        error
+      );
     }
   }
 
+  /**
+   * 保存数据到存储
+   * @param key 数据键
+   * @param value 数据值
+   * @throws {StoreError} 如果保存失败
+   */
   async set(key: string, value: any): Promise<void> {
+    // 输入验证
+    if (!key || typeof key !== 'string' || key.trim().length === 0) {
+      throw new StoreError(
+        '键名不能为空',
+        'write',
+        key,
+        new Error('Invalid key parameter')
+      );
+    }
+
+    if (value === undefined) {
+      console.warn(`[Store] 警告: 尝试保存 undefined 值到键 "${key}"`);
+    }
+
     try {
       const dataPath = await this.getDataPath();
       const appDir = await appDataDir();
       
       // 确保目录存在
-      await createDir(appDir, { recursive: true });
+      try {
+        await createDir(appDir, { recursive: true });
+      } catch (dirError: any) {
+        const errorMsg = dirError?.message || String(dirError);
+        if (errorMsg.includes('Permission') || errorMsg.includes('permission')) {
+          throw new StoreError(
+            `创建目录权限不足: ${appDir}`,
+            'write',
+            key,
+            dirError
+          );
+        }
+        throw new StoreError(
+          `创建目录失败: ${errorMsg}`,
+          'write',
+          key,
+          dirError
+        );
+      }
 
       // 读取现有数据
       let data: Record<string, any> = {};
-      if (await exists(dataPath)) {
+      const fileExists = await exists(dataPath);
+      if (fileExists) {
         try {
           const content = await readTextFile(dataPath);
-          data = JSON.parse(content);
-        } catch (e) {
-          // 如果文件损坏，使用空对象
-          console.warn('[Store] 文件损坏，重置数据');
+          if (content && content.trim().length > 0) {
+            try {
+              data = JSON.parse(content);
+              // 验证解析后的数据是对象
+              if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+                console.warn('[Store] 警告: 现有数据格式不正确，将重置为空对象');
+                data = {};
+              }
+            } catch (parseError: any) {
+              // 如果文件损坏，使用空对象
+              console.warn(`[Store] 警告: 数据文件损坏 (${this.filePath})，将重置数据`);
+              console.warn(`[Store] 解析错误详情:`, parseError?.message || String(parseError));
+              data = {};
+            }
+          }
+        } catch (readError: any) {
+          // 读取失败，但继续使用空对象（可能是文件被占用或权限问题）
+          const errorMsg = readError?.message || String(readError);
+          if (errorMsg.includes('Permission') || errorMsg.includes('permission')) {
+            throw new StoreError(
+              `读取现有数据权限不足: ${dataPath}`,
+              'write',
+              key,
+              readError
+            );
+          }
+          console.warn(`[Store] 警告: 无法读取现有数据，将创建新文件: ${errorMsg}`);
+          data = {};
         }
       }
 
       // 更新数据
       data[key] = value;
 
+      // 序列化数据
+      let jsonContent: string;
+      try {
+        jsonContent = JSON.stringify(data, null, 2);
+      } catch (stringifyError: any) {
+        throw new StoreError(
+          `序列化数据失败: ${stringifyError?.message || String(stringifyError)}`,
+          'write',
+          key,
+          stringifyError
+        );
+      }
+
       // 写入文件
-      await writeTextFile(dataPath, JSON.stringify(data, null, 2));
+      try {
+        await writeTextFile(dataPath, jsonContent);
+        console.log(`[Store] 成功保存数据到键 "${key}" (${this.filePath})`);
+      } catch (writeError: any) {
+        const errorMsg = writeError?.message || String(writeError);
+        if (errorMsg.includes('Permission') || errorMsg.includes('permission')) {
+          throw new StoreError(
+            `写入文件权限不足: ${dataPath}`,
+            'write',
+            key,
+            writeError
+          );
+        }
+        if (errorMsg.includes('disk') || errorMsg.includes('space') || errorMsg.includes('空间')) {
+          throw new StoreError(
+            `磁盘空间不足，无法保存数据: ${errorMsg}`,
+            'write',
+            key,
+            writeError
+          );
+        }
+        throw new StoreError(
+          `写入文件失败: ${errorMsg}`,
+          'write',
+          key,
+          writeError
+        );
+      }
     } catch (error) {
-      console.error(`[Store] 保存失败 (${key}):`, error);
-      throw error;
+      // 如果是 StoreError，直接抛出
+      if (error instanceof StoreError) {
+        console.error(`[Store] 保存失败 (${key}):`, error.message);
+        throw error;
+      }
+      // 其他未知错误
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error(`[Store] 未知错误 (${key}):`, errorMsg);
+      throw new StoreError(
+        `保存数据时发生未知错误: ${errorMsg}`,
+        'write',
+        key,
+        error
+      );
     }
   }
 
+  /**
+   * 保存数据（兼容性方法）
+   */
   async save(): Promise<void> {
     // 对于简单存储，set 已经保存了，这个方法保持兼容性
     return Promise.resolve();
   }
 
+  /**
+   * 清空所有数据
+   * @throws {StoreError} 如果清空失败
+   */
   async clear(): Promise<void> {
     try {
       const dataPath = await this.getDataPath();
-      if (await exists(dataPath)) {
+      const fileExists = await exists(dataPath);
+      if (!fileExists) {
+        console.log(`[Store] 数据文件不存在，无需清空: ${this.filePath}`);
+        return;
+      }
+
+      try {
         await writeTextFile(dataPath, JSON.stringify({}, null, 2));
+        console.log(`[Store] 成功清空数据文件: ${this.filePath}`);
+      } catch (writeError: any) {
+        const errorMsg = writeError?.message || String(writeError);
+        if (errorMsg.includes('Permission') || errorMsg.includes('permission')) {
+          throw new StoreError(
+            `清空文件权限不足: ${dataPath}`,
+            'clear',
+            undefined,
+            writeError
+          );
+        }
+        throw new StoreError(
+          `清空文件失败: ${errorMsg}`,
+          'clear',
+          undefined,
+          writeError
+        );
       }
     } catch (error) {
-      console.error('[Store] 清空失败:', error);
-      throw error;
+      // 如果是 StoreError，直接抛出
+      if (error instanceof StoreError) {
+        console.error('[Store] 清空失败:', error.message);
+        throw error;
+      }
+      // 其他未知错误
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error('[Store] 清空时发生未知错误:', errorMsg);
+      throw new StoreError(
+        `清空数据时发生未知错误: ${errorMsg}`,
+        'clear',
+        undefined,
+        error
+      );
     }
   }
 }
