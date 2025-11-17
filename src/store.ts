@@ -5,8 +5,15 @@ import { appDataDir, join } from '@tauri-apps/api/path';
 
 /**
  * 自定义错误类，用于存储操作
+ * 提供更详细的错误信息，包括操作类型、键名和原始错误
  */
 export class StoreError extends Error {
+  /**
+   * @param message 错误消息
+   * @param operation 操作类型 ('read' | 'write' | 'clear' | 'init')
+   * @param key 相关的键名（可选）
+   * @param originalError 原始错误对象（可选）
+   */
   constructor(
     message: string,
     public readonly operation: 'read' | 'write' | 'clear' | 'init',
@@ -18,10 +25,22 @@ export class StoreError extends Error {
   }
 }
 
+/**
+ * 简单的键值存储类
+ * 使用 JSON 文件存储数据，提供并发控制和错误处理
+ */
 class SimpleStore {
+  /** 存储文件的路径（相对于应用数据目录） */
   private filePath: string;
+  
+  /** 待处理的写操作队列，用于防止并发写入冲突 */
   private pendingWrites: Map<string, Promise<void>> = new Map();
 
+  /**
+   * 创建存储实例
+   * @param filename 存储文件名（相对于应用数据目录）
+   * @throws {StoreError} 如果文件名无效
+   */
   constructor(filename: string) {
     if (!filename || typeof filename !== 'string' || filename.trim().length === 0) {
       throw new StoreError(
@@ -35,7 +54,10 @@ class SimpleStore {
   }
   
   /**
-   * 等待所有pending写操作完成
+   * 等待所有待处理的写操作完成
+   * 用于防止并发写入冲突
+   * @param excludeKey 要排除的键名（当前正在写入的键）
+   * @private
    */
   private async waitForPendingWrites(excludeKey?: string): Promise<void> {
     const promises = Array.from(this.pendingWrites.entries())
@@ -358,6 +380,8 @@ class SimpleStore {
 
   /**
    * 保存数据（兼容性方法）
+   * 注意：在此实现中，`set()` 方法已经自动保存数据，因此此方法为空操作
+   * 保留此方法是为了与旧 API 兼容
    */
   async save(): Promise<void> {
     // 对于简单存储，set 已经保存了，这个方法保持兼容性
@@ -366,6 +390,7 @@ class SimpleStore {
 
   /**
    * 清空所有数据
+   * 将存储文件重置为空对象
    * @throws {StoreError} 如果清空失败
    */
   async clear(): Promise<void> {
@@ -416,5 +441,9 @@ class SimpleStore {
   }
 }
 
+/**
+ * 导出存储类
+ * 使用别名 `Store` 以保持与旧 API 的兼容性
+ */
 export { SimpleStore as Store };
 
