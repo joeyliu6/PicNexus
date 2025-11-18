@@ -443,7 +443,8 @@ async function syncHistoryToWebDAV(items: HistoryItem[], config: UserConfig): Pr
       const response = await client.put(webdavUrl, Body.text(jsonContent), {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Basic ${auth}`
+          'Authorization': `Basic ${auth}`,
+          'Overwrite': 'T'  // WebDAV 标准：允许覆盖现有文件
         },
         timeout: 10000, // 10秒超时
       });
@@ -454,7 +455,9 @@ async function syncHistoryToWebDAV(items: HistoryItem[], config: UserConfig): Pr
         const status = response.status;
         let errorMsg = `HTTP ${status}`;
         
-        if (status === 401 || status === 403) {
+        if (status === 409) {
+          errorMsg = `文件冲突 (HTTP ${status})：文件已存在且无法覆盖，请检查 WebDAV 服务器设置`;
+        } else if (status === 401 || status === 403) {
           errorMsg = `认证失败 (HTTP ${status})：请检查用户名和密码`;
         } else if (status === 404) {
           errorMsg = `路径不存在 (HTTP ${status})：请检查远程路径配置`;

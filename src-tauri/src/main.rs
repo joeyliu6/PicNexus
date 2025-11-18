@@ -461,7 +461,9 @@ struct R2Config {
     secret_access_key: String,
     #[serde(rename = "bucketName")]
     bucket_name: String,
+    #[allow(dead_code)]
     path: String,
+    #[allow(dead_code)]
     #[serde(rename = "publicDomain")]
     public_domain: String,
 }
@@ -472,6 +474,7 @@ struct WebDAVConfig {
     url: String,
     username: String,
     password: String,
+    #[allow(dead_code)]
     #[serde(rename = "remotePath")]
     remote_path: String,
 }

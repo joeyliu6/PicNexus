@@ -1307,14 +1307,26 @@ async function syncToWebDAV() {
       const response = await client.put(webdavUrl, Body.text(jsonContent), {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Basic ${auth}`
+          'Authorization': `Basic ${auth}`,
+          'Overwrite': 'T'  // WebDAV 标准：允许覆盖现有文件
         }
       });
       if (historyStatusMessageEl) {
         if (response.ok) {
           historyStatusMessageEl.textContent = `✅ 已同步 ${items.length} 条记录到 WebDAV`;
         } else {
-          historyStatusMessageEl.textContent = `❌ 同步失败: HTTP ${response.status}`;
+          const status = response.status;
+          let errorMsg = `❌ 同步失败: HTTP ${status}`;
+          if (status === 409) {
+            errorMsg = '❌ 同步失败: 文件冲突 (HTTP 409)，请检查 WebDAV 服务器设置';
+          } else if (status === 401 || status === 403) {
+            errorMsg = `❌ 同步失败: 认证失败 (HTTP ${status})，请检查用户名和密码`;
+          } else if (status === 404) {
+            errorMsg = `❌ 同步失败: 路径不存在 (HTTP ${status})，请检查远程路径配置`;
+          } else if (status >= 500) {
+            errorMsg = `❌ 同步失败: 服务器错误 (HTTP ${status})，WebDAV 服务器可能暂时不可用`;
+          }
+          historyStatusMessageEl.textContent = errorMsg;
         }
       }
     } catch (err: any) {
