@@ -9,6 +9,19 @@ import { UserConfig, R2Config, HistoryItem, FailedItem } from './config';
 import { Store, StoreError } from './store';
 import { basename } from '@tauri-apps/api/path';
 import { emit } from '@tauri-apps/api/event';
+import { 
+  CookieExpiredError, 
+  InvalidCookieError, 
+  NetworkError, 
+  TimeoutError,
+  FileReadError,
+  R2Error,
+  WebDAVError,
+  convertWeiboError,
+  isRetryableError,
+  isCookieError,
+  isNetworkError
+} from './errors';
 
 /**
  * 上传进度回调类型
@@ -759,24 +772,25 @@ export async function handleFileUpload(filePath: string, config: UserConfig) {
   } catch (error: any) {
     // --- [阻塞性错误处理] ---
     // 捕获 [步骤 A] 的失败
-    const errorMessage = error instanceof WeiboUploadError 
-      ? error.message 
-      : (error?.message || '未知错误');
-    const errorCode = error instanceof WeiboUploadError ? error.code : undefined;
+    
+    // 转换微博上传错误为自定义错误类型
+    const convertedError = error instanceof WeiboUploadError ? convertWeiboError(error) : error;
+    const errorMessage = convertedError?.message || '未知错误';
     
     console.error("[核心流程] 核心流程失败:", {
       message: errorMessage,
-      code: errorCode,
-      error: error
+      errorType: convertedError?.name,
+      error: convertedError
     });
     
-    // Cookie 过期提示
-    const lowerErrorMessage = errorMessage.toLowerCase();
-    if (lowerErrorMessage.includes("cookie") || lowerErrorMessage.includes("认证") || 
-        errorCode === 'COOKIE_EXPIRED' || errorCode === 'COOKIE_ERROR' || 
-        errorCode === 'INVALID_COOKIE' || errorCode === 'EMPTY_COOKIE') {
-      console.log("[Cookie错误] Cookie可能已过期，请重新获取");
-      await showNotification("Cookie错误", "Cookie可能已过期，请重新获取Cookie");
+    // Cookie 错误处理（使用 instanceof 替代魔术字符串）
+    if (isCookieError(convertedError)) {
+      const cookieErrorMessage = convertedError instanceof CookieExpiredError 
+        ? "Cookie已过期，请重新获取Cookie"
+        : "Cookie无效或格式不正确，请检查Cookie配置";
+      
+      console.log("[Cookie错误]", cookieErrorMessage);
+      await showNotification("Cookie错误", cookieErrorMessage);
       
       // 导航到设置页面
       try {
@@ -785,31 +799,14 @@ export async function handleFileUpload(filePath: string, config: UserConfig) {
         console.warn("[Cookie错误] 导航到设置失败:", emitError?.message || String(emitError));
       }
       
-      return { status: 'error', message: "Cookie已过期，请重新获取Cookie" };
+      return { status: 'error', message: cookieErrorMessage };
     }
     
     // v2.1: 失败重试队列逻辑
-    // 判断错误类型：可重试 vs 不可重试
-    const lowerErrorForRetry = errorMessage.toLowerCase();
-    const isRetryable = lowerErrorForRetry.includes("网络错误") || 
-                        lowerErrorForRetry.includes("超时") || 
-                        lowerErrorForRetry.includes("timeout") ||
-                        lowerErrorForRetry.includes("http 状态码: 5") ||
-                        lowerErrorForRetry.includes("network error") ||
-                        lowerErrorForRetry.includes("failed to fetch") ||
-                        lowerErrorForRetry.includes("连接") ||
-                        errorCode === 'NETWORK_ERROR' ||
-                        errorCode === 'TIMEOUT_ERROR';
+    // 使用 isRetryableError 函数判断是否可重试
+    const retryable = isRetryableError(convertedError);
     
-    const isNonRetryable = lowerErrorForRetry.includes("文件读取失败") || 
-                           lowerErrorForRetry.includes("无法解析响应") ||
-                           lowerErrorForRetry.includes("cookie") ||
-                           lowerErrorForRetry.includes("认证") ||
-                           errorCode === 'INVALID_FILE_TYPE' ||
-                           errorCode === 'EMPTY_FILE' ||
-                           errorCode === 'PARSE_ERROR';
-    
-    if (isRetryable && !isNonRetryable) {
+    if (retryable) {
       // 可重试错误：添加到失败队列
       try {
         const retryStore = new Store('.retry.dat');

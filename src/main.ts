@@ -646,17 +646,18 @@ async function loadSettings(): Promise<void> {
   try {
     console.log('[设置] 开始加载设置...');
     
-    // 读取配置
+    // 读取配置（带自动恢复功能）
     let config: UserConfig;
     try {
-      const loadedConfig = await configStore.get<UserConfig>('config');
+      // 如果配置文件损坏，get 方法会自动使用 DEFAULT_CONFIG 恢复
+      const loadedConfig = await configStore.get<UserConfig>('config', DEFAULT_CONFIG);
       config = loadedConfig || DEFAULT_CONFIG;
       console.log('[设置] ✓ 配置加载成功');
     } catch (error) {
       console.error('[设置] 读取配置失败，使用默认配置:', error);
       config = DEFAULT_CONFIG;
       if (saveStatusEl) {
-        saveStatusEl.textContent = '⚠️ 读取配置失败，显示默认值';
+        saveStatusEl.textContent = '⚠️ 读取配置失败，已使用默认值';
       }
     }
   
@@ -905,6 +906,12 @@ async function testR2Connection(): Promise<void> {
       return;
     }
     
+    // 禁用测试按钮，显示加载状态
+    if (testR2Btn) {
+      testR2Btn.disabled = true;
+      testR2Btn.textContent = '连接中...';
+    }
+    
     // 构建 R2 配置
     const r2Config = {
       accountId: r2AccountIdEl?.value.trim() || '',
@@ -916,7 +923,7 @@ async function testR2Connection(): Promise<void> {
     };
     
     // 更新状态
-    r2StatusMessageEl.textContent = '测试中...';
+    r2StatusMessageEl.textContent = '⏳ 测试中...';
     r2StatusMessageEl.style.color = 'orange';
     
     try {
@@ -940,6 +947,12 @@ async function testR2Connection(): Promise<void> {
       r2StatusMessageEl.textContent = `✗ 测试失败: ${errorMsg}`;
       r2StatusMessageEl.style.color = 'red';
     }
+  } finally {
+    // 恢复按钮状态
+    if (testR2Btn) {
+      testR2Btn.disabled = false;
+      testR2Btn.textContent = '测试连接';
+    }
   }
 }
 
@@ -956,6 +969,12 @@ async function testWebDAVConnection(): Promise<void> {
       return;
     }
     
+    // 禁用测试按钮，显示加载状态
+    if (testWebdavBtn) {
+      testWebdavBtn.disabled = true;
+      testWebdavBtn.textContent = '连接中...';
+    }
+    
     // 构建 WebDAV 配置
     const webdavConfig = {
       url: webdavUrlEl?.value.trim() || '',
@@ -965,7 +984,7 @@ async function testWebDAVConnection(): Promise<void> {
     };
     
     // 更新状态
-    webdavStatusMessageEl.textContent = '测试中...';
+    webdavStatusMessageEl.textContent = '⏳ 测试中...';
     webdavStatusMessageEl.style.color = 'orange';
     
     try {
@@ -988,6 +1007,12 @@ async function testWebDAVConnection(): Promise<void> {
     if (webdavStatusMessageEl) {
       webdavStatusMessageEl.textContent = `✗ 测试失败: ${errorMsg}`;
       webdavStatusMessageEl.style.color = 'red';
+    }
+  } finally {
+    // 恢复按钮状态
+    if (testWebdavBtn) {
+      testWebdavBtn.disabled = false;
+      testWebdavBtn.textContent = '测试连接';
     }
   }
 }
@@ -1020,15 +1045,21 @@ async function testWeiboConnection(): Promise<void> {
       return;
     }
   
-    // 更新状态
-    if (cookieStatusEl) {
-      cookieStatusEl.textContent = '⏳ 测试中...';
-      cookieStatusEl.style.color = 'yellow';
-    }
+  // 禁用测试按钮，显示加载状态
+  if (testCookieBtn) {
+    testCookieBtn.disabled = true;
+    testCookieBtn.textContent = '测试中...';
+  }
   
-    try {
-      // 获取 HTTP 客户端
-      const client = await getClient();
+  // 更新状态
+  if (cookieStatusEl) {
+    cookieStatusEl.textContent = '⏳ 测试中...';
+    cookieStatusEl.style.color = 'yellow';
+  }
+
+  try {
+    // 获取 HTTP 客户端
+    const client = await getClient();
       
       // 发送测试请求（带超时保护）
       const response = await client.get<{ code: string }>(
@@ -1114,6 +1145,12 @@ async function testWeiboConnection(): Promise<void> {
     if (cookieStatusEl) {
       cookieStatusEl.textContent = `❌ 测试失败: ${errorMsg}`;
       cookieStatusEl.style.color = 'red';
+    }
+  } finally {
+    // 恢复按钮状态
+    if (testCookieBtn) {
+      testCookieBtn.disabled = false;
+      testCookieBtn.textContent = '测试Cookie';
     }
   }
 }

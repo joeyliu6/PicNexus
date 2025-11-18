@@ -108,12 +108,14 @@ class SimpleStore {
   }
 
   /**
-   * 读取存储的数据
+   * 读取存储的数据，带错误恢复机制
+   * 如果配置文件损坏，自动使用默认配置并创建备份
    * @param key 数据键
+   * @param defaultValue 当文件损坏时使用的默认值（可选）
    * @returns 数据值，如果不存在或读取失败返回 null
    * @throws {StoreError} 如果发生严重错误（如权限问题）
    */
-  async get<T>(key: string): Promise<T | null> {
+  async get<T>(key: string, defaultValue?: T): Promise<T | null> {
     // 输入验证
     if (!key || typeof key !== 'string' || key.trim().length === 0) {
       console.warn('[Store] 警告: get() 方法接收到无效的 key 参数:', key);
@@ -172,6 +174,30 @@ class SimpleStore {
         const errorMsg = parseError?.message || String(parseError);
         console.error(`[Store] JSON 解析失败 (${this.filePath}):`, errorMsg);
         console.error(`[Store] 文件内容预览 (前200字符):`, content.substring(0, 200));
+        
+        // 如果提供了默认值，尝试恢复
+        if (defaultValue !== undefined) {
+          console.warn(`[Store] 文件损坏，尝试使用默认值恢复配置: ${key}`);
+          
+          // 创建损坏文件的备份
+          try {
+            const backupPath = `${dataPath}.corrupted.${Date.now()}`;
+            await writeTextFile(backupPath, content);
+            console.log(`[Store] ✓ 已创建损坏文件的备份: ${backupPath}`);
+          } catch (backupError) {
+            console.warn(`[Store] 创建备份失败:`, backupError);
+          }
+          
+          // 保存默认值到文件
+          try {
+            await this.set(key, defaultValue);
+            console.log(`[Store] ✓ 已使用默认值恢复配置: ${key}`);
+            return defaultValue;
+          } catch (recoverError) {
+            console.error(`[Store] 恢复配置失败:`, recoverError);
+          }
+        }
+        
         throw new StoreError(
           `数据文件格式错误（可能已损坏）: ${errorMsg}`,
           'read',

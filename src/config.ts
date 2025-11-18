@@ -62,3 +62,61 @@ export const DEFAULT_CONFIG: UserConfig = {
   },
 };
 
+/**
+ * 清洗配置对象中的敏感信息，用于日志输出
+ * 将敏感字段替换为 ******，防止日志泄露
+ * 
+ * @param config 用户配置对象
+ * @returns 清洗后的配置对象（深拷贝）
+ */
+export function sanitizeConfig(config: UserConfig): UserConfig {
+  // 深拷贝配置对象，避免修改原对象
+  const sanitized: UserConfig = {
+    ...config,
+    // 清洗 Cookie（只保留前8个和后4个字符）
+    weiboCookie: sanitizeString(config.weiboCookie, 8, 4),
+    // 清洗 R2 配置
+    r2: {
+      ...config.r2,
+      // Access Key ID 和 Secret Access Key 是敏感信息
+      accessKeyId: sanitizeString(config.r2.accessKeyId, 4, 4),
+      secretAccessKey: sanitizeString(config.r2.secretAccessKey, 0, 0), // 完全隐藏
+    },
+    // 清洗 WebDAV 配置
+    webdav: {
+      ...config.webdav,
+      // 密码是敏感信息
+      password: sanitizeString(config.webdav.password, 0, 0), // 完全隐藏
+    },
+  };
+  
+  return sanitized;
+}
+
+/**
+ * 清洗字符串，保留前后部分字符，中间用 ****** 替代
+ * 
+ * @param str 要清洗的字符串
+ * @param prefixLen 保留前缀长度
+ * @param suffixLen 保留后缀长度
+ * @returns 清洗后的字符串
+ */
+function sanitizeString(str: string | undefined, prefixLen: number = 0, suffixLen: number = 0): string {
+  if (!str || str.trim().length === 0) {
+    return '';
+  }
+  
+  const trimmed = str.trim();
+  
+  // 如果字符串太短，直接返回 ******
+  if (trimmed.length <= prefixLen + suffixLen) {
+    return '******';
+  }
+  
+  // 保留前后部分
+  const prefix = prefixLen > 0 ? trimmed.substring(0, prefixLen) : '';
+  const suffix = suffixLen > 0 ? trimmed.substring(trimmed.length - suffixLen) : '';
+  
+  return `${prefix}******${suffix}`;
+}
+

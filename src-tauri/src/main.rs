@@ -24,7 +24,19 @@ use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 type HmacSha256 = Hmac<Sha256>;
 
+/// 全局 HTTP 客户端状态
+/// 使用单例模式复用 HTTP 客户端，提升性能
+struct HttpClient(reqwest::Client);
+
 fn main() {
+    // 创建全局 HTTP 客户端（带连接池配置）
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))  // 60秒超时
+        .connect_timeout(std::time::Duration::from_secs(10))  // 10秒连接超时
+        .pool_idle_timeout(std::time::Duration::from_secs(90))  // 连接池空闲超时
+        .pool_max_idle_per_host(10)  // 每个主机最多保持10个空闲连接
+        .build()
+        .expect("Failed to create HTTP client");
     // 1. 定义原生菜单栏 (PRD 1.1)
     // "文件" 菜单 (或 "应用" 菜单 on macOS)
     let preferences = CustomMenuItem::new("preferences".to_string(), "偏好设置...")
@@ -73,6 +85,7 @@ fn main() {
     let system_tray = SystemTray::new().with_menu(tray_menu);
 
     tauri::Builder::default()
+        .manage(HttpClient(http_client))     // 注册全局 HTTP 客户端
         .invoke_handler(tauri::generate_handler![
             save_cookie_from_login,
             start_cookie_monitoring,
@@ -492,7 +505,10 @@ struct WebDAVConfig {
 
 /// 测试 R2 连接
 #[tauri::command]
-async fn test_r2_connection(config: R2Config) -> Result<String, String> {
+async fn test_r2_connection(
+    config: R2Config,
+    http_client: tauri::State<'_, HttpClient>
+) -> Result<String, String> {
     // 检查空字段
     if config.account_id.is_empty() 
         || config.access_key_id.is_empty() 
@@ -550,14 +566,8 @@ async fn test_r2_connection(config: R2Config) -> Result<String, String> {
         config.access_key_id, credential_scope, signed_headers, signature
     );
     
-    // 发送请求（带超时配置）
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))  // 30秒超时
-        .connect_timeout(std::time::Duration::from_secs(10))  // 10秒连接超时
-        .build()
-        .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
-    
-    match client
+    // 使用全局 HTTP 客户端（已配置超时和连接池）
+    match http_client.0
         .head(&endpoint_url)
         .header("Host", host)
         .header("x-amz-date", datetime_str)
@@ -599,20 +609,22 @@ fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
 
 /// 测试 WebDAV 连接
 #[tauri::command]
-async fn test_webdav_connection(config: WebDAVConfig) -> Result<String, String> {
+async fn test_webdav_connection(
+    config: WebDAVConfig,
+    http_client: tauri::State<'_, HttpClient>
+) -> Result<String, String> {
     // 检查空字段
     if config.url.is_empty() || config.username.is_empty() || config.password.is_empty() {
         return Err("配置不完整: URL、用户名和密码均为必填项。".to_string());
     }
-
-    let client = reqwest::Client::new();
     let auth_header = format!(
         "Basic {}",
         base64::Engine::encode(&base64::engine::general_purpose::STANDARD, format!("{}:{}", config.username, config.password))
     );
 
     // 执行 WebDAV 的 'PROPFIND' 请求 (比 OPTIONS 更可靠)
-    let response = client
+    // 使用全局 HTTP 客户端
+    let response = http_client.0
         .request(reqwest::Method::from_bytes(b"PROPFIND").unwrap(), &config.url)
         .header("Authorization", auth_header)
         .header("Depth", "0") // 只检查根 URL 本身
@@ -651,11 +663,15 @@ async fn test_webdav_connection(config: WebDAVConfig) -> Result<String, String> 
 /// 
 /// # 参数
 /// * `config` - R2 配置
+/// * `http_client` - 全局 HTTP 客户端
 /// 
 /// # 返回
 /// 返回 `Result<Vec<R2Object>, String>`，成功时返回对象列表，失败时返回错误信息
 #[tauri::command]
-async fn list_r2_objects(config: R2Config) -> Result<Vec<R2Object>, String> {
+async fn list_r2_objects(
+    config: R2Config,
+    http_client: tauri::State<'_, HttpClient>
+) -> Result<Vec<R2Object>, String> {
     use quick_xml::events::Event;
     use quick_xml::Reader;
 
@@ -669,15 +685,6 @@ async fn list_r2_objects(config: R2Config) -> Result<Vec<R2Object>, String> {
 
     let mut objects: Vec<R2Object> = Vec::new();
     let mut continuation_token: Option<String> = None;
-    
-    // 创建带超时配置的 HTTP 客户端
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(60))  // 60秒超时（列表操作可能较慢）
-        .connect_timeout(std::time::Duration::from_secs(10))  // 10秒连接超时
-        .pool_idle_timeout(std::time::Duration::from_secs(90))  // 连接池空闲超时
-        .pool_max_idle_per_host(10)  // 每个主机最多保持10个空闲连接
-        .build()
-        .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
 
     loop {
         // 构建请求 URL
@@ -741,8 +748,8 @@ async fn list_r2_objects(config: R2Config) -> Result<Vec<R2Object>, String> {
             config.access_key_id, credential_scope, signed_headers, signature
         );
         
-        // 发送请求
-        let response = client
+        // 使用全局 HTTP 客户端发送请求
+        let response = http_client.0
             .get(&url)
             .header("Host", &host)
             .header("x-amz-date", &datetime_str)
@@ -865,11 +872,16 @@ fn uri_encode_path(path: &str) -> String {
 /// # 参数
 /// * `config` - R2 配置
 /// * `key` - 要删除的对象的 Key
+/// * `http_client` - 全局 HTTP 客户端
 /// 
 /// # 返回
 /// 返回 `Result<String, String>`，成功时返回成功消息，失败时返回错误信息
 #[tauri::command]
-async fn delete_r2_object(config: R2Config, key: String) -> Result<String, String> {
+async fn delete_r2_object(
+    config: R2Config, 
+    key: String,
+    http_client: tauri::State<'_, HttpClient>
+) -> Result<String, String> {
     // 检查配置完整性
     if config.account_id.is_empty() 
         || config.access_key_id.is_empty() 
@@ -944,16 +956,7 @@ async fn delete_r2_object(config: R2Config, key: String) -> Result<String, Strin
         config.access_key_id, credential_scope, signed_headers, signature
     );
     
-    // 发送 DELETE 请求（带超时和重试）
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))  // 30秒超时
-        .connect_timeout(std::time::Duration::from_secs(10))  // 10秒连接超时
-        .pool_idle_timeout(std::time::Duration::from_secs(90))  // 连接池空闲超时
-        .pool_max_idle_per_host(10)  // 每个主机最多保持10个空闲连接
-        .build()
-        .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
-    
-    // 重试机制：最多尝试 3 次
+    // 重试机制：最多尝试 3 次（使用全局 HTTP 客户端）
     let max_retries = 3;
     let mut last_error = String::new();
     
@@ -964,7 +967,8 @@ async fn delete_r2_object(config: R2Config, key: String) -> Result<String, Strin
             tokio::time::sleep(delay).await;
         }
         
-        match client
+        // 使用全局 HTTP 客户端发送 DELETE 请求
+        match http_client.0
             .delete(&url)
             .header("Host", &host)
             .header("x-amz-date", &datetime_str)
