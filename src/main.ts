@@ -1309,14 +1309,49 @@ async function renderHistoryTable(items: HistoryItem[]) {
   
       const tdAction = document.createElement('td');
       const copyBtn = document.createElement('button');
-      copyBtn.textContent = '复制';
+      const copyIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+      const checkIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+      
+      copyBtn.innerHTML = copyIcon;
+      copyBtn.title = '复制链接';
+      copyBtn.style.cursor = 'pointer';
+      copyBtn.style.border = 'none';
+      copyBtn.style.background = 'transparent';
+      copyBtn.style.padding = '4px 8px'; // 调整 padding 以适应图标
+      copyBtn.style.borderRadius = '4px';
+      copyBtn.style.color = 'var(--text-muted)';
+      copyBtn.style.fontSize = '0'; // 避免可能的文字渲染
+      copyBtn.style.transition = 'all 0.2s';
+
+      // Hover 效果
+      copyBtn.onmouseover = () => {
+         // 仅当不是显示❌或✅时变色
+         if (copyBtn.innerHTML === copyIcon) {
+             copyBtn.style.color = 'var(--primary)';
+             copyBtn.style.background = 'rgba(59, 130, 246, 0.1)';
+         }
+      };
+      copyBtn.onmouseout = () => {
+          if (copyBtn.innerHTML === copyIcon) {
+            copyBtn.style.color = 'var(--text-muted)';
+            copyBtn.style.background = 'transparent';
+          }
+      };
+      
       copyBtn.addEventListener('click', async () => {
         try {
           await writeText(item.generatedLink);
-          copyBtn.textContent = '已复制!';
-          setTimeout(() => (copyBtn.textContent = '复制'), 1500);
+          copyBtn.innerHTML = checkIcon;
+          copyBtn.style.color = 'var(--success)';
+          setTimeout(() => {
+            copyBtn.innerHTML = copyIcon;
+            copyBtn.style.color = 'var(--text-muted)';
+            copyBtn.style.background = 'transparent';
+          }, 1500);
         } catch (err) {
-          copyBtn.textContent = '失败!';
+          copyBtn.innerHTML = '❌';
+          copyBtn.style.color = 'var(--error)';
+          copyBtn.style.fontSize = '14px'; // 错误图标需要字号
         }
       });
       tdAction.appendChild(copyBtn);

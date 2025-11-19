@@ -541,11 +541,14 @@ body, html {
 
 #history-view td:nth-child(2), #history-view td:nth-child(3) {
   max-width: 250px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;      /* 允许换行 */
+  word-break: break-all;    /* 在任意字符处换行，适合长 URL */
+  overflow: visible;        /* 显示完整内容 */
+  text-overflow: clip;      /* 不需要省略号 */
   font-family: var(--font-mono);
   color: var(--text-main);
+  font-size: 0.85em;        /* 稍微调小字号适应长链接 */
+  line-height: 1.4;
 }
 
 #history-view td a {
