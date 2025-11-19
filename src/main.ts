@@ -1496,7 +1496,27 @@ async function syncToWebDAV() {
       const { url, username, password, remotePath } = config.webdav;
       const items = await historyStore.get<HistoryItem[]>('uploads') || [];
       const jsonContent = JSON.stringify(items, null, 2);
-      const webdavUrl = url.endsWith('/') ? url + remotePath.substring(1) : url + remotePath;
+      
+      const baseUrl = url.trim();
+      let path = remotePath.trim();
+      
+      // 如果路径以 / 结尾，假设是目录，追加 history.json
+      if (path.endsWith('/')) {
+        path += 'history.json';
+      } else if (!path.toLowerCase().endsWith('.json')) {
+        // 如果没有扩展名，也假设是目录（或者追加 .json）
+        path += '/history.json';
+      }
+
+      let webdavUrl: string;
+      if (baseUrl.endsWith('/') && path.startsWith('/')) {
+        webdavUrl = baseUrl + path.substring(1);
+      } else if (baseUrl.endsWith('/') || path.startsWith('/')) {
+        webdavUrl = baseUrl + path;
+      } else {
+        webdavUrl = baseUrl + '/' + path;
+      }
+
       const auth = btoa(`${username}:${password}`);
       const client = await getClient();
       const response = await client.put(webdavUrl, Body.text(jsonContent), {

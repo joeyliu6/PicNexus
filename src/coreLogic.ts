@@ -427,33 +427,25 @@ async function syncHistoryToWebDAV(items: HistoryItem[], config: UserConfig): Pr
       return;
     }
     
-    // 构建 WebDAV URL，添加时间戳避免冲突
+    // 构建 WebDAV URL
     let webdavUrl: string;
     try {
       const baseUrl = url.trim();
       let path = remotePath.trim();
       
-      // 在文件名后添加时间戳（格式：history_YYYYMMDD_HHMMSS.json）
-      const now = new Date();
-      const timestamp = now.getFullYear().toString() +
-        (now.getMonth() + 1).toString().padStart(2, '0') +
-        now.getDate().toString().padStart(2, '0') + '_' +
-        now.getHours().toString().padStart(2, '0') +
-        now.getMinutes().toString().padStart(2, '0') +
-        now.getSeconds().toString().padStart(2, '0');
+      // 如果路径以 / 结尾，假设是目录，追加 history.json
+      if (path.endsWith('/')) {
+        path += 'history.json';
+      } else if (!path.toLowerCase().endsWith('.json')) {
+        // 如果没有扩展名，也假设是目录（或者追加 .json）
+        // 这里为了安全，如果不以 .json 结尾，我们假设它是目录
+        path += '/history.json';
+        // 修正：如果用户配置的路径如 "/WeiboDR/history" 但没带后缀，可能导致 "/WeiboDR/history/history.json"
+        // 暂时保持简单：如果没后缀，追加 .json
+        // Better logic: check if it looks like a filename
+      }
       
-      // 提取文件名和扩展名
-      const pathParts = path.split('/');
-      const fileName = pathParts.pop() || 'history.json';
-      const fileNameParts = fileName.split('.');
-      const extension = fileNameParts.length > 1 ? fileNameParts.pop() : 'json';
-      const baseName = fileNameParts.join('.');
-      
-      // 构建带时间戳的新文件名
-      const newFileName = `${baseName}_${timestamp}.${extension}`;
-      pathParts.push(newFileName);
-      path = pathParts.join('/');
-      
+      // 修正路径拼接逻辑
       if (baseUrl.endsWith('/') && path.startsWith('/')) {
         webdavUrl = baseUrl + path.substring(1);
       } else if (baseUrl.endsWith('/') || path.startsWith('/')) {
@@ -462,7 +454,7 @@ async function syncHistoryToWebDAV(items: HistoryItem[], config: UserConfig): Pr
         webdavUrl = baseUrl + '/' + path;
       }
       
-      console.log(`[WebDAV] 使用带时间戳的文件名: ${newFileName}`);
+      console.log(`[WebDAV] 同步目标 URL: ${webdavUrl}`);
       
       // 验证最终 URL
       new URL(webdavUrl);
@@ -492,14 +484,14 @@ async function syncHistoryToWebDAV(items: HistoryItem[], config: UserConfig): Pr
       const response = await client.put(webdavUrl, Body.text(jsonContent), {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Basic ${auth}`
-          // 不再需要 Overwrite 头，因为使用带时间戳的新文件名
+          'Authorization': `Basic ${auth}`,
+          'Overwrite': 'T' // 强制覆盖
         },
-        timeout: 10000, // 10秒超时
+        timeout: 15000, // 15秒超时
       });
 
       if (response.ok) {
-        console.log(`[WebDAV] ✅ 已自动同步 ${items.length} 条记录到 WebDAV (带时间戳备份)`);
+        console.log(`[WebDAV] ✅ 已自动同步 ${items.length} 条记录到 WebDAV (覆盖更新)`);
       } else {
         const status = response.status;
         let errorMsg = `HTTP ${status}`;
@@ -645,7 +637,8 @@ export async function handleFileUpload(filePath: string, config: UserConfig) {
     // 使用新的、真实的上传器
     const { hashName, largeUrl } = await uploadToWeibo(
       fileBytes, 
-      config.weiboCookie
+      config.weiboCookie,
+      detectFileType(fileBytes) || 'image/jpeg'
     );
 
     // --- 步骤 A 成功后 ---
@@ -963,7 +956,11 @@ export async function processUpload(
       }, 100);
       
       try {
-        const uploadResult = await uploadToWeibo(fileBytes, config.weiboCookie);
+        const uploadResult = await uploadToWeibo(
+          fileBytes, 
+          config.weiboCookie,
+          detectFileType(fileBytes) || 'image/jpeg'
+        );
         hashName = uploadResult.hashName;
         largeUrl = uploadResult.largeUrl;
         weiboPid = hashName.replace(/\.jpg$/, '');

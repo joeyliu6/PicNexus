@@ -215,10 +215,11 @@ async function delay(ms: number): Promise<void> {
 export async function uploadToWeibo(
   fileBytes: Uint8Array, 
   cookie: string,
+  mimeType: string = "image/jpeg",
   maxRetries: number = 3
 ): Promise<{ hashName: string; largeUrl: string }> {
   
-  console.log(`[步骤 A] 开始上传到微博... (文件大小: ${(fileBytes.length / 1024).toFixed(2)}KB)`);
+  console.log(`[步骤 A] 开始上传到微博... (文件大小: ${(fileBytes.length / 1024).toFixed(2)}KB, 类型: ${mimeType})`);
 
   // 输入验证
   try {
@@ -235,11 +236,6 @@ export async function uploadToWeibo(
       error
     );
   }
-
-  // 1. 确定 MIME 类型 (简单实现，可参考 channel.ts 扩展)
-  // 微博似乎不严格校验，但我们最好提供一个
-  // 暂时硬编码为 jpeg，因为 .png 上传后也会变 .jpg
-  const mimeType = "image/jpeg"; // 简化处理
 
   // 2. 构建 URL (逻辑参考 `channel.ts`)
   let url: string;
