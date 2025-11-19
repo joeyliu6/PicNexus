@@ -1,11 +1,44 @@
 /* Global Styles */
 :root {
+  /* New Palette: Slate/Zinc based (Cool Gray) */
+  --bg-app: #0f172a;       /* Slate 900 - App Background */
+  --bg-sidebar: #020617;   /* Slate 950 - Sidebar Background */
+  --bg-card: #1e293b;      /* Slate 800 - Card/Container Background */
+  --bg-input: #334155;     /* Slate 700 - Input Background */
+
+  /* Borders */
+  --border-subtle: #334155; /* Slate 700 */
+  --border-focus: #3b82f6;  /* Blue 500 */
+
+  /* Brand Colors */
+  --primary: #3b82f6;      /* Blue 500 */
+  --primary-hover: #2563eb; /* Blue 600 */
+  --accent: #38bdf8;       /* Sky 400 */
+
+  /* Status Colors */
+  --success: #10b981;      /* Emerald 500 */
+  --error: #ef4444;        /* Red 500 */
+  --warning: #eab308;      /* Yellow 500 */
+
+  /* Text Colors */
+  --text-main: #f8fafc;    /* Slate 50 */
+  --text-muted: #94a3b8;   /* Slate 400 */
+
+  /* Shadows */
+  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-float: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+  /* Font */
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  
   line-height: 1.5;
   font-weight: 400;
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+
+  color-scheme: dark;
+  color: var(--text-main);
+  background-color: var(--bg-app);
+  
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -19,7 +52,8 @@ body, html {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background-color: #242424;
+  background-color: var(--bg-app);
+  color: var(--text-main);
 }
 
 /* Dashboard Layout */
@@ -31,38 +65,52 @@ body, html {
 
 .sidebar {
   width: 60px;
-  background-color: #1c1c1c;
+  background-color: var(--bg-sidebar);
   display: flex;
   flex-direction: column;
   align-items: center;
   padding-top: 20px;
   flex-shrink: 0;
+  border-right: 1px solid var(--border-subtle);
 }
 
 .nav-btn {
   background: none;
   border: none;
-  color: #888;
-  font-size: 24px;
+  color: var(--text-muted);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  margin-bottom: 20px;
-  transition: color 0.2s;
+  margin-bottom: 15px;
+  transition: all 0.2s;
   position: relative;
+  border-radius: 8px;
+}
+
+.nav-btn svg {
+  width: 24px;
+  height: 24px;
+  stroke-width: 2;
 }
 
 .nav-btn:hover {
-  color: #eee;
+  color: var(--text-main);
+  background-color: rgba(255, 255, 255, 0.05);
 }
 
 .nav-btn.active {
-  color: #3498db;
+  color: var(--primary);
+  background-color: rgba(59, 130, 246, 0.1);
 }
 
 .badge {
   position: absolute;
-  top: -5px;
-  right: -5px;
-  background-color: #e74c3c;
+  top: -2px;
+  right: -2px;
+  background-color: var(--error);
   color: white;
   border-radius: 10px;
   padding: 2px 6px;
@@ -106,40 +154,41 @@ body, html {
 }
 
 #drop-zone-header {
-  border: 2px dashed #555;
+  border: 2px dashed var(--border-subtle);
   border-radius: 12px;
   padding: 30px;
   text-align: center;
   transition: all 0.2s ease;
   cursor: pointer;
-  background-color: #1c1c1c;
+  background-color: var(--bg-card);
   margin-bottom: 20px;
 }
 
 #drop-zone-header:hover,
 #drop-zone-header.drag-over {
-  background-color: #2a2a2a;
-  border-color: #3498db;
+  background-color: rgba(59, 130, 246, 0.05);
+  border-color: var(--primary);
 }
 
 #drop-message p {
   font-size: 1.3em;
   font-weight: 500;
   margin: 0 0 8px 0;
-  color: #eee;
+  color: var(--text-main);
 }
 
 #drop-message span {
   font-size: 0.9em;
-  color: #888;
+  color: var(--text-muted);
 }
 
 /* R2 开关样式 */
 .upload-controls {
   margin-bottom: 20px;
   padding: 15px;
-  background-color: #1c1c1c;
+  background-color: var(--bg-card);
   border-radius: 8px;
+  border: 1px solid var(--border-subtle);
 }
 
 .r2-toggle {
@@ -154,26 +203,29 @@ body, html {
   width: 18px;
   height: 18px;
   cursor: pointer;
+  accent-color: var(--primary);
 }
 
 .r2-toggle span {
-  color: #ccc;
+  color: var(--text-main);
   font-size: 1em;
 }
 
 /* 上传队列容器 */
 #upload-queue-container {
-  background-color: #1c1c1c;
+  background-color: var(--bg-card);
   border-radius: 8px;
   padding: 20px;
   min-height: 300px;
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-card);
 }
 
 #upload-queue-container h3 {
   margin: 0 0 15px 0;
-  color: #eee;
+  color: var(--text-main);
   font-size: 1.2em;
-  border-bottom: 1px solid #444;
+  border-bottom: 1px solid var(--border-subtle);
   padding-bottom: 10px;
 }
 
@@ -192,29 +244,36 @@ body, html {
   font-style: italic;
 }
 
-/* 队列项目样式 */
+/* 队列项目样式 - 优化版 */
 .upload-item {
   display: grid;
   grid-template-columns: 80px 1fr 2fr 120px;
   gap: 15px;
   align-items: center;
-  background-color: #242424;
+  background-color: var(--bg-card);
   padding: 15px;
   border-radius: 8px;
-  border: 1px solid #333;
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-card);
   transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
 }
 
 .upload-item:hover {
-  border-color: #3498db;
+  border-color: var(--primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-float);
 }
 
 .upload-item.upload-success {
-  border-color: #27ae60;
+  border-color: var(--border-subtle);
+  border-left: 4px solid var(--success);
 }
 
 .upload-item.upload-error {
-  border-color: #e74c3c;
+  border-color: var(--border-subtle);
+  border-left: 4px solid var(--error);
 }
 
 /* 预览图列 */
@@ -223,10 +282,11 @@ body, html {
   height: 80px;
   border-radius: 6px;
   overflow: hidden;
-  background-color: #333;
+  background-color: var(--bg-app);
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid var(--border-subtle);
 }
 
 .upload-item .preview img {
@@ -242,13 +302,14 @@ body, html {
 
 .upload-item .preview .error-icon {
   font-size: 32px;
-  color: #e74c3c;
+  color: var(--error);
 }
 
 /* 文件名列 */
 .upload-item .filename {
-  color: #eee;
+  color: var(--text-main);
   font-size: 0.95em;
+  font-family: var(--font-mono);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -269,50 +330,52 @@ body, html {
 }
 
 .progress-row label {
-  color: #aaa;
+  color: var(--text-muted);
   font-size: 0.85em;
 }
 
 .progress-row progress {
   width: 100%;
-  height: 8px;
-  border-radius: 4px;
+  height: 6px;
+  border-radius: 10px;
   border: none;
-  background-color: #333;
+  background-color: var(--bg-input);
+  overflow: hidden;
 }
 
 .progress-row progress::-webkit-progress-bar {
-  background-color: #333;
-  border-radius: 4px;
+  background-color: var(--bg-input);
+  border-radius: 10px;
 }
 
 .progress-row progress::-webkit-progress-value {
-  background-color: #3498db;
-  border-radius: 4px;
+  background: linear-gradient(90deg, var(--primary), #60a5fa);
+  border-radius: 10px;
   transition: width 0.3s;
 }
 
 .progress-row progress::-moz-progress-bar {
-  background-color: #3498db;
-  border-radius: 4px;
+  background: linear-gradient(90deg, var(--primary), #60a5fa);
+  border-radius: 10px;
 }
 
 .progress-row .status {
-  color: #888;
+  color: var(--text-muted);
   font-size: 0.8em;
   text-align: right;
+  font-family: var(--font-mono);
 }
 
 .progress-row .status.success {
-  color: #27ae60;
+  color: var(--success);
 }
 
 .progress-row .status.error {
-  color: #e74c3c;
+  color: var(--error);
 }
 
 .progress-row .status.skipped {
-  color: #888;
+  color: var(--warning);
 }
 
 /* 操作列 */
@@ -323,9 +386,9 @@ body, html {
 }
 
 .upload-item .actions button {
-  background: none;
-  border: 1px solid #555;
-  color: #aaa;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
   padding: 6px 10px;
   border-radius: 4px;
   cursor: pointer;
@@ -334,8 +397,8 @@ body, html {
 }
 
 .upload-item .actions button:hover:not(:disabled) {
-  background-color: #3498db;
-  border-color: #3498db;
+  background-color: var(--primary);
+  border-color: var(--primary);
   color: white;
 }
 
@@ -345,8 +408,8 @@ body, html {
 }
 
 .upload-item .actions button.copied {
-  background-color: #27ae60;
-  border-color: #27ae60;
+  background-color: var(--success);
+  border-color: var(--success);
   color: white;
 }
 
@@ -377,20 +440,20 @@ body, html {
 }
 
 #settings-view h1, #history-view h1 {
-  color: #eee;
-  border-bottom: 1px solid #444;
+  color: var(--text-main);
+  border-bottom: 1px solid var(--border-subtle);
   padding-bottom: 10px;
   font-size: 1.5em;
 }
 
 #settings-view h2 {
-  color: #eee;
+  color: var(--text-main);
   margin-top: 25px;
   margin-bottom: 5px;
 }
 
 #settings-view p, #settings-view label {
-  color: #aaa;
+  color: var(--text-muted);
   font-size: 0.9em;
 }
 
@@ -400,21 +463,21 @@ body, html {
   width: 100%;
   padding: 8px;
   box-sizing: border-box;
-  background-color: #333;
-  border: 1px solid #555;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-subtle);
   border-radius: 4px;
-  color: #eee;
+  color: var(--text-main);
   font-size: 1em;
   margin-top: 5px;
   margin-bottom: 10px;
 }
 
 #settings-view textarea {
-  font-family: inherit;
+  font-family: var(--font-mono);
 }
 
 #settings-view button, #history-view button {
-  background-color: #3498db;
+  background-color: var(--primary);
   border: none;
   color: white;
   padding: 10px 15px;
@@ -425,12 +488,12 @@ body, html {
 }
 
 #settings-view button:hover, #history-view button:hover {
-  background-color: #2980b9;
+  background-color: var(--primary-hover);
 }
 
 #settings-view .footer, #history-view .footer {
   margin-top: 30px;
-  border-top: 1px solid #444;
+  border-top: 1px solid var(--border-subtle);
   padding-top: 20px;
 }
 
@@ -445,7 +508,7 @@ body, html {
 
 #settings-view .radio-group label {
   margin-left: 5px;
-  color: #ccc;
+  color: var(--text-muted);
 }
 
 /* History View Styles */
@@ -456,18 +519,23 @@ body, html {
 }
 
 #history-view th, #history-view td {
-  border-bottom: 1px solid #444;
+  border-bottom: 1px solid var(--border-subtle);
   padding: 12px 8px;
   text-align: left;
   vertical-align: middle;
 }
 
+#history-view tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
 #history-view th {
-  color: #bbb;
+  color: var(--text-muted);
+  font-weight: 600;
 }
 
 #history-view td {
-  color: #ddd;
+  color: var(--text-muted);
   font-size: 0.9em;
 }
 
@@ -476,10 +544,12 @@ body, html {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  color: var(--text-main);
 }
 
 #history-view td a {
-  color: #58a6ff;
+  color: var(--primary);
   text-decoration: none;
 }
 
@@ -488,11 +558,11 @@ body, html {
 }
 
 #history-view #clear-history-btn {
-  background-color: #c0392b;
+  background-color: var(--error);
 }
 
 #history-view #clear-history-btn:hover {
-  background-color: #a93226;
+  background-color: #dc2626;
 }
 
 #history-view .footer {
@@ -502,7 +572,7 @@ body, html {
 #history-view #status-message {
   margin-left: 10px;
   font-size: 0.9em;
-  color: #888;
+  color: var(--text-muted);
 }
 
 #history-view .search-section {
@@ -513,10 +583,10 @@ body, html {
     width: 100%;
     padding: 8px;
     box-sizing: border-box;
-    background-color: #333;
-    border: 1px solid #555;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-subtle);
     border-radius: 4px;
-    color: #eee;
+    color: var(--text-main);
     font-size: 1em;
 }
 
@@ -528,8 +598,8 @@ body, html {
 }
 
 #failed-view h1 {
-  color: #eee;
-  border-bottom: 1px solid #444;
+  color: var(--text-main);
+  border-bottom: 1px solid var(--border-subtle);
   padding-bottom: 10px;
   font-size: 1.5em;
 }
@@ -540,24 +610,33 @@ body, html {
   margin-top: 20px;
 }
 
+#failed-view tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
 #failed-view th, #failed-view td {
-  border-bottom: 1px solid #444;
+  border-bottom: 1px solid var(--border-subtle);
   padding: 12px 8px;
   text-align: left;
   vertical-align: middle;
 }
 
 #failed-view th {
-  color: #bbb;
+  color: var(--text-muted);
 }
 
 #failed-view td {
-  color: #ddd;
+  color: var(--text-muted);
   font-size: 0.9em;
 }
 
+#failed-view td:first-child {
+  font-family: var(--font-mono);
+  color: var(--text-main);
+}
+
 #failed-view button {
-  background-color: #3498db;
+  background-color: var(--primary);
   border: none;
   color: white;
   padding: 8px 12px;
@@ -568,15 +647,15 @@ body, html {
 }
 
 #failed-view button:hover {
-  background-color: #2980b9;
+  background-color: var(--primary-hover);
 }
 
 #failed-view #clear-all-failed-btn {
-  background-color: #c0392b;
+  background-color: var(--error);
 }
 
 #failed-view #clear-all-failed-btn:hover {
-  background-color: #a93226;
+  background-color: #dc2626;
 }
 
 /* === R2 管理视图样式 === */
@@ -586,7 +665,7 @@ body, html {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: #1e1e1e;
+  background-color: var(--bg-app);
   overflow: hidden;
 }
 
@@ -596,15 +675,15 @@ body, html {
   justify-content: space-between;
   align-items: center;
   padding: 20px 30px;
-  background-color: #2a2a2a;
-  border-bottom: 1px solid #3a3a3a;
+  background-color: var(--bg-card);
+  border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 
 .r2-manager-toolbar h1 {
   margin: 0;
   font-size: 1.5em;
-  color: #fff;
+  color: var(--text-main);
 }
 
 .r2-toolbar-controls {
@@ -614,17 +693,17 @@ body, html {
 }
 
 .r2-info-text {
-  color: #aaa;
+  color: var(--text-muted);
   font-size: 0.95em;
 }
 
 .r2-stats-text {
-  color: #888;
+  color: var(--text-muted);
   font-size: 0.9em;
 }
 
 .r2-btn {
-  background-color: #3498db;
+  background-color: var(--primary);
   border: none;
   color: white;
   padding: 10px 20px;
@@ -636,7 +715,7 @@ body, html {
 }
 
 .r2-btn:hover {
-  background-color: #2980b9;
+  background-color: var(--primary-hover);
   transform: translateY(-1px);
 }
 
@@ -645,19 +724,19 @@ body, html {
 }
 
 .r2-btn-primary {
-  background-color: #27ae60;
+  background-color: var(--success);
 }
 
 .r2-btn-primary:hover {
-  background-color: #229954;
+  background-color: #059669; /* Emerald 600 */
 }
 
 .r2-btn-danger {
-  background-color: #e74c3c;
+  background-color: var(--error);
 }
 
 .r2-btn-danger:hover {
-  background-color: #c0392b;
+  background-color: #dc2626; /* Red 600 */
 }
 
 /* 加载状态 */
@@ -667,14 +746,14 @@ body, html {
   align-items: center;
   justify-content: center;
   padding: 60px 20px;
-  color: #aaa;
+  color: var(--text-muted);
 }
 
 .r2-spinner {
   width: 50px;
   height: 50px;
-  border: 4px solid #3a3a3a;
-  border-top-color: #3498db;
+  border: 4px solid var(--border-subtle);
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: r2-spin 1s linear infinite;
   margin-bottom: 20px;
@@ -687,7 +766,7 @@ body, html {
 /* 错误消息 */
 .r2-error-message {
   padding: 20px 30px;
-  background-color: #c0392b;
+  background-color: var(--error);
   color: white;
   text-align: center;
   font-size: 0.95em;
@@ -710,7 +789,7 @@ body, html {
 .r2-empty-message {
   grid-column: 1 / -1;
   text-align: center;
-  color: #888;
+  color: var(--text-muted);
   font-size: 1.2em;
   padding: 60px 20px;
 }
@@ -722,16 +801,18 @@ body, html {
   aspect-ratio: 1 / 1; /* 保持 1:1 方形比例 */
   background-size: cover;
   background-position: center;
-  background-color: #2a2a2a;
+  background-color: var(--bg-card);
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
+  border: 1px solid var(--border-subtle);
 }
 
 .r2-item:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-float);
+  border-color: var(--primary);
 }
 
 /* 网格项覆盖层 */
@@ -765,10 +846,11 @@ body, html {
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
+  font-family: var(--font-mono);
 }
 
 .r2-item-delete-btn {
-  background-color: rgba(231, 76, 60, 0.9);
+  background-color: rgba(239, 68, 68, 0.9); /* Red 500 90% */
   border: none;
   color: white;
   width: 40px;
@@ -781,7 +863,7 @@ body, html {
 }
 
 .r2-item-delete-btn:hover {
-  background-color: #c0392b;
+  background-color: var(--error);
   transform: scale(1.1);
 }
 
@@ -816,15 +898,16 @@ body, html {
 
 .r2-modal-content {
   position: relative;
-  background-color: #2a2a2a;
+  background-color: var(--bg-card);
   border-radius: 12px;
   max-width: 90%;
   max-height: 90%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-float);
   z-index: 1001;
+  border: 1px solid var(--border-subtle);
 }
 
 .r2-modal-close {
@@ -847,7 +930,7 @@ body, html {
 }
 
 .r2-modal-close:hover {
-  background-color: rgba(231, 76, 60, 0.9);
+  background-color: var(--error);
   transform: scale(1.1);
 }
 
@@ -860,8 +943,8 @@ body, html {
 
 .r2-modal-footer {
   padding: 20px 30px;
-  background-color: #1e1e1e;
-  border-top: 1px solid #3a3a3a;
+  background-color: var(--bg-app);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .r2-modal-info {
@@ -870,8 +953,9 @@ body, html {
 
 .r2-modal-info p {
   margin: 5px 0;
-  color: #aaa;
+  color: var(--text-muted);
   font-size: 0.9em;
+  font-family: var(--font-mono);
 }
 
 .r2-modal-actions {
@@ -888,12 +972,12 @@ body, html {
   position: fixed;
   bottom: 30px;
   right: 30px;
-  background-color: #27ae60;
+  background-color: var(--success);
   color: white;
   padding: 15px 25px;
   border-radius: 8px;
   font-size: 0.95em;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-float);
   z-index: 2000;
   opacity: 0;
   transform: translateY(20px);
@@ -906,7 +990,7 @@ body, html {
 }
 
 .r2-toast-error {
-  background-color: #e74c3c;
+  background-color: var(--error);
 }
 
 /* 响应式调整 */
