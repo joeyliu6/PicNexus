@@ -2,10 +2,10 @@
 // R2 存储管理视图逻辑
 
 import { invoke } from '@tauri-apps/api/tauri';
-import { dialog } from '@tauri-apps/api';
 import { writeText } from '@tauri-apps/api/clipboard';
-import { UserConfig, R2Config } from './config';
+import { UserConfig } from './config';
 import { appState } from './main';
+import { showConfirmModal } from './ui/modal';
 
 /**
  * R2 对象接口（与 Rust 结构体匹配）
@@ -23,6 +23,7 @@ export class R2Manager {
   private config: UserConfig;
   private objects: R2Object[] = [];
   private currentModalObject: R2Object | null = null;
+  private selectedKeys: Set<string> = new Set(); // 新增：存储选中项
 
   // DOM 元素
   private gridContainer: HTMLElement;
@@ -38,6 +39,11 @@ export class R2Manager {
   private modalCopyBtn: HTMLButtonElement;
   private modalDeleteBtn: HTMLButtonElement;
   private modalCloseBtn: HTMLButtonElement;
+
+  // 新增 DOM 引用
+  private batchDeleteBtn: HTMLButtonElement;
+  private selectAllCheckbox: HTMLInputElement;
+  private batchCountSpan: HTMLElement;
 
   constructor(config: UserConfig) {
     this.config = config;
@@ -56,6 +62,12 @@ export class R2Manager {
     this.modalCopyBtn = this.getElement('r2-modal-copy-btn') as HTMLButtonElement;
     this.modalDeleteBtn = this.getElement('r2-modal-delete-btn') as HTMLButtonElement;
     this.modalCloseBtn = this.getElement('r2-modal-close-btn') as HTMLButtonElement;
+    
+    // 获取新增的批量操作元素
+    // 注意：这些元素可能在某些版本中不存在，需要容错
+    this.batchDeleteBtn = document.getElementById('r2-batch-delete-btn') as HTMLButtonElement;
+    this.selectAllCheckbox = document.getElementById('r2-select-all') as HTMLInputElement;
+    this.batchCountSpan = document.getElementById('r2-batch-count') as HTMLElement;
 
     this.initEventListeners();
   }
@@ -79,6 +91,8 @@ export class R2Manager {
     this.refreshBtn.addEventListener('click', () => {
       // [v2.6 优化] 用户手动刷新，标记为脏数据
       appState.isR2Dirty = true;
+      this.selectedKeys.clear(); // 刷新时清空选中
+      this.updateBatchUI();
       this.loadObjects();
     });
 
@@ -110,6 +124,21 @@ export class R2Manager {
         this.closeModal();
       }
     });
+
+    // 批量删除按钮
+    if (this.batchDeleteBtn) {
+      this.batchDeleteBtn.addEventListener('click', () => {
+        this.deleteSelectedObjects();
+      });
+    }
+
+    // 全选复选框
+    if (this.selectAllCheckbox) {
+      this.selectAllCheckbox.addEventListener('change', (e) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        this.toggleSelectAll(checked);
+      });
+    }
   }
 
   /**
@@ -136,6 +165,9 @@ export class R2Manager {
       this.showLoading(true);
       this.hideError();
       this.clearGrid();
+      
+      // 禁用批量操作按钮
+      if (this.selectAllCheckbox) this.selectAllCheckbox.disabled = true;
 
       // 更新存储桶信息
       this.bucketInfoEl.textContent = `存储桶: ${this.config.r2.bucketName}`;
@@ -155,6 +187,10 @@ export class R2Manager {
       this.renderGrid();
 
       this.showLoading(false);
+      
+      // 启用批量操作按钮
+      if (this.selectAllCheckbox) this.selectAllCheckbox.disabled = false;
+      
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('[R2管理] 加载对象失败:', error);
@@ -192,6 +228,9 @@ export class R2Manager {
       const item = this.createGridItem(obj);
       this.gridContainer.appendChild(item);
     });
+    
+    // 更新 UI 状态（全选框等）
+    this.updateBatchUI();
   }
 
   /**
@@ -200,6 +239,12 @@ export class R2Manager {
   private createGridItem(obj: R2Object): HTMLElement {
     const item = document.createElement('div');
     item.className = 'r2-item';
+    item.setAttribute('data-key', obj.key);
+
+    // 根据是否被选中添加样式类
+    if (this.selectedKeys.has(obj.key)) {
+      item.classList.add('selected');
+    }
 
     // 1. Image
     const img = document.createElement('img');
@@ -208,17 +253,33 @@ export class R2Manager {
     img.loading = 'lazy';
     img.alt = obj.key;
 
-    // 2. Overlay
+    // 2. Checkbox Container (新增)
+    const checkboxContainer = document.createElement('div');
+    checkboxContainer.className = 'r2-item-checkbox';
+    
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = this.selectedKeys.has(obj.key);
+    
+    // 阻止点击冒泡，防止触发图片预览
+    checkbox.onclick = (e) => {
+      e.stopPropagation();
+      this.toggleSelection(obj.key, checkbox.checked);
+    };
+    
+    checkboxContainer.appendChild(checkbox);
+
+    // 3. Overlay
     const overlay = document.createElement('div');
     overlay.className = 'r2-item-overlay';
 
-    // 2.1 Filename
+    // 3.1 Filename
     const nameSpan = document.createElement('span');
     nameSpan.className = 'r2-item-name';
     nameSpan.textContent = obj.key;
     nameSpan.title = obj.key;
 
-    // 2.2 Delete Button
+    // 3.2 Delete Button
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'r2-item-delete';
     deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
@@ -230,17 +291,167 @@ export class R2Manager {
       this.deleteObject(obj);
     };
 
-    item.onclick = () => {
-      this.openModal(obj);
-    };
-
     // Assemble
     overlay.appendChild(nameSpan);
     overlay.appendChild(deleteBtn);
     item.appendChild(img);
+    item.appendChild(checkboxContainer); // Add Checkbox
     item.appendChild(overlay);
+    
+    // 修改 item 点击事件：支持 Ctrl/Cmd 切换选中
+    item.onclick = (e) => {
+        if (e.ctrlKey || e.metaKey) {
+          // Ctrl/Cmd + 点击 -> 切换选中
+          const isSelected = !this.selectedKeys.has(obj.key);
+          checkbox.checked = isSelected;
+          this.toggleSelection(obj.key, isSelected);
+        } else {
+          // 普通点击 -> 预览
+          this.openModal(obj);
+        }
+    };
 
     return item;
+  }
+  
+  /**
+   * 切换单个选中状态
+   */
+  private toggleSelection(key: string, selected: boolean): void {
+    if (selected) {
+      this.selectedKeys.add(key);
+    } else {
+      this.selectedKeys.delete(key);
+    }
+    this.updateBatchUI(); // 更新 UI 状态
+    this.refreshGridItemStyle(key, selected); // 仅更新该项样式
+  }
+  
+  /**
+   * 刷新单个网格项的样式（无需重绘整个网格）
+   */
+  private refreshGridItemStyle(key: string, selected: boolean): void {
+      const item = this.gridContainer.querySelector(`.r2-item[data-key="${CSS.escape(key)}"]`);
+      if (item) {
+          if (selected) {
+              item.classList.add('selected');
+          } else {
+              item.classList.remove('selected');
+          }
+          
+          // 同时更新内部复选框状态 (如果是通过 Ctrl 点击触发的)
+          const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement;
+          if (checkbox) {
+              checkbox.checked = selected;
+          }
+      }
+  }
+
+  /**
+   * 更新批量操作 UI（按钮显隐、全选框状态）
+   */
+  private updateBatchUI(): void {
+    const count = this.selectedKeys.size;
+
+    if (this.batchDeleteBtn && this.batchCountSpan) {
+      this.batchDeleteBtn.style.display = count > 0 ? 'inline-flex' : 'none';
+      this.batchCountSpan.textContent = `(${count})`;
+    }
+    
+    // 更新全选框状态
+    if (this.selectAllCheckbox) {
+      this.selectAllCheckbox.checked = count > 0 && count === this.objects.length;
+      this.selectAllCheckbox.indeterminate = count > 0 && count < this.objects.length;
+    }
+  }
+
+  /**
+   * 全选/反选逻辑
+   */
+  private toggleSelectAll(selected: boolean): void {
+    if (selected) {
+      this.objects.forEach(obj => this.selectedKeys.add(obj.key));
+    } else {
+      this.selectedKeys.clear();
+    }
+    this.renderGrid(); // 全选建议重绘网格，因为所有项都要变
+    this.updateBatchUI();
+  }
+
+  /**
+   * 批量删除选中项
+   */
+  private async deleteSelectedObjects(): Promise<void> {
+    const count = this.selectedKeys.size;
+    if (count === 0) return;
+
+    // 使用自定义模态框
+    const confirmed = await showConfirmModal(
+      `您确定要永久删除选中的 ${count} 个文件吗？\n\n此操作不可撤销。`,
+      '确认批量删除'
+    );
+
+    if (!confirmed) return;
+
+    console.log(`[R2管理] 开始批量删除 ${count} 个对象`);
+    
+    // 显示加载中
+    this.showLoading(true); 
+
+    const keysToDelete = Array.from(this.selectedKeys);
+    let successCount = 0;
+    let failCount = 0;
+    
+    // 更新状态文本显示进度
+    if (this.errorMessageEl) {
+        this.errorMessageEl.style.display = 'block';
+        this.errorMessageEl.style.backgroundColor = 'var(--bg-card)'; // 临时用作进度条背景
+        this.errorMessageEl.style.color = 'var(--text-primary)';
+        this.errorMessageEl.textContent = `正在删除... (0/${count})`;
+    }
+
+    // 简单的并发控制（例如每次 5 个）
+    const batchSize = 5;
+    for (let i = 0; i < keysToDelete.length; i += batchSize) {
+      const batch = keysToDelete.slice(i, i + batchSize);
+      await Promise.all(batch.map(async (key) => {
+        try {
+          await invoke('delete_r2_object', {
+            config: this.config.r2,
+            key: key,
+          });
+          successCount++;
+        } catch (error) {
+          console.error(`删除失败 ${key}:`, error);
+          failCount++;
+        }
+      }));
+      
+      // 更新进度
+      if (this.errorMessageEl) {
+          this.errorMessageEl.textContent = `正在删除... (${Math.min(i + batchSize, count)}/${count})`;
+      }
+    }
+
+    // 完成后处理
+    this.selectedKeys.clear();
+    this.updateBatchUI();
+    
+    // 重新加载列表
+    await this.loadObjects();
+    
+    // 恢复错误消息框样式
+    if (this.errorMessageEl) {
+        this.errorMessageEl.style.backgroundColor = '';
+        this.errorMessageEl.style.color = '';
+        this.errorMessageEl.style.display = 'none';
+    }
+    
+    if (failCount > 0) {
+      this.showTemporaryMessage(`删除完成: ${successCount} 成功, ${failCount} 失败`, 'error');
+    } else {
+      this.showTemporaryMessage(`成功删除 ${successCount} 个文件`);
+    }
   }
 
   /**
@@ -303,10 +514,10 @@ export class R2Manager {
    */
   private async deleteObject(obj: R2Object): Promise<void> {
     try {
-      // 确认对话框
-      const confirmed = await dialog.confirm(
+      // 确认对话框 (使用新的模态框)
+      const confirmed = await showConfirmModal(
         `您确定要从 R2 永久删除 "${obj.key}" 吗？\n\n此操作不可撤销。`,
-        { title: '确认删除', type: 'warning' }
+        '确认删除'
       );
 
       if (!confirmed) {
@@ -325,6 +536,12 @@ export class R2Manager {
 
       // 从列表中移除
       this.objects = this.objects.filter((o) => o.key !== obj.key);
+      
+      // 如果该对象被选中，也移除选中状态
+      if (this.selectedKeys.has(obj.key)) {
+          this.selectedKeys.delete(obj.key);
+          this.updateBatchUI();
+      }
 
       // 重新渲染网格
       this.renderGrid();
@@ -407,4 +624,3 @@ export class R2Manager {
     return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
   }
 }
-

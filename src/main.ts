@@ -14,6 +14,7 @@ import { getClient, ResponseType, Body } from '@tauri-apps/api/http';
 import { WebviewWindow, appWindow } from '@tauri-apps/api/window';
 import { UploadQueueManager } from './uploadQueue';
 import { R2Manager } from './r2-manager';
+import { showConfirmModal } from './ui/modal';
 
 // --- GLOBAL ERROR HANDLERS ---
 window.addEventListener('error', (event) => {
@@ -1173,80 +1174,8 @@ async function testWeiboConnection(): Promise<void> {
 let allHistoryItems: HistoryItem[] = [];
 
 /**
- * 显示自定义确认模态框
- * @param message 确认消息
- * @param title 标题 (可选)
- * @returns Promise<boolean> 用户点击确定返回 true，取消返回 false
- */
-function showConfirmModal(message: string, title: string = '确认'): Promise<boolean> {
-  return new Promise((resolve) => {
-    const modal = document.getElementById('confirm-modal');
-    const titleEl = document.getElementById('confirm-modal-title');
-    const messageEl = document.getElementById('confirm-modal-message');
-    const okBtn = document.getElementById('confirm-modal-ok');
-    const cancelBtn = document.getElementById('confirm-modal-cancel');
-    const closeBtn = document.getElementById('confirm-modal-close');
-
-    if (!modal || !titleEl || !messageEl || !okBtn || !cancelBtn || !closeBtn) {
-      console.error('[模态框] 找不到模态框元素');
-      // Fallback to native dialog if elements are missing
-      dialog.ask(message, { title, type: 'warning' }).then(resolve);
-      return;
-    }
-
-    titleEl.textContent = title;
-    messageEl.textContent = message;
-    modal.style.display = 'flex';
-    
-    // Focus OK button for accessibility
-    okBtn.focus();
-
-    const cleanup = () => {
-      okBtn.removeEventListener('click', onOk);
-      cancelBtn.removeEventListener('click', onCancel);
-      closeBtn.removeEventListener('click', onCancel);
-      modal.removeEventListener('click', onOverlayClick);
-      window.removeEventListener('keydown', onEscKey);
-    };
-
-    const onOk = () => {
-      cleanup();
-      modal.style.display = 'none';
-      resolve(true);
-    };
-
-    const onCancel = () => {
-      cleanup();
-      modal.style.display = 'none';
-      resolve(false);
-    };
-
-    const onOverlayClick = (e: MouseEvent) => {
-        // Close when clicking on the overlay background
-        // e.target is the element that triggered the event (the overlay div if clicked directly)
-        // .modal container is the flex container, clicking outside content hits it
-        const target = e.target as HTMLElement;
-        if (target.classList.contains('modal-overlay') || target.id === 'confirm-modal') {
-            onCancel();
-        }
-    };
-    
-    const onEscKey = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-            onCancel();
-        }
-    };
-
-    okBtn.addEventListener('click', onOk);
-    cancelBtn.addEventListener('click', onCancel);
-    closeBtn.addEventListener('click', onCancel);
-    modal.addEventListener('click', onOverlayClick);
-    window.addEventListener('keydown', onEscKey);
-  });
-}
-
-/**
  * 删除单条历史记录
+
  * @param itemId 历史记录项的唯一 ID
  */
 async function deleteHistoryItem(itemId: string): Promise<void> {

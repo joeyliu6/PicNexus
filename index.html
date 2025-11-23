@@ -229,6 +229,15 @@
                 R2 存储管理
               </h1>
               <div class="r2-toolbar-controls">
+                <label class="r2-select-all" style="display: flex; align-items: center; gap: 6px; font-size: 14px; margin-right: 10px; cursor: pointer;">
+                  <input type="checkbox" id="r2-select-all" />
+                  <span style="color: var(--text-secondary);">全选</span>
+                </label>
+
+                <button id="r2-batch-delete-btn" class="r2-btn r2-btn-danger" style="display: none; margin-right: 10px;">
+                  批量删除 <span id="r2-batch-count">(0)</span>
+                </button>
+
                 <span id="r2-bucket-info" class="r2-info-text"></span>
                 <span id="r2-stats-info" class="r2-stats-text"></span>
                 <button id="r2-refresh-btn" class="r2-btn">

@@ -187,3 +187,10 @@ async fn example_command(param: String) -> Result<String, String> {
 - 遵循最小权限原则
 - 保护用户隐私数据
 
+新 UI 必须使用 Vue 组件: 不再接受新的 document.createElement 代码。
+
+错误处理: 所有 Rust 命令必须返回 Result<T, String>，前端必须捕获并显示中文提示。
+
+样式: 尽量使用 src/style.css 中的 CSS 变量（如 var(--primary)）保持主题一致。
+
+图标: 使用 SVG 字符串或 Iconify，避免引入位图资源。

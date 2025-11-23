@@ -1083,6 +1083,50 @@ body, html {
   background: #ff3b30;
 }
 
+/* R2 网格项选中样式 */
+.r2-item.selected {
+  box-shadow: 0 0 0 3px var(--primary); /* 选中时显示蓝色边框 */
+  transform: translateY(-2px);
+}
+
+/* 复选框容器 */
+.r2-item-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  opacity: 0; /* 默认隐藏 */
+  transition: opacity 0.2s ease;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 4px;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 鼠标悬停或选中时显示复选框 */
+.r2-item:hover .r2-item-checkbox,
+.r2-item.selected .r2-item-checkbox {
+  opacity: 1;
+}
+
+/* 复选框样式优化 */
+.r2-item-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+/* 批量删除按钮样式调整 */
+#r2-batch-delete-btn {
+  font-size: 13px;
+  padding: 6px 12px;
+  animation: fade-in 0.2s ease-out;
+}
+
 /* Modals and Toasts remain largely the same */
 .r2-modal {
   position: fixed;
