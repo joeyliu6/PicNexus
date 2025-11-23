@@ -44,7 +44,8 @@ export class UploadQueueManager {
     
     const item: QueueItem = {
       id,
-      fileName, // Vue component doesn't need filePath strictly but we can keep it if we modify QueueItem interface
+      fileName,
+      filePath,
       uploadToR2,
       weiboProgress: 0,
       r2Progress: 0,
@@ -144,5 +145,46 @@ export class UploadQueueManager {
    */
   getQueueSize(): number {
     return this.vm.count();
+  }
+
+  /**
+   * 获取队列项
+   */
+  getItem(itemId: string): QueueItem | undefined {
+    return this.vm.getItem(itemId);
+  }
+
+  /**
+   * 重置队列项状态（用于重试）
+   */
+  resetItemForRetry(itemId: string): void {
+    const item = this.vm.getItem(itemId);
+    if (!item) {
+      console.warn(`[UploadQueue] 重试失败: 找不到队列项 ${itemId}`);
+      return;
+    }
+
+    // 重置状态
+    this.vm.updateItem(itemId, {
+      status: 'pending',
+      weiboProgress: 0,
+      r2Progress: 0,
+      weiboStatus: '等待中...',
+      r2Status: item.uploadToR2 ? '等待中...' : '已跳过',
+      weiboLink: undefined,
+      r2Link: undefined,
+      baiduLink: undefined,
+      weiboPid: undefined,
+      errorMessage: undefined,
+    });
+  }
+
+  /**
+   * 设置重试回调
+   */
+  setRetryCallback(callback: (itemId: string) => void): void {
+    if (this.vm && typeof this.vm.setRetryCallback === 'function') {
+      this.vm.setRetryCallback(callback);
+    }
   }
 }

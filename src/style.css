@@ -138,10 +138,16 @@ body, html {
   transition: background-color 0.2s;
 }
 
-.titlebar-button img {
+.titlebar-button img,
+.titlebar-button svg {
   width: 16px;
   height: 16px;
   filter: invert(0.8); /* Light grey for dark theme */
+}
+
+.titlebar-button svg {
+  stroke: currentColor;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .titlebar-button:hover {
@@ -152,8 +158,10 @@ body, html {
   background-color: #e81123;
 }
 
-.titlebar-button.close:hover img {
+.titlebar-button.close:hover img,
+.titlebar-button.close:hover svg {
   filter: invert(1); /* Pure white */
+  color: white;
 }
 
 /* Dashboard Layout */

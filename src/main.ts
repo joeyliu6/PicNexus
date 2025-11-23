@@ -378,6 +378,52 @@ async function initializeUpload(): Promise<void> {
       uploadQueueManager = new UploadQueueManager('upload-queue-list');
       console.log('[上传] 队列管理器初始化成功');
       
+      // 设置重试回调
+      uploadQueueManager.setRetryCallback(async (itemId: string) => {
+        try {
+          if (!uploadQueueManager) {
+            console.error('[重试] 上传队列管理器未初始化');
+            return;
+          }
+
+          const item = uploadQueueManager.getItem(itemId);
+          if (!item) {
+            console.error(`[重试] 找不到队列项: ${itemId}`);
+            return;
+          }
+
+          // 获取当前配置
+          let config: UserConfig | null = null;
+          try {
+            config = await configStore.get<UserConfig>('config');
+          } catch (error) {
+            console.error('[重试] 读取配置失败:', error);
+            await dialog.message('读取配置失败，无法重试', { title: '错误', type: 'error' });
+            return;
+          }
+
+          if (!config || !config.weiboCookie || config.weiboCookie.trim().length === 0) {
+            await dialog.message('请先在设置中配置微博 Cookie！', { title: '配置缺失', type: 'warning' });
+            navigateTo('settings');
+            return;
+          }
+
+          // 重置队列项状态
+          uploadQueueManager.resetItemForRetry(itemId);
+
+          // 创建进度回调
+          const onProgress = uploadQueueManager.createProgressCallback(itemId);
+
+          // 重新上传
+          console.log(`[重试] 开始重试上传: ${item.fileName}`);
+          await processUpload(item.filePath, config, { uploadToR2: item.uploadToR2 }, onProgress);
+        } catch (error) {
+          console.error('[重试] 重试失败:', error);
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          await dialog.message(`重试失败: ${errorMsg}`, { title: '错误', type: 'error' });
+        }
+      });
+      
       // 处理文件上传的核心函数
       const handleFiles = async (filePaths: string[]) => {
         try {
