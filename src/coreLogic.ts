@@ -29,7 +29,7 @@ export type UploadProgressCallback = (progress: {
  * @param config R2 配置
  * @returns 配置是否完整
  */
-function validateR2Config(config: R2Config): { valid: boolean; missingFields: string[] } {
+export function validateR2Config(config: R2Config): { valid: boolean; missingFields: string[] } {
   const missingFields: string[] = [];
   
   if (!config.accountId || config.accountId.trim().length === 0) {
@@ -865,67 +865,113 @@ export async function processUpload(
     let r2Link: string | null = null;
     
     if (options.uploadToR2) {
-      // 等待文件读取完成（如果之前已启动并行读取）
-      if (fileReadPromise) {
-        try {
-          fileBytes = await fileReadPromise;
-          if (fileBytes) {
-            console.log('[processUpload] 文件读取完成，准备上传到 R2');
-          }
-        } catch (e) {
-          console.error("[processUpload] 等待文件读取失败:", e);
-        }
-      }
-      
-      // 如果并行读取失败，尝试再次读取（降级方案）
-      if (!fileBytes) {
+      // 首先验证 R2 配置是否完整
+      const r2Validation = validateR2Config(config.r2 || {});
+      if (!r2Validation.valid) {
+        const missingFields = r2Validation.missingFields.join('、');
+        const errorMsg = `R2 配置不完整，缺少：${missingFields}。请先在设置中配置 R2。`;
+        console.error('[processUpload] R2 配置验证失败:', errorMsg);
+        // R2 配置错误时，标记 R2 部分失败，但不中断整个上传流程
+        // 微博上传已成功，所以只标记 R2 部分失败
+        onProgress({
+          type: 'r2_progress',
+          payload: 0
+        });
+        // 发送错误通知，但继续完成上传流程
+        onProgress({ 
+          type: 'error', 
+          payload: `R2 上传失败: ${errorMsg}` 
+        });
+        await showNotification("R2 配置错误", errorMsg);
+        // 跳过 R2 上传，继续完成后续步骤（生成链接、保存历史记录等）
+      } else {
+        // R2 配置完整，继续上传流程
+        
+        // 等待文件读取完成（如果之前已启动并行读取）
+        if (fileReadPromise) {
           try {
-            console.log('[processUpload] 并行读取未完成，重新读取文件...');
-            fileBytes = await readBinaryFile(filePath);
-          } catch (e) {
-            console.error("[processUpload] 读取文件失败 (R2):", e);
-          }
-      }
-
-      if (fileBytes) {
-        try {
-            console.log('[processUpload] 步骤 2: 开始上传到 R2...');
-            
-            // 使用真实的 R2 上传进度
-            finalR2Key = await backupToR2(
-                fileBytes, 
-                hashName, 
-                config.r2,
-                60000, // 超时时间
-                (percent) => {
-                    // 将 0-100 的进度转发给队列管理器
-                    onProgress({ type: 'r2_progress', payload: percent });
-                }
-            );
-            
-            if (finalR2Key) {
-                
-                // 生成 R2 公开链接
-                const publicDomain = config.r2?.publicDomain;
-                if (publicDomain && publicDomain.trim() && publicDomain.startsWith('http')) {
-                    const domain = publicDomain.endsWith('/') ? publicDomain.slice(0, -1) : publicDomain;
-                    r2Link = `${domain}/${finalR2Key}`;
-                }
-                
-                onProgress({
-                    type: 'r2_success',
-                    payload: { key: finalR2Key, r2Link }
-                });
-                
-                console.log(`[processUpload] ✓ R2 上传成功: ${finalR2Key}`);
-            } else {
-                console.log('[processUpload] R2 未配置，跳过上传');
+            fileBytes = await fileReadPromise;
+            if (fileBytes) {
+              console.log('[processUpload] 文件读取完成，准备上传到 R2');
             }
+          } catch (e) {
+            console.error("[processUpload] 等待文件读取失败:", e);
+          }
+        }
+        
+        // 如果并行读取失败，尝试再次读取（降级方案）
+        if (!fileBytes) {
+            try {
+              console.log('[processUpload] 并行读取未完成，重新读取文件...');
+              fileBytes = await readBinaryFile(filePath);
+            } catch (e) {
+              console.error("[processUpload] 读取文件失败 (R2):", e);
+            }
+        }
 
-        } catch (r2Error: any) {
-             const r2ErrorMsg = r2Error?.message || String(r2Error);
-             console.warn('[processUpload] R2 上传失败:', r2ErrorMsg);
-             await showNotification("R2 备份失败", r2ErrorMsg);
+        if (fileBytes) {
+          try {
+              console.log('[processUpload] 步骤 2: 开始上传到 R2...');
+              
+              // 使用真实的 R2 上传进度
+              finalR2Key = await backupToR2(
+                  fileBytes, 
+                  hashName, 
+                  config.r2,
+                  60000, // 超时时间
+                  (percent) => {
+                      // 将 0-100 的进度转发给队列管理器
+                      onProgress({ type: 'r2_progress', payload: percent });
+                  }
+              );
+              
+              if (finalR2Key) {
+                  
+                  // 生成 R2 公开链接
+                  const publicDomain = config.r2?.publicDomain;
+                  if (publicDomain && publicDomain.trim() && publicDomain.startsWith('http')) {
+                      const domain = publicDomain.endsWith('/') ? publicDomain.slice(0, -1) : publicDomain;
+                      r2Link = `${domain}/${finalR2Key}`;
+                  }
+                  
+                  onProgress({
+                      type: 'r2_success',
+                      payload: { key: finalR2Key, r2Link }
+                  });
+                  
+                  console.log(`[processUpload] ✓ R2 上传成功: ${finalR2Key}`);
+              } else {
+                  // 这种情况不应该发生，因为我们已经验证了配置
+                  const errorMsg = 'R2 上传失败：配置验证通过但上传返回 null';
+                  console.error('[processUpload]', errorMsg);
+                  onProgress({ 
+                    type: 'error', 
+                    payload: errorMsg 
+                  });
+              }
+
+          } catch (r2Error: any) {
+               const r2ErrorMsg = r2Error?.message || String(r2Error);
+               console.error('[processUpload] R2 上传失败:', r2ErrorMsg);
+               // R2 上传失败时，标记为错误但继续完成流程
+               onProgress({ 
+                 type: 'error', 
+                 payload: `R2 上传失败: ${r2ErrorMsg}` 
+               });
+               // 更新 R2 状态为失败
+               onProgress({
+                 type: 'r2_progress',
+                 payload: 0
+               });
+               await showNotification("R2 备份失败", r2ErrorMsg);
+          }
+        } else {
+          const errorMsg = 'R2 上传失败：无法读取文件';
+          console.error('[processUpload]', errorMsg);
+          onProgress({ 
+            type: 'error', 
+            payload: errorMsg 
+          });
         }
       }
     }

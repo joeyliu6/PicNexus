@@ -169,6 +169,10 @@ fn main() {
             
             #[cfg(any(windows, target_os = "macos"))]
             set_shadow(&window, true).unwrap();
+            
+            // 注意：窗口显示由前端代码控制（在 DOMContentLoaded 后调用 appWindow.show()）
+            // 这样可以确保 HTML/CSS 完全加载后再显示窗口，避免白色闪烁
+            
             Ok(())
         })
         .on_menu_event(|event| {            // 5. 处理菜单栏事件

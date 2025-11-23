@@ -5,7 +5,7 @@ import { dialog } from '@tauri-apps/api';
 
 import { Store } from './store';
 import { UserConfig, HistoryItem, DEFAULT_CONFIG } from './config';
-import { processUpload } from './coreLogic';
+import { processUpload, validateR2Config } from './coreLogic';
 import { writeText } from '@tauri-apps/api/clipboard';
 import { save } from '@tauri-apps/api/dialog';
 import { writeTextFile } from '@tauri-apps/api/fs';
@@ -448,7 +448,26 @@ async function initializeUpload(): Promise<void> {
           console.log(`[上传] 有效文件: ${valid.length}个，无效文件: ${invalid.length}个`);
           
           // 获取R2上传选项
-          const uploadToR2 = uploadR2Toggle?.checked ?? false;
+          let uploadToR2 = uploadR2Toggle?.checked ?? false;
+          
+          // 检查R2配置：如果用户勾选了R2上传但R2未配置，提示用户并自动取消勾选
+          if (uploadToR2) {
+            const r2Validation = validateR2Config(config.r2 || {});
+            if (!r2Validation.valid) {
+              const missingFields = r2Validation.missingFields.join('、');
+              await dialog.message(
+                `R2 配置不完整，缺少：${missingFields}。\n\n请先在设置中配置 R2，或取消勾选"同时备份到 Cloudflare R2"。`,
+                { title: 'R2 配置缺失', type: 'warning' }
+              );
+              // 自动取消勾选复选框
+              if (uploadR2Toggle) {
+                uploadR2Toggle.checked = false;
+              }
+              uploadToR2 = false;
+              console.log('[上传] R2 未配置，已自动取消勾选 R2 上传选项');
+            }
+          }
+          
           console.log(`[上传] R2上传选项: ${uploadToR2 ? '启用' : '禁用'}`);
           
           // 并发处理上传队列
@@ -1784,13 +1803,35 @@ function initialize(): void {
 }
 
 // 当 DOM 加载完成时初始化应用
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   try {
     console.log('[DOMContentLoaded] DOM 加载完成，开始初始化...');
     initialize();
+    
+    // ✅ 窗口显示控制：等待应用初始化完成后再显示窗口
+    // 可选：稍微延迟几十毫秒，确保 CSS 渲染也完全就绪（解决部分微弱的闪烁）
+    setTimeout(async () => {
+      try {
+        // 显式调用显示窗口
+        await appWindow.show();
+        // 显式将窗口置顶（防止启动时在后台）
+        await appWindow.setFocus();
+        console.log('[App] 窗口启动并显示');
+      } catch (e) {
+        console.error('[App] 显示窗口失败:', e);
+      }
+    }, 50); // 50ms 的延迟通常人眼无感，但能确保渲染稳定
   } catch (error) {
     console.error('[DOMContentLoaded] 初始化失败:', error);
     const errorMsg = error instanceof Error ? error.message : String(error);
     alert(`应用初始化失败: ${errorMsg}\n\n请刷新页面或联系开发者。`);
+    
+    // 即使初始化失败，也尝试显示窗口，让用户看到错误信息
+    try {
+      await appWindow.show();
+      await appWindow.setFocus();
+    } catch (e) {
+      console.error('[App] 显示窗口失败:', e);
+    }
   }
 });

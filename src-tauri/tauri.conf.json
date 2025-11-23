@@ -105,6 +105,7 @@
         "minHeight": 600,
         "center": true,
         "decorations": false,
+        "visible": false,
         "label": "main"
       }
     ],
