@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:build": "tauri build",
+    "tauri:build:portable": "tauri build --bundles portable"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.490.0",

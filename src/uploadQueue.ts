@@ -6,8 +6,26 @@
 
 import { createApp, App } from 'vue';
 import UploadQueueVue from './components/UploadQueue.vue';
-import type { QueueItem } from './components/UploadQueue.vue';
 import { appState } from './main';
+
+// 定义 QueueItem 类型（与 UploadQueue.vue 中的定义保持一致）
+export interface QueueItem {
+  id: string;
+  fileName: string;
+  filePath: string;
+  uploadToR2: boolean;
+  weiboProgress: number;
+  r2Progress: number;
+  weiboStatus: string;
+  r2Status: string;
+  weiboPid?: string;
+  weiboLink?: string;
+  r2Link?: string;
+  baiduLink?: string;
+  status: 'pending' | 'uploading' | 'success' | 'error';
+  errorMessage?: string;
+  thumbUrl?: string;
+}
 
 /**
  * 上传进度回调类型

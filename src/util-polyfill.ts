@@ -7,7 +7,7 @@ const debuglog = (() => {
   };
 })();
 
-const inspect = (obj: any, options?: any): string => {
+const inspect = (obj: any, _options?: any): string => {
   try {
     return JSON.stringify(obj, null, 2);
   } catch (e) {
