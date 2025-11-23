@@ -800,11 +800,15 @@ body, html {
 }
 
 #history-view #clear-history-btn {
-  background-color: var(--error);
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: var(--error);
 }
 
 #history-view #clear-history-btn:hover {
-  background-color: #dc2626;
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.5);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
 }
 
 #history-view .footer {
