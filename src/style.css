@@ -974,14 +974,11 @@ body, html {
 
 #r2-grid-container {
   display: grid;
-  /* Core: Auto calculation, min 140px (from 160px), max stretch */
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  /* 核心魔法：列宽至少 160px，空间够自动加列，空间不够自动减列 */
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   
-  /* Gap using clamp */
-  gap: clamp(10px, 2vw, 20px);
-  
-  padding: 20px;
-  padding-bottom: 80px;
+  gap: 16px;
+  padding: 16px;
   overflow-y: auto;
   height: 100%;
   flex-grow: 1;

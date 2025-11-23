@@ -104,6 +104,59 @@ fn main() {
         .system_tray(system_tray)            // 4. 添加系统托盘
         .setup(|app| {
             let window = app.get_window("main").unwrap();
+            
+            // --- 🏆 最佳适配方案逻辑 Start ---
+            if let Ok(Some(monitor)) = window.current_monitor() {
+                let screen_size = monitor.size();
+                let sw = screen_size.width;
+                let sh = screen_size.height;
+
+                eprintln!("[Display] 检测到屏幕尺寸: {}x{}", sw, sh);
+
+                // Tier 1: 4K / 2K 大屏 (宽度大于 1920 或 高度大于 1200)
+                // 策略：给用户最豪华的体验 -> 1600x1200
+                if sw > 1920 || sh > 1200 {
+                    if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
+                        width: 1600,
+                        height: 1200,
+                    })) {
+                        eprintln!("[Display] 设置窗口大小失败: {:?}", e);
+                    } else {
+                        eprintln!("[Display] 已设置为 Tier 1: 1600x1200");
+                        if let Err(e) = window.center() {
+                            eprintln!("[Display] 居中窗口失败: {:?}", e);
+                        }
+                    }
+                } 
+                // Tier 2: 标准 1080P (宽度在 1366~1920 之间)
+                // 策略：给一个舒适的默认值，不遮挡任务栏 -> 1280x900
+                else if sw >= 1366 && sh >= 900 {
+                    if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
+                        width: 1280,
+                        height: 900,
+                    })) {
+                        eprintln!("[Display] 设置窗口大小失败: {:?}", e);
+                    } else {
+                        eprintln!("[Display] 已设置为 Tier 2: 1280x900");
+                        if let Err(e) = window.center() {
+                            eprintln!("[Display] 居中窗口失败: {:?}", e);
+                        }
+                    }
+                }
+                // Tier 3: 小屏幕 (如 MacBook Air 13寸 / 老式笔记本)
+                // 策略：直接最大化，让用户看清楚
+                else {
+                    if let Err(e) = window.maximize() {
+                        eprintln!("[Display] 最大化窗口失败: {:?}", e);
+                    } else {
+                        eprintln!("[Display] 已设置为 Tier 3: 最大化");
+                    }
+                }
+            } else {
+                eprintln!("[Display] 无法获取显示器信息，使用默认窗口大小");
+            }
+            // --- 🏆 最佳适配方案逻辑 End ---
+            
             #[cfg(any(windows, target_os = "macos"))]
             set_shadow(&window, true).unwrap();
             Ok(())

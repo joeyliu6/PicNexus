@@ -99,10 +99,11 @@
         "fullscreen": false,
         "resizable": true,
         "title": "WeiboDR-Uploader (微博灾备上传器)",
-        "width": 800,
-        "height": 600,
-        "minWidth": 640,
-        "minHeight": 480,
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1024,
+        "minHeight": 768,
+        "center": true,
         "decorations": false,
         "label": "main"
       }
