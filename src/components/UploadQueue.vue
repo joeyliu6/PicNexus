@@ -75,7 +75,10 @@ defineExpose({
       <div class="preview">
         <img v-if="item.thumbUrl" :src="item.thumbUrl" :alt="item.fileName" class="thumb-img" onerror="this.style.display='none'">
         <span v-else-if="item.status === 'error'" class="error-icon">⚠️</span>
-        <span v-else class="loading-icon">⏳</span>
+        <svg v-else class="loading-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-opacity="0.2"/>
+          <path d="M12 2 A10 10 0 0 1 22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+        </svg>
       </div>
 
       <!-- Filename Column -->
@@ -183,6 +186,18 @@ defineExpose({
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+.loading-icon {
+    width: 24px;
+    height: 24px;
+    color: var(--primary);
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
 .filename {

@@ -439,7 +439,9 @@ body, html {
 
 .upload-item .preview .loading-icon {
   animation: spin 1s linear infinite;
-  font-size: 24px;
+  width: 24px;
+  height: 24px;
+  color: var(--primary);
 }
 
 .upload-item .preview .error-icon {
