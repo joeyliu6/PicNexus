@@ -889,6 +889,16 @@ export async function processUpload(
     // fileBytes 延迟读取
     let fileBytes: Uint8Array | null = null;
 
+    // 如果启用 R2，在微博上传的同时并行读取文件，避免微博上传完成后的停顿
+    let fileReadPromise: Promise<Uint8Array | null> | null = null;
+    if (options.uploadToR2) {
+      console.log('[processUpload] 并行读取文件（为 R2 上传做准备）...');
+      fileReadPromise = readBinaryFile(filePath).catch((e) => {
+        console.error("[processUpload] 读取文件失败 (R2):", e);
+        return null;
+      });
+    }
+
     // 步骤 1: 上传微博
     let hashName: string;
     let largeUrl: string;
@@ -935,9 +945,22 @@ export async function processUpload(
     let r2Link: string | null = null;
     
     if (options.uploadToR2) {
-      // 确保文件已读取
+      // 等待文件读取完成（如果之前已启动并行读取）
+      if (fileReadPromise) {
+        try {
+          fileBytes = await fileReadPromise;
+          if (fileBytes) {
+            console.log('[processUpload] 文件读取完成，准备上传到 R2');
+          }
+        } catch (e) {
+          console.error("[processUpload] 等待文件读取失败:", e);
+        }
+      }
+      
+      // 如果并行读取失败，尝试再次读取（降级方案）
       if (!fileBytes) {
           try {
+            console.log('[processUpload] 并行读取未完成，重新读取文件...');
             fileBytes = await readBinaryFile(filePath);
           } catch (e) {
             console.error("[processUpload] 读取文件失败 (R2):", e);
