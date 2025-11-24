@@ -1,8 +1,9 @@
 /* Global Styles */
 :root {
   /* New Palette: Slate/Zinc based (Cool Gray) */
-  --bg-app: #0f172a;       /* Slate 900 - App Background */
-  --bg-sidebar: #020617;   /* Slate 950 - Sidebar Background */
+  --bg-app: #0f172a;       /* Slate 900 - App Background (主内容区，最浅) */
+  --bg-sidebar: #0a0f1a;   /* 侧边栏背景色（第二深） */
+  --bg-titlebar: #020617;  /* 顶栏背景色（最深） */
   --bg-card: #1e293b;      /* Slate 800 - Card/Container Background */
   --bg-input: #334155;     /* Slate 700 - Input Background */
 
@@ -101,7 +102,8 @@ body, html {
 /* Titlebar Styles */
 #titlebar {
   height: 32px; /* Standard Windows titlebar height */
-  background: var(--bg-sidebar); /* Match sidebar for immersive look */
+  background: var(--bg-titlebar); /* 顶栏最深，形成顶部深色条 */
+  border-bottom: 1px solid rgba(51, 65, 85, 0.4); /* 底部边框，与主内容区分离 */
   user-select: none;
   display: flex;
   justify-content: space-between;
@@ -178,12 +180,12 @@ body, html {
 /* 2.2 侧边栏 (#sidebar) */
 .sidebar {
   width: 200px; /* Fixed width */
-  background-color: var(--bg-sidebar);
+  background-color: var(--bg-sidebar); /* 第二深的颜色，介于顶栏和主内容区之间 */
   display: flex;
   flex-direction: column;
   padding-top: 20px;
   flex-shrink: 0; /* Prevent compression */
-  border-right: 1px solid var(--border-subtle);
+  border-right: 1px solid rgba(51, 65, 85, 0.4); /* 右侧边框，与主内容区分离 */
   
   /* Typography */
   font-size: var(--text-sm);
