@@ -746,9 +746,98 @@ body, html {
   padding-top: 20px;
 }
 
-#save-status, #cookie-status {
+/* =========================================
+   通用状态消息样式（内联状态消息）
+   ========================================= */
+
+#save-status, 
+#cookie-status,
+#r2-status-message,
+#webdav-status-message,
+#history-view #status-message {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  
   margin-left: 10px;
-  font-size: 0.9em;
+  padding: 6px 12px;
+  
+  /* 半透明背景 + 磨砂玻璃效果 */
+  background: rgba(51, 65, 85, 0.2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  
+  /* 边框和圆角 */
+  border: 1px solid rgba(51, 65, 85, 0.3);
+  border-radius: 6px;
+  
+  /* 文字样式 */
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  
+  /* 动画 */
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: status-message-fade-in 0.3s ease-out;
+}
+
+/* 状态消息淡入动画 */
+@keyframes status-message-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 成功状态 */
+#save-status[style*="lightgreen"],
+#cookie-status[style*="lightgreen"],
+#r2-status-message[style*="lightgreen"],
+#webdav-status-message[style*="lightgreen"],
+#save-status.success,
+#cookie-status.success,
+#r2-status-message.success,
+#webdav-status-message.success {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+  color: var(--success) !important;
+  border-left: 2px solid var(--success);
+}
+
+/* 错误状态 */
+#save-status[style*="red"],
+#cookie-status[style*="red"],
+#r2-status-message[style*="red"],
+#webdav-status-message[style*="red"],
+#save-status.error,
+#cookie-status.error,
+#r2-status-message.error,
+#webdav-status-message.error {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: var(--error) !important;
+  border-left: 2px solid var(--error);
+}
+
+/* 警告/加载中状态 */
+#save-status[style*="orange"],
+#save-status[style*="yellow"],
+#cookie-status[style*="orange"],
+#cookie-status[style*="yellow"],
+#r2-status-message[style*="orange"],
+#webdav-status-message[style*="orange"],
+#save-status.warning,
+#cookie-status.warning,
+#r2-status-message.warning,
+#webdav-status-message.warning {
+  background: rgba(234, 179, 8, 0.15) !important;
+  border-color: rgba(234, 179, 8, 0.3) !important;
+  color: var(--warning) !important;
+  border-left: 2px solid var(--warning);
 }
 
 #settings-view .radio-group {
@@ -1186,14 +1275,61 @@ body, html {
   to { transform: rotate(360deg); }
 }
 
-.r2-error-message {
-  padding: 20px 30px;
-  background-color: var(--error);
-  color: white;
-  text-align: center;
-  font-size: 0.95em;
+/* =========================================
+   通用错误消息样式（现代化、半透明、主题匹配）
+   ========================================= */
+
+.r2-error-message,
+.error-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  
+  padding: 16px 24px;
   margin: 20px;
-  border-radius: 6px;
+  
+  /* 半透明背景 + 磨砂玻璃效果 */
+  background: rgba(239, 68, 68, 0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  
+  /* 边框 */
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-left: 3px solid var(--error);
+  border-radius: 8px;
+  
+  /* 文字样式 */
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-align: center;
+  line-height: var(--leading-normal);
+  
+  /* 动画效果 */
+  animation: error-message-fade-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 错误消息淡入动画 */
+@keyframes error-message-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 错误消息图标（可选） */
+.r2-error-message::before,
+.error-message::before {
+  content: '⚠️';
+  font-size: 18px;
+  flex-shrink: 0;
+  opacity: 0.9;
 }
 
 /* =========================================
