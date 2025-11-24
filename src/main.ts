@@ -13,7 +13,7 @@ import { getClient, ResponseType, Body } from '@tauri-apps/api/http';
 import { WebviewWindow, appWindow } from '@tauri-apps/api/window';
 import { UploadQueueManager } from './uploadQueue';
 import { R2Manager } from './r2-manager';
-import { showConfirmModal } from './ui/modal';
+import { showConfirmModal, showAlertModal } from './ui/modal';
 
 // --- GLOBAL ERROR HANDLERS ---
 window.addEventListener('error', (event) => {
@@ -173,9 +173,9 @@ async function filterValidFiles(filePaths: string[]): Promise<{ valid: string[];
   if (invalid.length > 0) {
     for (const invalidPath of invalid) {
       const fileName = invalidPath.split(/[/\\]/).pop() || invalidPath;
-      await dialog.message(
+      await showAlertModal(
         `文件类型不支持：${fileName} 不是一个有效的图片格式，已自动跳过。`,
-        { title: '文件类型验证', type: 'warning' }
+        '文件类型验证'
       );
       console.warn(`[文件验证] 跳过不支持的文件类型: ${fileName}`);
     }
@@ -382,12 +382,12 @@ async function initializeUpload(): Promise<void> {
             config = await configStore.get<UserConfig>('config');
           } catch (error) {
             console.error('[重试] 读取配置失败:', error);
-            await dialog.message('读取配置失败，无法重试', { title: '错误', type: 'error' });
+            await showAlertModal('读取配置失败，无法重试', '配置错误', 'error');
             return;
           }
 
           if (!config || !config.weiboCookie || config.weiboCookie.trim().length === 0) {
-            await dialog.message('请先在设置中配置微博 Cookie！', { title: '配置缺失', type: 'warning' });
+            await showAlertModal('请先在设置中配置微博 Cookie！', '配置缺失');
             navigateTo('settings');
             return;
           }
@@ -404,7 +404,7 @@ async function initializeUpload(): Promise<void> {
         } catch (error) {
           console.error('[重试] 重试失败:', error);
           const errorMsg = error instanceof Error ? error.message : String(error);
-          await dialog.message(`重试失败: ${errorMsg}`, { title: '错误', type: 'error' });
+          await showAlertModal(`重试失败: ${errorMsg}`, '重试错误', 'error');
         }
       });
       
@@ -425,14 +425,14 @@ async function initializeUpload(): Promise<void> {
             config = await configStore.get<UserConfig>('config');
           } catch (error) {
             console.error('[上传] 读取配置失败:', error);
-            await dialog.message('读取配置失败，请重试', { title: '错误', type: 'error' });
+            await showAlertModal('读取配置失败，请重试', '配置错误', 'error');
             return;
           }
           
           // 验证配置
           if (!config || !config.weiboCookie || config.weiboCookie.trim().length === 0) {
             console.warn('[上传] 未配置微博 Cookie');
-            await dialog.message('请先在设置中配置微博 Cookie！', { title: '配置缺失', type: 'warning' });
+            await showAlertModal('请先在设置中配置微博 Cookie！', '配置缺失');
             navigateTo('settings');
             return;
           }
@@ -455,9 +455,9 @@ async function initializeUpload(): Promise<void> {
             const r2Validation = validateR2Config(config.r2 || {});
             if (!r2Validation.valid) {
               const missingFields = r2Validation.missingFields.join('、');
-              await dialog.message(
+              await showAlertModal(
                 `R2 配置不完整，缺少：${missingFields}。\n\n请先在设置中配置 R2，或取消勾选"同时备份到 Cloudflare R2"。`,
-                { title: 'R2 配置缺失', type: 'warning' }
+                'R2 配置缺失'
               );
               // 自动取消勾选复选框
               if (uploadR2Toggle) {
@@ -477,7 +477,7 @@ async function initializeUpload(): Promise<void> {
         } catch (error) {
           console.error('[上传] 文件处理失败:', error);
           const errorMsg = error instanceof Error ? error.message : String(error);
-          await dialog.message(`上传失败: ${errorMsg}`, { title: '错误', type: 'error' });
+          await showAlertModal(`上传失败: ${errorMsg}`, '上传错误', 'error');
         }
       };
       
