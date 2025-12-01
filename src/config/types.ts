@@ -106,11 +106,11 @@ export type OutputFormat = 'direct' | 'baidu-proxy';
 
 /**
  * 用户配置（新架构）
- * 支持多图床服务
+ * 支持多图床并行上传
  */
 export interface UserConfig {
-  /** 主力图床服务（用户选择的默认上传目标） */
-  primaryService: ServiceType;
+  /** 用户启用的图床服务列表（上传窗口勾选的图床） */
+  enabledServices: ServiceType[];
 
   /** 各图床服务的配置 */
   services: {
@@ -125,17 +125,8 @@ export interface UserConfig {
   /** 输出格式 */
   outputFormat: OutputFormat;
 
-  /** 百度代理前缀（仅当 primaryService='weibo' && outputFormat='baidu-proxy' 时使用） */
+  /** 百度代理前缀（仅用于微博图床） */
   baiduPrefix?: string;
-
-  /** 备份配置（可选） */
-  backup?: {
-    /** 是否启用自动备份 */
-    enabled: boolean;
-
-    /** 备份到哪些服务（支持多个备份目标） */
-    services: ServiceType[];
-  };
 
   /** WebDAV 配置（用于历史记录同步） */
   webdav?: WebDAVConfig;
@@ -143,7 +134,7 @@ export interface UserConfig {
 
 /**
  * 历史记录项（新架构）
- * 支持多图床和备份信息
+ * 支持多图床并行上传结果
  */
 export interface HistoryItem {
   /** 唯一标识符 */
@@ -155,28 +146,28 @@ export interface HistoryItem {
   /** 原始本地文件名 */
   localFileName: string;
 
-  /** 主力上传服务 */
+  /** 原始文件路径（用于重试上传） */
+  filePath?: string;
+
+  /** 主力图床（第一个上传成功的图床） */
   primaryService: ServiceType;
 
-  /** 主力上传结果 */
-  primaryResult: UploadResult;
-
-  /** 备份上传结果（可选） */
-  backups?: Array<{
-    /** 备份服务 ID */
+  /** 所有图床的上传结果 */
+  results: Array<{
+    /** 图床服务 ID */
     serviceId: ServiceType;
 
-    /** 备份上传结果 */
+    /** 上传结果 */
     result?: UploadResult;
 
-    /** 备份状态 */
+    /** 上传状态 */
     status: 'success' | 'failed';
 
     /** 错误信息（如果失败） */
     error?: string;
   }>;
 
-  /** 最终生成的链接（已处理百度前缀等） */
+  /** 最终生成的链接（基于主力图床） */
   generatedLink: string;
 }
 
@@ -184,7 +175,7 @@ export interface HistoryItem {
  * 默认配置
  */
 export const DEFAULT_CONFIG: UserConfig = {
-  primaryService: 'weibo',
+  enabledServices: ['tcl'],  // 默认启用 TCL 图床（开箱即用）
   services: {
     weibo: {
       enabled: true,
@@ -198,14 +189,13 @@ export const DEFAULT_CONFIG: UserConfig = {
       bucketName: '',
       path: '',
       publicDomain: ''
+    },
+    tcl: {
+      enabled: true  // TCL 图床默认启用，无需额外配置
     }
   },
   outputFormat: 'baidu-proxy',
   baiduPrefix: 'https://image.baidu.com/search/down?thumburl=',
-  backup: {
-    enabled: false,
-    services: []
-  },
   webdav: {
     url: '',
     username: '',

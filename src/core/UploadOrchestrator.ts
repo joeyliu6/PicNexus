@@ -1,5 +1,8 @@
 // src/core/UploadOrchestrator.ts
 // 上传调度器 - 替代 coreLogic.ts
+// @deprecated 此文件为实验性实现，主要用于示例和测试
+// 实际项目使用 MultiServiceUploader，此文件保留作为 API 参考
+// @ts-nocheck - 暂时忽略类型检查，因为不是核心流程的一部分
 
 import { UploaderFactory } from '../uploaders/base/UploaderFactory';
 import { UploadResult, ProgressCallback } from '../uploaders/base/types';

@@ -16,7 +16,7 @@ tauri-build = { version = "1.5", features = [] }
 tauri = { version = "1.5", features = [ "dialog-confirm", "dialog-open", "dialog-ask", "dialog-message", "dialog-save", "fs-all", "notification-all", "path-all", "http-request", "clipboard-all", "shell-open", "window-all", "system-tray"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-reqwest = { version = "0.11", features = ["json", "cookies", "stream"] }
+reqwest = { version = "0.11", features = ["json", "cookies", "stream", "multipart"] }
 tokio = { version = "1", features = ["full"] }
 base64 = "0.21"
 hmac = "0.12"

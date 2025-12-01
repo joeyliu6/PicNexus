@@ -3,7 +3,7 @@
 
 import { invoke } from '@tauri-apps/api/tauri';
 import { writeText } from '@tauri-apps/api/clipboard';
-import { UserConfig } from './config';
+import { UserConfig } from './config/types';
 import { appState } from './main';
 import { showConfirmModal } from './ui/modal';
 
@@ -192,11 +192,11 @@ export class R2Manager {
       if (this.selectAllCheckbox) this.selectAllCheckbox.disabled = true;
 
       // 更新存储桶信息
-      this.bucketInfoEl.textContent = `存储桶: ${this.config.r2.bucketName}`;
+      this.bucketInfoEl.textContent = `存储桶: ${this.config.services.r2?.bucketName}`;
 
       // 调用 Rust 命令获取对象列表
       this.objects = await invoke<R2Object[]>('list_r2_objects', {
-        config: this.config.r2,
+        config: this.config.services.r2,
       });
 
       console.log(`[R2管理] 成功获取 ${this.objects.length} 个对象`);
@@ -225,13 +225,13 @@ export class R2Manager {
    * 检查 R2 是否已配置
    */
   private isR2Configured(): boolean {
-    const r2 = this.config.r2;
+    const r2 = this.config.services?.r2;
     return !!(
-      r2.accountId &&
-      r2.accessKeyId &&
-      r2.secretAccessKey &&
-      r2.bucketName &&
-      r2.publicDomain
+      r2?.accountId &&
+      r2?.accessKeyId &&
+      r2?.secretAccessKey &&
+      r2?.bucketName &&
+      r2?.publicDomain
     );
   }
 
@@ -535,7 +535,7 @@ export class R2Manager {
       await Promise.all(batch.map(async (key) => {
         try {
           await invoke('delete_r2_object', {
-            config: this.config.r2,
+            config: this.config.services.r2,
             key: key,
           });
           successCount++;
@@ -576,7 +576,7 @@ export class R2Manager {
    * 构建图片 URL
    */
   private buildImageUrl(key: string): string {
-    const domain = this.config.r2.publicDomain.replace(/\/$/, ''); // 移除末尾的斜杠
+    const domain = this.config.services.r2?.publicDomain?.replace(/\/$/, '') || ''; // 移除末尾的斜杠
     return `${domain}/${key}`;
   }
 
@@ -646,7 +646,7 @@ export class R2Manager {
 
       // 调用 Rust 命令删除对象
       const result = await invoke<string>('delete_r2_object', {
-        config: this.config.r2,
+        config: this.config.services.r2,
         key: obj.key,
       });
 

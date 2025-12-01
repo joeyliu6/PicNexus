@@ -4,12 +4,12 @@ import { invoke } from '@tauri-apps/api/tauri';
 import { dialog } from '@tauri-apps/api';
 
 import { Store } from './store';
-import { UserConfig, HistoryItem, DEFAULT_CONFIG } from './config';
-import { processUpload, validateR2Config } from './coreLogic';
+import { UserConfig, HistoryItem, DEFAULT_CONFIG, ServiceType } from './config/types';
+// import { validateR2Config } from './coreLogic'; // 暂未使用
 
 // 新架构导入
 import { initializeUploaders } from './uploaders';
-import { UploadOrchestrator } from './core';
+import { MultiServiceUploader, MultiUploadResult } from './core/MultiServiceUploader';
 import { writeText } from '@tauri-apps/api/clipboard';
 import { save } from '@tauri-apps/api/dialog';
 import { writeTextFile } from '@tauri-apps/api/fs';
@@ -20,6 +20,7 @@ import { R2Manager } from './r2-manager';
 import { showConfirmModal, showAlertModal } from './ui/modal';
 import { createApp } from 'vue';
 import BackupView from './components/BackupView.vue';
+import { basename } from '@tauri-apps/api/path';
 
 // --- GLOBAL ERROR HANDLERS ---
 window.addEventListener('error', (event) => {
@@ -114,7 +115,12 @@ const navButtons = [navUploadBtn, navHistoryBtn, navR2ManagerBtn, navBackupBtn, 
 
 // Upload View Elements
 const dropZoneHeader = getElement<HTMLElement>('drop-zone-header', '拖放区域头部');
-const uploadR2Toggle = getElement<HTMLInputElement>('upload-view-toggle-r2', 'R2上传开关');
+// Service checkboxes
+const serviceCheckboxes = {
+  weibo: document.querySelector<HTMLInputElement>('input[data-service="weibo"]'),
+  r2: document.querySelector<HTMLInputElement>('input[data-service="r2"]'),
+  tcl: document.querySelector<HTMLInputElement>('input[data-service="tcl"]')
+};
 
 // Settings View Elements
 const weiboCookieEl = getElement<HTMLTextAreaElement>('weibo-cookie', '微博Cookie输入框');
@@ -196,16 +202,16 @@ async function filterValidFiles(filePaths: string[]): Promise<{ valid: string[];
 }
 
 /**
- * 并发处理上传队列
+ * 并发处理上传队列（新架构 - 多图床并行上传）
  * @param filePaths 文件路径列表
  * @param config 用户配置
- * @param uploadToR2 是否上传到R2
+ * @param enabledServices 启用的图床服务列表
  * @param maxConcurrent 最大并发数（默认3）
  */
 async function processUploadQueue(
   filePaths: string[],
   config: UserConfig,
-  uploadToR2: boolean,
+  enabledServices: ServiceType[],
   maxConcurrent: number = 3
 ): Promise<void> {
   if (!uploadQueueManager) {
@@ -213,42 +219,144 @@ async function processUploadQueue(
     return;
   }
 
-  console.log(`[并发上传] 开始处理 ${filePaths.length} 个文件，最大并发数: ${maxConcurrent}`);
+  console.log(`[并发上传] 开始处理 ${filePaths.length} 个文件，启用图床:`, enabledServices);
+
+  const multiServiceUploader = new MultiServiceUploader();
 
   // 为每个文件创建队列项
   const uploadTasks = filePaths.map(filePath => {
     const fileName = filePath.split(/[/\\]/).pop() || filePath;
-    const itemId = uploadQueueManager!.addFile(filePath, fileName, uploadToR2);
-    
+    const itemId = uploadQueueManager!.addFile(filePath, fileName, enabledServices);
+
     return async () => {
-      const onProgress = uploadQueueManager!.createProgressCallback(itemId);
       try {
-        await processUpload(filePath, config, { uploadToR2 }, onProgress);
+        console.log(`[并发上传] 开始上传: ${fileName}`);
+
+        // 使用多图床上传编排器
+        const result = await multiServiceUploader.uploadToMultipleServices(
+          filePath,
+          enabledServices,
+          config,
+          (serviceId, percent) => {
+            // 每个图床独立进度回调
+            uploadQueueManager!.updateServiceProgress(itemId, serviceId, percent);
+          }
+        );
+
+        console.log(`[并发上传] ${fileName} 上传完成，主力图床: ${result.primaryService}`);
+
+        // 更新每个服务的链接信息
+        result.results.forEach(serviceResult => {
+          if (serviceResult.status === 'success' && serviceResult.result) {
+            const item = uploadQueueManager!.vm!.getItem(itemId);
+            if (item && item.serviceProgress[serviceResult.serviceId]) {
+              uploadQueueManager!.vm!.updateItem(itemId, {
+                serviceProgress: {
+                  ...item.serviceProgress,
+                  [serviceResult.serviceId]: {
+                    ...item.serviceProgress[serviceResult.serviceId],
+                    link: serviceResult.result.url
+                  }
+                }
+              });
+            }
+          }
+        });
+
+        // 保存历史记录
+        await saveHistoryItem(filePath, result, config);
+
+        // 通知队列管理器上传成功
+        uploadQueueManager!.markItemComplete(itemId, result.primaryUrl);
+
       } catch (error) {
-        console.error(`[并发上传] 文件上传异常: ${fileName}`, error);
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error(`[并发上传] ${fileName} 上传失败:`, errorMsg);
+        uploadQueueManager!.markItemFailed(itemId, errorMsg);
       }
     };
   });
 
   // 使用并发限制执行上传任务
   const executing: Promise<void>[] = [];
-  
+
   for (const task of uploadTasks) {
     const promise = task().finally(() => {
       executing.splice(executing.indexOf(promise), 1);
     });
-    
+
     executing.push(promise);
-    
+
     if (executing.length >= maxConcurrent) {
       await Promise.race(executing);
     }
   }
-  
+
   // 等待所有剩余任务完成
   await Promise.all(executing);
-  
+
   console.log(`[并发上传] 所有文件处理完成`);
+}
+
+/**
+ * 保存历史记录（新架构 - 多图床结果）
+ * @param filePath 文件路径
+ * @param uploadResult 多图床上传结果
+ * @param config 用户配置
+ */
+async function saveHistoryItem(
+  filePath: string,
+  uploadResult: MultiUploadResult,
+  _config: UserConfig  // 保留以备将来使用
+): Promise<void> {
+  try {
+    const historyStore = new Store('.history.dat');
+    let items: HistoryItem[] = [];
+
+    try {
+      items = await historyStore.get<HistoryItem[]>('uploads') || [];
+      if (!Array.isArray(items)) {
+        items = [];
+      }
+    } catch (readError: any) {
+      console.error('[历史记录] 读取历史记录失败:', readError?.message || String(readError));
+      items = [];
+    }
+
+    // 获取本地文件名
+    let fileName: string;
+    try {
+      fileName = await basename(filePath);
+      if (!fileName || fileName.trim().length === 0) {
+        fileName = filePath.split(/[/\\]/).pop() || '未知文件';
+      }
+    } catch (nameError: any) {
+      fileName = filePath.split(/[/\\]/).pop() || '未知文件';
+    }
+
+    // 创建新的历史记录项
+    const newItem: HistoryItem = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      timestamp: Date.now(),
+      localFileName: fileName,
+      filePath: filePath,  // 保存文件路径用于重试
+      primaryService: uploadResult.primaryService,
+      results: uploadResult.results,
+      generatedLink: uploadResult.primaryUrl
+    };
+
+    const newItems = [newItem, ...items];
+
+    try {
+      await historyStore.set('uploads', newItems);
+      await historyStore.save();
+      console.log(`[历史记录] ✓ 已保存成功，共 ${newItems.length} 条记录`);
+    } catch (saveError: any) {
+      console.error('[历史记录] 保存历史记录失败:', saveError?.message || String(saveError));
+    }
+  } catch (historyError: any) {
+    console.error('[历史记录] 保存历史记录时发生异常:', historyError?.message || String(historyError));
+  }
 }
 
 // --- VIEW ROUTING ---
@@ -371,53 +479,10 @@ async function initializeUpload(): Promise<void> {
       // 初始化队列管理器
       uploadQueueManager = new UploadQueueManager('upload-queue-list');
       console.log('[上传] 队列管理器初始化成功');
-      
-      // 设置重试回调
-      uploadQueueManager.setRetryCallback(async (itemId: string) => {
-        try {
-          if (!uploadQueueManager) {
-            console.error('[重试] 上传队列管理器未初始化');
-            return;
-          }
 
-          const item = uploadQueueManager.getItem(itemId);
-          if (!item) {
-            console.error(`[重试] 找不到队列项: ${itemId}`);
-            return;
-          }
+      // 注意：重试功能现在由新架构的 retryServiceUpload 函数处理
+      // 队列管理器的重试按钮功能已被新的多图床重试机制替代
 
-          // 获取当前配置
-          let config: UserConfig | null = null;
-          try {
-            config = await configStore.get<UserConfig>('config');
-          } catch (error) {
-            console.error('[重试] 读取配置失败:', error);
-            await showAlertModal('读取配置失败，无法重试', '配置错误', 'error');
-            return;
-          }
-
-          if (!config || !config.weiboCookie || config.weiboCookie.trim().length === 0) {
-            await showAlertModal('请先在设置中配置微博 Cookie！', '配置缺失');
-            navigateTo('settings');
-            return;
-          }
-
-          // 重置队列项状态
-          uploadQueueManager.resetItemForRetry(itemId);
-
-          // 创建进度回调
-          const onProgress = uploadQueueManager.createProgressCallback(itemId);
-
-          // 重新上传
-          console.log(`[重试] 开始重试上传: ${item.fileName}`);
-          await processUpload(item.filePath, config, { uploadToR2: item.uploadToR2 }, onProgress);
-        } catch (error) {
-          console.error('[重试] 重试失败:', error);
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          await showAlertModal(`重试失败: ${errorMsg}`, '重试错误', 'error');
-        }
-      });
-      
       // 处理文件上传的核心函数
       const handleFiles = async (filePaths: string[]) => {
         try {
@@ -426,9 +491,9 @@ async function initializeUpload(): Promise<void> {
             console.warn('[上传] 无效的文件列表:', filePaths);
             return;
           }
-          
+
           console.log('[上传] 接收到文件:', filePaths);
-        
+
           // 获取配置
           let config: UserConfig | null = null;
           try {
@@ -438,50 +503,50 @@ async function initializeUpload(): Promise<void> {
             await showAlertModal('读取配置失败，请重试', '配置错误', 'error');
             return;
           }
-          
-          // 验证配置
-          if (!config || !config.weiboCookie || config.weiboCookie.trim().length === 0) {
-            console.warn('[上传] 未配置微博 Cookie');
-            await showAlertModal('请先在设置中配置微博 Cookie！', '配置缺失');
-            navigateTo('settings');
-            return;
+
+          // 验证配置存在
+          if (!config) {
+            console.warn('[上传] 配置不存在，使用默认配置');
+            config = DEFAULT_CONFIG;
           }
-        
+
           // 文件类型验证（PRD 1.2）
           const { valid, invalid } = await filterValidFiles(filePaths);
-          
+
           if (valid.length === 0) {
             console.warn('[上传] 没有有效的图片文件');
             return;
           }
-          
+
           console.log(`[上传] 有效文件: ${valid.length}个，无效文件: ${invalid.length}个`);
-          
-          // 获取R2上传选项
-          const uploadToR2 = uploadR2Toggle?.checked ?? false;
-          
-          // [强校验] 如果用户勾选了R2上传但R2配置不完整，直接终止上传流程
-          if (uploadToR2) {
-            const r2Validation = validateR2Config(config.r2 || {});
-            if (!r2Validation.valid) {
-              const missingFields = r2Validation.missingFields.join('、');
-              const errorMsg = `上传已终止：您勾选了"同时备份到 R2"，但 R2 配置不完整。\n缺少项：${missingFields}。\n请在设置中补全配置，或取消勾选 R2 备份。`;
-              console.error('[上传] R2 配置前置校验失败:', errorMsg);
-              await showAlertModal(
-                errorMsg,
-                '上传已终止',
-                'error'
-              );
-              // 直接返回，不执行上传
-              return;
-            }
+
+          // 从复选框读取启用的图床服务列表
+          const enabledServices: ServiceType[] = [];
+          if (serviceCheckboxes.weibo?.checked) enabledServices.push('weibo');
+          if (serviceCheckboxes.r2?.checked) enabledServices.push('r2');
+          if (serviceCheckboxes.tcl?.checked) enabledServices.push('tcl');
+
+          if (enabledServices.length === 0) {
+            console.warn('[上传] 没有勾选任何图床');
+            await showAlertModal('请至少勾选一个图床服务！', '配置缺失');
+            return;
           }
-          
-          console.log(`[上传] R2上传选项: ${uploadToR2 ? '启用' : '禁用'}`);
-          
+
+          // 保存用户选择到配置
+          config.enabledServices = enabledServices;
+          try {
+            await configStore.set('config', config);
+            await configStore.save();
+          } catch (error) {
+            console.warn('[上传] 保存图床选择失败:', error);
+            // 不阻塞上传流程
+          }
+
+          console.log(`[上传] 启用的图床:`, enabledServices);
+
           // 并发处理上传队列
-          await processUploadQueue(valid, config, uploadToR2);
-          
+          await processUploadQueue(valid, config, enabledServices);
+
           console.log('[上传] 上传队列处理完成');
         } catch (error) {
           console.error('[上传] 文件处理失败:', error);
@@ -666,8 +731,15 @@ async function setupCookieListener(): Promise<void> {
             config = DEFAULT_CONFIG;
           }
           
-          config.weiboCookie = cookie.trim();
-          
+          // 迁移到新配置结构
+          if (!config.services) {
+            config.services = {};
+          }
+          if (!config.services.weibo) {
+            config.services.weibo = { enabled: true, cookie: '' };
+          }
+          config.services.weibo.cookie = cookie.trim();
+
           try {
             await configStore.set('config', config);
             await configStore.save();
@@ -737,26 +809,26 @@ async function loadSettings(): Promise<void> {
   
     // 填充表单元素（带空值检查）
     try {
-      if (weiboCookieEl) weiboCookieEl.value = config.weiboCookie || '';
-      if (r2AccountIdEl) r2AccountIdEl.value = config.r2?.accountId || '';
-      if (r2KeyIdEl) r2KeyIdEl.value = config.r2?.accessKeyId || '';
-      if (r2SecretKeyEl) r2SecretKeyEl.value = config.r2?.secretAccessKey || '';
-      if (r2BucketEl) r2BucketEl.value = config.r2?.bucketName || '';
-      if (r2PathEl) r2PathEl.value = config.r2?.path || '';
-      if (r2PublicDomainEl) r2PublicDomainEl.value = config.r2?.publicDomain || '';
-      if (baiduPrefixEl) baiduPrefixEl.value = config.baiduPrefix || DEFAULT_CONFIG.baiduPrefix;
+      if (weiboCookieEl) weiboCookieEl.value = config.services?.weibo?.cookie || '';
+      if (r2AccountIdEl) r2AccountIdEl.value = config.services?.r2?.accountId || '';
+      if (r2KeyIdEl) r2KeyIdEl.value = config.services?.r2?.accessKeyId || '';
+      if (r2SecretKeyEl) r2SecretKeyEl.value = config.services?.r2?.secretAccessKey || '';
+      if (r2BucketEl) r2BucketEl.value = config.services?.r2?.bucketName || '';
+      if (r2PathEl) r2PathEl.value = config.services?.r2?.path || '';
+      if (r2PublicDomainEl) r2PublicDomainEl.value = config.services?.r2?.publicDomain || '';
+      if (baiduPrefixEl) baiduPrefixEl.value = config.baiduPrefix || DEFAULT_CONFIG.baiduPrefix || 'https://image.baidu.com/search/down?thumburl=';
       
       // WebDAV 配置
       if (config.webdav) {
         if (webdavUrlEl) webdavUrlEl.value = config.webdav.url || '';
         if (webdavUsernameEl) webdavUsernameEl.value = config.webdav.username || '';
         if (webdavPasswordEl) webdavPasswordEl.value = config.webdav.password || '';
-        if (webdavRemotePathEl) webdavRemotePathEl.value = config.webdav.remotePath || DEFAULT_CONFIG.webdav.remotePath;
+        if (webdavRemotePathEl) webdavRemotePathEl.value = config.webdav.remotePath || DEFAULT_CONFIG.webdav?.remotePath || '/WeiboDR/history.json';
       } else {
         if (webdavUrlEl) webdavUrlEl.value = '';
         if (webdavUsernameEl) webdavUsernameEl.value = '';
         if (webdavPasswordEl) webdavPasswordEl.value = '';
-        if (webdavRemotePathEl) webdavRemotePathEl.value = DEFAULT_CONFIG.webdav.remotePath;
+        if (webdavRemotePathEl) webdavRemotePathEl.value = DEFAULT_CONFIG.webdav?.remotePath || '/WeiboDR/history.json';
       }
       
       // 输出格式（不再需要设置单选按钮，因为已删除）
@@ -808,28 +880,34 @@ async function saveSettings(): Promise<void> {
       }
       return;
     }
-  
-    // 构建配置对象（带空值检查）
+
+    // 构建配置对象（新架构）
+    const enabledServices: ServiceType[] = savedConfig?.enabledServices || ['tcl'];
+
     const config: UserConfig = {
-      weiboCookie: weiboCookieEl?.value.trim() || '',
-      r2: {
-        accountId: r2AccountIdEl?.value.trim() || '',
-        accessKeyId: r2KeyIdEl?.value.trim() || '',
-        secretAccessKey: r2SecretKeyEl?.value.trim() || '',
-        bucketName: r2BucketEl?.value.trim() || '',
-        path: r2PathEl?.value.trim() || '',
-        publicDomain: r2PublicDomainEl?.value.trim() || '',
+      enabledServices: enabledServices,
+      services: {
+        weibo: {
+          enabled: enabledServices.includes('weibo'),
+          cookie: weiboCookieEl?.value.trim() || ''
+        },
+        r2: {
+          enabled: enabledServices.includes('r2'),
+          accountId: r2AccountIdEl?.value.trim() || '',
+          accessKeyId: r2KeyIdEl?.value.trim() || '',
+          secretAccessKey: r2SecretKeyEl?.value.trim() || '',
+          bucketName: r2BucketEl?.value.trim() || '',
+          path: r2PathEl?.value.trim() || '',
+          publicDomain: r2PublicDomainEl?.value.trim() || ''
+        },
+        tcl: {
+          enabled: enabledServices.includes('tcl')
+        }
       },
-      baiduPrefix: baiduPrefixEl?.value.trim() || DEFAULT_CONFIG.baiduPrefix,
-      outputFormat: format as UserConfig['outputFormat'],
-      webdav: {
-        url: webdavUrlEl?.value.trim() || '',
-        username: webdavUsernameEl?.value.trim() || '',
-        password: webdavPasswordEl?.value.trim() || '',
-        remotePath: webdavRemotePathEl?.value.trim() || DEFAULT_CONFIG.webdav.remotePath,
-      },
+      outputFormat: savedConfig?.outputFormat || DEFAULT_CONFIG.outputFormat,
+      baiduPrefix: baiduPrefixEl?.value.trim() || DEFAULT_CONFIG.baiduPrefix
     };
-  
+
     // 保存到存储
     try {
       await configStore.set('config', config);
@@ -940,28 +1018,34 @@ async function handleAutoSave(): Promise<void> {
       showToast(errorMsg, 'error', 4000);
       return;
     }
-  
-    // 构建配置对象（带空值检查）
+
+    // 构建配置对象（新架构）
+    const enabledServices: ServiceType[] = savedConfig?.enabledServices || ['tcl'];
+
     const config: UserConfig = {
-      weiboCookie: weiboCookieEl?.value.trim() || '',
-      r2: {
-        accountId: r2AccountIdEl?.value.trim() || '',
-        accessKeyId: r2KeyIdEl?.value.trim() || '',
-        secretAccessKey: r2SecretKeyEl?.value.trim() || '',
-        bucketName: r2BucketEl?.value.trim() || '',
-        path: r2PathEl?.value.trim() || '',
-        publicDomain: r2PublicDomainEl?.value.trim() || '',
+      enabledServices: enabledServices,
+      services: {
+        weibo: {
+          enabled: enabledServices.includes('weibo'),
+          cookie: weiboCookieEl?.value.trim() || ''
+        },
+        r2: {
+          enabled: enabledServices.includes('r2'),
+          accountId: r2AccountIdEl?.value.trim() || '',
+          accessKeyId: r2KeyIdEl?.value.trim() || '',
+          secretAccessKey: r2SecretKeyEl?.value.trim() || '',
+          bucketName: r2BucketEl?.value.trim() || '',
+          path: r2PathEl?.value.trim() || '',
+          publicDomain: r2PublicDomainEl?.value.trim() || ''
+        },
+        tcl: {
+          enabled: enabledServices.includes('tcl')
+        }
       },
-      baiduPrefix: baiduPrefixEl?.value.trim() || DEFAULT_CONFIG.baiduPrefix,
-      outputFormat: format as UserConfig['outputFormat'],
-      webdav: {
-        url: webdavUrlEl?.value.trim() || '',
-        username: webdavUsernameEl?.value.trim() || '',
-        password: webdavPasswordEl?.value.trim() || '',
-        remotePath: webdavRemotePathEl?.value.trim() || DEFAULT_CONFIG.webdav.remotePath,
-      },
+      outputFormat: savedConfig?.outputFormat || DEFAULT_CONFIG.outputFormat,
+      baiduPrefix: baiduPrefixEl?.value.trim() || DEFAULT_CONFIG.baiduPrefix
     };
-  
+
     // 保存到存储
     try {
       await configStore.set('config', config);
@@ -1072,7 +1156,7 @@ async function testWebDAVConnection(): Promise<void> {
       url: webdavUrlEl?.value.trim() || '',
       username: webdavUsernameEl?.value.trim() || '',
       password: webdavPasswordEl?.value.trim() || '',
-      remotePath: webdavRemotePathEl?.value.trim() || DEFAULT_CONFIG.webdav.remotePath,
+      remotePath: webdavRemotePathEl?.value.trim() || DEFAULT_CONFIG.webdav?.remotePath || '/WeiboDR/history.json',
     };
     
     // 更新状态
@@ -1326,17 +1410,35 @@ async function deleteHistoryItem(itemId: string): Promise<void> {
 }
 
 function migrateHistoryItem(item: any): HistoryItem {
-    if (item.id && item.localFileName && item.generatedLink) {
+    // 如果是新格式且有必要字段，直接返回
+    if (item.id && item.localFileName && item.generatedLink &&
+        item.primaryService && item.results) {
       return item as HistoryItem;
     }
-    return {
+
+    // 迁移旧格式
+    const migratedItem: HistoryItem = {
       id: item.id || Date.now().toString() + Math.random().toString(36).substr(2, 9),
       timestamp: item.timestamp || Date.now(),
       localFileName: item.localFileName || item.fileName || '未知文件',
-      weiboPid: item.weiboPid || '',
+      filePath: item.filePath || undefined,
+
+      // 新架构必需字段
+      primaryService: item.primaryService || 'weibo',
+      results: item.results || [],
       generatedLink: item.generatedLink || item.link || '',
-      r2Key: item.r2Key || null,
     };
+
+    // 如果旧数据有链接但没有 results，构建兼容的 results
+    if (migratedItem.generatedLink && migratedItem.results.length === 0) {
+      migratedItem.results.push({
+        serviceId: 'weibo',
+        result: { url: migratedItem.generatedLink },
+        status: 'success'
+      });
+    }
+
+    return migratedItem;
 }
 
 function formatTimestamp(timestamp: number): string {
@@ -1344,6 +1446,8 @@ function formatTimestamp(timestamp: number): string {
     return date.toLocaleString();
 }
 
+// 预览URL生成函数（保留以备将来UI功能使用）
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function getPreviewUrl(weiboPid: string): Promise<string> {
     try {
       const config = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
@@ -1357,30 +1461,43 @@ async function getPreviewUrl(weiboPid: string): Promise<string> {
 }
 
 /**
- * 渲染历史记录表格
+ * 渲染历史记录表格（新架构 - 多图床展示）
  * [v2.7 优化] 使用 DocumentFragment 批量插入，减少 DOM 重排
+ * [v3.0 新功能] 支持多图床状态徽章、重试按钮、链接选择下拉
  */
 async function renderHistoryTable(items: HistoryItem[]) {
     if (!historyBody) {
       console.error('[历史记录] historyBody 不存在，无法渲染表格');
       return;
     }
-    
+
     historyBody.innerHTML = '';
-  
+
     if (items.length === 0) {
-      historyBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #888;">暂无历史记录</td></tr>';
+      historyBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #888;">暂无历史记录</td></tr>';
       return;
     }
-  
+
     // [v2.7 优化] 使用 DocumentFragment 进行批量插入
     const fragment = document.createDocumentFragment();
-    
+
     for (const item of items) {
       const tr = document.createElement('tr');
       tr.setAttribute('data-id', item.id);
       tr.setAttribute('data-filename', item.localFileName.toLowerCase());
-  
+
+      // 0. 复选框列（批量操作）
+      const tdCheckbox = document.createElement('td');
+      tdCheckbox.className = 'checkbox-col';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'row-checkbox';
+      checkbox.setAttribute('data-item-id', item.id);
+      checkbox.addEventListener('change', updateBulkActionButtons);
+      tdCheckbox.appendChild(checkbox);
+      tr.appendChild(tdCheckbox);
+
+      // 1. 预览列
       const tdPreview = document.createElement('td');
       const img = document.createElement('img');
       img.style.width = '50px';
@@ -1388,97 +1505,444 @@ async function renderHistoryTable(items: HistoryItem[]) {
       img.style.objectFit = 'cover';
       img.style.borderRadius = '4px';
       img.alt = item.localFileName;
-      img.src = await getPreviewUrl(item.weiboPid);
+
+      // 从成功的图床结果中获取预览图
+      const successResult = item.results?.find(r => r.status === 'success');
+      if (successResult?.result?.url) {
+        img.src = successResult.result.url;
+      } else {
+        img.src = item.generatedLink;
+      }
       img.onerror = () => { img.style.display = 'none'; };
       tdPreview.appendChild(img);
       tr.appendChild(tdPreview);
-  
+
+      // 2. 文件名列
       const tdName = document.createElement('td');
       tdName.textContent = item.localFileName;
       tdName.title = item.localFileName;
       tr.appendChild(tdName);
-  
+
+      // 3. 图床状态列（新增）
+      const tdServices = document.createElement('td');
+      const servicesContainer = document.createElement('div');
+      servicesContainer.className = 'service-badges-container';
+
+      // 渲染所有图床的状态徽章
+      if (item.results && item.results.length > 0) {
+        item.results.forEach(serviceResult => {
+          const badge = document.createElement('span');
+          badge.className = `service-badge ${serviceResult.status}`;
+          badge.title = serviceResult.error || serviceResult.result?.url || '';
+
+          // 图床名称映射
+          const serviceNames: Record<ServiceType, string> = {
+            weibo: '微博',
+            r2: 'R2',
+            tcl: 'TCL',
+            nami: '纳米',
+            jd: '京东',
+            nowcoder: '牛客'
+          };
+
+          const serviceName = serviceNames[serviceResult.serviceId] || serviceResult.serviceId;
+          badge.textContent = `${serviceName} ${serviceResult.status === 'success' ? '✓' : '✗'}`;
+
+          servicesContainer.appendChild(badge);
+
+          // 失败的图床显示重试按钮
+          if (serviceResult.status === 'failed') {
+            const retryBtn = document.createElement('button');
+            retryBtn.className = 'service-retry-btn';
+            retryBtn.innerHTML = '↻';
+            retryBtn.title = `重试上传到 ${serviceName}`;
+            retryBtn.onclick = () => retryServiceUpload(item.id, serviceResult.serviceId);
+            badge.appendChild(retryBtn);
+          }
+        });
+      } else {
+        // 旧数据兼容：没有 results 字段
+        const badge = document.createElement('span');
+        badge.className = 'service-badge success';
+        badge.textContent = `${item.primaryService || '未知'} ✓`;
+        servicesContainer.appendChild(badge);
+      }
+
+      tdServices.appendChild(servicesContainer);
+      tr.appendChild(tdServices);
+
+      // 4. 链接选择列（新增下拉框）
       const tdLink = document.createElement('td');
-      const link = document.createElement('a');
-      link.href = item.generatedLink;
-      link.target = '_blank';
-      link.textContent = item.generatedLink;
-      link.title = item.generatedLink;
-      tdLink.appendChild(link);
+
+      if (item.results && item.results.length > 0) {
+        // 创建链接选择下拉框
+        const linkSelector = document.createElement('select');
+        linkSelector.className = 'link-selector';
+        linkSelector.title = '选择要复制的链接';
+
+        item.results.forEach(serviceResult => {
+          if (serviceResult.status === 'success' && serviceResult.result?.url) {
+            const option = document.createElement('option');
+            option.value = serviceResult.result.url;
+
+            const serviceNames: Record<ServiceType, string> = {
+              weibo: '微博',
+              r2: 'R2',
+              tcl: 'TCL',
+              nami: '纳米',
+              jd: '京东',
+              nowcoder: '牛客'
+            };
+
+            const serviceName = serviceNames[serviceResult.serviceId] || serviceResult.serviceId;
+            const isPrimary = serviceResult.serviceId === item.primaryService;
+            option.textContent = `${serviceName}${isPrimary ? ' (主)' : ''}`;
+
+            if (isPrimary) {
+              option.selected = true;
+            }
+
+            linkSelector.appendChild(option);
+          }
+        });
+
+        // 如果只有一个成功的链接，直接显示链接
+        if (linkSelector.options.length === 1) {
+          const link = document.createElement('a');
+          link.href = item.generatedLink;
+          link.target = '_blank';
+          link.textContent = item.generatedLink;
+          link.title = item.generatedLink;
+          link.className = 'history-link';
+          tdLink.appendChild(link);
+        } else if (linkSelector.options.length > 1) {
+          tdLink.appendChild(linkSelector);
+        } else {
+          tdLink.textContent = '无可用链接';
+        }
+      } else {
+        // 旧数据兼容
+        const link = document.createElement('a');
+        link.href = item.generatedLink;
+        link.target = '_blank';
+        link.textContent = item.generatedLink;
+        link.title = item.generatedLink;
+        link.className = 'history-link';
+        tdLink.appendChild(link);
+      }
+
       tr.appendChild(tdLink);
-  
+
+      // 5. 时间列
       const tdTime = document.createElement('td');
       tdTime.textContent = formatTimestamp(item.timestamp);
       tr.appendChild(tdTime);
-  
+
+      // 6. 复制操作列
       const tdAction = document.createElement('td');
       const copyBtn = document.createElement('button');
       const copyIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
       const checkIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
-      
-      copyBtn.innerHTML = copyIcon;
-      copyBtn.title = '复制链接';
-      copyBtn.style.cursor = 'pointer';
-      copyBtn.style.border = 'none';
-      copyBtn.style.background = 'transparent';
-      copyBtn.style.padding = '4px 8px'; // 调整 padding 以适应图标
-      copyBtn.style.borderRadius = '4px';
-      copyBtn.style.color = 'var(--text-muted)';
-      copyBtn.style.fontSize = '0'; // 避免可能的文字渲染
-      copyBtn.style.transition = 'all 0.2s';
 
-      // Hover 效果
-      copyBtn.onmouseover = () => {
-         // 仅当不是显示❌或✅时变色
-         if (copyBtn.innerHTML === copyIcon) {
-             copyBtn.style.color = 'var(--primary)';
-             copyBtn.style.background = 'rgba(59, 130, 246, 0.1)';
-         }
-      };
-      copyBtn.onmouseout = () => {
-          if (copyBtn.innerHTML === copyIcon) {
-            copyBtn.style.color = 'var(--text-muted)';
-            copyBtn.style.background = 'transparent';
-          }
-      };
-      
+      copyBtn.innerHTML = copyIcon;
+      copyBtn.title = '复制当前选择的链接';
+      copyBtn.className = 'icon-btn';
+
       copyBtn.addEventListener('click', async () => {
         try {
-          await writeText(item.generatedLink);
+          let linkToCopy = item.generatedLink;
+
+          // 如果有下拉框，复制选中的链接
+          const selector = tr.querySelector<HTMLSelectElement>('.link-selector');
+          if (selector) {
+            linkToCopy = selector.value;
+          }
+
+          await writeText(linkToCopy);
           copyBtn.innerHTML = checkIcon;
           copyBtn.style.color = 'var(--success)';
           setTimeout(() => {
             copyBtn.innerHTML = copyIcon;
-            copyBtn.style.color = 'var(--text-muted)';
-            copyBtn.style.background = 'transparent';
+            copyBtn.style.color = '';
           }, 1500);
         } catch (err) {
           copyBtn.innerHTML = '❌';
           copyBtn.style.color = 'var(--error)';
-          copyBtn.style.fontSize = '14px'; // 错误图标需要字号
+          copyBtn.style.fontSize = '14px';
         }
       });
       tdAction.appendChild(copyBtn);
       tr.appendChild(tdAction);
-  
+
+      // 7. 删除操作列
       const tdDelete = document.createElement('td');
       const deleteBtn = document.createElement('button');
       deleteBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
       deleteBtn.title = '删除此记录';
-      deleteBtn.style.cursor = 'pointer';
-      deleteBtn.style.border = 'none';
-      deleteBtn.style.background = 'transparent';
-      deleteBtn.style.fontSize = '16px';
+      deleteBtn.className = 'icon-btn';
       deleteBtn.addEventListener('click', () => deleteHistoryItem(item.id));
       tdDelete.appendChild(deleteBtn);
       tr.appendChild(tdDelete);
-  
+
       // 添加到 DocumentFragment 而不是直接添加到 DOM
       fragment.appendChild(tr);
     }
-    
+
     // 一次性插入所有行，只触发一次重排
     historyBody.appendChild(fragment);
+}
+
+/**
+ * 重试单个图床的上传（新功能）
+ * @param historyId 历史记录 ID
+ * @param serviceId 图床服务 ID
+ */
+async function retryServiceUpload(historyId: string, serviceId: ServiceType): Promise<void> {
+  console.log(`[重试] 开始重试: historyId=${historyId}, serviceId=${serviceId}`);
+
+  try {
+    // 1. 获取历史记录项
+    const items = await historyStore.get<HistoryItem[]>('uploads', []);
+    const item = items.find(i => i.id === historyId);
+
+    if (!item) {
+      throw new Error('找不到历史记录项');
+    }
+
+    // 2. 检查是否有文件路径
+    if (!item.filePath) {
+      throw new Error('该历史记录没有保存原始文件路径，无法重试');
+    }
+
+    // 3. 检查文件是否存在
+    try {
+      const fileExists = await invoke<boolean>('file_exists', { path: item.filePath });
+      if (!fileExists) {
+        throw new Error(`原始文件不存在: ${item.filePath}`);
+      }
+    } catch (checkError: any) {
+      throw new Error(`检查文件失败: ${checkError.message || String(checkError)}`);
+    }
+
+    // 4. 获取当前配置
+    const config = await configStore.get<UserConfig>('config', DEFAULT_CONFIG);
+
+    // 5. 显示加载状态
+    const serviceNames: Record<ServiceType, string> = {
+      weibo: '微博',
+      r2: 'R2',
+      tcl: 'TCL',
+      nami: '纳米',
+      jd: '京东',
+      nowcoder: '牛客'
+    };
+    const serviceName = serviceNames[serviceId] || serviceId;
+    showToast(`正在重试上传到 ${serviceName}...`, 'loading', 0);
+
+    // 6. 重试上传
+    const multiUploader = new MultiServiceUploader();
+    const result = await multiUploader.retryUpload(
+      item.filePath,
+      serviceId,
+      config,
+      (percent) => {
+        console.log(`[重试] ${serviceName} 进度: ${percent}%`);
+      }
+    );
+
+    console.log(`[重试] ${serviceName} 上传成功:`, result);
+
+    // 7. 更新历史记录中的结果状态
+    // ⚠️ 关键修复：确保 results 数组存在（兼容旧数据）
+    if (!item.results) {
+      item.results = [];
+    }
+
+    const targetResult = item.results.find(r => r.serviceId === serviceId);
+    if (targetResult) {
+      targetResult.status = 'success';
+      targetResult.result = result;
+      delete targetResult.error;
+    } else {
+      // 如果原本没有这个图床的结果，添加新的
+      item.results.push({
+        serviceId,
+        result,
+        status: 'success'
+      });
+    }
+
+    // 如果重试成功的图床是第一个成功的，更新主力图床
+    const successResults = item.results.filter(r => r.status === 'success');
+    if (successResults.length === 1 && successResults[0].serviceId === serviceId) {
+      item.primaryService = serviceId;
+      item.generatedLink = result.url;
+    }
+
+    // 8. 保存更新后的历史记录
+    await historyStore.set('uploads', items);
+    await historyStore.save();
+
+    console.log(`[重试] 历史记录已更新`);
+
+    // 9. 显示成功提示
+    showToast(`${serviceName} 重试成功！`, 'success', 3000);
+
+    // 10. 重新加载历史记录表格
+    await loadHistory();
+
+  } catch (error: any) {
+    const errorMsg = error.message || String(error);
+    console.error(`[重试] 重试失败:`, error);
+    showToast(`重试失败: ${errorMsg}`, 'error', 5000);
+  }
+}
+
+/**
+ * 批量操作：获取选中的历史记录项
+ */
+function getSelectedHistoryItems(): string[] {
+  const checkboxes = document.querySelectorAll<HTMLInputElement>('.row-checkbox:checked');
+  return Array.from(checkboxes).map(cb => cb.getAttribute('data-item-id')).filter((id): id is string => !!id);
+}
+
+/**
+ * 批量操作：更新批量操作按钮的启用/禁用状态
+ */
+function updateBulkActionButtons(): void {
+  const selectedIds = getSelectedHistoryItems();
+  const bulkCopyBtn = document.getElementById('bulk-copy-btn') as HTMLButtonElement | null;
+  const bulkExportBtn = document.getElementById('bulk-export-btn') as HTMLButtonElement | null;
+  const bulkDeleteBtn = document.getElementById('bulk-delete-btn') as HTMLButtonElement | null;
+
+  const hasSelection = selectedIds.length > 0;
+
+  if (bulkCopyBtn) bulkCopyBtn.disabled = !hasSelection;
+  if (bulkExportBtn) bulkExportBtn.disabled = !hasSelection;
+  if (bulkDeleteBtn) bulkDeleteBtn.disabled = !hasSelection;
+}
+
+/**
+ * 批量操作：全选/取消全选
+ */
+function toggleSelectAll(checked: boolean): void {
+  const checkboxes = document.querySelectorAll<HTMLInputElement>('.row-checkbox');
+  checkboxes.forEach(cb => {
+    cb.checked = checked;
+  });
+  updateBulkActionButtons();
+}
+
+/**
+ * 批量操作：批量复制链接
+ */
+async function bulkCopyLinks(): Promise<void> {
+  try {
+    const selectedIds = getSelectedHistoryItems();
+    if (selectedIds.length === 0) {
+      showToast('请先选择要复制的项目', 'error', 3000);
+      return;
+    }
+
+    const items = await historyStore.get<HistoryItem[]>('uploads', []);
+    const selectedItems = items.filter(item => selectedIds.includes(item.id));
+
+    // 收集所有链接
+    const links = selectedItems.map(item => item.generatedLink).filter(link => !!link);
+
+    if (links.length === 0) {
+      showToast('选中的项目没有可用链接', 'error', 3000);
+      return;
+    }
+
+    // 复制到剪贴板（每行一个链接）
+    await writeText(links.join('\n'));
+
+    showToast(`已复制 ${links.length} 个链接到剪贴板`, 'success', 3000);
+    console.log(`[批量操作] 已复制 ${links.length} 个链接`);
+
+  } catch (error: any) {
+    console.error('[批量操作] 复制失败:', error);
+    showToast(`复制失败: ${error.message || String(error)}`, 'error', 5000);
+  }
+}
+
+/**
+ * 批量操作：批量导出为 JSON
+ */
+async function bulkExportJSON(): Promise<void> {
+  try {
+    const selectedIds = getSelectedHistoryItems();
+    if (selectedIds.length === 0) {
+      showToast('请先选择要导出的项目', 'error', 3000);
+      return;
+    }
+
+    const items = await historyStore.get<HistoryItem[]>('uploads', []);
+    const selectedItems = items.filter(item => selectedIds.includes(item.id));
+
+    // 生成 JSON 内容
+    const jsonContent = JSON.stringify(selectedItems, null, 2);
+
+    // 保存文件
+    const filePath = await save({
+      defaultPath: `weibo-history-${Date.now()}.json`,
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    });
+
+    if (!filePath) {
+      console.log('[批量操作] 用户取消导出');
+      return;
+    }
+
+    await writeTextFile(filePath, jsonContent);
+
+    showToast(`已导出 ${selectedItems.length} 条记录到 ${filePath}`, 'success', 3000);
+    console.log(`[批量操作] 已导出 ${selectedItems.length} 条记录`);
+
+  } catch (error: any) {
+    console.error('[批量操作] 导出失败:', error);
+    showToast(`导出失败: ${error.message || String(error)}`, 'error', 5000);
+  }
+}
+
+/**
+ * 批量操作：批量删除记录
+ */
+async function bulkDeleteRecords(): Promise<void> {
+  try {
+    const selectedIds = getSelectedHistoryItems();
+    if (selectedIds.length === 0) {
+      showToast('请先选择要删除的项目', 'error', 3000);
+      return;
+    }
+
+    const confirmed = await showConfirmModal(
+      `确定要删除选中的 ${selectedIds.length} 条历史记录吗？此操作不可撤销。`,
+      '批量删除确认'
+    );
+
+    if (!confirmed) {
+      console.log('[批量操作] 用户取消删除');
+      return;
+    }
+
+    const items = await historyStore.get<HistoryItem[]>('uploads', []);
+    const remainingItems = items.filter(item => !selectedIds.includes(item.id));
+
+    await historyStore.set('uploads', remainingItems);
+    await historyStore.save();
+
+    showToast(`已删除 ${selectedIds.length} 条记录`, 'success', 3000);
+    console.log(`[批量操作] 已删除 ${selectedIds.length} 条记录`);
+
+    // 重新加载历史记录
+    await loadHistory();
+
+  } catch (error: any) {
+    console.error('[批量操作] 删除失败:', error);
+    showToast(`删除失败: ${error.message || String(error)}`, 'error', 5000);
+  }
 }
 
 async function loadHistory() {
@@ -1490,7 +1954,13 @@ async function loadHistory() {
     }
   
     const migratedItems = items.map(migrateHistoryItem);
-    const needsSave = items.some(item => !item.id || !item.localFileName || !item.generatedLink);
+    const needsSave = items.some(item =>
+      !item.id ||
+      !item.localFileName ||
+      !item.generatedLink ||
+      !item.results ||          // 检查新架构必需字段
+      !item.primaryService      // 检查新架构必需字段
+    );
     if (needsSave) {
       await historyStore.set('uploads', migratedItems);
       await historyStore.save();
@@ -1542,6 +2012,8 @@ async function clearHistory() {
     }
 }
 
+// JSON导出函数（保留以备将来UI功能使用）
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function exportToJson() {
     try {
       if (historyStatusMessageEl) {
@@ -1577,6 +2049,8 @@ async function exportToJson() {
     }
 }
 
+// WebDAV同步函数（保留以备将来UI功能使用）
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function syncToWebDAV() {
     try {
       if (historyStatusMessageEl) {
@@ -1649,6 +2123,88 @@ async function syncToWebDAV() {
     }
 }
 
+/**
+ * 加载并更新服务复选框状态
+ */
+async function loadServiceCheckboxStates(): Promise<void> {
+  try {
+    const config = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
+
+    // 加载保存的选择状态
+    const enabledServices = config.enabledServices || ['tcl'];
+    if (serviceCheckboxes.weibo) {
+      serviceCheckboxes.weibo.checked = enabledServices.includes('weibo');
+      updateServiceStatus('weibo', config);
+    }
+    if (serviceCheckboxes.r2) {
+      serviceCheckboxes.r2.checked = enabledServices.includes('r2');
+      updateServiceStatus('r2', config);
+    }
+    if (serviceCheckboxes.tcl) {
+      serviceCheckboxes.tcl.checked = enabledServices.includes('tcl');
+      // TCL always ready
+    }
+
+    console.log('[服务复选框] 已加载状态:', enabledServices);
+  } catch (error) {
+    console.error('[服务复选框] 加载状态失败:', error);
+  }
+}
+
+/**
+ * 更新服务配置状态徽章
+ */
+function updateServiceStatus(serviceId: ServiceType, config: UserConfig): void {
+  const statusEl = document.querySelector<HTMLElement>(`.service-config-status[data-service="${serviceId}"]`);
+  if (!statusEl) return;
+
+  // 确保 config.services 存在
+  if (!config.services) {
+    console.warn('[服务状态] 配置中缺少 services 字段');
+    config.services = {};
+  }
+
+  let isConfigured = false;
+  let statusText = '';
+
+  if (serviceId === 'weibo') {
+    const weiboConfig = config.services.weibo;
+    isConfigured = !!weiboConfig?.cookie && weiboConfig.cookie.trim().length > 0;
+    statusText = isConfigured ? '已配置' : '未配置';
+    statusEl.className = `service-config-status ${isConfigured ? 'ready' : 'not-ready'}`;
+  } else if (serviceId === 'r2') {
+    const r2Config = config.services.r2;
+    isConfigured = !!(
+      r2Config?.accountId &&
+      r2Config.accessKeyId &&
+      r2Config.secretAccessKey &&
+      r2Config.bucketName
+    );
+    statusText = isConfigured ? '已配置' : '未配置';
+    statusEl.className = `service-config-status ${isConfigured ? 'ready' : 'not-ready'}`;
+  } else if (serviceId === 'tcl') {
+    statusEl.className = 'service-config-status ready';
+    statusText = '开箱即用';
+  }
+
+  statusEl.textContent = statusText;
+
+  // 如果未配置，禁用复选框
+  const checkbox = serviceCheckboxes[serviceId as keyof typeof serviceCheckboxes];
+  if (checkbox && serviceId !== 'tcl') {
+    if (!isConfigured) {
+      checkbox.disabled = true;
+      checkbox.checked = false;
+      const label = checkbox.closest('label');
+      if (label) label.classList.add('disabled');
+    } else {
+      checkbox.disabled = false;
+      const label = checkbox.closest('label');
+      if (label) label.classList.remove('disabled');
+    }
+  }
+}
+
 // --- INITIALIZATION ---
 /**
  * 初始化应用
@@ -1665,7 +2221,28 @@ function initialize(): void {
     } catch (error) {
       console.error('[初始化] 上传器注册失败:', error);
     }
-    
+
+    // 加载服务复选框状态
+    loadServiceCheckboxStates().catch(err => {
+      console.error('[初始化] 加载服务复选框状态失败:', err);
+    });
+
+    // 绑定服务复选框变化事件
+    Object.entries(serviceCheckboxes).forEach(([_serviceId, checkbox]) => {
+      if (checkbox) {
+        checkbox.addEventListener('change', () => {
+          const label = checkbox.closest('label');
+          if (label) {
+            if (checkbox.checked) {
+              label.classList.add('checked');
+            } else {
+              label.classList.remove('checked');
+            }
+          }
+        });
+      }
+    });
+
     // Bind navigation events (带空值检查)
     if (navUploadBtn) {
       navUploadBtn.addEventListener('click', () => navigateTo('upload'));
@@ -1779,7 +2356,54 @@ function initialize(): void {
     } else {
       console.warn('[初始化] 警告: 清空历史按钮不存在');
     }
-    
+
+    // 批量操作按钮事件绑定
+    const selectAllCheckbox = document.getElementById('select-all-history') as HTMLInputElement | null;
+    const thSelectAllCheckbox = document.getElementById('th-select-all') as HTMLInputElement | null;
+    const bulkCopyBtn = document.getElementById('bulk-copy-btn');
+    const bulkExportBtn = document.getElementById('bulk-export-btn');
+    const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+
+    if (selectAllCheckbox) {
+      selectAllCheckbox.addEventListener('change', (e) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        toggleSelectAll(checked);
+        if (thSelectAllCheckbox) thSelectAllCheckbox.checked = checked;
+      });
+    }
+
+    if (thSelectAllCheckbox) {
+      thSelectAllCheckbox.addEventListener('change', (e) => {
+        const checked = (e.target as HTMLInputElement).checked;
+        toggleSelectAll(checked);
+        if (selectAllCheckbox) selectAllCheckbox.checked = checked;
+      });
+    }
+
+    if (bulkCopyBtn) {
+      bulkCopyBtn.addEventListener('click', () => {
+        bulkCopyLinks().catch(err => {
+          console.error('[批量操作] 批量复制失败:', err);
+        });
+      });
+    }
+
+    if (bulkExportBtn) {
+      bulkExportBtn.addEventListener('click', () => {
+        bulkExportJSON().catch(err => {
+          console.error('[批量操作] 批量导出失败:', err);
+        });
+      });
+    }
+
+    if (bulkDeleteBtn) {
+      bulkDeleteBtn.addEventListener('click', () => {
+        bulkDeleteRecords().catch(err => {
+          console.error('[批量操作] 批量删除失败:', err);
+        });
+      });
+    }
+
     // 导出和同步功能已移至备份视图，这里不再绑定事件
     
     if (searchInput) {

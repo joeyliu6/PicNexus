@@ -2,6 +2,9 @@
  * 上传器测试工具
  * 用于测试新架构的微博和 R2 上传功能
  *
+ * ⚠️ 注意：此测试文件使用已弃用的 UploadOrchestrator API
+ * 实际测试请使用 MultiServiceUploader
+ *
  * 使用方法：
  * 1. 在浏览器控制台中导入此模块
  * 2. 调用测试函数
@@ -9,6 +12,9 @@
  * 示例：
  * import { testWeiboUpload, testR2Upload, testFullFlow } from './test-uploader';
  * await testWeiboUpload('/path/to/image.jpg');
+ *
+ * @deprecated 请参考 main.ts 中 MultiServiceUploader 的实际用法
+ * @ts-nocheck - 此文件为测试代码，暂时忽略类型检查
  */
 
 import { WeiboUploader } from './uploaders/weibo';

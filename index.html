@@ -80,12 +80,29 @@
               <input type="file" id="file-input" multiple accept="image/*" style="display: none;" />
             </div>
             
-            <!-- R2 备份开关 -->
+            <!-- 多图床选择 -->
             <div class="upload-controls">
-              <label class="r2-toggle">
-                <input type="checkbox" id="upload-view-toggle-r2" checked />
-                <span>同时备份到 Cloudflare R2</span>
-              </label>
+              <h3 style="margin: 0 0 10px 0; color: var(--text-secondary); font-size: 14px;">选择上传图床 (可多选)</h3>
+              <div class="service-checkboxes">
+                <label class="service-checkbox">
+                  <input type="checkbox" data-service="weibo" />
+                  <span class="service-icon">📝</span>
+                  <span class="service-name">微博图床</span>
+                  <span class="service-config-status" data-service="weibo"></span>
+                </label>
+                <label class="service-checkbox">
+                  <input type="checkbox" data-service="r2" />
+                  <span class="service-icon">☁️</span>
+                  <span class="service-name">Cloudflare R2</span>
+                  <span class="service-config-status" data-service="r2"></span>
+                </label>
+                <label class="service-checkbox checked">
+                  <input type="checkbox" data-service="tcl" checked />
+                  <span class="service-icon">✨</span>
+                  <span class="service-name">TCL 图床</span>
+                  <span class="service-config-status ready" data-service="tcl">开箱即用</span>
+                </label>
+              </div>
             </div>
             
             <!-- 上传队列列表 -->
@@ -99,17 +116,43 @@
           <div class="container">
             <h1>上传历史记录</h1>
             
-            <!-- v-1.2 新增：搜索框 -->
-            <div class="search-section">
-                <input type="text" id="search-input" placeholder="搜索本地文件名..." />
+            <!-- 批量操作工具栏 -->
+            <div class="history-toolbar">
+                <div class="bulk-actions">
+                    <label class="select-all-label">
+                        <input type="checkbox" id="select-all-history" />
+                        <span>全选</span>
+                    </label>
+                    <button id="bulk-copy-btn" class="bulk-action-btn" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        批量复制
+                    </button>
+                    <button id="bulk-export-btn" class="bulk-action-btn" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        导出 JSON
+                    </button>
+                    <button id="bulk-delete-btn" class="bulk-action-btn danger" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        批量删除
+                    </button>
+                </div>
+
+                <!-- v-1.2 搜索框 -->
+                <div class="search-section">
+                    <input type="text" id="search-input" placeholder="搜索本地文件名..." />
+                </div>
             </div>
-            
+
             <table id="history-table">
                 <thead>
                     <tr>
+                        <th class="checkbox-col">
+                            <input type="checkbox" id="th-select-all" title="全选/取消全选" />
+                        </th>
                         <th>预览</th>
                         <th>本地文件名</th>
-                        <th>生成链接</th>
+                        <th>图床状态</th>
+                        <th>链接</th>
                         <th>上传时间</th>
                         <th>复制</th>
                         <th>删除</th>
@@ -171,6 +214,22 @@
                 <span id="r2-status-message"></span>
             </div>
     
+            <div class="form-section">
+                <h2>TCL 图床</h2>
+                <p class="info-text" style="color: var(--success); display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    TCL 图床无需配置，开箱即用
+                </p>
+                <p class="info-text" style="color: var(--text-secondary); display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    支持格式：JPG、JPEG、PNG、GIF
+                </p>
+                <p class="info-text" style="color: var(--warning); display: flex; align-items: center; gap: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+                    注意：TCL 为第三方免费服务，稳定性无保障
+                </p>
+            </div>
+
             <div class="form-section">
                 <h2>链接配置</h2>
                 <label>百度代理前缀</label>

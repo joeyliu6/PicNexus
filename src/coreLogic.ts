@@ -6,7 +6,7 @@ import { sendNotification, isPermissionGranted, requestPermission } from "@tauri
 import { readBinaryFile } from '@tauri-apps/api/fs';
 import { getClient, Body } from '@tauri-apps/api/http';
 import { uploadToWeibo, WeiboUploadError } from './weiboUploader';
-import { UserConfig, R2Config, HistoryItem } from './config';
+import { UserConfig, R2ServiceConfig, HistoryItem } from './config/types';
 import { Store, StoreError } from './store';
 import { basename } from '@tauri-apps/api/path';
 import { emit } from '@tauri-apps/api/event';
@@ -29,7 +29,7 @@ export type UploadProgressCallback = (progress: {
  * @param config R2 配置
  * @returns 配置是否完整
  */
-export function validateR2Config(config: R2Config): { valid: boolean; missingFields: string[] } {
+export function validateR2Config(config: R2ServiceConfig): { valid: boolean; missingFields: string[] } {
   const missingFields: string[] = [];
   
   if (!config.accountId || config.accountId.trim().length === 0) {
@@ -94,8 +94,8 @@ function detectFileType(bytes: Uint8Array): string | null {
  */
 async function backupToR2(
   fileBytes: Uint8Array, // 接受字节流
-  hashName: string, 
-  config: R2Config,
+  hashName: string,
+  config: R2ServiceConfig,
   timeoutMs: number = 60000, // 默认60秒超时
   onProgress?: (percent: number) => void // 新增：进度回调
 ): Promise<string | null> {
@@ -280,42 +280,18 @@ async function generateLink(
     throw error;
   }
 
-  const format = config.outputFormat || 'baidu';
-  
+  // 新架构：outputFormat 只有 'direct' 和 'baidu-proxy'
+  // 向后兼容：'baidu' 映射到 'baidu-proxy', 'weibo' 映射到 'direct'
+  const format = config.outputFormat || 'baidu-proxy';
+
   switch (format) {
-    case 'weibo':
+    case 'direct':
+    case 'weibo' as any: // 向后兼容旧配置
       console.log(`[步骤 C] 使用微博原始链接: ${weiboLargeUrl}`);
       return weiboLargeUrl;
-      
-    case 'r2':
-      // v2.1: 检查 R2 公开域，如果不存在则回退到微博链接
-      const publicDomain = config.r2?.publicDomain;
-      if (!publicDomain || !publicDomain.trim() || !publicDomain.startsWith('http')) {
-        const warningMsg = "警告：R2 公开访问域名未配置或格式不正确，回退到微博链接。";
-        console.warn(`[步骤 C] ${warningMsg}`);
-        console.warn(`[步骤 C] 当前配置的域名: ${publicDomain || '(空)'}`);
-        await showNotification("R2 链接生成失败！", "请在设置中配置 R2 公开访问域。");
-        // 回退到微博链接
-        return weiboLargeUrl;
-      }
-      
-      // 验证域名格式
-      try {
-        new URL(publicDomain); // 验证 URL 格式
-      } catch (urlError) {
-        console.error(`[步骤 C] R2 域名格式错误: ${publicDomain}`, urlError);
-        await showNotification("R2 链接生成失败！", `R2 公开访问域名格式不正确: ${publicDomain}`);
-        return weiboLargeUrl;
-      }
-      
-      const domain = publicDomain.endsWith('/') ? publicDomain.slice(0, -1) : publicDomain;
-      const path = config.r2?.path || '';
-      const key = (path.endsWith('/') || path === '' ? path : path + '/') + hashName;
-      const r2Link = `${domain}/${key}`;
-      console.log(`[步骤 C] 使用 R2 链接: ${r2Link}`);
-      return r2Link;
-      
-    case 'baidu':
+
+    case 'baidu-proxy':
+    case 'baidu' as any: // 向后兼容旧配置
     default:
       const baiduPrefix = config.baiduPrefix || 'https://image.baidu.com/search/down?thumburl=';
       if (!baiduPrefix || typeof baiduPrefix !== 'string') {
@@ -577,7 +553,9 @@ function validateUserConfig(config: UserConfig): void {
     throw new Error("配置无效：用户配置对象不存在");
   }
 
-  if (!config.weiboCookie || typeof config.weiboCookie !== 'string' || config.weiboCookie.trim().length === 0) {
+  // 新架构：检查 config.services.weibo.cookie
+  const weiboCookie = config.services?.weibo?.cookie;
+  if (!weiboCookie || typeof weiboCookie !== 'string' || weiboCookie.trim().length === 0) {
     throw new Error("配置无效：微博 Cookie 未配置，请先在设置中配置 Cookie");
   }
 }
@@ -607,8 +585,8 @@ export async function handleFileUpload(filePath: string, config: UserConfig) {
     // --- [步骤 A - 上传微博] (串行) ---
     // 使用新的、流式上传器 (传入路径)
     const { hashName, largeUrl } = await uploadToWeibo(
-      filePath, 
-      config.weiboCookie
+      filePath,
+      config.services.weibo!.cookie // validateUserConfig 已确保存在
     );
 
 
@@ -660,15 +638,12 @@ export async function handleFileUpload(filePath: string, config: UserConfig) {
         console.warn("[历史记录] 获取文件名失败，使用路径:", nameError?.message || String(nameError));
         name = filePath.split(/[/\\]/).pop() || '未知文件';
       }
-      
-      // 从 hashName 提取 PID (例如: 006G4xsfgy1h8pbgtnqirj.jpg -> 006G4xsfgy1h8pbgtnqirj)
-      const weiboPid = hashName.replace(/\.jpg$/, '');
-      
+
       // [步骤 B - 备份R2] (并行 - 异步，但等待结果以保存 r2Key)
       let finalR2Key: string | null = null;
-      
+
       // 如果启用 R2，则在此处读取文件（为了微博上传性能优化，我们延迟到这里才读取）
-      if (!fileBytes && validateR2Config(config.r2).valid) {
+      if (!fileBytes && config.services?.r2 && validateR2Config(config.services.r2).valid) {
           try {
              console.log(`[核心流程] 为 R2 备份读取文件: ${filePath}`);
              fileBytes = await readBinaryFile(filePath);
@@ -677,9 +652,9 @@ export async function handleFileUpload(filePath: string, config: UserConfig) {
           }
       }
 
-      if (fileBytes) {
+      if (fileBytes && config.services?.r2) {
         try {
-            finalR2Key = await backupToR2(fileBytes, hashName, config.r2);
+            finalR2Key = await backupToR2(fileBytes, hashName, config.services.r2);
             if (finalR2Key) {
             console.log(`[历史记录] R2 备份成功，Key: ${finalR2Key}`);
             }
@@ -691,14 +666,22 @@ export async function handleFileUpload(filePath: string, config: UserConfig) {
             finalR2Key = null; // 失败时保持为 null
         }
       }
-      
-      const newItem: HistoryItem = { 
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9), // 使用时间戳+随机字符串作为唯一 ID
-        timestamp: Date.now(), 
+
+      // 新架构：构建 HistoryItem
+      const newItem: HistoryItem = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        timestamp: Date.now(),
         localFileName: name,
-        weiboPid: weiboPid,
+        primaryService: 'weibo',
+        results: [
+          {
+            serviceId: 'weibo',
+            result: { url: largeUrl, serviceId: 'weibo', fileKey: hashName },
+            status: 'success'
+          }
+        ],
         generatedLink: finalLink,
-        r2Key: finalR2Key
+        filePath: filePath
       };
 
       // 添加新记录到最前面，永久保存（不再限制 20 条）
@@ -785,277 +768,6 @@ export async function handleFileUpload(filePath: string, config: UserConfig) {
   }
 }
 
-/**
- * 处理单个文件上传（支持进度报告）
- * v2.0 新增 - 用于上传队列管理器
- * @param filePath 文件路径
- * @param config 用户配置
- * @param options 选项（是否上传到R2等）
- * @param onProgress 进度回调函数
- * @returns 上传结果
- */
-export async function processUpload(
-  filePath: string,
-  config: UserConfig,
-  options: { uploadToR2: boolean },
-  onProgress: UploadProgressCallback
-): Promise<{ status: 'success' | 'error'; link?: string; message?: string }> {
-  try {
-    // 1. 基础验证
-    validateFilePath(filePath);
-    validateUserConfig(config);
-
-    // 2. [新增] R2 配置前置强校验
-    // 如果用户要求备份到 R2，必须确保配置完整，否则连微博都不传
-    if (options.uploadToR2) {
-      const r2Validation = validateR2Config(config.r2 || {});
-      if (!r2Validation.valid) {
-        const missing = r2Validation.missingFields.join('、');
-        const errorMsg = `上传已终止：您勾选了"同时备份到 R2"，但 R2 配置不完整。\n缺少项：${missing}。\n请在设置中补全配置，或取消勾选 R2 备份。`;
-        console.error('[processUpload] R2 配置前置校验失败:', errorMsg);
-        onProgress({ type: 'error', payload: errorMsg });
-        return { status: 'error', message: errorMsg };
-      }
-    }
-
-    // 读取文件
-    // fileBytes 延迟读取
-    let fileBytes: Uint8Array | null = null;
-
-    // 如果启用 R2，在微博上传的同时并行读取文件，避免微博上传完成后的停顿
-    let fileReadPromise: Promise<Uint8Array | null> | null = null;
-    if (options.uploadToR2) {
-      console.log('[processUpload] 并行读取文件（为 R2 上传做准备）...');
-      fileReadPromise = readBinaryFile(filePath).catch((e) => {
-        console.error("[processUpload] 读取文件失败 (R2):", e);
-        return null;
-      });
-    }
-
-    // 步骤 1: 上传微博
-    let hashName: string;
-    let largeUrl: string;
-    let weiboPid: string;
-    
-    try {
-      console.log('[processUpload] 步骤 1: 开始上传到微博...');
-      
-      // 直接传入回调，使用真实进度
-      const uploadResult = await uploadToWeibo(
-        filePath, 
-        config.weiboCookie,
-        (percent) => {
-            // 将 0-100 的进度转发给队列管理器
-            onProgress({ type: 'weibo_progress', payload: percent });
-        }
-      );
-      
-      hashName = uploadResult.hashName;
-      largeUrl = uploadResult.largeUrl;
-      weiboPid = hashName.replace(/\.jpg$/, '');
-      
-      // 生成百度代理链接
-      const baiduPrefix = config.baiduPrefix || 'https://image.baidu.com/search/down?thumburl=';
-      const baiduLink = `${baiduPrefix}${largeUrl}`;
-      
-      onProgress({
-        type: 'weibo_success',
-        payload: { pid: weiboPid, largeUrl, baiduLink }
-      });
-      
-      console.log(`[processUpload] ✓ 微博上传成功: ${hashName}`);
-    } catch (error: any) {
-      const errorMsg = error instanceof WeiboUploadError 
-        ? error.message 
-        : (error?.message || '微博上传失败');
-      console.error('[processUpload] 微博上传失败:', errorMsg);
-      onProgress({ type: 'error', payload: errorMsg });
-      return { status: 'error', message: errorMsg };
-    }
-
-    // 步骤 2: 上传 R2 (可选)
-    let finalR2Key: string | null = null;
-    let r2Link: string | null = null;
-    
-    if (options.uploadToR2) {
-      // 首先验证 R2 配置是否完整
-      const r2Validation = validateR2Config(config.r2 || {});
-      if (!r2Validation.valid) {
-        const missingFields = r2Validation.missingFields.join('、');
-        const errorMsg = `R2 配置不完整，缺少：${missingFields}。请先在设置中配置 R2。`;
-        console.error('[processUpload] R2 配置验证失败:', errorMsg);
-        // R2 配置错误时，标记 R2 部分失败，但不中断整个上传流程
-        // 微博上传已成功，所以只标记 R2 部分失败
-        onProgress({
-          type: 'r2_progress',
-          payload: 0
-        });
-        // 发送错误通知，但继续完成上传流程
-        onProgress({ 
-          type: 'error', 
-          payload: `R2 上传失败: ${errorMsg}` 
-        });
-        await showNotification("R2 配置错误", errorMsg);
-        // 跳过 R2 上传，继续完成后续步骤（生成链接、保存历史记录等）
-      } else {
-        // R2 配置完整，继续上传流程
-        
-        // 等待文件读取完成（如果之前已启动并行读取）
-        if (fileReadPromise) {
-          try {
-            fileBytes = await fileReadPromise;
-            if (fileBytes) {
-              console.log('[processUpload] 文件读取完成，准备上传到 R2');
-            }
-          } catch (e) {
-            console.error("[processUpload] 等待文件读取失败:", e);
-          }
-        }
-        
-        // 如果并行读取失败，尝试再次读取（降级方案）
-        if (!fileBytes) {
-            try {
-              console.log('[processUpload] 并行读取未完成，重新读取文件...');
-              fileBytes = await readBinaryFile(filePath);
-            } catch (e) {
-              console.error("[processUpload] 读取文件失败 (R2):", e);
-            }
-        }
-
-        if (fileBytes) {
-          try {
-              console.log('[processUpload] 步骤 2: 开始上传到 R2...');
-              
-              // 使用真实的 R2 上传进度
-              finalR2Key = await backupToR2(
-                  fileBytes, 
-                  hashName, 
-                  config.r2,
-                  60000, // 超时时间
-                  (percent) => {
-                      // 将 0-100 的进度转发给队列管理器
-                      onProgress({ type: 'r2_progress', payload: percent });
-                  }
-              );
-              
-              if (finalR2Key) {
-                  
-                  // 生成 R2 公开链接
-                  const publicDomain = config.r2?.publicDomain;
-                  if (publicDomain && publicDomain.trim() && publicDomain.startsWith('http')) {
-                      const domain = publicDomain.endsWith('/') ? publicDomain.slice(0, -1) : publicDomain;
-                      r2Link = `${domain}/${finalR2Key}`;
-                  }
-                  
-                  onProgress({
-                      type: 'r2_success',
-                      payload: { key: finalR2Key, r2Link }
-                  });
-                  
-                  console.log(`[processUpload] ✓ R2 上传成功: ${finalR2Key}`);
-              } else {
-                  // 这种情况不应该发生，因为我们已经验证了配置
-                  const errorMsg = 'R2 上传失败：配置验证通过但上传返回 null';
-                  console.error('[processUpload]', errorMsg);
-                  onProgress({ 
-                    type: 'error', 
-                    payload: errorMsg 
-                  });
-              }
-
-          } catch (r2Error: any) {
-               const r2ErrorMsg = r2Error?.message || String(r2Error);
-               console.error('[processUpload] R2 上传失败:', r2ErrorMsg);
-               // R2 上传失败时，标记为错误但继续完成流程
-               onProgress({ 
-                 type: 'error', 
-                 payload: `R2 上传失败: ${r2ErrorMsg}` 
-               });
-               // 更新 R2 状态为失败
-               onProgress({
-                 type: 'r2_progress',
-                 payload: 0
-               });
-               await showNotification("R2 备份失败", r2ErrorMsg);
-          }
-        } else {
-          const errorMsg = 'R2 上传失败：无法读取文件';
-          console.error('[processUpload]', errorMsg);
-          onProgress({ 
-            type: 'error', 
-            payload: errorMsg 
-          });
-        }
-      }
-    }
-
-    // 步骤 3: 生成最终链接
-    const finalLink = await generateLink(largeUrl, hashName, config);
-
-    // 步骤 4: 保存历史记录
-    try {
-      const historyStore = new Store('.history.dat');
-      let items: HistoryItem[] = [];
-      
-      try {
-        items = await historyStore.get<HistoryItem[]>('uploads') || [];
-        if (!Array.isArray(items)) {
-          items = [];
-        }
-      } catch (readError: any) {
-        console.error("[processUpload] 读取历史记录失败:", readError?.message || String(readError));
-        items = [];
-      }
-      
-      // 获取本地文件名
-      let name: string;
-      try {
-        name = await basename(filePath);
-        if (!name || name.trim().length === 0) {
-          name = filePath.split(/[/\\]/).pop() || '未知文件';
-        }
-      } catch (nameError: any) {
-        name = filePath.split(/[/\\]/).pop() || '未知文件';
-      }
-      
-      const newItem: HistoryItem = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-        timestamp: Date.now(),
-        localFileName: name,
-        weiboPid: weiboPid,
-        generatedLink: finalLink,
-        r2Key: finalR2Key
-      };
-
-      const newItems = [newItem, ...items];
-      
-      try {
-        await historyStore.set('uploads', newItems);
-        await historyStore.save();
-        console.log(`[processUpload] ✓ 历史记录已保存`);
-      } catch (saveError: any) {
-        console.error("[processUpload] 保存历史记录失败:", saveError?.message || String(saveError));
-      }
-
-      // 自动同步到 WebDAV
-      syncHistoryToWebDAV(newItems, config).catch(err => {
-        console.error("[processUpload] WebDAV 同步失败:", err?.message || String(err));
-      });
-    } catch (historyError: any) {
-      console.error("[processUpload] 历史记录处理失败:", historyError?.message || String(historyError));
-    }
-
-    // 完成
-    onProgress({ type: 'complete', payload: { link: finalLink } });
-    
-    console.log(`[processUpload] ✓ 上传完成: ${finalLink}`);
-    return { status: 'success', link: finalLink };
-
-  } catch (error: any) {
-    const errorMsg = error?.message || '未知错误';
-    console.error('[processUpload] 上传失败:', errorMsg);
-    onProgress({ type: 'error', payload: errorMsg });
-    return { status: 'error', message: errorMsg };
-  }
-}
+// 注意：processUpload 函数已被弃用，新架构使用 MultiServiceUploader
+// 旧的上传逻辑已迁移到 src/core/MultiServiceUploader.ts
 

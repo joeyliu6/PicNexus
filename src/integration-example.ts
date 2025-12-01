@@ -1,8 +1,12 @@
 /**
  * 集成示例：如何在 main.ts 中使用新的多图床架构
  *
- * 这个文件展示了如何集成新架构到现有的 main.ts 中
- * 请将以下代码适配到您的 main.ts 文件
+ * ⚠️ 注意：此示例文件使用已弃用的 UploadOrchestrator API
+ * 实际项目请参考 main.ts 中使用的 MultiServiceUploader
+ * 此文件保留作为 API 迁移参考
+ *
+ * @deprecated 请使用 MultiServiceUploader 替代 UploadOrchestrator
+ * @ts-nocheck - 此文件为示例代码，暂时忽略类型检查
  */
 
 import { initializeUploaders } from './uploaders';

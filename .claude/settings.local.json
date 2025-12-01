@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(tree:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(npm run)",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": []

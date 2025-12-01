@@ -1,32 +1,49 @@
 // src/uploadQueue.ts
 /**
- * 上传队列管理器 (Vue 3 Refactor)
+ * 上传队列管理器 (Vue 3 Refactor - 多图床架构)
  * 负责管理可视化的上传队列UI和上传进度
  */
 
 import { createApp, App } from 'vue';
 import UploadQueueVue from './components/UploadQueue.vue';
 import { appState } from './main';
+import { ServiceType } from './config/types';
 
 /**
- * 队列项类型定义
+ * 单个图床服务的进度状态
+ */
+export interface ServiceProgress {
+  serviceId: ServiceType;
+  progress: number;  // 0-100
+  status: string;    // 状态文本
+  link?: string;     // 上传成功后的链接
+  error?: string;    // 错误信息
+}
+
+/**
+ * 队列项类型定义（新架构 - 支持多图床）
  */
 export interface QueueItem {
   id: string;
   fileName: string;
   filePath: string;
-  uploadToR2: boolean;
-  weiboProgress: number;
-  r2Progress: number;
-  weiboStatus: string;
-  r2Status: string;
-  weiboPid?: string;
-  weiboLink?: string;
-  r2Link?: string;
-  baiduLink?: string;
+  enabledServices: ServiceType[];  // 启用的图床列表
+  serviceProgress: Record<ServiceType, ServiceProgress>;  // 各图床独立进度
   status: 'pending' | 'uploading' | 'success' | 'error';
   errorMessage?: string;
+  primaryUrl?: string;  // 主力图床的URL
   thumbUrl?: string;
+
+  // 向后兼容字段（可选，供旧UI使用）
+  uploadToR2?: boolean;
+  weiboProgress?: number;
+  r2Progress?: number;
+  weiboStatus?: string;
+  r2Status?: string;
+  weiboPid?: string;
+  weiboLink?: string;
+  baiduLink?: string;
+  r2Link?: string;
 }
 
 /**
@@ -42,7 +59,7 @@ export type UploadProgressCallback = (progress: {
  */
 export class UploadQueueManager {
   private app: App;
-  private vm: any;
+  private vm: InstanceType<typeof UploadQueueVue> | null = null;
 
   constructor(queueListElementId: string) {
     const el = document.getElementById(queueListElementId);
@@ -57,27 +74,155 @@ export class UploadQueueManager {
   }
 
   /**
-   * 添加文件到队列
+   * 添加文件到队列（新架构 - 多图床支持）
    */
-  addFile(filePath: string, fileName: string, uploadToR2: boolean): string {
+  addFile(filePath: string, fileName: string, enabledServices: ServiceType[]): string {
     const id = `queue-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
+
+    // 初始化每个图床的进度状态
+    const serviceProgress: Record<string, ServiceProgress> = {};
+    enabledServices.forEach(serviceId => {
+      serviceProgress[serviceId] = {
+        serviceId,
+        progress: 0,
+        status: '等待中...'
+      };
+    });
+
     const item: QueueItem = {
       id,
       fileName,
       filePath,
-      uploadToR2,
+      enabledServices,
+      serviceProgress: serviceProgress as Record<ServiceType, ServiceProgress>,
+      status: 'pending',
+      // 向后兼容
+      uploadToR2: enabledServices.includes('r2'),
       weiboProgress: 0,
       r2Progress: 0,
       weiboStatus: '等待中...',
-      r2Status: uploadToR2 ? '等待中...' : '已跳过',
-      status: 'pending',
+      r2Status: enabledServices.includes('r2') ? '等待中...' : '已跳过',
     };
 
     this.vm.addFile(item);
-    
-    console.log(`[UploadQueue] 添加文件到队列: ${fileName} (ID: ${id})`);
+
+    console.log(`[UploadQueue] 添加文件到队列: ${fileName} (图床: ${enabledServices.join(', ')})`);
     return id;
+  }
+
+  /**
+   * 更新某个图床的上传进度
+   */
+  updateServiceProgress(itemId: string, serviceId: ServiceType, percent: number): void {
+    const item = this.vm.getItem(itemId);
+    if (!item) {
+      console.warn(`[UploadQueue] 找不到队列项: ${itemId}`);
+      return;
+    }
+
+    const safePercent = Math.max(0, Math.min(100, percent));
+
+    const updates: Partial<QueueItem> = {
+      status: 'uploading',
+      serviceProgress: {
+        ...item.serviceProgress,
+        [serviceId]: {
+          ...item.serviceProgress[serviceId],
+          progress: safePercent,
+          status: `${safePercent}%`
+        }
+      }
+    };
+
+    // 向后兼容
+    if (serviceId === 'weibo') {
+      updates.weiboProgress = safePercent;
+      updates.weiboStatus = `${safePercent}%`;
+    } else if (serviceId === 'r2') {
+      updates.r2Progress = safePercent;
+      updates.r2Status = `${safePercent}%`;
+    }
+
+    this.vm.updateItem(itemId, updates);
+  }
+
+  /**
+   * 标记队列项上传成功
+   */
+  markItemComplete(itemId: string, primaryUrl: string): void {
+    const item = this.vm.getItem(itemId);
+    if (!item) {
+      console.warn(`[UploadQueue] 找不到队列项: ${itemId}`);
+      return;
+    }
+
+    // 更新成功的图床状态
+    const serviceProgress = { ...item.serviceProgress };
+    item.enabledServices.forEach((serviceId: ServiceType) => {
+      if (serviceProgress[serviceId]?.progress === 100) {
+        serviceProgress[serviceId] = {
+          ...serviceProgress[serviceId],
+          status: '✓ 完成'
+        };
+      }
+    });
+
+    // 设置缩略图 URL（使用主力图床的 URL）
+    const thumbUrl = primaryUrl;
+
+    // 根据启用的服务设置对应的链接字段
+    const linkFields: any = {
+      thumbUrl,
+      primaryUrl
+    };
+
+    item.enabledServices.forEach((serviceId: ServiceType) => {
+      const serviceLink = serviceProgress[serviceId]?.link;
+      if (serviceLink) {
+        // 设置各个服务的链接字段
+        if (serviceId === 'weibo') {
+          linkFields.weiboLink = serviceLink;
+          // 从 serviceProgress 中获取 PID（如果有的话）
+          const weiboPid = serviceProgress[serviceId]?.metadata?.pid;
+          if (weiboPid) {
+            linkFields.weiboPid = weiboPid;
+          }
+        } else if (serviceId === 'r2') {
+          linkFields.r2Link = serviceLink;
+        } else if (serviceId === 'tcl') {
+          linkFields.tclLink = serviceLink;
+        }
+      }
+    });
+
+    this.vm.updateItem(itemId, {
+      status: 'success',
+      serviceProgress,
+      ...linkFields,
+      weiboStatus: item.enabledServices.includes('weibo') ? '✓ 完成' : '已跳过',  // 向后兼容
+      r2Status: item.enabledServices.includes('r2') ? '✓ 完成' : '已跳过'
+    });
+
+    console.log(`[UploadQueue] ${item.fileName} 上传成功`);
+  }
+
+  /**
+   * 标记队列项上传失败
+   */
+  markItemFailed(itemId: string, errorMessage: string): void {
+    const item = this.vm.getItem(itemId);
+    if (!item) {
+      console.warn(`[UploadQueue] 找不到队列项: ${itemId}`);
+      return;
+    }
+
+    this.vm.updateItem(itemId, {
+      status: 'error',
+      errorMessage,
+      weiboStatus: '✗ 失败',  // 向后兼容
+    });
+
+    console.error(`[UploadQueue] ${item.fileName} 上传失败: ${errorMessage}`);
   }
 
   /**
