@@ -110,6 +110,7 @@ fn main() {
             commands::upload::upload_file_stream,
             commands::r2::upload_to_r2,
             commands::tcl::upload_to_tcl,
+            commands::jd::upload_to_jd,
             commands::utils::file_exists,
             get_or_create_secure_key
         ])

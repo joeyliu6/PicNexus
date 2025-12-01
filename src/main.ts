@@ -119,7 +119,8 @@ const dropZoneHeader = getElement<HTMLElement>('drop-zone-header', '拖放区域
 const serviceCheckboxes = {
   weibo: document.querySelector<HTMLInputElement>('input[data-service="weibo"]'),
   r2: document.querySelector<HTMLInputElement>('input[data-service="r2"]'),
-  tcl: document.querySelector<HTMLInputElement>('input[data-service="tcl"]')
+  tcl: document.querySelector<HTMLInputElement>('input[data-service="tcl"]'),
+  jd: document.querySelector<HTMLInputElement>('input[data-service="jd"]')
 };
 
 // Settings View Elements
@@ -525,6 +526,7 @@ async function initializeUpload(): Promise<void> {
           if (serviceCheckboxes.weibo?.checked) enabledServices.push('weibo');
           if (serviceCheckboxes.r2?.checked) enabledServices.push('r2');
           if (serviceCheckboxes.tcl?.checked) enabledServices.push('tcl');
+          if (serviceCheckboxes.jd?.checked) enabledServices.push('jd');
 
           if (enabledServices.length === 0) {
             console.warn('[上传] 没有勾选任何图床');

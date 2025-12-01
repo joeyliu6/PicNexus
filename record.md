@@ -1,8 +1,8 @@
 # WeiboDR-Uploader 多图床架构重构记录
 
-> **开发日期**: 2025-12-01
+> **开发日期**: 2025-12-01 ~ 2025-12-02
 > **重构目标**: 从"主力+备份"模式升级到多图床并行上传架构
-> **核心特性**: TCL 图床（开箱即用）、多图床并行、独立进度、智能降级
+> **核心特性**: TCL 图床（开箱即用）、京东图床（开箱即用）、多图床并行、独立进度、智能降级
 
 ---
 
@@ -17,7 +17,7 @@
 - 配置结构: `primaryService` + `backup`
 
 **新架构 (v3.0)**:
-- 支持图床: 微博、R2、TCL（可扩展）
+- 支持图床: 微博、R2、TCL、京东（可扩展）
 - 上传模式: 并行（最多3个同时）
 - 选择策略: 互为备份，第一个成功的作为主力
 - 配置结构: `enabledServices: ServiceType[]`
@@ -1339,6 +1339,267 @@ progress.skipped::-webkit-progress-value {
 
 ---
 
+## ✅ 阶段十: 京东图床支持 (2025-12-02 完成)
+
+**修改文件**:
+- `src-tauri/src/commands/jd.rs` (新建) - Rust 后端上传命令
+- `src-tauri/src/commands/mod.rs` - 注册 jd 模块
+- `src-tauri/src/main.rs` - 注册 `upload_to_jd` 命令
+- `src/uploaders/jd/JDUploader.ts` (新建) - 前端上传器
+- `src/uploaders/jd/index.ts` (新建) - 导出文件
+- `src/uploaders/index.ts` - 注册京东上传器到工厂
+- `src/config/types.ts` - 修复 JDServiceConfig 类型
+- `index.html` - 添加京东复选框和设置说明
+- `src/main.ts` - 添加 jd 到 serviceCheckboxes
+- `src/core/MultiServiceUploader.ts` - 添加 jd 到无配置图床列表
+
+### 10.1 京东 API 特性
+
+**核心特点**:
+- ✅ **无需 Cookie**: 完全开箱即用，与 TCL 类似
+- ✅ **两步上传流程**: 先获取 `aid`/`pin`，再上传图片
+- ✅ **15MB 文件限制**: 比 TCL 限制更宽松
+- ✅ **支持格式**: JPG、JPEG、PNG、GIF
+
+**API 端点**:
+```
+1. 获取 aid/pin: GET https://api.m.jd.com/client.action?functionId=getAidInfo&...
+   - 返回 JSONP 格式: jsonp1({"code":"0","aid":"...","pin":"..."})
+
+2. 上传图片: POST https://file-dd.jd.com/file/uploadImg.action
+   - Form 参数: aid, pin, upload(文件)
+   - 返回 JSON: {"code": 0, "path": "jfs/xxx/xxx.jpg"}
+```
+
+### 10.2 Rust 后端实现
+
+**文件**: `src-tauri/src/commands/jd.rs`
+
+```rust
+const MAX_FILE_SIZE: u64 = 15 * 1024 * 1024;  // 15MB
+
+/// 获取 aid 和 pin
+async fn get_aid_info() -> Result<AidInfo, String> {
+    // 1. 构建请求 URL
+    let url = "https://api.m.jd.com/client.action?functionId=getAidInfo&...";
+
+    // 2. 发送请求并解析 JSONP 响应
+    // JSONP 格式: jsonp1({...})
+    let jsonp_text = response.text().await?;
+    let json_start = jsonp_text.find('(').ok_or("Invalid JSONP")? + 1;
+    let json_end = jsonp_text.rfind(')').ok_or("Invalid JSONP")?;
+    let json_str = &jsonp_text[json_start..json_end];
+
+    // 3. 解析 JSON
+    let aid_response: AidInfoResponse = serde_json::from_str(json_str)?;
+}
+
+#[tauri::command]
+pub async fn upload_to_jd(
+    window: Window,
+    id: String,
+    file_path: String
+) -> Result<JDUploadResult, String> {
+    // 1. 读取文件并验证
+    let file_data = tokio::fs::read(&file_path).await?;
+    if file_data.len() as u64 > MAX_FILE_SIZE {
+        return Err("文件大小超过 15MB 限制".to_string());
+    }
+
+    // 2. 获取 aid 和 pin
+    let aid_info = get_aid_info().await?;
+
+    // 3. 构建 multipart 表单
+    let form = Form::new()
+        .text("aid", aid_info.aid)
+        .text("pin", aid_info.pin)
+        .part("upload", Part::bytes(file_data).file_name(file_name));
+
+    // 4. 发送上传请求
+    let response = client
+        .post("https://file-dd.jd.com/file/uploadImg.action")
+        .multipart(form)
+        .send().await?;
+
+    // 5. 解析响应并返回完整 URL
+    let jd_response: JDApiResponse = response.json().await?;
+    let url = format!("https://img14.360buyimg.com/{}", jd_response.path);
+
+    Ok(JDUploadResult { url, size: file_data.len() as u64 })
+}
+```
+
+**响应结构**:
+```rust
+#[derive(Debug, Deserialize)]
+struct AidInfoResponse {
+    code: String,    // "0" 表示成功
+    aid: String,     // 用于上传的 aid
+    pin: String,     // 用于上传的 pin
+}
+
+#[derive(Debug, Deserialize)]
+struct JDApiResponse {
+    code: i32,       // 0 表示成功
+    path: String,    // 图片路径，如 "jfs/xxx/xxx.jpg"
+}
+```
+
+### 10.3 前端上传器
+
+**文件**: `src/uploaders/jd/JDUploader.ts`
+
+```typescript
+export class JDUploader extends BaseUploader {
+  readonly serviceId = 'jd';
+  readonly serviceName = '京东图床';
+
+  protected getRustCommand(): string {
+    return 'upload_to_jd';
+  }
+
+  // 京东无需配置验证
+  async validateConfig(_config: any): Promise<ValidationResult> {
+    return { valid: true };
+  }
+
+  async upload(
+    filePath: string,
+    _options: UploadOptions,
+    onProgress?: ProgressCallback
+  ): Promise<UploadResult> {
+    // 调用 Rust 后端
+    const rustResult = await this.uploadViaRust(filePath, {}, onProgress);
+
+    return {
+      serviceId: 'jd',
+      fileKey: rustResult.url,
+      url: rustResult.url,
+      size: rustResult.size
+    };
+  }
+}
+```
+
+### 10.4 配置类型修复
+
+**文件**: `src/config/types.ts`
+
+**问题**: 原有 `JDServiceConfig` 错误地包含了 `cookie` 字段
+
+```typescript
+// 修复前（错误）
+export interface JDServiceConfig extends BaseServiceConfig {
+  cookie: string;  // ❌ 京东不需要 cookie
+}
+
+// 修复后（正确）
+export interface JDServiceConfig extends BaseServiceConfig {
+  // 京东图床不需要额外配置
+}
+```
+
+**DEFAULT_CONFIG 更新**:
+```typescript
+export const DEFAULT_CONFIG: UserConfig = {
+  enabledServices: ['tcl', 'jd'],  // 默认启用 TCL 和京东
+  services: {
+    // ...
+    jd: { enabled: true }  // 京东默认启用
+  }
+};
+```
+
+### 10.5 UI 集成
+
+**文件**: `index.html`
+
+**上传界面复选框**:
+```html
+<label class="service-checkbox checked">
+  <input type="checkbox" data-service="jd" checked />
+  <span class="service-icon">🛒</span>
+  <span class="service-name">京东图床</span>
+  <span class="service-config-status ready" data-service="jd">开箱即用</span>
+</label>
+```
+
+**设置页面说明**:
+```html
+<div class="form-section">
+    <h2>京东图床</h2>
+    <p class="info-text" style="color: var(--success);">
+        ✓ 京东图床无需配置，开箱即用
+    </p>
+    <p class="info-text" style="color: var(--text-secondary);">
+        📄 支持格式：JPG、JPEG、PNG、GIF
+    </p>
+    <p class="info-text" style="color: var(--text-secondary);">
+        📦 文件大小限制：15MB
+    </p>
+    <p class="info-text" style="color: var(--warning);">
+        ⚠️ 注意：京东为第三方免费服务，稳定性无保障
+    </p>
+</div>
+```
+
+### 10.6 关键 Bug 修复
+
+#### 🐛 Bug: "jd 未配置，跳过"
+
+**问题描述**:
+实现完成后测试上传，控制台输出 `[MultiUploader] jd 未配置，跳过`，导致京东图床无法使用。
+
+**根本原因**:
+`src/core/MultiServiceUploader.ts` 中的 `filterConfiguredServices()` 方法只将 TCL 标记为无需配置的图床，没有包含京东。
+
+**修复位置**: `src/core/MultiServiceUploader.ts:230`
+
+```typescript
+// 修复前
+if (serviceId === 'tcl') {
+  return true;
+}
+
+// 修复后
+if (serviceId === 'tcl' || serviceId === 'jd') {
+  return true;
+}
+```
+
+**Debug 注意事项**:
+> ⚠️ **重要**: 添加新的无配置图床时，必须同时更新以下位置：
+> 1. `filterConfiguredServices()` 中的无配置图床判断
+> 2. `DEFAULT_CONFIG.services` 中的默认配置
+> 3. `sanitizeConfig()` 中的敏感数据处理（如果需要）
+
+### 10.7 测试要点
+
+- ✅ 京东上传成功，返回正确 URL
+- ✅ 进度回调正常工作
+- ✅ 文件大小验证（>15MB 时拒绝）
+- ✅ 文件类型验证
+- ✅ 与 TCL 并行上传正常
+- ✅ 历史记录正确显示京东结果
+- ✅ 设置页面显示京东说明
+
+### 10.8 文件完整列表
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `src-tauri/src/commands/jd.rs` | 新建 | Rust 后端上传命令 |
+| `src-tauri/src/commands/mod.rs` | 修改 | 添加 `pub mod jd;` |
+| `src-tauri/src/main.rs` | 修改 | 注册 `upload_to_jd` 命令 |
+| `src/uploaders/jd/JDUploader.ts` | 新建 | 前端上传器类 |
+| `src/uploaders/jd/index.ts` | 新建 | 导出文件 |
+| `src/uploaders/index.ts` | 修改 | 注册到工厂 |
+| `src/config/types.ts` | 修改 | 修复配置类型 |
+| `index.html` | 修改 | UI 复选框和设置说明 |
+| `src/main.ts` | 修改 | serviceCheckboxes |
+| `src/core/MultiServiceUploader.ts` | 修改 | 无配置图床列表 |
+
+---
+
 ## 🚧 待完成的工作 (TODO)
 
 ### 高优先级 (P0)
@@ -1625,7 +1886,7 @@ function migrateConfigToV3(oldConfig: any): UserConfig {
 #### 7. 更多图床支持
 **计划支持**:
 - [ ] 纳米图床 (Nami)
-- [ ] 京东图床 (JD)
+- [x] 京东图床 (JD) ✅ 已完成 2025-12-02
 - [ ] 牛客图床 (Nowcoder)
 
 **扩展模式**:
@@ -1821,10 +2082,12 @@ function migrateConfigToV3(oldConfig: any): UserConfig {
 | 阶段七 | 批量操作功能 | ✅ | 2025-12-01 |
 | 阶段八 | 上传队列 Vue 组件更新 | ✅ | 2025-12-01 |
 | 阶段九 | 设置页面 TCL 说明 | ✅ | 2025-12-01 |
+| 阶段十 | 京东图床支持 | ✅ | 2025-12-02 |
 
-**总体进度**: 约 95% 完成 (新增: TCL 说明文档)
+**总体进度**: 约 98% 完成 (新增: 京东图床支持)
 
 **所有 P0 + P1 任务已完成！** 🎉🎉🎉
+**京东图床已集成！** 🛒
 
 ### 进行中 (🚧)
 
@@ -1854,12 +2117,29 @@ function migrateConfigToV3(oldConfig: any): UserConfig {
 
 ### API 文档
 - TCL API: `https://service2.tcl.com/api.php/Center/uploadQiniu`
+- 京东 API:
+  - 获取凭证: `https://api.m.jd.com/client.action?functionId=getAidInfo`
+  - 上传图片: `https://file-dd.jd.com/file/uploadImg.action`
+  - 图片域名: `https://img14.360buyimg.com/`
 - 微博 API: (已有)
 - Cloudflare R2: (已有)
 
 ---
 
 ## 📝 更新日志
+
+### v3.0.1-alpha (2025-12-02)
+
+**新增**:
+- ✨ 京东图床支持（开箱即用，15MB 限制）
+- ✨ 京东设置页面说明
+
+**修复**:
+- 🐛 修复无配置图床在 `filterConfiguredServices()` 中被错误跳过的问题
+
+**文档**:
+- 📝 添加京东图床实现文档到 record.md
+- 📝 添加 Debug 注意事项（无配置图床检查清单）
 
 ### v3.0.0-alpha (2025-12-01)
 
@@ -1869,6 +2149,9 @@ function migrateConfigToV3(oldConfig: any): UserConfig {
 - ✨ 服务复选框 UI（带配置状态徽章）
 - ✨ 独立进度跟踪（每个图床）
 - ✨ 智能配置过滤
+- ✨ 历史记录多图床展示
+- ✨ 单图床重试功能
+- ✨ 批量操作功能（复制、导出、删除）
 
 **变更**:
 - 🔧 `UserConfig` 结构重构
@@ -1878,11 +2161,6 @@ function migrateConfigToV3(oldConfig: any): UserConfig {
 **移除**:
 - 🗑️ 主力+备份模式
 - 🗑️ R2 Toggle（替换为多图床复选框）
-
-**待完成**:
-- 🚧 历史记录多图床展示
-- 🚧 单图床重试功能
-- 🚧 批量操作功能
 
 ---
 
@@ -1894,5 +2172,5 @@ function migrateConfigToV3(oldConfig: any): UserConfig {
 
 ---
 
-**最后更新**: 2025-12-01
-**下次审查**: 完成 P0 任务后
+**最后更新**: 2025-12-02
+**下次审查**: 添加更多图床时

@@ -57,10 +57,10 @@ export interface NamiServiceConfig extends BaseServiceConfig {
 
 /**
  * 京东图床服务配置
+ * 京东图床无需认证，和 TCL 一样开箱即用
  */
 export interface JDServiceConfig extends BaseServiceConfig {
-  /** 京东 Cookie */
-  cookie: string;
+  // 京东图床不需要额外配置
 }
 
 /**
@@ -192,6 +192,9 @@ export const DEFAULT_CONFIG: UserConfig = {
     },
     tcl: {
       enabled: true  // TCL 图床默认启用，无需额外配置
+    },
+    jd: {
+      enabled: true  // 京东图床默认启用，无需额外配置
     }
   },
   outputFormat: 'baidu-proxy',
@@ -228,10 +231,7 @@ export function sanitizeConfig(config: UserConfig): UserConfig {
         ...config.services.nami,
         cookie: sanitizeString(config.services.nami.cookie, 8, 4)
       } : undefined,
-      jd: config.services.jd ? {
-        ...config.services.jd,
-        cookie: sanitizeString(config.services.jd.cookie, 8, 4)
-      } : undefined,
+      jd: config.services.jd,  // JD 无需清洗，没有敏感信息
       tcl: config.services.tcl,
       nowcoder: config.services.nowcoder ? {
         ...config.services.nowcoder,

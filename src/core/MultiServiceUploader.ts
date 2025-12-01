@@ -226,8 +226,8 @@ export class MultiServiceUploader {
     return enabledServices.filter(serviceId => {
       const serviceConfig = config.services[serviceId];
 
-      // TCL 图床无需配置，直接返回 true
-      if (serviceId === 'tcl') {
+      // TCL 和京东图床无需配置，直接返回 true
+      if (serviceId === 'tcl' || serviceId === 'jd') {
         return true;
       }
 
