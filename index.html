@@ -272,10 +272,19 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
                     注意：牛客为第三方服务，需要 Cookie 认证，稳定性无保障
                 </p>
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <button id="login-nowcoder-btn" class="btn-secondary" style="flex: 1; padding: 8px 12px; cursor: pointer;">
+                        自动获取Cookie
+                    </button>
+                    <button id="test-nowcoder-cookie-btn" class="btn-secondary" style="flex: 1; padding: 8px 12px; cursor: pointer;">
+                        测试连接
+                    </button>
+                </div>
                 <label for="nowcoder-cookie">牛客 Cookie</label>
                 <textarea id="nowcoder-cookie" rows="4" placeholder="请输入牛客网 Cookie...&#10;需要包含 NOWCODERUID 和 t 字段"></textarea>
+                <span id="nowcoder-cookie-status" style="display: block; margin-top: 5px; font-size: 0.9em;"></span>
                 <p class="hint" style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">
-                    💡 提示：登录 nowcoder.com 后，在浏览器开发者工具 (F12) → Network → 任意请求 → Headers → Cookie 中复制
+                    💡 提示：点击上方"自动获取Cookie"按钮，或手动复制：登录 nowcoder.com 后，在浏览器开发者工具 (F12) → Network → 任意请求 → Headers → Cookie 中复制
                 </p>
             </div>
 

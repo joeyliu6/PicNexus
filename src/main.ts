@@ -5,6 +5,7 @@ import { dialog } from '@tauri-apps/api';
 
 import { Store } from './store';
 import { UserConfig, HistoryItem, DEFAULT_CONFIG, ServiceType } from './config/types';
+import { getCookieProvider } from './config/cookieProviders';
 // import { validateR2Config } from './coreLogic'; // 暂未使用
 
 // 新架构导入
@@ -625,12 +626,21 @@ async function initializeUpload(): Promise<void> {
 // --- LOGIN WINDOW LOGIC ---
 /**
  * 打开 WebView 登录窗口
- * 允许用户通过官方微博登录页面获取 Cookie
+ * 允许用户通过官方登录页面获取 Cookie
+ * @param serviceId 服务标识（weibo/nowcoder 等），默认为 weibo
  */
-async function openWebviewLoginWindow(): Promise<void> {
+async function openWebviewLoginWindow(serviceId: string = 'weibo'): Promise<void> {
   try {
-    console.log('[WebView登录窗口] 开始打开官方登录窗口');
-    
+    // 获取 Cookie 提供者配置
+    const provider = getCookieProvider(serviceId);
+    if (!provider) {
+      showToast(`不支持的服务: ${serviceId}`, 'error', 3000);
+      console.error('[WebView登录窗口] 不支持的服务:', serviceId);
+      return;
+    }
+
+    console.log(`[WebView登录窗口] 开始打开 ${provider.name} 登录窗口`);
+
     // 检查窗口是否已存在
     try {
       const existingWindow = WebviewWindow.getByLabel('login-webview');
@@ -643,12 +653,12 @@ async function openWebviewLoginWindow(): Promise<void> {
       console.warn('[WebView登录窗口] 检查已存在窗口失败:', error);
       // 继续创建新窗口
     }
-    
-    // 创建新的Cookie获取窗口
+
+    // 创建新的Cookie获取窗口（通过 URL 参数传递服务类型）
     try {
       const loginWindow = new WebviewWindow('login-webview', {
-        url: '/login-webview.html',
-        title: '微博登录 - 自动获取Cookie',
+        url: `/login-webview.html?service=${serviceId}`,
+        title: `${provider.name}登录 - 自动获取Cookie`,
         width: 500,
         height: 800,
         resizable: true,
@@ -657,136 +667,194 @@ async function openWebviewLoginWindow(): Promise<void> {
         decorations: true,
         transparent: false,
       });
-      
+
       loginWindow.once('tauri://created', () => {
-        console.log('[WebView登录窗口] ✓ 窗口创建成功');
+        console.log(`[WebView登录窗口] ✓ ${provider.name} 窗口创建成功`);
       });
-      
+
       loginWindow.once('tauri://error', (e) => {
         console.error('[WebView登录窗口] 窗口创建失败:', e);
         const errorMsg = e && typeof e === 'object' && 'payload' in e ? String(e.payload) : String(e);
-        if (cookieStatusEl) {
-          cookieStatusEl.textContent = `❌ 打开登录窗口失败: ${errorMsg}`;
-          cookieStatusEl.style.color = 'red';
-        } else {
-          alert(`打开登录窗口失败: ${errorMsg}`);
-        }
+        showToast(`打开登录窗口失败: ${errorMsg}`, 'error', 5000);
       });
     } catch (createError) {
       const errorMsg = createError instanceof Error ? createError.message : String(createError);
       console.error('[WebView登录窗口] 创建窗口异常:', createError);
-      if (cookieStatusEl) {
-        cookieStatusEl.textContent = `❌ 创建登录窗口失败: ${errorMsg}`;
-        cookieStatusEl.style.color = 'red';
-      } else {
-        alert(`创建登录窗口失败: ${errorMsg}`);
-      }
+      showToast(`创建登录窗口失败: ${errorMsg}`, 'error', 5000);
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error('[WebView登录窗口] 打开窗口异常:', error);
-    if (cookieStatusEl) {
-      cookieStatusEl.textContent = `❌ 打开登录窗口失败: ${errorMsg}`;
-      cookieStatusEl.style.color = 'red';
-    } else {
-      alert(`打开登录窗口失败: ${errorMsg}`);
-    }
+    showToast(`打开登录窗口失败: ${errorMsg}`, 'error', 5000);
   }
 }
 
 
 /**
+ * Cookie 更新事件的 payload 类型
+ */
+interface CookieUpdatedPayload {
+  serviceId: string;
+  cookie: string;
+}
+
+/**
  * 设置 Cookie 更新监听器
- * 监听来自登录窗口的 Cookie 更新事件
+ * 监听来自登录窗口的 Cookie 更新事件（支持多服务）
  */
 async function setupCookieListener(): Promise<void> {
   try {
-    await listen<string>('cookie-updated', async (event) => {
+    // 监听新格式的事件 {serviceId, cookie}
+    await listen<CookieUpdatedPayload>('cookie-updated', async (event) => {
       try {
-        console.log('[Cookie更新] 收到Cookie更新事件，长度:', event.payload?.length || 0);
-        
-        const cookie = event.payload;
-        
-        // 验证 Cookie
-        if (!cookie || typeof cookie !== 'string' || cookie.trim().length === 0) {
-          console.error('[Cookie更新] Cookie为空或无效:', typeof cookie);
-          if (cookieStatusEl) {
-            cookieStatusEl.textContent = '❌ 接收到的 Cookie 无效';
-            cookieStatusEl.style.color = 'red';
-          }
+        const payload = event.payload;
+
+        // 兼容旧格式（直接是 string）和新格式（{serviceId, cookie}）
+        let serviceId: string;
+        let cookie: string;
+
+        if (typeof payload === 'string') {
+          // 旧格式：直接是 cookie 字符串，默认为微博
+          serviceId = 'weibo';
+          cookie = payload;
+        } else if (payload && typeof payload === 'object') {
+          // 新格式：{serviceId, cookie}
+          serviceId = payload.serviceId || 'weibo';
+          cookie = payload.cookie;
+        } else {
+          console.error('[Cookie更新] 无效的 payload 格式:', typeof payload);
           return;
         }
-        
-        try {
-          // 更新UI
-          if (weiboCookieEl) {
-            weiboCookieEl.value = cookie.trim();
-            console.log('[Cookie更新] ✓ UI已更新');
-          } else {
-            console.warn('[Cookie更新] 警告: weiboCookieEl 不存在，无法更新UI');
-          }
-          
-          // 保存到存储
-          let config: UserConfig;
-          try {
-            const existingConfig = await configStore.get<UserConfig>('config');
-            config = existingConfig || DEFAULT_CONFIG;
-          } catch (getError) {
-            console.warn('[Cookie更新] 读取现有配置失败，使用默认配置:', getError);
-            config = DEFAULT_CONFIG;
-          }
-          
-          // 迁移到新配置结构
-          if (!config.services) {
-            config.services = {};
-          }
-          if (!config.services.weibo) {
-            config.services.weibo = { enabled: true, cookie: '' };
-          }
-          config.services.weibo.cookie = cookie.trim();
 
-          try {
-            await configStore.set('config', config);
-            await configStore.save();
-            console.log('[Cookie更新] ✓ Cookie已保存到存储');
-          } catch (saveError) {
-            throw new Error(`保存配置失败: ${saveError instanceof Error ? saveError.message : String(saveError)}`);
-          }
-          
+        console.log(`[Cookie更新] 收到 ${serviceId} Cookie更新事件，长度:`, cookie?.length || 0);
+
+        // 验证 Cookie
+        if (!cookie || typeof cookie !== 'string' || cookie.trim().length === 0) {
+          console.error('[Cookie更新] Cookie为空或无效');
+          showToast('接收到的 Cookie 无效', 'error', 3000);
+          return;
+        }
+
+        const trimmedCookie = cookie.trim();
+
+        try {
+          // 根据服务类型更新对应的 UI 和配置
+          await handleCookieUpdate(serviceId, trimmedCookie);
+
+          // 刷新上传界面的服务复选框状态
+          await loadServiceCheckboxStates();
+
           // 显示成功提示
-          if (cookieStatusEl) {
-            cookieStatusEl.textContent = '✅ Cookie已自动填充并保存！';
-            cookieStatusEl.style.color = 'lightgreen';
-            
-            setTimeout(() => {
-              if (cookieStatusEl) {
-                cookieStatusEl.textContent = '';
-              }
-            }, 3000);
-          }
-          
+          const provider = getCookieProvider(serviceId);
+          const serviceName = provider?.name || serviceId;
+          showToast(`${serviceName} Cookie 已自动填充并保存！`, 'success', 3000);
+
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);
           console.error('[Cookie更新] 保存Cookie失败:', error);
-          if (cookieStatusEl) {
-            cookieStatusEl.textContent = `❌ 保存失败: ${errorMsg}`;
-            cookieStatusEl.style.color = 'red';
-          }
+          showToast(`保存失败: ${errorMsg}`, 'error', 5000);
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         console.error('[Cookie更新] 处理Cookie更新事件失败:', error);
-        if (cookieStatusEl) {
-          cookieStatusEl.textContent = `❌ 处理失败: ${errorMsg}`;
-          cookieStatusEl.style.color = 'red';
-        }
+        showToast(`处理失败: ${errorMsg}`, 'error', 5000);
       }
     });
-    
-    console.log('[Cookie更新] ✓ 监听器已设置');
+
+    console.log('[Cookie更新] ✓ 监听器已设置（支持多服务）');
   } catch (error) {
     console.error('[Cookie更新] 设置监听器失败:', error);
     // 不抛出错误，避免阻塞应用启动
+  }
+}
+
+/**
+ * 处理 Cookie 更新（根据服务类型更新 UI 和配置）
+ * @param serviceId 服务标识
+ * @param cookie Cookie 字符串
+ */
+async function handleCookieUpdate(serviceId: string, cookie: string): Promise<void> {
+  // 读取配置
+  let config: UserConfig;
+  try {
+    const existingConfig = await configStore.get<UserConfig>('config');
+    config = existingConfig || DEFAULT_CONFIG;
+  } catch (getError) {
+    console.warn('[Cookie更新] 读取现有配置失败，使用默认配置:', getError);
+    config = { ...DEFAULT_CONFIG };
+  }
+
+  // 确保 services 对象存在
+  if (!config.services) {
+    config.services = {};
+  }
+
+  // 根据服务类型更新
+  switch (serviceId) {
+    case 'weibo':
+      // 更新微博 Cookie
+      if (!config.services.weibo) {
+        config.services.weibo = { enabled: true, cookie: '' };
+      }
+      config.services.weibo.cookie = cookie;
+
+      // 更新 UI
+      if (weiboCookieEl) {
+        weiboCookieEl.value = cookie;
+        console.log('[Cookie更新] ✓ 微博 Cookie UI 已更新');
+      }
+
+      // 更新状态显示
+      if (cookieStatusEl) {
+        cookieStatusEl.textContent = '✅ Cookie已自动填充并保存！';
+        cookieStatusEl.style.color = 'lightgreen';
+        setTimeout(() => {
+          if (cookieStatusEl) cookieStatusEl.textContent = '';
+        }, 3000);
+      }
+      break;
+
+    case 'nowcoder':
+      // 更新牛客 Cookie
+      if (!config.services.nowcoder) {
+        config.services.nowcoder = { enabled: true, cookie: '' };
+      }
+      config.services.nowcoder.cookie = cookie;
+
+      // 更新 UI
+      const nowcoderCookieEl = document.getElementById('nowcoder-cookie') as HTMLTextAreaElement | null;
+      if (nowcoderCookieEl) {
+        nowcoderCookieEl.value = cookie;
+        console.log('[Cookie更新] ✓ 牛客 Cookie UI 已更新');
+      }
+
+      // 更新状态显示
+      const nowcoderStatusEl = document.getElementById('nowcoder-cookie-status');
+      if (nowcoderStatusEl) {
+        nowcoderStatusEl.textContent = '✅ Cookie已自动填充并保存！';
+        nowcoderStatusEl.style.color = 'lightgreen';
+        setTimeout(() => {
+          if (nowcoderStatusEl) nowcoderStatusEl.textContent = '';
+        }, 3000);
+      }
+      break;
+
+    default:
+      console.warn(`[Cookie更新] 未知的服务类型: ${serviceId}`);
+      // 尝试通用处理
+      (config.services as Record<string, any>)[serviceId] = {
+        enabled: true,
+        cookie: cookie
+      };
+  }
+
+  // 保存配置
+  try {
+    await configStore.set('config', config);
+    await configStore.save();
+    console.log(`[Cookie更新] ✓ ${serviceId} Cookie已保存到存储`);
+  } catch (saveError) {
+    throw new Error(`保存配置失败: ${saveError instanceof Error ? saveError.message : String(saveError)}`);
   }
 }
 
@@ -1344,6 +1412,175 @@ async function testWeiboConnection(): Promise<void> {
     if (testCookieBtn) {
       testCookieBtn.disabled = false;
       testCookieBtn.textContent = '测试Cookie';
+    }
+  }
+}
+
+/**
+ * 测试牛客 Cookie 连接
+ * 通过调用牛客上传 API 验证 Cookie 是否有效
+ */
+async function testNowcoderConnection(): Promise<void> {
+  const nowcoderCookieStatusEl = document.getElementById('nowcoder-cookie-status');
+  const testNowcoderBtn = document.getElementById('test-nowcoder-cookie-btn') as HTMLButtonElement | null;
+
+  try {
+    console.log('[牛客Cookie测试] 开始测试牛客连接...');
+
+    // 验证输入
+    if (!nowcoderCookieEl) {
+      console.error('[牛客Cookie测试] nowcoderCookieEl 不存在');
+      if (nowcoderCookieStatusEl) {
+        nowcoderCookieStatusEl.textContent = '❌ Cookie 输入框不存在';
+        nowcoderCookieStatusEl.style.color = 'red';
+      }
+      return;
+    }
+
+    const cookie = nowcoderCookieEl.value.trim();
+    if (!cookie || cookie.length === 0) {
+      console.warn('[牛客Cookie测试] Cookie 为空');
+      if (nowcoderCookieStatusEl) {
+        nowcoderCookieStatusEl.textContent = '❌ Cookie 不能为空！';
+        nowcoderCookieStatusEl.style.color = 'red';
+      }
+      return;
+    }
+
+    // 检查必要字段
+    if (!cookie.includes('t=')) {
+      console.warn('[牛客Cookie测试] Cookie 缺少 t 字段');
+      if (nowcoderCookieStatusEl) {
+        nowcoderCookieStatusEl.textContent = '❌ Cookie 缺少必要字段 t（需要登录后的 Cookie）';
+        nowcoderCookieStatusEl.style.color = 'red';
+      }
+      return;
+    }
+
+    // 禁用测试按钮，显示加载状态
+    if (testNowcoderBtn) {
+      testNowcoderBtn.disabled = true;
+      testNowcoderBtn.textContent = '测试中...';
+    }
+
+    // 更新状态
+    if (nowcoderCookieStatusEl) {
+      nowcoderCookieStatusEl.textContent = '⏳ 测试中...';
+      nowcoderCookieStatusEl.style.color = 'yellow';
+    }
+
+    try {
+      // 获取 HTTP 客户端
+      const client = await getClient();
+
+      // 创建最小的 1x1 透明 PNG（67 字节）
+      const minimalPng = new Uint8Array([
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, // 1x1 dimensions
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, // 8-bit RGBA
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, // IDAT chunk
+        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, // compressed data
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, // checksum
+        0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, // IEND chunk
+        0xAE, 0x42, 0x60, 0x82  // IEND CRC
+      ]);
+
+      // 发送测试请求
+      const timestamp = Date.now();
+      const response = await client.post<{ code: number; msg: string; url?: string }>(
+        `https://www.nowcoder.com/uploadImage?type=1&_=${timestamp}`,
+        Body.bytes(minimalPng),
+        {
+          responseType: ResponseType.JSON,
+          headers: {
+            Cookie: cookie,
+            'Content-Type': 'application/octet-stream',
+            'Referer': 'https://www.nowcoder.com/creation/write/article',
+            'Origin': 'https://www.nowcoder.com',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36'
+          },
+          timeout: 15000, // 15秒超时
+        }
+      );
+
+      // 检查 HTTP 状态码
+      if (!response.ok) {
+        const errorMsg = `❌ 测试失败 (HTTP ${response.status})`;
+        console.warn('[牛客Cookie测试] HTTP 请求失败:', response.status);
+        if (nowcoderCookieStatusEl) {
+          if (response.status === 401 || response.status === 403) {
+            nowcoderCookieStatusEl.textContent = `${errorMsg}: Cookie 无效或已过期`;
+          } else if (response.status >= 500) {
+            nowcoderCookieStatusEl.textContent = `${errorMsg}: 牛客服务器错误`;
+          } else {
+            nowcoderCookieStatusEl.textContent = errorMsg;
+          }
+          nowcoderCookieStatusEl.style.color = 'red';
+        }
+        return;
+      }
+
+      // 检查响应数据
+      if (!response.data) {
+        console.warn('[牛客Cookie测试] 响应数据为空');
+        if (nowcoderCookieStatusEl) {
+          nowcoderCookieStatusEl.textContent = '❌ 测试失败: 响应数据为空';
+          nowcoderCookieStatusEl.style.color = 'red';
+        }
+        return;
+      }
+
+      // 验证返回码
+      if (response.data.code === 0) {
+        console.log('[牛客Cookie测试] ✓ Cookie 有效');
+        if (nowcoderCookieStatusEl) {
+          nowcoderCookieStatusEl.textContent = '✅ Cookie 有效！ (已登录)';
+          nowcoderCookieStatusEl.style.color = 'lightgreen';
+        }
+      } else {
+        console.warn('[牛客Cookie测试] Cookie 无效，返回:', response.data);
+        if (nowcoderCookieStatusEl) {
+          nowcoderCookieStatusEl.textContent = `❌ ${response.data.msg || 'Cookie 无效或已过期'} (code: ${response.data.code})`;
+          nowcoderCookieStatusEl.style.color = 'red';
+        }
+      }
+    } catch (err: unknown) {
+      const errorStr = err?.toString() || String(err) || '';
+      const errorMsg = err instanceof Error ? err.message : errorStr;
+      const fullError = (errorMsg + ' ' + errorStr).toLowerCase();
+
+      console.error('[牛客Cookie测试] 测试失败:', err);
+
+      let displayMessage = '❌ 测试失败: 未知错误';
+      if (fullError.includes('json') || fullError.includes('parse')) {
+        displayMessage = '❌ 测试失败: Cookie 无效或格式错误 (无法解析响应)';
+      } else if (fullError.includes('network') || fullError.includes('fetch') || fullError.includes('connection')) {
+        displayMessage = '❌ 测试失败: 网络连接失败，请检查网络连接';
+      } else if (fullError.includes('timeout') || fullError.includes('超时')) {
+        displayMessage = '❌ 测试失败: 请求超时，请检查网络连接';
+      } else if (errorMsg) {
+        const shortError = errorMsg.length > 100 ? errorMsg.substring(0, 100) + '...' : errorMsg;
+        displayMessage = `❌ 测试失败: ${shortError}`;
+      }
+
+      if (nowcoderCookieStatusEl) {
+        nowcoderCookieStatusEl.textContent = displayMessage;
+        nowcoderCookieStatusEl.style.color = 'red';
+      }
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error('[牛客Cookie测试] 测试牛客连接失败:', error);
+    if (nowcoderCookieStatusEl) {
+      nowcoderCookieStatusEl.textContent = `❌ 测试失败: ${errorMsg}`;
+      nowcoderCookieStatusEl.style.color = 'red';
+    }
+  } finally {
+    // 恢复按钮状态
+    if (testNowcoderBtn) {
+      testNowcoderBtn.disabled = false;
+      testNowcoderBtn.textContent = '测试连接';
     }
   }
 }
@@ -2372,12 +2609,36 @@ function initialize(): void {
     
     if (loginWithWebviewBtn) {
       loginWithWebviewBtn.addEventListener('click', () => {
-        openWebviewLoginWindow().catch(err => {
-          console.error('[初始化] 打开登录窗口失败:', err);
+        openWebviewLoginWindow('weibo').catch(err => {
+          console.error('[初始化] 打开微博登录窗口失败:', err);
         });
       });
     } else {
       console.warn('[初始化] 警告: WebView登录按钮不存在');
+    }
+
+    // 牛客登录按钮事件绑定
+    const loginNowcoderBtn = document.getElementById('login-nowcoder-btn');
+    if (loginNowcoderBtn) {
+      loginNowcoderBtn.addEventListener('click', () => {
+        openWebviewLoginWindow('nowcoder').catch(err => {
+          console.error('[初始化] 打开牛客登录窗口失败:', err);
+        });
+      });
+    } else {
+      console.warn('[初始化] 警告: 牛客登录按钮不存在（可能设置页面未加载）');
+    }
+
+    // 牛客Cookie测试按钮事件绑定
+    const testNowcoderCookieBtn = document.getElementById('test-nowcoder-cookie-btn');
+    if (testNowcoderCookieBtn) {
+      testNowcoderCookieBtn.addEventListener('click', () => {
+        testNowcoderConnection().catch(err => {
+          console.error('[初始化] 测试牛客Cookie失败:', err);
+        });
+      });
+    } else {
+      console.warn('[初始化] 警告: 牛客Cookie测试按钮不存在');
     }
 
     // Bind history events (带空值检查)

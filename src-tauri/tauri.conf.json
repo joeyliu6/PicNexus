@@ -28,7 +28,9 @@
           "https://*.jianguoyun.com/*",
           "https://dav.yandex.com/*",
           "https://*.yandex.com/*",
-          "https://webdav.*/*"
+          "https://webdav.*/*",
+          "https://www.nowcoder.com/*",
+          "https://*.nowcoder.com/*"
         ]
       },
       "notification": {
@@ -89,6 +91,16 @@
         },
         {
           "domain": "login.sina.com.cn",
+          "windows": ["login-webview"],
+          "enableTauriAPI": true
+        },
+        {
+          "domain": "nowcoder.com",
+          "windows": ["login-webview"],
+          "enableTauriAPI": true
+        },
+        {
+          "domain": "www.nowcoder.com",
           "windows": ["login-webview"],
           "enableTauriAPI": true
         }

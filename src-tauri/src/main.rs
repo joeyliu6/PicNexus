@@ -233,27 +233,59 @@ fn main() {
         .expect("error while running tauri application");
 }
 
+/// Cookie 更新事件的 payload 结构
+#[derive(Clone, serde::Serialize)]
+struct CookieUpdatedPayload {
+    #[serde(rename = "serviceId")]
+    service_id: String,
+    cookie: String,
+}
+
 #[tauri::command]
-async fn save_cookie_from_login(cookie: String, app: tauri::AppHandle) -> Result<(), String> {
-    eprintln!("[保存Cookie] 开始保存Cookie，长度: {}", cookie.len());
-    
+async fn save_cookie_from_login(
+    cookie: String,
+    service_id: Option<String>,  // 服务标识（可选，向后兼容）
+    required_fields: Option<Vec<String>>,  // 必要字段验证（AND 逻辑）
+    any_of_fields: Option<Vec<String>>,    // 任意字段验证（OR 逻辑）
+    app: tauri::AppHandle
+) -> Result<(), String> {
+    let service = service_id.unwrap_or_else(|| "weibo".to_string());
+    let fields = required_fields.unwrap_or_default();
+    let any_fields = any_of_fields.unwrap_or_default();
+    eprintln!("[保存Cookie] 开始保存Cookie，服务: {}，长度: {}，必要字段: {:?}，任意字段: {:?}",
+        service, cookie.len(), fields, any_fields);
+
     // 输入验证
     if cookie.trim().is_empty() {
         return Err("Cookie不能为空".to_string());
     }
-    
-    // 发送事件到主窗口
+
+    // 验证必要字段和任意字段
+    if (!fields.is_empty() || !any_fields.is_empty()) && !validate_cookie_fields(&cookie, &fields, &any_fields) {
+        return Err(format!(
+            "Cookie 缺少必要字段，{}需要包含: {:?}{}",
+            service, fields,
+            if any_fields.is_empty() { String::new() } else { format!("，且至少包含: {:?} 之一", any_fields) }
+        ));
+    }
+
+    // 发送事件到主窗口（包含服务标识）
     if let Some(main_window) = app.get_window("main") {
-        match main_window.emit("cookie-updated", cookie.clone()) {
+        let payload = CookieUpdatedPayload {
+            service_id: service.clone(),
+            cookie: cookie.clone(),
+        };
+
+        match main_window.emit("cookie-updated", payload) {
             Ok(_) => {
-                eprintln!("[保存Cookie] ✓ 已发送Cookie到主窗口");
+                eprintln!("[保存Cookie] ✓ 已发送 {} Cookie到主窗口", service);
 
                 // 成功后，异步关闭登录窗口
                 if let Some(login_window) = app.get_window("login-webview") {
                     let _ = login_window.close();
                     eprintln!("[保存Cookie] ✓ 已请求关闭登录窗口");
                 }
-                
+
                 Ok(())
             }
             Err(e) => {
@@ -267,55 +299,162 @@ async fn save_cookie_from_login(cookie: String, app: tauri::AppHandle) -> Result
     }
 }
 
+/// 检查单个字段是否存在且值非空
+fn check_cookie_field(cookie: &str, field: &str) -> bool {
+    let pattern = format!("{}=", field);
+    if let Some(pos) = cookie.find(&pattern) {
+        let value_start = pos + pattern.len();
+        let remaining = &cookie[value_start..];
+        let value_end = remaining.find(';').unwrap_or(remaining.len());
+        // 检查值是否非空
+        if value_end == 0 {
+            eprintln!("[Cookie验证] 字段 {} 值为空", field);
+            return false;
+        }
+        let value = &remaining[..value_end];
+        eprintln!("[Cookie验证] 字段 {} = {} (长度: {})", field,
+            if value.len() > 20 { format!("{}...", &value[..20]) } else { value.to_string() },
+            value.len());
+        true
+    } else {
+        false
+    }
+}
+
+/// 验证 Cookie 是否包含必要字段（且值非空）
+/// - required_fields: 必须全部包含的字段（AND 逻辑）
+/// - any_of_fields: 至少包含其中一个字段（OR 逻辑）
+fn validate_cookie_fields(cookie: &str, required_fields: &[String], any_of_fields: &[String]) -> bool {
+    if required_fields.is_empty() && any_of_fields.is_empty() {
+        // 没有指定任何验证字段，只要非空就通过
+        return !cookie.trim().is_empty();
+    }
+
+    // 检查所有必要字段（AND 逻辑）
+    for field in required_fields {
+        if !check_cookie_field(cookie, field) {
+            eprintln!("[Cookie验证] 缺少必要字段: {}", field);
+            return false;
+        }
+    }
+
+    // 检查任意字段（OR 逻辑）- 如果有定义的话
+    if !any_of_fields.is_empty() {
+        let has_any = any_of_fields.iter().any(|f| check_cookie_field(cookie, f));
+        if !has_any {
+            eprintln!("[Cookie验证] 缺少任意安全字段，需要至少包含: {:?}", any_of_fields);
+            return false;
+        }
+        eprintln!("[Cookie验证] ✓ 通过 anyOfFields 检查");
+    }
+
+    true
+}
+
 #[tauri::command]
-async fn start_cookie_monitoring(app: tauri::AppHandle) -> Result<(), String> {
-    eprintln!("[Cookie监控] 开始监控登录窗口的Cookie");
-    
+async fn start_cookie_monitoring(
+    app: tauri::AppHandle,
+    service_id: Option<String>,           // 服务标识（可选，默认 weibo）
+    target_domain: Option<String>,        // 目标域名（可选）
+    required_fields: Option<Vec<String>>, // 必须的 Cookie 字段（可选，AND 逻辑）
+    any_of_fields: Option<Vec<String>>,   // 任意字段（可选，OR 逻辑）
+) -> Result<(), String> {
+    let service = service_id.unwrap_or_else(|| "weibo".to_string());
+    let domain = target_domain.unwrap_or_else(|| "weibo.com".to_string());
+    let fields = required_fields.unwrap_or_else(|| vec!["SUB".to_string(), "SUBP".to_string()]);
+    let any_fields = any_of_fields.unwrap_or_default();
+
+    eprintln!("[Cookie监控] 开始监控 {} 的Cookie (域名: {}, 必要字段: {:?}, 任意字段: {:?})",
+        service, domain, fields, any_fields);
+
     let app_handle = app.clone();
-    
+
     // 在新线程中运行监控
     std::thread::spawn(move || {
+        // 初始延迟 5 秒，等待页面加载完成
+        // 避免在页面加载时就获取到未登录的 Cookie
+        eprintln!("[Cookie监控] 等待 5 秒后开始检测...");
+        std::thread::sleep(Duration::from_secs(5));
+
         let mut check_count = 0;
         let max_checks = 120; // 最多检查120次（4分钟）
-        
+
         while check_count < max_checks {
             std::thread::sleep(Duration::from_secs(2));
             check_count += 1;
-            
+
+            eprintln!("[Cookie监控] 第 {}/{} 次检查 (服务: {})", check_count, max_checks, service);
+
             // 获取登录窗口
             if let Some(login_window) = app_handle.get_window("login-webview") {
                 #[cfg(target_os = "windows")]
                 {
-                    if attempt_cookie_capture_and_save(&login_window, &app_handle) {
+                    if attempt_cookie_capture_and_save_generic(
+                        &login_window,
+                        &app_handle,
+                        &service,
+                        &domain,
+                        &fields,
+                        &any_fields
+                    ) {
                         break;
                     }
                 }
 
                 #[cfg(not(target_os = "windows"))]
                 {
+                    // 构建动态的验证条件（required_fields: AND 逻辑）
+                    let required_checks: Vec<String> = fields
+                        .iter()
+                        .map(|f| format!("cookie.includes('{}=')", f))
+                        .collect();
+
+                    // 构建任意字段验证条件（any_of_fields: OR 逻辑）
+                    let any_checks: Vec<String> = any_fields
+                        .iter()
+                        .map(|f| format!("cookie.includes('{}=')", f))
+                        .collect();
+
+                    let condition = if required_checks.is_empty() && any_checks.is_empty() {
+                        "cookie.length > 0".to_string()
+                    } else if any_checks.is_empty() {
+                        required_checks.join(" && ")
+                    } else if required_checks.is_empty() {
+                        format!("({})", any_checks.join(" || "))
+                    } else {
+                        format!("({}) && ({})", required_checks.join(" && "), any_checks.join(" || "))
+                    };
+
+                    // 将字段列表转换为 JSON 格式供 JavaScript 使用
+                    let fields_json = serde_json::to_string(&fields).unwrap_or_else(|_| "[]".to_string());
+                    let any_fields_json = serde_json::to_string(&any_fields).unwrap_or_else(|_| "[]".to_string());
+
                     // 准备注入的JS，用于检查和发送Cookie
-                    let check_js = r#"
-                        (async function() {
-                            try {
+                    let check_js = format!(r#"
+                        (async function() {{
+                            try {{
                                 const cookie = document.cookie || '';
-                                // 微博登录成功的关键Cookie字段
-                                if (cookie.includes('SUB=') || cookie.includes('SUBP=')) {
+                                // 检查登录成功的关键Cookie字段
+                                if ({condition}) {{
                                     // 调用Tauri后端命令来保存Cookie
-                                    await window.__TAURI__.invoke('save_cookie_from_login', { 
-                                        cookie: cookie 
-                                    });
+                                    await window.__TAURI__.invoke('save_cookie_from_login', {{
+                                        cookie: cookie,
+                                        serviceId: '{service}',
+                                        requiredFields: {fields_json},
+                                        anyOfFields: {any_fields_json}
+                                    }});
                                     return true; // 表示成功
-                                }
+                                }}
                                 return false; // 表示未登录
-                            } catch (e) {
+                            }} catch (e) {{
                                 console.error('[自动监控] JS执行错误:', e);
                                 return false;
-                            }
-                        })()
-                    "#;
-                    
+                            }}
+                        }})()
+                    "#, condition = condition, service = service, fields_json = fields_json, any_fields_json = any_fields_json);
+
                     // 执行JS
-                    if let Err(e) = login_window.eval(check_js) {
+                    if let Err(e) = login_window.eval(&check_js) {
                         eprintln!("[Cookie监控] 执行JS脚本失败: {:?}", e);
                     }
                 }
@@ -324,29 +463,44 @@ async fn start_cookie_monitoring(app: tauri::AppHandle) -> Result<(), String> {
                 break; // 窗口关闭，退出循环
             }
         }
-        
+
         eprintln!("[Cookie监控] 监控结束（检查次数: {}）", check_count);
     });
-    
+
     Ok(())
 }
 
 #[tauri::command]
-async fn get_request_header_cookie(app: tauri::AppHandle) -> Result<String, String> {
+async fn get_request_header_cookie(
+    app: tauri::AppHandle,
+    service_id: Option<String>,           // 服务标识（可选）
+    target_domain: Option<String>,        // 目标域名（可选）
+    required_fields: Option<Vec<String>>, // 必须的 Cookie 字段（可选，AND 逻辑）
+    any_of_fields: Option<Vec<String>>,   // 任意字段（可选，OR 逻辑）
+) -> Result<String, String> {
+    let service = service_id.unwrap_or_else(|| "weibo".to_string());
+    let domain = target_domain.unwrap_or_else(|| "weibo.com".to_string());
+    let fields = required_fields.unwrap_or_else(|| vec!["SUB".to_string(), "SUBP".to_string()]);
+    let any_fields = any_of_fields.unwrap_or_default();
+
     #[cfg(target_os = "windows")]
     {
         let Some(login_window) = app.get_window("login-webview") else {
-            return Err("登录窗口未打开，请先点击“开始登录”".to_string());
+            return Err("登录窗口未打开，请先点击「开始登录」".to_string());
         };
 
-        match try_extract_cookie_header(&login_window) {
+        match try_extract_cookie_header_generic(&login_window, &domain) {
             Ok(Some(cookie)) => {
-                if cookie.contains("SUB=") && cookie.contains("SUBP=") {
-                    eprintln!("[Cookie获取] 请求头Cookie长度: {}", cookie.len());
+                if validate_cookie_fields(&cookie, &fields, &any_fields) {
+                    eprintln!("[Cookie获取] {} 请求头Cookie长度: {}", service, cookie.len());
                     Ok(cookie)
                 } else {
-                    Err("提取到的 Cookie 缺少关键字段（SUB / SUBP），请确认已成功登录微博"
-                        .to_string())
+                    Err(format!(
+                        "提取到的 Cookie 缺少关键字段（{:?}{}），请确认已成功登录{}",
+                        fields,
+                        if any_fields.is_empty() { String::new() } else { format!(" 或 {:?} 之一", any_fields) },
+                        service
+                    ))
                 }
             }
             Ok(None) => Err("未检测到 Cookie，请确认已完成登录后再试".to_string()),
@@ -356,47 +510,105 @@ async fn get_request_header_cookie(app: tauri::AppHandle) -> Result<String, Stri
 
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = app;
+        let _ = (app, service, domain, fields, any_fields);
         Err("当前操作系统暂不支持请求头 Cookie 提取，请使用页面内的手动复制方式".to_string())
     }
 }
 
+/// 通用版本的 Cookie 捕获和保存（支持多网站）
 #[cfg(target_os = "windows")]
-fn attempt_cookie_capture_and_save(
+fn attempt_cookie_capture_and_save_generic(
     login_window: &tauri::Window,
     app_handle: &tauri::AppHandle,
+    service_id: &str,
+    target_domain: &str,
+    required_fields: &[String],
+    any_of_fields: &[String],
 ) -> bool {
-    match try_extract_cookie_header(login_window) {
-        Ok(Some(cookie)) => {
-            if cookie.contains("SUB=") && cookie.contains("SUBP=") {
-                eprintln!("[Cookie监控] 检测到请求头Cookie，尝试保存");
-                match tauri::async_runtime::block_on(save_cookie_from_login(
-                    cookie.clone(),
-                    app_handle.clone(),
-                )) {
-                    Ok(_) => {
-                        eprintln!("[Cookie监控] ✓ 请求头Cookie保存成功");
-                        true
-                    }
-                    Err(err) => {
-                        eprintln!("[Cookie监控] 保存Cookie失败: {}", err);
-                        false
+    // 构建要尝试的域名列表（包括 www 变体）
+    let mut domains_to_try = vec![target_domain.to_string()];
+    if target_domain.starts_with("www.") {
+        // 如果是 www 开头，也尝试无 www 版本
+        domains_to_try.push(target_domain[4..].to_string());
+    } else {
+        // 如果不是 www 开头，也尝试 www 版本
+        domains_to_try.push(format!("www.{}", target_domain));
+    }
+
+    // 依次尝试每个域名，合并所有 Cookie
+    let mut all_cookies: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+
+    for domain in &domains_to_try {
+        match try_extract_cookie_header_generic(login_window, domain) {
+            Ok(Some(cookie)) => {
+                eprintln!("[Cookie监控] 从 {} 提取到 Cookie (长度: {})", domain, cookie.len());
+                // 解析 cookie 字符串并合并
+                for part in cookie.split("; ") {
+                    if let Some(eq_pos) = part.find('=') {
+                        let key = part[..eq_pos].to_string();
+                        let value = part[eq_pos + 1..].to_string();
+                        all_cookies.insert(key, value);
                     }
                 }
-            } else {
+            }
+            Ok(None) => {
+                eprintln!("[Cookie监控] 从 {} 未提取到 Cookie", domain);
+            }
+            Err(err) => {
+                eprintln!("[Cookie监控] 从 {} 读取Cookie失败: {}", domain, err);
+            }
+        }
+    }
+
+    if all_cookies.is_empty() {
+        eprintln!("[Cookie监控] 未从任何域名提取到 Cookie，继续等待...");
+        return false;
+    }
+
+    // 重新组装 cookie 字符串
+    let merged_cookie: String = all_cookies
+        .iter()
+        .map(|(k, v)| format!("{}={}", k, v))
+        .collect::<Vec<_>>()
+        .join("; ");
+
+    let cookie_preview = if merged_cookie.len() > 100 {
+        format!("{}... (共 {} 字符)", &merged_cookie[..100], merged_cookie.len())
+    } else {
+        merged_cookie.clone()
+    };
+    eprintln!("[Cookie监控] 合并后的 Cookie: {}", cookie_preview);
+
+    if validate_cookie_fields(&merged_cookie, required_fields, any_of_fields) {
+        eprintln!("[Cookie监控] ✓ 验证通过，尝试保存 {} Cookie", service_id);
+        match tauri::async_runtime::block_on(save_cookie_from_login(
+            merged_cookie.clone(),
+            Some(service_id.to_string()),
+            Some(required_fields.to_vec()),
+            Some(any_of_fields.to_vec()),
+            app_handle.clone(),
+        )) {
+            Ok(_) => {
+                eprintln!("[Cookie监控] ✓ {} Cookie保存成功", service_id);
+                true
+            }
+            Err(err) => {
+                eprintln!("[Cookie监控] 保存Cookie失败: {}", err);
                 false
             }
         }
-        Ok(None) => false,
-        Err(err) => {
-            eprintln!("[Cookie监控] 读取请求头Cookie失败: {}", err);
-            false
-        }
+    } else {
+        eprintln!("[Cookie监控] ✗ 验证失败，Cookie 缺少必要字段，继续等待...");
+        false
     }
 }
 
+/// 通用版本的 Cookie 提取（支持任意域名）
 #[cfg(target_os = "windows")]
-fn try_extract_cookie_header(window: &tauri::Window) -> Result<Option<String>, String> {
+fn try_extract_cookie_header_generic(window: &tauri::Window, domain: &str) -> Result<Option<String>, String> {
+    let target_url = format!("https://{}/", domain);
+    let target_url_clone = target_url.clone();
+
     let (result_tx, result_rx) = mpsc::channel();
     window
         .with_webview(move |inner| {
@@ -411,55 +623,49 @@ fn try_extract_cookie_header(window: &tauri::Window) -> Result<Option<String>, S
                     .map_err(|e| format!("{:?}", e))?;
 
                 let mut cookie_store: BTreeMap<String, String> = BTreeMap::new();
-                let target_urls = [
-                    "https://weibo.com/"
-                ];
 
-                for url in target_urls {
-                    let cm = cookie_manager.clone();
-                    let url_string = url.to_string();
-                    let url_string_clone = url_string.clone(); // Clone for use in closure
-                    let (tx, rx) = mpsc::channel();
+                // 使用传入的目标 URL
+                let cm = cookie_manager.clone();
+                let url_string = target_url_clone.clone();
+                let (tx, rx) = mpsc::channel();
 
-                    let result = GetCookiesCompletedHandler::wait_for_async_operation(
-                        Box::new(move |handler| unsafe {
-                            let wide = encode_wide(&url_string_clone);
-                            cm.GetCookies(
-                                windows::core::PCWSTR::from_raw(wide.as_ptr()),
-                                &handler,
-                            )
-                            .map_err(webview2_com::Error::WindowsError)
-                        }),
-                        Box::new(move |hr, list| {
-                            hr?;
-                            tx.send(list)
-                                .expect("send GetCookies result over channel");
-                            Ok(())
-                        }),
+                let result = GetCookiesCompletedHandler::wait_for_async_operation(
+                    Box::new(move |handler| unsafe {
+                        let wide = encode_wide(&url_string);
+                        cm.GetCookies(
+                            windows::core::PCWSTR::from_raw(wide.as_ptr()),
+                            &handler,
+                        )
+                        .map_err(webview2_com::Error::WindowsError)
+                    }),
+                    Box::new(move |hr, list| {
+                        hr?;
+                        tx.send(list)
+                            .expect("send GetCookies result over channel");
+                        Ok(())
+                    }),
+                );
+
+                if let Err(err) = result {
+                    eprintln!(
+                        "[Cookie监控] 获取 {} 请求头Cookie失败: {:?}",
+                        target_url_clone, err
                     );
+                    return Ok(None);
+                }
 
-                    if let Err(err) = result {
-                        eprintln!(
-                            "[Cookie监控] 获取 {} 请求头Cookie失败: {:?}",
-                            url_string, err
-                        );
-                        continue;
+                match rx.recv() {
+                    Ok(Some(list)) => {
+                        if let Err(err) = merge_cookie_list(&mut cookie_store, list) {
+                            eprintln!(
+                                "[Cookie监控] 解析 {} Cookie 失败: {}",
+                                target_url_clone, err
+                            );
+                        }
                     }
-
-                    match rx.recv() {
-                        Ok(Some(list)) => {
-                            if let Err(err) = merge_cookie_list(&mut cookie_store, list)
-                            {
-                                eprintln!(
-                                    "[Cookie监控] 解析 {} Cookie 失败: {}",
-                                    url_string, err
-                                );
-                            }
-                        }
-                        Ok(None) => continue,
-                        Err(_) => {
-                            return Err("接收Cookie结果失败".to_string());
-                        }
+                    Ok(None) => return Ok(None),
+                    Err(_) => {
+                        return Err("接收Cookie结果失败".to_string());
                     }
                 }
 
@@ -468,7 +674,7 @@ fn try_extract_cookie_header(window: &tauri::Window) -> Result<Option<String>, S
                 }
 
                 // 调试输出：显示提取到的所有Cookie
-                eprintln!("[Cookie调试] 提取到的Cookie键值对: {:?}", cookie_store);
+                eprintln!("[Cookie调试] 从 {} 提取到的Cookie键值对: {:?}", target_url_clone, cookie_store);
 
                 let header = cookie_store
                     .into_iter()
