@@ -68,6 +68,32 @@ export const appState = {
 };
 
 /**
+ * Gallery View State Interface
+ */
+interface GalleryViewState {
+  viewMode: 'table' | 'grid';
+  currentFilter: ServiceType | 'all';
+  displayedItems: HistoryItem[];
+  gridLoadedCount: number;
+  gridBatchSize: number;
+  selectedGridItems: Set<string>;
+  lightboxCurrentIndex: number;
+}
+
+/**
+ * Gallery View State
+ */
+const galleryState: GalleryViewState = {
+  viewMode: 'table',
+  currentFilter: 'all',
+  displayedItems: [],
+  gridLoadedCount: 0,
+  gridBatchSize: 50,
+  selectedGridItems: new Set(),
+  lightboxCurrentIndex: -1,
+};
+
+/**
  * 获取 DOM 元素，带空值检查和类型断言
  * @param id 元素 ID
  * @param elementType 元素类型描述（用于错误消息）
@@ -168,7 +194,33 @@ const clearHistoryBtn = getElement<HTMLButtonElement>('clear-history-btn', '清�
 const searchInput = getElement<HTMLInputElement>('search-input', '搜索输入框');
 const historyStatusMessageEl = queryElement<HTMLElement>('#history-view #status-message', '历史状态消息');
 
+// Gallery View Elements (新增)
+const viewModeTableBtn = getElement<HTMLButtonElement>('view-mode-table', '表格视图按钮');
+const viewModeGridBtn = getElement<HTMLButtonElement>('view-mode-grid', '瀑布流视图按钮');
+const imageBedFilter = getElement<HTMLSelectElement>('image-bed-filter', '图床筛选器');
+const tableViewContainer = getElement<HTMLElement>('table-view-container', '表格视图容器');
+const gridViewContainer = getElement<HTMLElement>('grid-view-container', '瀑布流视图容器');
+const galleryGrid = getElement<HTMLElement>('gallery-grid', '瀑布流网格');
+const gridLoadingIndicator = getElement<HTMLElement>('grid-loading-indicator', '加载指示器');
+const gridEndMessage = getElement<HTMLElement>('grid-end-message', '加载完成消息');
 
+// Lightbox Elements (新增)
+const lightboxModal = getElement<HTMLElement>('lightbox-modal', 'Lightbox模态框');
+const lightboxImage = getElement<HTMLImageElement>('lightbox-image', 'Lightbox图片');
+const lightboxFilename = getElement<HTMLElement>('lightbox-filename', 'Lightbox文件名');
+const lightboxServiceBadge = getElement<HTMLElement>('lightbox-service-badge', 'Lightbox图床徽章');
+const lightboxTimestamp = getElement<HTMLElement>('lightbox-timestamp', 'Lightbox时间戳');
+const lightboxClose = getElement<HTMLButtonElement>('lightbox-close', 'Lightbox关闭按钮');
+const lightboxPrev = getElement<HTMLButtonElement>('lightbox-prev', 'Lightbox上一张按钮');
+const lightboxNext = getElement<HTMLButtonElement>('lightbox-next', 'Lightbox下一张按钮');
+const lightboxCopyBtn = getElement<HTMLButtonElement>('lightbox-copy-btn', 'Lightbox复制按钮');
+const lightboxDeleteBtn = getElement<HTMLButtonElement>('lightbox-delete-btn', 'Lightbox删除按钮');
+
+// Context Menu Elements (新增)
+const contextMenu = getElement<HTMLElement>('context-menu', '右键菜单');
+const ctxPreview = getElement<HTMLElement>('ctx-preview', '右键预览');
+const ctxCopyLink = getElement<HTMLElement>('ctx-copy-link', '右键复制链接');
+const ctxDelete = getElement<HTMLElement>('ctx-delete', '右键删除');
 
 // --- FILE VALIDATION ---
 /**
@@ -2500,10 +2552,11 @@ async function loadHistory() {
     let items = await historyStore.get<any[]>('uploads');
     if (!items || items.length === 0) {
       allHistoryItems = [];
+      galleryState.displayedItems = [];
       renderHistoryTable([]);
       return;
     }
-  
+
     const migratedItems = items.map(migrateHistoryItem);
     const needsSave = items.some(item =>
       !item.id ||
@@ -2516,8 +2569,18 @@ async function loadHistory() {
       await historyStore.set('uploads', migratedItems);
       await historyStore.save();
     }
-  
+
     allHistoryItems = migratedItems.sort((a, b) => b.timestamp - a.timestamp);
+
+    // 初始化displayedItems - 应用当前筛选
+    if (galleryState.currentFilter === 'all') {
+      galleryState.displayedItems = allHistoryItems;
+    } else {
+      galleryState.displayedItems = allHistoryItems.filter(item =>
+        item.results?.some(r => r.serviceId === galleryState.currentFilter && r.status === 'success')
+      );
+    }
+
     await applySearchFilter();
 }
 
@@ -2526,16 +2589,29 @@ async function applySearchFilter() {
       console.warn('[历史记录] searchInput 不存在，无法应用过滤');
       return;
     }
-    
+
     const searchTerm = searchInput.value.toLowerCase().trim();
+    let filteredItems: HistoryItem[];
+
     if (!searchTerm) {
-      await renderHistoryTable(allHistoryItems);
-      return;
+      // 没有搜索词，使用displayedItems（可能已有图床筛选）
+      filteredItems = galleryState.displayedItems;
+    } else {
+      // 有搜索词，在displayedItems基础上进一步筛选
+      filteredItems = galleryState.displayedItems.filter(item =>
+        item.localFileName.toLowerCase().includes(searchTerm)
+      );
     }
-    const filtered = allHistoryItems.filter(item => 
-      item.localFileName.toLowerCase().includes(searchTerm)
-    );
-    await renderHistoryTable(filtered);
+
+    // 根据当前视图模式渲染
+    if (galleryState.viewMode === 'grid') {
+      // 更新displayedItems用于瀑布流（需要重新设置以触发重新渲染）
+      const tempItems = filteredItems;
+      galleryState.displayedItems = tempItems;
+      renderGalleryView();
+    } else {
+      await renderHistoryTable(filteredItems);
+    }
 }
 
 async function clearHistory() {
@@ -2769,6 +2845,617 @@ function updateServiceStatus(serviceId: ServiceType, config: UserConfig): void {
       const label = checkbox.closest('label');
       if (label) label.classList.remove('disabled');
     }
+  }
+}
+
+// ========================================
+// GALLERY VIEW FUNCTIONS (浏览视图功能)
+// ========================================
+
+/**
+ * 切换视图模式
+ */
+function switchViewMode(mode: 'table' | 'grid'): void {
+  galleryState.viewMode = mode;
+
+  // 更新按钮状态
+  if (viewModeTableBtn && viewModeGridBtn) {
+    if (mode === 'table') {
+      viewModeTableBtn.classList.add('active');
+      viewModeGridBtn.classList.remove('active');
+    } else {
+      viewModeTableBtn.classList.remove('active');
+      viewModeGridBtn.classList.add('active');
+    }
+  }
+
+  // 切换容器显示
+  if (tableViewContainer && gridViewContainer) {
+    if (mode === 'table') {
+      tableViewContainer.style.display = 'block';
+      gridViewContainer.style.display = 'none';
+    } else {
+      tableViewContainer.style.display = 'none';
+      gridViewContainer.style.display = 'block';
+      renderGalleryView();
+    }
+  }
+
+  // 保存偏好设置
+  saveViewModePreference(mode);
+}
+
+/**
+ * 保存视图模式偏好
+ */
+async function saveViewModePreference(mode: 'table' | 'grid'): Promise<void> {
+  try {
+    const config = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
+    if (!config.galleryViewPreferences) {
+      config.galleryViewPreferences = {
+        viewMode: mode,
+        gridColumnWidth: 220,
+      };
+    } else {
+      config.galleryViewPreferences.viewMode = mode;
+    }
+    await configStore.set('config', config);
+  } catch (error) {
+    console.error('[Gallery] 保存视图偏好失败:', error);
+  }
+}
+
+/**
+ * 加载视图模式偏好
+ */
+async function loadViewModePreference(): Promise<void> {
+  try {
+    const config = await configStore.get<UserConfig>('config');
+    if (config?.galleryViewPreferences?.viewMode) {
+      const mode = config.galleryViewPreferences.viewMode;
+      if (mode === 'grid') {
+        switchViewMode('grid');
+      }
+    }
+  } catch (error) {
+    console.error('[Gallery] 加载视图偏好失败:', error);
+  }
+}
+
+/**
+ * 渲染瀑布流视图
+ */
+function renderGalleryView(): void {
+  if (!galleryGrid) return;
+
+  galleryState.gridLoadedCount = 0;
+  galleryGrid.innerHTML = '';
+
+  if (galleryState.displayedItems.length === 0) {
+    renderEmptyState();
+    return;
+  }
+
+  loadMoreGridItems();
+  setupLazyLoading();
+}
+
+/**
+ * 渲染空状态
+ */
+function renderEmptyState(): void {
+  if (!galleryGrid) return;
+
+  const emptyDiv = document.createElement('div');
+  emptyDiv.className = 'grid-empty-state';
+  emptyDiv.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+      <circle cx="8.5" cy="8.5" r="1.5"/>
+      <polyline points="21 15 16 10 5 21"/>
+    </svg>
+    <p>暂无图片</p>
+  `;
+  galleryGrid.appendChild(emptyDiv);
+}
+
+/**
+ * 加载更多网格项
+ */
+function loadMoreGridItems(): void {
+  if (!galleryGrid) return;
+
+  const startIndex = galleryState.gridLoadedCount;
+  const endIndex = Math.min(
+    startIndex + galleryState.gridBatchSize,
+    galleryState.displayedItems.length
+  );
+
+  const itemsToLoad = galleryState.displayedItems.slice(startIndex, endIndex);
+  const fragment = document.createDocumentFragment();
+
+  itemsToLoad.forEach(item => {
+    const cardElement = createGalleryCard(item);
+    fragment.appendChild(cardElement);
+  });
+
+  galleryGrid.appendChild(fragment);
+  galleryState.gridLoadedCount = endIndex;
+  updateGridLoadingState();
+}
+
+/**
+ * 创建瀑布流卡片
+ */
+function createGalleryCard(item: HistoryItem): HTMLElement {
+  const card = document.createElement('div');
+  card.className = 'gallery-item';
+  card.setAttribute('data-id', item.id);
+
+  // 复选框
+  const checkboxDiv = document.createElement('div');
+  checkboxDiv.className = 'gallery-item-checkbox';
+  if (galleryState.selectedGridItems.has(item.id)) {
+    checkboxDiv.classList.add('has-checked');
+  }
+
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'grid-row-checkbox';
+  checkbox.setAttribute('data-item-id', item.id);
+  checkbox.checked = galleryState.selectedGridItems.has(item.id);
+  checkbox.addEventListener('change', (e) => {
+    e.stopPropagation();
+    handleGridCheckboxChange(item.id, checkbox.checked);
+  });
+  checkbox.addEventListener('click', (e) => e.stopPropagation());
+  checkboxDiv.appendChild(checkbox);
+  card.appendChild(checkboxDiv);
+
+  // 图床徽章
+  const badgeDiv = document.createElement('div');
+  badgeDiv.className = 'gallery-item-badge';
+
+  // 获取成功的图床
+  const successResults = item.results?.filter(r => r.status === 'success') || [];
+  successResults.slice(0, 2).forEach(result => {
+    const badge = document.createElement('span');
+    badge.className = 'service-badge success';
+    badge.textContent = getServiceDisplayName(result.serviceId);
+    badgeDiv.appendChild(badge);
+  });
+
+  if (successResults.length > 2) {
+    const moreBadge = document.createElement('span');
+    moreBadge.className = 'service-badge success';
+    moreBadge.textContent = `+${successResults.length - 2}`;
+    badgeDiv.appendChild(moreBadge);
+  }
+
+  card.appendChild(badgeDiv);
+
+  // 图片
+  const imageWrapper = document.createElement('div');
+  imageWrapper.className = 'gallery-item-image-wrapper';
+
+  const img = document.createElement('img');
+  img.className = 'gallery-item-image';
+  img.alt = item.localFileName;
+
+  const imageUrl = getImageUrlFromItem(item);
+  img.setAttribute('data-src', imageUrl);
+  img.addEventListener('load', () => img.classList.add('loaded'));
+  img.addEventListener('error', () => {
+    img.style.display = 'none';
+  });
+
+  imageWrapper.appendChild(img);
+  card.appendChild(imageWrapper);
+
+  // 文件名
+  const footer = document.createElement('div');
+  footer.className = 'gallery-item-footer';
+
+  const filename = document.createElement('div');
+  filename.className = 'gallery-item-filename';
+  filename.textContent = item.localFileName;
+  filename.title = item.localFileName;
+
+  footer.appendChild(filename);
+  card.appendChild(footer);
+
+  // 事件
+  card.addEventListener('click', () => openLightbox(item.id));
+  card.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    handleCardContextMenu(e, item.id);
+  });
+
+  return card;
+}
+
+/**
+ * 获取图片URL
+ */
+function getImageUrlFromItem(item: HistoryItem): string {
+  const successResult = item.results?.find(r => r.status === 'success');
+  if (successResult?.result?.url) {
+    return successResult.result.url;
+  }
+  return item.generatedLink || '';
+}
+
+/**
+ * 获取服务显示名称
+ */
+function getServiceDisplayName(serviceId: ServiceType): string {
+  const names: Record<ServiceType, string> = {
+    weibo: '微博',
+    r2: 'R2',
+    tcl: 'TCL',
+    jd: '京东',
+    nowcoder: '牛客',
+  };
+  return names[serviceId] || serviceId;
+}
+
+/**
+ * 更新网格加载状态
+ */
+function updateGridLoadingState(): void {
+  if (!gridLoadingIndicator || !gridEndMessage) return;
+
+  const hasMore = galleryState.gridLoadedCount < galleryState.displayedItems.length;
+
+  if (hasMore) {
+    gridLoadingIndicator.style.display = 'none';
+    gridEndMessage.style.display = 'none';
+  } else if (galleryState.displayedItems.length > 0) {
+    gridLoadingIndicator.style.display = 'none';
+    gridEndMessage.style.display = 'block';
+  } else {
+    gridLoadingIndicator.style.display = 'none';
+    gridEndMessage.style.display = 'none';
+  }
+}
+
+/**
+ * 处理网格复选框变化
+ */
+function handleGridCheckboxChange(itemId: string, checked: boolean): void {
+  if (checked) {
+    galleryState.selectedGridItems.add(itemId);
+  } else {
+    galleryState.selectedGridItems.delete(itemId);
+  }
+
+  // 更新复选框容器的显示状态
+  const card = galleryGrid?.querySelector(`[data-id="${itemId}"]`);
+  if (card) {
+    const checkboxDiv = card.querySelector('.gallery-item-checkbox');
+    if (checkboxDiv) {
+      if (checked) {
+        checkboxDiv.classList.add('has-checked');
+      } else {
+        checkboxDiv.classList.remove('has-checked');
+      }
+    }
+  }
+
+  updateBulkActionButtons();
+}
+
+/**
+ * 设置懒加载
+ */
+let gridObserver: IntersectionObserver | null = null;
+let loadMoreObserver: IntersectionObserver | null = null;
+
+function setupLazyLoading(): void {
+  // 图片懒加载
+  if (gridObserver) gridObserver.disconnect();
+
+  gridObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const img = entry.target as HTMLImageElement;
+          const src = img.getAttribute('data-src');
+          if (src) {
+            img.src = src;
+            img.removeAttribute('data-src');
+            gridObserver!.unobserve(img);
+          }
+        }
+      });
+    },
+    { rootMargin: '50px', threshold: 0.01 }
+  );
+
+  const images = document.querySelectorAll<HTMLImageElement>('.gallery-item-image[data-src]');
+  images.forEach(img => gridObserver!.observe(img));
+
+  // 加载更多
+  if (loadMoreObserver) loadMoreObserver.disconnect();
+
+  loadMoreObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const hasMore = galleryState.gridLoadedCount < galleryState.displayedItems.length;
+          if (hasMore && gridLoadingIndicator) {
+            gridLoadingIndicator.style.display = 'flex';
+            setTimeout(() => {
+              loadMoreGridItems();
+              // 观察新加载的图片
+              const newImages = document.querySelectorAll<HTMLImageElement>('.gallery-item-image[data-src]');
+              newImages.forEach(img => gridObserver?.observe(img));
+            }, 300);
+          }
+        }
+      });
+    },
+    { rootMargin: '200px', threshold: 0.01 }
+  );
+
+  if (gridLoadingIndicator) loadMoreObserver.observe(gridLoadingIndicator);
+}
+
+// ========================================
+// LIGHTBOX FUNCTIONS (Lightbox 功能)
+// ========================================
+
+/**
+ * 打开Lightbox
+ */
+function openLightbox(itemId: string): void {
+  const index = galleryState.displayedItems.findIndex(item => item.id === itemId);
+  if (index === -1) return;
+
+  galleryState.lightboxCurrentIndex = index;
+  updateLightboxContent();
+
+  if (lightboxModal) {
+    lightboxModal.style.display = 'flex';
+    document.addEventListener('keydown', handleLightboxKeydown);
+  }
+}
+
+/**
+ * 关闭Lightbox
+ */
+function closeLightbox(): void {
+  if (lightboxModal) {
+    lightboxModal.style.display = 'none';
+    document.removeEventListener('keydown', handleLightboxKeydown);
+  }
+}
+
+/**
+ * 更新Lightbox内容
+ */
+function updateLightboxContent(): void {
+  const item = galleryState.displayedItems[galleryState.lightboxCurrentIndex];
+  if (!item) return;
+
+  // 更新图片
+  if (lightboxImage) {
+    lightboxImage.src = getImageUrlFromItem(item);
+    lightboxImage.alt = item.localFileName;
+  }
+
+  // 更新文件名
+  if (lightboxFilename) {
+    lightboxFilename.textContent = item.localFileName;
+  }
+
+  // 更新图床徽章
+  if (lightboxServiceBadge) {
+    const successResults = item.results?.filter(r => r.status === 'success') || [];
+    if (successResults.length > 0) {
+      lightboxServiceBadge.className = 'service-badge success';
+      lightboxServiceBadge.textContent = successResults.map(r => getServiceDisplayName(r.serviceId)).join(', ');
+    } else {
+      lightboxServiceBadge.textContent = '';
+    }
+  }
+
+  // 更新时间戳
+  if (lightboxTimestamp) {
+    lightboxTimestamp.textContent = formatTimestamp(item.timestamp);
+  }
+
+  // 更新导航按钮状态
+  if (lightboxPrev) {
+    lightboxPrev.disabled = galleryState.lightboxCurrentIndex === 0;
+  }
+  if (lightboxNext) {
+    lightboxNext.disabled = galleryState.lightboxCurrentIndex === galleryState.displayedItems.length - 1;
+  }
+}
+
+/**
+ * 处理Lightbox键盘事件
+ */
+function handleLightboxKeydown(e: KeyboardEvent): void {
+  switch (e.key) {
+    case 'Escape':
+      closeLightbox();
+      break;
+    case 'ArrowLeft':
+      navigateLightbox(-1);
+      break;
+    case 'ArrowRight':
+      navigateLightbox(1);
+      break;
+  }
+}
+
+/**
+ * Lightbox导航
+ */
+function navigateLightbox(direction: number): void {
+  const newIndex = galleryState.lightboxCurrentIndex + direction;
+  if (newIndex >= 0 && newIndex < galleryState.displayedItems.length) {
+    galleryState.lightboxCurrentIndex = newIndex;
+    updateLightboxContent();
+  }
+}
+
+/**
+ * Lightbox复制链接
+ */
+async function lightboxCopyLink(): Promise<void> {
+  const item = galleryState.displayedItems[galleryState.lightboxCurrentIndex];
+  if (!item) return;
+
+  try {
+    const url = getImageUrlFromItem(item);
+    await writeText(url);
+    showToast('success', '链接已复制到剪贴板');
+  } catch (error) {
+    console.error('[Lightbox] 复制链接失败:', error);
+    showToast('error', '复制失败');
+  }
+}
+
+/**
+ * Lightbox删除
+ */
+async function lightboxDelete(): Promise<void> {
+  const item = galleryState.displayedItems[galleryState.lightboxCurrentIndex];
+  if (!item) return;
+
+  const confirmed = await showConfirmModal(
+    '确认删除',
+    `确定要删除 "${item.localFileName}" 的历史记录吗？`
+  );
+
+  if (confirmed) {
+    // 先关闭lightbox
+    closeLightbox();
+    // 删除记录
+    await deleteHistoryItem(item.id);
+  }
+}
+
+// ========================================
+// CONTEXT MENU FUNCTIONS (右键菜单功能)
+// ========================================
+
+let currentContextItemId: string | null = null;
+
+/**
+ * 处理卡片右键菜单
+ */
+function handleCardContextMenu(e: MouseEvent, itemId: string): void {
+  showContextMenu(e.clientX, e.clientY, itemId);
+}
+
+/**
+ * 显示右键菜单
+ */
+function showContextMenu(x: number, y: number, itemId: string): void {
+  if (!contextMenu) return;
+
+  currentContextItemId = itemId;
+
+  // 定位菜单
+  contextMenu.style.left = `${x}px`;
+  contextMenu.style.top = `${y}px`;
+  contextMenu.style.display = 'block';
+
+  // 点击其他地方关闭菜单
+  setTimeout(() => {
+    document.addEventListener('click', hideContextMenu, { once: true });
+  }, 0);
+}
+
+/**
+ * 隐藏右键菜单
+ */
+function hideContextMenu(): void {
+  if (contextMenu) {
+    contextMenu.style.display = 'none';
+  }
+  currentContextItemId = null;
+}
+
+/**
+ * 右键预览
+ */
+function contextMenuPreview(): void {
+  if (currentContextItemId) {
+    openLightbox(currentContextItemId);
+  }
+  hideContextMenu();
+}
+
+/**
+ * 右键复制链接
+ */
+async function contextMenuCopyLink(): Promise<void> {
+  if (!currentContextItemId) return;
+
+  const item = galleryState.displayedItems.find(i => i.id === currentContextItemId);
+  if (!item) return;
+
+  try {
+    const url = getImageUrlFromItem(item);
+    await writeText(url);
+    showToast('success', '链接已复制到剪贴板');
+  } catch (error) {
+    console.error('[Context Menu] 复制链接失败:', error);
+    showToast('error', '复制失败');
+  }
+
+  hideContextMenu();
+}
+
+/**
+ * 右键删除
+ */
+async function contextMenuDelete(): Promise<void> {
+  if (!currentContextItemId) return;
+
+  const item = galleryState.displayedItems.find(i => i.id === currentContextItemId);
+  if (!item) return;
+
+  hideContextMenu();
+
+  const confirmed = await showConfirmModal(
+    '确认删除',
+    `确定要删除 "${item.localFileName}" 的历史记录吗？`
+  );
+
+  if (confirmed) {
+    await deleteHistoryItem(item.id);
+  }
+}
+
+// ========================================
+// FILTER FUNCTIONS (筛选功能)
+// ========================================
+
+/**
+ * 应用图床筛选
+ */
+function applyImageBedFilter(serviceName: ServiceType | 'all'): void {
+  galleryState.currentFilter = serviceName;
+
+  if (serviceName === 'all') {
+    galleryState.displayedItems = allHistoryItems;
+  } else {
+    galleryState.displayedItems = allHistoryItems.filter(item =>
+      item.results?.some(r => r.serviceId === serviceName && r.status === 'success')
+    );
+  }
+
+  // 重新渲染当前视图
+  if (galleryState.viewMode === 'grid') {
+    renderGalleryView();
+  } else {
+    renderHistoryTable(galleryState.displayedItems);
   }
 }
 
@@ -3051,6 +3738,55 @@ function initialize(): void {
     } else {
       console.warn('[初始化] 警告: 备份视图元素不存在');
     }
+
+    // ========================================
+    // GALLERY VIEW EVENT LISTENERS (浏览视图事件监听)
+    // ========================================
+
+    // 视图切换按钮
+    viewModeTableBtn?.addEventListener('click', () => {
+      switchViewMode('table');
+    });
+
+    viewModeGridBtn?.addEventListener('click', () => {
+      switchViewMode('grid');
+    });
+
+    // 图床筛选器
+    imageBedFilter?.addEventListener('change', (e) => {
+      const select = e.target as HTMLSelectElement;
+      const value = select.value as ServiceType | 'all';
+      applyImageBedFilter(value);
+    });
+
+    // Lightbox 事件
+    lightboxClose?.addEventListener('click', closeLightbox);
+    lightboxPrev?.addEventListener('click', () => navigateLightbox(-1));
+    lightboxNext?.addEventListener('click', () => navigateLightbox(1));
+    lightboxCopyBtn?.addEventListener('click', lightboxCopyLink);
+    lightboxDeleteBtn?.addEventListener('click', lightboxDelete);
+
+    // Lightbox overlay 点击关闭
+    lightboxModal?.querySelector('.lightbox-overlay')?.addEventListener('click', closeLightbox);
+
+    // Context Menu 事件
+    ctxPreview?.addEventListener('click', contextMenuPreview);
+    ctxCopyLink?.addEventListener('click', contextMenuCopyLink);
+    ctxDelete?.addEventListener('click', contextMenuDelete);
+
+    // 点击页面其他地方隐藏右键菜单
+    document.addEventListener('contextmenu', (e) => {
+      // 如果不是在gallery-item上右键，隐藏菜单
+      const target = e.target as HTMLElement;
+      if (!target.closest('.gallery-item')) {
+        hideContextMenu();
+      }
+    });
+
+    // 加载视图偏好
+    loadViewModePreference().catch(err => {
+      console.error('[初始化] 加载视图偏好失败:', err);
+    });
 
     console.log('[初始化] ✓ 应用初始化完成');
   } catch (error) {

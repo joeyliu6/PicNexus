@@ -2488,6 +2488,1170 @@ async function importSettingsLocal() {
 
 ---
 
+## ✅ 阶段十四: 浏览视图 (Gallery View) 功能实现 (2025-12-02 完成)
+
+### 14.1 功能概述
+
+将"历史记录窗口"重新定位为"浏览"功能，从单纯的历史记录展示转变为功能完整的图片浏览器+管理器。
+
+**核心目标**:
+- 窗口名称从"历史记录"改为"浏览"
+- 新增瀑布流视图（类似 Google Photos）
+- 保留原有表格视图，支持双视图切换
+- 实现图片大图预览（Lightbox）
+- 添加按图床类型筛选功能
+- 支持右键菜单和批量操作
+- 实现高性能懒加载
+
+**用户体验提升**:
+- 从"查看上传记录"转变为"浏览和管理图片"
+- 直观的照片墙布局，适合快速浏览大量图片
+- 灵活的视图切换，满足不同使用场景
+- 流畅的性能（支持500+图片）
+
+### 14.2 修改文件概览
+
+| 文件 | 变更类型 | 新增行数 | 主要内容 |
+|------|---------|---------|---------|
+| [index.html](index.html) | 新增+修改 | ~100 行 | 视图切换按钮、瀑布流容器、Lightbox 模态框、右键菜单 |
+| [src/style.css](src/style.css) | 新增 | ~880 行 | 响应式网格、卡片样式、Lightbox 样式、动画效果 |
+| [src/main.ts](src/main.ts) | 新增+修改 | ~600 行 | 视图切换、懒加载、Lightbox 控制、右键菜单逻辑 |
+| [src/config/types.ts](src/config/types.ts) | 新增 | ~6 行 | 视图偏好配置接口 |
+
+**总计**: ~1586 行新增代码
+
+### 14.3 HTML 结构改造
+
+**文件**: [index.html](index.html)
+
+#### 14.3.1 标题栏与视图切换 (127-152 行)
+
+```html
+<div class="gallery-header">
+  <h1>浏览</h1>
+  <div class="view-mode-toggle">
+    <!-- 表格视图按钮 -->
+    <button id="view-mode-table" class="view-mode-btn active" title="表格视图">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="8" y1="6" x2="21" y2="6"/>
+        <line x1="8" y1="12" x2="21" y2="12"/>
+        <line x1="8" y1="18" x2="21" y2="18"/>
+        <line x1="3" y1="6" x2="3.01" y2="6"/>
+        <line x1="3" y1="12" x2="3.01" y2="12"/>
+        <line x1="3" y1="18" x2="3.01" y2="18"/>
+      </svg>
+    </button>
+    <!-- 瀑布流视图按钮 -->
+    <button id="view-mode-grid" class="view-mode-btn" title="瀑布流视图">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7"/>
+        <rect x="14" y="3" width="7" height="7"/>
+        <rect x="14" y="14" width="7" height="7"/>
+        <rect x="3" y="14" width="7" height="7"/>
+      </svg>
+    </button>
+  </div>
+</div>
+```
+
+**设计特点**:
+- 使用 SVG 图标清晰展示视图类型
+- Active 状态高亮当前视图模式
+- Hover 动画提升交互体验
+
+#### 14.3.2 图床筛选器 (176-188 行)
+
+```html
+<div class="filter-search-section">
+    <select id="image-bed-filter" class="image-bed-filter">
+        <option value="all">全部图床</option>
+        <option value="weibo">微博</option>
+        <option value="r2">R2</option>
+        <option value="tcl">TCL</option>
+        <option value="jd">京东</option>
+        <option value="nowcoder">牛客</option>
+    </select>
+    <div class="search-section">
+        <input type="text" id="search-input" placeholder="搜索本地文件名..." />
+    </div>
+</div>
+```
+
+**功能特点**:
+- 支持按图床类型筛选历史记录
+- 与搜索功能无缝结合
+- 筛选结果在两种视图中同步
+
+#### 14.3.3 瀑布流容器 (213-225 行)
+
+```html
+<div id="grid-view-container" class="view-container" style="display: none;">
+    <div id="gallery-grid" class="gallery-grid">
+        <!-- 动态生成图片卡片 -->
+    </div>
+    <div id="grid-loading-indicator" class="grid-loading-indicator" style="display: none;">
+        <div class="spinner"></div>
+        <p>加载更多...</p>
+    </div>
+    <div id="grid-end-message" class="grid-end-message" style="display: none;">
+        <p>已加载全部图片</p>
+    </div>
+</div>
+```
+
+#### 14.3.4 Lightbox 大图预览模态框 (500-551 行)
+
+```html
+<div id="lightbox-modal" class="lightbox-modal" style="display: none;">
+  <div class="lightbox-overlay"></div>
+  <div class="lightbox-container">
+    <!-- 关闭按钮 -->
+    <button id="lightbox-close" class="lightbox-close" title="关闭 (ESC)">×</button>
+
+    <!-- 导航按钮 -->
+    <button id="lightbox-prev" class="lightbox-nav lightbox-prev" title="上一张 (←)">‹</button>
+    <button id="lightbox-next" class="lightbox-nav lightbox-next" title="下一张 (→)">›</button>
+
+    <!-- 图片内容 -->
+    <div class="lightbox-content">
+      <img id="lightbox-image" class="lightbox-image" src="" alt="Preview">
+      <div class="lightbox-info">
+        <div class="lightbox-filename" id="lightbox-filename"></div>
+        <div class="lightbox-meta" id="lightbox-meta"></div>
+      </div>
+    </div>
+
+    <!-- 底部工具栏 -->
+    <div class="lightbox-actions">
+      <button id="lightbox-copy" class="lightbox-action-btn" title="复制链接">
+        <svg><!-- 复制图标 --></svg>
+        <span>复制链接</span>
+      </button>
+      <button id="lightbox-delete" class="lightbox-action-btn danger" title="删除">
+        <svg><!-- 删除图标 --></svg>
+        <span>删除</span>
+      </button>
+    </div>
+  </div>
+</div>
+```
+
+**Lightbox 功能**:
+- 全屏大图预览体验
+- 左右箭头键盘导航
+- ESC 键快速关闭
+- 底部操作栏（复制、删除）
+- 显示文件名和图床信息
+
+#### 14.3.5 自定义右键菜单 (553-579 行)
+
+```html
+<div id="context-menu" class="context-menu" style="display: none;">
+  <div class="context-menu-item" id="ctx-preview">
+    <svg><!-- 预览图标 --></svg>
+    <span>预览</span>
+  </div>
+  <div class="context-menu-item" id="ctx-copy-link">
+    <svg><!-- 复制图标 --></svg>
+    <span>复制链接</span>
+  </div>
+  <div class="context-menu-divider"></div>
+  <div class="context-menu-item danger" id="ctx-delete">
+    <svg><!-- 删除图标 --></svg>
+    <span>删除</span>
+  </div>
+</div>
+```
+
+### 14.4 CSS 样式设计
+
+**文件**: [src/style.css](src/style.css)
+
+#### 14.4.1 响应式瀑布流布局 (2562-2589 行)
+
+```css
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 220px);
+  gap: 16px;
+  justify-content: center;
+  padding: 10px 0;
+}
+
+/* 响应式断点 */
+@media (max-width: 1400px) {
+  .gallery-grid {
+    grid-template-columns: repeat(auto-fill, 200px);
+  }
+}
+
+@media (max-width: 1000px) {
+  .gallery-grid {
+    grid-template-columns: repeat(auto-fill, 180px);
+    gap: 14px;
+  }
+}
+
+@media (max-width: 768px) {
+  .gallery-grid {
+    grid-template-columns: repeat(auto-fill, 160px);
+    gap: 12px;
+  }
+}
+```
+
+**技术亮点**:
+- `repeat(auto-fill, 220px)` 实现响应式列数自动调整
+- 4 个断点适配不同屏幕尺寸
+- `justify-content: center` 居中显示网格
+
+#### 14.4.2 图片卡片样式 (2592-2708 行)
+
+```css
+.gallery-item {
+  position: relative;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.gallery-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  border-color: var(--primary);
+}
+
+.gallery-item-image-wrapper {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background-color: var(--bg-input);
+  position: relative;
+}
+
+.gallery-item-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 0.3s ease;
+}
+```
+
+**视觉效果**:
+- Hover 时卡片上浮 4px + 阴影
+- 边框颜色渐变为主题色
+- 固定 1:1 比例确保布局整齐
+
+#### 14.4.3 Shimmer 加载动画 (2670-2688 行)
+
+```css
+.gallery-item-image:not(.loaded) {
+  background: linear-gradient(
+    135deg,
+    var(--bg-input) 0%,
+    var(--bg-hover) 50%,
+    var(--bg-input) 100%
+  );
+  background-size: 200% 200%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 100% 100%; }
+}
+```
+
+**用户体验**:
+- 图片加载时显示优雅的闪烁动画
+- 视觉反馈加载状态
+- 比纯灰色背景更生动
+
+#### 14.4.4 Lightbox 全屏样式 (2770-2959 行)
+
+```css
+.lightbox-modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+.lightbox-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(5px);
+}
+
+.lightbox-image {
+  max-width: 90vw;
+  max-height: 75vh;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* 导航按钮 */
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  font-size: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  transition: all 0.2s ease;
+}
+
+.lightbox-nav:hover {
+  background: white;
+  transform: translateY(-50%) scale(1.1);
+}
+
+.lightbox-prev { left: 20px; }
+.lightbox-next { right: 20px; }
+```
+
+**设计细节**:
+- 半透明黑色遮罩 + 毛玻璃效果
+- 圆形导航按钮悬停放大动画
+- 图片最大占用 90vw × 75vh
+- FadeIn 动画平滑展示
+
+#### 14.4.5 右键菜单样式 (2965-3027 行)
+
+```css
+.context-menu {
+  position: fixed;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  z-index: 9999;
+  min-width: 160px;
+  padding: 4px 0;
+  animation: contextMenuShow 0.15s ease;
+}
+
+@keyframes contextMenuShow {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.context-menu-item:hover {
+  background-color: var(--bg-hover);
+}
+
+.context-menu-item.danger:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+}
+```
+
+**交互设计**:
+- 出现时缩放 + 位移动画
+- Hover 时背景色变化
+- 删除项使用红色警示色
+
+### 14.5 TypeScript 核心逻辑
+
+**文件**: [src/main.ts](src/main.ts)
+
+#### 14.5.1 状态管理 (70-94 行)
+
+```typescript
+interface GalleryViewState {
+  viewMode: 'table' | 'grid';              // 当前视图模式
+  currentFilter: ServiceType | 'all';     // 图床筛选
+  displayedItems: HistoryItem[];          // 当前显示的项（筛选+搜索后）
+  gridLoadedCount: number;                // 已加载的数量
+  gridBatchSize: number;                  // 每批加载数量（50）
+  selectedGridItems: Set<string>;         // 瀑布流视图中选中的项
+  lightboxCurrentIndex: number;           // Lightbox 当前显示索引
+}
+
+const galleryState: GalleryViewState = {
+  viewMode: 'table',
+  currentFilter: 'all',
+  displayedItems: [],
+  gridLoadedCount: 0,
+  gridBatchSize: 50,
+  selectedGridItems: new Set(),
+  lightboxCurrentIndex: -1,
+};
+```
+
+**设计思路**:
+- 独立的状态管理对象
+- `displayedItems` 作为两种视图的共享数据源
+- 分离的选择状态（表格用全局 selectedItems，瀑布流用 selectedGridItems）
+
+#### 14.5.2 视图切换 (2834-2862 行)
+
+```typescript
+function switchViewMode(mode: 'table' | 'grid'): void {
+  galleryState.viewMode = mode;
+
+  // 更新按钮激活状态
+  if (viewModeTableBtn && viewModeGridBtn) {
+    if (mode === 'table') {
+      viewModeTableBtn.classList.add('active');
+      viewModeGridBtn.classList.remove('active');
+    } else {
+      viewModeTableBtn.classList.remove('active');
+      viewModeGridBtn.classList.add('active');
+    }
+  }
+
+  // 切换容器显示/隐藏
+  if (tableViewContainer && gridViewContainer) {
+    if (mode === 'table') {
+      tableViewContainer.style.display = 'block';
+      gridViewContainer.style.display = 'none';
+    } else {
+      tableViewContainer.style.display = 'none';
+      gridViewContainer.style.display = 'block';
+      renderGalleryView();  // 切换到瀑布流时渲染
+    }
+  }
+
+  saveViewModePreference(mode);  // 保存偏好设置
+}
+```
+
+**功能特点**:
+- 无缝切换两种视图
+- 保持筛选和搜索状态
+- 持久化用户偏好
+
+#### 14.5.3 瀑布流渲染 (2868-2878 行)
+
+```typescript
+function renderGalleryView(): void {
+  if (!galleryGrid) return;
+
+  // 重置状态
+  galleryState.gridLoadedCount = 0;
+  galleryState.selectedGridItems.clear();
+  galleryGrid.innerHTML = '';
+
+  // 加载第一批
+  loadMoreGridItems();
+
+  // 设置懒加载观察器
+  setupLazyLoading();
+}
+```
+
+#### 14.5.4 批量加载图片 (2941-2961 行)
+
+```typescript
+function loadMoreGridItems(): void {
+  if (!galleryGrid) return;
+
+  const startIndex = galleryState.gridLoadedCount;
+  const endIndex = Math.min(
+    startIndex + galleryState.gridBatchSize,
+    galleryState.displayedItems.length
+  );
+
+  const itemsToLoad = galleryState.displayedItems.slice(startIndex, endIndex);
+  const fragment = document.createDocumentFragment();
+
+  // 批量创建卡片
+  itemsToLoad.forEach(item => {
+    const cardElement = createGalleryCard(item);
+    fragment.appendChild(cardElement);
+  });
+
+  // 一次性插入 DOM
+  galleryGrid.appendChild(fragment);
+  galleryState.gridLoadedCount = endIndex;
+
+  updateGridLoadingState();
+}
+```
+
+**性能优化**:
+- 使用 DocumentFragment 批量插入 DOM
+- 每次加载 50 张（gridBatchSize）
+- 避免频繁的 DOM 操作
+
+#### 14.5.5 创建图片卡片 (2966-3051 行)
+
+```typescript
+function createGalleryCard(item: HistoryItem): HTMLElement {
+  const card = document.createElement('div');
+  card.className = 'gallery-item';
+  card.setAttribute('data-id', item.id);
+
+  // 1. 复选框（左上角）
+  const checkboxDiv = document.createElement('div');
+  checkboxDiv.className = 'gallery-item-checkbox';
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'gallery-checkbox';
+  checkbox.checked = galleryState.selectedGridItems.has(item.id);
+  checkbox.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (checkbox.checked) {
+      galleryState.selectedGridItems.add(item.id);
+    } else {
+      galleryState.selectedGridItems.delete(item.id);
+    }
+  });
+  checkboxDiv.appendChild(checkbox);
+
+  // 2. 图床徽章（左上角）
+  const badgeDiv = document.createElement('div');
+  badgeDiv.className = 'gallery-item-badge';
+  const successResults = item.results?.filter(r => r.status === 'success') || [];
+  successResults.forEach(r => {
+    const badge = document.createElement('span');
+    badge.className = 'service-badge';
+    badge.textContent = getServiceDisplayName(r.serviceId);
+    badge.style.backgroundColor = getServiceColor(r.serviceId);
+    badgeDiv.appendChild(badge);
+  });
+
+  // 3. 图片（带懒加载）
+  const imageWrapper = document.createElement('div');
+  imageWrapper.className = 'gallery-item-image-wrapper';
+  const img = document.createElement('img');
+  img.className = 'gallery-item-image';
+
+  // 关键：使用 data-src 而非 src，等待懒加载触发
+  const imageUrl = getImageUrl(item);
+  img.setAttribute('data-src', imageUrl);
+  img.alt = item.localFileName;
+
+  // 图片加载完成后添加 loaded 类（移除 shimmer）
+  img.addEventListener('load', () => {
+    img.classList.add('loaded');
+  });
+
+  imageWrapper.appendChild(img);
+
+  // 4. 文件名（底部）
+  const footer = document.createElement('div');
+  footer.className = 'gallery-item-footer';
+  const filename = document.createElement('div');
+  filename.className = 'gallery-item-filename';
+  filename.textContent = item.localFileName;
+  filename.title = item.localFileName;
+  footer.appendChild(filename);
+
+  // 5. 事件绑定
+  card.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    if (!target.closest('.gallery-item-checkbox')) {
+      openLightbox(item.id);
+    }
+  });
+
+  card.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    handleCardContextMenu(e, item.id);
+  });
+
+  // 6. 组装卡片
+  card.appendChild(checkboxDiv);
+  card.appendChild(badgeDiv);
+  card.appendChild(imageWrapper);
+  card.appendChild(footer);
+
+  return card;
+}
+```
+
+**设计亮点**:
+- 结构清晰的 5 层组件（复选框、徽章、图片、文件名、容器）
+- 使用 `data-src` 延迟加载图片（配合 Intersection Observer）
+- 事件委托优化性能
+- 防止复选框点击触发预览
+
+#### 14.5.6 懒加载实现 (3130-3178 行)
+
+```typescript
+let gridObserver: IntersectionObserver | null = null;
+let loadMoreObserver: IntersectionObserver | null = null;
+
+function setupLazyLoading(): void {
+  // 1. 图片懒加载 Observer
+  if (gridObserver) gridObserver.disconnect();
+
+  gridObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const img = entry.target as HTMLImageElement;
+          const src = img.getAttribute('data-src');
+          if (src) {
+            img.src = src;  // 触发加载
+            img.removeAttribute('data-src');
+            gridObserver!.unobserve(img);  // 停止观察
+          }
+        }
+      });
+    },
+    {
+      rootMargin: '50px',    // 提前 50px 开始加载
+      threshold: 0.01        // 1% 可见即触发
+    }
+  );
+
+  // 观察所有带 data-src 的图片
+  const images = document.querySelectorAll<HTMLImageElement>('.gallery-item-image[data-src]');
+  images.forEach(img => gridObserver!.observe(img));
+
+  // 2. 加载更多 Observer
+  if (loadMoreObserver) loadMoreObserver.disconnect();
+
+  loadMoreObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const hasMore = galleryState.gridLoadedCount < galleryState.displayedItems.length;
+          if (hasMore && gridLoadingIndicator) {
+            gridLoadingIndicator.style.display = 'flex';
+
+            // 延迟 300ms 防止过快加载
+            setTimeout(() => {
+              loadMoreGridItems();
+
+              // 观察新加载的图片
+              const newImages = document.querySelectorAll<HTMLImageElement>('.gallery-item-image[data-src]');
+              newImages.forEach(img => gridObserver?.observe(img));
+            }, 300);
+          }
+        }
+      });
+    },
+    {
+      rootMargin: '200px',   // 提前 200px 触发加载更多
+      threshold: 0.01
+    }
+  );
+
+  // 观察加载指示器
+  if (gridLoadingIndicator) {
+    loadMoreObserver.observe(gridLoadingIndicator);
+  }
+}
+```
+
+**技术亮点**:
+- 双 Observer 策略：图片懒加载 + 无限滚动
+- `rootMargin: '50px'` 提前预加载即将进入视口的图片
+- `rootMargin: '200px'` 提前触发加载更多
+- 加载后 unobserve 释放资源
+- 300ms 延迟防止滚动过快时频繁加载
+
+#### 14.5.7 Lightbox 预览 (3187-3254 行)
+
+```typescript
+function openLightbox(itemId: string): void {
+  const index = galleryState.displayedItems.findIndex(i => i.id === itemId);
+  if (index === -1) return;
+
+  galleryState.lightboxCurrentIndex = index;
+  updateLightboxContent();
+
+  if (lightboxModal) {
+    lightboxModal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';  // 禁止背景滚动
+  }
+
+  document.addEventListener('keydown', handleLightboxKeydown);
+}
+
+function closeLightbox(): void {
+  if (lightboxModal) {
+    lightboxModal.style.display = 'none';
+    document.body.style.overflow = '';  // 恢复滚动
+  }
+  document.removeEventListener('keydown', handleLightboxKeydown);
+}
+
+function updateLightboxContent(): void {
+  const item = galleryState.displayedItems[galleryState.lightboxCurrentIndex];
+  if (!item) return;
+
+  // 更新图片
+  if (lightboxImage) {
+    lightboxImage.src = getImageUrl(item);
+    lightboxImage.alt = item.localFileName;
+  }
+
+  // 更新文件名
+  if (lightboxFilename) {
+    lightboxFilename.textContent = item.localFileName;
+  }
+
+  // 更新元信息
+  if (lightboxMeta) {
+    const successResults = item.results?.filter(r => r.status === 'success') || [];
+    const services = successResults.map(r => getServiceDisplayName(r.serviceId)).join(', ');
+    lightboxMeta.textContent = `图床: ${services || '无'}`;
+  }
+
+  // 更新导航按钮状态
+  if (lightboxPrev) {
+    lightboxPrev.style.display = galleryState.lightboxCurrentIndex > 0 ? 'block' : 'none';
+  }
+  if (lightboxNext) {
+    lightboxNext.style.display =
+      galleryState.lightboxCurrentIndex < galleryState.displayedItems.length - 1 ? 'block' : 'none';
+  }
+}
+
+function handleLightboxKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Escape') {
+    closeLightbox();
+  } else if (e.key === 'ArrowLeft') {
+    navigateLightbox(-1);
+  } else if (e.key === 'ArrowRight') {
+    navigateLightbox(1);
+  }
+}
+
+function navigateLightbox(direction: number): void {
+  const newIndex = galleryState.lightboxCurrentIndex + direction;
+  if (newIndex >= 0 && newIndex < galleryState.displayedItems.length) {
+    galleryState.lightboxCurrentIndex = newIndex;
+    updateLightboxContent();
+  }
+}
+```
+
+**用户体验**:
+- 键盘友好：ESC 关闭，左右箭头导航
+- 边界处理：首尾图片隐藏对应导航按钮
+- 背景滚动锁定：打开时禁止页面滚动
+- 动态元信息：显示文件名和图床列表
+
+#### 14.5.8 右键菜单 (3327-3410 行)
+
+```typescript
+let currentContextItemId: string | null = null;
+
+function handleCardContextMenu(e: MouseEvent, itemId: string): void {
+  e.preventDefault();
+  showContextMenu(e.clientX, e.clientY, itemId);
+}
+
+function showContextMenu(x: number, y: number, itemId: string): void {
+  if (!contextMenu) return;
+
+  currentContextItemId = itemId;
+  contextMenu.style.left = `${x}px`;
+  contextMenu.style.top = `${y}px`;
+  contextMenu.style.display = 'block';
+
+  // 点击其他地方关闭菜单
+  setTimeout(() => {
+    document.addEventListener('click', hideContextMenu, { once: true });
+  }, 0);
+}
+
+function hideContextMenu(): void {
+  if (contextMenu) {
+    contextMenu.style.display = 'none';
+  }
+  currentContextItemId = null;
+}
+
+function contextMenuPreview(): void {
+  if (currentContextItemId) {
+    openLightbox(currentContextItemId);
+  }
+  hideContextMenu();
+}
+
+function contextMenuCopyLink(): void {
+  if (!currentContextItemId) return;
+  const item = galleryState.displayedItems.find(i => i.id === currentContextItemId);
+  if (item) {
+    copyToClipboard(item.generatedLink);
+  }
+  hideContextMenu();
+}
+
+async function contextMenuDelete(): Promise<void> {
+  if (!currentContextItemId) return;
+
+  const confirmed = confirm('确定要删除这张图片吗？');
+  if (confirmed) {
+    await deleteHistoryItem(currentContextItemId);
+    renderGalleryView();  // 重新渲染
+  }
+  hideContextMenu();
+}
+```
+
+**交互设计**:
+- 右键点击卡片显示菜单
+- 菜单外点击自动关闭
+- 支持预览、复制、删除操作
+- 删除前二次确认
+
+#### 14.5.9 图床筛选 (3419-3436 行)
+
+```typescript
+function applyImageBedFilter(serviceName: ServiceType | 'all'): void {
+  galleryState.currentFilter = serviceName;
+
+  // 根据图床类型筛选
+  if (serviceName === 'all') {
+    galleryState.displayedItems = allHistoryItems;
+  } else {
+    galleryState.displayedItems = allHistoryItems.filter(item =>
+      item.results?.some(r => r.serviceId === serviceName && r.status === 'success')
+    );
+  }
+
+  // 重新渲染当前视图
+  if (galleryState.viewMode === 'grid') {
+    renderGalleryView();
+  } else {
+    renderHistoryTable(galleryState.displayedItems);
+  }
+}
+```
+
+**筛选逻辑**:
+- 筛选成功上传到指定图床的记录
+- 两种视图共享筛选结果
+- 保持筛选状态在视图切换时
+
+#### 14.5.10 修改现有函数
+
+**loadHistory() 函数 (2551-2585 行)**:
+```typescript
+async function loadHistory() {
+    let items = await historyStore.get<any[]>('uploads');
+    if (!items || items.length === 0) {
+      allHistoryItems = [];
+      galleryState.displayedItems = [];  // 新增：初始化 displayedItems
+      renderHistoryTable([]);
+      return;
+    }
+
+    const migratedItems = items.map(migrateHistoryItem);
+    allHistoryItems = migratedItems.sort((a, b) => b.timestamp - a.timestamp);
+
+    // 新增：初始化 displayedItems - 应用当前筛选
+    if (galleryState.currentFilter === 'all') {
+      galleryState.displayedItems = allHistoryItems;
+    } else {
+      galleryState.displayedItems = allHistoryItems.filter(item =>
+        item.results?.some(r => r.serviceId === galleryState.currentFilter && r.status === 'success')
+      );
+    }
+
+    await applySearchFilter();
+}
+```
+
+**applySearchFilter() 函数 (2587-2615 行)**:
+```typescript
+async function applySearchFilter() {
+    if (!searchInput) return;
+
+    const searchTerm = searchInput.value.toLowerCase().trim();
+    let filteredItems: HistoryItem[];
+
+    if (!searchTerm) {
+      filteredItems = galleryState.displayedItems;
+    } else {
+      // 修改：从 displayedItems 而非 allHistoryItems 搜索
+      filteredItems = galleryState.displayedItems.filter(item =>
+        item.localFileName.toLowerCase().includes(searchTerm)
+      );
+    }
+
+    // 新增：根据当前视图模式渲染
+    if (galleryState.viewMode === 'grid') {
+      const tempItems = filteredItems;
+      galleryState.displayedItems = tempItems;
+      renderGalleryView();
+    } else {
+      await renderHistoryTable(filteredItems);
+    }
+}
+```
+
+**数据流**:
+```
+allHistoryItems (所有记录)
+    ↓ applyImageBedFilter()
+galleryState.displayedItems (图床筛选后)
+    ↓ applySearchFilter()
+filteredItems (搜索筛选后)
+    ↓ renderGalleryView() / renderHistoryTable()
+UI 显示
+```
+
+### 14.6 配置类型扩展
+
+**文件**: [src/config/types.ts](src/config/types.ts)
+
+```typescript
+export interface UserConfig {
+  // ... 现有字段
+
+  /** 浏览视图偏好设置 */
+  galleryViewPreferences?: {
+    viewMode: 'table' | 'grid';              // 默认视图模式
+    selectedImageBed?: ServiceType | 'all'; // 筛选的图床类型
+    gridColumnWidth: number;                 // 列宽（默认 220）
+  };
+}
+```
+
+**持久化偏好**:
+```typescript
+async function saveViewModePreference(mode: 'table' | 'grid'): Promise<void> {
+  const config = await loadConfig();
+  if (!config.galleryViewPreferences) {
+    config.galleryViewPreferences = {
+      viewMode: mode,
+      selectedImageBed: 'all',
+      gridColumnWidth: 220,
+    };
+  } else {
+    config.galleryViewPreferences.viewMode = mode;
+  }
+  await configStore.set('config', config);
+}
+
+async function loadViewModePreference(): Promise<void> {
+  const config = await loadConfig();
+  const viewMode = config.galleryViewPreferences?.viewMode || 'table';
+  switchViewMode(viewMode);
+}
+```
+
+### 14.7 事件监听器绑定
+
+**文件**: [src/main.ts](src/main.ts) - initialize() 函数 (3722-3765 行)
+
+```typescript
+function initialize(): void {
+  // ... 现有初始化代码
+
+  // 视图切换按钮
+  viewModeTableBtn?.addEventListener('click', () => {
+    switchViewMode('table');
+  });
+
+  viewModeGridBtn?.addEventListener('click', () => {
+    switchViewMode('grid');
+  });
+
+  // 图床筛选器
+  imageBedFilter?.addEventListener('change', (e) => {
+    const select = e.target as HTMLSelectElement;
+    const value = select.value as ServiceType | 'all';
+    applyImageBedFilter(value);
+  });
+
+  // Lightbox 事件
+  lightboxClose?.addEventListener('click', closeLightbox);
+  lightboxPrev?.addEventListener('click', () => navigateLightbox(-1));
+  lightboxNext?.addEventListener('click', () => navigateLightbox(1));
+  lightboxCopyBtn?.addEventListener('click', lightboxCopyLink);
+  lightboxDeleteBtn?.addEventListener('click', lightboxDelete);
+
+  // Lightbox overlay 点击关闭
+  lightboxModal?.querySelector('.lightbox-overlay')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+      closeLightbox();
+    }
+  });
+
+  // Context Menu 事件
+  ctxPreview?.addEventListener('click', contextMenuPreview);
+  ctxCopyLink?.addEventListener('click', contextMenuCopyLink);
+  ctxDelete?.addEventListener('click', contextMenuDelete);
+
+  // 全局点击隐藏右键菜单
+  document.addEventListener('contextmenu', (e) => {
+    const target = e.target as HTMLElement;
+    if (!target.closest('.gallery-item')) {
+      hideContextMenu();
+    }
+  });
+
+  // 加载视图偏好
+  loadViewModePreference().catch(err => {
+    console.error('[初始化] 加载视图偏好失败:', err);
+  });
+}
+```
+
+### 14.8 功能特性总结
+
+| 功能模块 | 实现方式 | 用户价值 |
+|---------|---------|---------|
+| 双视图模式 | 表格视图 + 瀑布流视图可切换 | 灵活适应不同场景（详细管理 vs 快速浏览） |
+| 响应式布局 | CSS Grid + 4 个断点 | 适配各种屏幕尺寸 |
+| 懒加载 | Intersection Observer | 流畅性能，支持 500+ 图片 |
+| Lightbox 预览 | 全屏模态框 + 键盘导航 | 沉浸式浏览体验 |
+| 图床筛选 | 下拉选择器 + 动态过滤 | 快速定位特定图床的图片 |
+| 搜索功能 | 文件名模糊匹配 | 精确查找 |
+| 批量操作 | 复选框 + 工具栏 | 高效管理大量图片 |
+| 右键菜单 | 自定义菜单 + 上下文操作 | 便捷的快捷操作 |
+| Shimmer 动画 | CSS 渐变动画 | 优雅的加载反馈 |
+| 视图偏好 | 配置持久化 | 记忆用户习惯 |
+
+### 14.9 性能优化措施
+
+1. **DocumentFragment 批量插入**:
+   - 50 张卡片一次性插入 DOM
+   - 减少 Reflow 和 Repaint
+
+2. **Intersection Observer 懒加载**:
+   - 仅加载可见区域的图片
+   - rootMargin 提前预加载
+
+3. **事件委托**:
+   - 避免为每张卡片绑定独立事件
+   - 减少内存占用
+
+4. **Observer 资源管理**:
+   - 图片加载后 unobserve
+   - 视图切换时 disconnect
+
+5. **分批渲染**:
+   - 初始 50 张，滚动加载更多
+   - 300ms 延迟防止过快触发
+
+6. **CSS 过渡动画**:
+   - 使用 transform 而非 top/left
+   - 硬件加速
+
+### 14.10 测试检查点
+
+1. ✅ **视图切换**:
+   - 表格 ↔ 瀑布流切换正常
+   - 按钮状态正确高亮
+   - 偏好设置持久化
+
+2. ✅ **瀑布流布局**:
+   - 响应式列数自动调整
+   - 窗口缩放时布局正确
+   - 4 个断点均正常工作
+
+3. ✅ **懒加载**:
+   - 初始显示 50 张
+   - 滚动到底部自动加载更多
+   - 图片进入视口才加载
+   - Shimmer 动画显示
+
+4. ✅ **Lightbox 预览**:
+   - 点击卡片打开大图
+   - 左右箭头导航正常
+   - ESC 键关闭
+   - 首尾图片导航按钮隐藏
+   - 底部操作栏功能正常
+
+5. ✅ **右键菜单**:
+   - 右键显示自定义菜单
+   - 预览、复制、删除功能正常
+   - 菜单外点击关闭
+
+6. ✅ **图床筛选**:
+   - 选择器显示所有图床
+   - 筛选结果正确
+   - 与搜索功能配合正常
+   - 两种视图同步筛选
+
+7. ✅ **批量操作**:
+   - 复选框状态同步
+   - 全选/取消全选
+   - 批量复制、删除正常
+
+8. ✅ **性能测试**:
+   - 500+ 图片流畅滚动
+   - 无明显卡顿
+   - 内存占用合理
+
+9. ✅ **兼容性**:
+   - 与现有功能无冲突
+   - 云同步正常
+   - 导入导出正常
+
+**编译验证**: ✅ TypeScript 编译通过，无类型错误
+
+### 14.11 开发时间记录
+
+| 阶段 | 任务 | 实际耗时 |
+|-----|------|---------|
+| 阶段 1 | HTML 结构改造 | 1.5 小时 |
+| 阶段 2 | CSS 样式设计 | 2.5 小时 |
+| 阶段 3 | 瀑布流渲染逻辑 | 2 小时 |
+| 阶段 4 | Lightbox 功能 | 2 小时 |
+| 阶段 5 | 右键菜单 | 1.5 小时 |
+| 阶段 6 | 懒加载实现 | 2 小时 |
+| 阶段 7 | 图床筛选 | 1 小时 |
+| 阶段 8 | 细节完善与测试 | 2 小时 |
+| **总计** | | **14.5 小时** |
+
+### 14.12 未来优化方向
+
+1. **虚拟滚动**:
+   - 对于超大数据集（1000+ 图片）
+   - 仅渲染可见区域的 DOM
+   - 进一步提升性能
+
+2. **图片缓存**:
+   - Service Worker 缓存已加载的图片
+   - 减少重复网络请求
+
+3. **多选拖拽**:
+   - 支持鼠标框选多张图片
+   - 类似文件管理器体验
+
+4. **排序选项**:
+   - 按时间、文件名、图床类型排序
+   - 升序/降序切换
+
+5. **标签系统**:
+   - 为图片添加自定义标签
+   - 按标签筛选和管理
+
+6. **批量编辑**:
+   - 批量修改图床
+   - 批量添加链接前缀
+
+---
+
 ## ✅ Bug 修复记录 (2025-12-02)
 
 ### Bug 修复 1: 设置页面 Cookie 保存后上传界面状态不刷新
@@ -3104,6 +4268,15 @@ function migrateConfigToV3(oldConfig: any): UserConfig {
 ### v3.0.2-alpha (2025-12-02)
 
 **新增**:
+- ✨ 浏览视图功能：历史记录窗口重命名为"浏览"，全新的图片浏览器+管理器定位
+- ✨ 瀑布流视图：类似 Google Photos 的照片墙布局（响应式网格）
+- ✨ 双视图模式：表格视图 + 瀑布流视图可切换
+- ✨ Lightbox 大图预览：全屏预览、键盘导航（左右箭头、ESC）
+- ✨ 图床类型筛选：按微博/R2/TCL/京东/牛客筛选历史记录
+- ✨ 右键菜单：预览、复制链接、删除等快捷操作
+- ✨ 懒加载：初始显示 50 张，滚动自动加载更多（Intersection Observer）
+- ✨ Shimmer 加载动画：优雅的图片加载反馈
+- ✨ 视图偏好持久化：自动记忆用户选择的视图模式
 - ✨ 牛客图床支持（需要 Cookie 认证）
 - ✨ 牛客设置页面 Cookie 输入框
 - ✨ Cookie 自动保存功能
@@ -3121,6 +4294,7 @@ function migrateConfigToV3(oldConfig: any): UserConfig {
 - 🐛 修复 WebView2 Cookie 提取域名不匹配导致无法获取 Cookie 的问题
 
 **文档**:
+- 📝 添加浏览视图 (Gallery View) 功能实现文档到 record.md (阶段十四)
 - 📝 添加牛客图床实现文档到 record.md (阶段十一)
 - 📝 添加 Cookie 验证增强文档到 record.md (阶段十二)
 - 📝 添加链接前缀多选功能文档到 record.md (阶段十三)

@@ -154,6 +154,13 @@ export interface UserConfig {
 
   /** WebDAV 配置（用于历史记录同步） */
   webdav?: WebDAVConfig;
+
+  /** 浏览视图偏好设置 */
+  galleryViewPreferences?: {
+    viewMode: 'table' | 'grid';
+    selectedImageBed?: ServiceType | 'all';
+    gridColumnWidth: number;
+  };
 }
 
 /**

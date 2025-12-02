@@ -126,8 +126,31 @@
         </div>
         <div id="history-view" class="view">
           <div class="container">
-            <h1>上传历史记录</h1>
-            
+            <!-- 标题栏和视图切换 -->
+            <div class="gallery-header">
+              <h1>浏览</h1>
+              <div class="view-mode-toggle">
+                <button id="view-mode-table" class="view-mode-btn active" title="表格视图">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="8" y1="6" x2="21" y2="6"/>
+                    <line x1="8" y1="12" x2="21" y2="12"/>
+                    <line x1="8" y1="18" x2="21" y2="18"/>
+                    <line x1="3" y1="6" x2="3.01" y2="6"/>
+                    <line x1="3" y1="12" x2="3.01" y2="12"/>
+                    <line x1="3" y1="18" x2="3.01" y2="18"/>
+                  </svg>
+                </button>
+                <button id="view-mode-grid" class="view-mode-btn" title="瀑布流视图">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"/>
+                    <rect x="14" y="3" width="7" height="7"/>
+                    <rect x="14" y="14" width="7" height="7"/>
+                    <rect x="3" y="14" width="7" height="7"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
             <!-- 批量操作工具栏 -->
             <div class="history-toolbar">
                 <div class="bulk-actions">
@@ -149,13 +172,25 @@
                     </button>
                 </div>
 
-                <!-- v-1.2 搜索框 -->
-                <div class="search-section">
-                    <input type="text" id="search-input" placeholder="搜索本地文件名..." />
+                <!-- 筛选和搜索 -->
+                <div class="filter-search-section">
+                    <select id="image-bed-filter" class="image-bed-filter">
+                        <option value="all">全部图床</option>
+                        <option value="weibo">微博</option>
+                        <option value="r2">R2</option>
+                        <option value="tcl">TCL</option>
+                        <option value="jd">京东</option>
+                        <option value="nowcoder">牛客</option>
+                    </select>
+                    <div class="search-section">
+                        <input type="text" id="search-input" placeholder="搜索本地文件名..." />
+                    </div>
                 </div>
             </div>
 
-            <table id="history-table">
+            <!-- 表格视图容器 -->
+            <div id="table-view-container" class="view-container">
+                <table id="history-table">
                 <thead>
                     <tr>
                         <th class="checkbox-col">
@@ -173,7 +208,22 @@
                 <tbody id="history-body">
                 </tbody>
             </table>
-    
+            </div>
+
+            <!-- 瀑布流视图容器 -->
+            <div id="grid-view-container" class="view-container" style="display: none;">
+                <div id="gallery-grid" class="gallery-grid">
+                    <!-- 动态生成图片卡片 -->
+                </div>
+                <div id="grid-loading-indicator" class="grid-loading-indicator" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>加载更多...</p>
+                </div>
+                <div id="grid-end-message" class="grid-end-message" style="display: none;">
+                    <p>已加载全部图片</p>
+                </div>
+            </div>
+
             <div class="footer">
                 <button id="clear-history-btn">清空历史</button>
                 <span id="status-message"></span>
@@ -446,6 +496,88 @@
       <span id="toast-icon"></span>
       <span id="toast-message"></span>
     </div>
+
+    <!-- Lightbox Modal -->
+    <div id="lightbox-modal" class="lightbox-modal" style="display: none;">
+      <div class="lightbox-overlay"></div>
+      <div class="lightbox-content">
+        <button class="lightbox-close" id="lightbox-close">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+
+        <div class="lightbox-image-container">
+          <img id="lightbox-image" src="" alt="" />
+        </div>
+
+        <div class="lightbox-info">
+          <div class="lightbox-filename" id="lightbox-filename"></div>
+          <div class="lightbox-meta">
+            <span id="lightbox-service-badge" class="service-badge"></span>
+            <span id="lightbox-timestamp"></span>
+          </div>
+        </div>
+
+        <button class="lightbox-nav lightbox-prev" id="lightbox-prev">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+        <button class="lightbox-nav lightbox-next" id="lightbox-next">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </button>
+
+        <div class="lightbox-actions">
+          <button id="lightbox-copy-btn" class="lightbox-action-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            复制链接
+          </button>
+          <button id="lightbox-delete-btn" class="lightbox-action-btn danger">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+            删除
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="context-menu" class="context-menu" style="display: none;">
+      <ul class="context-menu-list">
+        <li id="ctx-preview" class="context-menu-item">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <span>预览</span>
+        </li>
+        <li id="ctx-copy-link" class="context-menu-item">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <span>复制链接</span>
+        </li>
+        <li class="context-menu-divider"></li>
+        <li id="ctx-delete" class="context-menu-item danger">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+          <span>删除</span>
+        </li>
+      </ul>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
