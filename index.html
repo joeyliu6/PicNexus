@@ -290,8 +290,50 @@
 
             <div class="form-section">
                 <h2>链接配置</h2>
-                <label>百度代理前缀</label>
-                <input type="text" id="baidu-prefix" value="https://image.baidu.com/search/down?thumburl=" />
+
+                <!-- 启用开关 -->
+                <div class="prefix-toggle-container">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="prefix-enabled" checked />
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="toggle-label">启用代理前缀（仅微博图床）</span>
+                </div>
+
+                <!-- 前缀选择器 -->
+                <div class="prefix-selector-container" id="prefix-selector-wrapper">
+                    <select id="prefix-selector" class="prefix-selector">
+                        <!-- 选项由 JavaScript 动态填充 -->
+                    </select>
+                    <button type="button" id="add-prefix-btn" class="prefix-action-btn" title="添加自定义前缀">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                    </button>
+                    <button type="button" id="delete-prefix-btn" class="prefix-action-btn prefix-delete-btn" title="删除当前前缀">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <p class="hint">微博图床返回的链接需要通过代理前缀才能正常访问。</p>
+            </div>
+
+            <!-- 添加前缀模态框 -->
+            <div id="add-prefix-modal" class="modal hidden">
+                <div class="modal-content">
+                    <h3>添加自定义前缀</h3>
+                    <label>前缀 URL</label>
+                    <input type="text" id="new-prefix-input" placeholder="https://example.com/proxy?url=" />
+                    <p class="hint">请输入完整的代理前缀 URL，微博图片链接会拼接在此前缀之后。</p>
+                    <div class="modal-buttons">
+                        <button type="button" id="cancel-add-prefix" class="btn-secondary">取消</button>
+                        <button type="button" id="confirm-add-prefix" class="btn-primary">添加</button>
+                    </div>
+                </div>
             </div>
     
             <div class="form-section">

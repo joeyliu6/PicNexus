@@ -105,6 +105,27 @@ export interface WebDAVConfig {
 export type OutputFormat = 'direct' | 'baidu-proxy';
 
 /**
+ * 链接前缀配置
+ * 用于微博图床的代理前缀管理
+ */
+export interface LinkPrefixConfig {
+  /** 是否启用代理前缀 */
+  enabled: boolean;
+  /** 当前选中的前缀索引 */
+  selectedIndex: number;
+  /** 前缀列表 */
+  prefixList: string[];
+}
+
+/**
+ * 默认前缀列表
+ */
+export const DEFAULT_PREFIXES: string[] = [
+  'https://image.baidu.com/search/down?thumburl=',
+  'https://cdn.cdnjson.com/pic.html?url='
+];
+
+/**
  * 用户配置（新架构）
  * 支持多图床并行上传
  */
@@ -125,8 +146,11 @@ export interface UserConfig {
   /** 输出格式 */
   outputFormat: OutputFormat;
 
-  /** 百度代理前缀（仅用于微博图床） */
+  /** @deprecated 使用 linkPrefixConfig 代替，保留用于向后兼容 */
   baiduPrefix?: string;
+
+  /** 链接前缀配置（用于微博图床代理） */
+  linkPrefixConfig?: LinkPrefixConfig;
 
   /** WebDAV 配置（用于历史记录同步） */
   webdav?: WebDAVConfig;
@@ -203,6 +227,11 @@ export const DEFAULT_CONFIG: UserConfig = {
   },
   outputFormat: 'baidu-proxy',
   baiduPrefix: 'https://image.baidu.com/search/down?thumburl=',
+  linkPrefixConfig: {
+    enabled: true,
+    selectedIndex: 0,
+    prefixList: [...DEFAULT_PREFIXES]
+  },
   webdav: {
     url: '',
     username: '',
@@ -276,4 +305,78 @@ function sanitizeString(str: string | undefined, prefixLen: number = 0, suffixLe
   const suffix = suffixLen > 0 ? trimmed.substring(trimmed.length - suffixLen) : '';
 
   return `${prefix}******${suffix}`;
+}
+
+/**
+ * 获取当前激活的前缀
+ * 如果前缀功能禁用，返回 null
+ *
+ * @param config 用户配置
+ * @returns 当前激活的前缀，或 null（如果禁用）
+ */
+export function getActivePrefix(config: UserConfig): string | null {
+  // 如果没有 linkPrefixConfig，尝试使用旧的 baiduPrefix
+  if (!config.linkPrefixConfig) {
+    return config.baiduPrefix || DEFAULT_PREFIXES[0];
+  }
+
+  // 如果功能禁用，返回 null
+  if (!config.linkPrefixConfig.enabled) {
+    return null;
+  }
+
+  const { selectedIndex, prefixList } = config.linkPrefixConfig;
+
+  // 如果列表为空，返回默认前缀
+  if (!prefixList || prefixList.length === 0) {
+    return DEFAULT_PREFIXES[0];
+  }
+
+  // 确保索引有效
+  if (selectedIndex >= 0 && selectedIndex < prefixList.length) {
+    return prefixList[selectedIndex];
+  }
+
+  // 索引无效，返回第一个
+  return prefixList[0];
+}
+
+/**
+ * 迁移旧配置到新格式
+ * 将单个 baiduPrefix 迁移为 linkPrefixConfig
+ *
+ * @param config 用户配置（可能是旧格式）
+ * @returns 迁移后的配置
+ */
+export function migrateConfig(config: UserConfig): UserConfig {
+  // 如果已经有 linkPrefixConfig，无需迁移
+  if (config.linkPrefixConfig) {
+    return config;
+  }
+
+  // 创建前缀列表，以默认前缀开始
+  const prefixList = [...DEFAULT_PREFIXES];
+  let selectedIndex = 0;
+
+  // 如果有旧的 baiduPrefix
+  if (config.baiduPrefix) {
+    const existingIndex = prefixList.indexOf(config.baiduPrefix);
+    if (existingIndex >= 0) {
+      // 旧前缀在默认列表中，选中它
+      selectedIndex = existingIndex;
+    } else {
+      // 旧前缀不在默认列表中，添加进去
+      prefixList.push(config.baiduPrefix);
+      selectedIndex = prefixList.length - 1;
+    }
+  }
+
+  return {
+    ...config,
+    linkPrefixConfig: {
+      enabled: true,
+      selectedIndex,
+      prefixList
+    }
+  };
 }

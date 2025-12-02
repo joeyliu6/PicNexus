@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/tauri';
 import { dialog } from '@tauri-apps/api';
 
 import { Store } from './store';
-import { UserConfig, HistoryItem, DEFAULT_CONFIG, ServiceType } from './config/types';
+import { UserConfig, HistoryItem, DEFAULT_CONFIG, ServiceType, LinkPrefixConfig, DEFAULT_PREFIXES, migrateConfig } from './config/types';
 import { getCookieProvider } from './config/cookieProviders';
 // import { validateR2Config } from './coreLogic'; // 暂未使用
 
@@ -135,7 +135,16 @@ const r2SecretKeyEl = getElement<HTMLInputElement>('r2-secret-key', 'R2密钥输
 const r2BucketEl = getElement<HTMLInputElement>('r2-bucket', 'R2存储桶输入框');
 const r2PathEl = getElement<HTMLInputElement>('r2-path', 'R2路径输入框');
 const r2PublicDomainEl = getElement<HTMLInputElement>('r2-public-domain', 'R2公开域名输入框');
-const baiduPrefixEl = getElement<HTMLInputElement>('baidu-prefix', '百度前缀输入框');
+// 链接前缀配置元素
+const prefixEnabledEl = getElement<HTMLInputElement>('prefix-enabled', '前缀启用开关');
+const prefixSelectorEl = getElement<HTMLSelectElement>('prefix-selector', '前缀选择器');
+const prefixSelectorWrapper = getElement<HTMLElement>('prefix-selector-wrapper', '前缀选择器容器');
+const addPrefixBtn = getElement<HTMLButtonElement>('add-prefix-btn', '添加前缀按钮');
+const deletePrefixBtn = getElement<HTMLButtonElement>('delete-prefix-btn', '删除前缀按钮');
+const addPrefixModal = getElement<HTMLElement>('add-prefix-modal', '添加前缀模态框');
+const newPrefixInput = getElement<HTMLInputElement>('new-prefix-input', '新前缀输入框');
+const cancelAddPrefixBtn = getElement<HTMLButtonElement>('cancel-add-prefix', '取消添加按钮');
+const confirmAddPrefixBtn = getElement<HTMLButtonElement>('confirm-add-prefix', '确认添加按钮');
 const webdavUrlEl = getElement<HTMLInputElement>('webdav-url', 'WebDAV URL输入框');
 const webdavUsernameEl = getElement<HTMLInputElement>('webdav-username', 'WebDAV用户名输入框');
 const webdavPasswordEl = getElement<HTMLInputElement>('webdav-password', 'WebDAV密码输入框');
@@ -890,8 +899,11 @@ async function loadSettings(): Promise<void> {
       if (r2PathEl) r2PathEl.value = config.services?.r2?.path || '';
       if (r2PublicDomainEl) r2PublicDomainEl.value = config.services?.r2?.publicDomain || '';
       if (nowcoderCookieEl) nowcoderCookieEl.value = config.services?.nowcoder?.cookie || '';
-      if (baiduPrefixEl) baiduPrefixEl.value = config.baiduPrefix || DEFAULT_CONFIG.baiduPrefix || 'https://image.baidu.com/search/down?thumburl=';
-      
+
+      // 链接前缀配置（使用迁移函数确保兼容旧配置）
+      const migratedConfig = migrateConfig(config);
+      populatePrefixSelector(migratedConfig.linkPrefixConfig!);
+
       // WebDAV 配置
       if (config.webdav) {
         if (webdavUrlEl) webdavUrlEl.value = config.webdav.url || '';
@@ -979,7 +991,8 @@ async function saveSettings(): Promise<void> {
         }
       },
       outputFormat: savedConfig?.outputFormat || DEFAULT_CONFIG.outputFormat,
-      baiduPrefix: baiduPrefixEl?.value.trim() || DEFAULT_CONFIG.baiduPrefix
+      baiduPrefix: getActivePrefixFromUI() || DEFAULT_CONFIG.baiduPrefix, // 向后兼容
+      linkPrefixConfig: getLinkPrefixConfigFromUI(savedConfig?.linkPrefixConfig)
     };
 
     // 保存到存储
@@ -1124,7 +1137,8 @@ async function handleAutoSave(): Promise<void> {
         }
       },
       outputFormat: savedConfig?.outputFormat || DEFAULT_CONFIG.outputFormat,
-      baiduPrefix: baiduPrefixEl?.value.trim() || DEFAULT_CONFIG.baiduPrefix
+      baiduPrefix: getActivePrefixFromUI() || DEFAULT_CONFIG.baiduPrefix, // 向后兼容
+      linkPrefixConfig: getLinkPrefixConfigFromUI(savedConfig?.linkPrefixConfig)
     };
 
     // 保存到存储
@@ -1152,6 +1166,256 @@ async function handleAutoSave(): Promise<void> {
     console.error('[自动保存] 自动保存失败:', error);
     showToast(`自动保存失败: ${errorMsg}`, 'error', 4000);
   }
+}
+
+// ========== 链接前缀配置辅助函数 ==========
+
+// 当前前缀列表（内存缓存，用于 UI 操作）
+let currentPrefixList: string[] = [...DEFAULT_PREFIXES];
+
+/**
+ * 填充前缀选择器下拉框
+ */
+function populatePrefixSelector(linkPrefixConfig: LinkPrefixConfig): void {
+  if (!prefixSelectorEl || !prefixEnabledEl) return;
+
+  // 更新内存缓存
+  currentPrefixList = linkPrefixConfig.prefixList || [...DEFAULT_PREFIXES];
+
+  // 设置开关状态
+  prefixEnabledEl.checked = linkPrefixConfig.enabled;
+  updatePrefixSelectorState(linkPrefixConfig.enabled);
+
+  // 清空现有选项
+  prefixSelectorEl.innerHTML = '';
+
+  // 填充选项
+  currentPrefixList.forEach((prefix, index) => {
+    const option = document.createElement('option');
+    option.value = index.toString();
+    // 截断长 URL 以便显示
+    const displayText = prefix.length > 50
+      ? prefix.substring(0, 47) + '...'
+      : prefix;
+    option.textContent = displayText;
+    option.title = prefix; // 完整 URL 作为 tooltip
+    option.selected = index === linkPrefixConfig.selectedIndex;
+    prefixSelectorEl.appendChild(option);
+  });
+
+  console.log('[前缀配置] 已填充前缀选择器，共', currentPrefixList.length, '个前缀');
+}
+
+/**
+ * 更新前缀选择器禁用状态
+ */
+function updatePrefixSelectorState(enabled: boolean): void {
+  if (prefixSelectorWrapper) {
+    if (enabled) {
+      prefixSelectorWrapper.classList.remove('disabled');
+    } else {
+      prefixSelectorWrapper.classList.add('disabled');
+    }
+  }
+}
+
+/**
+ * 从 UI 获取当前选中的前缀
+ */
+function getActivePrefixFromUI(): string | null {
+  if (!prefixEnabledEl?.checked) return null;
+  if (!prefixSelectorEl) return DEFAULT_PREFIXES[0];
+
+  const selectedIndex = parseInt(prefixSelectorEl.value);
+  if (selectedIndex >= 0 && selectedIndex < currentPrefixList.length) {
+    return currentPrefixList[selectedIndex];
+  }
+  return currentPrefixList[0] || DEFAULT_PREFIXES[0];
+}
+
+/**
+ * 从 UI 获取完整的前缀配置
+ */
+function getLinkPrefixConfigFromUI(savedConfig?: LinkPrefixConfig): LinkPrefixConfig {
+  return {
+    enabled: prefixEnabledEl?.checked ?? true,
+    selectedIndex: prefixSelectorEl ? parseInt(prefixSelectorEl.value) : 0,
+    prefixList: savedConfig?.prefixList || currentPrefixList
+  };
+}
+
+/**
+ * 验证 URL 格式
+ */
+function isValidPrefixUrl(url: string): boolean {
+  try {
+    new URL(url);
+    return url.startsWith('http://') || url.startsWith('https://');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 初始化前缀配置事件监听器
+ */
+function initPrefixEventListeners(): void {
+  // 开关切换
+  if (prefixEnabledEl) {
+    prefixEnabledEl.addEventListener('change', () => {
+      updatePrefixSelectorState(prefixEnabledEl.checked);
+      handleAutoSave().catch(err => {
+        console.error('[前缀配置] 保存开关状态失败:', err);
+      });
+    });
+  }
+
+  // 选择器切换
+  if (prefixSelectorEl) {
+    prefixSelectorEl.addEventListener('change', () => {
+      handleAutoSave().catch(err => {
+        console.error('[前缀配置] 保存选择失败:', err);
+      });
+    });
+  }
+
+  // 添加前缀按钮
+  if (addPrefixBtn) {
+    addPrefixBtn.addEventListener('click', () => {
+      if (addPrefixModal && newPrefixInput) {
+        newPrefixInput.value = '';
+        addPrefixModal.classList.remove('hidden');
+        newPrefixInput.focus();
+      }
+    });
+  }
+
+  // 取消添加
+  if (cancelAddPrefixBtn) {
+    cancelAddPrefixBtn.addEventListener('click', () => {
+      addPrefixModal?.classList.add('hidden');
+    });
+  }
+
+  // 确认添加
+  if (confirmAddPrefixBtn) {
+    confirmAddPrefixBtn.addEventListener('click', async () => {
+      if (!newPrefixInput) return;
+
+      const newPrefix = newPrefixInput.value.trim();
+
+      // 验证 URL
+      if (!newPrefix) {
+        showToast('请输入前缀 URL', 'error', 3000);
+        return;
+      }
+
+      if (!isValidPrefixUrl(newPrefix)) {
+        showToast('请输入有效的 URL（以 http:// 或 https:// 开头）', 'error', 3000);
+        return;
+      }
+
+      // 检查重复
+      if (currentPrefixList.includes(newPrefix)) {
+        showToast('该前缀已存在', 'error', 3000);
+        return;
+      }
+
+      // 添加新前缀
+      currentPrefixList.push(newPrefix);
+      const newIndex = currentPrefixList.length - 1;
+
+      // 更新 UI
+      const option = document.createElement('option');
+      option.value = newIndex.toString();
+      const displayText = newPrefix.length > 50
+        ? newPrefix.substring(0, 47) + '...'
+        : newPrefix;
+      option.textContent = displayText;
+      option.title = newPrefix;
+      prefixSelectorEl?.appendChild(option);
+
+      // 选中新添加的前缀
+      if (prefixSelectorEl) {
+        prefixSelectorEl.value = newIndex.toString();
+      }
+
+      // 保存配置
+      try {
+        await handleAutoSave();
+        addPrefixModal?.classList.add('hidden');
+        showToast('前缀添加成功', 'success', 2000);
+      } catch (err) {
+        console.error('[前缀配置] 添加前缀失败:', err);
+        // 回滚
+        currentPrefixList.pop();
+        if (prefixSelectorEl && prefixSelectorEl.lastChild) {
+          prefixSelectorEl.removeChild(prefixSelectorEl.lastChild);
+        }
+      }
+    });
+  }
+
+  // 删除前缀按钮
+  if (deletePrefixBtn) {
+    deletePrefixBtn.addEventListener('click', async () => {
+      if (!prefixSelectorEl) return;
+
+      const selectedIndex = parseInt(prefixSelectorEl.value);
+
+      // 确保至少保留一个前缀
+      if (currentPrefixList.length <= 1) {
+        showToast('至少需要保留一个前缀', 'error', 3000);
+        return;
+      }
+
+      const prefixToDelete = currentPrefixList[selectedIndex];
+
+      // 确认删除
+      const confirmed = await showConfirmModal(
+        `确定要删除该前缀吗？\n\n${prefixToDelete}`,
+        '删除前缀'
+      );
+
+      if (!confirmed) return;
+
+      // 删除前缀
+      currentPrefixList.splice(selectedIndex, 1);
+
+      // 调整选中索引
+      let newSelectedIndex = selectedIndex;
+      if (newSelectedIndex >= currentPrefixList.length) {
+        newSelectedIndex = currentPrefixList.length - 1;
+      }
+
+      // 重新填充选择器
+      const linkPrefixConfig: LinkPrefixConfig = {
+        enabled: prefixEnabledEl?.checked ?? true,
+        selectedIndex: newSelectedIndex,
+        prefixList: currentPrefixList
+      };
+      populatePrefixSelector(linkPrefixConfig);
+
+      // 保存配置
+      try {
+        await handleAutoSave();
+        showToast('前缀已删除', 'success', 2000);
+      } catch (err) {
+        console.error('[前缀配置] 删除前缀失败:', err);
+      }
+    });
+  }
+
+  // 点击模态框外部关闭
+  if (addPrefixModal) {
+    addPrefixModal.addEventListener('click', (e) => {
+      if (e.target === addPrefixModal) {
+        addPrefixModal.classList.add('hidden');
+      }
+    });
+  }
+
+  console.log('[前缀配置] 事件监听器已初始化');
 }
 
 /**
@@ -1829,6 +2093,9 @@ async function renderHistoryTable(items: HistoryItem[]) {
       const tdLink = document.createElement('td');
 
       if (item.results && item.results.length > 0) {
+        // 获取当前前缀配置
+        const activePrefix = getActivePrefixFromUI();
+
         // 创建链接选择下拉框
         const linkSelector = document.createElement('select');
         linkSelector.className = 'link-selector';
@@ -1837,7 +2104,13 @@ async function renderHistoryTable(items: HistoryItem[]) {
         item.results.forEach(serviceResult => {
           if (serviceResult.status === 'success' && serviceResult.result?.url) {
             const option = document.createElement('option');
-            option.value = serviceResult.result.url;
+
+            // 微博链接动态拼接当前选择的前缀
+            let displayUrl = serviceResult.result.url;
+            if (serviceResult.serviceId === 'weibo' && activePrefix) {
+              displayUrl = activePrefix + serviceResult.result.url;
+            }
+            option.value = displayUrl;
 
             const serviceNames: Record<ServiceType, string> = {
               weibo: '微博',
@@ -1862,11 +2135,13 @@ async function renderHistoryTable(items: HistoryItem[]) {
 
         // 如果只有一个成功的链接，直接显示链接
         if (linkSelector.options.length === 1) {
+          // 获取实际显示的链接（已经包含前缀处理）
+          const displayLink = linkSelector.options[0].value;
           const link = document.createElement('a');
-          link.href = item.generatedLink;
+          link.href = displayLink;
           link.target = '_blank';
-          link.textContent = item.generatedLink;
-          link.title = item.generatedLink;
+          link.textContent = displayLink;
+          link.title = displayLink;
           link.className = 'history-link';
           tdLink.appendChild(link);
         } else if (linkSelector.options.length > 1) {
@@ -1875,12 +2150,34 @@ async function renderHistoryTable(items: HistoryItem[]) {
           tdLink.textContent = '无可用链接';
         }
       } else {
-        // 旧数据兼容
+        // 旧数据兼容：动态处理微博链接前缀
+        const activePrefix = getActivePrefixFromUI();
+        let displayLink = item.generatedLink;
+
+        // 如果是微博链接且有前缀配置，需要处理
+        if (item.primaryService === 'weibo' && activePrefix) {
+          // 检查链接是否已经包含旧前缀，如果是则替换
+          const oldPrefixes = [...DEFAULT_PREFIXES];
+          let isOldPrefixed = false;
+          for (const oldPrefix of oldPrefixes) {
+            if (displayLink.startsWith(oldPrefix)) {
+              // 移除旧前缀，添加新前缀
+              displayLink = activePrefix + displayLink.substring(oldPrefix.length);
+              isOldPrefixed = true;
+              break;
+            }
+          }
+          // 如果没有旧前缀，直接添加新前缀
+          if (!isOldPrefixed && !displayLink.startsWith('http')) {
+            displayLink = activePrefix + displayLink;
+          }
+        }
+
         const link = document.createElement('a');
-        link.href = item.generatedLink;
+        link.href = displayLink;
         link.target = '_blank';
-        link.textContent = item.generatedLink;
-        link.title = item.generatedLink;
+        link.textContent = displayLink;
+        link.title = displayLink;
         link.className = 'history-link';
         tdLink.appendChild(link);
       }
@@ -2554,7 +2851,6 @@ function initialize(): void {
       r2BucketEl,
       r2PathEl,
       r2PublicDomainEl,
-      baiduPrefixEl,
       webdavUrlEl,
       webdavUsernameEl,
       webdavPasswordEl,
@@ -2576,7 +2872,10 @@ function initialize(): void {
     });
     
     // 输出格式单选按钮已删除，不再需要绑定事件
-    
+
+    // 链接前缀配置事件绑定
+    initPrefixEventListeners();
+
     if (testCookieBtn) {
       testCookieBtn.addEventListener('click', () => {
         testWeiboConnection().catch(err => {

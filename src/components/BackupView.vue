@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { Store } from '../store';
 import { UserConfig, HistoryItem, DEFAULT_CONFIG } from '../config';
+import { migrateConfig } from '../config/types';
 import { WebDAVClient } from '../utils/webdav';
 import { save, open } from '@tauri-apps/api/dialog';
 import { writeTextFile, readTextFile } from '@tauri-apps/api/fs';
@@ -87,8 +88,11 @@ async function importSettingsLocal() {
     }
     
     const content = await readTextFile(filePath);
-    const importedConfig = JSON.parse(content) as UserConfig;
-    
+    let importedConfig = JSON.parse(content) as UserConfig;
+
+    // 迁移旧配置格式（如 baiduPrefix -> linkPrefixConfig）
+    importedConfig = migrateConfig(importedConfig);
+
     // 获取当前配置（保留 WebDAV 配置）
     const currentConfig = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
     
@@ -243,12 +247,15 @@ async function downloadSettingsCloud() {
       throw new Error('云端配置文件不存在');
     }
     
-    const importedConfig = JSON.parse(content) as UserConfig;
-    
+    let importedConfig = JSON.parse(content) as UserConfig;
+
+    // 迁移旧配置格式（如 baiduPrefix -> linkPrefixConfig）
+    importedConfig = migrateConfig(importedConfig);
+
     // 保存配置
     await configStore.set('config', importedConfig);
     await configStore.save();
-    
+
     settingsSyncStatus.value = '状态: 已同步';
     showToast('配置已从云端恢复', 'success', 3000);
     

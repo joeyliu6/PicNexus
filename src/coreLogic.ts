@@ -6,7 +6,7 @@ import { sendNotification, isPermissionGranted, requestPermission } from "@tauri
 import { readBinaryFile } from '@tauri-apps/api/fs';
 import { getClient, Body } from '@tauri-apps/api/http';
 import { uploadToWeibo, WeiboUploadError } from './weiboUploader';
-import { UserConfig, R2ServiceConfig, HistoryItem } from './config/types';
+import { UserConfig, R2ServiceConfig, HistoryItem, getActivePrefix } from './config/types';
 import { Store, StoreError } from './store';
 import { basename } from '@tauri-apps/api/path';
 import { emit } from '@tauri-apps/api/event';
@@ -293,15 +293,18 @@ async function generateLink(
     case 'baidu-proxy':
     case 'baidu' as any: // 向后兼容旧配置
     default:
-      const baiduPrefix = config.baiduPrefix || 'https://image.baidu.com/search/down?thumburl=';
-      if (!baiduPrefix || typeof baiduPrefix !== 'string') {
-        console.warn("[步骤 C] 警告: 百度前缀无效，使用默认值");
-        const defaultPrefix = 'https://image.baidu.com/search/down?thumburl=';
-        return `${defaultPrefix}${weiboLargeUrl}`;
+      // 使用新的 getActivePrefix 函数获取当前前缀
+      const activePrefix = getActivePrefix(config);
+
+      // 如果前缀功能被禁用，返回原始链接
+      if (!activePrefix) {
+        console.log(`[步骤 C] 前缀功能已禁用，使用微博原始链接: ${weiboLargeUrl}`);
+        return weiboLargeUrl;
       }
-      const baiduLink = `${baiduPrefix}${weiboLargeUrl}`;
-      console.log(`[步骤 C] 使用百度代理链接: ${baiduLink}`);
-      return baiduLink;
+
+      const proxyLink = `${activePrefix}${weiboLargeUrl}`;
+      console.log(`[步骤 C] 使用代理链接: ${proxyLink}`);
+      return proxyLink;
   }
 }
 

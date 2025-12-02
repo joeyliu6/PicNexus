@@ -2276,3 +2276,191 @@ body, html {
   border-color: rgba(59, 130, 246, 0.5);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
+
+/* ========== 链接前缀配置样式 ========== */
+
+/* 开关容器 */
+.prefix-toggle-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.toggle-label {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+/* Toggle Switch 样式 */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-input);
+  transition: 0.3s;
+  border-radius: 24px;
+  border: 1px solid var(--border-subtle);
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--text-secondary);
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+  background-color: white;
+}
+
+.toggle-switch input:focus + .toggle-slider {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+/* 前缀选择器容器 */
+.prefix-selector-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.prefix-selector {
+  flex: 1;
+  padding: 10px 12px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 0;
+}
+
+.prefix-selector:hover {
+  border-color: var(--border-focus);
+}
+
+.prefix-selector:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.prefix-selector option {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  padding: 8px;
+}
+
+/* 前缀禁用状态 */
+.prefix-selector-container.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* 操作按钮 */
+.prefix-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: rgba(51, 65, 85, 0.3);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.prefix-action-btn:hover {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.prefix-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: var(--error);
+  color: var(--error);
+}
+
+/* 添加前缀模态框 */
+#add-prefix-modal .modal-content {
+  padding: 20px;
+}
+
+#add-prefix-modal h3 {
+  margin: 0 0 16px 0;
+  font-size: var(--text-lg);
+  color: var(--text-primary);
+}
+
+#add-prefix-modal label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+#add-prefix-modal input {
+  width: 100%;
+  padding: 10px 12px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  margin-bottom: 8px;
+  box-sizing: border-box;
+}
+
+#add-prefix-modal input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+#add-prefix-modal .hint {
+  margin-bottom: 16px;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}

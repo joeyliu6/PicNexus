@@ -2,7 +2,7 @@
 // 链接生成逻辑
 
 import { UploadResult } from '../uploaders/base/types';
-import { UserConfig } from '../config/types';
+import { UserConfig, getActivePrefix, DEFAULT_PREFIXES } from '../config/types';
 
 /**
  * 链接生成器
@@ -18,15 +18,22 @@ export class LinkGenerator {
    * @returns 最终生成的链接
    */
   static generate(result: UploadResult, config: UserConfig): string {
-    // 只有微博 + baidu-proxy 模式才加百度前缀
+    // 只有微博 + baidu-proxy 模式才加代理前缀
     if (
       result.serviceId === 'weibo' &&
-      config.outputFormat === 'baidu-proxy' &&
-      config.baiduPrefix
+      config.outputFormat === 'baidu-proxy'
     ) {
-      const baiduLink = `${config.baiduPrefix}${result.url}`;
-      console.log('[LinkGenerator] 生成百度代理链接:', baiduLink);
-      return baiduLink;
+      const activePrefix = getActivePrefix(config);
+
+      // 如果前缀功能被禁用，返回原始链接
+      if (!activePrefix) {
+        console.log('[LinkGenerator] 前缀功能已禁用，使用直接链接:', result.url);
+        return result.url;
+      }
+
+      const proxyLink = `${activePrefix}${result.url}`;
+      console.log('[LinkGenerator] 生成代理链接:', proxyLink);
+      return proxyLink;
     }
 
     // 其他情况直接返回原始 URL
@@ -50,16 +57,28 @@ export class LinkGenerator {
   }
 
   /**
-   * 获取原始链接（去除百度前缀）
+   * 获取原始链接（去除代理前缀）
    *
    * @param generatedLink 生成的链接
-   * @param baiduPrefix 百度前缀
+   * @param config 用户配置（可选，用于获取自定义前缀列表）
    * @returns 原始链接
    */
-  static getOriginalLink(generatedLink: string, baiduPrefix?: string): string {
-    if (baiduPrefix && generatedLink.startsWith(baiduPrefix)) {
-      return generatedLink.substring(baiduPrefix.length);
+  static getOriginalLink(generatedLink: string, config?: UserConfig): string {
+    // 获取所有可能的前缀
+    const allPrefixes = config?.linkPrefixConfig?.prefixList || DEFAULT_PREFIXES;
+
+    // 也检查旧的 baiduPrefix
+    if (config?.baiduPrefix && !allPrefixes.includes(config.baiduPrefix)) {
+      allPrefixes.push(config.baiduPrefix);
     }
+
+    // 检查链接是否以任何已知前缀开头
+    for (const prefix of allPrefixes) {
+      if (generatedLink.startsWith(prefix)) {
+        return generatedLink.substring(prefix.length);
+      }
+    }
+
     return generatedLink;
   }
 }

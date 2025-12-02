@@ -2184,6 +2184,310 @@ __snaker__id=v1mWnarE...; gdxidpyhxdE=y9QN1fLJ...
 
 ---
 
+## ✅ 阶段十三: 链接前缀多选功能 (2025-12-02 完成)
+
+**需求背景**:
+用户希望改造设置中的"链接配置"功能，让其支持多个代理前缀可选。微博图床返回的链接需要通过代理前缀才能正常访问，之前只支持单个固定前缀，现在需要：
+1. 支持多个前缀下拉选择
+2. 默认两个前缀：百度代理和 cdnjson 代理
+3. 支持用户添加/删除自定义前缀
+4. 开关控制是否启用前缀功能
+5. 历史记录中微博链接动态显示当前选择的前缀
+6. 备份导入导出支持新配置
+
+**修改文件**:
+- `src/config/types.ts` - 新增 LinkPrefixConfig 接口和辅助函数
+- `index.html` - UI 改为下拉选择 + 开关 + 添加/删除按钮
+- `src/style.css` - 新增前缀选择器样式
+- `src/main.ts` - DOM 交互、配置加载/保存、历史记录动态渲染
+- `src/coreLogic.ts` - generateLink() 使用新配置
+- `src/core/LinkGenerator.ts` - 使用 getActivePrefix()
+- `src/components/BackupView.vue` - 导入时迁移旧配置
+
+### 13.1 配置类型扩展
+
+**文件**: `src/config/types.ts`
+
+**新增接口**:
+```typescript
+/**
+ * 链接前缀配置
+ * 用于微博图床的代理前缀管理
+ */
+export interface LinkPrefixConfig {
+  /** 是否启用代理前缀 */
+  enabled: boolean;
+  /** 当前选中的前缀索引 */
+  selectedIndex: number;
+  /** 前缀列表 */
+  prefixList: string[];
+}
+
+/**
+ * 默认前缀列表
+ */
+export const DEFAULT_PREFIXES: string[] = [
+  'https://image.baidu.com/search/down?thumburl=',
+  'https://cdn.cdnjson.com/pic.html?url='
+];
+```
+
+**UserConfig 扩展**:
+```typescript
+interface UserConfig {
+  // ... 其他字段
+
+  /** @deprecated 使用 linkPrefixConfig 代替，保留用于向后兼容 */
+  baiduPrefix?: string;
+
+  /** 链接前缀配置（用于微博图床代理） */
+  linkPrefixConfig?: LinkPrefixConfig;
+}
+```
+
+**辅助函数**:
+```typescript
+/**
+ * 获取当前激活的前缀
+ * 如果前缀功能禁用，返回 null
+ */
+export function getActivePrefix(config: UserConfig): string | null {
+  if (!config.linkPrefixConfig) {
+    return config.baiduPrefix || DEFAULT_PREFIXES[0];
+  }
+  if (!config.linkPrefixConfig.enabled) {
+    return null;
+  }
+  const { selectedIndex, prefixList } = config.linkPrefixConfig;
+  if (selectedIndex >= 0 && selectedIndex < prefixList.length) {
+    return prefixList[selectedIndex];
+  }
+  return prefixList[0];
+}
+
+/**
+ * 迁移旧配置到新格式
+ */
+export function migrateConfig(config: UserConfig): UserConfig {
+  if (config.linkPrefixConfig) return config;
+
+  const prefixList = [...DEFAULT_PREFIXES];
+  let selectedIndex = 0;
+
+  if (config.baiduPrefix) {
+    const existingIndex = prefixList.indexOf(config.baiduPrefix);
+    if (existingIndex >= 0) {
+      selectedIndex = existingIndex;
+    } else {
+      prefixList.push(config.baiduPrefix);
+      selectedIndex = prefixList.length - 1;
+    }
+  }
+
+  return {
+    ...config,
+    linkPrefixConfig: { enabled: true, selectedIndex, prefixList }
+  };
+}
+```
+
+### 13.2 UI 组件改造
+
+**文件**: `index.html` (291-337行)
+
+**旧 UI**: 单个文本输入框
+```html
+<input type="text" id="baidu-prefix" value="https://image.baidu.com/search/down?thumburl=" />
+```
+
+**新 UI**: 开关 + 下拉选择 + 添加/删除按钮
+```html
+<!-- 启用开关 -->
+<div class="prefix-toggle-container">
+    <label class="toggle-switch">
+        <input type="checkbox" id="prefix-enabled" checked />
+        <span class="toggle-slider"></span>
+    </label>
+    <span class="toggle-label">启用代理前缀（仅微博图床）</span>
+</div>
+
+<!-- 前缀选择器 -->
+<div class="prefix-selector-container" id="prefix-selector-wrapper">
+    <select id="prefix-selector" class="prefix-selector">
+        <!-- 选项由 JavaScript 动态填充 -->
+    </select>
+    <button type="button" id="add-prefix-btn" class="prefix-action-btn">+</button>
+    <button type="button" id="delete-prefix-btn" class="prefix-action-btn">🗑️</button>
+</div>
+
+<!-- 添加前缀模态框 -->
+<div id="add-prefix-modal" class="modal hidden">
+    <div class="modal-content">
+        <h3>添加自定义前缀</h3>
+        <input type="text" id="new-prefix-input" placeholder="https://example.com/proxy?url=" />
+        <div class="modal-buttons">
+            <button id="cancel-add-prefix">取消</button>
+            <button id="confirm-add-prefix">添加</button>
+        </div>
+    </div>
+</div>
+```
+
+### 13.3 样式设计
+
+**文件**: `src/style.css` (2280-2466行)
+
+**Toggle Switch 样式**:
+```css
+.toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  background-color: var(--bg-input);
+  border-radius: 24px;
+  transition: 0.3s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: var(--primary);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+```
+
+**前缀选择器样式**:
+```css
+.prefix-selector-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.prefix-selector {
+  flex: 1;
+  padding: 10px 12px;
+  background-color: var(--bg-input);
+  border-radius: 8px;
+}
+
+.prefix-action-btn {
+  width: 36px;
+  height: 36px;
+  background: rgba(51, 65, 85, 0.3);
+  border-radius: 8px;
+}
+
+.prefix-action-btn:hover {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--primary);
+}
+
+.prefix-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--error);
+}
+```
+
+### 13.4 主逻辑实现
+
+**文件**: `src/main.ts`
+
+**新增辅助函数**:
+```typescript
+// 内存缓存当前前缀列表
+let currentPrefixList: string[] = [...DEFAULT_PREFIXES];
+
+// 填充前缀选择器
+function populatePrefixSelector(linkPrefixConfig: LinkPrefixConfig): void {
+  currentPrefixList = linkPrefixConfig.prefixList || [...DEFAULT_PREFIXES];
+  prefixEnabledEl.checked = linkPrefixConfig.enabled;
+  updatePrefixSelectorState(linkPrefixConfig.enabled);
+  // 填充选项...
+}
+
+// 从 UI 获取当前前缀
+function getActivePrefixFromUI(): string | null {
+  if (!prefixEnabledEl?.checked) return null;
+  const selectedIndex = parseInt(prefixSelectorEl.value);
+  return currentPrefixList[selectedIndex];
+}
+
+// 初始化事件监听器
+function initPrefixEventListeners(): void {
+  // 开关切换、选择器变化、添加/删除按钮...
+}
+```
+
+**历史记录动态渲染** (renderHistoryTable 函数):
+```typescript
+// 微博链接动态拼接当前选择的前缀
+if (serviceResult.serviceId === 'weibo' && activePrefix) {
+  displayUrl = activePrefix + serviceResult.result.url;
+}
+```
+
+### 13.5 链接生成器更新
+
+**文件**: `src/coreLogic.ts` 和 `src/core/LinkGenerator.ts`
+
+```typescript
+// 使用 getActivePrefix() 获取当前前缀
+const activePrefix = getActivePrefix(config);
+
+// 如果前缀功能被禁用，返回原始链接
+if (!activePrefix) {
+  return weiboLargeUrl;
+}
+
+const proxyLink = `${activePrefix}${weiboLargeUrl}`;
+```
+
+### 13.6 备份兼容处理
+
+**文件**: `src/components/BackupView.vue`
+
+```typescript
+import { migrateConfig } from '../config/types';
+
+// 导入配置时自动迁移旧格式
+async function importSettingsLocal() {
+  let importedConfig = JSON.parse(content) as UserConfig;
+  importedConfig = migrateConfig(importedConfig);  // 迁移
+  await configStore.set('config', importedConfig);
+}
+```
+
+### 13.7 功能特点总结
+
+| 功能 | 描述 |
+|------|------|
+| 多前缀支持 | 下拉选择，默认两个前缀 |
+| 开关控制 | 可禁用前缀功能，返回原始链接 |
+| 用户管理 | 添加/删除任意前缀（包括默认的） |
+| 动态显示 | 历史记录中微博链接动态使用当前前缀 |
+| 向后兼容 | 自动迁移旧的 baiduPrefix 配置 |
+| 备份支持 | 导入导出完整支持新配置 |
+
+### 13.8 测试检查点
+
+1. ✅ 新用户：默认显示两个前缀，第一个选中，开关开启
+2. ✅ 添加前缀：验证 URL 格式，添加后自动选中
+3. ✅ 删除前缀：任意前缀可删除，删除后调整选中项
+4. ✅ 开关关闭：微博链接显示原始链接
+5. ✅ 历史记录：切换前缀后，微博链接显示更新
+6. ✅ 备份恢复：导入旧配置正确迁移
+
+**编译验证**: ✅ TypeScript 编译通过
+
+---
+
 ## ✅ Bug 修复记录 (2025-12-02)
 
 ### Bug 修复 1: 设置页面 Cookie 保存后上传界面状态不刷新
@@ -2745,8 +3049,9 @@ function migrateConfigToV3(oldConfig: any): UserConfig {
 | 阶段十 | 京东图床支持 | ✅ | 2025-12-02 |
 | 阶段十一 | 牛客图床支持 | ✅ | 2025-12-02 |
 | 阶段十二 | 牛客 Cookie 验证增强与多域名支持 | ✅ | 2025-12-02 |
+| 阶段十三 | 链接前缀多选功能 | ✅ | 2025-12-02 |
 
-**总体进度**: 100% 完成 (最新: 牛客 Cookie 验证增强)
+**总体进度**: 100% 完成 (最新: 链接前缀多选功能)
 
 **所有 P0 + P1 任务已完成！** 🎉🎉🎉
 **京东图床已集成！** 🛒
@@ -2804,6 +3109,10 @@ function migrateConfigToV3(oldConfig: any): UserConfig {
 - ✨ Cookie 自动保存功能
 - ✨ Cookie 验证增强：支持 requiredFields (AND) 和 anyOfFields (OR) 双重验证
 - ✨ 多域名 Cookie 提取：自动合并 www 和非 www 域名的 Cookie
+- ✨ 链接前缀多选功能：支持多个代理前缀下拉选择
+- ✨ 前缀功能开关：可启用/禁用代理前缀（仅微博图床）
+- ✨ 自定义前缀管理：支持添加/删除自定义前缀
+- ✨ 历史记录动态前缀：微博链接根据当前选择的前缀动态显示
 
 **修复**:
 - 🐛 修复设置页面保存 Cookie 后上传界面复选框状态不刷新的问题
@@ -2814,6 +3123,7 @@ function migrateConfigToV3(oldConfig: any): UserConfig {
 **文档**:
 - 📝 添加牛客图床实现文档到 record.md (阶段十一)
 - 📝 添加 Cookie 验证增强文档到 record.md (阶段十二)
+- 📝 添加链接前缀多选功能文档到 record.md (阶段十三)
 
 ### v3.0.1-alpha (2025-12-02)
 
