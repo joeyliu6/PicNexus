@@ -1,7 +1,7 @@
 [package]
 name = "weibodr-uploader"
-version = "1.0.0"
-description = "微博灾备上传器"
+version = "3.0.0"
+description = "WeiboDR-Uploader - 多图床并行上传工具"
 authors = ["you"]
 license = ""
 repository = ""

@@ -2,11 +2,13 @@
 
 <div align="center">
 
-**微博灾备上传器 - 轻量级跨平台图片上传与备份工具**
+**多图床并行上传工具 - 支持 5 个图床服务的跨平台桌面应用**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)]()
-[![Version](https://img.shields.io/badge/Version-2.6-green)]()
+[![Version](https://img.shields.io/badge/Version-3.0-green)]()
+[![图床数量](https://img.shields.io/badge/%E5%9B%BE%E5%BA%8A%E6%95%B0%E9%87%8F-5%E4%B8%AA-brightgreen)]()
+[![架构](https://img.shields.io/badge/%E6%9E%B6%E6%9E%84-%E6%8F%92%E4%BB%B6%E5%8C%96-orange)]()
 
 [简体中文](#) | [English](#)
 
@@ -17,7 +19,8 @@
 ## 📖 目录
 
 - [项目简介](#-项目简介)
-- [核心功能](#-核心功能)
+- [核心特性](#-核心特性)
+- [图床对比](#-图床对比)
 - [技术栈](#-技术栈)
 - [快速开始](#-快速开始)
 - [使用指南](#-使用指南)
@@ -25,64 +28,130 @@
 - [常见问题](#-常见问题)
 - [项目结构](#-项目结构)
 - [开发指南](#-开发指南)
+- [文档导航](#-文档导航)
 - [许可证](#-许可证)
 
 ---
 
 ## 🎯 项目简介
 
-WeiboDR-Uploader 是一个基于 Tauri 框架开发的跨平台桌面应用，旨在提供便捷的图片上传和多重备份解决方案。通过微博图床服务实现图片托管，同时支持 Cloudflare R2 云存储备份和 WebDAV 历史记录同步。
+WeiboDR-Uploader 是一个基于 Tauri 框架开发的**多图床并行上传工具**，支持 5 个图床服务的跨平台桌面应用。通过插件化架构设计，实现多图床并行上传、智能备份和链接管理。
 
-### 为什么选择 WeiboDR-Uploader？
+### 为什么选择 WeiboDR-Uploader v3.0？
 
-- 🚀 **极简操作** - 拖拽即传，自动完成上传、备份和链接生成
-- 🔒 **安全可靠** - 所有敏感信息加密存储在本地，不上传到任何第三方服务器
-- 📊 **实时监控** - 可视化上传队列，精确到每个文件的进度反馈
-- 💾 **多重备份** - 支持 R2 云存储和 WebDAV 自动备份，数据永不丢失
-- 🎯 **智能管理** - 内置 R2 管理器，可浏览、查看和删除已上传文件
-- ⚡ **高效并发** - 支持同时上传多个文件，节省时间
-- 🌐 **跨平台** - 一次编译，Windows/macOS/Linux 通用
+- 🚀 **开箱即用** - TCL 和京东图床零配置，安装即用
+- ⚡ **并行上传** - 最多 3 个图床同时上传，第一个成功作为主力
+- 🔧 **插件化架构** - 基于 IUploader 接口，轻松扩展新图床
+- 🔒 **安全可靠** - 所有敏感信息加密存储在本地（AES-GCM）
+- 📊 **实时监控** - 每个图床独立进度显示
+- 💾 **多重备份** - 支持 5 个图床互为冗余，数据永不丢失
+- 🎯 **智能管理** - 历史记录网格视图、按图床筛选、WebDAV 同步
+- 🌐 **跨平台** - Windows/macOS/Linux 通用
 
 ---
 
-## ✨ 核心功能
+## ✨ 核心特性
 
-### 1. 图片上传与备份
+### 1. 多图床并行上传
 
-- **拖拽上传** - 支持拖拽或点击选择图片文件
-- **批量处理** - 支持同时上传多个文件（最多3个并发）
-- **文件验证** - 自动验证文件类型（支持 jpg、png、gif、bmp、webp）
-- **微博托管** - 上传到微博图床，获得稳定的图片链接
-- **R2 备份** - 可选备份到 Cloudflare R2 云存储
-- **链接格式** - 支持百度代理、微博原始、R2 链接三种格式
+**支持 5 个图床服务**：
+- **微博图床** - 需要 Cookie（30 天有效期）
+- **Cloudflare R2** - 需要 API 密钥（永久有效）
+- **TCL 图床** - 开箱即用，零配置 ✨
+- **京东图床** - 开箱即用，速度极快 ✨
+- **牛客图床** - 需要 Cookie（7-30 天有效期）
 
-### 2. 实时上传队列
+**并行上传特性**：
+- 最多 3 个图床同时上传
+- 每个图床独立进度显示
+- 第一个上传成功的作为主力图床
+- 其他图床自动成为备份（互为冗余）
+- 智能降级：某个图床失败不影响其他
 
-- **可视化进度** - 每个文件独立显示微博和 R2 上传进度
-- **状态反馈** - 实时显示等待、进行中、完成、失败等状态
-- **预览图** - 上传成功后显示图片缩略图
-- **一键复制** - 快速复制微博、百度代理或 R2 链接
+### 2. 开箱即用图床
 
-### 3. R2 云存储管理
+**TCL 图床**：
+- ✅ 无需配置，直接使用
+- ✅ 稳定性高（⭐⭐⭐⭐）
+- ✅ 速度快（⭐⭐⭐⭐）
+- ✅ 适合日常使用
 
-- **文件浏览** - 网格布局展示 R2 存储桶中的所有图片
-- **预览与下载** - 点击图片可查看大图和原始链接
-- **文件删除** - 支持删除不需要的图片文件
-- **智能缓存** - 按需刷新机制，减少 API 调用次数
+**京东图床**：
+- ✅ 无需配置，直接使用
+- ✅ 稳定性极高（⭐⭐⭐⭐⭐）
+- ✅ 速度极快（⭐⭐⭐⭐⭐）
+- ✅ 适合追求速度的场景
 
-### 4. 历史记录管理
+### 3. 需要配置的图床
 
-- **记录保存** - 自动保存最近的上传记录（可配置数量）
-- **WebDAV 同步** - 自动同步历史记录到 WebDAV 服务
-- **多链接查看** - 查看每条记录的微博、百度代理、R2 多种链接
-- **快速复制** - 一键复制任意格式的链接
+**微博图床**：
+- 需要获取 Cookie（约 10 分钟）
+- Cookie 约 30 天过期
+- 支持微博代理前缀管理
+- 适合短期使用和对微博链接有需求的场景
+- 配置指南：[微博 Cookie 获取指南](docs/guides/OFFICIAL_LOGIN_GUIDE.md)
 
-### 5. 配置与测试
+**Cloudflare R2**：
+- 需要 API 密钥（约 30 分钟配置）
+- API 密钥永久有效
+- 适合长期存储和重要图片备份
+- 商业级稳定性
+- 配置指南：[Cloudflare R2 配置指南](docs/guides/R2_SETUP_GUIDE.md)
 
-- **自动保存** - 配置修改后自动保存，无需手动点击
-- **连接测试** - 提供 R2 和 WebDAV 连接测试功能
-- **加密存储** - 使用 tauri-plugin-store 加密存储敏感信息
-- **详细反馈** - 测试失败时提供详细的错误信息和解决建议
+**牛客图床**：
+- 需要 Cookie（约 10 分钟）
+- Cookie 约 7-30 天过期
+- 适合技术博客配图
+- 配置指南：[牛客图床配置指南](docs/guides/NOWCODER_SETUP_GUIDE.md)
+
+### 4. 智能链接管理
+
+**微博代理前缀管理**：
+- 支持多个代理前缀（百度图片代理、CDN JSON 等）
+- 快速切换代理前缀
+- 自定义前缀添加和删除
+- 提高微博图片访问稳定性
+
+### 5. 历史记录管理
+
+- **表格视图** - 显示详细信息（文件名、时间、所有图床链接）
+- **网格视图（照片墙）** - 大图预览，视觉化浏览
+- **图床筛选** - 按图床类型筛选（全部/微博/R2/TCL/京东/牛客）
+- **批量操作** - 复制、导出、删除
+- **懒加载优化** - 每次加载 50 条，流畅体验
+- **WebDAV 同步** - 自动备份到 WebDAV 服务（坚果云、Nextcloud 等）
+
+### 6. R2 文件管理器
+
+- 网格布局展示 R2 存储桶中的所有图片
+- 预览与下载：点击图片查看大图和原始链接
+- 批量删除：删除不需要的图片文件
+- 智能缓存：按需刷新机制，减少 API 调用
+
+### 7. 配置与测试
+
+- 自动保存：配置修改后自动保存，无需手动点击
+- 连接测试：提供各图床的连接测试功能
+- 加密存储：使用 AES-GCM 加密存储敏感信息
+- 详细反馈：测试失败时提供详细错误信息和解决建议
+
+---
+
+## 📊 图床对比
+
+| 图床 | 配置难度 | 稳定性 | 速度 | Cookie/密钥 | 有效期 | 推荐场景 |
+|------|---------|--------|------|------------|--------|---------|
+| **TCL** | ⭐ 零配置 | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | 无需 | 长期 | 日常使用 |
+| **京东** | ⭐ 零配置 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | 无需 | 长期 | 追求速度 |
+| **微博** | ⭐⭐⭐ 简单 | ⭐⭐⭐ | ⭐⭐⭐ | Cookie | 30天 | 短期使用 |
+| **R2** | ⭐⭐⭐⭐ 复杂 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | API 密钥 | 永久 | 长期存储 |
+| **牛客** | ⭐⭐⭐ 简单 | ⭐⭐⭐ | ⭐⭐⭐ | Cookie | 7-30天 | 技术博客 |
+
+**推荐组合**：
+- **新手推荐**：TCL + 京东（零配置，开箱即用）
+- **日常使用**：TCL + 京东 + 微博（多种链接格式）
+- **重要图片**：TCL + 京东 + R2（三重保障）
+- **完整配置**：微博 + R2 + TCL + 京东 + 牛客（最大冗余）
 
 ---
 
@@ -91,19 +160,52 @@ WeiboDR-Uploader 是一个基于 Tauri 框架开发的跨平台桌面应用，�
 | 技术 | 版本 | 用途 |
 |------|------|------|
 | **Tauri** | 1.5.x | 跨平台桌面应用框架 |
+| **Vue 3** | 3.5.x | UI 框架 |
 | **TypeScript** | 5.3.x | 前端开发语言 |
 | **Rust** | 1.70+ | 后端开发语言 |
 | **Vite** | 5.0.x | 前端构建工具 |
 | **AWS SDK (S3)** | 3.490+ | Cloudflare R2 交互 |
-| **tauri-plugin-store** | - | 加密本地存储 |
+
+**架构特性**：
+- 插件化上传器设计（IUploader 接口 + BaseUploader 抽象类）
+- 工厂模式管理上传器（UploaderFactory）
+- 多图床编排器（MultiServiceUploader）
+- AES-GCM 加密本地存储
 
 ---
 
 ## 🚀 快速开始
 
-### 环境要求
+### 零配置体验（推荐新手）
 
-在开始之前，请确保已安装以下环境：
+1. **下载并安装应用**
+   - 下载最新版本的安装包
+   - 双击运行安装程序
+
+2. **打开应用**
+   - 启动 WeiboDR-Uploader
+
+3. **选择图床**
+   - 在上传窗口勾选 **TCL** 或 **京东**（或两者都勾选）
+
+4. **上传图片**
+   - 拖拽图片到上传区域，或点击选择文件
+   - 立即开始上传！
+
+**就是这么简单！** 🎉 无需任何配置，TCL 和京东图床开箱即用。
+
+### 配置其他图床（可选）
+
+如果需要更多图床选项，可以配置以下图床：
+
+- [微博 Cookie 获取指南](docs/guides/OFFICIAL_LOGIN_GUIDE.md) - 约 10 分钟
+- [Cloudflare R2 配置指南](docs/guides/R2_SETUP_GUIDE.md) - 约 30 分钟
+- [牛客图床配置指南](docs/guides/NOWCODER_SETUP_GUIDE.md) - 约 10 分钟
+- [TCL 和京东使用指南](docs/guides/TCL_JD_GUIDE.md) - 了解更多
+
+### 环境要求（开发者）
+
+在开始开发之前，请确保已安装以下环境：
 
 - **Node.js** 18.0 或更高版本
 - **Rust** 1.70 或更高版本
@@ -131,7 +233,7 @@ sudo apt install libwebkit2gtk-4.0-dev \
     librsvg2-dev
 ```
 
-### 安装步骤
+### 安装步骤（开发者）
 
 #### 1. 克隆项目
 ```bash
@@ -163,120 +265,78 @@ npm run tauri build
 
 ## 📚 使用指南
 
-### 首次使用配置
+### 1. 选择图床
 
-#### 1. 获取微博 Cookie（必需）
+在上传窗口勾选要使用的图床（建议勾选 2-3 个互为备份）。
 
-微博 Cookie 是上传图片的必要凭证。
+**推荐组合**：
+- **日常使用**：TCL + 京东
+- **重要图片**：TCL + 京东 + R2
+- **临时图片**：仅 TCL 或京东
 
-**获取步骤：**
-
-1. 点击应用设置页面中的 **🌐 获取Cookie** 按钮
-2. 在打开的浏览器中访问 **m.weibo.cn**（必须是移动版）
-3. 登录您的微博账号
-4. 登录成功后，按 `F12` 打开开发者工具
-5. 切换到 `Console`（控制台）标签
-6. 输入以下命令并回车：
-   ```javascript
-   document.cookie
-   ```
-7. 复制输出的**完整内容**（包含 SUB、SUBP 等字段）
-8. 粘贴到应用的 Cookie 输入框中
-9. 配置会自动保存
-
-**⚠️ 重要提示：**
-- 必须从 **m.weibo.cn** (移动版) 获取 Cookie
-- 不要从 weibo.com (桌面版) 获取，会导致上传失败
-- Cookie 通常 30 天左右过期，过期后需重新获取
-
-#### 2. 配置 Cloudflare R2（可选）
-
-R2 备份是可选功能，如果需要多重备份，请按以下步骤配置：
-
-**获取 R2 凭证：**
-
-1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/)
-2. 进入 **R2** 页面
-3. 复制 **Account ID**（在右上角）
-4. 点击"管理 R2 API 令牌"创建 API 令牌
-5. 记录 **Access Key ID** 和 **Secret Access Key**
-6. 创建或选择一个 **Bucket**（存储桶）
-
-**配置 CORS 规则（重要）：**
-
-在 R2 存储桶设置中添加 CORS 规则：
-
-```json
-[
-  {
-    "AllowedOrigins": ["tauri://localhost", "http://localhost:*"],
-    "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
-    "AllowedHeaders": ["*"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3600
-  }
-]
-```
-
-**在应用中填写配置：**
-
-| 字段 | 说明 | 示例 |
-|------|------|------|
-| R2 账户 ID | Account ID | `a1b2c3d4e5f6...` |
-| R2 访问密钥 ID | Access Key ID | `abc123def456...` |
-| R2 访问密钥 | Secret Access Key | `xyz789uvw012...` |
-| R2 存储桶名称 | Bucket Name | `my-images` |
-| R2 自定义路径 | 文件路径前缀（可选） | `blog/images/` |
-| R2 公开访问域名 | 自定义域名（可选） | `https://img.example.com` |
-
-**测试连接：**
-填写完成后，点击 **测试 R2 连接** 按钮验证配置是否正确。
-
-#### 3. 配置 WebDAV 自动备份（可选）
-
-WebDAV 用于自动备份历史记录文件。
-
-**以坚果云为例：**
-
-1. 登录坚果云网页版
-2. 进入"账户信息" → "安全选项"
-3. 点击"添加应用密码"
-4. 记录生成的授权码（格式：`xxxx-xxxx-xxxx-xxxx`）
-
-**在应用中填写配置：**
-
-| 字段 | 说明 | 示例 |
-|------|------|------|
-| WebDAV URL | WebDAV 服务器地址 | `https://dav.jianguoyun.com/dav/` |
-| WebDAV 用户名 | 登录用户名 | `user@example.com` |
-| WebDAV 密码 | 应用授权码（不是登录密码） | `xxxx-xxxx-xxxx-xxxx` |
-| 远程路径 | 历史记录文件路径 | `/WeiboDR/history.json` |
-
-**测试连接：**
-填写完成后，点击 **测试 WebDAV 连接** 按钮验证配置是否正确。
-
-### 上传图片
+### 2. 上传图片
 
 #### 方式一：拖拽上传
-
-1. 将图片文件拖拽到顶部上传区域
+1. 将图片文件拖拽到上传区域
 2. 有效文件会自动添加到上传队列
-3. 实时查看每个文件的上传进度
+3. 实时查看每个图床的上传进度
 4. 上传完成后点击按钮复制链接
 
 #### 方式二：点击上传
-
-1. 点击顶部上传区域
+1. 点击上传区域
 2. 在文件对话框中选择一个或多个图片
 3. 后续流程同拖拽上传
 
-#### 上传选项
+**支持的文件格式**：jpg、jpeg、png、gif、bmp、webp
 
-- **同时备份到 Cloudflare R2** - 勾选此选项会在微博上传成功后自动备份到 R2
-- **文件类型支持** - jpg、jpeg、png、gif、bmp、webp
-- **并发上传** - 最多同时上传 3 个文件
+**并发上传**：最多同时上传 3 个图床，超过部分会自动排队等待
 
-### 查看和管理 R2 文件
+### 3. 查看进度
+
+每个图床独立显示上传进度：
+- **等待中** - 灰色
+- **上传中** - 蓝色进度条（显示百分比）
+- **成功** - 绿色勾选标记
+- **失败** - 红色叉号（显示错误信息）
+
+**主力图床标识**：第一个上传成功的图床会被标记为"主力"，其他为"备份"。
+
+### 4. 复制链接
+
+上传完成后，可以复制以下格式的链接：
+- **主力图床链接** - 第一个成功的图床链接
+- **微博原始链接** - 微博图床原始 URL
+- **微博代理链接** - 带代理前缀的微博链接
+- **R2 链接** - Cloudflare R2 公开访问链接
+- **其他图床链接** - TCL、京东、牛客的链接
+
+### 5. 管理历史记录
+
+#### 表格视图
+- 显示详细信息（文件名、上传时间、图床链接）
+- 支持排序和搜索
+- 适合管理和查找
+
+#### 网格视图（照片墙）
+- 大图预览，视觉化浏览
+- 懒加载优化（每次加载 50 条）
+- 点击图片查看大图
+
+#### 图床筛选
+支持按图床类型筛选历史记录：
+- **全部** - 显示所有历史记录
+- **微博** - 只显示微博上传的记录
+- **R2** - 只显示 R2 上传的记录
+- **TCL** - 只显示 TCL 上传的记录
+- **京东** - 只显示京东上传的记录
+- **牛客** - 只显示牛客上传的记录
+
+#### WebDAV 自动备份
+配置 WebDAV 后，历史记录会自动同步到云端（坚果云、Nextcloud 等）。
+
+配置指南：[WebDAV 自动备份配置](docs/guides/WEBDAV_SETUP_GUIDE.md)
+
+### 6. 管理 R2 文件
 
 1. 点击左侧导航栏的 **R2 管理器** 按钮
 2. 首次进入会自动加载 R2 存储桶中的所有图片
@@ -284,106 +344,128 @@ WebDAV 用于自动备份历史记录文件。
 4. 点击删除按钮可删除不需要的文件
 5. 刷新按钮可手动重新加载列表
 
-### 查看上传历史
-
-1. 点击左侧导航栏的 **历史记录** 按钮
-2. 查看最近的上传记录
-3. 点击复制按钮可复制各种格式的链接
-4. 点击"同步到 WebDAV"可手动触发同步
-
 ---
 
 ## ⚙️ 配置说明
 
-### 输出格式选择
+### 微博代理前缀管理
 
-应用支持三种链接格式：
+**功能说明**：为微博图床链接添加代理前缀，提高访问稳定性和速度。
 
-| 格式 | 说明 | 示例 |
-|------|------|------|
-| **百度代理** | 通过百度代理访问微博图片（推荐） | `https://img.xxx.com/xxx.jpg` |
-| **微博原始** | 微博图床原始链接 | `https://wx1.sinaimg.cn/large/xxx.jpg` |
-| **R2 链接** | Cloudflare R2 公开访问链接 | `https://img.example.com/xxx.jpg` |
+**预设前缀**：
+1. **百度图片代理**：`https://image.baidu.com/search/down?thumburl=`
+2. **CDN JSON**：`https://cdn.cdnjson.com/pic.html?url=`
+
+**使用方法**：
+1. 在设置页面找到"链接前缀管理"部分
+2. 勾选"使用链接前缀"以启用
+3. 从下拉菜单选择要使用的前缀
+4. 配置自动保存
+
+**自定义前缀**：
+1. 点击"添加自定义前缀"按钮
+2. 输入前缀 URL（必须以 `https://` 开头）
+3. 点击"保存"
+4. 新前缀会出现在下拉菜单中
+
+**注意事项**：
+- 前缀只对微博图床有效
+- 预设前缀无法删除
+- 删除前缀不会影响已上传的图片链接
 
 ### 自动保存机制
 
-**v2.0+ 版本采用自动保存：**
-- 修改配置后点击输入框外部即自动保存
-- 页面底部显示"✓ 已自动保存"确认消息
-- 无需手动点击保存按钮
+v3.0 所有配置修改后自动保存，无需手动点击保存按钮。
+
+**保存时机**：
+- 输入框失去焦点时
+- 下拉菜单选择后
+- 复选框状态改变后
+
+**保存确认**：页面底部会显示"✓ 已自动保存"消息
 
 ### 安全性说明
 
-- **本地存储** - 所有配置信息存储在本地，使用加密存储
+- **本地存储** - 所有配置信息存储在本地，使用 AES-GCM 加密
 - **不上传数据** - 不会向任何第三方服务器发送敏感信息
-- **Cookie 安全** - Cookie 仅用于微博上传，不会被滥用
+- **Cookie 安全** - Cookie 仅用于对应图床上传，不会被滥用
 - **密钥保护** - R2 密钥和 WebDAV 密码加密存储
 
 ---
 
 ## ❓ 常见问题
 
-### Q1: 微博上传失败，提示 Cookie 无效？
+### Q1: 推荐使用哪个图床？
 
-**A:** 可能的原因和解决方法：
+**A**: 根据使用场景选择：
+
+- **新手**：TCL + 京东（零配置，开箱即用）
+- **日常使用**：TCL + 京东 + 微博（多种链接格式）
+- **重要图片**：TCL + 京东 + R2（三重保障，长期稳定）
+- **技术博客**：TCL + 京东 + 牛客（适合技术内容）
+
+### Q2: 必须配置所有图床吗？
+
+**A**: 不需要。TCL 和京东开箱即用，其他图床根据需求选择配置。
+
+### Q3: Cookie 多久过期？
+
+**A**:
+- **微博**：约 30 天
+- **牛客**：约 7-30 天
+- **R2**：API 密钥永久有效（除非手动删除）
+
+过期后按照对应指南重新获取即可。
+
+### Q4: 可以同时上传多少个图床？
+
+**A**: 最多 **3 个图床并行上传**，超过部分会自动排队等待。这是为了避免过多并发请求导致失败。
+
+### Q5: 微博上传失败，提示 Cookie 无效？
+
+**A**: 可能的原因和解决方法：
 
 1. **Cookie 过期** - 微博 Cookie 通常 30 天过期，请重新获取
 2. **从错误的地方获取** - 必须从 **m.weibo.cn**（移动版）获取，不能从 weibo.com（桌面版）获取
 3. **Cookie 不完整** - 确保复制了完整的 Cookie 字符串，包含 SUB、SUBP 等字段
 4. **网络问题** - 检查网络连接是否正常
 
-### Q2: R2 备份失败，提示 CORS 错误？
+详见：[微博 Cookie 获取指南](docs/guides/OFFICIAL_LOGIN_GUIDE.md)
 
-**A:** 这是最常见的 R2 问题。解决方法：
+### Q6: R2 备份失败，提示 CORS 错误？
+
+**A**: 这是最常见的 R2 问题。解决方法：
 
 1. 在 Cloudflare R2 Dashboard 中进入您的存储桶
 2. 点击 **Settings** → **CORS Policy**
-3. 添加 CORS 规则（参考上文"配置 Cloudflare R2"部分）
+3. 添加 CORS 规则（参考 [R2 配置指南](docs/guides/R2_SETUP_GUIDE.md)）
 4. 保存后等待几分钟让设置生效
 5. 重新测试连接
 
-### Q3: WebDAV 测试连接失败，提示用户名或密码错误？
+### Q7: 可以和其他图床工具一起使用吗？
 
-**A:** WebDAV 密码不是登录密码，是应用授权码：
+**A**: 可以！WeiboDR-Uploader 是独立的桌面应用，不会影响浏览器插件或其他图床工具的使用。
 
-- **坚果云** - 需要在"安全选项"中生成应用授权码
-- **Nextcloud** - 可以使用账户密码或创建应用密码
-- **其他服务** - 请查阅服务商的 WebDAV 文档
+### Q8: 历史记录最多保存多少条？
 
-### Q4: 上传的图片预览加载很慢或失败？
+**A**: 默认保存最近 **500 条**记录。WebDAV 备份会保存完整的历史记录 JSON 文件。
 
-**A:** 可能的原因：
+### Q9: 如何备份配置？
 
-1. **网络问题** - 微博图床在部分地区可能被限速
-2. **使用百度代理** - 百度代理链接在部分环境下可能加载较慢
-3. **切换链接格式** - 尝试使用"微博原始"或"R2 链接"格式
+**A**: 配置文件位于：
+- **Windows**: `%APPDATA%\com.weibodr.uploader\`
+- **macOS**: `~/Library/Application Support/com.weibodr.uploader/`
+- **Linux**: `~/.config/com.weibodr.uploader/`
 
-### Q5: 可以同时上传多少个文件？
+可以手动备份该目录下的配置文件。
 
-**A:** 
-- 默认支持最多 **3 个文件** 同时上传
-- 超过 3 个会自动排队等待
-- 这是为了避免过多并发请求导致失败
+### Q10: 图片无法访问怎么办？
 
-### Q6: R2 管理器显示的图片数量有限制吗？
-
-**A:** 
-- 单次最多加载 **1000 个** 文件
-- 如果文件过多，建议使用 R2 Dashboard 或设置合理的路径前缀
-
-### Q7: 历史记录最多保存多少条？
-
-**A:**
-- 默认保存最近 **20 条** 记录
-- 可以在配置文件中修改（需要编辑代码）
-- WebDAV 备份会保存完整的历史记录 JSON 文件
-
-### Q8: Cookie 中文显示乱码或无法保存？
-
-**A:**
-- 确保从浏览器 Console 直接复制 `document.cookie` 的输出
-- 不要使用第三方工具或插件获取 Cookie
-- 如果包含中文字符，建议使用原生浏览器开发者工具
+**A**:
+1. 检查网络连接
+2. 尝试使用其他图床的链接（如果有备份）
+3. 对于微博链接，尝试切换代理前缀或使用原始链接
+4. 如果所有图床都失败，建议重新上传
 
 ---
 
@@ -392,47 +474,88 @@ WebDAV 用于自动备份历史记录文件。
 ```
 WeiboDR-Uploader/
 ├── src/                          # 前端源码
-│   ├── main.ts                   # 主窗口逻辑、导航、状态管理
-│   ├── coreLogic.ts              # 核心上传工作流和业务逻辑
-│   ├── weiboUploader.ts          # 微博上传 API 封装
-│   ├── uploadQueue.ts            # 上传队列管理器
-│   ├── r2-manager.ts             # R2 管理器逻辑
-│   ├── config.ts                 # 配置类型定义和默认值
-│   ├── store.ts                  # 本地存储操作封装
-│   ├── errors.ts                 # 错误处理工具函数
-│   ├── style.css                 # 全局样式
-│   ├── ui/                       # UI 组件模块
-│   │   ├── settings-view.ts      # 设置视图逻辑
-│   │   ├── history-view.ts       # 历史记录视图逻辑
-│   │   └── ...                   # 其他视图模块
-│   └── login-webview.ts          # 登录指导窗口逻辑
-├── src-tauri/                    # Rust 后端
+│   ├── uploaders/                # 图床上传器（插件化）
+│   │   ├── base/                # 基础抽象
+│   │   │   ├── IUploader.ts     # 核心接口
+│   │   │   ├── BaseUploader.ts  # 抽象基类
+│   │   │   ├── UploaderFactory.ts # 工厂模式
+│   │   │   └── types.ts         # 共享类型
+│   │   ├── weibo/               # 微博上传器
+│   │   │   ├── WeiboUploader.ts
+│   │   │   └── WeiboError.ts
+│   │   ├── r2/                  # R2 上传器
+│   │   │   ├── R2Uploader.ts
+│   │   │   └── R2Error.ts
+│   │   ├── tcl/                 # TCL 上传器
+│   │   │   └── TCLUploader.ts
+│   │   ├── jd/                  # 京东上传器
+│   │   │   └── JDUploader.ts
+│   │   └── nowcoder/            # 牛客上传器
+│   │       └── NowcoderUploader.ts
+│   ├── core/                    # 核心业务逻辑
+│   │   ├── MultiServiceUploader.ts  # 多图床编排器
+│   │   ├── UploadOrchestrator.ts    # 流程编排
+│   │   └── LinkGenerator.ts         # URL 生成
+│   ├── config/                  # 配置管理
+│   │   └── types.ts             # 配置类型定义
+│   ├── ui/                      # UI 组件模块
+│   │   └── modal.ts             # 模态框管理
+│   ├── components/              # Vue 组件
+│   │   └── BackupView.vue       # 备份视图
+│   ├── main.ts                  # 应用入口
+│   ├── uploadQueue.ts           # 上传队列管理
+│   ├── r2-manager.ts            # R2 管理器逻辑
+│   ├── store.ts                 # 本地存储操作封装
+│   ├── crypto.ts                # AES-GCM 加密
+│   └── style.css                # 全局样式
+│
+├── src-tauri/                   # Rust 后端
 │   ├── src/
-│   │   └── main.rs               # Tauri 主文件、系统托盘
-│   ├── Cargo.toml                # Rust 依赖配置
-│   ├── tauri.conf.json           # Tauri 应用配置
-│   └── icons/                    # 应用图标
-├── index.html                    # 主窗口 HTML
-├── login-webview.html            # 登录指导窗口 HTML
-├── package.json                  # Node.js 依赖和脚本
-├── tsconfig.json                 # TypeScript 配置
-├── vite.config.ts                # Vite 构建配置
-├── README.md                     # 项目文档（本文件）
-└── .gitignore                    # Git 忽略规则
+│   │   ├── commands/            # Rust 命令实现
+│   │   │   ├── weibo.rs         # 微博上传
+│   │   │   ├── r2.rs            # R2 上传
+│   │   │   ├── tcl.rs           # TCL 上传
+│   │   │   ├── jd.rs            # 京东上传
+│   │   │   └── nowcoder.rs      # 牛客上传
+│   │   └── main.rs              # Tauri 主文件
+│   ├── Cargo.toml               # Rust 依赖配置
+│   ├── tauri.conf.json          # Tauri 应用配置
+│   └── icons/                   # 应用图标
+│
+├── docs/                        # 文档目录
+│   ├── guides/                  # 用户指南
+│   │   ├── README.md            # 指南索引
+│   │   ├── OFFICIAL_LOGIN_GUIDE.md # 微博 Cookie 获取
+│   │   ├── R2_SETUP_GUIDE.md    # R2 配置
+│   │   ├── NOWCODER_SETUP_GUIDE.md # 牛客配置
+│   │   ├── TCL_JD_GUIDE.md      # TCL/京东使用指南
+│   │   ├── SETTINGS_V3_USER_GUIDE.md # v3.0 设置指南
+│   │   ├── WEBDAV_SETUP_GUIDE.md # WebDAV 配置
+│   │   └── WEBDAV_PATH_GUIDE.md  # WebDAV 路径说明
+│   └── archive/                 # 历史文档
+│
+├── index.html                   # 主窗口 HTML
+├── package.json                 # Node.js 依赖和脚本
+├── tsconfig.json                # TypeScript 配置
+├── vite.config.ts               # Vite 构建配置
+├── README.md                    # 项目文档（本文件）
+├── CHANGELOG.md                 # 更新日志
+├── CONTRIBUTING.md              # 贡献指南
+├── record.md                    # 开发记录
+└── .gitignore                   # Git 忽略规则
 ```
 
 ### 核心模块说明
 
 | 模块 | 文件 | 功能 |
 |------|------|------|
-| **主窗口逻辑** | `src/main.ts` | 应用入口、导航、视图切换、状态管理 |
-| **核心业务** | `src/coreLogic.ts` | 上传工作流、备份逻辑、历史记录 |
-| **微博上传** | `src/weiboUploader.ts` | 微博 API 调用、文件上传 |
-| **队列管理** | `src/uploadQueue.ts` | 上传队列、进度显示、并发控制 |
+| **插件化上传器** | `src/uploaders/` | 所有图床上传器实现 |
+| **多图床编排** | `src/core/MultiServiceUploader.ts` | 并行上传调度和编排 |
+| **配置管理** | `src/config/types.ts` | UserConfig、HistoryItem 类型定义 |
+| **加密存储** | `src/store.ts` + `src/crypto.ts` | AES-GCM 加密的配置存储 |
+| **上传队列** | `src/uploadQueue.ts` | 上传队列管理和进度跟踪 |
 | **R2 管理** | `src/r2-manager.ts` | R2 文件浏览、删除、刷新 |
-| **配置管理** | `src/config.ts` | 类型定义、默认配置 |
-| **存储操作** | `src/store.ts` | 加密存储、配置读写 |
-| **后端服务** | `src-tauri/src/main.rs` | 系统托盘、Rust 命令 |
+| **Rust 后端** | `src-tauri/src/commands/` | 各图床的 Rust 上传实现 |
 
 ---
 
@@ -455,83 +578,120 @@ WeiboDR-Uploader/
 - 函数名使用 snake_case
 - 添加文档注释（`///`）
 
-### 错误处理规范
+### 添加新图床
 
-**TypeScript:**
+基于插件化架构，添加新图床非常简单：
+
+#### 1. 定义配置类型 (`src/config/types.ts`)
 ```typescript
-async function exampleFunction(): Promise<void> {
-  try {
-    // 操作逻辑
-    console.log('[模块名] 操作成功');
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error('[模块名] 操作失败:', error);
-    // 用户可见的错误消息使用中文
-    throw new Error(`操作失败: ${errorMsg}`);
+interface NewServiceConfig extends BaseServiceConfig {
+  apiKey: string;
+  // ... 其他字段
+}
+```
+
+#### 2. 实现 TypeScript 上传器 (`src/uploaders/newsvc/NewUploader.ts`)
+```typescript
+export class NewUploader extends BaseUploader {
+  readonly serviceId = 'newsvc';
+  readonly serviceName = '新图床';
+
+  protected getRustCommand(): string {
+    return 'upload_to_newsvc';
+  }
+
+  async validateConfig(config: any): Promise<ValidationResult> {
+    // 验证配置
+  }
+
+  async upload(filePath, options, onProgress?): Promise<UploadResult> {
+    const result = await this.uploadViaRust(filePath, {...}, onProgress);
+    return { serviceId: 'newsvc', fileKey: ..., url: ... };
+  }
+
+  getPublicUrl(result: UploadResult): string {
+    return result.url;
   }
 }
 ```
 
-**Rust:**
+#### 3. 注册到工厂 (`src/uploaders/base/UploaderFactory.ts`)
+```typescript
+case 'newsvc':
+  return new NewUploader();
+```
+
+#### 4. 实现 Rust 命令 (`src-tauri/src/commands/newsvc.rs`)
 ```rust
 #[tauri::command]
-async fn example_command(param: String) -> Result<String, String> {
-    if param.is_empty() {
-        return Err("参数不能为空".to_string());
-    }
-    
-    // 操作逻辑
-    
-    Ok("操作成功".to_string())
+async fn upload_to_newsvc(id: String, file_path: String, api_key: String)
+    -> Result<NewUploadResult, String> {
+  // 实现上传逻辑
 }
 ```
 
+#### 5. 更新配置类型
+将 `'newsvc'` 添加到 `ServiceType` 类型定义
+
+详细开发指南请查看 [开发记录](record.md)
+
 ### 调试技巧
 
-**前端调试：**
+**前端调试**：
 ```bash
 # 开发模式运行（自动打开 DevTools）
 npm run tauri dev
 ```
 
-**后端调试：**
+**后端调试**：
 ```rust
 // 在 main.rs 中添加日志
 println!("[Rust] Debug info: {:?}", variable);
 ```
 
-**查看应用日志：**
+**查看应用日志**：
 - Windows: `%APPDATA%\com.weibodr.uploader\logs\`
 - macOS: `~/Library/Application Support/com.weibodr.uploader/logs/`
 - Linux: `~/.config/com.weibodr.uploader/logs/`
-
-### 构建优化
-
-**开发构建（快速）：**
-```bash
-npm run tauri dev
-```
-
-**生产构建（优化）：**
-```bash
-npm run tauri build
-```
-
-**仅构建前端：**
-```bash
-npm run build
-```
 
 ### 贡献指南
 
 欢迎提交 Issue 和 Pull Request！
 
-**提交 PR 前请确保：**
+**提交 PR 前请确保**：
 1. 代码符合项目规范
 2. 所有功能正常工作
 3. 没有 TypeScript 或 Rust 编译错误
 4. 添加了必要的注释和文档
 5. 测试了主要功能流程
+
+详见：[贡献指南](CONTRIBUTING.md)
+
+---
+
+## 📚 文档导航
+
+### 快速开始
+- [README.md](README.md) - 项目主文档（本文件）
+- [CHANGELOG.md](CHANGELOG.md) - 版本更新记录
+- [TCL/京东图床使用指南](docs/guides/TCL_JD_GUIDE.md) - 零配置快速开始
+
+### 配置指南
+- [微博 Cookie 获取](docs/guides/OFFICIAL_LOGIN_GUIDE.md) - 10 分钟
+- [Cloudflare R2 配置](docs/guides/R2_SETUP_GUIDE.md) - 30 分钟
+- [牛客图床配置](docs/guides/NOWCODER_SETUP_GUIDE.md) - 10 分钟
+- [WebDAV 自动备份](docs/guides/WEBDAV_SETUP_GUIDE.md) - 15 分钟
+
+### 完整指南
+- [v3.0 设置完全指南](docs/guides/SETTINGS_V3_USER_GUIDE.md) - 所有配置选项详解
+- [用户指南索引](docs/guides/README.md) - 所有指南列表
+
+### 开发文档
+- [开发记录](record.md) - v3.0 架构演进和技术细节
+- [贡献指南](CONTRIBUTING.md) - 如何参与开发
+
+### 历史文档
+- [docs/archive/](docs/archive/) - v1.x 和 v2.x 历史文档
 
 ---
 
@@ -578,7 +738,6 @@ SOFTWARE.
 
 - **Issues**: [GitHub Issues](https://github.com/your-username/WeiboDR-Uploader/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/your-username/WeiboDR-Uploader/discussions)
-- **Email**: your-email@example.com
 
 ---
 
@@ -587,5 +746,7 @@ SOFTWARE.
 **如果这个项目对你有帮助，请给一个 ⭐ Star！**
 
 Made with ❤️ by WeiboDR-Uploader Team
+
+[⬆ 回到顶部](#weibodr-uploader)
 
 </div>

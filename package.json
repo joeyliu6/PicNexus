@@ -1,7 +1,7 @@
 {
   "name": "weibodr-uploader",
-  "version": "1.0.0",
-  "description": "微博灾备上传器 - 轻量级跨平台桌面应用",
+  "version": "3.0.0",
+  "description": "WeiboDR-Uploader - 多图床并行上传工具",
   "type": "module",
   "scripts": {
     "dev": "vite",
