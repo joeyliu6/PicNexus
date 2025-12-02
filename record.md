@@ -1953,6 +1953,237 @@ settingsInputs.forEach(input => {
 
 ---
 
+## ✅ 阶段十二: 牛客 Cookie 验证增强与多域名支持 (2025-12-02 完成)
+
+**问题背景**:
+用户报告程序在未登录状态就获取了 Cookie，且登录后也无法正确捕获 Cookie。分析发现两个核心问题：
+1. Cookie 验证不够严格，只检查 `t` 字段，未验证安全相关字段
+2. WebView2 Cookie 提取时域名匹配问题（`nowcoder.com` vs `www.nowcoder.com`）
+
+**修改文件**:
+- `src/config/cookieProviders.ts` - 更新验证规则，添加 anyOfFields
+- `src-tauri/src/main.rs` - 增强验证逻辑，支持多域名提取
+- `src/login-webview.ts` - 传递 anyOfFields 参数
+
+### 12.1 Cookie 验证规则增强
+
+**问题分析**:
+```
+未登录 Cookie: NOWCODERUID=xxx (无 t 字段)
+已登录 Cookie: NOWCODERUID=xxx; t=xxx; csrfToken=xxx; acw_tc=xxx; ...
+```
+
+之前的验证只检查 `['NOWCODERUID', 't']`，但 `NOWCODERUID` 在未登录时就存在，导致误判。
+
+**解决方案**: 使用两层验证逻辑
+1. **requiredFields** (AND 逻辑): 必须全部包含的字段
+2. **anyOfFields** (OR 逻辑): 至少包含其中一个字段
+
+**配置更新**: `src/config/cookieProviders.ts`
+```typescript
+nowcoder: {
+  cookieValidation: {
+    requiredFields: ['t', 'csrfToken'],  // 必须有登录Token和CSRF令牌
+    anyOfFields: ['acw_tc', 'SERVERID', '__snaker__id', 'gdxidpyhxdE']  // 至少一个安全字段
+  }
+}
+```
+
+**字段说明**:
+- `t`: 登录 Token (登录后才有)
+- `csrfToken`: CSRF 防护令牌
+- `acw_tc`: 阿里云 WAF Token
+- `SERVERID`/`SERVERCORSID`: 负载均衡标识
+- `__snaker__id`/`gdxidpyhxdE`: 反爬虫/验证码标识
+
+### 12.2 Rust 后端验证逻辑重构
+
+**文件**: `src-tauri/src/main.rs`
+
+**新增函数 1**: `check_cookie_field()` - 单字段检查辅助函数
+```rust
+fn check_cookie_field(cookie: &str, field: &str) -> bool {
+    let pattern = format!("{}=", field);
+    if let Some(pos) = cookie.find(&pattern) {
+        let value_start = pos + pattern.len();
+        let remaining = &cookie[value_start..];
+        let value_end = remaining.find(';').unwrap_or(remaining.len());
+
+        // 检查值是否非空
+        if value_end == 0 {
+            eprintln!("[Cookie验证] 字段 {} 值为空", field);
+            return false;
+        }
+        true
+    } else {
+        false
+    }
+}
+```
+
+**更新函数 2**: `validate_cookie_fields()` - 支持 AND/OR 双重验证
+```rust
+fn validate_cookie_fields(
+    cookie: &str,
+    required_fields: &[String],  // AND 逻辑
+    any_of_fields: &[String]     // OR 逻辑
+) -> bool {
+    // 1. 检查所有必要字段 (AND 逻辑)
+    for field in required_fields {
+        if !check_cookie_field(cookie, field) {
+            eprintln!("[Cookie验证] 缺少必要字段: {}", field);
+            return false;
+        }
+    }
+
+    // 2. 检查任意字段 (OR 逻辑)
+    if !any_of_fields.is_empty() {
+        let has_any = any_of_fields.iter().any(|f| check_cookie_field(cookie, f));
+        if !has_any {
+            eprintln!("[Cookie验证] 缺少任意安全字段: {:?}", any_of_fields);
+            return false;
+        }
+    }
+
+    true
+}
+```
+
+**更新函数 3**: 相关命令函数添加 `any_of_fields` 参数
+- `start_cookie_monitoring()`
+- `save_cookie_from_login()`
+- `get_request_header_cookie()`
+- `attempt_cookie_capture_and_save_generic()`
+
+### 12.3 多域名 Cookie 提取支持
+
+**问题**: WebView2 的 `GetCookies` API 对域名敏感
+- 请求 `nowcoder.com` 不会返回 `www.nowcoder.com` 的 Cookie
+- 用户登录在 `www.nowcoder.com`，但提取时使用的是 `nowcoder.com`
+
+**解决方案**: 自动尝试域名变体并合并结果
+
+**文件**: `src-tauri/src/main.rs` - `attempt_cookie_capture_and_save_generic()`
+
+```rust
+fn attempt_cookie_capture_and_save_generic(...) -> bool {
+    // 1. 构建域名变体列表
+    let mut domains_to_try = vec![target_domain.to_string()];
+    if target_domain.starts_with("www.") {
+        domains_to_try.push(target_domain[4..].to_string());  // 去掉 www.
+    } else {
+        domains_to_try.push(format!("www.{}", target_domain));  // 添加 www.
+    }
+
+    // 2. 从所有域名提取并合并 Cookie
+    let mut all_cookies: BTreeMap<String, String> = BTreeMap::new();
+    for domain in &domains_to_try {
+        match try_extract_cookie_header_generic(login_window, domain) {
+            Ok(Some(cookie)) => {
+                // 解析并合并到 all_cookies
+                for part in cookie.split("; ") {
+                    if let Some(eq_pos) = part.find('=') {
+                        let key = part[..eq_pos].to_string();
+                        let value = part[eq_pos + 1..].to_string();
+                        all_cookies.insert(key, value);
+                    }
+                }
+            }
+            _ => continue
+        }
+    }
+
+    // 3. 重新组装并验证
+    let merged_cookie = all_cookies.iter()
+        .map(|(k, v)| format!("{}={}", k, v))
+        .collect::<Vec<_>>()
+        .join("; ");
+
+    validate_cookie_fields(&merged_cookie, required_fields, any_of_fields)
+}
+```
+
+**特性**:
+- ✅ 自动尝试 `www.example.com` 和 `example.com` 两个变体
+- ✅ 合并所有域名的 Cookie（使用 BTreeMap 去重）
+- ✅ 对合并后的完整 Cookie 进行验证
+
+### 12.4 前端参数传递
+
+**文件**: `src/login-webview.ts`
+
+**更新位置 1**: `start_cookie_monitoring` 调用
+```typescript
+await invoke('start_cookie_monitoring', {
+  serviceId: serviceId,
+  targetDomain: provider.domains[0],
+  requiredFields: provider.cookieValidation?.requiredFields || [],
+  anyOfFields: provider.cookieValidation?.anyOfFields || []  // 新增
+});
+```
+
+**更新位置 2**: `get_request_header_cookie` 调用
+```typescript
+const cookie = await invoke<string>('get_request_header_cookie', {
+  serviceId: serviceId,
+  targetDomain: provider.domains[0],
+  requiredFields: provider.cookieValidation?.requiredFields || [],
+  anyOfFields: provider.cookieValidation?.anyOfFields || []  // 新增
+});
+```
+
+**更新位置 3**: `save_cookie_from_login` 调用
+```typescript
+await invoke('save_cookie_from_login', {
+  cookie: trimmedCookie,
+  serviceId: serviceId,
+  requiredFields: provider.cookieValidation?.requiredFields || [],
+  anyOfFields: provider.cookieValidation?.anyOfFields || []  // 新增
+});
+```
+
+### 12.5 域名顺序优化
+
+**文件**: `src/config/cookieProviders.ts`
+
+```typescript
+nowcoder: {
+  domains: ['www.nowcoder.com', 'nowcoder.com'],  // www 在前，因为登录在 www
+  // ...
+}
+```
+
+**说明**: 将 `www.nowcoder.com` 放在第一位，优先使用实际登录的域名。
+
+### 12.6 测试结果
+
+**验证通过的 Cookie 示例**:
+```
+NOWCODERUID=xxx; t=38746F43...; csrfToken=nYrlU6KF...;
+acw_tc=0a03837d...; SERVERID=8e67caa3...;
+__snaker__id=v1mWnarE...; gdxidpyhxdE=y9QN1fLJ...
+```
+
+**验证逻辑**:
+1. ✅ 包含 `t` 字段 (必须)
+2. ✅ 包含 `csrfToken` 字段 (必须)
+3. ✅ 包含 `acw_tc`, `SERVERID`, `__snaker__id`, `gdxidpyhxdE` 中至少一个
+4. ✅ 所有字段值非空
+
+**结果**: 用户确认修复成功，登录后能正确捕获 Cookie！✅
+
+### 12.7 修改文件汇总
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `src/config/cookieProviders.ts` | 修改 | 更新 nowcoder 验证规则和域名顺序 |
+| `src-tauri/src/main.rs` | 修改 | 新增 check_cookie_field()，重构验证逻辑，添加多域名支持 |
+| `src/login-webview.ts` | 修改 | 所有 invoke 调用添加 anyOfFields 参数 |
+
+**编译验证**: ✅ Rust 和 TypeScript 均编译通过
+
+---
+
 ## ✅ Bug 修复记录 (2025-12-02)
 
 ### Bug 修复 1: 设置页面 Cookie 保存后上传界面状态不刷新
@@ -2513,12 +2744,14 @@ function migrateConfigToV3(oldConfig: any): UserConfig {
 | 阶段九 | 设置页面 TCL 说明 | ✅ | 2025-12-01 |
 | 阶段十 | 京东图床支持 | ✅ | 2025-12-02 |
 | 阶段十一 | 牛客图床支持 | ✅ | 2025-12-02 |
+| 阶段十二 | 牛客 Cookie 验证增强与多域名支持 | ✅ | 2025-12-02 |
 
-**总体进度**: 约 99% 完成 (新增: 牛客图床支持)
+**总体进度**: 100% 完成 (最新: 牛客 Cookie 验证增强)
 
 **所有 P0 + P1 任务已完成！** 🎉🎉🎉
 **京东图床已集成！** 🛒
 **牛客图床已集成！** 📚
+**牛客 Cookie 自动捕获已修复！** ✅
 
 ### 进行中 (🚧)
 
@@ -2569,13 +2802,18 @@ function migrateConfigToV3(oldConfig: any): UserConfig {
 - ✨ 牛客图床支持（需要 Cookie 认证）
 - ✨ 牛客设置页面 Cookie 输入框
 - ✨ Cookie 自动保存功能
+- ✨ Cookie 验证增强：支持 requiredFields (AND) 和 anyOfFields (OR) 双重验证
+- ✨ 多域名 Cookie 提取：自动合并 www 和非 www 域名的 Cookie
 
 **修复**:
 - 🐛 修复设置页面保存 Cookie 后上传界面复选框状态不刷新的问题
 - 🐛 修复牛客图床返回压缩图片 URL，现在自动获取原图链接
+- 🐛 修复未登录状态误捕获 Cookie 的问题（增强字段验证）
+- 🐛 修复 WebView2 Cookie 提取域名不匹配导致无法获取 Cookie 的问题
 
 **文档**:
 - 📝 添加牛客图床实现文档到 record.md (阶段十一)
+- 📝 添加 Cookie 验证增强文档到 record.md (阶段十二)
 
 ### v3.0.1-alpha (2025-12-02)
 
