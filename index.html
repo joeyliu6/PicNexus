@@ -87,43 +87,13 @@
             <!-- 多图床选择 -->
             <div class="upload-controls">
               <h3 style="margin: 0 0 10px 0; color: var(--text-secondary); font-size: 14px;">选择上传图床 (可多选)</h3>
-              <div class="service-checkboxes">
-                <label class="service-checkbox">
-                  <input type="checkbox" data-service="weibo" />
-                  <span class="service-icon">📝</span>
-                  <span class="service-name">微博图床</span>
-                  <span class="service-config-status" data-service="weibo"></span>
-                </label>
-                <label class="service-checkbox">
-                  <input type="checkbox" data-service="r2" />
-                  <span class="service-icon">☁️</span>
-                  <span class="service-name">Cloudflare R2</span>
-                  <span class="service-config-status" data-service="r2"></span>
-                </label>
-                <label class="service-checkbox checked">
-                  <input type="checkbox" data-service="tcl" checked />
-                  <span class="service-icon">✨</span>
-                  <span class="service-name">TCL 图床</span>
-                  <span class="service-config-status ready" data-service="tcl">开箱即用</span>
-                </label>
-                <label class="service-checkbox checked">
-                  <input type="checkbox" data-service="jd" checked />
-                  <span class="service-icon">🛒</span>
-                  <span class="service-name">京东图床</span>
-                  <span class="service-config-status ready" data-service="jd">开箱即用</span>
-                </label>
-                <label class="service-checkbox">
-                  <input type="checkbox" data-service="nowcoder" />
-                  <span class="service-icon">📚</span>
-                  <span class="service-name">牛客图床</span>
-                  <span class="service-config-status" data-service="nowcoder"></span>
-                </label>
-                <label class="service-checkbox">
-                  <input type="checkbox" data-service="qiyu" />
-                  <span class="service-icon">🐟</span>
-                  <span class="service-name">七鱼图床</span>
-                  <span class="service-config-status" data-service="qiyu"></span>
-                </label>
+              <div class="service-buttons">
+                <button type="button" class="service-btn" data-service="weibo" data-tooltip="请先在设置中配置">微博</button>
+                <button type="button" class="service-btn" data-service="r2" data-tooltip="请先在设置中配置">R2</button>
+                <button type="button" class="service-btn selected" data-service="tcl">TCL</button>
+                <button type="button" class="service-btn selected" data-service="jd">京东</button>
+                <button type="button" class="service-btn" data-service="nowcoder" data-tooltip="请先在设置中配置">牛客</button>
+                <button type="button" class="service-btn" data-service="qiyu" data-tooltip="请先在设置中配置">七鱼</button>
               </div>
             </div>
 

@@ -144,14 +144,14 @@ const navButtons = [navUploadBtn, navHistoryBtn, navR2ManagerBtn, navBackupBtn, 
 
 // Upload View Elements
 const dropZoneHeader = getElement<HTMLElement>('drop-zone-header', '拖放区域头部');
-// Service checkboxes (上传界面)
-const serviceCheckboxes = {
-  weibo: document.querySelector<HTMLInputElement>('input[data-service="weibo"]'),
-  r2: document.querySelector<HTMLInputElement>('input[data-service="r2"]'),
-  tcl: document.querySelector<HTMLInputElement>('input[data-service="tcl"]'),
-  jd: document.querySelector<HTMLInputElement>('input[data-service="jd"]'),
-  nowcoder: document.querySelector<HTMLInputElement>('input[data-service="nowcoder"]'),
-  qiyu: document.querySelector<HTMLInputElement>('input[data-service="qiyu"]')
+// Service buttons (上传界面 - 新按钮式UI)
+const serviceButtons = {
+  weibo: document.querySelector<HTMLButtonElement>('.service-btn[data-service="weibo"]'),
+  r2: document.querySelector<HTMLButtonElement>('.service-btn[data-service="r2"]'),
+  tcl: document.querySelector<HTMLButtonElement>('.service-btn[data-service="tcl"]'),
+  jd: document.querySelector<HTMLButtonElement>('.service-btn[data-service="jd"]'),
+  nowcoder: document.querySelector<HTMLButtonElement>('.service-btn[data-service="nowcoder"]'),
+  qiyu: document.querySelector<HTMLButtonElement>('.service-btn[data-service="qiyu"]')
 };
 
 // Available service checkboxes (设置界面 - 控制哪些图床在上传界面可用)
@@ -614,18 +614,18 @@ async function initializeUpload(): Promise<void> {
 
           console.log(`[上传] 有效文件: ${valid.length}个，无效文件: ${invalid.length}个`);
 
-          // 从复选框读取启用的图床服务列表
+          // 从按钮读取启用的图床服务列表
           const enabledServices: ServiceType[] = [];
-          if (serviceCheckboxes.weibo?.checked) enabledServices.push('weibo');
-          if (serviceCheckboxes.r2?.checked) enabledServices.push('r2');
-          if (serviceCheckboxes.tcl?.checked) enabledServices.push('tcl');
-          if (serviceCheckboxes.jd?.checked) enabledServices.push('jd');
-          if (serviceCheckboxes.nowcoder?.checked) enabledServices.push('nowcoder');
-          if (serviceCheckboxes.qiyu?.checked) enabledServices.push('qiyu');
+          if (serviceButtons.weibo?.classList.contains('selected')) enabledServices.push('weibo');
+          if (serviceButtons.r2?.classList.contains('selected')) enabledServices.push('r2');
+          if (serviceButtons.tcl?.classList.contains('selected')) enabledServices.push('tcl');
+          if (serviceButtons.jd?.classList.contains('selected')) enabledServices.push('jd');
+          if (serviceButtons.nowcoder?.classList.contains('selected')) enabledServices.push('nowcoder');
+          if (serviceButtons.qiyu?.classList.contains('selected')) enabledServices.push('qiyu');
 
           if (enabledServices.length === 0) {
-            console.warn('[上传] 没有勾选任何图床');
-            await showAlertModal('请至少勾选一个图床服务！', '配置缺失');
+            console.warn('[上传] 没有选择任何图床');
+            await showAlertModal('请至少选择一个图床服务！', '配置缺失');
             return;
           }
 
@@ -1151,8 +1151,8 @@ async function setupCookieListener(): Promise<void> {
           // 根据服务类型更新对应的 UI 和配置
           await handleCookieUpdate(serviceId, trimmedCookie);
 
-          // 刷新上传界面的服务复选框状态
-          await loadServiceCheckboxStates();
+          // 刷新上传界面的服务按钮状态
+          await loadServiceButtonStates();
 
           // 显示成功提示
           const provider = getCookieProvider(serviceId);
@@ -1350,21 +1350,19 @@ async function loadSettings(): Promise<void> {
  * 根据设置中的可用图床配置，显示或隐藏上传界面的图床选项
  */
 function updateUploadServiceVisibility(availableServices: ServiceType[]): void {
-  // 获取所有上传界面的图床复选框容器
-  const allServiceLabels = document.querySelectorAll<HTMLElement>('.service-checkbox');
+  // 获取所有上传界面的图床按钮
+  const allServiceBtns = document.querySelectorAll<HTMLButtonElement>('.service-btn');
 
-  allServiceLabels.forEach(label => {
-    const input = label.querySelector<HTMLInputElement>('input[data-service]');
-    if (input) {
-      const serviceId = input.getAttribute('data-service') as ServiceType;
+  allServiceBtns.forEach(btn => {
+    const serviceId = btn.getAttribute('data-service') as ServiceType;
+    if (serviceId) {
       if (availableServices.includes(serviceId)) {
         // 显示该图床选项
-        label.style.display = '';
+        btn.style.display = '';
       } else {
-        // 隐藏该图床选项，并取消勾选
-        label.style.display = 'none';
-        input.checked = false;
-        label.classList.remove('checked');
+        // 隐藏该图床选项，并取消选中
+        btn.style.display = 'none';
+        btn.classList.remove('selected');
       }
     }
   });
@@ -1606,9 +1604,9 @@ async function handleAutoSave(): Promise<void> {
       await configStore.save();
       console.log('[自动保存] ✓ 配置自动保存成功');
 
-      // 3. 刷新上传界面的服务复选框状态
-      await loadServiceCheckboxStates();
-      console.log('[自动保存] ✓ 服务复选框状态已刷新');
+      // 3. 刷新上传界面的服务按钮状态
+      await loadServiceButtonStates();
+      console.log('[自动保存] ✓ 服务按钮状态已刷新');
 
       // 4. 更新上传界面的图床显示状态
       updateUploadServiceVisibility(availableServices);
@@ -3162,66 +3160,59 @@ async function syncToWebDAV() {
 }
 
 /**
- * 加载并更新服务复选框状态
+ * 加载并更新服务按钮状态
  */
-async function loadServiceCheckboxStates(): Promise<void> {
+async function loadServiceButtonStates(): Promise<void> {
   try {
     const config = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
 
-    // 加载保存的选择状态
-    const enabledServices = config.enabledServices || ['tcl'];
-    if (serviceCheckboxes.weibo) {
-      serviceCheckboxes.weibo.checked = enabledServices.includes('weibo');
-      updateServiceStatus('weibo', config);
-    }
-    if (serviceCheckboxes.r2) {
-      serviceCheckboxes.r2.checked = enabledServices.includes('r2');
-      updateServiceStatus('r2', config);
-    }
-    if (serviceCheckboxes.tcl) {
-      serviceCheckboxes.tcl.checked = enabledServices.includes('tcl');
-      // TCL always ready
-    }
-    if (serviceCheckboxes.jd) {
-      serviceCheckboxes.jd.checked = enabledServices.includes('jd');
-      // JD always ready
-    }
-    if (serviceCheckboxes.nowcoder) {
-      serviceCheckboxes.nowcoder.checked = enabledServices.includes('nowcoder');
-      updateServiceStatus('nowcoder', config);
-    }
-    if (serviceCheckboxes.qiyu) {
-      serviceCheckboxes.qiyu.checked = enabledServices.includes('qiyu');
-      updateServiceStatus('qiyu', config);
-    }
+    // 加载保存的选择状态（默认选中 tcl 和 jd）
+    const enabledServices = config.enabledServices || ['tcl', 'jd'];
+    const services: ServiceType[] = ['weibo', 'r2', 'tcl', 'jd', 'nowcoder', 'qiyu'];
 
-    console.log('[服务复选框] 已加载状态:', enabledServices);
+    services.forEach(serviceId => {
+      const btn = serviceButtons[serviceId as keyof typeof serviceButtons];
+      if (!btn) return;
+
+      // 先更新配置状态（决定是否 disabled）
+      updateServiceStatus(serviceId, config);
+
+      // 如果不是 disabled 且在 enabledServices 中，设为选中
+      if (!btn.classList.contains('disabled') && enabledServices.includes(serviceId)) {
+        btn.classList.add('selected');
+      } else {
+        btn.classList.remove('selected');
+      }
+    });
+
+    console.log('[服务按钮] 已加载状态:', enabledServices);
   } catch (error) {
-    console.error('[服务复选框] 加载状态失败:', error);
+    console.error('[服务按钮] 加载状态失败:', error);
   }
 }
 
 /**
- * 更新服务配置状态徽章
+ * 更新服务按钮状态（根据配置情况启用/禁用）
  */
 function updateServiceStatus(serviceId: ServiceType, config: UserConfig): void {
-  const statusEl = document.querySelector<HTMLElement>(`.service-config-status[data-service="${serviceId}"]`);
-  if (!statusEl) return;
+  const btn = serviceButtons[serviceId as keyof typeof serviceButtons];
+  if (!btn) return;
 
   // 确保 config.services 存在
   if (!config.services) {
-    console.warn('[服务状态] 配置中缺少 services 字段');
     config.services = {};
   }
 
-  let isConfigured = false;
-  let statusText = '';
+  // TCL 和 JD 开箱即用，始终可用
+  if (serviceId === 'tcl' || serviceId === 'jd') {
+    return;
+  }
 
+  // 判断是否已配置
+  let isConfigured = false;
   if (serviceId === 'weibo') {
     const weiboConfig = config.services.weibo;
     isConfigured = !!weiboConfig?.cookie && weiboConfig.cookie.trim().length > 0;
-    statusText = isConfigured ? '已配置' : '未配置';
-    statusEl.className = `service-config-status ${isConfigured ? 'ready' : 'not-ready'}`;
   } else if (serviceId === 'r2') {
     const r2Config = config.services.r2;
     isConfigured = !!(
@@ -3230,41 +3221,20 @@ function updateServiceStatus(serviceId: ServiceType, config: UserConfig): void {
       r2Config.secretAccessKey &&
       r2Config.bucketName
     );
-    statusText = isConfigured ? '已配置' : '未配置';
-    statusEl.className = `service-config-status ${isConfigured ? 'ready' : 'not-ready'}`;
-  } else if (serviceId === 'tcl') {
-    statusEl.className = 'service-config-status ready';
-    statusText = '开箱即用';
-  } else if (serviceId === 'jd') {
-    statusEl.className = 'service-config-status ready';
-    statusText = '开箱即用';
   } else if (serviceId === 'nowcoder') {
     const nowcoderConfig = config.services.nowcoder;
     isConfigured = !!nowcoderConfig?.cookie && nowcoderConfig.cookie.trim().length > 0;
-    statusText = isConfigured ? '已配置' : '未配置';
-    statusEl.className = `service-config-status ${isConfigured ? 'ready' : 'not-ready'}`;
   } else if (serviceId === 'qiyu') {
     const qiyuConfig = config.services.qiyu;
     isConfigured = !!qiyuConfig?.token && qiyuConfig.token.trim().length > 0;
-    statusText = isConfigured ? '已配置' : '未配置';
-    statusEl.className = `service-config-status ${isConfigured ? 'ready' : 'not-ready'}`;
   }
 
-  statusEl.textContent = statusText;
-
-  // 如果未配置，禁用复选框（TCL 和 JD 是开箱即用，不需要禁用）
-  const checkbox = serviceCheckboxes[serviceId as keyof typeof serviceCheckboxes];
-  if (checkbox && serviceId !== 'tcl' && serviceId !== 'jd') {
-    if (!isConfigured) {
-      checkbox.disabled = true;
-      checkbox.checked = false;
-      const label = checkbox.closest('label');
-      if (label) label.classList.add('disabled');
-    } else {
-      checkbox.disabled = false;
-      const label = checkbox.closest('label');
-      if (label) label.classList.remove('disabled');
-    }
+  // 更新按钮状态
+  if (!isConfigured) {
+    btn.classList.add('disabled');
+    btn.classList.remove('selected');
+  } else {
+    btn.classList.remove('disabled');
   }
 }
 
@@ -3897,22 +3867,36 @@ function initialize(): void {
       console.error('[初始化] 上传器注册失败:', error);
     }
 
-    // 加载服务复选框状态
-    loadServiceCheckboxStates().catch(err => {
-      console.error('[初始化] 加载服务复选框状态失败:', err);
+    // 加载服务按钮状态
+    loadServiceButtonStates().catch(err => {
+      console.error('[初始化] 加载服务按钮状态失败:', err);
     });
 
-    // 绑定服务复选框变化事件
-    Object.entries(serviceCheckboxes).forEach(([_serviceId, checkbox]) => {
-      if (checkbox) {
-        checkbox.addEventListener('change', () => {
-          const label = checkbox.closest('label');
-          if (label) {
-            if (checkbox.checked) {
-              label.classList.add('checked');
-            } else {
-              label.classList.remove('checked');
-            }
+    // 绑定服务按钮点击事件
+    Object.entries(serviceButtons).forEach(([_serviceId, btn]) => {
+      if (btn) {
+        btn.addEventListener('click', async () => {
+          // 如果是 disabled 状态，不处理点击
+          if (btn.classList.contains('disabled')) {
+            return;
+          }
+          // 切换选中状态
+          btn.classList.toggle('selected');
+          // 保存选择状态到配置
+          try {
+            const config = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
+            const enabledServices: ServiceType[] = [];
+            if (serviceButtons.weibo?.classList.contains('selected')) enabledServices.push('weibo');
+            if (serviceButtons.r2?.classList.contains('selected')) enabledServices.push('r2');
+            if (serviceButtons.tcl?.classList.contains('selected')) enabledServices.push('tcl');
+            if (serviceButtons.jd?.classList.contains('selected')) enabledServices.push('jd');
+            if (serviceButtons.nowcoder?.classList.contains('selected')) enabledServices.push('nowcoder');
+            if (serviceButtons.qiyu?.classList.contains('selected')) enabledServices.push('qiyu');
+            config.enabledServices = enabledServices;
+            await configStore.set('config', config);
+            await configStore.save();
+          } catch (err) {
+            console.error('[服务按钮] 保存选择状态失败:', err);
           }
         });
       }
