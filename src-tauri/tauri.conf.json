@@ -125,6 +125,16 @@
           "domain": "www.nowcoder.com",
           "windows": ["login-webview"],
           "enableTauriAPI": true
+        },
+        {
+          "domain": "zhihu.com",
+          "windows": ["login-webview"],
+          "enableTauriAPI": true
+        },
+        {
+          "domain": "www.zhihu.com",
+          "windows": ["login-webview"],
+          "enableTauriAPI": true
         }
       ]
     },

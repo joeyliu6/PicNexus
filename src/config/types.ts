@@ -6,7 +6,7 @@ import { UploadResult } from '../uploaders/base/types';
 /**
  * 支持的图床服务类型
  */
-export type ServiceType = 'weibo' | 'r2' | 'jd' | 'tcl' | 'nowcoder' | 'qiyu';
+export type ServiceType = 'weibo' | 'r2' | 'jd' | 'tcl' | 'nowcoder' | 'qiyu' | 'zhihu';
 
 /**
  * 基础服务配置接口
@@ -81,6 +81,15 @@ export interface QiyuServiceConfig extends BaseServiceConfig {
 }
 
 /**
+ * 知乎图床服务配置
+ * 需要 Cookie 认证
+ */
+export interface ZhihuServiceConfig extends BaseServiceConfig {
+  /** 知乎 Cookie */
+  cookie: string;
+}
+
+/**
  * WebDAV 配置
  * 保持与原有结构一致
  */
@@ -145,6 +154,7 @@ export interface UserConfig {
     tcl?: TCLServiceConfig;
     nowcoder?: NowcoderServiceConfig;
     qiyu?: QiyuServiceConfig;
+    zhihu?: ZhihuServiceConfig;
   };
 
   /** 输出格式 */
@@ -211,7 +221,7 @@ export interface HistoryItem {
  */
 export const DEFAULT_CONFIG: UserConfig = {
   enabledServices: ['tcl'],  // 默认启用 TCL 图床（开箱即用）
-  availableServices: ['weibo', 'r2', 'tcl', 'jd', 'nowcoder', 'qiyu'],  // 默认所有图床都可用
+  availableServices: ['weibo', 'r2', 'tcl', 'jd', 'nowcoder', 'qiyu', 'zhihu'],  // 默认所有图床都可用
   services: {
     weibo: {
       enabled: true,
@@ -238,6 +248,10 @@ export const DEFAULT_CONFIG: UserConfig = {
     },
     qiyu: {
       enabled: false  // 七鱼图床需要 Chrome/Edge 浏览器，默认不启用
+    },
+    zhihu: {
+      enabled: false,  // 知乎图床需要 Cookie，默认不启用
+      cookie: ''
     }
   },
   outputFormat: 'baidu-proxy',
@@ -282,7 +296,11 @@ export function sanitizeConfig(config: UserConfig): UserConfig {
         cookie: sanitizeString(config.services.nowcoder.cookie, 8, 4)
       } : undefined,
       // 七鱼图床 Token 由后端自动获取，无需脱敏处理
-      qiyu: config.services.qiyu
+      qiyu: config.services.qiyu,
+      zhihu: config.services.zhihu ? {
+        ...config.services.zhihu,
+        cookie: sanitizeString(config.services.zhihu.cookie, 8, 4)
+      } : undefined
     },
     webdav: config.webdav ? {
       ...config.webdav,

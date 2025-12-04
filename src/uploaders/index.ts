@@ -8,6 +8,7 @@ import { TCLUploader } from './tcl/TCLUploader';
 import { JDUploader } from './jd/JDUploader';
 import { NowcoderUploader } from './nowcoder/NowcoderUploader';
 import { QiyuUploader } from './qiyu/QiyuUploader';
+import { ZhihuUploader } from './zhihu/ZhihuUploader';
 
 /**
  * 初始化所有上传器
@@ -34,6 +35,9 @@ export function initializeUploaders(): void {
   // 注册七鱼上传器
   UploaderFactory.register('qiyu', () => new QiyuUploader());
 
+  // 注册知乎上传器
+  UploaderFactory.register('zhihu', () => new ZhihuUploader());
+
   const registered = UploaderFactory.getAvailableServices();
   console.log('[Uploaders] 已注册的上传器:', registered);
 }
@@ -45,4 +49,5 @@ export { TCLUploader } from './tcl';
 export { JDUploader } from './jd';
 export { NowcoderUploader } from './nowcoder';
 export { QiyuUploader } from './qiyu';
+export { ZhihuUploader } from './zhihu';
 export { UploaderFactory } from './base/UploaderFactory';

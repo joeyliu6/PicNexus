@@ -4684,6 +4684,246 @@ npx @yao-pkg/pkg dist/index.js -t node18-win-x64 -o ../../src-tauri/binaries/qiy
 
 ---
 
+## ✅ 阶段十六: 知乎图床支持 (2025-12-04 完成)
+
+### 概述
+
+添加知乎图床支持，采用与牛客图床类似的 Cookie 认证方式。知乎图床上传流程较为复杂，需要：
+1. 计算图片 MD5 Hash
+2. 获取上传凭证（可能返回已存在的图片）
+3. 上传到阿里云 OSS（需要 HMAC-SHA1 签名）
+4. 通知上传完成
+5. 轮询图片处理状态
+6. URL 标准化
+
+### 知乎上传流程详解
+
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  计算 MD5   │────▶│  获取上传凭证    │────▶│  检查 state     │
+│  Hash       │     │  POST /images    │     │  0=需上传       │
+└─────────────┘     └──────────────────┘     │  1=已存在       │
+                                              └────────┬────────┘
+                                                       │
+                    ┌──────────────────────────────────┴───────┐
+                    │ state=0                         state=1  │
+                    ▼                                          ▼
+           ┌────────────────┐                         ┌────────────────┐
+           │  上传到 OSS    │                         │  直接返回 URL  │
+           │  PUT (签名)    │                         │  (跳过上传)    │
+           └───────┬────────┘                         └────────────────┘
+                   │
+                   ▼
+           ┌────────────────┐
+           │  通知完成      │
+           │  POST complete │
+           └───────┬────────┘
+                   │
+                   ▼
+           ┌────────────────┐
+           │  轮询状态      │
+           │  GET /images/  │
+           └───────┬────────┘
+                   │
+                   ▼
+           ┌────────────────┐
+           │  URL 标准化    │
+           │  picx.zhimg    │
+           └────────────────┘
+```
+
+### OSS 签名计算 (HMAC-SHA1)
+
+知乎使用阿里云 OSS 存储图片，上传时需要计算签名：
+
+```rust
+fn calculate_oss_signature(
+    access_key: &str,
+    content_type: &str,
+    date: &str,
+    security_token: &str,
+    object_key: &str
+) -> String {
+    // StringToSign 格式:
+    // PUT\n
+    // \n                           (Content-MD5 为空)
+    // image/png\n
+    // Wed, 04 Dec 2024 05:00:00 GMT\n
+    // x-oss-date:Wed, 04 Dec 2024 05:00:00 GMT\n
+    // x-oss-security-token:{token}\n
+    // /zhihu-pics/{object_key}
+
+    let string_to_sign = format!(
+        "PUT\n\n{}\n{}\nx-oss-date:{}\nx-oss-security-token:{}\n/zhihu-pics/{}",
+        content_type, date, date, security_token, object_key
+    );
+
+    let mut mac = Hmac::<Sha1>::new_from_slice(access_key.as_bytes())
+        .expect("HMAC can take key of any size");
+    mac.update(string_to_sign.as_bytes());
+
+    STANDARD.encode(mac.finalize().into_bytes())
+}
+```
+
+**关键点**:
+- 使用 HMAC-SHA1（不是 SHA-256）
+- CanonicalizedOSSHeaders 必须按字母序排列
+- x-oss-date 和 Date 头需要一致
+
+### URL 标准化
+
+知乎返回的图片 URL 格式不一致，需要标准化：
+
+```rust
+fn normalize_image_url(url: &str) -> String {
+    // 从任意知乎图片 URL 提取 v2-xxx 部分
+    // 输入示例:
+    //   https://pic1.zhimg.com/v2-abc123_r.jpg
+    //   https://picx.zhimg.com/v2-abc123.webp
+    // 输出: https://picx.zhimg.com/v2-abc123.webp
+
+    if let Some(captures) = Regex::new(r"v2-[a-f0-9]+")
+        .unwrap()
+        .find(url)
+    {
+        format!("https://picx.zhimg.com/{}.webp", captures.as_str())
+    } else {
+        url.to_string()
+    }
+}
+```
+
+### 修改的文件清单
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `src-tauri/Cargo.toml` | 修改 | 添加 `sha1`, `md-5`, `regex` 依赖 |
+| `src/config/types.ts` | 修改 | 添加 `zhihu` 到 `ServiceType`，创建 `ZhihuServiceConfig` |
+| `src/config/cookieProviders.ts` | 修改 | 添加知乎 Cookie 验证配置 (需要 `z_c0` 字段) |
+| `src-tauri/src/commands/zhihu.rs` | **新建** | Rust 后端上传命令 (~280 行) |
+| `src-tauri/src/commands/mod.rs` | 修改 | 注册 `zhihu` 模块 |
+| `src-tauri/src/main.rs` | 修改 | 注册 `upload_to_zhihu` 命令 |
+| `src/uploaders/zhihu/ZhihuUploader.ts` | **新建** | 前端上传器类 |
+| `src/uploaders/zhihu/index.ts` | **新建** | 导出文件 |
+| `src/uploaders/index.ts` | 修改 | 注册到工厂 |
+| `src/core/MultiServiceUploader.ts` | 修改 | 添加知乎 Cookie 验证逻辑 |
+| `src-tauri/tauri.conf.json` | 修改 | 添加 `zhihu.com` 域名白名单 |
+| `index.html` | 修改 | 添加 UI 元素 (按钮、设置区域、复选框) |
+| `src/main.ts` | 修改 | 添加事件绑定、状态更新、服务名称映射 |
+
+### 🐛 Bug 修复记录
+
+#### Bug 1: 知乎按钮未配置时仍可选中
+
+**问题描述**: 知乎未配置 Cookie 时，上传界面的知乎按钮仍然是可选中状态，没有显示为禁用。
+
+**根本原因**: `loadServiceButtonStates()` 函数的 `services` 数组中遗漏了 `'zhihu'`。
+
+**修复位置**: `src/main.ts` 第 3370 行
+
+```typescript
+// 修复前
+const services: ServiceType[] = ['weibo', 'r2', 'tcl', 'jd', 'nowcoder', 'qiyu'];
+
+// 修复后
+const services: ServiceType[] = ['weibo', 'r2', 'tcl', 'jd', 'nowcoder', 'qiyu', 'zhihu'];
+```
+
+#### Bug 2: 选中知乎后提示"未选择图床"
+
+**问题描述**: 配置完知乎 Cookie 后，选中知乎图床按钮上传，却提示"请至少选择一个图床服务"。
+
+**根本原因**: 上传处理逻辑中遗漏了对 `serviceButtons.zhihu` 的 `selected` 状态检查。
+
+**修复位置**: `src/main.ts` 第 631 行
+
+```typescript
+// 修复前
+if (serviceButtons.qiyu?.classList.contains('selected')) enabledServices.push('qiyu');
+// 缺失 zhihu 检查
+
+// 修复后
+if (serviceButtons.qiyu?.classList.contains('selected')) enabledServices.push('qiyu');
+if (serviceButtons.zhihu?.classList.contains('selected')) enabledServices.push('zhihu');
+```
+
+**同类问题**: 按钮点击保存逻辑（第 4143 行）也遗漏了同样的检查，一并修复。
+
+#### Bug 3: 知乎 Cookie 修改后不自动保存
+
+**问题描述**: 在设置页面手动修改或清空知乎 Cookie 后，不会像其他设置项一样自动保存。
+
+**根本原因**: `settingsInputs` 数组中遗漏了 `zhihuCookieEl`，导致没有绑定 `blur` 事件触发自动保存。
+
+**修复位置**: `src/main.ts` 第 4205-4206 行
+
+```typescript
+// 修复前
+const settingsInputs = [
+  weiboCookieEl,
+  // ... 其他输入框
+  nowcoderCookieEl
+  // 缺失 zhihuCookieEl
+];
+
+// 修复后
+const settingsInputs = [
+  weiboCookieEl,
+  // ... 其他输入框
+  nowcoderCookieEl,
+  zhihuCookieEl  // 添加知乎 Cookie 输入框
+];
+```
+
+### ⚠️ 新增图床时的检查清单
+
+通过此次知乎图床实现和 Bug 修复，总结出新增图床时必须检查的代码位置：
+
+| 序号 | 检查项 | 文件位置 | 说明 |
+|------|--------|----------|------|
+| 1 | `ServiceType` 类型 | `src/config/types.ts` | 添加新服务 ID |
+| 2 | 服务配置接口 | `src/config/types.ts` | 创建 `XxxServiceConfig` |
+| 3 | `DEFAULT_CONFIG` | `src/config/types.ts` | 添加默认配置 |
+| 4 | `sanitizeConfig()` | `src/config/types.ts` | 添加配置清理逻辑 |
+| 5 | Cookie 验证配置 | `src/config/cookieProviders.ts` | 如需 Cookie 认证 |
+| 6 | Rust 上传命令 | `src-tauri/src/commands/xxx.rs` | 后端实现 |
+| 7 | 模块注册 | `src-tauri/src/commands/mod.rs` | `pub mod xxx;` |
+| 8 | 命令注册 | `src-tauri/src/main.rs` | `invoke_handler` |
+| 9 | 前端上传器 | `src/uploaders/xxx/` | `XxxUploader.ts` |
+| 10 | 工厂注册 | `src/uploaders/index.ts` | `UploaderFactory.register()` |
+| 11 | Cookie 验证 | `src/core/MultiServiceUploader.ts` | 如需 Cookie |
+| 12 | 域名白名单 | `src-tauri/tauri.conf.json` | WebView 登录用 |
+| 13 | UI 按钮 | `index.html` | `.service-btn` |
+| 14 | 设置区域 | `index.html` | 配置表单 |
+| 15 | 可用服务复选框 | `index.html` | `#available-xxx` |
+| 16 | **serviceButtons** | `src/main.ts` | DOM 元素引用 |
+| 17 | **availableServiceCheckboxes** | `src/main.ts` | 复选框引用 |
+| 18 | **xxxCookieEl** | `src/main.ts` | Cookie 输入框引用 |
+| 19 | **updateServiceStatus()** | `src/main.ts` | 配置检测逻辑 |
+| 20 | **handleAutoSave()** | `src/main.ts` | 保存配置对象 |
+| 21 | **loadServiceButtonStates() services 数组** ⚠️ | `src/main.ts` | **容易遗漏！** |
+| 22 | **上传处理 enabledServices 检查** ⚠️ | `src/main.ts` | **容易遗漏！** |
+| 23 | **按钮点击保存 enabledServices 检查** ⚠️ | `src/main.ts` | **容易遗漏！** |
+| 24 | **settingsInputs 数组** ⚠️ | `src/main.ts` | **容易遗漏！** |
+| 25 | **服务名称映射 (5处)** | `src/main.ts` | `Record<ServiceType, string>` |
+| 26 | WebView Cookie 处理 | `src/main.ts` | `switch (serviceId)` case |
+| 27 | 配置加载 | `src/main.ts` | `xxxCookieEl.value = ...` |
+| 28 | 登录按钮事件 | `src/main.ts` | `login-xxx-btn` |
+| 29 | 测试按钮事件 | `src/main.ts` | `test-xxx-cookie-btn` |
+| 30 | 测试连接函数 | `src/main.ts` | `testXxxConnection()` |
+
+> ⚠️ **重点关注**: 标记为"容易遗漏"的项目（21-25）是本次 Bug 的根源，新增图床时务必逐一检查！
+
+### 经验总结
+
+1. **类型系统不能完全防止遗漏**: TypeScript 的 `ServiceType` 联合类型只能保证类型安全，但无法检测数组/对象字面量中是否包含所有服务
+2. **硬编码服务列表的风险**: `main.ts` 中有多处硬编码的服务列表，新增服务时容易遗漏
+3. **建议改进**: 考虑将服务列表集中管理，或使用 `Object.keys(serviceButtons)` 等方式动态获取
+4. **测试覆盖**: 新增图床后应测试完整流程：配置状态显示 → 按钮选中 → 上传 → 配置保存
+
+---
+
 ## 👥 贡献者
 
 - **架构设计**: Claude (Anthropic)

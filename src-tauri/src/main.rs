@@ -115,6 +115,7 @@ fn main() {
             commands::qiyu::upload_to_qiyu,
             commands::qiyu_token::fetch_qiyu_token,
             commands::qiyu_token::check_chrome_installed,
+            commands::zhihu::upload_to_zhihu,
             commands::utils::file_exists,
             get_or_create_secure_key
         ])

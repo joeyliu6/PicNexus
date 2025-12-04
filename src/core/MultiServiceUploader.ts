@@ -259,6 +259,16 @@ export class MultiServiceUploader {
         return true;
       }
 
+      if (serviceId === 'zhihu') {
+        const zhihuConfig = serviceConfig as any;
+        if (!zhihuConfig.cookie || zhihuConfig.cookie.trim().length === 0) {
+          console.warn(`[MultiUploader] ${serviceId} Cookie 未配置，跳过`);
+          return false;
+        }
+        // 如果 cookie 存在，认为已配置
+        return true;
+      }
+
       if (serviceId === 'qiyu') {
         // 七鱼图床 Token 由后端自动获取，只要启用了就认为已配置
         // Chrome/Edge 检测在前端 UI 层面处理

@@ -79,6 +79,22 @@ export const COOKIE_PROVIDERS: Record<string, CookieProvider> = {
     },
     description: '登录牛客账号获取 Cookie',
     icon: '📚'
+  },
+  zhihu: {
+    serviceId: 'zhihu',
+    name: '知乎',
+    loginUrl: 'https://www.zhihu.com/signin',
+    domains: ['www.zhihu.com', 'zhihu.com'],  // www 在前，因为登录页面在 www 子域
+    cookieValidation: {
+      requiredFields: ['z_c0'],  // 知乎登录凭证（必须）
+      anyOfFields: [],
+      monitoringDelay: {
+        initialDelayMs: 3000,      // 3秒初始延迟（等待登录完成）
+        pollingIntervalMs: 1000    // 1秒轮询
+      }
+    },
+    description: '登录知乎账号获取 Cookie',
+    icon: '📖'
   }
 };
 

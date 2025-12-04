@@ -151,7 +151,8 @@ const serviceButtons = {
   tcl: document.querySelector<HTMLButtonElement>('.service-btn[data-service="tcl"]'),
   jd: document.querySelector<HTMLButtonElement>('.service-btn[data-service="jd"]'),
   nowcoder: document.querySelector<HTMLButtonElement>('.service-btn[data-service="nowcoder"]'),
-  qiyu: document.querySelector<HTMLButtonElement>('.service-btn[data-service="qiyu"]')
+  qiyu: document.querySelector<HTMLButtonElement>('.service-btn[data-service="qiyu"]'),
+  zhihu: document.querySelector<HTMLButtonElement>('.service-btn[data-service="zhihu"]')
 };
 
 // Available service checkboxes (设置界面 - 控制哪些图床在上传界面可用)
@@ -161,7 +162,8 @@ const availableServiceCheckboxes = {
   tcl: document.querySelector<HTMLInputElement>('#available-tcl'),
   jd: document.querySelector<HTMLInputElement>('#available-jd'),
   nowcoder: document.querySelector<HTMLInputElement>('#available-nowcoder'),
-  qiyu: document.querySelector<HTMLInputElement>('#available-qiyu')
+  qiyu: document.querySelector<HTMLInputElement>('#available-qiyu'),
+  zhihu: document.querySelector<HTMLInputElement>('#available-zhihu')
 };
 
 // Settings View Elements
@@ -189,6 +191,7 @@ const webdavUsernameEl = getElement<HTMLInputElement>('webdav-username', 'WebDAV
 const webdavPasswordEl = getElement<HTMLInputElement>('webdav-password', 'WebDAV密码输入框');
 const webdavRemotePathEl = getElement<HTMLInputElement>('webdav-remote-path', 'WebDAV远程路径输入框');
 const nowcoderCookieEl = document.querySelector<HTMLTextAreaElement>('#nowcoder-cookie');
+const zhihuCookieEl = document.querySelector<HTMLTextAreaElement>('#zhihu-cookie');
 const qiyuChromeStatusEl = document.querySelector<HTMLElement>('#qiyu-chrome-status');
 
 // 七鱼图床 Chrome 检测状态
@@ -625,6 +628,7 @@ async function initializeUpload(): Promise<void> {
           if (serviceButtons.jd?.classList.contains('selected')) enabledServices.push('jd');
           if (serviceButtons.nowcoder?.classList.contains('selected')) enabledServices.push('nowcoder');
           if (serviceButtons.qiyu?.classList.contains('selected')) enabledServices.push('qiyu');
+          if (serviceButtons.zhihu?.classList.contains('selected')) enabledServices.push('zhihu');
 
           if (enabledServices.length === 0) {
             console.warn('[上传] 没有选择任何图床');
@@ -749,7 +753,8 @@ const linkCheckerServiceNames: Record<ServiceType, string> = {
   tcl: 'TCL',
   jd: '京东',
   nowcoder: '牛客',
-  qiyu: '七鱼'
+  qiyu: '七鱼',
+  zhihu: '知乎'
 };
 
 /**
@@ -1252,6 +1257,31 @@ async function handleCookieUpdate(serviceId: string, cookie: string): Promise<vo
       }
       break;
 
+    case 'zhihu':
+      // 更新知乎 Cookie
+      if (!config.services.zhihu) {
+        config.services.zhihu = { enabled: true, cookie: '' };
+      }
+      config.services.zhihu.cookie = cookie;
+
+      // 更新 UI
+      const zhihuCookieElLocal = document.getElementById('zhihu-cookie') as HTMLTextAreaElement | null;
+      if (zhihuCookieElLocal) {
+        zhihuCookieElLocal.value = cookie;
+        console.log('[Cookie更新] ✓ 知乎 Cookie UI 已更新');
+      }
+
+      // 更新状态显示
+      const zhihuStatusEl = document.getElementById('zhihu-cookie-status');
+      if (zhihuStatusEl) {
+        zhihuStatusEl.textContent = '✅ Cookie已自动填充并保存！';
+        zhihuStatusEl.style.color = 'lightgreen';
+        setTimeout(() => {
+          if (zhihuStatusEl) zhihuStatusEl.textContent = '';
+        }, 3000);
+      }
+      break;
+
     default:
       console.warn(`[Cookie更新] 未知的服务类型: ${serviceId}`);
       // 尝试通用处理
@@ -1303,6 +1333,7 @@ async function loadSettings(): Promise<void> {
       if (r2PathEl) r2PathEl.value = config.services?.r2?.path || '';
       if (r2PublicDomainEl) r2PublicDomainEl.value = config.services?.r2?.publicDomain || '';
       if (nowcoderCookieEl) nowcoderCookieEl.value = config.services?.nowcoder?.cookie || '';
+      if (zhihuCookieEl) zhihuCookieEl.value = config.services?.zhihu?.cookie || '';
       // 七鱼图床不再需要手动配置 Token，由后端自动获取
 
       // 链接前缀配置（使用迁移函数确保兼容旧配置）
@@ -1594,6 +1625,10 @@ async function handleAutoSave(): Promise<void> {
         qiyu: {
           enabled: enabledServices.includes('qiyu')
           // Token 由后端自动获取，无需保存
+        },
+        zhihu: {
+          enabled: enabledServices.includes('zhihu'),
+          cookie: zhihuCookieEl?.value.trim() || ''
         }
       },
       outputFormat: savedConfig?.outputFormat || DEFAULT_CONFIG.outputFormat,
@@ -2313,6 +2348,165 @@ async function testNowcoderConnection(): Promise<void> {
   }
 }
 
+/**
+ * 测试知乎 Cookie 连接
+ * 通过调用知乎 API 验证 Cookie 是否有效
+ */
+async function testZhihuConnection(): Promise<void> {
+  const zhihuCookieStatusEl = document.getElementById('zhihu-cookie-status');
+  const testZhihuBtn = document.getElementById('test-zhihu-cookie-btn') as HTMLButtonElement | null;
+
+  try {
+    console.log('[知乎Cookie测试] 开始测试知乎连接...');
+
+    // 验证输入
+    if (!zhihuCookieEl) {
+      console.error('[知乎Cookie测试] zhihuCookieEl 不存在');
+      if (zhihuCookieStatusEl) {
+        zhihuCookieStatusEl.textContent = '❌ Cookie 输入框不存在';
+        zhihuCookieStatusEl.style.color = 'red';
+      }
+      return;
+    }
+
+    const cookie = zhihuCookieEl.value.trim();
+    if (!cookie || cookie.length === 0) {
+      console.warn('[知乎Cookie测试] Cookie 为空');
+      if (zhihuCookieStatusEl) {
+        zhihuCookieStatusEl.textContent = '❌ Cookie 不能为空！';
+        zhihuCookieStatusEl.style.color = 'red';
+      }
+      return;
+    }
+
+    // 检查必要字段
+    if (!cookie.includes('z_c0=')) {
+      console.warn('[知乎Cookie测试] Cookie 缺少 z_c0 字段');
+      if (zhihuCookieStatusEl) {
+        zhihuCookieStatusEl.textContent = '❌ Cookie 缺少必要字段 z_c0（需要登录后的 Cookie）';
+        zhihuCookieStatusEl.style.color = 'red';
+      }
+      return;
+    }
+
+    // 禁用测试按钮，显示加载状态
+    if (testZhihuBtn) {
+      testZhihuBtn.disabled = true;
+      testZhihuBtn.textContent = '测试中...';
+    }
+
+    // 更新状态
+    if (zhihuCookieStatusEl) {
+      zhihuCookieStatusEl.textContent = '⏳ 测试中...';
+      zhihuCookieStatusEl.style.color = 'yellow';
+    }
+
+    try {
+      // 获取 HTTP 客户端
+      const client = await getClient();
+
+      // 请求知乎用户信息 API 来验证 Cookie 有效性
+      const response = await client.get<{ name?: string; error?: { message: string } }>(
+        'https://api.zhihu.com/people/self',
+        {
+          responseType: ResponseType.JSON,
+          headers: {
+            Cookie: cookie,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+            'Referer': 'https://www.zhihu.com/',
+            'Origin': 'https://www.zhihu.com'
+          },
+          timeout: 15000, // 15秒超时
+        }
+      );
+
+      // 检查 HTTP 状态码
+      if (!response.ok) {
+        const errorMsg = `❌ 测试失败 (HTTP ${response.status})`;
+        console.warn('[知乎Cookie测试] HTTP 请求失败:', response.status);
+        if (zhihuCookieStatusEl) {
+          if (response.status === 401 || response.status === 403) {
+            zhihuCookieStatusEl.textContent = `${errorMsg}: Cookie 无效或已过期`;
+          } else if (response.status >= 500) {
+            zhihuCookieStatusEl.textContent = `${errorMsg}: 知乎服务器错误`;
+          } else {
+            zhihuCookieStatusEl.textContent = errorMsg;
+          }
+          zhihuCookieStatusEl.style.color = 'red';
+        }
+        return;
+      }
+
+      // 检查响应数据
+      if (!response.data) {
+        console.warn('[知乎Cookie测试] 响应数据为空');
+        if (zhihuCookieStatusEl) {
+          zhihuCookieStatusEl.textContent = '❌ 测试失败: 响应数据为空';
+          zhihuCookieStatusEl.style.color = 'red';
+        }
+        return;
+      }
+
+      // 验证返回数据
+      if (response.data.error) {
+        console.warn('[知乎Cookie测试] Cookie 无效，返回:', response.data.error);
+        if (zhihuCookieStatusEl) {
+          zhihuCookieStatusEl.textContent = `❌ ${response.data.error.message || 'Cookie 无效或已过期'}`;
+          zhihuCookieStatusEl.style.color = 'red';
+        }
+      } else if (response.data.name) {
+        console.log('[知乎Cookie测试] ✓ Cookie 有效，用户:', response.data.name);
+        if (zhihuCookieStatusEl) {
+          zhihuCookieStatusEl.textContent = `✅ Cookie 有效！ (用户: ${response.data.name})`;
+          zhihuCookieStatusEl.style.color = 'lightgreen';
+        }
+      } else {
+        console.log('[知乎Cookie测试] ✓ Cookie 有效');
+        if (zhihuCookieStatusEl) {
+          zhihuCookieStatusEl.textContent = '✅ Cookie 有效！ (已登录)';
+          zhihuCookieStatusEl.style.color = 'lightgreen';
+        }
+      }
+    } catch (err: unknown) {
+      const errorStr = err?.toString() || String(err) || '';
+      const errorMsg = err instanceof Error ? err.message : errorStr;
+      const fullError = (errorMsg + ' ' + errorStr).toLowerCase();
+
+      console.error('[知乎Cookie测试] 测试失败:', err);
+
+      let displayMessage = '❌ 测试失败: 未知错误';
+      if (fullError.includes('json') || fullError.includes('parse')) {
+        displayMessage = '❌ 测试失败: Cookie 无效或格式错误 (无法解析响应)';
+      } else if (fullError.includes('network') || fullError.includes('fetch') || fullError.includes('connection')) {
+        displayMessage = '❌ 测试失败: 网络连接失败，请检查网络连接';
+      } else if (fullError.includes('timeout') || fullError.includes('超时')) {
+        displayMessage = '❌ 测试失败: 请求超时，请检查网络连接';
+      } else if (errorMsg) {
+        const shortError = errorMsg.length > 100 ? errorMsg.substring(0, 100) + '...' : errorMsg;
+        displayMessage = `❌ 测试失败: ${shortError}`;
+      }
+
+      if (zhihuCookieStatusEl) {
+        zhihuCookieStatusEl.textContent = displayMessage;
+        zhihuCookieStatusEl.style.color = 'red';
+      }
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error('[知乎Cookie测试] 测试知乎连接失败:', error);
+    if (zhihuCookieStatusEl) {
+      zhihuCookieStatusEl.textContent = `❌ 测试失败: ${errorMsg}`;
+      zhihuCookieStatusEl.style.color = 'red';
+    }
+  } finally {
+    // 恢复按钮状态
+    if (testZhihuBtn) {
+      testZhihuBtn.disabled = false;
+      testZhihuBtn.textContent = '测试连接';
+    }
+  }
+}
+
 
 // --- HISTORY LOGIC (from history.ts) ---
 let allHistoryItems: HistoryItem[] = [];
@@ -2524,7 +2718,8 @@ async function renderHistoryTable(items: HistoryItem[]) {
             tcl: 'TCL',
             jd: '京东',
             nowcoder: '牛客',
-            qiyu: '七鱼'
+            qiyu: '七鱼',
+            zhihu: '知乎'
           };
 
           const serviceName = serviceNames[serviceResult.serviceId] || serviceResult.serviceId;
@@ -2582,7 +2777,8 @@ async function renderHistoryTable(items: HistoryItem[]) {
               tcl: 'TCL',
               jd: '京东',
               nowcoder: '牛客',
-              qiyu: '七鱼'
+              qiyu: '七鱼',
+              zhihu: '知乎'
             };
 
             const serviceName = serviceNames[serviceResult.serviceId] || serviceResult.serviceId;
@@ -2749,7 +2945,8 @@ async function retryServiceUpload(historyId: string, serviceId: ServiceType): Pr
       tcl: 'TCL',
       jd: '京东',
       nowcoder: '牛客',
-      qiyu: '七鱼'
+      qiyu: '七鱼',
+      zhihu: '知乎'
     };
     const serviceName = serviceNames[serviceId] || serviceId;
     showToast(`正在重试上传到 ${serviceName}...`, 'loading', 0);
@@ -3171,7 +3368,7 @@ async function loadServiceButtonStates(): Promise<void> {
 
     // 加载保存的选择状态（默认选中 tcl 和 jd）
     const enabledServices = config.enabledServices || ['tcl', 'jd'];
-    const services: ServiceType[] = ['weibo', 'r2', 'tcl', 'jd', 'nowcoder', 'qiyu'];
+    const services: ServiceType[] = ['weibo', 'r2', 'tcl', 'jd', 'nowcoder', 'qiyu', 'zhihu'];
 
     services.forEach(serviceId => {
       const btn = serviceButtons[serviceId as keyof typeof serviceButtons];
@@ -3227,6 +3424,9 @@ function updateServiceStatus(serviceId: ServiceType, config: UserConfig): void {
   } else if (serviceId === 'nowcoder') {
     const nowcoderConfig = config.services.nowcoder;
     isConfigured = !!nowcoderConfig?.cookie && nowcoderConfig.cookie.trim().length > 0;
+  } else if (serviceId === 'zhihu') {
+    const zhihuConfig = config.services.zhihu;
+    isConfigured = !!zhihuConfig?.cookie && zhihuConfig.cookie.trim().length > 0;
   } else if (serviceId === 'qiyu') {
     // 七鱼图床需要系统安装 Chrome/Edge 浏览器
     isConfigured = qiyuChromeInstalled;
@@ -3527,7 +3727,8 @@ function getServiceDisplayName(serviceId: ServiceType): string {
     tcl: 'TCL',
     jd: '京东',
     nowcoder: '牛客',
-    qiyu: '七鱼'
+    qiyu: '七鱼',
+    zhihu: '知乎'
   };
   return names[serviceId] || serviceId;
 }
@@ -3939,6 +4140,7 @@ function initialize(): void {
             if (serviceButtons.jd?.classList.contains('selected')) enabledServices.push('jd');
             if (serviceButtons.nowcoder?.classList.contains('selected')) enabledServices.push('nowcoder');
             if (serviceButtons.qiyu?.classList.contains('selected')) enabledServices.push('qiyu');
+            if (serviceButtons.zhihu?.classList.contains('selected')) enabledServices.push('zhihu');
             config.enabledServices = enabledServices;
             await configStore.set('config', config);
             await configStore.save();
@@ -4000,7 +4202,8 @@ function initialize(): void {
       webdavUsernameEl,
       webdavPasswordEl,
       webdavRemotePathEl,
-      nowcoderCookieEl
+      nowcoderCookieEl,
+      zhihuCookieEl
       // qiyu 不再需要手动配置 Token
     ];
     
@@ -4095,6 +4298,30 @@ function initialize(): void {
       });
     } else {
       console.warn('[初始化] 警告: 牛客Cookie测试按钮不存在');
+    }
+
+    // 知乎登录按钮事件绑定
+    const loginZhihuBtn = document.getElementById('login-zhihu-btn');
+    if (loginZhihuBtn) {
+      loginZhihuBtn.addEventListener('click', () => {
+        openWebviewLoginWindow('zhihu').catch(err => {
+          console.error('[初始化] 打开知乎登录窗口失败:', err);
+        });
+      });
+    } else {
+      console.warn('[初始化] 警告: 知乎登录按钮不存在（可能设置页面未加载）');
+    }
+
+    // 知乎Cookie测试按钮事件绑定
+    const testZhihuCookieBtn = document.getElementById('test-zhihu-cookie-btn');
+    if (testZhihuCookieBtn) {
+      testZhihuCookieBtn.addEventListener('click', () => {
+        testZhihuConnection().catch(err => {
+          console.error('[初始化] 测试知乎Cookie失败:', err);
+        });
+      });
+    } else {
+      console.warn('[初始化] 警告: 知乎Cookie测试按钮不存在');
     }
 
     // Bind history events (带空值检查)
