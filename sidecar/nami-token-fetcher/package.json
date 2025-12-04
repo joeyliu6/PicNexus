@@ -1,0 +1,21 @@
+{
+  "name": "nami-token-fetcher",
+  "version": "1.0.0",
+  "description": "Nami image hosting token fetcher sidecar",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "pkg:win:x64": "pkg dist/index.js -t node18-win-x64 -o ../../src-tauri/binaries/nami-token-fetcher-x86_64-pc-windows-msvc.exe",
+    "pkg:mac": "pkg dist/index.js -t node18-macos-x64 -o ../../src-tauri/binaries/nami-token-fetcher-x86_64-apple-darwin",
+    "pkg:mac-arm": "pkg dist/index.js -t node18-macos-arm64 -o ../../src-tauri/binaries/nami-token-fetcher-aarch64-apple-darwin",
+    "pkg:linux": "pkg dist/index.js -t node18-linux-x64 -o ../../src-tauri/binaries/nami-token-fetcher-x86_64-unknown-linux-gnu"
+  },
+  "dependencies": {
+    "puppeteer-core": "^21.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "@yao-pkg/pkg": "^5.12.0"
+  }
+}

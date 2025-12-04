@@ -95,6 +95,22 @@ export const COOKIE_PROVIDERS: Record<string, CookieProvider> = {
     },
     description: '登录知乎账号获取 Cookie',
     icon: '📖'
+  },
+  nami: {
+    serviceId: 'nami',
+    name: '纳米',
+    loginUrl: 'https://www.n.cn',
+    domains: ['www.n.cn', 'n.cn'],  // www 在前，因为主站在 www 子域
+    cookieValidation: {
+      requiredFields: ['Auth-Token'],  // 纳米登录成功必须有 Auth-Token（JWT）
+      anyOfFields: [],
+      monitoringDelay: {
+        initialDelayMs: 3000,      // 3秒初始延迟（等待登录完成）
+        pollingIntervalMs: 1000    // 1秒轮询
+      }
+    },
+    description: '登录纳米账号获取 Cookie',
+    icon: '☁️'
   }
 };
 

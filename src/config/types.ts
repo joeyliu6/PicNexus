@@ -6,7 +6,7 @@ import { UploadResult } from '../uploaders/base/types';
 /**
  * 支持的图床服务类型
  */
-export type ServiceType = 'weibo' | 'r2' | 'jd' | 'tcl' | 'nowcoder' | 'qiyu' | 'zhihu';
+export type ServiceType = 'weibo' | 'r2' | 'jd' | 'tcl' | 'nowcoder' | 'qiyu' | 'zhihu' | 'nami';
 
 /**
  * 基础服务配置接口
@@ -90,6 +90,18 @@ export interface ZhihuServiceConfig extends BaseServiceConfig {
 }
 
 /**
+ * 纳米图床服务配置
+ * 需要 Cookie 和 Auth-Token 认证
+ * 通过登录窗口自动获取 Cookie，Auth-Token 从 Cookie 中提取
+ */
+export interface NamiServiceConfig extends BaseServiceConfig {
+  /** 纳米 Cookie（完整的 Cookie 字符串） */
+  cookie: string;
+  /** Auth-Token（从 Cookie 中提取的 JWT Token） */
+  authToken: string;
+}
+
+/**
  * WebDAV 配置
  * 保持与原有结构一致
  */
@@ -155,6 +167,7 @@ export interface UserConfig {
     nowcoder?: NowcoderServiceConfig;
     qiyu?: QiyuServiceConfig;
     zhihu?: ZhihuServiceConfig;
+    nami?: NamiServiceConfig;
   };
 
   /** 输出格式 */
@@ -221,7 +234,7 @@ export interface HistoryItem {
  */
 export const DEFAULT_CONFIG: UserConfig = {
   enabledServices: ['tcl'],  // 默认启用 TCL 图床（开箱即用）
-  availableServices: ['weibo', 'r2', 'tcl', 'jd', 'nowcoder', 'qiyu', 'zhihu'],  // 默认所有图床都可用
+  availableServices: ['weibo', 'r2', 'tcl', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami'],  // 默认所有图床都可用
   services: {
     weibo: {
       enabled: true,
@@ -252,6 +265,11 @@ export const DEFAULT_CONFIG: UserConfig = {
     zhihu: {
       enabled: false,  // 知乎图床需要 Cookie，默认不启用
       cookie: ''
+    },
+    nami: {
+      enabled: false,  // 纳米图床需要 Cookie，默认不启用
+      cookie: '',
+      authToken: ''
     }
   },
   outputFormat: 'baidu-proxy',
@@ -300,6 +318,11 @@ export function sanitizeConfig(config: UserConfig): UserConfig {
       zhihu: config.services.zhihu ? {
         ...config.services.zhihu,
         cookie: sanitizeString(config.services.zhihu.cookie, 8, 4)
+      } : undefined,
+      nami: config.services.nami ? {
+        ...config.services.nami,
+        cookie: sanitizeString(config.services.nami.cookie, 8, 4),
+        authToken: sanitizeString(config.services.nami.authToken, 10, 4)
       } : undefined
     },
     webdav: config.webdav ? {

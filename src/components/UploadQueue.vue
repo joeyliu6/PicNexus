@@ -51,7 +51,9 @@ const serviceNames: Record<ServiceType, string> = {
   tcl: 'TCL',
   jd: '京东',
   nowcoder: '牛客',
-  qiyu: '七鱼'
+  qiyu: '七鱼',
+  zhihu: '知乎',
+  nami: '纳米'
 };
 
 // 获取状态颜色类

@@ -21,6 +21,11 @@
             "name": "binaries/qiyu-token-fetcher",
             "sidecar": true,
             "args": true
+          },
+          {
+            "name": "binaries/nami-token-fetcher",
+            "sidecar": true,
+            "args": true
           }
         ]
       },
@@ -90,7 +95,8 @@
         "icons/icon.ico"
       ],
       "externalBin": [
-        "binaries/qiyu-token-fetcher"
+        "binaries/qiyu-token-fetcher",
+        "binaries/nami-token-fetcher"
       ]
     },
     "security": {
@@ -133,6 +139,16 @@
         },
         {
           "domain": "www.zhihu.com",
+          "windows": ["login-webview"],
+          "enableTauriAPI": true
+        },
+        {
+          "domain": "n.cn",
+          "windows": ["login-webview"],
+          "enableTauriAPI": true
+        },
+        {
+          "domain": "www.n.cn",
           "windows": ["login-webview"],
           "enableTauriAPI": true
         }

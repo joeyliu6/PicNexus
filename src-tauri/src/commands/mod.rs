@@ -6,4 +6,6 @@ pub mod nowcoder;
 pub mod qiyu;
 pub mod qiyu_token;
 pub mod zhihu;
+pub mod nami;
+pub mod nami_token;
 pub mod utils;

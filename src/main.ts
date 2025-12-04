@@ -152,7 +152,8 @@ const serviceButtons = {
   jd: document.querySelector<HTMLButtonElement>('.service-btn[data-service="jd"]'),
   nowcoder: document.querySelector<HTMLButtonElement>('.service-btn[data-service="nowcoder"]'),
   qiyu: document.querySelector<HTMLButtonElement>('.service-btn[data-service="qiyu"]'),
-  zhihu: document.querySelector<HTMLButtonElement>('.service-btn[data-service="zhihu"]')
+  zhihu: document.querySelector<HTMLButtonElement>('.service-btn[data-service="zhihu"]'),
+  nami: document.querySelector<HTMLButtonElement>('.service-btn[data-service="nami"]')
 };
 
 // Available service checkboxes (设置界面 - 控制哪些图床在上传界面可用)
@@ -163,7 +164,8 @@ const availableServiceCheckboxes = {
   jd: document.querySelector<HTMLInputElement>('#available-jd'),
   nowcoder: document.querySelector<HTMLInputElement>('#available-nowcoder'),
   qiyu: document.querySelector<HTMLInputElement>('#available-qiyu'),
-  zhihu: document.querySelector<HTMLInputElement>('#available-zhihu')
+  zhihu: document.querySelector<HTMLInputElement>('#available-zhihu'),
+  nami: document.querySelector<HTMLInputElement>('#available-nami')
 };
 
 // Settings View Elements
@@ -192,6 +194,7 @@ const webdavPasswordEl = getElement<HTMLInputElement>('webdav-password', 'WebDAV
 const webdavRemotePathEl = getElement<HTMLInputElement>('webdav-remote-path', 'WebDAV远程路径输入框');
 const nowcoderCookieEl = document.querySelector<HTMLTextAreaElement>('#nowcoder-cookie');
 const zhihuCookieEl = document.querySelector<HTMLTextAreaElement>('#zhihu-cookie');
+const namiCookieEl = document.querySelector<HTMLTextAreaElement>('#nami-cookie');
 const qiyuChromeStatusEl = document.querySelector<HTMLElement>('#qiyu-chrome-status');
 
 // 七鱼图床 Chrome 检测状态
@@ -629,6 +632,7 @@ async function initializeUpload(): Promise<void> {
           if (serviceButtons.nowcoder?.classList.contains('selected')) enabledServices.push('nowcoder');
           if (serviceButtons.qiyu?.classList.contains('selected')) enabledServices.push('qiyu');
           if (serviceButtons.zhihu?.classList.contains('selected')) enabledServices.push('zhihu');
+          if (serviceButtons.nami?.classList.contains('selected')) enabledServices.push('nami');
 
           if (enabledServices.length === 0) {
             console.warn('[上传] 没有选择任何图床');
@@ -754,7 +758,8 @@ const linkCheckerServiceNames: Record<ServiceType, string> = {
   jd: '京东',
   nowcoder: '牛客',
   qiyu: '七鱼',
-  zhihu: '知乎'
+  zhihu: '知乎',
+  nami: '纳米'
 };
 
 /**
@@ -1282,6 +1287,38 @@ async function handleCookieUpdate(serviceId: string, cookie: string): Promise<vo
       }
       break;
 
+    case 'nami':
+      // 更新纳米 Cookie
+      if (!config.services.nami) {
+        config.services.nami = { enabled: true, cookie: '', authToken: '' };
+      }
+      config.services.nami.cookie = cookie;
+
+      // 从 Cookie 中提取 Auth-Token
+      const authTokenMatch = cookie.match(/Auth-Token=([^;]+)/);
+      if (authTokenMatch) {
+        config.services.nami.authToken = authTokenMatch[1];
+        console.log('[Cookie更新] ✓ 纳米 Auth-Token 已提取');
+      }
+
+      // 更新 UI
+      const namiCookieElLocal = document.getElementById('nami-cookie') as HTMLTextAreaElement | null;
+      if (namiCookieElLocal) {
+        namiCookieElLocal.value = cookie;
+        console.log('[Cookie更新] ✓ 纳米 Cookie UI 已更新');
+      }
+
+      // 更新状态显示
+      const namiStatusEl = document.getElementById('nami-cookie-status');
+      if (namiStatusEl) {
+        namiStatusEl.textContent = '✅ Cookie已自动填充并保存！';
+        namiStatusEl.style.color = 'lightgreen';
+        setTimeout(() => {
+          if (namiStatusEl) namiStatusEl.textContent = '';
+        }, 3000);
+      }
+      break;
+
     default:
       console.warn(`[Cookie更新] 未知的服务类型: ${serviceId}`);
       // 尝试通用处理
@@ -1629,7 +1666,18 @@ async function handleAutoSave(): Promise<void> {
         zhihu: {
           enabled: enabledServices.includes('zhihu'),
           cookie: zhihuCookieEl?.value.trim() || ''
-        }
+        },
+        nami: (() => {
+          const cookie = namiCookieEl?.value.trim() || '';
+          // 从 Cookie 中提取 Auth-Token，如果提取不到则保留已有的
+          const authTokenMatch = cookie.match(/Auth-Token=([^;]+)/);
+          const extractedAuthToken = authTokenMatch ? authTokenMatch[1] : '';
+          return {
+            enabled: enabledServices.includes('nami'),
+            cookie: cookie,
+            authToken: extractedAuthToken || savedConfig?.services?.nami?.authToken || ''
+          };
+        })()
       },
       outputFormat: savedConfig?.outputFormat || DEFAULT_CONFIG.outputFormat,
       baiduPrefix: getActivePrefixFromUI() || DEFAULT_CONFIG.baiduPrefix, // 向后兼容
@@ -2719,7 +2767,8 @@ async function renderHistoryTable(items: HistoryItem[]) {
             jd: '京东',
             nowcoder: '牛客',
             qiyu: '七鱼',
-            zhihu: '知乎'
+            zhihu: '知乎',
+            nami: '纳米'
           };
 
           const serviceName = serviceNames[serviceResult.serviceId] || serviceResult.serviceId;
@@ -2778,7 +2827,8 @@ async function renderHistoryTable(items: HistoryItem[]) {
               jd: '京东',
               nowcoder: '牛客',
               qiyu: '七鱼',
-              zhihu: '知乎'
+              zhihu: '知乎',
+              nami: '纳米'
             };
 
             const serviceName = serviceNames[serviceResult.serviceId] || serviceResult.serviceId;
@@ -2946,7 +2996,8 @@ async function retryServiceUpload(historyId: string, serviceId: ServiceType): Pr
       jd: '京东',
       nowcoder: '牛客',
       qiyu: '七鱼',
-      zhihu: '知乎'
+      zhihu: '知乎',
+      nami: '纳米'
     };
     const serviceName = serviceNames[serviceId] || serviceId;
     showToast(`正在重试上传到 ${serviceName}...`, 'loading', 0);
@@ -3368,7 +3419,7 @@ async function loadServiceButtonStates(): Promise<void> {
 
     // 加载保存的选择状态（默认选中 tcl 和 jd）
     const enabledServices = config.enabledServices || ['tcl', 'jd'];
-    const services: ServiceType[] = ['weibo', 'r2', 'tcl', 'jd', 'nowcoder', 'qiyu', 'zhihu'];
+    const services: ServiceType[] = ['weibo', 'r2', 'tcl', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami'];
 
     services.forEach(serviceId => {
       const btn = serviceButtons[serviceId as keyof typeof serviceButtons];
@@ -3430,6 +3481,10 @@ function updateServiceStatus(serviceId: ServiceType, config: UserConfig): void {
   } else if (serviceId === 'qiyu') {
     // 七鱼图床需要系统安装 Chrome/Edge 浏览器
     isConfigured = qiyuChromeInstalled;
+  } else if (serviceId === 'nami') {
+    // 纳米图床需要 Cookie
+    const namiConfig = config.services.nami;
+    isConfigured = !!namiConfig?.cookie && namiConfig.cookie.trim().length > 0;
   }
 
   // 更新按钮状态
@@ -3728,7 +3783,8 @@ function getServiceDisplayName(serviceId: ServiceType): string {
     jd: '京东',
     nowcoder: '牛客',
     qiyu: '七鱼',
-    zhihu: '知乎'
+    zhihu: '知乎',
+    nami: '纳米'
   };
   return names[serviceId] || serviceId;
 }
@@ -4141,6 +4197,7 @@ function initialize(): void {
             if (serviceButtons.nowcoder?.classList.contains('selected')) enabledServices.push('nowcoder');
             if (serviceButtons.qiyu?.classList.contains('selected')) enabledServices.push('qiyu');
             if (serviceButtons.zhihu?.classList.contains('selected')) enabledServices.push('zhihu');
+            if (serviceButtons.nami?.classList.contains('selected')) enabledServices.push('nami');
             config.enabledServices = enabledServices;
             await configStore.set('config', config);
             await configStore.save();
@@ -4203,8 +4260,9 @@ function initialize(): void {
       webdavPasswordEl,
       webdavRemotePathEl,
       nowcoderCookieEl,
-      zhihuCookieEl
-      // qiyu 不再需要手动配置 Token
+      zhihuCookieEl,
+      namiCookieEl
+      // qiyu 和 nami 的 Token 由后端自动获取，无需手动配置
     ];
     
     settingsInputs.forEach(input => {
@@ -4322,6 +4380,18 @@ function initialize(): void {
       });
     } else {
       console.warn('[初始化] 警告: 知乎Cookie测试按钮不存在');
+    }
+
+    // 纳米登录按钮事件绑定
+    const loginNamiBtn = document.getElementById('login-nami-btn');
+    if (loginNamiBtn) {
+      loginNamiBtn.addEventListener('click', () => {
+        openWebviewLoginWindow('nami').catch(err => {
+          console.error('[初始化] 打开纳米登录窗口失败:', err);
+        });
+      });
+    } else {
+      console.warn('[初始化] 警告: 纳米登录按钮不存在（可能设置页面未加载）');
     }
 
     // Bind history events (带空值检查)

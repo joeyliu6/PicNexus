@@ -95,6 +95,7 @@
                 <button type="button" class="service-btn" data-service="nowcoder" data-tooltip="请先在设置中配置">牛客</button>
                 <button type="button" class="service-btn" data-service="qiyu" data-tooltip="请先在设置中配置">七鱼</button>
                 <button type="button" class="service-btn" data-service="zhihu" data-tooltip="请先在设置中配置">知乎</button>
+                <button type="button" class="service-btn" data-service="nami" data-tooltip="请先在设置中配置">纳米</button>
               </div>
             </div>
 
@@ -378,6 +379,32 @@
             </div>
 
             <div class="form-section">
+                <h2>纳米图床</h2>
+                <p class="info-text" style="color: var(--text-secondary); display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    支持格式：JPG、JPEG、PNG、GIF、WebP、BMP
+                </p>
+                <p class="info-text" style="color: var(--warning); display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+                    注意：纳米为第三方服务，需要 Cookie 认证，稳定性无保障
+                </p>
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <button id="login-nami-btn" class="btn-secondary" style="flex: 1; padding: 8px 12px; cursor: pointer;">
+                        自动获取Cookie
+                    </button>
+                    <button id="test-nami-cookie-btn" class="btn-secondary" style="flex: 1; padding: 8px 12px; cursor: pointer;">
+                        测试连接
+                    </button>
+                </div>
+                <label for="nami-cookie">纳米 Cookie</label>
+                <textarea id="nami-cookie" rows="4" placeholder="请输入纳米 Cookie...&#10;需要包含 Auth-Token 字段"></textarea>
+                <span id="nami-cookie-status" style="display: block; margin-top: 5px; font-size: 0.9em;"></span>
+                <p class="hint" style="font-size: 0.85em; color: var(--text-secondary); margin-top: 5px;">
+                    💡 提示：点击上方"自动获取Cookie"按钮，登录后会自动获取 Cookie 和 Auth-Token
+                </p>
+            </div>
+
+            <div class="form-section">
                 <h2>支持的图床</h2>
                 <p style="color: var(--text-secondary); margin-bottom: 12px;">选择在上传界面显示的图床，取消勾选的图床不会出现在上传选项中。</p>
                 <div class="available-services-grid" id="available-services-grid">
@@ -415,6 +442,11 @@
                         <input type="checkbox" id="available-zhihu" data-available-service="zhihu" checked />
                         <span class="toggle-slider"></span>
                         <span class="toggle-label">知乎图床</span>
+                    </label>
+                    <label class="service-toggle">
+                        <input type="checkbox" id="available-nami" data-available-service="nami" checked />
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">纳米图床</span>
                     </label>
                 </div>
             </div>
@@ -516,6 +548,7 @@
                   <option value="nowcoder">牛客图床</option>
                   <option value="qiyu">七鱼图床</option>
                   <option value="zhihu">知乎图床</option>
+                  <option value="nami">纳米图床</option>
                 </select>
               </div>
               <button id="link-checker-start-btn" class="link-checker-btn primary">

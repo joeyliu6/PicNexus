@@ -9,6 +9,7 @@ import { JDUploader } from './jd/JDUploader';
 import { NowcoderUploader } from './nowcoder/NowcoderUploader';
 import { QiyuUploader } from './qiyu/QiyuUploader';
 import { ZhihuUploader } from './zhihu/ZhihuUploader';
+import { NamiUploader } from './nami/NamiUploader';
 
 /**
  * 初始化所有上传器
@@ -38,6 +39,9 @@ export function initializeUploaders(): void {
   // 注册知乎上传器
   UploaderFactory.register('zhihu', () => new ZhihuUploader());
 
+  // 注册纳米上传器
+  UploaderFactory.register('nami', () => new NamiUploader());
+
   const registered = UploaderFactory.getAvailableServices();
   console.log('[Uploaders] 已注册的上传器:', registered);
 }
@@ -50,4 +54,5 @@ export { JDUploader } from './jd';
 export { NowcoderUploader } from './nowcoder';
 export { QiyuUploader } from './qiyu';
 export { ZhihuUploader } from './zhihu';
+export { NamiUploader } from './nami';
 export { UploaderFactory } from './base/UploaderFactory';

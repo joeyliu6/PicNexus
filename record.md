@@ -4924,6 +4924,456 @@ const settingsInputs = [
 
 ---
 
+## 🌐 纳米图床 (nami) 完整实现记录
+
+> **开发日期**: 2025-12-05
+> **实现模式**: 全自动模式（通过登录窗口自动获取 Cookie）
+> **技术栈**: Rust + TypeScript + Puppeteer Sidecar
+> **关键特性**: TOS4-HMAC-SHA256 签名、动态 Token 获取、分片上传
+
+### 一、架构概述
+
+纳米图床使用火山引擎 TOS (Tinder Object Storage) 对象存储，与 AWS S3 类似但签名算法略有不同。
+
+**上传流程**:
+```
+用户文件 → 计算 SHA1 哈希 → 检查秒传 → 获取动态 Token → 获取 STS 凭证 → TOS4 签名 → 分片上传 → CDN URL
+```
+
+**关键常量**:
+```rust
+const TOS_HOST: &str = "n-so.tos-cn-shanghai.volces.com";
+const TOS_REGION: &str = "tos-cn-shanghai";
+const TOS_SERVICE: &str = "tos";
+const CDN_BASE: &str = "https://bfns.zhaomi.cn";
+```
+
+### 二、文件清单
+
+#### 新建文件
+| 文件路径 | 说明 | 行数 |
+|----------|------|------|
+| `sidecar/nami-token-fetcher/package.json` | Sidecar 依赖配置 | ~30 |
+| `sidecar/nami-token-fetcher/tsconfig.json` | TypeScript 配置 | ~20 |
+| `sidecar/nami-token-fetcher/src/index.ts` | 命令行入口 | ~100 |
+| `sidecar/nami-token-fetcher/src/browser-detector.ts` | Chrome/Edge 检测 | ~80 |
+| `sidecar/nami-token-fetcher/src/token-fetcher.ts` | 动态 Token 获取核心 | ~200 |
+| `src-tauri/src/commands/nami_token.rs` | Rust Token 命令 | ~150 |
+| `src-tauri/src/commands/nami.rs` | Rust 上传命令 | ~540 |
+| `src/uploaders/nami/NamiUploader.ts` | 前端上传器 | ~110 |
+| `src/uploaders/nami/index.ts` | 导出模块 | ~5 |
+
+#### 修改文件
+| 文件路径 | 修改内容 |
+|----------|----------|
+| `src/config/types.ts` | 添加 `'nami'` 到 ServiceType, 添加 `NamiServiceConfig`, 更新 `DEFAULT_CONFIG` |
+| `src/config/cookieProviders.ts` | 添加 nami 登录窗口配置 |
+| `src-tauri/tauri.conf.json` | 添加 `n.cn` 域名白名单、`externalBin` |
+| `src-tauri/src/commands/mod.rs` | 注册 `nami` 和 `nami_token` 模块 |
+| `src-tauri/src/main.rs` | 注册 Tauri 命令 |
+| `src/uploaders/index.ts` | 注册 nami 上传器 |
+| `index.html` | 添加 nami 按钮、设置区域、可用复选框 |
+| `src/main.ts` | **关键文件**: 约 15 处修改 |
+| `src/core/MultiServiceUploader.ts` | 添加 nami Cookie 验证 |
+| `src/components/UploadQueue.vue` | 添加 `nami: '纳米'` 到 serviceNames |
+
+### 三、Sidecar 实现 (nami-token-fetcher)
+
+#### 3.1 为什么需要 Sidecar？
+
+纳米图床需要动态生成的请求头（Headers），这些 Headers 是通过 JavaScript 在浏览器端计算的，包含：
+- `access-token`: 动态生成的访问令牌
+- `zm-token`: 加密的请求签名
+- `zm-ua`: 用户代理标识
+- `timestamp`: 时间戳
+- `sid`, `mid`, `request-id`, `header-tid`: 会话标识
+
+**无法直接调用 API 的原因**: 这些 Headers 依赖浏览器端的 JavaScript 代码生成，涉及复杂的加密算法和用户会话状态。
+
+#### 3.2 Sidecar 工作原理
+
+```typescript
+// token-fetcher.ts 核心逻辑
+
+1. 启动 Puppeteer (使用用户系统安装的 Chrome/Edge)
+2. 注入用户 Cookie 到浏览器
+3. 访问 https://www.n.cn
+4. 使用 CDP (Chrome DevTools Protocol) 监听网络请求
+5. 触发文件上传操作（上传一个临时生成的图片）
+6. 拦截 /api/byte/assumerole 请求
+7. 从请求头中提取所需的动态 Headers
+8. 返回 JSON 格式的结果
+```
+
+**CDP 监听代码**:
+```typescript
+const client = await page.createCDPSession();
+await client.send('Network.enable');
+
+client.on('Network.requestWillBeSent', (params: any) => {
+  if (params.request.url.includes('/api/byte/assumerole')) {
+    const headers = params.request.headers;
+    resolve({
+      accessToken: headers['access-token'],
+      zmToken: headers['zm-token'],
+      zmUa: headers['zm-ua'],
+      timestamp: headers['timestamp'],
+      sid: headers['sid'],
+      mid: headers['mid'],
+      requestId: headers['request-id'],
+      headerTid: headers['header-tid']
+    });
+  }
+});
+```
+
+#### 3.3 命令行接口
+
+```bash
+# 检查 Chrome 安装
+nami-token-fetcher check-chrome
+
+# 获取动态 Token
+nami-token-fetcher fetch-token --cookie "Auth-Token=xxx;..." --auth-token "eyJxxx..."
+```
+
+**输出格式**:
+```json
+{
+  "success": true,
+  "data": {
+    "accessToken": "23521063127464713328...",
+    "zmToken": "fd99e1bab15d41b421b1...",
+    "zmUa": "...",
+    "timestamp": "1764872101",
+    "sid": "...",
+    "mid": "...",
+    "requestId": "...",
+    "headerTid": "..."
+  }
+}
+```
+
+#### 3.4 构建和打包
+
+```bash
+cd sidecar/nami-token-fetcher
+npm install
+npm run build
+npm run pkg:win:x64
+```
+
+输出文件: `src-tauri/binaries/nami-token-fetcher-x86_64-pc-windows-msvc.exe`
+
+### 四、Rust 后端实现
+
+#### 4.1 TOS4-HMAC-SHA256 签名算法
+
+**与 AWS S3 的区别**:
+- AWS: 密钥派生使用 `"AWS4" + secretKey`
+- TOS: 密钥派生直接使用 `secretKey`（不加前缀）
+
+```rust
+/// 获取签名密钥 (TOS V4: 直接使用 secretKey，不加前缀)
+fn get_signing_key(&self, date: &str) -> Vec<u8> {
+    let k_date = Self::hmac_sha256(self.secret_key.as_bytes(), date);  // 直接使用
+    let k_region = Self::hmac_sha256(&k_date, TOS_REGION);
+    let k_service = Self::hmac_sha256(&k_region, TOS_SERVICE);
+    Self::hmac_sha256(&k_service, "request")
+}
+```
+
+**签名字符串格式**:
+```
+TOS4-HMAC-SHA256
+{timestamp}
+{date}/{region}/{service}/request
+{hashed_canonical_request}
+```
+
+#### 4.2 分片上传流程
+
+```rust
+// 1. 初始化分片上传
+let upload_id = init_multipart_upload(&client, &credentials, &file_key, content_type).await?;
+
+// 2. 上传分片（单分片，因为文件通常不大）
+let etag = upload_part(&client, &credentials, &file_key, &upload_id, 1, &buffer).await?;
+
+// 3. 完成上传
+complete_multipart_upload(&client, &credentials, &file_key, &upload_id, &[(1, etag)]).await?;
+```
+
+#### 4.3 关键 Bug 修复：TOS 响应格式
+
+**问题现象**:
+```
+无法解析 UploadId: {"Bucket":"n-so","Key":"web/xxx.jpg","UploadId":"0b39..."}
+```
+
+**根因**: 代码假设 TOS 返回 XML 格式，但实际返回 JSON 格式。
+
+**修复方案** (nami.rs:317-336):
+```rust
+// 解析响应获取 UploadId
+// 先尝试 JSON 格式，再尝试 XML 格式（兼容）
+let upload_id = if text.starts_with('{') {
+    // JSON 格式响应
+    #[derive(Deserialize)]
+    struct InitResponse {
+        #[serde(rename = "UploadId")]
+        upload_id: String,
+    }
+    let parsed: InitResponse = serde_json::from_str(&text)
+        .map_err(|e| format!("解析 JSON UploadId 失败: {}", e))?;
+    parsed.upload_id
+} else {
+    // XML 格式响应（兼容）
+    text.split("<UploadId>")
+        .nth(1)
+        .and_then(|s| s.split("</UploadId>").next())
+        .map(|s| s.to_string())
+        .ok_or_else(|| format!("无法解析 XML UploadId: {}", text))?
+};
+```
+
+### 五、前端实现
+
+#### 5.1 Cookie 登录配置 (cookieProviders.ts)
+
+```typescript
+nami: {
+  serviceId: 'nami',
+  name: '纳米',
+  loginUrl: 'https://www.n.cn',
+  domains: ['www.n.cn', 'n.cn'],
+  cookieValidation: {
+    requiredFields: ['Auth-Token'],  // 登录成功的标志
+    anyOfFields: [],
+    monitoringDelay: {
+      initialDelayMs: 3000,
+      pollingIntervalMs: 1000
+    }
+  },
+  description: '登录纳米账号获取 Cookie',
+  icon: '☁️'
+}
+```
+
+#### 5.2 Auth-Token 自动提取
+
+纳米图床的 Auth-Token 存在于 Cookie 中，需要自动提取：
+
+```typescript
+// main.ts - handleCookieUpdate 函数
+case 'nami':
+  if (!config.services.nami) {
+    config.services.nami = { enabled: true, cookie: '', authToken: '' };
+  }
+  config.services.nami.cookie = cookie;
+
+  // 从 Cookie 中提取 Auth-Token
+  const authTokenMatch = cookie.match(/Auth-Token=([^;]+)/);
+  if (authTokenMatch) {
+    config.services.nami.authToken = authTokenMatch[1];
+    console.log('[Cookie更新] ✓ 纳米 Auth-Token 已提取');
+  }
+  break;
+```
+
+#### 5.3 关键 Bug 修复：Auth-Token 被清空
+
+**问题现象**: 登录保存 Cookie 后，下次自动保存时 Auth-Token 被清空。
+
+**根因**: `handleAutoSave` 中设置 `authToken: ''`。
+
+**修复方案** (main.ts):
+```typescript
+nami: (() => {
+  const cookie = namiCookieEl?.value.trim() || '';
+  // 从 Cookie 中提取 Auth-Token，如果提取不到则保留已有的
+  const authTokenMatch = cookie.match(/Auth-Token=([^;]+)/);
+  const extractedAuthToken = authTokenMatch ? authTokenMatch[1] : '';
+  return {
+    enabled: enabledServices.includes('nami'),
+    cookie: cookie,
+    authToken: extractedAuthToken || savedConfig?.services?.nami?.authToken || ''
+  };
+})()
+```
+
+### 六、main.ts 修改清单 (共 15+ 处)
+
+| # | 位置 | 修改内容 |
+|---|------|----------|
+| 1 | ~第 156 行 | `serviceButtons` 添加 `nami` |
+| 2 | ~第 168 行 | `availableServiceCheckboxes` 添加 `nami` |
+| 3 | ~第 197 行 | 添加 `namiCookieEl` 声明 |
+| 4 | ~第 635 行 | 上传 `enabledServices.push('nami')` |
+| 5 | ~第 762 行 | `linkCheckerServiceNames` 添加 `nami: '纳米'` |
+| 6 | ~第 1288 行 | `handleCookieUpdate` 添加 `case 'nami'` |
+| 7 | ~第 1670 行 | `handleAutoSave` 添加 nami 配置 |
+| 8 | ~第 2765 行 | 上传完成 `serviceNames` 添加 nami |
+| 9 | ~第 2825 行 | 复制链接 `serviceNames` 添加 nami |
+| 10 | ~第 2994 行 | 重试上传 `serviceNames` 添加 nami |
+| 11 | ~第 3379 行 | `loadServiceButtonStates` services 数组添加 nami |
+| 12 | ~第 3441 行 | `updateServiceStatus` 添加 nami case |
+| 13 | ~第 3781 行 | `getServiceName` 添加 nami |
+| 14 | ~第 4189 行 | 按钮点击保存 `enabledServices.push('nami')` |
+| 15 | ~第 4251 行 | `settingsInputs` 添加 `namiCookieEl` |
+| 16 | ~第 4375 行 | 添加 nami 登录按钮事件 |
+
+### 七、踩坑记录与经验总结
+
+#### 7.1 Sidecar 中的 TypeScript 类型问题
+
+**问题**: 在 Puppeteer evaluate 中使用 DOM 类型报错 `Cannot find name 'Element'`
+
+**原因**: Node.js 环境没有 DOM 类型定义
+
+**解决**: 使用 `any` 类型替代
+```typescript
+// 错误
+await page.evaluate((el: Element) => el.click(), element);
+
+// 正确
+await page.evaluate((el: any) => el.click(), element);
+```
+
+#### 7.2 TOS 签名算法差异
+
+**问题**: 使用 AWS S3 签名方式，TOS 返回签名错误
+
+**原因**: TOS V4 签名的密钥派生不加 "TOS4" 前缀（与 AWS 的 "AWS4" 不同）
+
+**解决**: 直接使用 secretKey 作为 HMAC 密钥
+```rust
+// AWS S3
+let k_date = hmac_sha256(("AWS4" + secret_key).as_bytes(), date);
+
+// TOS V4
+let k_date = hmac_sha256(secret_key.as_bytes(), date);
+```
+
+#### 7.3 TOS 响应格式变化
+
+**问题**: InitiateMultipartUpload 返回 JSON 而非 XML
+
+**原因**: TOS 可能根据请求头或版本返回不同格式
+
+**解决**: 兼容两种格式，先尝试 JSON 再尝试 XML
+
+#### 7.4 Auth-Token 自动保存问题
+
+**问题**: 登录获取的 Auth-Token 在自动保存时被清空
+
+**原因**: `handleAutoSave` 中硬编码 `authToken: ''`
+
+**解决**: 从 Cookie 提取或保留已有值
+```typescript
+authToken: extractedAuthToken || savedConfig?.services?.nami?.authToken || ''
+```
+
+#### 7.5 服务名称映射遗漏
+
+**问题**: 添加新图床后，多处 `Record<ServiceType, string>` 报类型错误
+
+**原因**: main.ts 中有 5+ 处硬编码的服务名称映射
+
+**解决**: 全局搜索 `Record<ServiceType, string>` 并逐一添加
+
+### 八、调试技巧
+
+#### 8.1 Sidecar 调试
+
+```bash
+# 直接运行 sidecar 测试
+cd sidecar/nami-token-fetcher
+npx ts-node src/index.ts check-chrome
+npx ts-node src/index.ts fetch-token --cookie "..." --auth-token "..."
+```
+
+#### 8.2 Rust 后端调试
+
+查看 Tauri 控制台输出：
+```rust
+println!("[Nami] 获取动态 Headers...");
+eprintln!("[Nami] 错误: {}", error);
+```
+
+#### 8.3 前端调试
+
+浏览器控制台过滤：
+```
+[Nami]
+[Cookie更新]
+[MultiUploader]
+```
+
+### 九、配置文件示例
+
+#### tauri.conf.json 域名白名单
+```json
+{
+  "security": {
+    "dangerousRemoteDomainIpcAccess": [
+      {
+        "domain": "n.cn",
+        "windows": ["login-webview"],
+        "enableTauriAPI": true
+      },
+      {
+        "domain": "www.n.cn",
+        "windows": ["login-webview"],
+        "enableTauriAPI": true
+      }
+    ]
+  }
+}
+```
+
+#### tauri.conf.json externalBin
+```json
+{
+  "bundle": {
+    "externalBin": [
+      "binaries/qiyu-token-fetcher",
+      "binaries/nami-token-fetcher"
+    ]
+  }
+}
+```
+
+### 十、完整上传流程日志示例
+
+```
+[Cookie监控] 开始监控 nami 的Cookie
+[Cookie监控] ✓ 验证通过，尝试保存 nami Cookie
+[Cookie更新] ✓ 纳米 Auth-Token 已提取
+[Cookie更新] ✓ nami Cookie已保存到存储
+
+[上传] 启用的图床: ['nami']
+[并发上传] 开始处理 1 个文件，启用图床: ['nami']
+[MultiUploader] 开始并行上传到: ['nami']
+
+[Nami] 开始上传文件: D:\xxx\wallhaven-o35p7p.jpg
+[Nami] 文件哈希: e74076167cbc86a52113f388313cc24a74664ced
+[Nami] 获取动态 Headers...
+[NamiToken] Headers 获取成功
+[Nami] 获取 STS 凭证...
+[Nami] STS 凭证获取成功
+[Nami] 初始化分片上传...
+[Nami] UploadId: 0b39a6b910ac177c6b030131cfa5cdb26931cfa5
+[Nami] 上传分片...
+[Nami] Part 1 ETag: "xxx"
+[Nami] 完成上传...
+[Nami] 上传成功: https://bfns.zhaomi.cn/web/e74076167cbc86a52113f388313cc24a74664ced.jpg
+
+[并发上传] 所有文件处理完成
+```
+
+---
+
 ## 👥 贡献者
 
 - **架构设计**: Claude (Anthropic)
@@ -4932,5 +5382,5 @@ const settingsInputs = [
 
 ---
 
-**最后更新**: 2025-12-04
+**最后更新**: 2025-12-05
 **下次审查**: 添加更多图床时

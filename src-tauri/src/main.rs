@@ -116,6 +116,9 @@ fn main() {
             commands::qiyu_token::fetch_qiyu_token,
             commands::qiyu_token::check_chrome_installed,
             commands::zhihu::upload_to_zhihu,
+            commands::nami::upload_to_nami,
+            commands::nami_token::fetch_nami_token,
+            commands::nami_token::check_nami_chrome_installed,
             commands::utils::file_exists,
             get_or_create_secure_key
         ])
