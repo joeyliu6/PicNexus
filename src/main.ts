@@ -353,12 +353,20 @@ async function processUploadQueue(
           if (serviceResult.status === 'success' && serviceResult.result) {
             const item = uploadQueueManager!.getItem(itemId);
             if (item && item.serviceProgress[serviceResult.serviceId]) {
+              // 微博链接需要加前缀
+              let link = serviceResult.result.url;
+              if (serviceResult.serviceId === 'weibo') {
+                const activePrefix = getActivePrefixFromUI();
+                if (activePrefix) {
+                  link = activePrefix + link;
+                }
+              }
               uploadQueueManager!.updateItem(itemId, {
                 serviceProgress: {
                   ...item.serviceProgress,
                   [serviceResult.serviceId]: {
                     ...item.serviceProgress[serviceResult.serviceId],
-                    link: serviceResult.result.url
+                    link: link
                   }
                 }
               });
@@ -369,8 +377,15 @@ async function processUploadQueue(
         // 保存历史记录
         await saveHistoryItem(filePath, result, config);
 
-        // 通知队列管理器上传成功
-        uploadQueueManager!.markItemComplete(itemId, result.primaryUrl);
+        // 通知队列管理器上传成功（谁先上传完用谁的链接）
+        let thumbUrl = result.primaryUrl;
+        if (result.primaryService === 'weibo') {
+          const activePrefix = getActivePrefixFromUI();
+          if (activePrefix) {
+            thumbUrl = activePrefix + thumbUrl;
+          }
+        }
+        uploadQueueManager!.markItemComplete(itemId, thumbUrl);
 
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
@@ -2815,7 +2830,15 @@ async function renderHistoryTable(items: HistoryItem[]) {
       // 从成功的图床结果中获取预览图
       const successResult = item.results?.find(r => r.status === 'success');
       if (successResult?.result?.url) {
-        img.src = successResult.result.url;
+        let imgUrl = successResult.result.url;
+        // 微博链接加前缀
+        if (successResult.serviceId === 'weibo') {
+          const activePrefix = getActivePrefixFromUI();
+          if (activePrefix) {
+            imgUrl = activePrefix + imgUrl;
+          }
+        }
+        img.src = imgUrl;
       } else {
         img.src = item.generatedLink;
       }
@@ -3772,7 +3795,15 @@ function createGalleryCard(item: HistoryItem): HTMLElement {
 function getImageUrlFromItem(item: HistoryItem): string {
   const successResult = item.results?.find(r => r.status === 'success');
   if (successResult?.result?.url) {
-    return successResult.result.url;
+    let url = successResult.result.url;
+    // 微博链接加前缀
+    if (successResult.serviceId === 'weibo') {
+      const activePrefix = getActivePrefixFromUI();
+      if (activePrefix) {
+        url = activePrefix + url;
+      }
+    }
+    return url;
   }
   return item.generatedLink || '';
 }
