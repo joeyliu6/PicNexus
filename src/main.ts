@@ -583,8 +583,78 @@ async function initializeUpload(): Promise<void> {
       uploadQueueManager = new UploadQueueManager('upload-queue-list');
       console.log('[上传] 队列管理器初始化成功');
 
-      // 注意：重试功能现在由新架构的 retryServiceUpload 函数处理
-      // 队列管理器的重试按钮功能已被新的多图床重试机制替代
+      // 设置重试回调 - 当用户点击队列项的重试按钮时触发
+      uploadQueueManager.setRetryCallback(async (itemId: string) => {
+        const item = uploadQueueManager?.getItem(itemId);
+        if (!item) {
+          console.warn('[重试] 找不到队列项:', itemId);
+          return;
+        }
+
+        console.log(`[重试] 开始重试上传: ${item.fileName}`);
+
+        // 重置队列项状态
+        uploadQueueManager?.resetItemForRetry(itemId);
+
+        // 获取配置
+        let config: UserConfig | null = null;
+        try {
+          config = await configStore.get<UserConfig>('config');
+        } catch (error) {
+          console.error('[重试] 读取配置失败:', error);
+          uploadQueueManager?.markItemFailed(itemId, '读取配置失败');
+          return;
+        }
+
+        if (!config) {
+          config = DEFAULT_CONFIG;
+        }
+
+        // 使用原始的启用服务列表重新上传
+        const enabledServices = item.enabledServices || ['weibo'];
+        const multiServiceUploader = new MultiServiceUploader();
+
+        try {
+          const result = await multiServiceUploader.uploadToMultipleServices(
+            item.filePath,
+            enabledServices,
+            config,
+            (serviceId, percent) => {
+              uploadQueueManager?.updateServiceProgress(itemId, serviceId, percent);
+            }
+          );
+
+          // 更新每个服务的链接信息
+          result.results.forEach(serviceResult => {
+            if (serviceResult.status === 'success' && serviceResult.result) {
+              const currentItem = uploadQueueManager?.getItem(itemId);
+              if (currentItem && currentItem.serviceProgress[serviceResult.serviceId]) {
+                uploadQueueManager?.updateItem(itemId, {
+                  serviceProgress: {
+                    ...currentItem.serviceProgress,
+                    [serviceResult.serviceId]: {
+                      ...currentItem.serviceProgress[serviceResult.serviceId],
+                      link: serviceResult.result.url
+                    }
+                  }
+                });
+              }
+            }
+          });
+
+          // 保存历史记录
+          await saveHistoryItem(item.filePath, result, config);
+
+          // 标记完成
+          uploadQueueManager?.markItemComplete(itemId, result.primaryUrl);
+          console.log(`[重试] ${item.fileName} 重试成功`);
+
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          console.error(`[重试] ${item.fileName} 重试失败:`, errorMsg);
+          uploadQueueManager?.markItemFailed(itemId, errorMsg);
+        }
+      });
 
       // 处理文件上传的核心函数
       const handleFiles = async (filePaths: string[]) => {
@@ -1615,9 +1685,6 @@ async function handleAutoSave(): Promise<void> {
       return;
     }
 
-    // 构建配置对象（新架构）
-    const enabledServices: ServiceType[] = savedConfig?.enabledServices || ['tcl'];
-
     // 收集可用图床配置
     const availableServices: ServiceType[] = [];
     Object.entries(availableServiceCheckboxes).forEach(([serviceId, checkbox]) => {
@@ -1631,6 +1698,14 @@ async function handleAutoSave(): Promise<void> {
       showToast('至少需要启用一个图床', 'error', 3000);
       return;
     }
+
+    // 构建配置对象（新架构）
+    // 重要：过滤 enabledServices，只保留在 availableServices 中的服务
+    // 这样当用户在设置中关闭某个图床后，它也会从已选择的图床中移除
+    const savedEnabledServices = savedConfig?.enabledServices || ['tcl'];
+    const enabledServices: ServiceType[] = savedEnabledServices.filter(
+      service => availableServices.includes(service)
+    );
 
     const config: UserConfig = {
       enabledServices: enabledServices,
@@ -3439,8 +3514,20 @@ async function loadServiceButtonStates(): Promise<void> {
   try {
     const config = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
 
+    // 加载可用服务列表（在设置中启用的图床）
+    const availableServices = config.availableServices || DEFAULT_CONFIG.availableServices || [];
+
+    // 重要：初始化时也要更新上传界面的图床显示状态
+    // 这样应用启动时就会根据配置隐藏不可用的图床
+    updateUploadServiceVisibility(availableServices);
+
     // 加载保存的选择状态（默认选中 tcl 和 jd）
-    const enabledServices = config.enabledServices || ['tcl', 'jd'];
+    // 重要：过滤 enabledServices，只保留在 availableServices 中的服务
+    const savedEnabledServices = config.enabledServices || ['tcl', 'jd'];
+    const enabledServices = savedEnabledServices.filter(
+      service => availableServices.includes(service)
+    );
+
     const services: ServiceType[] = ['weibo', 'r2', 'tcl', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami'];
 
     services.forEach(serviceId => {
@@ -3450,15 +3537,16 @@ async function loadServiceButtonStates(): Promise<void> {
       // 先更新配置状态（决定是否 disabled）
       updateServiceStatus(serviceId, config);
 
-      // 如果不是 disabled 且在 enabledServices 中，设为选中
-      if (!btn.classList.contains('disabled') && enabledServices.includes(serviceId)) {
+      // 如果不是 disabled、在 availableServices 中、且在 enabledServices 中，设为选中
+      const isAvailable = availableServices.includes(serviceId);
+      if (!btn.classList.contains('disabled') && isAvailable && enabledServices.includes(serviceId)) {
         btn.classList.add('selected');
       } else {
         btn.classList.remove('selected');
       }
     });
 
-    console.log('[服务按钮] 已加载状态:', enabledServices);
+    console.log('[服务按钮] 已加载状态:', enabledServices, '(可用:', availableServices, ')');
   } catch (error) {
     console.error('[服务按钮] 加载状态失败:', error);
   }
@@ -3554,6 +3642,9 @@ async function checkQiyuChromeStatus(): Promise<void> {
       if (statusDot) statusDot.style.background = '#f59e0b'; // 橙色
       if (statusText) statusText.textContent = '检测失败';
     }
+
+    // 即使检测失败，也要加载服务按钮状态（包括更新上传界面的图床显示）
+    await loadServiceButtonStates();
   }
 }
 
