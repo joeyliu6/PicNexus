@@ -775,7 +775,7 @@ body, html {
   opacity: 0.5;
 }
 
-#settings-view button:not(.view-mode-btn), #history-view button:not(.view-mode-btn) {
+#settings-view button:not(.view-mode-btn):not(.prefix-action-btn), #history-view button:not(.view-mode-btn):not(.prefix-action-btn) {
   background: rgba(59, 130, 246, 0.15);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -791,7 +791,7 @@ body, html {
   overflow: hidden;
 }
 
-#settings-view button:not(.view-mode-btn)::before, #history-view button:not(.view-mode-btn)::before {
+#settings-view button:not(.view-mode-btn):not(.prefix-action-btn)::before, #history-view button:not(.view-mode-btn):not(.prefix-action-btn)::before {
   content: '';
   position: absolute;
   top: 0;
@@ -2598,7 +2598,7 @@ body, html {
 /* 视图切换 */
 .view-mode-toggle {
   display: flex;
-  gap: 0;
+  gap: 4px;
   background-color: var(--bg-input);
   border-radius: 6px;
   padding: 4px;
