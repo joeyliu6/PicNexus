@@ -775,7 +775,7 @@ body, html {
   opacity: 0.5;
 }
 
-#settings-view button, #history-view button {
+#settings-view button:not(.view-mode-btn), #history-view button:not(.view-mode-btn) {
   background: rgba(59, 130, 246, 0.15);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -791,7 +791,7 @@ body, html {
   overflow: hidden;
 }
 
-#settings-view button::before, #history-view button::before {
+#settings-view button:not(.view-mode-btn)::before, #history-view button:not(.view-mode-btn)::before {
   content: '';
   position: absolute;
   top: 0;
@@ -1029,18 +1029,23 @@ body, html {
 /* 历史记录 - 批量操作工具栏 */
 .history-toolbar {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  gap: 12px;
   margin-bottom: 16px;
-  flex-wrap: wrap;
+}
+
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
 }
 
 .bulk-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
 .select-all-label {
@@ -2590,19 +2595,7 @@ body, html {
    浏览视图 (Gallery View) 样式
    ======================================== */
 
-/* 标题栏和视图切换 */
-.gallery-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-}
-
-.gallery-header h1 {
-  margin: 0;
-}
-
+/* 视图切换 */
 .view-mode-toggle {
   display: flex;
   gap: 0;
@@ -2610,6 +2603,7 @@ body, html {
   border-radius: 6px;
   padding: 4px;
   border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
 .view-mode-btn {
@@ -2625,6 +2619,7 @@ body, html {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: visible !important;
 }
 
 .view-mode-btn:hover {
@@ -3186,16 +3181,6 @@ body, html {
    ======================================== */
 
 @media (max-width: 768px) {
-  .gallery-header {
-    flex-direction: column;
-    gap: 12px;
-    align-items: flex-start;
-  }
-
-  .view-mode-toggle {
-    align-self: flex-end;
-  }
-
   .filter-search-section {
     flex-direction: column;
     width: 100%;
