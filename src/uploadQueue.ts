@@ -316,7 +316,14 @@ export class UploadQueueManager {
    * 获取队列项
    */
   getItem(itemId: string): QueueItem | undefined {
-    return this.vm.getItem(itemId);
+    return this.vm?.getItem(itemId);
+  }
+
+  /**
+   * 更新队列项
+   */
+  updateItem(itemId: string, updates: Partial<QueueItem>): void {
+    this.vm?.updateItem(itemId, updates);
   }
 
   /**

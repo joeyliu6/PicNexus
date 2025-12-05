@@ -351,9 +351,9 @@ async function processUploadQueue(
         // 更新每个服务的链接信息
         result.results.forEach(serviceResult => {
           if (serviceResult.status === 'success' && serviceResult.result) {
-            const item = uploadQueueManager!.vm!.getItem(itemId);
+            const item = uploadQueueManager!.getItem(itemId);
             if (item && item.serviceProgress[serviceResult.serviceId]) {
-              uploadQueueManager!.vm!.updateItem(itemId, {
+              uploadQueueManager!.updateItem(itemId, {
                 serviceProgress: {
                   ...item.serviceProgress,
                   [serviceResult.serviceId]: {
@@ -2769,7 +2769,11 @@ function migrateHistoryItem(item: any): HistoryItem {
     if (migratedItem.generatedLink && migratedItem.results.length === 0) {
       migratedItem.results.push({
         serviceId: 'weibo',
-        result: { url: migratedItem.generatedLink },
+        result: {
+          serviceId: 'weibo',
+          fileKey: '',
+          url: migratedItem.generatedLink
+        },
         status: 'success'
       });
     }
@@ -2783,8 +2787,7 @@ function formatTimestamp(timestamp: number): string {
 }
 
 // 预览URL生成函数（保留以备将来UI功能使用）
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function getPreviewUrl(weiboPid: string): Promise<string> {
+export async function getPreviewUrl(weiboPid: string): Promise<string> {
     try {
       const config = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
       const baiduPrefix = config.baiduPrefix || DEFAULT_CONFIG.baiduPrefix;
@@ -2984,7 +2987,7 @@ async function retryServiceUpload(historyId: string, serviceId: ServiceType): Pr
 
   try {
     // 1. 获取历史记录项
-    const items = await historyStore.get<HistoryItem[]>('uploads', []);
+    const items = await historyStore.get<HistoryItem[]>('uploads', []) || [];
     const item = items.find(i => i.id === historyId);
 
     if (!item) {
@@ -3007,7 +3010,7 @@ async function retryServiceUpload(historyId: string, serviceId: ServiceType): Pr
     }
 
     // 4. 获取当前配置
-    const config = await configStore.get<UserConfig>('config', DEFAULT_CONFIG);
+    const config = await configStore.get<UserConfig>('config', DEFAULT_CONFIG) || DEFAULT_CONFIG;
 
     // 5. 显示加载状态
     const serviceNames: Record<ServiceType, string> = {
@@ -3128,7 +3131,7 @@ async function bulkCopyLinks(): Promise<void> {
       return;
     }
 
-    const items = await historyStore.get<HistoryItem[]>('uploads', []);
+    const items = await historyStore.get<HistoryItem[]>('uploads', []) || [];
     const selectedItems = items.filter(item => selectedIds.includes(item.id));
 
     // 收集所有链接
@@ -3162,7 +3165,7 @@ async function bulkExportJSON(): Promise<void> {
       return;
     }
 
-    const items = await historyStore.get<HistoryItem[]>('uploads', []);
+    const items = await historyStore.get<HistoryItem[]>('uploads', []) || [];
     const selectedItems = items.filter(item => selectedIds.includes(item.id));
 
     // 生成 JSON 内容
@@ -3211,7 +3214,7 @@ async function bulkDeleteRecords(): Promise<void> {
       return;
     }
 
-    const items = await historyStore.get<HistoryItem[]>('uploads', []);
+    const items = await historyStore.get<HistoryItem[]>('uploads', []) || [];
     const remainingItems = items.filter(item => !selectedIds.includes(item.id));
 
     await historyStore.set('uploads', remainingItems);
@@ -3321,8 +3324,7 @@ async function clearHistory() {
 }
 
 // JSON导出函数（保留以备将来UI功能使用）
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function exportToJson() {
+export async function exportToJson() {
     try {
       if (historyStatusMessageEl) {
         historyStatusMessageEl.textContent = '准备导出...';
@@ -3358,8 +3360,7 @@ async function exportToJson() {
 }
 
 // WebDAV同步函数（保留以备将来UI功能使用）
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function syncToWebDAV() {
+export async function syncToWebDAV() {
     try {
       if (historyStatusMessageEl) {
         historyStatusMessageEl.textContent = '同步中...';
