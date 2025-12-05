@@ -2658,6 +2658,7 @@ body, html {
   transition: all 0.2s ease;
   height: 36px;
   line-height: 1.5;
+  box-sizing: border-box;
 }
 
 .image-bed-filter:hover {
@@ -2673,6 +2674,10 @@ body, html {
 .search-section {
   flex: 1;
   min-width: 200px;
+}
+
+#history-view .filter-search-section .search-section {
+  margin-bottom: 0;
 }
 
 .search-section input {
