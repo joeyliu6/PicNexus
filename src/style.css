@@ -108,11 +108,6 @@ body, html {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 9999;
 }
 
 .titlebar-drag-region {
@@ -168,11 +163,6 @@ body, html {
 
 /* Dashboard Layout */
 .dashboard-container {
-  display: flex;
-  width: 100vw;
-  height: calc(100vh - 32px); /* Subtract titlebar height */
-  margin-top: 32px; /* Push down content */
-  overflow: hidden; /* Prevent full window scroll */
   background-color: var(--bg-app);
   transition: background-color 0.3s ease;
 }
