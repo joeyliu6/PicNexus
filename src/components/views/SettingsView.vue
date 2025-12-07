@@ -468,8 +468,7 @@ onMounted(async () => {
         <template #title>
           <div class="card-title">
             <i class="pi pi-user"></i>
-            <span>微博 Cookie</span>
-            <span class="required-badge">必填</span>
+            <span>微博图床</span>
           </div>
         </template>
         <template #content>
@@ -509,7 +508,6 @@ onMounted(async () => {
           <div class="card-title">
             <i class="pi pi-cloud"></i>
             <span>Cloudflare R2 配置</span>
-            <span class="optional-badge">可选</span>
           </div>
         </template>
         <template #content>
@@ -1153,11 +1151,17 @@ onMounted(async () => {
   gap: 10px;
 }
 
+/* 确保 Checkbox 组件对齐 */
+.field-checkbox :deep(.p-checkbox) {
+  flex-shrink: 0;
+}
+
 .checkbox-label {
   cursor: pointer;
   font-weight: 500;
   color: var(--text-primary);
   user-select: none;
+  line-height: 1;
 }
 
 .prefix-manager {

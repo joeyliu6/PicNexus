@@ -159,7 +159,6 @@ onMounted(async () => {
           <h3 class="controls-title">选择上传图床</h3>
           <span class="selection-badge">已选择 {{ selectedCount }} 个</span>
         </div>
-        <p class="controls-hint">可选择任意数量的图床，上传时将并发处理（最多同时3个）</p>
 
         <div class="service-buttons">
           <Button

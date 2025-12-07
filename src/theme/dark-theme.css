@@ -36,6 +36,12 @@
   --error: #ef4444;         /* Red 500 - 错误红 */
   --warning: #eab308;       /* Yellow 500 - 警告黄 */
 
+  /* ===== 检测窗口专用色 - 更柔和 ===== */
+  --success-soft: rgba(16, 185, 129, 0.15);
+  --error-soft: rgba(239, 68, 68, 0.15);
+  --warning-soft: rgba(234, 179, 8, 0.15);
+  --pending-soft: rgba(148, 163, 184, 0.15);
+
   /* ===== 交互色系统 ===== */
   --hover-overlay: rgba(255, 255, 255, 0.1);         /* 悬浮叠加层（深色主题用白色透明） */
   --hover-overlay-subtle: rgba(255, 255, 255, 0.05); /* 微妙悬浮效果 */

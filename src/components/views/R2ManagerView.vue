@@ -32,6 +32,9 @@ const errorMessage = ref('');
 const previewVisible = ref(false);
 const previewFile = ref<R2File | null>(null);
 
+// 标志位：防止首次加载时重复刷新
+const isFirstMount = ref(true);
+
 // 桶信息
 const bucketInfo = ref('');
 const statsInfo = ref('');
@@ -141,12 +144,15 @@ const formatDate = (date: Date): string => {
 
 onMounted(() => {
   refreshFiles();
+  isFirstMount.value = false;
 });
 
 // 视图激活时刷新文件列表（KeepAlive 缓存后的刷新）
 onActivated(() => {
-  console.log('[R2ManagerView] 视图已激活，刷新文件列表');
-  refreshFiles();
+  if (!isFirstMount.value) {
+    console.log('[R2ManagerView] 视图已激活，刷新文件列表');
+    refreshFiles();
+  }
 });
 </script>
 

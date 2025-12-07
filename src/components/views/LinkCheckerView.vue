@@ -590,10 +590,49 @@ const getStatusLabel = (status: string): string => {
 const truncate = (str: string, length: number): string => {
   return str.length > length ? str.substring(0, length) + '...' : str;
 };
+
+// 获取行的CSS类名（根据状态）
+const getRowClass = (data: CheckResult): string => {
+  switch (data.status) {
+    case 'all_valid':
+      return 'row-all-valid';
+    case 'partial_valid':
+      return 'row-partial-valid';
+    case 'all_invalid':
+      return 'row-all-invalid';
+    case 'pending':
+      return 'row-pending';
+    default:
+      return '';
+  }
+};
+
+// 切换行的展开/收起状态
+const toggleRowExpansion = (event: any) => {
+  const data = event.data as CheckResult;
+
+  // 检查当前行是否已展开
+  const isExpanded = expandedRows.value.some((row: CheckResult) => row.historyItemId === data.historyItemId);
+
+  if (isExpanded) {
+    // 收起：从数组中移除
+    expandedRows.value = expandedRows.value.filter(
+      (row: CheckResult) => row.historyItemId !== data.historyItemId
+    );
+  } else {
+    // 展开：添加到数组
+    expandedRows.value = [...expandedRows.value, data];
+  }
+};
 </script>
 
 <template>
   <div class="link-checker-view">
+    <!-- 顶部细进度条 -->
+    <div class="top-progress-bar" :class="{ active: isChecking }">
+      <div class="top-progress-fill" :style="{ width: progress + '%' }"></div>
+    </div>
+
     <div class="link-checker-container">
       <!-- 控制区域 -->
       <div class="link-checker-controls">
@@ -634,15 +673,6 @@ const truncate = (str: string, length: number): string => {
         />
       </div>
 
-      <!-- 进度条 -->
-      <div v-if="isChecking" class="link-checker-progress">
-        <div class="link-checker-progress-header">
-          <span>{{ progressText }}</span>
-          <span>{{ progress }}%</span>
-        </div>
-        <ProgressBar :value="progress" />
-      </div>
-
       <!-- 统计卡片 -->
       <div class="link-checker-stats">
         <div class="link-checker-stat-card">
@@ -681,14 +711,14 @@ const truncate = (str: string, length: number): string => {
         <DataTable
           :value="results"
           v-model:expandedRows="expandedRows"
+          :rowClass="getRowClass"
+          @row-click="toggleRowExpansion"
           paginator
           :rows="50"
           :rowsPerPageOptions="[10, 20, 50, 100]"
           class="link-checker-table"
           emptyMessage="点击【开始检测】检查历史记录中的图片链接"
         >
-          <Column expander style="width: 3rem" />
-
           <Column field="fileName" header="文件名" sortable style="width: 200px">
             <template #body="{ data }">
               <span :title="data.fileName">{{ data.fileName }}</span>
@@ -834,6 +864,9 @@ const truncate = (str: string, length: number): string => {
 </template>
 
 <style scoped>
+/* ===== 精致优雅风格 - 细腻阴影、流畅动画、精致细节 ===== */
+
+/* 基础布局 */
 .link-checker-view {
   display: flex;
   flex-direction: column;
@@ -849,16 +882,59 @@ const truncate = (str: string, length: number): string => {
   gap: 16px;
 }
 
-/* 控制区域 */
+/* ===== 顶部细进度条 ===== */
+.top-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: transparent;
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.top-progress-bar.active {
+  opacity: 1;
+}
+
+.top-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg,
+    var(--primary) 0%,
+    var(--accent) 50%,
+    var(--primary) 100%);
+  background-size: 200% 100%;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: progressShimmer 2s ease-in-out infinite;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5),
+              0 0 20px rgba(59, 130, 246, 0.3);
+}
+
+@keyframes progressShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ===== 控制区域 - 精致紧凑 ===== */
 .link-checker-controls {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
   flex-wrap: wrap;
   background: var(--bg-card);
-  padding: 20px;
-  border-radius: 12px;
+  padding: 16px 20px;
+  border-radius: 10px;
   border: 1px solid var(--border-subtle);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05),
+              0 1px 3px 0 rgba(0, 0, 0, 0.03);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.link-checker-controls:hover {
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.08),
+              0 4px 8px 0 rgba(0, 0, 0, 0.06);
 }
 
 .link-checker-filter-group {
@@ -871,99 +947,209 @@ const truncate = (str: string, length: number): string => {
 .link-checker-filter-group label {
   color: var(--text-primary);
   font-weight: 500;
+  font-size: 0.9rem;
 }
 
 .service-filter {
   min-width: 150px;
 }
 
-/* 进度条 */
-.link-checker-progress {
-  background: var(--bg-card);
-  padding: 20px;
-  border-radius: 12px;
-  border: 1px solid var(--border-subtle);
-}
-
-.link-checker-progress-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  font-size: 0.95rem;
-  color: var(--text-primary);
-  font-weight: 500;
-}
-
-/* 统计卡片 */
+/* ===== 统计卡片 - 柔和渐变 ===== */
 .link-checker-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
 }
 
 .link-checker-stat-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  padding: 16px;
+  padding: 14px 12px;
   text-align: center;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04),
+              0 1px 3px 0 rgba(0, 0, 0, 0.02);
 }
 
 .link-checker-stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-card);
+  transform: translateY(-3px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+              0 2px 4px -1px rgba(0, 0, 0, 0.06),
+              0 8px 16px -4px rgba(0, 0, 0, 0.08);
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 .stat-value {
-  font-size: 1.8rem;
+  font-size: 1.75rem;
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 4px;
+  transition: color 0.2s ease;
 }
 
 .stat-label {
   font-size: 0.8rem;
   color: var(--text-secondary);
   font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* 统计卡片渐变背景 */
+.link-checker-stat-card.valid {
+  background: linear-gradient(135deg,
+    var(--bg-card) 0%,
+    rgba(16, 185, 129, 0.03) 100%);
+}
+
+.link-checker-stat-card.valid:hover {
+  background: linear-gradient(135deg,
+    var(--bg-card) 0%,
+    rgba(16, 185, 129, 0.06) 100%);
 }
 
 .link-checker-stat-card.valid .stat-value {
   color: var(--success);
 }
 
+.link-checker-stat-card.invalid {
+  background: linear-gradient(135deg,
+    var(--bg-card) 0%,
+    rgba(239, 68, 68, 0.03) 100%);
+}
+
+.link-checker-stat-card.invalid:hover {
+  background: linear-gradient(135deg,
+    var(--bg-card) 0%,
+    rgba(239, 68, 68, 0.06) 100%);
+}
+
 .link-checker-stat-card.invalid .stat-value {
   color: var(--error);
+}
+
+.link-checker-stat-card.pending {
+  background: linear-gradient(135deg,
+    var(--bg-card) 0%,
+    rgba(148, 163, 184, 0.03) 100%);
+}
+
+.link-checker-stat-card.pending:hover {
+  background: linear-gradient(135deg,
+    var(--bg-card) 0%,
+    rgba(148, 163, 184, 0.06) 100%);
 }
 
 .link-checker-stat-card.pending .stat-value {
   color: var(--text-muted);
 }
 
-/* 检测结果 */
+/* ===== 检测结果 - 精致表格 ===== */
 .link-checker-results {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: 10px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05),
+              0 1px 3px 0 rgba(0, 0, 0, 0.03);
 }
 
 .link-checker-results-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .link-checker-results-header h3 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   font-weight: 600;
   color: var(--text-primary);
+  letter-spacing: -0.01em;
 }
 
 .link-checker-table {
   background: transparent;
+}
+
+/* 表格单元格优化 */
+:deep(.p-datatable .p-datatable-thead > tr > th) {
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: var(--bg-app);
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr > td) {
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  word-break: break-word;
+  white-space: normal;
+  border-color: var(--border-subtle);
+  transition: all 0.2s ease;
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr) {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr:hover) {
+  /* 背景色已由状态类控制 */
+}
+
+/* 状态色彩编码 - 柔和背景 */
+:deep(.p-datatable .p-datatable-tbody > tr.row-all-valid) {
+  background: linear-gradient(90deg,
+    rgba(16, 185, 129, 0.08) 0%,
+    rgba(16, 185, 129, 0.04) 100%) !important;
+  border-left: 3px solid var(--success);
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr.row-all-valid:hover) {
+  background: linear-gradient(90deg,
+    rgba(16, 185, 129, 0.12) 0%,
+    rgba(16, 185, 129, 0.06) 100%) !important;
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr.row-partial-valid) {
+  background: linear-gradient(90deg,
+    rgba(234, 179, 8, 0.08) 0%,
+    rgba(234, 179, 8, 0.04) 100%) !important;
+  border-left: 3px solid var(--warning);
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr.row-partial-valid:hover) {
+  background: linear-gradient(90deg,
+    rgba(234, 179, 8, 0.12) 0%,
+    rgba(234, 179, 8, 0.06) 100%) !important;
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr.row-all-invalid) {
+  background: linear-gradient(90deg,
+    rgba(239, 68, 68, 0.08) 0%,
+    rgba(239, 68, 68, 0.04) 100%) !important;
+  border-left: 3px solid var(--error);
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr.row-all-invalid:hover) {
+  background: linear-gradient(90deg,
+    rgba(239, 68, 68, 0.12) 0%,
+    rgba(239, 68, 68, 0.06) 100%) !important;
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr.row-pending) {
+  background: linear-gradient(90deg,
+    rgba(148, 163, 184, 0.06) 0%,
+    rgba(148, 163, 184, 0.03) 100%) !important;
+  border-left: 3px solid var(--text-muted);
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr.row-pending:hover) {
+  background: linear-gradient(90deg,
+    rgba(148, 163, 184, 0.10) 0%,
+    rgba(148, 163, 184, 0.05) 100%) !important;
 }
 
 .link-url {
@@ -974,19 +1160,51 @@ const truncate = (str: string, length: number): string => {
   display: block;
   white-space: normal;
   line-height: 1.5;
+  transition: all 0.2s ease;
+  opacity: 0.9;
 }
 
 .link-url:hover {
   text-decoration: underline;
+  opacity: 1;
+  color: var(--primary-hover);
 }
 
-/* 强制 DataTable 单元格内容换行 */
-:deep(.p-datatable .p-datatable-tbody > tr > td) {
-  word-break: break-word;
-  white-space: normal;
+/* 展开表格样式 */
+.service-details {
+  padding: 10px 14px;
+  background: var(--bg-app);
+  border-radius: 6px;
+  margin: 2px 0;
 }
 
-/* 滚动条 */
+.service-results-table {
+  background: transparent;
+}
+
+/* 子表格行也更紧凑 */
+:deep(.service-results-table .p-datatable-tbody > tr > td) {
+  padding: 6px 8px !important;
+  font-size: 0.8rem !important;
+}
+
+/* 展开行动画优化 */
+:deep(.p-datatable-row-expansion) {
+  animation: fadeInSlide 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeInSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== 滚动条 ===== */
 .link-checker-view::-webkit-scrollbar {
   width: 8px;
 }
@@ -1004,17 +1222,7 @@ const truncate = (str: string, length: number): string => {
   background: var(--text-muted);
 }
 
-/* 展开表格样式 */
-.service-details {
-  padding: 12px 16px;
-  background: var(--bg-app);
-  border-radius: 8px;
-}
-
-.service-results-table {
-  background: transparent;
-}
-
+/* ===== 工具类 ===== */
 .text-muted {
   color: var(--text-secondary);
 }
@@ -1037,11 +1245,11 @@ const truncate = (str: string, length: number): string => {
   line-height: 1.4;
 }
 
-/* 重新上传对话框样式 */
+/* ===== 重新上传对话框 - 精致圆润 ===== */
 .reupload-dialog-content {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .form-group {
@@ -1053,25 +1261,97 @@ const truncate = (str: string, length: number): string => {
 .form-group label {
   font-weight: 500;
   color: var(--text-primary);
+  font-size: 0.9rem;
+  letter-spacing: 0.01em;
 }
 
 .w-full {
   width: 100%;
 }
 
-/* 展开行动画 */
-:deep(.p-datatable-row-expansion) {
-  animation: fadeIn 0.2s ease-in;
+/* Dialog样式优化 */
+:deep(.p-dialog) {
+  border-radius: 10px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15),
+              0 10px 10px -5px rgba(0, 0, 0, 0.08),
+              0 0 0 1px rgba(0, 0, 0, 0.05);
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+:deep(.p-dialog .p-dialog-header) {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+:deep(.p-dialog .p-dialog-content) {
+  padding: 18px 20px;
+}
+
+:deep(.p-dialog .p-dialog-footer) {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border-subtle);
+  gap: 8px;
+}
+
+/* ===== Tag标签 - 柔和半透明 ===== */
+:deep(.p-tag) {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+:deep(.p-tag.p-tag-success) {
+  background-color: rgba(16, 185, 129, 0.12);
+  color: var(--success);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+:deep(.p-tag.p-tag-danger) {
+  background-color: rgba(239, 68, 68, 0.12);
+  color: var(--error);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+:deep(.p-tag.p-tag-warn) {
+  background-color: rgba(234, 179, 8, 0.12);
+  color: var(--warning);
+  border: 1px solid rgba(234, 179, 8, 0.25);
+}
+
+:deep(.p-tag.p-tag-secondary) {
+  background-color: rgba(148, 163, 184, 0.12);
+  color: var(--text-secondary);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+:deep(.p-tag.p-tag-info) {
+  background-color: rgba(59, 130, 246, 0.12);
+  color: var(--primary);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+/* ===== 全局动画优化 ===== */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+:deep(.p-button) {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+:deep(.p-button:hover:not(:disabled)) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+              0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+:deep(.p-button:active:not(:disabled)) {
+  transform: translateY(0);
+}
+
+:deep(.p-inputtext:focus),
+:deep(.p-select:focus) {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 </style>

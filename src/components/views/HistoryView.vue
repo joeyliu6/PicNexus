@@ -42,6 +42,9 @@ const serviceOptions = [
 
 const selectAll = ref(false);
 
+// 标志位：防止首次加载时重复刷新
+const isFirstMount = ref(true);
+
 // 计算属性：是否全选
 const isAllSelected = computed(() => {
   const currentItems = historyManager.filteredItems.value;
@@ -152,12 +155,15 @@ const handleClearHistory = async () => {
 onMounted(async () => {
   console.log('[HistoryView] 组件已挂载，开始加载历史记录');
   await historyManager.loadHistory();
+  isFirstMount.value = false;
 });
 
 // 视图激活时刷新历史记录（KeepAlive 缓存后的刷新）
 onActivated(async () => {
-  console.log('[HistoryView] 视图已激活，刷新历史记录');
-  await historyManager.loadHistory();
+  if (!isFirstMount.value) {
+    console.log('[HistoryView] 视图已激活，刷新历史记录');
+    await historyManager.loadHistory();
+  }
 });
 
 // 格式化时间
@@ -517,6 +523,11 @@ const getServiceName = (serviceId: ServiceType): string => {
 </template>
 
 <style scoped>
+/* CSS 变量 */
+.history-view {
+  --thumbnail-size: 60px;
+}
+
 .history-view {
   height: 100%;
   overflow-y: auto;
@@ -618,12 +629,35 @@ const getServiceName = (serviceId: ServiceType): string => {
   color: var(--text-secondary) !important;
 }
 
+/* 表格视图缩略图容器 - 固定正方形尺寸 */
 .preview-thumbnail {
-  width: 60px;
-  height: 60px;
-  object-fit: cover;
+  width: var(--thumbnail-size);
+  height: var(--thumbnail-size);
   border-radius: 6px;
+  overflow: hidden;
+  display: inline-block;
+  position: relative;
+  background: var(--bg-input);
+}
+
+/* 深度选择器：强制 PrimeVue Image 内部元素也为正方形 */
+:deep(.preview-thumbnail .p-image),
+:deep(.preview-thumbnail .p-image-preview-container) {
+  width: var(--thumbnail-size) !important;
+  height: var(--thumbnail-size) !important;
+  display: block;
+}
+
+:deep(.preview-thumbnail img) {
+  width: var(--thumbnail-size) !important;
+  height: var(--thumbnail-size) !important;
+  object-fit: cover !important;
   cursor: pointer;
+}
+
+/* Loading 状态 */
+:deep(.preview-thumbnail .p-image-preview-indicator) {
+  background: rgba(0, 0, 0, 0.5);
 }
 
 .preview-placeholder {
@@ -712,11 +746,33 @@ const getServiceName = (serviceId: ServiceType): string => {
   border-radius: 4px;
 }
 
+/* 瀑布流视图图片 - 响应式正方形 */
 .grid-item-image {
   width: 100%;
   aspect-ratio: 1;
-  object-fit: cover;
   cursor: pointer;
+  overflow: hidden;
+  position: relative;
+  background: var(--bg-input);
+}
+
+/* 深度选择器：确保 PrimeVue Image 内部元素正方形显示 */
+:deep(.grid-item-image .p-image),
+:deep(.grid-item-image .p-image-preview-container) {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+:deep(.grid-item-image img) {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+/* Loading 状态 */
+:deep(.grid-item-image .p-image-preview-indicator) {
+  background: rgba(0, 0, 0, 0.5);
 }
 
 .grid-item-placeholder {
