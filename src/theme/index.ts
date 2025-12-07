@@ -54,6 +54,13 @@ export const WeiboDRPreset = definePreset(Aura, {
           focusBackground: '{primary.100}',
           color: '{primary.700}',
           focusColor: '{primary.800}'
+        },
+        content: {
+          background: '{surface.0}',        // #ffffff - 亮色卡片背景
+          hoverBackground: '{surface.100}', // #f1f5f9
+          borderColor: '{surface.200}',     // #e2e8f0
+          color: '#0f172a',                 // Slate 900 - 深色文本
+          hoverColor: '#1e293b'             // Slate 800 - 悬浮文本
         }
       },
 
@@ -84,6 +91,13 @@ export const WeiboDRPreset = definePreset(Aura, {
           focusBackground: 'rgba(59, 130, 246, 0.24)',
           color: 'rgba(59, 130, 246, 0.87)',
           focusColor: 'rgba(59, 130, 246, 0.87)'
+        },
+        content: {
+          background: '{surface.50}',       // #1e293b - 深色卡片背景（Slate 800）
+          hoverBackground: '{surface.100}', // #334155 - Slate 700
+          borderColor: '{surface.100}',     // #334155 - Slate 700
+          color: '#f8fafc',                 // Slate 50 - 亮色文本（与 --text-main 一致）
+          hoverColor: '#f1f5f9'             // Slate 100 - 悬浮文本
         }
       }
     }

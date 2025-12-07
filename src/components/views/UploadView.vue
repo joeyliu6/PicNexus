@@ -284,7 +284,7 @@ onMounted(async () => {
 .selection-badge {
   padding: 4px 12px;
   background: var(--primary);
-  color: white;
+  color: var(--text-on-primary);
   border-radius: 16px;
   font-size: 0.85rem;
   font-weight: 600;

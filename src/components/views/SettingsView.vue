@@ -1065,7 +1065,7 @@ onMounted(async () => {
   font-size: 0.75rem;
   padding: 2px 8px;
   background: var(--error);
-  color: white;
+  color: var(--text-on-error);
   border-radius: 12px;
   font-weight: 500;
 }
@@ -1074,7 +1074,7 @@ onMounted(async () => {
   font-size: 0.75rem;
   padding: 2px 8px;
   background: var(--text-muted);
-  color: white;
+  color: var(--text-on-muted);
   border-radius: 12px;
   font-weight: 500;
 }

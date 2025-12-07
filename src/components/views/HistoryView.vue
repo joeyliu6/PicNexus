@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onActivated, watch } from 'vue';
 import { writeText } from '@tauri-apps/api/clipboard';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -40,9 +40,32 @@ const serviceOptions = [
   { label: '纳米', value: 'nami' }
 ];
 
-// DataTable 选中项（用于多选）
-const tableSelectedItems = ref<HistoryItem[]>([]);
 const selectAll = ref(false);
+
+// 计算属性：是否全选
+const isAllSelected = computed(() => {
+  const currentItems = historyManager.filteredItems.value;
+  if (currentItems.length === 0) return false;
+  return currentItems.every(item =>
+    historyManager.historyState.value.selectedItems.has(item.id)
+  );
+});
+
+// 计算属性：是否部分选中
+const isSomeSelected = computed(() => {
+  const currentItems = historyManager.filteredItems.value;
+  if (currentItems.length === 0) return false;
+  const selectedCount = currentItems.filter(item =>
+    historyManager.historyState.value.selectedItems.has(item.id)
+  ).length;
+  return selectedCount > 0 && selectedCount < currentItems.length;
+});
+
+// 处理表头复选框变化
+const handleHeaderCheckboxChange = (checked: boolean) => {
+  selectAll.value = checked;
+  handleSelectAll();
+};
 
 // 监听视图模式变化
 watch(() => historyManager.historyState.value.viewMode, (newMode) => {
@@ -59,6 +82,15 @@ watch(() => historyManager.historyState.value.currentFilter, (newFilter) => {
 // 监听搜索词变化
 watch(() => historyManager.searchTerm.value, (newTerm) => {
   console.log('[HistoryView] 搜索:', newTerm);
+});
+
+// 监听选中状态变化，同步工具栏全选复选框
+watch([isAllSelected, isSomeSelected], () => {
+  if (isAllSelected.value) {
+    selectAll.value = true;
+  } else if (!isSomeSelected.value) {
+    selectAll.value = false;
+  }
 });
 
 // 全选/取消全选
@@ -119,6 +151,12 @@ const handleClearHistory = async () => {
 // 加载历史记录
 onMounted(async () => {
   console.log('[HistoryView] 组件已挂载，开始加载历史记录');
+  await historyManager.loadHistory();
+});
+
+// 视图激活时刷新历史记录（KeepAlive 缓存后的刷新）
+onActivated(async () => {
+  console.log('[HistoryView] 视图已激活，刷新历史记录');
   await historyManager.loadHistory();
 });
 
@@ -222,6 +260,7 @@ const getServiceName = (serviceId: ServiceType): string => {
               v-model="selectAll"
               @change="handleSelectAll"
               :binary="true"
+              :indeterminate="isSomeSelected && !isAllSelected"
               inputId="select-all"
             />
             <label for="select-all" class="select-all-label">全选</label>
@@ -293,7 +332,6 @@ const getServiceName = (serviceId: ServiceType): string => {
         v-if="historyManager.historyState.value.viewMode === 'table'"
         key="table-view"
         :value="historyManager.filteredItems.value"
-        v-model:selection="tableSelectedItems"
         dataKey="id"
         paginator
         :rows="20"
@@ -303,7 +341,24 @@ const getServiceName = (serviceId: ServiceType): string => {
         class="history-table"
         :emptyMessage="historyManager.allHistoryItems.value.length === 0 ? '暂无历史记录' : '未找到匹配的记录'"
       >
-        <Column selectionMode="multiple" headerStyle="width: 3rem" />
+        <!-- 自定义复选框列 -->
+        <Column headerStyle="width: 3rem">
+          <template #header>
+            <Checkbox
+              :model-value="isAllSelected"
+              @update:model-value="handleHeaderCheckboxChange"
+              :binary="true"
+              :indeterminate="isSomeSelected && !isAllSelected"
+            />
+          </template>
+          <template #body="slotProps">
+            <Checkbox
+              :model-value="historyManager.historyState.value.selectedItems.has(slotProps.data.id)"
+              @update:model-value="historyManager.toggleSelection(slotProps.data.id)"
+              :binary="true"
+            />
+          </template>
+        </Column>
 
         <Column field="thumbUrl" header="预览" style="width: 80px">
           <template #body="slotProps">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onActivated } from 'vue';
 import Button from 'primevue/button';
 import Checkbox from 'primevue/checkbox';
 import Image from 'primevue/image';
@@ -140,6 +140,12 @@ const formatDate = (date: Date): string => {
 };
 
 onMounted(() => {
+  refreshFiles();
+});
+
+// 视图激活时刷新文件列表（KeepAlive 缓存后的刷新）
+onActivated(() => {
+  console.log('[R2ManagerView] 视图已激活，刷新文件列表');
   refreshFiles();
 });
 </script>

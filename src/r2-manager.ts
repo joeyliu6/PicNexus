@@ -354,7 +354,7 @@ export class R2Manager {
             placeholder.style.background = 'var(--error, #ff4444)';
             placeholder.style.animation = 'none';
             placeholder.textContent = '加载失败';
-            placeholder.style.color = 'white';
+            placeholder.style.color = 'var(--text-on-error, #ffffff)';
             placeholder.style.display = 'flex';
             placeholder.style.alignItems = 'center';
             placeholder.style.justifyContent = 'center';

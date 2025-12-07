@@ -121,6 +121,8 @@ fn main() {
             commands::nami_token::fetch_nami_token,
             commands::nami_token::check_nami_chrome_installed,
             commands::utils::file_exists,
+            commands::link_checker::check_image_link,
+            commands::link_checker::download_image_from_url,
             get_or_create_secure_key
         ])
         .menu(menu)                          // 3. 添加原生菜单栏

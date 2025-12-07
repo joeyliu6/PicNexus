@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed, KeepAlive, Transition } from 'vue';
 import TitleBar from './TitleBar.vue';
 import Sidebar from './Sidebar.vue';
 import UploadView from '../views/UploadView.vue';
@@ -11,7 +11,20 @@ import SettingsView from '../views/SettingsView.vue';
 
 type ViewType = 'upload' | 'history' | 'r2-manager' | 'backup' | 'link-checker' | 'settings';
 
+// 组件映射对象
+const viewComponents = {
+  upload: UploadView,
+  history: HistoryView,
+  'r2-manager': R2ManagerView,
+  backup: BackupView,
+  'link-checker': LinkCheckerView,
+  settings: SettingsView
+} as const;
+
 const currentView = ref<ViewType>('upload');
+
+// 计算当前应该显示的组件
+const currentViewComponent = computed(() => viewComponents[currentView.value]);
 
 const handleNavigate = (view: ViewType) => {
   currentView.value = view;
@@ -24,12 +37,13 @@ const handleNavigate = (view: ViewType) => {
     <div class="dashboard-container">
       <Sidebar @navigate="handleNavigate" />
       <div class="content-area">
-        <UploadView v-if="currentView === 'upload'" />
-        <HistoryView v-else-if="currentView === 'history'" />
-        <R2ManagerView v-else-if="currentView === 'r2-manager'" />
-        <BackupView v-else-if="currentView === 'backup'" />
-        <LinkCheckerView v-else-if="currentView === 'link-checker'" />
-        <SettingsView v-else-if="currentView === 'settings'" />
+        <!-- 使用 Transition 添加淡入淡出动画 -->
+        <!-- 使用 KeepAlive 缓存组件，避免重复销毁和创建 -->
+        <Transition name="view-fade" mode="out-in">
+          <KeepAlive :max="6">
+            <component :is="currentViewComponent" :key="currentView" />
+          </KeepAlive>
+        </Transition>
       </div>
     </div>
   </div>
@@ -53,7 +67,21 @@ const handleNavigate = (view: ViewType) => {
 
 .content-area {
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
   background: var(--bg-app);
+}
+
+/* 视图切换过渡动画 */
+.view-fade-enter-active,
+.view-fade-leave-active {
+  transition: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.view-fade-enter-from {
+  opacity: 0;
+}
+
+.view-fade-leave-to {
+  opacity: 0;
 }
 </style>

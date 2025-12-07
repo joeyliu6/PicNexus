@@ -1,16 +1,43 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import Button from 'primevue/button';
 import Select from 'primevue/select';
 import ProgressBar from 'primevue/progressbar';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
+import Dialog from 'primevue/dialog';
+import MultiSelect from 'primevue/multiselect';
+import { invoke } from '@tauri-apps/api/tauri';
+import { writeText } from '@tauri-apps/api/clipboard';
+import { save as saveDialog } from '@tauri-apps/api/dialog';
+import { writeTextFile } from '@tauri-apps/api/fs';
 import { useToast } from '../../composables/useToast';
 import { useConfirm } from '../../composables/useConfirm';
+import { useHistoryManager } from '../../composables/useHistory';
+import { useConfigManager } from '../../composables/useConfig';
+import { getActivePrefix } from '../../config/types';
+import { MultiServiceUploader } from '../../core/MultiServiceUploader';
+import { Store } from '../../store';
+import type { ServiceType, HistoryItem } from '../../config/types';
 
 const toast = useToast();
 const { confirmDelete } = useConfirm();
+
+// 使用历史记录管理器
+const { allHistoryItems, loadHistory } = useHistoryManager();
+
+// 使用配置管理器
+const { config } = useConfigManager();
+
+// 历史记录存储
+const historyStore = new Store('.history.dat');
+
+// 组件挂载时加载历史记录并预加载图片信息
+onMounted(async () => {
+  await loadHistory();
+  await preloadImageInfo();
+});
 
 // 检测状态
 const isChecking = ref(false);
@@ -30,6 +57,14 @@ const serviceOptions = [
   { label: '纳米图床', value: 'nami' }
 ];
 
+// 监听筛选条件变化
+watch(serviceFilter, async () => {
+  // 如果不在检测中，重新预加载
+  if (!isChecking.value) {
+    await preloadImageInfo();
+  }
+});
+
 // 统计数据
 const stats = ref({
   total: 0,
@@ -42,17 +77,154 @@ const stats = ref({
 const progress = ref(0);
 const progressText = ref('检测中... 0/0');
 
-// 检测结果
-interface CheckResult {
-  fileName: string;
-  link: string;
-  service: string;
-  status: 'valid' | 'invalid' | 'pending';
+// 错误类型
+type ErrorType = 'success' | 'http_4xx' | 'http_5xx' | 'timeout' | 'network' | 'pending';
+
+// 单个图床的检测结果
+interface ServiceCheckResult {
+  serviceId: ServiceType;
+  link: string;           // 检测的链接（可能含代理前缀）
+  originalLink: string;   // 原始链接（不含前缀）
+  isValid: boolean;
   statusCode?: number;
+  errorType: ErrorType;
   error?: string;
+  suggestion?: string;
+  responseTime?: number;
+}
+
+// 完整检测结果（一个文件包含多个图床）
+interface CheckResult {
+  historyItemId: string;
+  fileName: string;
+  filePath?: string;
+  primaryService: ServiceType;
+
+  serviceResults: ServiceCheckResult[];
+
+  // 聚合状态
+  status: 'all_valid' | 'partial_valid' | 'all_invalid' | 'pending';
+  validCount: number;
+  invalidCount: number;
+  canReupload: boolean;
 }
 
 const results = ref<CheckResult[]>([]);
+const expandedRows = ref<CheckResult[]>([]);
+
+// 从历史记录中提取链接（多图床检测）
+const extractLinksFromHistory = (): CheckResult[] => {
+  return allHistoryItems.value
+    .filter(item => {
+      // 如果有图床筛选，确保至少有一个图床匹配筛选条件
+      if (serviceFilter.value !== 'all') {
+        return item.results?.some(r =>
+          r.status === 'success' &&
+          r.result?.url &&
+          r.serviceId === serviceFilter.value
+        );
+      }
+      return item.results && item.results.length > 0;
+    })
+    .map(item => {
+      const serviceResults: ServiceCheckResult[] = item.results
+        .filter(r => {
+          // 只提取成功的结果
+          if (r.status !== 'success' || !r.result?.url) return false;
+
+          // 应用图床筛选
+          if (serviceFilter.value !== 'all' && r.serviceId !== serviceFilter.value) {
+            return false;
+          }
+
+          return true;
+        })
+        .map(r => {
+          const originalLink = r.result!.url;
+
+          // 微博图床且启用代理前缀时，加上前缀
+          let linkToCheck = originalLink;
+          if (r.serviceId === 'weibo' && config.value.outputFormat === 'baidu-proxy') {
+            const activePrefix = getActivePrefix(config.value);
+            if (activePrefix) {
+              linkToCheck = `${activePrefix}${originalLink}`;
+            }
+          }
+
+          return {
+            serviceId: r.serviceId,
+            link: linkToCheck,
+            originalLink,
+            isValid: false,
+            errorType: 'pending' as ErrorType,
+            statusCode: undefined,
+            error: undefined,
+            suggestion: undefined,
+            responseTime: undefined
+          };
+        });
+
+      return {
+        historyItemId: item.id,
+        fileName: item.localFileName,
+        filePath: item.filePath,
+        primaryService: item.primaryService,
+        serviceResults,
+        status: 'pending' as const,
+        validCount: 0,
+        invalidCount: 0,
+        canReupload: serviceResults.length > 1
+      };
+    })
+    .filter(item => item.serviceResults.length > 0);
+};
+
+// 更新聚合状态
+const updateAggregateStatus = (checkResult: CheckResult): void => {
+  const valid = checkResult.serviceResults.filter(r => r.isValid).length;
+  const total = checkResult.serviceResults.length;
+
+  checkResult.validCount = valid;
+  checkResult.invalidCount = total - valid;
+
+  if (valid === total) {
+    checkResult.status = 'all_valid';
+    checkResult.canReupload = false;
+  } else if (valid === 0) {
+    checkResult.status = 'all_invalid';
+    checkResult.canReupload = false;
+  } else {
+    checkResult.status = 'partial_valid';
+    checkResult.canReupload = true;
+  }
+};
+
+// 调用 Rust 后端检测单个链接
+const checkLink = async (serviceResult: ServiceCheckResult): Promise<void> => {
+  try {
+    const result = await invoke<{
+      link: string;
+      is_valid: boolean;
+      status_code?: number;
+      error?: string;
+      error_type: string;
+      suggestion?: string;
+      response_time?: number;
+    }>('check_image_link', { link: serviceResult.link });
+
+    serviceResult.isValid = result.is_valid;
+    serviceResult.statusCode = result.status_code;
+    serviceResult.errorType = result.error_type as ErrorType;
+    serviceResult.error = result.error;
+    serviceResult.suggestion = result.suggestion;
+    serviceResult.responseTime = result.response_time;
+  } catch (error) {
+    serviceResult.isValid = false;
+    serviceResult.errorType = 'network';
+    serviceResult.error = String(error);
+    serviceResult.suggestion = '检测失败';
+  }
+};
 
 // 开始检测
 const startCheck = async () => {
@@ -60,35 +232,135 @@ const startCheck = async () => {
 
   isChecking.value = true;
   isCancelled.value = false;
-  results.value = [];
+
+  // 如果已有预加载的数据，复用它
+  if (results.value.length === 0) {
+    // 没有预加载数据，执行完整加载流程
+    progress.value = 0;
+
+    try {
+      // 1. 加载历史记录
+      await loadHistory();
+
+      // 2. 提取链接（多图床检测）
+      const checkResults = extractLinksFromHistory();
+
+      if (checkResults.length === 0) {
+        toast.warn('无链接', '历史记录中没有可检测的图片链接');
+        isChecking.value = false;
+        return;
+      }
+
+      results.value = checkResults;
+      stats.value.total = checkResults.length;
+      stats.value.pending = checkResults.length;
+    } catch (error) {
+      toast.error('加载失败', String(error));
+      isChecking.value = false;
+      return;
+    }
+  } else {
+    // 已有预加载数据，重置检测状态
+    results.value.forEach(result => {
+      result.status = 'pending';
+      result.validCount = 0;
+      result.invalidCount = 0;
+      result.serviceResults.forEach(sr => {
+        sr.isValid = false;
+        sr.errorType = 'pending';
+        sr.statusCode = undefined;
+        sr.error = undefined;
+        sr.suggestion = undefined;
+        sr.responseTime = undefined;
+      });
+    });
+
+    stats.value = {
+      total: results.value.length,
+      valid: 0,
+      invalid: 0,
+      pending: results.value.length
+    };
+  }
+
+  progress.value = 0;
+  toast.info('开始检测', `共 ${results.value.length} 个文件待检测`);
 
   try {
-    // TODO: 调用后端检测逻辑
-    toast.info('开始检测', '链接检测功能待集成');
+    // 3. 批量检测（每个文件的所有图床串行检测）
+    let checkedCount = 0;
 
-    // 模拟检测进度
-    for (let i = 0; i <= 100; i += 10) {
+    for (const checkResult of results.value) {
       if (isCancelled.value) break;
 
-      progress.value = i;
-      progressText.value = `检测中... ${i}/100`;
-      stats.value = {
-        total: 100,
-        valid: Math.floor(i * 0.8),
-        invalid: Math.floor(i * 0.1),
-        pending: 100 - i
-      };
+      // 检测当前文件的所有图床
+      for (const serviceResult of checkResult.serviceResults) {
+        await checkLink(serviceResult);
+      }
 
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // 更新聚合状态（触发 Vue 响应式更新）
+      updateAggregateStatus(checkResult);
+
+      // 更新统计
+      checkedCount++;
+      stats.value.valid = results.value.filter(r => r.status === 'all_valid').length;
+      stats.value.invalid = results.value.filter(r => r.status === 'all_invalid' || r.status === 'partial_valid').length;
+      stats.value.pending = stats.value.total - checkedCount;
+
+      // 更新进度
+      progress.value = Math.round((checkedCount / stats.value.total) * 100);
+      progressText.value = `检测中... ${checkedCount}/${stats.value.total}`;
     }
 
     if (!isCancelled.value) {
-      toast.success('检测完成', '所有链接已检测完毕');
+      const allValid = results.value.filter(r => r.status === 'all_valid').length;
+      const partialValid = results.value.filter(r => r.status === 'partial_valid').length;
+      const allInvalid = results.value.filter(r => r.status === 'all_invalid').length;
+      toast.success('检测完成', `全部有效: ${allValid}, 部分有效: ${partialValid}, 全部失效: ${allInvalid}`);
     }
   } catch (error) {
     toast.error('检测失败', String(error));
   } finally {
     isChecking.value = false;
+  }
+};
+
+/**
+ * 预加载图片信息（不执行检测）
+ * 在进入窗口时调用，显示待检测的图片列表
+ */
+const preloadImageInfo = async () => {
+  try {
+    // 1. 确保历史记录已加载
+    if (allHistoryItems.value.length === 0) {
+      await loadHistory();
+    }
+
+    // 2. 提取链接（复用 extractLinksFromHistory）
+    const checkResults = extractLinksFromHistory();
+
+    if (checkResults.length === 0) {
+      console.log('[预加载] 无可检测的图片');
+      results.value = [];
+      stats.value = { total: 0, valid: 0, invalid: 0, pending: 0 };
+      return;
+    }
+
+    // 3. 设置结果（所有状态均为 pending）
+    results.value = checkResults;
+
+    // 4. 更新统计数据
+    stats.value = {
+      total: checkResults.length,
+      valid: 0,
+      invalid: 0,
+      pending: checkResults.length
+    };
+
+    console.log(`[预加载] 已加载 ${checkResults.length} 个文件的信息`);
+  } catch (error) {
+    console.error('[预加载] 加载失败:', error);
+    // 静默失败，不影响用户体验
   }
 };
 
@@ -101,7 +373,9 @@ const cancelCheck = () => {
 
 // 删除失效链接
 const deleteInvalid = () => {
-  const invalidCount = results.value.filter(r => r.status === 'invalid').length;
+  const invalidCount = results.value.filter(r =>
+    r.status === 'all_invalid' || r.status === 'partial_valid'
+  ).length;
 
   if (invalidCount === 0) {
     toast.warn('无失效链接', '没有找到失效的链接');
@@ -109,31 +383,195 @@ const deleteInvalid = () => {
   }
 
   confirmDelete(
-    `确定要删除 ${invalidCount} 个失效链接吗？此操作不可撤销。`,
+    `确定要从检测结果中移除 ${invalidCount} 个失效链接吗？`,
     () => {
-      results.value = results.value.filter(r => r.status !== 'invalid');
+      // 只从检测结果中移除，不修改历史记录
+      results.value = results.value.filter(r => r.status === 'all_valid');
+
+      // 更新统计
       stats.value.invalid = 0;
-      stats.value.total -= invalidCount;
-      toast.success('删除成功', `已删除 ${invalidCount} 个失效链接`);
+      stats.value.valid = results.value.filter(r => r.status === 'all_valid').length;
+      stats.value.pending = results.value.filter(r => r.status === 'pending').length;
+      stats.value.total = results.value.length;
+
+      toast.success('移除成功', `已从结果中移除 ${invalidCount} 个失效链接`);
     }
   );
+};
+
+// 单条重新检测
+const recheckSingle = async (checkResult: CheckResult) => {
+  toast.info('开始检测', `正在重新检测 ${checkResult.fileName}`);
+
+  for (const serviceResult of checkResult.serviceResults) {
+    await checkLink(serviceResult);
+  }
+
+  updateAggregateStatus(checkResult);
+  toast.success('检测完成', `${checkResult.fileName} 检测完成`);
+};
+
+// 批量导出 JSON
+const exportResults = async () => {
+  if (results.value.length === 0) {
+    toast.warn('无数据', '没有可导出的检测结果');
+    return;
+  }
+
+  const exportData = {
+    exportTime: new Date().toISOString(),
+    totalFiles: results.value.length,
+    summary: {
+      allValid: results.value.filter(r => r.status === 'all_valid').length,
+      partialValid: results.value.filter(r => r.status === 'partial_valid').length,
+      allInvalid: results.value.filter(r => r.status === 'all_invalid').length
+    },
+    results: results.value.map(r => ({
+      fileName: r.fileName,
+      status: r.status,
+      validCount: r.validCount,
+      invalidCount: r.invalidCount,
+      services: r.serviceResults.map(sr => ({
+        serviceId: sr.serviceId,
+        isValid: sr.isValid,
+        link: sr.link,
+        originalLink: sr.originalLink,
+        statusCode: sr.statusCode,
+        errorType: sr.errorType,
+        error: sr.error,
+        suggestion: sr.suggestion,
+        responseTime: sr.responseTime
+      }))
+    }))
+  };
+
+  const jsonContent = JSON.stringify(exportData, null, 2);
+
+  const filePath = await saveDialog({
+    defaultPath: `link-check-${Date.now()}.json`,
+    filters: [{ name: 'JSON', extensions: ['json'] }]
+  });
+
+  if (filePath) {
+    await writeTextFile(filePath as string, jsonContent);
+    toast.success('导出成功', `已导出 ${results.value.length} 条检测结果`);
+  }
 };
 
 // 复制链接
 const copyLink = async (link: string) => {
   try {
-    // TODO: 复制到剪贴板
+    await writeText(link);
     toast.success('已复制', '链接已复制到剪贴板');
   } catch (error) {
     toast.error('复制失败', String(error));
   }
 };
 
+// 重新上传相关
+const showReuploadDialog = ref(false);
+const selectedReuploadItem = ref<{
+  checkResult: CheckResult;
+  validServices: ServiceType[];
+  invalidServices: ServiceType[];
+  sourceService: ServiceType;
+  targetServices: ServiceType[];
+} | null>(null);
+
+// 打开重新上传对话框
+const openReuploadDialog = (checkResult: CheckResult) => {
+  if (!checkResult.canReupload) {
+    toast.warn('无法重新上传', '没有有效的源图床可供下载');
+    return;
+  }
+
+  const validServices = checkResult.serviceResults
+    .filter(r => r.isValid)
+    .map(r => r.serviceId);
+
+  const invalidServices = checkResult.serviceResults
+    .filter(r => !r.isValid)
+    .map(r => r.serviceId);
+
+  selectedReuploadItem.value = {
+    checkResult,
+    validServices,
+    invalidServices,
+    sourceService: validServices[0], // 默认选择第一个有效图床
+    targetServices: [...invalidServices]  // 默认选择所有失效图床
+  };
+
+  showReuploadDialog.value = true;
+};
+
+// 执行重新上传
+const executeReupload = async () => {
+  const item = selectedReuploadItem.value!;
+
+  try {
+    // 1. 从有效图床下载
+    const sourceResult = item.checkResult.serviceResults
+      .find(r => r.serviceId === item.sourceService);
+
+    if (!sourceResult) {
+      throw new Error('未找到源图床');
+    }
+
+    toast.info('下载中', `正在从 ${item.sourceService} 下载图片...`);
+
+    const tempFilePath = await invoke<string>('download_image_from_url', {
+      url: sourceResult.originalLink
+    });
+
+    // 2. 重新上传到目标图床
+    toast.info('上传中', `正在上传到 ${item.targetServices.join(', ')}...`);
+
+    const uploader = new MultiServiceUploader();
+    const uploadResult = await uploader.uploadToMultipleServices(
+      tempFilePath,
+      item.targetServices,
+      config.value
+    );
+
+    // 3. 更新历史记录
+    const items = await historyStore.get<HistoryItem[]>('uploads', []);
+    const historyItem = items.find(i => i.id === item.checkResult.historyItemId);
+
+    if (historyItem) {
+      uploadResult.results.forEach(newResult => {
+        const existingIndex = historyItem.results.findIndex(
+          r => r.serviceId === newResult.serviceId
+        );
+
+        if (existingIndex >= 0) {
+          historyItem.results[existingIndex] = newResult;
+        } else {
+          historyItem.results.push(newResult);
+        }
+      });
+
+      await historyStore.set('uploads', items);
+      await historyStore.save();
+    }
+
+    // 4. 重新检测
+    await recheckSingle(item.checkResult);
+
+    toast.success('重新上传成功', `已更新 ${uploadResult.results.length} 个图床`);
+
+  } catch (error) {
+    toast.error('重新上传失败', String(error));
+  } finally {
+    showReuploadDialog.value = false;
+  }
+};
+
 // 获取状态标签样式
-const getStatusSeverity = (status: string): 'success' | 'danger' | 'secondary' | undefined => {
+const getStatusSeverity = (status: string): 'success' | 'danger' | 'warn' | 'secondary' | undefined => {
   switch (status) {
-    case 'valid': return 'success';
-    case 'invalid': return 'danger';
+    case 'all_valid': return 'success';
+    case 'partial_valid': return 'warn';
+    case 'all_invalid': return 'danger';
     default: return 'secondary';
   }
 };
@@ -141,22 +579,22 @@ const getStatusSeverity = (status: string): 'success' | 'danger' | 'secondary' |
 // 获取状态标签文本
 const getStatusLabel = (status: string): string => {
   switch (status) {
-    case 'valid': return '✓ 有效';
-    case 'invalid': return '✗ 失效';
+    case 'all_valid': return '全部有效';
+    case 'partial_valid': return '部分有效';
+    case 'all_invalid': return '全部失效';
     default: return '待检测';
   }
+};
+
+// 截断链接用于显示
+const truncate = (str: string, length: number): string => {
+  return str.length > length ? str.substring(0, length) + '...' : str;
 };
 </script>
 
 <template>
   <div class="link-checker-view">
     <div class="link-checker-container">
-      <!-- 标题 -->
-      <div class="link-checker-header">
-        <h1>图片链接检测</h1>
-        <p class="link-checker-desc">检测历史记录中的图片链接是否仍然有效</p>
-      </div>
-
       <!-- 控制区域 -->
       <div class="link-checker-controls">
         <div class="link-checker-filter-group">
@@ -184,6 +622,14 @@ const getStatusLabel = (status: string): string => {
           icon="pi pi-stop"
           @click="cancelCheck"
           :disabled="!isChecking"
+          outlined
+        />
+
+        <Button
+          label="导出JSON"
+          icon="pi pi-download"
+          @click="exportResults"
+          :disabled="results.length === 0"
           outlined
         />
       </div>
@@ -234,69 +680,163 @@ const getStatusLabel = (status: string): string => {
 
         <DataTable
           :value="results"
+          v-model:expandedRows="expandedRows"
           paginator
-          :rows="20"
+          :rows="50"
           :rowsPerPageOptions="[10, 20, 50, 100]"
           class="link-checker-table"
           emptyMessage="点击【开始检测】检查历史记录中的图片链接"
         >
-          <Column field="fileName" header="文件名" sortable>
-            <template #body="slotProps">
-              <span :title="slotProps.data.fileName">{{ slotProps.data.fileName }}</span>
+          <Column expander style="width: 3rem" />
+
+          <Column field="fileName" header="文件名" sortable style="width: 200px">
+            <template #body="{ data }">
+              <span :title="data.fileName">{{ data.fileName }}</span>
             </template>
           </Column>
 
-          <Column field="link" header="链接">
-            <template #body="slotProps">
-              <a
-                :href="slotProps.data.link"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="link-url"
-                :title="slotProps.data.link"
-              >
-                {{ slotProps.data.link.substring(0, 50) }}...
-              </a>
-            </template>
-          </Column>
-
-          <Column field="service" header="图床" sortable style="width: 100px">
-            <template #body="slotProps">
-              <Tag :value="slotProps.data.service" severity="info" />
-            </template>
-          </Column>
-
-          <Column field="status" header="状态" sortable style="width: 100px">
-            <template #body="slotProps">
+          <Column field="status" header="聚合状态" sortable style="width: 150px">
+            <template #body="{ data }">
               <Tag
-                :value="getStatusLabel(slotProps.data.status)"
-                :severity="getStatusSeverity(slotProps.data.status)"
+                :value="getStatusLabel(data.status)"
+                :severity="getStatusSeverity(data.status)"
               />
+              <span class="ml-2 text-sm">{{ data.validCount }}/{{ data.serviceResults.length }}</span>
             </template>
           </Column>
 
-          <Column header="操作" style="width: 100px">
-            <template #body="slotProps">
+          <Column header="图床数量" style="width: 100px">
+            <template #body="{ data }">
+              {{ data.serviceResults.length }} 个
+            </template>
+          </Column>
+
+          <Column header="操作" style="width: 180px">
+            <template #body="{ data }">
               <Button
-                icon="pi pi-copy"
-                @click="copyLink(slotProps.data.link)"
+                icon="pi pi-refresh"
+                @click="recheckSingle(data)"
                 size="small"
                 text
                 rounded
-                v-tooltip.top="'复制链接'"
+                v-tooltip.top="'重新检测'"
+                class="mr-1"
+              />
+              <Button
+                icon="pi pi-upload"
+                @click="openReuploadDialog(data)"
+                :disabled="!data.canReupload"
+                size="small"
+                text
+                rounded
+                v-tooltip.top="'重新上传'"
               />
             </template>
           </Column>
+
+          <!-- 展开内容：显示所有图床的检测结果 -->
+          <template #expansion="{ data }">
+            <div class="service-details">
+              <DataTable :value="data.serviceResults" class="service-results-table">
+                <Column field="serviceId" header="图床" style="width: 100px">
+                  <template #body="{ data: sr }">
+                    <Tag :value="sr.serviceId" severity="info" />
+                  </template>
+                </Column>
+
+                <Column header="状态" style="width: 150px">
+                  <template #body="{ data: sr }">
+                    <Tag
+                      :severity="sr.isValid ? 'success' : 'danger'"
+                      :value="sr.isValid ? '有效' : '失效'"
+                    />
+                    <span v-if="sr.statusCode" class="ml-2 text-sm text-muted">HTTP {{ sr.statusCode }}</span>
+                  </template>
+                </Column>
+
+                <Column header="链接" style="width: 400px">
+                  <template #body="{ data: sr }">
+                    <a :href="sr.link" target="_blank" class="link-url" :title="sr.link">
+                      {{ truncate(sr.link, 60) }}
+                    </a>
+                  </template>
+                </Column>
+
+                <Column header="响应时间" style="width: 100px">
+                  <template #body="{ data: sr }">
+                    <span v-if="sr.responseTime" class="text-sm">{{ sr.responseTime }}ms</span>
+                    <span v-else class="text-sm text-muted">-</span>
+                  </template>
+                </Column>
+
+                <Column header="建议" style="min-width: 250px">
+                  <template #body="{ data: sr }">
+                    <small v-if="sr.suggestion" class="suggestion-text">{{ sr.suggestion }}</small>
+                    <span v-else class="text-sm text-muted">-</span>
+                  </template>
+                </Column>
+              </DataTable>
+            </div>
+          </template>
         </DataTable>
       </div>
     </div>
+
+    <!-- 重新上传对话框 -->
+    <Dialog
+      v-model:visible="showReuploadDialog"
+      header="重新上传"
+      :style="{ width: '500px' }"
+      modal
+    >
+      <template v-if="selectedReuploadItem">
+        <div class="reupload-dialog-content">
+          <p><strong>文件：</strong>{{ selectedReuploadItem.checkResult.fileName }}</p>
+
+          <div class="form-group">
+            <label>从哪个图床下载：</label>
+            <Select
+              v-model="selectedReuploadItem.sourceService"
+              :options="selectedReuploadItem.validServices"
+              placeholder="选择源图床"
+              class="w-full"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>重新上传到：</label>
+            <MultiSelect
+              v-model="selectedReuploadItem.targetServices"
+              :options="selectedReuploadItem.invalidServices"
+              placeholder="选择目标图床"
+              class="w-full"
+            />
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <Button
+          label="取消"
+          icon="pi pi-times"
+          @click="showReuploadDialog = false"
+          outlined
+        />
+        <Button
+          label="确认上传"
+          icon="pi pi-check"
+          @click="executeReupload"
+          severity="success"
+        />
+      </template>
+    </Dialog>
   </div>
 </template>
 
 <style scoped>
 .link-checker-view {
-  height: 100%;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   padding: 20px;
   background: var(--bg-app);
 }
@@ -306,25 +846,7 @@ const getStatusLabel = (status: string): string => {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-}
-
-/* 标题 */
-.link-checker-header {
-  text-align: center;
-}
-
-.link-checker-header h1 {
-  margin: 0 0 8px 0;
-  font-size: 2rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.link-checker-desc {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 1rem;
+  gap: 16px;
 }
 
 /* 控制区域 */
@@ -375,15 +897,15 @@ const getStatusLabel = (status: string): string => {
 /* 统计卡片 */
 .link-checker-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
 }
 
 .link-checker-stat-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: 8px;
+  padding: 16px;
   text-align: center;
   transition: all 0.2s;
 }
@@ -394,14 +916,14 @@ const getStatusLabel = (status: string): string => {
 }
 
 .stat-value {
-  font-size: 2.5rem;
+  font-size: 1.8rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .stat-label {
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
   font-weight: 500;
 }
@@ -447,15 +969,21 @@ const getStatusLabel = (status: string): string => {
 .link-url {
   color: var(--primary);
   text-decoration: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: inline-block;
-  max-width: 300px;
+  word-break: break-all;
+  width: 100%;
+  display: block;
+  white-space: normal;
+  line-height: 1.5;
 }
 
 .link-url:hover {
   text-decoration: underline;
+}
+
+/* 强制 DataTable 单元格内容换行 */
+:deep(.p-datatable .p-datatable-tbody > tr > td) {
+  word-break: break-word;
+  white-space: normal;
 }
 
 /* 滚动条 */
@@ -474,5 +1002,76 @@ const getStatusLabel = (status: string): string => {
 
 .link-checker-view::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+
+/* 展开表格样式 */
+.service-details {
+  padding: 12px 16px;
+  background: var(--bg-app);
+  border-radius: 8px;
+}
+
+.service-results-table {
+  background: transparent;
+}
+
+.text-muted {
+  color: var(--text-secondary);
+}
+
+.ml-2 {
+  margin-left: 0.5rem;
+}
+
+.mr-1 {
+  margin-right: 0.25rem;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+}
+
+.suggestion-text {
+  color: var(--text-secondary);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* 重新上传对话框样式 */
+.reupload-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.w-full {
+  width: 100%;
+}
+
+/* 展开行动画 */
+:deep(.p-datatable-row-expansion) {
+  animation: fadeIn 0.2s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

@@ -81,12 +81,12 @@ const closeWindow = () => {
 }
 
 .titlebar-button:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--hover-overlay);
 }
 
 .titlebar-button.close:hover {
   background: var(--error);
-  color: white;
+  color: var(--text-on-error);
 }
 
 .titlebar-button i {

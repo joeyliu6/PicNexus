@@ -144,11 +144,12 @@ body, html {
 
 .titlebar-button svg {
   stroke: currentColor;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-primary);
+  opacity: 0.8;
 }
 
 .titlebar-button:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--hover-overlay);
 }
 
 .titlebar-button.close:hover {
@@ -158,7 +159,7 @@ body, html {
 .titlebar-button.close:hover img,
 .titlebar-button.close:hover svg {
   filter: invert(1); /* Pure white */
-  color: white;
+  color: var(--text-on-error);
 }
 
 /* Dashboard Layout */
@@ -224,7 +225,7 @@ body, html {
 
 .nav-btn:hover {
   color: var(--text-primary);
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--hover-overlay-subtle);
 }
 
 .nav-btn.active {
@@ -239,7 +240,7 @@ body, html {
   right: 10px;
   transform: translateY(-50%);
   background-color: var(--error);
-  color: white;
+  color: var(--text-on-error);
   border-radius: 10px;
   padding: 2px 6px;
   font-size: 10px;
@@ -335,7 +336,8 @@ body, html {
 /* 图床选择按钮基础样式 */
 .service-btn {
   padding: 8px 16px;
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: var(--hover-overlay-subtle);
+  opacity: 0.6;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   cursor: pointer;
@@ -350,7 +352,7 @@ body, html {
 
 /* 悬浮效果 */
 .service-btn:not(.disabled):hover {
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: var(--button-hover-overlay);
   border-color: var(--success);
 }
 
@@ -363,12 +365,13 @@ body, html {
 
 /* 不可选状态 (未配置) */
 .service-btn.disabled {
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-disabled);
   cursor: not-allowed;
 }
 
 .service-btn.disabled:hover {
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: var(--hover-overlay-subtle);
+  opacity: 0.6;
   border-color: var(--border-subtle);
 }
 
@@ -391,8 +394,15 @@ body, html {
   visibility: hidden;
   transition: all 0.15s ease;
   z-index: 1000;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.1);
   pointer-events: none;
+}
+
+:root.dark-theme .service-btn.disabled[data-tooltip]::after {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+:root.light-theme .service-btn.disabled[data-tooltip]::after {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.1);
 }
 
 /* Tooltip 箭头 */
@@ -639,7 +649,7 @@ body, html {
   overflow: hidden;
 }
 
-.upload-item .actions button::before {
+:root.dark-theme .upload-item .actions button::before {
   content: '';
   position: absolute;
   top: 0;
@@ -647,6 +657,17 @@ body, html {
   width: 100%;
   height: 100%;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transition: left 0.5s;
+}
+
+:root.light-theme .upload-item .actions button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.05), transparent);
   transition: left 0.5s;
 }
 
@@ -2001,6 +2022,12 @@ body, html {
 .app-toast #toast-message {
   flex: 1;
   white-space: nowrap;
+}
+
+/* PrimeVue Toast 定位调整 - 避免与TitleBar重叠 */
+.p-toast.p-toast-top-right {
+  top: 52px !important;  /* TitleBar(32px) + 间距(20px) */
+  right: 20px;
 }
 
 .r2-empty-message {

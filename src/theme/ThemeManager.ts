@@ -79,11 +79,14 @@ export class ThemeManager {
     }
 
     const root = document.documentElement;
-    const duration = this.config.theme?.transitionDuration || 300;
+    const duration = this.config.theme?.transitionDuration || 200;
 
     // 如果启用过渡动画
     if (withTransition) {
       this.isTransitioning = true;
+
+      // 添加 GPU 加速提示，优化渲染性能
+      root.style.willChange = 'background-color';
 
       // 设置过渡持续时间
       root.style.setProperty('--theme-transition-duration', `${duration}ms`);
@@ -91,20 +94,30 @@ export class ThemeManager {
       // 添加过渡类
       root.classList.add('theme-transitioning');
 
-      // 延迟后移除过渡类
+      // 切换主题类（在过渡开始时立即切换）
+      if (mode === 'dark') {
+        root.classList.add('dark-theme');
+        root.classList.remove('light-theme');
+      } else {
+        root.classList.add('light-theme');
+        root.classList.remove('dark-theme');
+      }
+
+      // 延迟后移除过渡类并清理 GPU 资源
       setTimeout(() => {
         root.classList.remove('theme-transitioning');
+        root.style.willChange = 'auto'; // 清理 GPU 资源，避免内存浪费
         this.isTransitioning = false;
       }, duration);
-    }
-
-    // 切换主题类
-    if (mode === 'dark') {
-      root.classList.add('dark-theme');
-      root.classList.remove('light-theme');
     } else {
-      root.classList.add('light-theme');
-      root.classList.remove('dark-theme');
+      // 无过渡时直接切换
+      if (mode === 'dark') {
+        root.classList.add('dark-theme');
+        root.classList.remove('light-theme');
+      } else {
+        root.classList.add('light-theme');
+        root.classList.remove('dark-theme');
+      }
     }
   }
 

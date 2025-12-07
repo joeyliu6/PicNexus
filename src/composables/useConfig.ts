@@ -96,9 +96,6 @@ export function useConfigManager() {
       console.log('[配置管理] 开始保存配置...');
       isSaving.value = true;
 
-      // 显示保存中状态
-      toast.info('正在保存', '配置保存中...');
-
       // 验证必填字段
       if (newConfig.outputFormat === 'r2' && !newConfig.services?.r2?.publicDomain?.trim()) {
         const errorMsg = '当输出格式为 R2 时，公开访问域名不能为空！';
