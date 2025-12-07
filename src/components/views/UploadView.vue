@@ -31,8 +31,6 @@ const serviceLabels: Record<ServiceType, string> = {
   nami: '纳米'
 };
 
-const MAX_SERVICES = 3;
-
 // 所有服务列表
 const allServices: ServiceType[] = ['weibo', 'r2', 'tcl', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami'];
 
@@ -159,9 +157,9 @@ onMounted(async () => {
       <div class="upload-controls">
         <div class="controls-header">
           <h3 class="controls-title">选择上传图床</h3>
-          <span class="selection-badge">{{ selectedCount }}/{{ MAX_SERVICES }}</span>
+          <span class="selection-badge">已选择 {{ selectedCount }} 个</span>
         </div>
-        <p class="controls-hint">可同时选择最多 {{ MAX_SERVICES }} 个图床进行并行上传</p>
+        <p class="controls-hint">可选择任意数量的图床，上传时将并发处理（最多同时3个）</p>
 
         <div class="service-buttons">
           <Button

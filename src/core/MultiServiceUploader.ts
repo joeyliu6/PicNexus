@@ -75,17 +75,11 @@ export class MultiServiceUploader {
       );
     }
 
-    // 2. 限制并发上传（最多3个图床同时上传）
-    const limitedServices = validServices.slice(0, this.MAX_CONCURRENT_UPLOADS);
-    if (validServices.length > this.MAX_CONCURRENT_UPLOADS) {
-      console.warn(
-        `[MultiUploader] 已选择 ${validServices.length} 个图床，` +
-        `但只会并行上传前 ${this.MAX_CONCURRENT_UPLOADS} 个`
-      );
-    }
+    // 2. 分批并发上传到所有图床（最多同时3个）
+    console.log(`[MultiUploader] 将上传到 ${validServices.length} 个图床，并发数: ${this.MAX_CONCURRENT_UPLOADS}`);
 
-    // 3. 并行上传到所有图床
-    const uploadPromises = limitedServices.map(async (serviceId) => {
+    // 创建所有上传任务
+    const uploadTasks = validServices.map((serviceId) => async () => {
       try {
         const uploader = UploaderFactory.create(serviceId);
         const serviceConfig = config.services[serviceId];
@@ -128,23 +122,30 @@ export class MultiServiceUploader {
       }
     });
 
-    const results = await Promise.allSettled(uploadPromises);
+    // 3. 使用并发控制执行上传任务
+    const executing: Promise<any>[] = [];
+    const uploadResults: any[] = [];
 
-    // 4. 提取结果（已在 Promise 内部包含 serviceId，简化映射逻辑）
-    const uploadResults = results.map((r) => {
-      if (r.status === 'fulfilled') {
-        return r.value;
-      } else {
-        // rejected 的情况（理论上不应该发生，因为内部已 catch）
-        return {
-          serviceId: 'unknown' as ServiceType,
-          status: 'failed' as const,
-          error: r.reason?.message || '未知错误'
-        };
+    for (const task of uploadTasks) {
+      const promise = task().then(result => {
+        uploadResults.push(result);
+        return result;
+      }).finally(() => {
+        executing.splice(executing.indexOf(promise), 1);
+      });
+
+      executing.push(promise);
+
+      // 当达到最大并发数时，等待至少一个任务完成
+      if (executing.length >= this.MAX_CONCURRENT_UPLOADS) {
+        await Promise.race(executing);
       }
-    });
+    }
 
-    // 5. 确定主力图床（第一个成功的）
+    // 等待所有剩余任务完成
+    await Promise.all(executing);
+
+    // 4. 确定主力图床（第一个成功的）
     const primaryResult = uploadResults.find(r => r.status === 'success');
 
     if (!primaryResult || !primaryResult.result) {

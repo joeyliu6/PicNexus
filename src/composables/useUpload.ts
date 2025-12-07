@@ -2,7 +2,7 @@
 // 上传管理 Composable - 封装文件选择、上传、历史记录保存等功能
 
 import { ref, Ref, computed } from 'vue';
-import { dialog } from '@tauri-apps/api';
+import { dialog, invoke } from '@tauri-apps/api';
 import { basename } from '@tauri-apps/api/path';
 import { Store } from '../store';
 import {
@@ -207,7 +207,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     // 为每个文件创建队列项
     const uploadTasks = filePaths.map(filePath => {
       const fileName = filePath.split(/[/\\]/).pop() || filePath;
-      const itemId = queueManager!.addFile(filePath, fileName, enabledServices);
+      const itemId = queueManager!.addFile(filePath, fileName, [...enabledServices]);  // 传递数组副本
 
       return async () => {
         try {
@@ -329,7 +329,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         filePath: filePath,
         results: uploadResult.results,
         primaryService: uploadResult.primaryService,
-        generatedLink: uploadResult.primaryResult?.url || ''
+        generatedLink: uploadResult.primaryUrl || ''
       };
 
       // 添加到历史记录（最新的在前面）
@@ -368,7 +368,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       );
 
       // 更新各图床的配置状态
-      updateServiceConfigStatus(config);
+      await updateServiceConfigStatus(config);
 
       // 加载活跃前缀
       activePrefix.value = getActivePrefixFromConfig(config);
@@ -383,7 +383,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
    * 更新服务配置状态（根据配置情况判断是否已配置）
    * @param config 用户配置
    */
-  function updateServiceConfigStatus(config: UserConfig): void {
+  async function updateServiceConfigStatus(config: UserConfig): Promise<void> {
     if (!config.services) {
       config.services = {};
     }
@@ -413,8 +413,17 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     const zhihuConfig = config.services.zhihu;
     serviceConfigStatus.value.zhihu = !!zhihuConfig?.cookie && zhihuConfig.cookie.trim().length > 0;
 
-    // 七鱼（暂时标记为未配置，需要通过 invoke 检测 Chrome）
-    serviceConfigStatus.value.qiyu = false;
+    // 七鱼：检测 Chrome/Edge 是否安装
+    try {
+      const chromeInstalled = await invoke<boolean>('check_chrome_installed');
+      serviceConfigStatus.value.qiyu = chromeInstalled;
+      if (!chromeInstalled) {
+        console.warn('[七鱼] Chrome/Edge 未安装，服务不可用');
+      }
+    } catch (error) {
+      console.error('[七鱼] Chrome 检测失败:', error);
+      serviceConfigStatus.value.qiyu = false;
+    }
 
     // 纳米
     const namiConfig = config.services.nami;
@@ -448,11 +457,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       // 取消选中
       selectedServices.value.splice(index, 1);
     } else {
-      // 选中（最多3个）
-      if (selectedServices.value.length >= 3) {
-        toast.warn('最多选择3个图床', '已达到上限，请先取消选中其他图床');
-        return;
-      }
+      // 选中（无数量限制）
       selectedServices.value.push(serviceId);
     }
 

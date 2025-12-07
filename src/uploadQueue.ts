@@ -102,7 +102,7 @@ export class UploadQueueManager {
       id,
       fileName,
       filePath,
-      enabledServices,
+      enabledServices: [...enabledServices],  // 创建数组副本,避免引用共享
       serviceProgress: serviceProgress as Record<ServiceType, ServiceProgress>,
       status: 'pending',
       // 向后兼容

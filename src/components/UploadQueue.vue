@@ -377,7 +377,7 @@ defineExpose({
     display: flex;
     flex-direction: column;
     gap: 4px;
-    align-self: flex-start;
+    align-self: center;
 }
 
 /* PrimeVue Button 样式调整 */

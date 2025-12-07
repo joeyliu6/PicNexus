@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
+import { invoke } from '@tauri-apps/api/tauri';
 import Card from 'primevue/card';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
@@ -97,6 +98,37 @@ const testingConnections = ref<Record<string, boolean>>({
   nami: false,
   webdav: false
 });
+
+// 七鱼 Chrome 检测状态
+const qiyuChromeInstalled = ref<boolean>(false);
+const isCheckingChrome = ref<boolean>(false);
+
+// Chrome 状态颜色（绿色=已安装，红色=未安装）
+const chromeStatusColor = computed(() => {
+  if (qiyuChromeInstalled.value) return '#22c55e'; // 绿色
+  return '#ef4444'; // 红色
+});
+
+// Chrome 状态文本
+const chromeStatusText = computed(() => {
+  if (qiyuChromeInstalled.value) return '已检测到 Chrome/Edge ✓';
+  return '未检测到 Chrome/Edge';
+});
+
+// 检测 Chrome/Edge 是否安装
+async function checkQiyuChrome(): Promise<void> {
+  isCheckingChrome.value = true;
+  try {
+    console.log('[七鱼] 正在检测 Chrome/Edge 浏览器...');
+    qiyuChromeInstalled.value = await invoke<boolean>('check_chrome_installed');
+    console.log('[七鱼] Chrome 检测结果:', qiyuChromeInstalled.value);
+  } catch (error) {
+    console.error('[七鱼] Chrome 检测失败:', error);
+    qiyuChromeInstalled.value = false;
+  } finally {
+    isCheckingChrome.value = false;
+  }
+}
 
 // 加载配置
 const loadSettings = async () => {
@@ -385,6 +417,9 @@ onMounted(async () => {
   // 加载配置
   await loadSettings();
 
+  // 检测七鱼图床所需的 Chrome/Edge 浏览器
+  await checkQiyuChrome();
+
   // 设置 Cookie 更新监听器
   await configManager.setupCookieListener(handleCookieUpdate);
   console.log('[SettingsView] Cookie 监听器已设置');
@@ -594,6 +629,50 @@ onMounted(async () => {
           </Message>
           <Message severity="warn" :closable="false">
             注意：京东为第三方免费服务，稳定性无保障
+          </Message>
+        </template>
+      </Card>
+
+      <!-- 七鱼图床 -->
+      <Card class="settings-card">
+        <template #title>
+          <div class="card-title">
+            <i class="pi pi-image"></i>
+            <span>七鱼图床</span>
+          </div>
+        </template>
+        <template #content>
+          <Message severity="success" :closable="false">
+            七鱼图床无需手动配置 Token，通过浏览器自动获取
+          </Message>
+          <Message severity="info" :closable="false">
+            使用前提：系统需要安装 Chrome 或 Edge 浏览器
+          </Message>
+
+          <!-- Chrome 检测状态 -->
+          <div class="chrome-status-container">
+            <div class="status-row">
+              <span class="status-label">浏览器检测状态：</span>
+              <div class="status-indicator">
+                <div
+                  class="status-dot"
+                  :style="{ background: chromeStatusColor }"
+                ></div>
+                <span>{{ chromeStatusText }}</span>
+              </div>
+            </div>
+            <Button
+              label="重新检测"
+              icon="pi pi-refresh"
+              @click="checkQiyuChrome"
+              :loading="isCheckingChrome"
+              size="small"
+              outlined
+            />
+          </div>
+
+          <Message v-if="!qiyuChromeInstalled" severity="warn" :closable="false">
+            未检测到 Chrome/Edge，七鱼图床将无法使用
           </Message>
         </template>
       </Card>
@@ -1179,5 +1258,40 @@ onMounted(async () => {
 
 .settings-view::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+
+/* 七鱼 Chrome 检测状态样式 */
+.chrome-status-container {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--surface-ground);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-label {
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transition: background-color 0.3s;
 }
 </style>

@@ -344,7 +344,7 @@ async function processUploadQueue(
   // 为每个文件创建队列项
   const uploadTasks = filePaths.map(filePath => {
     const fileName = filePath.split(/[/\\]/).pop() || filePath;
-    const itemId = uploadQueueManager!.addFile(filePath, fileName, enabledServices);
+    const itemId = uploadQueueManager!.addFile(filePath, fileName, [...enabledServices]);  // 传递数组副本
 
     return async () => {
       try {
