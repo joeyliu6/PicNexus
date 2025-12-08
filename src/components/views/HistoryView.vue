@@ -6,12 +6,9 @@ import Column from 'primevue/column';
 import DataView from 'primevue/dataview';
 import Button from 'primevue/button';
 import Checkbox from 'primevue/checkbox';
-import SelectButton from 'primevue/selectbutton';
-import InputText from 'primevue/inputtext';
 import Select from 'primevue/select';
-import Image from 'primevue/image';
+import Dialog from 'primevue/dialog';
 import Tag from 'primevue/tag';
-import Badge from 'primevue/badge';
 import type { HistoryItem, ServiceType } from '../../config/types';
 import { getActivePrefix } from '../../config/types';
 import { useHistoryManager, type ViewMode } from '../../composables/useHistory';
@@ -27,6 +24,12 @@ const viewOptions = ref([
   { label: '表格', value: 'table' as ViewMode, icon: 'pi pi-table' },
   { label: '瀑布流', value: 'grid' as ViewMode, icon: 'pi pi-th-large' }
 ]);
+
+// Lightbox 状态
+const lightboxVisible = ref(false);
+const lightboxImage = ref('');
+const lightboxTitle = ref('');
+const lightboxItem = ref<HistoryItem | null>(null);
 
 // 图床筛选选项
 const serviceOptions = [
@@ -142,11 +145,6 @@ const handleCopyLink = async (item: HistoryItem) => {
   }
 };
 
-// 删除单项
-const handleDeleteItem = async (item: HistoryItem) => {
-  await historyManager.deleteHistoryItem(item.id);
-};
-
 // 清空历史
 const handleClearHistory = async () => {
   await historyManager.clearHistory();
@@ -251,36 +249,6 @@ const getThumbUrl = (item: HistoryItem): string | undefined => {
   return undefined;
 };
 
-// 获取服务标签颜色（已弃用，保留用于兼容）
-const getServiceSeverity = (service: string): 'success' | 'info' | 'warn' | 'danger' | 'secondary' | 'contrast' | undefined => {
-  const severityMap: Record<string, any> = {
-    weibo: 'info',
-    r2: 'success',
-    tcl: 'warn',
-    jd: 'danger',
-    nowcoder: 'secondary',
-    qiyu: 'info',
-    zhihu: 'info',
-    nami: 'success'
-  };
-  return severityMap[service] || 'secondary';
-};
-
-// 获取服务自定义颜色（深色模式友好）
-const getServiceColor = (service: string): { bg: string; text: string } => {
-  const colorMap: Record<string, { bg: string; text: string }> = {
-    weibo: { bg: '#60a5fa', text: '#ffffff' },      // 亮蓝色
-    r2: { bg: '#34d399', text: '#ffffff' },          // 亮绿色
-    tcl: { bg: '#fb923c', text: '#ffffff' },         // 亮橙色
-    jd: { bg: '#f87171', text: '#ffffff' },          // 亮红色
-    nowcoder: { bg: '#c084fc', text: '#ffffff' },    // 亮紫色
-    qiyu: { bg: '#22d3ee', text: '#ffffff' },        // 亮青色
-    zhihu: { bg: '#818cf8', text: '#ffffff' },       // 亮靛蓝色
-    nami: { bg: '#f472b6', text: '#ffffff' }         // 亮粉色
-  };
-  return colorMap[service] || { bg: '#94a3b8', text: '#ffffff' }; // 默认亮灰色
-};
-
 // 获取服务名称
 const getServiceName = (serviceId: ServiceType): string => {
   const serviceNames: Record<ServiceType, string> = {
@@ -337,84 +305,175 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
     toast.error('复制失败', String(error));
   }
 };
+
+// === Lightbox 相关函数 ===
+
+// 获取大图 URL（微博使用 large 尺寸）
+const getLargeImageUrl = (item: HistoryItem): string => {
+  const result = item.results.find(r =>
+    r.serviceId === item.primaryService && r.status === 'success'
+  );
+
+  if (!result?.result?.url) return '';
+
+  // 微博图床：使用 large 尺寸（而非 bmiddle）
+  if (result.serviceId === 'weibo' && result.result.fileKey) {
+    let largeUrl = `https://tvax1.sinaimg.cn/large/${result.result.fileKey}.jpg`;
+
+    const activePrefix = getActivePrefix(configManager.config.value);
+    if (activePrefix) {
+      largeUrl = `${activePrefix}${largeUrl}`;
+    }
+
+    return largeUrl;
+  }
+
+  return result.result.url;
+};
+
+// 打开 Lightbox
+const openLightbox = (item: HistoryItem): void => {
+  lightboxItem.value = item;
+  lightboxImage.value = getLargeImageUrl(item);
+  lightboxTitle.value = item.localFileName;
+  lightboxVisible.value = true;
+};
+
+// 从 Lightbox 删除单项
+const deleteSingleItem = async (item: HistoryItem): Promise<void> => {
+  try {
+    await historyManager.deleteHistoryItem(item.id);
+    lightboxVisible.value = false;
+    toast.success('删除成功', '已删除 1 条记录');
+  } catch (error) {
+    console.error('[历史记录] 删除失败:', error);
+    toast.error('删除失败', String(error));
+  }
+};
+
+// === 网格视图辅助函数 ===
+
+// 检查网格项是否选中
+const isGridSelected = (item: HistoryItem): boolean => {
+  return historyManager.historyState.value.selectedItems.has(item.id);
+};
+
+// 切换网格项选中状态
+const toggleGridSelection = (item: HistoryItem): void => {
+  historyManager.toggleSelection(item.id);
+};
+
+// 获取预览图 URL（复用 getThumbUrl）
+const getPreviewUrl = (item: HistoryItem): string | undefined => {
+  return getThumbUrl(item);
+};
 </script>
 
 <template>
   <div class="history-view">
     <div class="history-container">
-      <!-- 工具栏 -->
-      <div class="history-toolbar">
-        <!-- 第一行：批量操作 + 视图切换 -->
-        <div class="toolbar-row">
-          <div class="bulk-actions">
-            <Checkbox
-              v-model="selectAll"
-              @change="handleSelectAll"
-              :binary="true"
-              :indeterminate="isSomeSelected && !isAllSelected"
-              inputId="select-all"
-            />
-            <label for="select-all" class="select-all-label">全选</label>
+      <!-- Dashboard Strip -->
+      <div class="dashboard-strip">
+        <!-- 左侧区域：标题 + 视图切换 -->
+        <div class="strip-left">
+          <span class="view-title">上传历史</span>
+          <div class="v-divider"></div>
 
-            <Button
-              label="批量复制"
-              icon="pi pi-copy"
-              @click="handleBulkCopy"
-              :disabled="!historyManager.hasSelection.value"
-              size="small"
-              outlined
-            />
-            <Button
-              label="导出 JSON"
-              icon="pi pi-download"
-              @click="handleBulkExport"
-              :disabled="!historyManager.hasSelection.value"
-              size="small"
-              outlined
-            />
-            <Button
-              label="批量删除"
-              icon="pi pi-trash"
-              @click="handleBulkDelete"
-              :disabled="!historyManager.hasSelection.value"
-              severity="danger"
-              size="small"
-              outlined
-            />
+          <div class="view-switcher">
+            <button
+              v-for="opt in viewOptions"
+              :key="opt.value"
+              class="switch-btn"
+              :class="{ active: historyManager.historyState.value.viewMode === opt.value }"
+              @click="historyManager.historyState.value.viewMode = opt.value"
+              :title="opt.label"
+            >
+              <i :class="opt.icon"></i>
+            </button>
           </div>
-
-          <SelectButton
-            v-model="historyManager.historyState.value.viewMode"
-            :options="viewOptions"
-            optionLabel="label"
-            optionValue="value"
-            class="view-mode-toggle"
-          >
-            <template #option="slotProps">
-              <i :class="slotProps.option.icon"></i>
-            </template>
-          </SelectButton>
         </div>
 
-        <!-- 第二行：筛选和搜索 -->
-        <div class="filter-search-row">
+        <!-- 中间区域：搜索 + 筛选 -->
+        <div class="strip-center">
+          <div class="search-bar">
+            <i class="pi pi-search search-icon"></i>
+            <input
+              v-model="historyManager.searchTerm.value"
+              type="text"
+              placeholder="搜索文件名..."
+              class="search-input"
+            />
+            <i
+              v-if="historyManager.searchTerm.value"
+              class="pi pi-times clear-icon"
+              @click="historyManager.searchTerm.value = ''"
+            ></i>
+          </div>
+
           <Select
             v-model="historyManager.historyState.value.currentFilter"
             :options="serviceOptions"
             optionLabel="label"
             optionValue="value"
-            placeholder="筛选图床"
-            class="service-filter"
+            class="filter-select"
           />
+        </div>
 
-          <div class="search-wrapper">
-            <i class="pi pi-search search-icon"></i>
-            <InputText
-              v-model="historyManager.searchTerm.value"
-              placeholder="搜索图名..."
-              class="search-input"
+        <!-- 右侧区域：统计/批量操作 + 清空 -->
+        <div class="strip-right">
+          <!-- 未选中：显示统计 -->
+          <span class="stats-text" v-if="!historyManager.hasSelection.value">
+            共 {{ historyManager.filteredItems.value.length }} 项
+          </span>
+
+          <!-- 选中：显示批量操作 -->
+          <div v-else class="batch-actions">
+            <span class="selected-count">已选 {{ historyManager.selectedIds.value.length }}</span>
+            <Button
+              icon="pi pi-copy"
+              text
+              rounded
+              size="small"
+              @click="handleBulkCopy"
+              v-tooltip.bottom="'批量复制链接'"
+            />
+            <Button
+              icon="pi pi-download"
+              text
+              rounded
+              size="small"
+              @click="handleBulkExport"
+              v-tooltip.bottom="'导出 JSON'"
+            />
+            <Button
+              icon="pi pi-trash"
+              severity="danger"
+              text
+              rounded
+              size="small"
+              @click="handleBulkDelete"
+              v-tooltip.bottom="'批量删除'"
+            />
+            <Button
+              icon="pi pi-times"
+              text
+              rounded
+              size="small"
+              @click="historyManager.historyState.value.selectedItems.clear()"
+              v-tooltip.bottom="'取消选择'"
             />
           </div>
+
+          <div class="v-divider"></div>
+
+          <Button
+            icon="pi pi-trash"
+            class="icon-only-btn danger-hover"
+            text
+            rounded
+            @click="handleClearHistory"
+            v-tooltip.bottom="'清空所有历史'"
+          />
         </div>
       </div>
 
@@ -429,11 +488,17 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
         :rowsPerPageOptions="[10, 20, 50, 100]"
         sortField="timestamp"
         :sortOrder="-1"
-        class="history-table"
+        class="history-table minimal-table"
         :emptyMessage="historyManager.allHistoryItems.value.length === 0 ? '暂无历史记录' : '未找到匹配的记录'"
-        tableStyle="table-layout: fixed; width: 100%"
       >
-        <!-- 自定义复选框列 -->
+        <template #empty>
+          <div class="empty-state">
+            <i class="pi pi-folder-open"></i>
+            <p>没有找到相关记录</p>
+          </div>
+        </template>
+
+        <!-- 复选框列 -->
         <Column headerStyle="width: 3rem">
           <template #header>
             <Checkbox
@@ -452,39 +517,43 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
           </template>
         </Column>
 
-        <Column field="thumbUrl" header="预览" style="width: 4rem">
+        <!-- 预览列（36px 缩略图） -->
+        <Column header="预览" style="width: 60px">
           <template #body="slotProps">
-            <Image
-              v-if="getThumbUrl(slotProps.data)"
-              :src="getThumbUrl(slotProps.data)"
-              :alt="slotProps.data.localFileName"
-              preview
-              class="preview-thumbnail"
-            />
-            <i v-else class="pi pi-image preview-placeholder"></i>
+            <div class="thumb-box" @click="openLightbox(slotProps.data)">
+              <img
+                v-if="getThumbUrl(slotProps.data)"
+                :src="getThumbUrl(slotProps.data)"
+                :alt="slotProps.data.localFileName"
+                @error="(e: any) => e.target.src = '/placeholder.png'"
+              />
+              <i v-else class="pi pi-image thumb-placeholder"></i>
+            </div>
           </template>
         </Column>
 
-        <Column field="localFileName" header="图名" sortable style="flex: 1; min-width: 150px">
+        <!-- 文件名列 -->
+        <Column field="localFileName" header="文件名" sortable style="min-width: 200px">
           <template #body="slotProps">
-            <span class="file-name" :title="slotProps.data.localFileName">
-              {{ slotProps.data.localFileName }}
-            </span>
+            <div class="filename-cell">
+              <span class="fname" :title="slotProps.data.localFileName">
+                {{ slotProps.data.localFileName }}
+              </span>
+              <span class="fdate">{{ formatTime(slotProps.data.timestamp) }}</span>
+            </div>
           </template>
         </Column>
 
-        <Column field="primaryService" header="图床" sortable style="width: 120px">
+        <!-- 已传图床列 -->
+        <Column header="已传图床" style="width: 180px">
           <template #body="slotProps">
             <div class="service-badges">
-              <Badge
+              <Tag
                 v-for="serviceId in getSuccessfulServices(slotProps.data)"
                 :key="serviceId"
                 :value="getServiceName(serviceId)"
-                :style="{
-                  backgroundColor: getServiceColor(serviceId).bg,
-                  color: getServiceColor(serviceId).text
-                }"
-                class="service-badge"
+                severity="secondary"
+                class="mini-tag"
                 @click="handleCopyServiceLink(slotProps.data, serviceId)"
                 v-tooltip.top="`点击复制${getServiceName(serviceId)}链接`"
               />
@@ -492,53 +561,34 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
           </template>
         </Column>
 
-        <Column header="链接" style="width: 100px">
+        <!-- 链接操作列 -->
+        <Column header="链接" style="width: 120px; text-align: center;">
           <template #body="slotProps">
             <div class="link-actions">
               <Button
                 icon="pi pi-copy"
-                @click="handleCopyLink(slotProps.data)"
-                size="small"
                 text
                 rounded
-                v-tooltip.top="'复制主链接'"
+                size="small"
+                class="action-icon-btn"
+                @click="handleCopyLink(slotProps.data)"
+                v-tooltip.top="'复制链接'"
               />
               <Button
                 icon="pi pi-external-link"
-                @click="openInBrowser(slotProps.data)"
-                size="small"
                 text
                 rounded
-                v-tooltip.top="'在浏览器打开'"
-              />
-            </div>
-          </template>
-        </Column>
-
-        <Column field="timestamp" header="上传时间" sortable style="width: 150px">
-          <template #body="slotProps">
-            <span class="timestamp monospace">{{ formatTime(slotProps.data.timestamp) }}</span>
-          </template>
-        </Column>
-
-        <Column header="操作" style="width: 60px">
-          <template #body="slotProps">
-            <div class="action-buttons">
-              <Button
-                icon="pi pi-trash"
-                @click="handleDeleteItem(slotProps.data)"
-                severity="danger"
                 size="small"
-                text
-                rounded
-                v-tooltip.top="'删除'"
+                class="action-icon-btn"
+                @click="openLightbox(slotProps.data)"
+                v-tooltip.top="'查看大图'"
               />
             </div>
           </template>
         </Column>
       </DataTable>
 
-      <!-- 瀑布流视图 -->
+      <!-- 网格视图（Instagram 风格） -->
       <DataView
         v-else
         key="grid-view"
@@ -546,90 +596,63 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
         layout="grid"
         paginator
         :rows="24"
-        class="history-grid"
+        class="history-grid-view"
       >
         <template #empty>
-          <div class="grid-empty">
-            <i class="pi pi-images empty-icon"></i>
+          <div class="empty-state">
+            <i class="pi pi-folder-open"></i>
             <p>{{ historyManager.allHistoryItems.value.length === 0 ? '暂无历史记录' : '未找到匹配的记录' }}</p>
           </div>
         </template>
 
         <template #grid="slotProps">
-          {{ console.log('[DataView Grid] slotProps:', slotProps) }}
-          {{ console.log('[DataView Grid] slotProps.items:', slotProps.items) }}
-          <div class="grid-container">
-            <div v-for="item in slotProps.items" :key="item.id" class="grid-item">
-              <div class="grid-item-card">
-                <Checkbox
-                  :model-value="historyManager.historyState.value.selectedItems.has(item.id)"
-                  @update:model-value="historyManager.toggleSelection(item.id)"
-                  :binary="true"
-                  class="grid-item-checkbox"
-                />
-
-                <Image
-                  v-if="getThumbUrl(item)"
-                  :src="getThumbUrl(item)"
+          <div class="instagram-grid">
+            <div
+              v-for="item in slotProps.items"
+              :key="item.id"
+              class="grid-tile"
+              :class="{ selected: isGridSelected(item) }"
+              @click="toggleGridSelection(item)"
+            >
+              <!-- 图片区域 -->
+              <div class="tile-image">
+                <img
+                  v-if="getPreviewUrl(item)"
+                  :src="getPreviewUrl(item)"
                   :alt="item.localFileName"
-                  preview
-                  class="grid-item-image"
+                  @click.stop="openLightbox(item)"
+                  @error="(e: any) => e.target.src = '/placeholder.png'"
                 />
-                <div v-else class="grid-item-placeholder">
+                <div v-else class="tile-placeholder">
                   <i class="pi pi-image"></i>
                 </div>
+              </div>
 
-                <div class="grid-item-info">
-                  <p class="grid-item-name" :title="item.localFileName">
+              <!-- 选中指示器 -->
+              <div v-if="isGridSelected(item)" class="tile-selection-overlay">
+                <i class="pi pi-check-circle"></i>
+              </div>
+
+              <!-- HUD 悬浮层 -->
+              <div class="tile-hud">
+                <div class="hud-top">
+                  <span class="hud-filename" :title="item.localFileName">
                     {{ item.localFileName }}
-                  </p>
-                  <div class="grid-item-meta">
-                    <div class="service-tags">
-                      <Button
-                        v-for="serviceId in getSuccessfulServices(item)"
-                        :key="serviceId"
-                        :label="getServiceName(serviceId)"
-                        size="small"
-                        class="service-tag-btn"
-                        :style="{
-                          backgroundColor: getServiceColor(serviceId).bg,
-                          borderColor: getServiceColor(serviceId).bg,
-                          color: getServiceColor(serviceId).text
-                        }"
-                        @click="handleCopyServiceLink(item, serviceId)"
-                        v-tooltip.top="`点击复制${getServiceName(serviceId)}链接`"
-                      />
-                    </div>
-                    <span class="grid-item-time">{{ formatTime(item.timestamp) }}</span>
-                  </div>
+                  </span>
                 </div>
-
-                <div class="grid-item-actions">
-                  <Button
-                    icon="pi pi-copy"
-                    @click="handleCopyLink(item)"
-                    size="small"
-                    text
-                    rounded
-                    v-tooltip.top="'复制主链接'"
-                  />
-                  <Button
-                    icon="pi pi-external-link"
-                    @click="openInBrowser(item)"
-                    size="small"
-                    text
-                    rounded
-                    v-tooltip.top="'在浏览器打开'"
-                  />
-                  <Button
-                    icon="pi pi-trash"
-                    @click="handleDeleteItem(item)"
-                    severity="danger"
-                    size="small"
-                    text
-                    rounded
-                    v-tooltip.top="'删除'"
-                  />
+                <div class="hud-bottom">
+                  <button
+                    @click.stop="handleCopyLink(item)"
+                    :title="'复制链接'"
+                  >
+                    <i class="pi pi-copy"></i>
+                  </button>
+                  <button
+                    @click.stop="openLightbox(item)"
+                    :title="'查看大图'"
+                  >
+                    <i class="pi pi-eye"></i>
+                  </button>
                 </div>
               </div>
             </div>
@@ -637,19 +660,56 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
         </template>
       </DataView>
 
-      <!-- 底部操作栏 -->
-      <div class="history-footer">
-        <Button
-          label="清空历史"
-          icon="pi pi-trash"
-          @click="handleClearHistory"
-          severity="danger"
-          outlined
-        />
-        <p class="footer-hint">
-          💡 提示：导出和同步功能已移至"备份与同步中心"
-        </p>
-      </div>
+      <!-- Lightbox 图片查看器 -->
+      <Dialog
+        v-model:visible="lightboxVisible"
+        modal
+        :dismissableMask="true"
+        :showHeader="false"
+        class="lightbox-dialog"
+        :style="{ width: 'auto', maxWidth: '90vw', background: 'transparent', boxShadow: 'none', border: 'none' }"
+        :contentStyle="{ padding: 0, background: 'transparent' }"
+      >
+        <div class="lightbox-container" @click="lightboxVisible = false">
+          <img :src="lightboxImage" class="lightbox-img" @click.stop />
+
+          <div class="lightbox-caption" @click.stop>
+            <div class="lightbox-info">
+              <span class="lightbox-title">{{ lightboxTitle }}</span>
+              <span class="lightbox-time" v-if="lightboxItem">{{ formatTime(lightboxItem.timestamp) }}</span>
+            </div>
+
+            <div class="lightbox-actions" v-if="lightboxItem">
+              <Button
+                icon="pi pi-copy"
+                text
+                rounded
+                class="text-white"
+                @click="handleCopyLink(lightboxItem)"
+                v-tooltip.top="'复制链接'"
+              />
+              <Button
+                icon="pi pi-external-link"
+                text
+                rounded
+                class="text-white"
+                @click="openInBrowser(lightboxItem)"
+                v-tooltip.top="'在浏览器打开'"
+              />
+              <Button
+                icon="pi pi-trash"
+                severity="danger"
+                text
+                rounded
+                class="text-white"
+                @click="deleteSingleItem(lightboxItem)"
+                v-tooltip.top="'删除'"
+              />
+            </div>
+          </div>
+        </div>
+      </Dialog>
+
     </div>
   </div>
 </template>
@@ -676,191 +736,321 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
   gap: 20px;
 }
 
-/* 工具栏 */
-.history-toolbar {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  padding: 20px;
+/* === Dashboard Strip（顶部控制条）=== */
+.dashboard-strip {
+  flex-shrink: 0;
+  height: 60px;
+  background-color: var(--bg-card);
+  border-bottom: 1px solid var(--border-subtle);
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.toolbar-row {
-  display: flex;
+  align-items: center;
   justify-content: space-between;
+  padding: 0 20px;
+  z-index: 10;
+}
+
+.strip-left,
+.strip-center,
+.strip-right {
+  display: flex;
   align-items: center;
   gap: 16px;
 }
 
-.bulk-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.strip-center {
+  flex: 1;
+  justify-content: center;
+  max-width: 600px;
 }
 
-.select-all-label {
-  margin-right: 8px;
+/* 视图标题 */
+.view-title {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+/* 竖线分隔符 */
+.v-divider {
+  width: 1px;
+  height: 20px;
+  background-color: var(--border-subtle);
+}
+
+/* 视图切换器 */
+.view-switcher {
+  display: flex;
+  background: var(--bg-input);
+  border-radius: 6px;
+  padding: 2px;
+  border: 1px solid var(--border-subtle);
+}
+
+.switch-btn {
+  border: none;
+  background: transparent;
+  width: 32px;
+  height: 28px;
+  border-radius: 4px;
+  color: var(--text-secondary);
   cursor: pointer;
-  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.switch-btn:hover {
   color: var(--text-primary);
 }
 
-.view-mode-toggle {
-  flex-shrink: 0;
+.switch-btn.active {
+  background-color: var(--bg-card);
+  color: var(--primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-.filter-search-row {
+/* 搜索框（胶囊样式） */
+.search-bar {
   display: flex;
-  gap: 12px;
   align-items: center;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  padding: 0 12px;
+  width: 280px;
+  height: 32px;
+  transition: all 0.2s;
 }
 
-.service-filter {
-  min-width: 150px;
-}
-
-.search-wrapper {
-  flex: 1;
-  position: relative;
-  max-width: 400px;
-}
-
-.search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-muted);
-  pointer-events: none;
+.search-bar:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  width: 320px;
 }
 
 .search-input {
-  width: 100%;
-  padding-left: 40px;
+  border: none;
+  background: transparent;
+  outline: none;
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin: 0 8px;
 }
 
-/* 表格视图 */
+.search-icon,
+.clear-icon {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.clear-icon {
+  cursor: pointer;
+}
+
+.clear-icon:hover {
+  color: var(--text-primary);
+}
+
+/* 筛选下拉 */
+.filter-select {
+  height: 32px;
+  border-radius: 6px !important;
+  font-size: 13px !important;
+  width: 140px;
+}
+
+/* 统计与操作 */
+.stats-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: fadeIn 0.2s ease;
+}
+
+.selected-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  background: rgba(59, 130, 246, 0.1);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.icon-only-btn {
+  width: 32px;
+  height: 32px;
+}
+
+.danger-hover:hover {
+  color: var(--error) !important;
+  background: rgba(239, 68, 68, 0.1) !important;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* === 表格视图（极简风格）=== */
 .history-table {
   background: var(--bg-card);
   border-radius: 12px;
   overflow: hidden;
-  min-height: 200px; /* 临时调试：确保表格可见 */
 }
 
-/* 表格标题行居中 */
-:deep(.p-datatable-thead > tr > th) {
-  text-align: center !important;
+.minimal-table {
+  height: 100%;
 }
 
-/* 表格内容单元格也居中 */
-:deep(.p-datatable-tbody > tr > td) {
-  text-align: center !important;
+/* 表头样式 */
+:deep(.minimal-table .p-datatable-thead > tr > th) {
+  background: var(--bg-card) !important;
+  border-bottom: 2px solid var(--border-subtle) !important;
+  padding: 10px 16px !important;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
 }
 
-/* 修复 PrimeVue DataTable 空状态样式 */
-:deep(.p-datatable-empty-message) {
-  color: var(--text-secondary) !important;
-  text-align: center;
-  padding: 60px 20px;
-  font-size: 1rem;
+/* 行样式 */
+:deep(.minimal-table .p-datatable-tbody > tr) {
+  background: transparent !important;
 }
 
-:deep(.p-datatable-emptymessage td) {
-  color: var(--text-secondary) !important;
+:deep(.minimal-table .p-datatable-tbody > tr:nth-child(even)) {
+  background: rgba(0, 0, 0, 0.015) !important;
 }
 
-/* 表格视图缩略图容器 - 固定正方形尺寸 */
-.preview-thumbnail {
-  width: var(--thumbnail-size);
-  height: var(--thumbnail-size);
-  border-radius: 6px;
+:deep(.minimal-table .p-datatable-tbody > tr:hover) {
+  background: var(--hover-overlay-subtle) !important;
+}
+
+/* 单元格样式 */
+:deep(.minimal-table .p-datatable-tbody > tr > td) {
+  padding: 8px 16px !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+/* 缩略图盒子（36px 正方形） */
+.thumb-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
   overflow: hidden;
-  display: inline-block;
-  position: relative;
+  border: 1px solid var(--border-subtle);
+  cursor: zoom-in;
   background: var(--bg-input);
+  display: inline-block;
 }
 
-/* 深度选择器：强制 PrimeVue Image 内部元素也为正方形 */
-:deep(.preview-thumbnail .p-image),
-:deep(.preview-thumbnail .p-image-preview-container) {
-  width: var(--thumbnail-size) !important;
-  height: var(--thumbnail-size) !important;
-  display: block;
+.thumb-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-:deep(.preview-thumbnail img) {
-  width: var(--thumbnail-size) !important;
-  height: var(--thumbnail-size) !important;
-  object-fit: cover !important;
-  cursor: pointer;
-}
-
-/* Loading 状态 */
-:deep(.preview-thumbnail .p-image-preview-indicator) {
-  background: rgba(0, 0, 0, 0.5);
-}
-
-.preview-placeholder {
-  font-size: 2rem;
+.thumb-placeholder {
+  font-size: 1.5rem;
   color: var(--text-muted);
   opacity: 0.5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
 }
 
-.file-name {
-  display: block;
-  width: 100%;
+/* 文件名单元格 */
+.filename-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.fname {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.timestamp {
-  font-size: 0.9rem;
-  color: var(--text-secondary);
+.fdate {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
 }
 
-.action-buttons {
-  display: flex;
-  gap: 4px;
-}
-
-/* 服务 Badge 容器 */
+/* 服务徽章 */
 .service-badges {
   display: flex;
-  flex-wrap: wrap;
   gap: 4px;
-  justify-content: center;
+  flex-wrap: wrap;
 }
 
-/* 服务 Badge 样式 */
-.service-badge {
+.mini-tag {
+  font-size: 11px !important;
+  padding: 2px 6px !important;
+  height: auto !important;
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 0.8rem;
-  padding: 2px 8px;
-  border-radius: 4px;
+  transition: all 0.2s;
 }
 
-.service-badge:hover {
+.mini-tag:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   filter: brightness(1.1);
 }
 
-/* 链接操作按钮容器 */
+/* 链接操作 */
 .link-actions {
   display: flex;
-  gap: 4px;
   justify-content: center;
+  gap: 4px;
 }
 
-/* 时间戳等宽字体 */
-.timestamp.monospace {
-  font-family: var(--font-mono);
-  font-size: 0.85rem;
-  color: var(--text-secondary);
+.action-icon-btn {
+  color: var(--text-secondary) !important;
+  width: 28px !important;
+  height: 28px !important;
+}
+
+.action-icon-btn:hover {
+  color: var(--primary) !important;
+  background: rgba(59, 130, 246, 0.1) !important;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: var(--text-muted);
+  gap: 16px;
+}
+
+.empty-state i {
+  font-size: 48px;
+  opacity: 0.5;
 }
 
 /* 图床按钮容器（保留用于兼容） */
@@ -885,205 +1075,161 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
   filter: brightness(1.1);
 }
 
-/* 瀑布流视图 */
-.history-grid {
+/* === 网格视图（Instagram 风格）=== */
+.history-grid-view {
   background: var(--bg-card);
   border-radius: 12px;
+  overflow: hidden;
   padding: 20px;
-  min-height: 200px; /* 临时调试：确保瀑布流可见 */
 }
 
-:deep(.p-dataview-content) {
+:deep(.history-grid-view .p-dataview-content) {
   background: transparent;
 }
 
-.grid-container {
+/* Instagram 网格容器 */
+.instagram-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;  /* 用户指定 12px */
   width: 100%;
 }
 
-.grid-empty {
-  text-align: center;
-  padding: 60px 20px;
-  color: var(--text-secondary) !important;
-  font-size: 1rem;
-}
-
-.grid-empty p {
-  color: var(--text-secondary) !important;
-  margin: 0;
-}
-
-.empty-icon {
-  font-size: 4rem;
-  color: var(--text-secondary) !important;
-  opacity: 0.5;
-  margin-bottom: 16px;
-}
-
-.grid-item-card {
+/* 网格格子（正方形） */
+.grid-tile {
   position: relative;
-  background: var(--bg-input);
-  border: 1px solid rgba(255, 255, 255, 0.05); /* 微妙边框 */
-  border-radius: 8px;
+  aspect-ratio: 1;  /* 正方形 */
   overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* 亮色主题边框 */
-:root.light-theme .grid-item-card {
-  border: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.grid-item-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-float);
-  border-color: var(--border-subtle);
-}
-
-.grid-item-checkbox {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 2;
-  background: var(--bg-card);
-  padding: 4px;
-  border-radius: 4px;
-}
-
-/* 瀑布流视图图片 - 响应式正方形 */
-.grid-item-image {
-  width: 100%;
-  aspect-ratio: 1;
   cursor: pointer;
-  overflow: hidden;
-  position: relative;
   background: var(--bg-input);
+  border-radius: 8px;
+  transition: transform 0.2s;
 }
 
-/* 深度选择器：确保 PrimeVue Image 内部元素正方形显示 */
-:deep(.grid-item-image .p-image),
-:deep(.grid-item-image .p-image-preview-container) {
-  width: 100% !important;
-  height: 100% !important;
+.grid-tile:hover {
+  z-index: 2;
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* 选中状态：蓝色边框框住 */
+.grid-tile.selected {
+  box-shadow: inset 0 0 0 3px var(--primary);
+}
+
+/* 图片铺满 */
+.tile-image {
+  width: 100%;
+  height: 100%;
+}
+
+.tile-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   display: block;
 }
 
-:deep(.grid-item-image img) {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-}
-
-/* Loading 状态 */
-:deep(.grid-item-image .p-image-preview-indicator) {
-  background: rgba(0, 0, 0, 0.5);
-}
-
-.grid-item-placeholder {
+.tile-placeholder {
   width: 100%;
-  aspect-ratio: 1;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-app);
   color: var(--text-muted);
   font-size: 3rem;
-  opacity: 0.5;
+  opacity: 0.3;
 }
 
-.grid-item-info {
-  padding: 12px;
-}
-
-.grid-item-name {
-  margin: 0 0 8px 0;
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.grid-item-meta {
+/* 选中指示器 */
+.tile-selection-overlay {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  color: var(--primary);
+  background: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  font-size: 14px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.grid-item-time {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
-
-/* 操作栏：默认隐藏，hover 时从底部浮出 */
-.grid-item-actions {
+/* HUD 悬浮层（默认隐藏） */
+.tile-hud {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px;
-  background: linear-gradient(
-    to top,
-    rgba(15, 23, 42, 0.95) 0%,
-    rgba(15, 23, 42, 0.8) 100%
-  );
-  backdrop-filter: blur(8px);
-
-  /* 默认状态：向下隐藏 */
-  transform: translateY(100%);
+  top: 0;
+  background: rgba(0, 0, 0, 0.4);
   opacity: 0;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.2s;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px;
 }
 
-/* 亮色主题的操作栏渐变 */
-:root.light-theme .grid-item-actions {
-  background: linear-gradient(
-    to top,
-    rgba(255, 255, 255, 0.95) 0%,
-    rgba(255, 255, 255, 0.8) 100%
-  );
-}
-
-/* hover 时操作栏浮出 */
-.grid-item-card:hover .grid-item-actions {
-  transform: translateY(0);
+.grid-tile:hover .tile-hud {
   opacity: 1;
 }
 
-/* 触屏设备：操作栏始终显示 */
-@media (hover: none) {
-  .grid-item-actions {
-    transform: translateY(0);
-    opacity: 1;
-    position: static;
-    background: var(--bg-app);
-    border-top: 1px solid var(--border-subtle);
-  }
+/* HUD 顶部（文件名） */
+.hud-top {
+  text-align: left;
 }
 
-/* 底部 */
-.history-footer {
+.hud-filename {
+  color: white;
+  font-size: 11px;
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* HUD 底部（操作按钮） */
+.hud-bottom {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
-.footer-hint {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
+.hud-bottom button {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.hud-bottom button:hover {
+  background: white;
+  color: black;
+}
+
+/* 移动端：HUD 始终显示 */
+@media (hover: none) {
+  .tile-hud {
+    opacity: 1;
+    background: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.4) 0%,
+      rgba(0, 0, 0, 0.6) 100%
+    );
+  }
 }
 
 /* 滚动条 */
@@ -1102,5 +1248,80 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
 
 .history-view::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+
+/* === Lightbox 图片查看器 === */
+:deep(.lightbox-dialog .p-dialog-mask) {
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(10px);
+}
+
+:deep(.lightbox-dialog .p-dialog) {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+:deep(.lightbox-dialog .p-dialog-content) {
+  padding: 0;
+  background: transparent;
+}
+
+.lightbox-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+}
+
+.lightbox-img {
+  max-width: 100%;
+  max-height: 80vh;
+  border-radius: 4px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  cursor: default;
+}
+
+.lightbox-caption {
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  backdrop-filter: blur(10px);
+  cursor: default;
+}
+
+.lightbox-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lightbox-title {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.lightbox-time {
+  font-size: 11px;
+  opacity: 0.8;
+  font-family: var(--font-mono);
+}
+
+.lightbox-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.text-white {
+  color: white !important;
+}
+
+.text-white:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
 }
 </style>
