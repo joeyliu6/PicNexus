@@ -604,7 +604,7 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
 }
 
 .history-container {
-  max-width: 1400px;
+  max-width: 850px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;

@@ -203,7 +203,7 @@ onMounted(async () => {
 }
 
 .upload-container {
-  max-width: 1200px;
+  max-width: 850px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;

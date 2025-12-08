@@ -632,7 +632,7 @@ async function downloadHistoryCloud() {
 }
 
 .container {
-  max-width: 800px;
+  max-width: 850px;
   margin: 0 auto;
 }
 

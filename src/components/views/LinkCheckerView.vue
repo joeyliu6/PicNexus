@@ -875,8 +875,9 @@ const toggleRowExpansion = (event: any) => {
 }
 
 .link-checker-container {
-  max-width: 1200px;
+  max-width: 850px;
   margin: 0 auto;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
