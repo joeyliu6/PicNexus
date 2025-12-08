@@ -224,7 +224,7 @@ const getThumbUrl = (item: HistoryItem): string | undefined => {
   return undefined;
 };
 
-// 获取服务标签颜色
+// 获取服务标签颜色（已弃用，保留用于兼容）
 const getServiceSeverity = (service: string): 'success' | 'info' | 'warn' | 'danger' | 'secondary' | 'contrast' | undefined => {
   const severityMap: Record<string, any> = {
     weibo: 'info',
@@ -237,6 +237,21 @@ const getServiceSeverity = (service: string): 'success' | 'info' | 'warn' | 'dan
     nami: 'success'
   };
   return severityMap[service] || 'secondary';
+};
+
+// 获取服务自定义颜色（深色模式友好）
+const getServiceColor = (service: string): { bg: string; text: string } => {
+  const colorMap: Record<string, { bg: string; text: string }> = {
+    weibo: { bg: '#3b82f6', text: '#ffffff' },      // 蓝色
+    r2: { bg: '#10b981', text: '#ffffff' },          // 绿色
+    tcl: { bg: '#f97316', text: '#ffffff' },         // 橙色
+    jd: { bg: '#ef4444', text: '#ffffff' },          // 红色
+    nowcoder: { bg: '#a855f7', text: '#ffffff' },    // 紫色
+    qiyu: { bg: '#06b6d4', text: '#ffffff' },        // 青色
+    zhihu: { bg: '#6366f1', text: '#ffffff' },       // 靛蓝
+    nami: { bg: '#ec4899', text: '#ffffff' }         // 粉色
+  };
+  return colorMap[service] || { bg: '#64748b', text: '#ffffff' }; // 默认灰色
 };
 
 // 获取服务名称
@@ -252,6 +267,48 @@ const getServiceName = (serviceId: ServiceType): string => {
     nami: '纳米'
   };
   return serviceNames[serviceId] || serviceId;
+};
+
+// 获取所有成功上传的图床
+const getSuccessfulServices = (item: HistoryItem): ServiceType[] => {
+  return item.results
+    .filter(r => r.status === 'success')
+    .map(r => r.serviceId);
+};
+
+// 获取特定图床的链接（经过处理的链接）
+const getServiceLink = (item: HistoryItem, serviceId: ServiceType): string | null => {
+  const result = item.results.find(r => r.serviceId === serviceId && r.status === 'success');
+  if (!result?.result?.url) return null;
+
+  let link = result.result.url;
+
+  // 微博图床需要应用前缀配置（与 handleCopyLink 函数逻辑一致）
+  if (serviceId === 'weibo') {
+    const activePrefix = getActivePrefix(configManager.config.value);
+    if (activePrefix) {
+      link = `${activePrefix}${link}`;
+    }
+  }
+
+  return link;
+};
+
+// 复制特定图床的链接
+const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) => {
+  try {
+    const link = getServiceLink(item, serviceId);
+    if (!link) {
+      toast.warn('无可用链接', `${getServiceName(serviceId)} 图床没有可用的链接`);
+      return;
+    }
+
+    await writeText(link);
+    toast.success('已复制', `${getServiceName(serviceId)} 链接已复制到剪贴板`, 1500);
+  } catch (error) {
+    console.error(`[历史记录] 复制 ${serviceId} 链接失败:`, error);
+    toast.error('复制失败', String(error));
+  }
 };
 </script>
 
@@ -347,6 +404,7 @@ const getServiceName = (serviceId: ServiceType): string => {
         :sortOrder="-1"
         class="history-table"
         :emptyMessage="historyManager.allHistoryItems.value.length === 0 ? '暂无历史记录' : '未找到匹配的记录'"
+        tableStyle="table-layout: fixed; width: 100%"
       >
         <!-- 自定义复选框列 -->
         <Column headerStyle="width: 3rem">
@@ -380,7 +438,7 @@ const getServiceName = (serviceId: ServiceType): string => {
           </template>
         </Column>
 
-        <Column field="localFileName" header="本地文件名" sortable>
+        <Column field="localFileName" header="本地文件名" sortable style="min-width: 150px; width: 15%">
           <template #body="slotProps">
             <span class="file-name" :title="slotProps.data.localFileName">
               {{ slotProps.data.localFileName }}
@@ -388,12 +446,24 @@ const getServiceName = (serviceId: ServiceType): string => {
           </template>
         </Column>
 
-        <Column field="primaryService" header="主图床" sortable style="width: 100px">
+        <Column field="primaryService" header="图床" sortable style="min-width: 150px; width: 20%">
           <template #body="slotProps">
-            <Tag
-              :value="getServiceName(slotProps.data.primaryService)"
-              :severity="getServiceSeverity(slotProps.data.primaryService)"
-            />
+            <div class="service-tags">
+              <Button
+                v-for="serviceId in getSuccessfulServices(slotProps.data)"
+                :key="serviceId"
+                :label="getServiceName(serviceId)"
+                size="small"
+                class="service-tag-btn"
+                :style="{
+                  backgroundColor: getServiceColor(serviceId).bg,
+                  borderColor: getServiceColor(serviceId).bg,
+                  color: getServiceColor(serviceId).text
+                }"
+                @click="handleCopyServiceLink(slotProps.data, serviceId)"
+                v-tooltip.top="`点击复制${getServiceName(serviceId)}链接`"
+              />
+            </div>
           </template>
         </Column>
 
@@ -403,17 +473,9 @@ const getServiceName = (serviceId: ServiceType): string => {
           </template>
         </Column>
 
-        <Column header="操作" style="width: 120px">
+        <Column header="操作" style="width: 60px">
           <template #body="slotProps">
             <div class="action-buttons">
-              <Button
-                icon="pi pi-copy"
-                @click="handleCopyLink(slotProps.data)"
-                size="small"
-                text
-                rounded
-                v-tooltip.top="'复制主链接'"
-              />
               <Button
                 icon="pi pi-trash"
                 @click="handleDeleteItem(slotProps.data)"
@@ -474,23 +536,27 @@ const getServiceName = (serviceId: ServiceType): string => {
                     {{ item.localFileName }}
                   </p>
                   <div class="grid-item-meta">
-                    <Tag
-                      :value="getServiceName(item.primaryService)"
-                      :severity="getServiceSeverity(item.primaryService)"
-                      size="small"
-                    />
+                    <div class="service-tags">
+                      <Button
+                        v-for="serviceId in getSuccessfulServices(item)"
+                        :key="serviceId"
+                        :label="getServiceName(serviceId)"
+                        size="small"
+                        class="service-tag-btn"
+                        :style="{
+                          backgroundColor: getServiceColor(serviceId).bg,
+                          borderColor: getServiceColor(serviceId).bg,
+                          color: getServiceColor(serviceId).text
+                        }"
+                        @click="handleCopyServiceLink(item, serviceId)"
+                        v-tooltip.top="`点击复制${getServiceName(serviceId)}链接`"
+                      />
+                    </div>
                     <span class="grid-item-time">{{ formatTime(item.timestamp) }}</span>
                   </div>
                 </div>
 
                 <div class="grid-item-actions">
-                  <Button
-                    icon="pi pi-copy"
-                    @click="handleCopyLink(item)"
-                    size="small"
-                    text
-                    rounded
-                  />
                   <Button
                     icon="pi pi-trash"
                     @click="handleDeleteItem(item)"
@@ -618,6 +684,16 @@ const getServiceName = (serviceId: ServiceType): string => {
   min-height: 200px; /* 临时调试：确保表格可见 */
 }
 
+/* 表格标题行居中 */
+:deep(.p-datatable-thead > tr > th) {
+  text-align: center !important;
+}
+
+/* 表格内容单元格也居中 */
+:deep(.p-datatable-tbody > tr > td) {
+  text-align: center !important;
+}
+
 /* 修复 PrimeVue DataTable 空状态样式 */
 :deep(.p-datatable-empty-message) {
   color: var(--text-secondary) !important;
@@ -669,7 +745,7 @@ const getServiceName = (serviceId: ServiceType): string => {
 
 .file-name {
   display: block;
-  max-width: 300px;
+  width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -683,6 +759,28 @@ const getServiceName = (serviceId: ServiceType): string => {
 .action-buttons {
   display: flex;
   gap: 4px;
+}
+
+/* 图床按钮容器 */
+.service-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+/* 图床按钮样式 */
+.service-tag-btn {
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.875rem;
+  border-radius: 4px !important;
+}
+
+.service-tag-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  filter: brightness(1.1);
 }
 
 /* 瀑布流视图 */
