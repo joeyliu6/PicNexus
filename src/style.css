@@ -11,6 +11,10 @@
   --border-subtle: #334155; /* Slate 700 */
   --border-focus: #3b82f6;  /* Blue 500 */
 
+  /* Hover overlays - 用于悬浮效果 */
+  --hover-overlay: rgba(255, 255, 255, 0.08);
+  --hover-overlay-subtle: rgba(255, 255, 255, 0.04);
+
   /* Brand Colors */
   --primary: #3b82f6;      /* Blue 500 */
   --primary-hover: #2563eb; /* Blue 600 */
