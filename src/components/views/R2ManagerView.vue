@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated } from 'vue';
+import { ref, computed, onMounted, onActivated, nextTick } from 'vue';
 import Button from 'primevue/button';
 import Checkbox from 'primevue/checkbox';
 import Image from 'primevue/image';
@@ -8,9 +8,19 @@ import ProgressSpinner from 'primevue/progressspinner';
 import Message from 'primevue/message';
 import { useToast } from '../../composables/useToast';
 import { useConfirm } from '../../composables/useConfirm';
+import { invoke } from '@tauri-apps/api/tauri';
+import { useConfigManager } from '../../composables/useConfig';
 
 const toast = useToast();
 const { confirmDelete } = useConfirm();
+const configManager = useConfigManager();
+
+// R2 对象接口（与 Rust 后端匹配）
+interface R2Object {
+  key: string;
+  size: number;
+  lastModified: string;  // ISO 8601 字符串
+}
 
 // R2 文件项
 interface R2File {
@@ -57,12 +67,45 @@ const refreshFiles = async () => {
   errorMessage.value = '';
 
   try {
-    // TODO: 从 Rust 后端获取 R2 文件列表
-    await new Promise(resolve => setTimeout(resolve, 1000)); // 模拟加载
-    toast.info('刷新完成', 'R2 文件列表已刷新（功能待集成）');
+    // 1. 检查 R2 配置
+    const r2Config = configManager.config.value.services.r2;
+    if (!r2Config?.accountId || !r2Config?.accessKeyId ||
+        !r2Config?.secretAccessKey || !r2Config?.bucketName || !r2Config?.publicDomain) {
+      errorMessage.value = '请先在"设置"中完整配置 R2 服务';
+      loading.value = false;
+      return;
+    }
+
+    // 2. 调用后端 API
+    const objects = await invoke<R2Object[]>('list_r2_objects', {
+      config: r2Config
+    });
+
+    console.log(`[R2ManagerView] 成功获取 ${objects.length} 个对象`);
+
+    // 3. 转换为前端格式
+    files.value = objects.map(obj => ({
+      key: obj.key,
+      name: obj.key.split('/').pop() || obj.key,
+      url: `${r2Config.publicDomain.replace(/\/$/, '')}/${obj.key}`,
+      size: obj.size,
+      lastModified: new Date(obj.lastModified),
+      selected: false
+    }));
+
+    // 4. 更新统计信息
+    bucketInfo.value = `存储桶: ${r2Config.bucketName}`;
+    const totalSize = objects.reduce((sum, obj) => sum + obj.size, 0);
+    statsInfo.value = `共 ${objects.length} 个文件，${formatSize(totalSize)}`;
+
+    // 5. 显示成功提示
+    toast.success('刷新完成', `已加载 ${objects.length} 个文件`);
+
   } catch (error) {
-    errorMessage.value = String(error);
-    toast.error('刷新失败', String(error));
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error('[R2ManagerView] 刷新失败:', error);
+    errorMessage.value = errorMsg;
+    toast.error('刷新失败', errorMsg);
   } finally {
     loading.value = false;
   }
@@ -142,8 +185,9 @@ const formatDate = (date: Date): string => {
   }).format(date);
 };
 
-onMounted(() => {
-  refreshFiles();
+onMounted(async () => {
+  await refreshFiles();
+  await nextTick();
   isFirstMount.value = false;
 });
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated, watch } from 'vue';
+import { ref, computed, onMounted, onActivated, watch, nextTick } from 'vue';
 import { writeText } from '@tauri-apps/api/clipboard';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -155,6 +155,7 @@ const handleClearHistory = async () => {
 onMounted(async () => {
   console.log('[HistoryView] 组件已挂载，开始加载历史记录');
   await historyManager.loadHistory();
+  await nextTick();
   isFirstMount.value = false;
 });
 
