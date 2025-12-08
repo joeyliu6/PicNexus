@@ -45,7 +45,13 @@ export class MultiServiceUploader {
     filePath: string,
     enabledServices: ServiceType[],
     config: UserConfig,
-    onProgress?: (serviceId: ServiceType, percent: number) => void
+    onProgress?: (
+      serviceId: ServiceType,
+      percent: number,
+      step?: string,
+      stepIndex?: number,
+      totalSteps?: number
+    ) => void
   ): Promise<MultiUploadResult> {
     console.log('[MultiUploader] 开始并行上传到:', enabledServices);
 
@@ -94,7 +100,9 @@ export class MultiServiceUploader {
         const result = await uploader.upload(
           filePath,
           { config: serviceConfig },
-          onProgress ? (percent) => onProgress(serviceId, percent) : undefined
+          onProgress ? (percent, step, stepIndex, totalSteps) => {
+            onProgress(serviceId, percent, step, stepIndex, totalSteps);
+          } : undefined
         );
 
         console.log(`[MultiUploader] ${serviceId} 上传成功`);
@@ -127,14 +135,22 @@ export class MultiServiceUploader {
     const uploadResults: any[] = [];
 
     for (const task of uploadTasks) {
-      const promise = task().then(result => {
+      // 使用IIFE创建独立闭包，捕获promise引用，避免indexOf在并发场景下找错对象
+      const promise = (async () => {
+        const result = await task();
         uploadResults.push(result);
         return result;
-      }).finally(() => {
-        executing.splice(executing.indexOf(promise), 1);
-      });
+      })();
 
       executing.push(promise);
+
+      // 在闭包中移除当前promise（避免indexOf竞态条件）
+      promise.finally(() => {
+        const index = executing.indexOf(promise);
+        if (index > -1) {
+          executing.splice(index, 1);
+        }
+      });
 
       // 当达到最大并发数时，等待至少一个任务完成
       if (executing.length >= this.MAX_CONCURRENT_UPLOADS) {

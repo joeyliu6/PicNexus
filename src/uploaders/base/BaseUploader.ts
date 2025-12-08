@@ -20,6 +20,9 @@ interface ProgressEvent {
   id: string;
   progress: number;
   total: number;
+  step?: string;         // 可选：当前步骤描述（如"获取Token中..."）
+  step_index?: number;   // 可选：当前步骤索引（从1开始）
+  total_steps?: number;  // 可选：总步骤数
 }
 
 /**
@@ -99,8 +102,26 @@ export abstract class BaseUploader implements IUploader {
         unlisten = await listen<ProgressEvent>('upload://progress', (event) => {
           // 只处理当前上传任务的进度事件
           if (event.payload.id === uploadId) {
-            const percent = Math.round((event.payload.progress / event.payload.total) * 100);
-            onProgress(percent);
+            // 如果有步骤信息，记录到控制台
+            if (event.payload.step) {
+              console.log(
+                `[${this.serviceName}] ${event.payload.step}`,
+                `(步骤${event.payload.step_index}/${event.payload.total_steps})`
+              );
+            }
+
+            // 计算百分比并回调
+            const percent = event.payload.total > 0
+              ? Math.round((event.payload.progress / event.payload.total) * 100)
+              : 0;
+
+            // 传递步骤信息给外部回调
+            onProgress(
+              percent,
+              event.payload.step,
+              event.payload.step_index,
+              event.payload.total_steps
+            );
           }
         });
       } catch (error) {

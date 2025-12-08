@@ -266,9 +266,16 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             filePath,
             enabledServices,
             config,
-            (serviceId, percent) => {
-              // 每个图床独立进度回调
-              queueManager!.updateServiceProgress(itemId, serviceId, percent);
+            (serviceId, percent, step, stepIndex, totalSteps) => {
+              // 每个图床独立进度回调，传递步骤信息
+              queueManager!.updateServiceProgress(
+                itemId,
+                serviceId,
+                percent,
+                step,
+                stepIndex,
+                totalSteps
+              );
             }
           );
 

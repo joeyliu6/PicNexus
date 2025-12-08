@@ -154,7 +154,14 @@ export class UploadQueueManager {
   /**
    * 更新某个图床的上传进度
    */
-  updateServiceProgress(itemId: string, serviceId: ServiceType, percent: number): void {
+  updateServiceProgress(
+    itemId: string,
+    serviceId: ServiceType,
+    percent: number,
+    step?: string,
+    stepIndex?: number,
+    totalSteps?: number
+  ): void {
     const item = this.getItem(itemId);
     if (!item) {
       console.warn(`[UploadQueue] 找不到队列项: ${itemId}`);
@@ -163,6 +170,13 @@ export class UploadQueueManager {
 
     const safePercent = Math.max(0, Math.min(100, percent));
 
+    // 构建状态文本
+    let statusText = `${safePercent}%`;
+    if (step && stepIndex && totalSteps) {
+      // 显示步骤信息，例如："获取凭证中... (1/2)"
+      statusText = `${step} (${stepIndex}/${totalSteps})`;
+    }
+
     const updates: Partial<QueueItem> = {
       status: 'uploading',
       serviceProgress: {
@@ -170,7 +184,13 @@ export class UploadQueueManager {
         [serviceId]: {
           ...item.serviceProgress[serviceId],
           progress: safePercent,
-          status: `${safePercent}%`
+          status: statusText,
+          metadata: {
+            ...item.serviceProgress[serviceId]?.metadata,
+            step: step,
+            stepIndex: stepIndex,
+            totalSteps: totalSteps
+          }
         }
       }
     };
@@ -178,10 +198,10 @@ export class UploadQueueManager {
     // 向后兼容
     if (serviceId === 'weibo') {
       updates.weiboProgress = safePercent;
-      updates.weiboStatus = `${safePercent}%`;
+      updates.weiboStatus = statusText;
     } else if (serviceId === 'r2') {
       updates.r2Progress = safePercent;
-      updates.r2Status = `${safePercent}%`;
+      updates.r2Status = statusText;
     }
 
     this.updateItem(itemId, updates);

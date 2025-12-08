@@ -512,23 +512,73 @@ pub async fn upload_to_nami(
         });
     }
 
+    // 发送步骤1进度：获取动态Headers
+    let _ = window.emit("upload://progress", serde_json::json!({
+        "id": id,
+        "progress": 0,
+        "total": file_size,
+        "step": "获取动态Headers中...",
+        "step_index": 1,
+        "total_steps": 5
+    }));
+
     // 6. 获取动态 Headers
     println!("[Nami] 获取动态 Headers...");
     let dynamic_headers = fetch_nami_token(cookie.clone(), auth_token.clone()).await?;
+
+    // 发送步骤2进度：获取STS凭证
+    let _ = window.emit("upload://progress", serde_json::json!({
+        "id": id,
+        "progress": 0,
+        "total": file_size,
+        "step": "获取STS凭证中...",
+        "step_index": 2,
+        "total_steps": 5
+    }));
 
     // 7. 获取 STS 凭证
     println!("[Nami] 获取 STS 凭证...");
     let credentials = get_sts_credentials(&client, &file_key, &cookie, &auth_token, &dynamic_headers).await?;
     println!("[Nami] STS 凭证获取成功");
 
+    // 发送步骤3进度：初始化分片上传
+    let _ = window.emit("upload://progress", serde_json::json!({
+        "id": id,
+        "progress": 0,
+        "total": file_size,
+        "step": "初始化分片上传中...",
+        "step_index": 3,
+        "total_steps": 5
+    }));
+
     // 8. 初始化分片上传
     let content_type = get_content_type(&ext);
     println!("[Nami] 初始化分片上传...");
     let upload_id = init_multipart_upload(&client, &credentials, &file_key, content_type).await?;
 
+    // 发送步骤4进度：上传分片
+    let _ = window.emit("upload://progress", serde_json::json!({
+        "id": id,
+        "progress": 0,
+        "total": file_size,
+        "step": "上传分片中...",
+        "step_index": 4,
+        "total_steps": 5
+    }));
+
     // 9. 上传分片（单分片）
     println!("[Nami] 上传分片...");
     let etag = upload_part(&client, &credentials, &file_key, &upload_id, 1, &buffer).await?;
+
+    // 发送步骤5进度：完成上传
+    let _ = window.emit("upload://progress", serde_json::json!({
+        "id": id,
+        "progress": 0,
+        "total": file_size,
+        "step": "完成上传中...",
+        "step_index": 5,
+        "total_steps": 5
+    }));
 
     // 10. 完成上传
     println!("[Nami] 完成上传...");

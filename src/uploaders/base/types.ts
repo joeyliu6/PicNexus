@@ -77,5 +77,13 @@ export interface ConnectionTestResult {
 /**
  * 进度回调函数类型
  * @param percent 进度百分比 (0-100)
+ * @param step 当前步骤描述（可选）
+ * @param stepIndex 当前步骤索引（可选，从1开始）
+ * @param totalSteps 总步骤数（可选）
  */
-export type ProgressCallback = (percent: number) => void;
+export type ProgressCallback = (
+  percent: number,
+  step?: string,
+  stepIndex?: number,
+  totalSteps?: number
+) => void;

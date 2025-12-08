@@ -29,6 +29,16 @@ pub async fn upload_to_qiyu(
 ) -> Result<QiyuUploadResult, String> {
     println!("[Qiyu] 开始上传文件: {}", file_path);
 
+    // 发送步骤1进度：获取上传凭证
+    let _ = window.emit("upload://progress", serde_json::json!({
+        "id": id,
+        "progress": 0,
+        "total": 0,
+        "step": "获取上传凭证中...",
+        "step_index": 1,
+        "total_steps": 2
+    }));
+
     // 1. 自动获取新的 Token（每次上传都获取新的，确保 Object 路径唯一）
     println!("[Qiyu] 正在获取上传凭证...");
     let token_info = fetch_qiyu_token().await?;
@@ -73,6 +83,16 @@ pub async fn upload_to_qiyu(
         urlencoding::encode(&object_path)
     );
     println!("[Qiyu] 上传 URL: {}", upload_url);
+
+    // 发送步骤2进度：上传文件
+    let _ = window.emit("upload://progress", serde_json::json!({
+        "id": id,
+        "progress": 0,
+        "total": file_size,
+        "step": "上传文件中...",
+        "step_index": 2,
+        "total_steps": 2
+    }));
 
     // 6. 发送上传请求（直接 POST 二进制数据）
     let client = Client::builder()
