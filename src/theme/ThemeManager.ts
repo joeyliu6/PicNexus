@@ -46,7 +46,7 @@ export class ThemeManager {
    * @param mode 主题模式（'light' 或 'dark'）
    */
   async setTheme(mode: ThemeMode): Promise<void> {
-    const enableTransitions = this.config.theme?.enableTransitions ?? true;
+    const enableTransitions = false;  // 强制禁用过渡
 
     // 应用主题到 DOM
     await this.applyTheme(mode, enableTransitions);
