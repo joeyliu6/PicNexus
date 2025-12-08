@@ -354,7 +354,7 @@ export function useConfigManager() {
       }
 
       try {
-        const successMessage = await invoke<string>('test_nowcoder_connection', { cookie });
+        const successMessage = await invoke<string>('test_nowcoder_cookie', { nowcoderCookie: cookie });
         console.log('[牛客Cookie测试] ✓ 测试成功');
         return {
           success: true,
@@ -392,7 +392,7 @@ export function useConfigManager() {
       }
 
       try {
-        const successMessage = await invoke<string>('test_zhihu_connection', { cookie });
+        const successMessage = await invoke<string>('test_zhihu_connection', { zhihuCookie: cookie });
         console.log('[知乎Cookie测试] ✓ 测试成功');
         return {
           success: true,
@@ -438,8 +438,19 @@ export function useConfigManager() {
         };
       }
 
+      // 从 Cookie 中提取 Auth-Token
+      const authTokenMatch = cookie.match(/Auth-Token=([^;]+)/);
+      const authToken = authTokenMatch ? authTokenMatch[1] : '';
+
+      if (!authToken) {
+        return {
+          success: false,
+          message: 'Cookie 中未找到 Auth-Token，请重新获取'
+        };
+      }
+
       try {
-        const successMessage = await invoke<string>('test_nami_connection', { cookie });
+        const successMessage = await invoke<string>('test_nami_connection', { cookie, authToken });
         console.log('[纳米Cookie测试] ✓ 测试成功');
         return {
           success: true,

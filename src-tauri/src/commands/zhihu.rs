@@ -326,3 +326,55 @@ async fn poll_image_status(
 
     Err("图片处理超时".to_string())
 }
+
+/// 测试知乎 Cookie 连接
+#[tauri::command]
+pub async fn test_zhihu_connection(zhihu_cookie: String) -> Result<String, String> {
+
+    // 创建 1x1 透明 PNG 测试图片 (68 bytes)
+    let test_image = vec![
+        137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1,
+        8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 8, 153, 99, 0, 1, 0, 0, 5,
+        0, 1, 13, 10, 45, 180, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130
+    ];
+
+    // 计算 MD5
+    let image_hash = calculate_md5(&test_image);
+
+    let client = Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
+
+    // 尝试获取上传凭证来验证 Cookie
+    let response = client
+        .post("https://api.zhihu.com/images")
+        .header("Cookie", &zhihu_cookie)
+        .header("Content-Type", "application/json")
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        .header("Referer", "https://www.zhihu.com/")
+        .header("Origin", "https://www.zhihu.com")
+        .json(&serde_json::json!({
+            "image_hash": image_hash,
+            "source": "pin"
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("请求失败: {}", e))?;
+
+    let status = response.status();
+    let response_text = response.text().await.unwrap_or_default();
+
+    if status.is_success() {
+        // 尝试解析响应以验证格式正确
+        if let Ok(_) = serde_json::from_str::<UploadCredentialsResponse>(&response_text) {
+            Ok("知乎 Cookie 有效，连接成功".to_string())
+        } else {
+            Ok("知乎 Cookie 可能有效，但响应格式异常".to_string())
+        }
+    } else if status.as_u16() == 401 || status.as_u16() == 403 {
+        Err("Cookie 已失效或无效，请重新获取".to_string())
+    } else {
+        Err(format!("测试失败 (HTTP {}): {}", status, response_text))
+    }
+}

@@ -600,3 +600,49 @@ pub async fn upload_to_nami(
         instant: false,
     })
 }
+
+/// 测试纳米 Cookie 和 Auth-Token 连接
+#[tauri::command]
+pub async fn test_nami_connection(cookie: String, auth_token: String) -> Result<String, String> {
+    println!("[Nami Test] 开始测试连接...");
+
+    // 创建 HTTP 客户端
+    let client = Client::builder()
+        .danger_accept_invalid_certs(true)
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
+
+    // 尝试获取动态 Headers 来验证 Cookie 和 Auth-Token
+    println!("[Nami Test] 验证 Cookie 和 Auth-Token...");
+    match fetch_nami_token(cookie.clone(), auth_token.clone()).await {
+        Ok(dynamic_headers) => {
+            println!("[Nami Test] 动态 Headers 获取成功");
+
+            // 进一步验证：尝试创建一个测试的 file_key 并获取 STS 凭证
+            let test_file_key = "web/test.png";
+
+            match get_sts_credentials(&client, test_file_key, &cookie, &auth_token, &dynamic_headers).await {
+                Ok(_credentials) => {
+                    println!("[Nami Test] STS 凭证获取成功，Cookie 和 Auth-Token 有效");
+                    Ok("纳米 Cookie 和 Auth-Token 有效，连接成功".to_string())
+                },
+                Err(e) => {
+                    if e.contains("401") || e.contains("403") || e.contains("Unauthorized") {
+                        Err("Cookie 或 Auth-Token 已失效，请重新获取".to_string())
+                    } else {
+                        // STS 请求失败但不一定是认证问题
+                        Ok("纳米 Cookie 可能有效，但 STS 请求异常".to_string())
+                    }
+                }
+            }
+        },
+        Err(e) => {
+            if e.contains("401") || e.contains("403") || e.contains("Cookie") {
+                Err("Cookie 或 Auth-Token 无效或已过期，请重新获取".to_string())
+            } else {
+                Err(format!("测试失败: {}", e))
+            }
+        }
+    }
+}
