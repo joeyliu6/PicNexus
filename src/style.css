@@ -3592,3 +3592,157 @@ body, html {
     align-items: stretch;
   }
 }
+
+/* ============================================
+   全局 PrimeVue 组件样式覆盖
+   ============================================ */
+
+/* 1. 统一圆角 */
+:root {
+  --p-border-radius: 8px;
+}
+
+/* 2. DataTable 样式优化 */
+:deep(.p-datatable) {
+  border-radius: var(--p-border-radius);
+  overflow: hidden;
+}
+
+/* 表头：透明背景 + 微妙边框 */
+:deep(.p-datatable .p-datatable-thead > tr > th) {
+  background: transparent !important;
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 12px 16px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* 表格行：hover 高亮 */
+:deep(.p-datatable .p-datatable-tbody > tr) {
+  transition: background-color 0.2s ease;
+}
+
+:deep(.p-datatable .p-datatable-tbody > tr:hover) {
+  background-color: var(--hover-overlay-subtle) !important;
+}
+
+/* 单元格边框：更微妙 */
+:deep(.p-datatable .p-datatable-tbody > tr > td) {
+  border-color: var(--border-subtle);
+  padding: 12px 16px;
+}
+
+/* 3. 输入框样式统一：扁平化 */
+:deep(.p-inputtext),
+:deep(.p-textarea),
+:deep(.p-password .p-password-input) {
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--p-border-radius);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  padding: 10px 14px;
+  transition: all 0.2s ease;
+  box-shadow: none;
+}
+
+:deep(.p-inputtext:hover),
+:deep(.p-textarea:hover),
+:deep(.p-password .p-password-input:hover) {
+  border-color: var(--primary);
+}
+
+:deep(.p-inputtext:focus),
+:deep(.p-textarea:focus),
+:deep(.p-password .p-password-input:focus) {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  outline: none;
+}
+
+/* 4. 按钮样式微调 */
+:deep(.p-button) {
+  border-radius: var(--p-border-radius);
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+:deep(.p-button:hover) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+:deep(.p-button:active) {
+  transform: translateY(0);
+}
+
+/* 5. 对话框：磨砂玻璃效果 */
+:deep(.p-dialog) {
+  border-radius: 16px;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+  background: rgba(30, 41, 59, 0.95);
+  border: 1px solid var(--border-subtle);
+}
+
+:root.light-theme :deep(.p-dialog) {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+:deep(.p-dialog .p-dialog-header) {
+  background: transparent;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 20px 24px;
+}
+
+:deep(.p-dialog .p-dialog-content) {
+  background: transparent;
+  padding: 24px;
+}
+
+:deep(.p-dialog .p-dialog-footer) {
+  background: transparent;
+  border-top: 1px solid var(--border-subtle);
+  padding: 16px 24px;
+}
+
+/* 6. DataView（网格视图）分页器样式 */
+:deep(.p-paginator) {
+  background: transparent;
+  border: none;
+  padding: 16px 0;
+}
+
+:deep(.p-paginator .p-paginator-pages .p-paginator-page) {
+  min-width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+}
+
+:deep(.p-paginator .p-paginator-pages .p-paginator-page:hover) {
+  background: var(--hover-overlay-subtle);
+}
+
+:deep(.p-paginator .p-paginator-pages .p-paginator-page.p-highlight) {
+  background: var(--primary);
+  color: white;
+}
+
+/* 7. Toast 通知圆角统一 */
+:deep(.p-toast .p-toast-message) {
+  border-radius: var(--p-border-radius);
+  backdrop-filter: blur(8px);
+}
+
+/* 8. Tag 标签样式微调 */
+:deep(.p-tag) {
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}

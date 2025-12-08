@@ -34,6 +34,23 @@ const serviceLabels: Record<ServiceType, string> = {
 // 所有服务列表
 const allServices: ServiceType[] = ['weibo', 'r2', 'tcl', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami'];
 
+// 服务图标映射
+const serviceIcons: Record<ServiceType, string> = {
+  weibo: 'pi pi-eye',
+  r2: 'pi pi-cloud',
+  tcl: 'pi pi-server',
+  jd: 'pi pi-shopping-bag',
+  nowcoder: 'pi pi-code',
+  qiyu: 'pi pi-comments',
+  zhihu: 'pi pi-book',
+  nami: 'pi pi-upload'
+};
+
+// 获取服务图标
+const getServiceIcon = (serviceId: ServiceType): string => {
+  return serviceIcons[serviceId] || 'pi pi-image';
+};
+
 // 可见的服务（在可用服务列表中的）
 const visibleServices = computed(() => {
   return allServices.filter(serviceId =>
@@ -160,23 +177,47 @@ onMounted(async () => {
           <span class="selection-badge">已选择 {{ selectedCount }} 个</span>
         </div>
 
-        <div class="service-buttons">
-          <Button
+        <div class="service-grid">
+          <div
             v-for="serviceId in visibleServices"
             :key="serviceId"
-            :label="serviceLabels[serviceId]"
-            :disabled="!uploadManager.isServiceAvailable.value(serviceId)"
-            :outlined="!uploadManager.isServiceSelected.value(serviceId)"
-            :severity="uploadManager.isServiceSelected.value(serviceId) ? 'success' : 'secondary'"
+            class="service-card"
+            :class="{
+              'is-selected': uploadManager.isServiceSelected.value(serviceId),
+              'is-configured': uploadManager.serviceConfigStatus.value[serviceId],
+              'not-configured': !uploadManager.serviceConfigStatus.value[serviceId]
+            }"
+            v-ripple
+            tabindex="0"
+            role="button"
+            :aria-label="`选择 ${serviceLabels[serviceId]} 图床`"
+            :aria-pressed="uploadManager.isServiceSelected.value(serviceId)"
             @click="toggleService(serviceId)"
+            @keydown.enter="toggleService(serviceId)"
+            @keydown.space.prevent="toggleService(serviceId)"
             v-tooltip.top="!uploadManager.serviceConfigStatus.value[serviceId] ? '请先在设置中配置' : ''"
-            class="service-btn"
-            :class="{ 'service-selected': uploadManager.isServiceSelected.value(serviceId) }"
           >
-            <template #icon>
-              <i :class="uploadManager.isServiceSelected.value(serviceId) ? 'pi pi-check-circle' : 'pi pi-circle'"></i>
-            </template>
-          </Button>
+            <!-- 卡片头部：图标 -->
+            <div class="card-header">
+              <i :class="getServiceIcon(serviceId)" class="service-icon"></i>
+            </div>
+
+            <!-- 卡片主体：名称 -->
+            <div class="card-body">
+              <span class="service-name">{{ serviceLabels[serviceId] }}</span>
+            </div>
+
+            <!-- 选中标记（右上角对勾） -->
+            <div v-if="uploadManager.isServiceSelected.value(serviceId)" class="check-mark">
+              <i class="pi pi-check"></i>
+            </div>
+
+            <!-- 配置状态指示灯（左下角） -->
+            <div
+              class="status-dot"
+              :class="{ configured: uploadManager.serviceConfigStatus.value[serviceId] }"
+            ></div>
+          </div>
         </div>
       </div>
 
@@ -295,26 +336,141 @@ onMounted(async () => {
   margin: 0 0 16px 0;
 }
 
-.service-buttons {
+/* 服务网格 */
+.service-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 12px;
+  gap: 16px;
+  margin-top: 16px;
 }
 
-.service-btn {
-  min-width: 120px;
+/* 服务卡片 */
+.service-card {
+  position: relative;
+  background: var(--bg-input);
+  border: 2px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 20px 16px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  min-height: 120px;
+  user-select: none;
+}
+
+/* 卡片悬浮效果 */
+.service-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-float);
+  border-color: var(--primary);
+}
+
+/* 卡片焦点样式（键盘导航） */
+.service-card:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+/* 选中态 */
+.service-card.is-selected {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: var(--primary);
+  border-width: 2px;
+}
+
+.service-card.is-selected:hover {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+/* 未配置态（禁用） */
+.service-card.not-configured {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.service-card.not-configured:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--border-subtle);
+}
+
+/* 卡片头部 - 图标 */
+.card-header {
+  display: flex;
+  align-items: center;
   justify-content: center;
 }
 
-.service-btn.service-selected {
-  font-weight: 600;
-  background-color: #22c55e !important;
-  color: #ffffff !important;
-  border-color: #22c55e !important;
+.service-icon {
+  font-size: 2rem;
+  color: var(--primary);
+  transition: transform 0.3s ease;
 }
 
-.service-btn.service-selected:hover {
-  background-color: #16a34a !important;
+.service-card:hover .service-icon {
+  transform: scale(1.1);
+}
+
+/* 卡片主体 - 名称 */
+.card-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.service-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+/* 选中标记（右上角对勾） */
+.check-mark {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  background: var(--primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: checkBounce 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.check-mark i {
+  color: white;
+  font-size: 0.75rem;
+  font-weight: bold;
+}
+
+@keyframes checkBounce {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* 配置状态指示灯（左下角） */
+.status-dot {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #eab308; /* 未配置 - 黄色 */
+  box-shadow: 0 0 6px rgba(234, 179, 8, 0.5);
+}
+
+.status-dot.configured {
+  background: #10b981; /* 已配置 - 绿色 */
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
 }
 
 /* 上传队列区域 */

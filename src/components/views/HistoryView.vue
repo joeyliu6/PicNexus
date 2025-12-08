@@ -11,6 +11,7 @@ import InputText from 'primevue/inputtext';
 import Select from 'primevue/select';
 import Image from 'primevue/image';
 import Tag from 'primevue/tag';
+import Badge from 'primevue/badge';
 import type { HistoryItem, ServiceType } from '../../config/types';
 import { getActivePrefix } from '../../config/types';
 import { useHistoryManager, type ViewMode } from '../../composables/useHistory';
@@ -176,6 +177,32 @@ const formatTime = (timestamp: number) => {
     hour: '2-digit',
     minute: '2-digit'
   }).format(new Date(timestamp));
+};
+
+// 在浏览器中打开链接
+const openInBrowser = async (item: HistoryItem) => {
+  try {
+    if (!item.generatedLink) {
+      toast.warn('无可用链接', '该项目没有可用的链接');
+      return;
+    }
+
+    // 动态应用前缀（与 handleCopyLink 逻辑一致）
+    let finalLink = item.generatedLink;
+    if (item.primaryService === 'weibo') {
+      const activePrefix = getActivePrefix(configManager.config.value);
+      if (activePrefix) {
+        finalLink = `${activePrefix}${item.generatedLink}`;
+      }
+    }
+
+    // 使用 Tauri 的 shell 打开链接
+    const { open } = await import('@tauri-apps/api/shell');
+    await open(finalLink);
+  } catch (error) {
+    console.error('[历史记录] 打开链接失败:', error);
+    toast.error('打开失败', String(error));
+  }
 };
 
 // 获取缩略图 URL
@@ -425,7 +452,7 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
           </template>
         </Column>
 
-        <Column field="thumbUrl" header="预览" style="width: 80px">
+        <Column field="thumbUrl" header="预览" style="width: 4rem">
           <template #body="slotProps">
             <Image
               v-if="getThumbUrl(slotProps.data)"
@@ -438,7 +465,7 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
           </template>
         </Column>
 
-        <Column field="localFileName" header="图名" sortable style="min-width: 150px; width: 15%">
+        <Column field="localFileName" header="图名" sortable style="flex: 1; min-width: 150px">
           <template #body="slotProps">
             <span class="file-name" :title="slotProps.data.localFileName">
               {{ slotProps.data.localFileName }}
@@ -446,20 +473,18 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
           </template>
         </Column>
 
-        <Column field="primaryService" header="图床" sortable style="min-width: 150px; width: 20%">
+        <Column field="primaryService" header="图床" sortable style="width: 120px">
           <template #body="slotProps">
-            <div class="service-tags">
-              <Button
+            <div class="service-badges">
+              <Badge
                 v-for="serviceId in getSuccessfulServices(slotProps.data)"
                 :key="serviceId"
-                :label="getServiceName(serviceId)"
-                size="small"
-                class="service-tag-btn"
+                :value="getServiceName(serviceId)"
                 :style="{
                   backgroundColor: getServiceColor(serviceId).bg,
-                  borderColor: getServiceColor(serviceId).bg,
                   color: getServiceColor(serviceId).text
                 }"
+                class="service-badge"
                 @click="handleCopyServiceLink(slotProps.data, serviceId)"
                 v-tooltip.top="`点击复制${getServiceName(serviceId)}链接`"
               />
@@ -467,9 +492,32 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
           </template>
         </Column>
 
-        <Column field="timestamp" header="上传时间" sortable style="width: 180px">
+        <Column header="链接" style="width: 100px">
           <template #body="slotProps">
-            <span class="timestamp">{{ formatTime(slotProps.data.timestamp) }}</span>
+            <div class="link-actions">
+              <Button
+                icon="pi pi-copy"
+                @click="handleCopyLink(slotProps.data)"
+                size="small"
+                text
+                rounded
+                v-tooltip.top="'复制主链接'"
+              />
+              <Button
+                icon="pi pi-external-link"
+                @click="openInBrowser(slotProps.data)"
+                size="small"
+                text
+                rounded
+                v-tooltip.top="'在浏览器打开'"
+              />
+            </div>
+          </template>
+        </Column>
+
+        <Column field="timestamp" header="上传时间" sortable style="width: 150px">
+          <template #body="slotProps">
+            <span class="timestamp monospace">{{ formatTime(slotProps.data.timestamp) }}</span>
           </template>
         </Column>
 
@@ -558,12 +606,29 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
 
                 <div class="grid-item-actions">
                   <Button
+                    icon="pi pi-copy"
+                    @click="handleCopyLink(item)"
+                    size="small"
+                    text
+                    rounded
+                    v-tooltip.top="'复制主链接'"
+                  />
+                  <Button
+                    icon="pi pi-external-link"
+                    @click="openInBrowser(item)"
+                    size="small"
+                    text
+                    rounded
+                    v-tooltip.top="'在浏览器打开'"
+                  />
+                  <Button
                     icon="pi pi-trash"
                     @click="handleDeleteItem(item)"
                     severity="danger"
                     size="small"
                     text
                     rounded
+                    v-tooltip.top="'删除'"
                   />
                 </div>
               </div>
@@ -761,7 +826,44 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
   gap: 4px;
 }
 
-/* 图床按钮容器 */
+/* 服务 Badge 容器 */
+.service-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+}
+
+/* 服务 Badge 样式 */
+.service-badge {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.8rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.service-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  filter: brightness(1.1);
+}
+
+/* 链接操作按钮容器 */
+.link-actions {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+/* 时间戳等宽字体 */
+.timestamp.monospace {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* 图床按钮容器（保留用于兼容） */
 .service-tags {
   display: flex;
   flex-wrap: wrap;
@@ -824,15 +926,21 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
 .grid-item-card {
   position: relative;
   background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid rgba(255, 255, 255, 0.05); /* 微妙边框 */
   border-radius: 8px;
   overflow: hidden;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 亮色主题边框 */
+:root.light-theme .grid-item-card {
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .grid-item-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-4px);
   box-shadow: var(--shadow-float);
+  border-color: var(--border-subtle);
 }
 
 .grid-item-checkbox {
@@ -912,13 +1020,53 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
   color: var(--text-secondary);
 }
 
+/* 操作栏：默认隐藏，hover 时从底部浮出 */
 .grid-item-actions {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
   display: flex;
   justify-content: center;
-  gap: 4px;
-  padding: 8px;
-  background: var(--bg-app);
-  border-top: 1px solid var(--border-subtle);
+  gap: 8px;
+  padding: 12px;
+  background: linear-gradient(
+    to top,
+    rgba(15, 23, 42, 0.95) 0%,
+    rgba(15, 23, 42, 0.8) 100%
+  );
+  backdrop-filter: blur(8px);
+
+  /* 默认状态：向下隐藏 */
+  transform: translateY(100%);
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 亮色主题的操作栏渐变 */
+:root.light-theme .grid-item-actions {
+  background: linear-gradient(
+    to top,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(255, 255, 255, 0.8) 100%
+  );
+}
+
+/* hover 时操作栏浮出 */
+.grid-item-card:hover .grid-item-actions {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* 触屏设备：操作栏始终显示 */
+@media (hover: none) {
+  .grid-item-actions {
+    transform: translateY(0);
+    opacity: 1;
+    position: static;
+    background: var(--bg-app);
+    border-top: 1px solid var(--border-subtle);
+  }
 }
 
 /* 底部 */
