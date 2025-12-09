@@ -196,8 +196,10 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         return;
       }
 
-      // 同步界面状态和配置状态
-      if (JSON.stringify(enabledServices.sort()) !== JSON.stringify(selectedServices.value.sort())) {
+      // 同步界面状态和配置状态（修复：先复制再排序，避免修改原数组）
+      const sortedEnabled = [...enabledServices].sort();
+      const sortedSelected = [...selectedServices.value].sort();
+      if (JSON.stringify(sortedEnabled) !== JSON.stringify(sortedSelected)) {
         console.warn('[上传] 检测到状态不一致，同步中...');
         selectedServices.value = [...enabledServices];
       }
@@ -328,8 +330,12 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     const executing: Promise<void>[] = [];
 
     for (const task of uploadTasks) {
+      // 修复竞态条件：在闭包中捕获 promise 引用，确保正确删除
       const promise = task().finally(() => {
-        executing.splice(executing.indexOf(promise), 1);
+        const index = executing.indexOf(promise);
+        if (index > -1) {
+          executing.splice(index, 1);
+        }
       });
 
       executing.push(promise);

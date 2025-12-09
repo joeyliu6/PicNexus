@@ -113,7 +113,7 @@ export class UploadQueueManager {
       return null; // 返回 null 表示重复，不添加到队列
     }
 
-    const id = `queue-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const id = `queue-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
     // 初始化每个图床的进度状态
     const serviceProgress: Record<string, ServiceProgress> = {};

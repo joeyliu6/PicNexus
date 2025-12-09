@@ -49,7 +49,10 @@ fn main() {
         .pool_idle_timeout(std::time::Duration::from_secs(90))  // 连接池空闲超时
         .pool_max_idle_per_host(10)  // 每个主机最多保持10个空闲连接
         .build()
-        .expect("Failed to create HTTP client");
+        .unwrap_or_else(|e| {
+            eprintln!("[HTTP Client] 创建失败: {:?}，使用默认配置", e);
+            reqwest::Client::new()
+        });
     // 1. 定义原生菜单栏 (PRD 1.1)
     // "文件" 菜单 (或 "应用" 菜单 on macOS)
     let preferences = CustomMenuItem::new("preferences".to_string(), "偏好设置...")
@@ -130,8 +133,14 @@ fn main() {
         .menu(menu)                          // 3. 添加原生菜单栏
         .system_tray(system_tray)            // 4. 添加系统托盘
         .setup(|app| {
-            let window = app.get_window("main").unwrap();
-            
+            let window = match app.get_window("main") {
+                Some(w) => w,
+                None => {
+                    eprintln!("[Setup] 错误: 无法获取主窗口");
+                    return Err("无法获取主窗口".into());
+                }
+            };
+
             // --- 🏆 最佳适配方案逻辑 Start ---
             if let Ok(Some(monitor)) = window.current_monitor() {
                 let screen_size = monitor.size();
@@ -183,13 +192,18 @@ fn main() {
                 eprintln!("[Display] 无法获取显示器信息，使用默认窗口大小");
             }
             // --- 🏆 最佳适配方案逻辑 End ---
-            
+
             #[cfg(any(windows, target_os = "macos"))]
-            set_shadow(&window, true).unwrap();
-            
+            {
+                if let Err(e) = set_shadow(&window, true) {
+                    eprintln!("[Setup] 警告: 设置窗口阴影失败: {:?}", e);
+                    // 不影响程序继续运行
+                }
+            }
+
             // 注意：窗口显示由前端代码控制（在 DOMContentLoaded 后调用 appWindow.show()）
             // 这样可以确保 HTML/CSS 完全加载后再显示窗口，避免白色闪烁
-            
+
             Ok(())
         })
         .on_menu_event(|event| {            // 5. 处理菜单栏事件

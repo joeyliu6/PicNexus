@@ -193,17 +193,21 @@ pub async fn upload_file_stream(
     
     let progress_stream = stream.map(move |chunk| {
         if let Ok(bytes) = &chunk {
-            let mut uploaded = uploaded_clone.lock().unwrap();
-            *uploaded += bytes.len() as u64;
-            let current_progress = *uploaded;
-            
-            // 发送进度事件到前端
-            // 注意：为了性能，可以加个判断，比如每 1% 或每 100KB 发送一次，这里为了简单每次 chunk 都发
-            let _ = window_clone.emit("upload://progress", ProgressPayload {
-                id: id_clone.clone(),
-                progress: current_progress,
-                total: total_len_clone,
-            });
+            // 安全处理 Mutex lock，避免 panic
+            if let Ok(mut uploaded) = uploaded_clone.lock() {
+                *uploaded += bytes.len() as u64;
+                let current_progress = *uploaded;
+
+                // 发送进度事件到前端
+                // 注意：为了性能，可以加个判断，比如每 1% 或每 100KB 发送一次，这里为了简单每次 chunk 都发
+                let _ = window_clone.emit("upload://progress", ProgressPayload {
+                    id: id_clone.clone(),
+                    progress: current_progress,
+                    total: total_len_clone,
+                });
+            } else {
+                eprintln!("[上传] 警告: Mutex 锁被污染，跳过进度更新");
+            }
         }
         chunk
     });
