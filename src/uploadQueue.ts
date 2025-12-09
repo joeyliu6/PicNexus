@@ -83,13 +83,18 @@ export class UploadQueueManager {
   }
 
   /**
-   * 检查文件是否已在队列中
+   * 检查文件是否已在队列中（排除失败的项）
    * @param filePath 文件路径
-   * @returns 是否存在重复
+   * @returns 是否存在重复（仅允许失败项重新上传）
    */
   private isFileInQueue(filePath: string): boolean {
     const allItems = this.vm ? this.vm.getAllItems() : this.queueState.queueItems.value;
-    return allItems.some(item => item.filePath === filePath);
+    // 只检查 pending、uploading 和 success 状态的项
+    // 失败(error)的项不算重复，允许重新上传
+    return allItems.some(item =>
+      item.filePath === filePath &&
+      (item.status === 'pending' || item.status === 'uploading' || item.status === 'success')
+    );
   }
 
   /**
@@ -391,7 +396,7 @@ export class UploadQueueManager {
   }
 
   /**
-   * 重置队列项状态（用于重试）
+   * 重置队列项状态（用于重试 - 支持新架构）
    */
   resetItemForRetry(itemId: string): void {
     const item = this.getItem(itemId);
@@ -400,9 +405,23 @@ export class UploadQueueManager {
       return;
     }
 
+    // 重置所有字段，包括新架构的 serviceProgress
+    const resetServiceProgress: Record<string, ServiceProgress> = {};
+    if (item.enabledServices) {
+      item.enabledServices.forEach(serviceId => {
+        resetServiceProgress[serviceId] = {
+          progress: 0,
+          status: '等待中...',
+          link: undefined,
+          error: undefined
+        };
+      });
+    }
+
     // 重置状态
     this.updateItem(itemId, {
       status: 'pending',
+      // 旧架构字段
       weiboProgress: 0,
       r2Progress: 0,
       weiboStatus: '等待中...',
@@ -411,8 +430,14 @@ export class UploadQueueManager {
       r2Link: undefined,
       baiduLink: undefined,
       weiboPid: undefined,
+      // 新架构字段
+      serviceProgress: resetServiceProgress,
+      primaryUrl: undefined,
+      thumbUrl: undefined,
       errorMessage: undefined,
     });
+
+    console.log(`[UploadQueue] ${item.fileName} 已重置为重试状态`);
   }
 
   /**

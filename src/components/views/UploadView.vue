@@ -7,6 +7,7 @@ import type { ServiceType } from '../../config/types';
 import { useToast } from '../../composables/useToast';
 import { useUploadManager } from '../../composables/useUpload';
 import { UploadQueueManager } from '../../uploadQueue';
+import { MultiServiceUploader } from '../../core/MultiServiceUploader';
 
 const toast = useToast();
 
@@ -139,6 +140,93 @@ async function setupTauriFileDropListener() {
   }
 }
 
+// 设置重试回调
+const setupRetryCallback = () => {
+  if (uploadQueueRef.value) {
+    uploadQueueRef.value.setRetryCallback(async (itemId: string) => {
+      const item = queueManager.getItem(itemId);
+      if (!item) {
+        toast.error('重试失败', '找不到队列项');
+        return;
+      }
+
+      console.log(`[上传] 重试上传: ${item.fileName}`);
+      toast.info('重试中', `正在重新上传 ${item.fileName}`);
+
+      // 【关键修复】不调用 handleFilesUpload，直接在原地重新上传
+      // 避免触发 isFileInQueue() 的重复检测
+
+      // 重置状态
+      queueManager.resetItemForRetry(itemId);
+
+      // 获取启用的服务
+      const enabledServices = item.enabledServices || [];
+
+      try {
+        // 直接调用 MultiServiceUploader
+        const uploader = new MultiServiceUploader(
+          queueManager,
+          toast,
+          uploadManager.activePrefix.value
+        );
+
+        const result = await uploader.uploadToMultipleServices(
+          item.filePath,
+          enabledServices,
+          itemId
+        );
+
+        // 处理上传成功
+        let thumbUrl = result.primaryUrl;
+        if (result.primaryService === 'weibo' && uploadManager.activePrefix.value) {
+          thumbUrl = uploadManager.activePrefix.value + thumbUrl;
+        }
+        queueManager.markItemComplete(itemId, thumbUrl);
+
+        // 保存到历史记录
+        await uploadManager.saveHistoryItem(item.filePath, result);
+
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error(`[重试] ${item.fileName} 上传失败:`, errorMsg);
+
+        // 从错误消息中提取图床信息
+        let failedServices: string[] = [];
+        const servicePattern = /- (\w+):/g;
+        let match;
+        while ((match = servicePattern.exec(errorMsg)) !== null) {
+          failedServices.push(match[1]);
+        }
+
+        // 【修复】显示错误Toast（复用智能错误识别逻辑）
+        if (errorMsg.includes('Cookie') || errorMsg.includes('100006')) {
+          const serviceName = failedServices.length > 0 ? failedServices.join('、') : '微博';
+          toast.error(
+            `${serviceName} Cookie 已过期`,
+            '请前往设置页面更新 Cookie 后重试',
+            6000
+          );
+        } else if (errorMsg.includes('认证失败') || errorMsg.includes('authentication')) {
+          const serviceName = failedServices.length > 0 ? failedServices.join('、') : '图床';
+          toast.error(
+            `${serviceName}认证失败`,
+            '请检查配置信息是否正确',
+            5000
+          );
+        } else {
+          toast.error(
+            '重试失败',
+            `${item.fileName}: ${errorMsg}`,
+            5000
+          );
+        }
+
+        queueManager.markItemFailed(itemId, errorMsg);
+      }
+    });
+  }
+};
+
 // 加载配置
 onMounted(async () => {
   // 加载服务按钮状态
@@ -147,6 +235,9 @@ onMounted(async () => {
 
   // 设置文件拖拽监听
   await setupTauriFileDropListener();
+
+  // 设置重试回调
+  setupRetryCallback();
 });
 </script>
 

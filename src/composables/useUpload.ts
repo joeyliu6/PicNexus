@@ -319,6 +319,53 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);
           console.error(`[并发上传] ${fileName} 上传失败:`, errorMsg);
+
+          // 从错误消息中提取图床信息（所有图床失败时包含详细信息）
+          let failedServices: string[] = [];
+
+          // 尝试从错误消息中解析失败的图床
+          const servicePattern = /- (\w+):/g;
+          let match;
+          while ((match = servicePattern.exec(errorMsg)) !== null) {
+            failedServices.push(match[1]);
+          }
+
+          // 智能错误提示 - 带图床名称
+          if (errorMsg.includes('Cookie') || errorMsg.includes('100006')) {
+            // Cookie 相关错误（通常是微博）
+            const serviceName = failedServices.length > 0 ? failedServices.join('、') : '微博';
+            toast.error(
+              `${serviceName} Cookie 已过期`,
+              '请前往设置页面更新 Cookie 后重试',
+              6000
+            );
+          } else if (errorMsg.includes('认证失败') || errorMsg.includes('authentication')) {
+            // 认证错误
+            const serviceName = failedServices.length > 0 ? failedServices.join('、') : '图床';
+            toast.error(
+              `${serviceName}认证失败`,
+              '请检查配置信息是否正确',
+              5000
+            );
+          } else if (errorMsg.includes('所有图床上传均失败')) {
+            // 所有图床都失败 - 显示失败的图床列表
+            const servicesText = failedServices.length > 0
+              ? failedServices.join('、')
+              : '所有图床';
+            toast.error(
+              '上传失败',
+              `${fileName} 的 ${servicesText} 上传均失败，请检查网络连接和服务配置`,
+              5000
+            );
+          } else {
+            // 通用错误
+            toast.error(
+              '上传失败',
+              `${fileName}: ${errorMsg}`,
+              5000
+            );
+          }
+
           queueManager!.markItemFailed(itemId, errorMsg);
         }
       };
