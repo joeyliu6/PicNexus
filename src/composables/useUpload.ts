@@ -670,6 +670,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     selectFiles,
     handleFilesUpload,
     loadServiceButtonStates,
-    toggleServiceSelection
+    toggleServiceSelection,
+    saveHistoryItem
   };
 }

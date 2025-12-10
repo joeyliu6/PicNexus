@@ -5,20 +5,17 @@ import ProgressBar from 'primevue/progressbar';
 import Button from 'primevue/button';
 import { useToast } from '../composables/useToast';
 import { useQueueState } from '../composables/useQueueState';
-import type { QueueItem, UploadQueueManager } from '../uploadQueue';
+import type { QueueItem } from '../uploadQueue';
 
 const toast = useToast();
 const { queueItems } = useQueueState();  // 使用全局队列状态
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-let queueManagerInstance: UploadQueueManager | null = null; // 保留用于兼容性
+// 重试回调函数 (支持 serviceId 参数)
+let retryCallback: ((itemId: string, serviceId?: ServiceType) => void) | null = null;
 
-// 重试回调函数
-let retryCallback: ((itemId: string) => void) | null = null;
-
-const handleRetry = (itemId: string) => {
+const handleRetry = (itemId: string, serviceId?: ServiceType) => {
   if (retryCallback) {
-    retryCallback(itemId);
+    retryCallback(itemId, serviceId);
   }
 };
 
@@ -192,7 +189,8 @@ defineExpose({
       queueItems.value = [];
   },
   count: () => queueItems.value.length,
-  setRetryCallback: (callback: (itemId: string) => void) => {
+  getAllItems: () => queueItems.value,
+  setRetryCallback: (callback: (itemId: string, serviceId?: ServiceType) => void) => {
       retryCallback = callback;
   }
 });
@@ -268,24 +266,52 @@ defineExpose({
             class="progress-row"
           >
             <label>{{ serviceNames[service] }}</label>
+
             <ProgressBar
               :value="item.serviceProgress[service]?.progress || 0"
               :class="getStatusClass(item.serviceProgress[service]?.status || '')"
               :showValue="false"
               class="progress-bar"
             />
+
             <span
               class="status"
               :class="getStatusClass(item.serviceProgress[service]?.status || '')"
               :title="item.serviceProgress[service]?.status"
             >
-              <i
-                v-if="getStatusIcon(item.serviceProgress[service]?.status || '')"
-                :class="getStatusIcon(item.serviceProgress[service]?.status || '')"
-                class="status-icon"
-              ></i>
               {{ formatStatus(item.serviceProgress[service]?.status) }}
             </span>
+
+            <div class="row-action">
+              <Button
+                v-if="item.serviceProgress[service]?.status?.includes('✓') || item.serviceProgress[service]?.status?.includes('完成')"
+                @click="copyToClipboard(item.serviceProgress[service]?.link)"
+                icon="pi pi-copy"
+                text
+                rounded
+                size="small"
+                class="action-btn copy-btn"
+                v-tooltip.top="'复制链接'"
+              />
+
+              <i
+                v-else-if="item.serviceProgress[service]?.isRetrying"
+                class="pi pi-spin pi-spinner action-icon loading-icon"
+                title="重传中..."
+              ></i>
+
+              <Button
+                v-else-if="item.serviceProgress[service]?.status?.includes('✗') || item.serviceProgress[service]?.status?.includes('失败')"
+                @click="handleRetry(item.id, service)"
+                icon="pi pi-refresh"
+                severity="danger"
+                text
+                rounded
+                size="small"
+                class="action-btn retry-btn"
+                v-tooltip.top="'重试此服务'"
+              />
+            </div>
           </div>
         </template>
 
@@ -307,44 +333,6 @@ defineExpose({
               {{ formatStatus(item.r2Status) }}
             </span>
           </div>
-        </template>
-      </div>
-
-      <!-- Actions Column -->
-      <div class="actions">
-        <!-- 重试按钮（失败时显示） -->
-        <Button
-          v-if="item.status === 'error'"
-          @click="handleRetry(item.id)"
-          :label="item.retryCount && item.maxRetries ? `重试 (${item.retryCount}/${item.maxRetries})` : '重试'"
-          :icon="item.isRetrying ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"
-          :disabled="!!item.isRetrying || !!(item.retryCount && item.maxRetries && item.retryCount >= item.maxRetries)"
-          severity="warning"
-          size="small"
-          class="retry-btn"
-          :title="item.retryCount && item.maxRetries && item.retryCount >= item.maxRetries ? '已达到最大重试次数' : ''"
-        />
-
-        <!-- 新架构：动态显示启用服务的复制按钮 -->
-        <template v-if="item.serviceProgress && item.enabledServices && item.status === 'success'">
-          <Button
-            v-for="service in item.enabledServices"
-            :key="service"
-            @click="copyToClipboard(item.serviceProgress[service]?.link)"
-            :disabled="!item.serviceProgress[service]?.link"
-            :label="serviceNames[service]"
-            icon="pi pi-copy"
-            size="small"
-            outlined
-            class="copy-btn"
-          />
-        </template>
-
-        <!-- 旧架构：向后兼容 -->
-        <template v-else-if="item.status === 'success'">
-          <Button @click="copyToClipboard(item.weiboLink)" :disabled="!item.weiboLink" label="微博" icon="pi pi-copy" size="small" outlined class="copy-btn" />
-          <Button @click="copyToClipboard(item.baiduLink)" :disabled="!item.baiduLink" label="百度" icon="pi pi-copy" size="small" outlined class="copy-btn" />
-          <Button v-if="item.uploadToR2" @click="copyToClipboard(item.r2Link)" :disabled="!item.r2Link" label="R2" icon="pi pi-copy" size="small" outlined class="copy-btn" />
         </template>
       </div>
 
@@ -504,18 +492,19 @@ defineExpose({
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 6px;
-    width: 240px;
-    flex-shrink: 0;
+    gap: 8px;
+    flex: 1; /* 让它占据剩余空间 */
+    margin-left: 10px;
 }
 
 .progress-row {
     display: grid;
-    grid-template-columns: 32px 60px 1fr;
-    gap: 10px;
+    /* Label | ProgressBar | Status Text | Action Button */
+    grid-template-columns: 40px 1fr 60px 32px;
+    gap: 12px;
     align-items: center;
     font-size: 12px;
-    height: 18px;
+    height: 24px; /* 稍微增加高度以容纳按钮 */
 }
 
 .progress-row label {
@@ -574,9 +563,6 @@ defineExpose({
 
 /* 状态文本 */
 .status {
-    display: flex;
-    align-items: center;
-    gap: 4px;
     text-align: right;
     white-space: nowrap;
     overflow: hidden;
@@ -584,36 +570,35 @@ defineExpose({
     font-size: 11px;
     font-family: var(--font-mono);
     color: var(--text-secondary);
-    opacity: 0.9;
-    animation: fadeIn 0.3s ease-out;
-}
-
-/* 状态图标 */
-.status-icon {
-    flex-shrink: 0;
-    font-size: 10px;
 }
 
 /* 状态颜色 */
 .status.success { color: var(--success); }
 .status.error { color: var(--error); }
-.status.uploading { color: var(--primary); font-weight: 500; }
-.status.skipped { color: var(--text-muted); opacity: 0.7; }
+.status.uploading { color: var(--primary); }
 
-.actions {
+/* Row Action Styles */
+.row-action {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
-    align-self: center;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
 }
 
-/* PrimeVue Button 样式调整 */
-.copy-btn,
-.retry-btn {
-    font-size: 11px !important;
-    padding: 2px 8px !important;
+/* 按钮样式微调 */
+.action-btn {
+    width: 24px !important;
     height: 24px !important;
-    width: auto !important;
+    padding: 0 !important;
+}
+
+.action-icon {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.action-icon.loading-icon {
+    color: var(--primary);
 }
 
 .error-icon {

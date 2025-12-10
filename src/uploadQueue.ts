@@ -20,6 +20,7 @@ export interface ServiceProgress {
   link?: string;     // 上传成功后的链接
   error?: string;    // 错误信息
   metadata?: Record<string, any>;  // 额外元数据（如微博 PID）
+  isRetrying?: boolean; // 是否正在重试中
 }
 
 /**
@@ -191,10 +192,11 @@ export class UploadQueueManager {
     if (step && stepIndex && totalSteps) {
       // 显示步骤信息，例如："获取凭证中... (1/2)"
       statusText = `${step} (${stepIndex}/${totalSteps})`;
+    } else if (step) {
+      statusText = step;
     }
 
     const updates: Partial<QueueItem> = {
-      status: 'uploading',
       serviceProgress: {
         ...item.serviceProgress,
         [serviceId]: {
@@ -210,6 +212,13 @@ export class UploadQueueManager {
         }
       }
     };
+
+    // 如果整体状态是 error，且收到进度更新，说明正在重试，改为 uploading
+    if (item.status === 'error') {
+        updates.status = 'uploading';
+    } else if (item.status !== 'success') {
+        updates.status = 'uploading';
+    }
 
     // 向后兼容
     if (serviceId === 'weibo') {
@@ -241,7 +250,8 @@ export class UploadQueueManager {
       if (serviceProgress[serviceId]?.progress === 100 && !currentStatus.includes('失败') && !currentStatus.includes('✗')) {
         serviceProgress[serviceId] = {
           ...serviceProgress[serviceId],
-          status: '✓ 完成'
+          status: '✓ 完成',
+          isRetrying: false // 清除重试标记
         };
       }
     });
@@ -423,10 +433,12 @@ export class UploadQueueManager {
     if (item.enabledServices) {
       item.enabledServices.forEach(serviceId => {
         resetServiceProgress[serviceId] = {
+          serviceId, // 必须保留 serviceId
           progress: 0,
           status: '等待中...',
           link: undefined,
-          error: undefined
+          error: undefined,
+          isRetrying: false
         };
       });
     }
@@ -450,13 +462,45 @@ export class UploadQueueManager {
       errorMessage: undefined,
     });
 
-    console.log(`[UploadQueue] ${item.fileName} 已重置为重试状态`);
+    console.log(`[UploadQueue] ${item.fileName} 已重置为全量重试状态`);
+  }
+
+  /**
+   * 重置单个服务的状态（用于单独重试）
+   */
+  resetServiceForRetry(itemId: string, serviceId: ServiceType): void {
+    const item = this.getItem(itemId);
+    if (!item || !item.serviceProgress[serviceId]) {
+      console.warn(`[UploadQueue] 重试失败: 找不到服务 ${serviceId}`);
+      return;
+    }
+
+    const updates: Partial<QueueItem> = {
+      serviceProgress: {
+        ...item.serviceProgress,
+        [serviceId]: {
+          ...item.serviceProgress[serviceId],
+          progress: 0,
+          status: '等待中...',
+          error: undefined,
+          isRetrying: true // 标记为重试中
+        }
+      }
+    };
+
+    // 如果是单独重试，且当前整体状态是 error，临时改为 uploading 以避免 UI 显示红色左边框
+    if (item.status === 'error') {
+        updates.status = 'uploading';
+    }
+
+    this.updateItem(itemId, updates);
+    console.log(`[UploadQueue] ${item.fileName} - ${serviceId} 已重置为单独重试状态`);
   }
 
   /**
    * 设置重试回调
    */
-  setRetryCallback(callback: (itemId: string) => void): void {
+  setRetryCallback(callback: (itemId: string, serviceId?: ServiceType) => void): void {
     if (this.vm && typeof this.vm.setRetryCallback === 'function') {
       this.vm.setRetryCallback(callback);
     }

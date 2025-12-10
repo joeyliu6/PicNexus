@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import Button from 'primevue/button';
 import UploadQueue from '../UploadQueue.vue';
 import type { ServiceType, UserConfig } from '../../config/types';
 import { DEFAULT_CONFIG } from '../../config/types';
@@ -43,32 +42,12 @@ const serviceLabels: Record<ServiceType, string> = {
 // 所有服务列表
 const allServices: ServiceType[] = ['weibo', 'r2', 'tcl', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami'];
 
-// 服务图标映射
-const serviceIcons: Record<ServiceType, string> = {
-  weibo: 'pi pi-eye',
-  r2: 'pi pi-cloud',
-  tcl: 'pi pi-server',
-  jd: 'pi pi-shopping-bag',
-  nowcoder: 'pi pi-code',
-  qiyu: 'pi pi-comments',
-  zhihu: 'pi pi-book',
-  nami: 'pi pi-upload'
-};
-
-// 获取服务图标
-const getServiceIcon = (serviceId: ServiceType): string => {
-  return serviceIcons[serviceId] || 'pi pi-image';
-};
-
 // 可见的服务（在可用服务列表中的）
 const visibleServices = computed(() => {
   return allServices.filter(serviceId =>
     uploadManager.availableServices.value.includes(serviceId)
   );
 });
-
-// 选中数量
-const selectedCount = computed(() => uploadManager.selectedServices.value.length);
 
 // 处理服务选择切换
 const toggleService = (serviceId: ServiceType) => {
@@ -152,13 +131,99 @@ async function setupTauriFileDropListener() {
 // 设置重试回调
 const setupRetryCallback = () => {
   if (uploadQueueRef.value) {
-    uploadQueueRef.value.setRetryCallback(async (itemId: string) => {
+    uploadQueueRef.value.setRetryCallback(async (itemId: string, serviceId?: ServiceType) => {
       const item = queueManager.getItem(itemId);
       if (!item) {
         toast.error('重试失败', '找不到队列项');
         return;
       }
 
+      // === Case 1: Single Service Retry ===
+      if (serviceId) {
+        console.log(`[重试] 单独重试 ${item.fileName} -> ${serviceId}`);
+
+        // Check concurrency for this specific service on this item
+        const retryKey = `${itemId}-${serviceId}`;
+        if (retryingItems.value.has(retryKey)) {
+          console.warn(`[重试] ${item.fileName}-${serviceId} 已在重试中，跳过`);
+          return;
+        }
+
+        // Reset UI state for this service
+        queueManager.resetServiceForRetry(itemId, serviceId);
+        retryingItems.value.add(retryKey);
+
+        try {
+          const uploader = new MultiServiceUploader();
+          const configStore = new Store('.settings.dat');
+          const config = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
+
+          const result = await uploader.retryUpload(
+            item.filePath,
+            serviceId,
+            config,
+            (percent) => {
+              // Update progress bar
+              queueManager.updateServiceProgress(itemId, serviceId, percent);
+            }
+          );
+
+          // Handle Success
+          const updates = { ...item.serviceProgress };
+          let link = result.url;
+          if (serviceId === 'weibo' && uploadManager.activePrefix.value) {
+            link = uploadManager.activePrefix.value + link;
+          }
+
+          updates[serviceId] = {
+            ...updates[serviceId],
+            status: '✓ 完成',
+            progress: 100,
+            link: link,
+            isRetrying: false,
+            error: undefined
+          };
+
+          // Update queue item
+          queueManager.updateItem(itemId, {
+            serviceProgress: updates,
+            // If all enabled services are now successful, mark whole item as success
+            status: item.enabledServices.every(s =>
+              (updates[s]?.status?.includes('完成') || updates[s]?.status?.includes('✓'))
+            ) ? 'success' : 'uploading'
+          });
+
+          // If this was primary or we have no primary yet, set it
+          if (!item.primaryUrl || serviceId === item.enabledServices[0]) {
+            queueManager.updateItem(itemId, {
+              primaryUrl: link,
+              thumbUrl: link
+            });
+          }
+
+          toast.success('重试成功', `${serviceLabels[serviceId]} 上传成功`);
+
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          console.error(`[重试] ${serviceId} 失败:`, errorMsg);
+
+          const updates = { ...item.serviceProgress };
+          updates[serviceId] = {
+            ...updates[serviceId],
+            status: '✗ 失败',
+            progress: 0,
+            error: errorMsg,
+            isRetrying: false
+          };
+          queueManager.updateItem(itemId, { serviceProgress: updates });
+          toast.error('重试失败', `${serviceLabels[serviceId]}: ${errorMsg}`);
+        } finally {
+          retryingItems.value.delete(retryKey);
+        }
+        return;
+      }
+
+      // === Case 2: Full Retry (Legacy / Fallback) ===
       // 新增：并发控制 - 检查是否已在重试中
       if (retryingItems.value.has(itemId)) {
         console.warn(`[重试] ${item.fileName} 已在重试中，跳过`);
