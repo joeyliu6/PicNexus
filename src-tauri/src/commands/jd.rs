@@ -76,8 +76,8 @@ async fn get_aid_info() -> Result<AidInfo, String> {
 
 #[tauri::command]
 pub async fn upload_to_jd(
-    window: Window,
-    id: String,
+    _window: Window,
+    _id: String,
     file_path: String,
 ) -> Result<JDUploadResult, String> {
     println!("[JD] 开始上传文件: {}", file_path);
@@ -174,12 +174,8 @@ pub async fn upload_to_jd(
 
     println!("[JD] 上传成功: {}", image_url);
 
-    // 9. 发送进度完成事件
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": file_size,
-        "total": file_size
-    }));
+    // ✅ 修复: 删除此处的100%事件发送
+    // 前端会在收到Ok结果时自动设置100%
 
     Ok(JDUploadResult {
         url: image_url,

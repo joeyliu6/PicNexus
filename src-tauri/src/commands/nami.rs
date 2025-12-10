@@ -499,11 +499,8 @@ pub async fn upload_to_nami(
         let url = format!("{}/{}", CDN_BASE, file_key);
         println!("[Nami] 文件已存在，秒传成功: {}", url);
 
-        let _ = window.emit("upload://progress", serde_json::json!({
-            "id": id,
-            "progress": file_size,
-            "total": file_size
-        }));
+        // ✅ 修复: 删除此处的100%事件发送
+        // 前端会在收到Ok结果时自动设置100%
 
         return Ok(NamiUploadResult {
             url,
@@ -588,11 +585,8 @@ pub async fn upload_to_nami(
     let url = format!("{}/{}", CDN_BASE, file_key);
     println!("[Nami] 上传成功: {}", url);
 
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": file_size,
-        "total": file_size
-    }));
+    // ✅ 修复: 删除此处的100%事件发送
+    // 前端会在收到Ok结果时自动设置100%
 
     Ok(NamiUploadResult {
         url,

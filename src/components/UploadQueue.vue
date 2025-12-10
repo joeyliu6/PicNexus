@@ -173,14 +173,36 @@ defineExpose({
       queueItems.value.unshift(item);
   },
   updateItem: (id: string, updates: Partial<QueueItem>) => {
-      const item = queueItems.value.find(i => i.id === id);
-      if (item) {
-          Object.assign(item, updates);
+      const index = queueItems.value.findIndex(i => i.id === id);
+      if (index !== -1) {
+          const item = queueItems.value[index];
+
+          // ✅ 修复: 深拷贝 serviceProgress，避免引用共享
+          const updatedServiceProgress = updates.serviceProgress
+            ? {
+                ...item.serviceProgress,
+                ...Object.fromEntries(
+                  Object.entries(updates.serviceProgress).map(([key, value]) => [
+                    key,
+                    { ...item.serviceProgress?.[key as keyof typeof item.serviceProgress], ...value }
+                  ])
+                )
+              }
+            : item.serviceProgress;
+
+          // 使用展开运算符创建新对象，而不是 Object.assign 修改原对象
+          queueItems.value[index] = {
+              ...item,
+              ...updates,
+              serviceProgress: updatedServiceProgress
+          };
+
           // Update thumbUrl if PID is available and not set
-          if (item.weiboPid && !item.thumbUrl) {
+          const updatedItem = queueItems.value[index];
+          if (updatedItem.weiboPid && !updatedItem.thumbUrl) {
               const baiduPrefix = 'https://image.baidu.com/search/down?thumburl=';
-              const bmiddleUrl = `https://tvax1.sinaimg.cn/bmiddle/${item.weiboPid}.jpg`;
-              item.thumbUrl = `${baiduPrefix}${bmiddleUrl}`;
+              const bmiddleUrl = `https://tvax1.sinaimg.cn/bmiddle/${updatedItem.weiboPid}.jpg`;
+              queueItems.value[index].thumbUrl = `${baiduPrefix}${bmiddleUrl}`;
           }
       }
   },
@@ -599,6 +621,9 @@ defineExpose({
 
 .action-icon.loading-icon {
     color: var(--primary);
+    /* 修复: 设置旋转中心点，确保以中心旋转 */
+    transform-origin: center center;
+    display: inline-block; /* 确保 transform-origin 生效 */
 }
 
 .error-icon {

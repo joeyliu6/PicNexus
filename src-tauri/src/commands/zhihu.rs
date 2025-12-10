@@ -125,8 +125,8 @@ fn get_mime_type(ext: &str) -> &'static str {
 
 #[tauri::command]
 pub async fn upload_to_zhihu(
-    window: Window,
-    id: String,
+    _window: Window,
+    _id: String,
     file_path: String,
     zhihu_cookie: String,
 ) -> Result<ZhihuUploadResult, String> {
@@ -274,12 +274,8 @@ pub async fn upload_to_zhihu(
     let normalized_url = normalize_image_url(&final_url);
     println!("[Zhihu] 上传成功: {}", normalized_url);
 
-    // 7. 发送进度完成事件
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": file_size,
-        "total": file_size
-    }));
+    // ✅ 修复: 删除此处的100%事件发送
+    // 前端会在收到Ok结果时自动设置100%
 
     Ok(ZhihuUploadResult {
         url: normalized_url,

@@ -22,8 +22,8 @@ struct TCLApiResponse {
 
 #[tauri::command]
 pub async fn upload_to_tcl(
-    window: Window,
-    id: String,
+    _window: Window,
+    _id: String,
     file_path: String,
 ) -> Result<TCLUploadResult, String> {
     println!("[TCL] 开始上传文件: {}", file_path);
@@ -114,12 +114,8 @@ pub async fn upload_to_tcl(
 
     println!("[TCL] 上传成功: {}", https_url);
 
-    // 9. 发送进度完成事件
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": file_size,
-        "total": file_size
-    }));
+    // ✅ 修复: 删除此处的100%事件发送
+    // 前端会在收到Ok结果时自动设置100%
 
     Ok(TCLUploadResult {
         url: https_url,

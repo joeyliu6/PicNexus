@@ -137,12 +137,8 @@ pub async fn upload_to_qiyu(
 
     println!("[Qiyu] 上传成功: {}", cdn_url);
 
-    // 10. 发送进度完成事件
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": file_size,
-        "total": file_size
-    }));
+    // ✅ 修复: 删除此处的100%事件发送
+    // 前端会在收到Ok结果时自动设置100%
 
     Ok(QiyuUploadResult {
         url: cdn_url,

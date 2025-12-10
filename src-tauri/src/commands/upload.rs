@@ -198,11 +198,22 @@ pub async fn upload_file_stream(
                 *uploaded += bytes.len() as u64;
                 let current_progress = *uploaded;
 
+                // ✅ 修复: 限制进度最高99%，防止在业务验证前就显示100%
+                let safe_progress = if current_progress >= total_len_clone {
+                    // 数据已发送完毕，但服务器尚未响应，保持在99%
+                    if total_len_clone > 0 {
+                        total_len_clone.saturating_sub(total_len_clone / 100).max(1)
+                    } else {
+                        0
+                    }
+                } else {
+                    current_progress
+                };
+
                 // 发送进度事件到前端
-                // 注意：为了性能，可以加个判断，比如每 1% 或每 100KB 发送一次，这里为了简单每次 chunk 都发
                 let _ = window_clone.emit("upload://progress", ProgressPayload {
                     id: id_clone.clone(),
-                    progress: current_progress,
+                    progress: safe_progress,
                     total: total_len_clone,
                 });
             } else {
@@ -229,14 +240,11 @@ pub async fn upload_file_stream(
         .await?;
 
     let text = res.text().await?;
-    
-    // 上传完成，发送 100% 事件
-    let _ = window.emit("upload://progress", ProgressPayload {
-        id: id.clone(),
-        progress: total_len,
-        total: total_len,
-    });
-    
+
+    // ✅ 修复: 删除此处的100%事件发送
+    // 只有parse_weibo_response成功返回后，前端才会在收到Ok结果时设置100%
+    // 这样可以避免"进度条100%后又报错"的糟糕体验
+
     parse_weibo_response(&text)
 }
 

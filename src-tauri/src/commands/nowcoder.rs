@@ -91,8 +91,8 @@ struct NowcoderApiResponse {
 
 #[tauri::command]
 pub async fn upload_to_nowcoder(
-    window: Window,
-    id: String,
+    _window: Window,
+    _id: String,
     file_path: String,
     nowcoder_cookie: String,
 ) -> Result<NowcoderUploadResult, String> {
@@ -204,12 +204,8 @@ pub async fn upload_to_nowcoder(
 
     println!("[Nowcoder] 上传成功: {}", final_url);
 
-    // 10. 发送进度完成事件
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": file_size,
-        "total": file_size
-    }));
+    // ✅ 修复: 删除此处的100%事件发送
+    // 前端会在收到Ok结果时自动设置100%
 
     Ok(NowcoderUploadResult {
         url: final_url,

@@ -28,11 +28,31 @@ export function useQueueState() {
 
   /**
    * 更新队列项
+   * ✅ 修复: 深拷贝嵌套对象，避免引用共享导致队列项相互影响
    */
   const updateItem = (itemId: string, updates: Partial<QueueItem>) => {
     const index = queueItems.value.findIndex(item => item.id === itemId);
     if (index !== -1) {
-      queueItems.value[index] = { ...queueItems.value[index], ...updates };
+      const currentItem = queueItems.value[index];
+
+      // 深拷贝 serviceProgress，避免多个队列项共享同一个对象引用
+      const updatedServiceProgress = updates.serviceProgress
+        ? {
+            ...currentItem.serviceProgress,
+            ...Object.fromEntries(
+              Object.entries(updates.serviceProgress).map(([key, value]) => [
+                key,
+                { ...currentItem.serviceProgress?.[key as keyof typeof currentItem.serviceProgress], ...value }
+              ])
+            )
+          }
+        : currentItem.serviceProgress;
+
+      queueItems.value[index] = {
+        ...currentItem,
+        ...updates,
+        serviceProgress: updatedServiceProgress
+      };
     }
   };
 

@@ -135,8 +135,8 @@ pub async fn upload_to_r2(
             error_msg
         })?;
 
-    // 9. 发送完成进度
-    emit_progress(&window, &id, file_size, file_size);
+    // ✅ 修复: 删除此处的100%事件发送
+    // 前端会在收到Ok结果时自动设置100%
 
     println!("[R2] 上传成功！ETag: {:?}", result.e_tag());
 
