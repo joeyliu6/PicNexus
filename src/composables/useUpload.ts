@@ -11,7 +11,7 @@ import {
   ServiceType,
   HistoryItem
 } from '../config/types';
-import { MultiServiceUploader, MultiUploadResult } from '../core/MultiServiceUploader';
+import { MultiServiceUploader, MultiUploadResult, SingleServiceResult } from '../core/MultiServiceUploader';
 import { UploadQueueManager } from '../uploadQueue';
 import { useToast } from './useToast';
 import { debounceWithError } from '../utils/debounce';
@@ -261,15 +261,51 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
       return async () => {
         try {
-          console.log(`[并发��传] 开始上传: ${fileName}`);
+          console.log(`[并发上传] 开始上传: ${fileName}`);
+
+          // 实时处理单个服务完成的函数
+          const handleServiceResult = (serviceResult: SingleServiceResult) => {
+            const item = queueManager!.getItem(itemId);
+            if (!item) return;
+
+            const updatedServiceProgress = { ...item.serviceProgress };
+
+            if (serviceResult.status === 'success' && serviceResult.result) {
+              // 成功：立即更新状态并显示链接
+              let link = serviceResult.result.url;
+              if (serviceResult.serviceId === 'weibo' && activePrefix.value) {
+                link = activePrefix.value + link;
+              }
+
+              updatedServiceProgress[serviceResult.serviceId] = {
+                ...updatedServiceProgress[serviceResult.serviceId],
+                status: '✓ 完成',
+                progress: 100,
+                link: link
+              };
+            } else if (serviceResult.status === 'failed') {
+              // 失败：更新错误状态
+              updatedServiceProgress[serviceResult.serviceId] = {
+                ...updatedServiceProgress[serviceResult.serviceId],
+                status: '✗ 失败',
+                progress: 0,
+                error: serviceResult.error || '上传失败'
+              };
+            }
+
+            // 实时更新 UI
+            queueManager!.updateItem(itemId, {
+              serviceProgress: updatedServiceProgress
+            });
+          };
 
           // 使用多图床上传编排器
           const result = await multiServiceUploader.uploadToMultipleServices(
             filePath,
             enabledServices,
             config,
+            // 进度回调
             (serviceId, percent, step, stepIndex, totalSteps) => {
-              // 每个图床独立进度回调，传递步骤信息
               queueManager!.updateServiceProgress(
                 itemId,
                 serviceId,
@@ -278,12 +314,17 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
                 stepIndex,
                 totalSteps
               );
+            },
+            // 单项完成回调 - 实现实时 UI 响应
+            (singleResult) => {
+              console.log(`[实时更新] ${singleResult.serviceId} 完成:`, singleResult.status);
+              handleServiceResult(singleResult);
             }
           );
 
-          console.log(`[并发上传] ${fileName} 上传完成，主力图床: ${result.primaryService}`);
+          console.log(`[并发上传] ${fileName} 全部完成，主力图床: ${result.primaryService}`);
 
-          // 新增：检查部分失败并显示警告 Toast
+          // 检查部分失败并显示警告 Toast
           if (result.isPartialSuccess && result.partialFailures) {
             const failedServiceNames = result.partialFailures
               .map(f => {
@@ -302,7 +343,8 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             );
           }
 
-          // ✅ 原子化状态更新：一次性更新所有服务的状态
+          // 双重保险：实时回调已处理各服务状态，此处作为最终确认
+          // 确保所有状态在 Promise.all 完成后都是最新的
           const item = queueManager!.getItem(itemId);
           if (item) {
             const updatedServiceProgress = { ...item.serviceProgress };
@@ -310,7 +352,6 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             result.results.forEach(serviceResult => {
               if (updatedServiceProgress[serviceResult.serviceId]) {
                 if (serviceResult.status === 'success' && serviceResult.result) {
-                  // 成功：构建完整的状态对象
                   let link = serviceResult.result.url;
                   if (serviceResult.serviceId === 'weibo' && activePrefix.value) {
                     link = activePrefix.value + link;
@@ -323,7 +364,6 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
                     link: link
                   };
                 } else if (serviceResult.status === 'failed') {
-                  // 失败：更新错误状态并重置进度
                   updatedServiceProgress[serviceResult.serviceId] = {
                     ...updatedServiceProgress[serviceResult.serviceId],
                     status: '✗ 失败',
@@ -334,7 +374,6 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
               }
             });
 
-            // 一次性更新所有服务的状态
             queueManager!.updateItem(itemId, {
               serviceProgress: updatedServiceProgress
             });

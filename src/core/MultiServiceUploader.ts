@@ -12,6 +12,17 @@ import { convertToJDError } from '../uploaders/jd/JDError';
 import { convertToNamiError } from '../uploaders/nami/NamiError';
 
 /**
+ * 单个服务完成结果（用于实时回调）
+ */
+export interface SingleServiceResult {
+  serviceId: ServiceType;
+  result?: UploadResult;
+  status: 'success' | 'failed';
+  error?: string;
+  structuredError?: StructuredError;
+}
+
+/**
  * 多图床上传结果
  */
 export interface MultiUploadResult {
@@ -19,13 +30,7 @@ export interface MultiUploadResult {
   primaryService: ServiceType;
 
   /** 所有图床的上传结果 */
-  results: Array<{
-    serviceId: ServiceType;
-    result?: UploadResult;
-    status: 'success' | 'failed';
-    error?: string;
-    structuredError?: StructuredError;  // 新增：结构化错误
-  }>;
+  results: SingleServiceResult[];
 
   /** 主力图床的 URL */
   primaryUrl: string;
@@ -56,6 +61,7 @@ export class MultiServiceUploader {
    * @param enabledServices 启用的图床列表
    * @param config 用户配置
    * @param onProgress 进度回调（每个图床独立进度）
+   * @param onServiceResult 单个服务完成回调（实时通知）
    * @returns 多图床上传结果
    */
   async uploadToMultipleServices(
@@ -68,7 +74,8 @@ export class MultiServiceUploader {
       step?: string,
       stepIndex?: number,
       totalSteps?: number
-    ) => void
+    ) => void,
+    onServiceResult?: (result: SingleServiceResult) => void
   ): Promise<MultiUploadResult> {
     console.log('[MultiUploader] 开始并行上传到:', enabledServices);
 
@@ -103,6 +110,8 @@ export class MultiServiceUploader {
 
     // 创建所有上传任务
     const uploadTasks = validServices.map((serviceId) => async () => {
+      let taskResult: SingleServiceResult;
+
       try {
         const uploader = UploaderFactory.create(serviceId);
         const serviceConfig = config.services[serviceId];
@@ -133,13 +142,13 @@ export class MultiServiceUploader {
         );
 
         console.log(`[MultiUploader] ${serviceId} 上传成功`);
-        return {
+        taskResult = {
           serviceId,
           result,
           status: 'success' as const
         };
       } catch (error) {
-        // 新增：转换为结构化错误
+        // 转换为结构化错误
         let structuredError: StructuredError;
 
         switch (serviceId) {
@@ -174,13 +183,20 @@ export class MultiServiceUploader {
         }
 
         console.error(`[MultiUploader] ${serviceId} 上传失败:`, structuredError);
-        return {
+        taskResult = {
           serviceId,
           status: 'failed' as const,
           error: structuredError.message,
-          structuredError  // 新增：保存结构化错误
+          structuredError
         };
       }
+
+      // 关键：任务完成后立即通知回调，实现实时 UI 更新
+      if (onServiceResult) {
+        onServiceResult(taskResult);
+      }
+
+      return taskResult;
     });
 
     // 3. 并发执行所有上传任务（所有图床同时上传）
