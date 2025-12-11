@@ -3751,6 +3751,19 @@ body, html {
   backdrop-filter: blur(8px);
 }
 
+/* Toast 关闭按钮焦点样式优化 - 只在键盘导航时显示焦点环 */
+:deep(.p-toast .p-toast-message .p-toast-icon-close-button) {
+  /* 隐藏鼠标点击时的焦点环 */
+  outline: none;
+}
+
+:deep(.p-toast .p-toast-message .p-toast-icon-close-button:focus-visible) {
+  /* 保留键盘导航时的焦点环，使用主题色 */
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 /* 8. Tag 标签样式微调 */
 :deep(.p-tag) {
   border-radius: 4px;

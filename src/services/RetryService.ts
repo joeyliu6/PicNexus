@@ -8,6 +8,7 @@ import { UploadQueueManager, QueueItem } from '../uploadQueue';
 import { UserConfig, ServiceType } from '../config/types';
 import { Store } from '../store';
 import { UploadResult } from '../uploaders/base/types';
+import { checkNetworkConnectivity } from '../utils/network';
 
 export interface RetryOptions {
   /** 配置存储 */
@@ -50,17 +51,18 @@ export class RetryService {
       return;
     }
 
-    // 重试前检测网络
-    if (!navigator.onLine) {
-      this.options.toast.warn(
-        '网络未连接',
-        '请检查网络连接后再重试',
+    console.log(`[重试] 单独重试 ${item.fileName} -> ${serviceId}`);
+
+    // 检测网络连通性
+    const isNetworkAvailable = await checkNetworkConnectivity();
+    if (!isNetworkAvailable) {
+      this.options.toast.error(
+        '网络连接失败',
+        '请检查网络后重试',
         3000
       );
       return;
     }
-
-    console.log(`[重试] 单独重试 ${item.fileName} -> ${serviceId}`);
 
     // 并发控制
     const retryKey = `${itemId}-${serviceId}`;
@@ -135,17 +137,18 @@ export class RetryService {
       return;
     }
 
-    // 重试前检测网络
-    if (!navigator.onLine) {
-      this.options.toast.warn(
-        '网络未连接',
-        '请检查网络连接后再重试',
+    console.log(`[重试] 全量重试 (${currentRetryCount + 1}/${maxRetries}): ${item.fileName}`);
+
+    // 检测网络连通性
+    const isNetworkAvailable = await checkNetworkConnectivity();
+    if (!isNetworkAvailable) {
+      this.options.toast.error(
+        '网络连接失败',
+        '请检查网络后重试',
         3000
       );
       return;
     }
-
-    console.log(`[重试] 全量重试 (${currentRetryCount + 1}/${maxRetries}): ${item.fileName}`);
 
     // 指数退避延迟
     const delays = [0, 2000, 4000];
