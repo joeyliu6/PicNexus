@@ -515,8 +515,8 @@ defineExpose({
 
 /* 渠道图标 */
 .channel-icon {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 6px;
   display: flex;
   align-items: center;
@@ -543,8 +543,8 @@ defineExpose({
 }
 
 .channel-icon .icon-svg svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 
