@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { writeText } from '@tauri-apps/api/clipboard';
 import type { ServiceType } from '../config/types';
-import ProgressBar from 'primevue/progressbar';
 import { useToast } from '../composables/useToast';
 import { useQueueState } from '../composables/useQueueState';
 import type { QueueItem } from '../uploadQueue';
@@ -72,11 +71,6 @@ const getStatusCounts = (item: QueueItem) => {
     else pending++;
   });
   return { success, error, uploading, pending };
-};
-
-// 判断少渠道模式 (≤4)
-const isFewChannels = (item: QueueItem): boolean => {
-  return (item.enabledServices?.length || 0) <= 4;
 };
 
 // 计算堆叠进度条百分比
@@ -247,11 +241,10 @@ defineExpose({
         </div>
       </div>
 
-      <!-- 自适应网格 -->
+      <!-- 渠道网格 -->
       <div
         v-if="item.enabledServices && item.serviceProgress"
         class="channel-grid"
-        :class="{ 'few-channels': isFewChannels(item) }"
       >
         <div
           v-for="service in item.enabledServices"
@@ -268,22 +261,7 @@ defineExpose({
           <!-- 渠道信息 -->
           <div class="channel-info">
             <span class="channel-name">{{ serviceNames[service] }}</span>
-
-            <!-- 少渠道模式：显示进度条 -->
-            <template v-if="isFewChannels(item)">
-              <ProgressBar
-                :value="item.serviceProgress[service]?.progress || 0"
-                :showValue="false"
-                class="channel-progress"
-                :class="getStatusLabelClass(item, service)"
-              />
-              <span class="channel-status" :class="getStatusLabelClass(item, service)">
-                {{ getStatusLabel(item, service) }}
-              </span>
-            </template>
-
-            <!-- 多渠道模式：显示状态标签 -->
-            <span v-else class="status-label" :class="getStatusLabelClass(item, service)">
+            <span class="status-label" :class="getStatusLabelClass(item, service)">
               {{ getStatusLabel(item, service) }}
             </span>
           </div>
@@ -504,10 +482,6 @@ defineExpose({
   grid-template-columns: repeat(4, 1fr);
 }
 
-.channel-grid.few-channels {
-  grid-template-columns: repeat(2, 1fr);
-}
-
 /* 渠道卡片 */
 .channel-card {
   position: relative;
@@ -526,22 +500,18 @@ defineExpose({
   border-color: rgba(59, 130, 246, 0.3);
 }
 
-/* 错误态：克制的红色边框，不用红色背景 */
+/* 错误态：浅红色透明背景 */
 .channel-card.error {
-  background: var(--bg-card);
+  background: rgba(239, 68, 68, 0.08);
   border-color: rgba(239, 68, 68, 0.3);
-  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.05);
 }
 
-/* 成功态：与默认态相同 */
+/* 成功态：浅绿色透明背景 */
 .channel-card.success {
-  background: var(--bg-card);
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.3);
 }
 
-/* 少渠道模式卡片 */
-.few-channels .channel-card {
-  padding: 10px;
-}
 
 /* 渠道图标（去品牌化：统一中性灰，Hover 变蓝） */
 .channel-icon {
@@ -577,6 +547,11 @@ defineExpose({
   height: 18px;
 }
 
+/* SVG 图标统一使用蓝色调 */
+.channel-icon .icon-svg svg path {
+  fill: var(--primary);
+}
+
 /* Hover 时图标变品牌蓝 */
 .channel-card:hover .channel-icon {
   background: rgba(59, 130, 246, 0.1);
@@ -589,11 +564,6 @@ defineExpose({
   color: var(--error);
 }
 
-.few-channels .channel-icon {
-  width: 32px;
-  height: 32px;
-  font-size: 12px;
-}
 
 /* 渠道信息 */
 .channel-info {
@@ -613,9 +583,6 @@ defineExpose({
   text-overflow: ellipsis;
 }
 
-.few-channels .channel-name {
-  font-size: 13px;
-}
 
 /* 状态标签（紧凑模式） */
 .status-label {
@@ -632,68 +599,6 @@ defineExpose({
 }
 
 .status-label.uploading {
-  color: var(--primary);
-}
-
-/* 渠道进度条（宽版模式） */
-.channel-progress {
-  height: 4px !important;
-  border-radius: 2px;
-  margin-top: 2px;
-}
-
-.channel-progress :deep(.p-progressbar) {
-  background: var(--bg-input);
-  border-radius: 2px;
-}
-
-.channel-progress :deep(.p-progressbar-value) {
-  border-radius: 2px;
-  background: var(--primary);
-  transition: width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
-.channel-progress.success :deep(.p-progressbar-value) {
-  background: var(--success);
-}
-
-.channel-progress.error :deep(.p-progressbar-value) {
-  background: var(--error);
-}
-
-.channel-progress.uploading :deep(.p-progressbar-value) {
-  background: var(--primary);
-  animation: progressShimmer 1.5s ease-in-out infinite;
-  background-size: 200% 100%;
-  background-image: linear-gradient(
-    90deg,
-    var(--primary) 0%,
-    var(--accent) 50%,
-    var(--primary) 100%
-  );
-}
-
-@keyframes progressShimmer {
-  0%, 100% { background-position: 200% 0; }
-  50% { background-position: 0% 0; }
-}
-
-/* 渠道状态文本（宽版模式） */
-.channel-status {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 1px;
-}
-
-.channel-status.success {
-  color: var(--success);
-}
-
-.channel-status.error {
-  color: var(--error);
-}
-
-.channel-status.uploading {
   color: var(--primary);
 }
 
@@ -724,17 +629,6 @@ defineExpose({
   font-size: 12px;
 }
 
-.few-channels .copy-btn {
-  position: static;
-  margin-left: auto;
-  padding: 4px 8px;
-  border-radius: 4px;
-  opacity: 1;
-}
-
-.few-channels .copy-btn:hover {
-  background: rgba(16, 185, 129, 0.15);
-}
 
 /* 重试按钮 */
 .retry-btn {
@@ -761,15 +655,4 @@ defineExpose({
   font-size: 12px;
 }
 
-.few-channels .retry-btn {
-  position: static;
-  margin-left: auto;
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: var(--error-soft);
-}
-
-.few-channels .retry-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-}
 </style>
