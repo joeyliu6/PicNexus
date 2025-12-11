@@ -103,6 +103,28 @@ body, html {
   }
 }
 
+/* 焦点环控制：隐藏鼠标点击的焦点环，保留键盘导航的焦点环 */
+/* 默认隐藏所有焦点环 */
+*:focus {
+  outline: none;
+}
+
+/* 只在键盘导航时显示焦点环 */
+*:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* 针对 PrimeVue Dialog 的关闭按钮和其他按钮 */
+button:focus {
+  outline: none;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
 /* Titlebar Styles */
 #titlebar {
   height: 32px; /* Standard Windows titlebar height */
