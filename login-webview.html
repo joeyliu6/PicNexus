@@ -1,228 +1,190 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>微博官方登录</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
+  <title>登录授权 - WeiboDR-Uploader</title>
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: #ffffff;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            color: #1d1d1f;
-        }
+  <!-- 优雅的加载预览样式 -->
+  <style>
+    /* 立即设置背景色，避免白色闪烁 */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0f172a; /* Slate 900 - 深色主题默认 */
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    }
 
-        .toolbar {
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            padding: 15px 24px;
-            color: #1d1d1f;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #e5e5e5;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
+    #app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
 
-        .toolbar h1 {
-            font-size: 14px;
-            font-weight: 600;
-            color: #1d1d1f;
-            letter-spacing: -0.01em;
-        }
+    /* 加载骨架屏 */
+    .loading-skeleton {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      opacity: 1;
+      transition: opacity 0.3s ease;
+    }
 
-        .toolbar-buttons {
-            display: flex;
-            gap: 12px;
-        }
+    .loading-skeleton.loaded {
+      opacity: 0;
+      pointer-events: none;
+    }
 
-        .toolbar-btn {
-            padding: 6px 12px;
-            background: transparent;
-            color: #1d1d1f;
-            border: 1px solid #d2d2d7;
-            border-radius: 6px;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            font-weight: 500;
-        }
+    .skeleton-header {
+      height: 32px;
+      background: #020617;
+      border-bottom: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 8px;
+    }
 
-        .toolbar-btn:hover {
-            background: #f5f5f7;
-            border-color: #86868b;
-        }
+    .skeleton-icon {
+      width: 12px;
+      height: 12px;
+      background: #334155;
+      border-radius: 2px;
+      animation: skeleton-pulse 1.5s ease-in-out infinite;
+    }
 
-        .toolbar-btn.primary {
-            background: #000000;
-            color: #ffffff;
-            border-color: #000000;
-        }
+    .skeleton-text {
+      height: 12px;
+      width: 80px;
+      background: #334155;
+      border-radius: 2px;
+      animation: skeleton-pulse 1.5s ease-in-out 0.2s infinite;
+    }
 
-        .toolbar-btn.primary:hover {
-            background: #333333;
-            border-color: #333333;
-        }
+    .skeleton-content {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 24px;
+    }
 
-        .webview-container {
-            flex: 1;
-            position: relative;
-            background: white;
-        }
+    .skeleton-card {
+      width: 100%;
+      max-width: 380px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 32px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
 
-        iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
+    .skeleton-circle {
+      width: 80px;
+      height: 80px;
+      background: #0f172a;
+      border: 2px solid #334155;
+      border-radius: 50%;
+      animation: skeleton-pulse 1.5s ease-in-out infinite;
+    }
 
-        .loading-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: white;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
+    .skeleton-title {
+      width: 200px;
+      height: 20px;
+      background: #334155;
+      border-radius: 4px;
+      animation: skeleton-pulse 1.5s ease-in-out 0.1s infinite;
+    }
 
-        .loading-overlay.hidden {
-            display: none;
-        }
+    .skeleton-desc {
+      width: 280px;
+      height: 14px;
+      background: #334155;
+      border-radius: 3px;
+      animation: skeleton-pulse 1.5s ease-in-out 0.2s infinite;
+    }
 
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid #f5f5f7;
-            border-top: 3px solid #000000;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
+    .skeleton-message {
+      width: 100%;
+      height: 40px;
+      background: rgba(59, 130, 246, 0.08);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 8px;
+      animation: skeleton-pulse 1.5s ease-in-out 0.3s infinite;
+    }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+    .skeleton-button {
+      width: 100%;
+      height: 40px;
+      background: #334155;
+      border-radius: 8px;
+      animation: skeleton-pulse 1.5s ease-in-out 0.4s infinite;
+    }
 
-        .loading-text {
-            margin-top: 16px;
-            color: #86868b;
-            font-size: 13px;
-            font-weight: 500;
-        }
+    .skeleton-footer {
+      height: 32px;
+      background: #020617;
+      border-top: 1px solid #334155;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 16px;
+    }
 
-        .status-bar {
-            padding: 12px 24px;
-            background: #fafafa;
-            border-top: 1px solid #e5e5e5;
-            font-size: 12px;
-            color: #86868b;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+    .skeleton-footer-text {
+      height: 10px;
+      width: 60px;
+      background: #334155;
+      border-radius: 2px;
+      animation: skeleton-pulse 1.5s ease-in-out 0.5s infinite;
+    }
 
-        .status-message {
-            flex: 1;
-            font-family: monospace;
-        }
-
-        .status-message.success {
-            color: #00a335; /* Green suited for light bg */
-            font-weight: 600;
-        }
-
-        .status-message.error {
-            color: #d70015; /* Red suited for light bg */
-            font-weight: 600;
-        }
-
-        .tips {
-            padding: 16px 24px;
-            background: #f5f5f7;
-            border-bottom: 1px solid #e5e5e5;
-            font-size: 13px;
-            color: #1d1d1f;
-            line-height: 1.5;
-        }
-
-        .tips strong {
-            display: block;
-            margin-bottom: 4px;
-            color: #000000;
-            font-weight: 600;
-        }
-    </style>
+    @keyframes skeleton-pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.4;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div class="toolbar">
-        <h1>🔐 登录 - 自动获取Cookie</h1>
-        <div class="toolbar-buttons">
-            <button class="toolbar-btn primary" id="get-cookie-btn">获取Cookie</button>
-            <button class="toolbar-btn" id="close-btn">关闭</button>
+  <div id="app">
+    <!-- 加载骨架屏，Vue 挂载后自动消失 -->
+    <div class="loading-skeleton">
+      <div class="skeleton-header">
+        <div class="skeleton-icon"></div>
+        <div class="skeleton-text"></div>
+      </div>
+      <div class="skeleton-content">
+        <div class="skeleton-card">
+          <div class="skeleton-circle"></div>
+          <div class="skeleton-title"></div>
+          <div class="skeleton-desc"></div>
+          <div class="skeleton-message"></div>
+          <div class="skeleton-button"></div>
+          <div class="skeleton-button"></div>
+          <div class="skeleton-button"></div>
         </div>
+      </div>
+      <div class="skeleton-footer">
+        <div class="skeleton-footer-text"></div>
+        <div class="skeleton-footer-text"></div>
+      </div>
     </div>
-
-    <div class="tips" id="tips-section">
-        <strong>💡 使用说明：</strong>
-        点击下方"开始登录"按钮，将在本窗口加载登录页面。登录成功后会自动获取Cookie。
-    </div>
-
-    <div class="webview-container">
-        <div id="instructions" style="padding: 60px 40px; text-align: center;">
-            <div style="font-size: 64px; margin-bottom: 30px;">🔐</div>
-            <h2 style="color: #333; margin-bottom: 20px;">准备登录</h2>
-            <p style="color: #666; margin-bottom: 40px; line-height: 1.8;">
-                点击下方按钮将在本窗口加载登录页面。<br>
-                登录完成后，页面会自动检测并获取Cookie。
-            </p>
-            <button id="start-login-btn" style="
-                padding: 12px 32px;
-                background: #000000;
-                color: #ffffff;
-                border: none;
-                border-radius: 8px;
-                font-size: 16px;
-                font-weight: 500;
-                cursor: pointer;
-                transition: background 0.2s;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            ">🚀 开始登录</button>
-            
-            <div style="margin-top: 40px; padding: 20px; background: #f8f9fa; border-radius: 8px; text-align: left;">
-                <strong style="display: block; margin-bottom: 10px; color: #333;">⚠️ 重要说明：</strong>
-                <ul style="color: #666; line-height: 2; margin-left: 20px;">
-                    <li>登录页面将直接在本窗口加载</li>
-                    <li>支持官方所有登录方式（密码、验证码、扫码等）</li>
-                    <li>登录成功后会自动检测并保存Cookie</li>
-                    <li>整个过程在本地完成，安全可靠</li>
-                </ul>
-            </div>
-        </div>
-    </div>
-
-    <div class="status-bar">
-        <div class="status-message" id="status-message">
-            等待登录...
-        </div>
-    </div>
-
-    <script type="module" src="/src/login-webview.ts"></script>
+  </div>
+  <script type="module" src="/src/login-webview.ts"></script>
 </body>
 </html>
 
