@@ -120,7 +120,7 @@ const loadSettings = async () => {
 };
 
 // 自动保存
-const saveSettings = async () => {
+const saveSettings = async (silent = false) => {
   try {
     const currentConfig = configManager.config.value;
     const updatedConfig: UserConfig = {
@@ -145,7 +145,7 @@ const saveSettings = async () => {
     const tokenMatch = updatedConfig.services?.nami?.cookie?.match(/Auth-Token=([^;]+)/);
     if (tokenMatch && updatedConfig.services?.nami) updatedConfig.services.nami.authToken = tokenMatch[1];
 
-    await configManager.saveConfig(updatedConfig);
+    await configManager.saveConfig(updatedConfig, silent);
   } catch (e) { console.error(e); }
 };
 
@@ -193,8 +193,7 @@ onMounted(async () => {
   cookieUnlisten.value = await configManager.setupCookieListener(async (sid, cookie) => {
     if (sid === 'weibo') formData.value.weiboCookie = cookie;
     else if (['nowcoder', 'zhihu', 'nami'].includes(sid)) (formData.value as any)[sid].cookie = cookie;
-    await saveSettings();
-    toast.success('Cookie 已更新', `已自动捕获 ${serviceNames[sid as ServiceType]} Cookie`);
+    await saveSettings(true); // 静默保存，不显示"保存成功"提示
   });
 });
 

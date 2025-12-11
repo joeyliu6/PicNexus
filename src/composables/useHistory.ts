@@ -346,7 +346,7 @@ export function useHistoryManager() {
       // 复制到剪贴板（每行一个链接）
       await writeText(links.join('\n'));
 
-      toast.success('复制成功', `已复制 ${links.length} 个链接到剪贴板`);
+      toast.success('已复制', `已复制 ${links.length} 个链接到剪贴板`, 1500);
       console.log(`[批量操作] 已复制 ${links.length} 个链接`);
 
     } catch (error: any) {

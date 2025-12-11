@@ -90,8 +90,9 @@ export function useConfigManager() {
   /**
    * 保存配置
    * @param newConfig 新的配置对象
+   * @param silent 静默保存，不显示成功提示（用于自动保存场景）
    */
-  async function saveConfig(newConfig: UserConfig): Promise<void> {
+  async function saveConfig(newConfig: UserConfig, silent = false): Promise<void> {
     try {
       console.log('[配置管理] 开始保存配置...');
       isSaving.value = true;
@@ -134,7 +135,9 @@ export function useConfigManager() {
         config.value = { ...newConfig };
 
         console.log('[配置管理] ✓ 配置保存成功');
-        toast.success('保存成功', '配置已保存');
+        if (!silent) {
+          toast.success('保存成功', '配置已保存');
+        }
       } catch (saveError) {
         const errorMsg = saveError instanceof Error ? saveError.message : String(saveError);
         console.error('[配置管理] 保存配置失败:', saveError);
@@ -477,6 +480,9 @@ export function useConfigManager() {
    * @param serviceId 服务标识（weibo/nowcoder/zhihu/nami）
    */
   async function openCookieWebView(serviceId: ServiceType): Promise<void> {
+    let errorOccurred = false;
+    let errorMessage = '';
+
     try {
       // 获取 Cookie 提供者配置
       const provider = getCookieProvider(serviceId);
@@ -498,7 +504,7 @@ export function useConfigManager() {
         }
       } catch (error) {
         console.warn('[WebView登录窗口] 检查已存在窗口失败:', error);
-        // 继续创建新窗口
+        // 窗口不存在是正常情况，继续创建新窗口
       }
 
       // 创建新的Cookie获取窗口（通过 URL 参数传递服务类型）
@@ -520,19 +526,30 @@ export function useConfigManager() {
         });
 
         loginWindow.once('tauri://error', (e) => {
-          console.error('[WebView登录窗口] 窗口创建失败:', e);
-          const errorMsg = e && typeof e === 'object' && 'payload' in e ? String(e.payload) : String(e);
-          toast.error('打开登录窗口失败', errorMsg);
+          errorOccurred = true;
+          errorMessage = e && typeof e === 'object' && 'payload' in e ? String(e.payload) : String(e);
+          console.error('[WebView登录窗口] 窗口创建失败:', errorMessage);
         });
+
+        // 等待窗口初始化
+        await new Promise((resolve) => setTimeout(resolve, 200));
+
+        if (errorOccurred) {
+          throw new Error(errorMessage);
+        }
       } catch (createError) {
-        const errorMsg = createError instanceof Error ? createError.message : String(createError);
+        errorOccurred = true;
+        errorMessage = createError instanceof Error ? createError.message : String(createError);
         console.error('[WebView登录窗口] 创建窗口异常:', createError);
-        toast.error('创建登录窗口失败', errorMsg);
+        throw createError;
       }
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[WebView登录窗口] 打开窗口异常:', error);
-      toast.error('打开登录窗口失败', errorMsg);
+      // 统一错误处理 - 只在这里显示一次toast
+      if (!errorOccurred) {
+        errorMessage = error instanceof Error ? error.message : String(error);
+      }
+      console.error('[WebView登录窗口] 打开窗口失败:', errorMessage || error);
+      toast.error('打开登录窗口失败', errorMessage || String(error), 5000);
     }
   }
 

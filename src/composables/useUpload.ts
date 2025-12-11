@@ -262,7 +262,8 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
         toast.error(
           '网络连接失败',
-          `${queueItems.length}个文件未能上传，请检查网络后重试`
+          `${queueItems.length}个文件未能上传，请检查网络后重试`,
+          6000
         );
         return;
       }
