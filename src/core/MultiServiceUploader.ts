@@ -52,7 +52,6 @@ export interface MultiUploadResult {
  */
 export class MultiServiceUploader {
   /** 最大并发上传数（已移除限制，所有图床并发上传以提升用户体验） */
-  // private readonly MAX_CONCURRENT_UPLOADS = 3;  // 已废弃
 
   /**
    * 并行上传到多个图床（限制最大并发数）

@@ -1,4 +1,4 @@
-// src/main-new.ts
+// src/main.ts
 // 新架构的主入口文件 - 使用 Vue 3 + PrimeVue 单应用模式
 
 import { createApp } from 'vue';
