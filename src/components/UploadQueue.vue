@@ -316,7 +316,7 @@ defineExpose({
 .upload-queue {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 /* 空状态 */
@@ -325,20 +325,20 @@ defineExpose({
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 48px 0;
+  padding: 32px 0;
   text-align: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .empty-icon {
-  font-size: 3rem;
+  font-size: 2rem;
   color: var(--text-muted);
   opacity: 0.5;
 }
 
 .empty-text {
   color: var(--text-secondary);
-  font-size: var(--text-base);
+  font-size: 13px;
   font-style: italic;
   opacity: 0.7;
 }
@@ -347,23 +347,23 @@ defineExpose({
 .queue-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: 10px;
+  padding: 14px;
 }
 
 /* 卡片头部 */
 .card-header {
   display: flex;
-  gap: 20px;
-  align-items: flex-start;
-  margin-bottom: 24px;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
 }
 
 /* 缩略图 */
 .thumbnail-wrapper {
-  width: 64px;
-  height: 64px;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   overflow: hidden;
   flex-shrink: 0;
   background: var(--bg-input);
@@ -383,7 +383,7 @@ defineExpose({
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  font-size: 24px;
+  font-size: 16px;
 }
 
 /* 头部内容 */
@@ -396,12 +396,12 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  gap: 16px;
+  margin-bottom: 6px;
+  gap: 8px;
 }
 
 .filename {
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -414,23 +414,23 @@ defineExpose({
 /* 状态标签 */
 .status-pills {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 12px;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
   font-weight: 500;
   border: 1px solid transparent;
 }
 
 .pill i {
-  font-size: 12px;
+  font-size: 10px;
 }
 
 /* 状态胶囊：更克制的颜色 */
@@ -454,12 +454,12 @@ defineExpose({
 
 /* 堆叠进度条：更细更精致 */
 .stacked-progress {
-  height: 6px;
+  height: 4px;
   background: var(--bg-input);
-  border-radius: 3px;
+  border-radius: 2px;
   display: flex;
   overflow: hidden;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .segment {
@@ -493,14 +493,14 @@ defineExpose({
 }
 
 .status-text {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
 }
 
 /* 自适应网格 */
 .channel-grid {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   grid-template-columns: repeat(4, 1fr);
 }
 
@@ -513,9 +513,9 @@ defineExpose({
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 12px;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-card);
   transition: all 0.2s ease;
@@ -540,21 +540,21 @@ defineExpose({
 
 /* 少渠道模式卡片 */
 .few-channels .channel-card {
-  padding: 16px;
+  padding: 10px;
 }
 
 /* 渠道图标（去品牌化：统一中性灰，Hover 变蓝） */
 .channel-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg-secondary);
   color: var(--text-muted);
   font-weight: 600;
-  font-size: 13px;
+  font-size: 11px;
   flex-shrink: 0;
   transition: all 0.2s ease;
 }
@@ -573,8 +573,8 @@ defineExpose({
 }
 
 .channel-icon .icon-svg svg {
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
 }
 
 /* Hover 时图标变品牌蓝 */
@@ -590,9 +590,9 @@ defineExpose({
 }
 
 .few-channels .channel-icon {
-  width: 40px;
-  height: 40px;
-  font-size: 14px;
+  width: 32px;
+  height: 32px;
+  font-size: 12px;
 }
 
 /* 渠道信息 */
@@ -601,11 +601,11 @@ defineExpose({
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .channel-name {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
@@ -614,12 +614,12 @@ defineExpose({
 }
 
 .few-channels .channel-name {
-  font-size: 15px;
+  font-size: 13px;
 }
 
 /* 状态标签（紧凑模式） */
 .status-label {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
 }
 
@@ -637,18 +637,18 @@ defineExpose({
 
 /* 渠道进度条（宽版模式） */
 .channel-progress {
-  height: 6px !important;
-  border-radius: 3px;
-  margin-top: 4px;
+  height: 4px !important;
+  border-radius: 2px;
+  margin-top: 2px;
 }
 
 .channel-progress :deep(.p-progressbar) {
   background: var(--bg-input);
-  border-radius: 3px;
+  border-radius: 2px;
 }
 
 .channel-progress :deep(.p-progressbar-value) {
-  border-radius: 3px;
+  border-radius: 2px;
   background: var(--primary);
   transition: width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
@@ -680,9 +680,9 @@ defineExpose({
 
 /* 渠道状态文本（宽版模式） */
 .channel-status {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .channel-status.success {
@@ -700,13 +700,13 @@ defineExpose({
 /* 复制按钮 */
 .copy-btn {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 6px;
+  right: 6px;
   background: none;
   border: none;
   color: var(--success);
   cursor: pointer;
-  padding: 4px;
+  padding: 3px;
   border-radius: 4px;
   display: flex;
   align-items: center;
@@ -721,14 +721,14 @@ defineExpose({
 }
 
 .copy-btn i {
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .few-channels .copy-btn {
   position: static;
   margin-left: auto;
-  padding: 6px 10px;
-  border-radius: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
   opacity: 1;
 }
 
@@ -739,13 +739,13 @@ defineExpose({
 /* 重试按钮 */
 .retry-btn {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 6px;
+  right: 6px;
   background: none;
   border: none;
   color: var(--error);
   cursor: pointer;
-  padding: 4px;
+  padding: 3px;
   border-radius: 4px;
   display: flex;
   align-items: center;
@@ -758,14 +758,14 @@ defineExpose({
 }
 
 .retry-btn i {
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .few-channels .retry-btn {
   position: static;
   margin-left: auto;
-  padding: 6px 10px;
-  border-radius: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
   background: var(--error-soft);
 }
 
