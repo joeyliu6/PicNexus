@@ -170,7 +170,7 @@ const actions = {
 };
 
 // 前缀管理
-const addPrefix = () => { formData.value.linkPrefixList.push(''); formData.value.selectedPrefixIndex = formData.value.linkPrefixList.length - 1; saveSettings(); };
+const addPrefix = () => { formData.value.linkPrefixList.push(''); formData.value.selectedPrefixIndex = formData.value.linkPrefixList.length - 1; };
 const removePrefix = (idx: number) => {
   if (formData.value.linkPrefixList.length <= 1) return;
   formData.value.linkPrefixList.splice(idx, 1);
@@ -435,8 +435,8 @@ onUnmounted(() => {
 
         <div v-if="formData.linkPrefixEnabled" class="prefix-list">
             <div v-for="(_prefix, idx) in formData.linkPrefixList" :key="idx" class="prefix-row">
-                <RadioButton v-model="formData.selectedPrefixIndex" :value="idx" :inputId="'p-'+idx" @change="saveSettings" />
-                <InputText v-model="formData.linkPrefixList[idx]" @blur="saveSettings" class="flex-1" />
+                <RadioButton v-model="formData.selectedPrefixIndex" :value="idx" :inputId="'p-'+idx" @change="saveSettings()" />
+                <InputText v-model="formData.linkPrefixList[idx]" @blur="saveSettings()" class="flex-1" />
                 <Button icon="pi pi-trash" @click="removePrefix(idx)" text severity="danger" :disabled="formData.linkPrefixList.length <= 1"/>
             </div>
             <Button label="添加新前缀" icon="pi pi-plus" @click="addPrefix" outlined class="w-full mt-2" size="small" />
