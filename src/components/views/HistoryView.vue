@@ -9,15 +9,39 @@ import Checkbox from 'primevue/checkbox';
 import Select from 'primevue/select';
 import Dialog from 'primevue/dialog';
 import Tag from 'primevue/tag';
+import Skeleton from 'primevue/skeleton';
 import type { HistoryItem, ServiceType } from '../../config/types';
 import { getActivePrefix } from '../../config/types';
 import { useHistoryManager, type ViewMode } from '../../composables/useHistory';
 import { useToast } from '../../composables/useToast';
 import { useConfigManager } from '../../composables/useConfig';
+import { debounce } from '../../utils/debounce';
 
 const toast = useToast();
 const historyManager = useHistoryManager();
 const configManager = useConfigManager();
+
+// 本地搜索词（用于防抖）
+const localSearchTerm = ref('');
+
+// 防抖更新搜索词
+const debouncedSearch = debounce((term: string) => {
+  historyManager.searchTerm.value = term;
+}, 300);
+
+// 缩略图 URL 缓存
+const thumbUrlCache = new Map<string, string | undefined>();
+
+// 清空缩略图缓存
+const clearThumbCache = () => {
+  thumbUrlCache.clear();
+};
+
+// 监听数据变化时清空缓存
+watch(() => historyManager.allHistoryItems.value, clearThumbCache);
+
+// 监听前缀配置变化时清空缓存
+watch(() => configManager.config.value?.linkPrefixConfig, clearThumbCache, { deep: true });
 
 // watch 监听器停止函数
 const watchers = ref<(() => void)[]>([]);
@@ -89,9 +113,9 @@ const stopWatchFilter = watch(() => historyManager.historyState.value.currentFil
   historyManager.setFilter(newFilter);
 });
 
-// 监听搜索词变化
-const stopWatchSearch = watch(() => historyManager.searchTerm.value, (newTerm) => {
-  console.log('[HistoryView] 搜索:', newTerm);
+// 监听本地搜索词变化（防抖）
+const stopWatchSearch = watch(localSearchTerm, (newTerm) => {
+  debouncedSearch(newTerm);
 });
 
 // 监听选中状态变化，同步工具栏全选复选框
@@ -216,50 +240,61 @@ const openInBrowser = async (item: HistoryItem) => {
   }
 };
 
-// 获取缩略图 URL
+// 获取缩略图 URL（带缓存）
 const getThumbUrl = (item: HistoryItem): string | undefined => {
+  // 检查缓存
+  if (thumbUrlCache.has(item.id)) {
+    return thumbUrlCache.get(item.id);
+  }
+
+  let result: string | undefined;
+
   if (!item.results || item.results.length === 0) {
-    return undefined;
-  }
+    result = undefined;
+  } else {
+    // 优先使用主力图床的结果
+    const primaryResult = item.results.find(r => r.serviceId === item.primaryService && r.status === 'success');
+    if (primaryResult?.result?.url) {
+      // 对于微博图床，使用中等尺寸缩略图
+      if (primaryResult.serviceId === 'weibo' && primaryResult.result.fileKey) {
+        let thumbUrl = `https://tvax1.sinaimg.cn/bmiddle/${primaryResult.result.fileKey}.jpg`;
 
-  // 优先使用主力图床的结果
-  const primaryResult = item.results.find(r => r.serviceId === item.primaryService && r.status === 'success');
-  if (primaryResult?.result?.url) {
-    // 对于微博图床，使用中等尺寸缩略图
-    if (primaryResult.serviceId === 'weibo' && primaryResult.result.fileKey) {
-      let thumbUrl = `https://tvax1.sinaimg.cn/bmiddle/${primaryResult.result.fileKey}.jpg`;
+        // 应用链接前缀（如果启用）
+        const activePrefix = getActivePrefix(configManager.config.value);
+        if (activePrefix) {
+          thumbUrl = `${activePrefix}${thumbUrl}`;
+        }
 
-      // 应用链接前缀（如果启用）
-      const activePrefix = getActivePrefix(configManager.config.value);
-      if (activePrefix) {
-        thumbUrl = `${activePrefix}${thumbUrl}`;
+        result = thumbUrl;
+      } else {
+        // 其他图床直接使用 URL
+        result = primaryResult.result.url;
       }
+    } else {
+      // 如果主力图床没有结果，使用任何成功的结果
+      const anySuccess = item.results.find(r => r.status === 'success' && r.result?.url);
+      if (anySuccess?.result?.url) {
+        // 对于微博图床，使用中等尺寸缩略图
+        if (anySuccess.serviceId === 'weibo' && anySuccess.result.fileKey) {
+          let thumbUrl = `https://tvax1.sinaimg.cn/bmiddle/${anySuccess.result.fileKey}.jpg`;
 
-      return thumbUrl;
-    }
-    // 其他图床直接使用 URL
-    return primaryResult.result.url;
-  }
+          // 应用链接前缀（如果启用）
+          const activePrefix = getActivePrefix(configManager.config.value);
+          if (activePrefix) {
+            thumbUrl = `${activePrefix}${thumbUrl}`;
+          }
 
-  // 如果主力图床没有结果，使用任何成功的结果
-  const anySuccess = item.results.find(r => r.status === 'success' && r.result?.url);
-  if (anySuccess?.result?.url) {
-    // 对于微博图床，使用中等尺寸缩略图
-    if (anySuccess.serviceId === 'weibo' && anySuccess.result.fileKey) {
-      let thumbUrl = `https://tvax1.sinaimg.cn/bmiddle/${anySuccess.result.fileKey}.jpg`;
-
-      // 应用链接前缀（如果启用）
-      const activePrefix = getActivePrefix(configManager.config.value);
-      if (activePrefix) {
-        thumbUrl = `${activePrefix}${thumbUrl}`;
+          result = thumbUrl;
+        } else {
+          result = anySuccess.result.url;
+        }
       }
-
-      return thumbUrl;
     }
-    return anySuccess.result.url;
   }
 
-  return undefined;
+  // 缓存结果
+  thumbUrlCache.set(item.id, result);
+  return result;
 };
 
 // 获取服务名称
@@ -411,15 +446,15 @@ const getPreviewUrl = (item: HistoryItem): string | undefined => {
           <div class="search-bar">
             <i class="pi pi-search search-icon"></i>
             <input
-              v-model="historyManager.searchTerm.value"
+              v-model="localSearchTerm"
               type="text"
               placeholder="搜索文件名..."
               class="search-input"
             />
             <i
-              v-if="historyManager.searchTerm.value"
+              v-if="localSearchTerm"
               class="pi pi-times clear-icon"
-              @click="historyManager.searchTerm.value = ''"
+              @click="localSearchTerm = ''; historyManager.searchTerm.value = ''"
             ></i>
           </div>
 
@@ -490,9 +525,27 @@ const getPreviewUrl = (item: HistoryItem): string | undefined => {
         </div>
       </div>
 
+      <!-- 加载状态骨架屏 -->
+      <div v-if="historyManager.isLoading.value" class="loading-skeleton">
+        <div class="skeleton-header">
+          <Skeleton width="3rem" height="1.5rem" />
+          <Skeleton width="60px" height="36px" />
+          <Skeleton width="200px" height="1.5rem" />
+          <Skeleton width="180px" height="1.5rem" />
+          <Skeleton width="120px" height="1.5rem" />
+        </div>
+        <div v-for="i in 8" :key="i" class="skeleton-row">
+          <Skeleton width="1.5rem" height="1.5rem" />
+          <Skeleton width="36px" height="36px" />
+          <Skeleton width="70%" height="1rem" />
+          <Skeleton width="100px" height="1.5rem" />
+          <Skeleton width="60px" height="1.5rem" />
+        </div>
+      </div>
+
       <!-- 表格视图 -->
       <DataTable
-        v-if="historyManager.historyState.value.viewMode === 'table'"
+        v-else-if="historyManager.historyState.value.viewMode === 'table'"
         key="table-view"
         :value="historyManager.filteredItems.value"
         dataKey="id"
@@ -538,6 +591,7 @@ const getPreviewUrl = (item: HistoryItem): string | undefined => {
                 v-if="getThumbUrl(slotProps.data)"
                 :src="getThumbUrl(slotProps.data)"
                 :alt="slotProps.data.localFileName"
+                loading="lazy"
                 @error="(e: any) => e.target.src = '/placeholder.png'"
               />
               <i v-else class="pi pi-image thumb-placeholder"></i>
@@ -603,7 +657,7 @@ const getPreviewUrl = (item: HistoryItem): string | undefined => {
 
       <!-- 网格视图（Instagram 风格） -->
       <DataView
-        v-else
+        v-else-if="!historyManager.isLoading.value"
         key="grid-view"
         :value="historyManager.filteredItems.value"
         layout="grid"
@@ -633,6 +687,7 @@ const getPreviewUrl = (item: HistoryItem): string | undefined => {
                   v-if="getPreviewUrl(item)"
                   :src="getPreviewUrl(item)"
                   :alt="item.localFileName"
+                  loading="lazy"
                   @click.stop="openLightbox(item)"
                   @error="(e: any) => e.target.src = '/placeholder.png'"
                 />
@@ -1336,5 +1391,35 @@ const getPreviewUrl = (item: HistoryItem): string | undefined => {
 
 .text-white:hover {
   background: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* === 加载骨架屏 === */
+.loading-skeleton {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skeleton-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 2px solid var(--border-subtle);
+}
+
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.skeleton-row:last-child {
+  border-bottom: none;
 }
 </style>
