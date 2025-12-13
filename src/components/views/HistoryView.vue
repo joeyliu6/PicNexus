@@ -3,8 +3,8 @@ import { ref, computed, onMounted, onActivated, watch, nextTick } from 'vue';
 import { writeText } from '@tauri-apps/api/clipboard';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
-import DataView from 'primevue/dataview';
 import Button from 'primevue/button';
+import { VirtualWaterfall } from '@lhlyu/vue-virtual-waterfall';
 import Checkbox from 'primevue/checkbox';
 import Select from 'primevue/select';
 import Dialog from 'primevue/dialog';
@@ -16,6 +16,7 @@ import { useHistoryManager, type ViewMode } from '../../composables/useHistory';
 import { useToast } from '../../composables/useToast';
 import { useConfigManager } from '../../composables/useConfig';
 import { debounce } from '../../utils/debounce';
+import { getThumbnailUrl } from '../../services/ThumbnailService';
 
 // 【性能优化】DateTimeFormat 提取到组件外，全局复用
 // 避免每次渲染时创建新实例，减少 GC 压力
@@ -39,12 +40,20 @@ const debouncedSearch = debounce((term: string) => {
   historyManager.searchTerm.value = term;
 }, 300);
 
-// 缩略图 URL 缓存
+// 缩略图 URL 缓存（同步：微博图床）
 const thumbUrlCache = new Map<string, string | undefined>();
+
+// 异步缩略图 URL 缓存（非微博图床，需要前端生成）
+const asyncThumbUrls = ref(new Map<string, string>());
+
+// 正在加载的缩略图集合
+const loadingThumbs = new Set<string>();
 
 // 清空缩略图缓存
 const clearThumbCache = () => {
   thumbUrlCache.clear();
+  asyncThumbUrls.value.clear();
+  loadingThumbs.clear();
 };
 
 // 【性能优化】优化缓存清空策略
@@ -203,9 +212,9 @@ onMounted(async () => {
 
 // 【性能优化】视图激活时检查是否需要刷新
 onActivated(async () => {
-  // 只有数据为空时才加载，否则使用缓存
-  if (!isFirstMount.value && historyManager.allHistoryItems.value.length === 0) {
-    console.log('[HistoryView] 视图已激活，数据为空，刷新历史记录');
+  // 检查缓存是否失效（上传后会调用 invalidateCache 使 isDataLoaded 变为 false）
+  if (!isFirstMount.value && !historyManager.isDataLoaded.value) {
+    console.log('[HistoryView] 缓存已失效，重新加载历史记录');
     await historyManager.loadHistory();
   }
 });
@@ -243,60 +252,69 @@ const openInBrowser = async (item: HistoryItem) => {
 };
 
 // 获取缩略图 URL（带缓存）
+// 微博图床：直接返回服务端缩略图 URL
+// 其他图床：返回异步生成的缩略图（如果已生成），否则触发异步生成
 const getThumbUrl = (item: HistoryItem): string | undefined => {
-  // 检查缓存
+  // 检查同步缓存（微博图床）
   if (thumbUrlCache.has(item.id)) {
     return thumbUrlCache.get(item.id);
   }
 
-  let result: string | undefined;
-
-  if (!item.results || item.results.length === 0) {
-    result = undefined;
-  } else {
-    // 优先使用主力图床的结果
-    const primaryResult = item.results.find(r => r.serviceId === item.primaryService && r.status === 'success');
-    if (primaryResult?.result?.url) {
-      // 对于微博图床，使用中等尺寸缩略图
-      if (primaryResult.serviceId === 'weibo' && primaryResult.result.fileKey) {
-        let thumbUrl = `https://tvax1.sinaimg.cn/bmiddle/${primaryResult.result.fileKey}.jpg`;
-
-        // 应用链接前缀（如果启用）
-        const activePrefix = getActivePrefix(configManager.config.value);
-        if (activePrefix) {
-          thumbUrl = `${activePrefix}${thumbUrl}`;
-        }
-
-        result = thumbUrl;
-      } else {
-        // 其他图床直接使用 URL
-        result = primaryResult.result.url;
-      }
-    } else {
-      // 如果主力图床没有结果，使用任何成功的结果
-      const anySuccess = item.results.find(r => r.status === 'success' && r.result?.url);
-      if (anySuccess?.result?.url) {
-        // 对于微博图床，使用中等尺寸缩略图
-        if (anySuccess.serviceId === 'weibo' && anySuccess.result.fileKey) {
-          let thumbUrl = `https://tvax1.sinaimg.cn/bmiddle/${anySuccess.result.fileKey}.jpg`;
-
-          // 应用链接前缀（如果启用）
-          const activePrefix = getActivePrefix(configManager.config.value);
-          if (activePrefix) {
-            thumbUrl = `${activePrefix}${thumbUrl}`;
-          }
-
-          result = thumbUrl;
-        } else {
-          result = anySuccess.result.url;
-        }
-      }
-    }
+  // 检查异步缓存（非微博图床）
+  if (asyncThumbUrls.value.has(item.id)) {
+    return asyncThumbUrls.value.get(item.id);
   }
 
-  // 缓存结果
-  thumbUrlCache.set(item.id, result);
-  return result;
+  if (!item.results || item.results.length === 0) {
+    thumbUrlCache.set(item.id, undefined);
+    return undefined;
+  }
+
+  // 优先使用主力图床的结果
+  const primaryResult = item.results.find(r => r.serviceId === item.primaryService && r.status === 'success');
+  const targetResult = primaryResult || item.results.find(r => r.status === 'success' && r.result?.url);
+
+  if (!targetResult?.result?.url) {
+    thumbUrlCache.set(item.id, undefined);
+    return undefined;
+  }
+
+  // 微博图床：使用服务端缩略图
+  if (targetResult.serviceId === 'weibo' && targetResult.result.fileKey) {
+    let thumbUrl = `https://tvax1.sinaimg.cn/bmiddle/${targetResult.result.fileKey}.jpg`;
+
+    // 应用链接前缀（如果启用）
+    const activePrefix = getActivePrefix(configManager.config.value);
+    if (activePrefix) {
+      thumbUrl = `${activePrefix}${thumbUrl}`;
+    }
+
+    thumbUrlCache.set(item.id, thumbUrl);
+    return thumbUrl;
+  }
+
+  // 非微博图床：触发异步缩略图生成
+  const originalUrl = targetResult.result.url;
+
+  // 避免重复触发
+  if (!loadingThumbs.has(item.id)) {
+    loadingThumbs.add(item.id);
+
+    // 异步生成缩略图
+    getThumbnailUrl(originalUrl).then((thumbUrl) => {
+      if (thumbUrl) {
+        asyncThumbUrls.value.set(item.id, thumbUrl);
+        // 触发响应式更新
+        asyncThumbUrls.value = new Map(asyncThumbUrls.value);
+      }
+      loadingThumbs.delete(item.id);
+    }).catch(() => {
+      loadingThumbs.delete(item.id);
+    });
+  }
+
+  // 首次返回 undefined，等待异步加载完成后 Vue 会自动更新
+  return undefined;
 };
 
 // 获取服务名称
@@ -416,6 +434,13 @@ const toggleGridSelection = (item: HistoryItem): void => {
 // 获取预览图 URL（复用 getThumbUrl）
 const getPreviewUrl = (item: HistoryItem): string | undefined => {
   return getThumbUrl(item);
+};
+
+// === 虚拟瀑布流配置 ===
+
+// 计算项目高度（正方形布局，高度等于宽度）
+const calcItemHeight = (_item: HistoryItem, itemWidth: number): number => {
+  return itemWidth;
 };
 </script>
 
@@ -658,34 +683,36 @@ const getPreviewUrl = (item: HistoryItem): string | undefined => {
         </Column>
       </DataTable>
 
-      <!-- 网格视图（Instagram 风格） -->
-      <DataView
+      <!-- 网格视图（虚拟瀑布流） -->
+      <div
         v-else-if="!historyManager.isLoading.value"
-        key="grid-view"
-        :value="historyManager.filteredItems.value"
-        layout="grid"
-        paginator
-        :rows="24"
-        class="history-grid-view"
+        ref="waterfallContainerRef"
+        class="history-grid-view virtual-waterfall-container"
       >
-        <template #empty>
-          <div class="empty-state">
-            <i class="pi pi-folder-open"></i>
-            <p>{{ historyManager.allHistoryItems.value.length === 0 ? '暂无历史记录' : '未找到匹配的记录' }}</p>
-          </div>
-        </template>
+        <!-- 空状态 -->
+        <div v-if="historyManager.filteredItems.value.length === 0" class="empty-state">
+          <i class="pi pi-folder-open"></i>
+          <p>{{ historyManager.allHistoryItems.value.length === 0 ? '暂无历史记录' : '未找到匹配的记录' }}</p>
+        </div>
 
-        <template #grid="slotProps">
-          <div class="instagram-grid">
+        <!-- 虚拟瀑布流 -->
+        <VirtualWaterfall
+          v-else
+          :items="historyManager.filteredItems.value"
+          :calc-item-height="calcItemHeight"
+          row-key="id"
+          :gap="12"
+          :item-min-width="140"
+        >
+          <template #default="{ item }: { item: HistoryItem }">
             <div
-              v-for="item in slotProps.items"
-              :key="item.id"
               class="grid-tile"
               :class="{ selected: isGridSelected(item) }"
               @click="toggleGridSelection(item)"
             >
               <!-- 图片区域 -->
               <div class="tile-image">
+                <!-- 图片已加载 -->
                 <img
                   v-if="getPreviewUrl(item)"
                   :src="getPreviewUrl(item)"
@@ -694,8 +721,9 @@ const getPreviewUrl = (item: HistoryItem): string | undefined => {
                   @click.stop="openLightbox(item)"
                   @error="(e: any) => e.target.src = '/placeholder.png'"
                 />
-                <div v-else class="tile-placeholder">
-                  <i class="pi pi-image"></i>
+                <!-- 图片加载中：骨架屏动画 -->
+                <div v-else class="tile-skeleton">
+                  <Skeleton width="100%" height="100%" animation="wave" />
                 </div>
               </div>
 
@@ -727,9 +755,9 @@ const getPreviewUrl = (item: HistoryItem): string | undefined => {
                 </div>
               </div>
             </div>
-          </div>
-        </template>
-      </DataView>
+          </template>
+        </VirtualWaterfall>
+      </div>
 
       <!-- Lightbox 图片查看器 -->
       <Dialog
@@ -1146,7 +1174,7 @@ const getPreviewUrl = (item: HistoryItem): string | undefined => {
   filter: brightness(1.1);
 }
 
-/* === 网格视图（Instagram 风格）=== */
+/* === 网格视图（虚拟瀑布流）=== */
 .history-grid-view {
   background: var(--bg-card);
   border-radius: 12px;
@@ -1154,8 +1182,25 @@ const getPreviewUrl = (item: HistoryItem): string | undefined => {
   padding: 20px;
 }
 
-:deep(.history-grid-view .p-dataview-content) {
-  background: transparent;
+/* 虚拟瀑布流容器 - 必须指定固定高度 */
+.virtual-waterfall-container {
+  height: calc(100vh - 200px);
+  min-height: 400px;
+  overflow-y: auto;
+  /* 性能优化：启用 GPU 加速 */
+  transform: translateZ(0);
+  /* 性能优化：限制布局计算范围 */
+  contain: layout style paint;
+}
+
+/* 隐藏虚拟瀑布流的滚动条（由容器控制） */
+:deep(.virtual-waterfall-container > div) {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+:deep(.virtual-waterfall-container > div::-webkit-scrollbar) {
+  display: none;
 }
 
 /* Instagram 网格容器 */
@@ -1175,6 +1220,11 @@ const getPreviewUrl = (item: HistoryItem): string | undefined => {
   background: var(--bg-input);
   border-radius: 8px;
   transition: transform 0.2s;
+  /* 性能优化：启用 GPU 加速，减少重绘 */
+  transform: translateZ(0);
+  will-change: transform;
+  /* 性能优化：隔离布局计算 */
+  contain: layout style;
 }
 
 .grid-tile:hover {
@@ -1201,6 +1251,22 @@ const getPreviewUrl = (item: HistoryItem): string | undefined => {
   display: block;
 }
 
+/* 骨架屏容器 */
+.tile-skeleton {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* 骨架屏样式优化 */
+:deep(.tile-skeleton .p-skeleton) {
+  border-radius: 8px;
+  height: 100% !important;
+}
+
+/* 保留旧的占位符样式（兼容） */
 .tile-placeholder {
   width: 100%;
   height: 100%;

@@ -513,29 +513,33 @@ export function useHistoryManager() {
 
   /**
    * 切换视图模式
+   * 【性能优化】立即切换视图，配置保存在后台异步执行，不阻塞 UI
    */
-  async function switchViewMode(mode: ViewMode): Promise<void> {
+  function switchViewMode(mode: ViewMode): void {
+    // 立即切换视图（不等待保存）
     historyStateInternal.value.viewMode = mode;
 
-    // 保存视图偏好到配置
-    try {
-      const configStore = new Store('.settings.dat');
-      const config = await configStore.get<UserConfig>('config');
-      if (config) {
-        if (!config.galleryViewPreferences) {
-          config.galleryViewPreferences = {
-            viewMode: mode,
-            gridColumnWidth: 220,
-          };
-        } else {
-          config.galleryViewPreferences.viewMode = mode;
+    // 后台异步保存配置（不阻塞 UI）
+    queueMicrotask(async () => {
+      try {
+        const configStore = new Store('.settings.dat');
+        const config = await configStore.get<UserConfig>('config');
+        if (config) {
+          if (!config.galleryViewPreferences) {
+            config.galleryViewPreferences = {
+              viewMode: mode,
+              gridColumnWidth: 220,
+            };
+          } else {
+            config.galleryViewPreferences.viewMode = mode;
+          }
+          await configStore.set('config', config);
+          await configStore.save();
         }
-        await configStore.set('config', config);
-        await configStore.save();
+      } catch (error) {
+        console.error('[历史记录] 保存视图偏好失败:', error);
       }
-    } catch (error) {
-      console.error('[历史记录] 保存视图偏好失败:', error);
-    }
+    });
   }
 
   /**
