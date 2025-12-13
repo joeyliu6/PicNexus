@@ -1,7 +1,7 @@
 // src/composables/useHistory.ts
 // 历史记录管理 Composable（单例模式）
 
-import { ref, computed, type Ref } from 'vue';
+import { ref, computed, shallowRef, triggerRef, type Ref } from 'vue';
 import { save as saveDialog } from '@tauri-apps/api/dialog';
 import { writeTextFile } from '@tauri-apps/api/fs';
 import { writeText } from '@tauri-apps/api/clipboard';
@@ -20,7 +20,7 @@ const historyStore = new Store('.history.dat');
 export type ViewMode = 'table' | 'grid';
 
 /**
- * 历史记录状态接口
+ * 历史记录状态接口（不含 selectedItems，因为它变化频繁需要独立管理）
  */
 export interface HistoryState {
   viewMode: ViewMode;
@@ -28,6 +28,12 @@ export interface HistoryState {
   displayedItems: HistoryItem[];
   gridLoadedCount: number;
   gridBatchSize: number;
+}
+
+/**
+ * 完整的历史记录状态接口（包含 selectedItems，用于外部接口兼容）
+ */
+export interface HistoryStateWithSelection extends HistoryState {
   selectedItems: Set<string>;
 }
 
@@ -35,17 +41,21 @@ export interface HistoryState {
 // 单例共享状态（模块级别）
 // ============================================
 
-// 所有历史记录项（共享）
-const sharedAllHistoryItems: Ref<HistoryItem[]> = ref([]);
+// 【性能优化】使用 shallowRef 替代 ref
+// 历史记录项只需监听数组本身的替换，不需要深层追踪每个对象属性
+const sharedAllHistoryItems: Ref<HistoryItem[]> = shallowRef([]);
 
-// 历史记录状态（共享）
+// 【性能优化】将 selectedItems 独立为 shallowRef
+// Set 变化频繁，独立管理避免触发整个 state 的响应式更新
+const sharedSelectedIds = shallowRef(new Set<string>());
+
+// 历史记录状态（共享）- 移除 selectedItems
 const sharedHistoryState: Ref<HistoryState> = ref({
   viewMode: 'table',
   currentFilter: 'all',
   displayedItems: [],
   gridLoadedCount: 0,
   gridBatchSize: 50,
-  selectedItems: new Set<string>()
 });
 
 // 加载中状态（共享）
@@ -134,13 +144,21 @@ export function useHistoryManager() {
 
   // 使用共享状态（单例）
   const allHistoryItems = sharedAllHistoryItems;
-  const historyState = sharedHistoryState;
+  const historyStateInternal = sharedHistoryState;
+  const selectedIdsSet = sharedSelectedIds;
   const isLoading = sharedIsLoading;
   const searchTerm = sharedSearchTerm;
 
+  // 【性能优化】暴露给外部保持接口兼容
+  // 将 selectedItems 合并到 historyState 中
+  const historyState = computed(() => ({
+    ...historyStateInternal.value,
+    selectedItems: selectedIdsSet.value
+  }));
+
   // 计算属性：筛选后的项目
   const filteredItems = computed(() => {
-    let items = historyState.value.displayedItems;
+    let items = historyStateInternal.value.displayedItems;
 
     // 应用搜索过滤
     if (searchTerm.value.trim()) {
@@ -170,7 +188,7 @@ export function useHistoryManager() {
       let items = await historyStore.get<any[]>('uploads');
       if (!items || items.length === 0) {
         allHistoryItems.value = [];
-        historyState.value.displayedItems = [];
+        historyStateInternal.value.displayedItems = [];
         isDataLoaded.value = true;
         return;
       }
@@ -206,7 +224,7 @@ export function useHistoryManager() {
       console.error('[历史记录] 加载失败:', error);
       toast.error('加载失败', String(error));
       allHistoryItems.value = [];
-      historyState.value.displayedItems = [];
+      historyStateInternal.value.displayedItems = [];
     } finally {
       isLoading.value = false;
     }
@@ -219,22 +237,22 @@ export function useHistoryManager() {
     let items = allHistoryItems.value;
 
     // 应用图床筛选
-    if (historyState.value.currentFilter !== 'all') {
+    if (historyStateInternal.value.currentFilter !== 'all') {
       items = items.filter(item =>
         item.results?.some(r =>
-          r.serviceId === historyState.value.currentFilter && r.status === 'success'
+          r.serviceId === historyStateInternal.value.currentFilter && r.status === 'success'
         )
       );
     }
 
-    historyState.value.displayedItems = items;
+    historyStateInternal.value.displayedItems = items;
   }
 
   /**
    * 设置图床筛选
    */
   function setFilter(filter: ServiceType | 'all'): void {
-    historyState.value.currentFilter = filter;
+    historyStateInternal.value.currentFilter = filter;
     applyFilter();
   }
 
@@ -281,9 +299,15 @@ export function useHistoryManager() {
       console.log('[历史记录] ✓ 删除成功:', itemId);
       toast.success('删除成功', '历史记录已删除');
 
-      // 使缓存失效并重新加载
-      invalidateCache();
-      await loadHistory(true);
+      // 【性能优化】直接更新内存数据，避免全量重加载
+      allHistoryItems.value = allHistoryItems.value.filter(item => item.id !== itemId);
+      applyFilter();
+
+      // 从选中集合中移除
+      selectedIdsSet.value.delete(itemId);
+      triggerRef(selectedIdsSet);
+
+      dataVersion.value++;
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -311,9 +335,13 @@ export function useHistoryManager() {
 
       toast.success('清空成功', '所有历史记录已清空');
 
-      // 使缓存失效并重新加载
-      invalidateCache();
-      await loadHistory(true);
+      // 【性能优化】直接清空内存数据，避免重新加载
+      allHistoryItems.value = [];
+      historyStateInternal.value.displayedItems = [];
+      selectedIdsSet.value.clear();
+      triggerRef(selectedIdsSet);
+
+      dataVersion.value++;
 
     } catch (error) {
       console.error('[历史记录] 清空失败:', error);
@@ -466,9 +494,16 @@ export function useHistoryManager() {
       toast.success('删除成功', `已删除 ${selectedIds.length} 条记录`);
       console.log(`[批量操作] 已删除 ${selectedIds.length} 条记录`);
 
-      // 使缓存失效并重新加载
-      invalidateCache();
-      await loadHistory(true);
+      // 【性能优化】直接更新内存数据，避免全量重加载
+      const selectedIdSet = new Set(selectedIds);
+      allHistoryItems.value = allHistoryItems.value.filter(item => !selectedIdSet.has(item.id));
+      applyFilter();
+
+      // 清空选中
+      selectedIdsSet.value.clear();
+      triggerRef(selectedIdsSet);
+
+      dataVersion.value++;
 
     } catch (error: any) {
       console.error('[批量操作] 删除失败:', error);
@@ -480,7 +515,7 @@ export function useHistoryManager() {
    * 切换视图模式
    */
   async function switchViewMode(mode: ViewMode): Promise<void> {
-    historyState.value.viewMode = mode;
+    historyStateInternal.value.viewMode = mode;
 
     // 保存视图偏好到配置
     try {
@@ -504,54 +539,62 @@ export function useHistoryManager() {
   }
 
   /**
-   * 切换选中状态
+   * 【性能优化】切换选中状态
+   * 使用 shallowRef + triggerRef 避免深层响应式追踪
    */
   function toggleSelection(itemId: string): void {
-    if (historyState.value.selectedItems.has(itemId)) {
-      historyState.value.selectedItems.delete(itemId);
+    const set = selectedIdsSet.value;
+    if (set.has(itemId)) {
+      set.delete(itemId);
     } else {
-      historyState.value.selectedItems.add(itemId);
+      set.add(itemId);
     }
+    // shallowRef 修改内部需要手动触发更新
+    triggerRef(selectedIdsSet);
   }
 
   /**
-   * 全选/取消全选
+   * 【性能优化】全选/取消全选
+   * 批量操作后只触发一次更新，而非 N 次
    */
   function toggleSelectAll(checked: boolean): void {
+    const set = selectedIdsSet.value;
+    set.clear();
+
     if (checked) {
-      filteredItems.value.forEach(item => {
-        historyState.value.selectedItems.add(item.id);
-      });
-    } else {
-      historyState.value.selectedItems.clear();
+      filteredItems.value.forEach(item => set.add(item.id));
     }
+    // 批量操作完成后，只触发一次更新
+    triggerRef(selectedIdsSet);
   }
 
   /**
    * 清空选中
    */
   function clearSelection(): void {
-    historyState.value.selectedItems.clear();
+    selectedIdsSet.value.clear();
+    triggerRef(selectedIdsSet);
   }
 
   /**
    * 获取选中的项目 ID 列表
    */
   const selectedIds = computed(() => {
-    return Array.from(historyState.value.selectedItems);
+    return Array.from(selectedIdsSet.value);
   });
 
   /**
    * 是否有选中项目
    */
   const hasSelection = computed(() => {
-    return historyState.value.selectedItems.size > 0;
+    return selectedIdsSet.value.size > 0;
   });
 
   return {
     // 状态
     allHistoryItems,
     historyState,
+    selectedIdsRef: selectedIdsSet,  // 【性能优化】暴露原始 shallowRef 供高性能组件使用
     isLoading,
     searchTerm,
     filteredItems,

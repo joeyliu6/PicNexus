@@ -17,6 +17,16 @@ import { useToast } from '../../composables/useToast';
 import { useConfigManager } from '../../composables/useConfig';
 import { debounce } from '../../utils/debounce';
 
+// 【性能优化】DateTimeFormat 提取到组件外，全局复用
+// 避免每次渲染时创建新实例，减少 GC 压力
+const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit'
+});
+
 const toast = useToast();
 const historyManager = useHistoryManager();
 const configManager = useConfigManager();
@@ -37,11 +47,27 @@ const clearThumbCache = () => {
   thumbUrlCache.clear();
 };
 
-// 监听数据变化时清空缓存
-watch(() => historyManager.allHistoryItems.value, clearThumbCache);
+// 【性能优化】优化缓存清空策略
+// 数据变化时增量清理（只删除已移除项的缓存）
+watch(() => historyManager.allHistoryItems.value, (newItems) => {
+  const newIds = new Set(newItems.map(i => i.id));
+  for (const id of thumbUrlCache.keys()) {
+    if (!newIds.has(id)) {
+      thumbUrlCache.delete(id);
+    }
+  }
+}, { deep: false });
 
-// 监听前缀配置变化时清空缓存
-watch(() => configManager.config.value?.linkPrefixConfig, clearThumbCache, { deep: true });
+// 只监听影响 URL 的前缀配置项，避免 deep: true 的开销
+watch(
+  () => configManager.config.value?.linkPrefixConfig?.enabled,
+  clearThumbCache
+);
+
+watch(
+  () => configManager.config.value?.linkPrefixConfig?.selectedIndex,
+  clearThumbCache
+);
 
 
 // 视图选项
@@ -74,22 +100,20 @@ const selectAll = ref(false);
 // 标志位：防止首次加载时重复刷新
 const isFirstMount = ref(true);
 
-// 计算属性：是否全选
+// 【性能优化】计算属性：是否全选 - 直接使用 selectedIdsRef
 const isAllSelected = computed(() => {
   const currentItems = historyManager.filteredItems.value;
   if (currentItems.length === 0) return false;
-  return currentItems.every(item =>
-    historyManager.historyState.value.selectedItems.has(item.id)
-  );
+  const selectedSet = historyManager.selectedIdsRef.value;
+  return currentItems.every(item => selectedSet.has(item.id));
 });
 
-// 计算属性：是否部分选中
+// 【性能优化】计算属性：是否部分选中 - 直接使用 selectedIdsRef
 const isSomeSelected = computed(() => {
   const currentItems = historyManager.filteredItems.value;
   if (currentItems.length === 0) return false;
-  const selectedCount = currentItems.filter(item =>
-    historyManager.historyState.value.selectedItems.has(item.id)
-  ).length;
+  const selectedSet = historyManager.selectedIdsRef.value;
+  const selectedCount = currentItems.filter(item => selectedSet.has(item.id)).length;
   return selectedCount > 0 && selectedCount < currentItems.length;
 });
 
@@ -99,25 +123,18 @@ const handleHeaderCheckboxChange = (checked: boolean) => {
   handleSelectAll();
 };
 
-// 监听视图模式变化
-const stopWatchViewMode = watch(() => historyManager.historyState.value.viewMode, (newMode) => {
-  console.log('[HistoryView] 视图模式切换:', newMode);
-  historyManager.switchViewMode(newMode);
-});
+// 【性能优化】移除冗余 watch
+// stopWatchViewMode 和 stopWatchFilter 已删除
+// 视图模式通过按钮点击直接调用 switchViewMode
+// 筛选器通过 Select 的 @update:model-value 直接调用 setFilter
 
-// 监听筛选变化
-const stopWatchFilter = watch(() => historyManager.historyState.value.currentFilter, (newFilter) => {
-  console.log('[HistoryView] 图床筛选:', newFilter);
-  historyManager.setFilter(newFilter);
-});
-
-// 监听本地搜索词变化（防抖）
-const stopWatchSearch = watch(localSearchTerm, (newTerm) => {
+// 监听本地搜索词变化（防抖）- 保留，用于搜索功能
+watch(localSearchTerm, (newTerm) => {
   debouncedSearch(newTerm);
 });
 
 // 监听选中状态变化，同步工具栏全选复选框
-const stopWatchSelection = watch([isAllSelected, isSomeSelected], () => {
+watch([isAllSelected, isSomeSelected], () => {
   if (isAllSelected.value) {
     selectAll.value = true;
   } else if (!isSomeSelected.value) {
@@ -184,11 +201,11 @@ onMounted(async () => {
   isFirstMount.value = false;
 });
 
-// 视图激活时检查是否需要刷新（使用单例缓存）
+// 【性能优化】视图激活时检查是否需要刷新
 onActivated(async () => {
-  if (!isFirstMount.value) {
-    // 由于使用单例模式，loadHistory 会自动判断是否需要重新加载
-    // 如果数据已缓存，会直接返回，避免重复解密
+  // 只有数据为空时才加载，否则使用缓存
+  if (!isFirstMount.value && historyManager.allHistoryItems.value.length === 0) {
+    console.log('[HistoryView] 视图已激活，数据为空，刷新历史记录');
     await historyManager.loadHistory();
   }
 });
@@ -196,16 +213,8 @@ onActivated(async () => {
 // 注意：不再清理 watchers，因为使用单例模式后状态是共享的
 // watchers 需要保持活跃以响应 UI 交互
 
-// 格式化时间
-const formatTime = (timestamp: number) => {
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(new Date(timestamp));
-};
+// 【性能优化】格式化时间 - 使用预创建的 formatter
+const formatTime = (timestamp: number) => dateFormatter.format(new Date(timestamp));
 
 // 在浏览器中打开链接
 const openInBrowser = async (item: HistoryItem) => {
@@ -394,9 +403,9 @@ const deleteSingleItem = async (item: HistoryItem): Promise<void> => {
 
 // === 网格视图辅助函数 ===
 
-// 检查网格项是否选中
+// 【性能优化】检查网格项是否选中 - 直接使用 selectedIdsRef
 const isGridSelected = (item: HistoryItem): boolean => {
-  return historyManager.historyState.value.selectedItems.has(item.id);
+  return historyManager.selectedIdsRef.value.has(item.id);
 };
 
 // 切换网格项选中状态
@@ -426,7 +435,7 @@ const getPreviewUrl = (item: HistoryItem): string | undefined => {
               :key="opt.value"
               class="switch-btn"
               :class="{ active: historyManager.historyState.value.viewMode === opt.value }"
-              @click="historyManager.historyState.value.viewMode = opt.value"
+              @click="historyManager.switchViewMode(opt.value)"
               :title="opt.label"
             >
               <i :class="opt.icon"></i>
@@ -452,7 +461,8 @@ const getPreviewUrl = (item: HistoryItem): string | undefined => {
           </div>
 
           <Select
-            v-model="historyManager.historyState.value.currentFilter"
+            :model-value="historyManager.historyState.value.currentFilter"
+            @update:model-value="historyManager.setFilter($event)"
             :options="serviceOptions"
             optionLabel="label"
             optionValue="value"
@@ -500,7 +510,7 @@ const getPreviewUrl = (item: HistoryItem): string | undefined => {
               text
               rounded
               size="small"
-              @click="historyManager.historyState.value.selectedItems.clear()"
+              @click="historyManager.clearSelection()"
               v-tooltip.bottom="'取消选择'"
             />
           </div>
@@ -569,7 +579,7 @@ const getPreviewUrl = (item: HistoryItem): string | undefined => {
           </template>
           <template #body="slotProps">
             <Checkbox
-              :model-value="historyManager.historyState.value.selectedItems.has(slotProps.data.id)"
+              :model-value="historyManager.selectedIdsRef.value.has(slotProps.data.id)"
               @update:model-value="historyManager.toggleSelection(slotProps.data.id)"
               :binary="true"
             />
