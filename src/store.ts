@@ -297,7 +297,7 @@ class SimpleStore {
   
   /**
    * 执行实际的写入操作
-   * 支持历史记录数量限制和原子性写入
+   * 支持原子性写入
    */
   private async _performWrite(key: string, value: any): Promise<void> {
     try {
@@ -379,23 +379,8 @@ class SimpleStore {
         }
       }
 
-      // [v2.7 优化] 历史记录数量限制
-      // 如果 key 是 'uploads' 且 value 是数组，限制最多 500 条记录
-      if (key === 'uploads' && Array.isArray(value)) {
-        const MAX_HISTORY_ITEMS = 500;
-        if (value.length > MAX_HISTORY_ITEMS) {
-          console.warn(`[Store] 历史记录数量超过限制 (${value.length} > ${MAX_HISTORY_ITEMS})，自动截断旧数据`);
-          // 保留最新的 500 条（通常是最前面的，因为新记录在前面）
-          const truncated = value.slice(0, MAX_HISTORY_ITEMS);
-          console.log(`[Store] 已截断历史记录: ${value.length} -> ${truncated.length}`);
-          data[key] = truncated;
-        } else {
-          data[key] = value;
-        }
-      } else {
-        // 更新数据
-        data[key] = value;
-      }
+      // 更新数据
+      data[key] = value;
 
       // 序列化数据
       let jsonContent: string;
