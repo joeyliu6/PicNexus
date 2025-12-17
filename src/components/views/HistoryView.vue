@@ -1039,12 +1039,33 @@ const handleScroll = (event: Event) => {
   color: var(--text-primary);
 }
 
-/* 筛选下拉 */
+/* 筛选下拉 - 与搜索框保持一致的药丸形样式 */
 .filter-select {
-  height: 32px;
-  border-radius: 6px !important;
-  font-size: 13px !important;
   width: 140px;
+}
+
+:deep(.filter-select.p-select) {
+  height: 32px;
+  border-radius: 20px;
+  border: 1px solid transparent;
+  background: var(--bg-input);
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+:deep(.filter-select.p-select:hover) {
+  border-color: var(--border-subtle);
+}
+
+:deep(.filter-select.p-select.p-focus) {
+  background: var(--bg-card);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+:deep(.filter-select .p-select-label) {
+  padding: 0.5rem 1rem;
+  font-size: 13px;
 }
 
 /* 统计与操作 */
