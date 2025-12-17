@@ -131,6 +131,26 @@ function migrateHistoryItem(item: any): HistoryItem {
     }
   }
 
+  // 迁移链接检测状态
+  if (!item.linkCheckStatus) {
+    migratedItem.linkCheckStatus = {};
+  } else {
+    migratedItem.linkCheckStatus = item.linkCheckStatus;
+  }
+
+  if (!item.linkCheckSummary) {
+    const totalLinks = (migratedItem.results || []).filter((r: any) => r.status === 'success').length;
+    migratedItem.linkCheckSummary = {
+      totalLinks,
+      validLinks: 0,
+      invalidLinks: 0,
+      uncheckedLinks: totalLinks,
+      lastCheckTime: undefined
+    };
+  } else {
+    migratedItem.linkCheckSummary = item.linkCheckSummary;
+  }
+
   return migratedItem;
 }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import Button from 'primevue/button';
 import Select from 'primevue/select';
 import DataTable from 'primevue/datatable';
@@ -7,6 +7,7 @@ import Column from 'primevue/column';
 import Tag from 'primevue/tag';
 import Dialog from 'primevue/dialog';
 import MultiSelect from 'primevue/multiselect';
+import Checkbox from 'primevue/checkbox';
 import { invoke } from '@tauri-apps/api/tauri';
 import { writeText } from '@tauri-apps/api/clipboard';
 import { save as saveDialog } from '@tauri-apps/api/dialog';
@@ -48,6 +49,8 @@ const serviceOptions = [
   { label: '知乎图床', value: 'zhihu' },
   { label: '纳米图床', value: 'nami' }
 ];
+
+const statusFilter = ref<'all' | 'valid' | 'invalid' | 'unchecked'>('all');
 
 watch(serviceFilter, async () => {
   if (!isChecking.value) await preloadImageInfo();
@@ -92,10 +95,42 @@ interface CheckResult {
   validCount: number;
   invalidCount: number;
   canReupload: boolean;
+  linkCheckSummary?: {
+    totalLinks: number;
+    validLinks: number;
+    invalidLinks: number;
+    uncheckedLinks: number;
+    lastCheckTime?: number;
+  };
 }
 
 const results = ref<CheckResult[]>([]);
 const expandedRows = ref<CheckResult[]>([]);
+
+// 多选功能
+const selectedIds = ref(new Set<string>());
+
+const hasSelection = computed(() => selectedIds.value.size > 0);
+const isSomeSelected = computed(() => selectedIds.value.size > 0 && selectedIds.value.size < filteredResults.value.length);
+const isAllSelected = computed(() => filteredResults.value.length > 0 && selectedIds.value.size === filteredResults.value.length);
+const canBulkRepair = computed(() => {
+  return Array.from(selectedIds.value).some(id => {
+    const item = results.value.find(r => r.historyItemId === id);
+    return item?.canReupload;
+  });
+});
+
+// 时间格式化函数
+const formatCheckTime = (timestamp: number): string => {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+
+  if (diffMins < 60) return `${diffMins}分钟前`;
+  if (diffMins < 1440) return `${Math.floor(diffMins / 60)}小时前`;
+  return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+};
 
 const extractLinksFromHistory = (): CheckResult[] => {
   return allHistoryItems.value
@@ -183,6 +218,59 @@ const checkLink = async (serviceResult: ServiceCheckResult): Promise<void> => {
   }
 };
 
+// 保存检测结果到历史记录
+const saveCheckResultToHistory = async (checkResult: CheckResult): Promise<void> => {
+  try {
+    const items = await historyStore.get<HistoryItem[]>('uploads', []);
+    const historyItem = items.find(i => i.id === checkResult.historyItemId);
+
+    if (!historyItem) {
+      console.warn('[持久化] 未找到历史记录项:', checkResult.historyItemId);
+      return;
+    }
+
+    // 初始化检测状态
+    if (!historyItem.linkCheckStatus) {
+      historyItem.linkCheckStatus = {};
+    }
+
+    // 更新每个图床的检测状态
+    checkResult.serviceResults.forEach(sr => {
+      historyItem.linkCheckStatus![sr.serviceId] = {
+        isValid: sr.isValid,
+        lastCheckTime: Date.now(),
+        statusCode: sr.statusCode,
+        errorType: sr.errorType,
+        responseTime: sr.responseTime,
+        error: sr.error
+      };
+    });
+
+    // 更新汇总状态
+    const totalLinks = checkResult.serviceResults.length;
+    const validLinks = checkResult.serviceResults.filter(sr => sr.isValid).length;
+    const invalidLinks = totalLinks - validLinks;
+
+    historyItem.linkCheckSummary = {
+      totalLinks,
+      validLinks,
+      invalidLinks,
+      uncheckedLinks: 0,
+      lastCheckTime: Date.now()
+    };
+
+    // 更新 checkResult 的汇总状态
+    checkResult.linkCheckSummary = historyItem.linkCheckSummary;
+
+    // 保存到存储
+    await historyStore.set('uploads', items);
+    await historyStore.save();
+
+  } catch (error) {
+    console.error('[持久化] 保存检测结果失败:', error);
+  }
+};
+
 const startCheck = async () => {
   if (isChecking.value) return;
   isChecking.value = true;
@@ -234,6 +322,10 @@ const startCheck = async () => {
         await checkLink(serviceResult);
       }
       updateAggregateStatus(checkResult);
+
+      // 【新增】每检测完一项就保存到历史记录
+      await saveCheckResultToHistory(checkResult);
+
       checkedCount++;
       stats.value.valid = results.value.filter(r => r.status === 'all_valid').length;
       stats.value.invalid = results.value.filter(r => r.status === 'all_invalid' || r.status === 'partial_valid').length;
@@ -263,8 +355,47 @@ const preloadImageInfo = async () => {
       stats.value = { total: 0, valid: 0, invalid: 0, pending: 0 };
       return;
     }
+
+    // 【新增】合并历史检测状态
+    let validCount = 0;
+    let invalidCount = 0;
+    let pendingCount = 0;
+
+    checkResults.forEach(cr => {
+      const historyItem = allHistoryItems.value.find(h => h.id === cr.historyItemId);
+      if (historyItem?.linkCheckStatus) {
+        // 恢复检测状态
+        cr.serviceResults.forEach(sr => {
+          const savedStatus = historyItem.linkCheckStatus![sr.serviceId];
+          if (savedStatus) {
+            sr.isValid = savedStatus.isValid;
+            sr.errorType = savedStatus.errorType;
+            sr.statusCode = savedStatus.statusCode;
+            sr.responseTime = savedStatus.responseTime;
+            sr.error = savedStatus.error;
+          }
+        });
+
+        // 恢复汇总状态
+        updateAggregateStatus(cr);
+        cr.linkCheckSummary = historyItem.linkCheckSummary;
+
+        // 更新统计
+        if (cr.status === 'all_valid') validCount++;
+        else if (cr.status === 'all_invalid' || cr.status === 'partial_valid') invalidCount++;
+        else pendingCount++;
+      } else {
+        pendingCount++;
+      }
+    });
+
     results.value = checkResults;
-    stats.value = { total: checkResults.length, valid: 0, invalid: 0, pending: checkResults.length };
+    stats.value = {
+      total: checkResults.length,
+      valid: validCount,
+      invalid: invalidCount,
+      pending: pendingCount
+    };
   } catch (error) {}
 };
 
@@ -345,6 +476,196 @@ const toggleRowExpansion = (event: any) => {
 };
 
 const truncate = (str: string, len: number) => str.length > len ? str.substring(0, len) + '...' : str;
+
+// 筛选器函数
+const setStatusFilter = (filter: typeof statusFilter.value) => {
+  statusFilter.value = filter;
+};
+
+// 应用筛选的结果（需要在多选逻辑之前定义）
+const filteredResults = computed(() => {
+  let filtered = results.value;
+
+  // 按检测状态筛选
+  if (statusFilter.value !== 'all') {
+    filtered = filtered.filter(item => {
+      const summary = item.linkCheckSummary;
+      if (!summary) return statusFilter.value === 'unchecked';
+
+      switch (statusFilter.value) {
+        case 'valid':
+          return item.status === 'all_valid';
+        case 'invalid':
+          return item.status === 'all_invalid' || item.status === 'partial_valid';
+        case 'unchecked':
+          return item.status === 'pending';
+        default:
+          return true;
+      }
+    });
+  }
+
+  return filtered;
+});
+
+// 多选相关函数
+const toggleSelection = (id: string) => {
+  const newSet = new Set(selectedIds.value);
+  if (newSet.has(id)) {
+    newSet.delete(id);
+  } else {
+    newSet.add(id);
+  }
+  selectedIds.value = newSet;
+};
+
+const handleHeaderCheckboxChange = (value: boolean) => {
+  if (value) {
+    selectedIds.value = new Set(filteredResults.value.map(r => r.historyItemId));
+  } else {
+    selectedIds.value = new Set();
+  }
+};
+
+const clearSelection = () => {
+  selectedIds.value = new Set();
+};
+
+// 批量重检
+const handleBulkRecheck = async () => {
+  const selected = results.value.filter(r => selectedIds.value.has(r.historyItemId));
+
+  if (selected.length === 0) {
+    toast.warn('未选择', '请先选择要重检的项目');
+    return;
+  }
+
+  isChecking.value = true;
+  toast.info('开始批量重检', `共 ${selected.length} 项`);
+
+  let successCount = 0;
+  for (const item of selected) {
+    if (isCancelled.value) break;
+
+    for (const serviceResult of item.serviceResults) {
+      await checkLink(serviceResult);
+    }
+
+    updateAggregateStatus(item);
+    await saveCheckResultToHistory(item);
+    successCount++;
+
+    // 更新进度
+    progress.value = Math.round((successCount / selected.length) * 100);
+    progressText.value = `${successCount} / ${selected.length}`;
+  }
+
+  // 更新统计
+  stats.value.valid = results.value.filter(r => r.status === 'all_valid').length;
+  stats.value.invalid = results.value.filter(r => r.status === 'all_invalid' || r.status === 'partial_valid').length;
+  stats.value.pending = results.value.filter(r => r.status === 'pending').length;
+
+  toast.success('重检完成', `成功重检 ${successCount} 项`);
+  isChecking.value = false;
+  clearSelection();
+};
+
+// 批量修复
+const handleBulkRepair = async () => {
+  const selected = results.value.filter(r =>
+    selectedIds.value.has(r.historyItemId) && r.canReupload
+  );
+
+  if (selected.length === 0) {
+    toast.warn('无可修复项', '选中的项目中没有可修复的失效链接');
+    return;
+  }
+
+  const confirmed = await confirmDelete(
+    `将为 ${selected.length} 个项目执行自动修复（从有效图床重新上传到失效图床）`,
+    '确认批量修复'
+  );
+
+  if (!confirmed) return;
+
+  isChecking.value = true;
+  toast.info('开始批量修复', `共 ${selected.length} 项`);
+
+  let successCount = 0;
+  for (const item of selected) {
+    if (isCancelled.value) break;
+
+    try {
+      // 选择响应最快的有效图床作为源
+      const validServices = item.serviceResults
+        .filter(r => r.isValid)
+        .sort((a, b) => (a.responseTime || 9999) - (b.responseTime || 9999));
+
+      const invalidServiceIds = item.serviceResults
+        .filter(r => !r.isValid)
+        .map(r => r.serviceId);
+
+      if (validServices.length > 0 && invalidServiceIds.length > 0) {
+        const sourceUrl = validServices[0].originalLink;
+
+        // 下载图片
+        const tempFilePath = await invoke<string>('download_image_from_url', { url: sourceUrl });
+
+        // 重新上传到失效的图床
+        const uploader = new MultiServiceUploader();
+        const uploadResult = await uploader.uploadToMultipleServices(
+          tempFilePath,
+          invalidServiceIds,
+          config.value
+        );
+
+        // 更新历史记录
+        const items = await historyStore.get<HistoryItem[]>('uploads', []);
+        const historyItem = items.find(i => i.id === item.historyItemId);
+
+        if (historyItem) {
+          uploadResult.results.forEach(newResult => {
+            const existingIndex = historyItem.results.findIndex(
+              r => r.serviceId === newResult.serviceId
+            );
+            if (existingIndex >= 0) {
+              historyItem.results[existingIndex] = newResult;
+            } else {
+              historyItem.results.push(newResult);
+            }
+          });
+
+          await historyStore.set('uploads', items);
+          await historyStore.save();
+        }
+
+        // 重新检测
+        for (const sr of item.serviceResults) {
+          await checkLink(sr);
+        }
+        updateAggregateStatus(item);
+        await saveCheckResultToHistory(item);
+
+        successCount++;
+      }
+    } catch (error) {
+      console.error(`修复失败 (${item.fileName}):`, error);
+    }
+
+    // 更新进度
+    progress.value = Math.round((successCount / selected.length) * 100);
+    progressText.value = `${successCount} / ${selected.length}`;
+  }
+
+  // 更新统计
+  stats.value.valid = results.value.filter(r => r.status === 'all_valid').length;
+  stats.value.invalid = results.value.filter(r => r.status === 'all_invalid' || r.status === 'partial_valid').length;
+  stats.value.pending = results.value.filter(r => r.status === 'pending').length;
+
+  toast.success('批量修复完成', `成功修复 ${successCount} / ${selected.length} 项`);
+  isChecking.value = false;
+  clearSelection();
+};
 </script>
 
 <template>
@@ -386,19 +707,28 @@ const truncate = (str: string, len: number) => str.length > len ? str.substring(
         </div>
 
         <div class="stats-area">
-            <div class="stat-item">
+            <div class="stat-item clickable" @click="setStatusFilter('all')"
+                 :class="{ active: statusFilter === 'all' }">
                 <span class="stat-val">{{ stats.total }}</span>
                 <span class="stat-key">总数</span>
             </div>
             <div class="v-divider"></div>
-            <div class="stat-item success">
+            <div class="stat-item success clickable" @click="setStatusFilter('valid')"
+                 :class="{ active: statusFilter === 'valid' }">
                 <span class="stat-val">{{ stats.valid }}</span>
                 <span class="stat-key">有效</span>
             </div>
             <div class="v-divider"></div>
-            <div class="stat-item danger">
+            <div class="stat-item danger clickable" @click="setStatusFilter('invalid')"
+                 :class="{ active: statusFilter === 'invalid' }">
                 <span class="stat-val">{{ stats.invalid }}</span>
                 <span class="stat-key">失效</span>
+            </div>
+            <div class="v-divider"></div>
+            <div class="stat-item pending clickable" @click="setStatusFilter('unchecked')"
+                 :class="{ active: statusFilter === 'unchecked' }">
+                <span class="stat-val">{{ stats.pending }}</span>
+                <span class="stat-key">未检</span>
             </div>
 
             <div class="actions-area" v-if="stats.invalid > 0">
@@ -416,9 +746,39 @@ const truncate = (str: string, len: number) => str.length > len ? str.substring(
 
     <div class="progress-line" :style="{ width: progress + '%', opacity: isChecking ? 1 : 0 }"></div>
 
+    <!-- 批量操作按钮组 -->
+    <div v-if="hasSelection" class="batch-actions">
+        <span class="selected-count">已选 {{ selectedIds.size }}</span>
+
+        <Button
+            label="批量重检"
+            icon="pi pi-refresh"
+            size="small"
+            @click="handleBulkRecheck"
+            class="minimal-btn"
+        />
+
+        <Button
+            label="批量修复"
+            icon="pi pi-wrench"
+            size="small"
+            @click="handleBulkRepair"
+            :disabled="!canBulkRepair"
+            class="minimal-btn"
+        />
+
+        <Button
+            icon="pi pi-times"
+            text
+            rounded
+            size="small"
+            @click="clearSelection()"
+        />
+    </div>
+
     <div class="table-container">
         <DataTable
-          :value="results"
+          :value="filteredResults"
           v-model:expandedRows="expandedRows"
           @row-click="toggleRowExpansion"
           paginator
@@ -432,6 +792,26 @@ const truncate = (str: string, len: number) => str.length > len ? str.substring(
                     <p>暂无数据，请点击左上角开始检测</p>
                 </div>
             </template>
+
+            <!-- 复选框列 -->
+            <Column headerStyle="width: 3rem">
+                <template #header>
+                    <Checkbox
+                        :model-value="isAllSelected"
+                        @update:model-value="handleHeaderCheckboxChange"
+                        :binary="true"
+                        :indeterminate="isSomeSelected && !isAllSelected"
+                    />
+                </template>
+                <template #body="{ data }">
+                    <Checkbox
+                        :model-value="selectedIds.has(data.historyItemId)"
+                        @update:model-value="toggleSelection(data.historyItemId)"
+                        :binary="true"
+                        @click.stop
+                    />
+                </template>
+            </Column>
 
             <Column expander style="width: 3rem" />
 
@@ -458,6 +838,15 @@ const truncate = (str: string, len: number) => str.length > len ? str.substring(
                     <span class="rate-text">
                         {{ data.validCount }} <span class="text-muted">/ {{ data.serviceResults.length }}</span>
                     </span>
+                </template>
+            </Column>
+
+            <Column field="linkCheckSummary.lastCheckTime" header="检测时间" style="width: 150px">
+                <template #body="{ data }">
+                    <span v-if="data.linkCheckSummary?.lastCheckTime" class="check-time">
+                        {{ formatCheckTime(data.linkCheckSummary.lastCheckTime) }}
+                    </span>
+                    <span v-else class="uncheck-hint">尚未检测</span>
                 </template>
             </Column>
 
@@ -617,6 +1006,25 @@ const truncate = (str: string, len: number) => str.length > len ? str.substring(
 
 .stat-item.success .stat-val { color: var(--success); }
 .stat-item.danger .stat-val { color: var(--error); }
+.stat-item.pending .stat-val { color: var(--warning); }
+
+/* 可点击统计项样式 */
+.stat-item.clickable {
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.stat-item.clickable:hover {
+  background: rgba(59, 130, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+.stat-item.clickable.active {
+  background: rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 2px var(--primary);
+}
 
 /* === 进度条 === */
 .progress-line {
@@ -625,6 +1033,24 @@ const truncate = (str: string, len: number) => str.length > len ? str.substring(
     transition: width 0.3s ease, opacity 0.3s ease;
     max-width: 850px;
     margin: 0 auto;
+}
+
+/* === 批量操作区域 === */
+.batch-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--surface-100);
+    border-radius: 6px;
+    margin: 12px auto 0;
+    max-width: 810px;
+}
+
+.selected-count {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-right: 8px;
 }
 
 /* === 极简表格样式 (Minimal Table) === */
@@ -768,6 +1194,19 @@ const truncate = (str: string, len: number) => str.length > len ? str.substring(
 .dashed-link:hover {
     color: var(--primary);
     border-color: var(--primary);
+}
+
+/* 检测时间列样式 */
+.check-time {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.uncheck-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 /* 工具类 */

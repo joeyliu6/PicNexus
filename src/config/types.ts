@@ -249,6 +249,27 @@ export interface HistoryItem {
 
   /** 最终生成的链接（基于主力图床） */
   generatedLink: string;
+
+  /** 链接检测状态（每个图床的检测结果） */
+  linkCheckStatus?: {
+    [serviceId: string]: {
+      isValid: boolean;
+      lastCheckTime: number;
+      statusCode?: number;
+      errorType: 'success' | 'http_4xx' | 'http_5xx' | 'timeout' | 'network' | 'pending';
+      responseTime?: number;
+      error?: string;
+    };
+  };
+
+  /** 汇总状态（用于快速筛选） */
+  linkCheckSummary?: {
+    totalLinks: number;
+    validLinks: number;
+    invalidLinks: number;
+    uncheckedLinks: number;
+    lastCheckTime?: number;
+  };
 }
 
 /**
