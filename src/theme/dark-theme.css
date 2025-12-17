@@ -329,6 +329,11 @@
   border-color: var(--border-subtle);
 }
 
+/* DataTable 分页器 - 修复底部白线 */
+:root.dark-theme .p-datatable-paginator-bottom {
+  border-color: var(--border-subtle);
+}
+
 /* Dialog 组件 */
 :root.dark-theme .p-dialog {
   background-color: var(--bg-card);
