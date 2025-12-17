@@ -661,6 +661,22 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       // 更新各图床的配置状态
       await updateServiceConfigStatus(config);
 
+      // 过滤掉未配置的已选图床（配置清空后自动取消选中）
+      const previousSelected = [...selectedServices.value];
+      selectedServices.value = selectedServices.value.filter(
+        service => serviceConfigStatus.value[service]
+      );
+
+      // 如果有变化，保存到配置
+      if (previousSelected.length !== selectedServices.value.length) {
+        console.log('[服务按钮] 自动取消未配置图床的选中状态');
+        try {
+          await saveEnabledServicesToConfig.immediate([...selectedServices.value]);
+        } catch (error) {
+          console.warn('[服务按钮] 保存选择状态失败:', error);
+        }
+      }
+
       // 加载活跃前缀
       activePrefix.value = getActivePrefixFromConfig(config);
 
