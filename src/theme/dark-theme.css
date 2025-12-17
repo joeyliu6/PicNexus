@@ -429,6 +429,11 @@
   color: var(--text-main);
 }
 
+/* Toast 详细文字 - 使用白色便于阅读 */
+:root.dark-theme .p-toast .p-toast-message .p-toast-detail {
+  color: var(--text-main);
+}
+
 :root.dark-theme .p-toast .p-toast-message.p-toast-message-info {
   background-color: rgba(59, 130, 246, 0.15);
   border-color: var(--primary);
@@ -436,6 +441,11 @@
 
 :root.dark-theme .p-toast .p-toast-message.p-toast-message-info .p-toast-message-content {
   color: var(--primary);
+}
+
+/* Info Toast 详细文字 */
+:root.dark-theme .p-toast .p-toast-message.p-toast-message-info .p-toast-detail {
+  color: var(--text-main);
 }
 
 :root.dark-theme .p-toast .p-toast-message.p-toast-message-success {
@@ -447,6 +457,11 @@
   color: var(--success);
 }
 
+/* Success Toast 详细文字 */
+:root.dark-theme .p-toast .p-toast-message.p-toast-message-success .p-toast-detail {
+  color: var(--text-main);
+}
+
 :root.dark-theme .p-toast .p-toast-message.p-toast-message-warn {
   background-color: rgba(234, 179, 8, 0.15);
   border-color: var(--warning);
@@ -456,6 +471,11 @@
   color: var(--warning);
 }
 
+/* Warn Toast 详细文字 */
+:root.dark-theme .p-toast .p-toast-message.p-toast-message-warn .p-toast-detail {
+  color: var(--text-main);
+}
+
 :root.dark-theme .p-toast .p-toast-message.p-toast-message-error {
   background-color: rgba(239, 68, 68, 0.15);
   border-color: var(--error);
@@ -463,4 +483,9 @@
 
 :root.dark-theme .p-toast .p-toast-message.p-toast-message-error .p-toast-message-content {
   color: var(--error);
+}
+
+/* Error Toast 详细文字 */
+:root.dark-theme .p-toast .p-toast-message.p-toast-message-error .p-toast-detail {
+  color: var(--text-main);
 }
