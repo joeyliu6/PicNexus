@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onActivated, watch, nextTick } from 'vue';
+import { onClickOutside } from '@vueuse/core';
 import { writeText } from '@tauri-apps/api/clipboard';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -166,9 +167,85 @@ const handleSelectAll = () => {
   historyManager.toggleSelectAll(selectAll.value);
 };
 
-// 批量复制
+// 批量复制（原有方法，保留兼容）
 const handleBulkCopy = async () => {
   await historyManager.bulkCopyLinks(historyManager.selectedIds.value);
+};
+
+// === 浮动操作栏 - 复制下拉菜单 ===
+const copyMenuVisible = ref(false);
+const copyDropdownRef = ref<HTMLElement | null>(null);
+
+// 链接格式类型
+type LinkFormat = 'url' | 'markdown' | 'html' | 'bbcode';
+
+// 切换复制菜单
+const toggleCopyMenu = () => {
+  copyMenuVisible.value = !copyMenuVisible.value;
+};
+
+// 使用 VueUse 的 onClickOutside 检测点击外部关闭菜单
+onClickOutside(copyDropdownRef, () => {
+  copyMenuVisible.value = false;
+});
+
+// 格式化链接
+const formatLink = (url: string, fileName: string, format: LinkFormat): string => {
+  switch (format) {
+    case 'url': return url;
+    case 'markdown': return `![${fileName}](${url})`;
+    case 'html': return `<img src="${url}" alt="${fileName}" />`;
+    case 'bbcode': return `[img]${url}[/img]`;
+    default: return url;
+  }
+};
+
+// 批量复制（支持多种格式）
+const handleBulkCopyFormatted = async (format: LinkFormat) => {
+  copyMenuVisible.value = false;
+
+  const selectedIdList = historyManager.selectedIds.value;
+  if (selectedIdList.length === 0) {
+    toast.warn('未选择项目', '请先选择要复制的项目');
+    return;
+  }
+
+  try {
+    const items = historyManager.allHistoryItems.value.filter(item => selectedIdList.includes(item.id));
+    const activePrefix = getActivePrefix(configManager.config.value);
+
+    const formattedLinks = items.map(item => {
+      if (!item.generatedLink) return null;
+      let finalLink = item.generatedLink;
+      if (item.primaryService === 'weibo' && activePrefix) {
+        finalLink = `${activePrefix}${item.generatedLink}`;
+      }
+      return formatLink(finalLink, item.localFileName, format);
+    }).filter((link): link is string => !!link);
+
+    if (formattedLinks.length === 0) {
+      toast.warn('无可用链接', '选中的项目没有可用链接');
+      return;
+    }
+
+    await writeText(formattedLinks.join('\n'));
+
+    const formatNames: Record<LinkFormat, string> = { url: 'URL', markdown: 'Markdown', html: 'HTML', bbcode: 'BBCode' };
+    toast.success('复制成功', `已复制 ${formattedLinks.length} 个 ${formatNames[format]} 链接`, 1500);
+  } catch (error) {
+    console.error('[批量复制] 失败:', error);
+    toast.error('复制失败', String(error));
+  }
+};
+
+// 显示删除确认（浮动栏使用）
+const showDeleteConfirm = () => {
+  const count = historyManager.selectedIds.value.length;
+  if (count === 0) {
+    toast.warn('未选择项目', '请先选择要删除的项目');
+    return;
+  }
+  handleBulkDelete();
 };
 
 // 批量导出
@@ -548,50 +625,15 @@ const handleScroll = (event: Event) => {
           />
         </div>
 
-        <!-- 右侧区域：统计/批量操作 + 清空 -->
+        <!-- 右侧区域：统计信息（批量操作已移至浮动栏） -->
         <div class="strip-right">
-          <!-- 未选中：显示统计 -->
-          <span class="stats-text" v-if="!historyManager.hasSelection.value">
+          <span class="stats-text">
             共 {{ historyManager.filteredItems.value.length }} 项
+            <template v-if="historyManager.hasSelection.value">
+              <span class="stats-divider">·</span>
+              <span class="stats-selected">已选 {{ historyManager.selectedIds.value.length }}</span>
+            </template>
           </span>
-
-          <!-- 选中：显示批量操作 -->
-          <div v-else class="batch-actions">
-            <span class="selected-count">已选 {{ historyManager.selectedIds.value.length }}</span>
-            <Button
-              icon="pi pi-copy"
-              text
-              rounded
-              size="small"
-              @click="handleBulkCopy"
-              v-tooltip.bottom="'批量复制链接'"
-            />
-            <Button
-              icon="pi pi-download"
-              text
-              rounded
-              size="small"
-              @click="handleBulkExport"
-              v-tooltip.bottom="'导出 JSON'"
-            />
-            <Button
-              icon="pi pi-trash"
-              severity="danger"
-              text
-              rounded
-              size="small"
-              @click="handleBulkDelete"
-              v-tooltip.bottom="'批量删除'"
-            />
-            <Button
-              icon="pi pi-times"
-              text
-              rounded
-              size="small"
-              @click="historyManager.clearSelection()"
-              v-tooltip.bottom="'取消选择'"
-            />
-          </div>
         </div>
       </div>
 
@@ -627,6 +669,7 @@ const handleScroll = (event: Event) => {
         sortField="timestamp"
         :sortOrder="-1"
         class="history-table minimal-table"
+        :rowClass="(data: HistoryItem) => historyManager.selectedIdsRef.value.has(data.id) ? 'row-selected' : ''"
         :emptyMessage="historyManager.allHistoryItems.value.length === 0 ? '暂无历史记录' : '未找到匹配的记录'"
       >
         <template #empty>
@@ -893,6 +936,83 @@ const handleScroll = (event: Event) => {
         </div>
       </Dialog>
 
+      <!-- 浮动批量操作栏 -->
+      <Transition name="float-bar">
+        <div v-if="historyManager.hasSelection.value" class="floating-action-bar">
+          <div class="fab-content">
+            <!-- 选中计数 -->
+            <span class="fab-count">
+              <i class="pi pi-check-circle"></i>
+              已选 {{ historyManager.selectedIds.value.length }} 项
+            </span>
+
+            <div class="fab-divider"></div>
+
+            <!-- 复制链接下拉菜单 -->
+            <div class="fab-copy-dropdown" ref="copyDropdownRef">
+              <Button
+                icon="pi pi-copy"
+                label="复制链接"
+                text
+                size="small"
+                class="fab-btn"
+                @click.stop="toggleCopyMenu"
+              />
+              <Transition name="dropdown">
+                <div v-if="copyMenuVisible" class="copy-menu">
+                  <button class="copy-menu-item" @click="handleBulkCopyFormatted('url')">
+                    <i class="pi pi-link"></i><span>URL</span>
+                  </button>
+                  <button class="copy-menu-item" @click="handleBulkCopyFormatted('markdown')">
+                    <i class="pi pi-file-edit"></i><span>Markdown</span>
+                  </button>
+                  <button class="copy-menu-item" @click="handleBulkCopyFormatted('html')">
+                    <i class="pi pi-code"></i><span>HTML</span>
+                  </button>
+                  <button class="copy-menu-item" @click="handleBulkCopyFormatted('bbcode')">
+                    <i class="pi pi-comment"></i><span>BBCode</span>
+                  </button>
+                </div>
+              </Transition>
+            </div>
+
+            <!-- 导出 -->
+            <Button
+              icon="pi pi-download"
+              label="导出"
+              text
+              size="small"
+              class="fab-btn"
+              @click="handleBulkExport"
+            />
+
+            <!-- 删除 -->
+            <Button
+              icon="pi pi-trash"
+              label="删除"
+              severity="danger"
+              text
+              size="small"
+              class="fab-btn fab-btn-danger"
+              @click="showDeleteConfirm"
+            />
+
+            <div class="fab-divider"></div>
+
+            <!-- 取消选择 -->
+            <Button
+              icon="pi pi-times"
+              text
+              rounded
+              size="small"
+              class="fab-close"
+              @click="historyManager.clearSelection()"
+              v-tooltip.top="'取消选择'"
+            />
+          </div>
+        </div>
+      </Transition>
+
     </div>
   </div>
 </template>
@@ -1069,13 +1189,27 @@ const handleScroll = (event: Event) => {
   font-size: 13px;
 }
 
-/* 统计与操作 */
+/* 统计信息 */
 .stats-text {
   font-size: 12px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
+.stats-divider {
+  color: var(--text-tertiary);
+  margin: 0 2px;
+}
+
+.stats-selected {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* 批量操作（保留兼容，但已移至浮动栏） */
 .batch-actions {
   display: flex;
   align-items: center;
@@ -1152,6 +1286,24 @@ const handleScroll = (event: Event) => {
 
 :root.dark-theme :deep(.minimal-table .p-datatable-tbody > tr:hover) {
   background: rgba(59, 130, 246, 0.15) !important;
+}
+
+/* 表格行选中态 - 仅背景色 */
+:deep(.minimal-table .p-datatable-tbody > tr.row-selected) {
+  background: rgba(59, 130, 246, 0.12) !important;
+}
+
+:root.dark-theme :deep(.minimal-table .p-datatable-tbody > tr.row-selected) {
+  background: rgba(59, 130, 246, 0.18) !important;
+}
+
+/* 选中行悬浮态 */
+:deep(.minimal-table .p-datatable-tbody > tr.row-selected:hover) {
+  background: rgba(59, 130, 246, 0.16) !important;
+}
+
+:root.dark-theme :deep(.minimal-table .p-datatable-tbody > tr.row-selected:hover) {
+  background: rgba(59, 130, 246, 0.22) !important;
 }
 
 /* 单元格样式 */
@@ -1402,11 +1554,12 @@ const handleScroll = (event: Event) => {
   opacity: 1;
 }
 
-/* 选中状态 */
+/* 选中状态（增强） */
 .waterfall-card.selected {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2), 0 4px 12px rgba(59, 130, 246, 0.15);
 }
+
 
 /* 图片容器 - 固定高度确保虚拟滚动计算准确 */
 .card-image-container {
@@ -1483,22 +1636,37 @@ const handleScroll = (event: Event) => {
   background: rgba(0, 0, 0, 0.1) !important;
 }
 
-/* 选中指示器 */
+/* 选中指示器（增强：蓝色背景 + 弹跳动画） */
 .card-selection-overlay {
   position: absolute;
   top: 8px;
   right: 8px;
-  color: var(--primary);
-  background: white;
+  color: white;
+  background: var(--primary);
   border-radius: 50%;
   width: 24px;
   height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
   z-index: 10;
+  animation: checkBounce 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes checkBounce {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* 信息区域 */
@@ -1666,5 +1834,164 @@ const handleScroll = (event: Event) => {
 
 .skeleton-row:last-child {
   border-bottom: none;
+}
+
+/* === 浮动操作栏 === */
+.floating-action-bar {
+  position: fixed;
+  bottom: 70px;  /* 分页栏高度 ~46px + 间距 24px */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: rgba(30, 41, 59, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  box-shadow: var(--shadow-float), 0 -1px 0 rgba(255, 255, 255, 0.05) inset;
+  padding: 8px 16px;
+}
+
+:root.light-theme .floating-action-bar {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: var(--shadow-float), 0 1px 0 rgba(0, 0, 0, 0.03) inset;
+}
+
+.fab-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fab-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  padding: 6px 12px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.fab-count i {
+  font-size: 14px;
+}
+
+.fab-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border-subtle);
+  margin: 0 4px;
+}
+
+.fab-btn {
+  font-size: 13px !important;
+  padding: 6px 12px !important;
+  border-radius: 8px !important;
+}
+
+.fab-btn-danger:hover {
+  color: var(--error) !important;
+  background: rgba(239, 68, 68, 0.1) !important;
+}
+
+.fab-close {
+  width: 32px !important;
+  height: 32px !important;
+  color: var(--text-secondary) !important;
+}
+
+.fab-close:hover {
+  color: var(--text-primary) !important;
+  background: var(--hover-overlay) !important;
+}
+
+/* 浮动栏进入/退出动画 */
+.float-bar-enter-active,
+.float-bar-leave-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.float-bar-enter-from,
+.float-bar-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(20px);
+}
+
+/* === 复制下拉菜单 === */
+.fab-copy-dropdown {
+  position: relative;
+}
+
+.copy-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  box-shadow: var(--shadow-float);
+  padding: 6px;
+  min-width: 140px;
+  z-index: 1001;
+}
+
+.copy-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.copy-menu-item:hover {
+  background: var(--hover-overlay);
+  color: var(--primary);
+}
+
+.copy-menu-item i {
+  font-size: 14px;
+  color: var(--text-secondary);
+  width: 16px;
+  text-align: center;
+}
+
+.copy-menu-item:hover i {
+  color: var(--primary);
+}
+
+/* 下拉菜单动画 */
+.dropdown-enter-active,
+.dropdown-leave-active {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dropdown-enter-from,
+.dropdown-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
+}
+
+/* 响应式：窄屏幕隐藏按钮文字 */
+@media (max-width: 600px) {
+  .fab-btn :deep(.p-button-label) {
+    display: none;
+  }
+
+  .floating-action-bar {
+    padding: 8px 12px;
+  }
 }
 </style>
