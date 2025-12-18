@@ -195,7 +195,17 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       // 验证是否选中了图床服务
       if (enabledServices.length === 0) {
         console.warn('[上传] 没有选择任何图床');
-        toast.error('未配置图床', '请前往设置页启用至少一个图床服务');
+
+        // 检查是否有已配置的图床可供选择
+        const hasConfiguredServices = Object.values(serviceConfigStatus.value).some(status => status === true);
+
+        if (hasConfiguredServices) {
+          // 有已配置的图床但未选中
+          toast.error('未选择图床', '请在上传界面选择至少一个图床服务');
+        } else {
+          // 没有任何已配置的图床
+          toast.error('未配置图床', '请前往设置页启用至少一个图床服务');
+        }
         return;
       }
 
