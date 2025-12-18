@@ -298,8 +298,9 @@ export class MultiServiceUploader {
     return enabledServices.filter(serviceId => {
       const serviceConfig = config.services[serviceId];
 
-      // TCL 和京东图床无需配置，直接返回 true
-      if (serviceId === 'tcl' || serviceId === 'jd') {
+      // TCL、京东和七鱼图床无需配置，直接返回 true
+      // 七鱼的 Token 由后端自动获取，Chrome 检测在 validateConfig 中进行
+      if (serviceId === 'tcl' || serviceId === 'jd' || serviceId === 'qiyu') {
         return true;
       }
 
@@ -348,12 +349,6 @@ export class MultiServiceUploader {
           return false;
         }
         // 如果 cookie 存在，认为已配置
-        return true;
-      }
-
-      if (serviceId === 'qiyu') {
-        // 七鱼图床 Token 由后端自动获取，只要启用了就认为已配置
-        // Chrome/Edge 检测在前端 UI 层面处理
         return true;
       }
 

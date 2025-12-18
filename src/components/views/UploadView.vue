@@ -209,7 +209,6 @@ onUnmounted(() => {
 
       <!-- 图床选择区域 -->
       <div class="upload-controls">
-        <div class="service-group-label">选择上传图床</div>
         <div class="service-tags-wrapper">
           <button
             v-for="serviceId in visibleServices"

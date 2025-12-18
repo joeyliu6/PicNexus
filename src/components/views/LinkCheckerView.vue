@@ -35,6 +35,7 @@ onMounted(async () => {
 // 检测状态
 const isChecking = ref(false);
 const isCancelled = ref(false);
+const recheckingId = ref<string | null>(null);  // 正在重检的项目 ID
 
 // 筛选
 const serviceFilter = ref('all');
@@ -413,8 +414,22 @@ const deleteInvalid = () => {
 };
 
 const recheckSingle = async (checkResult: CheckResult) => {
-  for (const serviceResult of checkResult.serviceResults) await checkLink(serviceResult);
+  recheckingId.value = checkResult.historyItemId;
+
+  for (const serviceResult of checkResult.serviceResults) {
+    await checkLink(serviceResult);
+  }
+
   updateAggregateStatus(checkResult);
+  await saveCheckResultToHistory(checkResult);
+
+  // 更新统计
+  stats.value.valid = results.value.filter(r => r.status === 'all_valid').length;
+  stats.value.invalid = results.value.filter(r => r.status === 'all_invalid' || r.status === 'partial_valid').length;
+  stats.value.pending = results.value.filter(r => r.status === 'pending').length;
+
+  recheckingId.value = null;
+  toast.success('重检完成', checkResult.fileName);
 };
 
 const exportResults = async () => {
@@ -853,8 +868,8 @@ const handleBulkRepair = async () => {
             <Column header="操作" style="width: 140px; text-align: right;">
                 <template #body="{ data }">
                     <div class="row-actions">
-                        <button class="icon-action-btn" @click.stop="recheckSingle(data)" title="重新检测">
-                            <i class="pi pi-refresh"></i>
+                        <button class="icon-action-btn" @click.stop="recheckSingle(data)" :disabled="recheckingId === data.historyItemId" title="重新检测">
+                            <i class="pi" :class="recheckingId === data.historyItemId ? 'pi-spin pi-spinner' : 'pi-refresh'"></i>
                         </button>
                         <button class="icon-action-btn" @click.stop="openReuploadDialog(data)" :disabled="!data.canReupload" title="修复/重传">
                             <i class="pi pi-cloud-upload"></i>
