@@ -267,6 +267,13 @@ const saveCheckResultToHistory = async (checkResult: CheckResult): Promise<void>
     await historyStore.set('uploads', items);
     await historyStore.save();
 
+    // 同步更新内存缓存，避免切换筛选条件时丢失检测状态
+    const cachedItem = allHistoryItems.value.find(h => h.id === checkResult.historyItemId);
+    if (cachedItem) {
+      cachedItem.linkCheckStatus = historyItem.linkCheckStatus;
+      cachedItem.linkCheckSummary = historyItem.linkCheckSummary;
+    }
+
   } catch (error) {
     console.error('[持久化] 保存检测结果失败:', error);
   }
