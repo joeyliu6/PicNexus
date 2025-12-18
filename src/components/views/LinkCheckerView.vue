@@ -277,6 +277,9 @@ const startCheck = async () => {
   isChecking.value = true;
   isCancelled.value = false;
 
+  // 确定要检测的项目列表
+  let itemsToCheck: CheckResult[] = [];
+
   if (results.value.length === 0) {
     progress.value = 0;
     try {
@@ -290,13 +293,24 @@ const startCheck = async () => {
       results.value = checkResults;
       stats.value.total = checkResults.length;
       stats.value.pending = checkResults.length;
+      itemsToCheck = checkResults;
     } catch (error) {
       toast.error('加载失败', String(error));
       isChecking.value = false;
       return;
     }
   } else {
-    results.value.forEach(result => {
+    // 根据筛选条件决定检测哪些项目
+    itemsToCheck = statusFilter.value === 'all' ? results.value : filteredResults.value;
+
+    if (itemsToCheck.length === 0) {
+      toast.warn('无链接', '当前筛选条件下没有可检测的图片');
+      isChecking.value = false;
+      return;
+    }
+
+    // 只重置要检测的项目状态
+    itemsToCheck.forEach(result => {
       result.status = 'pending';
       result.validCount = 0;
       result.invalidCount = 0;
@@ -309,36 +323,38 @@ const startCheck = async () => {
         sr.responseTime = undefined;
       });
     });
-    stats.value = { total: results.value.length, valid: 0, invalid: 0, pending: results.value.length };
   }
 
+  const checkCount = itemsToCheck.length;
+  const filterLabel = statusFilter.value === 'all' ? '' : `（${statusFilter.value === 'valid' ? '有效' : statusFilter.value === 'invalid' ? '失效' : '未检'}）`;
+
   progress.value = 0;
-  toast.info('开始检测', `共 ${results.value.length} 个文件待检测`);
+  toast.info('开始检测', `共 ${checkCount} 个文件待检测${filterLabel}`);
 
   try {
     let checkedCount = 0;
-    for (const checkResult of results.value) {
+    for (const checkResult of itemsToCheck) {
       if (isCancelled.value) break;
       for (const serviceResult of checkResult.serviceResults) {
         await checkLink(serviceResult);
       }
       updateAggregateStatus(checkResult);
 
-      // 【新增】每检测完一项就保存到历史记录
       await saveCheckResultToHistory(checkResult);
 
       checkedCount++;
+      // 更新全局统计
       stats.value.valid = results.value.filter(r => r.status === 'all_valid').length;
       stats.value.invalid = results.value.filter(r => r.status === 'all_invalid' || r.status === 'partial_valid').length;
-      stats.value.pending = stats.value.total - checkedCount;
-      progress.value = Math.round((checkedCount / stats.value.total) * 100);
-      progressText.value = `${checkedCount} / ${stats.value.total}`;
+      stats.value.pending = results.value.filter(r => r.status === 'pending').length;
+      progress.value = Math.round((checkedCount / checkCount) * 100);
+      progressText.value = `${checkedCount} / ${checkCount}`;
     }
     if (!isCancelled.value) {
-      const allValid = results.value.filter(r => r.status === 'all_valid').length;
-      const partialValid = results.value.filter(r => r.status === 'partial_valid').length;
-      const allInvalid = results.value.filter(r => r.status === 'all_invalid').length;
-      toast.success('检测完成', `全部有效: ${allValid}, 部分有效: ${partialValid}, 全部失效: ${allInvalid}`);
+      const checkedValid = itemsToCheck.filter(r => r.status === 'all_valid').length;
+      const checkedPartial = itemsToCheck.filter(r => r.status === 'partial_valid').length;
+      const checkedInvalid = itemsToCheck.filter(r => r.status === 'all_invalid').length;
+      toast.success('检测完成', `全部有效: ${checkedValid}, 部分有效: ${checkedPartial}, 全部失效: ${checkedInvalid}`);
     }
   } catch (error) {
     toast.error('检测失败', String(error));
