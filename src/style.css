@@ -343,15 +343,6 @@ button:focus-visible {
   color: var(--text-secondary);
 }
 
-/* 多图床服务选择器样式 */
-.upload-controls {
-  margin-bottom: 20px;
-  padding: 20px;
-  background-color: var(--bg-card);
-  border-radius: 8px;
-  border: 1px solid var(--border-subtle);
-}
-
 /* 图床按钮容器 - Flex wrap 横向排列 */
 .service-buttons {
   display: flex;

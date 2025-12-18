@@ -257,7 +257,7 @@ onUnmounted(() => {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
 }
 
 /* 拖拽区域 */
