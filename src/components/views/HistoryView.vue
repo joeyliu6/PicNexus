@@ -620,7 +620,7 @@ const handleScroll = (event: Event) => {
         :value="historyManager.filteredItems.value"
         dataKey="id"
         scrollable
-        scrollHeight="calc(100vh - 220px)"
+        scrollHeight="flex"
         paginator
         :rows="50"
         :rowsPerPageOptions="[20, 50, 100]"
@@ -917,6 +917,7 @@ const handleScroll = (event: Event) => {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  height: calc(100vh - 60px);
 }
 
 /* === Dashboard Strip（顶部控制条）=== */
@@ -1117,6 +1118,8 @@ const handleScroll = (event: Event) => {
   background: var(--bg-card);
   border-radius: 12px;
   overflow: hidden;
+  flex: 1;
+  min-height: 0;
 }
 
 .minimal-table {
@@ -1325,7 +1328,8 @@ const handleScroll = (event: Event) => {
 .virtual-waterfall-container {
   background: var(--bg-card);
   border-radius: 12px;
-  height: calc(100vh - 200px);
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 1rem;
 }
