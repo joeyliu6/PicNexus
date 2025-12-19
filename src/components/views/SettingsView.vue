@@ -411,7 +411,7 @@ onUnmounted(() => {
                     <Button label="测试" icon="pi pi-check" @click="actions.nowcoder" :loading="testingConnections.nowcoder" text size="small"/>
                 </div>
             </div>
-            <Textarea v-model="formData.nowcoder.cookie" @blur="saveSettings" rows="2" class="mono-input w-full" placeholder="牛客 Cookie..." />
+            <Textarea v-model="formData.nowcoder.cookie" @blur="saveSettings" rows="6" class="mono-input w-full" placeholder="牛客 Cookie..." />
         </div>
 
         <Divider />
@@ -424,7 +424,7 @@ onUnmounted(() => {
                     <Button label="测试" icon="pi pi-check" @click="actions.zhihu" :loading="testingConnections.zhihu" text size="small"/>
                 </div>
             </div>
-            <Textarea v-model="formData.zhihu.cookie" @blur="saveSettings" rows="2" class="mono-input w-full" placeholder="知乎 Cookie..." />
+            <Textarea v-model="formData.zhihu.cookie" @blur="saveSettings" rows="6" class="mono-input w-full" placeholder="知乎 Cookie..." />
         </div>
 
         <Divider />
@@ -437,7 +437,7 @@ onUnmounted(() => {
                     <Button label="测试" icon="pi pi-check" @click="actions.nami" :loading="testingConnections.nami" text size="small"/>
                 </div>
             </div>
-            <Textarea v-model="formData.nami.cookie" @blur="saveSettings" rows="2" class="mono-input w-full" placeholder="纳米 Cookie..." />
+            <Textarea v-model="formData.nami.cookie" @blur="saveSettings" rows="6" class="mono-input w-full" placeholder="纳米 Cookie..." />
         </div>
       </div>
 
