@@ -728,7 +728,7 @@ const handleScroll = (event: Event) => {
         </Column>
 
         <!-- 文件名列 -->
-        <Column field="localFileName" header="文件名" sortable style="min-width: 200px">
+        <Column field="localFileName" header="文件名" sortable style="width: 285px">
           <template #body="slotProps">
             <div class="filename-cell">
               <span class="fname" :title="slotProps.data.localFileName">
@@ -756,31 +756,6 @@ const handleScroll = (event: Event) => {
           </template>
         </Column>
 
-        <!-- 链接操作列 -->
-        <Column header="链接" style="width: 120px; text-align: center;">
-          <template #body="slotProps">
-            <div class="link-actions">
-              <Button
-                icon="pi pi-copy"
-                text
-                rounded
-                size="small"
-                class="action-icon-btn"
-                @click="handleCopyLink(slotProps.data)"
-                v-tooltip.top="'复制链接'"
-              />
-              <Button
-                icon="pi pi-external-link"
-                text
-                rounded
-                size="small"
-                class="action-icon-btn"
-                @click="openLightbox(slotProps.data)"
-                v-tooltip.top="'查看大图'"
-              />
-            </div>
-          </template>
-        </Column>
       </DataTable>
 
       <!-- 网格视图（虚拟瀑布流） -->
