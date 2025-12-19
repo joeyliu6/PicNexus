@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue';
+import { ref, onMounted, onActivated, watch, computed } from 'vue';
 import Button from 'primevue/button';
 import Select from 'primevue/select';
 import DataTable from 'primevue/datatable';
@@ -32,10 +32,21 @@ onMounted(async () => {
   await preloadImageInfo();
 });
 
+onActivated(async () => {
+  // 组件重新激活时，重新加载数据
+  await loadHistory();
+  await preloadImageInfo();
+  // 清除快照，确保使用最新数据
+  snapshotIds.value = null;
+});
+
 // 检测状态
 const isChecking = ref(false);
 const isCancelled = ref(false);
 const recheckingId = ref<string | null>(null);  // 正在重检的项目 ID
+
+// 快照机制：检测过程中锁定显示的项目ID列表
+const snapshotIds = ref<Set<string> | null>(null);
 
 // 筛选
 const serviceFilter = ref('all');
@@ -301,19 +312,46 @@ const startCheck = async () => {
       stats.value.total = checkResults.length;
       stats.value.pending = checkResults.length;
       itemsToCheck = checkResults;
+
+      // 首次检测时，如果不是"全部"筛选条件，创建快照
+      if (statusFilter.value !== 'all') {
+        snapshotIds.value = new Set(checkResults.map(r => r.historyItemId));
+      }
     } catch (error) {
       toast.error('加载失败', String(error));
       isChecking.value = false;
       return;
     }
   } else {
-    // 根据筛选条件决定检测哪些项目
-    itemsToCheck = statusFilter.value === 'all' ? results.value : filteredResults.value;
+    // 根据筛选条件手动计算要检测的项目（不使用 filteredResults，因为它依赖 snapshotIds）
+    if (statusFilter.value === 'all') {
+      itemsToCheck = results.value;
+    } else {
+      itemsToCheck = results.value.filter(item => {
+        const summary = item.linkCheckSummary;
+        if (!summary) return statusFilter.value === 'unchecked';
+        switch (statusFilter.value) {
+          case 'valid':
+            return item.status === 'all_valid';
+          case 'invalid':
+            return item.status === 'all_invalid' || item.status === 'partial_valid';
+          case 'unchecked':
+            return item.status === 'pending';
+          default:
+            return true;
+        }
+      });
+    }
 
     if (itemsToCheck.length === 0) {
       toast.warn('无链接', '当前筛选条件下没有可检测的图片');
       isChecking.value = false;
       return;
+    }
+
+    // 创建快照：锁定当前要检测的项目ID
+    if (statusFilter.value !== 'all') {
+      snapshotIds.value = new Set(itemsToCheck.map(r => r.historyItemId));
     }
 
     // 只重置要检测的项目状态
@@ -439,6 +477,11 @@ const deleteInvalid = () => {
 const recheckSingle = async (checkResult: CheckResult) => {
   recheckingId.value = checkResult.historyItemId;
 
+  // 单项重检时创建快照（锁定当前显示的项目列表）
+  if (statusFilter.value !== 'all' && snapshotIds.value === null) {
+    snapshotIds.value = new Set(filteredResults.value.map(r => r.historyItemId));
+  }
+
   for (const serviceResult of checkResult.serviceResults) {
     await checkLink(serviceResult);
   }
@@ -518,11 +561,18 @@ const truncate = (str: string, len: number) => str.length > len ? str.substring(
 // 筛选器函数
 const setStatusFilter = (filter: typeof statusFilter.value) => {
   statusFilter.value = filter;
+  snapshotIds.value = null;  // 切换筛选条件时清除快照
+  selectedIds.value = new Set();  // 清除选中状态
 };
 
 // 应用筛选的结果（需要在多选逻辑之前定义）
 const filteredResults = computed(() => {
   let filtered = results.value;
+
+  // 如果存在快照，优先使用快照ID列表筛选
+  if (snapshotIds.value !== null) {
+    return filtered.filter(item => snapshotIds.value!.has(item.historyItemId));
+  }
 
   // 按检测状态筛选
   if (statusFilter.value !== 'all') {
@@ -579,6 +629,12 @@ const handleBulkRecheck = async () => {
   }
 
   isChecking.value = true;
+
+  // 批量重检时创建快照（只针对选中的项目）
+  if (statusFilter.value !== 'all') {
+    snapshotIds.value = new Set(selected.map(r => r.historyItemId));
+  }
+
   toast.info('开始批量重检', `共 ${selected.length} 项`);
 
   let successCount = 0;
@@ -627,6 +683,12 @@ const handleBulkRepair = async () => {
   if (!confirmed) return;
 
   isChecking.value = true;
+
+  // 批量修复时创建快照（只针对选中的项目）
+  if (statusFilter.value !== 'all') {
+    snapshotIds.value = new Set(selected.map(r => r.historyItemId));
+  }
+
   toast.info('开始批量修复', `共 ${selected.length} 项`);
 
   let successCount = 0;
