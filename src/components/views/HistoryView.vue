@@ -577,9 +577,8 @@ const handleScroll = (event: Event) => {
 
 <template>
   <div class="history-view">
-    <div class="history-container">
-      <!-- Dashboard Strip -->
-      <div class="dashboard-strip">
+    <!-- Dashboard Strip（固定顶部，不随表格滚动） -->
+    <div class="dashboard-strip">
         <!-- 左侧区域：标题 + 视图切换 -->
         <div class="strip-left">
           <span class="view-title">上传历史</span>
@@ -635,8 +634,10 @@ const handleScroll = (event: Event) => {
             </template>
           </span>
         </div>
-      </div>
+    </div>
 
+    <!-- 表格/网格内容区域（可滚动） -->
+    <div class="history-container">
       <!-- 加载状态骨架屏 -->
       <div v-if="historyManager.isLoading.value" class="loading-skeleton">
         <div class="skeleton-header">
@@ -661,14 +662,12 @@ const handleScroll = (event: Event) => {
         key="table-view"
         :value="historyManager.filteredItems.value"
         dataKey="id"
-        scrollable
-        scrollHeight="flex"
         paginator
         :rows="50"
-        :rowsPerPageOptions="[20, 50, 100]"
         sortField="timestamp"
         :sortOrder="-1"
         class="history-table minimal-table"
+        rowHover
         :rowClass="(data: HistoryItem) => historyManager.selectedIdsRef.value.has(data.id) ? 'row-selected' : ''"
         :emptyMessage="historyManager.allHistoryItems.value.length === 0 ? '暂无历史记录' : '未找到匹配的记录'"
       >
@@ -1024,20 +1023,21 @@ const handleScroll = (event: Event) => {
 }
 
 .history-view {
+  display: flex;
+  flex-direction: column;
   height: 100%;
-  overflow-y: auto;
-  padding: 20px;
+  overflow: hidden;
   background: var(--bg-app);
-  min-height: 400px; /* 临时调试：确保最小高度 */
 }
 
 .history-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 20px;
   max-width: 850px;
   margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  height: calc(100vh - 60px);
+  width: 100%;
 }
 
 /* === Dashboard Strip（顶部控制条）=== */
@@ -1252,12 +1252,12 @@ const handleScroll = (event: Event) => {
   background: var(--bg-card);
   border-radius: 12px;
   overflow: hidden;
-  flex: 1;
-  min-height: 0;
+  width: 100%;
 }
 
-.minimal-table {
-  height: 100%;
+/* 禁用 DataTable 内部滚动，由外层 .history-container 统一处理 */
+:deep(.history-table .p-datatable-table-container) {
+  overflow: visible !important;
 }
 
 /* 表头样式 */
