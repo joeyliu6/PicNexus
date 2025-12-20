@@ -402,7 +402,7 @@ onUnmounted(() => {
               <p>速度极快，CDN 全球分发。最大支持 15MB。</p>
               <div class="service-status">
                 <Tag :value="jdAvailable ? '可用' : '不可用'" :severity="jdAvailable ? 'success' : 'danger'" />
-                <Button v-if="!jdAvailable" label="检测" icon="pi pi-refresh" @click="checkJdAvailable" :loading="isCheckingJd" text size="small" />
+                <Button label="检测" icon="pi pi-refresh" @click="checkJdAvailable" :loading="isCheckingJd" text size="small" />
               </div>
             </div>
           </div>
@@ -413,7 +413,7 @@ onUnmounted(() => {
               <p>无需配置，直接使用。支持多种格式。</p>
               <div class="service-status">
                 <Tag :value="tclAvailable ? '可用' : '不可用'" :severity="tclAvailable ? 'success' : 'danger'" />
-                <Button v-if="!tclAvailable" label="检测" icon="pi pi-refresh" @click="checkTclAvailable" :loading="isCheckingTcl" text size="small" />
+                <Button label="检测" icon="pi pi-refresh" @click="checkTclAvailable" :loading="isCheckingTcl" text size="small" />
               </div>
             </div>
           </div>
@@ -424,7 +424,7 @@ onUnmounted(() => {
               <p>基于网易七鱼客服系统，Token 自动获取。</p>
               <div class="service-status">
                 <Tag :value="qiyuAvailable ? '可用' : '不可用'" :severity="qiyuAvailable ? 'success' : 'danger'" />
-                <Button v-if="!qiyuAvailable" label="检测" icon="pi pi-refresh" @click="checkQiyuAvailability" :loading="isCheckingQiyu" text size="small" />
+                <Button label="检测" icon="pi pi-refresh" @click="checkQiyuAvailability" :loading="isCheckingQiyu" text size="small" />
               </div>
             </div>
           </div>
