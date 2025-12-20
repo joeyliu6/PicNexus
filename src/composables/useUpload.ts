@@ -23,6 +23,9 @@ import { checkNetworkConnectivity } from '../utils/network';
 const configStore = new Store('.settings.dat');
 const historyStore = new Store('.history.dat');
 
+/** 历史记录保存锁，确保并发保存时不会互相覆盖 */
+let historySaveLock: Promise<void> = Promise.resolve();
+
 /**
  * 上传管理 Composable
  */
@@ -576,6 +579,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
   /**
    * 保存历史记录（多图床结果）
+   * 使用互斥锁确保并发保存时不会互相覆盖
    * @param filePath 文件路径
    * @param uploadResult 多图床上传结果
    */
@@ -583,62 +587,73 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     filePath: string,
     uploadResult: MultiUploadResult
   ): Promise<void> {
+    // 获取本地文件名（在锁外执行，减少锁持有时间）
+    let fileName: string;
     try {
-      let items: HistoryItem[] = [];
-
-      try {
-        items = await historyStore.get<HistoryItem[]>('uploads') || [];
-        if (!Array.isArray(items)) {
-          items = [];
-        }
-      } catch (readError: any) {
-        console.error('[历史记录] 读取历史记录失败:', readError?.message || String(readError));
-        items = [];
-      }
-
-      // 获取本地文件名
-      let fileName: string;
-      try {
-        fileName = await basename(filePath);
-        if (!fileName || fileName.trim().length === 0) {
-          fileName = filePath.split(/[/\\]/).pop() || '未知文件';
-        }
-      } catch (nameError: any) {
+      fileName = await basename(filePath);
+      if (!fileName || fileName.trim().length === 0) {
         fileName = filePath.split(/[/\\]/).pop() || '未知文件';
       }
-
-      // 创建历史记录项（只保存成功的图床结果，失败的不污染历史记录）
-      const successfulResults = uploadResult.results.filter(r => r.status === 'success');
-      const newItem: HistoryItem = {
-        id: `${Date.now()}_${Math.random().toString(36).substring(7)}`,
-        localFileName: fileName,
-        timestamp: Date.now(),
-        filePath: filePath,
-        results: successfulResults,
-        primaryService: uploadResult.primaryService,
-        generatedLink: uploadResult.primaryUrl || ''
-      };
-
-      // 添加到历史记录（最新的在前面）
-      items.unshift(newItem);
-
-      // 保存
-      try {
-        await historyStore.set('uploads', items);
-        await historyStore.save();
-        console.log('[历史记录] 已保存历史记录:', newItem.localFileName);
-
-        // 使历史记录缓存失效，下次切换到浏览界面时会重新加载
-        invalidateCache();
-      } catch (saveError: any) {
-        console.error('[历史记录] 保存历史记录失败:', saveError?.message || String(saveError));
-        throw new Error(`保存历史记录失败: ${saveError?.message || String(saveError)}`);
-      }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[历史记录] 保存历史记录失败:', error);
-      throw new Error(`保存历史记录失败: ${errorMsg}`);
+    } catch (nameError: any) {
+      fileName = filePath.split(/[/\\]/).pop() || '未知文件';
     }
+
+    // 使用链式 Promise 实现互斥锁，确保保存操作按顺序执行
+    const saveOperation = async () => {
+      try {
+        let items: HistoryItem[] = [];
+
+        try {
+          items = await historyStore.get<HistoryItem[]>('uploads') || [];
+          if (!Array.isArray(items)) {
+            items = [];
+          }
+        } catch (readError: any) {
+          console.error('[历史记录] 读取历史记录失败:', readError?.message || String(readError));
+          items = [];
+        }
+
+        // 创建历史记录项（只保存成功的图床结果，失败的不污染历史记录）
+        const successfulResults = uploadResult.results.filter(r => r.status === 'success');
+        const newItem: HistoryItem = {
+          id: `${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          localFileName: fileName,
+          timestamp: Date.now(),
+          filePath: filePath,
+          results: successfulResults,
+          primaryService: uploadResult.primaryService,
+          generatedLink: uploadResult.primaryUrl || ''
+        };
+
+        // 添加到历史记录（最新的在前面）
+        items.unshift(newItem);
+
+        // 保存
+        try {
+          await historyStore.set('uploads', items);
+          await historyStore.save();
+          console.log('[历史记录] 已保存历史记录:', newItem.localFileName);
+
+          // 使历史记录缓存失效，下次切换到浏览界面时会重新加载
+          invalidateCache();
+        } catch (saveError: any) {
+          console.error('[历史记录] 保存历史记录失败:', saveError?.message || String(saveError));
+          throw new Error(`保存历史记录失败: ${saveError?.message || String(saveError)}`);
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error('[历史记录] 保存历史记录失败:', error);
+        throw new Error(`保存历史记录失败: ${errorMsg}`);
+      }
+    };
+
+    // 将当前操作加入锁链，等待前一个操作完成后执行
+    historySaveLock = historySaveLock.then(saveOperation).catch((error) => {
+      // 捕获错误但不中断锁链，让后续操作可以继续
+      console.error('[历史记录] 锁链中的操作失败:', error);
+    });
+
+    await historySaveLock;
   }
 
   /**

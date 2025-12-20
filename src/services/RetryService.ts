@@ -5,10 +5,11 @@
 
 import { MultiServiceUploader, MultiUploadResult } from '../core/MultiServiceUploader';
 import { UploadQueueManager, QueueItem } from '../uploadQueue';
-import { UserConfig, ServiceType } from '../config/types';
+import { UserConfig, ServiceType, HistoryItem } from '../config/types';
 import { Store } from '../store';
 import { UploadResult } from '../uploaders/base/types';
 import { checkNetworkConnectivity } from '../utils/network';
+import { invalidateCache } from '../composables/useHistory';
 
 export interface RetryOptions {
   /** 配置存储 */
@@ -34,6 +35,9 @@ export interface RetryOptions {
 export class RetryService {
   private retryingItems = new Set<string>();
   private uploader = new MultiServiceUploader();
+
+  /** 历史记录更新锁，确保并发更新时不会互相覆盖 */
+  private static historyUpdateLock: Promise<void> = Promise.resolve();
 
   constructor(private options: RetryOptions) {}
 
@@ -271,6 +275,82 @@ export class RetryService {
         thumbUrl: link
       });
     }
+
+    // 更新历史记录
+    await this.updateHistoryRecord(item.filePath, serviceId, result, link);
+  }
+
+  /**
+   * 更新历史记录中的单个服务结果
+   * 使用互斥锁确保并发更新时不会互相覆盖
+   */
+  private async updateHistoryRecord(
+    filePath: string,
+    serviceId: ServiceType,
+    result: UploadResult,
+    link: string
+  ): Promise<void> {
+    // 使用链式 Promise 实现互斥锁，确保更新操作按顺序执行
+    const updateOperation = async () => {
+      try {
+        const historyStore = new Store('.history.dat');
+        const items = await historyStore.get<HistoryItem[]>('uploads') || [];
+
+        // 找到对应的历史记录项
+        const historyIndex = items.findIndex(h => h.filePath === filePath);
+        if (historyIndex !== -1) {
+          const historyItem = items[historyIndex];
+
+          // 检查该服务是否已存在结果
+          const existingResultIndex = historyItem.results.findIndex(
+            r => r.serviceId === serviceId
+          );
+
+          // 构建符合 UploadResult 类型的结果
+          const uploadResult: UploadResult = {
+            serviceId,
+            fileKey: result.fileKey || '',
+            url: link,
+            size: result.size,
+            width: result.width,
+            height: result.height,
+            metadata: result.metadata
+          };
+
+          const newResult = {
+            serviceId,
+            status: 'success' as const,
+            result: uploadResult
+          };
+
+          if (existingResultIndex !== -1) {
+            // 更新已有结果
+            historyItem.results[existingResultIndex] = newResult;
+          } else {
+            // 添加新结果
+            historyItem.results.push(newResult);
+          }
+
+          // 保存
+          await historyStore.set('uploads', items);
+          await historyStore.save();
+
+          // 使缓存失效
+          invalidateCache();
+
+          console.log(`[重试] 历史记录已更新: ${filePath} -> ${serviceId}`);
+        } else {
+          console.warn(`[重试] 未找到对应的历史记录: ${filePath}`);
+        }
+      } catch (error) {
+        console.error('[重试] 更新历史记录失败:', error);
+        // 不阻塞主流程
+      }
+    };
+
+    // 将当前操作加入队列，等待前面的操作完成后再执行
+    RetryService.historyUpdateLock = RetryService.historyUpdateLock.then(updateOperation);
+    await RetryService.historyUpdateLock;
   }
 
   /**
