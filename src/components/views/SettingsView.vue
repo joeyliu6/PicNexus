@@ -115,6 +115,25 @@ const checkTclAvailable = async () => {
   finally { isCheckingTcl.value = false; }
 };
 
+// 可用性检测冷却机制（防止频繁切换页面导致过度检测）
+const lastCheckTime = ref(0);
+const CHECK_COOLDOWN = 5 * 60 * 1000; // 5 分钟冷却
+
+const checkAllAvailabilityWithCooldown = async () => {
+  const now = Date.now();
+  if (now - lastCheckTime.value < CHECK_COOLDOWN) {
+    console.log('[可用性检测] 冷却中，跳过自动检测');
+    return;
+  }
+
+  lastCheckTime.value = now;
+  await Promise.all([
+    checkQiyuAvailability(),
+    checkJdAvailable(),
+    checkTclAvailable()
+  ]);
+};
+
 // 加载配置
 const loadSettings = async () => {
   try {
@@ -215,12 +234,8 @@ const resetToDefaultPrefixes = () => {
 // 监听 Cookie 更新
 onMounted(async () => {
   await loadSettings();
-  // 并行检测所有图床可用性
-  await Promise.all([
-    checkQiyuAvailability(),
-    checkJdAvailable(),
-    checkTclAvailable()
-  ]);
+  // 带冷却的可用性检测（5分钟内不重复检测）
+  await checkAllAvailabilityWithCooldown();
   cookieUnlisten.value = await configManager.setupCookieListener(async (sid, cookie) => {
     if (sid === 'weibo') formData.value.weiboCookie = cookie;
     else if (['nowcoder', 'zhihu', 'nami'].includes(sid)) (formData.value as any)[sid].cookie = cookie;
