@@ -11,59 +11,76 @@
  */
 export class TCLRateLimiter {
   private static instance: TCLRateLimiter;
-  
-  private sentInBatch: number = 0;
-  private readonly BATCH_LIMIT = 10;
-  private readonly COOLDOWN_MS = 36000 + 2000; // 36s + 2s 缓冲
-  private cooldownPromise: Promise<void> | null = null;
-  
-  private constructor() {}
-  
+
+  private sentCount: number = 0;
+  private readonly BATCH_SIZE = 10;
+
+  // 批次冷却时间 (36秒)
+  private readonly BATCH_COOLDOWN_MS = 36000;
+  // 批次内单张间隔 (2秒)，防止瞬间并发 10 张被拒
+  private readonly INTERVAL_MS = 2000;
+
+  // 排队控制
+  private nextAvailableTime: number = 0;
+
+  private constructor() {
+    this.nextAvailableTime = Date.now();
+  }
+
   static getInstance(): TCLRateLimiter {
     if (!TCLRateLimiter.instance) {
       TCLRateLimiter.instance = new TCLRateLimiter();
     }
     return TCLRateLimiter.instance;
   }
-  
+
+  /**
+   * 获取当前状态
+   */
+  getStatus(): { isCooling: boolean; remainingMs: number; count: number } {
+    const now = Date.now();
+    const remaining = Math.max(0, this.nextAvailableTime - now);
+    return {
+      isCooling: remaining > 2000, // 简单的判定：如果等待时间远大于间隔，说明在长冷却
+      remainingMs: remaining,
+      // 这里的 count 只是个示意，因为严格的 batch 逻辑已经融入到时间轴里了
+      count: this.sentCount % this.BATCH_SIZE
+    };
+  }
+
   /**
    * 申请上传许可
-   * 如果达到速率限制，此方法会挂起直到冷却结束
    */
   async acquire(): Promise<void> {
-    // 1. 如果正在冷却，等待冷却结束
-    if (this.cooldownPromise) {
-      console.log(`[TCLRateLimiter] 正在冷却中，等待恢复...`);
-      await this.cooldownPromise;
+    const now = Date.now();
+    this.sentCount++;
+    const currentCount = this.sentCount;
+
+    // 1. 确定本次请求需要增加的时间代价
+    // 默认代价是单纯的间隔
+    let cost = this.INTERVAL_MS;
+
+    // 2. 检查是否触发了批次限制 (每 10 张的最后一张后面要加长冷却)
+    // 注意：如果是第 10, 20, 30 张... 上传完后，后面那段空窗期就是冷却期
+    if (currentCount % this.BATCH_SIZE === 0) {
+      console.log(`[TCLRateLimiter] 也是第 ${currentCount} 张 (批次尾)，将触发长冷却`);
+      cost = this.BATCH_COOLDOWN_MS;
     }
 
-    // 2. 增加当前批次计数
-    // 关键：在放行前就计数，而不是完成后
-    this.sentInBatch++;
-    console.log(`[TCLRateLimiter] 申请许可: ${this.sentInBatch}/${this.BATCH_LIMIT}`);
+    // 3. 计算安排执行的时间
+    const scheduledTime = Math.max(now, this.nextAvailableTime);
 
-    // 3. 检查是否触发限流
-    if (this.sentInBatch >= this.BATCH_LIMIT) {
-      console.log(`[TCLRateLimiter] 达到批次限制 (${this.BATCH_LIMIT})，触发冷却 (${this.COOLDOWN_MS}ms)`);
-      
-      // 创建冷却 Promise
-      this.cooldownPromise = new Promise<void>((resolve) => {
-        setTimeout(() => {
-          console.log('[TCLRateLimiter] 冷却结束，重置计数');
-          this.sentInBatch = 0;
-          this.cooldownPromise = null;
-          resolve();
-        }, this.COOLDOWN_MS);
-      });
-      
-      // 注意：当前请求是第 10 个（或更多），它本身不需要等待（如果它是触发者）
-      // 但如果是严格的 "连续 10 张后触发"，第 10 张是最后一张允许的。
-      // 第 11 张进来时，会看到 sentInBatch > 10 (如果没重置) 或看到 cooldownPromise。
-      
-      // 修正逻辑：
-      // 如果当前是第 10 张，我们标记冷却，但让当前这张通过。
-      // 下一张（第 11 张）在 acquire() 开头会 await this.cooldownPromise。
-      // 所以不需要在这里 await。
+    // 更新下一次可用时间
+    this.nextAvailableTime = scheduledTime + cost;
+
+    // 4. 等待
+    const waitTime = scheduledTime - now;
+    if (waitTime > 0) {
+      const isLongWait = waitTime > 5000;
+      if (isLongWait) {
+        console.log(`[TCLRateLimiter] 触发冷却或排队，需等待 ${Math.ceil(waitTime / 1000)}s`);
+      }
+      await new Promise(resolve => setTimeout(resolve, waitTime));
     }
   }
 }

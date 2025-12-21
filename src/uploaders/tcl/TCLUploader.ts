@@ -40,6 +40,9 @@ export class TCLUploader extends BaseUploader {
   /**
    * 上传文件到 TCL
    */
+  /**
+   * 上传文件到 TCL
+   */
   async upload(
     filePath: string,
     options: UploadOptions,
@@ -47,31 +50,58 @@ export class TCLUploader extends BaseUploader {
   ): Promise<UploadResult> {
     this.log('info', '开始上传到 TCL', { filePath });
 
-    try {
-      // 限制速率
-      await TCLRateLimiter.getInstance().acquire();
+    // TCL 只需要针对限流重试，网络错误通常不需要重试太多次
+    const MAX_RETRIES = 2;
+    let lastError: any;
 
-      // 调用基类的 Rust 上传方法
-      // TCL 无需额外参数
-      const rustResult = await this.uploadViaRust(
-        filePath,
-        {},
-        onProgress
-      ) as TCLRustResult;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        // 限制速率 (如果在冷却，这里会等待)
+        await TCLRateLimiter.getInstance().acquire();
 
-      this.log('info', 'TCL 上传成功', { url: rustResult.url });
+        // 调用基类的 Rust 上传方法
+        const rustResult = await this.uploadViaRust(
+          filePath,
+          {},
+          onProgress
+        ) as TCLRustResult;
 
-      // 转换为标准 UploadResult
-      return {
-        serviceId: 'tcl',
-        fileKey: rustResult.url,  // TCL 使用完整 URL 作为 fileKey
-        url: rustResult.url,
-        size: rustResult.size
-      };
-    } catch (error) {
-      this.log('error', 'TCL 上传失败', error);
-      throw new Error(`TCL 图床上传失败: ${error}`);
+        this.log('info', 'TCL 上传成功', { url: rustResult.url });
+
+        return {
+          serviceId: 'tcl',
+          fileKey: rustResult.url,
+          url: rustResult.url,
+          size: rustResult.size
+        };
+      } catch (error: any) {
+        lastError = error;
+        const errorMsg = String(error);
+
+        // 检测限流关键字
+        // "操作太频繁" 是 TCL 典型的限流错误
+        if (errorMsg.includes('操作太频繁') || errorMsg.includes('frequent')) {
+          this.log('warn', `TCL 限流 (尝试 ${attempt + 1}/${MAX_RETRIES + 1})`, error);
+
+          // 如果遇到限流错误，说明 RateLimiter 可能没计算准（或者多实例并发了）
+          // 我们这里手动做一个延时再重试
+          if (attempt < MAX_RETRIES) {
+            // 既然服务端说太频繁，咱就老实等 5 秒
+            await new Promise(r => setTimeout(r, 5000));
+            continue;
+          }
+        }
+
+        // 其他错误直接抛出，或者按需重试
+        if (attempt < MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, 2000));
+          continue;
+        }
+      }
     }
+
+    this.log('error', 'TCL 上传失败', lastError);
+    throw new Error(`TCL 图床上传失败: ${lastError}`);
   }
 
   /**
