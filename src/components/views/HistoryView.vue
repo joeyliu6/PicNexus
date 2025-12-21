@@ -48,17 +48,9 @@ const debouncedSearch = debounce((term: string) => {
 // 缩略图 URL 缓存（同步：微博图床）
 const thumbUrlCache = new Map<string, string | undefined>();
 
-// 异步缩略图 URL 缓存（非微博图床，需要前端生成）
-const asyncThumbUrls = ref(new Map<string, string>());
-
-// 正在加载的缩略图集合
-const loadingThumbs = new Set<string>();
-
 // 清空缩略图缓存
 const clearThumbCache = () => {
   thumbUrlCache.clear();
-  asyncThumbUrls.value.clear();
-  loadingThumbs.clear();
 };
 
 // 【性能优化】优化缓存清空策略
@@ -334,16 +326,11 @@ const openInBrowser = async (item: HistoryItem) => {
 
 // 获取缩略图 URL（带缓存）
 // 微博图床：直接返回服务端缩略图 URL
-// 其他图床：返回异步生成的缩略图（如果已生成），否则触发异步生成
+// 其他图床：直接返回原图 URL（不再进行前端生成）
 const getThumbUrl = (item: HistoryItem): string | undefined => {
   // 检查同步缓存（微博图床）
   if (thumbUrlCache.has(item.id)) {
     return thumbUrlCache.get(item.id);
-  }
-
-  // 检查异步缓存（非微博图床）
-  if (asyncThumbUrls.value.has(item.id)) {
-    return asyncThumbUrls.value.get(item.id);
   }
 
   if (!item.results || item.results.length === 0) {
@@ -374,28 +361,8 @@ const getThumbUrl = (item: HistoryItem): string | undefined => {
     return thumbUrl;
   }
 
-  // 非微博图床：触发异步缩略图生成
-  const originalUrl = targetResult.result.url;
-
-  // 避免重复触发
-  if (!loadingThumbs.has(item.id)) {
-    loadingThumbs.add(item.id);
-
-    // 异步生成缩略图
-    getThumbnailUrl(originalUrl).then((thumbUrl) => {
-      if (thumbUrl) {
-        asyncThumbUrls.value.set(item.id, thumbUrl);
-        // 触发响应式更新
-        asyncThumbUrls.value = new Map(asyncThumbUrls.value);
-      }
-      loadingThumbs.delete(item.id);
-    }).catch(() => {
-      loadingThumbs.delete(item.id);
-    });
-  }
-
-  // 首次返回 undefined，等待异步加载完成后 Vue 会自动更新
-  return undefined;
+  // 非微博图床：直接使用原图 URL
+  return targetResult.result.url;
 };
 
 // 获取服务名称
@@ -1007,12 +974,17 @@ const handleScroll = (event: Event) => {
 
 .history-container {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  /* 关键修改：在 Grid 模式下，history-container 不应该滚动，
+     而是让内部的 virtual-waterfall-container 滚动。
+     Table 模式下，DataTable自带分页/滚动，通常也是自适应。
+     这里改为 hidden，防止双重滚动条。 */
+  overflow: hidden; 
   padding: 20px;
   max-width: 850px;
   margin: 0 auto;
   width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 /* === Dashboard Strip（顶部控制条）=== */
@@ -1457,8 +1429,11 @@ const handleScroll = (event: Event) => {
   border-radius: 12px;
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  /* 关键修改：让 VirtualWaterfall 接管滚动 */
+  overflow-y: auto;
   padding: 1rem;
+  /* 确保有明确的高度上下文 */
+  height: 100%;
 }
 
 /* 虚拟瀑布流组件 */
