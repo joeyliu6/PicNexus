@@ -974,17 +974,30 @@ const handleScroll = (event: Event) => {
 
 .history-container {
   flex: 1;
-  /* 关键修改：在 Grid 模式下，history-container 不应该滚动，
-     而是让内部的 virtual-waterfall-container 滚动。
-     Table 模式下，DataTable自带分页/滚动，通常也是自适应。
-     这里改为 hidden，防止双重滚动条。 */
-  overflow: hidden; 
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 20px;
   max-width: 850px;
   margin: 0 auto;
   width: 100%;
-  display: flex;
-  flex-direction: column;
+}
+
+/* history-container 滚动条样式 */
+.history-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.history-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.history-container::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 4px;
+}
+
+.history-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 /* === Dashboard Strip（顶部控制条）=== */
