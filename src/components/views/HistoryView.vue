@@ -984,7 +984,7 @@ const handleScroll = (event: Event) => {
 
 /* history-container 滚动条样式 */
 .history-container::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .history-container::-webkit-scrollbar-track {
@@ -1458,7 +1458,7 @@ const handleScroll = (event: Event) => {
 /* 滚动条样式 */
 .virtual-waterfall-container::-webkit-scrollbar,
 :deep(.virtual-waterfall)::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 :deep(.virtual-waterfall)::-webkit-scrollbar-track {
@@ -1678,7 +1678,7 @@ const handleScroll = (event: Event) => {
 
 /* 滚动条 */
 .history-view::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .history-view::-webkit-scrollbar-track {
