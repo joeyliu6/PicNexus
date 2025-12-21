@@ -5,18 +5,16 @@ import Sidebar from './Sidebar.vue';
 import UploadView from '../views/UploadView.vue';
 import HistoryView from '../views/HistoryView.vue';
 import R2ManagerView from '../views/R2ManagerView.vue';
-import BackupView from '../BackupView.vue';
 import LinkCheckerView from '../views/LinkCheckerView.vue';
 import SettingsView from '../views/SettingsView.vue';
 
-type ViewType = 'upload' | 'history' | 'r2-manager' | 'backup' | 'link-checker' | 'settings';
+type ViewType = 'upload' | 'history' | 'r2-manager' | 'link-checker' | 'settings';
 
 // 组件映射对象
 const viewComponents = {
   upload: UploadView,
   history: HistoryView,
   'r2-manager': R2ManagerView,
-  backup: BackupView,
   'link-checker': LinkCheckerView,
   settings: SettingsView
 } as const;

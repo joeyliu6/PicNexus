@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 import Button from 'primevue/button';
 
-type ViewType = 'upload' | 'history' | 'r2-manager' | 'backup' | 'link-checker' | 'settings';
+type ViewType = 'upload' | 'history' | 'r2-manager' | 'link-checker' | 'settings';
 
 const emit = defineEmits<{
   navigate: [view: ViewType]
@@ -14,7 +14,6 @@ const navItems = [
   { id: 'upload' as ViewType, label: '上传', icon: 'pi-cloud-upload', title: '上传' },
   { id: 'history' as ViewType, label: '浏览', icon: 'pi-history', title: '浏览记录' },
   { id: 'r2-manager' as ViewType, label: 'R2 管理', icon: 'pi-box', title: 'R2 管理' },
-  { id: 'backup' as ViewType, label: '备份', icon: 'pi-database', title: '备份与同步' },
   { id: 'link-checker' as ViewType, label: '检测', icon: 'pi-search', title: '链接检测' },
   { id: 'settings' as ViewType, label: '设置', icon: 'pi-cog', title: '设置' }
 ];
