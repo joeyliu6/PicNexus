@@ -301,12 +301,12 @@ onUnmounted(() => {
 
       <!-- 图床选择区域 -->
       <div class="upload-controls">
-        <!-- 私有图床 -->
-        <div v-if="visiblePrivateServices.length > 0" class="service-group">
-          <div class="service-group-label">私有图床</div>
+        <!-- 公共图床 -->
+        <div v-if="visiblePublicServices.length > 0" class="service-group">
+          <div class="service-group-label">公共图床</div>
           <div class="service-tags-wrapper">
             <button
-              v-for="serviceId in visiblePrivateServices"
+              v-for="serviceId in visiblePublicServices"
               :key="serviceId"
               class="service-tag"
               :class="{
@@ -324,12 +324,12 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- 公共图床 -->
-        <div v-if="visiblePublicServices.length > 0" class="service-group">
-          <div class="service-group-label">公共图床</div>
+        <!-- 私有图床 -->
+        <div v-if="visiblePrivateServices.length > 0" class="service-group">
+          <div class="service-group-label">私有图床</div>
           <div class="service-tags-wrapper">
             <button
-              v-for="serviceId in visiblePublicServices"
+              v-for="serviceId in visiblePrivateServices"
               :key="serviceId"
               class="service-tag"
               :class="{
