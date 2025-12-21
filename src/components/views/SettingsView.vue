@@ -896,7 +896,7 @@ onUnmounted(() => {
               <h3>京东图床</h3>
               <p>速度极快，CDN 全球分发。最大支持 15MB。</p>
               <div class="service-status">
-                <Tag :value="jdAvailable ? '可用' : '不可用'" :severity="jdAvailable ? 'success' : 'danger'" />
+                <Tag :value="isCheckingJd ? '检测中' : (jdAvailable ? '可用' : '不可用')" :severity="isCheckingJd ? 'info' : (jdAvailable ? 'success' : 'danger')" />
                 <Button label="检测" icon="pi pi-refresh" @click="checkJdAvailable" :loading="isCheckingJd" text size="small" />
               </div>
             </div>
@@ -906,7 +906,7 @@ onUnmounted(() => {
               <h3>TCL 图床</h3>
               <p>无需配置，直接使用。支持多种格式。</p>
               <div class="service-status">
-                <Tag :value="tclAvailable ? '可用' : '不可用'" :severity="tclAvailable ? 'success' : 'danger'" />
+                <Tag :value="isCheckingTcl ? '检测中' : (tclAvailable ? '可用' : '不可用')" :severity="isCheckingTcl ? 'info' : (tclAvailable ? 'success' : 'danger')" />
                 <Button label="检测" icon="pi pi-refresh" @click="checkTclAvailable" :loading="isCheckingTcl" text size="small" />
               </div>
             </div>
@@ -916,7 +916,7 @@ onUnmounted(() => {
               <h3>七鱼图床</h3>
               <p>基于网易七鱼客服系统，Token 自动获取。</p>
               <div class="service-status">
-                <Tag :value="qiyuAvailable ? '可用' : '不可用'" :severity="qiyuAvailable ? 'success' : 'danger'" />
+                <Tag :value="isCheckingQiyu ? '检测中' : (qiyuAvailable ? '可用' : '不可用')" :severity="isCheckingQiyu ? 'info' : (qiyuAvailable ? 'success' : 'danger')" />
                 <Button label="检测" icon="pi pi-refresh" @click="checkQiyuAvailability" :loading="isCheckingQiyu" text size="small" />
               </div>
             </div>
