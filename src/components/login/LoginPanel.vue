@@ -59,7 +59,7 @@
 
     <!-- 底部状态栏 -->
     <div class="status-bar">
-      <span class="status-text">WeiboDR 安全上下文</span>
+      <span class="status-text">PicNexus 安全上下文</span>
       <div class="secure-indicator">
         <div class="dot"></div>
         <span>已加密</span>

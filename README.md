@@ -1,4 +1,4 @@
-# WeiboDR-Uploader
+# PicNexus
 
 <div align="center">
 
@@ -164,7 +164,7 @@
 ```bash
 # 克隆项目
 git clone <repository-url>
-cd WeiboDR-Uploader
+cd PicNexus
 
 # 安装依赖
 npm install
@@ -179,7 +179,7 @@ npm run tauri build
 ### 项目结构
 
 ```
-WeiboDR-Uploader/
+PicNexus/
 ├── src/                      # 前端 (Vue 3 + TypeScript)
 │   ├── uploaders/            # 8 个图床上传器
 │   ├── components/           # Vue 组件
@@ -215,9 +215,9 @@ WeiboDR-Uploader/
 
 ### Q: 配置文件在哪？
 **A**:
-- Windows: `%APPDATA%\com.weibodr.uploader\`
-- macOS: `~/Library/Application Support/com.weibodr.uploader/`
-- Linux: `~/.config/com.weibodr.uploader/`
+- Windows: `%APPDATA%\us.picnex.app\`
+- macOS: `~/Library/Application Support/us.picnex.app/`
+- Linux: `~/.config/us.picnex.app/`
 
 ---
 

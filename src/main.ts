@@ -6,7 +6,7 @@ import App from './App.vue';
 
 // PrimeVue 相关导入
 import PrimeVue from 'primevue/config';
-import { WeiboDRPreset } from './theme';
+import { PicNexusPreset } from './theme';
 import ToastService from 'primevue/toastservice';
 import ConfirmationService from 'primevue/confirmationservice';
 import Tooltip from 'primevue/tooltip';
@@ -34,7 +34,7 @@ const app = createApp(App);
 // 配置 PrimeVue
 app.use(PrimeVue, {
   theme: {
-    preset: WeiboDRPreset,
+    preset: PicNexusPreset,
     options: {
       darkModeSelector: '.dark-theme',
       cssLayer: { name: 'primevue', order: 'reset, primevue, app' }
@@ -83,4 +83,4 @@ ensureConfigSync().then(() => {
 // 挂载应用
 app.mount('#app');
 
-console.log('[App] WeiboDR-Uploader 已启动 (新架构 - PrimeVue)');
+console.log('[App] PicNexus 已启动');

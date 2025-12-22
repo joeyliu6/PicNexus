@@ -1,7 +1,7 @@
 {
-  "name": "weibodr-uploader",
+  "name": "picnexus",
   "version": "3.0.0",
-  "description": "WeiboDR-Uploader - 多图床并行上传工具",
+  "description": "PicNexus - 多图床并行上传工具",
   "type": "module",
   "scripts": {
     "dev": "vite",

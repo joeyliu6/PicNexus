@@ -18,7 +18,7 @@ const closeWindow = () => {
 <template>
   <div class="titlebar" data-tauri-drag-region>
     <div class="titlebar-drag-region" data-tauri-drag-region>
-      <span class="app-title">WeiboDR</span>
+      <span class="app-title">PicNexus</span>
     </div>
     <div class="titlebar-controls">
       <button class="titlebar-button" @click="minimizeWindow" title="最小化">

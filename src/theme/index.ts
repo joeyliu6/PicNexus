@@ -5,10 +5,10 @@ import { definePreset } from '@primevue/themes';
 import Aura from '@primevue/themes/aura';
 
 /**
- * WeiboDR 自定义主题预设
+ * PicNexus 自定义主题预设
  * 基于 PrimeVue Aura 主题，适配现有配色方案
  */
-export const WeiboDRPreset = definePreset(Aura, {
+export const PicNexusPreset = definePreset(Aura, {
   semantic: {
     // 主品牌色 - Sky/Blue 系列
     primary: {

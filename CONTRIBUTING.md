@@ -1,6 +1,6 @@
 # 贡献指南
 
-感谢您对 WeiboDR-Uploader 项目感兴趣！我们欢迎任何形式的贡献。
+感谢您对 PicNexus 项目感兴趣！我们欢迎任何形式的贡献。
 
 ## 🤝 如何贡献
 
@@ -8,7 +8,7 @@
 
 如果您发现了 Bug 或有功能建议，请：
 
-1. 先在 [Issues](https://github.com/your-username/WeiboDR-Uploader/issues) 中搜索是否已有相关问题
+1. 先在 [Issues](https://github.com/your-username/PicNexus/issues) 中搜索是否已有相关问题
 2. 如果没有，创建一个新的 Issue
 3. 使用清晰的标题和详细的描述
 4. 如果是 Bug，请提供：
@@ -29,8 +29,8 @@
 
 2. **克隆到本地**
    ```bash
-   git clone https://github.com/your-username/WeiboDR-Uploader.git
-   cd WeiboDR-Uploader
+   git clone https://github.com/your-username/PicNexus.git
+   cd PicNexus
    ```
 
 3. **创建分支**
@@ -296,17 +296,17 @@ println!("[Rust] Debug info: {:?}", variable);
 ```
 
 **查看日志：**
-- Windows: `%APPDATA%\com.weibodr.uploader\logs\`
-- macOS: `~/Library/Application Support/com.weibodr.uploader/logs/`
-- Linux: `~/.config/com.weibodr.uploader/logs/`
+- Windows: `%APPDATA%\us.picnex.app\logs\`
+- macOS: `~/Library/Application Support/us.picnex.app/logs/`
+- Linux: `~/.config/us.picnex.app/logs/`
 
 ## 🤔 需要帮助？
 
 如果您在贡献过程中遇到问题：
 
 1. 查看 [README](README.md) 和 [文档](docs/README.md)
-2. 搜索已有的 [Issues](https://github.com/your-username/WeiboDR-Uploader/issues)
-3. 在 [Discussions](https://github.com/your-username/WeiboDR-Uploader/discussions) 中提问
+2. 搜索已有的 [Issues](https://github.com/your-username/PicNexus/issues)
+3. 在 [Discussions](https://github.com/your-username/PicNexus/discussions) 中提问
 4. 联系维护者
 
 ## 📜 行为准则

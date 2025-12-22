@@ -6,7 +6,7 @@
     "withGlobalTauri": true
   },
   "package": {
-    "productName": "WeiboDR-Uploader",
+    "productName": "PicNexus",
     "version": "3.0.0"
   },
   "tauri": {
@@ -86,7 +86,7 @@
     "bundle": {
       "active": true,
       "targets": "all",
-      "identifier": "com.weibodr.uploader",
+      "identifier": "us.picnex.app",
       "icon": [
         "icons/32x32.png",
         "icons/128x128.png",
@@ -158,7 +158,7 @@
       {
         "fullscreen": false,
         "resizable": true,
-        "title": "WeiboDR-Uploader (微博灾备上传器)",
+        "title": "PicNexus",
         "width": 1400,
         "height": 900,
         "minWidth": 800,
