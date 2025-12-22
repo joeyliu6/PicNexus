@@ -1294,8 +1294,13 @@ onUnmounted(() => {
               <h3>TCL 图床</h3>
               <p>无需配置，直接使用。支持多种格式。</p>
               <div class="service-status">
-                <Tag :value="isCheckingTcl ? '检测中' : (tclAvailable ? '可用' : '不可用')" :severity="isCheckingTcl ? 'info' : (tclAvailable ? 'success' : 'danger')" />
-                <Button label="检测" icon="pi pi-refresh" @click="checkTclAvailable" :loading="isCheckingTcl" text size="small" />
+                <Tag
+                  :value="isCheckingTcl ? '检测中' : (tclAvailable ? '可用' : '不可用')"
+                  :severity="isCheckingTcl ? 'info' : (tclAvailable ? 'success' : 'danger')"
+                  :icon="isCheckingTcl ? 'pi pi-spin pi-spinner' : undefined"
+                  class="clickable-tag"
+                  @click="!isCheckingTcl && checkTclAvailable()"
+                />
               </div>
             </div>
           </div>
@@ -1304,8 +1309,13 @@ onUnmounted(() => {
               <h3>七鱼图床</h3>
               <p>基于网易七鱼客服系统，Token 自动获取。</p>
               <div class="service-status">
-                <Tag :value="isCheckingQiyu ? '检测中' : (qiyuAvailable ? '可用' : '不可用')" :severity="isCheckingQiyu ? 'info' : (qiyuAvailable ? 'success' : 'danger')" />
-                <Button label="检测" icon="pi pi-refresh" @click="checkQiyuAvailability" :loading="isCheckingQiyu" text size="small" />
+                <Tag
+                  :value="isCheckingQiyu ? '检测中' : (qiyuAvailable ? '可用' : '不可用')"
+                  :severity="isCheckingQiyu ? 'info' : (qiyuAvailable ? 'success' : 'danger')"
+                  :icon="isCheckingQiyu ? 'pi pi-spin pi-spinner' : undefined"
+                  class="clickable-tag"
+                  @click="!isCheckingQiyu && checkQiyuAvailability()"
+                />
               </div>
             </div>
           </div>
@@ -2150,5 +2160,10 @@ onUnmounted(() => {
 
 :deep(.p-password .p-password-toggle-mask-btn:hover) {
   color: var(--text-main);
+}
+
+/* 可点击的状态 Tag */
+.clickable-tag {
+  cursor: pointer;
 }
 </style>
