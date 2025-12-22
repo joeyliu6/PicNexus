@@ -269,9 +269,27 @@ const downloadHistoryLoading = ref(false);
 const uploadHistoryMenuVisible = ref(false);
 const uploadHistoryDropdownRef = ref<HTMLElement | null>(null);
 
+// 配置下载菜单状态
+const downloadSettingsMenuVisible = ref(false);
+const downloadSettingsDropdownRef = ref<HTMLElement | null>(null);
+
+// 历史记录下载菜单状态
+const downloadHistoryMenuVisible = ref(false);
+const downloadHistoryDropdownRef = ref<HTMLElement | null>(null);
+
 // 切换历史记录上传菜单
 const toggleUploadHistoryMenu = () => {
   uploadHistoryMenuVisible.value = !uploadHistoryMenuVisible.value;
+};
+
+// 切换配置下载菜单
+const toggleDownloadSettingsMenu = () => {
+  downloadSettingsMenuVisible.value = !downloadSettingsMenuVisible.value;
+};
+
+// 切换历史记录下载菜单
+const toggleDownloadHistoryMenu = () => {
+  downloadHistoryMenuVisible.value = !downloadHistoryMenuVisible.value;
 };
 
 /**
@@ -408,9 +426,12 @@ async function uploadSettingsCloud() {
 }
 
 /**
- * 从云端下载配置 (WebDAV)
+ * 从云端下载配置 - 覆盖本地
+ * 完全使用云端配置替换本地配置
  */
-async function downloadSettingsCloud() {
+async function downloadSettingsOverwrite() {
+  downloadSettingsMenuVisible.value = false;
+
   try {
     downloadSettingsLoading.value = true;
     settingsSyncStatus.value = '状态: 下载中...';
@@ -422,18 +443,6 @@ async function downloadSettingsCloud() {
 
     if (!config.webdav.url || !config.webdav.username || !config.webdav.password) {
       throw new Error('WebDAV 配置不完整，请检查设置');
-    }
-
-    const confirmed = confirm(
-      '⚠️ 警告\n\n' +
-      '从云端下载配置将覆盖当前的本地配置。\n\n' +
-      '注意：如果云端配置中的 WebDAV 信息与当前不同，下载后可能会断开当前连接。\n\n' +
-      '是否继续下载？'
-    );
-
-    if (!confirmed) {
-      settingsSyncStatus.value = '状态: 已取消';
-      return;
     }
 
     const client = new WebDAVClient(config.webdav);
@@ -460,7 +469,7 @@ async function downloadSettingsCloud() {
     await configStore.save();
 
     settingsSyncStatus.value = `状态: 已同步 ${getCurrentTimeString()}`;
-    toast.success('配置已从云端恢复');
+    toast.success('配置已从云端恢复（覆盖本地）');
 
     setTimeout(() => {
       toast.info('请刷新页面以使配置生效');
@@ -468,6 +477,78 @@ async function downloadSettingsCloud() {
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error('[备份] 下载配置失败:', error);
+    settingsSyncStatus.value = '状态: 同步失败';
+
+    if (errorMsg.includes('不存在')) {
+      toast.error('云端配置文件不存在');
+    } else if (errorMsg.includes('JSON')) {
+      toast.error('下载失败', 'JSON 格式错误');
+    } else {
+      toast.error('下载失败', errorMsg);
+    }
+  } finally {
+    downloadSettingsLoading.value = false;
+  }
+}
+
+/**
+ * 从云端下载配置 - 合并（保留本地 WebDAV 配置）
+ * 保留本地的 WebDAV 连接信息，其他配置用云端的
+ */
+async function downloadSettingsMerge() {
+  downloadSettingsMenuVisible.value = false;
+
+  try {
+    downloadSettingsLoading.value = true;
+    settingsSyncStatus.value = '状态: 合并中...';
+
+    const currentConfig = await configStore.get<UserConfig>('config');
+    if (!currentConfig || !currentConfig.webdav) {
+      throw new Error('WebDAV 配置不完整，请先在设置中配置 WebDAV');
+    }
+
+    if (!currentConfig.webdav.url || !currentConfig.webdav.username || !currentConfig.webdav.password) {
+      throw new Error('WebDAV 配置不完整，请检查设置');
+    }
+
+    const client = new WebDAVClient(currentConfig.webdav);
+
+    let remotePath = currentConfig.webdav.remotePath || '/WeiboDR/settings.json';
+    if (remotePath.endsWith('/')) {
+      remotePath += 'settings.json';
+    } else if (!remotePath.toLowerCase().endsWith('.json')) {
+      remotePath += '/settings.json';
+    } else if (remotePath.toLowerCase().endsWith('history.json')) {
+      remotePath = remotePath.replace(/history\.json$/i, 'settings.json');
+    }
+
+    const content = await client.getFile(remotePath);
+
+    if (!content) {
+      throw new Error('云端配置文件不存在');
+    }
+
+    let importedConfig = JSON.parse(content) as UserConfig;
+    importedConfig = migrateConfig(importedConfig);
+
+    // 合并配置：保留本地 WebDAV 配置，其他用云端的
+    const mergedConfig: UserConfig = {
+      ...importedConfig,
+      webdav: currentConfig.webdav  // 保留本地 WebDAV 配置
+    };
+
+    await configStore.set('config', mergedConfig);
+    await configStore.save();
+
+    settingsSyncStatus.value = `状态: 已同步 ${getCurrentTimeString()}`;
+    toast.success('配置已从云端恢复（保留本地 WebDAV）');
+
+    setTimeout(() => {
+      toast.info('请刷新页面以使配置生效');
+    }, 1000);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error('[备份] 合并下载配置失败:', error);
     settingsSyncStatus.value = '状态: 同步失败';
 
     if (errorMsg.includes('不存在')) {
@@ -824,12 +905,82 @@ async function uploadHistoryIncremental() {
 }
 
 /**
- * 从云端下载历史记录 (WebDAV) - 智能合并
+ * 从云端下载历史记录 - 覆盖本地
+ * 完全使用云端数据替换本地历史记录
  */
-async function downloadHistoryCloud() {
+async function downloadHistoryOverwrite() {
+  downloadHistoryMenuVisible.value = false;
+
   try {
     downloadHistoryLoading.value = true;
     historySyncStatus.value = '状态: 下载中...';
+
+    const config = await configStore.get<UserConfig>('config');
+    if (!config || !config.webdav) {
+      throw new Error('WebDAV 配置不完整，请先在设置中配置 WebDAV');
+    }
+
+    if (!config.webdav.url || !config.webdav.username || !config.webdav.password) {
+      throw new Error('WebDAV 配置不完整，请检查设置');
+    }
+
+    const client = new WebDAVClient(config.webdav);
+
+    let remotePath = config.webdav.remotePath || '/WeiboDR/history.json';
+    if (remotePath.endsWith('/')) {
+      remotePath += 'history.json';
+    } else if (!remotePath.toLowerCase().endsWith('.json')) {
+      remotePath += '/history.json';
+    }
+
+    const content = await client.getFile(remotePath);
+
+    if (!content) {
+      throw new Error('云端历史记录文件不存在');
+    }
+
+    const cloudItems = JSON.parse(content) as HistoryItem[];
+
+    if (!Array.isArray(cloudItems)) {
+      throw new Error('云端数据格式错误：期望数组格式');
+    }
+
+    // 直接覆盖本地数据
+    await historyStore.set('uploads', cloudItems);
+    await historyStore.save();
+
+    // 使缓存失效，让其他视图在下次激活时重新加载
+    invalidateCache();
+
+    historySyncStatus.value = `状态: 已同步 (${cloudItems.length} 条) ${getCurrentTimeString()}`;
+    toast.success(`下载完成：共 ${cloudItems.length} 条记录（覆盖本地）`);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error('[备份] 下载历史记录失败:', error);
+    historySyncStatus.value = '状态: 同步失败';
+
+    if (errorMsg.includes('不存在')) {
+      toast.error('云端历史记录文件不存在');
+    } else if (errorMsg.includes('JSON')) {
+      toast.error('下载失败', 'JSON 格式错误');
+    } else {
+      toast.error('下载失败', errorMsg);
+    }
+  } finally {
+    downloadHistoryLoading.value = false;
+  }
+}
+
+/**
+ * 从云端下载历史记录 - 智能合并
+ * 与本地记录合并，保留更新的版本
+ */
+async function downloadHistoryMerge() {
+  downloadHistoryMenuVisible.value = false;
+
+  try {
+    downloadHistoryLoading.value = true;
+    historySyncStatus.value = '状态: 合并中...';
 
     const config = await configStore.get<UserConfig>('config');
     if (!config || !config.webdav) {
@@ -915,11 +1066,28 @@ async function downloadHistoryCloud() {
   }
 }
 
-// 点击外部关闭上传菜单
+// 点击外部关闭下拉菜单
 const handleClickOutside = (event: MouseEvent) => {
+  const target = event.target as Node;
+
+  // 关闭历史记录上传菜单
   if (uploadHistoryMenuVisible.value && uploadHistoryDropdownRef.value) {
-    if (!uploadHistoryDropdownRef.value.contains(event.target as Node)) {
+    if (!uploadHistoryDropdownRef.value.contains(target)) {
       uploadHistoryMenuVisible.value = false;
+    }
+  }
+
+  // 关闭配置下载菜单
+  if (downloadSettingsMenuVisible.value && downloadSettingsDropdownRef.value) {
+    if (!downloadSettingsDropdownRef.value.contains(target)) {
+      downloadSettingsMenuVisible.value = false;
+    }
+  }
+
+  // 关闭历史记录下载菜单
+  if (downloadHistoryMenuVisible.value && downloadHistoryDropdownRef.value) {
+    if (!downloadHistoryDropdownRef.value.contains(target)) {
+      downloadHistoryMenuVisible.value = false;
     }
   }
 };
@@ -1291,13 +1459,34 @@ onUnmounted(() => {
                 label="上传"
                 size="small"
               />
-              <Button
-                @click="downloadSettingsCloud"
-                :loading="downloadSettingsLoading"
-                icon="pi pi-cloud-download"
-                label="下载"
-                size="small"
-              />
+              <!-- 配置文件下载下拉菜单 -->
+              <div class="upload-dropdown-wrapper" ref="downloadSettingsDropdownRef">
+                <Button
+                  @click.stop="toggleDownloadSettingsMenu"
+                  :loading="downloadSettingsLoading"
+                  icon="pi pi-cloud-download"
+                  label="下载"
+                  size="small"
+                />
+                <Transition name="dropdown">
+                  <div v-if="downloadSettingsMenuVisible" class="upload-menu">
+                    <button class="upload-menu-item" @click="downloadSettingsMerge">
+                      <i class="pi pi-sync"></i>
+                      <div class="menu-item-content">
+                        <span class="menu-item-title">合并下载</span>
+                        <span class="menu-item-desc">保留本地 WebDAV 配置，其他用云端</span>
+                      </div>
+                    </button>
+                    <button class="upload-menu-item" @click="downloadSettingsOverwrite">
+                      <i class="pi pi-download"></i>
+                      <div class="menu-item-content">
+                        <span class="menu-item-title">覆盖本地</span>
+                        <span class="menu-item-desc">完全使用云端配置替换本地</span>
+                      </div>
+                    </button>
+                  </div>
+                </Transition>
+              </div>
             </div>
             <span class="backup-status">{{ settingsSyncStatus }}</span>
           </div>
@@ -1361,13 +1550,34 @@ onUnmounted(() => {
                   </div>
                 </Transition>
               </div>
-              <Button
-                @click="downloadHistoryCloud"
-                :loading="downloadHistoryLoading"
-                icon="pi pi-cloud-download"
-                label="下载"
-                size="small"
-              />
+              <!-- 历史记录下载下拉菜单 -->
+              <div class="upload-dropdown-wrapper" ref="downloadHistoryDropdownRef">
+                <Button
+                  @click.stop="toggleDownloadHistoryMenu"
+                  :loading="downloadHistoryLoading"
+                  icon="pi pi-cloud-download"
+                  label="下载"
+                  size="small"
+                />
+                <Transition name="dropdown">
+                  <div v-if="downloadHistoryMenuVisible" class="upload-menu">
+                    <button class="upload-menu-item" @click="downloadHistoryMerge">
+                      <i class="pi pi-sync"></i>
+                      <div class="menu-item-content">
+                        <span class="menu-item-title">智能合并下载</span>
+                        <span class="menu-item-desc">与本地记录合并，保留更新的版本</span>
+                      </div>
+                    </button>
+                    <button class="upload-menu-item" @click="downloadHistoryOverwrite">
+                      <i class="pi pi-download"></i>
+                      <div class="menu-item-content">
+                        <span class="menu-item-title">覆盖本地</span>
+                        <span class="menu-item-desc">完全使用云端记录替换本地</span>
+                      </div>
+                    </button>
+                  </div>
+                </Transition>
+              </div>
             </div>
             <span class="backup-status">{{ historySyncStatus }}</span>
           </div>
