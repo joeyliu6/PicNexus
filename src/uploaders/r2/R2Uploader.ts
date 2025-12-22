@@ -4,7 +4,7 @@
 import { BaseUploader } from '../base/BaseUploader';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
 import { R2ServiceConfig } from '../../config/types';
-import { R2UploadError, convertToR2Error } from './R2Error';
+import { convertToR2Error } from './R2Error';
 import { basename } from '@tauri-apps/api/path';
 
 /**

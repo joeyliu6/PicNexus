@@ -93,14 +93,6 @@ export function useConfigManager() {
       console.log('[配置管理] 开始保存配置...');
       isSaving.value = true;
 
-      // 验证必填字段
-      if (newConfig.outputFormat === 'r2' && !newConfig.services?.r2?.publicDomain?.trim()) {
-        const errorMsg = '当输出格式为 R2 时，公开访问域名不能为空！';
-        console.warn('[配置管理] 验证失败:', errorMsg);
-        toast.error('验证失败', errorMsg);
-        return;
-      }
-
       // 验证至少有一个可用图床
       if (!newConfig.availableServices || newConfig.availableServices.length === 0) {
         toast.error('验证失败', '至少需要启用一个图床');
@@ -641,15 +633,12 @@ export function useConfigManager() {
   function getLinkPrefixConfig(
     prefixEnabled: boolean,
     selectedIndex: number,
-    prefixList: string[],
-    savedConfig?: LinkPrefixConfig
+    prefixList: string[]
   ): LinkPrefixConfig {
     return {
       enabled: prefixEnabled,
       selectedIndex: selectedIndex,
-      prefixList: prefixList.length > 0 ? prefixList : DEFAULT_PREFIXES,
-      // 向后兼容：保留旧的 activePrefix 字段
-      activePrefix: savedConfig?.activePrefix || (prefixList[selectedIndex] || DEFAULT_PREFIXES[0])
+      prefixList: prefixList.length > 0 ? prefixList : DEFAULT_PREFIXES
     };
   }
 

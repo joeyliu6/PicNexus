@@ -71,19 +71,38 @@ export function debounceWithError<T extends (...args: any[]) => Promise<any>>(
   cancel: () => void;
   immediate: (...args: Parameters<T>) => Promise<void>;
 } {
-  const debouncedFn = debounce(
-    async (...args: Parameters<T>) => {
-      try {
-        await func(...args);
-      } catch (error) {
-        console.error('[防抖函数] 执行失败:', error);
-        onError?.(error);
-      }
-    },
-    delay
-  );
+  let timeoutId: NodeJS.Timeout | null = null;
+  let cancelled = false;
 
-  // 立即执行异步函数
+  const debouncedFn = ((...args: Parameters<T>) => {
+    if (cancelled) cancelled = false;
+    if (timeoutId !== null) clearTimeout(timeoutId);
+
+    timeoutId = setTimeout(async () => {
+      if (!cancelled) {
+        try {
+          await func(...args);
+        } catch (error) {
+          console.error('[防抖函数] 执行失败:', error);
+          onError?.(error);
+        }
+      }
+      timeoutId = null;
+      cancelled = false;
+    }, delay);
+  }) as ((...args: Parameters<T>) => void) & {
+    cancel: () => void;
+    immediate: (...args: Parameters<T>) => Promise<void>;
+  };
+
+  debouncedFn.cancel = () => {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    cancelled = true;
+  };
+
   debouncedFn.immediate = async (...args: Parameters<T>) => {
     debouncedFn.cancel();
     try {

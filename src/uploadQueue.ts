@@ -4,8 +4,6 @@
  * 负责管理可视化的上传队列UI和上传进度
  */
 
-import { createApp, App } from 'vue';
-import UploadQueueVue from './components/UploadQueue.vue';
 import { appState } from './appState';
 import { ServiceType } from './config/types';
 import { useQueueState } from './composables/useQueueState';
@@ -335,9 +333,9 @@ export class UploadQueueManager {
 
           const currentItem = this.getItem(itemId);
           if (currentItem) {
-             if (currentItem.weiboProgress < 100) {
+             if ((currentItem.weiboProgress ?? 0) < 100) {
                  updates.weiboStatus = '✗ 失败';
-             } else if (currentItem.uploadToR2 && currentItem.r2Progress < 100) {
+             } else if (currentItem.uploadToR2 && (currentItem.r2Progress ?? 0) < 100) {
                  updates.r2Status = '✗ 失败';
              }
           }
@@ -463,7 +461,7 @@ export class UploadQueueManager {
   /**
    * 设置重试回调（保留接口兼容性）
    */
-  setRetryCallback(callback: (itemId: string, serviceId?: ServiceType) => void): void {
+  setRetryCallback(_callback: (itemId: string, serviceId?: ServiceType) => void): void {
     // 在新架构中，重试回调直接在 UploadView 中处理
     // 这里保留方法以保持接口兼容
     console.log('[UploadQueue] 重试回调将由 UploadView 处理');

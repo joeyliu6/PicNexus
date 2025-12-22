@@ -2867,6 +2867,7 @@ dependencies = [
  "byteorder",
  "color_quant",
  "num-traits",
+ "png 0.17.16",
 ]
 
 [[package]]
@@ -3977,6 +3978,41 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67eabc2ef2a60eb7faa00097bd1ffdb5bd28e62bf39990626a582201b7a754e5"
 dependencies = [
  "siphasher 1.0.1",
+]
+
+[[package]]
+name = "picnexus"
+version = "3.0.0"
+dependencies = [
+ "arboard",
+ "aws-config",
+ "aws-sdk-s3",
+ "aws-smithy-types",
+ "base64 0.21.7",
+ "chrono",
+ "futures",
+ "hex",
+ "hmac",
+ "image 0.24.9",
+ "keyring",
+ "md-5",
+ "mime_guess",
+ "quick-xml 0.36.2",
+ "rand 0.8.5",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "tauri",
+ "tauri-build",
+ "tokio",
+ "tokio-util",
+ "urlencoding",
+ "webview2-com",
+ "window-shadows",
+ "windows 0.39.0",
 ]
 
 [[package]]
@@ -6471,39 +6507,6 @@ name = "weezl"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
-
-[[package]]
-name = "weibodr-uploader"
-version = "3.0.0"
-dependencies = [
- "aws-config",
- "aws-sdk-s3",
- "aws-smithy-types",
- "base64 0.21.7",
- "chrono",
- "futures",
- "hex",
- "hmac",
- "keyring",
- "md-5",
- "mime_guess",
- "quick-xml 0.36.2",
- "rand 0.8.5",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "sha1",
- "sha2",
- "tauri",
- "tauri-build",
- "tokio",
- "tokio-util",
- "urlencoding",
- "webview2-com",
- "window-shadows",
- "windows 0.39.0",
-]
 
 [[package]]
 name = "winapi"

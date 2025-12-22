@@ -131,6 +131,8 @@ fn main() {
             commands::utils::file_exists,
             commands::link_checker::check_image_link,
             commands::link_checker::download_image_from_url,
+            commands::clipboard::clipboard_has_image,
+            commands::clipboard::read_clipboard_image,
             get_or_create_secure_key
         ])
         .menu(menu)                          // 3. 添加原生菜单栏

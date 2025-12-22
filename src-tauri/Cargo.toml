@@ -36,6 +36,8 @@ aws-config = { version = "1.0", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "1.0"
 aws-smithy-types = "1.0"
 mime_guess = "2.0"
+arboard = "3"
+image = { version = "0.24", default-features = false, features = ["png"] }
 # headless_chrome 已被 Sidecar (Node.js + Puppeteer) 替代
 
 [target.'cfg(windows)'.dependencies]

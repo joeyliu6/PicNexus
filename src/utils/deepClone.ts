@@ -64,7 +64,7 @@ export function deepMerge<T extends Record<string, any>>(
         result[key] = deepMerge(targetValue, sourceValue);
       } else {
         // 直接赋值（会被深拷贝）
-        result[key] = deepClone(sourceValue);
+        result[key] = deepClone(sourceValue) as T[Extract<keyof T, string>];
       }
     }
   }

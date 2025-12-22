@@ -61,8 +61,9 @@ export class WebDAVClient {
       const testUrl = this.buildUrl(this.config.remotePath || '/');
 
       // 使用 PROPFIND 方法测试连接（WebDAV 标准方法）
+      // 注意：Tauri HttpVerb 不包含 PROPFIND，使用类型断言
       const response = await client.request({
-        method: 'PROPFIND',
+        method: 'PROPFIND' as 'GET',  // 类型断言绕过 TypeScript 检查
         url: testUrl,
         headers: {
           'Authorization': this.getAuthHeader(),

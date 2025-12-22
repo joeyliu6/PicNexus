@@ -38,7 +38,7 @@ export class JDUploader extends BaseUploader {
    */
   async upload(
     filePath: string,
-    options: UploadOptions,
+    _options: UploadOptions,
     onProgress?: ProgressCallback
   ): Promise<UploadResult> {
     this.log('info', '开始上传到京东', { filePath });

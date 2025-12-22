@@ -4,7 +4,7 @@
 import { BaseUploader } from '../base/BaseUploader';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
 import { WeiboServiceConfig } from '../../config/types';
-import { WeiboUploadError, convertToWeiboError } from './WeiboError';
+import { convertToWeiboError } from './WeiboError';
 
 /**
  * Rust 返回的微博上传结果

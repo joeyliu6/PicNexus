@@ -1,7 +1,7 @@
 // src/uploaders/base/index.ts
 // 统一导出所有基础组件
 
-export { IUploader } from './IUploader';
+export type { IUploader } from './IUploader';
 export { BaseUploader } from './BaseUploader';
 export { UploaderFactory } from './UploaderFactory';
 export type {

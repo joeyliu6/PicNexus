@@ -3,7 +3,7 @@
 
 import { BaseUploader } from '../base/BaseUploader';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
-import { TCLServiceConfig } from '../../config/types';
+// TCLServiceConfig 类型暂未使用，保留以备将来扩展
 import { TCLRateLimiter } from './TCLRateLimiter';
 
 /**
@@ -33,7 +33,7 @@ export class TCLUploader extends BaseUploader {
    * 验证 TCL 配置
    * TCL 图床无需配置，直接返回 valid
    */
-  async validateConfig(config: any): Promise<ValidationResult> {
+  async validateConfig(_config: any): Promise<ValidationResult> {
     return { valid: true };
   }
 
@@ -45,7 +45,7 @@ export class TCLUploader extends BaseUploader {
    */
   async upload(
     filePath: string,
-    options: UploadOptions,
+    _options: UploadOptions,
     onProgress?: ProgressCallback
   ): Promise<UploadResult> {
     this.log('info', '开始上传到 TCL', { filePath });

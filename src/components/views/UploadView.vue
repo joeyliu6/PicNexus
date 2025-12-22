@@ -8,6 +8,7 @@ import type { ServiceType } from '../../config/types';
 import { PRIVATE_SERVICES, PUBLIC_SERVICES } from '../../config/types';
 import { useToast } from '../../composables/useToast';
 import { useUploadManager } from '../../composables/useUpload';
+import { useClipboardImage } from '../../composables/useClipboardImage';
 import { useQueueState } from '../../composables/useQueueState';
 import { UploadQueueManager } from '../../uploadQueue';
 import { RetryService } from '../../services/RetryService';
@@ -23,6 +24,12 @@ const queueManager = new UploadQueueManager();
 
 // 使用上传管理器
 const uploadManager = useUploadManager(queueManager);
+
+// 使用剪贴板图片功能
+const { isProcessing: isPasting, pasteAndUpload } = useClipboardImage();
+
+// 键盘事件处理函数（需要在 onUnmounted 中清理）
+let keydownHandler: ((e: KeyboardEvent) => void) | null = null;
 
 // 引用
 const uploadQueueRef = ref<InstanceType<typeof UploadQueue>>();
@@ -99,6 +106,11 @@ const openFileDialog = async () => {
   if (filePaths && filePaths.length > 0) {
     await uploadManager.handleFilesUpload(filePaths);
   }
+};
+
+// 从剪贴板粘贴图片
+const handlePasteFromClipboard = async () => {
+  await pasteAndUpload(uploadManager.handleFilesUpload);
 };
 
 // 拖拽相关
@@ -263,6 +275,23 @@ onMounted(async () => {
 
   // 设置重试回调
   setupRetryCallback();
+
+  // 设置 Ctrl+V / Cmd+V 快捷键监听
+  keydownHandler = async (e: KeyboardEvent) => {
+    // 检测 Ctrl+V (Windows/Linux) 或 Cmd+V (Mac)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+      // 排除输入框，避免干扰正常的文本粘贴
+      const tagName = (e.target as HTMLElement)?.tagName?.toUpperCase();
+      if (tagName === 'INPUT' || tagName === 'TEXTAREA') {
+        return;
+      }
+      // 阻止默认行为并处理粘贴
+      e.preventDefault();
+      await handlePasteFromClipboard();
+    }
+  };
+  window.addEventListener('keydown', keydownHandler);
+  console.log('[UploadView] Ctrl+V 快捷键监听已设置');
 });
 
 // 组件卸载时清理监听器
@@ -276,6 +305,12 @@ onUnmounted(() => {
   // 清理所有文件拖拽监听器
   fileDropUnlisteners.value.forEach(unlisten => unlisten());
   fileDropUnlisteners.value = [];
+
+  // 清理键盘监听器
+  if (keydownHandler) {
+    window.removeEventListener('keydown', keydownHandler);
+    keydownHandler = null;
+  }
 });
 </script>
 
@@ -296,6 +331,15 @@ onUnmounted(() => {
           <i class="pi pi-cloud-upload drop-icon"></i>
           <p class="drop-text">拖拽图片到此处上传</p>
           <span class="drop-hint">或点击选择文件</span>
+          <button
+            class="paste-btn"
+            :disabled="isPasting"
+            @click.stop="handlePasteFromClipboard"
+            v-tooltip.top="'快捷键: Ctrl+V'"
+          >
+            <i class="pi" :class="isPasting ? 'pi-spin pi-spinner' : 'pi-clipboard'"></i>
+            <span>{{ isPasting ? '正在粘贴...' : '从剪贴板粘贴' }}</span>
+          </button>
         </div>
       </div>
 
@@ -470,6 +514,42 @@ onUnmounted(() => {
 .drop-hint {
   font-size: 0.95rem;
   color: var(--text-secondary);
+}
+
+/* 剪贴板粘贴按钮 */
+.paste-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 10px 20px;
+  background: var(--primary);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  pointer-events: auto;
+}
+
+.paste-btn:hover:not(:disabled) {
+  background: var(--primary-hover, #2563eb);
+  transform: translateY(-1px);
+}
+
+.paste-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.paste-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.paste-btn i {
+  font-size: 16px;
 }
 
 /* 图床选择区域 */
