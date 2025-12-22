@@ -279,17 +279,29 @@ const downloadHistoryDropdownRef = ref<HTMLElement | null>(null);
 
 // 切换历史记录上传菜单
 const toggleUploadHistoryMenu = () => {
-  uploadHistoryMenuVisible.value = !uploadHistoryMenuVisible.value;
+  const willOpen = !uploadHistoryMenuVisible.value;
+  // 关闭其他菜单
+  downloadSettingsMenuVisible.value = false;
+  downloadHistoryMenuVisible.value = false;
+  uploadHistoryMenuVisible.value = willOpen;
 };
 
 // 切换配置下载菜单
 const toggleDownloadSettingsMenu = () => {
-  downloadSettingsMenuVisible.value = !downloadSettingsMenuVisible.value;
+  const willOpen = !downloadSettingsMenuVisible.value;
+  // 关闭其他菜单
+  uploadHistoryMenuVisible.value = false;
+  downloadHistoryMenuVisible.value = false;
+  downloadSettingsMenuVisible.value = willOpen;
 };
 
 // 切换历史记录下载菜单
 const toggleDownloadHistoryMenu = () => {
-  downloadHistoryMenuVisible.value = !downloadHistoryMenuVisible.value;
+  const willOpen = !downloadHistoryMenuVisible.value;
+  // 关闭其他菜单
+  uploadHistoryMenuVisible.value = false;
+  downloadSettingsMenuVisible.value = false;
+  downloadHistoryMenuVisible.value = willOpen;
 };
 
 /**
@@ -1267,8 +1279,13 @@ onUnmounted(() => {
               <h3>京东图床</h3>
               <p>速度极快，CDN 全球分发。最大支持 15MB。</p>
               <div class="service-status">
-                <Tag :value="isCheckingJd ? '检测中' : (jdAvailable ? '可用' : '不可用')" :severity="isCheckingJd ? 'info' : (jdAvailable ? 'success' : 'danger')" />
-                <Button label="检测" icon="pi pi-refresh" @click="checkJdAvailable" :loading="isCheckingJd" text size="small" />
+                <Tag
+                  :value="isCheckingJd ? '检测中' : (jdAvailable ? '可用' : '不可用')"
+                  :severity="isCheckingJd ? 'info' : (jdAvailable ? 'success' : 'danger')"
+                  :icon="isCheckingJd ? 'pi pi-spin pi-spinner' : undefined"
+                  class="clickable-tag"
+                  @click="!isCheckingJd && checkJdAvailable()"
+                />
               </div>
             </div>
           </div>
@@ -1536,7 +1553,7 @@ onUnmounted(() => {
                     <button class="upload-menu-item" @click="uploadHistoryMerge">
                       <i class="pi pi-sync"></i>
                       <div class="menu-item-content">
-                        <span class="menu-item-title">智能合并上传</span>
+                        <span class="menu-item-title">合并上传</span>
                         <span class="menu-item-desc">下载云端数据，与本地合并后上传</span>
                       </div>
                     </button>
@@ -1564,7 +1581,7 @@ onUnmounted(() => {
                     <button class="upload-menu-item" @click="downloadHistoryMerge">
                       <i class="pi pi-sync"></i>
                       <div class="menu-item-content">
-                        <span class="menu-item-title">智能合并下载</span>
+                        <span class="menu-item-title">合并下载</span>
                         <span class="menu-item-desc">与本地记录合并，保留更新的版本</span>
                       </div>
                     </button>
