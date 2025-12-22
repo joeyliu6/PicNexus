@@ -19,6 +19,9 @@ import { initializeUploaders } from './uploaders';
 import { Store } from './store';
 import { DEFAULT_CONFIG, UserConfig } from './config/types';
 
+// Analytics 服务
+import { useAnalytics } from './composables/useAnalytics';
+
 // PrimeVue 样式
 import 'primeicons/primeicons.css';
 import './theme/transitions.css';
@@ -71,7 +74,11 @@ async function ensureConfigSync() {
 
 // 初始化上传器和配置同步
 initializeUploaders();
-ensureConfigSync();
+ensureConfigSync().then(() => {
+  // 配置同步完成后初始化 Analytics
+  const { initialize } = useAnalytics();
+  initialize().catch(err => console.warn('[Analytics] 初始化失败（非致命错误）:', err));
+});
 
 // 挂载应用
 app.mount('#app');

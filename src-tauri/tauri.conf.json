@@ -100,7 +100,7 @@
       ]
     },
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: blob: https://*.sinaimg.cn https://*.360buyimg.com https://*.nowcoder.com https://uploadfiles.nowcoder.com https://*.koyoo.cn https://*.qiyukf.net https://*.netease.im https://*.zhimg.com https://*.zhaomi.cn https://bfns.zhaomi.cn http://*.koyoo.cn http://* https://*; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://* http://*; font-src 'self' data:",
+      "csp": "default-src 'self'; img-src 'self' data: blob: https://*.sinaimg.cn https://*.360buyimg.com https://*.nowcoder.com https://uploadfiles.nowcoder.com https://*.koyoo.cn https://*.qiyukf.net https://*.netease.im https://*.zhimg.com https://*.zhaomi.cn https://bfns.zhaomi.cn http://*.koyoo.cn http://* https://* https://www.google-analytics.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://* http://*; font-src 'self' data:",
       "dangerousRemoteDomainIpcAccess": [
         {
           "domain": "m.weibo.cn",

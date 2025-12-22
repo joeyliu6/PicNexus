@@ -10,6 +10,7 @@ import Textarea from 'primevue/textarea';
 import Password from 'primevue/password';
 import Checkbox from 'primevue/checkbox';
 import RadioButton from 'primevue/radiobutton';
+import InputSwitch from 'primevue/inputswitch';
 import Divider from 'primevue/divider';
 import Tag from 'primevue/tag';
 import Card from 'primevue/card';
@@ -18,6 +19,7 @@ import { useToast } from '../../composables/useToast';
 import { useThemeManager } from '../../composables/useTheme';
 import { useConfigManager } from '../../composables/useConfig';
 import { useHistoryManager, invalidateCache } from '../../composables/useHistory';
+import { useAnalytics } from '../../composables/useAnalytics';
 import { Store } from '../../store';
 import { WebDAVClient } from '../../utils/webdav';
 import type { ThemeMode, UserConfig, ServiceType, HistoryItem, SyncStatus, WebDAVProfile } from '../../config/types';
@@ -27,6 +29,7 @@ const toast = useToast();
 const { currentTheme, setTheme } = useThemeManager();
 const configManager = useConfigManager();
 const historyManager = useHistoryManager();
+const analytics = useAnalytics();
 
 // 清空历史记录
 const handleClearHistory = async () => {
@@ -79,7 +82,8 @@ const formData = ref({
   webdav: { profiles: [] as Array<{ id: string; name: string; url: string; username: string; password: string; remotePath: string }>, activeId: null as string | null },
   linkPrefixEnabled: true,
   selectedPrefixIndex: 0,
-  linkPrefixList: [...DEFAULT_PREFIXES]
+  linkPrefixList: [...DEFAULT_PREFIXES],
+  analyticsEnabled: true
 });
 
 // 服务列表
@@ -171,6 +175,10 @@ const loadSettings = async () => {
       formData.value.selectedPrefixIndex = cfg.linkPrefixConfig.selectedIndex;
       formData.value.linkPrefixList = [...cfg.linkPrefixConfig.prefixList];
     }
+    // 加载 Analytics 配置
+    if (cfg.analytics) {
+      formData.value.analyticsEnabled = cfg.analytics.enabled;
+    }
   } catch (e) { console.error(e); }
 };
 
@@ -194,6 +202,9 @@ const saveSettings = async (silent = false) => {
         enabled: formData.value.linkPrefixEnabled,
         selectedIndex: formData.value.selectedPrefixIndex,
         prefixList: formData.value.linkPrefixList.filter(p => p.trim() !== '')
+      },
+      analytics: {
+        enabled: formData.value.analyticsEnabled
       }
     };
     // 特殊处理 Nami AuthToken
@@ -222,6 +233,15 @@ const actions = {
   nami: () => testConn('nami', () => configManager.testNamiConnection(formData.value.nami.cookie)),
   webdav: () => testConn('webdav', () => configManager.testWebDAVConnection(formData.value.webdav)),
   login: (svc: ServiceType) => configManager.openCookieWebView(svc)
+};
+
+// Analytics 开关切换
+const handleAnalyticsToggle = async () => {
+  if (formData.value.analyticsEnabled) {
+    await analytics.enable();
+  } else {
+    await analytics.disable();
+  }
 };
 
 // 前缀管理
@@ -1276,6 +1296,28 @@ onUnmounted(() => {
             outlined
             @click="handleClearHistory"
           />
+        </div>
+
+        <Divider />
+
+        <div class="form-group">
+          <label class="group-label">隐私设置</label>
+          <p class="helper-text">管理应用使用数据的收集。</p>
+
+          <div class="privacy-setting">
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-label">使用数据收集</span>
+                <span class="setting-desc">
+                  允许发送匿名使用统计，帮助改进应用。不收集任何个人信息或上传内容。
+                </span>
+              </div>
+              <InputSwitch
+                v-model="formData.analyticsEnabled"
+                @change="handleAnalyticsToggle"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2471,5 +2513,42 @@ onUnmounted(() => {
 /* 可点击的状态 Tag */
 .clickable-tag {
   cursor: pointer;
+}
+
+/* ========== 隐私设置样式 ========== */
+.privacy-setting {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.setting-info {
+  flex: 1;
+}
+
+.setting-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.setting-desc {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.mono-input {
+  font-family: var(--font-mono);
 }
 </style>

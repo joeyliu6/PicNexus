@@ -23,6 +23,14 @@ export interface ThemeConfig {
 }
 
 /**
+ * Google Analytics 配置接口
+ */
+export interface AnalyticsConfig {
+  /** 是否启用 Analytics 追踪 */
+  enabled: boolean;
+}
+
+/**
  * 支持的图床服务类型
  */
 export type ServiceType = 'weibo' | 'r2' | 'jd' | 'tcl' | 'nowcoder' | 'qiyu' | 'zhihu' | 'nami';
@@ -263,6 +271,9 @@ export interface UserConfig {
 
   /** 主题配置 */
   theme?: ThemeConfig;
+
+  /** Google Analytics 配置 */
+  analytics?: AnalyticsConfig;
 }
 
 /**
@@ -383,6 +394,9 @@ export const DEFAULT_CONFIG: UserConfig = {
     mode: 'dark',
     enableTransitions: true,
     transitionDuration: 300
+  },
+  analytics: {
+    enabled: true
   }
 };
 
