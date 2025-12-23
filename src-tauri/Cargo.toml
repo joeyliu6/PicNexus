@@ -38,6 +38,12 @@ arboard = "3"
 image = { version = "0.24", default-features = false, features = ["png"] }
 # headless_chrome 已被 Sidecar (Node.js + Puppeteer) 替代
 
+# SQLite 数据库插件（用于历史记录存储）
+[dependencies.tauri-plugin-sql]
+git = "https://github.com/tauri-apps/plugins-workspace"
+branch = "v1"
+features = ["sqlite"]
+
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.39", features = ["Win32_System_Com"] }
 webview2-com = "0.19.1"
@@ -46,4 +52,3 @@ window-shadows = "0.2"
 [features]
 # This feature is used for production builds or when `devPath` points to the filesystem
 custom-protocol = ["tauri/custom-protocol"]
-

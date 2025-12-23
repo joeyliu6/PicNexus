@@ -24,6 +24,7 @@ import { useHistoryManager, invalidateCache } from '../../composables/useHistory
 import { useAnalytics } from '../../composables/useAnalytics';
 import { Store } from '../../store';
 import { WebDAVClient } from '../../utils/webdav';
+import { historyDB } from '../../services/HistoryDatabase';
 import type { ThemeMode, UserConfig, ServiceType, HistoryItem, SyncStatus, WebDAVProfile } from '../../config/types';
 import { DEFAULT_CONFIG, DEFAULT_PREFIXES, PRIVATE_SERVICES, PUBLIC_SERVICES, migrateConfig } from '../../config/types';
 
@@ -270,7 +271,6 @@ const resetToDefaultPrefixes = () => {
 // ========== 备份与同步功能 ==========
 // 存储实例
 const configStore = new Store('.settings.dat');
-const historyStore = new Store('.history.dat');
 const syncStatusStore = new Store('.sync-status.dat');
 
 // 同步状态（持久化）
@@ -743,13 +743,13 @@ async function exportHistoryLocal() {
   try {
     exportHistoryLoading.value = true;
 
-    const items = await historyStore.get<HistoryItem[]>('uploads') || [];
-    if (items.length === 0) {
+    const count = await historyDB.getCount();
+    if (count === 0) {
       toast.warn('没有可导出的历史记录');
       return;
     }
 
-    const jsonContent = JSON.stringify(items, null, 2);
+    const jsonContent = await historyDB.exportToJSON();
 
     const filePath = await save({
       defaultPath: 'picnexus_history.json',
@@ -762,7 +762,7 @@ async function exportHistoryLocal() {
     }
 
     await writeTextFile(filePath, jsonContent);
-    toast.success(`已导出 ${items.length} 条记录到本地文件`);
+    toast.success(`已导出 ${count} 条记录到本地文件`);
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error('[备份] 导出历史记录失败:', error);
@@ -796,38 +796,22 @@ async function importHistoryLocal() {
       throw new Error('JSON 格式错误：期望数组格式');
     }
 
-    const currentItems = await historyStore.get<HistoryItem[]>('uploads') || [];
+    // 获取导入前的记录数
+    const countBefore = await historyDB.getCount();
 
-    const itemMap = new Map<string, HistoryItem>();
+    // 使用 SQLite 的合并导入
+    const importedCount = await historyDB.importFromJSON(content, 'merge');
 
-    currentItems.forEach(item => {
-      if (item.id) {
-        itemMap.set(item.id, item);
-      }
-    });
-
-    importedItems.forEach(item => {
-      if (item.id) {
-        itemMap.set(item.id, item);
-      } else {
-        item.id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-        itemMap.set(item.id, item);
-      }
-    });
-
-    const mergedItems = Array.from(itemMap.values());
-    mergedItems.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-    await historyStore.set('uploads', mergedItems);
-    await historyStore.save();
+    // 获取导入后的记录数
+    const countAfter = await historyDB.getCount();
 
     // 使缓存失效，让其他视图在下次激活时重新加载
     invalidateCache();
 
-    const addedCount = mergedItems.length - currentItems.length;
+    const addedCount = countAfter - countBefore;
     toast.success(
-      `导入完成：共 ${mergedItems.length} 条记录`,
-      `新增 ${addedCount} 条，去重 ${importedItems.length - addedCount} 条`
+      `导入完成：共 ${countAfter} 条记录`,
+      `新增 ${addedCount} 条，去重/更新 ${importedItems.length - addedCount} 条`
     );
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
@@ -863,17 +847,17 @@ async function uploadHistoryForce() {
   try {
     uploadHistoryLoading.value = true;
 
-    const items = await historyStore.get<HistoryItem[]>('uploads') || [];
-    if (items.length === 0) {
+    const count = await historyDB.getCount();
+    if (count === 0) {
       toast.warn('没有可上传的历史记录');
       return;
     }
 
-    const jsonContent = JSON.stringify(items, null, 2);
+    const jsonContent = await historyDB.exportToJSON();
     await webdav.client.putFile(webdav.remotePath, jsonContent);
 
     updateHistorySyncStatus('success');
-    toast.success(`已强制覆盖云端记录（${items.length} 条）`);
+    toast.success(`已强制覆盖云端记录（${count} 条）`);
   } catch (error) {
     const errorCode = extractErrorCode(error);
     console.error('[备份] 强制上传历史记录失败:', error);
@@ -897,11 +881,15 @@ async function uploadHistoryMerge() {
   try {
     uploadHistoryLoading.value = true;
 
-    const localItems = await historyStore.get<HistoryItem[]>('uploads') || [];
-    if (localItems.length === 0) {
+    const localCount = await historyDB.getCount();
+    if (localCount === 0) {
       toast.warn('没有可上传的历史记录');
       return;
     }
+
+    // 导出本地数据为 JSON
+    const localJsonContent = await historyDB.exportToJSON();
+    const localItems = JSON.parse(localJsonContent) as HistoryItem[];
 
     // 1. 尝试下载云端数据
     let cloudItems: HistoryItem[] = [];
@@ -979,11 +967,15 @@ async function uploadHistoryIncremental() {
   try {
     uploadHistoryLoading.value = true;
 
-    const localItems = await historyStore.get<HistoryItem[]>('uploads') || [];
-    if (localItems.length === 0) {
+    const localCount = await historyDB.getCount();
+    if (localCount === 0) {
       toast.warn('没有可上传的历史记录');
       return;
     }
+
+    // 导出本地数据为 JSON
+    const localJsonContent = await historyDB.exportToJSON();
+    const localItems = JSON.parse(localJsonContent) as HistoryItem[];
 
     // 1. 下载云端数据获取已存在的 ID
     let cloudItems: HistoryItem[] = [];
@@ -1068,9 +1060,8 @@ async function downloadHistoryOverwrite() {
       throw new Error('云端数据格式错误：期望数组格式');
     }
 
-    // 直接覆盖本地数据
-    await historyStore.set('uploads', cloudItems);
-    await historyStore.save();
+    // 使用 SQLite 的覆盖导入
+    await historyDB.importFromJSON(content, 'replace');
 
     // 使缓存失效，让其他视图在下次激活时重新加载
     invalidateCache();
@@ -1112,41 +1103,22 @@ async function downloadHistoryMerge() {
       throw new Error('云端数据格式错误：期望数组格式');
     }
 
-    const currentItems = await historyStore.get<HistoryItem[]>('uploads') || [];
+    // 获取导入前的记录数
+    const countBefore = await historyDB.getCount();
 
-    const itemMap = new Map<string, HistoryItem>();
+    // 使用 SQLite 的合并导入
+    await historyDB.importFromJSON(content, 'merge');
 
-    currentItems.forEach(item => {
-      if (item.id) {
-        itemMap.set(item.id, item);
-      }
-    });
-
-    cloudItems.forEach(item => {
-      if (item.id) {
-        const existing = itemMap.get(item.id);
-        if (!existing || (item.timestamp && item.timestamp > (existing.timestamp || 0))) {
-          itemMap.set(item.id, item);
-        }
-      } else {
-        item.id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-        itemMap.set(item.id, item);
-      }
-    });
-
-    const mergedItems = Array.from(itemMap.values());
-    mergedItems.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-    await historyStore.set('uploads', mergedItems);
-    await historyStore.save();
+    // 获取导入后的记录数
+    const countAfter = await historyDB.getCount();
 
     // 使缓存失效，让其他视图在下次激活时重新加载
     invalidateCache();
 
-    const addedCount = mergedItems.length - currentItems.length;
+    const addedCount = countAfter - countBefore;
     updateHistorySyncStatus('success');
     toast.success(
-      `下载完成：共 ${mergedItems.length} 条记录`,
+      `下载完成：共 ${countAfter} 条记录`,
       `新增 ${addedCount} 条，合并 ${cloudItems.length - addedCount} 条`
     );
   } catch (error) {

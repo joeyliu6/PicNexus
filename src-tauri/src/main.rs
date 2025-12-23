@@ -101,6 +101,7 @@ fn main() {
     let system_tray = SystemTray::new().with_menu(tray_menu);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_sql::Builder::default().build())  // SQLite 数据库插件
         .manage(HttpClient(http_client))     // 注册全局 HTTP 客户端
         .invoke_handler(tauri::generate_handler![
             save_cookie_from_login,

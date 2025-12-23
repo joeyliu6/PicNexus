@@ -18,14 +18,13 @@ import { useHistoryManager } from '../../composables/useHistory';
 import { useConfigManager } from '../../composables/useConfig';
 import { getActivePrefix } from '../../config/types';
 import { MultiServiceUploader } from '../../core/MultiServiceUploader';
-import { Store } from '../../store';
+import { historyDB } from '../../services/HistoryDatabase';
 import type { ServiceType, HistoryItem } from '../../config/types';
 
 const toast = useToast();
 const { confirmDelete } = useConfirm();
 const { allHistoryItems, loadHistory } = useHistoryManager();
 const { config } = useConfigManager();
-const historyStore = new Store('.history.dat');
 
 onMounted(async () => {
   await loadHistory();
@@ -230,11 +229,10 @@ const checkLink = async (serviceResult: ServiceCheckResult): Promise<void> => {
   }
 };
 
-// 保存检测结果到历史记录
+// 保存检测结果到历史记录（使用 SQLite）
 const saveCheckResultToHistory = async (checkResult: CheckResult): Promise<void> => {
   try {
-    const items = await historyStore.get<HistoryItem[]>('uploads', []);
-    const historyItem = items.find(i => i.id === checkResult.historyItemId);
+    const historyItem = await historyDB.getById(checkResult.historyItemId);
 
     if (!historyItem) {
       console.warn('[持久化] 未找到历史记录项:', checkResult.historyItemId);
@@ -263,7 +261,7 @@ const saveCheckResultToHistory = async (checkResult: CheckResult): Promise<void>
     const validLinks = checkResult.serviceResults.filter(sr => sr.isValid).length;
     const invalidLinks = totalLinks - validLinks;
 
-    historyItem.linkCheckSummary = {
+    const linkCheckSummary = {
       totalLinks,
       validLinks,
       invalidLinks,
@@ -271,12 +269,16 @@ const saveCheckResultToHistory = async (checkResult: CheckResult): Promise<void>
       lastCheckTime: Date.now()
     };
 
-    // 更新 checkResult 的汇总状态
-    checkResult.linkCheckSummary = historyItem.linkCheckSummary;
+    historyItem.linkCheckSummary = linkCheckSummary;
 
-    // 保存到存储
-    await historyStore.set('uploads', items);
-    await historyStore.save();
+    // 更新 checkResult 的汇总状态
+    checkResult.linkCheckSummary = linkCheckSummary;
+
+    // 保存到 SQLite
+    await historyDB.update(checkResult.historyItemId, {
+      linkCheckStatus: historyItem.linkCheckStatus,
+      linkCheckSummary: historyItem.linkCheckSummary
+    });
 
     // 同步更新内存缓存，避免切换筛选条件时丢失检测状态
     const cachedItem = allHistoryItems.value.find(h => h.id === checkResult.historyItemId);
@@ -533,16 +535,17 @@ const executeReupload = async () => {
         const tempFilePath = await invoke<string>('download_image_from_url', { url: sourceResult.originalLink });
         const uploader = new MultiServiceUploader();
         const uploadResult = await uploader.uploadToMultipleServices(tempFilePath, item.targetServices, config.value);
-        const items = await historyStore.get<HistoryItem[]>('uploads', []);
-        const historyItem = items.find(i => i.id === item.checkResult.historyItemId);
+
+        // 从 SQLite 获取历史记录项
+        const historyItem = await historyDB.getById(item.checkResult.historyItemId);
         if (historyItem) {
             uploadResult.results.forEach(newResult => {
                 const existingIndex = historyItem.results.findIndex(r => r.serviceId === newResult.serviceId);
                 if (existingIndex >= 0) historyItem.results[existingIndex] = newResult;
                 else historyItem.results.push(newResult);
             });
-            await historyStore.set('uploads', items);
-            await historyStore.save();
+            // 更新到 SQLite
+            await historyDB.update(item.checkResult.historyItemId, { results: historyItem.results });
         }
         await recheckSingle(item.checkResult);
         toast.success("成功", "重新上传完成");
@@ -719,9 +722,8 @@ const handleBulkRepair = async () => {
           config.value
         );
 
-        // 更新历史记录
-        const items = await historyStore.get<HistoryItem[]>('uploads', []);
-        const historyItem = items.find(i => i.id === item.historyItemId);
+        // 从 SQLite 获取并更新历史记录
+        const historyItem = await historyDB.getById(item.historyItemId);
 
         if (historyItem) {
           uploadResult.results.forEach(newResult => {
@@ -735,8 +737,8 @@ const handleBulkRepair = async () => {
             }
           });
 
-          await historyStore.set('uploads', items);
-          await historyStore.save();
+          // 更新到 SQLite
+          await historyDB.update(item.historyItemId, { results: historyItem.results });
         }
 
         // 重新检测

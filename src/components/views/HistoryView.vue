@@ -40,9 +40,9 @@ const configManager = useConfigManager();
 // 本地搜索词（用于防抖）
 const localSearchTerm = ref('');
 
-// 防抖更新搜索词
+// 防抖更新搜索词（调用 SQLite 搜索）
 const debouncedSearch = debounce((term: string) => {
-  historyManager.searchTerm.value = term;
+  historyManager.setSearchTerm(term);
 }, 300);
 
 // 缩略图 URL 缓存（同步：微博图床）
@@ -134,13 +134,9 @@ const handleHeaderCheckboxChange = (checked: boolean) => {
 // 视图模式通过按钮点击直接调用 switchViewMode
 // 筛选器通过 Select 的 @update:model-value 直接调用 setFilter
 
-// 监听本地搜索词变化（防抖）- 保留，用于搜索功能
-// 搜索时需要加载全部数据以确保搜索范围完整
+// 监听本地搜索词变化（防抖）- 用于搜索功能
+// SQLite 搜索已在 setSearchTerm 中处理，无需预加载全部数据
 watch(localSearchTerm, (newTerm) => {
-  if (newTerm.trim()) {
-    // 有搜索词时，确保加载全部数据
-    historyManager.loadAll();
-  }
   debouncedSearch(newTerm);
 });
 
@@ -582,7 +578,7 @@ const handleScroll = (event: Event) => {
             <InputIcon
               v-if="localSearchTerm"
               class="pi pi-times clear-icon"
-              @click="localSearchTerm = ''; historyManager.searchTerm.value = ''"
+              @click="localSearchTerm = ''"
             />
           </IconField>
         </div>

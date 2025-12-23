@@ -18,13 +18,10 @@ import { useToast } from './useToast';
 import { invalidateCache } from './useHistory';
 import { debounceWithError } from '../utils/debounce';
 import { checkNetworkConnectivity } from '../utils/network';
+import { historyDB } from '../services/HistoryDatabase';
 
 // --- STORES ---
 const configStore = new Store('.settings.dat');
-const historyStore = new Store('.history.dat');
-
-/** 历史记录保存锁，确保并发保存时不会互相覆盖 */
-let historySaveLock: Promise<void> = Promise.resolve();
 
 /**
  * 上传管理 Composable
@@ -567,9 +564,11 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
   /**
    * 保存历史记录（多图床结果）
-   * 使用互斥锁确保并发保存时不会互相覆盖
+   * 直接插入 SQLite，无需读取全部数据
    * @param filePath 文件路径
    * @param uploadResult 多图床上传结果
+   * @param customId 可选的自定义 ID
+   * @param liveResults 实时结果引用（用于并发场景）
    */
   async function saveHistoryItem(
     filePath: string,
@@ -577,123 +576,86 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     customId?: string,
     liveResults?: SingleServiceResult[]
   ): Promise<string | undefined> {
-    // 获取本地文件名（在锁外执行，减少锁持有时间）
-    let fileName: string;
     try {
-      fileName = await basename(filePath);
-      if (!fileName || fileName.trim().length === 0) {
+      // 获取本地文件名
+      let fileName: string;
+      try {
+        fileName = await basename(filePath);
+        if (!fileName || fileName.trim().length === 0) {
+          fileName = filePath.split(/[/\\]/).pop() || '未知文件';
+        }
+      } catch {
         fileName = filePath.split(/[/\\]/).pop() || '未知文件';
       }
-    } catch (nameError: any) {
-      fileName = filePath.split(/[/\\]/).pop() || '未知文件';
+
+      // 创建历史记录项（只保存成功的图床结果，失败的不污染历史记录）
+      // 关键逻辑：如果提供了 liveResults，则使用它作为数据源（它是最新的引用）
+      // 否则回退到 snapshot 的 uploadResult.results
+      const resultsSource = liveResults || uploadResult.results;
+      const successfulResults = resultsSource.filter(r => r.status === 'success');
+
+      // 使用传入的 ID 或生成新 ID
+      const newItemId = customId || `${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+      const newItem: HistoryItem = {
+        id: newItemId,
+        localFileName: fileName,
+        timestamp: Date.now(),
+        filePath: filePath,
+        results: successfulResults,
+        primaryService: uploadResult.primaryService,
+        generatedLink: uploadResult.primaryUrl || ''
+      };
+
+      // 直接插入 SQLite（SQLite 事务自动保证原子性，无需手动锁）
+      await historyDB.insert(newItem);
+      console.log('[历史记录] 已保存历史记录:', newItem.localFileName);
+
+      // 使历史记录缓存失效，下次切换到浏览界面时会重新加载
+      invalidateCache();
+
+      return newItem.id;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error('[历史记录] 保存历史记录失败:', error);
+      throw new Error(`保存历史记录失败: ${errorMsg}`);
     }
-
-    // 记录创建的ID以便返回
-    let createdId: string | undefined;
-
-    // 使用链式 Promise 实现互斥锁，确保保存操作按顺序执行
-    const saveOperation = async () => {
-      try {
-        let items: HistoryItem[] = [];
-
-        try {
-          items = await historyStore.get<HistoryItem[]>('uploads') || [];
-          if (!Array.isArray(items)) {
-            items = [];
-          }
-        } catch (readError: any) {
-          console.error('[历史记录] 读取历史记录失败:', readError?.message || String(readError));
-          items = [];
-        }
-
-        // 创建历史记录项（只保存成功的图床结果，失败的不污染历史记录）
-        // 关键逻辑：如果提供了 liveResults，则使用它作为数据源（它是最新的引用）
-        // 否则回退到 snapshot 的 uploadResult.results
-        const resultsSource = liveResults || uploadResult.results;
-        const successfulResults = resultsSource.filter(r => r.status === 'success');
-
-        // 使用传入的 ID 或生成新 ID
-        const newItemId = customId || `${Date.now()}_${Math.random().toString(36).substring(7)}`;
-
-        const newItem: HistoryItem = {
-          id: newItemId,
-          localFileName: fileName,
-          timestamp: Date.now(),
-          filePath: filePath,
-          results: successfulResults,
-          primaryService: uploadResult.primaryService,
-          generatedLink: uploadResult.primaryUrl || ''
-        };
-        createdId = newItem.id;
-
-        // 添加到历史记录（最新的在前面）
-        items.unshift(newItem);
-
-        // 保存
-        try {
-          await historyStore.set('uploads', items);
-          await historyStore.save();
-          console.log('[历史记录] 已保存历史记录:', newItem.localFileName);
-
-          // 使历史记录缓存失效，下次切换到浏览界面时会重新加载
-          invalidateCache();
-        } catch (saveError: any) {
-          console.error('[历史记录] 保存历史记录失败:', saveError?.message || String(saveError));
-          throw new Error(`保存历史记录失败: ${saveError?.message || String(saveError)}`);
-        }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        console.error('[历史记录] 保存历史记录失败:', error);
-        throw new Error(`保存历史记录失败: ${errorMsg}`);
-      }
-    };
-
-    // 将当前操作加入锁链，等待前一个操作完成后执行
-    historySaveLock = historySaveLock.then(saveOperation).catch((error) => {
-      // 捕获错误但不中断锁链，让后续操作可以继续
-      console.error('[历史记录] 锁链中的操作失败:', error);
-    });
-
-    await historySaveLock;
-
-    // 返回生成的 ID
-    return createdId;
   }
 
   /**
    * 向已有历史记录添加结果（用于后台异步上传完成时更新）
+   * 使用 SQLite 更新操作，无需读取全部数据
    */
   async function addResultToHistoryItem(historyId: string, result: SingleServiceResult): Promise<void> {
     if (!historyId || result.status !== 'success') return;
 
-    // 同样使用锁
-    const saveOperation = async () => {
-      try {
-        const items = await historyStore.get<HistoryItem[]>('uploads') || [];
-        const itemIndex = items.findIndex(i => i.id === historyId);
-
-        if (itemIndex > -1) {
-          const item = items[itemIndex];
-          // 检查是否已存在该服务的结果
-          const exists = item.results?.some(r => r.serviceId === result.serviceId);
-          if (!exists) {
-            if (!item.results) item.results = [];
-            item.results.push(result);
-
-            // 保存
-            await historyStore.set('uploads', items);
-            await historyStore.save();
-            console.log(`[历史记录] 追加结果到 ${item.localFileName}: ${result.serviceId}`);
-            invalidateCache();
-          }
-        }
-      } catch (error) {
-        console.error('[历史记录] 追加结果失败:', error);
+    try {
+      // 获取现有记录
+      const item = await historyDB.getById(historyId);
+      if (!item) {
+        // 记录尚未创建，安全忽略（saveHistoryItem 可能尚未执行）
+        console.log(`[历史记录] 记录 ${historyId} 尚不存在，跳过追加`);
+        return;
       }
-    };
 
-    historySaveLock = historySaveLock.then(saveOperation).catch(err => console.error(err));
-    await historySaveLock;
+      // 检查是否已存在该服务的结果
+      const exists = item.results?.some(r => r.serviceId === result.serviceId);
+      if (exists) {
+        console.log(`[历史记录] ${item.localFileName} 已有 ${result.serviceId} 结果，跳过`);
+        return;
+      }
+
+      // 追加新结果
+      const updatedResults = [...(item.results || []), result];
+
+      // 更新记录
+      await historyDB.update(historyId, { results: updatedResults });
+      console.log(`[历史记录] 追加结果到 ${item.localFileName}: ${result.serviceId}`);
+
+      invalidateCache();
+    } catch (error) {
+      console.error('[历史记录] 追加结果失败:', error);
+    }
   }
 
   /**
