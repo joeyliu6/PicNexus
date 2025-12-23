@@ -103,7 +103,7 @@ export const COOKIE_PROVIDERS: Record<string, CookieProvider> = {
     domains: ['www.n.cn', 'n.cn'],  // www 在前，因为主站在 www 子域
     cookieValidation: {
       requiredFields: ['Auth-Token'],  // 纳米登录成功必须有 Auth-Token（JWT）
-      anyOfFields: [],
+      anyOfFields: ['Q', 'T'],  // 登录后才会有 Q 或 T 字段，用于验证登录状态
       monitoringDelay: {
         initialDelayMs: 3000,      // 3秒初始延迟（等待登录完成）
         pollingIntervalMs: 1000    // 1秒轮询

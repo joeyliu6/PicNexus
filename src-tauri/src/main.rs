@@ -29,9 +29,9 @@ use sha2::{Digest, Sha256};
 type HmacSha256 = Hmac<Sha256>;
 
 // 用于密钥管理
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use keyring::Entry;
 use rand::Rng;
-use base64::{Engine as _, engine::general_purpose};
 
 // 定义服务名，防止与其他应用冲突
 const SERVICE_NAME: &str = "us.picnex.app.secure";
@@ -290,7 +290,7 @@ async fn save_cookie_from_login(
     }
 
     // 验证必要字段和任意字段
-    if (!fields.is_empty() || !any_fields.is_empty()) && !validate_cookie_fields(&cookie, &fields, &any_fields) {
+    if (!fields.is_empty() || !any_fields.is_empty()) && !validate_cookie_fields(&service, &cookie, &fields, &any_fields) {
         return Err(format!(
             "Cookie 缺少必要字段，{}需要包含: {:?}{}",
             service, fields,
@@ -329,7 +329,8 @@ async fn save_cookie_from_login(
 }
 
 /// 检查单个字段是否存在且值非空
-fn check_cookie_field(cookie: &str, field: &str) -> bool {
+/// service_id: 服务标识（预留参数，用于未来可能的特殊验证逻辑）
+fn check_cookie_field(cookie: &str, field: &str, _service_id: &str) -> bool {
     let pattern = format!("{}=", field);
     if let Some(pos) = cookie.find(&pattern) {
         let value_start = pos + pattern.len();
@@ -344,6 +345,7 @@ fn check_cookie_field(cookie: &str, field: &str) -> bool {
         eprintln!("[Cookie验证] 字段 {} = {} (长度: {})", field,
             if value.len() > 20 { format!("{}...", &value[..20]) } else { value.to_string() },
             value.len());
+
         true
     } else {
         false
@@ -351,9 +353,10 @@ fn check_cookie_field(cookie: &str, field: &str) -> bool {
 }
 
 /// 验证 Cookie 是否包含必要字段（且值非空）
+/// - service_id: 服务标识，用于特殊验证逻辑
 /// - required_fields: 必须全部包含的字段（AND 逻辑）
 /// - any_of_fields: 至少包含其中一个字段（OR 逻辑）
-fn validate_cookie_fields(cookie: &str, required_fields: &[String], any_of_fields: &[String]) -> bool {
+fn validate_cookie_fields(service_id: &str, cookie: &str, required_fields: &[String], any_of_fields: &[String]) -> bool {
     if required_fields.is_empty() && any_of_fields.is_empty() {
         // 没有指定任何验证字段，只要非空就通过
         return !cookie.trim().is_empty();
@@ -361,15 +364,15 @@ fn validate_cookie_fields(cookie: &str, required_fields: &[String], any_of_field
 
     // 检查所有必要字段（AND 逻辑）
     for field in required_fields {
-        if !check_cookie_field(cookie, field) {
-            eprintln!("[Cookie验证] 缺少必要字段: {}", field);
+        if !check_cookie_field(cookie, field, service_id) {
+            eprintln!("[Cookie验证] 缺少必要字段或验证失败: {}", field);
             return false;
         }
     }
 
     // 检查任意字段（OR 逻辑）- 如果有定义的话
     if !any_of_fields.is_empty() {
-        let has_any = any_of_fields.iter().any(|f| check_cookie_field(cookie, f));
+        let has_any = any_of_fields.iter().any(|f| check_cookie_field(cookie, f, service_id));
         if !has_any {
             eprintln!("[Cookie验证] 缺少任意安全字段，需要至少包含: {:?}", any_of_fields);
             return false;
@@ -598,7 +601,7 @@ async fn get_request_header_cookie(
             .collect::<Vec<_>>()
             .join("; ");
 
-        if validate_cookie_fields(&merged_cookie, &fields, &any_fields) {
+        if validate_cookie_fields(&service, &merged_cookie, &fields, &any_fields) {
             eprintln!("[Cookie获取] {} 请求头Cookie长度: {}", service, merged_cookie.len());
             Ok(merged_cookie)
         } else {
@@ -692,7 +695,7 @@ fn attempt_cookie_capture_and_save_generic(
     };
     eprintln!("[Cookie监控] 合并后的 Cookie: {}", cookie_preview);
 
-    if validate_cookie_fields(&merged_cookie, required_fields, any_of_fields) {
+    if validate_cookie_fields(service_id, &merged_cookie, required_fields, any_of_fields) {
         eprintln!("[Cookie监控] ✓ 验证通过，尝试保存 {} Cookie", service_id);
         match tauri::async_runtime::block_on(save_cookie_from_login(
             merged_cookie.clone(),
@@ -1021,7 +1024,7 @@ async fn test_webdav_connection(
     }
     let auth_header = format!(
         "Basic {}",
-        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, format!("{}:{}", config.username, config.password))
+        STANDARD.encode(format!("{}:{}", config.username, config.password))
     );
 
     // 执行 WebDAV 的 'PROPFIND' 请求 (比 OPTIONS 更可靠)
@@ -1438,7 +1441,7 @@ fn get_or_create_secure_key() -> Result<String, String> {
             eprintln!("[密钥管理] 生成新的加密密钥");
             let mut key_bytes = [0u8; 32];
             rand::thread_rng().fill(&mut key_bytes);
-            let new_key = general_purpose::STANDARD.encode(key_bytes);
+            let new_key = STANDARD.encode(key_bytes);
             
             // 存入系统钥匙串
             entry.set_password(&new_key).map_err(|e| {
