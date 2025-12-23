@@ -26,7 +26,7 @@ import { Store } from '../../store';
 import { WebDAVClient } from '../../utils/webdav';
 import { historyDB } from '../../services/HistoryDatabase';
 import type { ThemeMode, UserConfig, ServiceType, HistoryItem, SyncStatus, WebDAVProfile } from '../../config/types';
-import { DEFAULT_CONFIG, DEFAULT_PREFIXES, PRIVATE_SERVICES, PUBLIC_SERVICES, migrateConfig } from '../../config/types';
+import { DEFAULT_CONFIG, DEFAULT_PREFIXES, PRIVATE_SERVICES, PUBLIC_SERVICES, migrateConfig, isValidUserConfig } from '../../config/types';
 
 const toast = useToast();
 const { confirm: confirmDialog, confirmThreeWay } = useConfirm();
@@ -487,7 +487,20 @@ async function exportSettingsLocal() {
   try {
     exportSettingsLoading.value = true;
 
-    const config = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
+    let config = await configStore.get<UserConfig>('config');
+
+    // 验证配置数据格式，如果数据已损坏则使用默认配置并修复存储
+    if (!config || !isValidUserConfig(config)) {
+      console.error('[备份] 配置数据格式异常，使用默认配置');
+
+      // 尝试修复：将默认配置保存回存储
+      config = { ...DEFAULT_CONFIG };
+      await configStore.set('config', config);
+      await configStore.save();
+
+      toast.warn('配置已重置', '检测到配置数据异常，已使用默认配置');
+    }
+
     const jsonContent = JSON.stringify(config, null, 2);
 
     const filePath = await save({
@@ -530,6 +543,12 @@ async function importSettingsLocal() {
 
     const content = await readTextFile(filePath);
     let importedConfig = JSON.parse(content) as UserConfig;
+
+    // 验证数据格式，防止导入错误格式的数据（如历史记录数据）
+    if (!isValidUserConfig(importedConfig)) {
+      toast.error('导入失败', '文件内容不是有效的配置数据格式');
+      return;
+    }
 
     importedConfig = migrateConfig(importedConfig);
 
@@ -667,6 +686,14 @@ async function downloadSettingsOverwrite() {
     }
 
     let importedConfig = JSON.parse(content) as UserConfig;
+
+    // 验证数据格式，防止导入错误格式的数据（如历史记录数据）
+    if (!isValidUserConfig(importedConfig)) {
+      updateConfigSyncStatus('failed', '云端数据格式无效');
+      toast.error('下载失败', '云端配置文件内容格式无效，可能不是配置数据');
+      return;
+    }
+
     importedConfig = migrateConfig(importedConfig);
 
     await configStore.set('config', importedConfig);
@@ -709,6 +736,14 @@ async function downloadSettingsMerge() {
     }
 
     let importedConfig = JSON.parse(content) as UserConfig;
+
+    // 验证数据格式，防止导入错误格式的数据（如历史记录数据）
+    if (!isValidUserConfig(importedConfig)) {
+      updateConfigSyncStatus('failed', '云端数据格式无效');
+      toast.error('下载失败', '云端配置文件内容格式无效，可能不是配置数据');
+      return;
+    }
+
     importedConfig = migrateConfig(importedConfig);
 
     // 合并配置：保留本地 WebDAV 配置，其他用云端的

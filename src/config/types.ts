@@ -550,3 +550,41 @@ export function migrateConfig(config: UserConfig): UserConfig {
     }
   };
 }
+
+/**
+ * 验证对象是否为有效的 UserConfig 格式
+ * 用于防止导入错误格式的数据（如历史记录数据）覆盖配置
+ *
+ * @param obj 要验证的对象
+ * @returns 是否为有效的 UserConfig 格式
+ */
+export function isValidUserConfig(obj: unknown): obj is UserConfig {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+    return false;
+  }
+
+  const config = obj as Record<string, unknown>;
+
+  // 1. 不应该是数字索引对象（历史记录数据的特征：{"0": {...}, "1": {...}}）
+  const keys = Object.keys(config);
+  if (keys.length > 0 && keys.every(k => /^\d+$/.test(k))) {
+    return false;
+  }
+
+  // 2. 不应该包含历史记录特有的字段
+  if ('localFileName' in config || 'results' in config || 'generatedLink' in config) {
+    return false;
+  }
+
+  // 3. 必须包含 UserConfig 的必要字段（enabledServices 必须是数组）
+  if (!Array.isArray(config.enabledServices)) {
+    return false;
+  }
+
+  // 4. services 如果存在必须是对象
+  if (config.services !== undefined && (typeof config.services !== 'object' || config.services === null)) {
+    return false;
+  }
+
+  return true;
+}
