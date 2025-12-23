@@ -1,6 +1,6 @@
 [package]
 name = "picnexus"
-version = "3.0.0"
+version = "1.0.1"
 description = "PicNexus - 多图床并行上传工具"
 authors = ["you"]
 license = ""

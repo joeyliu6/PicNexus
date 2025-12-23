@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/tauri';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { save, open } from '@tauri-apps/api/dialog';
 import { writeTextFile, readTextFile } from '@tauri-apps/api/fs';
+import { getVersion } from '@tauri-apps/api/app';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
@@ -40,6 +41,9 @@ const handleClearHistory = async () => {
 
 // Cookie 监听器清理函数
 const cookieUnlisten = ref<UnlistenFn | null>(null);
+
+// 应用版本号
+const appVersion = ref<string>('');
 
 // --- 导航状态管理 ---
 type SettingsTab = 'general' | 'r2' | 'builtin' | 'cookie_auth' | 'links' | 'backup';
@@ -1183,6 +1187,14 @@ const handleClickOutside = (event: MouseEvent) => {
 
 // 监听 Cookie 更新
 onMounted(async () => {
+  // 获取应用版本号
+  try {
+    appVersion.value = await getVersion();
+  } catch (error) {
+    console.error('获取版本号失败:', error);
+    appVersion.value = '未知版本';
+  }
+
   await loadSettings();
   await loadSyncStatus();  // 加载同步状态
   // 带冷却的可用性检测（5分钟内不重复检测）
@@ -1230,7 +1242,7 @@ onUnmounted(() => {
       </div>
 
       <div class="sidebar-footer">
-        <span class="version-text">PicNexus v3.0.0</span>
+        <span class="version-text">PicNexus v{{ appVersion }}</span>
       </div>
     </div>
 
