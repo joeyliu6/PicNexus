@@ -620,7 +620,7 @@ pub async fn test_nami_connection(app: tauri::AppHandle, cookie: String, auth_to
             match get_sts_credentials(&client, test_file_key, &cookie, &auth_token, &dynamic_headers).await {
                 Ok(_credentials) => {
                     println!("[Nami Test] STS 凭证获取成功，Cookie 和 Auth-Token 有效");
-                    Ok("纳米 Cookie 和 Auth-Token 有效，连接成功".to_string())
+                    Ok("Cookie 验证通过".to_string())
                 },
                 Err(e) => {
                     if e.contains("401") || e.contains("403") || e.contains("Unauthorized") {

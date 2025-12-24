@@ -70,7 +70,7 @@ pub async fn test_nowcoder_cookie(nowcoder_cookie: String) -> Result<String, Str
         .map_err(|_| "Cookie 无效或已过期（无法解析响应）".to_string())?;
 
     if api_response.code == 0 {
-        Ok("Cookie 有效".to_string())
+        Ok("Cookie 验证通过".to_string())
     } else {
         Err(format!("{} (code: {})", api_response.msg.trim(), api_response.code))
     }

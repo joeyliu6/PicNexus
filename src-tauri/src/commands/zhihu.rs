@@ -398,7 +398,7 @@ pub async fn test_zhihu_connection(zhihu_cookie: String) -> Result<String, Strin
     if status.is_success() {
         // 尝试解析响应以验证格式正确
         if let Ok(_) = serde_json::from_str::<UploadCredentialsResponse>(&response_text) {
-            Ok("知乎 Cookie 有效，连接成功".to_string())
+            Ok("Cookie 验证通过".to_string())
         } else {
             Ok("知乎 Cookie 可能有效，但响应格式异常".to_string())
         }

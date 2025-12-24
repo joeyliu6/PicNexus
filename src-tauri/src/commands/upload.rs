@@ -361,7 +361,7 @@ pub async fn test_weibo_connection(
     // 检查是否上传成功（响应中包含 pid 字段）
     if response_text.contains("<pid>") {
         println!("[Weibo] ✓ Cookie 有效（测试上传成功）");
-        Ok("Cookie 有效（已登录）".to_string())
+        Ok("Cookie 验证通过".to_string())
     } else if response_text.contains("<err>") || response_text.contains("<code>") {
         // 解析错误信息
         Err("Cookie 无效或已过期".to_string())
