@@ -74,6 +74,21 @@ export class WebDAVClient {
   }
 
   /**
+   * 解密密码（用于加载配置时回显）
+   * @param encryptedPassword 加密的密码
+   * @returns Promise<string> 解密后的密码，解密失败返回空字符串
+   */
+  static async decryptPassword(encryptedPassword: string): Promise<string> {
+    if (!encryptedPassword) return '';
+    try {
+      return await secureStorage.decrypt(encryptedPassword);
+    } catch (error) {
+      console.error('[WebDAV] 密码解密失败:', error);
+      return '';
+    }
+  }
+
+  /**
    * 更新配置
    * @param config 新的 WebDAV 配置（密码应已解密）
    */

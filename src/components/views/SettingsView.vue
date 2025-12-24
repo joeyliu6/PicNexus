@@ -173,7 +173,14 @@ const loadSettings = async () => {
     formData.value.nami.cookie = cfg.services?.nami?.cookie || '';
     // 加载 WebDAV 配置（新结构）
     if (cfg.webdav) {
-      formData.value.webdav.profiles = cfg.webdav.profiles || [];
+      const profiles = cfg.webdav.profiles || [];
+      // 解密已保存的密码以便回显
+      for (const profile of profiles) {
+        if (profile.passwordEncrypted && !profile.password) {
+          profile.password = await WebDAVClient.decryptPassword(profile.passwordEncrypted);
+        }
+      }
+      formData.value.webdav.profiles = profiles;
       formData.value.webdav.activeId = cfg.webdav.activeId || null;
     }
     if (cfg.availableServices) availableServices.value = [...cfg.availableServices];
@@ -195,14 +202,18 @@ const saveSettings = async (silent = false) => {
     const currentConfig = configManager.config.value;
 
     // 处理 WebDAV 密码加密
-    const webdavConfig = { ...formData.value.webdav };
+    // 注意：需要深拷贝 profiles 数组，避免修改表单数据导致 UI 显示异常
+    const webdavConfig = {
+      ...formData.value.webdav,
+      profiles: formData.value.webdav.profiles.map(p => ({ ...p }))
+    };
     if (webdavConfig.profiles) {
       for (const profile of webdavConfig.profiles) {
-        // 如果有明文密码且未加密，则加密存储
+        // 如果有明文密码，则加密存储
         if (profile.password && profile.password.trim()) {
           try {
             profile.passwordEncrypted = await WebDAVClient.encryptPassword(profile.password);
-            // 清除明文密码
+            // 保存时清除明文密码（仅在拷贝对象上操作，不影响 UI）
             profile.password = '';
           } catch (err) {
             console.error('[WebDAV] 密码加密失败:', err);
