@@ -288,3 +288,85 @@ pub async fn upload_file_stream(
     parse_weibo_response(&text)
 }
 
+/// 测试微博 Cookie 是否有效
+/// 通过上传一个最小测试图片来验证 Cookie（与牛客测试方法相同）
+#[tauri::command]
+pub async fn test_weibo_connection(
+    weibo_cookie: String,
+    http_client: tauri::State<'_, HttpClient>
+) -> Result<String, String> {
+    println!("[Weibo] 测试 Cookie 有效性...");
+
+    // 检查 Cookie 非空
+    if weibo_cookie.trim().is_empty() {
+        return Err("Cookie 不能为空".to_string());
+    }
+
+    // 检查必要字段
+    if !weibo_cookie.contains("SUB=") || !weibo_cookie.contains("SUBP=") {
+        return Err("Cookie 缺少必要字段 SUB 或 SUBP".to_string());
+    }
+
+    // 最小的 1x1 透明 PNG（67 字节）- 与牛客测试相同
+    let minimal_png: Vec<u8> = vec![
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82,
+    ];
+
+    let url = "https://picupload.weibo.com/interface/pic_upload.php?s=xml&ori=1&data=1&rotate=0&wm=&app=miniblog&mime=image/jpeg";
+
+    // 发送测试上传请求
+    let response = http_client.0
+        .post(url)
+        .header(header::COOKIE, &weibo_cookie)
+        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .header(header::REFERER, "https://photo.weibo.com/")
+        .header(header::ORIGIN, "https://photo.weibo.com")
+        .header(header::USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36")
+        .body(minimal_png)
+        .timeout(std::time::Duration::from_secs(15))
+        .send()
+        .await
+        .map_err(|e| {
+            if e.is_timeout() {
+                "请求超时，请检查网络连接".to_string()
+            } else if e.is_connect() {
+                "网络连接失败，请检查网络连接或防火墙设置".to_string()
+            } else {
+                format!("请求失败: {}", e)
+            }
+        })?;
+
+    let response_text = response.text().await
+        .map_err(|e| format!("无法读取响应: {}", e))?;
+
+    println!("[Weibo] 测试响应: {}", if response_text.len() > 200 {
+        format!("{}... (共 {} 字节)", &response_text[..200], response_text.len())
+    } else {
+        response_text.clone()
+    });
+
+    // 检查认证错误（Cookie 过期返回 100006）
+    if response_text.contains("<data>100006</data>") {
+        return Err("Cookie 已过期（错误码：100006）".to_string());
+    }
+
+    // 检查是否上传成功（响应中包含 pid 字段）
+    if response_text.contains("<pid>") {
+        println!("[Weibo] ✓ Cookie 有效（测试上传成功）");
+        Ok("Cookie 有效（已登录）".to_string())
+    } else if response_text.contains("<err>") || response_text.contains("<code>") {
+        // 解析错误信息
+        Err("Cookie 无效或已过期".to_string())
+    } else {
+        Err("无法验证 Cookie 有效性（响应格式异常）".to_string())
+    }
+}
+

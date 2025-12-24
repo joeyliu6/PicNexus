@@ -74,6 +74,7 @@ fn main() {
             list_r2_objects,
             delete_r2_object,
             commands::upload::upload_file_stream,
+            commands::upload::test_weibo_connection,
             commands::r2::upload_to_r2,
             commands::tcl::upload_to_tcl,
             commands::tcl::check_tcl_available,

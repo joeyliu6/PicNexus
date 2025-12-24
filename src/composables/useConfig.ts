@@ -147,6 +147,7 @@ export function useConfigManager() {
 
   /**
    * 测试微博连接
+   * 通过 Rust 后端上传测试图片验证 Cookie（与知乎、牛客保持一致）
    * @param cookie 微博 Cookie
    */
   async function testWeiboConnection(cookie: string): Promise<TestConnectionResult> {
@@ -161,92 +162,17 @@ export function useConfigManager() {
       }
 
       try {
-        // 发送测试请求（带超时保护）
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-        const response = await fetch('https://weibo.com/aj/onoff/getstatus?sid=0', {
-          method: 'GET',
-          headers: {
-            'Cookie': cookie,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'
-          },
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-
-        // 检查 HTTP 状态码
-        if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
-            return {
-              success: false,
-              message: `HTTP ${response.status}: Cookie 无效或已过期`
-            };
-          } else if (response.status >= 500) {
-            return {
-              success: false,
-              message: `HTTP ${response.status}: 微博服务器错误`
-            };
-          } else {
-            return {
-              success: false,
-              message: `HTTP ${response.status}: 请求失败`
-            };
-          }
-        }
-
-        // 检查响应数据
-        const data = await response.json() as { code: string };
-        if (!data) {
-          return {
-            success: false,
-            message: '响应数据为空'
-          };
-        }
-
-        // 验证返回码
-        if (data.code === '100000') {
-          console.log('[Cookie测试] ✓ Cookie 有效');
-          return {
-            success: true,
-            message: 'Cookie 有效（已登录）'
-          };
-        } else {
-          return {
-            success: false,
-            message: `Cookie 无效或已过期 (返回码: ${data.code || '未知'})`
-          };
-        }
-      } catch (err: any) {
-        const errorStr = err?.toString() || String(err) || '';
-        const errorMsg = err?.message || errorStr || '';
-        const fullError = (errorMsg + ' ' + errorStr).toLowerCase();
-
-        console.error('[Cookie测试] 测试失败:', err);
-
-        if (fullError.includes('json') || fullError.includes('parse')) {
-          return {
-            success: false,
-            message: 'Cookie 完全无效或格式错误（无法解析响应）'
-          };
-        } else if (fullError.includes('network') || fullError.includes('fetch') || fullError.includes('connection')) {
-          return {
-            success: false,
-            message: '网络连接失败，请检查网络连接或防火墙设置'
-          };
-        } else if (fullError.includes('timeout') || fullError.includes('超时')) {
-          return {
-            success: false,
-            message: '请求超时，请检查网络连接'
-          };
-        } else {
-          const shortError = errorMsg.length > 100 ? errorMsg.substring(0, 100) + '...' : errorMsg;
-          return {
-            success: false,
-            message: shortError || '未知错误'
-          };
-        }
+        const successMessage = await invoke<string>('test_weibo_connection', { weiboCookie: cookie });
+        console.log('[Cookie测试] ✓ 测试成功');
+        return {
+          success: true,
+          message: successMessage
+        };
+      } catch (errorMessage) {
+        return {
+          success: false,
+          message: String(errorMessage)
+        };
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
