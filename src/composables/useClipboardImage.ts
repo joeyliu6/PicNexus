@@ -2,7 +2,7 @@
 // 剪贴板图片读取 Composable
 
 import { ref } from 'vue';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@tauri-apps/api/core';
 import { useToast } from './useToast';
 
 /** 剪贴板图片读取结果 */

@@ -3,14 +3,14 @@
 // 基于网易七鱼客服系统的 NOS 对象存储
 // 自动获取 Token，无需手动配置
 
-use tauri::Window;
+use tauri::{Window, Emitter, Manager};
 use serde::Serialize;
 use reqwest::Client;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 use std::time::{SystemTime, UNIX_EPOCH, Duration};
 
-use super::qiyu_token::fetch_qiyu_token;
+use super::qiyu_token::fetch_qiyu_token_internal;
 
 #[derive(Debug, Serialize)]
 pub struct QiyuUploadResult {
@@ -41,7 +41,7 @@ pub async fn upload_to_qiyu(
 
     // 1. 自动获取新的 Token（每次上传都获取新的，确保 Object 路径唯一）
     println!("[Qiyu] 正在获取上传凭证...");
-    let token_info = fetch_qiyu_token().await?;
+    let token_info = fetch_qiyu_token_internal(&window.app_handle()).await?;
     let qiyu_token = &token_info.token;
     let object_path = &token_info.object_path;
     println!("[Qiyu] Token 获取成功，Object 路径: {}", object_path);

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onActivated, watch, nextTick } from 'vue';
 import { onClickOutside } from '@vueuse/core';
-import { writeText } from '@tauri-apps/api/clipboard';
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Button from 'primevue/button';
@@ -323,7 +323,7 @@ const openInBrowser = async (item: HistoryItem) => {
     }
 
     // 使用 Tauri 的 shell 打开链接
-    const { open } = await import('@tauri-apps/api/shell');
+    const { open } = await import('@tauri-apps/plugin-shell');
     await open(finalLink);
   } catch (error) {
     console.error('[历史记录] 打开链接失败:', error);

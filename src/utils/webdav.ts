@@ -1,7 +1,7 @@
 // src/utils/webdav.ts
 // 通用 WebDAV 客户端模块
 
-import { getClient, Body, ResponseType } from '@tauri-apps/api/http';
+import { fetch } from '@tauri-apps/plugin-http';
 import { secureStorage } from '../crypto';
 
 /**
@@ -130,20 +130,22 @@ export class WebDAVClient {
    */
   async testConnection(): Promise<boolean> {
     try {
-      const client = await getClient();
       const testUrl = this.buildUrl(this.config.remotePath || '/');
 
       // 使用 PROPFIND 方法测试连接（WebDAV 标准方法）
-      // 注意：Tauri HttpVerb 不包含 PROPFIND，使用类型断言
-      const response = await client.request({
-        method: 'PROPFIND' as 'GET',  // 类型断言绕过 TypeScript 检查
-        url: testUrl,
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const response = await fetch(testUrl, {
+        method: 'PROPFIND',
         headers: {
           'Authorization': this.getAuthHeader(),
           'Depth': '0',
         },
-        timeout: 10000, // 10秒超时
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       // 200, 207 (Multi-Status) 或 404 (文件不存在但连接成功) 都算成功
       return response.ok || response.status === 404;
@@ -169,17 +171,23 @@ export class WebDAVClient {
         await this.ensureDir(parentDir);
       }
 
-      const client = await getClient();
       const url = this.buildUrl(remotePath);
 
-      const response = await client.put(url, Body.text(content), {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch(url, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': this.getAuthHeader(),
           'Overwrite': 'T', // WebDAV 标准：允许覆盖现有文件
         },
-        timeout: 30000, // 30秒超时
+        body: content,
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const status = response.status;
@@ -212,16 +220,20 @@ export class WebDAVClient {
    */
   async getFile(remotePath: string): Promise<string | null> {
     try {
-      const client = await getClient();
       const url = this.buildUrl(remotePath);
 
-      const response = await client.get<string>(url, {
-        responseType: ResponseType.Text,
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch(url, {
+        method: 'GET',
         headers: {
           'Authorization': this.getAuthHeader(),
         },
-        timeout: 30000, // 30秒超时
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (response.status === 404) {
         // 文件不存在，返回 null
@@ -241,7 +253,7 @@ export class WebDAVClient {
         throw new Error(errorMsg);
       }
 
-      return response.data || null;
+      return await response.text();
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
 
@@ -277,20 +289,23 @@ export class WebDAVClient {
    */
   async mkDir(remotePath: string): Promise<boolean> {
     try {
-      const client = await getClient();
       // 确保路径以 / 结尾
       const dirPath = remotePath.endsWith('/') ? remotePath : remotePath + '/';
       const url = this.buildUrl(dirPath);
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       // 使用 MKCOL 方法创建目录
-      const response = await client.request({
-        method: 'MKCOL' as 'GET', // 类型断言绕过 TypeScript 检查
-        url: url,
+      const response = await fetch(url, {
+        method: 'MKCOL',
         headers: {
           'Authorization': this.getAuthHeader(),
         },
-        timeout: 10000,
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       const status = response.status;
 

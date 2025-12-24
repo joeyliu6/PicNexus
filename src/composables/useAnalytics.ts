@@ -4,7 +4,7 @@
 
 import { ref, computed } from 'vue';
 import { Store } from '../store';
-import { getClient } from '@tauri-apps/api/http';
+import { fetch } from '@tauri-apps/plugin-http';
 import { getVersion } from '@tauri-apps/api/app';
 import { UserConfig } from '../config/types';
 
@@ -196,8 +196,6 @@ async function sendToGA4(
   params: Record<string, unknown> = {}
 ): Promise<boolean> {
   try {
-    const client = await getClient();
-
     const payload = {
       client_id: clientId,
       events: [{
@@ -213,9 +211,12 @@ async function sendToGA4(
 
     const url = `${GA_ENDPOINT}?measurement_id=${GA_MEASUREMENT_ID}&api_secret=${GA_API_SECRET}`;
 
-    const response = await client.post(url, {
-      type: 'Json',
-      payload
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
     });
 
     // GA4 Measurement Protocol 成功时返回 204 No Content
@@ -317,8 +318,6 @@ export function useAnalytics() {
       }
       cachedSessionId = await getOrRefreshSessionId();
 
-      const client = await getClient();
-
       const payload = {
         client_id: cachedClientId,
         user_properties: Object.fromEntries(
@@ -334,7 +333,13 @@ export function useAnalytics() {
       };
 
       const url = `${GA_ENDPOINT}?measurement_id=${GA_MEASUREMENT_ID}&api_secret=${GA_API_SECRET}`;
-      await client.post(url, { type: 'Json', payload });
+      await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
 
       console.log('[Analytics] 用户属性已设置');
     } catch (error) {

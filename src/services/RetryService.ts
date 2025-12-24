@@ -7,7 +7,6 @@ import { MultiServiceUploader, MultiUploadResult } from '../core/MultiServiceUpl
 import { UploadQueueManager, QueueItem } from '../uploadQueue';
 import { UserConfig, ServiceType } from '../config/types';
 import type { Store } from '../store';
-import type { HistoryItem } from '../config/types';
 import { UploadResult } from '../uploaders/base/types';
 import { checkNetworkConnectivity } from '../utils/network';
 import { invalidateCache } from '../composables/useHistory';

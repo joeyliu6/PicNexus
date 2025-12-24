@@ -1,6 +1,6 @@
 // src/crypto.ts
 // 加密存储工具类，使用 Web Crypto API 进行 AES-GCM 加密
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@tauri-apps/api/core';
 
 /**
  * 加密数据魔数前缀

@@ -6,7 +6,7 @@ use reqwest::header;
 use std::path::Path;
 use quick_xml::events::Event;
 use quick_xml::Reader;
-use tauri::Window;
+use tauri::{Window, Emitter};
 use futures::StreamExt;
 use std::sync::{Arc, Mutex};
 

@@ -2,7 +2,7 @@
 // 简单的存储工具，使用 Tauri 的 fs API 替代 tauri-plugin-store-api
 // v2.8: 支持加密存储，使用 AES-GCM 加密敏感数据
 // v2.9: 增强并发控制，使用全局互斥锁防止竞态条件
-import { readTextFile, writeTextFile, exists, createDir } from '@tauri-apps/api/fs';
+import { readTextFile, writeTextFile, exists, mkdir } from '@tauri-apps/plugin-fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import { secureStorage, isEncryptedData } from './crypto';
 
@@ -348,7 +348,7 @@ class SimpleStore {
       
       // 确保目录存在
       try {
-        await createDir(appDir, { recursive: true });
+        await mkdir(appDir, { recursive: true });
       } catch (dirError: any) {
         const errorMsg = dirError?.message || String(dirError);
         if (errorMsg.includes('Permission') || errorMsg.includes('permission')) {

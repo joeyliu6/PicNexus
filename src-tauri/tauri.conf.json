@@ -1,158 +1,21 @@
 {
+  "productName": "PicNexus",
+  "version": "1.0.1",
+  "identifier": "us.picnex.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
-    "devPath": "http://localhost:1420",
-    "withGlobalTauri": true
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
   },
-  "package": {
-    "productName": "PicNexus",
-    "version": "1.0.1"
-  },
-  "tauri": {
-    "allowlist": {
-      "all": false,
-      "shell": {
-        "all": false,
-        "open": true,
-        "sidecar": true,
-        "scope": [
-          {
-            "name": "binaries/qiyu-token-fetcher",
-            "sidecar": true,
-            "args": true
-          },
-          {
-            "name": "binaries/nami-token-fetcher",
-            "sidecar": true,
-            "args": true
-          }
-        ]
-      },
-      "http": {
-        "all": false,
-        "request": true,
-        "scope": [
-          "https://picupload.weibo.com/*",
-          "https://*.r2.cloudflarestorage.com/*",
-          "https://weibo.com/*",
-          "https://*.weibo.com/*",
-          "https://dav.jianguoyun.com/*",
-          "https://*.jianguoyun.com/*",
-          "https://dav.yandex.com/*",
-          "https://*.yandex.com/*",
-          "https://webdav.*/*",
-          "https://www.nowcoder.com/*",
-          "https://*.nowcoder.com/*",
-          "https://*.sinaimg.cn/*",
-          "https://tvax*.sinaimg.cn/*",
-          "https://ww*.sinaimg.cn/*",
-          "https://img*.360buyimg.com/*",
-          "https://*.360buyimg.com/*",
-          "https://uploadfiles.nowcoder.com/*",
-          "https://*.nos-eastchina1.126.net/*",
-          "https://*.nosdn.127.net/*",
-          "https://*.tcl.com/*",
-          "http://*",
-          "https://*"
-        ]
-      },
-      "notification": {
-        "all": true
-      },
-      "clipboard": {
-        "all": true,
-        "writeText": true
-      },
-      "window": {
-        "all": true
-      },
-      "fs": {
-        "all": true,
-        "scope": ["**"]
-      },
-      "path": {
-        "all": true
-      },
-      "dialog": {
-        "all": false,
-        "ask": true,
-        "confirm": true,
-        "message": true,
-        "open": true,
-        "save": true
-      }
-    },
-    "bundle": {
-      "active": true,
-      "targets": "all",
-      "identifier": "us.picnex.app",
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ],
-      "externalBin": [
-        "binaries/qiyu-token-fetcher",
-        "binaries/nami-token-fetcher"
-      ]
-    },
+  "app": {
+    "withGlobalTauri": true,
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: blob: https://*.sinaimg.cn https://*.360buyimg.com https://*.nowcoder.com https://uploadfiles.nowcoder.com https://*.koyoo.cn https://*.qiyukf.net https://*.netease.im https://*.zhimg.com https://*.zhaomi.cn https://bfns.zhaomi.cn http://*.koyoo.cn http://* https://* https://www.google-analytics.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://* http://*; font-src 'self' data:",
-      "dangerousRemoteDomainIpcAccess": [
-        {
-          "domain": "m.weibo.cn",
-          "windows": ["login-webview"],
-          "enableTauriAPI": true
-        },
-        {
-          "domain": "passport.weibo.cn",
-          "windows": ["login-webview"],
-          "enableTauriAPI": true
-        },
-        {
-          "domain": "weibo.com",
-          "windows": ["login-webview"],
-          "enableTauriAPI": true
-        },
-        {
-          "domain": "login.sina.com.cn",
-          "windows": ["login-webview"],
-          "enableTauriAPI": true
-        },
-        {
-          "domain": "nowcoder.com",
-          "windows": ["login-webview"],
-          "enableTauriAPI": true
-        },
-        {
-          "domain": "www.nowcoder.com",
-          "windows": ["login-webview"],
-          "enableTauriAPI": true
-        },
-        {
-          "domain": "zhihu.com",
-          "windows": ["login-webview"],
-          "enableTauriAPI": true
-        },
-        {
-          "domain": "www.zhihu.com",
-          "windows": ["login-webview"],
-          "enableTauriAPI": true
-        },
-        {
-          "domain": "n.cn",
-          "windows": ["login-webview"],
-          "enableTauriAPI": true
-        },
-        {
-          "domain": "www.n.cn",
-          "windows": ["login-webview"],
-          "enableTauriAPI": true
-        }
-      ]
+      "csp": "default-src 'self'; img-src 'self' data: blob: https://*.sinaimg.cn https://*.360buyimg.com https://*.nowcoder.com https://uploadfiles.nowcoder.com https://*.koyoo.cn https://*.qiyukf.net https://*.netease.im https://*.zhimg.com https://*.zhaomi.cn https://bfns.zhaomi.cn http://*.koyoo.cn http://* https://* https://www.google-analytics.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://* http://*; font-src 'self' data:"
+    },
+    "trayIcon": {
+      "iconPath": "icons/icon.ico",
+      "iconAsTemplate": true
     },
     "windows": [
       {
@@ -165,14 +28,30 @@
         "minHeight": 600,
         "center": true,
         "decorations": false,
+        "shadow": true,
         "visible": true,
         "label": "main"
       }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
     ],
-    "systemTray": {
-      "iconPath": "icons/icon.ico",
-      "iconAsTemplate": true
+    "externalBin": [
+      "binaries/qiyu-token-fetcher",
+      "binaries/nami-token-fetcher"
+    ]
+  },
+  "plugins": {
+    "shell": {
+      "open": true
     }
   }
 }
-

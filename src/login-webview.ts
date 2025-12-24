@@ -5,8 +5,11 @@ import PrimeVue from 'primevue/config';
 import { PicNexusPreset } from './theme';
 import LoginPanel from './components/login/LoginPanel.vue';
 import { COOKIE_PROVIDERS, type CookieProvider } from './config/cookieProviders';
-import { invoke } from '@tauri-apps/api/tauri';
-import { appWindow } from '@tauri-apps/api/window';
+import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+
+// 获取当前窗口实例
+const appWindow = getCurrentWindow();
 import { initLoginTheme } from './composables/useLoginTheme';
 
 // 引入样式（顺序重要）

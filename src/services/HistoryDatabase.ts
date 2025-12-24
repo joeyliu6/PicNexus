@@ -5,7 +5,7 @@
  * 支持 10 万条以上记录的分页加载和模糊搜索
  */
 
-import Database from 'tauri-plugin-sql-api';
+import Database from '@tauri-apps/plugin-sql';
 import type { HistoryItem, ServiceType } from '../config/types';
 
 /** 数据库文件名 */

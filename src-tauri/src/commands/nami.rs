@@ -2,7 +2,7 @@
 // 纳米图床上传命令
 // 使用火山引擎 TOS 对象存储，需要 TOS4-HMAC-SHA256 签名
 
-use tauri::Window;
+use tauri::{Window, Emitter, Manager};
 use serde::{Deserialize, Serialize};
 use reqwest::Client;
 use tokio::fs::File;
@@ -12,7 +12,7 @@ use sha2::Sha256;
 use hmac::{Hmac, Mac};
 use chrono::Utc;
 
-use super::nami_token::fetch_nami_token;
+use super::nami_token::fetch_nami_token_internal;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -522,7 +522,7 @@ pub async fn upload_to_nami(
 
     // 6. 获取动态 Headers
     println!("[Nami] 获取动态 Headers...");
-    let dynamic_headers = fetch_nami_token(cookie.clone(), auth_token.clone()).await?;
+    let dynamic_headers = fetch_nami_token_internal(&window.app_handle(), cookie.clone(), auth_token.clone()).await?;
 
     // 发送步骤2进度：获取STS凭证 (20%)
     let _ = window.emit("upload://progress", serde_json::json!({
@@ -598,7 +598,7 @@ pub async fn upload_to_nami(
 
 /// 测试纳米 Cookie 和 Auth-Token 连接
 #[tauri::command]
-pub async fn test_nami_connection(cookie: String, auth_token: String) -> Result<String, String> {
+pub async fn test_nami_connection(app: tauri::AppHandle, cookie: String, auth_token: String) -> Result<String, String> {
     println!("[Nami Test] 开始测试连接...");
 
     // 创建 HTTP 客户端
@@ -610,7 +610,7 @@ pub async fn test_nami_connection(cookie: String, auth_token: String) -> Result<
 
     // 尝试获取动态 Headers 来验证 Cookie 和 Auth-Token
     println!("[Nami Test] 验证 Cookie 和 Auth-Token...");
-    match fetch_nami_token(cookie.clone(), auth_token.clone()).await {
+    match fetch_nami_token_internal(&app, cookie.clone(), auth_token.clone()).await {
         Ok(dynamic_headers) => {
             println!("[Nami Test] 动态 Headers 获取成功");
 

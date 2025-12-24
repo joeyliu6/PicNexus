@@ -2,7 +2,8 @@
 // 上传管理 Composable - 封装文件选择、上传、历史记录保存等功能
 
 import { ref, Ref, computed } from 'vue';
-import { dialog, invoke } from '@tauri-apps/api';
+import { invoke } from '@tauri-apps/api/core';
+import { open as dialogOpen } from '@tauri-apps/plugin-dialog';
 import { basename } from '@tauri-apps/api/path';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { Store } from '../store';
@@ -124,7 +125,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
    */
   async function selectFiles(): Promise<string[] | null> {
     try {
-      const selected = await dialog.open({
+      const selected = await dialogOpen({
         multiple: true,
         filters: [{
           name: '图片',

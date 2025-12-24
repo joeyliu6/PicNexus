@@ -1,7 +1,7 @@
 // src-tauri/src/commands/tcl.rs
 // TCL 图床上传命令
 
-use tauri::Window;
+use tauri::{Window, Emitter};
 use serde::{Deserialize, Serialize};
 use reqwest::multipart;
 use tokio::fs::File;

@@ -2,10 +2,10 @@
 // 配置管理 Composable - 封装配置加载、保存、测试连接等功能
 
 import { ref, Ref } from 'vue';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn, emit } from '@tauri-apps/api/event';
-import { WebviewWindow } from '@tauri-apps/api/window';
-import { getClient, ResponseType } from '@tauri-apps/api/http';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { fetch } from '@tauri-apps/plugin-http';
 import { Store } from '../store';
 import {
   UserConfig,
@@ -161,21 +161,20 @@ export function useConfigManager() {
       }
 
       try {
-        // 获取 HTTP 客户端
-        const client = await getClient();
-
         // 发送测试请求（带超时保护）
-        const response = await client.get<{ code: string }>(
-          'https://weibo.com/aj/onoff/getstatus?sid=0',
-          {
-            responseType: ResponseType.JSON,
-            headers: {
-              Cookie: cookie,
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'
-            },
-            timeout: 10000, // 10秒超时
-          }
-        );
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        const response = await fetch('https://weibo.com/aj/onoff/getstatus?sid=0', {
+          method: 'GET',
+          headers: {
+            'Cookie': cookie,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'
+          },
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
 
         // 检查 HTTP 状态码
         if (!response.ok) {
@@ -198,7 +197,8 @@ export function useConfigManager() {
         }
 
         // 检查响应数据
-        if (!response.data) {
+        const data = await response.json() as { code: string };
+        if (!data) {
           return {
             success: false,
             message: '响应数据为空'
@@ -206,7 +206,7 @@ export function useConfigManager() {
         }
 
         // 验证返回码
-        if (response.data.code === '100000') {
+        if (data.code === '100000') {
           console.log('[Cookie测试] ✓ Cookie 有效');
           return {
             success: true,
@@ -215,7 +215,7 @@ export function useConfigManager() {
         } else {
           return {
             success: false,
-            message: `Cookie 无效或已过期 (返回码: ${response.data.code || '未知'})`
+            message: `Cookie 无效或已过期 (返回码: ${data.code || '未知'})`
           };
         }
       } catch (err: any) {
@@ -487,7 +487,7 @@ export function useConfigManager() {
 
       // 检查窗口是否已存在
       try {
-        const existingWindow = WebviewWindow.getByLabel('login-webview');
+        const existingWindow = await WebviewWindow.getByLabel('login-webview');
         if (existingWindow) {
           console.log('[WebView登录窗口] 窗口已存在，聚焦');
           await existingWindow.setFocus();
@@ -516,9 +516,9 @@ export function useConfigManager() {
           console.log(`[WebView登录窗口] ✓ ${provider.name} 窗口创建成功`);
         });
 
-        loginWindow.once('tauri://error', (e) => {
+        loginWindow.once('tauri://error', (e: unknown) => {
           errorOccurred = true;
-          errorMessage = e && typeof e === 'object' && 'payload' in e ? String(e.payload) : String(e);
+          errorMessage = e && typeof e === 'object' && 'payload' in e ? String((e as { payload: unknown }).payload) : String(e);
           console.error('[WebView登录窗口] 窗口创建失败:', errorMessage);
         });
 

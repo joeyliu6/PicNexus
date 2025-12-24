@@ -3,7 +3,8 @@
 // 使用 Sidecar (Node.js + Puppeteer) 从纳米页面获取动态 Headers
 
 use serde::{Deserialize, Serialize};
-use tauri::api::process::{Command, CommandEvent};
+use tauri_plugin_shell::ShellExt;
+use tauri_plugin_shell::process::CommandEvent;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NamiDynamicHeaders {
@@ -30,13 +31,29 @@ struct SidecarResponse<T> {
 }
 
 
-/// 从纳米页面获取动态 Headers
+/// 从纳米页面获取动态 Headers (Tauri command)
 #[tauri::command]
-pub async fn fetch_nami_token(cookie: String, auth_token: String) -> Result<NamiDynamicHeaders, String> {
+pub async fn fetch_nami_token(
+    app: tauri::AppHandle,
+    cookie: String,
+    auth_token: String
+) -> Result<NamiDynamicHeaders, String> {
+    fetch_nami_token_internal(&app, cookie, auth_token).await
+}
+
+/// 从纳米页面获取动态 Headers (内部函数)
+pub async fn fetch_nami_token_internal(
+    app: &tauri::AppHandle,
+    cookie: String,
+    auth_token: String
+) -> Result<NamiDynamicHeaders, String> {
     println!("[NamiToken] ========== 开始获取动态 Headers (Sidecar) ==========");
 
-    let (mut rx, _child) = Command::new_sidecar("nami-token-fetcher")
-        .map_err(|e| format!("创建 sidecar 失败: {}", e))?
+    let sidecar = app.shell()
+        .sidecar("nami-token-fetcher")
+        .map_err(|e| format!("创建 sidecar 失败: {}", e))?;
+
+    let (mut rx, _child) = sidecar
         .args(["fetch-token", "--cookie", &cookie, "--auth-token", &auth_token])
         .spawn()
         .map_err(|e| format!("启动 sidecar 失败: {}", e))?;
@@ -47,10 +64,10 @@ pub async fn fetch_nami_token(cookie: String, auth_token: String) -> Result<Nami
     while let Some(event) = rx.recv().await {
         match event {
             CommandEvent::Stdout(line) => {
-                output.push_str(&line);
+                output.push_str(&String::from_utf8_lossy(&line));
             }
             CommandEvent::Stderr(line) => {
-                stderr_output.push_str(&line);
+                stderr_output.push_str(&String::from_utf8_lossy(&line));
                 stderr_output.push('\n');
             }
             CommandEvent::Terminated(status) => {

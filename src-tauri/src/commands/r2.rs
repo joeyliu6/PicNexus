@@ -1,7 +1,7 @@
 // src-tauri/src/commands/r2.rs
 // Cloudflare R2 上传命令
 
-use tauri::Window;
+use tauri::{Window, Emitter};
 use serde::{Serialize, Deserialize};
 use std::path::Path;
 use aws_sdk_s3::{Client, Config, primitives::ByteStream};

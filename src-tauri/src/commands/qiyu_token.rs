@@ -3,7 +3,8 @@
 // 使用 Sidecar (Node.js + Puppeteer) 从七鱼页面获取上传凭证
 
 use serde::{Deserialize, Serialize};
-use tauri::api::process::{Command, CommandEvent};
+use tauri_plugin_shell::ShellExt;
+use tauri_plugin_shell::process::CommandEvent;
 use tokio::time::{timeout, Duration};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -29,11 +30,14 @@ struct CheckChromeData {
 
 /// 检测系统是否安装了 Chrome 浏览器
 #[tauri::command]
-pub async fn check_chrome_installed() -> Result<bool, String> {
+pub async fn check_chrome_installed(app: tauri::AppHandle) -> Result<bool, String> {
     println!("[QiyuToken] 检测 Chrome 安装状态...");
 
-    let (mut rx, _child) = Command::new_sidecar("qiyu-token-fetcher")
-        .map_err(|e| format!("创建 sidecar 失败: {}", e))?
+    let sidecar = app.shell()
+        .sidecar("qiyu-token-fetcher")
+        .map_err(|e| format!("创建 sidecar 失败: {}", e))?;
+
+    let (mut rx, _child) = sidecar
         .args(["check-chrome"])
         .spawn()
         .map_err(|e| format!("启动 sidecar 失败: {}", e))?;
@@ -46,10 +50,10 @@ pub async fn check_chrome_installed() -> Result<bool, String> {
         while let Some(event) = rx.recv().await {
             match event {
                 CommandEvent::Stdout(line) => {
-                    output.push_str(&line);
+                    output.push_str(&String::from_utf8_lossy(&line));
                 }
                 CommandEvent::Stderr(line) => {
-                    stderr_output.push_str(&line);
+                    stderr_output.push_str(&String::from_utf8_lossy(&line));
                     stderr_output.push('\n');
                 }
                 CommandEvent::Terminated(status) => {
@@ -95,8 +99,8 @@ pub async fn check_chrome_installed() -> Result<bool, String> {
 /// 检查七鱼图床是否可用（完整检测）
 /// 通过实际获取 Token 来验证上传能力
 #[tauri::command]
-pub async fn check_qiyu_available() -> bool {
-    match fetch_qiyu_token().await {
+pub async fn check_qiyu_available(app: tauri::AppHandle) -> bool {
+    match fetch_qiyu_token_internal(&app).await {
         Ok(_) => true,
         Err(e) => {
             println!("[Qiyu] 可用性检测失败: {}", e);
@@ -107,11 +111,19 @@ pub async fn check_qiyu_available() -> bool {
 
 /// 从七鱼页面获取新的上传 Token
 #[tauri::command]
-pub async fn fetch_qiyu_token() -> Result<QiyuToken, String> {
+pub async fn fetch_qiyu_token(app: tauri::AppHandle) -> Result<QiyuToken, String> {
+    fetch_qiyu_token_internal(&app).await
+}
+
+/// 内部函数：从七鱼页面获取新的上传 Token
+pub async fn fetch_qiyu_token_internal(app: &tauri::AppHandle) -> Result<QiyuToken, String> {
     println!("[QiyuToken] ========== 开始获取 Token (Sidecar) ==========");
 
-    let (mut rx, _child) = Command::new_sidecar("qiyu-token-fetcher")
-        .map_err(|e| format!("创建 sidecar 失败: {}", e))?
+    let sidecar = app.shell()
+        .sidecar("qiyu-token-fetcher")
+        .map_err(|e| format!("创建 sidecar 失败: {}", e))?;
+
+    let (mut rx, _child) = sidecar
         .args(["fetch-token"])
         .spawn()
         .map_err(|e| format!("启动 sidecar 失败: {}", e))?;
@@ -124,10 +136,10 @@ pub async fn fetch_qiyu_token() -> Result<QiyuToken, String> {
         while let Some(event) = rx.recv().await {
             match event {
                 CommandEvent::Stdout(line) => {
-                    output.push_str(&line);
+                    output.push_str(&String::from_utf8_lossy(&line));
                 }
                 CommandEvent::Stderr(line) => {
-                    stderr_output.push_str(&line);
+                    stderr_output.push_str(&String::from_utf8_lossy(&line));
                     stderr_output.push('\n');
                 }
                 CommandEvent::Terminated(status) => {

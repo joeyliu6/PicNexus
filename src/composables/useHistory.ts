@@ -3,9 +3,9 @@
 // 使用 SQLite 数据库存储，支持大数据量分页和搜索
 
 import { ref, computed, shallowRef, triggerRef, type Ref } from 'vue';
-import { save as saveDialog } from '@tauri-apps/api/dialog';
-import { writeTextFile } from '@tauri-apps/api/fs';
-import { writeText } from '@tauri-apps/api/clipboard';
+import { save as saveDialog } from '@tauri-apps/plugin-dialog';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type { HistoryItem, ServiceType, UserConfig } from '../config/types';
 import { getActivePrefix } from '../config/types';
 import { Store } from '../store';

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { writeText } from '@tauri-apps/api/clipboard';
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type { ServiceType } from '../config/types';
 import { useToast } from '../composables/useToast';
 import { useQueueState } from '../composables/useQueueState';

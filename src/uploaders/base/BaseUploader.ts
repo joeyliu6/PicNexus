@@ -1,7 +1,7 @@
 // src/uploaders/base/BaseUploader.ts
 // 上传器抽象基类，提供共享逻辑
 
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { IUploader } from './IUploader';
 import {

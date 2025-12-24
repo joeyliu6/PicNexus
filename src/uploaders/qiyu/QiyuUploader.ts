@@ -3,7 +3,7 @@
 // 基于网易七鱼客服系统的 NOS 对象存储
 // Token 自动获取，需要系统安装 Chrome 浏览器
 
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@tauri-apps/api/core';
 import { BaseUploader } from '../base/BaseUploader';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
 
