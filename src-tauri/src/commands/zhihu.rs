@@ -76,7 +76,7 @@ fn calculate_oss_signature(
     date: &str,
     security_token: &str,
     object_key: &str,
-) -> String {
+) -> Result<String, String> {
     // StringToSign 格式:
     // PUT\n
     // \n                           (Content-MD5 为空)
@@ -92,10 +92,10 @@ fn calculate_oss_signature(
     );
 
     let mut mac = HmacSha1::new_from_slice(access_key.as_bytes())
-        .expect("HMAC can take key of any size");
+        .map_err(|e| format!("HMAC 初始化失败: {}", e))?;
     mac.update(string_to_sign.as_bytes());
 
-    STANDARD.encode(mac.finalize().into_bytes())
+    Ok(STANDARD.encode(mac.finalize().into_bytes()))
 }
 
 /// 获取 RFC 2822 格式的日期
@@ -252,7 +252,7 @@ async fn upload_to_zhihu_inner(
             &date,
             &upload_token.access_token,
             &object_key,
-        );
+        )?;
 
         let authorization = format!("OSS {}:{}", upload_token.access_id, signature);
 

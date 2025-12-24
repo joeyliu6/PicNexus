@@ -639,7 +639,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       }
 
       // 检查是否已存在该服务的结果
-      const exists = item.results?.some(r => r.serviceId === result.serviceId);
+      const exists = item.results?.some((r: HistoryItem['results'][number]) => r.serviceId === result.serviceId);
       if (exists) {
         console.log(`[历史记录] ${item.localFileName} 已有 ${result.serviceId} 结果，跳过`);
         return;

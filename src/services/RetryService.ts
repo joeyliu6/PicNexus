@@ -5,11 +5,13 @@
 
 import { MultiServiceUploader, MultiUploadResult } from '../core/MultiServiceUploader';
 import { UploadQueueManager, QueueItem } from '../uploadQueue';
-import { UserConfig, ServiceType, HistoryItem } from '../config/types';
-import { Store } from '../store';
+import { UserConfig, ServiceType } from '../config/types';
+import type { Store } from '../store';
+import type { HistoryItem } from '../config/types';
 import { UploadResult } from '../uploaders/base/types';
 import { checkNetworkConnectivity } from '../utils/network';
 import { invalidateCache } from '../composables/useHistory';
+import { historyDB } from './HistoryDatabase';
 
 export interface RetryOptions {
   /** 配置存储 */
@@ -283,6 +285,7 @@ export class RetryService {
   /**
    * 更新历史记录中的单个服务结果
    * 使用互斥锁确保并发更新时不会互相覆盖
+   * 使用 SQLite 数据库存储（已从 JSON 迁移）
    */
   private async updateHistoryRecord(
     filePath: string,
@@ -293,55 +296,51 @@ export class RetryService {
     // 使用链式 Promise 实现互斥锁，确保更新操作按顺序执行
     const updateOperation = async () => {
       try {
-        const historyStore = new Store('.history.dat');
-        const items = await historyStore.get<HistoryItem[]>('uploads') || [];
+        // 使用 SQLite 分页获取记录并查找匹配项
+        const { items } = await historyDB.getPage({ page: 1, pageSize: 10000 });
+        const historyItem = items.find((h: HistoryItem) => h.filePath === filePath);
 
-        // 找到对应的历史记录项
-        const historyIndex = items.findIndex(h => h.filePath === filePath);
-        if (historyIndex !== -1) {
-          const historyItem = items[historyIndex];
-
-          // 检查该服务是否已存在结果
-          const existingResultIndex = historyItem.results.findIndex(
-            r => r.serviceId === serviceId
-          );
-
-          // 构建符合 UploadResult 类型的结果
-          const uploadResult: UploadResult = {
-            serviceId,
-            fileKey: result.fileKey || '',
-            url: link,
-            size: result.size,
-            width: result.width,
-            height: result.height,
-            metadata: result.metadata
-          };
-
-          const newResult = {
-            serviceId,
-            status: 'success' as const,
-            result: uploadResult
-          };
-
-          if (existingResultIndex !== -1) {
-            // 更新已有结果
-            historyItem.results[existingResultIndex] = newResult;
-          } else {
-            // 添加新结果
-            historyItem.results.push(newResult);
-          }
-
-          // 保存
-          await historyStore.set('uploads', items);
-          await historyStore.save();
-
-          // 使缓存失效
-          invalidateCache();
-
-          console.log(`[重试] 历史记录已更新: ${filePath} -> ${serviceId}`);
-        } else {
+        if (!historyItem) {
           console.warn(`[重试] 未找到对应的历史记录: ${filePath}`);
+          return;
         }
+
+        // 检查该服务是否已存在结果
+        const updatedResults = [...historyItem.results];
+        const existingIndex = updatedResults.findIndex(r => r.serviceId === serviceId);
+
+        // 构建符合 UploadResult 类型的结果
+        const uploadResult: UploadResult = {
+          serviceId,
+          fileKey: result.fileKey || '',
+          url: link,
+          size: result.size,
+          width: result.width,
+          height: result.height,
+          metadata: result.metadata
+        };
+
+        const newResult = {
+          serviceId,
+          status: 'success' as const,
+          result: uploadResult
+        };
+
+        if (existingIndex !== -1) {
+          // 更新已有结果
+          updatedResults[existingIndex] = newResult;
+        } else {
+          // 添加新结果
+          updatedResults.push(newResult);
+        }
+
+        // 使用 SQLite 更新记录
+        await historyDB.update(historyItem.id, { results: updatedResults });
+
+        // 使缓存失效
+        invalidateCache();
+
+        console.log(`[重试] 历史记录已更新: ${filePath} -> ${serviceId}`);
       } catch (error) {
         console.error('[重试] 更新历史记录失败:', error);
         // 不阻塞主流程

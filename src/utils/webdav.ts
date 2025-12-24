@@ -2,25 +2,83 @@
 // 通用 WebDAV 客户端模块
 
 import { getClient, Body, ResponseType } from '@tauri-apps/api/http';
-import { WebDAVConfig } from '../config';
+import { secureStorage } from '../crypto';
+
+/**
+ * WebDAV 客户端配置（内部使用，密码已解密）
+ */
+interface WebDAVClientConfig {
+  url: string;
+  username: string;
+  password: string;
+  remotePath?: string;
+}
 
 /**
  * WebDAV 客户端类
  * 提供基础的文件读写接口
+ * 注意：密码应使用加密存储，此类在使用时自动解密
  */
 export class WebDAVClient {
-  private config: WebDAVConfig;
+  private config: WebDAVClientConfig;
 
-  constructor(config: WebDAVConfig) {
-    this.config = config;
+  constructor(config: WebDAVClientConfig) {
+    this.config = { ...config };
+  }
+
+  /**
+   * 从加密配置创建 WebDAV 客户端
+   * @param encryptedConfig 包含加密密码的配置
+   * @returns Promise<WebDAVClient> 解密后的客户端实例
+   */
+  static async fromEncryptedConfig(encryptedConfig: {
+    url: string;
+    username: string;
+    password?: string;
+    passwordEncrypted?: string;
+    remotePath?: string;
+  }): Promise<WebDAVClient> {
+    let decryptedPassword = '';
+
+    // 优先使用加密密码
+    if (encryptedConfig.passwordEncrypted) {
+      try {
+        decryptedPassword = await secureStorage.decrypt(encryptedConfig.passwordEncrypted);
+      } catch (error) {
+        console.error('[WebDAV] 密码解密失败:', error);
+        throw new Error('WebDAV 密码解密失败，请重新配置');
+      }
+    } else if (encryptedConfig.password) {
+      // 向后兼容：使用明文密码（旧版本配置）
+      console.warn('[WebDAV] 使用明文密码（建议重新保存配置以启用加密）');
+      decryptedPassword = encryptedConfig.password;
+    } else {
+      throw new Error('WebDAV 密码未配置');
+    }
+
+    return new WebDAVClient({
+      url: encryptedConfig.url,
+      username: encryptedConfig.username,
+      password: decryptedPassword,
+      remotePath: encryptedConfig.remotePath,
+    });
+  }
+
+  /**
+   * 加密密码（用于保存配置时）
+   * @param password 明文密码
+   * @returns Promise<string> 加密后的密码
+   */
+  static async encryptPassword(password: string): Promise<string> {
+    return await secureStorage.encrypt(password);
   }
 
   /**
    * 更新配置
-   * @param config 新的 WebDAV 配置
+   * @param config 新的 WebDAV 配置（密码应已解密）
    */
-  updateConfig(config: WebDAVConfig): void {
-    this.config = config;
+  updateConfig(config: WebDAVClientConfig): void {
+    this.config = { ...config };
   }
 
   /**

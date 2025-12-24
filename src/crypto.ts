@@ -3,6 +3,21 @@
 import { invoke } from '@tauri-apps/api/tauri';
 
 /**
+ * 加密数据魔数前缀
+ * 用于明确标识数据是否已加密，避免启发式检测的不可靠性
+ */
+const ENCRYPTED_MAGIC_PREFIX = 'PNXENC:';
+
+/**
+ * 检查数据是否为加密格式
+ * @param data 待检查的数据
+ * @returns 是否为加密格式
+ */
+export function isEncryptedData(data: string): boolean {
+  return data.startsWith(ENCRYPTED_MAGIC_PREFIX);
+}
+
+/**
  * 将 Base64 字符串转为 Uint8Array
  * @param base64 Base64 编码的字符串
  * @returns Uint8Array 字节数组
@@ -70,7 +85,7 @@ export class SecureStorage {
   /**
    * 加密数据
    * @param text 要加密的明文文本
-   * @returns Promise<string> Base64 编码的密文（包含 IV + 密文）
+   * @returns Promise<string> 带魔数前缀的 Base64 编码密文（格式：PNXENC:Base64(IV + 密文)）
    * @throws {Error} 如果加密失败
    */
   async encrypt(text: string): Promise<string> {
@@ -81,7 +96,7 @@ export class SecureStorage {
     try {
       const encoder = new TextEncoder();
       const data = encoder.encode(text);
-      
+
       // 生成随机 IV (初始化向量)，每次加密都必须不同
       // AES-GCM 推荐使用 12 字节的 IV
       const iv = window.crypto.getRandomValues(new Uint8Array(12));
@@ -98,7 +113,8 @@ export class SecureStorage {
       combined.set(iv);
       combined.set(new Uint8Array(encryptedContent), iv.length);
 
-      return bytesToBase64(combined);
+      // 添加魔数前缀，明确标识这是加密数据
+      return ENCRYPTED_MAGIC_PREFIX + bytesToBase64(combined);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('[SecureStorage] 加密失败:', errorMsg);
@@ -108,16 +124,22 @@ export class SecureStorage {
 
   /**
    * 解密数据
-   * @param encryptedBase64 Base64 编码的密文（包含 IV + 密文）
+   * @param encryptedData 加密数据（支持带魔数前缀和旧版无前缀格式）
    * @returns Promise<string> 解密后的明文文本
    * @throws {Error} 如果解密失败（数据损坏或密钥不匹配）
    */
-  async decrypt(encryptedBase64: string): Promise<string> {
+  async decrypt(encryptedData: string): Promise<string> {
     if (!this.key) {
       await this.init();
     }
 
     try {
+      // 移除魔数前缀（如果存在）
+      let encryptedBase64 = encryptedData;
+      if (encryptedData.startsWith(ENCRYPTED_MAGIC_PREFIX)) {
+        encryptedBase64 = encryptedData.slice(ENCRYPTED_MAGIC_PREFIX.length);
+      }
+
       const combined = base64ToBytes(encryptedBase64);
       
       // 提取 IV (前12字节)

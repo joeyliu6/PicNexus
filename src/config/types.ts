@@ -156,8 +156,11 @@ export interface WebDAVProfile {
   /** WebDAV 用户名 */
   username: string;
 
-  /** WebDAV 密码 */
-  password: string;
+  /** WebDAV 密码（已废弃，仅用于向后兼容迁移） */
+  password?: string;
+
+  /** WebDAV 密码（加密存储） */
+  passwordEncrypted?: string;
 
   /** 远程路径 */
   remotePath: string;

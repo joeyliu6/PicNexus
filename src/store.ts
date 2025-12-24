@@ -1,9 +1,65 @@
 // src/store.ts
 // 简单的存储工具，使用 Tauri 的 fs API 替代 tauri-plugin-store-api
 // v2.8: 支持加密存储，使用 AES-GCM 加密敏感数据
+// v2.9: 增强并发控制，使用全局互斥锁防止竞态条件
 import { readTextFile, writeTextFile, exists, createDir } from '@tauri-apps/api/fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
-import { secureStorage } from './crypto';
+import { secureStorage, isEncryptedData } from './crypto';
+
+/**
+ * 简单的 Promise-based 互斥锁
+ * 用于防止并发文件操作导致的竞态条件
+ */
+class Mutex {
+  private locked = false;
+  private waitQueue: Array<() => void> = [];
+
+  /**
+   * 获取锁
+   * 如果锁已被持有，则等待直到锁可用
+   */
+  async acquire(): Promise<void> {
+    if (!this.locked) {
+      this.locked = true;
+      return;
+    }
+
+    // 等待锁释放
+    return new Promise<void>((resolve) => {
+      this.waitQueue.push(resolve);
+    });
+  }
+
+  /**
+   * 释放锁
+   * 如果有等待的任务，唤醒队列中的第一个任务
+   */
+  release(): void {
+    if (this.waitQueue.length > 0) {
+      // 唤醒队列中的下一个等待者
+      const next = this.waitQueue.shift();
+      if (next) {
+        next();
+      }
+    } else {
+      this.locked = false;
+    }
+  }
+
+  /**
+   * 使用锁执行操作
+   * 自动获取和释放锁，确保操作的原子性
+   * @param fn 要执行的异步操作
+   */
+  async withLock<T>(fn: () => Promise<T>): Promise<T> {
+    await this.acquire();
+    try {
+      return await fn();
+    } finally {
+      this.release();
+    }
+  }
+}
 
 /**
  * 自定义错误类，用于存储操作
@@ -30,13 +86,14 @@ export class StoreError extends Error {
 /**
  * 简单的键值存储类
  * 使用 JSON 文件存储数据，提供并发控制和错误处理
+ * v2.9: 使用全局互斥锁确保读-修改-写操作的原子性
  */
 class SimpleStore {
   /** 存储文件的路径（相对于应用数据目录） */
   private filePath: string;
-  
-  /** 待处理的写操作队列，用于防止并发写入冲突 */
-  private pendingWrites: Map<string, Promise<void>> = new Map();
+
+  /** 全局互斥锁，用于保护读-修改-写操作 */
+  private mutex: Mutex = new Mutex();
 
   /**
    * 创建存储实例
@@ -55,22 +112,6 @@ class SimpleStore {
     this.filePath = filename.trim();
   }
   
-  /**
-   * 等待所有待处理的写操作完成
-   * 用于防止并发写入冲突
-   * @param excludeKey 要排除的键名（当前正在写入的键）
-   * @private
-   */
-  private async waitForPendingWrites(excludeKey?: string): Promise<void> {
-    const promises = Array.from(this.pendingWrites.entries())
-      .filter(([key]) => key !== excludeKey)
-      .map(([_, promise]) => promise.catch(() => {})); // 忽略错误，只等待完成
-    
-    if (promises.length > 0) {
-      await Promise.all(promises);
-    }
-  }
-
   /**
    * 获取数据文件路径
    * @throws {StoreError} 如果无法获取应用数据目录
@@ -168,21 +209,31 @@ class SimpleStore {
       }
 
       // 【v2.8 加密存储】尝试解密
-      // 为了兼容旧版本（明文），先尝试 JSON.parse，如果失败或看起来是加密串，再尝试解密
+      // 使用魔数前缀明确检测加密数据，避免启发式检测的不可靠性
       let decryptedContent = content;
       try {
-        // 简单的启发式检查：如果不是以 { 或 [ 开头，可能是加密后的 Base64
-        if (!content.trim().startsWith('{') && !content.trim().startsWith('[')) {
-          console.log(`[Store] 检测到加密数据，尝试解密...`);
+        // 使用 isEncryptedData 进行精确检测（检查 PNXENC: 前缀）
+        if (isEncryptedData(content.trim())) {
+          console.log(`[Store] 检测到加密数据（魔数前缀），尝试解密...`);
           decryptedContent = await secureStorage.decrypt(content);
           console.log(`[Store] ✓ 解密成功`);
+        } else if (!content.trim().startsWith('{') && !content.trim().startsWith('[')) {
+          // 向后兼容：旧版本加密数据（无魔数前缀）
+          console.log(`[Store] 检测到可能的旧版加密数据，尝试解密...`);
+          try {
+            decryptedContent = await secureStorage.decrypt(content);
+            console.log(`[Store] ✓ 旧版加密数据解密成功`);
+          } catch {
+            // 旧版解密失败，可能是明文数据
+            console.warn(`[Store] 旧版解密失败，尝试按明文解析`);
+            decryptedContent = content;
+          }
         }
       } catch (decryptError: any) {
-        // 如果解密失败，可能本来就是明文（旧版本），忽略错误尝试直接解析
+        // 解密失败，记录错误但不静默降级
         const errorMsg = decryptError?.message || String(decryptError);
-        console.warn(`[Store] 解密失败，尝试按明文解析: ${errorMsg}`);
-        // 继续使用原始 content
-        decryptedContent = content;
+        console.error(`[Store] 解密失败: ${errorMsg}`);
+        throw new StoreError(`加密数据解密失败: ${errorMsg}`, 'read', key);
       }
 
       // 解析 JSON
@@ -259,6 +310,7 @@ class SimpleStore {
 
   /**
    * 保存数据到存储
+   * 使用互斥锁确保读-修改-写操作的原子性，防止竞态条件
    * @param key 数据键
    * @param value 数据值
    * @throws {StoreError} 如果保存失败
@@ -277,22 +329,12 @@ class SimpleStore {
     if (value === undefined) {
       console.warn(`[Store] 警告: 尝试保存 undefined 值到键 "${key}"`);
     }
-    
-    // 等待其他写操作完成，避免并发写入冲突
-    await this.waitForPendingWrites(key);
-    
-    // 创建写入Promise并注册
-    const writePromise = (async () => {
-      try {
-        await this._performWrite(key, value);
-      } finally {
-        // 写入完成后清除
-        this.pendingWrites.delete(key);
-      }
-    })();
-    
-    this.pendingWrites.set(key, writePromise);
-    await writePromise;
+
+    // 【v2.9】使用互斥锁保护整个读-修改-写操作
+    // 这确保了即使有多个并发写入，也不会发生数据覆盖
+    await this.mutex.withLock(async () => {
+      await this._performWrite(key, value);
+    });
   }
   
   /**
@@ -326,45 +368,15 @@ class SimpleStore {
       }
 
       // 读取现有数据（并尝试解密）
+      // 【v2.9 增强】读取失败时不再静默使用空对象，避免数据丢失
       let data: Record<string, any> = {};
       const fileExists = await exists(dataPath);
       if (fileExists) {
+        let oldFileContent: string;
         try {
-          const oldFileContent = await readTextFile(dataPath);
-          if (oldFileContent && oldFileContent.trim().length > 0) {
-            try {
-              // 【v2.8 加密存储】尝试解密旧数据
-              let oldContent = oldFileContent;
-              // 简单的启发式检查：如果不是以 { 或 [ 开头，可能是加密后的 Base64
-              if (!oldContent.trim().startsWith('{') && !oldContent.trim().startsWith('[')) {
-                try {
-                  console.log(`[Store] 检测到加密数据，尝试解密...`);
-                  oldContent = await secureStorage.decrypt(oldFileContent);
-                  console.log(`[Store] ✓ 解密成功`);
-                } catch (decryptError: any) {
-                  // 如果解密失败，可能本来就是明文（旧版本），忽略错误尝试直接解析
-                  const errorMsg = decryptError?.message || String(decryptError);
-                  console.warn(`[Store] 解密失败，尝试按明文解析: ${errorMsg}`);
-                  // 继续使用原始内容
-                  oldContent = oldFileContent;
-                }
-              }
-              
-              data = JSON.parse(oldContent);
-              // 验证解析后的数据是对象
-              if (typeof data !== 'object' || data === null || Array.isArray(data)) {
-                console.warn('[Store] 警告: 现有数据格式不正确，将重置为空对象');
-                data = {};
-              }
-            } catch (parseError: any) {
-              // 如果文件损坏，使用空对象
-              console.warn(`[Store] 警告: 数据文件损坏 (${this.filePath})，将重置数据`);
-              console.warn(`[Store] 解析错误详情:`, parseError?.message || String(parseError));
-              data = {};
-            }
-          }
+          oldFileContent = await readTextFile(dataPath);
         } catch (readError: any) {
-          // 读取失败，但继续使用空对象（可能是文件被占用或权限问题）
+          // 读取失败，抛出错误而不是静默继续
           const errorMsg = readError?.message || String(readError);
           if (errorMsg.includes('Permission') || errorMsg.includes('permission')) {
             throw new StoreError(
@@ -374,8 +386,95 @@ class SimpleStore {
               readError
             );
           }
-          console.warn(`[Store] 警告: 无法读取现有数据，将创建新文件: ${errorMsg}`);
-          data = {};
+          // 文件被占用等错误，抛出而不是静默覆盖
+          throw new StoreError(
+            `无法读取现有数据文件，操作中止以防止数据丢失: ${errorMsg}`,
+            'write',
+            key,
+            readError
+          );
+        }
+
+        if (oldFileContent && oldFileContent.trim().length > 0) {
+          // 【v2.9】使用 isEncryptedData 进行精确检测
+          let oldContent = oldFileContent;
+          const trimmedContent = oldFileContent.trim();
+
+          if (isEncryptedData(trimmedContent)) {
+            // 带魔数前缀的加密数据
+            try {
+              console.log(`[Store] 检测到加密数据（魔数前缀），尝试解密...`);
+              oldContent = await secureStorage.decrypt(oldFileContent);
+              console.log(`[Store] ✓ 解密成功`);
+            } catch (decryptError: any) {
+              const errorMsg = decryptError?.message || String(decryptError);
+              console.error(`[Store] 解密失败: ${errorMsg}`);
+              // 创建损坏文件的备份
+              try {
+                const backupPath = `${dataPath}.corrupted.${Date.now()}`;
+                await writeTextFile(backupPath, oldFileContent);
+                console.log(`[Store] ✓ 已创建损坏文件的备份: ${backupPath}`);
+              } catch (backupError) {
+                console.warn(`[Store] 创建备份失败:`, backupError);
+              }
+              throw new StoreError(
+                `配置文件解密失败，操作中止以防止数据丢失: ${errorMsg}`,
+                'write',
+                key,
+                decryptError
+              );
+            }
+          } else if (!trimmedContent.startsWith('{') && !trimmedContent.startsWith('[')) {
+            // 可能是旧版加密数据（无魔数前缀），尝试解密
+            try {
+              console.log(`[Store] 检测到可能的旧版加密数据，尝试解密...`);
+              oldContent = await secureStorage.decrypt(oldFileContent);
+              console.log(`[Store] ✓ 旧版加密数据解密成功`);
+            } catch (decryptError: any) {
+              // 旧版解密失败，可能是明文数据，继续尝试解析
+              const errorMsg = decryptError?.message || String(decryptError);
+              console.warn(`[Store] 旧版解密失败，尝试按明文解析: ${errorMsg}`);
+              oldContent = oldFileContent;
+            }
+          }
+
+          // 解析 JSON
+          try {
+            data = JSON.parse(oldContent);
+            // 验证解析后的数据是对象
+            if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+              console.warn('[Store] 警告: 现有数据格式不正确（非对象），创建备份后重置');
+              // 创建备份
+              try {
+                const backupPath = `${dataPath}.invalid.${Date.now()}`;
+                await writeTextFile(backupPath, oldFileContent);
+                console.log(`[Store] ✓ 已创建无效数据的备份: ${backupPath}`);
+              } catch (backupError) {
+                console.warn(`[Store] 创建备份失败:`, backupError);
+              }
+              data = {};
+            }
+          } catch (parseError: any) {
+            // JSON 解析失败，创建备份并抛出错误
+            const errorMsg = parseError?.message || String(parseError);
+            console.error(`[Store] JSON 解析失败 (${this.filePath}):`, errorMsg);
+
+            // 创建损坏文件的备份
+            try {
+              const backupPath = `${dataPath}.corrupted.${Date.now()}`;
+              await writeTextFile(backupPath, oldFileContent);
+              console.log(`[Store] ✓ 已创建损坏文件的备份: ${backupPath}`);
+            } catch (backupError) {
+              console.warn(`[Store] 创建备份失败:`, backupError);
+            }
+
+            throw new StoreError(
+              `配置文件已损坏，操作中止以防止数据丢失。已创建备份文件。错误: ${errorMsg}`,
+              'write',
+              key,
+              parseError
+            );
+          }
         }
       }
 

@@ -92,23 +92,24 @@ impl TosSigner {
         Utc::now().format("%Y%m%dT%H%M%SZ").to_string()
     }
 
-    /// HMAC-SHA256
-    fn hmac_sha256(key: &[u8], data: &str) -> Vec<u8> {
-        let mut mac = HmacSha256::new_from_slice(key).expect("HMAC error");
+    /// HMAC-SHA256（安全处理，避免 panic）
+    fn hmac_sha256(key: &[u8], data: &str) -> Result<Vec<u8>, String> {
+        let mut mac = HmacSha256::new_from_slice(key)
+            .map_err(|e| format!("HMAC 初始化失败: {}", e))?;
         mac.update(data.as_bytes());
-        mac.finalize().into_bytes().to_vec()
+        Ok(mac.finalize().into_bytes().to_vec())
     }
 
     /// 获取签名密钥 (TOS V4: 直接使用 secretKey，不加前缀)
-    fn get_signing_key(&self, date: &str) -> Vec<u8> {
-        let k_date = Self::hmac_sha256(self.secret_key.as_bytes(), date);
-        let k_region = Self::hmac_sha256(&k_date, TOS_REGION);
-        let k_service = Self::hmac_sha256(&k_region, TOS_SERVICE);
+    fn get_signing_key(&self, date: &str) -> Result<Vec<u8>, String> {
+        let k_date = Self::hmac_sha256(self.secret_key.as_bytes(), date)?;
+        let k_region = Self::hmac_sha256(&k_date, TOS_REGION)?;
+        let k_service = Self::hmac_sha256(&k_region, TOS_SERVICE)?;
         Self::hmac_sha256(&k_service, "request")
     }
 
     /// 签名请求
-    fn sign(&self, method: &str, uri: &str, query_params: &[(&str, &str)]) -> Vec<(String, String)> {
+    fn sign(&self, method: &str, uri: &str, query_params: &[(&str, &str)]) -> Result<Vec<(String, String)>, String> {
         let timestamp = Self::get_timestamp();
         let date = &timestamp[0..8];
 
@@ -127,9 +128,9 @@ impl TosSigner {
         let scope = format!("{}/{}/{}/request", date, TOS_REGION, TOS_SERVICE);
         let string_to_sign = self.build_string_to_sign(&timestamp, &scope, &canonical_request);
 
-        // 计算签名
-        let signing_key = self.get_signing_key(date);
-        let signature = hex::encode(Self::hmac_sha256(&signing_key, &string_to_sign));
+        // 计算签名（安全处理错误）
+        let signing_key = self.get_signing_key(date)?;
+        let signature = hex::encode(Self::hmac_sha256(&signing_key, &string_to_sign)?);
 
         // 构建 Authorization
         let signed_headers_str: String = sign_headers.iter()
@@ -148,7 +149,7 @@ impl TosSigner {
             .collect::<Vec<_>>();
         headers.push(("authorization".to_string(), authorization));
 
-        headers
+        Ok(headers)
     }
 
     /// 构建规范请求
@@ -292,7 +293,7 @@ async fn init_multipart_upload(
     let uri = format!("/{}", file_key);
     let query_params = [("uploads", "")];
 
-    let signed_headers = signer.sign("POST", &uri, &query_params);
+    let signed_headers = signer.sign("POST", &uri, &query_params)?;
 
     // URL 中对路径进行编码
     let encoded_path: String = file_key.split('/').map(|p| urlencoding::encode(p).to_string()).collect::<Vec<_>>().join("/");
@@ -365,7 +366,7 @@ async fn upload_part(
         .map(|(k, v)| (*k, v.as_str()))
         .collect();
 
-    let signed_headers = signer.sign("PUT", &uri, &query_params_ref);
+    let signed_headers = signer.sign("PUT", &uri, &query_params_ref)?;
 
     let encoded_path: String = file_key.split('/').map(|p| urlencoding::encode(p).to_string()).collect::<Vec<_>>().join("/");
     let url = format!("https://{}{}?partNumber={}&uploadId={}", TOS_HOST, format!("/{}", encoded_path), part_number, upload_id);
@@ -414,7 +415,7 @@ async fn complete_multipart_upload(
     let uri = format!("/{}", file_key);
     let query_params = [("uploadId", upload_id)];
 
-    let signed_headers = signer.sign("POST", &uri, &query_params);
+    let signed_headers = signer.sign("POST", &uri, &query_params)?;
 
     // 构建请求体
     let body = serde_json::json!({
@@ -489,8 +490,8 @@ pub async fn upload_to_nami(
     println!("[Nami] 文件哈希: {}, key: {}", hash, file_key);
 
     // 4. 创建 HTTP 客户端
+    // 注意：使用标准 TLS 验证，确保通信安全
     let client = Client::builder()
-        .danger_accept_invalid_certs(true)
         .build()
         .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
 
@@ -601,8 +602,8 @@ pub async fn test_nami_connection(cookie: String, auth_token: String) -> Result<
     println!("[Nami Test] 开始测试连接...");
 
     // 创建 HTTP 客户端
+    // 注意：使用标准 TLS 验证，确保通信安全
     let client = Client::builder()
-        .danger_accept_invalid_certs(true)
         .timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;

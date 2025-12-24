@@ -32,12 +32,12 @@ async function handleStartLogin() {
 
     // 启动后端 Cookie 监控
     await invoke('start_cookie_monitoring', {
-      serviceId: serviceId,
-      targetDomains: provider.domains,  // 传入完整的域名数组
-      requiredFields: provider.cookieValidation?.requiredFields || [],
-      anyOfFields: provider.cookieValidation?.anyOfFields || [],
-      initialDelayMs: provider.cookieValidation?.monitoringDelay?.initialDelayMs,
-      pollingIntervalMs: provider.cookieValidation?.monitoringDelay?.pollingIntervalMs
+      service_id: serviceId,
+      target_domains: provider.domains,  // 传入完整的域名数组
+      required_fields: provider.cookieValidation?.requiredFields || [],
+      any_of_fields: provider.cookieValidation?.anyOfFields || [],
+      initial_delay_ms: provider.cookieValidation?.monitoringDelay?.initialDelayMs,
+      polling_interval_ms: provider.cookieValidation?.monitoringDelay?.pollingIntervalMs
     });
 
     console.log(`[LoginWebview] Cookie monitoring started`);
@@ -62,10 +62,10 @@ async function handleGetCookie() {
     // 尝试从请求头获取（Windows 专用）
     try {
       cookie = await invoke<string>('get_request_header_cookie', {
-        serviceId: serviceId,
-        targetDomains: provider.domains,  // 传入完整的域名数组
-        requiredFields: provider.cookieValidation?.requiredFields || [],
-        anyOfFields: provider.cookieValidation?.anyOfFields || []
+        service_id: serviceId,
+        target_domains: provider.domains,  // 传入完整的域名数组
+        required_fields: provider.cookieValidation?.requiredFields || [],
+        any_of_fields: provider.cookieValidation?.anyOfFields || []
       });
     } catch (err) {
       console.warn('[LoginWebview] Request header cookie failed:', err);
@@ -85,9 +85,9 @@ async function handleGetCookie() {
     // 保存 Cookie
     await invoke('save_cookie_from_login', {
       cookie: cookie.trim(),
-      serviceId: serviceId,
-      requiredFields: provider.cookieValidation?.requiredFields || [],
-      anyOfFields: provider.cookieValidation?.anyOfFields || []
+      service_id: serviceId,
+      required_fields: provider.cookieValidation?.requiredFields || [],
+      any_of_fields: provider.cookieValidation?.anyOfFields || []
     });
 
     console.log(`[LoginWebview] Cookie saved successfully`);

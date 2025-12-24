@@ -179,6 +179,16 @@ pub async fn upload_file_stream(
     http_client: tauri::State<'_, HttpClient>
 ) -> Result<UploadResponse, AppError> {
 
+    // 安全验证：防止路径遍历攻击
+    // 使用 canonicalize 解析真实路径，防止通过 ../ 或符号链接访问未授权文件
+    let canonical_path = std::fs::canonicalize(&file_path)
+        .map_err(|e| AppError::FileIoError(format!("无法解析文件路径: {}", e)))?;
+
+    // 验证是普通文件而不是目录或特殊文件
+    if !canonical_path.is_file() {
+        return Err(AppError::FileIoError("指定的路径不是有效的文件".to_string()));
+    }
+
     // 发送步骤1进度：读取文件 (0%)
     let _ = window.emit("upload://progress", ProgressPayload {
         id: id.clone(),
@@ -193,7 +203,8 @@ pub async fn upload_file_stream(
     // Unused variable file_name
     let _file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("image.jpg");
 
-    let file = File::open(&file_path).await?;
+    // 使用规范化后的路径打开文件
+    let file = File::open(&canonical_path).await?;
     let metadata = file.metadata().await?;
     let total_len = metadata.len();
 
@@ -207,7 +218,7 @@ pub async fn upload_file_stream(
     let id_clone = id.clone();
     let total_len_clone = total_len;
     
-    let progress_stream = stream.map(move |chunk| {
+    let progress_stream = stream.map(move |chunk: Result<tokio_util::bytes::BytesMut, std::io::Error>| {
         if let Ok(bytes) = &chunk {
             // 安全处理 Mutex lock，避免 panic
             if let Ok(mut uploaded) = uploaded_clone.lock() {

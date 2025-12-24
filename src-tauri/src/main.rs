@@ -37,6 +37,18 @@ use rand::Rng;
 const SERVICE_NAME: &str = "us.picnex.app.secure";
 const KEY_NAME: &str = "config_encryption_key";
 
+/// 验证字段名是否安全（防止 JavaScript 注入）
+/// 只允许字母、数字、下划线和连字符
+fn is_safe_field_name(field: &str) -> bool {
+    !field.is_empty() && field.len() <= 64 && field.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+/// 验证服务 ID 是否安全（防止 JavaScript 注入）
+/// 只允许字母、数字、下划线和连字符
+fn is_safe_service_id(service: &str) -> bool {
+    !service.is_empty() && service.len() <= 32 && service.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
 /// 全局 HTTP 客户端状态
 /// 使用单例模式复用 HTTP 客户端，提升性能
 pub struct HttpClient(pub reqwest::Client);
@@ -330,27 +342,57 @@ async fn save_cookie_from_login(
 }
 
 /// 检查单个字段是否存在且值非空
+/// 修复：使用精确边界匹配，防止 "SUB" 误匹配 "SUBP" 或 "_SUB"
 /// service_id: 服务标识（预留参数，用于未来可能的特殊验证逻辑）
 fn check_cookie_field(cookie: &str, field: &str, _service_id: &str) -> bool {
-    let pattern = format!("{}=", field);
-    if let Some(pos) = cookie.find(&pattern) {
-        let value_start = pos + pattern.len();
-        let remaining = &cookie[value_start..];
-        let value_end = remaining.find(';').unwrap_or(remaining.len());
-        // 检查值是否非空
-        if value_end == 0 {
-            eprintln!("[Cookie验证] 字段 {} 值为空", field);
-            return false;
-        }
-        let value = &remaining[..value_end];
-        eprintln!("[Cookie验证] 字段 {} = {} (长度: {})", field,
-            if value.len() > 20 { format!("{}...", &value[..20]) } else { value.to_string() },
-            value.len());
-
-        true
-    } else {
-        false
+    // 先验证字段名只包含安全字符
+    if !is_safe_field_name(field) {
+        eprintln!("[Cookie验证] 无效字段名: {}", field);
+        return false;
     }
+
+    // 使用精确匹配逻辑：字段前必须是字符串开头或分号（可选空格）
+    // 遍历所有可能的位置进行验证
+    let search_pattern = format!("{}=", field);
+    let mut search_start = 0;
+
+    while let Some(pos) = cookie[search_start..].find(&search_pattern) {
+        let absolute_pos = search_start + pos;
+
+        // 检查字段名前的边界：必须是字符串开头或分号后（可选空格）
+        let is_valid_start = if absolute_pos == 0 {
+            true
+        } else {
+            // 检查前一个非空白字符是否是分号
+            let before = &cookie[..absolute_pos];
+            let trimmed = before.trim_end();
+            trimmed.ends_with(';') || trimmed.is_empty()
+        };
+
+        if is_valid_start {
+            let value_start = absolute_pos + search_pattern.len();
+            let remaining = &cookie[value_start..];
+            let value_end = remaining.find(';').unwrap_or(remaining.len());
+
+            // 检查值是否非空
+            if value_end == 0 {
+                eprintln!("[Cookie验证] 字段 {} 值为空", field);
+                return false;
+            }
+
+            let value = &remaining[..value_end];
+            eprintln!("[Cookie验证] 字段 {} = {} (长度: {})", field,
+                if value.len() > 20 { format!("{}...", &value[..20]) } else { value.to_string() },
+                value.len());
+
+            return true;
+        }
+
+        // 继续搜索下一个匹配
+        search_start = absolute_pos + 1;
+    }
+
+    false
 }
 
 /// 验证 Cookie 是否包含必要字段（且值非空）
@@ -404,6 +446,12 @@ async fn start_cookie_monitoring(
     const MAX_POLLING_INTERVAL_MS: u64 = 5000;      // 最大轮询间隔 5 秒（避免检测过慢）
 
     let service = service_id.unwrap_or_else(|| "weibo".to_string());
+
+    // 安全验证：防止 JavaScript 注入
+    if !is_safe_service_id(&service) {
+        return Err(format!("无效的服务 ID: {}，只允许字母、数字、下划线和连字符", service));
+    }
+
     // 优先使用 target_domains 数组，向后兼容 target_domain 单个值
     let domains: Vec<String> = target_domains
         .filter(|v| !v.is_empty())
@@ -414,6 +462,13 @@ async fn start_cookie_monitoring(
         });
     let fields = required_fields.unwrap_or_else(|| vec!["SUB".to_string(), "SUBP".to_string()]);
     let any_fields = any_of_fields.unwrap_or_default();
+
+    // 安全验证：检查所有字段名是否安全
+    for field in fields.iter().chain(any_fields.iter()) {
+        if !is_safe_field_name(field) {
+            return Err(format!("无效的字段名: {}，只允许字母、数字、下划线和连字符", field));
+        }
+    }
 
     // 应用延迟配置（带边界保护）
     let initial_delay = initial_delay_ms
@@ -550,6 +605,12 @@ async fn get_request_header_cookie(
     any_of_fields: Option<Vec<String>>,   // 任意字段（可选，OR 逻辑）
 ) -> Result<String, String> {
     let service = service_id.unwrap_or_else(|| "weibo".to_string());
+
+    // 安全验证：防止 JavaScript 注入
+    if !is_safe_service_id(&service) {
+        return Err(format!("无效的服务 ID: {}，只允许字母、数字、下划线和连字符", service));
+    }
+
     // 优先使用 target_domains 数组，向后兼容 target_domain 单个值
     let domains: Vec<String> = target_domains
         .filter(|v| !v.is_empty())
@@ -560,6 +621,13 @@ async fn get_request_header_cookie(
         });
     let fields = required_fields.unwrap_or_else(|| vec!["SUB".to_string(), "SUBP".to_string()]);
     let any_fields = any_of_fields.unwrap_or_default();
+
+    // 安全验证：检查所有字段名是否安全
+    for field in fields.iter().chain(any_fields.iter()) {
+        if !is_safe_field_name(field) {
+            return Err(format!("无效的字段名: {}，只允许字母、数字、下划线和连字符", field));
+        }
+    }
 
     #[cfg(target_os = "windows")]
     {

@@ -95,8 +95,8 @@ pub async fn upload_to_qiyu(
     }));
 
     // 6. 发送上传请求（直接 POST 二进制数据）
+    // 注意：使用标准 TLS 验证，确保通信安全
     let client = Client::builder()
-        .danger_accept_invalid_certs(true)
         .timeout(Duration::from_secs(45))
         .build()
         .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;

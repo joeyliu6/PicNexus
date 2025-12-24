@@ -6,7 +6,7 @@
  */
 
 import Database from 'tauri-plugin-sql-api';
-import type { HistoryItem, ServiceType } from '@/config/types';
+import type { HistoryItem, ServiceType } from '../config/types';
 
 /** 数据库文件名 */
 const DB_PATH = 'sqlite:history.db';

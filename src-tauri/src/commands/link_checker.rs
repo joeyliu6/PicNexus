@@ -4,6 +4,15 @@
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
+/// 最大允许下载的文件大小（50MB）
+const MAX_DOWNLOAD_SIZE: usize = 50 * 1024 * 1024;
+
+/// 临时文件前缀，用于清理时识别
+const TEMP_FILE_PREFIX: &str = "weibo_reupload_";
+
+/// 临时文件过期时间（1小时 = 3600秒）
+const TEMP_FILE_MAX_AGE_SECS: u64 = 3600;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CheckLinkResult {
     pub link: String,
@@ -163,15 +172,71 @@ pub async fn check_image_link(
     }
 }
 
+/// 清理过期的临时文件
+/// 删除超过 TEMP_FILE_MAX_AGE_SECS 秒的旧临时文件，防止磁盘空间被耗尽
+fn cleanup_old_temp_files() {
+    let temp_dir = std::env::temp_dir();
+
+    // 读取临时目录
+    let entries = match std::fs::read_dir(&temp_dir) {
+        Ok(entries) => entries,
+        Err(e) => {
+            eprintln!("[临时文件清理] 无法读取临时目录: {}", e);
+            return;
+        }
+    };
+
+    let now = std::time::SystemTime::now();
+    let mut cleaned_count = 0;
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+
+        // 只处理以特定前缀开头的文件
+        if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+            if !file_name.starts_with(TEMP_FILE_PREFIX) {
+                continue;
+            }
+
+            // 检查文件修改时间
+            if let Ok(metadata) = entry.metadata() {
+                if let Ok(modified) = metadata.modified() {
+                    if let Ok(age) = now.duration_since(modified) {
+                        if age.as_secs() > TEMP_FILE_MAX_AGE_SECS {
+                            // 删除过期文件
+                            if let Err(e) = std::fs::remove_file(&path) {
+                                eprintln!("[临时文件清理] 删除失败 {:?}: {}", path, e);
+                            } else {
+                                cleaned_count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if cleaned_count > 0 {
+        eprintln!("[临时文件清理] 已清理 {} 个过期文件", cleaned_count);
+    }
+}
+
 /// 从 URL 下载图片到临时目录
 ///
 /// 用于重新上传功能：从有效图床下载图片，然后重新上传到失效图床
+///
+/// 安全限制：
+/// - 最大文件大小：50MB
+/// - 自动清理超过1小时的旧临时文件
 #[tauri::command]
 pub async fn download_image_from_url(
     url: String,
     http_client: tauri::State<'_, crate::HttpClient>
 ) -> Result<String, String> {
     eprintln!("[下载图片] 开始下载: {}", url);
+
+    // 首先清理过期的临时文件，防止磁盘空间耗尽
+    cleanup_old_temp_files();
 
     // 发送 GET 请求下载图片
     let response = http_client.0
@@ -190,21 +255,41 @@ pub async fn download_image_from_url(
         return Err(format!("下载失败: HTTP {}", status.as_u16()));
     }
 
+    // 预检查 Content-Length（如果服务器提供）
+    if let Some(content_length) = response.content_length() {
+        if content_length as usize > MAX_DOWNLOAD_SIZE {
+            eprintln!("[下载图片] ✗ 文件过大: {} bytes (最大 {} bytes)", content_length, MAX_DOWNLOAD_SIZE);
+            return Err(format!("文件过大: {} MB (最大 {} MB)",
+                content_length / 1024 / 1024,
+                MAX_DOWNLOAD_SIZE / 1024 / 1024
+            ));
+        }
+    }
+
     // 读取响应内容
     let bytes = response.bytes().await.map_err(|e| {
         eprintln!("[下载图片] ✗ 读取内容失败: {}", e);
         format!("读取内容失败: {}", e)
     })?;
 
+    // 实际大小检查（防止服务器返回错误的 Content-Length）
+    if bytes.len() > MAX_DOWNLOAD_SIZE {
+        eprintln!("[下载图片] ✗ 文件过大: {} bytes (最大 {} bytes)", bytes.len(), MAX_DOWNLOAD_SIZE);
+        return Err(format!("文件过大: {} MB (最大 {} MB)",
+            bytes.len() / 1024 / 1024,
+            MAX_DOWNLOAD_SIZE / 1024 / 1024
+        ));
+    }
+
     eprintln!("[下载图片] ✓ 下载成功，大小: {} bytes", bytes.len());
 
     // 创建临时文件
     let temp_dir = std::env::temp_dir();
-    let file_name = format!("weibo_reupload_{}.jpg", chrono::Local::now().timestamp());
+    let file_name = format!("{}{}.jpg", TEMP_FILE_PREFIX, chrono::Local::now().timestamp());
     let temp_path = temp_dir.join(file_name);
 
     // 写入文件
-    std::fs::write(&temp_path, bytes).map_err(|e| {
+    std::fs::write(&temp_path, &bytes).map_err(|e| {
         eprintln!("[下载图片] ✗ 写入文件失败: {}", e);
         format!("写入文件失败: {}", e)
     })?;

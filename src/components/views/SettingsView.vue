@@ -86,7 +86,7 @@ const formData = ref({
   nowcoder: { cookie: '' },
   zhihu: { cookie: '' },
   nami: { cookie: '' },
-  webdav: { profiles: [] as Array<{ id: string; name: string; url: string; username: string; password: string; remotePath: string }>, activeId: null as string | null },
+  webdav: { profiles: [] as Array<{ id: string; name: string; url: string; username: string; password: string; passwordEncrypted?: string; remotePath: string }>, activeId: null as string | null },
   linkPrefixEnabled: true,
   selectedPrefixIndex: 0,
   linkPrefixList: [...DEFAULT_PREFIXES],
@@ -193,6 +193,24 @@ const loadSettings = async () => {
 const saveSettings = async (silent = false) => {
   try {
     const currentConfig = configManager.config.value;
+
+    // 处理 WebDAV 密码加密
+    const webdavConfig = { ...formData.value.webdav };
+    if (webdavConfig.profiles) {
+      for (const profile of webdavConfig.profiles) {
+        // 如果有明文密码且未加密，则加密存储
+        if (profile.password && profile.password.trim()) {
+          try {
+            profile.passwordEncrypted = await WebDAVClient.encryptPassword(profile.password);
+            // 清除明文密码
+            profile.password = '';
+          } catch (err) {
+            console.error('[WebDAV] 密码加密失败:', err);
+          }
+        }
+      }
+    }
+
     const updatedConfig: UserConfig = {
       ...currentConfig,
       availableServices: [...availableServices.value],
@@ -204,7 +222,7 @@ const saveSettings = async (silent = false) => {
         zhihu: { enabled: currentConfig.services?.zhihu?.enabled ?? false, cookie: formData.value.zhihu.cookie.trim() },
         nami: { enabled: currentConfig.services?.nami?.enabled ?? false, cookie: formData.value.nami.cookie.trim(), authToken: '' }
       },
-      webdav: { ...formData.value.webdav },
+      webdav: webdavConfig,
       linkPrefixConfig: {
         enabled: formData.value.linkPrefixEnabled,
         selectedIndex: formData.value.selectedPrefixIndex,
@@ -602,19 +620,21 @@ async function importSettingsLocal() {
  * 获取当前 WebDAV 客户端和远程路径
  * @param fileType 文件类型：'settings' 或 'history'
  */
-function getWebDAVClientAndPath(fileType: 'settings' | 'history'): { client: WebDAVClient; remotePath: string } | null {
+async function getWebDAVClientAndPath(fileType: 'settings' | 'history'): Promise<{ client: WebDAVClient; remotePath: string } | null> {
   const profile = activeWebDAVProfile.value;
-  if (!profile || !profile.url || !profile.username || !profile.password) {
+  if (!profile || !profile.url || !profile.username || (!profile.password && !profile.passwordEncrypted)) {
     toast.warn('请先配置 WebDAV 连接');
     return null;
   }
 
-  const client = new WebDAVClient({
+  // 使用安全的加密密码创建客户端
+  const client = await WebDAVClient.fromEncryptedConfig({
     url: profile.url,
     username: profile.username,
     password: profile.password,
+    passwordEncrypted: profile.passwordEncrypted,
     remotePath: profile.remotePath,
-  } as any);
+  });
 
   let remotePath = profile.remotePath || '/PicNexus/';
   if (remotePath.endsWith('/')) {
@@ -633,7 +653,7 @@ function getWebDAVClientAndPath(fileType: 'settings' | 'history'): { client: Web
  * 上传配置到云端 (WebDAV)
  */
 async function uploadSettingsCloud() {
-  const webdav = getWebDAVClientAndPath('settings');
+  const webdav = await getWebDAVClientAndPath('settings');
   if (!webdav) return;
 
   try {
@@ -666,7 +686,7 @@ async function uploadSettingsCloud() {
 async function downloadSettingsOverwrite() {
   downloadSettingsMenuVisible.value = false;
 
-  const webdav = getWebDAVClientAndPath('settings');
+  const webdav = await getWebDAVClientAndPath('settings');
   if (!webdav) return;
 
   // 二次确认
@@ -722,7 +742,7 @@ async function downloadSettingsOverwrite() {
 async function downloadSettingsMerge() {
   downloadSettingsMenuVisible.value = false;
 
-  const webdav = getWebDAVClientAndPath('settings');
+  const webdav = await getWebDAVClientAndPath('settings');
   if (!webdav) return;
 
   try {
@@ -869,7 +889,7 @@ async function importHistoryLocal() {
 async function uploadHistoryForce() {
   uploadHistoryMenuVisible.value = false;
 
-  const webdav = getWebDAVClientAndPath('history');
+  const webdav = await getWebDAVClientAndPath('history');
   if (!webdav) return;
 
   // 二次确认
@@ -910,7 +930,7 @@ async function uploadHistoryForce() {
 async function uploadHistoryMerge() {
   uploadHistoryMenuVisible.value = false;
 
-  const webdav = getWebDAVClientAndPath('history');
+  const webdav = await getWebDAVClientAndPath('history');
   if (!webdav) return;
 
   try {
@@ -996,7 +1016,7 @@ async function uploadHistoryMerge() {
 async function uploadHistoryIncremental() {
   uploadHistoryMenuVisible.value = false;
 
-  const webdav = getWebDAVClientAndPath('history');
+  const webdav = await getWebDAVClientAndPath('history');
   if (!webdav) return;
 
   try {
@@ -1070,7 +1090,7 @@ async function uploadHistoryIncremental() {
 async function downloadHistoryOverwrite() {
   downloadHistoryMenuVisible.value = false;
 
-  const webdav = getWebDAVClientAndPath('history');
+  const webdav = await getWebDAVClientAndPath('history');
   if (!webdav) return;
 
   // 二次确认
@@ -1120,7 +1140,7 @@ async function downloadHistoryOverwrite() {
 async function downloadHistoryMerge() {
   downloadHistoryMenuVisible.value = false;
 
-  const webdav = getWebDAVClientAndPath('history');
+  const webdav = await getWebDAVClientAndPath('history');
   if (!webdav) return;
 
   try {
