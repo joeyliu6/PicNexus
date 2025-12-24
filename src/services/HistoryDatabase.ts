@@ -116,6 +116,10 @@ class HistoryDatabase {
       await this.db.execute(`
         CREATE INDEX IF NOT EXISTS idx_filename_lower ON history_items(local_file_name_lower)
       `);
+      // 添加 file_path 索引，用于按文件路径快速查询
+      await this.db.execute(`
+        CREATE INDEX IF NOT EXISTS idx_file_path ON history_items(file_path)
+      `);
 
       this.initialized = true;
       console.log('[HistoryDB] 数据库初始化完成');
@@ -289,6 +293,20 @@ class HistoryDatabase {
       return null;
     }
     return this.rowToItem(rows[0]);
+  }
+
+  /**
+   * 根据文件路径查询单条历史记录
+   * @param filePath 文件的本地路径
+   * @returns 匹配的历史记录，或 null
+   */
+  async getByFilePath(filePath: string): Promise<HistoryItem | null> {
+    const db = await this.ensureInitialized();
+    const rows = await db.select<HistoryItemRow[]>(
+      'SELECT * FROM history_items WHERE file_path = $1 LIMIT 1',
+      [filePath]
+    );
+    return rows.length > 0 ? this.rowToItem(rows[0]) : null;
   }
 
   /**

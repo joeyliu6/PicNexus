@@ -296,9 +296,8 @@ export class RetryService {
     // 使用链式 Promise 实现互斥锁，确保更新操作按顺序执行
     const updateOperation = async () => {
       try {
-        // 使用 SQLite 分页获取记录并查找匹配项
-        const { items } = await historyDB.getPage({ page: 1, pageSize: 10000 });
-        const historyItem = items.find((h: HistoryItem) => h.filePath === filePath);
+        // 使用 SQLite 按 filePath 直接查询单条记录，避免加载大量数据到内存
+        const historyItem = await historyDB.getByFilePath(filePath);
 
         if (!historyItem) {
           console.warn(`[重试] 未找到对应的历史记录: ${filePath}`);
