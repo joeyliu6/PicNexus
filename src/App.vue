@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, computed } from 'vue';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import MainLayout from './components/layout/MainLayout.vue';
 import Toast from 'primevue/toast';
 import ConfirmDialog from 'primevue/confirmdialog';
@@ -32,6 +33,15 @@ onMounted(async () => {
   window.addEventListener('offline', handleOffline);
   window.addEventListener('online', handleOnline);
   console.log('[App] Network listeners registered');
+
+  // 前端加载完成后显示窗口（避免启动时白屏闪烁）
+  try {
+    const appWindow = getCurrentWindow();
+    await appWindow.show();
+    console.log('[App] Window shown');
+  } catch (err) {
+    console.error('[App] 显示窗口失败:', err);
+  }
 });
 
 onUnmounted(() => {

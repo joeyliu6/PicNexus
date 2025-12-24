@@ -29,7 +29,7 @@
         "center": true,
         "decorations": false,
         "shadow": true,
-        "visible": true,
+        "visible": false,
         "label": "main"
       }
     ]

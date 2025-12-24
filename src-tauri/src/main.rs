@@ -8,7 +8,9 @@ mod error;
 mod commands;
 
 use tauri::{Manager, Emitter};
-use tauri::menu::{Menu, MenuItem, Submenu, PredefinedMenuItem};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+#[cfg(target_os = "macos")]
+use tauri::menu::Submenu;
 use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};
 use std::time::Duration;
 
@@ -98,13 +100,14 @@ fn main() {
             get_or_create_secure_key
         ])
         .setup(|app| {
-            // 1. 创建原生菜单栏 (Tauri 2.0)
-            let preferences = MenuItem::with_id(app, "preferences", "偏好设置...", true, Some("CmdOrCtrl+,"))?;
-            let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-            let history = MenuItem::with_id(app, "history", "上传历史记录", true, Some("CmdOrCtrl+H"))?;
+            // 1. 创建原生菜单栏 (仅 macOS)
+            // 在 Windows 上不设置原生菜单栏，避免启动时菜单栏闪烁
+            #[cfg(target_os = "macos")]
+            {
+                let preferences = MenuItem::with_id(app, "preferences", "偏好设置...", true, Some("CmdOrCtrl+,"))?;
+                let history = MenuItem::with_id(app, "history", "上传历史记录", true, Some("CmdOrCtrl+H"))?;
 
-            let file_menu = if cfg!(target_os = "macos") {
-                Submenu::with_items(
+                let file_menu = Submenu::with_items(
                     app,
                     "PicNexus",
                     true,
@@ -112,52 +115,42 @@ fn main() {
                         &preferences,
                         &PredefinedMenuItem::quit(app, Some("退出"))?,
                     ],
-                )?
-            } else {
-                Submenu::with_items(
+                )?;
+
+                let window_menu = Submenu::with_items(
                     app,
-                    "文件",
+                    "窗口",
                     true,
-                    &[&preferences, &quit_item],
-                )?
-            };
+                    &[&history],
+                )?;
 
-            let window_menu = Submenu::with_items(
-                app,
-                "窗口",
-                true,
-                &[&history],
-            )?;
+                let menu = Menu::with_items(app, &[&file_menu, &window_menu])?;
+                app.set_menu(menu)?;
 
-            let menu = Menu::with_items(app, &[&file_menu, &window_menu])?;
-            app.set_menu(menu)?;
+                // 处理菜单事件 (macOS)
+                app.on_menu_event(move |app_handle, event| {
+                    let menu_id = event.id().as_ref();
+                    eprintln!("菜单事件触发: {}", menu_id);
 
-            // 2. 处理菜单事件
-            app.on_menu_event(move |app_handle, event| {
-                let menu_id = event.id().as_ref();
-                eprintln!("菜单事件触发: {}", menu_id);
-
-                match menu_id {
-                    "preferences" => {
-                        eprintln!("菜单事件触发: 偏好设置");
-                        if let Some(main_window) = app_handle.get_webview_window("main") {
-                            let _ = main_window.emit("navigate-to", "settings");
+                    match menu_id {
+                        "preferences" => {
+                            eprintln!("菜单事件触发: 偏好设置");
+                            if let Some(main_window) = app_handle.get_webview_window("main") {
+                                let _ = main_window.emit("navigate-to", "settings");
+                            }
+                        }
+                        "history" => {
+                            eprintln!("菜单事件触发: 上传历史记录");
+                            if let Some(main_window) = app_handle.get_webview_window("main") {
+                                let _ = main_window.emit("navigate-to", "history");
+                            }
+                        }
+                        _ => {
+                            eprintln!("未知菜单项: {}", menu_id);
                         }
                     }
-                    "history" => {
-                        eprintln!("菜单事件触发: 上传历史记录");
-                        if let Some(main_window) = app_handle.get_webview_window("main") {
-                            let _ = main_window.emit("navigate-to", "history");
-                        }
-                    }
-                    "quit" => {
-                        std::process::exit(0);
-                    }
-                    _ => {
-                        eprintln!("未知菜单项: {}", menu_id);
-                    }
-                }
-            });
+                });
+            }
 
             // 3. 创建系统托盘 (Tauri 2.0)
             let tray_open_settings = MenuItem::with_id(app, "open_settings", "打开设置", true, None::<&str>)?;
