@@ -46,7 +46,18 @@ const debouncedSearch = debounce((term: string) => {
 }, 300);
 
 // 缩略图 URL 缓存（同步：微博图床）
+const THUMB_CACHE_MAX_SIZE = 1000; // 缓存上限，防止内存无限增长
 const thumbUrlCache = new Map<string, string | undefined>();
+
+// 设置缩略图缓存（带 LRU 淘汰）
+const setThumbCache = (id: string, url: string | undefined) => {
+  // 如果超过上限，删除最早的条目（Map 保持插入顺序）
+  if (thumbUrlCache.size >= THUMB_CACHE_MAX_SIZE && !thumbUrlCache.has(id)) {
+    const firstKey = thumbUrlCache.keys().next().value;
+    if (firstKey) thumbUrlCache.delete(firstKey);
+  }
+  thumbUrlCache.set(id, url);
+};
 
 // 清空缩略图缓存
 const clearThumbCache = () => {
@@ -330,7 +341,7 @@ const getThumbUrl = (item: HistoryItem): string | undefined => {
   }
 
   if (!item.results || item.results.length === 0) {
-    thumbUrlCache.set(item.id, undefined);
+    setThumbCache(item.id, undefined);
     return undefined;
   }
 
@@ -339,7 +350,7 @@ const getThumbUrl = (item: HistoryItem): string | undefined => {
   const targetResult = primaryResult || item.results.find(r => r.status === 'success' && r.result?.url);
 
   if (!targetResult?.result?.url) {
-    thumbUrlCache.set(item.id, undefined);
+    setThumbCache(item.id, undefined);
     return undefined;
   }
 
@@ -353,7 +364,7 @@ const getThumbUrl = (item: HistoryItem): string | undefined => {
       thumbUrl = `${activePrefix}${thumbUrl}`;
     }
 
-    thumbUrlCache.set(item.id, thumbUrl);
+    setThumbCache(item.id, thumbUrl);
     return thumbUrl;
   }
 

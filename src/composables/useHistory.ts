@@ -230,7 +230,7 @@ export function useHistoryManager() {
       // 从 SQLite 搜索
       const { items, total } = await historyDB.search(keyword, {
         serviceFilter: historyStateInternal.value.currentFilter,
-        limit: 500  // 搜索结果最多显示 500 条
+        limit: 200  // 搜索结果限制为 200 条，减少内存占用
       });
 
       allHistoryItems.value = items;

@@ -17,7 +17,7 @@ import { Store } from '../../store';
 const toast = useToast();
 
 // 获取全局队列状态
-const { queueItems, clearQueue } = useQueueState();
+const { queueItems, clearQueue, clearCompletedItems, hasCompletedItems } = useQueueState();
 
 // 创建上传队列管理器实例
 const queueManager = new UploadQueueManager();
@@ -260,6 +260,12 @@ const confirmClearQueue = () => {
   toast.success('已清空', '上传队列已清空');
 };
 
+// 清空已完成的队列项（无需确认，不影响进行中的上传）
+const handleClearCompleted = () => {
+  clearCompletedItems();
+  toast.success('已清空', '已完成的上传项已清理');
+};
+
 // 加载配置
 onMounted(async () => {
   // 加载服务按钮状态
@@ -406,6 +412,14 @@ onUnmounted(() => {
             >
               <i class="pi" :class="isBatchRetrying ? 'pi-spin pi-spinner' : 'pi-refresh'"></i>
               <span>{{ isBatchRetrying ? '重传中...' : '批量重传' }}</span>
+            </button>
+            <button
+              v-if="hasCompletedItems"
+              class="queue-action-btn clear-completed-btn"
+              @click="handleClearCompleted"
+            >
+              <i class="pi pi-check-square"></i>
+              <span>清空已完成</span>
             </button>
             <button
               v-if="hasQueueItems"
@@ -714,6 +728,16 @@ onUnmounted(() => {
 .queue-action-btn.clear-btn:hover {
   color: var(--error);
   background: rgba(239, 68, 68, 0.1);
+}
+
+/* 清空已完成按钮 */
+.queue-action-btn.clear-completed-btn {
+  color: var(--text-muted);
+}
+
+.queue-action-btn.clear-completed-btn:hover {
+  color: var(--success);
+  background: rgba(34, 197, 94, 0.1);
 }
 
 /* 确认对话框内容 */

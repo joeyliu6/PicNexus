@@ -1,7 +1,7 @@
 // src/composables/useQueueState.ts
 // 全局上传队列状态管理
 
-import { ref, type Ref } from 'vue';
+import { ref, computed, type Ref } from 'vue';
 import type { QueueItem } from '../uploadQueue';
 
 // 全局队列状态（单例）
@@ -73,12 +73,32 @@ export function useQueueState() {
     queueItems.value = [];
   };
 
+  /**
+   * 清空已完成的队列项（保留 pending 和 uploading 状态的项）
+   */
+  const clearCompletedItems = () => {
+    queueItems.value = queueItems.value.filter(
+      item => item.status === 'pending' || item.status === 'uploading'
+    );
+  };
+
+  /**
+   * 检查是否有已完成的项（success 或 error）
+   */
+  const hasCompletedItems = computed(() => {
+    return queueItems.value.some(
+      item => item.status === 'success' || item.status === 'error'
+    );
+  });
+
   return {
     queueItems,
     addItem,
     getItem,
     updateItem,
     removeItem,
-    clearQueue
+    clearQueue,
+    clearCompletedItems,
+    hasCompletedItems
   };
 }

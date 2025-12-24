@@ -445,11 +445,14 @@ class HistoryDatabase {
 
   /**
    * 导出所有记录为 JSON 字符串
+   * 使用流式读取降低内存峰值压力
    */
   async exportToJSON(): Promise<string> {
-    const db = await this.ensureInitialized();
-    const rows = await db.select<HistoryItemRow[]>('SELECT * FROM history_items ORDER BY timestamp DESC');
-    const items = rows.map((row) => this.rowToItem(row));
+    const items: HistoryItem[] = [];
+    // 分批读取，每批 1000 条，降低内存峰值
+    for await (const batch of this.getAllStream(1000)) {
+      items.push(...batch);
+    }
     return JSON.stringify(items, null, 2);
   }
 
