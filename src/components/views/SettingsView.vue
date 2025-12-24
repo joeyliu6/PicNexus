@@ -25,7 +25,7 @@ import { useAnalytics } from '../../composables/useAnalytics';
 import { Store } from '../../store';
 import { WebDAVClient } from '../../utils/webdav';
 import { historyDB } from '../../services/HistoryDatabase';
-import type { ThemeMode, UserConfig, ServiceType, HistoryItem, SyncStatus, WebDAVProfile } from '../../config/types';
+import type { ThemeMode, UserConfig, ServiceType, HistoryItem, SyncStatus, WebDAVProfile, ServiceCheckStatus } from '../../config/types';
 import { DEFAULT_CONFIG, DEFAULT_PREFIXES, PRIVATE_SERVICES, PUBLIC_SERVICES, migrateConfig, isValidUserConfig } from '../../config/types';
 
 const toast = useToast();
@@ -105,11 +105,69 @@ const testingConnections = ref<Record<string, boolean>>({ weibo: false, r2: fals
 // 七鱼可用性检测（完整检测：实际获取 Token）
 const qiyuAvailable = ref(false);
 const isCheckingQiyu = ref(false);
-const checkQiyuAvailability = async () => {
+
+// 生成 7~12 天的随机毫秒数
+function getRandomCheckInterval(): number {
+  const minDays = 7;
+  const maxDays = 12;
+  const randomDays = Math.floor(Math.random() * (maxDays - minDays + 1)) + minDays;
+  return randomDays * 24 * 60 * 60 * 1000;
+}
+
+// 判断是否需要检测七鱼
+function shouldCheckQiyu(status: ServiceCheckStatus | undefined): boolean {
+  // 从未检测过 → 需要检测
+  if (!status || status.lastCheckTime === null) {
+    return true;
+  }
+  // 上次不可用 → 需要检测
+  if (!status.lastCheckResult) {
+    return true;
+  }
+  // 上次可用，检查是否到达下次检测时间
+  if (status.nextCheckTime && Date.now() >= status.nextCheckTime) {
+    return true;
+  }
+  return false;
+}
+
+// 七鱼可用性检测（支持智能检测策略）
+const checkQiyuAvailability = async (forceCheck = false) => {
+  // 非强制检测时，先判断是否需要检测
+  if (!forceCheck) {
+    if (!shouldCheckQiyu(syncStatus.value.qiyuCheckStatus)) {
+      // 不需要检测，使用缓存的结果
+      qiyuAvailable.value = syncStatus.value.qiyuCheckStatus?.lastCheckResult ?? false;
+      console.log('[七鱼检测] 使用缓存结果，跳过检测');
+      return;
+    }
+  }
+
   isCheckingQiyu.value = true;
-  try { qiyuAvailable.value = await invoke('check_qiyu_available'); }
-  catch (e) { qiyuAvailable.value = false; }
-  finally { isCheckingQiyu.value = false; }
+  try {
+    qiyuAvailable.value = await invoke('check_qiyu_available');
+
+    // 更新检测状态
+    const now = Date.now();
+    syncStatus.value.qiyuCheckStatus = {
+      lastCheckTime: now,
+      lastCheckResult: qiyuAvailable.value,
+      nextCheckTime: qiyuAvailable.value ? now + getRandomCheckInterval() : null
+    };
+    await saveSyncStatus();
+
+    console.log(`[七鱼检测] 检测完成，结果: ${qiyuAvailable.value ? '可用' : '不可用'}`);
+  } catch (e) {
+    qiyuAvailable.value = false;
+    syncStatus.value.qiyuCheckStatus = {
+      lastCheckTime: Date.now(),
+      lastCheckResult: false,
+      nextCheckTime: null
+    };
+    await saveSyncStatus();
+  } finally {
+    isCheckingQiyu.value = false;
+  }
 };
 
 // 京东可用性检测
@@ -132,23 +190,25 @@ const checkTclAvailable = async () => {
   finally { isCheckingTcl.value = false; }
 };
 
-// 可用性检测冷却机制（防止频繁切换页面导致过度检测）
+// 可用性检测冷却机制（防止频繁切换页面导致过度检测，仅用于京东和 TCL）
 const lastCheckTime = ref(0);
 const CHECK_COOLDOWN = 5 * 60 * 1000; // 5 分钟冷却
 
 const checkAllAvailabilityWithCooldown = async () => {
   const now = Date.now();
-  if (now - lastCheckTime.value < CHECK_COOLDOWN) {
-    console.log('[可用性检测] 冷却中，跳过自动检测');
-    return;
-  }
+  const needCooldownCheck = now - lastCheckTime.value >= CHECK_COOLDOWN;
 
-  lastCheckTime.value = now;
+  // 七鱼使用智能检测策略（不受冷却机制影响）
+  // 京东和 TCL 使用冷却机制
   await Promise.all([
-    checkQiyuAvailability(),
-    checkJdAvailable(),
-    checkTclAvailable()
+    checkQiyuAvailability(false),  // 使用智能检测
+    needCooldownCheck ? checkJdAvailable() : Promise.resolve(),
+    needCooldownCheck ? checkTclAvailable() : Promise.resolve()
   ]);
+
+  if (needCooldownCheck) {
+    lastCheckTime.value = now;
+  }
 };
 
 // 加载配置
@@ -1236,7 +1296,13 @@ onMounted(async () => {
 
   await loadSettings();
   await loadSyncStatus();  // 加载同步状态
-  // 带冷却的可用性检测（5分钟内不重复检测）
+
+  // 初始化七鱼可用状态（使用缓存值，避免检测前显示错误状态）
+  if (syncStatus.value.qiyuCheckStatus?.lastCheckResult !== undefined) {
+    qiyuAvailable.value = syncStatus.value.qiyuCheckStatus.lastCheckResult;
+  }
+
+  // 可用性检测（七鱼使用智能检测策略，京东/TCL使用5分钟冷却）
   await checkAllAvailabilityWithCooldown();
   cookieUnlisten.value = await configManager.setupCookieListener(async (sid, cookie) => {
     if (sid === 'weibo') formData.value.weiboCookie = cookie;
@@ -1465,7 +1531,7 @@ onUnmounted(() => {
                   :severity="isCheckingQiyu ? 'info' : (qiyuAvailable ? 'success' : 'danger')"
                   :icon="isCheckingQiyu ? 'pi pi-spin pi-spinner' : undefined"
                   class="clickable-tag"
-                  @click="!isCheckingQiyu && checkQiyuAvailability()"
+                  @click="!isCheckingQiyu && checkQiyuAvailability(true)"
                 />
               </div>
             </div>

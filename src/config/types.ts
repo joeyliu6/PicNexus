@@ -179,6 +179,19 @@ export interface WebDAVConfig {
 }
 
 /**
+ * 服务可用性检测状态
+ * 用于持久化保存服务检测结果，实现智能检测策略
+ */
+export interface ServiceCheckStatus {
+  /** 上次检测时间戳 */
+  lastCheckTime: number | null;
+  /** 上次检测结果 */
+  lastCheckResult: boolean;
+  /** 下次检测时间戳（仅可用时有效） */
+  nextCheckTime: number | null;
+}
+
+/**
  * 同步状态
  * 用于持久化保存同步结果
  */
@@ -200,6 +213,9 @@ export interface SyncStatus {
 
   /** 上传记录同步错误信息 */
   historySyncError?: string;
+
+  /** 七鱼图床检测状态 */
+  qiyuCheckStatus?: ServiceCheckStatus;
 }
 
 /**
