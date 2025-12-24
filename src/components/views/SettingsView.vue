@@ -429,7 +429,8 @@ function deleteWebDAVProfile(id: string) {
 // 切换 WebDAV 配置
 function switchWebDAVProfile(id: string) {
   formData.value.webdav.activeId = id;
-  saveSettings();
+  // 静默保存，仅切换配置不需要提示
+  saveSettings(true);
 }
 
 // 测试当前选中的 WebDAV 连接
