@@ -22,7 +22,7 @@ import type {
   LinkCategory,
   ReplacementCandidate
 } from '../config/types';
-import { MultiServiceUploader, type MultiUploadResult } from '../core/MultiServiceUploader';
+import { MultiServiceUploader } from '../core/MultiServiceUploader';
 import { historyDB } from './HistoryDatabase';
 import { getErrorMessage } from '../types/errors';
 
@@ -618,7 +618,7 @@ export class MarkdownRepairService {
           let content = await readTextFile(filePath);
 
           for (const [oldUrl, newUrl] of replacements) {
-            content = content.replaceAll(oldUrl, newUrl);
+            content = content.split(oldUrl).join(newUrl);
           }
 
           await this.atomicWrite(filePath, content);
@@ -764,6 +764,7 @@ export class MarkdownRepairService {
         directoryPath: options.directoryPath,
         includeSubdirs: options.includeSubdirs
       },
+      [],
       onProgress
     );
 

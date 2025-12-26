@@ -14,6 +14,7 @@ use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 #[cfg(not(target_os = "macos"))]
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};
+use tauri::image::Image;
 use std::time::Duration;
 
 // 用于 R2 和 WebDAV 测试
@@ -177,9 +178,12 @@ fn main() {
                 .build()?;
 
             // 4. 创建系统托盘（原生菜单，右键显示）
+            // 使用高分辨率图标以支持 4K 高分屏
+            let tray_icon = Image::from_bytes(include_bytes!("../icons/icon.png"))
+                .unwrap_or_else(|_| app.default_window_icon().unwrap().clone());
             let _tray = TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
-                .icon_as_template(true)
+                .icon(tray_icon)
+                .icon_as_template(false)  // Windows 不使用模板模式以显示彩色图标
                 .menu(&tray_menu)
                 .show_menu_on_left_click(false)  // 左键不显示菜单
                 .on_menu_event(|app, event| {

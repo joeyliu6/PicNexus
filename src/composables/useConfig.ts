@@ -5,7 +5,6 @@ import { ref, Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn, emit } from '@tauri-apps/api/event';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { fetch } from '@tauri-apps/plugin-http';
 import { Store } from '../store';
 import {
   UserConfig,
