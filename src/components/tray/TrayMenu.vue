@@ -109,23 +109,24 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
-/* 菜单主体 - 无圆角，紧凑 */
+/* 菜单主体 - 无圆角、无阴影、紧凑 */
 .tray-menu {
   height: 100%;
   background: var(--bg-card, #1e293b);
   border: 1px solid var(--border-subtle, #334155);
   overflow: hidden;
-  padding: 4px;
+  padding: 3px;
   box-sizing: border-box;
+  box-shadow: none;
 }
 
-/* 菜单项 */
+/* 菜单项 - 紧凑间距 */
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
-  border-radius: 6px;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
   cursor: pointer;
   transition: all 100ms ease;
   color: var(--text-main, #f8fafc);
@@ -154,10 +155,10 @@ onUnmounted(() => {
   color: #ef4444;
 }
 
-/* 图标 */
+/* 图标 - 小尺寸 */
 .menu-icon {
-  font-size: 0.9rem;
-  width: 16px;
+  font-size: 0.8rem;
+  width: 14px;
   text-align: center;
   opacity: 0.75;
   transition: all 100ms ease;
@@ -170,17 +171,17 @@ onUnmounted(() => {
   color: var(--text-main, #f8fafc);
 }
 
-/* 标签 */
+/* 标签 - 小字体 */
 .menu-label {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 500;
   letter-spacing: 0.01em;
 }
 
-/* 分隔线 */
+/* 分隔线 - 紧凑间距 */
 .menu-divider {
   height: 1px;
   background: var(--border-subtle, #334155);
-  margin: 4px 8px;
+  margin: 3px 6px;
 }
 </style>

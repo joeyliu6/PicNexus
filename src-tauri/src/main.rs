@@ -162,7 +162,18 @@ fn main() {
                 });
             }
 
-            // 3. 创建系统托盘 (自定义菜单窗口)
+            // 3. 预创建托盘菜单窗口（隐藏状态，提升响应速度）
+            let tray_menu_window = create_tray_menu_window(app.handle())?;
+
+            // 设置失焦时隐藏窗口
+            let tray_menu_clone = tray_menu_window.clone();
+            tray_menu_window.on_window_event(move |event| {
+                if let tauri::WindowEvent::Focused(false) = event {
+                    let _ = tray_menu_clone.hide();
+                }
+            });
+
+            // 4. 创建系统托盘
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .icon_as_template(true)
@@ -1506,12 +1517,41 @@ fn get_or_create_secure_key() -> Result<String, AppError> {
     }
 }
 
-/// 显示自定义托盘菜单窗口
+/// 预创建托盘菜单窗口（隐藏状态）
+fn create_tray_menu_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow, Box<dyn std::error::Error>> {
+    let window_width = 140.0;
+    let window_height = 95.0;
+
+    let window = WebviewWindowBuilder::new(
+        app,
+        "tray-menu",
+        WebviewUrl::App("tray-menu.html".into())
+    )
+    .title("托盘菜单")
+    .inner_size(window_width, window_height)
+    .position(-1000.0, -1000.0)  // 初始位置在屏幕外
+    .decorations(false)
+    .always_on_top(true)
+    .visible(false)  // 初始隐藏
+    .resizable(false)
+    .skip_taskbar(true)
+    .build()?;
+
+    eprintln!("[托盘菜单] 预创建成功");
+    Ok(window)
+}
+
+/// 显示托盘菜单（定位并显示预创建的窗口）
 /// click_x, click_y: 鼠标点击位置（物理像素）
 fn show_tray_menu(app: &tauri::AppHandle, click_x: i32, click_y: i32) {
-    // 如果菜单窗口已存在，关闭它（切换行为）
-    if let Some(existing) = app.get_webview_window("tray-menu") {
-        let _ = existing.close();
+    let Some(window) = app.get_webview_window("tray-menu") else {
+        eprintln!("[托盘菜单] 窗口不存在");
+        return;
+    };
+
+    // 如果窗口已可见，隐藏它（切换行为）
+    if window.is_visible().unwrap_or(false) {
+        let _ = window.hide();
         return;
     }
 
@@ -1525,62 +1565,19 @@ fn show_tray_menu(app: &tauri::AppHandle, click_x: i32, click_y: i32) {
     let logical_y = (click_y as f64 / scale_factor) as i32;
 
     // 窗口尺寸（逻辑像素）
-    let window_width = 160;
-    let window_height = 120;
+    let window_height = 95;
 
     // 计算窗口位置：鼠标点击点作为弹窗的左下角
-    let pos_x = logical_x;                      // 弹窗左边缘与鼠标X对齐
-    let pos_y = logical_y - window_height;      // 弹窗底边缘与鼠标Y对齐
+    let pos_x = logical_x;
+    let pos_y = logical_y - window_height;
 
-    // 创建新的托盘菜单窗口
-    let builder = WebviewWindowBuilder::new(
-        app,
-        "tray-menu",
-        WebviewUrl::App("tray-menu.html".into())
-    )
-    .title("托盘菜单")
-    .inner_size(window_width as f64, window_height as f64)
-    .position(pos_x.max(0) as f64, pos_y.max(0) as f64)
-    .decorations(false)
-    .always_on_top(true)
-    .visible(true)
-    .resizable(false)
-    .skip_taskbar(true)
-    .focused(true);
-
-    match builder.build() {
-        Ok(window) => {
-            // 确保窗口获得焦点
-            let _ = window.set_focus();
-
-            // 使用 AtomicBool 控制是否响应失焦事件
-            // Windows 上新窗口创建时会触发假的失焦事件，需要延迟后才开始监听
-            let can_close = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-            let can_close_clone = can_close.clone();
-
-            // 延迟 300ms 后才允许响应失焦事件
-            std::thread::spawn(move || {
-                std::thread::sleep(Duration::from_millis(300));
-                can_close_clone.store(true, std::sync::atomic::Ordering::SeqCst);
-            });
-
-            // 监听失焦事件，自动关闭菜单
-            let window_clone = window.clone();
-            window.on_window_event(move |event| {
-                if let tauri::WindowEvent::Focused(false) = event {
-                    // 只有在延迟后才响应失焦事件
-                    if can_close.load(std::sync::atomic::Ordering::SeqCst) {
-                        let _ = window_clone.close();
-                    }
-                }
-            });
-
-            eprintln!("[托盘菜单] 创建成功");
-        }
-        Err(e) => {
-            eprintln!("[托盘菜单] 创建失败: {:?}", e);
-        }
-    }
+    // 定位并显示窗口
+    let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition {
+        x: pos_x.max(0) as f64,
+        y: pos_y.max(0) as f64,
+    }));
+    let _ = window.show();
+    let _ = window.set_focus();
 }
 
 /// 处理托盘菜单操作
@@ -1588,9 +1585,9 @@ fn show_tray_menu(app: &tauri::AppHandle, click_x: i32, click_y: i32) {
 fn handle_tray_menu_action(action: String, app: tauri::AppHandle) {
     eprintln!("[托盘菜单] 收到操作: {}", action);
 
-    // 关闭托盘菜单
+    // 隐藏托盘菜单（不关闭，保持预创建状态）
     if let Some(menu_window) = app.get_webview_window("tray-menu") {
-        let _ = menu_window.close();
+        let _ = menu_window.hide();
     }
 
     match action.as_str() {
