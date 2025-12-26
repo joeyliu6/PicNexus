@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, KeepAlive, Transition } from 'vue';
+import { ref, computed, KeepAlive, Transition, onMounted, onUnmounted } from 'vue';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import TitleBar from './TitleBar.vue';
 import Sidebar from './Sidebar.vue';
 import UploadView from '../views/UploadView.vue';
@@ -27,6 +28,28 @@ const currentViewComponent = computed(() => viewComponents[currentView.value]);
 const handleNavigate = (view: ViewType) => {
   currentView.value = view;
 };
+
+// 托盘菜单导航事件监听器
+let unlistenNavigate: UnlistenFn | null = null;
+
+onMounted(async () => {
+  // 监听托盘菜单的导航事件
+  unlistenNavigate = await listen<string>('navigate-to', (event) => {
+    const target = event.payload;
+    console.log('[MainLayout] 收到托盘导航事件:', target);
+    if (target === 'settings' || target === 'history') {
+      handleNavigate(target);
+    }
+  });
+});
+
+onUnmounted(() => {
+  // 清理事件监听器
+  if (unlistenNavigate) {
+    unlistenNavigate();
+    unlistenNavigate = null;
+  }
+});
 </script>
 
 <template>

@@ -137,12 +137,18 @@ fn main() {
                         "preferences" => {
                             eprintln!("菜单事件触发: 偏好设置");
                             if let Some(main_window) = app_handle.get_webview_window("main") {
+                                let _ = main_window.unminimize();
+                                let _ = main_window.show();
+                                let _ = main_window.set_focus();
                                 let _ = main_window.emit("navigate-to", "settings");
                             }
                         }
                         "history" => {
                             eprintln!("菜单事件触发: 上传历史记录");
                             if let Some(main_window) = app_handle.get_webview_window("main") {
+                                let _ = main_window.unminimize();
+                                let _ = main_window.show();
+                                let _ = main_window.set_focus();
                                 let _ = main_window.emit("navigate-to", "history");
                             }
                         }
@@ -180,6 +186,7 @@ fn main() {
                         "open_settings" => {
                             eprintln!("托盘事件触发: 打开设置");
                             if let Some(main_window) = app_handle.get_webview_window("main") {
+                                let _ = main_window.unminimize();
                                 let _ = main_window.show();
                                 let _ = main_window.set_focus();
                                 let _ = main_window.emit("navigate-to", "settings");
@@ -188,6 +195,7 @@ fn main() {
                         "open_history" => {
                             eprintln!("托盘事件触发: 上传历史记录");
                             if let Some(main_window) = app_handle.get_webview_window("main") {
+                                let _ = main_window.unminimize();
                                 let _ = main_window.show();
                                 let _ = main_window.set_focus();
                                 let _ = main_window.emit("navigate-to", "history");
@@ -200,6 +208,7 @@ fn main() {
                     if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.unminimize();
                             let _ = window.show();
                             let _ = window.set_focus();
                         }
