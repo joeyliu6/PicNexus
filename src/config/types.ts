@@ -317,8 +317,8 @@ export interface UserConfig {
 export interface AutoSyncConfig {
   /** 是否启用自动同步 */
   enabled: boolean;
-  /** 同步间隔（分钟），默认 30 */
-  intervalMinutes: number;
+  /** 同步间隔（小时），默认 24 */
+  intervalHours: number;
 }
 
 /**
@@ -445,7 +445,7 @@ export const DEFAULT_CONFIG: UserConfig = {
   },
   autoSync: {
     enabled: false,
-    intervalMinutes: 30
+    intervalHours: 48
   }
 };
 

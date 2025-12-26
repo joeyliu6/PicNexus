@@ -569,7 +569,7 @@ const {
 } = useAutoSync(
   () => activeWebDAVProfile.value,
   {
-    interval: autoSyncConfig.value.intervalMinutes * 60 * 1000,
+    interval: autoSyncConfig.value.intervalHours * 60 * 60 * 1000,
     syncOnMount: false,
     syncSettings: true,
     syncHistory: true
@@ -581,7 +581,7 @@ function handleAutoSyncToggle(enabled: boolean) {
   autoSyncConfig.value.enabled = enabled;
   if (enabled) {
     startAutoSync();
-    toast.success('自动同步已启用', `每 ${autoSyncConfig.value.intervalMinutes} 分钟同步一次`);
+    toast.success('自动同步已启用', `每 ${autoSyncConfig.value.intervalHours} 小时同步一次`);
   } else {
     stopAutoSync();
     toast.info('自动同步已关闭');
@@ -590,10 +590,10 @@ function handleAutoSyncToggle(enabled: boolean) {
 }
 
 // 自动同步间隔变化处理
-function handleAutoSyncIntervalChange(minutes: number) {
-  const validMinutes = Math.max(5, Math.min(1440, minutes));
-  autoSyncConfig.value.intervalMinutes = validMinutes;
-  updateAutoSyncInterval(validMinutes);
+function handleAutoSyncIntervalChange(hours: number) {
+  const validHours = Math.max(1, Math.min(720, hours));
+  autoSyncConfig.value.intervalHours = validHours;
+  updateAutoSyncInterval(validHours);
   saveAutoSyncConfig();
 }
 
@@ -625,6 +625,32 @@ async function loadAutoSyncConfig() {
   } catch (e) {
     console.error('[自动同步] 加载配置失败:', e);
   }
+}
+
+// 立即同步 - 同步全部（配置 + 历史记录）
+async function syncNowAll() {
+  syncNowMenuVisible.value = false;
+  await syncNowAuto();
+}
+
+// 立即同步 - 仅同步配置
+async function syncNowSettingsOnly() {
+  syncNowMenuVisible.value = false;
+  if (!activeWebDAVProfile.value) {
+    toast.error('请先配置 WebDAV 连接');
+    return;
+  }
+  await uploadSettingsCloud();
+}
+
+// 立即同步 - 仅同步历史记录
+async function syncNowHistoryOnly() {
+  syncNowMenuVisible.value = false;
+  if (!activeWebDAVProfile.value) {
+    toast.error('请先配置 WebDAV 连接');
+    return;
+  }
+  await uploadHistoryMerge();
 }
 
 // ========== Markdown 修复功能 ==========
@@ -1116,6 +1142,10 @@ const downloadSettingsDropdownRef = ref<HTMLElement | null>(null);
 const downloadHistoryMenuVisible = ref(false);
 const downloadHistoryDropdownRef = ref<HTMLElement | null>(null);
 
+// 立即同步菜单状态
+const syncNowMenuVisible = ref(false);
+const syncNowDropdownRef = ref<HTMLElement | null>(null);
+
 // 区域展开状态（默认关闭）
 const configSectionExpanded = ref(false);
 const historySectionExpanded = ref(false);
@@ -1126,6 +1156,7 @@ const toggleUploadHistoryMenu = () => {
   // 关闭其他菜单
   downloadSettingsMenuVisible.value = false;
   downloadHistoryMenuVisible.value = false;
+  syncNowMenuVisible.value = false;
   uploadHistoryMenuVisible.value = willOpen;
 };
 
@@ -1135,6 +1166,7 @@ const toggleDownloadSettingsMenu = () => {
   // 关闭其他菜单
   uploadHistoryMenuVisible.value = false;
   downloadHistoryMenuVisible.value = false;
+  syncNowMenuVisible.value = false;
   downloadSettingsMenuVisible.value = willOpen;
 };
 
@@ -1144,7 +1176,18 @@ const toggleDownloadHistoryMenu = () => {
   // 关闭其他菜单
   uploadHistoryMenuVisible.value = false;
   downloadSettingsMenuVisible.value = false;
+  syncNowMenuVisible.value = false;
   downloadHistoryMenuVisible.value = willOpen;
+};
+
+// 切换立即同步菜单
+const toggleSyncNowMenu = () => {
+  const willOpen = !syncNowMenuVisible.value;
+  // 关闭其他菜单
+  uploadHistoryMenuVisible.value = false;
+  downloadSettingsMenuVisible.value = false;
+  downloadHistoryMenuVisible.value = false;
+  syncNowMenuVisible.value = willOpen;
 };
 
 /**
@@ -1857,6 +1900,13 @@ const handleClickOutside = (event: MouseEvent) => {
   if (downloadHistoryMenuVisible.value && downloadHistoryDropdownRef.value) {
     if (!downloadHistoryDropdownRef.value.contains(target)) {
       downloadHistoryMenuVisible.value = false;
+    }
+  }
+
+  // 关闭立即同步菜单
+  if (syncNowMenuVisible.value && syncNowDropdownRef.value) {
+    if (!syncNowDropdownRef.value.contains(target)) {
+      syncNowMenuVisible.value = false;
     }
   }
 };
@@ -2923,71 +2973,97 @@ onUnmounted(() => {
           <h3>自动同步</h3>
           <p class="helper-text">定时自动备份配置和历史记录到云端。</p>
 
-          <div class="auto-sync-settings">
-            <!-- 自动同步开关 -->
+          <!-- 未配置 WebDAV 提示 -->
+          <div v-if="!activeWebDAVProfile" class="auto-sync-warning">
+            <i class="pi pi-info-circle"></i>
+            <span>请先配置 WebDAV 连接后才能使用自动同步</span>
+          </div>
+
+          <!-- 自动同步表单 -->
+          <div v-else class="auto-sync-form">
+            <!-- 启用开关行 -->
             <div class="auto-sync-toggle">
-              <div class="toggle-label">
-                <span>启用自动同步</span>
-                <span v-if="isAutoSyncEnabled" class="auto-sync-status">
-                  <template v-if="isAutoSyncing">
-                    <i class="pi pi-spin pi-spinner"></i> 同步中...
-                  </template>
-                  <template v-else-if="remainingTimeFormatted">
-                    下次同步: {{ remainingTimeFormatted }}
-                  </template>
-                </span>
-              </div>
+              <span class="toggle-label-text">启用自动同步</span>
               <ToggleSwitch
                 :modelValue="autoSyncConfig.enabled"
                 @update:modelValue="handleAutoSyncToggle"
-                :disabled="!activeWebDAVProfile"
               />
             </div>
 
-            <!-- 同步间隔设置 -->
-            <div v-if="autoSyncConfig.enabled" class="auto-sync-interval">
-              <label>同步间隔（分钟）</label>
-              <div class="interval-input">
-                <InputText
-                  type="number"
-                  :modelValue="autoSyncConfig.intervalMinutes"
-                  @update:modelValue="(val: string | number) => handleAutoSyncIntervalChange(Number(val))"
-                  :min="5"
-                  :max="1440"
-                  style="width: 100px"
-                />
-                <span class="interval-hint">5 ~ 1440 分钟</span>
-              </div>
-            </div>
-
-            <!-- 上次同步状态 -->
-            <div v-if="lastAutoSync" class="auto-sync-last">
-              <span class="last-sync-label">上次自动同步:</span>
-              <span :class="['last-sync-result', autoSyncLastResult === 'success' ? 'success' : autoSyncLastResult === 'failed' ? 'error' : 'partial']">
-                {{ lastAutoSync.toLocaleString() }}
-                <template v-if="autoSyncLastResult === 'success'"> ✓</template>
-                <template v-else-if="autoSyncLastResult === 'partial'"> (部分成功)</template>
-                <template v-else-if="autoSyncLastResult === 'failed'"> ✗</template>
+            <!-- 同步状态行 -->
+            <div v-if="isAutoSyncEnabled" class="auto-sync-status-line">
+              <span class="status-item">
+                <span class="status-label">上次自动同步:</span>
+                <span v-if="lastAutoSync" :class="['status-value', autoSyncLastResult === 'success' ? 'success' : autoSyncLastResult === 'failed' ? 'error' : 'partial']">
+                  {{ lastAutoSync.toLocaleString() }}
+                  <template v-if="autoSyncLastResult === 'success'"> ✓</template>
+                  <template v-else-if="autoSyncLastResult === 'partial'"> (部分成功)</template>
+                  <template v-else-if="autoSyncLastResult === 'failed'"> ✗</template>
+                </span>
+                <span v-else class="status-value muted">暂无</span>
+              </span>
+              <span class="status-separator">|</span>
+              <span class="status-item">
+                <span class="status-label">下次同步:</span>
+                <span v-if="isAutoSyncing" class="status-value syncing">
+                  <i class="pi pi-spin pi-spinner"></i> 同步中...
+                </span>
+                <span v-else-if="remainingTimeFormatted" class="status-value">{{ remainingTimeFormatted }}</span>
               </span>
             </div>
 
-            <!-- 立即同步按钮 -->
-            <div v-if="autoSyncConfig.enabled" class="auto-sync-actions">
-              <Button
-                label="立即同步"
-                icon="pi pi-sync"
-                @click="syncNowAuto"
-                :loading="isAutoSyncing"
-                :disabled="!activeWebDAVProfile"
-                outlined
-                size="small"
-              />
+            <!-- 同步间隔设置 -->
+            <div v-if="autoSyncConfig.enabled" class="auto-sync-interval-row">
+              <label>同步间隔（小时）</label>
+              <div class="interval-input">
+                <InputText
+                  type="number"
+                  :modelValue="autoSyncConfig.intervalHours"
+                  @update:modelValue="(val: string | number) => handleAutoSyncIntervalChange(Number(val))"
+                  :min="1"
+                  :max="720"
+                />
+                <span class="interval-hint">1 ~ 720 小时</span>
+              </div>
             </div>
 
-            <!-- 未配置 WebDAV 提示 -->
-            <div v-if="!activeWebDAVProfile" class="auto-sync-warning">
-              <i class="pi pi-info-circle"></i>
-              <span>请先配置 WebDAV 连接后才能使用自动同步</span>
+            <!-- 立即同步下拉菜单 -->
+            <div v-if="autoSyncConfig.enabled" class="auto-sync-actions">
+              <div class="upload-dropdown-wrapper" ref="syncNowDropdownRef">
+                <Button
+                  @click.stop="toggleSyncNowMenu"
+                  :loading="isAutoSyncing"
+                  icon="pi pi-sync"
+                  label="立即同步"
+                  size="small"
+                  outlined
+                />
+                <Transition name="dropdown">
+                  <div v-if="syncNowMenuVisible" class="upload-menu">
+                    <button class="upload-menu-item" @click="syncNowAll">
+                      <i class="pi pi-cloud-upload"></i>
+                      <div class="menu-item-content">
+                        <span class="menu-item-title">同步全部</span>
+                        <span class="menu-item-desc">上传配置和上传记录 (推荐)</span>
+                      </div>
+                    </button>
+                    <button class="upload-menu-item" @click="syncNowSettingsOnly">
+                      <i class="pi pi-cog"></i>
+                      <div class="menu-item-content">
+                        <span class="menu-item-title">仅同步配置</span>
+                        <span class="menu-item-desc">只上传应用配置文件</span>
+                      </div>
+                    </button>
+                    <button class="upload-menu-item" @click="syncNowHistoryOnly">
+                      <i class="pi pi-history"></i>
+                      <div class="menu-item-content">
+                        <span class="menu-item-title">仅同步上传记录</span>
+                        <span class="menu-item-desc">智能合并上传记录</span>
+                      </div>
+                    </button>
+                  </div>
+                </Transition>
+              </div>
             </div>
           </div>
         </div>
@@ -3599,51 +3675,92 @@ onUnmounted(() => {
 }
 
 /* ========== 自动同步样式 ========== */
-.auto-sync-settings {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.auto-sync-form {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 20px;
 }
 
 .auto-sync-toggle {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  background-color: var(--bg-section);
-  border-radius: 8px;
 }
 
-.auto-sync-toggle .toggle-label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.auto-sync-toggle .toggle-label span:first-child {
+.toggle-label-text {
   font-weight: 500;
+  font-size: 14px;
   color: var(--text-primary);
 }
 
-.auto-sync-status {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.auto-sync-status .pi-spinner {
-  margin-right: 4px;
-}
-
-.auto-sync-interval {
+/* 同步状态行 */
+.auto-sync-status-line {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 16px;
+  margin-top: 8px;
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
-.auto-sync-interval label {
-  font-size: 14px;
+.auto-sync-status-line .status-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.auto-sync-status-line .status-label {
+  color: var(--text-muted);
+}
+
+.auto-sync-status-line .status-value {
+  color: var(--text-primary);
+}
+
+.auto-sync-status-line .status-value.success {
+  color: var(--success-color, #10b981);
+}
+
+.auto-sync-status-line .status-value.error {
+  color: var(--error-color, #ef4444);
+}
+
+.auto-sync-status-line .status-value.partial {
+  color: var(--warning-color, #f59e0b);
+}
+
+.auto-sync-status-line .status-value.muted {
+  color: var(--text-muted);
+}
+
+.auto-sync-status-line .status-value.syncing {
+  color: var(--primary);
+}
+
+.auto-sync-status-line .status-value.syncing .pi-spinner {
+  margin-right: 4px;
+}
+
+.auto-sync-status-line .status-separator {
+  color: var(--border-subtle);
+}
+
+/* 同步间隔设置行 */
+.auto-sync-interval-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.auto-sync-interval-row label {
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .interval-input {
@@ -3652,41 +3769,19 @@ onUnmounted(() => {
   gap: 8px;
 }
 
+.interval-input :deep(.p-inputtext) {
+  width: 80px;
+}
+
 .interval-hint {
   font-size: 12px;
   color: var(--text-muted);
 }
 
-.auto-sync-last {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 16px;
-  font-size: 13px;
-}
-
-.last-sync-label {
-  color: var(--text-secondary);
-}
-
-.last-sync-result {
-  font-weight: 500;
-}
-
-.last-sync-result.success {
-  color: var(--success-color, #10b981);
-}
-
-.last-sync-result.error {
-  color: var(--error-color, #ef4444);
-}
-
-.last-sync-result.partial {
-  color: var(--warning-color, #f59e0b);
-}
-
 .auto-sync-actions {
-  padding: 0 16px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .auto-sync-warning {

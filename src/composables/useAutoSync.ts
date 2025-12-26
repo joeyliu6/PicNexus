@@ -14,15 +14,15 @@ import type { WebDAVProfile } from '../config/types';
 export interface AutoSyncConfig {
   /** 是否启用自动同步 */
   enabled: boolean;
-  /** 同步间隔（分钟） */
-  intervalMinutes: number;
+  /** 同步间隔（小时） */
+  intervalHours: number;
 }
 
 /**
  * 自动同步选项
  */
 export interface AutoSyncOptions {
-  /** 同步间隔（毫秒），默认 30 分钟 */
+  /** 同步间隔（毫秒），默认 24 小时 */
   interval?: number;
   /** 是否在启动时立即同步 */
   syncOnMount?: boolean;
@@ -52,9 +52,9 @@ export interface AutoSyncState {
 
 // ==================== 默认配置 ====================
 
-const DEFAULT_INTERVAL = 30 * 60 * 1000; // 30 分钟
-const MIN_INTERVAL = 5 * 60 * 1000;      // 最小 5 分钟
-const MAX_INTERVAL = 24 * 60 * 60 * 1000; // 最大 24 小时
+const DEFAULT_INTERVAL = 24 * 60 * 60 * 1000;  // 默认 24 小时
+const MIN_INTERVAL = 1 * 60 * 60 * 1000;       // 最小 1 小时
+const MAX_INTERVAL = 720 * 60 * 60 * 1000;     // 最大 720 小时（30 天）
 
 // ==================== 主 Composable ====================
 
@@ -228,7 +228,7 @@ export function useAutoSync(
 
     isEnabled.value = true;
     scheduleNextSync();
-    console.log(`[自动同步] 已启动，间隔 ${safeInterval / 1000 / 60} 分钟`);
+    console.log(`[自动同步] 已启动，间隔 ${safeInterval / 1000 / 60 / 60} 小时`);
   }
 
   /**
@@ -260,8 +260,8 @@ export function useAutoSync(
   /**
    * 更新同步间隔
    */
-  function updateInterval(newIntervalMinutes: number): void {
-    const newInterval = newIntervalMinutes * 60 * 1000;
+  function updateInterval(newIntervalHours: number): void {
+    const newInterval = newIntervalHours * 60 * 60 * 1000;
     const safeNewInterval = Math.max(MIN_INTERVAL, Math.min(MAX_INTERVAL, newInterval));
 
     if (isEnabled.value) {
@@ -275,7 +275,7 @@ export function useAutoSync(
       }, safeNewInterval);
     }
 
-    console.log(`[自动同步] 间隔已更新为 ${safeNewInterval / 1000 / 60} 分钟`);
+    console.log(`[自动同步] 间隔已更新为 ${safeNewInterval / 1000 / 60 / 60} 小时`);
   }
 
   /**
@@ -341,6 +341,6 @@ export function useAutoSync(
 export function createDefaultAutoSyncConfig(): AutoSyncConfig {
   return {
     enabled: false,
-    intervalMinutes: 30
+    intervalHours: 48
   };
 }
