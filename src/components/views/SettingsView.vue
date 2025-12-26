@@ -25,7 +25,8 @@ import { useAnalytics } from '../../composables/useAnalytics';
 import { Store } from '../../store';
 import { WebDAVClient } from '../../utils/webdav';
 import { historyDB } from '../../services/HistoryDatabase';
-import type { ThemeMode, UserConfig, ServiceType, HistoryItem, SyncStatus, WebDAVProfile, ServiceCheckStatus } from '../../config/types';
+import { markdownRepairService, type RepairProgress, type DetectionResult } from '../../services/MarkdownRepairService';
+import type { ThemeMode, UserConfig, ServiceType, HistoryItem, SyncStatus, WebDAVProfile, ServiceCheckStatus, MarkdownRepairOptions, MarkdownRepairResult, MarkdownDetectOptions, MarkdownExecuteOptions, ReplacementCandidate } from '../../config/types';
 import { DEFAULT_CONFIG, DEFAULT_PREFIXES, PRIVATE_SERVICES, PUBLIC_SERVICES, migrateConfig, isValidUserConfig } from '../../config/types';
 
 const toast = useToast();
@@ -47,7 +48,7 @@ const cookieUnlisten = ref<UnlistenFn | null>(null);
 const appVersion = ref<string>('');
 
 // --- 导航状态管理 ---
-type SettingsTab = 'general' | 'r2' | 'builtin' | 'cookie_auth' | 'links' | 'backup';
+type SettingsTab = 'general' | 'r2' | 'builtin' | 'cookie_auth' | 'links' | 'md_repair' | 'backup';
 const activeTab = ref<SettingsTab>('general');
 
 const tabs = [
@@ -62,6 +63,7 @@ const tabs = [
   { type: 'separator' },
   { type: 'label', label: '高级' },
   { id: 'links', label: '链接前缀', icon: 'pi pi-link' },
+  { id: 'md_repair', label: 'MD 图链修复', icon: 'pi pi-wrench' },
   { id: 'backup', label: '备份与同步', icon: 'pi pi-database' },
 ];
 
@@ -526,6 +528,483 @@ const exportHistoryLoading = ref(false);
 const importHistoryLoading = ref(false);
 const uploadHistoryLoading = ref(false);
 const downloadHistoryLoading = ref(false);
+
+// ========== Markdown 修复功能 ==========
+// 工作流程阶段
+type RepairPhase = 'idle' | 'detecting' | 'result' | 'executing';
+const mdRepairPhase = ref<RepairPhase>('idle');
+const mdRepairProgress = ref<RepairProgress | null>(null);
+
+// 检测选项
+const mdDetectOptions = ref<MarkdownDetectOptions>({
+  directoryPath: '',
+  includeSubdirs: true
+});
+
+// 检测结果
+const mdDetectionResult = ref<DetectionResult | null>(null);
+
+// 执行选项
+const mdSelectedReplacements = ref<Map<string, string>>(new Map()); // 原始URL -> 替换URL
+const mdSelectedForReupload = ref<Set<string>>(new Set()); // 需要重新上传的URL
+const mdSelectedForBackup = ref<Set<string>>(new Set()); // 需要增加冗余的URL
+const mdRepairTargetServices = ref<ServiceType[]>([]); // 修复用目标图床（用于组合操作）
+const mdBackupTargetServices = ref<ServiceType[]>([]); // 备份用目标图床（用于 C 类冗余备份）
+const mdBackupEnabled = ref(true);
+const mdCleanOldBackups = ref(false);
+
+// 已存在的备份
+const mdExistingBackups = ref<string[]>([]);
+
+// 折叠状态（默认折叠）
+const mdReplaceableSectionExpanded = ref(false);
+const mdNeedReuploadSectionExpanded = ref(false);
+const mdCanBackupSectionExpanded = ref(false);
+
+// C 类分页状态
+const mdCanBackupPage = ref(1);
+const mdCanBackupPageSize = 20;
+
+// C 类分页计算属性
+const mdCanBackupPaginated = computed(() => {
+  const start = (mdCanBackupPage.value - 1) * mdCanBackupPageSize;
+  return mdDetectionResult.value?.linksByCategory.canBackup.slice(start, start + mdCanBackupPageSize) || [];
+});
+
+const mdCanBackupTotalPages = computed(() => {
+  const total = mdDetectionResult.value?.linksByCategory.canBackup.length || 0;
+  return Math.ceil(total / mdCanBackupPageSize);
+});
+
+// 计算属性：是否有任何选择
+const hasAnyMdSelection = computed(() => {
+  return mdSelectedReplacements.value.size > 0 || mdSelectedForBackup.value.size > 0;
+});
+
+// 计算属性：是否有修复选择（A 类替换）
+const hasRepairSelection = computed(() => {
+  return mdSelectedReplacements.value.size > 0;
+});
+
+// 计算属性：是否有备份选择（C 类冗余备份）- 保留兼容性
+const hasBackupSelection = computed(() => {
+  return mdSelectedForBackup.value.size > 0;
+});
+
+// 计算属性：C 类可备份链接总数
+const canBackupCount = computed(() => {
+  return mdDetectionResult.value?.linksByCategory.canBackup.length || 0;
+});
+
+// 计算属性：C 类链接涉及的图床统计
+const canBackupServiceStats = computed(() => {
+  if (!mdDetectionResult.value) return new Map<ServiceType | 'external', number>();
+  const stats = new Map<ServiceType | 'external', number>();
+  for (const item of mdDetectionResult.value.linksByCategory.canBackup) {
+    const service = item.serviceId;
+    stats.set(service, (stats.get(service) || 0) + 1);
+  }
+  return stats;
+});
+
+// 计算属性：实际需要上传的链接数量（排除已存在于目标图床的）
+const actualBackupCount = computed(() => {
+  if (!mdDetectionResult.value || mdBackupTargetServices.value.length === 0) {
+    return canBackupCount.value;
+  }
+  return mdDetectionResult.value.linksByCategory.canBackup.filter(item => {
+    // 外部链接始终需要上传
+    if (item.serviceId === 'external') return true;
+    // 已有该图床的链接跳过
+    return !mdBackupTargetServices.value.includes(item.serviceId as ServiceType);
+  }).length;
+});
+
+// 兼容旧代码（保留但不再直接使用）
+const mdRepairOptions = ref<MarkdownRepairOptions>({
+  directoryPath: '',
+  includeSubdirs: true,
+  repairMode: 'replace',
+  targetServices: []
+});
+const mdRepairResult = ref<MarkdownRepairResult | null>(null);
+
+// 可用于重新上传的图床列表（已配置好的图床）
+const availableServicesForReupload = computed(() => {
+  return availableServices.value.filter((s: ServiceType) => {
+    // 开箱即用图床（TCL、京东、七鱼）始终可用
+    if (['tcl', 'jd', 'qiyu'].includes(s)) return true;
+    // 其他图床需要检查配置
+    const cfg = configManager.config.value.services?.[s];
+    if (!cfg) return false;
+    if (s === 'weibo' || s === 'nowcoder' || s === 'zhihu') return !!(cfg as any).cookie;
+    if (s === 'nami') return !!(cfg as any).cookie && !!(cfg as any).authToken;
+    if (s === 'r2') return !!(cfg as any).accountId && !!(cfg as any).accessKeyId;
+    return false;
+  });
+});
+
+// 选择目录
+async function selectMdRepairDirectory() {
+  try {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: '选择要扫描的目录'
+    });
+    if (selected && typeof selected === 'string') {
+      mdDetectOptions.value.directoryPath = selected;
+      // 检查已存在的备份
+      mdExistingBackups.value = await markdownRepairService.getExistingBackups(selected);
+    }
+  } catch (e) {
+    console.error('选择目录失败:', e);
+  }
+}
+
+// 重置检测状态
+function resetMdRepair() {
+  mdRepairPhase.value = 'idle';
+  mdDetectionResult.value = null;
+  mdSelectedReplacements.value = new Map();
+  mdSelectedForReupload.value = new Set();
+  mdSelectedForBackup.value = new Set();
+  mdRepairProgress.value = null;
+  mdCanBackupPage.value = 1; // 重置分页
+}
+
+// 开始检测
+async function startMdDetection() {
+  if (!mdDetectOptions.value.directoryPath) {
+    toast.warn('请先选择要扫描的目录');
+    return;
+  }
+
+  mdRepairPhase.value = 'detecting';
+  mdDetectionResult.value = null;
+  mdRepairProgress.value = {
+    stage: 'scanning',
+    stageText: '正在准备...',
+    completed: 0,
+    total: 0,
+    percent: 0
+  };
+
+  try {
+    // 获取已保存的前缀列表配置（用于去除前缀后检测和匹配）
+    // 使用已保存的配置而非未保存的表单数据，确保一致性
+    const allPrefixes = configManager.config.value.linkPrefixConfig?.prefixList || [];
+
+    const result = await markdownRepairService.detect(
+      mdDetectOptions.value,
+      allPrefixes,
+      (progress) => {
+        mdRepairProgress.value = progress;
+      }
+    );
+
+    mdDetectionResult.value = result;
+    mdRepairPhase.value = 'result';
+
+    // 自动选择所有可替换的链接（使用第一个有效替换）
+    for (const item of result.linksByCategory.replaceable) {
+      const validReplacement = item.replacements.find(r => r.isValid);
+      if (validReplacement) {
+        mdSelectedReplacements.value.set(item.originalUrl, validReplacement.url);
+      }
+    }
+
+    // 显示检测结果提示
+    const { summary } = result;
+    if (summary.totalLinks === 0) {
+      toast.info('扫描完成', `共扫描 ${summary.totalFiles} 个文件，未发现图片链接`);
+    } else {
+      toast.success(
+        '检测完成',
+        `共 ${summary.totalLinks} 个链接，${summary.validLinks} 有效，${summary.invalidLinks} 失效`
+      );
+    }
+  } catch (e) {
+    toast.error('检测失败', String(e));
+    console.error('Markdown 检测失败:', e);
+    mdRepairPhase.value = 'idle';
+  }
+}
+
+// 选择替换链接
+function selectReplacement(originalUrl: string, replacementUrl: string) {
+  mdSelectedReplacements.value.set(originalUrl, replacementUrl);
+}
+
+// 取消选择替换
+function unselectReplacement(originalUrl: string) {
+  mdSelectedReplacements.value.delete(originalUrl);
+}
+
+// 切换重新上传选择
+function toggleReuploadSelection(url: string) {
+  if (mdSelectedForReupload.value.has(url)) {
+    mdSelectedForReupload.value.delete(url);
+  } else {
+    mdSelectedForReupload.value.add(url);
+  }
+}
+
+// 切换冗余备份选择
+function toggleBackupSelection(url: string) {
+  if (mdSelectedForBackup.value.has(url)) {
+    mdSelectedForBackup.value.delete(url);
+  } else {
+    mdSelectedForBackup.value.add(url);
+  }
+}
+
+// 复制链接到剪贴板
+async function copyLinkToClipboard(url: string) {
+  try {
+    await navigator.clipboard.writeText(url);
+    toast.success('复制成功', '链接已复制到剪贴板');
+  } catch (e) {
+    console.error('复制失败:', e);
+    toast.error('复制失败', String(e));
+  }
+}
+
+// 判断图床是否可用
+function isMdServiceAvailable(serviceId: ServiceType): boolean {
+  switch (serviceId) {
+    case 'tcl':
+      return tclAvailable.value;
+    case 'jd':
+      return jdAvailable.value;
+    case 'qiyu':
+      return qiyuAvailable.value;
+    case 'weibo':
+    case 'nowcoder':
+    case 'zhihu':
+    case 'nami': {
+      // Cookie 认证图床需要检查配置
+      const cfg = configManager.config.value.services?.[serviceId];
+      return !!(cfg as any)?.cookie;
+    }
+    case 'r2': {
+      // R2 需要检查配置
+      const r2Cfg = configManager.config.value.services?.r2;
+      return !!(r2Cfg as any)?.accountId && !!(r2Cfg as any)?.accessKeyId;
+    }
+    default:
+      return false;
+  }
+}
+
+// 执行修复
+async function executeMdRepair() {
+  if (!mdDetectionResult.value) return;
+
+  // 检查是否有需要执行的操作
+  const hasReplacements = mdSelectedReplacements.value.size > 0;
+  const hasReuploads = mdSelectedForReupload.value.size > 0 || mdSelectedForBackup.value.size > 0;
+
+  if (!hasReplacements && !hasReuploads) {
+    toast.warn('请先选择需要执行的操作');
+    return;
+  }
+
+  // 如果有重新上传/增加冗余操作，需要选择目标图床
+  if (hasReuploads && mdRepairTargetServices.value.length === 0) {
+    toast.warn('请选择目标图床');
+    return;
+  }
+
+  mdRepairPhase.value = 'executing';
+  mdRepairProgress.value = {
+    stage: 'repairing',
+    stageText: '正在执行...',
+    completed: 0,
+    total: 0,
+    percent: 0
+  };
+
+  try {
+    // 合并需要重新上传的链接
+    const linksToReupload = [
+      ...Array.from(mdSelectedForReupload.value),
+      ...Array.from(mdSelectedForBackup.value)
+    ];
+
+    const result = await markdownRepairService.execute(
+      mdDetectionResult.value,
+      {
+        // 创建 Map 副本，确保正确传递
+        linksToReplace: new Map(mdSelectedReplacements.value),
+        linksToReupload,
+        targetServices: mdRepairTargetServices.value,
+        backup: mdBackupEnabled.value,
+        cleanOldBackups: mdCleanOldBackups.value
+      },
+      configManager.config.value,
+      (progress) => {
+        mdRepairProgress.value = progress;
+      }
+    );
+
+    mdRepairResult.value = result;
+
+    // 显示执行结果
+    const { summary } = result;
+    if (summary.modifiedFiles > 0) {
+      toast.success('执行完成', `已修改 ${summary.modifiedFiles} 个文件，替换 ${summary.replacedLinks} 个链接`);
+    } else {
+      toast.info('执行完成', '无文件被修改');
+    }
+
+    // 返回结果展示界面，刷新检测结果
+    mdRepairPhase.value = 'result';
+  } catch (e) {
+    toast.error('执行失败', String(e));
+    console.error('Markdown 修复执行失败:', e);
+    mdRepairPhase.value = 'result';
+  }
+}
+
+// 执行修复（仅 A 类替换）
+async function executeMdRepairOnly() {
+  if (!mdDetectionResult.value) return;
+
+  // 检查是否有需要执行的操作
+  if (mdSelectedReplacements.value.size === 0) {
+    toast.warn('请先选择需要替换的链接');
+    return;
+  }
+
+  mdRepairPhase.value = 'executing';
+  mdRepairProgress.value = {
+    stage: 'repairing',
+    stageText: '正在执行替换...',
+    completed: 0,
+    total: 0,
+    percent: 0
+  };
+
+  try {
+    const result = await markdownRepairService.execute(
+      mdDetectionResult.value,
+      {
+        // 创建 Map 副本，确保正确传递
+        linksToReplace: new Map(mdSelectedReplacements.value),
+        linksToReupload: [],
+        targetServices: [],
+        backup: mdBackupEnabled.value,
+        cleanOldBackups: mdCleanOldBackups.value
+      },
+      configManager.config.value,
+      (progress) => {
+        mdRepairProgress.value = progress;
+      }
+    );
+
+    mdRepairResult.value = result;
+
+    // 显示执行结果
+    const { summary } = result;
+    if (summary.modifiedFiles > 0) {
+      toast.success('修复完成', `已修改 ${summary.modifiedFiles} 个文件，替换 ${summary.replacedLinks} 个链接`);
+    } else {
+      toast.info('修复完成', '无文件被修改');
+    }
+
+    // 返回结果展示界面
+    mdRepairPhase.value = 'result';
+  } catch (e) {
+    toast.error('修复失败', String(e));
+    console.error('Markdown 替换修复失败:', e);
+    mdRepairPhase.value = 'result';
+  }
+}
+
+// 执行上传（C 类冗余备份 - 默认全选所有链接）
+async function executeMdBackup() {
+  if (!mdDetectionResult.value) return;
+
+  // 获取所有 C 类链接
+  const allCanBackupLinks = mdDetectionResult.value.linksByCategory.canBackup || [];
+
+  // 检查是否有需要执行的操作
+  if (allCanBackupLinks.length === 0) {
+    toast.warn('没有可备份的链接');
+    return;
+  }
+
+  // 检查是否选择了目标图床
+  if (mdBackupTargetServices.value.length === 0) {
+    toast.warn('请选择目标图床');
+    return;
+  }
+
+  mdRepairPhase.value = 'executing';
+  mdRepairProgress.value = {
+    stage: 'reuploading',
+    stageText: '正在上传备份...',
+    completed: 0,
+    total: 0,
+    percent: 0
+  };
+
+  try {
+    // 过滤掉已经存在于目标图床的链接（避免重复上传）
+    const linksToUpload = allCanBackupLinks
+      .filter(item => {
+        // 外部链接始终需要上传
+        if (item.serviceId === 'external') return true;
+        // 已有该图床的链接跳过
+        return !mdBackupTargetServices.value.includes(item.serviceId as ServiceType);
+      })
+      .map(item => item.originalUrl);
+
+    if (linksToUpload.length === 0) {
+      toast.info('无需上传', '所有链接已存在于所选图床中');
+      mdRepairPhase.value = 'result';
+      return;
+    }
+
+    const result = await markdownRepairService.execute(
+      mdDetectionResult.value,
+      {
+        linksToReplace: new Map(),
+        linksToReupload: linksToUpload,
+        targetServices: mdBackupTargetServices.value,
+        backup: mdBackupEnabled.value,
+        cleanOldBackups: mdCleanOldBackups.value
+      },
+      configManager.config.value,
+      (progress) => {
+        mdRepairProgress.value = progress;
+      }
+    );
+
+    mdRepairResult.value = result;
+
+    // 显示执行结果
+    const { summary } = result;
+    if (summary.reuploadedLinks > 0) {
+      toast.success('备份上传完成', `已上传 ${summary.reuploadedLinks} 个链接到目标图床`);
+    } else {
+      toast.info('备份上传完成', '无链接被上传');
+    }
+
+    // 返回结果展示界面
+    mdRepairPhase.value = 'result';
+  } catch (e) {
+    toast.error('备份上传失败', String(e));
+    console.error('Markdown 备份上传失败:', e);
+    mdRepairPhase.value = 'result';
+  }
+}
+
+// 兼容旧的 startMdRepair 函数
+async function startMdRepair() {
+  await startMdDetection();
+}
 
 // 历史记录上传菜单状态
 const uploadHistoryMenuVisible = ref(false);
@@ -1629,6 +2108,425 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <div v-if="activeTab === 'md_repair'" class="settings-section">
+        <div class="section-header">
+          <h2>MD 图链修复</h2>
+          <p class="section-desc">扫描 Markdown 文件中的图片链接，检测并修复失效链接。</p>
+        </div>
+
+        <!-- ========== 阶段 1: 配置与检测 ========== -->
+        <template v-if="mdRepairPhase === 'idle' || mdRepairPhase === 'detecting'">
+          <!-- 扫描目录选择 -->
+          <div class="form-item mb-4">
+            <label>扫描目录</label>
+            <div class="flex gap-2">
+              <InputText
+                v-model="mdDetectOptions.directoryPath"
+                class="flex-1"
+                placeholder="选择要扫描的目录"
+                readonly
+              />
+              <Button
+                icon="pi pi-folder-open"
+                @click="selectMdRepairDirectory"
+                outlined
+                :disabled="mdRepairPhase === 'detecting'"
+              />
+            </div>
+          </div>
+
+          <!-- 包含子目录选项 -->
+          <div class="flex items-center gap-2 mb-4">
+            <Checkbox
+              v-model="mdDetectOptions.includeSubdirs"
+              :binary="true"
+              inputId="md-include-subdirs"
+              :disabled="mdRepairPhase === 'detecting'"
+            />
+            <label for="md-include-subdirs" class="cursor-pointer">包含子目录</label>
+          </div>
+
+          <!-- 开始检测按钮 -->
+          <div class="md-repair-actions mt-4">
+            <Button
+              :label="mdRepairPhase === 'detecting' ? '检测中...' : '开始检测'"
+              :icon="mdRepairPhase === 'detecting' ? 'pi pi-spin pi-spinner' : 'pi pi-search'"
+              :disabled="mdRepairPhase === 'detecting' || !mdDetectOptions.directoryPath"
+              @click="startMdDetection"
+            />
+          </div>
+
+          <!-- 进度条 -->
+          <div v-if="mdRepairProgress && mdRepairPhase === 'detecting'" class="md-repair-progress mt-4">
+            <div class="progress-header">
+              <span class="progress-stage">{{ mdRepairProgress.stageText }}</span>
+              <span class="progress-percent">{{ mdRepairProgress.percent }}%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" :style="{ width: mdRepairProgress.percent + '%' }"></div>
+            </div>
+            <p v-if="mdRepairProgress.current" class="progress-current">
+              {{ mdRepairProgress.current }}
+            </p>
+          </div>
+        </template>
+
+        <!-- ========== 阶段 2: 结果展示 ========== -->
+        <template v-if="mdRepairPhase === 'result' && mdDetectionResult">
+          <!-- 操作栏 -->
+          <div class="result-actions-bar mb-4">
+            <span class="current-path text-muted">
+              <i class="pi pi-folder"></i>
+              {{ mdDetectionResult.directoryPath }}
+            </span>
+            <Button
+              label="重新检测"
+              icon="pi pi-refresh"
+              @click="resetMdRepair"
+              outlined
+              size="small"
+            />
+          </div>
+
+          <!-- 统计概览 -->
+          <div class="md-repair-result">
+            <div class="result-header">
+              <h4>检测结果</h4>
+            </div>
+            <div class="result-stats cols-5">
+              <div class="stat-card">
+                <div class="stat-value">{{ mdDetectionResult.summary.totalFiles }}</div>
+                <div class="stat-label">扫描文件</div>
+              </div>
+              <div class="stat-card text-green">
+                <div class="stat-value">{{ mdDetectionResult.summary.validLinks }}</div>
+                <div class="stat-label">有效链接</div>
+              </div>
+              <div class="stat-card text-red">
+                <div class="stat-value">{{ mdDetectionResult.summary.invalidLinks }}</div>
+                <div class="stat-label">失效链接</div>
+              </div>
+              <div class="stat-card text-blue">
+                <div class="stat-value">{{ mdDetectionResult.summary.replaceableLinks }}</div>
+                <div class="stat-label">可替换</div>
+              </div>
+              <div class="stat-card text-orange">
+                <div class="stat-value">{{ mdDetectionResult.summary.needReuploadLinks }}</div>
+                <div class="stat-label">需上传</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- B类：需重新上传链接（移到顶部） -->
+          <div class="link-category-section collapsible mt-4">
+            <div class="category-header clickable" @click="mdNeedReuploadSectionExpanded = !mdNeedReuploadSectionExpanded">
+              <div class="header-left">
+                <i class="pi pi-exclamation-triangle text-orange"></i>
+                <h4>需重新上传 ({{ mdDetectionResult.linksByCategory.needReupload.length }})</h4>
+              </div>
+              <i :class="mdNeedReuploadSectionExpanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"></i>
+            </div>
+            <p class="category-desc">这些失效链接没有可用的替换，需手动获取图片后重新上传</p>
+            <Transition name="collapse">
+              <div v-if="mdNeedReuploadSectionExpanded" class="section-content">
+                <!-- 空状态 -->
+                <div v-if="mdDetectionResult.linksByCategory.needReupload.length === 0" class="empty-state">
+                  <i class="pi pi-inbox"></i>
+                  <p>暂无需重新上传的链接</p>
+                </div>
+                <!-- 链接列表 -->
+                <div v-else class="link-list">
+                  <div
+                    v-for="item in mdDetectionResult.linksByCategory.needReupload"
+                    :key="item.originalUrl"
+                    class="link-item"
+                  >
+                    <div class="link-main">
+                      <div class="link-url broken">
+                        <i class="pi pi-times-circle"></i>
+                        <span class="url-text">{{ item.originalUrl }}</span>
+                      </div>
+                      <div class="link-files">
+                        <span class="file-badge" v-for="fp in item.filePaths.slice(0, 3)" :key="fp">{{ fp }}</span>
+                        <span v-if="item.filePaths.length > 3" class="file-more">+{{ item.filePaths.length - 3 }} 更多</span>
+                      </div>
+                    </div>
+                    <div class="link-status">
+                      <Tag
+                        value="无可用替换"
+                        severity="warning"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </div>
+
+          <!-- A类：可替换链接列表 -->
+          <div class="link-category-section collapsible mt-4">
+            <div class="category-header clickable" @click="mdReplaceableSectionExpanded = !mdReplaceableSectionExpanded">
+              <div class="header-left">
+                <i class="pi pi-check-circle text-blue"></i>
+                <h4>可替换链接 ({{ mdDetectionResult.linksByCategory.replaceable.length }})</h4>
+              </div>
+              <i :class="mdReplaceableSectionExpanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"></i>
+            </div>
+            <p class="category-desc">这些失效链接在历史记录中有可用的替换</p>
+            <Transition name="collapse">
+              <div v-if="mdReplaceableSectionExpanded" class="section-content">
+                <!-- 空状态 -->
+                <div v-if="mdDetectionResult.linksByCategory.replaceable.length === 0" class="empty-state">
+                  <i class="pi pi-inbox"></i>
+                  <p>暂无可替换链接</p>
+                </div>
+                <!-- 链接列表 -->
+                <div v-else class="link-list">
+                  <div
+                    v-for="item in mdDetectionResult.linksByCategory.replaceable"
+                    :key="item.originalUrl"
+                    class="link-item"
+                  >
+                    <div class="link-main">
+                      <div class="link-url broken">
+                        <i class="pi pi-times-circle"></i>
+                        <span class="url-text">{{ item.originalUrl }}</span>
+                      </div>
+                      <div class="link-files">
+                        <span class="file-badge" v-for="fp in item.filePaths.slice(0, 3)" :key="fp">{{ fp }}</span>
+                        <span v-if="item.filePaths.length > 3" class="file-more">+{{ item.filePaths.length - 3 }} 更多</span>
+                      </div>
+                    </div>
+                    <div class="link-replacements">
+                      <span class="replacement-label">替换为:</span>
+                      <div class="replacement-options">
+                        <div
+                          v-for="rep in item.replacements.filter(r => r.isValid)"
+                          :key="rep.url"
+                          class="replacement-option"
+                          :class="{ selected: mdSelectedReplacements.get(item.originalUrl) === rep.url }"
+                          @click="selectReplacement(item.originalUrl, rep.url)"
+                        >
+                          <Tag
+                            :value="serviceNames[rep.serviceId]"
+                            :severity="rep.isValid ? 'success' : 'danger'"
+                            class="clickable-tag"
+                            @click.stop="copyLinkToClipboard(rep.url)"
+                            v-tooltip.top="'点击复制链接'"
+                          />
+                          <span
+                            class="rep-url clickable"
+                            @click.stop="copyLinkToClipboard(rep.url)"
+                            v-tooltip.top="'点击复制链接'"
+                          >{{ rep.url.slice(0, 50) }}...</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </div>
+
+          <!-- ==================== 修复区域 ==================== -->
+          <div class="repair-section mt-4">
+            <!-- 目标图床（修复用，保留以备扩展） -->
+            <div class="form-group">
+              <label class="group-label">目标图床</label>
+              <p class="helper-text">选择重新上传的目标图床（用于后续扩展）</p>
+              <div class="service-checkboxes">
+                <div
+                  v-for="service in availableServices"
+                  :key="service"
+                  class="service-checkbox"
+                  :class="{ disabled: !isMdServiceAvailable(service) }"
+                >
+                  <Checkbox
+                    v-model="mdRepairTargetServices"
+                    :value="service"
+                    :inputId="'repair-target-' + service"
+                    :disabled="!isMdServiceAvailable(service)"
+                  />
+                  <label :for="'repair-target-' + service" class="cursor-pointer">{{ serviceNames[service] }}</label>
+                </div>
+              </div>
+            </div>
+
+            <!-- 备份选项（修复用） -->
+            <div class="form-group mt-3">
+              <div class="flex items-center gap-2">
+                <Checkbox v-model="mdBackupEnabled" :binary="true" inputId="md-repair-backup-enable" />
+                <label for="md-repair-backup-enable" class="cursor-pointer">执行前备份文件</label>
+              </div>
+              <p class="helper-text ml-6 mt-2">
+                修改前自动备份原文件到 .md_repair_backup_[时间戳] 目录
+              </p>
+              <div v-if="mdBackupEnabled && mdExistingBackups.length > 0" class="flex items-center gap-2 mt-2 ml-6">
+                <Checkbox v-model="mdCleanOldBackups" :binary="true" inputId="md-repair-clean-backups" />
+                <label for="md-repair-clean-backups" class="cursor-pointer text-sm text-muted">
+                  清理旧备份 ({{ mdExistingBackups.length }} 个)
+                </label>
+              </div>
+            </div>
+
+            <!-- 执行修复按钮 -->
+            <div class="md-repair-actions mt-4">
+              <Button
+                :label="hasRepairSelection ? `执行修复 (${mdSelectedReplacements.size} 个替换)` : '执行修复'"
+                icon="pi pi-wrench"
+                :disabled="!hasRepairSelection"
+                @click="executeMdRepairOnly"
+              />
+              <p v-if="!hasRepairSelection" class="helper-text text-muted mt-2">
+                请先在"可替换链接"区域选择要替换的链接
+              </p>
+            </div>
+          </div>
+
+          <Divider />
+
+          <!-- ==================== 附加选项区域 ==================== -->
+          <div class="backup-section">
+            <h3 class="section-subtitle">附加选项</h3>
+            <p class="section-desc mb-4">
+              为单一来源的图片链接创建多图床备份，提高链接可靠性。
+            </p>
+
+            <!-- C类：可增加冗余（默认全选，无复选框） -->
+            <div class="link-category-section collapsible">
+              <div class="category-header clickable" @click="mdCanBackupSectionExpanded = !mdCanBackupSectionExpanded">
+                <div class="header-left">
+                  <i class="pi pi-shield text-purple"></i>
+                  <h4>可增加冗余 ({{ mdDetectionResult.linksByCategory.canBackup.length }})</h4>
+                </div>
+                <i :class="mdCanBackupSectionExpanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"></i>
+              </div>
+              <p class="category-desc">以下链接仅存储在单个图床，建议备份到其他图床</p>
+              <Transition name="collapse">
+                <div v-if="mdCanBackupSectionExpanded" class="section-content">
+                  <!-- 空状态 -->
+                  <div v-if="mdDetectionResult.linksByCategory.canBackup.length === 0" class="empty-state">
+                    <i class="pi pi-inbox"></i>
+                    <p>暂无可增加冗余的链接</p>
+                  </div>
+                  <!-- 链接列表（无复选框） -->
+                  <div v-else class="link-list">
+                    <div
+                      v-for="item in mdCanBackupPaginated"
+                      :key="item.originalUrl"
+                      class="link-item"
+                    >
+                      <div class="link-main">
+                        <div class="link-url valid">
+                          <i class="pi pi-check-circle"></i>
+                          <span class="url-text">{{ item.originalUrl }}</span>
+                        </div>
+                        <div class="link-files">
+                          <span class="file-badge" v-for="fp in item.filePaths.slice(0, 3)" :key="fp">{{ fp }}</span>
+                          <span v-if="item.filePaths.length > 3" class="file-more">+{{ item.filePaths.length - 3 }} 更多</span>
+                        </div>
+                      </div>
+                      <div class="link-status">
+                        <Tag
+                          :value="item.serviceId === 'external' ? '外部链接' : serviceNames[item.serviceId]"
+                          :severity="item.serviceId === 'external' ? 'info' : undefined"
+                          size="small"
+                          class="cursor-pointer"
+                          @click="copyLinkToClipboard(item.originalUrl)"
+                          v-tooltip.top="'点击复制链接'"
+                        />
+                      </div>
+                    </div>
+                    <!-- 分页控件 -->
+                    <div v-if="mdCanBackupTotalPages > 1" class="pagination-controls mt-3">
+                      <Button
+                        icon="pi pi-chevron-left"
+                        size="small"
+                        text
+                        :disabled="mdCanBackupPage === 1"
+                        @click="mdCanBackupPage--"
+                      />
+                      <span class="page-info">{{ mdCanBackupPage }} / {{ mdCanBackupTotalPages }}</span>
+                      <Button
+                        icon="pi pi-chevron-right"
+                        size="small"
+                        text
+                        :disabled="mdCanBackupPage === mdCanBackupTotalPages"
+                        @click="mdCanBackupPage++"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </Transition>
+            </div>
+
+            <!-- 当前涉及图床统计 -->
+            <div v-if="canBackupServiceStats.size > 0" class="service-stats-inline mt-4 mb-3">
+              <span class="stats-label">当前链接来源：</span>
+              <Tag
+                v-for="[serviceId, count] in canBackupServiceStats"
+                :key="serviceId"
+                :value="`${serviceId === 'external' ? '外部链接' : serviceNames[serviceId]}: ${count}`"
+                :severity="serviceId === 'external' ? 'info' : 'secondary'"
+                size="small"
+                class="mr-2"
+              />
+            </div>
+
+            <!-- 目标图床（备份用，移到 C 类下方） -->
+            <div class="form-group mt-4">
+              <label class="group-label">目标图床</label>
+              <p class="helper-text">选择备份目标图床（建议避开已有的图床类型）</p>
+              <div class="service-checkboxes">
+                <div
+                  v-for="service in availableServices"
+                  :key="service"
+                  class="service-checkbox"
+                  :class="{ disabled: !isMdServiceAvailable(service) }"
+                >
+                  <Checkbox
+                    v-model="mdBackupTargetServices"
+                    :value="service"
+                    :inputId="'backup-target-' + service"
+                    :disabled="!isMdServiceAvailable(service)"
+                  />
+                  <label :for="'backup-target-' + service" class="cursor-pointer">{{ serviceNames[service] }}</label>
+                </div>
+              </div>
+            </div>
+
+            <!-- 执行上传按钮 -->
+            <div class="md-repair-actions mt-4">
+              <Button
+                :label="`执行上传 (${actualBackupCount} 个)`"
+                icon="pi pi-cloud-upload"
+                :disabled="actualBackupCount === 0 || mdBackupTargetServices.length === 0"
+                @click="executeMdBackup"
+              />
+              <p v-if="mdBackupTargetServices.length > 0 && actualBackupCount === 0" class="helper-text text-muted mt-2">
+                所有链接已存在于所选图床中
+              </p>
+            </div>
+          </div>
+        </template>
+
+        <!-- ========== 阶段 3: 执行中 ========== -->
+        <template v-if="mdRepairPhase === 'executing'">
+          <div class="md-repair-progress mt-4">
+            <div class="progress-header">
+              <span class="progress-stage">{{ mdRepairProgress?.stageText || '执行中...' }}</span>
+              <span class="progress-percent">{{ mdRepairProgress?.percent || 0 }}%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" :style="{ width: (mdRepairProgress?.percent || 0) + '%' }"></div>
+            </div>
+            <p v-if="mdRepairProgress?.current" class="progress-current">
+              {{ mdRepairProgress.current }}
+            </p>
+          </div>
+        </template>
+      </div>
+
       <div v-if="activeTab === 'backup'" class="settings-section">
         <div class="section-header">
           <h2>备份与同步</h2>
@@ -2675,5 +3573,529 @@ onUnmounted(() => {
 
 .mono-input {
   font-family: var(--font-mono);
+}
+
+/* ========== Markdown 修复样式 ========== */
+
+/* 运行模式选项 */
+.mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mode-option:hover {
+  background: var(--hover-overlay-subtle);
+}
+
+.mode-option.active {
+  border-color: var(--primary);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.mode-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mode-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.mode-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.mode-tag {
+  flex-shrink: 0;
+}
+
+/* 图床复选框 */
+.service-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.service-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 修复操作按钮 */
+.md-repair-actions {
+  margin-top: 16px;
+}
+
+/* 进度条样式 */
+.md-repair-progress {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.progress-stage {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.progress-percent {
+  font-size: 13px;
+  color: var(--primary);
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.progress-bar {
+  height: 6px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.progress-current {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 结果统计样式 */
+.md-repair-result {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.result-header h4 {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.result-stats {
+  display: grid;
+  gap: 12px;
+}
+
+.result-stats.cols-5 {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.result-stats.cols-6 {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.stat-card {
+  text-align: center;
+  padding: 12px 8px;
+  background: var(--bg-card);
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  margin-bottom: 4px;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.stat-card.text-green .stat-value {
+  color: var(--success);
+}
+
+.stat-card.text-blue .stat-value {
+  color: var(--primary);
+}
+
+.stat-card.text-purple .stat-value {
+  color: #a855f7;
+}
+
+.stat-card.text-orange .stat-value {
+  color: var(--warning);
+}
+
+.stat-card.text-red .stat-value {
+  color: var(--danger);
+}
+
+/* 链接分类区域 */
+.link-category-section {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.link-category-section.collapsible {
+  /* 可折叠区域样式 */
+}
+
+.category-header {
+  margin-bottom: 12px;
+}
+
+.category-header.clickable {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 0;
+  padding: 4px 0;
+  transition: opacity 0.15s;
+}
+
+.category-header.clickable:hover {
+  opacity: 0.8;
+}
+
+.category-header.clickable > i {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-left h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.header-left > i {
+  font-size: 16px;
+}
+
+.category-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.category-header h4 i {
+  font-size: 16px;
+}
+
+.category-desc {
+  margin: 4px 0 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.section-content {
+  margin-top: 12px;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--text-muted);
+}
+
+.empty-state i {
+  font-size: 32px;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* 可点击的 Tag */
+.clickable-tag {
+  cursor: pointer;
+}
+
+/* 禁用状态 */
+.service-checkbox.disabled {
+  opacity: 0.6;
+}
+
+.service-checkbox.disabled label {
+  cursor: not-allowed;
+}
+
+/* 链接列表 */
+.link-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.link-list.compact {
+  gap: 8px;
+}
+
+.link-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.link-item.compact {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+}
+
+.link-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.link-url {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+
+.link-url.broken {
+  color: var(--danger);
+}
+
+.link-url.broken i {
+  color: var(--danger);
+}
+
+.link-url.valid {
+  color: var(--success);
+}
+
+.link-url.valid i {
+  color: var(--success);
+}
+
+.url-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.url-text.clickable {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+.url-text.clickable:hover {
+  text-decoration-style: solid;
+}
+
+.link-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.file-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: var(--bg-input);
+  border-radius: 4px;
+  color: var(--text-muted);
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-more {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 2px 4px;
+}
+
+/* 替换选项 */
+.link-replacements {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.replacement-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  display: block;
+}
+
+.replacement-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.replacement-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-input);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.replacement-option:hover {
+  background: var(--hover-overlay-subtle);
+}
+
+.replacement-option.selected {
+  border-color: var(--primary);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.rep-url {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link-status {
+  margin-top: 8px;
+}
+
+/* 执行区域 */
+.execute-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* 结果操作栏 */
+.result-actions-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* 当前检测路径 */
+.current-path {
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+
+/* 附加选项区域标题 */
+.section-subtitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+/* 图床统计信息（简化内联样式） */
+.service-stats-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.service-stats-inline .stats-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* 文本颜色工具类 */
+.text-blue {
+  color: var(--primary);
+}
+
+.text-orange {
+  color: var(--warning);
+}
+
+.text-purple {
+  color: #a855f7;
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.text-sm {
+  font-size: 12px;
+}
+
+.ml-6 {
+  margin-left: 24px;
 }
 </style>

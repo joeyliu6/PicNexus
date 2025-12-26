@@ -570,6 +570,154 @@ export function migrateConfig(config: UserConfig): UserConfig {
   };
 }
 
+// ========== Markdown 修复相关类型 ==========
+
+/**
+ * Markdown 修复运行模式
+ * - detect: 仅检测链接有效性，不修改文件
+ * - replace: 将失效链接替换为历史记录中的有效链接
+ * - reupload: 替换 + 对无法替换的链接下载并重新上传
+ */
+export type MarkdownRepairMode = 'detect' | 'replace' | 'reupload';
+
+/**
+ * Markdown 修复配置选项
+ */
+export interface MarkdownRepairOptions {
+  /** 扫描的目录路径 */
+  directoryPath: string;
+  /** 是否包含子目录 */
+  includeSubdirs: boolean;
+  /** 运行模式 */
+  repairMode: MarkdownRepairMode;
+  /** 重新上传目标图床（仅 reupload 模式使用） */
+  targetServices?: ServiceType[];
+}
+
+/**
+ * 检测选项（仅检测阶段使用）
+ */
+export interface MarkdownDetectOptions {
+  /** 扫描的目录路径 */
+  directoryPath: string;
+  /** 是否包含子目录 */
+  includeSubdirs: boolean;
+}
+
+/**
+ * 执行选项（替换/重新上传阶段使用）
+ */
+export interface MarkdownExecuteOptions {
+  /** 要替换的链接映射 Map<原始URL, 替换URL> */
+  linksToReplace: Map<string, string>;
+  /** 要重新上传的链接列表（从有效链接下载并上传） */
+  linksToReupload: string[];
+  /** 目标图床列表 */
+  targetServices: ServiceType[];
+  /** 是否备份文件 */
+  backup: boolean;
+  /** 是否清理旧备份 */
+  cleanOldBackups?: boolean;
+}
+
+/**
+ * 链接分类（用于检测结果展示）
+ * - replaceable: A类 - 可自动替换（历史记录中有其他有效链接）
+ * - need_reupload: B类 - 需重新上传（无可用替换）
+ * - can_backup: C类 - 可增加冗余（有效但单一来源）
+ */
+export type LinkCategory = 'replaceable' | 'need_reupload' | 'can_backup';
+
+/**
+ * 可用的替换链接候选
+ */
+export interface ReplacementCandidate {
+  /** 链接 URL */
+  url: string;
+  /** 图床 ID */
+  serviceId: ServiceType;
+  /** 链接是否有效 */
+  isValid: boolean;
+}
+
+/**
+ * 单个链接的修复结果
+ */
+export interface LinkRepairResult {
+  /** 原始链接 URL */
+  originalUrl: string;
+  /** 替换后的链接 URL（如果有替换） */
+  replacementUrl?: string;
+  /** 链接状态 */
+  status: 'valid' | 'replaced' | 'reuploaded' | 'reupload_failed' | 'unmatched' | 'error';
+  /** 错误信息（如果有） */
+  error?: string;
+  /** 重新上传到的图床 ID */
+  reuploadedServiceId?: ServiceType;
+  /** 链接分类（用于 UI 展示） */
+  category?: LinkCategory;
+  /** 可用的替换链接列表（用于用户选择） */
+  availableReplacements?: ReplacementCandidate[];
+}
+
+/**
+ * 单个文件的修复结果
+ */
+export interface FileRepairResult {
+  /** 文件路径 */
+  filePath: string;
+  /** 相对路径（用于显示） */
+  relativePath: string;
+  /** 文件中所有链接的修复结果 */
+  links: LinkRepairResult[];
+  /** 是否修改了文件 */
+  modified: boolean;
+  /** 错误信息（如果读取文件失败） */
+  error?: string;
+}
+
+/**
+ * Markdown 修复汇总统计
+ */
+export interface MarkdownRepairSummary {
+  /** 扫描的文件总数 */
+  totalFiles: number;
+  /** 检测到的链接总数 */
+  totalLinks: number;
+  /** 有效链接数 */
+  validLinks: number;
+  /** 失效链接数 */
+  invalidLinks: number;
+  /** A类：可替换链接数（历史记录中有其他有效链接） */
+  replaceableLinks: number;
+  /** B类：需重新上传链接数（无可用替换） */
+  needReuploadLinks: number;
+  /** C类：可增加冗余链接数（有效但单一来源） */
+  canBackupLinks: number;
+  /** 已替换链接数 */
+  replacedLinks: number;
+  /** 重新上传成功数 */
+  reuploadedLinks: number;
+  /** 重新上传失败数 */
+  reuploadFailedLinks: number;
+  /** 无法匹配的链接数 */
+  unmatchedLinks: number;
+  /** 修改的文件数 */
+  modifiedFiles: number;
+  /** 错误数 */
+  errors: number;
+}
+
+/**
+ * Markdown 修复完整结果
+ */
+export interface MarkdownRepairResult {
+  /** 汇总统计 */
+  summary: MarkdownRepairSummary;
+  /** 每个文件的详细结果 */
+  files: FileRepairResult[];
+}
+
 /**
  * 验证对象是否为有效的 UserConfig 格式
  * 用于防止导入错误格式的数据（如历史记录数据）覆盖配置
