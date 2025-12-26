@@ -1,10 +1,13 @@
 // src-tauri/src/commands/nami_token.rs
 // 纳米图床 Token 自动获取模块
 // 使用 Sidecar (Node.js + Puppeteer) 从纳米页面获取动态 Headers
+// v2.10: 迁移到 AppError 统一错误类型
 
 use serde::{Deserialize, Serialize};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
+
+use crate::error::AppError;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NamiDynamicHeaders {
@@ -37,7 +40,7 @@ pub async fn fetch_nami_token(
     app: tauri::AppHandle,
     cookie: String,
     auth_token: String
-) -> Result<NamiDynamicHeaders, String> {
+) -> Result<NamiDynamicHeaders, AppError> {
     fetch_nami_token_internal(&app, cookie, auth_token).await
 }
 
@@ -46,17 +49,17 @@ pub async fn fetch_nami_token_internal(
     app: &tauri::AppHandle,
     cookie: String,
     auth_token: String
-) -> Result<NamiDynamicHeaders, String> {
+) -> Result<NamiDynamicHeaders, AppError> {
     println!("[NamiToken] ========== 开始获取动态 Headers (Sidecar) ==========");
 
     let sidecar = app.shell()
         .sidecar("nami-token-fetcher")
-        .map_err(|e| format!("创建 sidecar 失败: {}", e))?;
+        .map_err(|e| AppError::external(format!("创建 sidecar 失败: {}", e)))?;
 
     let (mut rx, _child) = sidecar
         .args(["fetch-token", "--cookie", &cookie, "--auth-token", &auth_token])
         .spawn()
-        .map_err(|e| format!("启动 sidecar 失败: {}", e))?;
+        .map_err(|e| AppError::external(format!("启动 sidecar 失败: {}", e)))?;
 
     let mut output = String::new();
     let mut stderr_output = String::new();
@@ -86,7 +89,7 @@ pub async fn fetch_nami_token_internal(
 
     // 解析 JSON 响应
     let response: SidecarResponse<NamiDynamicHeaders> = serde_json::from_str(&output)
-        .map_err(|e| format!("解析响应失败: {}. 原始输出: {}", e, output))?;
+        .map_err(|e| AppError::external(format!("解析响应失败: {}. 原始输出: {}", e, output)))?;
 
     if response.success {
         if let Some(headers) = response.data {
@@ -95,8 +98,8 @@ pub async fn fetch_nami_token_internal(
             println!("[NamiToken]   zm_token: {}...", &headers.zm_token.chars().take(20).collect::<String>());
             return Ok(headers);
         }
-        Err("响应中没有 Headers 数据".to_string())
+        Err(AppError::external("响应中没有 Headers 数据"))
     } else {
-        Err(response.error.unwrap_or_else(|| "未知错误".to_string()))
+        Err(AppError::external(response.error.unwrap_or_else(|| "未知错误".to_string())))
     }
 }

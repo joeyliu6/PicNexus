@@ -2,6 +2,7 @@
 // 七鱼图床上传命令
 // 基于网易七鱼客服系统的 NOS 对象存储
 // 自动获取 Token，无需手动配置
+// v2.10: 迁移到 AppError 统一错误类型
 
 use tauri::{Window, Emitter, Manager};
 use serde::Serialize;
@@ -10,6 +11,7 @@ use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 use std::time::{SystemTime, UNIX_EPOCH, Duration};
 
+use crate::error::AppError;
 use super::qiyu_token::fetch_qiyu_token_internal;
 
 #[derive(Debug, Serialize)]
@@ -26,7 +28,7 @@ pub async fn upload_to_qiyu(
     window: Window,
     id: String,
     file_path: String,
-) -> Result<QiyuUploadResult, String> {
+) -> Result<QiyuUploadResult, AppError> {
     println!("[Qiyu] 开始上传文件: {}", file_path);
 
     // 发送步骤1进度：获取上传凭证 (0%)
@@ -48,24 +50,24 @@ pub async fn upload_to_qiyu(
 
     // 3. 读取文件
     let mut file = File::open(&file_path).await
-        .map_err(|e| format!("无法打开文件: {}", e))?;
+        .map_err(|e| AppError::file_io(format!("无法打开文件: {}", e)))?;
 
     let file_size = file.metadata().await
-        .map_err(|e| format!("无法获取文件元数据: {}", e))?
+        .map_err(|e| AppError::file_io(format!("无法获取文件元数据: {}", e)))?
         .len();
 
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).await
-        .map_err(|e| format!("无法读取文件: {}", e))?;
+        .map_err(|e| AppError::file_io(format!("无法读取文件: {}", e)))?;
 
     // 4. 验证文件类型（只允许图片）
     let file_name = std::path::Path::new(&file_path)
         .file_name()
         .and_then(|n| n.to_str())
-        .ok_or("无法获取文件名")?;
+        .ok_or_else(|| AppError::validation("无法获取文件名"))?;
 
     let ext = file_name.split('.').last()
-        .ok_or("无法获取文件扩展名")?
+        .ok_or_else(|| AppError::validation("无法获取文件扩展名"))?
         .to_lowercase();
 
     // 获取 Content-Type
@@ -74,7 +76,7 @@ pub async fn upload_to_qiyu(
         "png" => "image/png",
         "gif" => "image/gif",
         "webp" => "image/webp",
-        _ => return Err("只支持 JPG、PNG、GIF、WebP 格式的图片".to_string()),
+        _ => return Err(AppError::validation("只支持 JPG、PNG、GIF、WebP 格式的图片")),
     };
 
     // 5. 构建上传 URL
@@ -99,7 +101,7 @@ pub async fn upload_to_qiyu(
     let client = Client::builder()
         .timeout(Duration::from_secs(45))
         .build()
-        .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
+        .map_err(|e| AppError::network(format!("创建 HTTP 客户端失败: {}", e)))?;
 
     let response = client
         .post(&upload_url)
@@ -108,26 +110,26 @@ pub async fn upload_to_qiyu(
         .body(buffer)
         .send()
         .await
-        .map_err(|e| format!("上传请求失败: {}", e))?;
+        .map_err(|e| AppError::network(format!("上传请求失败: {}", e)))?;
 
     // 7. 检查响应状态
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
-        return Err(format!("上传失败 (HTTP {}): {}", status, body));
+        return Err(AppError::upload("七鱼", format!("上传失败 (HTTP {}): {}", status, body)));
     }
 
     // 8. 记录响应（仅用于调试，不解析 JSON）
     // API 响应格式: {"requestId": "...", "offset": ..., "context": "...", "callbackRetMsg": "..."}
     // HTTP 200 即视为成功
     let response_text = response.text().await
-        .map_err(|e| format!("无法读取响应: {}", e))?;
+        .map_err(|e| AppError::network(format!("无法读取响应: {}", e)))?;
     println!("[Qiyu] API 响应: {}", response_text);
 
     // 9. 构建 CDN URL (使用当前时间戳作为 createTime)
     let create_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|e| format!("无法获取时间戳: {}", e))?
+        .map_err(|e| AppError::external(format!("无法获取时间戳: {}", e)))?
         .as_millis();
 
     let cdn_url = format!(

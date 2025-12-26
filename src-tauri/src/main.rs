@@ -8,6 +8,7 @@ mod error;
 mod commands;
 
 use tauri::{Manager, Emitter};
+use error::AppError;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 #[cfg(target_os = "macos")]
 use tauri::menu::Submenu;
@@ -326,7 +327,7 @@ async fn save_cookie_from_login(
     required_fields: Option<Vec<String>>,
     any_of_fields: Option<Vec<String>>,
     app: tauri::AppHandle
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let service = service_id.unwrap_or_else(|| "weibo".to_string());
     let fields = required_fields.unwrap_or_default();
     let any_fields = any_of_fields.unwrap_or_default();
@@ -334,15 +335,15 @@ async fn save_cookie_from_login(
         service, cookie.len(), fields, any_fields);
 
     if cookie.trim().is_empty() {
-        return Err("Cookie不能为空".to_string());
+        return Err(AppError::validation("Cookie不能为空"));
     }
 
     if (!fields.is_empty() || !any_fields.is_empty()) && !validate_cookie_fields(&service, &cookie, &fields, &any_fields) {
-        return Err(format!(
+        return Err(AppError::auth(format!(
             "Cookie 缺少必要字段，{}需要包含: {:?}{}",
             service, fields,
             if any_fields.is_empty() { String::new() } else { format!("，且至少包含: {:?} 之一", any_fields) }
-        ));
+        )));
     }
 
     if let Some(main_window) = app.get_webview_window("main") {
@@ -364,12 +365,12 @@ async fn save_cookie_from_login(
             }
             Err(e) => {
                 eprintln!("[保存Cookie] 发送事件失败: {:?}", e);
-                Err(format!("发送Cookie事件失败: {}", e))
+                Err(AppError::external(format!("发送Cookie事件失败: {}", e)))
             }
         }
     } else {
         eprintln!("[保存Cookie] 错误: 找不到主窗口");
-        Err("找不到主窗口".to_string())
+        Err(AppError::external("找不到主窗口"))
     }
 }
 
@@ -516,7 +517,7 @@ async fn start_cookie_monitoring(
     any_of_fields: Option<Vec<String>>,
     initial_delay_ms: Option<u64>,
     polling_interval_ms: Option<u64>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     const DEFAULT_INITIAL_DELAY_MS: u64 = 3000;
     const DEFAULT_POLLING_INTERVAL_MS: u64 = 1000;
     const MIN_INITIAL_DELAY_MS: u64 = 500;
@@ -527,7 +528,7 @@ async fn start_cookie_monitoring(
     let service = service_id.unwrap_or_else(|| "weibo".to_string());
 
     if !is_safe_service_id(&service) {
-        return Err(format!("无效的服务 ID: {}，只允许字母、数字、下划线和连字符", service));
+        return Err(AppError::validation(format!("无效的服务 ID: {}，只允许字母、数字、下划线和连字符", service)));
     }
 
     // 不再默认回退到微博域名，使用前端传入的配置
@@ -543,7 +544,7 @@ async fn start_cookie_monitoring(
 
     for field in fields.iter().chain(any_fields.iter()) {
         if !is_safe_field_name(field) {
-            return Err(format!("无效的字段名: {}，只允许字母、数字、下划线和连字符", field));
+            return Err(AppError::validation(format!("无效的字段名: {}，只允许字母、数字、下划线和连字符", field)));
         }
     }
 
@@ -667,11 +668,11 @@ async fn get_request_header_cookie(
     target_domains: Option<Vec<String>>,
     required_fields: Option<Vec<String>>,
     any_of_fields: Option<Vec<String>>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let service = service_id.unwrap_or_else(|| "weibo".to_string());
 
     if !is_safe_service_id(&service) {
-        return Err(format!("无效的服务 ID: {}，只允许字母、数字、下划线和连字符", service));
+        return Err(AppError::validation(format!("无效的服务 ID: {}，只允许字母、数字、下划线和连字符", service)));
     }
 
     // 不再默认回退到微博域名，使用前端传入的配置
@@ -687,14 +688,14 @@ async fn get_request_header_cookie(
 
     for field in fields.iter().chain(any_fields.iter()) {
         if !is_safe_field_name(field) {
-            return Err(format!("无效的字段名: {}，只允许字母、数字、下划线和连字符", field));
+            return Err(AppError::validation(format!("无效的字段名: {}，只允许字母、数字、下划线和连字符", field)));
         }
     }
 
     #[cfg(target_os = "windows")]
     {
         let Some(login_window) = app.get_webview_window("login-webview") else {
-            return Err("登录窗口未打开，请先点击「开始登录」".to_string());
+            return Err(AppError::external("登录窗口未打开，请先点击「开始登录」"));
         };
 
         let mut all_cookies: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
@@ -721,7 +722,7 @@ async fn get_request_header_cookie(
         }
 
         if all_cookies.is_empty() {
-            return Err("未检测到 Cookie，请确认已完成登录后再试".to_string());
+            return Err(AppError::auth("未检测到 Cookie，请确认已完成登录后再试"));
         }
 
         let merged_cookie: String = all_cookies
@@ -734,19 +735,19 @@ async fn get_request_header_cookie(
             eprintln!("[Cookie获取] {} 请求头Cookie长度: {}", service, merged_cookie.len());
             Ok(merged_cookie)
         } else {
-            Err(format!(
+            Err(AppError::auth(format!(
                 "提取到的 Cookie 缺少关键字段（{:?}{}），请确认已成功登录{}",
                 fields,
                 if any_fields.is_empty() { String::new() } else { format!(" 或 {:?} 之一", any_fields) },
                 service
-            ))
+            )))
         }
     }
 
     #[cfg(not(target_os = "windows"))]
     {
         let _ = (app, service, domains, fields, any_fields);
-        Err("当前操作系统暂不支持请求头 Cookie 提取，请使用页面内的手动复制方式".to_string())
+        Err(AppError::external("当前操作系统暂不支持请求头 Cookie 提取，请使用页面内的手动复制方式"))
     }
 }
 
@@ -1016,12 +1017,12 @@ struct WebDAVConfig {
 async fn test_r2_connection(
     config: R2Config,
     http_client: tauri::State<'_, HttpClient>
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     if config.account_id.is_empty()
         || config.access_key_id.is_empty()
         || config.secret_access_key.is_empty()
         || config.bucket_name.is_empty() {
-        return Err("配置不完整: AccountID、KeyID、Secret 和 Bucket 均为必填项。".to_string());
+        return Err(AppError::validation("配置不完整: AccountID、KeyID、Secret 和 Bucket 均为必填项。"));
     }
 
     let endpoint_url = format!("https://{}.r2.cloudflarestorage.com/{}", config.account_id, config.bucket_name);
@@ -1079,20 +1080,20 @@ async fn test_r2_connection(
             if status.is_success() {
                 Ok("R2 连接成功！".to_string())
             } else if status == reqwest::StatusCode::NOT_FOUND {
-                Err(format!("连接失败: 存储桶 (Bucket) '{}' 未找到。", config.bucket_name))
+                Err(AppError::upload("R2", format!("存储桶 (Bucket) '{}' 未找到", config.bucket_name)))
             } else if status == reqwest::StatusCode::FORBIDDEN {
-                Err("连接失败: Access Key ID 或 Secret Access Key 无效，或权限不足。".to_string())
+                Err(AppError::auth("R2 认证失败: Access Key ID 或 Secret Access Key 无效，或权限不足"))
             } else {
-                Err(format!("连接失败: HTTP {}", status))
+                Err(AppError::network(format!("连接失败: HTTP {}", status)))
             }
         }
         Err(err) => {
             if err.is_connect() {
-                Err("连接失败: 无法连接到 R2 服务器。请检查网络连接。".to_string())
+                Err(AppError::network("无法连接到 R2 服务器，请检查网络连接"))
             } else if err.is_timeout() {
-                Err("连接失败: 请求超时。".to_string())
+                Err(AppError::network("请求超时"))
             } else {
-                Err(format!("连接失败: {}", err))
+                Err(AppError::network(format!("连接失败: {}", err)))
             }
         }
     }
@@ -1108,9 +1109,9 @@ fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
 async fn test_webdav_connection(
     config: WebDAVConfig,
     http_client: tauri::State<'_, HttpClient>
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     if config.url.is_empty() || config.username.is_empty() || config.password.is_empty() {
-        return Err("配置不完整: URL、用户名和密码均为必填项。".to_string());
+        return Err(AppError::validation("配置不完整: URL、用户名和密码均为必填项。"));
     }
     let auth_header = format!(
         "Basic {}",
@@ -1130,21 +1131,20 @@ async fn test_webdav_connection(
             if status.is_success() || status.as_u16() == 207 {
                 Ok("WebDAV 连接成功！".to_string())
             } else if status == reqwest::StatusCode::UNAUTHORIZED {
-                Err("连接失败: 用户名或密码错误。".to_string())
+                Err(AppError::auth("WebDAV 认证失败: 用户名或密码错误"))
             } else if status == reqwest::StatusCode::NOT_FOUND {
-                Err("连接失败: URL 未找到。请检查链接是否正确。".to_string())
+                Err(AppError::network("URL 未找到，请检查链接是否正确"))
             } else {
-                Err(format!("连接失败: 服务器返回状态 {}", status))
+                Err(AppError::network(format!("服务器返回状态 {}", status)))
             }
         }
         Err(err) => {
-            let err_str = err.to_string();
             if err.is_connect() {
-                Err("连接失败: 无法连接到服务器。请检查 URL 或网络。".to_string())
+                Err(AppError::network("无法连接到服务器，请检查 URL 或网络"))
             } else if err.is_timeout() {
-                Err("连接失败: 请求超时。".to_string())
+                Err(AppError::network("请求超时"))
             } else {
-                Err(format!("连接失败: {}", err_str))
+                Err(AppError::network(format!("连接失败: {}", err)))
             }
         }
     }
@@ -1154,7 +1154,7 @@ async fn test_webdav_connection(
 async fn list_r2_objects(
     config: R2Config,
     http_client: tauri::State<'_, HttpClient>
-) -> Result<Vec<R2Object>, String> {
+) -> Result<Vec<R2Object>, AppError> {
     use quick_xml::events::Event;
     use quick_xml::Reader;
 
@@ -1162,7 +1162,7 @@ async fn list_r2_objects(
         || config.access_key_id.is_empty()
         || config.secret_access_key.is_empty()
         || config.bucket_name.is_empty() {
-        return Err("R2 配置不完整，请先在设置中配置所有必填字段。".to_string());
+        return Err(AppError::validation("R2 配置不完整，请先在设置中配置所有必填字段"));
     }
 
     let mut objects: Vec<R2Object> = Vec::new();
@@ -1230,15 +1230,15 @@ async fn list_r2_objects(
             .header("Authorization", &authorization_header)
             .send()
             .await
-            .map_err(|e| format!("请求失败: {}", e))?;
+            .map_err(|e| AppError::network(format!("请求失败: {}", e)))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(format!("列出对象失败 (HTTP {}): {}", status, body));
+            return Err(AppError::upload("R2", format!("列出对象失败 (HTTP {}): {}", status, body)));
         }
 
-        let body = response.text().await.map_err(|e| format!("读取响应失败: {}", e))?;
+        let body = response.text().await.map_err(|e| AppError::network(format!("读取响应失败: {}", e)))?;
 
         let mut reader = Reader::from_str(&body);
         reader.config_mut().trim_text(true);
@@ -1307,7 +1307,7 @@ async fn list_r2_objects(
                     }
                 }
                 Ok(Event::Eof) => break,
-                Err(e) => return Err(format!("解析 XML 失败: {}", e)),
+                Err(e) => return Err(AppError::external(format!("解析 XML 失败: {}", e))),
                 _ => {}
             }
             buf.clear();
@@ -1371,16 +1371,16 @@ async fn delete_r2_object(
     config: R2Config,
     key: String,
     http_client: tauri::State<'_, HttpClient>
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     if config.account_id.is_empty()
         || config.access_key_id.is_empty()
         || config.secret_access_key.is_empty()
         || config.bucket_name.is_empty() {
-        return Err("R2 配置不完整，请先在设置中配置所有必填字段。".to_string());
+        return Err(AppError::validation("R2 配置不完整，请先在设置中配置所有必填字段"));
     }
 
     if key.is_empty() {
-        return Err("对象 Key 不能为空。".to_string());
+        return Err(AppError::validation("对象 Key 不能为空"));
     }
 
     let encoded_key = uri_encode_path(&key);
@@ -1461,7 +1461,7 @@ async fn delete_r2_object(
 
                         if status.is_client_error() {
                             eprintln!("[R2删除] 客户端错误，不重试: {}", last_error);
-                            return Err(last_error);
+                            return Err(AppError::upload("R2", last_error));
                         }
 
                         eprintln!("[R2删除] 服务器错误，将重试: {}", last_error);
@@ -1484,13 +1484,13 @@ async fn delete_r2_object(
             }
     }
 
-    Err(format!("删除失败（已重试 {} 次）: {}", max_retries, last_error))
+    Err(AppError::network(format!("删除失败（已重试 {} 次）: {}", max_retries, last_error)))
 }
 
 #[tauri::command]
-fn get_or_create_secure_key() -> Result<String, String> {
+fn get_or_create_secure_key() -> Result<String, AppError> {
     let entry = Entry::new(SERVICE_NAME, KEY_NAME).map_err(|e| {
-        format!("无法访问系统钥匙串: {}", e)
+        AppError::external(format!("无法访问系统钥匙串: {}", e))
     })?;
 
     match entry.get_password() {
@@ -1505,7 +1505,7 @@ fn get_or_create_secure_key() -> Result<String, String> {
             let new_key = STANDARD.encode(key_bytes);
 
             entry.set_password(&new_key).map_err(|e| {
-                format!("无法保存密钥到系统钥匙串: {}", e)
+                AppError::external(format!("无法保存密钥到系统钥匙串: {}", e))
             })?;
 
             eprintln!("[密钥管理] ✓ 新密钥已保存到系统钥匙串");

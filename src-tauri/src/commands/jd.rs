@@ -1,11 +1,14 @@
 // src-tauri/src/commands/jd.rs
 // 京东图床上传命令
+// v2.10: 迁移到 AppError 统一错误类型
 
 use tauri::{Window, Emitter};
 use serde::{Deserialize, Serialize};
 use reqwest::multipart;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
+
+use crate::error::AppError;
 
 /// 京东上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -32,7 +35,7 @@ struct JDUploadResponse {
 const MAX_FILE_SIZE: u64 = 15 * 1024 * 1024;
 
 /// 获取京东 aid 和 pin
-async fn get_aid_info() -> Result<AidInfo, String> {
+async fn get_aid_info() -> Result<AidInfo, AppError> {
     let url = "https://api.m.jd.com/client.action?functionId=getAidInfo&body=%7B%22aidClientType%22%3A%22comet%22%2C%22aidClientVersion%22%3A%22comet%20-v1.0.0%22%2C%22appId%22%3A%22im.customer%22%2C%22os%22%3A%22comet%22%2C%22entry%22%3A%22jd_web_EnterpriseZC%22%2C%22reqSrc%22%3A%22s_comet%22%2C%22siteId%22%3A-1%2C%22customerAppId%22%3A%22im.customer%22%7D&appid=wh5&client=wh5&clientVersion=1.0.0&loginType=3&callback=jsonp1";
 
     let client = reqwest::Client::new();
@@ -44,10 +47,10 @@ async fn get_aid_info() -> Result<AidInfo, String> {
         .header("Referer", "https://jdcs.jd.com/chat/index.action?venderId=1&appId=jd.waiter&customerAppId=im.customer&entry=jd_web_EnterpriseZC")
         .send()
         .await
-        .map_err(|e| format!("获取 aid 请求失败: {}", e))?;
+        .map_err(|e| AppError::network(format!("获取 aid 请求失败: {}", e)))?;
 
     let response_text = response.text().await
-        .map_err(|e| format!("无法读取 aid 响应: {}", e))?;
+        .map_err(|e| AppError::network(format!("无法读取 aid 响应: {}", e)))?;
 
     println!("[JD] Aid API 响应: {}", response_text);
 
@@ -56,14 +59,14 @@ async fn get_aid_info() -> Result<AidInfo, String> {
         .trim()
         .strip_prefix("jsonp1(")
         .and_then(|s| s.strip_suffix(")"))
-        .ok_or("无效的 JSONP 响应格式")?;
+        .ok_or_else(|| AppError::upload("京东", "无效的 JSONP 响应格式"))?;
 
     let json_value: serde_json::Value = serde_json::from_str(json_str)
-        .map_err(|e| format!("JSON 解析失败: {}", e))?;
+        .map_err(|e| AppError::upload("京东", format!("JSON 解析失败: {}", e)))?;
 
     let aid = json_value["aid"]
         .as_str()
-        .ok_or("响应中缺少 aid 字段")?
+        .ok_or_else(|| AppError::upload("京东", "响应中缺少 aid 字段"))?
         .to_string();
 
     let pin = json_value["pin"]
@@ -101,7 +104,7 @@ pub async fn upload_to_jd(
     window: Window,
     id: String,
     file_path: String,
-) -> Result<JDUploadResult, String> {
+) -> Result<JDUploadResult, AppError> {
     println!("[JD] 开始上传文件: {}", file_path);
 
     // 发送进度: 0% - 读取文件
@@ -116,36 +119,36 @@ pub async fn upload_to_jd(
 
     // 1. 读取文件
     let mut file = File::open(&file_path).await
-        .map_err(|e| format!("无法打开文件: {}", e))?;
+        .map_err(|e| AppError::file_io(format!("无法打开文件: {}", e)))?;
 
     let file_size = file.metadata().await
-        .map_err(|e| format!("无法获取文件元数据: {}", e))?
+        .map_err(|e| AppError::file_io(format!("无法获取文件元数据: {}", e)))?
         .len();
 
     // 2. 验证文件大小（限制 15MB）
     if file_size > MAX_FILE_SIZE {
-        return Err(format!(
+        return Err(AppError::validation(format!(
             "文件大小 ({:.2}MB) 超过限制 (15MB)",
             file_size as f64 / 1024.0 / 1024.0
-        ));
+        )));
     }
 
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).await
-        .map_err(|e| format!("无法读取文件: {}", e))?;
+        .map_err(|e| AppError::file_io(format!("无法读取文件: {}", e)))?;
 
     // 3. 验证文件类型（只允许图片）
     let file_name = std::path::Path::new(&file_path)
         .file_name()
         .and_then(|n| n.to_str())
-        .ok_or("无法获取文件名")?;
+        .ok_or_else(|| AppError::validation("无法获取文件名"))?;
 
     let ext = file_name.split('.').last()
-        .ok_or("无法获取文件扩展名")?
+        .ok_or_else(|| AppError::validation("无法获取文件扩展名"))?
         .to_lowercase();
 
     if !["jpg", "jpeg", "png", "gif"].contains(&ext.as_str()) {
-        return Err("只支持 JPG、PNG、GIF 格式的图片".to_string());
+        return Err(AppError::validation("只支持 JPG、PNG、GIF 格式的图片"));
     }
 
     // 发送进度: 25% - 获取凭证
@@ -174,7 +177,7 @@ pub async fn upload_to_jd(
     let part = multipart::Part::bytes(buffer)
         .file_name(normalized_file_name)
         .mime_str("image/*")
-        .map_err(|e| format!("无法设置 MIME 类型: {}", e))?;
+        .map_err(|e| AppError::validation(format!("无法设置 MIME 类型: {}", e)))?;
 
     let form = multipart::Form::new()
         .part("upload", part)  // 京东用 "upload" 字段名
@@ -205,7 +208,7 @@ pub async fn upload_to_jd(
         .timeout(std::time::Duration::from_secs(60))
         .send()
         .await
-        .map_err(|e| format!("上传请求失败: {}", e))?;
+        .map_err(|e| AppError::network(format!("上传请求失败: {}", e)))?;
 
     // 发送进度: 75% - 处理响应
     let _ = window.emit("upload://progress", serde_json::json!({
@@ -219,20 +222,20 @@ pub async fn upload_to_jd(
 
     // 7. 解析响应
     let response_text = response.text().await
-        .map_err(|e| format!("无法读取响应: {}", e))?;
+        .map_err(|e| AppError::network(format!("无法读取响应: {}", e)))?;
 
     println!("[JD] 上传 API 响应: {}", response_text);
 
     let upload_response: JDUploadResponse = serde_json::from_str(&response_text)
-        .map_err(|e| format!("JSON 解析失败: {}", e))?;
+        .map_err(|e| AppError::upload("京东", format!("JSON 解析失败: {}", e)))?;
 
     // 8. 检查上传结果
     if upload_response.code != 0 {
-        return Err(format!("京东 API 返回错误码: {}", upload_response.code));
+        return Err(AppError::upload_with_code("京东", upload_response.code, format!("API 返回错误码: {}", upload_response.code)));
     }
 
     let image_url = upload_response.path
-        .ok_or("API 未返回图片链接")?;
+        .ok_or_else(|| AppError::upload("京东", "API 未返回图片链接"))?;
 
     println!("[JD] 上传成功: {}", image_url);
 

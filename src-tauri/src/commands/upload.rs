@@ -37,7 +37,7 @@ struct ProgressPayload {
 fn parse_weibo_response(xml: &str) -> Result<UploadResponse, AppError> {
     // 首先检查认证错误
     if xml.contains("<data>100006</data>") {
-         return Err(AppError::AuthError("Cookie expired (code 100006)".to_string()));
+         return Err(AppError::auth("Cookie expired (code 100006)"));
     }
     
     let mut reader = Reader::from_str(xml);
@@ -97,10 +97,7 @@ fn parse_weibo_response(xml: &str) -> Result<UploadResponse, AppError> {
     }
     
     // 验证必需字段
-    let pid = pid.ok_or_else(|| AppError::WeiboApiError { 
-        code: -1, 
-        msg: "Failed to parse PID from XML response".to_string() 
-    })?;
+    let pid = pid.ok_or_else(|| AppError::upload("微博", "Failed to parse PID from XML response"))?;
     
     Ok(UploadResponse {
         pid,
@@ -116,10 +113,7 @@ fn parse_weibo_response_fallback(xml: &str) -> Result<UploadResponse, AppError> 
     // 使用更宽松的匹配，允许标签前后有空白字符
     // 查找 <pid> 或 <pid > 等变体
     let pid = find_xml_tag_content(xml, "pid")
-        .ok_or_else(|| AppError::WeiboApiError { 
-            code: -1, 
-            msg: "Failed to parse PID (fallback)".to_string() 
-        })?;
+        .ok_or_else(|| AppError::upload("微博", "Failed to parse PID (fallback)"))?;
     
     let width = find_xml_tag_content(xml, "width")
         .and_then(|s| s.trim().parse().ok())
@@ -182,11 +176,11 @@ pub async fn upload_file_stream(
     // 安全验证：防止路径遍历攻击
     // 使用 canonicalize 解析真实路径，防止通过 ../ 或符号链接访问未授权文件
     let canonical_path = std::fs::canonicalize(&file_path)
-        .map_err(|e| AppError::FileIoError(format!("无法解析文件路径: {}", e)))?;
+        .map_err(|e| AppError::file_io(format!("无法解析文件路径: {}", e)))?;
 
     // 验证是普通文件而不是目录或特殊文件
     if !canonical_path.is_file() {
-        return Err(AppError::FileIoError("指定的路径不是有效的文件".to_string()));
+        return Err(AppError::file_io("指定的路径不是有效的文件"));
     }
 
     // 发送步骤1进度：读取文件 (0%)
@@ -302,17 +296,17 @@ pub async fn upload_file_stream(
 pub async fn test_weibo_connection(
     weibo_cookie: String,
     http_client: tauri::State<'_, HttpClient>
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     println!("[Weibo] 测试 Cookie 有效性...");
 
     // 检查 Cookie 非空
     if weibo_cookie.trim().is_empty() {
-        return Err("Cookie 不能为空".to_string());
+        return Err(AppError::validation("Cookie 不能为空"));
     }
 
     // 检查必要字段
     if !weibo_cookie.contains("SUB=") || !weibo_cookie.contains("SUBP=") {
-        return Err("Cookie 缺少必要字段 SUB 或 SUBP".to_string());
+        return Err(AppError::auth("Cookie 缺少必要字段 SUB 或 SUBP"));
     }
 
     // 最小的 1x1 透明 PNG（67 字节）- 与牛客测试相同
@@ -344,16 +338,16 @@ pub async fn test_weibo_connection(
         .await
         .map_err(|e| {
             if e.is_timeout() {
-                "请求超时，请检查网络连接".to_string()
+                AppError::network("请求超时，请检查网络连接")
             } else if e.is_connect() {
-                "网络连接失败，请检查网络连接或防火墙设置".to_string()
+                AppError::network("网络连接失败，请检查网络连接或防火墙设置")
             } else {
-                format!("请求失败: {}", e)
+                AppError::network(format!("请求失败: {}", e))
             }
         })?;
 
     let response_text = response.text().await
-        .map_err(|e| format!("无法读取响应: {}", e))?;
+        .map_err(|e| AppError::network(format!("无法读取响应: {}", e)))?;
 
     println!("[Weibo] 测试响应: {}", if response_text.len() > 200 {
         format!("{}... (共 {} 字节)", &response_text[..200], response_text.len())
@@ -363,7 +357,7 @@ pub async fn test_weibo_connection(
 
     // 检查认证错误（Cookie 过期返回 100006）
     if response_text.contains("<data>100006</data>") {
-        return Err("Cookie 已过期（错误码：100006）".to_string());
+        return Err(AppError::auth("Cookie 已过期（错误码：100006）"));
     }
 
     // 检查是否上传成功（响应中包含 pid 字段）
@@ -372,9 +366,9 @@ pub async fn test_weibo_connection(
         Ok("Cookie 验证通过".to_string())
     } else if response_text.contains("<err>") || response_text.contains("<code>") {
         // 解析错误信息
-        Err("Cookie 无效或已过期".to_string())
+        Err(AppError::auth("Cookie 无效或已过期"))
     } else {
-        Err("无法验证 Cookie 有效性（响应格式异常）".to_string())
+        Err(AppError::external("无法验证 Cookie 有效性（响应格式异常）"))
     }
 }
 

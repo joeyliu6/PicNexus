@@ -1,6 +1,7 @@
 // src/composables/useHistory.ts
 // 历史记录管理 Composable（单例模式）
 // 使用 SQLite 数据库存储，支持大数据量分页和搜索
+// v2.10: 添加 TTL 缓存和跨窗口同步
 
 import { ref, computed, shallowRef, triggerRef, type Ref } from 'vue';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
@@ -13,6 +14,13 @@ import { historyDB } from '../services/HistoryDatabase';
 import { useToast } from './useToast';
 import { useConfirm } from './useConfirm';
 import { useConfigManager } from './useConfig';
+import {
+  onCacheEvent,
+  emitHistoryDeleted,
+  emitHistoryCleared,
+  type CacheEventPayload,
+  type HistoryEventData
+} from '../events/cacheEvents';
 
 /**
  * 视图模式类型
@@ -70,6 +78,73 @@ const isDataLoaded = ref(false);
 // 数据版本号（用于追踪变化）
 const dataVersion = ref(0);
 
+// === TTL 缓存相关 ===
+const CACHE_TTL = 5 * 60 * 1000;  // 5 分钟 TTL
+const lastLoadTime = ref<number>(0);  // 上次加载时间
+
+/**
+ * 检查缓存是否有效（未过期）
+ */
+function isCacheValid(): boolean {
+  if (!isDataLoaded.value) return false;
+  if (lastLoadTime.value === 0) return false;
+  return Date.now() - lastLoadTime.value < CACHE_TTL;
+}
+
+// === 跨窗口同步 ===
+let crossWindowListenerInitialized = false;
+
+/**
+ * 初始化跨窗口事件监听（单例）
+ */
+function initCrossWindowListener(): void {
+  if (crossWindowListenerInitialized) return;
+  crossWindowListenerInitialized = true;
+
+  onCacheEvent((payload: CacheEventPayload) => {
+    const data = payload.data as HistoryEventData | undefined;
+
+    switch (payload.type) {
+      case 'history-deleted':
+        // 其他窗口删除了记录，从本地缓存中移除
+        if (data?.ids && data.ids.length > 0) {
+          console.log('[历史记录] 跨窗口同步: 删除', data.ids);
+          const deletedSet = new Set(data.ids);
+          sharedAllHistoryItems.value = sharedAllHistoryItems.value.filter(
+            item => !deletedSet.has(item.id)
+          );
+          sharedHistoryState.value.displayedItems = sharedAllHistoryItems.value;
+          totalCount.value = Math.max(0, totalCount.value - data.ids.length);
+          // 从选中集合中移除
+          data.ids.forEach(id => sharedSelectedIds.value.delete(id));
+          triggerRef(sharedSelectedIds);
+          dataVersion.value++;
+        }
+        break;
+
+      case 'history-cleared':
+        // 其他窗口清空了全部记录
+        console.log('[历史记录] 跨窗口同步: 清空');
+        sharedAllHistoryItems.value = [];
+        sharedHistoryState.value.displayedItems = [];
+        totalCount.value = 0;
+        hasMore.value = false;
+        sharedSelectedIds.value.clear();
+        triggerRef(sharedSelectedIds);
+        dataVersion.value++;
+        break;
+
+      case 'history-updated':
+        // 其他窗口新增了记录，使缓存失效
+        console.log('[历史记录] 跨窗口同步: 更新，标记缓存失效');
+        isDataLoaded.value = false;
+        break;
+    }
+  }).catch(e => {
+    console.warn('[历史记录] 跨窗口监听设置失败:', e);
+  });
+}
+
 // === 分页加载相关 ===
 const PAGE_SIZE = 500;  // 每页加载数量
 const currentPage = ref(1);  // 当前页码
@@ -86,6 +161,7 @@ const isSearchMode = ref(false);
  */
 export function invalidateCache(): void {
   isDataLoaded.value = false;
+  lastLoadTime.value = 0;  // 清除 TTL 时间戳
   console.log('[历史记录] 缓存已失效');
 }
 
@@ -96,6 +172,9 @@ export function invalidateCache(): void {
 export function useHistoryManager() {
   const toast = useToast();
   const { confirm } = useConfirm();
+
+  // 初始化跨窗口事件监听（单例）
+  initCrossWindowListener();
 
   // 使用共享状态（单例）
   const allHistoryItems = sharedAllHistoryItems;
@@ -130,10 +209,15 @@ export function useHistoryManager() {
    * @param forceReload 是否强制重新加载（忽略缓存）
    */
   async function loadHistory(forceReload = false): Promise<void> {
-    // 如果数据已加载且不强制刷新，直接返回
-    if (isDataLoaded.value && !forceReload) {
-      console.log('[历史记录] 数据已缓存，跳过加载');
+    // 如果缓存有效且不强制刷新，直接返回
+    if (isCacheValid() && !forceReload) {
+      console.log('[历史记录] 缓存命中（TTL 有效），跳过加载');
       return;
+    }
+
+    // 检查是否缓存过期但数据存在
+    if (isDataLoaded.value && !isCacheValid()) {
+      console.log('[历史记录] 缓存已过期（TTL），重新加载');
     }
 
     try {
@@ -161,8 +245,9 @@ export function useHistoryManager() {
 
       console.log(`[历史记录] 加载完成: 显示 ${items.length}/${total} 条`);
 
-      // 标记数据已加载
+      // 标记数据已加载，记录加载时间
       isDataLoaded.value = true;
+      lastLoadTime.value = Date.now();
       dataVersion.value++;
 
     } catch (error) {
@@ -302,6 +387,11 @@ export function useHistoryManager() {
 
       dataVersion.value++;
 
+      // 跨窗口通知
+      emitHistoryDeleted([itemId]).catch(e => {
+        console.warn('[历史记录] 跨窗口通知失败:', e);
+      });
+
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('[历史记录] 删除失败:', error);
@@ -337,6 +427,11 @@ export function useHistoryManager() {
       triggerRef(selectedIdsSet);
 
       dataVersion.value++;
+
+      // 跨窗口通知
+      emitHistoryCleared().catch(e => {
+        console.warn('[历史记录] 跨窗口通知失败:', e);
+      });
 
     } catch (error) {
       console.error('[历史记录] 清空失败:', error);
@@ -497,6 +592,11 @@ export function useHistoryManager() {
       triggerRef(selectedIdsSet);
 
       dataVersion.value++;
+
+      // 跨窗口通知
+      emitHistoryDeleted(selectedIds).catch(e => {
+        console.warn('[历史记录] 跨窗口通知失败:', e);
+      });
 
     } catch (error: any) {
       console.error('[批量操作] 删除失败:', error);

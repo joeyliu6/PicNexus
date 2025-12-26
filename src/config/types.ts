@@ -306,6 +306,19 @@ export interface UserConfig {
 
   /** Google Analytics 配置 */
   analytics?: AnalyticsConfig;
+
+  /** 自动同步配置 */
+  autoSync?: AutoSyncConfig;
+}
+
+/**
+ * 自动同步配置
+ */
+export interface AutoSyncConfig {
+  /** 是否启用自动同步 */
+  enabled: boolean;
+  /** 同步间隔（分钟），默认 30 */
+  intervalMinutes: number;
 }
 
 /**
@@ -429,6 +442,10 @@ export const DEFAULT_CONFIG: UserConfig = {
   },
   analytics: {
     enabled: true
+  },
+  autoSync: {
+    enabled: false,
+    intervalMinutes: 30
   }
 };
 

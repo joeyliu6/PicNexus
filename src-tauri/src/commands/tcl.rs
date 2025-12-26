@@ -1,11 +1,14 @@
 // src-tauri/src/commands/tcl.rs
 // TCL 图床上传命令
+// v2.10: 迁移到 AppError 统一错误类型
 
 use tauri::{Window, Emitter};
 use serde::{Deserialize, Serialize};
 use reqwest::multipart;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
+
+use crate::error::AppError;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TCLUploadResult {
@@ -62,7 +65,7 @@ pub async fn upload_to_tcl(
     window: Window,
     id: String,
     file_path: String,
-) -> Result<TCLUploadResult, String> {
+) -> Result<TCLUploadResult, AppError> {
     println!("[TCL] 开始上传文件: {}", file_path);
 
     // 发送进度: 0% - 读取文件
@@ -77,28 +80,28 @@ pub async fn upload_to_tcl(
 
     // 1. 读取文件
     let mut file = File::open(&file_path).await
-        .map_err(|e| format!("无法打开文件: {}", e))?;
+        .map_err(|e| AppError::file_io(format!("无法打开文件: {}", e)))?;
 
     let file_size = file.metadata().await
-        .map_err(|e| format!("无法获取文件元数据: {}", e))?
+        .map_err(|e| AppError::file_io(format!("无法获取文件元数据: {}", e)))?
         .len();
 
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).await
-        .map_err(|e| format!("无法读取文件: {}", e))?;
+        .map_err(|e| AppError::file_io(format!("无法读取文件: {}", e)))?;
 
     // 2. 验证文件类型（只允许图片）
     let file_name = std::path::Path::new(&file_path)
         .file_name()
         .and_then(|n| n.to_str())
-        .ok_or("无法获取文件名")?;
+        .ok_or_else(|| AppError::validation("无法获取文件名"))?;
 
     let ext = file_name.split('.').last()
-        .ok_or("无法获取文件扩展名")?
+        .ok_or_else(|| AppError::validation("无法获取文件扩展名"))?
         .to_lowercase();
 
     if !["jpg", "jpeg", "png", "gif", "heic", "mp4", "mov"].contains(&ext.as_str()) {
-        return Err("只支持 JPG、JPEG、PNG、GIF、HEIC、MP4、MOV 格式".to_string());
+        return Err(AppError::validation("只支持 JPG、JPEG、PNG、GIF、HEIC、MP4、MOV 格式"));
     }
 
     // 注意：暂不验证文件大小限制，因为限制还不确定
@@ -114,7 +117,7 @@ pub async fn upload_to_tcl(
     let part = multipart::Part::bytes(buffer)
         .file_name(normalized_file_name)
         .mime_str("image/*")
-        .map_err(|e| format!("无法设置 MIME 类型: {}", e))?;
+        .map_err(|e| AppError::validation(format!("无法设置 MIME 类型: {}", e)))?;
 
     let form = multipart::Form::new()
         .part("file", part);
@@ -136,7 +139,7 @@ pub async fn upload_to_tcl(
         .multipart(form)
         .send()
         .await
-        .map_err(|e| format!("请求失败: {}", e))?;
+        .map_err(|e| AppError::network(format!("请求失败: {}", e)))?;
 
     // 发送进度: 66% - 处理响应
     let _ = window.emit("upload://progress", serde_json::json!({
@@ -150,20 +153,20 @@ pub async fn upload_to_tcl(
 
     // 5. 解析响应
     let response_text = response.text().await
-        .map_err(|e| format!("无法读取响应: {}", e))?;
+        .map_err(|e| AppError::network(format!("无法读取响应: {}", e)))?;
 
     println!("[TCL] API 响应: {}", response_text);
 
     let api_response: TCLApiResponse = serde_json::from_str(&response_text)
-        .map_err(|e| format!("JSON 解析失败: {}", e))?;
+        .map_err(|e| AppError::upload("TCL", format!("JSON 解析失败: {}", e)))?;
 
     // 6. 检查上传结果
     if api_response.code != 1 && api_response.msg != "success" {
-        return Err(format!("TCL API 返回错误: {}", api_response.msg));
+        return Err(AppError::upload("TCL", format!("API 返回错误: {}", api_response.msg)));
     }
 
     let data_url = api_response.data
-        .ok_or("API 未返回图片链接")?;
+        .ok_or_else(|| AppError::upload("TCL", "API 未返回图片链接"))?;
 
     // 7. 提取 URL（去掉 ?e= 参数）
     let clean_url = if let Some(pos) = data_url.find("?e=") {
