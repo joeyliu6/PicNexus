@@ -3176,10 +3176,10 @@ onUnmounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 32px 48px;
-  max-width: 800px; /* 限制内容最大宽度以保证可读性 */
 }
 
 .settings-section {
+  max-width: 800px; /* 限制内容最大宽度以保证可读性 */
   animation: fadeIn 0.3s ease-out;
 }
 
