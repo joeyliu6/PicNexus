@@ -4,8 +4,15 @@
 import { BaseUploader } from '../base/BaseUploader';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
 import { NamiServiceConfig } from '../../config/types';
-import { getTokenManager, type NamiDynamicHeaders } from '../../services/TokenManager';
 import { invoke } from '@tauri-apps/api/core';
+
+/**
+ * 纳米动态 Headers（通过 Sidecar 获取）
+ */
+interface NamiDynamicHeaders {
+  accessToken: string;
+  zmToken: string;
+}
 
 /**
  * Rust 返回的纳米上传结果
@@ -18,12 +25,6 @@ interface NamiRustResult {
 
 /** Token 刷新间隔（25分钟，略小于30分钟的有效期） */
 const TOKEN_REFRESH_INTERVAL_MS = 25 * 60 * 1000;
-
-/** Token 有效期（30分钟） */
-const TOKEN_VALIDITY_MS = 30 * 60 * 1000;
-
-/** 提前刷新阈值（5分钟） */
-const TOKEN_REFRESH_THRESHOLD_MS = 5 * 60 * 1000;
 
 /**
  * 纳米图床上传器
@@ -112,9 +113,7 @@ export class NamiUploader extends BaseUploader {
       this.credentialsChanged(config);
 
     if (!needsRefresh) {
-      this.log('debug', 'Token 仍然有效，跳过刷新', {
-        timeSinceLastFetch: Math.round(timeSinceLastFetch / 1000) + 's'
-      });
+      // Token 仍然有效，跳过刷新
       return;
     }
 
@@ -127,23 +126,11 @@ export class NamiUploader extends BaseUploader {
     });
 
     try {
-      // 配置 TokenManager 的刷新函数
-      const tokenManager = getTokenManager();
-      tokenManager.setNamiRefreshFn(config.cookie, config.authToken);
-
       // 通过 Sidecar 获取动态 Headers
       const dynamicHeaders = await invoke<NamiDynamicHeaders>('fetch_nami_token', {
         cookie: config.cookie,
         authToken: config.authToken,
       });
-
-      // 缓存 Token
-      tokenManager.setToken(
-        'nami',
-        dynamicHeaders,
-        TOKEN_VALIDITY_MS,
-        TOKEN_REFRESH_THRESHOLD_MS
-      );
 
       // 更新状态
       this.lastTokenFetchTime = now;
@@ -222,10 +209,9 @@ export class NamiUploader extends BaseUploader {
         errorMsg.includes('401') ||
         errorMsg.includes('403')
       ) {
-        // 清除 Token 缓存，下次上传时会重新获取
+        // 清除状态，下次上传时会重新获取 Token
         this.lastTokenFetchTime = 0;
         this.currentCredentials = null;
-        getTokenManager().clearToken('nami');
 
         throw new Error(`纳米图床认证失败，请检查 Cookie 和 Auth-Token 是否有效: ${errorMsg}`);
       }
