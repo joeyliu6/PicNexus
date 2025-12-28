@@ -54,6 +54,14 @@ interface HistoryItemRow {
   generated_link: string;
   link_check_status: string | null; // JSON 字符串
   link_check_summary: string | null; // JSON 字符串
+  // 图片元信息字段（用于 Justified Layout 布局）
+  width: number;
+  height: number;
+  aspect_ratio: number;
+  file_size: number;
+  format: string;
+  color_type: string;
+  has_alpha: number; // SQLite 没有 boolean，使用 0/1
 }
 
 /**
@@ -102,7 +110,14 @@ class HistoryDatabase {
           results TEXT NOT NULL,
           generated_link TEXT NOT NULL,
           link_check_status TEXT,
-          link_check_summary TEXT
+          link_check_summary TEXT,
+          width INTEGER NOT NULL,
+          height INTEGER NOT NULL,
+          aspect_ratio REAL NOT NULL,
+          file_size INTEGER NOT NULL,
+          format TEXT NOT NULL,
+          color_type TEXT NOT NULL,
+          has_alpha INTEGER NOT NULL
         )
       `);
 
@@ -165,8 +180,9 @@ class HistoryDatabase {
     await db.execute(
       `INSERT INTO history_items (
         id, timestamp, local_file_name, local_file_name_lower, file_path,
-        primary_service, results, generated_link, link_check_status, link_check_summary
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        primary_service, results, generated_link, link_check_status, link_check_summary,
+        width, height, aspect_ratio, file_size, format, color_type, has_alpha
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
       [
         row.id,
         row.timestamp,
@@ -178,9 +194,61 @@ class HistoryDatabase {
         row.generated_link,
         row.link_check_status,
         row.link_check_summary,
+        row.width,
+        row.height,
+        row.aspect_ratio,
+        row.file_size,
+        row.format,
+        row.color_type,
+        row.has_alpha,
       ]
     );
     console.log(`[HistoryDB] 插入记录: ${item.id}`);
+  }
+
+  /**
+   * 插入一条历史记录（忽略重复 ID）
+   * 作为最后防线，处理极端情况下的 ID 冲突
+   * @returns 是否成功插入（false 表示记录已存在，被跳过）
+   */
+  async insertOrIgnore(item: HistoryItem): Promise<boolean> {
+    const db = await this.ensureInitialized();
+
+    const row = this.itemToRow(item);
+    const result = await db.execute(
+      `INSERT OR IGNORE INTO history_items (
+        id, timestamp, local_file_name, local_file_name_lower, file_path,
+        primary_service, results, generated_link, link_check_status, link_check_summary,
+        width, height, aspect_ratio, file_size, format, color_type, has_alpha
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+      [
+        row.id,
+        row.timestamp,
+        row.local_file_name,
+        row.local_file_name_lower,
+        row.file_path,
+        row.primary_service,
+        row.results,
+        row.generated_link,
+        row.link_check_status,
+        row.link_check_summary,
+        row.width,
+        row.height,
+        row.aspect_ratio,
+        row.file_size,
+        row.format,
+        row.color_type,
+        row.has_alpha,
+      ]
+    );
+
+    const inserted = result.rowsAffected > 0;
+    if (inserted) {
+      console.log(`[HistoryDB] 插入记录: ${item.id}`);
+    } else {
+      console.warn(`[HistoryDB] ⚠️ 记录已存在，跳过插入: ${item.id}（可能存在竞态或 UUID 碰撞）`);
+    }
+    return inserted;
   }
 
   /**
@@ -202,8 +270,9 @@ class HistoryDatabase {
     await db.execute(
       `UPDATE history_items SET
         timestamp = $1, local_file_name = $2, local_file_name_lower = $3, file_path = $4,
-        primary_service = $5, results = $6, generated_link = $7, link_check_status = $8, link_check_summary = $9
-      WHERE id = $10`,
+        primary_service = $5, results = $6, generated_link = $7, link_check_status = $8, link_check_summary = $9,
+        width = $10, height = $11, aspect_ratio = $12, file_size = $13, format = $14, color_type = $15, has_alpha = $16
+      WHERE id = $17`,
       [
         row.timestamp,
         row.local_file_name,
@@ -214,6 +283,13 @@ class HistoryDatabase {
         row.generated_link,
         row.link_check_status,
         row.link_check_summary,
+        row.width,
+        row.height,
+        row.aspect_ratio,
+        row.file_size,
+        row.format,
+        row.color_type,
+        row.has_alpha,
         id,
       ]
     );
@@ -230,8 +306,9 @@ class HistoryDatabase {
     await db.execute(
       `INSERT OR REPLACE INTO history_items (
         id, timestamp, local_file_name, local_file_name_lower, file_path,
-        primary_service, results, generated_link, link_check_status, link_check_summary
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        primary_service, results, generated_link, link_check_status, link_check_summary,
+        width, height, aspect_ratio, file_size, format, color_type, has_alpha
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
       [
         row.id,
         row.timestamp,
@@ -243,6 +320,13 @@ class HistoryDatabase {
         row.generated_link,
         row.link_check_status,
         row.link_check_summary,
+        row.width,
+        row.height,
+        row.aspect_ratio,
+        row.file_size,
+        row.format,
+        row.color_type,
+        row.has_alpha,
       ]
     );
   }
@@ -518,6 +602,14 @@ class HistoryDatabase {
       generated_link: item.generatedLink,
       link_check_status: item.linkCheckStatus ? JSON.stringify(item.linkCheckStatus) : null,
       link_check_summary: item.linkCheckSummary ? JSON.stringify(item.linkCheckSummary) : null,
+      // 图片元信息
+      width: item.width,
+      height: item.height,
+      aspect_ratio: item.aspectRatio,
+      file_size: item.fileSize,
+      format: item.format,
+      color_type: item.colorType,
+      has_alpha: item.hasAlpha ? 1 : 0,
     };
   }
 
@@ -535,6 +627,14 @@ class HistoryDatabase {
       generatedLink: row.generated_link,
       linkCheckStatus: row.link_check_status ? JSON.parse(row.link_check_status) : undefined,
       linkCheckSummary: row.link_check_summary ? JSON.parse(row.link_check_summary) : undefined,
+      // 图片元信息
+      width: row.width,
+      height: row.height,
+      aspectRatio: row.aspect_ratio,
+      fileSize: row.file_size,
+      format: row.format,
+      colorType: row.color_type,
+      hasAlpha: row.has_alpha === 1,
     };
   }
 }

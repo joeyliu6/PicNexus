@@ -11,7 +11,8 @@ import {
   UserConfig,
   DEFAULT_CONFIG,
   ServiceType,
-  HistoryItem
+  HistoryItem,
+  ImageMetadata
 } from '../config/types';
 import { MultiServiceUploader, MultiUploadResult, SingleServiceResult } from '../core/MultiServiceUploader';
 import { UploadQueueManager } from '../uploadQueue';
@@ -20,6 +21,53 @@ import { invalidateCache } from './useHistory';
 import { debounceWithError } from '../utils/debounce';
 import { checkNetworkConnectivity } from '../utils/network';
 import { historyDB } from '../services/HistoryDatabase';
+
+// --- 图片元信息缓存（避免重复获取） ---
+const imageMetadataCache = new Map<string, ImageMetadata>();
+
+/**
+ * 获取图片元信息
+ * 使用缓存避免重复调用 Rust 命令
+ * @param filePath 图片文件路径
+ * @returns 图片元信息
+ */
+async function getImageMetadata(filePath: string): Promise<ImageMetadata> {
+  // 检查缓存
+  if (imageMetadataCache.has(filePath)) {
+    return imageMetadataCache.get(filePath)!;
+  }
+
+  try {
+    const metadata = await invoke<ImageMetadata>('get_image_metadata', { filePath });
+    // 缓存结果
+    imageMetadataCache.set(filePath, metadata);
+    return metadata;
+  } catch (error) {
+    console.error('[元信息] 获取图片元信息失败:', error);
+    // 返回默认值，避免阻塞上传流程
+    return {
+      width: 0,
+      height: 0,
+      aspect_ratio: 1,
+      file_size: 0,
+      format: 'unknown',
+      color_type: 'unknown',
+      has_alpha: false
+    };
+  }
+}
+
+/**
+ * 清理图片元信息缓存
+ * @param filePath 可选，指定要清理的文件路径；不传则清理全部
+ */
+function clearImageMetadataCache(filePath?: string): void {
+  if (filePath) {
+    imageMetadataCache.delete(filePath);
+  } else {
+    imageMetadataCache.clear();
+  }
+}
 
 // --- STORES ---
 const configStore = new Store('.settings.dat');
@@ -337,8 +385,8 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
           console.log(`[并发上传] 开始上传: ${fileName}`);
 
           // 跟踪历史记录 ID 和累积结果
-          // 预先生成历史记录 ID，用于解决并发保存的竞态条件
-          const historyId = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
+          // 使用 UUID 生成唯一 ID，避免高并发时的 ID 碰撞
+          const historyId = crypto.randomUUID();
           const allServiceResults: SingleServiceResult[] = [];
 
           // 方案 B：标志位跟踪历史记录是否已创建
@@ -467,15 +515,8 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
           // 注意：不需要遍历 result.results，因为 handleServiceResult 已经处理了
           // 但为了保险起见，如果有遗漏的可以再更新一次 (此处略过，依赖 handleServiceResult)
 
-          // 方案 B：历史记录已在 handleServiceResult 中创建
-          // 如果还没创建（所有图床都失败的情况），这里兜底创建
+          // 历史记录已在 handleServiceResult 中创建，无需兜底逻辑
           console.log(`[并发上传] 上传完成，历史记录已创建: ${historyCreated}，累积结果: ${allServiceResults.length} 个`);
-
-          if (!historyCreated && allServiceResults.some(r => r.status === 'success')) {
-            // 兜底：如果由于某种原因历史记录未创建，在此补救
-            console.log('[历史记录] 兜底创建历史记录...');
-            await saveHistoryItem(filePath, result, historyId, allServiceResults);
-          }
 
           // 通知队列管理器上传成功（谁先上传完用谁的链接）
           let thumbUrl = result.primaryUrl;
@@ -629,8 +670,11 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       const resultsSource = liveResults || uploadResult.results;
       const successfulResults = resultsSource.filter(r => r.status === 'success');
 
-      // 使用传入的 ID 或生成新 ID
-      const newItemId = customId || `${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      // 使用传入的 ID 或生成新 UUID
+      const newItemId = customId || crypto.randomUUID();
+
+      // 获取图片元信息（用于 Justified Layout 布局）
+      const metadata = await getImageMetadata(filePath);
 
       const newItem: HistoryItem = {
         id: newItemId,
@@ -639,15 +683,26 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         filePath: filePath,
         results: successfulResults,
         primaryService: uploadResult.primaryService,
-        generatedLink: uploadResult.primaryUrl || ''
+        generatedLink: uploadResult.primaryUrl || '',
+        // 图片元信息
+        width: metadata.width,
+        height: metadata.height,
+        aspectRatio: metadata.aspect_ratio,
+        fileSize: metadata.file_size,
+        format: metadata.format,
+        colorType: metadata.color_type,
+        hasAlpha: metadata.has_alpha
       };
 
-      // 直接插入 SQLite（SQLite 事务自动保证原子性，无需手动锁）
-      await historyDB.insert(newItem);
-      console.log('[历史记录] 已保存历史记录:', newItem.localFileName);
+      // 直接插入 SQLite（使用 insertOrIgnore 作为最后防线，处理极端情况下的 ID 冲突）
+      await historyDB.insertOrIgnore(newItem);
+      console.log('[历史记录] 已保存历史记录:', newItem.localFileName, '(尺寸:', metadata.width, 'x', metadata.height, ')');
 
       // 使历史记录缓存失效，下次切换到浏览界面时会重新加载
       invalidateCache();
+
+      // 清理元信息缓存
+      clearImageMetadataCache(filePath);
 
       return newItem.id;
     } catch (error) {
@@ -680,7 +735,10 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       fileName = filePath.split(/[/\\]/).pop() || '未知文件';
     }
 
-    // 构建初始历史记录（只包含第一个成功结果）
+    // 获取图片元信息（用于 Justified Layout 布局）
+    const metadata = await getImageMetadata(filePath);
+
+    // 构建初始历史记录（只包含第一个成功结果 + 图片元信息）
     const newItem: HistoryItem = {
       id: historyId,
       localFileName: fileName,
@@ -688,15 +746,26 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       filePath: filePath,
       results: [firstResult], // 只包含第一个成功结果
       primaryService: firstResult.serviceId,
-      generatedLink: firstResult.result?.url || ''
+      generatedLink: firstResult.result?.url || '',
+      // 图片元信息
+      width: metadata.width,
+      height: metadata.height,
+      aspectRatio: metadata.aspect_ratio,
+      fileSize: metadata.file_size,
+      format: metadata.format,
+      colorType: metadata.color_type,
+      hasAlpha: metadata.has_alpha
     };
 
-    // 直接插入 SQLite
-    await historyDB.insert(newItem);
-    console.log('[历史记录] 立即保存历史记录:', newItem.localFileName, '(主力图床:', firstResult.serviceId, ')');
+    // 直接插入 SQLite（使用 insertOrIgnore 作为最后防线，处理极端情况下的 ID 冲突）
+    await historyDB.insertOrIgnore(newItem);
+    console.log('[历史记录] 立即保存历史记录:', newItem.localFileName, '(主力图床:', firstResult.serviceId, ', 尺寸:', metadata.width, 'x', metadata.height, ')');
 
     // 使缓存失效
     invalidateCache();
+
+    // 清理元信息缓存（文件已上传完成）
+    clearImageMetadataCache(filePath);
   }
 
   /**
