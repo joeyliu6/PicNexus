@@ -3223,6 +3223,15 @@ button:focus-visible {
   backdrop-filter: blur(8px);
 }
 
+/* Toast 图标与文字垂直对齐 */
+.p-toast .p-toast-message-content {
+  align-items: flex-start;
+}
+
+.p-toast .p-toast-message-icon {
+  margin-top: 2px;
+}
+
 /* Toast 关闭按钮焦点样式优化 - 只在键盘导航时显示焦点环 */
 :deep(.p-toast .p-toast-message .p-toast-icon-close-button) {
   /* 隐藏鼠标点击时的焦点环 */

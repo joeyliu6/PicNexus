@@ -486,7 +486,7 @@ onUnmounted(() => {
   background: var(--bg-card);
   border: 2px dashed var(--border-subtle);
   border-radius: 12px;
-  padding: 60px 40px;
+  padding: 55px 40px;
   text-align: center;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -559,7 +559,7 @@ onUnmounted(() => {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  padding: 24px;
+  padding: 19px 24px 24px 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -657,7 +657,7 @@ onUnmounted(() => {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  padding: 24px;
+  padding: 19px 24px 24px 24px;
   flex: 1;
 }
 
