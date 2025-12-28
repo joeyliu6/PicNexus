@@ -2033,11 +2033,4 @@ const handleScroll = (event: Event) => {
   border: 1px solid var(--border-subtle);
   object-fit: contain;
 }
-
-/* Tooltip 样式调整 */
-.p-tooltip .p-tooltip-text {
-  font-size: 12px;
-  color: #cbd5e1;
-  padding: 4px 8px;
-}
 </style>

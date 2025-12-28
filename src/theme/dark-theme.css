@@ -417,9 +417,10 @@
 /* Tooltip 组件 */
 :root.dark-theme .p-tooltip .p-tooltip-text {
   background-color: var(--bg-card);
-  color: var(--text-main);
+  color: var(--text-secondary);
   border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-float);
+  font-size: 12px;
 }
 
 /* Toast 组件 */
