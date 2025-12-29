@@ -114,7 +114,8 @@ const formData = ref({
   linkPrefixEnabled: true,
   selectedPrefixIndex: 0,
   linkPrefixList: [...DEFAULT_PREFIXES],
-  analyticsEnabled: true
+  analyticsEnabled: true,
+  defaultHistoryViewMode: 'grid' as 'table' | 'grid'
 });
 
 // 服务列表
@@ -277,6 +278,8 @@ const loadSettings = async () => {
     if (cfg.analytics) {
       formData.value.analyticsEnabled = cfg.analytics.enabled;
     }
+    // 加载默认历史记录视图模式
+    formData.value.defaultHistoryViewMode = cfg.galleryViewPreferences?.viewMode || 'grid';
   } catch (e) { console.error(e); }
 };
 
@@ -325,6 +328,10 @@ const saveSettings = async (silent = false) => {
       },
       analytics: {
         enabled: formData.value.analyticsEnabled
+      },
+      galleryViewPreferences: {
+        viewMode: formData.value.defaultHistoryViewMode,
+        gridColumnWidth: currentConfig.galleryViewPreferences?.gridColumnWidth ?? 220
       }
     };
     // 特殊处理 Nami AuthToken
@@ -2041,6 +2048,33 @@ onUnmounted(() => {
         <Divider />
 
         <div class="form-group">
+          <label class="group-label">浏览界面默认视图</label>
+          <p class="helper-text">设置进入"浏览界面"页面时默认显示的视图模式。</p>
+          <div class="view-mode-options">
+            <div class="radio-option">
+              <RadioButton
+                v-model="formData.defaultHistoryViewMode"
+                inputId="view-grid"
+                value="grid"
+                @change="() => saveSettings()"
+              />
+              <label for="view-grid" class="radio-label">瀑布流视图</label>
+            </div>
+            <div class="radio-option">
+              <RadioButton
+                v-model="formData.defaultHistoryViewMode"
+                inputId="view-table"
+                value="table"
+                @change="() => saveSettings()"
+              />
+              <label for="view-table" class="radio-label">表格视图</label>
+            </div>
+          </div>
+        </div>
+
+        <Divider />
+
+        <div class="form-group">
           <label class="group-label">数据管理</label>
           <p class="helper-text">管理上传历史记录和应用缓存。</p>
           <div class="flex gap-2 flex-wrap">
@@ -3280,6 +3314,44 @@ onUnmounted(() => {
   color: var(--primary);
   font-weight: 600;
   box-shadow: 0 0 0 1px var(--primary);
+}
+
+/* 视图模式选择器 */
+.view-mode-options {
+  display: flex;
+  gap: 16px;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.radio-option:hover {
+  border-color: var(--primary);
+}
+
+.radio-option:has(:deep(.p-radiobutton-checked)) {
+  border-color: var(--primary);
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.radio-label {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.radio-option:has(:deep(.p-radiobutton-checked)) .radio-label {
+  color: var(--primary);
+  font-weight: 500;
 }
 
 /* Service Toggles */

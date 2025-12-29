@@ -1,15 +1,14 @@
 // src/composables/useHistory.ts
 // 历史记录管理 Composable（单例模式）
-// 使用 SQLite 数据库存储，支持大数据量分页和搜索
-// v2.10: 添加 TTL 缓存和跨窗口同步
+// 纯数据层：使用 SQLite 数据库存储，支持大数据量分页和搜索
+// v3.0: 视图状态已移至 useHistoryViewState.ts
 
-import { ref, computed, shallowRef, triggerRef, type Ref } from 'vue';
+import { ref, shallowRef, type Ref } from 'vue';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-import type { HistoryItem, ServiceType, UserConfig } from '../config/types';
+import type { HistoryItem, ServiceType } from '../config/types';
 import { getActivePrefix } from '../config/types';
-import { Store } from '../store';
 import { historyDB } from '../services/HistoryDatabase';
 import { useToast } from './useToast';
 import { useConfirm } from './useConfirm';
@@ -22,55 +21,15 @@ import {
   type HistoryEventData
 } from '../events/cacheEvents';
 
-/**
- * 视图模式类型
- */
-export type ViewMode = 'table' | 'grid';
-
-/**
- * 历史记录状态接口（不含 selectedItems，因为它变化频繁需要独立管理）
- */
-export interface HistoryState {
-  viewMode: ViewMode;
-  currentFilter: ServiceType | 'all';
-  displayedItems: HistoryItem[];
-  gridLoadedCount: number;
-  gridBatchSize: number;
-}
-
-/**
- * 完整的历史记录状态接口（包含 selectedItems，用于外部接口兼容）
- */
-export interface HistoryStateWithSelection extends HistoryState {
-  selectedItems: Set<string>;
-}
-
 // ============================================
 // 单例共享状态（模块级别）
 // ============================================
 
-// 【性能优化】使用 shallowRef 替代 ref
-// 历史记录项只需监听数组本身的替换，不需要深层追踪每个对象属性
+// 所有历史记录项（shallowRef 优化）
 const sharedAllHistoryItems: Ref<HistoryItem[]> = shallowRef([]);
 
-// 【性能优化】将 selectedItems 独立为 shallowRef
-// Set 变化频繁，独立管理避免触发整个 state 的响应式更新
-const sharedSelectedIds = shallowRef(new Set<string>());
-
-// 历史记录状态（共享）- 移除 selectedItems
-const sharedHistoryState: Ref<HistoryState> = ref({
-  viewMode: 'table',
-  currentFilter: 'all',
-  displayedItems: [],
-  gridLoadedCount: 0,
-  gridBatchSize: 50,
-});
-
-// 加载中状态（共享）
+// 加载中状态
 const sharedIsLoading = ref(false);
-
-// 搜索词（共享）
-const sharedSearchTerm = ref('');
 
 // 数据是否已加载（用于缓存判断）
 const isDataLoaded = ref(false);
@@ -80,7 +39,7 @@ const dataVersion = ref(0);
 
 // === TTL 缓存相关 ===
 const CACHE_TTL = 5 * 60 * 1000;  // 5 分钟 TTL
-const lastLoadTime = ref<number>(0);  // 上次加载时间
+const lastLoadTime = ref<number>(0);
 
 /**
  * 检查缓存是否有效（未过期）
@@ -94,6 +53,13 @@ function isCacheValid(): boolean {
 // === 跨窗口同步 ===
 let crossWindowListenerInitialized = false;
 
+// 分页状态
+const PAGE_SIZE = 500;
+const currentPage = ref(1);
+const totalCount = ref(0);
+const hasMore = ref(true);
+const isLoadingMore = ref(false);
+
 /**
  * 初始化跨窗口事件监听（单例）
  */
@@ -106,36 +72,26 @@ function initCrossWindowListener(): void {
 
     switch (payload.type) {
       case 'history-deleted':
-        // 其他窗口删除了记录，从本地缓存中移除
         if (data?.ids && data.ids.length > 0) {
           console.log('[历史记录] 跨窗口同步: 删除', data.ids);
           const deletedSet = new Set(data.ids);
           sharedAllHistoryItems.value = sharedAllHistoryItems.value.filter(
             item => !deletedSet.has(item.id)
           );
-          sharedHistoryState.value.displayedItems = sharedAllHistoryItems.value;
           totalCount.value = Math.max(0, totalCount.value - data.ids.length);
-          // 从选中集合中移除
-          data.ids.forEach(id => sharedSelectedIds.value.delete(id));
-          triggerRef(sharedSelectedIds);
           dataVersion.value++;
         }
         break;
 
       case 'history-cleared':
-        // 其他窗口清空了全部记录
         console.log('[历史记录] 跨窗口同步: 清空');
         sharedAllHistoryItems.value = [];
-        sharedHistoryState.value.displayedItems = [];
         totalCount.value = 0;
         hasMore.value = false;
-        sharedSelectedIds.value.clear();
-        triggerRef(sharedSelectedIds);
         dataVersion.value++;
         break;
 
       case 'history-updated':
-        // 其他窗口新增了记录，使缓存失效
         console.log('[历史记录] 跨窗口同步: 更新，标记缓存失效');
         isDataLoaded.value = false;
         break;
@@ -145,29 +101,18 @@ function initCrossWindowListener(): void {
   });
 }
 
-// === 分页加载相关 ===
-const PAGE_SIZE = 500;  // 每页加载数量
-const currentPage = ref(1);  // 当前页码
-const totalCount = ref(0);  // 总记录数
-const hasMore = ref(true);  // 是否还有更多数据
-const isLoadingMore = ref(false);  // 是否正在加载更多
-
-// 是否处于搜索模式
-const isSearchMode = ref(false);
-
 /**
  * 使缓存失效，下次 loadHistory 将强制重新加载
- * 导出为模块级别函数，可在任何地方调用（包括异步函数）
  */
 export function invalidateCache(): void {
   isDataLoaded.value = false;
-  lastLoadTime.value = 0;  // 清除 TTL 时间戳
+  lastLoadTime.value = 0;
   console.log('[历史记录] 缓存已失效');
 }
 
 /**
  * 历史记录管理 Composable（单例模式）
- * 所有组件共享同一份数据，避免重复加载
+ * 纯数据层：所有组件共享同一份数据
  */
 export function useHistoryManager() {
   const toast = useToast();
@@ -178,24 +123,7 @@ export function useHistoryManager() {
 
   // 使用共享状态（单例）
   const allHistoryItems = sharedAllHistoryItems;
-  const historyStateInternal = sharedHistoryState;
-  const selectedIdsSet = sharedSelectedIds;
   const isLoading = sharedIsLoading;
-  const searchTerm = sharedSearchTerm;
-
-  // 【性能优化】暴露给外部保持接口兼容
-  // 将 selectedItems 合并到 historyState 中
-  const historyState = computed(() => ({
-    ...historyStateInternal.value,
-    selectedItems: selectedIdsSet.value
-  }));
-
-  // 计算属性：筛选后的项目
-  // 注意：由于使用 SQLite，搜索和筛选已在 loadHistory/searchHistory 中完成
-  // 这里只是返回 displayedItems
-  const filteredItems = computed(() => {
-    return historyStateInternal.value.displayedItems;
-  });
 
   /**
    * 初始化数据库
@@ -215,37 +143,28 @@ export function useHistoryManager() {
       return;
     }
 
-    // 检查是否缓存过期但数据存在
     if (isDataLoaded.value && !isCacheValid()) {
       console.log('[历史记录] 缓存已过期（TTL），重新加载');
     }
 
     try {
       isLoading.value = true;
-      isSearchMode.value = false;
-      searchTerm.value = '';
 
-      // 确保数据库已初始化
       await initDatabase();
 
-      // 重置分页状态
       currentPage.value = 1;
 
-      // 从 SQLite 获取第一页数据
       const { items, total, hasMore: more } = await historyDB.getPage({
         page: 1,
         pageSize: PAGE_SIZE,
-        serviceFilter: historyStateInternal.value.currentFilter
       });
 
       allHistoryItems.value = items;
-      historyStateInternal.value.displayedItems = items;
       totalCount.value = total;
       hasMore.value = more;
 
       console.log(`[历史记录] 加载完成: 显示 ${items.length}/${total} 条`);
 
-      // 标记数据已加载，记录加载时间
       isDataLoaded.value = true;
       lastLoadTime.value = Date.now();
       dataVersion.value++;
@@ -254,7 +173,6 @@ export function useHistoryManager() {
       console.error('[历史记录] 加载失败:', error);
       toast.error('加载失败', String(error));
       allHistoryItems.value = [];
-      historyStateInternal.value.displayedItems = [];
     } finally {
       isLoading.value = false;
     }
@@ -264,11 +182,6 @@ export function useHistoryManager() {
    * 加载更多数据（无限滚动）
    */
   async function loadMore(): Promise<void> {
-    // 搜索模式下不分页
-    if (isSearchMode.value) {
-      return;
-    }
-
     if (!hasMore.value || isLoadingMore.value) {
       return;
     }
@@ -280,13 +193,10 @@ export function useHistoryManager() {
       const { items, hasMore: more } = await historyDB.getPage({
         page: currentPage.value,
         pageSize: PAGE_SIZE,
-        serviceFilter: historyStateInternal.value.currentFilter
       });
 
       if (items.length > 0) {
-        // 追加到现有数据
         allHistoryItems.value = [...allHistoryItems.value, ...items];
-        historyStateInternal.value.displayedItems = allHistoryItems.value;
         console.log(`[历史记录] 加载更多: ${allHistoryItems.value.length}/${totalCount.value} 条`);
       }
 
@@ -294,59 +204,6 @@ export function useHistoryManager() {
     } finally {
       isLoadingMore.value = false;
     }
-  }
-
-  /**
-   * 搜索历史记录（使用 SQLite LIKE 查询）
-   */
-  async function searchHistory(keyword: string): Promise<void> {
-    if (!keyword.trim()) {
-      // 清空搜索时，重新加载分页数据
-      isSearchMode.value = false;
-      await loadHistory(true);
-      return;
-    }
-
-    try {
-      isLoading.value = true;
-      isSearchMode.value = true;
-      searchTerm.value = keyword;
-
-      // 从 SQLite 搜索
-      const { items, total } = await historyDB.search(keyword, {
-        serviceFilter: historyStateInternal.value.currentFilter,
-        limit: 200  // 搜索结果限制为 200 条，减少内存占用
-      });
-
-      allHistoryItems.value = items;
-      historyStateInternal.value.displayedItems = items;
-      totalCount.value = total;
-      hasMore.value = false;  // 搜索结果不分页
-
-      console.log(`[历史记录] 搜索 "${keyword}": 找到 ${total} 条`);
-
-    } catch (error) {
-      console.error('[历史记录] 搜索失败:', error);
-      toast.error('搜索失败', String(error));
-    } finally {
-      isLoading.value = false;
-    }
-  }
-
-  /**
-   * 设置图床筛选
-   */
-  async function setFilter(filter: ServiceType | 'all'): Promise<void> {
-    historyStateInternal.value.currentFilter = filter;
-    // 重新加载数据（应用新的筛选条件）
-    await loadHistory(true);
-  }
-
-  /**
-   * 设置搜索词（触发搜索）
-   */
-  async function setSearchTerm(term: string): Promise<void> {
-    await searchHistory(term);
   }
 
   /**
@@ -370,24 +227,15 @@ export function useHistoryManager() {
         return;
       }
 
-      // 从 SQLite 删除
       await historyDB.delete(itemId);
 
       console.log('[历史记录] ✓ 删除成功:', itemId);
       toast.success('删除成功', '历史记录已删除');
 
-      // 【性能优化】直接更新内存数据，避免全量重加载
       allHistoryItems.value = allHistoryItems.value.filter(item => item.id !== itemId);
-      historyStateInternal.value.displayedItems = allHistoryItems.value;
       totalCount.value = Math.max(0, totalCount.value - 1);
-
-      // 从选中集合中移除
-      selectedIdsSet.value.delete(itemId);
-      triggerRef(selectedIdsSet);
-
       dataVersion.value++;
 
-      // 跨窗口通知
       emitHistoryDeleted([itemId]).catch(e => {
         console.warn('[历史记录] 跨窗口通知失败:', e);
       });
@@ -413,22 +261,15 @@ export function useHistoryManager() {
         return;
       }
 
-      // 清空 SQLite 数据库
       await historyDB.clear();
 
       toast.success('清空成功', '所有历史记录已清空');
 
-      // 【性能优化】直接清空内存数据，避免重新加载
       allHistoryItems.value = [];
-      historyStateInternal.value.displayedItems = [];
       totalCount.value = 0;
       hasMore.value = false;
-      selectedIdsSet.value.clear();
-      triggerRef(selectedIdsSet);
-
       dataVersion.value++;
 
-      // 跨窗口通知
       emitHistoryCleared().catch(e => {
         console.warn('[历史记录] 跨窗口通知失败:', e);
       });
@@ -471,7 +312,7 @@ export function useHistoryManager() {
   }
 
   /**
-   * 批量操作：批量复制链接
+   * 批量复制链接
    */
   async function bulkCopyLinks(selectedIds: string[]): Promise<void> {
     try {
@@ -480,23 +321,16 @@ export function useHistoryManager() {
         return;
       }
 
-      // 从内存中的已加载数据获取
       const selectedItems = allHistoryItems.value.filter(item => selectedIds.includes(item.id));
-
-      // 获取当前配置
       const { config } = useConfigManager();
       const currentConfig = config.value;
       const activePrefix = getActivePrefix(currentConfig);
 
-      // 为每个链接应用前缀
       const links = selectedItems.map(item => {
         if (!item.generatedLink) return null;
-
-        // 微博图床且启用了前缀，应用前缀
         if (item.primaryService === 'weibo' && activePrefix) {
           return `${activePrefix}${item.generatedLink}`;
         }
-
         return item.generatedLink;
       }).filter((link): link is string => !!link);
 
@@ -505,9 +339,7 @@ export function useHistoryManager() {
         return;
       }
 
-      // 复制到剪贴板（每行一个链接）
       await writeText(links.join('\n'));
-
       toast.success('已复制', `已复制 ${links.length} 个链接到剪贴板`, 1500);
       console.log(`[批量操作] 已复制 ${links.length} 个链接`);
 
@@ -518,7 +350,7 @@ export function useHistoryManager() {
   }
 
   /**
-   * 批量操作：批量导出为 JSON
+   * 批量导出为 JSON
    */
   async function bulkExportJSON(selectedIds: string[]): Promise<void> {
     try {
@@ -527,13 +359,9 @@ export function useHistoryManager() {
         return;
       }
 
-      // 从内存中的已加载数据获取
       const selectedItems = allHistoryItems.value.filter(item => selectedIds.includes(item.id));
-
-      // 生成 JSON 内容
       const jsonContent = JSON.stringify(selectedItems, null, 2);
 
-      // 保存文件
       const filePath = await saveDialog({
         defaultPath: `picnexus-history-${Date.now()}.json`,
         filters: [{ name: 'JSON', extensions: ['json'] }]
@@ -556,7 +384,7 @@ export function useHistoryManager() {
   }
 
   /**
-   * 批量操作：批量删除记录
+   * 批量删除记录
    */
   async function bulkDeleteRecords(selectedIds: string[]): Promise<void> {
     try {
@@ -575,25 +403,16 @@ export function useHistoryManager() {
         return;
       }
 
-      // 从 SQLite 批量删除
       await historyDB.deleteMany(selectedIds);
 
       toast.success('删除成功', `已删除 ${selectedIds.length} 条记录`);
       console.log(`[批量操作] 已删除 ${selectedIds.length} 条记录`);
 
-      // 【性能优化】直接更新内存数据，避免全量重加载
       const selectedIdSet = new Set(selectedIds);
       allHistoryItems.value = allHistoryItems.value.filter(item => !selectedIdSet.has(item.id));
-      historyStateInternal.value.displayedItems = allHistoryItems.value;
       totalCount.value = Math.max(0, totalCount.value - selectedIds.length);
-
-      // 清空选中
-      selectedIdsSet.value.clear();
-      triggerRef(selectedIdsSet);
-
       dataVersion.value++;
 
-      // 跨窗口通知
       emitHistoryDeleted(selectedIds).catch(e => {
         console.warn('[历史记录] 跨窗口通知失败:', e);
       });
@@ -605,79 +424,8 @@ export function useHistoryManager() {
   }
 
   /**
-   * 切换视图模式
-   * 【性能优化】立即切换视图，配置保存在后台异步执行，不阻塞 UI
-   */
-  function switchViewMode(mode: ViewMode): void {
-    // 立即切换视图（不等待保存）
-    historyStateInternal.value.viewMode = mode;
-
-    // 后台异步保存配置（不阻塞 UI）
-    queueMicrotask(async () => {
-      try {
-        const configStore = new Store('.settings.dat');
-        const config = await configStore.get<UserConfig>('config');
-        if (config) {
-          if (!config.galleryViewPreferences) {
-            config.galleryViewPreferences = {
-              viewMode: mode,
-              gridColumnWidth: 220,
-            };
-          } else {
-            config.galleryViewPreferences.viewMode = mode;
-          }
-          await configStore.set('config', config);
-          await configStore.save();
-        }
-      } catch (error) {
-        console.error('[历史记录] 保存视图偏好失败:', error);
-      }
-    });
-  }
-
-  /**
-   * 【性能优化】切换选中状态
-   * 使用 shallowRef + triggerRef 避免深层响应式追踪
-   */
-  function toggleSelection(itemId: string): void {
-    const set = selectedIdsSet.value;
-    if (set.has(itemId)) {
-      set.delete(itemId);
-    } else {
-      set.add(itemId);
-    }
-    // shallowRef 修改内部需要手动触发更新
-    triggerRef(selectedIdsSet);
-  }
-
-  /**
-   * 【性能优化】全选/取消全选
-   * 批量操作后只触发一次更新，而非 N 次
-   */
-  function toggleSelectAll(checked: boolean): void {
-    const set = selectedIdsSet.value;
-    set.clear();
-
-    if (checked) {
-      filteredItems.value.forEach(item => set.add(item.id));
-    }
-    // 批量操作完成后，只触发一次更新
-    triggerRef(selectedIdsSet);
-  }
-
-  /**
-   * 清空选中
-   */
-  function clearSelection(): void {
-    selectedIdsSet.value.clear();
-    triggerRef(selectedIdsSet);
-  }
-
-  /**
-   * 加载全量历史记录（独立于共享筛选状态）
-   * 用于 LinkCheckerView 等需要独立数据源的场景
-   *
-   * @returns 全部历史记录数组
+   * 加载全量历史记录（独立于分页状态）
+   * 用于 LinkCheckerView 等需要完整数据的场景
    */
   async function loadAllHistory(): Promise<HistoryItem[]> {
     await initDatabase();
@@ -690,54 +438,27 @@ export function useHistoryManager() {
     return allItems;
   }
 
-  /**
-   * 获取选中的项目 ID 列表
-   */
-  const selectedIds = computed(() => {
-    return Array.from(selectedIdsSet.value);
-  });
-
-  /**
-   * 是否有选中项目
-   */
-  const hasSelection = computed(() => {
-    return selectedIdsSet.value.size > 0;
-  });
-
   return {
     // 状态
     allHistoryItems,
-    historyState,
-    selectedIdsRef: selectedIdsSet,  // 【性能优化】暴露原始 shallowRef 供高性能组件使用
     isLoading,
-    searchTerm,
-    filteredItems,
-    selectedIds,
-    hasSelection,
-    isDataLoaded,  // 导出数据加载状态
+    isDataLoaded,
 
-    // 分页加载状态
+    // 分页状态
     totalCount,
     hasMore,
     isLoadingMore,
 
     // 方法
     loadHistory,
-    loadAllHistory,  // 加载全量数据（独立于筛选条件）
-    loadMore,  // 加载更多（无限滚动）
-    searchHistory,  // 搜索（SQLite LIKE）
-    invalidateCache,  // 导出缓存失效方法
-    setFilter,
-    setSearchTerm,
+    loadAllHistory,
+    loadMore,
+    invalidateCache,
     deleteHistoryItem,
     clearHistory,
     exportToJson,
     bulkCopyLinks,
     bulkExportJSON,
     bulkDeleteRecords,
-    switchViewMode,
-    toggleSelection,
-    toggleSelectAll,
-    clearSelection,
   };
 }
