@@ -36,6 +36,41 @@ const lightboxItem = ref<HistoryItem | null>(null);
 // Scroll container ref
 const scrollContainer = ref<HTMLElement | null>(null);
 
+// Sidebar Visibility Logic
+const isSidebarVisible = ref(false);
+let scrollTimeout: number | undefined;
+let isHoveringSidebar = ref(false);
+
+const showSidebar = () => {
+  isSidebarVisible.value = true;
+};
+
+const hideSidebarDebounced = () => {
+  if (scrollTimeout) clearTimeout(scrollTimeout);
+  scrollTimeout = window.setTimeout(() => {
+    if (!isHoveringSidebar.value) {
+      isSidebarVisible.value = false;
+    }
+  }, 1500);
+};
+
+const handleScroll = () => {
+  showSidebar();
+  hideSidebarDebounced();
+};
+
+const handleSidebarEnter = () => {
+  isHoveringSidebar.value = true;
+  showSidebar();
+  if (scrollTimeout) clearTimeout(scrollTimeout);
+};
+
+const handleSidebarLeave = () => {
+  isHoveringSidebar.value = false;
+  hideSidebarDebounced();
+};
+
+
 // Grouping Logic
 interface PhotoGroup {
   id: string; // '2023-10'
@@ -147,7 +182,11 @@ const handleBulkDelete = () => viewState.bulkDelete();
 <template>
   <div class="timeline-view">
     <!-- Main Scroll Area -->
-    <div class="timeline-scroll-area" ref="scrollContainer">
+    <div 
+      class="timeline-scroll-area" 
+      ref="scrollContainer"
+      @scroll="handleScroll"
+    >
       <div v-if="viewState.isLoading.value" class="loading-state">
         <Skeleton width="100%" height="200px" class="mb-4" />
         <Skeleton width="100%" height="400px" />
@@ -211,7 +250,12 @@ const handleBulkDelete = () => viewState.bulkDelete();
     </div>
 
     <!-- Right Sidebar -->
-    <div class="sidebar-wrapper">
+    <div 
+      class="sidebar-wrapper"
+      :class="{ visible: isSidebarVisible }"
+      @mouseenter="handleSidebarEnter"
+      @mouseleave="handleSidebarLeave"
+    >
       <TimelineSidebar 
         :groups="sidebarGroups" 
         @scroll-to="handleScrollTo" 
@@ -276,6 +320,13 @@ const handleBulkDelete = () => viewState.bulkDelete();
   background: linear-gradient(to left, var(--bg-app) 20%, transparent 100%);
   /* backdrop-filter could be added if supported and desired */
   pointer-events: none; /* Let clicks pass through transparent areas */
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.sidebar-wrapper.visible {
+  opacity: 1;
+  pointer-events: auto; /* Enable interaction when visible */
 }
 
 /* Enable pointer events on proper sidebar content */

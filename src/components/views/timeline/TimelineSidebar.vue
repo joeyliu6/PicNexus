@@ -69,7 +69,6 @@ const handleClick = (groupId: string) => {
             <!-- Tooltip (visible on hover) -->
             <div class="month-tooltip" :class="{ visible: hoveredGroup === group.id }">
               <span class="tooltip-month">{{ group.label }}</span>
-              <span class="tooltip-count">{{ group.count }}张</span>
             </div>
           </div>
         </div>
