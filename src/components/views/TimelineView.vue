@@ -298,16 +298,13 @@ const handleBulkDelete = () => viewState.bulkDelete();
   scroll-behavior: smooth;
 }
 
-/* Hide scrollbar for main area to keep it clean, or custom style */
+/* 隐藏滚动条但保持可滚动功能 */
+.timeline-scroll-area {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
 .timeline-scroll-area::-webkit-scrollbar {
-  width: 8px;
-}
-.timeline-scroll-area::-webkit-scrollbar-track {
-  background: transparent;
-}
-.timeline-scroll-area::-webkit-scrollbar-thumb {
-  background-color: var(--border-subtle);
-  border-radius: 4px;
+  display: none; /* Chrome/Safari/Opera */
 }
 
 .sidebar-wrapper {
