@@ -207,7 +207,8 @@ export class UploadQueueManager {
       updates.r2Status = statusText;
     }
 
-    this.updateItem(itemId, updates);
+    // 使用节流更新，合并同一帧内的多次进度更新
+    this.updateItemThrottled(itemId, updates);
   }
 
   /**
@@ -390,6 +391,14 @@ export class UploadQueueManager {
    */
   updateItem(itemId: string, updates: Partial<QueueItem>): void {
     this.queueState.updateItem(itemId, updates);
+  }
+
+  /**
+   * 节流更新队列项（用于高频进度更新）
+   * 使用 requestAnimationFrame 合并同一帧内的多次更新
+   */
+  updateItemThrottled(itemId: string, updates: Partial<QueueItem>): void {
+    this.queueState.updateItemThrottled(itemId, updates);
   }
 
   /**

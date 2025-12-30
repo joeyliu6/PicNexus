@@ -10,6 +10,10 @@ import { convertToStructuredR2Error } from '../uploaders/r2/R2Error';
 import { convertToTCLError } from '../uploaders/tcl/TCLError';
 import { convertToJDError } from '../uploaders/jd/JDError';
 import { convertToNamiError } from '../uploaders/nami/NamiError';
+import { getServiceSemaphore } from '../utils/semaphore';
+
+/** 每个图床的最大并发数 */
+const SERVICE_MAX_CONCURRENT = 2;
 
 /**
  * 单个服务完成结果（用于实时回调）
@@ -114,11 +118,15 @@ export class MultiServiceUploader {
 
     validServices.forEach((serviceId) => {
       const task = async () => {
-        let taskResult: SingleServiceResult;
+        // 获取该图床的信号量，限制并发数
+        const semaphore = getServiceSemaphore(serviceId, SERVICE_MAX_CONCURRENT);
 
-        try {
-          const uploader = UploaderFactory.create(serviceId);
-          const serviceConfig = config.services[serviceId];
+        return semaphore.withPermit(async () => {
+          let taskResult: SingleServiceResult;
+
+          try {
+            const uploader = UploaderFactory.create(serviceId);
+            const serviceConfig = config.services[serviceId];
 
           // 立即触发进度回调,显示"开始上传"状态
           if (onProgress) {
@@ -195,12 +203,13 @@ export class MultiServiceUploader {
           };
         }
 
-        // 关键：任务完成后立即通知回调，实现实时 UI 更新
-        if (onServiceResult) {
-          onServiceResult(taskResult);
-        }
+          // 关键：任务完成后立即通知回调，实现实时 UI 更新
+          if (onServiceResult) {
+            onServiceResult(taskResult);
+          }
 
-        return taskResult;
+          return taskResult;
+        }); // withPermit 结束
       };
 
       if (serviceId === 'tcl') {

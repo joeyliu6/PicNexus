@@ -589,6 +589,7 @@ class HistoryDatabase {
 
   /**
    * 将 HistoryItem 转换为数据库行
+   * 注意：color_type 和 has_alpha 字段已废弃，使用默认值以保持向后兼容
    */
   private itemToRow(item: HistoryItem): HistoryItemRow {
     return {
@@ -603,18 +604,20 @@ class HistoryDatabase {
       link_check_status: item.linkCheckStatus ? JSON.stringify(item.linkCheckStatus) : null,
       link_check_summary: item.linkCheckSummary ? JSON.stringify(item.linkCheckSummary) : null,
       // 图片元信息
-      width: item.width,
-      height: item.height,
-      aspect_ratio: item.aspectRatio,
-      file_size: item.fileSize,
-      format: item.format,
-      color_type: item.colorType,
-      has_alpha: item.hasAlpha ? 1 : 0,
+      width: item.width ?? 0,
+      height: item.height ?? 0,
+      aspect_ratio: item.aspectRatio ?? 1,
+      file_size: item.fileSize ?? 0,
+      format: item.format ?? 'unknown',
+      // 废弃字段，使用默认值保持向后兼容
+      color_type: 'unknown',
+      has_alpha: 0,
     };
   }
 
   /**
    * 将数据库行转换为 HistoryItem
+   * 注意：color_type 和 has_alpha 字段已废弃，不再读取
    */
   private rowToItem(row: HistoryItemRow): HistoryItem {
     return {
@@ -627,14 +630,12 @@ class HistoryDatabase {
       generatedLink: row.generated_link,
       linkCheckStatus: row.link_check_status ? JSON.parse(row.link_check_status) : undefined,
       linkCheckSummary: row.link_check_summary ? JSON.parse(row.link_check_summary) : undefined,
-      // 图片元信息
+      // 图片元信息（简化版，移除了 colorType 和 hasAlpha）
       width: row.width,
       height: row.height,
       aspectRatio: row.aspect_ratio,
       fileSize: row.file_size,
       format: row.format,
-      colorType: row.color_type,
-      hasAlpha: row.has_alpha === 1,
     };
   }
 }

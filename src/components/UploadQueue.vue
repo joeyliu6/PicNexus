@@ -1,13 +1,110 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+import VirtualScroller from 'primevue/virtualscroller';
 import type { ServiceType } from '../config/types';
 import { useToast } from '../composables/useToast';
 import { useQueueState } from '../composables/useQueueState';
 import type { QueueItem } from '../uploadQueue';
 import { deepClone, deepMerge } from '../utils/deepClone';
 
+/** 虚拟滚动阈值：超过此数量启用虚拟滚动 */
+const VIRTUAL_SCROLL_THRESHOLD = 20;
+
+/** 队列项估算高度（用于虚拟滚动） */
+const ITEM_HEIGHT = 180;
+
 const toast = useToast();
 const { queueItems } = useQueueState();
+
+// ========== 状态计算缓存 ==========
+
+/** 状态统计结果 */
+interface StatusCounts {
+  success: number;
+  error: number;
+  uploading: number;
+  pending: number;
+}
+
+/** 进度条百分比 */
+interface StackedProgress {
+  successPct: number;
+  errorPct: number;
+  uploadingPct: number;
+}
+
+/** 缓存的项状态 */
+interface CachedItemStatus {
+  counts: StatusCounts;
+  progress: StackedProgress;
+  statusText: string;
+}
+
+/**
+ * 计算所有队列项的状态缓存
+ * 使用 computed 确保只在 queueItems 变化时重新计算
+ */
+const itemStatusCache = computed<Map<string, CachedItemStatus>>(() => {
+  const cache = new Map<string, CachedItemStatus>();
+
+  for (const item of queueItems.value) {
+    // 计算状态统计
+    let success = 0, error = 0, uploading = 0, pending = 0;
+    item.enabledServices?.forEach(serviceId => {
+      const status = item.serviceProgress?.[serviceId]?.status || '';
+      if (isStatusSuccess(status)) success++;
+      else if (isStatusError(status)) error++;
+      else if (isStatusUploading(status)) uploading++;
+      else pending++;
+    });
+    const counts: StatusCounts = { success, error, uploading, pending };
+
+    // 计算进度条百分比
+    const total = item.enabledServices?.length || 1;
+    const progress: StackedProgress = {
+      successPct: (counts.success / total) * 100,
+      errorPct: (counts.error / total) * 100,
+      uploadingPct: (counts.uploading / total) * 100
+    };
+
+    // 计算状态文本
+    let statusText = '等待中...';
+    if (counts.uploading > 0) {
+      statusText = '正在同步...';
+    } else if (counts.error > 0 && counts.success > 0) {
+      statusText = '上传完成，部分失败';
+    } else if (counts.error > 0 && counts.error === total) {
+      statusText = '上传失败';
+    } else if (counts.success > 0 && counts.success + counts.error === total) {
+      statusText = '全部完成';
+    } else if (counts.success > 0 && counts.pending > 0) {
+      statusText = '部分完成...';
+    }
+
+    cache.set(item.id, { counts, progress, statusText });
+  }
+
+  return cache;
+});
+
+/** 获取缓存的状态统计 */
+const getCachedCounts = (item: QueueItem): StatusCounts => {
+  return itemStatusCache.value.get(item.id)?.counts || { success: 0, error: 0, uploading: 0, pending: 0 };
+};
+
+/** 获取缓存的进度条数据 */
+const getCachedProgress = (item: QueueItem): StackedProgress => {
+  return itemStatusCache.value.get(item.id)?.progress || { successPct: 0, errorPct: 0, uploadingPct: 0 };
+};
+
+/** 获取缓存的状态文本 */
+const getCachedStatusText = (item: QueueItem): string => {
+  return itemStatusCache.value.get(item.id)?.statusText || '等待中...';
+};
+
+/** 是否启用虚拟滚动（队列项数量超过阈值时启用） */
+const useVirtualScroll = computed(() => queueItems.value.length > VIRTUAL_SCROLL_THRESHOLD);
 
 // 重试回调函数
 let retryCallback: ((itemId: string, serviceId?: ServiceType) => void) | null = null;
@@ -65,48 +162,6 @@ const isStatusUploading = (status: string | undefined): boolean => {
          status.includes('上传') ||
          status.includes('准备') ||
          /\(\d+\/\d+\)/.test(status);  // 匹配步骤格式
-};
-
-// 统计各状态数量
-const getStatusCounts = (item: QueueItem) => {
-  let success = 0, error = 0, uploading = 0, pending = 0;
-  item.enabledServices?.forEach(serviceId => {
-    const status = item.serviceProgress?.[serviceId]?.status || '';
-    if (isStatusSuccess(status)) success++;
-    else if (isStatusError(status)) error++;
-    else if (isStatusUploading(status)) uploading++;
-    else pending++;
-  });
-  return { success, error, uploading, pending };
-};
-
-// 计算堆叠进度条百分比
-const getStackedProgress = (item: QueueItem) => {
-  const counts = getStatusCounts(item);
-  const total = item.enabledServices?.length || 1;
-  return {
-    successPct: (counts.success / total) * 100,
-    errorPct: (counts.error / total) * 100,
-    uploadingPct: (counts.uploading / total) * 100
-  };
-};
-
-// 获取状态描述文本
-const getStatusText = (item: QueueItem): string => {
-  const counts = getStatusCounts(item);
-  const total = item.enabledServices?.length || 0;
-
-  if (counts.uploading > 0) return '正在同步...';
-  if (counts.error > 0 && counts.success > 0) return '上传完成，部分失败';
-  if (counts.error > 0 && counts.error === total) return '上传失败';
-
-  // 只有当所有任务都完成（成功+失败=总数）才显示"全部完成"
-  if (counts.success > 0 && counts.success + counts.error === total) return '全部完成';
-
-  // 部分完成，还有等待中的
-  if (counts.success > 0 && counts.pending > 0) return '部分完成...';
-
-  return '等待中...';
 };
 
 // 获取渠道卡片的状态类
@@ -189,8 +244,127 @@ defineExpose({
       <span class="empty-text">暂无上传队列</span>
     </div>
 
-    <!-- 队列卡片列表 -->
+    <!-- 虚拟滚动模式（大列表） -->
+    <VirtualScroller
+      v-else-if="useVirtualScroll"
+      :items="queueItems"
+      :itemSize="ITEM_HEIGHT"
+      class="virtual-scroller"
+    >
+      <template v-slot:item="{ item }">
+        <div class="queue-card virtual-card">
+          <!-- 头部：缩略图 + 文件名 + 统计标签 + 堆叠进度条 -->
+          <div class="card-header">
+            <!-- 缩略图 -->
+            <div class="thumbnail-wrapper">
+              <img
+                v-if="item.thumbUrl"
+                :src="item.thumbUrl"
+                :alt="item.fileName"
+                class="thumbnail"
+                referrerpolicy="no-referrer"
+                onerror="this.style.display='none'"
+              />
+              <div v-else class="thumbnail-placeholder">
+                <i class="pi pi-image"></i>
+              </div>
+            </div>
+
+            <!-- 头部内容 -->
+            <div class="header-content">
+              <!-- 顶部行：文件名 + 状态标签 -->
+              <div class="header-top">
+                <h3 class="filename" :title="item.fileName">{{ item.fileName }}</h3>
+                <div class="status-pills">
+                  <span v-if="getCachedCounts(item as QueueItem).success > 0" class="pill success">
+                    <i class="pi pi-check-circle"></i>
+                    {{ getCachedCounts(item as QueueItem).success }}
+                  </span>
+                  <span v-if="getCachedCounts(item as QueueItem).error > 0" class="pill error">
+                    <i class="pi pi-exclamation-circle"></i>
+                    {{ getCachedCounts(item as QueueItem).error }}
+                  </span>
+                  <span v-if="getCachedCounts(item as QueueItem).uploading > 0" class="pill uploading">
+                    <i class="pi pi-spin pi-spinner"></i>
+                    {{ getCachedCounts(item as QueueItem).uploading }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- 堆叠进度条 -->
+              <div class="stacked-progress">
+                <div
+                  class="segment success"
+                  :style="{ width: getCachedProgress(item as QueueItem).successPct + '%' }"
+                ></div>
+                <div
+                  class="segment error"
+                  :style="{ width: getCachedProgress(item as QueueItem).errorPct + '%' }"
+                ></div>
+                <div
+                  class="segment uploading"
+                  :style="{ width: getCachedProgress(item as QueueItem).uploadingPct + '%' }"
+                ></div>
+              </div>
+
+              <!-- 状态描述 -->
+              <div class="status-line">
+                <span class="status-text">{{ getCachedStatusText(item as QueueItem) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 渠道网格 -->
+          <div
+            v-if="(item as QueueItem).enabledServices && (item as QueueItem).serviceProgress"
+            class="channel-grid"
+          >
+            <div
+              v-for="service in (item as QueueItem).enabledServices"
+              :key="service"
+              class="channel-card"
+              :class="getChannelCardClass(item as QueueItem, service)"
+            >
+              <!-- 渠道图标 -->
+              <div class="channel-icon" :class="{ 'has-svg': !!serviceIcons[service] }">
+                <span v-if="serviceIcons[service]" class="icon-svg" v-html="serviceIcons[service]"></span>
+                <span v-else>{{ serviceNames[service][0] }}</span>
+              </div>
+
+              <!-- 渠道信息 -->
+              <div class="channel-info">
+                <span class="channel-name">{{ serviceNames[service] }}</span>
+                <span class="status-label" :class="getStatusLabelClass(item as QueueItem, service)">
+                  {{ getStatusLabel(item as QueueItem, service) }}
+                </span>
+              </div>
+
+              <!-- 右上角按钮 -->
+              <button
+                v-if="isStatusSuccess((item as QueueItem).serviceProgress[service]?.status)"
+                @click="copyToClipboard((item as QueueItem).serviceProgress[service]?.link)"
+                class="copy-btn"
+                title="复制链接"
+              >
+                <i class="pi pi-copy"></i>
+              </button>
+              <button
+                v-else-if="isStatusError((item as QueueItem).serviceProgress[service]?.status)"
+                @click="handleRetry((item as QueueItem).id, service)"
+                class="retry-btn"
+                title="重试"
+              >
+                <i class="pi pi-refresh"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </template>
+    </VirtualScroller>
+
+    <!-- 普通模式（小列表） -->
     <div
+      v-else
       v-for="item in queueItems"
       :key="item.id"
       class="queue-card"
@@ -218,17 +392,17 @@ defineExpose({
           <div class="header-top">
             <h3 class="filename" :title="item.fileName">{{ item.fileName }}</h3>
             <div class="status-pills">
-              <span v-if="getStatusCounts(item).success > 0" class="pill success">
+              <span v-if="getCachedCounts(item).success > 0" class="pill success">
                 <i class="pi pi-check-circle"></i>
-                {{ getStatusCounts(item).success }}
+                {{ getCachedCounts(item).success }}
               </span>
-              <span v-if="getStatusCounts(item).error > 0" class="pill error">
+              <span v-if="getCachedCounts(item).error > 0" class="pill error">
                 <i class="pi pi-exclamation-circle"></i>
-                {{ getStatusCounts(item).error }}
+                {{ getCachedCounts(item).error }}
               </span>
-              <span v-if="getStatusCounts(item).uploading > 0" class="pill uploading">
+              <span v-if="getCachedCounts(item).uploading > 0" class="pill uploading">
                 <i class="pi pi-spin pi-spinner"></i>
-                {{ getStatusCounts(item).uploading }}
+                {{ getCachedCounts(item).uploading }}
               </span>
             </div>
           </div>
@@ -237,21 +411,21 @@ defineExpose({
           <div class="stacked-progress">
             <div
               class="segment success"
-              :style="{ width: getStackedProgress(item).successPct + '%' }"
+              :style="{ width: getCachedProgress(item).successPct + '%' }"
             ></div>
             <div
               class="segment error"
-              :style="{ width: getStackedProgress(item).errorPct + '%' }"
+              :style="{ width: getCachedProgress(item).errorPct + '%' }"
             ></div>
             <div
               class="segment uploading"
-              :style="{ width: getStackedProgress(item).uploadingPct + '%' }"
+              :style="{ width: getCachedProgress(item).uploadingPct + '%' }"
             ></div>
           </div>
 
           <!-- 状态描述 -->
           <div class="status-line">
-            <span class="status-text">{{ getStatusText(item) }}</span>
+            <span class="status-text">{{ getCachedStatusText(item) }}</span>
           </div>
         </div>
       </div>
@@ -310,6 +484,20 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* 虚拟滚动容器 */
+.virtual-scroller {
+  flex: 1;
+  height: 100%;
+  min-height: 300px;
+  max-height: calc(100vh - 200px);
+}
+
+/* 虚拟滚动卡片样式调整 */
+.virtual-card {
+  margin-bottom: 12px;
+  box-sizing: border-box;
 }
 
 /* 空状态 */

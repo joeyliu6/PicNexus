@@ -23,8 +23,9 @@ export interface ThemeConfig {
 }
 
 /**
- * 图片元数据接口
+ * 图片元数据接口（简化版）
  * 由 Rust 后端 get_image_metadata 命令返回
+ * 性能优化：移除了 color_type 和 has_alpha 字段，这些字段实际使用中不需要
  */
 export interface ImageMetadata {
   /** 图片宽度（像素） */
@@ -37,10 +38,6 @@ export interface ImageMetadata {
   file_size: number;
   /** 图片格式（jpg, png, webp, gif, bmp 等） */
   format: string;
-  /** 颜色类型（rgb, rgba, gray 等） */
-  color_type: string;
-  /** 是否包含 Alpha 通道 */
-  has_alpha: boolean;
 }
 
 /**
@@ -400,6 +397,23 @@ export interface HistoryItem {
     uncheckedLinks: number;
     lastCheckTime?: number;
   };
+
+  // ========== 图片元信息字段（用于 Justified Layout 布局） ==========
+
+  /** 图片宽度（像素） */
+  width?: number;
+
+  /** 图片高度（像素） */
+  height?: number;
+
+  /** 宽高比（width / height） */
+  aspectRatio?: number;
+
+  /** 文件大小（字节） */
+  fileSize?: number;
+
+  /** 图片格式（jpg, png, webp, gif, bmp 等） */
+  format?: string;
 }
 
 /**

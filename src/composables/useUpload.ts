@@ -21,6 +21,7 @@ import { invalidateCache } from './useHistory';
 import { debounceWithError } from '../utils/debounce';
 import { checkNetworkConnectivity } from '../utils/network';
 import { historyDB } from '../services/HistoryDatabase';
+import { Semaphore, chunkArray } from '../utils/semaphore';
 
 // --- 图片元信息缓存（避免重复获取） ---
 const imageMetadataCache = new Map<string, ImageMetadata>();
@@ -50,9 +51,7 @@ async function getImageMetadata(filePath: string): Promise<ImageMetadata> {
       height: 0,
       aspect_ratio: 1,
       file_size: 0,
-      format: 'unknown',
-      color_type: 'unknown',
-      has_alpha: false
+      format: 'unknown'
     };
   }
 }
@@ -67,6 +66,37 @@ function clearImageMetadataCache(filePath?: string): void {
   } else {
     imageMetadataCache.clear();
   }
+}
+
+// --- 分批获取元数据配置 ---
+const METADATA_BATCH_SIZE = 50;  // 每批处理 50 张图片
+const METADATA_CONCURRENCY = 5;  // 元数据获取并发数
+
+/**
+ * 批量获取图片元数据（带并发控制）
+ * 性能优化：分批获取避免同时发起大量请求
+ * @param filePaths 文件路径列表
+ * @param concurrency 并发数（默认 5）
+ * @returns 文件路径到元数据的 Map
+ */
+async function fetchMetadataBatch(
+  filePaths: string[],
+  concurrency: number = METADATA_CONCURRENCY
+): Promise<Map<string, ImageMetadata>> {
+  const results = new Map<string, ImageMetadata>();
+  const semaphore = new Semaphore(concurrency);
+
+  await Promise.all(filePaths.map(async (filePath) => {
+    await semaphore.acquire();
+    try {
+      const metadata = await getImageMetadata(filePath);
+      results.set(filePath, metadata);
+    } finally {
+      semaphore.release();
+    }
+  }));
+
+  return results;
 }
 
 // --- STORES ---
@@ -268,75 +298,65 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
       console.log(`[上传] 启用的图床:`, enabledServices);
 
-      // ⭐ 立即将所有文件加入队列（用户立即看到反馈）
+      // ⭐ 检查队列管理器
       if (!queueManager) {
         console.error('[上传] 队列管理器未初始化');
         toast.error('上传错误', '队列管理器未初始化');
         return;
       }
 
-      const queueItems = valid.map(filePath => {
-        const fileName = filePath.split(/[/\\]/).pop() || filePath;
-        const itemId = queueManager!.addFile(filePath, fileName, [...enabledServices]);
-        return { itemId, filePath, fileName };
-      }).filter(item => item.itemId); // 过滤重复文件
-
-      if (queueItems.length === 0) {
-        console.log('[上传] 所有文件都是重复的');
-        return;
-      }
-
-      console.log(`[上传] 已添加 ${queueItems.length} 个文件到队列`);
-
-      // ⭐ 异步检测网络（不阻塞UI）
+      // ⭐ 异步检测网络（在处理之前）
       const isNetworkAvailable = await checkNetworkConnectivity();
-
       if (!isNetworkAvailable) {
-        // 网络不通：将所有队列项标记为失败
-        queueItems.forEach(({ itemId }) => {
-          // 获取队列项
-          const item = queueManager!.getItem(itemId!);
-          if (item && item.serviceProgress) {
-            // 更新所有图床的状态为失败
-            const updatedServiceProgress = { ...item.serviceProgress };
-            enabledServices.forEach(serviceId => {
-              if (updatedServiceProgress[serviceId]) {
-                updatedServiceProgress[serviceId] = {
-                  ...updatedServiceProgress[serviceId],
-                  status: '✗ 失败',
-                  progress: 0,
-                  error: '网络连接失败，请检查网络后重试'
-                };
-              }
-            });
-            queueManager!.updateItem(itemId!, {
-              serviceProgress: updatedServiceProgress
-            });
-          }
-
-          // 标记整体状态为失败
-          queueManager!.markItemFailed(
-            itemId!,
-            '网络连接失败，请检查网络后重试'
-          );
-        });
-
         toast.error(
           '网络请求失败',
-          `${queueItems.length} 个文件请求超时或中断，请检查网络`,
+          `${valid.length} 个文件请求超时或中断，请检查网络`,
           6000
         );
         return;
       }
 
-      // 网络正常，开始上传
-      console.log('[上传] 网络检测通过，开始上传');
+      // ⭐ 流水线处理：分批获取元数据 + 上传
+      // 每批 50 张图片，避免同时发起大量请求
+      const batches = chunkArray(valid, METADATA_BATCH_SIZE);
+      console.log(`[上传] 开始流水线处理：${valid.length} 个文件，分 ${batches.length} 批`);
+
       isUploading.value = true;
 
-      // 并发处理上传队列（传入已创建的队列项）
-      await processUploadQueue(queueItems, config, enabledServices);
+      // 流水线处理各批次（并行）
+      // 每批：获取元数据 → 加入队列 → 开始上传
+      const batchPromises = batches.map(async (batchFiles, batchIndex) => {
+        console.log(`[上传] 批次 ${batchIndex + 1}/${batches.length}：开始获取 ${batchFiles.length} 个文件的元数据`);
 
-      console.log('[上传] 上传队列处理完成');
+        // 1. 批量获取元数据（并发控制）
+        // 这会预填充缓存，后续 saveHistoryItemImmediate 会直接使用缓存
+        await fetchMetadataBatch(batchFiles);
+        console.log(`[上传] 批次 ${batchIndex + 1}：元数据获取完成`);
+
+        // 2. 将该批文件加入队列
+        const queueItems = batchFiles.map(filePath => {
+          const fileName = filePath.split(/[/\\]/).pop() || filePath;
+          const itemId = queueManager!.addFile(filePath, fileName, [...enabledServices]);
+          return { itemId, filePath, fileName };
+        }).filter(item => item.itemId);
+
+        if (queueItems.length === 0) {
+          console.log(`[上传] 批次 ${batchIndex + 1}：所有文件都是重复的`);
+          return;
+        }
+
+        console.log(`[上传] 批次 ${batchIndex + 1}：已添加 ${queueItems.length} 个文件到队列，开始上传`);
+
+        // 3. 立即开始上传该批
+        await processUploadQueue(queueItems, config, enabledServices);
+
+        console.log(`[上传] 批次 ${batchIndex + 1}：上传完成`);
+      });
+
+      // 等待所有批次完成
+      await Promise.all(batchPromises);
+
+      console.log('[上传] 所有批次处理完成');
 
       // 上传完成
       isUploading.value = false;
@@ -684,14 +704,12 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         results: successfulResults,
         primaryService: uploadResult.primaryService,
         generatedLink: uploadResult.primaryUrl || '',
-        // 图片元信息
+        // 图片元信息（简化版，移除了 colorType 和 hasAlpha）
         width: metadata.width,
         height: metadata.height,
         aspectRatio: metadata.aspect_ratio,
         fileSize: metadata.file_size,
-        format: metadata.format,
-        colorType: metadata.color_type,
-        hasAlpha: metadata.has_alpha
+        format: metadata.format
       };
 
       // 直接插入 SQLite（使用 insertOrIgnore 作为最后防线，处理极端情况下的 ID 冲突）
@@ -747,14 +765,12 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       results: [firstResult], // 只包含第一个成功结果
       primaryService: firstResult.serviceId,
       generatedLink: firstResult.result?.url || '',
-      // 图片元信息
+      // 图片元信息（简化版，移除了 colorType 和 hasAlpha）
       width: metadata.width,
       height: metadata.height,
       aspectRatio: metadata.aspect_ratio,
       fileSize: metadata.file_size,
-      format: metadata.format,
-      colorType: metadata.color_type,
-      hasAlpha: metadata.has_alpha
+      format: metadata.format
     };
 
     // 直接插入 SQLite（使用 insertOrIgnore 作为最后防线，处理极端情况下的 ID 冲突）

@@ -7,6 +7,91 @@ import type { QueueItem } from '../uploadQueue';
 // 全局队列状态（单例）
 const queueItems: Ref<QueueItem[]> = ref([]);
 
+// ========== 进度更新节流机制 ==========
+
+/** 待处理的更新队列（按 itemId 分组） */
+const pendingUpdates: Map<string, Partial<QueueItem>[]> = new Map();
+
+/** 是否已经调度了 RAF 更新 */
+let rafScheduled = false;
+
+/**
+ * 合并多个更新到一个对象
+ */
+function mergeUpdates(updates: Partial<QueueItem>[]): Partial<QueueItem> {
+  return updates.reduce((merged, update) => {
+    // 合并 serviceProgress（深度合并）
+    if (update.serviceProgress && merged.serviceProgress) {
+      merged.serviceProgress = {
+        ...merged.serviceProgress,
+        ...Object.fromEntries(
+          Object.entries(update.serviceProgress).map(([key, value]) => {
+            const currentProgress = merged.serviceProgress?.[key as keyof typeof merged.serviceProgress];
+            const mergedMetadata = value?.metadata || currentProgress?.metadata
+              ? { ...currentProgress?.metadata, ...value?.metadata }
+              : undefined;
+            return [
+              key,
+              {
+                ...currentProgress,
+                ...value,
+                ...(mergedMetadata !== undefined ? { metadata: mergedMetadata } : {})
+              }
+            ];
+          })
+        )
+      };
+      // 删除 update 中的 serviceProgress，因为已经合并
+      const { serviceProgress: _, ...rest } = update;
+      return { ...merged, ...rest };
+    }
+    return { ...merged, ...update };
+  }, {} as Partial<QueueItem>);
+}
+
+/**
+ * 执行批量更新（在 RAF 回调中调用）
+ */
+function flushPendingUpdates() {
+  rafScheduled = false;
+
+  // 批量处理所有待更新的项
+  pendingUpdates.forEach((updates, itemId) => {
+    const index = queueItems.value.findIndex(item => item.id === itemId);
+    if (index !== -1) {
+      const currentItem = queueItems.value[index];
+      const mergedUpdate = mergeUpdates(updates);
+
+      // 合并 serviceProgress
+      const updatedServiceProgress = mergedUpdate.serviceProgress
+        ? {
+            ...currentItem.serviceProgress,
+            ...mergedUpdate.serviceProgress
+          }
+        : currentItem.serviceProgress;
+
+      queueItems.value[index] = {
+        ...currentItem,
+        ...mergedUpdate,
+        serviceProgress: updatedServiceProgress
+      };
+    }
+  });
+
+  // 清空待处理队列
+  pendingUpdates.clear();
+}
+
+/**
+ * 调度 RAF 更新
+ */
+function scheduleFlush() {
+  if (!rafScheduled) {
+    rafScheduled = true;
+    requestAnimationFrame(flushPendingUpdates);
+  }
+}
+
 /**
  * 队列状态管理 Composable
  * 提供全局的队列项管理功能
@@ -71,6 +156,24 @@ export function useQueueState() {
   };
 
   /**
+   * 节流更新队列项（用于高频进度更新）
+   * 使用 requestAnimationFrame 合并同一帧内的多次更新
+   *
+   * @param itemId 队列项 ID
+   * @param updates 更新内容
+   */
+  const updateItemThrottled = (itemId: string, updates: Partial<QueueItem>) => {
+    // 将更新添加到待处理队列
+    if (!pendingUpdates.has(itemId)) {
+      pendingUpdates.set(itemId, []);
+    }
+    pendingUpdates.get(itemId)!.push(updates);
+
+    // 调度 RAF 更新
+    scheduleFlush();
+  };
+
+  /**
    * 删除队列项
    */
   const removeItem = (itemId: string) => {
@@ -110,6 +213,7 @@ export function useQueueState() {
     addItem,
     getItem,
     updateItem,
+    updateItemThrottled,
     removeItem,
     clearQueue,
     clearCompletedItems,
