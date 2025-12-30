@@ -55,8 +55,8 @@ const showSidebar = () => {
 
 const hideSidebarDebounced = () => {
   if (scrollTimeout) clearTimeout(scrollTimeout);
-  // 根据触发来源决定延迟时间
-  const delay = lastShowSource === 'hover' ? 500 : 1500;
+  // 根据触发来源决定延迟时间：hover 离开 0.3s，滚动结束 1s
+  const delay = lastShowSource === 'hover' ? 300 : 1000;
   scrollTimeout = window.setTimeout(() => {
     if (!isHoveringSidebar.value) {
       isSidebarVisible.value = false;
@@ -104,7 +104,9 @@ const handleDragScroll = (progress: number) => {
   if (!scrollContainer.value) return;
   const { scrollHeight, clientHeight } = scrollContainer.value;
   const maxScroll = scrollHeight - clientHeight;
-  scrollContainer.value.scrollTop = maxScroll * progress;
+  requestAnimationFrame(() => {
+    scrollContainer.value!.scrollTop = maxScroll * progress;
+  });
 };
 
 

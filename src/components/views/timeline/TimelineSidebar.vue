@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onUnmounted } from 'vue';
+import { ref, computed, onUnmounted, watch } from 'vue';
 
 export interface TimeGroup {
   id: string; // unique id (e.g., '2024-5-15')
@@ -28,44 +28,107 @@ const sidebarRef = ref<HTMLElement | null>(null);
 // 鼠标悬停位置（0-1），null 表示鼠标不在区域内
 const hoverProgress = ref<number | null>(null);
 
-// 按年分组（用于显示年份标签和月份点）
+// 页面滚动时，重置悬停状态，让指示器跟随滚动位置
+watch(() => props.scrollProgress, () => {
+  hoverProgress.value = null;
+});
+
+// 计算总照片数
+const totalCount = computed(() => {
+  return props.groups.reduce((sum, g) => sum + g.count, 0);
+});
+
+// 按年分组，并计算每个年份在时间轴上的位置（按照片数量加权）
 const years = computed(() => {
-  const yearsMap = new Map<number, TimeGroup[]>();
+  if (props.groups.length === 0 || totalCount.value === 0) return [];
+
+  // 按年份分组并计算每年照片数
+  const yearsMap = new Map<number, { groups: TimeGroup[], count: number }>();
   props.groups.forEach(group => {
     if (!yearsMap.has(group.year)) {
-      yearsMap.set(group.year, []);
+      yearsMap.set(group.year, { groups: [], count: 0 });
     }
-    yearsMap.get(group.year)?.push(group);
+    const yearData = yearsMap.get(group.year)!;
+    yearData.groups.push(group);
+    yearData.count += group.count;
   });
 
-  // Sort years descending
-  return Array.from(yearsMap.keys()).sort((a, b) => b - a).map(year => ({
-    year,
-    groups: yearsMap.get(year)?.sort((a, b) => b.date.getTime() - a.date.getTime()) || []
-  }));
+  // 计算每个年份的位置和高度（按照片数量加权）
+  let cumulativePosition = 0;
+  return Array.from(yearsMap.entries())
+    .sort((a, b) => b[0] - a[0]) // 年份降序（2025 在上，2024 在下）
+    .map(([year, data]) => {
+      const weight = data.count / totalCount.value; // 权重 = 该年照片数 / 总照片数
+      const startPosition = cumulativePosition;
+      cumulativePosition += weight;
+      return {
+        year,
+        // 年份内的月份按时间降序排列（最新月份在上，1月在下）
+        groups: data.groups.sort((a, b) => b.date.getTime() - a.date.getTime()),
+        count: data.count,
+        startPosition,  // 该年份区域的起始位置 (0-1)
+        // 年份标签放在区域底部（表示"以上是这一年的内容"）
+        labelPosition: cumulativePosition,
+        height: weight  // 该年份占据的高度比例 (0-1)
+      };
+    });
 });
 
-// 滑块显示的月份
+// 计算所有日期点的位置（基于 years 结构，确保顺序正确）
+const allDots = computed(() => {
+  const dots: { id: string; position: number }[] = [];
+
+  for (const yearData of years.value) {
+    const groupCount = yearData.groups.length;
+    yearData.groups.forEach((group, index) => {
+      // 每个点在该年份区域内的位置
+      const positionInYear = groupCount > 1 ? index / (groupCount - 1) : 0.5;
+      const position = yearData.startPosition + positionInYear * yearData.height;
+      dots.push({ id: group.id, position });
+    });
+  }
+
+  return dots;
+});
+
+// 滑块显示的月份（根据加权位置找到对应月份）
 const displayMonth = computed(() => {
-  if (props.groups.length === 0) return '';
+  if (props.groups.length === 0 || years.value.length === 0) return '';
 
-  // 使用悬停位置或滚动位置
   const progress = hoverProgress.value ?? props.scrollProgress;
-  const index = Math.floor(progress * (props.groups.length - 1));
-  const group = props.groups[Math.min(index, props.groups.length - 1)];
-  return group ? `${group.month + 1}月` : props.currentMonthLabel;
+
+  // 根据进度找到对应的年份
+  for (const yearData of years.value) {
+    const yearEnd = yearData.startPosition + yearData.height;
+    if (progress >= yearData.startPosition && progress < yearEnd) {
+      // 在这个年份内，找到对应的月份
+      const progressInYear = (progress - yearData.startPosition) / yearData.height;
+      const groupIndex = Math.floor(progressInYear * yearData.groups.length);
+      const group = yearData.groups[Math.min(groupIndex, yearData.groups.length - 1)];
+      return `${group.year}年${group.month + 1}月`;
+    }
+  }
+
+  // 默认返回最后一个年份的最后一个月
+  const lastYear = years.value[years.value.length - 1];
+  if (lastYear && lastYear.groups.length > 0) {
+    const lastGroup = lastYear.groups[lastYear.groups.length - 1];
+    return `${lastGroup.year}年${lastGroup.month + 1}月`;
+  }
+
+  return props.currentMonthLabel;
 });
 
-// 滑块位置样式
+// 滑块位置样式（完全填充窗口高度）
 const indicatorStyle = computed(() => {
   if (!sidebarRef.value) return {};
   const trackHeight = sidebarRef.value.clientHeight;
-  const padding = 20;
-  const availableHeight = trackHeight - padding * 2;
+  const indicatorHeight = 28; // 指示器高度（紧凑布局）
+  const availableHeight = trackHeight - indicatorHeight;
 
   // 使用悬停位置或滚动位置
   const progress = hoverProgress.value ?? props.scrollProgress;
-  const top = padding + availableHeight * progress;
+  const top = (indicatorHeight / 2) + availableHeight * progress;
 
   return {
     top: `${top}px`
@@ -76,15 +139,15 @@ const indicatorStyle = computed(() => {
 const handleMouseMove = (e: MouseEvent) => {
   if (!sidebarRef.value) return;
   const rect = sidebarRef.value.getBoundingClientRect();
-  const padding = 20;
-  const y = e.clientY - rect.top - padding;
-  const availableHeight = rect.height - padding * 2;
+  const indicatorHeight = 28;
+  const y = e.clientY - rect.top - (indicatorHeight / 2);
+  const availableHeight = rect.height - indicatorHeight;
   hoverProgress.value = Math.max(0, Math.min(1, y / availableHeight));
 };
 
-// 鼠标离开：滑块回到滚动位置
+// 鼠标离开：保持指示器在当前位置（不再回到滚动位置）
 const handleMouseLeave = () => {
-  hoverProgress.value = null;
+  // 不再重置 hoverProgress，让指示器保持在当前位置
 };
 
 // 点击：跳转到鼠标位置
@@ -111,9 +174,10 @@ const startDrag = (e: MouseEvent) => {
 
 const onDrag = (e: MouseEvent) => {
   if (!isDragging.value || !sidebarRef.value) return;
-  const trackHeight = sidebarRef.value.clientHeight - 40;
+  const indicatorHeight = 28;
+  const availableHeight = sidebarRef.value.clientHeight - indicatorHeight;
   const deltaY = e.clientY - dragStartY.value;
-  const deltaProgress = deltaY / trackHeight;
+  const deltaProgress = deltaY / availableHeight;
   const newProgress = Math.max(0, Math.min(1, dragStartProgress.value + deltaProgress));
   hoverProgress.value = newProgress;
   emit('drag-scroll', newProgress);
@@ -154,29 +218,28 @@ onUnmounted(() => {
       <div class="indicator-line"></div>
     </div>
 
-    <!-- 时间轴轨道（仅视觉，无交互） -->
+    <!-- 时间轴轨道（绝对定位，与滚动进度对应） -->
     <div class="timeline-track">
+      <!-- 年份标签（放在该年份区域底部） -->
       <div
         v-for="yearData in years"
         :key="yearData.year"
-        class="year-segment"
+        class="year-label"
+        :style="{ top: `${yearData.labelPosition * 100}%` }"
       >
-        <!-- Year Label -->
-        <div class="year-label">{{ yearData.year }}</div>
-
-        <!-- Day dots (视觉展示，无交互) -->
-        <div class="days-container">
-          <div
-            v-for="group in yearData.groups"
-            :key="group.id"
-            class="day-dot"
-          ></div>
-        </div>
+        {{ yearData.year }}
       </div>
+
+      <!-- 日期点（基于 years 结构正确定位） -->
+      <div
+        v-for="dot in allDots"
+        :key="dot.id"
+        class="day-dot"
+        :style="{ top: `${dot.position * 100}%` }"
+      ></div>
     </div>
   </div>
 </template>
-
 <style scoped>
 .timeline-sidebar {
   position: absolute;
@@ -187,63 +250,63 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20px 0;
-  overflow: visible; /* 允许指示器溢出 */
+  padding: 0;
+  overflow: visible;
   user-select: none;
   cursor: pointer;
 }
 
+
+/* 时间轴轨道 - 填满整个高度 */
 .timeline-track {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  width: 100%;
-  align-items: center;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 12px;
+  width: 24px;
   pointer-events: none;
 }
 
-.year-segment {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-
+/* 年份标签 - 绝对定位 */
 .year-label {
-  font-size: 10px;
-  font-weight: bold;
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 600;
   color: var(--text-secondary);
-  opacity: 0.8;
+  opacity: 0.7;
+  white-space: nowrap;
 }
 
-.days-container {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  width: 100%;
-  align-items: center;
-}
-
+/* 日期点 - 绝对定位 */
 .day-dot {
+  position: absolute;
+  right: 10px;
   width: 4px;
   height: 4px;
   border-radius: 50%;
   background-color: var(--text-muted);
-  opacity: 0.4;
+  opacity: 0.08;
+  transform: translateY(-50%);
+  transition: opacity 0.3s ease;
 }
 
-/* 位置指示器 - 参考 immich */
+.timeline-sidebar:hover .day-dot {
+  opacity: 0.25;
+}
+
+/* 位置指示器 - 紧贴时间轴右侧 */
 .position-indicator {
   position: absolute;
-  right: 48px; /* 在时间轴点的左侧 */
+  right: 0;
   transform: translateY(-50%);
   display: flex;
   align-items: center;
-  gap: 0;
   cursor: grab;
   z-index: 10;
   pointer-events: auto;
+  transition: transform 0.15s ease;
 }
 
 .position-indicator:hover,
@@ -255,27 +318,33 @@ onUnmounted(() => {
   cursor: grabbing;
 }
 
-/* 月份标签 */
+/* 月份标签 - 直角矩形 + 蓝色底边框 + 紧凑布局 */
 .indicator-label {
   padding: 4px 10px;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(4px);
-  border-radius: 4px 0 0 4px;
-  border-bottom: 2px solid var(--primary);
+  background: var(--bg-app);
+  border-bottom: 3px solid var(--primary);
+  border-radius: 0;
   white-space: nowrap;
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.25);
-}
-
-.indicator-label span {
-  color: white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
+  transition: box-shadow 0.2s ease;
 }
 
-/* 指示线 */
+/* 悬浮时加深阴影 */
+.position-indicator:hover .indicator-label,
+.position-indicator.hovering .indicator-label {
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+}
+
+/* 拖拽时的状态 */
+.position-indicator.dragging .indicator-label {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+}
+
+/* 隐藏连接线（矩形紧贴时间轴） */
 .indicator-line {
-  width: 12px;
-  height: 2px;
-  background: var(--primary);
+  display: none;
 }
 </style>
