@@ -494,6 +494,11 @@ const handleBulkDelete = () => {
   width: 100%;
 }
 
+/* 强制固定列宽，确保骨架屏和真实数据的列宽一致 */
+:deep(.minimal-table .p-datatable-table) {
+  table-layout: fixed;
+}
+
 /* 禁用 DataTable 内部滚动 */
 :deep(.history-table .p-datatable-table-container) {
   overflow: visible !important;
