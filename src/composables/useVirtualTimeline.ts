@@ -567,38 +567,46 @@ export function useVirtualTimeline(
 
   let resizeObserver: ResizeObserver | null = null;
   let resizeDebounceTimer: number | null = null;
+  let isFirstResize = true;
 
   function setupResizeObserver() {
     if (!containerRef.value) return;
+
+    // 重置首次标志
+    isFirstResize = true;
 
     resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (!entry) return;
 
-      // 防抖：200ms 内只执行最后一次
+      const newWidth = entry.contentRect.width;
+      const newHeight = entry.contentRect.height;
+
+      // 首次回调立即执行，避免初始化时的布局跳跃
+      if (isFirstResize) {
+        isFirstResize = false;
+        containerWidth.value = newWidth;
+        viewportHeight.value = newHeight;
+        recalculateLayoutAsync();
+        return;
+      }
+
+      // 后续回调使用防抖
       if (resizeDebounceTimer) {
         clearTimeout(resizeDebounceTimer);
       }
 
       resizeDebounceTimer = window.setTimeout(() => {
-        const newWidth = entry.contentRect.width;
-        const newHeight = entry.contentRect.height;
-
         if (Math.abs(newWidth - containerWidth.value) > 1) {
           containerWidth.value = newWidth;
           // 宽度变化需要重算布局
           recalculateLayoutAsync();
         }
-
         viewportHeight.value = newHeight;
       }, 200);
     });
 
     resizeObserver.observe(containerRef.value);
-
-    // 初始化尺寸
-    containerWidth.value = containerRef.value.clientWidth;
-    viewportHeight.value = containerRef.value.clientHeight;
   }
 
   function cleanupResizeObserver() {
