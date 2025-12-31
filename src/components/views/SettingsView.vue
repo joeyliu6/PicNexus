@@ -17,6 +17,7 @@ import Divider from 'primevue/divider';
 import Tag from 'primevue/tag';
 import Card from 'primevue/card';
 import Message from 'primevue/message';
+import ProgressBar from 'primevue/progressbar';
 import { useToast } from '../../composables/useToast';
 import { useConfirm } from '../../composables/useConfirm';
 import { useThemeManager } from '../../composables/useTheme';
@@ -555,6 +556,7 @@ const uploadSettingsLoading = ref(false);
 const downloadSettingsLoading = ref(false);
 const exportHistoryLoading = ref(false);
 const importHistoryLoading = ref(false);
+const importHistoryProgress = ref(0); // 导入进度 0-100
 const uploadHistoryLoading = ref(false);
 const downloadHistoryLoading = ref(false);
 
@@ -1529,10 +1531,12 @@ async function exportHistoryLocal() {
 
 /**
  * 从本地文件导入历史记录（合并）
+ * 使用批量导入优化，支持进度显示
  */
 async function importHistoryLocal() {
   try {
     importHistoryLoading.value = true;
+    importHistoryProgress.value = 0;
 
     const filePath = await open({
       filters: [{ name: 'JSON', extensions: ['json'] }],
@@ -1554,8 +1558,15 @@ async function importHistoryLocal() {
     // 获取导入前的记录数
     const countBefore = await historyDB.getCount();
 
-    // 使用 SQLite 的合并导入
-    const importedCount = await historyDB.importFromJSON(content, 'merge');
+    // 使用 SQLite 的合并导入，带进度回调
+    const importedCount = await historyDB.importFromJSON(
+      content,
+      'merge',
+      (current, total) => {
+        // 更新进度（0-100）
+        importHistoryProgress.value = total > 0 ? Math.round((current / total) * 100) : 100;
+      }
+    );
 
     // 获取导入后的记录数
     const countAfter = await historyDB.getCount();
@@ -1579,6 +1590,7 @@ async function importHistoryLocal() {
     }
   } finally {
     importHistoryLoading.value = false;
+    importHistoryProgress.value = 0;
   }
 }
 
@@ -2848,11 +2860,18 @@ onUnmounted(() => {
                     @click="importHistoryLocal"
                     :loading="importHistoryLoading"
                     icon="pi pi-download"
-                    label="导入"
+                    :label="importHistoryLoading && importHistoryProgress > 0 ? `${importHistoryProgress}%` : '导入'"
                     outlined
                     size="small"
                   />
                 </div>
+                <!-- 导入进度条 -->
+                <ProgressBar
+                  v-if="importHistoryLoading && importHistoryProgress > 0"
+                  :value="importHistoryProgress"
+                  :showValue="false"
+                  class="import-progress-bar"
+                />
               </div>
 
               <div class="backup-group">
@@ -3582,6 +3601,13 @@ onUnmounted(() => {
 .backup-actions {
   display: flex;
   gap: 8px;
+}
+
+/* 导入进度条 */
+.import-progress-bar {
+  margin-top: 8px;
+  height: 4px;
+  border-radius: 2px;
 }
 
 .backup-status {

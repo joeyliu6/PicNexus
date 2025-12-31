@@ -528,6 +528,94 @@ class HistoryDatabase {
   // ============================================
 
   /**
+   * 批量查询已存在的记录（用于 merge 策略优化）
+   * 一次性查询所有指定 ID 的记录，避免 N+1 查询问题
+   *
+   * @param ids 要查询的 ID 列表
+   * @returns 存在的记录的 id 和 timestamp 映射
+   */
+  private async getExistingRecords(ids: string[]): Promise<Map<string, number>> {
+    if (ids.length === 0) {
+      return new Map();
+    }
+
+    const db = await this.ensureInitialized();
+    const result = new Map<string, number>();
+
+    // 分批查询，每批 500 个 ID，避免 SQL 语句过长
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      const batchIds = ids.slice(i, i + BATCH_SIZE);
+      const placeholders = batchIds.map((_, idx) => `$${idx + 1}`).join(',');
+      const rows = await db.select<{ id: string; timestamp: number }[]>(
+        `SELECT id, timestamp FROM history_items WHERE id IN (${placeholders})`,
+        batchIds
+      );
+      for (const row of rows) {
+        result.set(row.id, row.timestamp);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * 批量插入或更新记录（高性能批量操作）
+   * 使用单条 SQL 语句插入多条记录，显著提升导入性能
+   *
+   * @param items 要插入的记录列表
+   */
+  private async batchUpsert(items: HistoryItem[]): Promise<void> {
+    if (items.length === 0) return;
+
+    const db = await this.ensureInitialized();
+
+    // 构建批量插入的 SQL
+    const values: unknown[] = [];
+    const placeholders: string[] = [];
+    let paramIndex = 1;
+
+    for (const item of items) {
+      const row = this.itemToRow(item);
+      // 生成占位符 ($1, $2, ..., $17)
+      const rowPlaceholders = [];
+      for (let j = 0; j < 17; j++) {
+        rowPlaceholders.push(`$${paramIndex++}`);
+      }
+      placeholders.push(`(${rowPlaceholders.join(', ')})`);
+
+      values.push(
+        row.id,
+        row.timestamp,
+        row.local_file_name,
+        row.local_file_name_lower,
+        row.file_path,
+        row.primary_service,
+        row.results,
+        row.generated_link,
+        row.link_check_status,
+        row.link_check_summary,
+        row.width,
+        row.height,
+        row.aspect_ratio,
+        row.file_size,
+        row.format,
+        row.color_type,
+        row.has_alpha
+      );
+    }
+
+    await db.execute(
+      `INSERT OR REPLACE INTO history_items (
+        id, timestamp, local_file_name, local_file_name_lower, file_path,
+        primary_service, results, generated_link, link_check_status, link_check_summary,
+        width, height, aspect_ratio, file_size, format, color_type, has_alpha
+      ) VALUES ${placeholders.join(', ')}`,
+      values
+    );
+  }
+
+  /**
    * 导出所有记录为 JSON 字符串
    * 使用流式读取降低内存峰值压力
    */
@@ -541,13 +629,23 @@ class HistoryDatabase {
   }
 
   /**
-   * 从 JSON 导入记录
+   * 从 JSON 导入记录（高性能批量导入）
+   *
+   * 优化说明：
+   * - 使用批量插入替代逐条插入，大幅提升性能
+   * - merge 策略使用一次性查询替代 N+1 查询
+   * - 支持进度回调，便于 UI 显示导入进度
    *
    * @param json JSON 字符串
    * @param mergeStrategy 合并策略：replace 覆盖，merge 合并（相同 ID 保留较新的）
+   * @param onProgress 可选的进度回调 (current, total) => void
    * @returns 导入的记录数
    */
-  async importFromJSON(json: string, mergeStrategy: 'replace' | 'merge'): Promise<number> {
+  async importFromJSON(
+    json: string,
+    mergeStrategy: 'replace' | 'merge',
+    onProgress?: (current: number, total: number) => void
+  ): Promise<number> {
     const items = JSON.parse(json) as HistoryItem[];
 
     if (!Array.isArray(items)) {
@@ -555,28 +653,50 @@ class HistoryDatabase {
     }
 
     const db = await this.ensureInitialized();
+    const BATCH_SIZE = 500;
 
+    // replace 策略：先清空所有记录
     if (mergeStrategy === 'replace') {
       await db.execute('DELETE FROM history_items');
     }
 
-    let importedCount = 0;
+    // 预处理：确保所有记录都有 ID
     for (const item of items) {
-      // 确保 ID 存在
       if (!item.id) {
         item.id = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
       }
+    }
 
-      if (mergeStrategy === 'merge') {
-        // 合并模式：检查是否存在，存在则比较时间戳
-        const existing = await this.getById(item.id);
-        if (existing && existing.timestamp >= item.timestamp) {
-          continue; // 跳过较旧的记录
-        }
-      }
+    // 确定需要导入的记录
+    let itemsToImport: HistoryItem[];
 
-      await this.upsert(item);
-      importedCount++;
+    if (mergeStrategy === 'merge') {
+      // merge 策略：一次性查询所有已存在的记录（消除 N+1 查询）
+      const allIds = items.map((item) => item.id);
+      const existingMap = await this.getExistingRecords(allIds);
+
+      // 过滤出需要导入的记录（不存在或时间戳更新）
+      itemsToImport = items.filter((item) => {
+        const existingTimestamp = existingMap.get(item.id);
+        return !existingTimestamp || item.timestamp > existingTimestamp;
+      });
+
+      console.log(
+        `[HistoryDB] merge 策略: ${items.length} 条中有 ${itemsToImport.length} 条需要导入`
+      );
+    } else {
+      itemsToImport = items;
+    }
+
+    // 分批插入
+    let importedCount = 0;
+    for (let i = 0; i < itemsToImport.length; i += BATCH_SIZE) {
+      const batch = itemsToImport.slice(i, i + BATCH_SIZE);
+      await this.batchUpsert(batch);
+      importedCount += batch.length;
+
+      // 触发进度回调
+      onProgress?.(importedCount, itemsToImport.length);
     }
 
     console.log(`[HistoryDB] 导入完成: ${importedCount}/${items.length} 条`);
