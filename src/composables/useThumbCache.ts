@@ -3,7 +3,7 @@
  * 用于两个视图（表格/瀑布流）共享缩略图 URL 缓存
  */
 import { watch } from 'vue';
-import type { HistoryItem, ServiceType } from '../config/types';
+import type { HistoryItem } from '../config/types';
 import { getActivePrefix } from '../config/types';
 import { useConfigManager } from './useConfig';
 import { useHistoryManager } from './useHistory';

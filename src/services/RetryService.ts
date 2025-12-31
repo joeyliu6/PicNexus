@@ -10,6 +10,7 @@ import type { Store } from '../store';
 import { UploadResult } from '../uploaders/base/types';
 import { checkNetworkConnectivity } from '../utils/network';
 import { invalidateCache } from '../composables/useHistory';
+import { emitHistoryUpdated } from '../events/cacheEvents';
 import { historyDB } from './HistoryDatabase';
 
 export interface RetryOptions {
@@ -342,8 +343,9 @@ export class RetryService {
         // 使用 SQLite 更新记录
         await historyDB.update(historyItem.id, { results: updatedResults });
 
-        // 使缓存失效
+        // 使缓存失效并通知其他视图刷新
         invalidateCache();
+        emitHistoryUpdated([historyItem.id]);
 
         console.log(`[重试] 历史记录已更新: ${filePath} -> ${serviceId}`);
       } catch (error) {

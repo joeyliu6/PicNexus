@@ -2,8 +2,9 @@
 /**
  * 历史记录表格视图
  * 独立的表格视图组件，使用 DataTable 展示历史记录
+ * v2.0: 服务端分页模式，支持大数据量
  */
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, shallowRef, onMounted, onUnmounted, watch } from 'vue';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -13,9 +14,11 @@ import Skeleton from 'primevue/skeleton';
 import type { HistoryItem, ServiceType } from '../../../config/types';
 import { getActivePrefix } from '../../../config/types';
 import { useHistoryViewState, type LinkFormat } from '../../../composables/useHistoryViewState';
+import { useHistoryManager } from '../../../composables/useHistory';
 import { useThumbCache } from '../../../composables/useThumbCache';
 import { useConfigManager } from '../../../composables/useConfig';
 import { useToast } from '../../../composables/useToast';
+import { onCacheEventType } from '../../../events/cacheEvents';
 import HistoryLightbox from './HistoryLightbox.vue';
 import FloatingActionBar from './FloatingActionBar.vue';
 
@@ -34,7 +37,16 @@ const emit = defineEmits<{
 const toast = useToast();
 const configManager = useConfigManager();
 const viewState = useHistoryViewState();
+const historyManager = useHistoryManager();
 const thumbCache = useThumbCache();
+
+// === 服务端分页状态 ===
+const currentPageData = shallowRef<HistoryItem[]>([]);
+const currentPage = ref(1);
+const pageSize = ref(100);
+const totalRecords = ref(0);
+const isLoadingPage = ref(false);
+const first = ref(0);  // DataTable 的 first 参数（起始索引）
 
 // 日期格式化器
 const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
@@ -63,30 +75,103 @@ const hoverPreview = ref({
 // 表头复选框状态
 const selectAll = ref(false);
 
+// 事件监听取消函数
+let unlistenUpdated: (() => void) | null = null;
+let unlistenDeleted: (() => void) | null = null;
+
+/**
+ * 加载当前页数据（服务端分页核心函数）
+ */
+async function loadCurrentPage() {
+  try {
+    isLoadingPage.value = true;
+
+    const hasSearch = props.searchTerm?.trim();
+
+    if (hasSearch) {
+      // 搜索模式：使用 searchHistory
+      const result = await historyManager.searchHistory(props.searchTerm, {
+        serviceFilter: props.filter === 'all' ? undefined : props.filter,
+        limit: pageSize.value,
+        offset: (currentPage.value - 1) * pageSize.value
+      });
+      currentPageData.value = result.items;
+      totalRecords.value = result.total;
+    } else {
+      // 普通分页模式：使用 loadPageByNumber
+      const result = await historyManager.loadPageByNumber(
+        currentPage.value,
+        pageSize.value,
+        props.filter
+      );
+      currentPageData.value = result.items;
+      totalRecords.value = result.total;
+    }
+
+    console.log(`[HistoryTableView] 加载第 ${currentPage.value} 页: ${currentPageData.value.length}/${totalRecords.value} 条`);
+  } catch (error) {
+    console.error('[HistoryTableView] 加载失败:', error);
+    toast.error('加载失败', String(error));
+    currentPageData.value = [];
+    totalRecords.value = 0;
+  } finally {
+    isLoadingPage.value = false;
+  }
+}
+
+/**
+ * 分页事件处理（DataTable @page 事件）
+ */
+function onPageChange(event: { page: number; first: number; rows: number }) {
+  currentPage.value = event.page + 1;  // PrimeVue 页码从 0 开始
+  first.value = event.first;
+  loadCurrentPage();
+}
+
 // 初始化
 onMounted(async () => {
-  console.log('[HistoryTableView] 组件已挂载');
-  await viewState.loadHistory();
+  console.log('[HistoryTableView] 组件已挂载（服务端分页模式）');
+
+  // 监听历史记录更新事件（上传、导入、重传等）
+  unlistenUpdated = await onCacheEventType('history-updated', () => {
+    console.log('[HistoryTableView] 收到 history-updated 事件，重新加载第一页');
+    currentPage.value = 1;
+    first.value = 0;
+    loadCurrentPage();
+  });
+
+  // 监听历史记录删除事件
+  unlistenDeleted = await onCacheEventType('history-deleted', () => {
+    console.log('[HistoryTableView] 收到 history-deleted 事件，重新加载当前页');
+    loadCurrentPage();
+  });
+
+  // 初始加载第一页
+  await loadCurrentPage();
 });
 
 // 清理
 onUnmounted(() => {
   console.log('[HistoryTableView] 组件已卸载');
+
+  // 取消事件监听
+  unlistenUpdated?.();
+  unlistenDeleted?.();
+
   viewState.reset();
   thumbCache.clearThumbCache();
 });
 
-// 监听 props 变化，同步到 viewState
-watch(() => props.filter, (newFilter) => {
-  viewState.setFilter(newFilter);
-}, { immediate: true });
-
-watch(() => props.searchTerm, (newTerm) => {
-  viewState.setSearchTerm(newTerm);
-}, { immediate: true });
+// 监听 props 变化，重置到第一页并重新加载
+watch([() => props.filter, () => props.searchTerm], () => {
+  console.log('[HistoryTableView] 筛选/搜索条件变化，重置到第一页');
+  currentPage.value = 1;
+  first.value = 0;
+  loadCurrentPage();
+});
 
 // 向父组件同步统计数据
-watch(() => viewState.totalCount.value, (count) => {
+watch(() => totalRecords.value, (count) => {
   emit('update:totalCount', count);
 }, { immediate: true });
 
@@ -94,13 +179,12 @@ watch(() => viewState.selectedIdList.value.length, (count) => {
   emit('update:selectedCount', count);
 }, { immediate: true });
 
-// 监听选中状态变化，同步全选复选框
-watch([() => viewState.isAllSelected.value, () => viewState.isSomeSelected.value], () => {
-  if (viewState.isAllSelected.value) {
-    selectAll.value = true;
-  } else if (!viewState.isSomeSelected.value) {
-    selectAll.value = false;
-  }
+// 监听选中状态变化，同步全选复选框（仅当前页）
+watch(() => {
+  if (currentPageData.value.length === 0) return false;
+  return currentPageData.value.every(item => viewState.isSelected(item.id));
+}, (allSelected) => {
+  selectAll.value = allSelected;
 });
 
 // === 服务相关函数 ===
@@ -205,11 +289,18 @@ const handleLightboxDelete = async (item: HistoryItem) => {
   }
 };
 
-// === 表头复选框相关 ===
+// === 表头复选框相关（仅当前页）===
 
 const handleHeaderCheckboxChange = (checked: boolean) => {
   selectAll.value = checked;
-  viewState.toggleSelectAll(checked);
+  // 只选中/取消选中当前页的数据
+  currentPageData.value.forEach(item => {
+    if (checked) {
+      viewState.select(item.id);
+    } else {
+      viewState.deselect(item.id);
+    }
+  });
 };
 
 // === 浮动操作栏相关 ===
@@ -247,19 +338,24 @@ const handleBulkDelete = () => {
       </div>
     </div>
 
-    <!-- 表格视图 -->
+    <!-- 表格视图（服务端分页） -->
     <DataTable
       v-else
-      :value="viewState.filteredItems.value"
+      :value="currentPageData"
       dataKey="id"
+      lazy
       paginator
-      :rows="50"
+      :first="first"
+      :rows="pageSize"
+      :totalRecords="totalRecords"
+      :loading="isLoadingPage"
+      @page="onPageChange"
       sortField="timestamp"
       :sortOrder="-1"
       class="history-table minimal-table"
       rowHover
       :rowClass="(data: HistoryItem) => viewState.isSelected(data.id) ? 'row-selected' : ''"
-      :emptyMessage="viewState.allHistoryItems.value.length === 0 ? '暂无历史记录' : '未找到匹配的记录'"
+      :emptyMessage="totalRecords === 0 ? '暂无历史记录' : '未找到匹配的记录'"
     >
       <template #empty>
         <div class="empty-state">
@@ -272,10 +368,10 @@ const handleBulkDelete = () => {
       <Column headerStyle="width: 3rem">
         <template #header>
           <Checkbox
-            :model-value="viewState.isAllSelected.value"
+            :model-value="selectAll"
             @update:model-value="handleHeaderCheckboxChange"
             :binary="true"
-            :indeterminate="viewState.isSomeSelected.value && !viewState.isAllSelected.value"
+            :indeterminate="currentPageData.some(item => viewState.isSelected(item.id)) && !selectAll"
           />
         </template>
         <template #body="slotProps">

@@ -3,9 +3,9 @@
  * 工厂函数，每次调用返回独立的视图状态实例
  * 用于表格视图和瀑布流视图各自独立管理状态
  */
-import { ref, shallowRef, computed, triggerRef, watch } from 'vue';
+import { ref, shallowRef, computed, triggerRef } from 'vue';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-import type { HistoryItem, ServiceType } from '../config/types';
+import type { ServiceType } from '../config/types';
 import { getActivePrefix } from '../config/types';
 import { useHistoryManager } from './useHistory';
 import { useConfigManager } from './useConfig';
@@ -87,6 +87,30 @@ export function useHistoryViewState() {
     }
     selectedIds.value = newSet;
     triggerRef(selectedIds);
+  }
+
+  /**
+   * 选中单个项目
+   */
+  function select(id: string): void {
+    if (!selectedIds.value.has(id)) {
+      const newSet = new Set(selectedIds.value);
+      newSet.add(id);
+      selectedIds.value = newSet;
+      triggerRef(selectedIds);
+    }
+  }
+
+  /**
+   * 取消选中单个项目
+   */
+  function deselect(id: string): void {
+    if (selectedIds.value.has(id)) {
+      const newSet = new Set(selectedIds.value);
+      newSet.delete(id);
+      selectedIds.value = newSet;
+      triggerRef(selectedIds);
+    }
   }
 
   /**
@@ -243,6 +267,8 @@ export function useHistoryViewState() {
 
     // 选中操作
     toggleSelection,
+    select,
+    deselect,
     toggleSelectAll,
     clearSelection,
     isSelected,
@@ -262,6 +288,8 @@ export function useHistoryViewState() {
     // 代理 historyManager 的方法
     loadHistory: historyManager.loadHistory,
     loadMore: historyManager.loadMore,
+    loadPageByNumber: historyManager.loadPageByNumber,
+    searchHistory: historyManager.searchHistory,
     deleteHistoryItem: historyManager.deleteHistoryItem,
 
     // 代理 historyManager 的状态

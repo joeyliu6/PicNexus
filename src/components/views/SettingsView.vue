@@ -23,6 +23,7 @@ import { useConfirm } from '../../composables/useConfirm';
 import { useThemeManager } from '../../composables/useTheme';
 import { useConfigManager } from '../../composables/useConfig';
 import { useHistoryManager, invalidateCache } from '../../composables/useHistory';
+import { emitHistoryUpdated } from '../../events/cacheEvents';
 import { useAnalytics } from '../../composables/useAnalytics';
 import { useAutoSync, createDefaultAutoSyncConfig, type AutoSyncConfig } from '../../composables/useAutoSync';
 import SyncConflictDialog from '../dialogs/SyncConflictDialog.vue';
@@ -1571,8 +1572,9 @@ async function importHistoryLocal() {
     // 获取导入后的记录数
     const countAfter = await historyDB.getCount();
 
-    // 使缓存失效，让其他视图在下次激活时重新加载
+    // 使缓存失效并通知其他视图刷新
     invalidateCache();
+    emitHistoryUpdated();
 
     const addedCount = countAfter - countBefore;
     toast.success(
@@ -1830,8 +1832,9 @@ async function downloadHistoryOverwrite() {
     // 使用 SQLite 的覆盖导入
     await historyDB.importFromJSON(content, 'replace');
 
-    // 使缓存失效，让其他视图在下次激活时重新加载
+    // 使缓存失效并通知其他视图刷新
     invalidateCache();
+    emitHistoryUpdated();
 
     updateHistorySyncStatus('success');
     toast.success(`下载完成：共 ${cloudItems.length} 条记录（覆盖本地）`);
@@ -1879,8 +1882,9 @@ async function downloadHistoryMerge() {
     // 获取导入后的记录数
     const countAfter = await historyDB.getCount();
 
-    // 使缓存失效，让其他视图在下次激活时重新加载
+    // 使缓存失效并通知其他视图刷新
     invalidateCache();
+    emitHistoryUpdated();
 
     const addedCount = countAfter - countBefore;
     updateHistorySyncStatus('success');

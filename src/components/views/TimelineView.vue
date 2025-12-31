@@ -80,6 +80,20 @@ const updateScrollProgress = () => {
   visibleRatio.value = scrollHeight > 0 ? clientHeight / scrollHeight : 1;
 };
 
+// 无限滚动：检测是否需要加载更多
+const SCROLL_THRESHOLD = 300; // 距底部 300px 触发
+const checkLoadMore = () => {
+  if (!scrollContainer.value) return;
+  if (!viewState.hasMore.value || viewState.isLoadingMore.value) return;
+
+  const { scrollTop, scrollHeight, clientHeight } = scrollContainer.value;
+  const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+
+  if (distanceToBottom < SCROLL_THRESHOLD) {
+    viewState.loadMore();
+  }
+};
+
 const handleScroll = () => {
   // 拖动期间跳过滚动事件处理，避免循环更新
   if (isDragging) return;
@@ -94,6 +108,9 @@ const handleScroll = () => {
   showSidebar();
   hideSidebarDebounced();
   updateScrollProgress();
+
+  // 无限滚动检测
+  checkLoadMore();
 };
 
 const handleSidebarEnter = () => {
@@ -267,9 +284,9 @@ const handleBulkDelete = () => viewState.bulkDelete();
       </div>
 
       <div v-else class="groups-container">
-        <div 
-          v-for="group in groups" 
-          :key="group.id" 
+        <div
+          v-for="group in groups"
+          :key="group.id"
           :id="`group-${group.id}`"
           class="photo-group"
         >
@@ -281,16 +298,16 @@ const handleBulkDelete = () => viewState.bulkDelete();
 
           <!-- Photo Grid -->
           <div class="photo-grid">
-            <div 
-              v-for="item in group.items" 
+            <div
+              v-for="item in group.items"
               :key="item.id"
               class="photo-item"
               :class="{ selected: viewState.isSelected(item.id) }"
             >
               <div class="photo-wrapper" @click="openLightbox(item)">
-                <img 
+                <img
                   v-if="thumbCache.getThumbUrl(item)"
-                  :src="thumbCache.getThumbUrl(item)" 
+                  :src="thumbCache.getThumbUrl(item)"
                   loading="lazy"
                   class="photo-img"
                   @error="(e: any) => e.target.src = '/placeholder.png'"
@@ -299,9 +316,9 @@ const handleBulkDelete = () => viewState.bulkDelete();
 
                 <!-- Selection Overlay -->
                 <div class="selection-overlay"></div>
-                
+
                 <!-- Checkbox -->
-                <div 
+                <div
                   class="checkbox"
                   :class="{ checked: viewState.isSelected(item.id) }"
                   @click.stop="viewState.toggleSelection(item.id)"
@@ -311,6 +328,17 @@ const handleBulkDelete = () => viewState.bulkDelete();
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- 加载更多指示器 -->
+        <div v-if="viewState.isLoadingMore.value" class="loading-more">
+          <i class="pi pi-spin pi-spinner"></i>
+          <span>加载中...</span>
+        </div>
+
+        <!-- 已加载全部提示 -->
+        <div v-else-if="!viewState.hasMore.value && groups.length > 0" class="all-loaded">
+          已加载全部 {{ viewState.totalCount.value }} 张照片
         </div>
       </div>
       
@@ -540,4 +568,20 @@ const handleBulkDelete = () => viewState.bulkDelete();
 }
 
 .mb-4 { margin-bottom: 1rem; }
+
+/* 无限滚动状态 */
+.loading-more,
+.all-loaded {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.loading-more i {
+  font-size: 16px;
+}
 </style>

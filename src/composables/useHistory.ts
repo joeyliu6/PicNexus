@@ -9,7 +9,7 @@ import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type { HistoryItem, ServiceType } from '../config/types';
 import { getActivePrefix } from '../config/types';
-import { historyDB } from '../services/HistoryDatabase';
+import { historyDB, type PageResult, type SearchResult, type SearchOptions } from '../services/HistoryDatabase';
 import { useToast } from './useToast';
 import { useConfirm } from './useConfirm';
 import { useConfigManager } from './useConfig';
@@ -61,6 +61,38 @@ const hasMore = ref(true);
 const isLoadingMore = ref(false);
 
 /**
+ * 模块级别的数据重新加载函数（用于事件处理）
+ * 直接更新 sharedAllHistoryItems，供时间轴视图使用
+ */
+async function reloadSharedData(): Promise<void> {
+  try {
+    sharedIsLoading.value = true;
+    await historyDB.open();
+
+    currentPage.value = 1;
+
+    const { items, total, hasMore: more } = await historyDB.getPage({
+      page: 1,
+      pageSize: PAGE_SIZE,
+    });
+
+    sharedAllHistoryItems.value = items;
+    totalCount.value = total;
+    hasMore.value = more;
+
+    console.log(`[历史记录] 事件触发重新加载: ${items.length}/${total} 条`);
+
+    isDataLoaded.value = true;
+    lastLoadTime.value = Date.now();
+    dataVersion.value++;
+  } catch (error) {
+    console.error('[历史记录] 事件触发重新加载失败:', error);
+  } finally {
+    sharedIsLoading.value = false;
+  }
+}
+
+/**
  * 初始化跨窗口事件监听（单例）
  */
 function initCrossWindowListener(): void {
@@ -92,8 +124,10 @@ function initCrossWindowListener(): void {
         break;
 
       case 'history-updated':
-        console.log('[历史记录] 跨窗口同步: 更新，标记缓存失效');
+        console.log('[历史记录] 跨窗口同步: 更新，重新加载数据');
         isDataLoaded.value = false;
+        // 强制重新加载数据，确保时间轴视图能获取最新数据
+        reloadSharedData();
         break;
     }
   }).catch(e => {
@@ -438,6 +472,47 @@ export function useHistoryManager() {
     return allItems;
   }
 
+  /**
+   * 按页码加载数据（用于表格视图服务端分页）
+   * 不影响 allHistoryItems，返回独立的分页结果
+   *
+   * @param page 页码（从 1 开始）
+   * @param pageSize 每页数量（默认 100）
+   * @param serviceFilter 图床筛选
+   * @returns 分页结果
+   */
+  async function loadPageByNumber(
+    page: number,
+    pageSize: number = 100,
+    serviceFilter: ServiceType | 'all' = 'all'
+  ): Promise<PageResult> {
+    await initDatabase();
+    const result = await historyDB.getPage({
+      page,
+      pageSize,
+      serviceFilter: serviceFilter === 'all' ? undefined : serviceFilter,
+    });
+    console.log(`[历史记录] 加载第 ${page} 页: ${result.items.length}/${result.total} 条`);
+    return result;
+  }
+
+  /**
+   * 搜索历史记录（支持分页）
+   *
+   * @param keyword 搜索关键词
+   * @param options 搜索选项（serviceFilter、limit、offset）
+   * @returns 搜索结果
+   */
+  async function searchHistory(
+    keyword: string,
+    options: SearchOptions = {}
+  ): Promise<SearchResult> {
+    await initDatabase();
+    const result = await historyDB.search(keyword, options);
+    console.log(`[历史记录] 搜索"${keyword}": ${result.items.length}/${result.total} 条`);
+    return result;
+  }
+
   return {
     // 状态
     allHistoryItems,
@@ -453,6 +528,8 @@ export function useHistoryManager() {
     loadHistory,
     loadAllHistory,
     loadMore,
+    loadPageByNumber,
+    searchHistory,
     invalidateCache,
     deleteHistoryItem,
     clearHistory,

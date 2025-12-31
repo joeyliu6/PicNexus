@@ -18,6 +18,7 @@ import { MultiServiceUploader, MultiUploadResult, SingleServiceResult } from '..
 import { UploadQueueManager } from '../uploadQueue';
 import { useToast } from './useToast';
 import { invalidateCache } from './useHistory';
+import { emitHistoryUpdated } from '../events/cacheEvents';
 import { debounceWithError } from '../utils/debounce';
 import { checkNetworkConnectivity } from '../utils/network';
 import { historyDB } from '../services/HistoryDatabase';
@@ -777,8 +778,9 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     await historyDB.insertOrIgnore(newItem);
     console.log('[历史记录] 立即保存历史记录:', newItem.localFileName, '(主力图床:', firstResult.serviceId, ', 尺寸:', metadata.width, 'x', metadata.height, ')');
 
-    // 使缓存失效
+    // 使缓存失效并通知其他视图
     invalidateCache();
+    emitHistoryUpdated([historyId]);
 
     // 清理元信息缓存（文件已上传完成）
     clearImageMetadataCache(filePath);
