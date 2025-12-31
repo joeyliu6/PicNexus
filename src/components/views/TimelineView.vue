@@ -1,11 +1,14 @@
 <script setup lang="ts">
 /**
  * Timeline View (Google Photos style)
- * Groups photos by Month/Year and provides a timeline sidebar for navigation.
+ * 使用 Justified Layout + 虚拟滚动实现高性能图片浏览
+ * 支持 10 万+ 图片流畅滚动
  */
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick, shallowRef } from 'vue';
 import { useHistoryViewState, type LinkFormat } from '../../composables/useHistoryViewState';
+import { useVirtualTimeline, type PhotoGroup } from '../../composables/useVirtualTimeline';
 import { useThumbCache } from '../../composables/useThumbCache';
+import { useImageMetadataFixer } from '../../composables/useImageMetadataFixer';
 import { useToast } from '../../composables/useToast';
 import type { HistoryItem, ServiceType } from '../../config/types';
 import TimelineSidebar, { type TimeGroup } from './timeline/TimelineSidebar.vue';
@@ -13,166 +16,57 @@ import HistoryLightbox from './history/HistoryLightbox.vue';
 import FloatingActionBar from './history/FloatingActionBar.vue';
 import Skeleton from 'primevue/skeleton';
 
-// Props
+// ==================== Props & Emits ====================
+
 const props = defineProps<{
   filter?: ServiceType | 'all';
   searchTerm?: string;
 }>();
 
-// Emits
 const emit = defineEmits<{
   (e: 'update:totalCount', count: number): void;
   (e: 'update:selectedCount', count: number): void;
 }>();
 
+// ==================== Composables ====================
+
 const toast = useToast();
 const viewState = useHistoryViewState();
 const thumbCache = useThumbCache();
+const metadataFixer = useImageMetadataFixer();
+
+// ==================== Refs ====================
+
+// Scroll container ref
+const scrollContainer = ref<HTMLElement | null>(null);
 
 // Lightbox state
 const lightboxVisible = ref(false);
 const lightboxItem = ref<HistoryItem | null>(null);
 
-// Scroll container ref
-const scrollContainer = ref<HTMLElement | null>(null);
-
-// Sidebar Visibility Logic
+// Sidebar visibility
 const isSidebarVisible = ref(false);
 let scrollTimeout: number | undefined;
-let isHoveringSidebar = ref(false);
+const isHoveringSidebar = ref(false);
 
-// 触发来源：hover 用 0.5s 隐藏，scroll 用 1.5s 隐藏
+// 触发来源
 type ShowSource = 'scroll' | 'hover';
 let lastShowSource: ShowSource = 'scroll';
 
-// 滚动进度追踪
-const scrollProgress = ref(0);
-const visibleRatio = ref(1);
-
-// 拖动状态跟踪（拖动时跳过滚动事件处理）
+// 拖动状态
 let isDragging = false;
-
-// 滚动节流
-let scrollThrottleTimer: number | undefined;
-const SCROLL_THROTTLE_MS = 16; // ~60fps
-
-const showSidebar = () => {
-  isSidebarVisible.value = true;
-};
-
-const hideSidebarDebounced = () => {
-  if (scrollTimeout) clearTimeout(scrollTimeout);
-  // 根据触发来源决定延迟时间：hover 离开 0.3s，滚动结束 1s
-  const delay = lastShowSource === 'hover' ? 300 : 1000;
-  scrollTimeout = window.setTimeout(() => {
-    if (!isHoveringSidebar.value) {
-      isSidebarVisible.value = false;
-    }
-  }, delay);
-};
-
-// 更新滚动进度
-const updateScrollProgress = () => {
-  if (!scrollContainer.value) return;
-  const { scrollTop, scrollHeight, clientHeight } = scrollContainer.value;
-  const maxScroll = scrollHeight - clientHeight;
-  scrollProgress.value = maxScroll > 0 ? scrollTop / maxScroll : 0;
-  visibleRatio.value = scrollHeight > 0 ? clientHeight / scrollHeight : 1;
-};
-
-// 无限滚动：检测是否需要加载更多
-const SCROLL_THRESHOLD = 300; // 距底部 300px 触发
-const checkLoadMore = () => {
-  if (!scrollContainer.value) return;
-  if (!viewState.hasMore.value || viewState.isLoadingMore.value) return;
-
-  const { scrollTop, scrollHeight, clientHeight } = scrollContainer.value;
-  const distanceToBottom = scrollHeight - scrollTop - clientHeight;
-
-  if (distanceToBottom < SCROLL_THRESHOLD) {
-    viewState.loadMore();
-  }
-};
-
-const handleScroll = () => {
-  // 拖动期间跳过滚动事件处理，避免循环更新
-  if (isDragging) return;
-
-  // 滚动节流
-  if (scrollThrottleTimer) return;
-  scrollThrottleTimer = window.setTimeout(() => {
-    scrollThrottleTimer = undefined;
-  }, SCROLL_THROTTLE_MS);
-
-  lastShowSource = 'scroll';
-  showSidebar();
-  hideSidebarDebounced();
-  updateScrollProgress();
-
-  // 无限滚动检测
-  checkLoadMore();
-};
-
-const handleSidebarEnter = () => {
-  lastShowSource = 'hover';
-  isHoveringSidebar.value = true;
-  showSidebar();
-  if (scrollTimeout) clearTimeout(scrollTimeout);
-};
-
-const handleSidebarLeave = () => {
-  isHoveringSidebar.value = false;
-  hideSidebarDebounced();
-};
-
-// 滚动穿透：在时间轴上滚动时转发到主内容区域
-const handleSidebarWheel = (e: WheelEvent) => {
-  if (scrollContainer.value) {
-    scrollContainer.value.scrollTop += e.deltaY;
-  }
-};
-
-// 处理拖拽滚动
 let dragEndTimer: number | undefined;
-const handleDragScroll = (progress: number) => {
-  if (!scrollContainer.value) return;
 
-  // 设置拖动状态，避免滚动事件循环
-  isDragging = true;
+// ==================== Grouping Logic ====================
 
-  // 重置拖动结束定时器（拖动结束 100ms 后恢复）
-  if (dragEndTimer) clearTimeout(dragEndTimer);
-  dragEndTimer = window.setTimeout(() => {
-    isDragging = false;
-  }, 100);
-
-  const { scrollHeight, clientHeight } = scrollContainer.value;
-  const maxScroll = scrollHeight - clientHeight;
-
-  // 直接设置滚动位置，不用 requestAnimationFrame（减少延迟）
-  scrollContainer.value.scrollTop = maxScroll * progress;
-
-  // 手动更新进度（因为跳过了滚动事件）
-  scrollProgress.value = progress;
-};
-
-
-// Grouping Logic - 按天分组
-interface PhotoGroup {
-  id: string; // '2024-5-15'
-  label: string; // '2024年5月15日'
-  year: number;
-  month: number; // 0-11
-  day: number;
-  date: Date;
-  items: HistoryItem[];
-}
-
-const groups = computed(() => {
+/**
+ * 按天分组图片数据
+ */
+const groups = computed<PhotoGroup[]>(() => {
   const items = viewState.filteredItems.value;
   const groupsMap = new Map<string, PhotoGroup>();
 
-  items.forEach(item => {
+  items.forEach((item) => {
     const date = new Date(item.timestamp);
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -187,62 +81,218 @@ const groups = computed(() => {
         month,
         day,
         date: new Date(year, month, day),
-        items: []
+        items: [],
       });
     }
     groupsMap.get(id)?.items.push(item);
   });
 
-  // Sort groups by date descending (newest first)
+  // 按日期降序排列（最新的在前）
   return Array.from(groupsMap.values()).sort((a, b) => b.date.getTime() - a.date.getTime());
 });
 
-// Sidebar data
+// ==================== Virtual Timeline ====================
+
+const {
+  // 状态
+  totalHeight,
+  scrollProgress,
+  isCalculating,
+  viewportHeight,
+  scrollTop,
+
+  // 三阶段渲染状态
+  displayMode,
+  fastModeItems,
+
+  // 可见数据
+  visibleItems,
+  visibleHeaders,
+  currentStickyHeader,
+
+  // 布局数据
+  layoutResult,
+
+  // 方法
+  scrollToItem,
+  scrollToProgress,
+  forceUpdateVisibleArea,
+  handleScroll: virtualHandleScroll,
+} = useVirtualTimeline(scrollContainer, groups, {
+  targetRowHeight: 200,
+  gap: 4,
+  headerHeight: 48,
+  groupGap: 24,
+  overscan: 3,
+});
+
+// ==================== 三阶段渲染：图片加载状态 ====================
+
+/** 已加载图片的 ID 集合 */
+const loadedImages = shallowRef(new Set<string>());
+
+/** 最大缓存加载状态的图片数量 */
+const MAX_LOADED_CACHE = 500;
+
+/**
+ * 标记图片已加载
+ */
+function onImageLoad(id: string) {
+  const newSet = new Set(loadedImages.value);
+  newSet.add(id);
+
+  // 防止内存无限增长：超过阈值时清理
+  if (newSet.size > MAX_LOADED_CACHE) {
+    // 只保留当前可见的图片 ID
+    const visibleIds = new Set(visibleItems.value.map((v) => v.item.id));
+    loadedImages.value = visibleIds;
+  } else {
+    loadedImages.value = newSet;
+  }
+}
+
+/**
+ * 检查图片是否已加载
+ */
+function isImageLoaded(id: string): boolean {
+  return loadedImages.value.has(id);
+}
+
+// ==================== Sidebar Data ====================
+
 const sidebarGroups = computed<TimeGroup[]>(() => {
-  return groups.value.map(g => ({
+  return groups.value.map((g) => ({
     id: g.id,
-    label: g.month + 1 + '月', // Short label for sidebar
+    label: g.month + 1 + '月',
     year: g.year,
     month: g.month,
     day: g.day,
     date: g.date,
-    count: g.items.length
+    count: g.items.length,
   }));
 });
 
-// 当前月份标签（用于滑块显示）
+// 每个分组的布局高度（用于时间轴准确定位）
+const groupHeightMap = computed(() => {
+  const map = new Map<string, number>();
+  if (!layoutResult.value) return map;
+
+  for (const group of layoutResult.value.groupLayouts) {
+    // 高度 = 头部高度 + 内容高度
+    const height = group.headerHeight + group.contentHeight;
+    map.set(group.groupId, height);
+  }
+  return map;
+});
+
+// 当前月份标签
 const currentMonthLabel = computed(() => {
+  if (currentStickyHeader.value) {
+    const group = groups.value.find((g) => g.id === currentStickyHeader.value?.groupId);
+    if (group) {
+      return `${group.month + 1}月`;
+    }
+  }
   if (groups.value.length === 0) return '';
   const index = Math.floor(scrollProgress.value * (groups.value.length - 1));
   const group = groups.value[Math.min(index, groups.value.length - 1)];
   return `${group.month + 1}月`;
 });
 
-// Initialization
-onMounted(async () => {
-  console.log('[TimelineView] Mounted');
-  await viewState.loadHistory();
+// 可见比例
+const visibleRatio = computed(() => {
+  if (totalHeight.value <= viewportHeight.value) return 1;
+  return viewportHeight.value / totalHeight.value;
 });
 
-onUnmounted(() => {
-  viewState.reset();
-  thumbCache.clearThumbCache();
-});
+// ==================== Sidebar Visibility ====================
 
-// Watchers for props to update internal viewState
-watch(() => props.filter, (val) => {
-  if (val) viewState.setFilter(val);
-}, { immediate: true });
+const showSidebar = () => {
+  isSidebarVisible.value = true;
+};
 
-watch(() => props.searchTerm, (val) => {
-  if (val !== undefined) viewState.setSearchTerm(val);
-}, { immediate: true });
+const hideSidebarDebounced = () => {
+  if (scrollTimeout) clearTimeout(scrollTimeout);
+  const delay = lastShowSource === 'hover' ? 300 : 1000;
+  scrollTimeout = window.setTimeout(() => {
+    if (!isHoveringSidebar.value) {
+      isSidebarVisible.value = false;
+    }
+  }, delay);
+};
 
-// Sync stats
-watch(() => viewState.totalCount.value, (c) => emit('update:totalCount', c), { immediate: true });
-watch(() => viewState.selectedIdList.value.length, (c) => emit('update:selectedCount', c), { immediate: true });
+// ==================== Scroll Handling ====================
 
-// Lightbox & Actions
+// 无限滚动阈值
+const SCROLL_THRESHOLD = 500;
+
+/**
+ * 检测是否需要加载更多
+ */
+const checkLoadMore = () => {
+  if (!viewState.hasMore.value || viewState.isLoadingMore.value) return;
+
+  const distanceToBottom = totalHeight.value - scrollTop.value - viewportHeight.value;
+
+  if (distanceToBottom < SCROLL_THRESHOLD) {
+    viewState.loadMore();
+  }
+};
+
+/**
+ * 滚动事件处理
+ */
+const handleScroll = () => {
+  // 始终执行虚拟滚动处理（确保可见区域更新）
+  virtualHandleScroll();
+
+  // 侧边栏显示逻辑（拖动期间跳过）
+  if (!isDragging) {
+    lastShowSource = 'scroll';
+    showSidebar();
+    hideSidebarDebounced();
+  }
+
+  // 无限滚动检测
+  checkLoadMore();
+};
+
+// ==================== Sidebar Interactions ====================
+
+const handleSidebarEnter = () => {
+  lastShowSource = 'hover';
+  isHoveringSidebar.value = true;
+  showSidebar();
+  if (scrollTimeout) clearTimeout(scrollTimeout);
+};
+
+const handleSidebarLeave = () => {
+  isHoveringSidebar.value = false;
+  hideSidebarDebounced();
+};
+
+const handleSidebarWheel = (e: WheelEvent) => {
+  if (scrollContainer.value) {
+    scrollContainer.value.scrollTop += e.deltaY;
+  }
+};
+
+const handleDragScroll = (progress: number) => {
+  isDragging = true;
+
+  if (dragEndTimer) clearTimeout(dragEndTimer);
+  dragEndTimer = window.setTimeout(() => {
+    isDragging = false;
+    // 拖拽结束后强制更新可见区域，触发图片加载
+    forceUpdateVisibleArea();
+  }, 150);
+
+  // 传递拖拽状态，让 scrollToProgress 强制使用 fast 模式
+  scrollToProgress(progress, true);
+};
+
+// ==================== Lightbox ====================
+
 const openLightbox = (item: HistoryItem) => {
   lightboxItem.value = item;
   lightboxVisible.value = true;
@@ -252,98 +302,207 @@ const handleLightboxDelete = async (item: HistoryItem) => {
   try {
     await viewState.deleteHistoryItem(item.id);
     lightboxVisible.value = false;
-    toast.success('Deleted');
+    toast.success('已删除');
   } catch (e) {
-    toast.error('Failed to delete', String(e));
+    toast.error('删除失败', String(e));
   }
 };
 
-// Batch Actions
+/**
+ * Lightbox 导航时同步滚动位置
+ */
+const handleLightboxNavigate = (item: HistoryItem) => {
+  lightboxItem.value = item;
+  // 滚动到该图片位置（确保关闭后可见）
+  scrollToItem(item.id);
+};
+
+// ==================== Batch Actions ====================
+
 const handleBulkCopy = (fmt: LinkFormat) => viewState.bulkCopyFormatted(fmt);
 const handleBulkExport = () => viewState.bulkExport();
 const handleBulkDelete = () => viewState.bulkDelete();
+
+// ==================== Lifecycle ====================
+
+onMounted(async () => {
+  console.log('[TimelineView] Mounted with Justified Layout');
+  await viewState.loadHistory();
+
+  // 初始加载后，检查并修复缺失元数据
+  nextTick(() => {
+    const items = viewState.filteredItems.value;
+    const needsFix = items.filter((item) => !item.aspectRatio || item.aspectRatio <= 0);
+    if (needsFix.length > 0) {
+      console.log(`[TimelineView] 发现 ${needsFix.length} 张图片缺少宽高比，后台修复中...`);
+      metadataFixer.batchFixMissingMetadata(needsFix);
+    }
+  });
+});
+
+onUnmounted(() => {
+  viewState.reset();
+  thumbCache.clearThumbCache();
+
+  // 刷新待更新的元数据
+  metadataFixer.flushNow();
+
+  if (scrollTimeout) clearTimeout(scrollTimeout);
+  if (dragEndTimer) clearTimeout(dragEndTimer);
+});
+
+// ==================== Watchers ====================
+
+watch(
+  () => props.filter,
+  (val) => {
+    if (val) viewState.setFilter(val);
+  },
+  { immediate: true }
+);
+
+watch(
+  () => props.searchTerm,
+  (val) => {
+    if (val !== undefined) viewState.setSearchTerm(val);
+  },
+  { immediate: true }
+);
+
+watch(
+  () => viewState.totalCount.value,
+  (c) => emit('update:totalCount', c),
+  { immediate: true }
+);
+
+watch(
+  () => viewState.selectedIdList.value.length,
+  (c) => emit('update:selectedCount', c),
+  { immediate: true }
+);
 
 </script>
 
 <template>
   <div class="timeline-view">
     <!-- Main Scroll Area -->
-    <div 
-      class="timeline-scroll-area" 
-      ref="scrollContainer"
-      @scroll="handleScroll"
-    >
+    <div ref="scrollContainer" class="timeline-scroll-area" @scroll="handleScroll">
+      <!-- Loading State -->
       <div v-if="viewState.isLoading.value" class="loading-state">
         <Skeleton width="100%" height="200px" class="mb-4" />
         <Skeleton width="100%" height="400px" />
       </div>
 
+      <!-- Empty State -->
       <div v-else-if="groups.length === 0" class="empty-state">
-        <i class="pi pi-image" style="font-size: 3rem; opacity: 0.5;"></i>
-        <p>No photos found</p>
+        <i class="pi pi-image" style="font-size: 3rem; opacity: 0.5"></i>
+        <p>暂无图片</p>
       </div>
 
-      <div v-else class="groups-container">
+      <!-- Virtual Scroll Content -->
+      <div v-else class="virtual-container" :style="{ height: `${totalHeight}px` }">
+        <!-- Visible Group Headers -->
         <div
-          v-for="group in groups"
-          :key="group.id"
-          :id="`group-${group.id}`"
-          class="photo-group"
+          v-for="header in visibleHeaders"
+          :key="`header-${header.groupId}`"
+          class="group-header"
+          :style="{
+            transform: `translate3d(0, ${header.y}px, 0)`,
+            height: `${header.height}px`,
+          }"
         >
-          <!-- Sticky Header -->
-          <div class="group-header">
-            <span class="group-title">{{ group.label }}</span>
-            <span class="group-subtitle">{{ group.items.length }} 张照片</span>
+          <span class="group-title">{{ header.label }}</span>
+          <span class="group-subtitle">
+            {{ groups.find((g) => g.id === header.groupId)?.items.length || 0 }} 张照片
+          </span>
+        </div>
+
+        <!-- 阶段 1：快速滚动 - 正方形占位符 -->
+        <template v-if="displayMode === 'fast'">
+          <div
+            v-for="(pos, index) in fastModeItems"
+            :key="`fast-${index}`"
+            class="photo-placeholder"
+            :style="{
+              transform: `translate3d(${pos.x}px, ${pos.y}px, 0)`,
+              width: `${pos.width}px`,
+              height: `${pos.height}px`,
+            }"
+          >
+            <Skeleton width="100%" height="100%" borderRadius="8px" />
           </div>
+        </template>
 
-          <!-- Photo Grid -->
-          <div class="photo-grid">
-            <div
-              v-for="item in group.items"
-              :key="item.id"
-              class="photo-item"
-              :class="{ selected: viewState.isSelected(item.id) }"
-            >
-              <div class="photo-wrapper" @click="openLightbox(item)">
-                <img
-                  v-if="thumbCache.getThumbUrl(item)"
-                  :src="thumbCache.getThumbUrl(item)"
-                  loading="lazy"
-                  class="photo-img"
-                  @error="(e: any) => e.target.src = '/placeholder.png'"
-                />
-                 <Skeleton v-else width="100%" height="100%" />
+        <!-- 阶段 2 & 3：正常滚动 - Justified Layout -->
+        <template v-else>
+          <div
+            v-for="visible in visibleItems"
+            :key="visible.item.id"
+            class="photo-item"
+            :class="{ selected: viewState.isSelected(visible.item.id) }"
+            :style="{
+              transform: `translate3d(${visible.x}px, ${visible.y}px, 0)`,
+              width: `${visible.width}px`,
+              height: `${visible.height}px`,
+            }"
+          >
+            <div class="photo-wrapper" @click="openLightbox(visible.item)">
+              <!-- 阶段 2：图片未加载 - Skeleton 占位 -->
+              <Skeleton
+                v-if="!isImageLoaded(visible.item.id)"
+                width="100%"
+                height="100%"
+                borderRadius="8px"
+                class="photo-skeleton"
+              />
 
-                <!-- Selection Overlay -->
-                <div class="selection-overlay"></div>
+              <!-- 阶段 3：图片 - 始终渲染但初始隐藏，加载后显示 -->
+              <img
+                v-if="thumbCache.getThumbUrl(visible.item)"
+                :src="thumbCache.getThumbUrl(visible.item)"
+                class="photo-img"
+                :class="{ loaded: isImageLoaded(visible.item.id) }"
+                @load="onImageLoad(visible.item.id)"
+                @error="(e: any) => (e.target.style.display = 'none')"
+              />
 
-                <!-- Checkbox -->
-                <div
-                  class="checkbox"
-                  :class="{ checked: viewState.isSelected(item.id) }"
-                  @click.stop="viewState.toggleSelection(item.id)"
-                >
-                  <i v-if="viewState.isSelected(item.id)" class="pi pi-check"></i>
-                </div>
+              <!-- Selection Overlay -->
+              <div class="selection-overlay"></div>
+
+              <!-- Checkbox -->
+              <div
+                class="checkbox"
+                :class="{ checked: viewState.isSelected(visible.item.id) }"
+                @click.stop="viewState.toggleSelection(visible.item.id)"
+              >
+                <i v-if="viewState.isSelected(visible.item.id)" class="pi pi-check"></i>
               </div>
             </div>
           </div>
-        </div>
+        </template>
 
-        <!-- 加载更多指示器 -->
-        <div v-if="viewState.isLoadingMore.value" class="loading-more">
+        <!-- Loading More Indicator -->
+        <div
+          v-if="viewState.isLoadingMore.value"
+          class="loading-more"
+          :style="{ transform: `translate3d(0, ${totalHeight - 60}px, 0)` }"
+        >
           <i class="pi pi-spin pi-spinner"></i>
           <span>加载中...</span>
         </div>
 
-        <!-- 已加载全部提示 -->
-        <div v-else-if="!viewState.hasMore.value && groups.length > 0" class="all-loaded">
+        <!-- All Loaded Indicator -->
+        <div
+          v-else-if="!viewState.hasMore.value && groups.length > 0"
+          class="all-loaded"
+          :style="{ transform: `translate3d(0, ${totalHeight - 40}px, 0)` }"
+        >
           已加载全部 {{ viewState.totalCount.value }} 张照片
         </div>
       </div>
-      
-      <!-- Bottom spacing -->
-      <div style="height: 100px;"></div>
+
+      <!-- Bottom Spacing -->
+      <div style="height: 100px"></div>
     </div>
 
     <!-- Right Sidebar -->
@@ -359,17 +518,21 @@ const handleBulkDelete = () => viewState.bulkDelete();
         :scroll-progress="scrollProgress"
         :visible-ratio="visibleRatio"
         :current-month-label="currentMonthLabel"
+        :group-heights="groupHeightMap"
+        :total-layout-height="totalHeight"
         @drag-scroll="handleDragScroll"
       />
     </div>
 
-    <!-- Components -->
+    <!-- Lightbox -->
     <HistoryLightbox
       v-model:visible="lightboxVisible"
       :item="lightboxItem"
       @delete="handleLightboxDelete"
+      @navigate="handleLightboxNavigate"
     />
 
+    <!-- Floating Action Bar -->
     <FloatingActionBar
       :selected-count="viewState.selectedIdList.value.length"
       :visible="viewState.hasSelection.value"
@@ -378,6 +541,11 @@ const handleBulkDelete = () => viewState.bulkDelete();
       @delete="handleBulkDelete"
       @clear-selection="viewState.clearSelection"
     />
+
+    <!-- Layout Calculating Indicator -->
+    <div v-if="isCalculating" class="layout-indicator">
+      <i class="pi pi-spin pi-spinner"></i>
+    </div>
   </div>
 </template>
 
@@ -395,70 +563,33 @@ const handleBulkDelete = () => viewState.bulkDelete();
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0 70px 0 20px; /* 右侧留出空间给 sidebar */
-  /* 移除 scroll-behavior: smooth，避免拖动时卡顿 */
+  padding: 0 70px 0 20px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-/* 隐藏滚动条但保持可滚动功能 */
-.timeline-scroll-area {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
-}
 .timeline-scroll-area::-webkit-scrollbar {
-  display: none; /* Chrome/Safari/Opera */
+  display: none;
 }
 
-.sidebar-wrapper {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 120px; /* 扩大以容纳月份标签 */
-  z-index: 20;
-  background: linear-gradient(to left, var(--bg-app) 40%, transparent 100%);
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  overflow: visible; /* 允许指示器溢出 */
+/* Virtual Container */
+.virtual-container {
+  position: relative;
+  width: 100%;
 }
 
-.sidebar-wrapper.visible {
-  opacity: 1;
-  pointer-events: auto; /* Enable interaction when visible */
-}
-
-/* Enable pointer events on proper sidebar content */
-.sidebar-wrapper > * {
-  pointer-events: auto;
-}
-
-.groups-container {
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-  padding-top: 20px;
-}
-
-.photo-group {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
+/* Group Headers */
 .group-header {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: rgba(var(--bg-app-rgb), 0.85); /* Need RGB variable or fallback */
-  background: var(--bg-app); /* Fallback */
-  backdrop-filter: blur(10px);
-  padding: 10px 0;
+  position: absolute;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: baseline;
   gap: 12px;
+  padding: 10px 0;
+  background: var(--bg-app);
+  z-index: 5;
 }
-/* Ensure the sticky header has background to cover scrolling items */
-/* Hack to use var with opacity if not defined as RGB: use simple opaque color */
 
 .group-title {
   font-size: 18px;
@@ -471,19 +602,21 @@ const handleBulkDelete = () => viewState.bulkDelete();
   color: var(--text-secondary);
 }
 
-.photo-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 8px;
+/* Photo Placeholder (快速滚动模式) */
+.photo-placeholder {
+  position: absolute;
+  border-radius: 8px;
+  overflow: hidden;
+  will-change: transform;
 }
 
+/* Photo Items */
 .photo-item {
-  aspect-ratio: 1;
+  position: absolute;
   background: var(--bg-secondary);
   border-radius: 8px;
   overflow: hidden;
-  position: relative;
-  transition: transform 0.1s;
+  will-change: transform;
 }
 
 .photo-wrapper {
@@ -493,23 +626,38 @@ const handleBulkDelete = () => viewState.bulkDelete();
   position: relative;
 }
 
+/* Skeleton 占位符 */
+.photo-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+/* 图片加载过渡 */
 .photo-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.3s;
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out, transform 0.3s;
 }
 
-.photo-wrapper:hover .photo-img {
-  transform: scale(1.05);
+.photo-img.loaded {
+  opacity: 1;
 }
 
+.photo-wrapper:hover .photo-img.loaded {
+  transform: scale(1.03);
+}
+
+/* Selection */
 .selection-overlay {
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.1);
   opacity: 0;
   transition: opacity 0.2s;
+  pointer-events: none;
 }
 
 .photo-item.selected .selection-overlay {
@@ -556,8 +704,33 @@ const handleBulkDelete = () => viewState.bulkDelete();
   font-weight: bold;
 }
 
-/* Loading/Empty states */
-.loading-state, .empty-state {
+/* Sidebar */
+.sidebar-wrapper {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 120px;
+  z-index: 20;
+  background: linear-gradient(to left, var(--bg-app) 40%, transparent 100%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  overflow: visible;
+}
+
+.sidebar-wrapper.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sidebar-wrapper > * {
+  pointer-events: auto;
+}
+
+/* Loading/Empty States */
+.loading-state,
+.empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -567,11 +740,16 @@ const handleBulkDelete = () => viewState.bulkDelete();
   color: var(--text-secondary);
 }
 
-.mb-4 { margin-bottom: 1rem; }
+.mb-4 {
+  margin-bottom: 1rem;
+}
 
-/* 无限滚动状态 */
+/* Loading More */
 .loading-more,
 .all-loaded {
+  position: absolute;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -583,5 +761,26 @@ const handleBulkDelete = () => viewState.bulkDelete();
 
 .loading-more i {
   font-size: 16px;
+}
+
+/* Layout Indicator */
+.layout-indicator {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  background: var(--bg-secondary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  z-index: 100;
+}
+
+.layout-indicator i {
+  font-size: 18px;
+  color: var(--primary);
 }
 </style>
