@@ -119,7 +119,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
   const serviceConfigStatus: Ref<Record<ServiceType, boolean>> = ref({
     weibo: false,
     r2: false,
-    tcl: true,  // TCL 开箱即用
+
     jd: true,   // 京东开箱即用
     nowcoder: false,
     qiyu: false,
@@ -518,7 +518,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             const failedServiceNames = result.partialFailures
               .map(f => {
                 const nameMap: Record<string, string> = {
-                  weibo: '微博', r2: 'R2', tcl: 'TCL', jd: '京东',
+                  weibo: '微博', r2: 'R2', jd: '京东',
                   nowcoder: '牛客', qiyu: '七鱼', zhihu: '知乎', nami: '纳米'
                 };
                 return nameMap[f.serviceId] || f.serviceId;
@@ -902,7 +902,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     }
 
     // TCL 和 JD 开箱即用
-    serviceConfigStatus.value.tcl = true;
+
     serviceConfigStatus.value.jd = true;
 
     // 微博

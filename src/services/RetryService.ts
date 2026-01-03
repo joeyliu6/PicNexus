@@ -41,7 +41,7 @@ export class RetryService {
   /** 历史记录更新锁，确保并发更新时不会互相覆盖 */
   private static historyUpdateLock: Promise<void> = Promise.resolve();
 
-  constructor(private options: RetryOptions) {}
+  constructor(private options: RetryOptions) { }
 
   /**
    * 单个服务重试
@@ -102,7 +102,7 @@ export class RetryService {
       await this.handleSingleServiceSuccess(itemId, serviceId, item, result);
 
       const serviceLabels: Record<ServiceType, string> = {
-        weibo: '微博', r2: 'R2', tcl: 'TCL', jd: '京东',
+        weibo: '微博', r2: 'R2', jd: '京东',
         nowcoder: '牛客', qiyu: '七鱼', zhihu: '知乎', nami: '纳米'
       };
       this.options.toast.success('修复成功', `${serviceLabels[serviceId]} 已补充上传成功`);
@@ -218,7 +218,7 @@ export class RetryService {
         const failedServiceNames = result.partialFailures
           .map(f => {
             const nameMap: Record<string, string> = {
-              weibo: '微博', r2: 'R2', tcl: 'TCL', jd: '京东',
+              weibo: '微博', r2: 'R2', jd: '京东',
               nowcoder: '牛客', qiyu: '七鱼', zhihu: '知乎', nami: '纳米'
             };
             return nameMap[f.serviceId] || f.serviceId;
@@ -384,7 +384,7 @@ export class RetryService {
     this.options.queueManager.updateItem(itemId, { serviceProgress: updates });
 
     const serviceLabels: Record<ServiceType, string> = {
-      weibo: '微博', r2: 'R2', tcl: 'TCL', jd: '京东',
+      weibo: '微博', r2: 'R2', jd: '京东',
       nowcoder: '牛客', qiyu: '七鱼', zhihu: '知乎', nami: '纳米'
     };
     this.options.toast.error('重试依然失败', `${serviceLabels[serviceId]}: ${errorMsg}`);

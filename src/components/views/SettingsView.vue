@@ -121,9 +121,9 @@ const formData = ref({
 });
 
 // 服务列表
-const availableServices = ref<ServiceType[]>(['weibo', 'r2', 'tcl', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami']);
+const availableServices = ref<ServiceType[]>(['weibo', 'r2', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami']);
 const serviceNames: Record<ServiceType, string> = {
-  weibo: '微博', r2: 'R2', tcl: 'TCL', jd: '京东', nowcoder: '牛客', qiyu: '七鱼', zhihu: '知乎', nami: '纳米'
+  weibo: '微博', r2: 'R2', jd: '京东', nowcoder: '牛客', qiyu: '七鱼', zhihu: '知乎', nami: '纳米'
 };
 
 // 测试状态
@@ -207,30 +207,20 @@ const checkJdAvailable = async () => {
   finally { isCheckingJd.value = false; }
 };
 
-// TCL 可用性检测
-const tclAvailable = ref(false);
-const isCheckingTcl = ref(false);
-const checkTclAvailable = async () => {
-  isCheckingTcl.value = true;
-  try { tclAvailable.value = await invoke('check_tcl_available'); }
-  catch (e) { tclAvailable.value = false; }
-  finally { isCheckingTcl.value = false; }
-};
 
-// 可用性检测冷却机制（防止频繁切换页面导致过度检测，仅用于京东和 TCL）
-const lastCheckTime = ref(0);
-const CHECK_COOLDOWN = 5 * 60 * 1000; // 5 分钟冷却
+
+// 5 分钟冷却
+const CHECK_COOLDOWN = 5 * 60 * 1000;
 
 const checkAllAvailabilityWithCooldown = async () => {
   const now = Date.now();
   const needCooldownCheck = now - lastCheckTime.value >= CHECK_COOLDOWN;
 
   // 七鱼使用智能检测策略（不受冷却机制影响）
-  // 京东和 TCL 使用冷却机制
+  // 京东使用冷却机制
   await Promise.all([
     checkQiyuAvailability(false),  // 使用智能检测
-    needCooldownCheck ? checkJdAvailable() : Promise.resolve(),
-    needCooldownCheck ? checkTclAvailable() : Promise.resolve()
+    needCooldownCheck ? checkJdAvailable() : Promise.resolve()
   ]);
 
   if (needCooldownCheck) {
@@ -768,7 +758,7 @@ const mdRepairResult = ref<MarkdownRepairResult | null>(null);
 const availableServicesForReupload = computed(() => {
   return availableServices.value.filter((s: ServiceType) => {
     // 开箱即用图床（TCL、京东、七鱼）始终可用
-    if (['tcl', 'jd', 'qiyu'].includes(s)) return true;
+    if (['jd', 'qiyu'].includes(s)) return true;
     // 其他图床需要检查配置
     const cfg = configManager.config.value.services?.[s];
     if (!cfg) return false;
@@ -908,8 +898,7 @@ async function copyLinkToClipboard(url: string) {
 // 判断图床是否可用
 function isMdServiceAvailable(serviceId: ServiceType): boolean {
   switch (serviceId) {
-    case 'tcl':
-      return tclAvailable.value;
+
     case 'jd':
       return jdAvailable.value;
     case 'qiyu':
@@ -2195,21 +2184,7 @@ onUnmounted(() => {
               </div>
             </div>
           </div>
-          <div class="service-card-flat">
-            <div class="sc-content">
-              <h3>TCL 图床</h3>
-              <p>无需配置，直接使用。支持多种格式。</p>
-              <div class="service-status">
-                <Tag
-                  :value="isCheckingTcl ? '检测中' : (tclAvailable ? '可用' : '不可用')"
-                  :severity="isCheckingTcl ? 'info' : (tclAvailable ? 'success' : 'danger')"
-                  :icon="isCheckingTcl ? 'pi pi-spin pi-spinner' : undefined"
-                  class="clickable-tag"
-                  @click="!isCheckingTcl && checkTclAvailable()"
-                />
-              </div>
-            </div>
-          </div>
+
           <div class="service-card-flat">
             <div class="sc-content">
               <h3>七鱼图床</h3>

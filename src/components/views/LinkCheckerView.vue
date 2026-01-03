@@ -57,7 +57,7 @@ const serviceOptions = [
   { label: '全部图床', value: 'all' },
   { label: '微博图床', value: 'weibo' },
   { label: 'Cloudflare R2', value: 'r2' },
-  { label: 'TCL 图床', value: 'tcl' },
+
   { label: '京东图床', value: 'jd' },
   { label: '牛客图床', value: 'nowcoder' },
   { label: '七鱼图床', value: 'qiyu' },

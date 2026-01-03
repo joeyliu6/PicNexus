@@ -264,8 +264,7 @@ export class UploadQueueManager {
             }
           } else if (serviceId === 'r2') {
             linkFields.r2Link = serviceLink;
-          } else if (serviceId === 'tcl') {
-            linkFields.tclLink = serviceLink;
+
           }
         }
       });
@@ -347,11 +346,11 @@ export class UploadQueueManager {
 
           const currentItem = this.getItem(itemId);
           if (currentItem) {
-             if ((currentItem.weiboProgress ?? 0) < 100) {
-                 updates.weiboStatus = '✗ 失败';
-             } else if (currentItem.uploadToR2 && (currentItem.r2Progress ?? 0) < 100) {
-                 updates.r2Status = '✗ 失败';
-             }
+            if ((currentItem.weiboProgress ?? 0) < 100) {
+              updates.weiboStatus = '✗ 失败';
+            } else if (currentItem.uploadToR2 && (currentItem.r2Progress ?? 0) < 100) {
+              updates.r2Status = '✗ 失败';
+            }
           }
           break;
 
@@ -473,7 +472,7 @@ export class UploadQueueManager {
 
     // 如果是单独重试，且当前整体状态是 error，临时改为 uploading 以避免 UI 显示红色左边框
     if (item.status === 'error') {
-        updates.status = 'uploading';
+      updates.status = 'uploading';
     }
 
     this.updateItem(itemId, updates);

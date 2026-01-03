@@ -4,7 +4,7 @@
 import { UploaderFactory } from './base/UploaderFactory';
 import { WeiboUploader } from './weibo/WeiboUploader';
 import { R2Uploader } from './r2/R2Uploader';
-import { TCLUploader } from './tcl/TCLUploader';
+
 import { JDUploader } from './jd/JDUploader';
 import { NowcoderUploader } from './nowcoder/NowcoderUploader';
 import { QiyuUploader } from './qiyu/QiyuUploader';
@@ -24,8 +24,7 @@ export function initializeUploaders(): void {
   // 注册 R2 上传器
   UploaderFactory.register('r2', () => new R2Uploader());
 
-  // 注册 TCL 上传器
-  UploaderFactory.register('tcl', () => new TCLUploader());
+
 
   // 注册京东上传器
   UploaderFactory.register('jd', () => new JDUploader());
@@ -49,7 +48,7 @@ export function initializeUploaders(): void {
 // 导出所有上传器
 export { WeiboUploader } from './weibo';
 export { R2Uploader } from './r2';
-export { TCLUploader } from './tcl';
+
 export { JDUploader } from './jd';
 export { NowcoderUploader } from './nowcoder';
 export { QiyuUploader } from './qiyu';

@@ -82,8 +82,7 @@ fn main() {
             commands::upload::upload_file_stream,
             commands::upload::test_weibo_connection,
             commands::r2::upload_to_r2,
-            commands::tcl::upload_to_tcl,
-            commands::tcl::check_tcl_available,
+
             commands::jd::upload_to_jd,
             commands::jd::check_jd_available,
             commands::nowcoder::upload_to_nowcoder,

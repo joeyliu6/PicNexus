@@ -24,7 +24,7 @@ import {
 export interface IUploader {
   /**
    * 图床服务唯一标识符
-   * 示例: 'weibo', 'r2', 'nami', 'jd', 'tcl', 'nowcoder'
+   * 示例: 'weibo', 'r2', 'nami', 'jd', 'nowcoder'
    */
   readonly serviceId: string;
 

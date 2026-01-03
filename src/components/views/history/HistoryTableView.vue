@@ -202,7 +202,7 @@ const getServiceName = (serviceId: ServiceType): string => {
   const serviceNames: Record<ServiceType, string> = {
     weibo: '微博',
     r2: 'R2',
-    tcl: 'TCL',
+
     jd: '京东',
     nowcoder: '牛客',
     qiyu: '七鱼',

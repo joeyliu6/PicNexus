@@ -7,7 +7,7 @@ import { UserConfig, ServiceType } from '../config/types';
 import { StructuredError, UploadErrorCode, createStructuredError } from '../uploaders/base/ErrorTypes';
 import { convertToStructuredWeiboError } from '../uploaders/weibo/WeiboError';
 import { convertToStructuredR2Error } from '../uploaders/r2/R2Error';
-import { convertToTCLError } from '../uploaders/tcl/TCLError';
+
 import { convertToJDError } from '../uploaders/jd/JDError';
 import { convertToNamiError } from '../uploaders/nami/NamiError';
 import { getServiceSemaphore } from '../utils/semaphore';
@@ -113,8 +113,7 @@ export class MultiServiceUploader {
 
     // 创建所有上传任务
     // 将 TCL 和其他服务分开处理
-    const tclTasks: (() => Promise<SingleServiceResult>)[] = [];
-    const otherTasks: (() => Promise<SingleServiceResult>)[] = [];
+    const uploadTasks: (() => Promise<SingleServiceResult>)[] = [];
 
     validServices.forEach((serviceId) => {
       const task = async () => {
@@ -128,80 +127,78 @@ export class MultiServiceUploader {
             const uploader = UploaderFactory.create(serviceId);
             const serviceConfig = config.services[serviceId];
 
-          // 立即触发进度回调,显示"开始上传"状态
-          if (onProgress) {
-            onProgress(serviceId, 0, '准备上传...', 0, 2);
+            // 立即触发进度回调,显示"开始上传"状态
+            if (onProgress) {
+              onProgress(serviceId, 0, '准备上传...', 0, 2);
+            }
+
+            // 验证配置
+            const validation = await uploader.validateConfig(serviceConfig);
+            if (!validation.valid) {
+              throw new Error(`配置验证失败: ${validation.errors?.join(', ')}`);
+            }
+
+            // 配置验证通过,更新进度
+            if (onProgress) {
+              onProgress(serviceId, 10, '开始上传...', 1, 2);
+            }
+
+            // 上传
+            const result = await uploader.upload(
+              filePath,
+              { config: serviceConfig },
+              onProgress ? (percent, step, stepIndex, totalSteps) => {
+                onProgress(serviceId, percent, step, stepIndex, totalSteps);
+              } : undefined
+            );
+
+            console.log(`[MultiUploader] ${serviceId} 上传成功`);
+            taskResult = {
+              serviceId,
+              result,
+              status: 'success' as const
+            };
+          } catch (error) {
+            // 转换为结构化错误
+            let structuredError: StructuredError;
+
+            switch (serviceId) {
+              case 'weibo':
+                structuredError = convertToStructuredWeiboError(error);
+                break;
+              case 'r2':
+                structuredError = convertToStructuredR2Error(error);
+                break;
+
+              case 'jd':
+                structuredError = convertToJDError(error);
+                break;
+              case 'nami':
+                structuredError = convertToNamiError(error);
+                break;
+              default:
+                // 其他图床使用通用错误
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                structuredError = createStructuredError(
+                  UploadErrorCode.UPLOAD_FAILED,
+                  `${serviceId} 上传失败: ${errorMsg}`,
+                  {
+                    details: errorMsg,
+                    retryable: true,
+                    originalError: error,
+                    serviceId
+                  }
+                );
+            }
+
+            console.error(`[MultiUploader] ${serviceId} 上传失败:`, structuredError);
+            taskResult = {
+              serviceId,
+              status: 'failed' as const,
+              error: structuredError.message,
+              structuredError
+            };
           }
-
-          // 验证配置
-          const validation = await uploader.validateConfig(serviceConfig);
-          if (!validation.valid) {
-            throw new Error(`配置验证失败: ${validation.errors?.join(', ')}`);
-          }
-
-          // 配置验证通过,更新进度
-          if (onProgress) {
-            onProgress(serviceId, 10, '开始上传...', 1, 2);
-          }
-
-          // 上传
-          const result = await uploader.upload(
-            filePath,
-            { config: serviceConfig },
-            onProgress ? (percent, step, stepIndex, totalSteps) => {
-              onProgress(serviceId, percent, step, stepIndex, totalSteps);
-            } : undefined
-          );
-
-          console.log(`[MultiUploader] ${serviceId} 上传成功`);
-          taskResult = {
-            serviceId,
-            result,
-            status: 'success' as const
-          };
-        } catch (error) {
-          // 转换为结构化错误
-          let structuredError: StructuredError;
-
-          switch (serviceId) {
-            case 'weibo':
-              structuredError = convertToStructuredWeiboError(error);
-              break;
-            case 'r2':
-              structuredError = convertToStructuredR2Error(error);
-              break;
-            case 'tcl':
-              structuredError = convertToTCLError(error);
-              break;
-            case 'jd':
-              structuredError = convertToJDError(error);
-              break;
-            case 'nami':
-              structuredError = convertToNamiError(error);
-              break;
-            default:
-              // 其他图床使用通用错误
-              const errorMsg = error instanceof Error ? error.message : String(error);
-              structuredError = createStructuredError(
-                UploadErrorCode.UPLOAD_FAILED,
-                `${serviceId} 上传失败: ${errorMsg}`,
-                {
-                  details: errorMsg,
-                  retryable: true,
-                  originalError: error,
-                  serviceId
-                }
-              );
-          }
-
-          console.error(`[MultiUploader] ${serviceId} 上传失败:`, structuredError);
-          taskResult = {
-            serviceId,
-            status: 'failed' as const,
-            error: structuredError.message,
-            structuredError
-          };
-        }
 
           // 关键：任务完成后立即通知回调，实现实时 UI 更新
           if (onServiceResult) {
@@ -212,71 +209,12 @@ export class MultiServiceUploader {
         }); // withPermit 结束
       };
 
-      if (serviceId === 'tcl') {
-        tclTasks.push(task);
-      } else {
-        otherTasks.push(task);
-      }
+      uploadTasks.push(task);
     });
 
     // 3. 并发执行逻辑优化
     // 启动所有任务
-    const tclPromises = tclTasks.map(task => task());
-    const otherPromises = otherTasks.map(task => task());
-
-    let uploadResults: SingleServiceResult[] = [];
-
-    // 等待非 TCL 图床完成
-    const otherResults = await Promise.all(otherPromises);
-    const hasSuccess = otherResults.some(r => r.status === 'success');
-
-    if (hasSuccess) {
-      // 场景 A：其他图床有成功的
-      // 立即返回结果，TCL 继续在后台运行（火后不管）
-      // 注意：TCL 的结果可能还没出来，不包含在返回列表里
-      console.log('[MultiUploader] 其他图床上传成功，TCL 转入后台运行');
-      uploadResults = otherResults;
-
-      // 后台等待 TCL 完成，并通过回调通知结果
-      Promise.all(tclPromises).then(tclResults => {
-        const tclSuccess = tclResults.filter(r => r.status === 'success').length;
-        const tclFailed = tclResults.filter(r => r.status === 'failed').length;
-        console.log(`[MultiUploader] 后台 TCL 上传完成: ${tclSuccess} 成功 / ${tclFailed} 失败 / ${tclResults.length} 总数`);
-
-        // 通过回调通知每个 TCL 任务的结果，确保历史记录能正确记录
-        // 这样 handleServiceResult 会被调用，addResultToHistoryItem 也会触发
-        tclResults.forEach(result => {
-          if (onServiceResult) {
-            onServiceResult(result);
-          }
-        });
-      }).catch(err => {
-        console.error('[MultiUploader] 后台 TCL 任务异常:', err);
-        // 构造一个失败结果通知调用方
-        const failedResult: SingleServiceResult = {
-          serviceId: 'tcl',
-          status: 'failed',
-          error: `TCL 后台上传异常: ${err?.message || String(err)}`
-        };
-        if (onServiceResult) {
-          onServiceResult(failedResult);
-        }
-      });
-
-    } else {
-      // 场景 B：其他图床全部失败（或没有其他图床）
-      // 必须等待 TCL 完成，否则用户也是失败
-      if (tclPromises.length > 0) {
-        if (otherResults.length > 0) {
-          console.log('[MultiUploader] 其他图床全部失败，等待 TCL 结果...');
-        }
-        const tclResults = await Promise.all(tclPromises);
-        uploadResults = [...otherResults, ...tclResults];
-      } else {
-        // 没有 TCL 也没有成功的其他图床
-        uploadResults = otherResults;
-      }
-    }
+    const uploadResults = await Promise.all(uploadTasks.map(task => task()));
 
     // 4. 确定主力图床（第一个成功的）
     const primaryResult = uploadResults.find(r => r.status === 'success');
@@ -377,7 +315,7 @@ export class MultiServiceUploader {
 
       // TCL、京东和七鱼图床无需配置，直接返回 true
       // 七鱼的 Token 由后端自动获取，Chrome 检测在 validateConfig 中进行
-      if (serviceId === 'tcl' || serviceId === 'jd' || serviceId === 'qiyu') {
+      if (serviceId === 'jd' || serviceId === 'qiyu') {
         return true;
       }
 

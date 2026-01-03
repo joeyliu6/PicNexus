@@ -51,7 +51,7 @@ export interface AnalyticsConfig {
 /**
  * 支持的图床服务类型
  */
-export type ServiceType = 'weibo' | 'r2' | 'jd' | 'tcl' | 'nowcoder' | 'qiyu' | 'zhihu' | 'nami';
+export type ServiceType = 'weibo' | 'r2' | 'jd' | 'nowcoder' | 'qiyu' | 'zhihu' | 'nami';
 
 /**
  * 私有图床服务列表
@@ -63,7 +63,7 @@ export const PRIVATE_SERVICES: ServiceType[] = ['r2'];
  * 公共图床服务列表
  * 使用公共平台的存储服务
  */
-export const PUBLIC_SERVICES: ServiceType[] = ['weibo', 'zhihu', 'nami', 'qiyu', 'jd', 'tcl', 'nowcoder'];
+export const PUBLIC_SERVICES: ServiceType[] = ['weibo', 'zhihu', 'nami', 'qiyu', 'jd', 'nowcoder'];
 
 /**
  * 基础服务配置接口
@@ -112,13 +112,7 @@ export interface JDServiceConfig extends BaseServiceConfig {
   // 京东图床不需要额外配置
 }
 
-/**
- * TCL 图床服务配置
- * TCL 图床无需认证
- */
-export interface TCLServiceConfig extends BaseServiceConfig {
-  // TCL 图床不需要额外配置
-}
+
 
 /**
  * 牛客图床服务配置
@@ -293,7 +287,7 @@ export interface UserConfig {
     weibo?: WeiboServiceConfig;
     r2?: R2ServiceConfig;
     jd?: JDServiceConfig;
-    tcl?: TCLServiceConfig;
+
     nowcoder?: NowcoderServiceConfig;
     qiyu?: QiyuServiceConfig;
     zhihu?: ZhihuServiceConfig;
@@ -420,8 +414,8 @@ export interface HistoryItem {
  * 默认配置
  */
 export const DEFAULT_CONFIG: UserConfig = {
-  enabledServices: ['tcl', 'jd'],  // 默认启用 TCL 和 JD 图床（开箱即用）
-  availableServices: ['weibo', 'r2', 'tcl', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami'],  // 默认所有图床都可用
+  enabledServices: ['jd'],  // 默认启用 JD 图床（开箱即用）
+  availableServices: ['weibo', 'r2', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami'],  // 默认所有图床都可用
   services: {
     weibo: {
       enabled: true,
@@ -436,9 +430,7 @@ export const DEFAULT_CONFIG: UserConfig = {
       path: '',
       publicDomain: ''
     },
-    tcl: {
-      enabled: true  // TCL 图床默认启用，无需额外配置
-    },
+
     jd: {
       enabled: true  // 京东图床默认启用，无需额外配置
     },
@@ -504,7 +496,7 @@ export function sanitizeConfig(config: UserConfig): UserConfig {
         secretAccessKey: sanitizeString(config.services.r2.secretAccessKey, 0, 0)
       } : undefined,
       jd: config.services.jd,  // JD 无需清洗，没有敏感信息
-      tcl: config.services.tcl,
+
       nowcoder: config.services.nowcoder ? {
         ...config.services.nowcoder,
         cookie: sanitizeString(config.services.nowcoder.cookie, 8, 4)

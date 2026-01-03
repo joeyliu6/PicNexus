@@ -44,7 +44,7 @@ const serviceOptions = [
   { label: '全部图床', value: 'all' },
   { label: '微博', value: 'weibo' },
   { label: 'R2', value: 'r2' },
-  { label: 'TCL', value: 'tcl' },
+
   { label: '京东', value: 'jd' },
   { label: '牛客', value: 'nowcoder' },
   { label: '七鱼', value: 'qiyu' },
