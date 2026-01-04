@@ -57,18 +57,24 @@ const retryService = new RetryService({
 const serviceLabels: Record<ServiceType, string> = {
   weibo: '微博',
   r2: 'R2',
-
   jd: '京东',
   nowcoder: '牛客',
   qiyu: '七鱼',
   zhihu: '知乎',
   nami: '纳米',
-  bilibili: '哔哩哔哩',
-  chaoxing: '超星'
+  bilibili: 'B站',
+  chaoxing: '超星',
+  smms: 'SM.MS',
+  github: 'GitHub',
+  imgur: 'Imgur',
+  cos: '腾讯云',
+  oss: '阿里云',
+  qiniu: '七牛云',
+  upyun: '又拍云'
 };
 
 // 所有服务列表
-const allServices: ServiceType[] = ['weibo', 'r2', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami', 'bilibili', 'chaoxing'];
+const allServices: ServiceType[] = ['weibo', 'r2', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami', 'bilibili', 'chaoxing', 'smms', 'github', 'imgur', 'cos', 'oss', 'qiniu', 'upyun'];
 
 // 可见的服务（在可用服务列表中的）
 const visibleServices = computed(() => {

@@ -1,4 +1,4 @@
-// src/composables/useUpload.ts
+﻿// src/composables/useUpload.ts
 // 上传管理 Composable - 封装文件选择、上传、历史记录保存等功能
 
 import { ref, Ref, computed } from 'vue';
@@ -126,7 +126,14 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     zhihu: false,
     nami: false,
     bilibili: false,
-    chaoxing: false
+    chaoxing: false,
+    smms: false,
+    github: false,
+    imgur: false,
+    cos: false,
+    oss: false,
+    qiniu: false,
+    upyun: false
   });
 
   // 当前活跃的链接前缀
@@ -955,6 +962,57 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     // 超星
     const chaoxingConfig = config.services.chaoxing;
     serviceConfigStatus.value.chaoxing = !!chaoxingConfig?.cookie && chaoxingConfig.cookie.trim().length > 0;
+    // SM.MS
+    const smmsConfig = config.services.smms;
+    serviceConfigStatus.value.smms = !!smmsConfig?.token && smmsConfig.token.trim().length > 0;
+
+    // GitHub
+    const githubConfig = config.services.github;
+    serviceConfigStatus.value.github = !!(
+      githubConfig?.token &&
+      githubConfig.owner &&
+      githubConfig.repo
+    );
+
+    // Imgur
+    const imgurConfig = config.services.imgur;
+    serviceConfigStatus.value.imgur = !!imgurConfig?.clientId && imgurConfig.clientId.trim().length > 0;
+
+    // 鑵捐浜?COS
+    const cosConfig = config.services.cos;
+    serviceConfigStatus.value.cos = !!(
+      cosConfig?.secretId &&
+      cosConfig.secretKey &&
+      cosConfig.bucket &&
+      cosConfig.region
+    );
+
+    // 闃块噷浜?OSS
+    const ossConfig = config.services.oss;
+    serviceConfigStatus.value.oss = !!(
+      ossConfig?.accessKeyId &&
+      ossConfig.accessKeySecret &&
+      ossConfig.bucket &&
+      ossConfig.region
+    );
+
+    // 涓冪墰浜?
+    const qiniuConfig = config.services.qiniu;
+    serviceConfigStatus.value.qiniu = !!(
+      qiniuConfig?.accessKey &&
+      qiniuConfig.secretKey &&
+      qiniuConfig.bucket &&
+      qiniuConfig.domain
+    );
+
+    // 鍙堟媿浜?
+    const upyunConfig = config.services.upyun;
+    serviceConfigStatus.value.upyun = !!(
+      upyunConfig?.operator &&
+      upyunConfig.password &&
+      upyunConfig.bucket &&
+      upyunConfig.domain
+    );
   }
 
   /**

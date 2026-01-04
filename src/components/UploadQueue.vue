@@ -129,7 +129,14 @@ const serviceNames: Record<ServiceType, string> = {
   zhihu: '知乎',
   nami: '纳米',
   bilibili: 'B站',
-  chaoxing: '超星'
+  chaoxing: '超星',
+  smms: 'SM.MS',
+  github: 'GitHub',
+  imgur: 'Imgur',
+  cos: '腾讯云',
+  oss: '阿里云',
+  qiniu: '七牛云',
+  upyun: '又拍云'
 };
 
 // 渠道图标 SVG（统一灰色 #999999，由 CSS 覆盖为蓝色）

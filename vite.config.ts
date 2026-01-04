@@ -7,15 +7,15 @@ export default defineConfig({
   plugins: [vue()],
   // 防止 vite 警告
   clearScreen: false,
-  // Tauri 期望固定端口
-  server: {
-    port: 1420,
-    strictPort: true,
-    watch: {
-      // 告诉 vite 忽略 `src-tauri` 目录的变化
-      ignored: ["**/src-tauri/**"],
-    },
-  },
+   // Tauri 期望固定端口
+   server: {
+     port: 1420,
+     strictPort: false,
+     watch: {
+       // 告诉 vite 忽略 `src-tauri` 目录的变化
+       ignored: ["**/src-tauri/**"],
+     },
+   },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),

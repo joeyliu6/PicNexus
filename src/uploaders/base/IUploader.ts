@@ -93,15 +93,16 @@ export interface IUploader {
    * 测试与图床服务的连接性（可选方法）
    * 用于在设置页面验证配置是否正确
    *
+   * @param config 可选的服务配置，用于验证凭证
    * @returns 测试结果，包含成功状态、延迟、错误信息
    *
    * @example
-   * const test = await uploader.testConnection?.();
+   * const test = await uploader.testConnection?.(config);
    * if (test?.success) {
    *   console.log(`连接成功，延迟: ${test.latency}ms`);
    * } else {
    *   console.error('连接失败:', test?.error);
    * }
    */
-  testConnection?(): Promise<ConnectionTestResult>;
+  testConnection?(config?: any): Promise<ConnectionTestResult>;
 }

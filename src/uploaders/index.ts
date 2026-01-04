@@ -12,6 +12,13 @@ import { ZhihuUploader } from './zhihu/ZhihuUploader';
 import { NamiUploader } from './nami/NamiUploader';
 import { BilibiliUploader } from './bilibili/BilibiliUploader';
 import { ChaoxingUploader } from './chaoxing/ChaoxingUploader';
+import { SmmsUploader } from './smms/SmmsUploader';
+import { GithubUploader } from './github/GithubUploader';
+import { ImgurUploader } from './imgur/ImgurUploader';
+import { CosUploader } from './cos/CosUploader';
+import { OssUploader } from './oss/OssUploader';
+import { QiniuUploader } from './qiniu/QiniuUploader';
+import { UpyunUploader } from './upyun/UpyunUploader';
 
 /**
  * 初始化所有上传器
@@ -49,6 +56,27 @@ export function initializeUploaders(): void {
   // 注册超星上传器
   UploaderFactory.register('chaoxing', () => new ChaoxingUploader());
 
+  // 注册 SM.MS 上传器
+  UploaderFactory.register('smms', () => new SmmsUploader());
+
+  // 注册 GitHub 上传器
+  UploaderFactory.register('github', () => new GithubUploader());
+
+  // 注册 Imgur 上传器
+  UploaderFactory.register('imgur', () => new ImgurUploader());
+
+  // 注册腾讯云 COS 上传器
+  UploaderFactory.register('cos', () => new CosUploader());
+
+  // 注册阿里云 OSS 上传器
+  UploaderFactory.register('oss', () => new OssUploader());
+
+  // 注册七牛云上传器
+  UploaderFactory.register('qiniu', () => new QiniuUploader());
+
+  // 注册又拍云上传器
+  UploaderFactory.register('upyun', () => new UpyunUploader());
+
   const registered = UploaderFactory.getAvailableServices();
   console.log('[Uploaders] 已注册的上传器:', registered);
 }
@@ -64,4 +92,12 @@ export { ZhihuUploader } from './zhihu';
 export { NamiUploader } from './nami';
 export { BilibiliUploader } from './bilibili';
 export { ChaoxingUploader } from './chaoxing';
+export { SmmsUploader } from './smms';
+export { GithubUploader } from './github';
+export { ImgurUploader } from './imgur';
+export { CosUploader } from './cos';
+export { OssUploader } from './oss';
+export { QiniuUploader } from './qiniu';
+export { UpyunUploader } from './upyun';
 export { UploaderFactory } from './base/UploaderFactory';
+

@@ -104,7 +104,9 @@ export class RetryService {
       const serviceLabels: Record<ServiceType, string> = {
         weibo: '微博', r2: 'R2', jd: '京东',
         nowcoder: '牛客', qiyu: '七鱼', zhihu: '知乎', nami: '纳米',
-        bilibili: '哔哩哔哩', chaoxing: '超星'
+        bilibili: '哔哩哔哩', chaoxing: '超星',
+        smms: 'SM.MS', github: 'GitHub', imgur: 'Imgur',
+        cos: '腾讯云 COS', oss: '阿里云 OSS', qiniu: '七牛云', upyun: '又拍云'
       };
       this.options.toast.success('修复成功', `${serviceLabels[serviceId]} 已补充上传成功`);
 
@@ -387,7 +389,9 @@ export class RetryService {
     const serviceLabels: Record<ServiceType, string> = {
       weibo: '微博', r2: 'R2', jd: '京东',
       nowcoder: '牛客', qiyu: '七鱼', zhihu: '知乎', nami: '纳米',
-      bilibili: '哔哩哔哩', chaoxing: '超星'
+      bilibili: '哔哩哔哩', chaoxing: '超星',
+      smms: 'SM.MS', github: 'GitHub', imgur: 'Imgur',
+      cos: '腾讯云 COS', oss: '阿里云 OSS', qiniu: '七牛云', upyun: '又拍云'
     };
     this.options.toast.error('重试依然失败', `${serviceLabels[serviceId]}: ${errorMsg}`);
   }

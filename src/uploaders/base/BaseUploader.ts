@@ -222,8 +222,9 @@ export abstract class BaseUploader implements IUploader {
   /**
    * 测试连接（默认实现，子类可覆盖）
    * 默认返回未实现
+   * @param config 可选的服务配置，用于验证凭证
    */
-  async testConnection(): Promise<ConnectionTestResult> {
+  async testConnection(_config?: any): Promise<ConnectionTestResult> {
     return {
       success: false,
       error: '此服务暂未实现连接测试'

@@ -78,12 +78,17 @@ const activeTab = ref<SettingsTab>('general');
 const tabs = [
   { id: 'general', label: '常规设置', icon: 'pi pi-cog' },
   { type: 'separator' },
-  { type: 'label', label: '私有图床' },
+  { type: 'label', label: '私有云存储' },
   { id: 'r2', label: 'Cloudflare R2', icon: 'pi pi-cloud' },
+  { id: 'cos', label: '腾讯云 COS', icon: 'pi pi-cloud' },
+  { id: 'oss', label: '阿里云 OSS', icon: 'pi pi-cloud' },
+  { id: 'qiniu', label: '七牛云', icon: 'pi pi-cloud' },
+  { id: 'upyun', label: '又拍云', icon: 'pi pi-cloud' },
   { type: 'separator' },
   { type: 'label', label: '公共图床' },
   { id: 'builtin', label: '开箱即用', icon: 'pi pi-box' },
   { id: 'cookie_auth', label: 'Cookie 认证', icon: 'pi pi-key' },
+  { id: 'token_auth', label: 'Token 认证', icon: 'pi pi-key' },
   { type: 'separator' },
   { type: 'label', label: '高级' },
   { id: 'links', label: '链接前缀', icon: 'pi pi-link' },
@@ -109,11 +114,18 @@ const handleThemeChange = async (mode: ThemeMode) => {
 const formData = ref({
   weiboCookie: '',
   r2: { accountId: '', accessKeyId: '', secretAccessKey: '', bucketName: '', path: '', publicDomain: '' },
+  cos: { secretId: '', secretKey: '', region: '', bucket: '', path: '', publicDomain: '' },
+  oss: { accessKeyId: '', accessKeySecret: '', region: '', bucket: '', path: '', publicDomain: '' },
+  qiniu: { accessKey: '', secretKey: '', region: '', bucket: '', domain: '', path: '' },
+  upyun: { operator: '', password: '', bucket: '', domain: '', path: '' },
   nowcoder: { cookie: '' },
   zhihu: { cookie: '' },
   nami: { cookie: '' },
   bilibili: { cookie: '' },
   chaoxing: { cookie: '' },
+  smms: { token: '' },
+  github: { token: '', owner: '', repo: '', branch: 'main', path: 'images/' },
+  imgur: { clientId: '', clientSecret: '' },
   webdav: { profiles: [] as Array<{ id: string; name: string; url: string; username: string; password: string; passwordEncrypted?: string; remotePath: string }>, activeId: null as string | null },
   linkPrefixEnabled: true,
   selectedPrefixIndex: 0,
@@ -122,14 +134,78 @@ const formData = ref({
   defaultHistoryViewMode: 'grid' as 'table' | 'grid'
 });
 
-// 服务列表
-const availableServices = ref<ServiceType[]>(['weibo', 'r2', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami', 'bilibili', 'chaoxing']);
-const serviceNames: Record<ServiceType, string> = {
-  weibo: '微博', r2: 'R2', jd: '京东', nowcoder: '牛客', qiyu: '七鱼', zhihu: '知乎', nami: '纳米', bilibili: '哔哩哔哩', chaoxing: '超星'
-};
+// Token 认证图床测试（SM.MS、Imgur）
+async function testTokenConnection(serviceId: string, token: string) {
+  try {
+    if (serviceId === 'smms') {
+      await fetch('https://sm.ms/api/v2/upload', {
+        method: 'POST',
+        headers: { 'Authorization': token }
+      }).then(res => {
+        if (!res.ok) throw new Error('Token 无效');
+        return res.text();
+      });
+    } else if (serviceId === 'imgur') {
+      await fetch('https://api.imgur.com/3/account/albums', {
+        headers: { 'Authorization': `Client-ID ${token}` }
+      }).then(res => {
+        if (!res.ok) throw new Error('Client ID 无效');
+        return res.text();
+      });
+    }
+    toast.success('认证成功', `${serviceNames[serviceId as ServiceType]} Token 验证成功`);
+  } catch (error) {
+    toast.error('认证失败', `${serviceNames[serviceId as ServiceType]} Token 验证失败：${String(error)}`);
+    throw error;
+  }
+}
 
-// 测试状态
-const testingConnections = ref<Record<string, boolean>>({ weibo: false, r2: false, nowcoder: false, zhihu: false, nami: false, bilibili: false, chaoxing: false, webdav: false });
+// GitHub 测试
+async function testGitHubConnection() {
+  try {
+    const config = formData.value.github;
+    await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}`, {
+      headers: { 'Authorization': `token ${config.token}`, 'User-Agent': 'PicNexus' }
+    }).then(res => {
+      if (!res.ok) throw new Error('验证失败');
+      return res.json();
+    });
+    toast.success('连接成功', 'GitHub 仓库访问正常');
+  } catch (error) {
+    toast.error('连接失败', `GitHub 连接失败：${String(error)}`);
+    throw error;
+  }
+}
+
+// 测试连接状态
+const testingConnections = ref<Record<string, boolean>>({ 
+  weibo: false, r2: false, cos: false, oss: false, qiniu: false, upyun: false,
+  nowcoder: false, zhihu: false, nami: false, bilibili: false, chaoxing: false, 
+  smms: false, github: false, imgur: false, webdav: false
+});
+
+// 可用服务列表（用于用户选择启用哪些图床）
+const availableServices = ref<ServiceType[]>([]);
+
+// 图床名称映射
+const serviceNames: Record<ServiceType, string> = {
+  weibo: '微博',
+  r2: 'R2',
+  jd: '京东',
+  nowcoder: '牛客',
+  qiyu: '七鱼',
+  zhihu: '知乎',
+  nami: '纳米',
+  bilibili: 'B站',
+  chaoxing: '超星',
+  smms: 'SM.MS',
+  github: 'GitHub',
+  imgur: 'Imgur',
+  cos: '腾讯云',
+  oss: '阿里云',
+  qiniu: '七牛云',
+  upyun: '又拍云'
+};
 
 // 七鱼可用性检测（完整检测：实际获取 Token）
 const qiyuAvailable = ref(false);
@@ -251,6 +327,60 @@ const loadSettings = async () => {
       publicDomain: cfg.services?.r2?.publicDomain || ''
     };
 
+    // 新云存储配置
+    formData.value.cos = {
+      secretId: cfg.services?.cos?.secretId || '',
+      secretKey: cfg.services?.cos?.secretKey || '',
+      region: cfg.services?.cos?.region || '',
+      bucket: cfg.services?.cos?.bucket || '',
+      path: cfg.services?.cos?.path || 'images/',
+      publicDomain: cfg.services?.cos?.publicDomain || ''
+    };
+
+    formData.value.oss = {
+      accessKeyId: cfg.services?.oss?.accessKeyId || '',
+      accessKeySecret: cfg.services?.oss?.accessKeySecret || '',
+      region: cfg.services?.oss?.region || '',
+      bucket: cfg.services?.oss?.bucket || '',
+      path: cfg.services?.oss?.path || 'images/',
+      publicDomain: cfg.services?.oss?.publicDomain || ''
+    };
+
+    formData.value.qiniu = {
+      accessKey: cfg.services?.qiniu?.accessKey || '',
+      secretKey: cfg.services?.qiniu?.secretKey || '',
+      region: cfg.services?.qiniu?.region || '',
+      bucket: cfg.services?.qiniu?.bucket || '',
+      domain: cfg.services?.qiniu?.domain || '',
+      path: cfg.services?.qiniu?.path || 'images/'
+    };
+
+    formData.value.upyun = {
+      operator: cfg.services?.upyun?.operator || '',
+      password: cfg.services?.upyun?.password || '',
+      bucket: cfg.services?.upyun?.bucket || '',
+      domain: cfg.services?.upyun?.domain || '',
+      path: cfg.services?.upyun?.path || 'images/'
+    };
+
+    // Token 认证图床配置
+    formData.value.smms = {
+      token: cfg.services?.smms?.token || ''
+    };
+
+    formData.value.github = {
+      token: cfg.services?.github?.token || '',
+      owner: cfg.services?.github?.owner || '',
+      repo: cfg.services?.github?.repo || '',
+      branch: cfg.services?.github?.branch || 'main',
+      path: cfg.services?.github?.path || 'images/'
+    };
+
+    formData.value.imgur = {
+      clientId: cfg.services?.imgur?.clientId || '',
+      clientSecret: cfg.services?.imgur?.clientSecret || ''
+    };
+
     formData.value.nowcoder.cookie = cfg.services?.nowcoder?.cookie || '';
     formData.value.zhihu.cookie = cfg.services?.zhihu?.cookie || '';
     formData.value.nami.cookie = cfg.services?.nami?.cookie || '';
@@ -320,7 +450,14 @@ const saveSettings = async (silent = false) => {
         zhihu: { enabled: currentConfig.services?.zhihu?.enabled ?? false, cookie: formData.value.zhihu.cookie.trim() },
         nami: { enabled: currentConfig.services?.nami?.enabled ?? false, cookie: formData.value.nami.cookie.trim(), authToken: '' },
         bilibili: { enabled: currentConfig.services?.bilibili?.enabled ?? false, cookie: formData.value.bilibili.cookie.trim() },
-        chaoxing: { enabled: currentConfig.services?.chaoxing?.enabled ?? false, cookie: formData.value.chaoxing.cookie.trim() }
+        chaoxing: { enabled: currentConfig.services?.chaoxing?.enabled ?? false, cookie: formData.value.chaoxing.cookie.trim() },
+        cos: { ...formData.value.cos, enabled: currentConfig.services?.cos?.enabled ?? false },
+        oss: { ...formData.value.oss, enabled: currentConfig.services?.oss?.enabled ?? false },
+        qiniu: { ...formData.value.qiniu, enabled: currentConfig.services?.qiniu?.enabled ?? false },
+        upyun: { ...formData.value.upyun, enabled: currentConfig.services?.upyun?.enabled ?? false },
+        smms: { ...formData.value.smms, enabled: currentConfig.services?.smms?.enabled ?? false },
+        github: { ...formData.value.github, enabled: currentConfig.services?.github?.enabled ?? false },
+        imgur: { ...formData.value.imgur, enabled: currentConfig.services?.imgur?.enabled ?? false }
       },
       webdav: webdavConfig,
       linkPrefixConfig: {
@@ -354,15 +491,58 @@ const testConn = async (key: string, fn: () => Promise<any>) => {
 };
 
 // 具体测试方法
+// S3 兼容存储测试（COS、OSS、七牛、又拍）
+async function testS3Connection(serviceId: string) {
+  try {
+    const config = formData.value[serviceId as keyof typeof formData.value] as any;
+    
+    // 构建正确的 endpoint
+    let endpoint: string;
+    if (serviceId === 'cos') {
+      endpoint = `https://cos.${config.region}.myqcloud.com`;
+    } else if (serviceId === 'oss') {
+      endpoint = `https://oss-${config.region}.aliyuncs.com`;
+    } else if (serviceId === 'qiniu') {
+      // 七牛云 S3 兼容端点
+      endpoint = `https://s3-${config.region || 'cn-east-1'}.qiniucs.com`;
+    } else if (serviceId === 'upyun') {
+      // 又拍云 S3 兼容端点
+      endpoint = 'https://s3.api.upyun.com';
+    } else {
+      endpoint = config.domain || 'https://s3.amazonaws.com';
+    }
+    
+    await invoke('list_s3_objects', {
+      endpoint,
+      accessKey: serviceId === 'upyun' ? config.operator : config.accessKey || config.accessKeyId,
+      secretKey: serviceId === 'upyun' ? config.password : config.secretKey || config.accessKeySecret,
+      region: config.region || 'auto',
+      bucket: config.bucket,
+      maxKeys: 1
+    });
+    toast.success('连接成功', `${serviceNames[serviceId as ServiceType]} 连接测试成功`);
+  } catch (error) {
+    toast.error('连接失败', `${serviceNames[serviceId as ServiceType]} 连接失败：${String(error)}`);
+    throw error;
+  }
+}
+
 const actions = {
   weibo: () => testConn('weibo', () => configManager.testWeiboConnection(formData.value.weiboCookie)),
   r2: () => testConn('r2', () => configManager.testR2Connection(formData.value.r2)),
+  cos: () => testS3Connection('cos'),
+  oss: () => testS3Connection('oss'),
+  qiniu: () => testS3Connection('qiniu'),
+  upyun: () => testS3Connection('upyun'),
   nowcoder: () => testConn('nowcoder', () => configManager.testNowcoderConnection(formData.value.nowcoder.cookie)),
   zhihu: () => testConn('zhihu', () => configManager.testZhihuConnection(formData.value.zhihu.cookie)),
   nami: () => testConn('nami', () => configManager.testNamiConnection(formData.value.nami.cookie)),
   bilibili: () => testConn('bilibili', () => configManager.testBilibiliConnection(formData.value.bilibili.cookie)),
   chaoxing: () => testConn('chaoxing', () => configManager.testChaoxingConnection(formData.value.chaoxing.cookie)),
-  webdav: () => testConn('webdav', () => configManager.testWebDAVConnection(formData.value.webdav)),
+  smms: () => testConn('smms', () => testTokenConnection('smms', formData.value.smms.token)),
+  github: () => testConn('github', testGitHubConnection),
+  imgur: () => testConn('imgur', () => testTokenConnection('imgur', formData.value.imgur.clientId)),
+  webdav: () => testConn('webdav', () => configManager.testWebDAVConnection(activeWebDAVProfile.value)),
   login: (svc: ServiceType) => configManager.openCookieWebView(svc)
 };
 
@@ -2174,6 +2354,160 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <!-- 腾讯云 COS -->
+      <div v-if="activeTab === 'cos'" class="settings-section">
+        <div class="section-header">
+          <h2>腾讯云 COS</h2>
+          <p class="section-desc">腾讯云对象存储，支持数据万象处理。</p>
+        </div>
+
+        <div class="form-grid">
+            <div class="form-item">
+                <label>Secret ID</label>
+                <Password v-model="formData.cos.secretId" @blur="saveSettings" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item">
+                <label>Secret Key</label>
+                <Password v-model="formData.cos.secretKey" @blur="saveSettings" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item">
+                <label>地域 (Region)</label>
+                <InputText v-model="formData.cos.region" @blur="saveSettings" placeholder="ap-guangzhou" class="w-full" />
+            </div>
+            <div class="form-item">
+                <label>存储桶 (Bucket)</label>
+                <InputText v-model="formData.cos.bucket" @blur="saveSettings" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+                <label>自定义路径 (Optional)</label>
+                <InputText v-model="formData.cos.path" @blur="saveSettings" placeholder="e.g. blog/images/" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+                <label>公开访问域名 (Public Domain)</label>
+                <InputText v-model="formData.cos.publicDomain" @blur="saveSettings" placeholder="https://images.example.com" class="w-full" />
+            </div>
+        </div>
+
+        <div class="actions-row mt-4">
+            <Button label="测试 COS 连接" icon="pi pi-check" @click="actions.cos" :loading="testingConnections.cos" severity="secondary" outlined size="small" />
+        </div>
+      </div>
+
+      <!-- 阿里云 OSS -->
+      <div v-if="activeTab === 'oss'" class="settings-section">
+        <div class="section-header">
+          <h2>阿里云 OSS</h2>
+          <p class="section-desc">阿里云对象存储，支持图片处理服务。</p>
+        </div>
+
+        <div class="form-grid">
+            <div class="form-item">
+                <label>Access Key ID</label>
+                <Password v-model="formData.oss.accessKeyId" @blur="saveSettings" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item">
+                <label>Access Key Secret</label>
+                <Password v-model="formData.oss.accessKeySecret" @blur="saveSettings" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item">
+                <label>地域 (Region)</label>
+                <InputText v-model="formData.oss.region" @blur="saveSettings" placeholder="oss-cn-hangzhou" class="w-full" />
+            </div>
+            <div class="form-item">
+                <label>存储桶 (Bucket)</label>
+                <InputText v-model="formData.oss.bucket" @blur="saveSettings" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+                <label>自定义路径 (Optional)</label>
+                <InputText v-model="formData.oss.path" @blur="saveSettings" placeholder="e.g. blog/images/" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+                <label>公开访问域名 (Public Domain)</label>
+                <InputText v-model="formData.oss.publicDomain" @blur="saveSettings" placeholder="https://images.example.com" class="w-full" />
+            </div>
+        </div>
+
+        <div class="actions-row mt-4">
+            <Button label="测试 OSS 连接" icon="pi pi-check" @click="actions.oss" :loading="testingConnections.oss" severity="secondary" outlined size="small" />
+        </div>
+      </div>
+
+      <!-- 七牛云 -->
+      <div v-if="activeTab === 'qiniu'" class="settings-section">
+        <div class="section-header">
+          <h2>七牛云存储</h2>
+          <p class="section-desc">七牛云对象存储，支持 CDN 加速。</p>
+        </div>
+
+        <div class="form-grid">
+            <div class="form-item">
+                <label>Access Key (AK)</label>
+                <Password v-model="formData.qiniu.accessKey" @blur="saveSettings" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item">
+                <label>Secret Key (SK)</label>
+                <Password v-model="formData.qiniu.secretKey" @blur="saveSettings" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item">
+                <label>地域 (Region)</label>
+                <InputText v-model="formData.qiniu.region" @blur="saveSettings" placeholder="cn-east-1" class="w-full" />
+                <small class="text-gray-500 mt-1">七牛云区域代码，如 cn-east-1、cn-south-1 等</small>
+            </div>
+            <div class="form-item">
+                <label>存储桶 (Bucket)</label>
+                <InputText v-model="formData.qiniu.bucket" @blur="saveSettings" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+                <label>绑定域名 (Domain)</label>
+                <InputText v-model="formData.qiniu.domain" @blur="saveSettings" placeholder="https://images.example.com" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+                <label>自定义路径 (Optional)</label>
+                <InputText v-model="formData.qiniu.path" @blur="saveSettings" placeholder="e.g. blog/images/" class="w-full" />
+            </div>
+        </div>
+
+        <div class="actions-row mt-4">
+            <Button label="测试七牛云连接" icon="pi pi-check" @click="actions.qiniu" :loading="testingConnections.qiniu" severity="secondary" outlined size="small" />
+        </div>
+      </div>
+
+      <!-- 又拍云 -->
+      <div v-if="activeTab === 'upyun'" class="settings-section">
+        <div class="section-header">
+          <h2>又拍云存储</h2>
+          <p class="section-desc">又拍云对象存储，支持图片处理。</p>
+        </div>
+
+        <div class="form-grid">
+            <div class="form-item">
+                <label>Operator</label>
+                <Password v-model="formData.upyun.operator" @blur="saveSettings" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item">
+                <label>Password</label>
+                <Password v-model="formData.upyun.password" @blur="saveSettings" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item span-full">
+                <label>存储桶 (Bucket)</label>
+                <InputText v-model="formData.upyun.bucket" @blur="saveSettings" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+                <label>绑定域名 (Domain)</label>
+                <InputText v-model="formData.upyun.domain" @blur="saveSettings" placeholder="https://images.example.com" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+                <label>自定义路径 (Optional)</label>
+                <InputText v-model="formData.upyun.path" @blur="saveSettings" placeholder="e.g. blog/images/" class="w-full" />
+            </div>
+        </div>
+
+        <div class="actions-row mt-4">
+            <Button label="测试又拍云连接" icon="pi pi-check" @click="actions.upyun" :loading="testingConnections.upyun" severity="secondary" outlined size="small" />
+        </div>
+      </div>
+
+      <!-- 开箱即用 -->
       <div v-if="activeTab === 'builtin'" class="settings-section">
         <div class="section-header">
           <h2>开箱即用</h2>
@@ -2210,6 +2544,90 @@ onUnmounted(() => {
                   @click="!isCheckingQiyu && checkQiyuAvailability(true)"
                 />
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Token 认证 -->
+      <div v-if="activeTab === 'token_auth'" class="settings-section">
+        <div class="section-header">
+          <h2>Token 认证</h2>
+          <p class="section-desc">需要提供 API Token 的图床服务。</p>
+        </div>
+
+        <Divider />
+
+        <!-- SM.MS -->
+        <div class="sub-section">
+          <div class="flex justify-between items-center mb-2">
+            <h3>SM.MS 图床</h3>
+            <div class="actions-mini">
+              <Button label="测试" icon="pi pi-check" @click="actions.smms" :loading="testingConnections.smms" text size="small"/>
+            </div>
+          </div>
+          <div class="form-item">
+            <label>API Token</label>
+            <Password v-model="formData.smms.token" @blur="saveSettings" :feedback="false" toggleMask class="w-full" placeholder="SM.MS API Token" />
+            <small class="text-gray-500 mt-1">获取地址：https://sm.ms/home/apitoken</small>
+          </div>
+        </div>
+
+        <Divider />
+
+        <!-- GitHub -->
+        <div class="sub-section">
+          <div class="flex justify-between items-center mb-2">
+            <h3>GitHub 图床</h3>
+            <div class="actions-mini">
+              <Button label="测试" icon="pi pi-check" @click="actions.github" :loading="testingConnections.github" text size="small"/>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="form-item span-full">
+              <label>Personal Access Token</label>
+              <Password v-model="formData.github.token" @blur="saveSettings" :feedback="false" toggleMask class="w-full" placeholder="ghp_..." />
+              <small class="text-gray-500 mt-1">获取地址：Settings → Developer settings → Personal access tokens</small>
+            </div>
+            <div class="form-item">
+              <label>仓库所有者</label>
+              <InputText v-model="formData.github.owner" @blur="saveSettings" class="w-full" placeholder="username" />
+            </div>
+            <div class="form-item">
+              <label>仓库名称</label>
+              <InputText v-model="formData.github.repo" @blur="saveSettings" class="w-full" placeholder="repo-name" />
+            </div>
+            <div class="form-item">
+              <label>分支名称</label>
+              <InputText v-model="formData.github.branch" @blur="saveSettings" class="w-full" placeholder="main" />
+            </div>
+            <div class="form-item span-full">
+              <label>存储路径</label>
+              <InputText v-model="formData.github.path" @blur="saveSettings" class="w-full" placeholder="images/" />
+            </div>
+          </div>
+        </div>
+
+        <Divider />
+
+        <!-- Imgur -->
+        <div class="sub-section">
+          <div class="flex justify-between items-center mb-2">
+            <h3>Imgur 图床</h3>
+            <div class="actions-mini">
+              <Button label="测试" icon="pi pi-check" @click="actions.imgur" :loading="testingConnections.imgur" text size="small"/>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="form-item span-full">
+              <label>Client ID</label>
+              <Password v-model="formData.imgur.clientId" @blur="saveSettings" :feedback="false" toggleMask class="w-full" placeholder="Client ID" />
+              <small class="text-gray-500 mt-1">获取地址：https://imgur.com/account/settings/apps</small>
+            </div>
+            <div class="form-item span-full">
+              <label>Client Secret (Optional)</label>
+              <Password v-model="formData.imgur.clientSecret" @blur="saveSettings" :feedback="false" toggleMask class="w-full" placeholder="Client Secret" />
+              <small class="text-gray-500 mt-1">匿名上传可不填</small>
             </div>
           </div>
         </div>

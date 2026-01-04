@@ -1,0 +1,1 @@
+export { CosUploader } from './CosUploader';

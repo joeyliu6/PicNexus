@@ -1,0 +1,1 @@
+export { QiniuUploader } from './QiniuUploader';

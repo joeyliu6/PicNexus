@@ -51,19 +51,19 @@ export interface AnalyticsConfig {
 /**
  * 支持的图床服务类型
  */
-export type ServiceType = 'weibo' | 'r2' | 'jd' | 'nowcoder' | 'qiyu' | 'zhihu' | 'nami' | 'bilibili' | 'chaoxing';
+export type ServiceType = 'weibo' | 'r2' | 'jd' | 'nowcoder' | 'qiyu' | 'zhihu' | 'nami' | 'bilibili' | 'chaoxing' | 'smms' | 'github' | 'imgur' | 'cos' | 'oss' | 'qiniu' | 'upyun';
 
 /**
  * 私有图床服务列表
  * 用户需要提供自己的存储凭证，数据存储在用户自己的账户中
  */
-export const PRIVATE_SERVICES: ServiceType[] = ['r2'];
+export const PRIVATE_SERVICES: ServiceType[] = ['r2', 'cos', 'oss', 'qiniu', 'upyun'];
 
 /**
  * 公共图床服务列表
  * 使用公共平台的存储服务
  */
-export const PUBLIC_SERVICES: ServiceType[] = ['weibo', 'zhihu', 'nami', 'qiyu', 'jd', 'nowcoder', 'bilibili', 'chaoxing'];
+export const PUBLIC_SERVICES: ServiceType[] = ['weibo', 'zhihu', 'nami', 'qiyu', 'jd', 'nowcoder', 'bilibili', 'chaoxing', 'smms', 'github', 'imgur'];
 
 /**
  * 基础服务配置接口
@@ -170,6 +170,119 @@ export interface BilibiliServiceConfig extends BaseServiceConfig {
 export interface ChaoxingServiceConfig extends BaseServiceConfig {
   /** 超星 Cookie（完整的 Cookie 字符串） */
   cookie: string;
+}
+
+/**
+ * SM.MS 图床服务配置
+ * 公共图床，需要 API Token
+ */
+export interface SmmsServiceConfig extends BaseServiceConfig {
+  /** SM.MS API Token */
+  token: string;
+}
+
+/**
+ * GitHub 图床服务配置
+ * 使用 GitHub 仓库作为图床，需要 Personal Access Token
+ */
+export interface GithubServiceConfig extends BaseServiceConfig {
+  /** GitHub Personal Access Token */
+  token: string;
+  /** 仓库所有者用户名 */
+  owner: string;
+  /** 仓库名称 */
+  repo: string;
+  /** 分支名称（默认 main） */
+  branch: string;
+  /** 存储路径（默认 images/） */
+  path: string;
+  /** 自定义域名（可选） */
+  customDomain?: string;
+}
+
+/**
+ * Imgur 图床服务配置
+ * 公共图床，需要 Client ID
+ */
+export interface ImgurServiceConfig extends BaseServiceConfig {
+  /** Imgur Client ID */
+  clientId: string;
+  /** Imgur Client Secret（可选，用于匿名上传） */
+  clientSecret?: string;
+}
+
+/**
+ * 腾讯云 COS 图床服务配置
+ * 私有图床，需要 SecretId 和 SecretKey
+ */
+export interface CosServiceConfig extends BaseServiceConfig {
+  /** 腾讯云 SecretId */
+  secretId: string;
+  /** 腾讯云 SecretKey */
+  secretKey: string;
+  /** 地域（如 ap-guangzhou） */
+  region: string;
+  /** 存储桶名称 */
+  bucket: string;
+  /** 存储路径前缀（默认 images/） */
+  path: string;
+  /** 公开访问域名 */
+  publicDomain: string;
+}
+
+/**
+ * 阿里云 OSS 图床服务配置
+ * 私有图床，需要 AccessKey ID 和 Secret
+ */
+export interface OssServiceConfig extends BaseServiceConfig {
+  /** 阿里云 AccessKey ID */
+  accessKeyId: string;
+  /** 阿里云 AccessKey Secret */
+  accessKeySecret: string;
+  /** 地域（如 oss-cn-hangzhou） */
+  region: string;
+  /** 存储桶名称 */
+  bucket: string;
+  /** 存储路径前缀（默认 images/） */
+  path: string;
+  /** 公开访问域名 */
+  publicDomain: string;
+}
+
+/**
+ * 七牛云图床服务配置
+ * 私有图床，需要 AK 和 SK
+ */
+export interface QiniuServiceConfig extends BaseServiceConfig {
+  /** 七牛云 AccessKey */
+  accessKey: string;
+  /** 七牛云 SecretKey */
+  secretKey: string;
+  /** 存储区域（如 cn-east-1, cn-south-1） */
+  region: string;
+  /** 存储桶名称 */
+  bucket: string;
+  /** 域名（如 https://cdn.example.com） */
+  domain: string;
+  /** 存储路径前缀（默认 images/） */
+  path: string;
+}
+
+/**
+ * 又拍云图床服务配置
+ * 私有图床，需要 Operator 和 Password
+ */
+export interface UpyunServiceConfig extends BaseServiceConfig {
+  /** 又拍云 Operator */
+  operator: string;
+  /** 又提云 Password */
+  password: string;
+  /** 存储桶名称 */
+  bucket: string;
+  /** 域名（如 https://cdn.example.com） */
+  domain: string;
+  /** 存储路径前缀（默认 images/） */
+  path: string;
 }
 
 /**
@@ -287,7 +400,7 @@ export const DEFAULT_PREFIXES: string[] = [
  * 每次配置格式变更时递增此版本号
  * 迁移函数将根据此版本号决定是否需要执行迁移
  */
-export const CONFIG_VERSION = 1;
+export const CONFIG_VERSION = 2;
 
 export interface UserConfig {
   /**
@@ -314,6 +427,13 @@ export interface UserConfig {
     nami?: NamiServiceConfig;
     bilibili?: BilibiliServiceConfig;
     chaoxing?: ChaoxingServiceConfig;
+    smms?: SmmsServiceConfig;
+    github?: GithubServiceConfig;
+    imgur?: ImgurServiceConfig;
+    cos?: CosServiceConfig;
+    oss?: OssServiceConfig;
+    qiniu?: QiniuServiceConfig;
+    upyun?: UpyunServiceConfig;
   };
 
   /** 输出格式 */
@@ -437,7 +557,7 @@ export interface HistoryItem {
  */
 export const DEFAULT_CONFIG: UserConfig = {
   enabledServices: ['jd'],  // 默认启用 JD 图床（开箱即用）
-  availableServices: ['weibo', 'r2', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami', 'bilibili', 'chaoxing'],  // 默认所有图床都可用
+  availableServices: ['weibo', 'r2', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami', 'bilibili', 'chaoxing', 'smms', 'github', 'imgur', 'cos', 'oss', 'qiniu', 'upyun'],  // 默认所有图床都可用
   services: {
     weibo: {
       enabled: true,
@@ -479,6 +599,58 @@ export const DEFAULT_CONFIG: UserConfig = {
     chaoxing: {
       enabled: false,  // 超星图床需要 Cookie，默认不启用
       cookie: ''
+    },
+    smms: {
+      enabled: false,  // SM.MS 需要 Token，默认不启用
+      token: ''
+    },
+    github: {
+      enabled: false,  // GitHub 需要配置，默认不启用
+      token: '',
+      owner: '',
+      repo: '',
+      branch: 'main',
+      path: 'images/'
+    },
+    imgur: {
+      enabled: false,  // Imgur 需要配置，默认不启用
+      clientId: '',
+      clientSecret: ''
+    },
+    cos: {
+      enabled: false,  // 腾讯云 COS 需要配置，默认不启用
+      secretId: '',
+      secretKey: '',
+      region: '',
+      bucket: '',
+      path: 'images/',
+      publicDomain: ''
+    },
+    oss: {
+      enabled: false,  // 阿里云 OSS 需要配置，默认不启用
+      accessKeyId: '',
+      accessKeySecret: '',
+      region: '',
+      bucket: '',
+      path: 'images/',
+      publicDomain: ''
+    },
+    qiniu: {
+      enabled: false,  // 七牛云需要配置，默认不启用
+      accessKey: '',
+      secretKey: '',
+      region: '',
+      bucket: '',
+      domain: '',
+      path: 'images/'
+    },
+    upyun: {
+      enabled: false,  // 又拍云需要配置，默认不启用
+      operator: '',
+      password: '',
+      bucket: '',
+      domain: '',
+      path: 'images/'
     }
   },
   outputFormat: 'baidu-proxy',
@@ -549,6 +721,38 @@ export function sanitizeConfig(config: UserConfig): UserConfig {
       chaoxing: config.services.chaoxing ? {
         ...config.services.chaoxing,
         cookie: sanitizeString(config.services.chaoxing.cookie, 8, 4)
+      } : undefined,
+      smms: config.services.smms ? {
+        ...config.services.smms,
+        token: sanitizeString(config.services.smms.token, 4, 4)
+      } : undefined,
+      github: config.services.github ? {
+        ...config.services.github,
+        token: sanitizeString(config.services.github.token, 4, 4)
+      } : undefined,
+      imgur: config.services.imgur ? {
+        ...config.services.imgur,
+        clientId: sanitizeString(config.services.imgur.clientId, 4, 4),
+        clientSecret: sanitizeString(config.services.imgur.clientSecret, 4, 4)
+      } : undefined,
+      cos: config.services.cos ? {
+        ...config.services.cos,
+        secretId: sanitizeString(config.services.cos.secretId, 4, 4),
+        secretKey: sanitizeString(config.services.cos.secretKey, 0, 0)
+      } : undefined,
+      oss: config.services.oss ? {
+        ...config.services.oss,
+        accessKeyId: sanitizeString(config.services.oss.accessKeyId, 4, 4),
+        accessKeySecret: sanitizeString(config.services.oss.accessKeySecret, 0, 0)
+      } : undefined,
+      qiniu: config.services.qiniu ? {
+        ...config.services.qiniu,
+        accessKey: sanitizeString(config.services.qiniu.accessKey, 4, 4),
+        secretKey: sanitizeString(config.services.qiniu.secretKey, 0, 0)
+      } : undefined,
+      upyun: config.services.upyun ? {
+        ...config.services.upyun,
+        password: sanitizeString(config.services.upyun.password, 0, 0)
       } : undefined
     },
     webdav: config.webdav ? {
@@ -649,18 +853,14 @@ export function migrateConfig(config: UserConfig): UserConfig {
   // 版本 0 -> 1：将 baiduPrefix 迁移为 linkPrefixConfig
   if (currentVersion < 1) {
     if (!migratedConfig.linkPrefixConfig) {
-      // 创建前缀列表，以默认前缀开始
       const prefixList = [...DEFAULT_PREFIXES];
       let selectedIndex = 0;
 
-      // 如果有旧的 baiduPrefix
       if (migratedConfig.baiduPrefix) {
         const existingIndex = prefixList.indexOf(migratedConfig.baiduPrefix);
         if (existingIndex >= 0) {
-          // 旧前缀在默认列表中，选中它
           selectedIndex = existingIndex;
         } else {
-          // 旧前缀不在默认列表中，添加进去
           prefixList.push(migratedConfig.baiduPrefix);
           selectedIndex = prefixList.length - 1;
         }
@@ -676,6 +876,75 @@ export function migrateConfig(config: UserConfig): UserConfig {
       };
     }
     console.log('[配置迁移] 从版本 0 迁移到版本 1：linkPrefixConfig');
+  }
+
+  // 版本 1 -> 2：新增 7 个图床的默认配置
+  if (currentVersion < 2) {
+    const newServices = {
+      smms: migratedConfig.services?.smms || { enabled: false, token: '' },
+      github: migratedConfig.services?.github || {
+        enabled: false,
+        token: '',
+        owner: '',
+        repo: '',
+        branch: 'main',
+        path: 'images/'
+      },
+      imgur: migratedConfig.services?.imgur || {
+        enabled: false,
+        clientId: '',
+        clientSecret: ''
+      },
+      cos: migratedConfig.services?.cos || {
+        enabled: false,
+        secretId: '',
+        secretKey: '',
+        region: '',
+        bucket: '',
+        path: 'images/',
+        publicDomain: ''
+      },
+      oss: migratedConfig.services?.oss || {
+        enabled: false,
+        accessKeyId: '',
+        accessKeySecret: '',
+        region: '',
+        bucket: '',
+        path: 'images/',
+        publicDomain: ''
+      },
+      qiniu: migratedConfig.services?.qiniu || {
+        enabled: false,
+        accessKey: '',
+        secretKey: '',
+        region: '',
+        bucket: '',
+        domain: '',
+        path: 'images/'
+      },
+      upyun: migratedConfig.services?.upyun || {
+        enabled: false,
+        operator: '',
+        password: '',
+        bucket: '',
+        domain: '',
+        path: 'images/'
+      }
+    };
+
+    migratedConfig = {
+      ...migratedConfig,
+      services: {
+        ...migratedConfig.services,
+        ...newServices
+      },
+      availableServices: [
+        ...(migratedConfig.availableServices || ['weibo', 'r2', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami', 'bilibili', 'chaoxing']),
+        'smms', 'github', 'imgur', 'cos', 'oss', 'qiniu', 'upyun'
+      ]
+    };
+
+    console.log('[配置迁移] 从版本 1 迁移到版本 2：新增 7 个图床');
   }
 
   // 未来版本迁移示例：
