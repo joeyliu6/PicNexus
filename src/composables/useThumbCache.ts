@@ -74,6 +74,23 @@ export function generateThumbnailUrl(
       thumbUrl = `${url}?x-oss-process=image%2Fresize%2Cw_75%2Ch_75%2Cm_mfit%2Fformat%2Cpng`;
       break;
 
+    case 'bilibili':
+      // B站：使用 @宽w_高h 格式的缩略图，75x75 裁剪，80质量 WebP
+      thumbUrl = `${url}@75w_75h_1c_80q.webp`;
+      break;
+
+    case 'chaoxing': {
+      // 超星：替换域名 + 替换文件名
+      // 原图: https://p.cldisk.com/star4/{hash}/origin.jpg
+      // 缩略: https://p.ananas.chaoxing.com/star4/{hash}/75_0cQ80.webp
+      let cxUrl = url;
+      if (cxUrl.includes('p.cldisk.com')) {
+        cxUrl = cxUrl.replace('p.cldisk.com', 'p.ananas.chaoxing.com');
+      }
+      thumbUrl = cxUrl.replace(/\/origin\.[a-zA-Z0-9]+(\?.*)?$/, '/75_0cQ80.webp');
+      break;
+    }
+
     default:
       // 其他图床：直接使用原图
       thumbUrl = url;
@@ -131,6 +148,21 @@ export function generateMediumThumbnailUrl(
       // 牛客：w_400
       return `${url}?x-oss-process=image%2Fresize%2Cw_400%2Cm_mfit%2Fformat%2Cpng`;
 
+    case 'bilibili':
+      // B站：800宽，80质量 WebP
+      return `${url}@800w_80q.webp`;
+
+    case 'chaoxing': {
+      // 超星：替换域名 + 替换文件名为中等尺寸
+      // 原图: https://p.cldisk.com/star4/{hash}/origin.jpg
+      // 中图: https://p.ananas.chaoxing.com/star4/{hash}/800_0cQ80.webp
+      let cxMediumUrl = url;
+      if (cxMediumUrl.includes('p.cldisk.com')) {
+        cxMediumUrl = cxMediumUrl.replace('p.cldisk.com', 'p.ananas.chaoxing.com');
+      }
+      return cxMediumUrl.replace(/\/origin\.[a-zA-Z0-9]+(\?.*)?$/, '/800_0cQ80.webp');
+    }
+
     default:
       return url;
   }
@@ -147,12 +179,16 @@ export function getThumbnailCandidates(
   item: HistoryItem | any,
   config: any
 ): string[] {
+  // 判断是 QueueItem 还是 HistoryItem
+  // QueueItem 有 serviceProgress 且无 results，状态会动态变化，不应缓存
+  // HistoryItem 有 results，状态稳定，可以缓存
+  const isQueueItem = item.serviceProgress && !item.results;
+
   // 使用 item.id 作为缓存键
   const cacheKey = item.id;
 
-  // 检查缓存（需要考虑 config 变化，简单起见，这里不缓存 config 相关的结果）
-  // 如果需要更精确的缓存，可以将 config 的相关字段也加入 cacheKey
-  if (thumbnailCandidatesCache.has(cacheKey)) {
+  // 只对 HistoryItem 使用缓存（QueueItem 状态会动态变化）
+  if (!isQueueItem && thumbnailCandidatesCache.has(cacheKey)) {
     return thumbnailCandidatesCache.get(cacheKey)!;
   }
 
@@ -202,8 +238,10 @@ export function getThumbnailCandidates(
   // 去重
   const uniqueCandidates = [...new Set(candidates)];
 
-  // 缓存结果
-  thumbnailCandidatesCache.set(cacheKey, uniqueCandidates);
+  // 只对 HistoryItem 缓存结果（QueueItem 状态动态变化，不缓存）
+  if (!isQueueItem) {
+    thumbnailCandidatesCache.set(cacheKey, uniqueCandidates);
+  }
 
   return uniqueCandidates;
 }
