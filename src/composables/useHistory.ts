@@ -10,6 +10,9 @@ import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type { HistoryItem, ServiceType } from '../config/types';
 import { getActivePrefix } from '../config/types';
 import { historyDB, type PageResult, type SearchResult, type SearchOptions, type TimePeriodStats } from '../services/HistoryDatabase';
+import type { ImageMeta } from '../types/image-meta';
+import { extractMetaFromHistoryItem } from '../types/image-meta';
+import { useImageDetailCache } from './useImageDetailCache';
 import { useToast } from './useToast';
 import { useConfirm } from './useConfirm';
 import { useConfigManager } from './useConfig';
@@ -25,8 +28,8 @@ import {
 // 单例共享状态（模块级别）
 // ============================================
 
-// 所有历史记录项（shallowRef 优化）
-const sharedAllHistoryItems: Ref<HistoryItem[]> = shallowRef([]);
+// 所有图片元数据（轻量级，全量加载）
+const sharedImageMetas: Ref<ImageMeta[]> = shallowRef([]);
 
 // 加载中状态
 const sharedIsLoading = ref(false);
@@ -53,12 +56,8 @@ function isCacheValid(): boolean {
 // === 跨窗口同步 ===
 let crossWindowListenerInitialized = false;
 
-// 分页状态
-const PAGE_SIZE = 500;
-const currentPage = ref(1);
+// 总数（无需分页）
 const totalCount = ref(0);
-const hasMore = ref(true);
-const isLoadingMore = ref(false);
 
 // 时间段统计（用于时间轴完整显示）
 const sharedTimePeriodStats: Ref<TimePeriodStats[]> = shallowRef([]);
@@ -66,28 +65,25 @@ const isTimePeriodStatsLoaded = ref(false);
 
 /**
  * 模块级别的数据重新加载函数（用于事件处理）
- * 直接更新 sharedAllHistoryItems，供时间轴视图使用
+ * 直接更新 sharedImageMetas，供时间轴视图使用
  */
 async function reloadSharedData(): Promise<void> {
   try {
     sharedIsLoading.value = true;
     await historyDB.open();
 
-    currentPage.value = 1;
-
-    // 并行加载分页数据和时间段统计
-    const [pageResult, timePeriodStats] = await Promise.all([
-      historyDB.getPage({ page: 1, pageSize: PAGE_SIZE }),
+    // 并行加载元数据和时间段统计
+    const [metas, timePeriodStats] = await Promise.all([
+      historyDB.getMetaList(),
       historyDB.getTimePeriodStats(),
     ]);
 
-    sharedAllHistoryItems.value = pageResult.items;
-    totalCount.value = pageResult.total;
-    hasMore.value = pageResult.hasMore;
+    sharedImageMetas.value = metas;
+    totalCount.value = metas.length;
     sharedTimePeriodStats.value = timePeriodStats;
     isTimePeriodStatsLoaded.value = true;
 
-    console.log(`[历史记录] 事件触发重新加载: ${pageResult.items.length}/${pageResult.total} 条, ${timePeriodStats.length} 个月份`);
+    console.log(`[历史记录] 事件触发重新加载: ${metas.length} 条元数据, ${timePeriodStats.length} 个月份`);
 
     isDataLoaded.value = true;
     lastLoadTime.value = Date.now();
@@ -114,8 +110,8 @@ function initCrossWindowListener(): void {
         if (data?.ids && data.ids.length > 0) {
           console.log('[历史记录] 跨窗口同步: 删除', data.ids);
           const deletedSet = new Set(data.ids);
-          sharedAllHistoryItems.value = sharedAllHistoryItems.value.filter(
-            item => !deletedSet.has(item.id)
+          sharedImageMetas.value = sharedImageMetas.value.filter(
+            meta => !deletedSet.has(meta.id)
           );
           totalCount.value = Math.max(0, totalCount.value - data.ids.length);
           dataVersion.value++;
@@ -124,9 +120,8 @@ function initCrossWindowListener(): void {
 
       case 'history-cleared':
         console.log('[历史记录] 跨窗口同步: 清空');
-        sharedAllHistoryItems.value = [];
+        sharedImageMetas.value = [];
         totalCount.value = 0;
-        hasMore.value = false;
         dataVersion.value++;
         break;
 
@@ -158,12 +153,13 @@ export function invalidateCache(): void {
 export function useHistoryManager() {
   const toast = useToast();
   const { confirm } = useConfirm();
+  const detailCache = useImageDetailCache();
 
   // 初始化跨窗口事件监听（单例）
   initCrossWindowListener();
 
   // 使用共享状态（单例）
-  const allHistoryItems = sharedAllHistoryItems;
+  const imageMetas = sharedImageMetas;
   const isLoading = sharedIsLoading;
 
   /**
@@ -174,7 +170,7 @@ export function useHistoryManager() {
   }
 
   /**
-   * 加载历史记录（从 SQLite 分页加载）
+   * 加载历史记录元数据（全量加载）
    * @param forceReload 是否强制重新加载（忽略缓存）
    */
   async function loadHistory(forceReload = false): Promise<void> {
@@ -193,18 +189,13 @@ export function useHistoryManager() {
 
       await initDatabase();
 
-      currentPage.value = 1;
+      // 全量加载元数据
+      const metas = await historyDB.getMetaList();
 
-      const { items, total, hasMore: more } = await historyDB.getPage({
-        page: 1,
-        pageSize: PAGE_SIZE,
-      });
+      imageMetas.value = metas;
+      totalCount.value = metas.length;
 
-      allHistoryItems.value = items;
-      totalCount.value = total;
-      hasMore.value = more;
-
-      console.log(`[历史记录] 加载完成: 显示 ${items.length}/${total} 条`);
+      console.log(`[历史记录] 加载完成: ${metas.length} 条元数据`);
 
       isDataLoaded.value = true;
       lastLoadTime.value = Date.now();
@@ -213,39 +204,12 @@ export function useHistoryManager() {
     } catch (error) {
       console.error('[历史记录] 加载失败:', error);
       toast.error('加载失败', String(error));
-      allHistoryItems.value = [];
+      imageMetas.value = [];
     } finally {
       isLoading.value = false;
     }
   }
 
-  /**
-   * 加载更多数据（无限滚动）
-   */
-  async function loadMore(): Promise<void> {
-    if (!hasMore.value || isLoadingMore.value) {
-      return;
-    }
-
-    try {
-      isLoadingMore.value = true;
-      currentPage.value++;
-
-      const { items, hasMore: more } = await historyDB.getPage({
-        page: currentPage.value,
-        pageSize: PAGE_SIZE,
-      });
-
-      if (items.length > 0) {
-        allHistoryItems.value = [...allHistoryItems.value, ...items];
-        console.log(`[历史记录] 加载更多: ${allHistoryItems.value.length}/${totalCount.value} 条`);
-      }
-
-      hasMore.value = more;
-    } finally {
-      isLoadingMore.value = false;
-    }
-  }
 
   /**
    * 删除单个历史记录项
@@ -273,9 +237,13 @@ export function useHistoryManager() {
       console.log('[历史记录] ✓ 删除成功:', itemId);
       toast.success('删除成功', '历史记录已删除');
 
-      allHistoryItems.value = allHistoryItems.value.filter(item => item.id !== itemId);
+      // 更新元数据
+      imageMetas.value = imageMetas.value.filter(meta => meta.id !== itemId);
       totalCount.value = Math.max(0, totalCount.value - 1);
       dataVersion.value++;
+
+      // 清除详情缓存
+      detailCache.removeDetail(itemId);
 
       emitHistoryDeleted([itemId]).catch(e => {
         console.warn('[历史记录] 跨窗口通知失败:', e);
@@ -306,10 +274,13 @@ export function useHistoryManager() {
 
       toast.success('清空成功', '所有历史记录已清空');
 
-      allHistoryItems.value = [];
+      // 清空元数据
+      imageMetas.value = [];
       totalCount.value = 0;
-      hasMore.value = false;
       dataVersion.value++;
+
+      // 清除详情缓存
+      detailCache.clearCache();
 
       emitHistoryCleared().catch(e => {
         console.warn('[历史记录] 跨窗口通知失败:', e);
@@ -362,17 +333,17 @@ export function useHistoryManager() {
         return;
       }
 
-      const selectedItems = allHistoryItems.value.filter(item => selectedIds.includes(item.id));
+      const selectedMetas = imageMetas.value.filter(meta => selectedIds.includes(meta.id));
       const { config } = useConfigManager();
       const currentConfig = config.value;
       const activePrefix = getActivePrefix(currentConfig);
 
-      const links = selectedItems.map(item => {
-        if (!item.generatedLink) return null;
-        if (item.primaryService === 'weibo' && activePrefix) {
-          return `${activePrefix}${item.generatedLink}`;
+      const links = selectedMetas.map(meta => {
+        if (!meta.primaryUrl) return null;
+        if (meta.primaryService === 'weibo' && activePrefix) {
+          return `${activePrefix}${meta.primaryUrl}`;
         }
-        return item.generatedLink;
+        return meta.primaryUrl;
       }).filter((link): link is string => !!link);
 
       if (links.length === 0) {
@@ -400,7 +371,22 @@ export function useHistoryManager() {
         return;
       }
 
-      const selectedItems = allHistoryItems.value.filter(item => selectedIds.includes(item.id));
+      // 从数据库加载完整详情
+      const selectedItems: HistoryItem[] = [];
+      for (const id of selectedIds) {
+        try {
+          const detail = await detailCache.getDetail(id);
+          selectedItems.push(detail);
+        } catch (e) {
+          console.warn(`[批量操作] 跳过无效记录: ${id}`, e);
+        }
+      }
+
+      if (selectedItems.length === 0) {
+        toast.warn('无可用数据', '选中的项目无法加载');
+        return;
+      }
+
       const jsonContent = JSON.stringify(selectedItems, null, 2);
 
       const filePath = await saveDialog({
@@ -450,9 +436,12 @@ export function useHistoryManager() {
       console.log(`[批量操作] 已删除 ${selectedIds.length} 条记录`);
 
       const selectedIdSet = new Set(selectedIds);
-      allHistoryItems.value = allHistoryItems.value.filter(item => !selectedIdSet.has(item.id));
+      imageMetas.value = imageMetas.value.filter(meta => !selectedIdSet.has(meta.id));
       totalCount.value = Math.max(0, totalCount.value - selectedIds.length);
       dataVersion.value++;
+
+      // 清除详情缓存
+      selectedIds.forEach(id => detailCache.removeDetail(id));
 
       emitHistoryDeleted(selectedIds).catch(e => {
         console.warn('[历史记录] 跨窗口通知失败:', e);
@@ -481,7 +470,7 @@ export function useHistoryManager() {
 
   /**
    * 按页码加载数据（用于表格视图服务端分页）
-   * 不影响 allHistoryItems，返回独立的分页结果
+   * 不影响 imageMetas，返回独立的分页结果
    *
    * @param page 页码（从 1 开始）
    * @param pageSize 每页数量（默认 100）
@@ -539,8 +528,9 @@ export function useHistoryManager() {
   }
 
   /**
-   * 跳转到指定月份并重新加载数据
-   * 从该月份的最新时间戳开始加载数据
+   * 跳转到指定月份（验证该月份是否有数据）
+   * 在新架构下，所有元数据已加载，此函数仅验证目标月份存在性
+   * 实际滚动定位由 TimelineView 负责
    *
    * @param year 年份
    * @param month 月份 (0-11)
@@ -549,9 +539,8 @@ export function useHistoryManager() {
   async function jumpToMonth(year: number, month: number): Promise<boolean> {
     try {
       isLoading.value = true;
-      await initDatabase();
 
-      // 从时间段统计中找到目标月份的时间戳
+      // 从时间段统计中找到目标月份
       const targetPeriod = sharedTimePeriodStats.value.find(
         p => p.year === year && p.month === month
       );
@@ -561,25 +550,18 @@ export function useHistoryManager() {
         return false;
       }
 
-      // 从该月份的最大时间戳开始加载
-      const { items, total, hasMore: more } = await historyDB.getPageFromTimestamp(
-        targetPeriod.maxTimestamp,
-        PAGE_SIZE
-      );
+      // 验证元数据中是否有该月份的数据
+      const hasData = imageMetas.value.some(meta => {
+        const date = new Date(meta.timestamp);
+        return date.getFullYear() === year && date.getMonth() === month;
+      });
 
-      if (items.length === 0) {
+      if (!hasData) {
         console.warn(`[历史记录] 目标月份无数据: ${year}年${month + 1}月`);
         return false;
       }
 
-      // 重置分页状态，替换数据
-      currentPage.value = 1;
-      allHistoryItems.value = items;
-      totalCount.value = total;
-      hasMore.value = more;
-      dataVersion.value++;
-
-      console.log(`[历史记录] 跳转到 ${year}年${month + 1}月: 加载 ${items.length} 条`);
+      console.log(`[历史记录] 跳转到 ${year}年${month + 1}月`);
       return true;
 
     } catch (error) {
@@ -593,22 +575,22 @@ export function useHistoryManager() {
 
   return {
     // 状态
-    allHistoryItems,
+    imageMetas,  // ← 改为元数据（原 allHistoryItems）
     isLoading,
     isDataLoaded,
 
-    // 分页状态
+    // 统计
     totalCount,
-    hasMore,
-    isLoadingMore,
 
     // 时间段统计
     timePeriodStats: sharedTimePeriodStats,
 
+    // 详情缓存
+    detailCache,
+
     // 方法
     loadHistory,
     loadAllHistory,
-    loadMore,
     loadPageByNumber,
     searchHistory,
     invalidateCache,

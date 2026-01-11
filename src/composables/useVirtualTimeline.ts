@@ -16,7 +16,7 @@ import {
   type LayoutRow,
   type TimelineGroupLayout,
 } from '../utils/justifiedLayout';
-import type { HistoryItem } from '../config/types';
+import type { ImageMeta } from '../types/image-meta';
 
 // ==================== 类型定义 ====================
 
@@ -34,14 +34,14 @@ export interface PhotoGroup {
   day: number;
   /** 日期对象 */
   date: Date;
-  /** 该分组的图片 */
-  items: HistoryItem[];
+  /** 该分组的图片元数据 */
+  items: ImageMeta[];
 }
 
 /** 可见图片项（用于渲染） */
 export interface VisibleItem {
-  /** 图片数据 */
-  item: HistoryItem;
+  /** 图片元数据 */
+  meta: ImageMeta;
   /** x 坐标 */
   x: number;
   /** y 坐标 */
@@ -162,13 +162,13 @@ export function useVirtualTimeline(
   // ==================== 布局计算 ====================
 
   /**
-   * 将 HistoryItem 转换为 LayoutItem
+   * 将 ImageMeta 转换为 LayoutItem
    */
-  function toLayoutItems(items: HistoryItem[]): LayoutItem[] {
-    return items.map((item) => ({
-      id: item.id,
+  function toLayoutItems(items: ImageMeta[]): LayoutItem[] {
+    return items.map((meta) => ({
+      id: meta.id,
       // 如果没有宽高比，默认为 1（正方形）
-      aspectRatio: item.aspectRatio && item.aspectRatio > 0 ? item.aspectRatio : 1,
+      aspectRatio: meta.aspectRatio && meta.aspectRatio > 0 ? meta.aspectRatio : 1,
     }));
   }
 
@@ -260,14 +260,14 @@ export function useVirtualTimeline(
   });
 
   /**
-   * ID -> HistoryItem 映射（缓存）
+   * ID -> ImageMeta 映射（缓存）
    * 只在 groups 变化时重建，避免每次滚动都遍历
    */
   const itemMap = computed(() => {
-    const map = new Map<string, HistoryItem>();
+    const map = new Map<string, ImageMeta>();
     for (const group of groups.value) {
-      for (const item of group.items) {
-        map.set(item.id, item);
+      for (const meta of group.items) {
+        map.set(meta.id, meta);
       }
     }
     return map;
@@ -289,10 +289,10 @@ export function useVirtualTimeline(
       if (!rowData) continue;
 
       for (const layoutItem of rowData.row.items) {
-        const historyItem = map.get(layoutItem.id);
-        if (historyItem) {
+        const imageMeta = map.get(layoutItem.id);
+        if (imageMeta) {
           result.push({
-            item: historyItem,
+            meta: imageMeta,
             x: layoutItem.x,
             y: layoutItem.y,
             width: layoutItem.width,
@@ -648,7 +648,7 @@ export function useVirtualTimeline(
   /**
    * 增量更新分组（用于上传/删除图片时局部重算）
    */
-  function updateGroup(groupId: string, newItems: HistoryItem[]) {
+  function updateGroup(groupId: string, newItems: ImageMeta[]) {
     if (!layoutResult.value) {
       // 没有布局，执行完整计算
       recalculateLayoutAsync();

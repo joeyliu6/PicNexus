@@ -48,7 +48,7 @@ export function useImageLoadManager(
 
     // LRU 淘汰
     if (newSet.size > maxCache) {
-      const visibleIds = new Set(visibleItems.value.map((v) => v.item.id));
+      const visibleIds = new Set(visibleItems.value.map((v) => v.meta.id));
       let removed = false;
 
       for (const existingId of newSet) {
@@ -107,7 +107,7 @@ export function useImageLoadManager(
    */
   function cleanupExpiredImages() {
     const now = Date.now();
-    const visibleIds = new Set(visibleItems.value.map((v) => v.item.id));
+    const visibleIds = new Set(visibleItems.value.map((v) => v.meta.id));
     let hasChanges = false;
 
     // 更新当前可见图片的时间戳

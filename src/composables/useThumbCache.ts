@@ -366,8 +366,8 @@ export function useThumbCache() {
   const historyManager = useHistoryManager();
 
   // 数据变化时增量清理（只删除已移除项的缓存）
-  watch(() => historyManager.allHistoryItems.value, (newItems) => {
-    const newIds = new Set(newItems.map(i => i.id));
+  watch(() => historyManager.imageMetas.value, (newMetas) => {
+    const newIds = new Set(newMetas.map(m => m.id));
     for (const id of thumbUrlCache.keys()) {
       if (!newIds.has(id)) {
         thumbUrlCache.delete(id);

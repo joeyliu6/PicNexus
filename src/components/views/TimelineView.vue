@@ -8,12 +8,14 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick, shallowRef } fr
 import { useHistoryViewState, type LinkFormat } from '../../composables/useHistoryViewState';
 import { useHistoryManager } from '../../composables/useHistory';
 import { useVirtualTimeline, type PhotoGroup } from '../../composables/useVirtualTimeline';
-import { useThumbCache } from '../../composables/useThumbCache';
+import { useThumbCache, generateMediumThumbnailUrl } from '../../composables/useThumbCache';
+import { useConfigManager } from '../../composables/useConfig';
 import { useImageMetadataFixer } from '../../composables/useImageMetadataFixer';
 import { useImageLoadManager } from '../../composables/useImageLoadManager';
 import { useTimelineSidebarControl } from '../../composables/useTimelineSidebarControl';
 import { useToast } from '../../composables/useToast';
 import type { HistoryItem, ServiceType } from '../../config/types';
+import type { ImageMeta } from '../../types/image-meta';
 import TimelineSidebar, { type TimeGroup } from './timeline/TimelineSidebar.vue';
 import HistoryLightbox from './history/HistoryLightbox.vue';
 import FloatingActionBar from './history/FloatingActionBar.vue';
@@ -38,6 +40,7 @@ const viewState = useHistoryViewState();
 const historyManager = useHistoryManager();
 const thumbCache = useThumbCache();
 const metadataFixer = useImageMetadataFixer();
+const configManager = useConfigManager();
 
 // ==================== Refs ====================
 
@@ -47,6 +50,9 @@ const scrollContainer = ref<HTMLElement | null>(null);
 // Lightbox state
 const lightboxVisible = ref(false);
 const lightboxItem = ref<HistoryItem | null>(null);
+
+// 悬停详情缓存（用于显示悬停信息）
+const hoverDetailsMap = shallowRef(new Map<string, HistoryItem>());
 
 // Sidebar Control
 const {
@@ -68,14 +74,14 @@ let dragEndTimer: number | undefined;
 // ==================== Grouping Logic ====================
 
 /**
- * 按天分组图片数据
+ * 按天分组图片元数据
  */
 const groups = computed<PhotoGroup[]>(() => {
-  const items = viewState.filteredItems.value;
+  const metas = viewState.filteredMetas.value;
   const groupsMap = new Map<string, PhotoGroup>();
 
-  items.forEach((item) => {
-    const date = new Date(item.timestamp);
+  metas.forEach((meta) => {
+    const date = new Date(meta.timestamp);
     const year = date.getFullYear();
     const month = date.getMonth();
     const day = date.getDate();
@@ -92,7 +98,7 @@ const groups = computed<PhotoGroup[]>(() => {
         items: [],
       });
     }
-    groupsMap.get(id)?.items.push(item);
+    groupsMap.get(id)?.items.push(meta);
   });
 
   // 按日期降序排列（最新的在前）
@@ -197,22 +203,6 @@ const visibleRatio = computed(() => {
 
 // ==================== Scroll Handling ====================
 
-// 无限滚动阈值
-const SCROLL_THRESHOLD = 500;
-
-/**
- * 检测是否需要加载更多
- */
-const checkLoadMore = () => {
-  if (!viewState.hasMore.value || viewState.isLoadingMore.value) return;
-
-  const distanceToBottom = totalHeight.value - scrollTop.value - viewportHeight.value;
-
-  if (distanceToBottom < SCROLL_THRESHOLD) {
-    viewState.loadMore();
-  }
-};
-
 /**
  * 滚动事件处理
  */
@@ -224,9 +214,6 @@ const handleScroll = () => {
   if (!isDragging) {
     onSidebarScroll();
   }
-
-  // 无限滚动检测
-  checkLoadMore();
 };
 
 // ==================== Sidebar Interactions ====================
@@ -273,9 +260,16 @@ const handleJumpToPeriod = async (year: number, month: number) => {
 
 // ==================== Lightbox ====================
 
-const openLightbox = (item: HistoryItem) => {
-  lightboxItem.value = item;
-  lightboxVisible.value = true;
+const openLightbox = async (meta: ImageMeta) => {
+  try {
+    // 从详情缓存加载完整数据
+    const detail = await viewState.detailCache.getDetail(meta.id);
+    lightboxItem.value = detail;
+    lightboxVisible.value = true;
+  } catch (e) {
+    console.error('[Lightbox] 加载详情失败:', e);
+    toast.error('加载失败', String(e));
+  }
 };
 
 const handleLightboxDelete = async (item: HistoryItem) => {
@@ -327,12 +321,42 @@ function formatUploadTime(timestamp: number): string {
 }
 
 /**
- * 获取成功上传的服务列表
+ * 获取成功上传的服务列表（从悬停详情缓存）
  */
-function getSuccessfulServices(item: HistoryItem): string[] {
-  return item.results
+function getSuccessfulServices(id: string): string[] {
+  const detail = hoverDetailsMap.value.get(id);
+  if (!detail) return [];
+  return detail.results
     .filter(r => r.status === 'success')
     .map(r => r.serviceId);
+}
+
+/**
+ * 悬停时加载详情
+ */
+async function handleImageHover(meta: ImageMeta) {
+  if (hoverDetailsMap.value.has(meta.id)) return;
+
+  try {
+    const detail = await viewState.detailCache.getDetail(meta.id);
+    const newMap = new Map(hoverDetailsMap.value);
+    newMap.set(meta.id, detail);
+    hoverDetailsMap.value = newMap;
+  } catch (e) {
+    console.warn('[TimelineView] 悬停加载详情失败:', meta.id, e);
+  }
+}
+
+/**
+ * 从 ImageMeta 生成缩略图 URL
+ */
+function getThumbnailUrl(meta: ImageMeta): string {
+  return generateMediumThumbnailUrl(
+    meta.primaryService,
+    meta.primaryUrl,
+    meta.primaryFileKey,
+    configManager.config.value
+  );
 }
 
 /**
@@ -375,13 +399,13 @@ const preloadNextScreen = () => {
   const direction = scrollDirection?.value;
   if (!direction) return;
 
-  const currentVisibleIds = new Set(visibleItems.value.map(v => v.item.id));
-  const allItems = viewState.filteredItems.value;
+  const currentVisibleIds = new Set(visibleItems.value.map(v => v.meta.id));
+  const allMetas = viewState.filteredMetas.value;
 
   // 找到当前可见区域的边界索引
-  const visibleItemIds = visibleItems.value.map(v => v.item.id);
-  const firstVisibleIndex = allItems.findIndex(item => item.id === visibleItemIds[0]);
-  const lastVisibleIndex = allItems.findIndex(item => item.id === visibleItemIds[visibleItemIds.length - 1]);
+  const visibleMetaIds = visibleItems.value.map(v => v.meta.id);
+  const firstVisibleIndex = allMetas.findIndex(meta => meta.id === visibleMetaIds[0]);
+  const lastVisibleIndex = allMetas.findIndex(meta => meta.id === visibleMetaIds[visibleMetaIds.length - 1]);
 
   if (firstVisibleIndex === -1 || lastVisibleIndex === -1) return;
 
@@ -393,22 +417,22 @@ const preloadNextScreen = () => {
     ? lastVisibleIndex + 1
     : Math.max(0, firstVisibleIndex - preloadCount);
   const preloadEnd = direction === 'down'
-    ? Math.min(allItems.length, lastVisibleIndex + preloadCount + 1)
+    ? Math.min(allMetas.length, lastVisibleIndex + preloadCount + 1)
     : firstVisibleIndex;
 
   // 预加载图片
   for (let i = preloadStart; i < preloadEnd; i++) {
-    const item = allItems[i];
-    if (!item || currentVisibleIds.has(item.id) || isImageLoaded(item.id)) continue;
+    const meta = allMetas[i];
+    if (!meta || currentVisibleIds.has(meta.id) || isImageLoaded(meta.id)) continue;
 
-    const url = thumbCache.getMediumImageUrl(item);
+    const url = getThumbnailUrl(meta);
     if (!url) continue;
 
     // 后台预加载
     const img = new Image();
     img.src = url;
-    img.onload = () => onImageLoad(item.id);
-    img.onerror = (e) => onImageError(e, item.id);
+    img.onload = () => onImageLoad(meta.id);
+    img.onerror = (e) => onImageError(e, meta.id);
   }
 };
 
@@ -428,9 +452,6 @@ watch(displayMode, (mode) => {
 onMounted(async () => {
   console.log('[TimelineView] Mounted with Justified Layout');
 
-  // 启动延迟清理定时器
-  startCleanupTimer();
-
   // 并行加载历史记录和时间段统计
   await Promise.all([
     viewState.loadHistory(),
@@ -439,8 +460,8 @@ onMounted(async () => {
 
   // 初始加载后，检查并修复缺失元数据
   nextTick(() => {
-    const items = viewState.filteredItems.value;
-    const needsFix = items.filter((item) => !item.aspectRatio || item.aspectRatio <= 0);
+    const metas = viewState.filteredMetas.value;
+    const needsFix = metas.filter((meta) => !meta.aspectRatio || meta.aspectRatio <= 0);
     if (needsFix.length > 0) {
       console.log(`[TimelineView] 发现 ${needsFix.length} 张图片缺少宽高比，后台修复中...`);
       metadataFixer.batchFixMissingMetadata(needsFix);
@@ -534,19 +555,20 @@ watch(
         <!-- Justified Layout 图片列表（不再切换 DOM 结构） -->
         <div
           v-for="visible in visibleItems"
-          :key="visible.item.id"
+          :key="visible.meta.id"
           class="photo-item"
-          :class="{ selected: viewState.isSelected(visible.item.id) }"
+          :class="{ selected: viewState.isSelected(visible.meta.id) }"
           :style="{
             transform: `translate3d(${visible.x}px, ${visible.y}px, 0)`,
             width: `${visible.width}px`,
             height: `${visible.height}px`,
           }"
+          @mouseenter="handleImageHover(visible.meta)"
         >
-          <div class="photo-wrapper" @click="openLightbox(visible.item)">
+          <div class="photo-wrapper" @click="openLightbox(visible.meta)">
             <!-- 图片未加载时显示 Skeleton 占位 -->
             <Skeleton
-              v-if="!isImageLoaded(visible.item.id)"
+              v-if="!isImageLoaded(visible.meta.id)"
               width="100%"
               height="100%"
               borderRadius="8px"
@@ -555,12 +577,12 @@ watch(
 
             <!-- 图片 - 快速滚动时不加载新图片，但已加载的始终显示 -->
             <img
-              v-if="thumbCache.getMediumImageUrl(visible.item) && (isImageLoaded(visible.item.id) || displayMode !== 'fast')"
-              :src="thumbCache.getMediumImageUrl(visible.item)"
+              v-if="getThumbnailUrl(visible.meta) && (isImageLoaded(visible.meta.id) || displayMode !== 'fast')"
+              :src="getThumbnailUrl(visible.meta)"
               class="photo-img"
-              :class="{ loaded: isImageLoaded(visible.item.id) }"
-              @load="onImageLoad(visible.item.id)"
-              @error="onImageError($event, visible.item.id)"
+              :class="{ loaded: isImageLoaded(visible.meta.id) }"
+              @load="onImageLoad(visible.meta.id)"
+              @error="onImageError($event, visible.meta.id)"
             />
 
             <!-- Selection Overlay -->
@@ -569,31 +591,31 @@ watch(
             <!-- Checkbox -->
             <div
               class="checkbox"
-              :class="{ checked: viewState.isSelected(visible.item.id) }"
-              @click.stop="viewState.toggleSelection(visible.item.id)"
+              :class="{ checked: viewState.isSelected(visible.meta.id) }"
+              @click.stop="viewState.toggleSelection(visible.meta.id)"
             >
-              <i v-if="viewState.isSelected(visible.item.id)" class="pi pi-check"></i>
+              <i v-if="viewState.isSelected(visible.meta.id)" class="pi pi-check"></i>
             </div>
 
             <!-- 悬停信息层 -->
-            <div class="hover-info">
+            <div class="hover-info" v-if="hoverDetailsMap.get(visible.meta.id)">
               <div class="hover-info-top">
-                <span class="file-name" :title="visible.item.localFileName">
-                  {{ visible.item.localFileName }}
+                <span class="file-name" :title="hoverDetailsMap.get(visible.meta.id)!.localFileName">
+                  {{ hoverDetailsMap.get(visible.meta.id)!.localFileName }}
                 </span>
               </div>
               <div class="hover-info-bottom">
                 <div class="info-row">
                   <i class="pi pi-file"></i>
-                  <span class="file-size">{{ formatFileSize(visible.item.fileSize) }}</span>
+                  <span class="file-size">{{ formatFileSize(hoverDetailsMap.get(visible.meta.id)!.fileSize) }}</span>
                 </div>
                 <div class="info-row">
                   <i class="pi pi-clock"></i>
-                  <span class="upload-time">{{ formatUploadTime(visible.item.timestamp) }}</span>
+                  <span class="upload-time">{{ formatUploadTime(visible.meta.timestamp) }}</span>
                 </div>
-                <div class="service-badges" v-if="getSuccessfulServices(visible.item).length > 0">
+                <div class="service-badges" v-if="getSuccessfulServices(visible.meta.id).length > 0">
                   <span
-                    v-for="service in getSuccessfulServices(visible.item)"
+                    v-for="service in getSuccessfulServices(visible.meta.id)"
                     :key="service"
                     class="service-badge"
                     :title="`已上传到 ${getServiceName(service)}`"
@@ -606,23 +628,13 @@ watch(
           </div>
         </div>
 
-        <!-- Loading More Indicator -->
-        <div
-          v-if="viewState.isLoadingMore.value"
-          class="loading-more"
-          :style="{ transform: `translate3d(0, ${totalHeight - 60}px, 0)` }"
-        >
-          <i class="pi pi-spin pi-spinner"></i>
-          <span>加载中...</span>
-        </div>
-
         <!-- All Loaded Indicator -->
         <div
-          v-else-if="!viewState.hasMore.value && groups.length > 0"
+          v-if="groups.length > 0"
           class="all-loaded"
           :style="{ transform: `translate3d(0, ${totalHeight - 40}px, 0)` }"
         >
-          已加载全部 {{ viewState.totalCount.value }} 张照片
+          共 {{ viewState.totalCount.value }} 张照片
         </div>
       </div>
 

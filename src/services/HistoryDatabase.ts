@@ -7,6 +7,7 @@
 
 import Database from '@tauri-apps/plugin-sql';
 import type { HistoryItem, ServiceType } from '../config/types';
+import type { ImageMeta } from '../types/image-meta';
 
 /** 数据库文件名 */
 const DB_PATH = 'sqlite:history.db';
@@ -541,6 +542,73 @@ class HistoryDatabase {
       minTimestamp: row.min_timestamp,
       maxTimestamp: row.max_timestamp,
     }));
+  }
+
+  /**
+   * 获取所有图片的元数据（轻量级查询）
+   *
+   * 性能优化：
+   * - 只查询布局和缩略图必需的字段
+   * - 避免查询 linkCheckStatus/linkCheckSummary 等重型字段
+   * - 简化 results 解析，只提取 primaryFileKey
+   *
+   * @returns 按时间降序排列的元数据列表
+   */
+  async getMetaList(): Promise<ImageMeta[]> {
+    const db = await this.ensureInitialized();
+
+    // 只查询必需字段
+    const rows = await db.select<{
+      id: string;
+      timestamp: number;
+      local_file_name: string;
+      aspect_ratio: number;
+      primary_service: string;
+      generated_link: string;
+      results: string;  // JSON 字符串
+    }[]>(`
+      SELECT
+        id,
+        timestamp,
+        local_file_name,
+        aspect_ratio,
+        primary_service,
+        generated_link,
+        results
+      FROM history_items
+      ORDER BY timestamp DESC
+    `);
+
+    console.log(`[HistoryDB] 加载元数据: ${rows.length} 条`);
+
+    // 转换为 ImageMeta
+    return rows.map(row => {
+      // 提取主力图床的 fileKey（轻量级 JSON 解析）
+      let primaryFileKey: string | undefined;
+      try {
+        const results = JSON.parse(row.results) as Array<{
+          serviceId: string;
+          status: string;
+          result?: { fileKey?: string; url?: string };
+        }>;
+        const primaryResult = results.find(
+          r => r.serviceId === row.primary_service && r.status === 'success'
+        );
+        primaryFileKey = primaryResult?.result?.fileKey;
+      } catch (e) {
+        console.warn(`[HistoryDB] 解析 results 失败: ${row.id}`, e);
+      }
+
+      return {
+        id: row.id,
+        timestamp: row.timestamp,
+        localFileName: row.local_file_name || '',
+        aspectRatio: row.aspect_ratio || 1.0,
+        primaryService: row.primary_service as ServiceType,
+        primaryUrl: row.generated_link,
+        primaryFileKey,
+      };
+    });
   }
 
   /**

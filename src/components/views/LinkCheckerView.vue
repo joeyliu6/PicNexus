@@ -24,7 +24,7 @@ import type { ServiceType, HistoryItem } from '../../config/types';
 
 const toast = useToast();
 const { confirmDelete } = useConfirm();
-const { allHistoryItems, loadAllHistory } = useHistoryManager();
+const { loadAllHistory } = useHistoryManager();
 const { config } = useConfigManager();
 
 // 本地数据状态（独立于 HistoryView 的筛选条件）
@@ -289,13 +289,6 @@ const saveCheckResultToHistory = async (checkResult: CheckResult): Promise<void>
     if (localItem) {
       localItem.linkCheckStatus = historyItem.linkCheckStatus;
       localItem.linkCheckSummary = historyItem.linkCheckSummary;
-    }
-
-    // 同步更新共享缓存（确保返回 HistoryView 时状态正确）
-    const sharedItem = allHistoryItems.value.find(h => h.id === checkResult.historyItemId);
-    if (sharedItem) {
-      sharedItem.linkCheckStatus = historyItem.linkCheckStatus;
-      sharedItem.linkCheckSummary = historyItem.linkCheckSummary;
     }
 
   } catch (error) {

@@ -30,41 +30,39 @@ export function useHistoryViewState() {
 
   // === 计算属性 ===
 
-  // 筛选后的项目（根据 currentFilter 和 searchTerm 过滤）
-  const filteredItems = computed(() => {
-    let items = historyManager.allHistoryItems.value;
+  // 筛选后的元数据（根据 currentFilter 和 searchTerm 过滤）
+  const filteredMetas = computed(() => {
+    let metas = historyManager.imageMetas.value;
 
-    // 图床筛选
+    // 图床筛选（只筛选主力图床）
     if (currentFilter.value !== 'all') {
-      items = items.filter(item =>
-        item.results.some(r => r.serviceId === currentFilter.value && r.status === 'success')
-      );
+      metas = metas.filter(meta => meta.primaryService === currentFilter.value);
     }
 
     // 搜索筛选
     if (searchTerm.value.trim()) {
       const term = searchTerm.value.toLowerCase().trim();
-      items = items.filter(item =>
-        item.localFileName.toLowerCase().includes(term)
+      metas = metas.filter(meta =>
+        meta.localFileName.toLowerCase().includes(term)
       );
     }
 
-    return items;
+    return metas;
   });
 
   // 是否全选
   const isAllSelected = computed(() => {
-    const items = filteredItems.value;
-    if (items.length === 0) return false;
-    return items.every(item => selectedIds.value.has(item.id));
+    const metas = filteredMetas.value;
+    if (metas.length === 0) return false;
+    return metas.every(meta => selectedIds.value.has(meta.id));
   });
 
   // 是否部分选中
   const isSomeSelected = computed(() => {
-    const items = filteredItems.value;
-    if (items.length === 0) return false;
-    const count = items.filter(item => selectedIds.value.has(item.id)).length;
-    return count > 0 && count < items.length;
+    const metas = filteredMetas.value;
+    if (metas.length === 0) return false;
+    const count = metas.filter(meta => selectedIds.value.has(meta.id)).length;
+    return count > 0 && count < metas.length;
   });
 
   // 是否有选中项
@@ -119,7 +117,7 @@ export function useHistoryViewState() {
   function toggleSelectAll(checked: boolean): void {
     if (checked) {
       const newSet = new Set<string>();
-      filteredItems.value.forEach(item => newSet.add(item.id));
+      filteredMetas.value.forEach(meta => newSet.add(meta.id));
       selectedIds.value = newSet;
     } else {
       selectedIds.value = new Set();
@@ -188,16 +186,16 @@ export function useHistoryViewState() {
     }
 
     try {
-      const items = historyManager.allHistoryItems.value.filter(item => ids.includes(item.id));
+      const metas = historyManager.imageMetas.value.filter(meta => ids.includes(meta.id));
       const activePrefix = getActivePrefix(configManager.config.value);
 
-      const formattedLinks = items.map(item => {
-        if (!item.generatedLink) return null;
-        let finalLink = item.generatedLink;
-        if (item.primaryService === 'weibo' && activePrefix) {
-          finalLink = `${activePrefix}${item.generatedLink}`;
+      const formattedLinks = metas.map(meta => {
+        if (!meta.primaryUrl) return null;
+        let finalLink = meta.primaryUrl;
+        if (meta.primaryService === 'weibo' && activePrefix) {
+          finalLink = `${activePrefix}${meta.primaryUrl}`;
         }
-        return formatLink(finalLink, item.localFileName, format);
+        return formatLink(finalLink, meta.localFileName, format);
       }).filter((link): link is string => !!link);
 
       if (formattedLinks.length === 0) {
@@ -257,7 +255,7 @@ export function useHistoryViewState() {
     selectedIds,
     currentFilter,
     searchTerm,
-    filteredItems,
+    filteredMetas,  // ← 改为元数据
 
     // 计算属性
     isAllSelected,
@@ -287,16 +285,16 @@ export function useHistoryViewState() {
 
     // 代理 historyManager 的方法
     loadHistory: historyManager.loadHistory,
-    loadMore: historyManager.loadMore,
     loadPageByNumber: historyManager.loadPageByNumber,
     searchHistory: historyManager.searchHistory,
     deleteHistoryItem: historyManager.deleteHistoryItem,
 
     // 代理 historyManager 的状态
-    allHistoryItems: historyManager.allHistoryItems,
+    imageMetas: historyManager.imageMetas,
     isLoading: historyManager.isLoading,
-    isLoadingMore: historyManager.isLoadingMore,
     totalCount: historyManager.totalCount,
-    hasMore: historyManager.hasMore,
+
+    // 代理详情缓存
+    detailCache: historyManager.detailCache,
   };
 }
