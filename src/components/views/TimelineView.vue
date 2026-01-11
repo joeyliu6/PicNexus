@@ -17,6 +17,7 @@ import { useToast } from '../../composables/useToast';
 import type { HistoryItem, ServiceType } from '../../config/types';
 import type { ImageMeta } from '../../types/image-meta';
 import TimelineSidebar, { type TimeGroup } from './timeline/TimelineSidebar.vue';
+import TimelineIndicator from './timeline/TimelineIndicator.vue';
 import HistoryLightbox from './history/HistoryLightbox.vue';
 import FloatingActionBar from './history/FloatingActionBar.vue';
 import Skeleton from 'primevue/skeleton';
@@ -168,6 +169,15 @@ const sidebarGroups = computed<TimeGroup[]>(() => {
   }));
 });
 
+// 已加载的月份集合（用于新时间轴指示器）
+const loadedMonthsSet = computed(() => {
+  const set = new Set<string>();
+  for (const group of groups.value) {
+    set.add(`${group.year}-${group.month}`);
+  }
+  return set;
+});
+
 // 每个分组的布局高度（用于时间轴准确定位）
 const groupHeightMap = computed(() => {
   const map = new Map<string, number>();
@@ -178,6 +188,42 @@ const groupHeightMap = computed(() => {
     const height = group.headerHeight + group.contentHeight;
     map.set(group.groupId, height);
   }
+  return map;
+});
+
+// 基于布局高度的月份位置映射（用于时间轴指示器精确定位）
+const monthLayoutPositions = computed(() => {
+  const map = new Map<string, { start: number; end: number }>();
+  if (!layoutResult.value || totalHeight.value <= 0) return map;
+
+  // 按月份聚合分组（同一个月可能有多天的分组）
+  const monthGroups = new Map<string, { startY: number; endY: number }>();
+
+  for (const group of layoutResult.value.groupLayouts) {
+    const groupData = groups.value.find(g => g.id === group.groupId);
+    if (!groupData) continue;
+
+    const monthKey = `${groupData.year}-${groupData.month}`;
+    const groupEnd = group.contentY + group.contentHeight;
+
+    if (!monthGroups.has(monthKey)) {
+      monthGroups.set(monthKey, { startY: group.headerY, endY: groupEnd });
+    } else {
+      const existing = monthGroups.get(monthKey)!;
+      // 更新结束位置（取最大值）
+      existing.endY = Math.max(existing.endY, groupEnd);
+    }
+  }
+
+  // 转换为滚动进度比例 (0-1)
+  const maxScroll = Math.max(1, totalHeight.value - viewportHeight.value);
+  for (const [key, { startY, endY }] of monthGroups) {
+    map.set(key, {
+      start: Math.min(1, startY / maxScroll),
+      end: Math.min(1, endY / maxScroll),
+    });
+  }
+
   return map;
 });
 
@@ -255,6 +301,34 @@ const handleJumpToPeriod = async (year: number, month: number) => {
     // 强制更新可见区域
     forceUpdateVisibleArea();
     toast.success('已跳转', `${year}年${month + 1}月`);
+  }
+};
+
+/**
+ * 处理时间轴跳转到指定年份
+ */
+const handleJumpToYear = async (year: number) => {
+  console.log(`[TimelineView] 跳转到 ${year}年`);
+
+  // 找到该年份的分组
+  const yearGroups = groups.value.filter(g => g.year === year);
+
+  if (yearGroups.length > 0) {
+    // 已加载，直接滚动到该年份最早的分组
+    const firstGroup = yearGroups[yearGroups.length - 1]; // 最早的月份（降序排列）
+    if (firstGroup.items.length > 0) {
+      scrollToItem(firstGroup.items[0].id);
+      toast.success('已跳转', `${year}年`);
+    }
+  } else {
+    // 未加载，找到该年份的第一个月份并触发加载
+    const periods = historyManager.timePeriodStats.value;
+    const yearPeriods = periods.filter(p => p.year === year);
+    if (yearPeriods.length > 0) {
+      // 找最早的月份（periods 按时间降序，最后一个是最早的）
+      const earliestPeriod = yearPeriods[yearPeriods.length - 1];
+      await handleJumpToPeriod(year, earliestPeriod.month);
+    }
   }
 };
 
@@ -650,16 +724,17 @@ watch(
       @mouseleave="handleSidebarLeave"
       @wheel.prevent="handleSidebarWheel"
     >
-      <TimelineSidebar
-        :groups="sidebarGroups"
+      <TimelineIndicator
+        :periods="historyManager.timePeriodStats.value"
         :scroll-progress="scrollProgress"
         :visible-ratio="visibleRatio"
-        :current-month-label="currentMonthLabel"
-        :group-heights="groupHeightMap"
-        :total-layout-height="totalHeight"
-        :all-time-periods="historyManager.timePeriodStats.value"
+        :total-height="totalHeight"
+        :loaded-months="loadedMonthsSet"
+        :show-density="true"
+        :month-layout-positions="monthLayoutPositions"
         @drag-scroll="handleDragScroll"
         @jump-to-period="handleJumpToPeriod"
+        @jump-to-year="handleJumpToYear"
       />
     </div>
 
@@ -1022,9 +1097,9 @@ watch(
     font-size: 10px;
   }
 
-  /* 侧边栏在手机上缩小 */
+  /* 侧边栏在平板上缩小 */
   .sidebar-wrapper {
-    width: 40px;
+    width: 52px;
   }
 
   /* 悬停信息字体缩小 */
