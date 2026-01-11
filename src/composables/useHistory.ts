@@ -11,7 +11,6 @@ import type { HistoryItem, ServiceType } from '../config/types';
 import { getActivePrefix } from '../config/types';
 import { historyDB, type PageResult, type SearchResult, type SearchOptions, type TimePeriodStats } from '../services/HistoryDatabase';
 import type { ImageMeta } from '../types/image-meta';
-import { extractMetaFromHistoryItem } from '../types/image-meta';
 import { useImageDetailCache } from './useImageDetailCache';
 import { useToast } from './useToast';
 import { useConfirm } from './useConfirm';

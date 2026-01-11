@@ -2,7 +2,7 @@
  * 图片加载状态管理 Composable
  * 管理图片的加载状态、LRU 缓存、延迟清理
  */
-import { ref, shallowRef, onUnmounted, type Ref } from 'vue';
+import { shallowRef, onUnmounted, type Ref } from 'vue';
 import type { VisibleItem } from './useVirtualTimeline';
 
 interface UseImageLoadManagerOptions {
