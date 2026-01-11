@@ -6,17 +6,15 @@ import Sidebar from './Sidebar.vue';
 import UploadView from '../views/UploadView.vue';
 import HistoryView from '../views/HistoryView.vue';
 import CloudStorageView from '../views/CloudStorageView/index.vue';
-import LinkCheckerView from '../views/LinkCheckerView.vue';
 import SettingsView from '../views/SettingsView.vue';
 
-type ViewType = 'upload' | 'history' | 'cloud-storage' | 'link-checker' | 'settings';
+type ViewType = 'upload' | 'history' | 'cloud-storage' | 'settings';
 
 // 组件映射对象
 const viewComponents = {
   upload: UploadView,
   history: HistoryView,
   'cloud-storage': CloudStorageView,
-  'link-checker': LinkCheckerView,
   settings: SettingsView
 } as const;
 
