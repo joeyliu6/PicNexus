@@ -88,14 +88,6 @@ export function getServiceSemaphore(serviceId: string, maxConcurrent: number = 2
   return serviceSemaphores.get(serviceId)!;
 }
 
-/**
- * 重置所有图床的信号量
- * 用于清理或重新初始化
- */
-export function resetAllServiceSemaphores(): void {
-  serviceSemaphores.clear();
-}
-
 // ========== 工具函数 ==========
 
 /**
