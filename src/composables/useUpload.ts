@@ -12,7 +12,9 @@ import {
   DEFAULT_CONFIG,
   ServiceType,
   HistoryItem,
-  ImageMetadata
+  ImageMetadata,
+  SyncStatus,
+  ServiceCheckStatus
 } from '../config/types';
 import { MultiServiceUploader, MultiUploadResult, SingleServiceResult } from '../core/MultiServiceUploader';
 import { UploadQueueManager } from '../uploadQueue';
@@ -102,6 +104,31 @@ async function fetchMetadataBatch(
 
 // --- STORES ---
 const configStore = new Store('.settings.dat');
+const syncStatusStore = new Store('.sync-status.dat');
+
+// --- 七鱼检测缓存策略 (与 SettingsView 共享) ---
+
+/**
+ * 检查七鱼是否需要重新检测
+ * 复用 SettingsView 的智能检测策略
+ */
+function shouldCheckQiyu(status: ServiceCheckStatus | undefined): boolean {
+  if (!status) return true;
+  if (status.lastCheckResult === false) return true;
+  if (status.nextCheckTime && Date.now() >= status.nextCheckTime) return true;
+  return false;
+}
+
+/**
+ * 生成 7~12 天的随机毫秒数
+ * 用于设置下次检测时间
+ */
+function getRandomCheckInterval(): number {
+  const minDays = 7;
+  const maxDays = 12;
+  const randomDays = Math.floor(Math.random() * (maxDays - minDays + 1)) + minDays;
+  return randomDays * 24 * 60 * 60 * 1000;
+}
 
 /**
  * 上传管理 Composable
@@ -941,12 +968,38 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     const zhihuConfig = config.services.zhihu;
     serviceConfigStatus.value.zhihu = !!zhihuConfig?.cookie && zhihuConfig.cookie.trim().length > 0;
 
-    // 七鱼：检测 Chrome/Edge 是否安装
+    // 七鱼：使用智能检测策略（与 SettingsView 共享缓存）
     try {
-      const chromeInstalled = await invoke<boolean>('check_chrome_installed');
-      serviceConfigStatus.value.qiyu = chromeInstalled;
-      if (!chromeInstalled) {
-        console.warn('[七鱼] Chrome/Edge 未安装，服务不可用');
+      const syncStatus = await syncStatusStore.get<SyncStatus>('status');
+      const qiyuStatus = syncStatus?.qiyuCheckStatus;
+
+      if (!shouldCheckQiyu(qiyuStatus)) {
+        // 使用缓存结果
+        serviceConfigStatus.value.qiyu = qiyuStatus!.lastCheckResult;
+        console.log('[七鱼] 使用缓存的检测结果');
+      } else {
+        // 缓存失效，重新检测
+        const chromeInstalled = await invoke<boolean>('check_chrome_installed');
+        serviceConfigStatus.value.qiyu = chromeInstalled;
+
+        // 更新缓存（与 SettingsView 保持一致）
+        const now = Date.now();
+        const newStatus: SyncStatus = syncStatus || {
+          configLastSync: null,
+          configSyncResult: null,
+          historyLastSync: null,
+          historySyncResult: null
+        };
+        newStatus.qiyuCheckStatus = {
+          lastCheckTime: now,
+          lastCheckResult: chromeInstalled,
+          nextCheckTime: chromeInstalled ? now + getRandomCheckInterval() : null
+        };
+        await syncStatusStore.set('status', newStatus);
+
+        if (!chromeInstalled) {
+          console.warn('[七鱼] Chrome/Edge 未安装，服务不可用');
+        }
       }
     } catch (error) {
       console.error('[七鱼] Chrome 检测失败:', error);
