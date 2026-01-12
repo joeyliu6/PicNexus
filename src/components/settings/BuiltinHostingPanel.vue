@@ -5,7 +5,6 @@
  * 使用标签页切换，带可用性检测功能
  */
 import { ref, computed } from 'vue';
-import Button from 'primevue/button';
 import Tag from 'primevue/tag';
 
 const props = defineProps<{
@@ -84,10 +83,9 @@ const getProviderAvailable = (providerId: ProviderId): boolean => {
 
     <!-- 当前服务商配置表单 -->
     <div class="provider-form">
-      <!-- 服务描述 -->
+      <!-- 服务名称 -->
       <div class="section-header">
         <h2>{{ currentProviderInfo.name }}</h2>
-        <p class="section-desc">{{ currentProviderInfo.description }}</p>
       </div>
 
       <!-- 可用性状态卡片 -->
@@ -115,22 +113,11 @@ const getProviderAvailable = (providerId: ProviderId): boolean => {
           </div>
         </div>
         <Tag
-          :value="isCurrentAvailable ? '可用' : '不可用'"
-          :severity="isCurrentAvailable ? 'success' : 'danger'"
-          class="status-tag"
-        />
-      </div>
-
-      <!-- 检测按钮 -->
-      <div class="actions-row">
-        <Button
-          label="检测可用性"
-          icon="pi pi-refresh"
+          :value="isCurrentChecking ? '检测中...' : (isCurrentAvailable ? '可用' : '不可用')"
+          :severity="isCurrentChecking ? 'info' : (isCurrentAvailable ? 'success' : 'danger')"
+          class="status-tag clickable"
           @click="handleCheck"
-          :loading="isCurrentChecking"
-          severity="secondary"
-          outlined
-          size="small"
+          v-tooltip.top="'点击检测可用性'"
         />
       </div>
     </div>
@@ -151,7 +138,8 @@ const getProviderAvailable = (providerId: ProviderId): boolean => {
   gap: 8px;
   flex-wrap: wrap;
   padding: 4px;
-  background: var(--bg-secondary);
+  background: var(--hover-overlay-subtle);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
 }
 
@@ -282,11 +270,18 @@ const getProviderAvailable = (providerId: ProviderId): boolean => {
   flex-shrink: 0;
 }
 
-/* 操作按钮行 */
-.actions-row {
-  display: flex;
-  justify-content: flex-start;
-  gap: 12px;
-  padding-top: 8px;
+/* 可点击的状态标签 */
+.status-tag.clickable {
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.status-tag.clickable:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.status-tag.clickable:active {
+  transform: scale(0.98);
 }
 </style>

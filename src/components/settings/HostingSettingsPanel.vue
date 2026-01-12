@@ -56,6 +56,7 @@ const emit = defineEmits<{
   testToken: [providerId: string];
   testCookie: [providerId: string];
   checkBuiltin: [providerId: string];
+  loginCookie: [providerId: string];
 }>();
 
 // 默认展开的面板（可以同时展开多个）
@@ -85,6 +86,11 @@ const handleTestCookie = (providerId: string) => {
 const handleCheckBuiltin = (providerId: string) => {
   emit('checkBuiltin', providerId);
 };
+
+// 处理 Cookie 自动获取
+const handleLoginCookie = (providerId: string) => {
+  emit('loginCookie', providerId);
+};
 </script>
 
 <template>
@@ -97,12 +103,12 @@ const handleCheckBuiltin = (providerId: string) => {
 
     <!-- 折叠面板 -->
     <Accordion :value="activeAccordions" multiple class="hosting-accordion">
-      <!-- 私有图床 -->
+      <!-- 云存储 -->
       <AccordionPanel value="0">
         <AccordionHeader>
           <div class="accordion-title">
-            <i class="pi pi-server"></i>
-            <span>私有图床</span>
+            <i class="pi pi-cloud"></i>
+            <span>云存储</span>
             <span class="category-count">5</span>
           </div>
         </AccordionHeader>
@@ -116,12 +122,12 @@ const handleCheckBuiltin = (providerId: string) => {
         </AccordionContent>
       </AccordionPanel>
 
-      <!-- 开箱即用 -->
+      <!-- 免配置图床 -->
       <AccordionPanel value="1">
         <AccordionHeader>
           <div class="accordion-title">
-            <i class="pi pi-box"></i>
-            <span>开箱即用</span>
+            <i class="pi pi-bolt"></i>
+            <span>免配置图床</span>
             <span class="category-count">2</span>
           </div>
         </AccordionHeader>
@@ -140,7 +146,7 @@ const handleCheckBuiltin = (providerId: string) => {
       <AccordionPanel value="2">
         <AccordionHeader>
           <div class="accordion-title">
-            <i class="pi pi-key"></i>
+            <svg class="category-icon" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path d="M512 128C299.946667 128 128 299.946667 128 512 128 724.053333 299.946667 896 512 896 724.053333 896 896 724.053333 896 512 896 490.666667 894.293333 469.333333 890.453333 448 878.933333 426.666667 853.333333 426.666667 853.333333 426.666667L768 426.666667 768 384C768 341.333333 725.333333 341.333333 725.333333 341.333333L640 341.333333 640 298.666667C640 256 597.333333 256 597.333333 256L554.666667 256 554.666667 170.666667C554.666667 128 512 128 512 128M405.333333 256C440.746667 256 469.333333 284.586667 469.333333 320 469.333333 355.413333 440.746667 384 405.333333 384 369.92 384 341.333333 355.413333 341.333333 320 341.333333 284.586667 369.92 256 405.333333 256M277.333333 426.666667C312.746667 426.666667 341.333333 455.253333 341.333333 490.666667 341.333333 526.08 312.746667 554.666667 277.333333 554.666667 241.92 554.666667 213.333333 526.08 213.333333 490.666667 213.333333 455.253333 241.92 426.666667 277.333333 426.666667M490.666667 469.333333C526.08 469.333333 554.666667 497.92 554.666667 533.333333 554.666667 568.746667 526.08 597.333333 490.666667 597.333333 455.253333 597.333333 426.666667 568.746667 426.666667 533.333333 426.666667 497.92 455.253333 469.333333 490.666667 469.333333M704 554.666667C739.413333 554.666667 768 583.253333 768 618.666667 768 654.08 739.413333 682.666667 704 682.666667L704 682.666667C668.586667 682.666667 640 654.08 640 618.666667L640 618.666667C640 583.253333 668.586667 554.666667 704 554.666667M469.333333 682.666667C504.746667 682.666667 533.333333 711.253333 533.333333 746.666667 533.333333 782.08 504.746667 810.666667 469.333333 810.666667 433.92 810.666667 405.333333 782.08 405.333333 746.666667 405.333333 711.253333 433.92 682.666667 469.333333 682.666667Z" fill="currentColor"/></svg>
             <span>Cookie 认证</span>
             <span class="category-count">6</span>
           </div>
@@ -151,6 +157,7 @@ const handleCheckBuiltin = (providerId: string) => {
             :testingConnections="testingConnections"
             @save="handleSave"
             @test="handleTestCookie"
+            @login="handleLoginCookie"
           />
         </AccordionContent>
       </AccordionPanel>
@@ -159,7 +166,7 @@ const handleCheckBuiltin = (providerId: string) => {
       <AccordionPanel value="3">
         <AccordionHeader>
           <div class="accordion-title">
-            <i class="pi pi-shield"></i>
+            <svg class="category-icon" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path d="M412.8 396.8c0 54.4 44.8 99.2 99.2 99.2s99.2-44.8 99.2-99.2-44.8-99.2-99.2-99.2-99.2 44.8-99.2 99.2z" fill="currentColor"/><path d="M512 12.8C380.8 102.4 246.4 147.2 112 147.2v313.6c0 179.2 89.6 342.4 236.8 441.6l163.2 108.8 163.2-108.8c147.2-99.2 236.8-265.6 236.8-441.6V147.2c-134.4 0-265.6-44.8-400-134.4z m32 547.2v64h99.2v67.2H544v105.6h-64v-236.8c-76.8-16-134.4-83.2-134.4-163.2 0-92.8 73.6-166.4 166.4-166.4s166.4 73.6 166.4 166.4c0 80-57.6 147.2-134.4 163.2z" fill="currentColor"/></svg>
             <span>Token 认证</span>
             <span class="category-count">3</span>
           </div>
@@ -230,8 +237,17 @@ const handleCheckBuiltin = (providerId: string) => {
   color: var(--primary-color);
 }
 
+/* 自定义 SVG 图标样式 */
+.accordion-title .category-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  color: var(--primary-color);
+  flex-shrink: 0;
+}
+
 .category-count {
   margin-left: auto;
+  margin-right: 12px;
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-muted);
@@ -240,6 +256,43 @@ const handleCheckBuiltin = (providerId: string) => {
   border-radius: 12px;
   min-width: 28px;
   text-align: center;
+}
+
+/* 保持滚动条空间稳定，避免内容宽度跳变 */
+:deep(.p-accordioncontent-content) {
+  scrollbar-gutter: stable;
+}
+
+/* 修复暗黑模式 Accordion 背景色过深 */
+:deep(.p-accordionpanel) {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+:deep(.p-accordionheader) {
+  background: var(--bg-card);
+  border: none;
+  padding: 16px 20px;
+}
+
+:deep(.p-accordionheader:hover) {
+  background: var(--bg-card);
+}
+
+:deep(.p-accordionheader-toggle-icon) {
+  color: var(--text-muted);
+}
+
+:deep(.p-accordioncontent) {
+  background: transparent;
+  border: none;
+}
+
+:deep(.p-accordioncontent-content) {
+  padding: 20px;
+  background: transparent;
 }
 
 /* 响应式 */

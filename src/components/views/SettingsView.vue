@@ -579,6 +579,11 @@ const handleBuiltinCheck = (providerId: string) => {
   }
 };
 
+// Cookie 自动获取处理
+const handleCookieLogin = (providerId: string) => {
+  actions.login(providerId as ServiceType);
+};
+
 // 前缀管理
 const addPrefix = () => { formData.value.linkPrefixList.push(''); formData.value.selectedPrefixIndex = formData.value.linkPrefixList.length - 1; };
 const removePrefix = (idx: number) => {
@@ -2374,6 +2379,7 @@ onUnmounted(() => {
           @test-token="handleTokenTest"
           @test-cookie="handleCookieTest"
           @check-builtin="handleBuiltinCheck"
+          @login-cookie="handleCookieLogin"
         />
       </div>
 

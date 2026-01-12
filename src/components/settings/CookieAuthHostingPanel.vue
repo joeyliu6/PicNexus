@@ -27,6 +27,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   save: [];
   test: [providerId: string];
+  login: [providerId: string];
 }>();
 
 // 服务商类型定义
@@ -82,6 +83,11 @@ const handleTest = () => {
   emit('test', selectedProvider.value);
 };
 
+// 自动获取 Cookie
+const handleLogin = () => {
+  emit('login', selectedProvider.value);
+};
+
 // 从 Cookie 中提取 Auth-Token（仅用于 Nami）
 const extractAuthToken = computed(() => {
   if (selectedProvider.value !== 'nami') return '';
@@ -115,10 +121,9 @@ const extractAuthToken = computed(() => {
 
     <!-- 当前服务商配置表单 -->
     <div class="provider-form">
-      <!-- 服务描述 -->
+      <!-- 服务名称 -->
       <div class="section-header">
         <h2>{{ currentProviderInfo.name }}</h2>
-        <p class="section-desc">{{ currentProviderInfo.description }}</p>
       </div>
 
       <!-- 通用 Cookie 表单 -->
@@ -152,8 +157,16 @@ const extractAuthToken = computed(() => {
         </div>
       </div>
 
-      <!-- 测试连接按钮 -->
+      <!-- 操作按钮 -->
       <div class="actions-row">
+        <Button
+          label="自动获取"
+          icon="pi pi-sign-in"
+          @click="handleLogin"
+          severity="info"
+          outlined
+          size="small"
+        />
         <Button
           label="测试连接"
           icon="pi pi-check"
@@ -183,7 +196,8 @@ const extractAuthToken = computed(() => {
   gap: 8px;
   flex-wrap: wrap;
   padding: 4px;
-  background: var(--bg-secondary);
+  background: var(--hover-overlay-subtle);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
 }
 

@@ -121,10 +121,9 @@ const isTesting = computed(() => {
 
     <!-- 当前服务商配置表单 -->
     <div class="provider-form">
-      <!-- 服务描述 -->
+      <!-- 服务名称 -->
       <div class="section-header">
         <h2>{{ currentProviderInfo.name }}</h2>
-        <p class="section-desc">{{ currentProviderInfo.description }}</p>
       </div>
 
       <!-- R2 表单 -->
@@ -294,7 +293,8 @@ const isTesting = computed(() => {
   gap: 8px;
   flex-wrap: wrap;
   padding: 4px;
-  background: var(--bg-secondary);
+  background: var(--hover-overlay-subtle);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
 }
 
