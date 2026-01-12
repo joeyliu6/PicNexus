@@ -27,7 +27,7 @@ import { emitHistoryUpdated } from '../../events/cacheEvents';
 import { useAnalytics } from '../../composables/useAnalytics';
 import { useAutoSync, createDefaultAutoSyncConfig, type AutoSyncConfig } from '../../composables/useAutoSync';
 import SyncConflictDialog from '../dialogs/SyncConflictDialog.vue';
-import S3SettingsPanel from '../settings/S3SettingsPanel.vue';
+import HostingSettingsPanel from '../settings/HostingSettingsPanel.vue';
 import { Store } from '../../store';
 import { WebDAVClient } from '../../utils/webdav';
 import { historyDB } from '../../services/HistoryDatabase';
@@ -73,21 +73,15 @@ const appVersion = ref<string>('');
 const isClearingCache = ref(false);
 
 // --- 导航状态管理 ---
-type SettingsTab = 'general' | 's3' | 'builtin' | 'cookie_auth' | 'token_auth' | 'links' | 'md_repair' | 'backup';
+type SettingsTab = 'general' | 'hosting' | 'links' | 'md_repair' | 'backup';
 const activeTab = ref<SettingsTab>('general');
 
 const tabs = [
   { id: 'general', label: '常规设置', icon: 'pi pi-cog' },
   { type: 'separator' },
-  { type: 'label', label: '私有云存储' },
-  { id: 's3', label: 'S3 兼容存储', icon: 'pi pi-cloud' },
+  { id: 'hosting', label: '图床设置', icon: 'pi pi-images' },
   { type: 'separator' },
-  { type: 'label', label: '公共图床' },
-  { id: 'builtin', label: '开箱即用', icon: 'pi pi-box' },
-  { id: 'cookie_auth', label: 'Cookie 认证', icon: 'pi pi-key' },
-  { id: 'token_auth', label: 'Token 认证', icon: 'pi pi-key' },
-  { type: 'separator' },
-  { type: 'label', label: '高级' },
+  { type: 'label', label: '高级设置' },
   { id: 'links', label: '链接前缀', icon: 'pi pi-link' },
   { id: 'md_repair', label: 'MD 图链修复', icon: 'pi pi-wrench' },
   { id: 'backup', label: '备份与同步', icon: 'pi pi-database' },
@@ -554,6 +548,14 @@ const handleAnalyticsToggle = async () => {
 
 // S3 兼容存储测试连接处理
 const handleS3Test = (providerId: string) => {
+  const testFn = actions[providerId as keyof typeof actions];
+  if (typeof testFn === 'function') {
+    testFn();
+  }
+};
+
+// Token 认证测试连接处理
+const handleTokenTest = (providerId: string) => {
   const testFn = actions[providerId as keyof typeof actions];
   if (typeof testFn === 'function') {
     testFn();
@@ -2321,223 +2323,35 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- S3 兼容存储统一设置面板 -->
-      <div v-if="activeTab === 's3'" class="settings-section">
-        <S3SettingsPanel
-          :form-data="formData"
+      <!-- 私有图床统一设置面板 -->
+      <!-- 图床设置（统一面板） -->
+      <div v-if="activeTab === 'hosting'" class="settings-section">
+        <HostingSettingsPanel
+          :private-form-data="{
+            r2: formData.r2,
+            cos: formData.cos,
+            oss: formData.oss,
+            qiniu: formData.qiniu,
+            upyun: formData.upyun
+          }"
+          :cookie-form-data="{
+            weibo: { cookie: formData.weiboCookie },
+            zhihu: formData.zhihu,
+            nowcoder: formData.nowcoder,
+            nami: formData.nami,
+            bilibili: formData.bilibili,
+            chaoxing: formData.chaoxing
+          }"
+          :token-form-data="{
+            smms: formData.smms,
+            github: formData.github,
+            imgur: formData.imgur
+          }"
           :testing-connections="testingConnections"
           @save="saveSettings"
-          @test="handleS3Test"
+          @test-private="handleS3Test"
+          @test-token="handleTokenTest"
         />
-      </div>
-
-      <!-- 开箱即用 -->
-      <div v-if="activeTab === 'builtin'" class="settings-section">
-        <div class="section-header">
-          <h2>开箱即用</h2>
-          <p class="section-desc">无需配置，直接使用的图床服务。</p>
-        </div>
-
-        <div class="service-cards-row">
-          <div class="service-card-flat">
-            <div class="sc-content">
-              <h3>京东图床</h3>
-              <p>速度极快，CDN 全球分发。最大支持 15MB。</p>
-              <div class="service-status">
-                <Tag
-                  :value="isCheckingJd ? '检测中' : (jdAvailable ? '可用' : '不可用')"
-                  :severity="isCheckingJd ? 'info' : (jdAvailable ? 'success' : 'danger')"
-                  :icon="isCheckingJd ? 'pi pi-spin pi-spinner' : undefined"
-                  class="clickable-tag"
-                  @click="!isCheckingJd && checkJdAvailable()"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div class="service-card-flat">
-            <div class="sc-content">
-              <h3>七鱼图床</h3>
-              <p>基于网易七鱼客服系统，Token 自动获取。</p>
-              <div class="service-status">
-                <Tag
-                  :value="isCheckingQiyu ? '检测中' : (qiyuAvailable ? '可用' : '不可用')"
-                  :severity="isCheckingQiyu ? 'info' : (qiyuAvailable ? 'success' : 'danger')"
-                  :icon="isCheckingQiyu ? 'pi pi-spin pi-spinner' : undefined"
-                  class="clickable-tag"
-                  @click="!isCheckingQiyu && checkQiyuAvailability(true)"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Token 认证 -->
-      <div v-if="activeTab === 'token_auth'" class="settings-section">
-        <div class="section-header">
-          <h2>Token 认证</h2>
-          <p class="section-desc">需要提供 API Token 的图床服务。</p>
-        </div>
-
-        <Divider />
-
-        <!-- SM.MS -->
-        <div class="sub-section">
-          <div class="flex justify-between items-center mb-2">
-            <h3>SM.MS 图床</h3>
-            <div class="actions-mini">
-              <Button label="测试" icon="pi pi-check" @click="actions.smms" :loading="testingConnections.smms" text size="small"/>
-            </div>
-          </div>
-          <div class="form-item">
-            <label>API Token</label>
-            <Password v-model="formData.smms.token" @blur="saveSettings" :feedback="false" toggleMask class="w-full" placeholder="SM.MS API Token" />
-            <small class="text-gray-500 mt-1">获取地址：https://sm.ms/home/apitoken</small>
-          </div>
-        </div>
-
-        <Divider />
-
-        <!-- GitHub -->
-        <div class="sub-section">
-          <div class="flex justify-between items-center mb-2">
-            <h3>GitHub 图床</h3>
-            <div class="actions-mini">
-              <Button label="测试" icon="pi pi-check" @click="actions.github" :loading="testingConnections.github" text size="small"/>
-            </div>
-          </div>
-          <div class="form-grid">
-            <div class="form-item span-full">
-              <label>Personal Access Token</label>
-              <Password v-model="formData.github.token" @blur="saveSettings" :feedback="false" toggleMask class="w-full" placeholder="ghp_..." />
-              <small class="text-gray-500 mt-1">获取地址：Settings → Developer settings → Personal access tokens</small>
-            </div>
-            <div class="form-item">
-              <label>仓库所有者</label>
-              <InputText v-model="formData.github.owner" @blur="saveSettings" class="w-full" placeholder="username" />
-            </div>
-            <div class="form-item">
-              <label>仓库名称</label>
-              <InputText v-model="formData.github.repo" @blur="saveSettings" class="w-full" placeholder="repo-name" />
-            </div>
-            <div class="form-item">
-              <label>分支名称</label>
-              <InputText v-model="formData.github.branch" @blur="saveSettings" class="w-full" placeholder="main" />
-            </div>
-            <div class="form-item span-full">
-              <label>存储路径</label>
-              <InputText v-model="formData.github.path" @blur="saveSettings" class="w-full" placeholder="images/" />
-            </div>
-          </div>
-        </div>
-
-        <Divider />
-
-        <!-- Imgur -->
-        <div class="sub-section">
-          <div class="flex justify-between items-center mb-2">
-            <h3>Imgur 图床</h3>
-            <div class="actions-mini">
-              <Button label="测试" icon="pi pi-check" @click="actions.imgur" :loading="testingConnections.imgur" text size="small"/>
-            </div>
-          </div>
-          <div class="form-grid">
-            <div class="form-item span-full">
-              <label>Client ID</label>
-              <Password v-model="formData.imgur.clientId" @blur="saveSettings" :feedback="false" toggleMask class="w-full" placeholder="Client ID" />
-              <small class="text-gray-500 mt-1">获取地址：https://imgur.com/account/settings/apps</small>
-            </div>
-            <div class="form-item span-full">
-              <label>Client Secret (Optional)</label>
-              <Password v-model="formData.imgur.clientSecret" @blur="saveSettings" :feedback="false" toggleMask class="w-full" placeholder="Client Secret" />
-              <small class="text-gray-500 mt-1">匿名上传可不填</small>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="activeTab === 'cookie_auth'" class="settings-section">
-        <div class="section-header">
-          <h2>Cookie 认证</h2>
-          <p class="section-desc">需要提供 Cookie 的图床服务。</p>
-        </div>
-
-        <div class="sub-section">
-          <div class="flex justify-between items-center mb-2">
-            <h3>微博图床</h3>
-            <div class="actions-mini">
-              <Button label="获取" icon="pi pi-globe" @click="actions.login('weibo')" text size="small"/>
-              <Button label="测试" icon="pi pi-check" @click="actions.weibo" :loading="testingConnections.weibo" text size="small"/>
-            </div>
-          </div>
-          <Textarea v-model="formData.weiboCookie" @blur="saveSettings" rows="4" class="mono-input w-full" placeholder="SUB=...; (粘贴完整 Cookie)" />
-        </div>
-
-        <Divider />
-
-        <div class="sub-section">
-          <div class="flex justify-between items-center mb-2">
-            <h3>知乎图床</h3>
-            <div class="actions-mini">
-              <Button label="获取" icon="pi pi-globe" @click="actions.login('zhihu')" text size="small"/>
-              <Button label="测试" icon="pi pi-check" @click="actions.zhihu" :loading="testingConnections.zhihu" text size="small"/>
-            </div>
-          </div>
-          <Textarea v-model="formData.zhihu.cookie" @blur="saveSettings" rows="4" class="mono-input w-full" placeholder="知乎 Cookie..." />
-        </div>
-
-        <Divider />
-
-        <div class="sub-section">
-          <div class="flex justify-between items-center mb-2">
-            <h3>牛客图床</h3>
-            <div class="actions-mini">
-              <Button label="获取" icon="pi pi-globe" @click="actions.login('nowcoder')" text size="small"/>
-              <Button label="测试" icon="pi pi-check" @click="actions.nowcoder" :loading="testingConnections.nowcoder" text size="small"/>
-            </div>
-          </div>
-          <Textarea v-model="formData.nowcoder.cookie" @blur="saveSettings" rows="4" class="mono-input w-full" placeholder="牛客 Cookie..." />
-        </div>
-
-        <Divider />
-
-        <div class="sub-section">
-          <div class="flex justify-between items-center mb-2">
-            <h3>纳米图床</h3>
-            <div class="actions-mini">
-              <Button label="获取" icon="pi pi-globe" @click="actions.login('nami')" text size="small"/>
-              <Button label="测试" icon="pi pi-check" @click="actions.nami" :loading="testingConnections.nami" text size="small"/>
-            </div>
-          </div>
-          <Textarea v-model="formData.nami.cookie" @blur="saveSettings" rows="4" class="mono-input w-full" placeholder="纳米 Cookie..." />
-        </div>
-
-        <Divider />
-
-        <div class="sub-section">
-          <div class="flex justify-between items-center mb-2">
-            <h3>哔哩哔哩</h3>
-            <div class="actions-mini">
-              <Button label="获取" icon="pi pi-globe" @click="actions.login('bilibili')" text size="small"/>
-              <Button label="测试" icon="pi pi-check" @click="actions.bilibili" :loading="testingConnections.bilibili" text size="small"/>
-            </div>
-          </div>
-          <Textarea v-model="formData.bilibili.cookie" @blur="saveSettings" rows="4" class="mono-input w-full" placeholder="SESSDATA=...; bili_jct=...; (粘贴完整 Cookie)" />
-        </div>
-
-        <Divider />
-
-        <div class="sub-section">
-          <div class="flex justify-between items-center mb-2">
-            <h3>超星图床</h3>
-            <div class="actions-mini">
-              <Button label="获取" icon="pi pi-globe" @click="actions.login('chaoxing')" text size="small"/>
-              <Button label="测试" icon="pi pi-check" @click="actions.chaoxing" :loading="testingConnections.chaoxing" text size="small"/>
-            </div>
-          </div>
-          <Textarea v-model="formData.chaoxing.cookie" @blur="saveSettings" rows="4" class="mono-input w-full" placeholder="超星 Cookie（包含 _uid=...）" />
-        </div>
       </div>
 
       <div v-if="activeTab === 'links'" class="settings-section">

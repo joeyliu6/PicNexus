@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * S3 兼容存储统一设置面板
+ * 私有图床统一设置面板
  * 整合 R2、COS、OSS、七牛云、又拍云的配置界面
  * 使用标签页切换，带配置状态指示器
  */
@@ -10,7 +10,7 @@ import Password from 'primevue/password';
 import Button from 'primevue/button';
 
 // Props 定义
-interface S3FormData {
+interface PrivateHostingFormData {
   r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; path: string; publicDomain: string };
   cos: { secretId: string; secretKey: string; region: string; bucket: string; path: string; publicDomain: string };
   oss: { accessKeyId: string; accessKeySecret: string; region: string; bucket: string; path: string; publicDomain: string };
@@ -19,7 +19,7 @@ interface S3FormData {
 }
 
 const props = defineProps<{
-  formData: S3FormData;
+  formData: PrivateHostingFormData;
   testingConnections: Record<string, boolean>;
 }>();
 
@@ -28,17 +28,17 @@ const emit = defineEmits<{
   test: [providerId: string];
 }>();
 
-// S3 服务商类型定义
+// 服务商类型定义
 type ProviderId = 'r2' | 'cos' | 'oss' | 'qiniu' | 'upyun';
 
-interface S3Provider {
+interface Provider {
   id: ProviderId;
   name: string;
   description: string;
 }
 
-// S3 服务商定义
-const S3_PROVIDERS: S3Provider[] = [
+// 私有图床服务商定义
+const PROVIDERS: Provider[] = [
   { id: 'r2', name: 'Cloudflare R2', description: 'S3 兼容的高速存储，用于数据备份与分发' },
   { id: 'cos', name: '腾讯云 COS', description: '腾讯云对象存储，支持数据万象处理' },
   { id: 'oss', name: '阿里云 OSS', description: '阿里云对象存储，支持图片处理服务' },
@@ -51,7 +51,7 @@ const selectedProvider = ref<ProviderId>('r2');
 
 // 当前服务商信息
 const currentProviderInfo = computed(() => {
-  return S3_PROVIDERS.find(p => p.id === selectedProvider.value)!;
+  return PROVIDERS.find(p => p.id === selectedProvider.value)!;
 });
 
 // 检查服务商配置是否完整（用于状态指示器）
@@ -101,11 +101,11 @@ const isTesting = computed(() => {
 </script>
 
 <template>
-  <div class="s3-settings-panel">
+  <div class="hosting-panel">
     <!-- 服务商标签页切换 -->
-    <div class="s3-provider-tabs">
+    <div class="provider-tabs">
       <button
-        v-for="provider in S3_PROVIDERS"
+        v-for="provider in PROVIDERS"
         :key="provider.id"
         class="provider-tab"
         :class="{ active: selectedProvider === provider.id }"
@@ -281,125 +281,136 @@ const isTesting = computed(() => {
 </template>
 
 <style scoped>
-.s3-settings-panel {
+.hosting-panel {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 24px;
+  width: 100%;
 }
 
-/* ========== 服务商标签页切换 ========== */
-.s3-provider-tabs {
+/* 服务商标签页 */
+.provider-tabs {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  padding: 4px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
 }
 
 .provider-tab {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--bg-card);
+  padding: 10px 18px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s;
-  font-size: 13px;
+  transition: all 0.2s ease;
+  position: relative;
 }
 
 .provider-tab:hover {
-  border-color: var(--primary);
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
 .provider-tab.active {
-  border-color: var(--primary);
-  background: rgba(59, 130, 246, 0.1);
-  color: var(--primary);
+  background: var(--bg-primary);
+  color: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-/* 状态指示器 */
+/* 配置状态指示器 */
 .provider-indicator {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--text-muted);  /* 灰色 - 未配置 */
-  transition: background 0.2s;
+  background: var(--text-muted);
+  transition: background 0.2s ease;
 }
 
 .provider-indicator.configured {
-  background: #22c55e;  /* 绿色 - 已配置 */
+  background: var(--success);
 }
 
-/* ========== 配置表单区域 ========== */
+/* 表单区域 */
 .provider-form {
-  background: var(--bg-secondary);
-  border-radius: 8px;
-  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
 .section-header {
-  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .section-header h2 {
-  font-size: 1.125rem;
+  font-size: 1.25rem;
   font-weight: 600;
-  margin: 0 0 0.25rem 0;
-  color: var(--text-color);
+  color: var(--text-primary);
+  margin: 0;
 }
 
 .section-desc {
   font-size: 0.875rem;
-  color: var(--text-color-secondary);
+  color: var(--text-secondary);
   margin: 0;
 }
 
+/* 表单网格 */
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
+  gap: 20px;
 }
 
 .form-item {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
 .form-item.span-full {
-  grid-column: span 2;
+  grid-column: 1 / -1;
 }
 
 .form-item label {
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--text-color);
+  color: var(--text-primary);
 }
 
 .field-hint {
-  font-size: 0.75rem;
-  color: var(--text-color-secondary);
-  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-top: 4px;
 }
 
+/* 操作按钮行 */
 .actions-row {
   display: flex;
-  gap: 0.5rem;
-  margin-top: 1rem;
-  padding-top: 1rem;
+  justify-content: flex-start;
+  gap: 12px;
+  padding-top: 8px;
   border-top: 1px solid var(--border-subtle);
 }
 
-/* 响应式适配 */
-@media (max-width: 640px) {
+/* 响应式 */
+@media (max-width: 768px) {
   .form-grid {
     grid-template-columns: 1fr;
   }
 
   .form-item.span-full {
-    grid-column: span 1;
+    grid-column: 1;
   }
 }
 </style>
