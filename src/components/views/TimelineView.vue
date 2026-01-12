@@ -596,10 +596,63 @@ watch(
   <div class="timeline-view">
     <!-- Main Scroll Area -->
     <div ref="scrollContainer" class="timeline-scroll-area" @scroll="handleScroll">
-      <!-- Loading State -->
+      <!-- Loading State - 模拟时间线布局的骨架屏 -->
       <div v-if="viewState.isLoading.value" class="loading-state">
-        <Skeleton width="100%" height="200px" class="mb-4" />
-        <Skeleton width="100%" height="400px" />
+        <!-- 模拟分组 1 -->
+        <div class="skeleton-group">
+          <div class="skeleton-header">
+            <Skeleton width="160px" height="24px" />
+            <Skeleton width="70px" height="16px" />
+          </div>
+          <div class="skeleton-grid">
+            <Skeleton
+              v-for="(flex, i) in [1.2, 1.5, 1.3, 1.8]"
+              :key="`s1a-${i}`"
+              class="skeleton-item"
+              :style="{ flex }"
+              height="200px"
+              borderRadius="8px"
+            />
+          </div>
+          <div class="skeleton-grid">
+            <Skeleton
+              v-for="(flex, i) in [1.6, 1.2, 1.4]"
+              :key="`s1b-${i}`"
+              class="skeleton-item"
+              :style="{ flex }"
+              height="200px"
+              borderRadius="8px"
+            />
+          </div>
+        </div>
+
+        <!-- 模拟分组 2 -->
+        <div class="skeleton-group">
+          <div class="skeleton-header">
+            <Skeleton width="160px" height="24px" />
+            <Skeleton width="70px" height="16px" />
+          </div>
+          <div class="skeleton-grid">
+            <Skeleton
+              v-for="(flex, i) in [1.4, 1.7, 1.2, 1.5]"
+              :key="`s2a-${i}`"
+              class="skeleton-item"
+              :style="{ flex }"
+              height="200px"
+              borderRadius="8px"
+            />
+          </div>
+          <div class="skeleton-grid">
+            <Skeleton
+              v-for="(flex, i) in [1.8, 1.3, 1.5]"
+              :key="`s2b-${i}`"
+              class="skeleton-item"
+              :style="{ flex }"
+              height="200px"
+              borderRadius="8px"
+            />
+          </div>
+        </div>
       </div>
 
       <!-- Empty State -->
@@ -1006,7 +1059,10 @@ watch(
 }
 
 /* Loading/Empty States */
-.loading-state,
+.loading-state {
+  padding: 20px 0;
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -1017,8 +1073,26 @@ watch(
   color: var(--text-secondary);
 }
 
-.mb-4 {
-  margin-bottom: 1rem;
+/* 骨架屏 - 时间线布局模拟 */
+.skeleton-group {
+  margin-bottom: 24px;
+}
+
+.skeleton-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.skeleton-grid {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.skeleton-item {
+  min-width: 0;
 }
 
 /* Loading More */

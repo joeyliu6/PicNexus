@@ -194,22 +194,18 @@ const handleLoginCookie = (providerId: string) => {
 
 /* 页面标题 */
 .panel-header {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-bottom: 8px;
-  border-bottom: 2px solid var(--border-color);
+  margin-bottom: 32px;
 }
 
 .panel-header h2 {
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-size: 24px;
+  font-weight: 700;
   color: var(--text-primary);
-  margin: 0;
+  margin: 0 0 8px 0;
 }
 
 .header-desc {
-  font-size: 0.875rem;
+  font-size: 14px;
   color: var(--text-secondary);
   margin: 0;
 }
