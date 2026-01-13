@@ -24,13 +24,16 @@ import FloatingActionBar from './FloatingActionBar.vue';
 import ThumbnailImage from '../../common/ThumbnailImage.vue';
 import { getThumbnailCandidates } from '../../../composables/useThumbCache';
 
-// Props
+interface SkeletonItem {
+  id: string;
+  _skeleton: true;
+}
+
 const props = defineProps<{
   filter: ServiceType | 'all';
   searchTerm: string;
 }>();
 
-// Emits
 const emit = defineEmits<{
   (e: 'update:totalCount', count: number): void;
   (e: 'update:selectedCount', count: number): void;
@@ -42,6 +45,27 @@ const viewState = useHistoryViewState();
 const historyManager = useHistoryManager();
 const thumbCache = useThumbCache();
 
+const PREVIEW_MAX_SIZE = 300;
+const PREVIEW_MARGIN = 8;
+
+const SERVICE_NAMES: Record<ServiceType, string> = {
+  weibo: '微博',
+  r2: 'R2',
+  jd: '京东',
+  nowcoder: '牛客',
+  qiyu: '七鱼',
+  zhihu: '知乎',
+  nami: '纳米',
+  bilibili: 'B站',
+  chaoxing: '超星',
+  smms: 'SM.MS',
+  github: 'GitHub',
+  imgur: 'Imgur',
+  cos: '腾讯云COS',
+  oss: '阿里云OSS',
+  qiniu: '七牛云',
+  upyun: '又拍云'
+};
 
 // === 服务端分页状态 ===
 const currentPageData = shallowRef<HistoryItem[]>([]);
@@ -49,16 +73,16 @@ const currentPage = ref(1);
 const pageSize = ref(100);
 const totalRecords = ref(0);
 const isLoadingPage = ref(true);  // 初始为 true，组件挂载时显示骨架屏
-const first = ref(0);  // DataTable 的 first 参数（起始索引）
+const first = ref(0);
 
-// 骨架数据（加载时使用，确保骨架屏结构与真实数据完全一致）
-const skeletonData = Array.from({ length: 20 }, (_, i) => ({
+const skeletonData: SkeletonItem[] = Array.from({ length: 20 }, (_, i) => ({
   id: `skeleton-${i}`,
-  _skeleton: true  // 标记为骨架数据
-})) as any[];
+  _skeleton: true as const
+}));
 
-// 判断是否为骨架数据
-const isSkeleton = (data: any) => data._skeleton === true;
+function isSkeleton(data: HistoryItem | SkeletonItem): data is SkeletonItem {
+  return '_skeleton' in data && data._skeleton === true;
+}
 
 // 日期格式化器
 const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
@@ -69,14 +93,13 @@ const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
   minute: '2-digit'
 });
 
-// 格式化时间
-const formatTime = (timestamp: number) => dateFormatter.format(new Date(timestamp));
+function formatTime(timestamp: number): string {
+  return dateFormatter.format(new Date(timestamp));
+}
 
-// Lightbox 状态
 const lightboxVisible = ref(false);
 const lightboxItem = ref<HistoryItem | null>(null);
 
-// 悬浮预览状态
 const hoverPreview = ref({
   visible: false,
   url: '',
@@ -84,10 +107,8 @@ const hoverPreview = ref({
   style: {} as Record<string, string>
 });
 
-// 表头复选框状态
 const selectAll = ref(false);
 
-// 事件监听取消函数
 let unlistenUpdated: (() => void) | null = null;
 let unlistenDeleted: (() => void) | null = null;
 
@@ -199,32 +220,17 @@ watch(() => {
   selectAll.value = allSelected;
 });
 
-// === 服务相关函数 ===
+function getServiceName(serviceId: ServiceType): string {
+  return SERVICE_NAMES[serviceId] || serviceId;
+}
 
-const getServiceName = (serviceId: ServiceType): string => {
-  const serviceNames: Record<ServiceType, string> = {
-    weibo: '微博',
-    r2: 'R2',
-
-    jd: '京东',
-    nowcoder: '牛客',
-    qiyu: '七鱼',
-    zhihu: '知乎',
-    nami: '纳米',
-    bilibili: 'B站',
-    chaoxing: '超星'
-  };
-  return serviceNames[serviceId] || serviceId;
-};
-
-const getSuccessfulServices = (item: HistoryItem): ServiceType[] => {
+function getSuccessfulServices(item: HistoryItem): ServiceType[] {
   return item.results
     .filter(r => r.status === 'success')
     .map(r => r.serviceId);
-};
+}
 
-// 复制特定图床的链接
-const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) => {
+async function handleCopyServiceLink(item: HistoryItem, serviceId: ServiceType): Promise<void> {
   try {
     const result = item.results.find(r => r.serviceId === serviceId && r.status === 'success');
     if (!result?.result?.url) {
@@ -246,28 +252,23 @@ const handleCopyServiceLink = async (item: HistoryItem, serviceId: ServiceType) 
     console.error(`[历史记录] 复制 ${serviceId} 链接失败:`, error);
     toast.error('复制失败', String(error));
   }
-};
+}
 
-// === 悬浮预览相关 ===
-
-const handlePreviewEnter = (event: MouseEvent, item: HistoryItem) => {
+function handlePreviewEnter(event: MouseEvent, item: HistoryItem): void {
   const url = thumbCache.getMediumImageUrl(item);
   if (!url) return;
 
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  const previewMaxHeight = 300;
-  const previewMaxWidth = 300;
-  const margin = 8;
 
-  let top = rect.top + rect.height / 2 - previewMaxHeight / 2;
-  let left = rect.right + margin;
+  let top = rect.top + rect.height / 2 - PREVIEW_MAX_SIZE / 2;
+  let left = rect.right + PREVIEW_MARGIN;
 
-  if (top < margin) top = margin;
-  if (top + previewMaxHeight > window.innerHeight - margin) {
-    top = window.innerHeight - previewMaxHeight - margin;
+  if (top < PREVIEW_MARGIN) top = PREVIEW_MARGIN;
+  if (top + PREVIEW_MAX_SIZE > window.innerHeight - PREVIEW_MARGIN) {
+    top = window.innerHeight - PREVIEW_MAX_SIZE - PREVIEW_MARGIN;
   }
-  if (left + previewMaxWidth > window.innerWidth - margin) {
-    left = rect.left - previewMaxWidth - margin;
+  if (left + PREVIEW_MAX_SIZE > window.innerWidth - PREVIEW_MARGIN) {
+    left = rect.left - PREVIEW_MAX_SIZE - PREVIEW_MARGIN;
   }
 
   hoverPreview.value = {
@@ -279,20 +280,18 @@ const handlePreviewEnter = (event: MouseEvent, item: HistoryItem) => {
       left: `${left}px`
     }
   };
-};
+}
 
-const handlePreviewLeave = () => {
+function handlePreviewLeave(): void {
   hoverPreview.value.visible = false;
-};
+}
 
-// === Lightbox 相关 ===
-
-const openLightbox = (item: HistoryItem) => {
+function openLightbox(item: HistoryItem): void {
   lightboxItem.value = item;
   lightboxVisible.value = true;
-};
+}
 
-const handleLightboxDelete = async (item: HistoryItem) => {
+async function handleLightboxDelete(item: HistoryItem): Promise<void> {
   try {
     await viewState.deleteHistoryItem(item.id);
     lightboxVisible.value = false;
@@ -301,13 +300,10 @@ const handleLightboxDelete = async (item: HistoryItem) => {
     console.error('[历史记录] 删除失败:', error);
     toast.error('删除失败', String(error));
   }
-};
+}
 
-// === 表头复选框相关（仅当前页）===
-
-const handleHeaderCheckboxChange = (checked: boolean) => {
+function handleHeaderCheckboxChange(checked: boolean): void {
   selectAll.value = checked;
-  // 只选中/取消选中当前页的数据
   currentPageData.value.forEach(item => {
     if (checked) {
       viewState.select(item.id);
@@ -315,21 +311,19 @@ const handleHeaderCheckboxChange = (checked: boolean) => {
       viewState.deselect(item.id);
     }
   });
-};
+}
 
-// === 浮动操作栏相关 ===
-
-const handleBulkCopy = (format: LinkFormat) => {
+function handleBulkCopy(format: LinkFormat): void {
   viewState.bulkCopyFormatted(format);
-};
+}
 
-const handleBulkExport = () => {
+function handleBulkExport(): void {
   viewState.bulkExport();
-};
+}
 
-const handleBulkDelete = () => {
+function handleBulkDelete(): void {
   viewState.bulkDelete();
-};
+}
 </script>
 
 <template>
@@ -348,7 +342,7 @@ const handleBulkDelete = () => {
       :sortOrder="-1"
       class="history-table minimal-table"
       rowHover
-      :rowClass="(data: any) => data._skeleton ? '' : (viewState.isSelected(data.id) ? 'row-selected' : '')"
+      :rowClass="(data: HistoryItem | SkeletonItem) => isSkeleton(data) ? '' : (viewState.isSelected(data.id) ? 'row-selected' : '')"
       :emptyMessage="totalRecords === 0 ? '暂无历史记录' : '未找到匹配的记录'"
     >
       <template #empty>
@@ -478,7 +472,7 @@ const handleBulkDelete = () => {
         <img
           :src="hoverPreview.url"
           :alt="hoverPreview.alt"
-          @error="(e: any) => e.target.style.display = 'none'"
+          @error="(e: Event) => (e.target as HTMLImageElement).style.display = 'none'"
         />
       </div>
     </Teleport>
