@@ -30,17 +30,17 @@ export interface FilteredPoint {
 
 /** 优先级权重 */
 const PRIORITY = {
-  boundary: 150,       // 时间轴边界（最老/最新）- 必须显示
-  yearStart: 100,      // 1月 - 最高优先级
-  quarterStart: 50,    // 4/7/10月 - 季度开始
-  highDensity: 20,     // 照片数高于平均值 - 加分
-  otherMonth: 10,      // 其他月份 - 基础分
+  boundary: 150,
+  yearStart: 100,
+  quarterStart: 50,
+  highDensity: 20,
+  otherMonth: 10,
 };
 
 /** 默认最小间距（像素）- 更密集显示 */
 const DEFAULT_MIN_GAP_PX = 18;
 
-/** 低密度阈值：低于平均值的 2%（更宽松以保留更多月份点） */
+/** 低密度阈值：低于平均值的此比例将被过滤（0.02 = 2%） */
 const LOW_DENSITY_THRESHOLD = 0.02;
 
 // ==================== 核心函数 ====================
@@ -70,9 +70,8 @@ export function getLabelGranularity(timeSpanMonths: number, availableHeight: num
 }
 
 /**
- * 低密度过滤：去掉照片数低于平均值 10% 的月份
- * @param periods 时间段统计数据
- * @returns 过滤后的数据
+ * 低密度过滤：去掉照片数低于平均值 2% 的月份
+ * 边界月份（第一个和最后一个）始终保留
  */
 export function filterLowDensity(periods: TimePeriodStats[]): TimePeriodStats[] {
   if (periods.length <= 1) return periods;
@@ -94,13 +93,13 @@ export function filterLowDensity(periods: TimePeriodStats[]): TimePeriodStats[] 
 function shouldIncludeByGranularity(month: number, year: number, granularity: Granularity): boolean {
   switch (granularity) {
     case 'month':
-      return true; // 显示所有月份
+      return true;
     case 'quarter':
-      return [0, 3, 6, 9].includes(month); // 只显示季度开始（1/4/7/10月）
+      return [0, 3, 6, 9].includes(month);
     case 'year':
-      return month === 0; // 只显示1月
+      return month === 0;
     case 'decade':
-      return month === 0 && year % 5 === 0; // 每5年显示
+      return month === 0 && year % 5 === 0;
   }
 }
 
@@ -115,21 +114,16 @@ function calculatePriority(
 ): number {
   let priority = PRIORITY.otherMonth;
 
-  // 1月 - 最高优先级
   if (period.month === 0) {
     priority = PRIORITY.yearStart;
-  }
-  // 季度开始（4/7/10月）
-  else if ([3, 6, 9].includes(period.month)) {
+  } else if ([3, 6, 9].includes(period.month)) {
     priority = PRIORITY.quarterStart;
   }
 
-  // 高密度月份加分
   if (period.count > avgCount * 1.5) {
     priority += PRIORITY.highDensity;
   }
 
-  // 边界加分（第一个和最后一个）
   if (index === 0 || index === total - 1) {
     priority += PRIORITY.boundary;
   }
@@ -278,7 +272,7 @@ function ensureBoundaryPoints(
  * 月份点智能过滤管道（主入口）
  *
  * 处理流程：
- * 1. 低密度过滤 → 去掉照片数 < 平均值 10% 的月份
+ * 1. 低密度过滤 → 去掉照片数 < 平均值 2% 的月份
  * 2. 计算时间跨度
  * 3. 确定显示粒度 (month/quarter/year/decade)
  * 4. 生成候选点（带优先级）

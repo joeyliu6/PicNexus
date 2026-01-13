@@ -544,9 +544,9 @@ export function useVirtualTimeline(
   /**
    * 根据进度滚动（用于时间轴拖拽）
    * @param progress 滚动进度 0-1
-   * @param isDragging 是否正在拖拽（用于决定显示模式）
+   * @param instant 是否立即滚动（跳过动画，强制 fast 模式）
    */
-  function scrollToProgress(progress: number, isDragging: boolean = false) {
+  function scrollToProgress(progress: number, instant: boolean = false) {
     if (!containerRef.value) return;
 
     const maxScroll = totalHeight.value - viewportHeight.value;
@@ -554,16 +554,13 @@ export function useVirtualTimeline(
     containerRef.value.scrollTop = targetY;
     scrollTop.value = targetY;
 
-    // 拖拽期间强制使用 fast 模式
-    if (isDragging) {
+    if (instant) {
       displayMode.value = 'fast';
-      // 清除恢复定时器
       if (modeRecoveryTimer) {
         clearTimeout(modeRecoveryTimer);
         modeRecoveryTimer = null;
       }
     } else {
-      // 非拖拽（拖拽结束），延迟恢复到 normal 模式
       startModeRecovery();
     }
   }

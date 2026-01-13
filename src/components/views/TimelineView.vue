@@ -17,6 +17,8 @@ import { useTimelineSidebarControl } from '../../composables/useTimelineSidebarC
 import { useToast } from '../../composables/useToast';
 import type { HistoryItem, ServiceType } from '../../config/types';
 import type { ImageMeta } from '../../types/image-meta';
+import { formatFileSize, formatUploadTime } from '../../utils/formatters';
+import { getServiceDisplayName } from '../../constants/serviceNames';
 import TimelineSidebar, { type TimeGroup } from './timeline/TimelineSidebar.vue';
 import TimelineIndicator from './timeline/TimelineIndicator.vue';
 import HistoryLightbox from './history/HistoryLightbox.vue';
@@ -300,9 +302,8 @@ const handleDragScroll = (progress: number) => {
   if (dragEndTimer) clearTimeout(dragEndTimer);
   dragEndTimer = window.setTimeout(() => {
     isDragging = false;
-    // 拖拽结束后强制更新可见区域，触发图片加载
     forceUpdateVisibleArea();
-  }, 50); // 从 150ms 减少到 50ms，提升响应速度
+  }, PRELOAD_CONFIG.DRAG_END_DELAY_MS);
 
   // 传递拖拽状态，让 scrollToProgress 强制使用 fast 模式
   scrollToProgress(progress, true);
@@ -398,27 +399,6 @@ const handleBulkDelete = () => viewState.bulkDelete();
 // ==================== 悬停信息辅助函数 ====================
 
 /**
- * 格式化文件大小
- */
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-/**
- * 格式化上传时间
- */
-function formatUploadTime(timestamp: number): string {
-  const date = new Date(timestamp);
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const hours = date.getHours();
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  return `${month}/${day} ${hours}:${minutes}`;
-}
-
-/**
  * 获取成功上传的服务列表（从悬停详情缓存）
  */
 function getSuccessfulServices(id: string): string[] {
@@ -457,32 +437,17 @@ function getThumbnailUrl(meta: ImageMeta): string {
   );
 }
 
-/**
- * 获取服务显示名称
- */
-function getServiceName(serviceId: string): string {
-  const names: Record<string, string> = {
-    weibo: '微博',
-    r2: 'R2',
-    jd: '京东',
-    nowcoder: '牛客',
-    qiyu: '七鱼',
-    zhihu: '知乎',
-    nami: '纳米',
-    bilibili: 'B站',
-    chaoxing: '超星',
-    smms: 'SM.MS',
-    github: 'GitHub',
-    imgur: 'Imgur',
-    tencent: '腾讯云',
-    aliyun: '阿里云',
-    qiniu: '七牛云',
-    upyun: '又拍云',
-  };
-  return names[serviceId] || serviceId;
-}
-
 // ==================== 图片预加载 ====================
+
+/** 预加载配置 */
+const PRELOAD_CONFIG = {
+  /** 预加载图片数量上限（约1屏） */
+  MAX_COUNT: 20,
+  /** 预加载延迟（毫秒） */
+  DELAY_MS: 300,
+  /** 拖拽结束延迟（毫秒） */
+  DRAG_END_DELAY_MS: 50,
+} as const;
 
 /** 预加载定时器 */
 let preloadTimer: number | undefined;
@@ -508,7 +473,7 @@ const preloadNextScreen = () => {
   if (firstVisibleIndex === -1 || lastVisibleIndex === -1) return;
 
   // 预加载数量（约 1 屏）
-  const preloadCount = Math.min(20, visibleItems.value.length);
+  const preloadCount = Math.min(PRELOAD_CONFIG.MAX_COUNT, visibleItems.value.length);
 
   // 根据滚动方向确定预加载范围
   const preloadStart = direction === 'down'
@@ -537,11 +502,10 @@ const preloadNextScreen = () => {
 // 在滚动停止后触发预加载（使用防抖）
 watch(displayMode, (mode) => {
   if (mode === 'normal') {
-    // 切换到 normal 模式后，延迟 300ms 执行预加载
     if (preloadTimer) clearTimeout(preloadTimer);
     preloadTimer = window.setTimeout(() => {
       preloadNextScreen();
-    }, 300);
+    }, PRELOAD_CONFIG.DELAY_MS);
   }
 });
 
@@ -738,9 +702,9 @@ watch(
                     v-for="service in getSuccessfulServices(visible.meta.id)"
                     :key="service"
                     class="service-badge"
-                    :title="`已上传到 ${getServiceName(service)}`"
+                    :title="`已上传到 ${getServiceDisplayName(service)}`"
                   >
-                    {{ getServiceName(service) }}
+                    {{ getServiceDisplayName(service) }}
                   </span>
                 </div>
               </div>

@@ -37,37 +37,41 @@ export function useImageLoadManager(
   let cleanupTimer: number | undefined;
 
   /**
+   * 找到最老的可淘汰项（LRU 策略）
+   */
+  function findOldestEvictable(cache: Set<string>, excludeIds: Set<string>): string | null {
+    let oldestId: string | null = null;
+    let oldestTime = Infinity;
+
+    for (const id of cache) {
+      if (excludeIds.has(id)) continue;
+      const time = lastVisibleTime.get(id) ?? 0;
+      if (time < oldestTime) {
+        oldestTime = time;
+        oldestId = id;
+      }
+    }
+    return oldestId;
+  }
+
+  /**
    * 标记图片已加载
    */
   function onImageLoad(id: string) {
     const newSet = new Set(loadedImages.value);
     newSet.add(id);
 
-    // 更新最后可见时间
     lastVisibleTime.set(id, Date.now());
 
-    // LRU 淘汰
+    // LRU 淘汰：超过缓存上限时，淘汰最老的非可见项
     if (newSet.size > maxCache) {
       const visibleIds = new Set(visibleItems.value.map((v) => v.meta.id));
-      let removed = false;
+      visibleIds.add(id); // 排除当前正在加载的项
 
-      for (const existingId of newSet) {
-        if (!visibleIds.has(existingId) && existingId !== id) {
-          newSet.delete(existingId);
-          lastVisibleTime.delete(existingId);
-          removed = true;
-          break;
-        }
-      }
-
-      if (!removed) {
-        for (const existingId of newSet) {
-          if (existingId !== id) {
-            newSet.delete(existingId);
-            lastVisibleTime.delete(existingId);
-            break;
-          }
-        }
+      const toEvict = findOldestEvictable(newSet, visibleIds);
+      if (toEvict) {
+        newSet.delete(toEvict);
+        lastVisibleTime.delete(toEvict);
       }
     }
 
