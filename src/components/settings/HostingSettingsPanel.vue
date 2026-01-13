@@ -1,21 +1,12 @@
 <script setup lang="ts">
-/**
- * 图床设置统一面板
- * 使用折叠面板（Accordion）形式整合所有图床配置
- * 分类：私有图床、开箱即用、Cookie认证、Token认证
- */
-import { ref } from 'vue';
-import Accordion from 'primevue/accordion';
-import AccordionPanel from 'primevue/accordionpanel';
-import AccordionHeader from 'primevue/accordionheader';
-import AccordionContent from 'primevue/accordioncontent';
-import PrivateHostingPanel from './PrivateHostingPanel.vue';
-import BuiltinHostingPanel from './BuiltinHostingPanel.vue';
-import CookieAuthHostingPanel from './CookieAuthHostingPanel.vue';
-import TokenAuthHostingPanel from './TokenAuthHostingPanel.vue';
+import { computed } from 'vue';
+import InputText from 'primevue/inputtext';
+import Password from 'primevue/password';
+import Textarea from 'primevue/textarea';
+import Button from 'primevue/button';
+import HostingCard from './HostingCard.vue';
 
-// Props 定义
-interface PrivateHostingFormData {
+interface PrivateFormData {
   r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; path: string; publicDomain: string };
   cos: { secretId: string; secretKey: string; region: string; bucket: string; path: string; publicDomain: string };
   oss: { accessKeyId: string; accessKeySecret: string; region: string; bucket: string; path: string; publicDomain: string };
@@ -38,12 +29,15 @@ interface TokenFormData {
   imgur: { clientId: string; clientSecret?: string };
 }
 
+type PrivateProviderId = keyof PrivateFormData;
+type CookieProviderId = keyof CookieFormData;
+type TokenProviderId = keyof TokenFormData;
+
 const props = defineProps<{
-  privateFormData: PrivateHostingFormData;
+  privateFormData: PrivateFormData;
   cookieFormData: CookieFormData;
   tokenFormData: TokenFormData;
   testingConnections: Record<string, boolean>;
-  // 开箱即用检测状态
   jdAvailable: boolean;
   qiyuAvailable: boolean;
   isCheckingJd: boolean;
@@ -59,128 +53,492 @@ const emit = defineEmits<{
   loginCookie: [providerId: string];
 }>();
 
-// 默认展开的面板（可以同时展开多个）
-const activeAccordions = ref<number[]>([]);
+function isPrivateConfigured(providerId: PrivateProviderId): boolean {
+  const data = props.privateFormData;
+  switch (providerId) {
+    case 'r2':
+      return !!(data.r2.accountId && data.r2.accessKeyId && data.r2.secretAccessKey && data.r2.bucketName && data.r2.publicDomain);
+    case 'cos':
+      return !!(data.cos.secretId && data.cos.secretKey && data.cos.region && data.cos.bucket && data.cos.publicDomain);
+    case 'oss':
+      return !!(data.oss.accessKeyId && data.oss.accessKeySecret && data.oss.region && data.oss.bucket && data.oss.publicDomain);
+    case 'qiniu':
+      return !!(data.qiniu.accessKey && data.qiniu.secretKey && data.qiniu.region && data.qiniu.bucket && data.qiniu.domain);
+    case 'upyun':
+      return !!(data.upyun.operator && data.upyun.password && data.upyun.bucket && data.upyun.domain);
+    default:
+      return false;
+  }
+}
 
-// 处理保存
-const handleSave = () => {
-  emit('save');
-};
+function isCookieConfigured(providerId: CookieProviderId): boolean {
+  const cookie = props.cookieFormData[providerId].cookie;
+  return !!(cookie && cookie.trim().length > 0);
+}
 
-// 处理私有图床测试
-const handleTestPrivate = (providerId: string) => {
-  emit('testPrivate', providerId);
-};
+function isTokenConfigured(providerId: TokenProviderId): boolean {
+  const data = props.tokenFormData;
+  switch (providerId) {
+    case 'smms':
+      return !!(data.smms.token && data.smms.token.trim().length > 0);
+    case 'github':
+      return !!(data.github.token && data.github.owner && data.github.repo);
+    case 'imgur':
+      return !!(data.imgur.clientId && data.imgur.clientId.trim().length > 0);
+    default:
+      return false;
+  }
+}
 
-// 处理 Token 图床测试
-const handleTestToken = (providerId: string) => {
-  emit('testToken', providerId);
-};
-
-// 处理 Cookie 图床测试
-const handleTestCookie = (providerId: string) => {
-  emit('testCookie', providerId);
-};
-
-// 处理开箱即用检测
-const handleCheckBuiltin = (providerId: string) => {
-  emit('checkBuiltin', providerId);
-};
-
-// 处理 Cookie 自动获取
-const handleLoginCookie = (providerId: string) => {
-  emit('loginCookie', providerId);
-};
+const extractNamiAuthToken = computed(() => {
+  const cookie = props.cookieFormData.nami.cookie;
+  if (!cookie) return '';
+  const match = cookie.match(/auth-token=([^;]+)/);
+  return match ? match[1] : '';
+});
 </script>
 
 <template>
   <div class="hosting-settings-panel">
-    <!-- 页面标题 -->
     <div class="panel-header">
       <h2>图床设置</h2>
       <p class="header-desc">根据认证方式和使用场景选择合适的图床服务</p>
     </div>
 
-    <!-- 折叠面板 -->
-    <Accordion :value="activeAccordions" multiple class="hosting-accordion">
-      <!-- 云存储 -->
-      <AccordionPanel value="0">
-        <AccordionHeader>
-          <div class="accordion-title">
-            <i class="pi pi-cloud"></i>
-            <span>云存储</span>
-            <span class="category-count">5</span>
+    <div class="settings-content">
+      <div class="group-title">
+        <i class="pi pi-cloud"></i>
+        <span>云存储</span>
+      </div>
+      <div class="provider-grid">
+        <HostingCard
+          id="r2"
+          name="Cloudflare R2"
+          description="S3 兼容的高速存储"
+          :isConfigured="isPrivateConfigured('r2')"
+          :isTesting="testingConnections['r2']"
+          @test="emit('testPrivate', $event)"
+        >
+          <div class="form-grid">
+            <div class="form-item">
+              <label>Account ID</label>
+              <InputText v-model="privateFormData.r2.accountId" @blur="emit('save')" class="w-full" />
+            </div>
+            <div class="form-item">
+              <label>Bucket Name</label>
+              <InputText v-model="privateFormData.r2.bucketName" @blur="emit('save')" class="w-full" />
+            </div>
+            <div class="form-item">
+              <label>Access Key ID</label>
+              <Password v-model="privateFormData.r2.accessKeyId" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item">
+              <label>Secret Access Key</label>
+              <Password v-model="privateFormData.r2.secretAccessKey" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item span-full">
+              <label>自定义路径 (Optional)</label>
+              <InputText v-model="privateFormData.r2.path" @blur="emit('save')" placeholder="e.g. blog/images/" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+              <label>公开访问域名 (Public Domain)</label>
+              <InputText v-model="privateFormData.r2.publicDomain" @blur="emit('save')" placeholder="https://images.example.com" class="w-full" />
+            </div>
           </div>
-        </AccordionHeader>
-        <AccordionContent>
-          <PrivateHostingPanel
-            :formData="privateFormData"
-            :testingConnections="testingConnections"
-            @save="handleSave"
-            @test="handleTestPrivate"
-          />
-        </AccordionContent>
-      </AccordionPanel>
+        </HostingCard>
 
-      <!-- 免配置图床 -->
-      <AccordionPanel value="1">
-        <AccordionHeader>
-          <div class="accordion-title">
-            <i class="pi pi-bolt"></i>
-            <span>免配置图床</span>
-            <span class="category-count">2</span>
+        <HostingCard
+          id="cos"
+          name="腾讯云 COS"
+          description="腾讯云对象存储"
+          :isConfigured="isPrivateConfigured('cos')"
+          :isTesting="testingConnections['cos']"
+          @test="emit('testPrivate', $event)"
+        >
+          <div class="form-grid">
+            <div class="form-item">
+              <label>Secret ID</label>
+              <Password v-model="privateFormData.cos.secretId" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item">
+              <label>Secret Key</label>
+              <Password v-model="privateFormData.cos.secretKey" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item">
+              <label>地域 (Region)</label>
+              <InputText v-model="privateFormData.cos.region" @blur="emit('save')" placeholder="ap-guangzhou" class="w-full" />
+            </div>
+            <div class="form-item">
+              <label>存储桶 (Bucket)</label>
+              <InputText v-model="privateFormData.cos.bucket" @blur="emit('save')" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+              <label>自定义路径 (Optional)</label>
+              <InputText v-model="privateFormData.cos.path" @blur="emit('save')" placeholder="e.g. blog/images/" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+              <label>公开访问域名 (Public Domain)</label>
+              <InputText v-model="privateFormData.cos.publicDomain" @blur="emit('save')" placeholder="https://images.example.com" class="w-full" />
+            </div>
           </div>
-        </AccordionHeader>
-        <AccordionContent>
-          <BuiltinHostingPanel
-            :jdAvailable="jdAvailable"
-            :qiyuAvailable="qiyuAvailable"
-            :isCheckingJd="isCheckingJd"
-            :isCheckingQiyu="isCheckingQiyu"
-            @check="handleCheckBuiltin"
-          />
-        </AccordionContent>
-      </AccordionPanel>
+        </HostingCard>
 
-      <!-- Cookie 认证 -->
-      <AccordionPanel value="2">
-        <AccordionHeader>
-          <div class="accordion-title">
-            <svg class="category-icon" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path d="M512 128C299.946667 128 128 299.946667 128 512 128 724.053333 299.946667 896 512 896 724.053333 896 896 724.053333 896 512 896 490.666667 894.293333 469.333333 890.453333 448 878.933333 426.666667 853.333333 426.666667 853.333333 426.666667L768 426.666667 768 384C768 341.333333 725.333333 341.333333 725.333333 341.333333L640 341.333333 640 298.666667C640 256 597.333333 256 597.333333 256L554.666667 256 554.666667 170.666667C554.666667 128 512 128 512 128M405.333333 256C440.746667 256 469.333333 284.586667 469.333333 320 469.333333 355.413333 440.746667 384 405.333333 384 369.92 384 341.333333 355.413333 341.333333 320 341.333333 284.586667 369.92 256 405.333333 256M277.333333 426.666667C312.746667 426.666667 341.333333 455.253333 341.333333 490.666667 341.333333 526.08 312.746667 554.666667 277.333333 554.666667 241.92 554.666667 213.333333 526.08 213.333333 490.666667 213.333333 455.253333 241.92 426.666667 277.333333 426.666667M490.666667 469.333333C526.08 469.333333 554.666667 497.92 554.666667 533.333333 554.666667 568.746667 526.08 597.333333 490.666667 597.333333 455.253333 597.333333 426.666667 568.746667 426.666667 533.333333 426.666667 497.92 455.253333 469.333333 490.666667 469.333333M704 554.666667C739.413333 554.666667 768 583.253333 768 618.666667 768 654.08 739.413333 682.666667 704 682.666667L704 682.666667C668.586667 682.666667 640 654.08 640 618.666667L640 618.666667C640 583.253333 668.586667 554.666667 704 554.666667M469.333333 682.666667C504.746667 682.666667 533.333333 711.253333 533.333333 746.666667 533.333333 782.08 504.746667 810.666667 469.333333 810.666667 433.92 810.666667 405.333333 782.08 405.333333 746.666667 405.333333 711.253333 433.92 682.666667 469.333333 682.666667Z" fill="currentColor"/></svg>
-            <span>Cookie 认证</span>
-            <span class="category-count">6</span>
+        <HostingCard
+          id="oss"
+          name="阿里云 OSS"
+          description="阿里云对象存储"
+          :isConfigured="isPrivateConfigured('oss')"
+          :isTesting="testingConnections['oss']"
+          @test="emit('testPrivate', $event)"
+        >
+          <div class="form-grid">
+            <div class="form-item">
+              <label>Access Key ID</label>
+              <Password v-model="privateFormData.oss.accessKeyId" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item">
+              <label>Access Key Secret</label>
+              <Password v-model="privateFormData.oss.accessKeySecret" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item">
+              <label>地域 (Region)</label>
+              <InputText v-model="privateFormData.oss.region" @blur="emit('save')" placeholder="oss-cn-hangzhou" class="w-full" />
+            </div>
+            <div class="form-item">
+              <label>存储桶 (Bucket)</label>
+              <InputText v-model="privateFormData.oss.bucket" @blur="emit('save')" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+              <label>自定义路径 (Optional)</label>
+              <InputText v-model="privateFormData.oss.path" @blur="emit('save')" placeholder="e.g. blog/images/" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+              <label>公开访问域名 (Public Domain)</label>
+              <InputText v-model="privateFormData.oss.publicDomain" @blur="emit('save')" placeholder="https://images.example.com" class="w-full" />
+            </div>
           </div>
-        </AccordionHeader>
-        <AccordionContent>
-          <CookieAuthHostingPanel
-            :formData="cookieFormData"
-            :testingConnections="testingConnections"
-            @save="handleSave"
-            @test="handleTestCookie"
-            @login="handleLoginCookie"
-          />
-        </AccordionContent>
-      </AccordionPanel>
+        </HostingCard>
 
-      <!-- Token 认证 -->
-      <AccordionPanel value="3">
-        <AccordionHeader>
-          <div class="accordion-title">
-            <svg class="category-icon" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path d="M412.8 396.8c0 54.4 44.8 99.2 99.2 99.2s99.2-44.8 99.2-99.2-44.8-99.2-99.2-99.2-99.2 44.8-99.2 99.2z" fill="currentColor"/><path d="M512 12.8C380.8 102.4 246.4 147.2 112 147.2v313.6c0 179.2 89.6 342.4 236.8 441.6l163.2 108.8 163.2-108.8c147.2-99.2 236.8-265.6 236.8-441.6V147.2c-134.4 0-265.6-44.8-400-134.4z m32 547.2v64h99.2v67.2H544v105.6h-64v-236.8c-76.8-16-134.4-83.2-134.4-163.2 0-92.8 73.6-166.4 166.4-166.4s166.4 73.6 166.4 166.4c0 80-57.6 147.2-134.4 163.2z" fill="currentColor"/></svg>
-            <span>Token 认证</span>
-            <span class="category-count">3</span>
+        <HostingCard
+          id="qiniu"
+          name="七牛云"
+          description="七牛云对象存储"
+          :isConfigured="isPrivateConfigured('qiniu')"
+          :isTesting="testingConnections['qiniu']"
+          @test="emit('testPrivate', $event)"
+        >
+          <div class="form-grid">
+            <div class="form-item">
+              <label>Access Key (AK)</label>
+              <Password v-model="privateFormData.qiniu.accessKey" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item">
+              <label>Secret Key (SK)</label>
+              <Password v-model="privateFormData.qiniu.secretKey" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item">
+              <label>地域 (Region)</label>
+              <InputText v-model="privateFormData.qiniu.region" @blur="emit('save')" placeholder="cn-east-1" class="w-full" />
+              <small class="field-hint">七牛云区域代码，如 cn-east-1、cn-south-1 等</small>
+            </div>
+            <div class="form-item">
+              <label>存储桶 (Bucket)</label>
+              <InputText v-model="privateFormData.qiniu.bucket" @blur="emit('save')" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+              <label>绑定域名 (Domain)</label>
+              <InputText v-model="privateFormData.qiniu.domain" @blur="emit('save')" placeholder="https://images.example.com" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+              <label>自定义路径 (Optional)</label>
+              <InputText v-model="privateFormData.qiniu.path" @blur="emit('save')" placeholder="e.g. blog/images/" class="w-full" />
+            </div>
           </div>
-        </AccordionHeader>
-        <AccordionContent>
-          <TokenAuthHostingPanel
-            :formData="tokenFormData"
-            :testingConnections="testingConnections"
-            @save="handleSave"
-            @test="handleTestToken"
-          />
-        </AccordionContent>
-      </AccordionPanel>
-    </Accordion>
+        </HostingCard>
+
+        <HostingCard
+          id="upyun"
+          name="又拍云"
+          description="又拍云对象存储"
+          :isConfigured="isPrivateConfigured('upyun')"
+          :isTesting="testingConnections['upyun']"
+          @test="emit('testPrivate', $event)"
+        >
+          <div class="form-grid">
+            <div class="form-item">
+              <label>Operator</label>
+              <Password v-model="privateFormData.upyun.operator" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item">
+              <label>Password</label>
+              <Password v-model="privateFormData.upyun.password" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+            </div>
+            <div class="form-item span-full">
+              <label>存储桶 (Bucket)</label>
+              <InputText v-model="privateFormData.upyun.bucket" @blur="emit('save')" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+              <label>绑定域名 (Domain)</label>
+              <InputText v-model="privateFormData.upyun.domain" @blur="emit('save')" placeholder="https://images.example.com" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+              <label>自定义路径 (Optional)</label>
+              <InputText v-model="privateFormData.upyun.path" @blur="emit('save')" placeholder="e.g. blog/images/" class="w-full" />
+            </div>
+          </div>
+        </HostingCard>
+      </div>
+
+      <div class="group-title">
+        <i class="pi pi-bolt"></i>
+        <span>免配置图床</span>
+      </div>
+      <div class="provider-grid">
+        <HostingCard
+          id="jd"
+          name="京东"
+          description="京东云存储，开箱即用"
+          :isBuiltin="true"
+          :isAvailable="jdAvailable"
+          :isChecking="isCheckingJd"
+          :showTestButton="false"
+          @check="emit('checkBuiltin', $event)"
+        >
+          <div class="builtin-info">
+            <p>京东图床无需任何配置，可以直接使用。</p>
+          </div>
+        </HostingCard>
+
+        <HostingCard
+          id="qiyu"
+          name="七鱼"
+          description="网易七鱼客服系统存储"
+          :isBuiltin="true"
+          :isAvailable="qiyuAvailable"
+          :isChecking="isCheckingQiyu"
+          :showTestButton="false"
+          :showLoginButton="true"
+          @login="emit('loginCookie', $event)"
+          @check="emit('checkBuiltin', $event)"
+        >
+          <div class="builtin-info">
+            <p>七鱼图床 Token 已自动获取，可以直接使用。</p>
+          </div>
+        </HostingCard>
+      </div>
+
+      <div class="group-title">
+        <svg class="category-icon" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+          <path d="M512 128C299.946667 128 128 299.946667 128 512 128 724.053333 299.946667 896 512 896 724.053333 896 896 724.053333 896 512 896 490.666667 894.293333 469.333333 890.453333 448 878.933333 426.666667 853.333333 426.666667 853.333333 426.666667L768 426.666667 768 384C768 341.333333 725.333333 341.333333 725.333333 341.333333L640 341.333333 640 298.666667C640 256 597.333333 256 597.333333 256L554.666667 256 554.666667 170.666667C554.666667 128 512 128 512 128M405.333333 256C440.746667 256 469.333333 284.586667 469.333333 320 469.333333 355.413333 440.746667 384 405.333333 384 369.92 384 341.333333 355.413333 341.333333 320 341.333333 284.586667 369.92 256 405.333333 256M277.333333 426.666667C312.746667 426.666667 341.333333 455.253333 341.333333 490.666667 341.333333 526.08 312.746667 554.666667 277.333333 554.666667 241.92 554.666667 213.333333 526.08 213.333333 490.666667 213.333333 455.253333 241.92 426.666667 277.333333 426.666667M490.666667 469.333333C526.08 469.333333 554.666667 497.92 554.666667 533.333333 554.666667 568.746667 526.08 597.333333 490.666667 597.333333 455.253333 597.333333 426.666667 568.746667 426.666667 533.333333 426.666667 497.92 455.253333 469.333333 490.666667 469.333333M704 554.666667C739.413333 554.666667 768 583.253333 768 618.666667 768 654.08 739.413333 682.666667 704 682.666667L704 682.666667C668.586667 682.666667 640 654.08 640 618.666667L640 618.666667C640 583.253333 668.586667 554.666667 704 554.666667M469.333333 682.666667C504.746667 682.666667 533.333333 711.253333 533.333333 746.666667 533.333333 782.08 504.746667 810.666667 469.333333 810.666667 433.92 810.666667 405.333333 782.08 405.333333 746.666667 405.333333 711.253333 433.92 682.666667 469.333333 682.666667Z" fill="currentColor"/>
+        </svg>
+        <span>Cookie 认证</span>
+      </div>
+      <div class="provider-grid">
+        <HostingCard
+          id="weibo"
+          name="微博"
+          description="新浪微博图床"
+          :isConfigured="isCookieConfigured('weibo')"
+          :isTesting="testingConnections['weibo']"
+          :showLoginButton="true"
+          @test="emit('testCookie', $event)"
+          @login="emit('loginCookie', $event)"
+        >
+          <div class="form-grid">
+            <div class="form-item span-full">
+              <label>Cookie</label>
+              <Textarea v-model="cookieFormData.weibo.cookie" @blur="emit('save')" rows="6" class="w-full" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
+              <small class="form-hint">在浏览器中登录微博，按 F12 打开开发者工具，在 Network 选项卡中找到请求头的 Cookie 值并复制</small>
+            </div>
+          </div>
+        </HostingCard>
+
+        <HostingCard
+          id="zhihu"
+          name="知乎"
+          description="知乎图床"
+          :isConfigured="isCookieConfigured('zhihu')"
+          :isTesting="testingConnections['zhihu']"
+          :showLoginButton="true"
+          @test="emit('testCookie', $event)"
+          @login="emit('loginCookie', $event)"
+        >
+          <div class="form-grid">
+            <div class="form-item span-full">
+              <label>Cookie</label>
+              <Textarea v-model="cookieFormData.zhihu.cookie" @blur="emit('save')" rows="6" class="w-full" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
+              <small class="form-hint">在浏览器中登录知乎，按 F12 打开开发者工具，在 Network 选项卡中找到请求头的 Cookie 值并复制</small>
+            </div>
+          </div>
+        </HostingCard>
+
+        <HostingCard
+          id="nowcoder"
+          name="牛客"
+          description="牛客网图床"
+          :isConfigured="isCookieConfigured('nowcoder')"
+          :isTesting="testingConnections['nowcoder']"
+          :showLoginButton="true"
+          @test="emit('testCookie', $event)"
+          @login="emit('loginCookie', $event)"
+        >
+          <div class="form-grid">
+            <div class="form-item span-full">
+              <label>Cookie</label>
+              <Textarea v-model="cookieFormData.nowcoder.cookie" @blur="emit('save')" rows="6" class="w-full" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
+              <small class="form-hint">在浏览器中登录牛客，按 F12 打开开发者工具，在 Network 选项卡中找到请求头的 Cookie 值并复制</small>
+            </div>
+          </div>
+        </HostingCard>
+
+        <HostingCard
+          id="nami"
+          name="纳米"
+          description="纳米图床"
+          :isConfigured="isCookieConfigured('nami')"
+          :isTesting="testingConnections['nami']"
+          :showLoginButton="true"
+          @test="emit('testCookie', $event)"
+          @login="emit('loginCookie', $event)"
+        >
+          <div class="form-grid">
+            <div class="form-item span-full">
+              <label>Cookie</label>
+              <Textarea v-model="cookieFormData.nami.cookie" @blur="emit('save')" rows="6" class="w-full" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
+              <small class="form-hint">Auth-Token 会自动从 Cookie 中提取</small>
+            </div>
+            <div v-if="extractNamiAuthToken" class="form-item span-full">
+              <label>Auth-Token（自动提取）</label>
+              <InputText :modelValue="extractNamiAuthToken" readonly class="w-full" disabled />
+            </div>
+          </div>
+        </HostingCard>
+
+        <HostingCard
+          id="bilibili"
+          name="B站"
+          description="Bilibili 图床"
+          :isConfigured="isCookieConfigured('bilibili')"
+          :isTesting="testingConnections['bilibili']"
+          :showLoginButton="true"
+          @test="emit('testCookie', $event)"
+          @login="emit('loginCookie', $event)"
+        >
+          <div class="form-grid">
+            <div class="form-item span-full">
+              <label>Cookie</label>
+              <Textarea v-model="cookieFormData.bilibili.cookie" @blur="emit('save')" rows="6" class="w-full" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
+              <small class="form-hint">在浏览器中登录 B站，按 F12 打开开发者工具，在 Network 选项卡中找到请求头的 Cookie 值并复制</small>
+            </div>
+          </div>
+        </HostingCard>
+
+        <HostingCard
+          id="chaoxing"
+          name="超星"
+          description="超星图床"
+          :isConfigured="isCookieConfigured('chaoxing')"
+          :isTesting="testingConnections['chaoxing']"
+          :showLoginButton="true"
+          @test="emit('testCookie', $event)"
+          @login="emit('loginCookie', $event)"
+        >
+          <div class="form-grid">
+            <div class="form-item span-full">
+              <label>Cookie</label>
+              <Textarea v-model="cookieFormData.chaoxing.cookie" @blur="emit('save')" rows="6" class="w-full" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
+              <small class="form-hint">在浏览器中登录超星，按 F12 打开开发者工具，在 Network 选项卡中找到请求头的 Cookie 值并复制</small>
+            </div>
+          </div>
+        </HostingCard>
+      </div>
+
+      <div class="group-title">
+        <svg class="category-icon" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+          <path d="M412.8 396.8c0 54.4 44.8 99.2 99.2 99.2s99.2-44.8 99.2-99.2-44.8-99.2-99.2-99.2-99.2 44.8-99.2 99.2z" fill="currentColor"/><path d="M512 12.8C380.8 102.4 246.4 147.2 112 147.2v313.6c0 179.2 89.6 342.4 236.8 441.6l163.2 108.8 163.2-108.8c147.2-99.2 236.8-265.6 236.8-441.6V147.2c-134.4 0-265.6-44.8-400-134.4z m32 547.2v64h99.2v67.2H544v105.6h-64v-236.8c-76.8-16-134.4-83.2-134.4-163.2 0-92.8 73.6-166.4 166.4-166.4s166.4 73.6 166.4 166.4c0 80-57.6 147.2-134.4 163.2z" fill="currentColor"/>
+        </svg>
+        <span>Token 认证</span>
+      </div>
+      <div class="provider-grid">
+        <HostingCard
+          id="smms"
+          name="SM.MS"
+          description="SM.MS 图床"
+          :isConfigured="isTokenConfigured('smms')"
+          :isTesting="testingConnections['smms']"
+          @test="emit('testToken', $event)"
+        >
+          <div class="form-grid">
+            <div class="form-item span-full">
+              <label>API Token</label>
+              <Password v-model="tokenFormData.smms.token" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" placeholder="从 SM.MS 官网获取 API Token" />
+              <small class="form-hint">访问 <a href="https://sm.ms/home/apitoken" target="_blank">https://sm.ms/home/apitoken</a> 获取 API Token</small>
+            </div>
+          </div>
+        </HostingCard>
+
+        <HostingCard
+          id="github"
+          name="GitHub"
+          description="GitHub 仓库图床"
+          :isConfigured="isTokenConfigured('github')"
+          :isTesting="testingConnections['github']"
+          @test="emit('testToken', $event)"
+        >
+          <div class="form-grid">
+            <div class="form-item">
+              <label>Personal Access Token</label>
+              <Password v-model="tokenFormData.github.token" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" placeholder="ghp_xxxxxxxxxxxx" />
+            </div>
+            <div class="form-item">
+              <label>Repository Owner</label>
+              <InputText v-model="tokenFormData.github.owner" @blur="emit('save')" class="w-full" placeholder="your-username" />
+            </div>
+            <div class="form-item">
+              <label>Repository Name</label>
+              <InputText v-model="tokenFormData.github.repo" @blur="emit('save')" class="w-full" placeholder="image-hosting" />
+            </div>
+            <div class="form-item">
+              <label>Branch</label>
+              <InputText v-model="tokenFormData.github.branch" @blur="emit('save')" placeholder="main" class="w-full" />
+            </div>
+            <div class="form-item span-full">
+              <label>Storage Path</label>
+              <InputText v-model="tokenFormData.github.path" @blur="emit('save')" placeholder="images/" class="w-full" />
+              <small class="form-hint">图片存储在仓库中的路径，例如 images/ 或 assets/pics/</small>
+            </div>
+            <div class="form-item span-full">
+              <label>Custom Domain（可选）</label>
+              <InputText v-model="tokenFormData.github.customDomain" @blur="emit('save')" placeholder="https://cdn.example.com" class="w-full" />
+              <small class="form-hint">自定义域名，留空则使用 raw.githubusercontent.com</small>
+            </div>
+          </div>
+        </HostingCard>
+
+        <HostingCard
+          id="imgur"
+          name="Imgur"
+          description="Imgur 图床"
+          :isConfigured="isTokenConfigured('imgur')"
+          :isTesting="testingConnections['imgur']"
+          @test="emit('testToken', $event)"
+        >
+          <div class="form-grid">
+            <div class="form-item">
+              <label>Client ID</label>
+              <Password v-model="tokenFormData.imgur.clientId" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" placeholder="从 Imgur API 获取" />
+            </div>
+            <div class="form-item">
+              <label>Client Secret（可选）</label>
+              <Password v-model="tokenFormData.imgur.clientSecret" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" placeholder="可选配置" />
+            </div>
+            <div class="form-item span-full">
+              <small class="form-hint">访问 <a href="https://api.imgur.com/oauth2/addclient" target="_blank">Imgur API</a> 注册应用获取 Client ID</small>
+            </div>
+          </div>
+        </HostingCard>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -192,113 +550,120 @@ const handleLoginCookie = (providerId: string) => {
   width: 100%;
 }
 
-/* 页面标题 */
 .panel-header {
-  margin-bottom: 32px;
+  margin-bottom: 8px;
 }
 
 .panel-header h2 {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 600;
   color: var(--text-primary);
-  margin: 0 0 8px 0;
+  margin: 0 0 6px 0;
 }
 
 .header-desc {
-  font-size: 14px;
-  color: var(--text-secondary);
+  font-size: 13px;
+  color: var(--text-muted);
   margin: 0;
 }
 
-/* Accordion 样式 */
-.hosting-accordion {
+.settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 10px;
+  padding-top: 4px;
+}
+
+.group-title i {
+  font-size: 0.875rem;
+  color: var(--primary);
+}
+
+.category-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--primary);
+}
+
+.provider-grid {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-/* Accordion 标题样式 */
-.accordion-title {
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.form-item {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  font-size: 1rem;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-item.span-full {
+  grid-column: 1 / -1;
+}
+
+.form-item label {
+  font-size: 13px;
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--text-secondary);
 }
 
-.accordion-title i {
-  font-size: 1.125rem;
-  color: var(--primary-color);
-}
-
-/* 自定义 SVG 图标样式 */
-.accordion-title .category-icon {
-  width: 1.125rem;
-  height: 1.125rem;
-  color: var(--primary-color);
-  flex-shrink: 0;
-}
-
-.category-count {
-  margin-left: auto;
-  margin-right: 12px;
-  font-size: 0.8125rem;
-  font-weight: 500;
+.field-hint,
+.form-hint {
+  font-size: 12px;
   color: var(--text-muted);
-  background: var(--bg-secondary);
-  padding: 4px 10px;
-  border-radius: 12px;
-  min-width: 28px;
-  text-align: center;
+  line-height: 1.4;
+  margin-top: 2px;
 }
 
-/* 保持滚动条空间稳定，避免内容宽度跳变 */
-:deep(.p-accordioncontent-content) {
-  scrollbar-gutter: stable;
+.form-hint a {
+  color: var(--primary);
+  text-decoration: none;
+  transition: color 0.15s ease;
 }
 
-/* 修复暗黑模式 Accordion 背景色过深 */
-:deep(.p-accordionpanel) {
-  background: transparent;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  overflow: hidden;
+.form-hint a:hover {
+  text-decoration: underline;
 }
 
-:deep(.p-accordionheader) {
-  background: var(--bg-card);
-  border: none;
-  padding: 16px 20px;
-}
-
-:deep(.p-accordionheader:hover) {
-  background: var(--bg-card);
-}
-
-:deep(.p-accordionheader-toggle-icon) {
+.builtin-info {
   color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-:deep(.p-accordioncontent) {
-  background: transparent;
-  border: none;
+.builtin-info p {
+  margin: 0;
 }
 
-:deep(.p-accordioncontent-content) {
-  padding: 20px;
-  background: transparent;
-}
-
-/* 响应式 */
 @media (max-width: 768px) {
   .panel-header h2 {
     font-size: 1.25rem;
   }
 
-  .accordion-title {
-    font-size: 0.9375rem;
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-item.span-full {
+    grid-column: 1;
   }
 }
 </style>
