@@ -1,0 +1,21 @@
+<svg viewBox="0 0 200 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 云朵背景 -->
+  <ellipse cx="100" cy="130" rx="80" ry="8" fill="currentColor" opacity="0.05"/>
+
+  <!-- 主云朵 -->
+  <path d="M160 90C160 75.088 147.912 63 133 63C131.82 63 130.657 63.073 129.514 63.215C124.468 49.268 111.104 39 95.5 39C76.222 39 60.5 54.722 60.5 74C60.5 75.353 60.588 76.686 60.76 78C48.356 78.428 38.5 88.544 38.5 101C38.5 113.703 48.797 124 61.5 124H148C155.18 124 161 118.18 161 111C161 103.82 155.18 98 148 98C148 93.582 144.418 90 140 90C136.686 90 133.829 91.919 132.38 94.708C130.584 91.784 127.319 90 123.5 90H160Z" fill="currentColor" opacity="0.08"/>
+
+  <!-- 文件夹图标 -->
+  <rect x="72" y="70" width="56" height="44" rx="4" fill="var(--primary)" opacity="0.15"/>
+  <path d="M72 78C72 75.791 73.791 74 76 74H90L96 70H124C126.209 70 128 71.791 128 74V78H72Z" fill="var(--primary)" opacity="0.25"/>
+
+  <!-- 上传箭头 -->
+  <path d="M100 82V102" stroke="var(--primary)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M92 90L100 82L108 90" stroke="var(--primary)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- 装饰小点 -->
+  <circle cx="50" cy="60" r="3" fill="var(--primary)" opacity="0.2"/>
+  <circle cx="155" cy="55" r="2" fill="var(--primary)" opacity="0.15"/>
+  <circle cx="45" cy="95" r="2" fill="var(--primary)" opacity="0.1"/>
+  <circle cx="160" cy="85" r="2.5" fill="var(--primary)" opacity="0.15"/>
+</svg>
