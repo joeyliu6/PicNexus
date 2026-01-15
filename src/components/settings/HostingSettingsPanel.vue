@@ -5,7 +5,7 @@ import Password from 'primevue/password';
 import Textarea from 'primevue/textarea';
 import Button from 'primevue/button';
 import HostingCard from './HostingCard.vue';
-import { getCategoryIcon } from '../../utils/categoryIcons';
+import { getCategoryIcon } from '../../utils/icons';
 
 interface PrivateFormData {
   r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; path: string; publicDomain: string };

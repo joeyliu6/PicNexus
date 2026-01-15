@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import Button from 'primevue/button';
-import { getIllustration } from '../../../../utils/illustrationIcons';
+import { getIllustration } from '../../../../utils/icons';
 
 defineProps<{
   /** 图标 */

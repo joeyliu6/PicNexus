@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ServiceStatus, CloudServiceType, ConnectionStatus } from '../types';
-import { getServiceIcon } from '../../../../utils/serviceIcons';
+import { getServiceIcon } from '../../../../utils/icons';
 
 const props = defineProps<{
   /** 服务状态列表 */

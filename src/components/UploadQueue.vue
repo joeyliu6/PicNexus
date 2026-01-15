@@ -10,7 +10,7 @@ import { deepClone, deepMerge } from '../utils/deepClone';
 import { generateThumbnailUrl, getThumbnailCandidates } from '../composables/useThumbCache';
 import ThumbnailImage from './common/ThumbnailImage.vue';
 import { useConfigManager } from '../composables/useConfig';
-import { getServiceIcon } from '../utils/serviceIcons';
+import { getServiceIcon } from '../utils/icons';
 
 /** 虚拟滚动阈值：超过此数量启用虚拟滚动 */
 const VIRTUAL_SCROLL_THRESHOLD = 20;
