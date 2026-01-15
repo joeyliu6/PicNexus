@@ -2,19 +2,19 @@
 // 云存储管理视图类型定义
 
 /** 支持的存储服务类型 */
-export type CloudServiceType = 'r2' | 'cos' | 'oss' | 'qiniu' | 'upyun';
+export type CloudServiceType = 'r2' | 'tencent' | 'aliyun' | 'qiniu' | 'upyun';
 
 /** 存储服务ID到名称的映射 */
 export const SERVICE_NAMES: Record<CloudServiceType, string> = {
   r2: 'Cloudflare R2',
-  cos: '腾讯云 COS',
-  oss: '阿里云 OSS',
+  tencent: '腾讯云',
+  aliyun: '阿里云',
   qiniu: '七牛云',
   upyun: '又拍云',
 };
 
 /** 支持的服务列表 */
-export const SUPPORTED_SERVICES: CloudServiceType[] = ['r2', 'cos', 'oss', 'qiniu', 'upyun'];
+export const SUPPORTED_SERVICES: CloudServiceType[] = ['r2', 'tencent', 'aliyun', 'qiniu', 'upyun'];
 
 /** 连接状态 */
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'error' | 'unconfigured';

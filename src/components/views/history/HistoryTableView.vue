@@ -61,8 +61,8 @@ const SERVICE_NAMES: Record<ServiceType, string> = {
   smms: 'SM.MS',
   github: 'GitHub',
   imgur: 'Imgur',
-  cos: '腾讯云COS',
-  oss: '阿里云OSS',
+  tencent: '腾讯云',
+  aliyun: '阿里云',
   qiniu: '七牛云',
   upyun: '又拍云'
 };

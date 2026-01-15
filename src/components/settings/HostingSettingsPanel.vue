@@ -3,14 +3,13 @@ import { computed } from 'vue';
 import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
 import Textarea from 'primevue/textarea';
-import Button from 'primevue/button';
 import HostingCard from './HostingCard.vue';
 import { getCategoryIcon } from '../../utils/icons';
 
 interface PrivateFormData {
   r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; path: string; publicDomain: string };
-  cos: { secretId: string; secretKey: string; region: string; bucket: string; path: string; publicDomain: string };
-  oss: { accessKeyId: string; accessKeySecret: string; region: string; bucket: string; path: string; publicDomain: string };
+  tencent: { secretId: string; secretKey: string; region: string; bucket: string; path: string; publicDomain: string };
+  aliyun: { accessKeyId: string; accessKeySecret: string; region: string; bucket: string; path: string; publicDomain: string };
   qiniu: { accessKey: string; secretKey: string; region: string; bucket: string; domain: string; path: string };
   upyun: { operator: string; password: string; bucket: string; domain: string; path: string };
 }
@@ -59,10 +58,10 @@ function isPrivateConfigured(providerId: PrivateProviderId): boolean {
   switch (providerId) {
     case 'r2':
       return !!(data.r2.accountId && data.r2.accessKeyId && data.r2.secretAccessKey && data.r2.bucketName && data.r2.publicDomain);
-    case 'cos':
-      return !!(data.cos.secretId && data.cos.secretKey && data.cos.region && data.cos.bucket && data.cos.publicDomain);
-    case 'oss':
-      return !!(data.oss.accessKeyId && data.oss.accessKeySecret && data.oss.region && data.oss.bucket && data.oss.publicDomain);
+    case 'tencent':
+      return !!(data.tencent.secretId && data.tencent.secretKey && data.tencent.region && data.tencent.bucket && data.tencent.publicDomain);
+    case 'aliyun':
+      return !!(data.aliyun.accessKeyId && data.aliyun.accessKeySecret && data.aliyun.region && data.aliyun.bucket && data.aliyun.publicDomain);
     case 'qiniu':
       return !!(data.qiniu.accessKey && data.qiniu.secretKey && data.qiniu.region && data.qiniu.bucket && data.qiniu.domain);
     case 'upyun':
@@ -149,73 +148,73 @@ const extractNamiAuthToken = computed(() => {
         </HostingCard>
 
         <HostingCard
-          id="cos"
-          name="腾讯云 COS"
+          id="tencent"
+          name="腾讯云"
           description="腾讯云对象存储"
-          :isConfigured="isPrivateConfigured('cos')"
-          :isTesting="testingConnections['cos']"
+          :isConfigured="isPrivateConfigured('tencent')"
+          :isTesting="testingConnections['tencent']"
           @test="emit('testPrivate', $event)"
         >
           <div class="form-grid">
             <div class="form-item">
               <label>Secret ID</label>
-              <Password v-model="privateFormData.cos.secretId" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+              <Password v-model="privateFormData.tencent.secretId" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
             </div>
             <div class="form-item">
               <label>Secret Key</label>
-              <Password v-model="privateFormData.cos.secretKey" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+              <Password v-model="privateFormData.tencent.secretKey" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
             </div>
             <div class="form-item">
               <label>地域 (Region)</label>
-              <InputText v-model="privateFormData.cos.region" @blur="emit('save')" placeholder="ap-guangzhou" class="w-full" />
+              <InputText v-model="privateFormData.tencent.region" @blur="emit('save')" placeholder="ap-guangzhou" class="w-full" />
             </div>
             <div class="form-item">
               <label>存储桶 (Bucket)</label>
-              <InputText v-model="privateFormData.cos.bucket" @blur="emit('save')" class="w-full" />
+              <InputText v-model="privateFormData.tencent.bucket" @blur="emit('save')" class="w-full" />
             </div>
             <div class="form-item span-full">
               <label>自定义路径 (Optional)</label>
-              <InputText v-model="privateFormData.cos.path" @blur="emit('save')" placeholder="e.g. blog/images/" class="w-full" />
+              <InputText v-model="privateFormData.tencent.path" @blur="emit('save')" placeholder="e.g. blog/images/" class="w-full" />
             </div>
             <div class="form-item span-full">
               <label>公开访问域名 (Public Domain)</label>
-              <InputText v-model="privateFormData.cos.publicDomain" @blur="emit('save')" placeholder="https://images.example.com" class="w-full" />
+              <InputText v-model="privateFormData.tencent.publicDomain" @blur="emit('save')" placeholder="https://images.example.com" class="w-full" />
             </div>
           </div>
         </HostingCard>
 
         <HostingCard
-          id="oss"
-          name="阿里云 OSS"
+          id="aliyun"
+          name="阿里云"
           description="阿里云对象存储"
-          :isConfigured="isPrivateConfigured('oss')"
-          :isTesting="testingConnections['oss']"
+          :isConfigured="isPrivateConfigured('aliyun')"
+          :isTesting="testingConnections['aliyun']"
           @test="emit('testPrivate', $event)"
         >
           <div class="form-grid">
             <div class="form-item">
               <label>Access Key ID</label>
-              <Password v-model="privateFormData.oss.accessKeyId" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+              <Password v-model="privateFormData.aliyun.accessKeyId" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
             </div>
             <div class="form-item">
               <label>Access Key Secret</label>
-              <Password v-model="privateFormData.oss.accessKeySecret" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
+              <Password v-model="privateFormData.aliyun.accessKeySecret" @blur="emit('save')" :feedback="false" toggleMask class="w-full" inputClass="w-full" />
             </div>
             <div class="form-item">
               <label>地域 (Region)</label>
-              <InputText v-model="privateFormData.oss.region" @blur="emit('save')" placeholder="oss-cn-hangzhou" class="w-full" />
+              <InputText v-model="privateFormData.aliyun.region" @blur="emit('save')" placeholder="oss-cn-hangzhou" class="w-full" />
             </div>
             <div class="form-item">
               <label>存储桶 (Bucket)</label>
-              <InputText v-model="privateFormData.oss.bucket" @blur="emit('save')" class="w-full" />
+              <InputText v-model="privateFormData.aliyun.bucket" @blur="emit('save')" class="w-full" />
             </div>
             <div class="form-item span-full">
               <label>自定义路径 (Optional)</label>
-              <InputText v-model="privateFormData.oss.path" @blur="emit('save')" placeholder="e.g. blog/images/" class="w-full" />
+              <InputText v-model="privateFormData.aliyun.path" @blur="emit('save')" placeholder="e.g. blog/images/" class="w-full" />
             </div>
             <div class="form-item span-full">
               <label>公开访问域名 (Public Domain)</label>
-              <InputText v-model="privateFormData.oss.publicDomain" @blur="emit('save')" placeholder="https://images.example.com" class="w-full" />
+              <InputText v-model="privateFormData.aliyun.publicDomain" @blur="emit('save')" placeholder="https://images.example.com" class="w-full" />
             </div>
           </div>
         </HostingCard>
@@ -300,6 +299,7 @@ const extractNamiAuthToken = computed(() => {
           name="京东"
           description="京东云存储，开箱即用"
           :isBuiltin="true"
+          :isConfigured="jdAvailable"
           :isAvailable="jdAvailable"
           :isChecking="isCheckingJd"
           :showTestButton="false"
@@ -315,6 +315,7 @@ const extractNamiAuthToken = computed(() => {
           name="七鱼"
           description="网易七鱼客服系统存储"
           :isBuiltin="true"
+          :isConfigured="qiyuAvailable"
           :isAvailable="qiyuAvailable"
           :isChecking="isCheckingQiyu"
           :showTestButton="false"

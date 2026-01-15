@@ -86,9 +86,9 @@ export function useCloudStorage(): CloudStorageReturn {
           config.secretAccessKey &&
           config.bucketName
         );
-      case 'cos':
+      case 'tencent':
         return !!(config.secretId && config.secretKey && config.region && config.bucket);
-      case 'oss':
+      case 'aliyun':
         return !!(
           config.accessKeyId &&
           config.accessKeySecret &&

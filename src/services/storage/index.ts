@@ -2,7 +2,7 @@ export type { IStorageManager, StorageObject, ListResult, ListOptions, Connectio
 export { BaseS3StorageManager } from './S3StorageManager';
 export { StorageManagerFactory } from './StorageManagerFactory';
 export { R2StorageManager } from './R2StorageManager';
-export { CosStorageManager } from './CosStorageManager';
-export { OssStorageManager } from './OssStorageManager';
+export { TencentStorageManager } from './TencentStorageManager';
+export { AliyunStorageManager } from './AliyunStorageManager';
 export { QiniuStorageManager } from './QiniuStorageManager';
 export { UpyunStorageManager } from './UpyunStorageManager';

@@ -157,8 +157,8 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     smms: false,
     github: false,
     imgur: false,
-    cos: false,
-    oss: false,
+    tencent: false,
+    aliyun: false,
     qiniu: false,
     upyun: false
   });
@@ -558,7 +558,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
                   nowcoder: '牛客', qiyu: '七鱼', zhihu: '知乎', nami: '纳米',
                   bilibili: '哔哩哔哩', chaoxing: '超星',
                   smms: 'SM.MS', github: 'GitHub', imgur: 'Imgur',
-                  cos: '腾讯云COS', oss: '阿里云OSS', qiniu: '七牛云', upyun: '又拍云'
+                  tencent: '腾讯云', aliyun: '阿里云', qiniu: '七牛云', upyun: '又拍云'
                 };
                 return nameMap[f.serviceId] || f.serviceId;
               })
@@ -1034,21 +1034,21 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     serviceConfigStatus.value.imgur = !!imgurConfig?.clientId && imgurConfig.clientId.trim().length > 0;
 
     // 鑵捐浜?COS
-    const cosConfig = config.services.cos;
-    serviceConfigStatus.value.cos = !!(
-      cosConfig?.secretId &&
-      cosConfig.secretKey &&
-      cosConfig.bucket &&
-      cosConfig.region
+    const tencentConfig = config.services.tencent;
+    serviceConfigStatus.value.tencent = !!(
+      tencentConfig?.secretId &&
+      tencentConfig.secretKey &&
+      tencentConfig.bucket &&
+      tencentConfig.region
     );
 
     // 闃块噷浜?OSS
-    const ossConfig = config.services.oss;
-    serviceConfigStatus.value.oss = !!(
-      ossConfig?.accessKeyId &&
-      ossConfig.accessKeySecret &&
-      ossConfig.bucket &&
-      ossConfig.region
+    const aliyunConfig = config.services.aliyun;
+    serviceConfigStatus.value.aliyun = !!(
+      aliyunConfig?.accessKeyId &&
+      aliyunConfig.accessKeySecret &&
+      aliyunConfig.bucket &&
+      aliyunConfig.region
     );
 
     // 涓冪墰浜?

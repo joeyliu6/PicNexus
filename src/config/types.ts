@@ -51,13 +51,13 @@ export interface AnalyticsConfig {
 /**
  * 支持的图床服务类型
  */
-export type ServiceType = 'weibo' | 'r2' | 'jd' | 'nowcoder' | 'qiyu' | 'zhihu' | 'nami' | 'bilibili' | 'chaoxing' | 'smms' | 'github' | 'imgur' | 'cos' | 'oss' | 'qiniu' | 'upyun';
+export type ServiceType = 'weibo' | 'r2' | 'jd' | 'nowcoder' | 'qiyu' | 'zhihu' | 'nami' | 'bilibili' | 'chaoxing' | 'smms' | 'github' | 'imgur' | 'tencent' | 'aliyun' | 'qiniu' | 'upyun';
 
 /**
  * 私有图床服务列表
  * 用户需要提供自己的存储凭证，数据存储在用户自己的账户中
  */
-export const PRIVATE_SERVICES: ServiceType[] = ['r2', 'cos', 'oss', 'qiniu', 'upyun'];
+export const PRIVATE_SERVICES: ServiceType[] = ['r2', 'tencent', 'aliyun', 'qiniu', 'upyun'];
 
 /**
  * 公共图床服务列表
@@ -212,10 +212,10 @@ export interface ImgurServiceConfig extends BaseServiceConfig {
 }
 
 /**
- * 腾讯云 COS 图床服务配置
+ * 腾讯云图床服务配置
  * 私有图床，需要 SecretId 和 SecretKey
  */
-export interface CosServiceConfig extends BaseServiceConfig {
+export interface TencentServiceConfig extends BaseServiceConfig {
   /** 腾讯云 SecretId */
   secretId: string;
   /** 腾讯云 SecretKey */
@@ -231,10 +231,10 @@ export interface CosServiceConfig extends BaseServiceConfig {
 }
 
 /**
- * 阿里云 OSS 图床服务配置
+ * 阿里云图床服务配置
  * 私有图床，需要 AccessKey ID 和 Secret
  */
-export interface OssServiceConfig extends BaseServiceConfig {
+export interface AliyunServiceConfig extends BaseServiceConfig {
   /** 阿里云 AccessKey ID */
   accessKeyId: string;
   /** 阿里云 AccessKey Secret */
@@ -430,8 +430,8 @@ export interface UserConfig {
     smms?: SmmsServiceConfig;
     github?: GithubServiceConfig;
     imgur?: ImgurServiceConfig;
-    cos?: CosServiceConfig;
-    oss?: OssServiceConfig;
+    tencent?: TencentServiceConfig;
+    aliyun?: AliyunServiceConfig;
     qiniu?: QiniuServiceConfig;
     upyun?: UpyunServiceConfig;
   };
@@ -557,7 +557,7 @@ export interface HistoryItem {
  */
 export const DEFAULT_CONFIG: UserConfig = {
   enabledServices: ['jd'],  // 默认启用 JD 图床（开箱即用）
-  availableServices: ['weibo', 'r2', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami', 'bilibili', 'chaoxing', 'smms', 'github', 'imgur', 'cos', 'oss', 'qiniu', 'upyun'],  // 默认所有图床都可用
+  availableServices: ['weibo', 'r2', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami', 'bilibili', 'chaoxing', 'smms', 'github', 'imgur', 'tencent', 'aliyun', 'qiniu', 'upyun'],  // 默认所有图床都可用
   services: {
     weibo: {
       enabled: true,
@@ -617,8 +617,8 @@ export const DEFAULT_CONFIG: UserConfig = {
       clientId: '',
       clientSecret: ''
     },
-    cos: {
-      enabled: false,  // 腾讯云 COS 需要配置，默认不启用
+    tencent: {
+      enabled: false,  // 腾讯云需要配置，默认不启用
       secretId: '',
       secretKey: '',
       region: '',
@@ -626,8 +626,8 @@ export const DEFAULT_CONFIG: UserConfig = {
       path: 'images/',
       publicDomain: ''
     },
-    oss: {
-      enabled: false,  // 阿里云 OSS 需要配置，默认不启用
+    aliyun: {
+      enabled: false,  // 阿里云需要配置，默认不启用
       accessKeyId: '',
       accessKeySecret: '',
       region: '',
@@ -735,15 +735,15 @@ export function sanitizeConfig(config: UserConfig): UserConfig {
         clientId: sanitizeString(config.services.imgur.clientId, 4, 4),
         clientSecret: sanitizeString(config.services.imgur.clientSecret, 4, 4)
       } : undefined,
-      cos: config.services.cos ? {
-        ...config.services.cos,
-        secretId: sanitizeString(config.services.cos.secretId, 4, 4),
-        secretKey: sanitizeString(config.services.cos.secretKey, 0, 0)
+      tencent: config.services.tencent ? {
+        ...config.services.tencent,
+        secretId: sanitizeString(config.services.tencent.secretId, 4, 4),
+        secretKey: sanitizeString(config.services.tencent.secretKey, 0, 0)
       } : undefined,
-      oss: config.services.oss ? {
-        ...config.services.oss,
-        accessKeyId: sanitizeString(config.services.oss.accessKeyId, 4, 4),
-        accessKeySecret: sanitizeString(config.services.oss.accessKeySecret, 0, 0)
+      aliyun: config.services.aliyun ? {
+        ...config.services.aliyun,
+        accessKeyId: sanitizeString(config.services.aliyun.accessKeyId, 4, 4),
+        accessKeySecret: sanitizeString(config.services.aliyun.accessKeySecret, 0, 0)
       } : undefined,
       qiniu: config.services.qiniu ? {
         ...config.services.qiniu,
@@ -895,7 +895,7 @@ export function migrateConfig(config: UserConfig): UserConfig {
         clientId: '',
         clientSecret: ''
       },
-      cos: migratedConfig.services?.cos || {
+      tencent: migratedConfig.services?.tencent || {
         enabled: false,
         secretId: '',
         secretKey: '',
@@ -904,7 +904,7 @@ export function migrateConfig(config: UserConfig): UserConfig {
         path: 'images/',
         publicDomain: ''
       },
-      oss: migratedConfig.services?.oss || {
+      aliyun: migratedConfig.services?.aliyun || {
         enabled: false,
         accessKeyId: '',
         accessKeySecret: '',
@@ -940,7 +940,7 @@ export function migrateConfig(config: UserConfig): UserConfig {
       },
       availableServices: [
         ...(migratedConfig.availableServices || ['weibo', 'r2', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami', 'bilibili', 'chaoxing']),
-        'smms', 'github', 'imgur', 'cos', 'oss', 'qiniu', 'upyun'
+        'smms', 'github', 'imgur', 'tencent', 'aliyun', 'qiniu', 'upyun'
       ]
     };
 

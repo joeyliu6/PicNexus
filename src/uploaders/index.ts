@@ -15,8 +15,8 @@ import { ChaoxingUploader } from './chaoxing/ChaoxingUploader';
 import { SmmsUploader } from './smms/SmmsUploader';
 import { GithubUploader } from './github/GithubUploader';
 import { ImgurUploader } from './imgur/ImgurUploader';
-import { CosUploader } from './cos/CosUploader';
-import { OssUploader } from './oss/OssUploader';
+import { TencentUploader } from './tencent/TencentUploader';
+import { AliyunUploader } from './aliyun/AliyunUploader';
 import { QiniuUploader } from './qiniu/QiniuUploader';
 import { UpyunUploader } from './upyun/UpyunUploader';
 
@@ -65,11 +65,11 @@ export function initializeUploaders(): void {
   // 注册 Imgur 上传器
   UploaderFactory.register('imgur', () => new ImgurUploader());
 
-  // 注册腾讯云 COS 上传器
-  UploaderFactory.register('cos', () => new CosUploader());
+  // 注册腾讯云上传器
+  UploaderFactory.register('tencent', () => new TencentUploader());
 
-  // 注册阿里云 OSS 上传器
-  UploaderFactory.register('oss', () => new OssUploader());
+  // 注册阿里云上传器
+  UploaderFactory.register('aliyun', () => new AliyunUploader());
 
   // 注册七牛云上传器
   UploaderFactory.register('qiniu', () => new QiniuUploader());
@@ -95,8 +95,8 @@ export { ChaoxingUploader } from './chaoxing';
 export { SmmsUploader } from './smms';
 export { GithubUploader } from './github';
 export { ImgurUploader } from './imgur';
-export { CosUploader } from './cos';
-export { OssUploader } from './oss';
+export { TencentUploader } from './tencent';
+export { AliyunUploader } from './aliyun';
 export { QiniuUploader } from './qiniu';
 export { UpyunUploader } from './upyun';
 export { UploaderFactory } from './base/UploaderFactory';

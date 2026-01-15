@@ -3,8 +3,8 @@
 
 import { IStorageManager } from './IStorageManager';
 import { R2StorageManager } from './R2StorageManager';
-import { CosStorageManager } from './CosStorageManager';
-import { OssStorageManager } from './OssStorageManager';
+import { TencentStorageManager } from './TencentStorageManager';
+import { AliyunStorageManager } from './AliyunStorageManager';
 import { QiniuStorageManager } from './QiniuStorageManager';
 import { UpyunStorageManager } from './UpyunStorageManager';
 
@@ -13,8 +13,8 @@ export class StorageManagerFactory {
 
   static {
     this.register('r2', () => new R2StorageManager());
-    this.register('cos', () => new CosStorageManager());
-    this.register('oss', () => new OssStorageManager());
+    this.register('tencent', () => new TencentStorageManager());
+    this.register('aliyun', () => new AliyunStorageManager());
     this.register('qiniu', () => new QiniuStorageManager());
     this.register('upyun', () => new UpyunStorageManager());
   }

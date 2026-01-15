@@ -2,9 +2,11 @@
  * 图床服务显示名称映射
  */
 
-export const SERVICE_DISPLAY_NAMES: Record<string, string> = {
+import type { ServiceType } from '../config/types';
+
+export const SERVICE_DISPLAY_NAMES: Record<ServiceType, string> = {
   weibo: '微博',
-  r2: 'R2',
+  r2: 'Cloudflare R2',
   jd: '京东',
   nowcoder: '牛客',
   qiyu: '七鱼',
@@ -24,6 +26,6 @@ export const SERVICE_DISPLAY_NAMES: Record<string, string> = {
 /**
  * 获取服务显示名称
  */
-export function getServiceDisplayName(serviceId: string): string {
-  return SERVICE_DISPLAY_NAMES[serviceId] || serviceId;
+export function getServiceDisplayName(serviceId: ServiceType): string {
+  return SERVICE_DISPLAY_NAMES[serviceId];
 }

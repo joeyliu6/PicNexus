@@ -114,9 +114,9 @@ export abstract class BaseS3Uploader extends BaseUploader {
     };
 
     switch (this.serviceId) {
-      case 'cos':
+      case 'tencent':
         return `${url}?imageMogr2/thumbnail/${sizeParams[size]}x${sizeParams[size]}`;
-      case 'oss':
+      case 'aliyun':
         return `${url}?x-oss-process=image/resize,w_${sizeParams[size]}`;
       case 'qiniu':
         return `${url}?imageView2/2/w/${sizeParams[size]}`;

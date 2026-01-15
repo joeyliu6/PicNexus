@@ -67,14 +67,14 @@ const serviceLabels: Record<ServiceType, string> = {
   smms: 'SM.MS',
   github: 'GitHub',
   imgur: 'Imgur',
-  cos: '腾讯云',
-  oss: '阿里云',
+  tencent: '腾讯云',
+  aliyun: '阿里云',
   qiniu: '七牛云',
   upyun: '又拍云'
 };
 
 // 所有服务列表
-const allServices: ServiceType[] = ['weibo', 'r2', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami', 'bilibili', 'chaoxing', 'smms', 'github', 'imgur', 'cos', 'oss', 'qiniu', 'upyun'];
+const allServices: ServiceType[] = ['weibo', 'r2', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami', 'bilibili', 'chaoxing', 'smms', 'github', 'imgur', 'tencent', 'aliyun', 'qiniu', 'upyun'];
 
 // 可见的服务（在可用服务列表中的）
 const visibleServices = computed(() => {

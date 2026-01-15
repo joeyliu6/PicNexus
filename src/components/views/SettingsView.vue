@@ -105,8 +105,8 @@ const handleThemeChange = async (mode: ThemeMode) => {
 const formData = ref({
   weiboCookie: '',
   r2: { accountId: '', accessKeyId: '', secretAccessKey: '', bucketName: '', path: '', publicDomain: '' },
-  cos: { secretId: '', secretKey: '', region: '', bucket: '', path: '', publicDomain: '' },
-  oss: { accessKeyId: '', accessKeySecret: '', region: '', bucket: '', path: '', publicDomain: '' },
+  tencent: { secretId: '', secretKey: '', region: '', bucket: '', path: '', publicDomain: '' },
+  aliyun: { accessKeyId: '', accessKeySecret: '', region: '', bucket: '', path: '', publicDomain: '' },
   qiniu: { accessKey: '', secretKey: '', region: '', bucket: '', domain: '', path: '' },
   upyun: { operator: '', password: '', bucket: '', domain: '', path: '' },
   nowcoder: { cookie: '' },
@@ -169,9 +169,9 @@ async function testGitHubConnection() {
 }
 
 // 测试连接状态
-const testingConnections = ref<Record<string, boolean>>({ 
-  weibo: false, r2: false, cos: false, oss: false, qiniu: false, upyun: false,
-  nowcoder: false, zhihu: false, nami: false, bilibili: false, chaoxing: false, 
+const testingConnections = ref<Record<string, boolean>>({
+  weibo: false, r2: false, tencent: false, aliyun: false, qiniu: false, upyun: false,
+  nowcoder: false, zhihu: false, nami: false, bilibili: false, chaoxing: false,
   smms: false, github: false, imgur: false, webdav: false
 });
 
@@ -192,8 +192,8 @@ const serviceNames: Record<ServiceType, string> = {
   smms: 'SM.MS',
   github: 'GitHub',
   imgur: 'Imgur',
-  cos: '腾讯云',
-  oss: '阿里云',
+  tencent: '腾讯云',
+  aliyun: '阿里云',
   qiniu: '七牛云',
   upyun: '又拍云'
 };
@@ -319,22 +319,22 @@ const loadSettings = async () => {
     };
 
     // 新云存储配置
-    formData.value.cos = {
-      secretId: cfg.services?.cos?.secretId || '',
-      secretKey: cfg.services?.cos?.secretKey || '',
-      region: cfg.services?.cos?.region || '',
-      bucket: cfg.services?.cos?.bucket || '',
-      path: cfg.services?.cos?.path || 'images/',
-      publicDomain: cfg.services?.cos?.publicDomain || ''
+    formData.value.tencent = {
+      secretId: cfg.services?.tencent?.secretId || '',
+      secretKey: cfg.services?.tencent?.secretKey || '',
+      region: cfg.services?.tencent?.region || '',
+      bucket: cfg.services?.tencent?.bucket || '',
+      path: cfg.services?.tencent?.path || 'images/',
+      publicDomain: cfg.services?.tencent?.publicDomain || ''
     };
 
-    formData.value.oss = {
-      accessKeyId: cfg.services?.oss?.accessKeyId || '',
-      accessKeySecret: cfg.services?.oss?.accessKeySecret || '',
-      region: cfg.services?.oss?.region || '',
-      bucket: cfg.services?.oss?.bucket || '',
-      path: cfg.services?.oss?.path || 'images/',
-      publicDomain: cfg.services?.oss?.publicDomain || ''
+    formData.value.aliyun = {
+      accessKeyId: cfg.services?.aliyun?.accessKeyId || '',
+      accessKeySecret: cfg.services?.aliyun?.accessKeySecret || '',
+      region: cfg.services?.aliyun?.region || '',
+      bucket: cfg.services?.aliyun?.bucket || '',
+      path: cfg.services?.aliyun?.path || 'images/',
+      publicDomain: cfg.services?.aliyun?.publicDomain || ''
     };
 
     formData.value.qiniu = {
@@ -442,8 +442,8 @@ const saveSettings = async (silent = false) => {
         nami: { enabled: currentConfig.services?.nami?.enabled ?? false, cookie: formData.value.nami.cookie.trim(), authToken: '' },
         bilibili: { enabled: currentConfig.services?.bilibili?.enabled ?? false, cookie: formData.value.bilibili.cookie.trim() },
         chaoxing: { enabled: currentConfig.services?.chaoxing?.enabled ?? false, cookie: formData.value.chaoxing.cookie.trim() },
-        cos: { ...formData.value.cos, enabled: currentConfig.services?.cos?.enabled ?? false },
-        oss: { ...formData.value.oss, enabled: currentConfig.services?.oss?.enabled ?? false },
+        tencent: { ...formData.value.tencent, enabled: currentConfig.services?.tencent?.enabled ?? false },
+        aliyun: { ...formData.value.aliyun, enabled: currentConfig.services?.aliyun?.enabled ?? false },
         qiniu: { ...formData.value.qiniu, enabled: currentConfig.services?.qiniu?.enabled ?? false },
         upyun: { ...formData.value.upyun, enabled: currentConfig.services?.upyun?.enabled ?? false },
         smms: { ...formData.value.smms, enabled: currentConfig.services?.smms?.enabled ?? false },
@@ -489,9 +489,9 @@ async function testS3Connection(serviceId: string) {
     
     // 构建正确的 endpoint
     let endpoint: string;
-    if (serviceId === 'cos') {
+    if (serviceId === 'tencent') {
       endpoint = `https://cos.${config.region}.myqcloud.com`;
-    } else if (serviceId === 'oss') {
+    } else if (serviceId === 'aliyun') {
       endpoint = `https://oss-${config.region}.aliyuncs.com`;
     } else if (serviceId === 'qiniu') {
       // 七牛云 S3 兼容端点
@@ -521,8 +521,8 @@ async function testS3Connection(serviceId: string) {
 const actions = {
   weibo: () => testConn('weibo', () => configManager.testWeiboConnection(formData.value.weiboCookie)),
   r2: () => testConn('r2', () => configManager.testR2Connection(formData.value.r2)),
-  cos: () => testS3Connection('cos'),
-  oss: () => testS3Connection('oss'),
+  tencent: () => testS3Connection('tencent'),
+  aliyun: () => testS3Connection('aliyun'),
   qiniu: () => testS3Connection('qiniu'),
   upyun: () => testS3Connection('upyun'),
   nowcoder: () => testConn('nowcoder', () => configManager.testNowcoderConnection(formData.value.nowcoder.cookie)),
@@ -2351,8 +2351,8 @@ onUnmounted(() => {
         <HostingSettingsPanel
           :private-form-data="{
             r2: formData.r2,
-            cos: formData.cos,
-            oss: formData.oss,
+            tencent: formData.tencent,
+            aliyun: formData.aliyun,
             qiniu: formData.qiniu,
             upyun: formData.upyun
           }"
