@@ -139,7 +139,7 @@ const statusDotClass = computed(() => {
 }
 
 .hosting-card:hover {
-  border-color: var(--border-default);
+  border-color: var(--primary);
 }
 
 .hosting-card.expanded {

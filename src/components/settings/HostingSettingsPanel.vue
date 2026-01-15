@@ -72,43 +72,39 @@ function isPrivateConfigured(providerId: PrivateProviderId): boolean {
 }
 
 function isCookieConfigured(providerId: CookieProviderId): boolean {
-  const cookie = props.cookieFormData[providerId].cookie;
-  return !!(cookie && cookie.trim().length > 0);
+  return !!props.cookieFormData[providerId].cookie?.trim();
 }
 
 function isTokenConfigured(providerId: TokenProviderId): boolean {
   const data = props.tokenFormData;
   switch (providerId) {
     case 'smms':
-      return !!(data.smms.token && data.smms.token.trim().length > 0);
+      return !!data.smms.token?.trim();
     case 'github':
-      return !!(data.github.token && data.github.owner && data.github.repo);
+      return !!(data.github.token?.trim() && data.github.owner?.trim() && data.github.repo?.trim());
     case 'imgur':
-      return !!(data.imgur.clientId && data.imgur.clientId.trim().length > 0);
+      return !!data.imgur.clientId?.trim();
     default:
       return false;
   }
 }
 
 const extractNamiAuthToken = computed(() => {
-  const cookie = props.cookieFormData.nami.cookie;
-  if (!cookie) return '';
-  const match = cookie.match(/auth-token=([^;]+)/);
-  return match ? match[1] : '';
+  return props.cookieFormData.nami.cookie?.match(/auth-token=([^;]+)/)?.[1] || '';
 });
 </script>
 
 <template>
   <div class="hosting-settings-panel">
-    <div class="panel-header">
+    <div class="section-header">
       <h2>图床设置</h2>
-      <p class="header-desc">根据认证方式和使用场景选择合适的图床服务</p>
+      <p class="section-desc">根据认证方式和使用场景选择合适的图床服务</p>
     </div>
 
     <div class="settings-content">
       <div class="group-title">
-        <i class="pi pi-cloud"></i>
-        <span>云存储</span>
+        <span class="category-icon" v-html="getCategoryIcon('private-storage')"></span>
+        <span>私有存储</span>
       </div>
       <div class="provider-grid">
         <HostingCard
@@ -290,8 +286,8 @@ const extractNamiAuthToken = computed(() => {
       </div>
 
       <div class="group-title">
-        <i class="pi pi-bolt"></i>
-        <span>免配置图床</span>
+        <span class="category-icon" v-html="getCategoryIcon('public-easy')"></span>
+        <span>公共图床-开箱即用</span>
       </div>
       <div class="provider-grid">
         <HostingCard
@@ -330,8 +326,8 @@ const extractNamiAuthToken = computed(() => {
       </div>
 
       <div class="group-title">
-        <span class="category-icon" v-html="getCategoryIcon('cookie-auth')"></span>
-        <span>Cookie 认证</span>
+        <span class="category-icon" v-html="getCategoryIcon('public-cookie')"></span>
+        <span>公共图床-Cookie 认证</span>
       </div>
       <div class="provider-grid">
         <HostingCard
@@ -454,10 +450,8 @@ const extractNamiAuthToken = computed(() => {
       </div>
 
       <div class="group-title">
-        <svg class="category-icon" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
-          <path d="M412.8 396.8c0 54.4 44.8 99.2 99.2 99.2s99.2-44.8 99.2-99.2-44.8-99.2-99.2-99.2-99.2 44.8-99.2 99.2z" fill="currentColor"/><path d="M512 12.8C380.8 102.4 246.4 147.2 112 147.2v313.6c0 179.2 89.6 342.4 236.8 441.6l163.2 108.8 163.2-108.8c147.2-99.2 236.8-265.6 236.8-441.6V147.2c-134.4 0-265.6-44.8-400-134.4z m32 547.2v64h99.2v67.2H544v105.6h-64v-236.8c-76.8-16-134.4-83.2-134.4-163.2 0-92.8 73.6-166.4 166.4-166.4s166.4 73.6 166.4 166.4c0 80-57.6 147.2-134.4 163.2z" fill="currentColor"/>
-        </svg>
-        <span>Token 认证</span>
+        <span class="category-icon" v-html="getCategoryIcon('public-token')"></span>
+        <span>公共图床-Token 认证</span>
       </div>
       <div class="provider-grid">
         <HostingCard
@@ -546,55 +540,49 @@ const extractNamiAuthToken = computed(() => {
 .hosting-settings-panel {
   display: flex;
   flex-direction: column;
-  gap: 24px;
   width: 100%;
 }
 
-.panel-header {
-  margin-bottom: 8px;
+.section-header {
+  /* gap 控制间距，无需 margin */
 }
 
-.panel-header h2 {
-  font-size: 20px;
-  font-weight: 600;
+.section-header h2 {
+  font-size: 24px;
+  font-weight: 700;
   color: var(--text-primary);
-  margin: 0 0 6px 0;
+  margin: 0 0 8px 0;
 }
 
-.header-desc {
-  font-size: 13px;
-  color: var(--text-muted);
+.section-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
   margin: 0;
 }
 
 .settings-content {
   display: flex;
   flex-direction: column;
-  gap: 20px;
 }
 
 .group-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 10px;
-  padding-top: 4px;
-}
-
-.group-title i {
-  font-size: 0.875rem;
-  color: var(--primary);
+  color: var(--text-primary);
+  margin-top: 14px;
+  margin-bottom: 14px;
 }
 
 .category-icon {
-  width: 0.875rem;
-  height: 0.875rem;
+  width: 16px;
+  height: 16px;
   color: var(--primary);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .provider-grid {
@@ -654,10 +642,6 @@ const extractNamiAuthToken = computed(() => {
 }
 
 @media (max-width: 768px) {
-  .panel-header h2 {
-    font-size: 1.25rem;
-  }
-
   .form-grid {
     grid-template-columns: 1fr;
   }

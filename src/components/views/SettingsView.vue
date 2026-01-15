@@ -3335,17 +3335,13 @@ onUnmounted(() => {
 }
 
 .settings-section {
-  max-width: 800px; /* 限制内容最大宽度以保证可读性 */
+  max-width: 800px;
   animation: fadeIn 0.3s ease-out;
 }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(5px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-.section-header {
-  margin-bottom: 32px;
 }
 
 .section-header h2 {
@@ -3363,7 +3359,7 @@ onUnmounted(() => {
 
 /* 表单通用样式 */
 .form-group {
-  margin-bottom: 24px;
+  margin-top: 12px;
 }
 
 .group-label {
@@ -3371,13 +3367,17 @@ onUnmounted(() => {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .helper-text {
   font-size: 13px;
   color: var(--text-muted);
-  margin: -4px 0 12px 0;
+  margin: -3px 0 12px 0;
+}
+
+.p-divider-horizontal {
+  margin-top: 16px;
 }
 
 /* Grid Layout for Forms */
