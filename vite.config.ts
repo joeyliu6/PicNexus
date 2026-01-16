@@ -19,9 +19,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
-      // 修复 AWS SDK 在浏览器中使用 Node.js util 模块的问题
-      // 使用自定义 polyfill 替代 Node.js 的 util 模块
-      "util": fileURLToPath(new URL("./src/util-polyfill.ts", import.meta.url)),
     },
   },
   build: {
@@ -40,7 +37,6 @@ export default defineConfig({
             '@tauri-apps/plugin-dialog',
             '@tauri-apps/plugin-fs',
             '@tauri-apps/plugin-http',
-            '@tauri-apps/plugin-notification',
             '@tauri-apps/plugin-shell',
             '@tauri-apps/plugin-sql'
           ]

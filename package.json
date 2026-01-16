@@ -10,15 +10,12 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.490.0",
-    "@aws-sdk/lib-storage": "^3.937.0",
     "@primevue/themes": "^4.5.1",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-clipboard-manager": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "@tauri-apps/plugin-fs": "^2.0.0",
     "@tauri-apps/plugin-http": "^2.0.0",
-    "@tauri-apps/plugin-notification": "^2.0.0",
     "@tauri-apps/plugin-shell": "^2.0.0",
     "@tauri-apps/plugin-sql": "^2.0.0",
     "@vitejs/plugin-vue": "^6.0.2",
@@ -34,7 +31,6 @@
     "icon-gen": "^5.0.0",
     "sharp": "^0.34.5",
     "typescript": "^5.3.3",
-    "util": "^0.12.5",
     "vite": "^5.0.8"
   }
 }
