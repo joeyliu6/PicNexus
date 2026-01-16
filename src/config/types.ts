@@ -359,6 +359,9 @@ export interface SyncStatus {
   /** 上传记录同步错误信息 */
   historySyncError?: string;
 
+  /** 京东图床上次检测时间戳 */
+  lastJdCheck?: number;
+
   /** 七鱼图床检测状态 */
   qiyuCheckStatus?: ServiceCheckStatus;
 }
@@ -1141,6 +1144,54 @@ export function isValidUserConfig(obj: unknown): obj is UserConfig {
   if (config.services !== undefined && (typeof config.services !== 'object' || config.services === null)) {
     return false;
   }
+
+  return true;
+}
+
+/**
+ * 验证单个上传结果对象的结构
+ */
+function isValidUploadResultEntry(entry: unknown): boolean {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+    return false;
+  }
+
+  const e = entry as Record<string, unknown>;
+
+  // 必需字段
+  if (typeof e.serviceId !== 'string') return false;
+  if (e.status !== 'success' && e.status !== 'failed') return false;
+
+  // 可选字段类型检查
+  if (e.error !== undefined && typeof e.error !== 'string') return false;
+
+  return true;
+}
+
+/**
+ * 验证对象是否为有效的 HistoryItem
+ * 用于导入历史记录时的数据验证
+ */
+export function isValidHistoryItem(obj: unknown): obj is HistoryItem {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+    return false;
+  }
+
+  const item = obj as Record<string, unknown>;
+
+  // 必需字段检查
+  if (typeof item.id !== 'string' || item.id.trim().length === 0) return false;
+  if (typeof item.timestamp !== 'number' || !Number.isFinite(item.timestamp)) return false;
+  if (typeof item.localFileName !== 'string') return false;
+  if (typeof item.primaryService !== 'string') return false;
+  if (typeof item.generatedLink !== 'string') return false;
+
+  // results 数组深度验证
+  if (!Array.isArray(item.results)) return false;
+  if (!item.results.every(isValidUploadResultEntry)) return false;
+
+  // 可选字段类型检查
+  if (item.filePath !== undefined && typeof item.filePath !== 'string') return false;
 
   return true;
 }
