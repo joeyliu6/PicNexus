@@ -205,9 +205,21 @@
 
 .sub-section.collapsible {
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 0 16px;
   margin-bottom: 0;
+  margin-top: 16px;
+  background-color: var(--bg-card);
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.sub-section.collapsible:first-child {
+  margin-top: 0;
+}
+
+.sub-section.collapsible:hover {
+  border-color: var(--primary);
 }
 
 .section-header-collapsible {
@@ -217,7 +229,7 @@
 }
 
 .section-header-collapsible:hover {
-  opacity: 0.8;
+  background-color: var(--hover-overlay-subtle);
 }
 
 .section-title-row {

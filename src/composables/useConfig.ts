@@ -125,9 +125,6 @@ export function useConfigManager() {
       await emit('config-updated', { timestamp: Date.now() });
 
       console.log('[配置管理] ✓ 配置保存成功');
-      if (!silent) {
-        toast.showConfig('success', TOAST_MESSAGES.config.saveSuccess);
-      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('[配置管理] 保存配置失败:', error);

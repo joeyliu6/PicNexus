@@ -194,7 +194,7 @@ async function loadSettings() {
   }
 }
 
-async function saveSettings(silent = false) {
+async function saveSettings() {
   try {
     const config = await configStore.get<UserConfig>('config') || { ...DEFAULT_CONFIG };
 
@@ -254,8 +254,6 @@ async function saveSettings(silent = false) {
     await configStore.set('config', config);
     await configStore.save();
     await configManager.loadConfig();
-
-    if (!silent) toast.showConfig('success', TOAST_MESSAGES.config.saveSuccess);
   } catch (e) {
     console.error('[设置] 保存失败:', e);
     toast.showConfig('error', TOAST_MESSAGES.config.saveFailed(String(e)));

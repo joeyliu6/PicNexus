@@ -997,4 +997,9 @@ function handleSwitchProfile(id: string) {
 :deep(.p-password-input) {
   width: 100%;
 }
+
+/* 覆盖 helper-text 间距 */
+.helper-text {
+  margin: -3px 0 0 0;
+}
 </style>

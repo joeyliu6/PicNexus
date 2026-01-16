@@ -9,6 +9,10 @@
 
 ## [Unreleased]
 
+### Changed
+- 移除配置保存时的成功提示弹窗，减少不必要的通知干扰
+  - 保留错误提示，确保用户能感知保存失败
+
 ### Added
 - 新增 Toast 消息集中化管理系统
   - 新增 `src/constants/toastMessages.ts` 统一管理所有通知文案
