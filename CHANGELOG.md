@@ -10,6 +10,11 @@
 ## [Unreleased]
 
 ### Added
+- 新增 Toast 消息集中化管理系统
+  - 新增 `src/constants/toastMessages.ts` 统一管理所有通知文案
+  - `useToast` 新增 `showConfig()` 方法支持预定义消息配置
+  - 便于后续国际化和统一维护
+- 新增 `isValidHistoryItem()` 验证函数，用于导入历史记录时的数据验证
 - 新增腾讯云 COS 图床支持
   - 支持 SecretId/SecretKey 认证
   - 支持自定义地域、存储桶、路径前缀
