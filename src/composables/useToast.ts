@@ -1,11 +1,15 @@
 // src/composables/useToast.ts
-// Toast 通知 Composable
+// Toast 通知 Composable - 增强版
 
 import { useToast as usePrimeToast } from 'primevue/usetoast';
+import type { ToastMessageConfig } from '../constants/toastMessages';
 
 // Toast去重机制
 const recentToasts = new Map<string, number>();
 const DUPLICATE_WINDOW = 2000; // 2秒防抖窗口
+
+// 默认显示时长映射
+const DEFAULT_LIFE: Record<string, number> = { error: 5000, warn: 4000 };
 const CACHE_SIZE_LIMIT = 50; // 缓存大小限制
 const CACHE_EXPIRE_TIME = 5000; // 缓存过期时间
 
@@ -143,12 +147,47 @@ export function useToast() {
     toast.removeAllGroups();
   };
 
+  /**
+   * 使用预定义消息配置显示通知
+   * @param severity 严重程度
+   * @param config 消息配置对象
+   */
+  const showConfig = (
+    severity: 'success' | 'info' | 'warn' | 'error',
+    config: ToastMessageConfig
+  ) => {
+    const { summary, detail, life } = config;
+    const defaultLife = DEFAULT_LIFE[severity] ?? 3000;
+
+    if (isDuplicate(severity, summary, detail)) return;
+
+    toast.add({
+      severity,
+      summary,
+      detail,
+      life: life || defaultLife
+    });
+  };
+
+  /**
+   * 静默日志（仅记录日志，不显示通知）
+   * @param level 日志级别
+   * @param summary 标题
+   * @param detail 详细信息
+   */
+  const silent = (level: 'log' | 'error', summary: string, detail?: string) => {
+    const icon = level === 'log' ? '✓' : '✗';
+    console[level](`[Toast][静默] ${icon} ${summary}${detail ? `: ${detail}` : ''}`);
+  };
+
   return {
     success,
     error,
     warn,
     info,
     show,
-    clear
+    clear,
+    showConfig,
+    silent
   };
 }

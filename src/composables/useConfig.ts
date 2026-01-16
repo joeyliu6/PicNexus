@@ -16,6 +16,7 @@ import {
 } from '../config/types';
 import { getCookieProvider, validateCookie } from '../config/cookieProviders';
 import { useToast } from './useToast';
+import { TOAST_MESSAGES } from '../constants';
 
 // --- STORES ---
 const configStore = new Store('.settings.dat');
@@ -69,13 +70,13 @@ export function useConfigManager() {
       } catch (error) {
         console.error('[配置管理] 读取配置失败，使用默认配置:', error);
         config.value = { ...DEFAULT_CONFIG };
-        toast.error('读取配置失败', '已使用默认配置');
+        toast.showConfig('error', TOAST_MESSAGES.config.loadFailed('已使用默认配置'));
         return config.value;
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('[配置管理] 加载配置失败:', error);
-      toast.error('加载配置失败', errorMsg);
+      toast.showConfig('error', TOAST_MESSAGES.config.loadFailed(errorMsg));
       throw error;
     } finally {
       isLoading.value = false;
@@ -94,7 +95,7 @@ export function useConfigManager() {
 
       // 验证至少有一个可用图床
       if (!newConfig.availableServices || newConfig.availableServices.length === 0) {
-        toast.error('验证失败', '至少需要启用一个图床');
+        toast.showConfig('error', TOAST_MESSAGES.config.validationFailed('至少需要启用一个图床'));
         return;
       }
 
@@ -114,30 +115,25 @@ export function useConfigManager() {
       }
 
       // 保存到存储
-      try {
-        await configStore.set('config', newConfig);
-        await configStore.save();
+      await configStore.set('config', newConfig);
+      await configStore.save();
 
-        // 更新内存中的配置
-        config.value = { ...newConfig };
+      // 更新内存中的配置
+      config.value = { ...newConfig };
 
-        // 发送配置更新事件，通知其他组件刷新状态
-        await emit('config-updated', { timestamp: Date.now() });
+      // 发送配置更新事件，通知其他组件刷新状态
+      await emit('config-updated', { timestamp: Date.now() });
 
-        console.log('[配置管理] ✓ 配置保存成功');
-        if (!silent) {
-          toast.success('保存成功', '配置已保存');
-        }
-      } catch (saveError) {
-        const errorMsg = saveError instanceof Error ? saveError.message : String(saveError);
-        console.error('[配置管理] 保存配置失败:', saveError);
-        toast.error('保存失败', errorMsg);
-        throw saveError;
+      console.log('[配置管理] ✓ 配置保存成功');
+      if (!silent) {
+        toast.showConfig('success', TOAST_MESSAGES.config.saveSuccess);
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('[配置管理] 保存配置失败:', error);
-      toast.error('保存失败', errorMsg);
+      if (!silent) {
+        toast.showConfig('error', TOAST_MESSAGES.config.saveFailed(errorMsg));
+      }
       throw error;
     } finally {
       isSaving.value = false;
@@ -495,7 +491,7 @@ export function useConfigManager() {
       // 获取 Cookie 提供者配置
       const provider = getCookieProvider(serviceId);
       if (!provider) {
-        toast.error('不支持的服务', `${serviceId} 不支持自动获取 Cookie`);
+        toast.showConfig('error', TOAST_MESSAGES.auth.unsupportedService(serviceId));
         console.error('[WebView登录窗口] 不支持的服务:', serviceId);
         return;
       }
@@ -557,7 +553,7 @@ export function useConfigManager() {
         errorMessage = error instanceof Error ? error.message : String(error);
       }
       console.error('[WebView登录窗口] 打开窗口失败:', errorMessage || error);
-      toast.error('打开登录窗口失败', errorMessage || String(error), 5000);
+      toast.showConfig('error', TOAST_MESSAGES.auth.loginWindowFailed(errorMessage || String(error)));
     }
   }
 
@@ -597,7 +593,7 @@ export function useConfigManager() {
           // 验证 Cookie
           if (!cookie || typeof cookie !== 'string' || cookie.trim().length === 0) {
             console.error('[Cookie更新] Cookie为空或无效');
-            toast.error('Cookie 无效', '接收到的 Cookie 为空');
+            toast.showConfig('error', TOAST_MESSAGES.auth.cookieInvalid);
             return;
           }
 
@@ -610,17 +606,17 @@ export function useConfigManager() {
             // 显示成功提示
             const provider = getCookieProvider(serviceId);
             const serviceName = provider?.name || serviceId;
-            toast.success('Cookie 已更新', `${serviceName} Cookie 已自动填充并保存！`);
+            toast.showConfig('success', TOAST_MESSAGES.auth.cookieUpdated(serviceName));
 
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             console.error('[Cookie更新] 保存Cookie失败:', error);
-            toast.error('保存失败', errorMsg);
+            toast.showConfig('error', TOAST_MESSAGES.config.saveFailed(errorMsg));
           }
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);
           console.error('[Cookie更新] 处理Cookie更新事件失败:', error);
-          toast.error('处理失败', errorMsg);
+          toast.showConfig('error', TOAST_MESSAGES.config.saveFailed(errorMsg));
         }
       });
 

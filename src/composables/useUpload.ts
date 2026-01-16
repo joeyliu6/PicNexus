@@ -19,6 +19,7 @@ import {
 import { MultiServiceUploader, MultiUploadResult, SingleServiceResult } from '../core/MultiServiceUploader';
 import { UploadQueueManager } from '../uploadQueue';
 import { useToast } from './useToast';
+import { TOAST_MESSAGES } from '../constants';
 import { invalidateCache } from './useHistory';
 import { emitHistoryUpdated } from '../events/cacheEvents';
 import { debounceWithError } from '../utils/debounce';
@@ -207,7 +208,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     },
     500, // 500ms 防抖延迟
     (_error) => {
-      toast.warn('保存失败', '图床选择保存失败，请重试');
+      toast.showConfig('warn', TOAST_MESSAGES.config.saveFailed('图床选择保存失败，请重试'));
     }
   );
 
@@ -255,7 +256,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('[上传] 文件选择失败:', error);
-      toast.error('文件选择失败', errorMsg);
+      toast.showConfig('error', TOAST_MESSAGES.upload.selectFailed(errorMsg));
       return null;
     }
   }
@@ -279,12 +280,12 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
       if (valid.length === 0) {
         console.warn('[上传] 没有有效的图片文件');
-        toast.warn('未检测到图片', '请选择有效的图片文件（支持 JPG, PNG, GIF, WEBP, BMP）');
+        toast.showConfig('warn', TOAST_MESSAGES.upload.noImage);
         return;
       }
 
       if (invalid.length > 0) {
-        toast.warn('部分格式不支持', `已自动忽略 ${invalid.length} 个不支持的文件`);
+        toast.showConfig('warn', TOAST_MESSAGES.upload.invalidFormat(invalid.length));
       }
 
       console.log(`[上传] 有效文件: ${valid.length}个，无效文件: ${invalid.length}个`);
@@ -295,7 +296,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         config = await configStore.get<UserConfig>('config');
       } catch (error) {
         console.error('[上传] 读取配置失败:', error);
-        toast.error('配置加载异常', '读取配置文件失败，请刷新或稍后重试');
+        toast.showConfig('error', TOAST_MESSAGES.config.loadFailed('读取配置文件失败，请刷新或稍后重试'));
         return;
       }
 
@@ -317,10 +318,10 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
         if (hasConfiguredServices) {
           // 有已配置的图床但未选中
-          toast.error('未选择图床', '请在上传界面选择至少一个图床服务');
+          toast.showConfig('error', TOAST_MESSAGES.upload.noService);
         } else {
           // 没有任何已配置的图床
-          toast.error('未配置图床', '请前往设置页启用至少一个图床服务');
+          toast.showConfig('error', TOAST_MESSAGES.upload.notConfigured('任何'));
         }
         return;
       }
@@ -338,7 +339,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       // ⭐ 检查队列管理器
       if (!queueManager) {
         console.error('[上传] 队列管理器未初始化');
-        toast.error('上传错误', '队列管理器未初始化');
+        toast.showConfig('error', TOAST_MESSAGES.upload.failed('队列管理器未初始化'));
         return;
       }
 
@@ -402,7 +403,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       isUploading.value = false;
       console.error('[上传] 文件处理失败:', error);
       const errorMsg = error instanceof Error ? error.message : String(error);
-      toast.error('上传错误', `上传失败: ${errorMsg}`);
+      toast.showConfig('error', TOAST_MESSAGES.upload.failed(errorMsg));
     }
   }
 
@@ -421,7 +422,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
   ): Promise<void> {
     if (!queueManager) {
       console.error('[并发上传] 上传队列管理器未初始化');
-      toast.error('上传错误', '队列管理器未初始化');
+      toast.showConfig('error', TOAST_MESSAGES.upload.failed('队列管理器未初始化'));
       return;
     }
 
@@ -551,24 +552,10 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
           // 检查部分失败并显示警告 Toast
           if (result.isPartialSuccess && result.partialFailures) {
-            const failedServiceNames = result.partialFailures
-              .map(f => {
-                const nameMap: Record<string, string> = {
-                  weibo: '微博', r2: 'R2', jd: '京东',
-                  nowcoder: '牛客', qiyu: '七鱼', zhihu: '知乎', nami: '纳米',
-                  bilibili: '哔哩哔哩', chaoxing: '超星',
-                  smms: 'SM.MS', github: 'GitHub', imgur: 'Imgur',
-                  tencent: '腾讯云', aliyun: '阿里云', qiniu: '七牛云', upyun: '又拍云'
-                };
-                return nameMap[f.serviceId] || f.serviceId;
-              })
-              .join('、');
-
-            toast.warn(
-              '部分服务上传失败',
-              `${fileName}: ${failedServiceNames} 上传失败，其余图床已完成`,
-              5000
-            );
+            toast.showConfig('warn', TOAST_MESSAGES.upload.partialSuccess(
+              result.results.filter(r => r.status === 'success').length,
+              result.partialFailures.length
+            ));
           }
 
           // 双重保险：确保 UI 状态一致
@@ -603,33 +590,17 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
           if (errorMsg.includes('Cookie') || errorMsg.includes('100006')) {
             // Cookie 相关错误（通常是微博）
             const serviceName = failedServices.length > 0 ? failedServices.join('、') : '微博';
-            toast.error(
-              `${serviceName} 授权失效`,
-              '登录凭证/Cookie 已过期，请前往更新',
-              6000
-            );
+            toast.showConfig('error', TOAST_MESSAGES.auth.tokenFailed(serviceName, '登录凭证/Cookie 已过期，请前往更新'));
           } else if (errorMsg.includes('认证失败') || errorMsg.includes('authentication')) {
             // 认证错误
             const serviceName = failedServices.length > 0 ? failedServices.join('、') : '图床';
-            toast.error(
-              `${serviceName} 鉴权失败`,
-              '请检查 AK/SK 或 Token 配置是否正确',
-              5000
-            );
+            toast.showConfig('error', TOAST_MESSAGES.auth.connectionFailed(serviceName, '请检查 AK/SK 或 Token 配置是否正确'));
           } else if (errorMsg.includes('所有图床上传均失败')) {
             // 所有图床都失败
-            toast.error(
-              '全线上传失败',
-              `${fileName} 未能上传至任何图床`,
-              5000
-            );
+            toast.showConfig('error', TOAST_MESSAGES.upload.failed(`${fileName} 未能上传至任何图床`));
           } else {
             // 通用错误
-            toast.error(
-              '上传异常',
-              `${fileName}: ${errorMsg}`,
-              5000
-            );
+            toast.showConfig('error', TOAST_MESSAGES.upload.failed(`${fileName}: ${errorMsg}`));
           }
 
           // 新增:更新所有服务的失败状态

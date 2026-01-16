@@ -13,6 +13,7 @@ import { historyDB, type PageResult, type SearchResult, type SearchOptions, type
 import type { ImageMeta } from '../types/image-meta';
 import { useImageDetailCache } from './useImageDetailCache';
 import { useToast } from './useToast';
+import { TOAST_MESSAGES } from '../constants';
 import { useConfirm } from './useConfirm';
 import { useConfigManager } from './useConfig';
 import {
@@ -202,7 +203,7 @@ export function useHistoryManager() {
 
     } catch (error) {
       console.error('[历史记录] 加载失败:', error);
-      toast.error('加载失败', String(error));
+      toast.showConfig('error', TOAST_MESSAGES.common.loadFailed(String(error)));
       imageMetas.value = [];
     } finally {
       isLoading.value = false;
@@ -217,7 +218,7 @@ export function useHistoryManager() {
     try {
       if (!itemId || typeof itemId !== 'string' || itemId.trim().length === 0) {
         console.error('[历史记录] 删除失败: 无效的 itemId:', itemId);
-        toast.error('删除失败', '无效的项目ID');
+        toast.showConfig('error', TOAST_MESSAGES.history.invalidId);
         return;
       }
 
@@ -234,7 +235,7 @@ export function useHistoryManager() {
       await historyDB.delete(itemId);
 
       console.log('[历史记录] ✓ 删除成功:', itemId);
-      toast.success('删除成功', '历史记录已删除');
+      toast.showConfig('success', TOAST_MESSAGES.common.deleteSuccess(1));
 
       // 更新元数据
       imageMetas.value = imageMetas.value.filter(meta => meta.id !== itemId);
@@ -251,7 +252,7 @@ export function useHistoryManager() {
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('[历史记录] 删除失败:', error);
-      toast.error('删除失败', errorMsg);
+      toast.showConfig('error', TOAST_MESSAGES.common.deleteFailed(errorMsg));
     }
   }
 
@@ -271,7 +272,7 @@ export function useHistoryManager() {
 
       await historyDB.clear();
 
-      toast.success('清空成功', '所有历史记录已清空');
+      toast.showConfig('success', TOAST_MESSAGES.common.clearSuccess('所有历史记录'));
 
       // 清空元数据
       imageMetas.value = [];
@@ -287,7 +288,7 @@ export function useHistoryManager() {
 
     } catch (error) {
       console.error('[历史记录] 清空失败:', error);
-      toast.error('清空失败', String(error));
+      toast.showConfig('error', TOAST_MESSAGES.common.clearFailed(String(error)));
     }
   }
 
@@ -298,7 +299,7 @@ export function useHistoryManager() {
     try {
       const count = await historyDB.getCount();
       if (count === 0) {
-        toast.warn('无数据', '没有可导出的历史记录');
+        toast.showConfig('warn', TOAST_MESSAGES.sync.noHistory);
         return;
       }
 
@@ -314,11 +315,11 @@ export function useHistoryManager() {
       }
 
       await writeTextFile(filePath, jsonContent);
-      toast.success('导出成功', `已导出 ${count} 条记录`);
+      toast.showConfig('success', TOAST_MESSAGES.common.exportSuccess(count));
 
     } catch (error) {
       console.error('[历史记录] 导出失败:', error);
-      toast.error('导出失败', String(error));
+      toast.showConfig('error', TOAST_MESSAGES.common.exportFailed(String(error)));
     }
   }
 
@@ -328,7 +329,7 @@ export function useHistoryManager() {
   async function bulkCopyLinks(selectedIds: string[]): Promise<void> {
     try {
       if (selectedIds.length === 0) {
-        toast.warn('未选择项目', '请先选择要复制的项目');
+        toast.showConfig('warn', TOAST_MESSAGES.common.noSelection);
         return;
       }
 
@@ -346,17 +347,17 @@ export function useHistoryManager() {
       }).filter((link): link is string => !!link);
 
       if (links.length === 0) {
-        toast.warn('无可用链接', '选中的项目没有可用链接');
+        toast.showConfig('warn', TOAST_MESSAGES.history.noLink());
         return;
       }
 
       await writeText(links.join('\n'));
-      toast.success('已复制', `已复制 ${links.length} 个链接到剪贴板`, 1500);
+      toast.showConfig('success', TOAST_MESSAGES.common.copySuccess(links.length));
       console.log(`[批量操作] 已复制 ${links.length} 个链接`);
 
     } catch (error: any) {
       console.error('[批量操作] 复制失败:', error);
-      toast.error('复制失败', error.message || String(error));
+      toast.showConfig('error', TOAST_MESSAGES.common.copyFailed(error.message || String(error)));
     }
   }
 
@@ -366,7 +367,7 @@ export function useHistoryManager() {
   async function bulkExportJSON(selectedIds: string[]): Promise<void> {
     try {
       if (selectedIds.length === 0) {
-        toast.warn('未选择项目', '请先选择要导出的项目');
+        toast.showConfig('warn', TOAST_MESSAGES.common.noSelection);
         return;
       }
 
@@ -382,7 +383,7 @@ export function useHistoryManager() {
       }
 
       if (selectedItems.length === 0) {
-        toast.warn('无可用数据', '选中的项目无法加载');
+        toast.showConfig('warn', TOAST_MESSAGES.history.noLoadableData);
         return;
       }
 
@@ -400,12 +401,12 @@ export function useHistoryManager() {
 
       await writeTextFile(filePath, jsonContent);
 
-      toast.success('导出成功', `已导出 ${selectedItems.length} 条记录`);
+      toast.showConfig('success', TOAST_MESSAGES.common.exportSuccess(selectedItems.length));
       console.log(`[批量操作] 已导出 ${selectedItems.length} 条记录`);
 
     } catch (error: any) {
       console.error('[批量操作] 导出失败:', error);
-      toast.error('导出失败', error.message || String(error));
+      toast.showConfig('error', TOAST_MESSAGES.common.exportFailed(error.message || String(error)));
     }
   }
 
@@ -415,7 +416,7 @@ export function useHistoryManager() {
   async function bulkDeleteRecords(selectedIds: string[]): Promise<void> {
     try {
       if (selectedIds.length === 0) {
-        toast.warn('未选择项目', '请先选择要删除的项目');
+        toast.showConfig('warn', TOAST_MESSAGES.common.noSelection);
         return;
       }
 
@@ -431,7 +432,7 @@ export function useHistoryManager() {
 
       await historyDB.deleteMany(selectedIds);
 
-      toast.success('删除成功', `已删除 ${selectedIds.length} 条记录`);
+      toast.showConfig('success', TOAST_MESSAGES.common.deleteSuccess(selectedIds.length));
       console.log(`[批量操作] 已删除 ${selectedIds.length} 条记录`);
 
       const selectedIdSet = new Set(selectedIds);
@@ -448,7 +449,7 @@ export function useHistoryManager() {
 
     } catch (error: any) {
       console.error('[批量操作] 删除失败:', error);
-      toast.error('删除失败', error.message || String(error));
+      toast.showConfig('error', TOAST_MESSAGES.common.deleteFailed(error.message || String(error)));
     }
   }
 
@@ -565,7 +566,7 @@ export function useHistoryManager() {
 
     } catch (error) {
       console.error(`[历史记录] 跳转失败:`, error);
-      toast.error('跳转失败', String(error));
+      toast.showConfig('error', TOAST_MESSAGES.history.jumpFailed(String(error)));
       return false;
     } finally {
       isLoading.value = false;
