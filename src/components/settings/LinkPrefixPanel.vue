@@ -7,7 +7,6 @@ import InputText from 'primevue/inputtext';
 import Checkbox from 'primevue/checkbox';
 import RadioButton from 'primevue/radiobutton';
 import Button from 'primevue/button';
-import { DEFAULT_LINK_PREFIXES } from '../../config/types';
 
 // ==================== Props ====================
 

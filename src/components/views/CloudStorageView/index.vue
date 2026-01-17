@@ -43,13 +43,10 @@ const {
   toggleSelect,
   toggleSelectAll,
   clearSelection,
-  isSelected,
 } = useFileSelection({ objects });
 
 // 文件操作
 const {
-  isOperating,
-  operationProgress,
   uploadFiles,
   deleteFiles,
   copyLinks,
@@ -193,15 +190,6 @@ const handleBatchDownload = () => {
   }
 };
 
-// 右键菜单
-const handleContextMenu = (event: MouseEvent, item: StorageObject) => {
-  event.preventDefault();
-  contextMenuTarget.value = item;
-  contextMenuX.value = event.clientX;
-  contextMenuY.value = event.clientY;
-  contextMenuVisible.value = true;
-};
-
 // 生命周期
 onMounted(async () => {
   await initServiceStatuses();
@@ -274,7 +262,7 @@ watch(currentPath, () => {
           @open="handleOpenFolder"
           @load-more="loadMore"
           @upload="uploadFiles"
-          @contextmenu.prevent="(e: MouseEvent) => {}"
+          @contextmenu.prevent="() => {}"
         />
       </div>
 

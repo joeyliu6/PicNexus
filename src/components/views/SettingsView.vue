@@ -8,7 +8,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { getVersion } from '@tauri-apps/api/app';
-import Divider from 'primevue/divider';
 import { useToast } from '../../composables/useToast';
 import { TOAST_MESSAGES } from '../../constants';
 import { useConfirm } from '../../composables/useConfirm';
@@ -16,7 +15,7 @@ import { useThemeManager } from '../../composables/useTheme';
 import { useConfigManager } from '../../composables/useConfig';
 import { useHistoryManager } from '../../composables/useHistory';
 import { useAnalytics } from '../../composables/useAnalytics';
-import { useAutoSync, createDefaultAutoSyncConfig, type AutoSyncConfig } from '../../composables/useAutoSync';
+import { createDefaultAutoSyncConfig, type AutoSyncConfig } from '../../composables/useAutoSync';
 import { useServiceAvailability } from '../../composables/useServiceAvailability';
 
 // 组件
@@ -376,7 +375,7 @@ async function handleBuiltinCheck(serviceId: string) {
 }
 
 async function handleCookieLogin(serviceId: string) {
-  await configManager.openLoginWindow(serviceId as ServiceType);
+  await configManager.openCookieWebView(serviceId as ServiceType);
 }
 
 // ==================== 链接前缀管理 ====================
@@ -505,7 +504,7 @@ onMounted(async () => {
     else if (['nowcoder', 'zhihu', 'nami', 'bilibili', 'chaoxing'].includes(sid)) {
       (formData.value as any)[sid].cookie = cookie;
     }
-    await saveSettings(true);
+    await saveSettings();
   });
 });
 

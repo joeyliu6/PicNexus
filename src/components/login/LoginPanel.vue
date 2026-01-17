@@ -28,7 +28,7 @@
 
             <!-- 提示消息 -->
             <Message severity="info" :closable="false" class="custom-message">
-              <template #messageicon>
+              <template #icon>
                 <i class="pi pi-info-circle"></i>
               </template>
               <span class="message-text">我们仅获取必要的 Cookie 用于上传，不会保存您的密码。</span>

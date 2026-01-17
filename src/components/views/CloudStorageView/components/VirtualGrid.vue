@@ -1,7 +1,6 @@
 <script setup lang="ts" generic="T">
-import { ref, computed, watch, type StyleValue } from 'vue';
+import { ref, computed, type StyleValue } from 'vue';
 import { useVirtualGrid } from '../composables/useVirtualGrid';
-import type { VirtualGridConfig } from '../types';
 
 const props = withDefaults(
   defineProps<{
@@ -35,7 +34,7 @@ const containerRef = ref<HTMLElement | null>(null);
 const itemsRef = computed(() => props.items);
 
 // 使用虚拟滚动
-const { visibleItems, totalHeight, columns, onScroll, recalculate } = useVirtualGrid({
+const { visibleItems, totalHeight, onScroll, recalculate } = useVirtualGrid({
   items: itemsRef,
   containerRef,
   config: {

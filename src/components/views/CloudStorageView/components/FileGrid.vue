@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import ProgressSpinner from 'primevue/progressspinner';
 import Message from 'primevue/message';
 import VirtualGrid from './VirtualGrid.vue';

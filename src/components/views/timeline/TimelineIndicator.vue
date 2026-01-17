@@ -346,16 +346,11 @@ function handleYearClick(year: number, e: MouseEvent) {
 }
 
 // 拖拽处理
-let dragStartY = 0;
-let dragStartProgress = 0;
-
 function startDrag(e: MouseEvent) {
   e.preventDefault();
   e.stopPropagation();
 
   isDragging.value = true;
-  dragStartY = e.clientY;
-  dragStartProgress = hoverPosition.value ?? props.scrollProgress;
 
   document.addEventListener('mousemove', onDrag);
   document.addEventListener('mouseup', stopDrag);

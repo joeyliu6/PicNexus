@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import type { StorageObject, LinkFormat } from '../types';

@@ -112,7 +112,7 @@ const switchViewMode = (mode: ViewMode) => {
           ...config,
           galleryViewPreferences: {
             ...config.galleryViewPreferences,
-            viewMode: mode,
+            viewMode: mode as 'table' | 'grid',
             gridColumnWidth: config.galleryViewPreferences?.gridColumnWidth ?? 220,
           }
         };

@@ -5,8 +5,8 @@ import type { UnlistenFn } from '@tauri-apps/api/event';
 import UploadQueue from '../UploadQueue.vue';
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
-import type { ServiceType } from '../../config/types';
-import { PRIVATE_SERVICES, PUBLIC_SERVICES } from '../../config/types';
+import type { ServiceType, UserConfig } from '../../config/types';
+import { PRIVATE_SERVICES, PUBLIC_SERVICES, DEFAULT_CONFIG } from '../../config/types';
 import { useToast } from '../../composables/useToast';
 import { useUploadManager } from '../../composables/useUpload';
 import { useClipboardImage } from '../../composables/useClipboardImage';
@@ -14,6 +14,7 @@ import { useQueueState } from '../../composables/useQueueState';
 import { UploadQueueManager } from '../../uploadQueue';
 import { RetryService } from '../../services/RetryService';
 import { Store } from '../../store';
+import type { MultiUploadResult } from '../../core/MultiServiceUploader';
 
 const toast = useToast();
 
@@ -48,9 +49,11 @@ const configStore = new Store('.settings.dat');
 const retryService = new RetryService({
   configStore,
   queueManager,
-  activePrefix: uploadManager.activePrefix,
+  get activePrefix() { return uploadManager.activePrefix.value; },
   toast: toast,
-  saveHistoryItem: uploadManager.saveHistoryItem
+  saveHistoryItem: async (filePath: string, result: MultiUploadResult) => {
+    await uploadManager.saveHistoryItem(filePath, result);
+  }
 });
 
 // 服务配置映射
@@ -72,16 +75,6 @@ const serviceLabels: Record<ServiceType, string> = {
   qiniu: '七牛云',
   upyun: '又拍云'
 };
-
-// 所有服务列表
-const allServices: ServiceType[] = ['weibo', 'r2', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami', 'bilibili', 'chaoxing', 'smms', 'github', 'imgur', 'tencent', 'aliyun', 'qiniu', 'upyun'];
-
-// 可见的服务（在可用服务列表中的）
-const visibleServices = computed(() => {
-  return allServices.filter(serviceId =>
-    uploadManager.availableServices.value.includes(serviceId)
-  );
-});
 
 // 可见的私有图床
 const visiblePrivateServices = computed(() => {
@@ -185,7 +178,7 @@ async function setupTauriFileDropListener() {
 const setupRetryCallback = () => {
   if (uploadQueueRef.value) {
     uploadQueueRef.value.setRetryCallback(async (itemId: string, serviceId?: ServiceType) => {
-      const config = await configStore.get('config') || { services: {} };
+      const config = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
 
       if (serviceId) {
         // 单个服务重试
@@ -250,7 +243,7 @@ const handleBatchRetry = async () => {
 
   isBatchRetrying.value = true;
   try {
-    const config = await configStore.get('config') || { services: {} };
+    const config = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
     await retryService.retryAllFailed(failedItemIds, config);
   } finally {
     isBatchRetrying.value = false;

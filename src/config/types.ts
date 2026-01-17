@@ -466,6 +466,9 @@ export interface UserConfig {
 
   /** 自动同步配置 */
   autoSync?: AutoSyncConfig;
+
+  /** 默认历史记录视图模式 */
+  defaultHistoryViewMode?: 'table' | 'grid';
 }
 
 /**
@@ -677,7 +680,8 @@ export const DEFAULT_CONFIG: UserConfig = {
   autoSync: {
     enabled: false,
     intervalHours: 48
-  }
+  },
+  defaultHistoryViewMode: 'table'
 };
 
 /**

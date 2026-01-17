@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import Checkbox from 'primevue/checkbox';
 import Button from 'primevue/button';
 import type { StorageObject } from '../types';
 

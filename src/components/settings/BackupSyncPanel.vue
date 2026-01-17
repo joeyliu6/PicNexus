@@ -11,7 +11,7 @@ import ToggleSwitch from 'primevue/toggleswitch';
 import ProgressBar from 'primevue/progressbar';
 import { useBackupSync } from '../../composables/useBackupSync';
 import { useAutoSync } from '../../composables/useAutoSync';
-import type { WebDAVProfile, WebDAVConfig, AutoSyncConfig, SyncStatus } from '../../config/types';
+import type { WebDAVProfile, WebDAVConfig, AutoSyncConfig } from '../../config/types';
 
 // ==================== Props ====================
 
@@ -606,8 +606,8 @@ function handleSwitchProfile(id: string) {
           <div class="interval-input">
             <InputText
               type="number"
-              :modelValue="autoSyncConfig.intervalHours"
-              @update:modelValue="(val: string | number) => handleAutoSyncIntervalChange(Number(val))"
+              :modelValue="String(autoSyncConfig.intervalHours)"
+              @update:modelValue="(val) => handleAutoSyncIntervalChange(Number(val))"
               :min="1"
               :max="720"
             />
