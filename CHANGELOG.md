@@ -10,6 +10,15 @@
 ## [Unreleased]
 
 ### Changed
+- 重构 Timeline 视图组件架构
+  - 将 TimelineView 拆分为 TimelinePhotoGrid、TimelinePhotoItem、TimelineSkeleton 三个子组件
+  - 移除未使用的 TimelineSidebar 组件
+  - 代码量减少约 500 行，提升可维护性
+- 清理未使用的 Markdown 修复功能代码
+  - 移除 MarkdownRepairService（1272 行）
+  - 移除 types.ts 中相关类型定义（148 行）
+- 优化 useImageMetadataFixer 接口
+  - 新增 FixableItem 接口，使函数更通用
 - 移除配置保存时的成功提示弹窗，减少不必要的通知干扰
   - 保留错误提示，确保用户能感知保存失败
 

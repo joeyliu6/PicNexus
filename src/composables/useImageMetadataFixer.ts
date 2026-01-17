@@ -17,6 +17,15 @@ export interface MetadataFixResult {
   aspectRatio: number;
 }
 
+/** 可修复元数据的项（最小接口） */
+export interface FixableItem {
+  id: string;
+  filePath?: string;
+  width?: number;
+  height?: number;
+  aspectRatio?: number;
+}
+
 /** 待更新的元数据项 */
 interface PendingUpdate {
   id: string;
@@ -88,7 +97,7 @@ export function useImageMetadataFixer() {
    * @param items 历史记录项数组
    * @returns 需要修复的项数量
    */
-  async function batchFixMissingMetadata(items: HistoryItem[]): Promise<number> {
+  async function batchFixMissingMetadata(items: FixableItem[]): Promise<number> {
     const needsFix = items.filter((item) => !hasValidMetadata(item));
 
     if (needsFix.length === 0) {
@@ -233,7 +242,7 @@ export function useImageMetadataFixer() {
 /**
  * 检查是否有有效的元数据
  */
-function hasValidMetadata(item: HistoryItem): boolean {
+function hasValidMetadata(item: FixableItem): boolean {
   return !!(
     item.width &&
     item.height &&

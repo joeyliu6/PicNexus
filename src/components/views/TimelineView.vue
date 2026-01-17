@@ -17,13 +17,11 @@ import { useTimelineSidebarControl } from '../../composables/useTimelineSidebarC
 import { useToast } from '../../composables/useToast';
 import type { HistoryItem, ServiceType } from '../../config/types';
 import type { ImageMeta } from '../../types/image-meta';
-import { formatFileSize, formatUploadTime } from '../../utils/formatters';
-import { getServiceDisplayName } from '../../constants/serviceNames';
-import TimelineSidebar, { type TimeGroup } from './timeline/TimelineSidebar.vue';
+import TimelineSkeleton from './timeline/TimelineSkeleton.vue';
+import TimelinePhotoGrid from './timeline/TimelinePhotoGrid.vue';
 import TimelineIndicator from './timeline/TimelineIndicator.vue';
 import HistoryLightbox from './history/HistoryLightbox.vue';
 import FloatingActionBar from './history/FloatingActionBar.vue';
-import Skeleton from 'primevue/skeleton';
 
 // ==================== Props & Emits ====================
 
@@ -67,7 +65,6 @@ const hoverDetailsMap = shallowRef(new Map<string, HistoryItem>());
 // Sidebar Control
 const {
   isSidebarVisible,
-  isHoveringSidebar,
   onScroll: onSidebarScroll,
   onSidebarEnter: handleSidebarEnter,
   onSidebarLeave: handleSidebarLeave,
@@ -123,7 +120,6 @@ const {
   scrollProgress,
   isCalculating,
   viewportHeight,
-  scrollTop,
 
   // 三阶段渲染状态（仅用于控制图片加载行为）
   displayMode,
@@ -132,7 +128,6 @@ const {
   // 可见数据
   visibleItems,
   visibleHeaders,
-  currentStickyHeader,
 
   // 布局数据
   layoutResult,
@@ -164,19 +159,11 @@ const {
   maxRetry: 1,
 });
 
-// ==================== Sidebar Data ====================
+// 转换为 Set 供子组件使用
+const loadedImagesSet = computed(() => new Set(loadedImages.value));
+const selectedIdsSet = computed(() => new Set(viewState.selectedIdList.value));
 
-const sidebarGroups = computed<TimeGroup[]>(() => {
-  return groups.value.map((g) => ({
-    id: g.id,
-    label: g.month + 1 + '月',
-    year: g.year,
-    month: g.month,
-    day: g.day,
-    date: g.date,
-    count: g.items.length,
-  }));
-});
+// ==================== Sidebar Data ====================
 
 // 已加载的月份集合（用于新时间轴指示器）
 const loadedMonthsSet = computed(() => {
@@ -185,19 +172,6 @@ const loadedMonthsSet = computed(() => {
     set.add(`${group.year}-${group.month}`);
   }
   return set;
-});
-
-// 每个分组的布局高度（用于时间轴准确定位）
-const groupHeightMap = computed(() => {
-  const map = new Map<string, number>();
-  if (!layoutResult.value) return map;
-
-  for (const group of layoutResult.value.groupLayouts) {
-    // 高度 = 头部高度 + 内容高度
-    const height = group.headerHeight + group.contentHeight;
-    map.set(group.groupId, height);
-  }
-  return map;
 });
 
 // 基于布局高度的月份位置映射（用于时间轴指示器精确定位）
@@ -234,20 +208,6 @@ const monthLayoutPositions = computed(() => {
   }
 
   return map;
-});
-
-// 当前月份标签
-const currentMonthLabel = computed(() => {
-  if (currentStickyHeader.value) {
-    const group = groups.value.find((g) => g.id === currentStickyHeader.value?.groupId);
-    if (group) {
-      return `${group.month + 1}月`;
-    }
-  }
-  if (groups.value.length === 0) return '';
-  const index = Math.floor(scrollProgress.value * (groups.value.length - 1));
-  const group = groups.value[Math.min(index, groups.value.length - 1)];
-  return `${group.month + 1}月`;
 });
 
 // 可见比例
@@ -405,17 +365,6 @@ const handleBulkDelete = () => viewState.bulkDelete();
 // ==================== 悬停信息辅助函数 ====================
 
 /**
- * 获取成功上传的服务列表（从悬停详情缓存）
- */
-function getSuccessfulServices(id: string): string[] {
-  const detail = hoverDetailsMap.value.get(id);
-  if (!detail) return [];
-  return detail.results
-    .filter(r => r.status === 'success')
-    .map(r => r.serviceId);
-}
-
-/**
  * 悬停时加载详情
  */
 async function handleImageHover(meta: ImageMeta) {
@@ -503,7 +452,7 @@ const preloadNextScreen = () => {
     const img = new Image();
     img.src = url;
     img.onload = () => onImageLoad(meta.id);
-    img.onerror = (e) => onImageError(e, meta.id);
+    img.onerror = (e) => onImageError(e as Event, meta.id);
   }
 };
 
@@ -651,32 +600,10 @@ watch(
     <!-- Main Scroll Area -->
     <div ref="scrollContainer" class="timeline-scroll-area" @scroll="handleScroll">
       <!-- Loading State - 使用 Justified Layout 算法的骨架屏 -->
-      <div v-if="viewState.isLoading.value || showSkeleton" class="skeleton-container" :style="{ height: `${skeletonLayout.totalHeight}px` }">
-        <!-- 分组头部占位 -->
-        <div
-          v-for="group in skeletonLayout.groups"
-          :key="`skeleton-header-${group.id}`"
-          class="skeleton-header"
-          :style="{ transform: `translate3d(0, ${group.headerY}px, 0)` }"
-        >
-          <Skeleton width="140px" height="24px" />
-          <Skeleton width="70px" height="16px" />
-        </div>
-
-        <!-- 图片占位 -->
-        <div
-          v-for="(item, index) in skeletonLayout.items"
-          :key="`skeleton-item-${index}`"
-          class="skeleton-photo"
-          :style="{
-            transform: `translate3d(${item.x}px, ${item.y}px, 0)`,
-            width: `${item.width}px`,
-            height: `${item.height}px`,
-          }"
-        >
-          <Skeleton width="100%" height="100%" borderRadius="8px" />
-        </div>
-      </div>
+      <TimelineSkeleton
+        v-if="viewState.isLoading.value || showSkeleton"
+        :layout="skeletonLayout"
+      />
 
       <!-- Empty State -->
       <div v-else-if="groups.length === 0" class="empty-state">
@@ -685,108 +612,27 @@ watch(
       </div>
 
       <!-- Virtual Scroll Content -->
-      <div v-else class="virtual-container" :style="{ height: `${totalHeight}px` }">
-        <!-- Visible Group Headers -->
-        <div
-          v-for="header in visibleHeaders"
-          :key="`header-${header.groupId}`"
-          class="group-header"
-          :style="{
-            transform: `translate3d(0, ${header.y}px, 0)`,
-            height: `${header.height}px`,
-          }"
-        >
-          <span class="group-title">{{ header.label }}</span>
-          <span class="group-subtitle">
-            {{ groups.find((g) => g.id === header.groupId)?.items.length || 0 }} 张照片
-          </span>
-        </div>
-
-        <!-- Justified Layout 图片列表（不再切换 DOM 结构） -->
-        <div
-          v-for="visible in visibleItems"
-          :key="visible.meta.id"
-          class="photo-item"
-          :class="{ selected: viewState.isSelected(visible.meta.id) }"
-          :style="{
-            transform: `translate3d(${visible.x}px, ${visible.y}px, 0)`,
-            width: `${visible.width}px`,
-            height: `${visible.height}px`,
-          }"
-          @mouseenter="handleImageHover(visible.meta)"
-        >
-          <div class="photo-wrapper" @click="openLightbox(visible.meta)">
-            <!-- 图片未加载时显示 Skeleton 占位 -->
-            <Skeleton
-              v-if="!isImageLoaded(visible.meta.id)"
-              width="100%"
-              height="100%"
-              borderRadius="8px"
-              class="photo-skeleton"
-            />
-
-            <!-- 图片 - 快速滚动时不加载新图片，但已加载的始终显示 -->
-            <img
-              v-if="getThumbnailUrl(visible.meta) && (isImageLoaded(visible.meta.id) || displayMode !== 'fast')"
-              :src="getThumbnailUrl(visible.meta)"
-              class="photo-img"
-              :class="{ loaded: isImageLoaded(visible.meta.id) }"
-              @load="onImageLoad(visible.meta.id)"
-              @error="onImageError($event, visible.meta.id)"
-            />
-
-            <!-- Selection Overlay -->
-            <div class="selection-overlay"></div>
-
-            <!-- Checkbox -->
-            <div
-              class="checkbox"
-              :class="{ checked: viewState.isSelected(visible.meta.id) }"
-              @click.stop="viewState.toggleSelection(visible.meta.id)"
-            >
-              <i v-if="viewState.isSelected(visible.meta.id)" class="pi pi-check"></i>
-            </div>
-
-            <!-- 悬停信息层 -->
-            <div class="hover-info" v-if="hoverDetailsMap.get(visible.meta.id)">
-              <div class="hover-info-top">
-                <span class="file-name" :title="hoverDetailsMap.get(visible.meta.id)!.localFileName">
-                  {{ hoverDetailsMap.get(visible.meta.id)!.localFileName }}
-                </span>
-              </div>
-              <div class="hover-info-bottom">
-                <div class="info-row">
-                  <i class="pi pi-file"></i>
-                  <span class="file-size">{{ formatFileSize(hoverDetailsMap.get(visible.meta.id)!.fileSize) }}</span>
-                </div>
-                <div class="info-row">
-                  <i class="pi pi-clock"></i>
-                  <span class="upload-time">{{ formatUploadTime(visible.meta.timestamp) }}</span>
-                </div>
-                <div class="service-badges" v-if="getSuccessfulServices(visible.meta.id).length > 0">
-                  <span
-                    v-for="service in getSuccessfulServices(visible.meta.id)"
-                    :key="service"
-                    class="service-badge"
-                    :title="`已上传到 ${getServiceDisplayName(service)}`"
-                  >
-                    {{ getServiceDisplayName(service) }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- All Loaded Indicator -->
-        <div
-          v-if="groups.length > 0"
-          class="all-loaded"
-          :style="{ transform: `translate3d(0, ${totalHeight - 40}px, 0)` }"
-        >
+      <TimelinePhotoGrid
+        v-else
+        :groups="groups"
+        :visible-items="visibleItems"
+        :visible-headers="visibleHeaders"
+        :total-height="totalHeight"
+        :display-mode="displayMode"
+        :selected-ids="selectedIdsSet"
+        :loaded-images="loadedImagesSet"
+        :hover-details-map="hoverDetailsMap"
+        :get-thumbnail-url="getThumbnailUrl"
+        @item-click="openLightbox"
+        @item-toggle-select="viewState.toggleSelection"
+        @item-hover="handleImageHover"
+        @image-load="onImageLoad"
+        @image-error="onImageError"
+      >
+        <template #footer>
           共 {{ viewState.totalCount.value }} 张照片
-        </div>
-      </div>
+        </template>
+      </TimelinePhotoGrid>
 
       <!-- Bottom Spacing -->
       <div style="height: 100px"></div>
@@ -861,202 +707,6 @@ watch(
   display: none;
 }
 
-/* Virtual Container */
-.virtual-container {
-  position: relative;
-  width: 100%;
-}
-
-/* Group Headers */
-.group-header {
-  position: absolute;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding: 10px 0;
-  background: var(--bg-app);
-  z-index: 5;
-}
-
-.group-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.group-subtitle {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-/* Photo Items */
-.photo-item {
-  position: absolute;
-  background: var(--bg-secondary);
-  border-radius: 8px;
-  overflow: hidden;
-  will-change: transform;
-}
-
-.photo-wrapper {
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
-  position: relative;
-}
-
-/* Skeleton 占位符 */
-.photo-skeleton {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-}
-
-/* 图片加载过渡 */
-.photo-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0;
-  transition: opacity 0.3s ease-in-out, transform 0.3s;
-}
-
-.photo-img.loaded {
-  opacity: 1;
-}
-
-.photo-wrapper:hover .photo-img.loaded {
-  transform: scale(1.03);
-}
-
-/* Selection */
-.selection-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.1);
-  opacity: 0;
-  transition: opacity 0.2s;
-  pointer-events: none;
-}
-
-.photo-item.selected .selection-overlay {
-  opacity: 1;
-  background: rgba(59, 130, 246, 0.2);
-  border: 2px solid var(--primary);
-  border-radius: 8px;
-}
-
-.checkbox {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.8);
-  background: rgba(0, 0, 0, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: all 0.2s;
-  z-index: 2;
-}
-
-.photo-wrapper:hover .checkbox,
-.checkbox.checked {
-  opacity: 1;
-}
-
-.checkbox:hover {
-  background: rgba(0, 0, 0, 0.4);
-}
-
-.checkbox.checked {
-  background: var(--primary);
-  border-color: var(--primary);
-}
-
-.checkbox.checked i {
-  font-size: 10px;
-  color: white;
-  font-weight: bold;
-}
-
-/* 悬停信息层 */
-.hover-info {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to bottom, transparent 30%, rgba(0, 0, 0, 0.85) 100%);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 10px;
-  pointer-events: none;
-  color: white;
-  border-radius: 8px;
-}
-
-.photo-wrapper:hover .hover-info {
-  opacity: 1;
-}
-
-.hover-info-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.file-name {
-  flex: 1;
-  font-size: 13px;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-.hover-info-bottom {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.info-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  opacity: 0.95;
-}
-
-.info-row i {
-  font-size: 10px;
-  opacity: 0.8;
-}
-
-.service-badges {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  margin-top: 2px;
-}
-
-.service-badge {
-  padding: 3px 7px;
-  background: rgba(59, 130, 246, 0.85);
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 500;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(4px);
-}
-
 /* Sidebar */
 .sidebar-wrapper {
   position: absolute;
@@ -1081,11 +731,7 @@ watch(
   pointer-events: auto;
 }
 
-/* Loading/Empty States */
-.loading-state {
-  padding: 20px 0;
-}
-
+/* Empty State */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -1094,49 +740,6 @@ watch(
   padding: 40px;
   height: 100%;
   color: var(--text-secondary);
-}
-
-/* 骨架屏 - Justified Layout 风格 */
-.skeleton-container {
-  position: relative;
-  width: 100%;
-}
-
-.skeleton-header {
-  position: absolute;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding: 10px 0;
-  height: 48px;
-}
-
-.skeleton-photo {
-  position: absolute;
-  background: var(--bg-secondary);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-/* Loading More */
-.loading-more,
-.all-loaded {
-  position: absolute;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 20px;
-  color: var(--text-secondary);
-  font-size: 14px;
-}
-
-.loading-more i {
-  font-size: 16px;
 }
 
 /* Layout Indicator */
@@ -1167,14 +770,6 @@ watch(
   .timeline-scroll-area {
     padding: 0 50px 0 16px;
   }
-
-  .group-title {
-    font-size: 16px; /* 缩小标题字体 */
-  }
-
-  .group-subtitle {
-    font-size: 11px;
-  }
 }
 
 /* 手机设备 (≤768px) */
@@ -1183,39 +778,8 @@ watch(
     padding: 0 40px 0 12px;
   }
 
-  .group-header {
-    padding: 12px 0; /* 减少头部内边距 */
-  }
-
-  .group-title {
-    font-size: 15px;
-  }
-
-  .group-subtitle {
-    font-size: 10px;
-  }
-
-  /* 侧边栏在平板上缩小 */
   .sidebar-wrapper {
     width: 52px;
-  }
-
-  /* 悬停信息字体缩小 */
-  .hover-info {
-    padding: 8px;
-  }
-
-  .file-name {
-    font-size: 12px;
-  }
-
-  .info-row {
-    font-size: 10px;
-  }
-
-  .service-badge {
-    font-size: 9px;
-    padding: 2px 5px;
   }
 }
 
@@ -1225,40 +789,8 @@ watch(
     padding: 0 8px;
   }
 
-  .group-title {
-    font-size: 14px;
-  }
-
-  .group-subtitle {
-    display: none; /* 隐藏副标题节省空间 */
-  }
-
-  /* 完全隐藏侧边栏，使用底部导航 */
   .sidebar-wrapper {
     display: none;
-  }
-
-  /* 悬停信息简化 */
-  .hover-info-bottom {
-    gap: 4px;
-  }
-
-  .service-badges {
-    display: none; /* 隐藏图床标识，节省空间 */
-  }
-}
-
-/* 触摸设备优化 */
-@media (hover: none) {
-  /* 悬停信息在触摸设备上不显示（点击才显示） */
-  .hover-info {
-    display: none;
-  }
-
-  /* 增大选择框点击区域 */
-  .checkbox {
-    width: 32px;
-    height: 32px;
   }
 }
 </style>
