@@ -515,6 +515,7 @@ class HistoryDatabase {
 
     // 使用 SQL 聚合查询，按年月分组统计
     // SQLite 的 strftime 从 timestamp（毫秒）提取年月
+    // 注意：必须使用 'localtime' 修饰符，否则 UTC 时区会导致跨年/跨月边界错误
     const rows = await db.select<{
       year: number;
       month: number;
@@ -523,13 +524,13 @@ class HistoryDatabase {
       max_timestamp: number;
     }[]>(`
       SELECT
-        CAST(strftime('%Y', timestamp / 1000, 'unixepoch') AS INTEGER) as year,
-        CAST(strftime('%m', timestamp / 1000, 'unixepoch') AS INTEGER) - 1 as month,
+        CAST(strftime('%Y', timestamp / 1000, 'unixepoch', 'localtime') AS INTEGER) as year,
+        CAST(strftime('%m', timestamp / 1000, 'unixepoch', 'localtime') AS INTEGER) - 1 as month,
         COUNT(*) as count,
         MIN(timestamp) as min_timestamp,
         MAX(timestamp) as max_timestamp
       FROM history_items
-      GROUP BY year, strftime('%m', timestamp / 1000, 'unixepoch')
+      GROUP BY year, strftime('%m', timestamp / 1000, 'unixepoch', 'localtime')
       ORDER BY year DESC, month DESC
     `);
 

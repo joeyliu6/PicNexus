@@ -715,7 +715,7 @@ watch(
   bottom: 0;
   width: 120px;
   z-index: 20;
-  background: linear-gradient(to left, var(--bg-app) 40%, transparent 100%);
+  background: transparent;
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.3s ease;

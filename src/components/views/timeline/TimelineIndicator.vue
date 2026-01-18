@@ -130,6 +130,10 @@ const filteredDots = computed<FilteredPoint[]>(() => {
 
 /**
  * 生成年份区段数据
+ * 数据按时间降序排列（最新在前），所以：
+ * - 遍历时先遇到的是该年最新的月份
+ * - 最后遇到的是该年最早的月份
+ * - labelPosition 应该放在该年最早月份处（即该年区段的末尾位置）
  */
 const yearSections = computed<YearSection[]>(() => {
   if (monthSegments.value.length === 0) return [];
@@ -138,6 +142,7 @@ const yearSections = computed<YearSection[]>(() => {
   let currentYear: number | null = null;
   let sectionStart = 0;
   let sectionCount = 0;
+  let lastSegmentPosition = 0;
 
   for (let i = 0; i < monthSegments.value.length; i++) {
     const segment = monthSegments.value[i];
@@ -150,7 +155,7 @@ const yearSections = computed<YearSection[]>(() => {
           startPosition: sectionStart,
           endPosition: segment.position,
           totalCount: sectionCount,
-          labelPosition: segment.position,  // 年份标签放在该年底部
+          labelPosition: lastSegmentPosition,  // 年份标签放在该年最早月份处
         });
       }
 
@@ -161,16 +166,17 @@ const yearSections = computed<YearSection[]>(() => {
     } else {
       sectionCount += segment.count;
     }
+    lastSegmentPosition = segment.position;
   }
 
-  // 添加最后一个年份区段
+  // 添加最后一个年份区段（最老的年份）
   if (currentYear !== null) {
     sections.push({
       year: currentYear,
       startPosition: sectionStart,
       endPosition: 1,
       totalCount: sectionCount,
-      labelPosition: 1,  // 年份标签放在该年底部（时间轴末端）
+      labelPosition: lastSegmentPosition,  // 年份标签放在该年最早月份处
     });
   }
 
@@ -183,10 +189,9 @@ const yearSections = computed<YearSection[]>(() => {
  * 核心思想：标签是"路标"，不是"数据展示"
  *
  * 规则：
- * 1. 最新的一年不显示（用户刚进入时就在这里，不需要标签）
+ * 1. 最新的一年必须显示（让用户知道时间轴起点）
  * 2. 最老的一年必须显示（让用户知道时间轴边界）
- * 3. 最近5年必须显示（用户最常浏览的区域）
- * 4. 其他年份应用空间优先规则（间距 >= MIN_LABEL_GAP_PX）
+ * 3. 其他年份应用空间优先规则（间距 >= MIN_LABEL_GAP_PX）
  */
 const visibleYearSections = computed<YearSection[]>(() => {
   const sections = yearSections.value;
@@ -194,16 +199,13 @@ const visibleYearSections = computed<YearSection[]>(() => {
 
   if (sections.length === 0) return [];
 
-  // 容器高度未知时，应用基本规则（跳过第一个）
+  // 容器高度未知时，返回所有年份
   if (height <= 0) {
-    return sections.slice(1);
+    return sections;
   }
 
   const visible: YearSection[] = [];
   let lastPixelPosition = -Infinity;
-
-  // 当前年份，用于判断"最近5年"
-  const currentYear = new Date().getFullYear();
 
   for (let i = 0; i < sections.length; i++) {
     const section = sections[i];
@@ -211,20 +213,15 @@ const visibleYearSections = computed<YearSection[]>(() => {
 
     const isFirst = i === 0; // 最新的年份
     const isLast = i === sections.length - 1; // 最老的年份
-    const isRecentFiveYears = section.year >= currentYear - 4; // 最近5年
 
-    // 规则1：最新的一年不显示
-    if (isFirst) continue;
-
-    // 规则2 & 3：最老的一年 或 最近5年 必须显示
-    const mustShow = isLast || isRecentFiveYears;
+    // 规则1 & 2：最新和最老的年份必须显示
+    const mustShow = isFirst || isLast;
 
     if (mustShow) {
-      // 强制显示，但更新位置以影响后续判断
       visible.push(section);
       lastPixelPosition = pixelPosition;
     } else {
-      // 规则4：其他年份应用空间优先规则
+      // 规则3：其他年份应用空间优先规则
       if (pixelPosition - lastPixelPosition >= MIN_LABEL_GAP_PX) {
         visible.push(section);
         lastPixelPosition = pixelPosition;
@@ -529,8 +526,9 @@ onUnmounted(() => {
   transition: all 0.2s ease;
   pointer-events: auto;
   cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 4px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.6);
 }
 
 .year-label:hover {
@@ -745,5 +743,10 @@ onUnmounted(() => {
 :root.dark-theme .year-separator,
 .dark-theme .year-separator {
   opacity: 0.3;
+}
+
+:root.dark-theme .year-label,
+.dark-theme .year-label {
+  background: rgba(255, 255, 255, 0.15);
 }
 </style>
