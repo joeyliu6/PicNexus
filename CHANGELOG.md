@@ -10,6 +10,12 @@
 ## [Unreleased]
 
 ### Changed
+- 重构上传视图组件 (`UploadView.vue`)
+  - 拆分为 3 个子组件：`ServiceSelector`, `UploadDropZone`, `UploadQueuePanel`
+  - 消除重复代码，统一 UI 逻辑
+- 重构备份与同步设置面板 (`BackupSyncPanel.vue`)
+  - 拆分为 4 个职责单一的子组件：WebDAV 配置、自动同步、配置备份、历史备份
+  - 优化代码结构，提升可维护性 (~1000 行 → 拆分)
 - 重构 Timeline 视图组件架构
   - 将 TimelineView 拆分为 TimelinePhotoGrid、TimelinePhotoItem、TimelineSkeleton 三个子组件
   - 移除未使用的 TimelineSidebar 组件
