@@ -1,14 +1,21 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import Button from 'primevue/button';
-import type { StorageObject } from '../types';
+import type { StorageObject, ViewMode } from '../types';
 
-const props = defineProps<{
-  /** 文件对象 */
-  item: StorageObject;
-  /** 是否选中 */
-  selected: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    /** 文件对象 */
+    item: StorageObject;
+    /** 是否选中 */
+    selected: boolean;
+    /** 视图模式 */
+    viewMode?: ViewMode;
+  }>(),
+  {
+    viewMode: 'grid',
+  }
+);
 
 const emit = defineEmits<{
   select: [item: StorageObject, event: MouseEvent];
@@ -71,7 +78,11 @@ const handleCheckboxClick = (e: MouseEvent) => {
 <template>
   <div
     class="file-card"
-    :class="{ 'is-selected': selected, 'is-folder': item.type === 'folder' }"
+    :class="{
+      'is-selected': selected,
+      'is-folder': item.type === 'folder',
+      'list-mode': viewMode === 'list',
+    }"
     @click="handleClick"
     @dblclick="handleDoubleClick"
   >
@@ -235,12 +246,12 @@ const handleCheckboxClick = (e: MouseEvent) => {
   justify-content: center;
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.02));
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(245, 158, 11, 0.02));
 }
 
 .folder-icon {
   font-size: 3.5rem;
-  color: var(--primary);
+  color: #f59e0b;
   opacity: 0.85;
   transition: transform 0.2s, opacity 0.2s;
 }
@@ -319,5 +330,83 @@ const handleCheckboxClick = (e: MouseEvent) => {
 /* 文件夹特殊样式 */
 .file-card.is-folder .thumbnail-wrapper {
   background: transparent;
+}
+
+/* ========== 列表模式样式 ========== */
+.file-card.list-mode {
+  flex-direction: row;
+  height: 100%;
+  border-radius: 8px;
+  padding: 4px;
+  gap: 12px;
+}
+
+.file-card.list-mode:hover {
+  transform: none;
+}
+
+.file-card.list-mode .selection-checkbox {
+  position: static;
+  flex-shrink: 0;
+  margin: auto 0;
+  opacity: 0;
+}
+
+.file-card.list-mode:hover .selection-checkbox,
+.file-card.list-mode.is-selected .selection-checkbox {
+  opacity: 1;
+}
+
+.file-card.list-mode .thumbnail-wrapper {
+  width: 44px;
+  height: 44px;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.file-card.list-mode .folder-icon {
+  font-size: 1.5rem;
+}
+
+.file-card.list-mode .generic-file-icon i {
+  font-size: 1.5rem;
+}
+
+.file-card.list-mode .file-info {
+  flex: 1;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  display: flex;
+  border-top: none;
+  padding: 0;
+  min-width: 0;
+  background: transparent;
+}
+
+.file-card.list-mode .file-name {
+  flex: 1;
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+.file-card.list-mode .file-meta {
+  flex-shrink: 0;
+  margin-left: 16px;
+}
+
+.file-card.list-mode .hover-actions {
+  position: static;
+  opacity: 0;
+  background: none;
+  transform: none;
+  padding: 0;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.file-card.list-mode:hover .hover-actions {
+  opacity: 1;
 }
 </style>

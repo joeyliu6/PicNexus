@@ -1,6 +1,7 @@
 <script setup lang="ts" generic="T">
 import { ref, computed, type StyleValue } from 'vue';
 import { useVirtualGrid } from '../composables/useVirtualGrid';
+import type { ViewMode } from '../types';
 
 const props = withDefaults(
   defineProps<{
@@ -14,12 +15,15 @@ const props = withDefaults(
     gap?: number;
     /** 预渲染行数 */
     overscan?: number;
+    /** 视图模式 */
+    viewMode?: ViewMode;
   }>(),
   {
     itemWidth: 180,
     itemHeight: 200,
     gap: 16,
     overscan: 3,
+    viewMode: 'grid',
   }
 );
 
@@ -32,11 +36,13 @@ const containerRef = ref<HTMLElement | null>(null);
 
 // 将 props.items 转换为 ref（用于 composable）
 const itemsRef = computed(() => props.items);
+const viewModeRef = computed(() => props.viewMode);
 
 // 使用虚拟滚动
-const { visibleItems, totalHeight, onScroll, recalculate } = useVirtualGrid({
+const { visibleItems, totalHeight, currentItemWidth, currentItemHeight, onScroll, recalculate } = useVirtualGrid({
   items: itemsRef,
   containerRef,
+  viewMode: viewModeRef,
   config: {
     itemWidth: props.itemWidth,
     itemHeight: props.itemHeight,
@@ -67,6 +73,8 @@ const contentStyle = computed<StyleValue>(() => ({
 defineExpose({
   recalculate,
   containerRef,
+  currentItemWidth,
+  currentItemHeight,
 });
 </script>
 

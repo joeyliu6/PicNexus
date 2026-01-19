@@ -1,25 +1,35 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import ProgressSpinner from 'primevue/progressspinner';
 import Message from 'primevue/message';
 import VirtualGrid from './VirtualGrid.vue';
 import FileGridItem from './FileGridItem.vue';
 import EmptyState from './EmptyState.vue';
-import type { StorageObject } from '../types';
+import { useMarqueeSelection, type SelectionRect } from '../composables/useMarqueeSelection';
+import type { ItemPosition } from '../composables/useFileSelection';
+import type { StorageObject, ViewMode } from '../types';
 
-const props = defineProps<{
-  /** 对象列表 */
-  items: StorageObject[];
-  /** 选中的 key 集合 */
-  selectedKeys: Set<string>;
-  /** 是否加载中 */
-  loading: boolean;
-  /** 错误信息 */
-  error: string | null;
-  /** 是否有更多数据 */
-  hasMore: boolean;
-  /** 是否正在拖拽 */
-  isDragging?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    /** 对象列表 */
+    items: StorageObject[];
+    /** 选中的 key 集合 */
+    selectedKeys: Set<string>;
+    /** 是否加载中 */
+    loading: boolean;
+    /** 错误信息 */
+    error: string | null;
+    /** 是否有更多数据 */
+    hasMore: boolean;
+    /** 是否正在拖拽 */
+    isDragging?: boolean;
+    /** 视图模式 */
+    viewMode?: ViewMode;
+  }>(),
+  {
+    viewMode: 'grid',
+  }
+);
 
 const emit = defineEmits<{
   select: [item: StorageObject, event: MouseEvent];
@@ -29,7 +39,53 @@ const emit = defineEmits<{
   open: [item: StorageObject];
   loadMore: [];
   upload: [];
+  marqueeSelect: [rect: SelectionRect, positions: ItemPosition[]];
 }>();
+
+// 网格容器引用
+const gridContainerRef = ref<HTMLElement | null>(null);
+
+// 网格配置
+const GRID_ITEM_WIDTH = 180;
+const GRID_ITEM_HEIGHT = 220;
+const LIST_ITEM_HEIGHT = 56;
+const GAP = 16;
+
+// 计算项目位置
+const calculateItemPositions = (): ItemPosition[] => {
+  if (!gridContainerRef.value) return [];
+
+  const containerWidth = gridContainerRef.value.clientWidth - GAP * 2;
+  const isListMode = props.viewMode === 'list';
+
+  const itemWidth = isListMode ? containerWidth : GRID_ITEM_WIDTH;
+  const itemHeight = isListMode ? LIST_ITEM_HEIGHT : GRID_ITEM_HEIGHT;
+  const columns = isListMode ? 1 : Math.max(1, Math.floor((containerWidth + GAP) / (itemWidth + GAP)));
+
+  return props.items.map((item, index) => {
+    const col = index % columns;
+    const row = Math.floor(index / columns);
+    return {
+      key: item.key,
+      left: GAP + col * (itemWidth + GAP),
+      top: GAP + row * (itemHeight + GAP),
+      width: itemWidth,
+      height: itemHeight,
+    };
+  });
+};
+
+// 框选功能
+const { isSelecting, selectionRect, handleMouseDown } = useMarqueeSelection({
+  containerRef: gridContainerRef,
+  onSelectionChange: (rect) => {
+    const positions = calculateItemPositions();
+    emit('marqueeSelect', rect, positions);
+  },
+  onSelectionEnd: () => {
+    // 选择结束，不需要额外处理
+  },
+});
 
 // 检查项目是否选中
 const isSelected = (item: StorageObject) => props.selectedKeys.has(item.key);
@@ -78,26 +134,46 @@ const isSelected = (item: StorageObject) => props.selectedKeys.has(item.key);
     />
 
     <!-- 文件网格 -->
-    <VirtualGrid
+    <div
       v-else
-      :items="items"
-      :item-width="180"
-      :item-height="220"
-      :gap="16"
-      @scroll-end="emit('loadMore')"
+      ref="gridContainerRef"
+      class="grid-container"
+      @mousedown="handleMouseDown"
     >
-      <template #default="{ item }">
-        <FileGridItem
-          :item="item"
-          :selected="isSelected(item)"
-          @select="(i, e) => emit('select', i, e)"
-          @preview="(i) => emit('preview', i)"
-          @copy-link="(i) => emit('copyLink', i)"
-          @delete="(i) => emit('delete', i)"
-          @open="(i) => emit('open', i)"
-        />
-      </template>
-    </VirtualGrid>
+      <VirtualGrid
+        :items="items"
+        :item-width="180"
+        :item-height="220"
+        :gap="16"
+        :view-mode="viewMode"
+        @scroll-end="emit('loadMore')"
+      >
+        <template #default="{ item }">
+          <FileGridItem
+            :item="item"
+            :selected="isSelected(item)"
+            :view-mode="viewMode"
+            @select="(i, e) => emit('select', i, e)"
+            @preview="(i) => emit('preview', i)"
+            @copy-link="(i) => emit('copyLink', i)"
+            @delete="(i) => emit('delete', i)"
+            @open="(i) => emit('open', i)"
+          />
+        </template>
+      </VirtualGrid>
+
+      <!-- 框选矩形 -->
+      <div
+        v-if="isSelecting && selectionRect"
+        class="selection-rect"
+        :style="{
+          left: selectionRect.left + 'px',
+          top: selectionRect.top + 'px',
+          width: selectionRect.width + 'px',
+          height: selectionRect.height + 'px',
+        }"
+      ></div>
+    </div>
 
     <!-- 加载更多指示器 -->
     <div v-if="loading && items.length > 0" class="loading-more">
@@ -232,6 +308,24 @@ const isSelected = (item: StorageObject) => props.selectedKeys.has(item.key);
   padding: 16px;
   color: var(--text-secondary);
   font-size: 13px;
+}
+
+/* 网格容器 */
+.grid-container {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* 框选矩形 */
+.selection-rect {
+  position: absolute;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid var(--primary);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 50;
 }
 
 /* 淡入淡出动画 */

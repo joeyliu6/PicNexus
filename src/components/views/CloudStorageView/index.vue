@@ -5,15 +5,26 @@ import { useCloudStorage } from './composables/useCloudStorage';
 import { useFileSelection } from './composables/useFileSelection';
 import { useFileOperations } from './composables/useFileOperations';
 import { useDragDrop } from './composables/useDragDrop';
+import { useSorting } from './composables/useSorting';
 import ServiceTabs from './components/ServiceTabs.vue';
 import StorageToolbar from './components/StorageToolbar.vue';
 import FileGrid from './components/FileGrid.vue';
+import FileTable from './components/FileTable.vue';
+import FileDetailPanel from './components/FileDetailPanel.vue';
 import FloatingActionBar from './components/FloatingActionBar.vue';
 import PreviewDialog from './components/PreviewDialog.vue';
 import ContextMenu from './components/ContextMenu.vue';
-import type { StorageObject, LinkFormat, ContextMenuItem } from './types';
+import type { StorageObject, LinkFormat, ContextMenuItem, ViewMode, SortField } from './types';
 
 const toast = useToast();
+
+// 视图模式（持久化到 localStorage）
+const STORAGE_KEY = 'cloud-storage-view-mode';
+const viewMode = ref<ViewMode>((localStorage.getItem(STORAGE_KEY) as ViewMode) || 'grid');
+
+watch(viewMode, (newMode) => {
+  localStorage.setItem(STORAGE_KEY, newMode);
+});
 
 // 核心状态
 const {
@@ -38,12 +49,18 @@ const {
 const {
   selectedItems,
   selectedKeys,
-  isAllSelected,
-  isIndeterminate,
   toggleSelect,
-  toggleSelectAll,
   clearSelection,
+  selectByRect,
+  selectItems,
 } = useFileSelection({ objects });
+
+// 排序
+const { sortField, sortDirection, sortedObjects, toggleSort } = useSorting(objects);
+
+// 详情面板状态
+const detailVisible = ref(false);
+const detailFile = ref<StorageObject | null>(null);
 
 // 文件操作
 const {
@@ -174,6 +191,32 @@ const handleOpenFolder = async (item: StorageObject) => {
   }
 };
 
+// 详情面板操作
+const handleShowDetail = (item: StorageObject) => {
+  if (item.type === 'file') {
+    detailFile.value = item;
+    detailVisible.value = true;
+  }
+};
+
+const handleCloseDetail = () => {
+  detailVisible.value = false;
+};
+
+// 排序操作
+const handleSort = (field: SortField) => {
+  toggleSort(field);
+};
+
+// 全选操作
+const handleSelectAll = (checked: boolean) => {
+  if (checked) {
+    selectItems(objects.value);
+  } else {
+    clearSelection();
+  }
+};
+
 const handleBatchDelete = () => {
   if (selectedItems.value.length === 0) return;
   deleteFiles(selectedItems.value);
@@ -188,6 +231,10 @@ const handleBatchDownload = () => {
   if (files.length === 1) {
     downloadFile(files[0]);
   }
+};
+
+const handleMarqueeSelect = (rect: { left: number; top: number; width: number; height: number }, positions: { key: string; left: number; top: number; width: number; height: number }[]) => {
+  selectByRect(rect, positions);
 };
 
 // 生命周期
@@ -234,27 +281,47 @@ watch(currentPath, () => {
           :bucket-name="bucketName"
           :stats="stats"
           :loading="isLoading"
-          :is-all-selected="isAllSelected"
-          :is-indeterminate="isIndeterminate"
-          :selected-count="selectedItems.length"
           :search-query="searchQuery"
+          :view-mode="viewMode"
           @navigate="handleNavigate"
           @refresh="refresh"
           @upload="uploadFiles"
           @search="search"
-          @toggle-select-all="toggleSelectAll"
+          @update:view-mode="viewMode = $event"
         />
       </header>
 
       <!-- 内容区域 -->
       <div class="content-body">
+        <!-- 表格视图 -->
+        <FileTable
+          v-if="viewMode === 'table'"
+          :items="sortedObjects"
+          :selected-keys="selectedKeys"
+          :loading="isLoading"
+          :error="error"
+          :sort-field="sortField"
+          :sort-direction="sortDirection"
+          @select="handleSelect"
+          @select-all="handleSelectAll"
+          @preview="handleShowDetail"
+          @open="handleOpenFolder"
+          @sort="handleSort"
+          @delete="(item) => deleteFiles([item])"
+          @copy-link="(item) => handleCopyLink(item, 'url')"
+          @upload="uploadFiles"
+        />
+
+        <!-- 网格/列表视图 -->
         <FileGrid
-          :items="objects"
+          v-else
+          :items="sortedObjects"
           :selected-keys="selectedKeys"
           :loading="isLoading"
           :error="error"
           :has-more="hasMore"
           :is-dragging="isDragging || isOver"
+          :view-mode="viewMode"
           @select="handleSelect"
           @preview="handlePreview"
           @copy-link="(item) => handleCopyLink(item, 'url')"
@@ -262,9 +329,20 @@ watch(currentPath, () => {
           @open="handleOpenFolder"
           @load-more="loadMore"
           @upload="uploadFiles"
+          @marquee-select="handleMarqueeSelect"
           @contextmenu.prevent="() => {}"
         />
       </div>
+
+      <!-- 详情侧边栏 -->
+      <FileDetailPanel
+        :file="detailFile"
+        :visible="detailVisible"
+        @close="handleCloseDetail"
+        @download="downloadFile"
+        @delete="(f) => { deleteFiles([f]); handleCloseDetail(); }"
+        @copy-link="handleCopyLink"
+      />
 
       <!-- 浮动操作栏 -->
       <FloatingActionBar
@@ -275,6 +353,20 @@ watch(currentPath, () => {
         @download="handleBatchDownload"
         @close="clearSelection"
       />
+
+      <!-- 底部状态栏 -->
+      <footer class="status-bar">
+        <div class="status-left">
+          <span class="status-count">{{ objects.length }} 个项目</span>
+          <span v-if="selectedItems.length > 0" class="status-selected">
+            已选择 {{ selectedItems.length }} 个
+          </span>
+        </div>
+        <div class="status-right">
+          <span class="status-indicator" :class="services.find(s => s.serviceId === activeService)?.status"></span>
+          <span class="status-service">{{ services.find(s => s.serviceId === activeService)?.serviceName }}</span>
+        </div>
+      </footer>
     </main>
 
     <!-- 预览对话框 -->
@@ -353,5 +445,59 @@ watch(currentPath, () => {
   flex: 1;
   overflow: hidden;
   padding: 20px;
+}
+
+/* 底部状态栏 */
+.status-bar {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 24px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-subtle);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.status-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status-selected {
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.status-indicator.connected {
+  background: var(--success);
+}
+
+.status-indicator.connecting {
+  background: var(--warning);
+}
+
+.status-indicator.error {
+  background: var(--error);
+}
+
+.status-service {
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 </style>

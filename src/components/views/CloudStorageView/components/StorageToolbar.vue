@@ -2,9 +2,8 @@
 import { ref, watch } from 'vue';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
-import Checkbox from 'primevue/checkbox';
 import Breadcrumb from './Breadcrumb.vue';
-import type { StorageStats } from '../types';
+import type { StorageStats, ViewMode } from '../types';
 
 const props = defineProps<{
   /** 当前路径 */
@@ -15,14 +14,10 @@ const props = defineProps<{
   stats: StorageStats | null;
   /** 是否加载中 */
   loading: boolean;
-  /** 是否全选 */
-  isAllSelected: boolean;
-  /** 是否部分选中 */
-  isIndeterminate: boolean;
-  /** 选中数量 */
-  selectedCount: number;
   /** 搜索关键词 */
   searchQuery: string;
+  /** 视图模式 */
+  viewMode: ViewMode;
 }>();
 
 const emit = defineEmits<{
@@ -30,7 +25,7 @@ const emit = defineEmits<{
   refresh: [];
   upload: [];
   search: [query: string];
-  toggleSelectAll: [];
+  'update:viewMode': [mode: ViewMode];
 }>();
 
 // 本地搜索值
@@ -52,14 +47,6 @@ const handleSearchInput = () => {
   searchTimeout = setTimeout(() => {
     emit('search', localSearchQuery.value);
   }, 300);
-};
-
-// 格式化大小
-const formatSize = (bytes: number): string => {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
 };
 </script>
 
@@ -96,52 +83,54 @@ const formatSize = (bytes: number): string => {
         />
       </div>
 
-      <!-- 分隔线 -->
-      <div class="toolbar-divider"></div>
-
-      <!-- 全选 -->
-      <div class="select-all">
-        <Checkbox
-          :modelValue="isAllSelected"
-          :indeterminate="isIndeterminate"
-          :binary="true"
-          @change="emit('toggleSelectAll')"
-          inputId="select-all"
-        />
-        <label for="select-all">全选</label>
-      </div>
-
-      <!-- 统计信息 -->
-      <div v-if="stats" class="stats-info">
-        <span class="stats-count">{{ stats.objectCount }} 个文件</span>
-        <span class="stats-separator"></span>
-        <span class="stats-size">{{ formatSize(stats.totalSize) }}</span>
-      </div>
-
-      <!-- 分隔线 -->
-      <div class="toolbar-divider"></div>
-
-      <!-- 操作按钮组 -->
-      <div class="action-buttons">
+      <!-- 视图切换按钮组 -->
+      <div class="view-toggle">
         <Button
-          label="上传"
-          icon="pi pi-upload"
-          @click="emit('upload')"
-          size="small"
-          class="upload-btn"
-        />
-
-        <Button
-          icon="pi pi-refresh"
-          @click="emit('refresh')"
-          :loading="loading"
+          icon="pi pi-th-large"
+          :class="{ active: viewMode === 'grid' }"
           text
-          rounded
           size="small"
-          v-tooltip.top="'刷新'"
-          class="refresh-btn"
+          @click="emit('update:viewMode', 'grid')"
+          v-tooltip.top="'网格视图'"
+        />
+        <Button
+          icon="pi pi-list"
+          :class="{ active: viewMode === 'list' }"
+          text
+          size="small"
+          @click="emit('update:viewMode', 'list')"
+          v-tooltip.top="'列表视图'"
+        />
+        <Button
+          icon="pi pi-table"
+          :class="{ active: viewMode === 'table' }"
+          text
+          size="small"
+          @click="emit('update:viewMode', 'table')"
+          v-tooltip.top="'表格视图'"
         />
       </div>
+
+      <!-- 刷新按钮 -->
+      <Button
+        icon="pi pi-refresh"
+        @click="emit('refresh')"
+        :loading="loading"
+        text
+        rounded
+        size="small"
+        v-tooltip.top="'刷新'"
+        class="refresh-btn"
+      />
+
+      <!-- 上传按钮 -->
+      <Button
+        label="上传"
+        icon="pi pi-upload"
+        @click="emit('upload')"
+        size="small"
+        class="upload-btn"
+      />
     </div>
   </div>
 </template>
@@ -152,8 +141,9 @@ const formatSize = (bytes: number): string => {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 16px 24px;
-  min-height: 60px;
+  padding: 12px 24px;
+  min-height: 56px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .toolbar-left {
@@ -167,15 +157,7 @@ const formatSize = (bytes: number): string => {
 .toolbar-right {
   display: flex;
   align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-/* 分隔线 */
-.toolbar-divider {
-  width: 1px;
-  height: 24px;
-  background: var(--border-subtle);
+  gap: 12px;
 }
 
 /* 搜索框 */
@@ -196,14 +178,15 @@ const formatSize = (bytes: number): string => {
 .search-input {
   padding-left: 36px;
   padding-right: 32px;
-  width: 220px;
-  border-radius: 8px;
+  width: 200px;
+  border-radius: 20px;
   background: var(--bg-app);
   border: 1px solid var(--border-subtle);
   transition: all 0.2s;
 }
 
 .search-input:focus {
+  width: 260px;
   background: var(--bg-card);
   border-color: var(--primary);
   box-shadow: var(--focus-ring-shadow);
@@ -214,59 +197,31 @@ const formatSize = (bytes: number): string => {
   right: 4px;
 }
 
-/* 全选 */
-.select-all {
+/* 视图切换按钮组 */
+.view-toggle {
   display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.select-all label {
-  cursor: pointer;
-  user-select: none;
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-/* 统计信息 */
-.stats-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  padding: 6px 12px;
   background: var(--bg-app);
   border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
 }
 
-.stats-count {
-  font-weight: 500;
-}
-
-.stats-separator {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--text-muted);
-}
-
-.stats-size {
+.view-toggle :deep(.p-button) {
   color: var(--text-muted);
+  border-radius: 4px;
 }
 
-/* 操作按钮组 */
-.action-buttons {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.view-toggle :deep(.p-button.active) {
+  color: var(--primary);
+  background: var(--bg-card);
 }
 
-.upload-btn {
-  font-weight: 500;
+.view-toggle :deep(.p-button:hover:not(.active)) {
+  color: var(--text-primary);
+  background: var(--hover-overlay-subtle);
 }
 
+/* 刷新按钮 */
 .refresh-btn {
   color: var(--text-secondary);
 }
@@ -274,5 +229,10 @@ const formatSize = (bytes: number): string => {
 .refresh-btn:hover {
   color: var(--primary);
   background: var(--hover-overlay);
+}
+
+/* 上传按钮 */
+.upload-btn {
+  font-weight: 500;
 }
 </style>

@@ -68,7 +68,8 @@ const getServiceSvg = (serviceId: string): string | null => {
       >
         <span class="service-icon-svg" v-html="getServiceSvg(service.serviceId)"></span>
         <span class="service-name">{{ service.serviceName }}</span>
-        <i :class="`pi ${getStatusIcon(service.status)}`" class="status-indicator"></i>
+        <span v-if="service.serviceId === activeService" class="active-indicator"></span>
+        <i v-else :class="`pi ${getStatusIcon(service.status)}`" class="status-indicator"></i>
       </button>
     </div>
   </nav>
@@ -121,8 +122,12 @@ const getServiceSvg = (serviceId: string): string | null => {
 }
 
 .service-item.active {
-  background: var(--selected-bg);
-  color: var(--primary);
+  background: var(--primary);
+  color: white;
+}
+
+.service-item.active .service-icon-svg {
+  color: white;
 }
 
 .service-icon-svg {
@@ -144,10 +149,6 @@ const getServiceSvg = (serviceId: string): string | null => {
   color: var(--text-primary);
 }
 
-.service-item.active .service-icon-svg {
-  color: var(--primary);
-}
-
 .service-name {
   flex: 1;
   font-weight: 500;
@@ -158,6 +159,15 @@ const getServiceSvg = (serviceId: string): string | null => {
 
 .status-indicator {
   font-size: 10px;
+  flex-shrink: 0;
+}
+
+/* 激活状态圆点指示器 */
+.active-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: white;
   flex-shrink: 0;
 }
 
