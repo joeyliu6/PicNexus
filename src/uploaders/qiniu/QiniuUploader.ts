@@ -32,6 +32,6 @@ export class QiniuUploader extends BaseS3Uploader {
   }
 
   protected getPublicDomain(config: any): string {
-    return config.domain;
+    return config.publicDomain;
   }
 }

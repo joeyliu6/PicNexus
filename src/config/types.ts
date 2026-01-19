@@ -262,8 +262,8 @@ export interface QiniuServiceConfig extends BaseServiceConfig {
   region: string;
   /** 存储桶名称 */
   bucket: string;
-  /** 域名（如 https://cdn.example.com） */
-  domain: string;
+  /** 公开访问域名（如 https://cdn.example.com） */
+  publicDomain: string;
   /** 存储路径前缀（默认 images/） */
   path: string;
 }
@@ -279,8 +279,8 @@ export interface UpyunServiceConfig extends BaseServiceConfig {
   password: string;
   /** 存储桶名称 */
   bucket: string;
-  /** 域名（如 https://cdn.example.com） */
-  domain: string;
+  /** 公开访问域名（如 https://cdn.example.com） */
+  publicDomain: string;
   /** 存储路径前缀（默认 images/） */
   path: string;
 }
@@ -647,7 +647,7 @@ export const DEFAULT_CONFIG: UserConfig = {
       secretKey: '',
       region: '',
       bucket: '',
-      domain: '',
+      publicDomain: '',
       path: 'images/'
     },
     upyun: {
@@ -655,7 +655,7 @@ export const DEFAULT_CONFIG: UserConfig = {
       operator: '',
       password: '',
       bucket: '',
-      domain: '',
+      publicDomain: '',
       path: 'images/'
     }
   },
@@ -926,7 +926,7 @@ export function migrateConfig(config: UserConfig): UserConfig {
         secretKey: '',
         region: '',
         bucket: '',
-        domain: '',
+        publicDomain: '',
         path: 'images/'
       },
       upyun: migratedConfig.services?.upyun || {
@@ -934,7 +934,7 @@ export function migrateConfig(config: UserConfig): UserConfig {
         operator: '',
         password: '',
         bucket: '',
-        domain: '',
+        publicDomain: '',
         path: 'images/'
       }
     };
