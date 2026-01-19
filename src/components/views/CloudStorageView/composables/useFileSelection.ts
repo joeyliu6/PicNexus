@@ -3,6 +3,15 @@
 
 import { ref, computed, type Ref } from 'vue';
 import type { StorageObject } from '../types';
+import type { SelectionRect } from './useMarqueeSelection';
+
+export interface ItemPosition {
+  key: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
 
 export interface FileSelectionOptions {
   /** 对象列表引用 */
@@ -28,6 +37,8 @@ export interface FileSelectionReturn {
   selectItems: (items: StorageObject[]) => void;
   /** 检查是否选中 */
   isSelected: (item: StorageObject) => boolean;
+  /** 通过矩形区域选择 */
+  selectByRect: (rect: SelectionRect, itemPositions: ItemPosition[]) => void;
 }
 
 export function useFileSelection(options: FileSelectionOptions): FileSelectionReturn {
@@ -116,6 +127,30 @@ export function useFileSelection(options: FileSelectionOptions): FileSelectionRe
     return selectedKeys.value.has(item.key);
   }
 
+  // 检查两个矩形是否相交
+  function rectsIntersect(
+    rect1: SelectionRect,
+    rect2: { left: number; top: number; width: number; height: number }
+  ): boolean {
+    return !(
+      rect1.left + rect1.width < rect2.left ||
+      rect2.left + rect2.width < rect1.left ||
+      rect1.top + rect1.height < rect2.top ||
+      rect2.top + rect2.height < rect1.top
+    );
+  }
+
+  // 通过矩形区域选择
+  function selectByRect(rect: SelectionRect, itemPositions: ItemPosition[]) {
+    const keysInRect: string[] = [];
+    for (const pos of itemPositions) {
+      if (rectsIntersect(rect, pos)) {
+        keysInRect.push(pos.key);
+      }
+    }
+    selectedKeys.value = new Set(keysInRect);
+  }
+
   return {
     selectedItems,
     selectedKeys,
@@ -126,5 +161,6 @@ export function useFileSelection(options: FileSelectionOptions): FileSelectionRe
     clearSelection,
     selectItems,
     isSelected,
+    selectByRect,
   };
 }

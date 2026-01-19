@@ -165,7 +165,26 @@ export interface SortConfig {
 }
 
 /** 视图模式 */
-export type ViewMode = 'grid' | 'list';
+export type ViewMode = 'grid' | 'list' | 'table';
+
+/** 表格列配置 */
+export interface TableColumn {
+  key: string;
+  label: string;
+  width?: string;
+  sortable?: boolean;
+  align?: 'left' | 'center' | 'right';
+}
+
+/** 默认表格列配置 */
+export const DEFAULT_TABLE_COLUMNS: TableColumn[] = [
+  { key: 'checkbox', label: '', width: '48px', sortable: false },
+  { key: 'name', label: '对象', sortable: true },
+  { key: 'contentType', label: '类型', width: '120px', sortable: true },
+  { key: 'size', label: '大小', width: '100px', sortable: true, align: 'right' },
+  { key: 'lastModified', label: '已修改', width: '180px', sortable: true },
+  { key: 'actions', label: '', width: '48px', sortable: false },
+];
 
 /** 右键菜单项 */
 export interface ContextMenuItem {
