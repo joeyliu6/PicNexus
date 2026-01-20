@@ -427,6 +427,7 @@ const handleSelectAll = (checked: boolean) => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin: 0 -8px;
 }
 
 /* 滚动条 */
