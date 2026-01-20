@@ -299,8 +299,18 @@ impl S3TestConfig {
     }
 }
 
+/// 判断错误是否可重试（网络瞬时错误）
+fn is_retriable_error(error_msg: &str) -> bool {
+    error_msg.contains("dispatch failure")
+        || error_msg.contains("connection reset")
+        || error_msg.contains("connection closed")
+        || error_msg.contains("timeout")
+        || error_msg.contains("hyper")
+}
+
 /// 测试 S3 兼容存储连接
 /// 根据 service_id 自动构建对应的 endpoint 进行验证
+/// 包含重试机制（最多 3 次，指数退避）以应对网络瞬时错误
 #[tauri::command]
 pub async fn test_s3_connection(
     service_id: String,
@@ -330,45 +340,82 @@ pub async fn test_s3_connection(
 
     println!("[S3测试] Endpoint: {}, Region: {}, Bucket: {}", endpoint, region, bucket);
 
-    // 创建 S3 客户端
-    let client = create_s3_client(&endpoint, &access_key, &secret_key, &region);
-
-    // 使用 list_objects_v2 验证连接（max_keys=1 减少开销）
+    // 重试配置
+    const MAX_RETRIES: u32 = 3;
     let test_timeout = Duration::from_secs(15);
+    let mut last_error: Option<AppError> = None;
 
-    let result = timeout(test_timeout, async {
-        client
-            .list_objects_v2()
-            .bucket(&bucket)
-            .max_keys(1)
-            .send()
-            .await
-    })
-    .await
-    .map_err(|_| AppError::storage("连接超时，请检查网络或配置"))?
-    .map_err(|e| {
-        let error_msg = e.to_string();
-        println!("[S3测试] 错误: {}", error_msg);
+    for attempt in 1..=MAX_RETRIES {
+        // 每次尝试创建新的客户端（避免复用失败的连接）
+        let client = create_s3_client(&endpoint, &access_key, &secret_key, &region);
 
-        if error_msg.contains("NoSuchBucket") {
-            return AppError::storage(format!("存储桶不存在: {}", bucket));
-        }
-        if error_msg.contains("AccessDenied") || error_msg.contains("InvalidAccessKeyId") {
-            return AppError::auth("认证失败: 请检查 Access Key 和 Secret Key");
-        }
-        if error_msg.contains("SignatureDoesNotMatch") {
-            return AppError::auth("签名错误: 请检查 Secret Key 是否正确");
-        }
-        if error_msg.contains("InvalidBucketName") {
-            return AppError::config(format!("无效的存储桶名称: {}", bucket));
-        }
-        AppError::storage(format!("连接失败: {}", error_msg))
-    })?;
+        let result = timeout(test_timeout, async {
+            client
+                .list_objects_v2()
+                .bucket(&bucket)
+                .max_keys(1)
+                .send()
+                .await
+        })
+        .await;
 
-    let object_count = result.contents().len();
-    println!("[S3测试] ✓ {} 连接成功，存储桶内有 {} 个对象", service_id, object_count);
+        match result {
+            Ok(Ok(response)) => {
+                let object_count = response.contents().len();
+                if attempt > 1 {
+                    println!("[S3测试] ✓ {} 连接成功（第 {} 次尝试），存储桶内有 {} 个对象",
+                        service_id, attempt, object_count);
+                } else {
+                    println!("[S3测试] ✓ {} 连接成功，存储桶内有 {} 个对象",
+                        service_id, object_count);
+                }
+                return Ok(format!("{} 连接成功！", get_service_name(&service_id)));
+            }
+            Ok(Err(e)) => {
+                let error_msg = e.to_string();
+                println!("[S3测试] 第 {} 次尝试失败: {}", attempt, error_msg);
 
-    Ok(format!("{} 连接成功！", get_service_name(&service_id)))
+                // 不可重试的错误（配置错误、认证错误等）直接返回
+                if error_msg.contains("NoSuchBucket") {
+                    return Err(AppError::storage(format!("存储桶不存在: {}", bucket)));
+                }
+                if error_msg.contains("AccessDenied") || error_msg.contains("InvalidAccessKeyId") {
+                    return Err(AppError::auth("认证失败: 请检查 Access Key 和 Secret Key"));
+                }
+                if error_msg.contains("SignatureDoesNotMatch") {
+                    return Err(AppError::auth("签名错误: 请检查 Secret Key 是否正确"));
+                }
+                if error_msg.contains("InvalidBucketName") {
+                    return Err(AppError::config(format!("无效的存储桶名称: {}", bucket)));
+                }
+
+                // 可重试的错误
+                if is_retriable_error(&error_msg) && attempt < MAX_RETRIES {
+                    let delay = Duration::from_millis(100 * 2u64.pow(attempt - 1));
+                    println!("[S3测试] 将在 {:?} 后重试...", delay);
+                    tokio::time::sleep(delay).await;
+                    last_error = Some(AppError::storage(format!("连接失败: {}", error_msg)));
+                    continue;
+                }
+
+                return Err(AppError::storage(format!("连接失败: {}", error_msg)));
+            }
+            Err(_) => {
+                println!("[S3测试] 第 {} 次尝试超时", attempt);
+                if attempt < MAX_RETRIES {
+                    let delay = Duration::from_millis(100 * 2u64.pow(attempt - 1));
+                    println!("[S3测试] 将在 {:?} 后重试...", delay);
+                    tokio::time::sleep(delay).await;
+                    last_error = Some(AppError::storage("连接超时，请检查网络或配置"));
+                    continue;
+                }
+                return Err(AppError::storage("连接超时，请检查网络或配置"));
+            }
+        }
+    }
+
+    // 所有重试都失败
+    Err(last_error.unwrap_or_else(|| AppError::storage("连接失败")))
 }
 
 /// 根据服务类型构建 S3 endpoint
