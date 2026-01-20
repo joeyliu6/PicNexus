@@ -37,6 +37,8 @@ export interface CloudStorageReturn {
   error: Ref<string | null>;
   /** 统计信息 */
   stats: ComputedRef<StorageStats | null>;
+  /** 存储桶名称（直接从配置读取，不依赖 objects） */
+  bucketName: ComputedRef<string>;
   /** 搜索关键词 */
   searchQuery: Ref<string>;
   /** 当前存储管理器 */
@@ -93,6 +95,12 @@ export function useCloudStorage(): CloudStorageReturn {
       totalSize: files.reduce((sum, obj) => sum + obj.size, 0),
       bucketName: (config?.bucketName || config?.bucket || '') as string,
     };
+  });
+
+  // 存储桶名称（直接从配置读取，不依赖 objects，避免切换时闪烁"根目录"）
+  const bucketName = computed<string>(() => {
+    const config = configManager.config.value.services?.[activeService.value] as Record<string, unknown> | undefined;
+    return (config?.bucketName || config?.bucket || '') as string;
   });
 
   // 检查服务是否已配置
@@ -531,6 +539,7 @@ export function useCloudStorage(): CloudStorageReturn {
     isServiceLoading,
     error,
     stats,
+    bucketName,
     searchQuery,
     currentManager,
     pagination,

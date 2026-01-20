@@ -107,7 +107,6 @@ const handleSearchInput = () => {
 
       <!-- 刷新按钮 -->
       <Button
-        label="刷新"
         icon="pi pi-sync"
         outlined
         size="small"

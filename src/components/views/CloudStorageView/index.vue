@@ -6,6 +6,9 @@ import { useFileSelection } from './composables/useFileSelection';
 import { useFileOperations } from './composables/useFileOperations';
 import { useDragDrop } from './composables/useDragDrop';
 import { useSorting } from './composables/useSorting';
+import Dialog from 'primevue/dialog';
+import InputText from 'primevue/inputtext';
+import Button from 'primevue/button';
 import ServiceTabs from './components/ServiceTabs.vue';
 import StorageToolbar from './components/StorageToolbar.vue';
 import FileList from './components/FileList.vue';
@@ -30,6 +33,7 @@ const {
   isServiceLoading,
   error,
   stats,
+  bucketName,
   searchQuery,
   pagination,
   setActiveService,
@@ -64,6 +68,7 @@ const {
   deleteFiles,
   copyLinks,
   downloadFile,
+  createFolder,
 } = useFileOperations({
   activeService,
   currentPath,
@@ -96,8 +101,10 @@ const contextMenuTarget = ref<StorageObject | null>(null);
 // 首次挂载标志
 const isFirstMount = ref(true);
 
-// 计算存储桶名称
-const bucketName = computed(() => stats.value?.bucketName || '');
+// 创建文件夹对话框状态
+const createFolderDialogVisible = ref(false);
+const newFolderName = ref('');
+const isCreatingFolder = ref(false);
 
 // 分页状态（computed 确保响应式）
 const paginationState = computed(() => ({
@@ -227,6 +234,25 @@ const handleBatchDelete = () => {
   deleteFiles(selectedItems.value);
 };
 
+const handleCreateFolder = async () => {
+  newFolderName.value = '';
+  createFolderDialogVisible.value = true;
+};
+
+const confirmCreateFolder = async () => {
+  const folderName = newFolderName.value.trim();
+  if (!folderName) return;
+
+  isCreatingFolder.value = true;
+  try {
+    await createFolder(folderName);
+    createFolderDialogVisible.value = false;
+    newFolderName.value = '';
+  } finally {
+    isCreatingFolder.value = false;
+  }
+};
+
 const handleBatchCopyLink = async (format: LinkFormat) => {
   await copyLinks(selectedItems.value, format);
 };
@@ -285,10 +311,13 @@ watch(currentPath, () => {
           :stats="stats"
           :loading="isLoading"
           :search-query="searchQuery"
+          :selected-count="selectedItems.length"
           @navigate="handleNavigate"
           @refresh="refresh"
           @upload="uploadFiles"
           @search="search"
+          @delete="handleBatchDelete"
+          @createFolder="handleCreateFolder"
         />
       </header>
 

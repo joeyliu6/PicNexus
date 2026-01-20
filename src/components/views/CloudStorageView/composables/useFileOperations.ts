@@ -226,9 +226,18 @@ export function useFileOperations(options: FileOperationsOptions): FileOperation
   async function createFolder(folderName: string) {
     if (!folderName) return;
 
-    // 对象存储通常通过创建空对象来模拟文件夹
-    // 这需要后端支持，暂时简化处理
-    toast.info('提示', '创建文件夹功能开发中，可直接上传文件时指定路径');
+    isOperating.value = true;
+    try {
+      const manager = getManager();
+      const folderPath = currentPath.value + folderName;
+      await manager.createFolder(folderPath);
+      toast.success('创建成功', `文件夹 "${folderName}" 已创建`);
+      await refresh();
+    } catch (e) {
+      toast.error('创建失败', e instanceof Error ? e.message : '未知错误');
+    } finally {
+      isOperating.value = false;
+    }
   }
 
   // 下载文件
