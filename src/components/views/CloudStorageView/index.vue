@@ -385,6 +385,40 @@ watch(currentPath, () => {
       :x="contextMenuX"
       :y="contextMenuY"
     />
+
+    <!-- 创建文件夹对话框 -->
+    <Dialog
+      v-model:visible="createFolderDialogVisible"
+      header="添加目录"
+      :modal="true"
+      :closable="true"
+      :style="{ width: '400px' }"
+    >
+      <div class="create-folder-content">
+        <label for="folderName">文件夹名称</label>
+        <InputText
+          id="folderName"
+          v-model="newFolderName"
+          placeholder="请输入文件夹名称"
+          class="folder-name-input"
+          @keyup.enter="confirmCreateFolder"
+          autofocus
+        />
+      </div>
+      <template #footer>
+        <Button
+          label="取消"
+          severity="secondary"
+          @click="createFolderDialogVisible = false"
+        />
+        <Button
+          label="确定"
+          :loading="isCreatingFolder"
+          :disabled="!newFolderName.trim()"
+          @click="confirmCreateFolder"
+        />
+      </template>
+    </Dialog>
   </div>
 </template>
 
@@ -438,5 +472,21 @@ watch(currentPath, () => {
   height: 56px;
   background: var(--bg-card);
   border-top: 1px solid var(--border-subtle);
+}
+
+/* 创建文件夹对话框 */
+.create-folder-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.create-folder-content label {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.folder-name-input {
+  width: 100%;
 }
 </style>
