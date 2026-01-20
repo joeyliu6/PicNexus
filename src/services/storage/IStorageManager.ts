@@ -98,6 +98,13 @@ export interface IStorageManager {
   getObjectInfo?(remotePath: string): Promise<StorageObject>;
 
   /**
+   * 创建文件夹
+   * 对象存储通过创建以 / 结尾的空对象来模拟文件夹
+   * @param folderPath 文件夹路径（必须以 / 结尾）
+   */
+  createFolder(folderPath: string): Promise<void>;
+
+  /**
    * 初始化管理器
    * @param config 服务配置
    */

@@ -117,7 +117,7 @@ pub async fn upload_to_s3_compatible(
     })
 }
 
-/// 列出 S3 兼容存储的对象
+/// 列出 S3 兼容存储的对象（支持 delimiter 分层）
 #[tauri::command]
 pub async fn list_s3_objects(
     endpoint: String,
@@ -126,8 +126,9 @@ pub async fn list_s3_objects(
     region: String,
     bucket: String,
     prefix: Option<String>,
+    delimiter: Option<String>,
     max_keys: Option<u32>,
-) -> Result<Vec<serde_json::Value>, AppError> {
+) -> Result<serde_json::Value, AppError> {
     let credentials = Credentials::new(
         &access_key,
         &secret_key,
@@ -151,6 +152,11 @@ pub async fn list_s3_objects(
         request = request.prefix(prefix);
     }
 
+    // 使用 delimiter 区分文件夹和文件
+    if let Some(delim) = &delimiter {
+        request = request.delimiter(delim);
+    }
+
     if let Some(max) = max_keys {
         request = request.max_keys(max as i32);
     }
@@ -158,6 +164,7 @@ pub async fn list_s3_objects(
     let response = request.send().await
         .map_err(|e| AppError::storage(format!("列出对象失败: {}", e)))?;
 
+    // 解析文件列表
     let objects: Vec<serde_json::Value> = response
         .contents()
         .iter()
@@ -174,7 +181,20 @@ pub async fn list_s3_objects(
         })
         .collect();
 
-    Ok(objects)
+    // 解析公共前缀（文件夹）
+    let prefixes: Vec<String> = response
+        .common_prefixes()
+        .iter()
+        .filter_map(|p| p.prefix().map(|s| s.to_string()))
+        .collect();
+
+    // 返回包含 objects 和 prefixes 的结构
+    Ok(serde_json::json!({
+        "objects": objects,
+        "prefixes": prefixes,
+        "is_truncated": response.is_truncated().unwrap_or(false),
+        "continuation_token": response.next_continuation_token().unwrap_or_default()
+    }))
 }
 
 /// 删除 S3 兼容存储的对象
@@ -492,4 +512,49 @@ fn get_service_name(service_id: &str) -> &str {
         "upyun" => "又拍云",
         _ => service_id,
     }
+}
+
+/// 创建 S3 文件夹
+#[tauri::command]
+pub async fn create_s3_folder(
+    endpoint: String,
+    access_key: String,
+    secret_key: String,
+    region: String,
+    bucket: String,
+    key: String,
+) -> Result<String, AppError> {
+    println!("[S3兼容] 创建文件夹: {}", key);
+
+    let credentials = Credentials::new(
+        &access_key,
+        &secret_key,
+        None,
+        None,
+        "PicNexus",
+    );
+
+    let config = Config::builder()
+        .endpoint_url(&endpoint)
+        .region(Region::new(region.clone()))
+        .credentials_provider(credentials)
+        .force_path_style(true)
+        .build();
+
+    let client = Client::from_conf(config);
+
+    let body = ByteStream::from(Vec::new());
+
+    client
+        .put_object()
+        .bucket(&bucket)
+        .key(&key)
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| AppError::storage(format!("创建文件夹失败: {}", e)))?;
+
+    println!("[S3兼容] 文件夹创建成功: {}", key);
+
+    Ok(format!("成功创建文件夹: {}", key))
 }

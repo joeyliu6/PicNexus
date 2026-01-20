@@ -108,6 +108,7 @@ fn main() {
             commands::s3_compatible::delete_s3_object,
             commands::s3_compatible::delete_s3_objects,
             commands::s3_compatible::test_s3_connection,
+            commands::s3_compatible::create_s3_folder,
             commands::link_checker::check_image_link,
             commands::link_checker::download_image_from_url,
             commands::clipboard::clipboard_has_image,

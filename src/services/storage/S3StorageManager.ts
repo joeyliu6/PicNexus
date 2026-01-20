@@ -63,12 +63,22 @@ export abstract class BaseS3StorageManager implements IStorageManager {
       region: this.getRegion(),
       bucket: this.getBucket(),
       prefix: options.prefix,
+      delimiter: options.delimiter || '/',
       maxKeys: options.maxKeys || 100
     });
 
-    const objects = (result as any[]).map((obj: any) => ({
+    const data = result as {
+      objects: any[];
+      prefixes: string[];
+      is_truncated: boolean;
+      continuation_token: string;
+    };
+
+    // 解析文件列表，提取文件名（去除当前路径前缀）
+    const currentPrefix = options.prefix || '';
+    const objects = data.objects.map((obj: any) => ({
       key: obj.key,
-      name: obj.key.split('/').pop() || obj.key,
+      name: obj.key.replace(currentPrefix, '').split('/').pop() || obj.key,
       size: obj.size,
       lastModified: new Date(obj.last_modified),
       isDirectory: false,
@@ -79,8 +89,9 @@ export abstract class BaseS3StorageManager implements IStorageManager {
 
     return {
       objects,
-      prefixes: [],
-      isTruncated: false,
+      prefixes: data.prefixes,
+      isTruncated: data.is_truncated,
+      continuationToken: data.continuation_token || undefined,
       totalCount: objects.length
     };
   }
@@ -145,6 +156,19 @@ export abstract class BaseS3StorageManager implements IStorageManager {
         error: '删除失败'
       }))
     };
+  }
+
+  async createFolder(folderPath: string): Promise<void> {
+    const path = folderPath.endsWith('/') ? folderPath : folderPath + '/';
+
+    await invoke('create_s3_folder', {
+      endpoint: this.getEndpoint(),
+      accessKey: this.getAccessKey(),
+      secretKey: this.getSecretKey(),
+      region: this.getRegion(),
+      bucket: this.getBucket(),
+      key: path
+    });
   }
 
   protected getPublicDomain(): string {
