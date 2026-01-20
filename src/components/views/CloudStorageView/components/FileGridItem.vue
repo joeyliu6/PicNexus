@@ -246,12 +246,12 @@ const handleCheckboxClick = (e: MouseEvent) => {
   justify-content: center;
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(245, 158, 11, 0.02));
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.02));
 }
 
 .folder-icon {
   font-size: 3.5rem;
-  color: #f59e0b;
+  color: var(--primary);
   opacity: 0.85;
   transition: transform 0.2s, opacity 0.2s;
 }
@@ -336,8 +336,11 @@ const handleCheckboxClick = (e: MouseEvent) => {
 .file-card.list-mode {
   flex-direction: row;
   height: 100%;
-  border-radius: 8px;
-  padding: 4px;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  padding: 4px 8px;
   gap: 12px;
 }
 

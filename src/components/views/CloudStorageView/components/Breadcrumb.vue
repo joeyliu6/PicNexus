@@ -42,13 +42,12 @@ const breadcrumbItems = computed(() => {
           @click="emit('navigate', item.path)"
           :disabled="index === breadcrumbItems.length - 1"
         >
-          <i v-if="index === 0" class="pi pi-home home-icon"></i>
           <span class="item-label">{{ item.label }}</span>
         </button>
-        <i
+        <span
           v-if="index < breadcrumbItems.length - 1"
-          class="pi pi-chevron-right separator"
-        ></i>
+          class="separator"
+        >/</span>
       </template>
     </div>
   </nav>
@@ -58,42 +57,40 @@ const breadcrumbItems = computed(() => {
 .breadcrumb {
   display: flex;
   align-items: center;
+  gap: 8px;
 }
 
 .breadcrumb-list {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0;
   flex-wrap: wrap;
 }
 
 .breadcrumb-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+  padding: 4px 1px;
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: 4px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--primary);
+  text-decoration: underline;
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .breadcrumb-item:hover:not(.is-current) {
-  color: var(--primary);
+  color: var(--primary-hover);
   background: var(--selected-bg);
 }
 
 .breadcrumb-item.is-current {
   color: var(--text-primary);
+  text-decoration: none;
   cursor: default;
-}
-
-.home-icon {
-  font-size: 14px;
 }
 
 .item-label {
@@ -104,7 +101,7 @@ const breadcrumbItems = computed(() => {
 }
 
 .separator {
-  font-size: 10px;
+  font-size: 13px;
   color: var(--text-muted);
   margin: 0 2px;
 }

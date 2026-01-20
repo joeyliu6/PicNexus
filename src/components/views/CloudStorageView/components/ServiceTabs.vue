@@ -123,7 +123,7 @@ const getServiceSvg = (serviceId: string): string | null => {
   justify-content: center;
   gap: 10px;
   padding: 10px;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
   color: var(--text-secondary);
@@ -146,12 +146,15 @@ const getServiceSvg = (serviceId: string): string | null => {
 }
 
 .service-item.active {
-  background: var(--primary);
-  color: white;
+  border-color: var(--primary);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0.06) 100%);
+  color: var(--primary);
+  font-weight: 600;
+  box-shadow: 0 0 0 1px var(--primary), 0 0 20px rgba(59, 130, 246, 0.15);
 }
 
 .service-item.active .service-icon-svg {
-  color: white;
+  color: var(--primary);
 }
 
 .service-icon-svg {
@@ -203,12 +206,15 @@ const getServiceSvg = (serviceId: string): string | null => {
   opacity: 1;
 }
 
-.service-item.active .status-dot {
-  background: rgba(255, 255, 255, 0.8);
-}
-
 .status-dot.status-connected {
   background: var(--success);
+  box-shadow: 0 0 8px var(--success);
+  animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 .status-dot.status-connecting {
