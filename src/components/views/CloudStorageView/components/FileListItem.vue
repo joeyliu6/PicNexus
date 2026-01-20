@@ -75,7 +75,11 @@ const handleRowClick = () => {
   >
     <!-- 复选框 -->
     <div class="item-checkbox" @click="handleCheckboxClick">
-      <Checkbox :modelValue="selected" binary />
+      <Checkbox
+        :modelValue="selected"
+        binary
+        :pt="{ root: { style: 'pointer-events: none' } }"
+      />
     </div>
 
     <!-- 文件信息 -->
