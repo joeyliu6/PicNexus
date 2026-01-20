@@ -30,7 +30,7 @@ export interface CloudStorageReturn {
   /** 错误信息 */
   error: Ref<string | null>;
   /** 统计信息 */
-  stats: Ref<StorageStats | null>;
+  stats: ComputedRef<StorageStats | null>;
   /** 搜索关键词 */
   searchQuery: Ref<string>;
   /** 当前存储管理器 */
@@ -66,7 +66,6 @@ export function useCloudStorage(): CloudStorageReturn {
   const objects = ref<StorageObject[]>([]);
   const isLoading = ref(false);
   const error = ref<string | null>(null);
-  const stats = ref<StorageStats | null>(null);
   const serviceStatuses = ref<Map<string, ServiceStatus>>(new Map());
 
   // 分页状态
@@ -74,6 +73,20 @@ export function useCloudStorage(): CloudStorageReturn {
 
   // 搜索状态
   const searchQuery = ref('');
+
+  // 统计信息（computed 自动响应式更新，无需手动调用 refreshStats）
+  const stats = computed<StorageStats | null>(() => {
+    if (objects.value.length === 0) return null;
+
+    const files = objects.value.filter((obj) => obj.type === 'file');
+    const config = configManager.config.value.services?.[activeService.value] as Record<string, unknown> | undefined;
+
+    return {
+      objectCount: files.length,
+      totalSize: files.reduce((sum, obj) => sum + obj.size, 0),
+      bucketName: (config?.bucketName || config?.bucket || '') as string,
+    };
+  });
 
   // 检查服务是否已配置
   function isServiceConfigured(serviceId: string): boolean {
@@ -208,9 +221,6 @@ export function useCloudStorage(): CloudStorageReturn {
       objects.value = [...folders, ...files];
       pagination.setPage(page);
       pagination.setHasMore(result.isTruncated);
-
-      // 更新统计信息
-      await refreshStats();
     }
 
     return result.continuationToken || null;
@@ -228,17 +238,22 @@ export function useCloudStorage(): CloudStorageReturn {
     error.value = null;
 
     try {
-      // 测试连接
-      const connectionResult = await manager.testConnection();
-      updateServiceStatus(
-        activeService.value,
-        connectionResult.success ? 'connected' : 'error',
-        connectionResult.error
-      );
+      // 仅在未连接或状态为错误时测试连接，已连接则跳过
+      const cachedStatus = serviceStatuses.value.get(activeService.value);
+      const needsConnectionTest = !cachedStatus || cachedStatus.status !== 'connected';
 
-      if (!connectionResult.success) {
-        error.value = connectionResult.error || '连接失败';
-        return;
+      if (needsConnectionTest) {
+        const connectionResult = await manager.testConnection();
+        updateServiceStatus(
+          activeService.value,
+          connectionResult.success ? 'connected' : 'error',
+          connectionResult.error
+        );
+
+        if (!connectionResult.success) {
+          error.value = connectionResult.error || '连接失败';
+          return;
+        }
       }
 
       // 获取当前页数据
@@ -290,23 +305,6 @@ export function useCloudStorage(): CloudStorageReturn {
   async function changePageSize(size: number) {
     pagination.changePageSize(size);
     await refresh();
-  }
-
-  // 刷新统计信息
-  async function refreshStats() {
-    // 从当前加载的对象计算基础统计
-    const totalSize = objects.value
-      .filter((obj) => obj.type === 'file')
-      .reduce((sum, obj) => sum + obj.size, 0);
-
-    const config = configManager.config.value.services?.[activeService.value] as Record<string, unknown> | undefined;
-    const bucketName = (config?.bucketName || config?.bucket || '') as string;
-
-    stats.value = {
-      objectCount: objects.value.filter((obj) => obj.type === 'file').length,
-      totalSize,
-      bucketName,
-    };
   }
 
   // 更新服务状态
@@ -368,44 +366,48 @@ export function useCloudStorage(): CloudStorageReturn {
     }
   }
 
-  // 初始化时检查所有服务状态
+  // 初始化时检查所有服务状态（并行测试提升性能）
   async function initServiceStatuses() {
-    // 确保配置已加载（解决初次打开时配置未就绪的问题）
     await configManager.loadConfig();
 
-    // 首先标记所有已配置的服务为 connecting
+    // 首先标记所有服务状态
     for (const serviceId of SUPPORTED_SERVICES) {
-      if (isServiceConfigured(serviceId)) {
-        updateServiceStatus(serviceId, 'connecting');
-      } else {
-        updateServiceStatus(serviceId, 'unconfigured');
-      }
+      updateServiceStatus(
+        serviceId,
+        isServiceConfigured(serviceId) ? 'connecting' : 'unconfigured'
+      );
     }
 
-    // 然后逐个测试连接
-    for (const serviceId of SUPPORTED_SERVICES) {
-      if (!isServiceConfigured(serviceId)) continue;
+    // 并行测试所有已配置的服务
+    const configuredServices = SUPPORTED_SERVICES.filter(isServiceConfigured);
 
+    const testPromises = configuredServices.map(async (serviceId) => {
       try {
         const config = configManager.config.value.services?.[serviceId];
-        if (!config) continue;
+        if (!config) {
+          return { serviceId, success: false, error: '配置不存在' };
+        }
 
         const manager = StorageManagerFactory.create(serviceId, config);
         const result = await manager.testConnection();
-
-        updateServiceStatus(
-          serviceId,
-          result.success ? 'connected' : 'error',
-          result.error
-        );
+        return { serviceId, success: result.success, error: result.error };
       } catch (e) {
-        updateServiceStatus(
+        return {
           serviceId,
-          'error',
-          e instanceof Error ? e.message : '初始化失败'
-        );
+          success: false,
+          error: e instanceof Error ? e.message : '初始化失败',
+        };
       }
-    }
+    });
+
+    const results = await Promise.allSettled(testPromises);
+
+    results.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        const { serviceId, success, error } = result.value;
+        updateServiceStatus(serviceId, success ? 'connected' : 'error', error);
+      }
+    });
   }
 
   return {
