@@ -61,14 +61,31 @@ const isClearingCache = ref(false);
 type SettingsTab = 'general' | 'hosting' | 'links' | 'backup';
 const activeTab = ref<SettingsTab>('general');
 
-const tabs = [
-  { id: 'general', label: '常规设置', icon: 'pi pi-cog' },
-  { type: 'separator' },
-  { id: 'hosting', label: '图床设置', icon: 'pi pi-images' },
-  { type: 'separator' },
-  { type: 'label', label: '高级设置' },
-  { id: 'links', label: '链接前缀', icon: 'pi pi-link' },
-  { id: 'backup', label: '备份与同步', icon: 'pi pi-database' },
+interface NavItem {
+  id: SettingsTab;
+  label: string;
+  icon: string;
+}
+
+interface NavGroup {
+  label?: string;
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
+  {
+    items: [
+      { id: 'general', label: '常规设置', icon: 'pi pi-cog' },
+      { id: 'hosting', label: '图床设置', icon: 'pi pi-images' },
+    ]
+  },
+  {
+    label: '高级',
+    items: [
+      { id: 'links', label: '链接前缀', icon: 'pi pi-link' },
+      { id: 'backup', label: '备份与同步', icon: 'pi pi-database' },
+    ]
+  }
 ];
 
 // 表单数据
@@ -519,25 +536,26 @@ onUnmounted(() => {
 <template>
   <div class="settings-layout">
     <div class="settings-sidebar">
-      <div class="sidebar-header">设置</div>
-      <div class="nav-list">
-        <template v-for="(item, index) in tabs" :key="index">
-          <div v-if="item.type === 'separator'" class="nav-separator"></div>
-          <div v-else-if="item.type === 'label'" class="nav-label">{{ item.label }}</div>
+      <div class="sidebar-title">设置</div>
+
+      <nav class="nav-list">
+        <div v-for="(group, idx) in navGroups" :key="idx" class="nav-group">
+          <div v-if="group.label" class="nav-group-label">{{ group.label }}</div>
           <button
-            v-else
+            v-for="item in group.items"
+            :key="item.id"
             class="nav-item"
             :class="{ active: activeTab === item.id }"
-            @click="activeTab = item.id as SettingsTab"
+            @click="activeTab = item.id"
           >
-            <i :class="item.icon"></i>
+            <i :class="item.icon" class="nav-icon"></i>
             <span>{{ item.label }}</span>
           </button>
-        </template>
-      </div>
+        </div>
+      </nav>
 
       <div class="sidebar-footer">
-        <span class="version-text">PicNexus v{{ appVersion }}</span>
+        <span class="version-text">v{{ appVersion }}</span>
       </div>
     </div>
 
@@ -651,30 +669,50 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.sidebar-header {
-  height: 60px;
+.sidebar-title {
+  height: 52px;
   display: flex;
   align-items: center;
-  padding: 0 24px;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-primary);
+  padding: 0 20px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-secondary);
   border-bottom: 1px solid var(--border-subtle);
 }
 
 .nav-list {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 12px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+}
+
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav-group + .nav-group {
+  margin-top: 24px;
+}
+
+.nav-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 12px 8px;
+  user-select: none;
+  cursor: default;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   padding: 10px 12px;
   border-radius: 6px;
   border: none;
@@ -683,8 +721,16 @@ onUnmounted(() => {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.15s, color 0.15s;
   text-align: left;
+  width: 100%;
+}
+
+.nav-item .nav-icon {
+  font-size: 16px;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
 }
 
 .nav-item:hover {
@@ -698,36 +744,21 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
-.nav-item i {
-  font-size: 16px;
-}
-
-.nav-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  padding: 16px 12px 6px;
-  letter-spacing: 0.05em;
-}
-
-.nav-separator {
-  height: 1px;
-  background-color: var(--border-subtle);
-  margin: 8px 12px;
-  opacity: 0.5;
+.nav-item.active .nav-icon {
+  color: var(--primary);
 }
 
 .sidebar-footer {
-  padding: 16px;
+  padding: 12px 16px;
   border-top: 1px solid var(--border-subtle);
   text-align: center;
 }
 
 .version-text {
-  font-size: 12px;
-  color: var(--text-muted);
+  font-size: 11px;
+  color: var(--text-tertiary);
   font-family: var(--font-mono);
+  opacity: 0.7;
 }
 
 /* === 内容区域 === */
