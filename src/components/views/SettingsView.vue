@@ -643,7 +643,7 @@ onUnmounted(() => {
 
 /* === 侧边栏导航 === */
 .settings-sidebar {
-  width: 240px;
+  width: 200px;
   background-color: var(--bg-card);
   border-right: 1px solid var(--border-subtle);
   display: flex;

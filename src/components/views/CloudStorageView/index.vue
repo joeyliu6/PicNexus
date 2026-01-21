@@ -440,7 +440,7 @@ watch(currentPath, () => {
 /* 左侧侧边栏 - 始终展开 */
 .sidebar-area {
   flex-shrink: 0;
-  width: 180px;
+  width: 200px;
   background: var(--bg-card);
   border-right: 1px solid var(--border-subtle);
   display: flex;

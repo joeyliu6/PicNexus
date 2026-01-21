@@ -73,7 +73,7 @@ const handleNavigate = (view: ViewType) => {
 
 .nav-btn :deep(.p-button-label) {
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .nav-btn:hover {
