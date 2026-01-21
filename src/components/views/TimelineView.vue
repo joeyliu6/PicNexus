@@ -562,23 +562,30 @@ function showSkeletonWithCheck() {
   });
 }
 
-// 监听 visible 变化，切换时显示骨架屏
+// 监听 visible 变化，切换时显示骨架屏并刷新可见区域
 watch(
   () => props.visible,
   (isVisible, wasVisible) => {
     if (isVisible && !wasVisible) {
       showSkeletonWithCheck();
+      // 强制刷新虚拟滚动的可见区域，修复切换后图片空白问题
+      nextTick(() => {
+        forceUpdateVisibleArea();
+      });
     }
   }
 );
 
-// 监听 KeepAlive 激活，从其他页面切换回来时显示骨架屏
+// 监听 KeepAlive 激活，从其他页面切换回来时刷新可见区域
 watch(
   () => props.activationTrigger,
   (_, oldVal) => {
-    // 只有当前可见且非首次触发时才显示骨架屏
+    // 只有当前可见且非首次触发时才处理
     if (props.visible && oldVal !== undefined) {
-      showSkeletonWithCheck();
+      // 强制刷新虚拟滚动的可见区域，修复切换后图片空白问题
+      nextTick(() => {
+        forceUpdateVisibleArea();
+      });
     }
   }
 );
