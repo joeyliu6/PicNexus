@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
 import Button from 'primevue/button';
 import SplitButton from 'primevue/splitbutton';
+import Skeleton from 'primevue/skeleton';
 import CopyableUrl from './CopyableUrl.vue';
 import type { StorageObject, LinkFormat } from '../types';
 
@@ -19,6 +20,24 @@ const emit = defineEmits<{
 
 // ESC 键关闭面板或 Lightbox
 const lightboxOpen = ref(false);
+
+// 图片加载状态
+const imageLoading = ref(true);
+const imageError = ref(false);
+
+watch(() => props.file, () => {
+  imageLoading.value = true;
+  imageError.value = false;
+});
+
+const handleImageLoad = () => {
+  imageLoading.value = false;
+};
+
+const handleImageError = () => {
+  imageLoading.value = false;
+  imageError.value = true;
+};
 
 const openLightbox = () => {
   lightboxOpen.value = true;
@@ -142,10 +161,30 @@ const handleOverlayClick = (e: MouseEvent) => {
             <div
               v-if="isImage && file.url"
               class="preview-section"
-              @click="openLightbox"
+              @click="!imageLoading && !imageError && openLightbox()"
             >
               <div class="preview-blur-bg" :style="{ backgroundImage: `url(${file.url})` }"></div>
-              <img :src="file.url" :alt="file.name" class="preview-image" />
+
+              <!-- 骨架屏：图片加载中显示 -->
+              <div v-if="imageLoading" class="skeleton-wrapper">
+                <Skeleton width="100%" height="200px" borderRadius="8px" />
+              </div>
+
+              <!-- 实际图片 -->
+              <img
+                v-show="!imageLoading && !imageError"
+                :src="file.url"
+                :alt="file.name"
+                class="preview-image"
+                @load="handleImageLoad"
+                @error="handleImageError"
+              />
+
+              <!-- 加载失败提示 -->
+              <div v-if="imageError" class="image-error">
+                <i class="pi pi-image" />
+                <span>图片加载失败</span>
+              </div>
             </div>
 
             <!-- 链接输入框 -->
@@ -294,6 +333,36 @@ const handleOverlayClick = (e: MouseEvent) => {
   object-fit: contain;
   border-radius: 8px;
   box-shadow: var(--shadow-float);
+}
+
+/* 骨架屏包装器 - 填满整个预览区域 */
+.skeleton-wrapper {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.skeleton-wrapper :deep(.p-skeleton) {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 12px;
+}
+
+/* 图片加载失败 */
+.image-error {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+}
+
+.image-error i {
+  font-size: 32px;
 }
 
 /* 链接输入框区 */
