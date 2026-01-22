@@ -94,10 +94,6 @@ const handleSelectAll = (checked: boolean) => {
         key="empty"
         icon="pi-cloud-upload"
         title="暂无文件"
-        description="拖拽文件到此处上传，或点击下方按钮选择文件"
-        actionLabel="上传文件"
-        actionIcon="pi-upload"
-        @action="emit('upload')"
       />
 
       <!-- 文件列表 -->

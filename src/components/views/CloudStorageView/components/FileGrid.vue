@@ -127,10 +127,6 @@ const isSelected = (item: StorageObject) => props.selectedKeys.has(item.key);
       v-else-if="items.length === 0"
       icon="pi-inbox"
       title="暂无文件"
-      description="上传图片到云存储后将在此显示"
-      actionLabel="上传文件"
-      actionIcon="pi-upload"
-      @action="emit('upload')"
     />
 
     <!-- 文件网格 -->
