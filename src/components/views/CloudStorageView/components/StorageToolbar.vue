@@ -183,9 +183,6 @@ onUnmounted(() => {
 
 .search-input:focus {
   width: 200px;
-  background: var(--bg-card);
-  border-color: var(--primary);
-  box-shadow: var(--focus-ring-shadow);
 }
 
 .search-clear {

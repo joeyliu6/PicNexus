@@ -536,7 +536,7 @@ onUnmounted(() => {
       </nav>
 
       <div class="sidebar-footer">
-        <span class="version-text">v{{ appVersion }}</span>
+        <span class="version-text">PicNexus v{{ appVersion }}</span>
       </div>
     </div>
 
