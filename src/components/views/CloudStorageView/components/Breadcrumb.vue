@@ -70,25 +70,26 @@ const breadcrumbItems = computed(() => {
 .breadcrumb-item {
   display: inline-flex;
   align-items: center;
-  padding: 4px 1px;
+  padding: 4px 2px;
   border: none;
   background: transparent;
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 500;
-  color: var(--primary);
-  text-decoration: underline;
+  color: var(--text-tertiary);
+  text-decoration: none;
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .breadcrumb-item:hover:not(.is-current) {
-  color: var(--primary-hover);
-  background: var(--selected-bg);
+  color: var(--text-muted);
+  background: var(--hover-overlay);
 }
 
 .breadcrumb-item.is-current {
   color: var(--text-primary);
+  font-weight: 600;
   text-decoration: none;
   cursor: default;
 }
@@ -101,8 +102,8 @@ const breadcrumbItems = computed(() => {
 }
 
 .separator {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin: 0 2px;
+  font-size: 16px;
+  color: var(--text-tertiary);
+  margin: 0 4px;
 }
 </style>

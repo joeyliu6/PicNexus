@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, onUnmounted } from 'vue';
 import Button from 'primevue/button';
 import InputText from 'primevue/inputtext';
 import Breadcrumb from './Breadcrumb.vue';
@@ -41,6 +41,10 @@ const handleSearchInput = () => {
     emit('search', localSearchQuery.value);
   }, 300);
 };
+
+onUnmounted(() => {
+  if (searchTimeout) clearTimeout(searchTimeout);
+});
 </script>
 
 <template>
@@ -92,8 +96,9 @@ const handleSearchInput = () => {
       <Button
         label="上传"
         icon="pi pi-upload"
-        outlined
+        text
         size="small"
+        class="ghost-button"
         @click="emit('upload')"
       />
 
@@ -101,7 +106,9 @@ const handleSearchInput = () => {
       <Button
         label="添加目录"
         icon="pi pi-plus"
+        text
         size="small"
+        class="ghost-button"
         @click="emit('createFolder')"
       />
 
@@ -168,9 +175,9 @@ const handleSearchInput = () => {
   width: 140px;
   height: 34px;
   font-size: 13px;
-  border-radius: 8px;
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid transparent;
   transition: all 0.2s;
 }
 
@@ -190,5 +197,18 @@ const handleSearchInput = () => {
 
 .search-clear :deep(.p-button-icon) {
   font-size: 12px;
+}
+
+/* 幽灵按钮样式 */
+.ghost-button {
+  background: transparent !important;
+  border: 1px solid var(--border-subtle) !important;
+  color: var(--text-muted) !important;
+}
+
+.ghost-button:hover {
+  background: var(--hover-overlay) !important;
+  border-color: var(--text-muted) !important;
+  color: var(--text-primary) !important;
 }
 </style>

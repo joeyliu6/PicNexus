@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import Checkbox from 'primevue/checkbox';
 import type { StorageObject } from '../types';
 import { formatFileSize } from '../../../../utils/formatters';
@@ -15,6 +15,27 @@ const emit = defineEmits<{
   open: [item: StorageObject];
   showDetail: [item: StorageObject];
 }>();
+
+const itemInfoRef = ref<HTMLElement | null>(null);
+const containerWidth = ref(300);
+
+let resizeObserver: ResizeObserver | null = null;
+
+onMounted(() => {
+  if (itemInfoRef.value) {
+    containerWidth.value = itemInfoRef.value.offsetWidth;
+    resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        containerWidth.value = entry.contentRect.width;
+      }
+    });
+    resizeObserver.observe(itemInfoRef.value);
+  }
+});
+
+onUnmounted(() => {
+  resizeObserver?.disconnect();
+});
 
 const isImage = computed(() => {
   if (props.item.type === 'folder') return false;
@@ -33,6 +54,17 @@ const fileType = computed(() => {
   return typeMap[ext] || ext.toUpperCase() || '-';
 });
 
+const truncatedName = computed(() => {
+  const name = props.item.name;
+  const charWidth = 7.5;
+  const maxLength = Math.max(20, Math.floor(containerWidth.value / charWidth));
+
+  if (name.length <= maxLength) return name;
+
+  const half = Math.floor((maxLength - 3) / 2);
+  return name.slice(0, half) + '...' + name.slice(-half);
+});
+
 const formatDate = (date: Date): string => {
   return date.toLocaleDateString('zh-CN', {
     year: 'numeric',
@@ -49,8 +81,6 @@ const handleCheckboxClick = (e: MouseEvent) => {
 const handleRowClick = () => {
   if (props.item.type === 'folder') {
     emit('open', props.item);
-  } else if (isImage.value) {
-    emit('showDetail', props.item);
   } else {
     emit('showDetail', props.item);
   }
@@ -76,9 +106,9 @@ const handleRowClick = () => {
     </div>
 
     <!-- 文件信息 -->
-    <div class="item-info">
+    <div ref="itemInfoRef" class="item-info">
       <i v-if="item.type === 'folder'" class="pi pi-folder folder-icon"></i>
-      <span class="item-name" :title="item.name">{{ item.name }}</span>
+      <span class="item-name" :title="item.name">{{ truncatedName }}</span>
     </div>
 
     <!-- 类型 -->
@@ -100,14 +130,14 @@ const handleRowClick = () => {
   padding: 10px 12px;
   background: var(--bg-card);
   border: none;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
   border-radius: 0;
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
 
 .file-list-item:hover {
-  background: var(--hover-overlay);
+  background: rgba(59, 130, 246, 0.05);
 }
 
 .file-list-item.is-selected {
@@ -132,7 +162,7 @@ const handleRowClick = () => {
 
 .item-info .folder-icon {
   font-size: 1.1rem;
-  color: var(--primary);
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -140,17 +170,15 @@ const handleRowClick = () => {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
 .item-type {
   width: 60px;
   flex-shrink: 0;
   font-size: 12px;
-  color: var(--text-muted);
-  text-align: center;
+  color: var(--text-tertiary);
+  text-align: right;
 }
 
 .item-meta {
