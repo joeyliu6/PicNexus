@@ -12,6 +12,7 @@ import { checkNetworkConnectivity } from '../utils/network';
 import { invalidateCache } from '../composables/useHistory';
 import { emitHistoryUpdated } from '../events/cacheEvents';
 import { historyDB } from './HistoryDatabase';
+import { SERVICE_DISPLAY_NAMES } from '../constants/serviceNames';
 
 export interface RetryOptions {
   /** 配置存储 */
@@ -101,14 +102,7 @@ export class RetryService {
       // 处理成功
       await this.handleSingleServiceSuccess(itemId, serviceId, item, result);
 
-      const serviceLabels: Record<ServiceType, string> = {
-        weibo: '微博', r2: 'R2', jd: '京东',
-        nowcoder: '牛客', qiyu: '七鱼', zhihu: '知乎', nami: '纳米',
-        bilibili: '哔哩哔哩', chaoxing: '超星',
-        smms: 'SM.MS', github: 'GitHub', imgur: 'Imgur',
-        tencent: '腾讯云', aliyun: '阿里云', qiniu: '七牛云', upyun: '又拍云'
-      };
-      this.options.toast.success('修复成功', `${serviceLabels[serviceId]} 已补充上传成功`);
+      this.options.toast.success('修复成功', `${SERVICE_DISPLAY_NAMES[serviceId]} 已补充上传成功`);
 
     } catch (error) {
       await this.handleSingleServiceFailure(itemId, serviceId, item, error);
@@ -219,16 +213,7 @@ export class RetryService {
       // 检测部分失败
       if (result.isPartialSuccess && result.partialFailures) {
         const failedServiceNames = result.partialFailures
-          .map(f => {
-            const nameMap: Record<string, string> = {
-              weibo: '微博', r2: 'R2', jd: '京东',
-              nowcoder: '牛客', qiyu: '七鱼', zhihu: '知乎', nami: '纳米',
-              bilibili: '哔哩哔哩', chaoxing: '超星',
-              smms: 'SM.MS', github: 'GitHub', imgur: 'Imgur',
-              tencent: '腾讯云', aliyun: '阿里云', qiniu: '七牛云', upyun: '又拍云'
-            };
-            return nameMap[f.serviceId] || f.serviceId;
-          })
+          .map(f => SERVICE_DISPLAY_NAMES[f.serviceId] || f.serviceId)
           .join('、');
 
         this.options.toast.warn(
@@ -410,14 +395,7 @@ export class RetryService {
       }
     }
 
-    const serviceLabels: Record<ServiceType, string> = {
-      weibo: '微博', r2: 'R2', jd: '京东',
-      nowcoder: '牛客', qiyu: '七鱼', zhihu: '知乎', nami: '纳米',
-      bilibili: '哔哩哔哩', chaoxing: '超星',
-      smms: 'SM.MS', github: 'GitHub', imgur: 'Imgur',
-      tencent: '腾讯云', aliyun: '阿里云', qiniu: '七牛云', upyun: '又拍云'
-    };
-    this.options.toast.error('重试依然失败', `${serviceLabels[serviceId]}: ${errorMsg}`);
+    this.options.toast.error('重试依然失败', `${SERVICE_DISPLAY_NAMES[serviceId]}: ${errorMsg}`);
   }
 
   /**
