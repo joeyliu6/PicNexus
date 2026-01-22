@@ -58,8 +58,8 @@ const getServiceSvg = (serviceId: string): string | null => {
         <svg
           v-if="service.serviceId === activeService && isLoading"
           class="loading-spinner"
-          width="14"
-          height="14"
+          width="20"
+          height="20"
           viewBox="0 0 14 14"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
@@ -252,8 +252,8 @@ const getServiceSvg = (serviceId: string): string | null => {
 
 /* 加载指示器 - PrimeVue 风格 SVG */
 .loading-spinner {
-  width: 14px;
-  height: 14px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
   color: var(--primary);
   animation: spinner-spin 1s linear infinite;

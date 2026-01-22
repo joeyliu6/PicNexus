@@ -95,7 +95,7 @@ export function useCloudStorage(): CloudStorageReturn {
   const activeService = ref<CloudServiceType>('r2');
   const currentPath = ref<string>('');
   const objects = ref<StorageObject[]>([]);
-  const isLoading = ref(false);
+  const isLoading = ref(true);
   const isServiceLoading = ref(false);
   const error = ref<string | null>(null);
   const serviceStatuses = ref<Map<string, ServiceStatus>>(new Map());
