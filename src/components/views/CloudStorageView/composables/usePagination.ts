@@ -71,30 +71,25 @@ export function usePagination(options: UsePaginationOptions = {}): UsePagination
     tokenCache.value = new Map(tokenCache.value);
   }
 
-  function getToken(page: number): string | null | undefined {
-    const entry = tokenCache.value.get(page);
-    if (!entry) return undefined;
-
-    // 检查是否过期（第 1 页永不过期）
-    if (page > 1 && Date.now() - entry.timestamp > TOKEN_CACHE_TTL) {
-      tokenCache.value.delete(page);
-      return undefined;
-    }
-
-    return entry.token;
-  }
-
-  function hasToken(page: number): boolean {
+  // 检查 token 是否有效（存在且未过期）
+  function isTokenValid(page: number): boolean {
     const entry = tokenCache.value.get(page);
     if (!entry) return false;
-
-    // 检查是否过期（第 1 页永不过期）
+    // 第 1 页永不过期
     if (page > 1 && Date.now() - entry.timestamp > TOKEN_CACHE_TTL) {
       tokenCache.value.delete(page);
       return false;
     }
-
     return true;
+  }
+
+  function getToken(page: number): string | null | undefined {
+    if (!isTokenValid(page)) return undefined;
+    return tokenCache.value.get(page)!.token;
+  }
+
+  function hasToken(page: number): boolean {
+    return isTokenValid(page);
   }
 
   // 找到最接近目标页且已缓存（未过期）的页码
