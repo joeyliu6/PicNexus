@@ -105,15 +105,6 @@ export function generateBatchRenameSuggestion(files: string[]): string[] {
     return prefix.substring(0, i);
   }, files[0]);
 
-  files.reduce((_suffix, _file) => {
-    let i = 0;
-    while (i < Math.min(_suffix.length, _file.length) &&
-           _suffix[_suffix.length - 1 - i] === _file[_file.length - 1 - i]) {
-      i++;
-    }
-    return _suffix.substring(_suffix.length - i);
-  }, files[0]);
-
   const suggestions: string[] = [];
 
   if (commonPrefix.length > 3) {

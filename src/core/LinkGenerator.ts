@@ -27,17 +27,13 @@ export class LinkGenerator {
 
       // 如果前缀功能被禁用，返回原始链接
       if (!activePrefix) {
-        console.log('[LinkGenerator] 前缀功能已禁用，使用直接链接:', result.url);
         return result.url;
       }
 
-      const proxyLink = `${activePrefix}${result.url}`;
-      console.log('[LinkGenerator] 生成代理链接:', proxyLink);
-      return proxyLink;
+      return `${activePrefix}${result.url}`;
     }
 
     // 其他情况直接返回原始 URL
-    console.log('[LinkGenerator] 使用直接链接:', result.url);
     return result.url;
   }
 

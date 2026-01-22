@@ -24,29 +24,12 @@ export function useThemeManager() {
   const initializeTheme = async (playTransition = false): Promise<void> => {
     try {
       const config = await configStore.get<UserConfig>('config');
+      const effectiveConfig = config ?? DEFAULT_CONFIG;
 
-      if (config) {
-        // 创建主题管理器实例
-        themeManager = new ThemeManager(config, configStore);
-
-        // 初始化主题
-        await themeManager.initialize(playTransition);
-
-        // 更新当前主题状态
-        currentTheme.value = themeManager.getCurrentTheme();
-        isInitialized.value = true;
-
-        console.log('[ThemeManager] Initialized with theme:', currentTheme.value);
-      } else {
-        console.warn('[ThemeManager] No config found, using default config');
-
-        // 使用默认配置创建主题管理器
-        themeManager = new ThemeManager(DEFAULT_CONFIG, configStore);
-        await themeManager.initialize(playTransition);
-
-        currentTheme.value = themeManager.getCurrentTheme();
-        isInitialized.value = true;
-      }
+      themeManager = new ThemeManager(effectiveConfig, configStore);
+      await themeManager.initialize(playTransition);
+      currentTheme.value = themeManager.getCurrentTheme();
+      isInitialized.value = true;
     } catch (error) {
       console.error('[ThemeManager] Initialization failed:', error);
       currentTheme.value = 'dark';
@@ -65,7 +48,6 @@ export function useThemeManager() {
     try {
       await themeManager.toggleTheme();
       currentTheme.value = themeManager.getCurrentTheme();
-      console.log('[ThemeManager] Theme toggled to:', currentTheme.value);
     } catch (error) {
       console.error('[ThemeManager] Failed to toggle theme:', error);
     }
@@ -84,7 +66,6 @@ export function useThemeManager() {
     try {
       await themeManager.setTheme(mode);
       currentTheme.value = mode;
-      console.log('[ThemeManager] Theme set to:', mode);
     } catch (error) {
       console.error('[ThemeManager] Failed to set theme:', error);
     }
