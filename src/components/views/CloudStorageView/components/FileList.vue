@@ -138,8 +138,6 @@ const handleSelectAll = (checked: boolean) => {
 .file-list-wrapper {
   position: relative;
   height: 100%;
-  background: var(--bg-card);
-  border-radius: 12px;
   overflow: hidden;
 }
 
@@ -338,7 +336,6 @@ const handleSelectAll = (checked: boolean) => {
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  background: var(--bg-card);
   border-bottom: 1px solid var(--border-subtle);
   font-size: 12px;
   color: var(--text-muted);

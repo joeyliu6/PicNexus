@@ -461,7 +461,6 @@ watch(currentPath, () => {
 /* 工具栏头部 */
 .toolbar-header {
   flex-shrink: 0;
-  background: var(--bg-card);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -476,8 +475,7 @@ watch(currentPath, () => {
 /* 分页栏 */
 .pagination-footer {
   flex-shrink: 0;
-  height: 56px;
-  background: var(--bg-card);
+  height: 36px;
   border-top: 1px solid var(--border-subtle);
 }
 

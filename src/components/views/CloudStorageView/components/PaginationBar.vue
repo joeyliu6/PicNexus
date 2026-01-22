@@ -59,7 +59,6 @@ function handlePageChange(event: PageState) {
   align-items: center;
   justify-content: center;
   height: 100%;
-  background: var(--bg-card);
 }
 
 /* 极简分页样式 */

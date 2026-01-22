@@ -122,7 +122,6 @@ const handleRowClick = () => {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  background: var(--bg-card);
   border: none;
   border-bottom: 1px solid rgba(148, 163, 184, 0.15);
   border-radius: 0;
