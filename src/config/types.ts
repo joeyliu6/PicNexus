@@ -1,4 +1,3 @@
-// src/config/types.ts
 // 新的配置类型定义，支持多图床架构
 
 import { UploadResult } from '../uploaders/base/types';

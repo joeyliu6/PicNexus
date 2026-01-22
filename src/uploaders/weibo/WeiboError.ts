@@ -1,4 +1,3 @@
-// src/uploaders/weibo/WeiboError.ts
 // 微博上传错误处理
 
 import { UploadErrorCode, StructuredError, createStructuredError } from '../base/ErrorTypes';

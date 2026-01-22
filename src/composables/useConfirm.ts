@@ -1,4 +1,3 @@
-// src/composables/useConfirm.ts
 // 确认对话框 Composable
 
 import { useConfirm as usePrimeConfirm } from 'primevue/useconfirm';

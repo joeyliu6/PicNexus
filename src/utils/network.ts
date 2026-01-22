@@ -1,4 +1,3 @@
-// src/utils/network.ts
 /**
  * 网络工具函数
  */

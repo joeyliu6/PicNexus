@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// src/components/settings/LinkPrefixPanel.vue
 // 链接前缀设置面板组件
 
 import { computed } from 'vue';

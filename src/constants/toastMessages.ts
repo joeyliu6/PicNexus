@@ -1,4 +1,3 @@
-// src/constants/toastMessages.ts
 // 集中管理所有通知文案，便于维护和国际化
 
 // 类型定义

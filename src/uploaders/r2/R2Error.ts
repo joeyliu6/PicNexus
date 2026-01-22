@@ -1,4 +1,3 @@
-// src/uploaders/r2/R2Error.ts
 // Cloudflare R2 上传错误处理
 
 import { UploadErrorCode, StructuredError, createStructuredError } from '../base/ErrorTypes';

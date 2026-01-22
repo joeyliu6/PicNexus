@@ -1,4 +1,3 @@
-// src/uploaders/index.ts
 // 上传器统一导出和初始化
 
 import { UploaderFactory } from './base/UploaderFactory';

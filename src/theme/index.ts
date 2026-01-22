@@ -1,4 +1,3 @@
-// src/theme/index.ts
 // PrimeVue 主题预设配置
 
 import { definePreset } from '@primevue/themes';

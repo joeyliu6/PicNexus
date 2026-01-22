@@ -1,4 +1,3 @@
-// src/uploaders/nami/NamiError.ts
 // 纳米图床错误处理
 
 import { UploadErrorCode, StructuredError, createStructuredError } from '../base/ErrorTypes';

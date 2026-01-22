@@ -1,4 +1,3 @@
-// src/uploaders/base/BaseUploader.ts
 // 上传器抽象基类，提供共享逻辑
 
 import { invoke } from '@tauri-apps/api/core';

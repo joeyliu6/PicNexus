@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// src/components/views/upload/UploadQueuePanel.vue
 // 上传队列面板组件
 
 import { ref } from 'vue';

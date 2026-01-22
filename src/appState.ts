@@ -1,4 +1,3 @@
-// src/appState.ts
 // Global application state
 
 /**

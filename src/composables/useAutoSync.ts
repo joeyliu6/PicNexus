@@ -1,4 +1,3 @@
-// src/composables/useAutoSync.ts
 // 自动同步调度 Composable
 // v2.10: 支持定时自动同步 WebDAV 配置和历史记录
 

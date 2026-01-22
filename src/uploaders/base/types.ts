@@ -1,4 +1,3 @@
-// src/uploaders/base/types.ts
 // 共享类型定义
 
 /**

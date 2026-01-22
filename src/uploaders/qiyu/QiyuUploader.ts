@@ -1,4 +1,3 @@
-// src/uploaders/qiyu/QiyuUploader.ts
 // 七鱼图床上传器
 // 基于网易七鱼客服系统的 NOS 对象存储
 // Token 自动获取，需要系统安装 Chrome 浏览器

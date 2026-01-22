@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// src/components/settings/AdvancedSettingsPanel.vue
 // 高级设置面板组件 - 整合链接前缀、记录与缓存管理、隐私设置
 
 import { computed } from 'vue';

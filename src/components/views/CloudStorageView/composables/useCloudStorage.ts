@@ -1,4 +1,3 @@
-// src/components/views/CloudStorageView/composables/useCloudStorage.ts
 // 云存储核心状态管理
 
 import { ref, computed, type Ref, type ComputedRef } from 'vue';

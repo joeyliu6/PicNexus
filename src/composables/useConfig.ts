@@ -1,4 +1,3 @@
-// src/composables/useConfig.ts
 // 配置管理 Composable - 封装配置加载、保存、测试连接等功能
 
 import { ref, Ref } from 'vue';

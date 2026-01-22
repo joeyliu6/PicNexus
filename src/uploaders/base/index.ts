@@ -1,4 +1,3 @@
-// src/uploaders/base/index.ts
 // 统一导出所有基础组件
 
 export type { IUploader } from './IUploader';

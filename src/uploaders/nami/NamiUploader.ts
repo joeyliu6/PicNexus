@@ -1,4 +1,3 @@
-// src/uploaders/nami/NamiUploader.ts
 // 纳米图床上传器实现
 
 import { BaseUploader } from '../base/BaseUploader';

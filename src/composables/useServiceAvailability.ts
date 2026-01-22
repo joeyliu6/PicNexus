@@ -1,4 +1,3 @@
-// src/composables/useServiceAvailability.ts
 // 图床服务可用性检测 Composable
 // 从 SettingsView.vue 中抽取，提供七鱼、京东等服务的可用性检测
 // 使用模块级单例模式，确保状态跨组件共享

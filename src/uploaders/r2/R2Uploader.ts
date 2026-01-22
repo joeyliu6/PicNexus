@@ -1,4 +1,3 @@
-// src/uploaders/r2/R2Uploader.ts
 // Cloudflare R2 上传器实现
 // 基于 S3 兼容协议，继承 BaseS3Uploader
 

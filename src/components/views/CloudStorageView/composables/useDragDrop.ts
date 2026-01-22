@@ -1,4 +1,3 @@
-// src/components/views/CloudStorageView/composables/useDragDrop.ts
 // 拖拽上传逻辑
 
 import { ref, onMounted, onUnmounted, type Ref } from 'vue';

@@ -1,4 +1,3 @@
-// src/utils/renameUtils.ts
 // 批量重命名工具函数
 
 export interface RenamePattern {

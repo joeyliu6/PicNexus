@@ -1,4 +1,3 @@
-// src/uploaders/chaoxing/ChaoxingUploader.ts
 // 超星图床上传器实现
 
 import { BaseUploader } from '../base/BaseUploader';

@@ -1,4 +1,3 @@
-// src/utils/semaphore.ts
 // 信号量实现，用于控制并发数
 
 /**

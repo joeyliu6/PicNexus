@@ -1,4 +1,3 @@
-// src/composables/useServiceSelector.ts
 // 图床服务选择模块 - 管理图床服务的选择状态、配置状态和可用性
 
 import { ref, computed, type Ref, type ComputedRef } from 'vue';

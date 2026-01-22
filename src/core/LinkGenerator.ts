@@ -1,4 +1,3 @@
-// src/core/LinkGenerator.ts
 // 链接生成逻辑
 
 import { UploadResult } from '../uploaders/base/types';

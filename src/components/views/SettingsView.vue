@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// src/components/views/SettingsView.vue
 // 设置视图 - 重构后精简版
 // 核心逻辑保留，UI 组件拆分到独立面板
 

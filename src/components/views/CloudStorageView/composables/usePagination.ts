@@ -1,4 +1,3 @@
-// src/components/views/CloudStorageView/composables/usePagination.ts
 // 分页状态管理 - 处理 S3 Token-based 分页的缓存策略
 
 import { ref, computed, type Ref, type ComputedRef } from 'vue';

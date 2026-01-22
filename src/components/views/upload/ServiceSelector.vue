@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// src/components/views/upload/ServiceSelector.vue
 // 图床服务选择器组件
 
 import type { ServiceType } from '../../../config/types';

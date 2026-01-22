@@ -1,4 +1,3 @@
-// src/uploaders/jd/JDError.ts
 // 京东图床错误处理
 
 import { UploadErrorCode, StructuredError, createStructuredError } from '../base/ErrorTypes';

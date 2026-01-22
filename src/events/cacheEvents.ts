@@ -1,4 +1,3 @@
-// src/events/cacheEvents.ts
 // 跨窗口缓存事件管理
 
 import { listen, emit, type UnlistenFn } from '@tauri-apps/api/event';

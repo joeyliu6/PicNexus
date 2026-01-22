@@ -1,4 +1,3 @@
-// src/core/MultiServiceUploader.ts
 // 多图床并行上传编排器
 
 import { UploaderFactory } from '../uploaders/base/UploaderFactory';

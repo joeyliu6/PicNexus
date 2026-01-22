@@ -1,4 +1,3 @@
-// src/uploaders/s3/BaseS3Uploader.ts
 // S3 兼容存储上传器基类
 // 支持：腾讯云 COS、阿里云 OSS、七牛云、又拍云
 

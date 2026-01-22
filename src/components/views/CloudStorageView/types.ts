@@ -1,4 +1,3 @@
-// src/components/views/CloudStorageView/types.ts
 // 云存储管理视图类型定义
 
 /** 支持的存储服务类型 */

@@ -1,4 +1,3 @@
-// src/login-webview.ts
 // 登录窗口 Vue 应用入口
 import { createApp } from 'vue';
 import PrimeVue from 'primevue/config';

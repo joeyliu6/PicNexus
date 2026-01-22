@@ -1,4 +1,3 @@
-// src/uploaders/nowcoder/NowcoderUploader.ts
 // 牛客图床上传器实现
 
 import { BaseUploader } from '../base/BaseUploader';

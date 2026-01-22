@@ -1,4 +1,3 @@
-// src/types/errors.ts
 // 前端错误类型定义，与 Rust 后端 AppError 保持一致
 // v2.10: 统一错误处理
 

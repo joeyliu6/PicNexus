@@ -1,4 +1,3 @@
-// src/services/storage/StorageManagerFactory.ts
 // 云存储管理器工厂
 
 import { IStorageManager } from './IStorageManager';

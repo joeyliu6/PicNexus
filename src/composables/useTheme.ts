@@ -1,4 +1,3 @@
-// src/composables/useTheme.ts
 // 主题管理 Composable
 
 import { ref, readonly } from 'vue';

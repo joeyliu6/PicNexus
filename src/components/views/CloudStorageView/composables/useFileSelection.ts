@@ -1,4 +1,3 @@
-// src/components/views/CloudStorageView/composables/useFileSelection.ts
 // 文件选择逻辑
 
 import { ref, computed, type Ref } from 'vue';

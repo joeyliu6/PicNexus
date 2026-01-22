@@ -1,4 +1,3 @@
-// src/uploaders/base/IUploader.ts
 // 上传器核心接口定义
 
 import {

@@ -1,4 +1,3 @@
-// src/services/storage/S3StorageManager.ts
 // S3 兼容存储管理器基类
 // 支持：R2、腾讯云 COS、阿里云 OSS、七牛云、又拍云
 

@@ -1,4 +1,3 @@
-// src/composables/useClipboardImage.ts
 // 剪贴板图片读取 Composable
 
 import { ref } from 'vue';

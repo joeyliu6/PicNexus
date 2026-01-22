@@ -1,4 +1,3 @@
-// src/uploaders/base/UploaderFactory.ts
 // 上传器工厂类，负责注册和创建上传器实例
 
 import { IUploader } from './IUploader';

@@ -1,4 +1,3 @@
-// src/components/views/CloudStorageView/composables/useVirtualGrid.ts
 // 虚拟滚动网格核心逻辑
 
 import { ref, computed, watch, onMounted, onUnmounted, type Ref } from 'vue';

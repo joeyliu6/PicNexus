@@ -1,4 +1,3 @@
-// src/components/views/CloudStorageView/composables/useCloudStorageCache.ts
 // 云存储数据缓存 - LRU 策略 + Stale-While-Revalidate
 
 import type { StorageObject, CloudServiceType } from '../types';

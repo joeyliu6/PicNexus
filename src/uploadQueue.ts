@@ -1,4 +1,3 @@
-// src/uploadQueue.ts
 /**
  * 上传队列管理器 (Vue 3 Refactor - 多图床架构)
  * 负责管理可视化的上传队列UI和上传进度

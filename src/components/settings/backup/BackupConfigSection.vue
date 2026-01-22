@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// src/components/settings/backup/BackupConfigSection.vue
 // 备份配置区域组件 (本地导出/导入 + 云端上传/下载)
 
 import { ref, onMounted, onUnmounted } from 'vue';

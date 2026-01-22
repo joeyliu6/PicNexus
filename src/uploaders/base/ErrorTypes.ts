@@ -1,4 +1,3 @@
-// src/uploaders/base/ErrorTypes.ts
 // 统一的错误码和结构化错误定义
 
 /**

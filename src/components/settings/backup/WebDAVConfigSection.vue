@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// src/components/settings/backup/WebDAVConfigSection.vue
 // WebDAV 配置区域组件
 
 import { computed, ref } from 'vue';

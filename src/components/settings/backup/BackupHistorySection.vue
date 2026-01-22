@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// src/components/settings/backup/BackupHistorySection.vue
 // 历史记录备份区域组件
 
 import { ref, onMounted, onUnmounted } from 'vue';

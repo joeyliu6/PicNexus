@@ -1,4 +1,3 @@
-// src/uploaders/bilibili/BilibiliUploader.ts
 // 哔哩哔哩图床上传器实现
 
 import { BaseUploader } from '../base/BaseUploader';

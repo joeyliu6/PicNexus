@@ -1,4 +1,3 @@
-// src/services/storage/IStorageManager.ts
 // 通用云存储管理器接口定义
 
 import { StorageObject, ListResult } from '../../components/views/CloudStorageView/types';

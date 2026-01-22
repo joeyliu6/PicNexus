@@ -1,4 +1,3 @@
-// src/composables/useWebDAVSync.ts
 // WebDAV 同步管理 Composable
 // v2.10: 从 SettingsView.vue 中提取，提供统一的同步状态管理
 

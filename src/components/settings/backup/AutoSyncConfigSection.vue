@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// src/components/settings/backup/AutoSyncConfigSection.vue
 // 自动同步配置组件
 
 import { computed, onMounted, onUnmounted, ref } from 'vue';

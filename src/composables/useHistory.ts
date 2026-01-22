@@ -1,4 +1,3 @@
-// src/composables/useHistory.ts
 // 历史记录管理 Composable（单例模式）
 // 纯数据层：使用 SQLite 数据库存储，支持大数据量分页和搜索
 // v3.0: 视图状态已移至 useHistoryViewState.ts

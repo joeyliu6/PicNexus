@@ -1,4 +1,3 @@
-// src/composables/useQueueState.ts
 // 全局上传队列状态管理
 
 import { ref, computed, type Ref } from 'vue';

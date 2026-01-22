@@ -1,4 +1,3 @@
-// src/theme/ThemeManager.ts
 // 主题管理器 - 负责主题切换和持久化
 
 import { Store } from '../store';

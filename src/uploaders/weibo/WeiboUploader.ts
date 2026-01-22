@@ -1,4 +1,3 @@
-// src/uploaders/weibo/WeiboUploader.ts
 // 微博图床上传器实现
 
 import { BaseUploader } from '../base/BaseUploader';

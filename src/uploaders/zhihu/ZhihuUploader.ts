@@ -1,4 +1,3 @@
-// src/uploaders/zhihu/ZhihuUploader.ts
 // 知乎图床上传器实现
 
 import { BaseUploader } from '../base/BaseUploader';

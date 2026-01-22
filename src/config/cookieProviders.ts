@@ -1,4 +1,3 @@
-// src/config/cookieProviders.ts
 // 多网站 Cookie 自动获取配置系统
 
 import type { ServiceType } from './types';

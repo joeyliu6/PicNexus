@@ -1,4 +1,3 @@
-// src/components/views/CloudStorageView/composables/useMarqueeSelection.ts
 // 框选功能逻辑
 
 import { ref, computed, onMounted, onUnmounted, type Ref } from 'vue';

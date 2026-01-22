@@ -1,4 +1,3 @@
-// src/store.ts
 // 简单的存储工具，使用 Tauri 的 fs API 替代 tauri-plugin-store-api
 // v2.8: 支持加密存储，使用 AES-GCM 加密敏感数据
 // v2.9: 增强并发控制，使用全局互斥锁防止竞态条件

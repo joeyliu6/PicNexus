@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// src/components/views/upload/UploadDropZone.vue
 // 文件上传拖拽区域组件
 
 interface Props {

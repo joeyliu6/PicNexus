@@ -1,4 +1,3 @@
-// src/composables/useAnalytics.ts
 // Google Analytics 4 Measurement Protocol 实现
 // 专为桌面应用设计，使用 HTTP 直接请求代替 gtag.js
 

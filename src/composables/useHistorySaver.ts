@@ -1,4 +1,3 @@
-// src/composables/useHistorySaver.ts
 // 历史记录保存模块 - 管理上传历史的保存和更新
 
 import { basename } from '@tauri-apps/api/path';

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// src/components/settings/GeneralSettingsPanel.vue
 // 常规设置面板组件
 
 import { computed } from 'vue';
