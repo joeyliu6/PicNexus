@@ -1,12 +1,5 @@
 // src/utils/debounce.ts
-// 防抖工具函数
 
-/**
- * 防抖函数
- * @param func 要防抖的函数
- * @param delay 延迟时间（毫秒）
- * @returns 防抖后的函数
- */
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
   delay: number
@@ -18,27 +11,16 @@ export function debounce<T extends (...args: any[]) => any>(
   let cancelled = false;
 
   const debouncedFn = (...args: Parameters<T>) => {
-    // 如果已取消，重置状态
-    if (cancelled) {
-      cancelled = false;
-    }
+    if (cancelled) cancelled = false;
+    if (timeoutId !== null) clearTimeout(timeoutId);
 
-    // 清除之前的定时器
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId);
-    }
-
-    // 设置新的定时器
     timeoutId = setTimeout(() => {
-      if (!cancelled) {
-        func(...args);
-      }
+      if (!cancelled) func(...args);
       timeoutId = null;
       cancelled = false;
     }, delay);
   };
 
-  // 取消函数
   debouncedFn.cancel = () => {
     if (timeoutId !== null) {
       clearTimeout(timeoutId);
@@ -47,7 +29,6 @@ export function debounce<T extends (...args: any[]) => any>(
     cancelled = true;
   };
 
-  // 立即执行函数
   debouncedFn.immediate = (...args: Parameters<T>) => {
     debouncedFn.cancel();
     func(...args);
@@ -56,13 +37,6 @@ export function debounce<T extends (...args: any[]) => any>(
   return debouncedFn;
 }
 
-/**
- * 创建带错误处理的防抖函数
- * @param func 要防抖的函数
- * @param delay 延迟时间（毫秒）
- * @param onError 错误处理回调
- * @returns 防抖后的函数
- */
 export function debounceWithError<T extends (...args: any[]) => Promise<any>>(
   func: T,
   delay: number,
