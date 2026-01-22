@@ -13,9 +13,11 @@
   --bg-card: #ffffff;      /* White - 卡片容器背景 */
   --bg-input: #f8fafc;     /* Slate 50 - 输入框背景 */
   --bg-secondary: #e2e8f0; /* Slate 200 - 次要背景 */
+  --bg-sidebar-settings: #F9FAFB;  /* Gray 50 - 设置页侧边栏 */
 
   /* ===== 边框色 ===== */
   --border-subtle: #cbd5e1; /* Slate 300 - 微妙的边框 */
+  --border-subtle-light: rgba(203, 213, 225, 0.5);  /* 更淡的边框 */
   --border-focus: #3b82f6;  /* Blue 500 - 焦点边框 */
 
   /* ===== 文本色系统 ===== */

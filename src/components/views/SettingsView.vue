@@ -518,7 +518,6 @@ onUnmounted(() => {
   <div class="settings-layout">
     <div class="settings-sidebar">
       <div class="sidebar-title">设置</div>
-
       <nav class="nav-list">
         <div v-for="(group, idx) in navGroups" :key="idx" class="nav-group">
           <div v-if="group.label" class="nav-group-label">{{ group.label }}</div>
@@ -643,22 +642,22 @@ onUnmounted(() => {
 /* === 侧边栏导航 === */
 .settings-sidebar {
   width: 200px;
-  background-color: var(--bg-card);
-  border-right: 1px solid var(--border-subtle);
+  background-color: var(--bg-sidebar-settings);
+  border-right: 1px solid var(--border-subtle-light);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
 }
 
 .sidebar-title {
-  height: 52px;
+  height: 45px;
   display: flex;
   align-items: center;
   padding: 0 20px;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
   color: var(--text-secondary);
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle-light);
 }
 
 .nav-list {
@@ -672,7 +671,7 @@ onUnmounted(() => {
 .nav-group {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .nav-group + .nav-group {
@@ -695,7 +694,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: 8px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -720,7 +719,7 @@ onUnmounted(() => {
 }
 
 .nav-item.active {
-  background-color: rgba(59, 130, 246, 0.1);
+  background-color: rgba(59, 130, 246, 0.12);
   color: var(--primary);
   font-weight: 600;
 }
@@ -731,7 +730,7 @@ onUnmounted(() => {
 
 .sidebar-footer {
   padding: 12px 16px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--border-subtle-light);
   text-align: center;
 }
 
@@ -739,7 +738,7 @@ onUnmounted(() => {
   font-size: 11px;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
 /* === 内容区域 === */
