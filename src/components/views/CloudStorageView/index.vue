@@ -441,8 +441,8 @@ watch(currentPath, () => {
 .sidebar-area {
   flex-shrink: 0;
   width: 200px;
-  background: var(--bg-card);
-  border-right: 1px solid var(--border-subtle);
+  background: var(--bg-sidebar-settings);
+  border-right: 1px solid var(--border-subtle-light);
   display: flex;
   flex-direction: column;
   overflow: hidden;

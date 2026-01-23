@@ -36,10 +36,7 @@ const getServiceSvg = (serviceId: string): string | null => {
 <template>
   <nav class="service-nav" :class="{ expanded }">
     <!-- 标题区域 -->
-    <div class="nav-header">
-      <i class="pi pi-cloud nav-icon"></i>
-      <span class="nav-title">云存储</span>
-    </div>
+    <div class="sidebar-title">云存储</div>
 
     <div class="service-list">
       <button
@@ -91,41 +88,17 @@ const getServiceSvg = (serviceId: string): string | null => {
   padding: 12px 8px;
 }
 
-/* 标题区域 */
-.nav-header {
+/* 标题区域 - 使用负 margin 抵消 nav 的 padding */
+.sidebar-title {
+  height: 45px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px 10px;
-  margin-bottom: 8px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.service-nav.expanded .nav-header {
-  justify-content: flex-start;
-  padding: 8px 12px;
-}
-
-.nav-icon {
-  font-size: 18px;
-  color: var(--primary);
-  flex-shrink: 0;
-}
-
-.nav-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  opacity: 0;
-  width: 0;
-  white-space: nowrap;
-  transition: opacity 0.2s ease;
-}
-
-.service-nav.expanded .nav-title {
-  opacity: 1;
-  width: auto;
+  padding: 0 20px;
+  margin: -12px -8px 12px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle-light);
 }
 
 .service-list {
@@ -141,7 +114,7 @@ const getServiceSvg = (serviceId: string): string | null => {
   gap: 10px;
   padding: 10px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 8px;
   background: transparent;
   color: var(--text-secondary);
   font-size: 13px;
@@ -158,16 +131,14 @@ const getServiceSvg = (serviceId: string): string | null => {
 }
 
 .service-item:hover {
-  background: var(--hover-overlay);
+  background: var(--hover-overlay-subtle);
   color: var(--text-primary);
 }
 
 .service-item.active {
-  border-color: var(--primary);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0.06) 100%);
+  background-color: rgba(59, 130, 246, 0.12);
   color: var(--primary);
   font-weight: 600;
-  box-shadow: 0 0 0 1px var(--primary), 0 0 20px rgba(59, 130, 246, 0.15);
 }
 
 .service-item.active .service-icon-svg {
