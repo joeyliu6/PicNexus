@@ -206,7 +206,7 @@
 .sub-section.collapsible {
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  padding: 0 16px;
+  padding: 0;
   margin-bottom: 0;
   margin-top: 16px;
   background-color: var(--bg-card);
@@ -224,7 +224,7 @@
 
 .section-header-collapsible {
   cursor: pointer;
-  padding: 16px 0;
+  padding: 16px;
   user-select: none;
 }
 
@@ -253,7 +253,7 @@
 }
 
 .section-content {
-  padding-bottom: 16px;
+  padding: 0 16px 16px;
 }
 
 /* ==================== 进度条 ==================== */
