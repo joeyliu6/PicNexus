@@ -248,9 +248,7 @@ async function saveSettings() {
     config.availableServices = availableServices.value;
     config.autoSync = autoSyncConfig.value;
 
-    await configStore.set('config', config);
-    await configStore.save();
-    await configManager.loadConfig();
+    await configManager.saveConfig(config, true);
   } catch (e) {
     console.error('[设置] 保存失败:', e);
     toast.showConfig('error', TOAST_MESSAGES.config.saveFailed(String(e)));
