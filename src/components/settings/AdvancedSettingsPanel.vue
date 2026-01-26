@@ -222,8 +222,8 @@ function handlePrefixChange(index: number, value: string) {
 
 /* 隐私设置 */
 .privacy-setting {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--selected-bg);
+  border: 1px solid var(--primary-border);
   border-radius: 8px;
   padding: 16px;
 }
