@@ -2,12 +2,10 @@
 // 备份与同步设置面板 - 列表工具型布局
 
 import { computed, onMounted } from 'vue';
-import Divider from 'primevue/divider';
 import { useBackupSync } from '../../composables/useBackupSync';
 import type { WebDAVConfig } from '../../config/types';
 
-import SyncItemRow from './backup/SyncItemRow.vue';
-import LocalBackupRow from './backup/LocalBackupRow.vue';
+import DataItemCard from './backup/DataItemCard.vue';
 import WebDAVConfigCollapsible from './backup/WebDAVConfigCollapsible.vue';
 
 // ==================== Props ====================
@@ -152,68 +150,57 @@ function handleHistoryCloudAction(action: string) {
       </div>
     </div>
 
-    <!-- 分组标题：本地备份 -->
-    <div class="group-title">本地备份</div>
+    <!-- 未配置时：WebDAV 配置面板优先显示 -->
+    <template v-if="!isWebDAVConnected">
+      <WebDAVConfigCollapsible
+        v-model="localWebDAVConfig"
+        :testing="webdavTesting"
+        @save="handleSave"
+        @test="handleTestWebDAV"
+      />
 
-    <!-- 配置文件本地备份行 -->
-    <LocalBackupRow
-      type="config"
-      :loading="{ export: exportSettingsLoading, import: importSettingsLoading }"
-      @export-local="exportSettingsLocal"
-      @import-local="importSettingsLocal"
-    />
+      <div class="cloud-disabled-hint">
+        <i class="pi pi-info-circle"></i>
+        <span>请先完成 WebDAV 配置后再进行云端同步操作</span>
+      </div>
+    </template>
 
-    <Divider />
-
-    <!-- 上传记录本地备份行 -->
-    <LocalBackupRow
-      type="history"
-      :loading="{ export: exportHistoryLoading, import: importHistoryLoading }"
-      @export-local="exportHistoryLocal"
-      @import-local="importHistoryLocal"
-    />
-
-    <!-- 分组标题：WebDAV 同步 -->
-    <div class="group-title" style="margin-top: 24px;">WebDAV 同步</div>
-
-    <!-- 配置文件云端同步行 -->
-    <SyncItemRow
+    <!-- 配置文件卡片 -->
+    <DataItemCard
       type="config"
       :sync-status="configSyncStatus"
       :is-cloud-enabled="isWebDAVConnected"
       :provider-name="activeWebDAVProfile?.name"
-      :loading="{
-        upload: uploadSettingsLoading,
-        download: downloadSettingsLoading
-      }"
+      :local-loading="{ export: exportSettingsLoading, import: importSettingsLoading }"
+      :cloud-loading="{ upload: uploadSettingsLoading, download: downloadSettingsLoading }"
+      @export-local="exportSettingsLocal"
+      @import-local="importSettingsLocal"
       @sync-to-cloud="handleConfigSyncToCloud"
       @cloud-action="handleConfigCloudAction"
     />
 
-    <Divider />
-
-    <!-- 上传记录云端同步行 -->
-    <SyncItemRow
+    <!-- 上传记录卡片 -->
+    <DataItemCard
       type="history"
       :sync-status="historySyncStatus"
       :is-cloud-enabled="isWebDAVConnected"
       :provider-name="activeWebDAVProfile?.name"
-      :loading="{
-        upload: uploadHistoryLoading,
-        download: downloadHistoryLoading
-      }"
+      :local-loading="{ export: exportHistoryLoading, import: importHistoryLoading }"
+      :cloud-loading="{ upload: uploadHistoryLoading, download: downloadHistoryLoading }"
+      @export-local="exportHistoryLocal"
+      @import-local="importHistoryLocal"
       @cloud-action="handleHistoryCloudAction"
     />
 
-    <Divider />
-
-    <!-- WebDAV 配置（可折叠） -->
-    <WebDAVConfigCollapsible
-      v-model="localWebDAVConfig"
-      :testing="webdavTesting"
-      @save="handleSave"
-      @test="handleTestWebDAV"
-    />
+    <!-- 已配置时：WebDAV 配置面板在底部 -->
+    <template v-if="isWebDAVConnected">
+      <WebDAVConfigCollapsible
+        v-model="localWebDAVConfig"
+        :testing="webdavTesting"
+        @save="handleSave"
+        @test="handleTestWebDAV"
+      />
+    </template>
   </div>
 </template>
 
@@ -222,15 +209,18 @@ function handleHistoryCloudAction(action: string) {
 
 .backup-sync-panel {
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-/* 标题区融合状态 */
+/* 标题区 */
 .section-header-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 16px;
+  margin-bottom: 4px;
 }
 
 .header-left h2 {
@@ -240,16 +230,22 @@ function handleHistoryCloudAction(action: string) {
   margin: 0 0 6px 0;
 }
 
-/* 分组标题 */
-.group-title {
+/* 未配置提示 */
+.cloud-disabled-hint {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.cloud-disabled-hint i {
+  color: var(--warning);
   font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-top: 16px;
-  margin-bottom: 12px;
+  flex-shrink: 0;
 }
 
 </style>

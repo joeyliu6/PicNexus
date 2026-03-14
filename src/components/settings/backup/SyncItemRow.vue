@@ -90,19 +90,41 @@ const itemConfig = computed(() => {
   };
 });
 
+const STALE_DAYS_WARNING = 7;
+const STALE_DAYS_DANGER = 30;
+
+const daysSinceLastSync = computed(() => {
+  if (!props.syncStatus.lastSync) return -1;
+  try {
+    const lastSync = new Date(props.syncStatus.lastSync);
+    return Math.floor((Date.now() - lastSync.getTime()) / (1000 * 60 * 60 * 24));
+  } catch {
+    return -1;
+  }
+});
+
+const isStale = computed(() => daysSinceLastSync.value >= STALE_DAYS_WARNING);
+const isDangerouslyStale = computed(() => daysSinceLastSync.value >= STALE_DAYS_DANGER);
+
 const statusClass = computed(() => {
   if (!props.syncStatus.lastSync) return 'not-synced';
-  if (props.syncStatus.result === 'success') return 'synced';
+  if (props.syncStatus.result === 'failed') return 'failed';
   if (props.syncStatus.result === 'partial') return 'partial';
-  return 'failed';
+  if (isDangerouslyStale.value) return 'stale-danger';
+  if (isStale.value) return 'stale-warning';
+  return 'synced';
 });
 
 const statusText = computed(() => {
   const provider = props.providerName || '';
-  if (!props.syncStatus.lastSync) return provider ? `${provider} · 尚未同步` : '尚未同步';
-  if (props.syncStatus.result === 'success') return provider ? `${provider} · 同步完成` : '同步完成';
-  if (props.syncStatus.result === 'partial') return provider ? `${provider} · 部分同步` : '部分同步';
-  return provider ? `${provider} · 同步失败` : '同步失败';
+  const prefix = provider ? `${provider} · ` : '';
+
+  if (!props.syncStatus.lastSync) return `${prefix}尚未同步`;
+  if (props.syncStatus.result === 'failed') return `${prefix}同步失败`;
+  if (props.syncStatus.result === 'partial') return `${prefix}部分同步`;
+
+  if (isStale.value) return `${prefix}${daysSinceLastSync.value} 天前同步`;
+  return `${prefix}同步完成`;
 });
 
 const isHistoryType = computed(() => props.type === 'history');
@@ -369,6 +391,14 @@ function handleSimpleUpload() {
 
 .status-text.partial {
   color: var(--warning);
+}
+
+.status-text.stale-warning {
+  color: var(--warning);
+}
+
+.status-text.stale-danger {
+  color: var(--error);
 }
 
 .last-sync {

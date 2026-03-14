@@ -43,14 +43,18 @@ const statusLabel = computed(() => {
   if (props.testing) return '验证中...';
   if (!activeProfile.value) return '未启用';
   if (!hasValidConfig.value) return '需配置';
-  return '待验证'; // 已配置，待验证
+  if (activeProfile.value.connectionStatus === 'success') return '已连接';
+  if (activeProfile.value.connectionStatus === 'failed') return '连接失败';
+  return '待验证';
 });
 
-// 状态样式类
 const statusClass = computed(() => {
   if (props.testing) return 'status-testing';
   if (!activeProfile.value) return 'status-disabled';
-  return 'status-warning'; // 需配置或待验证
+  if (activeProfile.value.connectionStatus === 'success') return 'status-success';
+  if (activeProfile.value.connectionStatus === 'failed') return 'status-error';
+  if (!hasValidConfig.value) return 'status-warning';
+  return 'status-warning';
 });
 
 onMounted(() => {
@@ -363,6 +367,14 @@ function applyPreset(preset: typeof providerPresets[0]) {
 
 .header-status-text.status-warning {
   color: var(--warning);
+}
+
+.header-status-text.status-success {
+  color: var(--success);
+}
+
+.header-status-text.status-error {
+  color: var(--error);
 }
 
 .header-status-text.status-disabled {

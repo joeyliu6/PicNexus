@@ -447,6 +447,12 @@ export function useBackupSync(): UseBackupSyncReturn {
         return;
       }
 
+      const confirmed = await confirmDialog(
+        '导入将以合并方式写入本地历史记录，已有记录不会被删除。\n是否继续？',
+        '导入历史记录'
+      );
+      if (!confirmed) return;
+
       const content = await readTextFile(filePath);
       const parsed = JSON.parse(content);
 
