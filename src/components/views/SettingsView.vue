@@ -14,7 +14,6 @@ import { useThemeManager } from '../../composables/useTheme';
 import { useConfigManager } from '../../composables/useConfig';
 import { useHistoryManager } from '../../composables/useHistory';
 import { useAnalytics } from '../../composables/useAnalytics';
-import { createDefaultAutoSyncConfig, type AutoSyncConfig } from '../../composables/useAutoSync';
 import { useServiceAvailability } from '../../composables/useServiceAvailability';
 import { SERVICE_DISPLAY_NAMES } from '../../constants/serviceNames';
 
@@ -123,9 +122,6 @@ const serviceNames: Record<ServiceType, string> = {
   r2: 'R2',  // 设置界面使用简短名称
 };
 
-// 自动同步配置
-const autoSyncConfig = ref<AutoSyncConfig>(createDefaultAutoSyncConfig());
-
 // ==================== 计算属性 ====================
 
 const activeWebDAVProfile = computed(() => {
@@ -182,10 +178,6 @@ async function loadSettings() {
     formData.value.defaultHistoryViewMode = config.defaultHistoryViewMode || 'grid';
     availableServices.value = config.availableServices || ['jd', 'qiyu'];
 
-    // 自动同步配置
-    if (config.autoSync) {
-      autoSyncConfig.value = config.autoSync;
-    }
   } catch (e) {
     console.error('[设置] 加载失败:', e);
   }
@@ -246,7 +238,6 @@ async function saveSettings() {
     config.analytics = { enabled: formData.value.analyticsEnabled };
     config.defaultHistoryViewMode = formData.value.defaultHistoryViewMode;
     config.availableServices = availableServices.value;
-    config.autoSync = autoSyncConfig.value;
 
     await configManager.saveConfig(config, true);
   } catch (e) {
@@ -632,9 +623,7 @@ onUnmounted(() => {
       <div v-if="activeTab === 'backup'" class="settings-section">
         <BackupSyncPanel
           :webdav-config="formData.webdav"
-          :auto-sync-config="autoSyncConfig"
           @update:webdav-config="(v) => { formData.webdav = v; saveSettings(); }"
-          @update:auto-sync-config="(v) => { autoSyncConfig = v; saveSettings(); }"
           @save="saveSettings"
           @test-web-d-a-v="testActiveWebDAV"
           @add-web-d-a-v-profile="addWebDAVProfile"

@@ -4,10 +4,10 @@
 import { computed, onMounted } from 'vue';
 import Divider from 'primevue/divider';
 import { useBackupSync } from '../../composables/useBackupSync';
-import type { WebDAVConfig, AutoSyncConfig } from '../../config/types';
+import type { WebDAVConfig } from '../../config/types';
 
 import SyncItemRow from './backup/SyncItemRow.vue';
-import AutoSyncRow from './backup/AutoSyncRow.vue';
+import LocalBackupRow from './backup/LocalBackupRow.vue';
 import WebDAVConfigCollapsible from './backup/WebDAVConfigCollapsible.vue';
 
 // ==================== Props ====================
@@ -15,9 +15,6 @@ import WebDAVConfigCollapsible from './backup/WebDAVConfigCollapsible.vue';
 interface Props {
   /** WebDAV 配置 */
   webdavConfig: WebDAVConfig;
-
-  /** 自动同步配置 */
-  autoSyncConfig: AutoSyncConfig;
 
   /** WebDAV 测试中状态（由父组件管理） */
   webdavTesting?: boolean;
@@ -30,9 +27,6 @@ const props = defineProps<Props>();
 const emit = defineEmits<{
   /** WebDAV 配置变更 */
   'update:webdavConfig': [config: WebDAVConfig];
-
-  /** 自动同步配置变更 */
-  'update:autoSyncConfig': [config: AutoSyncConfig];
 
   /** 保存设置 */
   'save': [];
@@ -82,11 +76,6 @@ const localWebDAVConfig = computed({
   set: (val) => emit('update:webdavConfig', val)
 });
 
-const localAutoSyncConfig = computed({
-  get: () => props.autoSyncConfig,
-  set: (val) => emit('update:autoSyncConfig', val)
-});
-
 const configSyncStatus = computed(() => ({
   lastSync: syncStatus.value.configLastSync,
   result: syncStatus.value.configSyncResult,
@@ -98,28 +87,6 @@ const historySyncStatus = computed(() => ({
   result: syncStatus.value.historySyncResult,
   error: syncStatus.value.historySyncError
 }));
-
-// 间隔选项（不含自定义，简化版）
-const intervalOptions = [
-  { label: '30 分钟', value: 0.5 },
-  { label: '1 小时', value: 1 },
-  { label: '3 小时', value: 3 },
-  { label: '6 小时', value: 6 },
-  { label: '12 小时', value: 12 },
-  { label: '24 小时', value: 24 },
-  { label: '2 天', value: 48 },
-  { label: '5 天', value: 120 }
-];
-
-function handleAutoSyncEnabledChange(val: boolean) {
-  localAutoSyncConfig.value = { ...localAutoSyncConfig.value, enabled: val };
-  handleSave();
-}
-
-function handleAutoSyncIntervalChange(val: number) {
-  localAutoSyncConfig.value = { ...localAutoSyncConfig.value, intervalHours: val };
-  handleSave();
-}
 
 onMounted(async () => {
   await loadSyncStatus();
@@ -185,10 +152,31 @@ function handleHistoryCloudAction(action: string) {
       </div>
     </div>
 
-    <!-- 分组标题：同步项目 -->
-    <div class="group-title">同步项目</div>
+    <!-- 分组标题：本地备份 -->
+    <div class="group-title">本地备份</div>
 
-    <!-- 配置文件同步行 -->
+    <!-- 配置文件本地备份行 -->
+    <LocalBackupRow
+      type="config"
+      :loading="{ export: exportSettingsLoading, import: importSettingsLoading }"
+      @export-local="exportSettingsLocal"
+      @import-local="importSettingsLocal"
+    />
+
+    <Divider />
+
+    <!-- 上传记录本地备份行 -->
+    <LocalBackupRow
+      type="history"
+      :loading="{ export: exportHistoryLoading, import: importHistoryLoading }"
+      @export-local="exportHistoryLocal"
+      @import-local="importHistoryLocal"
+    />
+
+    <!-- 分组标题：WebDAV 同步 -->
+    <div class="group-title" style="margin-top: 24px;">WebDAV 同步</div>
+
+    <!-- 配置文件云端同步行 -->
     <SyncItemRow
       type="config"
       :sync-status="configSyncStatus"
@@ -196,19 +184,15 @@ function handleHistoryCloudAction(action: string) {
       :provider-name="activeWebDAVProfile?.name"
       :loading="{
         upload: uploadSettingsLoading,
-        download: downloadSettingsLoading,
-        exportLocal: exportSettingsLoading,
-        importLocal: importSettingsLoading
+        download: downloadSettingsLoading
       }"
       @sync-to-cloud="handleConfigSyncToCloud"
       @cloud-action="handleConfigCloudAction"
-      @export-local="exportSettingsLocal"
-      @import-local="importSettingsLocal"
     />
 
     <Divider />
 
-    <!-- 上传记录同步行 -->
+    <!-- 上传记录云端同步行 -->
     <SyncItemRow
       type="history"
       :sync-status="historySyncStatus"
@@ -216,24 +200,9 @@ function handleHistoryCloudAction(action: string) {
       :provider-name="activeWebDAVProfile?.name"
       :loading="{
         upload: uploadHistoryLoading,
-        download: downloadHistoryLoading,
-        exportLocal: exportHistoryLoading,
-        importLocal: importHistoryLoading
+        download: downloadHistoryLoading
       }"
       @cloud-action="handleHistoryCloudAction"
-      @export-local="exportHistoryLocal"
-      @import-local="importHistoryLocal"
-    />
-
-    <Divider />
-
-    <!-- 自动同步行（作为同步项目第三行） -->
-    <AutoSyncRow
-      :config="localAutoSyncConfig"
-      :is-cloud-enabled="isWebDAVConnected"
-      :interval-options="intervalOptions"
-      @update:enabled="handleAutoSyncEnabledChange"
-      @update:interval="handleAutoSyncIntervalChange"
     />
 
     <Divider />

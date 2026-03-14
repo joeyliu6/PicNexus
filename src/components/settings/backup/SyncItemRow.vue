@@ -14,8 +14,6 @@ interface SyncStatusInfo {
 interface LoadingState {
   upload: boolean;
   download: boolean;
-  exportLocal: boolean;
-  importLocal: boolean;
 }
 
 interface Props {
@@ -38,17 +36,10 @@ interface Props {
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  /** 同步到云端 */
   'sync-to-cloud': [];
-  /** 本地导出 */
-  'export-local': [];
-  /** 本地导入 */
-  'import-local': [];
-  /** 高级云端操作 */
   'cloud-action': [action: string];
 }>();
 
-const moreMenuVisible = ref(false);
 const uploadMenuVisible = ref(false);
 const downloadMenuVisible = ref(false);
 
@@ -75,9 +66,6 @@ onUnmounted(() => {
   window.removeEventListener(MENU_OPEN_EVENT, handleOtherMenuOpen);
 });
 
-const { target: moreMenuRef } = useClickOutside(() => {
-  moreMenuVisible.value = false;
-});
 const { target: uploadMenuRef } = useClickOutside(() => {
   uploadMenuVisible.value = false;
 });
@@ -85,7 +73,7 @@ const { target: downloadMenuRef } = useClickOutside(() => {
   downloadMenuVisible.value = false;
 });
 
-defineExpose({ moreMenuRef, uploadMenuRef, downloadMenuRef });
+defineExpose({ uploadMenuRef, downloadMenuRef });
 
 const itemConfig = computed(() => {
   if (props.type === 'config') {
@@ -134,16 +122,8 @@ function formatDetailedDate(dateStr: string): string {
 }
 
 function closeAllMenus() {
-  moreMenuVisible.value = false;
   uploadMenuVisible.value = false;
   downloadMenuVisible.value = false;
-}
-
-function toggleMoreMenu() {
-  const wasVisible = moreMenuVisible.value;
-  closeAllMenus();
-  moreMenuVisible.value = !wasVisible;
-  if (!wasVisible) broadcastMenuOpen();
 }
 
 function toggleUploadMenu() {
@@ -158,16 +138,6 @@ function toggleDownloadMenu() {
   closeAllMenus();
   downloadMenuVisible.value = !wasVisible;
   if (!wasVisible) broadcastMenuOpen();
-}
-
-function handleExportLocal() {
-  closeAllMenus();
-  emit('export-local');
-}
-
-function handleImportLocal() {
-  closeAllMenus();
-  emit('import-local');
 }
 
 function handleCloudAction(action: string) {
@@ -275,28 +245,6 @@ function handleSimpleUpload() {
           </Transition>
         </div>
 
-        <!-- 更多操作 -->
-        <div class="dropdown-wrapper" ref="moreMenuRef">
-          <Button
-            @click.stop="toggleMoreMenu"
-            icon="pi pi-ellipsis-h"
-            text
-            size="small"
-            class="more-btn"
-          />
-          <Transition name="dropdown">
-            <div v-if="moreMenuVisible" class="dropdown-menu local-menu">
-              <button class="dropdown-item" @click="handleExportLocal" :disabled="loading.exportLocal">
-                <i class="pi pi-download"></i>
-                <span class="item-label">导出到本地</span>
-              </button>
-              <button class="dropdown-item" @click="handleImportLocal" :disabled="loading.importLocal">
-                <i class="pi pi-upload"></i>
-                <span class="item-label">从本地导入</span>
-              </button>
-            </div>
-          </Transition>
-        </div>
       </div>
 
       <!-- 状态信息 -->
@@ -439,14 +387,6 @@ function handleSimpleUpload() {
   gap: 6px;
 }
 
-.more-btn {
-  color: var(--text-muted);
-}
-
-.more-btn:hover {
-  color: var(--text-primary);
-}
-
 /* 下拉菜单 */
 .dropdown-wrapper {
   position: relative;
@@ -463,10 +403,6 @@ function handleSimpleUpload() {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   z-index: 1000;
   overflow: hidden;
-}
-
-.dropdown-menu.local-menu {
-  min-width: 140px;
 }
 
 .dropdown-item {

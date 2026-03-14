@@ -468,7 +468,7 @@ export const DEFAULT_PREFIXES: string[] = [
  * 每次配置格式变更时递增此版本号
  * 迁移函数将根据此版本号决定是否需要执行迁移
  */
-export const CONFIG_VERSION = 3;
+export const CONFIG_VERSION = 4;
 
 export interface UserConfig {
   /**
@@ -529,21 +529,8 @@ export interface UserConfig {
   /** Google Analytics 配置 */
   analytics?: AnalyticsConfig;
 
-  /** 自动同步配置 */
-  autoSync?: AutoSyncConfig;
-
   /** 默认历史记录视图模式 */
   defaultHistoryViewMode?: 'table' | 'grid';
-}
-
-/**
- * 自动同步配置
- */
-export interface AutoSyncConfig {
-  /** 是否启用自动同步 */
-  enabled: boolean;
-  /** 同步间隔（小时），默认 24 */
-  intervalHours: number;
 }
 
 /**
@@ -746,10 +733,6 @@ export const DEFAULT_CONFIG: UserConfig = {
   },
   analytics: {
     enabled: true
-  },
-  autoSync: {
-    enabled: false,
-    intervalHours: 48
   },
   defaultHistoryViewMode: 'table'
 };
@@ -1038,6 +1021,12 @@ export function migrateConfig(config: UserConfig): UserConfig {
       };
     }
     console.log('[配置迁移] 从版本 2 迁移到版本 3：新增 GitHub CDN 加速配置');
+  }
+
+  // 版本 3 -> 4：移除自动同步功能
+  if (currentVersion < 4) {
+    delete (migratedConfig as any).autoSync;
+    console.log('[配置迁移] 从版本 3 迁移到版本 4：移除自动同步配置');
   }
 
   // 未来版本迁移示例：
