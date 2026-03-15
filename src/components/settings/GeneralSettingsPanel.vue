@@ -162,24 +162,24 @@ function toggleService(service: ServiceType) {
       <label class="group-label">浏览界面默认视图</label>
       <p class="helper-text">设置进入"浏览界面"页面时默认显示的视图模式。</p>
       <div class="view-mode-options">
-        <div class="radio-option">
+        <label for="view-grid" class="radio-option">
           <RadioButton
             v-model="localDefaultHistoryViewMode"
             inputId="view-grid"
             value="grid"
             @change="handleViewModeChange"
           />
-          <label for="view-grid" class="radio-label">瀑布流视图</label>
-        </div>
-        <div class="radio-option">
+          <span class="radio-label">瀑布流视图</span>
+        </label>
+        <label for="view-table" class="radio-option">
           <RadioButton
             v-model="localDefaultHistoryViewMode"
             inputId="view-table"
             value="table"
             @change="handleViewModeChange"
           />
-          <label for="view-table" class="radio-label">表格视图</label>
-        </div>
+          <span class="radio-label">表格视图</span>
+        </label>
       </div>
     </div>
   </div>
