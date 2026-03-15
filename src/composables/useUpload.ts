@@ -155,8 +155,8 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       if (enabledServices.length === 0) {
         console.warn('[上传] 没有选择任何图床');
 
-        // 检查是否有已配置的图床可供选择
-        const hasConfiguredServices = Object.values(serviceConfigStatus.value).some(status => status === true);
+        // 检查是否有可用的图床可供选择
+        const hasConfiguredServices = availableServices.value.length > 0;
 
         if (hasConfiguredServices) {
           // 有已配置的图床但未选中

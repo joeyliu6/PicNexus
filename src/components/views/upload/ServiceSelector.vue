@@ -9,7 +9,6 @@ interface Props {
   publicServices: ServiceType[];
   privateServices: ServiceType[];
   serviceLabels: Record<ServiceType, string>;
-  serviceConfigStatus: Record<ServiceType, boolean>;
   isServiceSelected: (id: ServiceType) => boolean;
 }
 
@@ -38,16 +37,10 @@ function handleToggle(serviceId: ServiceType) {
           v-for="serviceId in publicServices"
           :key="serviceId"
           class="service-tag"
-          :class="{
-            'is-selected': isServiceSelected(serviceId),
-            'is-configured': serviceConfigStatus[serviceId],
-            'not-configured': !serviceConfigStatus[serviceId]
-          }"
+          :class="{ 'is-selected': isServiceSelected(serviceId) }"
           @click="handleToggle(serviceId)"
           v-ripple
-          v-tooltip.top="!serviceConfigStatus[serviceId] ? '请先在设置中配置' : ''"
         >
-          <span class="status-dot"></span>
           <span class="tag-text">{{ serviceLabels[serviceId] }}</span>
         </button>
       </div>
@@ -61,16 +54,10 @@ function handleToggle(serviceId: ServiceType) {
           v-for="serviceId in privateServices"
           :key="serviceId"
           class="service-tag"
-          :class="{
-            'is-selected': isServiceSelected(serviceId),
-            'is-configured': serviceConfigStatus[serviceId],
-            'not-configured': !serviceConfigStatus[serviceId]
-          }"
+          :class="{ 'is-selected': isServiceSelected(serviceId) }"
           @click="handleToggle(serviceId)"
           v-ripple
-          v-tooltip.top="!serviceConfigStatus[serviceId] ? '请先在设置中配置' : ''"
         >
-          <span class="status-dot"></span>
           <span class="tag-text">{{ serviceLabels[serviceId] }}</span>
         </button>
       </div>
@@ -133,8 +120,8 @@ function handleToggle(serviceId: ServiceType) {
   user-select: none;
 }
 
-/* 悬停效果（排除选中和未配置状态） */
-.service-tag:hover:not(:disabled):not(.is-selected):not(.not-configured) {
+/* 悬停效果（排除选中状态） */
+.service-tag:hover:not(:disabled):not(.is-selected) {
   background-color: var(--hover-overlay-subtle);
   border-color: var(--text-muted);
 }
@@ -145,35 +132,5 @@ function handleToggle(serviceId: ServiceType) {
   border-color: var(--primary);
   color: var(--primary);
   font-weight: 600;
-}
-
-/* 状态点 */
-.status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: var(--border-subtle);
-}
-
-/* 已配置（绿点） */
-.service-tag.is-configured .status-dot {
-  background-color: var(--success);
-  box-shadow: 0 0 4px rgba(16, 185, 129, 0.4);
-}
-
-/* 未配置（黄点） */
-.service-tag.not-configured .status-dot {
-  background-color: var(--warning);
-}
-
-/* 未配置态（禁用） */
-.service-tag.not-configured {
-  opacity: 0.65;
-  cursor: not-allowed;
-}
-
-.service-tag.not-configured:hover {
-  background-color: var(--bg-input);
-  border-color: var(--border-subtle);
 }
 </style>

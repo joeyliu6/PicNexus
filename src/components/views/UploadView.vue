@@ -78,31 +78,21 @@ const serviceLabels: Record<ServiceType, string> = {
   upyun: '又拍云'
 };
 
-// 可见的私有图床
+// 可见的私有图床（需同时在 availableServices 中且已配置）
 const visiblePrivateServices = computed(() => {
   return PRIVATE_SERVICES.filter(serviceId =>
-    uploadManager.availableServices.value.includes(serviceId)
+    uploadManager.availableServices.value.includes(serviceId) &&
+    uploadManager.serviceConfigStatus.value[serviceId]
   );
 });
 
-// 可见的公共图床
+// 可见的公共图床（需同时在 availableServices 中且已配置）
 const visiblePublicServices = computed(() => {
   return PUBLIC_SERVICES.filter(serviceId =>
-    uploadManager.availableServices.value.includes(serviceId)
+    uploadManager.availableServices.value.includes(serviceId) &&
+    uploadManager.serviceConfigStatus.value[serviceId]
   );
 });
-
-// 处理服务选择切换
-const toggleService = (serviceId: ServiceType) => {
-  // 检查是否已配置
-  if (!uploadManager.serviceConfigStatus.value[serviceId]) {
-    toast.warn('未配置', `${serviceLabels[serviceId]} 图床未配置，请先在设置中配置`);
-    return;
-  }
-
-  // 切换选择
-  uploadManager.toggleServiceSelection(serviceId);
-};
 
 // 打开文件选择对话框
 const openFileDialog = async () => {
@@ -327,9 +317,8 @@ onUnmounted(() => {
         :public-services="visiblePublicServices"
         :private-services="visiblePrivateServices"
         :service-labels="serviceLabels"
-        :service-config-status="uploadManager.serviceConfigStatus.value"
         :is-service-selected="uploadManager.isServiceSelected.value"
-        @toggle="toggleService"
+        @toggle="uploadManager.toggleServiceSelection"
       />
 
       <!-- 上传队列 -->
