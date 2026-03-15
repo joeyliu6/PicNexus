@@ -314,8 +314,7 @@ function applyPreset(preset: typeof providerPresets[0]) {
 .webdav-collapsible {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  margin-top: 24px;
+  border-radius: 12px;
   overflow: hidden;
 }
 

@@ -54,14 +54,6 @@ onUnmounted(() => {
 
 const { target: uploadMenuRef } = useClickOutside(() => { uploadMenuVisible.value = false; });
 const { target: downloadMenuRef } = useClickOutside(() => { downloadMenuVisible.value = false; });
-defineExpose({ uploadMenuRef, downloadMenuRef });
-
-const ITEM_CONFIGS = {
-  config: { title: '配置文件', icon: 'pi pi-cog', description: '包含图床密钥、Cookie 及偏好设置' },
-  history: { title: '上传记录', icon: 'pi pi-history', description: '历史上传文件和 URL 记录' }
-} as const;
-
-const itemConfig = computed(() => ITEM_CONFIGS[props.type]);
 
 const STALE_DAYS_WARNING = 7;
 const STALE_DAYS_DANGER = 30;
@@ -98,6 +90,7 @@ const statusText = computed(() => {
 });
 
 const isHistoryType = computed(() => props.type === 'history');
+const isAnyCloudLoading = computed(() => props.cloudLoading.upload || props.cloudLoading.download);
 
 function formatDetailedDate(dateStr: string): string {
   try {
@@ -118,17 +111,11 @@ function closeAllMenus() {
   downloadMenuVisible.value = false;
 }
 
-function toggleUploadMenu() {
-  const wasVisible = uploadMenuVisible.value;
+function toggleMenu(menu: 'upload' | 'download') {
+  const target = menu === 'upload' ? uploadMenuVisible : downloadMenuVisible;
+  const wasVisible = target.value;
   closeAllMenus();
-  uploadMenuVisible.value = !wasVisible;
-  if (!wasVisible) broadcastMenuOpen();
-}
-
-function toggleDownloadMenu() {
-  const wasVisible = downloadMenuVisible.value;
-  closeAllMenus();
-  downloadMenuVisible.value = !wasVisible;
+  target.value = !wasVisible;
   if (!wasVisible) broadcastMenuOpen();
 }
 
@@ -136,56 +123,64 @@ function handleCloudAction(action: string) {
   closeAllMenus();
   emit('cloud-action', action);
 }
+
+function handleQuickSync() {
+  if (isHistoryType.value) {
+    emit('cloud-action', 'upload-merge');
+  } else {
+    emit('sync-to-cloud');
+  }
+}
 </script>
 
 <template>
-  <div class="data-item-card">
-    <!-- 卡片头部：图标 + 标题 + 描述 -->
-    <div class="card-header">
-      <div class="card-icon">
-        <i :class="itemConfig.icon"></i>
-      </div>
-      <div class="card-info">
-        <div class="card-title">{{ itemConfig.title }}</div>
-        <div class="card-desc">{{ itemConfig.description }}</div>
+  <div class="data-card">
+    <!-- 本地操作行 -->
+    <div class="card-row">
+      <span class="row-label">本地操作</span>
+      <div class="row-actions">
+        <Button
+          @click="emit('export-local')"
+          :loading="localLoading.export"
+          label="导出"
+          icon="pi pi-download"
+          outlined
+          size="small"
+        />
+        <Button
+          @click="emit('import-local')"
+          :loading="localLoading.import"
+          label="导入"
+          icon="pi pi-upload"
+          outlined
+          size="small"
+        />
       </div>
     </div>
 
-    <!-- 操作区域：本地 + 云端并列 -->
-    <div class="card-actions">
-      <!-- 本地操作 -->
-      <div class="action-group">
-        <span class="action-label">本地</span>
-        <div class="action-buttons">
+    <div class="card-divider"></div>
+
+    <!-- 云端同步行 -->
+    <div class="card-row">
+      <span class="row-label">云端同步</span>
+      <div class="row-actions">
+        <!-- 上传按钮 -->
+        <template v-if="!isHistoryType">
           <Button
-            @click="emit('export-local')"
-            :loading="localLoading.export"
-            label="导出"
-            icon="pi pi-download"
+            @click="emit('sync-to-cloud')"
+            :loading="cloudLoading.upload"
+            :disabled="!isCloudEnabled"
+            :title="!isCloudEnabled ? '请先配置 WebDAV 连接' : ''"
+            label="上传"
+            icon="pi pi-cloud-upload"
             outlined
             size="small"
           />
-          <Button
-            @click="emit('import-local')"
-            :loading="localLoading.import"
-            label="导入"
-            icon="pi pi-upload"
-            outlined
-            size="small"
-          />
-        </div>
-      </div>
-
-      <div class="action-divider"></div>
-
-      <!-- 云端操作 -->
-      <div class="action-group">
-        <span class="action-label">云端</span>
-        <div class="action-buttons">
-          <!-- 上传按钮 -->
-          <template v-if="!isHistoryType">
+        </template>
+        <template v-else>
+          <div class="dropdown-wrapper" ref="uploadMenuRef">
             <Button
-              @click="emit('sync-to-cloud')"
+              @click.stop="toggleMenu('upload')"
               :loading="cloudLoading.upload"
               :disabled="!isCloudEnabled"
               :title="!isCloudEnabled ? '请先配置 WebDAV 连接' : ''"
@@ -194,188 +189,143 @@ function handleCloudAction(action: string) {
               outlined
               size="small"
             />
-          </template>
-          <template v-else>
-            <div class="dropdown-wrapper" ref="uploadMenuRef">
-              <Button
-                @click.stop="toggleUploadMenu"
-                :loading="cloudLoading.upload"
-                :disabled="!isCloudEnabled"
-                :title="!isCloudEnabled ? '请先配置 WebDAV 连接' : ''"
-                label="上传"
-                icon="pi pi-cloud-upload"
-                outlined
-                size="small"
-              />
-              <Transition name="dropdown">
-                <div v-if="uploadMenuVisible" class="dropdown-menu">
-                  <button class="dropdown-item" @click="handleCloudAction('upload-merge')">
-                    <span class="item-label">智能合并</span>
-                    <span class="item-hint">推荐</span>
-                  </button>
-                  <button class="dropdown-item" @click="handleCloudAction('upload-incremental')">
-                    <span class="item-label">仅上传新增</span>
-                  </button>
-                  <button class="dropdown-item danger" @click="handleCloudAction('upload-force')">
-                    <span class="item-label">强制覆盖云端</span>
-                  </button>
-                </div>
-              </Transition>
-            </div>
-          </template>
-
-          <!-- 下载按钮 -->
-          <div class="dropdown-wrapper" ref="downloadMenuRef">
-            <Button
-              @click.stop="toggleDownloadMenu"
-              :loading="cloudLoading.download"
-              :disabled="!isCloudEnabled"
-              :title="!isCloudEnabled ? '请先配置 WebDAV 连接' : ''"
-              label="拉取"
-              icon="pi pi-cloud-download"
-              outlined
-              size="small"
-            />
             <Transition name="dropdown">
-              <div v-if="downloadMenuVisible" class="dropdown-menu">
-                <template v-if="!isHistoryType">
-                  <button class="dropdown-item" @click="handleCloudAction('download-merge')">
-                    <span class="item-label">保留 WebDAV 配置</span>
-                    <span class="item-hint">推荐</span>
-                  </button>
-                  <button class="dropdown-item danger" @click="handleCloudAction('download-overwrite')">
-                    <span class="item-label">完全覆盖本地</span>
-                  </button>
-                </template>
-                <template v-else>
-                  <button class="dropdown-item" @click="handleCloudAction('download-merge')">
-                    <span class="item-label">智能合并</span>
-                    <span class="item-hint">推荐</span>
-                  </button>
-                  <button class="dropdown-item danger" @click="handleCloudAction('download-overwrite')">
-                    <span class="item-label">覆盖本地</span>
-                  </button>
-                </template>
+              <div v-if="uploadMenuVisible" class="dropdown-menu">
+                <button class="dropdown-item" @click="handleCloudAction('upload-merge')">
+                  <span class="item-label">智能合并</span>
+                  <span class="item-hint">推荐</span>
+                </button>
+                <button class="dropdown-item" @click="handleCloudAction('upload-incremental')">
+                  <span class="item-label">仅上传新增</span>
+                </button>
+                <button class="dropdown-item danger" @click="handleCloudAction('upload-force')">
+                  <span class="item-label">强制覆盖云端</span>
+                </button>
               </div>
             </Transition>
           </div>
-        </div>
+        </template>
 
-        <!-- 同步状态 -->
-        <div v-if="isCloudEnabled" class="sync-status">
+        <!-- 下载按钮 -->
+        <div class="dropdown-wrapper" ref="downloadMenuRef">
+          <Button
+            @click.stop="toggleMenu('download')"
+            :loading="cloudLoading.download"
+            :disabled="!isCloudEnabled"
+            :title="!isCloudEnabled ? '请先配置 WebDAV 连接' : ''"
+            label="拉取"
+            icon="pi pi-cloud-download"
+            outlined
+            size="small"
+          />
+          <Transition name="dropdown">
+            <div v-if="downloadMenuVisible" class="dropdown-menu">
+              <template v-if="!isHistoryType">
+                <button class="dropdown-item" @click="handleCloudAction('download-merge')">
+                  <span class="item-label">保留 WebDAV 配置</span>
+                  <span class="item-hint">推荐</span>
+                </button>
+                <button class="dropdown-item danger" @click="handleCloudAction('download-overwrite')">
+                  <span class="item-label">完全覆盖本地</span>
+                </button>
+              </template>
+              <template v-else>
+                <button class="dropdown-item" @click="handleCloudAction('download-merge')">
+                  <span class="item-label">智能合并</span>
+                  <span class="item-hint">推荐</span>
+                </button>
+                <button class="dropdown-item danger" @click="handleCloudAction('download-overwrite')">
+                  <span class="item-label">覆盖本地</span>
+                </button>
+              </template>
+            </div>
+          </Transition>
+        </div>
+      </div>
+    </div>
+
+    <!-- 同步状态栏 -->
+    <template v-if="isCloudEnabled">
+      <div class="card-divider"></div>
+      <div class="card-status-bar">
+        <div class="status-left">
           <span class="status-text" :class="statusClass">
             <span class="status-dot"></span>
             {{ statusText }}
           </span>
-          <span v-if="syncStatus.lastSync" class="last-sync">
-            {{ formatDetailedDate(syncStatus.lastSync) }}
-          </span>
+          <button
+            v-if="isStale"
+            class="quick-sync-btn"
+            :disabled="isAnyCloudLoading"
+            @click="handleQuickSync"
+          >
+            立即同步
+          </button>
         </div>
+        <span v-if="syncStatus.lastSync" class="last-sync">
+          {{ formatDetailedDate(syncStatus.lastSync) }}
+        </span>
       </div>
-    </div>
+    </template>
   </div>
 </template>
 
 <style scoped>
-.data-item-card {
+/* 卡片容器 */
+.data-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 16px;
-  transition: border-color 0.15s;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
-.data-item-card:hover {
-  border-color: var(--primary-hover-bg);
-}
-
-/* 卡片头部 */
-.card-header {
+/* 行布局 */
+.card-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
+  justify-content: space-between;
+  padding: 12px 16px;
 }
 
-.card-icon {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--primary-hover-bg);
-  border-radius: 8px;
-  color: var(--primary);
+.row-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
   flex-shrink: 0;
 }
 
-.card-icon i {
-  font-size: 16px;
-}
-
-.card-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 2px;
-}
-
-.card-desc {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-/* 操作区域 */
-.card-actions {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-}
-
-.action-group {
+.row-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
-.action-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-weight: 500;
-  min-width: 28px;
-  flex-shrink: 0;
+/* 分隔线 */
+.card-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 0 16px;
 }
 
-.action-buttons {
+/* 状态栏 */
+.card-status-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  padding: 10px 16px;
 }
 
-.action-divider {
-  width: 1px;
-  height: 28px;
-  background: var(--border-subtle);
-  flex-shrink: 0;
-  align-self: center;
-}
-
-/* 同步状态 */
-.sync-status {
+.status-left {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  margin-left: 4px;
-  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
 }
 
 .status-text {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -396,9 +346,31 @@ function handleCloudAction(action: string) {
 .status-text.stale-danger { color: var(--error); }
 
 .last-sync {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+/* 立即同步按钮 */
+.quick-sync-btn {
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--primary);
+  border-radius: 4px;
+  color: var(--primary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.quick-sync-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.quick-sync-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* 下拉菜单 */
@@ -413,8 +385,8 @@ function handleCloudAction(action: string) {
   min-width: 160px;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  box-shadow: var(--shadow-float);
   z-index: 1000;
   overflow: hidden;
 }
@@ -459,16 +431,18 @@ function handleCloudAction(action: string) {
   transform: translateY(-4px);
 }
 
-/* 响应式：窄屏时操作区换行 */
-@media (max-width: 640px) {
-  .card-actions {
+/* 响应式 */
+@media (max-width: 480px) {
+  .card-row {
     flex-direction: column;
-    gap: 10px;
+    align-items: flex-start;
+    gap: 8px;
   }
 
-  .action-divider {
-    width: 100%;
-    height: 1px;
+  .card-status-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
   }
 }
 </style>
