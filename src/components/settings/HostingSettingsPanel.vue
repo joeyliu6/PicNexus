@@ -369,18 +369,20 @@ const extractNamiAuthToken = computed(() => {
               <small class="form-hint">在浏览器中登录微博，按 F12 打开开发者工具，在 Network 选项卡中找到请求头的 Cookie 值并复制</small>
             </div>
           </div>
-          <WeiboLinkPrefixSection
-            :link-prefix-enabled="linkPrefixEnabled"
-            :prefix-list="prefixList"
-            :selected-prefix-index="selectedPrefixIndex"
-            @update:link-prefix-enabled="emit('update:linkPrefixEnabled', $event)"
-            @update:prefix-list="emit('update:prefixList', $event)"
-            @update:selected-prefix-index="emit('update:selectedPrefixIndex', $event)"
-            @save="emit('save')"
-            @add-prefix="emit('addPrefix')"
-            @remove-prefix="emit('removePrefix', $event)"
-            @reset-to-default="emit('resetToDefault')"
-          />
+          <template #extra>
+            <WeiboLinkPrefixSection
+              :link-prefix-enabled="linkPrefixEnabled"
+              :prefix-list="prefixList"
+              :selected-prefix-index="selectedPrefixIndex"
+              @update:link-prefix-enabled="emit('update:linkPrefixEnabled', $event)"
+              @update:prefix-list="emit('update:prefixList', $event)"
+              @update:selected-prefix-index="emit('update:selectedPrefixIndex', $event)"
+              @save="emit('save')"
+              @add-prefix="emit('addPrefix')"
+              @remove-prefix="emit('removePrefix', $event)"
+              @reset-to-default="emit('resetToDefault')"
+            />
+          </template>
         </HostingCard>
 
         <HostingCard
@@ -541,11 +543,13 @@ const extractNamiAuthToken = computed(() => {
               <small class="form-hint">自定义域名，留空则使用 raw.githubusercontent.com</small>
             </div>
           </div>
-          <GithubCdnSection
-            :github-cdn-config="githubCdnConfig"
-            @update:github-cdn-config="emit('update:githubCdnConfig', $event)"
-            @save="emit('save')"
-          />
+          <template #extra>
+            <GithubCdnSection
+              :github-cdn-config="githubCdnConfig"
+              @update:github-cdn-config="emit('update:githubCdnConfig', $event)"
+              @save="emit('save')"
+            />
+          </template>
         </HostingCard>
 
         <HostingCard

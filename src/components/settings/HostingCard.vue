@@ -124,6 +124,8 @@ const statusDotClass = computed(() => {
             size="small"
           />
         </div>
+
+        <slot name="extra"></slot>
       </div>
     </div>
   </div>
