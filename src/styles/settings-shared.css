@@ -386,3 +386,25 @@
   font-family: var(--font-mono);
   font-size: 13px;
 }
+
+/* ==================== 卡片内子章节 ==================== */
+
+.card-subsection {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+
+.subsection-title {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.subsection-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 12px 0;
+}

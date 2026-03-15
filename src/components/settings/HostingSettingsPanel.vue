@@ -3,9 +3,11 @@ import { computed } from 'vue';
 import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
 import Textarea from 'primevue/textarea';
-import Button from 'primevue/button';
 import HostingCard from './HostingCard.vue';
+import WeiboLinkPrefixSection from './hosting/WeiboLinkPrefixSection.vue';
+import GithubCdnSection from './hosting/GithubCdnSection.vue';
 import { getCategoryIcon } from '../../utils/icons';
+import type { GithubCdnConfig } from '../../config/types';
 
 interface PrivateFormData {
   r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; path: string; publicDomain: string };
@@ -33,6 +35,7 @@ interface TokenFormData {
     branch: string;
     path: string;
     customDomain?: string;
+    cdnConfig?: GithubCdnConfig;
   };
   imgur: { clientId: string; clientSecret?: string };
 }
@@ -50,6 +53,10 @@ const props = defineProps<{
   qiyuAvailable: boolean;
   isCheckingJd: boolean;
   isCheckingQiyu: boolean;
+  linkPrefixEnabled: boolean;
+  prefixList: string[];
+  selectedPrefixIndex: number;
+  githubCdnConfig?: GithubCdnConfig;
 }>();
 
 const emit = defineEmits<{
@@ -59,6 +66,13 @@ const emit = defineEmits<{
   testCookie: [providerId: string];
   checkBuiltin: [providerId: string];
   loginCookie: [providerId: string];
+  'update:linkPrefixEnabled': [enabled: boolean];
+  'update:prefixList': [list: string[]];
+  'update:selectedPrefixIndex': [index: number];
+  'update:githubCdnConfig': [config: GithubCdnConfig];
+  addPrefix: [];
+  removePrefix: [index: number];
+  resetToDefault: [];
 }>();
 
 function isPrivateConfigured(providerId: PrivateProviderId): boolean {
@@ -355,6 +369,18 @@ const extractNamiAuthToken = computed(() => {
               <small class="form-hint">在浏览器中登录微博，按 F12 打开开发者工具，在 Network 选项卡中找到请求头的 Cookie 值并复制</small>
             </div>
           </div>
+          <WeiboLinkPrefixSection
+            :link-prefix-enabled="linkPrefixEnabled"
+            :prefix-list="prefixList"
+            :selected-prefix-index="selectedPrefixIndex"
+            @update:link-prefix-enabled="emit('update:linkPrefixEnabled', $event)"
+            @update:prefix-list="emit('update:prefixList', $event)"
+            @update:selected-prefix-index="emit('update:selectedPrefixIndex', $event)"
+            @save="emit('save')"
+            @add-prefix="emit('addPrefix')"
+            @remove-prefix="emit('removePrefix', $event)"
+            @reset-to-default="emit('resetToDefault')"
+          />
         </HostingCard>
 
         <HostingCard
@@ -515,6 +541,11 @@ const extractNamiAuthToken = computed(() => {
               <small class="form-hint">自定义域名，留空则使用 raw.githubusercontent.com</small>
             </div>
           </div>
+          <GithubCdnSection
+            :github-cdn-config="githubCdnConfig"
+            @update:github-cdn-config="emit('update:githubCdnConfig', $event)"
+            @save="emit('save')"
+          />
         </HostingCard>
 
         <HostingCard
