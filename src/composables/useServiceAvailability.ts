@@ -86,12 +86,7 @@ async function checkQiyuAvailability(forceCheck = false): Promise<void> {
     qiyuAvailable.value = await invoke('check_qiyu_available');
 
     // 更新检测状态
-    const updatedStatus: SyncStatus = syncStatus || {
-      configLastSync: null,
-      configSyncResult: null,
-      historyLastSync: null,
-      historySyncResult: null
-    };
+    const updatedStatus: SyncStatus = syncStatus || { syncByProfile: {} };
 
     updatedStatus.qiyuCheckStatus = {
       lastCheckTime: now,
@@ -160,12 +155,7 @@ async function checkAllAvailabilityWithCooldown(initialSyncStatus?: SyncStatus):
 
   // 如果执行了京东检测，更新最后检测时间
   if (needCooldownCheck) {
-    const updatedStatus: SyncStatus = syncStatus || {
-      configLastSync: null,
-      configSyncResult: null,
-      historyLastSync: null,
-      historySyncResult: null
-    };
+    const updatedStatus: SyncStatus = syncStatus || { syncByProfile: {} };
     updatedStatus.lastJdCheck = now;
     await syncStatusStore.set('status', updatedStatus);
     await syncStatusStore.save();

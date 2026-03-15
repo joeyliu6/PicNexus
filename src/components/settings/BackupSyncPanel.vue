@@ -20,7 +20,6 @@ const emit = defineEmits<{
 }>();
 
 const {
-  syncStatus,
   exportSettingsLoading,
   importSettingsLoading,
   uploadSettingsLoading,
@@ -30,6 +29,8 @@ const {
   uploadHistoryLoading,
   downloadHistoryLoading,
   loadSyncStatus,
+  getProfileSyncRecord,
+  getAllSyncRecords,
   exportSettingsLocal,
   importSettingsLocal,
   exportHistoryLocal,
@@ -58,17 +59,37 @@ const localWebDAVConfig = computed({
   set: (val) => emit('update:webdavConfig', val)
 });
 
-const configSyncStatus = computed(() => ({
-  lastSync: syncStatus.value.configLastSync,
-  result: syncStatus.value.configSyncResult,
-  error: syncStatus.value.configSyncError
-}));
+const currentProfileRecord = computed(() => {
+  const profile = activeWebDAVProfile.value;
+  if (!profile) return null;
+  return getProfileSyncRecord(profile.id);
+});
 
-const historySyncStatus = computed(() => ({
-  lastSync: syncStatus.value.historyLastSync,
-  result: syncStatus.value.historySyncResult,
-  error: syncStatus.value.historySyncError
-}));
+const configSyncStatus = computed(() => {
+  const record = currentProfileRecord.value;
+  return {
+    lastSync: record?.configLastSync ?? null,
+    result: record?.configSyncResult ?? null,
+    error: record?.configSyncError,
+  };
+});
+
+const historySyncStatus = computed(() => {
+  const record = currentProfileRecord.value;
+  return {
+    lastSync: record?.historyLastSync ?? null,
+    result: record?.historySyncResult ?? null,
+    error: record?.historySyncError,
+  };
+});
+
+const otherProfileRecords = computed(() => {
+  const currentId = activeWebDAVProfile.value?.id;
+  const all = getAllSyncRecords();
+  return Object.entries(all)
+    .filter(([id]) => id !== currentId && id !== '__legacy__')
+    .map(([, record]) => record);
+});
 
 onMounted(() => loadSyncStatus());
 
@@ -133,6 +154,7 @@ function handleHistoryCloudAction(action: string) {
         :sync-status="configSyncStatus"
         :is-cloud-enabled="isWebDAVConnected"
         :provider-name="activeWebDAVProfile?.name"
+        :other-profiles="otherProfileRecords"
         :local-loading="{ export: exportSettingsLoading, import: importSettingsLoading }"
         :cloud-loading="{ upload: uploadSettingsLoading, download: downloadSettingsLoading }"
         @export-local="exportSettingsLocal"
@@ -151,6 +173,7 @@ function handleHistoryCloudAction(action: string) {
         :sync-status="historySyncStatus"
         :is-cloud-enabled="isWebDAVConnected"
         :provider-name="activeWebDAVProfile?.name"
+        :other-profiles="otherProfileRecords"
         :local-loading="{ export: exportHistoryLoading, import: importHistoryLoading }"
         :cloud-loading="{ upload: uploadHistoryLoading, download: downloadHistoryLoading }"
         @export-local="exportHistoryLocal"

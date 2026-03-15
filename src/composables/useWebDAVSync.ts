@@ -68,12 +68,7 @@ const configStore = new Store('.settings.dat');
 // ==================== 共享状态 ====================
 
 const syncStatus: Ref<SyncStatus> = ref({
-  configLastSync: null,
-  configSyncResult: null,
-  configSyncError: undefined,
-  historyLastSync: null,
-  historySyncResult: null,
-  historySyncError: undefined
+  syncByProfile: {},
 });
 
 const isSyncing = ref(false);
@@ -165,18 +160,34 @@ export function useWebDAVSync() {
   function updateStatus(
     target: SyncTarget,
     result: 'success' | 'failed',
+    profile?: WebDAVProfile,
     error?: string
   ): void {
+    if (!profile) return;
     const timestamp = formatTimestamp(new Date());
+    const profileId = profile.id;
+
+    if (!syncStatus.value.syncByProfile[profileId]) {
+      syncStatus.value.syncByProfile[profileId] = {
+        providerName: profile.name,
+        configLastSync: null,
+        configSyncResult: null,
+        historyLastSync: null,
+        historySyncResult: null,
+      };
+    }
+
+    const record = syncStatus.value.syncByProfile[profileId];
+    record.providerName = profile.name;
 
     if (target === 'settings') {
-      syncStatus.value.configLastSync = timestamp;
-      syncStatus.value.configSyncResult = result;
-      syncStatus.value.configSyncError = error;
+      record.configLastSync = timestamp;
+      record.configSyncResult = result;
+      record.configSyncError = error;
     } else {
-      syncStatus.value.historyLastSync = timestamp;
-      syncStatus.value.historySyncResult = result;
-      syncStatus.value.historySyncError = error;
+      record.historyLastSync = timestamp;
+      record.historySyncResult = result;
+      record.historySyncError = error;
     }
 
     saveSyncStatus();
@@ -248,14 +259,14 @@ export function useWebDAVSync() {
       await client.putFile(remotePath, JSON.stringify(config, null, 2));
 
       setProgress('settings', 'upload', 'done', 100, '上传完成');
-      updateStatus('settings', 'success');
+      updateStatus('settings', 'success', profile);
       toast.success('上传成功', '配置已上传到云端');
 
       return { success: true, target: 'settings', operation: 'upload', message: '配置已上传到云端' };
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       setProgress('settings', 'upload', 'error', 0, errorMsg);
-      updateStatus('settings', 'failed', errorMsg);
+      updateStatus('settings', 'failed', profile, errorMsg);
       toast.error('上传失败', errorMsg);
       return { success: false, target: 'settings', operation: 'upload', message: errorMsg };
     } finally {
@@ -316,7 +327,7 @@ export function useWebDAVSync() {
       await configStore.save();
 
       setProgress('settings', 'download', 'done', 100, '下载完成');
-      updateStatus('settings', 'success');
+      updateStatus('settings', 'success', profile);
 
       const successMsg = mode === 'merge' ? '配置已合并（保留本地 WebDAV）' : '配置已覆盖';
       toast.success('下载成功', successMsg);
@@ -325,7 +336,7 @@ export function useWebDAVSync() {
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       setProgress('settings', 'download', 'error', 0, errorMsg);
-      updateStatus('settings', 'failed', errorMsg);
+      updateStatus('settings', 'failed', profile, errorMsg);
       toast.error('下载失败', errorMsg);
       return { success: false, target: 'settings', operation: 'download', message: errorMsg };
     } finally {
@@ -398,7 +409,7 @@ export function useWebDAVSync() {
       await client.putFile(remotePath, JSON.stringify(uploadItems, null, 2));
 
       setProgress('history', 'upload', 'done', 100, '上传完成');
-      updateStatus('history', 'success');
+      updateStatus('history', 'success', profile);
       toast.success('上传成功', `已上传 ${uploadItems.length} 条记录`);
 
       return {
@@ -411,7 +422,7 @@ export function useWebDAVSync() {
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       setProgress('history', 'upload', 'error', 0, errorMsg);
-      updateStatus('history', 'failed', errorMsg);
+      updateStatus('history', 'failed', profile, errorMsg);
       toast.error('上传失败', errorMsg);
       return { success: false, target: 'history', operation: 'upload', message: errorMsg };
     } finally {
@@ -456,7 +467,7 @@ export function useWebDAVSync() {
       const importedCount = await historyDB.importFromJSON(JSON.stringify(cloudItems), mergeStrategy);
 
       setProgress('history', 'download', 'done', 100, '下载完成');
-      updateStatus('history', 'success');
+      updateStatus('history', 'success', profile);
 
       const successMsg = `已导入 ${importedCount} 条记录`;
       toast.success('下载成功', successMsg);
@@ -471,7 +482,7 @@ export function useWebDAVSync() {
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       setProgress('history', 'download', 'error', 0, errorMsg);
-      updateStatus('history', 'failed', errorMsg);
+      updateStatus('history', 'failed', profile, errorMsg);
       toast.error('下载失败', errorMsg);
       return { success: false, target: 'history', operation: 'download', message: errorMsg };
     } finally {

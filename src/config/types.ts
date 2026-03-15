@@ -402,27 +402,25 @@ export interface ServiceCheckStatus {
 }
 
 /**
+ * 单个 profile 的同步记录
+ */
+export interface ProfileSyncRecord {
+  providerName: string;
+  configLastSync: string | null;
+  configSyncResult: 'success' | 'failed' | null;
+  configSyncError?: string;
+  historyLastSync: string | null;
+  historySyncResult: 'success' | 'failed' | null;
+  historySyncError?: string;
+}
+
+/**
  * 同步状态
- * 用于持久化保存同步结果
+ * 按 profileId 隔离存储，每个 WebDAV 配置独立维护同步记录
  */
 export interface SyncStatus {
-  /** 配置上次同步时间 (YYYY-MM-DD HH:mm:ss) */
-  configLastSync: string | null;
-
-  /** 配置同步结果 */
-  configSyncResult: 'success' | 'failed' | null;
-
-  /** 配置同步错误信息 */
-  configSyncError?: string;
-
-  /** 上传记录上次同步时间 */
-  historyLastSync: string | null;
-
-  /** 上传记录同步结果 */
-  historySyncResult: 'success' | 'failed' | null;
-
-  /** 上传记录同步错误信息 */
-  historySyncError?: string;
+  /** 按 profileId 索引的同步记录 */
+  syncByProfile: Record<string, ProfileSyncRecord>;
 
   /** 京东图床上次检测时间戳 */
   lastJdCheck?: number;

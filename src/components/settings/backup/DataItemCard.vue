@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import Button from 'primevue/button';
 import { useClickOutside } from '../../../composables/useClickOutside';
+import type { ProfileSyncRecord } from '../../../config/types';
 
 const MENU_OPEN_EVENT = 'sync-row-menu-open';
 
@@ -18,9 +19,12 @@ interface Props {
   localLoading: { export: boolean; import: boolean };
   cloudLoading: { upload: boolean; download: boolean };
   providerName?: string;
+  otherProfiles?: ProfileSyncRecord[];
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  otherProfiles: () => [],
+});
 
 const emit = defineEmits<{
   'export-local': [];
@@ -31,6 +35,7 @@ const emit = defineEmits<{
 
 const uploadMenuVisible = ref(false);
 const downloadMenuVisible = ref(false);
+const tooltipVisible = ref(false);
 const instanceId = Math.random().toString(36).substr(2, 9);
 
 function broadcastMenuOpen() {
@@ -58,25 +63,38 @@ const { target: downloadMenuRef } = useClickOutside(() => { downloadMenuVisible.
 const STALE_DAYS_WARNING = 7;
 const STALE_DAYS_DANGER = 30;
 
-const daysSinceLastSync = computed(() => {
-  if (!props.syncStatus.lastSync) return -1;
+function getElapsedMs(dateStr: string): number {
   try {
-    const lastSync = new Date(props.syncStatus.lastSync);
-    return Math.floor((Date.now() - lastSync.getTime()) / (1000 * 60 * 60 * 24));
+    return Date.now() - new Date(dateStr).getTime();
   } catch {
     return -1;
   }
-});
+}
 
-const isStale = computed(() => daysSinceLastSync.value >= STALE_DAYS_WARNING);
-const isDangerouslyStale = computed(() => daysSinceLastSync.value >= STALE_DAYS_DANGER);
+function formatRelativeTime(dateStr: string): string {
+  const ms = getElapsedMs(dateStr);
+  if (ms < 0) return '未知时间';
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes} 分钟前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  const days = Math.floor(hours / 24);
+  return `${days} 天前`;
+}
+
+const daysSinceLastSync = computed(() => {
+  if (!props.syncStatus.lastSync) return -1;
+  const ms = getElapsedMs(props.syncStatus.lastSync);
+  return ms < 0 ? -1 : Math.floor(ms / (1000 * 60 * 60 * 24));
+});
 
 const statusClass = computed(() => {
   if (!props.syncStatus.lastSync) return 'not-synced';
   if (props.syncStatus.result === 'failed') return 'failed';
   if (props.syncStatus.result === 'partial') return 'partial';
-  if (isDangerouslyStale.value) return 'stale-danger';
-  if (isStale.value) return 'stale-warning';
+  if (daysSinceLastSync.value >= STALE_DAYS_DANGER) return 'stale-danger';
+  if (daysSinceLastSync.value >= STALE_DAYS_WARNING) return 'stale-warning';
   return 'synced';
 });
 
@@ -85,26 +103,43 @@ const statusText = computed(() => {
   if (!props.syncStatus.lastSync) return `${prefix}尚未同步`;
   if (props.syncStatus.result === 'failed') return `${prefix}同步失败`;
   if (props.syncStatus.result === 'partial') return `${prefix}部分同步`;
-  if (isStale.value) return `${prefix}${daysSinceLastSync.value} 天前同步`;
-  return `${prefix}同步完成`;
+  const relTime = formatRelativeTime(props.syncStatus.lastSync);
+  return `${prefix}${relTime}同步`;
 });
 
 const isHistoryType = computed(() => props.type === 'history');
-const isAnyCloudLoading = computed(() => props.cloudLoading.upload || props.cloudLoading.download);
 
-function formatDetailedDate(dateStr: string): string {
+function formatDate(dateStr: string, includeYear = true): string {
   try {
     const date = new Date(dateStr);
-    const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
     const h = String(date.getHours()).padStart(2, '0');
     const min = String(date.getMinutes()).padStart(2, '0');
-    return `${y}/${m}/${d} ${h}:${min}`;
+    return includeYear ? `${date.getFullYear()}/${m}/${d} ${h}:${min}` : `${m}/${d} ${h}:${min}`;
   } catch {
     return dateStr;
   }
 }
+
+const tooltipProfiles = computed(() => {
+  if (!props.otherProfiles?.length) return [];
+  const isConfig = props.type === 'config';
+  return props.otherProfiles
+    .filter(r => isConfig ? r.configLastSync : r.historyLastSync)
+    .map(r => {
+      const lastSync = (isConfig ? r.configLastSync : r.historyLastSync)!;
+      const result = isConfig ? r.configSyncResult : r.historySyncResult;
+      return {
+        name: r.providerName,
+        date: formatDate(lastSync, false),
+        result,
+        statusClass: result === 'failed' ? 'failed' : 'synced',
+      };
+    });
+});
+
+const hasTooltip = computed(() => tooltipProfiles.value.length > 0);
 
 function closeAllMenus() {
   uploadMenuVisible.value = false;
@@ -124,13 +159,6 @@ function handleCloudAction(action: string) {
   emit('cloud-action', action);
 }
 
-function handleQuickSync() {
-  if (isHistoryType.value) {
-    emit('cloud-action', 'upload-merge');
-  } else {
-    emit('sync-to-cloud');
-  }
-}
 </script>
 
 <template>
@@ -246,24 +274,36 @@ function handleQuickSync() {
 
     <!-- 同步状态栏 -->
     <template v-if="isCloudEnabled">
-      <div class="card-divider"></div>
       <div class="card-status-bar">
-        <div class="status-left">
+        <div
+          class="status-left"
+          :class="{ 'has-tooltip': hasTooltip }"
+          @mouseenter="tooltipVisible = true"
+          @mouseleave="tooltipVisible = false"
+        >
           <span class="status-text" :class="statusClass">
             <span class="status-dot"></span>
             {{ statusText }}
           </span>
-          <button
-            v-if="isStale"
-            class="quick-sync-btn"
-            :disabled="isAnyCloudLoading"
-            @click="handleQuickSync"
-          >
-            立即同步
-          </button>
+
+          <!-- 其他服务商 tooltip -->
+          <Transition name="tooltip">
+            <div v-if="tooltipVisible && hasTooltip" class="sync-tooltip">
+              <div
+                v-for="(p, i) in tooltipProfiles"
+                :key="i"
+                class="tooltip-row"
+              >
+                <span class="tooltip-dot" :class="p.statusClass"></span>
+                <span class="tooltip-name">{{ p.name }}</span>
+                <span class="tooltip-date">{{ p.date }}</span>
+                <span v-if="p.result === 'failed'" class="tooltip-failed">失败</span>
+              </div>
+            </div>
+          </Transition>
         </div>
         <span v-if="syncStatus.lastSync" class="last-sync">
-          {{ formatDetailedDate(syncStatus.lastSync) }}
+          {{ formatDate(syncStatus.lastSync) }}
         </span>
       </div>
     </template>
@@ -316,9 +356,14 @@ function handleQuickSync() {
 }
 
 .status-left {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.status-left.has-tooltip {
+  cursor: default;
 }
 
 .status-text {
@@ -343,7 +388,7 @@ function handleQuickSync() {
 .status-text.failed { color: var(--error); }
 .status-text.partial { color: var(--warning); }
 .status-text.stale-warning { color: var(--warning); }
-.status-text.stale-danger { color: var(--error); }
+.status-text.stale-danger { color: #e67e22; }
 
 .last-sync {
   font-size: 11px;
@@ -351,26 +396,65 @@ function handleQuickSync() {
   white-space: nowrap;
 }
 
-/* 立即同步按钮 */
-.quick-sync-btn {
-  padding: 2px 8px;
-  background: transparent;
-  border: 1px solid var(--primary);
-  border-radius: 4px;
-  color: var(--primary);
+/* Tooltip */
+.sync-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 200px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  box-shadow: var(--shadow-float);
+  z-index: 1000;
+  padding: 6px 0;
+}
+
+.tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.tooltip-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tooltip-dot.synced { background: var(--success); }
+.tooltip-dot.failed { background: var(--error); }
+
+.tooltip-name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.tooltip-date {
+  margin-left: auto;
+  color: var(--text-muted);
   font-size: 11px;
-  cursor: pointer;
-  transition: all 0.15s;
-  white-space: nowrap;
 }
 
-.quick-sync-btn:hover:not(:disabled) {
-  background: rgba(59, 130, 246, 0.1);
+.tooltip-failed {
+  color: var(--error);
+  font-size: 11px;
 }
 
-.quick-sync-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+/* Tooltip 动画 */
+.tooltip-enter-active,
+.tooltip-leave-active {
+  transition: all 0.15s ease;
+}
+
+.tooltip-enter-from,
+.tooltip-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 /* 下拉菜单 */
