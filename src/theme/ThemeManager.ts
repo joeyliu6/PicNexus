@@ -1,63 +1,53 @@
-// 主题管理器 - 负责主题切换和持久化
-
 import { Store } from '../store';
 import type { UserConfig, ThemeMode } from '../config/types';
 
-/**
- * 主题管理器类
- * 负责应用主题切换、过渡动画和配置持久化
- */
+type EffectiveTheme = 'light' | 'dark';
+
 export class ThemeManager {
   private config: UserConfig;
   private store: Store;
-  private isTransitioning = false;
+  private mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  private systemChangeHandler: (() => void) | null = null;
+  private onSystemThemeChange: ((theme: EffectiveTheme) => void) | null = null;
 
   constructor(config: UserConfig, store: Store) {
     this.config = config;
     this.store = store;
   }
 
-  /**
-   * 初始化主题（应用启动时调用）
-   * @param playTransition 是否播放过渡动画，默认为 false
-   */
-  async initialize(playTransition = false): Promise<void> {
-    const theme = this.config.theme || {
-      mode: 'dark',
-      enableTransitions: true,
-      transitionDuration: 300
-    };
+  initialize(): void {
+    const mode = this.config.theme?.mode || 'auto';
 
-    await this.applyTheme(theme.mode, playTransition);
+    if (mode === 'auto') {
+      this.startSystemListener();
+    }
+
+    this.applyThemeClass(this.resolveEffectiveTheme(mode));
   }
 
-  /**
-   * 切换主题模式（亮色 ↔ 深色）
-   */
   async toggleTheme(): Promise<void> {
-    const currentMode = this.config.theme?.mode || 'dark';
-    const newMode: ThemeMode = currentMode === 'dark' ? 'light' : 'dark';
-    await this.setTheme(newMode);
+    const currentMode = this.config.theme?.mode || 'auto';
+    const modes: ThemeMode[] = ['light', 'dark', 'auto'];
+    const nextIndex = (modes.indexOf(currentMode) + 1) % modes.length;
+    await this.setTheme(modes[nextIndex]);
   }
 
-  /**
-   * 设置主题模式
-   * @param mode 主题模式（'light' 或 'dark'）
-   */
   async setTheme(mode: ThemeMode): Promise<void> {
-    const enableTransitions = false;  // 强制禁用过渡
+    this.stopSystemListener();
 
-    // 应用主题到 DOM
-    await this.applyTheme(mode, enableTransitions);
+    if (mode === 'auto') {
+      this.startSystemListener();
+    }
 
-    // 更新配置
+    const effective = this.resolveEffectiveTheme(mode);
+    this.applyThemeClass(effective);
+
     this.config.theme = {
       mode,
-      enableTransitions,
+      enableTransitions: false,
       transitionDuration: this.config.theme?.transitionDuration || 300
     };
 
-    // 持久化到存储
     try {
       await this.store.set('config', this.config);
       await this.store.save();
@@ -67,59 +57,61 @@ export class ThemeManager {
   }
 
   /**
-   * 应用主题类到 DOM 元素
+   * 注册系统主题变化回调（供 composable 监听）
    */
-  private applyThemeClass(mode: ThemeMode): void {
-    const root = document.documentElement;
-    root.classList.toggle('dark-theme', mode === 'dark');
-    root.classList.toggle('light-theme', mode === 'light');
-    localStorage.setItem('picnexus-theme', `${mode}-theme`);
+  setOnSystemThemeChange(callback: ((theme: EffectiveTheme) => void) | null): void {
+    this.onSystemThemeChange = callback;
   }
 
-  /**
-   * 应用主题到 DOM
-   * @param mode 主题模式
-   * @param withTransition 是否启用过渡动画
-   */
-  private async applyTheme(mode: ThemeMode, withTransition: boolean): Promise<void> {
-    if (this.isTransitioning) {
-      return;
-    }
-
-    const root = document.documentElement;
-    const duration = this.config.theme?.transitionDuration || 200;
-
-    if (withTransition) {
-      this.isTransitioning = true;
-      root.style.willChange = 'background-color';
-      root.style.setProperty('--theme-transition-duration', `${duration}ms`);
-      root.classList.add('theme-transitioning');
-
-      this.applyThemeClass(mode);
-
-      setTimeout(() => {
-        root.classList.remove('theme-transitioning');
-        root.style.willChange = 'auto';
-        this.isTransitioning = false;
-      }, duration);
-    } else {
-      this.applyThemeClass(mode);
-    }
-  }
-
-  /**
-   * 获取当前主题模式
-   * @returns 当前主题模式（'light' 或 'dark'）
-   */
   getCurrentTheme(): ThemeMode {
-    return this.config.theme?.mode || 'dark';
+    return this.config.theme?.mode || 'auto';
   }
 
-  /**
-   * 更新配置引用
-   * @param config 新的配置对象
-   */
+  getEffectiveTheme(): EffectiveTheme {
+    return this.resolveEffectiveTheme(this.getCurrentTheme());
+  }
+
   updateConfig(config: UserConfig): void {
     this.config = config;
   }
+
+  destroy(): void {
+    this.stopSystemListener();
+  }
+
+  private resolveEffectiveTheme(mode: ThemeMode): EffectiveTheme {
+    if (mode === 'auto') {
+      return this.mediaQuery.matches ? 'dark' : 'light';
+    }
+    return mode;
+  }
+
+  private startSystemListener(): void {
+    this.stopSystemListener();
+
+    this.systemChangeHandler = () => {
+      const effective = this.resolveEffectiveTheme('auto');
+      this.applyThemeClass(effective);
+      this.onSystemThemeChange?.(effective);
+    };
+
+    this.mediaQuery.addEventListener('change', this.systemChangeHandler);
+  }
+
+  private stopSystemListener(): void {
+    if (this.systemChangeHandler) {
+      this.mediaQuery.removeEventListener('change', this.systemChangeHandler);
+      this.systemChangeHandler = null;
+    }
+  }
+
+  private applyThemeClass(effective: EffectiveTheme): void {
+    const root = document.documentElement;
+    root.classList.toggle('dark-theme', effective === 'dark');
+    root.classList.toggle('light-theme', effective === 'light');
+
+    const mode = this.config.theme?.mode || 'auto';
+    localStorage.setItem('picnexus-theme', mode === 'auto' ? 'auto' : `${effective}-theme`);
+  }
+
 }

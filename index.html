@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="referrer" content="no-referrer" />
-    <!-- 内联样式：立即设置背景色，避免白色闪烁 -->
+    <!-- 内联样式：基础布局 + 主题背景色 -->
     <style>
       html, body {
         margin: 0;
@@ -12,14 +12,36 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background-color: #0f172a; /* Slate 900 - 与应用主题色一致 */
-        color: #f8fafc; /* Slate 50 - 文本颜色 */
+      }
+      html.dark-theme, html.dark-theme body {
+        background-color: #0f172a;
+        color: #f8fafc;
+      }
+      html.light-theme, html.light-theme body {
+        background-color: #f1f5f9;
+        color: #0f172a;
       }
       #app {
         width: 100%;
         height: 100%;
       }
     </style>
+    <!-- 同步读取 localStorage 主题偏好，避免启动闪烁 -->
+    <script>
+      (function() {
+        var saved = localStorage.getItem('picnexus-theme');
+        var cls;
+        if (saved === 'light-theme') {
+          cls = 'light-theme';
+        } else if (saved === 'dark-theme') {
+          cls = 'dark-theme';
+        } else {
+          cls = window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark-theme' : 'light-theme';
+        }
+        document.documentElement.classList.add(cls);
+      })();
+    </script>
     <link rel="stylesheet" href="/src/style.css" />
     <title>PicNexus</title>
   </head>

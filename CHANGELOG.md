@@ -16,6 +16,9 @@
 
 ## [Unreleased]
 
+### Changed
+- 默认主题从深色模式改为跟随系统设置（auto），首次打开自动适配系统亮/暗模式
+
 ### Added
 - **云存储分页功能**
   - 新增 `usePagination` composable 管理 Token 缓存分页

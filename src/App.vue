@@ -8,12 +8,11 @@ import { useThemeManager } from './composables/useTheme';
 import { useToast } from './composables/useToast';
 import { TOAST_MESSAGES } from './constants';
 
-const { currentTheme, initializeTheme } = useThemeManager();
+const { effectiveTheme, initializeTheme } = useThemeManager();
 const toast = useToast();
 
-// 计算根元素的类名
 const rootClass = computed(() => {
-  return currentTheme.value === 'dark' ? 'dark-theme' : 'light-theme';
+  return effectiveTheme.value === 'dark' ? 'dark-theme' : 'light-theme';
 });
 
 // 网络状态监听处理函数
@@ -28,7 +27,7 @@ function handleOnline() {
 onMounted(async () => {
   // 初始化主题系统
   await initializeTheme();
-  console.log('[App] Theme initialized:', currentTheme.value);
+  console.log('[App] Theme initialized:', effectiveTheme.value);
 
   // 添加网络状态监听
   window.addEventListener('offline', handleOffline);

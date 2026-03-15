@@ -5,7 +5,7 @@ import { UploadResult } from '../uploaders/base/types';
 /**
  * 主题模式类型
  */
-export type ThemeMode = 'light' | 'dark';
+export type ThemeMode = 'light' | 'dark' | 'auto';
 
 /**
  * 主题配置接口
@@ -725,7 +725,7 @@ export const DEFAULT_CONFIG: UserConfig = {
     activeId: null
   },
   theme: {
-    mode: 'dark',
+    mode: 'auto',
     enableTransitions: true,
     transitionDuration: 300
   },

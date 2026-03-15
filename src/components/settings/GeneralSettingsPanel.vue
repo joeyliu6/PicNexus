@@ -46,7 +46,8 @@ const emit = defineEmits<{
 
 const themeOptions = [
   { value: 'light', label: '浅色', icon: 'pi pi-sun' },
-  { value: 'dark', label: '深色', icon: 'pi pi-moon' }
+  { value: 'dark', label: '深色', icon: 'pi pi-moon' },
+  { value: 'auto', label: '跟随系统', icon: 'pi pi-desktop' }
 ];
 
 // ==================== 计算属性 ====================
@@ -65,7 +66,6 @@ const localDefaultHistoryViewMode = computed({
 
 function handleThemeChange(theme: ThemeMode) {
   emit('update:currentTheme', theme);
-  emit('save');
 }
 
 function handleServiceChange() {
