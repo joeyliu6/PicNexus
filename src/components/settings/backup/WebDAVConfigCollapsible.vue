@@ -145,31 +145,6 @@ function handleTest() {
   emit('test');
 }
 
-// 服务商预设（扩展）
-const providerPresets = [
-  { name: '坚果云', url: 'https://dav.jianguoyun.com/dav/' },
-  { name: 'Nextcloud', url: 'https://your-domain.com/remote.php/dav/files/USERNAME/' },
-  { name: '群晖 NAS', url: 'https://your-nas-ip:5006/webdav/' },
-  { name: 'Alist', url: 'http://localhost:5244/dav/' },
-  { name: 'TeraCloud', url: 'https://seto.teracloud.jp/dav/' },
-  { name: 'OwnCloud', url: 'https://your-domain.com/remote.php/webdav/' }
-];
-
-function applyPreset(preset: typeof providerPresets[0]) {
-  if (!activeProfile.value) return;
-
-  const updatedProfiles = props.modelValue.profiles.map(p => {
-    if (p.id === props.modelValue.activeId) {
-      return { ...p, url: preset.url, name: preset.name };
-    }
-    return p;
-  });
-
-  emit('update:modelValue', {
-    ...props.modelValue,
-    profiles: updatedProfiles
-  });
-}
 </script>
 
 <template>
@@ -204,22 +179,6 @@ function applyPreset(preset: typeof providerPresets[0]) {
 
         <!-- 当前配置表单 -->
         <div v-if="activeProfile" class="simple-form">
-          <!-- 快速填充预设（独立区块） -->
-          <div class="form-row">
-            <label class="row-label">快速填充</label>
-            <div class="preset-chips">
-              <button
-                v-for="preset in providerPresets"
-                :key="preset.name"
-                class="chip-btn"
-                @click="applyPreset(preset)"
-                :title="preset.url"
-              >
-                {{ preset.name }}
-              </button>
-            </div>
-          </div>
-
           <!-- 配置名称（单列） -->
           <div class="form-field">
             <label>配置名称</label>
@@ -461,42 +420,6 @@ function applyPreset(preset: typeof providerPresets[0]) {
   display: flex;
   flex-direction: column;
   gap: 14px;
-}
-
-.form-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.row-label {
-  font-size: 13px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-/* 纯文字 Chips */
-.preset-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.chip-btn {
-  padding: 4px 10px;
-  background: var(--bg-secondary);
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.chip-btn:hover {
-  border-color: var(--primary);
-  color: var(--primary);
 }
 
 .form-field {
