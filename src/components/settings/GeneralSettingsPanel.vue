@@ -22,6 +22,9 @@ interface Props {
 
   /** 服务名称映射 */
   serviceNames: Record<ServiceType, string>;
+
+  /** 各服务的配置状态 */
+  serviceConfigStatus: Record<ServiceType, boolean>;
 }
 
 const props = defineProps<Props>();
@@ -123,14 +126,21 @@ function toggleService(service: ServiceType) {
             v-for="svc in PRIVATE_SERVICES"
             :key="svc"
             class="toggle-chip"
-            @click="toggleService(svc)"
+            :class="{ disabled: !serviceConfigStatus[svc] }"
+            v-tooltip.top="!serviceConfigStatus[svc] ? '未配置，请前往图床设置' : ''"
+            @click="serviceConfigStatus[svc] && toggleService(svc)"
           >
             <Checkbox
               :modelValue="localAvailableServices.includes(svc)"
               :binary="true"
+              :disabled="!serviceConfigStatus[svc]"
               @click.stop
             />
             <span class="toggle-label">{{ serviceNames[svc] }}</span>
+            <span
+              class="status-dot"
+              :class="{ configured: serviceConfigStatus[svc] }"
+            ></span>
           </div>
         </div>
       </div>
@@ -142,14 +152,21 @@ function toggleService(service: ServiceType) {
             v-for="svc in PUBLIC_SERVICES"
             :key="svc"
             class="toggle-chip"
-            @click="toggleService(svc)"
+            :class="{ disabled: !serviceConfigStatus[svc] }"
+            v-tooltip.top="!serviceConfigStatus[svc] ? '未配置，请前往图床设置' : ''"
+            @click="serviceConfigStatus[svc] && toggleService(svc)"
           >
             <Checkbox
               :modelValue="localAvailableServices.includes(svc)"
               :binary="true"
+              :disabled="!serviceConfigStatus[svc]"
               @click.stop
             />
             <span class="toggle-label">{{ serviceNames[svc] }}</span>
+            <span
+              class="status-dot"
+              :class="{ configured: serviceConfigStatus[svc] }"
+            ></span>
           </div>
         </div>
       </div>
@@ -254,8 +271,27 @@ function toggleService(service: ServiceType) {
   transition: all 0.2s;
 }
 
-.toggle-chip:hover {
+.toggle-chip:hover:not(.disabled) {
   border-color: var(--primary);
+}
+
+.toggle-chip.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.status-dot.configured {
+  background: var(--success);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
 }
 
 .toggle-chip label {

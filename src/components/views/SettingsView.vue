@@ -2,7 +2,7 @@
 // 设置视图 - 重构后精简版
 // 核心逻辑保留，UI 组件拆分到独立面板
 
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import type { UnlistenFn } from '@tauri-apps/api/event';
@@ -124,8 +124,51 @@ const serviceNames: Record<ServiceType, string> = {
 
 // ==================== 计算属性 ====================
 
+const serviceConfigStatus = computed<Record<ServiceType, boolean>>(() => {
+  const fd = formData.value;
+  return {
+    r2: !!(fd.r2.accountId && fd.r2.accessKeyId && fd.r2.secretAccessKey && fd.r2.bucketName && fd.r2.publicDomain),
+    tencent: !!(fd.tencent.secretId && fd.tencent.secretKey && fd.tencent.region && fd.tencent.bucket && fd.tencent.publicDomain),
+    aliyun: !!(fd.aliyun.accessKeyId && fd.aliyun.accessKeySecret && fd.aliyun.region && fd.aliyun.bucket && fd.aliyun.publicDomain),
+    qiniu: !!(fd.qiniu.accessKey && fd.qiniu.secretKey && fd.qiniu.region && fd.qiniu.bucket && fd.qiniu.publicDomain),
+    upyun: !!(fd.upyun.operator && fd.upyun.password && fd.upyun.bucket && fd.upyun.publicDomain),
+    weibo: !!fd.weiboCookie?.trim(),
+    zhihu: !!fd.zhihu.cookie?.trim(),
+    nowcoder: !!fd.nowcoder.cookie?.trim(),
+    nami: !!fd.nami.cookie?.trim(),
+    bilibili: !!fd.bilibili.cookie?.trim(),
+    chaoxing: !!fd.chaoxing.cookie?.trim(),
+    smms: !!fd.smms.token?.trim(),
+    github: !!(fd.github.token?.trim() && fd.github.owner?.trim() && fd.github.repo?.trim()),
+    imgur: !!fd.imgur.clientId?.trim(),
+    jd: true,
+    qiyu: true,
+  };
+});
+
 const activeWebDAVProfile = computed(() => {
   return formData.value.webdav.profiles.find(p => p.id === formData.value.webdav.activeId) || null;
+});
+
+watch(serviceConfigStatus, (newStatus, oldStatus) => {
+  if (!oldStatus) return;
+  let changed = false;
+  for (const [svc, configured] of Object.entries(newStatus)) {
+    const serviceId = svc as ServiceType;
+    if (configured && !oldStatus[serviceId]) {
+      if (!availableServices.value.includes(serviceId)) {
+        availableServices.value.push(serviceId);
+        changed = true;
+      }
+    } else if (!configured && oldStatus[serviceId]) {
+      const idx = availableServices.value.indexOf(serviceId);
+      if (idx !== -1) {
+        availableServices.value.splice(idx, 1);
+        changed = true;
+      }
+    }
+  }
+  if (changed) saveSettings();
 });
 
 // ==================== 配置加载/保存 ====================
@@ -552,6 +595,7 @@ onUnmounted(() => {
           :available-services="availableServices"
           :default-history-view-mode="formData.defaultHistoryViewMode"
           :service-names="serviceNames"
+          :service-config-status="serviceConfigStatus"
           @update:current-theme="handleThemeChange"
           @update:available-services="(v) => { availableServices = v; saveSettings(); }"
           @update:default-history-view-mode="(v) => { formData.defaultHistoryViewMode = v; saveSettings(); }"
