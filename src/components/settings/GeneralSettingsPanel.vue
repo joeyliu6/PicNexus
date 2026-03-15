@@ -137,10 +137,6 @@ function toggleService(service: ServiceType) {
               @click.stop
             />
             <span class="toggle-label">{{ serviceNames[svc] }}</span>
-            <span
-              class="status-dot"
-              :class="{ configured: serviceConfigStatus[svc] }"
-            ></span>
           </div>
         </div>
       </div>
@@ -163,10 +159,6 @@ function toggleService(service: ServiceType) {
               @click.stop
             />
             <span class="toggle-label">{{ serviceNames[svc] }}</span>
-            <span
-              class="status-dot"
-              :class="{ configured: serviceConfigStatus[svc] }"
-            ></span>
           </div>
         </div>
       </div>
@@ -276,28 +268,17 @@ function toggleService(service: ServiceType) {
 }
 
 .toggle-chip.disabled {
-  opacity: 0.5;
   cursor: not-allowed;
+  background: var(--bg-app);
 }
 
-.status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  flex-shrink: 0;
-  margin-left: auto;
-}
-
-.status-dot.configured {
-  background: var(--success);
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
-}
-
-.toggle-chip label {
-  cursor: pointer;
+.toggle-chip .toggle-label {
   font-size: 13px;
   color: var(--text-primary);
+}
+
+.toggle-chip.disabled .toggle-label {
+  color: var(--text-muted);
 }
 
 /* 视图模式选择器 */
