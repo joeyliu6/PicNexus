@@ -415,8 +415,24 @@ export function useConfigManager() {
         }
       });
 
-      console.log('[Cookie更新] ✓ 监听器已设置（支持多服务）');
-      return unlisten;
+      // 监听 Cookie 监控超时事件
+      const unlistenTimeout = await listen<string>('cookie-monitoring-timeout', (event) => {
+        const serviceId = event.payload;
+        const provider = getCookieProvider(serviceId);
+        const serviceName = provider?.name || serviceId;
+        console.warn(`[Cookie监控] ${serviceName} 自动获取超时`);
+        toast.showConfig('warn', {
+          summary: '自动获取超时',
+          detail: `${serviceName} Cookie 自动获取超时，请手动点击「获取 Cookie」按钮`,
+          life: 8000
+        });
+      });
+
+      console.log('[Cookie更新] ✓ 监听器已设置（支持多服务 + 超时通知）');
+      return () => {
+        unlisten();
+        unlistenTimeout();
+      };
     } catch (error) {
       console.error('[Cookie更新] 设置监听器失败:', error);
       // 返回空函数以保持接口一致性

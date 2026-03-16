@@ -75,6 +75,7 @@ fn main() {
             open_login_window,
             save_cookie_from_login,
             start_cookie_monitoring,
+            setup_cookie_event_monitoring,
             get_request_header_cookie,
             test_r2_connection,
             test_webdav_connection,
@@ -576,34 +577,72 @@ fn get_default_validation_rules(service_id: &str) -> (Vec<&'static str>, Vec<&'s
     }
 }
 
-/// 检查特定服务的登录状态（某些服务需要检查字段值而不仅仅是存在性）
-fn check_login_status(service_id: &str, cookie: &str) -> bool {
-    match service_id {
-        "weibo" => {
-            // 微博需要检查 MLOGIN=1 表示已登录
-            // MLOGIN=0 表示未登录（即使有 SUB/SUBP 也是临时会话）
-            if let Some(mlogin_pos) = cookie.find("MLOGIN=") {
-                let value_start = mlogin_pos + 7;
+/// 检查字段值是否匹配期望值（泛化的登录状态检查，替代硬编码的服务特定逻辑）
+fn check_field_value_matches(cookie: &str, field_value_checks: &std::collections::HashMap<String, String>) -> bool {
+    if field_value_checks.is_empty() {
+        return true;
+    }
+
+    for (field, expected_value) in field_value_checks {
+        let search_pattern = format!("{}=", field);
+        let mut found = false;
+        let mut search_start = 0;
+
+        while let Some(pos) = cookie[search_start..].find(&search_pattern) {
+            let absolute_pos = search_start + pos;
+            let is_valid_start = if absolute_pos == 0 {
+                true
+            } else {
+                let before = &cookie[..absolute_pos];
+                before.trim_end().ends_with(';') || before.trim_end().is_empty()
+            };
+
+            if is_valid_start {
+                let value_start = absolute_pos + search_pattern.len();
                 let remaining = &cookie[value_start..];
                 let value_end = remaining.find(';').unwrap_or(remaining.len());
-                let value = remaining[..value_end].trim();
-                if value == "1" {
-                    eprintln!("[登录状态检查] ✓ 微博 MLOGIN=1，已登录");
-                    return true;
+                let actual_value = remaining[..value_end].trim();
+
+                if actual_value == expected_value.as_str() {
+                    eprintln!("[字段值检查] ✓ {}={}", field, expected_value);
+                    found = true;
+                    break;
                 } else {
-                    eprintln!("[登录状态检查] ✗ 微博 MLOGIN={}，未登录", value);
+                    eprintln!("[字段值检查] ✗ {} 值不匹配，期望 {}，实际 {}", field, expected_value, actual_value);
                     return false;
                 }
             }
-            eprintln!("[登录状态检查] ✗ 微博缺少 MLOGIN 字段");
-            false
+            search_start = absolute_pos + 1;
         }
-        // 其他服务只检查必要字段存在即可
-        _ => true,
+
+        if !found {
+            eprintln!("[字段值检查] ✗ 缺少字段 {}", field);
+            return false;
+        }
     }
+    true
+}
+
+/// 获取服务的默认字段值检查规则（当前端未传 field_value_checks 时使用）
+fn get_default_field_value_checks(service_id: &str) -> std::collections::HashMap<String, String> {
+    let mut checks = std::collections::HashMap::new();
+    if service_id == "weibo" {
+        checks.insert("MLOGIN".to_string(), "1".to_string());
+    }
+    checks
 }
 
 fn validate_cookie_fields(service_id: &str, cookie: &str, required_fields: &[String], any_of_fields: &[String]) -> bool {
+    validate_cookie_fields_with_value_checks(service_id, cookie, required_fields, any_of_fields, &None)
+}
+
+fn validate_cookie_fields_with_value_checks(
+    service_id: &str,
+    cookie: &str,
+    required_fields: &[String],
+    any_of_fields: &[String],
+    field_value_checks: &Option<std::collections::HashMap<String, String>>,
+) -> bool {
     // 如果前端未提供验证规则，使用默认规则
     let (default_required, default_any) = get_default_validation_rules(service_id);
 
@@ -644,9 +683,13 @@ fn validate_cookie_fields(service_id: &str, cookie: &str, required_fields: &[Str
         eprintln!("[Cookie验证] ✓ 通过 anyOfFields 检查");
     }
 
-    // 检查特定服务的登录状态（如微博需要 MLOGIN=1）
-    if !check_login_status(service_id, cookie) {
-        eprintln!("[Cookie验证] ✗ {} 登录状态检查失败", service_id);
+    // 检查字段值（泛化的登录状态检查）
+    let actual_checks = match field_value_checks {
+        Some(checks) if !checks.is_empty() => checks.clone(),
+        _ => get_default_field_value_checks(service_id),
+    };
+    if !check_field_value_matches(cookie, &actual_checks) {
+        eprintln!("[Cookie验证] ✗ {} 字段值检查失败", service_id);
         return false;
     }
 
@@ -654,6 +697,7 @@ fn validate_cookie_fields(service_id: &str, cookie: &str, required_fields: &[Str
     true
 }
 
+// DEPRECATED: 已被 setup_cookie_event_monitoring 替代，保留供非 Windows 降级使用
 #[tauri::command]
 async fn start_cookie_monitoring(
     app: tauri::AppHandle,
@@ -807,6 +851,278 @@ async fn start_cookie_monitoring(
     Ok(())
 }
 
+/// 事件驱动的 Cookie 监控：监听 NavigationCompleted 事件，仅在页面导航完成时提取 Cookie
+#[tauri::command]
+async fn setup_cookie_event_monitoring(
+    app: tauri::AppHandle,
+    service_id: Option<String>,
+    target_domains: Option<Vec<String>>,
+    required_fields: Option<Vec<String>>,
+    any_of_fields: Option<Vec<String>>,
+    field_value_checks: Option<std::collections::HashMap<String, String>>,
+    timeout_ms: Option<u64>,
+) -> Result<(), AppError> {
+    const DEFAULT_TIMEOUT_MS: u64 = 60000;
+
+    let service = service_id.unwrap_or_else(|| "weibo".to_string());
+
+    if !is_safe_service_id(&service) {
+        return Err(AppError::validation(format!("无效的服务 ID: {}", service)));
+    }
+
+    let domains: Vec<String> = target_domains
+        .filter(|v| !v.is_empty())
+        .unwrap_or_default();
+    let fields = required_fields.unwrap_or_default();
+    let any_fields = any_of_fields.unwrap_or_default();
+
+    for field in fields.iter().chain(any_fields.iter()) {
+        if !is_safe_field_name(field) {
+            return Err(AppError::validation(format!("无效的字段名: {}", field)));
+        }
+    }
+
+    // Issue #3: 验证 field_value_checks 的 key 安全性
+    if let Some(ref checks) = field_value_checks {
+        for key in checks.keys() {
+            if !is_safe_field_name(key) {
+                return Err(AppError::validation(format!("无效的字段值检查 key: {}", key)));
+            }
+        }
+    }
+
+    let timeout = timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS).clamp(10000, 300000);
+
+    eprintln!(
+        "[事件监控] 开始监控 {} 的Cookie (域名: {:?}, 超时: {}ms)",
+        service, domains, timeout
+    );
+
+    #[cfg(target_os = "windows")]
+    {
+        let Some(login_webview) = app.get_webview("login-content") else {
+            return Err(AppError::external("登录窗口未打开"));
+        };
+
+        let app_handle = app.clone();
+        let service_clone = service.clone();
+        let domains_clone = domains.clone();
+        let fields_clone = fields.clone();
+        let any_fields_clone = any_fields.clone();
+        let field_value_checks_clone = field_value_checks.clone();
+
+        let completed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let first_nav_done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+        let completed_for_handler = completed.clone();
+        let first_nav_for_handler = first_nav_done.clone();
+
+        let result = login_webview.with_webview(move |webview| {
+            #[cfg(windows)]
+            unsafe {
+                use webview2_com::Microsoft::Web::WebView2::Win32::*;
+
+                let controller = webview.controller();
+                let core = match controller.CoreWebView2() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("[事件监控] 获取 CoreWebView2 失败: {:?}", e);
+                        return;
+                    }
+                };
+
+                #[windows_core::implement(ICoreWebView2NavigationCompletedEventHandler)]
+                struct NavHandler {
+                    app_handle: tauri::AppHandle,
+                    service_id: String,
+                    domains: Vec<String>,
+                    required_fields: Vec<String>,
+                    any_of_fields: Vec<String>,
+                    field_value_checks: Option<std::collections::HashMap<String, String>>,
+                    completed: std::sync::Arc<std::sync::atomic::AtomicBool>,
+                    first_nav_done: std::sync::Arc<std::sync::atomic::AtomicBool>,
+                    timeout_ms: u64,
+                }
+
+                impl ICoreWebView2NavigationCompletedEventHandler_Impl for NavHandler_Impl {
+                    fn Invoke(
+                        &self,
+                        sender: windows_core::Ref<'_, ICoreWebView2>,
+                        args: windows_core::Ref<'_, ICoreWebView2NavigationCompletedEventArgs>,
+                    ) -> windows_core::Result<()> {
+                        use std::sync::atomic::Ordering;
+
+                        if self.completed.load(Ordering::SeqCst) {
+                            return Ok(());
+                        }
+
+                        // 检查导航是否成功
+                        let mut is_success = windows_core::BOOL::default();
+                        if let Ok(a) = args.ok() {
+                            let _ = unsafe { a.IsSuccess(&mut is_success) };
+                        }
+
+                        // 获取当前 URL 用于日志
+                        let mut url_ptr = windows_core::PWSTR::null();
+                        if let Ok(s) = sender.ok() {
+                            let _ = unsafe { s.Source(&mut url_ptr) };
+                        }
+                        let current_url = unsafe { url_ptr.to_string().unwrap_or_default() };
+                        eprintln!("[事件监控] NavigationCompleted: {} (成功: {})", current_url, is_success.as_bool());
+
+                        // 首次导航完成（登录页加载好），启动超时计时器
+                        if !self.first_nav_done.swap(true, Ordering::SeqCst) {
+                            eprintln!("[事件监控] 登录页加载完成，启动 {}ms 超时计时器", self.timeout_ms);
+                            let timeout = self.timeout_ms;
+                            let completed_for_timeout = self.completed.clone();
+                            let app_for_timeout = self.app_handle.clone();
+                            let service_for_timeout = self.service_id.clone();
+
+                            // Issue #4: 分段 sleep，支持提前退出
+                            std::thread::spawn(move || {
+                                use std::sync::atomic::Ordering;
+                                let interval = Duration::from_secs(1);
+                                let total = Duration::from_millis(timeout);
+                                let mut elapsed = Duration::ZERO;
+
+                                while elapsed < total {
+                                    std::thread::sleep(interval.min(total - elapsed));
+                                    elapsed += interval;
+                                    if completed_for_timeout.load(Ordering::SeqCst) {
+                                        return;
+                                    }
+                                }
+                                eprintln!("[事件监控] ⏰ {} 超时（{}ms），发送通知", service_for_timeout, timeout);
+                                let _ = app_for_timeout.emit("cookie-monitoring-timeout", &service_for_timeout);
+                            });
+                        }
+
+                        if !is_success.as_bool() {
+                            return Ok(());
+                        }
+
+                        // Issue #2: 将 Cookie 提取移到新线程，避免阻塞 WebView2 UI 线程
+                        // try_extract_cookie_header_generic 内部调用 with_webview + channel 等待，
+                        // 在 UI 线程中调用会死锁
+                        let app = self.app_handle.clone();
+                        let service = self.service_id.clone();
+                        let domains = self.domains.clone();
+                        let required_fields = self.required_fields.clone();
+                        let any_of_fields = self.any_of_fields.clone();
+                        let field_value_checks = self.field_value_checks.clone();
+                        let completed = self.completed.clone();
+
+                        std::thread::spawn(move || {
+                            eprintln!("[事件监控] 检测到页面跳转，尝试提取 {} Cookie...", service);
+
+                            let login_webview = match app.get_webview("login-content") {
+                                Some(w) => w,
+                                None => {
+                                    eprintln!("[事件监控] 登录窗口已关闭");
+                                    return;
+                                }
+                            };
+
+                            let merged_cookie = match extract_and_merge_cookies(&login_webview, &domains, "事件监控") {
+                                Some(c) => c,
+                                None => {
+                                    eprintln!("[事件监控] 未提取到 Cookie，等待下次导航...");
+                                    return;
+                                }
+                            };
+
+                            if validate_cookie_fields_with_value_checks(
+                                &service,
+                                &merged_cookie,
+                                &required_fields,
+                                &any_of_fields,
+                                &field_value_checks,
+                            ) {
+                                eprintln!("[事件监控] ✓ {} Cookie 验证通过！保存中...", service);
+                                completed.store(true, std::sync::atomic::Ordering::SeqCst);
+
+                                let app_save = app.clone();
+                                let service_save = service.clone();
+                                let fields_save = required_fields;
+                                let any_fields_save = any_of_fields;
+
+                                tauri::async_runtime::spawn(async move {
+                                    if let Err(e) = save_cookie_from_login(
+                                        merged_cookie,
+                                        Some(service_save),
+                                        Some(fields_save),
+                                        Some(any_fields_save),
+                                        app_save,
+                                    ).await {
+                                        eprintln!("[事件监控] 保存Cookie失败: {}", e);
+                                    }
+                                });
+                            } else {
+                                eprintln!("[事件监控] ✗ Cookie 验证未通过，等待下次导航...");
+                            }
+                        });
+
+                        Ok(())
+                    }
+                }
+
+                let handler: ICoreWebView2NavigationCompletedEventHandler = NavHandler {
+                    app_handle: app_handle,
+                    service_id: service_clone,
+                    domains: domains_clone,
+                    required_fields: fields_clone,
+                    any_of_fields: any_fields_clone,
+                    field_value_checks: field_value_checks_clone,
+                    completed: completed_for_handler,
+                    first_nav_done: first_nav_for_handler,
+                    timeout_ms: timeout,
+                }.into();
+
+                let mut token: i64 = 0;
+                if let Err(e) = core.add_NavigationCompleted(&handler, &mut token) {
+                    eprintln!("[事件监控] 注册 NavigationCompleted 失败: {:?}", e);
+                    // 降级到轮询模式提示
+                    return;
+                }
+
+                eprintln!("[事件监控] ✓ NavigationCompleted 事件注册成功");
+            }
+        });
+
+        if result.is_err() {
+            eprintln!("[事件监控] with_webview 调用失败，降级到轮询模式");
+            // 降级：调用旧的轮询命令
+            return start_cookie_monitoring(
+                app,
+                Some(service),
+                None,
+                Some(domains),
+                Some(fields),
+                Some(any_fields),
+                None,
+                None,
+            ).await;
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        eprintln!("[事件监控] 非 Windows 平台，降级到轮询模式");
+        return start_cookie_monitoring(
+            app,
+            Some(service),
+            None,
+            Some(domains),
+            Some(fields),
+            Some(any_fields),
+            None,
+            None,
+        ).await;
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 async fn get_request_header_cookie(
     app: tauri::AppHandle,
@@ -845,38 +1161,10 @@ async fn get_request_header_cookie(
             return Err(AppError::external("登录窗口未打开，请先点击「开始登录」"));
         };
 
-        let mut all_cookies: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
-
-        for domain in &domains {
-            match try_extract_cookie_header_generic(&login_webview, domain) {
-                Ok(Some(cookie)) => {
-                    eprintln!("[Cookie获取] 从 {} 提取到 Cookie (长度: {})", domain, cookie.len());
-                    for part in cookie.split("; ") {
-                        if let Some(eq_pos) = part.find('=') {
-                            let key = part[..eq_pos].to_string();
-                            let value = part[eq_pos + 1..].to_string();
-                            all_cookies.insert(key, value);
-                        }
-                    }
-                }
-                Ok(None) => {
-                    eprintln!("[Cookie获取] 从 {} 未提取到 Cookie", domain);
-                }
-                Err(err) => {
-                    eprintln!("[Cookie获取] 从 {} 读取Cookie失败: {}", domain, err);
-                }
-            }
-        }
-
-        if all_cookies.is_empty() {
-            return Err(AppError::auth("未检测到 Cookie，请确认已完成登录后再试"));
-        }
-
-        let merged_cookie: String = all_cookies
-            .into_iter()
-            .map(|(k, v)| format!("{}={}", k, v))
-            .collect::<Vec<_>>()
-            .join("; ");
+        let merged_cookie = match extract_and_merge_cookies(&login_webview, &domains, "Cookie获取") {
+            Some(c) => c,
+            None => return Err(AppError::auth("未检测到 Cookie，请确认已完成登录后再试")),
+        };
 
         if validate_cookie_fields(&service, &merged_cookie, &fields, &any_fields) {
             eprintln!("[Cookie获取] {} 请求头Cookie长度: {}", service, merged_cookie.len());
@@ -907,61 +1195,13 @@ fn attempt_cookie_capture_and_save_generic(
     required_fields: &[String],
     any_of_fields: &[String],
 ) -> bool {
-    let mut domains_to_try: Vec<String> = Vec::new();
-    for domain in target_domains {
-        if !domains_to_try.contains(domain) {
-            domains_to_try.push(domain.clone());
+    let merged_cookie = match extract_and_merge_cookies(login_window, target_domains, "Cookie监控") {
+        Some(c) => c,
+        None => {
+            eprintln!("[Cookie监控] 未从任何域名提取到 Cookie，继续等待...");
+            return false;
         }
-        if domain.starts_with("www.") {
-            let without_www = domain[4..].to_string();
-            if !domains_to_try.contains(&without_www) {
-                domains_to_try.push(without_www);
-            }
-        } else {
-            let with_www = format!("www.{}", domain);
-            if !domains_to_try.contains(&with_www) {
-                domains_to_try.push(with_www);
-            }
-        }
-    }
-
-    let mut all_cookies: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
-
-    for domain in &domains_to_try {
-        match try_extract_cookie_header_generic(login_window, domain) {
-            Ok(Some(cookie)) => {
-                eprintln!("[Cookie监控] 从 {} 提取到 Cookie (长度: {})", domain, cookie.len());
-                for part in cookie.split("; ") {
-                    if let Some(eq_pos) = part.find('=') {
-                        let key = part[..eq_pos].to_string();
-                        let value = part[eq_pos + 1..].to_string();
-                        all_cookies.insert(key, value);
-                    }
-                }
-            }
-            Ok(None) => {
-                eprintln!("[Cookie监控] 从 {} 未提取到 Cookie", domain);
-            }
-            Err(err) => {
-                eprintln!("[Cookie监控] 从 {} 读取Cookie失败: {}", domain, err);
-            }
-        }
-    }
-
-    if all_cookies.is_empty() {
-        eprintln!("[Cookie监控] 未从任何域名提取到 Cookie，继续等待...");
-        return false;
-    }
-
-    let merged_cookie: String = all_cookies
-        .iter()
-        .map(|(k, v)| format!("{}={}", k, v))
-        .collect::<Vec<_>>()
-        .join("; ");
-
-    // 安全日志：只打印 Cookie 长度和字段数量，不打印实际内容
-    let field_count = merged_cookie.matches('=').count();
-    eprintln!("[Cookie监控] 合并后的 Cookie: {} 个字段，共 {} 字符", field_count, merged_cookie.len());
+    };
 
     if validate_cookie_fields(service_id, &merged_cookie, required_fields, any_of_fields) {
         eprintln!("[Cookie监控] ✓ 验证通过，尝试保存 {} Cookie", service_id);
@@ -985,6 +1225,52 @@ fn attempt_cookie_capture_and_save_generic(
         eprintln!("[Cookie监控] ✗ 验证失败，Cookie 缺少必要字段，继续等待...");
         false
     }
+}
+
+/// 从多个域名提取 Cookie 并合并去重
+/// 返回 (合并后的 Cookie 字符串, 是否为空)
+#[cfg(target_os = "windows")]
+fn extract_and_merge_cookies(
+    webview: &tauri::Webview,
+    domains: &[String],
+    log_prefix: &str,
+) -> Option<String> {
+    let mut all_cookies: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+
+    for domain in domains {
+        match try_extract_cookie_header_generic(webview, domain) {
+            Ok(Some(cookie)) => {
+                eprintln!("[{}] 从 {} 提取到 Cookie (长度: {})", log_prefix, domain, cookie.len());
+                for part in cookie.split("; ") {
+                    if let Some(eq_pos) = part.find('=') {
+                        let key = part[..eq_pos].to_string();
+                        let value = part[eq_pos + 1..].to_string();
+                        all_cookies.insert(key, value);
+                    }
+                }
+            }
+            Ok(None) => {
+                eprintln!("[{}] 从 {} 未提取到 Cookie", log_prefix, domain);
+            }
+            Err(err) => {
+                eprintln!("[{}] 从 {} 读取Cookie失败: {}", log_prefix, domain, err);
+            }
+        }
+    }
+
+    if all_cookies.is_empty() {
+        return None;
+    }
+
+    let merged: String = all_cookies
+        .into_iter()
+        .map(|(k, v)| format!("{}={}", k, v))
+        .collect::<Vec<_>>()
+        .join("; ");
+
+    let field_count = merged.matches('=').count();
+    eprintln!("[{}] 合并 Cookie: {} 个字段，{} 字符", log_prefix, field_count, merged.len());
+    Some(merged)
 }
 
 // WebView2 Cookie 自动提取功能 (Windows)
