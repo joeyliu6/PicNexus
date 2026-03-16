@@ -164,9 +164,18 @@ class SimpleStore {
       return null;
     }
 
+    // 【v2.10】使用互斥锁保护读操作，防止与并发写入产生竞态条件
+    return this.mutex.withLock(() => this._performRead<T>(key, defaultValue));
+  }
+
+  /**
+   * 执行实际的读取操作（在锁内调用）
+   * 注意：恢复损坏文件时直接调用 _performWrite 而非 set，避免二次加锁导致死锁
+   */
+  private async _performRead<T>(key: string, defaultValue?: T): Promise<T | null> {
     try {
       const dataPath = await this.getDataPath();
-      
+
       // 检查文件是否存在
       const fileExists = await exists(dataPath);
       if (!fileExists) {
@@ -244,11 +253,11 @@ class SimpleStore {
         const errorMsg = parseError?.message || String(parseError);
         console.error(`[Store] JSON 解析失败 (${this.filePath}):`, errorMsg);
         console.error(`[Store] 文件内容预览 (前200字符):`, content.substring(0, 200));
-        
+
         // 如果提供了默认值，尝试恢复
         if (defaultValue !== undefined) {
           console.warn(`[Store] 文件损坏，尝试使用默认值恢复配置: ${key}`);
-          
+
           // 创建损坏文件的备份
           try {
             const backupPath = `${dataPath}.corrupted.${Date.now()}`;
@@ -257,17 +266,17 @@ class SimpleStore {
           } catch (backupError) {
             console.warn(`[Store] 创建备份失败:`, backupError);
           }
-          
-          // 保存默认值到文件
+
+          // 直接调用 _performWrite 恢复，避免通过 set() 二次加锁导致死锁
           try {
-            await this.set(key, defaultValue);
+            await this._performWrite(key, defaultValue);
             console.log(`[Store] ✓ 已使用默认值恢复配置: ${key}`);
             return defaultValue;
           } catch (recoverError) {
             console.error(`[Store] 恢复配置失败:`, recoverError);
           }
         }
-        
+
         throw new StoreError(
           `数据文件格式错误（可能已损坏）: ${errorMsg}`,
           'read',
@@ -575,53 +584,53 @@ class SimpleStore {
    * @throws {StoreError} 如果清空失败
    */
   async clear(): Promise<void> {
-    try {
-      const dataPath = await this.getDataPath();
-      const fileExists = await exists(dataPath);
-      if (!fileExists) {
-        console.log(`[Store] 数据文件不存在，无需清空: ${this.filePath}`);
-        return;
-      }
-
+    // 【v2.10】使用互斥锁保护清空操作，防止与并发 set() 竞态导致 clear 效果丢失
+    await this.mutex.withLock(async () => {
       try {
-        // 【v2.8 加密存储】清空时也加密写入
-        const emptyJson = JSON.stringify({}, null, 2);
-        const encryptedContent = await secureStorage.encrypt(emptyJson);
-        await writeTextFile(dataPath, encryptedContent);
-        console.log(`[Store] 成功清空数据文件: ${this.filePath}`);
-      } catch (writeError: any) {
-        const errorMsg = writeError?.message || String(writeError);
-        if (errorMsg.includes('Permission') || errorMsg.includes('permission')) {
+        const dataPath = await this.getDataPath();
+        const fileExists = await exists(dataPath);
+        if (!fileExists) {
+          console.log(`[Store] 数据文件不存在，无需清空: ${this.filePath}`);
+          return;
+        }
+
+        try {
+          const emptyJson = JSON.stringify({}, null, 2);
+          const encryptedContent = await secureStorage.encrypt(emptyJson);
+          await writeTextFile(dataPath, encryptedContent);
+          console.log(`[Store] 成功清空数据文件: ${this.filePath}`);
+        } catch (writeError: any) {
+          const errorMsg = writeError?.message || String(writeError);
+          if (errorMsg.includes('Permission') || errorMsg.includes('permission')) {
+            throw new StoreError(
+              `清空文件权限不足: ${dataPath}`,
+              'clear',
+              undefined,
+              writeError
+            );
+          }
           throw new StoreError(
-            `清空文件权限不足: ${dataPath}`,
+            `清空文件失败: ${errorMsg}`,
             'clear',
             undefined,
             writeError
           );
         }
+      } catch (error) {
+        if (error instanceof StoreError) {
+          console.error('[Store] 清空失败:', error.message);
+          throw error;
+        }
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error('[Store] 清空时发生未知错误:', errorMsg);
         throw new StoreError(
-          `清空文件失败: ${errorMsg}`,
+          `清空数据时发生未知错误: ${errorMsg}`,
           'clear',
           undefined,
-          writeError
+          error
         );
       }
-    } catch (error) {
-      // 如果是 StoreError，直接抛出
-      if (error instanceof StoreError) {
-        console.error('[Store] 清空失败:', error.message);
-        throw error;
-      }
-      // 其他未知错误
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[Store] 清空时发生未知错误:', errorMsg);
-      throw new StoreError(
-        `清空数据时发生未知错误: ${errorMsg}`,
-        'clear',
-        undefined,
-        error
-      );
-    }
+    });
   }
 }
 

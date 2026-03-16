@@ -14,6 +14,26 @@ import type {
 } from '../config/types';
 import { isValidUserConfig, migrateConfig } from '../config/types';
 
+// ==================== 数据验证 ====================
+
+/**
+ * 验证云端历史记录数据格式
+ * 确保解析后的数据是 HistoryItem 数组，防止损坏/篡改的数据导致运行时崩溃
+ */
+function validateHistoryItems(data: unknown): HistoryItem[] {
+  if (!Array.isArray(data)) {
+    throw new Error(
+      `云端历史记录格式无效：期望数组，实际为 ${typeof data}`
+    );
+  }
+
+  return data.filter((item: unknown) => {
+    if (typeof item !== 'object' || item === null) return false;
+    const record = item as Record<string, unknown>;
+    return typeof record.id === 'string' && record.id.length > 0;
+  }) as HistoryItem[];
+}
+
 // ==================== 类型定义 ====================
 
 /** 同步操作类型 */
@@ -382,7 +402,7 @@ export function useWebDAVSync() {
         const remoteContent = await client.getFile(remotePath);
 
         if (remoteContent) {
-          const cloudItems = JSON.parse(remoteContent) as HistoryItem[];
+          const cloudItems = validateHistoryItems(JSON.parse(remoteContent));
 
           if (mode === 'incremental') {
             // 增量模式：只上传云端不存在的记录
@@ -458,7 +478,7 @@ export function useWebDAVSync() {
         throw new Error('云端历史记录不存在');
       }
 
-      const cloudItems = JSON.parse(content) as HistoryItem[];
+      const cloudItems = validateHistoryItems(JSON.parse(content));
 
       // 导入记录
       setProgress('history', 'download', 'merging', 70, '导入记录...');
@@ -507,6 +527,10 @@ export function useWebDAVSync() {
       if (!remoteContent) return null;
 
       const remoteConfig = JSON.parse(remoteContent);
+      if (typeof remoteConfig !== 'object' || remoteConfig === null || Array.isArray(remoteConfig)) {
+        console.warn('[WebDAV同步] 远程配置格式无效，跳过冲突检测');
+        return null;
+      }
       const localConfig = await configStore.get<UserConfig>('config');
 
       // 简单对比：检查配置是否相同

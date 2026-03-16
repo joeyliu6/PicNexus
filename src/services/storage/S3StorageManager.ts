@@ -16,7 +16,17 @@ export abstract class BaseS3StorageManager implements IStorageManager {
   protected abstract getRegion(): string;
   protected abstract getBucket(): string;
 
+  /**
+   * 确保 config 已初始化，未初始化时抛出明确错误而非 Cannot read properties of null
+   */
+  protected ensureConfig(): void {
+    if (this.config == null) {
+      throw new Error(`[${this.serviceName}] 存储管理器未初始化：请先调用 init(config) 设置配置`);
+    }
+  }
+
   async testConnection(): Promise<ConnectionTestResult> {
+    this.ensureConfig();
     const startTime = Date.now();
     try {
       console.log('[S3Manager] 测试连接:', {
@@ -62,6 +72,7 @@ export abstract class BaseS3StorageManager implements IStorageManager {
   }
 
   async listObjects(options: ListOptions = {}): Promise<ListResult> {
+    this.ensureConfig();
     const result = await invoke('list_s3_objects', {
       endpoint: this.getEndpoint(),
       accessKey: this.getAccessKey(),
@@ -108,6 +119,7 @@ export abstract class BaseS3StorageManager implements IStorageManager {
     remotePath: string,
     _onProgress?: (percent: number) => void
   ): Promise<string> {
+    this.ensureConfig();
     const result = await invoke('upload_to_s3_compatible', {
       id: `${this.serviceId}_${Date.now()}`,
       filePath: localPath,
@@ -132,6 +144,7 @@ export abstract class BaseS3StorageManager implements IStorageManager {
   }
 
   async deleteFile(remotePath: string): Promise<void> {
+    this.ensureConfig();
     await invoke('delete_s3_object', {
       endpoint: this.getEndpoint(),
       accessKey: this.getAccessKey(),
@@ -146,6 +159,7 @@ export abstract class BaseS3StorageManager implements IStorageManager {
     success: string[];
     failed: { path: string; error: string }[];
   }> {
+    this.ensureConfig();
     const result = await invoke('delete_s3_objects', {
       endpoint: this.getEndpoint(),
       accessKey: this.getAccessKey(),
@@ -166,6 +180,7 @@ export abstract class BaseS3StorageManager implements IStorageManager {
   }
 
   async createFolder(folderPath: string): Promise<void> {
+    this.ensureConfig();
     const path = folderPath.endsWith('/') ? folderPath : folderPath + '/';
 
     await invoke('create_s3_folder', {

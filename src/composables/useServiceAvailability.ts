@@ -154,8 +154,15 @@ async function checkAllAvailabilityWithCooldown(initialSyncStatus?: SyncStatus):
   ]);
 
   // 如果执行了京东检测，更新最后检测时间
+  // 【v2.10 修复】重新读取最新状态再更新，避免覆盖七鱼检测刚写入的 qiyuCheckStatus
   if (needCooldownCheck) {
-    const updatedStatus: SyncStatus = syncStatus || { syncByProfile: {} };
+    let latestStatus: SyncStatus | null = null;
+    try {
+      latestStatus = await syncStatusStore.get<SyncStatus>('status');
+    } catch (e) {
+      console.error('[服务检测] 读取最新同步状态失败:', e);
+    }
+    const updatedStatus: SyncStatus = latestStatus || { syncByProfile: {} };
     updatedStatus.lastJdCheck = now;
     await syncStatusStore.set('status', updatedStatus);
     await syncStatusStore.save();
