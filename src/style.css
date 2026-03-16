@@ -2953,7 +2953,7 @@ button:focus-visible {
 .p-confirmdialog .p-dialog-header {
   background: transparent;
   border-bottom: none;
-  padding: 24px 24px 0;
+  padding: 24px 24px 8px;
 }
 
 .p-confirmdialog .p-dialog-title {
@@ -2979,18 +2979,24 @@ button:focus-visible {
 /* 对话框内容区域 */
 .p-confirmdialog .p-dialog-content {
   background: transparent;
-  padding: 20px 24px 24px;
+  padding: 24px 24px 28px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 16px;
 }
 
-/* 警告图标样式 */
+/* 图标圆形背景衬底 */
 .p-confirmdialog .p-confirmdialog-icon {
-  font-size: 24px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--warning-soft);
   color: var(--warning);
+  font-size: 20px;
   flex-shrink: 0;
-  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* 消息文本样式 */
@@ -3006,7 +3012,7 @@ button:focus-visible {
 .p-confirmdialog .p-dialog-footer {
   background: transparent;
   border-top: 1px solid var(--border-subtle);
-  padding: 16px 24px;
+  padding: 20px 24px;
   display: flex;
   justify-content: flex-end;
   gap: 12px;
@@ -3026,6 +3032,11 @@ button:focus-visible {
 .p-confirmdialog .p-confirmdialog-reject-button:hover {
   background: var(--hover-overlay);
   border-color: var(--text-muted);
+}
+
+.p-confirmdialog .p-confirmdialog-reject-button:active {
+  transform: translateY(0);
+  background: var(--hover-overlay);
 }
 
 .p-confirmdialog .p-confirmdialog-reject-button:focus-visible {
@@ -3050,9 +3061,49 @@ button:focus-visible {
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
+.p-confirmdialog .p-confirmdialog-accept-button:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
 .p-confirmdialog .p-confirmdialog-accept-button:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+
+/* danger 按钮（删除操作） */
+.p-confirmdialog .p-confirmdialog-accept-button.p-button-danger {
+  background: var(--error);
+}
+
+.p-confirmdialog .p-confirmdialog-accept-button.p-button-danger:hover {
+  background: #dc2626;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.p-confirmdialog .p-confirmdialog-accept-button.p-button-danger:focus-visible {
+  outline-color: var(--error);
+}
+
+/* warning 按钮（警告操作） */
+.p-confirmdialog .p-confirmdialog-accept-button.p-button-warning {
+  background: var(--warning);
+  color: #1a1a1a;
+}
+
+.p-confirmdialog .p-confirmdialog-accept-button.p-button-warning:hover {
+  background: #d97706;
+  box-shadow: 0 4px 12px rgba(234, 179, 8, 0.4);
+}
+
+.p-confirmdialog .p-confirmdialog-accept-button.p-button-warning:focus-visible {
+  outline-color: var(--warning);
+}
+
+/* :has() 联动——danger 弹窗图标自动变红 */
+.p-confirmdialog:has(.p-button-danger) .p-confirmdialog-icon {
+  background: var(--error-soft);
+  color: var(--error);
 }
 
 /* 浅色主题下的按钮样式 */

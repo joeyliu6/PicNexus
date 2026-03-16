@@ -46,7 +46,7 @@ watch(() => props.forceExpand, (val) => {
       cardRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }
-});
+}, { immediate: true });
 
 const toggleExpanded = () => {
   isExpanded.value = !isExpanded.value;

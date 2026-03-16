@@ -116,16 +116,13 @@ const shortStatusText = computed(() => {
 const isHistoryType = computed(() => props.type === 'history');
 
 function formatDate(dateStr: string, includeYear = true): string {
-  try {
-    const date = new Date(dateStr);
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    const h = String(date.getHours()).padStart(2, '0');
-    const min = String(date.getMinutes()).padStart(2, '0');
-    return includeYear ? `${date.getFullYear()}/${m}/${d} ${h}:${min}` : `${m}/${d} ${h}:${min}`;
-  } catch {
-    return dateStr;
-  }
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const h = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  return includeYear ? `${date.getFullYear()}/${m}/${d} ${h}:${min}` : `${m}/${d} ${h}:${min}`;
 }
 
 const tooltipContent = computed(() => {

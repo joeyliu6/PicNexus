@@ -365,6 +365,7 @@ function handleTest() {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 6px 0;
   border-bottom: 1px solid var(--border-subtle);
   margin-bottom: 16px;
 }
@@ -375,30 +376,30 @@ function handleTest() {
 }
 
 .tab-btn {
-  padding: 8px 12px;
+  padding: 6px 12px;
   background: transparent;
   border: none;
-  border-bottom: 2px solid transparent;
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 20px;
   cursor: pointer;
   transition: all 0.15s;
-  margin-bottom: -1px;
+  border-radius: 6px;
 }
 
 .tab-btn:hover {
   color: var(--text-primary);
+  background: var(--hover-overlay-subtle);
 }
 
 .tab-btn.active {
   color: var(--primary);
-  border-bottom-color: var(--primary);
+  font-weight: 600;
 }
 
 .add-btn {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
