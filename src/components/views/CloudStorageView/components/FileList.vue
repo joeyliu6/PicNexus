@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import Message from 'primevue/message';
 import Checkbox from 'primevue/checkbox';
 import FileListItem from './FileListItem.vue';
 import EmptyState from './EmptyState.vue';
-import type { StorageObject } from '../types';
+import UnconfiguredState from './UnconfiguredState.vue';
+import ErrorState from './ErrorState.vue';
+import type { StorageObject, CloudServiceType } from '../types';
 
 const props = defineProps<{
   items: StorageObject[];
@@ -13,6 +14,10 @@ const props = defineProps<{
   error: string | null;
   isDragging?: boolean;
   allSelected?: boolean;
+  serviceConfigured?: boolean;
+  activeService?: CloudServiceType;
+  searchQuery?: string;
+  retrying?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -24,21 +29,25 @@ const emit = defineEmits<{
   upload: [];
   showDetail: [item: StorageObject];
   selectAll: [checked: boolean];
+  goToSettings: [];
+  retry: [];
+  createFolder: [];
+  clearSearch: [];
 }>();
 
 const isSelected = (item: StorageObject) => props.selectedKeys.has(item.key);
 
-// 全选状态（考虑部分选中）
 const isIndeterminate = computed(() => {
   const selectedCount = props.selectedKeys.size;
   return selectedCount > 0 && selectedCount < props.items.length;
 });
 
-// 统一视图状态：骨架屏 / 错误 / 空状态 / 内容
-type ViewState = 'skeleton' | 'error' | 'empty' | 'content';
+type ViewState = 'skeleton' | 'unconfigured' | 'error' | 'searchEmpty' | 'empty' | 'content';
 const viewState = computed<ViewState>(() => {
+  if (props.serviceConfigured === false && props.activeService) return 'unconfigured';
   if (props.loading && props.items.length === 0) return 'skeleton';
   if (props.error && props.items.length === 0) return 'error';
+  if (props.items.length === 0 && props.searchQuery) return 'searchEmpty';
   if (props.items.length === 0) return 'empty';
   return 'content';
 });
@@ -46,6 +55,8 @@ const viewState = computed<ViewState>(() => {
 const handleSelectAll = (checked: boolean) => {
   emit('selectAll', checked);
 };
+
+const SKELETON_ROWS = 6;
 </script>
 
 <template>
@@ -63,10 +74,18 @@ const handleSelectAll = (checked: boolean) => {
       </div>
     </Transition>
 
-    <!-- 统一过渡：骨架屏 / 错误 / 空状态 / 内容（互斥渲染，避免重叠闪烁） -->
+    <!-- 统一过渡：各状态互斥渲染 -->
     <Transition name="fade" mode="out-in">
+      <!-- 未配置状态 -->
+      <UnconfiguredState
+        v-if="viewState === 'unconfigured'"
+        key="unconfigured"
+        :service-id="activeService as CloudServiceType"
+        @go-to-settings="emit('goToSettings')"
+      />
+
       <!-- 骨架屏加载状态 -->
-      <div v-if="viewState === 'skeleton'" key="skeleton" class="skeleton-list">
+      <div v-else-if="viewState === 'skeleton'" key="skeleton" class="skeleton-list">
         <div class="skeleton-header">
           <div class="skeleton-checkbox"></div>
           <div class="skeleton-header-name"></div>
@@ -74,9 +93,13 @@ const handleSelectAll = (checked: boolean) => {
           <div class="skeleton-header-size"></div>
           <div class="skeleton-header-time"></div>
         </div>
-        <div class="skeleton-row">
+        <div
+          v-for="i in SKELETON_ROWS"
+          :key="i"
+          class="skeleton-row"
+        >
           <div class="skeleton-checkbox"></div>
-          <div class="skeleton-name" style="width: 45%"></div>
+          <div class="skeleton-name" :style="{ width: `${30 + (i * 7) % 40}%` }"></div>
           <div class="skeleton-type"></div>
           <div class="skeleton-size"></div>
           <div class="skeleton-time"></div>
@@ -84,16 +107,34 @@ const handleSelectAll = (checked: boolean) => {
       </div>
 
       <!-- 错误状态 -->
-      <Message v-else-if="viewState === 'error'" key="error" severity="error" :closable="false">
-        {{ error }}
-      </Message>
+      <ErrorState
+        v-else-if="viewState === 'error'"
+        key="error"
+        :error="error!"
+        :retrying="retrying"
+        @retry="emit('retry')"
+        @go-to-settings="emit('goToSettings')"
+      />
 
-      <!-- 空状态 -->
+      <!-- 搜索无结果 -->
+      <EmptyState
+        v-else-if="viewState === 'searchEmpty'"
+        key="searchEmpty"
+        title="未找到匹配的文件"
+        variant="search"
+        :search-query="searchQuery"
+        @clear-search="emit('clearSearch')"
+      />
+
+      <!-- 空目录 -->
       <EmptyState
         v-else-if="viewState === 'empty'"
         key="empty"
-        icon="pi-cloud-upload"
         title="暂无文件"
+        description="上传文件或创建目录开始管理你的云存储"
+        variant="empty"
+        @upload="emit('upload')"
+        @create-folder="emit('createFolder')"
       />
 
       <!-- 文件列表 -->
@@ -121,12 +162,12 @@ const handleSelectAll = (checked: boolean) => {
             :key="item.key"
             :item="item"
             :selected="isSelected(item)"
-            @select="(i, e) => emit('select', i, e)"
-            @preview="(i) => emit('preview', i)"
-            @copy-link="(i) => emit('copyLink', i)"
-            @delete="(i) => emit('delete', i)"
-            @open="(i) => emit('open', i)"
-            @show-detail="(i) => emit('showDetail', i)"
+            @select="(i: StorageObject, e: MouseEvent) => emit('select', i, e)"
+            @preview="(i: StorageObject) => emit('preview', i)"
+            @copy-link="(i: StorageObject) => emit('copyLink', i)"
+            @delete="(i: StorageObject) => emit('delete', i)"
+            @open="(i: StorageObject) => emit('open', i)"
+            @show-detail="(i: StorageObject) => emit('showDetail', i)"
           />
         </div>
       </div>
@@ -328,7 +369,7 @@ const handleSelectAll = (checked: boolean) => {
   height: 100%;
   overflow-y: auto;
   padding: 8px;
-  padding-right: 0; /* 让滚动条贴边 */
+  padding-right: 0;
 }
 
 /* 列表表头 */
@@ -337,7 +378,7 @@ const handleSelectAll = (checked: boolean) => {
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  padding-right: 24px; /* 补偿内容间距 */
+  padding-right: 24px;
   border-bottom: 1px solid var(--border-subtle-light);
   font-size: 12px;
   color: var(--text-muted);
@@ -390,7 +431,7 @@ const handleSelectAll = (checked: boolean) => {
   flex-direction: column;
   gap: 6px;
   margin: 0 0 0 -8px;
-  padding-right: 24px; /* 补偿内容间距 */
+  padding-right: 24px;
 }
 
 /* 滚动条 */

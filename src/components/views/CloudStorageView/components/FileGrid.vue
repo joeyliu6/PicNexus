@@ -125,8 +125,8 @@ const isSelected = (item: StorageObject) => props.selectedKeys.has(item.key);
     <!-- 空状态 -->
     <EmptyState
       v-else-if="items.length === 0"
-      icon="pi-inbox"
       title="暂无文件"
+      variant="empty"
     />
 
     <!-- 文件网格 -->

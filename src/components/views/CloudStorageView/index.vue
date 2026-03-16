@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, onActivated, nextTick, watch } from 'vue';
+import { emit as tauriEmit } from '@tauri-apps/api/event';
 import { useToast } from '@/composables/useToast';
 import { useCloudStorage } from './composables/useCloudStorage';
 import { useFileSelection } from './composables/useFileSelection';
@@ -43,9 +44,36 @@ const {
   changePageSize,
   search,
   initServiceStatuses,
+  isServiceConfigured,
   startAutoRefresh,
   stopAutoRefresh,
 } = useCloudStorage();
+
+// 当前服务是否已配置
+const isCurrentServiceConfigured = computed(() => isServiceConfigured(activeService.value));
+
+// 重试状态
+const isRetrying = ref(false);
+
+// 导航到设置页面
+const handleGoToSettings = () => {
+  tauriEmit('navigate-to', { view: 'settings', tab: 'hosting' });
+};
+
+// 清除搜索
+const handleClearSearch = () => {
+  search('');
+};
+
+// 重试连接
+const handleRetry = async () => {
+  isRetrying.value = true;
+  try {
+    await refresh();
+  } finally {
+    isRetrying.value = false;
+  }
+};
 
 // 文件选择
 const {
@@ -337,6 +365,10 @@ watch(currentPath, () => {
           :error="error"
           :is-dragging="isDragging || isOver"
           :all-selected="selectedKeys.size === objects.length && objects.length > 0"
+          :service-configured="isCurrentServiceConfigured"
+          :active-service="activeService"
+          :search-query="searchQuery"
+          :retrying="isRetrying"
           @select="handleSelect"
           @preview="handlePreview"
           @copy-link="(item) => handleCopyLink(item, 'url')"
@@ -345,6 +377,10 @@ watch(currentPath, () => {
           @upload="uploadFiles"
           @show-detail="handleShowDetail"
           @select-all="handleSelectAll"
+          @go-to-settings="handleGoToSettings"
+          @retry="handleRetry"
+          @create-folder="handleCreateFolder"
+          @clear-search="handleClearSearch"
         />
       </div>
 
