@@ -28,13 +28,14 @@ const activeProfile = computed(() => {
 
 const hasValidConfig = computed(() => {
   if (!activeProfile.value) return false;
-  return !!(activeProfile.value.url && activeProfile.value.username);
+  const p = activeProfile.value;
+  return !!(p.url && p.username && (p.password || p.passwordEncrypted));
 });
 
 const shouldAutoExpand = computed(() => {
   if (props.modelValue.profiles.length === 0) return true;
   if (!props.modelValue.activeId) return true;
-  if (activeProfile.value && (!activeProfile.value.url || !activeProfile.value.username)) return true;
+  if (activeProfile.value && !hasValidConfig.value) return true;
   return false;
 });
 
@@ -51,9 +52,9 @@ const statusLabel = computed(() => {
 const statusClass = computed(() => {
   if (props.testing) return 'status-testing';
   if (!activeProfile.value) return 'status-disabled';
+  if (!hasValidConfig.value) return 'status-warning';
   if (activeProfile.value.connectionStatus === 'success') return 'status-success';
   if (activeProfile.value.connectionStatus === 'failed') return 'status-error';
-  if (!hasValidConfig.value) return 'status-warning';
   return 'status-warning';
 });
 
