@@ -1,14 +1,22 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import Button from 'primevue/button';
 
 type ViewType = 'upload' | 'history' | 'cloud-storage' | 'settings';
+
+const props = defineProps<{
+  currentView?: ViewType;
+}>();
 
 const emit = defineEmits<{
   navigate: [view: ViewType]
 }>();
 
-const activeView = ref<ViewType>('upload');
+const activeView = ref<ViewType>(props.currentView ?? 'upload');
+
+watch(() => props.currentView, (v) => {
+  if (v) activeView.value = v;
+});
 
 const navItems = [
   { id: 'upload' as ViewType, label: '上传', icon: 'pi-cloud-upload', title: '上传' },

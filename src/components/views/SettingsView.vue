@@ -2,7 +2,7 @@
 // 设置视图 - 重构后精简版
 // 核心逻辑保留，UI 组件拆分到独立面板
 
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, inject, onMounted, onUnmounted, onActivated } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import type { UnlistenFn } from '@tauri-apps/api/event';
@@ -59,6 +59,29 @@ const isClearingCache = ref(false);
 // 导航状态
 type SettingsTab = 'general' | 'hosting' | 'advanced' | 'backup';
 const activeTab = ref<SettingsTab>('general');
+
+// 接收来自 MainLayout 的 tab 跳转指令（不提供 fallback，确保拿到 provide 的同一个 ref）
+const settingsTargetTab = inject<import('vue').Ref<string | null>>('settingsTargetTab');
+
+const applyTargetTab = () => {
+  if (settingsTargetTab?.value) {
+    const validTabs: SettingsTab[] = ['general', 'hosting', 'advanced', 'backup'];
+    if (validTabs.includes(settingsTargetTab.value as SettingsTab)) {
+      activeTab.value = settingsTargetTab.value as SettingsTab;
+    }
+    settingsTargetTab.value = null;
+  }
+};
+
+// KeepAlive 重新激活时检查
+onActivated(applyTargetTab);
+
+// watch 兜底：处理时序竞争（settingsTargetTab 在 onActivated 之后才被赋值的情况）
+if (settingsTargetTab) {
+  watch(settingsTargetTab, (val) => {
+    if (val) applyTargetTab();
+  });
+}
 
 interface NavItem {
   id: SettingsTab;
@@ -539,6 +562,9 @@ function handleAnalyticsToggle() {
 // ==================== 生命周期 ====================
 
 onMounted(async () => {
+  // 首次挂载时也检查 tab 跳转指令（处理从未访问过设置页的情况）
+  applyTargetTab();
+
   try {
     appVersion.value = await getVersion();
   } catch (error) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, KeepAlive, Transition, onMounted, onUnmounted } from 'vue';
+import { ref, computed, provide, KeepAlive, Transition, onMounted, onUnmounted } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import TitleBar from './TitleBar.vue';
 import Sidebar from './Sidebar.vue';
@@ -23,6 +23,10 @@ const currentView = ref<ViewType>('upload');
 // 计算当前应该显示的组件
 const currentViewComponent = computed(() => viewComponents[currentView.value]);
 
+// 设置页面需要激活的 tab（用于从其他页面跳转到指定设置面板）
+const settingsTargetTab = ref<string | null>(null);
+provide('settingsTargetTab', settingsTargetTab);
+
 const handleNavigate = (view: ViewType) => {
   currentView.value = view;
 };
@@ -31,12 +35,25 @@ const handleNavigate = (view: ViewType) => {
 let unlistenNavigate: UnlistenFn | null = null;
 
 onMounted(async () => {
-  // 监听托盘菜单的导航事件
-  unlistenNavigate = await listen<string>('navigate-to', (event) => {
-    const target = event.payload;
-    console.log('[MainLayout] 收到托盘导航事件:', target);
-    if (target === 'settings' || target === 'history') {
-      handleNavigate(target);
+  // 监听导航事件（来自托盘菜单或应用内跳转）
+  // payload 支持两种格式：
+  // - 字符串: 'settings' | 'history'
+  // - 对象: { view: 'settings', tab: 'hosting' }
+  unlistenNavigate = await listen<string | { view: string; tab?: string }>('navigate-to', (event) => {
+    const payload = event.payload;
+
+    if (typeof payload === 'string') {
+      if (payload === 'settings' || payload === 'history') {
+        handleNavigate(payload);
+      }
+    } else if (payload && typeof payload === 'object') {
+      const { view, tab } = payload;
+      if (view === 'settings' || view === 'history' || view === 'upload' || view === 'cloud-storage') {
+        if (view === 'settings' && tab) {
+          settingsTargetTab.value = tab;
+        }
+        handleNavigate(view as ViewType);
+      }
     }
   });
 });
@@ -54,7 +71,7 @@ onUnmounted(() => {
   <div class="main-layout">
     <TitleBar />
     <div class="dashboard-container">
-      <Sidebar @navigate="handleNavigate" />
+      <Sidebar :current-view="currentView" @navigate="handleNavigate" />
       <div class="content-area">
         <!-- 使用 Transition 添加淡入淡出动画 -->
         <!-- 使用 KeepAlive 缓存组件，避免重复销毁和创建 -->
