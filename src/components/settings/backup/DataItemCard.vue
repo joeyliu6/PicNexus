@@ -35,7 +35,6 @@ const emit = defineEmits<{
 
 const uploadMenuVisible = ref(false);
 const downloadMenuVisible = ref(false);
-const tooltipVisible = ref(false);
 const instanceId = Math.random().toString(36).substr(2, 9);
 
 function broadcastMenuOpen() {
@@ -107,6 +106,13 @@ const statusText = computed(() => {
   return `${prefix}${relTime}同步`;
 });
 
+const shortStatusText = computed(() => {
+  if (!props.syncStatus.lastSync) return '未同步';
+  if (props.syncStatus.result === 'failed') return '同步失败';
+  if (props.syncStatus.result === 'partial') return '部分同步';
+  return formatRelativeTime(props.syncStatus.lastSync);
+});
+
 const isHistoryType = computed(() => props.type === 'history');
 
 function formatDate(dateStr: string, includeYear = true): string {
@@ -122,24 +128,24 @@ function formatDate(dateStr: string, includeYear = true): string {
   }
 }
 
-const tooltipProfiles = computed(() => {
-  if (!props.otherProfiles?.length) return [];
-  const isConfig = props.type === 'config';
-  return props.otherProfiles
-    .filter(r => isConfig ? r.configLastSync : r.historyLastSync)
-    .map(r => {
-      const lastSync = (isConfig ? r.configLastSync : r.historyLastSync)!;
+const tooltipContent = computed(() => {
+  const lines: string[] = [];
+  lines.push(statusText.value);
+  if (props.syncStatus.lastSync) {
+    lines.push(formatDate(props.syncStatus.lastSync));
+  }
+  if (props.otherProfiles?.length) {
+    const isConfig = props.type === 'config';
+    for (const r of props.otherProfiles) {
+      const lastSync = isConfig ? r.configLastSync : r.historyLastSync;
+      if (!lastSync) continue;
       const result = isConfig ? r.configSyncResult : r.historySyncResult;
-      return {
-        name: r.providerName,
-        date: formatDate(lastSync, false),
-        result,
-        statusClass: result === 'failed' ? 'failed' : 'synced',
-      };
-    });
+      const status = result === 'failed' ? ' (失败)' : '';
+      lines.push(`${r.providerName}: ${formatDate(lastSync, false)}${status}`);
+    }
+  }
+  return lines.join('\n');
 });
-
-const hasTooltip = computed(() => tooltipProfiles.value.length > 0);
 
 function closeAllMenus() {
   uploadMenuVisible.value = false;
@@ -170,27 +176,38 @@ function handleCloudAction(action: string) {
         <Button
           @click="emit('export-local')"
           :loading="localLoading.export"
-          label="导出"
+          label="备份到本地"
           icon="pi pi-download"
-          outlined
+          text
+          severity="secondary"
           size="small"
         />
         <Button
           @click="emit('import-local')"
           :loading="localLoading.import"
-          label="导入"
+          label="从本地恢复"
           icon="pi pi-upload"
-          outlined
+          text
+          severity="secondary"
           size="small"
         />
       </div>
     </div>
 
-    <div class="card-divider"></div>
-
     <!-- 云端同步行 -->
-    <div class="card-row">
-      <span class="row-label">云端同步</span>
+    <div class="card-row cloud-row">
+      <div class="row-label-group">
+        <span class="row-label">云端同步</span>
+        <span
+          v-if="isCloudEnabled"
+          v-tooltip.bottom="tooltipContent"
+          class="status-badge"
+          :class="statusClass"
+        >
+          <span class="status-dot"></span>
+          {{ shortStatusText }}
+        </span>
+      </div>
       <div class="row-actions">
         <!-- 上传按钮 -->
         <template v-if="!isHistoryType">
@@ -199,7 +216,7 @@ function handleCloudAction(action: string) {
             :loading="cloudLoading.upload"
             :disabled="!isCloudEnabled"
             :title="!isCloudEnabled ? '请先配置 WebDAV 连接' : ''"
-            label="上传"
+            label="备份到云端"
             icon="pi pi-cloud-upload"
             outlined
             size="small"
@@ -212,7 +229,7 @@ function handleCloudAction(action: string) {
               :loading="cloudLoading.upload"
               :disabled="!isCloudEnabled"
               :title="!isCloudEnabled ? '请先配置 WebDAV 连接' : ''"
-              label="上传"
+              label="备份到云端"
               icon="pi pi-cloud-upload"
               outlined
               size="small"
@@ -241,7 +258,7 @@ function handleCloudAction(action: string) {
             :loading="cloudLoading.download"
             :disabled="!isCloudEnabled"
             :title="!isCloudEnabled ? '请先配置 WebDAV 连接' : ''"
-            label="拉取"
+            label="从云端恢复"
             icon="pi pi-cloud-download"
             outlined
             size="small"
@@ -272,41 +289,6 @@ function handleCloudAction(action: string) {
       </div>
     </div>
 
-    <!-- 同步状态栏 -->
-    <template v-if="isCloudEnabled">
-      <div class="card-status-bar">
-        <div
-          class="status-left"
-          :class="{ 'has-tooltip': hasTooltip }"
-          @mouseenter="tooltipVisible = true"
-          @mouseleave="tooltipVisible = false"
-        >
-          <span class="status-text" :class="statusClass">
-            <span class="status-dot"></span>
-            {{ statusText }}
-          </span>
-
-          <!-- 其他服务商 tooltip -->
-          <Transition name="tooltip">
-            <div v-if="tooltipVisible && hasTooltip" class="sync-tooltip">
-              <div
-                v-for="(p, i) in tooltipProfiles"
-                :key="i"
-                class="tooltip-row"
-              >
-                <span class="tooltip-dot" :class="p.statusClass"></span>
-                <span class="tooltip-name">{{ p.name }}</span>
-                <span class="tooltip-date">{{ p.date }}</span>
-                <span v-if="p.result === 'failed'" class="tooltip-failed">失败</span>
-              </div>
-            </div>
-          </Transition>
-        </div>
-        <span v-if="syncStatus.lastSync" class="last-sync">
-          {{ formatDate(syncStatus.lastSync) }}
-        </span>
-      </div>
-    </template>
   </div>
 </template>
 
@@ -316,7 +298,6 @@ function handleCloudAction(action: string) {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  overflow: hidden;
 }
 
 /* 行布局 */
@@ -324,7 +305,16 @@ function handleCloudAction(action: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 10px 14px;
+}
+
+.card-row:first-child {
+  border-radius: 12px 12px 0 0;
+}
+
+.card-row.cloud-row {
+  background: var(--hover-overlay-subtle);
+  border-radius: 0 0 12px 12px;
 }
 
 .row-label {
@@ -340,122 +330,40 @@ function handleCloudAction(action: string) {
   gap: 8px;
 }
 
-/* 分隔线 */
-.card-divider {
-  height: 1px;
-  background: var(--border-subtle);
-  margin: 0 16px;
-}
-
-/* 状态栏 */
-.card-status-bar {
+/* 标签分组（标签 + 状态 Badge 内联） */
+.row-label-group {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
+  gap: 8px;
+  min-width: 0;
 }
 
-.status-left {
+.status-badge {
   position: relative;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
-}
-
-.status-left.has-tooltip {
-  cursor: default;
-}
-
-.status-text {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
+  gap: 4px;
+  font-size: 11px;
   font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
   white-space: nowrap;
 }
 
 .status-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: currentColor;
   flex-shrink: 0;
 }
 
-.status-text.synced { color: var(--success); }
-.status-text.not-synced { color: var(--text-muted); }
-.status-text.failed { color: var(--error); }
-.status-text.partial { color: var(--warning); }
-.status-text.stale-warning { color: var(--warning); }
-.status-text.stale-danger { color: #e67e22; }
-
-.last-sync {
-  font-size: 11px;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-/* Tooltip */
-.sync-tooltip {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  min-width: 200px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  box-shadow: var(--shadow-float);
-  z-index: 1000;
-  padding: 6px 0;
-}
-
-.tooltip-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.tooltip-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.tooltip-dot.synced { background: var(--success); }
-.tooltip-dot.failed { background: var(--error); }
-
-.tooltip-name {
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.tooltip-date {
-  margin-left: auto;
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-.tooltip-failed {
-  color: var(--error);
-  font-size: 11px;
-}
-
-/* Tooltip 动画 */
-.tooltip-enter-active,
-.tooltip-leave-active {
-  transition: all 0.15s ease;
-}
-
-.tooltip-enter-from,
-.tooltip-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
-}
+.status-badge.synced { background: rgba(34, 197, 94, 0.12); color: var(--success); }
+.status-badge.not-synced { background: var(--hover-overlay-subtle); color: var(--text-muted); }
+.status-badge.failed { background: rgba(239, 68, 68, 0.1); color: var(--error); }
+.status-badge.partial { background: rgba(245, 158, 11, 0.1); color: var(--warning); }
+.status-badge.stale-warning { background: rgba(245, 158, 11, 0.1); color: var(--warning); }
+.status-badge.stale-danger { background: rgba(230, 126, 34, 0.1); color: #e67e22; }
 
 /* 下拉菜单 */
 .dropdown-wrapper {
@@ -523,10 +431,8 @@ function handleCloudAction(action: string) {
     gap: 8px;
   }
 
-  .card-status-bar {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
+  .row-label-group {
+    flex-wrap: wrap;
   }
 }
 </style>

@@ -191,6 +191,7 @@ function handleHistoryCloudAction(action: string) {
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-top: 12px;
 }
 
 .warn-text i {
