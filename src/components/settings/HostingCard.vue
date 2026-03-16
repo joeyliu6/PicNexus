@@ -98,7 +98,6 @@ const statusDotClass = computed(() => {
             label="自动获取"
             icon="pi pi-sign-in"
             @click="handleLogin"
-            severity="info"
             outlined
             size="small"
           />
@@ -286,8 +285,6 @@ const statusDotClass = computed(() => {
   display: flex;
   justify-content: flex-start;
   gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-subtle);
 }
 
 @media (max-width: 768px) {
