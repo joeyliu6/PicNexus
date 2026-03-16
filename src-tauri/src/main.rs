@@ -63,6 +63,10 @@ fn main() {
     tauri::Builder::default()
         // 注册 Tauri 2.0 插件
         .plugin(tauri_plugin_positioner::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -315,28 +319,31 @@ fn main() {
             }
             // --- 最佳适配方案逻辑 End ---
 
-            // 5. 添加后台内存优化功能 (仅 Windows)
-            // 使用 WebView2 的 MemoryUsageTargetLevel API 降低后台内存占用
-            #[cfg(target_os = "windows")]
+            // 5. 窗口事件处理：关闭最小化到托盘 + 后台内存优化
             {
-                let window_clone = window.clone();
+                let window_for_close = window.clone();
+                #[cfg(target_os = "windows")]
+                let window_for_focus = window.clone();
                 window.on_window_event(move |event| {
                     match event {
+                        tauri::WindowEvent::CloseRequested { api, .. } => {
+                            // 关闭按钮 → 隐藏到托盘（托盘菜单"退出"才是真正退出）
+                            api.prevent_close();
+                            let _ = window_for_close.hide();
+                        }
+                        #[cfg(target_os = "windows")]
                         tauri::WindowEvent::Focused(focused) => {
+                            // Windows 后台内存优化：WebView2 MemoryUsageTargetLevel
                             let level_str = if *focused { "Normal" } else { "Low" };
-                            let window_ref = window_clone.clone();
-
-                            // 使用 with_webview 访问底层 WebView2 API
+                            let window_ref = window_for_focus.clone();
                             let _ = window_ref.with_webview(move |webview| {
                                 #[cfg(windows)]
                                 unsafe {
                                     use webview2_com::Microsoft::Web::WebView2::Win32::*;
-                                    // 使用 windows_core（由 Tauri/wry 依赖树引入的版本）
                                     use windows_core::Interface;
 
                                     let controller = webview.controller();
                                     if let Ok(core) = controller.CoreWebView2() {
-                                        // ICoreWebView2_19 包含 MemoryUsageTargetLevel API
                                         if let Ok(core19) = core.cast::<ICoreWebView2_19>() {
                                             let level_value = if level_str == "Low" {
                                                 COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW

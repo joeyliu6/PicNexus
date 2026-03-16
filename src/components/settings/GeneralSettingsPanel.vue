@@ -3,6 +3,7 @@
 
 import { computed } from 'vue';
 import Checkbox from 'primevue/checkbox';
+import ToggleSwitch from 'primevue/toggleswitch';
 import Divider from 'primevue/divider';
 import type { ThemeMode, ServiceType } from '../../config/types';
 import { PRIVATE_SERVICES, PUBLIC_SERVICES } from '../../config/types';
@@ -10,17 +11,12 @@ import { PRIVATE_SERVICES, PUBLIC_SERVICES } from '../../config/types';
 // ==================== Props ====================
 
 interface Props {
-  /** 当前主题 */
   currentTheme: ThemeMode;
-
-  /** 启用的服务列表 */
   availableServices: ServiceType[];
-
-  /** 服务名称映射 */
   serviceNames: Record<ServiceType, string>;
-
-  /** 各服务的配置状态 */
   serviceConfigStatus: Record<ServiceType, boolean>;
+  autoStart: boolean;
+  minimizeToTrayOnStart: boolean;
 }
 
 const props = defineProps<Props>();
@@ -28,13 +24,11 @@ const props = defineProps<Props>();
 // ==================== Emits ====================
 
 const emit = defineEmits<{
-  /** 主题变更 */
   'update:currentTheme': [theme: ThemeMode];
-
-  /** 启用服务变更 */
   'update:availableServices': [services: ServiceType[]];
-
-  /** 保存设置 */
+  'update:autoStart': [enabled: boolean];
+  'update:minimizeToTrayOnStart': [enabled: boolean];
+  'navigate-to-hosting': [serviceId: ServiceType];
   'save': [];
 }>();
 
@@ -66,13 +60,21 @@ function toggleService(service: ServiceType) {
     : [...current, service];
   emit('save');
 }
+
+function handleChipClick(svc: ServiceType) {
+  if (props.serviceConfigStatus[svc]) {
+    toggleService(svc);
+  } else {
+    emit('navigate-to-hosting', svc);
+  }
+}
 </script>
 
 <template>
   <div class="general-settings-panel">
     <div class="section-header">
       <h2>常规设置</h2>
-      <p class="section-desc">管理应用外观与启用的服务模块。</p>
+      <p class="section-desc">管理应用外观、启动行为与启用的服务模块。</p>
     </div>
 
     <!-- 外观主题 -->
@@ -94,10 +96,39 @@ function toggleService(service: ServiceType) {
 
     <Divider />
 
+    <!-- 应用行为 -->
+    <div class="form-group">
+      <label class="group-label">应用行为</label>
+      <div class="behavior-toggles">
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-row-label">开机自启动</span>
+            <span class="toggle-row-desc">系统启动时自动运行 PicNexus</span>
+          </div>
+          <ToggleSwitch
+            :modelValue="autoStart"
+            @update:modelValue="(v: boolean) => emit('update:autoStart', v)"
+          />
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-row-label">启动时最小化到托盘</span>
+            <span class="toggle-row-desc">启动后不显示主窗口，仅显示托盘图标</span>
+          </div>
+          <ToggleSwitch
+            :modelValue="minimizeToTrayOnStart"
+            @update:modelValue="(v: boolean) => emit('update:minimizeToTrayOnStart', v)"
+          />
+        </div>
+      </div>
+    </div>
+
+    <Divider />
+
     <!-- 启用的图床服务 -->
     <div class="form-group">
       <label class="group-label">启用的图床服务</label>
-      <p class="helper-text">勾选要在"上传界面"显示的服务。</p>
+      <p class="helper-text">勾选要在"上传界面"显示的服务。未配置的服务点击可跳转到配置。</p>
 
       <div class="service-group-section">
         <div class="service-group-title">私有图床</div>
@@ -107,8 +138,7 @@ function toggleService(service: ServiceType) {
             :key="svc"
             class="toggle-chip"
             :class="{ disabled: !serviceConfigStatus[svc] }"
-            v-tooltip.top="!serviceConfigStatus[svc] ? '未配置，请前往图床设置' : ''"
-            @click="serviceConfigStatus[svc] && toggleService(svc)"
+            @click="handleChipClick(svc)"
           >
             <Checkbox
               :modelValue="localAvailableServices.includes(svc)"
@@ -117,6 +147,7 @@ function toggleService(service: ServiceType) {
               @click.stop
             />
             <span class="toggle-label">{{ serviceNames[svc] }}</span>
+            <i v-if="!serviceConfigStatus[svc]" class="pi pi-arrow-right chip-nav-icon"></i>
           </div>
         </div>
       </div>
@@ -129,8 +160,7 @@ function toggleService(service: ServiceType) {
             :key="svc"
             class="toggle-chip"
             :class="{ disabled: !serviceConfigStatus[svc] }"
-            v-tooltip.top="!serviceConfigStatus[svc] ? '未配置，请前往图床设置' : ''"
-            @click="serviceConfigStatus[svc] && toggleService(svc)"
+            @click="handleChipClick(svc)"
           >
             <Checkbox
               :modelValue="localAvailableServices.includes(svc)"
@@ -139,6 +169,7 @@ function toggleService(service: ServiceType) {
               @click.stop
             />
             <span class="toggle-label">{{ serviceNames[svc] }}</span>
+            <i v-if="!serviceConfigStatus[svc]" class="pi pi-arrow-right chip-nav-icon"></i>
           </div>
         </div>
       </div>
@@ -184,6 +215,40 @@ function toggleService(service: ServiceType) {
   box-shadow: 0 0 0 1px var(--primary);
 }
 
+/* 应用行为 */
+.behavior-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+.toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toggle-row-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.toggle-row-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 /* 服务分组样式 */
 .service-group-section {
   margin-bottom: 16px;
@@ -221,17 +286,32 @@ function toggleService(service: ServiceType) {
 }
 
 .toggle-chip.disabled {
-  cursor: not-allowed;
+  cursor: pointer;
   background: var(--bg-app);
+}
+
+.toggle-chip.disabled:hover {
+  border-color: var(--primary);
 }
 
 .toggle-chip .toggle-label {
   font-size: 13px;
   color: var(--text-primary);
+  flex: 1;
 }
 
 .toggle-chip.disabled .toggle-label {
   color: var(--text-muted);
+}
+
+.chip-nav-icon {
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+
+.toggle-chip.disabled:hover .chip-nav-icon {
+  color: var(--primary);
 }
 
 </style>

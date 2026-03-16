@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, watch, nextTick } from 'vue';
 import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
 import Textarea from 'primevue/textarea';
@@ -56,6 +56,7 @@ const props = defineProps<{
   prefixList: string[];
   selectedPrefixIndex: number;
   githubUrlStrategy?: GithubUrlStrategy;
+  targetCardId?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -72,7 +73,18 @@ const emit = defineEmits<{
   addPrefix: [];
   removePrefix: [index: number];
   resetToDefault: [];
+  cardNavigated: [];
 }>();
+
+function isTargetCard(id: string): boolean {
+  return props.targetCardId === id;
+}
+
+watch(() => props.targetCardId, (val) => {
+  if (val) {
+    nextTick(() => emit('cardNavigated'));
+  }
+});
 
 function isPrivateConfigured(providerId: PrivateProviderId): boolean {
   const data = props.privateFormData;
@@ -130,6 +142,7 @@ const extractNamiAuthToken = computed(() => {
       <div class="provider-grid">
         <HostingCard
           id="r2"
+          :force-expand="isTargetCard('r2')"
           name="Cloudflare R2"
           description="S3 兼容的高速存储"
           :isConfigured="isPrivateConfigured('r2')"
@@ -166,6 +179,7 @@ const extractNamiAuthToken = computed(() => {
 
         <HostingCard
           id="tencent"
+          :force-expand="isTargetCard('tencent')"
           name="腾讯云"
           description="腾讯云对象存储"
           :isConfigured="isPrivateConfigured('tencent')"
@@ -202,6 +216,7 @@ const extractNamiAuthToken = computed(() => {
 
         <HostingCard
           id="aliyun"
+          :force-expand="isTargetCard('aliyun')"
           name="阿里云"
           description="阿里云对象存储"
           :isConfigured="isPrivateConfigured('aliyun')"
@@ -238,6 +253,7 @@ const extractNamiAuthToken = computed(() => {
 
         <HostingCard
           id="qiniu"
+          :force-expand="isTargetCard('qiniu')"
           name="七牛云"
           description="七牛云对象存储"
           :isConfigured="isPrivateConfigured('qiniu')"
@@ -275,6 +291,7 @@ const extractNamiAuthToken = computed(() => {
 
         <HostingCard
           id="upyun"
+          :force-expand="isTargetCard('upyun')"
           name="又拍云"
           description="又拍云对象存储"
           :isConfigured="isPrivateConfigured('upyun')"
@@ -313,6 +330,7 @@ const extractNamiAuthToken = computed(() => {
       <div class="provider-grid">
         <HostingCard
           id="jd"
+          :force-expand="isTargetCard('jd')"
           name="京东"
           description="京东云存储，开箱即用"
           :isBuiltin="true"
@@ -329,6 +347,7 @@ const extractNamiAuthToken = computed(() => {
 
         <HostingCard
           id="qiyu"
+          :force-expand="isTargetCard('qiyu')"
           name="七鱼"
           description="网易七鱼客服系统存储"
           :isBuiltin="true"
@@ -353,6 +372,7 @@ const extractNamiAuthToken = computed(() => {
       <div class="provider-grid">
         <HostingCard
           id="weibo"
+          :force-expand="isTargetCard('weibo')"
           name="微博"
           description="新浪微博图床"
           :isConfigured="isCookieConfigured('weibo')"
@@ -386,6 +406,7 @@ const extractNamiAuthToken = computed(() => {
 
         <HostingCard
           id="zhihu"
+          :force-expand="isTargetCard('zhihu')"
           name="知乎"
           description="知乎图床"
           :isConfigured="isCookieConfigured('zhihu')"
@@ -405,6 +426,7 @@ const extractNamiAuthToken = computed(() => {
 
         <HostingCard
           id="nowcoder"
+          :force-expand="isTargetCard('nowcoder')"
           name="牛客"
           description="牛客网图床"
           :isConfigured="isCookieConfigured('nowcoder')"
@@ -424,6 +446,7 @@ const extractNamiAuthToken = computed(() => {
 
         <HostingCard
           id="nami"
+          :force-expand="isTargetCard('nami')"
           name="纳米"
           description="纳米图床"
           :isConfigured="isCookieConfigured('nami')"
@@ -447,6 +470,7 @@ const extractNamiAuthToken = computed(() => {
 
         <HostingCard
           id="bilibili"
+          :force-expand="isTargetCard('bilibili')"
           name="B站"
           description="Bilibili 图床"
           :isConfigured="isCookieConfigured('bilibili')"
@@ -466,6 +490,7 @@ const extractNamiAuthToken = computed(() => {
 
         <HostingCard
           id="chaoxing"
+          :force-expand="isTargetCard('chaoxing')"
           name="超星"
           description="超星图床"
           :isConfigured="isCookieConfigured('chaoxing')"
@@ -491,6 +516,7 @@ const extractNamiAuthToken = computed(() => {
       <div class="provider-grid">
         <HostingCard
           id="smms"
+          :force-expand="isTargetCard('smms')"
           name="SM.MS"
           description="SM.MS 图床"
           :isConfigured="isTokenConfigured('smms')"
@@ -508,6 +534,7 @@ const extractNamiAuthToken = computed(() => {
 
         <HostingCard
           id="github"
+          :force-expand="isTargetCard('github')"
           name="GitHub"
           description="GitHub 仓库图床"
           :isConfigured="isTokenConfigured('github')"
@@ -548,6 +575,7 @@ const extractNamiAuthToken = computed(() => {
 
         <HostingCard
           id="imgur"
+          :force-expand="isTargetCard('imgur')"
           name="Imgur"
           description="Imgur 图床"
           :isConfigured="isTokenConfigured('imgur')"

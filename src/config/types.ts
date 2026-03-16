@@ -479,6 +479,16 @@ export const DEFAULT_PREFIXES: string[] = [
 ];
 
 /**
+ * 应用行为配置
+ */
+export interface AppBehaviorConfig {
+  /** 开机自启动 */
+  autoStart: boolean;
+  /** 启动时最小化到托盘 */
+  minimizeToTrayOnStart: boolean;
+}
+
+/**
  * 用户配置（新架构）
  * 支持多图床并行上传
  */
@@ -487,7 +497,7 @@ export const DEFAULT_PREFIXES: string[] = [
  * 每次配置格式变更时递增此版本号
  * 迁移函数将根据此版本号决定是否需要执行迁移
  */
-export const CONFIG_VERSION = 5;
+export const CONFIG_VERSION = 6;
 
 export interface UserConfig {
   /**
@@ -547,6 +557,9 @@ export interface UserConfig {
 
   /** Google Analytics 配置 */
   analytics?: AnalyticsConfig;
+
+  /** 应用行为配置 */
+  appBehavior?: AppBehaviorConfig;
 }
 
 /**
@@ -749,6 +762,10 @@ export const DEFAULT_CONFIG: UserConfig = {
   },
   analytics: {
     enabled: true
+  },
+  appBehavior: {
+    autoStart: false,
+    minimizeToTrayOnStart: false
   }
 };
 
@@ -1075,6 +1092,14 @@ export function migrateConfig(config: UserConfig): UserConfig {
       delete github.cdnConfig;
     }
     console.log('[配置迁移] 从版本 4 迁移到版本 5：合并 GitHub URL 策略');
+  }
+
+  // 版本 5 -> 6：新增应用行为配置
+  if (currentVersion < 6) {
+    if (!migratedConfig.appBehavior) {
+      migratedConfig.appBehavior = { autoStart: false, minimizeToTrayOnStart: false };
+    }
+    console.log('[配置迁移] 从版本 5 迁移到版本 6：新增应用行为配置');
   }
 
   // 更新版本号到最新

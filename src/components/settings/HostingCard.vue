@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import Button from 'primevue/button';
 
 interface Props {
@@ -14,6 +14,7 @@ interface Props {
   isChecking?: boolean;
   showTestButton?: boolean;
   showLoginButton?: boolean;
+  forceExpand?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -23,7 +24,8 @@ const props = withDefaults(defineProps<Props>(), {
   isAvailable: false,
   isChecking: false,
   showTestButton: true,
-  showLoginButton: false
+  showLoginButton: false,
+  forceExpand: false
 });
 
 const emit = defineEmits<{
@@ -33,7 +35,18 @@ const emit = defineEmits<{
   toggle: [expanded: boolean];
 }>();
 
+const cardRef = ref<HTMLElement | null>(null);
 const isExpanded = ref(props.defaultExpanded);
+
+watch(() => props.forceExpand, (val) => {
+  if (val) {
+    isExpanded.value = true;
+    emit('toggle', true);
+    nextTick(() => {
+      cardRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+});
 
 const toggleExpanded = () => {
   isExpanded.value = !isExpanded.value;
@@ -61,7 +74,7 @@ const statusDotClass = computed(() => {
 </script>
 
 <template>
-  <div class="hosting-card" :class="{ expanded: isExpanded }">
+  <div ref="cardRef" class="hosting-card" :class="{ expanded: isExpanded }">
     <div class="card-header" @click="toggleExpanded">
       <div class="header-left">
         <span :class="statusDotClass"></span>

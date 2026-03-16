@@ -7,6 +7,8 @@ import ConfirmDialog from 'primevue/confirmdialog';
 import { useThemeManager } from './composables/useTheme';
 import { useToast } from './composables/useToast';
 import { TOAST_MESSAGES } from './constants';
+import { Store } from './store';
+import type { UserConfig } from './config/types';
 
 const { effectiveTheme, initializeTheme } = useThemeManager();
 const toast = useToast();
@@ -35,12 +37,23 @@ onMounted(async () => {
   console.log('[App] Network listeners registered');
 
   // 前端加载完成后显示窗口（避免启动时白屏闪烁）
+  // 如果开启了"启动时最小化到托盘"，则不显示窗口
   try {
-    const appWindow = getCurrentWindow();
-    await appWindow.show();
-    console.log('[App] Window shown');
+    const configStore = new Store('.settings.dat');
+    const config = await configStore.get<UserConfig>('config');
+    const minimizeOnStart = config?.appBehavior?.minimizeToTrayOnStart ?? false;
+
+    if (!minimizeOnStart) {
+      const appWindow = getCurrentWindow();
+      await appWindow.show();
+      console.log('[App] Window shown');
+    } else {
+      console.log('[App] 启动时最小化到托盘，窗口保持隐藏');
+    }
   } catch (err) {
     console.error('[App] 显示窗口失败:', err);
+    // 出错时兜底显示窗口
+    try { await getCurrentWindow().show(); } catch { /* ignore */ }
   }
 });
 

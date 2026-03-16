@@ -125,7 +125,8 @@ const formData = ref({
   linkPrefixEnabled: true,
   selectedPrefixIndex: 0,
   linkPrefixList: [...DEFAULT_PREFIXES],
-  analyticsEnabled: true
+  analyticsEnabled: true,
+  appBehavior: { autoStart: false, minimizeToTrayOnStart: false }
 });
 
 // 测试连接状态
@@ -137,6 +138,9 @@ const testingConnections = ref<Record<string, boolean>>({
 
 // 可用服务列表
 const availableServices = ref<ServiceType[]>([]);
+
+// 图床设置跳转：目标卡片 ID
+const targetCardId = ref<string | null>(null);
 
 // 图床名称映射（基于常量，覆盖部分显示名称以适应 UI）
 const serviceNames: Record<ServiceType, string> = {
@@ -240,7 +244,14 @@ async function loadSettings() {
     }
 
     formData.value.analyticsEnabled = config.analytics?.enabled ?? true;
+    formData.value.appBehavior = config.appBehavior ?? { autoStart: false, minimizeToTrayOnStart: false };
     availableServices.value = config.availableServices || ['jd', 'qiyu'];
+
+    // 从 OS 同步自启动真实状态
+    try {
+      const isEnabled = await invoke<boolean>('plugin:autostart|is_enabled');
+      formData.value.appBehavior.autoStart = isEnabled;
+    } catch { /* 忽略：插件不可用时保持配置值 */ }
 
   } catch (e) {
     console.error('[设置] 加载失败:', e);
@@ -300,6 +311,7 @@ async function saveSettings() {
     };
 
     config.analytics = { enabled: formData.value.analyticsEnabled };
+    config.appBehavior = formData.value.appBehavior;
     config.availableServices = availableServices.value;
 
     await configManager.saveConfig(config, true);
@@ -559,6 +571,27 @@ function handleAnalyticsToggle() {
   saveSettings();
 }
 
+// ==================== 自启动控制 ====================
+
+async function handleAutoStartChange(enabled: boolean) {
+  formData.value.appBehavior.autoStart = enabled;
+  try {
+    await invoke(enabled ? 'plugin:autostart|enable' : 'plugin:autostart|disable');
+  } catch (e) {
+    console.error('[设置] 自启动设置失败:', e);
+    toast.showConfig('error', TOAST_MESSAGES.config.saveFailed(String(e)));
+    formData.value.appBehavior.autoStart = !enabled;
+  }
+  saveSettings();
+}
+
+// ==================== 图床跳转 ====================
+
+function handleNavigateToHosting(serviceId: ServiceType) {
+  targetCardId.value = serviceId;
+  activeTab.value = 'hosting';
+}
+
 // ==================== 生命周期 ====================
 
 onMounted(async () => {
@@ -625,8 +658,13 @@ onUnmounted(() => {
           :available-services="availableServices"
           :service-names="serviceNames"
           :service-config-status="serviceConfigStatus"
+          :auto-start="formData.appBehavior.autoStart"
+          :minimize-to-tray-on-start="formData.appBehavior.minimizeToTrayOnStart"
           @update:current-theme="handleThemeChange"
           @update:available-services="(v) => { availableServices = v; saveSettings(); }"
+          @update:auto-start="handleAutoStartChange"
+          @update:minimize-to-tray-on-start="(v) => { formData.appBehavior.minimizeToTrayOnStart = v; saveSettings(); }"
+          @navigate-to-hosting="handleNavigateToHosting"
           @save="saveSettings"
         />
       </div>
@@ -663,6 +701,8 @@ onUnmounted(() => {
           :prefix-list="formData.linkPrefixList"
           :selected-prefix-index="formData.selectedPrefixIndex"
           :github-url-strategy="formData.github.urlStrategy"
+          :target-card-id="targetCardId"
+          @card-navigated="targetCardId = null"
           @save="saveSettings"
           @test-private="handleServiceTest"
           @test-token="handleServiceTest"

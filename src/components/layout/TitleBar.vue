@@ -14,7 +14,7 @@ const toggleMaximize = () => {
 };
 
 const closeWindow = () => {
-  appWindow.close();
+  appWindow.hide();
 };
 </script>
 
