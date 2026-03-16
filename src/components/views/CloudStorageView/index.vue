@@ -142,7 +142,6 @@ const paginationState = computed(() => ({
   pageSize: pagination.pageSize.value,
   hasMore: pagination.hasMore.value,
   maxKnownPage: pagination.maxKnownPage.value,
-  pageSizeOptions: pagination.pageSizeOptions,
 }));
 
 // 右键菜单项
@@ -390,11 +389,9 @@ watch(currentPath, () => {
           :current-page="paginationState.currentPage"
           :page-size="paginationState.pageSize"
           :total-items="objects.length"
-          :selected-count="selectedItems.length"
           :has-more="paginationState.hasMore"
           :loading="isLoading"
           :max-known-page="paginationState.maxKnownPage"
-          :page-size-options="paginationState.pageSizeOptions"
           @page-change="goToPage"
           @page-size-change="changePageSize"
         />

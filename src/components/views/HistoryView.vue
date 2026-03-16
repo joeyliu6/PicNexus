@@ -193,13 +193,6 @@ const handleSelectedCountUpdate = (count: number) => {
           <span class="stat-val">{{ totalCount }}</span>
           <span class="stat-key">总数</span>
         </div>
-        <template v-if="selectedCount > 0">
-          <div class="v-divider"></div>
-          <div class="stat-item selected">
-            <span class="stat-val">{{ selectedCount }}</span>
-            <span class="stat-key">已选</span>
-          </div>
-        </template>
       </div>
     </div>
 
@@ -300,17 +293,6 @@ const handleSelectedCountUpdate = (count: number) => {
   text-transform: uppercase;
   color: var(--text-secondary);
   margin-top: 2px;
-}
-
-.stat-item.selected .stat-val {
-  color: var(--primary);
-}
-
-/* 竖线分隔符 */
-.v-divider {
-  width: 1px;
-  height: 24px;
-  background-color: var(--border-subtle);
 }
 
 /* 视图标题 */

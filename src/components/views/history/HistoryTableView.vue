@@ -13,6 +13,7 @@ import Tag from 'primevue/tag';
 import Skeleton from 'primevue/skeleton';
 import type { HistoryItem, ServiceType } from '../../../config/types';
 import { getActivePrefix } from '../../../config/types';
+import { formatFileSize } from '../../../utils/formatters';
 import { useHistoryViewState, type LinkFormat } from '../../../composables/useHistoryViewState';
 import { useHistoryManager } from '../../../composables/useHistory';
 import { useThumbCache } from '../../../composables/useThumbCache';
@@ -327,7 +328,7 @@ function handleBulkDelete(): void {
 </script>
 
 <template>
-  <div class="table-view-container">
+  <div class="table-view-container" :class="{ 'has-selection': viewState.hasSelection.value }">
     <!-- 表格视图（服务端分页，加载时使用骨架数据） -->
     <DataTable
       :value="isLoadingPage ? skeletonData : currentPageData"
@@ -419,7 +420,12 @@ function handleBulkDelete(): void {
             <span class="fname" :title="slotProps.data.localFileName">
               {{ slotProps.data.localFileName }}
             </span>
-            <span class="fdate">{{ formatTime(slotProps.data.timestamp) }}</span>
+            <span class="fmeta">
+              {{ formatTime(slotProps.data.timestamp) }}
+              <template v-if="slotProps.data.fileSize">
+                <span class="meta-dot">·</span>{{ formatFileSize(slotProps.data.fileSize) }}
+              </template>
+            </span>
           </div>
         </template>
       </Column>
@@ -482,6 +488,10 @@ function handleBulkDelete(): void {
 <style scoped>
 .table-view-container {
   height: 100%;
+}
+
+.table-view-container.has-selection {
+  padding-bottom: 80px;
 }
 
 /* === 表格视图（极简风格）=== */
@@ -621,10 +631,15 @@ function handleBulkDelete(): void {
   white-space: nowrap;
 }
 
-.fdate {
+.fmeta {
   font-size: 11px;
   color: var(--text-muted);
   font-family: var(--font-mono);
+}
+
+.meta-dot {
+  margin: 0 4px;
+  opacity: 0.5;
 }
 
 /* 服务徽章 */

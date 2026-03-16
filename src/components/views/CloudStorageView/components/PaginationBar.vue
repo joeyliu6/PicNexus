@@ -6,11 +6,9 @@ const props = defineProps<{
   currentPage: number;
   pageSize: number;
   totalItems: number;
-  selectedCount: number;
   hasMore: boolean;
   loading: boolean;
   maxKnownPage: number;
-  pageSizeOptions: number[];
 }>();
 
 const emit = defineEmits<{

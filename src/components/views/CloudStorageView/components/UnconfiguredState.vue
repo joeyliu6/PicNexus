@@ -15,33 +15,6 @@ const emit = defineEmits<{
 const serviceName = computed(() => SERVICE_NAMES[props.serviceId]);
 const serviceIconSvg = computed(() => getServiceIcon(props.serviceId) || '');
 
-const CONFIG_HINTS: Record<CloudServiceType, string[]> = {
-  r2: [
-    '在 Cloudflare 控制台创建 R2 存储桶',
-    '生成 API Token（需要 R2 读写权限）',
-    '填写 Account ID、Access Key、Secret Key 和 Bucket 名称',
-  ],
-  tencent: [
-    '在腾讯云控制台创建 COS 存储桶',
-    '获取 SecretId 和 SecretKey',
-    '填写地域、Bucket 名称和访问域名',
-  ],
-  aliyun: [
-    '在阿里云控制台创建 OSS 存储桶',
-    '获取 AccessKey ID 和 AccessKey Secret',
-    '填写地域、Bucket 名称和访问域名',
-  ],
-  qiniu: [
-    '在七牛云控制台创建存储空间',
-    '获取 Access Key 和 Secret Key',
-    '填写 Bucket 名称和绑定的访问域名',
-  ],
-  upyun: [
-    '在又拍云控制台创建存储服务',
-    '获取操作员账号和密码',
-    '填写服务名称（Bucket）和绑定的访问域名',
-  ],
-};
 </script>
 
 <template>
@@ -57,13 +30,6 @@ const CONFIG_HINTS: Record<CloudServiceType, string[]> = {
         class="go-settings-btn"
         @click="emit('goToSettings')"
       />
-
-      <div class="config-steps">
-        <p class="steps-title">配置步骤</p>
-        <ol class="steps-list">
-          <li v-for="(step, i) in CONFIG_HINTS[serviceId]" :key="i">{{ step }}</li>
-        </ol>
-      </div>
     </div>
   </div>
 </template>
@@ -110,30 +76,4 @@ const CONFIG_HINTS: Record<CloudServiceType, string[]> = {
   line-height: 1.5;
 }
 
-.go-settings-btn {
-  margin-bottom: 32px;
-}
-
-.config-steps {
-  text-align: left;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle-light);
-  border-radius: 8px;
-  padding: 16px 20px;
-}
-
-.steps-title {
-  margin: 0 0 10px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.steps-list {
-  margin: 0;
-  padding-left: 20px;
-  font-size: 13px;
-  color: var(--text-muted);
-  line-height: 1.8;
-}
 </style>
