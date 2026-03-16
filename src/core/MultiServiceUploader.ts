@@ -341,7 +341,7 @@ export class MultiServiceUploader {
 
       // Cookie 类图床：统一检查 cookie 字段
       if (MultiServiceUploader.COOKIE_BASED_SERVICES.includes(serviceId)) {
-        const cfg = serviceConfig as Record<string, unknown>;
+        const cfg = serviceConfig as unknown as Record<string, unknown>;
         if (!(cfg.cookie as string)?.trim()) {
           console.warn(`[MultiUploader] ${serviceId} Cookie 未配置，跳过`);
           return false;
@@ -352,7 +352,7 @@ export class MultiServiceUploader {
       // 通用必填字段校验
       const requiredFields = MultiServiceUploader.REQUIRED_FIELDS[serviceId];
       if (requiredFields) {
-        const cfg = serviceConfig as Record<string, unknown>;
+        const cfg = serviceConfig as unknown as Record<string, unknown>;
         const hasAll = requiredFields.every(field => {
           const val = cfg[field];
           return typeof val === 'string' ? val.trim() : val;
