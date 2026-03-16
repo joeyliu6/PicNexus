@@ -73,6 +73,7 @@ fn main() {
         .manage(HttpClient(http_client))     // 注册全局 HTTP 客户端
         .invoke_handler(tauri::generate_handler![
             open_login_window,
+            show_login_window,
             save_cookie_from_login,
             start_cookie_monitoring,
             setup_cookie_event_monitoring,
@@ -459,8 +460,26 @@ async fn open_login_window(
         }
     });
 
-    window.show().map_err(|e| AppError::external(format!("显示窗口失败: {}", e)))?;
+    // 不立即 show，等待前端 Vue 挂载完成后由 show_login_window 命令触发
+    // 兜底：3 秒后如果前端未调用 show，自动显示（防止前端崩溃导致窗口永不可见）
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        if let Some(w) = app_handle.get_window("login-window") {
+            if !w.is_visible().unwrap_or(true) {
+                let _ = w.show();
+            }
+        }
+    });
 
+    Ok(())
+}
+
+#[tauri::command]
+async fn show_login_window(app: tauri::AppHandle) -> Result<(), AppError> {
+    if let Some(window) = app.get_window("login-window") {
+        window.show().map_err(|e| AppError::external(format!("显示窗口失败: {}", e)))?;
+    }
     Ok(())
 }
 

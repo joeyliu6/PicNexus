@@ -145,10 +145,13 @@ async function bootstrap() {
   // 挂载应用
   app.mount('#app');
 
-  console.log('[LoginWebview] Vue app mounted');
+  // CSS 和 Vue 已就绪，通知 Rust 端显示窗口（避免白屏闪烁）
+  await invoke('show_login_window');
+  console.log('[LoginWebview] Vue app mounted, window shown');
 }
 
 // 启动应用
 bootstrap().catch(error => {
   console.error('[LoginWebview] Bootstrap failed:', error);
+  invoke('show_login_window').catch(() => {});
 });
