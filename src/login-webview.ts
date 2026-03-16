@@ -34,7 +34,7 @@ async function handleStartLogin() {
     // 启动后端 Cookie 监控
     // 注意：Tauri 2.0 invoke 参数名需使用 camelCase，会自动转换为 Rust 的 snake_case
     await invoke('start_cookie_monitoring', {
-      serviceId: serviceId,
+      serviceId,
       targetDomains: provider.domains,
       requiredFields: provider.cookieValidation?.requiredFields || [],
       anyOfFields: provider.cookieValidation?.anyOfFields || [],
@@ -64,7 +64,7 @@ async function handleGetCookie() {
     // 尝试从请求头获取（Windows 专用）
     try {
       cookie = await invoke<string>('get_request_header_cookie', {
-        serviceId: serviceId,
+        serviceId,
         targetDomains: provider.domains,
         requiredFields: provider.cookieValidation?.requiredFields || [],
         anyOfFields: provider.cookieValidation?.anyOfFields || []
@@ -87,7 +87,7 @@ async function handleGetCookie() {
     // 保存 Cookie
     await invoke('save_cookie_from_login', {
       cookie: cookie.trim(),
-      serviceId: serviceId,
+      serviceId,
       requiredFields: provider.cookieValidation?.requiredFields || [],
       anyOfFields: provider.cookieValidation?.anyOfFields || []
     });
@@ -146,14 +146,10 @@ async function bootstrap() {
   // 挂载应用
   app.mount('#app');
 
-  // 渲染完成后显示窗口，避免白屏闪烁
-  await appWindow.show();
-
   console.log('[LoginWebview] Vue app mounted');
 }
 
 // 启动应用
 bootstrap().catch(error => {
   console.error('[LoginWebview] Bootstrap failed:', error);
-  appWindow.show();
 });

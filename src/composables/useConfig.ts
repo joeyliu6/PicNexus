@@ -3,7 +3,6 @@
 import { ref, Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn, emit } from '@tauri-apps/api/event';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { Store } from '../store';
 import {
   UserConfig,
@@ -321,78 +320,35 @@ export function useConfigManager() {
    * @param serviceId 服务标识（weibo/nowcoder/zhihu/nami/bilibili/chaoxing）
    */
   async function openCookieWebView(serviceId: ServiceType): Promise<void> {
-    let errorOccurred = false;
-    let errorMessage = '';
-
     try {
-      // 获取 Cookie 提供者配置
       const provider = getCookieProvider(serviceId);
       if (!provider) {
         toast.showConfig('error', TOAST_MESSAGES.auth.unsupportedService(serviceId));
-        console.error('[WebView登录窗口] 不支持的服务:', serviceId);
         return;
       }
 
       console.log(`[WebView登录窗口] 开始打开 ${provider.name} 登录窗口`);
 
-      // 检查窗口是否已存在
-      try {
-        const existingWindow = await WebviewWindow.getByLabel('login-webview');
-        if (existingWindow) {
-          console.log('[WebView登录窗口] 窗口已存在，聚焦');
-          await existingWindow.setFocus();
-          return;
-        }
-      } catch (error) {
-        console.warn('[WebView登录窗口] 检查已存在窗口失败:', error);
-        // 窗口不存在是正常情况，继续创建新窗口
-      }
+      // 检测当前主题
+      const isLight = document.documentElement.classList.contains('light-theme');
+      const theme = isLight ? 'light' : 'dark';
+      const loginSize = provider.loginWindowSize ?? DEFAULT_LOGIN_WINDOW_SIZE;
 
-      // 创建新的Cookie获取窗口（通过 URL 参数传递服务类型）
-      try {
-        const loginSize = provider.loginWindowSize ?? DEFAULT_LOGIN_WINDOW_SIZE;
-        const loginWindow = new WebviewWindow('login-webview', {
-          url: `/login-webview.html?service=${serviceId}`,
-          title: `${provider.name}登录 - 自动获取Cookie`,
-          width: loginSize.width,
-          height: loginSize.height,
-          resizable: true,
-          center: true,
-          alwaysOnTop: false,
-          decorations: true,
-          transparent: false,
-          visible: false,
-        });
+      // 通过 Rust 命令创建多 Webview 登录窗口
+      await invoke('open_login_window', {
+        serviceId,
+        serviceName: provider.name,
+        width: loginSize.width,
+        height: loginSize.height,
+        titlebarUrl: `login-titlebar.html?name=${encodeURIComponent(provider.name)}&theme=${theme}`,
+        contentUrl: `login-webview.html?service=${serviceId}`,
+      });
 
-        loginWindow.once('tauri://created', () => {
-          console.log(`[WebView登录窗口] ✓ ${provider.name} 窗口创建成功`);
-        });
-
-        loginWindow.once('tauri://error', (e: unknown) => {
-          errorOccurred = true;
-          errorMessage = e && typeof e === 'object' && 'payload' in e ? String((e as { payload: unknown }).payload) : String(e);
-          console.error('[WebView登录窗口] 窗口创建失败:', errorMessage);
-        });
-
-        // 等待窗口初始化
-        await new Promise((resolve) => setTimeout(resolve, 200));
-
-        if (errorOccurred) {
-          throw new Error(errorMessage);
-        }
-      } catch (createError) {
-        errorOccurred = true;
-        errorMessage = createError instanceof Error ? createError.message : String(createError);
-        console.error('[WebView登录窗口] 创建窗口异常:', createError);
-        throw createError;
-      }
+      console.log(`[WebView登录窗口] ✓ ${provider.name} 窗口创建成功`);
     } catch (error) {
-      // 统一错误处理 - 只在这里显示一次toast
-      if (!errorOccurred) {
-        errorMessage = error instanceof Error ? error.message : String(error);
-      }
-      console.error('[WebView登录窗口] 打开窗口失败:', errorMessage || error);
-      toast.showConfig('error', TOAST_MESSAGES.auth.loginWindowFailed(errorMessage || String(error)));
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[WebView登录窗口] 打开窗口失败:', errorMessage);
+      toast.showConfig('error', TOAST_MESSAGES.auth.loginWindowFailed(errorMessage));
     }
   }
 

@@ -42,31 +42,6 @@
       pointer-events: none;
     }
 
-    .skeleton-header {
-      height: 32px;
-      background: #020617;
-      border-bottom: 1px solid #334155;
-      display: flex;
-      align-items: center;
-      padding: 0 16px;
-      gap: 8px;
-    }
-
-    .skeleton-icon {
-      width: 12px;
-      height: 12px;
-      background: #334155;
-      border-radius: 2px;
-      animation: skeleton-pulse 1.5s ease-in-out infinite;
-    }
-
-    .skeleton-text {
-      height: 12px;
-      width: 80px;
-      background: #334155;
-      border-radius: 2px;
-      animation: skeleton-pulse 1.5s ease-in-out 0.2s infinite;
-    }
 
     .skeleton-content {
       flex: 1;
@@ -131,23 +106,6 @@
       animation: skeleton-pulse 1.5s ease-in-out 0.4s infinite;
     }
 
-    .skeleton-footer {
-      height: 32px;
-      background: #020617;
-      border-top: 1px solid #334155;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0 16px;
-    }
-
-    .skeleton-footer-text {
-      height: 10px;
-      width: 60px;
-      background: #334155;
-      border-radius: 2px;
-      animation: skeleton-pulse 1.5s ease-in-out 0.5s infinite;
-    }
 
     @keyframes skeleton-pulse {
       0%, 100% {
@@ -163,10 +121,6 @@
   <div id="app">
     <!-- 加载骨架屏，Vue 挂载后自动消失 -->
     <div class="loading-skeleton">
-      <div class="skeleton-header">
-        <div class="skeleton-icon"></div>
-        <div class="skeleton-text"></div>
-      </div>
       <div class="skeleton-content">
         <div class="skeleton-card">
           <div class="skeleton-circle"></div>
@@ -177,10 +131,6 @@
           <div class="skeleton-button"></div>
           <div class="skeleton-button"></div>
         </div>
-      </div>
-      <div class="skeleton-footer">
-        <div class="skeleton-footer-text"></div>
-        <div class="skeleton-footer-text"></div>
       </div>
     </div>
   </div>

@@ -1,77 +1,54 @@
 <template>
   <div class="login-container">
-    <!-- 自定义窗口标题栏（可拖拽） -->
-    <div class="window-header" data-tauri-drag-region>
-      <div class="header-title">
-        <i class="pi pi-lock"></i>
-        <span>{{ provider.name }}登录授权</span>
-      </div>
-    </div>
-
+    <!-- 主内容区 -->
     <div class="content-area">
-      <Card class="login-card" :pt="{ body: { class: 'p-0' }, content: { class: 'p-0' } }">
-        <template #content>
-          <div class="card-inner">
-            <!-- 状态图标 -->
-            <div class="status-icon-wrapper">
-              <i class="pi pi-user-edit animate-pulse"></i>
-            </div>
+      <div class="dialog-body">
+        <!-- 图标 -->
+        <div class="icon-container">
+          <i class="pi pi-shield"></i>
+        </div>
 
-            <!-- 文本提示 -->
-            <div class="text-section">
-              <h2 class="title">准备登录{{ provider.name }}</h2>
-              <p class="description">
-                点击下方按钮将在本窗口加载{{ provider.name }}登录页面。<br>
-                登录成功后，页面会自动检测并获取Cookie。
-              </p>
-            </div>
+        <!-- 标题与描述 -->
+        <h2 class="dialog-title">准备登录{{ provider.name }}</h2>
+        <p class="dialog-desc">
+          点击下方按钮将在本窗口加载{{ provider.name }}登录页面。登录成功后自动获取
+          Cookie 以便进行图片上传。
+        </p>
 
-            <!-- 提示消息 -->
-            <Message severity="info" :closable="false" class="custom-message">
-              <template #icon>
-                <i class="pi pi-info-circle"></i>
-              </template>
-              <span class="message-text">我们仅获取必要的 Cookie 用于上传，不会保存您的密码。</span>
-            </Message>
-
-            <!-- 操作按钮组 -->
-            <div class="actions">
-              <Button
-                label="🚀 开始登录"
-                icon="pi pi-sign-in"
-                severity="primary"
-                class="action-button"
-                @click="$emit('startLogin')"
-              />
-              <Button
-                label="取消"
-                icon="pi pi-times"
-                outlined
-                severity="danger"
-                class="action-button"
-                @click="$emit('close')"
-              />
-            </div>
+        <!-- 安全提示 -->
+        <div class="security-tip">
+          <div class="tip-header">
+            <i class="pi pi-info-circle"></i>
+            <span>安全提示</span>
           </div>
-        </template>
-      </Card>
-    </div>
+          <p class="tip-text">
+            PicNexus 仅获取必要 Cookie，绝不保存您的账号密码。
+          </p>
+        </div>
 
-    <!-- 底部状态栏 -->
-    <div class="status-bar">
-      <span class="status-text">PicNexus 安全上下文</span>
-      <div class="secure-indicator">
-        <div class="dot"></div>
-        <span>已加密</span>
+        <!-- 操作按钮 -->
+        <div class="actions">
+          <Button
+            label="开始登录"
+            icon="pi pi-sign-in"
+            class="btn-primary"
+            @click="$emit('startLogin')"
+          />
+          <Button
+            label="取消"
+            outlined
+            class="btn-cancel"
+            @click="$emit('close')"
+          />
+        </div>
       </div>
     </div>
+
   </div>
 </template>
 
 <script setup lang="ts">
 import Button from 'primevue/button';
-import Card from 'primevue/card';
-import Message from 'primevue/message';
 import type { CookieProvider } from '@/config/cookieProviders';
 
 defineProps<{
@@ -85,261 +62,135 @@ defineEmits<{
 </script>
 
 <style scoped>
-/* === 全局布局 === */
 .login-container {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background-color: var(--bg-app);
+  background: var(--bg-app);
   color: var(--text-main);
   user-select: none;
   overflow: hidden;
 }
 
-/* === 窗口标题栏 === */
-.window-header {
-  height: 32px;
-  display: flex;
-  align-items: center;
-  padding: 0 16px;
-  background: var(--bg-titlebar);
-  border-bottom: 1px solid var(--border-subtle);
-  flex-shrink: 0;
-}
-
-.header-title {
-  font-size: 12px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-main);
-  opacity: 0.9;
-}
-
-.header-title i {
-  font-size: 0.9rem;
-}
-
-/* === 内容区域 === */
+/* 主内容区 */
 .content-area {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 40px 24px;
+  padding: 32px 24px;
   overflow-y: auto;
 }
 
-.card-inner {
-  padding: 32px 24px;
+.dialog-body {
   display: flex;
   flex-direction: column;
   align-items: center;
-}
-
-/* === PrimeVue Card 深度定制 === */
-:deep(.login-card.p-card) {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
   width: 100%;
-  max-width: 380px;
+  max-width: 340px;
 }
 
-/* === 状态图标 === */
-.status-icon-wrapper {
-  background: var(--bg-app);
-  width: 80px;
-  height: 80px;
+/* 图标 */
+.icon-container {
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
+  border: 1.5px solid var(--border-subtle);
+  background: var(--bg-card);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 24px;
-  border: 2px solid var(--border-subtle);
-  transition: all 0.3s ease;
+  margin-bottom: 20px;
 }
 
-.status-icon-wrapper i {
-  font-size: 2.5rem;
+.icon-container i {
+  font-size: 1.5rem;
   color: var(--primary);
 }
 
-.status-icon-wrapper:hover {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
-}
-
-/* === 文本区域 === */
-.text-section {
-  text-align: center;
-  margin-bottom: 24px;
-  width: 100%;
-}
-
-.title {
-  font-size: 1.25rem;
+/* 标题 */
+.dialog-title {
+  font-size: 1.125rem;
   font-weight: 600;
   color: var(--text-main);
-  margin: 0 0 12px 0;
-  line-height: 1.3;
+  margin: 0 0 10px 0;
+  text-align: center;
 }
 
-.description {
-  font-size: 0.875rem;
+.dialog-desc {
+  font-size: 0.8125rem;
   color: var(--text-muted);
-  line-height: 1.6;
+  line-height: 1.7;
+  text-align: center;
+  margin: 0 0 20px 0;
+}
+
+/* 安全提示 */
+.security-tip {
+  width: 100%;
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 24px;
+}
+
+.tip-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.tip-header i {
+  font-size: 0.8125rem;
+  color: var(--primary);
+}
+
+.tip-header span {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.tip-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.5;
   margin: 0;
 }
 
-/* === 自定义 Message 组件 === */
-.custom-message {
-  width: 100%;
-  margin-bottom: 24px;
-}
-
-:deep(.custom-message.p-message) {
-  background: rgba(59, 130, 246, 0.08);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: 8px;
-  padding: 12px 16px;
-}
-
-:deep(.custom-message .p-message-content) {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-:deep(.custom-message .pi-info-circle) {
-  color: var(--primary);
-  font-size: 1rem;
-}
-
-.message-text {
-  font-size: 0.8125rem;
-  color: var(--text-main);
-  line-height: 1.5;
-}
-
-/* === 操作按钮组 === */
+/* 按钮 */
 .actions {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
 }
 
-.action-button {
+:deep(.btn-primary.p-button) {
   width: 100%;
-}
-
-:deep(.action-button.p-button) {
   height: 40px;
   border-radius: 8px;
   font-size: 0.875rem;
   font-weight: 500;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 8px;
 }
 
-:deep(.action-button.p-button:hover) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-:deep(.action-button.p-button:active) {
-  transform: translateY(0);
-}
-
-/* === 底部状态栏 === */
-.status-bar {
-  height: 32px;
-  background: var(--bg-titlebar);
-  border-top: 1px solid var(--border-subtle);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 16px;
-  flex-shrink: 0;
-}
-
-.status-text {
-  font-size: 0.6875rem;
-  color: var(--text-muted);
+:deep(.btn-cancel.p-button) {
+  width: 100%;
+  height: 38px;
+  border-radius: 8px;
+  font-size: 0.8125rem;
   font-weight: 500;
-  letter-spacing: 0.02em;
-}
-
-.secure-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.6875rem;
+  justify-content: center;
+  border-color: var(--border-subtle);
   color: var(--text-muted);
-  font-weight: 500;
 }
 
-.dot {
-  width: 6px;
-  height: 6px;
-  background-color: var(--success);
-  border-radius: 50%;
-  animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+:deep(.btn-cancel.p-button:hover) {
+  border-color: var(--text-muted);
+  background: var(--hover-overlay-subtle);
 }
 
-/* === 动画效果 === */
-.animate-pulse {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-
-@keyframes pulse-dot {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.7;
-    transform: scale(1.2);
-  }
-}
-
-/* === 响应式优化 === */
-@media (max-height: 700px) {
-  .content-area {
-    padding: 24px 20px;
-  }
-
-  .card-inner {
-    padding: 24px 20px;
-  }
-
-  .status-icon-wrapper {
-    width: 64px;
-    height: 64px;
-    margin-bottom: 20px;
-  }
-
-  .status-icon-wrapper i {
-    font-size: 2rem;
-  }
-
-  .title {
-    font-size: 1.125rem;
-  }
-}
 </style>

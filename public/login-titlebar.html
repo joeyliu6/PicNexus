@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login Titlebar</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* 深色主题（默认） */
+    :root {
+      --tb-bg: #020617;
+      --tb-text: #f8fafc;
+      --tb-text-muted: #94a3b8;
+      --tb-border: #334155;
+      --tb-close-hover: #ef4444;
+    }
+
+    /* 亮色主题 */
+    html.light {
+      --tb-bg: #cbd5e1;
+      --tb-text: #0f172a;
+      --tb-text-muted: #64748b;
+      --tb-border: #94a3b8;
+      --tb-close-hover: #ef4444;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--tb-bg);
+      color: var(--tb-text);
+      height: 36px;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 36px;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--tb-border);
+    }
+
+    .titlebar-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .lock-icon {
+      width: 14px;
+      height: 14px;
+      opacity: 0.7;
+    }
+
+    .service-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--tb-text);
+    }
+
+    .auth-label {
+      font-size: 12px;
+      color: var(--tb-text-muted);
+    }
+
+    .close-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--tb-text-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .close-btn:hover {
+      background: var(--tb-close-hover);
+      color: #fff;
+    }
+
+    .close-btn svg {
+      width: 12px;
+      height: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="titlebar" data-tauri-drag-region>
+    <div class="titlebar-left" data-tauri-drag-region>
+      <svg class="lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>
+      <span class="service-name" id="serviceName"></span>
+      <span class="auth-label">登录授权</span>
+    </div>
+    <button class="close-btn" id="closeBtn" title="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"/>
+        <line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+  </div>
+
+  <script>
+    // 从 URL 参数读取服务名和主题
+    const params = new URLSearchParams(window.location.search);
+    const name = params.get('name') || '';
+    const theme = params.get('theme') || 'dark';
+
+    document.getElementById('serviceName').textContent = name;
+
+    if (theme === 'light') {
+      document.documentElement.classList.add('light');
+    }
+
+    // 关闭按钮 - 关闭父窗口
+    document.getElementById('closeBtn').addEventListener('click', async () => {
+      try {
+        const { getCurrentWindow } = window.__TAURI__.window;
+        await getCurrentWindow().close();
+      } catch (e) {
+        console.error('关闭窗口失败:', e);
+      }
+    });
+  </script>
+</body>
+</html>
