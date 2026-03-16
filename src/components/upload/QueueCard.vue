@@ -58,6 +58,7 @@ const statusText = computed(() => {
   const total = props.item.enabledServices?.length || 1;
 
   if (c.uploading > 0) return '正在同步...';
+  if (c.error > 0 && c.pending > 0) return '部分失败，等待中...';
   if (c.error > 0 && c.success > 0) return '上传完成，部分失败';
   if (c.error > 0 && c.error === total) return '上传失败';
   if (c.success > 0 && c.success + c.error === total) return '全部完成';

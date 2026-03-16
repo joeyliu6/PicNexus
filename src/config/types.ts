@@ -939,7 +939,7 @@ export function getActivePrefix(config: UserConfig): string | null {
  * @returns 迁移后的配置（版本号为最新）
  */
 export function migrateConfig(config: UserConfig): UserConfig {
-  let migratedConfig = { ...config };
+  let migratedConfig: UserConfig = structuredClone(config);
   const currentVersion = config.configVersion || 0;
 
   // 版本 0 -> 1：将 baiduPrefix 迁移为 linkPrefixConfig

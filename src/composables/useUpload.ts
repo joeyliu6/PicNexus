@@ -479,19 +479,17 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             toast.showConfig('error', TOAST_MESSAGES.upload.failed(`${fileName}: ${errorMsg}`));
           }
 
-          // 新增:更新所有服务的失败状态
           const item = queueManager!.getItem(itemId);
-          if (item && item.serviceProgress) {
-            const updatedServiceProgress = { ...item.serviceProgress };
+          if (item) {
+            const updatedServiceProgress = { ...(item.serviceProgress || {}) };
             enabledServices.forEach(serviceId => {
-              if (updatedServiceProgress[serviceId]) {
-                updatedServiceProgress[serviceId] = {
-                  ...updatedServiceProgress[serviceId],
-                  status: '✗ 失败',
-                  progress: 0,
-                  error: errorMsg
-                };
-              }
+              updatedServiceProgress[serviceId] = {
+                ...updatedServiceProgress[serviceId],
+                serviceId,
+                status: '✗ 失败',
+                progress: 0,
+                error: errorMsg
+              };
             });
             queueManager!.updateItem(itemId, {
               serviceProgress: updatedServiceProgress

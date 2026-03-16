@@ -165,11 +165,23 @@ export function useHistoryViewState() {
   /**
    * 格式化链接
    */
+  function escapeHtmlAttr(str: string): string {
+    return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function escapeMarkdown(str: string): string {
+    return str.replace(/[\[\]]/g, '\\$&');
+  }
+
+  function escapeMarkdownUrl(str: string): string {
+    return str.replace(/[()]/g, '\\$&');
+  }
+
   function formatLink(url: string, fileName: string, format: LinkFormat): string {
     switch (format) {
       case 'url': return url;
-      case 'markdown': return `![${fileName}](${url})`;
-      case 'html': return `<img src="${url}" alt="${fileName}" />`;
+      case 'markdown': return `![${escapeMarkdown(fileName)}](${escapeMarkdownUrl(url)})`;
+      case 'html': return `<img src="${escapeHtmlAttr(url)}" alt="${escapeHtmlAttr(fileName)}" />`;
       case 'bbcode': return `[img]${url}[/img]`;
       default: return url;
     }
