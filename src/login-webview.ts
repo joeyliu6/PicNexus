@@ -31,18 +31,17 @@ async function handleStartLogin() {
   try {
     console.log(`[LoginWebview] Starting login for ${provider.name}`);
 
-    // 启动后端 Cookie 监控
-    // 注意：Tauri 2.0 invoke 参数名需使用 camelCase，会自动转换为 Rust 的 snake_case
-    await invoke('start_cookie_monitoring', {
+    // 使用事件驱动的 Cookie 监控（NavigationCompleted），非 Windows 自动降级到轮询
+    await invoke('setup_cookie_event_monitoring', {
       serviceId,
       targetDomains: provider.domains,
       requiredFields: provider.cookieValidation?.requiredFields || [],
       anyOfFields: provider.cookieValidation?.anyOfFields || [],
-      initialDelayMs: provider.cookieValidation?.monitoringDelay?.initialDelayMs,
-      pollingIntervalMs: provider.cookieValidation?.monitoringDelay?.pollingIntervalMs
+      fieldValueChecks: provider.cookieValidation?.fieldValueChecks || {},
+      timeoutMs: provider.cookieValidation?.timeoutMs,
     });
 
-    console.log(`[LoginWebview] Cookie monitoring started`);
+    console.log(`[LoginWebview] Cookie event monitoring started`);
 
     // 跳转到登录页面（DOM 将被第三方网站接管）
     window.location.href = provider.loginUrl;

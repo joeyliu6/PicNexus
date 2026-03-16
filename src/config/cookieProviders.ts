@@ -10,7 +10,11 @@ export interface CookieValidation {
   requiredFields?: string[];
   /** 至少包含其中一个字段 */
   anyOfFields?: string[];
-  /** Cookie 监控延迟配置（可选，不提供则使用后端默认值） */
+  /** 字段值检查：key 为字段名，value 为期望值（如微博 MLOGIN 必须为 '1'） */
+  fieldValueChecks?: Record<string, string>;
+  /** 事件驱动超时（毫秒），从登录页加载完成后开始计时，默认 60000 */
+  timeoutMs?: number;
+  /** 降级轮询配置（仅非 Windows 平台使用） */
   monitoringDelay?: {
     /** 初始延迟（毫秒），页面加载后等待多久开始第一次检查 */
     initialDelayMs?: number;
@@ -67,10 +71,11 @@ export const COOKIE_PROVIDERS: Record<string, CookieProvider> = {
     loginUrl: 'https://m.weibo.cn/',
     domains: ['weibo.com', 'm.weibo.cn'],
     cookieValidation: {
-      requiredFields: ['SUB', 'SUBP'],  // 微博登录成功必须有这两个字段
+      requiredFields: ['SUB', 'SUBP'],
+      fieldValueChecks: { 'MLOGIN': '1' },
       monitoringDelay: {
-        initialDelayMs: 2000,      // 2秒初始延迟（快速响应）
-        pollingIntervalMs: 500     // 0.5秒轮询（高频检测）
+        initialDelayMs: 2000,
+        pollingIntervalMs: 500
       }
     },
     description: '登录微博账号获取 Cookie',
@@ -203,6 +208,16 @@ export function validateCookie(cookie: string, validation?: CookieValidation): b
     const hasAnyField = validation.anyOfFields.some(field => cookie.includes(`${field}=`));
     if (!hasAnyField) {
       return false;
+    }
+  }
+
+  // 检查字段值（如微博 MLOGIN=1）
+  if (validation.fieldValueChecks) {
+    for (const [field, expectedValue] of Object.entries(validation.fieldValueChecks)) {
+      const pattern = `${field}=${expectedValue}`;
+      if (!cookie.includes(pattern)) {
+        return false;
+      }
     }
   }
 
