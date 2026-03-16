@@ -6,10 +6,9 @@ import LoginPanel from './components/login/LoginPanel.vue';
 import { COOKIE_PROVIDERS, type CookieProvider } from './config/cookieProviders';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-
-// 获取当前窗口实例
-const appWindow = getCurrentWindow();
 import { initLoginTheme } from './composables/useLoginTheme';
+
+const appWindow = getCurrentWindow();
 
 // 引入样式（顺序重要）
 import 'primeicons/primeicons.css';
@@ -147,10 +146,14 @@ async function bootstrap() {
   // 挂载应用
   app.mount('#app');
 
+  // 渲染完成后显示窗口，避免白屏闪烁
+  await appWindow.show();
+
   console.log('[LoginWebview] Vue app mounted');
 }
 
 // 启动应用
 bootstrap().catch(error => {
   console.error('[LoginWebview] Bootstrap failed:', error);
+  appWindow.show();
 });

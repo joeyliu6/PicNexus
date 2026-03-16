@@ -20,6 +20,14 @@ export interface CookieValidation {
 }
 
 /**
+ * 登录阶段窗口尺寸配置
+ */
+export interface LoginWindowSize {
+  width: number;
+  height: number;
+}
+
+/**
  * Cookie 提供者配置
  */
 export interface CookieProvider {
@@ -37,7 +45,12 @@ export interface CookieProvider {
   description: string;
   /** 图标 */
   icon: string;
+  /** 加载登录页时的窗口尺寸（不设置则使用默认值 1000x750） */
+  loginWindowSize?: LoginWindowSize;
 }
+
+/** 登录页默认窗口尺寸（桌面版网站） */
+export const DEFAULT_LOGIN_WINDOW_SIZE: LoginWindowSize = { width: 1000, height: 750 };
 
 /**
  * 所有支持自动获取 Cookie 的服务配置
@@ -61,7 +74,8 @@ export const COOKIE_PROVIDERS: Record<string, CookieProvider> = {
       }
     },
     description: '登录微博账号获取 Cookie',
-    icon: '📝'
+    icon: '📝',
+    loginWindowSize: { width: 420, height: 750 }
   },
   nowcoder: {
     serviceId: 'nowcoder',

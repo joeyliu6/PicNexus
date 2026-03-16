@@ -13,7 +13,7 @@ import {
   DEFAULT_PREFIXES,
   migrateConfig
 } from '../config/types';
-import { getCookieProvider, validateCookie } from '../config/cookieProviders';
+import { getCookieProvider, validateCookie, DEFAULT_LOGIN_WINDOW_SIZE } from '../config/cookieProviders';
 import { useToast } from './useToast';
 import { TOAST_MESSAGES } from '../constants';
 
@@ -350,16 +350,18 @@ export function useConfigManager() {
 
       // 创建新的Cookie获取窗口（通过 URL 参数传递服务类型）
       try {
+        const loginSize = provider.loginWindowSize ?? DEFAULT_LOGIN_WINDOW_SIZE;
         const loginWindow = new WebviewWindow('login-webview', {
           url: `/login-webview.html?service=${serviceId}`,
           title: `${provider.name}登录 - 自动获取Cookie`,
-          width: 500,
-          height: 800,
+          width: loginSize.width,
+          height: loginSize.height,
           resizable: true,
           center: true,
           alwaysOnTop: false,
           decorations: true,
           transparent: false,
+          visible: false,
         });
 
         loginWindow.once('tauri://created', () => {
