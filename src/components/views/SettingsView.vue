@@ -354,6 +354,16 @@ async function testConn(fn: () => Promise<void>, key: string) {
   }
 }
 
+async function testCookieConnection(command: string, params: Record<string, string>, serviceId: ServiceType) {
+  try {
+    await invoke(command, params);
+    toast.showConfig('success', TOAST_MESSAGES.auth.cookieValid(serviceNames[serviceId]));
+  } catch (e) {
+    toast.showConfig('error', TOAST_MESSAGES.auth.testFailed(String(e)));
+    throw e;
+  }
+}
+
 const actions: Record<string, () => Promise<void>> = {
   r2: () => testS3Connection('r2'),
   tencent: () => testS3Connection('tencent'),
@@ -363,24 +373,21 @@ const actions: Record<string, () => Promise<void>> = {
   smms: () => testTokenConnection('smms', formData.value.smms.token),
   github: () => testGitHubConnection(),
   imgur: () => testTokenConnection('imgur', formData.value.imgur.clientId),
+  weibo: () => testCookieConnection('test_weibo_connection', { weiboCookie: formData.value.weiboCookie || '' }, 'weibo'),
+  zhihu: () => testCookieConnection('test_zhihu_connection', { zhihuCookie: formData.value.zhihu?.cookie || '' }, 'zhihu'),
+  nowcoder: () => testCookieConnection('test_nowcoder_cookie', { nowcoderCookie: formData.value.nowcoder?.cookie || '' }, 'nowcoder'),
+  bilibili: () => testCookieConnection('test_bilibili_connection', { bilibiliCookie: formData.value.bilibili?.cookie || '' }, 'bilibili'),
+  chaoxing: () => testCookieConnection('test_chaoxing_connection', { chaoxingCookie: formData.value.chaoxing?.cookie || '' }, 'chaoxing'),
+  nami: () => {
+    const cookie = formData.value.nami.cookie || '';
+    const tokenMatch = cookie.match(/token=([^;]+)/);
+    const authToken = formData.value.nami.authToken || (tokenMatch ? tokenMatch[1] : '');
+    return testCookieConnection('test_nami_connection', { cookie, authToken }, 'nami');
+  },
 };
 
 async function handleServiceTest(serviceId: string) {
   await testConn(actions[serviceId], serviceId);
-}
-
-async function handleCookieTest(serviceId: string) {
-  testingConnections.value[serviceId] = true;
-  try {
-    const fd = formData.value as any;
-    const cookie = serviceId === 'weibo' ? fd.weiboCookie : fd[serviceId]?.cookie;
-    await invoke('test_cookie_connection', { serviceId, cookie });
-    toast.showConfig('success', TOAST_MESSAGES.auth.cookieValid(serviceNames[serviceId as ServiceType]));
-  } catch (e) {
-    toast.showConfig('error', TOAST_MESSAGES.auth.testFailed(String(e)));
-  } finally {
-    testingConnections.value[serviceId] = false;
-  }
 }
 
 async function handleBuiltinCheck(serviceId: string) {
@@ -633,7 +640,7 @@ onUnmounted(() => {
           @save="saveSettings"
           @test-private="handleServiceTest"
           @test-token="handleServiceTest"
-          @test-cookie="handleCookieTest"
+          @test-cookie="handleServiceTest"
           @check-builtin="handleBuiltinCheck"
           @login-cookie="handleCookieLogin"
           @update:link-prefix-enabled="(v) => { formData.linkPrefixEnabled = v; saveSettings(); }"
