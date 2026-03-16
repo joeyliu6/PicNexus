@@ -49,12 +49,12 @@ export interface CookieProvider {
   description: string;
   /** 图标 */
   icon: string;
-  /** 加载登录页时的窗口尺寸（不设置则使用默认值 1000x750） */
+  /** 加载登录页时的窗口尺寸（不设置则使用默认值 1300x800） */
   loginWindowSize?: LoginWindowSize;
 }
 
 /** 登录页默认窗口尺寸（桌面版网站） */
-export const DEFAULT_LOGIN_WINDOW_SIZE: LoginWindowSize = { width: 1000, height: 750 };
+export const DEFAULT_LOGIN_WINDOW_SIZE: LoginWindowSize = { width: 1300, height: 800 };
 
 /**
  * 所有支持自动获取 Cookie 的服务配置
@@ -68,7 +68,7 @@ export const COOKIE_PROVIDERS: Record<string, CookieProvider> = {
   weibo: {
     serviceId: 'weibo',
     name: '微博',
-    loginUrl: 'https://m.weibo.cn/',
+    loginUrl: 'https://weibo.com/',
     domains: ['weibo.com', 'm.weibo.cn'],
     cookieValidation: {
       requiredFields: ['SUB', 'SUBP'],
@@ -79,8 +79,7 @@ export const COOKIE_PROVIDERS: Record<string, CookieProvider> = {
       }
     },
     description: '登录微博账号获取 Cookie',
-    icon: '📝',
-    loginWindowSize: { width: 420, height: 750 }
+    icon: '📝'
   },
   nowcoder: {
     serviceId: 'nowcoder',
