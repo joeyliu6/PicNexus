@@ -24,7 +24,7 @@ import AdvancedSettingsPanel from '../settings/AdvancedSettingsPanel.vue';
 import BackupSyncPanel from '../settings/BackupSyncPanel.vue';
 
 import { Store } from '../../store';
-import type { ThemeMode, UserConfig, ServiceType, WebDAVProfile, GithubCdnConfig } from '../../config/types';
+import type { ThemeMode, UserConfig, ServiceType, WebDAVProfile, GithubUrlStrategy } from '../../config/types';
 import { DEFAULT_CONFIG, DEFAULT_PREFIXES } from '../../config/types';
 
 // ==================== Composables ====================
@@ -96,7 +96,7 @@ const formData = ref({
   bilibili: { cookie: '' },
   chaoxing: { cookie: '' },
   smms: { token: '' },
-  github: { token: '', owner: '', repo: '', branch: 'main', path: 'images/' } as { token: string; owner: string; repo: string; branch: string; path: string; customDomain?: string; cdnConfig?: GithubCdnConfig },
+  github: { token: '', owner: '', repo: '', branch: 'main', path: 'images/' } as { token: string; owner: string; repo: string; branch: string; path: string; urlStrategy?: GithubUrlStrategy },
   imgur: { clientId: '', clientSecret: '' },
   webdav: { profiles: [] as WebDAVProfile[], activeId: null as string | null },
   linkPrefixEnabled: true,
@@ -634,7 +634,7 @@ onUnmounted(() => {
           :link-prefix-enabled="formData.linkPrefixEnabled"
           :prefix-list="formData.linkPrefixList"
           :selected-prefix-index="formData.selectedPrefixIndex"
-          :github-cdn-config="formData.github.cdnConfig"
+          :github-url-strategy="formData.github.urlStrategy"
           @save="saveSettings"
           @test-private="handleServiceTest"
           @test-token="handleServiceTest"
@@ -644,7 +644,7 @@ onUnmounted(() => {
           @update:link-prefix-enabled="(v) => { formData.linkPrefixEnabled = v; saveSettings(); }"
           @update:prefix-list="(v) => { formData.linkPrefixList = v; }"
           @update:selected-prefix-index="(v) => { formData.selectedPrefixIndex = v; saveSettings(); }"
-          @update:github-cdn-config="(v) => { formData.github.cdnConfig = v; }"
+          @update:github-url-strategy="(v) => { formData.github.urlStrategy = v; }"
           @add-prefix="addPrefix"
           @remove-prefix="removePrefix"
           @reset-to-default="resetToDefaultPrefixes"

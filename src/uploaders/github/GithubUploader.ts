@@ -84,7 +84,27 @@ export class GithubUploader extends BaseUploader {
   }
 
   private applyUrlTransform(rawUrl: string, config: GithubServiceConfig): string {
-    // 优先使用自定义域名
+    const strategy = config.urlStrategy;
+
+    if (strategy) {
+      if (strategy.type === 'custom-domain' && strategy.customDomain) {
+        const parts = parseGithubRawUrl(rawUrl);
+        if (parts) {
+          const domain = strategy.customDomain.replace(/\/$/, '');
+          return `${domain}/${parts.path}`;
+        }
+      }
+      if (strategy.type === 'cdn') {
+        return transformGithubUrl(rawUrl, {
+          enabled: true,
+          selectedIndex: strategy.selectedCdnIndex,
+          cdnList: strategy.cdnList
+        });
+      }
+      return rawUrl;
+    }
+
+    // 向后兼容：未迁移的旧配置
     if (config.customDomain) {
       const parts = parseGithubRawUrl(rawUrl);
       if (parts) {
@@ -92,8 +112,6 @@ export class GithubUploader extends BaseUploader {
         return `${domain}/${parts.path}`;
       }
     }
-
-    // 应用 CDN 转换
     return transformGithubUrl(rawUrl, config.cdnConfig);
   }
 

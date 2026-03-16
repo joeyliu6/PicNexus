@@ -5,9 +5,9 @@ import Password from 'primevue/password';
 import Textarea from 'primevue/textarea';
 import HostingCard from './HostingCard.vue';
 import WeiboLinkPrefixSection from './hosting/WeiboLinkPrefixSection.vue';
-import GithubCdnSection from './hosting/GithubCdnSection.vue';
+import GithubUrlStrategySection from './hosting/GithubUrlStrategySection.vue';
 import { getCategoryIcon } from '../../utils/icons';
-import type { GithubCdnConfig } from '../../config/types';
+import type { GithubUrlStrategy } from '../../config/types';
 
 interface PrivateFormData {
   r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; path: string; publicDomain: string };
@@ -34,8 +34,7 @@ interface TokenFormData {
     repo: string;
     branch: string;
     path: string;
-    customDomain?: string;
-    cdnConfig?: GithubCdnConfig;
+    urlStrategy?: GithubUrlStrategy;
   };
   imgur: { clientId: string; clientSecret?: string };
 }
@@ -56,7 +55,7 @@ const props = defineProps<{
   linkPrefixEnabled: boolean;
   prefixList: string[];
   selectedPrefixIndex: number;
-  githubCdnConfig?: GithubCdnConfig;
+  githubUrlStrategy?: GithubUrlStrategy;
 }>();
 
 const emit = defineEmits<{
@@ -69,7 +68,7 @@ const emit = defineEmits<{
   'update:linkPrefixEnabled': [enabled: boolean];
   'update:prefixList': [list: string[]];
   'update:selectedPrefixIndex': [index: number];
-  'update:githubCdnConfig': [config: GithubCdnConfig];
+  'update:githubUrlStrategy': [strategy: GithubUrlStrategy];
   addPrefix: [];
   removePrefix: [index: number];
   resetToDefault: [];
@@ -537,16 +536,11 @@ const extractNamiAuthToken = computed(() => {
               <InputText v-model="tokenFormData.github.path" @blur="emit('save')" placeholder="images/" class="w-full" />
               <small class="form-hint">图片存储在仓库中的路径，例如 images/ 或 assets/pics/</small>
             </div>
-            <div class="form-item span-full">
-              <label>Custom Domain（可选）</label>
-              <InputText v-model="tokenFormData.github.customDomain" @blur="emit('save')" placeholder="https://cdn.example.com" class="w-full" />
-              <small class="form-hint">自定义域名，留空则使用 raw.githubusercontent.com</small>
-            </div>
           </div>
           <template #extra>
-            <GithubCdnSection
-              :github-cdn-config="githubCdnConfig"
-              @update:github-cdn-config="emit('update:githubCdnConfig', $event)"
+            <GithubUrlStrategySection
+              :url-strategy="githubUrlStrategy"
+              @update:url-strategy="emit('update:githubUrlStrategy', $event)"
               @save="emit('save')"
             />
           </template>

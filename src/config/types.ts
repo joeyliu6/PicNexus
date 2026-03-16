@@ -236,6 +236,25 @@ export const DEFAULT_GITHUB_CDN_LIST: GithubCdnProvider[] = [
 ];
 
 /**
+ * GitHub URL 策略类型
+ * - 'default': 使用 raw.githubusercontent.com 原始链接
+ * - 'cdn': 使用 CDN 加速（从 cdnList 中选择）
+ * - 'custom-domain': 使用自定义域名
+ */
+export type GithubUrlStrategyType = 'default' | 'cdn' | 'custom-domain';
+
+/**
+ * GitHub URL 策略配置
+ * 将 customDomain 和 cdnConfig 合并为互斥的三选一
+ */
+export interface GithubUrlStrategy {
+  type: GithubUrlStrategyType;
+  selectedCdnIndex: number;
+  cdnList: GithubCdnProvider[];
+  customDomain: string;
+}
+
+/**
  * GitHub 图床服务配置
  * 使用 GitHub 仓库作为图床，需要 Personal Access Token
  */
@@ -250,10 +269,12 @@ export interface GithubServiceConfig extends BaseServiceConfig {
   branch: string;
   /** 存储路径（默认 images/） */
   path: string;
-  /** 自定义域名（可选） */
+  /** @deprecated 已迁移到 urlStrategy.customDomain */
   customDomain?: string;
-  /** CDN 加速配置 */
+  /** @deprecated 已迁移到 urlStrategy */
   cdnConfig?: GithubCdnConfig;
+  /** URL 策略配置（v5 新增） */
+  urlStrategy?: GithubUrlStrategy;
 }
 
 /**
@@ -466,7 +487,7 @@ export const DEFAULT_PREFIXES: string[] = [
  * 每次配置格式变更时递增此版本号
  * 迁移函数将根据此版本号决定是否需要执行迁移
  */
-export const CONFIG_VERSION = 4;
+export const CONFIG_VERSION = 5;
 
 export interface UserConfig {
   /**
@@ -1027,11 +1048,38 @@ export function migrateConfig(config: UserConfig): UserConfig {
     console.log('[配置迁移] 从版本 3 迁移到版本 4：移除自动同步配置');
   }
 
-  // 未来版本迁移示例：
-  // if (currentVersion < 2) {
-  //   // 版本 1 -> 2 的迁移逻辑
-  //   console.log('[配置迁移] 从版本 1 迁移到版本 2：xxx');
-  // }
+  // 版本 4 -> 5：合并 GitHub customDomain + cdnConfig 为 urlStrategy
+  if (currentVersion < 5) {
+    const github = migratedConfig.services?.github;
+    if (github && !github.urlStrategy) {
+      let strategyType: GithubUrlStrategyType = 'default';
+      let customDomain = '';
+      let selectedCdnIndex = 0;
+      let cdnList = [...DEFAULT_GITHUB_CDN_LIST];
+
+      if (github.customDomain?.trim()) {
+        strategyType = 'custom-domain';
+        customDomain = github.customDomain;
+      } else if (github.cdnConfig?.enabled) {
+        strategyType = 'cdn';
+        selectedCdnIndex = github.cdnConfig.selectedIndex;
+        cdnList = github.cdnConfig.cdnList?.length
+          ? [...github.cdnConfig.cdnList]
+          : [...DEFAULT_GITHUB_CDN_LIST];
+      }
+
+      github.urlStrategy = {
+        type: strategyType,
+        selectedCdnIndex,
+        cdnList,
+        customDomain
+      };
+
+      delete github.customDomain;
+      delete github.cdnConfig;
+    }
+    console.log('[配置迁移] 从版本 4 迁移到版本 5：合并 GitHub URL 策略');
+  }
 
   // 更新版本号到最新
   migratedConfig.configVersion = CONFIG_VERSION;
