@@ -102,8 +102,7 @@ const formData = ref({
   linkPrefixEnabled: true,
   selectedPrefixIndex: 0,
   linkPrefixList: [...DEFAULT_PREFIXES],
-  analyticsEnabled: true,
-  defaultHistoryViewMode: 'grid' as 'table' | 'grid'
+  analyticsEnabled: true
 });
 
 // 测试连接状态
@@ -218,7 +217,6 @@ async function loadSettings() {
     }
 
     formData.value.analyticsEnabled = config.analytics?.enabled ?? true;
-    formData.value.defaultHistoryViewMode = config.defaultHistoryViewMode || 'grid';
     availableServices.value = config.availableServices || ['jd', 'qiyu'];
 
   } catch (e) {
@@ -279,7 +277,6 @@ async function saveSettings() {
     };
 
     config.analytics = { enabled: formData.value.analyticsEnabled };
-    config.defaultHistoryViewMode = formData.value.defaultHistoryViewMode;
     config.availableServices = availableServices.value;
 
     await configManager.saveConfig(config, true);
@@ -593,12 +590,10 @@ onUnmounted(() => {
         <GeneralSettingsPanel
           :current-theme="currentTheme"
           :available-services="availableServices"
-          :default-history-view-mode="formData.defaultHistoryViewMode"
           :service-names="serviceNames"
           :service-config-status="serviceConfigStatus"
           @update:current-theme="handleThemeChange"
           @update:available-services="(v) => { availableServices = v; saveSettings(); }"
-          @update:default-history-view-mode="(v) => { formData.defaultHistoryViewMode = v; saveSettings(); }"
           @save="saveSettings"
         />
       </div>

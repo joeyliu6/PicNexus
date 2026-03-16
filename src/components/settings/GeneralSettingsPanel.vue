@@ -3,7 +3,6 @@
 
 import { computed } from 'vue';
 import Checkbox from 'primevue/checkbox';
-import RadioButton from 'primevue/radiobutton';
 import Divider from 'primevue/divider';
 import type { ThemeMode, ServiceType } from '../../config/types';
 import { PRIVATE_SERVICES, PUBLIC_SERVICES } from '../../config/types';
@@ -16,9 +15,6 @@ interface Props {
 
   /** 启用的服务列表 */
   availableServices: ServiceType[];
-
-  /** 默认历史视图模式 */
-  defaultHistoryViewMode: 'grid' | 'table';
 
   /** 服务名称映射 */
   serviceNames: Record<ServiceType, string>;
@@ -37,9 +33,6 @@ const emit = defineEmits<{
 
   /** 启用服务变更 */
   'update:availableServices': [services: ServiceType[]];
-
-  /** 默认视图模式变更 */
-  'update:defaultHistoryViewMode': [mode: 'grid' | 'table'];
 
   /** 保存设置 */
   'save': [];
@@ -60,23 +53,10 @@ const localAvailableServices = computed({
   set: (val) => emit('update:availableServices', val)
 });
 
-const localDefaultHistoryViewMode = computed({
-  get: () => props.defaultHistoryViewMode,
-  set: (val) => emit('update:defaultHistoryViewMode', val)
-});
-
 // ==================== 方法 ====================
 
 function handleThemeChange(theme: ThemeMode) {
   emit('update:currentTheme', theme);
-}
-
-function handleServiceChange() {
-  emit('save');
-}
-
-function handleViewModeChange() {
-  emit('save');
 }
 
 function toggleService(service: ServiceType) {
@@ -84,7 +64,7 @@ function toggleService(service: ServiceType) {
   localAvailableServices.value = current.includes(service)
     ? current.filter(s => s !== service)
     : [...current, service];
-  handleServiceChange();
+  emit('save');
 }
 </script>
 
@@ -164,33 +144,6 @@ function toggleService(service: ServiceType) {
       </div>
     </div>
 
-    <Divider />
-
-    <!-- 浏览界面默认视图 -->
-    <div class="form-group">
-      <label class="group-label">浏览界面默认视图</label>
-      <p class="helper-text">设置进入"浏览界面"页面时默认显示的视图模式。</p>
-      <div class="view-mode-options">
-        <label for="view-grid" class="radio-option">
-          <RadioButton
-            v-model="localDefaultHistoryViewMode"
-            inputId="view-grid"
-            value="grid"
-            @change="handleViewModeChange"
-          />
-          <span class="radio-label">瀑布流视图</span>
-        </label>
-        <label for="view-table" class="radio-option">
-          <RadioButton
-            v-model="localDefaultHistoryViewMode"
-            inputId="view-table"
-            value="table"
-            @change="handleViewModeChange"
-          />
-          <span class="radio-label">表格视图</span>
-        </label>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -281,41 +234,4 @@ function toggleService(service: ServiceType) {
   color: var(--text-muted);
 }
 
-/* 视图模式选择器 */
-.view-mode-options {
-  display: flex;
-  gap: 16px;
-}
-
-.radio-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.radio-option:hover {
-  border-color: var(--primary);
-}
-
-.radio-option:has(:deep(.p-radiobutton-checked)) {
-  border-color: var(--primary);
-  background-color: rgba(59, 130, 246, 0.05);
-}
-
-.radio-label {
-  cursor: pointer;
-  color: var(--text-secondary);
-  font-size: 14px;
-}
-
-.radio-option:has(:deep(.p-radiobutton-checked)) .radio-label {
-  color: var(--primary);
-  font-weight: 500;
-}
 </style>

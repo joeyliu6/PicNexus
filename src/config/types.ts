@@ -547,9 +547,6 @@ export interface UserConfig {
 
   /** Google Analytics 配置 */
   analytics?: AnalyticsConfig;
-
-  /** 默认历史记录视图模式 */
-  defaultHistoryViewMode?: 'table' | 'grid';
 }
 
 /**
@@ -752,8 +749,7 @@ export const DEFAULT_CONFIG: UserConfig = {
   },
   analytics: {
     enabled: true
-  },
-  defaultHistoryViewMode: 'table'
+  }
 };
 
 /**
