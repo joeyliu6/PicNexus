@@ -72,6 +72,7 @@ fn main() {
         .plugin(tauri_plugin_http::init())
         .manage(HttpClient(http_client))     // 注册全局 HTTP 客户端
         .invoke_handler(tauri::generate_handler![
+            open_login_window,
             save_cookie_from_login,
             start_cookie_monitoring,
             get_request_header_cookie,
@@ -367,6 +368,101 @@ struct CookieUpdatedPayload {
     cookie: String,
 }
 
+/// 打开多 Webview 登录窗口
+/// 窗口结构：标题栏 Webview (36px) + 内容区 Webview
+#[tauri::command]
+async fn open_login_window(
+    app: tauri::AppHandle,
+    service_id: String,
+    service_name: String,
+    width: f64,
+    height: f64,
+    titlebar_url: String,
+    content_url: String,
+) -> Result<(), AppError> {
+    use tauri::{WebviewUrl, LogicalPosition, LogicalSize};
+
+    if !is_safe_service_id(&service_id) {
+        return Err(AppError::validation(format!("无效的服务 ID: {}", service_id)));
+    }
+
+    // URL 路径白名单校验
+    if !titlebar_url.starts_with("login-titlebar.html") {
+        return Err(AppError::validation("无效的标题栏 URL"));
+    }
+    if !content_url.starts_with("login-webview.html") {
+        return Err(AppError::validation("无效的内容 URL"));
+    }
+
+    // 限制窗口尺寸范围
+    let width = width.clamp(300.0, 2000.0);
+    let height = height.clamp(200.0, 1500.0);
+
+    // 如果窗口已存在，聚焦并返回
+    if let Some(existing) = app.get_window("login-window") {
+        let _ = existing.set_focus();
+        return Ok(());
+    }
+
+    let titlebar_height: f64 = 36.0;
+
+    // 创建无边框窗口
+    let window = tauri::window::WindowBuilder::new(&app, "login-window")
+        .title(&format!("{} 登录", service_name))
+        .inner_size(width, height)
+        .decorations(false)
+        .visible(false)
+        .center()
+        .build()
+        .map_err(|e| AppError::external(format!("创建登录窗口失败: {}", e)))?;
+
+    // 添加标题栏 Webview
+    let _titlebar = window.add_child(
+        tauri::webview::WebviewBuilder::new(
+            "login-titlebar",
+            WebviewUrl::App(titlebar_url.into()),
+        ),
+        LogicalPosition::new(0.0, 0.0),
+        LogicalSize::new(width, titlebar_height),
+    ).map_err(|e| AppError::external(format!("创建标题栏失败: {}", e)))?;
+
+    // 添加内容区 Webview
+    let _content = window.add_child(
+        tauri::webview::WebviewBuilder::new(
+            "login-content",
+            WebviewUrl::App(content_url.into()),
+        ),
+        LogicalPosition::new(0.0, titlebar_height),
+        LogicalSize::new(width, height - titlebar_height),
+    ).map_err(|e| AppError::external(format!("创建内容区失败: {}", e)))?;
+
+    // 监听窗口 resize，同步更新子 Webview 尺寸
+    let win_clone = window.clone();
+    window.on_window_event(move |event| {
+        if let tauri::WindowEvent::Resized(physical_size) = event {
+            // 最小化时物理尺寸为 (0, 0)，跳过布局更新
+            if physical_size.width == 0 || physical_size.height == 0 {
+                return;
+            }
+            let scale = win_clone.scale_factor().unwrap_or(1.0);
+            let logical_w = physical_size.width as f64 / scale;
+            let logical_h = physical_size.height as f64 / scale;
+
+            if let Some(titlebar) = win_clone.app_handle().get_webview("login-titlebar") {
+                let _ = titlebar.set_size(LogicalSize::new(logical_w, titlebar_height));
+            }
+            if let Some(content) = win_clone.app_handle().get_webview("login-content") {
+                let _ = content.set_position(LogicalPosition::new(0.0, titlebar_height));
+                let _ = content.set_size(LogicalSize::new(logical_w, logical_h - titlebar_height));
+            }
+        }
+    });
+
+    window.show().map_err(|e| AppError::external(format!("显示窗口失败: {}", e)))?;
+
+    Ok(())
+}
+
 #[tauri::command]
 async fn save_cookie_from_login(
     cookie: String,
@@ -403,7 +499,7 @@ async fn save_cookie_from_login(
             Ok(_) => {
                 eprintln!("[保存Cookie] ✓ 已发送 {} Cookie到主窗口", service);
 
-                if let Some(login_window) = app.get_webview_window("login-webview") {
+                if let Some(login_window) = app.get_window("login-window") {
                     let _ = login_window.close();
                     eprintln!("[保存Cookie] ✓ 已请求关闭登录窗口");
                 }
@@ -634,11 +730,11 @@ async fn start_cookie_monitoring(
 
             eprintln!("[Cookie监控] 第 {}/{} 次检查 (服务: {})", check_count, max_checks, service);
 
-            if let Some(login_window) = app_handle.get_webview_window("login-webview") {
+            if let Some(login_webview) = app_handle.get_webview("login-content") {
                 #[cfg(target_os = "windows")]
                 {
                     if attempt_cookie_capture_and_save_generic(
-                        &login_window,
+                        &login_webview,
                         &app_handle,
                         &service,
                         &domains,
@@ -695,7 +791,7 @@ async fn start_cookie_monitoring(
                         }})()
                     "#, condition = condition, service = service, fields_json = fields_json, any_fields_json = any_fields_json);
 
-                    if let Err(e) = login_window.eval(&check_js) {
+                    if let Err(e) = login_webview.eval(&check_js) {
                         eprintln!("[Cookie监控] 执行JS脚本失败: {:?}", e);
                     }
                 }
@@ -745,14 +841,14 @@ async fn get_request_header_cookie(
 
     #[cfg(target_os = "windows")]
     {
-        let Some(login_window) = app.get_webview_window("login-webview") else {
+        let Some(login_webview) = app.get_webview("login-content") else {
             return Err(AppError::external("登录窗口未打开，请先点击「开始登录」"));
         };
 
         let mut all_cookies: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
 
         for domain in &domains {
-            match try_extract_cookie_header_generic(&login_window, domain) {
+            match try_extract_cookie_header_generic(&login_webview, domain) {
                 Ok(Some(cookie)) => {
                     eprintln!("[Cookie获取] 从 {} 提取到 Cookie (长度: {})", domain, cookie.len());
                     for part in cookie.split("; ") {
@@ -804,7 +900,7 @@ async fn get_request_header_cookie(
 
 #[cfg(target_os = "windows")]
 fn attempt_cookie_capture_and_save_generic(
-    login_window: &tauri::WebviewWindow,
+    login_window: &tauri::Webview,
     app_handle: &tauri::AppHandle,
     service_id: &str,
     target_domains: &[String],
@@ -894,7 +990,7 @@ fn attempt_cookie_capture_and_save_generic(
 // WebView2 Cookie 自动提取功能 (Windows)
 // 使用 WebView2 CookieManager API 从指定域名提取 Cookie
 #[cfg(target_os = "windows")]
-fn try_extract_cookie_header_generic(window: &tauri::WebviewWindow, domain: &str) -> Result<Option<String>, String> {
+fn try_extract_cookie_header_generic(window: &tauri::Webview, domain: &str) -> Result<Option<String>, String> {
     use std::sync::mpsc;
     use std::time::Duration;
 
