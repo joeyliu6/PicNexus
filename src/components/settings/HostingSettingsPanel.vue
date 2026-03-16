@@ -364,7 +364,7 @@ const extractNamiAuthToken = computed(() => {
           <div class="form-grid">
             <div class="form-item span-full">
               <label>Cookie</label>
-              <Textarea v-model="cookieFormData.weibo.cookie" @blur="emit('save')" rows="6" class="w-full" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
+              <Textarea v-model="cookieFormData.weibo.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
               <small class="form-hint">在浏览器中登录微博，按 F12 打开开发者工具，在 Network 选项卡中找到请求头的 Cookie 值并复制</small>
             </div>
           </div>
@@ -397,7 +397,7 @@ const extractNamiAuthToken = computed(() => {
           <div class="form-grid">
             <div class="form-item span-full">
               <label>Cookie</label>
-              <Textarea v-model="cookieFormData.zhihu.cookie" @blur="emit('save')" rows="6" class="w-full" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
+              <Textarea v-model="cookieFormData.zhihu.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
               <small class="form-hint">在浏览器中登录知乎，按 F12 打开开发者工具，在 Network 选项卡中找到请求头的 Cookie 值并复制</small>
             </div>
           </div>
@@ -416,7 +416,7 @@ const extractNamiAuthToken = computed(() => {
           <div class="form-grid">
             <div class="form-item span-full">
               <label>Cookie</label>
-              <Textarea v-model="cookieFormData.nowcoder.cookie" @blur="emit('save')" rows="6" class="w-full" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
+              <Textarea v-model="cookieFormData.nowcoder.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
               <small class="form-hint">在浏览器中登录牛客，按 F12 打开开发者工具，在 Network 选项卡中找到请求头的 Cookie 值并复制</small>
             </div>
           </div>
@@ -435,7 +435,7 @@ const extractNamiAuthToken = computed(() => {
           <div class="form-grid">
             <div class="form-item span-full">
               <label>Cookie</label>
-              <Textarea v-model="cookieFormData.nami.cookie" @blur="emit('save')" rows="6" class="w-full" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
+              <Textarea v-model="cookieFormData.nami.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
               <small class="form-hint">Auth-Token 会自动从 Cookie 中提取</small>
             </div>
             <div v-if="extractNamiAuthToken" class="form-item span-full">
@@ -458,7 +458,7 @@ const extractNamiAuthToken = computed(() => {
           <div class="form-grid">
             <div class="form-item span-full">
               <label>Cookie</label>
-              <Textarea v-model="cookieFormData.bilibili.cookie" @blur="emit('save')" rows="6" class="w-full" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
+              <Textarea v-model="cookieFormData.bilibili.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
               <small class="form-hint">在浏览器中登录 B站，按 F12 打开开发者工具，在 Network 选项卡中找到请求头的 Cookie 值并复制</small>
             </div>
           </div>
@@ -477,7 +477,7 @@ const extractNamiAuthToken = computed(() => {
           <div class="form-grid">
             <div class="form-item span-full">
               <label>Cookie</label>
-              <Textarea v-model="cookieFormData.chaoxing.cookie" @blur="emit('save')" rows="6" class="w-full" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
+              <Textarea v-model="cookieFormData.chaoxing.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
               <small class="form-hint">在浏览器中登录超星，按 F12 打开开发者工具，在 Network 选项卡中找到请求头的 Cookie 值并复制</small>
             </div>
           </div>
@@ -676,6 +676,13 @@ const extractNamiAuthToken = computed(() => {
 
 .builtin-info p {
   margin: 0;
+}
+
+.cookie-field {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-all;
 }
 
 @media (max-width: 768px) {
