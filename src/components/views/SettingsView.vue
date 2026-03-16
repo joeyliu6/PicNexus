@@ -20,7 +20,6 @@ import { SERVICE_DISPLAY_NAMES } from '../../constants/serviceNames';
 // 组件
 import HostingSettingsPanel from '../settings/HostingSettingsPanel.vue';
 import GeneralSettingsPanel from '../settings/GeneralSettingsPanel.vue';
-import AdvancedSettingsPanel from '../settings/AdvancedSettingsPanel.vue';
 import BackupSyncPanel from '../settings/BackupSyncPanel.vue';
 
 import { Store } from '../../store';
@@ -57,7 +56,7 @@ const appVersion = ref<string>('');
 const isClearingCache = ref(false);
 
 // 导航状态
-type SettingsTab = 'general' | 'hosting' | 'advanced' | 'backup';
+type SettingsTab = 'general' | 'hosting' | 'backup';
 const activeTab = ref<SettingsTab>('general');
 
 // 接收来自 MainLayout 的 tab 跳转指令（不提供 fallback，确保拿到 provide 的同一个 ref）
@@ -65,7 +64,7 @@ const settingsTargetTab = inject<import('vue').Ref<string | null>>('settingsTarg
 
 const applyTargetTab = () => {
   if (settingsTargetTab?.value) {
-    const validTabs: SettingsTab[] = ['general', 'hosting', 'advanced', 'backup'];
+    const validTabs: SettingsTab[] = ['general', 'hosting', 'backup'];
     if (validTabs.includes(settingsTargetTab.value as SettingsTab)) {
       activeTab.value = settingsTargetTab.value as SettingsTab;
     }
@@ -99,7 +98,6 @@ const navGroups: NavGroup[] = [
     items: [
       { id: 'general', label: '常规设置', icon: 'pi pi-cog' },
       { id: 'hosting', label: '图床设置', icon: 'pi pi-images' },
-      { id: 'advanced', label: '高级设置', icon: 'pi pi-sliders-h' },
       { id: 'backup', label: '备份与同步', icon: 'pi pi-database' },
     ]
   }
@@ -660,11 +658,16 @@ onUnmounted(() => {
           :service-config-status="serviceConfigStatus"
           :auto-start="formData.appBehavior.autoStart"
           :minimize-to-tray-on-start="formData.appBehavior.minimizeToTrayOnStart"
+          :analytics-enabled="formData.analyticsEnabled"
+          :is-clearing-cache="isClearingCache"
           @update:current-theme="handleThemeChange"
           @update:available-services="(v) => { availableServices = v; saveSettings(); }"
           @update:auto-start="handleAutoStartChange"
           @update:minimize-to-tray-on-start="(v) => { formData.appBehavior.minimizeToTrayOnStart = v; saveSettings(); }"
+          @update:analytics-enabled="(v) => { formData.analyticsEnabled = v; handleAnalyticsToggle(); }"
           @navigate-to-hosting="handleNavigateToHosting"
+          @clear-history="handleClearHistory"
+          @clear-cache="handleClearAppCache"
           @save="saveSettings"
         />
       </div>
@@ -716,18 +719,6 @@ onUnmounted(() => {
           @add-prefix="addPrefix"
           @remove-prefix="removePrefix"
           @reset-to-default="resetToDefaultPrefixes"
-        />
-      </div>
-
-      <!-- 高级设置 -->
-      <div v-if="activeTab === 'advanced'" class="settings-section">
-        <AdvancedSettingsPanel
-          :analytics-enabled="formData.analyticsEnabled"
-          :is-clearing-cache="isClearingCache"
-          @update:analytics-enabled="(v) => { formData.analyticsEnabled = v; handleAnalyticsToggle(); }"
-          @save="saveSettings"
-          @clear-history="handleClearHistory"
-          @clear-cache="handleClearAppCache"
         />
       </div>
 

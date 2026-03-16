@@ -1,7 +1,6 @@
 <script setup lang="ts">
-// 常规设置面板组件
-
 import { computed } from 'vue';
+import Button from 'primevue/button';
 import Checkbox from 'primevue/checkbox';
 import ToggleSwitch from 'primevue/toggleswitch';
 import Divider from 'primevue/divider';
@@ -17,6 +16,8 @@ interface Props {
   serviceConfigStatus: Record<ServiceType, boolean>;
   autoStart: boolean;
   minimizeToTrayOnStart: boolean;
+  analyticsEnabled: boolean;
+  isClearingCache: boolean;
 }
 
 const props = defineProps<Props>();
@@ -28,7 +29,10 @@ const emit = defineEmits<{
   'update:availableServices': [services: ServiceType[]];
   'update:autoStart': [enabled: boolean];
   'update:minimizeToTrayOnStart': [enabled: boolean];
+  'update:analyticsEnabled': [enabled: boolean];
   'navigate-to-hosting': [serviceId: ServiceType];
+  'clearHistory': [];
+  'clearCache': [];
   'save': [];
 }>();
 
@@ -45,6 +49,11 @@ const themeOptions = [
 const localAvailableServices = computed({
   get: () => props.availableServices,
   set: (val) => emit('update:availableServices', val)
+});
+
+const localAnalyticsEnabled = computed({
+  get: () => props.analyticsEnabled,
+  set: (val) => emit('update:analyticsEnabled', val)
 });
 
 // ==================== 方法 ====================
@@ -96,6 +105,58 @@ function handleChipClick(svc: ServiceType) {
 
     <Divider />
 
+    <!-- 启用的图床服务 -->
+    <div class="form-group">
+      <label class="group-label">启用的图床服务</label>
+      <p class="helper-text">点击服务卡片可跳转到图床配置，勾选复选框控制在「上传界面」的显示。</p>
+
+      <div class="service-group-section">
+        <div class="service-group-title">私有图床</div>
+        <div class="service-toggles-grid">
+          <div
+            v-for="svc in PRIVATE_SERVICES"
+            :key="svc"
+            class="toggle-chip"
+            :class="{ disabled: !serviceConfigStatus[svc] }"
+            @click="handleChipClick(svc)"
+          >
+            <Checkbox
+              :modelValue="localAvailableServices.includes(svc)"
+              :binary="true"
+              :disabled="!serviceConfigStatus[svc]"
+              @click.stop
+              @update:modelValue="toggleService(svc)"
+            />
+            <span class="toggle-label">{{ serviceNames[svc] }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="service-group-section">
+        <div class="service-group-title">公共图床</div>
+        <div class="service-toggles-grid">
+          <div
+            v-for="svc in PUBLIC_SERVICES"
+            :key="svc"
+            class="toggle-chip"
+            :class="{ disabled: !serviceConfigStatus[svc] }"
+            @click="handleChipClick(svc)"
+          >
+            <Checkbox
+              :modelValue="localAvailableServices.includes(svc)"
+              :binary="true"
+              :disabled="!serviceConfigStatus[svc]"
+              @click.stop
+              @update:modelValue="toggleService(svc)"
+            />
+            <span class="toggle-label">{{ serviceNames[svc] }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <Divider />
+
     <!-- 应用行为 -->
     <div class="form-group">
       <label class="group-label">应用行为</label>
@@ -120,58 +181,41 @@ function handleChipClick(svc: ServiceType) {
             @update:modelValue="(v: boolean) => emit('update:minimizeToTrayOnStart', v)"
           />
         </div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-row-label">使用数据收集</span>
+            <span class="toggle-row-desc">允许发送匿名使用统计，帮助改进应用。不收集任何个人信息或上传内容。</span>
+          </div>
+          <ToggleSwitch
+            v-model="localAnalyticsEnabled"
+            @change="emit('save')"
+          />
+        </div>
       </div>
     </div>
 
     <Divider />
 
-    <!-- 启用的图床服务 -->
+    <!-- 数据管理 -->
     <div class="form-group">
-      <label class="group-label">启用的图床服务</label>
-      <p class="helper-text">勾选要在"上传界面"显示的服务。未配置的服务点击可跳转到配置。</p>
-
-      <div class="service-group-section">
-        <div class="service-group-title">私有图床</div>
-        <div class="service-toggles-grid">
-          <div
-            v-for="svc in PRIVATE_SERVICES"
-            :key="svc"
-            class="toggle-chip"
-            :class="{ disabled: !serviceConfigStatus[svc] }"
-            @click="handleChipClick(svc)"
-          >
-            <Checkbox
-              :modelValue="localAvailableServices.includes(svc)"
-              :binary="true"
-              :disabled="!serviceConfigStatus[svc]"
-              @click.stop
-            />
-            <span class="toggle-label">{{ serviceNames[svc] }}</span>
-            <i v-if="!serviceConfigStatus[svc]" class="pi pi-arrow-right chip-nav-icon"></i>
-          </div>
-        </div>
-      </div>
-
-      <div class="service-group-section">
-        <div class="service-group-title">公共图床</div>
-        <div class="service-toggles-grid">
-          <div
-            v-for="svc in PUBLIC_SERVICES"
-            :key="svc"
-            class="toggle-chip"
-            :class="{ disabled: !serviceConfigStatus[svc] }"
-            @click="handleChipClick(svc)"
-          >
-            <Checkbox
-              :modelValue="localAvailableServices.includes(svc)"
-              :binary="true"
-              :disabled="!serviceConfigStatus[svc]"
-              @click.stop
-            />
-            <span class="toggle-label">{{ serviceNames[svc] }}</span>
-            <i v-if="!serviceConfigStatus[svc]" class="pi pi-arrow-right chip-nav-icon"></i>
-          </div>
-        </div>
+      <label class="group-label">数据管理</label>
+      <p class="helper-text">管理上传历史记录和应用缓存。</p>
+      <div class="flex gap-2 flex-wrap">
+        <Button
+          label="清空历史记录"
+          icon="pi pi-trash"
+          severity="danger"
+          outlined
+          @click="emit('clearHistory')"
+        />
+        <Button
+          label="清理应用缓存"
+          icon="pi pi-refresh"
+          severity="secondary"
+          outlined
+          :loading="isClearingCache"
+          @click="emit('clearCache')"
+        />
       </div>
     </div>
 
@@ -303,15 +347,4 @@ function handleChipClick(svc: ServiceType) {
 .toggle-chip.disabled .toggle-label {
   color: var(--text-muted);
 }
-
-.chip-nav-icon {
-  font-size: 10px;
-  color: var(--text-muted);
-  transition: color 0.2s;
-}
-
-.toggle-chip.disabled:hover .chip-nav-icon {
-  color: var(--primary);
-}
-
 </style>
