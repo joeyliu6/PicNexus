@@ -7,7 +7,7 @@ import { useToast } from '@/composables/useToast';
 import { useConfirm } from '@/composables/useConfirm';
 import { StorageManagerFactory } from '@/services/storage';
 import {
-  LINK_FORMATS,
+  formatLink,
   type CloudServiceType,
   type StorageObject,
   type LinkFormat,
@@ -206,11 +206,8 @@ export function useFileOperations(options: FileOperationsOptions): FileOperation
       return;
     }
 
-    const formatConfig = LINK_FORMATS.find((f) => f.format === format);
-    if (!formatConfig) return;
-
     const links = files
-      .map((file) => formatConfig.template(file.url!, file.name))
+      .map((file) => formatLink(file.url!, file.name, format))
       .join('\n');
 
     try {

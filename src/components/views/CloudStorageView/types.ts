@@ -77,44 +77,8 @@ export interface StorageStats {
   region?: string;
 }
 
-/** 链接格式类型 */
-export type LinkFormat = 'url' | 'markdown' | 'html' | 'bbcode';
-
-/** 链接格式配置 */
-export interface LinkFormatConfig {
-  format: LinkFormat;
-  label: string;
-  icon: string;
-  template: (url: string, name: string) => string;
-}
-
-/** 预定义的链接格式 */
-export const LINK_FORMATS: LinkFormatConfig[] = [
-  {
-    format: 'url',
-    label: 'URL',
-    icon: 'pi-link',
-    template: (url) => url,
-  },
-  {
-    format: 'markdown',
-    label: 'Markdown',
-    icon: 'pi-file-edit',
-    template: (url, name) => `![${name}](${url})`,
-  },
-  {
-    format: 'html',
-    label: 'HTML',
-    icon: 'pi-code',
-    template: (url, name) => `<img src="${url}" alt="${name}" />`,
-  },
-  {
-    format: 'bbcode',
-    label: 'BBCode',
-    icon: 'pi-comment',
-    template: (url) => `[img]${url}[/img]`,
-  },
-];
+export type { LinkFormat } from '../../../utils/linkFormatter';
+export { LINK_FORMAT_OPTIONS as LINK_FORMATS, formatLink } from '../../../utils/linkFormatter';
 
 /** 文件操作类型 */
 export type FileOperation = 'upload' | 'delete' | 'rename' | 'move' | 'copy';

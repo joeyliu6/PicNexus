@@ -10,9 +10,8 @@ import { getActivePrefix } from '../config/types';
 import { useHistoryManager } from './useHistory';
 import { useConfigManager } from './useConfig';
 import { useToast } from './useToast';
-
-// 链接格式类型
-export type LinkFormat = 'url' | 'markdown' | 'html' | 'bbcode';
+import { formatLink, FORMAT_NAMES } from '../utils/linkFormatter';
+export type { LinkFormat } from '../utils/linkFormatter';
 
 /**
  * 创建独立的视图状态
@@ -163,34 +162,9 @@ export function useHistoryViewState() {
   // === 批量操作 ===
 
   /**
-   * 格式化链接
-   */
-  function escapeHtmlAttr(str: string): string {
-    return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
-  function escapeMarkdown(str: string): string {
-    return str.replace(/[\[\]]/g, '\\$&');
-  }
-
-  function escapeMarkdownUrl(str: string): string {
-    return str.replace(/[()]/g, '\\$&');
-  }
-
-  function formatLink(url: string, fileName: string, format: LinkFormat): string {
-    switch (format) {
-      case 'url': return url;
-      case 'markdown': return `![${escapeMarkdown(fileName)}](${escapeMarkdownUrl(url)})`;
-      case 'html': return `<img src="${escapeHtmlAttr(url)}" alt="${escapeHtmlAttr(fileName)}" />`;
-      case 'bbcode': return `[img]${url}[/img]`;
-      default: return url;
-    }
-  }
-
-  /**
    * 批量复制链接（支持多种格式）
    */
-  async function bulkCopyFormatted(format: LinkFormat): Promise<void> {
+  async function bulkCopyFormatted(format: import('../utils/linkFormatter').LinkFormat): Promise<void> {
     const ids = selectedIdList.value;
     if (ids.length === 0) {
       toast.warn('未选择项目', '请先选择要复制的项目');
@@ -216,14 +190,7 @@ export function useHistoryViewState() {
       }
 
       await writeText(formattedLinks.join('\n'));
-
-      const formatNames: Record<LinkFormat, string> = {
-        url: 'URL',
-        markdown: 'Markdown',
-        html: 'HTML',
-        bbcode: 'BBCode'
-      };
-      toast.success('已复制', `${formattedLinks.length} 个 ${formatNames[format]} 链接`, 1500);
+      toast.success('已复制', `${formattedLinks.length} 个 ${FORMAT_NAMES[format]} 链接`, 1500);
     } catch (error) {
       console.error('[批量复制] 失败:', error);
       toast.error('复制失败', String(error));
