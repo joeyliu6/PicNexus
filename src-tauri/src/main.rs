@@ -74,6 +74,9 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(HttpClient(http_client))     // 注册全局 HTTP 客户端
         .invoke_handler(tauri::generate_handler![
             open_login_window,

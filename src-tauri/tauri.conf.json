@@ -34,6 +34,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -44,11 +45,21 @@
     "externalBin": [
       "binaries/qiyu-token-fetcher",
       "binaries/nami-token-fetcher"
-    ]
+    ],
+    "resources": ["icons/icon.png"]
   },
   "plugins": {
     "shell": {
       "open": true
+    },
+    "updater": {
+      "endpoints": [
+        "https://github.com/joeyliu6/PicNexus/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDIzRDMyNTkyMTYxRjU3Q0MKUldUTVZ4OFdraVhUSXpwR1E4cW5xa0FSWllHMTB1Z0FCaHExTzNPamxJNjVTR0pacWZ4eVNYQ2YK",
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

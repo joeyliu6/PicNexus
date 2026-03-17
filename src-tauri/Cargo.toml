@@ -46,6 +46,9 @@ image = { version = "0.24", default-features = false, features = ["png", "jpeg",
 imagesize = "0.13"
 tauri-plugin-positioner = { version = "2.0", features = ["tray-icon"] }
 tauri-plugin-autostart = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 [target.'cfg(windows)'.dependencies]
 # WebView2 COM 接口 - 用于内存优化
