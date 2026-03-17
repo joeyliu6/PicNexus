@@ -15,6 +15,7 @@ import { useConfigManager } from '../../composables/useConfig';
 import { useHistoryManager } from '../../composables/useHistory';
 import { useAnalytics } from '../../composables/useAnalytics';
 import { useServiceAvailability } from '../../composables/useServiceAvailability';
+import { useServiceHealth } from '../../composables/useServiceHealth';
 import { SERVICE_DISPLAY_NAMES } from '../../constants/serviceNames';
 
 // 组件
@@ -44,6 +45,8 @@ const {
   checkJdAvailable,
   checkAllAvailabilityWithCooldown
 } = useServiceAvailability();
+
+const serviceHealth = useServiceHealth();
 
 // ==================== 存储实例 ====================
 
@@ -124,7 +127,12 @@ const formData = ref({
   selectedPrefixIndex: 0,
   linkPrefixList: [...DEFAULT_PREFIXES],
   analyticsEnabled: true,
-  appBehavior: { autoStart: false, minimizeToTrayOnStart: false }
+  appBehavior: { autoStart: false, minimizeToTrayOnStart: false },
+  linkOutput: {
+    defaultFormat: 'url' as import('../../utils/linkFormatter').LinkFormat,
+    customTemplate: '{url}',
+    autoCopy: true,
+  }
 });
 
 // 测试连接状态
@@ -241,6 +249,11 @@ async function loadSettings() {
       formData.value.linkPrefixList = config.linkPrefixConfig.prefixList || [...DEFAULT_PREFIXES];
     }
 
+    // 链接输出配置
+    if (config.linkOutput) {
+      formData.value.linkOutput = { ...formData.value.linkOutput, ...config.linkOutput };
+    }
+
     formData.value.analyticsEnabled = config.analytics?.enabled ?? true;
     formData.value.appBehavior = config.appBehavior ?? { autoStart: false, minimizeToTrayOnStart: false };
     availableServices.value = config.availableServices || ['jd', 'qiyu'];
@@ -250,6 +263,10 @@ async function loadSettings() {
       const isEnabled = await invoke<boolean>('plugin:autostart|is_enabled');
       formData.value.appBehavior.autoStart = isEnabled;
     } catch { /* 忽略：插件不可用时保持配置值 */ }
+
+    // 初始化图床健康状态
+    await serviceHealth.loadHealthStatus();
+    serviceHealth.evaluateConfig(config);
 
   } catch (e) {
     console.error('[设置] 加载失败:', e);
@@ -308,11 +325,13 @@ async function saveSettings() {
       prefixList: formData.value.linkPrefixList
     };
 
+    config.linkOutput = formData.value.linkOutput;
     config.analytics = { enabled: formData.value.analyticsEnabled };
     config.appBehavior = formData.value.appBehavior;
     config.availableServices = availableServices.value;
 
     await configManager.saveConfig(config, true);
+    serviceHealth.evaluateConfig(config);
   } catch (e) {
     console.error('[设置] 保存失败:', e);
     toast.showConfig('error', TOAST_MESSAGES.config.saveFailed(String(e)));
@@ -367,13 +386,25 @@ async function testGitHubConnection() {
   }
 }
 
+function errorToString(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object') {
+    const obj = error as Record<string, unknown>;
+    if (typeof obj.message === 'string') return obj.message;
+    try { return JSON.stringify(error); } catch { /* fallthrough */ }
+  }
+  return String(error);
+}
+
 async function testS3Connection(serviceId: ServiceType) {
   const config = formData.value[serviceId as keyof typeof formData.value] as any;
   try {
     await invoke('test_s3_connection', { serviceId, config });
     toast.showConfig('success', TOAST_MESSAGES.auth.configValid(serviceNames[serviceId]));
   } catch (error) {
-    toast.showConfig('error', TOAST_MESSAGES.auth.connectionFailed(serviceNames[serviceId], String(error)));
+    const msg = errorToString(error);
+    toast.showConfig('error', TOAST_MESSAGES.auth.connectionFailed(serviceNames[serviceId], msg));
     throw error;
   }
 }
@@ -382,6 +413,9 @@ async function testConn(fn: () => Promise<void>, key: string) {
   testingConnections.value[key] = true;
   try {
     await fn();
+    serviceHealth.markVerified(key as ServiceType);
+  } catch (e) {
+    serviceHealth.markTestFailed(key as ServiceType, errorToString(e));
   } finally {
     testingConnections.value[key] = false;
   }
@@ -660,11 +694,17 @@ onUnmounted(() => {
           :minimize-to-tray-on-start="formData.appBehavior.minimizeToTrayOnStart"
           :analytics-enabled="formData.analyticsEnabled"
           :is-clearing-cache="isClearingCache"
+          :link-default-format="formData.linkOutput.defaultFormat"
+          :link-custom-template="formData.linkOutput.customTemplate"
+          :link-auto-copy="formData.linkOutput.autoCopy"
           @update:current-theme="handleThemeChange"
           @update:available-services="(v) => { availableServices = v; saveSettings(); }"
           @update:auto-start="handleAutoStartChange"
           @update:minimize-to-tray-on-start="(v) => { formData.appBehavior.minimizeToTrayOnStart = v; saveSettings(); }"
           @update:analytics-enabled="(v) => { formData.analyticsEnabled = v; handleAnalyticsToggle(); }"
+          @update:link-default-format="(v) => { formData.linkOutput.defaultFormat = v; }"
+          @update:link-custom-template="(v) => { formData.linkOutput.customTemplate = v; }"
+          @update:link-auto-copy="(v) => { formData.linkOutput.autoCopy = v; }"
           @navigate-to-hosting="handleNavigateToHosting"
           @clear-history="handleClearHistory"
           @clear-cache="handleClearAppCache"

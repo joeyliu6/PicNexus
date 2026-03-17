@@ -3,6 +3,7 @@
 
 import { ref } from 'vue';
 import { open as dialogOpen } from '@tauri-apps/plugin-dialog';
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { Store } from '../store';
 import {
   UserConfig,
@@ -16,8 +17,11 @@ import { TOAST_MESSAGES } from '../constants';
 import { checkNetworkConnectivity } from '../utils/network';
 import { chunkArray } from '../utils/semaphore';
 import { useServiceSelector } from './useServiceSelector';
+import { useServiceHealth } from './useServiceHealth';
 import { useHistorySaver } from './useHistorySaver';
 import { fetchMetadataBatch } from './useImageMetadata';
+import { AUTH_CONFIG_ERROR_CODES } from '../types/serviceHealth';
+import { formatLink, FORMAT_NAMES } from '../utils/linkFormatter';
 
 // --- 配置 ---
 const METADATA_BATCH_SIZE = 50;  // 每批处理 50 张图片
@@ -204,6 +208,9 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
       isUploading.value = true;
 
+      // 收集成功上传的链接（用于自动复制）
+      const collectedLinks: Array<{ url: string; fileName: string }> = [];
+
       // 批次处理函数
       const processBatch = async (batchFiles: string[], batchIndex: number) => {
         console.log(`[上传] 批次 ${batchIndex + 1}/${batches.length}：开始获取 ${batchFiles.length} 个文件的元数据`);
@@ -228,7 +235,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         console.log(`[上传] 批次 ${batchIndex + 1}：已添加 ${queueItems.length} 个文件到队列，开始上传`);
 
         // 3. 立即开始上传该批
-        await processUploadQueue(queueItems, config, enabledServices);
+        await processUploadQueue(queueItems, config, enabledServices, 5, collectedLinks);
 
         console.log(`[上传] 批次 ${batchIndex + 1}：上传完成`);
       };
@@ -266,6 +273,25 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
       console.log('[上传] 所有批次处理完成');
 
+      // 自动复制链接到剪贴板
+      if (config.linkOutput?.autoCopy !== false && collectedLinks.length > 0) {
+        try {
+          const format = config.linkOutput?.defaultFormat || 'url';
+          const template = config.linkOutput?.customTemplate;
+          const formatted = collectedLinks
+            .map(l => formatLink(l.url, l.fileName, format, template))
+            .join('\n');
+          await writeText(formatted);
+          toast.success(
+            '已复制',
+            `${collectedLinks.length} 个 ${FORMAT_NAMES[format]} 链接已复制到剪贴板`,
+            2000
+          );
+        } catch (err) {
+          console.warn('[自动复制] 写入剪贴板失败:', err);
+        }
+      }
+
       // 上传完成
       isUploading.value = false;
 
@@ -288,7 +314,8 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     queueItems: Array<{ itemId: string | null; filePath: string; fileName: string }>,
     config: UserConfig,
     enabledServices: ServiceType[],
-    maxConcurrent: number = 5
+    maxConcurrent: number = 5,
+    collectedLinks?: Array<{ url: string; fileName: string }>
   ): Promise<void> {
     if (!queueManager) {
       console.error('[并发上传] 上传队列管理器未初始化');
@@ -393,6 +420,14 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
                 progress: 0,
                 error: serviceResult.error || '上传失败'
               };
+
+              // 认证/配置类错误联动健康状态
+              if (serviceResult.structuredError) {
+                const code = serviceResult.structuredError.code;
+                if ((AUTH_CONFIG_ERROR_CODES as readonly string[]).includes(code)) {
+                  useServiceHealth().markUploadError(serviceId, serviceResult.structuredError);
+                }
+              }
             }
 
             // 实时更新 UI（只更新当前服务，不影响其他服务）
@@ -446,6 +481,12 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
           if (result.primaryService === 'weibo' && activePrefix.value) {
             thumbUrl = activePrefix.value + thumbUrl;
           }
+
+          // 收集主力图床链接（用于自动复制）
+          if (thumbUrl && collectedLinks) {
+            collectedLinks.push({ url: thumbUrl, fileName });
+          }
+
           queueManager!.markItemComplete(itemId, thumbUrl);
 
         } catch (error) {

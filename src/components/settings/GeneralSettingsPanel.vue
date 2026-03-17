@@ -3,9 +3,11 @@ import { computed } from 'vue';
 import Button from 'primevue/button';
 import Checkbox from 'primevue/checkbox';
 import ToggleSwitch from 'primevue/toggleswitch';
+import InputText from 'primevue/inputtext';
 import Divider from 'primevue/divider';
 import type { ThemeMode, ServiceType } from '../../config/types';
 import { PRIVATE_SERVICES, PUBLIC_SERVICES } from '../../config/types';
+import { LINK_FORMAT_OPTIONS, type LinkFormat } from '../../utils/linkFormatter';
 
 // ==================== Props ====================
 
@@ -18,6 +20,9 @@ interface Props {
   minimizeToTrayOnStart: boolean;
   analyticsEnabled: boolean;
   isClearingCache: boolean;
+  linkDefaultFormat: LinkFormat;
+  linkCustomTemplate: string;
+  linkAutoCopy: boolean;
 }
 
 const props = defineProps<Props>();
@@ -30,6 +35,9 @@ const emit = defineEmits<{
   'update:autoStart': [enabled: boolean];
   'update:minimizeToTrayOnStart': [enabled: boolean];
   'update:analyticsEnabled': [enabled: boolean];
+  'update:linkDefaultFormat': [format: LinkFormat];
+  'update:linkCustomTemplate': [template: string];
+  'update:linkAutoCopy': [enabled: boolean];
   'navigate-to-hosting': [serviceId: ServiceType];
   'clearHistory': [];
   'clearCache': [];
@@ -76,6 +84,21 @@ function handleChipClick(svc: ServiceType) {
   } else {
     emit('navigate-to-hosting', svc);
   }
+}
+
+function handleFormatChange(format: LinkFormat) {
+  emit('update:linkDefaultFormat', format);
+  emit('save');
+}
+
+function handleAutoCopyChange(enabled: boolean) {
+  emit('update:linkAutoCopy', enabled);
+  emit('save');
+}
+
+function handleTemplateChange(template: string | undefined) {
+  emit('update:linkCustomTemplate', template || '{url}');
+  emit('save');
 }
 </script>
 
@@ -191,6 +214,56 @@ function handleChipClick(svc: ServiceType) {
             @change="emit('save')"
           />
         </div>
+      </div>
+    </div>
+
+    <Divider />
+
+    <!-- 链接输出 -->
+    <div class="form-group">
+      <label class="group-label">链接输出</label>
+      <p class="helper-text">控制上传完成后链接的复制格式和行为。</p>
+
+      <div class="behavior-toggles">
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-row-label">上传后自动复制链接</span>
+            <span class="toggle-row-desc">全部上传完成后，自动将主力图床链接复制到剪贴板</span>
+          </div>
+          <ToggleSwitch
+            :modelValue="linkAutoCopy"
+            @update:modelValue="handleAutoCopyChange"
+          />
+        </div>
+      </div>
+
+      <div class="format-section">
+        <span class="format-section-label">默认复制格式</span>
+        <div class="format-options">
+          <div
+            v-for="opt in LINK_FORMAT_OPTIONS"
+            :key="opt.format"
+            class="format-card"
+            :class="{ active: linkDefaultFormat === opt.format }"
+            @click="handleFormatChange(opt.format)"
+          >
+            <i :class="'pi ' + opt.icon"></i>
+            <span class="format-card-label">{{ opt.label }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="linkDefaultFormat === 'custom'" class="custom-template-section">
+        <span class="format-section-label">自定义模板</span>
+        <InputText
+          :modelValue="linkCustomTemplate"
+          placeholder="{url}"
+          class="template-input"
+          @update:modelValue="handleTemplateChange"
+        />
+        <p class="helper-text template-hint">
+          可用变量：<code>{url}</code>、<code>{filename}</code>、<code>{width}</code>、<code>{height}</code>
+        </p>
       </div>
     </div>
 
@@ -346,5 +419,78 @@ function handleChipClick(svc: ServiceType) {
 
 .toggle-chip.disabled .toggle-label {
   color: var(--text-muted);
+}
+
+/* 链接输出格式 */
+.format-section {
+  margin-top: 12px;
+}
+
+.format-section-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.format-options {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.format-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background-color: var(--bg-card);
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.format-card:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.format-card.active {
+  border-color: var(--primary);
+  background-color: rgba(59, 130, 246, 0.05);
+  color: var(--primary);
+  font-weight: 600;
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.format-card i {
+  font-size: 14px;
+}
+
+.custom-template-section {
+  margin-top: 12px;
+}
+
+.template-input {
+  width: 100%;
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 13px;
+}
+
+.template-hint {
+  margin-top: 6px;
+}
+
+.template-hint code {
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 12px;
+  padding: 1px 5px;
+  background: var(--bg-app);
+  border-radius: 3px;
+  color: var(--primary);
 }
 </style>
