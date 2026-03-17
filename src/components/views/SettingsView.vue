@@ -728,7 +728,9 @@ async function testActiveWebDAV() {
     });
     // 更新连接状态为成功
     updateWebDAVProfileStatus(profile.id, 'success', undefined);
-    toast.showConfig('success', result || TOAST_MESSAGES.auth.success('WebDAV'));
+    toast.showConfig('success', result
+      ? { summary: '验证成功', detail: result }
+      : TOAST_MESSAGES.auth.success('WebDAV'));
   } catch (e) {
     // 更新连接状态为失败，并记录错误信息
     const errorMsg = String(e);

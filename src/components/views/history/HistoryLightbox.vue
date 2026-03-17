@@ -230,7 +230,7 @@ const closeLightbox = () => {
             </span>
             <span class="lightbox-size">
               <i class="pi pi-file"></i>
-              {{ formatFileSize(item.fileSize ?? 0) }}
+              {{ formatFileSize(item?.fileSize ?? 0) }}
             </span>
             <span class="lightbox-services" v-if="item">
               <i class="pi pi-cloud-upload"></i>
