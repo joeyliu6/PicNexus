@@ -2,16 +2,23 @@
 import { onMounted, onUnmounted, computed } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import MainLayout from './components/layout/MainLayout.vue';
+import OnboardingDialog from './components/onboarding/OnboardingDialog.vue';
 import Toast from 'primevue/toast';
 import ConfirmDialog from 'primevue/confirmdialog';
 import { useThemeManager } from './composables/useTheme';
 import { useToast } from './composables/useToast';
+import { useOnboarding } from './composables/useOnboarding';
+import { useGlobalShortcut } from './composables/useGlobalShortcut';
+import { useAutoUpdate } from './composables/useAutoUpdate';
 import { TOAST_MESSAGES } from './constants';
 import { Store } from './store';
 import type { UserConfig } from './config/types';
 
 const { effectiveTheme, initializeTheme } = useThemeManager();
 const toast = useToast();
+const { checkAndShow: checkOnboarding } = useOnboarding();
+const { initGlobalShortcuts, cleanup: cleanupGlobalShortcuts } = useGlobalShortcut();
+const { checkForUpdate } = useAutoUpdate();
 
 const rootClass = computed(() => {
   return effectiveTheme.value === 'dark' ? 'dark-theme' : 'light-theme';
@@ -50,6 +57,18 @@ onMounted(async () => {
     } else {
       console.log('[App] 启动时最小化到托盘，窗口保持隐藏');
     }
+
+    await checkOnboarding();
+
+    // 初始化全局快捷键
+    await initGlobalShortcuts();
+
+    // 启动时自动检查更新（延迟 3 秒，不阻塞启动）
+    if (config?.autoUpdate?.enabled !== false) {
+      setTimeout(() => {
+        checkForUpdate().catch((e) => console.warn('[App] 自动检查更新失败:', e));
+      }, 3000);
+    }
   } catch (err) {
     console.error('[App] 显示窗口失败:', err);
     // 出错时兜底显示窗口
@@ -58,16 +77,19 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  // 清理网络状态监听
   window.removeEventListener('offline', handleOffline);
   window.removeEventListener('online', handleOnline);
-  console.log('[App] Network listeners cleaned up');
+  cleanupGlobalShortcuts().catch((e) => console.warn('[App] 快捷键清理失败:', e));
+  console.log('[App] Cleanup completed');
 });
 </script>
 
 <template>
   <div id="app" :class="rootClass">
     <MainLayout />
+
+    <!-- 首次使用引导 -->
+    <OnboardingDialog />
 
     <!-- 全局 Toast 通知 -->
     <Toast position="top-right" />

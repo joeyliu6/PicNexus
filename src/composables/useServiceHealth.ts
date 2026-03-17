@@ -88,6 +88,7 @@ function buildTooltipText(record: ServiceHealthRecord): string {
       if (record.lastVerifiedAt) return `可用 · ${formatRelativeTime(record.lastVerifiedAt)}`;
       return '可用';
     case 'error':
+      if (record.lastError) return `异常 · ${record.lastError}`;
       return '异常';
   }
 }

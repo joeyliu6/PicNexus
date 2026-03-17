@@ -5,6 +5,7 @@ import Checkbox from 'primevue/checkbox';
 import ToggleSwitch from 'primevue/toggleswitch';
 import InputText from 'primevue/inputtext';
 import Divider from 'primevue/divider';
+import ShortcutInput from './ShortcutInput.vue';
 import type { ThemeMode, ServiceType } from '../../config/types';
 import { PRIVATE_SERVICES, PUBLIC_SERVICES } from '../../config/types';
 import { LINK_FORMAT_OPTIONS, type LinkFormat } from '../../utils/linkFormatter';
@@ -23,6 +24,9 @@ interface Props {
   linkDefaultFormat: LinkFormat;
   linkCustomTemplate: string;
   linkAutoCopy: boolean;
+  globalShortcutEnabled: boolean;
+  shortcutUploadClipboard: string;
+  shortcutUploadFromFile: string;
 }
 
 const props = defineProps<Props>();
@@ -38,9 +42,13 @@ const emit = defineEmits<{
   'update:linkDefaultFormat': [format: LinkFormat];
   'update:linkCustomTemplate': [template: string];
   'update:linkAutoCopy': [enabled: boolean];
+  'update:globalShortcutEnabled': [enabled: boolean];
+  'update:shortcutUploadClipboard': [shortcut: string];
+  'update:shortcutUploadFromFile': [shortcut: string];
   'navigate-to-hosting': [serviceId: ServiceType];
   'clearHistory': [];
   'clearCache': [];
+  'reopenOnboarding': [];
   'save': [];
 }>();
 
@@ -141,6 +149,7 @@ function handleTemplateChange(template: string | undefined) {
             :key="svc"
             class="toggle-chip"
             :class="{ disabled: !serviceConfigStatus[svc] }"
+            v-tooltip.top="!serviceConfigStatus[svc] ? '尚未配置，点击前往设置' : null"
             @click="handleChipClick(svc)"
           >
             <Checkbox
@@ -163,6 +172,7 @@ function handleTemplateChange(template: string | undefined) {
             :key="svc"
             class="toggle-chip"
             :class="{ disabled: !serviceConfigStatus[svc] }"
+            v-tooltip.top="!serviceConfigStatus[svc] ? '尚未配置，点击前往设置' : null"
             @click="handleChipClick(svc)"
           >
             <Checkbox
@@ -212,6 +222,44 @@ function handleTemplateChange(template: string | undefined) {
           <ToggleSwitch
             v-model="localAnalyticsEnabled"
             @change="emit('save')"
+          />
+        </div>
+      </div>
+    </div>
+
+    <Divider />
+
+    <!-- 全局快捷键 -->
+    <div class="form-group">
+      <label class="group-label">全局快捷键</label>
+      <p class="helper-text">在任何应用中通过快捷键直接触发上传，无需切换窗口。</p>
+      <div class="behavior-toggles">
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <span class="toggle-row-label">启用全局快捷键</span>
+            <span class="toggle-row-desc">注册系统级快捷键，在后台也能触发上传</span>
+          </div>
+          <ToggleSwitch
+            :modelValue="globalShortcutEnabled"
+            @update:modelValue="(v: boolean) => { emit('update:globalShortcutEnabled', v); emit('save'); }"
+          />
+        </div>
+      </div>
+      <div v-if="globalShortcutEnabled" class="shortcut-config">
+        <div class="shortcut-row">
+          <span class="shortcut-label">剪贴板图片上传</span>
+          <ShortcutInput
+            :modelValue="shortcutUploadClipboard"
+            placeholder="点击录入快捷键"
+            @update:modelValue="(v: string) => { emit('update:shortcutUploadClipboard', v); emit('save'); }"
+          />
+        </div>
+        <div class="shortcut-row">
+          <span class="shortcut-label">选择文件上传</span>
+          <ShortcutInput
+            :modelValue="shortcutUploadFromFile"
+            placeholder="点击录入快捷键"
+            @update:modelValue="(v: string) => { emit('update:shortcutUploadFromFile', v); emit('save'); }"
           />
         </div>
       </div>
@@ -288,6 +336,13 @@ function handleTemplateChange(template: string | undefined) {
           outlined
           :loading="isClearingCache"
           @click="emit('clearCache')"
+        />
+        <Button
+          label="重新打开引导"
+          icon="pi pi-question-circle"
+          severity="secondary"
+          outlined
+          @click="emit('reopenOnboarding')"
         />
       </div>
     </div>
@@ -409,6 +464,7 @@ function handleTemplateChange(template: string | undefined) {
 
 .toggle-chip.disabled:hover {
   border-color: var(--primary);
+  border-style: dashed;
 }
 
 .toggle-chip .toggle-label {
@@ -419,6 +475,30 @@ function handleTemplateChange(template: string | undefined) {
 
 .toggle-chip.disabled .toggle-label {
   color: var(--text-muted);
+}
+
+/* 快捷键配置 */
+.shortcut-config {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+.shortcut-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
 }
 
 /* 链接输出格式 */

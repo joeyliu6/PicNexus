@@ -3079,3 +3079,8 @@ button:focus-visible {
   opacity: 0;
   transform: scale(0.95);
 }
+
+/* Tooltip 宽度扩展，避免短文本被强制换行 */
+.p-tooltip {
+  max-width: 26rem;
+}

@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { computed, watch, nextTick } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
 import Textarea from 'primevue/textarea';
-import Button from 'primevue/button';
 import HostingCard from './HostingCard.vue';
 import WeiboLinkPrefixSection from './hosting/WeiboLinkPrefixSection.vue';
 import GithubUrlStrategySection from './hosting/GithubUrlStrategySection.vue';
 import { getCategoryIcon } from '../../utils/icons';
 import type { GithubUrlStrategy } from '../../config/types';
-import type { BatchTestProgress, BatchTestReport } from '../../types/batchTest';
+import type { BatchTestProgress } from '../../types/batchTest';
+import type { ServiceHealthStatus } from '../../types/serviceHealth';
 import { useServiceHealth } from '../../composables/useServiceHealth';
 
 const { healthStatusMap, healthTooltipMap } = useServiceHealth();
@@ -64,7 +64,8 @@ const props = defineProps<{
   targetCardId?: string | null;
   isBatchTesting?: boolean;
   batchTestProgress?: BatchTestProgress | null;
-  batchTestReport?: BatchTestReport | null;
+  batchTestCompletionKey?: number;
+  serviceNames: Record<string, string>;
 }>();
 
 const emit = defineEmits<{
@@ -83,6 +84,8 @@ const emit = defineEmits<{
   resetToDefault: [];
   cardNavigated: [];
   testAll: [];
+  cancelBatchTest: [];
+  scrollToService: [serviceId: string];
 }>();
 
 function isTargetCard(id: string): boolean {
@@ -135,10 +138,37 @@ const extractNamiAuthToken = computed(() => {
   return props.cookieFormData.nami.cookie?.match(/auth-token=([^;]+)/)?.[1] || '';
 });
 
-const MAX_ERROR_LENGTH = 40;
-function truncateError(error: string): string {
-  return error.length > MAX_ERROR_LENGTH ? error.slice(0, MAX_ERROR_LENGTH) + '...' : error;
+const healthSummary = computed(() => {
+  const counts: Record<ServiceHealthStatus, number> = { unconfigured: 0, pending: 0, verified: 0, error: 0 };
+  for (const status of Object.values(healthStatusMap.value)) {
+    counts[status as ServiceHealthStatus]++;
+  }
+  const hasConfigured = counts.pending > 0 || counts.verified > 0 || counts.error > 0;
+  return { ...counts, hasConfigured };
+});
+
+const expandedStatus = ref<string | null>(null);
+
+const statusServiceList = computed(() => {
+  if (!expandedStatus.value) return [];
+  return Object.entries(healthStatusMap.value)
+    .filter(([, s]) => s === expandedStatus.value)
+    .map(([id]) => ({ id, name: props.serviceNames[id] || id }));
+});
+
+function toggleStatusExpand(status: string) {
+  expandedStatus.value = expandedStatus.value === status ? null : status;
 }
+
+function handleServiceClick(serviceId: string) {
+  emit('scrollToService', serviceId);
+}
+
+const progressPercent = computed(() => {
+  const p = props.batchTestProgress;
+  if (!p || p.total === 0) return 0;
+  return Math.round((p.current / p.total) * 100);
+});
 </script>
 
 <template>
@@ -148,28 +178,77 @@ function truncateError(error: string): string {
       <p class="section-desc">根据认证方式和使用场景选择合适的图床服务</p>
     </div>
 
-    <div class="batch-test-bar">
-      <Button
-        :label="isBatchTesting ? `正在测试 ${batchTestProgress?.current ?? 0}/${batchTestProgress?.total ?? 0}...` : '测试所有图床'"
-        :icon="isBatchTesting ? 'pi pi-spin pi-spinner' : 'pi pi-play'"
-        :disabled="isBatchTesting"
-        severity="secondary"
-        size="small"
-        outlined
-        @click="emit('testAll')"
-      />
-      <div v-if="batchTestReport && !isBatchTesting" class="batch-report">
-        <span :class="['report-summary', batchTestReport.failed.length === 0 ? 'all-pass' : batchTestReport.passed === 0 ? 'all-fail' : 'has-fail']">
-          {{ batchTestReport.passed }}/{{ batchTestReport.total }} 通过
-        </span>
-        <div v-if="batchTestReport.failed.length > 0" class="report-failures">
-          <div v-for="item in batchTestReport.failed" :key="item.serviceId" class="failure-item" v-tooltip.bottom="item.error">
-            <span class="failure-name">{{ item.name }}</span>
-            <span class="failure-error">{{ truncateError(item.error) }}</span>
-          </div>
-        </div>
+    <template v-if="healthSummary.hasConfigured">
+      <div class="group-title">
+        <i class="pi pi-heart-fill category-icon"></i>
+        <span>服务状态</span>
       </div>
-    </div>
+      <div class="health-overview">
+        <template v-if="isBatchTesting && batchTestProgress">
+          <div class="health-checking-wrapper">
+            <div class="health-checking">
+              <div class="health-checking-info">
+                <i class="pi" :class="progressPercent === 100 ? 'pi-check-circle health-complete-icon' : 'pi-spin pi-spinner health-spinner'"></i>
+                <span class="health-progress">
+                  {{ progressPercent === 100 ? '检测完成' : `正在检测... (${batchTestProgress.current}/${batchTestProgress.total}) ${batchTestProgress.currentService}` }}
+                </span>
+              </div>
+              <div class="health-checking-right">
+                <span class="health-percent" :class="{ 'health-percent-done': progressPercent === 100 }">{{ progressPercent }}%</span>
+                <button v-if="progressPercent < 100" class="health-cancel" @click="emit('cancelBatchTest')" title="取消检测">
+                  <i class="pi pi-times"></i>
+                  取消
+                </button>
+              </div>
+            </div>
+            <div class="health-progress-bar">
+              <div class="health-progress-fill" :class="{ complete: progressPercent === 100 }" :style="{ width: progressPercent + '%' }"></div>
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <div class="health-row">
+            <div class="health-stats" :key="batchTestCompletionKey">
+              <span v-if="healthSummary.verified > 0" class="health-pill verified pill-reveal" :class="{ active: expandedStatus === 'verified' }" @click="toggleStatusExpand('verified')">
+                <span class="health-dot"></span>
+                {{ healthSummary.verified }} 个可用
+                <i class="pi pill-chevron" :class="expandedStatus === 'verified' ? 'pi-chevron-up' : 'pi-chevron-down'"></i>
+              </span>
+              <span v-if="healthSummary.error > 0" class="health-pill error pill-reveal" :class="{ active: expandedStatus === 'error' }" @click="toggleStatusExpand('error')">
+                <span class="health-dot"></span>
+                {{ healthSummary.error }} 个异常
+                <i class="pi pill-chevron" :class="expandedStatus === 'error' ? 'pi-chevron-up' : 'pi-chevron-down'"></i>
+              </span>
+              <span v-if="healthSummary.pending > 0" class="health-pill pending pill-reveal" :class="{ active: expandedStatus === 'pending' }" @click="toggleStatusExpand('pending')">
+                <span class="health-dot"></span>
+                {{ healthSummary.pending }} 个待验证
+                <i class="pi pill-chevron" :class="expandedStatus === 'pending' ? 'pi-chevron-up' : 'pi-chevron-down'"></i>
+              </span>
+              <span v-if="healthSummary.unconfigured > 0" class="health-pill unconfigured pill-reveal" :class="{ active: expandedStatus === 'unconfigured' }" @click="toggleStatusExpand('unconfigured')">
+                <span class="health-dot"></span>
+                {{ healthSummary.unconfigured }} 个未配置
+                <i class="pi pill-chevron" :class="expandedStatus === 'unconfigured' ? 'pi-chevron-up' : 'pi-chevron-down'"></i>
+              </span>
+            </div>
+            <button class="health-refresh" @click="emit('testAll')">
+              <i class="pi pi-refresh"></i>
+              刷新检测
+            </button>
+          </div>
+          <div v-if="expandedStatus && statusServiceList.length > 0" class="status-service-list">
+            <div
+              v-for="svc in statusServiceList"
+              :key="svc.id"
+              class="status-service-item"
+              @click="handleServiceClick(svc.id)"
+            >
+              <span class="health-dot" :class="expandedStatus"></span>
+              <span class="service-name">{{ svc.name }}</span>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
 
     <div class="settings-content">
       <div class="group-title">
@@ -690,61 +769,292 @@ function truncateError(error: string): string {
   margin: 0;
 }
 
-.batch-test-bar {
+.health-overview {
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+}
+
+.health-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+
+.health-checking-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.health-checking {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.health-checking-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.health-spinner {
+  font-size: 13px;
+  color: var(--primary);
+}
+
+.health-progress {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.health-checking-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.health-percent {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.health-progress-bar {
+  width: 100%;
+  height: 3px;
+  background: var(--bg-input);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.health-progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 2px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.health-progress-fill.complete {
+  background: var(--success);
+}
+
+.health-complete-icon {
+  font-size: 13px;
+  color: var(--success);
+}
+
+.health-percent-done {
+  color: var(--success);
+}
+
+.pill-reveal {
+  animation: pillFadeIn 0.3s ease both;
+}
+
+.health-stats .pill-reveal:nth-child(2) { animation-delay: 80ms; }
+.health-stats .pill-reveal:nth-child(3) { animation-delay: 160ms; }
+.health-stats .pill-reveal:nth-child(4) { animation-delay: 240ms; }
+
+.pill-chevron {
+  font-size: 0.625rem;
+  margin-left: 2px;
+}
+
+@keyframes pillFadeIn {
+  from { opacity: 0; transform: translateY(4px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.health-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.health-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.health-pill .health-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.health-pill.verified {
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  color: var(--success);
+}
+
+.health-pill.verified .health-dot {
+  background: var(--success);
+}
+
+.health-pill.verified:hover {
+  background: color-mix(in srgb, var(--success) 20%, transparent);
+}
+
+.health-pill.error {
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+  color: var(--error);
+}
+
+.health-pill.error .health-dot {
+  background: var(--error);
+}
+
+.health-pill.error:hover {
+  background: color-mix(in srgb, var(--error) 20%, transparent);
+}
+
+.health-pill.pending {
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  color: var(--warning);
+}
+
+.health-pill.pending .health-dot {
+  background: var(--warning);
+}
+
+.health-pill.pending:hover {
+  background: color-mix(in srgb, var(--warning) 20%, transparent);
+}
+
+.health-pill.unconfigured {
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+  color: var(--text-muted);
+}
+
+.health-pill.unconfigured .health-dot {
+  background: var(--text-muted);
+  opacity: 0.5;
+}
+
+.health-pill.unconfigured:hover {
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
+}
+
+.health-pill.active {
+  outline: 1.5px solid currentColor;
+  outline-offset: -1.5px;
+}
+
+.status-service-list {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.batch-report {
-  display: flex;
-  flex-direction: column;
   gap: 6px;
-  font-size: 13px;
-  padding-top: 4px;
+  padding-top: 8px;
+  animation: fadeIn 0.15s ease;
 }
 
-.report-summary {
-  font-weight: 600;
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.report-summary.all-pass {
-  color: var(--green-500);
-}
-
-.report-summary.has-fail {
-  color: var(--orange-500);
-}
-
-.report-summary.all-fail {
-  color: var(--red-400);
-}
-
-.report-failures {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.failure-item {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
+.status-service-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
   font-size: 12px;
   color: var(--text-secondary);
 }
 
-.failure-name {
-  font-weight: 500;
-  color: var(--red-400);
+.status-service-item:hover {
+  background: var(--hover-overlay-subtle);
+  border-color: var(--primary);
+  color: var(--text-primary);
+}
+
+.status-service-item .health-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-service-item .health-dot.verified { background: var(--success); }
+.status-service-item .health-dot.error { background: var(--error); }
+.status-service-item .health-dot.pending { background: var(--warning); }
+.status-service-item .health-dot.unconfigured { background: var(--text-muted); opacity: 0.5; }
+
+.service-name {
   white-space: nowrap;
 }
 
-.failure-error {
-  color: var(--text-muted);
-  word-break: break-all;
+.health-refresh {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: background-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.health-refresh:hover {
+  background: var(--hover-overlay-subtle);
+}
+
+.health-refresh .pi {
+  font-size: 12px;
+}
+
+.health-cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: none;
+  background: var(--hover-overlay-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.health-cancel:hover {
+  background: color-mix(in srgb, var(--error) 15%, transparent);
+  color: var(--error);
+}
+
+.health-cancel .pi {
+  font-size: 10px;
 }
 
 .settings-content {

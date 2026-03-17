@@ -16,17 +16,19 @@ import { useHistoryManager } from '../../composables/useHistory';
 import { useAnalytics } from '../../composables/useAnalytics';
 import { useServiceAvailability } from '../../composables/useServiceAvailability';
 import { useServiceHealth } from '../../composables/useServiceHealth';
+import { useOnboarding } from '../../composables/useOnboarding';
 import { SERVICE_DISPLAY_NAMES } from '../../constants/serviceNames';
 import { SERVICE_REQUIRED_FIELDS } from '../../constants/serviceRequiredFields';
-import { NO_CONFIG_SERVICES } from '../../constants/serviceRequiredFields';
-import type { BatchTestProgress, BatchTestReport } from '../../types/batchTest';
+import type { BatchTestProgress } from '../../types/batchTest';
 
 // 组件
 import HostingSettingsPanel from '../settings/HostingSettingsPanel.vue';
 import GeneralSettingsPanel from '../settings/GeneralSettingsPanel.vue';
 import BackupSyncPanel from '../settings/BackupSyncPanel.vue';
+import AboutUpdatePanel from '../settings/AboutUpdatePanel.vue';
 
 import { Store } from '../../store';
+import { syncStatusStore } from '../../store/instances';
 import type { ThemeMode, UserConfig, ServiceType, WebDAVProfile, GithubUrlStrategy } from '../../config/types';
 import { DEFAULT_CONFIG, DEFAULT_PREFIXES } from '../../config/types';
 
@@ -50,6 +52,7 @@ const {
 } = useServiceAvailability();
 
 const serviceHealth = useServiceHealth();
+const { reopen: reopenOnboarding } = useOnboarding();
 
 // ==================== 存储实例 ====================
 
@@ -62,7 +65,7 @@ const appVersion = ref<string>('');
 const isClearingCache = ref(false);
 
 // 导航状态
-type SettingsTab = 'general' | 'hosting' | 'backup';
+type SettingsTab = 'general' | 'hosting' | 'backup' | 'about';
 const activeTab = ref<SettingsTab>('general');
 
 // 接收来自 MainLayout 的 tab 跳转指令（不提供 fallback，确保拿到 provide 的同一个 ref）
@@ -70,7 +73,7 @@ const settingsTargetTab = inject<import('vue').Ref<string | null>>('settingsTarg
 
 const applyTargetTab = () => {
   if (settingsTargetTab?.value) {
-    const validTabs: SettingsTab[] = ['general', 'hosting', 'backup'];
+    const validTabs: SettingsTab[] = ['general', 'hosting', 'backup', 'about'];
     if (validTabs.includes(settingsTargetTab.value as SettingsTab)) {
       activeTab.value = settingsTargetTab.value as SettingsTab;
     }
@@ -87,6 +90,17 @@ if (settingsTargetTab) {
     if (val) applyTargetTab();
   });
 }
+
+// 切换到图床设置 Tab 时，自动静默检测（带冷却）
+const isSettingsReady = ref(false);
+watch(activeTab, (tab) => {
+  if (!isSettingsReady.value) return;
+  if (tab === 'hosting' && !isBatchTesting.value) {
+    if (Date.now() - lastBatchCheckTime.value > AUTO_CHECK_COOLDOWN) {
+      testAllConfiguredServices();
+    }
+  }
+});
 
 interface NavItem {
   id: SettingsTab;
@@ -105,6 +119,7 @@ const navGroups: NavGroup[] = [
       { id: 'general', label: '常规设置', icon: 'pi pi-cog' },
       { id: 'hosting', label: '图床设置', icon: 'pi pi-images' },
       { id: 'backup', label: '备份与同步', icon: 'pi pi-database' },
+      { id: 'about', label: '关于与更新', icon: 'pi pi-info-circle' },
     ]
   }
 ];
@@ -135,7 +150,13 @@ const formData = ref({
     defaultFormat: 'url' as import('../../utils/linkFormatter').LinkFormat,
     customTemplate: '{url}',
     autoCopy: true,
-  }
+  },
+  globalShortcut: {
+    enabled: true,
+    uploadClipboard: 'CommandOrControl+Shift+C',
+    uploadFromFile: 'CommandOrControl+Shift+O',
+  },
+  autoUpdateEnabled: true,
 });
 
 // 测试连接状态
@@ -148,7 +169,17 @@ const testingConnections = ref<Record<string, boolean>>({
 // 批量测试状态
 const isBatchTesting = ref(false);
 const batchTestProgress = ref<BatchTestProgress | null>(null);
-const batchTestReport = ref<BatchTestReport | null>(null);
+const batchTestAborted = ref(false);
+const batchTestCompletionKey = ref(0);
+const lastBatchCheckTime = ref(0);
+const AUTO_CHECK_COOLDOWN = 12 * 60 * 60 * 1000;
+const LAST_CHECK_KEY = 'serviceHealthLastCheck';
+const MIN_DISPLAY_MS = 300;
+const COMPLETE_LINGER_MS = 500;
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // 可用服务列表
 const availableServices = ref<ServiceType[]>([]);
@@ -264,6 +295,12 @@ async function loadSettings() {
 
     formData.value.analyticsEnabled = config.analytics?.enabled ?? true;
     formData.value.appBehavior = config.appBehavior ?? { autoStart: false, minimizeToTrayOnStart: false };
+    formData.value.autoUpdateEnabled = config.autoUpdate?.enabled ?? true;
+    formData.value.globalShortcut = config.globalShortcut ?? {
+      enabled: true,
+      uploadClipboard: 'CommandOrControl+Shift+C',
+      uploadFromFile: 'CommandOrControl+Shift+O',
+    };
     availableServices.value = config.availableServices || ['jd', 'qiyu'];
 
     // 从 OS 同步自启动真实状态
@@ -336,6 +373,8 @@ async function saveSettings() {
     config.linkOutput = formData.value.linkOutput;
     config.analytics = { enabled: formData.value.analyticsEnabled };
     config.appBehavior = formData.value.appBehavior;
+    config.globalShortcut = formData.value.globalShortcut;
+    config.autoUpdate = { enabled: formData.value.autoUpdateEnabled };
     config.availableServices = availableServices.value;
 
     await configManager.saveConfig(config, true);
@@ -481,6 +520,14 @@ const actions: Record<string, () => Promise<void>> = {
     const authToken = formData.value.nami.authToken || (tokenMatch ? tokenMatch[1] : '');
     return testCookieConnection('test_nami_connection', { cookie, authToken }, 'nami');
   },
+  jd: async () => {
+    await checkJdAvailable(true);
+    if (!jdAvailable.value) throw new Error('京东图床当前不可用');
+  },
+  qiyu: async () => {
+    await checkQiyuAvailability(true);
+    if (!qiyuAvailable.value) throw new Error('七鱼图床当前不可用');
+  },
 };
 
 async function handleServiceTest(serviceId: string) {
@@ -501,60 +548,108 @@ async function handleBuiltinCheck(serviceId: string) {
   }
 }
 
-async function testAllConfiguredServices() {
-  const configuredServices = (Object.entries(serviceHealth.healthStatusMap.value) as [ServiceType, string][])
-    .filter(([id, status]) => status !== 'unconfigured' && !NO_CONFIG_SERVICES.includes(id) && actions[id])
-    .map(([id]) => id);
+const S3_SERVICE_IDS: ServiceType[] = ['r2', 'tencent', 'aliyun', 'qiniu', 'upyun'];
 
-  if (configuredServices.length === 0) {
-    toast.showConfig('info', { summary: '没有已配置的图床需要测试' });
-    return;
+function preValidateService(serviceId: ServiceType): string | null {
+  if (S3_SERVICE_IDS.includes(serviceId)) {
+    const config = formData.value[serviceId as keyof typeof formData.value] as any;
+    return validateS3Config(serviceId, config);
   }
+  return null;
+}
+
+async function runServiceTest(serviceId: ServiceType, task: Promise<void>) {
+  try {
+    await task;
+    serviceHealth.markVerified(serviceId);
+  } catch (e) {
+    serviceHealth.markTestFailed(serviceId, errorToString(e));
+  }
+}
+
+async function testAllConfiguredServices() {
+  if (isBatchTesting.value) return;
+
+  const MIN_TOTAL_MS = 1500;
+  const SLOW_SERVICES: ServiceType[] = ['qiyu'];
+
+  const allServices = (Object.entries(serviceHealth.healthStatusMap.value) as [ServiceType, string][])
+    .filter(([id]) => actions[id])
+    .map(([id, status]) => ({ id: id as ServiceType, status }));
+
+  if (allServices.length === 0) return;
+
+  const normalServices = allServices.filter(s => !SLOW_SERVICES.includes(s.id));
+  const slowServiceEntries = allServices.filter(s => SLOW_SERVICES.includes(s.id));
+  const orderedServices = [...normalServices, ...slowServiceEntries];
 
   isBatchTesting.value = true;
-  batchTestReport.value = null;
-  batchTestProgress.value = { current: 0, total: configuredServices.length, currentService: '' };
+  batchTestAborted.value = false;
+  batchTestProgress.value = { current: 0, total: orderedServices.length, currentService: '' };
   suppressToasts(true);
 
-  const failed: BatchTestReport['failed'] = [];
-  let passed = 0;
-  let completed = 0;
+  const slowPromises = new Map<ServiceType, Promise<void>>();
+  for (const s of slowServiceEntries) {
+    if (s.status !== 'unconfigured' && !preValidateService(s.id)) {
+      slowPromises.set(s.id, actions[s.id]());
+    }
+  }
+
+  const overallStartTime = Date.now();
 
   try {
-    const tasks = configuredServices.map((serviceId) => async () => {
-      batchTestProgress.value = { current: completed + 1, total: configuredServices.length, currentService: serviceNames[serviceId] };
-      testingConnections.value[serviceId] = true;
-      try {
-        await actions[serviceId]();
-        serviceHealth.markVerified(serviceId);
-        passed++;
-      } catch (e) {
-        const msg = errorToString(e);
-        serviceHealth.markTestFailed(serviceId, msg);
-        failed.push({ serviceId, name: serviceNames[serviceId], error: msg });
-      } finally {
-        testingConnections.value[serviceId] = false;
-        completed++;
-        batchTestProgress.value = { current: completed, total: configuredServices.length, currentService: '' };
-      }
-    });
+    for (let i = 0; i < orderedServices.length; i++) {
+      if (batchTestAborted.value) break;
 
-    // 有限并发执行（max 3）
-    let nextIndex = 0;
-    async function runNext(): Promise<void> {
-      while (nextIndex < tasks.length) {
-        const task = tasks[nextIndex++];
-        await task();
+      const { id: serviceId, status } = orderedServices[i];
+      const startTime = Date.now();
+
+      batchTestProgress.value = {
+        current: i,
+        total: orderedServices.length,
+        currentService: serviceNames[serviceId],
+      };
+      testingConnections.value[serviceId] = true;
+
+      if (status === 'unconfigured') {
+        await delay(MIN_DISPLAY_MS);
+      } else {
+        const validationError = preValidateService(serviceId);
+        if (validationError) {
+          serviceHealth.markTestFailed(serviceId, validationError);
+          await delay(MIN_DISPLAY_MS);
+        } else {
+          const task = slowPromises.get(serviceId) ?? actions[serviceId]();
+          await runServiceTest(serviceId, task);
+          const elapsed = Date.now() - startTime;
+          if (elapsed < MIN_DISPLAY_MS) await delay(MIN_DISPLAY_MS - elapsed);
+        }
       }
+
+      testingConnections.value[serviceId] = false;
     }
-    const concurrency = Math.min(3, tasks.length);
-    await Promise.all(Array.from({ length: concurrency }, () => runNext()));
+
+    if (!batchTestAborted.value) {
+      batchTestProgress.value = {
+        current: orderedServices.length,
+        total: orderedServices.length,
+        currentService: '',
+      };
+      const totalElapsed = Date.now() - overallStartTime;
+      await delay(Math.max(COMPLETE_LINGER_MS, MIN_TOTAL_MS - totalElapsed));
+    }
   } finally {
     suppressToasts(false);
-    batchTestReport.value = { total: configuredServices.length, passed, failed, completedAt: Date.now() };
     isBatchTesting.value = false;
     batchTestProgress.value = null;
+    batchTestCompletionKey.value++;
+    lastBatchCheckTime.value = Date.now();
+    syncStatusStore.set(LAST_CHECK_KEY, lastBatchCheckTime.value);
   }
+}
+
+function scrollToService(serviceId: string) {
+  targetCardId.value = serviceId;
 }
 
 async function handleCookieLogin(serviceId: string) {
@@ -724,6 +819,8 @@ onMounted(async () => {
   }
 
   await loadSettings();
+  const savedCheckTime = await syncStatusStore.get<number>(LAST_CHECK_KEY);
+  if (savedCheckTime) lastBatchCheckTime.value = savedCheckTime;
   await checkAllAvailabilityWithCooldown();
 
   cookieUnlisten.value = await configManager.setupCookieListener(async (sid, cookie) => {
@@ -733,6 +830,8 @@ onMounted(async () => {
     }
     await saveSettings();
   });
+
+  isSettingsReady.value = true;
 });
 
 onUnmounted(() => {
@@ -783,6 +882,9 @@ onUnmounted(() => {
           :link-default-format="formData.linkOutput.defaultFormat"
           :link-custom-template="formData.linkOutput.customTemplate"
           :link-auto-copy="formData.linkOutput.autoCopy"
+          :global-shortcut-enabled="formData.globalShortcut.enabled"
+          :shortcut-upload-clipboard="formData.globalShortcut.uploadClipboard"
+          :shortcut-upload-from-file="formData.globalShortcut.uploadFromFile"
           @update:current-theme="handleThemeChange"
           @update:available-services="(v) => { availableServices = v; saveSettings(); }"
           @update:auto-start="handleAutoStartChange"
@@ -791,9 +893,13 @@ onUnmounted(() => {
           @update:link-default-format="(v) => { formData.linkOutput.defaultFormat = v; }"
           @update:link-custom-template="(v) => { formData.linkOutput.customTemplate = v; }"
           @update:link-auto-copy="(v) => { formData.linkOutput.autoCopy = v; }"
+          @update:global-shortcut-enabled="(v: boolean) => { formData.globalShortcut.enabled = v; }"
+          @update:shortcut-upload-clipboard="(v: string) => { formData.globalShortcut.uploadClipboard = v; }"
+          @update:shortcut-upload-from-file="(v: string) => { formData.globalShortcut.uploadFromFile = v; }"
           @navigate-to-hosting="handleNavigateToHosting"
           @clear-history="handleClearHistory"
           @clear-cache="handleClearAppCache"
+          @reopen-onboarding="reopenOnboarding"
           @save="saveSettings"
         />
       </div>
@@ -833,9 +939,12 @@ onUnmounted(() => {
           :target-card-id="targetCardId"
           :is-batch-testing="isBatchTesting"
           :batch-test-progress="batchTestProgress"
-          :batch-test-report="batchTestReport"
+          :batch-test-completion-key="batchTestCompletionKey"
+          :service-names="serviceNames"
           @card-navigated="targetCardId = null"
           @test-all="testAllConfiguredServices"
+          @cancel-batch-test="batchTestAborted = true"
+          @scroll-to-service="scrollToService"
           @save="saveSettings"
           @test-private="handleServiceTest"
           @test-token="handleServiceTest"
@@ -862,6 +971,17 @@ onUnmounted(() => {
           @add-web-d-a-v-profile="addWebDAVProfile"
           @delete-web-d-a-v-profile="deleteWebDAVProfile"
           @switch-web-d-a-v-profile="switchWebDAVProfile"
+        />
+      </div>
+
+      <!-- 关于与更新 -->
+      <div v-if="activeTab === 'about'" class="settings-section">
+        <AboutUpdatePanel
+          :app-version="appVersion"
+          :auto-update-enabled="formData.autoUpdateEnabled"
+          @update:auto-update-enabled="(v) => { formData.autoUpdateEnabled = v; saveSettings(); }"
+          @reopen-onboarding="reopenOnboarding"
+          @save="saveSettings"
         />
       </div>
     </div>
