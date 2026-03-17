@@ -3,6 +3,13 @@
 import { useToast as usePrimeToast } from 'primevue/usetoast';
 import type { ToastMessageConfig } from '../constants/toastMessages';
 
+// 全局静默开关（批量操作时抑制所有 Toast）
+let globalSuppressed = false;
+
+export function suppressToasts(suppress: boolean): void {
+  globalSuppressed = suppress;
+}
+
 // Toast去重机制
 const recentToasts = new Map<string, number>();
 const DUPLICATE_WINDOW = 2000; // 2秒防抖窗口
@@ -54,118 +61,23 @@ function isDuplicate(severity: string, summary: string, detail?: string): boolea
 export function useToast() {
   const toast = usePrimeToast();
 
-  /**
-   * 显示成功通知
-   * @param summary 标题
-   * @param detail 详细信息（可选）
-   * @param life 显示时长（毫秒），默认 3000
-   */
-  const success = (summary: string, detail?: string, life = 3000) => {
-    if (isDuplicate('success', summary, detail)) return;
-    toast.add({
-      severity: 'success',
-      summary,
-      detail,
-      life
-    });
-  };
+  type Severity = 'success' | 'info' | 'warn' | 'error';
 
-  /**
-   * 显示错误通知
-   * @param summary 标题
-   * @param detail 详细信息（可选）
-   * @param life 显示时长（毫秒），默认 5000
-   */
-  const error = (summary: string, detail?: string, life = 5000) => {
-    if (isDuplicate('error', summary, detail)) return;
-    toast.add({
-      severity: 'error',
-      summary,
-      detail,
-      life
-    });
-  };
-
-  /**
-   * 显示警告通知
-   * @param summary 标题
-   * @param detail 详细信息（可选）
-   * @param life 显示时长（毫秒），默认 4000
-   */
-  const warn = (summary: string, detail?: string, life = 4000) => {
-    if (isDuplicate('warn', summary, detail)) return;
-    toast.add({
-      severity: 'warn',
-      summary,
-      detail,
-      life
-    });
-  };
-
-  /**
-   * 显示信息通知
-   * @param summary 标题
-   * @param detail 详细信息（可选）
-   * @param life 显示时长（毫秒），默认 3000
-   */
-  const info = (summary: string, detail?: string, life = 3000) => {
-    if (isDuplicate('info', summary, detail)) return;
-    toast.add({
-      severity: 'info',
-      summary,
-      detail,
-      life
-    });
-  };
-
-  /**
-   * 显示自定义通知
-   * @param severity 严重程度
-   * @param summary 标题
-   * @param detail 详细信息（可选）
-   * @param life 显示时长（毫秒），默认 3000
-   */
-  const show = (
-    severity: 'success' | 'info' | 'warn' | 'error',
-    summary: string,
-    detail?: string,
-    life = 3000
-  ) => {
-    toast.add({
-      severity,
-      summary,
-      detail,
-      life
-    });
-  };
-
-  /**
-   * 清除所有通知
-   */
-  const clear = () => {
-    toast.removeAllGroups();
-  };
-
-  /**
-   * 使用预定义消息配置显示通知
-   * @param severity 严重程度
-   * @param config 消息配置对象
-   */
-  const showConfig = (
-    severity: 'success' | 'info' | 'warn' | 'error',
-    config: ToastMessageConfig
-  ) => {
-    const { summary, detail, life } = config;
-    const defaultLife = DEFAULT_LIFE[severity] ?? 3000;
-
+  function addToast(severity: Severity, summary: string, detail?: string, life?: number): void {
+    if (globalSuppressed) return;
     if (isDuplicate(severity, summary, detail)) return;
+    toast.add({ severity, summary, detail, life: life || DEFAULT_LIFE[severity] || 3000 });
+  }
 
-    toast.add({
-      severity,
-      summary,
-      detail,
-      life: life || defaultLife
-    });
+  const success = (summary: string, detail?: string, life?: number) => addToast('success', summary, detail, life);
+  const error = (summary: string, detail?: string, life?: number) => addToast('error', summary, detail, life);
+  const warn = (summary: string, detail?: string, life?: number) => addToast('warn', summary, detail, life);
+  const info = (summary: string, detail?: string, life?: number) => addToast('info', summary, detail, life);
+  const show = (severity: Severity, summary: string, detail?: string, life?: number) => addToast(severity, summary, detail, life);
+  const clear = () => toast.removeAllGroups();
+
+  const showConfig = (severity: Severity, config: ToastMessageConfig) => {
+    addToast(severity, config.summary, config.detail, config.life);
   };
 
   /**

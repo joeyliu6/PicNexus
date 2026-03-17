@@ -428,10 +428,10 @@ export interface ServiceCheckStatus {
 export interface ProfileSyncRecord {
   providerName: string;
   configLastSync: string | null;
-  configSyncResult: 'success' | 'failed' | null;
+  configSyncResult: 'success' | 'failed' | 'partial' | null;
   configSyncError?: string;
   historyLastSync: string | null;
-  historySyncResult: 'success' | 'failed' | null;
+  historySyncResult: 'success' | 'failed' | 'partial' | null;
   historySyncError?: string;
 }
 
@@ -443,8 +443,11 @@ export interface SyncStatus {
   /** 按 profileId 索引的同步记录 */
   syncByProfile: Record<string, ProfileSyncRecord>;
 
-  /** 京东图床上次检测时间戳 */
+  /** @deprecated 使用 jdCheckStatus 代替 */
   lastJdCheck?: number;
+
+  /** 京东图床检测状态 */
+  jdCheckStatus?: ServiceCheckStatus;
 
   /** 七鱼图床检测状态 */
   qiyuCheckStatus?: ServiceCheckStatus;

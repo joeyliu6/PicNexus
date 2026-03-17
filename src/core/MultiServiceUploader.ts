@@ -10,6 +10,11 @@ import { convertToStructuredR2Error } from '../uploaders/r2/R2Error';
 import { convertToJDError } from '../uploaders/jd/JDError';
 import { convertToNamiError } from '../uploaders/nami/NamiError';
 import { getServiceSemaphore } from '../utils/semaphore';
+import {
+  SERVICE_REQUIRED_FIELDS,
+  COOKIE_BASED_SERVICES,
+  NO_CONFIG_SERVICES,
+} from '../constants/serviceRequiredFields';
 
 /** 每个图床的最大并发数 */
 const SERVICE_MAX_CONCURRENT = 2;
@@ -299,25 +304,7 @@ export class MultiServiceUploader {
     );
   }
 
-  /** 基于 Cookie 认证的图床列表 */
-  private static readonly COOKIE_BASED_SERVICES: ServiceType[] = [
-    'weibo', 'nowcoder', 'zhihu', 'nami', 'bilibili', 'chaoxing'
-  ];
-
-  /** 无需配置的图床列表 */
-  private static readonly NO_CONFIG_SERVICES: ServiceType[] = ['jd', 'qiyu'];
-
-  /** 各图床必填字段映射表 */
-  private static readonly REQUIRED_FIELDS: Partial<Record<ServiceType, string[]>> = {
-    r2: ['accountId', 'accessKeyId', 'secretAccessKey', 'bucketName', 'publicDomain'],
-    smms: ['token'],
-    github: ['token', 'owner', 'repo'],
-    imgur: ['clientId'],
-    tencent: ['secretId', 'secretKey', 'bucket', 'region', 'publicDomain'],
-    aliyun: ['accessKeyId', 'accessKeySecret', 'bucket', 'region', 'publicDomain'],
-    qiniu: ['accessKey', 'secretKey', 'bucket', 'publicDomain'],
-    upyun: ['operator', 'password', 'bucket', 'publicDomain'],
-  };
+  // 常量已迁移到 src/constants/serviceRequiredFields.ts
 
   /**
    * 过滤出已配置的图床
@@ -329,7 +316,7 @@ export class MultiServiceUploader {
   ): ServiceType[] {
     return enabledServices.filter(serviceId => {
       // 无需配置的图床直接通过
-      if (MultiServiceUploader.NO_CONFIG_SERVICES.includes(serviceId)) {
+      if (NO_CONFIG_SERVICES.includes(serviceId)) {
         return true;
       }
 
@@ -340,7 +327,7 @@ export class MultiServiceUploader {
       }
 
       // Cookie 类图床：统一检查 cookie 字段
-      if (MultiServiceUploader.COOKIE_BASED_SERVICES.includes(serviceId)) {
+      if (COOKIE_BASED_SERVICES.includes(serviceId)) {
         const cfg = serviceConfig as unknown as Record<string, unknown>;
         if (!(cfg.cookie as string)?.trim()) {
           console.warn(`[MultiUploader] ${serviceId} Cookie 未配置，跳过`);
@@ -350,8 +337,8 @@ export class MultiServiceUploader {
       }
 
       // 通用必填字段校验
-      const requiredFields = MultiServiceUploader.REQUIRED_FIELDS[serviceId];
-      if (requiredFields) {
+      const requiredFields = SERVICE_REQUIRED_FIELDS[serviceId];
+      if (requiredFields?.length) {
         const cfg = serviceConfig as unknown as Record<string, unknown>;
         const hasAll = requiredFields.every(field => {
           const val = cfg[field];

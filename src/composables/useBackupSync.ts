@@ -70,6 +70,12 @@ export interface UseBackupSyncReturn {
   downloadHistoryOverwrite: (profile: WebDAVProfile | null) => Promise<void>;
   downloadHistoryMerge: (profile: WebDAVProfile | null) => Promise<void>;
 
+  // 双向同步
+  syncConfigLoading: Ref<boolean>;
+  syncHistoryLoading: Ref<boolean>;
+  syncConfig: (profile: WebDAVProfile | null) => Promise<void>;
+  syncHistory: (profile: WebDAVProfile | null) => Promise<void>;
+
   // 菜单控制
   toggleUploadHistoryMenu: () => void;
   toggleDownloadSettingsMenu: () => void;
@@ -200,6 +206,8 @@ export function useBackupSync(): UseBackupSyncReturn {
   const importHistoryProgress = ref(0);
   const uploadHistoryLoading = ref(false);
   const downloadHistoryLoading = ref(false);
+  const syncConfigLoading = ref(false);
+  const syncHistoryLoading = ref(false);
 
   // 下拉菜单状态
   const uploadHistoryMenuVisible = ref(false);
@@ -284,7 +292,8 @@ export function useBackupSync(): UseBackupSyncReturn {
     return profiles[profileId];
   }
 
-  function updateConfigSyncStatus(profile: WebDAVProfile, result: 'success' | 'failed', error?: string): void {
+  function updateConfigSyncStatus(profile: WebDAVProfile | null, result: 'success' | 'failed' | 'partial', error?: string): void {
+    if (!profile) return;
     const record = ensureProfileRecord(profile.id, profile.name);
     record.configLastSync = getFullTimestamp();
     record.configSyncResult = result;
@@ -292,7 +301,8 @@ export function useBackupSync(): UseBackupSyncReturn {
     saveSyncStatus();
   }
 
-  function updateHistorySyncStatus(profile: WebDAVProfile, result: 'success' | 'failed', error?: string): void {
+  function updateHistorySyncStatus(profile: WebDAVProfile | null, result: 'success' | 'failed' | 'partial', error?: string): void {
+    if (!profile) return;
     const record = ensureProfileRecord(profile.id, profile.name);
     record.historyLastSync = getFullTimestamp();
     record.historySyncResult = result;
@@ -568,12 +578,12 @@ export function useBackupSync(): UseBackupSyncReturn {
       const jsonContent = JSON.stringify(config, null, 2);
       await webdav.client.putFile(webdav.remotePath, jsonContent);
 
-      updateConfigSyncStatus(profile!, 'success');
+      updateConfigSyncStatus(profile,'success');
       toast.showConfig('success', TOAST_MESSAGES.sync.uploadSuccess('config'));
     } catch (error) {
       const errorCode = extractErrorCode(error);
       console.error('[备份] 上传配置失败:', error);
-      updateConfigSyncStatus(profile!, 'failed', errorCode);
+      updateConfigSyncStatus(profile,'failed', errorCode);
       toast.showConfig('error', TOAST_MESSAGES.sync.uploadFailed(errorCode));
     } finally {
       uploadSettingsLoading.value = false;
@@ -607,7 +617,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       let importedConfig = JSON.parse(content) as UserConfig;
 
       if (!isValidUserConfig(importedConfig)) {
-        updateConfigSyncStatus(profile!, 'failed', '云端数据格式无效');
+        updateConfigSyncStatus(profile,'failed', '云端数据格式无效');
         toast.showConfig('error', TOAST_MESSAGES.sync.downloadFailed('云端配置文件内容格式无效'));
         return;
       }
@@ -617,7 +627,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       await configStore.set('config', importedConfig);
       await configStore.save();
 
-      updateConfigSyncStatus(profile!, 'success');
+      updateConfigSyncStatus(profile,'success');
       toast.showConfig('success', TOAST_MESSAGES.sync.downloadSuccess('config'));
 
       setTimeout(() => {
@@ -626,7 +636,7 @@ export function useBackupSync(): UseBackupSyncReturn {
     } catch (error) {
       const errorCode = extractErrorCode(error);
       console.error('[备份] 下载配置失败:', error);
-      updateConfigSyncStatus(profile!, 'failed', errorCode);
+      updateConfigSyncStatus(profile,'failed', errorCode);
       toast.showConfig('error', TOAST_MESSAGES.sync.downloadFailed(errorCode));
     } finally {
       downloadSettingsLoading.value = false;
@@ -655,7 +665,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       let importedConfig = JSON.parse(content) as UserConfig;
 
       if (!isValidUserConfig(importedConfig)) {
-        updateConfigSyncStatus(profile!, 'failed', '云端数据格式无效');
+        updateConfigSyncStatus(profile,'failed', '云端数据格式无效');
         toast.error('下载失败', '云端配置文件内容格式无效，可能不是配置数据');
         return;
       }
@@ -670,7 +680,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       await configStore.set('config', mergedConfig);
       await configStore.save();
 
-      updateConfigSyncStatus(profile!, 'success');
+      updateConfigSyncStatus(profile,'success');
       toast.success('配置已从云端恢复（保留本地 WebDAV）');
 
       setTimeout(() => {
@@ -679,7 +689,7 @@ export function useBackupSync(): UseBackupSyncReturn {
     } catch (error) {
       const errorCode = extractErrorCode(error);
       console.error('[备份] 合并下载配置失败:', error);
-      updateConfigSyncStatus(profile!, 'failed', errorCode);
+      updateConfigSyncStatus(profile,'failed', errorCode);
       toast.error('下载失败', errorCode);
     } finally {
       downloadSettingsLoading.value = false;
@@ -715,12 +725,12 @@ export function useBackupSync(): UseBackupSyncReturn {
       const jsonContent = await historyDB.exportToJSON();
       await webdav.client.putFile(webdav.remotePath, jsonContent);
 
-      updateHistorySyncStatus(profile!, 'success');
+      updateHistorySyncStatus(profile,'success');
       toast.success(`已强制覆盖云端记录（${count} 条）`);
     } catch (error) {
       const errorCode = extractErrorCode(error);
       console.error('[备份] 强制上传历史记录失败:', error);
-      updateHistorySyncStatus(profile!, 'failed', errorCode);
+      updateHistorySyncStatus(profile,'failed', errorCode);
       toast.error('上传失败', errorCode);
     } finally {
       uploadHistoryLoading.value = false;
@@ -776,7 +786,7 @@ export function useBackupSync(): UseBackupSyncReturn {
             itemMap.set(item.id, item);
           }
         } else {
-          item.id = Date.now().toString() + Math.random().toString(36).substring(2, 11);
+          item.id = crypto.randomUUID();
           itemMap.set(item.id, item);
         }
       });
@@ -788,7 +798,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       await webdav.client.putFile(webdav.remotePath, jsonContent);
 
       const newCount = mergedItems.length - cloudItems.length;
-      updateHistorySyncStatus(profile!, 'success');
+      updateHistorySyncStatus(profile,'success');
       toast.success(
         `合并上传完成：共 ${mergedItems.length} 条记录`,
         newCount > 0 ? `新增 ${newCount} 条到云端` : '云端数据已是最新'
@@ -796,7 +806,7 @@ export function useBackupSync(): UseBackupSyncReturn {
     } catch (error) {
       const errorCode = extractErrorCode(error);
       console.error('[备份] 智能合并上传失败:', error);
-      updateHistorySyncStatus(profile!, 'failed', errorCode);
+      updateHistorySyncStatus(profile,'failed', errorCode);
       toast.error('上传失败', errorCode);
     } finally {
       uploadHistoryLoading.value = false;
@@ -845,7 +855,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       const newItems = localItems.filter(item => item.id && !cloudIdSet.has(item.id));
 
       if (newItems.length === 0) {
-        updateHistorySyncStatus(profile!, 'success');
+        updateHistorySyncStatus(profile,'success');
         toast.info('无需上传', '本地没有新增的记录');
         return;
       }
@@ -856,7 +866,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       const jsonContent = JSON.stringify(mergedItems, null, 2);
       await webdav.client.putFile(webdav.remotePath, jsonContent);
 
-      updateHistorySyncStatus(profile!, 'success');
+      updateHistorySyncStatus(profile,'success');
       toast.success(
         `增量上传完成`,
         `新增 ${newItems.length} 条记录到云端，共 ${mergedItems.length} 条`
@@ -864,7 +874,7 @@ export function useBackupSync(): UseBackupSyncReturn {
     } catch (error) {
       const errorCode = extractErrorCode(error);
       console.error('[备份] 增量上传失败:', error);
-      updateHistorySyncStatus(profile!, 'failed', errorCode);
+      updateHistorySyncStatus(profile,'failed', errorCode);
       toast.error('上传失败', errorCode);
     } finally {
       uploadHistoryLoading.value = false;
@@ -906,12 +916,12 @@ export function useBackupSync(): UseBackupSyncReturn {
       invalidateCache();
       emitHistoryUpdated();
 
-      updateHistorySyncStatus(profile!, 'success');
+      updateHistorySyncStatus(profile,'success');
       toast.success(`下载完成：共 ${cloudItems.length} 条记录（覆盖本地）`);
     } catch (error) {
       const errorCode = extractErrorCode(error);
       console.error('[备份] 下载历史记录失败:', error);
-      updateHistorySyncStatus(profile!, 'failed', errorCode);
+      updateHistorySyncStatus(profile,'failed', errorCode);
       toast.error('下载失败', errorCode);
     } finally {
       downloadHistoryLoading.value = false;
@@ -952,7 +962,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       emitHistoryUpdated();
 
       const addedCount = countAfter - countBefore;
-      updateHistorySyncStatus(profile!, 'success');
+      updateHistorySyncStatus(profile,'success');
       toast.success(
         `下载完成：共 ${countAfter} 条记录`,
         `新增 ${addedCount} 条，合并 ${cloudItems.length - addedCount} 条`
@@ -960,10 +970,164 @@ export function useBackupSync(): UseBackupSyncReturn {
     } catch (error) {
       const errorCode = extractErrorCode(error);
       console.error('[备份] 下载历史记录失败:', error);
-      updateHistorySyncStatus(profile!, 'failed', errorCode);
+      updateHistorySyncStatus(profile,'failed', errorCode);
       toast.error('下载失败', errorCode);
     } finally {
       downloadHistoryLoading.value = false;
+    }
+  }
+
+  // ==================== 双向同步 ====================
+
+  /**
+   * 双向同步配置文件：拉取云端 → 合并 → 推送
+   */
+  async function syncConfig(profile: WebDAVProfile | null): Promise<void> {
+    if (!profile) return;
+    const webdav = await getWebDAVClientAndPath(profile, 'settings', toast);
+    if (!webdav) return;
+
+    let stage: 'download' | 'upload' = 'download';
+
+    try {
+      syncConfigLoading.value = true;
+
+      const currentConfig = await configStore.get<UserConfig>('config');
+      let hasCloudData = false;
+
+      // 步骤 1：拉取云端配置并合并到本地（保留本地 WebDAV 配置）
+      try {
+        const content = await webdav.client.getFile(webdav.remotePath);
+        if (content) {
+          let importedConfig = JSON.parse(content) as UserConfig;
+          if (isValidUserConfig(importedConfig)) {
+            importedConfig = migrateConfig(importedConfig);
+            hasCloudData = true;
+
+            if (currentConfig) {
+              const mergedConfig: UserConfig = {
+                ...importedConfig,
+                webdav: currentConfig.webdav,
+              };
+              await configStore.set('config', mergedConfig);
+              await configStore.save();
+            }
+          }
+        }
+      } catch {
+        // 云端文件不存在，跳过下载步骤
+      }
+
+      // 步骤 2：将本地配置上传到云端
+      stage = 'upload';
+      const finalConfig = await configStore.get<UserConfig>('config');
+      if (!finalConfig) throw new Error('无法读取本地配置');
+
+      const jsonContent = JSON.stringify(finalConfig, null, 2);
+      await webdav.client.putFile(webdav.remotePath, jsonContent);
+
+      updateConfigSyncStatus(profile,'success');
+      toast.success('配置同步完成');
+
+      if (hasCloudData) {
+        setTimeout(() => {
+          toast.info('请刷新页面以使配置生效');
+        }, 1000);
+      }
+    } catch (error) {
+      const errorCode = extractErrorCode(error);
+      console.error('[备份] 配置同步失败:', error);
+
+      if (stage === 'upload') {
+        updateConfigSyncStatus(profile,'partial', errorCode);
+        toast.error('云端数据已合并到本地，但上传失败', errorCode);
+      } else {
+        updateConfigSyncStatus(profile,'failed', errorCode);
+        toast.error('同步失败：无法获取云端配置', errorCode);
+      }
+    } finally {
+      syncConfigLoading.value = false;
+    }
+  }
+
+  /**
+   * 双向同步历史记录：拉取云端 → 合并 → 推送
+   */
+  async function syncHistory(profile: WebDAVProfile | null): Promise<void> {
+    if (!profile) return;
+    const webdav = await getWebDAVClientAndPath(profile, 'history', toast);
+    if (!webdav) return;
+
+    let stage: 'download' | 'upload' = 'download';
+
+    try {
+      syncHistoryLoading.value = true;
+
+      // 步骤 1：拉取云端数据合并到本地
+      let cloudItems: HistoryItem[] = [];
+      try {
+        const content = await webdav.client.getFile(webdav.remotePath);
+        if (content) {
+          const parsed = JSON.parse(content);
+          if (Array.isArray(parsed)) {
+            cloudItems = parsed;
+            await historyDB.importFromJSON(content, 'merge');
+            invalidateCache();
+            emitHistoryUpdated();
+          }
+        }
+      } catch {
+        // 云端文件不存在，跳过下载步骤
+      }
+
+      // 步骤 2：将本地数据合并上传到云端
+      stage = 'upload';
+      const localCount = await historyDB.getCount();
+      if (localCount === 0 && cloudItems.length === 0) {
+        toast.warn('没有可同步的历史记录');
+        return;
+      }
+
+      const localJsonContent = await historyDB.exportToJSON();
+      const localItems = JSON.parse(localJsonContent) as HistoryItem[];
+
+      const itemMap = new Map<string, HistoryItem>();
+      cloudItems.forEach(item => {
+        if (item.id) itemMap.set(item.id, item);
+      });
+      localItems.forEach(item => {
+        if (item.id) {
+          const existing = itemMap.get(item.id);
+          if (!existing || (item.timestamp && item.timestamp > (existing.timestamp || 0))) {
+            itemMap.set(item.id, item);
+          }
+        } else {
+          item.id = crypto.randomUUID();
+          itemMap.set(item.id, item);
+        }
+      });
+
+      const mergedItems = Array.from(itemMap.values());
+      mergedItems.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+      const jsonContent = JSON.stringify(mergedItems, null, 2);
+      await webdav.client.putFile(webdav.remotePath, jsonContent);
+
+      updateHistorySyncStatus(profile,'success');
+      toast.success(`同步完成：共 ${mergedItems.length} 条记录`);
+    } catch (error) {
+      const errorCode = extractErrorCode(error);
+      console.error('[备份] 历史记录同步失败:', error);
+
+      if (stage === 'upload') {
+        updateHistorySyncStatus(profile,'partial', errorCode);
+        toast.error('云端数据已合并到本地，但上传失败', errorCode);
+      } else {
+        updateHistorySyncStatus(profile,'failed', errorCode);
+        toast.error('同步失败：无法获取云端记录', errorCode);
+      }
+    } finally {
+      syncHistoryLoading.value = false;
     }
   }
 
@@ -1014,6 +1178,12 @@ export function useBackupSync(): UseBackupSyncReturn {
     uploadHistoryIncremental,
     downloadHistoryOverwrite,
     downloadHistoryMerge,
+
+    // 双向同步
+    syncConfigLoading,
+    syncHistoryLoading,
+    syncConfig,
+    syncHistory,
 
     // 菜单控制
     toggleUploadHistoryMenu,

@@ -6,6 +6,9 @@ import { ref, type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { SyncStatus } from '../config/types';
 import { syncStatusStore } from '../store/instances';
+import { useServiceHealth } from './useServiceHealth';
+
+const { markVerified, markTestFailed } = useServiceHealth();
 
 // ==================== 类型定义 ====================
 
@@ -19,7 +22,7 @@ export interface UseServiceAvailabilityReturn {
 
   // 方法
   checkQiyuAvailability: (forceCheck?: boolean) => Promise<void>;
-  checkJdAvailable: () => Promise<void>;
+  checkJdAvailable: (forceCheck?: boolean) => Promise<void>;
   checkAllAvailabilityWithCooldown: (syncStatus?: SyncStatus) => Promise<void>;
 
   // 工具函数
@@ -84,6 +87,7 @@ async function checkQiyuAvailability(forceCheck = false): Promise<void> {
   isCheckingQiyu.value = true;
   try {
     qiyuAvailable.value = await invoke('check_qiyu_available');
+    if (qiyuAvailable.value) markVerified('qiyu');
 
     // 更新检测状态
     const updatedStatus: SyncStatus = syncStatus || { syncByProfile: {} };
@@ -100,6 +104,7 @@ async function checkQiyuAvailability(forceCheck = false): Promise<void> {
     console.log(`[七鱼检测] 检测完成，结果: ${qiyuAvailable.value ? '可用' : '不可用'}`);
   } catch (e) {
     qiyuAvailable.value = false;
+    markTestFailed('qiyu', String(e));
     console.error('[七鱼检测] 检测失败:', e);
   } finally {
     isCheckingQiyu.value = false;
@@ -108,13 +113,47 @@ async function checkQiyuAvailability(forceCheck = false): Promise<void> {
 
 /**
  * 京东可用性检测
+ * 采用与七鱼相同的智能检测策略，支持缓存恢复
+ *
+ * @param forceCheck 是否强制检测（忽略冷却时间）
  */
-async function checkJdAvailable(): Promise<void> {
+async function checkJdAvailable(forceCheck = false): Promise<void> {
+  let syncStatus: SyncStatus | null = null;
+  try {
+    syncStatus = await syncStatusStore.get<SyncStatus>('status');
+  } catch (e) {
+    console.error('[服务检测] 加载同步状态失败:', e);
+  }
+
+  const now = Date.now();
+  const lastCheck = syncStatus?.jdCheckStatus?.lastCheckTime ?? syncStatus?.lastJdCheck ?? 0;
+
+  if (!forceCheck && (now - lastCheck) <= JD_CHECK_COOLDOWN) {
+    jdAvailable.value = syncStatus?.jdCheckStatus?.lastCheckResult ?? false;
+    console.log('[京东检测] 在冷却期内，使用缓存结果:', jdAvailable.value);
+    return;
+  }
+
   isCheckingJd.value = true;
   try {
     jdAvailable.value = await invoke('check_jd_available');
+    if (jdAvailable.value) markVerified('jd');
+
+    const updatedStatus: SyncStatus = syncStatus || { syncByProfile: {} };
+    updatedStatus.jdCheckStatus = {
+      lastCheckTime: now,
+      lastCheckResult: jdAvailable.value,
+      nextCheckTime: null,
+    };
+    updatedStatus.lastJdCheck = now;
+
+    await syncStatusStore.set('status', updatedStatus);
+    await syncStatusStore.save();
+
+    console.log(`[京东检测] 检测完成，结果: ${jdAvailable.value ? '可用' : '不可用'}`);
   } catch (e) {
     jdAvailable.value = false;
+    markTestFailed('jd', String(e));
     console.error('[京东检测] 检测失败:', e);
   } finally {
     isCheckingJd.value = false;
@@ -131,42 +170,13 @@ async function checkAllAvailabilityWithCooldown(initialSyncStatus?: SyncStatus):
   if (initialSyncStatus?.qiyuCheckStatus?.lastCheckResult !== undefined) {
     qiyuAvailable.value = initialSyncStatus.qiyuCheckStatus.lastCheckResult;
   }
-
-  let syncStatus: SyncStatus | null = initialSyncStatus || null;
-
-  // 如果没有提供，从存储加载
-  if (!syncStatus) {
-    try {
-      syncStatus = await syncStatusStore.get<SyncStatus>('status');
-    } catch (e) {
-      console.error('[服务检测] 加载同步状态失败:', e);
-    }
+  if (initialSyncStatus?.jdCheckStatus?.lastCheckResult !== undefined) {
+    jdAvailable.value = initialSyncStatus.jdCheckStatus.lastCheckResult;
   }
 
-  const now = Date.now();
-  const lastJdCheck = syncStatus?.lastJdCheck ?? 0;
-  const needCooldownCheck = (now - lastJdCheck) > JD_CHECK_COOLDOWN;
-
-  // 并发检测
-  await Promise.all([
-    checkQiyuAvailability(false),  // 使用智能检测
-    needCooldownCheck ? checkJdAvailable() : Promise.resolve()
-  ]);
-
-  // 如果执行了京东检测，更新最后检测时间
-  // 【v2.10 修复】重新读取最新状态再更新，避免覆盖七鱼检测刚写入的 qiyuCheckStatus
-  if (needCooldownCheck) {
-    let latestStatus: SyncStatus | null = null;
-    try {
-      latestStatus = await syncStatusStore.get<SyncStatus>('status');
-    } catch (e) {
-      console.error('[服务检测] 读取最新同步状态失败:', e);
-    }
-    const updatedStatus: SyncStatus = latestStatus || { syncByProfile: {} };
-    updatedStatus.lastJdCheck = now;
-    await syncStatusStore.set('status', updatedStatus);
-    await syncStatusStore.save();
-  }
+  // 串行检测，避免并发写 syncStatusStore 同一 key 导致互相覆盖
+  await checkQiyuAvailability(false);
+  await checkJdAvailable(false);
 }
 
 // ==================== 主 Composable ====================
