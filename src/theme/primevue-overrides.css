@@ -291,6 +291,22 @@
   font-size: 12px;
 }
 
+.p-tooltip-right .p-tooltip-arrow {
+  border-right-color: var(--bg-card);
+}
+
+.p-tooltip-left .p-tooltip-arrow {
+  border-left-color: var(--bg-card);
+}
+
+.p-tooltip-top .p-tooltip-arrow {
+  border-top-color: var(--bg-card);
+}
+
+.p-tooltip-bottom .p-tooltip-arrow {
+  border-bottom-color: var(--bg-card);
+}
+
 /* ===== Toast 组件 ===== */
 .p-toast .p-toast-message {
   background-color: var(--bg-card);

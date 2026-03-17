@@ -208,24 +208,24 @@ function handleCloudAction(action: string) {
       <div class="row-actions">
         <!-- 上传按钮 -->
         <template v-if="!isHistoryType">
-          <Button
-            @click="emit('sync-to-cloud')"
-            :loading="cloudLoading.upload"
-            :disabled="!isCloudEnabled"
-            :title="!isCloudEnabled ? '请先配置 WebDAV 连接' : ''"
-            label="备份到云端"
-            icon="pi pi-cloud-upload"
-            outlined
-            size="small"
-          />
+          <span v-tooltip.bottom="!isCloudEnabled ? '请先配置 WebDAV 连接' : null">
+            <Button
+              @click="emit('sync-to-cloud')"
+              :loading="cloudLoading.upload"
+              :disabled="!isCloudEnabled"
+              label="备份到云端"
+              icon="pi pi-cloud-upload"
+              outlined
+              size="small"
+            />
+          </span>
         </template>
         <template v-else>
-          <div class="dropdown-wrapper" ref="uploadMenuRef">
+          <div class="dropdown-wrapper" ref="uploadMenuRef" v-tooltip.bottom="!isCloudEnabled ? '请先配置 WebDAV 连接' : null">
             <Button
               @click.stop="toggleMenu('upload')"
               :loading="cloudLoading.upload"
               :disabled="!isCloudEnabled"
-              :title="!isCloudEnabled ? '请先配置 WebDAV 连接' : ''"
               label="备份到云端"
               icon="pi pi-cloud-upload"
               outlined
@@ -249,12 +249,11 @@ function handleCloudAction(action: string) {
         </template>
 
         <!-- 下载按钮 -->
-        <div class="dropdown-wrapper" ref="downloadMenuRef">
+        <div class="dropdown-wrapper" ref="downloadMenuRef" v-tooltip.bottom="!isCloudEnabled ? '请先配置 WebDAV 连接' : null">
           <Button
             @click.stop="toggleMenu('download')"
             :loading="cloudLoading.download"
             :disabled="!isCloudEnabled"
-            :title="!isCloudEnabled ? '请先配置 WebDAV 连接' : ''"
             label="从云端恢复"
             icon="pi pi-cloud-download"
             outlined

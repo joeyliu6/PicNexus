@@ -313,62 +313,6 @@ button:focus-visible {
   border-color: var(--border-subtle);
 }
 
-/* Tooltip 样式 */
-.service-btn.disabled[data-tooltip]::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: calc(100% + 10px);
-  left: 50%;
-  transform: translateX(-50%) scale(0.9);
-  padding: 10px 14px;
-  background: rgb(10, 10, 10);
-  border: 2px solid #475569;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #f1f5f9;
-  white-space: nowrap;
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.15s ease;
-  z-index: 1000;
-  pointer-events: none;
-}
-
-:root.dark-theme .service-btn.disabled[data-tooltip]::after {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.1);
-}
-
-:root.light-theme .service-btn.disabled[data-tooltip]::after {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.1);
-}
-
-/* Tooltip 箭头 */
-.service-btn.disabled[data-tooltip]::before {
-  content: '';
-  position: absolute;
-  bottom: calc(100% + 2px);
-  left: 50%;
-  transform: translateX(-50%);
-  border: 6px solid transparent;
-  border-top-color: #475569;
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.15s ease;
-  z-index: 1001;
-}
-
-.service-btn.disabled[data-tooltip]:hover::after {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(-50%) scale(1);
-}
-
-.service-btn.disabled[data-tooltip]:hover::before {
-  opacity: 1;
-  visibility: visible;
-}
-
 /* 3.1 队列项目样式 (Flex + Ellipsis) */
 .upload-item {
   display: flex; /* Flexbox for responsive layout */
