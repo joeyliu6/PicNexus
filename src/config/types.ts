@@ -451,11 +451,14 @@ export interface SyncStatus {
 }
 
 /**
- * 输出格式类型
+ * 微博代理模式
  * - direct: 直接返回原始链接
  * - baidu-proxy: 使用百度代理（仅微博支持）
  */
-export type OutputFormat = 'direct' | 'baidu-proxy';
+export type WeiboProxyMode = 'direct' | 'baidu-proxy';
+
+/** @deprecated 使用 WeiboProxyMode 代替 */
+export type OutputFormat = WeiboProxyMode;
 
 /**
  * 链接前缀配置
@@ -489,6 +492,19 @@ export interface AppBehaviorConfig {
 }
 
 /**
+ * 链接输出配置
+ * 控制上传完成后链接的复制格式和行为
+ */
+export interface LinkOutputConfig {
+  /** 默认复制格式 */
+  defaultFormat: import('../utils/linkFormatter').LinkFormat;
+  /** 自定义模板（defaultFormat 为 'custom' 时使用） */
+  customTemplate: string;
+  /** 上传完成后是否自动复制到剪贴板 */
+  autoCopy: boolean;
+}
+
+/**
  * 用户配置（新架构）
  * 支持多图床并行上传
  */
@@ -497,7 +513,7 @@ export interface AppBehaviorConfig {
  * 每次配置格式变更时递增此版本号
  * 迁移函数将根据此版本号决定是否需要执行迁移
  */
-export const CONFIG_VERSION = 6;
+export const CONFIG_VERSION = 7;
 
 export interface UserConfig {
   /**
@@ -533,8 +549,11 @@ export interface UserConfig {
     upyun?: UpyunServiceConfig;
   };
 
-  /** 输出格式 */
-  outputFormat: OutputFormat;
+  /** 微博代理模式 */
+  weiboProxyMode: WeiboProxyMode;
+
+  /** 链接输出配置 */
+  linkOutput?: LinkOutputConfig;
 
   /** @deprecated 使用 linkPrefixConfig 代替，保留用于向后兼容 */
   baiduPrefix?: string;
@@ -745,7 +764,12 @@ export const DEFAULT_CONFIG: UserConfig = {
       path: 'images/'
     }
   },
-  outputFormat: 'baidu-proxy',
+  weiboProxyMode: 'baidu-proxy',
+  linkOutput: {
+    defaultFormat: 'url',
+    customTemplate: '{url}',
+    autoCopy: true,
+  },
   linkPrefixConfig: {
     enabled: true,
     selectedIndex: 0,
@@ -1100,6 +1124,23 @@ export function migrateConfig(config: UserConfig): UserConfig {
       migratedConfig.appBehavior = { autoStart: false, minimizeToTrayOnStart: false };
     }
     console.log('[配置迁移] 从版本 5 迁移到版本 6：新增应用行为配置');
+  }
+
+  // 版本 6 -> 7：重命名 outputFormat 为 weiboProxyMode，新增 linkOutput
+  if (currentVersion < 7) {
+    const raw = migratedConfig as unknown as Record<string, unknown>;
+    if ('outputFormat' in raw) {
+      migratedConfig.weiboProxyMode = raw.outputFormat as WeiboProxyMode;
+      delete raw.outputFormat;
+    }
+    if (!migratedConfig.linkOutput) {
+      migratedConfig.linkOutput = {
+        defaultFormat: 'url',
+        customTemplate: '{url}',
+        autoCopy: true,
+      };
+    }
+    console.log('[配置迁移] 从版本 6 迁移到版本 7：重命名 outputFormat，新增 linkOutput');
   }
 
   // 更新版本号到最新

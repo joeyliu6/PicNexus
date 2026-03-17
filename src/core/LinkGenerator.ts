@@ -20,7 +20,7 @@ export class LinkGenerator {
     // 只有微博 + baidu-proxy 模式才加代理前缀
     if (
       result.serviceId === 'weibo' &&
-      config.outputFormat === 'baidu-proxy'
+      config.weiboProxyMode === 'baidu-proxy'
     ) {
       const activePrefix = getActivePrefix(config);
 
