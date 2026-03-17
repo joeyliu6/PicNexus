@@ -487,11 +487,28 @@ export const DEFAULT_PREFIXES: string[] = [
 /**
  * 应用行为配置
  */
+export interface AutoUpdateConfig {
+  enabled: boolean;
+}
+
 export interface AppBehaviorConfig {
   /** 开机自启动 */
   autoStart: boolean;
   /** 启动时最小化到托盘 */
   minimizeToTrayOnStart: boolean;
+}
+
+/**
+ * 全局快捷键配置
+ * 控制在任何应用中通过快捷键触发上传
+ */
+export interface GlobalShortcutConfig {
+  /** 是否启用全局快捷键 */
+  enabled: boolean;
+  /** 上传剪贴板图片的快捷键（Tauri 格式，如 'CommandOrControl+Shift+C'） */
+  uploadClipboard: string;
+  /** 选择文件上传的快捷键 */
+  uploadFromFile: string;
 }
 
 /**
@@ -516,7 +533,7 @@ export interface LinkOutputConfig {
  * 每次配置格式变更时递增此版本号
  * 迁移函数将根据此版本号决定是否需要执行迁移
  */
-export const CONFIG_VERSION = 7;
+export const CONFIG_VERSION = 10;
 
 export interface UserConfig {
   /**
@@ -582,6 +599,15 @@ export interface UserConfig {
 
   /** 应用行为配置 */
   appBehavior?: AppBehaviorConfig;
+
+  /** 全局快捷键配置 */
+  globalShortcut?: GlobalShortcutConfig;
+
+  /** 自动更新配置 */
+  autoUpdate?: AutoUpdateConfig;
+
+  /** 是否已完成首次使用引导 */
+  onboardingCompleted?: boolean;
 }
 
 /**
@@ -792,8 +818,17 @@ export const DEFAULT_CONFIG: UserConfig = {
   },
   appBehavior: {
     autoStart: false,
-    minimizeToTrayOnStart: false
-  }
+    minimizeToTrayOnStart: true
+  },
+  globalShortcut: {
+    enabled: true,
+    uploadClipboard: 'CommandOrControl+Shift+C',
+    uploadFromFile: 'CommandOrControl+Shift+O',
+  },
+  autoUpdate: {
+    enabled: true,
+  },
+  onboardingCompleted: false
 };
 
 /**
@@ -1144,6 +1179,34 @@ export function migrateConfig(config: UserConfig): UserConfig {
       };
     }
     console.log('[配置迁移] 从版本 6 迁移到版本 7：重命名 outputFormat，新增 linkOutput');
+  }
+
+  // 版本 7 -> 8：新增首次使用引导标志
+  if (currentVersion < 8) {
+    if (migratedConfig.onboardingCompleted === undefined) {
+      migratedConfig.onboardingCompleted = true;
+    }
+    console.log('[配置迁移] 从版本 7 迁移到版本 8：新增引导标志');
+  }
+
+  // 版本 8 -> 9：新增全局快捷键配置
+  if (currentVersion < 9) {
+    if (!migratedConfig.globalShortcut) {
+      migratedConfig.globalShortcut = {
+        enabled: true,
+        uploadClipboard: 'CommandOrControl+Shift+C',
+        uploadFromFile: 'CommandOrControl+Shift+O',
+      };
+    }
+    console.log('[配置迁移] 从版本 8 迁移到版本 9：新增全局快捷键配置');
+  }
+
+  // 版本 9 -> 10：新增自动更新配置
+  if (currentVersion < 10) {
+    if (!migratedConfig.autoUpdate) {
+      migratedConfig.autoUpdate = { enabled: true };
+    }
+    console.log('[配置迁移] 从版本 9 迁移到版本 10：新增自动更新配置');
   }
 
   // 更新版本号到最新
