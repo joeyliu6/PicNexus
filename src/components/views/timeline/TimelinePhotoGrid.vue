@@ -31,6 +31,7 @@ const props = defineProps<{
   displayMode: 'fast' | 'smooth' | 'normal';
   selectedIds: Set<string>;
   loadedImages: Set<string>;
+  failedImages: Set<string>;
   hoverDetailsMap: Map<string, HistoryItem>;
   getThumbnailUrl: (meta: ImageMeta) => string;
 }>();
@@ -78,6 +79,7 @@ function getGroupItemCount(groupId: string): number {
       :height="visible.height"
       :is-selected="selectedIds.has(visible.meta.id)"
       :is-loaded="loadedImages.has(visible.meta.id)"
+      :is-failed="failedImages.has(visible.meta.id)"
       :display-mode="displayMode"
       :thumbnail-url="getThumbnailUrl(visible.meta)"
       :hover-detail="hoverDetailsMap.get(visible.meta.id)"

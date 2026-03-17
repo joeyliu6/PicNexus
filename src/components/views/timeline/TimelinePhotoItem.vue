@@ -17,6 +17,7 @@ const props = defineProps<{
   height: number;
   isSelected: boolean;
   isLoaded: boolean;
+  isFailed: boolean;
   displayMode: 'fast' | 'smooth' | 'normal';
   thumbnailUrl: string;
   hoverDetail?: HistoryItem;
@@ -50,9 +51,14 @@ const successfulServices = computed(() => {
     @mouseenter="emit('hover')"
   >
     <div class="photo-wrapper" @click="emit('click')">
+      <!-- 加载失败占位 -->
+      <div v-if="isFailed" class="photo-error">
+        <i class="pi pi-image"></i>
+      </div>
+
       <!-- 图片未加载时显示 Skeleton 占位 -->
       <Skeleton
-        v-if="!isLoaded"
+        v-else-if="!isLoaded"
         width="100%"
         height="100%"
         borderRadius="8px"
@@ -61,7 +67,7 @@ const successfulServices = computed(() => {
 
       <!-- 图片 - 快速滚动时不加载新图片，但已加载的始终显示 -->
       <img
-        v-if="thumbnailUrl && (isLoaded || displayMode !== 'fast')"
+        v-if="!isFailed && thumbnailUrl && (isLoaded || displayMode !== 'fast')"
         :src="thumbnailUrl"
         class="photo-img"
         :class="{ loaded: isLoaded }"
@@ -118,6 +124,23 @@ const successfulServices = computed(() => {
   position: absolute;
   inset: 0;
   z-index: 1;
+}
+
+.photo-error {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.photo-error i {
+  font-size: 1.5rem;
 }
 
 .photo-img {

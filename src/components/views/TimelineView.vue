@@ -149,6 +149,7 @@ const {
 
 const {
   loadedImages,
+  failedImages,
   onImageLoad,
   onImageError,
   isImageLoaded,
@@ -161,6 +162,7 @@ const {
 
 // 转换为 Set 供子组件使用
 const loadedImagesSet = computed(() => new Set(loadedImages.value));
+const failedImagesSet = computed(() => new Set(failedImages.value));
 const selectedIdsSet = computed(() => new Set(viewState.selectedIdList.value));
 
 // ==================== Sidebar Data ====================
@@ -628,6 +630,7 @@ watch(
         :display-mode="displayMode"
         :selected-ids="selectedIdsSet"
         :loaded-images="loadedImagesSet"
+        :failed-images="failedImagesSet"
         :hover-details-map="hoverDetailsMap"
         :get-thumbnail-url="getThumbnailUrl"
         @item-click="openLightbox"

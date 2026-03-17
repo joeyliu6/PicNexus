@@ -27,6 +27,9 @@ export function useImageLoadManager(
   /** 已加载图片的 ID 集合 */
   const loadedImages = shallowRef(new Set<string>());
 
+  /** 加载失败的图片 ID 集合 */
+  const failedImages = shallowRef(new Set<string>());
+
   /** 图片最后可见时间戳（用于延迟销毁） */
   const lastVisibleTime = new Map<string, number>();
 
@@ -96,7 +99,17 @@ export function useImageLoadManager(
       }, 500);
     } else {
       img.style.display = 'none';
+      const newSet = new Set(failedImages.value);
+      newSet.add(id);
+      failedImages.value = newSet;
     }
+  }
+
+  /**
+   * 检查图片是否加载失败
+   */
+  function isImageFailed(id: string): boolean {
+    return failedImages.value.has(id);
   }
 
   /**
@@ -159,6 +172,7 @@ export function useImageLoadManager(
    */
   function clearAll() {
     loadedImages.value = new Set();
+    failedImages.value = new Set();
     lastVisibleTime.clear();
     imageRetryCount.clear();
   }
@@ -174,9 +188,11 @@ export function useImageLoadManager(
 
   return {
     loadedImages,
+    failedImages,
     onImageLoad,
     onImageError,
     isImageLoaded,
+    isImageFailed,
     cleanupExpiredImages,
     clearAll,
   };
