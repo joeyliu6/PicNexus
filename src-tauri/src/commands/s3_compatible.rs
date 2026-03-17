@@ -17,9 +17,6 @@ use super::utils::read_file_bytes;
 /// S3 操作默认超时时间（秒）
 const S3_OPERATION_TIMEOUT_SECS: u64 = 30;
 
-/// 默认每页返回的最大对象数
-const DEFAULT_MAX_KEYS: i32 = 100;
-
 /// S3 兼容上传结果
 #[derive(Debug, Serialize, Deserialize)]
 pub struct S3UploadResult {
@@ -139,156 +136,6 @@ pub async fn upload_to_s3_compatible(
     })
 }
 
-/// 列出 S3 兼容存储的对象（支持 delimiter 分层）
-#[tauri::command]
-pub async fn list_s3_objects(
-    endpoint: String,
-    access_key: String,
-    secret_key: String,
-    region: String,
-    bucket: String,
-    prefix: Option<String>,
-    delimiter: Option<String>,
-    max_keys: Option<u32>,
-    continuation_token: Option<String>,
-) -> Result<serde_json::Value, AppError> {
-    let client = create_s3_client(&endpoint, &access_key, &secret_key, &region);
-
-    let mut request = client.list_objects_v2().bucket(&bucket);
-
-    if let Some(prefix) = &prefix {
-        request = request.prefix(prefix);
-    }
-
-    // 使用 delimiter 区分文件夹和文件
-    if let Some(delim) = &delimiter {
-        request = request.delimiter(delim);
-    }
-
-    if let Some(max) = max_keys {
-        request = request.max_keys(max as i32);
-    } else {
-        request = request.max_keys(DEFAULT_MAX_KEYS);
-    }
-
-    // 分页：使用 continuation_token 获取下一页
-    if let Some(token) = &continuation_token {
-        if !token.is_empty() {
-            request = request.continuation_token(token);
-        }
-    }
-
-    // 发送请求（带超时保护）
-    let response = timeout(
-        Duration::from_secs(S3_OPERATION_TIMEOUT_SECS),
-        request.send()
-    )
-    .await
-    .map_err(|_| AppError::storage(format!("列出对象超时 ({}秒)", S3_OPERATION_TIMEOUT_SECS)))?
-    .map_err(|e| AppError::storage(format!("列出对象失败: {}", e)))?;
-
-    // 解析文件列表
-    let objects: Vec<serde_json::Value> = response
-        .contents()
-        .iter()
-        .map(|obj| {
-            let last_modified = obj.last_modified()
-                .map(|d| d.to_string())
-                .unwrap_or_default();
-
-            serde_json::json!({
-                "key": obj.key().unwrap_or(""),
-                "size": obj.size().unwrap_or(0),
-                "last_modified": last_modified,
-            })
-        })
-        .collect();
-
-    // 解析公共前缀（文件夹）
-    let prefixes: Vec<String> = response
-        .common_prefixes()
-        .iter()
-        .filter_map(|p| p.prefix().map(|s| s.to_string()))
-        .collect();
-
-    // 返回包含 objects 和 prefixes 的结构
-    Ok(serde_json::json!({
-        "objects": objects,
-        "prefixes": prefixes,
-        "is_truncated": response.is_truncated().unwrap_or(false),
-        "continuation_token": response.next_continuation_token().unwrap_or_default()
-    }))
-}
-
-/// 删除 S3 兼容存储的对象
-#[tauri::command]
-pub async fn delete_s3_object(
-    endpoint: String,
-    access_key: String,
-    secret_key: String,
-    region: String,
-    bucket: String,
-    key: String,
-) -> Result<String, AppError> {
-    let client = create_s3_client(&endpoint, &access_key, &secret_key, &region);
-
-    // 删除对象（带超时保护）
-    timeout(
-        Duration::from_secs(S3_OPERATION_TIMEOUT_SECS),
-        client
-            .delete_object()
-            .bucket(&bucket)
-            .key(&key)
-            .send()
-    )
-    .await
-    .map_err(|_| AppError::storage(format!("删除对象超时 ({}秒)", S3_OPERATION_TIMEOUT_SECS)))?
-    .map_err(|e| AppError::storage(format!("删除对象失败: {}", e)))?;
-
-    Ok(format!("成功删除: {}", key))
-}
-
-/// 批量删除 S3 兼容存储的对象
-#[tauri::command]
-pub async fn delete_s3_objects(
-    endpoint: String,
-    access_key: String,
-    secret_key: String,
-    region: String,
-    bucket: String,
-    keys: Vec<String>,
-) -> Result<serde_json::Value, AppError> {
-    let client = create_s3_client(&endpoint, &access_key, &secret_key, &region);
-
-    let mut success_keys: Vec<String> = Vec::new();
-    let mut failed_keys: Vec<String> = Vec::new();
-
-    for key in keys {
-        // 每个删除操作带超时保护
-        let result = timeout(
-            Duration::from_secs(S3_OPERATION_TIMEOUT_SECS),
-            client.delete_object().bucket(&bucket).key(&key).send()
-        ).await;
-
-        match result {
-            Ok(Ok(_)) => success_keys.push(key),
-            Ok(Err(e)) => {
-                eprintln!("[S3兼容] 删除失败 {}: {}", key, e);
-                failed_keys.push(key);
-            }
-            Err(_) => {
-                eprintln!("[S3兼容] 删除超时 {}", key);
-                failed_keys.push(key);
-            }
-        }
-    }
-
-    Ok(serde_json::json!({
-        "success": success_keys,
-        "failed": failed_keys
-    }))
-}
-
 /// S3 兼容存储测试配置
 /// 支持多种字段名映射，兼容不同云服务商的配置格式
 #[derive(Debug, Clone, Deserialize)]
@@ -332,15 +179,6 @@ impl S3TestConfig {
         self.bucket_name.clone()
             .or_else(|| self.bucket.clone())
     }
-}
-
-/// 判断错误是否可重试（网络瞬时错误）
-fn is_retriable_error(error_msg: &str) -> bool {
-    error_msg.contains("dispatch failure")
-        || error_msg.contains("connection reset")
-        || error_msg.contains("connection closed")
-        || error_msg.contains("timeout")
-        || error_msg.contains("hyper")
 }
 
 /// 测试 S3 兼容存储连接
@@ -520,33 +358,3 @@ fn get_service_name(service_id: &str) -> &str {
     }
 }
 
-/// 创建 S3 文件夹
-#[tauri::command]
-pub async fn create_s3_folder(
-    endpoint: String,
-    access_key: String,
-    secret_key: String,
-    region: String,
-    bucket: String,
-    key: String,
-) -> Result<String, AppError> {
-    let client = create_s3_client(&endpoint, &access_key, &secret_key, &region);
-
-    let body = ByteStream::from(Vec::new());
-
-    // 创建文件夹（带超时保护）
-    timeout(
-        Duration::from_secs(S3_OPERATION_TIMEOUT_SECS),
-        client
-            .put_object()
-            .bucket(&bucket)
-            .key(&key)
-            .body(body)
-            .send()
-    )
-    .await
-    .map_err(|_| AppError::storage(format!("创建文件夹超时 ({}秒)", S3_OPERATION_TIMEOUT_SECS)))?
-    .map_err(|e| AppError::storage(format!("创建文件夹失败: {}", e)))?;
-
-    Ok(format!("成功创建文件夹: {}", key))
-}
