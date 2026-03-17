@@ -59,7 +59,11 @@ async function toggleMoreMenu() {
 
 function handleForceAction(action: 'upload' | 'download') {
   moreMenuVisible.value = false;
-  emit(action === 'upload' ? 'force-upload' : 'force-download');
+  if (action === 'upload') {
+    emit('force-upload');
+  } else {
+    emit('force-download');
+  }
 }
 
 const STALE_DAYS_WARNING = 7;

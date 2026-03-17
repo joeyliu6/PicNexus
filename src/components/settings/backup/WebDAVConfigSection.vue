@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // WebDAV 配置区域组件
 
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
 import Button from 'primevue/button';
