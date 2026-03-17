@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
 import Button from 'primevue/button';
+import type { ServiceHealthStatus } from '../../types/serviceHealth';
 
 interface Props {
   id: string;
   name: string;
   description: string;
   isConfigured: boolean;
+  healthStatus?: ServiceHealthStatus;
+  healthTooltip?: string;
   isTesting?: boolean;
   defaultExpanded?: boolean;
   isBuiltin?: boolean;
@@ -18,6 +21,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  healthStatus: undefined,
+  healthTooltip: undefined,
   isTesting: false,
   defaultExpanded: false,
   isBuiltin: false,
@@ -48,9 +53,41 @@ watch(() => props.forceExpand, (val) => {
   }
 }, { immediate: true });
 
+function findScrollParent(el: HTMLElement): HTMLElement | null {
+  let parent = el.parentElement;
+  while (parent) {
+    const overflow = getComputedStyle(parent).overflowY;
+    if (overflow === 'auto' || overflow === 'scroll') return parent;
+    parent = parent.parentElement;
+  }
+  return null;
+}
+
+function scrollCardIntoView(): void {
+  const card = cardRef.value;
+  if (!card) return;
+  const scrollParent = findScrollParent(card);
+  if (!scrollParent) return;
+
+  const cardRect = card.getBoundingClientRect();
+  const parentRect = scrollParent.getBoundingClientRect();
+  const overflow = cardRect.bottom + 10 - parentRect.bottom;
+
+  if (overflow > 0) {
+    scrollParent.scrollBy({ top: overflow, behavior: 'smooth' });
+  } else if (cardRect.top < parentRect.top) {
+    scrollParent.scrollBy({ top: cardRect.top - parentRect.top - 10, behavior: 'smooth' });
+  }
+}
+
 const toggleExpanded = () => {
   isExpanded.value = !isExpanded.value;
   emit('toggle', isExpanded.value);
+
+  if (isExpanded.value) {
+    // 等待 DOM 更新和渲染完成后再滚动
+    nextTick(() => requestAnimationFrame(() => requestAnimationFrame(scrollCardIntoView)));
+  }
 };
 
 const handleTest = () => {
@@ -67,9 +104,12 @@ const handleCheck = () => {
 
 const statusDotClass = computed(() => {
   if (props.isBuiltin) {
-    return props.isAvailable ? 'status-dot configured' : 'status-dot';
+    return props.isAvailable ? 'status-dot verified' : 'status-dot';
   }
-  return props.isConfigured ? 'status-dot configured' : 'status-dot';
+  if (props.healthStatus) {
+    return `status-dot ${props.healthStatus}`;
+  }
+  return props.isConfigured ? 'status-dot verified' : 'status-dot';
 });
 </script>
 
@@ -77,7 +117,7 @@ const statusDotClass = computed(() => {
   <div ref="cardRef" class="hosting-card" :class="{ expanded: isExpanded }">
     <div class="card-header" @click="toggleExpanded">
       <div class="header-left">
-        <span :class="statusDotClass"></span>
+        <span :class="statusDotClass" v-tooltip.top="healthTooltip || null"></span>
         <div class="header-info">
           <span class="card-title">{{ name }}</span>
           <span class="card-description">{{ description }}</span>
@@ -229,9 +269,20 @@ const statusDotClass = computed(() => {
   box-shadow: 0 0 0 2px var(--bg-card);
 }
 
-.status-dot.configured {
+.status-dot.configured,
+.status-dot.verified {
   background: var(--success);
   box-shadow: 0 0 0 2px var(--bg-card), 0 0 6px rgba(16, 185, 129, 0.4);
+}
+
+.status-dot.pending {
+  background: var(--warning);
+  box-shadow: 0 0 0 2px var(--bg-card), 0 0 6px rgba(245, 158, 11, 0.4);
+}
+
+.status-dot.error {
+  background: var(--error);
+  box-shadow: 0 0 0 2px var(--bg-card), 0 0 6px rgba(239, 68, 68, 0.4);
 }
 
 .card-content {
@@ -285,7 +336,7 @@ const statusDotClass = computed(() => {
 }
 
 .builtin-status:not(.available) .status-icon i {
-  color: var(--danger);
+  color: var(--error);
 }
 
 .status-text {

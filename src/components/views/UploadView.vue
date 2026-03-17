@@ -7,6 +7,7 @@ import Button from 'primevue/button';
 import type { ServiceType, UserConfig } from '../../config/types';
 import { PRIVATE_SERVICES, PUBLIC_SERVICES, DEFAULT_CONFIG } from '../../config/types';
 import { useToast } from '../../composables/useToast';
+import { useServiceHealth } from '../../composables/useServiceHealth';
 import { useUploadManager } from '../../composables/useUpload';
 import { useClipboardImage } from '../../composables/useClipboardImage';
 import { useQueueState } from '../../composables/useQueueState';
@@ -20,6 +21,7 @@ import ServiceSelector from './upload/ServiceSelector.vue';
 import UploadQueuePanel from './upload/UploadQueuePanel.vue';
 
 const toast = useToast();
+const { healthStatusMap, healthTooltipMap, loadHealthStatus, evaluateConfig } = useServiceHealth();
 
 // 获取全局队列状态
 const { queueItems, clearQueue, clearCompletedItems, hasCompletedItems } = useQueueState();
@@ -248,6 +250,11 @@ onMounted(async () => {
   await uploadManager.loadServiceButtonStates();
   console.log('[UploadView] 服务按钮状态已加载');
 
+  // 初始化图床健康状态（与设置页同步）
+  await loadHealthStatus();
+  const config = await configStore.get<UserConfig>('config');
+  if (config) evaluateConfig(config);
+
   // 设置配置更新监听器（设置页面修改配置后自动刷新）
   configUnlisten.value = await uploadManager.setupConfigListener();
   console.log('[UploadView] 配置更新监听器已设置');
@@ -318,6 +325,8 @@ onUnmounted(() => {
         :private-services="visiblePrivateServices"
         :service-labels="serviceLabels"
         :is-service-selected="uploadManager.isServiceSelected.value"
+        :service-health-map="healthStatusMap"
+        :service-health-tooltip-map="healthTooltipMap"
         @toggle="uploadManager.toggleServiceSelection"
       />
 

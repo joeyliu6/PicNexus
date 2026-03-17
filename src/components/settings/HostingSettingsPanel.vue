@@ -3,11 +3,16 @@ import { computed, watch, nextTick } from 'vue';
 import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
 import Textarea from 'primevue/textarea';
+import Button from 'primevue/button';
 import HostingCard from './HostingCard.vue';
 import WeiboLinkPrefixSection from './hosting/WeiboLinkPrefixSection.vue';
 import GithubUrlStrategySection from './hosting/GithubUrlStrategySection.vue';
 import { getCategoryIcon } from '../../utils/icons';
 import type { GithubUrlStrategy } from '../../config/types';
+import type { BatchTestProgress, BatchTestReport } from '../../types/batchTest';
+import { useServiceHealth } from '../../composables/useServiceHealth';
+
+const { healthStatusMap, healthTooltipMap } = useServiceHealth();
 
 interface PrivateFormData {
   r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; path: string; publicDomain: string };
@@ -57,6 +62,9 @@ const props = defineProps<{
   selectedPrefixIndex: number;
   githubUrlStrategy?: GithubUrlStrategy;
   targetCardId?: string | null;
+  isBatchTesting?: boolean;
+  batchTestProgress?: BatchTestProgress | null;
+  batchTestReport?: BatchTestReport | null;
 }>();
 
 const emit = defineEmits<{
@@ -74,6 +82,7 @@ const emit = defineEmits<{
   removePrefix: [index: number];
   resetToDefault: [];
   cardNavigated: [];
+  testAll: [];
 }>();
 
 function isTargetCard(id: string): boolean {
@@ -125,6 +134,11 @@ function isTokenConfigured(providerId: TokenProviderId): boolean {
 const extractNamiAuthToken = computed(() => {
   return props.cookieFormData.nami.cookie?.match(/auth-token=([^;]+)/)?.[1] || '';
 });
+
+const MAX_ERROR_LENGTH = 40;
+function truncateError(error: string): string {
+  return error.length > MAX_ERROR_LENGTH ? error.slice(0, MAX_ERROR_LENGTH) + '...' : error;
+}
 </script>
 
 <template>
@@ -132,6 +146,29 @@ const extractNamiAuthToken = computed(() => {
     <div class="section-header">
       <h2>图床设置</h2>
       <p class="section-desc">根据认证方式和使用场景选择合适的图床服务</p>
+    </div>
+
+    <div class="batch-test-bar">
+      <Button
+        :label="isBatchTesting ? `正在测试 ${batchTestProgress?.current ?? 0}/${batchTestProgress?.total ?? 0}...` : '测试所有图床'"
+        :icon="isBatchTesting ? 'pi pi-spin pi-spinner' : 'pi pi-play'"
+        :disabled="isBatchTesting"
+        severity="secondary"
+        size="small"
+        outlined
+        @click="emit('testAll')"
+      />
+      <div v-if="batchTestReport && !isBatchTesting" class="batch-report">
+        <span :class="['report-summary', batchTestReport.failed.length === 0 ? 'all-pass' : batchTestReport.passed === 0 ? 'all-fail' : 'has-fail']">
+          {{ batchTestReport.passed }}/{{ batchTestReport.total }} 通过
+        </span>
+        <div v-if="batchTestReport.failed.length > 0" class="report-failures">
+          <div v-for="item in batchTestReport.failed" :key="item.serviceId" class="failure-item" v-tooltip.bottom="item.error">
+            <span class="failure-name">{{ item.name }}</span>
+            <span class="failure-error">{{ truncateError(item.error) }}</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="settings-content">
@@ -146,6 +183,8 @@ const extractNamiAuthToken = computed(() => {
           name="Cloudflare R2"
           description="S3 兼容的高速存储"
           :isConfigured="isPrivateConfigured('r2')"
+          :health-status="healthStatusMap['r2']"
+          :health-tooltip="healthTooltipMap['r2']"
           :isTesting="testingConnections['r2']"
           @test="emit('testPrivate', $event)"
         >
@@ -183,6 +222,8 @@ const extractNamiAuthToken = computed(() => {
           name="腾讯云"
           description="腾讯云对象存储"
           :isConfigured="isPrivateConfigured('tencent')"
+          :health-status="healthStatusMap['tencent']"
+          :health-tooltip="healthTooltipMap['tencent']"
           :isTesting="testingConnections['tencent']"
           @test="emit('testPrivate', $event)"
         >
@@ -220,6 +261,8 @@ const extractNamiAuthToken = computed(() => {
           name="阿里云"
           description="阿里云对象存储"
           :isConfigured="isPrivateConfigured('aliyun')"
+          :health-status="healthStatusMap['aliyun']"
+          :health-tooltip="healthTooltipMap['aliyun']"
           :isTesting="testingConnections['aliyun']"
           @test="emit('testPrivate', $event)"
         >
@@ -257,6 +300,8 @@ const extractNamiAuthToken = computed(() => {
           name="七牛云"
           description="七牛云对象存储"
           :isConfigured="isPrivateConfigured('qiniu')"
+          :health-status="healthStatusMap['qiniu']"
+          :health-tooltip="healthTooltipMap['qiniu']"
           :isTesting="testingConnections['qiniu']"
           @test="emit('testPrivate', $event)"
         >
@@ -295,6 +340,8 @@ const extractNamiAuthToken = computed(() => {
           name="又拍云"
           description="又拍云对象存储"
           :isConfigured="isPrivateConfigured('upyun')"
+          :health-status="healthStatusMap['upyun']"
+          :health-tooltip="healthTooltipMap['upyun']"
           :isTesting="testingConnections['upyun']"
           @test="emit('testPrivate', $event)"
         >
@@ -337,6 +384,7 @@ const extractNamiAuthToken = computed(() => {
           :isConfigured="jdAvailable"
           :isAvailable="jdAvailable"
           :isChecking="isCheckingJd"
+          :health-tooltip="healthTooltipMap['jd']"
           :showTestButton="false"
           @check="emit('checkBuiltin', $event)"
         >
@@ -354,6 +402,7 @@ const extractNamiAuthToken = computed(() => {
           :isConfigured="qiyuAvailable"
           :isAvailable="qiyuAvailable"
           :isChecking="isCheckingQiyu"
+          :health-tooltip="healthTooltipMap['qiyu']"
           :showTestButton="false"
           @check="emit('checkBuiltin', $event)"
         >
@@ -374,6 +423,8 @@ const extractNamiAuthToken = computed(() => {
           name="微博"
           description="新浪微博图床"
           :isConfigured="isCookieConfigured('weibo')"
+          :health-status="healthStatusMap['weibo']"
+          :health-tooltip="healthTooltipMap['weibo']"
           :isTesting="testingConnections['weibo']"
           :showLoginButton="true"
           @test="emit('testCookie', $event)"
@@ -408,6 +459,8 @@ const extractNamiAuthToken = computed(() => {
           name="知乎"
           description="知乎图床"
           :isConfigured="isCookieConfigured('zhihu')"
+          :health-status="healthStatusMap['zhihu']"
+          :health-tooltip="healthTooltipMap['zhihu']"
           :isTesting="testingConnections['zhihu']"
           :showLoginButton="true"
           @test="emit('testCookie', $event)"
@@ -428,6 +481,8 @@ const extractNamiAuthToken = computed(() => {
           name="牛客"
           description="牛客网图床"
           :isConfigured="isCookieConfigured('nowcoder')"
+          :health-status="healthStatusMap['nowcoder']"
+          :health-tooltip="healthTooltipMap['nowcoder']"
           :isTesting="testingConnections['nowcoder']"
           :showLoginButton="true"
           @test="emit('testCookie', $event)"
@@ -448,6 +503,8 @@ const extractNamiAuthToken = computed(() => {
           name="纳米"
           description="纳米图床"
           :isConfigured="isCookieConfigured('nami')"
+          :health-status="healthStatusMap['nami']"
+          :health-tooltip="healthTooltipMap['nami']"
           :isTesting="testingConnections['nami']"
           :showLoginButton="true"
           @test="emit('testCookie', $event)"
@@ -472,6 +529,8 @@ const extractNamiAuthToken = computed(() => {
           name="B站"
           description="Bilibili 图床"
           :isConfigured="isCookieConfigured('bilibili')"
+          :health-status="healthStatusMap['bilibili']"
+          :health-tooltip="healthTooltipMap['bilibili']"
           :isTesting="testingConnections['bilibili']"
           :showLoginButton="true"
           @test="emit('testCookie', $event)"
@@ -492,6 +551,8 @@ const extractNamiAuthToken = computed(() => {
           name="超星"
           description="超星图床"
           :isConfigured="isCookieConfigured('chaoxing')"
+          :health-status="healthStatusMap['chaoxing']"
+          :health-tooltip="healthTooltipMap['chaoxing']"
           :isTesting="testingConnections['chaoxing']"
           :showLoginButton="true"
           @test="emit('testCookie', $event)"
@@ -518,6 +579,8 @@ const extractNamiAuthToken = computed(() => {
           name="SM.MS"
           description="SM.MS 图床"
           :isConfigured="isTokenConfigured('smms')"
+          :health-status="healthStatusMap['smms']"
+          :health-tooltip="healthTooltipMap['smms']"
           :isTesting="testingConnections['smms']"
           @test="emit('testToken', $event)"
         >
@@ -536,6 +599,8 @@ const extractNamiAuthToken = computed(() => {
           name="GitHub"
           description="GitHub 仓库图床"
           :isConfigured="isTokenConfigured('github')"
+          :health-status="healthStatusMap['github']"
+          :health-tooltip="healthTooltipMap['github']"
           :isTesting="testingConnections['github']"
           @test="emit('testToken', $event)"
         >
@@ -577,6 +642,8 @@ const extractNamiAuthToken = computed(() => {
           name="Imgur"
           description="Imgur 图床"
           :isConfigured="isTokenConfigured('imgur')"
+          :health-status="healthStatusMap['imgur']"
+          :health-tooltip="healthTooltipMap['imgur']"
           :isTesting="testingConnections['imgur']"
           @test="emit('testToken', $event)"
         >
@@ -621,6 +688,63 @@ const extractNamiAuthToken = computed(() => {
   font-size: 14px;
   color: var(--text-secondary);
   margin: 0;
+}
+
+.batch-test-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.batch-report {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  padding-top: 4px;
+}
+
+.report-summary {
+  font-weight: 600;
+}
+
+.report-summary.all-pass {
+  color: var(--green-500);
+}
+
+.report-summary.has-fail {
+  color: var(--orange-500);
+}
+
+.report-summary.all-fail {
+  color: var(--red-400);
+}
+
+.report-failures {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.failure-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.failure-name {
+  font-weight: 500;
+  color: var(--red-400);
+  white-space: nowrap;
+}
+
+.failure-error {
+  color: var(--text-muted);
+  word-break: break-all;
 }
 
 .settings-content {

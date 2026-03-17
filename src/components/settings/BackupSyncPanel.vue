@@ -28,6 +28,8 @@ const {
   importHistoryLoading,
   uploadHistoryLoading,
   downloadHistoryLoading,
+  syncConfigLoading,
+  syncHistoryLoading,
   loadSyncStatus,
   getProfileSyncRecord,
   getAllSyncRecords,
@@ -35,14 +37,12 @@ const {
   importSettingsLocal,
   exportHistoryLocal,
   importHistoryLocal,
+  syncConfig,
+  syncHistory,
   uploadSettingsCloud,
   downloadSettingsOverwrite,
-  downloadSettingsMerge,
   uploadHistoryForce,
-  uploadHistoryMerge,
-  uploadHistoryIncremental,
   downloadHistoryOverwrite,
-  downloadHistoryMerge
 } = useBackupSync();
 
 const activeWebDAVProfile = computed(() =>
@@ -93,32 +93,28 @@ const otherProfileRecords = computed(() => {
 
 onMounted(() => loadSyncStatus());
 
-function handleConfigSyncToCloud() {
-  if (activeWebDAVProfile.value) {
-    uploadSettingsCloud(activeWebDAVProfile.value);
-  }
+function handleConfigSync() {
+  if (activeWebDAVProfile.value) syncConfig(activeWebDAVProfile.value);
 }
 
-function handleConfigCloudAction(action: string) {
-  if (!activeWebDAVProfile.value) return;
-  const profile = activeWebDAVProfile.value;
-
-  if (action === 'download-merge') downloadSettingsMerge(profile);
-  else if (action === 'download-overwrite') downloadSettingsOverwrite(profile);
+function handleHistorySync() {
+  if (activeWebDAVProfile.value) syncHistory(activeWebDAVProfile.value);
 }
 
-function handleHistoryCloudAction(action: string) {
-  if (!activeWebDAVProfile.value) return;
-  const profile = activeWebDAVProfile.value;
+function handleConfigForceUpload() {
+  if (activeWebDAVProfile.value) uploadSettingsCloud(activeWebDAVProfile.value);
+}
 
-  const actions: Record<string, () => void> = {
-    'upload-merge': () => uploadHistoryMerge(profile),
-    'upload-incremental': () => uploadHistoryIncremental(profile),
-    'upload-force': () => uploadHistoryForce(profile),
-    'download-merge': () => downloadHistoryMerge(profile),
-    'download-overwrite': () => downloadHistoryOverwrite(profile)
-  };
-  actions[action]?.();
+function handleConfigForceDownload() {
+  if (activeWebDAVProfile.value) downloadSettingsOverwrite(activeWebDAVProfile.value);
+}
+
+function handleHistoryForceUpload() {
+  if (activeWebDAVProfile.value) uploadHistoryForce(activeWebDAVProfile.value);
+}
+
+function handleHistoryForceDownload() {
+  if (activeWebDAVProfile.value) downloadHistoryOverwrite(activeWebDAVProfile.value);
 }
 </script>
 
@@ -126,7 +122,7 @@ function handleHistoryCloudAction(action: string) {
   <div class="backup-sync-panel">
     <div class="section-header">
       <h2>备份与同步</h2>
-      <p class="section-desc">基于 WebDAV 的配置管理与数据流转服务</p>
+      <p class="section-desc">管理你的设置和上传记录，支持多设备同步</p>
     </div>
 
     <!-- WebDAV 连接 -->
@@ -142,13 +138,13 @@ function handleHistoryCloudAction(action: string) {
 
     <p v-if="!isWebDAVConnected" class="helper-text warn-text">
       <i class="pi pi-info-circle"></i>
-      请先完成 WebDAV 配置后再进行云端同步操作
+      配置 WebDAV 连接后即可使用云端同步
     </p>
 
     <!-- 配置文件 -->
     <div class="form-group">
       <label class="group-label">配置文件</label>
-      <p class="helper-text">包含图床密钥、Cookie 及偏好设置</p>
+      <p class="helper-text">你的图床账号、偏好和所有设置项</p>
       <DataItemCard
         type="config"
         :sync-status="configSyncStatus"
@@ -156,29 +152,33 @@ function handleHistoryCloudAction(action: string) {
         :provider-name="activeWebDAVProfile?.name"
         :other-profiles="otherProfileRecords"
         :local-loading="{ export: exportSettingsLoading, import: importSettingsLoading }"
-        :cloud-loading="{ upload: uploadSettingsLoading, download: downloadSettingsLoading }"
+        :cloud-loading="{ sync: syncConfigLoading, forceUpload: uploadSettingsLoading, forceDownload: downloadSettingsLoading }"
         @export-local="exportSettingsLocal"
         @import-local="importSettingsLocal"
-        @sync-to-cloud="handleConfigSyncToCloud"
-        @cloud-action="handleConfigCloudAction"
+        @sync-cloud="handleConfigSync"
+        @force-upload="handleConfigForceUpload"
+        @force-download="handleConfigForceDownload"
       />
     </div>
 
     <!-- 上传记录 -->
     <div class="form-group">
       <label class="group-label">上传记录</label>
-      <p class="helper-text">历史上传文件和 URL 记录</p>
+      <p class="helper-text">所有已上传的图片记录和链接</p>
       <DataItemCard
         type="history"
+        menu-placement="top"
         :sync-status="historySyncStatus"
         :is-cloud-enabled="isWebDAVConnected"
         :provider-name="activeWebDAVProfile?.name"
         :other-profiles="otherProfileRecords"
         :local-loading="{ export: exportHistoryLoading, import: importHistoryLoading }"
-        :cloud-loading="{ upload: uploadHistoryLoading, download: downloadHistoryLoading }"
+        :cloud-loading="{ sync: syncHistoryLoading, forceUpload: uploadHistoryLoading, forceDownload: downloadHistoryLoading }"
         @export-local="exportHistoryLocal"
         @import-local="importHistoryLocal"
-        @cloud-action="handleHistoryCloudAction"
+        @sync-cloud="handleHistorySync"
+        @force-upload="handleHistoryForceUpload"
+        @force-download="handleHistoryForceDownload"
       />
     </div>
   </div>

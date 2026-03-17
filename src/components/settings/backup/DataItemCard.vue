@@ -1,10 +1,15 @@
+<script lang="ts">
+import { ref } from 'vue';
+
+let instanceCounter = 0;
+const openMenuId = ref<number | null>(null);
+</script>
+
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { computed, nextTick } from 'vue';
 import Button from 'primevue/button';
 import { useClickOutside } from '../../../composables/useClickOutside';
 import type { ProfileSyncRecord } from '../../../config/types';
-
-const MENU_OPEN_EVENT = 'sync-row-menu-open';
 
 interface SyncStatusInfo {
   lastSync?: string | null;
@@ -17,47 +22,45 @@ interface Props {
   syncStatus: SyncStatusInfo;
   isCloudEnabled: boolean;
   localLoading: { export: boolean; import: boolean };
-  cloudLoading: { upload: boolean; download: boolean };
+  cloudLoading: { sync: boolean; forceUpload: boolean; forceDownload: boolean };
+  menuPlacement?: 'bottom' | 'top';
   providerName?: string;
   otherProfiles?: ProfileSyncRecord[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  menuPlacement: 'bottom',
   otherProfiles: () => [],
 });
 
 const emit = defineEmits<{
   'export-local': [];
   'import-local': [];
-  'sync-to-cloud': [];
-  'cloud-action': [action: string];
+  'sync-cloud': [];
+  'force-upload': [];
+  'force-download': [];
 }>();
 
-const uploadMenuVisible = ref(false);
-const downloadMenuVisible = ref(false);
-const instanceId = Math.random().toString(36).substr(2, 9);
+const instanceId = ++instanceCounter;
+const moreMenuVisible = computed({
+  get: () => openMenuId.value === instanceId,
+  set: (val: boolean) => { openMenuId.value = val ? instanceId : null; }
+});
+const { target: moreMenuRef } = useClickOutside(() => { moreMenuVisible.value = false; });
 
-function broadcastMenuOpen() {
-  window.dispatchEvent(new CustomEvent(MENU_OPEN_EVENT, { detail: { instanceId } }));
-}
-
-function handleOtherMenuOpen(event: Event) {
-  const customEvent = event as CustomEvent;
-  if (customEvent.detail.instanceId !== instanceId) {
-    closeAllMenus();
+async function toggleMoreMenu() {
+  moreMenuVisible.value = !moreMenuVisible.value;
+  if (moreMenuVisible.value) {
+    await nextTick();
+    const menuEl = moreMenuRef.value?.querySelector('.dropdown-menu') as HTMLElement | null;
+    menuEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 }
 
-onMounted(() => {
-  window.addEventListener(MENU_OPEN_EVENT, handleOtherMenuOpen);
-});
-
-onUnmounted(() => {
-  window.removeEventListener(MENU_OPEN_EVENT, handleOtherMenuOpen);
-});
-
-const { target: uploadMenuRef } = useClickOutside(() => { uploadMenuVisible.value = false; });
-const { target: downloadMenuRef } = useClickOutside(() => { downloadMenuVisible.value = false; });
+function handleForceAction(action: 'upload' | 'download') {
+  moreMenuVisible.value = false;
+  emit(action === 'upload' ? 'force-upload' : 'force-download');
+}
 
 const STALE_DAYS_WARNING = 7;
 const STALE_DAYS_DANGER = 30;
@@ -115,6 +118,13 @@ const shortStatusText = computed(() => {
 
 const isHistoryType = computed(() => props.type === 'history');
 
+const syncButtonTooltip = computed(() => {
+  if (!props.isCloudEnabled) return '请先配置 WebDAV 连接';
+  return isHistoryType.value
+    ? '自动合并云端与本地记录，保留最新版本'
+    : '自动合并云端与本地设置，冲突时保留本地';
+});
+
 function formatDate(dateStr: string, includeYear = true): string {
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return dateStr;
@@ -144,24 +154,9 @@ const tooltipContent = computed(() => {
   return lines.join('\n');
 });
 
-function closeAllMenus() {
-  uploadMenuVisible.value = false;
-  downloadMenuVisible.value = false;
-}
-
-function toggleMenu(menu: 'upload' | 'download') {
-  const target = menu === 'upload' ? uploadMenuVisible : downloadMenuVisible;
-  const wasVisible = target.value;
-  closeAllMenus();
-  target.value = !wasVisible;
-  if (!wasVisible) broadcastMenuOpen();
-}
-
-function handleCloudAction(action: string) {
-  closeAllMenus();
-  emit('cloud-action', action);
-}
-
+const isAnyForceLoading = computed(() =>
+  props.cloudLoading.forceUpload || props.cloudLoading.forceDownload
+);
 </script>
 
 <template>
@@ -173,19 +168,17 @@ function handleCloudAction(action: string) {
         <Button
           @click="emit('export-local')"
           :loading="localLoading.export"
-          label="备份到本地"
+          label="导出"
           icon="pi pi-download"
-          text
-          severity="secondary"
+          outlined
           size="small"
         />
         <Button
           @click="emit('import-local')"
           :loading="localLoading.import"
-          label="从本地恢复"
+          label="导入"
           icon="pi pi-upload"
-          text
-          severity="secondary"
+          outlined
           size="small"
         />
       </div>
@@ -206,97 +199,62 @@ function handleCloudAction(action: string) {
         </span>
       </div>
       <div class="row-actions">
-        <!-- 上传按钮 -->
-        <template v-if="!isHistoryType">
-          <span v-tooltip.bottom="!isCloudEnabled ? '请先配置 WebDAV 连接' : null">
-            <Button
-              @click="emit('sync-to-cloud')"
-              :loading="cloudLoading.upload"
-              :disabled="!isCloudEnabled"
-              label="备份到云端"
-              icon="pi pi-cloud-upload"
-              outlined
-              size="small"
-            />
-          </span>
-        </template>
-        <template v-else>
-          <div class="dropdown-wrapper" ref="uploadMenuRef" v-tooltip.bottom="!isCloudEnabled ? '请先配置 WebDAV 连接' : null">
-            <Button
-              @click.stop="toggleMenu('upload')"
-              :loading="cloudLoading.upload"
-              :disabled="!isCloudEnabled"
-              label="备份到云端"
-              icon="pi pi-cloud-upload"
-              outlined
-              size="small"
-            />
-            <Transition name="dropdown">
-              <div v-if="uploadMenuVisible" class="dropdown-menu">
-                <button class="dropdown-item" @click="handleCloudAction('upload-merge')">
-                  <span class="item-label">智能合并</span>
-                  <span class="item-hint">推荐</span>
-                </button>
-                <button class="dropdown-item" @click="handleCloudAction('upload-incremental')">
-                  <span class="item-label">仅上传新增</span>
-                </button>
-                <button class="dropdown-item danger" @click="handleCloudAction('upload-force')">
-                  <span class="item-label">强制覆盖云端</span>
-                </button>
-              </div>
-            </Transition>
-          </div>
-        </template>
-
-        <!-- 下载按钮 -->
-        <div class="dropdown-wrapper" ref="downloadMenuRef" v-tooltip.bottom="!isCloudEnabled ? '请先配置 WebDAV 连接' : null">
+        <span v-tooltip.bottom="syncButtonTooltip">
           <Button
-            @click.stop="toggleMenu('download')"
-            :loading="cloudLoading.download"
+            @click="emit('sync-cloud')"
+            :loading="cloudLoading.sync"
             :disabled="!isCloudEnabled"
-            label="从云端恢复"
-            icon="pi pi-cloud-download"
+            label="同步"
+            icon="pi pi-sync"
             outlined
             size="small"
           />
-          <Transition name="dropdown">
-            <div v-if="downloadMenuVisible" class="dropdown-menu">
-              <template v-if="!isHistoryType">
-                <button class="dropdown-item" @click="handleCloudAction('download-merge')">
-                  <span class="item-label">保留 WebDAV 配置</span>
-                  <span class="item-hint">推荐</span>
-                </button>
-                <button class="dropdown-item danger" @click="handleCloudAction('download-overwrite')">
-                  <span class="item-label">完全覆盖本地</span>
-                </button>
-              </template>
-              <template v-else>
-                <button class="dropdown-item" @click="handleCloudAction('download-merge')">
-                  <span class="item-label">智能合并</span>
-                  <span class="item-hint">推荐</span>
-                </button>
-                <button class="dropdown-item danger" @click="handleCloudAction('download-overwrite')">
-                  <span class="item-label">覆盖本地</span>
-                </button>
-              </template>
+        </span>
+        <div class="dropdown-wrapper" ref="moreMenuRef">
+          <Button
+            @click.stop="toggleMoreMenu"
+            :disabled="!isCloudEnabled || isAnyForceLoading"
+            label="更多"
+            icon="pi pi-chevron-down"
+            iconPos="right"
+            outlined
+            size="small"
+          />
+          <Transition :name="props.menuPlacement === 'top' ? 'dropdown-up' : 'dropdown'">
+            <div v-if="moreMenuVisible" class="dropdown-menu" :class="{ 'placement-top': props.menuPlacement === 'top' }">
+              <button
+                v-tooltip.left="'以本地数据完全替换云端，云端现有数据将丢失'"
+                class="dropdown-item danger"
+                :disabled="cloudLoading.forceUpload"
+                @click="handleForceAction('upload')"
+              >
+                <i class="pi pi-cloud-upload"></i>
+                <span class="item-label">覆盖云端</span>
+              </button>
+              <button
+                v-tooltip.left="'以云端数据完全替换本地，本地现有数据将丢失'"
+                class="dropdown-item danger"
+                :disabled="cloudLoading.forceDownload"
+                @click="handleForceAction('download')"
+              >
+                <i class="pi pi-cloud-download"></i>
+                <span class="item-label">覆盖本地</span>
+              </button>
             </div>
           </Transition>
         </div>
       </div>
     </div>
-
   </div>
 </template>
 
 <style scoped>
-/* 卡片容器 */
 .data-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
 }
 
-/* 行布局 */
 .card-row {
   display: flex;
   align-items: center;
@@ -326,7 +284,6 @@ function handleCloudAction(action: string) {
   gap: 8px;
 }
 
-/* 标签分组（标签 + 状态 Badge 内联） */
 .row-label-group {
   display: flex;
   align-items: center;
@@ -361,7 +318,7 @@ function handleCloudAction(action: string) {
 .status-badge.stale-warning { background: rgba(245, 158, 11, 0.1); color: var(--warning); }
 .status-badge.stale-danger { background: rgba(230, 126, 34, 0.1); color: #e67e22; }
 
-/* 下拉菜单 */
+/* 更多菜单 */
 .dropdown-wrapper {
   position: relative;
 }
@@ -370,13 +327,18 @@ function handleCloudAction(action: string) {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  min-width: 160px;
+  min-width: 200px;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   box-shadow: var(--shadow-float);
   z-index: 1000;
   overflow: hidden;
+}
+
+.dropdown-menu.placement-top {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .dropdown-item {
@@ -403,11 +365,10 @@ function handleCloudAction(action: string) {
 }
 
 .dropdown-item .item-label { flex: 1; }
-.dropdown-item .item-hint { font-size: 11px; color: var(--text-muted); }
 .dropdown-item.danger { color: var(--error); }
 .dropdown-item.danger:hover:not(:disabled) { background: rgba(239, 68, 68, 0.08); }
+.dropdown-item:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* 下拉动画 */
 .dropdown-enter-active,
 .dropdown-leave-active {
   transition: all 0.15s ease;
@@ -419,7 +380,17 @@ function handleCloudAction(action: string) {
   transform: translateY(-4px);
 }
 
-/* 响应式 */
+.dropdown-up-enter-active,
+.dropdown-up-leave-active {
+  transition: all 0.15s ease;
+}
+
+.dropdown-up-enter-from,
+.dropdown-up-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
 @media (max-width: 480px) {
   .card-row {
     flex-direction: column;

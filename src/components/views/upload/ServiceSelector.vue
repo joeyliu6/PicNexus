@@ -2,6 +2,7 @@
 // 图床服务选择器组件
 
 import type { ServiceType } from '../../../config/types';
+import type { ServiceHealthStatus } from '../../../types/serviceHealth';
 
 // ==================== Props ====================
 
@@ -10,6 +11,8 @@ interface Props {
   privateServices: ServiceType[];
   serviceLabels: Record<ServiceType, string>;
   isServiceSelected: (id: ServiceType) => boolean;
+  serviceHealthMap?: Record<ServiceType, ServiceHealthStatus>;
+  serviceHealthTooltipMap?: Record<ServiceType, string>;
 }
 
 const props = defineProps<Props>();
@@ -41,6 +44,7 @@ function handleToggle(serviceId: ServiceType) {
           @click="handleToggle(serviceId)"
           v-ripple
         >
+          <span class="health-dot" :class="serviceHealthMap?.[serviceId] || 'unconfigured'" v-tooltip.top="serviceHealthTooltipMap?.[serviceId] || null"></span>
           <span class="tag-text">{{ serviceLabels[serviceId] }}</span>
         </button>
       </div>
@@ -58,6 +62,7 @@ function handleToggle(serviceId: ServiceType) {
           @click="handleToggle(serviceId)"
           v-ripple
         >
+          <span class="health-dot" :class="serviceHealthMap?.[serviceId] || 'unconfigured'" v-tooltip.top="serviceHealthTooltipMap?.[serviceId] || null"></span>
           <span class="tag-text">{{ serviceLabels[serviceId] }}</span>
         </button>
       </div>
@@ -132,5 +137,27 @@ function handleToggle(serviceId: ServiceType) {
   border-color: var(--primary);
   color: var(--primary);
   font-weight: 600;
+}
+
+/* 图床健康状态圆点 */
+.health-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+  box-shadow: 0 0 0 1px var(--border-subtle);
+}
+
+.health-dot.pending {
+  background: var(--warning);
+}
+
+.health-dot.verified {
+  background: var(--success);
+}
+
+.health-dot.error {
+  background: var(--error);
 }
 </style>

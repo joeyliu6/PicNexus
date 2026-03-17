@@ -7,7 +7,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { getVersion } from '@tauri-apps/api/app';
-import { useToast } from '../../composables/useToast';
+import { useToast, suppressToasts } from '../../composables/useToast';
 import { TOAST_MESSAGES } from '../../constants';
 import { useConfirm } from '../../composables/useConfirm';
 import { useThemeManager } from '../../composables/useTheme';
@@ -17,6 +17,9 @@ import { useAnalytics } from '../../composables/useAnalytics';
 import { useServiceAvailability } from '../../composables/useServiceAvailability';
 import { useServiceHealth } from '../../composables/useServiceHealth';
 import { SERVICE_DISPLAY_NAMES } from '../../constants/serviceNames';
+import { SERVICE_REQUIRED_FIELDS } from '../../constants/serviceRequiredFields';
+import { NO_CONFIG_SERVICES } from '../../constants/serviceRequiredFields';
+import type { BatchTestProgress, BatchTestReport } from '../../types/batchTest';
 
 // 组件
 import HostingSettingsPanel from '../settings/HostingSettingsPanel.vue';
@@ -141,6 +144,11 @@ const testingConnections = ref<Record<string, boolean>>({
   nowcoder: false, zhihu: false, nami: false, bilibili: false, chaoxing: false,
   smms: false, github: false, imgur: false, webdav: false
 });
+
+// 批量测试状态
+const isBatchTesting = ref(false);
+const batchTestProgress = ref<BatchTestProgress | null>(null);
+const batchTestReport = ref<BatchTestReport | null>(null);
 
 // 可用服务列表
 const availableServices = ref<ServiceType[]>([]);
@@ -397,8 +405,30 @@ function errorToString(error: unknown): string {
   return String(error);
 }
 
+function validateS3Config(serviceId: ServiceType, config: Record<string, unknown>): string | null {
+  const fields = SERVICE_REQUIRED_FIELDS[serviceId] || [];
+  for (const field of fields) {
+    const val = config[field];
+    if (!val || String(val).trim().length < 2) {
+      return `${field} 格式无效（至少 2 个字符）`;
+    }
+  }
+  if (serviceId === 'r2' && config.accountId && !/^[a-f0-9]{32}$/.test(String(config.accountId))) {
+    return 'Account ID 格式不正确（应为 32 位十六进制字符串）';
+  }
+  if (config.publicDomain && !/^https?:\/\/.+/.test(String(config.publicDomain))) {
+    return '公开访问域名应以 http:// 或 https:// 开头';
+  }
+  return null;
+}
+
 async function testS3Connection(serviceId: ServiceType) {
   const config = formData.value[serviceId as keyof typeof formData.value] as any;
+  const validationError = validateS3Config(serviceId, config);
+  if (validationError) {
+    toast.showConfig('error', TOAST_MESSAGES.auth.connectionFailed(serviceNames[serviceId], validationError));
+    throw new Error(validationError);
+  }
   try {
     await invoke('test_s3_connection', { serviceId, config });
     toast.showConfig('success', TOAST_MESSAGES.auth.configValid(serviceNames[serviceId]));
@@ -468,6 +498,62 @@ async function handleBuiltinCheck(serviceId: string) {
     toast.showConfig('info', qiyuAvailable.value
       ? TOAST_MESSAGES.auth.serviceAvailable('七鱼图床')
       : TOAST_MESSAGES.auth.serviceUnavailable('七鱼图床'));
+  }
+}
+
+async function testAllConfiguredServices() {
+  const configuredServices = (Object.entries(serviceHealth.healthStatusMap.value) as [ServiceType, string][])
+    .filter(([id, status]) => status !== 'unconfigured' && !NO_CONFIG_SERVICES.includes(id) && actions[id])
+    .map(([id]) => id);
+
+  if (configuredServices.length === 0) {
+    toast.showConfig('info', { summary: '没有已配置的图床需要测试' });
+    return;
+  }
+
+  isBatchTesting.value = true;
+  batchTestReport.value = null;
+  batchTestProgress.value = { current: 0, total: configuredServices.length, currentService: '' };
+  suppressToasts(true);
+
+  const failed: BatchTestReport['failed'] = [];
+  let passed = 0;
+  let completed = 0;
+
+  try {
+    const tasks = configuredServices.map((serviceId) => async () => {
+      batchTestProgress.value = { current: completed + 1, total: configuredServices.length, currentService: serviceNames[serviceId] };
+      testingConnections.value[serviceId] = true;
+      try {
+        await actions[serviceId]();
+        serviceHealth.markVerified(serviceId);
+        passed++;
+      } catch (e) {
+        const msg = errorToString(e);
+        serviceHealth.markTestFailed(serviceId, msg);
+        failed.push({ serviceId, name: serviceNames[serviceId], error: msg });
+      } finally {
+        testingConnections.value[serviceId] = false;
+        completed++;
+        batchTestProgress.value = { current: completed, total: configuredServices.length, currentService: '' };
+      }
+    });
+
+    // 有限并发执行（max 3）
+    let nextIndex = 0;
+    async function runNext(): Promise<void> {
+      while (nextIndex < tasks.length) {
+        const task = tasks[nextIndex++];
+        await task();
+      }
+    }
+    const concurrency = Math.min(3, tasks.length);
+    await Promise.all(Array.from({ length: concurrency }, () => runNext()));
+  } finally {
+    suppressToasts(false);
+    batchTestReport.value = { total: configuredServices.length, passed, failed, completedAt: Date.now() };
+    isBatchTesting.value = false;
+    batchTestProgress.value = null;
   }
 }
 
@@ -745,7 +831,11 @@ onUnmounted(() => {
           :selected-prefix-index="formData.selectedPrefixIndex"
           :github-url-strategy="formData.github.urlStrategy"
           :target-card-id="targetCardId"
+          :is-batch-testing="isBatchTesting"
+          :batch-test-progress="batchTestProgress"
+          :batch-test-report="batchTestReport"
           @card-navigated="targetCardId = null"
+          @test-all="testAllConfiguredServices"
           @save="saveSettings"
           @test-private="handleServiceTest"
           @test-token="handleServiceTest"
