@@ -5,16 +5,14 @@ import TitleBar from './TitleBar.vue';
 import Sidebar from './Sidebar.vue';
 import UploadView from '../views/UploadView.vue';
 import HistoryView from '../views/HistoryView.vue';
-import CloudStorageView from '../views/CloudStorageView/index.vue';
 import SettingsView from '../views/SettingsView.vue';
 
-type ViewType = 'upload' | 'history' | 'cloud-storage' | 'settings';
+type ViewType = 'upload' | 'history' | 'settings';
 
 // 组件映射对象
 const viewComponents = {
   upload: UploadView,
   history: HistoryView,
-  'cloud-storage': CloudStorageView,
   settings: SettingsView
 } as const;
 
@@ -48,7 +46,7 @@ onMounted(async () => {
       }
     } else if (payload && typeof payload === 'object') {
       const { view, tab } = payload;
-      if (view === 'settings' || view === 'history' || view === 'upload' || view === 'cloud-storage') {
+      if (view === 'settings' || view === 'history' || view === 'upload') {
         if (view === 'settings' && tab) {
           settingsTargetTab.value = tab;
         }
