@@ -138,6 +138,10 @@ class HistoryDatabase {
       await this.db.execute(`
         CREATE INDEX IF NOT EXISTS idx_service ON history_items(primary_service)
       `);
+      // 复合索引：覆盖 WHERE primary_service = ? ORDER BY timestamp DESC 查询
+      await this.db.execute(`
+        CREATE INDEX IF NOT EXISTS idx_service_timestamp ON history_items(primary_service, timestamp DESC)
+      `);
       await this.db.execute(`
         CREATE INDEX IF NOT EXISTS idx_filename_lower ON history_items(local_file_name_lower)
       `);
@@ -404,44 +408,50 @@ class HistoryDatabase {
   }
 
   /**
+   * 构建带 COUNT(*) OVER() 窗口函数的分页查询，单次查询同时获取总数和分页数据
+   */
+  private async queryWithTotal(
+    db: Awaited<ReturnType<typeof this.ensureInitialized>>,
+    baseWhere: string,
+    baseParams: (string | number)[],
+    serviceFilter: string,
+    limit: number,
+    offset: number,
+  ): Promise<{ items: HistoryItem[]; total: number; hasMore: boolean }> {
+    const params: (string | number)[] = [...baseParams];
+    let whereClause = baseWhere;
+
+    const nextParam = () => `$${params.length + 1}`;
+
+    if (serviceFilter !== 'all') {
+      whereClause += whereClause ? ` AND primary_service = ${nextParam()}` : `WHERE primary_service = ${nextParam()}`;
+      params.push(serviceFilter);
+    }
+
+    const limitOffset = `LIMIT ${nextParam()}`;
+    params.push(limit);
+    const offsetClause = `OFFSET ${nextParam()}`;
+    params.push(offset);
+
+    const rows = await db.select<(HistoryItemRow & { _total: number })[]>(
+      `SELECT *, COUNT(*) OVER() as _total FROM history_items ${whereClause} ORDER BY timestamp DESC ${limitOffset} ${offsetClause}`,
+      params
+    );
+
+    const total = rows[0]?._total || 0;
+    const items = rows.map((row) => this.rowToItem(row));
+    const hasMore = offset + items.length < total;
+    return { items, total, hasMore };
+  }
+
+  /**
    * 分页获取历史记录
    */
   async getPage(options: PageOptions): Promise<PageResult> {
     const db = await this.ensureInitialized();
     const { page, pageSize = PAGE_SIZE, serviceFilter = 'all' } = options;
     const offset = (page - 1) * pageSize;
-
-    let whereClause = '';
-    const countParams: (string | number)[] = [];
-    const selectParams: (string | number)[] = [];
-
-    if (serviceFilter !== 'all') {
-      whereClause = 'WHERE primary_service = $1';
-      countParams.push(serviceFilter);
-      selectParams.push(serviceFilter, pageSize, offset);
-    } else {
-      selectParams.push(pageSize, offset);
-    }
-
-    // 获取总数
-    const countResult = await db.select<{ count: number }[]>(
-      `SELECT COUNT(*) as count FROM history_items ${whereClause}`,
-      countParams
-    );
-    const total = countResult[0]?.count || 0;
-
-    // 获取分页数据
-    const selectWhereClause = serviceFilter !== 'all' ? 'WHERE primary_service = $1' : '';
-    const limitOffset = serviceFilter !== 'all' ? 'LIMIT $2 OFFSET $3' : 'LIMIT $1 OFFSET $2';
-    const rows = await db.select<HistoryItemRow[]>(
-      `SELECT * FROM history_items ${selectWhereClause} ORDER BY timestamp DESC ${limitOffset}`,
-      selectParams
-    );
-
-    const items = rows.map((row) => this.rowToItem(row));
-    const hasMore = offset + items.length < total;
-
-    return { items, total, hasMore };
+    return this.queryWithTotal(db, '', [], serviceFilter, pageSize, offset);
   }
 
   /**
@@ -452,37 +462,12 @@ class HistoryDatabase {
     const { serviceFilter = 'all', limit = 100, offset = 0 } = options;
     const keywordLower = keyword.toLowerCase().trim();
 
-    let whereClause = 'WHERE local_file_name_lower LIKE $1';
-    const countParams: (string | number)[] = [`%${keywordLower}%`];
-    const selectParams: (string | number)[] = [`%${keywordLower}%`];
-
-    if (serviceFilter !== 'all') {
-      whereClause += ' AND primary_service = $2';
-      countParams.push(serviceFilter);
-      selectParams.push(serviceFilter, limit, offset);
-    } else {
-      selectParams.push(limit, offset);
-    }
-
-    // 获取匹配总数
-    const countResult = await db.select<{ count: number }[]>(
-      `SELECT COUNT(*) as count FROM history_items ${whereClause}`,
-      countParams
+    const result = await this.queryWithTotal(
+      db, 'WHERE local_file_name_lower LIKE $1', [`%${keywordLower}%`],
+      serviceFilter, limit, offset,
     );
-    const total = countResult[0]?.count || 0;
-
-    // 获取搜索结果
-    const limitOffset = serviceFilter !== 'all' ? 'LIMIT $3 OFFSET $4' : 'LIMIT $2 OFFSET $3';
-    const rows = await db.select<HistoryItemRow[]>(
-      `SELECT * FROM history_items ${whereClause} ORDER BY timestamp DESC ${limitOffset}`,
-      selectParams
-    );
-
-    const items = rows.map((row) => this.rowToItem(row));
-    const hasMore = offset + items.length < total;
-
-    console.log(`[HistoryDB] 搜索 "${keyword}": 找到 ${total} 条，返回 ${items.length} 条`);
-    return { items, total, hasMore };
+    console.log(`[HistoryDB] 搜索 "${keyword}": 找到 ${result.total} 条，返回 ${result.items.length} 条`);
+    return result;
   }
 
   /**

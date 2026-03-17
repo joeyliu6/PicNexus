@@ -3,7 +3,7 @@
  * 历史记录图片查看器（Lightbox）
  * 谷歌相册风格的图片预览组件
  */
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
@@ -99,6 +99,19 @@ const lightboxImage = computed(() => {
   return getLargeImageUrl(props.item);
 });
 
+const imageLoading = ref(true);
+const imageError = ref(false);
+
+function onImageLoad() {
+  imageLoading.value = false;
+  imageError.value = false;
+}
+
+function onImageError() {
+  imageLoading.value = false;
+  imageError.value = true;
+}
+
 // 复制链接
 const handleCopyLink = async () => {
   if (!props.item) return;
@@ -158,6 +171,14 @@ const handleDelete = () => {
   }
 };
 
+// visible 变化时重置图片状态
+watch(() => props.visible, (val) => {
+  if (val) {
+    imageLoading.value = true;
+    imageError.value = false;
+  }
+});
+
 // 关闭 Lightbox
 const closeLightbox = () => {
   emit('update:visible', false);
@@ -176,8 +197,26 @@ const closeLightbox = () => {
     :contentStyle="{ padding: 0, background: 'transparent' }"
   >
     <div class="lightbox-container" @click="closeLightbox">
+      <!-- 加载中 -->
+      <div v-if="imageLoading" class="lightbox-loading" @click.stop>
+        <i class="pi pi-spin pi-spinner"></i>
+      </div>
+
+      <!-- 加载失败 -->
+      <div v-if="imageError" class="lightbox-error" @click.stop>
+        <i class="pi pi-image"></i>
+        <span>图片加载失败，可能已过期</span>
+      </div>
+
       <!-- 主图片 -->
-      <img :src="lightboxImage" class="lightbox-img" @click.stop />
+      <img
+        v-show="!imageError"
+        :src="lightboxImage"
+        class="lightbox-img"
+        @click.stop
+        @load="onImageLoad"
+        @error="onImageError"
+      />
 
       <!-- 底部信息栏（谷歌相册风格） -->
       <div class="lightbox-bottom-bar" @click.stop>
@@ -265,6 +304,36 @@ const closeLightbox = () => {
   border-radius: 8px;
   box-shadow: none;
   cursor: default;
+}
+
+.lightbox-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 2rem;
+  cursor: default;
+}
+
+.lightbox-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 200px;
+  padding: 40px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: default;
+}
+
+.lightbox-error i {
+  font-size: 3rem;
+}
+
+.lightbox-error span {
+  font-size: 14px;
 }
 
 /* 底部信息栏（谷歌相册风格） */

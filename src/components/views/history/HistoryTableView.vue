@@ -4,7 +4,7 @@
  * 独立的表格视图组件，使用 DataTable 展示历史记录
  * v2.0: 服务端分页模式，支持大数据量
  */
-import { ref, shallowRef, onMounted, onUnmounted, watch } from 'vue';
+import { ref, shallowRef, computed, onMounted, onUnmounted, watch } from 'vue';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -76,10 +76,22 @@ const totalRecords = ref(0);
 const isLoadingPage = ref(true);  // 初始为 true，组件挂载时显示骨架屏
 const first = ref(0);
 
-const skeletonData: SkeletonItem[] = Array.from({ length: 20 }, (_, i) => ({
-  id: `skeleton-${i}`,
-  _skeleton: true as const
-}));
+const DEFAULT_SKELETON_COUNT = 20;
+
+function generateSkeletonData(count: number): SkeletonItem[] {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `skeleton-${i}`,
+    _skeleton: true as const
+  }));
+}
+
+const skeletonData = computed(() => {
+  if (totalRecords.value > 0) {
+    const remaining = totalRecords.value - (currentPage.value - 1) * pageSize.value;
+    return generateSkeletonData(Math.min(pageSize.value, remaining));
+  }
+  return generateSkeletonData(DEFAULT_SKELETON_COUNT);
+});
 
 function isSkeleton(data: HistoryItem | SkeletonItem): data is SkeletonItem {
   return '_skeleton' in data && data._skeleton === true;
@@ -157,6 +169,7 @@ async function loadCurrentPage() {
  * 分页事件处理（DataTable @page 事件）
  */
 function onPageChange(event: { page: number; first: number; rows: number }) {
+  if (isLoadingPage.value) return;
   currentPage.value = event.page + 1;  // PrimeVue 页码从 0 开始
   first.value = event.first;
   loadCurrentPage();
@@ -201,6 +214,7 @@ watch([() => props.filter, () => props.searchTerm], () => {
   console.log('[HistoryTableView] 筛选/搜索条件变化，重置到第一页');
   currentPage.value = 1;
   first.value = 0;
+  viewState.clearSelection();
   loadCurrentPage();
 });
 
@@ -271,6 +285,9 @@ function handlePreviewEnter(event: MouseEvent, item: HistoryItem): void {
   if (left + PREVIEW_MAX_SIZE > window.innerWidth - PREVIEW_MARGIN) {
     left = rect.left - PREVIEW_MAX_SIZE - PREVIEW_MARGIN;
   }
+  if (left < PREVIEW_MARGIN) {
+    left = PREVIEW_MARGIN;
+  }
 
   hoverPreview.value = {
     visible: true,
@@ -328,13 +345,13 @@ function handleBulkDelete(): void {
 </script>
 
 <template>
-  <div class="table-view-container" :class="{ 'has-selection': viewState.hasSelection.value }">
+  <div class="table-view-container" :class="{ 'has-selection': viewState.hasSelection.value, 'is-loading': isLoadingPage }">
     <!-- 表格视图（服务端分页，加载时使用骨架数据） -->
     <DataTable
       :value="isLoadingPage ? skeletonData : currentPageData"
       dataKey="id"
       lazy
-      :paginator="!isLoadingPage"
+      :paginator="totalRecords > 0"
       :first="first"
       :rows="pageSize"
       :totalRecords="totalRecords"
@@ -492,6 +509,11 @@ function handleBulkDelete(): void {
 
 .table-view-container.has-selection {
   padding-bottom: 80px;
+}
+
+.table-view-container.is-loading :deep(.p-paginator) {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 /* === 表格视图（极简风格）=== */
