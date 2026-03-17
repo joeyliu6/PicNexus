@@ -355,8 +355,6 @@ const extractNamiAuthToken = computed(() => {
           :isAvailable="qiyuAvailable"
           :isChecking="isCheckingQiyu"
           :showTestButton="false"
-          :showLoginButton="true"
-          @login="emit('loginCookie', $event)"
           @check="emit('checkBuiltin', $event)"
         >
           <div class="builtin-info">
@@ -385,7 +383,7 @@ const extractNamiAuthToken = computed(() => {
             <div class="form-item span-full">
               <label>Cookie</label>
               <Textarea v-model="cookieFormData.weibo.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
-              <small class="form-hint">在浏览器中登录微博，按 F12 打开开发者工具，在 Network 选项卡中找到请求头的 Cookie 值并复制</small>
+              <small class="form-hint">点击「自动获取」登录即可自动填入 Cookie，无需手动操作<br>如需手动填写，可在浏览器中登录后通过开发者工具（F12 → Network）复制 Cookie</small>
             </div>
           </div>
           <template #extra>
@@ -419,7 +417,7 @@ const extractNamiAuthToken = computed(() => {
             <div class="form-item span-full">
               <label>Cookie</label>
               <Textarea v-model="cookieFormData.zhihu.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
-              <small class="form-hint">在浏览器中登录知乎，按 F12 打开开发者工具，在 Network 选项卡中找到请求头的 Cookie 值并复制</small>
+              <small class="form-hint">点击「自动获取」登录即可自动填入 Cookie，无需手动操作<br>如需手动填写，可在浏览器中登录后通过开发者工具（F12 → Network）复制 Cookie</small>
             </div>
           </div>
         </HostingCard>
@@ -439,7 +437,7 @@ const extractNamiAuthToken = computed(() => {
             <div class="form-item span-full">
               <label>Cookie</label>
               <Textarea v-model="cookieFormData.nowcoder.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
-              <small class="form-hint">在浏览器中登录牛客，按 F12 打开开发者工具，在 Network 选项卡中找到请求头的 Cookie 值并复制</small>
+              <small class="form-hint">点击「自动获取」登录即可自动填入 Cookie，无需手动操作<br>如需手动填写，可在浏览器中登录后通过开发者工具（F12 → Network）复制 Cookie</small>
             </div>
           </div>
         </HostingCard>
@@ -459,7 +457,7 @@ const extractNamiAuthToken = computed(() => {
             <div class="form-item span-full">
               <label>Cookie</label>
               <Textarea v-model="cookieFormData.nami.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
-              <small class="form-hint">Auth-Token 会自动从 Cookie 中提取</small>
+              <small class="form-hint">点击「自动获取」登录即可自动填入 Cookie，无需手动操作<br>如需手动填写，可在浏览器中登录后通过开发者工具（F12 → Network）复制 Cookie</small>
             </div>
             <div v-if="extractNamiAuthToken" class="form-item span-full">
               <label>Auth-Token（自动提取）</label>
@@ -483,7 +481,7 @@ const extractNamiAuthToken = computed(() => {
             <div class="form-item span-full">
               <label>Cookie</label>
               <Textarea v-model="cookieFormData.bilibili.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
-              <small class="form-hint">在浏览器中登录 B站，按 F12 打开开发者工具，在 Network 选项卡中找到请求头的 Cookie 值并复制</small>
+              <small class="form-hint">点击「自动获取」登录即可自动填入 Cookie，无需手动操作<br>如需手动填写，可在浏览器中登录后通过开发者工具（F12 → Network）复制 Cookie</small>
             </div>
           </div>
         </HostingCard>
@@ -503,7 +501,7 @@ const extractNamiAuthToken = computed(() => {
             <div class="form-item span-full">
               <label>Cookie</label>
               <Textarea v-model="cookieFormData.chaoxing.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
-              <small class="form-hint">在浏览器中登录超星，按 F12 打开开发者工具，在 Network 选项卡中找到请求头的 Cookie 值并复制</small>
+              <small class="form-hint">点击「自动获取」登录即可自动填入 Cookie，无需手动操作<br>如需手动填写，可在浏览器中登录后通过开发者工具（F12 → Network）复制 Cookie</small>
             </div>
           </div>
         </HostingCard>
