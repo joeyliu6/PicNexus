@@ -12,7 +12,8 @@ import Checkbox from 'primevue/checkbox';
 import Tag from 'primevue/tag';
 import Skeleton from 'primevue/skeleton';
 import type { HistoryItem, ServiceType } from '../../../config/types';
-import { getActivePrefix } from '../../../config/types';
+import { getPrimaryImageUrl } from '../../../utils/imageUrl';
+import { getServiceDisplayName } from '../../../constants/serviceNames';
 import { formatFileSize } from '../../../utils/formatters';
 import { useHistoryViewState, type LinkFormat } from '../../../composables/useHistoryViewState';
 import { useHistoryManager } from '../../../composables/useHistory';
@@ -49,24 +50,6 @@ const thumbCache = useThumbCache();
 const PREVIEW_MAX_SIZE = 300;
 const PREVIEW_MARGIN = 8;
 
-const SERVICE_NAMES: Record<ServiceType, string> = {
-  weibo: '微博',
-  r2: 'R2',
-  jd: '京东',
-  nowcoder: '牛客',
-  qiyu: '七鱼',
-  zhihu: '知乎',
-  nami: '纳米',
-  bilibili: 'B站',
-  chaoxing: '超星',
-  smms: 'SM.MS',
-  github: 'GitHub',
-  imgur: 'Imgur',
-  tencent: '腾讯云',
-  aliyun: '阿里云',
-  qiniu: '七牛云',
-  upyun: '又拍云'
-};
 
 // === 服务端分页状态 ===
 const currentPageData = shallowRef<HistoryItem[]>([]);
@@ -235,10 +218,6 @@ watch(() => {
   selectAll.value = allSelected;
 });
 
-function getServiceName(serviceId: ServiceType): string {
-  return SERVICE_NAMES[serviceId] || serviceId;
-}
-
 function getSuccessfulServices(item: HistoryItem): ServiceType[] {
   return item.results
     .filter(r => r.status === 'success')
@@ -249,7 +228,7 @@ async function handleCopyServiceLink(item: HistoryItem, serviceId: ServiceType):
   try {
     const result = item.results.find(r => r.serviceId === serviceId && r.status === 'success');
     if (!result?.result?.url) {
-      toast.warn('无可用链接', `${getServiceName(serviceId)} 图床没有可用的链接`);
+      toast.warn('无可用链接', `${getServiceDisplayName(serviceId)} 图床没有可用的链接`);
       return;
     }
 
@@ -262,7 +241,7 @@ async function handleCopyServiceLink(item: HistoryItem, serviceId: ServiceType):
     }
 
     await writeText(link);
-    toast.success('已复制', `${getServiceName(serviceId)} 链接已复制到剪贴板`, 1500);
+    toast.success('已复制', `${getServiceDisplayName(serviceId)} 链接已复制到剪贴板`, 1500);
   } catch (error) {
     console.error(`[历史记录] 复制 ${serviceId} 链接失败:`, error);
     toast.error('复制失败', String(error));
@@ -304,6 +283,17 @@ function handlePreviewLeave(): void {
   hoverPreview.value.visible = false;
 }
 
+// 灯箱导航支持
+const lightboxIndex = computed(() => {
+  if (!lightboxItem.value) return -1;
+  return currentPageData.value.findIndex(item => item.id === lightboxItem.value!.id);
+});
+
+const lightboxHasPrev = computed(() => lightboxIndex.value > 0);
+const lightboxHasNext = computed(() =>
+  lightboxIndex.value >= 0 && lightboxIndex.value < currentPageData.value.length - 1
+);
+
 function openLightbox(item: HistoryItem): void {
   lightboxItem.value = item;
   lightboxVisible.value = true;
@@ -318,6 +308,25 @@ async function handleLightboxDelete(item: HistoryItem): Promise<void> {
     console.error('[历史记录] 删除失败:', error);
     toast.error('删除失败', String(error));
   }
+}
+
+function getItemImageUrl(item: HistoryItem): string {
+  return getPrimaryImageUrl(item, configManager.config.value);
+}
+
+function preloadAdjacentImage(currentIdx: number, direction: 'prev' | 'next'): void {
+  const preloadIdx = direction === 'prev' ? currentIdx - 1 : currentIdx + 1;
+  if (preloadIdx < 0 || preloadIdx >= currentPageData.value.length) return;
+  const url = getItemImageUrl(currentPageData.value[preloadIdx]);
+  if (url) new Image().src = url;
+}
+
+function handleLightboxNavigate(direction: 'prev' | 'next'): void {
+  const idx = lightboxIndex.value;
+  const nextIdx = direction === 'prev' ? idx - 1 : idx + 1;
+  if (nextIdx < 0 || nextIdx >= currentPageData.value.length) return;
+  lightboxItem.value = currentPageData.value[nextIdx];
+  preloadAdjacentImage(nextIdx, direction);
 }
 
 function handleHeaderCheckboxChange(checked: boolean): void {
@@ -449,19 +458,20 @@ function handleBulkDelete(): void {
 
       <!-- 已传图床列 -->
       <Column header="已传图床" style="width: 180px">
-        <template #body="slotProps">
-          <!-- 骨架屏状态 -->
-          <Skeleton v-if="isSkeleton(slotProps.data)" width="50px" height="22px" borderRadius="4px" />
-          <!-- 真实数据 -->
-          <div v-else class="service-badges">
+        <template #body="{ data }">
+          <Skeleton v-if="isSkeleton(data)" width="50px" height="22px" borderRadius="4px" />
+          <div
+            v-else
+            class="service-badges"
+            v-tooltip.top="getSuccessfulServices(data).map(id => getServiceDisplayName(id)).join('、')"
+          >
             <Tag
-              v-for="serviceId in getSuccessfulServices(slotProps.data)"
+              v-for="serviceId in getSuccessfulServices(data)"
               :key="serviceId"
-              :value="getServiceName(serviceId)"
+              :value="getServiceDisplayName(serviceId)"
               severity="secondary"
               class="mini-tag"
-              @click="handleCopyServiceLink(slotProps.data, serviceId)"
-              v-tooltip.top="`点击复制${getServiceName(serviceId)}链接`"
+              @click="handleCopyServiceLink(data, serviceId)"
             />
           </div>
         </template>
@@ -472,7 +482,10 @@ function handleBulkDelete(): void {
     <HistoryLightbox
       v-model:visible="lightboxVisible"
       :item="lightboxItem"
+      :has-prev="lightboxHasPrev"
+      :has-next="lightboxHasNext"
       @delete="handleLightboxDelete"
+      @navigate="handleLightboxNavigate"
     />
 
     <!-- 浮动操作栏 -->
@@ -668,7 +681,9 @@ function handleBulkDelete(): void {
 .service-badges {
   display: flex;
   gap: 4px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  align-items: center;
 }
 
 .mini-tag {

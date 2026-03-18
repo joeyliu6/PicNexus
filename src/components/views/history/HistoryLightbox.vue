@@ -1,34 +1,39 @@
 <script setup lang="ts">
 /**
  * 历史记录图片查看器（Lightbox）
- * 谷歌相册风格的图片预览组件
+ * 抖音风格：图片模糊背景 + 左右导航 + 固定底栏
  */
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-import Dialog from 'primevue/dialog';
-import Button from 'primevue/button';
 import type { HistoryItem, ServiceType } from '../../../config/types';
 import { getActivePrefix } from '../../../config/types';
 import { useToast } from '../../../composables/useToast';
 import { useConfigManager } from '../../../composables/useConfig';
+import { useConfirm } from '../../../composables/useConfirm';
 import { formatFileSize } from '../../../utils/formatters';
+import { getPrimaryImageUrl } from '../../../utils/imageUrl';
+import { getServiceDisplayName } from '../../../constants/serviceNames';
 
-// Props
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   visible: boolean;
   item: HistoryItem | null;
-}>();
+  hasPrev?: boolean;
+  hasNext?: boolean;
+}>(), {
+  hasPrev: false,
+  hasNext: false,
+});
 
-// Emits
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void;
   (e: 'delete', item: HistoryItem): void;
+  (e: 'navigate', direction: 'prev' | 'next'): void;
 }>();
 
 const toast = useToast();
 const configManager = useConfigManager();
+const { confirmDelete } = useConfirm();
 
-// 日期格式化器
 const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',
   month: '2-digit',
@@ -37,70 +42,99 @@ const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
   minute: '2-digit'
 });
 
-// 格式化时间
 const formatTime = (timestamp: number) => dateFormatter.format(new Date(timestamp));
 
-// 获取服务名称
-const getServiceName = (serviceId: ServiceType): string => {
-  const serviceNames: Record<ServiceType, string> = {
-    weibo: '微博',
-    r2: 'Cloudflare R2',
-    jd: '京东',
-    nowcoder: '牛客',
-    qiyu: '七鱼',
-    zhihu: '知乎',
-    nami: '纳米',
-    bilibili: 'B站',
-    chaoxing: '超星',
-    smms: 'SM.MS',
-    github: 'GitHub',
-    imgur: 'Imgur',
-    tencent: '腾讯云',
-    aliyun: '阿里云',
-    qiniu: '七牛云',
-    upyun: '又拍云'
-  };
-  return serviceNames[serviceId] || serviceId;
-};
+const getSuccessfulServices = (item: HistoryItem): ServiceType[] =>
+  item.results.filter(r => r.status === 'success').map(r => r.serviceId);
 
-// 获取所有成功上传的图床
-const getSuccessfulServices = (item: HistoryItem): ServiceType[] => {
-  return item.results
-    .filter(r => r.status === 'success')
-    .map(r => r.serviceId);
-};
-
-// 获取大图 URL
-const getLargeImageUrl = (item: HistoryItem): string => {
-  const result = item.results.find(r =>
-    r.serviceId === item.primaryService && r.status === 'success'
-  );
-
-  if (!result?.result?.url) return '';
-
-  // 微博图床：使用 large 尺寸
-  if (result.serviceId === 'weibo' && result.result.fileKey) {
-    let largeUrl = `https://tvax1.sinaimg.cn/large/${result.result.fileKey}.jpg`;
-
-    const activePrefix = getActivePrefix(configManager.config.value);
-    if (activePrefix) {
-      largeUrl = `${activePrefix}${largeUrl}`;
-    }
-
-    return largeUrl;
-  }
-
-  return result.result.url;
-};
-
-// 计算属性：大图 URL
 const lightboxImage = computed(() => {
   if (!props.item) return '';
-  return getLargeImageUrl(props.item);
+  return getPrimaryImageUrl(props.item, configManager.config.value);
 });
 
 const imageLoading = ref(true);
 const imageError = ref(false);
+const imageScale = ref(1);
+const MIN_SCALE = 0.5;
+const MAX_SCALE = 5;
+
+const translateX = ref(0);
+const translateY = ref(0);
+const isDragging = ref(false);
+let dragStartX = 0;
+let dragStartY = 0;
+let dragStartTranslateX = 0;
+let dragStartTranslateY = 0;
+let dragMoveDistance = 0;
+let dragRafId: number | null = null;
+
+function handleDoubleClick() {
+  recentDoubleClick = true;
+  setTimeout(() => { recentDoubleClick = false; }, 0);
+  if (imageScale.value !== 1) {
+    imageScale.value = 1;
+    translateX.value = 0;
+    translateY.value = 0;
+  }
+}
+
+function handleImgMouseDown(e: MouseEvent) {
+  isDragging.value = true;
+  dragMoveDistance = 0;
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
+  dragStartTranslateX = translateX.value;
+  dragStartTranslateY = translateY.value;
+  e.preventDefault();
+}
+
+function handleMouseMove(e: MouseEvent) {
+  if (!isDragging.value) return;
+  if (dragRafId !== null) return;
+  dragRafId = requestAnimationFrame(() => {
+    dragRafId = null;
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    dragMoveDistance = Math.sqrt(dx * dx + dy * dy);
+    translateX.value = dragStartTranslateX + dx;
+    translateY.value = dragStartTranslateY + dy;
+  });
+}
+
+function handleMouseUp() {
+  isDragging.value = false;
+  // 延迟重置：mouseup → click 序列中，让 closeLightbox 先判断本次是拖拽还是点击
+  setTimeout(() => { dragMoveDistance = 0; }, 0);
+  if (dragRafId !== null) {
+    cancelAnimationFrame(dragRafId);
+    dragRafId = null;
+  }
+}
+
+const imageTransform = computed(() =>
+  `translate(${translateX.value}px, ${translateY.value}px) scale(${imageScale.value})`
+);
+
+const imageCursor = computed(() =>
+  isDragging.value ? 'grabbing' : 'grab'
+);
+
+const truncateMiddle = (name: string, maxLen = 42): string => {
+  if (name.length <= maxLen) return name;
+  const extIdx = name.lastIndexOf('.');
+  const ext = extIdx > 0 ? name.slice(extIdx) : '';
+  const base = extIdx > 0 ? name.slice(0, extIdx) : name;
+  const keep = maxLen - ext.length - 3;
+  if (keep <= 0) return name.slice(0, maxLen - 3) + '...';
+  const head = Math.ceil(keep / 2);
+  const tail = Math.floor(keep / 2);
+  return base.slice(0, head) + '...' + base.slice(-tail) + ext;
+};
+
+const displayFileName = computed(() => {
+  if (!props.item?.localFileName) return '';
+  return truncateMiddle(props.item.localFileName);
+});
 
 function onImageLoad() {
   imageLoading.value = false;
@@ -112,25 +146,29 @@ function onImageError() {
   imageError.value = true;
 }
 
-// 复制链接
+function resetImageState() {
+  imageLoading.value = true;
+  imageError.value = false;
+  imageScale.value = 1;
+  translateX.value = 0;
+  translateY.value = 0;
+}
+
+function getFinalLink(): string | null {
+  if (!props.item?.generatedLink) return null;
+  let link = props.item.generatedLink;
+  if (props.item.primaryService === 'weibo') {
+    const prefix = getActivePrefix(configManager.config.value);
+    if (prefix) link = `${prefix}${link}`;
+  }
+  return link;
+}
+
 const handleCopyLink = async () => {
-  if (!props.item) return;
-
+  const link = getFinalLink();
+  if (!link) { toast.warn('无可用链接', '该项目没有可用的链接'); return; }
   try {
-    if (!props.item.generatedLink) {
-      toast.warn('无可用链接', '该项目没有可用的链接');
-      return;
-    }
-
-    let finalLink = props.item.generatedLink;
-    if (props.item.primaryService === 'weibo') {
-      const activePrefix = getActivePrefix(configManager.config.value);
-      if (activePrefix) {
-        finalLink = `${activePrefix}${props.item.generatedLink}`;
-      }
-    }
-
-    await writeText(finalLink);
+    await writeText(link);
     toast.success('已复制', '链接已复制到剪贴板', 1500);
   } catch (error) {
     console.error('[Lightbox] 复制链接失败:', error);
@@ -138,182 +176,370 @@ const handleCopyLink = async () => {
   }
 };
 
-// 在浏览器中打开
 const openInBrowser = async () => {
-  if (!props.item) return;
-
+  const link = getFinalLink();
+  if (!link) { toast.warn('无可用链接', '该项目没有可用的链接'); return; }
   try {
-    if (!props.item.generatedLink) {
-      toast.warn('无可用链接', '该项目没有可用的链接');
-      return;
-    }
-
-    let finalLink = props.item.generatedLink;
-    if (props.item.primaryService === 'weibo') {
-      const activePrefix = getActivePrefix(configManager.config.value);
-      if (activePrefix) {
-        finalLink = `${activePrefix}${props.item.generatedLink}`;
-      }
-    }
-
     const { open } = await import('@tauri-apps/plugin-shell');
-    await open(finalLink);
+    await open(link);
   } catch (error) {
     console.error('[Lightbox] 打开链接失败:', error);
     toast.error('打开失败', String(error));
   }
 };
 
-// 删除项目
 const handleDelete = () => {
-  if (props.item) {
-    emit('delete', props.item);
-  }
+  if (!props.item) return;
+  resetImageState();
+  confirmDelete('确定要删除这条记录吗？', () => {
+    emit('delete', props.item!);
+  });
 };
 
-// visible 变化时重置图片状态
-watch(() => props.visible, (val) => {
-  if (val) {
-    imageLoading.value = true;
-    imageError.value = false;
-  }
-});
+let recentDoubleClick = false;
 
-// 关闭 Lightbox
 const closeLightbox = () => {
+  if (dragMoveDistance > 5) return;
+  if (recentDoubleClick) return;
   emit('update:visible', false);
 };
+
+const navigatePrev = () => {
+  if (props.hasPrev) emit('navigate', 'prev');
+};
+
+const navigateNext = () => {
+  if (props.hasNext) emit('navigate', 'next');
+};
+
+function handleKeydown(e: KeyboardEvent) {
+  if (!props.visible) return;
+  if (e.key === 'Escape') closeLightbox();
+  if (e.key === 'ArrowLeft') navigatePrev();
+  if (e.key === 'ArrowRight') navigateNext();
+}
+
+let wheelThrottleTimer: ReturnType<typeof setTimeout> | null = null;
+
+function handleWheel(e: WheelEvent) {
+  if (!props.visible) return;
+  e.preventDefault();
+
+  if (e.ctrlKey) {
+    const delta = e.deltaY > 0 ? -0.15 : 0.15;
+    imageScale.value = Math.min(MAX_SCALE, Math.max(MIN_SCALE, imageScale.value + delta));
+  } else {
+    if (wheelThrottleTimer) return;
+    wheelThrottleTimer = setTimeout(() => { wheelThrottleTimer = null; }, 200);
+    if (e.deltaY > 0) navigateNext();
+    else if (e.deltaY < 0) navigatePrev();
+  }
+}
+
+function cleanupTimers() {
+  if (wheelThrottleTimer) {
+    clearTimeout(wheelThrottleTimer);
+    wheelThrottleTimer = null;
+  }
+  if (dragRafId !== null) {
+    cancelAnimationFrame(dragRafId);
+    dragRafId = null;
+  }
+  isDragging.value = false;
+  dragMoveDistance = 0;
+}
+
+watch(() => props.visible, (val) => {
+  if (val) resetImageState();
+  else cleanupTimers();
+});
+
+watch(() => props.item, () => {
+  if (props.visible) resetImageState();
+});
+
+onMounted(() => window.addEventListener('keydown', handleKeydown));
+onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 </script>
 
 <template>
-  <Dialog
-    :visible="visible"
-    @update:visible="emit('update:visible', $event)"
-    modal
-    :dismissableMask="true"
-    :showHeader="false"
-    class="lightbox-dialog"
-    :style="{ width: 'auto', maxWidth: '90vw', background: 'transparent', boxShadow: 'none', border: 'none' }"
-    :contentStyle="{ padding: 0, background: 'transparent' }"
-  >
-    <div class="lightbox-container" @click="closeLightbox">
-      <!-- 加载中 -->
-      <div v-if="imageLoading" class="lightbox-loading" @click.stop>
-        <i class="pi pi-spin pi-spinner"></i>
-      </div>
+  <Teleport to="body">
+    <Transition name="lightbox-fade">
+      <div v-if="visible" class="lightbox-overlay" @click="closeLightbox" @wheel.prevent="handleWheel" @mousemove="handleMouseMove" @mouseup="handleMouseUp">
+        <!-- 抖音风格：图片自身模糊放大作为背景 -->
+        <div
+          v-if="lightboxImage"
+          class="lightbox-bg"
+          :style="{ backgroundImage: `url(${lightboxImage})` }"
+        ></div>
+        <div class="lightbox-bg-dim"></div>
 
-      <!-- 加载失败 -->
-      <div v-if="imageError" class="lightbox-error" @click.stop>
-        <i class="pi pi-image"></i>
-        <span>图片加载失败，可能已过期</span>
-      </div>
+        <!-- 关闭按钮 -->
+        <button class="lightbox-close" @click.stop="closeLightbox">
+          <i class="pi pi-times"></i>
+        </button>
 
-      <!-- 主图片 -->
-      <img
-        v-show="!imageError"
-        :src="lightboxImage"
-        class="lightbox-img"
-        @click.stop
-        @load="onImageLoad"
-        @error="onImageError"
-      />
+        <!-- 左箭头 -->
+        <button
+          v-if="hasPrev"
+          class="lightbox-nav lightbox-nav-prev"
+          @click.stop="navigatePrev"
+        >
+          <i class="pi pi-chevron-left"></i>
+        </button>
 
-      <!-- 底部信息栏（谷歌相册风格） -->
-      <div class="lightbox-bottom-bar" @click.stop>
-        <!-- 左侧：图片信息 -->
-        <div class="lightbox-info-section">
-          <span class="lightbox-filename">{{ item?.localFileName }}</span>
-          <div class="lightbox-meta">
-            <span class="lightbox-time" v-if="item">
-              <i class="pi pi-calendar"></i>
-              {{ formatTime(item.timestamp) }}
-            </span>
-            <span class="lightbox-size">
-              <i class="pi pi-file"></i>
-              {{ formatFileSize(item?.fileSize ?? 0) }}
-            </span>
-            <span class="lightbox-services" v-if="item">
-              <i class="pi pi-cloud-upload"></i>
-              {{ getSuccessfulServices(item).map(s => getServiceName(s)).join('、') }}
-            </span>
+        <!-- 主图片区域 -->
+        <div class="lightbox-content" @click.stop @dblclick.prevent="handleDoubleClick">
+          <!-- 加载动画：绝对定位覆盖，呼吸图标风格 -->
+          <Transition name="lightbox-loader">
+            <div v-if="imageLoading && !imageError" class="lightbox-loading-overlay">
+              <div class="lightbox-breathe-container">
+                <i class="pi pi-image lightbox-breathe-icon"></i>
+              </div>
+              <span class="lightbox-loading-text">加载中…</span>
+            </div>
+          </Transition>
+
+          <div v-if="imageError" class="lightbox-error">
+            <i class="pi pi-image"></i>
+            <span>图片加载失败，可能已过期</span>
+          </div>
+          <img
+            v-show="!imageError"
+            :src="lightboxImage"
+            :class="['lightbox-img', { 'lightbox-img-loaded': !imageLoading }]"
+            :style="{ transform: imageTransform, cursor: imageCursor }"
+            @load="onImageLoad"
+            @error="onImageError"
+            @mousedown="handleImgMouseDown"
+          />
+
+        </div>
+
+        <!-- 右箭头 -->
+        <button
+          v-if="hasNext"
+          class="lightbox-nav lightbox-nav-next"
+          @click.stop="navigateNext"
+        >
+          <i class="pi pi-chevron-right"></i>
+        </button>
+
+        <!-- 固定底栏 -->
+        <div v-if="item" class="lightbox-bottom" @click.stop>
+          <div class="lightbox-info-cell cell-filename">
+            <span class="cell-value filename-value" :title="item.localFileName">{{ displayFileName }}</span>
+            <span class="cell-label">文件名</span>
+          </div>
+          <div class="lightbox-divider"></div>
+          <div class="lightbox-info-cell cell-time">
+            <span class="cell-value">{{ formatTime(item.timestamp) }}</span>
+            <span class="cell-label">上传时间</span>
+          </div>
+          <div class="lightbox-divider"></div>
+          <div class="lightbox-info-cell cell-size">
+            <span class="cell-value">{{ formatFileSize(item.fileSize ?? 0) }}</span>
+            <span class="cell-label">文件大小</span>
+          </div>
+          <div class="lightbox-divider"></div>
+          <div
+            class="lightbox-info-cell cell-source"
+            v-tooltip.top="getSuccessfulServices(item).map(s => getServiceDisplayName(s)).join('、')"
+          >
+            <span class="cell-value source-value">{{ getSuccessfulServices(item).map(s => getServiceDisplayName(s)).join('、') }}</span>
+            <span class="cell-label">已传图床</span>
+          </div>
+          <div class="lightbox-actions">
+            <button class="action-btn" @click="handleCopyLink" v-tooltip.top="'复制链接'">
+              <i class="pi pi-copy"></i>
+            </button>
+            <button class="action-btn" @click="openInBrowser" v-tooltip.top="'在浏览器打开'">
+              <i class="pi pi-external-link"></i>
+            </button>
+            <button class="action-btn action-btn-danger" @click="handleDelete" v-tooltip.top="'删除记录'">
+              <i class="pi pi-trash"></i>
+            </button>
           </div>
         </div>
-
-        <!-- 右侧：操作按钮 -->
-        <div class="lightbox-actions" v-if="item">
-          <Button
-            icon="pi pi-copy"
-            text
-            rounded
-            class="lightbox-action-btn"
-            @click="handleCopyLink"
-            v-tooltip.top="'复制链接'"
-          />
-          <Button
-            icon="pi pi-external-link"
-            text
-            rounded
-            class="lightbox-action-btn"
-            @click="openInBrowser"
-            v-tooltip.top="'在浏览器打开'"
-          />
-          <Button
-            icon="pi pi-trash"
-            severity="danger"
-            text
-            rounded
-            class="lightbox-action-btn lightbox-action-danger"
-            @click="handleDelete"
-            v-tooltip.top="'删除'"
-          />
-        </div>
       </div>
-    </div>
-  </Dialog>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
-/* === Lightbox 图片查看器（谷歌相册风格）=== */
-:deep(.lightbox-dialog .p-dialog-mask) {
-  background: rgba(0, 0, 0, 0.9);
-  backdrop-filter: blur(10px);
-}
-
-:deep(.lightbox-dialog .p-dialog) {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-}
-
-:deep(.lightbox-dialog .p-dialog-content) {
-  padding: 0;
-  background: transparent;
-}
-
-.lightbox-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  cursor: pointer;
-}
-
-.lightbox-img {
-  max-width: 100%;
-  max-height: 75vh;
-  border-radius: 8px;
-  box-shadow: none;
-  cursor: default;
-}
-
-.lightbox-loading {
+/* ==================== 全屏遮罩 ==================== */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  padding-bottom: 64px; /* 预留底栏空间，图片在底栏上方区域居中 */
+}
+
+/* ==================== 抖音风格模糊背景 ==================== */
+.lightbox-bg {
+  position: absolute;
+  inset: -60px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(40px) brightness(0.35) saturate(1.2);
+  transform: scale(1.15);
+}
+
+.lightbox-bg-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* ==================== 关闭按钮 ==================== */
+.lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 3;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: var(--hover-overlay);
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.15;
+  transition: opacity 0.25s ease, background 0.2s ease, color 0.2s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.lightbox-close:hover {
+  opacity: 1;
+  color: var(--text-main);
+}
+
+/* ==================== 导航箭头 ==================== */
+.lightbox-nav {
+  position: absolute;
+  top: calc(50% - 32px);
+  transform: translateY(-50%);
+  z-index: 3;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: var(--hover-overlay);
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.lightbox-nav-prev { left: 20px; }
+.lightbox-nav-next { right: 20px; }
+
+.lightbox-nav:hover {
+  color: var(--text-main);
+  transform: translateY(-50%) scale(1.08);
+}
+
+/* ==================== 主图片区域 ==================== */
+.lightbox-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: calc(100vw - 160px);
+  max-height: calc(100vh - 64px - 48px); /* 底栏64 + 上下留白48 */
+  min-width: 200px;
   min-height: 200px;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 2rem;
-  cursor: default;
+}
+
+.lightbox-img {
+  max-width: calc(100vw - 160px);
+  max-height: calc(100vh - 64px - 48px);
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.1s ease-out;
+  user-select: none;
+}
+
+.lightbox-img-loaded {
+  opacity: 1;
+}
+
+/* ==================== 呼吸图标加载动画 ==================== */
+.lightbox-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  z-index: 1;
+}
+
+.lightbox-breathe-container {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--hover-overlay-subtle);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border-subtle);
+}
+
+.lightbox-breathe-icon {
+  font-size: 1.5rem;
+  color: var(--text-muted);
+  animation: lightbox-breathe 3s ease-in-out infinite;
+}
+
+@keyframes lightbox-breathe {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(0.98);
+    filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0));
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1);
+    filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.4));
+  }
+}
+
+.lightbox-loading-text {
+  font-size: var(--text-base);
+  color: var(--text-tertiary);
+  letter-spacing: 0.05em;
+}
+
+/* Loading overlay 淡入淡出 */
+.lightbox-loader-enter-active,
+.lightbox-loader-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.lightbox-loader-enter-from,
+.lightbox-loader-leave-to {
+  opacity: 0;
 }
 
 .lightbox-error {
@@ -322,97 +548,155 @@ const closeLightbox = () => {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  min-height: 200px;
   padding: 40px;
-  color: rgba(255, 255, 255, 0.5);
-  cursor: default;
+  color: var(--text-muted);
 }
 
 .lightbox-error i {
   font-size: 3rem;
+  color: var(--error);
 }
 
 .lightbox-error span {
   font-size: 14px;
 }
 
-/* 底部信息栏（谷歌相册风格） */
-.lightbox-bottom-bar {
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  color: white;
-  padding: 12px 20px;
-  border-radius: 12px;
+/* ==================== 固定底栏 ==================== */
+.lightbox-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  height: 64px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  box-shadow: 0 -1px 0 0 rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 24px;
+  padding: 0 24px;
   cursor: default;
-  min-width: 400px;
-  max-width: 90vw;
 }
 
-.lightbox-info-section {
+.lightbox-info-cell {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  padding: 0 16px;
+  gap: 3px;
   min-width: 0;
+  flex-shrink: 0;
+}
+
+.cell-filename {
+  flex: 5;
+  flex-shrink: 1;
+  padding-left: 0;
+}
+
+.cell-time {
+  flex: 2;
+}
+
+.cell-size {
   flex: 1;
 }
 
-.lightbox-filename {
-  font-size: 14px;
-  font-weight: 600;
-  color: white;
+.cell-source {
+  flex: 1.5;
+  flex-shrink: 1;
+}
+
+.cell-value {
+  color: var(--text-main);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
   white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.source-value,
+.filename-value {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.lightbox-meta {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
+.cell-label {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
-.lightbox-time,
-.lightbox-size,
-.lightbox-services {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.75);
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.lightbox-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
 }
 
-.lightbox-time i,
-.lightbox-size i,
-.lightbox-services i {
-  font-size: 12px;
-  opacity: 0.8;
-}
-
+/* ==================== 操作按钮 ==================== */
 .lightbox-actions {
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
+  padding-left: 16px;
 }
 
-.lightbox-action-btn {
-  color: white !important;
-  width: 36px !important;
-  height: 36px !important;
+.action-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: none;
+  background: var(--hover-overlay-subtle);
+  color: var(--text-muted);
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
 }
 
-.lightbox-action-btn:hover {
-  background: rgba(255, 255, 255, 0.15) !important;
+.action-btn:hover {
+  background: var(--hover-overlay);
+  color: var(--text-main);
 }
 
-.lightbox-action-danger:hover {
-  background: rgba(239, 68, 68, 0.2) !important;
-  color: #fca5a5 !important;
+.action-btn-danger {
+  color: var(--error);
+}
+
+.action-btn-danger:hover {
+  background: var(--error-soft);
+  color: var(--error);
+}
+
+/* 浅色模式：灯箱始终保持暗色风格，重新绑定为暗色变量值（来源：style.css :root） */
+:root.light-theme .lightbox-overlay {
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-tertiary: #64748b;
+  --hover-overlay: rgba(255, 255, 255, 0.08);
+  --hover-overlay-subtle: rgba(255, 255, 255, 0.04);
+  --border-subtle: #334155;
+  --error: #ef4444;
+  --error-soft: rgba(239, 68, 68, 0.15);
+}
+
+/* ==================== 过渡动画 ==================== */
+.lightbox-fade-enter-active {
+  transition: opacity 0.25s ease;
+}
+
+.lightbox-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.lightbox-fade-enter-from,
+.lightbox-fade-leave-to {
+  opacity: 0;
 }
 </style>

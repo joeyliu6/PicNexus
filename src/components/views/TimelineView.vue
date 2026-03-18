@@ -15,7 +15,8 @@ import { useImageMetadataFixer } from '../../composables/useImageMetadataFixer';
 import { useImageLoadManager } from '../../composables/useImageLoadManager';
 import { useTimelineSidebarControl } from '../../composables/useTimelineSidebarControl';
 import { useToast } from '../../composables/useToast';
-import type { HistoryItem, ServiceType } from '../../config/types';
+import { type HistoryItem, type ServiceType } from '../../config/types';
+import { getPrimaryImageUrl } from '../../utils/imageUrl';
 import type { ImageMeta } from '../../types/image-meta';
 import TimelineSkeleton from './timeline/TimelineSkeleton.vue';
 import TimelinePhotoGrid from './timeline/TimelinePhotoGrid.vue';
@@ -327,9 +328,19 @@ const handleJumpToYear = async (year: number) => {
 
 // ==================== Lightbox ====================
 
+// 当前灯箱图片在 filteredMetas 中的索引
+const lightboxIndex = computed(() => {
+  if (!lightboxItem.value) return -1;
+  return viewState.filteredMetas.value.findIndex(m => m.id === lightboxItem.value!.id);
+});
+
+const lightboxHasPrev = computed(() => lightboxIndex.value > 0);
+const lightboxHasNext = computed(() =>
+  lightboxIndex.value >= 0 && lightboxIndex.value < viewState.filteredMetas.value.length - 1
+);
+
 const openLightbox = async (meta: ImageMeta) => {
   try {
-    // 从详情缓存加载完整数据
     const detail = await viewState.detailCache.getDetail(meta.id);
     lightboxItem.value = detail;
     lightboxVisible.value = true;
@@ -349,13 +360,32 @@ const handleLightboxDelete = async (item: HistoryItem) => {
   }
 };
 
-/**
- * Lightbox 导航时同步滚动位置
- */
-const handleLightboxNavigate = (item: HistoryItem) => {
-  lightboxItem.value = item;
-  // 滚动到该图片位置（确保关闭后可见）
-  scrollToItem(item.id);
+async function preloadAdjacentInTimeline(currentIdx: number, direction: 'prev' | 'next'): Promise<void> {
+  const metas = viewState.filteredMetas.value;
+  const preloadIdx = direction === 'prev' ? currentIdx - 1 : currentIdx + 1;
+  if (preloadIdx < 0 || preloadIdx >= metas.length) return;
+  try {
+    const detail = await viewState.detailCache.getDetail(metas[preloadIdx].id);
+    const url = getPrimaryImageUrl(detail, configManager.config.value);
+    if (url) new Image().src = url;
+  } catch { /* 预加载失败不影响用户体验 */ }
+}
+
+const handleLightboxNavigate = async (direction: 'prev' | 'next') => {
+  const metas = viewState.filteredMetas.value;
+  const idx = lightboxIndex.value;
+  const nextIdx = direction === 'prev' ? idx - 1 : idx + 1;
+  if (nextIdx < 0 || nextIdx >= metas.length) return;
+
+  try {
+    const nextMeta = metas[nextIdx];
+    const detail = await viewState.detailCache.getDetail(nextMeta.id);
+    lightboxItem.value = detail;
+    scrollToItem(nextMeta.id);
+    preloadAdjacentInTimeline(nextIdx, direction);
+  } catch (e) {
+    console.error('[Lightbox] 导航加载失败:', e);
+  }
 };
 
 // ==================== Batch Actions ====================
@@ -673,6 +703,8 @@ watch(
     <HistoryLightbox
       v-model:visible="lightboxVisible"
       :item="lightboxItem"
+      :has-prev="lightboxHasPrev"
+      :has-next="lightboxHasNext"
       @delete="handleLightboxDelete"
       @navigate="handleLightboxNavigate"
     />
