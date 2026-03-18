@@ -133,7 +133,7 @@ function handleToggle(serviceId: ServiceType) {
 
 /* 选中状态（固定样式，悬浮时不变） */
 .service-tag.is-selected {
-  background-color: rgba(59, 130, 246, 0.1);
+  background-color: color-mix(in srgb, var(--primary) 10%, transparent);
   border-color: var(--primary);
   color: var(--primary);
   font-weight: 600;

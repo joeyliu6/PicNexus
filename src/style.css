@@ -2886,6 +2886,11 @@ button:focus-visible {
 
 /* ===== 9. ConfirmDialog 确认对话框样式优化 ===== */
 
+/* 确保确认对话框在 Lightbox (z-index: 9999) 之上，仅针对 ConfirmDialog */
+.p-dialog-mask:has(.p-confirmdialog) {
+  z-index: 10001 !important;
+}
+
 /* 对话框主体样式 */
 .p-confirmdialog {
   max-width: 420px;
@@ -3092,4 +3097,5 @@ button:focus-visible {
 /* Tooltip 宽度扩展，避免短文本被强制换行 */
 .p-tooltip {
   max-width: 26rem;
+  z-index: 10000 !important;
 }
