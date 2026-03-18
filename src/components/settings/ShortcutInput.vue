@@ -96,6 +96,7 @@ function handleKeyDown(e: KeyboardEvent) {
     class="shortcut-input"
     :class="{ recording: isRecording, empty: !modelValue }"
     tabindex="0"
+    v-tooltip.top="isRecording ? undefined : '点击自定义录制快捷键'"
     @focus="handleFocus"
     @blur="handleBlur"
     @keydown="handleKeyDown"
@@ -109,6 +110,7 @@ function handleKeyDown(e: KeyboardEvent) {
 .shortcut-input {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-width: 160px;
   height: 34px;
   padding: 0 12px;

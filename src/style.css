@@ -64,6 +64,10 @@
   /* Brand Colors */
   --primary: #3b82f6;      /* Blue 500 */
   --primary-hover: #2563eb; /* Blue 600 */
+  --primary-alpha-8: rgba(59, 130, 246, 0.08);
+  --primary-alpha-10: rgba(59, 130, 246, 0.1);
+  --primary-alpha-12: rgba(59, 130, 246, 0.12);
+  --primary-alpha-15: rgba(59, 130, 246, 0.15);
   --accent: #38bdf8;       /* Sky 400 */
   --color-primary: var(--primary);
 
@@ -159,6 +163,11 @@ body, html {
 *:focus-visible {
   outline: 2px solid var(--border-focus);
   outline-offset: 2px;
+}
+
+/* 搜索框 input 不显示焦点轮廓 */
+.search-bar-input:focus-visible {
+  outline: none;
 }
 
 /* 针对 PrimeVue Dialog 的关闭按钮和其他按钮 */

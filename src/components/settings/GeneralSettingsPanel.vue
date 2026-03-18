@@ -48,7 +48,7 @@ const emit = defineEmits<{
   'navigate-to-hosting': [serviceId: ServiceType];
   'clearHistory': [];
   'clearCache': [];
-  'reopenOnboarding': [];
+
   'save': [];
 }>();
 
@@ -336,13 +336,6 @@ function handleTemplateChange(template: string | undefined) {
           outlined
           :loading="isClearingCache"
           @click="emit('clearCache')"
-        />
-        <Button
-          label="重新打开引导"
-          icon="pi pi-question-circle"
-          severity="secondary"
-          outlined
-          @click="emit('reopenOnboarding')"
         />
       </div>
     </div>

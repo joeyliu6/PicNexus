@@ -901,7 +901,6 @@ onUnmounted(() => {
           @navigate-to-hosting="handleNavigateToHosting"
           @clear-history="handleClearHistory"
           @clear-cache="handleClearAppCache"
-          @reopen-onboarding="reopenOnboarding"
           @save="saveSettings"
         />
       </div>
