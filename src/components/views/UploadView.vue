@@ -80,19 +80,19 @@ const serviceLabels: Record<ServiceType, string> = {
   upyun: '又拍云'
 };
 
-// 可见的私有图床（需同时在 availableServices 中且已配置）
+// 可见的私有图床（需在 availableServices 中且非未配置状态）
 const visiblePrivateServices = computed(() => {
   return PRIVATE_SERVICES.filter(serviceId =>
     uploadManager.availableServices.value.includes(serviceId) &&
-    uploadManager.serviceConfigStatus.value[serviceId]
+    healthStatusMap.value[serviceId] !== 'unconfigured'
   );
 });
 
-// 可见的公共图床（需同时在 availableServices 中且已配置）
+// 可见的公共图床（需在 availableServices 中且非未配置状态）
 const visiblePublicServices = computed(() => {
   return PUBLIC_SERVICES.filter(serviceId =>
     uploadManager.availableServices.value.includes(serviceId) &&
-    uploadManager.serviceConfigStatus.value[serviceId]
+    healthStatusMap.value[serviceId] !== 'unconfigured'
   );
 });
 

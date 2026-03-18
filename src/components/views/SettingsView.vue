@@ -802,11 +802,6 @@ async function handleAutoStartChange(enabled: boolean) {
 
 // ==================== 图床跳转 ====================
 
-function handleNavigateToHosting(serviceId: ServiceType) {
-  targetCardId.value = serviceId;
-  activeTab.value = 'hosting';
-}
-
 // ==================== 生命周期 ====================
 
 onMounted(async () => {
@@ -874,9 +869,6 @@ onUnmounted(() => {
       <div v-if="activeTab === 'general'" class="settings-section">
         <GeneralSettingsPanel
           :current-theme="currentTheme"
-          :available-services="availableServices"
-          :service-names="serviceNames"
-          :service-config-status="serviceConfigStatus"
           :auto-start="formData.appBehavior.autoStart"
           :minimize-to-tray-on-start="formData.appBehavior.minimizeToTrayOnStart"
           :analytics-enabled="formData.analyticsEnabled"
@@ -888,7 +880,6 @@ onUnmounted(() => {
           :shortcut-upload-clipboard="formData.globalShortcut.uploadClipboard"
           :shortcut-upload-from-file="formData.globalShortcut.uploadFromFile"
           @update:current-theme="handleThemeChange"
-          @update:available-services="(v) => { availableServices = v; saveSettings(); }"
           @update:auto-start="handleAutoStartChange"
           @update:minimize-to-tray-on-start="(v) => { formData.appBehavior.minimizeToTrayOnStart = v; saveSettings(); }"
           @update:analytics-enabled="(v) => { formData.analyticsEnabled = v; handleAnalyticsToggle(); }"
@@ -898,7 +889,6 @@ onUnmounted(() => {
           @update:global-shortcut-enabled="(v: boolean) => { formData.globalShortcut.enabled = v; }"
           @update:shortcut-upload-clipboard="(v: string) => { formData.globalShortcut.uploadClipboard = v; }"
           @update:shortcut-upload-from-file="(v: string) => { formData.globalShortcut.uploadFromFile = v; }"
-          @navigate-to-hosting="handleNavigateToHosting"
           @clear-history="handleClearHistory"
           @clear-cache="handleClearAppCache"
           @save="saveSettings"
@@ -942,6 +932,9 @@ onUnmounted(() => {
           :batch-test-progress="batchTestProgress"
           :batch-test-completion-key="batchTestCompletionKey"
           :service-names="serviceNames"
+          :available-services="availableServices"
+          :service-config-status="serviceConfigStatus"
+          @update:available-services="(v) => { availableServices = v; saveSettings(); }"
           @card-navigated="targetCardId = null"
           @test-all="testAllConfiguredServices"
           @cancel-batch-test="batchTestAborted = true"

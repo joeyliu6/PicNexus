@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue';
+import { computed, watch, nextTick } from 'vue';
+import Checkbox from 'primevue/checkbox';
 import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
 import Textarea from 'primevue/textarea';
@@ -7,7 +8,8 @@ import HostingCard from './HostingCard.vue';
 import WeiboLinkPrefixSection from './hosting/WeiboLinkPrefixSection.vue';
 import GithubUrlStrategySection from './hosting/GithubUrlStrategySection.vue';
 import { getCategoryIcon } from '../../utils/icons';
-import type { GithubUrlStrategy } from '../../config/types';
+import type { GithubUrlStrategy, ServiceType } from '../../config/types';
+import { PRIVATE_SERVICES, PUBLIC_SERVICES } from '../../config/types';
 import type { BatchTestProgress } from '../../types/batchTest';
 import type { ServiceHealthStatus } from '../../types/serviceHealth';
 import { useServiceHealth } from '../../composables/useServiceHealth';
@@ -66,10 +68,13 @@ const props = defineProps<{
   batchTestProgress?: BatchTestProgress | null;
   batchTestCompletionKey?: number;
   serviceNames: Record<string, string>;
+  availableServices: ServiceType[];
+  serviceConfigStatus: Record<ServiceType, boolean>;
 }>();
 
 const emit = defineEmits<{
   save: [];
+  'update:availableServices': [services: ServiceType[]];
   testPrivate: [providerId: string];
   testToken: [providerId: string];
   testCookie: [providerId: string];
@@ -147,41 +152,48 @@ const healthSummary = computed(() => {
   return { ...counts, hasConfigured };
 });
 
-const expandedStatus = ref<string | null>(null);
-
-const statusServiceList = computed(() => {
-  if (!expandedStatus.value) return [];
-  return Object.entries(healthStatusMap.value)
-    .filter(([, s]) => s === expandedStatus.value)
-    .map(([id]) => ({ id, name: props.serviceNames[id] || id }));
-});
-
-function toggleStatusExpand(status: string) {
-  expandedStatus.value = expandedStatus.value === status ? null : status;
-}
-
-function handleServiceClick(serviceId: string) {
-  emit('scrollToService', serviceId);
-}
 
 const progressPercent = computed(() => {
   const p = props.batchTestProgress;
   if (!p || p.total === 0) return 0;
   return Math.round((p.current / p.total) * 100);
 });
+
+const localAvailableServices = computed({
+  get: () => props.availableServices,
+  set: (val) => emit('update:availableServices', val)
+});
+
+function toggleService(service: ServiceType) {
+  const current = localAvailableServices.value;
+  localAvailableServices.value = current.includes(service)
+    ? current.filter(s => s !== service)
+    : [...current, service];
+  emit('save');
+}
+
+function handleChipClick(svc: ServiceType) {
+  emit('scrollToService', svc);
+}
+
+function getChipTooltip(svc: ServiceType): string | null {
+  const status = healthStatusMap.value[svc];
+  if (status === 'unconfigured') return '未配置，点击跳转到配置';
+  return healthTooltipMap.value[svc] ?? null;
+}
 </script>
 
 <template>
   <div class="hosting-settings-panel">
     <div class="section-header">
       <h2>图床设置</h2>
-      <p class="section-desc">根据认证方式和使用场景选择合适的图床服务</p>
+      <p class="section-desc">选择你需要的图床服务，配置后即可开始上传</p>
     </div>
 
     <template v-if="healthSummary.hasConfigured">
       <div class="group-title">
         <i class="pi pi-heart-fill category-icon"></i>
-        <span>服务状态</span>
+        <span>连接状态</span>
       </div>
       <div class="health-overview">
         <template v-if="isBatchTesting && batchTestProgress">
@@ -190,7 +202,7 @@ const progressPercent = computed(() => {
               <div class="health-checking-info">
                 <i class="pi" :class="progressPercent === 100 ? 'pi-check-circle health-complete-icon' : 'pi-spin pi-spinner health-spinner'"></i>
                 <span class="health-progress">
-                  {{ progressPercent === 100 ? '检测完成' : `正在检测... (${batchTestProgress.current}/${batchTestProgress.total}) ${batchTestProgress.currentService}` }}
+                  {{ progressPercent === 100 ? '检测完成' : `正在检测… (${batchTestProgress.current}/${batchTestProgress.total}) ${batchTestProgress.currentService}` }}
                 </span>
               </div>
               <div class="health-checking-right">
@@ -209,46 +221,85 @@ const progressPercent = computed(() => {
         <template v-else>
           <div class="health-row">
             <div class="health-stats" :key="batchTestCompletionKey">
-              <span v-if="healthSummary.verified > 0" class="health-pill verified pill-reveal" :class="{ active: expandedStatus === 'verified' }" @click="toggleStatusExpand('verified')">
+              <span v-if="healthSummary.verified > 0" class="health-pill verified pill-reveal">
                 <span class="health-dot"></span>
-                {{ healthSummary.verified }} 个可用
-                <i class="pi pill-chevron" :class="expandedStatus === 'verified' ? 'pi-chevron-up' : 'pi-chevron-down'"></i>
+                {{ healthSummary.verified }} 个正常
               </span>
-              <span v-if="healthSummary.error > 0" class="health-pill error pill-reveal" :class="{ active: expandedStatus === 'error' }" @click="toggleStatusExpand('error')">
+              <span v-if="healthSummary.error > 0" class="health-pill error pill-reveal">
                 <span class="health-dot"></span>
                 {{ healthSummary.error }} 个异常
-                <i class="pi pill-chevron" :class="expandedStatus === 'error' ? 'pi-chevron-up' : 'pi-chevron-down'"></i>
               </span>
-              <span v-if="healthSummary.pending > 0" class="health-pill pending pill-reveal" :class="{ active: expandedStatus === 'pending' }" @click="toggleStatusExpand('pending')">
+              <span v-if="healthSummary.pending > 0" class="health-pill pending pill-reveal">
                 <span class="health-dot"></span>
-                {{ healthSummary.pending }} 个待验证
-                <i class="pi pill-chevron" :class="expandedStatus === 'pending' ? 'pi-chevron-up' : 'pi-chevron-down'"></i>
+                {{ healthSummary.pending }} 个未检测
               </span>
-              <span v-if="healthSummary.unconfigured > 0" class="health-pill unconfigured pill-reveal" :class="{ active: expandedStatus === 'unconfigured' }" @click="toggleStatusExpand('unconfigured')">
+              <span v-if="healthSummary.unconfigured > 0" class="health-pill unconfigured pill-reveal">
                 <span class="health-dot"></span>
                 {{ healthSummary.unconfigured }} 个未配置
-                <i class="pi pill-chevron" :class="expandedStatus === 'unconfigured' ? 'pi-chevron-up' : 'pi-chevron-down'"></i>
               </span>
             </div>
             <button class="health-refresh" @click="emit('testAll')">
               <i class="pi pi-refresh"></i>
-              刷新检测
+              重新检测
             </button>
-          </div>
-          <div v-if="expandedStatus && statusServiceList.length > 0" class="status-service-list">
-            <div
-              v-for="svc in statusServiceList"
-              :key="svc.id"
-              class="status-service-item"
-              @click="handleServiceClick(svc.id)"
-            >
-              <span class="health-dot" :class="expandedStatus"></span>
-              <span class="service-name">{{ svc.name }}</span>
-            </div>
           </div>
         </template>
       </div>
     </template>
+
+    <!-- 启用的图床服务 -->
+    <div class="group-title">
+      <i class="pi pi-check-square category-icon"></i>
+      <span>启用的服务</span>
+    </div>
+    <p class="service-enable-helper">勾选后显示在上传界面，点击服务名可跳转到对应配置。</p>
+    <div class="service-enable-section">
+      <div class="service-group-section">
+        <div class="service-group-title">私有存储</div>
+        <div class="service-toggles-grid">
+          <div
+            v-for="svc in PRIVATE_SERVICES"
+            :key="svc"
+            class="toggle-chip"
+            :class="healthStatusMap[svc]"
+            v-tooltip.top="getChipTooltip(svc)"
+            @click="handleChipClick(svc)"
+          >
+            <Checkbox
+              :modelValue="localAvailableServices.includes(svc)"
+              :binary="true"
+              :disabled="healthStatusMap[svc] === 'unconfigured'"
+              @click.stop
+              @update:modelValue="toggleService(svc)"
+            />
+            <span class="toggle-label">{{ serviceNames[svc] }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="service-group-section">
+        <div class="service-group-title">公共图床</div>
+        <div class="service-toggles-grid">
+          <div
+            v-for="svc in PUBLIC_SERVICES"
+            :key="svc"
+            class="toggle-chip"
+            :class="healthStatusMap[svc]"
+            v-tooltip.top="getChipTooltip(svc)"
+            @click="handleChipClick(svc)"
+          >
+            <Checkbox
+              :modelValue="localAvailableServices.includes(svc)"
+              :binary="true"
+              :disabled="healthStatusMap[svc] === 'unconfigured'"
+              @click.stop
+              @update:modelValue="toggleService(svc)"
+            />
+            <span class="toggle-label">{{ serviceNames[svc] }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div class="settings-content">
       <div class="group-title">
@@ -451,7 +502,7 @@ const progressPercent = computed(() => {
 
       <div class="group-title">
         <span class="category-icon" v-html="getCategoryIcon('public-easy')"></span>
-        <span>公共图床-开箱即用</span>
+        <span>公共图床 · 免配置</span>
       </div>
       <div class="provider-grid">
         <HostingCard
@@ -493,7 +544,7 @@ const progressPercent = computed(() => {
 
       <div class="group-title">
         <span class="category-icon" v-html="getCategoryIcon('public-cookie')"></span>
-        <span>公共图床-Cookie 认证</span>
+        <span>公共图床 · Cookie 登录</span>
       </div>
       <div class="provider-grid">
         <HostingCard
@@ -649,7 +700,7 @@ const progressPercent = computed(() => {
 
       <div class="group-title">
         <span class="category-icon" v-html="getCategoryIcon('public-token')"></span>
-        <span>公共图床-Token 认证</span>
+        <span>公共图床 · Token 授权</span>
       </div>
       <div class="provider-grid">
         <HostingCard
@@ -863,10 +914,6 @@ const progressPercent = computed(() => {
 .health-stats .pill-reveal:nth-child(3) { animation-delay: 160ms; }
 .health-stats .pill-reveal:nth-child(4) { animation-delay: 240ms; }
 
-.pill-chevron {
-  font-size: 0.625rem;
-  margin-left: 2px;
-}
 
 @keyframes pillFadeIn {
   from { opacity: 0; transform: translateY(4px) scale(0.95); }
@@ -889,7 +936,6 @@ const progressPercent = computed(() => {
   border-radius: 20px;
   font-size: 12px;
   font-weight: 500;
-  cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
 }
@@ -910,9 +956,6 @@ const progressPercent = computed(() => {
   background: var(--success);
 }
 
-.health-pill.verified:hover {
-  background: color-mix(in srgb, var(--success) 20%, transparent);
-}
 
 .health-pill.error {
   background: color-mix(in srgb, var(--error) 12%, transparent);
@@ -923,9 +966,6 @@ const progressPercent = computed(() => {
   background: var(--error);
 }
 
-.health-pill.error:hover {
-  background: color-mix(in srgb, var(--error) 20%, transparent);
-}
 
 .health-pill.pending {
   background: color-mix(in srgb, var(--warning) 12%, transparent);
@@ -936,9 +976,6 @@ const progressPercent = computed(() => {
   background: var(--warning);
 }
 
-.health-pill.pending:hover {
-  background: color-mix(in srgb, var(--warning) 20%, transparent);
-}
 
 .health-pill.unconfigured {
   background: color-mix(in srgb, var(--text-muted) 10%, transparent);
@@ -950,63 +987,7 @@ const progressPercent = computed(() => {
   opacity: 0.5;
 }
 
-.health-pill.unconfigured:hover {
-  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
-}
 
-.health-pill.active {
-  outline: 1.5px solid currentColor;
-  outline-offset: -1.5px;
-}
-
-.status-service-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding-top: 8px;
-  animation: fadeIn 0.15s ease;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.status-service-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.status-service-item:hover {
-  background: var(--hover-overlay-subtle);
-  border-color: var(--primary);
-  color: var(--text-primary);
-}
-
-.status-service-item .health-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.status-service-item .health-dot.verified { background: var(--success); }
-.status-service-item .health-dot.error { background: var(--error); }
-.status-service-item .health-dot.pending { background: var(--warning); }
-.status-service-item .health-dot.unconfigured { background: var(--text-muted); opacity: 0.5; }
-
-.service-name {
-  white-space: nowrap;
-}
 
 .health-refresh {
   margin-left: auto;
@@ -1055,6 +1036,100 @@ const progressPercent = computed(() => {
 
 .health-cancel .pi {
   font-size: 10px;
+}
+
+.service-enable-helper {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 12px 0;
+}
+
+.service-enable-section {
+  padding: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+}
+
+.service-group-section {
+  margin-bottom: 16px;
+}
+
+.service-group-section:last-child {
+  margin-bottom: 0;
+}
+
+.service-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.service-toggles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.toggle-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  background: var(--bg-app);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toggle-chip .toggle-label {
+  font-size: 13px;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+/* 可用 - 绿色边框 */
+.toggle-chip.verified {
+  border-color: var(--success);
+}
+
+.toggle-chip.verified :deep(.p-checkbox.p-checked) {
+  background-color: var(--success);
+  border-color: var(--success);
+}
+
+/* 异常 - 红色边框 */
+.toggle-chip.error {
+  border-color: var(--error);
+}
+
+.toggle-chip.error :deep(.p-checkbox.p-checked) {
+  background-color: var(--error);
+  border-color: var(--error);
+}
+
+/* 待验证 - 黄色边框 */
+.toggle-chip.pending {
+  border-color: var(--warning);
+}
+
+.toggle-chip.pending :deep(.p-checkbox.p-checked) {
+  background-color: var(--warning);
+  border-color: var(--warning);
+}
+
+/* 未配置 - 灰色 */
+.toggle-chip.unconfigured {
+  cursor: pointer;
+}
+
+.toggle-chip.unconfigured:hover {
+  border-color: var(--primary);
+  border-style: dashed;
 }
 
 .settings-content {

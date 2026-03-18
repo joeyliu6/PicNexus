@@ -1,22 +1,17 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import Button from 'primevue/button';
-import Checkbox from 'primevue/checkbox';
 import ToggleSwitch from 'primevue/toggleswitch';
 import InputText from 'primevue/inputtext';
 import Divider from 'primevue/divider';
 import ShortcutInput from './ShortcutInput.vue';
-import type { ThemeMode, ServiceType } from '../../config/types';
-import { PRIVATE_SERVICES, PUBLIC_SERVICES } from '../../config/types';
+import type { ThemeMode } from '../../config/types';
 import { LINK_FORMAT_OPTIONS, type LinkFormat } from '../../utils/linkFormatter';
 
 // ==================== Props ====================
 
 interface Props {
   currentTheme: ThemeMode;
-  availableServices: ServiceType[];
-  serviceNames: Record<ServiceType, string>;
-  serviceConfigStatus: Record<ServiceType, boolean>;
   autoStart: boolean;
   minimizeToTrayOnStart: boolean;
   analyticsEnabled: boolean;
@@ -35,7 +30,6 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   'update:currentTheme': [theme: ThemeMode];
-  'update:availableServices': [services: ServiceType[]];
   'update:autoStart': [enabled: boolean];
   'update:minimizeToTrayOnStart': [enabled: boolean];
   'update:analyticsEnabled': [enabled: boolean];
@@ -45,7 +39,6 @@ const emit = defineEmits<{
   'update:globalShortcutEnabled': [enabled: boolean];
   'update:shortcutUploadClipboard': [shortcut: string];
   'update:shortcutUploadFromFile': [shortcut: string];
-  'navigate-to-hosting': [serviceId: ServiceType];
   'clearHistory': [];
   'clearCache': [];
 
@@ -62,11 +55,6 @@ const themeOptions = [
 
 // ==================== 计算属性 ====================
 
-const localAvailableServices = computed({
-  get: () => props.availableServices,
-  set: (val) => emit('update:availableServices', val)
-});
-
 const localAnalyticsEnabled = computed({
   get: () => props.analyticsEnabled,
   set: (val) => emit('update:analyticsEnabled', val)
@@ -76,22 +64,6 @@ const localAnalyticsEnabled = computed({
 
 function handleThemeChange(theme: ThemeMode) {
   emit('update:currentTheme', theme);
-}
-
-function toggleService(service: ServiceType) {
-  const current = localAvailableServices.value;
-  localAvailableServices.value = current.includes(service)
-    ? current.filter(s => s !== service)
-    : [...current, service];
-  emit('save');
-}
-
-function handleChipClick(svc: ServiceType) {
-  if (props.serviceConfigStatus[svc]) {
-    toggleService(svc);
-  } else {
-    emit('navigate-to-hosting', svc);
-  }
 }
 
 function handleFormatChange(format: LinkFormat) {
@@ -114,7 +86,7 @@ function handleTemplateChange(template: string | undefined) {
   <div class="general-settings-panel">
     <div class="section-header">
       <h2>常规设置</h2>
-      <p class="section-desc">管理应用外观、启动行为与启用的服务模块。</p>
+      <p class="section-desc">管理应用外观、启动行为与链接输出。</p>
     </div>
 
     <!-- 外观主题 -->
@@ -130,60 +102,6 @@ function handleTemplateChange(template: string | undefined) {
         >
           <i :class="opt.icon"></i>
           <span>{{ opt.label }}</span>
-        </div>
-      </div>
-    </div>
-
-    <Divider />
-
-    <!-- 启用的图床服务 -->
-    <div class="form-group">
-      <label class="group-label">启用的图床服务</label>
-      <p class="helper-text">点击服务卡片可跳转到图床配置，勾选复选框控制在「上传界面」的显示。</p>
-
-      <div class="service-group-section">
-        <div class="service-group-title">私有图床</div>
-        <div class="service-toggles-grid">
-          <div
-            v-for="svc in PRIVATE_SERVICES"
-            :key="svc"
-            class="toggle-chip"
-            :class="{ disabled: !serviceConfigStatus[svc] }"
-            v-tooltip.top="!serviceConfigStatus[svc] ? '尚未配置，点击前往设置' : null"
-            @click="handleChipClick(svc)"
-          >
-            <Checkbox
-              :modelValue="localAvailableServices.includes(svc)"
-              :binary="true"
-              :disabled="!serviceConfigStatus[svc]"
-              @click.stop
-              @update:modelValue="toggleService(svc)"
-            />
-            <span class="toggle-label">{{ serviceNames[svc] }}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="service-group-section">
-        <div class="service-group-title">公共图床</div>
-        <div class="service-toggles-grid">
-          <div
-            v-for="svc in PUBLIC_SERVICES"
-            :key="svc"
-            class="toggle-chip"
-            :class="{ disabled: !serviceConfigStatus[svc] }"
-            v-tooltip.top="!serviceConfigStatus[svc] ? '尚未配置，点击前往设置' : null"
-            @click="handleChipClick(svc)"
-          >
-            <Checkbox
-              :modelValue="localAvailableServices.includes(svc)"
-              :binary="true"
-              :disabled="!serviceConfigStatus[svc]"
-              @click.stop
-              @update:modelValue="toggleService(svc)"
-            />
-            <span class="toggle-label">{{ serviceNames[svc] }}</span>
-          </div>
         </div>
       </div>
     </div>
@@ -411,62 +329,6 @@ function handleTemplateChange(template: string | undefined) {
 
 .toggle-row-desc {
   font-size: 12px;
-  color: var(--text-muted);
-}
-
-/* 服务分组样式 */
-.service-group-section {
-  margin-bottom: 16px;
-}
-
-.service-group-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 8px;
-}
-
-.service-toggles-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 12px;
-}
-
-.toggle-chip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.toggle-chip:hover:not(.disabled) {
-  border-color: var(--primary);
-}
-
-.toggle-chip.disabled {
-  cursor: pointer;
-  background: var(--bg-app);
-}
-
-.toggle-chip.disabled:hover {
-  border-color: var(--primary);
-  border-style: dashed;
-}
-
-.toggle-chip .toggle-label {
-  font-size: 13px;
-  color: var(--text-primary);
-  flex: 1;
-}
-
-.toggle-chip.disabled .toggle-label {
   color: var(--text-muted);
 }
 
