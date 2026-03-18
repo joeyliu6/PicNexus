@@ -250,27 +250,26 @@ const currentPosition = computed(() => {
  */
 const currentDateInfo = computed(() => {
   const pos = currentPosition.value;
+  const segments = monthSegments.value;
 
-  // 找到最接近的月份
-  let closest = monthSegments.value[0];
-  let minDistance = Infinity;
-
-  for (const segment of monthSegments.value) {
-    const distance = Math.abs(segment.position - pos);
-    if (distance < minDistance) {
-      minDistance = distance;
-      closest = segment;
-    }
-  }
-
-  if (!closest) {
+  if (segments.length === 0) {
     return { year: new Date().getFullYear(), month: 0 };
   }
 
-  return {
-    year: closest.year,
-    month: closest.month,
-  };
+  // 区间匹配：pos 落在哪个 segment 的 [start, nextStart) 范围内
+  // segments 按时间降序排列（最新在前），position 从小到大递增
+  for (let i = 0; i < segments.length; i++) {
+    const segmentEnd = i + 1 < segments.length
+      ? segments[i + 1].position
+      : 1;
+
+    if (pos < segmentEnd) {
+      return { year: segments[i].year, month: segments[i].month };
+    }
+  }
+
+  const last = segments[segments.length - 1];
+  return { year: last.year, month: last.month };
 });
 
 /**
