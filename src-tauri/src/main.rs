@@ -940,6 +940,7 @@ async fn setup_cookie_event_monitoring(
         let completed_for_handler = completed.clone();
         let first_nav_for_handler = first_nav_done.clone();
 
+        let app_for_ready = app.clone();
         let result = login_webview.with_webview(move |webview| {
             #[cfg(windows)]
             unsafe {
@@ -993,15 +994,15 @@ async fn setup_cookie_event_monitoring(
                         let current_url = unsafe { url_ptr.to_string().unwrap_or_default() };
                         eprintln!("[事件监控] NavigationCompleted: {} (成功: {})", current_url, is_success.as_bool());
 
-                        // 首次导航完成（登录页加载好），启动超时计时器
+                        // 首次导航完成（登录页加载好），启动超时计时器 + 轮询兜底
                         if !self.first_nav_done.swap(true, Ordering::SeqCst) {
-                            eprintln!("[事件监控] 登录页加载完成，启动 {}ms 超时计时器", self.timeout_ms);
+                            eprintln!("[事件监控] 登录页加载完成，启动 {}ms 超时计时器 + 轮询兜底", self.timeout_ms);
                             let timeout = self.timeout_ms;
                             let completed_for_timeout = self.completed.clone();
                             let app_for_timeout = self.app_handle.clone();
                             let service_for_timeout = self.service_id.clone();
 
-                            // Issue #4: 分段 sleep，支持提前退出
+                            // Issue #4: 分段 sleep，支持提前退出 + 窗口关闭感知
                             std::thread::spawn(move || {
                                 use std::sync::atomic::Ordering;
                                 let interval = Duration::from_secs(1);
@@ -1014,10 +1015,26 @@ async fn setup_cookie_event_monitoring(
                                     if completed_for_timeout.load(Ordering::SeqCst) {
                                         return;
                                     }
+                                    if app_for_timeout.get_window("login-window").is_none() {
+                                        eprintln!("[事件监控] 登录窗口已关闭，取消超时计时");
+                                        return;
+                                    }
                                 }
                                 eprintln!("[事件监控] ⏰ {} 超时（{}ms），发送通知", service_for_timeout, timeout);
                                 let _ = app_for_timeout.emit("cookie-monitoring-timeout", &service_for_timeout);
                             });
+
+                            // 轮询兜底：SPA 登录流程不触发 NavigationCompleted，定期提取 Cookie
+                            spawn_cookie_poll_fallback(
+                                self.app_handle.clone(),
+                                self.service_id.clone(),
+                                self.domains.clone(),
+                                self.required_fields.clone(),
+                                self.any_of_fields.clone(),
+                                self.field_value_checks.clone(),
+                                self.completed.clone(),
+                                self.timeout_ms,
+                            );
                         }
 
                         if !is_success.as_bool() {
@@ -1062,7 +1079,10 @@ async fn setup_cookie_event_monitoring(
                                 &field_value_checks,
                             ) {
                                 eprintln!("[事件监控] ✓ {} Cookie 验证通过！保存中...", service);
-                                completed.store(true, std::sync::atomic::Ordering::SeqCst);
+                                if completed.compare_exchange(false, true, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst).is_err() {
+                                    eprintln!("[事件监控] 已被其他线程完成，跳过保存");
+                                    return;
+                                }
 
                                 let app_save = app.clone();
                                 let service_save = service.clone();
@@ -1111,6 +1131,9 @@ async fn setup_cookie_event_monitoring(
                 eprintln!("[事件监控] ✓ NavigationCompleted 事件注册成功");
             }
         });
+
+        // 通知前端 handler 已注册完成，可以安全跳转
+        let _ = app_for_ready.emit("cookie-monitoring-ready", ());
 
         if result.is_err() {
             eprintln!("[事件监控] with_webview 调用失败，降级到轮询模式");
@@ -1248,6 +1271,79 @@ fn attempt_cookie_capture_and_save_generic(
         eprintln!("[Cookie监控] ✗ 验证失败，Cookie 缺少必要字段，继续等待...");
         false
     }
+}
+
+/// SPA 轮询兜底：定期从 WebView 提取 Cookie 并验证
+/// 用于 SPA 登录流程不触发 NavigationCompleted 的场景
+#[cfg(target_os = "windows")]
+fn spawn_cookie_poll_fallback(
+    app: tauri::AppHandle,
+    service_id: String,
+    domains: Vec<String>,
+    required_fields: Vec<String>,
+    any_of_fields: Vec<String>,
+    field_value_checks: Option<std::collections::HashMap<String, String>>,
+    completed: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    timeout_ms: u64,
+) {
+    use std::sync::atomic::Ordering;
+
+    std::thread::spawn(move || {
+        let poll_interval = Duration::from_secs(2);
+        let total = Duration::from_millis(timeout_ms);
+
+        // 初始延迟 3 秒，分段 sleep 以感知窗口关闭
+        for _ in 0..3 {
+            std::thread::sleep(Duration::from_secs(1));
+            if completed.load(Ordering::SeqCst)
+                || app.get_window("login-window").is_none()
+            {
+                return;
+            }
+        }
+        let mut elapsed = Duration::from_secs(3);
+
+        while elapsed < total {
+            if completed.load(Ordering::SeqCst) {
+                eprintln!("[轮询兜底] Cookie 已获取，轮询退出");
+                return;
+            }
+
+            let Some(login_webview) = app.get_webview("login-content") else {
+                eprintln!("[轮询兜底] 登录窗口已关闭，轮询退出");
+                return;
+            };
+
+            if let Some(merged_cookie) = extract_and_merge_cookies(&login_webview, &domains, "轮询兜底") {
+                if validate_cookie_fields_with_value_checks(
+                    &service_id, &merged_cookie, &required_fields, &any_of_fields, &field_value_checks,
+                ) {
+                    eprintln!("[轮询兜底] ✓ {} Cookie 验证通过！保存中...", service_id);
+                    if completed.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+                        eprintln!("[轮询兜底] 已被其他线程完成，跳过保存");
+                        return;
+                    }
+
+                    let app_save = app.clone();
+                    let service_save = service_id.clone();
+                    let fields_save = required_fields.clone();
+                    let any_fields_save = any_of_fields.clone();
+
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) = save_cookie_from_login(
+                            merged_cookie, Some(service_save), Some(fields_save), Some(any_fields_save), app_save,
+                        ).await {
+                            eprintln!("[轮询兜底] 保存Cookie失败: {}", e);
+                        }
+                    });
+                    return;
+                }
+            }
+
+            std::thread::sleep(poll_interval);
+            elapsed += poll_interval;
+        }
+    });
 }
 
 /// 从多个域名提取 Cookie 并合并去重

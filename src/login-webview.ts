@@ -43,6 +43,19 @@ async function handleStartLogin() {
 
     console.log(`[LoginWebview] Cookie event monitoring started`);
 
+    // 等待 Rust 端 NavigationCompleted handler 注册完成后再跳转
+    const { listen } = await import('@tauri-apps/api/event');
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        console.warn('[LoginWebview] cookie-monitoring-ready timeout, proceeding anyway');
+        resolve();
+      }, 3000);
+      listen('cookie-monitoring-ready', () => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+
     // 跳转到登录页面（DOM 将被第三方网站接管）
     window.location.href = provider.loginUrl;
   } catch (error) {

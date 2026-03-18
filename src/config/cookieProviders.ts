@@ -68,7 +68,7 @@ export const COOKIE_PROVIDERS: Record<string, CookieProvider> = {
   weibo: {
     serviceId: 'weibo',
     name: '微博',
-    loginUrl: 'https://weibo.com/',
+    loginUrl: 'https://m.weibo.cn/',
     domains: ['weibo.com', 'm.weibo.cn'],
     cookieValidation: {
       requiredFields: ['SUB', 'SUBP'],
