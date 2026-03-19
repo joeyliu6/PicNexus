@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import MainLayout from './components/layout/MainLayout.vue';
 import OnboardingDialog from './components/onboarding/OnboardingDialog.vue';
+import BackupPasswordDialog from './components/dialogs/BackupPasswordDialog.vue';
 import Toast from 'primevue/toast';
 import ConfirmDialog from 'primevue/confirmdialog';
 import { useThemeManager } from './composables/useTheme';
@@ -12,6 +13,9 @@ import { useGlobalShortcut } from './composables/useGlobalShortcut';
 import { useAutoUpdate } from './composables/useAutoUpdate';
 import { TOAST_MESSAGES } from './constants';
 import { Store } from './store';
+import { BackupPasswordRequiredError, secureStorage } from './crypto';
+import { readTextFile } from '@tauri-apps/plugin-fs';
+import { appDataDir, join } from '@tauri-apps/api/path';
 import type { UserConfig } from './config/types';
 
 const { effectiveTheme, initializeTheme } = useThemeManager();
@@ -24,6 +28,12 @@ const rootClass = computed(() => {
   return effectiveTheme.value === 'dark' ? 'dark-theme' : 'light-theme';
 });
 
+// 备份密码恢复对话框状态
+const showPasswordDialog = ref(false);
+const passwordDialogRef = ref<InstanceType<typeof BackupPasswordDialog>>();
+/** 缓存的加密配置文件内容，密码验证成功后用于解密 */
+let pendingEncryptedContent = '';
+
 // 网络状态监听处理函数
 function handleOffline() {
   toast.showConfig('warn', TOAST_MESSAGES.network.disconnected);
@@ -33,45 +43,100 @@ function handleOnline() {
   toast.showConfig('success', TOAST_MESSAGES.network.restored);
 }
 
+/** continueStartup 的安全包装：失败时兜底显示窗口 */
+async function safeContinueStartup() {
+  try {
+    await continueStartup();
+  } catch (err) {
+    console.error('[App] 启动流程失败:', err);
+    try { await getCurrentWindow().show(); } catch { /* ignore */ }
+  }
+}
+
+/**
+ * 处理用户输入备份密码后的恢复流程
+ */
+async function handlePasswordConfirm(password: string) {
+  try {
+    await secureStorage.initWithPassword(pendingEncryptedContent, password);
+  } catch (err) {
+    if (err instanceof Error && err.message === '备份密码不正确') {
+      passwordDialogRef.value?.onPasswordFailed();
+    } else {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.showConfig('error', { summary: '恢复失败', detail: msg });
+    }
+    return;
+  }
+
+  passwordDialogRef.value?.onPasswordSuccess();
+  toast.showConfig('success', { summary: '配置恢复成功' });
+  await safeContinueStartup();
+}
+
+/**
+ * 用户选择跳过密码输入，使用默认配置
+ */
+async function handlePasswordSkip() {
+  toast.showConfig('info', { summary: '已使用默认配置启动', detail: '你可以随时在设置中重新输入备份密码恢复' });
+  pendingEncryptedContent = '';
+  await safeContinueStartup();
+}
+
+/**
+ * 正常启动流程：读配置 → 显示窗口 → 引导 → 快捷键 → 自动更新
+ * 由 onMounted 和密码对话框回调共同调用
+ */
+async function continueStartup() {
+  const configStore = new Store('.settings.dat');
+  const config = await configStore.get<UserConfig>('config');
+  const minimizeOnStart = config?.appBehavior?.minimizeToTrayOnStart ?? false;
+
+  if (!minimizeOnStart) {
+    await getCurrentWindow().show();
+    console.log('[App] Window shown');
+  } else {
+    console.log('[App] 启动时最小化到托盘，窗口保持隐藏');
+  }
+
+  await checkOnboarding();
+  await initGlobalShortcuts();
+
+  if (config?.autoUpdate?.enabled !== false) {
+    setTimeout(() => {
+      checkForUpdate().catch((e) => console.warn('[App] 自动检查更新失败:', e));
+    }, 3000);
+  }
+}
+
 onMounted(async () => {
-  // 初始化主题系统
   await initializeTheme();
   console.log('[App] Theme initialized:', effectiveTheme.value);
 
-  // 添加网络状态监听
   window.addEventListener('offline', handleOffline);
   window.addEventListener('online', handleOnline);
   console.log('[App] Network listeners registered');
 
-  // 前端加载完成后显示窗口（避免启动时白屏闪烁）
-  // 如果开启了"启动时最小化到托盘"，则不显示窗口
   try {
-    const configStore = new Store('.settings.dat');
-    const config = await configStore.get<UserConfig>('config');
-    const minimizeOnStart = config?.appBehavior?.minimizeToTrayOnStart ?? false;
-
-    if (!minimizeOnStart) {
-      const appWindow = getCurrentWindow();
-      await appWindow.show();
-      console.log('[App] Window shown');
-    } else {
-      console.log('[App] 启动时最小化到托盘，窗口保持隐藏');
-    }
-
-    await checkOnboarding();
-
-    // 初始化全局快捷键
-    await initGlobalShortcuts();
-
-    // 启动时自动检查更新（延迟 3 秒，不阻塞启动）
-    if (config?.autoUpdate?.enabled !== false) {
-      setTimeout(() => {
-        checkForUpdate().catch((e) => console.warn('[App] 自动检查更新失败:', e));
-      }, 3000);
-    }
+    await continueStartup();
   } catch (err) {
-    console.error('[App] 显示窗口失败:', err);
-    // 出错时兜底显示窗口
+    if (err instanceof BackupPasswordRequiredError) {
+      console.log('[App] 检测到备份密码加密配置，等待用户输入密码');
+      try { await getCurrentWindow().show(); } catch { /* ignore */ }
+
+      try {
+        const appDir = await appDataDir();
+        const configPath = await join(appDir, '.settings.dat');
+        pendingEncryptedContent = await readTextFile(configPath);
+      } catch (readErr) {
+        console.error('[App] 读取加密配置文件失败:', readErr);
+      }
+
+      showPasswordDialog.value = true;
+      return;
+    }
+
+    console.error('[App] 启动失败:', err);
     try { await getCurrentWindow().show(); } catch { /* ignore */ }
   }
 });
@@ -90,6 +155,15 @@ onUnmounted(() => {
 
     <!-- 首次使用引导 -->
     <OnboardingDialog />
+
+    <!-- 备份密码恢复对话框 -->
+    <BackupPasswordDialog
+      ref="passwordDialogRef"
+      v-model="showPasswordDialog"
+      mode="restore"
+      @confirm="handlePasswordConfirm"
+      @skip="handlePasswordSkip"
+    />
 
     <!-- 全局 Toast 通知 -->
     <Toast position="top-right" />

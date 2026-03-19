@@ -4,6 +4,7 @@ import { ref, Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn, emit } from '@tauri-apps/api/event';
 import { Store } from '../store';
+import { BackupPasswordRequiredError } from '../crypto';
 import {
   UserConfig,
   DEFAULT_CONFIG,
@@ -50,32 +51,23 @@ export function useConfigManager() {
    * 加载配置
    */
   async function loadConfig(): Promise<UserConfig> {
+    console.log('[配置管理] 开始加载配置...');
+    isLoading.value = true;
+
     try {
-      console.log('[配置管理] 开始加载配置...');
-      isLoading.value = true;
-
-      // 读取配置（带自动恢复功能）
-      try {
-        // 如果配置文件损坏，get 方法会自动使用 DEFAULT_CONFIG 恢复
-        const loadedConfig = await configStore.get<UserConfig>('config', DEFAULT_CONFIG);
-        const finalConfig = loadedConfig || DEFAULT_CONFIG;
-
-        // 使用迁移函数确保兼容旧配置
-        config.value = migrateConfig(finalConfig);
-
-        console.log('[配置管理] ✓ 配置加载成功');
-        return config.value;
-      } catch (error) {
-        console.error('[配置管理] 读取配置失败，使用默认配置:', error);
-        config.value = { ...DEFAULT_CONFIG };
-        toast.showConfig('error', TOAST_MESSAGES.config.loadFailed('已使用默认配置'));
-        return config.value;
-      }
+      const loadedConfig = await configStore.get<UserConfig>('config', DEFAULT_CONFIG);
+      config.value = migrateConfig(loadedConfig || DEFAULT_CONFIG);
+      console.log('[配置管理] ✓ 配置加载成功');
+      return config.value;
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[配置管理] 加载配置失败:', error);
-      toast.showConfig('error', TOAST_MESSAGES.config.loadFailed(errorMsg));
-      throw error;
+      if (error instanceof BackupPasswordRequiredError) {
+        throw error;
+      }
+      // 读取/迁移失败时降级为默认配置
+      console.error('[配置管理] 读取配置失败，使用默认配置:', error);
+      config.value = { ...DEFAULT_CONFIG };
+      toast.showConfig('error', TOAST_MESSAGES.config.loadFailed('已使用默认配置'));
+      return config.value;
     } finally {
       isLoading.value = false;
     }

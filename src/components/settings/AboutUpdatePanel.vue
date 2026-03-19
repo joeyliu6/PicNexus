@@ -5,6 +5,7 @@ import ProgressBar from 'primevue/progressbar';
 import ToggleSwitch from 'primevue/toggleswitch';
 import Divider from 'primevue/divider';
 import { open } from '@tauri-apps/plugin-shell';
+import { invoke } from '@tauri-apps/api/core';
 import { useAutoUpdate } from '../../composables/useAutoUpdate';
 import { useToast } from '../../composables/useToast';
 import appIconUrl from '../../assets/icons/app-icon.png';
@@ -50,6 +51,15 @@ const lastCheckText = computed(() => {
 
 function openExternal(url: string) {
   open(url);
+}
+
+async function openLogDir() {
+  try {
+    const logDir = await invoke<string>('get_log_dir');
+    await open(logDir);
+  } catch (e) {
+    toast.error('打开失败', '无法打开日志目录');
+  }
 }
 </script>
 
@@ -226,6 +236,15 @@ function openExternal(url: string) {
           <div class="link-card-content">
             <span class="link-card-title">重新引导</span>
             <span class="link-card-desc">重新查看新手引导</span>
+          </div>
+        </button>
+        <button class="link-card" @click="openLogDir">
+          <div class="link-card-icon">
+            <i class="pi pi-file" />
+          </div>
+          <div class="link-card-content">
+            <span class="link-card-title">日志目录</span>
+            <span class="link-card-desc">查看运行日志，排查问题</span>
           </div>
         </button>
       </div>
@@ -442,14 +461,14 @@ function openExternal(url: string) {
 
 .link-card:hover {
   border-color: var(--primary);
-  background: rgba(59, 130, 246, 0.03);
+  background: var(--primary-alpha-8);
 }
 
 .link-card-icon {
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: rgba(59, 130, 246, 0.1);
+  background: var(--primary-alpha-10);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -462,7 +481,7 @@ function openExternal(url: string) {
 }
 
 .link-card:hover .link-card-icon {
-  background: rgba(59, 130, 246, 0.15);
+  background: var(--primary-alpha-15);
 }
 
 .link-card-content {
