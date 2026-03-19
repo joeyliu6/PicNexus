@@ -35,7 +35,7 @@ function handleNext() {
     modal
     :closable="false"
     :draggable="false"
-    :style="{ width: '520px' }"
+    :style="{ width: '460px' }"
     :pt="{
       root: { class: 'onboarding-dialog' },
       mask: { class: 'onboarding-mask' },
@@ -101,25 +101,26 @@ function handleNext() {
 
 .step-indicators {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  align-items: center;
 }
 
 .step-dot {
   width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  height: 6px;
+  border-radius: 9999px;
   background: var(--border-subtle);
-  transition: background 0.2s, transform 0.2s;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .step-dot.active {
+  width: 28px;
   background: var(--primary);
-  transform: scale(1.25);
 }
 
 .step-dot.done {
   background: var(--primary);
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
 .onboarding-body {
@@ -142,14 +143,35 @@ function handleNext() {
   gap: 8px;
 }
 
-.step-fade-enter-active,
-.step-fade-leave-active {
-  transition: opacity 0.15s ease;
+:deep(.footer-actions .p-button) {
+  border-radius: 8px !important;
+  padding: 10px 20px !important;
+  font-weight: 600 !important;
 }
 
-.step-fade-enter-from,
+:deep(.footer-actions .p-button-outlined) {
+  background: var(--bg-button-secondary) !important;
+  border: none !important;
+  color: white !important;
+}
+
+:deep(.footer-actions .p-button-outlined:hover) {
+  background: var(--bg-button-secondary-hover) !important;
+}
+
+.step-fade-enter-active,
+.step-fade-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.step-fade-enter-from {
+  opacity: 0;
+  transform: translateX(12px);
+}
+
 .step-fade-leave-to {
   opacity: 0;
+  transform: translateX(-12px);
 }
 </style>
 
@@ -157,19 +179,25 @@ function handleNext() {
 .onboarding-dialog {
   border-radius: 16px !important;
   overflow: hidden;
+  background: var(--bg-card) !important;
+  border: none !important;
+  box-shadow: var(--shadow-dialog) !important;
 }
 
 .onboarding-dialog .p-dialog-header {
-  padding: 20px 24px 0 !important;
+  padding: 24px 24px 0 !important;
   border-bottom: none !important;
+  background: transparent !important;
 }
 
 .onboarding-dialog .p-dialog-content {
   padding: 0 24px !important;
+  background: transparent !important;
 }
 
 .onboarding-dialog .p-dialog-footer {
-  padding: 0 24px 20px !important;
+  padding: 0 24px 24px !important;
   border-top: none !important;
+  background: transparent !important;
 }
 </style>

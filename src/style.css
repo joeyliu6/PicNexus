@@ -64,6 +64,7 @@
   /* Brand Colors */
   --primary: #3b82f6;      /* Blue 500 */
   --primary-hover: #2563eb; /* Blue 600 */
+  --primary-alpha-5: rgba(59, 130, 246, 0.05);
   --primary-alpha-8: rgba(59, 130, 246, 0.08);
   --primary-alpha-10: rgba(59, 130, 246, 0.1);
   --primary-alpha-12: rgba(59, 130, 246, 0.12);
@@ -75,16 +76,34 @@
   --success: #10b981;      /* Emerald 500 */
   --error: #ef4444;        /* Red 500 */
   --warning: #eab308;      /* Yellow 500 */
+  --pending: #a78bfa;      /* Violet 400 — 中性"待定"语义 */
+  --success-alpha-8: rgba(16, 185, 129, 0.08);
+  --success-alpha-15: rgba(16, 185, 129, 0.15);
+  --warning-alpha-8: rgba(234, 179, 8, 0.08);
+  --warning-alpha-15: rgba(234, 179, 8, 0.15);
+  --error-alpha-8: rgba(239, 68, 68, 0.08);
+  --error-alpha-15: rgba(239, 68, 68, 0.15);
+  --pending-alpha-8: rgba(167, 139, 250, 0.08);
+  --pending-alpha-15: rgba(167, 139, 250, 0.15);
 
   /* Text Colors */
   --text-main: #f8fafc;    /* Slate 50 */
   --text-muted: #94a3b8;   /* Slate 400 */
   --text-primary: var(--text-main);
   --text-secondary: var(--text-muted);
+  --text-on-surface: #111827; /* Gray 900 — 亮色主题表面上的深色文字 */
+
+  /* Surface Colors */
+  --bg-surface: #ffffff;   /* 亮色主题对话框/卡片背景 */
+
+  /* Button Surfaces (Bold Contrast) */
+  --bg-button-secondary: #4e5058;
+  --bg-button-secondary-hover: #5c5e66;
 
   /* Shadows */
   --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --shadow-float: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-dialog: 0 20px 60px rgba(0, 0, 0, 0.7);
 
   /* --- Typography System --- */
 
@@ -2794,34 +2813,56 @@ button:focus-visible {
   transform: translateY(0);
 }
 
-/* 5. 对话框：磨砂玻璃效果 */
+/* 5. 对话框 — Bold Contrast */
 :deep(.p-dialog) {
   border-radius: 16px;
   overflow: hidden;
-  backdrop-filter: blur(12px);
-  background: rgba(30, 41, 59, 0.95);
-  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  border: none;
+  box-shadow: var(--shadow-dialog);
 }
 
 :root.light-theme :deep(.p-dialog) {
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--bg-surface);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
 }
 
 :deep(.p-dialog .p-dialog-header) {
   background: transparent;
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 20px 24px;
+  border-bottom: none;
+  padding: 24px 24px 0;
+}
+
+:deep(.p-dialog .p-dialog-header .p-dialog-title) {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+:deep(.p-dialog .p-dialog-header-close) {
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  color: var(--text-muted);
+  transition: all 0.15s ease;
+}
+
+:deep(.p-dialog .p-dialog-header-close:hover) {
+  background: var(--hover-overlay);
+  color: var(--text-main);
 }
 
 :deep(.p-dialog .p-dialog-content) {
   background: transparent;
-  padding: 24px;
+  padding: 16px 24px 24px;
 }
 
 :deep(.p-dialog .p-dialog-footer) {
   background: transparent;
-  border-top: 1px solid var(--border-subtle);
-  padding: 16px 24px;
+  border-top: none;
+  padding: 0 24px 24px;
+  display: flex;
+  gap: 12px;
 }
 
 /* 6. DataView（网格视图）分页器样式 */
@@ -2893,72 +2934,57 @@ button:focus-visible {
 
 /* 对话框主体样式 */
 .p-confirmdialog {
-  max-width: 420px;
+  width: 460px;
+  max-width: 90vw;
   border-radius: 16px;
   overflow: hidden;
-  backdrop-filter: blur(16px);
-  background: rgba(30, 41, 59, 0.98);
-  border: 1px solid var(--border-subtle);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  background: var(--bg-card);
+  border: none;
+  box-shadow: var(--shadow-dialog);
 }
 
 :root.light-theme .p-confirmdialog {
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+  background: var(--bg-surface);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
 }
 
-/* 对话框标题栏 */
-.p-confirmdialog .p-dialog-header {
+/* 标题栏 */
+.p-dialog.p-confirmdialog .p-dialog-header {
   background: transparent;
   border-bottom: none;
-  padding: 24px 24px 8px;
+  padding: 24px 24px 0;
 }
 
-.p-confirmdialog .p-dialog-title {
+.p-dialog.p-confirmdialog .p-dialog-title {
   font-size: 18px;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-weight: 700;
+  color: var(--text-main);
 }
 
-/* 关闭按钮 */
-.p-confirmdialog .p-dialog-header-close {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  color: var(--text-muted);
-  transition: all 0.2s ease;
+:root.light-theme .p-dialog.p-confirmdialog .p-dialog-title {
+  color: var(--text-on-surface);
 }
 
-.p-confirmdialog .p-dialog-header-close:hover {
-  background: var(--hover-overlay);
-  color: var(--text-primary);
-}
-
-/* 对话框内容区域 */
-.p-confirmdialog .p-dialog-content {
+/* 内容区域 */
+.p-dialog.p-confirmdialog .p-dialog-content {
   background: transparent;
-  padding: 24px 24px 28px;
+  padding: 20px 24px 24px;
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 12px;
 }
 
-/* 图标圆形背景衬底 */
-.p-confirmdialog .p-confirmdialog-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--warning-soft);
-  color: var(--warning);
-  font-size: 20px;
+/* 图标隐藏 */
+.p-dialog.p-confirmdialog .p-confirmdialog-icon {
+  font-size: 28px;
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: none;
 }
 
-/* 消息文本样式 */
-.p-confirmdialog .p-confirmdialog-message {
+/* 消息文本 */
+.p-dialog.p-confirmdialog .p-confirmdialog-message {
   font-size: 14px;
   line-height: 1.6;
   color: var(--text-secondary);
@@ -2966,130 +2992,202 @@ button:focus-visible {
   word-break: break-word;
 }
 
-/* 对话框底部按钮区域 */
-.p-confirmdialog .p-dialog-footer {
+/* 底部按钮区域 — 右对齐横排 */
+.p-dialog.p-confirmdialog .p-dialog-footer {
   background: transparent;
-  border-top: 1px solid var(--border-subtle);
-  padding: 20px 24px;
+  border-top: none;
+  padding: 8px 24px 24px;
   display: flex;
+  flex-direction: row;
   justify-content: flex-end;
   gap: 12px;
 }
 
-/* 取消按钮 - 次要样式 */
-.p-confirmdialog .p-confirmdialog-reject-button {
-  background: transparent;
-  border: 1px solid var(--border-subtle);
-  color: var(--text-primary);
-  padding: 10px 20px;
+/* 确认按钮 — 实心主色 */
+.p-dialog.p-confirmdialog .p-confirmdialog-accept-button {
+  background: var(--primary);
+  border: none;
+  color: white;
+  padding: 10px 24px;
   border-radius: 8px;
-  font-weight: 500;
-  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  order: 1;
 }
 
-.p-confirmdialog .p-confirmdialog-reject-button:hover {
-  background: var(--hover-overlay);
-  border-color: var(--text-muted);
+.p-dialog.p-confirmdialog .p-confirmdialog-accept-button:hover {
+  opacity: 0.9;
 }
 
-.p-confirmdialog .p-confirmdialog-reject-button:active {
-  transform: translateY(0);
-  background: var(--hover-overlay);
+.p-dialog.p-confirmdialog .p-confirmdialog-accept-button:active {
+  transform: scale(0.98);
 }
 
-.p-confirmdialog .p-confirmdialog-reject-button:focus-visible {
+.p-dialog.p-confirmdialog .p-confirmdialog-accept-button:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 
-/* 确认按钮 - 主要样式 */
-.p-confirmdialog .p-confirmdialog-accept-button {
-  background: var(--primary);
-  border: none;
-  color: white;
-  padding: 10px 20px;
+/* 取消按钮 — outlined 次要 */
+.p-dialog.p-confirmdialog .p-confirmdialog-reject-button {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  padding: 10px 24px;
   border-radius: 8px;
-  font-weight: 500;
-  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.15s ease;
+  order: 0;
 }
 
-.p-confirmdialog .p-confirmdialog-accept-button:hover {
-  background: var(--primary-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+.p-dialog.p-confirmdialog .p-confirmdialog-reject-button:hover {
+  background: var(--hover-overlay);
+  border-color: var(--text-muted);
 }
 
-.p-confirmdialog .p-confirmdialog-accept-button:active {
-  transform: translateY(0);
-  box-shadow: none;
+.p-dialog.p-confirmdialog .p-confirmdialog-reject-button:active {
+  transform: scale(0.98);
 }
 
-.p-confirmdialog .p-confirmdialog-accept-button:focus-visible {
+.p-dialog.p-confirmdialog .p-confirmdialog-reject-button:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 
 /* danger 按钮（删除操作） */
-.p-confirmdialog .p-confirmdialog-accept-button.p-button-danger {
+.p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-danger {
   background: var(--error);
 }
 
-.p-confirmdialog .p-confirmdialog-accept-button.p-button-danger:hover {
-  background: #dc2626;
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+.p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-danger:hover {
+  opacity: 0.9;
 }
 
-.p-confirmdialog .p-confirmdialog-accept-button.p-button-danger:focus-visible {
+.p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-danger:focus-visible {
   outline-color: var(--error);
 }
 
-/* warning 按钮（警告操作） */
-.p-confirmdialog .p-confirmdialog-accept-button.p-button-warning {
+/* warning 按钮 */
+.p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-warning {
   background: var(--warning);
   color: #1a1a1a;
 }
 
-.p-confirmdialog .p-confirmdialog-accept-button.p-button-warning:hover {
-  background: #d97706;
-  box-shadow: 0 4px 12px rgba(234, 179, 8, 0.4);
+.p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-warning:hover {
+  opacity: 0.9;
 }
 
-.p-confirmdialog .p-confirmdialog-accept-button.p-button-warning:focus-visible {
+.p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-warning:focus-visible {
   outline-color: var(--warning);
 }
 
-/* :has() 联动——danger 弹窗图标自动变红 */
-.p-confirmdialog:has(.p-button-danger) .p-confirmdialog-icon {
-  background: var(--error-soft);
-  color: var(--error);
-}
-
-/* 浅色主题下的按钮样式 */
-:root.light-theme .p-confirmdialog .p-confirmdialog-reject-button {
+/* 浅色主题按钮 */
+:root.light-theme .p-dialog.p-confirmdialog .p-confirmdialog-reject-button {
+  background: transparent;
   border-color: #d1d5db;
   color: #374151;
 }
 
-:root.light-theme .p-confirmdialog .p-confirmdialog-reject-button:hover {
+:root.light-theme .p-dialog.p-confirmdialog .p-confirmdialog-reject-button:hover {
   background: #f3f4f6;
   border-color: #9ca3af;
 }
 
-/* 对话框进入动画 */
+/* 对话框动画 */
 .p-confirmdialog.p-dialog-enter-active {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .p-confirmdialog.p-dialog-enter-from {
   opacity: 0;
-  transform: scale(0.95) translateY(-10px);
+  transform: scale(0.92);
 }
 
 .p-confirmdialog.p-dialog-leave-active {
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .p-confirmdialog.p-dialog-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
+/* ===== 10. BackupPasswordDialog ===== */
+
+.backup-password-dlg {
+  width: 460px;
+  max-width: 90vw;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--bg-card);
+  border: none;
+  box-shadow: var(--shadow-dialog);
+}
+
+:root.light-theme .backup-password-dlg {
+  background: var(--bg-surface);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.p-dialog.backup-password-dlg .p-dialog-header {
+  background: transparent;
+  border-bottom: none;
+  padding: 24px 24px 0;
+}
+
+.p-dialog.backup-password-dlg .p-dialog-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+:root.light-theme .p-dialog.backup-password-dlg .p-dialog-title {
+  color: var(--text-on-surface);
+}
+
+.p-dialog.backup-password-dlg .p-dialog-header-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--text-muted);
+  transition: all 0.15s ease;
+}
+
+.p-dialog.backup-password-dlg .p-dialog-header-close:hover {
+  background: var(--hover-overlay);
+  color: var(--text-main);
+}
+
+.p-dialog.backup-password-dlg .p-dialog-content {
+  background: transparent;
+  padding: 20px 24px 24px;
+}
+
+.p-dialog.backup-password-dlg .p-dialog-footer {
+  background: transparent;
+  border-top: none;
+  padding: 8px 24px 24px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.backup-password-dlg.p-dialog-enter-active {
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.backup-password-dlg.p-dialog-enter-from {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+.backup-password-dlg.p-dialog-leave-active {
+  transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.backup-password-dlg.p-dialog-leave-to {
   opacity: 0;
   transform: scale(0.95);
 }

@@ -145,7 +145,7 @@ const formData = ref({
   selectedPrefixIndex: 0,
   linkPrefixList: [...DEFAULT_PREFIXES],
   analyticsEnabled: true,
-  appBehavior: { autoStart: false, minimizeToTrayOnStart: false },
+  appBehavior: { autoStart: false, minimizeToTrayOnStart: false, closeToTray: true },
   linkOutput: {
     defaultFormat: 'url' as import('../../utils/linkFormatter').LinkFormat,
     customTemplate: '{url}',
@@ -294,7 +294,10 @@ async function loadSettings() {
     }
 
     formData.value.analyticsEnabled = config.analytics?.enabled ?? true;
-    formData.value.appBehavior = config.appBehavior ?? { autoStart: false, minimizeToTrayOnStart: false };
+    formData.value.appBehavior = config.appBehavior ?? { autoStart: false, minimizeToTrayOnStart: false, closeToTray: true };
+    if (formData.value.appBehavior.closeToTray === undefined) {
+      formData.value.appBehavior.closeToTray = true;
+    }
     formData.value.autoUpdateEnabled = config.autoUpdate?.enabled ?? true;
     formData.value.globalShortcut = config.globalShortcut ?? {
       enabled: true,
@@ -800,6 +803,12 @@ async function handleAutoStartChange(enabled: boolean) {
   saveSettings();
 }
 
+async function handleCloseToTrayChange(enabled: boolean) {
+  formData.value.appBehavior.closeToTray = enabled;
+  await invoke('set_close_to_tray', { enabled });
+  saveSettings();
+}
+
 // ==================== 图床跳转 ====================
 
 // ==================== 生命周期 ====================
@@ -871,6 +880,7 @@ onUnmounted(() => {
           :current-theme="currentTheme"
           :auto-start="formData.appBehavior.autoStart"
           :minimize-to-tray-on-start="formData.appBehavior.minimizeToTrayOnStart"
+          :close-to-tray="formData.appBehavior.closeToTray"
           :analytics-enabled="formData.analyticsEnabled"
           :is-clearing-cache="isClearingCache"
           :link-default-format="formData.linkOutput.defaultFormat"
@@ -882,6 +892,7 @@ onUnmounted(() => {
           @update:current-theme="handleThemeChange"
           @update:auto-start="handleAutoStartChange"
           @update:minimize-to-tray-on-start="(v) => { formData.appBehavior.minimizeToTrayOnStart = v; saveSettings(); }"
+          @update:close-to-tray="handleCloseToTrayChange"
           @update:analytics-enabled="(v) => { formData.analyticsEnabled = v; handleAnalyticsToggle(); }"
           @update:link-default-format="(v) => { formData.linkOutput.defaultFormat = v; }"
           @update:link-custom-template="(v) => { formData.linkOutput.customTemplate = v; }"

@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import { computed, watch, nextTick } from 'vue';
-import Checkbox from 'primevue/checkbox';
+import { ref, computed, watch, nextTick } from 'vue';
 import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
 import Textarea from 'primevue/textarea';
 import HostingCard from './HostingCard.vue';
 import WeiboLinkPrefixSection from './hosting/WeiboLinkPrefixSection.vue';
 import GithubUrlStrategySection from './hosting/GithubUrlStrategySection.vue';
-import { getCategoryIcon } from '../../utils/icons';
 import type { GithubUrlStrategy, ServiceType } from '../../config/types';
 import { PRIVATE_SERVICES, PUBLIC_SERVICES } from '../../config/types';
 import type { BatchTestProgress } from '../../types/batchTest';
@@ -181,21 +179,28 @@ function getChipTooltip(svc: ServiceType): string | null {
   if (status === 'unconfigured') return '未配置，点击跳转到配置';
   return healthTooltipMap.value[svc] ?? null;
 }
+
+const activeFilter = ref<ServiceHealthStatus | null>(null);
+
+function toggleFilter(status: ServiceHealthStatus) {
+  activeFilter.value = activeFilter.value === status ? null : status;
+}
 </script>
 
 <template>
   <div class="hosting-settings-panel">
     <div class="section-header">
       <h2>图床设置</h2>
-      <p class="section-desc">选择你需要的图床服务，配置后即可开始上传</p>
+      <p class="section-desc">勾选启用图床服务，点击服务名可跳转配置</p>
     </div>
 
-    <template v-if="healthSummary.hasConfigured">
-      <div class="group-title">
-        <i class="pi pi-heart-fill category-icon"></i>
-        <span>连接状态</span>
-      </div>
-      <div class="health-overview">
+    <!-- 启用的图床服务（整合连接状态） -->
+    <div class="group-title">
+      <span>启用的服务</span>
+    </div>
+    <div class="service-enable-section">
+      <!-- 摘要头部（原连接状态，移入卡片内） -->
+      <div class="service-health-header" v-if="healthSummary.hasConfigured">
         <template v-if="isBatchTesting && batchTestProgress">
           <div class="health-checking-wrapper">
             <div class="health-checking">
@@ -221,19 +226,19 @@ function getChipTooltip(svc: ServiceType): string | null {
         <template v-else>
           <div class="health-row">
             <div class="health-stats" :key="batchTestCompletionKey">
-              <span v-if="healthSummary.verified > 0" class="health-pill verified pill-reveal">
+              <span v-if="healthSummary.verified > 0" class="health-pill verified pill-reveal" :class="{ active: activeFilter === 'verified' }" @click="toggleFilter('verified')">
                 <span class="health-dot"></span>
                 {{ healthSummary.verified }} 个正常
               </span>
-              <span v-if="healthSummary.error > 0" class="health-pill error pill-reveal">
+              <span v-if="healthSummary.error > 0" class="health-pill error pill-reveal" :class="{ active: activeFilter === 'error' }" @click="toggleFilter('error')">
                 <span class="health-dot"></span>
                 {{ healthSummary.error }} 个异常
               </span>
-              <span v-if="healthSummary.pending > 0" class="health-pill pending pill-reveal">
+              <span v-if="healthSummary.pending > 0" class="health-pill pending pill-reveal" :class="{ active: activeFilter === 'pending' }" @click="toggleFilter('pending')">
                 <span class="health-dot"></span>
                 {{ healthSummary.pending }} 个未检测
               </span>
-              <span v-if="healthSummary.unconfigured > 0" class="health-pill unconfigured pill-reveal">
+              <span v-if="healthSummary.unconfigured > 0" class="health-pill unconfigured pill-reveal" :class="{ active: activeFilter === 'unconfigured' }" @click="toggleFilter('unconfigured')">
                 <span class="health-dot"></span>
                 {{ healthSummary.unconfigured }} 个未配置
               </span>
@@ -245,15 +250,7 @@ function getChipTooltip(svc: ServiceType): string | null {
           </div>
         </template>
       </div>
-    </template>
 
-    <!-- 启用的图床服务 -->
-    <div class="group-title">
-      <i class="pi pi-check-square category-icon"></i>
-      <span>启用的服务</span>
-    </div>
-    <p class="service-enable-helper">勾选后显示在上传界面，点击服务名可跳转到对应配置。</p>
-    <div class="service-enable-section">
       <div class="service-group-section">
         <div class="service-group-title">私有存储</div>
         <div class="service-toggles-grid">
@@ -261,17 +258,21 @@ function getChipTooltip(svc: ServiceType): string | null {
             v-for="svc in PRIVATE_SERVICES"
             :key="svc"
             class="toggle-chip"
-            :class="healthStatusMap[svc]"
+            :class="[healthStatusMap[svc], { 'is-filtered-out': activeFilter && healthStatusMap[svc] !== activeFilter }]"
             v-tooltip.top="getChipTooltip(svc)"
             @click="handleChipClick(svc)"
           >
-            <Checkbox
-              :modelValue="localAvailableServices.includes(svc)"
-              :binary="true"
-              :disabled="healthStatusMap[svc] === 'unconfigured'"
-              @click.stop
-              @update:modelValue="toggleService(svc)"
-            />
+            <span v-if="healthStatusMap[svc] === 'unconfigured'" class="toggle-empty-circle"></span>
+            <button
+              v-else
+              class="toggle-indicator"
+              :class="{ checked: localAvailableServices.includes(svc) }"
+              :aria-pressed="localAvailableServices.includes(svc)"
+              :aria-label="`${localAvailableServices.includes(svc) ? '禁用' : '启用'} ${serviceNames[svc]}`"
+              @click.stop="toggleService(svc)"
+            >
+              <i v-if="localAvailableServices.includes(svc)" class="pi pi-check"></i>
+            </button>
             <span class="toggle-label">{{ serviceNames[svc] }}</span>
           </div>
         </div>
@@ -284,17 +285,21 @@ function getChipTooltip(svc: ServiceType): string | null {
             v-for="svc in PUBLIC_SERVICES"
             :key="svc"
             class="toggle-chip"
-            :class="healthStatusMap[svc]"
+            :class="[healthStatusMap[svc], { 'is-filtered-out': activeFilter && healthStatusMap[svc] !== activeFilter }]"
             v-tooltip.top="getChipTooltip(svc)"
             @click="handleChipClick(svc)"
           >
-            <Checkbox
-              :modelValue="localAvailableServices.includes(svc)"
-              :binary="true"
-              :disabled="healthStatusMap[svc] === 'unconfigured'"
-              @click.stop
-              @update:modelValue="toggleService(svc)"
-            />
+            <span v-if="healthStatusMap[svc] === 'unconfigured'" class="toggle-empty-circle"></span>
+            <button
+              v-else
+              class="toggle-indicator"
+              :class="{ checked: localAvailableServices.includes(svc) }"
+              :aria-pressed="localAvailableServices.includes(svc)"
+              :aria-label="`${localAvailableServices.includes(svc) ? '禁用' : '启用'} ${serviceNames[svc]}`"
+              @click.stop="toggleService(svc)"
+            >
+              <i v-if="localAvailableServices.includes(svc)" class="pi pi-check"></i>
+            </button>
             <span class="toggle-label">{{ serviceNames[svc] }}</span>
           </div>
         </div>
@@ -303,7 +308,6 @@ function getChipTooltip(svc: ServiceType): string | null {
 
     <div class="settings-content">
       <div class="group-title">
-        <span class="category-icon" v-html="getCategoryIcon('private-storage')"></span>
         <span>私有存储</span>
       </div>
       <div class="provider-grid">
@@ -501,7 +505,6 @@ function getChipTooltip(svc: ServiceType): string | null {
       </div>
 
       <div class="group-title">
-        <span class="category-icon" v-html="getCategoryIcon('public-easy')"></span>
         <span>公共图床 · 免配置</span>
       </div>
       <div class="provider-grid">
@@ -543,7 +546,6 @@ function getChipTooltip(svc: ServiceType): string | null {
       </div>
 
       <div class="group-title">
-        <span class="category-icon" v-html="getCategoryIcon('public-cookie')"></span>
         <span>公共图床 · Cookie 登录</span>
       </div>
       <div class="provider-grid">
@@ -699,7 +701,6 @@ function getChipTooltip(svc: ServiceType): string | null {
       </div>
 
       <div class="group-title">
-        <span class="category-icon" v-html="getCategoryIcon('public-token')"></span>
         <span>公共图床 · Token 授权</span>
       </div>
       <div class="provider-grid">
@@ -820,11 +821,10 @@ function getChipTooltip(svc: ServiceType): string | null {
   margin: 0;
 }
 
-.health-overview {
-  padding: 10px 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+.service-health-header {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .health-row {
@@ -938,6 +938,13 @@ function getChipTooltip(svc: ServiceType): string | null {
   font-weight: 500;
   transition: all 0.15s ease;
   white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.health-pill.active {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
 }
 
 .health-pill .health-dot {
@@ -968,12 +975,12 @@ function getChipTooltip(svc: ServiceType): string | null {
 
 
 .health-pill.pending {
-  background: color-mix(in srgb, var(--warning) 12%, transparent);
-  color: var(--warning);
+  background: color-mix(in srgb, var(--pending) 12%, transparent);
+  color: var(--pending);
 }
 
 .health-pill.pending .health-dot {
-  background: var(--warning);
+  background: var(--pending);
 }
 
 
@@ -1038,12 +1045,6 @@ function getChipTooltip(svc: ServiceType): string | null {
   font-size: 10px;
 }
 
-.service-enable-helper {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin: 0 0 12px 0;
-}
-
 .service-enable-section {
   padding: 14px;
   background: var(--bg-card);
@@ -1069,67 +1070,142 @@ function getChipTooltip(svc: ServiceType): string | null {
 }
 
 .service-toggles-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .toggle-chip {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px;
-  background: var(--bg-app);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--hover-overlay-subtle);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .toggle-chip .toggle-label {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-primary);
-  flex: 1;
+  white-space: nowrap;
 }
 
-/* 可用 - 绿色边框 */
+/* 可用 - 淡绿底 */
 .toggle-chip.verified {
-  border-color: var(--success);
+  background: var(--success-alpha-8);
+}
+.toggle-chip.verified:hover {
+  background: var(--success-alpha-15);
 }
 
-.toggle-chip.verified :deep(.p-checkbox.p-checked) {
-  background-color: var(--success);
-  border-color: var(--success);
-}
-
-/* 异常 - 红色边框 */
-.toggle-chip.error {
-  border-color: var(--error);
-}
-
-.toggle-chip.error :deep(.p-checkbox.p-checked) {
-  background-color: var(--error);
-  border-color: var(--error);
-}
-
-/* 待验证 - 黄色边框 */
-.toggle-chip.pending {
-  border-color: var(--warning);
-}
-
-.toggle-chip.pending :deep(.p-checkbox.p-checked) {
-  background-color: var(--warning);
-  border-color: var(--warning);
-}
-
-/* 未配置 - 灰色 */
+/* 未配置 - 明确弱化（安静的多数态） */
 .toggle-chip.unconfigured {
   cursor: pointer;
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.04);
+}
+.toggle-chip.unconfigured .toggle-label {
+  opacity: 0.4;
+}
+.toggle-chip.unconfigured:hover {
+  background: var(--primary-alpha-8);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.toggle-chip.unconfigured:hover .toggle-label {
+  opacity: 0.7;
 }
 
-.toggle-chip.unconfigured:hover {
+.toggle-indicator {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: none;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+  opacity: 0.45;
+}
+
+.toggle-indicator .pi {
+  font-size: 10px;
+  color: #fff;
+  display: none;
+}
+
+.toggle-indicator.checked {
+  opacity: 1;
+  border: none;
+}
+
+.toggle-indicator.checked .pi {
+  display: block;
+}
+
+.toggle-chip.verified .toggle-indicator.checked {
+  background: var(--success);
+}
+
+.toggle-chip.pending .toggle-indicator.checked {
+  background: var(--pending);
+}
+
+.toggle-chip.error .toggle-indicator.checked {
+  background: var(--error);
+}
+
+.toggle-indicator:hover {
+  opacity: 0.8;
   border-color: var(--primary);
-  border-style: dashed;
+}
+
+.toggle-indicator.checked:hover {
+  filter: brightness(1.15);
+}
+
+.toggle-empty-circle {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-muted);
+  opacity: 0.3;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.toggle-chip.unconfigured:hover .toggle-empty-circle {
+  opacity: 0.5;
+  border-color: var(--primary);
+}
+
+/* 未检测 - 淡紫底 */
+.toggle-chip.pending {
+  background: var(--pending-alpha-8);
+}
+.toggle-chip.pending:hover {
+  background: var(--pending-alpha-15);
+}
+
+/* 有问题 - 淡红底 */
+.toggle-chip.error {
+  background: var(--error-alpha-8);
+}
+.toggle-chip.error:hover {
+  background: var(--error-alpha-15);
+}
+
+/* 筛选时未匹配的药丸淡化 */
+.toggle-chip.is-filtered-out {
+  opacity: 0.15;
+  pointer-events: none;
+  transition: opacity 0.2s;
 }
 
 .settings-content {

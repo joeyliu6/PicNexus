@@ -2,8 +2,7 @@
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { emit as tauriEmit, type UnlistenFn } from '@tauri-apps/api/event';
-import Dialog from 'primevue/dialog';
-import Button from 'primevue/button';
+import { useConfirm } from '../../composables/useConfirm';
 import type { ServiceType, UserConfig } from '../../config/types';
 import { PRIVATE_SERVICES, PUBLIC_SERVICES, DEFAULT_CONFIG } from '../../config/types';
 import { useToast } from '../../composables/useToast';
@@ -22,6 +21,7 @@ import UploadQueuePanel from './upload/UploadQueuePanel.vue';
 
 const toast = useToast();
 const { healthStatusMap, healthTooltipMap, loadHealthStatus, evaluateConfig } = useServiceHealth();
+const { showConfirm } = useConfirm();
 
 // 获取全局队列状态
 const { queueItems, clearQueue, clearCompletedItems, hasCompletedItems } = useQueueState();
@@ -204,7 +204,6 @@ const hasQueueItems = computed(() => {
 });
 
 // 清空确认对话框状态
-const showClearConfirm = ref(false);
 
 // 批量重试状态
 const isBatchRetrying = ref(false);
@@ -231,16 +230,20 @@ const handleBatchRetry = async () => {
   }
 };
 
-// 显示清空确认对话框
+// 清空队列（带确认）
 const handleClearQueue = () => {
-  showClearConfirm.value = true;
-};
-
-// 确认清空队列
-const confirmClearQueue = () => {
-  clearQueue();
-  showClearConfirm.value = false;
-  toast.success('已清空', '上传队列已清空');
+  showConfirm({
+    header: '确认清空',
+    message: '确定要清空上传队列吗？此操作不可撤销。',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: '清空',
+    rejectLabel: '取消',
+    acceptClass: 'p-button-danger',
+    accept: () => {
+      clearQueue();
+      toast.success('已清空', '上传队列已清空');
+    }
+  });
 };
 
 // 清空已完成的队列项（无需确认，不影响进行中的上传）
@@ -349,32 +352,6 @@ onUnmounted(() => {
       />
     </div>
 
-    <!-- 清空确认对话框 -->
-    <Dialog
-      v-model:visible="showClearConfirm"
-      header="确认清空"
-      :modal="true"
-      :closable="true"
-      :style="{ width: '360px' }"
-    >
-      <div class="confirm-content">
-        <i class="pi pi-exclamation-triangle confirm-icon"></i>
-        <p>确定要清空上传队列吗？此操作不可恢复。</p>
-      </div>
-      <template #footer>
-        <Button
-          label="取消"
-          severity="secondary"
-          text
-          @click="showClearConfirm = false"
-        />
-        <Button
-          label="确定清空"
-          severity="danger"
-          @click="confirmClearQueue"
-        />
-      </template>
-    </Dialog>
   </div>
 </template>
 
@@ -392,26 +369,6 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 20px;
-}
-
-/* 确认对话框内容 */
-.confirm-content {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 8px 0;
-}
-
-.confirm-content .confirm-icon {
-  color: var(--warning);
-  font-size: 1.5rem;
-  flex-shrink: 0;
-}
-
-.confirm-content p {
-  margin: 0;
-  color: var(--text-secondary);
-  line-height: 1.5;
 }
 
 /* 滚动条 */

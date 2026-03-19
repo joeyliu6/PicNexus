@@ -14,6 +14,7 @@ interface Props {
   currentTheme: ThemeMode;
   autoStart: boolean;
   minimizeToTrayOnStart: boolean;
+  closeToTray: boolean;
   analyticsEnabled: boolean;
   isClearingCache: boolean;
   linkDefaultFormat: LinkFormat;
@@ -32,6 +33,7 @@ const emit = defineEmits<{
   'update:currentTheme': [theme: ThemeMode];
   'update:autoStart': [enabled: boolean];
   'update:minimizeToTrayOnStart': [enabled: boolean];
+  'update:closeToTray': [enabled: boolean];
   'update:analyticsEnabled': [enabled: boolean];
   'update:linkDefaultFormat': [format: LinkFormat];
   'update:linkCustomTemplate': [template: string];
@@ -112,35 +114,37 @@ function handleTemplateChange(template: string | undefined) {
     <div class="form-group">
       <label class="group-label">应用行为</label>
       <div class="behavior-toggles">
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-row-label">开机自启动</span>
-            <span class="toggle-row-desc">系统启动时自动运行 PicNexus</span>
+        <div class="toggle-group">
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-row-label">开机自启动</span>
+              <span class="toggle-row-desc">系统启动时自动运行 PicNexus</span>
+            </div>
+            <ToggleSwitch
+              :modelValue="autoStart"
+              @update:modelValue="(v: boolean) => emit('update:autoStart', v)"
+            />
           </div>
-          <ToggleSwitch
-            :modelValue="autoStart"
-            @update:modelValue="(v: boolean) => emit('update:autoStart', v)"
-          />
-        </div>
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-row-label">启动时最小化到托盘</span>
-            <span class="toggle-row-desc">启动后不显示主窗口，仅显示托盘图标</span>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-row-label">静默启动</span>
+              <span class="toggle-row-desc">启动时直接最小化到托盘，不弹出主窗口</span>
+            </div>
+            <ToggleSwitch
+              :modelValue="minimizeToTrayOnStart"
+              @update:modelValue="(v: boolean) => emit('update:minimizeToTrayOnStart', v)"
+            />
           </div>
-          <ToggleSwitch
-            :modelValue="minimizeToTrayOnStart"
-            @update:modelValue="(v: boolean) => emit('update:minimizeToTrayOnStart', v)"
-          />
-        </div>
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-row-label">使用数据收集</span>
-            <span class="toggle-row-desc">允许发送匿名使用统计，帮助改进应用。不收集任何个人信息或上传内容。</span>
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-row-label">关闭时最小化到托盘</span>
+              <span class="toggle-row-desc">关闭窗口时不退出应用，最小化到系统托盘</span>
+            </div>
+            <ToggleSwitch
+              :modelValue="closeToTray"
+              @update:modelValue="(v: boolean) => emit('update:closeToTray', v)"
+            />
           </div>
-          <ToggleSwitch
-            v-model="localAnalyticsEnabled"
-            @change="emit('save')"
-          />
         </div>
       </div>
     </div>
@@ -152,33 +156,33 @@ function handleTemplateChange(template: string | undefined) {
       <label class="group-label">全局快捷键</label>
       <p class="helper-text">在任何应用中通过快捷键直接触发上传，无需切换窗口。</p>
       <div class="behavior-toggles">
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-row-label">启用全局快捷键</span>
-            <span class="toggle-row-desc">注册系统级快捷键，在后台也能触发上传</span>
+        <div class="toggle-group">
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-row-label">启用全局快捷键</span>
+              <span class="toggle-row-desc">注册系统级快捷键，在后台也能触发上传</span>
+            </div>
+            <ToggleSwitch
+              :modelValue="globalShortcutEnabled"
+              @update:modelValue="(v: boolean) => { emit('update:globalShortcutEnabled', v); emit('save'); }"
+            />
           </div>
-          <ToggleSwitch
-            :modelValue="globalShortcutEnabled"
-            @update:modelValue="(v: boolean) => { emit('update:globalShortcutEnabled', v); emit('save'); }"
-          />
-        </div>
-      </div>
-      <div v-if="globalShortcutEnabled" class="shortcut-config">
-        <div class="shortcut-row">
-          <span class="shortcut-label">剪贴板图片上传</span>
-          <ShortcutInput
-            :modelValue="shortcutUploadClipboard"
-            placeholder="点击录入快捷键"
-            @update:modelValue="(v: string) => { emit('update:shortcutUploadClipboard', v); emit('save'); }"
-          />
-        </div>
-        <div class="shortcut-row">
-          <span class="shortcut-label">选择文件上传</span>
-          <ShortcutInput
-            :modelValue="shortcutUploadFromFile"
-            placeholder="点击录入快捷键"
-            @update:modelValue="(v: string) => { emit('update:shortcutUploadFromFile', v); emit('save'); }"
-          />
+          <div v-if="globalShortcutEnabled" class="shortcut-row-in-group">
+            <span class="shortcut-label">剪贴板图片上传</span>
+            <ShortcutInput
+              :modelValue="shortcutUploadClipboard"
+              placeholder="点击录入快捷键"
+              @update:modelValue="(v: string) => { emit('update:shortcutUploadClipboard', v); emit('save'); }"
+            />
+          </div>
+          <div v-if="globalShortcutEnabled" class="shortcut-row-in-group">
+            <span class="shortcut-label">选择文件上传</span>
+            <ShortcutInput
+              :modelValue="shortcutUploadFromFile"
+              placeholder="点击录入快捷键"
+              @update:modelValue="(v: string) => { emit('update:shortcutUploadFromFile', v); emit('save'); }"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -235,11 +239,25 @@ function handleTemplateChange(template: string | undefined) {
 
     <Divider />
 
-    <!-- 数据管理 -->
+    <!-- 数据与隐私 -->
     <div class="form-group">
-      <label class="group-label">数据管理</label>
-      <p class="helper-text">管理上传历史记录和应用缓存。</p>
-      <div class="flex gap-2 flex-wrap">
+      <label class="group-label">数据与隐私</label>
+      <p class="helper-text">管理上传历史、应用缓存与隐私偏好。</p>
+      <div class="behavior-toggles">
+        <div class="toggle-group">
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-row-label">帮助改进 PicNexus</span>
+              <span class="toggle-row-desc">发送匿名使用统计，帮助我们持续优化体验。不涉及个人信息或上传内容。</span>
+            </div>
+            <ToggleSwitch
+              v-model="localAnalyticsEnabled"
+              @change="emit('save')"
+            />
+          </div>
+        </div>
+      </div>
+      <div class="flex gap-2 flex-wrap" style="margin-top: 20px;">
         <Button
           label="清空历史记录"
           icon="pi pi-trash"
@@ -292,7 +310,7 @@ function handleTemplateChange(template: string | undefined) {
 
 .theme-card.active {
   border-color: var(--primary);
-  background-color: rgba(59, 130, 246, 0.05);
+  background-color: var(--primary-alpha-5);
   color: var(--primary);
   font-weight: 600;
   box-shadow: 0 0 0 1px var(--primary);
@@ -302,7 +320,25 @@ function handleTemplateChange(template: string | undefined) {
 .behavior-toggles {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
+}
+
+.toggle-group {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-card);
+}
+
+.toggle-group .toggle-row {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.toggle-group .toggle-row:last-child {
+  border-bottom: none;
 }
 
 .toggle-row {
@@ -332,26 +368,21 @@ function handleTemplateChange(template: string | undefined) {
   color: var(--text-muted);
 }
 
-/* 快捷键配置 */
-.shortcut-config {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.shortcut-row {
+/* 快捷键配置（卡片内） */
+.shortcut-row-in-group {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.shortcut-row-in-group:last-child {
+  border-bottom: none;
 }
 
 .shortcut-label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
 }
@@ -396,7 +427,7 @@ function handleTemplateChange(template: string | undefined) {
 
 .format-card.active {
   border-color: var(--primary);
-  background-color: rgba(59, 130, 246, 0.05);
+  background-color: var(--primary-alpha-5);
   color: var(--primary);
   font-weight: 600;
   box-shadow: 0 0 0 1px var(--primary);

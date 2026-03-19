@@ -231,7 +231,7 @@ export class SecureStorage {
         ciphertext as BufferSource
       );
     } catch {
-      throw new Error('备份密码不正确');
+      throw new Error('迁移密码不正确');
     }
 
     // 密码验证通过，导出密钥存入钥匙串

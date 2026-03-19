@@ -4,16 +4,18 @@
  * 独立的表格视图组件，使用 DataTable 展示历史记录
  * v2.0: 服务端分页模式，支持大数据量
  */
-import { ref, shallowRef, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, shallowRef, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Checkbox from 'primevue/checkbox';
-import Tag from 'primevue/tag';
+import Popover from 'primevue/popover';
+import type PopoverType from 'primevue/popover';
 import Skeleton from 'primevue/skeleton';
 import type { HistoryItem, ServiceType } from '../../../config/types';
 import { getPrimaryImageUrl } from '../../../utils/imageUrl';
 import { getServiceDisplayName } from '../../../constants/serviceNames';
+import { getServiceIcon } from '../../../utils/icons';
 import { formatFileSize } from '../../../utils/formatters';
 import { useHistoryViewState, type LinkFormat } from '../../../composables/useHistoryViewState';
 import { useHistoryManager } from '../../../composables/useHistory';
@@ -145,6 +147,7 @@ async function loadCurrentPage() {
     totalRecords.value = 0;
   } finally {
     isLoadingPage.value = false;
+    nextTick(() => setupBadgeWidthObserver());
   }
 }
 
@@ -178,6 +181,7 @@ onMounted(async () => {
 
   // 初始加载第一页
   await loadCurrentPage();
+  nextTick(() => setupBadgeWidthObserver());
 });
 
 // 清理
@@ -187,6 +191,10 @@ onUnmounted(() => {
   // 取消事件监听
   unlistenUpdated?.();
   unlistenDeleted?.();
+
+  badgeResizeObserver?.disconnect();
+  badgeResizeObserver = null;
+  cancelAnimationFrame(resizeRafId);
 
   viewState.reset();
   thumbCache.clearThumbCache();
@@ -222,6 +230,78 @@ function getSuccessfulServices(item: HistoryItem): ServiceType[] {
   return item.results
     .filter(r => r.status === 'success')
     .map(r => r.serviceId);
+}
+
+// 自适应标签宽度（观测 td 父元素避免反馈循环）
+const badgeColumnWidth = ref(200);
+let badgeResizeObserver: ResizeObserver | null = null;
+let resizeRafId = 0;
+
+function setupBadgeWidthObserver(): void {
+  if (badgeResizeObserver) return;
+  const badge = document.querySelector('.service-badges') as HTMLElement | null;
+  const td = badge?.closest('td') as HTMLElement | null;
+  if (!td) return;
+
+  badgeColumnWidth.value = td.clientWidth - 32; // clientWidth 含 padding，减去 16px * 2
+  badgeResizeObserver = new ResizeObserver(entries => {
+    cancelAnimationFrame(resizeRafId);
+    resizeRafId = requestAnimationFrame(() => {
+      for (const entry of entries) {
+        badgeColumnWidth.value = entry.contentRect.width; // contentRect 已是 content box
+      }
+    });
+  });
+  badgeResizeObserver.observe(td);
+}
+
+const MORE_BTN_WIDTH = 30;
+const BADGE_GAP = 4;
+
+function estimateBadgeWidth(name: string): number {
+  let textWidth = 0;
+  for (const char of name) {
+    textWidth += char.charCodeAt(0) > 0x7F ? 12 : 7;
+  }
+  return 16 + 14 + 4 + textWidth; // padding + icon + icon-gap + text
+}
+
+function getVisibleCount(services: ServiceType[]): number {
+  const available = badgeColumnWidth.value;
+  let used = 0;
+  let count = 0;
+
+  for (let i = 0; i < services.length; i++) {
+    const width = estimateBadgeWidth(getServiceDisplayName(services[i]));
+    const gap = count > 0 ? BADGE_GAP : 0;
+    const remaining = services.length - i - 1;
+    const reserveMore = remaining > 0 ? MORE_BTN_WIDTH + BADGE_GAP : 0;
+
+    if (used + gap + width + reserveMore > available && count > 0) break;
+    used += gap + width;
+    count++;
+  }
+
+  return Math.max(count, 1);
+}
+
+// Popover 状态
+const servicePopoverRef = ref<InstanceType<typeof PopoverType> | null>(null);
+const popoverItem = ref<HistoryItem | null>(null);
+
+const popoverServices = computed<ServiceType[]>(() => {
+  if (!popoverItem.value) return [];
+  return getSuccessfulServices(popoverItem.value);
+});
+
+function openServicePopover(event: Event, item: HistoryItem): void {
+  popoverItem.value = item;
+  servicePopoverRef.value?.toggle(event);
+}
+
+function handlePopoverCopyLink(serviceId: ServiceType): void {
+  if (!popoverItem.value) return;
+  handleCopyServiceLink(popoverItem.value, serviceId);
 }
 
 async function handleCopyServiceLink(item: HistoryItem, serviceId: ServiceType): Promise<void> {
@@ -457,26 +537,51 @@ function handleBulkDelete(): void {
       </Column>
 
       <!-- 已传图床列 -->
-      <Column header="已传图床" style="width: 180px">
+      <Column header="已传图床" style="min-width: 120px">
         <template #body="{ data }">
           <Skeleton v-if="isSkeleton(data)" width="50px" height="22px" borderRadius="4px" />
-          <div
-            v-else
-            class="service-badges"
-            v-tooltip.top="getSuccessfulServices(data).map(id => getServiceDisplayName(id)).join('、')"
-          >
-            <Tag
-              v-for="serviceId in getSuccessfulServices(data)"
-              :key="serviceId"
-              :value="getServiceDisplayName(serviceId)"
-              severity="secondary"
-              class="mini-tag"
-              @click="handleCopyServiceLink(data, serviceId)"
-            />
+          <div v-else class="service-badges">
+            <TransitionGroup name="badge-pop">
+              <span
+                v-for="serviceId in getSuccessfulServices(data).slice(0, getVisibleCount(getSuccessfulServices(data)))"
+                :key="serviceId"
+                class="service-badge-icon"
+                :title="`点击复制 ${getServiceDisplayName(serviceId)} 链接`"
+                @click="handleCopyServiceLink(data, serviceId)"
+              >
+                <span class="badge-icon" v-html="getServiceIcon(serviceId)" />
+                <span class="badge-label">{{ getServiceDisplayName(serviceId) }}</span>
+              </span>
+              <span
+                v-if="getSuccessfulServices(data).length > getVisibleCount(getSuccessfulServices(data))"
+                :key="'more-' + getVisibleCount(getSuccessfulServices(data))"
+                class="service-badge-more"
+                @click="openServicePopover($event, data)"
+              >
+                +{{ getSuccessfulServices(data).length - getVisibleCount(getSuccessfulServices(data)) }}
+              </span>
+            </TransitionGroup>
           </div>
         </template>
       </Column>
     </DataTable>
+
+    <!-- 图床服务 Popover -->
+    <Popover ref="servicePopoverRef">
+      <div class="service-popover-list">
+        <button
+          v-for="serviceId in popoverServices"
+          :key="serviceId"
+          class="service-popover-item"
+          :aria-label="`复制 ${getServiceDisplayName(serviceId)} 链接`"
+          @click="handlePopoverCopyLink(serviceId)"
+        >
+          <span class="badge-icon" v-html="getServiceIcon(serviceId)" />
+          <span>{{ getServiceDisplayName(serviceId) }}</span>
+          <i class="pi pi-copy" />
+        </button>
+      </div>
+    </Popover>
 
     <!-- Lightbox -->
     <HistoryLightbox
@@ -681,22 +786,134 @@ function handleBulkDelete(): void {
 .service-badges {
   display: flex;
   gap: 4px;
+  align-items: center;
   flex-wrap: nowrap;
   overflow: hidden;
+  position: relative;
+}
+
+.service-badge-icon {
+  display: inline-flex;
   align-items: center;
-}
-
-.mini-tag {
-  font-size: 11px !important;
-  padding: 2px 6px !important;
-  height: auto !important;
+  gap: 4px;
+  padding: 3px 8px;
+  background: var(--primary-alpha-10);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--text-primary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.mini-tag:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.1);
+.service-badge-icon:hover {
+  background: var(--primary-alpha-15);
+}
+
+.badge-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.badge-icon :deep(svg) {
+  width: 100%;
+  height: 100%;
+}
+
+.badge-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.service-badge-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 6px;
+  background: var(--bg-input);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.service-badge-more:hover {
+  background: var(--primary-alpha-15);
+  color: var(--text-primary);
+}
+
+/* Q弹动画：只做进入和位移，不做离开（避免 absolute 在 flex 中错位） */
+.badge-pop-enter-active {
+  animation: badgeBounceIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.badge-pop-leave-active {
+  display: none;
+}
+
+.badge-pop-move {
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes badgeBounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  70% {
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Popover 列表 */
+.service-popover-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 140px;
+}
+
+.service-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-primary);
+  transition: background 0.15s;
+}
+
+.service-popover-item:hover {
+  background: var(--primary-alpha-10);
+}
+
+.service-popover-item .pi-copy {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.service-popover-item:hover .pi-copy {
+  opacity: 1;
 }
 
 /* 空状态 */

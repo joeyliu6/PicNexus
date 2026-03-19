@@ -222,8 +222,8 @@ export function useHistoryManager() {
       }
 
       const confirmed = await confirm(
-        '您确定要从本地历史记录中删除此条目吗？此操作不会删除已上传到图床的图片。',
-        '确认删除'
+        '确定要删除这条历史记录吗？此操作不可撤销。',
+        { header: '确认删除', acceptLabel: '删除', acceptClass: 'p-button-danger' }
       );
 
       if (!confirmed) {
@@ -262,7 +262,7 @@ export function useHistoryManager() {
     try {
       const confirmed = await confirm(
         '确定要清空所有上传历史记录吗？此操作不可撤销。',
-        '确认清空'
+        { header: '确认清空', acceptLabel: '清空', acceptClass: 'p-button-danger' }
       );
 
       if (!confirmed) {
@@ -421,7 +421,7 @@ export function useHistoryManager() {
 
       const confirmed = await confirm(
         `确定要删除选中的 ${selectedIds.length} 条历史记录吗？此操作不可撤销。`,
-        '批量删除确认'
+        { header: '批量删除确认', acceptLabel: '删除', acceptClass: 'p-button-danger' }
       );
 
       if (!confirmed) {

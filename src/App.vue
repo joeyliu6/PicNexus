@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { invoke } from '@tauri-apps/api/core';
 import MainLayout from './components/layout/MainLayout.vue';
 import OnboardingDialog from './components/onboarding/OnboardingDialog.vue';
 import BackupPasswordDialog from './components/dialogs/BackupPasswordDialog.vue';
@@ -60,7 +61,7 @@ async function handlePasswordConfirm(password: string) {
   try {
     await secureStorage.initWithPassword(pendingEncryptedContent, password);
   } catch (err) {
-    if (err instanceof Error && err.message === '备份密码不正确') {
+    if (err instanceof Error && err.message === '迁移密码不正确') {
       passwordDialogRef.value?.onPasswordFailed();
     } else {
       const msg = err instanceof Error ? err.message : String(err);
@@ -78,7 +79,7 @@ async function handlePasswordConfirm(password: string) {
  * 用户选择跳过密码输入，使用默认配置
  */
 async function handlePasswordSkip() {
-  toast.showConfig('info', { summary: '已使用默认配置启动', detail: '你可以随时在设置中重新输入备份密码恢复' });
+  toast.showConfig('info', { summary: '已使用默认配置启动', detail: '你可以随时在「备份与同步」中输入迁移密码恢复' });
   pendingEncryptedContent = '';
   await safeContinueStartup();
 }
@@ -91,6 +92,8 @@ async function continueStartup() {
   const configStore = new Store('.settings.dat');
   const config = await configStore.get<UserConfig>('config');
   const minimizeOnStart = config?.appBehavior?.minimizeToTrayOnStart ?? false;
+  const closeToTray = config?.appBehavior?.closeToTray ?? true;
+  await invoke('set_close_to_tray', { enabled: closeToTray });
 
   if (!minimizeOnStart) {
     await getCurrentWindow().show();
@@ -121,7 +124,7 @@ onMounted(async () => {
     await continueStartup();
   } catch (err) {
     if (err instanceof BackupPasswordRequiredError) {
-      console.log('[App] 检测到备份密码加密配置，等待用户输入密码');
+      console.log('[App] 检测到迁移密码加密配置，等待用户输入密码');
       try { await getCurrentWindow().show(); } catch { /* ignore */ }
 
       try {

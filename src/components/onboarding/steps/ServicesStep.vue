@@ -83,9 +83,9 @@
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
+  border: none;
 }
 
 .group-badge {

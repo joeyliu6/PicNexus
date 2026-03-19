@@ -55,8 +55,7 @@ function openExternal(url: string) {
 
 async function openLogDir() {
   try {
-    const logDir = await invoke<string>('get_log_dir');
-    await open(logDir);
+    await invoke('open_log_dir');
   } catch (e) {
     toast.error('打开失败', '无法打开日志目录');
   }

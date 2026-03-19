@@ -496,6 +496,8 @@ export interface AppBehaviorConfig {
   autoStart: boolean;
   /** 启动时最小化到托盘 */
   minimizeToTrayOnStart: boolean;
+  /** 关闭按钮最小化到托盘（false = 直接退出） */
+  closeToTray: boolean;
 }
 
 /**
@@ -533,7 +535,7 @@ export interface LinkOutputConfig {
  * 每次配置格式变更时递增此版本号
  * 迁移函数将根据此版本号决定是否需要执行迁移
  */
-export const CONFIG_VERSION = 10;
+export const CONFIG_VERSION = 11;
 
 export interface UserConfig {
   /**
@@ -818,7 +820,8 @@ export const DEFAULT_CONFIG: UserConfig = {
   },
   appBehavior: {
     autoStart: false,
-    minimizeToTrayOnStart: true
+    minimizeToTrayOnStart: false,
+    closeToTray: true
   },
   globalShortcut: {
     enabled: true,
@@ -1167,7 +1170,7 @@ export function migrateConfig(config: UserConfig): UserConfig {
   // 版本 5 -> 6：新增应用行为配置
   runStep(6, '新增应用行为配置', () => {
     if (!migratedConfig.appBehavior) {
-      migratedConfig.appBehavior = { autoStart: false, minimizeToTrayOnStart: false };
+      migratedConfig.appBehavior = { autoStart: false, minimizeToTrayOnStart: false, closeToTray: true };
     }
   });
 
@@ -1209,6 +1212,13 @@ export function migrateConfig(config: UserConfig): UserConfig {
   runStep(10, '新增自动更新配置', () => {
     if (!migratedConfig.autoUpdate) {
       migratedConfig.autoUpdate = { enabled: true };
+    }
+  });
+
+  // 版本 10 -> 11：新增关闭按钮行为配置
+  runStep(11, '新增关闭按钮行为配置', () => {
+    if (migratedConfig.appBehavior && migratedConfig.appBehavior.closeToTray === undefined) {
+      migratedConfig.appBehavior.closeToTray = true;
     }
   });
 

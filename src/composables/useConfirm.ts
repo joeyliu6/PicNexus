@@ -23,6 +23,17 @@ export interface ConfirmOptions {
 
   /** 图标 */
   icon?: string;
+
+  /** 确认按钮样式类（如 'p-button-danger'） */
+  acceptClass?: string;
+}
+
+/** 异步确认选项 */
+export interface ConfirmAsyncOptions {
+  header?: string;
+  acceptLabel?: string;
+  rejectLabel?: string;
+  acceptClass?: string;
 }
 
 /** 三态确认结果 */
@@ -60,6 +71,7 @@ export function useConfirm() {
       icon: options.icon || 'pi pi-exclamation-triangle',
       acceptLabel: options.acceptLabel || '确认',
       rejectLabel: options.rejectLabel || '取消',
+      acceptClass: options.acceptClass,
       accept: options.accept,
       reject: options.reject
     });
@@ -109,17 +121,25 @@ export function useConfirm() {
   /**
    * 异步确认对话框（返回 Promise）
    * @param message 消息内容
-   * @param header 对话框标题
+   * @param headerOrOptions 标题字符串，或完整选项对象
    * @returns Promise<boolean> 用户是否确认
    */
-  const confirmAsync = (message: string, header?: string): Promise<boolean> => {
+  const confirmAsync = (
+    message: string,
+    headerOrOptions?: string | ConfirmAsyncOptions
+  ): Promise<boolean> => {
+    const opts = typeof headerOrOptions === 'string'
+      ? { header: headerOrOptions }
+      : headerOrOptions || {};
+
     return new Promise((resolve) => {
       confirm.require({
-        header: header || '确认',
+        header: opts.header || '确认',
         message,
         icon: 'pi pi-exclamation-triangle',
-        acceptLabel: '确认',
-        rejectLabel: '取消',
+        acceptLabel: opts.acceptLabel || '确认',
+        rejectLabel: opts.rejectLabel || '取消',
+        acceptClass: opts.acceptClass,
         accept: () => resolve(true),
         reject: () => resolve(false)
       });

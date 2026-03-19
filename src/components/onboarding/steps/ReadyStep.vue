@@ -39,10 +39,10 @@
 }
 
 .step-icon {
-  width: 72px;
-  height: 72px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
-  background: #22c55e;
+  background: var(--success-alpha-15);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -50,15 +50,15 @@
 }
 
 .step-icon .pi {
-  font-size: 32px;
-  color: #fff;
+  font-size: 28px;
+  color: var(--success);
 }
 
 .step-title {
   font-size: 22px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-main);
-  margin: 0 0 12px;
+  margin: 0 0 8px;
 }
 
 .step-desc {
@@ -71,7 +71,7 @@
 .tip-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   text-align: left;
 }
 
@@ -79,16 +79,23 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 12px 16px;
-  border-radius: 10px;
+  padding: 14px 16px;
+  border-radius: 8px;
   background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
+  border: none;
 }
 
 .tip-item > .pi {
-  font-size: 18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--primary-alpha-15);
   color: var(--primary);
+  font-size: 16px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tip-content {
@@ -99,7 +106,7 @@
 
 .tip-label {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-main);
 }
 

@@ -6,7 +6,7 @@ const openMenuId = ref<number | null>(null);
 </script>
 
 <script setup lang="ts">
-import { computed, nextTick } from 'vue';
+import { ref, computed, nextTick } from 'vue';
 import Button from 'primevue/button';
 import { useClickOutside } from '../../../composables/useClickOutside';
 import type { ProfileSyncRecord } from '../../../config/types';
@@ -23,13 +23,11 @@ interface Props {
   isCloudEnabled: boolean;
   localLoading: { export: boolean; import: boolean };
   cloudLoading: { sync: boolean; forceUpload: boolean; forceDownload: boolean };
-  menuPlacement?: 'bottom' | 'top';
   providerName?: string;
   otherProfiles?: ProfileSyncRecord[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  menuPlacement: 'bottom',
   otherProfiles: () => [],
 });
 
@@ -47,10 +45,17 @@ const moreMenuVisible = computed({
   set: (val: boolean) => { openMenuId.value = val ? instanceId : null; }
 });
 const { target: moreMenuRef } = useClickOutside(() => { moreMenuVisible.value = false; });
+const menuPlaceTop = ref(false);
 
 async function toggleMoreMenu() {
   moreMenuVisible.value = !moreMenuVisible.value;
   if (moreMenuVisible.value) {
+    const wrapperEl = moreMenuRef.value as HTMLElement | null;
+    if (wrapperEl) {
+      const rect = wrapperEl.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      menuPlaceTop.value = spaceBelow < 140;
+    }
     await nextTick();
     const menuEl = moreMenuRef.value?.querySelector('.dropdown-menu') as HTMLElement | null;
     menuEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -123,7 +128,6 @@ const shortStatusText = computed(() => {
 const isHistoryType = computed(() => props.type === 'history');
 
 const syncButtonTooltip = computed(() => {
-  if (!props.isCloudEnabled) return '请先配置 WebDAV 连接';
   return isHistoryType.value
     ? '自动合并云端与本地记录，保留最新版本'
     : '自动合并云端与本地设置，冲突时保留本地';
@@ -188,12 +192,11 @@ const isAnyForceLoading = computed(() =>
       </div>
     </div>
 
-    <!-- 云端同步行 -->
-    <div class="card-row cloud-row">
+    <!-- 云端同步行：仅 WebDAV 已连接时显示 -->
+    <div v-if="isCloudEnabled" class="card-row cloud-row">
       <div class="row-label-group">
         <span class="row-label">云端同步</span>
         <span
-          v-if="isCloudEnabled"
           v-tooltip.bottom="tooltipContent"
           class="status-badge"
           :class="statusClass"
@@ -207,7 +210,6 @@ const isAnyForceLoading = computed(() =>
           <Button
             @click="emit('sync-cloud')"
             :loading="cloudLoading.sync"
-            :disabled="!isCloudEnabled"
             label="同步"
             icon="pi pi-sync"
             outlined
@@ -217,15 +219,15 @@ const isAnyForceLoading = computed(() =>
         <div class="dropdown-wrapper" ref="moreMenuRef">
           <Button
             @click.stop="toggleMoreMenu"
-            :disabled="!isCloudEnabled || isAnyForceLoading"
+            :disabled="isAnyForceLoading"
             label="更多"
             icon="pi pi-chevron-down"
             iconPos="right"
             outlined
             size="small"
           />
-          <Transition :name="props.menuPlacement === 'top' ? 'dropdown-up' : 'dropdown'">
-            <div v-if="moreMenuVisible" class="dropdown-menu" :class="{ 'placement-top': props.menuPlacement === 'top' }">
+          <Transition :name="menuPlaceTop ? 'dropdown-up' : 'dropdown'">
+            <div v-if="moreMenuVisible" class="dropdown-menu" :class="{ 'placement-top': menuPlaceTop }">
               <button
                 v-tooltip.left="'以本地数据完全替换云端，云端现有数据将丢失'"
                 class="dropdown-item danger"
@@ -266,13 +268,8 @@ const isAnyForceLoading = computed(() =>
   padding: 10px 14px;
 }
 
-.card-row:first-child {
-  border-radius: 12px 12px 0 0;
-}
-
 .card-row.cloud-row {
   background: var(--hover-overlay-subtle);
-  border-radius: 0 0 12px 12px;
 }
 
 .row-label {
@@ -315,12 +312,12 @@ const isAnyForceLoading = computed(() =>
   flex-shrink: 0;
 }
 
-.status-badge.synced { background: rgba(34, 197, 94, 0.12); color: var(--success); }
+.status-badge.synced { background: var(--success-soft); color: var(--success); }
 .status-badge.not-synced { background: var(--hover-overlay-subtle); color: var(--text-muted); }
-.status-badge.failed { background: rgba(239, 68, 68, 0.1); color: var(--error); }
-.status-badge.partial { background: rgba(245, 158, 11, 0.1); color: var(--warning); }
-.status-badge.stale-warning { background: rgba(245, 158, 11, 0.1); color: var(--warning); }
-.status-badge.stale-danger { background: rgba(230, 126, 34, 0.1); color: #e67e22; }
+.status-badge.failed { background: var(--error-soft); color: var(--error); }
+.status-badge.partial { background: var(--warning-soft); color: var(--warning); }
+.status-badge.stale-warning { background: var(--warning-soft); color: var(--warning); }
+.status-badge.stale-danger { background: var(--warning-soft); color: #e67e22; }
 
 /* 更多菜单 */
 .dropdown-wrapper {
@@ -370,7 +367,7 @@ const isAnyForceLoading = computed(() =>
 
 .dropdown-item .item-label { flex: 1; }
 .dropdown-item.danger { color: var(--error); }
-.dropdown-item.danger:hover:not(:disabled) { background: rgba(239, 68, 68, 0.08); }
+.dropdown-item.danger:hover:not(:disabled) { background: var(--error-soft); }
 .dropdown-item:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .dropdown-enter-active,

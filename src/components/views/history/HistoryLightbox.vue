@@ -191,7 +191,7 @@ const openInBrowser = async () => {
 const handleDelete = () => {
   if (!props.item) return;
   resetImageState();
-  confirmDelete('确定要删除这条记录吗？', () => {
+  confirmDelete('确定要删除这条历史记录吗？此操作不可撤销。', () => {
     emit('delete', props.item!);
   });
 };

@@ -1,24 +1,27 @@
 <template>
   <div class="onboarding-step welcome-step">
-    <div class="step-icon">
-      <i class="pi pi-images" />
-    </div>
     <h2 class="step-title">欢迎使用 PicNexus</h2>
     <p class="step-desc">
-      一次上传，多处备份。PicNexus 支持同时上传到多个图床，确保你的图片永不丢失。
+      简单、专业、安全的多图床上传工具
     </p>
     <div class="step-highlights">
       <div class="highlight-item">
-        <i class="pi pi-bolt" />
-        <span>拖拽即传，开箱即用</span>
+        <div class="highlight-icon">
+          <i class="pi pi-bolt" />
+        </div>
+        <span>极速上传</span>
       </div>
       <div class="highlight-item">
-        <i class="pi pi-cloud" />
-        <span>16+ 图床服务支持</span>
+        <div class="highlight-icon">
+          <i class="pi pi-cloud" />
+        </div>
+        <span>多图床支持</span>
       </div>
       <div class="highlight-item">
-        <i class="pi pi-shield" />
-        <span>配置加密，安全可靠</span>
+        <div class="highlight-icon">
+          <i class="pi pi-shield" />
+        </div>
+        <span>安全加密</span>
       </div>
     </div>
   </div>
@@ -29,58 +32,59 @@
   text-align: center;
 }
 
-.step-icon {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: var(--primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 20px;
-}
-
-.step-icon .pi {
-  font-size: 32px;
-  color: #fff;
-}
-
 .step-title {
-  font-size: 22px;
-  font-weight: 600;
+  font-size: 26px;
+  font-weight: 700;
   color: var(--text-main);
-  margin: 0 0 12px;
+  margin: 0 0 8px;
 }
 
 .step-desc {
   font-size: 14px;
   color: var(--text-muted);
   line-height: 1.6;
-  margin: 0 0 24px;
+  margin: 0 0 28px;
   max-width: 380px;
   margin-left: auto;
   margin-right: auto;
 }
 
 .step-highlights {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
-  align-items: flex-start;
-  max-width: 280px;
-  margin: 0 auto;
 }
 
 .highlight-item {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 10px;
-  font-size: 14px;
-  color: var(--text-main);
+  padding: 20px 12px;
+  border-radius: 12px;
+  background: var(--bg-input);
+  border: none;
+  text-align: center;
 }
 
-.highlight-item .pi {
-  font-size: 16px;
+.highlight-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  background: var(--primary-alpha-15);
   color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.highlight-icon .pi {
+  font-size: 22px;
+}
+
+.highlight-item span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
 }
 </style>

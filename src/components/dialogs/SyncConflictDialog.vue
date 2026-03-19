@@ -3,88 +3,67 @@
     v-model:visible="visible"
     modal
     header="同步冲突"
-    :style="{ width: '450px' }"
+    :style="{ width: '460px' }"
     :closable="true"
     :draggable="false"
     @hide="handleCancel"
   >
-    <div class="flex flex-col gap-4">
-      <!-- 冲突信息 -->
-      <Message severity="warn" :closable="false">
-        <template #icon>
-          <i class="pi pi-exclamation-triangle" />
-        </template>
-        <span class="ml-2">{{ conflict?.message }}</span>
-      </Message>
-
-      <!-- 时间戳信息 -->
-      <div class="text-sm text-surface-600 dark:text-surface-400">
-        <p v-if="conflict?.localTimestamp" class="mb-1">
-          <i class="pi pi-desktop mr-2" />
-          本地最后同步: {{ formatTime(conflict.localTimestamp) }}
-        </p>
-        <p v-if="conflict?.remoteTimestamp">
-          <i class="pi pi-cloud mr-2" />
-          云端最后更新: {{ formatTime(conflict.remoteTimestamp) }}
-        </p>
+    <div class="sync-conflict-content">
+      <!-- 冲突徽章 -->
+      <div class="conflict-badge">
+        <i class="pi pi-exclamation-triangle" />
+        <span>{{ conflict?.message || '检测到数据版本冲突' }}</span>
       </div>
 
-      <Divider />
+      <!-- 双卡片对比 -->
+      <div class="comparison-grid">
+        <!-- 云端版本 -->
+        <div class="version-card version-remote">
+          <div class="version-header">
+            <i class="pi pi-cloud" />
+            <span>云端版本</span>
+          </div>
+          <div class="version-meta">
+            <p v-if="conflict?.remoteTimestamp">
+              修改时间: {{ formatTime(conflict.remoteTimestamp) }}
+            </p>
+          </div>
+          <button class="version-action" @click="handleResolve('use_remote')">
+            保留此版本
+          </button>
+        </div>
 
-      <!-- 解决方式 -->
-      <div class="text-sm font-medium mb-2">请选择解决方式：</div>
-
-      <div class="flex flex-col gap-2">
-        <!-- 使用本地数据 -->
-        <Button
-          label="使用本地数据（覆盖云端）"
-          icon="pi pi-upload"
-          severity="danger"
-          outlined
-          class="w-full justify-start"
-          @click="handleResolve('use_local')"
-        />
-
-        <!-- 使用云端数据 -->
-        <Button
-          label="使用云端数据（覆盖本地）"
-          icon="pi pi-download"
-          severity="info"
-          outlined
-          class="w-full justify-start"
-          @click="handleResolve('use_remote')"
-        />
-
-        <!-- 智能合并（仅历史记录） -->
-        <Button
-          v-if="conflict?.target === 'history'"
-          label="智能合并（合并两边数据）"
-          icon="pi pi-sync"
-          severity="success"
-          class="w-full justify-start"
-          @click="handleResolve('merge')"
-        />
-
-        <!-- 取消 -->
-        <Button
-          label="取消"
-          icon="pi pi-times"
-          text
-          class="w-full justify-start"
-          @click="handleCancel"
-        />
+        <!-- 本地版本 -->
+        <div class="version-card version-local">
+          <div class="version-header">
+            <i class="pi pi-desktop" />
+            <span>本地版本</span>
+          </div>
+          <div class="version-meta">
+            <p v-if="conflict?.localTimestamp">
+              修改时间: {{ formatTime(conflict.localTimestamp) }}
+            </p>
+          </div>
+          <button class="version-action version-action-primary" @click="handleResolve('use_local')">
+            保留此版本
+          </button>
+        </div>
       </div>
 
-      <!-- 提示信息 -->
-      <div class="text-xs text-surface-500 dark:text-surface-500 mt-2">
-        <p v-if="conflict?.target === 'settings'">
-          <i class="pi pi-info-circle mr-1" />
-          配置合并时会保留本地的 WebDAV 设置
-        </p>
-        <p v-else>
-          <i class="pi pi-info-circle mr-1" />
-          智能合并会根据时间戳保留较新的记录
-        </p>
+      <!-- 智能合并（仅历史记录） -->
+      <Button
+        v-if="conflict?.target === 'history'"
+        label="智能合并（合并两边数据）"
+        icon="pi pi-sync"
+        class="merge-btn"
+        @click="handleResolve('merge')"
+      />
+
+      <!-- 提示 -->
+      <div class="conflict-hint">
+        <i class="pi pi-info-circle" />
+        <span v-if="conflict?.target === 'settings'">配置合并时会保留本地的 WebDAV 设置</span>
+        <span v-else>智能合并会根据时间戳保留较新的记录</span>
       </div>
     </div>
   </Dialog>
@@ -94,8 +73,6 @@
 import { computed } from 'vue';
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
-import Message from 'primevue/message';
-import Divider from 'primevue/divider';
 import type { SyncConflict, ConflictResolution } from '@/composables/useWebDAVSync';
 
 // ==================== Props ====================
@@ -150,12 +127,108 @@ function formatTime(timestamp: number): string {
 </script>
 
 <style scoped>
-/* 确保按钮文字左对齐 */
-:deep(.p-button.justify-start) {
-  justify-content: flex-start;
+.sync-conflict-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-:deep(.p-button.justify-start .p-button-label) {
-  flex: none;
+.conflict-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(234, 179, 8, 0.2);
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--warning);
+  align-self: flex-start;
+}
+
+.conflict-badge i {
+  font-size: 13px;
+}
+
+.comparison-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.version-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 12px;
+  border: none;
+  background: var(--bg-input);
+}
+
+.version-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+}
+
+.version-header i {
+  font-size: 16px;
+}
+
+.version-card:first-child .version-header i {
+  color: #60a5fa;
+}
+
+.version-card:last-child .version-header i {
+  color: #4ade80;
+}
+
+.version-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.version-action {
+  width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: var(--bg-button-secondary);
+  color: white;
+  margin-top: auto;
+}
+
+.version-action:hover {
+  background: var(--bg-button-secondary-hover);
+}
+
+:deep(.merge-btn) {
+  width: 100%;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  padding: 12px 20px !important;
+}
+
+.conflict-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.conflict-hint i {
+  font-size: 12px;
+  opacity: 0.6;
 }
 </style>

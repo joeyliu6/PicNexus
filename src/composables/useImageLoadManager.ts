@@ -79,6 +79,7 @@ export function useImageLoadManager(
     }
 
     loadedImages.value = newSet;
+    startCleanupTimer();
   }
 
   /**
@@ -147,6 +148,11 @@ export function useImageLoadManager(
     if (hasChanges) {
       loadedImages.value = newSet;
     }
+
+    // 无已加载图片时自动停止定时器，避免空转
+    if (newSet.size === 0) {
+      stopCleanupTimer();
+    }
   }
 
   /**
@@ -176,9 +182,6 @@ export function useImageLoadManager(
     lastVisibleTime.clear();
     imageRetryCount.clear();
   }
-
-  // 自动启动清理定时器
-  startCleanupTimer();
 
   // 组件卸载时清理
   onUnmounted(() => {

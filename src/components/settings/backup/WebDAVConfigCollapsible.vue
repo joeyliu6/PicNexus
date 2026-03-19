@@ -120,7 +120,7 @@ function handleDeleteProfile(id: string) {
   const profile = props.modelValue.profiles.find(p => p.id === id);
   const profileName = profile?.name || '此配置';
 
-  confirmDelete(`确定要删除「${profileName}」吗？此操作无法撤销。`, () => {
+  confirmDelete(`确定要删除「${profileName}」吗？此操作不可撤销。`, () => {
     const newProfiles = props.modelValue.profiles.filter(p => p.id !== id);
     let newActiveId = props.modelValue.activeId;
 

@@ -600,8 +600,8 @@ export function useBackupSync(): UseBackupSyncReturn {
     if (!webdav) return;
 
     const confirmed = await confirmDialog(
-      '⚠️ 警告：此操作将完全覆盖本地配置！\n\n本地的所有配置（包括 WebDAV 连接信息）将被云端数据替换。\n是否继续？',
-      '覆盖本地配置'
+      '本地的所有配置（包括 WebDAV 连接信息）将被云端数据替换。此操作不可撤销。',
+      { header: '覆盖本地配置', acceptLabel: '覆盖', acceptClass: 'p-button-danger' }
     );
     if (!confirmed) return;
 
@@ -708,8 +708,8 @@ export function useBackupSync(): UseBackupSyncReturn {
     if (!webdav) return;
 
     const confirmed = await confirmDialog(
-      '⚠️ 警告：此操作将完全覆盖云端数据！\n\n云端现有的所有记录将被删除，替换为本地数据。\n此操作不可撤销，是否继续？',
-      '强制覆盖云端'
+      '云端现有的所有记录将被删除，替换为本地数据。此操作不可撤销。',
+      { header: '强制覆盖云端', acceptLabel: '覆盖', acceptClass: 'p-button-danger' }
     );
     if (!confirmed) return;
 
@@ -891,8 +891,8 @@ export function useBackupSync(): UseBackupSyncReturn {
     if (!webdav) return;
 
     const confirmed = await confirmDialog(
-      '⚠️ 警告：此操作将完全覆盖本地数据！\n\n本地现有的所有记录将被删除，替换为云端数据。\n是否继续？',
-      '覆盖本地数据'
+      '本地现有的所有记录将被删除，替换为云端数据。此操作不可撤销。',
+      { header: '覆盖本地数据', acceptLabel: '覆盖', acceptClass: 'p-button-danger' }
     );
     if (!confirmed) return;
 

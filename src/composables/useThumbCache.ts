@@ -240,6 +240,10 @@ export function getThumbnailCandidates(
 
   // 只对 HistoryItem 缓存结果（QueueItem 状态动态变化，不缓存）
   if (!isQueueItem) {
+    if (thumbnailCandidatesCache.size >= THUMB_CACHE_MAX_SIZE && !thumbnailCandidatesCache.has(cacheKey)) {
+      const firstKey = thumbnailCandidatesCache.keys().next().value;
+      if (firstKey) thumbnailCandidatesCache.delete(firstKey);
+    }
     thumbnailCandidatesCache.set(cacheKey, uniqueCandidates);
   }
 
@@ -307,8 +311,10 @@ function getThumbUrl(item: HistoryItem, config: ReturnType<typeof useConfigManag
     return thumbUrl;
   }
 
-  // 非微博图床：直接使用原图 URL
-  return targetResult.result.url;
+  // 非微博图床：直接使用原图 URL（写入缓存避免重复查找）
+  const resultUrl = targetResult.result.url;
+  setThumbCache(item.id, resultUrl);
+  return resultUrl;
 }
 
 /**

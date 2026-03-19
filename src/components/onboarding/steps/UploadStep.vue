@@ -74,9 +74,9 @@
   align-items: center;
   gap: 6px;
   padding: 16px 20px;
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
+  border: none;
   min-width: 110px;
 }
 
