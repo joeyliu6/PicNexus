@@ -233,8 +233,8 @@ async function handleCopyServiceLink(item: HistoryItem, serviceId: ServiceType):
     }
 
     let link = result.result.url;
-    if (serviceId === 'weibo') {
-      const activePrefix = getActivePrefix(configManager.config.value);
+    if (serviceId === 'weibo' && configManager.config.value.linkPrefixConfig) {
+      const activePrefix = configManager.getActivePrefix(configManager.config.value.linkPrefixConfig);
       if (activePrefix) {
         link = `${activePrefix}${link}`;
       }

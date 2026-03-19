@@ -462,8 +462,11 @@ class HistoryDatabase {
     const { serviceFilter = 'all', limit = 100, offset = 0 } = options;
     const keywordLower = keyword.toLowerCase().trim();
 
+    // 转义 LIKE 通配符，防止用户输入 % 或 _ 导致意外匹配
+    const escaped = keywordLower.replace(/[%_\\]/g, '\\$&');
+
     const result = await this.queryWithTotal(
-      db, 'WHERE local_file_name_lower LIKE $1', [`%${keywordLower}%`],
+      db, `WHERE local_file_name_lower LIKE $1 ESCAPE '\\'`, [`%${escaped}%`],
       serviceFilter, limit, offset,
     );
     console.log(`[HistoryDB] 搜索 "${keyword}": 找到 ${result.total} 条，返回 ${result.items.length} 条`);
@@ -792,10 +795,29 @@ class HistoryDatabase {
     mergeStrategy: 'replace' | 'merge',
     onProgress?: (current: number, total: number) => void
   ): Promise<number> {
-    const items = JSON.parse(json) as HistoryItem[];
+    const parsed = JSON.parse(json);
 
-    if (!Array.isArray(items)) {
+    if (!Array.isArray(parsed)) {
       throw new Error('无效的 JSON 格式：期望数组');
+    }
+
+    // 校验每条记录的必需字段，过滤掉格式不合法的数据
+    const items = (parsed as HistoryItem[]).filter(item => {
+      if (!item || typeof item !== 'object') return false;
+      if (typeof item.timestamp !== 'number' || item.timestamp <= 0) return false;
+      if (typeof item.localFileName !== 'string' || !item.localFileName) return false;
+      if (typeof item.primaryService !== 'string' || !item.primaryService) return false;
+      if (typeof item.generatedLink !== 'string') return false;
+      if (!Array.isArray(item.results)) return false;
+      return true;
+    });
+
+    if (items.length === 0 && parsed.length > 0) {
+      throw new Error('导入数据格式不匹配，请检查文件是否为 PicNexus 导出的历史记录');
+    }
+
+    if (items.length < parsed.length) {
+      console.warn(`[HistoryDB] 导入校验: ${parsed.length} 条中有 ${parsed.length - items.length} 条格式无效被跳过`);
     }
 
     const db = await this.ensureInitialized();

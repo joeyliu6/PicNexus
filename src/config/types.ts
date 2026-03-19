@@ -1004,8 +1004,21 @@ export function migrateConfig(config: UserConfig): UserConfig {
   let migratedConfig: UserConfig = structuredClone(config);
   const currentVersion = config.configVersion || 0;
 
+  if (currentVersion >= CONFIG_VERSION) {
+    return migratedConfig;
+  }
+
+  console.log(`[配置迁移] 开始迁移: v${currentVersion} → v${CONFIG_VERSION}`);
+
+  /** 执行单个迁移步骤，失败时抛出异常中断后续步骤 */
+  const runStep = (targetVersion: number, desc: string, fn: () => void) => {
+    if (currentVersion >= targetVersion) return;
+    fn();
+    console.log(`[配置迁移] v${targetVersion - 1} → v${targetVersion}: ${desc}`);
+  };
+
   // 版本 0 -> 1：将 baiduPrefix 迁移为 linkPrefixConfig
-  if (currentVersion < 1) {
+  runStep(1, 'linkPrefixConfig', () => {
     if (!migratedConfig.linkPrefixConfig) {
       const prefixList = [...DEFAULT_PREFIXES];
       let selectedIndex = 0;
@@ -1029,11 +1042,10 @@ export function migrateConfig(config: UserConfig): UserConfig {
         }
       };
     }
-    console.log('[配置迁移] 从版本 0 迁移到版本 1：linkPrefixConfig');
-  }
+  });
 
   // 版本 1 -> 2：新增 7 个图床的默认配置
-  if (currentVersion < 2) {
+  runStep(2, '新增 7 个图床', () => {
     const newServices = {
       smms: migratedConfig.services?.smms || { enabled: false, token: '' },
       github: migratedConfig.services?.github || {
@@ -1099,11 +1111,10 @@ export function migrateConfig(config: UserConfig): UserConfig {
       ] as ServiceType[])]
     };
 
-    console.log('[配置迁移] 从版本 1 迁移到版本 2：新增 7 个图床');
-  }
+  });
 
   // 版本 2 -> 3：新增 GitHub CDN 加速配置
-  if (currentVersion < 3) {
+  runStep(3, 'GitHub CDN 加速', () => {
     if (migratedConfig.services?.github && !migratedConfig.services.github.cdnConfig) {
       migratedConfig.services.github = {
         ...migratedConfig.services.github,
@@ -1114,17 +1125,15 @@ export function migrateConfig(config: UserConfig): UserConfig {
         }
       };
     }
-    console.log('[配置迁移] 从版本 2 迁移到版本 3：新增 GitHub CDN 加速配置');
-  }
+  });
 
   // 版本 3 -> 4：移除自动同步功能
-  if (currentVersion < 4) {
+  runStep(4, '移除自动同步', () => {
     delete (migratedConfig as any).autoSync;
-    console.log('[配置迁移] 从版本 3 迁移到版本 4：移除自动同步配置');
-  }
+  });
 
   // 版本 4 -> 5：合并 GitHub customDomain + cdnConfig 为 urlStrategy
-  if (currentVersion < 5) {
+  runStep(5, '合并 GitHub URL 策略', () => {
     const github = migratedConfig.services?.github;
     if (github && !github.urlStrategy) {
       let strategyType: GithubUrlStrategyType = 'default';
@@ -1153,19 +1162,17 @@ export function migrateConfig(config: UserConfig): UserConfig {
       delete github.customDomain;
       delete github.cdnConfig;
     }
-    console.log('[配置迁移] 从版本 4 迁移到版本 5：合并 GitHub URL 策略');
-  }
+  });
 
   // 版本 5 -> 6：新增应用行为配置
-  if (currentVersion < 6) {
+  runStep(6, '新增应用行为配置', () => {
     if (!migratedConfig.appBehavior) {
       migratedConfig.appBehavior = { autoStart: false, minimizeToTrayOnStart: false };
     }
-    console.log('[配置迁移] 从版本 5 迁移到版本 6：新增应用行为配置');
-  }
+  });
 
   // 版本 6 -> 7：重命名 outputFormat 为 weiboProxyMode，新增 linkOutput
-  if (currentVersion < 7) {
+  runStep(7, '重命名 outputFormat，新增 linkOutput', () => {
     const raw = migratedConfig as unknown as Record<string, unknown>;
     if ('outputFormat' in raw) {
       migratedConfig.weiboProxyMode = raw.outputFormat as WeiboProxyMode;
@@ -1178,19 +1185,17 @@ export function migrateConfig(config: UserConfig): UserConfig {
         autoCopy: true,
       };
     }
-    console.log('[配置迁移] 从版本 6 迁移到版本 7：重命名 outputFormat，新增 linkOutput');
-  }
+  });
 
   // 版本 7 -> 8：新增首次使用引导标志
-  if (currentVersion < 8) {
+  runStep(8, '新增引导标志', () => {
     if (migratedConfig.onboardingCompleted === undefined) {
       migratedConfig.onboardingCompleted = true;
     }
-    console.log('[配置迁移] 从版本 7 迁移到版本 8：新增引导标志');
-  }
+  });
 
   // 版本 8 -> 9：新增全局快捷键配置
-  if (currentVersion < 9) {
+  runStep(9, '新增全局快捷键', () => {
     if (!migratedConfig.globalShortcut) {
       migratedConfig.globalShortcut = {
         enabled: true,
@@ -1198,19 +1203,17 @@ export function migrateConfig(config: UserConfig): UserConfig {
         uploadFromFile: 'CommandOrControl+Shift+O',
       };
     }
-    console.log('[配置迁移] 从版本 8 迁移到版本 9：新增全局快捷键配置');
-  }
+  });
 
   // 版本 9 -> 10：新增自动更新配置
-  if (currentVersion < 10) {
+  runStep(10, '新增自动更新配置', () => {
     if (!migratedConfig.autoUpdate) {
       migratedConfig.autoUpdate = { enabled: true };
     }
-    console.log('[配置迁移] 从版本 9 迁移到版本 10：新增自动更新配置');
-  }
+  });
 
-  // 更新版本号到最新
   migratedConfig.configVersion = CONFIG_VERSION;
+  console.log(`[配置迁移] 全部完成: v${currentVersion} → v${CONFIG_VERSION}`);
 
   return migratedConfig;
 }

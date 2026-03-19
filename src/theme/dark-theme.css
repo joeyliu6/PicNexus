@@ -41,7 +41,9 @@
   /* ===== 检测窗口专用色 - 更柔和 ===== */
   --success-soft: rgba(16, 185, 129, 0.15);
   --error-soft: rgba(239, 68, 68, 0.15);
+  --error-border: rgba(239, 68, 68, 0.3);
   --warning-soft: rgba(234, 179, 8, 0.15);
+  --warning-border: rgba(234, 179, 8, 0.3);
   --pending-soft: rgba(148, 163, 184, 0.15);
 
   /* ===== 交互色系统 ===== */

@@ -25,6 +25,7 @@ import { formatLink, FORMAT_NAMES } from '../utils/linkFormatter';
 
 // --- 配置 ---
 const METADATA_BATCH_SIZE = 50;  // 每批处理 50 张图片
+const MAX_FILES_PER_UPLOAD = 200; // 单次上传最大文件数，防止内存溢出
 
 // --- STORES ---
 const configStore = new Store('.settings.dat');
@@ -112,17 +113,26 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
    * @param filePaths 文件路径列表
    */
   async function handleFilesUpload(filePaths: string[]): Promise<void> {
-    try {
-      // 验证输入
-      if (!Array.isArray(filePaths) || filePaths.length === 0) {
-        console.warn('[上传] 无效的文件列表:', filePaths);
-        return;
-      }
+    // 防止重入：上传期间不接受新上传
+    if (isUploading.value) {
+      toast.showConfig('warn', { summary: '请稍候', detail: '当前有上传任务进行中，请等待完成后再试' });
+      return;
+    }
 
+    // 验证输入
+    if (!Array.isArray(filePaths) || filePaths.length === 0) {
+      console.warn('[上传] 无效的文件列表:', filePaths);
+      return;
+    }
+
+    // 立即锁定，防止 await 间隙的竞态
+    isUploading.value = true;
+
+    try {
       console.log('[上传] 接收到文件:', filePaths);
 
       // 文件类型验证
-      const { valid, invalid } = await filterValidFiles(filePaths);
+      let { valid, invalid } = await filterValidFiles(filePaths);
 
       if (valid.length === 0) {
         console.warn('[上传] 没有有效的图片文件');
@@ -132,6 +142,12 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
       if (invalid.length > 0) {
         toast.showConfig('warn', TOAST_MESSAGES.upload.invalidFormat(invalid.length));
+      }
+
+      // 文件数量限制，防止内存溢出
+      if (valid.length > MAX_FILES_PER_UPLOAD) {
+        toast.showConfig('warn', { summary: '文件数量超限', detail: `单次最多上传 ${MAX_FILES_PER_UPLOAD} 个文件，已截断多余的 ${valid.length - MAX_FILES_PER_UPLOAD} 个` });
+        valid = valid.slice(0, MAX_FILES_PER_UPLOAD);
       }
 
       console.log(`[上传] 有效文件: ${valid.length}个，无效文件: ${invalid.length}个`);
@@ -205,8 +221,6 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       const batches = chunkArray(valid, METADATA_BATCH_SIZE);
       const MAX_CONCURRENT_BATCHES = 2;  // 最多同时处理 2 个批次
       console.log(`[上传] 开始流水线处理：${valid.length} 个文件，分 ${batches.length} 批，最大并发 ${MAX_CONCURRENT_BATCHES} 批`);
-
-      isUploading.value = true;
 
       // 收集成功上传的链接（用于自动复制）
       const collectedLinks: Array<{ url: string; fileName: string }> = [];
@@ -291,15 +305,12 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
           console.warn('[自动复制] 写入剪贴板失败:', err);
         }
       }
-
-      // 上传完成
-      isUploading.value = false;
-
     } catch (error) {
-      isUploading.value = false;
       console.error('[上传] 文件处理失败:', error);
       const errorMsg = error instanceof Error ? error.message : String(error);
       toast.showConfig('error', TOAST_MESSAGES.upload.failed(errorMsg));
+    } finally {
+      isUploading.value = false;
     }
   }
 
