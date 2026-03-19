@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import type { UnlistenFn } from '@tauri-apps/api/event';
+import { emit as tauriEmit, type UnlistenFn } from '@tauri-apps/api/event';
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import type { ServiceType, UserConfig } from '../../config/types';
@@ -95,6 +95,11 @@ const visiblePublicServices = computed(() => {
     healthStatusMap.value[serviceId] !== 'unconfigured'
   );
 });
+
+// 跳转到设置页图床配置
+const navigateToSettings = () => {
+  tauriEmit('navigate-to', { view: 'settings', tab: 'hosting' });
+};
 
 // 打开文件选择对话框
 const openFileDialog = async () => {
@@ -328,6 +333,7 @@ onUnmounted(() => {
         :service-health-map="healthStatusMap"
         :service-health-tooltip-map="healthTooltipMap"
         @toggle="uploadManager.toggleServiceSelection"
+        @go-settings="navigateToSettings"
       />
 
       <!-- 上传队列 -->

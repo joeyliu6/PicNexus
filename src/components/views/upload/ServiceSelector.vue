@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 图床服务选择器组件
 
+import { computed } from 'vue';
 import type { ServiceType } from '../../../config/types';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
 
@@ -21,7 +22,10 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   toggle: [serviceId: ServiceType];
+  'go-settings': [];
 }>();
+
+const hasServices = computed(() => props.publicServices.length > 0 || props.privateServices.length > 0);
 
 // ==================== Methods ====================
 
@@ -32,40 +36,47 @@ function handleToggle(serviceId: ServiceType) {
 
 <template>
   <div class="upload-controls">
-    <!-- 公共图床 -->
-    <div v-if="publicServices.length > 0" class="service-group">
-      <div class="service-group-label">公共图床</div>
-      <div class="service-tags-wrapper">
-        <button
-          v-for="serviceId in publicServices"
-          :key="serviceId"
-          class="service-tag"
-          :class="{ 'is-selected': isServiceSelected(serviceId) }"
-          @click="handleToggle(serviceId)"
-          v-ripple
-        >
-          <span class="health-dot" :class="serviceHealthMap?.[serviceId] || 'unconfigured'" v-tooltip.top="serviceHealthTooltipMap?.[serviceId] || null"></span>
-          <span class="tag-text">{{ serviceLabels[serviceId] }}</span>
-        </button>
+    <template v-if="hasServices">
+      <!-- 公共图床 -->
+      <div v-if="publicServices.length > 0" class="service-group">
+        <div class="service-group-label">公共图床</div>
+        <div class="service-tags-wrapper">
+          <button
+            v-for="serviceId in publicServices"
+            :key="serviceId"
+            class="service-tag"
+            :class="{ 'is-selected': isServiceSelected(serviceId) }"
+            @click="handleToggle(serviceId)"
+            v-ripple
+          >
+            <span class="health-dot" :class="serviceHealthMap?.[serviceId] || 'unconfigured'" v-tooltip.top="serviceHealthTooltipMap?.[serviceId] || null"></span>
+            <span class="tag-text">{{ serviceLabels[serviceId] }}</span>
+          </button>
+        </div>
       </div>
-    </div>
 
-    <!-- 私有图床 -->
-    <div v-if="privateServices.length > 0" class="service-group">
-      <div class="service-group-label">私有图床</div>
-      <div class="service-tags-wrapper">
-        <button
-          v-for="serviceId in privateServices"
-          :key="serviceId"
-          class="service-tag"
-          :class="{ 'is-selected': isServiceSelected(serviceId) }"
-          @click="handleToggle(serviceId)"
-          v-ripple
-        >
-          <span class="health-dot" :class="serviceHealthMap?.[serviceId] || 'unconfigured'" v-tooltip.top="serviceHealthTooltipMap?.[serviceId] || null"></span>
-          <span class="tag-text">{{ serviceLabels[serviceId] }}</span>
-        </button>
+      <!-- 私有图床 -->
+      <div v-if="privateServices.length > 0" class="service-group">
+        <div class="service-group-label">私有图床</div>
+        <div class="service-tags-wrapper">
+          <button
+            v-for="serviceId in privateServices"
+            :key="serviceId"
+            class="service-tag"
+            :class="{ 'is-selected': isServiceSelected(serviceId) }"
+            @click="handleToggle(serviceId)"
+            v-ripple
+          >
+            <span class="health-dot" :class="serviceHealthMap?.[serviceId] || 'unconfigured'" v-tooltip.top="serviceHealthTooltipMap?.[serviceId] || null"></span>
+            <span class="tag-text">{{ serviceLabels[serviceId] }}</span>
+          </button>
+        </div>
       </div>
+    </template>
+
+    <!-- 空状态引导 -->
+    <div v-else class="empty-state">
+      <span class="empty-state-text">暂无可用图床，<button class="empty-state-link" @click="emit('go-settings')">前往设置配置</button></span>
     </div>
   </div>
 </template>
@@ -159,5 +170,34 @@ function handleToggle(serviceId: ServiceType) {
 
 .health-dot.error {
   background: var(--error);
+}
+
+/* 空状态引导 */
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 0;
+}
+
+.empty-state-text {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.empty-state-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: inherit;
+  color: var(--primary);
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.empty-state-link:hover {
+  color: var(--primary-hover, #2563eb);
+  text-decoration: underline;
 }
 </style>
