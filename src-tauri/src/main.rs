@@ -8,6 +8,7 @@ mod error;
 mod commands;
 
 use tauri::{Manager, Emitter};
+use tauri_plugin_log::{Target, TargetKind};
 use error::AppError;
 #[cfg(target_os = "macos")]
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
@@ -77,6 +78,17 @@ fn main() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .targets([
+                    Target::new(TargetKind::Stdout),
+                    Target::new(TargetKind::LogDir { file_name: None }),
+                    Target::new(TargetKind::Webview),
+                ])
+                .max_file_size(5_000_000) // 单个日志文件最大 5MB
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepOne)
+                .build(),
+        )
         .manage(HttpClient(http_client))     // 注册全局 HTTP 客户端
         .invoke_handler(tauri::generate_handler![
             open_login_window,
@@ -118,7 +130,9 @@ fn main() {
             commands::clipboard::clipboard_has_image,
             commands::clipboard::read_clipboard_image,
             commands::image_meta::get_image_metadata,
-            get_or_create_secure_key
+            get_or_create_secure_key,
+            set_secure_key,
+            get_log_dir
         ])
         .setup(|app| {
             // 1. 创建原生菜单栏 (仅 macOS)
@@ -1719,5 +1733,38 @@ fn get_or_create_secure_key() -> Result<String, AppError> {
             Ok(new_key)
         }
     }
+}
+
+#[tauri::command]
+fn set_secure_key(key: String) -> Result<(), AppError> {
+    // 校验密钥格式：必须是合法 Base64 且解码后正好 32 字节（AES-256）
+    let decoded = STANDARD.decode(&key).map_err(|_| {
+        AppError::external("密钥格式无效：非法 Base64".to_string())
+    })?;
+    if decoded.len() != 32 {
+        return Err(AppError::external(format!(
+            "密钥长度无效：期望 32 字节，实际 {} 字节", decoded.len()
+        )));
+    }
+
+    let entry = Entry::new(SERVICE_NAME, KEY_NAME).map_err(|e| {
+        AppError::external(format!("无法访问系统钥匙串: {}", e))
+    })?;
+
+    entry.set_password(&key).map_err(|e| {
+        AppError::external(format!("无法更新密钥到系统钥匙串: {}", e))
+    })?;
+
+    eprintln!("[密钥管理] ✓ 密钥已更新到系统钥匙串");
+    Ok(())
+}
+
+/// 获取日志目录路径
+#[tauri::command]
+fn get_log_dir(app: tauri::AppHandle) -> Result<String, AppError> {
+    let log_dir = app.path().app_log_dir().map_err(|e| {
+        AppError::file_io(format!("无法获取日志目录: {}", e))
+    })?;
+    Ok(log_dir.to_string_lossy().to_string())
 }
 

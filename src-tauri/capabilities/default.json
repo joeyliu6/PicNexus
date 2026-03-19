@@ -27,9 +27,6 @@
     "core:tray:default",
     "shell:default",
     "shell:allow-open",
-    "shell:allow-execute",
-    "shell:allow-stdin-write",
-    "shell:allow-kill",
     {
       "identifier": "shell:allow-spawn",
       "allow": [
@@ -54,27 +51,14 @@
     "fs:default",
     "fs:allow-exists",
     "fs:allow-mkdir",
-    "fs:allow-remove",
-    "fs:allow-rename",
-    "fs:allow-copy-file",
-    "fs:allow-read-dir",
-    "fs:allow-read-file",
     "fs:allow-read-text-file",
-    "fs:allow-write-file",
     "fs:allow-write-text-file",
-    "fs:read-all",
-    "fs:write-all",
     "fs:scope-app-recursive",
     "fs:scope-appcache-recursive",
     "fs:scope-appconfig-recursive",
     "fs:scope-appdata-recursive",
     "fs:scope-applocaldata-recursive",
     "fs:scope-applog-recursive",
-    "fs:scope-desktop-recursive",
-    "fs:scope-document-recursive",
-    "fs:scope-download-recursive",
-    "fs:scope-home-recursive",
-    "fs:scope-picture-recursive",
     "fs:scope-temp-recursive",
     "clipboard-manager:default",
     "clipboard-manager:allow-read-text",
@@ -107,6 +91,7 @@
     "global-shortcut:allow-unregister-all",
     "global-shortcut:allow-is-registered",
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "log:default"
   ]
 }

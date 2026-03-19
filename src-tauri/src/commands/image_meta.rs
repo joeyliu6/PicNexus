@@ -47,6 +47,12 @@ pub fn get_image_metadata(file_path: String) -> Result<ImageMetadata, AppError> 
         return Err(AppError::file_io(format!("文件不存在: {}", file_path)));
     }
 
+    // 1.5 路径规范化，防止路径穿越攻击（如 ../../etc/passwd）
+    let canonical_path = path.canonicalize().map_err(|e| {
+        AppError::file_io(format!("无法解析文件路径: {}", e))
+    })?;
+    let path = canonical_path.as_path();
+
     // 2. 获取文件大小（从文件系统元数据）
     let file_size = fs::metadata(path)
         .map_err(|e| AppError::file_io(format!("读取文件元数据失败: {}", e)))?
