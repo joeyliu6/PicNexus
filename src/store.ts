@@ -3,7 +3,7 @@
 // v2.9: 增强并发控制，使用全局互斥锁防止竞态条件
 import { readTextFile, writeTextFile, exists, mkdir } from '@tauri-apps/plugin-fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
-import { secureStorage, isEncryptedData } from './crypto';
+import { secureStorage, isAnyEncryptedData, BackupPasswordRequiredError } from './crypto';
 
 /**
  * 简单的 Promise-based 互斥锁
@@ -216,29 +216,31 @@ class SimpleStore {
         return null;
       }
 
-      // 【v2.8 加密存储】尝试解密
-      // 使用魔数前缀明确检测加密数据，避免启发式检测的不可靠性
+      // 【v3.0 加密存储】尝试解密
+      // 支持 PNXENC（随机密钥）和 PNXPWD（备份密码）两种格式
       let decryptedContent = content;
+      const trimmedContent = content.trim();
       try {
-        // 使用 isEncryptedData 进行精确检测（检查 PNXENC: 前缀）
-        if (isEncryptedData(content.trim())) {
-          console.log(`[Store] 检测到加密数据（魔数前缀），尝试解密...`);
-          decryptedContent = await secureStorage.decrypt(content);
+        if (isAnyEncryptedData(trimmedContent)) {
+          console.log(`[Store] 检测到加密数据，尝试解密...`);
+          decryptedContent = await secureStorage.decrypt(trimmedContent);
           console.log(`[Store] ✓ 解密成功`);
-        } else if (!content.trim().startsWith('{') && !content.trim().startsWith('[')) {
+        } else if (!trimmedContent.startsWith('{') && !trimmedContent.startsWith('[')) {
           // 向后兼容：旧版本加密数据（无魔数前缀）
           console.log(`[Store] 检测到可能的旧版加密数据，尝试解密...`);
           try {
-            decryptedContent = await secureStorage.decrypt(content);
+            decryptedContent = await secureStorage.decrypt(trimmedContent);
             console.log(`[Store] ✓ 旧版加密数据解密成功`);
           } catch {
-            // 旧版解密失败，可能是明文数据
             console.warn(`[Store] 旧版解密失败，尝试按明文解析`);
             decryptedContent = content;
           }
         }
       } catch (decryptError: any) {
-        // 解密失败，记录错误但不静默降级
+        // 备份密码需要输入：直接传播，不降级
+        if (decryptError instanceof BackupPasswordRequiredError) {
+          throw decryptError;
+        }
         const errorMsg = decryptError?.message || String(decryptError);
         console.error(`[Store] 解密失败: ${errorMsg}`);
         throw new StoreError(`加密数据解密失败: ${errorMsg}`, 'read', key);
@@ -299,6 +301,10 @@ class SimpleStore {
 
       return value as T;
     } catch (error) {
+      // 备份密码需要输入：直接传播到 UI 层
+      if (error instanceof BackupPasswordRequiredError) {
+        throw error;
+      }
       // 如果是 StoreError，直接抛出
       if (error instanceof StoreError) {
         console.error(`[Store] 读取失败 (${key}):`, error.message);
@@ -404,20 +410,23 @@ class SimpleStore {
         }
 
         if (oldFileContent && oldFileContent.trim().length > 0) {
-          // 【v2.9】使用 isEncryptedData 进行精确检测
+          // 【v3.0】支持 PNXENC 和 PNXPWD 两种加密格式
           let oldContent = oldFileContent;
           const trimmedContent = oldFileContent.trim();
 
-          if (isEncryptedData(trimmedContent)) {
-            // 带魔数前缀的加密数据
+          if (isAnyEncryptedData(trimmedContent)) {
+            // 带魔数前缀的加密数据（PNXENC 或 PNXPWD）
             try {
-              console.log(`[Store] 检测到加密数据（魔数前缀），尝试解密...`);
-              oldContent = await secureStorage.decrypt(oldFileContent);
+              console.log(`[Store] 检测到加密数据，尝试解密...`);
+              oldContent = await secureStorage.decrypt(trimmedContent);
               console.log(`[Store] ✓ 解密成功`);
             } catch (decryptError: any) {
+              // 备份密码需要输入：直接传播
+              if (decryptError instanceof BackupPasswordRequiredError) {
+                throw decryptError;
+              }
               const errorMsg = decryptError?.message || String(decryptError);
               console.error(`[Store] 解密失败: ${errorMsg}`);
-              // 创建损坏文件的备份
               try {
                 const backupPath = `${dataPath}.corrupted.${Date.now()}`;
                 await writeTextFile(backupPath, oldFileContent);
@@ -436,10 +445,9 @@ class SimpleStore {
             // 可能是旧版加密数据（无魔数前缀），尝试解密
             try {
               console.log(`[Store] 检测到可能的旧版加密数据，尝试解密...`);
-              oldContent = await secureStorage.decrypt(oldFileContent);
+              oldContent = await secureStorage.decrypt(trimmedContent);
               console.log(`[Store] ✓ 旧版加密数据解密成功`);
             } catch (decryptError: any) {
-              // 旧版解密失败，可能是明文数据，继续尝试解析
               const errorMsg = decryptError?.message || String(decryptError);
               console.warn(`[Store] 旧版解密失败，尝试按明文解析: ${errorMsg}`);
               oldContent = oldFileContent;
@@ -551,6 +559,10 @@ class SimpleStore {
         );
       }
     } catch (error) {
+      // 备份密码需要输入：直接传播到 UI 层
+      if (error instanceof BackupPasswordRequiredError) {
+        throw error;
+      }
       // 如果是 StoreError，直接抛出
       if (error instanceof StoreError) {
         console.error(`[Store] 保存失败 (${key}):`, error.message);
