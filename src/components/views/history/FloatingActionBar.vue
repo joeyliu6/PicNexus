@@ -1,45 +1,61 @@
 <script setup lang="ts">
-/**
- * 浮动批量操作栏
- * 用于批量复制、导出、删除等操作
- */
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import Button from 'primevue/button';
+import type { ServiceType } from '../../../config/types';
+import type { LinkFormat } from '../../../utils/linkFormatter';
+import { useConfigManager } from '../../../composables/useConfig';
+import { SERVICE_DISPLAY_NAMES } from '../../../constants/serviceNames';
 
-// Props
-defineProps<{
+const props = defineProps<{
   selectedCount: number;
   visible: boolean;
+  availableServices?: ServiceType[];
 }>();
 
-// Emits
 const emit = defineEmits<{
-  (e: 'copy', format: 'url' | 'markdown' | 'html' | 'bbcode'): void;
+  (e: 'copy', format: LinkFormat, serviceId?: ServiceType): void;
   (e: 'export'): void;
   (e: 'delete'): void;
   (e: 'clear-selection'): void;
 }>();
 
-// 复制下拉菜单状态
+const configManager = useConfigManager();
+
 const copyMenuVisible = ref(false);
 const copyDropdownRef = ref<HTMLElement | null>(null);
+const selectedService = ref<ServiceType | undefined>(undefined);
 
-// 切换复制菜单
-const toggleCopyMenu = () => {
-  copyMenuVisible.value = !copyMenuVisible.value;
-};
+const hasCustomTemplate = computed(() => !!configManager.config.value.linkOutput?.customTemplate);
+const showServiceChips = computed(() => (props.availableServices?.length ?? 0) > 1);
 
-// 点击外部关闭菜单
-onClickOutside(copyDropdownRef, () => {
+const COPY_FORMATS: { type: LinkFormat; icon: string; label: string; needsCustom?: boolean }[] = [
+  { type: 'url', icon: 'pi-link', label: 'URL' },
+  { type: 'markdown', icon: 'pi-file-edit', label: 'Markdown' },
+  { type: 'html', icon: 'pi-code', label: 'HTML' },
+  { type: 'bbcode', icon: 'pi-comment', label: 'BBCode' },
+  { type: 'custom', icon: 'pi-pencil', label: '自定义', needsCustom: true },
+];
+
+function closeCopyMenu(): void {
   copyMenuVisible.value = false;
-});
+  selectedService.value = undefined;
+}
 
-// 处理复制
-const handleCopy = (format: 'url' | 'markdown' | 'html' | 'bbcode') => {
-  copyMenuVisible.value = false;
-  emit('copy', format);
-};
+function toggleCopyMenu(): void {
+  copyMenuVisible.value ? closeCopyMenu() : (copyMenuVisible.value = true);
+}
+
+onClickOutside(copyDropdownRef, closeCopyMenu);
+
+function handleServiceSelect(serviceId: ServiceType): void {
+  selectedService.value = selectedService.value === serviceId ? undefined : serviceId;
+}
+
+function handleCopy(format: LinkFormat): void {
+  emit('copy', format, selectedService.value);
+  closeCopyMenu();
+}
 </script>
 
 <template>
@@ -66,18 +82,29 @@ const handleCopy = (format: 'url' | 'markdown' | 'html' | 'bbcode') => {
           />
           <Transition name="dropdown">
             <div v-if="copyMenuVisible" class="copy-menu">
-              <button class="copy-menu-item" @click="handleCopy('url')">
-                <i class="pi pi-link"></i><span>URL</span>
-              </button>
-              <button class="copy-menu-item" @click="handleCopy('markdown')">
-                <i class="pi pi-file-edit"></i><span>Markdown</span>
-              </button>
-              <button class="copy-menu-item" @click="handleCopy('html')">
-                <i class="pi pi-code"></i><span>HTML</span>
-              </button>
-              <button class="copy-menu-item" @click="handleCopy('bbcode')">
-                <i class="pi pi-comment"></i><span>BBCode</span>
-              </button>
+              <!-- 图床选择芯片（多图床时显示）-->
+              <div v-if="showServiceChips" class="service-chips">
+                <button
+                  v-for="sid in availableServices"
+                  :key="sid"
+                  class="service-chip"
+                  :class="{ active: selectedService === sid }"
+                  @click.stop="handleServiceSelect(sid)"
+                >
+                  {{ SERVICE_DISPLAY_NAMES[sid] || sid }}
+                </button>
+              </div>
+              <div v-if="showServiceChips" class="menu-divider"></div>
+
+              <template v-for="fmt in COPY_FORMATS" :key="fmt.type">
+                <button
+                  v-if="!fmt.needsCustom || hasCustomTemplate"
+                  class="copy-menu-item"
+                  @click="handleCopy(fmt.type)"
+                >
+                  <i class="pi" :class="fmt.icon"></i><span>{{ fmt.label }}</span>
+                </button>
+              </template>
             </div>
           </Transition>
         </div>
@@ -121,14 +148,13 @@ const handleCopy = (format: 'url' | 'markdown' | 'html' | 'bbcode') => {
 </template>
 
 <style scoped>
-/* === 浮动操作栏 === */
 .floating-action-bar {
   position: fixed;
   bottom: 70px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
-  background: rgba(30, 41, 59, 0.9);
+  background: rgba(26, 26, 30, 0.9);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-subtle);
@@ -156,7 +182,7 @@ const handleCopy = (format: 'url' | 'markdown' | 'html' | 'bbcode') => {
   font-weight: 600;
   color: var(--primary);
   padding: 6px 12px;
-  background: rgba(59, 130, 246, 0.1);
+  background: var(--primary-alpha-10);
   border-radius: 12px;
   white-space: nowrap;
 }
@@ -206,7 +232,6 @@ const handleCopy = (format: 'url' | 'markdown' | 'html' | 'bbcode') => {
   transform: translateX(-50%) translateY(20px);
 }
 
-/* === 复制下拉菜单 === */
 .fab-copy-dropdown {
   position: relative;
 }
@@ -221,8 +246,46 @@ const handleCopy = (format: 'url' | 'markdown' | 'html' | 'bbcode') => {
   border-radius: 12px;
   box-shadow: var(--shadow-float);
   padding: 6px;
-  min-width: 140px;
+  min-width: 160px;
   z-index: 1001;
+}
+
+/* 图床芯片选择 */
+.service-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+.service-chip {
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.service-chip:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.service-chip.active {
+  background: var(--primary-alpha-15);
+  border-color: var(--primary);
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.menu-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 8px;
 }
 
 .copy-menu-item {

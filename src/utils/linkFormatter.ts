@@ -55,14 +55,26 @@ export function escapeMarkdownUrl(str: string): string {
  * @param fileName 文件名
  * @param format 格式类型
  * @param customTemplate 自定义模板（format 为 'custom' 时使用）
+ * @param dimensions 图片尺寸（可选，用于自定义模板的 {width}/{height} 变量）
  */
-export function formatLink(url: string, fileName: string, format: LinkFormat, customTemplate?: string): string {
+export function formatLink(
+  url: string,
+  fileName: string,
+  format: LinkFormat,
+  customTemplate?: string,
+  dimensions?: { width?: number; height?: number }
+): string {
   switch (format) {
     case 'url': return url;
     case 'markdown': return `![${escapeMarkdown(fileName)}](${escapeMarkdownUrl(url)})`;
     case 'html': return `<img src="${escapeHtmlAttr(url)}" alt="${escapeHtmlAttr(fileName)}" />`;
     case 'bbcode': return `[img]${url}[/img]`;
-    case 'custom': return applyTemplate(customTemplate || '{url}', { url, filename: fileName });
+    case 'custom': return applyTemplate(customTemplate || '{url}', {
+      url,
+      filename: fileName,
+      width: dimensions?.width,
+      height: dimensions?.height,
+    });
     default: return url;
   }
 }

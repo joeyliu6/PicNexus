@@ -84,7 +84,7 @@ function handleRetry() {
 }
 
 .channel-card:hover {
-  border-color: rgba(59, 130, 246, 0.3);
+  border-color: var(--primary-alpha-30);
 }
 
 .channel-card.error {
@@ -164,39 +164,13 @@ function handleRetry() {
   color: var(--primary);
 }
 
-.copy-btn {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  background: none;
-  border: none;
-  color: var(--success);
-  cursor: pointer;
-  padding: 3px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  opacity: 0.6;
-}
-
-.copy-btn:hover {
-  background: var(--success-soft);
-  opacity: 1;
-}
-
-.copy-btn i {
-  font-size: 12px;
-}
-
+.copy-btn,
 .retry-btn {
   position: absolute;
   top: 6px;
   right: 6px;
   background: none;
   border: none;
-  color: var(--error);
   cursor: pointer;
   padding: 3px;
   border-radius: 4px;
@@ -206,10 +180,13 @@ function handleRetry() {
   transition: all 0.2s ease;
 }
 
-.retry-btn:hover {
-  background: var(--error-soft);
-}
+.copy-btn { color: var(--success); opacity: 0.6; }
+.retry-btn { color: var(--error); }
 
+.copy-btn:hover { background: var(--success-soft); opacity: 1; }
+.retry-btn:hover { background: var(--error-soft); }
+
+.copy-btn i,
 .retry-btn i {
   font-size: 12px;
 }

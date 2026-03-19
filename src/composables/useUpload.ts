@@ -3,7 +3,6 @@
 
 import { ref } from 'vue';
 import { open as dialogOpen } from '@tauri-apps/plugin-dialog';
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { Store } from '../store';
 import {
   UserConfig,
@@ -13,6 +12,7 @@ import {
 import { MultiServiceUploader, SingleServiceResult } from '../core/MultiServiceUploader';
 import { UploadQueueManager } from '../uploadQueue';
 import { useToast } from './useToast';
+import { useCopyLink, type CopyLinkItem } from './useCopyLink';
 import { TOAST_MESSAGES } from '../constants';
 import { checkNetworkConnectivity } from '../utils/network';
 import { chunkArray } from '../utils/semaphore';
@@ -21,7 +21,6 @@ import { useServiceHealth } from './useServiceHealth';
 import { useHistorySaver } from './useHistorySaver';
 import { fetchMetadataBatch } from './useImageMetadata';
 import { AUTH_CONFIG_ERROR_CODES } from '../types/serviceHealth';
-import { formatLink, FORMAT_NAMES } from '../utils/linkFormatter';
 
 // --- 配置 ---
 const METADATA_BATCH_SIZE = 50;  // 每批处理 50 张图片
@@ -35,6 +34,7 @@ const configStore = new Store('.settings.dat');
  */
 export function useUploadManager(queueManager?: UploadQueueManager) {
   const toast = useToast();
+  const { copyLinks } = useCopyLink();
 
   // 使用服务选择模块
   const {
@@ -223,7 +223,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       console.log(`[上传] 开始流水线处理：${valid.length} 个文件，分 ${batches.length} 批，最大并发 ${MAX_CONCURRENT_BATCHES} 批`);
 
       // 收集成功上传的链接（用于自动复制）
-      const collectedLinks: Array<{ url: string; fileName: string }> = [];
+      const collectedLinks: CopyLinkItem[] = [];
 
       // 批次处理函数
       const processBatch = async (batchFiles: string[], batchIndex: number) => {
@@ -287,23 +287,9 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
       console.log('[上传] 所有批次处理完成');
 
-      // 自动复制链接到剪贴板
+      // 自动复制链接到剪贴板（使用统一 useCopyLink）
       if (config.linkOutput?.autoCopy !== false && collectedLinks.length > 0) {
-        try {
-          const format = config.linkOutput?.defaultFormat || 'url';
-          const template = config.linkOutput?.customTemplate;
-          const formatted = collectedLinks
-            .map(l => formatLink(l.url, l.fileName, format, template))
-            .join('\n');
-          await writeText(formatted);
-          toast.success(
-            '已复制',
-            `${collectedLinks.length} 个 ${FORMAT_NAMES[format]} 链接已复制到剪贴板`,
-            2000
-          );
-        } catch (err) {
-          console.warn('[自动复制] 写入剪贴板失败:', err);
-        }
+        await copyLinks(collectedLinks);
       }
     } catch (error) {
       console.error('[上传] 文件处理失败:', error);
@@ -326,7 +312,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     config: UserConfig,
     enabledServices: ServiceType[],
     maxConcurrent: number = 5,
-    collectedLinks?: Array<{ url: string; fileName: string }>
+    collectedLinks?: CopyLinkItem[]
   ): Promise<void> {
     if (!queueManager) {
       console.error('[并发上传] 上传队列管理器未初始化');
@@ -493,9 +479,13 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             thumbUrl = activePrefix.value + thumbUrl;
           }
 
-          // 收集主力图床链接（用于自动复制）
-          if (thumbUrl && collectedLinks) {
-            collectedLinks.push({ url: thumbUrl, fileName });
+          // 收集主力图床链接（用于自动复制，serviceId 用于统一前缀处理）
+          if (result.primaryUrl && collectedLinks) {
+            collectedLinks.push({
+              url: result.primaryUrl,
+              fileName,
+              serviceId: result.primaryService as ServiceType,
+            });
           }
 
           queueManager!.markItemComplete(itemId, thumbUrl);

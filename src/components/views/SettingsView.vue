@@ -32,7 +32,6 @@ import { syncStatusStore } from '../../store/instances';
 import type { ThemeMode, UserConfig, ServiceType, WebDAVProfile, GithubUrlStrategy } from '../../config/types';
 import { DEFAULT_CONFIG, DEFAULT_PREFIXES } from '../../config/types';
 
-// ==================== Composables ====================
 
 const toast = useToast();
 const { confirm: confirmDialog } = useConfirm();
@@ -54,11 +53,9 @@ const {
 const serviceHealth = useServiceHealth();
 const { reopen: reopenOnboarding } = useOnboarding();
 
-// ==================== 存储实例 ====================
 
 const configStore = new Store('.settings.dat');
 
-// ==================== 状态 ====================
 
 const cookieUnlisten = ref<UnlistenFn | null>(null);
 const appVersion = ref<string>('');
@@ -193,7 +190,6 @@ const serviceNames: Record<ServiceType, string> = {
   r2: 'R2',  // 设置界面使用简短名称
 };
 
-// ==================== 计算属性 ====================
 
 const serviceConfigStatus = computed<Record<ServiceType, boolean>>(() => {
   const fd = formData.value;
@@ -242,7 +238,6 @@ watch(serviceConfigStatus, (newStatus, oldStatus) => {
   if (changed) saveSettings();
 });
 
-// ==================== 配置加载/保存 ====================
 
 async function loadSettings() {
   try {
@@ -388,7 +383,6 @@ async function saveSettings() {
   }
 }
 
-// ==================== 主题处理 ====================
 
 async function handleThemeChange(mode: ThemeMode) {
   try {
@@ -399,7 +393,6 @@ async function handleThemeChange(mode: ThemeMode) {
   }
 }
 
-// ==================== 测试连接 ====================
 
 async function testTokenConnection(serviceId: string, token: string) {
   try {
@@ -659,7 +652,6 @@ async function handleCookieLogin(serviceId: string) {
   await configManager.openCookieWebView(serviceId as ServiceType);
 }
 
-// ==================== 链接前缀管理 ====================
 
 function addPrefix() {
   formData.value.linkPrefixList.push('');
@@ -681,7 +673,6 @@ function resetToDefaultPrefixes() {
   saveSettings();
 }
 
-// ==================== WebDAV 配置管理 ====================
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 11);
@@ -760,7 +751,6 @@ function updateWebDAVProfileStatus(profileId: string, status: 'pending' | 'succe
   saveSettings();
 }
 
-// ==================== 其他处理函数 ====================
 
 async function handleClearHistory() {
   await historyManager.clearHistory();
@@ -789,7 +779,6 @@ function handleAnalyticsToggle() {
   saveSettings();
 }
 
-// ==================== 自启动控制 ====================
 
 async function handleAutoStartChange(enabled: boolean) {
   formData.value.appBehavior.autoStart = enabled;
@@ -809,9 +798,7 @@ async function handleCloseToTrayChange(enabled: boolean) {
   saveSettings();
 }
 
-// ==================== 图床跳转 ====================
 
-// ==================== 生命周期 ====================
 
 onMounted(async () => {
   // 首次挂载时也检查 tab 跳转指令（处理从未访问过设置页的情况）
@@ -1082,7 +1069,7 @@ onUnmounted(() => {
 }
 
 .nav-item.active {
-  background-color: rgba(59, 130, 246, 0.12);
+  background-color: var(--primary-alpha-12);
   color: var(--primary);
   font-weight: 600;
 }

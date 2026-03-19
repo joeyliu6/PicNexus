@@ -68,10 +68,6 @@ const statusText = computed(() => {
 
 const thumbnailSrcs = computed(() => getThumbnailCandidates(props.item, props.config));
 
-function handleCopy(link: string) {
-  emit('copy', link);
-}
-
 function handleRetry(serviceId: ServiceType) {
   emit('retry', props.item.id, serviceId);
 }
@@ -128,7 +124,7 @@ function handleRetry(serviceId: ServiceType) {
         :service="service"
         :status="item.serviceProgress[service]?.status"
         :link="item.serviceProgress[service]?.link"
-        @copy="handleCopy"
+        @copy="(link: string) => emit('copy', link)"
         @retry="handleRetry(service)"
       />
     </div>
@@ -233,7 +229,7 @@ function handleRetry(serviceId: ServiceType) {
 
 .pill.uploading {
   color: var(--primary);
-  background: rgba(59, 130, 246, 0.05);
+  background: var(--primary-alpha-5);
 }
 
 .stacked-progress {

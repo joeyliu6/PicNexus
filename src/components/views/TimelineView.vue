@@ -5,7 +5,7 @@
  * 支持 10 万+ 图片流畅滚动
  */
 import { ref, computed, onMounted, onUnmounted, watch, nextTick, shallowRef } from 'vue';
-import { useHistoryViewState, type LinkFormat } from '../../composables/useHistoryViewState';
+import { useHistoryViewState } from '../../composables/useHistoryViewState';
 import { useHistoryManager } from '../../composables/useHistory';
 import { useVirtualTimeline, type PhotoGroup } from '../../composables/useVirtualTimeline';
 import { generateSkeletonLayout } from '../../utils/justifiedLayout';
@@ -24,7 +24,6 @@ import TimelineIndicator from './timeline/TimelineIndicator.vue';
 import HistoryLightbox from './history/HistoryLightbox.vue';
 import FloatingActionBar from './history/FloatingActionBar.vue';
 
-// ==================== Props & Emits ====================
 
 const props = defineProps<{
   filter?: ServiceType | 'all';
@@ -38,7 +37,6 @@ const emit = defineEmits<{
   (e: 'update:selectedCount', count: number): void;
 }>();
 
-// ==================== Composables ====================
 
 const toast = useToast();
 const viewState = useHistoryViewState();
@@ -47,7 +45,6 @@ const thumbCache = useThumbCache();
 const metadataFixer = useImageMetadataFixer();
 const configManager = useConfigManager();
 
-// ==================== Refs ====================
 
 // Scroll container ref
 const scrollContainer = ref<HTMLElement | null>(null);
@@ -79,7 +76,6 @@ const {
 let isDragging = false;
 let dragEndTimer: number | undefined;
 
-// ==================== Grouping Logic ====================
 
 /**
  * 按天分组图片元数据
@@ -113,7 +109,6 @@ const groups = computed<PhotoGroup[]>(() => {
   return Array.from(groupsMap.values()).sort((a, b) => b.date.getTime() - a.date.getTime());
 });
 
-// ==================== Virtual Timeline ====================
 
 const {
   // 状态
@@ -146,7 +141,6 @@ const {
   overscan: 3,
 });
 
-// ==================== 图片加载状态管理 ====================
 
 const {
   loadedImages,
@@ -166,7 +160,6 @@ const loadedImagesSet = computed(() => new Set(loadedImages.value));
 const failedImagesSet = computed(() => new Set(failedImages.value));
 const selectedIdsSet = computed(() => new Set(viewState.selectedIdList.value));
 
-// ==================== Sidebar Data ====================
 
 // 已加载的月份集合（用于新时间轴指示器）
 const loadedMonthsSet = computed(() => {
@@ -219,7 +212,6 @@ const visibleRatio = computed(() => {
   return viewportHeight.value / totalHeight.value;
 });
 
-// ==================== 骨架屏布局 ====================
 
 /**
  * 骨架屏布局数据
@@ -242,7 +234,6 @@ const skeletonLayout = computed(() => {
   });
 });
 
-// ==================== Scroll Handling ====================
 
 /**
  * 滚动事件处理
@@ -257,7 +248,6 @@ const handleScroll = () => {
   }
 };
 
-// ==================== Sidebar Interactions ====================
 
 const handleSidebarWheel = (e: WheelEvent) => {
   if (scrollContainer.value) {
@@ -326,7 +316,6 @@ const handleJumpToYear = async (year: number) => {
   }
 };
 
-// ==================== Lightbox ====================
 
 // 当前灯箱图片在 filteredMetas 中的索引
 const lightboxIndex = computed(() => {
@@ -388,13 +377,19 @@ const handleLightboxNavigate = async (direction: 'prev' | 'next') => {
   }
 };
 
-// ==================== Batch Actions ====================
 
-const handleBulkCopy = (fmt: LinkFormat) => viewState.bulkCopyFormatted(fmt);
-const handleBulkExport = () => viewState.bulkExport();
-const handleBulkDelete = () => viewState.bulkDelete();
+// 从选中的 ImageMeta 中提取可用图床（轻量视图只知道主服务）
+const selectedAvailableServices = computed<ServiceType[]>(() => {
+  const ids = viewState.selectedIdList.value;
+  if (ids.length === 0) return [];
+  const serviceSet = new Set<ServiceType>();
+  for (const meta of viewState.filteredMetas.value) {
+    if (ids.includes(meta.id)) serviceSet.add(meta.primaryService);
+  }
+  return Array.from(serviceSet);
+});
 
-// ==================== 悬停信息辅助函数 ====================
+
 
 /**
  * 悬停时加载详情
@@ -424,7 +419,6 @@ function getThumbnailUrl(meta: ImageMeta): string {
   );
 }
 
-// ==================== 图片预加载 ====================
 
 /** 预加载配置 */
 const PRELOAD_CONFIG = {
@@ -498,7 +492,6 @@ watch(displayMode, (mode) => {
   }
 });
 
-// ==================== Lifecycle ====================
 
 onMounted(async () => {
   console.log('[TimelineView] Mounted with Justified Layout');
@@ -538,8 +531,6 @@ onUnmounted(() => {
   if (skeletonMinDisplayTimeout) clearTimeout(skeletonMinDisplayTimeout);
 });
 
-// ==================== Watchers ====================
-
 watch(
   () => props.filter,
   (val) => {
@@ -568,9 +559,6 @@ watch(
   { immediate: true }
 );
 
-/**
- * 隐藏骨架屏（带最小显示时间，避免闪烁）
- */
 function hideSkeleton() {
   if (skeletonMinDisplayTimeout) {
     clearTimeout(skeletonMinDisplayTimeout);
@@ -581,12 +569,8 @@ function hideSkeleton() {
   }, PRELOAD_CONFIG.SKELETON_MIN_DISPLAY_MS);
 }
 
-/**
- * 显示骨架屏并检查是否需要立即隐藏
- */
 function showSkeletonWithCheck() {
   showSkeleton.value = true;
-  // 如果布局已完成，延迟后隐藏骨架屏
   nextTick(() => {
     if (!isCalculating.value) {
       hideSkeleton();
@@ -594,35 +578,25 @@ function showSkeletonWithCheck() {
   });
 }
 
-// 监听 visible 变化，切换时显示骨架屏并刷新可见区域
 watch(
   () => props.visible,
-  (isVisible, wasVisible) => {
-    if (isVisible && !wasVisible) {
-      showSkeletonWithCheck();
-      // 强制刷新虚拟滚动的可见区域，修复切换后图片空白问题
-      nextTick(() => {
-        forceUpdateVisibleArea();
-      });
-    }
+  async (isVisible, wasVisible) => {
+    if (!isVisible || wasVisible) return;
+    showSkeletonWithCheck();
+    await nextTick();
+    forceUpdateVisibleArea();
   }
 );
 
-// 监听 KeepAlive 激活，从其他页面切换回来时刷新可见区域
 watch(
   () => props.activationTrigger,
-  (_, oldVal) => {
-    // 只有当前可见且非首次触发时才处理
-    if (props.visible && oldVal !== undefined) {
-      // 强制刷新虚拟滚动的可见区域，修复切换后图片空白问题
-      nextTick(() => {
-        forceUpdateVisibleArea();
-      });
-    }
+  async (_, oldVal) => {
+    if (!props.visible || oldVal === undefined) return;
+    await nextTick();
+    forceUpdateVisibleArea();
   }
 );
 
-// 监听布局计算完成，隐藏骨架屏
 watch(
   () => isCalculating.value,
   (calculating) => {
@@ -713,9 +687,10 @@ watch(
     <FloatingActionBar
       :selected-count="viewState.selectedIdList.value.length"
       :visible="viewState.hasSelection.value"
-      @copy="handleBulkCopy"
-      @export="handleBulkExport"
-      @delete="handleBulkDelete"
+      :available-services="selectedAvailableServices"
+      @copy="viewState.bulkCopyFormatted"
+      @export="viewState.bulkExport"
+      @delete="viewState.bulkDelete"
       @clear-selection="viewState.clearSelection"
     />
 

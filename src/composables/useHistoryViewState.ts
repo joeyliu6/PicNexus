@@ -1,44 +1,33 @@
-/**
- * 历史记录视图状态 composable
- * 工厂函数，每次调用返回独立的视图状态实例
- * 用于表格视图和瀑布流视图各自独立管理状态
- */
 import { ref, shallowRef, computed, triggerRef } from 'vue';
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type { ServiceType } from '../config/types';
-import { getActivePrefix } from '../config/types';
 import { useHistoryManager } from './useHistory';
-import { useConfigManager } from './useConfig';
 import { useToast } from './useToast';
-import { formatLink, FORMAT_NAMES } from '../utils/linkFormatter';
+import { useCopyLink, type CopyLinkItem } from './useCopyLink';
 export type { LinkFormat } from '../utils/linkFormatter';
 
-/**
- * 创建独立的视图状态
- * 每次调用返回新的状态实例，用于独立视图
- */
 export function useHistoryViewState() {
   const historyManager = useHistoryManager();
-  const configManager = useConfigManager();
   const toast = useToast();
+  const { copyLinks } = useCopyLink();
 
-  // === 独立状态（每个视图实例独立）===
   const selectedIds = shallowRef(new Set<string>());
   const currentFilter = ref<ServiceType | 'all'>('all');
   const searchTerm = ref('');
 
-  // === 计算属性 ===
+  function updateSelection(fn: (set: Set<string>) => void): void {
+    const newSet = new Set(selectedIds.value);
+    fn(newSet);
+    selectedIds.value = newSet;
+    triggerRef(selectedIds);
+  }
 
-  // 筛选后的元数据（根据 currentFilter 和 searchTerm 过滤）
   const filteredMetas = computed(() => {
     let metas = historyManager.imageMetas.value;
 
-    // 图床筛选（只筛选主力图床）
     if (currentFilter.value !== 'all') {
       metas = metas.filter(meta => meta.primaryService === currentFilter.value);
     }
 
-    // 搜索筛选
     if (searchTerm.value.trim()) {
       const term = searchTerm.value.toLowerCase().trim();
       metas = metas.filter(meta =>
@@ -49,14 +38,11 @@ export function useHistoryViewState() {
     return metas;
   });
 
-  // 是否全选
   const isAllSelected = computed(() => {
     const metas = filteredMetas.value;
-    if (metas.length === 0) return false;
-    return metas.every(meta => selectedIds.value.has(meta.id));
+    return metas.length > 0 && metas.every(meta => selectedIds.value.has(meta.id));
   });
 
-  // 是否部分选中
   const isSomeSelected = computed(() => {
     const metas = filteredMetas.value;
     if (metas.length === 0) return false;
@@ -64,149 +50,97 @@ export function useHistoryViewState() {
     return count > 0 && count < metas.length;
   });
 
-  // 是否有选中项
   const hasSelection = computed(() => selectedIds.value.size > 0);
-
-  // 选中的 ID 数组
   const selectedIdList = computed(() => Array.from(selectedIds.value));
 
-  // === 选中操作 ===
-
-  /**
-   * 切换单项选中状态
-   */
   function toggleSelection(id: string): void {
-    const newSet = new Set(selectedIds.value);
-    if (newSet.has(id)) {
-      newSet.delete(id);
-    } else {
-      newSet.add(id);
-    }
-    selectedIds.value = newSet;
-    triggerRef(selectedIds);
+    updateSelection(set => set.has(id) ? set.delete(id) : set.add(id));
   }
 
-  /**
-   * 选中单个项目
-   */
   function select(id: string): void {
-    if (!selectedIds.value.has(id)) {
-      const newSet = new Set(selectedIds.value);
-      newSet.add(id);
-      selectedIds.value = newSet;
-      triggerRef(selectedIds);
-    }
+    if (!selectedIds.value.has(id)) updateSelection(set => set.add(id));
   }
 
-  /**
-   * 取消选中单个项目
-   */
   function deselect(id: string): void {
-    if (selectedIds.value.has(id)) {
-      const newSet = new Set(selectedIds.value);
-      newSet.delete(id);
-      selectedIds.value = newSet;
-      triggerRef(selectedIds);
-    }
+    if (selectedIds.value.has(id)) updateSelection(set => set.delete(id));
   }
 
-  /**
-   * 全选/取消全选
-   */
   function toggleSelectAll(checked: boolean): void {
-    if (checked) {
-      const newSet = new Set<string>();
-      filteredMetas.value.forEach(meta => newSet.add(meta.id));
-      selectedIds.value = newSet;
-    } else {
-      selectedIds.value = new Set();
-    }
+    selectedIds.value = checked
+      ? new Set(filteredMetas.value.map(m => m.id))
+      : new Set();
     triggerRef(selectedIds);
   }
 
-  /**
-   * 清空选中
-   */
   function clearSelection(): void {
     selectedIds.value = new Set();
     triggerRef(selectedIds);
   }
 
-  /**
-   * 检查项目是否选中
-   */
   function isSelected(id: string): boolean {
     return selectedIds.value.has(id);
   }
 
-  // === 筛选和搜索 ===
-
-  /**
-   * 设置图床筛选
-   */
   function setFilter(filter: ServiceType | 'all'): void {
     currentFilter.value = filter;
-    // 筛选变化时清空选中
     clearSelection();
   }
 
-  /**
-   * 设置搜索词
-   */
   function setSearchTerm(term: string): void {
     searchTerm.value = term;
-    // 搜索变化时清空选中
     clearSelection();
   }
 
-  // === 批量操作 ===
-
-  /**
-   * 批量复制链接（支持多种格式）
-   */
-  async function bulkCopyFormatted(format: import('../utils/linkFormatter').LinkFormat): Promise<void> {
+  async function bulkCopyFormatted(format?: import('../utils/linkFormatter').LinkFormat, serviceId?: ServiceType): Promise<void> {
     const ids = selectedIdList.value;
     if (ids.length === 0) {
       toast.warn('未选择项目', '请先选择要复制的项目');
       return;
     }
 
-    try {
-      const metas = historyManager.imageMetas.value.filter(meta => ids.includes(meta.id));
-      const activePrefix = getActivePrefix(configManager.config.value);
+    const metas = historyManager.imageMetas.value.filter(meta => ids.includes(meta.id));
 
-      const formattedLinks = metas.map(meta => {
-        if (!meta.primaryUrl) return null;
-        let finalLink = meta.primaryUrl;
-        if (meta.primaryService === 'weibo' && activePrefix) {
-          finalLink = `${activePrefix}${meta.primaryUrl}`;
-        }
-        return formatLink(finalLink, meta.localFileName, format);
-      }).filter((link): link is string => !!link);
+    let items: CopyLinkItem[];
 
-      if (formattedLinks.length === 0) {
-        toast.warn('无可用链接', '选中的项目没有可用链接');
-        return;
+    if (serviceId) {
+      const details = await Promise.all(
+        metas.map(meta => historyManager.detailCache.getDetail(meta.id).catch(() => null))
+      );
+      items = [];
+      for (const detail of details) {
+        if (!detail) continue;
+        const result = detail.results?.find(
+          r => r.serviceId === serviceId && r.status === 'success'
+        );
+        if (!result?.result?.url) continue;
+        items.push({
+          url: result.result.url,
+          fileName: detail.localFileName,
+          serviceId,
+        });
       }
-
-      await writeText(formattedLinks.join('\n'));
-      toast.success('已复制', `${formattedLinks.length} 个 ${FORMAT_NAMES[format]} 链接`, 1500);
-    } catch (error) {
-      console.error('[批量复制] 失败:', error);
-      toast.error('复制失败', String(error));
+    } else {
+      items = metas
+        .filter(meta => !!meta.primaryUrl)
+        .map(meta => ({
+          url: meta.primaryUrl,
+          fileName: meta.localFileName,
+          serviceId: meta.primaryService,
+        }));
     }
+
+    if (items.length === 0) {
+      toast.warn('无可用链接', '选中的项目没有可用链接');
+      return;
+    }
+
+    await copyLinks(items, { format });
   }
 
-  /**
-   * 批量导出
-   */
   async function bulkExport(): Promise<void> {
     await historyManager.bulkExportJSON(selectedIdList.value);
   }
 
-  /**
-   * 批量删除
-   */
   async function bulkDelete(): Promise<void> {
     const ids = selectedIdList.value;
     if (ids.length === 0) {
@@ -218,11 +152,6 @@ export function useHistoryViewState() {
     clearSelection();
   }
 
-  // === 重置 ===
-
-  /**
-   * 重置所有状态
-   */
   function reset(): void {
     selectedIds.value = new Set();
     currentFilter.value = 'all';
@@ -230,50 +159,18 @@ export function useHistoryViewState() {
   }
 
   return {
-    // 状态
-    selectedIds,
-    currentFilter,
-    searchTerm,
-    filteredMetas,  // ← 改为元数据
-
-    // 计算属性
-    isAllSelected,
-    isSomeSelected,
-    hasSelection,
-    selectedIdList,
-
-    // 选中操作
-    toggleSelection,
-    select,
-    deselect,
-    toggleSelectAll,
-    clearSelection,
-    isSelected,
-
-    // 筛选和搜索
-    setFilter,
-    setSearchTerm,
-
-    // 批量操作
-    bulkCopyFormatted,
-    bulkExport,
-    bulkDelete,
-
-    // 重置
-    reset,
-
-    // 代理 historyManager 的方法
+    selectedIds, currentFilter, searchTerm, filteredMetas,
+    isAllSelected, isSomeSelected, hasSelection, selectedIdList,
+    toggleSelection, select, deselect, toggleSelectAll, clearSelection, isSelected,
+    setFilter, setSearchTerm,
+    bulkCopyFormatted, bulkExport, bulkDelete, reset,
     loadHistory: historyManager.loadHistory,
     loadPageByNumber: historyManager.loadPageByNumber,
     searchHistory: historyManager.searchHistory,
     deleteHistoryItem: historyManager.deleteHistoryItem,
-
-    // 代理 historyManager 的状态
     imageMetas: historyManager.imageMetas,
     isLoading: historyManager.isLoading,
     totalCount: historyManager.totalCount,
-
-    // 代理详情缓存
     detailCache: historyManager.detailCache,
   };
 }

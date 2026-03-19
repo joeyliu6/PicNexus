@@ -1,14 +1,9 @@
 <script setup lang="ts">
-/**
- * 历史记录图片查看器（Lightbox）
- * 抖音风格：图片模糊背景 + 左右导航 + 固定底栏
- */
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type { HistoryItem, ServiceType } from '../../../config/types';
-import { getActivePrefix } from '../../../config/types';
 import { useToast } from '../../../composables/useToast';
 import { useConfigManager } from '../../../composables/useConfig';
+import { useCopyLink } from '../../../composables/useCopyLink';
 import { useConfirm } from '../../../composables/useConfirm';
 import { formatFileSize } from '../../../utils/formatters';
 import { getPrimaryImageUrl } from '../../../utils/imageUrl';
@@ -32,6 +27,7 @@ const emit = defineEmits<{
 
 const toast = useToast();
 const configManager = useConfigManager();
+const { copyLink: copyLinkAction, applyPrefix } = useCopyLink();
 const { confirmDelete } = useConfirm();
 
 const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
@@ -154,34 +150,34 @@ function resetImageState() {
   translateY.value = 0;
 }
 
-function getFinalLink(): string | null {
-  if (!props.item?.generatedLink) return null;
-  let link = props.item.generatedLink;
-  if (props.item.primaryService === 'weibo') {
-    const prefix = getActivePrefix(configManager.config.value);
-    if (prefix) link = `${prefix}${link}`;
+function requireLink(): { link: string; item: HistoryItem } | null {
+  const link = props.item?.generatedLink;
+  if (!link || !props.item) {
+    toast.warn('无可用链接', '该项目没有可用的链接');
+    return null;
   }
-  return link;
+  return { link, item: props.item };
 }
 
 const handleCopyLink = async () => {
-  const link = getFinalLink();
-  if (!link) { toast.warn('无可用链接', '该项目没有可用的链接'); return; }
-  try {
-    await writeText(link);
-    toast.success('已复制', '链接已复制到剪贴板', 1500);
-  } catch (error) {
-    console.error('[Lightbox] 复制链接失败:', error);
-    toast.error('复制失败', String(error));
-  }
+  const ctx = requireLink();
+  if (!ctx) return;
+  await copyLinkAction({
+    url: ctx.link,
+    fileName: ctx.item.localFileName,
+    serviceId: ctx.item.primaryService as ServiceType,
+    width: ctx.item.width,
+    height: ctx.item.height,
+  });
 };
 
 const openInBrowser = async () => {
-  const link = getFinalLink();
-  if (!link) { toast.warn('无可用链接', '该项目没有可用的链接'); return; }
+  const ctx = requireLink();
+  if (!ctx) return;
   try {
     const { open } = await import('@tauri-apps/plugin-shell');
-    await open(link);
+    const finalUrl = applyPrefix(ctx.link, ctx.item.primaryService as ServiceType);
+    await open(finalUrl);
   } catch (error) {
     console.error('[Lightbox] 打开链接失败:', error);
     toast.error('打开失败', String(error));
@@ -266,7 +262,6 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
   <Teleport to="body">
     <Transition name="lightbox-fade">
       <div v-if="visible" class="lightbox-overlay" @click="closeLightbox" @wheel.prevent="handleWheel" @mousemove="handleMouseMove" @mouseup="handleMouseUp">
-        <!-- 抖音风格：图片自身模糊放大作为背景 -->
         <div
           v-if="lightboxImage"
           class="lightbox-bg"
@@ -274,12 +269,10 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
         ></div>
         <div class="lightbox-bg-dim"></div>
 
-        <!-- 关闭按钮 -->
         <button class="lightbox-close" @click.stop="closeLightbox">
           <i class="pi pi-times"></i>
         </button>
 
-        <!-- 左箭头 -->
         <button
           v-if="hasPrev"
           class="lightbox-nav lightbox-nav-prev"
@@ -288,9 +281,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
           <i class="pi pi-chevron-left"></i>
         </button>
 
-        <!-- 主图片区域 -->
         <div class="lightbox-content" @click.stop @dblclick.prevent="handleDoubleClick">
-          <!-- 加载动画：绝对定位覆盖，呼吸图标风格 -->
           <Transition name="lightbox-loader">
             <div v-if="imageLoading && !imageError" class="lightbox-loading-overlay">
               <div class="lightbox-breathe-container">
@@ -316,7 +307,6 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 
         </div>
 
-        <!-- 右箭头 -->
         <button
           v-if="hasNext"
           class="lightbox-nav lightbox-nav-next"
@@ -325,7 +315,6 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
           <i class="pi pi-chevron-right"></i>
         </button>
 
-        <!-- 固定底栏 -->
         <div v-if="item" class="lightbox-bottom" @click.stop>
           <div class="lightbox-info-cell cell-filename">
             <span class="cell-value filename-value" :title="item.localFileName">{{ displayFileName }}</span>
@@ -367,7 +356,6 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 </template>
 
 <style scoped>
-/* ==================== 全屏遮罩 ==================== */
 .lightbox-overlay {
   position: fixed;
   inset: 0;
@@ -379,7 +367,6 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
   padding-bottom: 64px; /* 预留底栏空间，图片在底栏上方区域居中 */
 }
 
-/* ==================== 抖音风格模糊背景 ==================== */
 .lightbox-bg {
   position: absolute;
   inset: -60px;
@@ -395,7 +382,6 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
   background: rgba(0, 0, 0, 0.25);
 }
 
-/* ==================== 关闭按钮 ==================== */
 .lightbox-close {
   position: absolute;
   top: 16px;
@@ -423,7 +409,6 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
   color: var(--text-main);
 }
 
-/* ==================== 导航箭头 ==================== */
 .lightbox-nav {
   position: absolute;
   top: calc(50% - 32px);
@@ -453,7 +438,6 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
   transform: translateY(-50%) scale(1.08);
 }
 
-/* ==================== 主图片区域 ==================== */
 .lightbox-content {
   position: relative;
   z-index: 2;
@@ -481,7 +465,6 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
   opacity: 1;
 }
 
-/* ==================== 呼吸图标加载动画 ==================== */
 .lightbox-loading-overlay {
   position: absolute;
   inset: 0;
@@ -561,7 +544,6 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
   font-size: 14px;
 }
 
-/* ==================== 固定底栏 ==================== */
 .lightbox-bottom {
   position: absolute;
   bottom: 0;
@@ -635,7 +617,6 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
   flex-shrink: 0;
 }
 
-/* ==================== 操作按钮 ==================== */
 .lightbox-actions {
   margin-left: auto;
   display: flex;
@@ -686,7 +667,6 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
   --error-soft: rgba(239, 68, 68, 0.15);
 }
 
-/* ==================== 过渡动画 ==================== */
 .lightbox-fade-enter-active {
   transition: opacity 0.25s ease;
 }

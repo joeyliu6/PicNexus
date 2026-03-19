@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import VirtualScroller from 'primevue/virtualscroller';
 import type { ServiceType } from '../config/types';
-import { useToast } from '../composables/useToast';
 import { useQueueState } from '../composables/useQueueState';
 import type { QueueItem } from '../uploadQueue';
 import { deepClone, deepMerge } from '../utils/deepClone';
@@ -13,7 +11,6 @@ import QueueCard from './upload/QueueCard.vue';
 const VIRTUAL_SCROLL_THRESHOLD = 20;
 const ITEM_HEIGHT = 180;
 
-const toast = useToast();
 const { queueItems } = useQueueState();
 const { config } = useConfigManager();
 
@@ -23,16 +20,6 @@ let retryCallback: ((itemId: string, serviceId?: ServiceType) => void) | null = 
 
 function handleRetry(itemId: string, serviceId: ServiceType) {
   retryCallback?.(itemId, serviceId);
-}
-
-async function handleCopy(link: string) {
-  try {
-    await writeText(link);
-    toast.success('已复制', '链接已复制到剪贴板', 1500);
-  } catch (err) {
-    console.error('Copy failed', err);
-    toast.error('复制失败', String(err));
-  }
 }
 
 defineExpose({
@@ -75,7 +62,7 @@ defineExpose({
           :item="(item as QueueItem)"
           :config="config"
           class="virtual-card"
-          @copy="handleCopy"
+
           @retry="handleRetry"
         />
       </template>
@@ -87,7 +74,6 @@ defineExpose({
       :key="item.id"
       :item="item"
       :config="config"
-      @copy="handleCopy"
       @retry="handleRetry"
     />
   </div>

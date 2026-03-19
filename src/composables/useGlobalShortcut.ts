@@ -20,9 +20,10 @@ import {
   GlobalShortcutConfig,
   migrateConfig,
 } from '../config/types';
+import type { ServiceType } from '../config/types';
 import { MultiServiceUploader, SingleServiceResult } from '../core/MultiServiceUploader';
 import { useHistorySaver } from './useHistorySaver';
-import { formatLink } from '../utils/linkFormatter';
+import { formatLinkWithConfig } from './useCopyLink';
 
 const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
 
@@ -62,7 +63,12 @@ async function getFileName(filePath: string): Promise<string> {
 /**
  * 后台上传单个文件到所有启用的图床
  */
-async function uploadFileInBackground(filePath: string, config: UserConfig): Promise<string | null> {
+interface UploadResult {
+  primaryUrl: string;
+  primaryService: ServiceType;
+}
+
+async function uploadFileInBackground(filePath: string, config: UserConfig): Promise<UploadResult | null> {
   const uploader = new MultiServiceUploader();
   const historySaver = useHistorySaver();
 
@@ -98,7 +104,11 @@ async function uploadFileInBackground(filePath: string, config: UserConfig): Pro
     }
   );
 
-  return result.primaryUrl;
+  if (!result.primaryUrl) return null;
+  return {
+    primaryUrl: result.primaryUrl,
+    primaryService: result.primaryService as ServiceType,
+  };
 }
 
 async function withUploadGuard(label: string, fn: () => Promise<void>) {
@@ -118,12 +128,14 @@ async function withUploadGuard(label: string, fn: () => Promise<void>) {
   }
 }
 
-async function formatAndCopyLink(primaryUrl: string, filePath: string, config: UserConfig): Promise<string> {
+async function formatLinkForShortcut(
+  primaryUrl: string,
+  filePath: string,
+  config: UserConfig,
+  serviceId?: ServiceType
+): Promise<string> {
   const fileName = await getFileName(filePath);
-  const linkOutput = config.linkOutput || DEFAULT_CONFIG.linkOutput!;
-  const formatted = formatLink(primaryUrl, fileName, linkOutput.defaultFormat, linkOutput.customTemplate);
-  if (linkOutput.autoCopy) await writeText(formatted);
-  return formatted;
+  return formatLinkWithConfig({ url: primaryUrl, fileName, serviceId }, config);
 }
 
 const handleClipboardUpload = () => withUploadGuard('剪贴板上传', async () => {
@@ -135,10 +147,12 @@ const handleClipboardUpload = () => withUploadGuard('剪贴板上传', async () 
 
   const tempFilePath = await invoke<string>('read_clipboard_image');
   const config = await loadConfig();
-  const primaryUrl = await uploadFileInBackground(tempFilePath, config);
-  if (!primaryUrl) return;
+  const uploadResult = await uploadFileInBackground(tempFilePath, config);
+  if (!uploadResult) return;
 
-  await formatAndCopyLink(primaryUrl, tempFilePath, config);
+  const linkOutput = config.linkOutput || DEFAULT_CONFIG.linkOutput!;
+  const formatted = await formatLinkForShortcut(uploadResult.primaryUrl, tempFilePath, config, uploadResult.primaryService);
+  if (linkOutput.autoCopy) await writeText(formatted);
   await notify('上传成功', '链接已复制到剪贴板');
 });
 
@@ -157,9 +171,12 @@ const handleFileSelectUpload = () => withUploadGuard('文件选择上传', async
 
   for (const filePath of filePaths) {
     try {
-      const primaryUrl = await uploadFileInBackground(filePath, config);
-      if (primaryUrl) {
-        allLinks.push(formatLink(primaryUrl, await getFileName(filePath), linkOutput.defaultFormat, linkOutput.customTemplate));
+      const uploadResult = await uploadFileInBackground(filePath, config);
+      if (uploadResult) {
+        const formatted = await formatLinkForShortcut(
+          uploadResult.primaryUrl, filePath, config, uploadResult.primaryService
+        );
+        allLinks.push(formatted);
       }
     } catch (err) {
       console.error(`[全局快捷键] 文件上传失败: ${filePath}`, err);

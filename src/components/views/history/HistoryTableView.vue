@@ -1,9 +1,4 @@
 <script setup lang="ts">
-/**
- * 历史记录表格视图
- * 独立的表格视图组件，使用 DataTable 展示历史记录
- * v2.0: 服务端分页模式，支持大数据量
- */
 import { ref, shallowRef, computed, nextTick, onMounted, onUnmounted, watch } from 'vue';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import DataTable from 'primevue/datatable';
@@ -17,7 +12,7 @@ import { getPrimaryImageUrl } from '../../../utils/imageUrl';
 import { getServiceDisplayName } from '../../../constants/serviceNames';
 import { getServiceIcon } from '../../../utils/icons';
 import { formatFileSize } from '../../../utils/formatters';
-import { useHistoryViewState, type LinkFormat } from '../../../composables/useHistoryViewState';
+import { useHistoryViewState } from '../../../composables/useHistoryViewState';
 import { useHistoryManager } from '../../../composables/useHistory';
 import { useThumbCache } from '../../../composables/useThumbCache';
 import { useConfigManager } from '../../../composables/useConfig';
@@ -52,8 +47,6 @@ const thumbCache = useThumbCache();
 const PREVIEW_MAX_SIZE = 300;
 const PREVIEW_MARGIN = 8;
 
-
-// === 服务端分页状态 ===
 const currentPageData = shallowRef<HistoryItem[]>([]);
 const currentPage = ref(1);
 const pageSize = ref(100);
@@ -82,7 +75,6 @@ function isSkeleton(data: HistoryItem | SkeletonItem): data is SkeletonItem {
   return '_skeleton' in data && data._skeleton === true;
 }
 
-// 日期格式化器
 const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',
   month: '2-digit',
@@ -110,9 +102,6 @@ const selectAll = ref(false);
 let unlistenUpdated: (() => void) | null = null;
 let unlistenDeleted: (() => void) | null = null;
 
-/**
- * 加载当前页数据（服务端分页核心函数）
- */
 async function loadCurrentPage() {
   try {
     isLoadingPage.value = true;
@@ -120,7 +109,6 @@ async function loadCurrentPage() {
     const hasSearch = props.searchTerm?.trim();
 
     if (hasSearch) {
-      // 搜索模式：使用 searchHistory
       const result = await historyManager.searchHistory(props.searchTerm, {
         serviceFilter: props.filter === 'all' ? undefined : props.filter,
         limit: pageSize.value,
@@ -129,7 +117,6 @@ async function loadCurrentPage() {
       currentPageData.value = result.items;
       totalRecords.value = result.total;
     } else {
-      // 普通分页模式：使用 loadPageByNumber
       const result = await historyManager.loadPageByNumber(
         currentPage.value,
         pageSize.value,
@@ -151,9 +138,6 @@ async function loadCurrentPage() {
   }
 }
 
-/**
- * 分页事件处理（DataTable @page 事件）
- */
 function onPageChange(event: { page: number; first: number; rows: number }) {
   if (isLoadingPage.value) return;
   currentPage.value = event.page + 1;  // PrimeVue 页码从 0 开始
@@ -161,34 +145,22 @@ function onPageChange(event: { page: number; first: number; rows: number }) {
   loadCurrentPage();
 }
 
-// 初始化
 onMounted(async () => {
-  console.log('[HistoryTableView] 组件已挂载（服务端分页模式）');
-
-  // 监听历史记录更新事件（上传、导入、重传等）
   unlistenUpdated = await onCacheEventType('history-updated', () => {
-    console.log('[HistoryTableView] 收到 history-updated 事件，重新加载第一页');
     currentPage.value = 1;
     first.value = 0;
     loadCurrentPage();
   });
 
-  // 监听历史记录删除事件
   unlistenDeleted = await onCacheEventType('history-deleted', () => {
-    console.log('[HistoryTableView] 收到 history-deleted 事件，重新加载当前页');
     loadCurrentPage();
   });
 
-  // 初始加载第一页
   await loadCurrentPage();
   nextTick(() => setupBadgeWidthObserver());
 });
 
-// 清理
 onUnmounted(() => {
-  console.log('[HistoryTableView] 组件已卸载');
-
-  // 取消事件监听
   unlistenUpdated?.();
   unlistenDeleted?.();
 
@@ -200,16 +172,13 @@ onUnmounted(() => {
   thumbCache.clearThumbCache();
 });
 
-// 监听 props 变化，重置到第一页并重新加载
 watch([() => props.filter, () => props.searchTerm], () => {
-  console.log('[HistoryTableView] 筛选/搜索条件变化，重置到第一页');
   currentPage.value = 1;
   first.value = 0;
   viewState.clearSelection();
   loadCurrentPage();
 });
 
-// 向父组件同步统计数据
 watch(() => totalRecords.value, (count) => {
   emit('update:totalCount', count);
 }, { immediate: true });
@@ -218,7 +187,6 @@ watch(() => viewState.selectedIdList.value.length, (count) => {
   emit('update:selectedCount', count);
 }, { immediate: true });
 
-// 监听选中状态变化，同步全选复选框（仅当前页）
 watch(() => {
   if (currentPageData.value.length === 0) return false;
   return currentPageData.value.every(item => viewState.isSelected(item.id));
@@ -232,7 +200,6 @@ function getSuccessfulServices(item: HistoryItem): ServiceType[] {
     .map(r => r.serviceId);
 }
 
-// 自适应标签宽度（观测 td 父元素避免反馈循环）
 const badgeColumnWidth = ref(200);
 let badgeResizeObserver: ResizeObserver | null = null;
 let resizeRafId = 0;
@@ -257,13 +224,17 @@ function setupBadgeWidthObserver(): void {
 
 const MORE_BTN_WIDTH = 30;
 const BADGE_GAP = 4;
+const BADGE_PADDING = 16;
+const BADGE_ICON_WITH_GAP = 18; // icon(14) + gap(4)
+const CHAR_WIDTH_ASCII = 7;
+const CHAR_WIDTH_CJK = 12;
 
 function estimateBadgeWidth(name: string): number {
   let textWidth = 0;
   for (const char of name) {
-    textWidth += char.charCodeAt(0) > 0x7F ? 12 : 7;
+    textWidth += char.charCodeAt(0) > 0x7F ? CHAR_WIDTH_CJK : CHAR_WIDTH_ASCII;
   }
-  return 16 + 14 + 4 + textWidth; // padding + icon + icon-gap + text
+  return BADGE_PADDING + BADGE_ICON_WITH_GAP + textWidth;
 }
 
 function getVisibleCount(services: ServiceType[]): number {
@@ -285,7 +256,6 @@ function getVisibleCount(services: ServiceType[]): number {
   return Math.max(count, 1);
 }
 
-// Popover 状态
 const servicePopoverRef = ref<InstanceType<typeof PopoverType> | null>(null);
 const popoverItem = ref<HistoryItem | null>(null);
 
@@ -363,7 +333,6 @@ function handlePreviewLeave(): void {
   hoverPreview.value.visible = false;
 }
 
-// 灯箱导航支持
 const lightboxIndex = computed(() => {
   if (!lightboxItem.value) return -1;
   return currentPageData.value.findIndex(item => item.id === lightboxItem.value!.id);
@@ -420,17 +389,19 @@ function handleHeaderCheckboxChange(checked: boolean): void {
   });
 }
 
-function handleBulkCopy(format: LinkFormat): void {
-  viewState.bulkCopyFormatted(format);
-}
+const selectedAvailableServices = computed<ServiceType[]>(() => {
+  const ids = viewState.selectedIdList.value;
+  if (ids.length === 0) return [];
+  const serviceSet = new Set<ServiceType>();
+  for (const item of currentPageData.value) {
+    if (!ids.includes(item.id)) continue;
+    for (const r of item.results) {
+      if (r.status === 'success') serviceSet.add(r.serviceId);
+    }
+  }
+  return Array.from(serviceSet);
+});
 
-function handleBulkExport(): void {
-  viewState.bulkExport();
-}
-
-function handleBulkDelete(): void {
-  viewState.bulkDelete();
-}
 </script>
 
 <template>
@@ -597,9 +568,10 @@ function handleBulkDelete(): void {
     <FloatingActionBar
       :selected-count="viewState.selectedIdList.value.length"
       :visible="viewState.hasSelection.value"
-      @copy="handleBulkCopy"
-      @export="handleBulkExport"
-      @delete="handleBulkDelete"
+      :available-services="selectedAvailableServices"
+      @copy="viewState.bulkCopyFormatted"
+      @export="viewState.bulkExport"
+      @delete="viewState.bulkDelete"
       @clear-selection="viewState.clearSelection"
     />
 
@@ -634,7 +606,6 @@ function handleBulkDelete(): void {
   pointer-events: none;
 }
 
-/* === 表格视图（极简风格）=== */
 .history-table {
   background: var(--bg-card);
   border-radius: 12px;
@@ -642,17 +613,14 @@ function handleBulkDelete(): void {
   width: 100%;
 }
 
-/* 强制固定列宽，确保骨架屏和真实数据的列宽一致 */
 :deep(.minimal-table .p-datatable-table) {
   table-layout: fixed;
 }
 
-/* 禁用 DataTable 内部滚动 */
 :deep(.history-table .p-datatable-table-container) {
   overflow: visible !important;
 }
 
-/* 表头样式 */
 :deep(.minimal-table .p-datatable-thead > tr > th) {
   background: var(--bg-card) !important;
   border-bottom: 2px solid var(--border-subtle) !important;
@@ -665,7 +633,6 @@ function handleBulkDelete(): void {
   box-sizing: border-box;
 }
 
-/* 行样式 */
 :deep(.minimal-table .p-datatable-tbody > tr) {
   background: transparent !important;
 }
@@ -675,31 +642,29 @@ function handleBulkDelete(): void {
 }
 
 :deep(.minimal-table .p-datatable-tbody > tr:hover) {
-  background: rgba(59, 130, 246, 0.08) !important;
+  background: var(--primary-alpha-8) !important;
 }
 
 :root.dark-theme :deep(.minimal-table .p-datatable-tbody > tr:hover) {
-  background: rgba(59, 130, 246, 0.15) !important;
+  background: var(--primary-alpha-15) !important;
 }
 
-/* 表格行选中态 */
 :deep(.minimal-table .p-datatable-tbody > tr.row-selected) {
-  background: rgba(59, 130, 246, 0.12) !important;
+  background: var(--primary-alpha-12) !important;
 }
 
 :root.dark-theme :deep(.minimal-table .p-datatable-tbody > tr.row-selected) {
-  background: rgba(59, 130, 246, 0.18) !important;
+  background: var(--primary-alpha-18) !important;
 }
 
 :deep(.minimal-table .p-datatable-tbody > tr.row-selected:hover) {
-  background: rgba(59, 130, 246, 0.16) !important;
+  background: var(--primary-alpha-16) !important;
 }
 
 :root.dark-theme :deep(.minimal-table .p-datatable-tbody > tr.row-selected:hover) {
-  background: rgba(59, 130, 246, 0.22) !important;
+  background: var(--primary-alpha-22) !important;
 }
 
-/* 单元格样式 */
 :deep(.minimal-table .p-datatable-tbody > tr > td) {
   padding: 8px 16px !important;
   border-bottom: 1px solid var(--border-subtle) !important;
@@ -709,7 +674,6 @@ function handleBulkDelete(): void {
   box-sizing: border-box;
 }
 
-/* 缩略图盒子 */
 .thumb-box {
   width: 36px;
   height: 36px;
@@ -755,7 +719,6 @@ function handleBulkDelete(): void {
   display: inline-block;
 }
 
-/* 文件名单元格 */
 .filename-cell {
   display: flex;
   flex-direction: column;
@@ -782,7 +745,6 @@ function handleBulkDelete(): void {
   opacity: 0.5;
 }
 
-/* 服务徽章 */
 .service-badges {
   display: flex;
   gap: 4px;
@@ -848,7 +810,6 @@ function handleBulkDelete(): void {
   color: var(--text-primary);
 }
 
-/* Q弹动画：只做进入和位移，不做离开（避免 absolute 在 flex 中错位） */
 .badge-pop-enter-active {
   animation: badgeBounceIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -875,7 +836,6 @@ function handleBulkDelete(): void {
   }
 }
 
-/* Popover 列表 */
 .service-popover-list {
   display: flex;
   flex-direction: column;
@@ -916,7 +876,6 @@ function handleBulkDelete(): void {
   opacity: 1;
 }
 
-/* 空状态 */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -932,7 +891,6 @@ function handleBulkDelete(): void {
   opacity: 0.5;
 }
 
-/* 骨架屏间距辅助类 */
 .mt-1 {
   margin-top: 4px;
 }
@@ -941,7 +899,6 @@ function handleBulkDelete(): void {
   margin-top: 2px;
 }
 
-/* 修复骨架屏累积偏移：强制 Skeleton 使用 inline-block 布局 */
 :deep(.minimal-table .p-datatable-tbody .p-skeleton) {
   display: inline-block !important;
   vertical-align: middle;
