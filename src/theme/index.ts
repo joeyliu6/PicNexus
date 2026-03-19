@@ -9,19 +9,19 @@ import Aura from '@primevue/themes/aura';
  */
 export const PicNexusPreset = definePreset(Aura, {
   semantic: {
-    // 主品牌色 - Sky/Blue 系列
+    // 主品牌色 - Blue 系列（Arctic Minimal）
     primary: {
-      50: '{sky.50}',
-      100: '{sky.100}',
-      200: '{sky.200}',
-      300: '{sky.300}',
-      400: '{sky.400}',
-      500: '{sky.500}',   // #3b82f6 - 主品牌色
-      600: '{sky.600}',   // #2563eb - 悬浮态
-      700: '{sky.700}',
-      800: '{sky.800}',
-      900: '{sky.900}',
-      950: '{sky.950}'
+      50: '{blue.50}',
+      100: '{blue.100}',
+      200: '{blue.200}',
+      300: '{blue.300}',
+      400: '{blue.400}',   // #60a5fa - 深色模式主色
+      500: '{blue.500}',   // #3b82f6 - 亮色模式主色/深色悬浮态
+      600: '{blue.600}',
+      700: '{blue.700}',
+      800: '{blue.800}',
+      900: '{blue.900}',
+      950: '{blue.950}'
     },
 
     // 颜色方案配置
@@ -63,21 +63,21 @@ export const PicNexusPreset = definePreset(Aura, {
         }
       },
 
-      // 深色主题
+      // 深色主题 - Arctic Minimal (Zinc 纯灰)
       dark: {
         surface: {
-          0: '#0f172a',      // Slate 900 - 主内容区（对应 --bg-app）
-          50: '#1e293b',     // Slate 800 - 卡片容器（对应 --bg-card）
-          100: '#334155',    // Slate 700 - 输入框（对应 --bg-input）
-          200: '#475569',    // Slate 600
-          300: '#64748b',    // Slate 500
-          400: '#94a3b8',    // Slate 400 - 次要文本（对应 --text-muted）
-          500: '#cbd5e1',    // Slate 300
-          600: '#e2e8f0',    // Slate 200
-          700: '#f1f5f9',    // Slate 100
-          800: '#f8fafc',    // Slate 50 - 主文本（对应 --text-main）
+          0: '#131316',      // 主内容区（对应 --bg-app）
+          50: '#1a1a1e',     // 卡片容器（对应 --bg-card）
+          100: '#242428',    // 输入框（对应 --bg-input）
+          200: '#2e2e33',    // 中间过渡色
+          300: '#71717a',    // Zinc 500 - 对应 --text-tertiary
+          400: '#a1a1aa',    // Zinc 400 - 对应 --text-muted
+          500: '#d4d4d8',    // Zinc 300
+          600: '#e4e4e7',    // Zinc 200
+          700: '#f4f4f5',    // Zinc 100
+          800: '#f4f4f5',    // 对应 --text-main
           900: '#ffffff',
-          950: '#0a0f1a'     // 侧边栏背景（对应 --bg-sidebar）
+          950: '#0e0e11'     // 侧边栏背景（对应 --bg-sidebar）
         },
         primary: {
           color: '{primary.400}',
@@ -86,17 +86,17 @@ export const PicNexusPreset = definePreset(Aura, {
           activeColor: '{primary.200}'
         },
         highlight: {
-          background: 'rgba(59, 130, 246, 0.16)',
-          focusBackground: 'rgba(59, 130, 246, 0.24)',
-          color: 'rgba(59, 130, 246, 0.87)',
-          focusColor: 'rgba(59, 130, 246, 0.87)'
+          background: 'rgba(96, 165, 250, 0.16)',
+          focusBackground: 'rgba(96, 165, 250, 0.24)',
+          color: 'rgba(96, 165, 250, 0.87)',
+          focusColor: 'rgba(96, 165, 250, 0.87)'
         },
         content: {
-          background: '{surface.50}',       // #1e293b - 深色卡片背景（Slate 800）
-          hoverBackground: '{surface.100}', // #334155 - Slate 700
-          borderColor: '{surface.100}',     // #334155 - Slate 700
-          color: '#f8fafc',                 // Slate 50 - 亮色文本（与 --text-main 一致）
-          hoverColor: '#f1f5f9'             // Slate 100 - 悬浮文本
+          background: '{surface.50}',       // #1a1a1e - 卡片背景
+          hoverBackground: '{surface.100}', // #242428
+          borderColor: '{surface.100}',     // #242428
+          color: '#f4f4f5',                 // Zinc 100 - 主文本
+          hoverColor: '#e4e4e7'             // Zinc 200 - 悬浮文本
         }
       }
     }

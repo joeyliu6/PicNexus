@@ -67,12 +67,12 @@ function handlePaste(e: Event) {
 
 .drop-zone:hover {
   border-color: var(--primary);
-  background: rgba(59, 130, 246, 0.05);
+  background: var(--primary-alpha-5);
 }
 
 .drop-zone.dragging {
   border-color: var(--primary);
-  background: rgba(59, 130, 246, 0.1);
+  background: var(--primary-alpha-10);
   border-style: solid;
 }
 
@@ -118,7 +118,7 @@ function handlePaste(e: Event) {
 }
 
 .paste-link:hover:not(:disabled) {
-  color: var(--primary-hover, #2563eb);
+  color: var(--primary-hover, #3b82f6);
   text-decoration: underline;
 }
 

@@ -7,31 +7,31 @@
  */
 :root,
 :root.dark-theme {
-  /* ===== 背景色系统 - Dark Mode ===== */
-  --bg-app: #0f172a;       /* Slate 900 - 主内容区背景 */
-  --bg-sidebar: #0a0f1a;   /* 侧边栏背景色（更深） */
-  --bg-titlebar: #020617;  /* Slate 950 - 标题栏背景（最深） */
-  --bg-card: #1e293b;      /* Slate 800 - 卡片容器背景 */
-  --bg-input: #334155;     /* Slate 700 - 输入框背景 */
-  --bg-secondary: #1e293b; /* Slate 800 - 次要背景 */
-  --bg-sidebar-settings: #0a0f1a;  /* 设置页侧边栏 - 复用 --bg-sidebar */
+  /* ===== 背景色系统 - Arctic Minimal (Zinc 纯灰) ===== */
+  --bg-app: #131316;       /* 主内容区背景 */
+  --bg-sidebar: #0e0e11;   /* 侧边栏背景色（更深） */
+  --bg-titlebar: #09090b;  /* Zinc 950 - 标题栏背景（最深） */
+  --bg-card: #1a1a1e;      /* 卡片容器背景 */
+  --bg-input: #242428;     /* 输入框背景 */
+  --bg-secondary: #1a1a1e; /* 次要背景 */
+  --bg-sidebar-settings: #0e0e11;  /* 设置页侧边栏 */
 
   /* ===== 边框色 ===== */
-  --border-subtle: #334155; /* Slate 700 - 微妙的边框 */
-  --border-subtle-light: rgba(51, 65, 85, 0.5);  /* 更淡的边框 */
-  --border-focus: #3b82f6;  /* Blue 500 - 焦点边框 */
+  --border-subtle: #27272a; /* Zinc 800 - 微妙的边框 */
+  --border-subtle-light: rgba(39, 39, 42, 0.5);  /* 更淡的边框 */
+  --border-focus: #60a5fa;  /* Blue 400 - 焦点边框 */
 
   /* ===== 文本色系统 ===== */
-  --text-main: #f8fafc;     /* Slate 50 - 主文本 */
-  --text-muted: #94a3b8;    /* Slate 400 - 次要文本 */
+  --text-main: #f4f4f5;     /* Zinc 100 - 主文本 */
+  --text-muted: #a1a1aa;    /* Zinc 400 - 次要文本 */
   --text-primary: var(--text-main);
   --text-secondary: var(--text-muted);
-  --text-tertiary: #64748b; /* Slate 500 - 三级文本 */
+  --text-tertiary: #71717a; /* Zinc 500 - 三级文本 */
 
-  /* ===== 品牌色 ===== */
-  --primary: #3b82f6;       /* Blue 500 - 主品牌色 */
-  --primary-hover: #2563eb; /* Blue 600 - 悬浮态 */
-  --accent: #38bdf8;        /* Sky 400 - 强调色 */
+  /* ===== 品牌色 - Arctic Minimal ===== */
+  --primary: #60a5fa;       /* Blue 400 - 主品牌色（柔和） */
+  --primary-hover: #3b82f6; /* Blue 500 - 悬浮态 */
+  --accent: #93c5fd;        /* Blue 300 - 强调色 */
 
   /* ===== 状态色 ===== */
   --success: #10b981;       /* Emerald 500 - 成功绿 */
@@ -54,7 +54,7 @@
   /* ===== 特殊文本色 ===== */
   --text-on-primary: #ffffff;    /* 主色背景上的文本 */
   --text-on-error: #ffffff;      /* 错误色背景上的文本 */
-  --text-disabled: rgba(248, 250, 252, 0.4); /* 禁用文本 */
+  --text-disabled: rgba(244, 244, 245, 0.4); /* 禁用文本 */
 
   /* ===== 阴影系统 - Dark Mode 更柔和 ===== */
   --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.3),
@@ -65,10 +65,10 @@
                   0 10px 10px -5px rgba(0, 0, 0, 0.2);
 
   /* ===== 焦点环 ===== */
-  --focus-ring-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  --focus-ring-shadow: 0 0 0 3px var(--primary-alpha-20);
 
   /* ===== 状态背景色 ===== */
-  --state-info-bg: rgba(59, 130, 246, 0.15);
+  --state-info-bg: var(--primary-alpha-15);
   --state-success-bg: rgba(16, 185, 129, 0.15);
   --state-warn-bg: rgba(234, 179, 8, 0.15);
   --state-error-bg: rgba(239, 68, 68, 0.15);
@@ -80,19 +80,19 @@
   --state-error-text: var(--error);
 
   /* ===== 滚动条 ===== */
-  --scrollbar-thumb: rgba(148, 163, 184, 0.3);
-  --scrollbar-thumb-hover: rgba(148, 163, 184, 0.5);
+  --scrollbar-thumb: rgba(161, 161, 170, 0.3);
+  --scrollbar-thumb-hover: rgba(161, 161, 170, 0.5);
   --scrollbar-track: var(--bg-input);
 
   /* ===== 禁用状态 ===== */
-  --bg-disabled: rgba(51, 65, 85, 0.5);
+  --bg-disabled: rgba(39, 39, 42, 0.5);
 
   /* ===== 选中状态背景 ===== */
-  --selected-bg: rgb(214 228 251 / 30%);
+  --selected-bg: var(--primary-alpha-20);
 
   /* ===== 主色边框（用于选中/高亮状态） ===== */
-  --primary-border: rgba(59, 130, 246, 0.4);
-  --primary-hover-bg: rgba(59, 130, 246, 0.08);
+  --primary-border: var(--primary-alpha-40);
+  --primary-hover-bg: var(--primary-alpha-8);
 
   /* ===== 色彩方案 ===== */
   color-scheme: dark;
@@ -105,18 +105,18 @@
 /* 标题栏在深色主题下的样式 */
 :root.dark-theme #titlebar {
   background-color: var(--bg-titlebar);
-  border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+  border-bottom: 1px solid rgba(39, 39, 42, 0.5);
 }
 
 /* 侧边栏在深色主题下的样式 */
 :root.dark-theme .sidebar {
   background-color: var(--bg-sidebar);
-  border-right: 1px solid rgba(51, 65, 85, 0.5);
+  border-right: 1px solid rgba(39, 39, 42, 0.5);
 }
 
 /* 导航按钮激活状态 */
 :root.dark-theme .nav-btn.active {
-  background-color: rgba(59, 130, 246, 0.15);
+  background-color: var(--primary-alpha-15);
   color: var(--primary);
 }
 
@@ -131,7 +131,7 @@
 :root.dark-theme textarea:focus,
 :root.dark-theme select:focus {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 3px var(--primary-alpha-20);
 }
 
 /* 进度条 */
@@ -145,7 +145,7 @@
 
 /* 表格斑马条纹 */
 :root.dark-theme table tr:nth-child(even) {
-  background-color: rgba(51, 65, 85, 0.3);
+  background-color: rgba(39, 39, 42, 0.3);
 }
 
 /* 卡片悬浮效果 */

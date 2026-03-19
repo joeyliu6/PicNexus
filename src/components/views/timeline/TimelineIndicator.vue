@@ -624,7 +624,7 @@ onUnmounted(() => {
   height: 12px;
   border-radius: 50%;
   background: var(--primary);
-  box-shadow: 0 1px 4px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 1px 4px var(--primary-alpha-30);
 }
 
 /* 日期气泡（底部蓝边样式） */

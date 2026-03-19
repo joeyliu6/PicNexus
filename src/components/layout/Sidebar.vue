@@ -84,17 +84,17 @@ const handleNavigate = (view: ViewType) => {
 }
 
 .nav-btn:hover {
-  background: rgba(59, 130, 246, 0.1);
+  background: var(--primary-alpha-10);
   color: var(--primary);
 }
 
 .nav-btn.nav-btn-active {
-  background: rgba(59, 130, 246, 0.15);
+  background: var(--primary-alpha-15);
   color: var(--primary);
   font-weight: 600;
 }
 
 .nav-btn.nav-btn-active:hover {
-  background: rgba(59, 130, 246, 0.2);
+  background: var(--primary-alpha-20);
 }
 </style>

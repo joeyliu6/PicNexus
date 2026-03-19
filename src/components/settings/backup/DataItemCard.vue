@@ -1,8 +1,8 @@
 <script lang="ts">
-import { ref } from 'vue';
+import { ref as createRef } from 'vue';
 
 let instanceCounter = 0;
-const openMenuId = ref<number | null>(null);
+const openMenuId = createRef<number | null>(null);
 </script>
 
 <script setup lang="ts">

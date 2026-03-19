@@ -46,30 +46,39 @@
 
 /* Global Styles */
 :root {
-  /* New Palette: Slate/Zinc based (Cool Gray) */
-  --bg-app: #0f172a;       /* Slate 900 - App Background (主内容区，最浅) */
-  --bg-sidebar: #0a0f1a;   /* 侧边栏背景色（第二深） */
-  --bg-titlebar: #020617;  /* 顶栏背景色（最深） */
-  --bg-card: #1e293b;      /* Slate 800 - Card/Container Background */
-  --bg-input: #334155;     /* Slate 700 - Input Background */
+  /* Arctic Minimal - Zinc 纯灰系 */
+  --bg-app: #131316;       /* 主内容区背景 */
+  --bg-sidebar: #0e0e11;   /* 侧边栏背景色（更深） */
+  --bg-titlebar: #09090b;  /* Zinc 950 - 标题栏背景（最深） */
+  --bg-card: #1a1a1e;      /* 卡片容器背景 */
+  --bg-input: #242428;     /* 输入框背景 */
 
   /* Borders */
-  --border-subtle: #334155; /* Slate 700 */
-  --border-focus: #3b82f6;  /* Blue 500 */
+  --border-subtle: #27272a; /* Zinc 800 */
+  --border-focus: #60a5fa;  /* Blue 400 */
 
   /* Hover overlays - 用于悬浮效果 */
   --hover-overlay: rgba(255, 255, 255, 0.08);
   --hover-overlay-subtle: rgba(255, 255, 255, 0.04);
 
-  /* Brand Colors */
-  --primary: #3b82f6;      /* Blue 500 */
-  --primary-hover: #2563eb; /* Blue 600 */
-  --primary-alpha-5: rgba(59, 130, 246, 0.05);
-  --primary-alpha-8: rgba(59, 130, 246, 0.08);
-  --primary-alpha-10: rgba(59, 130, 246, 0.1);
-  --primary-alpha-12: rgba(59, 130, 246, 0.12);
-  --primary-alpha-15: rgba(59, 130, 246, 0.15);
-  --accent: #38bdf8;       /* Sky 400 */
+  /* Brand Colors - Arctic Minimal */
+  --primary: #60a5fa;      /* Blue 400 */
+  --primary-hover: #3b82f6; /* Blue 500 */
+  --primary-alpha-5: rgba(96, 165, 250, 0.05);
+  --primary-alpha-6: rgba(96, 165, 250, 0.06);
+  --primary-alpha-8: rgba(96, 165, 250, 0.08);
+  --primary-alpha-10: rgba(96, 165, 250, 0.1);
+  --primary-alpha-12: rgba(96, 165, 250, 0.12);
+  --primary-alpha-15: rgba(96, 165, 250, 0.15);
+  --primary-alpha-16: rgba(96, 165, 250, 0.16);
+  --primary-alpha-18: rgba(96, 165, 250, 0.18);
+  --primary-alpha-20: rgba(96, 165, 250, 0.2);
+  --primary-alpha-22: rgba(96, 165, 250, 0.22);
+  --primary-alpha-25: rgba(96, 165, 250, 0.25);
+  --primary-alpha-30: rgba(96, 165, 250, 0.3);
+  --primary-alpha-40: rgba(96, 165, 250, 0.4);
+  --primary-alpha-50: rgba(96, 165, 250, 0.5);
+  --accent: #93c5fd;       /* Blue 300 */
   --color-primary: var(--primary);
 
   /* Status Colors */
@@ -87,8 +96,8 @@
   --pending-alpha-15: rgba(167, 139, 250, 0.15);
 
   /* Text Colors */
-  --text-main: #f8fafc;    /* Slate 50 */
-  --text-muted: #94a3b8;   /* Slate 400 */
+  --text-main: #f4f4f5;    /* Zinc 100 */
+  --text-muted: #a1a1aa;   /* Zinc 400 */
   --text-primary: var(--text-main);
   --text-secondary: var(--text-muted);
   --text-on-surface: #111827; /* Gray 900 — 亮色主题表面上的深色文字 */
@@ -547,10 +556,10 @@ button:focus-visible {
 }
 
 .upload-item .actions button:hover:not(:disabled) {
-  background: rgba(59, 130, 246, 0.2);
-  border-color: rgba(59, 130, 246, 0.4);
+  background: var(--primary-alpha-20);
+  border-color: var(--primary-alpha-40);
   color: var(--primary);
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 2px 8px var(--primary-alpha-15);
 }
 
 .upload-item .actions button:disabled {
@@ -870,7 +879,7 @@ button:focus-visible {
 .link-selector:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 2px var(--primary-alpha-10);
 }
 
 .link-selector option {
@@ -908,7 +917,7 @@ button:focus-visible {
 
 .icon-btn:hover {
   color: var(--primary);
-  background: rgba(59, 130, 246, 0.1);
+  background: var(--primary-alpha-10);
 }
 
 .icon-btn:active {
@@ -1027,10 +1036,10 @@ button:focus-visible {
 
 /* R2 工具栏按钮基础样式 */
 .r2-btn {
-  background: rgba(59, 130, 246, 0.15);
+  background: var(--primary-alpha-15);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  border: 1px solid var(--primary-alpha-30);
   color: var(--text-primary);
   padding: 8px 16px;
   border-radius: 8px;
@@ -1065,13 +1074,13 @@ button:focus-visible {
 }
 
 .r2-btn:hover {
-  background: rgba(59, 130, 246, 0.25);
-  border-color: rgba(59, 130, 246, 0.5);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  background: var(--primary-alpha-25);
+  border-color: var(--primary-alpha-50);
+  box-shadow: 0 4px 12px var(--primary-alpha-20);
 }
 
 .r2-btn:active {
-  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 2px 6px var(--primary-alpha-15);
 }
 
 /* 图标+文字按钮 */
@@ -1866,15 +1875,15 @@ button:focus-visible {
 }
 
 .btn-primary {
-  background: rgba(59, 130, 246, 0.15);
-  border-color: rgba(59, 130, 246, 0.3);
+  background: var(--primary-alpha-15);
+  border-color: var(--primary-alpha-30);
   color: var(--text-primary);
 }
 
 .btn-primary:hover {
-  background: rgba(59, 130, 246, 0.25);
-  border-color: rgba(59, 130, 246, 0.5);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  background: var(--primary-alpha-25);
+  border-color: var(--primary-alpha-50);
+  box-shadow: 0 4px 12px var(--primary-alpha-20);
 }
 
 /* ========== 链接前缀配置样式 ========== */
@@ -1943,7 +1952,7 @@ button:focus-visible {
 }
 
 .toggle-switch input:focus + .toggle-slider {
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 0 2px var(--primary-alpha-30);
 }
 
 /* 容器：使用 Grid 布局自动适应宽度 */
@@ -1971,13 +1980,13 @@ button:focus-visible {
 
 /* 鼠标悬停效果 */
 .service-toggle:hover {
-  background-color: rgba(59, 130, 246, 0.08);
+  background-color: var(--primary-alpha-8);
   border-color: var(--primary); /* 悬停时边框高亮 */
 }
 
 /* 选中状态的卡片背景 */
 .service-toggle:has(input:checked) {
-  background-color: rgba(59, 130, 246, 0.12);
+  background-color: var(--primary-alpha-12);
   border-color: var(--primary);
 }
 
@@ -2050,7 +2059,7 @@ button:focus-visible {
 .prefix-selector:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 2px var(--primary-alpha-20);
 }
 
 .prefix-selector option {
@@ -2087,11 +2096,11 @@ button:focus-visible {
 }
 
 .prefix-action-btn:hover {
-  background: rgba(59, 130, 246, 0.2);
+  background: var(--primary-alpha-20);
   border-color: var(--primary);
   color: var(--primary);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 2px 8px var(--primary-alpha-20);
 }
 
 .prefix-action-btn:hover svg {
@@ -2142,7 +2151,7 @@ button:focus-visible {
 #add-prefix-modal input:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 2px var(--primary-alpha-20);
 }
 
 #add-prefix-modal .hint {
@@ -2195,7 +2204,7 @@ button:focus-visible {
 .view-mode-btn.active {
   background-color: var(--primary);
   color: white;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 2px 4px var(--primary-alpha-30);
 }
 
 .view-mode-btn svg {
@@ -2233,7 +2242,7 @@ button:focus-visible {
 .image-bed-filter:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 2px var(--primary-alpha-10);
 }
 
 .search-section {
@@ -2262,7 +2271,7 @@ button:focus-visible {
 .search-section input:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 2px var(--primary-alpha-10);
 }
 
 /* 视图容器 */
@@ -2793,7 +2802,7 @@ button:focus-visible {
 :deep(.p-textarea:focus),
 :deep(.p-password .p-password-input:focus) {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 3px var(--primary-alpha-15);
   outline: none;
 }
 

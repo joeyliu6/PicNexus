@@ -128,8 +128,8 @@ defineEmits<{
 /* 安全提示 */
 .security-tip {
   width: 100%;
-  background: rgba(59, 130, 246, 0.06);
-  border: 1px solid rgba(59, 130, 246, 0.15);
+  background: var(--primary-alpha-6);
+  border: 1px solid var(--primary-alpha-15);
   border-radius: 8px;
   padding: 12px 14px;
   margin-bottom: 24px;

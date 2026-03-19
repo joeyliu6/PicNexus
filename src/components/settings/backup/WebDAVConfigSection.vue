@@ -233,7 +233,7 @@ function handleTest() {
 
 .profile-tab.active {
   border-color: var(--primary);
-  background: rgba(59, 130, 246, 0.1);
+  background: var(--primary-alpha-10);
   color: var(--primary);
 }
 

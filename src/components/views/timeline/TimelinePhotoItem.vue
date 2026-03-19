@@ -170,7 +170,7 @@ const successfulServices = computed(() => {
 
 .photo-item.selected .selection-overlay {
   opacity: 1;
-  background: rgba(59, 130, 246, 0.2);
+  background: var(--primary-alpha-20);
   border: 2px solid var(--primary);
   border-radius: 8px;
 }

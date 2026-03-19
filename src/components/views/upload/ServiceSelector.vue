@@ -197,7 +197,7 @@ function handleToggle(serviceId: ServiceType) {
 }
 
 .empty-state-link:hover {
-  color: var(--primary-hover, #2563eb);
+  color: var(--primary-hover, #3b82f6);
   text-decoration: underline;
 }
 </style>

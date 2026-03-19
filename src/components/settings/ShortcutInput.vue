@@ -131,7 +131,7 @@ function handleKeyDown(e: KeyboardEvent) {
 .shortcut-input:focus,
 .shortcut-input.recording {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 0 2px var(--primary-alpha-15);
 }
 
 .shortcut-text {
