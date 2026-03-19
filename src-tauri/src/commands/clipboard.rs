@@ -27,7 +27,7 @@ pub fn clipboard_has_image() -> Result<bool, AppError> {
 /// 返回临时文件的完整路径
 #[tauri::command]
 pub fn read_clipboard_image() -> Result<String, AppError> {
-    eprintln!("[剪贴板] 正在读取剪贴板图片...");
+    log::info!("[剪贴板] 正在读取剪贴板图片...");
 
     // 获取剪贴板访问
     let mut clipboard = Clipboard::new()
@@ -39,7 +39,7 @@ pub fn read_clipboard_image() -> Result<String, AppError> {
         _ => AppError::clipboard(format!("读取剪贴板图片失败: {}", e)),
     })?;
 
-    eprintln!(
+    log::debug!(
         "[剪贴板] 读取成功，尺寸: {}x{}",
         image_data.width, image_data.height
     );
@@ -59,7 +59,7 @@ pub fn read_clipboard_image() -> Result<String, AppError> {
         .map_err(|e| AppError::clipboard(format!("PNG 编码失败: {}", e)))?;
 
     let png_bytes = png_data.into_inner();
-    eprintln!("[剪贴板] PNG 编码完成，大小: {} bytes", png_bytes.len());
+    log::debug!("[剪贴板] PNG 编码完成，大小: {} bytes", png_bytes.len());
 
     // 创建临时文件路径
     let temp_dir = std::env::temp_dir();
@@ -71,12 +71,12 @@ pub fn read_clipboard_image() -> Result<String, AppError> {
 
     // 写入文件
     std::fs::write(&temp_path, png_bytes).map_err(|e| {
-        eprintln!("[剪贴板] 写入临时文件失败: {}", e);
+        log::error!("[剪贴板] 写入临时文件失败: {}", e);
         AppError::file_io(format!("写入临时文件失败: {}", e))
     })?;
 
     let path_str = temp_path.to_string_lossy().to_string();
-    eprintln!("[剪贴板] 图片已保存到临时文件: {}", path_str);
+    log::info!("[剪贴板] 图片已保存到临时文件: {}", path_str);
 
     Ok(path_str)
 }

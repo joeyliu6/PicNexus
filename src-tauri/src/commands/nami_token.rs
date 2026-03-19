@@ -50,7 +50,7 @@ pub async fn fetch_nami_token_internal(
     cookie: String,
     auth_token: String
 ) -> Result<NamiDynamicHeaders, AppError> {
-    println!("[NamiToken] ========== 开始获取动态 Headers (Sidecar) ==========");
+    log::info!("[NamiToken] 开始获取动态 Headers (Sidecar)");
 
     let sidecar = app.shell()
         .sidecar("nami-token-fetcher")
@@ -74,7 +74,7 @@ pub async fn fetch_nami_token_internal(
                 stderr_output.push('\n');
             }
             CommandEvent::Terminated(status) => {
-                println!("[NamiToken] Sidecar 退出，状态: {:?}", status);
+                log::debug!("[NamiToken] Sidecar 退出，状态: {:?}", status);
             }
             _ => {}
         }
@@ -83,7 +83,7 @@ pub async fn fetch_nami_token_internal(
     // 输出 stderr 日志（包含进度信息）
     if !stderr_output.is_empty() {
         for line in stderr_output.lines() {
-            println!("{}", line);
+            log::debug!("{}", line);
         }
     }
 
@@ -93,9 +93,7 @@ pub async fn fetch_nami_token_internal(
 
     if response.success {
         if let Some(headers) = response.data {
-            println!("[NamiToken] ========== Headers 获取成功 ==========");
-            println!("[NamiToken]   access_token: {}...", &headers.access_token.chars().take(20).collect::<String>());
-            println!("[NamiToken]   zm_token: {}...", &headers.zm_token.chars().take(20).collect::<String>());
+            log::info!("[NamiToken] Headers 获取成功");
             return Ok(headers);
         }
         Err(AppError::external("响应中没有 Headers 数据"))

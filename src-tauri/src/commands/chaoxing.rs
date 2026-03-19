@@ -26,7 +26,7 @@ struct ChaoxingApiResponse {
 /// 测试超星 Cookie 是否有效
 #[tauri::command]
 pub async fn test_chaoxing_connection(chaoxing_cookie: String) -> Result<String, AppError> {
-    println!("[Chaoxing] 测试 Cookie 有效性...");
+    log::info!("[Chaoxing] 测试 Cookie 有效性...");
 
     // 检查 Cookie 非空
     if chaoxing_cookie.trim().is_empty() {
@@ -38,7 +38,7 @@ pub async fn test_chaoxing_connection(chaoxing_cookie: String) -> Result<String,
         return Err(AppError::auth("Cookie 缺少必要字段 _uid，请确认已登录"));
     }
 
-    println!("[Chaoxing] ✓ Cookie 包含必要字段 _uid");
+    log::info!("[Chaoxing] Cookie 包含必要字段 _uid");
 
     // 最小的 1x1 透明 PNG（67 字节）
     let minimal_png: Vec<u8> = vec![
@@ -78,11 +78,7 @@ pub async fn test_chaoxing_connection(chaoxing_cookie: String) -> Result<String,
     let response_text = response.text().await
         .into_network_err_with("无法读取响应")?;
 
-    println!("[Chaoxing] 测试响应: {}", if response_text.len() > 200 {
-        format!("{}... (共 {} 字节)", &response_text[..200], response_text.len())
-    } else {
-        response_text.clone()
-    });
+    log::debug!("[Chaoxing] 测试响应: {} bytes", response_text.len());
 
     // 检查是否返回 HTML（Cookie 失效的典型特征）
     if response_text.contains("<!DOCTYPE html>") || response_text.contains("<html") {
@@ -94,7 +90,7 @@ pub async fn test_chaoxing_connection(chaoxing_cookie: String) -> Result<String,
         .map_err(|_| AppError::auth("Cookie 无效或已过期（无法解析响应）"))?;
 
     if api_response.status == Some(true) && api_response.url.is_some() {
-        println!("[Chaoxing] ✓ Cookie 有效（测试上传成功）");
+        log::info!("[Chaoxing] Cookie 有效（测试上传成功）");
         Ok("Cookie 验证通过".to_string())
     } else {
         let msg = api_response.msg.unwrap_or_else(|| "未知错误".to_string());
@@ -110,7 +106,7 @@ pub async fn upload_to_chaoxing(
     file_path: String,
     chaoxing_cookie: String,
 ) -> Result<ChaoxingUploadResult, AppError> {
-    println!("[Chaoxing] 开始上传文件: {}", file_path);
+    log::info!("[Chaoxing] 开始上传文件: {}", file_path);
 
     // 1. 检查 Cookie
     if chaoxing_cookie.trim().is_empty() {
@@ -180,7 +176,7 @@ pub async fn upload_to_chaoxing(
     let response_text = response.text().await
         .into_network_err_with("无法读取响应")?;
 
-    println!("[Chaoxing] API 响应: {}", response_text);
+    log::debug!("[Chaoxing] API 响应: {}", response_text);
 
     // 检查是否返回 HTML（Cookie 失效的典型特征）
     if response_text.contains("<!DOCTYPE html>") || response_text.contains("<html") {
@@ -202,7 +198,7 @@ pub async fn upload_to_chaoxing(
     // 11. 去掉 URL 中的查询参数
     let final_url = image_url.split('?').next().unwrap_or(&image_url).to_string();
 
-    println!("[Chaoxing] 上传成功: {}", final_url);
+    log::info!("[Chaoxing] 上传成功: {}", final_url);
 
     Ok(ChaoxingUploadResult {
         url: final_url,

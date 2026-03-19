@@ -62,7 +62,7 @@ fn extract_bilibili_cookies(cookie: &str) -> Result<(String, String), AppError> 
 /// 测试哔哩哔哩 Cookie 是否有效（使用用户导航 API，无需上传图片）
 #[tauri::command]
 pub async fn test_bilibili_connection(bilibili_cookie: String) -> Result<String, AppError> {
-    println!("[Bilibili] 测试 Cookie 有效性...");
+    log::info!("[Bilibili] 测试 Cookie 有效性...");
 
     // 检查 Cookie 非空
     if bilibili_cookie.trim().is_empty() {
@@ -71,7 +71,7 @@ pub async fn test_bilibili_connection(bilibili_cookie: String) -> Result<String,
 
     // 提取并验证 Cookie 字段
     let (sessdata, _csrf) = extract_bilibili_cookies(&bilibili_cookie)?;
-    println!("[Bilibili] ✓ Cookie 包含必要字段 SESSDATA 和 bili_jct");
+    log::info!("[Bilibili] Cookie 包含必要字段 SESSDATA 和 bili_jct");
 
     // 使用用户导航 API 验证登录状态（不需要上传图片）
     let client = reqwest::Client::new();
@@ -87,11 +87,7 @@ pub async fn test_bilibili_connection(bilibili_cookie: String) -> Result<String,
     let response_text = response.text().await
         .into_network_err_with("无法读取响应")?;
 
-    println!("[Bilibili] 导航 API 响应: {}", if response_text.len() > 300 {
-        format!("{}... (共 {} 字节)", &response_text[..300], response_text.len())
-    } else {
-        response_text.clone()
-    });
+    log::debug!("[Bilibili] 导航 API 响应: {} bytes", response_text.len());
 
     // 解析响应
     let nav_response: BilibiliNavResponse = serde_json::from_str(&response_text)
@@ -102,7 +98,7 @@ pub async fn test_bilibili_connection(bilibili_cookie: String) -> Result<String,
         if let Some(data) = nav_response.data {
             if data.is_login {
                 let username = data.uname.unwrap_or_else(|| "未知用户".to_string());
-                println!("[Bilibili] ✓ Cookie 有效（用户: {}）", username);
+                log::info!("[Bilibili] Cookie 有效（用户: {}）", username);
                 return Ok(format!("Cookie 验证通过（用户: {}）", username));
             }
         }
@@ -123,7 +119,7 @@ pub async fn upload_to_bilibili(
     file_path: String,
     bilibili_cookie: String,
 ) -> Result<BilibiliUploadResult, AppError> {
-    println!("[Bilibili] 开始上传文件: {}", file_path);
+    log::info!("[Bilibili] 开始上传文件: {}", file_path);
 
     // 1. 提取 SESSDATA 和 csrf
     let (sessdata, csrf) = extract_bilibili_cookies(&bilibili_cookie)?;
@@ -192,7 +188,7 @@ pub async fn upload_to_bilibili(
     let response_text = response.text().await
         .into_network_err_with("无法读取响应")?;
 
-    println!("[Bilibili] API 响应: {}", response_text);
+    log::debug!("[Bilibili] API 响应: {}", response_text);
 
     let api_response: BilibiliApiResponse = serde_json::from_str(&response_text)
         .map_err(|e| AppError::upload("哔哩哔哩", format!("JSON 解析失败: {} (响应: {})", e, response_text)))?;
@@ -215,7 +211,7 @@ pub async fn upload_to_bilibili(
         image_url
     };
 
-    println!("[Bilibili] 上传成功: {}", final_url);
+    log::info!("[Bilibili] 上传成功: {}", final_url);
 
     Ok(BilibiliUploadResult {
         url: final_url,

@@ -51,7 +51,7 @@ async fn get_aid_info() -> Result<AidInfo, AppError> {
     let response_text = response.text().await
         .into_network_err_with("无法读取 aid 响应")?;
 
-    println!("[JD] Aid API 响应: {}", response_text);
+    log::debug!("[JD] Aid API 响应: {}", response_text);
 
     // 解析 JSONP 响应: jsonp1({...})
     let json_str = response_text
@@ -80,19 +80,19 @@ async fn get_aid_info() -> Result<AidInfo, AppError> {
 /// 通过调用 get_aid_info() 检测 API 是否可达
 #[tauri::command]
 pub async fn check_jd_available() -> bool {
-    println!("[JD] 开始可用性检测...");
+    log::info!("[JD] 开始可用性检测...");
     let start_time = std::time::Instant::now();
 
     match get_aid_info().await {
         Ok(aid_info) => {
             let elapsed = start_time.elapsed();
-            println!("[JD] 检测完成 - aid: {}, 耗时: {:?}, 结果: 可用",
+            log::info!("[JD] 检测完成 - aid: {}, 耗时: {:?}, 结果: 可用",
                 aid_info.aid, elapsed);
             true
         }
         Err(e) => {
             let elapsed = start_time.elapsed();
-            println!("[JD] 可用性检测失败 - 错误: {}, 耗时: {:?}", e, elapsed);
+            log::error!("[JD] 可用性检测失败 - 错误: {}, 耗时: {:?}", e, elapsed);
             false
         }
     }
@@ -104,7 +104,7 @@ pub async fn upload_to_jd(
     id: String,
     file_path: String,
 ) -> Result<JDUploadResult, AppError> {
-    println!("[JD] 开始上传文件: {}", file_path);
+    log::info!("[JD] 开始上传文件: {}", file_path);
 
     // 发送进度: 0% - 读取文件
     let _ = window.emit("upload://progress", serde_json::json!({
@@ -152,9 +152,9 @@ pub async fn upload_to_jd(
     }));
 
     // 4. 获取 aid 和 pin
-    println!("[JD] 正在获取 aid 和 pin...");
+    log::debug!("[JD] 正在获取 aid 和 pin...");
     let aid_info = get_aid_info().await?;
-    println!("[JD] 获取成功 - aid: {}, pin: {}", aid_info.aid, aid_info.pin);
+    log::debug!("[JD] 获取成功 - aid: {}", aid_info.aid);
 
     // 5. 构建 multipart form
     // 将扩展名转为小写（避免服务器不支持大写扩展名）
@@ -214,7 +214,7 @@ pub async fn upload_to_jd(
     let response_text = response.text().await
         .into_network_err_with("无法读取响应")?;
 
-    println!("[JD] 上传 API 响应: {}", response_text);
+    log::debug!("[JD] 上传 API 响应: {}", response_text);
 
     let upload_response: JDUploadResponse = serde_json::from_str(&response_text)
         .map_err(|e| AppError::upload("京东", format!("JSON 解析失败: {}", e)))?;
@@ -233,8 +233,8 @@ pub async fn upload_to_jd(
         "img30.360buyimg.com/imgzone"
     );
 
-    println!("[JD] 上传成功（原始URL: {}）", raw_url);
-    println!("[JD] 转换后URL: {}", image_url);
+    log::info!("[JD] 上传成功（原始URL: {}）", raw_url);
+    log::debug!("[JD] 转换后URL: {}", image_url);
 
     // ✅ 修复: 删除此处的100%事件发送
     // 前端会在收到Ok结果时自动设置100%

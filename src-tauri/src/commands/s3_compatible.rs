@@ -63,7 +63,7 @@ pub async fn upload_to_s3_compatible(
     key: String,
     public_domain: String,
 ) -> Result<S3UploadResult, AppError> {
-    println!("[S3兼容] 开始上传文件: {}", file_path);
+    log::info!("[S3兼容] 开始上传文件: {}", file_path);
 
     // 发送进度: 0% - 读取文件
     let _ = window.emit("upload://progress", serde_json::json!({
@@ -78,7 +78,7 @@ pub async fn upload_to_s3_compatible(
     // 1. 读取文件
     let (buffer, file_size) = read_file_bytes(&file_path).await?;
 
-    println!("[S3兼容] 文件大小: {} bytes", file_size);
+    log::debug!("[S3兼容] 文件大小: {} bytes", file_size);
 
     // 发送进度: 33% - 创建客户端
     let _ = window.emit("upload://progress", serde_json::json!({
@@ -119,7 +119,7 @@ pub async fn upload_to_s3_compatible(
     .map_err(|_| AppError::upload("S3兼容", format!("上传超时 ({}秒)", S3_OPERATION_TIMEOUT_SECS * 2)))?
     .map_err(|e| AppError::upload("S3兼容", format!("上传失败: {}", e)))?;
 
-    println!("[S3兼容] 上传成功 - Key: {}", key);
+    log::info!("[S3兼容] 上传成功 - Key: {}", key);
 
     // 4. 构建公开访问 URL
     let url = if public_domain.is_empty() {
@@ -189,7 +189,7 @@ pub async fn test_s3_connection(
     service_id: String,
     config: S3TestConfig,
 ) -> Result<String, AppError> {
-    println!("[S3测试] 开始测试 {} 连接", service_id);
+    log::info!("[S3测试] 开始测试 {} 连接", service_id);
 
     let access_key = config.get_access_key()
         .filter(|s| !s.is_empty())
@@ -211,7 +211,7 @@ pub async fn test_s3_connection(
     // 构建 endpoint 和 region
     let (endpoint, region) = build_s3_endpoint(&service_id, &config, &bucket)?;
 
-    println!("[S3测试] Endpoint: {}, Region: {}, Bucket: {}", endpoint, region, bucket);
+    log::debug!("[S3测试] Endpoint: {}, Region: {}, Bucket: {}", endpoint, region, bucket);
 
     // 单次测试，快速反馈优先
     let test_timeout = Duration::from_secs(10);
@@ -230,13 +230,13 @@ pub async fn test_s3_connection(
     match result {
         Ok(Ok(response)) => {
             let object_count = response.contents().len();
-            println!("[S3测试] ✓ {} 连接成功，存储桶内有 {} 个对象",
+            log::info!("[S3测试] {} 连接成功，存储桶内有 {} 个对象",
                 service_id, object_count);
             Ok(format!("{} 连接成功！", get_service_name(&service_id)))
         }
         Ok(Err(e)) => {
             let error_msg = e.to_string();
-            println!("[S3测试] 连接失败: {}", error_msg);
+            log::error!("[S3测试] 连接失败: {}", error_msg);
 
             if error_msg.contains("NoSuchBucket") {
                 Err(AppError::storage(format!("存储桶不存在: {}", bucket)))
@@ -251,7 +251,7 @@ pub async fn test_s3_connection(
             }
         }
         Err(_) => {
-            println!("[S3测试] 连接超时");
+            log::warn!("[S3测试] 连接超时");
             Err(AppError::storage("连接超时，请检查网络或配置"))
         }
     }
@@ -334,7 +334,7 @@ async fn test_upyun_connection(
 
     let status = response.status();
     if status.is_success() {
-        println!("[S3测试] ✓ 又拍云连接成功");
+        log::info!("[S3测试] 又拍云连接成功");
         return Ok("又拍云连接成功！".to_string());
     }
     if status == reqwest::StatusCode::UNAUTHORIZED {

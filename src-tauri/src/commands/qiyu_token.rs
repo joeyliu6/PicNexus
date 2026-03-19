@@ -34,7 +34,7 @@ struct CheckChromeData {
 /// 检测系统是否安装了 Chrome 浏览器
 #[tauri::command]
 pub async fn check_chrome_installed(app: tauri::AppHandle) -> Result<bool, AppError> {
-    println!("[QiyuToken] 检测 Chrome 安装状态...");
+    log::info!("[QiyuToken] 检测 Chrome 安装状态...");
 
     let sidecar = app.shell()
         .sidecar("qiyu-token-fetcher")
@@ -60,7 +60,7 @@ pub async fn check_chrome_installed(app: tauri::AppHandle) -> Result<bool, AppEr
                     stderr_output.push('\n');
                 }
                 CommandEvent::Terminated(status) => {
-                    println!("[QiyuToken] Sidecar 退出，状态: {:?}", status);
+                    log::debug!("[QiyuToken] Sidecar 退出，状态: {:?}", status);
                 }
                 _ => {}
             }
@@ -75,7 +75,7 @@ pub async fn check_chrome_installed(app: tauri::AppHandle) -> Result<bool, AppEr
     // 输出 stderr 日志
     if !stderr_output.is_empty() {
         for line in stderr_output.lines() {
-            println!("{}", line);
+            log::debug!("{}", line);
         }
     }
 
@@ -87,12 +87,12 @@ pub async fn check_chrome_installed(app: tauri::AppHandle) -> Result<bool, AppEr
         if let Some(data) = response.data {
             if data.installed {
                 if let (Some(name), Some(path)) = (&data.name, &data.path) {
-                    println!("[QiyuToken] 检测到 {}: {}", name, path);
+                    log::info!("[QiyuToken] 检测到 {}: {}", name, path);
                 }
                 return Ok(true);
             }
         }
-        println!("[QiyuToken] 未检测到 Chrome 或 Edge");
+        log::warn!("[QiyuToken] 未检测到 Chrome 或 Edge");
         Ok(false)
     } else {
         Err(AppError::external(response.error.unwrap_or_else(|| "未知错误".to_string())))
@@ -103,19 +103,19 @@ pub async fn check_chrome_installed(app: tauri::AppHandle) -> Result<bool, AppEr
 /// 通过实际获取 Token 来验证上传能力
 #[tauri::command]
 pub async fn check_qiyu_available(app: tauri::AppHandle) -> bool {
-    println!("[Qiyu] 开始可用性检测（获取 Token）...");
+    log::info!("[Qiyu] 开始可用性检测（获取 Token）...");
     let start_time = std::time::Instant::now();
 
     match fetch_qiyu_token_internal(&app).await {
         Ok(token) => {
             let elapsed = start_time.elapsed();
-            println!("[Qiyu] 检测完成 - Object: {}, 耗时: {:?}, 结果: 可用",
+            log::info!("[Qiyu] 检测完成 - Object: {}, 耗时: {:?}, 结果: 可用",
                 token.object_path, elapsed);
             true
         }
         Err(e) => {
             let elapsed = start_time.elapsed();
-            println!("[Qiyu] 可用性检测失败 - 错误: {}, 耗时: {:?}", e, elapsed);
+            log::error!("[Qiyu] 可用性检测失败 - 错误: {}, 耗时: {:?}", e, elapsed);
             false
         }
     }
@@ -129,7 +129,7 @@ pub async fn fetch_qiyu_token(app: tauri::AppHandle) -> Result<QiyuToken, AppErr
 
 /// 内部函数：从七鱼页面获取新的上传 Token
 pub async fn fetch_qiyu_token_internal(app: &tauri::AppHandle) -> Result<QiyuToken, AppError> {
-    println!("[QiyuToken] ========== 开始获取 Token (Sidecar) ==========");
+    log::info!("[QiyuToken] ========== 开始获取 Token (Sidecar) ==========");
 
     let sidecar = app.shell()
         .sidecar("qiyu-token-fetcher")
@@ -155,7 +155,7 @@ pub async fn fetch_qiyu_token_internal(app: &tauri::AppHandle) -> Result<QiyuTok
                     stderr_output.push('\n');
                 }
                 CommandEvent::Terminated(status) => {
-                    println!("[QiyuToken] Sidecar 退出，状态: {:?}", status);
+                    log::debug!("[QiyuToken] Sidecar 退出，状态: {:?}", status);
                 }
                 _ => {}
             }
@@ -170,7 +170,7 @@ pub async fn fetch_qiyu_token_internal(app: &tauri::AppHandle) -> Result<QiyuTok
     // 输出 stderr 日志（包含进度信息）
     if !stderr_output.is_empty() {
         for line in stderr_output.lines() {
-            println!("{}", line);
+            log::debug!("{}", line);
         }
     }
 
@@ -180,9 +180,9 @@ pub async fn fetch_qiyu_token_internal(app: &tauri::AppHandle) -> Result<QiyuTok
 
     if response.success {
         if let Some(token) = response.data {
-            println!("[QiyuToken] ========== Token 获取成功 ==========");
-            println!("[QiyuToken]   Object: {}", token.object_path);
-            println!("[QiyuToken]   Expires: {}", token.expires);
+            log::info!("[QiyuToken] Token 获取成功");
+            log::debug!("[QiyuToken]   Object: {}", token.object_path);
+            log::debug!("[QiyuToken]   Expires: {}", token.expires);
             return Ok(token);
         }
         Err(AppError::upload("七鱼", "响应中没有 Token 数据"))

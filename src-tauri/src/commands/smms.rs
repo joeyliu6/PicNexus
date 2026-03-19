@@ -47,7 +47,7 @@ pub async fn upload_to_smms(
     file_path: String,
     smms_token: String,
 ) -> Result<SmmsUploadResult, AppError> {
-    println!("[SM.MS] 开始上传文件: {}", file_path);
+    log::info!("[SM.MS] 开始上传文件: {}", file_path);
 
     // 发送进度: 0% - 读取文件
     let _ = window.emit("upload://progress", serde_json::json!({
@@ -127,7 +127,7 @@ pub async fn upload_to_smms(
     let status = response.status();
     if !status.is_success() {
         let response_text = response.text().await.unwrap_or_default();
-        println!("[SM.MS] API 错误响应: {}", response_text);
+        log::error!("[SM.MS] API 错误响应: {}", response_text);
         return match status {
             reqwest::StatusCode::UNAUTHORIZED =>
                 Err(AppError::auth("SM.MS Token 无效或已过期")),
@@ -143,7 +143,7 @@ pub async fn upload_to_smms(
     let response_text = response.text().await
         .into_network_err_with("无法读取响应")?;
 
-    println!("[SM.MS] API 响应: {}", response_text);
+    log::debug!("[SM.MS] API 响应: {}", response_text);
 
     let smms_response: SmmsResponse = serde_json::from_str(&response_text)
         .map_err(|e| AppError::upload("SM.MS", format!("JSON 解析失败: {}", e)))?;
@@ -157,7 +157,7 @@ pub async fn upload_to_smms(
     let data = smms_response.data
         .ok_or_else(|| AppError::upload("SM.MS", "API 未返回数据"))?;
 
-    println!("[SM.MS] 上传成功 - URL: {}", data.url);
+    log::info!("[SM.MS] 上传成功 - URL: {}", data.url);
 
     Ok(SmmsUploadResult {
         url: data.url,

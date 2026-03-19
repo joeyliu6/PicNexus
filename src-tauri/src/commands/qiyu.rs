@@ -28,7 +28,7 @@ pub async fn upload_to_qiyu(
     id: String,
     file_path: String,
 ) -> Result<QiyuUploadResult, AppError> {
-    println!("[Qiyu] 开始上传文件: {}", file_path);
+    log::info!("[Qiyu] 开始上传文件: {}", file_path);
 
     // 发送步骤1进度：获取上传凭证 (0%)
     let _ = window.emit("upload://progress", serde_json::json!({
@@ -41,11 +41,11 @@ pub async fn upload_to_qiyu(
     }));
 
     // 1. 自动获取新的 Token（每次上传都获取新的，确保 Object 路径唯一）
-    println!("[Qiyu] 正在获取上传凭证...");
+    log::debug!("[Qiyu] 正在获取上传凭证...");
     let token_info = fetch_qiyu_token_internal(&window.app_handle()).await?;
     let qiyu_token = &token_info.token;
     let object_path = &token_info.object_path;
-    println!("[Qiyu] Token 获取成功，Object 路径: {}", object_path);
+    log::debug!("[Qiyu] Token 获取成功，Object 路径: {}", object_path);
 
     // 3. 读取文件
     let (buffer, file_size) = read_file_bytes(&file_path).await?;
@@ -74,7 +74,7 @@ pub async fn upload_to_qiyu(
         "https://cdn-nimup-chunk.qiyukf.net/nim/{}?offset=0&complete=true&version=1.0",
         urlencoding::encode(&object_path)
     );
-    println!("[Qiyu] 上传 URL: {}", upload_url);
+    log::debug!("[Qiyu] 上传 URL: {}", upload_url);
 
     // 发送步骤2进度：上传文件 (50%)
     let _ = window.emit("upload://progress", serde_json::json!({
@@ -114,7 +114,7 @@ pub async fn upload_to_qiyu(
     // HTTP 200 即视为成功
     let response_text = response.text().await
         .into_network_err_with("无法读取响应")?;
-    println!("[Qiyu] API 响应: {}", response_text);
+    log::debug!("[Qiyu] API 响应: {}", response_text);
 
     // 9. 构建 CDN URL (使用当前时间戳作为 createTime)
     let create_time = SystemTime::now()
@@ -128,7 +128,7 @@ pub async fn upload_to_qiyu(
         create_time
     );
 
-    println!("[Qiyu] 上传成功: {}", cdn_url);
+    log::info!("[Qiyu] 上传成功: {}", cdn_url);
 
     // ✅ 修复: 删除此处的100%事件发送
     // 前端会在收到Ok结果时自动设置100%

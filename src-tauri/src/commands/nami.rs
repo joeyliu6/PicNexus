@@ -255,7 +255,7 @@ async fn get_sts_credentials(
     let status = response.status();
     let text = response.text().await.into_network_err_with("读取 STS 响应失败")?;
 
-    println!("[Nami] STS 响应: {}", text);
+    log::debug!("[Nami] STS 响应状态: HTTP {}", status);
 
     if !status.is_success() {
         return Err(AppError::upload("纳米", format!("STS 请求失败 (HTTP {}): {}", status, text)));
@@ -330,7 +330,7 @@ async fn init_multipart_upload(
             .ok_or_else(|| AppError::upload("纳米", format!("无法解析 XML UploadId: {}", text)))?
     };
 
-    println!("[Nami] UploadId: {}", upload_id);
+    log::debug!("[Nami] UploadId 获取成功");
     Ok(upload_id)
 }
 
@@ -388,7 +388,7 @@ async fn upload_part(
         .map(|s| s.to_string())
         .ok_or_else(|| AppError::upload("纳米", "响应中没有 ETag"))?;
 
-    println!("[Nami] Part {} ETag: {}", part_number, etag);
+    log::debug!("[Nami] Part {} 上传成功", part_number);
     Ok(etag)
 }
 
@@ -454,7 +454,7 @@ pub async fn upload_to_nami(
     cookie: String,
     auth_token: String,
 ) -> Result<NamiUploadResult, AppError> {
-    println!("[Nami] 开始上传文件: {}", file_path);
+    log::info!("[Nami] 开始上传文件: {}", file_path);
 
     // 1. 读取文件
     let (buffer, file_size) = read_file_bytes(&file_path).await?;
@@ -472,7 +472,7 @@ pub async fn upload_to_nami(
     // 3. 计算文件哈希
     let hash = calculate_file_hash(&buffer);
     let file_key = format!("web/{}.{}", hash, ext);
-    println!("[Nami] 文件哈希: {}, key: {}", hash, file_key);
+    log::debug!("[Nami] 文件 key: {}", file_key);
 
     // 4. 创建 HTTP 客户端
     // 注意：使用标准 TLS 验证，确保通信安全
@@ -483,7 +483,7 @@ pub async fn upload_to_nami(
     // 5. 检查文件是否已存在（秒传）
     if check_file_exists(&client, &file_key).await {
         let url = format!("{}/{}", CDN_BASE, file_key);
-        println!("[Nami] 文件已存在，秒传成功: {}", url);
+        log::info!("[Nami] 文件已存在，秒传成功: {}", url);
 
         // ✅ 修复: 删除此处的100%事件发送
         // 前端会在收到Ok结果时自动设置100%
@@ -506,7 +506,7 @@ pub async fn upload_to_nami(
     }));
 
     // 6. 获取动态 Headers
-    println!("[Nami] 获取动态 Headers...");
+    log::info!("[Nami] 获取动态 Headers...");
     let dynamic_headers = fetch_nami_token_internal(&window.app_handle(), cookie.clone(), auth_token.clone()).await?;
 
     // 发送步骤2进度：获取STS凭证 (20%)
@@ -520,9 +520,9 @@ pub async fn upload_to_nami(
     }));
 
     // 7. 获取 STS 凭证
-    println!("[Nami] 获取 STS 凭证...");
+    log::info!("[Nami] 获取 STS 凭证...");
     let credentials = get_sts_credentials(&client, &file_key, &cookie, &auth_token, &dynamic_headers).await?;
-    println!("[Nami] STS 凭证获取成功");
+    log::info!("[Nami] STS 凭证获取成功");
 
     // 发送步骤3进度：初始化分片上传 (40%)
     let _ = window.emit("upload://progress", serde_json::json!({
@@ -536,7 +536,7 @@ pub async fn upload_to_nami(
 
     // 8. 初始化分片上传
     let content_type = get_content_type(&ext);
-    println!("[Nami] 初始化分片上传...");
+    log::debug!("[Nami] 初始化分片上传...");
     let upload_id = init_multipart_upload(&client, &credentials, &file_key, content_type).await?;
 
     // 发送步骤4进度：上传分片 (60%)
@@ -550,7 +550,7 @@ pub async fn upload_to_nami(
     }));
 
     // 9. 上传分片（单分片）
-    println!("[Nami] 上传分片...");
+    log::debug!("[Nami] 上传分片...");
     let etag = upload_part(&client, &credentials, &file_key, &upload_id, 1, &buffer).await?;
 
     // 发送步骤5进度：完成上传 (80%)
@@ -564,12 +564,12 @@ pub async fn upload_to_nami(
     }));
 
     // 10. 完成上传
-    println!("[Nami] 完成上传...");
+    log::debug!("[Nami] 完成上传...");
     complete_multipart_upload(&client, &credentials, &file_key, &upload_id, &[(1, etag)]).await?;
 
     // 11. 返回结果
     let url = format!("{}/{}", CDN_BASE, file_key);
-    println!("[Nami] 上传成功: {}", url);
+    log::info!("[Nami] 上传成功: {}", url);
 
     // ✅ 修复: 删除此处的100%事件发送
     // 前端会在收到Ok结果时自动设置100%
@@ -584,7 +584,7 @@ pub async fn upload_to_nami(
 /// 测试纳米 Cookie 和 Auth-Token 连接
 #[tauri::command]
 pub async fn test_nami_connection(app: tauri::AppHandle, cookie: String, auth_token: String) -> Result<String, AppError> {
-    println!("[Nami Test] 开始测试连接...");
+    log::info!("[Nami Test] 开始测试连接");
 
     // 创建 HTTP 客户端
     // 注意：使用标准 TLS 验证，确保通信安全
@@ -594,17 +594,17 @@ pub async fn test_nami_connection(app: tauri::AppHandle, cookie: String, auth_to
         .into_network_err_with("创建 HTTP 客户端失败")?;
 
     // 尝试获取动态 Headers 来验证 Cookie 和 Auth-Token
-    println!("[Nami Test] 验证 Cookie 和 Auth-Token...");
+    log::debug!("[Nami Test] 验证 Cookie 和 Auth-Token");
     match fetch_nami_token_internal(&app, cookie.clone(), auth_token.clone()).await {
         Ok(dynamic_headers) => {
-            println!("[Nami Test] 动态 Headers 获取成功");
+            log::debug!("[Nami Test] 动态 Headers 获取成功");
 
             // 进一步验证：尝试创建一个测试的 file_key 并获取 STS 凭证
             let test_file_key = "web/test.png";
 
             match get_sts_credentials(&client, test_file_key, &cookie, &auth_token, &dynamic_headers).await {
                 Ok(_credentials) => {
-                    println!("[Nami Test] STS 凭证获取成功，Cookie 和 Auth-Token 有效");
+                    log::info!("[Nami Test] STS 凭证获取成功，Cookie 和 Auth-Token 有效");
                     Ok("Cookie 验证通过".to_string())
                 },
                 Err(e) => {

@@ -43,7 +43,7 @@ pub async fn upload_to_imgur(
     imgur_client_id: String,
     imgur_client_secret: Option<String>,
 ) -> Result<ImgurUploadResult, AppError> {
-    println!("[Imgur] 开始上传文件: {}", file_path);
+    log::info!("[Imgur] 开始上传文件: {}", file_path);
 
     // 发送进度: 0% - 读取文件
     let _ = window.emit("upload://progress", serde_json::json!({
@@ -133,7 +133,7 @@ pub async fn upload_to_imgur(
     let status = response.status();
     if !status.is_success() {
         let response_text = response.text().await.unwrap_or_default();
-        println!("[Imgur] API 错误响应: {}", response_text);
+        log::error!("[Imgur] API 错误响应: {}", response_text);
         return match status {
             reqwest::StatusCode::UNAUTHORIZED =>
                 Err(AppError::auth("Imgur Client ID 无效")),
@@ -149,7 +149,7 @@ pub async fn upload_to_imgur(
     let response_text = response.text().await
         .into_network_err_with("无法读取响应")?;
 
-    println!("[Imgur] API 响应: {}", response_text);
+    log::debug!("[Imgur] API 响应: {}", response_text);
 
     let imgur_response: ImgurResponse = serde_json::from_str(&response_text)
         .map_err(|e| AppError::upload("Imgur", format!("JSON 解析失败: {}", e)))?;
@@ -162,7 +162,7 @@ pub async fn upload_to_imgur(
     let data = imgur_response.data
         .ok_or_else(|| AppError::upload("Imgur", "API 未返回数据"))?;
 
-    println!("[Imgur] 上传成功 - URL: {}", data.link);
+    log::info!("[Imgur] 上传成功 - URL: {}", data.link);
 
     Ok(ImgurUploadResult {
         url: data.link,

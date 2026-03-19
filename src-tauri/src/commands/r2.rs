@@ -48,7 +48,7 @@ pub async fn upload_to_r2(
     bucket_name: String,
     key: String,
 ) -> Result<R2UploadResult, AppError> {
-    println!("[R2] 开始上传: {} -> {}", file_path, key);
+    log::info!("[R2] 开始上传: {} -> {}", file_path, key);
 
     // 1. 检查文件是否存在
     let path = Path::new(&file_path);
@@ -62,14 +62,14 @@ pub async fn upload_to_r2(
         .into_file_io_err_with("读取文件元数据失败")?
         .len();
 
-    println!("[R2] 文件大小: {} bytes", file_size);
+    log::debug!("[R2] 文件大小: {} bytes", file_size);
 
     // 3. 发送初始进度
     emit_progress(&window, &id, 0, file_size);
 
     // 4. 构建 S3 客户端
     let endpoint = format!("https://{}.r2.cloudflarestorage.com", account_id);
-    println!("[R2] 端点: {}", endpoint);
+    log::debug!("[R2] 端点: {}", endpoint);
 
     let credentials = Credentials::new(
         &access_key_id,
@@ -92,7 +92,7 @@ pub async fn upload_to_r2(
         .first_or_octet_stream()
         .to_string();
 
-    println!("[R2] Content-Type: {}", content_type);
+    log::debug!("[R2] Content-Type: {}", content_type);
 
     // 6. 读取文件
     let mut file = File::open(&path)
@@ -111,7 +111,7 @@ pub async fn upload_to_r2(
     let body = ByteStream::from(buffer);
 
     // 8. 上传到 R2（设置 2 分钟超时）
-    println!("[R2] 开始上传到存储桶: {}", bucket_name);
+    log::debug!("[R2] 开始上传到存储桶: {}", bucket_name);
 
     let upload_timeout = Duration::from_secs(120);
 
@@ -129,7 +129,7 @@ pub async fn upload_to_r2(
     .map_err(|_| AppError::storage("R2 上传超时: 网络连接不稳定或文件过大，请稍后重试"))?
     .map_err(|e| {
         let error_msg = format!("R2 上传失败: {}", e);
-        println!("[R2] 错误: {}", error_msg);
+        log::error!("[R2] 错误: {}", error_msg);
 
         // 转换为更友好的错误提示
         if error_msg.contains("NoSuchBucket") {
@@ -148,7 +148,7 @@ pub async fn upload_to_r2(
     // ✅ 修复: 删除此处的100%事件发送
     // 前端会在收到Ok结果时自动设置100%
 
-    println!("[R2] 上传成功！ETag: {:?}", result.e_tag());
+    log::info!("[R2] 上传成功！ETag: {:?}", result.e_tag());
 
     Ok(R2UploadResult {
         e_tag: result.e_tag().map(|s| s.to_string()),

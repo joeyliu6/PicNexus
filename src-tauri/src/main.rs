@@ -9,6 +9,7 @@ mod commands;
 
 use tauri::{Manager, Emitter};
 use tauri_plugin_log::{Target, TargetKind};
+use log::LevelFilter;
 use error::AppError;
 #[cfg(target_os = "macos")]
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
@@ -17,6 +18,10 @@ use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};
 use tauri::image::Image;
 use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// 关闭按钮行为状态：true = 最小化到托盘，false = 直接退出
+pub struct CloseToTrayState(pub AtomicBool);
 
 // 用于 R2 和 WebDAV 测试
 use hmac::{Hmac, Mac};
@@ -57,7 +62,7 @@ fn main() {
         .pool_max_idle_per_host(10)  // 每个主机最多保持10个空闲连接
         .build()
         .unwrap_or_else(|e| {
-            eprintln!("[HTTP Client] 创建失败: {:?}，使用默认配置", e);
+            log::warn!("[HTTP Client] 创建失败: {:?}，使用默认配置", e);
             reqwest::Client::new()
         });
 
@@ -85,12 +90,26 @@ fn main() {
                     Target::new(TargetKind::LogDir { file_name: None }),
                     Target::new(TargetKind::Webview),
                 ])
-                .max_file_size(5_000_000) // 单个日志文件最大 5MB
-                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepOne)
+                .level(LevelFilter::Info)
+                .level_for("picnexus", LevelFilter::Debug)
+                .level_for("hyper", LevelFilter::Warn)
+                .level_for("hyper_util", LevelFilter::Warn)
+                .level_for("reqwest", LevelFilter::Warn)
+                .level_for("rustls", LevelFilter::Warn)
+                .level_for("tungstenite", LevelFilter::Warn)
+                .level_for("tokio_tungstenite", LevelFilter::Warn)
+                .level_for("aws_sdk_s3", LevelFilter::Warn)
+                .level_for("aws_config", LevelFilter::Warn)
+                .level_for("aws_smithy_runtime", LevelFilter::Warn)
+                .level_for("tracing", LevelFilter::Warn)
+                .max_file_size(10_000_000)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
                 .build(),
         )
         .manage(HttpClient(http_client))     // 注册全局 HTTP 客户端
+        .manage(CloseToTrayState(AtomicBool::new(true)))
         .invoke_handler(tauri::generate_handler![
+            set_close_to_tray,
             open_login_window,
             show_login_window,
             save_cookie_from_login,
@@ -132,7 +151,7 @@ fn main() {
             commands::image_meta::get_image_metadata,
             get_or_create_secure_key,
             set_secure_key,
-            get_log_dir
+            open_log_dir
         ])
         .setup(|app| {
             // 1. 创建原生菜单栏 (仅 macOS)
@@ -165,11 +184,11 @@ fn main() {
                 // 处理菜单事件 (macOS)
                 app.on_menu_event(move |app_handle, event| {
                     let menu_id = event.id().as_ref();
-                    eprintln!("菜单事件触发: {}", menu_id);
+                    log::debug!("菜单事件触发: {}", menu_id);
 
                     match menu_id {
                         "preferences" => {
-                            eprintln!("菜单事件触发: 偏好设置");
+                            log::debug!("菜单事件触发: 偏好设置");
                             if let Some(main_window) = app_handle.get_webview_window("main") {
                                 let _ = main_window.unminimize();
                                 let _ = main_window.show();
@@ -178,7 +197,7 @@ fn main() {
                             }
                         }
                         "history" => {
-                            eprintln!("菜单事件触发: 上传历史记录");
+                            log::debug!("菜单事件触发: 上传历史记录");
                             if let Some(main_window) = app_handle.get_webview_window("main") {
                                 let _ = main_window.unminimize();
                                 let _ = main_window.show();
@@ -187,7 +206,7 @@ fn main() {
                             }
                         }
                         _ => {
-                            eprintln!("未知菜单项: {}", menu_id);
+                            log::debug!("未知菜单项: {}", menu_id);
                         }
                     }
                 });
@@ -266,7 +285,7 @@ fn main() {
             let window = match app.get_webview_window("main") {
                 Some(w) => w,
                 None => {
-                    eprintln!("[Setup] 错误: 无法获取主窗口");
+                    log::error!("[Setup] 错误: 无法获取主窗口");
                     return Err("无法获取主窗口".into());
                 }
             };
@@ -287,7 +306,7 @@ fn main() {
                 let sw = screen_size.width;
                 let sh = screen_size.height;
 
-                eprintln!("[Display] 检测到屏幕尺寸: {}x{}", sw, sh);
+                log::debug!("[Display] 检测到屏幕尺寸: {}x{}", sw, sh);
 
                 // Tier 1: 4K / 2K 大屏 (宽度大于 1920 或 高度大于 1200)
                 if sw > 1920 || sh > 1200 {
@@ -295,11 +314,11 @@ fn main() {
                         width: 1600,
                         height: 1200,
                     })) {
-                        eprintln!("[Display] 设置窗口大小失败: {:?}", e);
+                        log::warn!("[Display] 设置窗口大小失败: {:?}", e);
                     } else {
-                        eprintln!("[Display] 已设置为 Tier 1: 1600x1200");
+                        log::debug!("[Display] 已设置为 Tier 1: 1600x1200");
                         if let Err(e) = window.center() {
-                            eprintln!("[Display] 居中窗口失败: {:?}", e);
+                            log::warn!("[Display] 居中窗口失败: {:?}", e);
                         }
                     }
                 }
@@ -309,24 +328,24 @@ fn main() {
                         width: 1280,
                         height: 900,
                     })) {
-                        eprintln!("[Display] 设置窗口大小失败: {:?}", e);
+                        log::warn!("[Display] 设置窗口大小失败: {:?}", e);
                     } else {
-                        eprintln!("[Display] 已设置为 Tier 2: 1280x900");
+                        log::debug!("[Display] 已设置为 Tier 2: 1280x900");
                         if let Err(e) = window.center() {
-                            eprintln!("[Display] 居中窗口失败: {:?}", e);
+                            log::warn!("[Display] 居中窗口失败: {:?}", e);
                         }
                     }
                 }
                 // Tier 3: 小屏幕
                 else {
                     if let Err(e) = window.maximize() {
-                        eprintln!("[Display] 最大化窗口失败: {:?}", e);
+                        log::warn!("[Display] 最大化窗口失败: {:?}", e);
                     } else {
-                        eprintln!("[Display] 已设置为 Tier 3: 最大化");
+                        log::debug!("[Display] 已设置为 Tier 3: 最大化");
                     }
                 }
             } else {
-                eprintln!("[Display] 无法获取显示器信息，使用默认窗口大小");
+                log::warn!("[Display] 无法获取显示器信息，使用默认窗口大小");
             }
             // --- 最佳适配方案逻辑 End ---
 
@@ -338,9 +357,15 @@ fn main() {
                 window.on_window_event(move |event| {
                     match event {
                         tauri::WindowEvent::CloseRequested { api, .. } => {
-                            // 关闭按钮 → 隐藏到托盘（托盘菜单"退出"才是真正退出）
-                            api.prevent_close();
-                            let _ = window_for_close.hide();
+                            let close_to_tray = window_for_close
+                                .app_handle()
+                                .state::<CloseToTrayState>()
+                                .0
+                                .load(Ordering::Relaxed);
+                            if close_to_tray {
+                                api.prevent_close();
+                                let _ = window_for_close.hide();
+                            }
                         }
                         #[cfg(target_os = "windows")]
                         tauri::WindowEvent::Focused(focused) => {
@@ -362,7 +387,7 @@ fn main() {
                                                 COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL
                                             };
                                             if core19.SetMemoryUsageTargetLevel(level_value).is_ok() {
-                                                eprintln!("[内存优化] ✓ 已设置为 {} 模式", level_str);
+                                                log::trace!("[内存优化] ✓ 已设置为 {} 模式", level_str);
                                             }
                                         }
                                     }
@@ -372,6 +397,28 @@ fn main() {
                         _ => {}
                     }
                 });
+            }
+
+            // 启动时清理过期日志（保留最近 7 天）
+            if let Ok(log_dir) = app.path().app_log_dir() {
+                let max_age = std::time::Duration::from_secs(7 * 24 * 3600);
+                let now = std::time::SystemTime::now();
+                for entry in std::fs::read_dir(&log_dir).into_iter().flatten().flatten() {
+                    let path = entry.path();
+                    let is_log = path.extension().and_then(|e| e.to_str()) == Some("log")
+                        || path.to_string_lossy().contains(".log.");
+                    if !is_log { continue; }
+
+                    let expired = entry.metadata().ok()
+                        .and_then(|m| m.modified().or_else(|_| m.created()).ok())
+                        .and_then(|t| now.duration_since(t).ok())
+                        .is_some_and(|age| age > max_age);
+
+                    if expired {
+                        let _ = std::fs::remove_file(&path);
+                        log::debug!("[日志清理] 已删除过期日志: {}", path.display());
+                    }
+                }
             }
 
             Ok(())
@@ -386,6 +433,11 @@ struct CookieUpdatedPayload {
     #[serde(rename = "serviceId")]
     service_id: String,
     cookie: String,
+}
+
+#[tauri::command]
+fn set_close_to_tray(state: tauri::State<'_, CloseToTrayState>, enabled: bool) {
+    state.0.store(enabled, Ordering::Relaxed);
 }
 
 /// 打开多 Webview 登录窗口
@@ -512,7 +564,7 @@ async fn save_cookie_from_login(
     let service = service_id.unwrap_or_else(|| "weibo".to_string());
     let fields = required_fields.unwrap_or_default();
     let any_fields = any_of_fields.unwrap_or_default();
-    eprintln!("[保存Cookie] 开始保存Cookie，服务: {}，长度: {}，必要字段: {:?}，任意字段: {:?}",
+    log::debug!("[保存Cookie] 开始保存Cookie，服务: {}，长度: {}，必要字段: {:?}，任意字段: {:?}",
         service, cookie.len(), fields, any_fields);
 
     if cookie.trim().is_empty() {
@@ -535,29 +587,29 @@ async fn save_cookie_from_login(
 
         match main_window.emit("cookie-updated", payload) {
             Ok(_) => {
-                eprintln!("[保存Cookie] ✓ 已发送 {} Cookie到主窗口", service);
+                log::debug!("[保存Cookie] ✓ 已发送 {} Cookie到主窗口", service);
 
                 if let Some(login_window) = app.get_window("login-window") {
                     let _ = login_window.close();
-                    eprintln!("[保存Cookie] ✓ 已请求关闭登录窗口");
+                    log::debug!("[保存Cookie] ✓ 已请求关闭登录窗口");
                 }
 
                 Ok(())
             }
             Err(e) => {
-                eprintln!("[保存Cookie] 发送事件失败: {:?}", e);
+                log::error!("[保存Cookie] 发送事件失败: {:?}", e);
                 Err(AppError::external(format!("发送Cookie事件失败: {}", e)))
             }
         }
     } else {
-        eprintln!("[保存Cookie] 错误: 找不到主窗口");
+        log::error!("[保存Cookie] 错误: 找不到主窗口");
         Err(AppError::external("找不到主窗口"))
     }
 }
 
 fn check_cookie_field(cookie: &str, field: &str, _service_id: &str) -> bool {
     if !is_safe_field_name(field) {
-        eprintln!("[Cookie验证] 无效字段名: {}", field);
+        log::warn!("[Cookie验证] 无效字段名: {}", field);
         return false;
     }
 
@@ -581,13 +633,13 @@ fn check_cookie_field(cookie: &str, field: &str, _service_id: &str) -> bool {
             let value_end = remaining.find(';').unwrap_or(remaining.len());
 
             if value_end == 0 {
-                eprintln!("[Cookie验证] 字段 {} 值为空", field);
+                log::warn!("[Cookie验证] 字段 {} 值为空", field);
                 return false;
             }
 
             let value = &remaining[..value_end];
             // 安全日志：只打印字段名和长度，不打印实际值，防止敏感信息泄露
-            eprintln!("[Cookie验证] 字段 {} 存在 (长度: {} 字符)", field, value.len());
+            log::debug!("[Cookie验证] 字段 {} 存在 (长度: {} 字符)", field, value.len());
 
             return true;
         }
@@ -641,11 +693,11 @@ fn check_field_value_matches(cookie: &str, field_value_checks: &std::collections
                 let actual_value = remaining[..value_end].trim();
 
                 if actual_value == expected_value.as_str() {
-                    eprintln!("[字段值检查] ✓ {}={}", field, expected_value);
+                    log::debug!("[字段值检查] ✓ {}={}", field, expected_value);
                     found = true;
                     break;
                 } else {
-                    eprintln!("[字段值检查] ✗ {} 值不匹配，期望 {}，实际 {}", field, expected_value, actual_value);
+                    log::debug!("[字段值检查] ✗ {} 值不匹配，期望 {}，实际 {}", field, expected_value, actual_value);
                     return false;
                 }
             }
@@ -653,7 +705,7 @@ fn check_field_value_matches(cookie: &str, field_value_checks: &std::collections
         }
 
         if !found {
-            eprintln!("[字段值检查] ✗ 缺少字段 {}", field);
+            log::debug!("[字段值检查] ✗ 缺少字段 {}", field);
             return false;
         }
     }
@@ -695,7 +747,7 @@ fn validate_cookie_fields_with_value_checks(
         any_of_fields.to_vec()
     };
 
-    eprintln!("[Cookie验证] 服务: {}, 必要字段: {:?}, 任意字段: {:?}", service_id, actual_required, actual_any);
+    log::debug!("[Cookie验证] 服务: {}, 必要字段: {:?}, 任意字段: {:?}", service_id, actual_required, actual_any);
 
     if actual_required.is_empty() && actual_any.is_empty() {
         return !cookie.trim().is_empty();
@@ -704,20 +756,20 @@ fn validate_cookie_fields_with_value_checks(
     // 检查必要字段
     for field in &actual_required {
         if !check_cookie_field(cookie, field, service_id) {
-            eprintln!("[Cookie验证] ✗ 缺少必要字段: {}", field);
+            log::warn!("[Cookie验证] ✗ 缺少必要字段: {}", field);
             return false;
         }
     }
-    eprintln!("[Cookie验证] ✓ 通过 requiredFields 检查");
+    log::debug!("[Cookie验证] ✓ 通过 requiredFields 检查");
 
     // 检查任意字段
     if !actual_any.is_empty() {
         let has_any = actual_any.iter().any(|f| check_cookie_field(cookie, f, service_id));
         if !has_any {
-            eprintln!("[Cookie验证] ✗ 缺少任意安全字段，需要至少包含: {:?}", actual_any);
+            log::warn!("[Cookie验证] ✗ 缺少任意安全字段，需要至少包含: {:?}", actual_any);
             return false;
         }
-        eprintln!("[Cookie验证] ✓ 通过 anyOfFields 检查");
+        log::debug!("[Cookie验证] ✓ 通过 anyOfFields 检查");
     }
 
     // 检查字段值（泛化的登录状态检查）
@@ -726,11 +778,11 @@ fn validate_cookie_fields_with_value_checks(
         _ => get_default_field_value_checks(service_id),
     };
     if !check_field_value_matches(cookie, &actual_checks) {
-        eprintln!("[Cookie验证] ✗ {} 字段值检查失败", service_id);
+        log::warn!("[Cookie验证] ✗ {} 字段值检查失败", service_id);
         return false;
     }
 
-    eprintln!("[Cookie验证] ✓ {} Cookie 验证通过！", service_id);
+    log::debug!("[Cookie验证] ✓ {} Cookie 验证通过！", service_id);
     true
 }
 
@@ -784,7 +836,7 @@ async fn start_cookie_monitoring(
         .unwrap_or(DEFAULT_POLLING_INTERVAL_MS)
         .clamp(MIN_POLLING_INTERVAL_MS, MAX_POLLING_INTERVAL_MS);
 
-    eprintln!(
+    log::debug!(
         "[Cookie监控] 开始监控 {} 的Cookie (域名列表: {:?}, 必要字段: {:?}, 任意字段: {:?}, 初始延迟: {}ms, 轮询间隔: {}ms)",
         service, domains, fields, any_fields, initial_delay, polling_interval
     );
@@ -792,14 +844,14 @@ async fn start_cookie_monitoring(
     let app_handle = app.clone();
 
     std::thread::spawn(move || {
-        eprintln!("[Cookie监控] 等待 {}ms 后开始检测...", initial_delay);
+        log::debug!("[Cookie监控] 等待 {}ms 后开始检测...", initial_delay);
         std::thread::sleep(Duration::from_millis(initial_delay));
 
         let mut check_count = 0;
         let max_timeout_ms = 240000u64;
         let max_checks = ((max_timeout_ms.saturating_sub(initial_delay)) / polling_interval).max(10) as i32;
 
-        eprintln!(
+        log::debug!(
             "[Cookie监控] 最大检查次数: {} (预计总时长: {}ms)",
             max_checks,
             initial_delay + (max_checks as u64 * polling_interval)
@@ -809,7 +861,7 @@ async fn start_cookie_monitoring(
             std::thread::sleep(Duration::from_millis(polling_interval));
             check_count += 1;
 
-            eprintln!("[Cookie监控] 第 {}/{} 次检查 (服务: {})", check_count, max_checks, service);
+            log::debug!("[Cookie监控] 第 {}/{} 次检查 (服务: {})", check_count, max_checks, service);
 
             if let Some(login_webview) = app_handle.get_webview("login-content") {
                 #[cfg(target_os = "windows")]
@@ -873,16 +925,16 @@ async fn start_cookie_monitoring(
                     "#, condition = condition, service = service, fields_json = fields_json, any_fields_json = any_fields_json);
 
                     if let Err(e) = login_webview.eval(&check_js) {
-                        eprintln!("[Cookie监控] 执行JS脚本失败: {:?}", e);
+                        log::warn!("[Cookie监控] 执行JS脚本失败: {:?}", e);
                     }
                 }
             } else {
-                eprintln!("[Cookie监控] 登录窗口已关闭，自动停止监控");
+                log::debug!("[Cookie监控] 登录窗口已关闭，自动停止监控");
                 break;
             }
         }
 
-        eprintln!("[Cookie监控] 监控结束（检查次数: {}）", check_count);
+        log::debug!("[Cookie监控] 监控结束（检查次数: {}）", check_count);
     });
 
     Ok(())
@@ -930,7 +982,7 @@ async fn setup_cookie_event_monitoring(
 
     let timeout = timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS).clamp(10000, 300000);
 
-    eprintln!(
+    log::debug!(
         "[事件监控] 开始监控 {} 的Cookie (域名: {:?}, 超时: {}ms)",
         service, domains, timeout
     );
@@ -964,7 +1016,7 @@ async fn setup_cookie_event_monitoring(
                 let core = match controller.CoreWebView2() {
                     Ok(c) => c,
                     Err(e) => {
-                        eprintln!("[事件监控] 获取 CoreWebView2 失败: {:?}", e);
+                        log::warn!("[事件监控] 获取 CoreWebView2 失败: {:?}", e);
                         return;
                     }
                 };
@@ -1006,11 +1058,11 @@ async fn setup_cookie_event_monitoring(
                             let _ = unsafe { s.Source(&mut url_ptr) };
                         }
                         let current_url = unsafe { url_ptr.to_string().unwrap_or_default() };
-                        eprintln!("[事件监控] NavigationCompleted: {} (成功: {})", current_url, is_success.as_bool());
+                        log::debug!("[事件监控] NavigationCompleted: {} (成功: {})", current_url, is_success.as_bool());
 
                         // 首次导航完成（登录页加载好），启动超时计时器 + 轮询兜底
                         if !self.first_nav_done.swap(true, Ordering::SeqCst) {
-                            eprintln!("[事件监控] 登录页加载完成，启动 {}ms 超时计时器 + 轮询兜底", self.timeout_ms);
+                            log::debug!("[事件监控] 登录页加载完成，启动 {}ms 超时计时器 + 轮询兜底", self.timeout_ms);
                             let timeout = self.timeout_ms;
                             let completed_for_timeout = self.completed.clone();
                             let app_for_timeout = self.app_handle.clone();
@@ -1030,11 +1082,11 @@ async fn setup_cookie_event_monitoring(
                                         return;
                                     }
                                     if app_for_timeout.get_window("login-window").is_none() {
-                                        eprintln!("[事件监控] 登录窗口已关闭，取消超时计时");
+                                        log::debug!("[事件监控] 登录窗口已关闭，取消超时计时");
                                         return;
                                     }
                                 }
-                                eprintln!("[事件监控] ⏰ {} 超时（{}ms），发送通知", service_for_timeout, timeout);
+                                log::warn!("[事件监控] ⏰ {} 超时（{}ms），发送通知", service_for_timeout, timeout);
                                 let _ = app_for_timeout.emit("cookie-monitoring-timeout", &service_for_timeout);
                             });
 
@@ -1067,12 +1119,12 @@ async fn setup_cookie_event_monitoring(
                         let completed = self.completed.clone();
 
                         std::thread::spawn(move || {
-                            eprintln!("[事件监控] 检测到页面跳转，尝试提取 {} Cookie...", service);
+                            log::debug!("[事件监控] 检测到页面跳转，尝试提取 {} Cookie...", service);
 
                             let login_webview = match app.get_webview("login-content") {
                                 Some(w) => w,
                                 None => {
-                                    eprintln!("[事件监控] 登录窗口已关闭");
+                                    log::debug!("[事件监控] 登录窗口已关闭");
                                     return;
                                 }
                             };
@@ -1080,7 +1132,7 @@ async fn setup_cookie_event_monitoring(
                             let merged_cookie = match extract_and_merge_cookies(&login_webview, &domains, "事件监控") {
                                 Some(c) => c,
                                 None => {
-                                    eprintln!("[事件监控] 未提取到 Cookie，等待下次导航...");
+                                    log::debug!("[事件监控] 未提取到 Cookie，等待下次导航...");
                                     return;
                                 }
                             };
@@ -1092,9 +1144,9 @@ async fn setup_cookie_event_monitoring(
                                 &any_of_fields,
                                 &field_value_checks,
                             ) {
-                                eprintln!("[事件监控] ✓ {} Cookie 验证通过！保存中...", service);
+                                log::debug!("[事件监控] ✓ {} Cookie 验证通过！保存中...", service);
                                 if completed.compare_exchange(false, true, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst).is_err() {
-                                    eprintln!("[事件监控] 已被其他线程完成，跳过保存");
+                                    log::debug!("[事件监控] 已被其他线程完成，跳过保存");
                                     return;
                                 }
 
@@ -1111,11 +1163,11 @@ async fn setup_cookie_event_monitoring(
                                         Some(any_fields_save),
                                         app_save,
                                     ).await {
-                                        eprintln!("[事件监控] 保存Cookie失败: {}", e);
+                                        log::warn!("[事件监控] 保存Cookie失败: {}", e);
                                     }
                                 });
                             } else {
-                                eprintln!("[事件监控] ✗ Cookie 验证未通过，等待下次导航...");
+                                log::debug!("[事件监控] ✗ Cookie 验证未通过，等待下次导航...");
                             }
                         });
 
@@ -1137,12 +1189,12 @@ async fn setup_cookie_event_monitoring(
 
                 let mut token: i64 = 0;
                 if let Err(e) = core.add_NavigationCompleted(&handler, &mut token) {
-                    eprintln!("[事件监控] 注册 NavigationCompleted 失败: {:?}", e);
+                    log::warn!("[事件监控] 注册 NavigationCompleted 失败: {:?}", e);
                     // 降级到轮询模式提示
                     return;
                 }
 
-                eprintln!("[事件监控] ✓ NavigationCompleted 事件注册成功");
+                log::debug!("[事件监控] ✓ NavigationCompleted 事件注册成功");
             }
         });
 
@@ -1150,7 +1202,7 @@ async fn setup_cookie_event_monitoring(
         let _ = app_for_ready.emit("cookie-monitoring-ready", ());
 
         if result.is_err() {
-            eprintln!("[事件监控] with_webview 调用失败，降级到轮询模式");
+            log::warn!("[事件监控] with_webview 调用失败，降级到轮询模式");
             // 降级：调用旧的轮询命令
             return start_cookie_monitoring(
                 app,
@@ -1167,7 +1219,7 @@ async fn setup_cookie_event_monitoring(
 
     #[cfg(not(target_os = "windows"))]
     {
-        eprintln!("[事件监控] 非 Windows 平台，降级到轮询模式");
+        log::debug!("[事件监控] 非 Windows 平台，降级到轮询模式");
         return start_cookie_monitoring(
             app,
             Some(service),
@@ -1227,7 +1279,7 @@ async fn get_request_header_cookie(
         };
 
         if validate_cookie_fields(&service, &merged_cookie, &fields, &any_fields) {
-            eprintln!("[Cookie获取] {} 请求头Cookie长度: {}", service, merged_cookie.len());
+            log::debug!("[Cookie获取] {} 请求头Cookie长度: {}", service, merged_cookie.len());
             Ok(merged_cookie)
         } else {
             Err(AppError::auth(format!(
@@ -1258,13 +1310,13 @@ fn attempt_cookie_capture_and_save_generic(
     let merged_cookie = match extract_and_merge_cookies(login_window, target_domains, "Cookie监控") {
         Some(c) => c,
         None => {
-            eprintln!("[Cookie监控] 未从任何域名提取到 Cookie，继续等待...");
+            log::debug!("[Cookie监控] 未从任何域名提取到 Cookie，继续等待...");
             return false;
         }
     };
 
     if validate_cookie_fields(service_id, &merged_cookie, required_fields, any_of_fields) {
-        eprintln!("[Cookie监控] ✓ 验证通过，尝试保存 {} Cookie", service_id);
+        log::debug!("[Cookie监控] ✓ 验证通过，尝试保存 {} Cookie", service_id);
         match tauri::async_runtime::block_on(save_cookie_from_login(
             merged_cookie.clone(),
             Some(service_id.to_string()),
@@ -1273,16 +1325,16 @@ fn attempt_cookie_capture_and_save_generic(
             app_handle.clone(),
         )) {
             Ok(_) => {
-                eprintln!("[Cookie监控] ✓ {} Cookie保存成功", service_id);
+                log::debug!("[Cookie监控] ✓ {} Cookie保存成功", service_id);
                 true
             }
             Err(err) => {
-                eprintln!("[Cookie监控] 保存Cookie失败: {}", err);
+                log::warn!("[Cookie监控] 保存Cookie失败: {}", err);
                 false
             }
         }
     } else {
-        eprintln!("[Cookie监控] ✗ 验证失败，Cookie 缺少必要字段，继续等待...");
+        log::debug!("[Cookie监控] ✗ 验证失败，Cookie 缺少必要字段，继续等待...");
         false
     }
 }
@@ -1319,12 +1371,12 @@ fn spawn_cookie_poll_fallback(
 
         while elapsed < total {
             if completed.load(Ordering::SeqCst) {
-                eprintln!("[轮询兜底] Cookie 已获取，轮询退出");
+                log::debug!("[轮询兜底] Cookie 已获取，轮询退出");
                 return;
             }
 
             let Some(login_webview) = app.get_webview("login-content") else {
-                eprintln!("[轮询兜底] 登录窗口已关闭，轮询退出");
+                log::debug!("[轮询兜底] 登录窗口已关闭，轮询退出");
                 return;
             };
 
@@ -1332,9 +1384,9 @@ fn spawn_cookie_poll_fallback(
                 if validate_cookie_fields_with_value_checks(
                     &service_id, &merged_cookie, &required_fields, &any_of_fields, &field_value_checks,
                 ) {
-                    eprintln!("[轮询兜底] ✓ {} Cookie 验证通过！保存中...", service_id);
+                    log::debug!("[轮询兜底] ✓ {} Cookie 验证通过！保存中...", service_id);
                     if completed.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
-                        eprintln!("[轮询兜底] 已被其他线程完成，跳过保存");
+                        log::debug!("[轮询兜底] 已被其他线程完成，跳过保存");
                         return;
                     }
 
@@ -1347,7 +1399,7 @@ fn spawn_cookie_poll_fallback(
                         if let Err(e) = save_cookie_from_login(
                             merged_cookie, Some(service_save), Some(fields_save), Some(any_fields_save), app_save,
                         ).await {
-                            eprintln!("[轮询兜底] 保存Cookie失败: {}", e);
+                            log::warn!("[轮询兜底] 保存Cookie失败: {}", e);
                         }
                     });
                     return;
@@ -1373,7 +1425,7 @@ fn extract_and_merge_cookies(
     for domain in domains {
         match try_extract_cookie_header_generic(webview, domain) {
             Ok(Some(cookie)) => {
-                eprintln!("[{}] 从 {} 提取到 Cookie (长度: {})", log_prefix, domain, cookie.len());
+                log::debug!("[{}] 从 {} 提取到 Cookie (长度: {})", log_prefix, domain, cookie.len());
                 for part in cookie.split("; ") {
                     if let Some(eq_pos) = part.find('=') {
                         let key = part[..eq_pos].to_string();
@@ -1383,10 +1435,10 @@ fn extract_and_merge_cookies(
                 }
             }
             Ok(None) => {
-                eprintln!("[{}] 从 {} 未提取到 Cookie", log_prefix, domain);
+                log::debug!("[{}] 从 {} 未提取到 Cookie", log_prefix, domain);
             }
             Err(err) => {
-                eprintln!("[{}] 从 {} 读取Cookie失败: {}", log_prefix, domain, err);
+                log::warn!("[{}] 从 {} 读取Cookie失败: {}", log_prefix, domain, err);
             }
         }
     }
@@ -1402,7 +1454,7 @@ fn extract_and_merge_cookies(
         .join("; ");
 
     let field_count = merged.matches('=').count();
-    eprintln!("[{}] 合并 Cookie: {} 个字段，{} 字符", log_prefix, field_count, merged.len());
+    log::debug!("[{}] 合并 Cookie: {} 个字段，{} 字符", log_prefix, field_count, merged.len());
     Some(merged)
 }
 
@@ -1430,7 +1482,7 @@ fn try_extract_cookie_header_generic(window: &tauri::Webview, domain: &str) -> R
             let core = match controller.CoreWebView2() {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("[Cookie提取] 获取 CoreWebView2 失败: {:?}", e);
+                    log::warn!("[Cookie提取] 获取 CoreWebView2 失败: {:?}", e);
                     let _ = tx.send(None);
                     return;
                 }
@@ -1440,7 +1492,7 @@ fn try_extract_cookie_header_generic(window: &tauri::Webview, domain: &str) -> R
             let core2 = match core.cast::<ICoreWebView2_2>() {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("[Cookie提取] Cast 到 ICoreWebView2_2 失败: {:?}", e);
+                    log::warn!("[Cookie提取] Cast 到 ICoreWebView2_2 失败: {:?}", e);
                     let _ = tx.send(None);
                     return;
                 }
@@ -1450,7 +1502,7 @@ fn try_extract_cookie_header_generic(window: &tauri::Webview, domain: &str) -> R
             let cookie_manager = match core2.CookieManager() {
                 Ok(cm) => cm,
                 Err(e) => {
-                    eprintln!("[Cookie提取] 获取 CookieManager 失败: {:?}", e);
+                    log::warn!("[Cookie提取] 获取 CookieManager 失败: {:?}", e);
                     let _ = tx.send(None);
                     return;
                 }
@@ -1516,14 +1568,14 @@ fn try_extract_cookie_header_generic(window: &tauri::Webview, domain: &str) -> R
 
             // 调用 GetCookies
             if let Err(e) = cookie_manager.GetCookies(PCWSTR(uri_hstring.as_ptr()), &handler) {
-                eprintln!("[Cookie提取] GetCookies 调用失败: {:?}", e);
+                log::warn!("[Cookie提取] GetCookies 调用失败: {:?}", e);
                 let _ = tx.send(None);
             }
         }
     });
 
     if result.is_err() {
-        eprintln!("[Cookie提取] with_webview 调用失败");
+        log::warn!("[Cookie提取] with_webview 调用失败");
         return Ok(None);
     }
 
@@ -1531,12 +1583,12 @@ fn try_extract_cookie_header_generic(window: &tauri::Webview, domain: &str) -> R
     match rx.recv_timeout(Duration::from_secs(5)) {
         Ok(cookie_opt) => {
             if let Some(ref cookies) = cookie_opt {
-                eprintln!("[Cookie提取] ✓ 从 {} 提取到 {} 个 Cookie", domain, cookies.matches('=').count());
+                log::debug!("[Cookie提取] ✓ 从 {} 提取到 {} 个 Cookie", domain, cookies.matches('=').count());
             }
             Ok(cookie_opt)
         }
         Err(_) => {
-            eprintln!("[Cookie提取] 等待结果超时");
+            log::warn!("[Cookie提取] 等待结果超时");
             Ok(None)
         }
     }
@@ -1716,11 +1768,11 @@ fn get_or_create_secure_key() -> Result<String, AppError> {
 
     match entry.get_password() {
         Ok(key) => {
-            eprintln!("[密钥管理] 从钥匙串读取现有密钥");
+            log::debug!("[密钥管理] 从钥匙串读取现有密钥");
             Ok(key)
         },
         Err(_) => {
-            eprintln!("[密钥管理] 生成新的加密密钥");
+            log::debug!("[密钥管理] 生成新的加密密钥");
             let mut key_bytes = [0u8; 32];
             rand::thread_rng().fill(&mut key_bytes);
             let new_key = STANDARD.encode(key_bytes);
@@ -1729,7 +1781,7 @@ fn get_or_create_secure_key() -> Result<String, AppError> {
                 AppError::external(format!("无法保存密钥到系统钥匙串: {}", e))
             })?;
 
-            eprintln!("[密钥管理] ✓ 新密钥已保存到系统钥匙串");
+            log::debug!("[密钥管理] ✓ 新密钥已保存到系统钥匙串");
             Ok(new_key)
         }
     }
@@ -1755,16 +1807,22 @@ fn set_secure_key(key: String) -> Result<(), AppError> {
         AppError::external(format!("无法更新密钥到系统钥匙串: {}", e))
     })?;
 
-    eprintln!("[密钥管理] ✓ 密钥已更新到系统钥匙串");
+    log::debug!("[密钥管理] ✓ 密钥已更新到系统钥匙串");
     Ok(())
 }
 
-/// 获取日志目录路径
+/// 打开日志目录
 #[tauri::command]
-fn get_log_dir(app: tauri::AppHandle) -> Result<String, AppError> {
+fn open_log_dir(app: tauri::AppHandle) -> Result<(), AppError> {
     let log_dir = app.path().app_log_dir().map_err(|e| {
         AppError::file_io(format!("无法获取日志目录: {}", e))
     })?;
-    Ok(log_dir.to_string_lossy().to_string())
+    std::fs::create_dir_all(&log_dir).map_err(|e| {
+        AppError::file_io(format!("无法创建日志目录: {}", e))
+    })?;
+    opener::open(&log_dir).map_err(|e| {
+        AppError::file_io(format!("无法打开日志目录: {}", e))
+    })?;
+    Ok(())
 }
 

@@ -85,7 +85,7 @@ pub async fn check_image_link(
     link: String,
     http_client: tauri::State<'_, crate::HttpClient>,
 ) -> Result<CheckLinkResult, AppError> {
-    eprintln!("[链接检测] 检测链接: {}", link);
+    log::debug!("[链接检测] 检测链接: {}", link);
 
     // 验证 URL 格式
     if link.trim().is_empty() {
@@ -105,7 +105,7 @@ pub async fn check_image_link(
 
     // 百度代理链接使用 GET + Range 请求，其他使用 HEAD 请求
     let response_result = if is_baidu_proxy_link(&link) {
-        eprintln!("[链接检测] 百度代理链接，使用 Range 请求");
+        log::debug!("[链接检测] 百度代理链接，使用 Range 请求");
         http_client
             .0
             .get(&link)
@@ -132,9 +132,9 @@ pub async fn check_image_link(
 
             let (error_type, suggestion) = classify_error(Some(status_code), None);
 
-            eprintln!(
+            log::debug!(
                 "[链接检测] {} - HTTP {} ({}ms)",
-                if is_valid { "✓" } else { "✗" },
+                if is_valid { "ok" } else { "fail" },
                 status_code,
                 elapsed
             );
@@ -166,7 +166,7 @@ pub async fn check_image_link(
 
             let (error_type, suggestion) = classify_error(None, Some(&err));
 
-            eprintln!("[链接检测] ✗ 失败: {} ({}ms)", error_msg, elapsed);
+            log::debug!("[链接检测] 失败: {} ({}ms)", error_msg, elapsed);
 
             Ok(CheckLinkResult {
                 link,
@@ -190,7 +190,7 @@ fn cleanup_old_temp_files() {
     let entries = match std::fs::read_dir(&temp_dir) {
         Ok(entries) => entries,
         Err(e) => {
-            eprintln!("[临时文件清理] 无法读取临时目录: {}", e);
+            log::error!("[临时文件清理] 无法读取临时目录: {}", e);
             return;
         }
     };
@@ -214,7 +214,7 @@ fn cleanup_old_temp_files() {
                         if age.as_secs() > TEMP_FILE_MAX_AGE_SECS {
                             // 删除过期文件
                             if let Err(e) = std::fs::remove_file(&path) {
-                                eprintln!("[临时文件清理] 删除失败 {:?}: {}", path, e);
+                                log::error!("[临时文件清理] 删除失败 {:?}: {}", path, e);
                             } else {
                                 cleaned_count += 1;
                             }
@@ -226,7 +226,7 @@ fn cleanup_old_temp_files() {
     }
 
     if cleaned_count > 0 {
-        eprintln!("[临时文件清理] 已清理 {} 个过期文件", cleaned_count);
+        log::info!("[临时文件清理] 已清理 {} 个过期文件", cleaned_count);
     }
 }
 
@@ -242,7 +242,7 @@ pub async fn download_image_from_url(
     url: String,
     http_client: tauri::State<'_, crate::HttpClient>,
 ) -> Result<String, AppError> {
-    eprintln!("[下载图片] 开始下载: {}", url);
+    log::info!("[下载图片] 开始下载: {}", url);
 
     // 首先清理过期的临时文件，防止磁盘空间耗尽
     cleanup_old_temp_files();
@@ -255,13 +255,13 @@ pub async fn download_image_from_url(
         .send()
         .await
         .map_err(|e| {
-            eprintln!("[下载图片] ✗ 请求失败: {}", e);
+            log::error!("[下载图片] 请求失败: {}", e);
             AppError::network(format!("下载失败: {}", e))
         })?;
 
     if !response.status().is_success() {
         let status = response.status();
-        eprintln!("[下载图片] ✗ HTTP错误: {}", status);
+        log::error!("[下载图片] HTTP错误: {}", status);
         return Err(AppError::network(format!(
             "下载失败: HTTP {}",
             status.as_u16()
@@ -271,8 +271,8 @@ pub async fn download_image_from_url(
     // 预检查 Content-Length（如果服务器提供）
     if let Some(content_length) = response.content_length() {
         if content_length as usize > MAX_DOWNLOAD_SIZE {
-            eprintln!(
-                "[下载图片] ✗ 文件过大: {} bytes (最大 {} bytes)",
+            log::warn!(
+                "[下载图片] 文件过大: {} bytes (最大 {} bytes)",
                 content_length, MAX_DOWNLOAD_SIZE
             );
             return Err(AppError::validation(format!(
@@ -285,14 +285,14 @@ pub async fn download_image_from_url(
 
     // 读取响应内容
     let bytes = response.bytes().await.map_err(|e| {
-        eprintln!("[下载图片] ✗ 读取内容失败: {}", e);
+        log::error!("[下载图片] 读取内容失败: {}", e);
         AppError::network(format!("读取内容失败: {}", e))
     })?;
 
     // 实际大小检查（防止服务器返回错误的 Content-Length）
     if bytes.len() > MAX_DOWNLOAD_SIZE {
-        eprintln!(
-            "[下载图片] ✗ 文件过大: {} bytes (最大 {} bytes)",
+        log::warn!(
+            "[下载图片] 文件过大: {} bytes (最大 {} bytes)",
             bytes.len(),
             MAX_DOWNLOAD_SIZE
         );
@@ -303,7 +303,7 @@ pub async fn download_image_from_url(
         )));
     }
 
-    eprintln!("[下载图片] ✓ 下载成功，大小: {} bytes", bytes.len());
+    log::debug!("[下载图片] 下载成功，大小: {} bytes", bytes.len());
 
     // 创建临时文件
     let temp_dir = std::env::temp_dir();
@@ -316,12 +316,12 @@ pub async fn download_image_from_url(
 
     // 写入文件
     std::fs::write(&temp_path, &bytes).map_err(|e| {
-        eprintln!("[下载图片] ✗ 写入文件失败: {}", e);
+        log::error!("[下载图片] 写入文件失败: {}", e);
         AppError::file_io(format!("写入文件失败: {}", e))
     })?;
 
     let path_str = temp_path.to_string_lossy().to_string();
-    eprintln!("[下载图片] ✓ 已保存到: {}", path_str);
+    log::info!("[下载图片] 已保存到: {}", path_str);
 
     Ok(path_str)
 }

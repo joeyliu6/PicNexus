@@ -88,7 +88,7 @@ fn parse_weibo_response(xml: &str) -> Result<UploadResponse, AppError> {
             Ok(Event::Eof) => break,
             Err(e) => {
                 // XML 解析失败，尝试回退到正则匹配
-                eprintln!("[上传] XML 解析失败，尝试正则匹配: {}", e);
+                log::warn!("[上传] XML 解析失败，尝试正则匹配: {}", e);
                 return parse_weibo_response_fallback(xml);
             }
             _ => {}
@@ -221,7 +221,7 @@ pub async fn upload_file_stream(
                 Err(poisoned) => {
                     // Mutex 被污染（之前有 panic），尝试恢复
                     // 对于进度计数器，恢复是安全的，因为它不影响上传结果
-                    eprintln!("[上传] 警告: Mutex 锁被污染，尝试恢复进度计数器");
+                    log::warn!("[上传] Mutex 锁被污染，尝试恢复进度计数器");
                     poisoned.into_inner()
                 }
             };
@@ -297,7 +297,7 @@ pub async fn test_weibo_connection(
     weibo_cookie: String,
     http_client: tauri::State<'_, HttpClient>
 ) -> Result<String, AppError> {
-    println!("[Weibo] 测试 Cookie 有效性...");
+    log::info!("[Weibo] 测试 Cookie 有效性...");
 
     // 检查 Cookie 非空
     if weibo_cookie.trim().is_empty() {
@@ -349,11 +349,7 @@ pub async fn test_weibo_connection(
     let response_text = response.text().await
         .map_err(|e| AppError::network(format!("无法读取响应: {}", e)))?;
 
-    println!("[Weibo] 测试响应: {}", if response_text.len() > 200 {
-        format!("{}... (共 {} 字节)", &response_text[..200], response_text.len())
-    } else {
-        response_text.clone()
-    });
+    log::debug!("[Weibo] 测试响应: {} bytes", response_text.len());
 
     // 检查认证错误（Cookie 过期返回 100006）
     if response_text.contains("<data>100006</data>") {
@@ -362,7 +358,7 @@ pub async fn test_weibo_connection(
 
     // 检查是否上传成功（响应中包含 pid 字段）
     if response_text.contains("<pid>") {
-        println!("[Weibo] ✓ Cookie 有效（测试上传成功）");
+        log::info!("[Weibo] Cookie 有效（测试上传成功）");
         Ok("Cookie 验证通过".to_string())
     } else if response_text.contains("<err>") || response_text.contains("<code>") {
         // 解析错误信息

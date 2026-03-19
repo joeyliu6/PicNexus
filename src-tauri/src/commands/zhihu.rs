@@ -140,7 +140,7 @@ pub async fn upload_to_zhihu(
     for attempt in 0..=MAX_UPLOAD_RETRIES {
         if attempt > 0 {
             let delay = attempt * 2;  // 2, 4, 6 秒
-            println!("[Zhihu] 第 {} 次重试，等待 {} 秒...", attempt, delay);
+            log::debug!("[Zhihu] 第 {} 次重试，等待 {} 秒", attempt, delay);
             tokio::time::sleep(Duration::from_secs(delay as u64)).await;
         }
 
@@ -150,7 +150,7 @@ pub async fn upload_to_zhihu(
                 // 只对"图片处理超时"错误进行重试
                 let error_str = format!("{}", e);
                 if error_str.contains("图片处理超时") && attempt < MAX_UPLOAD_RETRIES {
-                    println!("[Zhihu] 上传超时，准备重试...");
+                    log::warn!("[Zhihu] 上传超时，准备重试");
                     last_error = Some(e);
                     continue;
                 }
@@ -167,7 +167,7 @@ async fn upload_to_zhihu_inner(
     file_path: &str,
     zhihu_cookie: &str,
 ) -> Result<ZhihuUploadResult, AppError> {
-    println!("[Zhihu] 开始上传文件: {}", file_path);
+    log::info!("[Zhihu] 开始上传文件: {}", file_path);
 
     // 1. 读取文件
     let (buffer, file_size) = read_file_bytes(file_path).await?;
@@ -190,7 +190,7 @@ async fn upload_to_zhihu_inner(
 
     // 3. 计算图片 MD5
     let image_hash = calculate_md5(&buffer);
-    println!("[Zhihu] 图片 MD5: {}", image_hash);
+    log::debug!("[Zhihu] 图片 MD5: {}", image_hash);
 
     // 4. 获取上传凭证
     let client = Client::builder()
@@ -216,18 +216,24 @@ async fn upload_to_zhihu_inner(
     let credentials_text = credentials_response.text().await
         .into_network_err_with("读取凭证响应失败")?;
 
-    println!("[Zhihu] 凭证响应: {}", credentials_text);
+    log::debug!("[Zhihu] 凭证状态: state={}",
+        serde_json::from_str::<serde_json::Value>(&credentials_text)
+            .ok()
+            .and_then(|v| v.get("upload_file").and_then(|f| f.get("state")).cloned())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "unknown".to_string())
+    );
 
     let credentials: UploadCredentialsResponse = serde_json::from_str(&credentials_text)
         .map_err(|e| AppError::upload("知乎", format!("解析凭证失败: {} (响应: {})", e, credentials_text)))?;
 
     let image_id = credentials.upload_file.image_id.clone();
-    println!("[Zhihu] Image ID: {}, State: {}", image_id, credentials.upload_file.state);
+    log::debug!("[Zhihu] Image ID: {}, State: {}", image_id, credentials.upload_file.state);
 
     // 5. 判断 state
     let final_url = if credentials.upload_file.state == 1 {
         // 图片已存在，直接查询状态获取 URL
-        println!("[Zhihu] 图片已存在，跳过上传");
+        log::info!("[Zhihu] 图片已存在，跳过上传");
         poll_image_status(&client, &zhihu_cookie, &image_id, 30).await?
     } else {
         // 需要上传到 OSS
@@ -236,7 +242,7 @@ async fn upload_to_zhihu_inner(
         let object_key = credentials.upload_file.object_key
             .ok_or_else(|| AppError::upload("知乎", "state=0 但未返回 object_key"))?;
 
-        println!("[Zhihu] 开始上传到 OSS: {}", object_key);
+        log::info!("[Zhihu] 开始上传到 OSS");
 
         // 5.1 上传到 OSS
         let date = get_rfc2822_date();
@@ -269,7 +275,7 @@ async fn upload_to_zhihu_inner(
             return Err(AppError::upload("知乎", format!("OSS 上传失败 ({}): {}", oss_status, oss_error)));
         }
 
-        println!("[Zhihu] OSS 上传成功");
+        log::info!("[Zhihu] OSS 上传成功");
 
         // 5.2 通知知乎上传完成
         let notify_response = client
@@ -288,11 +294,11 @@ async fn upload_to_zhihu_inner(
 
         if !notify_response.status().is_success() {
             let notify_error = notify_response.text().await.unwrap_or_default();
-            println!("[Zhihu] 通知上传完成失败: {}", notify_error);
+            log::warn!("[Zhihu] 通知上传完成失败: {}", notify_error);
             // 继续轮询，可能服务端已经处理完成
         }
 
-        println!("[Zhihu] 开始轮询图片状态...");
+        log::debug!("[Zhihu] 开始轮询图片状态");
 
         // 5.3 轮询图片状态
         poll_image_status(&client, &zhihu_cookie, &image_id, 30).await?
@@ -300,7 +306,7 @@ async fn upload_to_zhihu_inner(
 
     // 6. 标准化 URL
     let normalized_url = normalize_image_url(&final_url);
-    println!("[Zhihu] 上传成功: {}", normalized_url);
+    log::info!("[Zhihu] 上传成功: {}", normalized_url);
 
     // ✅ 修复: 删除此处的100%事件发送
     // 前端会在收到Ok结果时自动设置100%
@@ -336,7 +342,7 @@ async fn poll_image_status(
         let status: ImageStatusResponse = serde_json::from_str(&response_text)
             .map_err(|e| AppError::upload("知乎", format!("解析状态响应失败: {} (响应: {})", e, response_text)))?;
 
-        println!("[Zhihu] 轮询 #{}: status={:?}", attempt + 1, status.status);
+        log::debug!("[Zhihu] 轮询 #{}: status={:?}", attempt + 1, status.status);
 
         if status.status.as_deref() != Some("processing") {
             // 处理完成，提取 URL
