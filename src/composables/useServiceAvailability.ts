@@ -79,35 +79,37 @@ async function checkQiyuAvailability(forceCheck = false): Promise<void> {
   if (!forceCheck && syncStatus?.qiyuCheckStatus?.nextCheckTime) {
     if (now < syncStatus.qiyuCheckStatus.nextCheckTime) {
       qiyuAvailable.value = syncStatus.qiyuCheckStatus.lastCheckResult ?? false;
-      console.log('[七鱼检测] 在冷却期内，使用缓存结果:', qiyuAvailable.value);
+      console.debug('[七鱼检测] 在冷却期内，使用缓存结果:', qiyuAvailable.value);
       return;
     }
   }
 
   isCheckingQiyu.value = true;
+  let checkResult = false;
   try {
-    qiyuAvailable.value = await invoke('check_qiyu_available');
-    if (qiyuAvailable.value) markVerified('qiyu');
-
-    // 更新检测状态
-    const updatedStatus: SyncStatus = syncStatus || { syncByProfile: {} };
-
-    updatedStatus.qiyuCheckStatus = {
-      lastCheckTime: now,
-      lastCheckResult: qiyuAvailable.value,
-      nextCheckTime: qiyuAvailable.value ? now + getRandomCheckInterval() : null
-    };
-
-    await syncStatusStore.set('status', updatedStatus);
-    await syncStatusStore.save();
-
-    console.log(`[七鱼检测] 检测完成，结果: ${qiyuAvailable.value ? '可用' : '不可用'}`);
+    checkResult = await invoke<boolean>('check_qiyu_available');
+    qiyuAvailable.value = checkResult;
+    if (checkResult) markVerified('qiyu');
   } catch (e) {
     qiyuAvailable.value = false;
     markTestFailed('qiyu', String(e));
     console.error('[七鱼检测] 检测失败:', e);
   } finally {
     isCheckingQiyu.value = false;
+  }
+
+  // 持久化单独处理，失败不影响检测结果
+  try {
+    const updatedStatus: SyncStatus = syncStatus || { syncByProfile: {} };
+    updatedStatus.qiyuCheckStatus = {
+      lastCheckTime: now,
+      lastCheckResult: checkResult,
+      nextCheckTime: checkResult ? now + getRandomCheckInterval() : null,
+    };
+    await syncStatusStore.set('status', updatedStatus);
+    await syncStatusStore.save();
+  } catch (e) {
+    console.warn('[七鱼检测] 状态持久化失败（不影响检测结果）:', e);
   }
 }
 
@@ -130,33 +132,37 @@ async function checkJdAvailable(forceCheck = false): Promise<void> {
 
   if (!forceCheck && (now - lastCheck) <= JD_CHECK_COOLDOWN) {
     jdAvailable.value = syncStatus?.jdCheckStatus?.lastCheckResult ?? false;
-    console.log('[京东检测] 在冷却期内，使用缓存结果:', jdAvailable.value);
+    console.debug('[京东检测] 在冷却期内，使用缓存结果:', jdAvailable.value);
     return;
   }
 
   isCheckingJd.value = true;
+  let checkResult = false;
   try {
-    jdAvailable.value = await invoke('check_jd_available');
-    if (jdAvailable.value) markVerified('jd');
-
-    const updatedStatus: SyncStatus = syncStatus || { syncByProfile: {} };
-    updatedStatus.jdCheckStatus = {
-      lastCheckTime: now,
-      lastCheckResult: jdAvailable.value,
-      nextCheckTime: null,
-    };
-    updatedStatus.lastJdCheck = now;
-
-    await syncStatusStore.set('status', updatedStatus);
-    await syncStatusStore.save();
-
-    console.log(`[京东检测] 检测完成，结果: ${jdAvailable.value ? '可用' : '不可用'}`);
+    checkResult = await invoke<boolean>('check_jd_available');
+    jdAvailable.value = checkResult;
+    if (checkResult) markVerified('jd');
   } catch (e) {
     jdAvailable.value = false;
     markTestFailed('jd', String(e));
     console.error('[京东检测] 检测失败:', e);
   } finally {
     isCheckingJd.value = false;
+  }
+
+  // 持久化单独处理，失败不影响检测结果
+  try {
+    const updatedStatus: SyncStatus = syncStatus || { syncByProfile: {} };
+    updatedStatus.jdCheckStatus = {
+      lastCheckTime: now,
+      lastCheckResult: checkResult,
+      nextCheckTime: null,
+    };
+    updatedStatus.lastJdCheck = now;
+    await syncStatusStore.set('status', updatedStatus);
+    await syncStatusStore.save();
+  } catch (e) {
+    console.warn('[京东检测] 状态持久化失败（不影响检测结果）:', e);
   }
 }
 
