@@ -6,42 +6,55 @@
     :style="{ width: '460px' }"
     :closable="mode !== 'restore'"
     :draggable="false"
-    :pt="{ root: { class: 'backup-password-dlg' } }"
+    :pt="{ root: { class: 'backup-password-dlg' }, closeButton: { class: 'backup-pwd-close-btn' } }"
     @hide="handleCancel"
   >
     <div class="backup-password-dialog">
       <!-- 恢复模式：检测到加密配置 -->
       <div v-if="mode === 'restore'" class="dialog-description">
         <i class="pi pi-lock" />
-        <p>当前配置使用迁移密码加密。请输入你之前设置的迁移密码来恢复配置。</p>
-      </div>
-
-      <!-- 设置模式 -->
-      <div v-else-if="mode === 'set'" class="dialog-description">
-        <i class="pi pi-shield" />
-        <p>设置一个迁移密码，导出和同步的配置会自动加密。换电脑时输入密码即可恢复所有设置。</p>
-      </div>
-
-      <!-- 修改模式 -->
-      <div v-else-if="mode === 'change'" class="dialog-description">
-        <i class="pi pi-pencil" />
-        <p>修改迁移密码后，配置将使用新密码重新加密。</p>
+        <p>你的配置文件已用备份密码加密。输入当时设置的密码，就能还原配置。</p>
       </div>
 
       <!-- 密码输入 -->
       <div class="field">
-        <label for="backup-password">{{ mode === 'restore' ? '迁移密码' : '密码' }}</label>
+        <label for="backup-password">{{ mode === 'restore' ? '备份密码' : '密码' }}</label>
         <Password
           id="backup-password"
           v-model="password"
           :feedback="false"
           toggleMask
           :inputStyle="{ width: '100%' }"
+          :inputProps="{ autocomplete: 'new-password' }"
           :class="{ 'p-invalid': passwordError }"
-          :placeholder="mode === 'restore' ? '输入你之前设置的迁移密码' : '至少 8 位，包含字母和数字'"
+          :placeholder="mode === 'restore' ? '输入你之前设置的备份密码' : '至少 8 位，包含数字'"
           @keydown.enter="handleSubmit"
         />
         <small v-if="passwordError" class="p-error">{{ passwordError }}</small>
+
+        <!-- 强度提示（设置/修改模式始终显示） -->
+        <div v-if="showStrengthHints" class="strength-hints">
+          <!-- 必须满足 -->
+          <span
+            v-for="check in strengthChecks"
+            :key="check.label"
+            class="strength-check"
+            :class="{ passed: check.passed }"
+          >
+            <i :class="check.passed ? 'pi pi-check-circle' : 'pi pi-circle'" />
+            {{ check.label }}
+          </span>
+          <!-- 建议满足 -->
+          <span
+            v-for="suggestion in strengthSuggestions"
+            :key="suggestion.label"
+            class="strength-suggestion"
+            :class="{ passed: suggestion.passed }"
+          >
+            <i :class="suggestion.passed ? 'pi pi-check-circle' : 'pi pi-circle'" />
+            {{ suggestion.label }}
+          </span>
+        </div>
       </div>
 
       <!-- 确认密码（仅设置/修改模式） -->
@@ -53,6 +66,7 @@
           :feedback="false"
           toggleMask
           :inputStyle="{ width: '100%' }"
+          :inputProps="{ autocomplete: 'new-password' }"
           :class="{ 'p-invalid': confirmError }"
           placeholder="再次输入密码"
           @keydown.enter="handleSubmit"
@@ -60,10 +74,15 @@
         <small v-if="confirmError" class="p-error">{{ confirmError }}</small>
       </div>
 
-      <!-- 警告提示 -->
-      <div v-if="mode !== 'restore'" class="warning-box">
-        <i class="pi pi-exclamation-triangle" />
-        <span>请牢记此密码！忘记后将无法在新电脑上恢复已加密的配置。</span>
+      <!-- 警告提示（仅设置/修改模式） -->
+      <div v-if="mode === 'set' || mode === 'change'" class="dialog-note-warn">
+        <i class="pi pi-info-circle" />
+        <span>
+          {{ mode === 'change'
+            ? '修改后旧备份仍需旧密码打开。请妥善保管密码，忘记后将无法还原。'
+            : '请妥善保管密码，忘记后将无法还原。'
+          }}
+        </span>
       </div>
 
       <!-- 错误次数提示（恢复模式） -->
@@ -132,6 +151,27 @@ const confirmError = ref('');
 const loading = ref(false);
 const failedAttempts = ref(0);
 
+const isSetMode = computed(() => props.mode === 'set' || props.mode === 'change');
+const showStrengthHints = computed(() => isSetMode.value);
+
+// 必须满足的条件
+const strengthChecks = computed(() => {
+  const p = password.value;
+  return [
+    { label: '至少 8 位', passed: p.length >= 8 },
+    { label: '包含数字', passed: /\d/.test(p) },
+  ];
+});
+
+// 建议满足的条件（不影响验证通过，仅引导）
+const strengthSuggestions = computed(() => {
+  const p = password.value;
+  return [
+    { label: '大小写字母', passed: /[a-z]/.test(p) && /[A-Z]/.test(p) },
+    { label: '特殊符号', passed: /[^a-zA-Z0-9]/.test(p) },
+  ];
+});
+
 const visible = computed({
   get: () => props.modelValue,
   set: (val) => emit('update:modelValue', val)
@@ -139,9 +179,9 @@ const visible = computed({
 
 const dialogTitle = computed(() => {
   switch (props.mode) {
-    case 'restore': return '检测到加密配置';
-    case 'change': return '修改迁移密码';
-    default: return '设置迁移密码';
+    case 'restore': return '还原备份配置';
+    case 'change': return '修改备份密码';
+    default: return '设置备份密码';
   }
 });
 
@@ -170,7 +210,6 @@ function validate(): boolean {
   }
 
   if (props.mode !== 'restore') {
-    // 设置/修改模式需要强度验证
     const result = validateBackupPassword(password.value);
     if (!result.valid) {
       passwordError.value = result.message;
@@ -240,7 +279,7 @@ defineExpose({
 
 .dialog-description {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   padding: 12px 14px;
   border-radius: 8px;
@@ -255,11 +294,28 @@ defineExpose({
   font-size: 20px;
   flex-shrink: 0;
   color: var(--primary);
+  margin-top: 1px;
 }
 
 .dialog-description p {
   margin: 0;
   color: var(--text-secondary);
+}
+
+.dialog-note-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.dialog-note-warn i {
+  font-size: 12px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  opacity: 0.7;
 }
 
 .field {
@@ -284,34 +340,55 @@ defineExpose({
   background: var(--bg-input);
   border: none;
   padding: 12px 16px;
-  color: white;
-}
-
-:root.light-theme .field :deep(.p-password input) {
-  background: #f1f5f9;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .field :deep(.p-password input:focus) {
   box-shadow: 0 0 0 1px var(--primary);
 }
 
-.warning-box {
+.strength-hints {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: rgba(234, 179, 8, 0.1);
-  border: 1px solid rgba(234, 179, 8, 0.2);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--warning);
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 2px;
 }
 
-.warning-box i {
-  font-size: 14px;
-  flex-shrink: 0;
+.strength-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+
+.strength-check i {
+  font-size: 12px;
+}
+
+.strength-check.passed {
+  color: var(--success);
+}
+
+/* 建议项：默认更浅，通过后变绿 */
+.strength-suggestion {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  opacity: 0.6;
+  transition: color 0.15s, opacity 0.15s;
+}
+
+.strength-suggestion i {
+  font-size: 12px;
+}
+
+.strength-suggestion.passed {
+  color: var(--success);
+  opacity: 1;
 }
 
 .error-box {
@@ -320,8 +397,8 @@ defineExpose({
   gap: 8px;
   padding: 10px 14px;
   border-radius: 8px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: var(--error-alpha-8);
+  border: 1px solid var(--error-alpha-15);
   font-size: 12px;
   font-weight: 500;
   color: var(--error);

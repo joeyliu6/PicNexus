@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import Button from 'primevue/button';
 import { invoke } from '@tauri-apps/api/core';
 import { useConfirm } from 'primevue/useconfirm';
 import { useBackupSync } from '../../composables/useBackupSync';
 import { useToast } from '../../composables/useToast';
 import { secureStorage } from '../../crypto';
-import { configStore } from '../../store/instances';
+import { configStore, syncStatusStore } from '../../store/instances';
 import type { WebDAVConfig, UserConfig } from '../../config/types';
 
 import DataItemCard from './backup/DataItemCard.vue';
@@ -53,14 +53,23 @@ const {
   downloadSettingsOverwrite,
   uploadHistoryForce,
   downloadHistoryOverwrite,
+  passwordRequest,
 } = useBackupSync();
 
 // 迁移密码状态
 const hasBackupPassword = ref(false);
 const showPasswordDialog = ref(false);
-const passwordDialogMode = ref<'set' | 'change'>('set');
+const passwordDialogMode = ref<'set' | 'change' | 'restore'>('set');
 const passwordDialogRef = ref<InstanceType<typeof BackupPasswordDialog>>();
 const passwordLoading = ref(false);
+
+// 监听导入/下载时的密码请求
+watch(passwordRequest, (request) => {
+  if (request) {
+    passwordDialogMode.value = 'restore';
+    showPasswordDialog.value = true;
+  }
+});
 
 const activeWebDAVProfile = computed(() =>
   props.webdavConfig.profiles.find(p => p.id === props.webdavConfig.activeId) || null
@@ -138,17 +147,17 @@ function handleHistoryForceDownload() {
   if (activeWebDAVProfile.value) downloadHistoryOverwrite(activeWebDAVProfile.value);
 }
 
-// 导出前引导设置迁移密码
+// 导出前引导设置备份密码
 function handleExportWithGuide() {
   if (!hasBackupPassword.value) {
     confirm.require({
-      header: '配置包含敏感信息',
-      message: '你的配置中包含图床密钥、Token 等敏感信息。设置迁移密码可以加密保护，换电脑时也能安全恢复。',
+      header: '导出文件未加密',
+      message: '导出的文件包含所有图床密钥和 Token。建议先设置备份密码，导出文件会自动加密保护。',
       icon: 'pi pi-shield',
-      acceptLabel: '先设置密码',
-      rejectLabel: '直接导出',
-      accept: () => openSetPasswordDialog(),
-      reject: () => exportSettingsLocal(),
+      acceptLabel: '直接导出',
+      rejectLabel: '先设置密码',
+      accept: () => exportSettingsLocal(),
+      reject: () => openSetPasswordDialog(),
     });
     return;
   }
@@ -167,52 +176,82 @@ function openSetPasswordDialog() {
  */
 async function swapKeyAndReencrypt(swapFn: () => Promise<void>): Promise<void> {
   const config = await configStore.get<UserConfig>('config');
+  const syncStatusRaw = await syncStatusStore.readRawAll().catch(() => null);
   const oldKeyB64 = await invoke<string>('get_or_create_secure_key');
 
   await swapFn();
 
   if (config) {
     try {
-      await configStore.set('config', config);
+      await configStore.setDirect({ config });
     } catch (e) {
-      // 写回失败，回滚钥匙串到旧密钥
       console.error('[迁移密码] 重新加密写回失败，回滚密钥:', e);
       await invoke('set_secure_key', { key: oldKeyB64 });
       await secureStorage.forceReinit();
       throw e;
     }
   }
+
+  if (syncStatusRaw && Object.keys(syncStatusRaw).length > 0) {
+    await syncStatusStore.setDirect(syncStatusRaw).catch(e =>
+      console.warn('[迁移密码] syncStatusStore 重新加密失败（非致命）:', e)
+    );
+  }
 }
 
 async function handlePasswordConfirm(password: string) {
+  // restore 模式：导入/下载加密数据时的密码请求
+  if (passwordDialogMode.value === 'restore' && passwordRequest.value) {
+    passwordRequest.value.resolve(password);
+    passwordDialogRef.value?.onPasswordSuccess();
+    return;
+  }
+
+  // set/change 模式：设置或修改备份密码
   passwordLoading.value = true;
   try {
     await swapKeyAndReencrypt(() => secureStorage.setBackupPassword(password));
     hasBackupPassword.value = true;
     passwordDialogRef.value?.onPasswordSuccess();
-    toast.showConfig('success', { summary: '迁移密码设置成功', detail: '配置文件已使用新密码重新加密' });
+    toast.showConfig('success', { summary: '备份密码设置成功', detail: '配置文件已使用新密码重新加密' });
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error('[迁移密码] 设置失败:', errorMsg);
-    toast.showConfig('error', { summary: '设置迁移密码失败', detail: errorMsg });
+    console.error('[备份密码] 设置失败:', errorMsg);
+    toast.showConfig('error', { summary: '设置备份密码失败', detail: errorMsg });
   } finally {
     passwordLoading.value = false;
   }
 }
 
-async function handleClearPassword() {
-  passwordLoading.value = true;
-  try {
-    await swapKeyAndReencrypt(() => secureStorage.clearBackupPassword());
-    hasBackupPassword.value = false;
-    toast.showConfig('success', { summary: '迁移密码已清除', detail: '已切换为本机专属加密，换电脑后需重新配置' });
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error('[迁移密码] 清除失败:', errorMsg);
-    toast.showConfig('error', { summary: '清除迁移密码失败', detail: errorMsg });
-  } finally {
-    passwordLoading.value = false;
+function handlePasswordDialogCancel() {
+  if (passwordDialogMode.value === 'restore' && passwordRequest.value) {
+    passwordRequest.value.reject(new Error('user_cancelled'));
+    passwordRequest.value = null;
   }
+}
+
+function handleClearPassword() {
+  confirm.require({
+    header: '关闭加密',
+    message: '关闭后，后续导出的配置不再加密。已有备份仍需原密码打开。',
+    icon: 'pi pi-lock-open',
+    acceptLabel: '确认关闭',
+    rejectLabel: '取消',
+    accept: async () => {
+      passwordLoading.value = true;
+      try {
+        await swapKeyAndReencrypt(() => secureStorage.clearBackupPassword());
+        hasBackupPassword.value = false;
+        toast.showConfig('success', { summary: '备份密码已停用', detail: '已切换为本机专属加密，换电脑后需重新配置' });
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error('[备份密码] 停用失败:', errorMsg);
+        toast.showConfig('error', { summary: '停用备份密码失败', detail: errorMsg });
+      } finally {
+        passwordLoading.value = false;
+      }
+    },
+  });
 }
 </script>
 
@@ -223,72 +262,55 @@ async function handleClearPassword() {
       <p class="section-desc">管理你的设置和上传记录，支持多设备同步</p>
     </div>
 
-    <!-- 安全加密 -->
+    <!-- 备份密码 -->
     <div class="form-group">
-      <label class="group-label">安全加密</label>
+      <label class="group-label">备份密码</label>
 
-      <div v-if="!hasBackupPassword" class="security-banner warning">
-        <div class="banner-icon">
-          <i class="pi pi-shield" />
-        </div>
-        <div class="banner-content">
-          <div class="banner-title">尚未设置迁移密码</div>
-          <p class="banner-desc">导出或同步时，密钥和 Token 将以明文传输。设置密码后可加密保护，方便换电脑时安全恢复。</p>
-          <Button
-            label="设置迁移密码"
-            icon="pi pi-lock"
-            severity="warning"
-            outlined
-            size="small"
-            :loading="passwordLoading"
-            @click="openSetPasswordDialog"
-          />
-          <p class="banner-hint">
-            <i class="pi pi-info-circle" />
-            密码不会上传，仅在本地加密你的配置
-          </p>
-        </div>
-      </div>
-
-      <div v-else class="security-banner success">
-        <div class="banner-icon">
-          <i class="pi pi-check-circle" />
-        </div>
-        <div class="banner-content">
-          <div class="banner-title">已加密保护</div>
-          <p class="banner-desc">你的配置已加密，可安全导出和同步到其他设备。</p>
-          <div class="password-actions">
+      <div class="security-card" :class="hasBackupPassword ? 'is-protected' : 'is-unprotected'">
+        <div class="security-card-top">
+          <span v-if="hasBackupPassword" class="security-status">● 已加密</span>
+          <span v-else class="security-status-inactive">
+            <i class="pi pi-exclamation-circle"></i> 未设置
+          </span>
+          <div class="security-card-actions">
+            <template v-if="hasBackupPassword">
+              <Button
+                label="修改密码"
+                icon="pi pi-pencil"
+                severity="secondary"
+                outlined
+                size="small"
+                :loading="passwordLoading"
+                @click="openSetPasswordDialog"
+              />
+              <Button
+                label="关闭加密"
+                icon="pi pi-lock-open"
+                severity="danger"
+                outlined
+                size="small"
+                :loading="passwordLoading"
+                @click="handleClearPassword"
+              />
+            </template>
             <Button
-              label="修改密码"
-              icon="pi pi-pencil"
-              severity="secondary"
+              v-else
+              label="设置密码"
+              icon="pi pi-lock"
+              severity="primary"
               outlined
               size="small"
               :loading="passwordLoading"
               @click="openSetPasswordDialog"
             />
-            <Button
-              label="清除"
-              icon="pi pi-times"
-              severity="danger"
-              text
-              size="small"
-              :loading="passwordLoading"
-              @click="handleClearPassword"
-            />
           </div>
-          <details class="forgot-password-hint">
-            <summary>忘记密码怎么办？</summary>
-            <div class="hint-content">
-              <ul>
-                <li>密码无法找回</li>
-                <li>当前电脑不受影响（密钥已保存在系统中）</li>
-                <li>新电脑将无法恢复加密配置，需重新填写各图床密钥</li>
-                <li>可以清除密码后重新设置</li>
-              </ul>
-            </div>
-          </details>
         </div>
+        <p class="security-desc">
+          {{ hasBackupPassword
+            ? '导出和同步的配置文件已加密。换电脑时，导入备份文件并输入密码即可还原。'
+            : '配置以明文保存，设置密码后自动加密。换机时导入备份并输入密码即可还原。'
+          }}
+        </p>
       </div>
     </div>
 
@@ -361,6 +383,8 @@ async function handleClearPassword() {
       v-model="showPasswordDialog"
       :mode="passwordDialogMode"
       @confirm="handlePasswordConfirm"
+      @cancel="handlePasswordDialogCancel"
+      @skip="handlePasswordDialogCancel"
     />
   </div>
 </template>
@@ -368,109 +392,62 @@ async function handleClearPassword() {
 <style scoped>
 @import '../../styles/settings-shared.css';
 
-/* 安全加密 banner */
-.security-banner {
-  display: flex;
-  gap: 12px;
-  padding: 14px 16px;
+/* 备份密码卡片 */
+.security-card {
+  padding: 12px 16px;
   border-radius: 10px;
+  background: var(--hover-overlay-subtle);
+  border: 1px solid var(--border-subtle);
+  transition: border-color 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.security-banner.warning {
-  background: var(--warning-soft);
+.security-card.is-protected {
+  border-color: var(--primary-alpha-15);
 }
 
-.security-banner.success {
-  background: var(--success-soft);
+.security-card.is-unprotected {
+  border-color: var(--warning-alpha-15);
 }
 
-.banner-icon {
-  flex-shrink: 0;
-  font-size: 18px;
-  line-height: 1;
-  padding-top: 1px;
+.security-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.security-banner.warning .banner-icon {
-  color: var(--warning);
-}
-
-.security-banner.success .banner-icon {
+.security-status {
+  font-size: 12px;
+  font-weight: 500;
   color: var(--success);
 }
 
-.banner-content {
+.security-status-inactive {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--warning);
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
+  align-items: center;
+  gap: 4px;
 }
 
-.banner-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-main);
-}
-
-.banner-desc {
+.security-desc {
   font-size: 13px;
   color: var(--text-muted);
-  line-height: 1.5;
   margin: 0;
+  line-height: 1.5;
 }
 
-.banner-hint {
+.security-card-actions {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  color: var(--text-muted);
-  margin: 0;
-}
-
-.banner-hint i {
-  font-size: 13px;
   flex-shrink: 0;
 }
 
-.password-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.forgot-password-hint {
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.forgot-password-hint summary {
-  cursor: pointer;
-  color: var(--text-muted);
-  opacity: 0.8;
-  user-select: none;
-}
-
-.forgot-password-hint summary:hover {
-  opacity: 1;
-}
-
-.hint-content {
-  margin-top: 8px;
-  padding: 10px 12px;
-  background: var(--hover-overlay-subtle);
-  border-radius: 8px;
-  line-height: 1.6;
-}
-
-.hint-content ul {
-  margin: 0;
-  padding-left: 16px;
-}
-
-.hint-content li {
-  margin-bottom: 2px;
-}
 
 /* 数据管理区块 */
 .data-section {

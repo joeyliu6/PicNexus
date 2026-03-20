@@ -20,6 +20,7 @@ import type {
 } from '../config/types';
 import { DEFAULT_CONFIG, migrateConfig, isValidUserConfig, isValidHistoryItem } from '../config/types';
 import { configStore, syncStatusStore } from '../store/instances';
+import { secureStorage, isPasswordEncryptedData, decryptWithPassword } from '../crypto';
 
 // ==================== 类型定义 ====================
 
@@ -81,6 +82,9 @@ export interface UseBackupSyncReturn {
   toggleDownloadSettingsMenu: () => void;
   toggleDownloadHistoryMenu: () => void;
   closeAllMenus: () => void;
+
+  // 密码请求（用于导入/下载加密数据时弹窗）
+  passwordRequest: Ref<{ resolve: (password: string) => void; reject: (reason?: Error) => void } | null>;
 
   // 工具函数
   extractErrorCode: (error: unknown) => string;
@@ -217,6 +221,27 @@ export function useBackupSync(): UseBackupSyncReturn {
   // 折叠状态（默认关闭）
   const configSectionExpanded = ref(false);
   const historySectionExpanded = ref(false);
+
+  // 密码请求状态（导入/下载加密数据时使用）
+  const passwordRequest = ref<{ resolve: (password: string) => void; reject: (reason?: Error) => void } | null>(null);
+
+  /**
+   * 解密加密内容：始终要求用户输入密码
+   */
+  async function tryDecryptContent(encryptedContent: string): Promise<string> {
+    const password = await new Promise<string>((resolve, reject) => {
+      passwordRequest.value = { resolve, reject };
+    });
+
+    try {
+      const result = await decryptWithPassword(encryptedContent, password);
+      passwordRequest.value = null;
+      return result;
+    } catch (error) {
+      passwordRequest.value = null;
+      throw error;
+    }
+  }
 
   // ==================== 状态管理 ====================
 
@@ -359,6 +384,11 @@ export function useBackupSync(): UseBackupSyncReturn {
 
       const jsonContent = JSON.stringify(config, null, 2);
 
+      let outputContent = jsonContent;
+      if (secureStorage.isPasswordMode()) {
+        outputContent = await secureStorage.encrypt(jsonContent);
+      }
+
       const filePath = await save({
         defaultPath: 'picnexus_settings.json',
         filters: [{ name: 'JSON', extensions: ['json'] }]
@@ -369,7 +399,7 @@ export function useBackupSync(): UseBackupSyncReturn {
         return;
       }
 
-      await writeTextFile(filePath, jsonContent);
+      await writeTextFile(filePath, outputContent);
       toast.showConfig('success', TOAST_MESSAGES.common.exportSuccess(1));
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -398,7 +428,13 @@ export function useBackupSync(): UseBackupSyncReturn {
       }
 
       const content = await readTextFile(filePath);
-      let importedConfig = JSON.parse(content) as UserConfig;
+
+      let jsonContent = content;
+      if (isPasswordEncryptedData(content.trim())) {
+        jsonContent = await tryDecryptContent(content.trim());
+      }
+
+      let importedConfig = JSON.parse(jsonContent) as UserConfig;
 
       if (!isValidUserConfig(importedConfig)) {
         toast.showConfig('error', TOAST_MESSAGES.common.importFailed('文件内容不是有效的配置数据格式'));
@@ -438,6 +474,7 @@ export function useBackupSync(): UseBackupSyncReturn {
         toast.showConfig('info', TOAST_MESSAGES.sync.refreshHint);
       }, 1000);
     } catch (error) {
+      if (error instanceof Error && error.message === 'user_cancelled') return;
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('[备份] 导入配置失败:', error);
 
@@ -576,7 +613,11 @@ export function useBackupSync(): UseBackupSyncReturn {
       }
 
       const jsonContent = JSON.stringify(config, null, 2);
-      await webdav.client.putFile(webdav.remotePath, jsonContent);
+      let uploadContent = jsonContent;
+      if (secureStorage.isPasswordMode()) {
+        uploadContent = await secureStorage.encrypt(jsonContent);
+      }
+      await webdav.client.putFile(webdav.remotePath, uploadContent);
 
       updateConfigSyncStatus(profile,'success');
       toast.showConfig('success', TOAST_MESSAGES.sync.uploadSuccess('config'));
@@ -608,10 +649,15 @@ export function useBackupSync(): UseBackupSyncReturn {
     try {
       downloadSettingsLoading.value = true;
 
-      const content = await webdav.client.getFile(webdav.remotePath);
+      const rawContent = await webdav.client.getFile(webdav.remotePath);
 
-      if (!content) {
+      if (!rawContent) {
         throw new Error('云端配置文件不存在');
+      }
+
+      let content = rawContent;
+      if (isPasswordEncryptedData(rawContent.trim())) {
+        content = await tryDecryptContent(rawContent.trim());
       }
 
       let importedConfig = JSON.parse(content) as UserConfig;
@@ -634,6 +680,7 @@ export function useBackupSync(): UseBackupSyncReturn {
         toast.showConfig('info', TOAST_MESSAGES.sync.refreshHint);
       }, 1000);
     } catch (error) {
+      if (error instanceof Error && error.message === 'user_cancelled') return;
       const errorCode = extractErrorCode(error);
       console.error('[备份] 下载配置失败:', error);
       updateConfigSyncStatus(profile,'failed', errorCode);
@@ -656,10 +703,15 @@ export function useBackupSync(): UseBackupSyncReturn {
       downloadSettingsLoading.value = true;
 
       const currentConfig = await configStore.get<UserConfig>('config');
-      const content = await webdav.client.getFile(webdav.remotePath);
+      const rawContent = await webdav.client.getFile(webdav.remotePath);
 
-      if (!content) {
+      if (!rawContent) {
         throw new Error('云端配置文件不存在');
+      }
+
+      let content = rawContent;
+      if (isPasswordEncryptedData(rawContent.trim())) {
+        content = await tryDecryptContent(rawContent.trim());
       }
 
       let importedConfig = JSON.parse(content) as UserConfig;
@@ -687,6 +739,7 @@ export function useBackupSync(): UseBackupSyncReturn {
         toast.info('请刷新页面以使配置生效');
       }, 1000);
     } catch (error) {
+      if (error instanceof Error && error.message === 'user_cancelled') return;
       const errorCode = extractErrorCode(error);
       console.error('[备份] 合并下载配置失败:', error);
       updateConfigSyncStatus(profile,'failed', errorCode);
@@ -997,9 +1050,13 @@ export function useBackupSync(): UseBackupSyncReturn {
 
       // 步骤 1：拉取云端配置并合并到本地（保留本地 WebDAV 配置）
       try {
-        const content = await webdav.client.getFile(webdav.remotePath);
-        if (content) {
-          let importedConfig = JSON.parse(content) as UserConfig;
+        const rawContent = await webdav.client.getFile(webdav.remotePath);
+        if (rawContent) {
+          let contentStr = rawContent;
+          if (isPasswordEncryptedData(rawContent.trim())) {
+            contentStr = await tryDecryptContent(rawContent.trim());
+          }
+          let importedConfig = JSON.parse(contentStr) as UserConfig;
           if (isValidUserConfig(importedConfig)) {
             importedConfig = migrateConfig(importedConfig);
             hasCloudData = true;
@@ -1024,7 +1081,11 @@ export function useBackupSync(): UseBackupSyncReturn {
       if (!finalConfig) throw new Error('无法读取本地配置');
 
       const jsonContent = JSON.stringify(finalConfig, null, 2);
-      await webdav.client.putFile(webdav.remotePath, jsonContent);
+      let uploadContent = jsonContent;
+      if (secureStorage.isPasswordMode()) {
+        uploadContent = await secureStorage.encrypt(jsonContent);
+      }
+      await webdav.client.putFile(webdav.remotePath, uploadContent);
 
       updateConfigSyncStatus(profile,'success');
       toast.success('配置同步完成');
@@ -1035,6 +1096,7 @@ export function useBackupSync(): UseBackupSyncReturn {
         }, 1000);
       }
     } catch (error) {
+      if (error instanceof Error && error.message === 'user_cancelled') return;
       const errorCode = extractErrorCode(error);
       console.error('[备份] 配置同步失败:', error);
 
@@ -1190,6 +1252,9 @@ export function useBackupSync(): UseBackupSyncReturn {
     toggleDownloadSettingsMenu,
     toggleDownloadHistoryMenu,
     closeAllMenus,
+
+    // 密码请求
+    passwordRequest,
 
     // 工具函数
     extractErrorCode,

@@ -120,15 +120,52 @@ async function deriveRawKeyFromPassword(password: string, salt: Uint8Array): Pro
 }
 
 /**
+ * 解析 PNXPWD 格式的加密数据，拆出 salt / iv / ciphertext
+ */
+function parsePasswordData(encryptedData: string): { salt: Uint8Array; iv: Uint8Array; ciphertext: Uint8Array } {
+  const base64Data = encryptedData.startsWith(PASSWORD_ENCRYPTED_PREFIX)
+    ? encryptedData.slice(PASSWORD_ENCRYPTED_PREFIX.length)
+    : encryptedData;
+
+  const combined = base64ToBytes(base64Data);
+  if (combined.length < SALT_LENGTH + IV_LENGTH + 1) {
+    throw new Error('加密数据格式无效');
+  }
+
+  return {
+    salt: combined.slice(0, SALT_LENGTH),
+    iv: combined.slice(SALT_LENGTH, SALT_LENGTH + IV_LENGTH),
+    ciphertext: combined.slice(SALT_LENGTH + IV_LENGTH),
+  };
+}
+
+/**
+ * 用密码直接解密 PNXPWD 格式数据（不依赖 secureStorage 实例状态）
+ * 用于导入加密备份文件时独立解密
+ */
+export async function decryptWithPassword(encryptedData: string, password: string): Promise<string> {
+  const { salt, iv, ciphertext } = parsePasswordData(encryptedData);
+  const key = await deriveKeyFromPassword(password, salt);
+
+  try {
+    const decryptedBuffer = await window.crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: iv as BufferSource },
+      key,
+      ciphertext as BufferSource
+    );
+    return new TextDecoder().decode(decryptedBuffer);
+  } catch {
+    throw new Error('迁移密码不正确');
+  }
+}
+
+/**
  * 验证备份密码强度
- * 规则：至少 8 位，必须包含字母和数字
+ * 规则：至少 8 位，必须包含数字
  */
 export function validateBackupPassword(password: string): { valid: boolean; message: string } {
   if (password.length < 8) {
     return { valid: false, message: '密码长度至少 8 位' };
-  }
-  if (!/[a-zA-Z]/.test(password)) {
-    return { valid: false, message: '密码必须包含至少一个字母' };
   }
   if (!/\d/.test(password)) {
     return { valid: false, message: '密码必须包含至少一个数字' };
@@ -169,23 +206,10 @@ export class SecureStorage {
   }
 
   /**
-   * 解析 PNXPWD 格式的加密数据，拆出 salt / iv / ciphertext
+   * 解析 PNXPWD 格式的加密数据（委托给独立函数）
    */
-  private parsePasswordData(encryptedData: string): { salt: Uint8Array; iv: Uint8Array; ciphertext: Uint8Array } {
-    const base64Data = encryptedData.startsWith(PASSWORD_ENCRYPTED_PREFIX)
-      ? encryptedData.slice(PASSWORD_ENCRYPTED_PREFIX.length)
-      : encryptedData;
-
-    const combined = base64ToBytes(base64Data);
-    if (combined.length < SALT_LENGTH + IV_LENGTH + 1) {
-      throw new Error('加密数据格式无效');
-    }
-
-    return {
-      salt: combined.slice(0, SALT_LENGTH),
-      iv: combined.slice(SALT_LENGTH, SALT_LENGTH + IV_LENGTH),
-      ciphertext: combined.slice(SALT_LENGTH + IV_LENGTH),
-    };
+  private parsePasswordData(encryptedData: string) {
+    return parsePasswordData(encryptedData);
   }
 
   /**

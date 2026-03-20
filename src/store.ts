@@ -1,7 +1,7 @@
 // 简单的存储工具，使用 Tauri 的 fs API 替代 tauri-plugin-store-api
 // v2.8: 支持加密存储，使用 AES-GCM 加密敏感数据
 // v2.9: 增强并发控制，使用全局互斥锁防止竞态条件
-import { readTextFile, writeTextFile, exists, mkdir } from '@tauri-apps/plugin-fs';
+import { readTextFile, writeTextFile, exists, mkdir, remove } from '@tauri-apps/plugin-fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import { secureStorage, isAnyEncryptedData, BackupPasswordRequiredError } from './crypto';
 
@@ -94,12 +94,16 @@ class SimpleStore {
   /** 全局互斥锁，用于保护读-修改-写操作 */
   private mutex: Mutex = new Mutex();
 
+  /** 是否启用自愈模式（解密失败时备份后重置，而非中止写入） */
+  private selfHeal: boolean;
+
   /**
    * 创建存储实例
    * @param filename 存储文件名（相对于应用数据目录）
+   * @param options.selfHeal 启用自愈模式：解密失败时备份原文件并以空对象继续写入（适用于可重建的瞬态存储）
    * @throws {StoreError} 如果文件名无效
    */
-  constructor(filename: string) {
+  constructor(filename: string, options: { selfHeal?: boolean } = {}) {
     if (!filename || typeof filename !== 'string' || filename.trim().length === 0) {
       throw new StoreError(
         '文件名不能为空',
@@ -109,6 +113,7 @@ class SimpleStore {
       );
     }
     this.filePath = filename.trim();
+    this.selfHeal = options.selfHeal ?? false;
   }
   
   /**
@@ -352,6 +357,43 @@ class SimpleStore {
   }
   
   /**
+   * 直接写入完整数据（跳过读旧文件合并）
+   * 用于密钥切换场景：旧文件用旧密钥加密，新密钥无法解密，
+   * 所以跳过读取直接用新密钥加密写入全量数据
+   */
+  async setDirect(data: Record<string, any>): Promise<void> {
+    await this.mutex.withLock(async () => {
+      const dataPath = await this.getDataPath();
+      const appDir = await appDataDir();
+      await mkdir(appDir, { recursive: true });
+
+      const jsonContent = JSON.stringify(data, null, 2);
+      const encryptedContent = await secureStorage.encrypt(jsonContent);
+      await writeTextFile(dataPath, encryptedContent);
+      console.log(`[Store] ✓ 直接写入成功 (${this.filePath})`);
+    });
+  }
+
+  /**
+   * 读取文件的完整原始对象（用于密钥切换时快照全量数据）
+   * @returns 解密并解析后的完整对象，文件不存在时返回 null
+   */
+  async readRawAll(): Promise<Record<string, unknown> | null> {
+    return this.mutex.withLock(async () => {
+      const dataPath = await this.getDataPath();
+      if (!await exists(dataPath)) return null;
+      const content = await readTextFile(dataPath);
+      if (!content || !content.trim()) return null;
+      const trimmed = content.trim();
+      let decoded = content;
+      if (isAnyEncryptedData(trimmed)) {
+        decoded = await secureStorage.decrypt(trimmed);
+      }
+      return JSON.parse(decoded) as Record<string, unknown>;
+    });
+  }
+
+  /**
    * 执行实际的写入操作
    * 支持原子性写入
    */
@@ -434,12 +476,18 @@ class SimpleStore {
               } catch (backupError) {
                 console.warn(`[Store] 创建备份失败:`, backupError);
               }
-              throw new StoreError(
-                `配置文件解密失败，操作中止以防止数据丢失: ${errorMsg}`,
-                'write',
-                key,
-                decryptError
-              );
+              if (this.selfHeal) {
+                try { await remove(dataPath); } catch {}
+                console.warn(`[Store] ⚠ 自愈模式：已备份损坏文件并重置，继续写入新数据 (${this.filePath})`);
+                oldContent = '{}'; // 重置为空 JSON，跳过后续 JSON 解析失败
+              } else {
+                throw new StoreError(
+                  `配置文件解密失败，操作中止以防止数据丢失: ${errorMsg}`,
+                  'write',
+                  key,
+                  decryptError
+                );
+              }
             }
           } else if (!trimmedContent.startsWith('{') && !trimmedContent.startsWith('[')) {
             // 可能是旧版加密数据（无魔数前缀），尝试解密
