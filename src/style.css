@@ -2874,30 +2874,6 @@ button:focus-visible {
   gap: 12px;
 }
 
-/* 6. DataView（网格视图）分页器样式 */
-:deep(.p-paginator) {
-  background: transparent;
-  border: none;
-  padding: 16px 0;
-}
-
-:deep(.p-paginator .p-paginator-pages .p-paginator-page) {
-  min-width: 36px;
-  height: 36px;
-  border-radius: 6px;
-  color: var(--text-primary);
-  transition: all 0.2s ease;
-}
-
-:deep(.p-paginator .p-paginator-pages .p-paginator-page:hover) {
-  background: var(--hover-overlay-subtle);
-}
-
-:deep(.p-paginator .p-paginator-pages .p-paginator-page.p-highlight) {
-  background: var(--primary);
-  color: white;
-}
-
 /* 7. Toast 通知圆角统一 */
 :deep(.p-toast .p-toast-message) {
   border-radius: var(--p-border-radius);
@@ -3167,6 +3143,21 @@ button:focus-visible {
 .p-dialog.backup-password-dlg .p-dialog-header-close:hover {
   background: var(--hover-overlay);
   color: var(--text-main);
+}
+
+.p-dialog.backup-password-dlg .p-dialog-header-close:focus,
+.p-dialog.backup-password-dlg .p-dialog-header-close:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* 通过 :pt closeButton 注入的 class，精准移除焦点环 */
+.backup-pwd-close-btn:focus,
+.backup-pwd-close-btn:focus-visible,
+.backup-pwd-close-btn:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 
 .p-dialog.backup-password-dlg .p-dialog-content {

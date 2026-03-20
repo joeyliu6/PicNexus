@@ -3,7 +3,7 @@
  * 历史记录视图入口组件
  * 负责 Dashboard Strip 和视图切换
  */
-import { ref, onMounted, onActivated, watch } from 'vue';
+import { ref, onMounted, onActivated, onDeactivated, watch, nextTick } from 'vue';
 import Select from 'primevue/select';
 import InputText from 'primevue/inputtext';
 import type { ServiceType } from '../../config/types';
@@ -29,6 +29,9 @@ const totalCount = ref(0);
 const selectedCount = ref(0);
 
 const activationTrigger = ref(0);
+
+const historyContainerRef = ref<HTMLElement | null>(null);
+let savedTableScrollTop = 0;
 
 const viewOptions = [
   { label: '表格', value: 'table' as ViewMode, icon: 'pi pi-table' },
@@ -67,6 +70,34 @@ onActivated(async () => {
   // 通知子视图激活状态变化
   activationTrigger.value++;
   await historyManager.loadHistory();
+  // 恢复表格滚动位置（数据加载后等 DOM flush 再设置）
+  if (currentViewMode.value === 'table' && savedTableScrollTop > 0) {
+    await nextTick();
+    if (historyContainerRef.value) {
+      historyContainerRef.value.scrollTop = savedTableScrollTop;
+    }
+  }
+});
+
+onDeactivated(() => {
+  if (currentViewMode.value === 'table') {
+    savedTableScrollTop = historyContainerRef.value?.scrollTop ?? savedTableScrollTop;
+  }
+});
+
+// 同层 v-show 切换（table ↔ timeline）时保存/恢复滚动位置
+watch(currentViewMode, async (newMode, oldMode) => {
+  if (oldMode === 'table') {
+    // v-show 切换前 DOM 尚未隐藏，此时 scrollTop 仍可读
+    savedTableScrollTop = historyContainerRef.value?.scrollTop ?? savedTableScrollTop;
+  }
+  if (newMode === 'table' && savedTableScrollTop > 0) {
+    // 等 HistoryTableView display:block 渲染完成，容器高度恢复后再设置
+    await nextTick();
+    if (historyContainerRef.value) {
+      historyContainerRef.value.scrollTop = savedTableScrollTop;
+    }
+  }
 });
 
 // 切换视图模式
@@ -173,7 +204,7 @@ const handleSelectedCountUpdate = (count: number) => {
     </div>
 
     <!-- 视图容器（可滚动） -->
-    <div class="history-container" :class="{ 'no-padding': currentViewMode === 'timeline' }">
+    <div ref="historyContainerRef" class="history-container" :class="{ 'no-padding': currentViewMode === 'timeline' }">
       <!-- 表格视图 -->
       <HistoryTableView
         v-show="currentViewMode === 'table'"

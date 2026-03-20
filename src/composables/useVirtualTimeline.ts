@@ -3,7 +3,7 @@
  * 管理 Justified Layout 的虚拟滚动，支持大量图片流畅浏览
  */
 
-import { ref, computed, watch, shallowRef, onMounted, onUnmounted, type Ref } from 'vue';
+import { ref, computed, watch, shallowRef, onMounted, onUnmounted, nextTick, type Ref } from 'vue';
 import {
   calculateTimelineLayout,
   getVisibleRowRange,
@@ -126,6 +126,9 @@ export function useVirtualTimeline(
 
   /** 布局计算中标志 */
   const isCalculating = ref(false);
+
+  /** 滚动位置恢复中标志（抑制 ResizeObserver 干扰） */
+  let isRestoring = false;
 
   /** 布局暂停标志（用于批量更新） */
   const isLayoutSuspended = ref(false);
@@ -574,6 +577,20 @@ export function useVirtualTimeline(
     scrollTop.value = containerRef.value.scrollTop;
     viewportHeight.value = containerRef.value.clientHeight;
 
+    // 检查 containerWidth 是否过时（从 display:none 恢复时仍为 0）
+    // 使用内容宽度（减去 padding），与 ResizeObserver 的 contentRect.width 一致
+    const style = getComputedStyle(containerRef.value);
+    const currentWidth = containerRef.value.clientWidth
+      - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    if (currentWidth > 0 && Math.abs(currentWidth - containerWidth.value) > 1) {
+      containerWidth.value = currentWidth;
+      const result = calculateFullLayout();
+      if (result) {
+        layoutResult.value = result;
+        isCalculating.value = false;
+      }
+    }
+
     // 重置速度检测状态
     lastScrollTopForVelocity = scrollTop.value;
     lastScrollTime = performance.now();
@@ -581,6 +598,48 @@ export function useVirtualTimeline(
 
     // 延迟切换到 normal 模式
     startModeRecovery();
+  }
+
+  /**
+   * 恢复滚动位置（由调用者指定目标位置，不从 DOM 读取）
+   * 用于 KeepAlive/Tab 切换后的位置恢复，避免 forceUpdateVisibleArea 读取 DOM scrollTop=0 的竞态
+   */
+  async function restoreScrollTop(targetScrollTop: number) {
+    if (!containerRef.value) return;
+    isRestoring = true;
+
+    const style = getComputedStyle(containerRef.value);
+    const currentWidth = containerRef.value.clientWidth
+      - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    if (currentWidth > 0 && Math.abs(currentWidth - containerWidth.value) > 1) {
+      containerWidth.value = currentWidth;
+      const result = calculateFullLayout();
+      if (result) {
+        layoutResult.value = result;
+        isCalculating.value = false;
+      }
+    }
+
+    viewportHeight.value = containerRef.value.clientHeight;
+
+    // 等 Vue flush layoutResult → DOM spacer 高度更新，再设置 scrollTop
+    // 否则 spacer 为 0 时 scrollTop 会被浏览器 clamp 到 0
+    await nextTick();
+
+    if (!containerRef.value) {
+      isRestoring = false;
+      return;
+    }
+
+    containerRef.value.scrollTop = targetScrollTop;
+    scrollTop.value = targetScrollTop;
+
+    lastScrollTopForVelocity = targetScrollTop;
+    lastScrollTime = performance.now();
+    scrollVelocity.value = 0;
+    startModeRecovery();
+
+    requestAnimationFrame(() => { isRestoring = false; });
   }
 
   // ==================== 容器尺寸监听 ====================
@@ -599,8 +658,13 @@ export function useVirtualTimeline(
       const entry = entries[0];
       if (!entry) return;
 
+      if (isRestoring) return;
+
       const newWidth = entry.contentRect.width;
       const newHeight = entry.contentRect.height;
+
+      // 容器被隐藏/分离时宽度为 0，跳过以保留正确的布局状态
+      if (newWidth === 0) return;
 
       // 首次回调立即执行，避免初始化时的布局跳跃
       if (isFirstResize) {
@@ -759,6 +823,7 @@ export function useVirtualTimeline(
     scrollToItem,
     scrollToProgress,
     forceUpdateVisibleArea,
+    restoreScrollTop,
     recalculateLayout: recalculateLayoutAsync,
     suspendLayout,
     resumeLayout,

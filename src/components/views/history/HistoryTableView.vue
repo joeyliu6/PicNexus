@@ -44,6 +44,8 @@ const viewState = useHistoryViewState();
 const historyManager = useHistoryManager();
 const thumbCache = useThumbCache();
 
+const isFilterActive = computed(() => !!(props.searchTerm || props.filter !== 'all'));
+
 const PREVIEW_MAX_SIZE = 300;
 const PREVIEW_MARGIN = 8;
 
@@ -222,12 +224,12 @@ function setupBadgeWidthObserver(): void {
   badgeResizeObserver.observe(td);
 }
 
-const MORE_BTN_WIDTH = 30;
+const MORE_BTN_WIDTH = 26;
 const BADGE_GAP = 4;
 const BADGE_PADDING = 16;
 const BADGE_ICON_WITH_GAP = 18; // icon(14) + gap(4)
-const CHAR_WIDTH_ASCII = 7;
-const CHAR_WIDTH_CJK = 12;
+const CHAR_WIDTH_ASCII = 6;
+const CHAR_WIDTH_CJK = 11;
 
 function estimateBadgeWidth(name: string): number {
   let textWidth = 0;
@@ -425,8 +427,17 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
     >
       <template #empty>
         <div class="empty-state">
-          <i class="pi pi-folder-open"></i>
-          <p>没有找到相关记录</p>
+          <div class="empty-state-icon">
+            <i :class="isFilterActive ? 'pi pi-search' : 'pi pi-images'"></i>
+          </div>
+          <div class="empty-state-content">
+            <p class="empty-state-title">
+              {{ isFilterActive ? '没有找到匹配的记录' : '暂无上传记录' }}
+            </p>
+            <p class="empty-state-desc">
+              {{ isFilterActive ? '尝试调整搜索关键词或筛选条件' : '上传图片后，历史记录将在这里显示' }}
+            </p>
+          </div>
         </div>
       </template>
 
@@ -454,7 +465,7 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
       </Column>
 
       <!-- 预览列 -->
-      <Column header="预览" style="width: 60px">
+      <Column header="预览" style="width: 64px">
         <template #body="slotProps">
           <!-- 骨架屏状态 - 使用与真实数据相同的结构 -->
           <div v-if="isSkeleton(slotProps.data)" class="thumb-preview-wrapper">
@@ -485,7 +496,7 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
       </Column>
 
       <!-- 文件名列 -->
-      <Column field="localFileName" header="文件名" sortable style="width: 285px">
+      <Column field="localFileName" header="文件名">
         <template #body="slotProps">
           <!-- 骨架屏状态 -->
           <div v-if="isSkeleton(slotProps.data)" class="filename-cell">
@@ -498,9 +509,10 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
               {{ slotProps.data.localFileName }}
             </span>
             <span class="fmeta">
-              {{ formatTime(slotProps.data.timestamp) }}
+              <span class="fmeta-date">{{ formatTime(slotProps.data.timestamp) }}</span>
               <template v-if="slotProps.data.fileSize">
-                <span class="meta-dot">·</span>{{ formatFileSize(slotProps.data.fileSize) }}
+                <span class="meta-dot">·</span>
+                <span class="fmeta-size">{{ formatFileSize(slotProps.data.fileSize) }}</span>
               </template>
             </span>
           </div>
@@ -508,7 +520,7 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
       </Column>
 
       <!-- 已传图床列 -->
-      <Column header="已传图床" style="min-width: 120px">
+      <Column header="已传图床" style="width: 30%">
         <template #body="{ data }">
           <Skeleton v-if="isSkeleton(data)" width="50px" height="22px" borderRadius="4px" />
           <div v-else class="service-badges">
@@ -601,6 +613,54 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
   padding-bottom: 80px;
 }
 
+/* 分页器样式 */
+:deep(.p-paginator) {
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  padding: 12px 16px;
+  gap: 4px;
+}
+
+:deep(.p-paginator .p-paginator-pages .p-paginator-page) {
+  min-width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+}
+
+:deep(.p-paginator .p-paginator-pages .p-paginator-page:hover) {
+  background: var(--hover-overlay-subtle);
+  color: var(--text-primary);
+}
+
+:deep(.p-paginator .p-paginator-pages .p-paginator-page.p-highlight) {
+  background: var(--primary);
+  color: white;
+  font-weight: 600;
+}
+
+:deep(.p-paginator .p-paginator-first),
+:deep(.p-paginator .p-paginator-prev),
+:deep(.p-paginator .p-paginator-next),
+:deep(.p-paginator .p-paginator-last) {
+  min-width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--text-muted);
+  transition: all 0.15s ease;
+}
+
+:deep(.p-paginator .p-paginator-first:hover),
+:deep(.p-paginator .p-paginator-prev:hover),
+:deep(.p-paginator .p-paginator-next:hover),
+:deep(.p-paginator .p-paginator-last:hover) {
+  background: var(--hover-overlay-subtle);
+  color: var(--text-primary);
+}
+
 .table-view-container.is-loading :deep(.p-paginator) {
   opacity: 0.5;
   pointer-events: none;
@@ -623,13 +683,13 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
 
 :deep(.minimal-table .p-datatable-thead > tr > th) {
   background: var(--bg-card) !important;
-  border-bottom: 2px solid var(--border-subtle) !important;
-  padding: 10px 16px !important;
-  font-size: 12px;
+  border-bottom: 1px solid var(--border-subtle) !important;
+  padding: 12px 16px !important;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  height: 40px !important;  /* 固定表头高度 */
+  color: var(--text-tertiary);
+  letter-spacing: 0.03em;
+  height: 42px !important;
   box-sizing: border-box;
 }
 
@@ -667,11 +727,19 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
 
 :deep(.minimal-table .p-datatable-tbody > tr > td) {
   padding: 8px 16px !important;
-  border-bottom: 1px solid var(--border-subtle) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
   font-size: 13px;
   vertical-align: middle;
   height: 52px !important;  /* 固定行高，与骨架屏一致 */
   box-sizing: border-box;
+}
+
+:root.dark-theme :deep(.minimal-table .p-datatable-tbody > tr > td) {
+  border-bottom-color: var(--border-subtle) !important;
+}
+
+:deep(.minimal-table .p-datatable-tbody > tr:last-child > td) {
+  border-bottom: none !important;
 }
 
 .thumb-box {
@@ -737,12 +805,21 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
 .fmeta {
   font-size: 11px;
   color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.fmeta-date {
+  font-family: var(--font-sans);
+}
+
+.fmeta-size {
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .meta-dot {
-  margin: 0 4px;
-  opacity: 0.5;
+  margin: 0 5px;
+  color: var(--text-tertiary);
 }
 
 .service-badges {
@@ -881,14 +958,41 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 300px;
+  height: 360px;
   color: var(--text-muted);
-  gap: 16px;
+  gap: 20px;
 }
 
-.empty-state i {
-  font-size: 48px;
-  opacity: 0.5;
+.empty-state-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  background: var(--primary-alpha-6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-state-icon i {
+  font-size: 28px;
+  color: var(--primary);
+  opacity: 0.7;
+}
+
+.empty-state-content {
+  text-align: center;
+}
+
+.empty-state-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.empty-state-desc {
+  font-size: 13px;
+  color: var(--text-tertiary);
 }
 
 .mt-1 {

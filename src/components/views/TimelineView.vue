@@ -4,7 +4,7 @@
  * 使用 Justified Layout + 虚拟滚动实现高性能图片浏览
  * 支持 10 万+ 图片流畅滚动
  */
-import { ref, computed, onMounted, onUnmounted, watch, nextTick, shallowRef } from 'vue';
+import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, nextTick, shallowRef } from 'vue';
 import { useHistoryViewState } from '../../composables/useHistoryViewState';
 import { useHistoryManager } from '../../composables/useHistory';
 import { useVirtualTimeline, type PhotoGroup } from '../../composables/useVirtualTimeline';
@@ -113,6 +113,7 @@ const groups = computed<PhotoGroup[]>(() => {
 const {
   // 状态
   totalHeight,
+  scrollTop: virtualScrollTop,
   scrollProgress,
   isCalculating,
   viewportHeight,
@@ -132,6 +133,7 @@ const {
   scrollToItem,
   scrollToProgress,
   forceUpdateVisibleArea,
+  restoreScrollTop,
   handleScroll: virtualHandleScroll,
 } = useVirtualTimeline(scrollContainer, groups, {
   targetRowHeight: 200,
@@ -218,10 +220,15 @@ const visibleRatio = computed(() => {
  * 使用 Justified Layout 算法确保与实际内容布局一致
  */
 const skeletonLayout = computed(() => {
-  // 使用视口尺寸计算，如果还未获取则使用窗口尺寸作为降级
-  const width = viewportHeight.value > 0
-    ? (scrollContainer.value?.clientWidth || window.innerWidth - 90)
-    : window.innerWidth - 90;
+  // 使用内容区域宽度（减去 padding），与实际布局保持一致
+  let width: number;
+  if (viewportHeight.value > 0 && scrollContainer.value) {
+    const style = getComputedStyle(scrollContainer.value);
+    width = scrollContainer.value.clientWidth
+      - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  } else {
+    width = window.innerWidth - 90;
+  }
   const height = viewportHeight.value > 0 ? viewportHeight.value : window.innerHeight;
 
   return generateSkeletonLayout({
@@ -238,11 +245,48 @@ const skeletonLayout = computed(() => {
 /**
  * 滚动事件处理
  */
+// 持续追踪滚动位置（同步更新，避免 deactivate/v-show 时读 DOM 返回 0）
+let lastKnownScrollTop = 0;
+
+let lastStableScrollTop = 0;
+let lastStableProgress = 0;
+let lastStableAnchorId: string | null = null;
+
+function saveStablePosition(scrollTop?: number) {
+  const domTop = scrollContainer.value?.scrollTop ?? 0;
+  let resolvedTop = typeof scrollTop === 'number' ? scrollTop : domTop;
+  const isInvalidTop = !Number.isFinite(resolvedTop) || resolvedTop < 0;
+  const isLikelyCollapsedReset = resolvedTop === 0
+    && lastKnownScrollTop > 0
+    && !!scrollContainer.value
+    && (scrollContainer.value.clientHeight === 0 || scrollContainer.value.clientWidth === 0);
+  if (isInvalidTop || isLikelyCollapsedReset) {
+    resolvedTop = Math.max(0, virtualScrollTop.value, lastKnownScrollTop);
+  }
+  resolvedTop = Math.max(0, resolvedTop);
+  const currentProgress = Math.min(1, Math.max(0, scrollProgress.value));
+  const anchorId = visibleItems.value[0]?.meta.id ?? lastStableAnchorId;
+
+  lastKnownScrollTop = resolvedTop;
+  lastStableScrollTop = resolvedTop;
+  lastStableProgress = currentProgress;
+  lastStableAnchorId = anchorId ?? null;
+}
+
 const handleScroll = () => {
-  // 始终执行虚拟滚动处理（确保可见区域更新）
+  if (scrollContainer.value) {
+    const nextTop = scrollContainer.value.scrollTop;
+    // KeepAlive/v-show 切换时容器可能瞬时上报 0，避免覆盖真实滚动位置
+    const isTransientReset = nextTop === 0
+      && lastStableScrollTop > 0
+      && (scrollContainer.value.clientHeight === 0 || scrollContainer.value.clientWidth === 0);
+    if (!isTransientReset) {
+      saveStablePosition(nextTop);
+    }
+  }
+
   virtualHandleScroll();
 
-  // 侧边栏显示逻辑（拖动期间跳过）
   if (!isDragging) {
     onSidebarScroll();
   }
@@ -257,6 +301,7 @@ const handleSidebarWheel = (e: WheelEvent) => {
 
 const handleDragScroll = (progress: number) => {
   isDragging = true;
+  lastStableProgress = Math.min(1, Math.max(0, progress));
 
   if (dragEndTimer) clearTimeout(dragEndTimer);
   dragEndTimer = window.setTimeout(() => {
@@ -531,6 +576,56 @@ onUnmounted(() => {
   if (skeletonMinDisplayTimeout) clearTimeout(skeletonMinDisplayTimeout);
 });
 
+// 滚动位置保存/恢复（统一管理 KeepAlive 和 Tab 切换两种场景）
+let savedPosition = 0;
+let savedTabPosition = 0;
+let pendingRestore: 'keepalive' | 'tab' | null = null;
+
+function doRestore() {
+  if (!pendingRestore || !scrollContainer.value) return;
+  const savedTarget = pendingRestore === 'keepalive' ? savedPosition : savedTabPosition;
+  const restoreType = pendingRestore;
+  pendingRestore = null;
+  if (!isCalculating.value) {
+    const target = savedTarget > 0 ? savedTarget : lastStableScrollTop;
+    if (target > 0) {
+      restoreScrollTop(target);
+      saveStablePosition(target);
+      return;
+    }
+
+    if (lastStableProgress > 0) {
+      scrollToProgress(lastStableProgress, true);
+      saveStablePosition();
+      return;
+    }
+
+    if (lastStableAnchorId) {
+      scrollToItem(lastStableAnchorId, 'auto');
+      saveStablePosition();
+      return;
+    }
+
+    forceUpdateVisibleArea();
+    saveStablePosition(0);
+  } else {
+    pendingRestore = restoreType;
+  }
+}
+
+onDeactivated(() => {
+  saveStablePosition();
+  savedPosition = lastStableScrollTop;
+});
+
+onActivated(async () => {
+  if (savedPosition > 0 || lastStableScrollTop > 0 || lastStableProgress > 0 || !!lastStableAnchorId) {
+    pendingRestore = 'keepalive';
+  }
+  await new Promise<void>(r => requestAnimationFrame(() => r()));
+  doRestore();
+});
+
 watch(
   () => props.filter,
   (val) => {
@@ -581,19 +676,45 @@ function showSkeletonWithCheck() {
 watch(
   () => props.visible,
   async (isVisible, wasVisible) => {
-    if (!isVisible || wasVisible) return;
-    showSkeletonWithCheck();
-    await nextTick();
-    forceUpdateVisibleArea();
+    if (!isVisible) {
+      saveStablePosition();
+      savedTabPosition = lastStableScrollTop;
+      return;
+    }
+    if (wasVisible) return;
+
+    if (groups.value.length === 0) {
+      showSkeletonWithCheck();
+    }
+
+    await new Promise<void>(r => requestAnimationFrame(() => r()));
+
+    if (savedTabPosition > 0 || lastStableScrollTop > 0 || lastStableProgress > 0 || !!lastStableAnchorId) {
+      pendingRestore = 'tab';
+    }
+    doRestore();
   }
+);
+
+watch(
+  visibleItems,
+  (items) => {
+    const firstId = items[0]?.meta.id;
+    if (firstId) {
+      lastStableAnchorId = firstId;
+    }
+  },
+  { deep: false }
 );
 
 watch(
   () => props.activationTrigger,
   async (_, oldVal) => {
     if (!props.visible || oldVal === undefined) return;
-    await nextTick();
-    forceUpdateVisibleArea();
+    await new Promise<void>(r => requestAnimationFrame(() => r()));
+    if (!pendingRestore) {
+      forceUpdateVisibleArea();
+    }
   }
 );
 
@@ -602,6 +723,9 @@ watch(
   (calculating) => {
     if (!calculating && showSkeleton.value) {
       hideSkeleton();
+    }
+    if (!calculating && pendingRestore) {
+      nextTick(() => doRestore());
     }
   }
 );

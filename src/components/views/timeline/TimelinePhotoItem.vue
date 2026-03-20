@@ -8,6 +8,7 @@ import Skeleton from 'primevue/skeleton';
 import type { ImageMeta } from '../../../types/image-meta';
 import type { HistoryItem } from '../../../config/types';
 import { getServiceDisplayName } from '../../../constants/serviceNames';
+import { getServiceIcon } from '../../../utils/icons';
 
 const props = defineProps<{
   meta: ImageMeta;
@@ -37,6 +38,7 @@ const successfulServices = computed(() => {
     .filter(r => r.status === 'success')
     .map(r => r.serviceId);
 });
+
 </script>
 
 <template>
@@ -96,6 +98,7 @@ const successfulServices = computed(() => {
             class="service-badge"
             :title="`已上传到 ${getServiceDisplayName(service)}`"
           >
+            <span class="badge-icon" v-html="getServiceIcon(service)" />
             {{ getServiceDisplayName(service) }}
           </span>
         </div>
@@ -239,6 +242,9 @@ const successfulServices = computed(() => {
 }
 
 .service-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 3px 7px;
   background: rgb(89 92 96 / 50%);
   border-radius: 4px;
@@ -246,6 +252,18 @@ const successfulServices = computed(() => {
   font-weight: 500;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(4px);
+}
+
+.badge-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.badge-icon :deep(svg) {
+  width: 14px;
+  height: 14px;
 }
 
 /* 响应式适配 */
@@ -258,6 +276,7 @@ const successfulServices = computed(() => {
     font-size: 9px;
     padding: 2px 5px;
   }
+
 }
 
 @media (max-width: 480px) {

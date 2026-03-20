@@ -177,6 +177,14 @@ export function calculateJustifiedLayout(
     if (isLastRow && lastRowBehavior === 'left' && numItems < 4) {
       // 最后一行图片少于 4 张时，使用目标行高，左对齐
       rowHeight = targetRowHeight;
+      // 防止宽图溢出：确保行内最宽图片不超过可用宽度
+      for (let i = rowStart; i < rowEnd; i++) {
+        const ratio = items[i].aspectRatio || 1;
+        const maxHeightForItem = availableWidth / ratio;
+        if (rowHeight > maxHeightForItem) {
+          rowHeight = maxHeightForItem;
+        }
+      }
     }
 
     // 计算每张图片的位置和尺寸
@@ -679,7 +687,7 @@ export function generateSkeletonLayout(
 
   // 估算需要的分组数（覆盖视口 + 额外 1 组）
   const avgGroupHeight = targetRowHeight * 2 + headerHeight + groupGap;
-  const groupCount = Math.ceil(viewportHeight / avgGroupHeight) + 1;
+  const groupCount = Math.max(1, Math.ceil(viewportHeight / avgGroupHeight));
 
   // 使用固定种子确保布局稳定
   const random = seededRandom(42);
