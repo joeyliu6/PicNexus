@@ -1,9 +1,8 @@
-import { Store } from '../store';
 import type { UserConfig } from '../config/types';
+import { configStore } from '../store/instances';
 
 export async function initLoginTheme(): Promise<'light' | 'dark'> {
   try {
-    const configStore = new Store('.settings.dat');
     const config = await configStore.get<UserConfig>('config');
     const themeMode = config?.theme?.mode || 'auto';
 

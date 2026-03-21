@@ -1,9 +1,7 @@
 import { ref, readonly } from 'vue';
 import { ThemeManager } from '../theme/ThemeManager';
-import { Store } from '../store';
 import { DEFAULT_CONFIG, type UserConfig, type ThemeMode } from '../config/types';
-
-const configStore = new Store('.settings.dat');
+import { configStore } from '../store/instances';
 let themeManager: ThemeManager | null = null;
 const themeMode = ref<ThemeMode>('auto');
 const effectiveTheme = ref<'light' | 'dark'>('dark');

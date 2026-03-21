@@ -1,6 +1,9 @@
 // 加密存储工具类，使用 Web Crypto API 进行 AES-GCM 加密
 // v3.0: 支持备份密码加密模式，可跨电脑恢复配置
 import { invoke } from '@tauri-apps/api/core';
+import { createLogger } from './utils/logger';
+
+const log = createLogger('SecureStorage');
 
 /**
  * 加密数据魔数前缀（随机密钥模式，绑定本机）
@@ -185,6 +188,8 @@ export class SecureStorage {
   private mode: 'random' | 'password' = 'random';
   /** 备份密码的盐值（仅密码模式有值） */
   private passwordSalt: Uint8Array | null = null;
+  /** 防止并发 init() 重复调用 get_or_create_secure_key */
+  private initPromise: Promise<void> | null = null;
 
   /**
    * 从 Base64 密钥导入并更新内部状态
@@ -217,16 +222,21 @@ export class SecureStorage {
    */
   async init(): Promise<void> {
     if (this.key) return;
-
-    try {
-      const keyB64 = await invoke<string>('get_or_create_secure_key');
-      await this.applyKey(keyB64, 'random', null);
-      console.log('[SecureStorage] ✓ 密钥初始化成功');
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[SecureStorage] 密钥初始化失败:', errorMsg);
-      throw new Error(`密钥初始化失败: ${errorMsg}`);
+    if (!this.initPromise) {
+      this.initPromise = (async () => {
+        try {
+          const keyB64 = await invoke<string>('get_or_create_secure_key');
+          await this.applyKey(keyB64, 'random', null);
+          log.info('✓ 密钥初始化成功');
+        } catch (error) {
+          this.initPromise = null; // 失败时允许重试
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          log.error('密钥初始化失败:', errorMsg);
+          throw new Error(`密钥初始化失败: ${errorMsg}`);
+        }
+      })();
     }
+    return this.initPromise;
   }
 
   /**
@@ -235,6 +245,7 @@ export class SecureStorage {
    */
   async forceReinit(): Promise<void> {
     this.key = null;
+    this.initPromise = null;
     this.mode = 'random';
     this.passwordSalt = null;
     await this.init();
@@ -264,7 +275,7 @@ export class SecureStorage {
     await invoke('set_secure_key', { key: derivedKeyB64 });
     await this.applyKey(derivedKeyB64, 'password', salt);
 
-    console.log('[SecureStorage] ✓ 备份密码验证通过，密钥已更新');
+    log.info('✓ 备份密码验证通过，密钥已更新');
   }
 
   /**
@@ -278,7 +289,7 @@ export class SecureStorage {
     await invoke('set_secure_key', { key: derivedKeyB64 });
     await this.applyKey(derivedKeyB64, 'password', salt);
 
-    console.log('[SecureStorage] ✓ 备份密码已设置');
+    log.info('✓ 备份密码已设置');
   }
 
   /**
@@ -291,7 +302,7 @@ export class SecureStorage {
     await invoke('set_secure_key', { key: keyB64 });
     await this.applyKey(keyB64, 'random', null);
 
-    console.log('[SecureStorage] ✓ 已切回随机密钥模式');
+    log.info('✓ 已切回随机密钥模式');
   }
 
   /**
@@ -339,7 +350,7 @@ export class SecureStorage {
       return ENCRYPTED_MAGIC_PREFIX + bytesToBase64(combined);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[SecureStorage] 加密失败:', errorMsg);
+      log.error('加密失败:', errorMsg);
       throw new Error(`加密失败: ${errorMsg}`);
     }
   }
@@ -382,7 +393,7 @@ export class SecureStorage {
         throw error;
       }
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[SecureStorage] 解密失败:', errorMsg);
+      log.error('解密失败:', errorMsg);
       throw new Error('数据损坏或密钥不匹配');
     }
   }

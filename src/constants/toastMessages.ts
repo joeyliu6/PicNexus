@@ -90,6 +90,11 @@ export const TOAST_MESSAGES = {
     resetWarning: {
       summary: '配置已重置',
       detail: '检测到配置数据异常，已使用默认配置'
+    } as StaticMessage,
+    keyMismatchReset: {
+      summary: '配置已重置为默认值',
+      detail: '检测到加密密钥不匹配，所有配置（包含图床密钥）已重置，请重新进行配置。',
+      life: 0
     } as StaticMessage
   },
 

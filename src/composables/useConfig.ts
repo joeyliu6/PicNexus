@@ -3,7 +3,8 @@
 import { ref, Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn, emit } from '@tauri-apps/api/event';
-import { Store } from '../store';
+import { configStore } from '../store/instances';
+import type { Store } from '../store';
 import { BackupPasswordRequiredError } from '../crypto';
 import {
   UserConfig,
@@ -16,9 +17,9 @@ import {
 import { getCookieProvider, validateCookie, DEFAULT_LOGIN_WINDOW_SIZE } from '../config/cookieProviders';
 import { useToast } from './useToast';
 import { TOAST_MESSAGES } from '../constants';
+import { createLogger } from '../utils/logger';
 
-// --- STORES ---
-const configStore = new Store('.settings.dat');
+const log = createLogger('useConfig');
 
 // --- 全局单例状态（所有组件共享） ---
 const config: Ref<UserConfig> = ref<UserConfig>({ ...DEFAULT_CONFIG });
@@ -51,20 +52,20 @@ export function useConfigManager() {
    * 加载配置
    */
   async function loadConfig(): Promise<UserConfig> {
-    console.log('[配置管理] 开始加载配置...');
+    log.info('开始加载配置...');
     isLoading.value = true;
 
     try {
       const loadedConfig = await configStore.get<UserConfig>('config', DEFAULT_CONFIG);
       config.value = migrateConfig(loadedConfig || DEFAULT_CONFIG);
-      console.log('[配置管理] ✓ 配置加载成功');
+      log.info('✓ 配置加载成功');
       return config.value;
     } catch (error) {
       if (error instanceof BackupPasswordRequiredError) {
         throw error;
       }
       // 读取/迁移失败时降级为默认配置
-      console.error('[配置管理] 读取配置失败，使用默认配置:', error);
+      log.error('读取配置失败，使用默认配置:', error);
       config.value = { ...DEFAULT_CONFIG };
       toast.showConfig('error', TOAST_MESSAGES.config.loadFailed('已使用默认配置'));
       return config.value;
@@ -80,7 +81,7 @@ export function useConfigManager() {
    */
   async function saveConfig(newConfig: UserConfig, silent = false): Promise<void> {
     try {
-      console.log('[配置管理] 开始保存配置...');
+      log.info('开始保存配置...');
       isSaving.value = true;
 
       // 验证至少有一个可用图床
@@ -93,13 +94,13 @@ export function useConfigManager() {
       if (newConfig.linkPrefixConfig) {
         // 确保前缀列表不为空
         if (!newConfig.linkPrefixConfig.prefixList || newConfig.linkPrefixConfig.prefixList.length === 0) {
-          console.warn('[配置管理] 前缀列表为空，恢复默认前缀');
+          log.warn('前缀列表为空，恢复默认前缀');
           newConfig.linkPrefixConfig.prefixList = [...DEFAULT_PREFIXES];
         }
         // 确保选中索引在有效范围内
         if (newConfig.linkPrefixConfig.selectedIndex < 0 ||
             newConfig.linkPrefixConfig.selectedIndex >= newConfig.linkPrefixConfig.prefixList.length) {
-          console.warn('[配置管理] 选中索引无效，重置为 0');
+          log.warn('选中索引无效，重置为 0');
           newConfig.linkPrefixConfig.selectedIndex = 0;
         }
       }
@@ -114,10 +115,10 @@ export function useConfigManager() {
       // 发送配置更新事件，通知其他组件刷新状态
       await emit('config-updated', { timestamp: Date.now() });
 
-      console.log('[配置管理] ✓ 配置保存成功');
+      log.info('✓ 配置保存成功');
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[配置管理] 保存配置失败:', error);
+      log.error('保存配置失败:', error);
       if (!silent) {
         toast.showConfig('error', TOAST_MESSAGES.config.saveFailed(errorMsg));
       }
@@ -143,7 +144,7 @@ export function useConfigManager() {
     preValidate?: () => TestConnectionResult | null
   ): Promise<TestConnectionResult> {
     try {
-      console.log(`[${serviceName}Cookie测试] 开始测试连接...`);
+      log.info(`[${serviceName}Cookie测试] 开始测试连接...`);
 
       if (!cookie || cookie.trim().length === 0) {
         return { success: false, message: 'Cookie 不能为空' };
@@ -156,14 +157,14 @@ export function useConfigManager() {
 
       try {
         const successMessage = await invoke<string>(invokeCommand, invokeParams);
-        console.log(`[${serviceName}Cookie测试] ✓ 测试成功`);
+        log.info(`[${serviceName}Cookie测试] ✓ 测试成功`);
         return { success: true, message: successMessage };
       } catch (errorMessage) {
         return { success: false, message: String(errorMessage) };
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error(`[${serviceName}Cookie测试] 测试连接失败:`, error);
+      log.error(`[${serviceName}Cookie测试] 测试连接失败:`, error);
       return { success: false, message: errorMsg };
     }
   }
@@ -188,11 +189,11 @@ export function useConfigManager() {
     publicDomain?: string;
   }): Promise<TestConnectionResult> {
     try {
-      console.log('[R2测试] 开始测试 R2 连接...');
+      log.info('开始测试 R2 连接...');
 
       try {
         const successMessage = await invoke<string>('test_r2_connection', { config: r2Config });
-        console.log('[R2测试] ✓ 测试成功');
+        log.info('R2 ✓ 测试成功');
         return {
           success: true,
           message: successMessage
@@ -205,7 +206,7 @@ export function useConfigManager() {
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[R2测试] 测试 R2 连接失败:', error);
+      log.error('测试 R2 连接失败:', error);
       return {
         success: false,
         message: errorMsg
@@ -224,11 +225,11 @@ export function useConfigManager() {
     remotePath: string;
   }): Promise<TestConnectionResult> {
     try {
-      console.log('[WebDAV测试] 开始测试 WebDAV 连接...');
+      log.info('开始测试 WebDAV 连接...');
 
       try {
         const successMessage = await invoke<string>('test_webdav_connection', { config: webdavConfig });
-        console.log('[WebDAV测试] ✓ 测试成功');
+        log.info('WebDAV ✓ 测试成功');
         return {
           success: true,
           message: successMessage
@@ -241,7 +242,7 @@ export function useConfigManager() {
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[WebDAV测试] 测试 WebDAV 连接失败:', error);
+      log.error('测试 WebDAV 连接失败:', error);
       return {
         success: false,
         message: errorMsg
@@ -319,7 +320,7 @@ export function useConfigManager() {
         return;
       }
 
-      console.log(`[WebView登录窗口] 开始打开 ${provider.name} 登录窗口`);
+      log.info(`开始打开 ${provider.name} 登录窗口`);
 
       // 检测当前主题
       const isLight = document.documentElement.classList.contains('light-theme');
@@ -336,10 +337,10 @@ export function useConfigManager() {
         contentUrl: `login-webview.html?service=${serviceId}`,
       });
 
-      console.log(`[WebView登录窗口] ✓ ${provider.name} 窗口创建成功`);
+      log.info(`✓ ${provider.name} 窗口创建成功`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[WebView登录窗口] 打开窗口失败:', errorMessage);
+      log.error('打开窗口失败:', errorMessage);
       toast.showConfig('error', TOAST_MESSAGES.auth.loginWindowFailed(errorMessage));
     }
   }
@@ -371,15 +372,15 @@ export function useConfigManager() {
             serviceId = payload.serviceId || 'weibo';
             cookie = payload.cookie;
           } else {
-            console.error('[Cookie更新] 无效的 payload 格式:', typeof payload);
+            log.error('无效的 payload 格式:', typeof payload);
             return;
           }
 
-          console.log(`[Cookie更新] 收到 ${serviceId} Cookie更新事件，长度:`, cookie?.length || 0);
+          log.info(`收到 ${serviceId} Cookie更新事件，长度:`, cookie?.length || 0);
 
           // 验证 Cookie
           if (!cookie || typeof cookie !== 'string' || cookie.trim().length === 0) {
-            console.error('[Cookie更新] Cookie为空或无效');
+            log.error('Cookie为空或无效');
             toast.showConfig('error', TOAST_MESSAGES.auth.cookieInvalid);
             return;
           }
@@ -397,12 +398,12 @@ export function useConfigManager() {
 
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            console.error('[Cookie更新] 保存Cookie失败:', error);
+            log.error('保存Cookie失败:', error);
             toast.showConfig('error', TOAST_MESSAGES.config.saveFailed(errorMsg));
           }
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);
-          console.error('[Cookie更新] 处理Cookie更新事件失败:', error);
+          log.error('处理Cookie更新事件失败:', error);
           toast.showConfig('error', TOAST_MESSAGES.config.saveFailed(errorMsg));
         }
       });
@@ -412,7 +413,7 @@ export function useConfigManager() {
         const serviceId = event.payload;
         const provider = getCookieProvider(serviceId);
         const serviceName = provider?.name || serviceId;
-        console.warn(`[Cookie监控] ${serviceName} 自动获取超时`);
+        log.warn(`${serviceName} 自动获取超时`);
         toast.showConfig('warn', {
           summary: '自动获取超时',
           detail: `${serviceName} Cookie 自动获取超时，请手动点击「获取 Cookie」按钮`,
@@ -420,13 +421,13 @@ export function useConfigManager() {
         });
       });
 
-      console.log('[Cookie更新] ✓ 监听器已设置（支持多服务 + 超时通知）');
+      log.info('✓ 监听器已设置（支持多服务 + 超时通知）');
       return () => {
         unlisten();
         unlistenTimeout();
       };
     } catch (error) {
-      console.error('[Cookie更新] 设置监听器失败:', error);
+      log.error('设置监听器失败:', error);
       // 返回空函数以保持接口一致性
       return () => {};
     }

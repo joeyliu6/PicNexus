@@ -15,6 +15,9 @@ import {
   COOKIE_BASED_SERVICES,
   NO_CONFIG_SERVICES,
 } from '../constants/serviceRequiredFields';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('MultiUploader');
 
 /** 每个图床的最大并发数 */
 const SERVICE_MAX_CONCURRENT = 2;
@@ -84,7 +87,7 @@ export class MultiServiceUploader {
     ) => void,
     onServiceResult?: (result: SingleServiceResult) => void
   ): Promise<MultiUploadResult> {
-    console.log('[MultiUploader] 开始并行上传到:', enabledServices);
+    log.info('开始并行上传到:', enabledServices);
 
     // 确保 config.services 存在（兼容旧版本配置）
     // 使用安全副本，避免修改传入的 config 对象
@@ -114,7 +117,7 @@ export class MultiServiceUploader {
     }
 
     // 2. 并发上传到所有图床（无并发限制，提升用户体验）
-    console.log(`[MultiUploader] 将上传到 ${validServices.length} 个图床，全部并发上传`);
+    log.info(`将上传到 ${validServices.length} 个图床，全部并发上传`);
 
     // 创建所有上传任务
     // 将 TCL 和其他服务分开处理
@@ -157,7 +160,7 @@ export class MultiServiceUploader {
               } : undefined
             );
 
-            console.log(`[MultiUploader] ${serviceId} 上传成功`);
+            log.info(`${serviceId} 上传成功`);
             taskResult = {
               serviceId,
               result,
@@ -196,7 +199,7 @@ export class MultiServiceUploader {
                 );
             }
 
-            console.error(`[MultiUploader] ${serviceId} 上传失败:`, structuredError);
+            log.error(`${serviceId} 上传失败:`, structuredError);
             taskResult = {
               serviceId,
               status: 'failed' as const,
@@ -244,15 +247,14 @@ export class MultiServiceUploader {
       structuredError: r.structuredError
     })) : undefined;
 
-    console.log('[MultiUploader] 主力图床:', primaryResult.serviceId);
-    console.log('[MultiUploader] 上传结果:', {
+    log.info('主力图床:', primaryResult.serviceId);
+    log.info('上传结果:', {
       成功: uploadResults.filter(r => r.status === 'success').length,
       失败: uploadResults.filter(r => r.status === 'failed').length
     });
 
-    // 新增：记录警告
     if (isPartialSuccess) {
-      console.warn('[MultiUploader] 部分图床上传失败:', partialFailures);
+      log.warn('部分图床上传失败:', partialFailures);
     }
 
     return {
@@ -279,7 +281,7 @@ export class MultiServiceUploader {
     config: UserConfig,
     onProgress?: (percent: number, step?: string, stepIndex?: number, totalSteps?: number) => void
   ): Promise<UploadResult> {
-    console.log(`[MultiUploader] 重试上传到 ${serviceId}`);
+    log.info(`重试上传到 ${serviceId}`);
 
     // 使用安全副本，避免修改传入的 config 对象
     const safeConfig: UserConfig = {
@@ -322,7 +324,7 @@ export class MultiServiceUploader {
 
       const serviceConfig = config.services[serviceId];
       if (!serviceConfig) {
-        console.warn(`[MultiUploader] ${serviceId} 未配置，跳过`);
+        log.warn(`${serviceId} 未配置，跳过`);
         return false;
       }
 
@@ -330,7 +332,7 @@ export class MultiServiceUploader {
       if (COOKIE_BASED_SERVICES.includes(serviceId)) {
         const cfg = serviceConfig as unknown as Record<string, unknown>;
         if (!(cfg.cookie as string)?.trim()) {
-          console.warn(`[MultiUploader] ${serviceId} Cookie 未配置，跳过`);
+          log.warn(`${serviceId} Cookie 未配置，跳过`);
           return false;
         }
         return true;
@@ -345,7 +347,7 @@ export class MultiServiceUploader {
           return typeof val === 'string' ? val.trim() : val;
         });
         if (!hasAll) {
-          console.warn(`[MultiUploader] ${serviceId} 配置不完整，跳过`);
+          log.warn(`${serviceId} 配置不完整，跳过`);
           return false;
         }
         return true;
@@ -353,7 +355,7 @@ export class MultiServiceUploader {
 
       // 其他图床：检查 enabled 字段
       if (serviceConfig.enabled === false) {
-        console.warn(`[MultiUploader] ${serviceId} 未启用，跳过`);
+        log.warn(`${serviceId} 未启用，跳过`);
         return false;
       }
 

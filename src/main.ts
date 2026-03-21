@@ -15,8 +15,10 @@ import Ripple from 'primevue/ripple';
 import { initializeUploaders } from './uploaders';
 
 // 配置和 Store 导入
-import { Store } from './store';
+import { configStore } from './store/instances';
+import { StoreError } from './store';
 import { DEFAULT_CONFIG, UserConfig } from './config/types';
+import { startupFlags } from './store/startupFlags';
 
 // Analytics 服务
 import { useAnalytics } from './composables/useAnalytics';
@@ -54,8 +56,6 @@ app.directive('ripple', Ripple);
  * 在应用启动时检查并初始化配置
  */
 async function ensureConfigSync() {
-  const configStore = new Store('.settings.dat');
-
   try {
     const config = await configStore.get<UserConfig>('config');
     if (!config) {
@@ -69,6 +69,17 @@ async function ensureConfigSync() {
     }
   } catch (error) {
     console.error('[初始化] 配置同步失败:', error);
+    // 解密失败（密钥不匹配）→ 数据不可恢复，用 setDirect 覆写为默认配置
+    if (error instanceof StoreError) {
+      console.warn('[初始化] ⚠ 检测到密钥不匹配，配置将重置为默认值（旧配置无法恢复）');
+      try {
+        await configStore.setDirect({ config: DEFAULT_CONFIG });
+        startupFlags.configResetDueToKeyMismatch = true;
+        console.log('[初始化] ✓ 配置已重置为默认值');
+      } catch (resetError) {
+        console.error('[初始化] 重置配置失败:', resetError);
+      }
+    }
   }
 }
 

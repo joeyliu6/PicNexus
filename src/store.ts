@@ -4,6 +4,9 @@
 import { readTextFile, writeTextFile, exists, mkdir, remove } from '@tauri-apps/plugin-fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import { secureStorage, isAnyEncryptedData, BackupPasswordRequiredError } from './crypto';
+import { createLogger } from './utils/logger';
+
+const log = createLogger('Store');
 
 /**
  * 简单的 Promise-based 互斥锁
@@ -165,7 +168,7 @@ class SimpleStore {
   async get<T>(key: string, defaultValue?: T): Promise<T | null> {
     // 输入验证
     if (!key || typeof key !== 'string' || key.trim().length === 0) {
-      console.warn('[Store] 警告: get() 方法接收到无效的 key 参数:', key);
+      log.warn('警告: get() 方法接收到无效的 key 参数:', key);
       return null;
     }
 
@@ -184,7 +187,7 @@ class SimpleStore {
       // 检查文件是否存在
       const fileExists = await exists(dataPath);
       if (!fileExists) {
-        console.log(`[Store] 数据文件不存在: ${this.filePath}，返回 null`);
+        log.debug(`数据文件不存在: ${this.filePath}，返回 null`);
         return null;
       }
 
@@ -204,7 +207,7 @@ class SimpleStore {
           );
         }
         if (errorMsg.includes('not found') || errorMsg.includes('不存在')) {
-          console.log(`[Store] 文件不存在: ${dataPath}`);
+          log.debug(`文件不存在: ${dataPath}`);
           return null;
         }
         throw new StoreError(
@@ -217,7 +220,7 @@ class SimpleStore {
 
       // 验证文件内容不为空
       if (!content || content.trim().length === 0) {
-        console.warn(`[Store] 警告: 数据文件为空: ${this.filePath}`);
+        log.warn(`警告: 数据文件为空: ${this.filePath}`);
         return null;
       }
 
@@ -227,17 +230,17 @@ class SimpleStore {
       const trimmedContent = content.trim();
       try {
         if (isAnyEncryptedData(trimmedContent)) {
-          console.log(`[Store] 检测到加密数据，尝试解密...`);
+          log.debug(`检测到加密数据，尝试解密...`);
           decryptedContent = await secureStorage.decrypt(trimmedContent);
-          console.log(`[Store] ✓ 解密成功`);
+          log.info(`✓ 解密成功`);
         } else if (!trimmedContent.startsWith('{') && !trimmedContent.startsWith('[')) {
           // 向后兼容：旧版本加密数据（无魔数前缀）
-          console.log(`[Store] 检测到可能的旧版加密数据，尝试解密...`);
+          log.debug(`检测到可能的旧版加密数据，尝试解密...`);
           try {
             decryptedContent = await secureStorage.decrypt(trimmedContent);
-            console.log(`[Store] ✓ 旧版加密数据解密成功`);
+            log.info(`✓ 旧版加密数据解密成功`);
           } catch {
-            console.warn(`[Store] 旧版解密失败，尝试按明文解析`);
+            log.warn(`旧版解密失败，尝试按明文解析`);
             decryptedContent = content;
           }
         }
@@ -247,7 +250,7 @@ class SimpleStore {
           throw decryptError;
         }
         const errorMsg = decryptError?.message || String(decryptError);
-        console.error(`[Store] 解密失败: ${errorMsg}`);
+        log.error(`解密失败: ${errorMsg}`);
         throw new StoreError(`加密数据解密失败: ${errorMsg}`, 'read', key);
       }
 
@@ -258,29 +261,29 @@ class SimpleStore {
       } catch (parseError: any) {
         // JSON 解析失败，文件可能损坏
         const errorMsg = parseError?.message || String(parseError);
-        console.error(`[Store] JSON 解析失败 (${this.filePath}):`, errorMsg);
-        console.error(`[Store] 文件内容预览 (前200字符):`, content.substring(0, 200));
+        log.error(`JSON 解析失败 (${this.filePath}):`, errorMsg);
+        log.error(`文件内容预览 (前200字符):`, content.substring(0, 200));
 
         // 如果提供了默认值，尝试恢复
         if (defaultValue !== undefined) {
-          console.warn(`[Store] 文件损坏，尝试使用默认值恢复配置: ${key}`);
+          log.warn(`文件损坏，尝试使用默认值恢复配置: ${key}`);
 
           // 创建损坏文件的备份
           try {
             const backupPath = `${dataPath}.corrupted.${Date.now()}`;
             await writeTextFile(backupPath, content);
-            console.log(`[Store] ✓ 已创建损坏文件的备份: ${backupPath}`);
+            log.info(`✓ 已创建损坏文件的备份: ${backupPath}`);
           } catch (backupError) {
-            console.warn(`[Store] 创建备份失败:`, backupError);
+            log.warn(`创建备份失败:`, backupError);
           }
 
           // 直接调用 _performWrite 恢复，避免通过 set() 二次加锁导致死锁
           try {
             await this._performWrite(key, defaultValue);
-            console.log(`[Store] ✓ 已使用默认值恢复配置: ${key}`);
+            log.info(`✓ 已使用默认值恢复配置: ${key}`);
             return defaultValue;
           } catch (recoverError) {
-            console.error(`[Store] 恢复配置失败:`, recoverError);
+            log.error(`恢复配置失败:`, recoverError);
           }
         }
 
@@ -294,13 +297,13 @@ class SimpleStore {
 
       // 验证数据是对象
       if (typeof data !== 'object' || data === null || Array.isArray(data)) {
-        console.warn(`[Store] 警告: 数据格式不正确，期望对象，实际: ${typeof data}`);
+        log.warn(`警告: 数据格式不正确，期望对象，实际: ${typeof data}`);
         return null;
       }
 
       const value = data[key];
       if (value === undefined) {
-        console.log(`[Store] 键 "${key}" 不存在于数据文件中`);
+        log.debug(`键 "${key}" 不存在于数据文件中`);
         return null;
       }
 
@@ -312,12 +315,12 @@ class SimpleStore {
       }
       // 如果是 StoreError，直接抛出
       if (error instanceof StoreError) {
-        console.error(`[Store] 读取失败 (${key}):`, error.message);
+        log.error(`读取失败 (${key}):`, error.message);
         throw error;
       }
       // 其他未知错误
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error(`[Store] 未知错误 (${key}):`, errorMsg);
+      log.error(`未知错误 (${key}):`, errorMsg);
       throw new StoreError(
         `读取数据时发生未知错误: ${errorMsg}`,
         'read',
@@ -346,7 +349,7 @@ class SimpleStore {
     }
 
     if (value === undefined) {
-      console.warn(`[Store] 警告: 尝试保存 undefined 值到键 "${key}"`);
+      log.warn(`警告: 尝试保存 undefined 值到键 "${key}"`);
     }
 
     // 【v2.9】使用互斥锁保护整个读-修改-写操作
@@ -370,7 +373,7 @@ class SimpleStore {
       const jsonContent = JSON.stringify(data, null, 2);
       const encryptedContent = await secureStorage.encrypt(jsonContent);
       await writeTextFile(dataPath, encryptedContent);
-      console.log(`[Store] ✓ 直接写入成功 (${this.filePath})`);
+      log.info(`✓ 直接写入成功 (${this.filePath})`);
     });
   }
 
@@ -459,26 +462,26 @@ class SimpleStore {
           if (isAnyEncryptedData(trimmedContent)) {
             // 带魔数前缀的加密数据（PNXENC 或 PNXPWD）
             try {
-              console.log(`[Store] 检测到加密数据，尝试解密...`);
+              log.debug(`检测到加密数据，尝试解密...`);
               oldContent = await secureStorage.decrypt(trimmedContent);
-              console.log(`[Store] ✓ 解密成功`);
+              log.info(`✓ 解密成功`);
             } catch (decryptError: any) {
               // 备份密码需要输入：直接传播
               if (decryptError instanceof BackupPasswordRequiredError) {
                 throw decryptError;
               }
               const errorMsg = decryptError?.message || String(decryptError);
-              console.error(`[Store] 解密失败: ${errorMsg}`);
+              log.error(`解密失败: ${errorMsg}`);
               try {
                 const backupPath = `${dataPath}.corrupted.${Date.now()}`;
                 await writeTextFile(backupPath, oldFileContent);
-                console.log(`[Store] ✓ 已创建损坏文件的备份: ${backupPath}`);
+                log.info(`✓ 已创建损坏文件的备份: ${backupPath}`);
               } catch (backupError) {
-                console.warn(`[Store] 创建备份失败:`, backupError);
+                log.warn(`创建备份失败:`, backupError);
               }
               if (this.selfHeal) {
                 try { await remove(dataPath); } catch {}
-                console.warn(`[Store] ⚠ 自愈模式：已备份损坏文件并重置，继续写入新数据 (${this.filePath})`);
+                log.warn(`⚠ 自愈模式：已备份损坏文件并重置，继续写入新数据 (${this.filePath})`);
                 oldContent = '{}'; // 重置为空 JSON，跳过后续 JSON 解析失败
               } else {
                 throw new StoreError(
@@ -492,12 +495,12 @@ class SimpleStore {
           } else if (!trimmedContent.startsWith('{') && !trimmedContent.startsWith('[')) {
             // 可能是旧版加密数据（无魔数前缀），尝试解密
             try {
-              console.log(`[Store] 检测到可能的旧版加密数据，尝试解密...`);
+              log.debug(`检测到可能的旧版加密数据，尝试解密...`);
               oldContent = await secureStorage.decrypt(trimmedContent);
-              console.log(`[Store] ✓ 旧版加密数据解密成功`);
+              log.info(`✓ 旧版加密数据解密成功`);
             } catch (decryptError: any) {
               const errorMsg = decryptError?.message || String(decryptError);
-              console.warn(`[Store] 旧版解密失败，尝试按明文解析: ${errorMsg}`);
+              log.warn(`旧版解密失败，尝试按明文解析: ${errorMsg}`);
               oldContent = oldFileContent;
             }
           }
@@ -507,29 +510,29 @@ class SimpleStore {
             data = JSON.parse(oldContent);
             // 验证解析后的数据是对象
             if (typeof data !== 'object' || data === null || Array.isArray(data)) {
-              console.warn('[Store] 警告: 现有数据格式不正确（非对象），创建备份后重置');
+              log.warn('警告: 现有数据格式不正确（非对象），创建备份后重置');
               // 创建备份
               try {
                 const backupPath = `${dataPath}.invalid.${Date.now()}`;
                 await writeTextFile(backupPath, oldFileContent);
-                console.log(`[Store] ✓ 已创建无效数据的备份: ${backupPath}`);
+                log.info(`✓ 已创建无效数据的备份: ${backupPath}`);
               } catch (backupError) {
-                console.warn(`[Store] 创建备份失败:`, backupError);
+                log.warn(`创建备份失败:`, backupError);
               }
               data = {};
             }
           } catch (parseError: any) {
             // JSON 解析失败，创建备份并抛出错误
             const errorMsg = parseError?.message || String(parseError);
-            console.error(`[Store] JSON 解析失败 (${this.filePath}):`, errorMsg);
+            log.error(`JSON 解析失败 (${this.filePath}):`, errorMsg);
 
             // 创建损坏文件的备份
             try {
               const backupPath = `${dataPath}.corrupted.${Date.now()}`;
               await writeTextFile(backupPath, oldFileContent);
-              console.log(`[Store] ✓ 已创建损坏文件的备份: ${backupPath}`);
+              log.info(`✓ 已创建损坏文件的备份: ${backupPath}`);
             } catch (backupError) {
-              console.warn(`[Store] 创建备份失败:`, backupError);
+              log.warn(`创建备份失败:`, backupError);
             }
 
             throw new StoreError(
@@ -562,10 +565,10 @@ class SimpleStore {
       let encryptedContent: string;
       try {
         encryptedContent = await secureStorage.encrypt(jsonContent);
-        console.log(`[Store] ✓ 数据加密成功`);
+        log.info(`✓ 数据加密成功`);
       } catch (encryptError: any) {
         const errorMsg = encryptError?.message || String(encryptError);
-        console.error(`[Store] 加密失败: ${errorMsg}`);
+        log.error(`加密失败: ${errorMsg}`);
         throw new StoreError(
           `加密数据失败: ${errorMsg}`,
           'write',
@@ -579,7 +582,7 @@ class SimpleStore {
       // 【v2.8】写入加密后的内容
       try {
         await writeTextFile(dataPath, encryptedContent);
-        console.log(`[Store] 成功保存数据到键 "${key}" (${this.filePath})`);
+        log.debug(`成功保存数据到键 "${key}" (${this.filePath})`);
       } catch (writeError: any) {
         
         const errorMsg = writeError?.message || String(writeError);
@@ -613,12 +616,12 @@ class SimpleStore {
       }
       // 如果是 StoreError，直接抛出
       if (error instanceof StoreError) {
-        console.error(`[Store] 保存失败 (${key}):`, error.message);
+        log.error(`保存失败 (${key}):`, error.message);
         throw error;
       }
       // 其他未知错误
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error(`[Store] 未知错误 (${key}):`, errorMsg);
+      log.error(`未知错误 (${key}):`, errorMsg);
       throw new StoreError(
         `保存数据时发生未知错误: ${errorMsg}`,
         'write',
@@ -650,7 +653,7 @@ class SimpleStore {
         const dataPath = await this.getDataPath();
         const fileExists = await exists(dataPath);
         if (!fileExists) {
-          console.log(`[Store] 数据文件不存在，无需清空: ${this.filePath}`);
+          log.debug(`数据文件不存在，无需清空: ${this.filePath}`);
           return;
         }
 
@@ -658,7 +661,7 @@ class SimpleStore {
           const emptyJson = JSON.stringify({}, null, 2);
           const encryptedContent = await secureStorage.encrypt(emptyJson);
           await writeTextFile(dataPath, encryptedContent);
-          console.log(`[Store] 成功清空数据文件: ${this.filePath}`);
+          log.info(`✓ 成功清空数据文件: ${this.filePath}`);
         } catch (writeError: any) {
           const errorMsg = writeError?.message || String(writeError);
           if (errorMsg.includes('Permission') || errorMsg.includes('permission')) {
@@ -678,11 +681,11 @@ class SimpleStore {
         }
       } catch (error) {
         if (error instanceof StoreError) {
-          console.error('[Store] 清空失败:', error.message);
+          log.error('清空失败:', error.message);
           throw error;
         }
         const errorMsg = error instanceof Error ? error.message : String(error);
-        console.error('[Store] 清空时发生未知错误:', errorMsg);
+        log.error('清空时发生未知错误:', errorMsg);
         throw new StoreError(
           `清空数据时发生未知错误: ${errorMsg}`,
           'clear',

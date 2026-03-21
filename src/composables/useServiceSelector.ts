@@ -2,7 +2,7 @@
 
 import { ref, computed, type Ref, type ComputedRef } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { Store } from '../store';
+import { configStore } from '../store/instances';
 import type { UserConfig, ServiceType } from '../config/types';
 import { DEFAULT_CONFIG } from '../config/types';
 import { useToast } from './useToast';
@@ -29,8 +29,6 @@ export interface UseServiceSelectorReturn {
 }
 
 // ==================== 模块级共享状态（单例） ====================
-
-const configStore = new Store('.settings.dat');
 
 const selectedServices = ref<ServiceType[]>([]);
 const availableServices = ref<ServiceType[]>([]);

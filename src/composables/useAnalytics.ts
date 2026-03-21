@@ -2,7 +2,7 @@
 // 专为桌面应用设计，使用 HTTP 直接请求代替 gtag.js
 
 import { ref, computed } from 'vue';
-import { Store } from '../store';
+import { configStore } from '../store/instances';
 import { fetch } from '@tauri-apps/plugin-http';
 import { getVersion } from '@tauri-apps/api/app';
 import { UserConfig } from '../config/types';
@@ -31,9 +31,6 @@ interface AnalyticsData {
   sessionId: string;
   lastActiveTime: number;
 }
-
-/** 配置存储实例 */
-const configStore = new Store('.settings.dat');
 
 /**
  * GA4 事件名称常量

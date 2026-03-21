@@ -8,6 +8,9 @@
 import Database from '@tauri-apps/plugin-sql';
 import type { HistoryItem, ServiceType } from '../config/types';
 import type { ImageMeta } from '../types/image-meta';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('HistoryDB');
 
 /** 数据库文件名 */
 const DB_PATH = 'sqlite:history.db';
@@ -105,7 +108,7 @@ class HistoryDatabase {
     }
 
     try {
-      console.log('[HistoryDB] 正在打开数据库...');
+      log.info('正在打开数据库...');
       this.db = await Database.load(DB_PATH);
 
       // 创建表（如果不存在）
@@ -151,9 +154,9 @@ class HistoryDatabase {
       `);
 
       this.initialized = true;
-      console.log('[HistoryDB] 数据库初始化完成');
+      log.info('数据库初始化完成');
     } catch (error) {
-      console.error('[HistoryDB] 数据库初始化失败:', error);
+      log.error('数据库初始化失败:', error);
       throw error;
     }
   }
@@ -166,7 +169,7 @@ class HistoryDatabase {
       await this.db.close();
       this.db = null;
       this.initialized = false;
-      console.log('[HistoryDB] 数据库已关闭');
+      log.info('数据库已关闭');
     }
   }
 
@@ -217,7 +220,7 @@ class HistoryDatabase {
         row.has_alpha,
       ]
     );
-    console.log(`[HistoryDB] 插入记录: ${item.id}`);
+    log.info(`插入记录: ${item.id}`);
   }
 
   /**
@@ -258,9 +261,9 @@ class HistoryDatabase {
 
     const inserted = result.rowsAffected > 0;
     if (inserted) {
-      console.log(`[HistoryDB] 插入记录: ${item.id}`);
+      log.info(`插入记录: ${item.id}`);
     } else {
-      console.warn(`[HistoryDB] ⚠️ 记录已存在，跳过插入: ${item.id}（可能存在竞态或 UUID 碰撞）`);
+      log.warn(`记录已存在，跳过插入: ${item.id}（可能存在竞态或 UUID 碰撞）`);
     }
     return inserted;
   }
@@ -307,7 +310,7 @@ class HistoryDatabase {
         id,
       ]
     );
-    console.log(`[HistoryDB] 更新记录: ${id}`);
+    log.info(`更新记录: ${id}`);
   }
 
   /**
@@ -351,7 +354,7 @@ class HistoryDatabase {
   async delete(id: string): Promise<void> {
     const db = await this.ensureInitialized();
     await db.execute('DELETE FROM history_items WHERE id = $1', [id]);
-    console.log(`[HistoryDB] 删除记录: ${id}`);
+    log.info(`删除记录: ${id}`);
   }
 
   /**
@@ -364,7 +367,7 @@ class HistoryDatabase {
     // 生成 $1, $2, $3... 占位符
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
     await db.execute(`DELETE FROM history_items WHERE id IN (${placeholders})`, ids);
-    console.log(`[HistoryDB] 批量删除 ${ids.length} 条记录`);
+    log.info(`批量删除 ${ids.length} 条记录`);
   }
 
   /**
@@ -373,7 +376,7 @@ class HistoryDatabase {
   async clear(): Promise<void> {
     const db = await this.ensureInitialized();
     await db.execute('DELETE FROM history_items');
-    console.log('[HistoryDB] 已清空所有记录');
+    log.info('已清空所有记录');
   }
 
   // ============================================
@@ -469,7 +472,7 @@ class HistoryDatabase {
       db, `WHERE local_file_name_lower LIKE $1 ESCAPE '\\'`, [`%${escaped}%`],
       serviceFilter, limit, offset,
     );
-    console.log(`[HistoryDB] 搜索 "${keyword}": 找到 ${result.total} 条，返回 ${result.items.length} 条`);
+    log.debug(`搜索 "${keyword}": 找到 ${result.total} 条，返回 ${result.items.length} 条`);
     return result;
   }
 
@@ -522,7 +525,7 @@ class HistoryDatabase {
       ORDER BY year DESC, month DESC
     `);
 
-    console.log(`[HistoryDB] 时间段统计: ${rows.length} 个月份`);
+    log.debug(`时间段统计: ${rows.length} 个月份`);
 
     return rows.map(row => ({
       year: row.year,
@@ -568,7 +571,7 @@ class HistoryDatabase {
       ORDER BY timestamp DESC
     `);
 
-    console.log(`[HistoryDB] 加载元数据: ${rows.length} 条`);
+    log.debug(`加载元数据: ${rows.length} 条`);
 
     // 转换为 ImageMeta
     return rows.map(row => {
@@ -585,7 +588,7 @@ class HistoryDatabase {
         );
         primaryFileKey = primaryResult?.result?.fileKey;
       } catch (e) {
-        console.warn(`[HistoryDB] 解析 results 失败: ${row.id}`, e);
+        log.warn(`解析 results 失败: ${row.id}`, e);
       }
 
       return {
@@ -637,7 +640,7 @@ class HistoryDatabase {
     // 该时间戳之前的数据是否已全部加载
     const hasMore = items.length < countBefore;
 
-    console.log(`[HistoryDB] 从时间戳 ${fromTimestamp} 加载: ${items.length} 条，剩余 ${countBefore - items.length} 条`);
+    log.debug(`从时间戳 ${fromTimestamp} 加载: ${items.length} 条，剩余 ${countBefore - items.length} 条`);
 
     return { items, total, hasMore };
   }
@@ -817,7 +820,7 @@ class HistoryDatabase {
     }
 
     if (items.length < parsed.length) {
-      console.warn(`[HistoryDB] 导入校验: ${parsed.length} 条中有 ${parsed.length - items.length} 条格式无效被跳过`);
+      log.warn(`导入校验: ${parsed.length} 条中有 ${parsed.length - items.length} 条格式无效被跳过`);
     }
 
     const db = await this.ensureInitialized();
@@ -849,9 +852,7 @@ class HistoryDatabase {
         return !existingTimestamp || item.timestamp > existingTimestamp;
       });
 
-      console.log(
-        `[HistoryDB] merge 策略: ${items.length} 条中有 ${itemsToImport.length} 条需要导入`
-      );
+      log.info(`merge 策略: ${items.length} 条中有 ${itemsToImport.length} 条需要导入`);
     } else {
       itemsToImport = items;
     }
@@ -867,7 +868,7 @@ class HistoryDatabase {
       onProgress?.(importedCount, itemsToImport.length);
     }
 
-    console.log(`[HistoryDB] 导入完成: ${importedCount}/${items.length} 条`);
+    log.info(`导入完成: ${importedCount}/${items.length} 条`);
     return importedCount;
   }
 
@@ -911,7 +912,7 @@ class HistoryDatabase {
     try {
       return JSON.parse(json);
     } catch (e) {
-      console.error(`[HistoryDB] ${field} JSON 解析失败: ${id}`, e);
+      log.error(`${field} JSON 解析失败: ${id}`, e);
       return fallback;
     }
   }

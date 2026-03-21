@@ -13,8 +13,9 @@ import { useOnboarding } from './composables/useOnboarding';
 import { useGlobalShortcut } from './composables/useGlobalShortcut';
 import { useAutoUpdate } from './composables/useAutoUpdate';
 import { TOAST_MESSAGES } from './constants';
-import { Store } from './store';
+import { configStore } from './store/instances';
 import { BackupPasswordRequiredError, secureStorage } from './crypto';
+import { startupFlags } from './store/startupFlags';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import type { UserConfig } from './config/types';
@@ -89,7 +90,6 @@ async function handlePasswordSkip() {
  * 由 onMounted 和密码对话框回调共同调用
  */
 async function continueStartup() {
-  const configStore = new Store('.settings.dat');
   const config = await configStore.get<UserConfig>('config');
   const minimizeOnStart = config?.appBehavior?.minimizeToTrayOnStart ?? false;
   const closeToTray = config?.appBehavior?.closeToTray ?? true;
@@ -119,6 +119,11 @@ onMounted(async () => {
   window.addEventListener('offline', handleOffline);
   window.addEventListener('online', handleOnline);
   console.log('[App] Network listeners registered');
+
+  if (startupFlags.configResetDueToKeyMismatch) {
+    startupFlags.configResetDueToKeyMismatch = false;
+    toast.showConfig('warn', TOAST_MESSAGES.config.keyMismatchReset);
+  }
 
   try {
     await continueStartup();

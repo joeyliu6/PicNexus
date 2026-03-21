@@ -12,7 +12,7 @@ import { useClipboardImage } from '../../composables/useClipboardImage';
 import { useQueueState } from '../../composables/useQueueState';
 import { UploadQueueManager } from '../../uploadQueue';
 import { RetryService } from '../../services/RetryService';
-import { Store } from '../../store';
+import { configStore } from '../../store/instances';
 import type { MultiUploadResult } from '../../core/MultiServiceUploader';
 
 import UploadDropZone from './upload/UploadDropZone.vue';
@@ -45,9 +45,6 @@ const fileDropUnlisteners = ref<UnlistenFn[]>([]);
 
 // 配置更新监听器清理函数
 const configUnlisten = ref<UnlistenFn | null>(null);
-
-// 配置存储
-const configStore = new Store('.settings.dat');
 
 // 创建重试服务实例
 const retryService = new RetryService({

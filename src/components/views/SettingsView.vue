@@ -27,8 +27,7 @@ import GeneralSettingsPanel from '../settings/GeneralSettingsPanel.vue';
 import BackupSyncPanel from '../settings/BackupSyncPanel.vue';
 import AboutUpdatePanel from '../settings/AboutUpdatePanel.vue';
 
-import { Store } from '../../store';
-import { syncStatusStore } from '../../store/instances';
+import { configStore, syncStatusStore } from '../../store/instances';
 import type { ThemeMode, UserConfig, ServiceType, WebDAVProfile, GithubUrlStrategy } from '../../config/types';
 import { DEFAULT_CONFIG, DEFAULT_PREFIXES } from '../../config/types';
 
@@ -52,9 +51,6 @@ const {
 
 const serviceHealth = useServiceHealth();
 const { reopen: reopenOnboarding } = useOnboarding();
-
-
-const configStore = new Store('.settings.dat');
 
 
 const cookieUnlisten = ref<UnlistenFn | null>(null);

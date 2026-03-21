@@ -11,6 +11,9 @@ import {
   ProgressCallback
 } from './types';
 import { getErrorMessage, isAuthError } from '../../types/errors';
+import { createLogger } from '../../utils/logger';
+
+const log = createLogger('BaseUploader');
 
 /**
  * 进度事件负载
@@ -97,7 +100,7 @@ export abstract class BaseUploader implements IUploader {
     // 1. 生成唯一上传 ID（用于匹配进度事件）
     const uploadId = `${this.serviceId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    console.log(`[${this.serviceName}] 开始上传... (ID: ${uploadId})`);
+    log.info(`${this.serviceName} 开始上传... (ID: ${uploadId})`);
 
     // 2. 进度平滑状态
     let lastReportedPercent = 0;       // 上次报告的真实进度
@@ -141,8 +144,8 @@ export abstract class BaseUploader implements IUploader {
           if (event.payload.id === uploadId) {
             // 如果有步骤信息，记录到控制台
             if (event.payload.step) {
-              console.log(
-                `[${this.serviceName}] ${event.payload.step}`,
+              log.debug(
+                `${this.serviceName} ${event.payload.step}`,
                 `(步骤${event.payload.step_index}/${event.payload.total_steps})`
               );
             }
@@ -174,7 +177,7 @@ export abstract class BaseUploader implements IUploader {
           }
         });
       } catch (error) {
-        console.warn(`[${this.serviceName}] 无法监听进度事件:`, error);
+        log.warn(`${this.serviceName} 无法监听进度事件:`, error);
         // 继续执行，不因为进度监听失败而中断上传
       }
     }
@@ -192,10 +195,10 @@ export abstract class BaseUploader implements IUploader {
         onProgress(100, '完成', lastTotalSteps, lastTotalSteps);
       }
 
-      console.log(`[${this.serviceName}] 上传成功:`, result);
+      log.info(`${this.serviceName} 上传成功:`, result);
       return result;
     } catch (error: unknown) {
-      console.error(`[${this.serviceName}] 上传失败:`, error);
+      log.error(`${this.serviceName} 上传失败:`, error);
 
       // 使用统一的错误处理函数解析 AppError
       const errorMessage = getErrorMessage(error);
@@ -251,17 +254,15 @@ export abstract class BaseUploader implements IUploader {
    * 统一的日志格式
    */
   protected log(level: 'info' | 'warn' | 'error', message: string, data?: any): void {
-    const prefix = `[${this.serviceName}]`;
-
     switch (level) {
       case 'info':
-        console.log(prefix, message, data ?? '');
+        log.debug(`${this.serviceName} ${message}`, data ?? '');
         break;
       case 'warn':
-        console.warn(prefix, message, data ?? '');
+        log.warn(`${this.serviceName} ${message}`, data ?? '');
         break;
       case 'error':
-        console.error(prefix, message, data ?? '');
+        log.error(`${this.serviceName} ${message}`, data ?? '');
         break;
     }
   }

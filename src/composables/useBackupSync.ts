@@ -21,6 +21,9 @@ import type {
 import { DEFAULT_CONFIG, migrateConfig, isValidUserConfig, isValidHistoryItem } from '../config/types';
 import { configStore, syncStatusStore } from '../store/instances';
 import { secureStorage, isPasswordEncryptedData, decryptWithPassword } from '../crypto';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('BackupSync');
 
 // ==================== 类型定义 ====================
 
@@ -286,7 +289,7 @@ export function useBackupSync(): UseBackupSyncReturn {
         await saveSyncStatus();
       }
     } catch (e) {
-      console.error('[备份] 加载同步状态失败:', e);
+      log.error('加载同步状态失败:', e);
     }
   }
 
@@ -298,7 +301,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       await syncStatusStore.set('status', syncStatus.value);
       await syncStatusStore.save();
     } catch (e) {
-      console.error('[备份] 保存同步状态失败:', e);
+      log.error('保存同步状态失败:', e);
     }
   }
 
@@ -375,7 +378,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       let config = await configStore.get<UserConfig>('config');
 
       if (!config || !isValidUserConfig(config)) {
-        console.error('[备份] 配置数据格式异常，使用默认配置');
+        log.error('配置数据格式异常，使用默认配置');
         config = { ...DEFAULT_CONFIG };
         await configStore.set('config', config);
         await configStore.save();
@@ -403,7 +406,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       toast.showConfig('success', TOAST_MESSAGES.common.exportSuccess(1));
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[备份] 导出配置失败:', error);
+      log.error('导出配置失败:', error);
       toast.showConfig('error', TOAST_MESSAGES.common.exportFailed(errorMsg));
     } finally {
       exportSettingsLoading.value = false;
@@ -476,7 +479,7 @@ export function useBackupSync(): UseBackupSyncReturn {
     } catch (error) {
       if (error instanceof Error && error.message === 'user_cancelled') return;
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[备份] 导入配置失败:', error);
+      log.error('导入配置失败:', error);
 
       if (errorMsg.includes('JSON')) {
         toast.showConfig('error', TOAST_MESSAGES.common.importFailed('JSON 格式错误，请检查文件格式'));
@@ -517,7 +520,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       toast.showConfig('success', TOAST_MESSAGES.common.exportSuccess(count));
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[备份] 导出历史记录失败:', error);
+      log.error('导出历史记录失败:', error);
       toast.showConfig('error', TOAST_MESSAGES.common.exportFailed(errorMsg));
     } finally {
       exportHistoryLoading.value = false;
@@ -582,7 +585,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       ));
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[备份] 导入历史记录失败:', error);
+      log.error('导入历史记录失败:', error);
 
       if (errorMsg.includes('JSON')) {
         toast.showConfig('error', TOAST_MESSAGES.common.importFailed('JSON 格式错误，请检查文件格式'));
@@ -623,7 +626,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       toast.showConfig('success', TOAST_MESSAGES.sync.uploadSuccess('config'));
     } catch (error) {
       const errorCode = extractErrorCode(error);
-      console.error('[备份] 上传配置失败:', error);
+      log.error('上传配置失败:', error);
       updateConfigSyncStatus(profile,'failed', errorCode);
       toast.showConfig('error', TOAST_MESSAGES.sync.uploadFailed(errorCode));
     } finally {
@@ -682,7 +685,7 @@ export function useBackupSync(): UseBackupSyncReturn {
     } catch (error) {
       if (error instanceof Error && error.message === 'user_cancelled') return;
       const errorCode = extractErrorCode(error);
-      console.error('[备份] 下载配置失败:', error);
+      log.error('下载配置失败:', error);
       updateConfigSyncStatus(profile,'failed', errorCode);
       toast.showConfig('error', TOAST_MESSAGES.sync.downloadFailed(errorCode));
     } finally {
@@ -741,7 +744,7 @@ export function useBackupSync(): UseBackupSyncReturn {
     } catch (error) {
       if (error instanceof Error && error.message === 'user_cancelled') return;
       const errorCode = extractErrorCode(error);
-      console.error('[备份] 合并下载配置失败:', error);
+      log.error('合并下载配置失败:', error);
       updateConfigSyncStatus(profile,'failed', errorCode);
       toast.error('下载失败', errorCode);
     } finally {
@@ -782,7 +785,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       toast.success(`已强制覆盖云端记录（${count} 条）`);
     } catch (error) {
       const errorCode = extractErrorCode(error);
-      console.error('[备份] 强制上传历史记录失败:', error);
+      log.error('强制上传历史记录失败:', error);
       updateHistorySyncStatus(profile,'failed', errorCode);
       toast.error('上传失败', errorCode);
     } finally {
@@ -821,7 +824,7 @@ export function useBackupSync(): UseBackupSyncReturn {
           }
         }
       } catch (e) {
-        console.log('[备份] 云端文件不存在或无法解析，将进行全量上传');
+        log.info('云端文件不存在或无法解析，将进行全量上传');
       }
 
       const itemMap = new Map<string, HistoryItem>();
@@ -858,7 +861,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       );
     } catch (error) {
       const errorCode = extractErrorCode(error);
-      console.error('[备份] 智能合并上传失败:', error);
+      log.error('智能合并上传失败:', error);
       updateHistorySyncStatus(profile,'failed', errorCode);
       toast.error('上传失败', errorCode);
     } finally {
@@ -902,7 +905,7 @@ export function useBackupSync(): UseBackupSyncReturn {
           }
         }
       } catch (e) {
-        console.log('[备份] 云端文件不存在，将进行全量上传');
+        log.info('云端文件不存在，将进行全量上传');
       }
 
       const newItems = localItems.filter(item => item.id && !cloudIdSet.has(item.id));
@@ -926,7 +929,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       );
     } catch (error) {
       const errorCode = extractErrorCode(error);
-      console.error('[备份] 增量上传失败:', error);
+      log.error('增量上传失败:', error);
       updateHistorySyncStatus(profile,'failed', errorCode);
       toast.error('上传失败', errorCode);
     } finally {
@@ -973,7 +976,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       toast.success(`下载完成：共 ${cloudItems.length} 条记录（覆盖本地）`);
     } catch (error) {
       const errorCode = extractErrorCode(error);
-      console.error('[备份] 下载历史记录失败:', error);
+      log.error('下载历史记录失败:', error);
       updateHistorySyncStatus(profile,'failed', errorCode);
       toast.error('下载失败', errorCode);
     } finally {
@@ -1022,7 +1025,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       );
     } catch (error) {
       const errorCode = extractErrorCode(error);
-      console.error('[备份] 下载历史记录失败:', error);
+      log.error('下载历史记录失败:', error);
       updateHistorySyncStatus(profile,'failed', errorCode);
       toast.error('下载失败', errorCode);
     } finally {
@@ -1098,7 +1101,7 @@ export function useBackupSync(): UseBackupSyncReturn {
     } catch (error) {
       if (error instanceof Error && error.message === 'user_cancelled') return;
       const errorCode = extractErrorCode(error);
-      console.error('[备份] 配置同步失败:', error);
+      log.error('配置同步失败:', error);
 
       if (stage === 'upload') {
         updateConfigSyncStatus(profile,'partial', errorCode);
@@ -1179,7 +1182,7 @@ export function useBackupSync(): UseBackupSyncReturn {
       toast.success(`同步完成：共 ${mergedItems.length} 条记录`);
     } catch (error) {
       const errorCode = extractErrorCode(error);
-      console.error('[备份] 历史记录同步失败:', error);
+      log.error('历史记录同步失败:', error);
 
       if (stage === 'upload') {
         updateHistorySyncStatus(profile,'partial', errorCode);

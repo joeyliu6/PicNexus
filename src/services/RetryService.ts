@@ -12,6 +12,9 @@ import { invalidateCache } from '../composables/useHistory';
 import { emitHistoryUpdated } from '../events/cacheEvents';
 import { historyDB } from './HistoryDatabase';
 import { SERVICE_DISPLAY_NAMES } from '../constants/serviceNames';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('RetryService');
 
 export interface RetryOptions {
   /** 配置存储 */
@@ -57,7 +60,7 @@ export class RetryService {
       return;
     }
 
-    console.log(`[重试] 单独重试 ${item.fileName} -> ${serviceId}`);
+    log.info(`单独重试 ${item.fileName} -> ${serviceId}`);
 
     // 检测网络连通性
     const isNetworkAvailable = await checkNetworkConnectivity();
@@ -73,7 +76,7 @@ export class RetryService {
     // 并发控制
     const retryKey = `${itemId}-${serviceId}`;
     if (this.retryingItems.has(retryKey)) {
-      console.warn(`[重试] ${item.fileName}-${serviceId} 已在重试中，跳过`);
+      log.warn(`${item.fileName}-${serviceId} 已在重试中，跳过`);
       return;
     }
 
@@ -122,7 +125,7 @@ export class RetryService {
 
     // 并发控制
     if (this.retryingItems.has(itemId)) {
-      console.warn(`[重试] ${item.fileName} 已在重试中，跳过`);
+      log.warn(`${item.fileName} 已在重试中，跳过`);
       return;
     }
 
@@ -139,7 +142,7 @@ export class RetryService {
       return;
     }
 
-    console.log(`[重试] 全量重试 (${currentRetryCount + 1}/${maxRetries}): ${item.fileName}`);
+    log.info(`全量重试 (${currentRetryCount + 1}/${maxRetries}): ${item.fileName}`);
 
     // 检测网络连通性
     const isNetworkAvailable = await checkNetworkConnectivity();
@@ -163,7 +166,7 @@ export class RetryService {
     const delay = Math.round(exponentialDelay + jitter);
 
     if (delay > 0) {
-      console.log(`[重试] 等待 ${delay}ms 后重试（指数退避 + 抖动）...`);
+      log.info(`等待 ${delay}ms 后重试（指数退避 + 抖动）...`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
 
@@ -297,7 +300,7 @@ export class RetryService {
         const historyItem = await historyDB.getByFilePath(filePath);
 
         if (!historyItem) {
-          console.warn(`[重试] 未找到对应的历史记录: ${filePath}`);
+          log.warn(`未找到对应的历史记录: ${filePath}`);
           return;
         }
 
@@ -337,9 +340,9 @@ export class RetryService {
         invalidateCache();
         emitHistoryUpdated([historyItem.id]);
 
-        console.log(`[重试] 历史记录已更新: ${filePath} -> ${serviceId}`);
+        log.info(`历史记录已更新: ${filePath} -> ${serviceId}`);
       } catch (error) {
-        console.error('[重试] 更新历史记录失败:', error);
+        log.error('更新历史记录失败:', error);
         // 不阻塞主流程
       }
     };
@@ -359,7 +362,7 @@ export class RetryService {
     error: unknown
   ): Promise<void> {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`[重试] ${serviceId} 失败:`, errorMsg);
+    log.error(`${serviceId} 失败:`, errorMsg);
 
     const updates = { ...item.serviceProgress };
     updates[serviceId] = {
@@ -497,7 +500,7 @@ export class RetryService {
       return { success: 0, failed: 0 };
     }
 
-    console.log(`[批量重传] 开始重传 ${retryTasks.length} 个失败的图床`);
+    log.info(`开始重传 ${retryTasks.length} 个失败的图床`);
 
     // 检测网络连通性
     const isNetworkAvailable = await checkNetworkConnectivity();
@@ -561,7 +564,7 @@ export class RetryService {
       );
     }
 
-    console.log(`[批量重传] 完成: ${successCount} 成功, ${failedCount} 失败`);
+    log.info(`完成: ${successCount} 成功, ${failedCount} 失败`);
     return { success: successCount, failed: failedCount };
   }
 
@@ -575,7 +578,7 @@ export class RetryService {
     error: unknown
   ): Promise<void> {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`[重试] ${item.fileName} 上传失败:`, errorMsg);
+    log.error(`${item.fileName} 上传失败:`, errorMsg);
 
     // 解析失败的图床
     let failedServices: string[] = [];

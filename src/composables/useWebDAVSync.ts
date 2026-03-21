@@ -2,7 +2,7 @@
 // v2.10: 从 SettingsView.vue 中提取，提供统一的同步状态管理
 
 import { ref, computed, type Ref } from 'vue';
-import { Store } from '../store';
+import { configStore, syncStatusStore } from '../store/instances';
 import { WebDAVClient } from '../utils/webdav';
 import { historyDB } from '../services/HistoryDatabase';
 import { useToast } from './useToast';
@@ -13,6 +13,9 @@ import type {
   HistoryItem
 } from '../config/types';
 import { isValidUserConfig, migrateConfig } from '../config/types';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('WebDAVSync');
 
 // ==================== 数据验证 ====================
 
@@ -79,11 +82,6 @@ export interface SyncResult {
   hadConflict?: boolean;
   resolution?: ConflictResolution;
 }
-
-// ==================== 存储实例（模块级别单例） ====================
-
-const syncStatusStore = new Store('.sync-status.dat');
-const configStore = new Store('.settings.dat');
 
 // ==================== 共享状态 ====================
 
@@ -158,7 +156,7 @@ export function useWebDAVSync() {
         syncStatus.value = { ...syncStatus.value, ...saved };
       }
     } catch (e) {
-      console.error('[WebDAV同步] 加载同步状态失败:', e);
+      log.error('加载同步状态失败:', e);
     }
   }
 
@@ -170,7 +168,7 @@ export function useWebDAVSync() {
       await syncStatusStore.set('status', syncStatus.value);
       await syncStatusStore.save();
     } catch (e) {
-      console.error('[WebDAV同步] 保存同步状态失败:', e);
+      log.error('保存同步状态失败:', e);
     }
   }
 
@@ -528,7 +526,7 @@ export function useWebDAVSync() {
 
       const remoteConfig = JSON.parse(remoteContent);
       if (typeof remoteConfig !== 'object' || remoteConfig === null || Array.isArray(remoteConfig)) {
-        console.warn('[WebDAV同步] 远程配置格式无效，跳过冲突检测');
+        log.warn('远程配置格式无效，跳过冲突检测');
         return null;
       }
       const localConfig = await configStore.get<UserConfig>('config');
@@ -549,7 +547,7 @@ export function useWebDAVSync() {
         message: '本地配置与云端配置不一致'
       };
     } catch (e) {
-      console.warn('[WebDAV同步] 冲突检测失败:', e);
+      log.warn('冲突检测失败:', e);
       return null;
     }
   }

@@ -3,7 +3,7 @@
 
 import { ref } from 'vue';
 import { open as dialogOpen } from '@tauri-apps/plugin-dialog';
-import { Store } from '../store';
+import { configStore } from '../store/instances';
 import {
   UserConfig,
   DEFAULT_CONFIG,
@@ -21,13 +21,13 @@ import { useServiceHealth } from './useServiceHealth';
 import { useHistorySaver } from './useHistorySaver';
 import { fetchMetadataBatch } from './useImageMetadata';
 import { AUTH_CONFIG_ERROR_CODES } from '../types/serviceHealth';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('useUpload');
 
 // --- 配置 ---
 const METADATA_BATCH_SIZE = 50;  // 每批处理 50 张图片
 const MAX_FILES_PER_UPLOAD = 200; // 单次上传最大文件数，防止内存溢出
-
-// --- STORES ---
-const configStore = new Store('.settings.dat');
 
 /**
  * 上传管理 Composable
@@ -102,7 +102,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       return null;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[上传] 文件选择失败:', error);
+      log.error('文件选择失败:', error);
       toast.showConfig('error', TOAST_MESSAGES.upload.selectFailed(errorMsg));
       return null;
     }
@@ -121,7 +121,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
     // 验证输入
     if (!Array.isArray(filePaths) || filePaths.length === 0) {
-      console.warn('[上传] 无效的文件列表:', filePaths);
+      log.warn('无效的文件列表:', filePaths);
       return;
     }
 
@@ -129,13 +129,13 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     isUploading.value = true;
 
     try {
-      console.log('[上传] 接收到文件:', filePaths);
+      log.info('接收到文件:', filePaths);
 
       // 文件类型验证
       let { valid, invalid } = await filterValidFiles(filePaths);
 
       if (valid.length === 0) {
-        console.warn('[上传] 没有有效的图片文件');
+        log.warn('没有有效的图片文件');
         toast.showConfig('warn', TOAST_MESSAGES.upload.noImage);
         return;
       }
@@ -150,21 +150,21 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         valid = valid.slice(0, MAX_FILES_PER_UPLOAD);
       }
 
-      console.log(`[上传] 有效文件: ${valid.length}个，无效文件: ${invalid.length}个`);
+      log.info(`有效文件: ${valid.length}个，无效文件: ${invalid.length}个`);
 
       // 获取配置
       let config: UserConfig | null = null;
       try {
         config = await configStore.get<UserConfig>('config');
       } catch (error) {
-        console.error('[上传] 读取配置失败:', error);
+        log.error('读取配置失败:', error);
         toast.showConfig('error', TOAST_MESSAGES.config.loadFailed('读取配置文件失败，请刷新或稍后重试'));
         return;
       }
 
       // 验证配置存在
       if (!config) {
-        console.warn('[上传] 配置不存在，使用默认配置');
+        log.warn('配置不存在，使用默认配置');
         config = DEFAULT_CONFIG;
       }
 
@@ -173,7 +173,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
       // 验证是否选中了图床服务
       if (enabledServices.length === 0) {
-        console.warn('[上传] 没有选择任何图床');
+        log.warn('没有选择任何图床');
 
         // 检查是否有可用的图床可供选择
         const hasConfiguredServices = availableServices.value.length > 0;
@@ -192,15 +192,15 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       const sortedEnabled = [...enabledServices].sort();
       const sortedSelected = [...selectedServices.value].sort();
       if (JSON.stringify(sortedEnabled) !== JSON.stringify(sortedSelected)) {
-        console.warn('[上传] 检测到状态不一致，同步中...');
+        log.warn('检测到状态不一致，同步中...');
         selectedServices.value = [...enabledServices];
       }
 
-      console.log(`[上传] 启用的图床:`, enabledServices);
+      log.info(`启用的图床:`, enabledServices);
 
       // ⭐ 检查队列管理器
       if (!queueManager) {
-        console.error('[上传] 队列管理器未初始化');
+        log.error('队列管理器未初始化');
         toast.showConfig('error', TOAST_MESSAGES.upload.failed('队列管理器未初始化'));
         return;
       }
@@ -220,19 +220,19 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       // 每批 50 张图片，限制同时进行的批次数量避免网络拥塞
       const batches = chunkArray(valid, METADATA_BATCH_SIZE);
       const MAX_CONCURRENT_BATCHES = 2;  // 最多同时处理 2 个批次
-      console.log(`[上传] 开始流水线处理：${valid.length} 个文件，分 ${batches.length} 批，最大并发 ${MAX_CONCURRENT_BATCHES} 批`);
+      log.info(`开始流水线处理：${valid.length} 个文件，分 ${batches.length} 批，最大并发 ${MAX_CONCURRENT_BATCHES} 批`);
 
       // 收集成功上传的链接（用于自动复制）
       const collectedLinks: CopyLinkItem[] = [];
 
       // 批次处理函数
       const processBatch = async (batchFiles: string[], batchIndex: number) => {
-        console.log(`[上传] 批次 ${batchIndex + 1}/${batches.length}：开始获取 ${batchFiles.length} 个文件的元数据`);
+        log.debug(`批次 ${batchIndex + 1}/${batches.length}：开始获取 ${batchFiles.length} 个文件的元数据`);
 
         // 1. 批量获取元数据（并发控制）
         // 这会预填充缓存，后续 saveHistoryItemImmediate 会直接使用缓存
         await fetchMetadataBatch(batchFiles);
-        console.log(`[上传] 批次 ${batchIndex + 1}：元数据获取完成`);
+        log.debug(`批次 ${batchIndex + 1}：元数据获取完成`);
 
         // 2. 将该批文件加入队列
         const queueItems = batchFiles.map(filePath => {
@@ -242,16 +242,16 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         }).filter(item => item.itemId);
 
         if (queueItems.length === 0) {
-          console.log(`[上传] 批次 ${batchIndex + 1}：所有文件都是重复的`);
+          log.debug(`批次 ${batchIndex + 1}：所有文件都是重复的`);
           return;
         }
 
-        console.log(`[上传] 批次 ${batchIndex + 1}：已添加 ${queueItems.length} 个文件到队列，开始上传`);
+        log.debug(`批次 ${batchIndex + 1}：已添加 ${queueItems.length} 个文件到队列，开始上传`);
 
         // 3. 立即开始上传该批
         await processUploadQueue(queueItems, config, enabledServices, 5, collectedLinks);
 
-        console.log(`[上传] 批次 ${batchIndex + 1}：上传完成`);
+        log.debug(`批次 ${batchIndex + 1}：上传完成`);
       };
 
       // 限制并发批次数量，避免网络拥塞和服务器限流
@@ -273,7 +273,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
             processBatch(batches[currentIndex], currentIndex)
               .catch((error) => {
-                console.error(`[上传] 批次 ${currentIndex + 1} 处理失败:`, error);
+                log.error(`批次 ${currentIndex + 1} 处理失败:`, error);
               })
               .finally(() => {
                 activeBatches--;
@@ -285,14 +285,14 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         runNextBatch();
       });
 
-      console.log('[上传] 所有批次处理完成');
+      log.info('所有批次处理完成');
 
       // 自动复制链接到剪贴板（使用统一 useCopyLink）
       if (config.linkOutput?.autoCopy !== false && collectedLinks.length > 0) {
         await copyLinks(collectedLinks);
       }
     } catch (error) {
-      console.error('[上传] 文件处理失败:', error);
+      log.error('文件处理失败:', error);
       const errorMsg = error instanceof Error ? error.message : String(error);
       toast.showConfig('error', TOAST_MESSAGES.upload.failed(errorMsg));
     } finally {
@@ -315,12 +315,12 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     collectedLinks?: CopyLinkItem[]
   ): Promise<void> {
     if (!queueManager) {
-      console.error('[并发上传] 上传队列管理器未初始化');
+      log.error('上传队列管理器未初始化');
       toast.showConfig('error', TOAST_MESSAGES.upload.failed('队列管理器未初始化'));
       return;
     }
 
-    console.log(`[并发上传] 开始处理 ${queueItems.length} 个文件，启用图床:`, enabledServices);
+    log.info(`开始处理 ${queueItems.length} 个文件，启用图床:`, enabledServices);
 
     const multiServiceUploader = new MultiServiceUploader();
 
@@ -328,13 +328,13 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     const uploadTasks = queueItems.map(({ itemId, filePath, fileName }) => {
       // itemId 在创建时已经过重复检查
       if (!itemId) {
-        console.log(`[并发上传] 跳过无效队列项: ${fileName}`);
+        log.debug(`跳过无效队列项: ${fileName}`);
         return null; // 返回 null 表示跳过
       }
 
       return async () => {
         try {
-          console.log(`[并发上传] 开始上传: ${fileName}`);
+          log.debug(`开始上传: ${fileName}`);
 
           // 跟踪历史记录 ID 和累积结果
           // 使用 UUID 生成唯一 ID，避免高并发时的 ID 碰撞
@@ -359,33 +359,33 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
                 // 立即创建历史记录（只包含当前这个成功结果）
                 await saveHistoryItemImmediate(filePath, serviceResult, historyId);
                 historyCreated = true;
-                console.log(`[历史记录] 首个成功结果 ${serviceResult.serviceId} 已触发历史记录创建`);
+                log.debug(`首个成功结果 ${serviceResult.serviceId} 已触发历史记录创建`);
 
                 // 处理等待队列中的结果（在创建期间到达的其他成功结果）
                 if (pendingResults.length > 0) {
-                  console.log(`[历史记录] 处理等待队列: ${pendingResults.length} 个结果`);
+                  log.debug(`处理等待队列: ${pendingResults.length} 个结果`);
                   for (const pending of pendingResults) {
                     const success = await addResultToHistoryItem(historyId, pending);
                     if (!success) {
-                      console.warn(`[历史记录] ${pending.serviceId} 结果追加失败，但不影响上传`);
+                      log.warn(`${pending.serviceId} 结果追加失败，但不影响上传`);
                     }
                   }
                   pendingResults.length = 0; // 清空队列
                 }
               } catch (err) {
-                console.error('[历史记录] 立即保存失败:', err);
+                log.error('立即保存失败:', err);
                 historyCreating = false; // 重置，允许后续成功结果重试
               }
             } else if (serviceResult.status === 'success' && historyCreated) {
               // 后续成功结果追加到已有记录
               const success = await addResultToHistoryItem(historyId, serviceResult);
               if (!success) {
-                console.warn(`[历史记录] ${serviceResult.serviceId} 结果追加失败，但不影响上传`);
+                log.warn(`${serviceResult.serviceId} 结果追加失败，但不影响上传`);
               }
             } else if (serviceResult.status === 'success' && historyCreating && !historyCreated) {
               // 正在创建历史记录期间到达的结果，加入等待队列
               pendingResults.push(serviceResult);
-              console.log(`[历史记录] ${serviceResult.serviceId} 加入等待队列`);
+              log.debug(`${serviceResult.serviceId} 加入等待队列`);
             }
 
             const item = queueManager!.getItem(itemId);
@@ -451,12 +451,12 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             },
             // 单项完成回调 - 实现实时 UI 响应
             (singleResult) => {
-              console.log(`[实时更新] ${singleResult.serviceId} 完成:`, singleResult.status);
+              log.debug(`${singleResult.serviceId} 完成:`, singleResult.status);
               handleServiceResult(singleResult);
             }
           );
 
-          console.log(`[并发上传] ${fileName} 全部完成，主力图床: ${result.primaryService}`);
+          log.info(`${fileName} 全部完成，主力图床: ${result.primaryService}`);
 
           // 检查部分失败并显示警告 Toast
           if (result.isPartialSuccess && result.partialFailures) {
@@ -471,7 +471,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
           // 但为了保险起见，如果有遗漏的可以再更新一次 (此处略过，依赖 handleServiceResult)
 
           // 历史记录已在 handleServiceResult 中创建，无需兜底逻辑
-          console.log(`[并发上传] 上传完成，历史记录已创建: ${historyCreated}，累积结果: ${allServiceResults.length} 个`);
+          log.debug(`上传完成，历史记录已创建: ${historyCreated}，累积结果: ${allServiceResults.length} 个`);
 
           // 通知队列管理器上传成功（谁先上传完用谁的链接）
           let thumbUrl = result.primaryUrl;
@@ -492,7 +492,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);
-          console.error(`[并发上传] ${fileName} 上传失败:`, errorMsg);
+          log.error(`${fileName} 上传失败:`, errorMsg);
 
           // 从错误消息中提取图床信息（所有图床失败时包含详细信息）
           let failedServices: string[] = [];
@@ -543,7 +543,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       };
     }).filter(task => task !== null); // 过滤掉 null 值
 
-    console.log(`[并发上传] 实际需要上传的文件数: ${uploadTasks.length}/${queueItems.length}`);
+    log.debug(`实际需要上传的文件数: ${uploadTasks.length}/${queueItems.length}`);
 
     // ✅ 改进的并发控制：使用信号量模式避免竞态条件
     let activeCount = 0;
@@ -554,7 +554,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       const runNext = () => {
         // 所有任务都已启动且完成
         if (taskIndex >= uploadTasks.length && activeCount === 0) {
-          console.log(`[并发上传] 所有文件处理完成`);
+          log.info(`所有文件处理完成`);
           resolve();
           return;
         }
@@ -572,7 +572,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             })
             .catch((error) => {
               results.push({ status: 'rejected', reason: error });
-              console.error(`[并发上传] 任务 ${currentIndex} 失败:`, error);
+              log.error(`任务 ${currentIndex} 失败:`, error);
             })
             .finally(() => {
               activeCount--;
