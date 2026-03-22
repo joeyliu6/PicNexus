@@ -227,12 +227,9 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
       // 批次处理函数
       const processBatch = async (batchFiles: string[], batchIndex: number) => {
-        log.debug(`批次 ${batchIndex + 1}/${batches.length}：开始获取 ${batchFiles.length} 个文件的元数据`);
-
         // 1. 批量获取元数据（并发控制）
         // 这会预填充缓存，后续 saveHistoryItemImmediate 会直接使用缓存
         await fetchMetadataBatch(batchFiles);
-        log.debug(`批次 ${batchIndex + 1}：元数据获取完成`);
 
         // 2. 将该批文件加入队列
         const queueItems = batchFiles.map(filePath => {
@@ -242,16 +239,13 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         }).filter(item => item.itemId);
 
         if (queueItems.length === 0) {
-          log.debug(`批次 ${batchIndex + 1}：所有文件都是重复的`);
           return;
         }
-
-        log.debug(`批次 ${batchIndex + 1}：已添加 ${queueItems.length} 个文件到队列，开始上传`);
 
         // 3. 立即开始上传该批
         await processUploadQueue(queueItems, config, enabledServices, 5, collectedLinks);
 
-        log.debug(`批次 ${batchIndex + 1}：上传完成`);
+        log.debug(`批次 ${batchIndex + 1}/${batches.length} 完成：${queueItems.length} 个文件`);
       };
 
       // 限制并发批次数量，避免网络拥塞和服务器限流
@@ -334,8 +328,6 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
       return async () => {
         try {
-          log.debug(`开始上传: ${fileName}`);
-
           // 跟踪历史记录 ID 和累积结果
           // 使用 UUID 生成唯一 ID，避免高并发时的 ID 碰撞
           const historyId = crypto.randomUUID();
@@ -359,11 +351,9 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
                 // 立即创建历史记录（只包含当前这个成功结果）
                 await saveHistoryItemImmediate(filePath, serviceResult, historyId);
                 historyCreated = true;
-                log.debug(`首个成功结果 ${serviceResult.serviceId} 已触发历史记录创建`);
 
                 // 处理等待队列中的结果（在创建期间到达的其他成功结果）
                 if (pendingResults.length > 0) {
-                  log.debug(`处理等待队列: ${pendingResults.length} 个结果`);
                   for (const pending of pendingResults) {
                     const success = await addResultToHistoryItem(historyId, pending);
                     if (!success) {
@@ -385,7 +375,6 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             } else if (serviceResult.status === 'success' && historyCreating && !historyCreated) {
               // 正在创建历史记录期间到达的结果，加入等待队列
               pendingResults.push(serviceResult);
-              log.debug(`${serviceResult.serviceId} 加入等待队列`);
             }
 
             const item = queueManager!.getItem(itemId);
@@ -451,7 +440,6 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             },
             // 单项完成回调 - 实现实时 UI 响应
             (singleResult) => {
-              log.debug(`${singleResult.serviceId} 完成:`, singleResult.status);
               handleServiceResult(singleResult);
             }
           );
@@ -468,10 +456,6 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
           // 双重保险：确保 UI 状态一致
           // 注意：不需要遍历 result.results，因为 handleServiceResult 已经处理了
-          // 但为了保险起见，如果有遗漏的可以再更新一次 (此处略过，依赖 handleServiceResult)
-
-          // 历史记录已在 handleServiceResult 中创建，无需兜底逻辑
-          log.debug(`上传完成，历史记录已创建: ${historyCreated}，累积结果: ${allServiceResults.length} 个`);
 
           // 通知队列管理器上传成功（谁先上传完用谁的链接）
           let thumbUrl = result.primaryUrl;

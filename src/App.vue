@@ -19,6 +19,9 @@ import { startupFlags } from './store/startupFlags';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import type { UserConfig } from './config/types';
+import { createLogger } from './utils/logger';
+
+const log = createLogger('App');
 
 const { effectiveTheme, initializeTheme } = useThemeManager();
 const toast = useToast();
@@ -50,7 +53,7 @@ async function safeContinueStartup() {
   try {
     await continueStartup();
   } catch (err) {
-    console.error('[App] 启动流程失败:', err);
+    log.error('启动流程失败:', err);
     try { await getCurrentWindow().show(); } catch { /* ignore */ }
   }
 }
@@ -97,9 +100,8 @@ async function continueStartup() {
 
   if (!minimizeOnStart) {
     await getCurrentWindow().show();
-    console.log('[App] Window shown');
   } else {
-    console.log('[App] 启动时最小化到托盘，窗口保持隐藏');
+    log.debug('启动时最小化到托盘，窗口保持隐藏');
   }
 
   await checkOnboarding();
@@ -107,18 +109,17 @@ async function continueStartup() {
 
   if (config?.autoUpdate?.enabled !== false) {
     setTimeout(() => {
-      checkForUpdate().catch((e) => console.warn('[App] 自动检查更新失败:', e));
+      checkForUpdate().catch((e) => log.warn('自动检查更新失败:', e));
     }, 3000);
   }
 }
 
 onMounted(async () => {
   await initializeTheme();
-  console.log('[App] Theme initialized:', effectiveTheme.value);
+  log.debug('主题初始化完成:', effectiveTheme.value);
 
   window.addEventListener('offline', handleOffline);
   window.addEventListener('online', handleOnline);
-  console.log('[App] Network listeners registered');
 
   if (startupFlags.configResetDueToKeyMismatch) {
     startupFlags.configResetDueToKeyMismatch = false;
@@ -129,7 +130,7 @@ onMounted(async () => {
     await continueStartup();
   } catch (err) {
     if (err instanceof BackupPasswordRequiredError) {
-      console.log('[App] 检测到迁移密码加密配置，等待用户输入密码');
+      log.debug('检测到迁移密码加密配置，等待用户输入密码');
       try { await getCurrentWindow().show(); } catch { /* ignore */ }
 
       try {
@@ -137,14 +138,14 @@ onMounted(async () => {
         const configPath = await join(appDir, '.settings.dat');
         pendingEncryptedContent = await readTextFile(configPath);
       } catch (readErr) {
-        console.error('[App] 读取加密配置文件失败:', readErr);
+        log.error('读取加密配置文件失败:', readErr);
       }
 
       showPasswordDialog.value = true;
       return;
     }
 
-    console.error('[App] 启动失败:', err);
+    log.error('启动失败:', err);
     try { await getCurrentWindow().show(); } catch { /* ignore */ }
   }
 });
@@ -152,8 +153,7 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('offline', handleOffline);
   window.removeEventListener('online', handleOnline);
-  cleanupGlobalShortcuts().catch((e) => console.warn('[App] 快捷键清理失败:', e));
-  console.log('[App] Cleanup completed');
+  cleanupGlobalShortcuts().catch((e) => log.warn('快捷键清理失败:', e));
 });
 </script>
 
