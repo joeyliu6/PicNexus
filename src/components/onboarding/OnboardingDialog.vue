@@ -123,7 +123,7 @@ function handleNext() {
 
 .onboarding-body {
   padding: 8px 0 16px;
-  min-height: 300px;
+  min-height: 340px;
   display: flex;
   align-items: center;
   justify-content: center;
