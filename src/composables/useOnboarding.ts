@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { useConfigManager } from './useConfig';
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 3;
 
 const isVisible = ref(false);
 const currentStep = ref(0);

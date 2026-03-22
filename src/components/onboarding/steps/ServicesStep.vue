@@ -1,24 +1,21 @@
 <template>
   <div class="onboarding-step services-step">
-    <div class="step-icon">
-      <i class="pi pi-server" />
-    </div>
-    <h2 class="step-title">配置更多图床</h2>
+    <h2 class="step-title">支持的图床</h2>
     <p class="step-desc">
-      除了开箱即用的图床，你还可以在设置中配置更多图床服务。
+      在设置中按需开启，支持并行上传到多个图床。
     </p>
     <div class="service-groups">
       <div class="service-group">
         <div class="group-header">
           <span class="group-badge ready">开箱即用</span>
         </div>
-        <div class="group-items">京东、七鱼、牛客</div>
+        <div class="group-items">京东、七鱼</div>
       </div>
       <div class="service-group">
         <div class="group-header">
           <span class="group-badge cookie">Cookie 登录</span>
         </div>
-        <div class="group-items">微博、知乎、B站、纳米、超星</div>
+        <div class="group-items">微博、知乎、B站、纳米、超星、牛客</div>
       </div>
       <div class="service-group">
         <div class="group-header">
@@ -39,22 +36,6 @@
 <style scoped>
 .services-step {
   text-align: center;
-}
-
-.step-icon {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: var(--primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 20px;
-}
-
-.step-icon .pi {
-  font-size: 32px;
-  color: #fff;
 }
 
 .step-title {
@@ -99,23 +80,23 @@
 }
 
 .group-badge.ready {
-  background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
+  background: var(--success-alpha-15);
+  color: var(--success);
 }
 
 .group-badge.cookie {
-  background: rgba(234, 179, 8, 0.15);
-  color: #eab308;
+  background: var(--warning-alpha-15);
+  color: var(--warning);
 }
 
 .group-badge.token {
   background: var(--primary-alpha-15);
-  color: #60a5fa;
+  color: var(--primary);
 }
 
 .group-badge.cloud {
-  background: rgba(168, 85, 247, 0.15);
-  color: #a855f7;
+  background: var(--pending-alpha-15);
+  color: var(--pending);
 }
 
 .group-items {

@@ -6,7 +6,6 @@ import { useOnboarding } from '../../composables/useOnboarding';
 import WelcomeStep from './steps/WelcomeStep.vue';
 import UploadStep from './steps/UploadStep.vue';
 import ServicesStep from './steps/ServicesStep.vue';
-import ReadyStep from './steps/ReadyStep.vue';
 
 const {
   isVisible,
@@ -58,8 +57,7 @@ function handleNext() {
       <Transition name="step-fade" mode="out-in">
         <WelcomeStep v-if="currentStep === 0" key="welcome" />
         <UploadStep v-else-if="currentStep === 1" key="upload" />
-        <ServicesStep v-else-if="currentStep === 2" key="services" />
-        <ReadyStep v-else key="ready" />
+        <ServicesStep v-else key="services" />
       </Transition>
     </div>
 

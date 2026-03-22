@@ -2,26 +2,26 @@
   <div class="onboarding-step welcome-step">
     <h2 class="step-title">欢迎使用 PicNexus</h2>
     <p class="step-desc">
-      简单、专业、安全的多图床上传工具
+      多图床并行上传工具
     </p>
     <div class="step-highlights">
       <div class="highlight-item">
         <div class="highlight-icon">
-          <i class="pi pi-bolt" />
+          <i class="pi pi-clone" />
         </div>
-        <span>极速上传</span>
+        <span>多图床并行</span>
       </div>
       <div class="highlight-item">
         <div class="highlight-icon">
-          <i class="pi pi-cloud" />
+          <i class="pi pi-link" />
         </div>
-        <span>多图床支持</span>
+        <span>多格式输出</span>
       </div>
       <div class="highlight-item">
         <div class="highlight-icon">
-          <i class="pi pi-shield" />
+          <i class="pi pi-check-circle" />
         </div>
-        <span>安全加密</span>
+        <span>开箱即用</span>
       </div>
     </div>
   </div>

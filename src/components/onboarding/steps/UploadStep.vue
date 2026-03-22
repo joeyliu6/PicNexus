@@ -1,11 +1,8 @@
 <template>
   <div class="onboarding-step upload-step">
-    <div class="step-icon">
-      <i class="pi pi-upload" />
-    </div>
-    <h2 class="step-title">拖拽即上传</h2>
+    <h2 class="step-title">上传图片</h2>
     <p class="step-desc">
-      将图片拖入窗口即可上传，京东图床已默认启用，无需任何配置。
+      支持三种上传方式，京东图床已默认启用。上传后自动生成 URL、Markdown、HTML 等格式链接。
     </p>
     <div class="upload-methods">
       <div class="method-card">
@@ -30,22 +27,6 @@
 <style scoped>
 .upload-step {
   text-align: center;
-}
-
-.step-icon {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: var(--primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 20px;
-}
-
-.step-icon .pi {
-  font-size: 32px;
-  color: #fff;
 }
 
 .step-title {
