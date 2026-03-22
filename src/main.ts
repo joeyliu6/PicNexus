@@ -19,9 +19,13 @@ import { configStore } from './store/instances';
 import { StoreError } from './store';
 import { DEFAULT_CONFIG, UserConfig } from './config/types';
 import { startupFlags } from './store/startupFlags';
+import { createLogger } from './utils/logger';
 
 // Analytics 服务
 import { useAnalytics } from './composables/useAnalytics';
+
+// 备份文件清理
+import { cleanupStoreBackups } from './utils/storeCleanup';
 
 // PrimeVue 样式
 import 'primeicons/primeicons.css';
@@ -29,6 +33,8 @@ import './theme/dark-theme.css';
 import './theme/light-theme.css';
 import './theme/primevue-overrides.css';
 import './theme/transitions.css';
+
+const log = createLogger('Init');
 
 // 创建 Vue 应用实例
 const app = createApp(App);
@@ -60,24 +66,23 @@ async function ensureConfigSync() {
     const config = await configStore.get<UserConfig>('config');
     if (!config) {
       // 初始化配置
-      console.log('[初始化] 创建默认配置...');
       await configStore.set('config', DEFAULT_CONFIG);
       await configStore.save();
-      console.log('[初始化] ✓ 已创建默认配置，启用的图床:', DEFAULT_CONFIG.enabledServices);
+      log.debug('已创建默认配置，启用的图床:', DEFAULT_CONFIG.enabledServices);
     } else {
-      console.log('[初始化] ✓ 配置已存在，启用的图床:', config.enabledServices);
+      log.debug('配置已存在，启用的图床:', config.enabledServices);
     }
   } catch (error) {
-    console.error('[初始化] 配置同步失败:', error);
+    log.error('配置同步失败:', error);
     // 解密失败（密钥不匹配）→ 数据不可恢复，用 setDirect 覆写为默认配置
     if (error instanceof StoreError) {
-      console.warn('[初始化] ⚠ 检测到密钥不匹配，配置将重置为默认值（旧配置无法恢复）');
+      log.warn('检测到密钥不匹配，配置将重置为默认值（旧配置无法恢复）');
       try {
         await configStore.setDirect({ config: DEFAULT_CONFIG });
         startupFlags.configResetDueToKeyMismatch = true;
-        console.log('[初始化] ✓ 配置已重置为默认值');
+        log.debug('配置已重置为默认值');
       } catch (resetError) {
-        console.error('[初始化] 重置配置失败:', resetError);
+        log.error('重置配置失败:', resetError);
       }
     }
   }
@@ -96,17 +101,18 @@ async function startApp() {
 
   // 3. 初始化 Analytics（非阻塞，失败不影响应用）
   const { initialize } = useAnalytics();
-  initialize().catch(err => console.warn('[Analytics] 初始化失败（非致命错误）:', err));
+  initialize().catch(err => log.warn('Analytics 初始化失败（非致命错误）:', err));
 
-  // 4. 挂载应用（确保配置已加载）
+  // 4. 清理过期备份文件（非阻塞，失败不影响应用）
+  cleanupStoreBackups().catch(() => {});
+
+  // 5. 挂载应用（确保配置已加载）
   app.mount('#app');
-
-  console.log('[App] PicNexus 已启动');
 }
 
 // 启动应用
 startApp().catch(err => {
-  console.error('[App] 启动失败:', err);
+  log.error('启动失败:', err);
   // 即使初始化失败，也尝试挂载应用，让用户看到错误界面
   app.mount('#app');
 });
