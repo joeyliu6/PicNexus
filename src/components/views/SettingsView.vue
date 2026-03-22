@@ -213,6 +213,22 @@ const activeWebDAVProfile = computed(() => {
   return formData.value.webdav.profiles.find(p => p.id === formData.value.webdav.activeId) || null;
 });
 
+// 防抖版保存：用于 blur/watch 触发的自动保存，500ms 内多次触发合并为一次
+let _debouncedSaveTimer: ReturnType<typeof setTimeout> | null = null;
+function debouncedSaveSettings() {
+  if (_debouncedSaveTimer !== null) clearTimeout(_debouncedSaveTimer);
+  _debouncedSaveTimer = setTimeout(() => {
+    _debouncedSaveTimer = null;
+    saveSettings();
+  }, 500);
+}
+function cancelDebouncedSave() {
+  if (_debouncedSaveTimer !== null) {
+    clearTimeout(_debouncedSaveTimer);
+    _debouncedSaveTimer = null;
+  }
+}
+
 watch(serviceConfigStatus, (newStatus, oldStatus) => {
   if (!oldStatus) return;
   let changed = false;
@@ -231,7 +247,7 @@ watch(serviceConfigStatus, (newStatus, oldStatus) => {
       }
     }
   }
-  if (changed) saveSettings();
+  if (changed) debouncedSaveSettings();
 });
 
 
@@ -824,6 +840,10 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  // 组件销毁时取消防抖并强制立即保存，防止关闭应用时最后一次输入丢失
+  cancelDebouncedSave();
+  saveSettings();
+
   if (cookieUnlisten.value) {
     cookieUnlisten.value();
     cookieUnlisten.value = null;
@@ -874,7 +894,7 @@ onUnmounted(() => {
           :shortcut-upload-from-file="formData.globalShortcut.uploadFromFile"
           @update:current-theme="handleThemeChange"
           @update:auto-start="handleAutoStartChange"
-          @update:minimize-to-tray-on-start="(v) => { formData.appBehavior.minimizeToTrayOnStart = v; saveSettings(); }"
+          @update:minimize-to-tray-on-start="(v) => { formData.appBehavior.minimizeToTrayOnStart = v; debouncedSaveSettings(); }"
           @update:close-to-tray="handleCloseToTrayChange"
           @update:analytics-enabled="(v) => { formData.analyticsEnabled = v; handleAnalyticsToggle(); }"
           @update:link-default-format="(v) => { formData.linkOutput.defaultFormat = v; }"
@@ -885,7 +905,7 @@ onUnmounted(() => {
           @update:shortcut-upload-from-file="(v: string) => { formData.globalShortcut.uploadFromFile = v; }"
           @clear-history="handleClearHistory"
           @clear-cache="handleClearAppCache"
-          @save="saveSettings"
+          @save="debouncedSaveSettings"
         />
       </div>
 
@@ -928,20 +948,20 @@ onUnmounted(() => {
           :service-names="serviceNames"
           :available-services="availableServices"
           :service-config-status="serviceConfigStatus"
-          @update:available-services="(v) => { availableServices = v; saveSettings(); }"
+          @update:available-services="(v) => { availableServices = v; debouncedSaveSettings(); }"
           @card-navigated="targetCardId = null"
           @test-all="testAllConfiguredServices"
           @cancel-batch-test="batchTestAborted = true"
           @scroll-to-service="scrollToService"
-          @save="saveSettings"
+          @save="debouncedSaveSettings"
           @test-private="handleServiceTest"
           @test-token="handleServiceTest"
           @test-cookie="handleServiceTest"
           @check-builtin="handleBuiltinCheck"
           @login-cookie="handleCookieLogin"
-          @update:link-prefix-enabled="(v) => { formData.linkPrefixEnabled = v; saveSettings(); }"
+          @update:link-prefix-enabled="(v) => { formData.linkPrefixEnabled = v; debouncedSaveSettings(); }"
           @update:prefix-list="(v) => { formData.linkPrefixList = v; }"
-          @update:selected-prefix-index="(v) => { formData.selectedPrefixIndex = v; saveSettings(); }"
+          @update:selected-prefix-index="(v) => { formData.selectedPrefixIndex = v; debouncedSaveSettings(); }"
           @update:github-url-strategy="(v) => { formData.github.urlStrategy = v; }"
           @add-prefix="addPrefix"
           @remove-prefix="removePrefix"
@@ -953,9 +973,8 @@ onUnmounted(() => {
       <div v-if="activeTab === 'backup'" class="settings-section">
         <BackupSyncPanel
           :webdav-config="formData.webdav"
-          @update:webdav-config="(v) => { formData.webdav = v; saveSettings(); }"
-          @save="saveSettings"
-          @test-web-d-a-v="testActiveWebDAV"
+          @update:webdav-config="(v) => { formData.webdav = v; debouncedSaveSettings(); }"
+          @save="debouncedSaveSettings"
           @add-web-d-a-v-profile="addWebDAVProfile"
           @delete-web-d-a-v-profile="deleteWebDAVProfile"
           @switch-web-d-a-v-profile="switchWebDAVProfile"
@@ -967,9 +986,9 @@ onUnmounted(() => {
         <AboutUpdatePanel
           :app-version="appVersion"
           :auto-update-enabled="formData.autoUpdateEnabled"
-          @update:auto-update-enabled="(v) => { formData.autoUpdateEnabled = v; saveSettings(); }"
+          @update:auto-update-enabled="(v) => { formData.autoUpdateEnabled = v; debouncedSaveSettings(); }"
           @reopen-onboarding="reopenOnboarding"
-          @save="saveSettings"
+          @save="debouncedSaveSettings"
         />
       </div>
     </div>

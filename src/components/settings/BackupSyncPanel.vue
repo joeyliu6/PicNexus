@@ -307,8 +307,8 @@ function handleClearPassword() {
         </div>
         <p class="security-desc">
           {{ hasBackupPassword
-            ? '导出和同步的配置文件已加密。换电脑时，导入备份文件并输入密码即可还原。'
-            : '配置以明文保存，设置密码后自动加密。换机时导入备份并输入密码即可还原。'
+            ? '配置文件已加密保护，导出更安全。换机还原时导入备份并输入密码即可。'
+            : '配置默认以明文导出，设置密码后自动加密。换机还原时需输入该密码。'
           }}
         </p>
       </div>
@@ -371,10 +371,6 @@ function handleClearPassword() {
         />
       </div>
 
-      <p v-if="!isWebDAVConnected" class="helper-text cloud-hint">
-        <i class="pi pi-info-circle" />
-        配置 WebDAV 连接后即可使用云端同步
-      </p>
     </div>
 
     <!-- 迁移密码对话框 -->
@@ -460,8 +456,8 @@ function handleClearPassword() {
 
 .data-section-header {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  flex-direction: column;
+  gap: 2px;
   margin-bottom: 8px;
 }
 
@@ -472,20 +468,7 @@ function handleClearPassword() {
 }
 
 .data-section-desc {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.cloud-hint {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.cloud-hint i {
-  color: var(--text-muted);
   font-size: 13px;
-  flex-shrink: 0;
+  color: var(--text-muted);
 }
 </style>

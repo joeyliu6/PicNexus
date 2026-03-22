@@ -192,11 +192,17 @@ const isAnyForceLoading = computed(() =>
       </div>
     </div>
 
-    <!-- 云端同步行：仅 WebDAV 已连接时显示 -->
-    <div v-if="isCloudEnabled" class="card-row cloud-row">
+    <!-- 云端同步行：始终显示，未连接时禁用 -->
+    <div class="card-row cloud-row" :class="{ 'is-disabled': !isCloudEnabled }">
       <div class="row-label-group">
         <span class="row-label">云端同步</span>
+        <!-- 未配置时：直接显示 inline 提示文字，不藏在 tooltip 里 -->
+        <span v-if="!isCloudEnabled" class="cloud-hint-text">
+          <i class="pi pi-lock cloud-hint-icon" />
+          未配置 WebDAV
+        </span>
         <span
+          v-else
           v-tooltip.bottom="tooltipContent"
           class="status-badge"
           :class="statusClass"
@@ -206,17 +212,19 @@ const isAnyForceLoading = computed(() =>
         </span>
       </div>
       <div class="row-actions">
-        <span v-tooltip.bottom="syncButtonTooltip">
+        <span v-tooltip.bottom="isCloudEnabled ? syncButtonTooltip : undefined">
           <Button
             @click="emit('sync-cloud')"
             :loading="cloudLoading.sync"
+            :disabled="!isCloudEnabled"
             label="同步"
             icon="pi pi-sync"
             outlined
             size="small"
           />
         </span>
-        <div class="dropdown-wrapper" ref="moreMenuRef">
+        <!-- 禁用态隐藏「更多」按钮，减少认知负担 -->
+        <div v-if="isCloudEnabled" class="dropdown-wrapper" ref="moreMenuRef">
           <Button
             @click.stop="toggleMoreMenu"
             :disabled="isAnyForceLoading"
@@ -268,8 +276,13 @@ const isAnyForceLoading = computed(() =>
   padding: 10px 14px;
 }
 
+.card-row + .card-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
 .card-row.cloud-row {
   background: var(--hover-overlay-subtle);
+  border-radius: 0 0 12px 12px;
 }
 
 .row-label {
@@ -318,6 +331,26 @@ const isAnyForceLoading = computed(() =>
 .status-badge.partial { background: var(--warning-soft); color: var(--warning); }
 .status-badge.stale-warning { background: var(--warning-soft); color: var(--warning); }
 .status-badge.stale-danger { background: var(--warning-soft); color: #e67e22; }
+
+.cloud-row.is-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* 未配置时的 inline 提示文字 */
+.cloud-hint-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.cloud-hint-icon {
+  font-size: 11px;
+  color: var(--text-muted);
+}
 
 /* 更多菜单 */
 .dropdown-wrapper {
