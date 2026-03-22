@@ -53,7 +53,7 @@
     "fs:allow-mkdir",
     "fs:allow-read-dir",
     "fs:allow-read-text-file",
-    "fs:allow-remove-file",
+    "fs:allow-remove",
     "fs:allow-write-text-file",
     "fs:scope-app-recursive",
     "fs:scope-appcache-recursive",

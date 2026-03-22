@@ -1,6 +1,7 @@
 // 简单的存储工具，使用 Tauri 的 fs API 替代 tauri-plugin-store-api
 // v2.8: 支持加密存储，使用 AES-GCM 加密敏感数据
 // v2.9: 增强并发控制，使用全局互斥锁防止竞态条件
+// v2.10: 添加内存缓存，避免同一会话内重复解密
 import { readTextFile, writeTextFile, exists, mkdir, remove } from '@tauri-apps/plugin-fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import { secureStorage, isAnyEncryptedData, BackupPasswordRequiredError } from './crypto';
@@ -100,6 +101,12 @@ class SimpleStore {
   /** 是否启用自愈模式（解密失败时备份后重置，而非中止写入） */
   private selfHeal: boolean;
 
+  /** 内存缓存：避免同一会话内对同一文件重复读取和解密 */
+  private memCache: Record<string, any> = {};
+
+  /** 缓存是否已从磁盘完整加载过 */
+  private cacheLoaded = false;
+
   /**
    * 创建存储实例
    * @param filename 存储文件名（相对于应用数据目录）
@@ -181,6 +188,13 @@ class SimpleStore {
    * 注意：恢复损坏文件时直接调用 _performWrite 而非 set，避免二次加锁导致死锁
    */
   private async _performRead<T>(key: string, defaultValue?: T): Promise<T | null> {
+    // 缓存命中：跳过文件 I/O 和解密
+    if (this.cacheLoaded) {
+      const cached = this.memCache[key];
+      if (cached !== undefined) return cached as T;
+      return defaultValue !== undefined ? defaultValue : null;
+    }
+
     try {
       const dataPath = await this.getDataPath();
 
@@ -304,9 +318,15 @@ class SimpleStore {
       const value = data[key];
       if (value === undefined) {
         log.debug(`键 "${key}" 不存在于数据文件中`);
+        // 加载完整缓存，后续读取直接从内存返回
+        this.memCache = { ...data };
+        this.cacheLoaded = true;
         return null;
       }
 
+      // 加载完整缓存，后续读取直接从内存返回
+      this.memCache = { ...data };
+      this.cacheLoaded = true;
       return value as T;
     } catch (error) {
       // 备份密码需要输入：直接传播到 UI 层
@@ -326,6 +346,102 @@ class SimpleStore {
         'read',
         key,
         error
+      );
+    }
+  }
+
+  /**
+   * 从磁盘加载完整数据（仅在缓存未初始化时调用）
+   * 支持 PNXENC 和 PNXPWD 两种加密格式，以及旧版兼容
+   */
+  private async _loadFromDisk(key: string, dataPath: string): Promise<Record<string, any>> {
+    const fileExists = await exists(dataPath);
+    if (!fileExists) return {};
+
+    let oldFileContent: string;
+    try {
+      oldFileContent = await readTextFile(dataPath);
+    } catch (readError: any) {
+      const errorMsg = readError?.message || String(readError);
+      if (errorMsg.includes('Permission') || errorMsg.includes('permission')) {
+        throw new StoreError(`读取现有数据权限不足: ${dataPath}`, 'write', key, readError);
+      }
+      throw new StoreError(
+        `无法读取现有数据文件，操作中止以防止数据丢失: ${errorMsg}`,
+        'write', key, readError
+      );
+    }
+
+    if (!oldFileContent || oldFileContent.trim().length === 0) return {};
+
+    let oldContent = oldFileContent;
+    const trimmedContent = oldFileContent.trim();
+
+    if (isAnyEncryptedData(trimmedContent)) {
+      try {
+        log.debug(`检测到加密数据，尝试解密...`);
+        oldContent = await secureStorage.decrypt(trimmedContent);
+        log.info(`✓ 解密成功`);
+      } catch (decryptError: any) {
+        if (decryptError instanceof BackupPasswordRequiredError) throw decryptError;
+        const errorMsg = decryptError?.message || String(decryptError);
+        log.error(`解密失败: ${errorMsg}`);
+        try {
+          const backupPath = `${dataPath}.corrupted.${Date.now()}`;
+          await writeTextFile(backupPath, oldFileContent);
+          log.info(`✓ 已创建损坏文件的备份: ${backupPath}`);
+        } catch (backupError) {
+          log.warn(`创建备份失败:`, backupError);
+        }
+        if (this.selfHeal) {
+          try { await remove(dataPath); } catch {}
+          log.warn(`⚠ 自愈模式：已备份损坏文件并重置，继续写入新数据 (${this.filePath})`);
+          return {};
+        }
+        throw new StoreError(
+          `配置文件解密失败，操作中止以防止数据丢失: ${errorMsg}`,
+          'write', key, decryptError
+        );
+      }
+    } else if (!trimmedContent.startsWith('{') && !trimmedContent.startsWith('[')) {
+      try {
+        log.debug(`检测到可能的旧版加密数据，尝试解密...`);
+        oldContent = await secureStorage.decrypt(trimmedContent);
+        log.info(`✓ 旧版加密数据解密成功`);
+      } catch (decryptError: any) {
+        const errorMsg = decryptError?.message || String(decryptError);
+        log.warn(`旧版解密失败，尝试按明文解析: ${errorMsg}`);
+        oldContent = oldFileContent;
+      }
+    }
+
+    try {
+      const data = JSON.parse(oldContent);
+      if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+        log.warn('警告: 现有数据格式不正确（非对象），创建备份后重置');
+        try {
+          const backupPath = `${dataPath}.invalid.${Date.now()}`;
+          await writeTextFile(backupPath, oldFileContent);
+          log.info(`✓ 已创建无效数据的备份: ${backupPath}`);
+        } catch (backupError) {
+          log.warn(`创建备份失败:`, backupError);
+        }
+        return {};
+      }
+      return data;
+    } catch (parseError: any) {
+      const errorMsg = parseError?.message || String(parseError);
+      log.error(`JSON 解析失败 (${this.filePath}):`, errorMsg);
+      try {
+        const backupPath = `${dataPath}.corrupted.${Date.now()}`;
+        await writeTextFile(backupPath, oldFileContent);
+        log.info(`✓ 已创建损坏文件的备份: ${backupPath}`);
+      } catch (backupError) {
+        log.warn(`创建备份失败:`, backupError);
+      }
+      throw new StoreError(
+        `配置文件已损坏，操作中止以防止数据丢失。已创建备份文件。错误: ${errorMsg}`,
+        'write', key, parseError
       );
     }
   }
@@ -373,6 +489,9 @@ class SimpleStore {
       const jsonContent = JSON.stringify(data, null, 2);
       const encryptedContent = await secureStorage.encrypt(jsonContent);
       await writeTextFile(dataPath, encryptedContent);
+      // 密钥切换后同步更新缓存
+      this.memCache = { ...data };
+      this.cacheLoaded = true;
       log.info(`✓ 直接写入成功 (${this.filePath})`);
     });
   }
@@ -404,7 +523,7 @@ class SimpleStore {
     try {
       const dataPath = await this.getDataPath();
       const appDir = await appDataDir();
-      
+
       // 确保目录存在
       try {
         await mkdir(appDir, { recursive: true });
@@ -426,127 +545,19 @@ class SimpleStore {
         );
       }
 
-      // 读取现有数据（并尝试解密）
-      // 【v2.9 增强】读取失败时不再静默使用空对象，避免数据丢失
-      let data: Record<string, any> = {};
-      const fileExists = await exists(dataPath);
-      if (fileExists) {
-        let oldFileContent: string;
-        try {
-          oldFileContent = await readTextFile(dataPath);
-        } catch (readError: any) {
-          // 读取失败，抛出错误而不是静默继续
-          const errorMsg = readError?.message || String(readError);
-          if (errorMsg.includes('Permission') || errorMsg.includes('permission')) {
-            throw new StoreError(
-              `读取现有数据权限不足: ${dataPath}`,
-              'write',
-              key,
-              readError
-            );
-          }
-          // 文件被占用等错误，抛出而不是静默覆盖
-          throw new StoreError(
-            `无法读取现有数据文件，操作中止以防止数据丢失: ${errorMsg}`,
-            'write',
-            key,
-            readError
-          );
-        }
-
-        if (oldFileContent && oldFileContent.trim().length > 0) {
-          // 【v3.0】支持 PNXENC 和 PNXPWD 两种加密格式
-          let oldContent = oldFileContent;
-          const trimmedContent = oldFileContent.trim();
-
-          if (isAnyEncryptedData(trimmedContent)) {
-            // 带魔数前缀的加密数据（PNXENC 或 PNXPWD）
-            try {
-              log.debug(`检测到加密数据，尝试解密...`);
-              oldContent = await secureStorage.decrypt(trimmedContent);
-              log.info(`✓ 解密成功`);
-            } catch (decryptError: any) {
-              // 备份密码需要输入：直接传播
-              if (decryptError instanceof BackupPasswordRequiredError) {
-                throw decryptError;
-              }
-              const errorMsg = decryptError?.message || String(decryptError);
-              log.error(`解密失败: ${errorMsg}`);
-              try {
-                const backupPath = `${dataPath}.corrupted.${Date.now()}`;
-                await writeTextFile(backupPath, oldFileContent);
-                log.info(`✓ 已创建损坏文件的备份: ${backupPath}`);
-              } catch (backupError) {
-                log.warn(`创建备份失败:`, backupError);
-              }
-              if (this.selfHeal) {
-                try { await remove(dataPath); } catch {}
-                log.warn(`⚠ 自愈模式：已备份损坏文件并重置，继续写入新数据 (${this.filePath})`);
-                oldContent = '{}'; // 重置为空 JSON，跳过后续 JSON 解析失败
-              } else {
-                throw new StoreError(
-                  `配置文件解密失败，操作中止以防止数据丢失: ${errorMsg}`,
-                  'write',
-                  key,
-                  decryptError
-                );
-              }
-            }
-          } else if (!trimmedContent.startsWith('{') && !trimmedContent.startsWith('[')) {
-            // 可能是旧版加密数据（无魔数前缀），尝试解密
-            try {
-              log.debug(`检测到可能的旧版加密数据，尝试解密...`);
-              oldContent = await secureStorage.decrypt(trimmedContent);
-              log.info(`✓ 旧版加密数据解密成功`);
-            } catch (decryptError: any) {
-              const errorMsg = decryptError?.message || String(decryptError);
-              log.warn(`旧版解密失败，尝试按明文解析: ${errorMsg}`);
-              oldContent = oldFileContent;
-            }
-          }
-
-          // 解析 JSON
-          try {
-            data = JSON.parse(oldContent);
-            // 验证解析后的数据是对象
-            if (typeof data !== 'object' || data === null || Array.isArray(data)) {
-              log.warn('警告: 现有数据格式不正确（非对象），创建备份后重置');
-              // 创建备份
-              try {
-                const backupPath = `${dataPath}.invalid.${Date.now()}`;
-                await writeTextFile(backupPath, oldFileContent);
-                log.info(`✓ 已创建无效数据的备份: ${backupPath}`);
-              } catch (backupError) {
-                log.warn(`创建备份失败:`, backupError);
-              }
-              data = {};
-            }
-          } catch (parseError: any) {
-            // JSON 解析失败，创建备份并抛出错误
-            const errorMsg = parseError?.message || String(parseError);
-            log.error(`JSON 解析失败 (${this.filePath}):`, errorMsg);
-
-            // 创建损坏文件的备份
-            try {
-              const backupPath = `${dataPath}.corrupted.${Date.now()}`;
-              await writeTextFile(backupPath, oldFileContent);
-              log.info(`✓ 已创建损坏文件的备份: ${backupPath}`);
-            } catch (backupError) {
-              log.warn(`创建备份失败:`, backupError);
-            }
-
-            throw new StoreError(
-              `配置文件已损坏，操作中止以防止数据丢失。已创建备份文件。错误: ${errorMsg}`,
-              'write',
-              key,
-              parseError
-            );
-          }
-        }
+      // 优先从内存缓存获取现有数据，避免重复读取文件和解密
+      let data: Record<string, any>;
+      if (this.cacheLoaded) {
+        data = { ...this.memCache };
+      } else {
+        // 缓存未加载时，走原有文件读取流程
+        data = await this._loadFromDisk(key, dataPath);
       }
 
-      // 更新数据
+      // 更新数据并同步内存缓存
       data[key] = value;
+      this.memCache = { ...data };
+      this.cacheLoaded = true;
 
       // 序列化数据
       let jsonContent: string;
@@ -661,6 +672,9 @@ class SimpleStore {
           const emptyJson = JSON.stringify({}, null, 2);
           const encryptedContent = await secureStorage.encrypt(emptyJson);
           await writeTextFile(dataPath, encryptedContent);
+          // 同步清空内存缓存
+          this.memCache = {};
+          this.cacheLoaded = false;
           log.info(`✓ 成功清空数据文件: ${this.filePath}`);
         } catch (writeError: any) {
           const errorMsg = writeError?.message || String(writeError);
