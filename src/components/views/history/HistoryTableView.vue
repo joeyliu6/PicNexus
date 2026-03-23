@@ -45,6 +45,7 @@ const historyManager = useHistoryManager();
 const thumbCache = useThumbCache();
 
 const isFilterActive = computed(() => !!(props.searchTerm || props.filter !== 'all'));
+const tableViewRef = ref<HTMLElement | null>(null);
 
 const PREVIEW_MAX_SIZE = 300;
 const PREVIEW_MARGIN = 8;
@@ -168,6 +169,7 @@ onUnmounted(() => {
 
   badgeResizeObserver?.disconnect();
   badgeResizeObserver = null;
+  badgeObservedElement = null;
   cancelAnimationFrame(resizeRafId);
 
   viewState.reset();
@@ -204,24 +206,44 @@ function getSuccessfulServices(item: HistoryItem): ServiceType[] {
 
 const badgeColumnWidth = ref(200);
 let badgeResizeObserver: ResizeObserver | null = null;
+let badgeObservedElement: HTMLElement | null = null;
 let resizeRafId = 0;
 
 function setupBadgeWidthObserver(): void {
-  if (badgeResizeObserver) return;
-  const badge = document.querySelector('.service-badges') as HTMLElement | null;
-  const td = badge?.closest('td') as HTMLElement | null;
-  if (!td) return;
+  const root = tableViewRef.value;
+  if (!root) return;
 
-  badgeColumnWidth.value = td.clientWidth - 32; // clientWidth 含 padding，减去 16px * 2
+  const table = root.querySelector('.history-table') as HTMLElement | null;
+  if (!table) return;
+
+  const badge = table.querySelector('.service-badges') as HTMLElement | null;
+  const td = badge?.closest('td') as HTMLElement | null;
+  const header = table.querySelector('.p-datatable-thead > tr > th:nth-child(4)') as HTMLElement | null;
+  const target = td || header;
+  if (!target) return;
+
+  if (badgeResizeObserver && badgeObservedElement === target) return;
+
+  badgeResizeObserver?.disconnect();
+  badgeResizeObserver = null;
+  badgeObservedElement = target;
+
+  const computedStyle = window.getComputedStyle(target);
+  const horizontalPadding = (
+    parseFloat(computedStyle.paddingLeft || '0') +
+    parseFloat(computedStyle.paddingRight || '0')
+  );
+  badgeColumnWidth.value = Math.max(target.clientWidth - horizontalPadding, 80);
+
   badgeResizeObserver = new ResizeObserver(entries => {
     cancelAnimationFrame(resizeRafId);
     resizeRafId = requestAnimationFrame(() => {
       for (const entry of entries) {
-        badgeColumnWidth.value = entry.contentRect.width; // contentRect 已是 content box
+        badgeColumnWidth.value = Math.max(entry.contentRect.width, 80); // contentRect 为 content box
       }
     });
   });
-  badgeResizeObserver.observe(td);
+  badgeResizeObserver.observe(target);
 }
 
 const MORE_BTN_WIDTH = 26;
@@ -407,7 +429,7 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
 </script>
 
 <template>
-  <div class="table-view-container" :class="{ 'has-selection': viewState.hasSelection.value, 'is-loading': isLoadingPage }">
+  <div ref="tableViewRef" class="table-view-container" :class="{ 'has-selection': viewState.hasSelection.value, 'is-loading': isLoadingPage }">
     <!-- 表格视图（服务端分页，加载时使用骨架数据） -->
     <DataTable
       :value="isLoadingPage ? skeletonData : currentPageData"
@@ -520,30 +542,27 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
       </Column>
 
       <!-- 已传图床列 -->
-      <Column header="已传图床" style="width: 30%">
+      <Column header="已传图床" style="min-width: 180px; width: 30%">
         <template #body="{ data }">
           <Skeleton v-if="isSkeleton(data)" width="50px" height="22px" borderRadius="4px" />
           <div v-else class="service-badges">
-            <TransitionGroup name="badge-pop">
-              <span
-                v-for="serviceId in getSuccessfulServices(data).slice(0, getVisibleCount(getSuccessfulServices(data)))"
-                :key="serviceId"
-                class="service-badge-icon"
-                :title="`点击复制 ${getServiceDisplayName(serviceId)} 链接`"
-                @click="handleCopyServiceLink(data, serviceId)"
-              >
-                <span class="badge-icon" v-html="getServiceIcon(serviceId)" />
-                <span class="badge-label">{{ getServiceDisplayName(serviceId) }}</span>
-              </span>
-              <span
-                v-if="getSuccessfulServices(data).length > getVisibleCount(getSuccessfulServices(data))"
-                :key="'more-' + getVisibleCount(getSuccessfulServices(data))"
-                class="service-badge-more"
-                @click="openServicePopover($event, data)"
-              >
-                +{{ getSuccessfulServices(data).length - getVisibleCount(getSuccessfulServices(data)) }}
-              </span>
-            </TransitionGroup>
+            <span
+              v-for="serviceId in getSuccessfulServices(data).slice(0, getVisibleCount(getSuccessfulServices(data)))"
+              :key="serviceId"
+              class="service-badge-icon"
+              :title="`点击复制 ${getServiceDisplayName(serviceId)} 链接`"
+              @click="handleCopyServiceLink(data, serviceId)"
+            >
+              <span class="badge-icon" v-html="getServiceIcon(serviceId)" />
+              <span class="badge-label">{{ getServiceDisplayName(serviceId) }}</span>
+            </span>
+            <span
+              v-if="getSuccessfulServices(data).length > getVisibleCount(getSuccessfulServices(data))"
+              class="service-badge-more"
+              @click="openServicePopover($event, data)"
+            >
+              +{{ getSuccessfulServices(data).length - getVisibleCount(getSuccessfulServices(data)) }}
+            </span>
           </div>
         </template>
       </Column>
@@ -885,32 +904,6 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
 .service-badge-more:hover {
   background: var(--primary-alpha-15);
   color: var(--text-primary);
-}
-
-.badge-pop-enter-active {
-  animation: badgeBounceIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.badge-pop-leave-active {
-  display: none;
-}
-
-.badge-pop-move {
-  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-@keyframes badgeBounceIn {
-  0% {
-    opacity: 0;
-    transform: scale(0.3);
-  }
-  70% {
-    transform: scale(1.08);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
 }
 
 .service-popover-list {

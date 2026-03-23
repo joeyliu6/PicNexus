@@ -1,37 +1,85 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import { onClickOutside } from '@vueuse/core';
 import type { ServiceType } from '../../config/types';
+import { useConfigManager } from '../../composables/useConfig';
+import { LINK_FORMAT_OPTIONS, type LinkFormat } from '../../utils/linkFormatter';
 import { getServiceIcon } from '../../utils/icons';
 import { SERVICE_DISPLAY_NAMES } from '../../constants/serviceNames';
 import { isStatusSuccess, isStatusError, getStatusType, getStatusLabel } from '../../utils/uploadStatus';
+import { buildUploadFailureTooltip } from '../../utils/uploadFailureMessage';
+
+export interface ChannelCopyPayload {
+  url: string;
+  serviceId: ServiceType;
+  fileName: string;
+  format?: LinkFormat;
+}
 
 interface Props {
   service: ServiceType;
   status?: string;
   link?: string;
+  error?: string;
+  fileName: string;
 }
 
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  copy: [link: string];
+  copy: [payload: ChannelCopyPayload];
   retry: [];
 }>();
+
+const configManager = useConfigManager();
 
 const serviceName = computed(() => SERVICE_DISPLAY_NAMES[props.service]);
 const serviceIcon = computed(() => getServiceIcon(props.service));
 const statusType = computed(() => getStatusType(props.status));
 const statusLabel = computed(() => getStatusLabel(props.status));
+const errorTooltip = computed(() => {
+  if (!isStatusError(props.status)) return '';
+  return buildUploadFailureTooltip(serviceName.value, props.error, [props.service]);
+});
 
 const cardClass = computed(() => ({
   error: isStatusError(props.status),
   success: isStatusSuccess(props.status),
 }));
 
+const menuVisible = ref(false);
+const menuRef = ref<HTMLElement | null>(null);
+
+const formatOptions = computed(() => {
+  const hasCustomTemplate = !!configManager.config.value.linkOutput?.customTemplate;
+  return LINK_FORMAT_OPTIONS.filter(opt => opt.format !== 'custom' || hasCustomTemplate);
+});
+
+onClickOutside(menuRef, () => {
+  menuVisible.value = false;
+});
+
+function emitCopy(format?: LinkFormat) {
+  if (!props.link) return;
+  emit('copy', {
+    url: props.link,
+    serviceId: props.service,
+    fileName: props.fileName,
+    format,
+  });
+}
+
 function handleCopy() {
-  if (props.link) {
-    emit('copy', props.link);
-  }
+  emitCopy();
+}
+
+function toggleMenu() {
+  menuVisible.value = !menuVisible.value;
+}
+
+function handleFormatCopy(format: LinkFormat) {
+  menuVisible.value = false;
+  emitCopy(format);
 }
 
 function handleRetry() {
@@ -40,7 +88,11 @@ function handleRetry() {
 </script>
 
 <template>
-  <div class="channel-card" :class="cardClass">
+  <div
+    class="channel-card"
+    :class="cardClass"
+    v-tooltip.top="errorTooltip || null"
+  >
     <div class="channel-icon" :class="{ 'has-svg': !!serviceIcon }">
       <span v-if="serviceIcon" class="icon-svg" v-html="serviceIcon"></span>
       <span v-else>{{ serviceName[0] }}</span>
@@ -51,14 +103,41 @@ function handleRetry() {
       <span class="status-label" :class="statusType">{{ statusLabel }}</span>
     </div>
 
-    <button
-      v-if="isStatusSuccess(status)"
-      class="copy-btn"
-      title="复制链接"
-      @click="handleCopy"
+    <div
+      v-if="isStatusSuccess(status) && link"
+      ref="menuRef"
+      class="copy-actions"
     >
-      <i class="pi pi-copy"></i>
-    </button>
+      <button
+        class="copy-btn"
+        title="复制链接"
+        @click="handleCopy"
+      >
+        <i class="pi pi-copy"></i>
+      </button>
+      <button
+        class="copy-menu-btn"
+        title="选择复制格式"
+        @click.stop="toggleMenu"
+      >
+        <i class="pi pi-angle-down"></i>
+      </button>
+
+      <Transition name="copy-menu">
+        <div v-if="menuVisible" class="copy-format-menu">
+          <button
+            v-for="opt in formatOptions"
+            :key="opt.format"
+            class="format-item"
+            @click="handleFormatCopy(opt.format)"
+          >
+            <i :class="'pi ' + opt.icon"></i>
+            <span>{{ opt.label }}</span>
+          </button>
+        </div>
+      </Transition>
+    </div>
+
     <button
       v-else-if="isStatusError(status)"
       class="retry-btn"
@@ -164,11 +243,17 @@ function handleRetry() {
   color: var(--primary);
 }
 
-.copy-btn,
-.retry-btn {
+.copy-actions {
   position: absolute;
   top: 6px;
   right: 6px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.copy-btn,
+.copy-menu-btn,
+.retry-btn {
   background: none;
   border: none;
   cursor: pointer;
@@ -180,14 +265,99 @@ function handleRetry() {
   transition: all 0.2s ease;
 }
 
-.copy-btn { color: var(--success); opacity: 0.6; }
-.retry-btn { color: var(--error); }
+.copy-btn {
+  color: var(--success);
+  opacity: 0.7;
+}
 
-.copy-btn:hover { background: var(--success-soft); opacity: 1; }
-.retry-btn:hover { background: var(--error-soft); }
+.copy-menu-btn {
+  color: var(--success);
+  opacity: 0.75;
+  border-left: 1px solid var(--success-soft);
+  margin-left: 2px;
+  padding: 3px 4px;
+}
+
+.retry-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  color: var(--error);
+}
+
+.copy-btn:hover,
+.copy-menu-btn:hover {
+  background: var(--success-soft);
+  opacity: 1;
+}
+
+.retry-btn:hover {
+  background: var(--error-soft);
+}
 
 .copy-btn i,
+.copy-menu-btn i,
 .retry-btn i {
   font-size: 12px;
+}
+
+.copy-menu-btn i {
+  font-size: 11px;
+}
+
+.copy-format-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  box-shadow: var(--shadow-float);
+  padding: 4px;
+  min-width: 120px;
+  z-index: 1001;
+}
+
+.format-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.format-item:hover {
+  background: var(--hover-overlay);
+  color: var(--primary);
+}
+
+.format-item i {
+  font-size: 13px;
+  color: var(--text-secondary);
+  width: 14px;
+  text-align: center;
+}
+
+.format-item:hover i {
+  color: var(--primary);
+}
+
+.copy-menu-enter-active,
+.copy-menu-leave-active {
+  transition: all 0.15s ease;
+}
+
+.copy-menu-enter-from,
+.copy-menu-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
 }
 </style>

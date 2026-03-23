@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import type { ServiceType, UserConfig } from '../../config/types';
 import type { QueueItem } from '../../uploadQueue';
+import type { LinkFormat } from '../../utils/linkFormatter';
 import { getThumbnailCandidates } from '../../composables/useThumbCache';
 import { isStatusSuccess, isStatusError, isStatusUploading } from '../../utils/uploadStatus';
 import ThumbnailImage from '../common/ThumbnailImage.vue';
@@ -20,6 +21,13 @@ interface StackedProgress {
   uploadingPct: number;
 }
 
+interface QueueCopyPayload {
+  url: string;
+  serviceId: ServiceType;
+  fileName: string;
+  format?: LinkFormat;
+}
+
 interface Props {
   item: QueueItem;
   config: UserConfig;
@@ -28,7 +36,7 @@ interface Props {
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  copy: [link: string];
+  copy: [payload: QueueCopyPayload];
   retry: [itemId: string, serviceId: ServiceType];
 }>();
 
@@ -70,6 +78,10 @@ const thumbnailSrcs = computed(() => getThumbnailCandidates(props.item, props.co
 
 function handleRetry(serviceId: ServiceType) {
   emit('retry', props.item.id, serviceId);
+}
+
+function handleCopy(payload: QueueCopyPayload) {
+  emit('copy', payload);
 }
 </script>
 
@@ -123,8 +135,10 @@ function handleRetry(serviceId: ServiceType) {
         :key="service"
         :service="service"
         :status="item.serviceProgress[service]?.status"
+        :error="item.serviceProgress[service]?.error"
         :link="item.serviceProgress[service]?.link"
-        @copy="(link: string) => emit('copy', link)"
+        :file-name="item.fileName"
+        @copy="handleCopy"
         @retry="handleRetry(service)"
       />
     </div>

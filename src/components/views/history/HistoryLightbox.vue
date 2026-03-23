@@ -8,6 +8,7 @@ import { useConfirm } from '../../../composables/useConfirm';
 import { formatFileSize } from '../../../utils/formatters';
 import { getPrimaryImageUrl } from '../../../utils/imageUrl';
 import { getServiceDisplayName } from '../../../constants/serviceNames';
+import { buildHistoryFailureLine } from '../../../utils/uploadFailureMessage';
 
 const props = withDefaults(defineProps<{
   visible: boolean;
@@ -42,6 +43,35 @@ const formatTime = (timestamp: number) => dateFormatter.format(new Date(timestam
 
 const getSuccessfulServices = (item: HistoryItem): ServiceType[] =>
   item.results.filter(r => r.status === 'success').map(r => r.serviceId);
+
+const getFailedResults = (item: HistoryItem) =>
+  item.results.filter(r => r.status === 'failed');
+
+const successfulServicesText = computed(() => {
+  if (!props.item) return '';
+  return getSuccessfulServices(props.item).map(serviceId => getServiceDisplayName(serviceId)).join('、');
+});
+
+const failedResults = computed(() => {
+  if (!props.item) return [];
+  return getFailedResults(props.item);
+});
+
+const failedServicesText = computed(() =>
+  failedResults.value
+    .map(result => getServiceDisplayName(result.serviceId))
+    .join('、')
+);
+
+const failedServicesTooltip = computed(() =>
+  failedResults.value
+    .map(result => buildHistoryFailureLine(
+      getServiceDisplayName(result.serviceId),
+      result.error,
+      [result.serviceId]
+    ))
+    .join('；')
+);
 
 const lightboxImage = computed(() => {
   if (!props.item) return '';
@@ -333,11 +363,21 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
           <div class="lightbox-divider"></div>
           <div
             class="lightbox-info-cell cell-source"
-            v-tooltip.top="getSuccessfulServices(item).map(s => getServiceDisplayName(s)).join('、')"
+            v-tooltip.top="successfulServicesText"
           >
-            <span class="cell-value source-value">{{ getSuccessfulServices(item).map(s => getServiceDisplayName(s)).join('、') }}</span>
+            <span class="cell-value source-value">{{ successfulServicesText }}</span>
             <span class="cell-label">已传图床</span>
           </div>
+          <template v-if="failedResults.length > 0">
+            <div class="lightbox-divider"></div>
+            <div
+              class="lightbox-info-cell cell-failed"
+              v-tooltip.top="failedServicesTooltip"
+            >
+              <span class="cell-value source-value">{{ failedServicesText }}</span>
+              <span class="cell-label">失败图床</span>
+            </div>
+          </template>
           <div class="lightbox-actions">
             <button class="action-btn" @click="handleCopyLink" v-tooltip.top="'复制链接'">
               <i class="pi pi-copy"></i>
@@ -586,6 +626,11 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 
 .cell-source {
   flex: 1.5;
+  flex-shrink: 1;
+}
+
+.cell-failed {
+  flex: 1.6;
   flex-shrink: 1;
 }
 

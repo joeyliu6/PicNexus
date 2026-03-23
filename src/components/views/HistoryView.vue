@@ -3,12 +3,11 @@
  * 历史记录视图入口组件
  * 负责 Dashboard Strip 和视图切换
  */
-import { ref, onMounted, onActivated, onDeactivated, watch, nextTick } from 'vue';
+import { ref, onActivated, onDeactivated, watch, nextTick } from 'vue';
 import Select from 'primevue/select';
 import InputText from 'primevue/inputtext';
 import type { ServiceType } from '../../config/types';
 import { SERVICE_DISPLAY_NAMES } from '../../constants/serviceNames';
-import { useConfigManager } from '../../composables/useConfig';
 import { useHistoryManager } from '../../composables/useHistory';
 import { debounce } from '../../utils/debounce';
 import HistoryTableView from './history/HistoryTableView.vue';
@@ -17,7 +16,6 @@ import 'primeicons/primeicons.css';
 
 type ViewMode = 'table' | 'timeline';
 
-const configManager = useConfigManager();
 const historyManager = useHistoryManager();
 
 const currentViewMode = ref<ViewMode>('table');
@@ -52,18 +50,6 @@ const updateSearchTerm = debounce((term: string) => {
 }, 300);
 
 watch(localSearchTerm, updateSearchTerm);
-
-// 初始化：加载默认视图偏好
-onMounted(async () => {
-  try {
-    const config = await configManager.loadConfig();
-    const defaultMode = (config.galleryViewPreferences?.viewMode as any) === 'grid'
-      ? 'table'
-      : (config.galleryViewPreferences?.viewMode as ViewMode) ?? 'table';
-    currentViewMode.value = defaultMode;
-  } catch {
-  }
-});
 
 // KeepAlive 激活时刷新数据（解决上传后切换回来不更新的问题）
 onActivated(async () => {
@@ -107,25 +93,6 @@ const switchViewMode = (mode: ViewMode) => {
   selectedCount.value = 0;
 
   currentViewMode.value = mode;
-
-  // 异步保存视图偏好（不阻塞 UI）
-  queueMicrotask(async () => {
-    try {
-      const config = configManager.config.value;
-      if (config) {
-        const updatedConfig = {
-          ...config,
-          galleryViewPreferences: {
-            ...config.galleryViewPreferences,
-            viewMode: mode as 'table' | 'grid',
-            gridColumnWidth: config.galleryViewPreferences?.gridColumnWidth ?? 220,
-          }
-        };
-        await configManager.saveConfig(updatedConfig, true);
-      }
-    } catch {
-    }
-  });
 };
 
 const handleFilterChange = (filter: ServiceType | 'all') => {
@@ -413,7 +380,7 @@ const handleSelectedCountUpdate = (count: number) => {
 
 .search-field:focus-within {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-alpha-10);
+  box-shadow: none;
 }
 
 .search-field-icon {

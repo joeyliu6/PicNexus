@@ -6,6 +6,8 @@ import { useQueueState } from '../composables/useQueueState';
 import type { QueueItem } from '../uploadQueue';
 import { deepClone, deepMerge } from '../utils/deepClone';
 import { useConfigManager } from '../composables/useConfig';
+import { useCopyLink } from '../composables/useCopyLink';
+import type { LinkFormat } from '../utils/linkFormatter';
 import QueueCard from './upload/QueueCard.vue';
 
 const VIRTUAL_SCROLL_THRESHOLD = 20;
@@ -13,13 +15,34 @@ const ITEM_HEIGHT = 180;
 
 const { queueItems } = useQueueState();
 const { config } = useConfigManager();
+const { copyLink } = useCopyLink();
 
 const useVirtualScroll = computed(() => queueItems.value.length > VIRTUAL_SCROLL_THRESHOLD);
+
+interface QueueCopyPayload {
+  url: string;
+  serviceId: ServiceType;
+  fileName: string;
+  format?: LinkFormat;
+}
 
 let retryCallback: ((itemId: string, serviceId?: ServiceType) => void) | null = null;
 
 function handleRetry(itemId: string, serviceId: ServiceType) {
   retryCallback?.(itemId, serviceId);
+}
+
+async function handleCopy(payload: QueueCopyPayload) {
+  await copyLink(
+    {
+      url: payload.url,
+      serviceId: payload.serviceId,
+      fileName: payload.fileName
+    },
+    {
+      format: payload.format
+    }
+  );
 }
 
 defineExpose({
@@ -63,6 +86,7 @@ defineExpose({
           :config="config"
           class="virtual-card"
 
+          @copy="handleCopy"
           @retry="handleRetry"
         />
       </template>
@@ -74,6 +98,7 @@ defineExpose({
       :key="item.id"
       :item="item"
       :config="config"
+      @copy="handleCopy"
       @retry="handleRetry"
     />
   </div>
