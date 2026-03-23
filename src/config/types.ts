@@ -1003,9 +1003,21 @@ export function getActivePrefix(config: UserConfig): string | null {
  * @param config 可能来自旧版本的用户配置
  * @returns 迁移后的配置（版本号为最新）
  */
+function cloneConfigForMigration(config: UserConfig): UserConfig {
+  try {
+    return structuredClone(config);
+  } catch {
+    try {
+      return JSON.parse(JSON.stringify(config)) as UserConfig;
+    } catch {
+      return JSON.parse(JSON.stringify(DEFAULT_CONFIG)) as UserConfig;
+    }
+  }
+}
+
 export function migrateConfig(config: UserConfig): UserConfig {
-  let migratedConfig: UserConfig = structuredClone(config);
-  const currentVersion = config.configVersion || 0;
+  let migratedConfig: UserConfig = cloneConfigForMigration(config);
+  const currentVersion = migratedConfig.configVersion || 0;
 
   if (currentVersion >= CONFIG_VERSION) {
     return migratedConfig;

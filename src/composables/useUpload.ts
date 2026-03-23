@@ -12,7 +12,7 @@ import {
 import { MultiServiceUploader, SingleServiceResult } from '../core/MultiServiceUploader';
 import { UploadQueueManager } from '../uploadQueue';
 import { useToast } from './useToast';
-import { useCopyLink, type CopyLinkItem } from './useCopyLink';
+import { useCopyLink, type CopyLinkItem, type CopyLinkResult } from './useCopyLink';
 import { TOAST_MESSAGES } from '../constants';
 import { checkNetworkConnectivity } from '../utils/network';
 import { chunkArray } from '../utils/semaphore';
@@ -22,6 +22,8 @@ import { useHistorySaver } from './useHistorySaver';
 import { fetchMetadataBatch } from './useImageMetadata';
 import { AUTH_CONFIG_ERROR_CODES } from '../types/serviceHealth';
 import { createLogger } from '../utils/logger';
+import { buildUploadSummaryToast, type UploadSessionSummary, type UploadCopySummary } from '../utils/uploadSummary';
+import { SERVICE_DISPLAY_NAMES } from '../constants/serviceNames';
 
 const log = createLogger('useUpload');
 
@@ -58,6 +60,22 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
   // 上传中状态
   const isUploading = ref(false);
+
+  function showUploadSessionSummary(
+    summary: UploadSessionSummary,
+    copy: UploadCopySummary
+  ): void {
+    const payload = buildUploadSummaryToast(summary, copy);
+    if (!payload) return;
+
+    if (payload.severity === 'success') {
+      toast.success(payload.summary, payload.detail);
+    } else if (payload.severity === 'error') {
+      toast.error(payload.summary, payload.detail);
+    } else {
+      toast.warn(payload.summary, payload.detail);
+    }
+  }
 
   /**
    * 验证文件类型（只允许图片）
@@ -155,11 +173,15 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       // 获取配置
       let config: UserConfig | null = null;
       try {
-        config = await configStore.get<UserConfig>('config');
+        // 传入默认值：配置损坏时由 Store 自动恢复，避免偶发读取失败中断上传
+        config = await configStore.get<UserConfig>('config', DEFAULT_CONFIG);
       } catch (error) {
-        log.error('读取配置失败:', error);
-        toast.showConfig('error', TOAST_MESSAGES.config.loadFailed('读取配置文件失败，请刷新或稍后重试'));
-        return;
+        log.error('读取配置失败，回退默认配置:', error);
+        toast.showConfig('warn', {
+          summary: '读取配置失败',
+          detail: '已回退到默认配置继续上传，可前往设置页检查配置文件'
+        });
+        config = DEFAULT_CONFIG;
       }
 
       // 验证配置存在
@@ -224,6 +246,13 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
       // 收集成功上传的链接（用于自动复制）
       const collectedLinks: CopyLinkItem[] = [];
+      const uploadSummary: UploadSessionSummary = {
+        total: 0,
+        success: 0,
+        failed: 0,
+        partialServiceFailureCount: 0,
+        partialFailedServices: [],
+      };
 
       // 批次处理函数
       const processBatch = async (batchFiles: string[], batchIndex: number) => {
@@ -243,7 +272,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         }
 
         // 3. 立即开始上传该批
-        await processUploadQueue(queueItems, config, enabledServices, 5, collectedLinks);
+        await processUploadQueue(queueItems, config, enabledServices, 5, collectedLinks, uploadSummary);
 
         log.debug(`批次 ${batchIndex + 1}/${batches.length} 完成：${queueItems.length} 个文件`);
       };
@@ -282,9 +311,21 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       log.info('所有批次处理完成');
 
       // 自动复制链接到剪贴板（使用统一 useCopyLink）
-      if (config.linkOutput?.autoCopy !== false && collectedLinks.length > 0) {
-        await copyLinks(collectedLinks);
+      const autoCopyEnabled = config.linkOutput?.autoCopy !== false;
+      let copyResult: CopyLinkResult | null = null;
+      if (autoCopyEnabled && collectedLinks.length > 0) {
+        copyResult = await copyLinks(collectedLinks, {
+          showSuccessToast: false,
+          showErrorToast: false,
+        });
       }
+
+      showUploadSessionSummary(uploadSummary, {
+        autoCopyEnabled,
+        copiedCount: copyResult?.copiedCount ?? 0,
+        format: copyResult?.format || config.linkOutput?.defaultFormat || 'url',
+        copyFailed: autoCopyEnabled && !!copyResult && !copyResult.ok,
+      });
     } catch (error) {
       log.error('文件处理失败:', error);
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -306,7 +347,8 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     config: UserConfig,
     enabledServices: ServiceType[],
     maxConcurrent: number = 5,
-    collectedLinks?: CopyLinkItem[]
+    collectedLinks?: CopyLinkItem[],
+    uploadSummary?: UploadSessionSummary
   ): Promise<void> {
     if (!queueManager) {
       log.error('上传队列管理器未初始化');
@@ -328,21 +370,22 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
       return async () => {
         try {
-          // 跟踪历史记录 ID 和累积结果
           // 使用 UUID 生成唯一 ID，避免高并发时的 ID 碰撞
           const historyId = crypto.randomUUID();
-          const allServiceResults: SingleServiceResult[] = [];
 
           // 方案 B：标志位跟踪历史记录是否已创建
           let historyCreated = false;
           let historyCreating = false; // 防止并发创建
-          // 等待队列：在 historyCreating 期间到达的成功结果，待 historyCreated 后追加
+          // 等待队列：在历史记录创建前/创建期间到达的结果，待 historyCreated 后追加
           const pendingResults: SingleServiceResult[] = [];
 
           // 实时处理单个服务完成的函数
           const handleServiceResult = async (serviceResult: SingleServiceResult) => {
-            // 记录此结果，确保后续保存时包含它
-            allServiceResults.push(serviceResult);
+            if (!historyCreated && historyCreating) {
+              pendingResults.push(serviceResult);
+            } else if (!historyCreated && serviceResult.status === 'failed') {
+              pendingResults.push(serviceResult);
+            }
 
             // 方案 B：第一个成功结果到达时立即创建历史记录
             if (serviceResult.status === 'success' && !historyCreated && !historyCreating) {
@@ -351,10 +394,12 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
                 // 立即创建历史记录（只包含当前这个成功结果）
                 await saveHistoryItemImmediate(filePath, serviceResult, historyId);
                 historyCreated = true;
+                historyCreating = false;
 
-                // 处理等待队列中的结果（在创建期间到达的其他成功结果）
+                // 处理等待队列中的结果（创建前/创建期间到达的失败或其他成功结果）
                 if (pendingResults.length > 0) {
-                  for (const pending of pendingResults) {
+                  const queuedResults = pendingResults.filter(pending => pending !== serviceResult);
+                  for (const pending of queuedResults) {
                     const success = await addResultToHistoryItem(historyId, pending);
                     if (!success) {
                       log.warn(`${pending.serviceId} 结果追加失败，但不影响上传`);
@@ -363,18 +408,16 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
                   pendingResults.length = 0; // 清空队列
                 }
               } catch (err) {
+                pendingResults.push(serviceResult);
                 log.error('立即保存失败:', err);
                 historyCreating = false; // 重置，允许后续成功结果重试
               }
-            } else if (serviceResult.status === 'success' && historyCreated) {
-              // 后续成功结果追加到已有记录
+            } else if (historyCreated) {
+              // 历史记录已创建后，后续成功/失败结果都追加到已有记录
               const success = await addResultToHistoryItem(historyId, serviceResult);
               if (!success) {
                 log.warn(`${serviceResult.serviceId} 结果追加失败，但不影响上传`);
               }
-            } else if (serviceResult.status === 'success' && historyCreating && !historyCreated) {
-              // 正在创建历史记录期间到达的结果，加入等待队列
-              pendingResults.push(serviceResult);
             }
 
             const item = queueManager!.getItem(itemId);
@@ -439,20 +482,10 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
               );
             },
             // 单项完成回调 - 实现实时 UI 响应
-            (singleResult) => {
-              handleServiceResult(singleResult);
-            }
+            (singleResult) => handleServiceResult(singleResult)
           );
 
           log.info(`${fileName} 全部完成，主力图床: ${result.primaryService}`);
-
-          // 检查部分失败并显示警告 Toast
-          if (result.isPartialSuccess && result.partialFailures) {
-            toast.showConfig('warn', TOAST_MESSAGES.upload.partialSuccess(
-              result.results.filter(r => r.status === 'success').length,
-              result.partialFailures.length
-            ));
-          }
 
           // 双重保险：确保 UI 状态一致
           // 注意：不需要遍历 result.results，因为 handleServiceResult 已经处理了
@@ -461,6 +494,24 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
           let thumbUrl = result.primaryUrl;
           if (result.primaryService === 'weibo' && activePrefix.value) {
             thumbUrl = activePrefix.value + thumbUrl;
+          }
+
+          if (uploadSummary && result.partialFailures?.length) {
+            const failureCounts = new Map(
+              (uploadSummary.partialFailedServices ?? []).map(item => [item.serviceName, item.count])
+            );
+
+            result.partialFailures.forEach(({ serviceId }) => {
+              const serviceName = SERVICE_DISPLAY_NAMES[serviceId] || serviceId;
+              failureCounts.set(serviceName, (failureCounts.get(serviceName) ?? 0) + 1);
+            });
+
+            uploadSummary.partialServiceFailureCount =
+              (uploadSummary.partialServiceFailureCount ?? 0) + result.partialFailures.length;
+            uploadSummary.partialFailedServices = Array.from(
+              failureCounts,
+              ([serviceName, count]) => ({ serviceName, count })
+            );
           }
 
           // 收集主力图床链接（用于自动复制，serviceId 用于统一前缀处理）
@@ -473,6 +524,9 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
           }
 
           queueManager!.markItemComplete(itemId, thumbUrl);
+          if (uploadSummary) {
+            uploadSummary.success += 1;
+          }
 
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);
@@ -523,11 +577,17 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
           }
 
           queueManager!.markItemFailed(itemId, errorMsg);
+          if (uploadSummary) {
+            uploadSummary.failed += 1;
+          }
         }
       };
     }).filter(task => task !== null); // 过滤掉 null 值
 
     log.debug(`实际需要上传的文件数: ${uploadTasks.length}/${queueItems.length}`);
+    if (uploadSummary) {
+      uploadSummary.total += uploadTasks.length;
+    }
 
     // ✅ 改进的并发控制：使用信号量模式避免竞态条件
     let activeCount = 0;

@@ -100,6 +100,7 @@ class SimpleStore {
 
   /** 是否启用自愈模式（解密失败时备份后重置，而非中止写入） */
   private selfHeal: boolean;
+  private encrypted: boolean;
 
   /** 内存缓存：避免同一会话内对同一文件重复读取和解密 */
   private memCache: Record<string, any> = {};
@@ -113,7 +114,7 @@ class SimpleStore {
    * @param options.selfHeal 启用自愈模式：解密失败时备份原文件并以空对象继续写入（适用于可重建的瞬态存储）
    * @throws {StoreError} 如果文件名无效
    */
-  constructor(filename: string, options: { selfHeal?: boolean } = {}) {
+  constructor(filename: string, options: { selfHeal?: boolean; encrypted?: boolean } = {}) {
     if (!filename || typeof filename !== 'string' || filename.trim().length === 0) {
       throw new StoreError(
         '文件名不能为空',
@@ -124,6 +125,7 @@ class SimpleStore {
     }
     this.filePath = filename.trim();
     this.selfHeal = options.selfHeal ?? false;
+    this.encrypted = options.encrypted ?? true;
   }
   
   /**
@@ -242,12 +244,19 @@ class SimpleStore {
       // 支持 PNXENC（随机密钥）和 PNXPWD（备份密码）两种格式
       let decryptedContent = content;
       const trimmedContent = content.trim();
+      if (!this.encrypted && isAnyEncryptedData(trimmedContent)) {
+        throw new StoreError(
+          `Detected encrypted data in plaintext store ${this.filePath}. Please delete the file manually and retry.`,
+          'read',
+          key
+        );
+      }
       try {
-        if (isAnyEncryptedData(trimmedContent)) {
+        if (this.encrypted && isAnyEncryptedData(trimmedContent)) {
           log.debug(`检测到加密数据，尝试解密...`);
           decryptedContent = await secureStorage.decrypt(trimmedContent);
           log.info(`✓ 解密成功`);
-        } else if (!trimmedContent.startsWith('{') && !trimmedContent.startsWith('[')) {
+        } else if (this.encrypted && !trimmedContent.startsWith('{') && !trimmedContent.startsWith('[')) {
           // 向后兼容：旧版本加密数据（无魔数前缀）
           log.debug(`检测到可能的旧版加密数据，尝试解密...`);
           try {
@@ -261,6 +270,9 @@ class SimpleStore {
       } catch (decryptError: any) {
         // 备份密码需要输入：直接传播，不降级
         if (decryptError instanceof BackupPasswordRequiredError) {
+          throw decryptError;
+        }
+        if (decryptError instanceof StoreError) {
           throw decryptError;
         }
         const errorMsg = decryptError?.message || String(decryptError);
@@ -376,8 +388,15 @@ class SimpleStore {
 
     let oldContent = oldFileContent;
     const trimmedContent = oldFileContent.trim();
+    if (!this.encrypted && isAnyEncryptedData(trimmedContent)) {
+      throw new StoreError(
+        `Detected encrypted data in plaintext store ${this.filePath}. Please delete the file manually and retry.`,
+        'write',
+        key
+      );
+    }
 
-    if (isAnyEncryptedData(trimmedContent)) {
+    if (this.encrypted && isAnyEncryptedData(trimmedContent)) {
       try {
         log.debug(`检测到加密数据，尝试解密...`);
         oldContent = await secureStorage.decrypt(trimmedContent);
@@ -403,7 +422,7 @@ class SimpleStore {
           'write', key, decryptError
         );
       }
-    } else if (!trimmedContent.startsWith('{') && !trimmedContent.startsWith('[')) {
+    } else if (this.encrypted && !trimmedContent.startsWith('{') && !trimmedContent.startsWith('[')) {
       try {
         log.debug(`检测到可能的旧版加密数据，尝试解密...`);
         oldContent = await secureStorage.decrypt(trimmedContent);
@@ -487,10 +506,12 @@ class SimpleStore {
       await mkdir(appDir, { recursive: true });
 
       const jsonContent = JSON.stringify(data, null, 2);
-      const encryptedContent = await secureStorage.encrypt(jsonContent);
-      await writeTextFile(dataPath, encryptedContent);
+      const contentToWrite = this.encrypted
+        ? await secureStorage.encrypt(jsonContent)
+        : jsonContent;
+      await writeTextFile(dataPath, contentToWrite);
       // 密钥切换后同步更新缓存
-      this.memCache = { ...data };
+      this.memCache = JSON.parse(jsonContent) as Record<string, any>;
       this.cacheLoaded = true;
       log.info(`✓ 直接写入成功 (${this.filePath})`);
     });
@@ -508,8 +529,15 @@ class SimpleStore {
       if (!content || !content.trim()) return null;
       const trimmed = content.trim();
       let decoded = content;
-      if (isAnyEncryptedData(trimmed)) {
-        decoded = await secureStorage.decrypt(trimmed);
+      if (this.encrypted) {
+        if (isAnyEncryptedData(trimmed)) {
+          decoded = await secureStorage.decrypt(trimmed);
+        }
+      } else if (isAnyEncryptedData(trimmed)) {
+        throw new StoreError(
+          `Detected encrypted data in plaintext store ${this.filePath}. Please delete the file manually and retry.`,
+          'read'
+        );
       }
       return JSON.parse(decoded) as Record<string, unknown>;
     });
@@ -556,8 +584,6 @@ class SimpleStore {
 
       // 更新数据并同步内存缓存
       data[key] = value;
-      this.memCache = { ...data };
-      this.cacheLoaded = true;
 
       // 序列化数据
       let jsonContent: string;
@@ -572,27 +598,33 @@ class SimpleStore {
         );
       }
 
-      // 【v2.8 加密存储】加密数据
-      let encryptedContent: string;
-      try {
-        encryptedContent = await secureStorage.encrypt(jsonContent);
-        log.info(`✓ 数据加密成功`);
-      } catch (encryptError: any) {
-        const errorMsg = encryptError?.message || String(encryptError);
-        log.error(`加密失败: ${errorMsg}`);
-        throw new StoreError(
-          `加密数据失败: ${errorMsg}`,
-          'write',
-          key,
-          encryptError
-        );
+      // 生成纯 JSON 的内存缓存，避免响应式 Proxy 留在缓存中
+      this.memCache = JSON.parse(jsonContent) as Record<string, any>;
+      this.cacheLoaded = true;
+
+      // 【v2.8 加密存储】加密数据（或直接明文写入）
+      let contentToWrite = jsonContent;
+      if (this.encrypted) {
+        try {
+          contentToWrite = await secureStorage.encrypt(jsonContent);
+          log.info(`✓ 数据加密成功`);
+        } catch (encryptError: any) {
+          const errorMsg = encryptError?.message || String(encryptError);
+          log.error(`加密失败: ${errorMsg}`);
+          throw new StoreError(
+            `加密数据失败: ${errorMsg}`,
+            'write',
+            key,
+            encryptError
+          );
+        }
       }
 
       // [v2.7 优化] 原子性写入：直接写入目标文件
       // Tauri 的 writeTextFile 本身是原子性的，可以直接覆盖原文件
       // 【v2.8】写入加密后的内容
       try {
-        await writeTextFile(dataPath, encryptedContent);
+        await writeTextFile(dataPath, contentToWrite);
         log.debug(`成功保存数据到键 "${key}" (${this.filePath})`);
       } catch (writeError: any) {
         
@@ -670,8 +702,10 @@ class SimpleStore {
 
         try {
           const emptyJson = JSON.stringify({}, null, 2);
-          const encryptedContent = await secureStorage.encrypt(emptyJson);
-          await writeTextFile(dataPath, encryptedContent);
+          const contentToWrite = this.encrypted
+            ? await secureStorage.encrypt(emptyJson)
+            : emptyJson;
+          await writeTextFile(dataPath, contentToWrite);
           // 同步清空内存缓存
           this.memCache = {};
           this.cacheLoaded = false;
@@ -716,4 +750,3 @@ class SimpleStore {
  * 使用别名 `Store` 以保持与旧 API 的兼容性
  */
 export { SimpleStore as Store };
-

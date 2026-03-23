@@ -85,7 +85,7 @@ export class MultiServiceUploader {
       stepIndex?: number,
       totalSteps?: number
     ) => void,
-    onServiceResult?: (result: SingleServiceResult) => void
+    onServiceResult?: (result: SingleServiceResult) => void | Promise<void>
   ): Promise<MultiUploadResult> {
     log.info('开始并行上传到:', enabledServices);
 
@@ -210,7 +210,7 @@ export class MultiServiceUploader {
 
           // 关键：任务完成后立即通知回调，实现实时 UI 更新
           if (onServiceResult) {
-            onServiceResult(taskResult);
+            await onServiceResult(taskResult);
           }
 
           return taskResult;

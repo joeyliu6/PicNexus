@@ -1,0 +1,236 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ref } from 'vue';
+import { DEFAULT_CONFIG } from '../../../config/types';
+
+const {
+  configStoreGetMock,
+  fetchMetadataBatchMock,
+  saveHistoryItemMock,
+  saveHistoryItemImmediateMock,
+  addResultToHistoryItemMock,
+  copyLinksMock,
+  checkNetworkConnectivityMock,
+  uploadToMultipleServicesMock,
+  toastSuccessMock,
+  toastWarnMock,
+  toastErrorMock,
+  toastInfoMock,
+  toastShowConfigMock,
+} = vi.hoisted(() => ({
+  configStoreGetMock: vi.fn(),
+  fetchMetadataBatchMock: vi.fn(),
+  saveHistoryItemMock: vi.fn(),
+  saveHistoryItemImmediateMock: vi.fn(),
+  addResultToHistoryItemMock: vi.fn(),
+  copyLinksMock: vi.fn(),
+  checkNetworkConnectivityMock: vi.fn(),
+  uploadToMultipleServicesMock: vi.fn(),
+  toastSuccessMock: vi.fn(),
+  toastWarnMock: vi.fn(),
+  toastErrorMock: vi.fn(),
+  toastInfoMock: vi.fn(),
+  toastShowConfigMock: vi.fn(),
+}));
+
+const selectedServicesRef = ref(['jd', 'upyun']);
+const availableServicesRef = ref(['jd', 'upyun']);
+const serviceConfigStatusRef = ref({});
+const activePrefixRef = ref<string | null>(null);
+
+vi.mock('../../../store/instances', () => ({
+  configStore: {
+    get: configStoreGetMock,
+  },
+}));
+
+vi.mock('../../../composables/useToast', () => ({
+  useToast: () => ({
+    success: toastSuccessMock,
+    warn: toastWarnMock,
+    error: toastErrorMock,
+    info: toastInfoMock,
+    showConfig: toastShowConfigMock,
+  }),
+}));
+
+vi.mock('../../../composables/useCopyLink', () => ({
+  useCopyLink: () => ({
+    copyLinks: copyLinksMock,
+  }),
+}));
+
+vi.mock('../../../composables/useServiceSelector', () => ({
+  useServiceSelector: () => ({
+    selectedServices: selectedServicesRef,
+    availableServices: availableServicesRef,
+    serviceConfigStatus: serviceConfigStatusRef,
+    activePrefix: activePrefixRef,
+    isServiceAvailable: () => true,
+    isServiceSelected: () => true,
+    loadServiceButtonStates: vi.fn(),
+    toggleServiceSelection: vi.fn(),
+    setupConfigListener: vi.fn(),
+  }),
+}));
+
+vi.mock('../../../composables/useServiceHealth', () => ({
+  useServiceHealth: () => ({
+    markUploadError: vi.fn(),
+  }),
+}));
+
+vi.mock('../../../composables/useHistorySaver', () => ({
+  useHistorySaver: () => ({
+    saveHistoryItem: saveHistoryItemMock,
+    saveHistoryItemImmediate: saveHistoryItemImmediateMock,
+    addResultToHistoryItem: addResultToHistoryItemMock,
+  }),
+}));
+
+vi.mock('../../../composables/useImageMetadata', () => ({
+  fetchMetadataBatch: fetchMetadataBatchMock,
+}));
+
+vi.mock('../../../utils/network', () => ({
+  checkNetworkConnectivity: checkNetworkConnectivityMock,
+}));
+
+vi.mock('../../../core/MultiServiceUploader', () => ({
+  MultiServiceUploader: class {
+    uploadToMultipleServices = uploadToMultipleServicesMock;
+  },
+}));
+
+function createQueueManager() {
+  const item = {
+    id: 'queue-1',
+    fileName: 'test.jpg',
+    filePath: 'C:/tmp/test.jpg',
+    enabledServices: ['jd', 'upyun'],
+    serviceProgress: {
+      jd: { serviceId: 'jd', progress: 0, status: '等待中...' },
+      upyun: { serviceId: 'upyun', progress: 0, status: '等待中...' },
+    },
+    status: 'pending',
+  };
+
+  return {
+    addFile: vi.fn().mockReturnValue(item.id),
+    getItem: vi.fn().mockImplementation(() => item),
+    updateItem: vi.fn().mockImplementation((_itemId: string, updates: Record<string, unknown>) => {
+      if (updates.serviceProgress) {
+        item.serviceProgress = {
+          ...item.serviceProgress,
+          ...(updates.serviceProgress as Record<string, unknown>),
+        };
+      }
+      Object.assign(item, updates);
+    }),
+    updateServiceProgress: vi.fn(),
+    markItemComplete: vi.fn(),
+  };
+}
+
+describe('useUploadManager', () => {
+  beforeEach(() => {
+    configStoreGetMock.mockReset().mockResolvedValue({
+      ...DEFAULT_CONFIG,
+      enabledServices: ['jd', 'upyun'],
+      linkOutput: {
+        ...DEFAULT_CONFIG.linkOutput!,
+        autoCopy: false,
+      },
+    });
+    fetchMetadataBatchMock.mockReset().mockResolvedValue(undefined);
+    saveHistoryItemMock.mockReset().mockResolvedValue(undefined);
+    saveHistoryItemImmediateMock.mockReset().mockResolvedValue(undefined);
+    addResultToHistoryItemMock.mockReset().mockResolvedValue(true);
+    copyLinksMock.mockReset().mockResolvedValue({ ok: true, copiedCount: 0, format: 'url' });
+    checkNetworkConnectivityMock.mockReset().mockResolvedValue(true);
+    toastSuccessMock.mockReset();
+    toastWarnMock.mockReset();
+    toastErrorMock.mockReset();
+    toastInfoMock.mockReset();
+    toastShowConfigMock.mockReset();
+    uploadToMultipleServicesMock.mockReset().mockImplementation(
+      async (
+        _filePath: string,
+        _enabledServices: string[],
+        _config: unknown,
+        _onProgress?: unknown,
+        onServiceResult?: (result: any) => void | Promise<void>
+      ) => {
+        const failed = {
+          serviceId: 'upyun',
+          status: 'failed' as const,
+          error: '又拍云上传失败: 上传失败: service error',
+        };
+        const success = {
+          serviceId: 'jd',
+          status: 'success' as const,
+          result: {
+            serviceId: 'jd',
+            fileKey: 'jd-key',
+            url: 'https://example.com/jd.jpg',
+          },
+        };
+
+        await onServiceResult?.(failed);
+        await onServiceResult?.(success);
+
+        return {
+          primaryService: 'jd',
+          primaryUrl: 'https://example.com/jd.jpg',
+          results: [failed, success],
+          partialFailures: [{ serviceId: 'upyun', error: failed.error }],
+          isPartialSuccess: true,
+        };
+      }
+    );
+  });
+
+  it('persists failures that arrive before the first success', async () => {
+    const queueManager = createQueueManager();
+    const { useUploadManager } = await import('../../../composables/useUpload');
+    const { handleFilesUpload } = useUploadManager(queueManager as never);
+
+    await handleFilesUpload(['C:/tmp/test.jpg']);
+
+    expect(saveHistoryItemImmediateMock).toHaveBeenCalledTimes(1);
+    expect(saveHistoryItemImmediateMock.mock.calls[0][1]).toMatchObject({
+      serviceId: 'jd',
+      status: 'success',
+    });
+    expect(addResultToHistoryItemMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        serviceId: 'upyun',
+        status: 'failed',
+      })
+    );
+  });
+
+  it('shows a partial-success toast when uploads succeed but some services fail', async () => {
+    configStoreGetMock.mockResolvedValue({
+      ...DEFAULT_CONFIG,
+      enabledServices: ['jd', 'upyun'],
+      linkOutput: {
+        ...DEFAULT_CONFIG.linkOutput!,
+        autoCopy: true,
+      },
+    });
+    copyLinksMock.mockResolvedValue({ ok: true, copiedCount: 1, format: 'url' });
+
+    const queueManager = createQueueManager();
+    const { useUploadManager } = await import('../../../composables/useUpload');
+    const { handleFilesUpload } = useUploadManager(queueManager as never);
+
+    await handleFilesUpload(['C:/tmp/test.jpg']);
+
+    expect(toastWarnMock).toHaveBeenCalledWith(
+      '上传完成，又拍云上传失败',
+      '成功的链接已复制。可在队列中对失败项重试。'
+    );
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+  });
+});

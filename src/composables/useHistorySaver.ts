@@ -47,6 +47,36 @@ async function getFileName(filePath: string): Promise<string> {
   return filePath.split(/[/\\]/).pop() || '未知文件';
 }
 
+/**
+ * 同一条历史记录的追加更新队列
+ * 解决并发 addResultToHistoryItem 的读改写覆盖问题
+ */
+const historyUpdateQueue = new Map<string, Promise<void>>();
+
+async function withHistoryUpdateQueue<T>(
+  historyId: string,
+  task: () => Promise<T>
+): Promise<T> {
+  const previous = historyUpdateQueue.get(historyId) ?? Promise.resolve();
+  let releaseCurrent!: () => void;
+  const currentGate = new Promise<void>((resolve) => {
+    releaseCurrent = resolve;
+  });
+  const chained = previous.catch(() => {}).then(() => currentGate);
+  historyUpdateQueue.set(historyId, chained);
+
+  await previous.catch(() => {});
+
+  try {
+    return await task();
+  } finally {
+    releaseCurrent();
+    if (historyUpdateQueue.get(historyId) === chained) {
+      historyUpdateQueue.delete(historyId);
+    }
+  }
+}
+
 // ==================== 主 Composable ====================
 
 /**
@@ -55,7 +85,7 @@ async function getFileName(filePath: string): Promise<string> {
  * 提供三种保存方式：
  * 1. saveHistoryItem - 完整保存（所有图床上传完成后）
  * 2. saveHistoryItemImmediate - 立即保存（第一个成功结果）
- * 3. addResultToHistoryItem - 追加结果（后续成功结果）
+ * 3. addResultToHistoryItem - 追加结果（后续成功/失败结果）
  */
 export function useHistorySaver(): UseHistorySaverReturn {
   /**
@@ -73,7 +103,6 @@ export function useHistorySaver(): UseHistorySaverReturn {
 
       // 使用 liveResults 或回退到 uploadResult.results
       const resultsSource = liveResults || uploadResult.results;
-      const successfulResults = resultsSource.filter(r => r.status === 'success');
 
       const newItemId = customId || crypto.randomUUID();
       const metadata = await getImageMetadata(filePath);
@@ -83,7 +112,7 @@ export function useHistorySaver(): UseHistorySaverReturn {
         localFileName: fileName,
         timestamp: Date.now(),
         filePath: filePath,
-        results: successfulResults,
+        results: resultsSource,
         primaryService: uploadResult.primaryService,
         generatedLink: uploadResult.primaryUrl || '',
         width: metadata.width,
@@ -109,7 +138,7 @@ export function useHistorySaver(): UseHistorySaverReturn {
 
   /**
    * 立即保存历史记录（第一个成功结果到达时调用）
-   * 创建只包含单个结果的历史记录，后续结果通过 addResultToHistoryItem 追加
+   * 创建只包含首个成功结果的历史记录，后续结果通过 addResultToHistoryItem 追加
    */
   async function saveHistoryItemImmediate(
     filePath: string,
@@ -151,47 +180,50 @@ export function useHistorySaver(): UseHistorySaverReturn {
     historyId: string,
     result: SingleServiceResult
   ): Promise<boolean> {
-    if (!historyId || result.status !== 'success') return true; // 无需处理的情况视为成功
+    return withHistoryUpdateQueue(historyId, async () => {
+      if (!historyId) return true; // 无需处理的情况视为成功
 
-    const MAX_ATTEMPTS = 2;
+      const MAX_ATTEMPTS = 2;
 
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      try {
-        const item = await historyDB.getById(historyId);
-        if (!item) {
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        try {
+          const item = await historyDB.getById(historyId);
+          if (!item) {
+            if (attempt < MAX_ATTEMPTS - 1) {
+              await new Promise(resolve => setTimeout(resolve, 50));
+              continue;
+            }
+            console.warn(`[历史记录] 记录 ${historyId} 不存在，无法追加 ${result.serviceId} 结果`);
+            return false;
+          }
+
+          const existingIndex = item.results?.findIndex(
+            (r: HistoryItem['results'][number]) => r.serviceId === result.serviceId
+          );
+
+          const updatedResults = [...(item.results || [])];
+          if (typeof existingIndex === 'number' && existingIndex >= 0) {
+            updatedResults[existingIndex] = result;
+          } else {
+            updatedResults.push(result);
+          }
+          await historyDB.update(historyId, { results: updatedResults });
+          console.log(`[历史记录] 更新结果: ${result.serviceId}`);
+
+          invalidateCache();
+          await emitHistoryUpdated([historyId]);
+          return true;
+        } catch (error) {
           if (attempt < MAX_ATTEMPTS - 1) {
             await new Promise(resolve => setTimeout(resolve, 50));
-            continue;
+          } else {
+            console.error(`[历史记录] 追加 ${result.serviceId} 结果失败:`, error);
+            return false;
           }
-          console.warn(`[历史记录] 记录 ${historyId} 不存在，无法追加 ${result.serviceId} 结果`);
-          return false;
-        }
-
-        // 检查是否已存在（防止重复）
-        const exists = item.results?.some(
-          (r: HistoryItem['results'][number]) => r.serviceId === result.serviceId
-        );
-        if (exists) {
-          return true; // 已存在视为成功
-        }
-
-        const updatedResults = [...(item.results || []), result];
-        await historyDB.update(historyId, { results: updatedResults });
-        console.log(`[历史记录] 追加结果: ${result.serviceId}`);
-
-        invalidateCache();
-        await emitHistoryUpdated([historyId]);
-        return true;
-      } catch (error) {
-        if (attempt < MAX_ATTEMPTS - 1) {
-          await new Promise(resolve => setTimeout(resolve, 50));
-        } else {
-          console.error(`[历史记录] 追加 ${result.serviceId} 结果失败:`, error);
-          return false;
         }
       }
-    }
-    return false;
+      return false;
+    });
   }
 
   return {

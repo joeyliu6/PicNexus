@@ -13,4 +13,4 @@ export const configStore = new Store('.settings.dat');
  * 同步状态存储实例（单例）
  * 用于存储同步状态、服务可用性检测状态等
  */
-export const syncStatusStore = new Store('.sync-status.dat', { selfHeal: true });
+export const syncStatusStore = new Store('.sync-status.dat', { selfHeal: true, encrypted: false });
