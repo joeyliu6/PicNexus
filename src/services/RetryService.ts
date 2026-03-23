@@ -34,6 +34,11 @@ export interface RetryOptions {
   saveHistoryItem: (filePath: string, result: MultiUploadResult) => Promise<void>;
 }
 
+interface RetrySingleServiceOptions {
+  /** 批量重传时静默单项 toast，避免提示轰炸 */
+  silentToast?: boolean;
+}
+
 /**
  * 重试服务类
  */
@@ -52,11 +57,15 @@ export class RetryService {
   async retrySingleService(
     itemId: string,
     serviceId: ServiceType,
-    config: UserConfig
+    config: UserConfig,
+    options?: RetrySingleServiceOptions
   ): Promise<void> {
+    const silentToast = options?.silentToast === true;
     const item = this.options.queueManager.getItem(itemId);
     if (!item) {
-      this.options.toast.error('重试失败', '队列项不存在');
+      if (!silentToast) {
+        this.options.toast.error('重试失败', '队列项不存在');
+      }
       return;
     }
 
@@ -65,11 +74,13 @@ export class RetryService {
     // 检测网络连通性
     const isNetworkAvailable = await checkNetworkConnectivity();
     if (!isNetworkAvailable) {
-      this.options.toast.error(
-        '网络请求失败',
-        '请检查网络后重试',
-        3000
-      );
+      if (!silentToast) {
+        this.options.toast.error(
+          '网络请求失败',
+          '请检查网络后重试',
+          3000
+        );
+      }
       return;
     }
 
@@ -104,10 +115,12 @@ export class RetryService {
       // 处理成功
       await this.handleSingleServiceSuccess(itemId, serviceId, item, result);
 
-      this.options.toast.success('修复成功', `${SERVICE_DISPLAY_NAMES[serviceId]} 已补充上传成功`);
+      if (!silentToast) {
+        this.options.toast.success('修复成功', `${SERVICE_DISPLAY_NAMES[serviceId]} 已补充上传成功`);
+      }
 
     } catch (error) {
-      await this.handleSingleServiceFailure(itemId, serviceId, item, error);
+      await this.handleSingleServiceFailure(itemId, serviceId, item, error, silentToast);
     } finally {
       this.retryingItems.delete(retryKey);
     }
@@ -359,7 +372,8 @@ export class RetryService {
     itemId: string,
     serviceId: ServiceType,
     item: QueueItem,
-    error: unknown
+    error: unknown,
+    silentToast: boolean = false
   ): Promise<void> {
     const errorMsg = error instanceof Error ? error.message : String(error);
     log.error(`${serviceId} 失败:`, errorMsg);
@@ -397,7 +411,9 @@ export class RetryService {
       }
     }
 
-    this.options.toast.error('重试依然失败', `${SERVICE_DISPLAY_NAMES[serviceId]}: ${errorMsg}`);
+    if (!silentToast) {
+      this.options.toast.error('重试依然失败', `${SERVICE_DISPLAY_NAMES[serviceId]}: ${errorMsg}`);
+    }
   }
 
   /**
@@ -513,15 +529,10 @@ export class RetryService {
       return { success: 0, failed: retryTasks.length };
     }
 
-    this.options.toast.info(
-      '批量重传中',
-      `正在重传 ${retryTasks.length} 个失败的图床...`
-    );
-
     // 并发执行所有重试（只重试失败的服务）
     const results = await Promise.allSettled(
       retryTasks.map(({ itemId, serviceId }) =>
-        this.retrySingleService(itemId, serviceId, config)
+        this.retrySingleService(itemId, serviceId, config, { silentToast: true })
       )
     );
 
@@ -548,18 +559,18 @@ export class RetryService {
     if (failedCount === 0) {
       this.options.toast.success(
         '批量重传完成',
-        `全部 ${successCount} 个图床重传成功`
+        `重传结果：成功 ${successCount}，失败 ${failedCount}。`
       );
     } else if (successCount === 0) {
       this.options.toast.error(
         '批量重传失败',
-        `全部 ${failedCount} 个图床重传失败`,
+        `重传结果：成功 ${successCount}，失败 ${failedCount}。`,
         5000
       );
     } else {
       this.options.toast.warn(
         '批量重传部分完成',
-        `${successCount} 个成功，${failedCount} 个仍失败`,
+        `重传结果：成功 ${successCount}，失败 ${failedCount}。`,
         5000
       );
     }

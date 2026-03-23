@@ -28,8 +28,42 @@ console.log(`[LoginWebview] Service: ${serviceId}, Provider:`, provider);
  * 开始登录处理
  */
 async function handleStartLogin() {
+  let unlistenReady: (() => void) | null = null;
+  let readyResolved = false;
+  let readyTimer: ReturnType<typeof setTimeout> | null = null;
+  let resolveReady!: () => void;
+
+  const finishReady = () => {
+    if (readyResolved) return;
+    readyResolved = true;
+    if (readyTimer) {
+      clearTimeout(readyTimer);
+      readyTimer = null;
+    }
+    if (unlistenReady) {
+      unlistenReady();
+      unlistenReady = null;
+    }
+    resolveReady();
+  };
+
   try {
     console.log(`[LoginWebview] Starting login for ${provider.name}`);
+
+    // 先注册 ready 监听，避免错过 Rust 端瞬时发出的 ready 事件
+    const { listen } = await import('@tauri-apps/api/event');
+    const readyPromise = new Promise<void>((resolve) => {
+      resolveReady = resolve;
+    });
+
+    unlistenReady = await listen('cookie-monitoring-ready', () => {
+      finishReady();
+    });
+
+    readyTimer = setTimeout(() => {
+      console.warn('[LoginWebview] cookie-monitoring-ready timeout, proceeding anyway');
+      finishReady();
+    }, 3000);
 
     // 使用事件驱动的 Cookie 监控（NavigationCompleted），非 Windows 自动降级到轮询
     await invoke('setup_cookie_event_monitoring', {
@@ -44,21 +78,19 @@ async function handleStartLogin() {
     console.log(`[LoginWebview] Cookie event monitoring started`);
 
     // 等待 Rust 端 NavigationCompleted handler 注册完成后再跳转
-    const { listen } = await import('@tauri-apps/api/event');
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        console.warn('[LoginWebview] cookie-monitoring-ready timeout, proceeding anyway');
-        resolve();
-      }, 3000);
-      listen('cookie-monitoring-ready', () => {
-        clearTimeout(timer);
-        resolve();
-      });
-    });
+    await readyPromise;
 
     // 跳转到登录页面（DOM 将被第三方网站接管）
     window.location.href = provider.loginUrl;
   } catch (error) {
+    if (readyTimer) {
+      clearTimeout(readyTimer);
+      readyTimer = null;
+    }
+    if (unlistenReady) {
+      unlistenReady();
+      unlistenReady = null;
+    }
     console.error('[LoginWebview] Start login failed:', error);
     alert(`启动监控失败: ${error}`);
   }

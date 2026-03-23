@@ -42,6 +42,11 @@ interface TestConnectionResult {
   message: string;
 }
 
+
+function toPlainConfig(input: UserConfig): UserConfig {
+  return JSON.parse(JSON.stringify(input)) as UserConfig;
+}
+
 /**
  * 配置管理 Composable
  */
@@ -83,34 +88,35 @@ export function useConfigManager() {
     try {
       log.info('开始保存配置...');
       isSaving.value = true;
+      const configToSave = toPlainConfig(newConfig);
 
       // 验证至少有一个可用图床
-      if (!newConfig.availableServices || newConfig.availableServices.length === 0) {
+      if (!configToSave.availableServices || configToSave.availableServices.length === 0) {
         toast.showConfig('error', TOAST_MESSAGES.config.validationFailed('至少需要启用一个图床'));
         return;
       }
 
       // 验证链接前缀配置
-      if (newConfig.linkPrefixConfig) {
+      if (configToSave.linkPrefixConfig) {
         // 确保前缀列表不为空
-        if (!newConfig.linkPrefixConfig.prefixList || newConfig.linkPrefixConfig.prefixList.length === 0) {
+        if (!configToSave.linkPrefixConfig.prefixList || configToSave.linkPrefixConfig.prefixList.length === 0) {
           log.warn('前缀列表为空，恢复默认前缀');
-          newConfig.linkPrefixConfig.prefixList = [...DEFAULT_PREFIXES];
+          configToSave.linkPrefixConfig.prefixList = [...DEFAULT_PREFIXES];
         }
         // 确保选中索引在有效范围内
-        if (newConfig.linkPrefixConfig.selectedIndex < 0 ||
-            newConfig.linkPrefixConfig.selectedIndex >= newConfig.linkPrefixConfig.prefixList.length) {
+        if (configToSave.linkPrefixConfig.selectedIndex < 0 ||
+            configToSave.linkPrefixConfig.selectedIndex >= configToSave.linkPrefixConfig.prefixList.length) {
           log.warn('选中索引无效，重置为 0');
-          newConfig.linkPrefixConfig.selectedIndex = 0;
+          configToSave.linkPrefixConfig.selectedIndex = 0;
         }
       }
 
       // 保存到存储
-      await configStore.set('config', newConfig);
+      await configStore.set('config', configToSave);
       await configStore.save();
 
       // 更新内存中的配置
-      config.value = { ...newConfig };
+      config.value = { ...configToSave };
 
       // 发送配置更新事件，通知其他组件刷新状态
       await emit('config-updated', { timestamp: Date.now() });

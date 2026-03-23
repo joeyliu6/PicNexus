@@ -23,7 +23,8 @@ import {
 import type { ServiceType } from '../config/types';
 import { MultiServiceUploader, SingleServiceResult } from '../core/MultiServiceUploader';
 import { useHistorySaver } from './useHistorySaver';
-import { formatLinkWithConfig } from './useCopyLink';
+import { formatLinkWithConfig, getLinkFormatConfig } from './useCopyLink';
+import { buildUploadSummaryToast, type UploadCopySummary } from '../utils/uploadSummary';
 
 const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
 
@@ -138,6 +139,26 @@ async function formatLinkForShortcut(
   return formatLinkWithConfig({ url: primaryUrl, fileName, serviceId }, config);
 }
 
+function createShortcutCopySummary(config: UserConfig, autoCopyEnabled: boolean): UploadCopySummary {
+  const { format } = getLinkFormatConfig(config);
+  return {
+    autoCopyEnabled,
+    copiedCount: 0,
+    format,
+    copyFailed: false,
+  };
+}
+
+async function notifyUploadSummary(total: number, success: number, copy: UploadCopySummary): Promise<void> {
+  const payload = buildUploadSummaryToast({
+    total,
+    success,
+    failed: Math.max(0, total - success),
+  }, copy);
+  if (!payload) return;
+  await notify(payload.summary, payload.detail);
+}
+
 const handleClipboardUpload = () => withUploadGuard('剪贴板上传', async () => {
   const hasImage = await invoke<boolean>('clipboard_has_image');
   if (!hasImage) {
@@ -151,9 +172,19 @@ const handleClipboardUpload = () => withUploadGuard('剪贴板上传', async () 
   if (!uploadResult) return;
 
   const linkOutput = config.linkOutput || DEFAULT_CONFIG.linkOutput!;
+  const autoCopyEnabled = linkOutput.autoCopy !== false;
+  const copySummary = createShortcutCopySummary(config, autoCopyEnabled);
   const formatted = await formatLinkForShortcut(uploadResult.primaryUrl, tempFilePath, config, uploadResult.primaryService);
-  if (linkOutput.autoCopy) await writeText(formatted);
-  await notify('上传成功', '链接已复制到剪贴板');
+  if (autoCopyEnabled) {
+    try {
+      await writeText(formatted);
+      copySummary.copiedCount = 1;
+    } catch (err) {
+      copySummary.copyFailed = true;
+      console.error('[全局快捷键] 自动复制失败:', err);
+    }
+  }
+  await notifyUploadSummary(1, 1, copySummary);
 });
 
 const handleFileSelectUpload = () => withUploadGuard('文件选择上传', async () => {
@@ -167,6 +198,8 @@ const handleFileSelectUpload = () => withUploadGuard('文件选择上传', async
 
   const config = await loadConfig();
   const linkOutput = config.linkOutput || DEFAULT_CONFIG.linkOutput!;
+  const autoCopyEnabled = linkOutput.autoCopy !== false;
+  const copySummary = createShortcutCopySummary(config, autoCopyEnabled);
   const allLinks: string[] = [];
 
   for (const filePath of filePaths) {
@@ -183,17 +216,22 @@ const handleFileSelectUpload = () => withUploadGuard('文件选择上传', async
     }
   }
 
-  if (allLinks.length > 0 && linkOutput.autoCopy) {
-    await writeText(allLinks.join('\n'));
+  if (allLinks.length > 0 && autoCopyEnabled) {
+    try {
+      await writeText(allLinks.join('\n'));
+      copySummary.copiedCount = allLinks.length;
+    } catch (err) {
+      copySummary.copyFailed = true;
+      console.error('[全局快捷键] 自动复制失败:', err);
+    }
   }
 
-  if (allLinks.length === filePaths.length) {
-    await notify('上传成功', `${allLinks.length} 个文件已上传，链接已复制`);
-  } else if (allLinks.length > 0) {
-    await notify('部分上传成功', `${allLinks.length}/${filePaths.length} 个文件上传成功`);
-  } else {
+  if (allLinks.length === 0) {
     await notify('上传失败', '所有文件上传均失败');
+    return;
   }
+
+  await notifyUploadSummary(filePaths.length, allLinks.length, copySummary);
 });
 
 /**

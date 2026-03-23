@@ -91,9 +91,10 @@ export function useServiceSelector(): UseServiceSelectorReturn {
           config = DEFAULT_CONFIG;
         }
 
-        config.enabledServices = [...services];
+        const configToSave = JSON.parse(JSON.stringify(config)) as UserConfig;
+        configToSave.enabledServices = [...services];
 
-        await configStore.set('config', config);
+        await configStore.set('config', configToSave);
         await configStore.save();
 
         console.log('[配置保存] ✓ 图床选择已保存');
