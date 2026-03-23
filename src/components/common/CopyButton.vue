@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
  * 通用复制链接按钮
- * 单击：使用默认格式复制
- * 右键：弹出格式选择菜单
+ * - 单击：使用默认格式复制
+ * - 右键：弹出格式菜单（兼容）
+ * - menuTrigger="button"：显示显式格式按钮
  */
-import { ref, computed } from 'vue';
+import { computed, ref } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import { LINK_FORMAT_OPTIONS, type LinkFormat } from '../../utils/linkFormatter';
 import { useCopyLink, type CopyLinkItem } from '../../composables/useCopyLink';
@@ -15,10 +16,12 @@ const props = withDefaults(defineProps<{
   icon?: string;
   size?: 'small' | 'normal';
   showFormatLabel?: boolean;
+  menuTrigger?: 'contextmenu' | 'button';
 }>(), {
   icon: 'pi pi-copy',
   size: 'small',
   showFormatLabel: false,
+  menuTrigger: 'contextmenu',
 });
 
 const { copyLink } = useCopyLink();
@@ -27,12 +30,11 @@ const configManager = useConfigManager();
 const menuVisible = ref(false);
 const menuRef = ref<HTMLElement | null>(null);
 
+const showMenuToggle = computed(() => props.menuTrigger === 'button');
+
 const formatOptions = computed(() => {
   const hasCustomTemplate = !!configManager.config.value.linkOutput?.customTemplate;
-  return LINK_FORMAT_OPTIONS.filter(opt => {
-    if (opt.format === 'custom') return hasCustomTemplate;
-    return true;
-  });
+  return LINK_FORMAT_OPTIONS.filter(opt => opt.format !== 'custom' || hasCustomTemplate);
 });
 
 onClickOutside(menuRef, () => {
@@ -44,7 +46,12 @@ async function handleClick() {
 }
 
 function handleContextMenu(event: MouseEvent) {
+  if (props.menuTrigger !== 'contextmenu') return;
   event.preventDefault();
+  menuVisible.value = !menuVisible.value;
+}
+
+function toggleMenu() {
   menuVisible.value = !menuVisible.value;
 }
 
@@ -59,11 +66,20 @@ async function handleFormatCopy(format: LinkFormat) {
     <button
       class="copy-btn"
       :class="[size]"
-      title="复制链接（右键选格式）"
+      :title="menuTrigger === 'contextmenu' ? '复制链接（右键选格式）' : '复制链接'"
       @click="handleClick"
       @contextmenu="handleContextMenu"
     >
       <i :class="icon"></i>
+    </button>
+    <button
+      v-if="showMenuToggle"
+      class="menu-toggle-btn"
+      :class="[size]"
+      title="选择复制格式"
+      @click.stop="toggleMenu"
+    >
+      <i class="pi pi-angle-down"></i>
     </button>
 
     <Transition name="copy-menu">
@@ -107,12 +123,41 @@ async function handleFormatCopy(format: LinkFormat) {
   opacity: 1;
 }
 
+.menu-toggle-btn {
+  background: none;
+  border: none;
+  border-left: 1px solid var(--success-soft);
+  color: var(--success);
+  cursor: pointer;
+  padding: 3px 4px;
+  border-radius: 4px;
+  margin-left: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  opacity: 0.75;
+}
+
+.menu-toggle-btn:hover {
+  background: var(--success-soft);
+  opacity: 1;
+}
+
 .copy-btn.small i {
   font-size: 12px;
 }
 
 .copy-btn.normal i {
   font-size: 14px;
+}
+
+.menu-toggle-btn.small i {
+  font-size: 11px;
+}
+
+.menu-toggle-btn.normal i {
+  font-size: 13px;
 }
 
 .copy-format-menu {

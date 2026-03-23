@@ -18,10 +18,22 @@ export interface CopyLinkItem {
 
 interface CopyLinkOptions {
   format?: LinkFormat;
+  /** 兼容旧参数：同时控制成功/失败提示 */
   showToast?: boolean;
+  /** 是否显示成功提示 */
+  showSuccessToast?: boolean;
+  /** 是否显示失败/警告提示 */
+  showErrorToast?: boolean;
 }
 
 const TOAST_DURATION = 1500;
+
+export interface CopyLinkResult {
+  ok: boolean;
+  copiedCount: number;
+  format: LinkFormat;
+  error?: string;
+}
 
 // ==================== 纯函数（不依赖 Vue context）====================
 
@@ -85,51 +97,123 @@ export function useCopyLink() {
     return formatLinkWithConfig(item, configManager.config.value, format);
   }
 
+  function resolveToastOptions(options?: CopyLinkOptions) {
+    const base = options?.showToast ?? true;
+    return {
+      showSuccessToast: options?.showSuccessToast ?? base,
+      showErrorToast: options?.showErrorToast ?? base,
+    };
+  }
+
   /**
    * 复制单个链接
    */
-  async function copyLink(item: CopyLinkItem, options?: CopyLinkOptions): Promise<void> {
-    const { format, showToast = true } = options || {};
+  async function copyLink(item: CopyLinkItem, options?: CopyLinkOptions): Promise<CopyLinkResult> {
+    const { format } = options || {};
+    const { format: defaultFormat } = getFormatConfig();
+    const finalFormat = format || defaultFormat;
+    const { showSuccessToast, showErrorToast } = resolveToastOptions(options);
+
     try {
       const formatted = formatSingleLink(item, format);
+      if (!formatted) {
+        if (showErrorToast) {
+          toast.warn('无可用链接', '没有可复制的链接');
+        }
+        return {
+          ok: false,
+          copiedCount: 0,
+          format: finalFormat,
+          error: '没有可复制的链接',
+        };
+      }
+
       await writeText(formatted);
-      if (showToast) {
-        const { format: defaultFormat } = getFormatConfig();
-        const finalFormat = format || defaultFormat;
+      if (showSuccessToast) {
         toast.success('已复制', `${FORMAT_NAMES[finalFormat]} 链接已复制`, TOAST_DURATION);
       }
+
+      return {
+        ok: true,
+        copiedCount: 1,
+        format: finalFormat,
+      };
     } catch (error) {
       console.error('[复制链接] 失败:', error);
-      toast.error('复制失败', String(error));
+      const errorMsg = String(error);
+      if (showErrorToast) {
+        toast.error('复制失败', errorMsg);
+      }
+
+      return {
+        ok: false,
+        copiedCount: 0,
+        format: finalFormat,
+        error: errorMsg,
+      };
     }
   }
 
   /**
    * 批量复制链接
    */
-  async function copyLinks(items: CopyLinkItem[], options?: CopyLinkOptions): Promise<void> {
-    if (items.length === 0) return;
+  async function copyLinks(items: CopyLinkItem[], options?: CopyLinkOptions): Promise<CopyLinkResult> {
+    const { format } = options || {};
+    const { format: defaultFormat } = getFormatConfig();
+    const finalFormat = format || defaultFormat;
+    const { showSuccessToast, showErrorToast } = resolveToastOptions(options);
 
-    const { format, showToast = true } = options || {};
+    if (items.length === 0) {
+      if (showErrorToast) {
+        toast.warn('无可用链接', '没有可复制的链接');
+      }
+      return {
+        ok: false,
+        copiedCount: 0,
+        format: finalFormat,
+        error: '没有可复制的链接',
+      };
+    }
+
     try {
       const formattedLinks = items
         .map(item => formatSingleLink(item, format))
         .filter(Boolean);
 
       if (formattedLinks.length === 0) {
-        toast.warn('无可用链接', '没有可复制的链接');
-        return;
+        if (showErrorToast) {
+          toast.warn('无可用链接', '没有可复制的链接');
+        }
+        return {
+          ok: false,
+          copiedCount: 0,
+          format: finalFormat,
+          error: '没有可复制的链接',
+        };
       }
 
       await writeText(formattedLinks.join('\n'));
-      if (showToast) {
-        const { format: defaultFormat } = getFormatConfig();
-        const finalFormat = format || defaultFormat;
+      if (showSuccessToast) {
         toast.success('已复制', `${formattedLinks.length} 个 ${FORMAT_NAMES[finalFormat]} 链接已复制`, TOAST_DURATION);
       }
+
+      return {
+        ok: true,
+        copiedCount: formattedLinks.length,
+        format: finalFormat,
+      };
     } catch (error) {
       console.error('[批量复制] 失败:', error);
-      toast.error('复制失败', String(error));
+      const errorMsg = String(error);
+      if (showErrorToast) {
+        toast.error('复制失败', errorMsg);
+      }
+      return {
+        ok: false,
+        copiedCount: 0,
+        format: finalFormat,
+        error: errorMsg,
+      };
     }
   }
 
