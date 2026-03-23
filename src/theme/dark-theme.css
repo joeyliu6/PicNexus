@@ -65,7 +65,7 @@
                   0 10px 10px -5px rgba(0, 0, 0, 0.2);
 
   /* ===== 焦点环 ===== */
-  --focus-ring-shadow: 0 0 0 3px var(--primary-alpha-20);
+  --focus-ring-shadow: none;
 
   /* ===== 状态背景色 ===== */
   --state-info-bg: var(--primary-alpha-15);
@@ -131,7 +131,7 @@
 :root.dark-theme textarea:focus,
 :root.dark-theme select:focus {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px var(--primary-alpha-20);
+  box-shadow: none;
 }
 
 /* 进度条 */

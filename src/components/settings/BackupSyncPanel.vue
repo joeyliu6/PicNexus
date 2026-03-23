@@ -405,7 +405,7 @@ function handleClearPassword() {
 }
 
 .security-card.is-unprotected {
-  border-color: var(--warning-alpha-15);
+  border-color: var(--border-subtle);
 }
 
 .security-card-top {
@@ -424,7 +424,7 @@ function handleClearPassword() {
 .security-status-inactive {
   font-size: 12px;
   font-weight: 500;
-  color: var(--warning);
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   gap: 4px;

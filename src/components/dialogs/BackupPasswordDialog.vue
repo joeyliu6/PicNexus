@@ -344,7 +344,7 @@ defineExpose({
 }
 
 .field :deep(.p-password input:focus) {
-  box-shadow: 0 0 0 1px var(--primary);
+  box-shadow: none;
 }
 
 .strength-hints {

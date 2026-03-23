@@ -77,6 +77,13 @@
   --primary-alpha-25: rgba(96, 165, 250, 0.25);
   --primary-alpha-30: rgba(96, 165, 250, 0.3);
   --primary-alpha-40: rgba(96, 165, 250, 0.4);
+
+  /* 品牌色：微信（固定色，不跟随主题） */
+  --wechat-green: #07c160;
+  --wechat-green-text: #fff;
+  --wechat-qr-bg: #fff;
+  --wechat-qr-shadow: rgba(0, 0, 0, 0.08);
+  --wechat-qr-border: rgba(0, 0, 0, 0.06);
   --primary-alpha-50: rgba(96, 165, 250, 0.5);
   --accent: #93c5fd;       /* Blue 300 */
   --color-primary: var(--primary);
@@ -181,16 +188,16 @@ body, html {
   }
 }
 
-/* 焦点环控制：隐藏鼠标点击的焦点环，保留键盘导航的焦点环 */
-/* 默认隐藏所有焦点环 */
+/* 焦点环控制：全局隐藏焦点环 */
 *:focus {
   outline: none;
+  box-shadow: none;
 }
 
-/* 只在键盘导航时显示焦点环 */
+/* 桌面 App 键盘导航场景极少，且默认焦点环在部分 PrimeVue 组件上影响视觉美观，故全局关闭 */
 *:focus-visible {
-  outline: 2px solid var(--border-focus);
-  outline-offset: 2px;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* 搜索框 input 不显示焦点轮廓 */
@@ -201,11 +208,12 @@ body, html {
 /* 针对 PrimeVue Dialog 的关闭按钮和其他按钮 */
 button:focus {
   outline: none;
+  box-shadow: none;
 }
 
 button:focus-visible {
-  outline: 2px solid var(--border-focus);
-  outline-offset: 2px;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* Titlebar Styles */
@@ -879,7 +887,7 @@ button:focus-visible {
 .link-selector:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-alpha-10);
+  box-shadow: none;
 }
 
 .link-selector option {
@@ -1952,7 +1960,7 @@ button:focus-visible {
 }
 
 .toggle-switch input:focus + .toggle-slider {
-  box-shadow: 0 0 0 2px var(--primary-alpha-30);
+  box-shadow: none;
 }
 
 /* 容器：使用 Grid 布局自动适应宽度 */
@@ -2059,7 +2067,7 @@ button:focus-visible {
 .prefix-selector:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-alpha-20);
+  box-shadow: none;
 }
 
 .prefix-selector option {
@@ -2151,7 +2159,7 @@ button:focus-visible {
 #add-prefix-modal input:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-alpha-20);
+  box-shadow: none;
 }
 
 #add-prefix-modal .hint {
@@ -2242,7 +2250,7 @@ button:focus-visible {
 .image-bed-filter:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-alpha-10);
+  box-shadow: none;
 }
 
 .search-section {
@@ -2271,7 +2279,7 @@ button:focus-visible {
 .search-section input:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-alpha-10);
+  box-shadow: none;
 }
 
 /* 视图容器 */
@@ -2802,7 +2810,7 @@ button:focus-visible {
 :deep(.p-textarea:focus),
 :deep(.p-password .p-password-input:focus) {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px var(--primary-alpha-15);
+  box-shadow: none;
   outline: none;
 }
 
@@ -2889,16 +2897,15 @@ button:focus-visible {
   margin-top: 2px;
 }
 
-/* Toast 关闭按钮焦点样式优化 - 只在键盘导航时显示焦点环 */
+/* Toast 关闭按钮焦点样式 */
 :deep(.p-toast .p-toast-message .p-toast-icon-close-button) {
-  /* 隐藏鼠标点击时的焦点环 */
   outline: none;
+  box-shadow: none;
 }
 
 :deep(.p-toast .p-toast-message .p-toast-icon-close-button:focus-visible) {
-  /* 保留键盘导航时的焦点环，使用主题色 */
-  outline: 2px solid var(--p-primary-color);
-  outline-offset: 2px;
+  outline: none !important;
+  box-shadow: none !important;
   border-radius: 4px;
 }
 
@@ -3010,8 +3017,8 @@ button:focus-visible {
 }
 
 .p-dialog.p-confirmdialog .p-confirmdialog-accept-button:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* 取消按钮 — outlined 次要 */
@@ -3037,8 +3044,8 @@ button:focus-visible {
 }
 
 .p-dialog.p-confirmdialog .p-confirmdialog-reject-button:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* danger 按钮（删除操作） */
@@ -3051,7 +3058,8 @@ button:focus-visible {
 }
 
 .p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-danger:focus-visible {
-  outline-color: var(--error);
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* warning 按钮 */
@@ -3065,7 +3073,8 @@ button:focus-visible {
 }
 
 .p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-warning:focus-visible {
-  outline-color: var(--warning);
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* 浅色主题按钮 */

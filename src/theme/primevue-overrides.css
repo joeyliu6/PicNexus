@@ -20,7 +20,7 @@
 
 .p-inputtext:enabled:focus {
   border-color: var(--border-focus);
-  box-shadow: var(--focus-ring-shadow);
+  box-shadow: none;
 }
 
 .p-inputtext:disabled {
@@ -45,7 +45,7 @@
 
 .p-textarea:enabled:focus {
   border-color: var(--border-focus);
-  box-shadow: var(--focus-ring-shadow);
+  box-shadow: none;
 }
 
 .p-textarea:disabled {
@@ -70,7 +70,7 @@
 
 .p-password .p-password-input:enabled:focus {
   border-color: var(--border-focus);
-  box-shadow: var(--focus-ring-shadow);
+  box-shadow: none;
 }
 
 .p-password .p-password-input:disabled {
@@ -94,7 +94,7 @@
 
 .p-select:enabled:focus {
   border-color: var(--border-focus);
-  box-shadow: var(--focus-ring-shadow);
+  box-shadow: none;
 }
 
 .p-select-overlay {

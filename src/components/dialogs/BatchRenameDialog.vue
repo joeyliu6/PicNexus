@@ -157,7 +157,7 @@ watch(() => props.files, (newFiles) => {
 }
 
 .template-section :deep(.template-input:focus) {
-  box-shadow: 0 0 0 1px var(--primary);
+  box-shadow: none;
 }
 
 .variable-chips {

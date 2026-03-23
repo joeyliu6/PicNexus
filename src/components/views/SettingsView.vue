@@ -377,15 +377,15 @@ async function saveSettings() {
     config.linkPrefixConfig = {
       enabled: formData.value.linkPrefixEnabled,
       selectedIndex: formData.value.selectedPrefixIndex,
-      prefixList: formData.value.linkPrefixList
+      prefixList: [...formData.value.linkPrefixList]
     };
 
-    config.linkOutput = formData.value.linkOutput;
+    config.linkOutput = { ...formData.value.linkOutput };
     config.analytics = { enabled: formData.value.analyticsEnabled };
-    config.appBehavior = formData.value.appBehavior;
-    config.globalShortcut = formData.value.globalShortcut;
+    config.appBehavior = { ...formData.value.appBehavior };
+    config.globalShortcut = { ...formData.value.globalShortcut };
     config.autoUpdate = { enabled: formData.value.autoUpdateEnabled };
-    config.availableServices = availableServices.value;
+    config.availableServices = [...availableServices.value];
 
     await configManager.saveConfig(config, true);
     serviceHealth.evaluateConfig(config);
@@ -824,8 +824,12 @@ onMounted(async () => {
   }
 
   await loadSettings();
-  const savedCheckTime = await syncStatusStore.get<number>(LAST_CHECK_KEY);
-  if (savedCheckTime) lastBatchCheckTime.value = savedCheckTime;
+  try {
+    const savedCheckTime = await syncStatusStore.get<number>(LAST_CHECK_KEY);
+    if (savedCheckTime) lastBatchCheckTime.value = savedCheckTime;
+  } catch (error) {
+    console.warn('[设置] 读取上次检测时间失败（可能仍是旧加密状态文件）:', error);
+  }
   await checkAllAvailabilityWithCooldown();
 
   cookieUnlisten.value = await configManager.setupCookieListener(async (sid, cookie) => {

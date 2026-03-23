@@ -64,7 +64,7 @@
                   0 10px 10px -5px rgba(0, 0, 0, 0.04);
 
   /* ===== 焦点环 ===== */
-  --focus-ring-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  --focus-ring-shadow: none;
 
   /* ===== 状态背景色 ===== */
   --state-info-bg: rgba(59, 130, 246, 0.1);
@@ -130,7 +130,7 @@
 :root.light-theme textarea:focus,
 :root.light-theme select:focus {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: none;
 }
 
 /* 进度条 */
