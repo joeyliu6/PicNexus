@@ -129,6 +129,23 @@ class SimpleStore {
   }
   
   /**
+   * 自愈重置：删除文件并清空内存缓存
+   * write 路径删除失败时抛出错误（防止写入脏数据导致死循环）
+   */
+  private async selfHealReset(dataPath: string, throwOnRemoveFail: boolean, key?: string): Promise<void> {
+    log.warn(`⚠ 自愈模式：明文 store 检测到加密数据，自动删除并重置 (${this.filePath})`);
+    try {
+      await remove(dataPath);
+    } catch (e) {
+      if (!throwOnRemoveFail) return;
+      log.error(`⚠ 自愈模式删除文件失败，无法继续写入 (${this.filePath})`, e);
+      throw new StoreError(`自愈模式删除文件失败`, 'write', key, e as Error);
+    }
+    this.memCache = {};
+    this.cacheLoaded = false;
+  }
+
+  /**
    * 获取数据文件路径
    * @throws {StoreError} 如果无法获取应用数据目录
    */
@@ -245,6 +262,10 @@ class SimpleStore {
       let decryptedContent = content;
       const trimmedContent = content.trim();
       if (!this.encrypted && isAnyEncryptedData(trimmedContent)) {
+        if (this.selfHeal) {
+          await this.selfHealReset(dataPath, false);
+          return null;
+        }
         throw new StoreError(
           `Detected encrypted data in plaintext store ${this.filePath}. Please delete the file manually and retry.`,
           'read',
@@ -389,6 +410,10 @@ class SimpleStore {
     let oldContent = oldFileContent;
     const trimmedContent = oldFileContent.trim();
     if (!this.encrypted && isAnyEncryptedData(trimmedContent)) {
+      if (this.selfHeal) {
+        await this.selfHealReset(dataPath, true, key);
+        return {};
+      }
       throw new StoreError(
         `Detected encrypted data in plaintext store ${this.filePath}. Please delete the file manually and retry.`,
         'write',
@@ -534,6 +559,10 @@ class SimpleStore {
           decoded = await secureStorage.decrypt(trimmed);
         }
       } else if (isAnyEncryptedData(trimmed)) {
+        if (this.selfHeal) {
+          await this.selfHealReset(dataPath, false);
+          return null;
+        }
         throw new StoreError(
           `Detected encrypted data in plaintext store ${this.filePath}. Please delete the file manually and retry.`,
           'read'
