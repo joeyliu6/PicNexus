@@ -411,7 +411,7 @@ async function openLogDir() {
 }
 
 .update-icon.success {
-  color: #22c55e;
+  color: var(--success);
 }
 
 .update-icon.available {
@@ -419,7 +419,7 @@ async function openLogDir() {
 }
 
 .update-icon.error {
-  color: #ef4444;
+  color: var(--error);
 }
 
 .new-version-label {

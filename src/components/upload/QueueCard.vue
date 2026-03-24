@@ -233,7 +233,7 @@ function handleCopy(payload: QueueCopyPayload) {
 
 .pill.success {
   color: var(--success);
-  background: rgba(16, 185, 129, 0.05);
+  background: var(--success-alpha-8);
 }
 
 .pill.error {
@@ -265,7 +265,7 @@ function handleCopy(payload: QueueCopyPayload) {
 }
 
 .segment.error {
-  background: #f87171;
+  background: var(--error);
 }
 
 .segment.uploading {

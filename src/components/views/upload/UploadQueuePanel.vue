@@ -158,7 +158,7 @@ defineExpose({
 
 .queue-action-btn.clear-btn:hover {
   color: var(--error);
-  background: rgba(239, 68, 68, 0.1);
+  background: var(--error-alpha-10);
 }
 
 /* 清空已完成按钮 */
@@ -168,6 +168,6 @@ defineExpose({
 
 .queue-action-btn.clear-completed-btn:hover {
   color: var(--success);
-  background: rgba(34, 197, 94, 0.1);
+  background: var(--success-alpha-8);
 }
 </style>

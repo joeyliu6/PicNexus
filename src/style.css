@@ -61,6 +61,16 @@
   --hover-overlay: rgba(255, 255, 255, 0.08);
   --hover-overlay-subtle: rgba(255, 255, 255, 0.04);
 
+  /* 叠加层/遮罩 — 用于斑马纹、分隔线等非交互场景 */
+  --overlay-light: rgba(255, 255, 255, 0.015);
+  --overlay-medium: rgba(255, 255, 255, 0.06);
+
+  /* 状态色边框 */
+  --success-border: rgba(16, 185, 129, 0.3);
+  --warning-border: rgba(234, 179, 8, 0.3);
+  --error-border: rgba(239, 68, 68, 0.3);
+  --error-alpha-10: rgba(239, 68, 68, 0.1);
+
   /* Brand Colors - Arctic Minimal */
   --primary: #60a5fa;      /* Blue 400 */
   --primary-hover: #3b82f6; /* Blue 500 */
@@ -143,11 +153,41 @@
   --text-lg: 16px; /* 小标题 */
   --text-xl: 20px; /* 页面标题 */
   
-  /* 4. 行高：让文字“呼吸” */
+  /* 4. 行高：让文字”呼吸” */
   --leading-tight: 1.2;
   --leading-normal: 1.5;
   --leading-relaxed: 1.6;
-  
+
+  /* --- Design Token System --- */
+
+  /* 圆角 */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-full: 9999px;
+
+  /* 间距 */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+
+  /* Z-index 层级 */
+  --z-base: 1;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 1000;
+  --z-modal: 1100;
+  --z-toast: 1200;
+  --z-tooltip: 1300;
+  --z-lightbox: 9999;
+  --z-titlebar: 10001;
+
   color-scheme: dark;
   color: var(--text-primary);
   background-color: var(--bg-app);
@@ -1422,7 +1462,7 @@ button:focus-visible {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 1000;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1545,7 +1585,7 @@ button:focus-visible {
   position: fixed;
   top: 50px; /* 避开 32px 的标题栏 */
   right: 20px;
-  z-index: 9999; /* 确保在最顶层 */
+  z-index: var(--z-lightbox); /* 确保在最顶层 */
   
   display: flex;
   align-items: center;
@@ -2919,9 +2959,9 @@ button:focus-visible {
 
 /* ===== 9. ConfirmDialog 确认对话框样式优化 ===== */
 
-/* 确保确认对话框在 Lightbox (z-index: 9999) 之上，仅针对 ConfirmDialog */
+/* 确保确认对话框在 Lightbox 之上，仅针对 ConfirmDialog */
 .p-dialog-mask:has(.p-confirmdialog) {
-  z-index: 10001 !important;
+  z-index: var(--z-titlebar) !important;
 }
 
 /* 对话框主体样式 */

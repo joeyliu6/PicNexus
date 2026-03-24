@@ -717,7 +717,7 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
 }
 
 :deep(.minimal-table .p-datatable-tbody > tr:nth-child(even)) {
-  background: rgba(0, 0, 0, 0.015) !important;
+  background: var(--overlay-light) !important;
 }
 
 :deep(.minimal-table .p-datatable-tbody > tr:hover) {
@@ -746,7 +746,7 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
 
 :deep(.minimal-table .p-datatable-tbody > tr > td) {
   padding: 8px 16px !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+  border-bottom: 1px solid var(--overlay-medium) !important;
   font-size: 13px;
   vertical-align: middle;
   height: 52px !important;  /* 固定行高，与骨架屏一致 */
@@ -1006,7 +1006,7 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
 <style>
 .global-thumb-hover-preview {
   position: fixed;
-  z-index: 9999;
+  z-index: var(--z-lightbox);
   pointer-events: none;
   animation: globalPreviewFadeIn 0.2s ease;
 }

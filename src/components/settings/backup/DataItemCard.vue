@@ -330,7 +330,7 @@ const isAnyForceLoading = computed(() =>
 .status-badge.failed { background: var(--error-soft); color: var(--error); }
 .status-badge.partial { background: var(--warning-soft); color: var(--warning); }
 .status-badge.stale-warning { background: var(--warning-soft); color: var(--warning); }
-.status-badge.stale-danger { background: var(--warning-soft); color: #e67e22; }
+.status-badge.stale-danger { background: var(--warning-soft); color: var(--warning); }
 
 .cloud-row.is-disabled {
   opacity: 0.6;
@@ -366,7 +366,7 @@ const isAnyForceLoading = computed(() =>
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   box-shadow: var(--shadow-float);
-  z-index: 1000;
+  z-index: var(--z-overlay);
   overflow: hidden;
 }
 

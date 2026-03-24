@@ -167,13 +167,13 @@ function handleRetry() {
 }
 
 .channel-card.error {
-  background: rgba(239, 68, 68, 0.08);
-  border-color: rgba(239, 68, 68, 0.3);
+  background: var(--error-alpha-8);
+  border-color: var(--error-border);
 }
 
 .channel-card.success {
-  background: rgba(16, 185, 129, 0.08);
-  border-color: rgba(16, 185, 129, 0.3);
+  background: var(--success-alpha-8);
+  border-color: var(--success-border);
 }
 
 .channel-icon {
@@ -315,7 +315,7 @@ function handleRetry() {
   box-shadow: var(--shadow-float);
   padding: 4px;
   min-width: 120px;
-  z-index: 1001;
+  z-index: var(--z-modal);
 }
 
 .format-item {

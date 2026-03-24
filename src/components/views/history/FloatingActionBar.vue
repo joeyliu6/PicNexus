@@ -153,7 +153,7 @@ function handleCopy(format: LinkFormat): void {
   bottom: 70px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1000;
+  z-index: var(--z-overlay);
   background: rgba(26, 26, 30, 0.9);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -206,7 +206,7 @@ function handleCopy(format: LinkFormat): void {
 
 .fab-btn-danger:hover {
   color: var(--error) !important;
-  background: rgba(239, 68, 68, 0.1) !important;
+  background: var(--error-alpha-10) !important;
 }
 
 .fab-close {
@@ -247,7 +247,7 @@ function handleCopy(format: LinkFormat): void {
   box-shadow: var(--shadow-float);
   padding: 6px;
   min-width: 160px;
-  z-index: 1001;
+  z-index: var(--z-modal);
 }
 
 /* 图床芯片选择 */

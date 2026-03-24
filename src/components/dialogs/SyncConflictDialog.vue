@@ -180,11 +180,11 @@ function formatTime(timestamp: number): string {
 }
 
 .version-card:first-child .version-header i {
-  color: #60a5fa;
+  color: var(--primary);
 }
 
 .version-card:last-child .version-header i {
-  color: #4ade80;
+  color: var(--success);
 }
 
 .version-meta {

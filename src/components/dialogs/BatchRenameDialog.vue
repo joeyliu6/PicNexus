@@ -152,8 +152,8 @@ watch(() => props.files, (newFiles) => {
 }
 
 :root.light-theme .template-section :deep(.template-input) {
-  background: #f1f5f9;
-  color: #111827;
+  background: var(--bg-input);
+  color: var(--text-main);
 }
 
 .template-section :deep(.template-input:focus) {

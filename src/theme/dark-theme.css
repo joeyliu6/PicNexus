@@ -51,6 +51,14 @@
   --hover-overlay-subtle: rgba(255, 255, 255, 0.05); /* 微妙悬浮效果 */
   --button-hover-overlay: rgba(255, 255, 255, 0.08); /* 按钮悬浮叠加 */
 
+  /* ===== 叠加层/遮罩 ===== */
+  --overlay-light: rgba(255, 255, 255, 0.015);  /* 斑马纹等极淡叠加 */
+  --overlay-medium: rgba(255, 255, 255, 0.06);  /* 分隔线、轻边框 */
+
+  /* ===== 状态色补充 ===== */
+  --success-border: rgba(16, 185, 129, 0.3);
+  --error-alpha-10: rgba(239, 68, 68, 0.1);
+
   /* ===== 特殊文本色 ===== */
   --text-on-primary: #ffffff;    /* 主色背景上的文本 */
   --text-on-error: #ffffff;      /* 错误色背景上的文本 */

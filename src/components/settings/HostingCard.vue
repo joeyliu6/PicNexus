@@ -272,17 +272,17 @@ const statusDotClass = computed(() => {
 .status-dot.configured,
 .status-dot.verified {
   background: var(--success);
-  box-shadow: 0 0 0 2px var(--bg-card), 0 0 6px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 0 0 2px var(--bg-card), 0 0 6px var(--success-border);
 }
 
 .status-dot.pending {
   background: var(--warning);
-  box-shadow: 0 0 0 2px var(--bg-card), 0 0 6px rgba(245, 158, 11, 0.4);
+  box-shadow: 0 0 0 2px var(--bg-card), 0 0 6px var(--warning-border);
 }
 
 .status-dot.error {
   background: var(--error);
-  box-shadow: 0 0 0 2px var(--bg-card), 0 0 6px rgba(239, 68, 68, 0.4);
+  box-shadow: 0 0 0 2px var(--bg-card), 0 0 6px var(--error-border);
 }
 
 .card-content {

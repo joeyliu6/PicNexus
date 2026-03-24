@@ -171,7 +171,7 @@ async function handleFormatCopy(format: LinkFormat) {
   box-shadow: var(--shadow-float);
   padding: 4px;
   min-width: 120px;
-  z-index: 1001;
+  z-index: var(--z-modal);
 }
 
 .format-item {
