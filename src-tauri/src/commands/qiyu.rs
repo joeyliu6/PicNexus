@@ -41,11 +41,9 @@ pub async fn upload_to_qiyu(
     }));
 
     // 1. 自动获取新的 Token（每次上传都获取新的，确保 Object 路径唯一）
-    log::debug!("[Qiyu] 正在获取上传凭证...");
     let token_info = fetch_qiyu_token_internal(&window.app_handle()).await?;
     let qiyu_token = &token_info.token;
     let object_path = &token_info.object_path;
-    log::debug!("[Qiyu] Token 获取成功，Object 路径: {}", object_path);
 
     // 3. 读取文件
     let (buffer, file_size) = read_file_bytes(&file_path).await?;
@@ -74,7 +72,6 @@ pub async fn upload_to_qiyu(
         "https://cdn-nimup-chunk.qiyukf.net/nim/{}?offset=0&complete=true&version=1.0",
         urlencoding::encode(&object_path)
     );
-    log::debug!("[Qiyu] 上传 URL: {}", upload_url);
 
     // 发送步骤2进度：上传文件 (50%)
     let _ = window.emit("upload://progress", serde_json::json!({

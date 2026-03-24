@@ -21,7 +21,7 @@ const WS_INTERCEPT_SCRIPT = `
   const OriginalWebSocket = window.WebSocket;
 
   window.WebSocket = function(url, protocols) {
-    console.log('[WS Intercept] 新连接:', url);
+    // 静默连接，不输出日志
 
     const ws = protocols
       ? new OriginalWebSocket(url, protocols)
@@ -40,7 +40,6 @@ const WS_INTERCEPT_SCRIPT = `
       if (text) {
         var tokenMatch = text.match(/UPLOAD\\s+[a-f0-9]{32}:[A-Za-z0-9+\\/=]+:[A-Za-z0-9+\\/=]+/);
         if (tokenMatch) {
-          console.log('[WS Intercept] !!! 捕获到 Token !!!');
           window.__captured_nos_token__ = tokenMatch[0];
         }
       }
@@ -95,7 +94,6 @@ async function createTestImage(): Promise<string> {
   ]);
 
   fs.writeFileSync(tempImagePath, pngData);
-  console.error(`[QiyuToken] 创建临时测试图片: ${tempImagePath}`);
   return tempImagePath;
 }
 
@@ -106,7 +104,6 @@ function cleanupTempFile(filePath: string): void {
   try {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
-      console.error(`[QiyuToken] 已删除临时文件: ${filePath}`);
     }
   } catch (e) {
     // 忽略删除失败
@@ -118,14 +115,10 @@ function cleanupTempFile(filePath: string): void {
  * 使用 Puppeteer 的 setInputFiles 真正上传测试图片
  */
 export async function fetchQiyuToken(): Promise<QiyuToken> {
-  console.error('[QiyuToken] ========== 开始获取 Token ==========');
-
   const browserInfo = detectChromePath();
   if (!browserInfo) {
     throw new Error('未检测到 Chrome 或 Edge 浏览器');
   }
-
-  console.error(`[QiyuToken] 使用浏览器: ${browserInfo.name} (${browserInfo.path})`);
 
   let browser: Browser | null = null;
   let tempImagePath: string | null = null;
@@ -185,13 +178,9 @@ export async function fetchQiyuToken(): Promise<QiyuToken> {
 
       // 检查是否是 NOS 上传请求
       if (url.includes('nos') || url.includes('nim') || url.includes('netease') || url.includes('126.net')) {
-        console.error(`[QiyuToken] 发现 NOS 相关请求: ${url}`);
-
         // 检查请求头中的 Token
         const nosToken = headers['x-nos-token'] || headers['X-Nos-Token'];
         if (nosToken) {
-          console.error(`[QiyuToken] !!! 从 HTTP 请求头捕获到 Token !!!`);
-          console.error(`[QiyuToken] x-nos-token: ${nosToken.substring(0, 100)}...`);
           capturedToken = nosToken;
         }
       }
@@ -209,7 +198,6 @@ export async function fetchQiyuToken(): Promise<QiyuToken> {
           // 尝试解析 Token
           const tokenMatch = body.match(/UPLOAD\s+[a-f0-9]{32}:[A-Za-z0-9+\/=]+:[A-Za-z0-9+\/=]+/);
           if (tokenMatch) {
-            console.error('[QiyuToken] !!! 从 HTTP 响应捕获到 Token !!!');
             capturedToken = tokenMatch[0];
           }
         } catch (e) {
@@ -234,7 +222,6 @@ export async function fetchQiyuToken(): Promise<QiyuToken> {
         // 检查是否包含 Token
         const tokenMatch = decoded.match(/UPLOAD\s+[a-f0-9]{32}:[A-Za-z0-9+\/=]+:[A-Za-z0-9+\/=]+/);
         if (tokenMatch) {
-          console.error('[QiyuToken] !!! 捕获到 Token (CDP Base64解码) !!!');
           capturedToken = tokenMatch[0];
         }
       } catch (e) {
@@ -242,10 +229,11 @@ export async function fetchQiyuToken(): Promise<QiyuToken> {
       }
 
       // 直接检查原始 payload
-      const tokenMatch = payload.match(/UPLOAD\s+[a-f0-9]{32}:[A-Za-z0-9+\/=]+:[A-Za-z0-9+\/=]+/);
-      if (tokenMatch) {
-        console.error('[QiyuToken] !!! 捕获到 Token (CDP) !!!');
-        capturedToken = tokenMatch[0];
+      if (!capturedToken) {
+        const tokenMatch = payload.match(/UPLOAD\s+[a-f0-9]{32}:[A-Za-z0-9+\/=]+:[A-Za-z0-9+\/=]+/);
+        if (tokenMatch) {
+          capturedToken = tokenMatch[0];
+        }
       }
     });
 
@@ -253,22 +241,16 @@ export async function fetchQiyuToken(): Promise<QiyuToken> {
     await page.evaluateOnNewDocument(WS_INTERCEPT_SCRIPT);
 
     // 导航到七鱼页面
-    console.error(`[QiyuToken] 正在打开七鱼页面: ${QIYU_PAGE_URL}`);
     await page.goto(QIYU_PAGE_URL, {
       waitUntil: 'networkidle2',
       timeout: 30000
     });
 
     // 等待页面完全加载
-    console.error('[QiyuToken] 等待页面完全加载 (5秒)...');
     await sleep(5000);
-
-    // 使用 Puppeteer 的 setInputFiles 真正上传文件
-    console.error('[QiyuToken] 查找文件输入框...');
 
     // 找到所有文件输入框
     const fileInputs = await page.$$('input[type="file"]');
-    console.error(`[QiyuToken] 找到 ${fileInputs.length} 个文件输入框`);
 
     if (fileInputs.length === 0) {
       throw new Error('未找到文件输入框');
@@ -277,36 +259,30 @@ export async function fetchQiyuToken(): Promise<QiyuToken> {
     // 尝试每个文件输入框
     for (let i = 0; i < fileInputs.length; i++) {
       const fileInput = fileInputs[i];
-      console.error(`[QiyuToken] 尝试使用第 ${i + 1} 个文件输入框上传...`);
 
       try {
         // 使用 Puppeteer 的 setInputFiles 设置文件（这会真正触发上传）
         await fileInput.uploadFile(tempImagePath);
-        console.error(`[QiyuToken] 已设置文件到第 ${i + 1} 个输入框`);
 
         // 等待一小段时间让上传开始
         await sleep(2000);
 
         // 检查是否已经捕获到 Token
         if (capturedToken) {
-          console.error(`[QiyuToken] 第 ${i + 1} 个输入框触发了 Token!`);
           break;
         }
       } catch (e: any) {
-        console.error(`[QiyuToken] 第 ${i + 1} 个输入框失败: ${e.message}`);
+        // 继续尝试下一个输入框
       }
     }
 
     // 如果还没有 Token，继续等待
     if (!capturedToken) {
-      console.error('[QiyuToken] 等待捕获 Token (最多20秒)...');
-
       for (let i = 0; i < 40; i++) {
         await sleep(500);
 
         // 检查 CDP 捕获的 Token
         if (capturedToken) {
-          console.error(`[QiyuToken] Token 已通过 CDP 捕获 (第 ${i + 1} 次检查)`);
           break;
         }
 
@@ -314,54 +290,31 @@ export async function fetchQiyuToken(): Promise<QiyuToken> {
         try {
           const jsToken = await page.evaluate('window.__captured_nos_token__');
           if (jsToken) {
-            console.error(`[QiyuToken] Token 已通过 JS 注入捕获 (第 ${i + 1} 次检查)`);
             capturedToken = jsToken as string;
             break;
           }
         } catch (e) {
           // 忽略评估错误
         }
-
-        // 每2秒报告状态
-        if ((i + 1) % 4 === 0) {
-          let jsMessageCount = 0;
-          try {
-            jsMessageCount = await page.evaluate('window.__ws_message_count__ || 0') as number;
-          } catch (e) {
-            // 忽略
-          }
-          console.error(`[QiyuToken] [${((i + 1) / 2).toFixed(1)}s] CDP消息: ${wsMessageCount}, JS消息: ${jsMessageCount}`);
-        }
       }
     }
 
     if (!capturedToken) {
-      // 输出调试信息
-      console.error('[QiyuToken] ========== Token 获取失败 ==========');
+      // 失败时输出调试信息辅助排查
       try {
         const debugInfo = await page.evaluate(`({
-          jsMessageCount: window.__ws_message_count__ || 0,
-          fileInputCount: document.querySelectorAll('input[type="file"]').length,
-          pageTitle: document.title,
-          pageUrl: window.location.href
+          jsMsg: window.__ws_message_count__ || 0,
+          inputs: document.querySelectorAll('input[type="file"]').length,
+          title: document.title
         })`);
-        console.error('[QiyuToken] 调试信息:', JSON.stringify(debugInfo, null, 2));
+        console.error(`[QiyuToken] Token 获取失败 - ${JSON.stringify(debugInfo)}, wsMsg: ${wsMessageCount}`);
       } catch (e) {
-        console.error('[QiyuToken] 无法获取调试信息');
-      }
-
-      // 输出最近的 WebSocket 消息
-      if (recentMessages.length > 0) {
-        console.error('[QiyuToken] 最近的 WebSocket 消息:');
-        recentMessages.forEach((msg, i) => {
-          console.error(`  [${i + 1}] ${msg}`);
-        });
+        console.error(`[QiyuToken] Token 获取失败 - wsMsg: ${wsMessageCount}`);
       }
 
       throw new Error('未能捕获到上传 Token');
     }
 
-    console.error('[QiyuToken] ========== Token 获取成功 ==========');
     return parseToken(capturedToken);
 
   } finally {
@@ -401,9 +354,7 @@ function parseToken(token: string): QiyuToken {
 
   const expires = policy.Expires || 0;
 
-  console.error('[QiyuToken] Token 解析成功');
-  console.error(`[QiyuToken]   Object: ${objectPath}`);
-  console.error(`[QiyuToken]   Expires: ${expires}`);
+  console.error(`[QiyuToken] 解析成功 - object: ${objectPath}, expires: ${expires}`);
 
   return {
     token,
