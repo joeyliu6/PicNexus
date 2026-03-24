@@ -181,78 +181,38 @@ export interface SmmsServiceConfig extends BaseServiceConfig {
 }
 
 /**
- * GitHub CDN 提供商配置
+ * GitHub CDN 提供商
  */
 export interface GithubCdnProvider {
-  /** 提供商名称 */
+  /** 显示名称 */
   name: string;
-  /** URL 模板，支持占位符: {owner}, {repo}, {branch}, {path} */
-  urlTemplate: string;
-  /** 是否为预设（预设不可删除） */
-  isPreset?: boolean;
+  /** CDN 域名，如 https://cdn.jsdmirror.com */
+  url: string;
+  /** URL 模板，支持变量：{domain} {owner} {repo} {branch} {path} {rawUrl} */
+  template: string;
 }
 
 /**
  * GitHub CDN 加速配置
+ * 通过 jsDelivr 或其镜像将 raw.githubusercontent.com 链接转换为 CDN 链接
  */
 export interface GithubCdnConfig {
   /** 是否启用 CDN 加速 */
   enabled: boolean;
   /** 当前选中的 CDN 索引 */
   selectedIndex: number;
-  /** CDN 列表（预设 + 自定义） */
+  /** CDN 提供商列表 */
   cdnList: GithubCdnProvider[];
 }
 
 /**
- * 默认 GitHub CDN 列表
+ * 默认 GitHub CDN 提供商列表
  */
+export const DEFAULT_CDN_TEMPLATE = '{domain}/gh/{owner}/{repo}@{branch}/{path}';
+
 export const DEFAULT_GITHUB_CDN_LIST: GithubCdnProvider[] = [
-  {
-    name: 'GitHub Raw',
-    urlTemplate: 'https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}',
-    isPreset: true
-  },
-  {
-    name: 'jsDelivr CDN',
-    urlTemplate: 'https://cdn.jsdelivr.net/gh/{owner}/{repo}@{branch}/{path}',
-    isPreset: true
-  },
-  {
-    name: 'jsdmirror',
-    urlTemplate: 'https://cdn.jsdmirror.com/gh/{owner}/{repo}@{branch}/{path}',
-    isPreset: true
-  },
-  {
-    name: 'Statically CDN',
-    urlTemplate: 'https://cdn.statically.io/gh/{owner}/{repo}@{branch}/{path}',
-    isPreset: true
-  },
-  {
-    name: 'GitHub Proxy',
-    urlTemplate: 'https://ghproxy.com/https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}',
-    isPreset: true
-  }
+  { name: 'jsDelivr', url: 'https://cdn.jsdelivr.net', template: DEFAULT_CDN_TEMPLATE }
 ];
-
-/**
- * GitHub URL 策略类型
- * - 'default': 使用 raw.githubusercontent.com 原始链接
- * - 'cdn': 使用 CDN 加速（从 cdnList 中选择）
- * - 'custom-domain': 使用自定义域名
- */
-export type GithubUrlStrategyType = 'default' | 'cdn' | 'custom-domain';
-
-/**
- * GitHub URL 策略配置
- * 将 customDomain 和 cdnConfig 合并为互斥的三选一
- */
-export interface GithubUrlStrategy {
-  type: GithubUrlStrategyType;
-  selectedCdnIndex: number;
-  cdnList: GithubCdnProvider[];
-  customDomain: string;
-}
 
 /**
  * GitHub 图床服务配置
@@ -269,12 +229,8 @@ export interface GithubServiceConfig extends BaseServiceConfig {
   branch: string;
   /** 存储路径（默认 images/） */
   path: string;
-  /** @deprecated 已迁移到 urlStrategy.customDomain */
-  customDomain?: string;
-  /** @deprecated 已迁移到 urlStrategy */
+  /** CDN 加速配置 */
   cdnConfig?: GithubCdnConfig;
-  /** URL 策略配置（v5 新增） */
-  urlStrategy?: GithubUrlStrategy;
 }
 
 /**
@@ -535,7 +491,7 @@ export interface LinkOutputConfig {
  * 每次配置格式变更时递增此版本号
  * 迁移函数将根据此版本号决定是否需要执行迁移
  */
-export const CONFIG_VERSION = 11;
+export const CONFIG_VERSION = 13;
 
 export interface UserConfig {
   /**
@@ -749,7 +705,7 @@ export const DEFAULT_CONFIG: UserConfig = {
       branch: 'main',
       path: 'images/',
       cdnConfig: {
-        enabled: false,  // 默认不启用 CDN，使用原始 GitHub 链接
+        enabled: false,
         selectedIndex: 0,
         cdnList: [...DEFAULT_GITHUB_CDN_LIST]
       }
@@ -1128,56 +1084,16 @@ export function migrateConfig(config: UserConfig): UserConfig {
 
   });
 
-  // 版本 2 -> 3：新增 GitHub CDN 加速配置
-  runStep(3, 'GitHub CDN 加速', () => {
-    if (migratedConfig.services?.github && !migratedConfig.services.github.cdnConfig) {
-      migratedConfig.services.github = {
-        ...migratedConfig.services.github,
-        cdnConfig: {
-          enabled: false,
-          selectedIndex: 0,
-          cdnList: [...DEFAULT_GITHUB_CDN_LIST]
-        }
-      };
-    }
-  });
+  // 版本 2 -> 3：（已废弃）
+  runStep(3, '已废弃', () => {});
 
   // 版本 3 -> 4：移除自动同步功能
   runStep(4, '移除自动同步', () => {
     delete (migratedConfig as any).autoSync;
   });
 
-  // 版本 4 -> 5：合并 GitHub customDomain + cdnConfig 为 urlStrategy
-  runStep(5, '合并 GitHub URL 策略', () => {
-    const github = migratedConfig.services?.github;
-    if (github && !github.urlStrategy) {
-      let strategyType: GithubUrlStrategyType = 'default';
-      let customDomain = '';
-      let selectedCdnIndex = 0;
-      let cdnList = [...DEFAULT_GITHUB_CDN_LIST];
-
-      if (github.customDomain?.trim()) {
-        strategyType = 'custom-domain';
-        customDomain = github.customDomain;
-      } else if (github.cdnConfig?.enabled) {
-        strategyType = 'cdn';
-        selectedCdnIndex = github.cdnConfig.selectedIndex;
-        cdnList = github.cdnConfig.cdnList?.length
-          ? [...github.cdnConfig.cdnList]
-          : [...DEFAULT_GITHUB_CDN_LIST];
-      }
-
-      github.urlStrategy = {
-        type: strategyType,
-        selectedCdnIndex,
-        cdnList,
-        customDomain
-      };
-
-      delete github.customDomain;
-      delete github.cdnConfig;
-    }
-  });
+  // 版本 4 -> 5：（已废弃）
+  runStep(5, '已废弃', () => {});
 
   // 版本 5 -> 6：新增应用行为配置
   runStep(6, '新增应用行为配置', () => {
@@ -1231,6 +1147,30 @@ export function migrateConfig(config: UserConfig): UserConfig {
   runStep(11, '新增关闭按钮行为配置', () => {
     if (migratedConfig.appBehavior && migratedConfig.appBehavior.closeToTray === undefined) {
       migratedConfig.appBehavior.closeToTray = true;
+    }
+  });
+
+  // 版本 11 -> 12：GitHub 前缀代理改为 jsDelivr CDN 模式
+  runStep(12, 'GitHub 代理改为 CDN 模式', () => {
+    const github = migratedConfig.services?.github as any;
+    if (github) {
+      delete github.proxyConfig;
+      github.cdnConfig = {
+        enabled: false,
+        selectedIndex: 0,
+        cdnList: [...DEFAULT_GITHUB_CDN_LIST]
+      };
+    }
+  });
+
+  // 版本 12 -> 13：GitHub CDN 增加模板字段
+  runStep(13, 'GitHub CDN 增加模板字段', () => {
+    const github = migratedConfig.services?.github as any;
+    if (github?.cdnConfig?.cdnList) {
+      github.cdnConfig.cdnList = github.cdnConfig.cdnList.map((cdn: any) => ({
+        ...cdn,
+        template: cdn.template || DEFAULT_CDN_TEMPLATE
+      }));
     }
   });
 

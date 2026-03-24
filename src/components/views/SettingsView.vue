@@ -28,7 +28,7 @@ import BackupSyncPanel from '../settings/BackupSyncPanel.vue';
 import AboutUpdatePanel from '../settings/AboutUpdatePanel.vue';
 
 import { configStore, syncStatusStore } from '../../store/instances';
-import type { ThemeMode, UserConfig, ServiceType, WebDAVProfile, GithubUrlStrategy } from '../../config/types';
+import type { ThemeMode, UserConfig, ServiceType, WebDAVProfile } from '../../config/types';
 import { DEFAULT_CONFIG, DEFAULT_PREFIXES } from '../../config/types';
 
 
@@ -131,7 +131,7 @@ const formData = ref({
   bilibili: { cookie: '' },
   chaoxing: { cookie: '' },
   smms: { token: '' },
-  github: { token: '', owner: '', repo: '', branch: 'main', path: 'images/' } as { token: string; owner: string; repo: string; branch: string; path: string; urlStrategy?: GithubUrlStrategy },
+  github: { token: '', owner: '', repo: '', branch: 'main', path: 'images/' } as import('../../config/types').GithubServiceConfig,
   imgur: { clientId: '', clientSecret: '' },
   webdav: { profiles: [] as WebDAVProfile[], activeId: null as string | null },
   linkPrefixEnabled: true,
@@ -207,10 +207,6 @@ const serviceConfigStatus = computed<Record<ServiceType, boolean>>(() => {
     jd: true,
     qiyu: true,
   };
-});
-
-const activeWebDAVProfile = computed(() => {
-  return formData.value.webdav.profiles.find(p => p.id === formData.value.webdav.activeId) || null;
 });
 
 // 防抖版保存：用于 blur/watch 触发的自动保存，500ms 内多次触发合并为一次
@@ -335,18 +331,18 @@ async function saveSettings() {
     config.services = {
       ...config.services,
       weibo: { enabled: true, cookie: formData.value.weiboCookie },
-      r2: { enabled: true, ...formData.value.r2 },
-      tencent: { enabled: true, ...formData.value.tencent },
-      aliyun: { enabled: true, ...formData.value.aliyun },
-      qiniu: { enabled: true, ...formData.value.qiniu },
-      upyun: { enabled: true, ...formData.value.upyun },
-      nowcoder: { enabled: true, ...formData.value.nowcoder },
-      zhihu: { enabled: true, ...formData.value.zhihu },
-      bilibili: { enabled: true, ...formData.value.bilibili },
-      chaoxing: { enabled: true, ...formData.value.chaoxing },
-      smms: { enabled: true, ...formData.value.smms },
-      github: { enabled: true, ...formData.value.github },
-      imgur: { enabled: true, ...formData.value.imgur },
+      r2: { ...formData.value.r2, enabled: true },
+      tencent: { ...formData.value.tencent, enabled: true },
+      aliyun: { ...formData.value.aliyun, enabled: true },
+      qiniu: { ...formData.value.qiniu, enabled: true },
+      upyun: { ...formData.value.upyun, enabled: true },
+      nowcoder: { ...formData.value.nowcoder, enabled: true },
+      zhihu: { ...formData.value.zhihu, enabled: true },
+      bilibili: { ...formData.value.bilibili, enabled: true },
+      chaoxing: { ...formData.value.chaoxing, enabled: true },
+      smms: { ...formData.value.smms, enabled: true },
+      github: { ...formData.value.github, enabled: true },
+      imgur: { ...formData.value.imgur, enabled: true },
     };
 
     // Nami Token 提取
@@ -719,49 +715,7 @@ function switchWebDAVProfile(id: string) {
   saveSettings();
 }
 
-async function testActiveWebDAV() {
-  const profile = activeWebDAVProfile.value;
-  if (!profile) return;
-  testingConnections.value.webdav = true;
-  try {
-    const result = await invoke<string>('test_webdav_connection', {
-      config: {
-        url: profile.url,
-        username: profile.username,
-        password: profile.password,
-        remotePath: profile.remotePath || '/PicNexus/'
-      }
-    });
-    // 更新连接状态为成功
-    updateWebDAVProfileStatus(profile.id, 'success', undefined);
-    toast.showConfig('success', result
-      ? { summary: '验证成功', detail: result }
-      : TOAST_MESSAGES.auth.success('WebDAV'));
-  } catch (e) {
-    // 更新连接状态为失败，并记录错误信息
-    const errorMsg = String(e);
-    updateWebDAVProfileStatus(profile.id, 'failed', errorMsg);
-    toast.showConfig('error', TOAST_MESSAGES.auth.connectionFailed('WebDAV', errorMsg));
-  } finally {
-    testingConnections.value.webdav = false;
-  }
-}
 
-function updateWebDAVProfileStatus(profileId: string, status: 'pending' | 'success' | 'failed', error?: string) {
-  const profiles = formData.value.webdav.profiles.map(p => {
-    if (p.id === profileId) {
-      return {
-        ...p,
-        connectionStatus: status,
-        lastTestedAt: status !== 'pending' ? Date.now() : p.lastTestedAt,
-        lastError: error
-      };
-    }
-    return p;
-  });
-  formData.value.webdav.profiles = profiles;
-  saveSettings();
-}
 
 
 async function handleClearHistory() {
@@ -944,7 +898,7 @@ onUnmounted(() => {
           :link-prefix-enabled="formData.linkPrefixEnabled"
           :prefix-list="formData.linkPrefixList"
           :selected-prefix-index="formData.selectedPrefixIndex"
-          :github-url-strategy="formData.github.urlStrategy"
+          :github-cdn-config="formData.github.cdnConfig"
           :target-card-id="targetCardId"
           :is-batch-testing="isBatchTesting"
           :batch-test-progress="batchTestProgress"
@@ -966,7 +920,7 @@ onUnmounted(() => {
           @update:link-prefix-enabled="(v) => { formData.linkPrefixEnabled = v; debouncedSaveSettings(); }"
           @update:prefix-list="(v) => { formData.linkPrefixList = v; }"
           @update:selected-prefix-index="(v) => { formData.selectedPrefixIndex = v; debouncedSaveSettings(); }"
-          @update:github-url-strategy="(v) => { formData.github.urlStrategy = v; }"
+          @update:github-cdn-config="(v) => { formData.github.cdnConfig = v; }"
           @add-prefix="addPrefix"
           @remove-prefix="removePrefix"
           @reset-to-default="resetToDefaultPrefixes"

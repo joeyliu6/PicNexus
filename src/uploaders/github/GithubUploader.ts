@@ -1,6 +1,5 @@
 import { BaseUploader } from '../base/BaseUploader';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
-import { transformGithubUrl, parseGithubRawUrl } from '../../utils/githubCdn';
 import type { GithubServiceConfig } from '../../config/types';
 
 interface GithubRustResult {
@@ -84,35 +83,25 @@ export class GithubUploader extends BaseUploader {
   }
 
   private applyUrlTransform(rawUrl: string, config: GithubServiceConfig): string {
-    const strategy = config.urlStrategy;
+    if (!config.cdnConfig?.enabled) return rawUrl;
 
-    if (strategy) {
-      if (strategy.type === 'custom-domain' && strategy.customDomain) {
-        const parts = parseGithubRawUrl(rawUrl);
-        if (parts) {
-          const domain = strategy.customDomain.replace(/\/$/, '');
-          return `${domain}/${parts.path}`;
-        }
-      }
-      if (strategy.type === 'cdn') {
-        return transformGithubUrl(rawUrl, {
-          enabled: true,
-          selectedIndex: strategy.selectedCdnIndex,
-          cdnList: strategy.cdnList
-        });
-      }
-      return rawUrl;
-    }
+    const { cdnList, selectedIndex } = config.cdnConfig;
+    const cdn = cdnList[selectedIndex] || cdnList[0];
+    if (!cdn?.url || !cdn?.template) return rawUrl;
 
-    // 向后兼容：未迁移的旧配置
-    if (config.customDomain) {
-      const parts = parseGithubRawUrl(rawUrl);
-      if (parts) {
-        const domain = config.customDomain.replace(/\/$/, '');
-        return `${domain}/${parts.path}`;
-      }
-    }
-    return transformGithubUrl(rawUrl, config.cdnConfig);
+    const match = rawUrl.match(/^https?:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/);
+    if (!match) return rawUrl;
+
+    const [, owner, repo, branch, path] = match;
+    const domain = cdn.url.replace(/\/$/, '');
+
+    return cdn.template
+      .replace(/\{domain\}/g, domain)
+      .replace(/\{owner\}/g, owner)
+      .replace(/\{repo\}/g, repo)
+      .replace(/\{branch\}/g, branch)
+      .replace(/\{path\}/g, path)
+      .replace(/\{rawUrl\}/g, rawUrl);
   }
 
   getPublicUrl(result: UploadResult): string {

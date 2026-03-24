@@ -5,8 +5,8 @@ import Password from 'primevue/password';
 import Textarea from 'primevue/textarea';
 import HostingCard from './HostingCard.vue';
 import WeiboLinkPrefixSection from './hosting/WeiboLinkPrefixSection.vue';
-import GithubUrlStrategySection from './hosting/GithubUrlStrategySection.vue';
-import type { GithubUrlStrategy, ServiceType } from '../../config/types';
+import GithubProxySection from './hosting/GithubProxySection.vue';
+import type { GithubCdnConfig, ServiceType } from '../../config/types';
 import { PRIVATE_SERVICES, PUBLIC_SERVICES } from '../../config/types';
 import type { BatchTestProgress } from '../../types/batchTest';
 import type { ServiceHealthStatus } from '../../types/serviceHealth';
@@ -39,7 +39,7 @@ interface TokenFormData {
     repo: string;
     branch: string;
     path: string;
-    urlStrategy?: GithubUrlStrategy;
+    cdnConfig?: GithubCdnConfig;
   };
   imgur: { clientId: string; clientSecret?: string };
 }
@@ -60,7 +60,7 @@ const props = defineProps<{
   linkPrefixEnabled: boolean;
   prefixList: string[];
   selectedPrefixIndex: number;
-  githubUrlStrategy?: GithubUrlStrategy;
+  githubCdnConfig?: GithubCdnConfig;
   targetCardId?: string | null;
   isBatchTesting?: boolean;
   batchTestProgress?: BatchTestProgress | null;
@@ -81,7 +81,7 @@ const emit = defineEmits<{
   'update:linkPrefixEnabled': [enabled: boolean];
   'update:prefixList': [list: string[]];
   'update:selectedPrefixIndex': [index: number];
-  'update:githubUrlStrategy': [strategy: GithubUrlStrategy];
+  'update:githubCdnConfig': [config: GithubCdnConfig];
   addPrefix: [];
   removePrefix: [index: number];
   resetToDefault: [];
@@ -757,11 +757,14 @@ function toggleFilter(status: ServiceHealthStatus) {
               <InputText v-model="tokenFormData.github.path" @blur="emit('save')" placeholder="images/" class="w-full" />
               <small class="form-hint">图片存储在仓库中的路径，例如 images/ 或 assets/pics/</small>
             </div>
+            <div class="form-item span-full">
+              <small class="form-hint">访问 <a href="https://github.com/settings/tokens/new?scopes=repo&description=PicNexus" target="_blank">GitHub Token 创建页面</a> 获取 Personal Access Token（需要 repo 权限）</small>
+            </div>
           </div>
           <template #extra>
-            <GithubUrlStrategySection
-              :url-strategy="githubUrlStrategy"
-              @update:url-strategy="emit('update:githubUrlStrategy', $event)"
+            <GithubProxySection
+              :cdn-config="githubCdnConfig"
+              @update:cdn-config="emit('update:githubCdnConfig', $event)"
               @save="emit('save')"
             />
           </template>
