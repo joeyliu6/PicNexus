@@ -117,8 +117,6 @@ export class MultiServiceUploader {
     }
 
     // 2. 并发上传到所有图床（无并发限制，提升用户体验）
-    log.info(`将上传到 ${validServices.length} 个图床，全部并发上传`);
-
     // 创建所有上传任务
     // 将 TCL 和其他服务分开处理
     const uploadTasks: (() => Promise<SingleServiceResult>)[] = [];
@@ -247,11 +245,9 @@ export class MultiServiceUploader {
       structuredError: r.structuredError
     })) : undefined;
 
-    log.info('主力图床:', primaryResult.serviceId);
-    log.info('上传结果:', {
-      成功: uploadResults.filter(r => r.status === 'success').length,
-      失败: uploadResults.filter(r => r.status === 'failed').length
-    });
+    const successCount = uploadResults.filter(r => r.status === 'success').length;
+    const failedCount = uploadResults.filter(r => r.status === 'failed').length;
+    log.info(`上传完成: 成功 ${successCount}, 失败 ${failedCount}, 主力: ${primaryResult.serviceId}`);
 
     if (isPartialSuccess) {
       log.warn('部分图床上传失败:', partialFailures);

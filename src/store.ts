@@ -636,7 +636,6 @@ class SimpleStore {
       if (this.encrypted) {
         try {
           contentToWrite = await secureStorage.encrypt(jsonContent);
-          log.info(`✓ 数据加密成功`);
         } catch (encryptError: any) {
           const errorMsg = encryptError?.message || String(encryptError);
           log.error(`加密失败: ${errorMsg}`);

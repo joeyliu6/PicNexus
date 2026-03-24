@@ -218,8 +218,6 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         selectedServices.value = [...enabledServices];
       }
 
-      log.info(`启用的图床:`, enabledServices);
-
       // ⭐ 检查队列管理器
       if (!queueManager) {
         log.error('队列管理器未初始化');
@@ -355,8 +353,6 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       toast.showConfig('error', TOAST_MESSAGES.upload.failed('队列管理器未初始化'));
       return;
     }
-
-    log.info(`开始处理 ${queueItems.length} 个文件，启用图床:`, enabledServices);
 
     const multiServiceUploader = new MultiServiceUploader();
 
@@ -598,7 +594,6 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       const runNext = () => {
         // 所有任务都已启动且完成
         if (taskIndex >= uploadTasks.length && activeCount === 0) {
-          log.info(`所有文件处理完成`);
           resolve();
           return;
         }

@@ -32,7 +32,6 @@ export function useClipboardImage() {
 
     try {
       // 1. 检查剪贴板是否包含图片
-      console.log('[剪贴板] 检查剪贴板是否包含图片...');
       const hasImg = await invoke<boolean>('clipboard_has_image');
 
       if (!hasImg) {
@@ -43,10 +42,7 @@ export function useClipboardImage() {
       }
 
       // 2. 读取图片并保存为临时文件
-      console.log('[剪贴板] 正在读取图片...');
       const tempFilePath = await invoke<string>('read_clipboard_image');
-
-      console.log('[剪贴板] 临时文件已创建:', tempFilePath);
 
       return {
         success: true,

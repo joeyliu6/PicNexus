@@ -86,6 +86,7 @@ class HistoryDatabase {
   private db: Database | null = null;
   private static instance: HistoryDatabase | null = null;
   private initialized = false;
+  private initPromise: Promise<void> | null = null;
 
   private constructor() {}
 
@@ -108,7 +109,7 @@ class HistoryDatabase {
     }
 
     try {
-      log.info('正在打开数据库...');
+      log.debug('正在打开数据库...');
       this.db = await Database.load(DB_PATH);
 
       // 创建表（如果不存在）
@@ -154,7 +155,7 @@ class HistoryDatabase {
       `);
 
       this.initialized = true;
-      log.info('数据库初始化完成');
+      log.debug('数据库初始化完成');
     } catch (error) {
       log.error('数据库初始化失败:', error);
       throw error;
@@ -169,7 +170,7 @@ class HistoryDatabase {
       await this.db.close();
       this.db = null;
       this.initialized = false;
-      log.info('数据库已关闭');
+      this.initPromise = null;
     }
   }
 
@@ -178,7 +179,10 @@ class HistoryDatabase {
    */
   private async ensureInitialized(): Promise<Database> {
     if (!this.initialized || !this.db) {
-      await this.open();
+      if (!this.initPromise) {
+        this.initPromise = this.open();
+      }
+      await this.initPromise;
     }
     return this.db!;
   }
@@ -220,7 +224,7 @@ class HistoryDatabase {
         row.has_alpha,
       ]
     );
-    log.info(`插入记录: ${item.id}`);
+    log.debug(`插入记录: ${item.id}`);
   }
 
   /**
@@ -261,7 +265,7 @@ class HistoryDatabase {
 
     const inserted = result.rowsAffected > 0;
     if (inserted) {
-      log.info(`插入记录: ${item.id}`);
+      log.debug(`插入记录: ${item.id}`);
     } else {
       log.warn(`记录已存在，跳过插入: ${item.id}（可能存在竞态或 UUID 碰撞）`);
     }
@@ -310,7 +314,7 @@ class HistoryDatabase {
         id,
       ]
     );
-    log.info(`更新记录: ${id}`);
+    log.debug(`更新记录: ${id}`);
   }
 
   /**
@@ -354,7 +358,7 @@ class HistoryDatabase {
   async delete(id: string): Promise<void> {
     const db = await this.ensureInitialized();
     await db.execute('DELETE FROM history_items WHERE id = $1', [id]);
-    log.info(`删除记录: ${id}`);
+    log.debug(`删除记录: ${id}`);
   }
 
   /**
@@ -525,7 +529,7 @@ class HistoryDatabase {
       ORDER BY year DESC, month DESC
     `);
 
-    log.debug(`时间段统计: ${rows.length} 个月份`);
+
 
     return rows.map(row => ({
       year: row.year,
@@ -571,7 +575,7 @@ class HistoryDatabase {
       ORDER BY timestamp DESC
     `);
 
-    log.debug(`加载元数据: ${rows.length} 条`);
+
 
     // 转换为 ImageMeta
     return rows.map(row => {
@@ -640,7 +644,7 @@ class HistoryDatabase {
     // 该时间戳之前的数据是否已全部加载
     const hasMore = items.length < countBefore;
 
-    log.debug(`从时间戳 ${fromTimestamp} 加载: ${items.length} 条，剩余 ${countBefore - items.length} 条`);
+
 
     return { items, total, hasMore };
   }

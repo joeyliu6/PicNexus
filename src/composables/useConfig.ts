@@ -57,7 +57,6 @@ export function useConfigManager() {
    * 加载配置
    */
   async function loadConfig(): Promise<UserConfig> {
-    log.info('开始加载配置...');
     isLoading.value = true;
 
     try {
@@ -86,7 +85,6 @@ export function useConfigManager() {
    */
   async function saveConfig(newConfig: UserConfig, silent = false): Promise<void> {
     try {
-      log.info('开始保存配置...');
       isSaving.value = true;
       const configToSave = toPlainConfig(newConfig);
 
@@ -427,7 +425,7 @@ export function useConfigManager() {
         });
       });
 
-      log.info('✓ 监听器已设置（支持多服务 + 超时通知）');
+      log.debug('✓ 监听器已设置（支持多服务 + 超时通知）');
       return () => {
         unlisten();
         unlistenTimeout();

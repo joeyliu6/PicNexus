@@ -82,8 +82,6 @@ async function reloadSharedData(): Promise<void> {
     sharedTimePeriodStats.value = timePeriodStats;
     isTimePeriodStatsLoaded.value = true;
 
-    console.log(`[历史记录] 事件触发重新加载: ${metas.length} 条元数据, ${timePeriodStats.length} 个月份`);
-
     isDataLoaded.value = true;
     lastLoadTime.value = Date.now();
     dataVersion.value++;
@@ -107,7 +105,6 @@ function initCrossWindowListener(): void {
     switch (payload.type) {
       case 'history-deleted':
         if (data?.ids && data.ids.length > 0) {
-          console.log('[历史记录] 跨窗口同步: 删除', data.ids);
           const deletedSet = new Set(data.ids);
           sharedImageMetas.value = sharedImageMetas.value.filter(
             meta => !deletedSet.has(meta.id)
@@ -118,14 +115,12 @@ function initCrossWindowListener(): void {
         break;
 
       case 'history-cleared':
-        console.log('[历史记录] 跨窗口同步: 清空');
         sharedImageMetas.value = [];
         totalCount.value = 0;
         dataVersion.value++;
         break;
 
       case 'history-updated':
-        console.log('[历史记录] 跨窗口同步: 更新，重新加载数据');
         isDataLoaded.value = false;
         // 强制重新加载数据，确保时间轴视图能获取最新数据
         reloadSharedData();
@@ -142,7 +137,6 @@ function initCrossWindowListener(): void {
 export function invalidateCache(): void {
   isDataLoaded.value = false;
   lastLoadTime.value = 0;
-  console.log('[历史记录] 缓存已失效');
 }
 
 /**
@@ -175,12 +169,10 @@ export function useHistoryManager() {
   async function loadHistory(forceReload = false): Promise<void> {
     // 如果缓存有效且不强制刷新，直接返回
     if (isCacheValid() && !forceReload) {
-      console.log('[历史记录] 缓存命中（TTL 有效），跳过加载');
       return;
     }
 
     if (isDataLoaded.value && !isCacheValid()) {
-      console.log('[历史记录] 缓存已过期（TTL），重新加载');
     }
 
     try {
@@ -194,7 +186,6 @@ export function useHistoryManager() {
       imageMetas.value = metas;
       totalCount.value = metas.length;
 
-      console.log(`[历史记录] 加载完成: ${metas.length} 条元数据`);
 
       isDataLoaded.value = true;
       lastLoadTime.value = Date.now();
@@ -227,13 +218,11 @@ export function useHistoryManager() {
       );
 
       if (!confirmed) {
-        console.log('[历史记录] 用户取消删除');
         return;
       }
 
       await historyDB.delete(itemId);
 
-      console.log('[历史记录] ✓ 删除成功:', itemId);
       toast.showConfig('success', TOAST_MESSAGES.common.deleteSuccess(1));
 
       // 更新元数据
@@ -487,7 +476,6 @@ export function useHistoryManager() {
       pageSize,
       serviceFilter: serviceFilter === 'all' ? undefined : serviceFilter,
     });
-    console.log(`[历史记录] 加载第 ${page} 页: ${result.items.length}/${result.total} 条`);
     return result;
   }
 
@@ -504,7 +492,6 @@ export function useHistoryManager() {
   ): Promise<SearchResult> {
     await initDatabase();
     const result = await historyDB.search(keyword, options);
-    console.log(`[历史记录] 搜索"${keyword}": ${result.items.length}/${result.total} 条`);
     return result;
   }
 
@@ -522,7 +509,6 @@ export function useHistoryManager() {
     const stats = await historyDB.getTimePeriodStats();
     sharedTimePeriodStats.value = stats;
     isTimePeriodStatsLoaded.value = true;
-    console.log(`[历史记录] 加载时间段统计: ${stats.length} 个月份`);
     return stats;
   }
 
