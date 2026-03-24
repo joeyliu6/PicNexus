@@ -84,6 +84,73 @@
 
 ---
 
+## [Unreleased] - 2026 Q1 功能批次（2026-01-23 至 2026-03-23）
+
+### Added
+
+#### 核心功能
+- **全局快捷键上传**：系统级快捷键在任意应用中触发图片上传；新增 ShortcutInput 可视化录入组件
+- **应用内自动更新**：检测新版本、展示下载进度并自动重启；签名公钥验证安全性
+- **首次使用引导流程**：4 步 onboarding 对话框（欢迎 → 上传说明 → 服务介绍 → 准备就绪），完成状态持久化
+- **跨电脑配置恢复**：PNXPWD 加密格式（PBKDF2 + AES-GCM），备份密码对话框支持设置/修改/恢复三种模式
+- **备份密码导入**：支持直接导入他人/跨机加密备份文件，输入备份密码完成解密恢复
+- **图床健康状态系统**：四态模型（未配置/检测中/已验证/异常），HostingCard 指示灯 + tooltip，批量测试（最大并发 3）
+- **链接输出配置**：默认格式、自定义模板、上传后自动复制开关，集成到常规设置面板
+- **图床空状态引导**：无可用图床时展示「前往设置配置」引导，点击跳转至设置面板
+- **启动时自动清理备份**：删除超过 30 天且超出数量限制（3 个）的 `.corrupted.*`/`.invalid.*` 备份文件
+- **云端同步行始终可见**：BackupSync 面板未配置 WebDAV 时显示禁用态，锁图标提示，配置后自动启用
+- **上传结果全量持久化**：历史记录保存全部上传结果（含失败），支持失败图床详情展示和重试入口
+- **ChannelCard 状态展示**：上传队列和历史记录展示各图床的上传状态、失败原因 tooltip 和链接复制操作
+- **时间线图片加载失败状态**：新增 failedImages 集合追踪失败图片，显示失败占位图标，避免重复重试
+- **GitHub Actions 发布流程**：新增 `.github/workflows/release.yml` 自动化构建与发布
+
+#### UI 增强
+- **全屏沉浸式图片查看器**：从 PrimeVue Dialog 改为 Teleport 全屏遮罩，支持键盘快捷键、鼠标滚轮、拖拽平移、预加载邻图
+- **历史视图滚动位置恢复**：HistoryView/TimelineView 跨 Tab 切换时自动保存/恢复滚动位置
+- **历史表格空状态区分**：「无记录」与「无搜索结果」展示不同文案
+- **关闭时最小化到托盘**：GeneralSettingsPanel 新增关闭行为选项（closeToTray）
+
+### Fixed
+- **Store selfHeal 死循环**：selfHeal 模式删除文件失败时抛出 StoreError，防止脏数据写入引发死循环
+- **响应式 Proxy 序列化**：`useConfig` 新增 `toPlainConfig()`，修复 Proxy 对象无法 JSON.stringify 的问题
+- **上传防重入**：`useUpload` 添加防重入锁，同时限制单次上传文件数量上限为 200
+- **SQL 注入防护**：历史记录搜索关键词转义 LIKE 通配符（`%`/`_`/`\`）
+- **Cookie 登录稳定性**：增加 SPA 轮询兜底解决未触发 NavigationCompleted 问题；微博登录改为 `m.weibo.cn`；compare_exchange 防重复保存
+- **时间轴指示器日期跳变**：将最近距离匹配改为区间匹配，解决滑块在 segment 边界处日期抖动
+- **WebDAV 验证 toast 结构修复**：测试成功时 toast 消息格式对齐
+- **历史灯箱空值保护**：HistoryLightbox 添加 item 可选链防止 undefined 异常
+- **z-index 层级冲突**：ConfirmDialog 遮罩提升至 10001，Tooltip 设为 10000
+- **S3 路径穿越防护**：`image_meta` 命令添加路径规范化验证
+
+### Changed
+- **引导流程精简**：4 步 onboarding 精简为 3 步（移除 ReadyStep），更新文案，去除装饰性大图标，硬编码颜色改为 CSS 变量
+- **服务启用控件迁移**：从「常规设置」迁移到「图床设置」顶部，toggle-chip 根据健康状态着色
+- **复制链接统一**：新增 `useCopyLink` composable 统一所有复制入口；新增通用 `CopyButton` 组件（支持右键格式选择）；FloatingActionBar 批量复制支持图床筛选
+- **RetryService 批量重试**：支持批量重试失败项，汇总结果统一 Toast 提示
+- **历史视图导航栏**：重构为标签页 + 芯片风格，图床筛选动态读取 SERVICE_DISPLAY_NAMES
+- **分页查询优化**：COUNT(*) OVER() 窗口函数合并计数与分页为单次查询，新增复合索引加速
+- **Bold Contrast UI 风格**：移除毛玻璃效果，实色背景，加粗标题；BatchRenameDialog 变量 chips + 内联预览重写；SyncConflictDialog 清晰冲突对比布局
+- **上传摘要 Toast**：覆盖全成功/部分失败/全失败/图床部分失败等 5 种场景的差异化提示
+- **微信品牌色规范化**：提取为 `--wechat-green` 等 CSS 变量，禁止硬编码
+
+### Removed
+- **CloudStorageView 云存储浏览器**：移除整个云端文件管理模块（27 个组件，~6572 行），核心上传和连接测试功能保留
+- **遗留 R2 管理命令**：删除后端手写 AWS Sig V4 死代码（~544 行）
+
+### Performance
+- **Store 内存缓存**：新增 memCache / cacheLoaded 缓存完整数据对象，同一会话命中缓存后跳过文件 I/O 和 AES-GCM 解密
+
+### Infrastructure
+- **Store 单例化**：新增 `src/store/instances.ts`，消除 15 处重复 `new Store()` 实例化
+- **结构化 Logger**：新增 `src/utils/logger.ts`（基于 Tauri 日志插件），替换 13 个文件的 `console.*`；后端 `println!` 全替换为 `log::*` 宏；日志轮转改为 KeepAll + 启动清理 7 天前日志
+- **测试基础设施**：集成 vitest + happy-dom + Tauri mock（log/invoke/fs/path/dialog），新增单元测试覆盖 RetryService、HistoryDatabase、SecureStorage、formatters、useCopyLink、CopyButton 等核心模块
+- **Arctic Minimal 色彩体系**：Slate → Zinc 纯灰系；primary Blue 500 → Blue 400；PrimeVue 主题 Sky → Blue；新增 `--primary-alpha-*` 透明度变量（6/8/10/12/15/16/18/20/22/25/30/40/50）
+- **配置版本演进**：v6 → v7（LinkOutputConfig）→ v10（GlobalShortcutConfig/AutoUpdateConfig）→ v11（closeToTray）
+- **linkFormatter 模块**：提取链接格式化逻辑，新增 custom 格式和模板变量替换能力
+- **Tauri 安全加固**：fs/shell 权限收窄至最小原则，简化 CSP 策略，新增 `set_secure_key` 密钥更新命令
+
+---
+
 ## [1.0.1] - 2025-01-10
 
 ### Fixed
