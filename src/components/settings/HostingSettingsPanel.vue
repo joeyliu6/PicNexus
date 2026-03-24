@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
-import InputText from 'primevue/inputtext';
-import Password from 'primevue/password';
-import Textarea from 'primevue/textarea';
-import HostingCard from './HostingCard.vue';
-import WeiboLinkPrefixSection from './hosting/WeiboLinkPrefixSection.vue';
-import GithubProxySection from './hosting/GithubProxySection.vue';
 import type { GithubCdnConfig, ServiceType } from '../../config/types';
 import { PRIVATE_SERVICES, PUBLIC_SERVICES } from '../../config/types';
+import PrivateStorageGroup from './hosting/PrivateStorageGroup.vue';
+import CookieServiceGroup from './hosting/CookieServiceGroup.vue';
+import TokenServiceGroup from './hosting/TokenServiceGroup.vue';
+import BuiltinServiceGroup from './hosting/BuiltinServiceGroup.vue';
 import type { BatchTestProgress } from '../../types/batchTest';
 import type { ServiceHealthStatus } from '../../types/serviceHealth';
 import { useServiceHealth } from '../../composables/useServiceHealth';
@@ -43,10 +41,6 @@ interface TokenFormData {
   };
   imgur: { clientId: string; clientSecret?: string };
 }
-
-type PrivateProviderId = keyof PrivateFormData;
-type CookieProviderId = keyof CookieFormData;
-type TokenProviderId = keyof TokenFormData;
 
 const props = defineProps<{
   privateFormData: PrivateFormData;
@@ -91,55 +85,12 @@ const emit = defineEmits<{
   scrollToService: [serviceId: string];
 }>();
 
-function isTargetCard(id: string): boolean {
-  return props.targetCardId === id;
-}
-
 watch(() => props.targetCardId, (val) => {
   if (val) {
     nextTick(() => emit('cardNavigated'));
   }
 });
 
-function isPrivateConfigured(providerId: PrivateProviderId): boolean {
-  const data = props.privateFormData;
-  switch (providerId) {
-    case 'r2':
-      return !!(data.r2.accountId && data.r2.accessKeyId && data.r2.secretAccessKey && data.r2.bucketName && data.r2.publicDomain);
-    case 'tencent':
-      return !!(data.tencent.secretId && data.tencent.secretKey && data.tencent.region && data.tencent.bucket && data.tencent.publicDomain);
-    case 'aliyun':
-      return !!(data.aliyun.accessKeyId && data.aliyun.accessKeySecret && data.aliyun.region && data.aliyun.bucket && data.aliyun.publicDomain);
-    case 'qiniu':
-      return !!(data.qiniu.accessKey && data.qiniu.secretKey && data.qiniu.region && data.qiniu.bucket && data.qiniu.publicDomain);
-    case 'upyun':
-      return !!(data.upyun.operator && data.upyun.password && data.upyun.bucket && data.upyun.publicDomain);
-    default:
-      return false;
-  }
-}
-
-function isCookieConfigured(providerId: CookieProviderId): boolean {
-  return !!props.cookieFormData[providerId].cookie?.trim();
-}
-
-function isTokenConfigured(providerId: TokenProviderId): boolean {
-  const data = props.tokenFormData;
-  switch (providerId) {
-    case 'smms':
-      return !!data.smms.token?.trim();
-    case 'github':
-      return !!(data.github.token?.trim() && data.github.owner?.trim() && data.github.repo?.trim());
-    case 'imgur':
-      return !!data.imgur.clientId?.trim();
-    default:
-      return false;
-  }
-}
-
-const extractNamiAuthToken = computed(() => {
-  return props.cookieFormData.nami.cookie?.match(/auth-token=([^;]+)/)?.[1] || '';
-});
 
 const healthSummary = computed(() => {
   const counts: Record<ServiceHealthStatus, number> = { unconfigured: 0, pending: 0, verified: 0, error: 0 };
@@ -310,492 +261,66 @@ function toggleFilter(status: ServiceHealthStatus) {
       <div class="group-title">
         <span>私有存储</span>
       </div>
-      <div class="provider-grid">
-        <HostingCard
-          id="r2"
-          :force-expand="isTargetCard('r2')"
-          name="Cloudflare R2"
-          description="S3 兼容的高速存储"
-          :isConfigured="isPrivateConfigured('r2')"
-          :health-status="healthStatusMap['r2']"
-          :health-tooltip="healthTooltipMap['r2']"
-          :isTesting="testingConnections['r2']"
-          @test="emit('testPrivate', $event)"
-        >
-          <div class="form-grid">
-            <div class="form-item">
-              <label>Account ID</label>
-              <InputText v-model="privateFormData.r2.accountId" @blur="emit('save')" class="w-full" />
-            </div>
-            <div class="form-item">
-              <label>Bucket Name</label>
-              <InputText v-model="privateFormData.r2.bucketName" @blur="emit('save')" class="w-full" />
-            </div>
-            <div class="form-item">
-              <label>Access Key ID</label>
-              <Password v-model="privateFormData.r2.accessKeyId" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="输入 Access Key ID" />
-            </div>
-            <div class="form-item">
-              <label>Secret Access Key</label>
-              <Password v-model="privateFormData.r2.secretAccessKey" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="输入 Secret Access Key" />
-            </div>
-            <div class="form-item span-full">
-              <label>自定义路径 (Optional)</label>
-              <InputText v-model="privateFormData.r2.path" @blur="emit('save')" placeholder="e.g. blog/images/" class="w-full" />
-            </div>
-            <div class="form-item span-full">
-              <label>公开访问域名 (Public Domain)</label>
-              <InputText v-model="privateFormData.r2.publicDomain" @blur="emit('save')" placeholder="https://images.example.com" class="w-full" />
-            </div>
-          </div>
-        </HostingCard>
-
-        <HostingCard
-          id="tencent"
-          :force-expand="isTargetCard('tencent')"
-          name="腾讯云"
-          description="腾讯云对象存储"
-          :isConfigured="isPrivateConfigured('tencent')"
-          :health-status="healthStatusMap['tencent']"
-          :health-tooltip="healthTooltipMap['tencent']"
-          :isTesting="testingConnections['tencent']"
-          @test="emit('testPrivate', $event)"
-        >
-          <div class="form-grid">
-            <div class="form-item">
-              <label>Secret ID</label>
-              <Password v-model="privateFormData.tencent.secretId" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="输入 SecretId" />
-            </div>
-            <div class="form-item">
-              <label>Secret Key</label>
-              <Password v-model="privateFormData.tencent.secretKey" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="输入 SecretKey" />
-            </div>
-            <div class="form-item">
-              <label>地域 (Region)</label>
-              <InputText v-model="privateFormData.tencent.region" @blur="emit('save')" placeholder="ap-guangzhou" class="w-full" />
-            </div>
-            <div class="form-item">
-              <label>存储桶 (Bucket)</label>
-              <InputText v-model="privateFormData.tencent.bucket" @blur="emit('save')" class="w-full" />
-            </div>
-            <div class="form-item span-full">
-              <label>自定义路径 (Optional)</label>
-              <InputText v-model="privateFormData.tencent.path" @blur="emit('save')" placeholder="e.g. blog/images/" class="w-full" />
-            </div>
-            <div class="form-item span-full">
-              <label>公开访问域名 (Public Domain)</label>
-              <InputText v-model="privateFormData.tencent.publicDomain" @blur="emit('save')" placeholder="https://images.example.com" class="w-full" />
-            </div>
-          </div>
-        </HostingCard>
-
-        <HostingCard
-          id="aliyun"
-          :force-expand="isTargetCard('aliyun')"
-          name="阿里云"
-          description="阿里云对象存储"
-          :isConfigured="isPrivateConfigured('aliyun')"
-          :health-status="healthStatusMap['aliyun']"
-          :health-tooltip="healthTooltipMap['aliyun']"
-          :isTesting="testingConnections['aliyun']"
-          @test="emit('testPrivate', $event)"
-        >
-          <div class="form-grid">
-            <div class="form-item">
-              <label>Access Key ID</label>
-              <Password v-model="privateFormData.aliyun.accessKeyId" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="输入 AccessKey ID" />
-            </div>
-            <div class="form-item">
-              <label>Access Key Secret</label>
-              <Password v-model="privateFormData.aliyun.accessKeySecret" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="输入 AccessKey Secret" />
-            </div>
-            <div class="form-item">
-              <label>地域 (Region)</label>
-              <InputText v-model="privateFormData.aliyun.region" @blur="emit('save')" placeholder="oss-cn-hangzhou" class="w-full" />
-            </div>
-            <div class="form-item">
-              <label>存储桶 (Bucket)</label>
-              <InputText v-model="privateFormData.aliyun.bucket" @blur="emit('save')" class="w-full" />
-            </div>
-            <div class="form-item span-full">
-              <label>自定义路径 (Optional)</label>
-              <InputText v-model="privateFormData.aliyun.path" @blur="emit('save')" placeholder="e.g. blog/images/" class="w-full" />
-            </div>
-            <div class="form-item span-full">
-              <label>公开访问域名 (Public Domain)</label>
-              <InputText v-model="privateFormData.aliyun.publicDomain" @blur="emit('save')" placeholder="https://images.example.com" class="w-full" />
-            </div>
-          </div>
-        </HostingCard>
-
-        <HostingCard
-          id="qiniu"
-          :force-expand="isTargetCard('qiniu')"
-          name="七牛云"
-          description="七牛云对象存储"
-          :isConfigured="isPrivateConfigured('qiniu')"
-          :health-status="healthStatusMap['qiniu']"
-          :health-tooltip="healthTooltipMap['qiniu']"
-          :isTesting="testingConnections['qiniu']"
-          @test="emit('testPrivate', $event)"
-        >
-          <div class="form-grid">
-            <div class="form-item">
-              <label>Access Key (AK)</label>
-              <Password v-model="privateFormData.qiniu.accessKey" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="输入 Access Key" />
-            </div>
-            <div class="form-item">
-              <label>Secret Key (SK)</label>
-              <Password v-model="privateFormData.qiniu.secretKey" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="输入 Secret Key" />
-            </div>
-            <div class="form-item">
-              <label>地域 (Region)</label>
-              <InputText v-model="privateFormData.qiniu.region" @blur="emit('save')" placeholder="cn-east-1" class="w-full" />
-              <small class="field-hint">七牛云区域代码，如 cn-east-1、cn-south-1 等</small>
-            </div>
-            <div class="form-item">
-              <label>存储桶 (Bucket)</label>
-              <InputText v-model="privateFormData.qiniu.bucket" @blur="emit('save')" class="w-full" />
-            </div>
-            <div class="form-item span-full">
-              <label>公开访问域名 (Public Domain)</label>
-              <InputText v-model="privateFormData.qiniu.publicDomain" @blur="emit('save')" placeholder="https://images.example.com" class="w-full" />
-            </div>
-            <div class="form-item span-full">
-              <label>自定义路径 (Optional)</label>
-              <InputText v-model="privateFormData.qiniu.path" @blur="emit('save')" placeholder="e.g. blog/images/" class="w-full" />
-            </div>
-          </div>
-        </HostingCard>
-
-        <HostingCard
-          id="upyun"
-          :force-expand="isTargetCard('upyun')"
-          name="又拍云"
-          description="又拍云对象存储"
-          :isConfigured="isPrivateConfigured('upyun')"
-          :health-status="healthStatusMap['upyun']"
-          :health-tooltip="healthTooltipMap['upyun']"
-          :isTesting="testingConnections['upyun']"
-          @test="emit('testPrivate', $event)"
-        >
-          <div class="form-grid">
-            <div class="form-item">
-              <label>Operator</label>
-              <Password v-model="privateFormData.upyun.operator" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="操作员账号" />
-            </div>
-            <div class="form-item">
-              <label>Password</label>
-              <Password v-model="privateFormData.upyun.password" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="操作员密码" />
-            </div>
-            <div class="form-item span-full">
-              <label>存储桶 (Bucket)</label>
-              <InputText v-model="privateFormData.upyun.bucket" @blur="emit('save')" class="w-full" />
-            </div>
-            <div class="form-item span-full">
-              <label>公开访问域名 (Public Domain)</label>
-              <InputText v-model="privateFormData.upyun.publicDomain" @blur="emit('save')" placeholder="https://images.example.com" class="w-full" />
-            </div>
-            <div class="form-item span-full">
-              <label>自定义路径 (Optional)</label>
-              <InputText v-model="privateFormData.upyun.path" @blur="emit('save')" placeholder="e.g. blog/images/" class="w-full" />
-            </div>
-          </div>
-        </HostingCard>
-      </div>
+      <PrivateStorageGroup
+        :private-form-data="privateFormData"
+        :testing-connections="testingConnections"
+        :health-status-map="healthStatusMap"
+        :health-tooltip-map="healthTooltipMap"
+        :target-card-id="targetCardId"
+        @save="emit('save')"
+        @test-private="emit('testPrivate', $event)"
+      />
 
       <div class="group-title">
         <span>公共图床 · 免配置</span>
       </div>
-      <div class="provider-grid">
-        <HostingCard
-          id="jd"
-          :force-expand="isTargetCard('jd')"
-          name="京东"
-          description="京东云存储，开箱即用"
-          :isBuiltin="true"
-          :isConfigured="jdAvailable"
-          :isAvailable="jdAvailable"
-          :isChecking="isCheckingJd"
-          :health-tooltip="healthTooltipMap['jd']"
-          :showTestButton="false"
-          @check="emit('checkBuiltin', $event)"
-        >
-          <div class="builtin-info">
-            <p>京东图床无需任何配置，可以直接使用。</p>
-          </div>
-        </HostingCard>
-
-        <HostingCard
-          id="qiyu"
-          :force-expand="isTargetCard('qiyu')"
-          name="七鱼"
-          description="网易七鱼客服系统存储"
-          :isBuiltin="true"
-          :isConfigured="qiyuAvailable"
-          :isAvailable="qiyuAvailable"
-          :isChecking="isCheckingQiyu"
-          :health-tooltip="healthTooltipMap['qiyu']"
-          :showTestButton="false"
-          @check="emit('checkBuiltin', $event)"
-        >
-          <div class="builtin-info">
-            <p>七鱼图床 Token 已自动获取，可以直接使用。</p>
-          </div>
-        </HostingCard>
-      </div>
+      <BuiltinServiceGroup
+        :jd-available="jdAvailable"
+        :qiyu-available="qiyuAvailable"
+        :is-checking-jd="isCheckingJd"
+        :is-checking-qiyu="isCheckingQiyu"
+        :health-tooltip-map="healthTooltipMap"
+        :target-card-id="targetCardId"
+        @check-builtin="emit('checkBuiltin', $event)"
+      />
 
       <div class="group-title">
         <span>公共图床 · Cookie 登录</span>
       </div>
-      <div class="provider-grid">
-        <HostingCard
-          id="weibo"
-          :force-expand="isTargetCard('weibo')"
-          name="微博"
-          description="新浪微博图床"
-          :isConfigured="isCookieConfigured('weibo')"
-          :health-status="healthStatusMap['weibo']"
-          :health-tooltip="healthTooltipMap['weibo']"
-          :isTesting="testingConnections['weibo']"
-          :showLoginButton="true"
-          @test="emit('testCookie', $event)"
-          @login="emit('loginCookie', $event)"
-        >
-          <div class="form-grid">
-            <div class="form-item span-full">
-              <label>Cookie</label>
-              <Textarea v-model="cookieFormData.weibo.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
-              <small class="form-hint">点击「自动获取」登录即可自动填入 Cookie，无需手动操作<br>如需手动填写，可在浏览器中登录后通过开发者工具（F12 → Network）复制 Cookie</small>
-            </div>
-          </div>
-          <template #extra>
-            <WeiboLinkPrefixSection
-              :link-prefix-enabled="linkPrefixEnabled"
-              :prefix-list="prefixList"
-              :selected-prefix-index="selectedPrefixIndex"
-              @update:link-prefix-enabled="emit('update:linkPrefixEnabled', $event)"
-              @update:prefix-list="emit('update:prefixList', $event)"
-              @update:selected-prefix-index="emit('update:selectedPrefixIndex', $event)"
-              @save="emit('save')"
-              @add-prefix="emit('addPrefix')"
-              @remove-prefix="emit('removePrefix', $event)"
-              @reset-to-default="emit('resetToDefault')"
-            />
-          </template>
-        </HostingCard>
-
-        <HostingCard
-          id="zhihu"
-          :force-expand="isTargetCard('zhihu')"
-          name="知乎"
-          description="知乎图床"
-          :isConfigured="isCookieConfigured('zhihu')"
-          :health-status="healthStatusMap['zhihu']"
-          :health-tooltip="healthTooltipMap['zhihu']"
-          :isTesting="testingConnections['zhihu']"
-          :showLoginButton="true"
-          @test="emit('testCookie', $event)"
-          @login="emit('loginCookie', $event)"
-        >
-          <div class="form-grid">
-            <div class="form-item span-full">
-              <label>Cookie</label>
-              <Textarea v-model="cookieFormData.zhihu.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
-              <small class="form-hint">点击「自动获取」登录即可自动填入 Cookie，无需手动操作<br>如需手动填写，可在浏览器中登录后通过开发者工具（F12 → Network）复制 Cookie</small>
-            </div>
-          </div>
-        </HostingCard>
-
-        <HostingCard
-          id="nowcoder"
-          :force-expand="isTargetCard('nowcoder')"
-          name="牛客"
-          description="牛客网图床"
-          :isConfigured="isCookieConfigured('nowcoder')"
-          :health-status="healthStatusMap['nowcoder']"
-          :health-tooltip="healthTooltipMap['nowcoder']"
-          :isTesting="testingConnections['nowcoder']"
-          :showLoginButton="true"
-          @test="emit('testCookie', $event)"
-          @login="emit('loginCookie', $event)"
-        >
-          <div class="form-grid">
-            <div class="form-item span-full">
-              <label>Cookie</label>
-              <Textarea v-model="cookieFormData.nowcoder.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
-              <small class="form-hint">点击「自动获取」登录即可自动填入 Cookie，无需手动操作<br>如需手动填写，可在浏览器中登录后通过开发者工具（F12 → Network）复制 Cookie</small>
-            </div>
-          </div>
-        </HostingCard>
-
-        <HostingCard
-          id="nami"
-          :force-expand="isTargetCard('nami')"
-          name="纳米"
-          description="纳米图床"
-          :isConfigured="isCookieConfigured('nami')"
-          :health-status="healthStatusMap['nami']"
-          :health-tooltip="healthTooltipMap['nami']"
-          :isTesting="testingConnections['nami']"
-          :showLoginButton="true"
-          @test="emit('testCookie', $event)"
-          @login="emit('loginCookie', $event)"
-        >
-          <div class="form-grid">
-            <div class="form-item span-full">
-              <label>Cookie</label>
-              <Textarea v-model="cookieFormData.nami.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
-              <small class="form-hint">点击「自动获取」登录即可自动填入 Cookie，无需手动操作<br>如需手动填写，可在浏览器中登录后通过开发者工具（F12 → Network）复制 Cookie</small>
-            </div>
-            <div v-if="extractNamiAuthToken" class="form-item span-full">
-              <label>Auth-Token（自动提取）</label>
-              <InputText :modelValue="extractNamiAuthToken" readonly class="w-full" disabled />
-            </div>
-          </div>
-        </HostingCard>
-
-        <HostingCard
-          id="bilibili"
-          :force-expand="isTargetCard('bilibili')"
-          name="B站"
-          description="Bilibili 图床"
-          :isConfigured="isCookieConfigured('bilibili')"
-          :health-status="healthStatusMap['bilibili']"
-          :health-tooltip="healthTooltipMap['bilibili']"
-          :isTesting="testingConnections['bilibili']"
-          :showLoginButton="true"
-          @test="emit('testCookie', $event)"
-          @login="emit('loginCookie', $event)"
-        >
-          <div class="form-grid">
-            <div class="form-item span-full">
-              <label>Cookie</label>
-              <Textarea v-model="cookieFormData.bilibili.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
-              <small class="form-hint">点击「自动获取」登录即可自动填入 Cookie，无需手动操作<br>如需手动填写，可在浏览器中登录后通过开发者工具（F12 → Network）复制 Cookie</small>
-            </div>
-          </div>
-        </HostingCard>
-
-        <HostingCard
-          id="chaoxing"
-          :force-expand="isTargetCard('chaoxing')"
-          name="超星"
-          description="超星图床"
-          :isConfigured="isCookieConfigured('chaoxing')"
-          :health-status="healthStatusMap['chaoxing']"
-          :health-tooltip="healthTooltipMap['chaoxing']"
-          :isTesting="testingConnections['chaoxing']"
-          :showLoginButton="true"
-          @test="emit('testCookie', $event)"
-          @login="emit('loginCookie', $event)"
-        >
-          <div class="form-grid">
-            <div class="form-item span-full">
-              <label>Cookie</label>
-              <Textarea v-model="cookieFormData.chaoxing.cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
-              <small class="form-hint">点击「自动获取」登录即可自动填入 Cookie，无需手动操作<br>如需手动填写，可在浏览器中登录后通过开发者工具（F12 → Network）复制 Cookie</small>
-            </div>
-          </div>
-        </HostingCard>
-      </div>
+      <CookieServiceGroup
+        :cookie-form-data="cookieFormData"
+        :testing-connections="testingConnections"
+        :health-status-map="healthStatusMap"
+        :health-tooltip-map="healthTooltipMap"
+        :target-card-id="targetCardId"
+        :link-prefix-enabled="linkPrefixEnabled"
+        :prefix-list="prefixList"
+        :selected-prefix-index="selectedPrefixIndex"
+        @save="emit('save')"
+        @test-cookie="emit('testCookie', $event)"
+        @login-cookie="emit('loginCookie', $event)"
+        @update:link-prefix-enabled="emit('update:linkPrefixEnabled', $event)"
+        @update:prefix-list="emit('update:prefixList', $event)"
+        @update:selected-prefix-index="emit('update:selectedPrefixIndex', $event)"
+        @add-prefix="emit('addPrefix')"
+        @remove-prefix="emit('removePrefix', $event)"
+        @reset-to-default="emit('resetToDefault')"
+      />
 
       <div class="group-title">
         <span>公共图床 · Token 授权</span>
       </div>
-      <div class="provider-grid">
-        <HostingCard
-          id="smms"
-          :force-expand="isTargetCard('smms')"
-          name="SM.MS"
-          description="SM.MS 图床"
-          :isConfigured="isTokenConfigured('smms')"
-          :health-status="healthStatusMap['smms']"
-          :health-tooltip="healthTooltipMap['smms']"
-          :isTesting="testingConnections['smms']"
-          @test="emit('testToken', $event)"
-        >
-          <div class="form-grid">
-            <div class="form-item span-full">
-              <label>API Token</label>
-              <Password v-model="tokenFormData.smms.token" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="从 SM.MS 官网获取 API Token" />
-              <small class="form-hint">访问 <a href="https://sm.ms/home/apitoken" target="_blank">https://sm.ms/home/apitoken</a> 获取 API Token</small>
-            </div>
-          </div>
-        </HostingCard>
-
-        <HostingCard
-          id="github"
-          :force-expand="isTargetCard('github')"
-          name="GitHub"
-          description="GitHub 仓库图床"
-          :isConfigured="isTokenConfigured('github')"
-          :health-status="healthStatusMap['github']"
-          :health-tooltip="healthTooltipMap['github']"
-          :isTesting="testingConnections['github']"
-          @test="emit('testToken', $event)"
-        >
-          <div class="form-grid">
-            <div class="form-item">
-              <label>Personal Access Token</label>
-              <Password v-model="tokenFormData.github.token" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="ghp_xxxxxxxxxxxx" />
-            </div>
-            <div class="form-item">
-              <label>Repository Owner</label>
-              <InputText v-model="tokenFormData.github.owner" @blur="emit('save')" class="w-full" placeholder="your-username" />
-            </div>
-            <div class="form-item">
-              <label>Repository Name</label>
-              <InputText v-model="tokenFormData.github.repo" @blur="emit('save')" class="w-full" placeholder="image-hosting" />
-            </div>
-            <div class="form-item">
-              <label>Branch</label>
-              <InputText v-model="tokenFormData.github.branch" @blur="emit('save')" placeholder="main" class="w-full" />
-            </div>
-            <div class="form-item span-full">
-              <label>Storage Path</label>
-              <InputText v-model="tokenFormData.github.path" @blur="emit('save')" placeholder="images/" class="w-full" />
-              <small class="form-hint">图片存储在仓库中的路径，例如 images/ 或 assets/pics/</small>
-            </div>
-            <div class="form-item span-full">
-              <small class="form-hint">访问 <a href="https://github.com/settings/tokens/new?scopes=repo&description=PicNexus" target="_blank">GitHub Token 创建页面</a> 获取 Personal Access Token（需要 repo 权限）</small>
-            </div>
-          </div>
-          <template #extra>
-            <GithubProxySection
-              :cdn-config="githubCdnConfig"
-              @update:cdn-config="emit('update:githubCdnConfig', $event)"
-              @save="emit('save')"
-            />
-          </template>
-        </HostingCard>
-
-        <HostingCard
-          id="imgur"
-          :force-expand="isTargetCard('imgur')"
-          name="Imgur"
-          description="Imgur 图床"
-          :isConfigured="isTokenConfigured('imgur')"
-          :health-status="healthStatusMap['imgur']"
-          :health-tooltip="healthTooltipMap['imgur']"
-          :isTesting="testingConnections['imgur']"
-          @test="emit('testToken', $event)"
-        >
-          <div class="form-grid">
-            <div class="form-item">
-              <label>Client ID</label>
-              <Password v-model="tokenFormData.imgur.clientId" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="从 Imgur API 获取" />
-            </div>
-            <div class="form-item">
-              <label>Client Secret（可选）</label>
-              <Password v-model="tokenFormData.imgur.clientSecret" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="可选配置" />
-            </div>
-            <div class="form-item span-full">
-              <small class="form-hint">访问 <a href="https://api.imgur.com/oauth2/addclient" target="_blank">Imgur API</a> 注册应用获取 Client ID</small>
-            </div>
-          </div>
-        </HostingCard>
-      </div>
+      <TokenServiceGroup
+        :token-form-data="tokenFormData"
+        :testing-connections="testingConnections"
+        :health-status-map="healthStatusMap"
+        :health-tooltip-map="healthTooltipMap"
+        :target-card-id="targetCardId"
+        :github-cdn-config="githubCdnConfig"
+        @save="emit('save')"
+        @test-token="emit('testToken', $event)"
+        @update:github-cdn-config="emit('update:githubCdnConfig', $event)"
+      />
     </div>
   </div>
 </template>
@@ -1084,7 +609,7 @@ function toggleFilter(status: ServiceHealthStatus) {
   gap: 6px;
   padding: 6px 14px;
   background: var(--hover-overlay-subtle);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle-light);
   border-radius: 20px;
   cursor: pointer;
   transition: all 0.2s;
@@ -1108,14 +633,14 @@ function toggleFilter(status: ServiceHealthStatus) {
 .toggle-chip.unconfigured {
   cursor: pointer;
   background: transparent;
-  border-color: rgba(255, 255, 255, 0.04);
+  border-color: var(--hover-overlay-subtle);
 }
 .toggle-chip.unconfigured .toggle-label {
   opacity: 0.4;
 }
 .toggle-chip.unconfigured:hover {
   background: var(--primary-alpha-8);
-  border-color: rgba(255, 255, 255, 0.08);
+  border-color: var(--hover-overlay);
 }
 .toggle-chip.unconfigured:hover .toggle-label {
   opacity: 0.7;
@@ -1140,7 +665,7 @@ function toggleFilter(status: ServiceHealthStatus) {
 
 .toggle-indicator .pi {
   font-size: 10px;
-  color: #fff;
+  color: var(--text-on-primary);
   display: none;
 }
 
