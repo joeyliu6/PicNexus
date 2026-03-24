@@ -123,6 +123,8 @@
 - **S3 路径穿越防护**：`image_meta` 命令添加路径规范化验证
 
 ### Changed
+- **CSS Design Token 系统**：新增 `--radius-*`（圆角）、`--space-*`（间距）、`--z-*`（z-index 层级）变量族；13 个组件硬编码颜色/z-index 全部替换为 CSS 变量
+- **HostingSettingsPanel 拆分**：拆为 PrivateStorageGroup / CookieServiceGroup / TokenServiceGroup / BuiltinServiceGroup 四个子组件；PrivateStorageGroup 用数据驱动 v-for 重构
 - **引导流程精简**：4 步 onboarding 精简为 3 步（移除 ReadyStep），更新文案，去除装饰性大图标，硬编码颜色改为 CSS 变量
 - **服务启用控件迁移**：从「常规设置」迁移到「图床设置」顶部，toggle-chip 根据健康状态着色
 - **复制链接统一**：新增 `useCopyLink` composable 统一所有复制入口；新增通用 `CopyButton` 组件（支持右键格式选择）；FloatingActionBar 批量复制支持图床筛选

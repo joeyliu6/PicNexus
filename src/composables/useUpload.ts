@@ -256,7 +256,11 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       const processBatch = async (batchFiles: string[], batchIndex: number) => {
         // 1. 批量获取元数据（并发控制）
         // 这会预填充缓存，后续 saveHistoryItemImmediate 会直接使用缓存
-        await fetchMetadataBatch(batchFiles);
+        try {
+          await fetchMetadataBatch(batchFiles);
+        } catch (metaError) {
+          log.warn(`批次 ${batchIndex + 1} 元数据获取失败，继续上传:`, metaError);
+        }
 
         // 2. 将该批文件加入队列
         const queueItems = batchFiles.map(filePath => {

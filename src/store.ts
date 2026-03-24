@@ -354,7 +354,7 @@ class SimpleStore {
         // 加载完整缓存，后续读取直接从内存返回
         this.memCache = { ...data };
         this.cacheLoaded = true;
-        return null;
+        return defaultValue !== undefined ? defaultValue : null;
       }
 
       // 加载完整缓存，后续读取直接从内存返回

@@ -7,6 +7,9 @@ import { historyDB } from '../services/HistoryDatabase';
 import { invalidateCache } from './useHistory';
 import { emitHistoryUpdated } from '../events/cacheEvents';
 import { getImageMetadata, clearImageMetadataCache } from './useImageMetadata';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('HistorySaver');
 
 // ==================== 类型定义 ====================
 
@@ -123,7 +126,7 @@ export function useHistorySaver(): UseHistorySaverReturn {
       };
 
       await historyDB.insertOrIgnore(newItem);
-      console.log('[历史记录] 已保存:', newItem.localFileName, '(尺寸:', metadata.width, 'x', metadata.height, ')');
+      log.info('[历史记录] 已保存:', newItem.localFileName, '(尺寸:', metadata.width, 'x', metadata.height, ')');
 
       invalidateCache();
       clearImageMetadataCache(filePath);
@@ -131,7 +134,7 @@ export function useHistorySaver(): UseHistorySaverReturn {
       return newItem.id;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[历史记录] 保存失败:', error);
+      log.error('[历史记录] 保存失败:', error);
       throw new Error(`保存历史记录失败: ${errorMsg}`);
     }
   }
@@ -164,7 +167,7 @@ export function useHistorySaver(): UseHistorySaverReturn {
     };
 
     await historyDB.insertOrIgnore(newItem);
-    console.log('[历史记录] 立即保存:', newItem.localFileName, '(主力图床:', firstResult.serviceId, ')');
+    log.info('[历史记录] 立即保存:', newItem.localFileName, '(主力图床:', firstResult.serviceId, ')');
 
     invalidateCache();
     emitHistoryUpdated([historyId]);
@@ -193,7 +196,7 @@ export function useHistorySaver(): UseHistorySaverReturn {
               await new Promise(resolve => setTimeout(resolve, 50));
               continue;
             }
-            console.warn(`[历史记录] 记录 ${historyId} 不存在，无法追加 ${result.serviceId} 结果`);
+            log.warn(`[历史记录] 记录 ${historyId} 不存在，无法追加 ${result.serviceId} 结果`);
             return false;
           }
 
@@ -208,7 +211,7 @@ export function useHistorySaver(): UseHistorySaverReturn {
             updatedResults.push(result);
           }
           await historyDB.update(historyId, { results: updatedResults });
-          console.log(`[历史记录] 更新结果: ${result.serviceId}`);
+          log.info(`[历史记录] 更新结果: ${result.serviceId}`);
 
           invalidateCache();
           await emitHistoryUpdated([historyId]);
@@ -217,7 +220,7 @@ export function useHistorySaver(): UseHistorySaverReturn {
           if (attempt < MAX_ATTEMPTS - 1) {
             await new Promise(resolve => setTimeout(resolve, 50));
           } else {
-            console.error(`[历史记录] 追加 ${result.serviceId} 结果失败:`, error);
+            log.error(`[历史记录] 追加 ${result.serviceId} 结果失败:`, error);
             return false;
           }
         }
