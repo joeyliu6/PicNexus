@@ -107,6 +107,8 @@
   --success-alpha-15: rgba(16, 185, 129, 0.15);
   --warning-alpha-8: rgba(234, 179, 8, 0.08);
   --warning-alpha-15: rgba(234, 179, 8, 0.15);
+  --warning-alpha-25: rgba(234, 179, 8, 0.25);
+  --warning-alpha-40: rgba(234, 179, 8, 0.4);
   --error-alpha-8: rgba(239, 68, 68, 0.08);
   --error-alpha-15: rgba(239, 68, 68, 0.15);
   --pending-alpha-8: rgba(167, 139, 250, 0.08);
@@ -226,6 +228,12 @@ body, html {
   body {
     font-weight: 400;
   }
+}
+
+/* 全局文字选中样式 */
+::selection {
+  background: var(--primary-alpha-20);
+  color: inherit;
 }
 
 /* 焦点环控制：全局隐藏焦点环 */

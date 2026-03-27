@@ -143,7 +143,7 @@
 /* ==================== 表单样式 ==================== */
 
 .form-group {
-  margin-top: 16px;
+  margin-top: 14px;
 }
 
 .group-label {
@@ -163,7 +163,13 @@
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .form-item {
@@ -407,4 +413,145 @@
   font-size: 12px;
   color: var(--text-muted);
   margin: 0 0 12px 0;
+}
+
+/* ==================== 开关行（Toggle Row） ==================== */
+/* 适用于"标题+描述"与控件并排的设置项 */
+
+.toggle-group {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-card);
+}
+
+.toggle-group .toggle-row {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.toggle-group .toggle-row:last-child {
+  border-bottom: none;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+.toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toggle-row-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.toggle-row-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ==================== 状态标签 ==================== */
+
+.status-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.status-badge.active {
+  background: var(--success-alpha-8);
+  color: var(--success);
+}
+
+.status-badge.inactive {
+  background: var(--bg-input);
+  color: var(--text-muted);
+}
+
+/* ==================== 表单提示 ==================== */
+/* 适用于字段下方的说明文字，含链接跳转样式 */
+
+.form-hint,
+.field-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+.form-hint a,
+.field-hint a {
+  color: var(--primary);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.form-hint a:hover,
+.field-hint a:hover {
+  text-decoration: underline;
+}
+
+/* ==================== 通用设置行 ==================== */
+/* 适用于所有面板的 label + control 行布局 */
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+}
+
+.settings-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.settings-row-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.settings-row-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* ==================== 通用设置卡片 ==================== */
+/* 带分割线的行容器，适用于一组 settings-row */
+
+.settings-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.settings-card .settings-row {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.settings-card .settings-row:last-child {
+  border-bottom: none;
 }

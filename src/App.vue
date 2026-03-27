@@ -12,6 +12,7 @@ import { useToast } from './composables/useToast';
 import { useOnboarding } from './composables/useOnboarding';
 import { useGlobalShortcut } from './composables/useGlobalShortcut';
 import { useAutoUpdate } from './composables/useAutoUpdate';
+import { useServiceAvailability } from './composables/useServiceAvailability';
 import { TOAST_MESSAGES } from './constants';
 import { configStore } from './store/instances';
 import { BackupPasswordRequiredError, secureStorage } from './crypto';
@@ -28,6 +29,10 @@ const toast = useToast();
 const { checkAndShow: checkOnboarding } = useOnboarding();
 const { initGlobalShortcuts, cleanup: cleanupGlobalShortcuts } = useGlobalShortcut();
 const { checkForUpdate } = useAutoUpdate();
+const { checkAllAvailabilityWithCooldown, startPeriodicCheck } = useServiceAvailability();
+
+let periodicCheckIntervalId: ReturnType<typeof setInterval> | null = null;
+let periodicCheckStopWatch: (() => void) | null = null;
 
 const rootClass = computed(() => {
   return effectiveTheme.value === 'dark' ? 'dark-theme' : 'light-theme';
@@ -112,6 +117,9 @@ async function continueStartup() {
       checkForUpdate().catch((e) => log.warn('自动检查更新失败:', e));
     }, 3000);
   }
+
+  // 应用启动后触发首次图床可用性检测（非阻塞）
+  checkAllAvailabilityWithCooldown().catch((e) => log.warn('图床可用性检测失败:', e));
 }
 
 onMounted(async () => {
@@ -148,12 +156,19 @@ onMounted(async () => {
     log.error('启动失败:', err);
     try { await getCurrentWindow().show(); } catch { /* ignore */ }
   }
+
+  // 启动 12 小时周期性图床检测定时器
+  const periodicCheck = startPeriodicCheck();
+  periodicCheckIntervalId = periodicCheck.intervalId;
+  periodicCheckStopWatch = periodicCheck.stopWatch;
 });
 
 onUnmounted(() => {
   window.removeEventListener('offline', handleOffline);
   window.removeEventListener('online', handleOnline);
   cleanupGlobalShortcuts().catch((e) => log.warn('快捷键清理失败:', e));
+  if (periodicCheckIntervalId !== null) clearInterval(periodicCheckIntervalId);
+  if (periodicCheckStopWatch) periodicCheckStopWatch();
 });
 </script>
 
