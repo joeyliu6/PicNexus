@@ -1,0 +1,12 @@
+.picnexus-status {
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.picnexus-connected {
+  color: var(--text-success);
+}
+
+.picnexus-disconnected {
+  color: var(--text-muted);
+}
