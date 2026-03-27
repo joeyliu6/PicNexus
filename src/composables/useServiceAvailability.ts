@@ -2,11 +2,12 @@
 // 从 SettingsView.vue 中抽取，提供七鱼、京东等服务的可用性检测
 // 使用模块级单例模式，确保状态跨组件共享
 
-import { ref, type Ref } from 'vue';
+import { ref, watch, type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { SyncStatus } from '../config/types';
 import { syncStatusStore } from '../store/instances';
 import { useServiceHealth } from './useServiceHealth';
+import { isUploading } from './uploadState';
 
 const { markVerified, markTestFailed } = useServiceHealth();
 
@@ -24,21 +25,17 @@ export interface UseServiceAvailabilityReturn {
   checkQiyuAvailability: (forceCheck?: boolean) => Promise<void>;
   checkJdAvailable: (forceCheck?: boolean) => Promise<void>;
   checkAllAvailabilityWithCooldown: (syncStatus?: SyncStatus) => Promise<void>;
-
-  // 工具函数
-  getRandomCheckInterval: () => number;
+  markServiceAvailable: (serviceId: 'qiyu' | 'jd') => Promise<void>;
+  startPeriodicCheck: () => { intervalId: ReturnType<typeof setInterval>; stopWatch: () => void };
 }
 
 // ==================== 常量 ====================
 
-/** 京东检测冷却时间 (5分钟) */
-const JD_CHECK_COOLDOWN = 5 * 60 * 1000;
+/** 检测成功后冷却时间（12小时） */
+const CHECK_SUCCESS_COOLDOWN = 12 * 60 * 60 * 1000;
 
-/** 七鱼检测成功后最小间隔 (10小时) */
-const QIYU_MIN_INTERVAL = 10 * 60 * 60 * 1000;
-
-/** 七鱼检测成功后最大间隔 (14小时) */
-const QIYU_MAX_INTERVAL = 14 * 60 * 60 * 1000;
+/** 检测失败后冷却时间（30分钟，快速重试） */
+const CHECK_FAIL_COOLDOWN = 30 * 60 * 1000;
 
 // ==================== 模块级共享状态（单例） ====================
 
@@ -46,15 +43,6 @@ const qiyuAvailable = ref(false);
 const isCheckingQiyu = ref(false);
 const jdAvailable = ref(false);
 const isCheckingJd = ref(false);
-
-// ==================== 工具函数 ====================
-
-/**
- * 生成随机检测间隔（10-14小时）
- */
-function getRandomCheckInterval(): number {
-  return QIYU_MIN_INTERVAL + Math.random() * (QIYU_MAX_INTERVAL - QIYU_MIN_INTERVAL);
-}
 
 // ==================== 检测方法 ====================
 
@@ -104,7 +92,7 @@ async function checkQiyuAvailability(forceCheck = false): Promise<void> {
     updatedStatus.qiyuCheckStatus = {
       lastCheckTime: now,
       lastCheckResult: checkResult,
-      nextCheckTime: checkResult ? now + getRandomCheckInterval() : null,
+      nextCheckTime: checkResult ? now + CHECK_SUCCESS_COOLDOWN : now + CHECK_FAIL_COOLDOWN,
     };
     await syncStatusStore.set('status', updatedStatus);
     await syncStatusStore.save();
@@ -128,12 +116,13 @@ async function checkJdAvailable(forceCheck = false): Promise<void> {
   }
 
   const now = Date.now();
-  const lastCheck = syncStatus?.jdCheckStatus?.lastCheckTime ?? syncStatus?.lastJdCheck ?? 0;
 
-  if (!forceCheck && (now - lastCheck) <= JD_CHECK_COOLDOWN) {
-    jdAvailable.value = syncStatus?.jdCheckStatus?.lastCheckResult ?? false;
-    console.debug('[京东检测] 在冷却期内，使用缓存结果:', jdAvailable.value);
-    return;
+  if (!forceCheck && syncStatus?.jdCheckStatus?.nextCheckTime) {
+    if (now < syncStatus.jdCheckStatus.nextCheckTime) {
+      jdAvailable.value = syncStatus.jdCheckStatus.lastCheckResult ?? false;
+      console.debug('[京东检测] 在冷却期内，使用缓存结果:', jdAvailable.value);
+      return;
+    }
   }
 
   isCheckingJd.value = true;
@@ -156,9 +145,8 @@ async function checkJdAvailable(forceCheck = false): Promise<void> {
     updatedStatus.jdCheckStatus = {
       lastCheckTime: now,
       lastCheckResult: checkResult,
-      nextCheckTime: null,
+      nextCheckTime: checkResult ? now + CHECK_SUCCESS_COOLDOWN : now + CHECK_FAIL_COOLDOWN,
     };
-    updatedStatus.lastJdCheck = now;
     await syncStatusStore.set('status', updatedStatus);
     await syncStatusStore.save();
   } catch (e) {
@@ -183,6 +171,67 @@ async function checkAllAvailabilityWithCooldown(initialSyncStatus?: SyncStatus):
   // 串行检测，避免并发写 syncStatusStore 同一 key 导致互相覆盖
   await checkQiyuAvailability(false);
   await checkJdAvailable(false);
+}
+
+/**
+ * 标记某图床上传成功（视为可用，重置冷却计时器）
+ * 供 useUpload.ts 在上传成功后调用
+ */
+async function markServiceAvailable(serviceId: 'qiyu' | 'jd'): Promise<void> {
+  const now = Date.now();
+  const nextCheckTime = now + CHECK_SUCCESS_COOLDOWN;
+
+  let syncStatus: SyncStatus | null = null;
+  try {
+    syncStatus = await syncStatusStore.get<SyncStatus>('status');
+  } catch (e) {
+    // 忽略读取失败
+  }
+
+  const updatedStatus: SyncStatus = syncStatus || { syncByProfile: {} };
+  const checkStatus = { lastCheckTime: now, lastCheckResult: true, nextCheckTime };
+
+  if (serviceId === 'qiyu') {
+    qiyuAvailable.value = true;
+    updatedStatus.qiyuCheckStatus = checkStatus;
+  } else {
+    jdAvailable.value = true;
+    updatedStatus.jdCheckStatus = checkStatus;
+  }
+
+  try {
+    await syncStatusStore.set('status', updatedStatus);
+    await syncStatusStore.save();
+  } catch (e) {
+    console.warn('[服务检测] 标记可用状态持久化失败:', e);
+  }
+}
+
+/**
+ * 启动周期性检测（每 12 小时）
+ * 若上传期间定时触发，则推迟到上传完成后执行
+ *
+ * @returns intervalId 供 onUnmounted 清理
+ */
+function startPeriodicCheck(): { intervalId: ReturnType<typeof setInterval>; stopWatch: () => void } {
+  let pendingCheck = false;
+
+  const intervalId = setInterval(async () => {
+    if (isUploading.value) {
+      pendingCheck = true;
+      return;
+    }
+    await checkAllAvailabilityWithCooldown();
+  }, CHECK_SUCCESS_COOLDOWN);
+
+  const stopWatch = watch(isUploading, async (uploading) => {
+    if (!uploading && pendingCheck) {
+      pendingCheck = false;
+      await checkAllAvailabilityWithCooldown();
+    }
+  });
+
+  return { intervalId, stopWatch };
 }
 
 // ==================== 主 Composable ====================
@@ -216,8 +265,7 @@ export function useServiceAvailability(): UseServiceAvailabilityReturn {
     checkQiyuAvailability,
     checkJdAvailable,
     checkAllAvailabilityWithCooldown,
-
-    // 工具函数
-    getRandomCheckInterval
+    markServiceAvailable,
+    startPeriodicCheck,
   };
 }

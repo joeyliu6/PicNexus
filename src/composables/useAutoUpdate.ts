@@ -59,6 +59,7 @@ async function checkForUpdate(): Promise<void> {
       status.value = 'up-to-date';
     }
   } catch (e) {
+    lastCheckTime.value = Date.now();
     status.value = 'error';
     errorMessage.value = e instanceof Error ? e.message : String(e);
     console.error('[自动更新] 检查失败:', e);

@@ -12,7 +12,7 @@ import type {
   WebDAVProfile,
   HistoryItem
 } from '../config/types';
-import { isValidUserConfig, migrateConfig } from '../config/types';
+import { isValidUserConfig } from '../config/types';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('WebDAVSync');
@@ -326,8 +326,6 @@ export function useWebDAVSync() {
       if (!isValidUserConfig(importedConfig)) {
         throw new Error('云端配置格式无效');
       }
-
-      importedConfig = migrateConfig(importedConfig);
 
       // 合并或覆盖
       setProgress('settings', 'download', 'merging', 70, '应用配置...');

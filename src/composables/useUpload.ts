@@ -1,12 +1,13 @@
 ﻿// src/composables/useUpload.ts
 // 上传管理 Composable - 上传流程编排（核心协调器）
 
-import { ref } from 'vue';
+import { isUploading } from './uploadState';
 import { open as dialogOpen } from '@tauri-apps/plugin-dialog';
 import { configStore } from '../store/instances';
 import {
   UserConfig,
   DEFAULT_CONFIG,
+  DEFAULT_COMPRESSION_PRESET,
   ServiceType
 } from '../config/types';
 import { MultiServiceUploader, SingleServiceResult } from '../core/MultiServiceUploader';
@@ -18,8 +19,10 @@ import { checkNetworkConnectivity } from '../utils/network';
 import { chunkArray } from '../utils/semaphore';
 import { useServiceSelector } from './useServiceSelector';
 import { useServiceHealth } from './useServiceHealth';
+import { useServiceAvailability } from './useServiceAvailability';
 import { useHistorySaver } from './useHistorySaver';
-import { fetchMetadataBatch } from './useImageMetadata';
+import { fetchMetadataBatch, getImageMetadata } from './useImageMetadata';
+import { useImageCompress } from './useImageCompress';
 import { AUTH_CONFIG_ERROR_CODES } from '../types/serviceHealth';
 import { createLogger } from '../utils/logger';
 import { buildUploadSummaryToast, type UploadSessionSummary, type UploadCopySummary } from '../utils/uploadSummary';
@@ -58,8 +61,6 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     addResultToHistoryItem
   } = useHistorySaver();
 
-  // 上传中状态
-  const isUploading = ref(false);
 
   function showUploadSessionSummary(
     summary: UploadSessionSummary,
@@ -145,6 +146,9 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
     // 立即锁定，防止 await 间隙的竞态
     isUploading.value = true;
+
+    const { compressImageBatch, cleanupTempFiles } = useImageCompress();
+    let compressionEnabled = false;
 
     try {
       log.info('接收到文件:', filePaths);
@@ -252,6 +256,12 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         partialFailedServices: [],
       };
 
+      const compressionConfig = config.imageCompression ?? DEFAULT_CONFIG.imageCompression!;
+      compressionEnabled = compressionConfig.enabled;
+      const activePreset = compressionConfig.presets?.find(
+        p => p.id === compressionConfig.activePresetId,
+      ) ?? compressionConfig.presets?.[0] ?? { ...DEFAULT_COMPRESSION_PRESET };
+
       // 批次处理函数
       const processBatch = async (batchFiles: string[], batchIndex: number) => {
         // 1. 批量获取元数据（并发控制）
@@ -262,9 +272,33 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
           log.warn(`批次 ${batchIndex + 1} 元数据获取失败，继续上传:`, metaError);
         }
 
+        // 1.5 图片压缩预处理
+        let actualFiles = batchFiles;
+        if (compressionConfig.enabled) {
+          try {
+            const fileSizes = new Map<string, number>();
+            const metaResults = await Promise.all(
+              batchFiles.map(fp => getImageMetadata(fp).catch(() => null))
+            );
+            metaResults.forEach((meta, i) => {
+              if (meta?.file_size) fileSizes.set(batchFiles[i], meta.file_size);
+            });
+
+            const pathMap = await compressImageBatch(batchFiles, activePreset, fileSizes);
+            if (pathMap.size > 0) {
+              actualFiles = batchFiles.map(fp => pathMap.get(fp) ?? fp);
+              log.info(`批次 ${batchIndex + 1}: ${pathMap.size} 张图片已压缩`);
+            }
+          } catch (compressError) {
+            log.warn(`批次 ${batchIndex + 1} 压缩失败，使用原图:`, compressError);
+          }
+        }
+
         // 2. 将该批文件加入队列
-        const queueItems = batchFiles.map(filePath => {
-          const fileName = filePath.split(/[/\\]/).pop() || filePath;
+        const queueItems = actualFiles.map((filePath, index) => {
+          // 使用原始文件名（不是压缩后的临时文件名）
+          const originalPath = batchFiles[index];
+          const fileName = originalPath.split(/[/\\]/).pop() || originalPath;
           const itemId = queueManager!.addFile(filePath, fileName, [...enabledServices]);
           return { itemId, filePath, fileName };
         }).filter(item => item.itemId);
@@ -334,6 +368,10 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       toast.showConfig('error', TOAST_MESSAGES.upload.failed(errorMsg));
     } finally {
       isUploading.value = false;
+      // 清理压缩产生的临时文件
+      if (compressionEnabled) {
+        cleanupTempFiles().catch((err: unknown) => log.warn('清理压缩临时文件失败:', err));
+      }
     }
   }
 
@@ -429,6 +467,12 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             let serviceUpdate: Record<string, any> = {};
 
             if (serviceResult.status === 'success' && serviceResult.result) {
+              // 七鱼/京东上传成功，标记为可用（重置检测冷却计时器）
+              if (serviceId === 'qiyu' || serviceId === 'jd') {
+                const { markServiceAvailable } = useServiceAvailability();
+                markServiceAvailable(serviceId as 'qiyu' | 'jd').catch(() => {});
+              }
+
               // 成功：立即更新状态并显示链接
               let link = serviceResult.result.url;
               if (serviceId === 'weibo' && activePrefix.value) {

@@ -18,7 +18,6 @@ import {
   UserConfig,
   DEFAULT_CONFIG,
   GlobalShortcutConfig,
-  migrateConfig,
 } from '../config/types';
 import type { ServiceType } from '../config/types';
 import { MultiServiceUploader, SingleServiceResult } from '../core/MultiServiceUploader';
@@ -50,7 +49,7 @@ async function notify(title: string, body: string) {
 
 async function loadConfig(): Promise<UserConfig> {
   const loaded = await configStore.get<UserConfig>('config', DEFAULT_CONFIG);
-  return migrateConfig(loaded || DEFAULT_CONFIG);
+  return loaded || DEFAULT_CONFIG;
 }
 
 async function getFileName(filePath: string): Promise<string> {

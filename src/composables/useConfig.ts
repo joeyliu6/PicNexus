@@ -12,7 +12,6 @@ import {
   ServiceType,
   LinkPrefixConfig,
   DEFAULT_PREFIXES,
-  migrateConfig
 } from '../config/types';
 import { getCookieProvider, validateCookie, DEFAULT_LOGIN_WINDOW_SIZE } from '../config/cookieProviders';
 import { useToast } from './useToast';
@@ -61,14 +60,14 @@ export function useConfigManager() {
 
     try {
       const loadedConfig = await configStore.get<UserConfig>('config', DEFAULT_CONFIG);
-      config.value = migrateConfig(loadedConfig || DEFAULT_CONFIG);
+      config.value = loadedConfig || DEFAULT_CONFIG;
       log.info('✓ 配置加载成功');
       return config.value;
     } catch (error) {
       if (error instanceof BackupPasswordRequiredError) {
         throw error;
       }
-      // 读取/迁移失败时降级为默认配置
+      // 读取失败时降级为默认配置
       log.error('读取配置失败，使用默认配置:', error);
       config.value = { ...DEFAULT_CONFIG };
       toast.showConfig('error', TOAST_MESSAGES.config.loadFailed('已使用默认配置'));

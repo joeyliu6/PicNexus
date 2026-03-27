@@ -2,7 +2,16 @@
 
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { useToast } from './useToast';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('useClipboardImage');
+
+/** 判断文本是否为图片 URL */
+function isImageUrl(text: string): boolean {
+  return /^https?:\/\/.+\.(jpe?g|png|gif|webp|bmp)([?#].*)?$/i.test(text);
+}
 
 /** 剪贴板图片读取结果 */
 export interface ClipboardImageResult {
@@ -70,15 +79,32 @@ export function useClipboardImage() {
   ): Promise<void> {
     const result = await readClipboardImage();
 
-    if (!result.success) {
-      toast.warn('粘贴失败', result.error || '无法读取剪贴板图片');
+    if (result.success && result.filePath) {
+      await uploadHandler([result.filePath]);
       return;
     }
 
-    if (result.filePath) {
-      // 调用上传处理器
-      await uploadHandler([result.filePath]);
+    // 剪贴板没有图片数据，尝试读取文本判断是否为图片 URL
+    try {
+      const text = await readText();
+      const trimmed = text?.trim() || '';
+      if (isImageUrl(trimmed)) {
+        log.info('检测到剪贴板中的图片 URL，开始下载:', trimmed);
+        try {
+          const downloadResult = await invoke<{ file_path: string }>('download_url_image', { url: trimmed });
+          await uploadHandler([downloadResult.file_path]);
+          return;
+        } catch (downloadError) {
+          log.error('图片 URL 下载失败:', downloadError);
+          toast.warn('下载失败', `图片链接下载失败: ${String(downloadError)}`);
+          return;
+        }
+      }
+    } catch (error) {
+      log.debug('读取剪贴板文本失败:', error);
     }
+
+    toast.warn('粘贴失败', '剪贴板中没有图片，也没有有效的图片链接');
   }
 
   return {

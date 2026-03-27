@@ -22,6 +22,9 @@ import {
   type CacheEventPayload,
   type HistoryEventData
 } from '../events/cacheEvents';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('History');
 
 // ============================================
 // 单例共享状态（模块级别）
@@ -58,6 +61,25 @@ let crossWindowListenerInitialized = false;
 // 总数（无需分页）
 const totalCount = ref(0);
 
+// 收藏总数
+const favoriteCount = ref(0);
+
+// 独立的收藏 ID 集合（解耦收藏状态，避免触发 imageMetas 的全量 reactivity 级联）
+const sharedFavoriteSet: Ref<Set<string>> = shallowRef(new Set());
+
+/** 从 favoriteSet 中移除指定 ID，更新计数（公共辅助） */
+function removeFavoritesFromIds(ids: string[]): void {
+  const newSet = new Set(sharedFavoriteSet.value);
+  let removed = 0;
+  for (const id of ids) {
+    if (newSet.delete(id)) removed++;
+  }
+  if (removed > 0) {
+    sharedFavoriteSet.value = newSet;
+    favoriteCount.value = Math.max(0, favoriteCount.value - removed);
+  }
+}
+
 // 时间段统计（用于时间轴完整显示）
 const sharedTimePeriodStats: Ref<TimePeriodStats[]> = shallowRef([]);
 const isTimePeriodStatsLoaded = ref(false);
@@ -72,13 +94,16 @@ async function reloadSharedData(): Promise<void> {
     await historyDB.open();
 
     // 并行加载元数据和时间段统计
-    const [metas, timePeriodStats] = await Promise.all([
+    const [metas, timePeriodStats, favCount] = await Promise.all([
       historyDB.getMetaList(),
       historyDB.getTimePeriodStats(),
+      historyDB.getFavoriteCount(),
     ]);
 
     sharedImageMetas.value = metas;
     totalCount.value = metas.length;
+    favoriteCount.value = favCount;
+    sharedFavoriteSet.value = new Set(metas.filter(m => m.isFavorited).map(m => m.id));
     sharedTimePeriodStats.value = timePeriodStats;
     isTimePeriodStatsLoaded.value = true;
 
@@ -86,7 +111,7 @@ async function reloadSharedData(): Promise<void> {
     lastLoadTime.value = Date.now();
     dataVersion.value++;
   } catch (error) {
-    console.error('[历史记录] 事件触发重新加载失败:', error);
+    log.error('[历史记录] 事件触发重新加载失败:', error);
   } finally {
     sharedIsLoading.value = false;
   }
@@ -109,6 +134,7 @@ function initCrossWindowListener(): void {
           sharedImageMetas.value = sharedImageMetas.value.filter(
             meta => !deletedSet.has(meta.id)
           );
+          removeFavoritesFromIds(data.ids);
           totalCount.value = Math.max(0, totalCount.value - data.ids.length);
           dataVersion.value++;
         }
@@ -116,7 +142,9 @@ function initCrossWindowListener(): void {
 
       case 'history-cleared':
         sharedImageMetas.value = [];
+        sharedFavoriteSet.value = new Set();
         totalCount.value = 0;
+        favoriteCount.value = 0;
         dataVersion.value++;
         break;
 
@@ -180,19 +208,23 @@ export function useHistoryManager() {
 
       await initDatabase();
 
-      // 全量加载元数据
-      const metas = await historyDB.getMetaList();
+      // 全量加载元数据 + 收藏计数
+      const [metas, favCount] = await Promise.all([
+        historyDB.getMetaList(),
+        historyDB.getFavoriteCount(),
+      ]);
 
       imageMetas.value = metas;
       totalCount.value = metas.length;
-
+      favoriteCount.value = favCount;
+      sharedFavoriteSet.value = new Set(metas.filter(m => m.isFavorited).map(m => m.id));
 
       isDataLoaded.value = true;
       lastLoadTime.value = Date.now();
       dataVersion.value++;
 
     } catch (error) {
-      console.error('[历史记录] 加载失败:', error);
+      log.error('[历史记录] 加载失败:', error);
       toast.showConfig('error', TOAST_MESSAGES.common.loadFailed(String(error)));
       imageMetas.value = [];
     } finally {
@@ -207,7 +239,7 @@ export function useHistoryManager() {
   async function deleteHistoryItem(itemId: string): Promise<void> {
     try {
       if (!itemId || typeof itemId !== 'string' || itemId.trim().length === 0) {
-        console.error('[历史记录] 删除失败: 无效的 itemId:', itemId);
+        log.error('[历史记录] 删除失败: 无效的 itemId:', itemId);
         toast.showConfig('error', TOAST_MESSAGES.history.invalidId);
         return;
       }
@@ -228,6 +260,8 @@ export function useHistoryManager() {
       // 更新元数据
       imageMetas.value = imageMetas.value.filter(meta => meta.id !== itemId);
       totalCount.value = Math.max(0, totalCount.value - 1);
+
+      removeFavoritesFromIds([itemId]);
       dataVersion.value++;
 
       // 清除详情缓存
@@ -239,7 +273,7 @@ export function useHistoryManager() {
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[历史记录] 删除失败:', error);
+      log.error('[历史记录] 删除失败:', error);
       toast.showConfig('error', TOAST_MESSAGES.common.deleteFailed(errorMsg));
     }
   }
@@ -265,6 +299,8 @@ export function useHistoryManager() {
       // 清空元数据
       imageMetas.value = [];
       totalCount.value = 0;
+      favoriteCount.value = 0;
+      sharedFavoriteSet.value = new Set();
       dataVersion.value++;
 
       // 清除详情缓存
@@ -275,7 +311,7 @@ export function useHistoryManager() {
       });
 
     } catch (error) {
-      console.error('[历史记录] 清空失败:', error);
+      log.error('[历史记录] 清空失败:', error);
       toast.showConfig('error', TOAST_MESSAGES.common.clearFailed(String(error)));
     }
   }
@@ -306,7 +342,7 @@ export function useHistoryManager() {
       toast.showConfig('success', TOAST_MESSAGES.common.exportSuccess(count));
 
     } catch (error) {
-      console.error('[历史记录] 导出失败:', error);
+      log.error('[历史记录] 导出失败:', error);
       toast.showConfig('error', TOAST_MESSAGES.common.exportFailed(String(error)));
     }
   }
@@ -344,7 +380,7 @@ export function useHistoryManager() {
       console.log(`[批量操作] 已复制 ${links.length} 个链接`);
 
     } catch (error: any) {
-      console.error('[批量操作] 复制失败:', error);
+      log.error('[批量操作] 复制失败:', error);
       toast.showConfig('error', TOAST_MESSAGES.common.copyFailed(error.message || String(error)));
     }
   }
@@ -393,7 +429,7 @@ export function useHistoryManager() {
       console.log(`[批量操作] 已导出 ${selectedItems.length} 条记录`);
 
     } catch (error: any) {
-      console.error('[批量操作] 导出失败:', error);
+      log.error('[批量操作] 导出失败:', error);
       toast.showConfig('error', TOAST_MESSAGES.common.exportFailed(error.message || String(error)));
     }
   }
@@ -426,6 +462,9 @@ export function useHistoryManager() {
       const selectedIdSet = new Set(selectedIds);
       imageMetas.value = imageMetas.value.filter(meta => !selectedIdSet.has(meta.id));
       totalCount.value = Math.max(0, totalCount.value - selectedIds.length);
+
+      removeFavoritesFromIds(selectedIds);
+
       dataVersion.value++;
 
       // 清除详情缓存
@@ -436,7 +475,7 @@ export function useHistoryManager() {
       });
 
     } catch (error: any) {
-      console.error('[批量操作] 删除失败:', error);
+      log.error('[批量操作] 删除失败:', error);
       toast.showConfig('error', TOAST_MESSAGES.common.deleteFailed(error.message || String(error)));
     }
   }
@@ -558,6 +597,93 @@ export function useHistoryManager() {
     }
   }
 
+  /**
+   * 切换单张图片的收藏状态
+   * 使用独立的 favoriteSet 避免触发 imageMetas 的全量 reactivity 级联
+   */
+  const pendingToggleIds = new Set<string>();
+
+  async function toggleFavorite(id: string): Promise<boolean> {
+    if (pendingToggleIds.has(id)) return sharedFavoriteSet.value.has(id);
+    pendingToggleIds.add(id);
+
+    const previousState = sharedFavoriteSet.value.has(id);
+    const targetState = !previousState;
+
+    // 乐观更新：只修改 favoriteSet（O(1)），不触碰 imageMetas 数组引用
+    const newSet = new Set(sharedFavoriteSet.value);
+    if (targetState) newSet.add(id); else newSet.delete(id);
+    sharedFavoriteSet.value = newSet;
+    favoriteCount.value += targetState ? 1 : -1;
+
+    // 静默同步 meta 对象属性（不替换数组引用，不触发 shallowRef 响应）
+    const metaIndex = imageMetas.value.findIndex(m => m.id === id);
+    if (metaIndex >= 0) {
+      imageMetas.value[metaIndex].isFavorited = targetState;
+    }
+
+    try {
+      await historyDB.setFavorite(id, targetState);
+      detailCache.removeDetail(id);
+      return targetState;
+    } catch (error) {
+      // 失败时回滚
+      const rollbackSet = new Set(sharedFavoriteSet.value);
+      if (previousState) rollbackSet.add(id); else rollbackSet.delete(id);
+      sharedFavoriteSet.value = rollbackSet;
+      favoriteCount.value += previousState ? 1 : -1;
+      if (metaIndex >= 0) {
+        imageMetas.value[metaIndex].isFavorited = previousState;
+      }
+      log.error('[历史记录] 切换收藏失败:', error);
+      toast.showConfig('error', { summary: '操作失败', detail: String(error) });
+      throw error;
+    } finally {
+      pendingToggleIds.delete(id);
+    }
+  }
+
+  /**
+   * 批量设置收藏状态
+   * 使用 favoriteSet 避免 O(n) 遍历 imageMetas
+   */
+  async function batchSetFavorite(ids: string[], favorited: boolean): Promise<void> {
+    if (ids.length === 0) return;
+
+    try {
+      await historyDB.batchSetFavorite(ids, favorited);
+
+      // 更新 favoriteSet（O(ids.length)）
+      const newSet = new Set(sharedFavoriteSet.value);
+      let deltaCount = 0;
+      for (const id of ids) {
+        const wasFavorited = newSet.has(id);
+        if (wasFavorited === favorited) continue;
+        deltaCount += favorited ? 1 : -1;
+        if (favorited) newSet.add(id); else newSet.delete(id);
+      }
+      sharedFavoriteSet.value = newSet;
+      favoriteCount.value = Math.max(0, favoriteCount.value + deltaCount);
+
+      // 静默同步 meta 对象属性
+      const idSet = new Set(ids);
+      for (const meta of imageMetas.value) {
+        if (idSet.has(meta.id)) meta.isFavorited = favorited;
+      }
+
+      ids.forEach(id => detailCache.removeDetail(id));
+
+      toast.showConfig('success', {
+        summary: favorited ? '已收藏' : '已取消收藏',
+        detail: `${ids.length} 张图片`,
+        life: 1500,
+      });
+    } catch (error) {
+      log.error('[历史记录] 批量收藏操作失败:', error);
+      toast.showConfig('error', { summary: '操作失败', detail: String(error) });
+    }
+  }
+
   return {
     // 状态
     imageMetas,  // ← 改为元数据（原 allHistoryItems）
@@ -589,6 +715,12 @@ export function useHistoryManager() {
     // 时间轴相关
     loadTimePeriodStats,
     jumpToMonth,
+
+    // 收藏
+    favoriteCount,
+    favoriteSet: sharedFavoriteSet as Readonly<Ref<Set<string>>>,
+    toggleFavorite,
+    batchSetFavorite,
   };
 }
 
