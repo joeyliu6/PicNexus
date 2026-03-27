@@ -27,13 +27,18 @@
 | **工具** | `get_image_metadata` | 获取图片元数据 |
 | | `check_image_link` | 检测链接有效性 |
 | | `download_image_from_url` | 下载远程图片 |
+| | `download_url_image` | 从 URL 下载图片到临时文件 |
 | | `read_file_bytes` | 读取文件字节 |
+| **图片压缩** | `compress_image` | 压缩图片（质量/尺寸/格式转换） |
+| | `cleanup_compressed_files` | 清理压缩临时文件 |
+| | `strip_exif_only` | 仅去除 EXIF（不重编码） |
 | **S3 管理** | `list_s3_objects` | 列出对象 |
 | | `delete_s3_object` | 删除单个对象 |
 | | `delete_s3_objects` | 批量删除对象 |
 | **Token** | `fetch_nami_token` | 获取纳米 Token |
 | | `fetch_qiyu_token` | 获取七鱼 Token |
 | | `check_chrome_installed` | 检查 Chrome |
+| **编辑器 Server** | `update_server_config` | 启动/停止/更新 HTTP Server |
 
 ---
 
@@ -417,3 +422,126 @@ try {
 | 日期 | 变更 |
 |------|------|
 | 2025-01-13 | 初始版本 |
+| 2026-03-24 | 新增 `update_server_config`（编辑器兼容 HTTP Server）|
+| 2026-03-25 | 新增 `compress_image`、`cleanup_compressed_files`、`strip_exif_only`（图片压缩）|
+| 2026-03-25 | 新增 `download_url_image`（URL 图片下载）|
+
+---
+
+## update_server_config
+
+启动/停止/更新编辑器兼容 HTTP Server（PicGo 协议）。
+
+```typescript
+interface Params {
+  enabled: boolean;                 // 是否启用 Server
+  port: number;                     // 监听端口（推荐 36799，避免与 PicGo 36677 冲突）
+  serviceConfigJson: string | null; // JSON 序列化的 ServerUploadConfig，null 表示未配置
+}
+
+// serviceConfigJson 格式示例
+// 京东图床
+'{"type":"jd"}'
+// GitHub
+'{"type":"github","token":"ghp_xxx","owner":"user","repo":"repo","branch":"main","path":"images/"}'
+// SM.MS
+'{"type":"smms","token":"xxx"}'
+// Imgur
+'{"type":"imgur","clientId":"xxx"}'
+
+// 返回
+type Result = string; // 成功提示，如 "Server 已在端口 36799 启动"
+
+// 错误情况
+// - 端口已被占用 → AppError（建议用户换端口）
+// - serviceConfigJson 格式错误 → AppError
+```
+
+**注意**：此命令会先停止当前运行的 Server（如有），再按新参数启动。调用时机：
+- `onMounted` 时如配置已启用
+- 用户修改设置时（`@update:editor-server`）
+
+---
+
+## 图片压缩命令
+
+### compress_image
+
+压缩图片，支持 JPEG/PNG/WebP/BMP 输入。支持质量调整、等比缩放、格式转换。GIF 动图不支持，会返回错误。
+
+```typescript
+interface Params {
+  filePath: string;      // 原图绝对路径
+  quality: number;       // 压缩质量 1-100（JPEG/WebP 有效）
+  maxLongSide: number;   // 最长边限制（像素），0 表示不限制
+  outputFormat: string;  // 输出格式："original" | "webp" | "jpeg"
+}
+
+interface Result {
+  outputPath: string;     // 压缩后临时文件路径
+  originalSize: number;   // 原始文件大小（字节）
+  compressedSize: number; // 压缩后大小（字节）
+  ratio: number;          // 压缩率（0.0 ~ 1.0，越小越好）
+  width: number;          // 压缩后宽度
+  height: number;         // 压缩后高度
+  format: string;         // 输出格式
+}
+```
+
+**注意**：输出到系统临时目录。上传完成后应调用 `cleanup_compressed_files` 或依赖 `compress_image` 启动时的自动清理。
+
+---
+
+### cleanup_compressed_files
+
+清理压缩产生的所有临时文件（匹配 `picnexus_compressed_*` 模式）。
+
+```typescript
+// 无参数
+// 返回 void
+await invoke('cleanup_compressed_files');
+```
+
+---
+
+### strip_exif_only
+
+仅去除图片 EXIF 数据（不重编码，保持原图质量），支持 JPEG。
+
+```typescript
+interface Params {
+  filePath: string; // 原图绝对路径
+}
+
+// 返回：处理后临时文件路径
+type Result = string;
+```
+
+---
+
+## URL 下载命令
+
+### download_url_image
+
+从图片 URL 下载到临时文件。支持 Content-Type 校验和魔术字节双重验证，确保下载内容为图片。
+
+```typescript
+interface Params {
+  url: string; // 图片 URL（需以 http:// 或 https:// 开头）
+}
+
+interface Result {
+  filePath: string;    // 临时文件绝对路径
+  contentType: string; // MIME 类型（如 "image/jpeg"）
+  fileSize: number;    // 文件大小（字节）
+}
+
+// 错误情况
+// - URL 为空或格式不合法 → AppError::validation
+// - HTTP 请求失败 → AppError::network
+// - Content-Type 非图片 → AppError::validation
+// - 下载超时（30 秒）→ AppError::network
+```
+
+**注意**：下载的临时文件使用后需手动清理，或由上传完成后的清理流程统一处理。
+
