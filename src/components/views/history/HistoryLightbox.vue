@@ -5,6 +5,7 @@ import { useToast } from '../../../composables/useToast';
 import { useConfigManager } from '../../../composables/useConfig';
 import { useCopyLink } from '../../../composables/useCopyLink';
 import { useConfirm } from '../../../composables/useConfirm';
+import { useHistoryManager } from '../../../composables/useHistory';
 import { formatFileSize } from '../../../utils/formatters';
 import { getPrimaryImageUrl } from '../../../utils/imageUrl';
 import { getServiceDisplayName } from '../../../constants/serviceNames';
@@ -24,12 +25,19 @@ const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void;
   (e: 'delete', item: HistoryItem): void;
   (e: 'navigate', direction: 'prev' | 'next'): void;
+  (e: 'toggle-favorite', item: HistoryItem): void;
 }>();
 
 const toast = useToast();
 const configManager = useConfigManager();
 const { copyLink: copyLinkAction, applyPrefix } = useCopyLink();
 const { confirmDelete } = useConfirm();
+const historyManager = useHistoryManager();
+
+const isItemFavorited = computed(() => {
+  if (!props.item) return false;
+  return historyManager.favoriteSet.value.has(props.item.id);
+});
 
 const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',
@@ -280,7 +288,7 @@ watch(() => props.visible, (val) => {
   else cleanupTimers();
 });
 
-watch(() => props.item, () => {
+watch(() => props.item?.id, () => {
   if (props.visible) resetImageState();
 });
 
@@ -379,6 +387,14 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
             </div>
           </template>
           <div class="lightbox-actions">
+            <button
+              class="action-btn"
+              :class="{ 'action-btn-favorited': isItemFavorited }"
+              @click="emit('toggle-favorite', item)"
+              v-tooltip.top="isItemFavorited ? '取消收藏' : '收藏'"
+            >
+              <i :class="isItemFavorited ? 'pi pi-star-fill' : 'pi pi-star'"></i>
+            </button>
             <button class="action-btn" @click="handleCopyLink" v-tooltip.top="'复制链接'">
               <i class="pi pi-copy"></i>
             </button>
@@ -689,6 +705,14 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 .action-btn:hover {
   background: var(--hover-overlay);
   color: var(--text-main);
+}
+
+.action-btn-favorited {
+  color: var(--warning) !important;
+}
+
+.action-btn-favorited:hover {
+  background: var(--warning-alpha-15) !important;
 }
 
 .action-btn-danger {

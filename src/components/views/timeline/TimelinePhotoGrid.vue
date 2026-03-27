@@ -30,6 +30,7 @@ const props = defineProps<{
   totalHeight: number;
   displayMode: 'fast' | 'smooth' | 'normal';
   selectedIds: Set<string>;
+  favoriteIds: Set<string>;
   loadedImages: Set<string>;
   failedImages: Set<string>;
   hoverDetailsMap: Map<string, HistoryItem>;
@@ -39,6 +40,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'item-click', meta: ImageMeta): void;
   (e: 'item-toggle-select', id: string): void;
+  (e: 'item-toggle-favorite', id: string): void;
   (e: 'item-hover', meta: ImageMeta): void;
   (e: 'image-load', id: string): void;
   (e: 'image-error', event: Event, id: string): void;
@@ -78,6 +80,7 @@ function getGroupItemCount(groupId: string): number {
       :width="visible.width"
       :height="visible.height"
       :is-selected="selectedIds.has(visible.meta.id)"
+      :is-favorited="favoriteIds.has(visible.meta.id)"
       :is-loaded="loadedImages.has(visible.meta.id)"
       :is-failed="failedImages.has(visible.meta.id)"
       :display-mode="displayMode"
@@ -85,19 +88,17 @@ function getGroupItemCount(groupId: string): number {
       :hover-detail="hoverDetailsMap.get(visible.meta.id)"
       @click="emit('item-click', visible.meta)"
       @toggle-select="emit('item-toggle-select', visible.meta.id)"
+      @toggle-favorite="emit('item-toggle-favorite', visible.meta.id)"
       @hover="emit('item-hover', visible.meta)"
       @image-load="emit('image-load', visible.meta.id)"
       @image-error="emit('image-error', $event, visible.meta.id)"
     />
 
-    <!-- All Loaded Indicator -->
-    <div
-      v-if="groups.length > 0"
-      class="all-loaded"
-      :style="{ transform: `translate3d(0, ${totalHeight - 40}px, 0)` }"
-    >
-      <slot name="footer"></slot>
-    </div>
+  </div>
+
+  <!-- Footer slot - 位于虚拟容器外，避免绝对定位叠图 -->
+  <div v-if="groups.length > 0" class="all-loaded">
+    <slot name="footer"></slot>
   </div>
 </template>
 
@@ -131,9 +132,6 @@ function getGroupItemCount(groupId: string): number {
 }
 
 .all-loaded {
-  position: absolute;
-  left: 0;
-  right: 0;
   display: flex;
   align-items: center;
   justify-content: center;

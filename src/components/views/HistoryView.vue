@@ -12,9 +12,10 @@ import { useHistoryManager } from '../../composables/useHistory';
 import { debounce } from '../../utils/debounce';
 import HistoryTableView from './history/HistoryTableView.vue';
 import TimelineView from './TimelineView.vue';
+import FavoritesView from './FavoritesView.vue';
 import 'primeicons/primeicons.css';
 
-type ViewMode = 'table' | 'timeline';
+type ViewMode = 'table' | 'timeline' | 'favorites';
 
 const historyManager = useHistoryManager();
 
@@ -33,7 +34,8 @@ let savedTableScrollTop = 0;
 
 const viewOptions = [
   { label: '表格', value: 'table' as ViewMode, icon: 'pi pi-table' },
-  { label: '时间轴', value: 'timeline' as ViewMode, icon: 'pi pi-calendar' }
+  { label: '时间轴', value: 'timeline' as ViewMode, icon: 'pi pi-calendar' },
+  { label: '收藏', value: 'favorites' as ViewMode, icon: 'pi pi-star' },
 ];
 
 const serviceOptions: Array<{ label: string; value: ServiceType | 'all' }> = [
@@ -171,10 +173,11 @@ const handleSelectedCountUpdate = (count: number) => {
     </div>
 
     <!-- 视图容器（可滚动） -->
-    <div ref="historyContainerRef" class="history-container" :class="{ 'no-padding': currentViewMode === 'timeline' }">
+    <div ref="historyContainerRef" class="history-container" :class="{ 'no-padding': currentViewMode !== 'table' }">
       <!-- 表格视图 -->
       <HistoryTableView
         v-show="currentViewMode === 'table'"
+        :visible="currentViewMode === 'table'"
         :filter="currentFilter"
         :search-term="debouncedSearchTerm"
         @update:total-count="handleTotalCountUpdate"
@@ -185,6 +188,17 @@ const handleSelectedCountUpdate = (count: number) => {
       <TimelineView
         v-show="currentViewMode === 'timeline'"
         :visible="currentViewMode === 'timeline'"
+        :activation-trigger="activationTrigger"
+        :filter="currentFilter"
+        :search-term="debouncedSearchTerm"
+        @update:total-count="handleTotalCountUpdate"
+        @update:selected-count="handleSelectedCountUpdate"
+      />
+
+      <!-- 收藏视图 -->
+      <FavoritesView
+        v-show="currentViewMode === 'favorites'"
+        :visible="currentViewMode === 'favorites'"
         :activation-trigger="activationTrigger"
         :filter="currentFilter"
         :search-term="debouncedSearchTerm"

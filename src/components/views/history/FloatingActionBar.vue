@@ -18,6 +18,7 @@ const emit = defineEmits<{
   (e: 'export'): void;
   (e: 'delete'): void;
   (e: 'clear-selection'): void;
+  (e: 'batch-favorite', favorited: boolean): void;
 }>();
 
 const configManager = useConfigManager();
@@ -67,6 +68,28 @@ function handleCopy(format: LinkFormat): void {
           <i class="pi pi-check-circle"></i>
           {{ selectedCount }}
         </span>
+
+        <div class="fab-divider"></div>
+
+        <!-- 收藏 -->
+        <Button
+          icon="pi pi-star"
+          text
+          size="small"
+          class="fab-btn"
+          @click="emit('batch-favorite', true)"
+          v-tooltip.top="'收藏'"
+        />
+
+        <!-- 取消收藏 -->
+        <Button
+          icon="pi pi-star-fill"
+          text
+          size="small"
+          class="fab-btn fab-btn-unfavorite"
+          @click="emit('batch-favorite', false)"
+          v-tooltip.top="'取消收藏'"
+        />
 
         <div class="fab-divider"></div>
 
@@ -202,6 +225,14 @@ function handleCopy(format: LinkFormat): void {
   font-size: 13px !important;
   padding: 6px 12px !important;
   border-radius: 8px !important;
+}
+
+.fab-btn-unfavorite {
+  color: var(--warning) !important;
+}
+
+.fab-btn-unfavorite:hover {
+  background: var(--warning-alpha-15) !important;
 }
 
 .fab-btn-danger:hover {

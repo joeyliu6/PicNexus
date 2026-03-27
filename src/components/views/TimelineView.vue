@@ -30,6 +30,7 @@ const props = defineProps<{
   searchTerm?: string;
   visible?: boolean;
   activationTrigger?: number;
+  favoritesOnly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -81,7 +82,14 @@ let dragEndTimer: number | undefined;
  * 按天分组图片元数据
  */
 const groups = computed<PhotoGroup[]>(() => {
-  const metas = viewState.filteredMetas.value;
+  let metas = viewState.filteredMetas.value;
+
+  // 收藏模式：只显示已收藏的图片（使用独立 favoriteSet）
+  if (props.favoritesOnly) {
+    const favSet = historyManager.favoriteSet.value;
+    metas = metas.filter(m => favSet.has(m.id));
+  }
+
   const groupsMap = new Map<string, PhotoGroup>();
 
   metas.forEach((meta) => {
@@ -394,6 +402,15 @@ const handleLightboxDelete = async (item: HistoryItem) => {
   }
 };
 
+async function handleToggleFavorite(idOrItem: string | HistoryItem): Promise<void> {
+  const id = typeof idOrItem === 'string' ? idOrItem : idOrItem.id;
+  try {
+    await historyManager.toggleFavorite(id);
+  } catch {
+    // useHistory 内部已处理 toast 通知
+  }
+}
+
 async function preloadAdjacentInTimeline(currentIdx: number, direction: 'prev' | 'next'): Promise<void> {
   const metas = viewState.filteredMetas.value;
   const preloadIdx = direction === 'prev' ? currentIdx - 1 : currentIdx + 1;
@@ -643,8 +660,10 @@ watch(
 );
 
 watch(
-  () => viewState.totalCount.value,
-  (c) => emit('update:totalCount', c),
+  [() => viewState.totalCount.value, () => props.visible],
+  ([c, isVisible]) => {
+    if (isVisible !== false) emit('update:totalCount', c);
+  },
   { immediate: true }
 );
 
@@ -744,8 +763,9 @@ watch(
 
       <!-- Empty State -->
       <div v-else-if="groups.length === 0" class="empty-state">
-        <i class="pi pi-image" style="font-size: 3rem; opacity: 0.5"></i>
-        <p>暂无图片</p>
+        <i :class="favoritesOnly ? 'pi pi-star' : 'pi pi-image'" style="font-size: 3rem; opacity: 0.5"></i>
+        <p>{{ favoritesOnly ? '暂无收藏' : '暂无图片' }}</p>
+        <p v-if="favoritesOnly" class="empty-state-hint">点击图片上的星形图标即可收藏</p>
       </div>
 
       <!-- Virtual Scroll Content -->
@@ -757,12 +777,14 @@ watch(
         :total-height="totalHeight"
         :display-mode="displayMode"
         :selected-ids="selectedIdsSet"
+        :favorite-ids="historyManager.favoriteSet.value"
         :loaded-images="loadedImagesSet"
         :failed-images="failedImagesSet"
         :hover-details-map="hoverDetailsMap"
         :get-thumbnail-url="getThumbnailUrl"
         @item-click="openLightbox"
         @item-toggle-select="viewState.toggleSelection"
+        @item-toggle-favorite="handleToggleFavorite"
         @item-hover="handleImageHover"
         @image-load="onImageLoad"
         @image-error="onImageError"
@@ -805,6 +827,7 @@ watch(
       :has-next="lightboxHasNext"
       @delete="handleLightboxDelete"
       @navigate="handleLightboxNavigate"
+      @toggle-favorite="handleToggleFavorite"
     />
 
     <!-- Floating Action Bar -->
@@ -816,6 +839,7 @@ watch(
       @export="viewState.bulkExport"
       @delete="viewState.bulkDelete"
       @clear-selection="viewState.clearSelection"
+      @batch-favorite="(favorited: boolean) => historyManager.batchSetFavorite(viewState.selectedIdList.value, favorited)"
     />
 
     <!-- Layout Calculating Indicator -->
@@ -881,6 +905,12 @@ watch(
   padding: 40px;
   height: 100%;
   color: var(--text-secondary);
+}
+
+.empty-state-hint {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
 }
 
 /* Layout Indicator */

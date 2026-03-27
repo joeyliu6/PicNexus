@@ -17,6 +17,7 @@ const props = defineProps<{
   width: number;
   height: number;
   isSelected: boolean;
+  isFavorited: boolean;
   isLoaded: boolean;
   isFailed: boolean;
   displayMode: 'fast' | 'smooth' | 'normal';
@@ -27,6 +28,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'click'): void;
   (e: 'toggle-select'): void;
+  (e: 'toggle-favorite'): void;
   (e: 'hover'): void;
   (e: 'image-load'): void;
   (e: 'image-error', event: Event): void;
@@ -87,6 +89,15 @@ const successfulServices = computed(() => {
         @click.stop="emit('toggle-select')"
       >
         <i v-if="isSelected" class="pi pi-check"></i>
+      </div>
+
+      <!-- Favorite Button -->
+      <div
+        class="favorite-btn"
+        :class="{ favorited: isFavorited }"
+        @click.stop="emit('toggle-favorite')"
+      >
+        <i :class="isFavorited ? 'pi pi-star-fill' : 'pi pi-star'"></i>
       </div>
 
       <!-- 悬停信息层 -->
@@ -195,6 +206,12 @@ const successfulServices = computed(() => {
   z-index: 2;
 }
 
+.checkbox::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
 .photo-wrapper:hover .checkbox,
 .checkbox.checked {
   opacity: 1;
@@ -213,6 +230,69 @@ const successfulServices = computed(() => {
   font-size: 10px;
   color: white;
   font-weight: bold;
+}
+
+.favorite-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s;
+  z-index: 2;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.favorite-btn::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+.photo-wrapper:hover .favorite-btn,
+.favorite-btn.favorited {
+  opacity: 1;
+}
+
+.favorite-btn.favorited {
+  color: var(--warning);
+  background: var(--warning-alpha-25);
+}
+
+.favorite-btn:hover {
+  transform: scale(1.15);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.favorite-btn.favorited:hover {
+  background: var(--warning-alpha-40);
+}
+
+@keyframes star-pop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.5); }
+  55%  { transform: scale(0.85); }
+  75%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.favorite-btn.favorited i {
+  animation: star-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .favorite-btn.favorited i {
+    animation: none;
+  }
 }
 
 .hover-info {
@@ -237,8 +317,14 @@ const successfulServices = computed(() => {
 .service-badges {
   display: flex;
   gap: 4px;
-  flex-wrap: wrap;
+  flex-wrap: wrap-reverse;
   justify-content: flex-end;
+  transform: translateY(4px);
+  transition: transform 0.2s ease;
+}
+
+.photo-wrapper:hover .hover-info .service-badges {
+  transform: translateY(0);
 }
 
 .service-badge {

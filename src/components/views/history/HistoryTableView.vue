@@ -31,6 +31,7 @@ interface SkeletonItem {
 const props = defineProps<{
   filter: ServiceType | 'all';
   searchTerm: string;
+  visible?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -183,9 +184,13 @@ watch([() => props.filter, () => props.searchTerm], () => {
   loadCurrentPage();
 });
 
-watch(() => totalRecords.value, (count) => {
-  emit('update:totalCount', count);
-}, { immediate: true });
+watch(
+  [() => totalRecords.value, () => props.visible],
+  ([count, isVisible]) => {
+    if (isVisible !== false) emit('update:totalCount', count);
+  },
+  { immediate: true }
+);
 
 watch(() => viewState.selectedIdList.value.length, (count) => {
   emit('update:selectedCount', count);
@@ -197,6 +202,14 @@ watch(() => {
 }, (allSelected) => {
   selectAll.value = allSelected;
 });
+
+async function handleToggleFavorite(item: HistoryItem): Promise<void> {
+  try {
+    await historyManager.toggleFavorite(item.id);
+  } catch {
+    // useHistory 内部已处理 toast 通知
+  }
+}
 
 function getSuccessfulServices(item: HistoryItem): ServiceType[] {
   return item.results
@@ -593,6 +606,7 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
       :has-next="lightboxHasNext"
       @delete="handleLightboxDelete"
       @navigate="handleLightboxNavigate"
+      @toggle-favorite="handleToggleFavorite"
     />
 
     <!-- 浮动操作栏 -->
@@ -604,6 +618,7 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
       @export="viewState.bulkExport"
       @delete="viewState.bulkDelete"
       @clear-selection="viewState.clearSelection"
+      @batch-favorite="(favorited: boolean) => historyManager.batchSetFavorite(viewState.selectedIdList.value, favorited)"
     />
 
     <!-- 全局悬浮预览层 -->

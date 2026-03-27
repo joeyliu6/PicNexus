@@ -9,15 +9,20 @@ import { useToast } from '../../composables/useToast';
 import { useServiceHealth } from '../../composables/useServiceHealth';
 import { useUploadManager } from '../../composables/useUpload';
 import { useClipboardImage } from '../../composables/useClipboardImage';
+import { useUrlDownload } from '../../composables/useUrlDownload';
 import { useQueueState } from '../../composables/useQueueState';
 import { UploadQueueManager } from '../../uploadQueue';
 import { RetryService } from '../../services/RetryService';
 import { configStore } from '../../store/instances';
+import { useConfigManager } from '../../composables/useConfig';
 import type { MultiUploadResult } from '../../core/MultiServiceUploader';
+import type { ImageCompressionConfig, CompressionPreset } from '../../config/types';
+import { DEFAULT_COMPRESSION_PRESET } from '../../config/types';
 
 import UploadDropZone from './upload/UploadDropZone.vue';
 import ServiceSelector from './upload/ServiceSelector.vue';
 import UploadQueuePanel from './upload/UploadQueuePanel.vue';
+import UrlDownloadDialog from '../dialogs/UrlDownloadDialog.vue';
 
 const toast = useToast();
 const { healthStatusMap, healthTooltipMap, loadHealthStatus, evaluateConfig } = useServiceHealth();
@@ -35,6 +40,10 @@ const uploadManager = useUploadManager(queueManager);
 // 使用剪贴板图片功能
 const { isProcessing: isPasting, pasteAndUpload } = useClipboardImage();
 
+// 使用 URL 下载功能
+const { isDownloading, downloadAndUpload } = useUrlDownload();
+const showUrlDialog = ref(false);
+
 // 键盘事件处理函数（需要在 onUnmounted 中清理）
 let keydownHandler: ((e: KeyboardEvent) => void) | null = null;
 
@@ -45,6 +54,9 @@ const fileDropUnlisteners = ref<UnlistenFn[]>([]);
 
 // 配置更新监听器清理函数
 const configUnlisten = ref<UnlistenFn | null>(null);
+
+// 压缩配置（与全局 configStore 双向同步）
+const compressionConfig = ref<ImageCompressionConfig>(DEFAULT_CONFIG.imageCompression!);
 
 // 创建重试服务实例
 const retryService = new RetryService({
@@ -93,7 +105,37 @@ const visiblePublicServices = computed(() => {
   );
 });
 
-// 跳转到设置页图床配置
+// 当前激活的预设（计算属性）
+const activePreset = computed<CompressionPreset>(() => {
+  const cfg = compressionConfig.value;
+  return cfg.presets?.find(p => p.id === cfg.activePresetId)
+    ?? cfg.presets?.[0]
+    ?? { ...DEFAULT_COMPRESSION_PRESET };
+});
+
+// 压缩配置写回 configStore（与设置页同步）
+async function handleCompressionToggle(enabled: boolean) {
+  compressionConfig.value = { ...compressionConfig.value, enabled };
+  await saveCompressionConfig();
+}
+
+async function handlePresetSwitch(presetId: string) {
+  compressionConfig.value = { ...compressionConfig.value, activePresetId: presetId };
+  await saveCompressionConfig();
+}
+
+const configManager = useConfigManager();
+
+async function saveCompressionConfig() {
+  try {
+    const config = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
+    config.imageCompression = { ...compressionConfig.value };
+    await configManager.saveConfig(config, true);
+  } catch (err) {
+    // 静默保存失败不打扰用户
+  }
+}
+
 const navigateToSettings = () => {
   tauriEmit('navigate-to', { view: 'settings', tab: 'hosting' });
 };
@@ -109,6 +151,16 @@ const openFileDialog = async () => {
 // 从剪贴板粘贴图片
 const handlePasteFromClipboard = async () => {
   await pasteAndUpload(uploadManager.handleFilesUpload);
+};
+
+// URL 下载相关
+const handleUrlDownloadClick = () => {
+  showUrlDialog.value = true;
+};
+
+const handleUrlConfirm = async (input: string) => {
+  showUrlDialog.value = false;
+  await downloadAndUpload(input, uploadManager.handleFilesUpload);
 };
 
 // 拖拽相关
@@ -258,10 +310,31 @@ onMounted(async () => {
   // 初始化图床健康状态（与设置页同步）
   await loadHealthStatus();
   const config = await configStore.get<UserConfig>('config');
-  if (config) evaluateConfig(config);
+  if (config) {
+    evaluateConfig(config);
+    if (config.imageCompression) {
+      compressionConfig.value = config.imageCompression;
+    }
+  }
 
   // 设置配置更新监听器（设置页面修改配置后自动刷新）
   configUnlisten.value = await uploadManager.setupConfigListener();
+
+  // 监听配置变更，同步压缩配置（设置页改动后上传页自动更新）
+  const { listen } = await import('@tauri-apps/api/event');
+  const compressionUnlisten = await listen('config-updated', async () => {
+    const updated = await configStore.get<UserConfig>('config');
+    if (updated?.imageCompression) {
+      compressionConfig.value = updated.imageCompression;
+    }
+  });
+  // 将清理函数挂到已有的 configUnlisten 上
+  const originalUnlisten = configUnlisten.value;
+  configUnlisten.value = () => {
+    originalUnlisten?.();
+    compressionUnlisten();
+  };
+
   console.log('[UploadView] 配置更新监听器已设置');
 
   // 设置文件拖拽监听
@@ -316,12 +389,19 @@ onUnmounted(() => {
       <UploadDropZone
         :is-dragging="isDragging"
         :is-pasting="isPasting"
+        :is-downloading="isDownloading"
+        :compression-enabled="compressionConfig.enabled"
+        :active-preset="activePreset"
+        :presets="compressionConfig.presets ?? []"
         @click="openFileDialog"
         @paste="handlePasteFromClipboard"
+        @url-download="handleUrlDownloadClick"
         @drag-enter="handleDragEnter"
         @drag-over="handleDragOver"
         @drag-leave="handleDragLeave"
         @drop="handleDrop"
+        @update:compression-enabled="handleCompressionToggle"
+        @update:active-preset-id="handlePresetSwitch"
       />
 
       <!-- 图床选择区域 -->
@@ -349,6 +429,12 @@ onUnmounted(() => {
       />
     </div>
 
+    <!-- URL 下载对话框 -->
+    <UrlDownloadDialog
+      v-model:visible="showUrlDialog"
+      :is-downloading="isDownloading"
+      @confirm="handleUrlConfirm"
+    />
   </div>
 </template>
 

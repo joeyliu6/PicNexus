@@ -1,9 +1,17 @@
 <script setup lang="ts">
-// 文件上传拖拽区域组件
+import { ref, computed } from 'vue';
+import ToggleSwitch from 'primevue/toggleswitch';
+import Popover from 'primevue/popover';
+import type PopoverType from 'primevue/popover';
+import type { CompressionPreset } from '../../../config/types';
 
 interface Props {
   isDragging: boolean;
   isPasting: boolean;
+  isDownloading?: boolean;
+  compressionEnabled: boolean;
+  activePreset: CompressionPreset | null;
+  presets: CompressionPreset[];
 }
 
 const props = defineProps<Props>();
@@ -11,21 +19,60 @@ const props = defineProps<Props>();
 const emit = defineEmits<{
   click: [];
   paste: [];
+  'url-download': [];
   'drag-enter': [event: DragEvent];
   'drag-over': [event: DragEvent];
   'drag-leave': [event: DragEvent];
   'drop': [event: DragEvent];
+  'update:compressionEnabled': [enabled: boolean];
+  'update:activePresetId': [presetId: string];
 }>();
+
+const presetPopoverRef = ref<InstanceType<typeof PopoverType> | null>(null);
 
 function handleClick() {
   emit('click');
 }
 
 function handlePaste(e: Event) {
-  // 阻止冒泡，避免触发点击事件
   e.stopPropagation();
   emit('paste');
 }
+
+function handleUrlDownload(e: Event) {
+  e.stopPropagation();
+  emit('url-download');
+}
+
+function handleCompressToggle(val: boolean) {
+  emit('update:compressionEnabled', val);
+}
+
+function togglePresetPopover(event: Event) {
+  presetPopoverRef.value?.toggle(event);
+}
+
+function selectPreset(presetId: string) {
+  emit('update:activePresetId', presetId);
+  presetPopoverRef.value?.hide();
+}
+
+function formatLabel(fmt: string): string {
+  if (fmt === 'original') return '原格式';
+  if (fmt === 'webp') return 'WebP';
+  return 'JPEG';
+}
+
+function formatPresetDesc(p: CompressionPreset): string {
+  return `${formatLabel(p.outputFormat)} · 质量 ${p.quality}`;
+}
+
+const presetTooltip = computed(() => {
+  const p = props.activePreset;
+  if (!p) return '';
+  const skip = p.skipIfSmallerKB > 0 ? `跳过 ${p.skipIfSmallerKB} KB 以下` : '全部压缩';
+  return `质量 ${p.quality} · ${formatLabel(p.outputFormat)} · ${skip}`;
+});
 </script>
 
 <template>
@@ -47,15 +94,56 @@ function handlePaste(e: Event) {
           :disabled="isPasting"
           @click="handlePaste"
           v-tooltip.top="'快捷键: Ctrl+V'"
-        >{{ isPasting ? '正在粘贴...' : '从剪贴板粘贴' }}</button>
+        >{{ isPasting ? '正在粘贴...' : '从剪贴板粘贴' }}</button>，或<button
+          class="paste-link"
+          :disabled="isDownloading"
+          @click="handleUrlDownload"
+        >{{ isDownloading ? '正在下载...' : '从 URL 下载' }}</button>
       </span>
     </div>
+
+    <!-- 压缩控件：右下角 -->
+    <div class="compress-corner" @click.stop>
+      <ToggleSwitch
+        :modelValue="compressionEnabled"
+        @update:modelValue="handleCompressToggle"
+        class="compress-switch"
+      />
+      <span class="compress-label" v-tooltip.top="'更改将同步到全局设置'">压缩</span>
+      <button
+        v-if="compressionEnabled && activePreset"
+        class="compress-preset-trigger"
+        v-tooltip.top="presetTooltip"
+        @click.stop="togglePresetPopover"
+      >
+        {{ activePreset.name }}
+        <i class="pi pi-chevron-down compress-preset-chevron" />
+      </button>
+    </div>
+
+    <!-- 预设切换 Popover -->
+    <Popover ref="presetPopoverRef">
+      <div class="preset-popover-list">
+        <button
+          v-for="preset in presets"
+          :key="preset.id"
+          class="preset-popover-item"
+          :class="{ active: activePreset?.id === preset.id }"
+          @click="selectPreset(preset.id)"
+        >
+          <i class="pi pi-check preset-check" />
+          <span class="preset-item-name">{{ preset.name }}</span>
+          <span class="preset-item-desc">{{ formatPresetDesc(preset) }}</span>
+        </button>
+      </div>
+    </Popover>
   </div>
 </template>
 
 <style scoped>
 /* 拖拽区域 */
 .drop-zone {
+  position: relative;
   background: var(--bg-card);
   border: 2px dashed var(--border-subtle);
   border-radius: 12px;
@@ -104,13 +192,11 @@ function handlePaste(e: Event) {
 
 /* 剪贴板粘贴链接 */
 .paste-link {
-  /* 重置按钮默认样式 */
   background: none;
   border: none;
   padding: 0;
   font: inherit;
   font-size: inherit;
-  /* 链接样式 */
   color: var(--primary);
   cursor: pointer;
   transition: color 0.2s ease;
@@ -125,5 +211,111 @@ function handlePaste(e: Event) {
 .paste-link:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+/* 压缩控件 - 右下角 */
+.compress-corner {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+  cursor: default;
+}
+
+.compress-switch {
+  transform: scale(0.8);
+}
+
+.compress-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+/* 预设切换触发按钮 */
+.compress-preset-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.compress-preset-trigger:hover {
+  border-color: var(--primary);
+  color: var(--text-primary);
+  background: var(--primary-alpha-5);
+}
+
+.compress-preset-chevron {
+  font-size: 0.6rem;
+  opacity: 0.6;
+}
+
+/* 预设 Popover 列表 */
+.preset-popover-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 160px;
+}
+
+.preset-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-primary);
+  transition: background 0.15s;
+}
+
+.preset-popover-item:hover {
+  background: var(--primary-alpha-10);
+}
+
+.preset-popover-item.active {
+  background: var(--primary-alpha-8);
+}
+
+.preset-check {
+  font-size: 0.7rem;
+  color: var(--primary);
+  width: 14px;
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+.preset-popover-item.active .preset-check {
+  opacity: 1;
+}
+
+.preset-item-name {
+  font-weight: 500;
+}
+
+.preset-item-desc {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 </style>
