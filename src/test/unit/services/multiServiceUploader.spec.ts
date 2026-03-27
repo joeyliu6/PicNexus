@@ -284,13 +284,13 @@ describe('MultiServiceUploader', () => {
     expect(onServiceResult).toHaveBeenCalledTimes(2);
 
     const resultServiceIds = onServiceResult.mock.calls.map(
-      (call: [SingleServiceResult]) => call[0].serviceId,
+      (call: SingleServiceResult[]) => call[0].serviceId,
     );
     expect(resultServiceIds).toContain('smms');
     expect(resultServiceIds).toContain('github');
 
     // 每次回调的 status 都应该是 success
-    onServiceResult.mock.calls.forEach((call: [SingleServiceResult]) => {
+    onServiceResult.mock.calls.forEach((call: SingleServiceResult[]) => {
       expect(call[0].status).toBe('success');
     });
   });
