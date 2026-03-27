@@ -238,10 +238,9 @@ const successfulServices = computed(() => {
   right: 8px;
   width: 20px;
   height: 20px;
-  border-radius: 50%;
   border: none;
-  background: rgba(0, 0, 0, 0.3);
-  color: rgba(255, 255, 255, 0.8);
+  background: none;
+  color: rgba(255, 255, 255, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -249,7 +248,8 @@ const successfulServices = computed(() => {
   transition: all 0.2s;
   z-index: 2;
   cursor: pointer;
-  font-size: 10px;
+  font-size: 11px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
 }
 
 .favorite-btn::before {
@@ -265,23 +265,22 @@ const successfulServices = computed(() => {
 
 .favorite-btn.favorited {
   color: var(--warning);
-  background: var(--warning-alpha-25);
+  filter: drop-shadow(0 1px 3px rgba(234, 179, 8, 0.4));
 }
 
 .favorite-btn:hover {
   transform: scale(1.15);
-  background: rgba(0, 0, 0, 0.5);
 }
 
 .favorite-btn.favorited:hover {
-  background: var(--warning-alpha-40);
+  filter: drop-shadow(0 1px 4px rgba(234, 179, 8, 0.6));
 }
 
 @keyframes star-pop {
   0%   { transform: scale(1); }
-  35%  { transform: scale(1.5); }
-  55%  { transform: scale(0.85); }
-  75%  { transform: scale(1.15); }
+  35%  { transform: scale(1.25); }
+  55%  { transform: scale(0.92); }
+  75%  { transform: scale(1.08); }
   100% { transform: scale(1); }
 }
 

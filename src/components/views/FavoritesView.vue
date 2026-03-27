@@ -517,9 +517,9 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   right: 8px;
   width: 20px;
   height: 20px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.3);
-  color: rgba(255, 255, 255, 0.8);
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -527,7 +527,8 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   transition: all 0.2s;
   z-index: 2;
   cursor: pointer;
-  font-size: 10px;
+  font-size: 11px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
 }
 
 .photo-item:hover .favorite-btn,
@@ -536,17 +537,16 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 }
 
 .favorite-btn.favorited {
-  color: #eab308;
-  background: rgba(234, 179, 8, 0.25);
+  color: var(--warning);
+  filter: drop-shadow(0 1px 3px rgba(234, 179, 8, 0.4));
 }
 
 .favorite-btn:hover {
   transform: scale(1.15);
-  background: rgba(0, 0, 0, 0.5);
 }
 
 .favorite-btn.favorited:hover {
-  background: rgba(234, 179, 8, 0.4);
+  filter: drop-shadow(0 1px 4px rgba(234, 179, 8, 0.6));
 }
 
 /* === 空状态 === */
@@ -598,7 +598,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   transition: transform 0.55s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
-/* === 最后一项特殊离场：向心缩小 === */
+/* === 最后一项特殊离场：柔和淡出 === */
 .fav-last-enter-active {
   transition: opacity 0.45s ease, transform 0.45s ease;
 }
@@ -610,13 +610,13 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 
 .fav-last-leave-active {
   position: absolute;
-  transition: opacity 0.6s ease-out, transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.33s ease-out, transform 0.33s ease-out;
   z-index: 0;
 }
 
 .fav-last-leave-to {
   opacity: 0;
-  transform: scale(0.3);
+  transform: scale(0.92);
 }
 
 .fav-last-move {
@@ -644,8 +644,8 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 
 /* === 空状态入场：下方浮入 + 缩放 + 弹性缓动 === */
 .empty-fade-enter-active {
-  transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.4s,
-              transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.4s;
+  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.15s,
+              transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.15s;
 }
 
 .empty-fade-enter-from {
@@ -663,7 +663,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 
 /* 星形图标入场动画 */
 .empty-fade-enter-active .empty-star-icon {
-  animation: empty-star-arrive 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.55s both;
+  animation: empty-star-arrive 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.3s both;
 }
 
 @keyframes empty-star-arrive {

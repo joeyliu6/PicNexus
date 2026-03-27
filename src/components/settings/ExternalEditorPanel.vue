@@ -629,6 +629,14 @@ const applyStatusLabel = computed(() => {
   flex-direction: column;
 }
 
+@keyframes show-overflow {
+  to { overflow: visible; }
+}
+
+.editor-card.expanded .card-content {
+  animation: show-overflow 0s 0.25s forwards;
+}
+
 .card-content > :first-child {
   border-top: 1px solid var(--border-subtle);
 }
