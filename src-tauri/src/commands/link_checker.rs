@@ -13,6 +13,9 @@ const MAX_DOWNLOAD_SIZE: usize = 50 * 1024 * 1024;
 /// 临时文件前缀，用于清理时识别
 const TEMP_FILE_PREFIX: &str = "weibo_reupload_";
 
+/// URL 下载临时文件前缀
+const URL_DOWNLOAD_PREFIX: &str = "picnexus_url_";
+
 /// 临时文件过期时间（1小时 = 3600秒）
 const TEMP_FILE_MAX_AGE_SECS: u64 = 3600;
 
@@ -203,7 +206,7 @@ fn cleanup_old_temp_files() {
 
         // 只处理以特定前缀开头的文件
         if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-            if !file_name.starts_with(TEMP_FILE_PREFIX) {
+            if !file_name.starts_with(TEMP_FILE_PREFIX) && !file_name.starts_with(URL_DOWNLOAD_PREFIX) {
                 continue;
             }
 
@@ -324,4 +327,198 @@ pub async fn download_image_from_url(
     log::info!("[下载图片] 已保存到: {}", path_str);
 
     Ok(path_str)
+}
+
+/// URL 下载结果
+#[derive(Debug, Serialize)]
+pub struct UrlDownloadResult {
+    /// 临时文件路径
+    pub file_path: String,
+    /// MIME 类型
+    pub content_type: String,
+    /// 文件大小（字节）
+    pub file_size: u64,
+}
+
+/// 从 Content-Type 推断文件扩展名
+fn extension_from_content_type(content_type: &str) -> &str {
+    let mime = content_type.split(';').next().unwrap_or("").trim();
+    match mime {
+        "image/png" => "png",
+        "image/gif" => "gif",
+        "image/webp" => "webp",
+        "image/bmp" | "image/x-ms-bmp" => "bmp",
+        "image/jpeg" | "image/jpg" => "jpg",
+        "image/svg+xml" => "svg",
+        _ => "",
+    }
+}
+
+/// 从 URL 路径推断文件扩展名
+fn extension_from_url(url: &str) -> &str {
+    // 去除查询参数和锚点
+    let path = url.split('?').next().unwrap_or(url);
+    let path = path.split('#').next().unwrap_or(path);
+    if let Some(dot_pos) = path.rfind('.') {
+        let ext = &path[dot_pos + 1..];
+        match ext.to_lowercase().as_str() {
+            "jpg" | "jpeg" => "jpg",
+            "png" => "png",
+            "gif" => "gif",
+            "webp" => "webp",
+            "bmp" => "bmp",
+            _ => "",
+        }
+    } else {
+        ""
+    }
+}
+
+/// 从 URL 下载图片到临时目录（通用版）
+///
+/// 相比 `download_image_from_url`，增加了：
+/// - Content-Type 校验（确认为图片）
+/// - 根据 MIME 类型自动推断扩展名
+/// - 返回结构化结果（路径、类型、大小）
+#[tauri::command]
+pub async fn download_url_image(
+    url: String,
+    http_client: tauri::State<'_, crate::HttpClient>,
+) -> Result<UrlDownloadResult, AppError> {
+    log::info!("[URL下载] 开始下载: {}", url);
+
+    // 验证 URL 格式
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return Err(AppError::validation("URL 不能为空"));
+    }
+    if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
+        return Err(AppError::validation("请输入有效的 URL（以 http:// 或 https:// 开头）"));
+    }
+
+    // 清理过期临时文件
+    cleanup_old_temp_files();
+
+    // 发送 GET 请求
+    let response = http_client
+        .0
+        .get(trimmed)
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await
+        .map_err(|e| {
+            log::error!("[URL下载] 请求失败: {}", e);
+            AppError::network(format!("下载失败: {}", e))
+        })?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        log::error!("[URL下载] HTTP 错误: {}", status);
+        return Err(AppError::network(format!("下载失败: HTTP {}", status.as_u16())));
+    }
+
+    // 获取 Content-Type
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+
+    // 校验是否为图片
+    let is_image = content_type.starts_with("image/");
+    if !content_type.is_empty() && !is_image {
+        log::warn!("[URL下载] 非图片类型: {}", content_type);
+        return Err(AppError::validation(format!(
+            "URL 指向的不是图片（Content-Type: {}）",
+            content_type
+        )));
+    }
+
+    // 预检文件大小
+    if let Some(content_length) = response.content_length() {
+        if content_length as usize > MAX_DOWNLOAD_SIZE {
+            return Err(AppError::validation(format!(
+                "文件过大: {} MB（最大 {} MB）",
+                content_length / 1024 / 1024,
+                MAX_DOWNLOAD_SIZE / 1024 / 1024
+            )));
+        }
+    }
+
+    // 读取响应内容
+    let bytes = response.bytes().await.map_err(|e| {
+        log::error!("[URL下载] 读取内容失败: {}", e);
+        AppError::network(format!("读取内容失败: {}", e))
+    })?;
+
+    if bytes.len() > MAX_DOWNLOAD_SIZE {
+        return Err(AppError::validation(format!(
+            "文件过大: {} MB（最大 {} MB）",
+            bytes.len() / 1024 / 1024,
+            MAX_DOWNLOAD_SIZE / 1024 / 1024
+        )));
+    }
+
+    // 推断扩展名：优先 Content-Type，其次 URL 路径，兜底 jpg
+    let ext = {
+        let from_ct = extension_from_content_type(&content_type);
+        if !from_ct.is_empty() {
+            from_ct
+        } else {
+            let from_url = extension_from_url(trimmed);
+            if !from_url.is_empty() { from_url } else { "jpg" }
+        }
+    };
+
+    // 如果没有 Content-Type 且无法从 URL 推断，通过魔术字节验证
+    if content_type.is_empty() {
+        let is_valid_image = bytes.len() >= 4 && (
+            // JPEG: FF D8 FF
+            (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) ||
+            // PNG: 89 50 4E 47
+            (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) ||
+            // GIF: 47 49 46
+            (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) ||
+            // BMP: 42 4D
+            (bytes[0] == 0x42 && bytes[1] == 0x4D) ||
+            // WEBP: RIFF....WEBP
+            (bytes.len() >= 12 && bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46
+                && bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50)
+        );
+        if !is_valid_image {
+            return Err(AppError::validation("URL 指向的不是图片"));
+        }
+    }
+
+    let file_size = bytes.len() as u64;
+
+    // 创建临时文件
+    let temp_dir = std::env::temp_dir();
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_nanos();
+    let file_name = format!(
+        "{}{}_{}.{}",
+        URL_DOWNLOAD_PREFIX,
+        chrono::Local::now().format("%Y%m%d_%H%M%S"),
+        nanos,
+        ext
+    );
+    let temp_path = temp_dir.join(file_name);
+
+    std::fs::write(&temp_path, &bytes).map_err(|e| {
+        log::error!("[URL下载] 写入文件失败: {}", e);
+        AppError::file_io(format!("写入文件失败: {}", e))
+    })?;
+
+    let path_str = temp_path.to_string_lossy().to_string();
+    log::info!("[URL下载] 已保存到: {} ({} bytes, {})", path_str, file_size, content_type);
+
+    Ok(UrlDownloadResult {
+        file_path: path_str,
+        content_type,
+        file_size,
+    })
 }

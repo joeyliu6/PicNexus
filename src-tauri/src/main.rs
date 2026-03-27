@@ -6,6 +6,8 @@
 
 mod error;
 mod commands;
+mod server;
+mod cli;
 
 use tauri::{Manager, Emitter};
 use tauri_plugin_log::{Target, TargetKind};
@@ -19,9 +21,19 @@ use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent}
 use tauri::image::Image;
 use std::time::Duration;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use tokio::sync::Mutex as TokioMutex;
 
 /// 关闭按钮行为状态：true = 最小化到托盘，false = 直接退出
 pub struct CloseToTrayState(pub AtomicBool);
+
+/// Server 运行时状态
+/// upload_config: 当前 Server 使用的图床配置
+/// abort_handle: 当前 Server 任务的取消句柄（停止/重启时使用）
+pub struct ServerState {
+    pub upload_config: Arc<TokioMutex<Option<server::ServerUploadConfig>>>,
+    pub abort_handle: std::sync::Mutex<Option<tokio::task::AbortHandle>>,
+}
 
 // 用于 R2 和 WebDAV 测试
 use hmac::{Hmac, Mac};
@@ -54,6 +66,23 @@ fn is_safe_service_id(service: &str) -> bool {
 pub struct HttpClient(pub reqwest::Client);
 
 fn main() {
+    // CLI 模式检测
+    match cli::parse_cli_args() {
+        cli::CliAction::Help => {
+            cli::print_help();
+            return;
+        }
+        cli::CliAction::Version => {
+            cli::print_version();
+            return;
+        }
+        cli::CliAction::Upload { files, json_output } => {
+            cli::run_cli_upload(files, json_output);
+            return;
+        }
+        cli::CliAction::None => {}
+    }
+
     // 创建全局 HTTP 客户端（带连接池配置）
     let http_client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(60))  // 60秒超时
@@ -108,6 +137,10 @@ fn main() {
         )
         .manage(HttpClient(http_client))     // 注册全局 HTTP 客户端
         .manage(CloseToTrayState(AtomicBool::new(true)))
+        .manage(ServerState {
+            upload_config: Arc::new(TokioMutex::new(None)),
+            abort_handle: std::sync::Mutex::new(None),
+        })
         .invoke_handler(tauri::generate_handler![
             set_close_to_tray,
             open_login_window,
@@ -146,12 +179,19 @@ fn main() {
             commands::s3_compatible::test_s3_connection,
             commands::link_checker::check_image_link,
             commands::link_checker::download_image_from_url,
+            commands::link_checker::download_url_image,
             commands::clipboard::clipboard_has_image,
             commands::clipboard::read_clipboard_image,
             commands::image_meta::get_image_metadata,
+            commands::image_compress::compress_image,
+            commands::image_compress::cleanup_compressed_files,
+            commands::image_compress::strip_exif_only,
             get_or_create_secure_key,
             set_secure_key,
-            open_log_dir
+            open_log_dir,
+            update_server_config,
+            save_cli_config,
+            get_executable_path
         ])
         .setup(|app| {
             // 1. 创建原生菜单栏 (仅 macOS)
@@ -1824,5 +1864,121 @@ fn open_log_dir(app: tauri::AppHandle) -> Result<(), AppError> {
         AppError::file_io(format!("无法打开日志目录: {}", e))
     })?;
     Ok(())
+}
+
+/// 保存 CLI 配置文件（供 Typora 自定义命令模式使用）
+///
+/// 返回当前可执行文件的绝对路径（用于 Typora 自定义命令配置提示）
+#[tauri::command]
+fn get_executable_path() -> Result<String, AppError> {
+    std::env::current_exe()
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| AppError::file_io(format!("无法获取可执行文件路径: {}", e)))
+}
+
+/// 将 Server 图床配置写入 {app_data_dir}/cli-config.json，
+/// CLI 模式启动时直接读取此文件，无需启动 GUI。
+/// 传 None 时删除配置文件（禁用 CLI 模式）。
+#[tauri::command]
+async fn save_cli_config(
+    app: tauri::AppHandle,
+    service_config_json: Option<String>,
+) -> Result<(), AppError> {
+    let config_dir = app.path().app_data_dir()
+        .map_err(|e| AppError::file_io(format!("无法获取应用数据目录: {}", e)))?;
+
+    std::fs::create_dir_all(&config_dir)
+        .map_err(|e| AppError::file_io(format!("无法创建配置目录: {}", e)))?;
+
+    let config_path = config_dir.join("cli-config.json");
+
+    match service_config_json {
+        Some(json) => {
+            // 先验证 JSON 格式，避免写入损坏的配置
+            let _: server::ServerUploadConfig = serde_json::from_str(&json)
+                .map_err(|e| AppError::config(format!("CLI 配置格式无效: {}", e)))?;
+
+            std::fs::write(&config_path, &json)
+                .map_err(|e| AppError::file_io(format!("写入 cli-config.json 失败: {}", e)))?;
+
+            log::info!("[CLI Config] ✓ cli-config.json 已更新: {}", config_path.display());
+        }
+        None => {
+            if config_path.exists() {
+                std::fs::remove_file(&config_path)
+                    .map_err(|e| AppError::file_io(format!("删除 cli-config.json 失败: {}", e)))?;
+            }
+            log::info!("[CLI Config] cli-config.json 已删除");
+        }
+    }
+
+    Ok(())
+}
+
+/// 更新编辑器兼容 Server 配置（由前端调用）
+///
+/// - enabled: 是否启动 Server
+/// - port: 监听端口（默认 36799）
+/// - service_config_json: Server 专用图床配置的 JSON 字符串（ServerUploadConfig 枚举）
+///   格式示例: {"type":"jd"} | {"type":"github","token":"...","owner":"...","repo":"...","branch":"main","path":"images/"}
+///   传 null 时清空配置（Server 收到请求会提示未配置图床）
+#[tauri::command]
+async fn update_server_config(
+    state: tauri::State<'_, ServerState>,
+    enabled: bool,
+    port: u16,
+    service_config_json: Option<String>,
+) -> Result<String, AppError> {
+    // 1. 更新图床配置
+    {
+        let mut config = state.upload_config.lock().await;
+        if let Some(ref json) = service_config_json {
+            match serde_json::from_str::<server::ServerUploadConfig>(json) {
+                Ok(parsed) => {
+                    *config = Some(parsed);
+                    log::info!("[Server] 图床配置已更新");
+                }
+                Err(e) => {
+                    return Err(AppError::config(format!("Server 配置解析失败: {}", e)));
+                }
+            }
+        } else {
+            *config = None;
+        }
+    }
+
+    // 2. 停止当前运行的 Server（如有），等待端口释放
+    {
+        let abort_handle = {
+            let mut handle = state.abort_handle.lock()
+                .map_err(|_| AppError::external("锁定 abort_handle 失败"))?;
+            handle.take()
+        };
+        if let Some(h) = abort_handle {
+            h.abort();
+            log::info!("[Server] 旧 Server 已停止");
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        }
+    }
+
+    // 3. 如果 enabled，启动新 Server
+    if enabled {
+        let config_arc = Arc::clone(&state.upload_config);
+        let task = tokio::task::spawn(async move {
+            if let Err(e) = server::start_server(port, config_arc).await {
+                log::error!("[Server] 启动失败: {}", e);
+            }
+        });
+
+        let mut handle = state.abort_handle.lock()
+            .map_err(|_| AppError::external("锁定 abort_handle 失败"))?;
+        *handle = Some(task.abort_handle());
+
+        log::info!("[Server] 编辑器兼容 Server 已启动，端口: {}", port);
+        Ok(format!("Server 已在端口 {} 启动", port))
+    } else {
+        log::info!("[Server] 编辑器兼容 Server 已停止");
+        Ok("Server 已停止".to_string())
+    }
 }
 
