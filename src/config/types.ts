@@ -483,23 +483,81 @@ export interface LinkOutputConfig {
 }
 
 /**
+ * 编辑器兼容 Server 支持的图床类型（简化子集）
+ * 与 Rust 侧 ServerUploadConfig 枚举保持一致（serde tag = "type"）
+ */
+export type ServerServiceType = ServiceType;
+
+/**
+ * 编辑器兼容 Server 配置
+ * 独立于主界面的多服务选择，为 Typora/Obsidian 提供专用图床
+ */
+export interface EditorServerConfig {
+  /** 是否启用 HTTP Server（Obsidian 集成） */
+  enabled: boolean;
+  /** 是否启用 Typora 集成 */
+  typoraEnabled: boolean;
+  /** 监听端口（默认 36799，避免与 PicGo/PicList 36677 冲突） */
+  port: number;
+  /** Typora 专用图床（null = 未配置） */
+  typoraService: ServerServiceType | null;
+  /** Obsidian 专用图床（null = 未配置） */
+  obsidianService: ServerServiceType | null;
+}
+
+/** 压缩输出格式 */
+export type CompressionOutputFormat = 'original' | 'webp' | 'jpeg';
+
+/** 单个压缩预设方案 */
+export interface CompressionPreset {
+  /** 预设唯一 ID */
+  id: string;
+  /** 预设名称 */
+  name: string;
+  /** 压缩质量 1-100 */
+  quality: number;
+  /** 输出格式 */
+  outputFormat: CompressionOutputFormat;
+  /** 最长边限制（像素），0 = 不限制 */
+  maxLongSide: number;
+  /** 等比缩放百分比，100 = 不缩放，1-99 = 按比例缩小 */
+  scalePercent: number;
+  /** 跳过小于此值（KB）的文件，0 = 全部压缩 */
+  skipIfSmallerKB: number;
+  /** 去除 EXIF 元数据 */
+  stripExif: boolean;
+}
+
+/** 默认压缩预设 */
+export const DEFAULT_COMPRESSION_PRESET: CompressionPreset = {
+  id: 'default',
+  name: '默认',
+  quality: 80,
+  outputFormat: 'original',
+  maxLongSide: 0,
+  scalePercent: 100,
+  skipIfSmallerKB: 200,
+  stripExif: true,
+};
+
+/**
+ * 图片压缩配置（支持多预设方案）
+ * 控制上传前的图片预处理行为
+ */
+export interface ImageCompressionConfig {
+  /** 是否启用压缩 */
+  enabled: boolean;
+  /** 当前激活的预设 ID */
+  activePresetId: string;
+  /** 所有预设方案 */
+  presets: CompressionPreset[];
+}
+
+/**
  * 用户配置（新架构）
  * 支持多图床并行上传
  */
-/**
- * 当前配置版本号
- * 每次配置格式变更时递增此版本号
- * 迁移函数将根据此版本号决定是否需要执行迁移
- */
-export const CONFIG_VERSION = 13;
-
 export interface UserConfig {
-  /**
-   * 配置版本号
-   * 用于追踪配置格式变化，支持增量迁移
-   */
-  configVersion?: number;
-
   /** 用户启用的图床服务列表（上传窗口勾选的图床） */
   enabledServices: ServiceType[];
 
@@ -566,6 +624,12 @@ export interface UserConfig {
 
   /** 是否已完成首次使用引导 */
   onboardingCompleted?: boolean;
+
+  /** 图片压缩配置 */
+  imageCompression?: ImageCompressionConfig;
+
+  /** 编辑器兼容 Server（Typora/Obsidian 集成） */
+  editorServer?: EditorServerConfig;
 }
 
 /**
@@ -643,6 +707,9 @@ export interface HistoryItem {
 
   /** 图片格式（jpg, png, webp, gif, bmp 等） */
   format?: string;
+
+  /** 是否已收藏 */
+  isFavorited?: boolean;
 }
 
 /**
@@ -787,7 +854,19 @@ export const DEFAULT_CONFIG: UserConfig = {
   autoUpdate: {
     enabled: true,
   },
-  onboardingCompleted: false
+  onboardingCompleted: false,
+  editorServer: {
+    enabled: false,
+    typoraEnabled: false,
+    port: 36799,
+    typoraService: null,
+    obsidianService: null,
+  },
+  imageCompression: {
+    enabled: false,
+    activePresetId: 'default',
+    presets: [{ ...DEFAULT_COMPRESSION_PRESET }],
+  }
 };
 
 /**
@@ -939,245 +1018,6 @@ export function getActivePrefix(config: UserConfig): string | null {
 
   // 索引无效，返回第一个
   return prefixList[0];
-}
-
-/**
- * 迁移旧配置到新格式
- * 将单个 baiduPrefix 迁移为 linkPrefixConfig
- *
- * @param config 用户配置（可能是旧格式）
- * @returns 迁移后的配置
- */
-/**
- * 配置迁移函数
- *
- * 根据配置版本号执行增量迁移，确保旧版本配置能正确升级到新版本。
- * 每次配置格式变更时：
- * 1. 递增 CONFIG_VERSION
- * 2. 在此函数中添加对应版本的迁移逻辑
- *
- * @param config 可能来自旧版本的用户配置
- * @returns 迁移后的配置（版本号为最新）
- */
-function cloneConfigForMigration(config: UserConfig): UserConfig {
-  try {
-    return structuredClone(config);
-  } catch {
-    try {
-      return JSON.parse(JSON.stringify(config)) as UserConfig;
-    } catch {
-      return JSON.parse(JSON.stringify(DEFAULT_CONFIG)) as UserConfig;
-    }
-  }
-}
-
-export function migrateConfig(config: UserConfig): UserConfig {
-  let migratedConfig: UserConfig = cloneConfigForMigration(config);
-  const currentVersion = migratedConfig.configVersion || 0;
-
-  if (currentVersion >= CONFIG_VERSION) {
-    return migratedConfig;
-  }
-
-  console.log(`[配置迁移] 开始迁移: v${currentVersion} → v${CONFIG_VERSION}`);
-
-  /** 执行单个迁移步骤，失败时抛出异常中断后续步骤 */
-  const runStep = (targetVersion: number, desc: string, fn: () => void) => {
-    if (currentVersion >= targetVersion) return;
-    fn();
-    console.log(`[配置迁移] v${targetVersion - 1} → v${targetVersion}: ${desc}`);
-  };
-
-  // 版本 0 -> 1：将 baiduPrefix 迁移为 linkPrefixConfig
-  runStep(1, 'linkPrefixConfig', () => {
-    if (!migratedConfig.linkPrefixConfig) {
-      const prefixList = [...DEFAULT_PREFIXES];
-      let selectedIndex = 0;
-
-      if (migratedConfig.baiduPrefix) {
-        const existingIndex = prefixList.indexOf(migratedConfig.baiduPrefix);
-        if (existingIndex >= 0) {
-          selectedIndex = existingIndex;
-        } else {
-          prefixList.push(migratedConfig.baiduPrefix);
-          selectedIndex = prefixList.length - 1;
-        }
-      }
-
-      migratedConfig = {
-        ...migratedConfig,
-        linkPrefixConfig: {
-          enabled: true,
-          selectedIndex,
-          prefixList
-        }
-      };
-    }
-  });
-
-  // 版本 1 -> 2：新增 7 个图床的默认配置
-  runStep(2, '新增 7 个图床', () => {
-    const newServices = {
-      smms: migratedConfig.services?.smms || { enabled: false, token: '' },
-      github: migratedConfig.services?.github || {
-        enabled: false,
-        token: '',
-        owner: '',
-        repo: '',
-        branch: 'main',
-        path: 'images/'
-      },
-      imgur: migratedConfig.services?.imgur || {
-        enabled: false,
-        clientId: '',
-        clientSecret: ''
-      },
-      tencent: migratedConfig.services?.tencent || {
-        enabled: false,
-        secretId: '',
-        secretKey: '',
-        region: '',
-        bucket: '',
-        path: 'images/',
-        publicDomain: ''
-      },
-      aliyun: migratedConfig.services?.aliyun || {
-        enabled: false,
-        accessKeyId: '',
-        accessKeySecret: '',
-        region: '',
-        bucket: '',
-        path: 'images/',
-        publicDomain: ''
-      },
-      qiniu: migratedConfig.services?.qiniu || {
-        enabled: false,
-        accessKey: '',
-        secretKey: '',
-        region: '',
-        bucket: '',
-        publicDomain: '',
-        path: 'images/'
-      },
-      upyun: migratedConfig.services?.upyun || {
-        enabled: false,
-        operator: '',
-        password: '',
-        bucket: '',
-        publicDomain: '',
-        path: 'images/'
-      }
-    };
-
-    migratedConfig = {
-      ...migratedConfig,
-      services: {
-        ...migratedConfig.services,
-        ...newServices
-      },
-      // 使用 Set 去重，避免已存在的服务重复添加
-      availableServices: [...new Set([
-        ...(migratedConfig.availableServices || ['weibo', 'r2', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami', 'bilibili', 'chaoxing']),
-        'smms', 'github', 'imgur', 'tencent', 'aliyun', 'qiniu', 'upyun'
-      ] as ServiceType[])]
-    };
-
-  });
-
-  // 版本 2 -> 3：（已废弃）
-  runStep(3, '已废弃', () => {});
-
-  // 版本 3 -> 4：移除自动同步功能
-  runStep(4, '移除自动同步', () => {
-    delete (migratedConfig as any).autoSync;
-  });
-
-  // 版本 4 -> 5：（已废弃）
-  runStep(5, '已废弃', () => {});
-
-  // 版本 5 -> 6：新增应用行为配置
-  runStep(6, '新增应用行为配置', () => {
-    if (!migratedConfig.appBehavior) {
-      migratedConfig.appBehavior = { autoStart: false, minimizeToTrayOnStart: false, closeToTray: true };
-    }
-  });
-
-  // 版本 6 -> 7：重命名 outputFormat 为 weiboProxyMode，新增 linkOutput
-  runStep(7, '重命名 outputFormat，新增 linkOutput', () => {
-    const raw = migratedConfig as unknown as Record<string, unknown>;
-    if ('outputFormat' in raw) {
-      migratedConfig.weiboProxyMode = raw.outputFormat as WeiboProxyMode;
-      delete raw.outputFormat;
-    }
-    if (!migratedConfig.linkOutput) {
-      migratedConfig.linkOutput = {
-        defaultFormat: 'url',
-        customTemplate: '{url}',
-        autoCopy: true,
-      };
-    }
-  });
-
-  // 版本 7 -> 8：新增首次使用引导标志
-  runStep(8, '新增引导标志', () => {
-    if (migratedConfig.onboardingCompleted === undefined) {
-      migratedConfig.onboardingCompleted = true;
-    }
-  });
-
-  // 版本 8 -> 9：新增全局快捷键配置
-  runStep(9, '新增全局快捷键', () => {
-    if (!migratedConfig.globalShortcut) {
-      migratedConfig.globalShortcut = {
-        enabled: true,
-        uploadClipboard: 'CommandOrControl+Shift+C',
-        uploadFromFile: 'CommandOrControl+Shift+O',
-      };
-    }
-  });
-
-  // 版本 9 -> 10：新增自动更新配置
-  runStep(10, '新增自动更新配置', () => {
-    if (!migratedConfig.autoUpdate) {
-      migratedConfig.autoUpdate = { enabled: true };
-    }
-  });
-
-  // 版本 10 -> 11：新增关闭按钮行为配置
-  runStep(11, '新增关闭按钮行为配置', () => {
-    if (migratedConfig.appBehavior && migratedConfig.appBehavior.closeToTray === undefined) {
-      migratedConfig.appBehavior.closeToTray = true;
-    }
-  });
-
-  // 版本 11 -> 12：GitHub 前缀代理改为 jsDelivr CDN 模式
-  runStep(12, 'GitHub 代理改为 CDN 模式', () => {
-    const github = migratedConfig.services?.github as any;
-    if (github) {
-      delete github.proxyConfig;
-      github.cdnConfig = {
-        enabled: false,
-        selectedIndex: 0,
-        cdnList: [...DEFAULT_GITHUB_CDN_LIST]
-      };
-    }
-  });
-
-  // 版本 12 -> 13：GitHub CDN 增加模板字段
-  runStep(13, 'GitHub CDN 增加模板字段', () => {
-    const github = migratedConfig.services?.github as any;
-    if (github?.cdnConfig?.cdnList) {
-      github.cdnConfig.cdnList = github.cdnConfig.cdnList.map((cdn: any) => ({
-        ...cdn,
-        template: cdn.template || DEFAULT_CDN_TEMPLATE
-      }));
-    }
-  });
-
-  migratedConfig.configVersion = CONFIG_VERSION;
-  console.log(`[配置迁移] 全部完成: v${currentVersion} → v${CONFIG_VERSION}`);
-
-  return migratedConfig;
 }
 
 /**

@@ -158,6 +158,22 @@ export const TOAST_MESSAGES = {
     })
   },
 
+  // === URL 下载 ===
+  urlDownload: {
+    invalidUrl: {
+      summary: '无效 URL',
+      detail: '请输入有效的图片链接（以 http:// 或 https:// 开头）'
+    } as StaticMessage,
+    downloadFailed: (error: string): ToastMessageConfig => ({
+      summary: 'URL 下载失败',
+      detail: error
+    }),
+    partialFailed: (success: number, failed: number): ToastMessageConfig => ({
+      summary: '部分下载失败',
+      detail: `成功下载 ${success} 个，失败 ${failed} 个，已上传成功的部分`
+    }),
+  },
+
   // === 同步相关 ===
   sync: {
     uploadSuccess: (type: 'config' | 'history', count?: number): ToastMessageConfig => ({

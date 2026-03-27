@@ -55,6 +55,32 @@ export interface TimePeriodStats {
   maxTimestamp: number;
 }
 
+// ============================================
+// 同步日志类型
+// ============================================
+
+export type SyncLogOperation =
+  | 'export_settings_local'
+  | 'import_settings_local'
+  | 'export_history_local'
+  | 'import_history_local'
+  | 'upload_settings_cloud'
+  | 'download_settings_cloud'
+  | 'sync_settings'
+  | 'upload_history_cloud'
+  | 'download_history_cloud'
+  | 'sync_history';
+
+export interface SyncLogEntry {
+  id: string;
+  timestamp: number;
+  operation: SyncLogOperation;
+  result: 'success' | 'failed';
+  details?: string;
+  profileId?: string;
+  profileName?: string;
+}
+
 /** 数据库行类型（与 SQL 表结构对应） */
 interface HistoryItemRow {
   id: string;
@@ -75,6 +101,27 @@ interface HistoryItemRow {
   format: string;
   color_type: string;
   has_alpha: number; // SQLite 没有 boolean，使用 0/1
+  is_favorited: number; // 0/1
+}
+
+/** 所有列名（INSERT/UPDATE 统一使用，新增列只需改这里） */
+const ALL_COLUMNS = [
+  'id', 'timestamp', 'local_file_name', 'local_file_name_lower', 'file_path',
+  'primary_service', 'results', 'generated_link', 'link_check_status', 'link_check_summary',
+  'width', 'height', 'aspect_ratio', 'file_size', 'format', 'color_type', 'has_alpha', 'is_favorited',
+] as const;
+
+const COLUMNS_SQL = ALL_COLUMNS.join(', ');
+const COLUMN_COUNT = ALL_COLUMNS.length;
+
+/** 从 row 对象按 ALL_COLUMNS 顺序提取值数组 */
+function rowValues(row: HistoryItemRow): unknown[] {
+  return ALL_COLUMNS.map(col => row[col]);
+}
+
+/** 生成 $1, $2, ..., $N 占位符，offset 为起始编号 */
+function columnPlaceholders(offset = 1): string {
+  return ALL_COLUMNS.map((_, i) => `$${offset + i}`).join(', ');
 }
 
 /**
@@ -154,6 +201,25 @@ class HistoryDatabase {
         CREATE INDEX IF NOT EXISTS idx_file_path ON history_items(file_path)
       `);
 
+      // 创建同步日志表
+      await this.db.execute(`
+        CREATE TABLE IF NOT EXISTS sync_log (
+          id TEXT PRIMARY KEY,
+          timestamp INTEGER NOT NULL,
+          operation TEXT NOT NULL,
+          result TEXT NOT NULL,
+          details TEXT,
+          profile_id TEXT,
+          profile_name TEXT
+        )
+      `);
+      await this.db.execute(`
+        CREATE INDEX IF NOT EXISTS idx_sync_log_timestamp ON sync_log(timestamp DESC)
+      `);
+
+      // 迁移：添加收藏字段（幂等操作，已存在则忽略）
+      await this.migrateAddFavoriteColumn();
+
       this.initialized = true;
       log.debug('数据库初始化完成');
     } catch (error) {
@@ -187,6 +253,77 @@ class HistoryDatabase {
     return this.db!;
   }
 
+  /**
+   * 迁移：添加 is_favorited 列（幂等）
+   */
+  private async migrateAddFavoriteColumn(): Promise<void> {
+    try {
+      // 检查列是否已存在
+      const rows = await this.db!.select<{ name: string }[]>(
+        `PRAGMA table_info(history_items)`
+      );
+      const hasColumn = rows.some(r => r.name === 'is_favorited');
+      if (hasColumn) return;
+
+      await this.db!.execute(
+        `ALTER TABLE history_items ADD COLUMN is_favorited INTEGER NOT NULL DEFAULT 0`
+      );
+      await this.db!.execute(
+        `CREATE INDEX IF NOT EXISTS idx_favorited ON history_items(is_favorited, timestamp DESC)`
+      );
+      log.info('迁移完成：添加 is_favorited 列');
+    } catch (error) {
+      log.error('迁移 is_favorited 列失败:', error);
+      throw error;
+    }
+  }
+
+  // ============================================
+  // 收藏操作
+  // ============================================
+
+  /**
+   * 设置收藏状态（单次 IPC，无需回读）
+   */
+  async setFavorite(id: string, favorited: boolean): Promise<void> {
+    const db = await this.ensureInitialized();
+    await db.execute(
+      `UPDATE history_items SET is_favorited = $1 WHERE id = $2`,
+      [favorited ? 1 : 0, id]
+    );
+    log.debug(`设置收藏: ${id} → ${favorited}`);
+  }
+
+  /**
+   * 批量设置收藏状态
+   */
+  async batchSetFavorite(ids: string[], favorited: boolean): Promise<void> {
+    if (ids.length === 0) return;
+    const db = await this.ensureInitialized();
+    const BATCH_SIZE = 500;
+
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      const batch = ids.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map((_, j) => `$${j + 2}`).join(',');
+      await db.execute(
+        `UPDATE history_items SET is_favorited = $1 WHERE id IN (${placeholders})`,
+        [favorited ? 1 : 0, ...batch]
+      );
+    }
+    log.info(`批量${favorited ? '收藏' : '取消收藏'} ${ids.length} 条记录`);
+  }
+
+  /**
+   * 获取收藏总数
+   */
+  async getFavoriteCount(): Promise<number> {
+    const db = await this.ensureInitialized();
+    const result = await db.select<{ count: number }[]>(
+      `SELECT COUNT(*) as count FROM history_items WHERE is_favorited = 1`
+    );
+    return result[0]?.count || 0;
+  }
+
   // ============================================
   // CRUD 操作
   // ============================================
@@ -199,30 +336,8 @@ class HistoryDatabase {
 
     const row = this.itemToRow(item);
     await db.execute(
-      `INSERT INTO history_items (
-        id, timestamp, local_file_name, local_file_name_lower, file_path,
-        primary_service, results, generated_link, link_check_status, link_check_summary,
-        width, height, aspect_ratio, file_size, format, color_type, has_alpha
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
-      [
-        row.id,
-        row.timestamp,
-        row.local_file_name,
-        row.local_file_name_lower,
-        row.file_path,
-        row.primary_service,
-        row.results,
-        row.generated_link,
-        row.link_check_status,
-        row.link_check_summary,
-        row.width,
-        row.height,
-        row.aspect_ratio,
-        row.file_size,
-        row.format,
-        row.color_type,
-        row.has_alpha,
-      ]
+      `INSERT INTO history_items (${COLUMNS_SQL}) VALUES (${columnPlaceholders()})`,
+      rowValues(row)
     );
     log.debug(`插入记录: ${item.id}`);
   }
@@ -237,30 +352,8 @@ class HistoryDatabase {
 
     const row = this.itemToRow(item);
     const result = await db.execute(
-      `INSERT OR IGNORE INTO history_items (
-        id, timestamp, local_file_name, local_file_name_lower, file_path,
-        primary_service, results, generated_link, link_check_status, link_check_summary,
-        width, height, aspect_ratio, file_size, format, color_type, has_alpha
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
-      [
-        row.id,
-        row.timestamp,
-        row.local_file_name,
-        row.local_file_name_lower,
-        row.file_path,
-        row.primary_service,
-        row.results,
-        row.generated_link,
-        row.link_check_status,
-        row.link_check_summary,
-        row.width,
-        row.height,
-        row.aspect_ratio,
-        row.file_size,
-        row.format,
-        row.color_type,
-        row.has_alpha,
-      ]
+      `INSERT OR IGNORE INTO history_items (${COLUMNS_SQL}) VALUES (${columnPlaceholders()})`,
+      rowValues(row)
     );
 
     const inserted = result.rowsAffected > 0;
@@ -288,31 +381,14 @@ class HistoryDatabase {
     const updated: HistoryItem = { ...existing, ...updates };
     const row = this.itemToRow(updated);
 
+    // UPDATE: 跳过 id 列（第 0 个），用剩余列生成 SET 子句
+    const updateCols = ALL_COLUMNS.slice(1);
+    const setClause = updateCols.map((col, i) => `${col} = $${i + 1}`).join(', ');
+    const updateValues = updateCols.map(col => row[col]);
+
     await db.execute(
-      `UPDATE history_items SET
-        timestamp = $1, local_file_name = $2, local_file_name_lower = $3, file_path = $4,
-        primary_service = $5, results = $6, generated_link = $7, link_check_status = $8, link_check_summary = $9,
-        width = $10, height = $11, aspect_ratio = $12, file_size = $13, format = $14, color_type = $15, has_alpha = $16
-      WHERE id = $17`,
-      [
-        row.timestamp,
-        row.local_file_name,
-        row.local_file_name_lower,
-        row.file_path,
-        row.primary_service,
-        row.results,
-        row.generated_link,
-        row.link_check_status,
-        row.link_check_summary,
-        row.width,
-        row.height,
-        row.aspect_ratio,
-        row.file_size,
-        row.format,
-        row.color_type,
-        row.has_alpha,
-        id,
-      ]
+      `UPDATE history_items SET ${setClause} WHERE id = $${updateCols.length + 1}`,
+      [...updateValues, id]
     );
     log.debug(`更新记录: ${id}`);
   }
@@ -325,30 +401,8 @@ class HistoryDatabase {
     const row = this.itemToRow(item);
 
     await db.execute(
-      `INSERT OR REPLACE INTO history_items (
-        id, timestamp, local_file_name, local_file_name_lower, file_path,
-        primary_service, results, generated_link, link_check_status, link_check_summary,
-        width, height, aspect_ratio, file_size, format, color_type, has_alpha
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
-      [
-        row.id,
-        row.timestamp,
-        row.local_file_name,
-        row.local_file_name_lower,
-        row.file_path,
-        row.primary_service,
-        row.results,
-        row.generated_link,
-        row.link_check_status,
-        row.link_check_summary,
-        row.width,
-        row.height,
-        row.aspect_ratio,
-        row.file_size,
-        row.format,
-        row.color_type,
-        row.has_alpha,
-      ]
+      `INSERT OR REPLACE INTO history_items (${COLUMNS_SQL}) VALUES (${columnPlaceholders()})`,
+      rowValues(row)
     );
   }
 
@@ -562,6 +616,7 @@ class HistoryDatabase {
       primary_service: string;
       generated_link: string;
       results: string;  // JSON 字符串
+      is_favorited: number;
     }[]>(`
       SELECT
         id,
@@ -570,7 +625,8 @@ class HistoryDatabase {
         aspect_ratio,
         primary_service,
         generated_link,
-        results
+        results,
+        is_favorited
       FROM history_items
       ORDER BY timestamp DESC
     `);
@@ -603,6 +659,7 @@ class HistoryDatabase {
         primaryService: row.primary_service as ServiceType,
         primaryUrl: row.generated_link,
         primaryFileKey,
+        isFavorited: row.is_favorited === 1,
       };
     });
   }
@@ -726,47 +783,19 @@ class HistoryDatabase {
 
     const db = await this.ensureInitialized();
 
-    // 构建批量插入的 SQL
     const values: unknown[] = [];
-    const placeholders: string[] = [];
+    const rowPlaceholders: string[] = [];
     let paramIndex = 1;
 
     for (const item of items) {
       const row = this.itemToRow(item);
-      // 生成占位符 ($1, $2, ..., $17)
-      const rowPlaceholders = [];
-      for (let j = 0; j < 17; j++) {
-        rowPlaceholders.push(`$${paramIndex++}`);
-      }
-      placeholders.push(`(${rowPlaceholders.join(', ')})`);
-
-      values.push(
-        row.id,
-        row.timestamp,
-        row.local_file_name,
-        row.local_file_name_lower,
-        row.file_path,
-        row.primary_service,
-        row.results,
-        row.generated_link,
-        row.link_check_status,
-        row.link_check_summary,
-        row.width,
-        row.height,
-        row.aspect_ratio,
-        row.file_size,
-        row.format,
-        row.color_type,
-        row.has_alpha
-      );
+      rowPlaceholders.push(`(${columnPlaceholders(paramIndex)})`);
+      paramIndex += COLUMN_COUNT;
+      values.push(...rowValues(row));
     }
 
     await db.execute(
-      `INSERT OR REPLACE INTO history_items (
-        id, timestamp, local_file_name, local_file_name_lower, file_path,
-        primary_service, results, generated_link, link_check_status, link_check_summary,
-        width, height, aspect_ratio, file_size, format, color_type, has_alpha
-      ) VALUES ${placeholders.join(', ')}`,
+      `INSERT OR REPLACE INTO history_items (${COLUMNS_SQL}) VALUES ${rowPlaceholders.join(', ')}`,
       values
     );
   }
@@ -905,7 +934,69 @@ class HistoryDatabase {
       // 废弃字段，使用默认值保持向后兼容
       color_type: 'unknown',
       has_alpha: 0,
+      is_favorited: item.isFavorited ? 1 : 0,
     };
+  }
+
+  // ============================================
+  // 同步日志
+  // ============================================
+
+  /**
+   * 写入一条同步操作日志，超出 20 条时自动删除最旧的
+   */
+  async addSyncLog(entry: SyncLogEntry): Promise<void> {
+    const db = await this.ensureInitialized();
+    await db.execute(
+      `INSERT INTO sync_log (id, timestamp, operation, result, details, profile_id, profile_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [entry.id, entry.timestamp, entry.operation, entry.result,
+       entry.details ?? null, entry.profileId ?? null, entry.profileName ?? null]
+    );
+    // 只保留最新 20 条
+    await db.execute(`
+      DELETE FROM sync_log
+      WHERE id NOT IN (
+        SELECT id FROM sync_log ORDER BY timestamp DESC LIMIT 20
+      )
+    `);
+  }
+
+  /**
+   * 读取同步日志，按时间倒序
+   */
+  async getSyncLogs(limit = 20): Promise<SyncLogEntry[]> {
+    const db = await this.ensureInitialized();
+    const rows = await db.select<{
+      id: string;
+      timestamp: number;
+      operation: string;
+      result: string;
+      details: string | null;
+      profile_id: string | null;
+      profile_name: string | null;
+    }[]>(
+      `SELECT id, timestamp, operation, result, details, profile_id, profile_name
+       FROM sync_log ORDER BY timestamp DESC LIMIT $1`,
+      [limit]
+    );
+    return rows.map(r => ({
+      id: r.id,
+      timestamp: r.timestamp,
+      operation: r.operation as SyncLogOperation,
+      result: r.result as 'success' | 'failed',
+      details: r.details ?? undefined,
+      profileId: r.profile_id ?? undefined,
+      profileName: r.profile_name ?? undefined,
+    }));
+  }
+
+  /**
+   * 清空所有同步日志
+   */
+  async clearSyncLogs(): Promise<void> {
+    const db = await this.ensureInitialized();
+    await db.execute(`DELETE FROM sync_log`);
   }
 
   /**
@@ -942,6 +1033,7 @@ class HistoryDatabase {
       aspectRatio: row.aspect_ratio,
       fileSize: row.file_size,
       format: row.format,
+      isFavorited: row.is_favorited === 1,
     };
   }
 }

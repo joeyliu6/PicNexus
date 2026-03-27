@@ -48,6 +48,9 @@ export interface ImageMeta {
    * 用于生成不同尺寸的缩略图
    */
   primaryFileKey?: string;
+
+  /** 是否已收藏 */
+  isFavorited?: boolean;
 }
 
 /**
@@ -67,5 +70,6 @@ export function extractMetaFromHistoryItem(item: any): ImageMeta {
     primaryService: item.primaryService,
     primaryUrl: primaryResult?.result?.url || item.generatedLink,
     primaryFileKey: primaryResult?.result?.fileKey,
+    isFavorited: item.isFavorited ?? false,
   };
 }
