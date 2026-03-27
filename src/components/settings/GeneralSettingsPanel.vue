@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import Button from 'primevue/button';
-import ToggleSwitch from 'primevue/toggleswitch';
 import InputText from 'primevue/inputtext';
+import ToggleSwitch from 'primevue/toggleswitch';
 import Divider from 'primevue/divider';
 import ShortcutInput from './ShortcutInput.vue';
 import type { ThemeMode } from '../../config/types';
@@ -82,6 +82,7 @@ function handleTemplateChange(template: string | undefined) {
   emit('update:linkCustomTemplate', template || '{url}');
   emit('save');
 }
+
 </script>
 
 <template>
@@ -237,6 +238,7 @@ function handleTemplateChange(template: string | undefined) {
       </div>
     </div>
 
+
     <Divider />
 
     <!-- 数据与隐私 -->
@@ -310,7 +312,7 @@ function handleTemplateChange(template: string | undefined) {
 
 .theme-card.active {
   border-color: var(--primary);
-  background-color: var(--primary-alpha-5);
+  background-color: var(--primary-alpha-8);
   color: var(--primary);
   font-weight: 600;
   box-shadow: 0 0 0 1px var(--primary);
@@ -323,50 +325,6 @@ function handleTemplateChange(template: string | undefined) {
   gap: 8px;
 }
 
-.toggle-group {
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--bg-card);
-}
-
-.toggle-group .toggle-row {
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.toggle-group .toggle-row:last-child {
-  border-bottom: none;
-}
-
-.toggle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-}
-
-.toggle-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.toggle-row-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.toggle-row-desc {
-  font-size: 12px;
-  color: var(--text-muted);
-}
 
 /* 快捷键配置（卡片内） */
 .shortcut-row-in-group {
@@ -427,7 +385,7 @@ function handleTemplateChange(template: string | undefined) {
 
 .format-card.active {
   border-color: var(--primary);
-  background-color: var(--primary-alpha-5);
+  background-color: var(--primary-alpha-8);
   color: var(--primary);
   font-weight: 600;
   box-shadow: 0 0 0 1px var(--primary);
@@ -459,4 +417,5 @@ function handleTemplateChange(template: string | undefined) {
   border-radius: 3px;
   color: var(--primary);
 }
+
 </style>

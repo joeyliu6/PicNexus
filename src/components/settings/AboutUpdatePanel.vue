@@ -16,7 +16,7 @@ interface Props {
   autoUpdateEnabled: boolean;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
 
 const emit = defineEmits<{
   'update:autoUpdateEnabled': [value: boolean];
@@ -56,6 +56,17 @@ watch(status, (val) => {
   }
 });
 
+const versionCopied = ref(false);
+async function copyVersion() {
+  try {
+    await navigator.clipboard.writeText(props.appVersion);
+    versionCopied.value = true;
+    setTimeout(() => { versionCopied.value = false; }, 2000);
+  } catch {
+    // 剪贴板权限被拒绝时静默失败
+  }
+}
+
 const lastCheckText = computed(() => {
   if (!lastCheckTime.value) return '';
   const diff = Date.now() - lastCheckTime.value;
@@ -91,7 +102,12 @@ async function openLogDir() {
         <img :src="appIconUrl" alt="PicNexus" class="app-info-icon" />
         <div class="app-info-content">
           <div class="app-name">PicNexus</div>
-          <div class="app-version">版本 {{ appVersion }}</div>
+          <div class="app-version">
+            版本 {{ appVersion }}
+            <button class="copy-version-btn" title="复制版本号" @click="copyVersion">
+              <i :class="versionCopied ? 'pi pi-check' : 'pi pi-copy'" />
+            </button>
+          </div>
           <div class="app-desc">多图床并行上传工具</div>
         </div>
       </div>
@@ -184,7 +200,10 @@ async function openLogDir() {
         <div v-else-if="status === 'error'" class="update-status">
           <div class="update-status-text">
             <i class="pi pi-times-circle update-icon error" />
-            <span>检查更新失败</span>
+            <div class="update-status-info">
+              <span>无法连接到更新服务器</span>
+              <span v-if="lastCheckText" class="last-check">上次检查：{{ lastCheckText }}</span>
+            </div>
           </div>
           <Button
             label="重试"
@@ -195,18 +214,17 @@ async function openLogDir() {
           />
         </div>
 
-        <!-- 分割线 + 自动更新开关 -->
-        <div class="update-card-divider" />
-        <div class="toggle-row">
-          <div class="toggle-info">
-            <span class="toggle-row-label">自动更新</span>
-            <span class="toggle-row-desc">启动时自动检测是否有新版本</span>
-          </div>
-          <ToggleSwitch
-            :modelValue="autoUpdateEnabled"
-            @update:modelValue="(v: boolean) => { emit('update:autoUpdateEnabled', v); emit('save'); }"
-          />
+      </div>
+
+      <div class="toggle-card">
+        <div class="toggle-info">
+          <span class="toggle-row-label">自动更新</span>
+          <span class="toggle-row-desc">启动时自动检测是否有新版本</span>
         </div>
+        <ToggleSwitch
+          :modelValue="autoUpdateEnabled"
+          @update:modelValue="(v: boolean) => { emit('update:autoUpdateEnabled', v); emit('save'); }"
+        />
       </div>
     </div>
 
@@ -344,9 +362,36 @@ async function openLogDir() {
 }
 
 .app-version {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 14px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
+}
+
+.copy-version-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color 0.15s, background 0.15s;
+}
+
+.copy-version-btn:hover {
+  color: var(--primary);
+  background: var(--primary-alpha-10);
+}
+
+.copy-version-btn i {
+  font-size: 12px;
 }
 
 .app-desc {
@@ -460,38 +505,32 @@ async function openLogDir() {
   margin-top: 12px;
 }
 
-/* 卡片内分割线 */
-.update-card-divider {
-  height: 1px;
-  background: var(--border-subtle);
-  margin: 16px 0;
-}
-
-/* 自动更新 toggle（卡片内部） */
-.update-card .toggle-row {
+/* 自动更新独立卡片 */
+.toggle-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 0;
-  background: none;
-  border: none;
-  border-radius: 0;
+  padding: 16px 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  margin-top: 12px;
 }
 
-.update-card .toggle-info {
+.toggle-info {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.update-card .toggle-row-label {
+.toggle-card .toggle-row-label {
   font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
 }
 
-.update-card .toggle-row-desc {
+.toggle-card .toggle-row-desc {
   font-size: 12px;
   color: var(--text-muted);
 }

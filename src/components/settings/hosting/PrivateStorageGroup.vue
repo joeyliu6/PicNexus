@@ -169,3 +169,7 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
     </HostingCard>
   </div>
 </template>
+
+<style scoped>
+@import '../../../styles/settings-shared.css';
+</style>

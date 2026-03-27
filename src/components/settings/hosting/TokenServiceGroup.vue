@@ -150,3 +150,7 @@ function isTokenConfigured(providerId: keyof TokenFormData): boolean {
     </HostingCard>
   </div>
 </template>
+
+<style scoped>
+@import '../../../styles/settings-shared.css';
+</style>

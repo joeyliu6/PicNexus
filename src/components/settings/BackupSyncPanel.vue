@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import Button from 'primevue/button';
+import Divider from 'primevue/divider';
 import { invoke } from '@tauri-apps/api/core';
 import { useConfirm } from 'primevue/useconfirm';
 import { useBackupSync } from '../../composables/useBackupSync';
@@ -12,6 +13,7 @@ import type { WebDAVConfig, UserConfig } from '../../config/types';
 import DataItemCard from './backup/DataItemCard.vue';
 import WebDAVConfigCollapsible from './backup/WebDAVConfigCollapsible.vue';
 import BackupPasswordDialog from '../dialogs/BackupPasswordDialog.vue';
+import SyncHistoryLog from './backup/SyncHistoryLog.vue';
 
 interface Props {
   webdavConfig: WebDAVConfig;
@@ -55,6 +57,8 @@ const {
   downloadHistoryOverwrite,
   passwordRequest,
 } = useBackupSync();
+
+const syncHistoryLogRef = ref<InstanceType<typeof SyncHistoryLog> | null>(null);
 
 // 迁移密码状态
 const hasBackupPassword = ref(false);
@@ -123,28 +127,61 @@ onMounted(async () => {
   hasBackupPassword.value = secureStorage.isPasswordMode();
 });
 
-function handleConfigSync() {
-  if (activeWebDAVProfile.value) syncConfig(activeWebDAVProfile.value);
+async function handleConfigSync() {
+  if (activeWebDAVProfile.value) {
+    await syncConfig(activeWebDAVProfile.value);
+    syncHistoryLogRef.value?.refresh();
+  }
 }
 
-function handleHistorySync() {
-  if (activeWebDAVProfile.value) syncHistory(activeWebDAVProfile.value);
+async function handleHistorySync() {
+  if (activeWebDAVProfile.value) {
+    await syncHistory(activeWebDAVProfile.value);
+    syncHistoryLogRef.value?.refresh();
+  }
 }
 
-function handleConfigForceUpload() {
-  if (activeWebDAVProfile.value) uploadSettingsCloud(activeWebDAVProfile.value);
+async function handleConfigForceUpload() {
+  if (activeWebDAVProfile.value) {
+    await uploadSettingsCloud(activeWebDAVProfile.value);
+    syncHistoryLogRef.value?.refresh();
+  }
 }
 
-function handleConfigForceDownload() {
-  if (activeWebDAVProfile.value) downloadSettingsOverwrite(activeWebDAVProfile.value);
+async function handleConfigForceDownload() {
+  if (activeWebDAVProfile.value) {
+    await downloadSettingsOverwrite(activeWebDAVProfile.value);
+    syncHistoryLogRef.value?.refresh();
+  }
 }
 
-function handleHistoryForceUpload() {
-  if (activeWebDAVProfile.value) uploadHistoryForce(activeWebDAVProfile.value);
+async function handleHistoryForceUpload() {
+  if (activeWebDAVProfile.value) {
+    await uploadHistoryForce(activeWebDAVProfile.value);
+    syncHistoryLogRef.value?.refresh();
+  }
 }
 
-function handleHistoryForceDownload() {
-  if (activeWebDAVProfile.value) downloadHistoryOverwrite(activeWebDAVProfile.value);
+async function handleHistoryForceDownload() {
+  if (activeWebDAVProfile.value) {
+    await downloadHistoryOverwrite(activeWebDAVProfile.value);
+    syncHistoryLogRef.value?.refresh();
+  }
+}
+
+async function handleImportSettings() {
+  await importSettingsLocal();
+  syncHistoryLogRef.value?.refresh();
+}
+
+async function handleExportHistory() {
+  await exportHistoryLocal();
+  syncHistoryLogRef.value?.refresh();
+}
+
+async function handleImportHistory() {
+  await importHistoryLocal();
+  syncHistoryLogRef.value?.refresh();
 }
 
 // 导出前引导设置备份密码
@@ -156,12 +193,12 @@ function handleExportWithGuide() {
       icon: 'pi pi-shield',
       acceptLabel: '直接导出',
       rejectLabel: '先设置密码',
-      accept: () => exportSettingsLocal(),
+      accept: async () => { await exportSettingsLocal(); syncHistoryLogRef.value?.refresh(); },
       reject: () => openSetPasswordDialog(),
     });
     return;
   }
-  exportSettingsLocal();
+  exportSettingsLocal().then(() => syncHistoryLogRef.value?.refresh());
 }
 
 // 迁移密码操作
@@ -314,6 +351,8 @@ function handleClearPassword() {
       </div>
     </div>
 
+    <Divider />
+
     <!-- WebDAV 连接 -->
     <div class="form-group">
       <label class="group-label">WebDAV 连接</label>
@@ -324,6 +363,8 @@ function handleClearPassword() {
         @test="emit('testWebDAV')"
       />
     </div>
+
+    <Divider />
 
     <!-- 数据管理 -->
     <div class="form-group">
@@ -343,7 +384,7 @@ function handleClearPassword() {
           :local-loading="{ export: exportSettingsLoading, import: importSettingsLoading }"
           :cloud-loading="{ sync: syncConfigLoading, forceUpload: uploadSettingsLoading, forceDownload: downloadSettingsLoading }"
           @export-local="handleExportWithGuide"
-          @import-local="importSettingsLocal"
+          @import-local="handleImportSettings"
           @sync-cloud="handleConfigSync"
           @force-upload="handleConfigForceUpload"
           @force-download="handleConfigForceDownload"
@@ -363,12 +404,20 @@ function handleClearPassword() {
           :other-profiles="otherProfileRecords"
           :local-loading="{ export: exportHistoryLoading, import: importHistoryLoading }"
           :cloud-loading="{ sync: syncHistoryLoading, forceUpload: uploadHistoryLoading, forceDownload: downloadHistoryLoading }"
-          @export-local="exportHistoryLocal"
-          @import-local="importHistoryLocal"
+          @export-local="handleExportHistory"
+          @import-local="handleImportHistory"
           @sync-cloud="handleHistorySync"
           @force-upload="handleHistoryForceUpload"
           @force-download="handleHistoryForceDownload"
         />
+      </div>
+
+      <div class="data-section">
+        <div class="data-section-header">
+          <span class="data-section-title">操作历史</span>
+          <span class="data-section-desc">备份、导入导出等操作记录</span>
+        </div>
+        <SyncHistoryLog ref="syncHistoryLogRef" />
       </div>
 
     </div>

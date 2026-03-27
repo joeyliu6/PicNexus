@@ -57,3 +57,15 @@ const emit = defineEmits<{
     </HostingCard>
   </div>
 </template>
+
+<style scoped>
+.builtin-info {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.builtin-info p {
+  margin: 0;
+}
+</style>

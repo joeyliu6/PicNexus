@@ -105,3 +105,14 @@ const namiAuthToken = computed(() => {
     </HostingCard>
   </div>
 </template>
+
+<style scoped>
+@import '../../../styles/settings-shared.css';
+
+.cookie-field {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+</style>

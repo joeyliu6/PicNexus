@@ -24,11 +24,20 @@ import type { BatchTestProgress } from '../../types/batchTest';
 // 组件
 import HostingSettingsPanel from '../settings/HostingSettingsPanel.vue';
 import GeneralSettingsPanel from '../settings/GeneralSettingsPanel.vue';
+import AdvancedSettingsPanel from '../settings/AdvancedSettingsPanel.vue';
 import BackupSyncPanel from '../settings/BackupSyncPanel.vue';
 import AboutUpdatePanel from '../settings/AboutUpdatePanel.vue';
 
-import { configStore, syncStatusStore } from '../../store/instances';
-import type { ThemeMode, UserConfig, ServiceType, WebDAVProfile } from '../../config/types';
+import { configStore } from '../../store/instances';
+import type {
+  ThemeMode,
+  UserConfig,
+  ServiceType,
+  WebDAVProfile,
+  ImageCompressionConfig,
+  EditorServerConfig,
+  ServerServiceType,
+} from '../../config/types';
 import { DEFAULT_CONFIG, DEFAULT_PREFIXES } from '../../config/types';
 
 
@@ -46,7 +55,6 @@ const {
   isCheckingJd,
   checkQiyuAvailability,
   checkJdAvailable,
-  checkAllAvailabilityWithCooldown
 } = useServiceAvailability();
 
 const serviceHealth = useServiceHealth();
@@ -54,11 +62,13 @@ const { reopen: reopenOnboarding } = useOnboarding();
 
 
 const cookieUnlisten = ref<UnlistenFn | null>(null);
+const compressionSyncUnlisten = ref<UnlistenFn | null>(null);
 const appVersion = ref<string>('');
+const executablePath = ref<string>('');
 const isClearingCache = ref(false);
 
 // 导航状态
-type SettingsTab = 'general' | 'hosting' | 'backup' | 'about';
+type SettingsTab = 'general' | 'hosting' | 'advanced' | 'backup' | 'about';
 const activeTab = ref<SettingsTab>('general');
 
 // 接收来自 MainLayout 的 tab 跳转指令（不提供 fallback，确保拿到 provide 的同一个 ref）
@@ -66,7 +76,13 @@ const settingsTargetTab = inject<import('vue').Ref<string | null>>('settingsTarg
 
 const applyTargetTab = () => {
   if (settingsTargetTab?.value) {
-    const validTabs: SettingsTab[] = ['general', 'hosting', 'backup', 'about'];
+    const validTabs: SettingsTab[] = ['general', 'hosting', 'advanced', 'backup', 'about'];
+    // 兼容旧跳转：compression/editor 均跳转到 advanced
+    if (settingsTargetTab.value === 'compression' || settingsTargetTab.value === 'editor') {
+      activeTab.value = 'advanced';
+      settingsTargetTab.value = null;
+      return;
+    }
     if (validTabs.includes(settingsTargetTab.value as SettingsTab)) {
       activeTab.value = settingsTargetTab.value as SettingsTab;
     }
@@ -84,16 +100,7 @@ if (settingsTargetTab) {
   });
 }
 
-// 切换到图床设置 Tab 时，自动静默检测（带冷却）
 const isSettingsReady = ref(false);
-watch(activeTab, (tab) => {
-  if (!isSettingsReady.value) return;
-  if (tab === 'hosting' && !isBatchTesting.value) {
-    if (Date.now() - lastBatchCheckTime.value > AUTO_CHECK_COOLDOWN) {
-      testAllConfiguredServices();
-    }
-  }
-});
 
 interface NavItem {
   id: SettingsTab;
@@ -111,6 +118,7 @@ const navGroups: NavGroup[] = [
     items: [
       { id: 'general', label: '常规设置', icon: 'pi pi-cog' },
       { id: 'hosting', label: '图床设置', icon: 'pi pi-images' },
+      { id: 'advanced', label: '高级设置', icon: 'pi pi-sliders-h' },
       { id: 'backup', label: '备份与同步', icon: 'pi pi-database' },
       { id: 'about', label: '关于与更新', icon: 'pi pi-info-circle' },
     ]
@@ -150,7 +158,30 @@ const formData = ref({
     uploadFromFile: 'CommandOrControl+Shift+O',
   },
   autoUpdateEnabled: true,
+  imageCompression: { ...DEFAULT_CONFIG.imageCompression! } as ImageCompressionConfig,
+  editorServer: { ...DEFAULT_CONFIG.editorServer! } as EditorServerConfig,
 });
+
+type SaveFeedbackStatus = 'idle' | 'saving' | 'saved' | 'error';
+type EditorApplyStatus = 'idle' | 'applying' | 'applied' | 'error';
+
+interface SaveFeedbackState {
+  status: SaveFeedbackStatus;
+  message?: string;
+  updatedAt?: number;
+}
+
+interface EditorApplyFeedbackState {
+  status: EditorApplyStatus;
+  message?: string;
+  updatedAt?: number;
+}
+
+const advancedSaveState = ref<SaveFeedbackState>({ status: 'idle' });
+const editorApplyState = ref<EditorApplyFeedbackState>({ status: 'idle' });
+const lastAppliedEditorPayloadKey = ref<string | null>(null);
+let _advancedSavedResetTimer: ReturnType<typeof setTimeout> | null = null;
+let _debouncedEditorApplyTimer: ReturnType<typeof setTimeout> | null = null;
 
 // 测试连接状态
 const testingConnections = ref<Record<string, boolean>>({
@@ -164,9 +195,6 @@ const isBatchTesting = ref(false);
 const batchTestProgress = ref<BatchTestProgress | null>(null);
 const batchTestAborted = ref(false);
 const batchTestCompletionKey = ref(0);
-const lastBatchCheckTime = ref(0);
-const AUTO_CHECK_COOLDOWN = 12 * 60 * 60 * 1000;
-const LAST_CHECK_KEY = 'serviceHealthLastCheck';
 const MIN_DISPLAY_MS = 300;
 const COMPLETE_LINGER_MS = 500;
 
@@ -209,20 +237,54 @@ const serviceConfigStatus = computed<Record<ServiceType, boolean>>(() => {
   };
 });
 
+function setAdvancedSaveState(status: SaveFeedbackStatus, message?: string) {
+  advancedSaveState.value = { status, message, updatedAt: Date.now() };
+  if (_advancedSavedResetTimer) {
+    clearTimeout(_advancedSavedResetTimer);
+    _advancedSavedResetTimer = null;
+  }
+  if (status === 'saved') {
+    _advancedSavedResetTimer = setTimeout(() => {
+      if (advancedSaveState.value.status === 'saved') {
+        advancedSaveState.value = { status: 'idle' };
+      }
+      _advancedSavedResetTimer = null;
+    }, 1800);
+  }
+}
+
+function setEditorApplyState(status: EditorApplyStatus, message?: string) {
+  editorApplyState.value = { status, message, updatedAt: Date.now() };
+}
+
 // 防抖版保存：用于 blur/watch 触发的自动保存，500ms 内多次触发合并为一次
 let _debouncedSaveTimer: ReturnType<typeof setTimeout> | null = null;
-function debouncedSaveSettings() {
+let _pendingSaveTrackStatus = false;
+function scheduleSave(trackAdvancedStatus = false) {
+  _pendingSaveTrackStatus = _pendingSaveTrackStatus || trackAdvancedStatus;
   if (_debouncedSaveTimer !== null) clearTimeout(_debouncedSaveTimer);
   _debouncedSaveTimer = setTimeout(() => {
     _debouncedSaveTimer = null;
-    saveSettings();
+    const trackStatus = _pendingSaveTrackStatus;
+    _pendingSaveTrackStatus = false;
+    void saveSettings({ trackAdvancedStatus: trackStatus });
   }, 500);
 }
+
+function debouncedSaveSettings() {
+  scheduleSave(false);
+}
+
+function debouncedSaveSettingsWithStatus() {
+  scheduleSave(true);
+}
+
 function cancelDebouncedSave() {
   if (_debouncedSaveTimer !== null) {
     clearTimeout(_debouncedSaveTimer);
     _debouncedSaveTimer = null;
   }
+  _pendingSaveTrackStatus = false;
 }
 
 watch(serviceConfigStatus, (newStatus, oldStatus) => {
@@ -245,7 +307,6 @@ watch(serviceConfigStatus, (newStatus, oldStatus) => {
   }
   if (changed) debouncedSaveSettings();
 });
-
 
 async function loadSettings() {
   try {
@@ -302,6 +363,8 @@ async function loadSettings() {
       formData.value.appBehavior.closeToTray = true;
     }
     formData.value.autoUpdateEnabled = config.autoUpdate?.enabled ?? true;
+    formData.value.imageCompression = config.imageCompression ?? { ...DEFAULT_CONFIG.imageCompression! };
+    formData.value.editorServer = { ...DEFAULT_CONFIG.editorServer!, ...(config.editorServer ?? {}) };
     formData.value.globalShortcut = config.globalShortcut ?? {
       enabled: true,
       uploadClipboard: 'CommandOrControl+Shift+C',
@@ -324,7 +387,12 @@ async function loadSettings() {
   }
 }
 
-async function saveSettings() {
+async function saveSettings(options: { trackAdvancedStatus?: boolean } = {}): Promise<boolean> {
+  const { trackAdvancedStatus = false } = options;
+  if (trackAdvancedStatus) {
+    setAdvancedSaveState('saving', '保存中…');
+  }
+
   try {
     const config = await configStore.get<UserConfig>('config') || { ...DEFAULT_CONFIG };
 
@@ -381,13 +449,24 @@ async function saveSettings() {
     config.appBehavior = { ...formData.value.appBehavior };
     config.globalShortcut = { ...formData.value.globalShortcut };
     config.autoUpdate = { enabled: formData.value.autoUpdateEnabled };
+    config.imageCompression = { ...formData.value.imageCompression };
+    config.editorServer = { ...formData.value.editorServer };
     config.availableServices = [...availableServices.value];
 
     await configManager.saveConfig(config, true);
     serviceHealth.evaluateConfig(config);
+
+    if (trackAdvancedStatus) {
+      setAdvancedSaveState('saved', '已保存');
+    }
+    return true;
   } catch (e) {
     console.error('[设置] 保存失败:', e);
     toast.showConfig('error', TOAST_MESSAGES.config.saveFailed(String(e)));
+    if (trackAdvancedStatus) {
+      setAdvancedSaveState('error', `保存失败：${errorToString(e)}`);
+    }
+    return false;
   }
 }
 
@@ -647,8 +726,6 @@ async function testAllConfiguredServices() {
     isBatchTesting.value = false;
     batchTestProgress.value = null;
     batchTestCompletionKey.value++;
-    lastBatchCheckTime.value = Date.now();
-    syncStatusStore.set(LAST_CHECK_KEY, lastBatchCheckTime.value);
   }
 }
 
@@ -736,6 +813,174 @@ async function handleClearAppCache() {
   }
 }
 
+function buildServiceConfigJson(service: ServerServiceType | null): string | null {
+  if (!service) return null;
+
+  const svc = service;
+  const fd = formData.value;
+
+  switch (svc) {
+    case 'jd':
+      return JSON.stringify({ type: 'jd' });
+    case 'qiyu':
+      return JSON.stringify({ type: 'qiyu' });
+    case 'github':
+      return JSON.stringify({ type: 'github', token: fd.github.token, owner: fd.github.owner, repo: fd.github.repo, branch: fd.github.branch, path: fd.github.path });
+    case 'smms':
+      return JSON.stringify({ type: 'smms', token: fd.smms.token });
+    case 'imgur':
+      return JSON.stringify({ type: 'imgur', clientId: fd.imgur.clientId });
+    case 'weibo':
+      return JSON.stringify({ type: 'weibo', cookie: fd.weiboCookie });
+    case 'bilibili':
+      return JSON.stringify({ type: 'bilibili', cookie: fd.bilibili.cookie });
+    case 'nowcoder':
+      return JSON.stringify({ type: 'nowcoder', cookie: fd.nowcoder.cookie });
+    case 'chaoxing':
+      return JSON.stringify({ type: 'chaoxing', cookie: fd.chaoxing.cookie });
+    case 'zhihu':
+      return JSON.stringify({ type: 'zhihu', cookie: fd.zhihu.cookie });
+    case 'nami': {
+      const cookie = fd.nami.cookie;
+      const tokenMatch = cookie.match(/token=([^;]+)/);
+      const authToken = fd.nami.authToken || (tokenMatch ? tokenMatch[1] : '');
+      return JSON.stringify({ type: 'nami', cookie, authToken });
+    }
+    case 'r2':
+      return JSON.stringify({ type: 'r2', accountId: fd.r2.accountId, accessKeyId: fd.r2.accessKeyId, secretAccessKey: fd.r2.secretAccessKey, bucketName: fd.r2.bucketName, path: fd.r2.path, publicDomain: fd.r2.publicDomain });
+    case 'tencent':
+      return JSON.stringify({ type: 'tencent', secretId: fd.tencent.secretId, secretKey: fd.tencent.secretKey, region: fd.tencent.region, bucket: fd.tencent.bucket, path: fd.tencent.path, publicDomain: fd.tencent.publicDomain });
+    case 'aliyun':
+      return JSON.stringify({ type: 'aliyun', accessKeyId: fd.aliyun.accessKeyId, accessKeySecret: fd.aliyun.accessKeySecret, region: fd.aliyun.region, bucket: fd.aliyun.bucket, path: fd.aliyun.path, publicDomain: fd.aliyun.publicDomain });
+    case 'qiniu':
+      // 前端字段 publicDomain → Rust 侧 custom_domain（JSON: customDomain）
+      return JSON.stringify({ type: 'qiniu', accessKey: fd.qiniu.accessKey, secretKey: fd.qiniu.secretKey, region: fd.qiniu.region, bucket: fd.qiniu.bucket, customDomain: fd.qiniu.publicDomain, path: fd.qiniu.path });
+    case 'upyun':
+      return JSON.stringify({ type: 'upyun', operator: fd.upyun.operator, password: fd.upyun.password, bucket: fd.upyun.bucket, publicDomain: fd.upyun.publicDomain });
+    default:
+      return null;
+  }
+}
+
+function buildObsidianApplyPayload(cfg: EditorServerConfig) {
+  return {
+    enabled: cfg.enabled,
+    port: cfg.port,
+    serviceConfigJson: buildServiceConfigJson(cfg.obsidianService),
+  };
+}
+
+function buildEditorCredentialSignature(service: ServerServiceType, fd: typeof formData.value): string {
+  switch (service) {
+    case 'jd':
+    case 'qiyu':
+      return service;
+    case 'github':
+      return [fd.github.token, fd.github.owner, fd.github.repo, fd.github.branch, fd.github.path].join('|');
+    case 'smms':
+      return fd.smms.token;
+    case 'imgur':
+      return fd.imgur.clientId;
+    case 'weibo':
+      return fd.weiboCookie;
+    case 'bilibili':
+      return fd.bilibili.cookie;
+    case 'nowcoder':
+      return fd.nowcoder.cookie;
+    case 'chaoxing':
+      return fd.chaoxing.cookie;
+    case 'zhihu':
+      return fd.zhihu.cookie;
+    case 'nami':
+      return [fd.nami.cookie, fd.nami.authToken].join('|');
+    case 'r2':
+      return [fd.r2.accountId, fd.r2.accessKeyId, fd.r2.secretAccessKey, fd.r2.bucketName, fd.r2.path, fd.r2.publicDomain].join('|');
+    case 'tencent':
+      return [fd.tencent.secretId, fd.tencent.secretKey, fd.tencent.region, fd.tencent.bucket, fd.tencent.path, fd.tencent.publicDomain].join('|');
+    case 'aliyun':
+      return [fd.aliyun.accessKeyId, fd.aliyun.accessKeySecret, fd.aliyun.region, fd.aliyun.bucket, fd.aliyun.path, fd.aliyun.publicDomain].join('|');
+    case 'qiniu':
+      return [fd.qiniu.accessKey, fd.qiniu.secretKey, fd.qiniu.region, fd.qiniu.bucket, fd.qiniu.publicDomain, fd.qiniu.path].join('|');
+    case 'upyun':
+      return [fd.upyun.operator, fd.upyun.password, fd.upyun.bucket, fd.upyun.publicDomain].join('|');
+    default:
+      return '';
+  }
+}
+
+const activeEditorServiceSignature = computed(() => {
+  const cfg = formData.value.editorServer;
+  const fd = formData.value;
+  const typoraSig = cfg.typoraService
+    ? `typora:${cfg.typoraService}:${buildEditorCredentialSignature(cfg.typoraService, fd)}`
+    : 'typora:none';
+  const obsidianSig = cfg.obsidianService
+    ? `obsidian:${cfg.obsidianService}:${buildEditorCredentialSignature(cfg.obsidianService, fd)}`
+    : 'obsidian:none';
+  return `${typoraSig}|${obsidianSig}`;
+});
+
+watch(activeEditorServiceSignature, () => {
+  if (!isSettingsReady.value) return;
+  const cfg = formData.value.editorServer;
+  if (!cfg.typoraService && !cfg.obsidianService) return;
+  if (!cfg.enabled && !cfg.typoraEnabled) return;
+  debouncedApplyEditorServer();
+});
+
+async function applyEditorServer(
+  cfg: EditorServerConfig,
+  options: { force?: boolean; trackStatus?: boolean } = {},
+): Promise<boolean> {
+  const { force = false, trackStatus = true } = options;
+
+  if (!Number.isInteger(cfg.port) || cfg.port < 1024 || cfg.port > 65535) {
+    const message = '端口必须在 1024-65535 之间';
+    setEditorApplyState('error', message);
+    return false;
+  }
+
+  const obsidianPayload = buildObsidianApplyPayload(cfg);
+  const cliConfigJson = buildServiceConfigJson(cfg.typoraService);
+  const payloadKey = JSON.stringify({ obsidian: obsidianPayload, cli: cliConfigJson });
+
+  if (!force && payloadKey === lastAppliedEditorPayloadKey.value) {
+    if (trackStatus && editorApplyState.value.status !== 'error') {
+      setEditorApplyState('applied', cfg.enabled ? '配置已生效' : '配置已应用（服务未启动）');
+    }
+    return true;
+  }
+
+  if (trackStatus) {
+    setEditorApplyState('applying', '应用中…');
+  }
+
+  try {
+    await invoke('update_server_config', obsidianPayload);
+    await invoke('save_cli_config', { serviceConfigJson: cliConfigJson });
+    lastAppliedEditorPayloadKey.value = payloadKey;
+    if (trackStatus) {
+      const message = cfg.enabled ? '已生效' : '配置已应用（服务未启动）';
+      setEditorApplyState('applied', message);
+    }
+    return true;
+  } catch (e) {
+    console.error('[Server] 更新失败:', e);
+    const detail = errorToString(e);
+    setEditorApplyState('error', `应用失败：${detail}`);
+    toast.showConfig('error', { summary: '编辑器 Server 更新失败', detail });
+    return false;
+  }
+}
+
+function debouncedApplyEditorServer() {
+  if (_debouncedEditorApplyTimer) clearTimeout(_debouncedEditorApplyTimer);
+  _debouncedEditorApplyTimer = setTimeout(() => {
+    _debouncedEditorApplyTimer = null;
+    void applyEditorServer(formData.value.editorServer, { trackStatus: false });
+  }, 500);
+}
+
 function handleAnalyticsToggle() {
   if (formData.value.analyticsEnabled) {
     analytics.enable();
@@ -777,14 +1022,21 @@ onMounted(async () => {
     appVersion.value = '未知版本';
   }
 
+  executablePath.value = await invoke<string>('get_executable_path').catch(() => '');
+
   await loadSettings();
-  try {
-    const savedCheckTime = await syncStatusStore.get<number>(LAST_CHECK_KEY);
-    if (savedCheckTime) lastBatchCheckTime.value = savedCheckTime;
-  } catch (error) {
-    console.warn('[设置] 读取上次检测时间失败（可能仍是旧加密状态文件）:', error);
-  }
-  await checkAllAvailabilityWithCooldown();
+
+  // 启动时同步编辑器配置（包含 CLI 配置与 Server 运行态）
+  await applyEditorServer(formData.value.editorServer, { force: true, trackStatus: false });
+
+  const { listen } = await import('@tauri-apps/api/event');
+  compressionSyncUnlisten.value = await listen('config-updated', async () => {
+    // 仅同步压缩配置，避免覆盖用户正在编辑的其他字段
+    const updated = await configStore.get<UserConfig>('config');
+    if (updated?.imageCompression) {
+      formData.value.imageCompression = { ...updated.imageCompression };
+    }
+  });
 
   cookieUnlisten.value = await configManager.setupCookieListener(async (sid, cookie) => {
     if (sid === 'weibo') formData.value.weiboCookie = cookie;
@@ -798,13 +1050,22 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  // 组件销毁时取消防抖并强制立即保存，防止关闭应用时最后一次输入丢失
   cancelDebouncedSave();
-  saveSettings();
+  if (_debouncedEditorApplyTimer) {
+    clearTimeout(_debouncedEditorApplyTimer);
+    _debouncedEditorApplyTimer = null;
+  }
+  // 同步保存：不用 void，而是让调用链完成（Tauri 在窗口关闭前会等待同步代码）
+  saveSettings().catch(() => {});
 
   if (cookieUnlisten.value) {
     cookieUnlisten.value();
     cookieUnlisten.value = null;
+  }
+
+  if (compressionSyncUnlisten.value) {
+    compressionSyncUnlisten.value();
+    compressionSyncUnlisten.value = null;
   }
 });
 </script>
@@ -864,6 +1125,21 @@ onUnmounted(() => {
           @clear-history="handleClearHistory"
           @clear-cache="handleClearAppCache"
           @save="debouncedSaveSettings"
+        />
+      </div>
+
+      <!-- 高级设置 -->
+      <div v-if="activeTab === 'advanced'" class="settings-section">
+        <AdvancedSettingsPanel
+          :image-compression="formData.imageCompression"
+          :editor-server="formData.editorServer"
+          :executable-path="executablePath"
+          :editor-apply-state="editorApplyState"
+          @update:image-compression="(v: ImageCompressionConfig) => { formData.imageCompression = v; debouncedSaveSettingsWithStatus(); }"
+          @update:editor-server="async (v: EditorServerConfig) => { formData.editorServer = v; await applyEditorServer(v, { trackStatus: true }); debouncedSaveSettingsWithStatus(); }"
+          @retry-editor-apply="() => applyEditorServer(formData.editorServer, { force: true, trackStatus: true })"
+          @navigate-hosting="activeTab = 'hosting'"
+          @save="debouncedSaveSettingsWithStatus"
         />
       </div>
 
