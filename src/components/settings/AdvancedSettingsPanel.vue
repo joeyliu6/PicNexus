@@ -55,9 +55,7 @@ const emit = defineEmits<{
 @import '../../styles/settings-shared.css';
 
 .advanced-settings-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+  width: 100%;
 }
 
 .advanced-settings-panel .section-desc {

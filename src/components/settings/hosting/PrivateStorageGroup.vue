@@ -35,7 +35,7 @@ interface ServiceConfig {
 
 const PRIVATE_SERVICES: ServiceConfig[] = [
   {
-    id: 'r2', name: 'Cloudflare R2', description: 'S3 兼容的高速存储',
+    id: 'r2', name: 'Cloudflare R2', description: '零出口费用的对象存储',
     requiredKeys: ['accountId', 'accessKeyId', 'secretAccessKey', 'bucketName', 'publicDomain'],
     fields: [
       { key: 'accountId', label: 'Account ID', type: 'text' },
@@ -207,7 +207,7 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
       :id="makeCustomS3Id(profile.id)"
       :force-expand="targetCardId === makeCustomS3Id(profile.id)"
       :name="profile.name || '自定义 S3'"
-      description="S3 兼容存储"
+      description="对接其他 S3 协议云存储"
       :isConfigured="isCustomS3Configured(profile)"
       :health-status="healthStatusMap[makeCustomS3Id(profile.id)]"
       :health-tooltip="healthTooltipMap[makeCustomS3Id(profile.id)]"
