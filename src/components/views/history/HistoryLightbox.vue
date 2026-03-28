@@ -86,11 +86,16 @@ const lightboxImage = computed(() => {
   return getPrimaryImageUrl(props.item, configManager.config.value);
 });
 
-const imageLoading = ref(true);
+const displaySrc = ref('');
+const imageReady = ref(false);
+const showLoadingIndicator = ref(false);
 const imageError = ref(false);
 const imageScale = ref(1);
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 5;
+
+let preloadInstance: HTMLImageElement | null = null;
+let loadingDelayTimer: ReturnType<typeof setTimeout> | null = null;
 
 const translateX = ref(0);
 const translateY = ref(0);
@@ -170,19 +175,69 @@ const displayFileName = computed(() => {
   return truncateMiddle(props.item.localFileName);
 });
 
-function onImageLoad() {
-  imageLoading.value = false;
+function cleanupPreload() {
+  if (preloadInstance) {
+    preloadInstance.onload = null;
+    preloadInstance.onerror = null;
+    preloadInstance = null;
+  }
+  if (loadingDelayTimer !== null) {
+    clearTimeout(loadingDelayTimer);
+    loadingDelayTimer = null;
+  }
+  showLoadingIndicator.value = false;
+}
+
+function preloadAndSwitch(newSrc: string, immediateLoading = false) {
+  cleanupPreload();
+
+  if (!newSrc) {
+    displaySrc.value = '';
+    imageError.value = true;
+    return;
+  }
+
+  if (newSrc === displaySrc.value) {
+    imageError.value = false;
+    return;
+  }
+
   imageError.value = false;
+
+  if (immediateLoading) {
+    showLoadingIndicator.value = true;
+  } else {
+    loadingDelayTimer = setTimeout(() => {
+      if (preloadInstance) showLoadingIndicator.value = true;
+    }, 150);
+  }
+
+  const img = new Image();
+  preloadInstance = img;
+
+  img.onload = () => {
+    if (preloadInstance !== img) return;
+    cleanupPreload();
+    displaySrc.value = newSrc;
+    imageReady.value = true;
+    imageError.value = false;
+  };
+
+  img.onerror = () => {
+    if (preloadInstance !== img) return;
+    cleanupPreload();
+    imageError.value = true;
+  };
+
+  img.src = newSrc;
 }
 
 function onImageError() {
-  imageLoading.value = false;
   imageError.value = true;
+  imageReady.value = false;
 }
 
 function resetImageState() {
-  imageLoading.value = true;
-  imageError.value = false;
   imageScale.value = 1;
   translateX.value = 0;
   translateY.value = 0;
@@ -281,15 +336,26 @@ function cleanupTimers() {
   }
   isDragging.value = false;
   dragMoveDistance = 0;
+  cleanupPreload();
 }
 
 watch(() => props.visible, (val) => {
-  if (val) resetImageState();
-  else cleanupTimers();
+  if (val) {
+    resetImageState();
+    displaySrc.value = '';
+    imageReady.value = false;
+    imageError.value = false;
+    preloadAndSwitch(lightboxImage.value, true);
+  } else {
+    cleanupTimers();
+  }
 });
 
 watch(() => props.item?.id, () => {
-  if (props.visible) resetImageState();
+  if (props.visible) {
+    resetImageState();
+    preloadAndSwitch(lightboxImage.value);
+  }
 });
 
 onMounted(() => window.addEventListener('keydown', handleKeydown));
@@ -301,9 +367,9 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
     <Transition name="lightbox-fade">
       <div v-if="visible" class="lightbox-overlay" @click="closeLightbox" @wheel.prevent="handleWheel" @mousemove="handleMouseMove" @mouseup="handleMouseUp">
         <div
-          v-if="lightboxImage"
+          v-if="displaySrc"
           class="lightbox-bg"
-          :style="{ backgroundImage: `url(${lightboxImage})` }"
+          :style="{ backgroundImage: `url(${displaySrc})` }"
         ></div>
         <div class="lightbox-bg-dim"></div>
 
@@ -321,7 +387,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 
         <div class="lightbox-content" @click.stop @dblclick.prevent="handleDoubleClick">
           <Transition name="lightbox-loader">
-            <div v-if="imageLoading && !imageError" class="lightbox-loading-overlay">
+            <div v-if="showLoadingIndicator && !imageError" class="lightbox-loading-overlay">
               <div class="lightbox-breathe-container">
                 <i class="pi pi-image lightbox-breathe-icon"></i>
               </div>
@@ -334,11 +400,10 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
             <span>图片加载失败，可能已过期</span>
           </div>
           <img
-            v-show="!imageError"
-            :src="lightboxImage"
-            :class="['lightbox-img', { 'lightbox-img-loaded': !imageLoading }]"
+            v-show="!imageError && displaySrc"
+            :src="displaySrc"
+            :class="['lightbox-img', { 'lightbox-img-loaded': imageReady }]"
             :style="{ transform: imageTransform, cursor: imageCursor }"
-            @load="onImageLoad"
             @error="onImageError"
             @mousedown="handleImgMouseDown"
           />
