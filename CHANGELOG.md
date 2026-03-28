@@ -47,6 +47,9 @@
 - 上传界面压缩开关与设置界面压缩开关实现双向同步，改动任一处另一处实时更新；上传界面压缩标签新增 tooltip 提示"更改将同步到全局设置"
 
 ### Fixed
+- **生产构建 PrimeVue 样式丢失**
+  - 修复 Tauri 2.x CSP nonce 机制与 PrimeVue 4.x 运行时样式注入冲突，导致编译后 ToggleSwitch、InputNumber 等组件样式全部丢失的问题
+  - 在 `tauri.conf.json` 中对 `style-src` 禁用 nonce 替换（`dangerousDisableAssetCspModification`）
 - **图床可用性检测重复触发**
   - 修复七鱼/京东可用性检测在「应用启动」和「进入图床设置页」时各触发一次的问题
   - 检测时机调整为：仅在应用启动时触发一次，此后每 12 小时周期性检测

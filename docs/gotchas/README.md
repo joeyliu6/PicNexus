@@ -11,6 +11,7 @@
 | [vue-watch-object-prop-spread.md](./vue-watch-object-prop-spread.md) | `{ ...obj }` 更新 prop 触发 watch 副作用（如 resetImageState），应监听 `item?.id` | Vue/响应式 |
 | [tauri-async-runtime-spawn-no-abort-handle.md](./tauri-async-runtime-spawn-no-abort-handle.md) | `tauri::async_runtime::spawn` 不支持 `abort_handle()`，需改用 `tokio::task::spawn` | Tauri/tokio |
 | [primevue-scoped-css-width-not-applied.md](./primevue-scoped-css-width-not-applied.md) | PrimeVue 组件上的 scoped CSS 宽度不生效，需用原生 div 包裹 + `:deep()` 穿透 | PrimeVue/CSS |
+| [tauri-csp-nonce-blocks-primevue-styles.md](./tauri-csp-nonce-blocks-primevue-styles.md) | Tauri 2.x CSP nonce 替换导致 PrimeVue 运行时样式被静默拦截，需禁用 style-src 的 nonce 修改 | Tauri/CSP |
 
 ---
 

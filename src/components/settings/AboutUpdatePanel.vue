@@ -101,14 +101,17 @@ async function openLogDir() {
       <div class="app-info-card">
         <img :src="appIconUrl" alt="PicNexus" class="app-info-icon" />
         <div class="app-info-content">
-          <div class="app-name">PicNexus</div>
+          <div class="app-name-row">
+            <span class="app-name">PicNexus</span>
+            <span class="app-tagline">多图床上传工具</span>
+          </div>
           <div class="app-version">
             版本 {{ appVersion }}
             <button class="copy-version-btn" title="复制版本号" @click="copyVersion">
               <i :class="versionCopied ? 'pi pi-check' : 'pi pi-copy'" />
             </button>
           </div>
-          <div class="app-desc">多图床并行上传工具</div>
+          <div class="app-keywords">16+ 图床 · 自定义压缩 · 云端同步 · 编辑器集成 · 剪贴板上传</div>
         </div>
       </div>
     </div>
@@ -333,7 +336,7 @@ async function openLogDir() {
 /* 应用信息卡片 */
 .app-info-card {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 20px;
   padding: 24px;
   background: var(--bg-card);
@@ -355,10 +358,21 @@ async function openLogDir() {
   gap: 2px;
 }
 
+.app-name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
 .app-name {
   font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.app-tagline {
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 .app-version {
@@ -394,10 +408,11 @@ async function openLogDir() {
   font-size: 12px;
 }
 
-.app-desc {
-  font-size: 13px;
+.app-keywords {
+  font-size: 12px;
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: 8px;
+  line-height: 1.6;
 }
 
 /* 更新卡片 */

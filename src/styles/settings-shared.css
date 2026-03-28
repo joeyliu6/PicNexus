@@ -2,6 +2,16 @@
 /* 设置页面共享样式 */
 /* 用于 SettingsView.vue 和各设置面板组件 */
 
+/* ==================== 设置卡片变量 ==================== */
+
+.settings-layout,
+.settings-section,
+.editor-panel,
+.compression-collapsible,
+.advanced-settings-panel {
+  --settings-card-radius: 12px;
+}
+
 /* ==================== 面板头部 ==================== */
 
 .section-header h2 {
@@ -211,7 +221,7 @@
 
 .sub-section.collapsible {
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
+  border-radius: var(--settings-card-radius, 12px);
   padding: 0;
   margin-bottom: 0;
   margin-top: 16px;

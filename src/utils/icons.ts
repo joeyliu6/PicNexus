@@ -1,4 +1,3 @@
-import type { ServiceType } from '../config/types';
 
 // 通用图标加载器工厂
 function createIconLoader<T extends string = string>(
@@ -41,16 +40,16 @@ const serviceModules = import.meta.glob<string>(
   '../assets/icons/services/*.svg',
   { eager: true, query: '?raw', import: 'default' }
 );
-const serviceIconMap = createIconLoader<ServiceType>(serviceModules);
+const serviceIconMap = createIconLoader(serviceModules);
 
-export function getServiceIcon(service: ServiceType): string | undefined {
+export function getServiceIcon(service: string): string | undefined {
   return serviceIconMap.get(service);
 }
 
-export function getAllServiceIcons(): ReadonlyMap<ServiceType, string> {
+export function getAllServiceIcons(): ReadonlyMap<string, string> {
   return serviceIconMap;
 }
 
-export function hasServiceIcon(service: ServiceType): boolean {
+export function hasServiceIcon(service: string): boolean {
   return serviceIconMap.has(service);
 }
