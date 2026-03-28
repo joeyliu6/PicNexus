@@ -6,8 +6,7 @@ import { Semaphore } from '../utils/semaphore';
 
 // ==================== 常量 ====================
 
-export const METADATA_BATCH_SIZE = 50;
-export const METADATA_CONCURRENCY = 5;
+const METADATA_CONCURRENCY = 5;
 const MAX_CACHE_SIZE = 500;  // 缓存上限，防止内存无限增长
 
 // ==================== 模块级缓存 ====================

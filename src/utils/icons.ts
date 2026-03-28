@@ -13,28 +13,6 @@ function createIconLoader<T extends string = string>(
   return map;
 }
 
-// 分类图标
-const categoryModules = import.meta.glob<string>(
-  '../assets/icons/categories/*.svg',
-  { eager: true, query: '?raw', import: 'default' }
-);
-const categoryIconMap = createIconLoader(categoryModules);
-
-export function getCategoryIcon(category: string): string | undefined {
-  return categoryIconMap.get(category);
-}
-
-// 插画图标
-const illustrationModules = import.meta.glob<string>(
-  '../assets/icons/illustrations/*.svg',
-  { eager: true, query: '?raw', import: 'default' }
-);
-const illustrationMap = createIconLoader(illustrationModules);
-
-export function getIllustration(name: string): string | undefined {
-  return illustrationMap.get(name);
-}
-
 // 服务图标
 const serviceModules = import.meta.glob<string>(
   '../assets/icons/services/*.svg',
@@ -46,10 +24,3 @@ export function getServiceIcon(service: string): string | undefined {
   return serviceIconMap.get(service);
 }
 
-export function getAllServiceIcons(): ReadonlyMap<string, string> {
-  return serviceIconMap;
-}
-
-export function hasServiceIcon(service: string): boolean {
-  return serviceIconMap.has(service);
-}

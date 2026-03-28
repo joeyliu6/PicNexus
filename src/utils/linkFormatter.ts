@@ -37,15 +37,15 @@ export const FORMAT_NAMES: Record<LinkFormat, string> = {
   custom: '自定义',
 };
 
-export function escapeHtmlAttr(str: string): string {
+function escapeHtmlAttr(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-export function escapeMarkdown(str: string): string {
+function escapeMarkdown(str: string): string {
   return str.replace(/[\[\]]/g, '\\$&');
 }
 
-export function escapeMarkdownUrl(str: string): string {
+function escapeMarkdownUrl(str: string): string {
   return str.replace(/[()]/g, '\\$&');
 }
 

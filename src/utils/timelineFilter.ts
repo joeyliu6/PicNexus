@@ -12,7 +12,7 @@ import type { TimePeriodStats } from '../services/HistoryDatabase';
 // ==================== 类型定义 ====================
 
 /** 显示粒度 */
-export type Granularity = 'month' | 'quarter' | 'year' | 'decade';
+type Granularity = 'month' | 'quarter' | 'year' | 'decade';
 
 /** 过滤后的月份点 */
 export interface FilteredPoint {
@@ -51,7 +51,7 @@ const LOW_DENSITY_THRESHOLD = 0.02;
  * @param availableHeight 可用像素高度
  * @returns 显示粒度
  */
-export function getLabelGranularity(timeSpanMonths: number, availableHeight: number): Granularity {
+function getLabelGranularity(timeSpanMonths: number, availableHeight: number): Granularity {
   if (availableHeight <= 0) return 'year';
 
   // 密度 = 每像素代表多少个月
@@ -73,7 +73,7 @@ export function getLabelGranularity(timeSpanMonths: number, availableHeight: num
  * 低密度过滤：去掉照片数低于平均值 2% 的月份
  * 边界月份（第一个和最后一个）始终保留
  */
-export function filterLowDensity(periods: TimePeriodStats[]): TimePeriodStats[] {
+function filterLowDensity(periods: TimePeriodStats[]): TimePeriodStats[] {
   if (periods.length <= 1) return periods;
 
   const totalCount = periods.reduce((sum, p) => sum + p.count, 0);
@@ -145,7 +145,7 @@ function formatLabel(year: number, month: number): string {
  * @param granularity 显示粒度
  * @returns 候选点数组
  */
-export function generateCandidatePoints(
+function generateCandidatePoints(
   periods: TimePeriodStats[],
   loadedMonths: Set<string>,
   granularity: Granularity
@@ -203,7 +203,7 @@ export function generateCandidatePoints(
  * @param minGapPx 最小间距（像素）
  * @returns 过滤后的点数组
  */
-export function filterByMinGap(
+function filterByMinGap(
   candidates: FilteredPoint[],
   containerHeight: number,
   minGapPx: number = DEFAULT_MIN_GAP_PX
