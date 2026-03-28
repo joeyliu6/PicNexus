@@ -198,6 +198,7 @@ function resetForm() {
   confirmPassword.value = '';
   passwordError.value = '';
   confirmError.value = '';
+  loading.value = false;
 }
 
 function validate(): boolean {
@@ -256,6 +257,11 @@ function onPasswordFailed() {
   }
 }
 
+/** 外部调用：仅重置 loading 状态（用于非密码错误的系统失败场景） */
+function resetLoading() {
+  loading.value = false;
+}
+
 /** 外部调用：密码验证成功后关闭 */
 function onPasswordSuccess() {
   loading.value = false;
@@ -266,7 +272,8 @@ function onPasswordSuccess() {
 
 defineExpose({
   onPasswordFailed,
-  onPasswordSuccess
+  onPasswordSuccess,
+  resetLoading
 });
 </script>
 

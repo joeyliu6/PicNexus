@@ -23,6 +23,7 @@ import {
   type HistoryEventData
 } from '../events/cacheEvents';
 import { createLogger } from '../utils/logger';
+import { debounce } from '../utils/debounce';
 
 const log = createLogger('History');
 
@@ -66,6 +67,9 @@ const favoriteCount = ref(0);
 
 // 独立的收藏 ID 集合（解耦收藏状态，避免触发 imageMetas 的全量 reactivity 级联）
 const sharedFavoriteSet: Ref<Set<string>> = shallowRef(new Set());
+
+// 收藏 toggle 防重入集合（模块级别单例，确保多个 useHistoryManager 实例共享）
+const pendingToggleIds = new Set<string>();
 
 /** 从 favoriteSet 中移除指定 ID，更新计数（公共辅助） */
 function removeFavoritesFromIds(ids: string[]): void {
@@ -117,6 +121,9 @@ async function reloadSharedData(): Promise<void> {
   }
 }
 
+// debounced 版本：合并短时间内的多次 history-updated 事件，避免并发竞态
+const debouncedReloadSharedData = debounce(reloadSharedData, 300);
+
 /**
  * 初始化跨窗口事件监听（单例）
  */
@@ -150,8 +157,8 @@ function initCrossWindowListener(): void {
 
       case 'history-updated':
         isDataLoaded.value = false;
-        // 强制重新加载数据，确保时间轴视图能获取最新数据
-        reloadSharedData();
+        // 使用 debounce 合并短时间内的多次更新事件，避免并发竞态
+        debouncedReloadSharedData();
         break;
     }
   }).catch(e => {
@@ -601,8 +608,6 @@ export function useHistoryManager() {
    * 切换单张图片的收藏状态
    * 使用独立的 favoriteSet 避免触发 imageMetas 的全量 reactivity 级联
    */
-  const pendingToggleIds = new Set<string>();
-
   async function toggleFavorite(id: string): Promise<boolean> {
     if (pendingToggleIds.has(id)) return sharedFavoriteSet.value.has(id);
     pendingToggleIds.add(id);

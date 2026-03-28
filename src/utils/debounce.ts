@@ -4,7 +4,7 @@ export function debounce<T extends (...args: any[]) => any>(
   delay: number
 ): ((...args: Parameters<T>) => void) & {
   cancel: () => void;
-  immediate: () => void;
+  immediate: (...args: Parameters<T>) => void;
 } {
   let timeoutId: NodeJS.Timeout | null = null;
   let cancelled = false;

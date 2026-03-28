@@ -799,7 +799,9 @@ function addPrefix() {
 function removePrefix(index: number) {
   if (formData.value.linkPrefixList.length > 1) {
     formData.value.linkPrefixList.splice(index, 1);
-    if (formData.value.selectedPrefixIndex >= formData.value.linkPrefixList.length) {
+    if (index < formData.value.selectedPrefixIndex) {
+      formData.value.selectedPrefixIndex--;
+    } else if (formData.value.selectedPrefixIndex >= formData.value.linkPrefixList.length) {
       formData.value.selectedPrefixIndex = formData.value.linkPrefixList.length - 1;
     }
     saveSettings();

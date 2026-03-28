@@ -129,6 +129,7 @@ export function useHistorySaver(): UseHistorySaverReturn {
       log.info('[历史记录] 已保存:', newItem.localFileName, '(尺寸:', metadata.width, 'x', metadata.height, ')');
 
       invalidateCache();
+      emitHistoryUpdated([newItem.id]);
       clearImageMetadataCache(filePath);
 
       return newItem.id;

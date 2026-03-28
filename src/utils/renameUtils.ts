@@ -11,21 +11,27 @@ export interface RenamePreview {
   isValid: boolean;
 }
 
-const VARIABLE_PATTERNS: Record<string, (original: string, index: number) => string> = {
-  '{date}': () => new Date().toISOString().split('T')[0],
-  '{time}': () => new Date().toTimeString().split(' ')[0],
-  '{index}': (_: string, index: number) => String(index + 1).padStart(3, '0'),
-  '{original}': (original: string) => original,
-  '{filename}': (original: string) => original,
-  '{ext}': (original: string) => {
-    const lastDot = original.lastIndexOf('.');
-    return lastDot !== -1 ? original.substring(lastDot) : '';
-  },
-  '{name}': (original: string) => {
-    const lastDot = original.lastIndexOf('.');
-    return lastDot !== -1 ? original.substring(0, lastDot) : original;
-  }
-};
+/** 创建变量解析器，now 为固定时间戳以保证同批次一致性 */
+function createVariableResolvers(now: Date): Record<string, (original: string, index: number) => string> {
+  return {
+    '{date}': () => now.toISOString().split('T')[0],
+    '{time}': () => now.toTimeString().split(' ')[0],
+    '{index}': (_: string, index: number) => String(index + 1).padStart(3, '0'),
+    '{original}': (original: string) => original,
+    '{filename}': (original: string) => original,
+    '{ext}': (original: string) => {
+      const lastDot = original.lastIndexOf('.');
+      return lastDot !== -1 ? original.substring(lastDot) : '';
+    },
+    '{name}': (original: string) => {
+      const lastDot = original.lastIndexOf('.');
+      return lastDot !== -1 ? original.substring(0, lastDot) : original;
+    },
+  };
+}
+
+/** 支持的变量名列表（用于模板校验） */
+const SUPPORTED_VARIABLES = ['{date}', '{time}', '{index}', '{original}', '{filename}', '{ext}', '{name}'];
 
 export function parseRenameTemplate(template: string): RenamePattern {
   return {
@@ -34,12 +40,13 @@ export function parseRenameTemplate(template: string): RenamePattern {
   };
 }
 
-export function generateRenamedName(template: string, original: string, index: number): string {
+export function generateRenamedName(template: string, original: string, index: number, now?: Date): string {
   let result = template;
+  const resolvers = createVariableResolvers(now ?? new Date());
 
-  Object.entries(VARIABLE_PATTERNS).forEach(([variable, generator]) => {
-    result = result.replace(new RegExp(variable, 'g'), generator(original, index));
-  });
+  for (const [variable, generator] of Object.entries(resolvers)) {
+    result = result.split(variable).join(generator(original, index));
+  }
 
   return result;
 }
@@ -49,8 +56,9 @@ export function previewRename(
   template: string,
   startIndex: number = 0
 ): RenamePreview[] {
+  const now = new Date();
   return files.map((file, index) => {
-    const renamed = generateRenamedName(template, file, startIndex + index);
+    const renamed = generateRenamedName(template, file, startIndex + index, now);
     const isValid = renamed !== file && renamed.trim().length > 0;
 
     return {
@@ -85,7 +93,7 @@ export function validateTemplate(template: string): { valid: boolean; error?: st
   }
 
   for (const variable of variableMatches) {
-    if (!VARIABLE_PATTERNS[variable]) {
+    if (!SUPPORTED_VARIABLES.includes(variable)) {
       return { valid: false, error: `不支持的变量: ${variable}` };
     }
   }

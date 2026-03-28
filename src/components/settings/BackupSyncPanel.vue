@@ -255,6 +255,7 @@ async function handlePasswordConfirm(password: string) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error('[备份密码] 设置失败:', errorMsg);
     toast.showConfig('error', { summary: '设置备份密码失败', detail: errorMsg });
+    passwordDialogRef.value?.resetLoading();
   } finally {
     passwordLoading.value = false;
   }
