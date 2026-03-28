@@ -163,35 +163,38 @@ const statusDotClass = computed(() => {
         </div>
 
         <div class="card-actions">
-          <Button
-            v-if="showLoginButton"
-            label="自动获取"
-            icon="pi pi-sign-in"
-            @click="handleLogin"
-            outlined
-            size="small"
-          />
-          <Button
-            v-if="isBuiltin"
-            :label="isChecking ? '检测中...' : '检测可用性'"
-            :icon="isChecking ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"
-            @click="handleCheck"
-            :loading="isChecking"
-            severity="secondary"
-            outlined
-            size="small"
-          />
-          <Button
-            v-if="showTestButton"
-            label="测试连接"
-            icon="pi pi-check"
-            @click="handleTest"
-            :loading="isTesting"
-            :disabled="!isConfigured && !isBuiltin"
-            severity="secondary"
-            outlined
-            size="small"
-          />
+          <div class="actions-left">
+            <Button
+              v-if="showLoginButton"
+              label="自动获取"
+              icon="pi pi-sign-in"
+              @click="handleLogin"
+              outlined
+              size="small"
+            />
+            <Button
+              v-if="isBuiltin"
+              :label="isChecking ? '检测中...' : '检测可用性'"
+              :icon="isChecking ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"
+              @click="handleCheck"
+              :loading="isChecking"
+              severity="secondary"
+              outlined
+              size="small"
+            />
+            <Button
+              v-if="showTestButton"
+              label="测试连接"
+              icon="pi pi-check"
+              @click="handleTest"
+              :loading="isTesting"
+              :disabled="!isConfigured && !isBuiltin"
+              severity="secondary"
+              outlined
+              size="small"
+            />
+          </div>
+          <slot name="actions-right"></slot>
         </div>
 
         <slot name="extra"></slot>
@@ -365,7 +368,13 @@ const statusDotClass = computed(() => {
 
 .card-actions {
   display: flex;
-  justify-content: flex-start;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.actions-left {
+  display: flex;
   gap: 8px;
 }
 
@@ -383,6 +392,10 @@ const statusDotClass = computed(() => {
   }
 
   .card-actions {
+    flex-wrap: wrap;
+  }
+
+  .actions-left {
     flex-wrap: wrap;
   }
 }

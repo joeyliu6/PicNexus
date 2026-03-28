@@ -121,7 +121,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   save: [];
   testPrivate: [providerId: string];
-  addCustomS3: [];
   deleteCustomS3: [profileId: string];
   updateCustomS3: [profile: CustomS3Profile];
 }>();
@@ -244,29 +243,19 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
           <small v-if="field.hint" class="field-hint">{{ field.hint }}</small>
         </div>
       </div>
-      <div class="custom-s3-delete">
+      <template #actions-right>
         <button class="delete-profile-btn" @click.stop="emit('deleteCustomS3', profile.id)">
           <i class="pi pi-trash"></i>
           <span>删除此配置</span>
         </button>
-      </div>
+      </template>
     </HostingCard>
 
-    <button class="add-custom-s3-btn" @click="emit('addCustomS3')">
-      <i class="pi pi-plus"></i>
-      <span>添加自定义 S3</span>
-    </button>
   </div>
 </template>
 
 <style scoped>
 @import '../../../styles/settings-shared.css';
-
-.custom-s3-delete {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-subtle);
-}
 
 .delete-profile-btn {
   display: inline-flex;
@@ -284,27 +273,5 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
 
 .delete-profile-btn:hover {
   background: var(--error-alpha-8);
-}
-
-.add-custom-s3-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 100%;
-  padding: 10px;
-  background: none;
-  border: 1px dashed var(--border-subtle);
-  border-radius: 8px;
-  color: var(--text-muted);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.add-custom-s3-btn:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-  background: var(--primary-alpha-6);
 }
 </style>

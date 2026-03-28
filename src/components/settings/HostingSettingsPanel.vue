@@ -346,7 +346,13 @@ function toggleFilter(status: ServiceHealthStatus) {
     <Divider />
 
     <div class="form-group">
-      <label class="group-label">私有存储</label>
+      <div class="group-header-row">
+        <label class="group-label">私有存储</label>
+        <button class="add-custom-s3-btn" @click="emit('addCustomS3')">
+          <i class="pi pi-plus" style="font-size: 11px"></i>
+          <span>添加自定义 S3</span>
+        </button>
+      </div>
 
       <PrivateStorageGroup
         :private-form-data="privateFormData"
@@ -357,7 +363,6 @@ function toggleFilter(status: ServiceHealthStatus) {
         :target-card-id="targetCardId"
         @save="emit('save')"
         @test-private="emit('testPrivate', $event)"
-        @add-custom-s3="emit('addCustomS3')"
         @delete-custom-s3="emit('deleteCustomS3', $event)"
         @update-custom-s3="emit('updateCustomS3', $event)"
       />
@@ -429,6 +434,36 @@ function toggleFilter(status: ServiceHealthStatus) {
   width: 100%;
 }
 
+.group-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.group-header-row .group-label {
+  margin-bottom: 0;
+}
+
+.add-custom-s3-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.add-custom-s3-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-alpha-8);
+}
 
 .service-health-header {
   margin-bottom: 14px;
