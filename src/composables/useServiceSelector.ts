@@ -3,8 +3,8 @@
 import { ref, computed, type Ref, type ComputedRef } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { configStore } from '../store/instances';
-import type { UserConfig, ServiceType } from '../config/types';
-import { DEFAULT_CONFIG } from '../config/types';
+import type { UserConfig } from '../config/types';
+import { DEFAULT_CONFIG, makeCustomS3Id } from '../config/types';
 import { useToast } from './useToast';
 import { useServiceAvailability } from './useServiceAvailability';
 import { TOAST_MESSAGES } from '../constants';
@@ -13,26 +13,26 @@ import { debounceWithError } from '../utils/debounce';
 // ==================== 类型定义 ====================
 
 export interface UseServiceSelectorReturn {
-  selectedServices: Ref<ServiceType[]>;
-  availableServices: Ref<ServiceType[]>;
-  serviceConfigStatus: Ref<Record<ServiceType, boolean>>;
+  selectedServices: Ref<string[]>;
+  availableServices: Ref<string[]>;
+  serviceConfigStatus: Ref<Record<string, boolean>>;
   activePrefix: Ref<string | null>;
 
-  isServiceAvailable: ComputedRef<(serviceId: ServiceType) => boolean>;
-  isServiceSelected: ComputedRef<(serviceId: ServiceType) => boolean>;
+  isServiceAvailable: ComputedRef<(serviceId: string) => boolean>;
+  isServiceSelected: ComputedRef<(serviceId: string) => boolean>;
 
   loadServiceButtonStates(): Promise<void>;
-  toggleServiceSelection(serviceId: ServiceType): void;
-  saveEnabledServicesToConfig(services: ServiceType[]): void;
+  toggleServiceSelection(serviceId: string): void;
+  saveEnabledServicesToConfig(services: string[]): void;
   updateServiceConfigStatus(config: UserConfig): Promise<void>;
   setupConfigListener(): Promise<UnlistenFn>;
 }
 
 // ==================== 模块级共享状态（单例） ====================
 
-const selectedServices = ref<ServiceType[]>([]);
-const availableServices = ref<ServiceType[]>([]);
-const serviceConfigStatus = ref<Record<ServiceType, boolean>>({
+const selectedServices = ref<string[]>([]);
+const availableServices = ref<string[]>([]);
+const serviceConfigStatus = ref<Record<string, boolean>>({
   weibo: false,
   r2: false,
   jd: true,
@@ -48,7 +48,7 @@ const serviceConfigStatus = ref<Record<ServiceType, boolean>>({
   tencent: false,
   aliyun: false,
   qiniu: false,
-  upyun: false
+  upyun: false,
 });
 const activePrefix = ref<string | null>(null);
 
@@ -82,7 +82,7 @@ export function useServiceSelector(): UseServiceSelectorReturn {
    * 保存启用的服务到配置（防抖版本）
    */
   const saveEnabledServicesToConfigDebounced = debounceWithError(
-    async (services: ServiceType[]) => {
+    async (services: string[]) => {
       try {
         console.log('[配置保存] 保存图床选择到配置:', services);
 
@@ -112,7 +112,7 @@ export function useServiceSelector(): UseServiceSelectorReturn {
   /**
    * 保存启用的服务到配置
    */
-  function saveEnabledServicesToConfig(services: ServiceType[]): void {
+  function saveEnabledServicesToConfig(services: string[]): void {
     saveEnabledServicesToConfigDebounced(services);
   }
 
@@ -220,6 +220,18 @@ export function useServiceSelector(): UseServiceSelectorReturn {
       upyunConfig.bucket &&
       upyunConfig.publicDomain
     );
+
+    // 自定义 S3 profiles
+    for (const profile of config.custom_s3_profiles ?? []) {
+      const compositeId = makeCustomS3Id(profile.id);
+      serviceConfigStatus.value[compositeId] = !!(
+        profile.endpoint &&
+        profile.accessKeyId &&
+        profile.secretAccessKey &&
+        profile.region &&
+        profile.bucket
+      );
+    }
   }
 
   /**
@@ -271,7 +283,7 @@ export function useServiceSelector(): UseServiceSelectorReturn {
   /**
    * 切换图床服务选择
    */
-  function toggleServiceSelection(serviceId: ServiceType): void {
+  function toggleServiceSelection(serviceId: string): void {
     const index = selectedServices.value.indexOf(serviceId);
     if (index > -1) {
       selectedServices.value.splice(index, 1);
@@ -286,14 +298,14 @@ export function useServiceSelector(): UseServiceSelectorReturn {
   /**
    * 检查图床是否可用
    */
-  const isServiceAvailable = computed(() => (serviceId: ServiceType): boolean => {
+  const isServiceAvailable = computed(() => (serviceId: string): boolean => {
     return availableServices.value.includes(serviceId) && serviceConfigStatus.value[serviceId];
   });
 
   /**
    * 检查图床是否选中
    */
-  const isServiceSelected = computed(() => (serviceId: ServiceType): boolean => {
+  const isServiceSelected = computed(() => (serviceId: string): boolean => {
     return selectedServices.value.includes(serviceId);
   });
 
@@ -347,7 +359,7 @@ export function resetServiceSelectorState(): void {
     tencent: false,
     aliyun: false,
     qiniu: false,
-    upyun: false
+    upyun: false,
   };
   activePrefix.value = null;
 }

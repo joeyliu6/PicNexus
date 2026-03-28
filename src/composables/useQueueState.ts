@@ -25,7 +25,7 @@ function mergeUpdates(updates: Partial<QueueItem>[]): Partial<QueueItem> {
         ...merged.serviceProgress,
         ...Object.fromEntries(
           Object.entries(update.serviceProgress).map(([key, value]) => {
-            const currentProgress = merged.serviceProgress?.[key as keyof typeof merged.serviceProgress];
+            const currentProgress = merged.serviceProgress?.[key];
             const mergedMetadata = value?.metadata || currentProgress?.metadata
               ? { ...currentProgress?.metadata, ...value?.metadata }
               : undefined;
@@ -34,6 +34,9 @@ function mergeUpdates(updates: Partial<QueueItem>[]): Partial<QueueItem> {
               {
                 ...currentProgress,
                 ...value,
+                serviceId: key,
+                progress: value?.progress ?? currentProgress?.progress ?? 0,
+                status: value?.status ?? currentProgress?.status ?? '',
                 ...(mergedMetadata !== undefined ? { metadata: mergedMetadata } : {})
               }
             ];
@@ -142,7 +145,7 @@ export function useQueueState() {
             ...currentItem.serviceProgress,
             ...Object.fromEntries(
               Object.entries(updates.serviceProgress).map(([key, value]) => {
-                const currentProgress = currentItem.serviceProgress?.[key as keyof typeof currentItem.serviceProgress];
+                const currentProgress = currentItem.serviceProgress?.[key];
                 // 对 metadata 也进行深拷贝
                 const mergedMetadata = value?.metadata || currentProgress?.metadata
                   ? { ...currentProgress?.metadata, ...value?.metadata }
@@ -153,6 +156,9 @@ export function useQueueState() {
                   {
                     ...currentProgress,
                     ...value,
+                    serviceId: key,
+                    progress: value?.progress ?? currentProgress?.progress ?? 0,
+                    status: value?.status ?? currentProgress?.status ?? '',
                     // 如果有 metadata，使用深拷贝的版本
                     ...(mergedMetadata !== undefined ? { metadata: mergedMetadata } : {})
                   }

@@ -4,6 +4,7 @@
 
 import { ref, computed, triggerRef, type Ref, type ComputedRef } from 'vue';
 import type { ServiceType, UserConfig } from '../config/types';
+import { isCustomS3Id, getCustomS3ProfileId, makeCustomS3Id } from '../config/types';
 import type {
   ServiceHealthStatus,
   ServiceHealthRecord,
@@ -11,7 +12,7 @@ import type {
   PersistedHealthData,
 } from '../types/serviceHealth';
 import { AUTH_CONFIG_ERROR_CODES } from '../types/serviceHealth';
-import { SERVICE_REQUIRED_FIELDS, NO_CONFIG_SERVICES } from '../constants/serviceRequiredFields';
+import { SERVICE_REQUIRED_FIELDS, NO_CONFIG_SERVICES, CUSTOM_S3_REQUIRED_FIELDS } from '../constants/serviceRequiredFields';
 import { syncStatusStore } from '../store/instances';
 import type { StructuredError } from '../uploaders/base/ErrorTypes';
 import { formatRelativeTime } from '../utils/formatters';
@@ -43,15 +44,16 @@ function autoLoadFromDisk(): Promise<void> {
       try {
         const persisted = await syncStatusStore.get<PersistedHealthData>(PERSIST_KEY);
         if (persisted) {
-          for (const serviceId of ALL_SERVICE_TYPES) {
-            const saved = persisted[serviceId];
-            if (saved) {
-              const record = healthMap.value[serviceId];
-              record.status = saved.status;
-              record.lastVerifiedAt = saved.lastVerifiedAt;
-              record.lastError = saved.lastError;
-              record.errorSource = saved.errorSource;
+          for (const [key, saved] of Object.entries(persisted)) {
+            if (!saved) continue;
+            if (!healthMap.value[key]) {
+              healthMap.value[key] = createDefaultRecord();
             }
+            const record = healthMap.value[key];
+            record.status = saved.status;
+            record.lastVerifiedAt = saved.lastVerifiedAt;
+            record.lastError = saved.lastError;
+            record.errorSource = saved.errorSource;
           }
           triggerRef(healthMap);
           console.log('[健康状态] 自动加载完成');
@@ -68,9 +70,9 @@ function autoLoadFromDisk(): Promise<void> {
 autoLoadFromDisk();
 
 // 模块级 computed，确保所有消费者共享同一个响应式引用
-const healthStatusMap: ComputedRef<Record<ServiceType, ServiceHealthStatus>> = computed(() => {
-  const map = {} as Record<ServiceType, ServiceHealthStatus>;
-  for (const id of ALL_SERVICE_TYPES) {
+const healthStatusMap: ComputedRef<Record<string, ServiceHealthStatus>> = computed(() => {
+  const map = {} as Record<string, ServiceHealthStatus>;
+  for (const id of Object.keys(healthMap.value)) {
     map[id] = healthMap.value[id]?.status || 'unconfigured';
   }
   return map;
@@ -93,9 +95,9 @@ function buildTooltipText(record: ServiceHealthRecord): string {
   }
 }
 
-const healthTooltipMap: ComputedRef<Record<ServiceType, string>> = computed(() => {
-  const map = {} as Record<ServiceType, string>;
-  for (const id of ALL_SERVICE_TYPES) {
+const healthTooltipMap: ComputedRef<Record<string, string>> = computed(() => {
+  const map = {} as Record<string, string>;
+  for (const id of Object.keys(healthMap.value)) {
     map[id] = buildTooltipText(healthMap.value[id]);
   }
   return map;
@@ -114,8 +116,8 @@ function createDefaultRecord(): ServiceHealthRecord {
   };
 }
 
-function createDefaultHealthMap(): ServiceHealthMap {
-  const map = {} as ServiceHealthMap;
+function createDefaultHealthMap(): Record<string, ServiceHealthRecord> {
+  const map = {} as Record<string, ServiceHealthRecord>;
   for (const id of ALL_SERVICE_TYPES) {
     map[id] = createDefaultRecord();
   }
@@ -127,13 +129,27 @@ function createDefaultHealthMap(): ServiceHealthMap {
  * 用于判断必填字段是否已填写
  */
 function getServiceFieldValues(
-  serviceId: ServiceType,
+  serviceId: string,
   config: UserConfig
 ): Record<string, string> {
-  const requiredFields = SERVICE_REQUIRED_FIELDS[serviceId];
-  if (!requiredFields.length) return {};
+  // 自定义 S3 复合 ID：从 custom_s3_profiles 中查找
+  if (isCustomS3Id(serviceId)) {
+    const profileId = getCustomS3ProfileId(serviceId);
+    const profile = config.custom_s3_profiles?.find(p => p.id === profileId);
+    if (!profile) return {};
 
-  const serviceConfig = config.services[serviceId] as unknown as Record<string, unknown> | undefined;
+    const values: Record<string, string> = {};
+    for (const field of CUSTOM_S3_REQUIRED_FIELDS) {
+      const val = (profile as unknown as Record<string, unknown>)[field];
+      values[field] = typeof val === 'string' ? val.trim() : '';
+    }
+    return values;
+  }
+
+  const requiredFields = SERVICE_REQUIRED_FIELDS[serviceId as ServiceType];
+  if (!requiredFields?.length) return {};
+
+  const serviceConfig = config.services[serviceId as ServiceType] as unknown as Record<string, unknown> | undefined;
   if (!serviceConfig) return {};
 
   const values: Record<string, string> = {};
@@ -153,6 +169,12 @@ function buildConfigSnapshot(config: UserConfig): Record<string, string> {
     const values = getServiceFieldValues(serviceId, config);
     snapshot[serviceId] = Object.values(values).join('|');
   }
+  // 包含自定义 S3 profiles
+  for (const profile of config.custom_s3_profiles ?? []) {
+    const compositeId = makeCustomS3Id(profile.id);
+    const values = getServiceFieldValues(compositeId, config);
+    snapshot[compositeId] = Object.values(values).join('|');
+  }
   return snapshot;
 }
 
@@ -170,7 +192,7 @@ function debouncedPersist(): void {
 async function persistHealthStatus(): Promise<void> {
   try {
     const data: PersistedHealthData = {};
-    for (const serviceId of ALL_SERVICE_TYPES) {
+    for (const serviceId of Object.keys(healthMap.value)) {
       const record = healthMap.value[serviceId];
       if (record.status !== 'unconfigured') {
         data[serviceId] = {
@@ -191,15 +213,15 @@ async function persistHealthStatus(): Promise<void> {
 
 export interface UseServiceHealthReturn {
   healthMap: Ref<ServiceHealthMap>;
-  getHealth: (serviceId: ServiceType) => ServiceHealthRecord;
-  getStatusClass: (serviceId: ServiceType) => string;
-  healthStatusMap: ComputedRef<Record<ServiceType, ServiceHealthStatus>>;
-  healthTooltipMap: ComputedRef<Record<ServiceType, string>>;
+  getHealth: (serviceId: string) => ServiceHealthRecord;
+  getStatusClass: (serviceId: string) => string;
+  healthStatusMap: ComputedRef<Record<string, ServiceHealthStatus>>;
+  healthTooltipMap: ComputedRef<Record<string, string>>;
   loadHealthStatus: () => Promise<void>;
   evaluateConfig: (config: UserConfig) => void;
-  markVerified: (serviceId: ServiceType) => void;
-  markTestFailed: (serviceId: ServiceType, error: string) => void;
-  markUploadError: (serviceId: ServiceType, structuredError: StructuredError) => void;
+  markVerified: (serviceId: string) => void;
+  markTestFailed: (serviceId: string, error: string) => void;
+  markUploadError: (serviceId: string, structuredError: StructuredError) => void;
 }
 
 // ==================== 配置评估（模块级） ====================
@@ -207,31 +229,19 @@ export interface UseServiceHealthReturn {
 function evaluateConfigInternal(config: UserConfig): void {
   const newSnapshot = buildConfigSnapshot(config);
 
-  for (const serviceId of ALL_SERVICE_TYPES) {
-    const record = healthMap.value[serviceId];
-    const requiredFields = SERVICE_REQUIRED_FIELDS[serviceId];
-
-    // 无需配置的图床：如果尚未通过运行时检测，标记为 pending
-    if (NO_CONFIG_SERVICES.includes(serviceId)) {
-      if (record.status === 'unconfigured') {
-        record.status = 'pending';
-      }
-      record.filledCount = 0;
-      record.totalRequired = 0;
-      continue;
+  // 评估单个服务的健康状态
+  function evaluateService(serviceId: string, totalRequired: number): void {
+    if (!healthMap.value[serviceId]) {
+      healthMap.value[serviceId] = createDefaultRecord();
     }
-
-    // 计算字段完成度
+    const record = healthMap.value[serviceId];
     const fieldValues = getServiceFieldValues(serviceId, config);
     const filledCount = Object.values(fieldValues).filter(v => v.length > 0).length;
-    const totalRequired = requiredFields.length;
 
     record.filledCount = filledCount;
     record.totalRequired = totalRequired;
 
-    const allFilled = filledCount >= totalRequired;
-
-    if (!allFilled) {
+    if (filledCount < totalRequired) {
       record.status = 'unconfigured';
       record.lastError = null;
       record.errorSource = null;
@@ -248,6 +258,35 @@ function evaluateConfigInternal(config: UserConfig): void {
     }
   }
 
+  for (const serviceId of ALL_SERVICE_TYPES) {
+    // 无需配置的图床：如果尚未通过运行时检测，标记为 pending
+    if (NO_CONFIG_SERVICES.includes(serviceId)) {
+      const record = healthMap.value[serviceId];
+      if (record.status === 'unconfigured') {
+        record.status = 'pending';
+      }
+      record.filledCount = 0;
+      record.totalRequired = 0;
+      continue;
+    }
+    evaluateService(serviceId, SERVICE_REQUIRED_FIELDS[serviceId].length);
+  }
+
+  for (const profile of config.custom_s3_profiles ?? []) {
+    evaluateService(makeCustomS3Id(profile.id), CUSTOM_S3_REQUIRED_FIELDS.length);
+  }
+
+  // 清理已删除的 custom_s3 profiles
+  for (const key of Object.keys(healthMap.value)) {
+    if (isCustomS3Id(key)) {
+      const profileId = getCustomS3ProfileId(key);
+      const exists = config.custom_s3_profiles?.some(p => p.id === profileId);
+      if (!exists) {
+        delete healthMap.value[key];
+      }
+    }
+  }
+
   lastConfigSnapshot = newSnapshot;
   triggerRef(healthMap);
   debouncedPersist();
@@ -256,11 +295,11 @@ function evaluateConfigInternal(config: UserConfig): void {
 // ==================== Composable ====================
 
 export function useServiceHealth(): UseServiceHealthReturn {
-  function getHealth(serviceId: ServiceType): ServiceHealthRecord {
+  function getHealth(serviceId: string): ServiceHealthRecord {
     return healthMap.value[serviceId] || createDefaultRecord();
   }
 
-  function getStatusClass(serviceId: ServiceType): string {
+  function getStatusClass(serviceId: string): string {
     return `status-dot ${healthMap.value[serviceId]?.status || 'unconfigured'}`;
   }
 
@@ -268,7 +307,7 @@ export function useServiceHealth(): UseServiceHealthReturn {
     await autoLoadFromDisk();
   }
 
-  function updateRecord(serviceId: ServiceType, updates: Partial<ServiceHealthRecord>): void {
+  function updateRecord(serviceId: string, updates: Partial<ServiceHealthRecord>): void {
     const record = healthMap.value[serviceId];
     if (!record) return;
     Object.assign(record, updates);
@@ -276,15 +315,15 @@ export function useServiceHealth(): UseServiceHealthReturn {
     debouncedPersist();
   }
 
-  function markVerified(serviceId: ServiceType): void {
+  function markVerified(serviceId: string): void {
     updateRecord(serviceId, { status: 'verified', lastVerifiedAt: Date.now(), lastError: null, errorSource: null });
   }
 
-  function markTestFailed(serviceId: ServiceType, error: string): void {
+  function markTestFailed(serviceId: string, error: string): void {
     updateRecord(serviceId, { status: 'error', lastError: error, errorSource: 'test' });
   }
 
-  function markUploadError(serviceId: ServiceType, structuredError: StructuredError): void {
+  function markUploadError(serviceId: string, structuredError: StructuredError): void {
     if (!(AUTH_CONFIG_ERROR_CODES as readonly string[]).includes(structuredError.code)) return;
     updateRecord(serviceId, { status: 'error', lastError: structuredError.message, errorSource: 'upload' });
   }

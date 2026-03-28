@@ -91,7 +91,7 @@ export function useHistoryViewState() {
     clearSelection();
   }
 
-  async function bulkCopyFormatted(format?: import('../utils/linkFormatter').LinkFormat, serviceId?: ServiceType): Promise<void> {
+  async function bulkCopyFormatted(format?: import('../utils/linkFormatter').LinkFormat, serviceId?: string): Promise<void> {
     const ids = selectedIdList.value;
     if (ids.length === 0) {
       toast.warn('未选择项目', '请先选择要复制的项目');

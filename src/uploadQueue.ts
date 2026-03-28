@@ -4,14 +4,13 @@
  */
 
 import { appState } from './appState';
-import { ServiceType } from './config/types';
 import { useQueueState } from './composables/useQueueState';
 
 /**
  * 单个图床服务的进度状态
  */
 export interface ServiceProgress {
-  serviceId: ServiceType;
+  serviceId: string;
   progress: number;  // 0-100
   status: string;    // 状态文本
   link?: string;     // 上传成功后的链接
@@ -27,8 +26,8 @@ export interface QueueItem {
   id: string;
   fileName: string;
   filePath: string;
-  enabledServices: ServiceType[];  // 启用的图床列表
-  serviceProgress: Partial<Record<ServiceType, ServiceProgress>>;  // 各图床独立进度
+  enabledServices: string[];  // 启用的图床列表
+  serviceProgress: Partial<Record<string, ServiceProgress>>;  // 各图床独立进度
   status: 'pending' | 'uploading' | 'success' | 'error';
   errorMessage?: string;
   primaryUrl?: string;  // 主力图床的URL
@@ -98,7 +97,7 @@ export class UploadQueueManager {
   /**
    * 添加文件到队列（新架构 - 多图床支持）
    */
-  addFile(filePath: string, fileName: string, enabledServices: ServiceType[]): string | null {
+  addFile(filePath: string, fileName: string, enabledServices: string[]): string | null {
     // 检查重复
     if (this.isFileInQueue(filePath)) {
       const duplicateCount = this.getDuplicateCount(filePath);
@@ -123,7 +122,7 @@ export class UploadQueueManager {
       fileName,
       filePath,
       enabledServices: [...enabledServices],  // 创建数组副本,避免引用共享
-      serviceProgress: serviceProgress as Record<ServiceType, ServiceProgress>,
+      serviceProgress: serviceProgress as Record<string, ServiceProgress>,
       status: 'pending',
       // 新增：初始化重试相关字段
       retryCount: 0,
@@ -150,7 +149,7 @@ export class UploadQueueManager {
    */
   updateServiceProgress(
     itemId: string,
-    serviceId: ServiceType,
+    serviceId: string,
     percent: number,
     step?: string,
     stepIndex?: number,
@@ -178,6 +177,7 @@ export class UploadQueueManager {
       serviceProgress: {
         [serviceId]: {
           ...item.serviceProgress[serviceId],
+          serviceId,
           progress: safePercent,
           status: statusText,
           metadata: {
@@ -228,7 +228,7 @@ export class UploadQueueManager {
     // 不再使用 { ...item.serviceProgress } 展开全部，避免覆盖并发更新
     const serviceProgressUpdates: Record<string, any> = {};
 
-    item.enabledServices.forEach((serviceId: ServiceType) => {
+    item.enabledServices.forEach((serviceId: string) => {
       const currentProgress = item.serviceProgress[serviceId];
       const currentStatus = currentProgress?.status || '';
       // 只标记那些进度为100且不是失败状态的服务
@@ -253,7 +253,7 @@ export class UploadQueueManager {
     // 重新读取最新的 item 状态来获取链接字段
     const latestItem = this.getItem(itemId);
     if (latestItem) {
-      latestItem.enabledServices.forEach((serviceId: ServiceType) => {
+      latestItem.enabledServices.forEach((serviceId: string) => {
         const serviceLink = latestItem.serviceProgress[serviceId]?.link;
         if (serviceLink) {
           // 设置各个服务的链接字段
@@ -455,7 +455,7 @@ export class UploadQueueManager {
   /**
    * 重置单个服务的状态（用于单独重试）
    */
-  resetServiceForRetry(itemId: string, serviceId: ServiceType): void {
+  resetServiceForRetry(itemId: string, serviceId: string): void {
     const item = this.getItem(itemId);
     if (!item || !item.serviceProgress[serviceId]) {
       console.warn(`[UploadQueue] 重试失败: 找不到服务 ${serviceId}`);
@@ -487,7 +487,7 @@ export class UploadQueueManager {
   /**
    * 设置重试回调（保留接口兼容性）
    */
-  setRetryCallback(_callback: (itemId: string, serviceId?: ServiceType) => void): void {
+  setRetryCallback(_callback: (itemId: string, serviceId?: string) => void): void {
     // 在新架构中，重试回调直接在 UploadView 中处理
     // 这里保留方法以保持接口兼容
     console.log('[UploadQueue] 重试回调将由 UploadView 处理');

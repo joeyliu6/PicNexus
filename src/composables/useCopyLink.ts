@@ -5,13 +5,13 @@ import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { useConfigManager } from './useConfig';
 import { useToast } from './useToast';
 import { getActivePrefix } from '../config/types';
-import type { ServiceType, UserConfig } from '../config/types';
+import type { UserConfig } from '../config/types';
 import { formatLink, FORMAT_NAMES, type LinkFormat } from '../utils/linkFormatter';
 
 export interface CopyLinkItem {
   url: string;
   fileName: string;
-  serviceId?: ServiceType;
+  serviceId?: string;
   width?: number;
   height?: number;
 }
@@ -40,7 +40,7 @@ export interface CopyLinkResult {
 /**
  * 对 URL 应用微博前缀（纯函数版本，直接传入 config）
  */
-export function applyLinkPrefix(url: string, serviceId: ServiceType | undefined, config: UserConfig): string {
+export function applyLinkPrefix(url: string, serviceId: string | undefined, config: UserConfig): string {
   if (serviceId !== 'weibo') return url;
   const prefix = getActivePrefix(config);
   return prefix ? `${prefix}${url}` : url;
@@ -85,7 +85,7 @@ export function useCopyLink() {
   const configManager = useConfigManager();
   const toast = useToast();
 
-  function applyPrefix(url: string, serviceId?: ServiceType): string {
+  function applyPrefix(url: string, serviceId?: string): string {
     return applyLinkPrefix(url, serviceId, configManager.config.value);
   }
 

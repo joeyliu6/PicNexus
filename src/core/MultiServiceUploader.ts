@@ -2,7 +2,7 @@
 
 import { UploaderFactory } from '../uploaders/base/UploaderFactory';
 import { UploadResult } from '../uploaders/base/types';
-import { UserConfig, ServiceType } from '../config/types';
+import { UserConfig, ServiceType, isCustomS3Id, getCustomS3ProfileId } from '../config/types';
 import { StructuredError, UploadErrorCode, createStructuredError } from '../uploaders/base/ErrorTypes';
 import { convertToStructuredWeiboError } from '../uploaders/weibo/WeiboError';
 import { convertToStructuredR2Error } from '../uploaders/r2/R2Error';
@@ -14,6 +14,7 @@ import {
   SERVICE_REQUIRED_FIELDS,
   COOKIE_BASED_SERVICES,
   NO_CONFIG_SERVICES,
+  CUSTOM_S3_REQUIRED_FIELDS,
 } from '../constants/serviceRequiredFields';
 import { createLogger } from '../utils/logger';
 
@@ -22,11 +23,19 @@ const log = createLogger('MultiUploader');
 /** 每个图床的最大并发数 */
 const SERVICE_MAX_CONCURRENT = 2;
 
+/** 根据 serviceId 查找对应的配置对象（支持内置服务和 custom_s3:xxx） */
+function getServiceConfig(serviceId: string, config: UserConfig): Record<string, unknown> | undefined {
+  if (isCustomS3Id(serviceId)) {
+    return config.custom_s3_profiles?.find(p => p.id === getCustomS3ProfileId(serviceId)) as Record<string, unknown> | undefined;
+  }
+  return config.services[serviceId as ServiceType] as Record<string, unknown> | undefined;
+}
+
 /**
  * 单个服务完成结果（用于实时回调）
  */
 export interface SingleServiceResult {
-  serviceId: ServiceType;
+  serviceId: string;
   result?: UploadResult;
   status: 'success' | 'failed';
   error?: string;
@@ -38,7 +47,7 @@ export interface SingleServiceResult {
  */
 export interface MultiUploadResult {
   /** 主力图床（第一个成功的） */
-  primaryService: ServiceType;
+  primaryService: string;
 
   /** 所有图床的上传结果 */
   results: SingleServiceResult[];
@@ -48,7 +57,7 @@ export interface MultiUploadResult {
 
   /** 新增：部分失败的图床列表（至少一个成功时） */
   partialFailures?: Array<{
-    serviceId: ServiceType;
+    serviceId: string;
     error: string;
     structuredError?: StructuredError;
   }>;
@@ -76,10 +85,10 @@ export class MultiServiceUploader {
    */
   async uploadToMultipleServices(
     filePath: string,
-    enabledServices: ServiceType[],
+    enabledServices: string[],
     config: UserConfig,
     onProgress?: (
-      serviceId: ServiceType,
+      serviceId: string,
       percent: number,
       step?: string,
       stepIndex?: number,
@@ -131,7 +140,10 @@ export class MultiServiceUploader {
 
           try {
             const uploader = UploaderFactory.create(serviceId);
-            const serviceConfig = safeConfig.services[serviceId];
+            const serviceConfig = getServiceConfig(serviceId, safeConfig);
+            if (!serviceConfig) {
+              throw new Error(`服务 ${serviceId} 的配置不存在，请检查设置`);
+            }
 
             // 立即触发进度回调,显示"开始上传"状态
             if (onProgress) {
@@ -273,7 +285,7 @@ export class MultiServiceUploader {
    */
   async retryUpload(
     filePath: string,
-    serviceId: ServiceType,
+    serviceId: string,
     config: UserConfig,
     onProgress?: (percent: number, step?: string, stepIndex?: number, totalSteps?: number) => void
   ): Promise<UploadResult> {
@@ -286,7 +298,10 @@ export class MultiServiceUploader {
     };
 
     const uploader = UploaderFactory.create(serviceId);
-    const serviceConfig = safeConfig.services[serviceId];
+    const serviceConfig = getServiceConfig(serviceId, safeConfig);
+    if (!serviceConfig) {
+      throw new Error(`服务 ${serviceId} 的配置不存在，请检查设置`);
+    }
 
     // 验证配置
     const validation = await uploader.validateConfig(serviceConfig);
@@ -309,25 +324,43 @@ export class MultiServiceUploader {
    * 在过滤阶段验证配置完整性，避免上传时才报错
    */
   private filterConfiguredServices(
-    enabledServices: ServiceType[],
+    enabledServices: string[],
     config: UserConfig
-  ): ServiceType[] {
+  ): string[] {
     return enabledServices.filter(serviceId => {
-      // 无需配置的图床直接通过
-      if (NO_CONFIG_SERVICES.includes(serviceId)) {
+      // 自定义 S3 复合 ID：从 custom_s3_profiles 中检查
+      if (isCustomS3Id(serviceId)) {
+        const profile = getServiceConfig(serviceId, config);
+        if (!profile) {
+          log.warn(`${serviceId} 未找到对应 profile，跳过`);
+          return false;
+        }
+        const cfg = profile as Record<string, unknown>;
+        const hasAll = CUSTOM_S3_REQUIRED_FIELDS.every(field => {
+          const val = cfg[field];
+          return typeof val === 'string' ? val.trim() : val;
+        });
+        if (!hasAll) {
+          log.warn(`${serviceId} 配置不完整，跳过`);
+          return false;
+        }
         return true;
       }
 
-      const serviceConfig = config.services[serviceId];
+      // 无需配置的图床直接通过
+      if (NO_CONFIG_SERVICES.includes(serviceId as ServiceType)) {
+        return true;
+      }
+
+      const serviceConfig = getServiceConfig(serviceId, config);
       if (!serviceConfig) {
         log.warn(`${serviceId} 未配置，跳过`);
         return false;
       }
 
       // Cookie 类图床：统一检查 cookie 字段
-      if (COOKIE_BASED_SERVICES.includes(serviceId)) {
-        const cfg = serviceConfig as unknown as Record<string, unknown>;
-        if (!(cfg.cookie as string)?.trim()) {
+      if (COOKIE_BASED_SERVICES.includes(serviceId as ServiceType)) {
+        if (!(serviceConfig.cookie as string)?.trim()) {
           log.warn(`${serviceId} Cookie 未配置，跳过`);
           return false;
         }
@@ -335,11 +368,10 @@ export class MultiServiceUploader {
       }
 
       // 通用必填字段校验
-      const requiredFields = SERVICE_REQUIRED_FIELDS[serviceId];
+      const requiredFields = SERVICE_REQUIRED_FIELDS[serviceId as ServiceType];
       if (requiredFields?.length) {
-        const cfg = serviceConfig as unknown as Record<string, unknown>;
         const hasAll = requiredFields.every(field => {
-          const val = cfg[field];
+          const val = serviceConfig[field];
           return typeof val === 'string' ? val.trim() : val;
         });
         if (!hasAll) {

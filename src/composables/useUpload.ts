@@ -8,8 +8,8 @@ import {
   UserConfig,
   DEFAULT_CONFIG,
   DEFAULT_COMPRESSION_PRESET,
-  ServiceType
 } from '../config/types';
+import type { ServiceType } from '../config/types';
 import { MultiServiceUploader, SingleServiceResult } from '../core/MultiServiceUploader';
 import { UploadQueueManager } from '../uploadQueue';
 import { useToast } from './useToast';
@@ -385,7 +385,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
   async function processUploadQueue(
     queueItems: Array<{ itemId: string | null; filePath: string; fileName: string }>,
     config: UserConfig,
-    enabledServices: ServiceType[],
+    enabledServices: string[],
     maxConcurrent: number = 5,
     collectedLinks?: CopyLinkItem[],
     uploadSummary?: UploadSessionSummary
@@ -546,7 +546,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             );
 
             result.partialFailures.forEach(({ serviceId }) => {
-              const serviceName = SERVICE_DISPLAY_NAMES[serviceId] || serviceId;
+              const serviceName = (SERVICE_DISPLAY_NAMES as Record<string, string>)[serviceId] || serviceId;
               failureCounts.set(serviceName, (failureCounts.get(serviceName) ?? 0) + 1);
             });
 

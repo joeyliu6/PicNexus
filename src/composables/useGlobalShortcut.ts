@@ -132,7 +132,7 @@ async function formatLinkForShortcut(
   primaryUrl: string,
   filePath: string,
   config: UserConfig,
-  serviceId?: ServiceType
+  serviceId?: string
 ): Promise<string> {
   const fileName = await getFileName(filePath);
   return formatLinkWithConfig({ url: primaryUrl, fileName, serviceId }, config);

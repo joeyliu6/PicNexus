@@ -4,14 +4,14 @@
 
 import { MultiServiceUploader, MultiUploadResult } from '../core/MultiServiceUploader';
 import { UploadQueueManager, QueueItem } from '../uploadQueue';
-import { UserConfig, ServiceType } from '../config/types';
+import { UserConfig } from '../config/types';
 import type { Store } from '../store';
 import { UploadResult } from '../uploaders/base/types';
 import { checkNetworkConnectivity } from '../utils/network';
 import { invalidateCache } from '../composables/useHistory';
 import { emitHistoryUpdated } from '../events/cacheEvents';
 import { historyDB } from './HistoryDatabase';
-import { SERVICE_DISPLAY_NAMES } from '../constants/serviceNames';
+import { getServiceDisplayName } from '../constants/serviceNames';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('RetryService');
@@ -56,7 +56,7 @@ export class RetryService {
    */
   async retrySingleService(
     itemId: string,
-    serviceId: ServiceType,
+    serviceId: string,
     config: UserConfig,
     options?: RetrySingleServiceOptions
   ): Promise<void> {
@@ -116,11 +116,11 @@ export class RetryService {
       await this.handleSingleServiceSuccess(itemId, serviceId, item, result);
 
       if (!silentToast) {
-        this.options.toast.success('修复成功', `${SERVICE_DISPLAY_NAMES[serviceId]} 已补充上传成功`);
+        this.options.toast.success('修复成功', `${getServiceDisplayName(serviceId, config)} 已补充上传成功`);
       }
 
     } catch (error) {
-      await this.handleSingleServiceFailure(itemId, serviceId, item, error, silentToast);
+      await this.handleSingleServiceFailure(itemId, serviceId, item, error, silentToast, config);
     } finally {
       this.retryingItems.delete(retryKey);
     }
@@ -228,7 +228,7 @@ export class RetryService {
       // 检测部分失败
       if (result.isPartialSuccess && result.partialFailures) {
         const failedServiceNames = result.partialFailures
-          .map(f => SERVICE_DISPLAY_NAMES[f.serviceId] || f.serviceId)
+          .map(f => getServiceDisplayName(f.serviceId, config))
           .join('、');
 
         this.options.toast.warn(
@@ -252,7 +252,7 @@ export class RetryService {
    */
   private async handleSingleServiceSuccess(
     itemId: string,
-    serviceId: ServiceType,
+    serviceId: string,
     item: QueueItem,
     result: UploadResult
   ): Promise<void> {
@@ -302,7 +302,7 @@ export class RetryService {
    */
   private async updateHistoryRecord(
     filePath: string,
-    serviceId: ServiceType,
+    serviceId: string,
     result: UploadResult,
     link: string
   ): Promise<void> {
@@ -370,10 +370,11 @@ export class RetryService {
    */
   private async handleSingleServiceFailure(
     itemId: string,
-    serviceId: ServiceType,
+    serviceId: string,
     item: QueueItem,
     error: unknown,
-    silentToast: boolean = false
+    silentToast: boolean = false,
+    config?: UserConfig
   ): Promise<void> {
     const errorMsg = error instanceof Error ? error.message : String(error);
     log.error(`${serviceId} 失败:`, errorMsg);
@@ -412,7 +413,7 @@ export class RetryService {
     }
 
     if (!silentToast) {
-      this.options.toast.error('重试依然失败', `${SERVICE_DISPLAY_NAMES[serviceId]}: ${errorMsg}`);
+      this.options.toast.error('重试依然失败', `${getServiceDisplayName(serviceId, config)}: ${errorMsg}`);
     }
   }
 
@@ -474,12 +475,12 @@ export class RetryService {
   /**
    * 获取队列项中失败的服务列表
    */
-  private getFailedServices(item: QueueItem): ServiceType[] {
-    const failed: ServiceType[] = [];
+  private getFailedServices(item: QueueItem): string[] {
+    const failed: string[] = [];
     if (item.serviceProgress) {
       for (const [serviceId, progress] of Object.entries(item.serviceProgress)) {
-        if (progress.status?.includes('失败') || progress.status?.includes('✗')) {
-          failed.push(serviceId as ServiceType);
+        if (progress?.status?.includes('失败') || progress?.status?.includes('✗')) {
+          failed.push(serviceId);
         }
       }
     }
@@ -501,7 +502,7 @@ export class RetryService {
     }
 
     // 收集所有需要重试的服务
-    const retryTasks: { itemId: string; serviceId: ServiceType }[] = [];
+    const retryTasks: { itemId: string; serviceId: string }[] = [];
     for (const itemId of failedItemIds) {
       const item = this.options.queueManager.getItem(itemId);
       if (item) {
@@ -585,7 +586,7 @@ export class RetryService {
   private async handleFullRetryFailure(
     itemId: string,
     item: QueueItem,
-    enabledServices: ServiceType[],
+    enabledServices: string[],
     error: unknown
   ): Promise<void> {
     const errorMsg = error instanceof Error ? error.message : String(error);
