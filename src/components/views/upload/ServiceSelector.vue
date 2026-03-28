@@ -2,18 +2,17 @@
 // 图床服务选择器组件
 
 import { computed } from 'vue';
-import type { ServiceType } from '../../../config/types';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
 
 // ==================== Props ====================
 
 interface Props {
-  publicServices: ServiceType[];
-  privateServices: ServiceType[];
-  serviceLabels: Record<ServiceType, string>;
-  isServiceSelected: (id: ServiceType) => boolean;
-  serviceHealthMap?: Record<ServiceType, ServiceHealthStatus>;
-  serviceHealthTooltipMap?: Record<ServiceType, string>;
+  publicServices: string[];
+  privateServices: string[];
+  serviceLabels: Record<string, string>;
+  isServiceSelected: (id: string) => boolean;
+  serviceHealthMap?: Record<string, ServiceHealthStatus>;
+  serviceHealthTooltipMap?: Record<string, string>;
 }
 
 const props = defineProps<Props>();
@@ -21,7 +20,7 @@ const props = defineProps<Props>();
 // ==================== Emits ====================
 
 const emit = defineEmits<{
-  toggle: [serviceId: ServiceType];
+  toggle: [serviceId: string];
   'go-settings': [];
 }>();
 
@@ -29,7 +28,7 @@ const hasServices = computed(() => props.publicServices.length > 0 || props.priv
 
 // ==================== Methods ====================
 
-function handleToggle(serviceId: ServiceType) {
+function handleToggle(serviceId: string) {
   emit('toggle', serviceId);
 }
 </script>

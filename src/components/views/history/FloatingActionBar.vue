@@ -2,19 +2,18 @@
 import { ref, computed } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import Button from 'primevue/button';
-import type { ServiceType } from '../../../config/types';
 import type { LinkFormat } from '../../../utils/linkFormatter';
 import { useConfigManager } from '../../../composables/useConfig';
-import { SERVICE_DISPLAY_NAMES } from '../../../constants/serviceNames';
+import { getServiceDisplayName } from '../../../constants/serviceNames';
 
 const props = defineProps<{
   selectedCount: number;
   visible: boolean;
-  availableServices?: ServiceType[];
+  availableServices?: string[];
 }>();
 
 const emit = defineEmits<{
-  (e: 'copy', format: LinkFormat, serviceId?: ServiceType): void;
+  (e: 'copy', format: LinkFormat, serviceId?: string): void;
   (e: 'export'): void;
   (e: 'delete'): void;
   (e: 'clear-selection'): void;
@@ -25,7 +24,7 @@ const configManager = useConfigManager();
 
 const copyMenuVisible = ref(false);
 const copyDropdownRef = ref<HTMLElement | null>(null);
-const selectedService = ref<ServiceType | undefined>(undefined);
+const selectedService = ref<string | undefined>(undefined);
 
 const hasCustomTemplate = computed(() => !!configManager.config.value.linkOutput?.customTemplate);
 const showServiceChips = computed(() => (props.availableServices?.length ?? 0) > 1);
@@ -49,7 +48,7 @@ function toggleCopyMenu(): void {
 
 onClickOutside(copyDropdownRef, closeCopyMenu);
 
-function handleServiceSelect(serviceId: ServiceType): void {
+function handleServiceSelect(serviceId: string): void {
   selectedService.value = selectedService.value === serviceId ? undefined : serviceId;
 }
 
@@ -114,7 +113,7 @@ function handleCopy(format: LinkFormat): void {
                   :class="{ active: selectedService === sid }"
                   @click.stop="handleServiceSelect(sid)"
                 >
-                  {{ SERVICE_DISPLAY_NAMES[sid] || sid }}
+                  {{ getServiceDisplayName(sid) }}
                 </button>
               </div>
               <div v-if="showServiceChips" class="menu-divider"></div>

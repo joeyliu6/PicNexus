@@ -211,7 +211,7 @@ async function handleToggleFavorite(item: HistoryItem): Promise<void> {
   }
 }
 
-function getSuccessfulServices(item: HistoryItem): ServiceType[] {
+function getSuccessfulServices(item: HistoryItem): string[] {
   return item.results
     .filter(r => r.status === 'success')
     .map(r => r.serviceId);
@@ -274,7 +274,7 @@ function estimateBadgeWidth(name: string): number {
   return BADGE_PADDING + BADGE_ICON_WITH_GAP + textWidth;
 }
 
-function getVisibleCount(services: ServiceType[]): number {
+function getVisibleCount(services: string[]): number {
   const available = badgeColumnWidth.value;
   let used = 0;
   let count = 0;
@@ -296,7 +296,7 @@ function getVisibleCount(services: ServiceType[]): number {
 const servicePopoverRef = ref<InstanceType<typeof PopoverType> | null>(null);
 const popoverItem = ref<HistoryItem | null>(null);
 
-const popoverServices = computed<ServiceType[]>(() => {
+const popoverServices = computed<string[]>(() => {
   if (!popoverItem.value) return [];
   return getSuccessfulServices(popoverItem.value);
 });
@@ -306,12 +306,12 @@ function openServicePopover(event: Event, item: HistoryItem): void {
   servicePopoverRef.value?.toggle(event);
 }
 
-function handlePopoverCopyLink(serviceId: ServiceType): void {
+function handlePopoverCopyLink(serviceId: string): void {
   if (!popoverItem.value) return;
   handleCopyServiceLink(popoverItem.value, serviceId);
 }
 
-async function handleCopyServiceLink(item: HistoryItem, serviceId: ServiceType): Promise<void> {
+async function handleCopyServiceLink(item: HistoryItem, serviceId: string): Promise<void> {
   try {
     const result = item.results.find(r => r.serviceId === serviceId && r.status === 'success');
     if (!result?.result?.url) {
@@ -426,10 +426,10 @@ function handleHeaderCheckboxChange(checked: boolean): void {
   });
 }
 
-const selectedAvailableServices = computed<ServiceType[]>(() => {
+const selectedAvailableServices = computed<string[]>(() => {
   const ids = viewState.selectedIdList.value;
   if (ids.length === 0) return [];
-  const serviceSet = new Set<ServiceType>();
+  const serviceSet = new Set<string>();
   for (const item of currentPageData.value) {
     if (!ids.includes(item.id)) continue;
     for (const r of item.results) {

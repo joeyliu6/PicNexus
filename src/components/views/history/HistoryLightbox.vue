@@ -49,7 +49,7 @@ const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
 
 const formatTime = (timestamp: number) => dateFormatter.format(new Date(timestamp));
 
-const getSuccessfulServices = (item: HistoryItem): ServiceType[] =>
+const getSuccessfulServices = (item: HistoryItem): string[] =>
   item.results.filter(r => r.status === 'success').map(r => r.serviceId);
 
 const getFailedResults = (item: HistoryItem) =>

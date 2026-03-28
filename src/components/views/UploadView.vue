@@ -3,8 +3,8 @@ import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { emit as tauriEmit, type UnlistenFn } from '@tauri-apps/api/event';
 import { useConfirm } from '../../composables/useConfirm';
-import type { ServiceType, UserConfig } from '../../config/types';
-import { PRIVATE_SERVICES, PUBLIC_SERVICES, DEFAULT_CONFIG } from '../../config/types';
+import type { UserConfig, CustomS3Profile } from '../../config/types';
+import { PRIVATE_SERVICES, PUBLIC_SERVICES, DEFAULT_CONFIG, makeCustomS3Id } from '../../config/types';
 import { useToast } from '../../composables/useToast';
 import { useServiceHealth } from '../../composables/useServiceHealth';
 import { useUploadManager } from '../../composables/useUpload';
@@ -69,32 +69,48 @@ const retryService = new RetryService({
   }
 });
 
-// 服务配置映射
-const serviceLabels: Record<ServiceType, string> = {
-  weibo: '微博',
-  r2: 'R2',
-  jd: '京东',
-  nowcoder: '牛客',
-  qiyu: '七鱼',
-  zhihu: '知乎',
-  nami: '纳米',
-  bilibili: 'B站',
-  chaoxing: '超星',
-  smms: 'SM.MS',
-  github: 'GitHub',
-  imgur: 'Imgur',
-  tencent: '腾讯云',
-  aliyun: '阿里云',
-  qiniu: '七牛云',
-  upyun: '又拍云'
-};
+// 自定义 S3 profiles（从 configStore 同步）
+const customS3Profiles = ref<CustomS3Profile[]>([]);
 
-// 可见的私有图床（需在 availableServices 中且非未配置状态）
+// 服务配置映射（动态合并自定义 S3 profiles 名称）
+const serviceLabels = computed<Record<string, string>>(() => {
+  const base: Record<string, string> = {
+    weibo: '微博',
+    r2: 'R2',
+    jd: '京东',
+    nowcoder: '牛客',
+    qiyu: '七鱼',
+    zhihu: '知乎',
+    nami: '纳米',
+    bilibili: 'B站',
+    chaoxing: '超星',
+    smms: 'SM.MS',
+    github: 'GitHub',
+    imgur: 'Imgur',
+    tencent: '腾讯云',
+    aliyun: '阿里云',
+    qiniu: '七牛云',
+    upyun: '又拍云',
+  };
+  for (const profile of customS3Profiles.value) {
+    base[makeCustomS3Id(profile.id)] = profile.name || '自定义 S3';
+  }
+  return base;
+});
+
+// 可见的私有图床（需在 availableServices 中且非未配置状态，含自定义 S3）
 const visiblePrivateServices = computed(() => {
-  return PRIVATE_SERVICES.filter(serviceId =>
+  const builtins = PRIVATE_SERVICES.filter(serviceId =>
     uploadManager.availableServices.value.includes(serviceId) &&
     healthStatusMap.value[serviceId] !== 'unconfigured'
   );
+  const customIds = customS3Profiles.value
+    .map(p => makeCustomS3Id(p.id))
+    .filter(id =>
+      uploadManager.availableServices.value.includes(id) &&
+      healthStatusMap.value[id] !== 'unconfigured'
+    );
+  return [...builtins, ...customIds];
 });
 
 // 可见的公共图床（需在 availableServices 中且非未配置状态）
@@ -219,7 +235,7 @@ async function setupTauriFileDropListener() {
 // 设置重试回调
 const setupRetryCallback = () => {
   if (uploadQueuePanelRef.value) {
-    uploadQueuePanelRef.value.setRetryCallback(async (itemId: string, serviceId?: ServiceType) => {
+    uploadQueuePanelRef.value.setRetryCallback(async (itemId: string, serviceId?: string) => {
       const config = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
 
       if (serviceId) {
@@ -237,7 +253,7 @@ const hasFailedServices = (item: typeof queueItems.value[0]): boolean => {
   if (item.status === 'error') return true;
   if (item.serviceProgress) {
     return Object.values(item.serviceProgress).some(
-      progress => progress.status?.includes('失败') || progress.status?.includes('✗')
+      progress => progress?.status?.includes('失败') || progress?.status?.includes('✗')
     );
   }
   return false;

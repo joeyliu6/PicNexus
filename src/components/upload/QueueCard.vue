@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { ServiceType, UserConfig } from '../../config/types';
+import type { UserConfig } from '../../config/types';
 import type { QueueItem } from '../../uploadQueue';
 import type { LinkFormat } from '../../utils/linkFormatter';
 import { getThumbnailCandidates } from '../../composables/useThumbCache';
@@ -23,7 +23,7 @@ interface StackedProgress {
 
 interface QueueCopyPayload {
   url: string;
-  serviceId: ServiceType;
+  serviceId: string;
   fileName: string;
   format?: LinkFormat;
 }
@@ -37,7 +37,7 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   copy: [payload: QueueCopyPayload];
-  retry: [itemId: string, serviceId: ServiceType];
+  retry: [itemId: string, serviceId: string];
 }>();
 
 const counts = computed<StatusCounts>(() => {
@@ -76,7 +76,7 @@ const statusText = computed(() => {
 
 const thumbnailSrcs = computed(() => getThumbnailCandidates(props.item, props.config));
 
-function handleRetry(serviceId: ServiceType) {
+function handleRetry(serviceId: string) {
   emit('retry', props.item.id, serviceId);
 }
 

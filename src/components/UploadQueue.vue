@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import VirtualScroller from 'primevue/virtualscroller';
-import type { ServiceType } from '../config/types';
 import { useQueueState } from '../composables/useQueueState';
 import type { QueueItem } from '../uploadQueue';
 import { deepClone, deepMerge } from '../utils/deepClone';
@@ -21,14 +20,14 @@ const useVirtualScroll = computed(() => queueItems.value.length > VIRTUAL_SCROLL
 
 interface QueueCopyPayload {
   url: string;
-  serviceId: ServiceType;
+  serviceId: string;
   fileName: string;
   format?: LinkFormat;
 }
 
-let retryCallback: ((itemId: string, serviceId?: ServiceType) => void) | null = null;
+let retryCallback: ((itemId: string, serviceId?: string) => void) | null = null;
 
-function handleRetry(itemId: string, serviceId: ServiceType) {
+function handleRetry(itemId: string, serviceId: string) {
   retryCallback?.(itemId, serviceId);
 }
 
@@ -61,7 +60,7 @@ defineExpose({
   },
   count: () => queueItems.value.length,
   getAllItems: () => queueItems.value,
-  setRetryCallback: (callback: (itemId: string, serviceId?: ServiceType) => void) => {
+  setRetryCallback: (callback: (itemId: string, serviceId?: string) => void) => {
     retryCallback = callback;
   },
 });

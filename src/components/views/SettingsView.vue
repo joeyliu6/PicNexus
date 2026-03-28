@@ -37,8 +37,10 @@ import type {
   ImageCompressionConfig,
   EditorServerConfig,
   ServerServiceType,
+  CustomS3Profile,
 } from '../../config/types';
-import { DEFAULT_CONFIG, DEFAULT_PREFIXES } from '../../config/types';
+import { DEFAULT_CONFIG, DEFAULT_PREFIXES, makeCustomS3Id, isCustomS3Id, getCustomS3ProfileId } from '../../config/types';
+import { syncCustomS3Uploaders } from '../../uploaders';
 
 
 const toast = useToast();
@@ -133,6 +135,7 @@ const formData = ref({
   aliyun: { accessKeyId: '', accessKeySecret: '', region: '', bucket: '', path: '', publicDomain: '' },
   qiniu: { accessKey: '', secretKey: '', region: '', bucket: '', publicDomain: '', path: '' },
   upyun: { operator: '', password: '', bucket: '', publicDomain: '', path: '' },
+  custom_s3_profiles: [] as CustomS3Profile[],
   nowcoder: { cookie: '' },
   zhihu: { cookie: '' },
   nami: { cookie: '', authToken: '' },
@@ -163,7 +166,6 @@ const formData = ref({
 });
 
 type SaveFeedbackStatus = 'idle' | 'saving' | 'saved' | 'error';
-type EditorApplyStatus = 'idle' | 'applying' | 'applied' | 'error';
 
 interface SaveFeedbackState {
   status: SaveFeedbackStatus;
@@ -171,14 +173,7 @@ interface SaveFeedbackState {
   updatedAt?: number;
 }
 
-interface EditorApplyFeedbackState {
-  status: EditorApplyStatus;
-  message?: string;
-  updatedAt?: number;
-}
-
 const advancedSaveState = ref<SaveFeedbackState>({ status: 'idle' });
-const editorApplyState = ref<EditorApplyFeedbackState>({ status: 'idle' });
 const lastAppliedEditorPayloadKey = ref<string | null>(null);
 let _advancedSavedResetTimer: ReturnType<typeof setTimeout> | null = null;
 let _debouncedEditorApplyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -203,7 +198,7 @@ function delay(ms: number): Promise<void> {
 }
 
 // 可用服务列表
-const availableServices = ref<ServiceType[]>([]);
+const availableServices = ref<string[]>([]);
 
 // 图床设置跳转：目标卡片 ID
 const targetCardId = ref<string | null>(null);
@@ -215,9 +210,9 @@ const serviceNames: Record<ServiceType, string> = {
 };
 
 
-const serviceConfigStatus = computed<Record<ServiceType, boolean>>(() => {
+const serviceConfigStatus = computed<Record<string, boolean>>(() => {
   const fd = formData.value;
-  return {
+  const result: Record<string, boolean> = {
     r2: !!(fd.r2.accountId && fd.r2.accessKeyId && fd.r2.secretAccessKey && fd.r2.bucketName && fd.r2.publicDomain),
     tencent: !!(fd.tencent.secretId && fd.tencent.secretKey && fd.tencent.region && fd.tencent.bucket && fd.tencent.publicDomain),
     aliyun: !!(fd.aliyun.accessKeyId && fd.aliyun.accessKeySecret && fd.aliyun.region && fd.aliyun.bucket && fd.aliyun.publicDomain),
@@ -235,6 +230,10 @@ const serviceConfigStatus = computed<Record<ServiceType, boolean>>(() => {
     jd: true,
     qiyu: true,
   };
+  for (const profile of fd.custom_s3_profiles || []) {
+    result[makeCustomS3Id(profile.id)] = !!(profile.endpoint && profile.accessKeyId && profile.secretAccessKey && profile.region && profile.bucket);
+  }
+  return result;
 });
 
 function setAdvancedSaveState(status: SaveFeedbackStatus, message?: string) {
@@ -251,10 +250,6 @@ function setAdvancedSaveState(status: SaveFeedbackStatus, message?: string) {
       _advancedSavedResetTimer = null;
     }, 1800);
   }
-}
-
-function setEditorApplyState(status: EditorApplyStatus, message?: string) {
-  editorApplyState.value = { status, message, updatedAt: Date.now() };
 }
 
 // 防抖版保存：用于 blur/watch 触发的自动保存，500ms 内多次触发合并为一次
@@ -326,6 +321,38 @@ async function loadSettings() {
     formData.value.smms = { ...formData.value.smms, ...(config.services?.smms || {}) };
     formData.value.github = { ...formData.value.github, ...(config.services?.github || {}) };
     formData.value.imgur = { ...formData.value.imgur, ...(config.services?.imgur || {}) };
+
+    // 迁移旧的单实例 custom_s3 配置到 profiles
+    const oldCustomS3 = (config.services as any)?.custom_s3;
+    if (oldCustomS3 && (!config.custom_s3_profiles || config.custom_s3_profiles.length === 0)) {
+      if (oldCustomS3.endpoint || oldCustomS3.accessKeyId) {
+        const profileId = generateId();
+        config.custom_s3_profiles = [{
+          id: profileId,
+          name: '自定义 S3',
+          endpoint: oldCustomS3.endpoint || '',
+          accessKeyId: oldCustomS3.accessKeyId || '',
+          secretAccessKey: oldCustomS3.secretAccessKey || '',
+          region: oldCustomS3.region || '',
+          bucket: oldCustomS3.bucket || '',
+          path: oldCustomS3.path || '',
+          publicDomain: oldCustomS3.publicDomain || '',
+        }];
+        const oldId = 'custom_s3';
+        const newId = makeCustomS3Id(profileId);
+        if (config.enabledServices?.includes(oldId)) {
+          config.enabledServices = config.enabledServices.filter((s: string) => s !== oldId).concat(newId);
+        }
+        if (config.availableServices?.includes(oldId)) {
+          config.availableServices = config.availableServices.filter((s: string) => s !== oldId).concat(newId);
+        }
+      }
+      delete (config.services as any).custom_s3;
+    }
+
+    // 自定义 S3 profiles
+    formData.value.custom_s3_profiles = config.custom_s3_profiles || [];
+    syncCustomS3Uploaders(formData.value.custom_s3_profiles);
 
     // WebDAV 配置
     if (config.webdav) {
@@ -413,6 +440,9 @@ async function saveSettings(options: { trackAdvancedStatus?: boolean } = {}): Pr
       imgur: { ...formData.value.imgur, enabled: true },
     };
 
+    // 自定义 S3 profiles
+    config.custom_s3_profiles = formData.value.custom_s3_profiles;
+
     // Nami Token 提取
     const namiCookie = formData.value.nami.cookie;
     let namiAuthToken = formData.value.nami.authToken || '';
@@ -454,6 +484,7 @@ async function saveSettings(options: { trackAdvancedStatus?: boolean } = {}): Pr
     config.availableServices = [...availableServices.value];
 
     await configManager.saveConfig(config, true);
+    syncCustomS3Uploaders(formData.value.custom_s3_profiles);
     serviceHealth.evaluateConfig(config);
 
     if (trackAdvancedStatus) {
@@ -544,19 +575,32 @@ function validateS3Config(serviceId: ServiceType, config: Record<string, unknown
   return null;
 }
 
-async function testS3Connection(serviceId: ServiceType) {
-  const config = formData.value[serviceId as keyof typeof formData.value] as any;
-  const validationError = validateS3Config(serviceId, config);
+async function testS3Connection(serviceId: string) {
+  let config: any;
+  let displayName: string;
+
+  if (isCustomS3Id(serviceId)) {
+    const profileId = getCustomS3ProfileId(serviceId);
+    const profile = formData.value.custom_s3_profiles.find(p => p.id === profileId);
+    if (!profile) throw new Error('找不到该自定义 S3 配置');
+    config = { ...profile };
+    displayName = profile.name || '自定义 S3';
+  } else {
+    config = formData.value[serviceId as keyof typeof formData.value] as any;
+    displayName = serviceNames[serviceId as ServiceType];
+  }
+
+  const validationError = validateS3Config(serviceId as ServiceType, config);
   if (validationError) {
-    toast.showConfig('error', TOAST_MESSAGES.auth.connectionFailed(serviceNames[serviceId], validationError));
+    toast.showConfig('error', TOAST_MESSAGES.auth.connectionFailed(displayName, validationError));
     throw new Error(validationError);
   }
   try {
     await invoke('test_s3_connection', { serviceId, config });
-    toast.showConfig('success', TOAST_MESSAGES.auth.configValid(serviceNames[serviceId]));
+    toast.showConfig('success', TOAST_MESSAGES.auth.configValid(displayName));
   } catch (error) {
     const msg = errorToString(error);
-    toast.showConfig('error', TOAST_MESSAGES.auth.connectionFailed(serviceNames[serviceId], msg));
+    toast.showConfig('error', TOAST_MESSAGES.auth.connectionFailed(displayName, msg));
     throw error;
   }
 }
@@ -614,6 +658,10 @@ const actions: Record<string, () => Promise<void>> = {
 };
 
 async function handleServiceTest(serviceId: string) {
+  if (isCustomS3Id(serviceId)) {
+    await testConn(() => testS3Connection(serviceId), serviceId);
+    return;
+  }
   await testConn(actions[serviceId], serviceId);
 }
 
@@ -633,10 +681,16 @@ async function handleBuiltinCheck(serviceId: string) {
 
 const S3_SERVICE_IDS: ServiceType[] = ['r2', 'tencent', 'aliyun', 'qiniu', 'upyun'];
 
-function preValidateService(serviceId: ServiceType): string | null {
-  if (S3_SERVICE_IDS.includes(serviceId)) {
+function preValidateService(serviceId: string): string | null {
+  if (isCustomS3Id(serviceId)) {
+    const profileId = getCustomS3ProfileId(serviceId);
+    const profile = formData.value.custom_s3_profiles.find(p => p.id === profileId);
+    if (!profile) return '找不到该自定义 S3 配置';
+    return validateS3Config(serviceId as ServiceType, profile as any);
+  }
+  if (S3_SERVICE_IDS.includes(serviceId as ServiceType)) {
     const config = formData.value[serviceId as keyof typeof formData.value] as any;
-    return validateS3Config(serviceId, config);
+    return validateS3Config(serviceId as ServiceType, config);
   }
   return null;
 }
@@ -758,6 +812,49 @@ function resetToDefaultPrefixes() {
   saveSettings();
 }
 
+function addCustomS3Profile() {
+  const newProfile: CustomS3Profile = {
+    id: generateId(),
+    name: `自定义 S3 ${formData.value.custom_s3_profiles.length + 1}`,
+    endpoint: '', accessKeyId: '', secretAccessKey: '',
+    region: '', bucket: '', path: '', publicDomain: ''
+  };
+  formData.value.custom_s3_profiles.push(newProfile);
+  saveSettings();
+}
+
+async function deleteCustomS3Profile(profileId: string) {
+  const profile = formData.value.custom_s3_profiles.find(p => p.id === profileId);
+  const profileName = profile?.name || '自定义 S3';
+  const confirmed = await confirmDialog(
+    `确定要删除「${profileName}」配置吗？删除后相关的编辑器服务绑定也会一并清除。`,
+    '删除配置'
+  );
+  if (!confirmed) return;
+
+  formData.value.custom_s3_profiles = formData.value.custom_s3_profiles.filter(p => p.id !== profileId);
+  const compositeId = makeCustomS3Id(profileId);
+  availableServices.value = availableServices.value.filter(s => s !== compositeId);
+
+  // 级联清理：编辑器服务绑定
+  const editor = formData.value.editorServer;
+  if (editor.typoraService === compositeId) {
+    editor.typoraService = '' as ServerServiceType;
+  }
+  if (editor.obsidianService === compositeId) {
+    editor.obsidianService = '' as ServerServiceType;
+  }
+
+  saveSettings();
+}
+
+function updateCustomS3Profile(profile: CustomS3Profile) {
+  const idx = formData.value.custom_s3_profiles.findIndex(p => p.id === profile.id);
+  if (idx !== -1) {
+    formData.value.custom_s3_profiles[idx] = { ...profile };
+  }
+  saveSettings();
+}
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 11);
@@ -857,8 +954,16 @@ function buildServiceConfigJson(service: ServerServiceType | null): string | nul
       return JSON.stringify({ type: 'qiniu', accessKey: fd.qiniu.accessKey, secretKey: fd.qiniu.secretKey, region: fd.qiniu.region, bucket: fd.qiniu.bucket, customDomain: fd.qiniu.publicDomain, path: fd.qiniu.path });
     case 'upyun':
       return JSON.stringify({ type: 'upyun', operator: fd.upyun.operator, password: fd.upyun.password, bucket: fd.upyun.bucket, publicDomain: fd.upyun.publicDomain });
-    default:
+    default: {
+      if (isCustomS3Id(svc)) {
+        const profileId = getCustomS3ProfileId(svc);
+        const profile = fd.custom_s3_profiles.find(p => p.id === profileId);
+        if (profile) {
+          return JSON.stringify({ type: svc, endpoint: profile.endpoint, accessKeyId: profile.accessKeyId, secretAccessKey: profile.secretAccessKey, region: profile.region, bucket: profile.bucket, path: profile.path, publicDomain: profile.publicDomain });
+        }
+      }
       return null;
+    }
   }
 }
 
@@ -903,8 +1008,14 @@ function buildEditorCredentialSignature(service: ServerServiceType, fd: typeof f
       return [fd.qiniu.accessKey, fd.qiniu.secretKey, fd.qiniu.region, fd.qiniu.bucket, fd.qiniu.publicDomain, fd.qiniu.path].join('|');
     case 'upyun':
       return [fd.upyun.operator, fd.upyun.password, fd.upyun.bucket, fd.upyun.publicDomain].join('|');
-    default:
+    default: {
+      if (isCustomS3Id(service)) {
+        const profileId = getCustomS3ProfileId(service);
+        const profile = fd.custom_s3_profiles.find(p => p.id === profileId);
+        if (profile) return [profile.endpoint, profile.accessKeyId, profile.secretAccessKey, profile.region, profile.bucket, profile.path, profile.publicDomain].join('|');
+      }
       return '';
+    }
   }
 }
 
@@ -930,13 +1041,11 @@ watch(activeEditorServiceSignature, () => {
 
 async function applyEditorServer(
   cfg: EditorServerConfig,
-  options: { force?: boolean; trackStatus?: boolean } = {},
+  options: { force?: boolean } = {},
 ): Promise<boolean> {
-  const { force = false, trackStatus = true } = options;
+  const { force = false } = options;
 
   if (!Number.isInteger(cfg.port) || cfg.port < 1024 || cfg.port > 65535) {
-    const message = '端口必须在 1024-65535 之间';
-    setEditorApplyState('error', message);
     return false;
   }
 
@@ -945,30 +1054,17 @@ async function applyEditorServer(
   const payloadKey = JSON.stringify({ obsidian: obsidianPayload, cli: cliConfigJson });
 
   if (!force && payloadKey === lastAppliedEditorPayloadKey.value) {
-    if (trackStatus && editorApplyState.value.status !== 'error') {
-      setEditorApplyState('applied', cfg.enabled ? '配置已生效' : '配置已应用（服务未启动）');
-    }
     return true;
-  }
-
-  if (trackStatus) {
-    setEditorApplyState('applying', '应用中…');
   }
 
   try {
     await invoke('update_server_config', obsidianPayload);
     await invoke('save_cli_config', { serviceConfigJson: cliConfigJson });
     lastAppliedEditorPayloadKey.value = payloadKey;
-    if (trackStatus) {
-      const message = cfg.enabled ? '已生效' : '配置已应用（服务未启动）';
-      setEditorApplyState('applied', message);
-    }
     return true;
   } catch (e) {
     console.error('[Server] 更新失败:', e);
-    const detail = errorToString(e);
-    setEditorApplyState('error', `应用失败：${detail}`);
-    toast.showConfig('error', { summary: '编辑器 Server 更新失败', detail });
+    toast.showConfig('error', { summary: '编辑器服务启动失败', detail: errorToString(e) });
     return false;
   }
 }
@@ -977,7 +1073,7 @@ function debouncedApplyEditorServer() {
   if (_debouncedEditorApplyTimer) clearTimeout(_debouncedEditorApplyTimer);
   _debouncedEditorApplyTimer = setTimeout(() => {
     _debouncedEditorApplyTimer = null;
-    void applyEditorServer(formData.value.editorServer, { trackStatus: false });
+    void applyEditorServer(formData.value.editorServer);
   }, 500);
 }
 
@@ -1027,7 +1123,7 @@ onMounted(async () => {
   await loadSettings();
 
   // 启动时同步编辑器配置（包含 CLI 配置与 Server 运行态）
-  await applyEditorServer(formData.value.editorServer, { force: true, trackStatus: false });
+  await applyEditorServer(formData.value.editorServer, { force: true });
 
   const { listen } = await import('@tauri-apps/api/event');
   compressionSyncUnlisten.value = await listen('config-updated', async () => {
@@ -1134,10 +1230,8 @@ onUnmounted(() => {
           :image-compression="formData.imageCompression"
           :editor-server="formData.editorServer"
           :executable-path="executablePath"
-          :editor-apply-state="editorApplyState"
           @update:image-compression="(v: ImageCompressionConfig) => { formData.imageCompression = v; debouncedSaveSettingsWithStatus(); }"
-          @update:editor-server="async (v: EditorServerConfig) => { formData.editorServer = v; await applyEditorServer(v, { trackStatus: true }); debouncedSaveSettingsWithStatus(); }"
-          @retry-editor-apply="() => applyEditorServer(formData.editorServer, { force: true, trackStatus: true })"
+          @update:editor-server="async (v: EditorServerConfig) => { formData.editorServer = v; await applyEditorServer(v); debouncedSaveSettingsWithStatus(); }"
           @navigate-hosting="activeTab = 'hosting'"
           @save="debouncedSaveSettingsWithStatus"
         />
@@ -1151,8 +1245,9 @@ onUnmounted(() => {
             tencent: formData.tencent,
             aliyun: formData.aliyun,
             qiniu: formData.qiniu,
-            upyun: formData.upyun
+            upyun: formData.upyun,
           }"
+          :custom-s3-profiles="formData.custom_s3_profiles"
           :cookie-form-data="{
             weibo: { cookie: formData.weiboCookie },
             zhihu: formData.zhihu,
@@ -1200,6 +1295,9 @@ onUnmounted(() => {
           @add-prefix="addPrefix"
           @remove-prefix="removePrefix"
           @reset-to-default="resetToDefaultPrefixes"
+          @add-custom-s3="addCustomS3Profile"
+          @delete-custom-s3="deleteCustomS3Profile"
+          @update-custom-s3="updateCustomS3Profile"
         />
       </div>
 

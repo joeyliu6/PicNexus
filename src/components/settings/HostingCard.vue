@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue';
+import { ref, computed, watch } from 'vue';
 import Button from 'primevue/button';
 import type { ServiceHealthStatus } from '../../types/serviceHealth';
 
@@ -43,13 +43,17 @@ const emit = defineEmits<{
 const cardRef = ref<HTMLElement | null>(null);
 const isExpanded = ref(props.defaultExpanded);
 
+/** CSS Grid 过渡时长（ms），与 CSS 中的 0.25s 保持一致 */
+const TRANSITION_DURATION = 260;
+/** 滚动时额外留白（px），避免卡片紧贴容器边界 */
+const SCROLL_PADDING = 15;
+
 watch(() => props.forceExpand, (val) => {
   if (val) {
     isExpanded.value = true;
     emit('toggle', true);
-    nextTick(() => {
-      cardRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+    // 等待 CSS Grid 过渡完成后再滚动
+    setTimeout(scrollCardIntoView, TRANSITION_DURATION);
   }
 }, { immediate: true });
 
@@ -71,12 +75,24 @@ function scrollCardIntoView(): void {
 
   const cardRect = card.getBoundingClientRect();
   const parentRect = scrollParent.getBoundingClientRect();
-  const overflow = cardRect.bottom + 10 - parentRect.bottom;
+  const viewHeight = parentRect.height;
+  const cardHeight = cardRect.height;
 
-  if (overflow > 0) {
-    scrollParent.scrollBy({ top: overflow, behavior: 'smooth' });
-  } else if (cardRect.top < parentRect.top) {
-    scrollParent.scrollBy({ top: cardRect.top - parentRect.top - 10, behavior: 'smooth' });
+  // 卡片比可视区域还高 → 优先显示顶部（名称）
+  if (cardHeight > viewHeight - SCROLL_PADDING * 2) {
+    const topOffset = cardRect.top - parentRect.top - SCROLL_PADDING;
+    if (Math.abs(topOffset) > 1) {
+      scrollParent.scrollBy({ top: topOffset, behavior: 'smooth' });
+    }
+    return;
+  }
+
+  // 卡片能完整显示 → 确保整张卡片在可视区域内
+  const bottomOverflow = cardRect.bottom + SCROLL_PADDING - parentRect.bottom;
+  if (bottomOverflow > 0) {
+    scrollParent.scrollBy({ top: bottomOverflow, behavior: 'smooth' });
+  } else if (cardRect.top < parentRect.top + SCROLL_PADDING) {
+    scrollParent.scrollBy({ top: cardRect.top - parentRect.top - SCROLL_PADDING, behavior: 'smooth' });
   }
 }
 
@@ -85,8 +101,8 @@ const toggleExpanded = () => {
   emit('toggle', isExpanded.value);
 
   if (isExpanded.value) {
-    // 等待 DOM 更新和渲染完成后再滚动
-    nextTick(() => requestAnimationFrame(() => requestAnimationFrame(scrollCardIntoView)));
+    // 等待 CSS Grid 过渡完成后再滚动，确保高度已经展开到位
+    setTimeout(scrollCardIntoView, TRANSITION_DURATION);
   }
 };
 
@@ -128,8 +144,9 @@ const statusDotClass = computed(() => {
       </div>
     </div>
 
-    <div v-if="isExpanded" class="card-content">
-      <div class="content-inner">
+    <div class="card-content-wrapper">
+      <div class="card-content">
+        <div class="content-inner">
         <slot></slot>
 
         <div v-if="isBuiltin" class="builtin-status" :class="{ available: isAvailable }">
@@ -178,6 +195,7 @@ const statusDotClass = computed(() => {
         </div>
 
         <slot name="extra"></slot>
+        </div>
       </div>
     </div>
   </div>
@@ -285,23 +303,23 @@ const statusDotClass = computed(() => {
   box-shadow: 0 0 0 2px var(--bg-card), 0 0 6px var(--error-border);
 }
 
-.card-content {
-  border-top: 1px solid var(--border-subtle);
-  animation: slideDown 0.2s ease;
+/* CSS Grid 展开/收起动画 */
+.card-content-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.25s ease;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.hosting-card.expanded .card-content-wrapper {
+  grid-template-rows: 1fr;
+}
+
+.card-content {
+  overflow: hidden;
 }
 
 .content-inner {
+  border-top: 1px solid var(--border-subtle);
   padding: 16px;
   display: flex;
   flex-direction: column;

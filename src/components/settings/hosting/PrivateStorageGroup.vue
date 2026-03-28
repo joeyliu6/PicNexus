@@ -3,6 +3,8 @@ import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
 import HostingCard from '../HostingCard.vue';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
+import type { CustomS3Profile } from '../../../config/types';
+import { makeCustomS3Id } from '../../../config/types';
 
 interface PrivateFormData {
   r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; path: string; publicDomain: string };
@@ -93,10 +95,23 @@ const PRIVATE_SERVICES: ServiceConfig[] = [
   },
 ];
 
+const CUSTOM_S3_FIELDS: FieldConfig[] = [
+  { key: 'name', label: '显示名称', type: 'text', placeholder: '如：我的 MinIO', spanFull: true },
+  { key: 'endpoint', label: 'Endpoint (端点地址)', type: 'text', placeholder: 'https://s3.amazonaws.com', spanFull: true, hint: '完整的 S3 兼容端点 URL，包含协议前缀' },
+  { key: 'accessKeyId', label: 'Access Key ID', type: 'password', placeholder: '输入 Access Key ID' },
+  { key: 'secretAccessKey', label: 'Secret Access Key', type: 'password', placeholder: '输入 Secret Access Key' },
+  { key: 'region', label: '地域 (Region)', type: 'text', placeholder: 'us-east-1' },
+  { key: 'bucket', label: '存储桶 (Bucket)', type: 'text' },
+  { key: 'path', label: '自定义路径 (Optional)', type: 'text', placeholder: 'e.g. blog/images/', spanFull: true },
+  { key: 'publicDomain', label: '公开访问域名 (Optional)', type: 'text', placeholder: 'https://cdn.example.com', spanFull: true, hint: '留空则使用 Endpoint 构建访问链接' },
+];
+const CUSTOM_S3_REQUIRED_KEYS = ['endpoint', 'accessKeyId', 'secretAccessKey', 'region', 'bucket'];
+
 // NOTE: privateFormData 通过引用传递，子组件直接修改嵌套属性是有意为之的设计
 // 父组件（HostingSettingsPanel）负责监听 save 事件触发持久化
 const props = defineProps<{
   privateFormData: PrivateFormData;
+  customS3Profiles: CustomS3Profile[];
   testingConnections: Record<string, boolean>;
   healthStatusMap: Record<string, ServiceHealthStatus>;
   healthTooltipMap: Record<string, string>;
@@ -106,11 +121,29 @@ const props = defineProps<{
 const emit = defineEmits<{
   save: [];
   testPrivate: [providerId: string];
+  addCustomS3: [];
+  deleteCustomS3: [profileId: string];
+  updateCustomS3: [profile: CustomS3Profile];
 }>();
 
 function isConfigured(svc: ServiceConfig): boolean {
   const data = props.privateFormData[svc.id] as Record<string, string>;
   return svc.requiredKeys.every(k => !!data[k]?.trim());
+}
+
+function isCustomS3Configured(profile: CustomS3Profile): boolean {
+  return CUSTOM_S3_REQUIRED_KEYS.every(k => !!(profile[k as keyof CustomS3Profile] as string)?.trim());
+}
+
+function getCustomS3Field(profile: CustomS3Profile, key: string): string {
+  return (profile[key as keyof CustomS3Profile] as string) || '';
+}
+
+function setCustomS3Field(profileId: string, key: string, value: string) {
+  const profile = props.customS3Profiles.find(p => p.id === profileId);
+  if (profile) {
+    emit('updateCustomS3', { ...profile, [key]: value });
+  }
 }
 
 function getFieldModel(svcId: PrivateProviderId, fieldKey: string) {
@@ -167,9 +200,111 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
         </div>
       </div>
     </HostingCard>
+
+    <!-- 自定义 S3 多实例 -->
+    <HostingCard
+      v-for="profile in customS3Profiles"
+      :key="makeCustomS3Id(profile.id)"
+      :id="makeCustomS3Id(profile.id)"
+      :force-expand="targetCardId === makeCustomS3Id(profile.id)"
+      :name="profile.name || '自定义 S3'"
+      description="S3 兼容存储"
+      :isConfigured="isCustomS3Configured(profile)"
+      :health-status="healthStatusMap[makeCustomS3Id(profile.id)]"
+      :health-tooltip="healthTooltipMap[makeCustomS3Id(profile.id)]"
+      :isTesting="testingConnections[makeCustomS3Id(profile.id)]"
+      @test="emit('testPrivate', $event)"
+    >
+      <div class="form-grid">
+        <div
+          v-for="field in CUSTOM_S3_FIELDS"
+          :key="field.key"
+          class="form-item"
+          :class="{ 'span-full': field.spanFull }"
+        >
+          <label>{{ field.label }}</label>
+          <Password
+            v-if="field.type === 'password'"
+            :modelValue="getCustomS3Field(profile, field.key)"
+            @update:modelValue="setCustomS3Field(profile.id, field.key, $event)"
+            @blur="emit('save')"
+            :feedback="false"
+            toggleMask
+            fluid
+            :placeholder="field.placeholder"
+          />
+          <InputText
+            v-else
+            :modelValue="getCustomS3Field(profile, field.key)"
+            @update:modelValue="setCustomS3Field(profile.id, field.key, $event ?? '')"
+            @blur="emit('save')"
+            :placeholder="field.placeholder"
+            class="w-full"
+          />
+          <small v-if="field.hint" class="field-hint">{{ field.hint }}</small>
+        </div>
+      </div>
+      <div class="custom-s3-delete">
+        <button class="delete-profile-btn" @click.stop="emit('deleteCustomS3', profile.id)">
+          <i class="pi pi-trash"></i>
+          <span>删除此配置</span>
+        </button>
+      </div>
+    </HostingCard>
+
+    <button class="add-custom-s3-btn" @click="emit('addCustomS3')">
+      <i class="pi pi-plus"></i>
+      <span>添加自定义 S3</span>
+    </button>
   </div>
 </template>
 
 <style scoped>
 @import '../../../styles/settings-shared.css';
+
+.custom-s3-delete {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.delete-profile-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: none;
+  border: 1px solid var(--error-alpha-20);
+  border-radius: 6px;
+  color: var(--error);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.delete-profile-btn:hover {
+  background: var(--error-alpha-8);
+}
+
+.add-custom-s3-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px;
+  background: none;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.add-custom-s3-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-alpha-6);
+}
 </style>

@@ -3,7 +3,6 @@
 
 import { ref } from 'vue';
 import UploadQueue from '../../UploadQueue.vue';
-import type { ServiceType } from '../../../config/types';
 
 // ==================== Props ====================
 
@@ -31,7 +30,7 @@ const uploadQueueRef = ref<InstanceType<typeof UploadQueue>>();
 /**
  * 设置重试回调（代理到内部的 UploadQueue 组件）
  */
-function setRetryCallback(callback: (itemId: string, serviceId?: ServiceType) => Promise<void>) {
+function setRetryCallback(callback: (itemId: string, serviceId?: string) => Promise<void>) {
   if (uploadQueueRef.value) {
     uploadQueueRef.value.setRetryCallback(callback);
   }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, watchEffect, nextTick, onUnmounted } from 'vue';
 import Divider from 'primevue/divider';
-import type { GithubCdnConfig, ServiceType } from '../../config/types';
+import type { GithubCdnConfig, ServiceType, CustomS3Profile } from '../../config/types';
 import { PRIVATE_SERVICES, PUBLIC_SERVICES } from '../../config/types';
 import PrivateStorageGroup from './hosting/PrivateStorageGroup.vue';
 import CookieServiceGroup from './hosting/CookieServiceGroup.vue';
@@ -45,6 +45,7 @@ interface TokenFormData {
 
 const props = defineProps<{
   privateFormData: PrivateFormData;
+  customS3Profiles: CustomS3Profile[];
   cookieFormData: CookieFormData;
   tokenFormData: TokenFormData;
   testingConnections: Record<string, boolean>;
@@ -61,13 +62,13 @@ const props = defineProps<{
   batchTestProgress?: BatchTestProgress | null;
   batchTestCompletionKey?: number;
   serviceNames: Record<string, string>;
-  availableServices: ServiceType[];
+  availableServices: string[];
   serviceConfigStatus: Record<ServiceType, boolean>;
 }>();
 
 const emit = defineEmits<{
   save: [];
-  'update:availableServices': [services: ServiceType[]];
+  'update:availableServices': [services: string[]];
   testPrivate: [providerId: string];
   testToken: [providerId: string];
   testCookie: [providerId: string];
@@ -84,6 +85,9 @@ const emit = defineEmits<{
   testAll: [];
   cancelBatchTest: [];
   scrollToService: [serviceId: string];
+  addCustomS3: [];
+  deleteCustomS3: [profileId: string];
+  updateCustomS3: [profile: CustomS3Profile];
 }>();
 
 watch(() => props.targetCardId, (val) => {
@@ -346,12 +350,16 @@ function toggleFilter(status: ServiceHealthStatus) {
 
       <PrivateStorageGroup
         :private-form-data="privateFormData"
+        :custom-s3-profiles="customS3Profiles"
         :testing-connections="testingConnections"
         :health-status-map="healthStatusMap"
         :health-tooltip-map="healthTooltipMap"
         :target-card-id="targetCardId"
         @save="emit('save')"
         @test-private="emit('testPrivate', $event)"
+        @add-custom-s3="emit('addCustomS3')"
+        @delete-custom-s3="emit('deleteCustomS3', $event)"
+        @update-custom-s3="emit('updateCustomS3', $event)"
       />
     </div>
 

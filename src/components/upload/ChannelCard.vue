@@ -1,23 +1,22 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { onClickOutside } from '@vueuse/core';
-import type { ServiceType } from '../../config/types';
 import { useConfigManager } from '../../composables/useConfig';
 import { LINK_FORMAT_OPTIONS, type LinkFormat } from '../../utils/linkFormatter';
 import { getServiceIcon } from '../../utils/icons';
-import { SERVICE_DISPLAY_NAMES } from '../../constants/serviceNames';
+import { getServiceDisplayName } from '../../constants/serviceNames';
 import { isStatusSuccess, isStatusError, getStatusType, getStatusLabel } from '../../utils/uploadStatus';
 import { buildUploadFailureTooltip } from '../../utils/uploadFailureMessage';
 
 export interface ChannelCopyPayload {
   url: string;
-  serviceId: ServiceType;
+  serviceId: string;
   fileName: string;
   format?: LinkFormat;
 }
 
 interface Props {
-  service: ServiceType;
+  service: string;
   status?: string;
   link?: string;
   error?: string;
@@ -33,7 +32,7 @@ const emit = defineEmits<{
 
 const configManager = useConfigManager();
 
-const serviceName = computed(() => SERVICE_DISPLAY_NAMES[props.service]);
+const serviceName = computed(() => getServiceDisplayName(props.service));
 const serviceIcon = computed(() => getServiceIcon(props.service));
 const statusType = computed(() => getStatusType(props.status));
 const statusLabel = computed(() => getStatusLabel(props.status));
