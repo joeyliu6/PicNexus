@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import ToggleSwitch from 'primevue/toggleswitch';
 import InputNumber from 'primevue/inputnumber';
 
@@ -43,12 +43,6 @@ const statusDesc = computed(() => {
   }
   if (p.stripExif) parts.push('去 EXIF');
   return parts.join(' · ');
-});
-
-onMounted(() => {
-  if (props.imageCompression.enabled) {
-    expanded.value = true;
-  }
 });
 
 onBeforeUnmount(() => {
@@ -230,6 +224,14 @@ const qualityLevel = computed(() => {
   return { label: '高', cls: 'quality-high' };
 });
 
+const scaleLevel = computed(() => {
+  const s = activePreset.value.scalePercent ?? 100;
+  if (s >= 100) return { label: '原图', cls: 'scale-original' };
+  if (s >= 75) return { label: '轻微', cls: 'scale-light' };
+  if (s >= 50) return { label: '适中', cls: 'scale-moderate' };
+  return { label: '激进', cls: 'scale-heavy' };
+});
+
 const previewDialogVisible = ref(false);
 
 function openPreviewDialog() {
@@ -273,11 +275,6 @@ function openPreviewDialog() {
               @click="selectPreset(preset.id)"
               @dblclick="startEditing(preset.id)"
             >{{ editingPresetId === preset.id ? editDraft : preset.name }}</span>
-            <i
-              v-if="editingPresetId !== preset.id && imageCompression.activePresetId === preset.id"
-              class="pi pi-pencil preset-edit-icon"
-              @click.stop="startEditing(preset.id)"
-            />
             <input
               v-if="editingPresetId === preset.id"
               ref="editInputRef"
@@ -301,7 +298,7 @@ function openPreviewDialog() {
         <div class="settings-row">
           <div class="settings-row-info">
             <span class="settings-row-label">输出格式</span>
-            <span class="settings-row-desc">压缩后图片的输出格式，不同格式在体积、画质和兼容性上各有取舍</span>
+            <span class="settings-row-desc">不同格式在体积、画质和兼容性上各有取舍</span>
           </div>
           <div class="format-tabs">
             <button
@@ -342,23 +339,26 @@ function openPreviewDialog() {
             <span class="settings-row-label">图片缩放</span>
             <span class="settings-row-desc">等比缩放，100% 为原始尺寸</span>
           </div>
-          <div class="narrow-input">
-            <InputNumber
-              :modelValue="activePreset.scalePercent ?? 100"
-              :min="1"
-              :max="100"
-              :useGrouping="false"
-              suffix="%"
-              @update:modelValue="handleScaleInput"
-              @blur="commitScaleInput"
-            />
+          <div class="scale-input-group">
+            <span class="quality-badge" :class="scaleLevel.cls">{{ scaleLevel.label }}</span>
+            <div class="narrow-input">
+              <InputNumber
+                :modelValue="activePreset.scalePercent ?? 100"
+                :min="1"
+                :max="100"
+                :useGrouping="false"
+                suffix="%"
+                @update:modelValue="handleScaleInput"
+                @blur="commitScaleInput"
+              />
+            </div>
           </div>
         </div>
 
         <div class="settings-row">
           <div class="settings-row-info">
             <span class="settings-row-label">跳过小文件</span>
-            <span class="settings-row-desc">低于阈值的文件不做压缩处理，建议 1-3MB</span>
+            <span class="settings-row-desc">低于阈值的文件不做压缩处理，避免越压越大</span>
           </div>
           <div class="skip-input-group">
             <InputNumber
@@ -531,9 +531,12 @@ function openPreviewDialog() {
 }
 
 .preset-tab {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  min-width: 64px;
+  min-height: 28px;
   padding: 5px 14px;
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
@@ -561,6 +564,7 @@ function openPreviewDialog() {
   border-style: dashed;
   color: var(--text-muted);
   padding: 5px 10px;
+  min-width: auto;
 }
 
 .preset-tab.add-tab:hover:not(.disabled) {
@@ -582,14 +586,10 @@ function openPreviewDialog() {
 .preset-tab-label {
   user-select: none;
   cursor: pointer;
-}
-
-.preset-tab.active .preset-tab-label {
-  cursor: pointer;
+  text-align: center;
 }
 
 .preset-tab.editing {
-  position: relative;
   border-color: var(--primary);
 }
 
@@ -603,6 +603,7 @@ function openPreviewDialog() {
   font: inherit;
   padding: 5px 14px;
   box-sizing: border-box;
+  text-align: center;
 }
 
 .preset-actions {
@@ -640,27 +641,10 @@ function openPreviewDialog() {
   font-size: 11px;
 }
 
-/* --- Preset Edit Icon --- */
-
-.preset-edit-icon {
-  font-size: 10px;
-  color: var(--text-muted);
-  opacity: 0;
-  cursor: pointer;
-  transition: opacity 0.15s, color 0.15s;
-}
-
-.preset-tab.active:hover .preset-edit-icon {
-  opacity: 1;
-}
-
-.preset-edit-icon:hover {
-  color: var(--primary);
-}
-
 /* --- Quality Badge --- */
 
-.quality-input-group {
+.quality-input-group,
+.scale-input-group {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -694,6 +678,28 @@ function openPreviewDialog() {
 .quality-badge.quality-high {
   color: var(--primary);
   background: var(--primary-alpha-8);
+}
+
+/* --- Scale Badge --- */
+
+.quality-badge.scale-original {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.quality-badge.scale-light {
+  color: var(--primary);
+  background: var(--primary-alpha-8);
+}
+
+.quality-badge.scale-moderate {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.quality-badge.scale-heavy {
+  color: var(--error);
+  background: var(--error-alpha-8);
 }
 
 /* --- Format Tabs --- */
@@ -823,14 +829,15 @@ function openPreviewDialog() {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 0;
-  border: none;
-  background: none;
-  color: var(--text-muted);
+  padding: 5px 14px;
+  border: 1px solid var(--primary-alpha-15);
+  border-radius: 999px;
+  background: var(--primary-alpha-8);
+  color: var(--primary);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: color 0.15s;
+  transition: all 0.15s;
   flex-shrink: 0;
 }
 
@@ -840,7 +847,7 @@ function openPreviewDialog() {
 }
 
 .preview-btn:hover:not(:disabled) {
-  color: var(--primary);
+  background: var(--primary-alpha-12);
 }
 
 .preview-btn:disabled {

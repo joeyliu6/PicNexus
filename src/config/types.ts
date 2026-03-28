@@ -575,7 +575,7 @@ export const DEFAULT_COMPRESSION_PRESET: CompressionPreset = {
   outputFormat: 'original',
   maxLongSide: 0,
   scalePercent: 100,
-  skipIfSmallerKB: 200,
+  skipIfSmallerKB: 2048,
   stripExif: true,
 };
 
