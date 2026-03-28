@@ -186,9 +186,11 @@ fn main() {
             commands::image_compress::compress_image,
             commands::image_compress::cleanup_compressed_files,
             commands::image_compress::strip_exif_only,
+            commands::image_compress::read_image_as_base64,
             get_or_create_secure_key,
             set_secure_key,
             open_log_dir,
+            check_port_free,
             update_server_config,
             save_cli_config,
             get_executable_path
@@ -1915,6 +1917,11 @@ async fn save_cli_config(
     Ok(())
 }
 
+#[tauri::command]
+async fn check_port_free(port: u16) -> bool {
+    server::is_port_free(port).await
+}
+
 /// 更新编辑器兼容 Server 配置（由前端调用）
 ///
 /// - enabled: 是否启动 Server
@@ -1961,12 +1968,15 @@ async fn update_server_config(
         }
     }
 
-    // 3. 如果 enabled，启动新 Server
+    // 3. 如果 enabled，两阶段启动：先 bind（同步等结果），再 spawn serve
     if enabled {
+        let listener = server::bind_server(port).await
+            .map_err(|e| AppError::external(e))?;
+
         let config_arc = Arc::clone(&state.upload_config);
         let task = tokio::task::spawn(async move {
-            if let Err(e) = server::start_server(port, config_arc).await {
-                log::error!("[Server] 启动失败: {}", e);
+            if let Err(e) = server::run_server(listener, config_arc).await {
+                log::error!("[Server] 运行失败: {}", e);
             }
         });
 

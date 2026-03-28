@@ -158,6 +158,8 @@ pub struct S3TestConfig {
     pub bucket: Option<String>,
     // region
     pub region: Option<String>,
+    // 自定义 S3 端点（custom_s3 专用）
+    pub endpoint: Option<String>,
 }
 
 impl S3TestConfig {
@@ -300,6 +302,43 @@ fn build_s3_endpoint(
                 region.clone(),
             ))
         }
+        s if s == "custom_s3" || s.starts_with("custom_s3:") => {
+            let endpoint = config.endpoint.as_ref()
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| AppError::config("自定义 S3 Endpoint 不能为空"))?;
+
+            // 校验 endpoint 是合法的 HTTP(S) URL，防止 SSRF
+            let parsed = url::Url::parse(endpoint)
+                .map_err(|_| AppError::config("Endpoint 不是合法的 URL，请输入完整的 https://... 地址"))?;
+            match parsed.scheme() {
+                "http" | "https" => {}
+                _ => return Err(AppError::config("Endpoint 仅支持 http 或 https 协议")),
+            }
+            // 拒绝内网 / 元数据地址（RFC 1918 + link-local + loopback + 云元数据）
+            if let Some(host) = parsed.host_str() {
+                let is_private = host == "127.0.0.1"
+                    || host == "localhost"
+                    || host == "[::1]"
+                    || host.starts_with("10.")
+                    || host.starts_with("192.168.")
+                    || host == "169.254.169.254"
+                    || host == "metadata.google.internal"
+                    || (host.starts_with("172.") && {
+                        host.split('.')
+                            .nth(1)
+                            .and_then(|s| s.parse::<u8>().ok())
+                            .map_or(false, |n| (16..=31).contains(&n))
+                    });
+                if is_private {
+                    return Err(AppError::config("Endpoint 不能指向内网或元数据地址"));
+                }
+            }
+
+            let region = config.region.as_ref()
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| AppError::config("自定义 S3 Region 不能为空"))?;
+            Ok((endpoint.clone(), region.clone()))
+        }
         _ => Err(AppError::config(format!("不支持的服务类型: {}", service_id))),
     }
 }
@@ -354,6 +393,7 @@ fn get_service_name(service_id: &str) -> &str {
         "aliyun" => "阿里云 OSS",
         "qiniu" => "七牛云",
         "upyun" => "又拍云",
+        s if s == "custom_s3" || s.starts_with("custom_s3:") => "自定义 S3 存储",
         _ => service_id,
     }
 }
