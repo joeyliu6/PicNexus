@@ -3,7 +3,7 @@
 // v2.10: 迁移到 AppError 统一错误类型
 
 use arboard::Clipboard;
-use image::ImageOutputFormat;
+use image::ImageFormat;
 use std::io::Cursor;
 
 use crate::error::AppError;
@@ -55,7 +55,7 @@ pub fn read_clipboard_image() -> Result<String, AppError> {
     // 编码为 PNG
     let mut png_data = Cursor::new(Vec::new());
     rgba_image
-        .write_to(&mut png_data, ImageOutputFormat::Png)
+        .write_to(&mut png_data, ImageFormat::Png)
         .map_err(|e| AppError::clipboard(format!("PNG 编码失败: {}", e)))?;
 
     let png_bytes = png_data.into_inner();

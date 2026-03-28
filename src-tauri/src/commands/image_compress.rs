@@ -1,7 +1,7 @@
 use std::fs;
-use std::io::Write;
 use std::path::Path;
 
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use image::imageops::FilterType;
 use image::GenericImageView;
 use serde::Serialize;
@@ -159,53 +159,38 @@ pub async fn compress_image(
             None
         };
 
-        // 编码并保存
+        // 编码并保存（使用专业编码器）
         match out_ext {
             "jpg" => {
-                let rgb = processed.to_rgb8();
-                let mut encoded_bytes = Vec::<u8>::new();
-                let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(
-                    &mut encoded_bytes,
-                    quality,
-                );
-                encoder.encode(
-                    rgb.as_raw(),
-                    final_w,
-                    final_h,
-                    image::ColorType::Rgb8,
-                ).map_err(|e| {
-                    AppError::file_io(format!("JPEG 编码失败: {}", e))
-                })?;
+                let encoded_bytes = encode_jpeg_mozjpeg(&processed, final_w, final_h, quality)?;
 
                 let final_bytes = if !strip_exif {
                     if let Some(exif_segment) = source_exif_segment.as_ref() {
                         inject_jpeg_exif_segment(&encoded_bytes, exif_segment)
-                            .unwrap_or_else(|| encoded_bytes.clone())
+                            .unwrap_or(encoded_bytes)
                     } else {
-                        encoded_bytes.clone()
+                        encoded_bytes
                     }
                 } else {
-                    encoded_bytes.clone()
+                    encoded_bytes
                 };
 
-                let mut out_file = fs::File::create(&output_path).map_err(|e| {
-                    AppError::file_io(format!("无法创建输出文件: {}", e))
-                })?;
-                out_file.write_all(&final_bytes).map_err(|e| {
+                fs::write(&output_path, &final_bytes).map_err(|e| {
                     AppError::file_io(format!("写入 JPEG 文件失败: {}", e))
                 })?;
             }
             "webp" => {
-                // image crate 0.24 的 WebP 编码通过 save 方法支持
-                // 质量控制通过先转 JPEG 再转 WebP 实现（MVP 简化方案）
-                processed.save(&output_path).map_err(|e| {
-                    AppError::file_io(format!("WebP 编码失败: {}", e))
+                let rgba = processed.to_rgba8();
+                let encoder = webp::Encoder::from_rgba(rgba.as_raw(), final_w, final_h);
+                let encoded = encoder.encode(quality as f32);
+                fs::write(&output_path, &*encoded).map_err(|e| {
+                    AppError::file_io(format!("写入 WebP 文件失败: {}", e))
                 })?;
             }
             "png" => {
-                // PNG 使用默认压缩（后续 Phase 2 引入 oxipng 优化）
-                processed.save(&output_path).map_err(|e| {
-                    AppError::file_io(format!("PNG 编码失败: {}", e))
+                let png_bytes = encode_png_lossy(&processed, final_w, final_h, quality)?;
+                fs::write(&output_path, &png_bytes).map_err(|e| {
+                    AppError::file_io(format!("写入 PNG 文件失败: {}", e))
                 })?;
             }
             _ => {
@@ -363,6 +348,112 @@ fn inject_jpeg_exif_segment(jpeg: &[u8], exif_segment: &[u8]) -> Option<Vec<u8>>
     Some(out)
 }
 
+/// 像素数预检：防止超大图片导致内存耗尽（上限 5000 万像素）
+fn check_pixel_limit(width: u32, height: u32) -> Result<(), AppError> {
+    let pixel_count = (width as u64).checked_mul(height as u64)
+        .ok_or_else(|| AppError::file_io("图片尺寸溢出"))?;
+    if pixel_count > 50_000_000 {
+        return Err(AppError::file_io(format!(
+            "图片像素数 ({}) 超过上限 (5000万)，请先缩小图片",
+            pixel_count
+        )));
+    }
+    Ok(())
+}
+
+/// 使用 MozJPEG 编码 JPEG（压缩率比标准 libjpeg 好 10-15%）
+fn encode_jpeg_mozjpeg(
+    img: &image::DynamicImage,
+    width: u32,
+    height: u32,
+    quality: u8,
+) -> Result<Vec<u8>, AppError> {
+    check_pixel_limit(width, height)?;
+
+    let rgb = img.to_rgb8();
+    let mut comp = mozjpeg::Compress::new(mozjpeg::ColorSpace::JCS_RGB);
+    comp.set_size(width as usize, height as usize);
+    comp.set_quality(quality as f32);
+
+    let mut started = comp.start_compress(Vec::new())
+        .map_err(|e| AppError::file_io(format!("MozJPEG 初始化失败: {}", e)))?;
+
+    let row_stride = (width as usize).checked_mul(3)
+        .ok_or_else(|| AppError::file_io("行步长计算溢出"))?;
+    let raw = rgb.as_raw();
+    for row in 0..height as usize {
+        let start = row * row_stride;
+        let end = start + row_stride;
+        if end > raw.len() {
+            return Err(AppError::file_io("图像数据不完整，扫描行越界"));
+        }
+        started.write_scanlines(&raw[start..end])
+            .map_err(|e| AppError::file_io(format!("MozJPEG 写入扫描行失败: {}", e)))?;
+    }
+
+    started.finish()
+        .map_err(|e| AppError::file_io(format!("MozJPEG 编码失败: {}", e)))
+}
+
+/// 使用 imagequant 有损压缩 PNG（类似 TinyPNG/pngquant）
+fn encode_png_lossy(
+    img: &image::DynamicImage,
+    width: u32,
+    height: u32,
+    quality: u8,
+) -> Result<Vec<u8>, AppError> {
+    check_pixel_limit(width, height)?;
+
+    let rgba = img.to_rgba8();
+    let pixels: Vec<imagequant::RGBA> = rgba
+        .pixels()
+        .map(|p| imagequant::RGBA { r: p[0], g: p[1], b: p[2], a: p[3] })
+        .collect();
+
+    let mut liq = imagequant::new();
+    // speed=10: 比默认(4)快 8 倍，质量仅降 5%（pngquant 官方推荐用于实时场景）
+    liq.set_speed(10)
+        .map_err(|e| AppError::file_io(format!("imagequant 设置速度失败: {}", e)))?;
+    // 将用户 quality（1-100）映射到 imagequant 的合理范围
+    // 映射：用户 1-100 → imagequant min 60-90, max 70-100
+    // quality 70+ 在浏览器中肉眼无差别（pngquant 官方文档）
+    let iq_max = (60 + (quality as u32) * 40 / 100).min(100) as u8;
+    let iq_min = iq_max.saturating_sub(10).max(60);
+    liq.set_quality(iq_min, iq_max)
+        .map_err(|e| AppError::file_io(format!("imagequant 设置质量失败: {}", e)))?;
+
+    let mut liq_image = liq.new_image(pixels, width as usize, height as usize, 0.0)
+        .map_err(|e| AppError::file_io(format!("imagequant 创建图像失败: {}", e)))?;
+
+    let mut result = liq.quantize(&mut liq_image)
+        .map_err(|e| AppError::file_io(format!("imagequant 量化失败: {}", e)))?;
+
+    result.set_dithering_level(1.0)
+        .map_err(|e| AppError::file_io(format!("imagequant 设置抖动失败: {}", e)))?;
+
+    let (palette, indexed_pixels) = result.remapped(&mut liq_image)
+        .map_err(|e| AppError::file_io(format!("imagequant 重映射失败: {}", e)))?;
+
+    let mut encoder = lodepng::Encoder::new();
+    encoder.set_auto_convert(false);
+
+    // 设置 info 和 raw 两套调色板（lodepng 要求两者一致）
+    fn apply_palette(mode: &mut lodepng::ColorMode, palette: &[imagequant::RGBA]) -> Result<(), AppError> {
+        mode.colortype = lodepng::ColorType::PALETTE;
+        mode.set_bitdepth(8);
+        for c in palette {
+            mode.palette_add(lodepng::RGBA { r: c.r, g: c.g, b: c.b, a: c.a })
+                .map_err(|e| AppError::file_io(format!("lodepng 调色板失败: {:?}", e)))?;
+        }
+        Ok(())
+    }
+    apply_palette(&mut encoder.info_png_mut().color, &palette)?;
+    apply_palette(encoder.info_raw_mut(), &palette)?;
+
+    encoder.encode(&indexed_pixels, width as usize, height as usize)
+        .map_err(|e| AppError::file_io(format!("lodepng 编码失败: {:?}", e)))
+}
+
 /// 仅去除 EXIF 元数据（不压缩质量、不缩放）
 ///
 /// 用于：启用了 stripExif 但跳过压缩的小文件。
@@ -434,18 +525,13 @@ pub async fn strip_exif_only(
             .as_millis();
         let output_path = compress_dir.join(format!("{}_{}.{}", stem, timestamp, out_ext));
 
-        // 用高质量重编码（JPEG 用 quality=100），自然去除 EXIF
+        // 用高质量重编码，自然去除 EXIF
         match out_ext {
             "jpg" => {
-                let rgb = img.to_rgb8();
-                let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(
-                    fs::File::create(&output_path)
-                        .map_err(|e| AppError::file_io(format!("无法创建输出文件: {}", e)))?,
-                    100, // 最高质量，仅为去 EXIF
-                );
-                encoder
-                    .encode(rgb.as_raw(), w, h, image::ColorType::Rgb8)
-                    .map_err(|e| AppError::file_io(format!("JPEG 编码失败: {}", e)))?;
+                let encoded = encode_jpeg_mozjpeg(&img, w, h, 100)?;
+                fs::write(&output_path, &encoded).map_err(|e| {
+                    AppError::file_io(format!("写入 JPEG 文件失败: {}", e))
+                })?;
             }
             _ => {
                 img.save(&output_path)
@@ -483,4 +569,63 @@ pub async fn strip_exif_only(
     })
     .await
     .map_err(|e| AppError::external(format!("EXIF 剥离任务执行失败: {}", e)))?
+}
+
+/// 读取图片文件为 base64 data URI（用于压缩预览）
+///
+/// 为避免大图占用过多内存，当图片长边超过 max_side 时自动缩小。
+#[tauri::command]
+pub async fn read_image_as_base64(
+    file_path: String,
+    max_side: Option<u32>,
+) -> Result<String, AppError> {
+    let path = Path::new(&file_path);
+    if !path.exists() {
+        return Err(AppError::file_io(format!("文件不存在: {}", file_path)));
+    }
+
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+
+    // PNG/WebP 可能带透明通道，用 PNG 预览保留透明；其他格式用 JPEG（编码快、体积小）
+    let has_alpha = matches!(ext.as_str(), "png" | "webp");
+
+    let max_side = max_side.unwrap_or(1200);
+    let file_path_clone = file_path.clone();
+
+    tokio::task::spawn_blocking(move || {
+        let img = image::open(&file_path_clone)
+            .map_err(|e| AppError::file_io(format!("无法打开图片: {}", e)))?;
+
+        let (w, h) = img.dimensions();
+        let long_side = w.max(h);
+
+        let final_img = if long_side > max_side {
+            img.resize(max_side, max_side, FilterType::Triangle)
+        } else {
+            img
+        };
+
+        if has_alpha {
+            let mut buf = Vec::new();
+            final_img.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png)
+                .map_err(|e| AppError::file_io(format!("预览 PNG 编码失败: {}", e)))?;
+            let b64 = STANDARD.encode(&buf);
+            Ok(format!("data:image/png;base64,{}", b64))
+        } else {
+            let rgb = final_img.to_rgb8();
+            let (fw, fh) = rgb.dimensions();
+            let mut buf = std::io::Cursor::new(Vec::new());
+            let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, 85);
+            encoder.encode(rgb.as_raw(), fw, fh, image::ExtendedColorType::Rgb8)
+                .map_err(|e| AppError::file_io(format!("预览 JPEG 编码失败: {}", e)))?;
+            let b64 = STANDARD.encode(buf.into_inner());
+            Ok(format!("data:image/jpeg;base64,{}", b64))
+        }
+    })
+    .await
+    .map_err(|e| AppError::external(format!("读取图片失败: {}", e)))?
 }

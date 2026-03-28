@@ -1,7 +1,7 @@
 [package]
 name = "picnexus"
 version = "1.0.2"
-description = "PicNexus - 多图床并行上传工具"
+description = "PicNexus - 多图床上传工具"
 authors = ["you"]
 license = ""
 repository = ""
@@ -34,6 +34,7 @@ hex = "0.4"
 regex = "1.10"
 chrono = "0.4"
 quick-xml = "0.36"
+url = "2"
 urlencoding = "2.1"
 tokio-util = { version = "0.7.17", features = ["codec"] }
 futures = "0.3"
@@ -42,7 +43,11 @@ rand = "0.8"
 aws-sdk-s3 = { version = "1.0", features = ["behavior-version-latest"] }
 mime_guess = "2.0"
 arboard = "3"
-image = { version = "0.24", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+imagequant = "4"
+lodepng = "3"
+mozjpeg = "0.10"
+webp = "0.3"
 imagesize = "0.13"
 tauri-plugin-positioner = { version = "2.0", features = ["tray-icon"] }
 tauri-plugin-autostart = "2"
