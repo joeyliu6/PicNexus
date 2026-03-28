@@ -4,17 +4,10 @@ import ImageCompressionPanel from './ImageCompressionPanel.vue';
 import ExternalEditorPanel from './ExternalEditorPanel.vue';
 import type { ImageCompressionConfig, EditorServerConfig } from '../../config/types';
 
-interface EditorApplyFeedbackState {
-  status: 'idle' | 'applying' | 'applied' | 'error';
-  message?: string;
-  updatedAt?: number;
-}
-
 interface Props {
   imageCompression: ImageCompressionConfig;
   editorServer: EditorServerConfig;
   executablePath?: string;
-  editorApplyState?: EditorApplyFeedbackState;
 }
 
 const props = defineProps<Props>();
@@ -23,7 +16,6 @@ const emit = defineEmits<{
   (e: 'update:imageCompression', v: ImageCompressionConfig): void;
   (e: 'update:editorServer', v: EditorServerConfig): void;
   (e: 'save'): void;
-  (e: 'retryEditorApply'): void;
   (e: 'navigateHosting'): void;
 }>();
 </script>
@@ -51,9 +43,7 @@ const emit = defineEmits<{
         embedded
         :editor-server="props.editorServer"
         :executable-path="props.executablePath"
-        :apply-state="props.editorApplyState"
         @update:editor-server="(v: EditorServerConfig) => emit('update:editorServer', v)"
-        @retry-apply="emit('retryEditorApply')"
         @navigate-hosting="emit('navigateHosting')"
         @save="emit('save')"
       />

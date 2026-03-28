@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import ToggleSwitch from 'primevue/toggleswitch';
 import InputNumber from 'primevue/inputnumber';
 
 import type { ImageCompressionConfig, CompressionPreset, CompressionOutputFormat } from '../../config/types';
 import { DEFAULT_COMPRESSION_PRESET } from '../../config/types';
+import { debounce } from '../../utils/debounce';
 import { useConfirm } from '../../composables/useConfirm';
+import CompressionPreviewDialog from '../dialogs/CompressionPreviewDialog.vue';
 
 interface Props {
   imageCompression: ImageCompressionConfig;
@@ -17,10 +19,10 @@ const emit = defineEmits<{
   'update:imageCompression': [config: ImageCompressionConfig];
 }>();
 
-const { confirmDelete } = useConfirm();
 const MAX_PRESETS = 5;
 
 const expanded = ref(false);
+const { confirmDelete } = useConfirm();
 
 const FORMAT_LABEL: Record<string, string> = {
   original: '原格式',
@@ -49,6 +51,11 @@ onMounted(() => {
   }
 });
 
+onBeforeUnmount(() => {
+  debouncedQualityUpdate.cancel();
+  debouncedScaleUpdate.cancel();
+});
+
 function toggleExpand() {
   expanded.value = !expanded.value;
 }
@@ -56,7 +63,6 @@ function toggleExpand() {
 const editingPresetId = ref<string | null>(null);
 const editDraft = ref('');
 const editInputRef = ref<HTMLInputElement | HTMLInputElement[] | null>(null);
-const editTabWidth = ref<number | null>(null);
 const skipUnit = ref<'KB' | 'MB'>('KB');
 
 
@@ -118,7 +124,8 @@ function handleDeletePreset(presetId: string) {
   if (props.imageCompression.presets.length <= 1) return;
   const preset = props.imageCompression.presets.find((p) => p.id === presetId);
   if (!preset) return;
-  confirmDelete(`确定要删除「${preset.name}」吗？此操作不可撤销。`, () => {
+
+  confirmDelete(`确定要删除方案「${preset.name}」吗？`, () => {
     const presets = props.imageCompression.presets.filter((p) => p.id !== presetId);
     const activeId = props.imageCompression.activePresetId === presetId
       ? presets[0].id
@@ -127,12 +134,9 @@ function handleDeletePreset(presetId: string) {
   });
 }
 
-function startEditing(presetId: string, event?: MouseEvent) {
+function startEditing(presetId: string) {
   const preset = props.imageCompression.presets.find((p) => p.id === presetId);
   if (!preset) return;
-  const labelEl = event?.target as HTMLElement | undefined;
-  const tabEl = labelEl?.closest('.preset-tab') as HTMLElement | null;
-  editTabWidth.value = tabEl ? tabEl.offsetWidth : null;
   editingPresetId.value = presetId;
   editDraft.value = preset.name;
   nextTick(() => {
@@ -151,33 +155,39 @@ function commitEdit() {
     updateCompression({ presets });
   }
   editingPresetId.value = null;
-  editTabWidth.value = null;
 }
 
 function cancelEdit() {
   editingPresetId.value = null;
-  editTabWidth.value = null;
 }
 
-function handleQualityInput(v: number | null) {
-  if (v === null) {
-    updateActivePreset({ quality: 80 });
-    return;
-  }
-  let q = v;
-  if (q > 0 && q < 1) q = Math.round(q * 100);
-  q = Math.round(Math.min(100, Math.max(1, q)));
+const debouncedQualityUpdate = debounce((q: number) => {
   updateActivePreset({ quality: q });
+}, 300);
+
+const debouncedScaleUpdate = debounce((s: number) => {
+  updateActivePreset({ scalePercent: s });
+}, 300);
+
+function handleQualityInput(v: number | null) {
+  const q = v === null ? 80 : Math.round(Math.min(100, Math.max(1, v)));
+  debouncedQualityUpdate(q);
 }
 
 function handleScaleInput(v: number | null) {
-  if (v === null) {
-    updateActivePreset({ scalePercent: 100 });
-    return;
-  }
-  let s = v;
-  if (s > 0 && s < 1) s = Math.round(s * 100);
-  s = Math.round(Math.min(100, Math.max(1, s)));
+  const s = v === null ? 100 : Math.round(Math.min(100, Math.max(1, v)));
+  debouncedScaleUpdate(s);
+}
+
+function commitQualityInput() {
+  debouncedQualityUpdate.cancel();
+  const q = Math.round(Math.min(100, Math.max(1, activePreset.value.quality)));
+  updateActivePreset({ quality: q });
+}
+
+function commitScaleInput() {
+  debouncedScaleUpdate.cancel();
+  const s = Math.round(Math.min(100, Math.max(1, activePreset.value.scalePercent ?? 100)));
   updateActivePreset({ scalePercent: s });
 }
 
@@ -211,6 +221,20 @@ function handleSkipUnitChange(newUnit: 'KB' | 'MB') {
 function toggleSkipUnit() {
   handleSkipUnitChange(skipUnit.value === 'KB' ? 'MB' : 'KB');
 }
+
+const qualityLevel = computed(() => {
+  const q = activePreset.value.quality;
+  if (q <= 30) return { label: '低', cls: 'quality-low' };
+  if (q <= 60) return { label: '中', cls: 'quality-medium' };
+  if (q <= 80) return { label: '良好', cls: 'quality-good' };
+  return { label: '高', cls: 'quality-high' };
+});
+
+const previewDialogVisible = ref(false);
+
+function openPreviewDialog() {
+  previewDialogVisible.value = true;
+}
 </script>
 
 <template>
@@ -241,17 +265,21 @@ function toggleSkipUnit() {
             :key="preset.id"
             class="preset-tab"
             :class="{ active: imageCompression.activePresetId === preset.id, editing: editingPresetId === preset.id }"
-            :style="editingPresetId === preset.id && editTabWidth ? { width: editTabWidth + 'px' } : {}"
-            v-tooltip.top="imageCompression.activePresetId !== preset.id && editingPresetId !== preset.id ? '双击重命名' : undefined"
+            v-tooltip.top="editingPresetId !== preset.id ? '双击重命名' : undefined"
           >
             <span
-              v-if="editingPresetId !== preset.id"
               class="preset-tab-label"
+              :style="editingPresetId === preset.id ? { visibility: 'hidden' } : {}"
               @click="selectPreset(preset.id)"
-              @dblclick="startEditing(preset.id, $event)"
-            >{{ preset.name }}</span>
+              @dblclick="startEditing(preset.id)"
+            >{{ editingPresetId === preset.id ? editDraft : preset.name }}</span>
+            <i
+              v-if="editingPresetId !== preset.id && imageCompression.activePresetId === preset.id"
+              class="pi pi-pencil preset-edit-icon"
+              @click.stop="startEditing(preset.id)"
+            />
             <input
-              v-else
+              v-if="editingPresetId === preset.id"
               ref="editInputRef"
               v-model.trim="editDraft"
               class="preset-tab-input"
@@ -294,14 +322,18 @@ function toggleSkipUnit() {
             <span class="settings-row-label">压缩质量</span>
             <span class="settings-row-desc">1-100，数值越大画质越高</span>
           </div>
-          <div class="narrow-input">
-            <InputNumber
-              :modelValue="activePreset.quality"
-              :min="1"
-              :max="100"
-              :useGrouping="false"
-              @update:modelValue="handleQualityInput"
-            />
+          <div class="quality-input-group">
+            <span class="quality-badge" :class="qualityLevel.cls">{{ qualityLevel.label }}</span>
+            <div class="narrow-input">
+              <InputNumber
+                :modelValue="activePreset.quality"
+                :min="1"
+                :max="100"
+                :useGrouping="false"
+                @update:modelValue="handleQualityInput"
+                @blur="commitQualityInput"
+              />
+            </div>
           </div>
         </div>
 
@@ -318,6 +350,7 @@ function toggleSkipUnit() {
               :useGrouping="false"
               suffix="%"
               @update:modelValue="handleScaleInput"
+              @blur="commitScaleInput"
             />
           </div>
         </div>
@@ -325,7 +358,7 @@ function toggleSkipUnit() {
         <div class="settings-row">
           <div class="settings-row-info">
             <span class="settings-row-label">跳过小文件</span>
-            <span class="settings-row-desc">低于阈值的文件不做压缩处理</span>
+            <span class="settings-row-desc">低于阈值的文件不做压缩处理，建议 1-3MB</span>
           </div>
           <div class="skip-input-group">
             <InputNumber
@@ -355,14 +388,27 @@ function toggleSkipUnit() {
           />
         </div>
 
-        <button
-          v-if="imageCompression.presets.length > 1"
-          class="delete-preset-btn"
-          @click="handleDeletePreset(imageCompression.activePresetId)"
-        >
-          <i class="pi pi-trash" />
-          删除此方案
-        </button>
+        <CompressionPreviewDialog
+          :visible="previewDialogVisible"
+          :preset="activePreset"
+          @update:visible="previewDialogVisible = $event"
+        />
+
+        <div class="preset-actions">
+          <button class="preview-btn" @click="openPreviewDialog">
+            <i class="pi pi-image" />
+            试一试
+          </button>
+          <button
+            class="delete-preset-btn"
+            :disabled="imageCompression.presets.length <= 1"
+            v-tooltip.top="imageCompression.presets.length <= 1 ? '至少保留一个方案' : undefined"
+            @click="handleDeletePreset(imageCompression.activePresetId)"
+          >
+            <i class="pi pi-trash" />
+            删除此方案
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -376,7 +422,7 @@ function toggleSkipUnit() {
 .compression-collapsible {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
+  border-radius: var(--settings-card-radius, 12px);
   overflow: hidden;
 }
 
@@ -460,6 +506,10 @@ function toggleSkipUnit() {
   flex-direction: column;
 }
 
+.expanded .collapsible-content {
+  border-top: 1px solid var(--border-subtle);
+}
+
 /* settings-row 分割线（原来由 .settings-card 提供） */
 .compression-collapsible .settings-row {
   border-bottom: 1px solid var(--border-subtle);
@@ -539,24 +589,32 @@ function toggleSkipUnit() {
 }
 
 .preset-tab.editing {
+  position: relative;
   border-color: var(--primary);
 }
 
 .preset-tab-input {
+  position: absolute;
+  inset: 0;
   background: transparent;
   border: none;
   outline: none;
   color: inherit;
   font: inherit;
-  width: 100%;
-  min-width: 0;
-  padding: 0;
+  padding: 5px 14px;
   box-sizing: border-box;
 }
 
+.preset-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 8px 16px 12px;
+}
+
 .delete-preset-btn {
-  align-self: flex-end;
-  margin: 4px 16px 8px 0;
+  margin: 0;
   padding: 4px 0;
   background: none;
   border: none;
@@ -569,12 +627,73 @@ function toggleSkipUnit() {
   transition: color 0.15s;
 }
 
-.delete-preset-btn:hover {
+.delete-preset-btn:hover:not(:disabled) {
   color: var(--error);
+}
+
+.delete-preset-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .delete-preset-btn .pi {
   font-size: 11px;
+}
+
+/* --- Preset Edit Icon --- */
+
+.preset-edit-icon {
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.preset-tab.active:hover .preset-edit-icon {
+  opacity: 1;
+}
+
+.preset-edit-icon:hover {
+  color: var(--primary);
+}
+
+/* --- Quality Badge --- */
+
+.quality-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.quality-badge {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.quality-badge.quality-low {
+  color: var(--error);
+  background: var(--error-soft);
+}
+
+.quality-badge.quality-medium {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.quality-badge.quality-good {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.quality-badge.quality-high {
+  color: var(--primary);
+  background: var(--primary-alpha-8);
 }
 
 /* --- Format Tabs --- */
@@ -696,6 +815,37 @@ function toggleSkipUnit() {
 .skip-unit-btn .pi {
   font-size: 10px;
   opacity: 0.6;
+}
+
+/* --- Compression Preview --- */
+
+.preview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+
+.preview-btn .pi {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.preview-btn:hover:not(:disabled) {
+  color: var(--primary);
+}
+
+.preview-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* --- Responsive --- */
