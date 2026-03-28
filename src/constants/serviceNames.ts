@@ -2,7 +2,8 @@
  * 图床服务显示名称映射
  */
 
-import type { ServiceType } from '../config/types';
+import type { ServiceType, UserConfig } from '../config/types';
+import { isCustomS3Id, getCustomS3ProfileId } from '../config/types';
 
 export const SERVICE_DISPLAY_NAMES: Record<ServiceType, string> = {
   weibo: '微博',
@@ -25,7 +26,13 @@ export const SERVICE_DISPLAY_NAMES: Record<ServiceType, string> = {
 
 /**
  * 获取服务显示名称
+ * 支持内置服务和 custom_s3:profileId 复合 ID
  */
-export function getServiceDisplayName(serviceId: ServiceType): string {
-  return SERVICE_DISPLAY_NAMES[serviceId];
+export function getServiceDisplayName(serviceId: string, config?: UserConfig): string {
+  if (isCustomS3Id(serviceId)) {
+    const profileId = getCustomS3ProfileId(serviceId);
+    const profile = config?.custom_s3_profiles?.find(p => p.id === profileId);
+    return profile?.name || `自定义 S3 (${profileId})`;
+  }
+  return SERVICE_DISPLAY_NAMES[serviceId as ServiceType] || serviceId;
 }

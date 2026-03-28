@@ -1,7 +1,5 @@
 // 图床健康状态类型定义
 
-import type { ServiceType } from '../config/types';
-
 /**
  * 图床健康状态
  * - unconfigured: 必填字段未填完
@@ -38,7 +36,7 @@ export interface PersistedHealthData {
 /**
  * 所有图床的健康状态映射
  */
-export type ServiceHealthMap = Record<ServiceType, ServiceHealthRecord>;
+export type ServiceHealthMap = Record<string, ServiceHealthRecord>;
 
 /**
  * 触发状态变红的认证/配置类错误码

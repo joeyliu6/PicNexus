@@ -53,10 +53,24 @@ export interface AnalyticsConfig {
 export type ServiceType = 'weibo' | 'r2' | 'jd' | 'nowcoder' | 'qiyu' | 'zhihu' | 'nami' | 'bilibili' | 'chaoxing' | 'smms' | 'github' | 'imgur' | 'tencent' | 'aliyun' | 'qiniu' | 'upyun';
 
 /**
- * 私有图床服务列表
+ * 私有图床服务列表（内置）
  * 用户需要提供自己的存储凭证，数据存储在用户自己的账户中
  */
 export const PRIVATE_SERVICES: ServiceType[] = ['r2', 'tencent', 'aliyun', 'qiniu', 'upyun'];
+
+// ==================== 自定义 S3 复合 ID 工具函数 ====================
+
+export function isCustomS3Id(id: string): boolean {
+  return id.startsWith('custom_s3:');
+}
+
+export function getCustomS3ProfileId(compositeId: string): string {
+  return compositeId.slice('custom_s3:'.length);
+}
+
+export function makeCustomS3Id(profileId: string): string {
+  return `custom_s3:${profileId}`;
+}
 
 /**
  * 公共图床服务列表
@@ -319,6 +333,31 @@ export interface UpyunServiceConfig extends BaseServiceConfig {
 }
 
 /**
+ * 自定义 S3 兼容存储 Profile
+ * 支持多实例，每个 profile 代表一个独立的 S3 兼容存储
+ */
+export interface CustomS3Profile {
+  /** 唯一标识符，用于构建复合 ID（custom_s3:xxx） */
+  id: string;
+  /** 用户自定义显示名称（如"我的 MinIO"） */
+  name: string;
+  /** S3 兼容端点地址（如 https://s3.amazonaws.com） */
+  endpoint: string;
+  /** Access Key ID */
+  accessKeyId: string;
+  /** Secret Access Key */
+  secretAccessKey: string;
+  /** 地域（如 us-east-1） */
+  region: string;
+  /** 存储桶名称 */
+  bucket: string;
+  /** 存储路径前缀 */
+  path: string;
+  /** 公开访问域名（可选，留空则使用 endpoint 构建链接） */
+  publicDomain: string;
+}
+
+/**
  * WebDAV 配置项（单个配置）
  */
 export interface WebDAVProfile {
@@ -486,7 +525,7 @@ export interface LinkOutputConfig {
  * 编辑器兼容 Server 支持的图床类型（简化子集）
  * 与 Rust 侧 ServerUploadConfig 枚举保持一致（serde tag = "type"）
  */
-export type ServerServiceType = ServiceType;
+export type ServerServiceType = string;
 
 /**
  * 编辑器兼容 Server 配置
@@ -558,11 +597,11 @@ export interface ImageCompressionConfig {
  * 支持多图床并行上传
  */
 export interface UserConfig {
-  /** 用户启用的图床服务列表（上传窗口勾选的图床） */
-  enabledServices: ServiceType[];
+  /** 用户启用的图床服务列表（上传窗口勾选的图床，支持复合 ID 如 custom_s3:xxx） */
+  enabledServices: string[];
 
-  /** 全局可用的图床列表（设置中配置，控制上传界面显示哪些图床） */
-  availableServices?: ServiceType[];
+  /** 全局可用的图床列表（设置中配置，控制上传界面显示哪些图床，支持复合 ID） */
+  availableServices?: string[];
 
   /** 各图床服务的配置 */
   services: {
@@ -585,6 +624,9 @@ export interface UserConfig {
     upyun?: UpyunServiceConfig;
   };
 
+  /** 自定义 S3 存储 profiles（多实例） */
+  custom_s3_profiles?: CustomS3Profile[];
+
   /** 微博代理模式 */
   weiboProxyMode: WeiboProxyMode;
 
@@ -603,7 +645,7 @@ export interface UserConfig {
   /** 浏览视图偏好设置 */
   galleryViewPreferences?: {
     viewMode: 'table' | 'grid';
-    selectedImageBed?: ServiceType | 'all';
+    selectedImageBed?: string | 'all';
     gridColumnWidth: number;
   };
 
@@ -649,13 +691,13 @@ export interface HistoryItem {
   /** 原始文件路径（用于重试上传） */
   filePath?: string;
 
-  /** 主力图床（第一个上传成功的图床） */
-  primaryService: ServiceType;
+  /** 主力图床（第一个上传成功的图床，支持复合 ID） */
+  primaryService: string;
 
   /** 所有图床的上传结果 */
   results: Array<{
-    /** 图床服务 ID */
-    serviceId: ServiceType;
+    /** 图床服务 ID（支持复合 ID 如 custom_s3:xxx） */
+    serviceId: string;
 
     /** 上传结果 */
     result?: UploadResult;
@@ -818,6 +860,7 @@ export const DEFAULT_CONFIG: UserConfig = {
       path: 'images/'
     }
   },
+  custom_s3_profiles: [],
   weiboProxyMode: 'baidu-proxy',
   linkOutput: {
     defaultFormat: 'url',
@@ -947,6 +990,11 @@ export function sanitizeConfig(config: UserConfig): UserConfig {
         password: sanitizeString(config.services.upyun.password, 0, 0)
       } : undefined
     },
+    custom_s3_profiles: config.custom_s3_profiles?.map(profile => ({
+      ...profile,
+      accessKeyId: sanitizeString(profile.accessKeyId, 4, 4),
+      secretAccessKey: sanitizeString(profile.secretAccessKey, 0, 0)
+    })),
     webdav: config.webdav ? {
       profiles: config.webdav.profiles.map(profile => ({
         ...profile,

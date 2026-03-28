@@ -18,6 +18,8 @@ import { TencentUploader } from './tencent/TencentUploader';
 import { AliyunUploader } from './aliyun/AliyunUploader';
 import { QiniuUploader } from './qiniu/QiniuUploader';
 import { UpyunUploader } from './upyun/UpyunUploader';
+import { CustomS3Uploader } from './custom-s3/CustomS3Uploader';
+import type { CustomS3Profile } from '../config/types';
 
 /**
  * 初始化所有上传器
@@ -80,6 +82,23 @@ export function initializeUploaders(): void {
   console.log('[Uploaders] 已注册的上传器:', registered);
 }
 
+/**
+ * 同步自定义 S3 上传器注册
+ * 根据 profiles 列表注册/注销对应的上传器实例
+ */
+export function syncCustomS3Uploaders(profiles: CustomS3Profile[]): void {
+  // 先清理旧的 custom_s3:xxx 注册
+  for (const id of UploaderFactory.getAvailableServices()) {
+    if (id.startsWith('custom_s3:')) {
+      UploaderFactory.unregister(id);
+    }
+  }
+  // 为每个 profile 注册上传器
+  for (const profile of profiles) {
+    UploaderFactory.register(`custom_s3:${profile.id}`, () => new CustomS3Uploader());
+  }
+}
+
 // 导出所有上传器
 export { WeiboUploader } from './weibo';
 export { R2Uploader } from './r2';
@@ -98,5 +117,6 @@ export { TencentUploader } from './tencent';
 export { AliyunUploader } from './aliyun';
 export { QiniuUploader } from './qiniu';
 export { UpyunUploader } from './upyun';
+export { CustomS3Uploader } from './custom-s3';
 export { UploaderFactory } from './base/UploaderFactory';
 
