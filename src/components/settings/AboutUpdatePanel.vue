@@ -121,7 +121,10 @@ async function openLogDir() {
     <!-- 软件更新 -->
     <div class="form-group">
       <label class="group-label">软件更新</label>
-      <div class="update-card">
+      <div class="update-card" :class="{
+        'update-card-success': status === 'up-to-date',
+        'update-card-available': status === 'available',
+      }">
         <!-- idle -->
         <div v-if="status === 'idle'" class="update-status">
           <div class="update-status-text">
@@ -205,14 +208,17 @@ async function openLogDir() {
             <i class="pi pi-times-circle update-icon error" />
             <div class="update-status-info">
               <span>无法连接到更新服务器</span>
-              <span v-if="lastCheckText" class="last-check">上次检查：{{ lastCheckText }}</span>
+              <span class="last-check">
+                <template v-if="lastCheckText">上次检查：{{ lastCheckText }} · </template>
+                请检查网络连接后重试
+              </span>
             </div>
           </div>
           <Button
             label="重试"
             icon="pi pi-refresh"
             size="small"
-            severity="secondary"
+            outlined
             @click="checkForUpdate"
           />
         </div>
@@ -480,6 +486,16 @@ async function openLogDir() {
 
 .update-icon.error {
   color: var(--error);
+}
+
+.update-card-success {
+  background: var(--success-alpha-8);
+  border-color: var(--success-border);
+}
+
+.update-card-available {
+  background: var(--primary-alpha-8);
+  border-color: var(--primary-border);
 }
 
 .new-version-label {

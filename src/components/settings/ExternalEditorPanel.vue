@@ -280,7 +280,7 @@ watch(
         <div class="guide-card">
           <div class="guide-step">
             <span class="step-badge">1</span>
-            <span class="step-text">打开 Typora，进入 <code class="inline-code">偏好设置</code> → <code class="inline-code">图像</code></span>
+            <span class="step-text">打开 Typora，进入 <code class="menu-label">偏好设置</code> → <code class="menu-label">图像</code></span>
           </div>
           <div class="guide-step">
             <span class="step-badge">2</span>
@@ -526,6 +526,16 @@ watch(
 .inline-code {
   font-family: var(--font-mono);
   font-size: 12px;
+  padding: 1px 5px;
+  background: var(--primary-alpha-8);
+  border-radius: 3px;
+  color: var(--primary);
+}
+
+.menu-label {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
   padding: 1px 5px;
   background: var(--primary-alpha-8);
   border-radius: 3px;
