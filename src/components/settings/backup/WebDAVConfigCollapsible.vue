@@ -100,7 +100,7 @@ function handleSwitchProfile(id: string) {
 
 function handleAddProfile() {
   const newProfile: WebDAVProfile = {
-    id: Date.now().toString(),
+    id: crypto.randomUUID(),
     name: `新配置 ${props.modelValue.profiles.length + 1}`,
     url: '',
     username: '',

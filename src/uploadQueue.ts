@@ -3,7 +3,6 @@
  * 负责管理可视化的上传队列UI和上传进度
  */
 
-import { appState } from './appState';
 import { useQueueState } from './composables/useQueueState';
 
 /**
@@ -342,7 +341,6 @@ export class UploadQueueManager {
           updates.r2Progress = 100;
           updates.r2Status = '✓ 完成';
           updates.r2Link = progress.payload.r2Link;
-          appState.isR2Dirty = true;
           break;
 
         case 'error':

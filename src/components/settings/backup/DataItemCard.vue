@@ -75,11 +75,8 @@ const STALE_DAYS_WARNING = 7;
 const STALE_DAYS_DANGER = 30;
 
 function getElapsedMs(dateStr: string): number {
-  try {
-    return Date.now() - new Date(dateStr).getTime();
-  } catch {
-    return -1;
-  }
+  const ms = Date.now() - new Date(dateStr).getTime();
+  return isNaN(ms) ? -1 : ms;
 }
 
 function formatRelativeTime(dateStr: string): string {

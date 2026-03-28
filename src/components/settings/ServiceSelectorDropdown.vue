@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { onClickOutside, useElementBounding } from '@vueuse/core';
 import Button from 'primevue/button';
-import type { ServerServiceType, ServiceType } from '../../config/types';
+import type { ServerServiceType } from '../../config/types';
 
 interface ServiceOption {
   value: ServerServiceType;
@@ -57,8 +57,8 @@ function selectService(svc: ServerServiceType | null) {
       <span
         v-if="modelValue"
         class="status-dot"
-        :class="healthStatusMap[modelValue as unknown as ServiceType]"
-        v-tooltip.top="healthTooltipMap[modelValue as unknown as ServiceType]"
+        :class="healthStatusMap[modelValue]"
+        v-tooltip.top="healthTooltipMap[modelValue]"
       />
       <span v-else class="status-dot-placeholder" />
       <span class="service-trigger-name">
@@ -79,12 +79,12 @@ function selectService(svc: ServerServiceType | null) {
           }"
           v-tooltip.top="cliUnsupportedServices.has(svc.value)
             ? '该图床不支持外部编辑器模式（需要浏览器自动化）'
-            : (healthTooltipMap[svc.value as unknown as ServiceType] || null)"
+            : (healthTooltipMap[svc.value] || null)"
           @click="!cliUnsupportedServices.has(svc.value) && selectService(svc.value)"
         >
           <span
             class="status-dot"
-            :class="cliUnsupportedServices.has(svc.value) ? '' : (healthStatusMap[svc.value as unknown as ServiceType] || '')"
+            :class="cliUnsupportedServices.has(svc.value) ? '' : (healthStatusMap[svc.value] || '')"
           />
           <span>{{ svc.label }}</span>
         </button>

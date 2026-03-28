@@ -31,6 +31,6 @@ export class UpyunUploader extends BaseS3Uploader {
   }
 
   protected getPublicDomain(config: any): string {
-    return config.publicDomain;
+    return config.publicDomain || '';
   }
 }

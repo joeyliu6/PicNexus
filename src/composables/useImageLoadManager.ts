@@ -91,15 +91,18 @@ export function useImageLoadManager(
 
     if (currentRetry < maxRetry) {
       imageRetryCount.set(id, currentRetry + 1);
+      const originalSrc = img.src;
+      // 离屏预加载的 Image 对象不在 DOM 中，重试始终安全
+      const isOffscreen = !img.isConnected;
       setTimeout(() => {
-        if (img && img.src) {
-          const originalSrc = img.src;
+        // 模板中的 img：如果已被虚拟滚动移出 DOM，跳过重试避免操作过期引用
+        if (!isOffscreen && !img.isConnected) return;
+        if (originalSrc) {
           img.src = '';
           img.src = originalSrc;
         }
       }, 500);
     } else {
-      img.style.display = 'none';
       const newSet = new Set(failedImages.value);
       newSet.add(id);
       failedImages.value = newSet;

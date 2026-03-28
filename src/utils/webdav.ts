@@ -115,12 +115,14 @@ export class WebDAVClient {
   }
 
   /**
-   * 生成 Basic Auth 认证头
+   * 生成 Basic Auth 认证头（支持 UTF-8 用户名和密码）
    * @returns Base64 编码的认证字符串
    */
   private getAuthHeader(): string {
-    const auth = btoa(`${this.config.username.trim()}:${this.config.password.trim()}`);
-    return `Basic ${auth}`;
+    const credentials = `${this.config.username.trim()}:${this.config.password.trim()}`;
+    const bytes = new TextEncoder().encode(credentials);
+    const base64 = btoa(Array.from(bytes, b => String.fromCharCode(b)).join(''));
+    return `Basic ${base64}`;
   }
 
   /**
@@ -162,52 +164,50 @@ export class WebDAVClient {
    * @throws {Error} 上传失败时抛出错误
    */
   async putFile(remotePath: string, content: string): Promise<void> {
+    // 提取父目录路径并确保其存在
+    const lastSlashIndex = remotePath.lastIndexOf('/');
+    if (lastSlashIndex > 0) {
+      const parentDir = remotePath.substring(0, lastSlashIndex + 1);
+      await this.ensureDir(parentDir);
+    }
+
+    const url = this.buildUrl(remotePath);
+
+    let response: Response;
     try {
-      // 提取父目录路径并确保其存在
-      const lastSlashIndex = remotePath.lastIndexOf('/');
-      if (lastSlashIndex > 0) {
-        const parentDir = remotePath.substring(0, lastSlashIndex + 1);
-        await this.ensureDir(parentDir);
-      }
-
-      const url = this.buildUrl(remotePath);
-
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      const response = await fetch(url, {
+      response = await fetch(url, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': this.getAuthHeader(),
-          'Overwrite': 'T', // WebDAV 标准：允许覆盖现有文件
+          'Overwrite': 'T',
         },
         body: content,
         signal: controller.signal
       });
 
       clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const status = response.status;
-        let errorMsg = `上传失败: HTTP ${status}`;
-
-        if (status === 401 || status === 403) {
-          errorMsg = '认证失败，请检查用户名和密码';
-        } else if (status === 404) {
-          errorMsg = '路径不存在，请检查远程路径配置';
-        } else if (status === 507) {
-          errorMsg = '存储空间不足，WebDAV 服务器空间已满';
-        } else if (status >= 500) {
-          errorMsg = `服务器错误 (HTTP ${status})，WebDAV 服务器可能暂时不可用`;
-        }
-
-        throw new Error(errorMsg);
-      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('[WebDAV] 上传文件失败:', errorMsg);
       throw new Error(`WebDAV 上传失败: ${errorMsg}`);
+    }
+
+    if (!response.ok) {
+      const status = response.status;
+      if (status === 401 || status === 403) {
+        throw new Error('认证失败，请检查用户名和密码');
+      } else if (status === 404) {
+        throw new Error('路径不存在，请检查远程路径配置');
+      } else if (status === 507) {
+        throw new Error('存储空间不足，WebDAV 服务器空间已满');
+      } else if (status >= 500) {
+        throw new Error(`服务器错误 (HTTP ${status})，WebDAV 服务器可能暂时不可用`);
+      }
+      throw new Error(`上传失败: HTTP ${status}`);
     }
   }
 
@@ -218,13 +218,14 @@ export class WebDAVClient {
    * @throws {Error} 下载失败时抛出错误
    */
   async getFile(remotePath: string): Promise<string | null> {
-    try {
-      const url = this.buildUrl(remotePath);
+    const url = this.buildUrl(remotePath);
 
+    let response: Response;
+    try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      const response = await fetch(url, {
+      response = await fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': this.getAuthHeader(),
@@ -233,48 +234,51 @@ export class WebDAVClient {
       });
 
       clearTimeout(timeoutId);
-
-      if (response.status === 404) {
-        // 文件不存在，返回 null
-        return null;
-      }
-
-      if (!response.ok) {
-        const status = response.status;
-        let errorMsg = `下载失败: HTTP ${status}`;
-
-        if (status === 401 || status === 403) {
-          errorMsg = '认证失败，请检查用户名和密码';
-        } else if (status >= 500) {
-          errorMsg = `服务器错误 (HTTP ${status})，WebDAV 服务器可能暂时不可用`;
-        }
-
-        throw new Error(errorMsg);
-      }
-
-      return await response.text();
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-
-      // 如果是 404 错误，返回 null 而不是抛出异常
-      if (errorMsg.includes('404') || errorMsg.includes('not found')) {
-        return null;
-      }
-
       console.error('[WebDAV] 下载文件失败:', errorMsg);
       throw new Error(`WebDAV 下载失败: ${errorMsg}`);
     }
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    if (!response.ok) {
+      const status = response.status;
+      if (status === 401 || status === 403) {
+        throw new Error('认证失败，请检查用户名和密码');
+      } else if (status >= 500) {
+        throw new Error(`服务器错误 (HTTP ${status})，WebDAV 服务器可能暂时不可用`);
+      }
+      throw new Error(`下载失败: HTTP ${status}`);
+    }
+
+    return await response.text();
   }
 
   /**
-   * 检查文件是否存在
+   * 检查文件是否存在（使用 PROPFIND 轻量检查，不下载文件内容）
    * @param remotePath 远程路径
    * @returns 文件是否存在
    */
   async exists(remotePath: string): Promise<boolean> {
     try {
-      const content = await this.getFile(remotePath);
-      return content !== null;
+      const url = this.buildUrl(remotePath);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const response = await fetch(url, {
+        method: 'PROPFIND',
+        headers: {
+          'Authorization': this.getAuthHeader(),
+          'Depth': '0',
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      return response.ok;
     } catch (error) {
       console.error('[WebDAV] 检查文件存在性失败:', error);
       return false;
