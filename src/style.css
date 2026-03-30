@@ -622,8 +622,8 @@ button:focus-visible {
 
 /* Scrollbar Styles */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -634,9 +634,7 @@ button:focus-visible {
 
 ::-webkit-scrollbar-thumb {
   background-color: var(--scrollbar-thumb);
-  border-radius: 4px;
-  border: 1px solid transparent;
-  background-clip: content-box;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {

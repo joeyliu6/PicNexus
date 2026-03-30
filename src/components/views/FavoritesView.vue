@@ -334,12 +334,12 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 20px 24px;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  scrollbar-width: none;           /* Firefox */
+  -ms-overflow-style: none;        /* IE/Edge */
 }
 
 .favorites-scroll::-webkit-scrollbar {
-  display: none;
+  display: none;                   /* Chrome/Safari */
 }
 
 /* === 头部栏 === */

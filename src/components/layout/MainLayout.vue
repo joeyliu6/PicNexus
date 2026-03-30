@@ -5,14 +5,16 @@ import TitleBar from './TitleBar.vue';
 import Sidebar from './Sidebar.vue';
 import UploadView from '../views/UploadView.vue';
 import HistoryView from '../views/HistoryView.vue';
+import LinkCheckView from '../views/LinkCheckView.vue';
 import SettingsView from '../views/SettingsView.vue';
 
-type ViewType = 'upload' | 'history' | 'settings';
+type ViewType = 'upload' | 'history' | 'link-check' | 'settings';
 
 // 组件映射对象
 const viewComponents = {
   upload: UploadView,
   history: HistoryView,
+  'link-check': LinkCheckView,
   settings: SettingsView
 } as const;
 
@@ -41,12 +43,12 @@ onMounted(async () => {
     const payload = event.payload;
 
     if (typeof payload === 'string') {
-      if (payload === 'settings' || payload === 'history') {
+      if (payload === 'settings' || payload === 'history' || payload === 'link-check') {
         handleNavigate(payload);
       }
     } else if (payload && typeof payload === 'object') {
       const { view, tab } = payload;
-      if (view === 'settings' || view === 'history' || view === 'upload') {
+      if (view === 'settings' || view === 'history' || view === 'upload' || view === 'link-check') {
         if (view === 'settings' && tab) {
           settingsTargetTab.value = tab;
         }

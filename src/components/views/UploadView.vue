@@ -471,20 +471,7 @@ onUnmounted(() => {
 }
 
 /* 滚动条 */
-.upload-view::-webkit-scrollbar {
-  width: 8px;
-}
-
 .upload-view::-webkit-scrollbar-track {
   background: var(--bg-input);
-}
-
-.upload-view::-webkit-scrollbar-thumb {
-  background: var(--border-subtle);
-  border-radius: 4px;
-}
-
-.upload-view::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
 }
 </style>
