@@ -30,19 +30,20 @@ onMounted(load);
 interface OpMeta {
   icon: string;
   label: string;
+  color: string;
 }
 
 const OP_META: Record<SyncLogOperation, OpMeta> = {
-  export_settings_local:   { icon: 'pi-upload',        label: '导出配置到本地' },
-  import_settings_local:   { icon: 'pi-download',      label: '从本地导入配置' },
-  export_history_local:    { icon: 'pi-upload',        label: '导出历史到本地' },
-  import_history_local:    { icon: 'pi-download',      label: '从本地导入历史' },
-  upload_settings_cloud:   { icon: 'pi-cloud-upload',  label: '上传配置' },
-  download_settings_cloud: { icon: 'pi-cloud-download', label: '下载配置' },
-  sync_settings:           { icon: 'pi-refresh',       label: '双向同步配置' },
-  upload_history_cloud:    { icon: 'pi-cloud-upload',  label: '上传历史' },
-  download_history_cloud:  { icon: 'pi-cloud-download', label: '下载历史' },
-  sync_history:            { icon: 'pi-refresh',       label: '双向同步历史' },
+  export_settings_local:   { icon: 'pi-upload',        label: '导出配置到本地',  color: 'var(--text-muted)' },
+  import_settings_local:   { icon: 'pi-download',      label: '从本地导入配置',  color: 'var(--text-muted)' },
+  export_history_local:    { icon: 'pi-upload',        label: '导出历史到本地',  color: 'var(--text-muted)' },
+  import_history_local:    { icon: 'pi-download',      label: '从本地导入历史',  color: 'var(--text-muted)' },
+  upload_settings_cloud:   { icon: 'pi-cloud-upload',  label: '上传配置到云端',  color: 'var(--primary)' },
+  download_settings_cloud: { icon: 'pi-cloud-download', label: '从云端下载配置', color: 'var(--primary)' },
+  sync_settings:           { icon: 'pi-arrows-v',      label: '双向同步配置',   color: 'var(--primary)' },
+  upload_history_cloud:    { icon: 'pi-cloud-upload',  label: '上传记录到云端',  color: 'var(--primary)' },
+  download_history_cloud:  { icon: 'pi-cloud-download', label: '从云端下载记录', color: 'var(--primary)' },
+  sync_history:            { icon: 'pi-arrows-v',      label: '双向同步记录',   color: 'var(--primary)' },
 };
 
 function getOpMeta(op: SyncLogOperation): OpMeta {
@@ -71,7 +72,7 @@ function formatRelativeTime(timestamp: number): string {
 <template>
   <div class="sync-history-log">
     <div v-if="entries.length > 0" class="log-header">
-      <span class="log-count">{{ entries.length }}</span>
+      <span class="log-title">最近 {{ entries.length }} 条</span>
       <button class="clear-btn" @click="handleClear">清空</button>
     </div>
 
@@ -91,17 +92,18 @@ function formatRelativeTime(timestamp: number): string {
         class="log-row-wrapper"
       >
         <div class="log-row">
-          <div class="op-icon-wrap">
-            <i :class="['pi', getOpMeta(entry.operation).icon, 'op-icon']" />
-          </div>
+          <i
+            :class="['pi', getOpMeta(entry.operation).icon, 'op-icon']"
+            :style="{ color: getOpMeta(entry.operation).color }"
+          />
 
           <div class="row-info">
             <div class="row-main">
               <span class="op-label">{{ getOpMeta(entry.operation).label }}</span>
               <span
                 v-if="isCloudOp(entry.operation) && entry.profileName"
-                class="source-pill"
-              >{{ entry.profileName }}</span>
+                class="source-name"
+              >· {{ entry.profileName }}</span>
             </div>
             <div class="row-meta">
               <span class="row-time">{{ formatRelativeTime(entry.timestamp) }}</span>
@@ -111,14 +113,12 @@ function formatRelativeTime(timestamp: number): string {
             </div>
           </div>
 
-          <span :class="['result-badge', entry.result === 'success' ? 'badge-success' : 'badge-failed']">
-            {{ entry.result === 'success' ? '成功' : '失败' }}
-          </span>
-        </div>
-
-        <!-- 失败错误详情 -->
-        <div v-if="entry.result === 'failed' && entry.details" class="error-detail">
-          {{ entry.details }}
+          <i v-if="entry.result === 'success'" class="pi pi-check result-icon result-success" />
+          <i
+            v-else
+            v-tooltip.left="{ value: entry.details || '操作失败', class: 'sync-error-tooltip' }"
+            class="pi pi-exclamation-circle result-icon result-failed"
+          />
         </div>
 
         <div v-if="index < entries.length - 1" class="row-divider" />
@@ -143,13 +143,10 @@ function formatRelativeTime(timestamp: number): string {
   padding: 10px 18px;
 }
 
-.log-count {
-  font-size: 11px;
+.log-title {
+  font-size: 12px;
   color: var(--text-muted);
-  background: var(--hover-overlay-subtle);
-  border-radius: var(--radius-full);
-  padding: 1px 7px;
-  border: 1px solid var(--border-subtle);
+  font-weight: 500;
 }
 
 .clear-btn {
@@ -204,21 +201,16 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 /* ===== 操作图标 ===== */
-.op-icon-wrap {
+.op-icon {
   flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius-md);
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
+  font-size: 15px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.op-icon {
-  font-size: 13px;
-  color: var(--text-muted);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
 }
 
 /* ===== 行内容 ===== */
@@ -242,13 +234,9 @@ function formatRelativeTime(timestamp: number): string {
   white-space: nowrap;
 }
 
-.source-pill {
-  font-size: 11px;
+.source-name {
+  font-size: 12px;
   color: var(--text-muted);
-  background: var(--hover-overlay-subtle);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 1px 6px;
   white-space: nowrap;
 }
 
@@ -272,31 +260,27 @@ function formatRelativeTime(timestamp: number): string {
   white-space: nowrap;
 }
 
-/* ===== 结果 Badge ===== */
-.result-badge {
+/* ===== 结果图标 ===== */
+.result-icon {
   flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 500;
-  padding: 3px 8px;
-  border-radius: var(--radius-sm);
+  font-size: 14px;
 }
 
-.badge-success {
-  background: var(--success-soft);
-  color: var(--state-success-text);
+.result-success {
+  color: var(--success);
 }
 
-.badge-failed {
-  background: var(--error-soft);
-  color: var(--state-error-text);
+.result-failed {
+  color: var(--error);
+  cursor: help;
 }
+</style>
 
-/* ===== 错误详情 ===== */
-.error-detail {
-  padding: 5px 18px 9px 60px;
-  font-size: 11px;
-  color: var(--state-error-text);
-  opacity: 0.8;
-  background: var(--error-alpha-8);
+<!-- tooltip 渲染在 body 上，scoped 无法覆盖，需要全局样式 -->
+<style>
+.sync-error-tooltip.p-tooltip .p-tooltip-text {
+  max-width: 320px;
+  white-space: normal;
+  word-break: break-word;
 }
 </style>

@@ -81,7 +81,15 @@ const activeWebDAVProfile = computed(() =>
 
 const isWebDAVConnected = computed(() => {
   const profile = activeWebDAVProfile.value;
-  return !!(profile && profile.url && profile.username);
+  return !!(profile && profile.connectionStatus === 'success');
+});
+
+const webdavHintText = computed(() => {
+  const profile = activeWebDAVProfile.value;
+  if (!profile || !profile.url || !profile.username) return '未配置 WebDAV';
+  if (profile.connectionStatus === 'failed') return '连接失败，请重新验证';
+  if (profile.connectionStatus !== 'success') return '请先验证 WebDAV 连接';
+  return '';
 });
 
 const localWebDAVConfig = computed({
@@ -380,6 +388,7 @@ function handleClearPassword() {
           type="config"
           :sync-status="configSyncStatus"
           :is-cloud-enabled="isWebDAVConnected"
+          :cloud-hint="webdavHintText"
           :provider-name="activeWebDAVProfile?.name"
           :other-profiles="otherProfileRecords"
           :local-loading="{ export: exportSettingsLoading, import: importSettingsLoading }"
@@ -401,6 +410,7 @@ function handleClearPassword() {
           type="history"
           :sync-status="historySyncStatus"
           :is-cloud-enabled="isWebDAVConnected"
+          :cloud-hint="webdavHintText"
           :provider-name="activeWebDAVProfile?.name"
           :other-profiles="otherProfileRecords"
           :local-loading="{ export: exportHistoryLoading, import: importHistoryLoading }"
