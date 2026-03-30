@@ -137,6 +137,7 @@ fn main() {
         )
         .manage(HttpClient(http_client))     // 注册全局 HTTP 客户端
         .manage(CloseToTrayState(AtomicBool::new(true)))
+        .manage(commands::link_checker::BatchCheckCancelFlag(Arc::new(AtomicBool::new(false))))
         .manage(ServerState {
             upload_config: Arc::new(TokioMutex::new(None)),
             abort_handle: std::sync::Mutex::new(None),
@@ -180,6 +181,8 @@ fn main() {
             commands::link_checker::check_image_link,
             commands::link_checker::download_image_from_url,
             commands::link_checker::download_url_image,
+            commands::link_checker::batch_check_links,
+            commands::link_checker::cancel_batch_check,
             commands::clipboard::clipboard_has_image,
             commands::clipboard::read_clipboard_image,
             commands::image_meta::get_image_metadata,

@@ -1,9 +1,14 @@
 // src-tauri/src/commands/link_checker.rs
 // 图片链接检测命令
 // v2.10: 迁移到 AppError 统一错误类型
+// v3.0: 新增批量检测引擎、服务感知请求头、并发控制
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Instant;
+use tauri::Emitter;
 
 use crate::error::AppError;
 
@@ -19,17 +24,20 @@ const URL_DOWNLOAD_PREFIX: &str = "picnexus_url_";
 /// 临时文件过期时间（1小时 = 3600秒）
 const TEMP_FILE_MAX_AGE_SECS: u64 = 3600;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckLinkResult {
     pub link: String,
     pub is_valid: bool,
     pub status_code: Option<u16>,
     pub error: Option<String>,
-
-    // 新增字段
-    pub error_type: String,         // "success" | "http_4xx" | "http_5xx" | "timeout" | "network"
-    pub suggestion: Option<String>, // 修复建议
-    pub response_time: Option<u64>, // 响应时间(毫秒)
+    pub error_type: String,         // "success" | "http_4xx" | "http_5xx" | "timeout" | "network" | "suspicious"
+    pub suggestion: Option<String>,
+    pub response_time: Option<u64>,
+    // v3.0 新增
+    pub detected_service: Option<String>,
+    pub browser_might_work: bool,
+    pub content_type: Option<String>,
+    pub content_length: Option<u64>,
 }
 
 /// 错误分类和建议生成
@@ -73,56 +81,147 @@ fn classify_error(
     ("network".to_string(), Some("未知错误".to_string()))
 }
 
-/// 判断是否为百度代理链接
-fn is_baidu_proxy_link(link: &str) -> bool {
-    link.contains("image.baidu.com")
+
+/// 已知有防盗链的图床服务
+const HOTLINK_PROTECTED_SERVICES: &[&str] = &[
+    "weibo", "bilibili", "jd", "zhihu", "chaoxing", "nowcoder",
+];
+
+/// 不支持 HEAD 请求的图床（直接用 GET + Range）
+const HEAD_UNSUPPORTED_SERVICES: &[&str] = &["zhihu", "chaoxing", "baidu"];
+
+/// 通用 Chrome User-Agent
+const CHROME_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36";
+
+/// 从 URL 域名识别图床服务
+fn detect_service_from_url(url: &str) -> Option<&'static str> {
+    // 提取域名部分
+    let host = url
+        .strip_prefix("https://").or_else(|| url.strip_prefix("http://"))
+        .and_then(|s| s.split('/').next())
+        .unwrap_or("");
+
+    if host.ends_with(".sinaimg.cn") || host == "sinaimg.cn" {
+        return Some("weibo");
+    }
+    if host.contains("image.baidu.com") {
+        return Some("baidu");
+    }
+    if host.ends_with(".hdslb.com") || host == "hdslb.com" {
+        return Some("bilibili");
+    }
+    if host.ends_with(".360buyimg.com") || host == "360buyimg.com" {
+        return Some("jd");
+    }
+    if host.ends_with(".zhimg.com") || host == "zhimg.com" {
+        return Some("zhihu");
+    }
+    if host.contains("chaoxing.com") {
+        return Some("chaoxing");
+    }
+    if host.contains("nowcoder.com") {
+        return Some("nowcoder");
+    }
+    if host == "raw.githubusercontent.com" || host == "github.com" || host.ends_with(".github.io") {
+        return Some("github");
+    }
+    if host == "i.imgur.com" || host == "imgur.com" {
+        return Some("imgur");
+    }
+    if host.ends_with(".aliyuncs.com") {
+        return Some("oss");
+    }
+    if host.ends_with(".myqcloud.com") {
+        return Some("cos");
+    }
+    if host.ends_with(".qiniudn.com") || host.ends_with(".qnssl.com") || host.ends_with(".qbox.me") {
+        return Some("qiniu");
+    }
+    if host.ends_with(".smms.app") || host == "i.loli.net" || host == "vip2.loli.io" {
+        return Some("smms");
+    }
+    if host.ends_with(".nami.observer") || host.contains("nami") {
+        return Some("nami");
+    }
+    None
 }
 
-/// 检测单个图片链接是否有效
-///
-/// 使用 HEAD 请求检测链接，减少流量消耗
-/// 对于百度代理链接，使用 GET + Range 头请求（百度不支持 HEAD）
-/// 超时设置为 10 秒，避免长时间等待
-#[tauri::command]
-pub async fn check_image_link(
-    link: String,
-    http_client: tauri::State<'_, crate::HttpClient>,
-) -> Result<CheckLinkResult, AppError> {
-    log::debug!("[链接检测] 检测链接: {}", link);
+/// 为请求附加服务特定的 Referer / UA 头以绕过防盗链
+fn apply_service_headers(
+    builder: reqwest::RequestBuilder,
+    service: Option<&str>,
+) -> reqwest::RequestBuilder {
+    match service {
+        Some("weibo") => builder
+            .header("Referer", "https://weibo.com/")
+            .header("User-Agent", CHROME_UA),
+        Some("bilibili") => builder
+            .header("Referer", "https://mall.bilibili.com/")
+            .header("User-Agent", CHROME_UA),
+        Some("jd") => builder
+            .header("Referer", "https://jdcs.jd.com/chat/index.action?venderId=1&appId=jd.waiter&customerAppId=im.customer&entry=jd_web_EnterpriseZC")
+            .header("User-Agent", CHROME_UA),
+        Some("zhihu") => builder
+            .header("Referer", "https://www.zhihu.com/")
+            .header("User-Agent", CHROME_UA),
+        Some("chaoxing") => builder
+            .header("Referer", "https://notice.chaoxing.com/")
+            .header("User-Agent", CHROME_UA),
+        Some("nowcoder") => builder
+            .header("Referer", "https://www.nowcoder.com/creation/write/article")
+            .header("User-Agent", CHROME_UA),
+        Some("github") => builder
+            .header("User-Agent", "PicNexus"),
+        // 对其他服务也附加通用浏览器 UA
+        _ => builder
+            .header("User-Agent", CHROME_UA),
+    }
+}
 
-    // 验证 URL 格式
+/// 检测单个链接的内部实现（供 check_image_link 和 batch_check_links 共用）
+async fn check_single_link(
+    link: &str,
+    http_client: &reqwest::Client,
+    timeout_secs: u64,
+) -> CheckLinkResult {
     if link.trim().is_empty() {
-        return Ok(CheckLinkResult {
-            link,
+        return CheckLinkResult {
+            link: link.to_string(),
             is_valid: false,
             status_code: None,
             error: Some("链接为空".to_string()),
             error_type: "network".to_string(),
             suggestion: Some("链接为空".to_string()),
             response_time: None,
-        });
+            detected_service: None,
+            browser_might_work: false,
+            content_type: None,
+            content_length: None,
+        };
     }
 
-    // 记录开始时间
+    let service = detect_service_from_url(link);
+    let timeout = std::time::Duration::from_secs(timeout_secs);
     let start_time = Instant::now();
 
-    // 百度代理链接使用 GET + Range 请求，其他使用 HEAD 请求
-    let response_result = if is_baidu_proxy_link(&link) {
-        log::debug!("[链接检测] 百度代理链接，使用 Range 请求");
-        http_client
-            .0
-            .get(&link)
-            .header("Range", "bytes=0-0")
-            .timeout(std::time::Duration::from_secs(10))
-            .send()
-            .await
+    // 已知不支持 HEAD 的图床直接用 GET + Range，其他用 HEAD（405 时兜底 fallback GET）
+    let skip_head = service.map_or(false, |s| HEAD_UNSUPPORTED_SERVICES.contains(&s));
+
+    let response_result = if skip_head {
+        let builder = http_client.get(link).header("Range", "bytes=0-0").timeout(timeout);
+        apply_service_headers(builder, service).send().await
     } else {
-        http_client
-            .0
-            .head(&link)
-            .timeout(std::time::Duration::from_secs(10))
-            .send()
-            .await
+        let head_result = {
+            let builder = http_client.head(link).timeout(timeout);
+            apply_service_headers(builder, service).send().await
+        };
+        match &head_result {
+            Ok(resp) if resp.status().as_u16() == 405 => {
+                let builder = http_client.get(link).header("Range", "bytes=0-0").timeout(timeout);
+                apply_service_headers(builder, service).send().await
+            }
+            _ => head_result,
+        }
     };
 
     match response_result {
@@ -130,20 +229,43 @@ pub async fn check_image_link(
             let elapsed = start_time.elapsed().as_millis() as u64;
             let status = response.status();
             let status_code = status.as_u16();
-            // 2xx 状态码有效，206 Partial Content 也是有效的
-            let is_valid = status.is_success();
 
-            let (error_type, suggestion) = classify_error(Some(status_code), None);
+            // 提取 Content-Type 和 Content-Length
+            let ct = response
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_string());
+            let cl = response
+                .headers()
+                .get("content-length")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.parse::<u64>().ok())
+                .or(response.content_length());
 
-            log::debug!(
-                "[链接检测] {} - HTTP {} ({}ms)",
-                if is_valid { "ok" } else { "fail" },
-                status_code,
-                elapsed
+            let is_2xx = status.is_success();
+
+            // 疑似异常判定：200 但内容不是图片或体积过小
+            let is_suspicious = is_2xx && (
+                ct.as_deref().map_or(false, |t| !t.starts_with("image/") && !t.is_empty())
+                || cl.map_or(false, |len| len > 0 && len < 1024)
             );
 
-            Ok(CheckLinkResult {
-                link,
+            let (mut error_type, mut suggestion) = classify_error(Some(status_code), None);
+
+            if is_suspicious {
+                error_type = "suspicious".to_string();
+                suggestion = Some("返回 200 但内容类型或大小异常，可能不是有效图片".to_string());
+            }
+
+            // 防盗链判定：403 + 已知防盗链服务
+            let browser_might_work = status_code == 403
+                && service.map_or(false, |s| HOTLINK_PROTECTED_SERVICES.contains(&s));
+
+            let is_valid = is_2xx && !is_suspicious;
+
+            CheckLinkResult {
+                link: link.to_string(),
                 is_valid,
                 status_code: Some(status_code),
                 error: if !is_valid {
@@ -154,11 +276,14 @@ pub async fn check_image_link(
                 error_type,
                 suggestion,
                 response_time: Some(elapsed),
-            })
+                detected_service: service.map(|s| s.to_string()),
+                browser_might_work,
+                content_type: ct,
+                content_length: cl,
+            }
         }
         Err(err) => {
             let elapsed = start_time.elapsed().as_millis() as u64;
-
             let error_msg = if err.is_timeout() {
                 "请求超时".to_string()
             } else if err.is_connect() {
@@ -169,19 +294,45 @@ pub async fn check_image_link(
 
             let (error_type, suggestion) = classify_error(None, Some(&err));
 
-            log::debug!("[链接检测] 失败: {} ({}ms)", error_msg, elapsed);
+            // 防盗链判定（连接被拒也可能是防盗链）
+            let browser_might_work = service.map_or(false, |s| HOTLINK_PROTECTED_SERVICES.contains(&s));
 
-            Ok(CheckLinkResult {
-                link,
+            CheckLinkResult {
+                link: link.to_string(),
                 is_valid: false,
                 status_code: None,
                 error: Some(error_msg),
                 error_type,
                 suggestion,
                 response_time: Some(elapsed),
-            })
+                detected_service: service.map(|s| s.to_string()),
+                browser_might_work,
+                content_type: None,
+                content_length: None,
+            }
         }
     }
+}
+
+/// 检测单个图片链接是否有效
+///
+/// 使用 HEAD 请求检测链接，减少流量消耗
+/// 对于百度代理链接，使用 GET + Range 头请求（百度不支持 HEAD）
+/// 自动识别图床服务并附加正确的 Referer/UA 头
+#[tauri::command]
+pub async fn check_image_link(
+    link: String,
+    http_client: tauri::State<'_, crate::HttpClient>,
+) -> Result<CheckLinkResult, AppError> {
+    log::debug!("[链接检测] 检测链接: {}", link);
+    let result = check_single_link(&link, &http_client.0, 10).await;
+    log::debug!(
+        "[链接检测] {} - {:?} ({}ms)",
+        if result.is_valid { "ok" } else { "fail" },
+        result.status_code,
+        result.response_time.unwrap_or(0)
+    );
+    Ok(result)
 }
 
 /// 清理过期的临时文件
@@ -521,4 +672,218 @@ pub async fn download_url_image(
         content_type,
         file_size,
     })
+}
+
+// ===== 批量检测引擎 =====
+
+/// 批量检测取消标志（Tauri State 管理）
+pub struct BatchCheckCancelFlag(pub Arc<AtomicBool>);
+
+/// 批量检测请求
+#[derive(Debug, Deserialize)]
+pub struct BatchCheckRequest {
+    /// 待检测链接列表
+    pub links: Vec<BatchCheckItem>,
+    /// 全局并发数（默认 10）
+    pub concurrency: Option<usize>,
+    /// 单图床最大并发数（默认 3）
+    pub per_host_limit: Option<usize>,
+    /// 单链接超时秒数（默认 10）
+    pub timeout_secs: Option<u64>,
+}
+
+/// 批量检测中的单个链接
+#[derive(Debug, Deserialize)]
+pub struct BatchCheckItem {
+    /// 待检测 URL（已经过前缀改造的最终 URL）
+    pub url: String,
+    /// 关联的 HistoryItem ID
+    pub history_id: Option<String>,
+    /// 前端传入的图床标识
+    pub service_id: Option<String>,
+}
+
+/// 批量检测进度（通过 Tauri 事件上报）
+#[derive(Debug, Clone, Serialize)]
+pub struct BatchCheckProgress {
+    pub checked: usize,
+    pub total: usize,
+    pub current_url: String,
+    pub current_result: Option<CheckLinkResult>,
+}
+
+/// 批量检测最终结果
+#[derive(Debug, Serialize)]
+pub struct BatchCheckResult {
+    pub results: Vec<BatchCheckItemResult>,
+    pub total: usize,
+    pub valid: usize,
+    pub invalid: usize,
+    pub timeout: usize,
+    pub suspicious: usize,
+    pub elapsed_ms: u64,
+    pub cancelled: bool,
+}
+
+/// 批量检测中单条结果（带关联信息）
+#[derive(Debug, Clone, Serialize)]
+pub struct BatchCheckItemResult {
+    #[serde(flatten)]
+    pub check: CheckLinkResult,
+    pub history_id: Option<String>,
+    pub service_id: Option<String>,
+}
+
+/// 批量检测图片链接有效性
+///
+/// 支持全局并发控制 + 单图床限速 + 取消 + 实时进度上报
+#[tauri::command]
+pub async fn batch_check_links(
+    window: tauri::Window,
+    request: BatchCheckRequest,
+    http_client: tauri::State<'_, crate::HttpClient>,
+    cancel_flag: tauri::State<'_, BatchCheckCancelFlag>,
+) -> Result<BatchCheckResult, AppError> {
+    let total = request.links.len();
+    let concurrency = request.concurrency.unwrap_or(10).max(1).min(50);
+    let per_host_limit = request.per_host_limit.unwrap_or(3).max(1).min(10);
+    let timeout_secs = request.timeout_secs.unwrap_or(10).max(3).min(30);
+
+    log::info!(
+        "[批量检测] 开始: {} 条链接, 并发={}, 单图床限制={}, 超时={}s",
+        total, concurrency, per_host_limit, timeout_secs
+    );
+
+    // 重置取消标志
+    cancel_flag.0.store(false, Ordering::SeqCst);
+
+    let start_time = Instant::now();
+    let global_semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
+    let cancel = cancel_flag.0.clone();
+    let client = http_client.0.clone();
+
+    // 构建按域名分组的限速信号量
+    let host_semaphores: Arc<tokio::sync::Mutex<HashMap<String, Arc<tokio::sync::Semaphore>>>> =
+        Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+
+    // 已完成计数（用于进度上报）
+    let checked_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
+    // 为每条链接创建异步任务
+    let mut handles = Vec::with_capacity(total);
+
+    for item in request.links {
+        let global_sem = global_semaphore.clone();
+        let host_sems = host_semaphores.clone();
+        let cancel = cancel.clone();
+        let client = client.clone();
+        let window = window.clone();
+        let checked = checked_count.clone();
+        let total_count = total;
+
+        let handle = tokio::spawn(async move {
+            // 检查取消标志
+            if cancel.load(Ordering::SeqCst) {
+                return None;
+            }
+
+            // 获取全局并发许���
+            let _global_permit = global_sem.acquire().await.ok()?;
+
+            // 再次检查取消
+            if cancel.load(Ordering::SeqCst) {
+                return None;
+            }
+
+            // 获取单域名并发许可
+            let host = extract_host(&item.url);
+            let host_sem = {
+                let mut map = host_sems.lock().await;
+                map.entry(host)
+                    .or_insert_with(|| Arc::new(tokio::sync::Semaphore::new(per_host_limit)))
+                    .clone()
+            };
+            let _host_permit = host_sem.acquire().await.ok()?;
+
+            // 最后一次检查取消
+            if cancel.load(Ordering::SeqCst) {
+                return None;
+            }
+
+            // 执行检测
+            let check_result = check_single_link(&item.url, &client, timeout_secs).await;
+
+            let result = BatchCheckItemResult {
+                check: check_result.clone(),
+                history_id: item.history_id,
+                service_id: item.service_id,
+            };
+
+            // 更新进度并上报
+            let done = checked.fetch_add(1, Ordering::SeqCst) + 1;
+            let _ = window.emit("link-check://progress", BatchCheckProgress {
+                checked: done,
+                total: total_count,
+                current_url: item.url,
+                current_result: Some(check_result),
+            });
+
+            Some(result)
+        });
+
+        handles.push(handle);
+    }
+
+    // 等待所有任务完成
+    let mut results = Vec::with_capacity(total);
+    for handle in handles {
+        match handle.await {
+            Ok(Some(result)) => results.push(result),
+            Ok(None) => {} // 被取消的任务
+            Err(e) => log::warn!("[批量检测] 任务异常: {}", e),
+        }
+    }
+
+    let elapsed_ms = start_time.elapsed().as_millis() as u64;
+    let cancelled = cancel.load(Ordering::SeqCst);
+
+    let valid = results.iter().filter(|r| r.check.is_valid).count();
+    let invalid = results.iter().filter(|r| !r.check.is_valid && r.check.error_type != "timeout" && r.check.error_type != "suspicious").count();
+    let timeout = results.iter().filter(|r| r.check.error_type == "timeout").count();
+    let suspicious = results.iter().filter(|r| r.check.error_type == "suspicious").count();
+
+    log::info!(
+        "[批量检测] 完成: 总={}, 有效={}, 失效={}, 超时={}, 疑似={}, 耗时={}ms, 取消={}",
+        results.len(), valid, invalid, timeout, suspicious, elapsed_ms, cancelled
+    );
+
+    Ok(BatchCheckResult {
+        results,
+        total,
+        valid,
+        invalid,
+        timeout,
+        suspicious,
+        elapsed_ms,
+        cancelled,
+    })
+}
+
+/// 取消正在进行的批量检测
+#[tauri::command]
+pub async fn cancel_batch_check(
+    cancel_flag: tauri::State<'_, BatchCheckCancelFlag>,
+) -> Result<(), AppError> {
+    log::info!("[批量检测] 收到取消请求");
+    cancel_flag.0.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
+/// 从 URL 中提取域名（用于按域名限速）
+fn extract_host(url: &str) -> String {
+    url.strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+        .and_then(|s| s.split('/').next())
+        .unwrap_or("unknown")
+        .to_string()
 }
