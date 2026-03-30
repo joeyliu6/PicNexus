@@ -241,12 +241,12 @@ function openPreviewDialog() {
 
 <template>
   <div class="compression-collapsible" :class="{ expanded }">
-    <button class="collapsible-header" @click="toggleExpand">
+    <button class="card-header" @click="toggleExpand">
       <div class="header-left">
         <span class="status-dot" :class="imageCompression.enabled ? 'active' : ''" v-tooltip.top="imageCompression.enabled ? '已启用' : '未启用'" />
         <div class="header-info">
-          <span class="header-title">图片压缩</span>
-          <span class="header-desc">{{ statusDesc }}</span>
+          <span class="card-title">图片压缩</span>
+          <span class="card-description">{{ statusDesc }}</span>
         </div>
       </div>
       <div class="header-right">
@@ -259,8 +259,8 @@ function openPreviewDialog() {
       </div>
     </button>
 
-    <div class="collapsible-content-wrapper">
-      <div class="collapsible-content">
+    <div class="card-content-wrapper">
+      <div class="card-content">
         <div class="preset-tab-row">
           <div
             v-for="preset in imageCompression.presets"
@@ -426,87 +426,16 @@ function openPreviewDialog() {
   overflow: hidden;
 }
 
-.collapsible-header {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--text-primary);
-  text-align: left;
-  transition: background 0.15s;
-}
-
-.collapsible-header:hover {
-  background: var(--hover-overlay-subtle);
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  flex-shrink: 0;
-  transition: all 0.2s ease;
-  box-shadow: 0 0 0 2px var(--bg-card);
-}
-
-.status-dot.active {
-  background: var(--success);
-  box-shadow: 0 0 0 2px var(--bg-card), 0 0 6px var(--success-border);
-}
-
-.header-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.header-title {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  line-height: 1.3;
-}
-
-.header-desc {
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-  line-height: 1.3;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-/* CSS Grid auto-height 动画 */
-.collapsible-content-wrapper {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.25s ease;
-}
-
-.expanded .collapsible-content-wrapper {
+.expanded .card-content-wrapper {
   grid-template-rows: 1fr;
 }
 
-.collapsible-content {
-  overflow: hidden;
+.card-content {
   display: flex;
   flex-direction: column;
 }
 
-.expanded .collapsible-content {
+.expanded .card-content {
   border-top: 1px solid var(--border-subtle);
 }
 

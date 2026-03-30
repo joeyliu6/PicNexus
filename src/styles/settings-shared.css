@@ -565,3 +565,107 @@
 .settings-card .settings-row:last-child {
   border-bottom: none;
 }
+
+/* ==================== 折叠卡片公共样式 ==================== */
+/* 适用于所有可折叠配置卡片（HostingCard、CollapsibleSettingsCard、 */
+/* ImageCompressionPanel、WebDAVConfigCollapsible 等）               */
+
+.card-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+
+.card-header:hover {
+  background-color: var(--hover-overlay-subtle);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.card-description {
+  font-size: 0.8125rem; /* 13px — 与原组件保持一致 */
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 0 2px var(--bg-card);
+}
+
+.status-dot.active,
+.status-dot.configured,
+.status-dot.verified {
+  background: var(--success);
+  box-shadow: 0 0 0 2px var(--bg-card), 0 0 6px var(--success-border);
+}
+
+.status-dot.pending {
+  background: var(--warning);
+  box-shadow: 0 0 0 2px var(--bg-card), 0 0 6px var(--warning-border);
+}
+
+.status-dot.error {
+  background: var(--error);
+  box-shadow: 0 0 0 2px var(--bg-card), 0 0 6px var(--error-border);
+}
+
+.expand-icon {
+  font-size: 14px;
+  color: var(--text-muted);
+  transition: color 0.2s ease;
+}
+
+.card-content-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.25s ease;
+}
+
+.card-content {
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .card-header {
+    padding: 12px 14px;
+  }
+}

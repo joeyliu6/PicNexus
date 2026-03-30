@@ -77,9 +77,15 @@ function toggleExpand() {
 function updateActiveProfileField(field: keyof WebDAVProfile, value: string) {
   if (!activeProfile.value) return;
 
+  const connectionFields: (keyof WebDAVProfile)[] = ['url', 'username', 'password', 'remotePath'];
+
   const updatedProfiles = props.modelValue.profiles.map(p => {
     if (p.id === props.modelValue.activeId) {
-      return { ...p, [field]: value };
+      const updated = { ...p, [field]: value };
+      if (connectionFields.includes(field) && p.connectionStatus === 'success') {
+        updated.connectionStatus = undefined;
+      }
+      return updated;
     }
     return p;
   });
@@ -151,17 +157,17 @@ function handleTest() {
 <template>
   <div class="webdav-collapsible" :class="{ expanded, 'needs-attention': shouldAutoExpand }">
     <!-- 折叠头部 -->
-    <button class="collapsible-header" @click="toggleExpand">
+    <button class="card-header" @click="toggleExpand">
       <div class="header-left">
-        <span class="header-title">WebDAV 同步</span>
+        <span class="card-title">WebDAV 同步</span>
         <span class="header-status-text" :class="statusClass">{{ statusLabel }}</span>
       </div>
       <i :class="expanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"></i>
     </button>
 
     <!-- 展开内容（CSS Grid auto-height 动画） -->
-    <div class="collapsible-content-wrapper">
-      <div class="collapsible-content">
+    <div class="card-content-wrapper">
+      <div class="card-content">
         <!-- 下划线风格 Tabs -->
         <div class="tabs-row">
           <div class="tabs-list">
@@ -286,35 +292,6 @@ function handleTest() {
   border-color: var(--warning);
 }
 
-/* 折叠头部 */
-.collapsible-header {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--text-primary);
-  transition: background 0.15s;
-}
-
-.collapsible-header:hover {
-  background: var(--hover-overlay-subtle);
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.header-title {
-  font-size: 14px;
-  font-weight: 600;
-}
-
 .header-status-text {
   font-size: 12px;
   color: var(--text-muted);
@@ -340,23 +317,15 @@ function handleTest() {
   color: var(--text-muted);
 }
 
-/* CSS Grid auto-height 动画 */
-.collapsible-content-wrapper {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.25s ease;
-}
-
-.expanded .collapsible-content-wrapper {
+.expanded .card-content-wrapper {
   grid-template-rows: 1fr;
 }
 
-.collapsible-content {
-  overflow: hidden;
+.card-content {
   padding: 0 16px;
 }
 
-.expanded .collapsible-content {
+.expanded .card-content {
   padding-bottom: 16px;
 }
 

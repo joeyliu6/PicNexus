@@ -196,6 +196,10 @@ function selectService(svc: ServerServiceType | null) {
   cursor: not-allowed;
 }
 
+.service-item + .service-item {
+  border-top: 1px solid var(--border-subtle);
+}
+
 .service-item.active {
   background: var(--primary-alpha-10);
   color: var(--primary);

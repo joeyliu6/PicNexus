@@ -205,6 +205,8 @@ const statusDotClass = computed(() => {
 </template>
 
 <style scoped>
+@import '../../styles/settings-shared.css';
+
 .hosting-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
@@ -221,57 +223,6 @@ const statusDotClass = computed(() => {
   border-color: var(--primary);
 }
 
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  cursor: pointer;
-  user-select: none;
-  transition: background-color 0.15s ease;
-}
-
-.card-header:hover {
-  background-color: var(--hover-overlay-subtle);
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.header-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.card-title {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  line-height: 1.3;
-}
-
-.card-description {
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-  line-height: 1.3;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.expand-icon {
-  font-size: 0.875rem;
-  color: var(--text-muted);
-  transition: transform 0.2s ease, color 0.2s ease;
-}
-
 .hosting-card:hover .expand-icon {
   color: var(--text-secondary);
 }
@@ -280,45 +231,8 @@ const statusDotClass = computed(() => {
   color: var(--primary);
 }
 
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  flex-shrink: 0;
-  transition: all 0.2s ease;
-  box-shadow: 0 0 0 2px var(--bg-card);
-}
-
-.status-dot.configured,
-.status-dot.verified {
-  background: var(--success);
-  box-shadow: 0 0 0 2px var(--bg-card), 0 0 6px var(--success-border);
-}
-
-.status-dot.pending {
-  background: var(--warning);
-  box-shadow: 0 0 0 2px var(--bg-card), 0 0 6px var(--warning-border);
-}
-
-.status-dot.error {
-  background: var(--error);
-  box-shadow: 0 0 0 2px var(--bg-card), 0 0 6px var(--error-border);
-}
-
-/* CSS Grid 展开/收起动画 */
-.card-content-wrapper {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.25s ease;
-}
-
 .hosting-card.expanded .card-content-wrapper {
   grid-template-rows: 1fr;
-}
-
-.card-content {
-  overflow: hidden;
 }
 
 .content-inner {
@@ -379,14 +293,6 @@ const statusDotClass = computed(() => {
 }
 
 @media (max-width: 768px) {
-  .card-header {
-    padding: 12px 14px;
-  }
-
-  .card-title {
-    font-size: 0.875rem;
-  }
-
   .content-inner {
     padding: 14px;
   }

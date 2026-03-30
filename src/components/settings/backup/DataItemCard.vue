@@ -21,6 +21,7 @@ interface Props {
   type: 'config' | 'history';
   syncStatus: SyncStatusInfo;
   isCloudEnabled: boolean;
+  cloudHint?: string;
   localLoading: { export: boolean; import: boolean };
   cloudLoading: { sync: boolean; forceUpload: boolean; forceDownload: boolean };
   providerName?: string;
@@ -196,7 +197,7 @@ const isAnyForceLoading = computed(() =>
         <!-- 未配置时：直接显示 inline 提示文字，不藏在 tooltip 里 -->
         <span v-if="!isCloudEnabled" class="cloud-hint-text">
           <i class="pi pi-lock cloud-hint-icon" />
-          未配置 WebDAV
+          {{ cloudHint || '未配置 WebDAV' }}
         </span>
         <span
           v-else

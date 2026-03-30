@@ -333,6 +333,7 @@ import './theme/transitions.css';
 | 层级 | Class | 字号 | 粗细 | 颜色 | 用途 |
 |------|-------|------|------|------|------|
 | 页面标题 | `.section-header h2` | 24px | 700 | `--text-primary` | 每个设置 Tab 的顶部标题 |
+| 卡片标题 | `.card-title` | 14px | 600 | `--text-primary` | 可折叠卡片标题（如"图片压缩""Typora""Obsidian""Cloudflare R2"） |
 | 区块标签 | `.group-label` | 14px | 600 | `--text-primary` | 功能分区标题（如"外观主题""应用行为"） |
 | 行标题 | `.toggle-row-label` | 14px | 500 | `--text-primary` | 设置项名称（如"开机自启动"） |
 
@@ -346,6 +347,25 @@ import './theme/transitions.css';
 | **L4** 提示卡片 | `.tips-card` | 13px | `--text-secondary` | (卡片 padding) | 信息提示框 | "典型效果：JPEG 80%…" |
 
 > **L3 行内描述**在不同面板中使用不同 class 名（`.toggle-row-desc`、`.config-hint`、`.port-hint`、`.service-section-desc`、`.link-card-desc`），但样式值必须统一为 **12px / --text-muted**。
+
+### 折叠卡片公共样式
+
+所有可折叠配置卡片（HostingCard、CollapsibleSettingsCard、ImageCompressionPanel、WebDAVConfigCollapsible 等）共享以下统一类名，定义在 `settings-shared.css`：
+
+| 语义 | Class | 说明 |
+|------|-------|------|
+| 头部按钮 | `.card-header` | flex 布局，14px 16px 内边距，hover 背景 |
+| 左侧容器 | `.header-left` | flex, gap 12px |
+| 信息容器 | `.header-info` | flex-column, gap 2px |
+| 标题 | `.card-title` | 14px / 600 / `--text-primary` |
+| 描述 | `.card-description` | 13px / `--text-muted` |
+| 右侧容器 | `.header-right` | flex, gap 12px |
+| 状态点 | `.status-dot` | 8px 圆点 + `.active`/`.verified`/`.pending`/`.error` |
+| 展开图标 | `.expand-icon` | 14px / `--text-muted` |
+| 内容包装 | `.card-content-wrapper` | CSS Grid 展开动画 |
+| 内容区 | `.card-content` | overflow hidden |
+
+> 各组件只需保留自己的**容器类**（如 `.hosting-card`、`.collapsible-card`）和组件特有逻辑。
 
 ### 容器规范
 
