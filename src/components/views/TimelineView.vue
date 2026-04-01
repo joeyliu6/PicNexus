@@ -272,8 +272,11 @@ function saveStablePosition(scrollTop?: number) {
     resolvedTop = Math.max(0, virtualScrollTop.value, lastKnownScrollTop);
   }
   resolvedTop = Math.max(0, resolvedTop);
-  const currentProgress = Math.min(1, Math.max(0, scrollProgress.value));
-  const anchorId = visibleItems.value[0]?.meta.id ?? lastStableAnchorId;
+  // 从 resolvedTop 直接算 progress，避免用 stale 的 scrollProgress.value（virtualScrollTop 在 RAF 里异步更新）
+  const maxScroll = Math.max(0, totalHeight.value - viewportHeight.value);
+  const currentProgress = maxScroll > 0 ? Math.min(1, Math.max(0, resolvedTop / maxScroll)) : 0;
+  // resolvedTop = 0 时清除 anchor，防止 stale 旧位置的锚点在还原时意外跳到底部
+  const anchorId = resolvedTop === 0 ? null : (visibleItems.value[0]?.meta.id ?? lastStableAnchorId);
 
   lastKnownScrollTop = resolvedTop;
   lastStableScrollTop = resolvedTop;

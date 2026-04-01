@@ -5,7 +5,6 @@
  */
 import { ref, computed, watch, reactive } from 'vue';
 import Skeleton from 'primevue/skeleton';
-import Select from 'primevue/select';
 import { useHistoryViewState } from '../../composables/useHistoryViewState';
 import { useHistoryManager } from '../../composables/useHistory';
 import { useConfigManager } from '../../composables/useConfig';
@@ -37,23 +36,13 @@ const configManager = useConfigManager();
 const scrollContainerRef = ref<HTMLElement | null>(null);
 let savedScrollTop = 0;
 
-// 排序
-type SortOrder = 'newest' | 'oldest';
-const sortOrder = ref<SortOrder>('newest');
-
-const sortOptions = [
-  { label: '最新上传', value: 'newest' as SortOrder },
-  { label: '最早上传', value: 'oldest' as SortOrder },
-];
-
 // 图片加载状态追踪（响应式对象，Vue 3 Proxy 自动追踪属性增删）
 const imageStates = reactive<Record<string, 'loading' | 'loaded' | 'failed'>>({});
 
 // 收藏列表（基于独立 favoriteSet 过滤，避免依赖 imageMetas 的 isFavorited 属性）
 const favoriteMetas = computed<ImageMeta[]>(() => {
   const favSet = historyManager.favoriteSet.value;
-  const metas = viewState.filteredMetas.value.filter(m => favSet.has(m.id));
-  return sortOrder.value === 'oldest' ? [...metas].reverse() : metas;
+  return viewState.filteredMetas.value.filter(m => favSet.has(m.id));
 });
 
 // 灯箱
@@ -195,9 +184,6 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 
       <!-- 加载骨架屏 -->
       <template v-if="viewState.isLoading.value">
-        <div class="favorites-header">
-          <Skeleton width="80px" height="18px" border-radius="6px" />
-        </div>
         <div class="favorites-grid">
           <div v-for="i in 16" :key="i" class="photo-item">
             <Skeleton width="100%" height="100%" border-radius="8px" class="photo-skeleton" />
@@ -213,20 +199,6 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
             <i class="pi pi-star empty-star-icon" style="font-size: 2.8rem; opacity: 0.35"></i>
             <p class="empty-title">暂无收藏</p>
             <p class="empty-hint">点击图片右上角的 ★ 开始收藏</p>
-          </div>
-        </Transition>
-
-        <!-- 头部栏 -->
-        <Transition name="header-fade">
-          <div v-if="favoriteMetas.length > 0" class="favorites-header">
-            <span class="favorites-count">{{ favoriteMetas.length }} 张收藏</span>
-            <Select
-              v-model="sortOrder"
-              :options="sortOptions"
-              option-label="label"
-              option-value="value"
-              class="sort-chip"
-            />
           </div>
         </Transition>
 
@@ -342,60 +314,6 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   display: none;                   /* Chrome/Safari */
 }
 
-/* === 头部栏 === */
-.favorites-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.favorites-count {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-/* 排序下拉 */
-.sort-chip {
-  flex-shrink: 0;
-}
-
-:deep(.sort-chip.p-select) {
-  height: 28px;
-  border-radius: 14px;
-  border: none;
-  background: var(--primary-alpha-8);
-  font-size: 12px;
-  transition: background 0.15s;
-}
-
-:deep(.sort-chip.p-select:hover) {
-  background: var(--primary-alpha-15);
-}
-
-:deep(.sort-chip.p-select.p-focus) {
-  background: var(--primary-alpha-15);
-  box-shadow: none;
-}
-
-:deep(.sort-chip .p-select-label) {
-  padding: 0 6px 0 10px;
-  font-size: 12px;
-  color: var(--primary);
-  font-weight: 500;
-  line-height: 28px;
-}
-
-:deep(.sort-chip .p-select-dropdown) {
-  width: 20px;
-  color: var(--primary);
-}
-
-:deep(.sort-chip .p-select-dropdown .p-icon) {
-  width: 10px;
-  height: 10px;
-}
 
 /* === 网格 === */
 .favorites-grid {
@@ -623,25 +541,6 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   transition: transform 0.55s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
-/* === Header 淡出上滑 === */
-.header-fade-enter-active {
-  transition: opacity 0.4s ease, transform 0.4s ease;
-}
-
-.header-fade-enter-from {
-  opacity: 0;
-  transform: translateY(-8px);
-}
-
-.header-fade-leave-active {
-  transition: opacity 0.45s ease-out, transform 0.45s ease-out;
-}
-
-.header-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
-}
-
 /* === 空状态入场：下方浮入 + 缩放 + 弹性缓动 === */
 .empty-fade-enter-active {
   transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.15s,
@@ -685,8 +584,6 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   .fav-last-enter-active,
   .fav-last-leave-active,
   .fav-last-move,
-  .header-fade-enter-active,
-  .header-fade-leave-active,
   .empty-fade-enter-active,
   .empty-fade-leave-active {
     transition: none;

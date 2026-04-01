@@ -128,7 +128,6 @@ async function openLogDir() {
         <!-- idle -->
         <div v-if="status === 'idle'" class="update-status">
           <div class="update-status-text">
-            <i class="pi pi-sync update-icon" />
             <span>点击右侧按钮检查是否有可用更新</span>
           </div>
           <Button
@@ -150,7 +149,6 @@ async function openLogDir() {
         <!-- up-to-date -->
         <div v-else-if="status === 'up-to-date'" class="update-status">
           <div class="update-status-text">
-            <i class="pi pi-check-circle update-icon success" />
             <div class="update-status-info">
               <span>已是最新版本</span>
               <span v-if="lastCheckText" class="last-check">上次检查：{{ lastCheckText }}</span>
@@ -197,7 +195,6 @@ async function openLogDir() {
         <!-- ready -->
         <div v-else-if="status === 'ready'" class="update-status">
           <div class="update-status-text">
-            <i class="pi pi-check-circle update-icon success" />
             <span>下载完成，正在重启应用...</span>
           </div>
         </div>
@@ -205,10 +202,9 @@ async function openLogDir() {
         <!-- error -->
         <div v-else-if="status === 'error'" class="update-status">
           <div class="update-status-text">
-            <i class="pi pi-times-circle update-icon error" />
             <div class="update-status-info">
               <span>无法连接到更新服务器</span>
-              <span class="last-check">
+              <span class="last-check error-hint">
                 <template v-if="lastCheckText">上次检查：{{ lastCheckText }} · </template>
                 请检查网络连接后重试
               </span>
@@ -423,7 +419,7 @@ async function openLogDir() {
 
 /* 更新卡片 */
 .update-card {
-  padding: 20px;
+  padding: 16px 20px;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
@@ -437,7 +433,7 @@ async function openLogDir() {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 36px;
+  min-height: 34px;
 }
 
 .update-status-vertical {
@@ -476,15 +472,11 @@ async function openLogDir() {
   color: var(--primary);
 }
 
-.update-icon.success {
-  color: var(--success);
-}
-
 .update-icon.available {
   color: var(--primary);
 }
 
-.update-icon.error {
+.error-hint {
   color: var(--error);
 }
 

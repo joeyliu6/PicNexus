@@ -1,6 +1,12 @@
 // 链接检测功能类型定义
 // 镜像 Rust link_checker.rs 中的结构体
 
+/** 状态筛选类型 */
+export type StatusFilter = 'invalid' | 'suspicious' | 'timeout' | 'unchecked' | 'valid' | 'all' | null;
+
+/** error_type → 严重度权重（数值越小越严重），用于列表排序 */
+export const SEVERITY: Record<string, number> = { http_4xx: 0, http_5xx: 1, network: 2, timeout: 3, suspicious: 4, success: 5 };
+
 /** 单条链接检测结果（对应 Rust CheckLinkResult） */
 export interface CheckLinkResult {
   link: string;
@@ -55,6 +61,8 @@ export interface BatchCheckRequestItem {
   url: string;
   history_id?: string;
   service_id?: string;
+  /** GitHub CDN 启用时的原始 raw.githubusercontent.com URL，用于双重检测 */
+  fallback_url?: string;
 }
 
 /** 前端展示用的检测结果行 */
@@ -64,7 +72,19 @@ export interface LinkCheckRow {
   url: string;
   rawUrl: string;
   fileName: string;
+  /** GitHub CDN 启用时的原始 raw.githubusercontent.com URL，用于单条重检双重检测 */
+  fallbackUrl?: string;
   checkResult?: CheckLinkResult;
+  /** 重检临时结果（动画结束前不写入 checkResult，避免过滤器提前剔除行） */
+  recheckResult?: CheckLinkResult;
+  /** 重检中：按钮转圈（随网络请求，不再是固定时长） */
+  recheckLoading?: boolean;
+  /** 重检结果徽章淡出触发器（Case A：行留在列表） */
+  recheckBadgeFading?: boolean;
+  /** 整行淡出触发器（Case B：行要离开当前筛选） */
+  fadingOut?: boolean;
+  /** 单条重试后锁定的排序权重，防止 checkResult 更新触发位置移动 */
+  pinnedSortWeight?: number;
 }
 
 /** MD 文件中的图片链接 */

@@ -246,7 +246,8 @@ async fn check_single_link(
             let is_2xx = status.is_success();
 
             // 疑似异常判定：200 但内容不是图片或体积过小
-            let is_suspicious = is_2xx && (
+            // 206 是 Range 请求的正常响应，其 Content-Length/Content-Type 反映部分内容，不参与 suspicious 判定
+            let is_suspicious = is_2xx && status_code != 206 && (
                 ct.as_deref().map_or(false, |t| !t.starts_with("image/") && !t.is_empty())
                 || cl.map_or(false, |len| len > 0 && len < 1024)
             );
@@ -294,8 +295,8 @@ async fn check_single_link(
 
             let (error_type, suggestion) = classify_error(None, Some(&err));
 
-            // 防盗链判定（连接被拒也可能是防盗链）
-            let browser_might_work = service.map_or(false, |s| HOTLINK_PROTECTED_SERVICES.contains(&s));
+            // 网络层错误（连接失败/超时）时浏览器同样无法访问，不标记为防盗链
+            let browser_might_work = false;
 
             CheckLinkResult {
                 link: link.to_string(),
@@ -314,18 +315,47 @@ async fn check_single_link(
     }
 }
 
+/// 带 fallback 的链接检测：主链接失败时尝试备用 URL
+/// 若备用成功，返回备用结果，但 `link` 字段保持原始 URL
+async fn check_link_with_fallback(
+    url: &str,
+    fallback_url: Option<&str>,
+    http_client: &reqwest::Client,
+    timeout_secs: u64,
+) -> CheckLinkResult {
+    let primary = check_single_link(url, http_client, timeout_secs).await;
+    if primary.is_valid {
+        return primary;
+    }
+    if let Some(fb) = fallback_url {
+        if fb != url {
+            let fallback = check_single_link(fb, http_client, timeout_secs).await;
+            if fallback.is_valid {
+                // 保持 link 字段为原始 URL，其余采用 fallback 结果
+                return CheckLinkResult {
+                    link: url.to_string(),
+                    ..fallback
+                };
+            }
+        }
+    }
+    primary
+}
+
 /// 检测单个图片链接是否有效
 ///
 /// 使用 HEAD 请求检测链接，减少流量消耗
 /// 对于百度代理链接，使用 GET + Range 头请求（百度不支持 HEAD）
 /// 自动识别图床服务并附加正确的 Referer/UA 头
+/// fallback_url：GitHub CDN 启用时传入 raw.githubusercontent.com 原始链接作为备选
 #[tauri::command]
 pub async fn check_image_link(
     link: String,
+    fallback_url: Option<String>,
     http_client: tauri::State<'_, crate::HttpClient>,
 ) -> Result<CheckLinkResult, AppError> {
     log::debug!("[链接检测] 检测链接: {}", link);
-    let result = check_single_link(&link, &http_client.0, 10).await;
+    let result = check_link_with_fallback(&link, fallback_url.as_deref(), &http_client.0, 10).await;
     log::debug!(
         "[链接检测] {} - {:?} ({}ms)",
         if result.is_valid { "ok" } else { "fail" },
@@ -701,6 +731,8 @@ pub struct BatchCheckItem {
     pub history_id: Option<String>,
     /// 前端传入的图床标识
     pub service_id: Option<String>,
+    /// 备用检测 URL（GitHub CDN 启用时为 raw.githubusercontent.com 原始链接）
+    pub fallback_url: Option<String>,
 }
 
 /// 批量检测进度（通过 Tauri 事件上报）
@@ -810,8 +842,13 @@ pub async fn batch_check_links(
                 return None;
             }
 
-            // 执行检测
-            let check_result = check_single_link(&item.url, &client, timeout_secs).await;
+            // 执行检测（GitHub CDN 启用时带 fallback）
+            let check_result = check_link_with_fallback(
+                &item.url,
+                item.fallback_url.as_deref(),
+                &client,
+                timeout_secs,
+            ).await;
 
             let result = BatchCheckItemResult {
                 check: check_result.clone(),

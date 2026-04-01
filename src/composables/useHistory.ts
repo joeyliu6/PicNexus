@@ -243,12 +243,12 @@ export function useHistoryManager() {
   /**
    * 删除单个历史记录项
    */
-  async function deleteHistoryItem(itemId: string): Promise<void> {
+  async function deleteHistoryItem(itemId: string): Promise<boolean> {
     try {
       if (!itemId || typeof itemId !== 'string' || itemId.trim().length === 0) {
         log.error('[历史记录] 删除失败: 无效的 itemId:', itemId);
         toast.showConfig('error', TOAST_MESSAGES.history.invalidId);
-        return;
+        return false;
       }
 
       const confirmed = await confirm(
@@ -257,7 +257,7 @@ export function useHistoryManager() {
       );
 
       if (!confirmed) {
-        return;
+        return false;
       }
 
       await historyDB.delete(itemId);
@@ -278,10 +278,12 @@ export function useHistoryManager() {
         console.warn('[历史记录] 跨窗口通知失败:', e);
       });
 
+      return true;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       log.error('[历史记录] 删除失败:', error);
       toast.showConfig('error', TOAST_MESSAGES.common.deleteFailed(errorMsg));
+      return false;
     }
   }
 
@@ -444,11 +446,11 @@ export function useHistoryManager() {
   /**
    * 批量删除记录
    */
-  async function bulkDeleteRecords(selectedIds: string[]): Promise<void> {
+  async function bulkDeleteRecords(selectedIds: string[]): Promise<boolean> {
     try {
       if (selectedIds.length === 0) {
         toast.showConfig('warn', TOAST_MESSAGES.common.noSelection);
-        return;
+        return false;
       }
 
       const confirmed = await confirm(
@@ -458,7 +460,7 @@ export function useHistoryManager() {
 
       if (!confirmed) {
         console.log('[批量操作] 用户取消删除');
-        return;
+        return false;
       }
 
       await historyDB.deleteMany(selectedIds);
@@ -481,9 +483,11 @@ export function useHistoryManager() {
         console.warn('[历史记录] 跨窗口通知失败:', e);
       });
 
+      return true;
     } catch (error: any) {
       log.error('[批量操作] 删除失败:', error);
       toast.showConfig('error', TOAST_MESSAGES.common.deleteFailed(error.message || String(error)));
+      return false;
     }
   }
 

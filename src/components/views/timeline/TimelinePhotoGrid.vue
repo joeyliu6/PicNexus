@@ -66,7 +66,7 @@ function getGroupItemCount(groupId: string): number {
     >
       <span class="group-title">{{ header.label }}</span>
       <span class="group-subtitle">
-        {{ getGroupItemCount(header.groupId) }} 张照片
+        {{ getGroupItemCount(header.groupId) }} 张图片
       </span>
     </div>
 

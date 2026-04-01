@@ -104,6 +104,7 @@
   --warning: #eab308;      /* Yellow 500 */
   --pending: #a78bfa;      /* Violet 400 — 中性"待定"语义 */
   --success-alpha-8: rgba(16, 185, 129, 0.08);
+  --success-alpha-10: rgba(16, 185, 129, 0.1);
   --success-alpha-15: rgba(16, 185, 129, 0.15);
   --warning-alpha-8: rgba(234, 179, 8, 0.08);
   --warning-alpha-15: rgba(234, 179, 8, 0.15);

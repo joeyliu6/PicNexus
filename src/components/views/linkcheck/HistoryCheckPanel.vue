@@ -4,11 +4,11 @@
  * 全宽单列、下划线 Tab、单行列表、hover 显示 URL
  */
 import { ref, computed, watch } from 'vue';
-import Checkbox from 'primevue/checkbox';
+import { watchDebounced } from '@vueuse/core';
 import Skeleton from 'primevue/skeleton';
 import { getServiceIcon } from '../../../utils/icons';
 import { getServiceDisplayName } from '../../../constants/serviceNames';
-import type { LinkCheckRow, BatchCheckProgress } from '../../../types/linkCheck';
+import { SEVERITY, type StatusFilter, type LinkCheckRow, type BatchCheckProgress, type CheckLinkResult } from '../../../types/linkCheck';
 
 const props = defineProps<{
   checkRows: LinkCheckRow[];
@@ -19,34 +19,39 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'check-all'): void;
-  (e: 'check-subset', filter: { statusFilter?: 'unchecked' | 'invalid'; serviceId?: string }): void;
+  (e: 'check-subset', filter: { statusFilter?: 'unchecked' | 'invalid' | 'timeout' | 'suspicious' | 'valid' | 'problems'; serviceId?: string }): void;
   (e: 'cancel-check'): void;
-  (e: 'recheck-single', row: LinkCheckRow): void;
+  (e: 'recheck-single', row: LinkCheckRow, filter: StatusFilter): void;
   (e: 'copy-url', url: string): void;
   (e: 'export-csv'): void;
   (e: 'open-md-rescue'): void;
   (e: 'delete-row', row: LinkCheckRow): void;
   (e: 'delete-batch', ids: string[]): void;
+  (e: 'recheck-batch', ids: string[]): void;
 }>();
 
 // ============================================
 // 筛选 + 分页
 // ============================================
 
-type StatusFilter = 'invalid' | 'suspicious' | 'timeout' | 'unchecked' | 'valid' | 'all' | null;
-const statusFilter = ref<StatusFilter>(null);
+const statusFilter = ref<StatusFilter>('invalid');
 const selectedServiceId = ref<string | null>(null);
 const showServiceMenu = ref(false);
+const searchInput = ref('');
 const searchQuery = ref('');
 const PAGE_SIZE = 100;
 const currentPage = ref(1);
+const pageByFilter = new Map<StatusFilter, number>();
 const showCheckMenu = ref(false);
 const searchFocused = ref(false);
 const progressHover = ref(false);
 
-watch(statusFilter, () => { currentPage.value = 1; });
-watch(selectedServiceId, () => { currentPage.value = 1; });
-watch(searchQuery, () => { currentPage.value = 1; });
+watch(selectedServiceId, () => { pageByFilter.clear(); currentPage.value = 1; });
+watchDebounced(searchInput, (val) => { searchQuery.value = val; pageByFilter.clear(); currentPage.value = 1; }, { debounce: 200 });
+watch(statusFilter, (newFilter, oldFilter) => {
+  pageByFilter.set(oldFilter!, currentPage.value);
+  currentPage.value = pageByFilter.get(newFilter!) ?? 1;
+});
 
 // 作用域行：只应用图床 + 搜索筛选，不含状态筛选（供 stats 和 filteredRows 共用）
 const scopedRows = computed(() => {
@@ -65,17 +70,17 @@ const scopedRows = computed(() => {
 
 const stats = computed(() => {
   const rows = scopedRows.value;
-  const valid = rows.filter((r) => r.checkResult?.is_valid).length;
-  const invalid = rows.filter(
-    (r) => r.checkResult && !r.checkResult.is_valid
-      && r.checkResult.error_type !== 'timeout' && r.checkResult.error_type !== 'suspicious',
-  ).length;
-  const timeout = rows.filter((r) => r.checkResult?.error_type === 'timeout').length;
-  const suspicious = rows.filter((r) => r.checkResult?.error_type === 'suspicious').length;
-  const unchecked = rows.filter((r) => !r.checkResult).length;
+  let valid = 0, invalid = 0, timeout = 0, suspicious = 0, unchecked = 0;
+  for (const r of rows) {
+    const cr = r.checkResult;
+    if (!cr) { unchecked++; continue; }
+    if (cr.is_valid) { valid++; continue; }
+    if (cr.error_type === 'timeout') { timeout++; }
+    else if (cr.error_type === 'suspicious' || cr.browser_might_work) { suspicious++; }
+    else { invalid++; }
+  }
   const checked = rows.length - unchecked;
-  const problems = invalid + timeout + suspicious;
-  return { total: rows.length, valid, invalid, timeout, suspicious, unchecked, checked, problems };
+  return { total: rows.length, valid, invalid, timeout, suspicious, unchecked, checked, problems: invalid + timeout + suspicious };
 });
 
 // 按图床统计
@@ -92,11 +97,13 @@ const serviceList = computed(() => {
 const filteredRows = computed(() => {
   // 图床 + 搜索筛选已在 scopedRows 完成，这里只做状态筛选 + 排序
   let rows = scopedRows.value.filter((row) => {
+    // 重检动画中的行始终保留，避免被过滤掉导致动画中断
+    if (row.recheckResult || row.fadingOut) return true;
     const r = row.checkResult;
     switch (statusFilter.value) {
       case null: return r && !r.is_valid;
-      case 'invalid': return r && !r.is_valid && r.error_type !== 'timeout' && r.error_type !== 'suspicious';
-      case 'suspicious': return r?.error_type === 'suspicious';
+      case 'invalid': return r != null && !r.is_valid && r.error_type !== 'timeout' && r.error_type !== 'suspicious' && !r.browser_might_work;
+      case 'suspicious': return r?.error_type === 'suspicious' || r?.browser_might_work === true;
       case 'timeout': return r?.error_type === 'timeout';
       case 'unchecked': return !r;
       case 'valid': return r?.is_valid;
@@ -105,14 +112,17 @@ const filteredRows = computed(() => {
     }
   });
   // 按严重程度排序：失效 > 超时 > 可疑
-  const severity: Record<string, number> = { http_4xx: 0, http_5xx: 1, network: 2, timeout: 3, suspicious: 4, success: 5 };
   rows = [...rows].sort((a, b) =>
-    (severity[a.checkResult?.error_type ?? 'success'] ?? 5) - (severity[b.checkResult?.error_type ?? 'success'] ?? 5),
+    (a.pinnedSortWeight ?? SEVERITY[a.checkResult?.error_type ?? 'success'] ?? 5) -
+    (b.pinnedSortWeight ?? SEVERITY[b.checkResult?.error_type ?? 'success'] ?? 5),
   );
   return rows;
 });
 
 const totalPages = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / PAGE_SIZE)));
+watch(totalPages, (newTotal) => {
+  if (currentPage.value > newTotal) currentPage.value = newTotal;
+});
 const visibleRows = computed(() => {
   const start = (currentPage.value - 1) * PAGE_SIZE;
   return filteredRows.value.slice(start, start + PAGE_SIZE);
@@ -136,15 +146,45 @@ const progressTooltip = computed(() => {
 // 智能检测
 // ============================================
 
+// 需要感知上下文的标签（正常/全部/null 不感知，保持原有智能逻辑）
+const CONTEXT_AWARE_FILTERS = new Set(['invalid', 'suspicious', 'timeout', 'unchecked']);
+
+const FILTER_LABEL: Record<string, string> = {
+  invalid: '重检失效链接',
+  suspicious: '重检可疑链接',
+  timeout: '重检超时链接',
+  unchecked: '检测未检测',
+};
+
 const smartCheckLabel = computed(() => {
+  const sf = statusFilter.value;
+  if (sf && CONTEXT_AWARE_FILTERS.has(sf)) {
+    const label = FILTER_LABEL[sf];
+    const count = sf === 'invalid' ? stats.value.invalid : stats.value[sf as keyof typeof stats.value] as number;
+    if (label && count > 0) return `${label} (${count.toLocaleString()})`;
+  }
+  // 默认智能逻辑
   if (stats.value.unchecked === stats.value.total) return '开始检测';
   if (stats.value.unchecked > 0) return '继续检测';
   if (stats.value.problems > 0) return `重检问题链接 (${stats.value.problems})`;
   return '重新检测全部';
 });
 
+const FILTER_TOOLTIP: Record<string, string> = {
+  invalid: '重新检测当前筛选的失效链接',
+  suspicious: '重新检测当前筛选的可疑链接',
+  timeout: '重新检测当前筛选的超时链接',
+  unchecked: '检测尚未验证的链接',
+};
+
 // 智能检测按钮 tooltip
 const smartCheckTooltip = computed(() => {
+  const sf = statusFilter.value;
+  if (sf && CONTEXT_AWARE_FILTERS.has(sf)) {
+    const count = sf === 'invalid' ? stats.value.invalid : stats.value[sf as keyof typeof stats.value] as number;
+    const tip = FILTER_TOOLTIP[sf];
+    if (tip && count > 0) return `${tip} (${count.toLocaleString()} 条)`;
+  }
   const { unchecked, total, problems } = stats.value;
   if (unchecked === total) return `检测全部 ${total.toLocaleString()} 条链接`;
   if (unchecked > 0) return `检测尚未验证的 ${unchecked.toLocaleString()} 条链接`;
@@ -154,6 +194,8 @@ const smartCheckTooltip = computed(() => {
 
 // 是否显示下拉箭头（只有一种操作时隐藏）
 const showDropdownArrow = computed(() => {
+  // 选中了感知上下文的标签时，始终显示（用户可能想选择其他检测范围）
+  if (statusFilter.value && CONTEXT_AWARE_FILTERS.has(statusFilter.value)) return true;
   // 全部未检测 → 只有"开始检测"一个动作
   if (stats.value.unchecked === stats.value.total) return false;
   // 全部已检测且没有问题 → 只有"重新检测全部"一个动作
@@ -161,35 +203,51 @@ const showDropdownArrow = computed(() => {
   return true;
 });
 
-// 下拉菜单选项
+// 下拉菜单选项（智能去重：不重复当前默认操作）
 const dropdownItems = computed(() => {
-  const items: Array<{
-    label: string;
-    desc: string;
-    action: () => void;
-  }> = [];
+  const items: Array<{ label: string; desc: string; icon: string; action: () => void }> = [];
   const { total, unchecked, problems } = stats.value;
+  const sf = statusFilter.value;
 
+  // 始终提供"检测全部"
   items.push({
     label: `检测全部 (${total.toLocaleString()})`,
     desc: '包括已检测的链接',
+    icon: 'pi-play',
     action: () => { emit('check-all'); showCheckMenu.value = false; },
   });
 
-  if (unchecked > 0 && unchecked < total) {
+  // "仅未检测"：有未检测且当前默认操作不是它时显示
+  if (unchecked > 0 && unchecked < total && sf !== 'unchecked') {
     items.push({
       label: `仅未检测 (${unchecked.toLocaleString()})`,
       desc: '跳过已有结果的链接',
+      icon: 'pi-clock',
       action: () => { emit('check-subset', { statusFilter: 'unchecked' }); showCheckMenu.value = false; },
     });
   }
 
-  if (problems > 0) {
+  // "重检问题链接"：有问题链接且当前不在问题子标签时显示
+  if (problems > 0 && sf !== 'invalid' && sf !== 'timeout' && sf !== 'suspicious') {
     items.push({
       label: `重检问题链接 (${problems})`,
       desc: '重新验证失效、超时、可疑链接',
-      action: () => { emit('check-subset', { statusFilter: 'invalid' }); showCheckMenu.value = false; },
+      icon: 'pi-exclamation-triangle',
+      action: () => { emit('check-subset', { statusFilter: 'problems' }); showCheckMenu.value = false; },
     });
+  }
+
+  // 在问题子标签时，提供"重检全部问题链接"作为替代
+  if ((sf === 'invalid' || sf === 'suspicious' || sf === 'timeout') && problems > 0) {
+    const currentCount = sf === 'invalid' ? stats.value.invalid : stats.value[sf as keyof typeof stats.value] as number;
+    if (problems !== currentCount) {
+      items.push({
+        label: `重检全部问题链接 (${problems})`,
+        desc: '包括失效、超时、可疑链接',
+        icon: 'pi-exclamation-triangle',
+        action: () => { emit('check-subset', { statusFilter: 'problems' }); showCheckMenu.value = false; },
+      });
+    }
   }
 
   return items;
@@ -197,18 +255,23 @@ const dropdownItems = computed(() => {
 
 function handleSmartCheck() {
   showCheckMenu.value = false;
+  const sf = statusFilter.value;
+
+  // 选中了感知上下文的标签时，直接检测对应子集
+  if (sf && CONTEXT_AWARE_FILTERS.has(sf)) {
+    emit('check-subset', { statusFilter: sf as 'unchecked' | 'invalid' | 'timeout' | 'suspicious' });
+    return;
+  }
+
+  // 默认智能逻辑（null / 'all'）
   const { unchecked, total, problems } = stats.value;
   if (unchecked === total) {
-    // 全部未检测 → 检测全部
     emit('check-all');
   } else if (unchecked > 0) {
-    // 部分已检测 → 继续检测未检测的
     emit('check-subset', { statusFilter: 'unchecked' });
   } else if (problems > 0) {
-    // 全部已检测有问题 → 重检问题链接
-    emit('check-subset', { statusFilter: 'invalid' });
+    emit('check-subset', { statusFilter: 'problems' });
   } else {
-    // 全部已检测无问题 → 重新检测全部
     emit('check-all');
   }
 }
@@ -217,22 +280,23 @@ function handleSmartCheck() {
 // 行为辅助
 // ============================================
 
-const pageInput = ref('');
+const pageInput = ref(String(currentPage.value));
+watch(currentPage, (val) => { pageInput.value = String(val); });
 
-// 底栏简洁摘要：只显示「当前列表数 / 总数」
+// 底栏摘要：始终显示当前筛选结果的数量
 const bottomSummary = computed(() => {
   const filtered = filteredRows.value.length;
-  const total = stats.value.total;
-  if (total === 0) return '';
-  // 有筛选时显示 "筛选结果 / 总数"，无筛选时只显示总数
-  const hasFilter = statusFilter.value || searchQuery.value.trim() || selectedServiceId.value;
-  return hasFilter
-    ? `${filtered.toLocaleString()} / ${total.toLocaleString()} 条`
-    : `共 ${total.toLocaleString()} 条`;
+  if (stats.value.total === 0) return '';
+  return `共 ${filtered.toLocaleString()} 条`;
 });
 
 function handlePageInput(e: Event) {
-  const val = parseInt((e.target as HTMLInputElement).value, 10);
+  const raw = (e.target as HTMLInputElement).value.trim();
+  if (!raw) {
+    pageInput.value = String(currentPage.value);
+    return;
+  }
+  const val = parseInt(raw, 10);
   if (Number.isNaN(val) || val < 1) {
     currentPage.value = 1;
   } else if (val > totalPages.value) {
@@ -240,29 +304,53 @@ function handlePageInput(e: Event) {
   } else {
     currentPage.value = val;
   }
-  pageInput.value = '';
+  pageInput.value = String(currentPage.value);
 }
 
 function handleCopyUrl(row: LinkCheckRow) {
   emit('copy-url', row.url);
 }
 
+/** 状态圆点：结果回来立刻更新（recheckResult 优先） */
 function statusDotColor(row: LinkCheckRow): string {
-  const r = row.checkResult;
+  const r = row.recheckResult ?? row.checkResult;
   if (!r) return 'var(--text-tertiary)';
   if (r.is_valid) return 'var(--success)';
   if (r.error_type === 'timeout') return 'var(--warning)';
-  if (r.error_type === 'suspicious') return 'var(--pending)';
+  if (r.error_type === 'suspicious' || r.browser_might_work) return 'var(--pending)';
   return 'var(--error)';
 }
 
+/** error-badge 的样式类：recheckResult 优先，与 errorLabel / 圆点同步 */
+function errorBadgeClass(row: LinkCheckRow): Record<string, boolean> {
+  const r = row.recheckResult ?? row.checkResult;
+  return {
+    'error-badge--success': !!r?.is_valid,
+    'error-badge--unchecked': !r,
+    'error-badge--error': !!r && ['http_4xx', 'http_5xx', 'network'].includes(r.error_type) && !r.browser_might_work,
+    'error-badge--warning': r?.error_type === 'timeout',
+    'error-badge--suspicious': r?.error_type === 'suspicious' || !!r?.browser_might_work,
+  };
+}
+
+/** 左侧 error-badge：recheckResult 优先，与圆点同步更新 */
 function errorLabel(row: LinkCheckRow): string {
-  const r = row.checkResult;
-  if (!r || r.is_valid) return '';
+  const r = row.recheckResult ?? row.checkResult;
+  if (!r) return '—';
+  if (r.is_valid) return r.status_code ? String(r.status_code) : '200';
   if (r.status_code) return String(r.status_code);
   if (r.error_type === 'timeout') return '超时';
   if (r.error_type === 'network') return '网络';
-  if (r.error_type === 'suspicious') return '疑似';
+  if (r.error_type === 'suspicious' || r.browser_might_work) return '疑似';
+  return '失效';
+}
+
+/** 按钮位置结果徽章文案（两字，与左侧状态码互补） */
+function recheckLabel(result: CheckLinkResult): string {
+  if (result.is_valid) return '可用';
+  if (result.error_type === 'timeout') return '超时';
+  if (result.error_type === 'network') return '断连';
+  if (result.error_type === 'suspicious' || result.browser_might_work) return '疑似';
   return '失效';
 }
 
@@ -313,12 +401,10 @@ function errorTooltip(row: LinkCheckRow): string {
   return parts.join(' · ');
 }
 
-// 重检按钮旋转
-const spinningRowId = ref<string | null>(null);
+// 重检按钮：转圈由 row.recheckLoading 驱动，随网络请求时长
+// 将当前 statusFilter 一并传出，供组合式函数判断 Case A/B
 function handleRecheck(row: LinkCheckRow) {
-  spinningRowId.value = row.historyId + row.serviceId;
-  emit('recheck-single', row);
-  setTimeout(() => { spinningRowId.value = null; }, 800);
+  emit('recheck-single', row, statusFilter.value);
 }
 
 // ============================================
@@ -362,6 +448,13 @@ function handleDeleteBatch() {
   emit('delete-batch', ids);
   clearSelection();
 }
+
+function handleRecheckBatch() {
+  const ids = [...selectedIds.value];
+  if (ids.length === 0) return;
+  emit('recheck-batch', ids);
+  clearSelection();
+}
 </script>
 
 <template>
@@ -369,50 +462,59 @@ function handleDeleteBatch() {
     <!-- 芯片栏：统计 + 筛选 + 进度 + 搜索 -->
     <div class="chip-bar">
       <div class="chip-group">
-        <button
-          class="filter-chip chip--error" :class="{ active: statusFilter === 'invalid' }"
-          @click="statusFilter = statusFilter === 'invalid' ? null : 'invalid'"
-        >
-          <span class="chip-dot" style="background: var(--error)"></span>
-          失效 {{ stats.invalid }}
-        </button>
-        <button
-          v-if="stats.suspicious > 0"
-          class="filter-chip chip--suspicious" :class="{ active: statusFilter === 'suspicious' }"
-          @click="statusFilter = statusFilter === 'suspicious' ? null : 'suspicious'"
-        >
-          <span class="chip-dot" style="background: var(--pending)"></span>
-          可疑 {{ stats.suspicious }}
-        </button>
-        <button
-          v-if="stats.timeout > 0"
-          class="filter-chip chip--timeout" :class="{ active: statusFilter === 'timeout' }"
-          @click="statusFilter = statusFilter === 'timeout' ? null : 'timeout'"
-        >
-          <span class="chip-dot" style="background: var(--warning)"></span>
-          超时 {{ stats.timeout }}
-        </button>
-        <button
-          v-if="stats.unchecked > 0"
-          class="filter-chip chip--unchecked" :class="{ active: statusFilter === 'unchecked' }"
-          @click="statusFilter = statusFilter === 'unchecked' ? null : 'unchecked'"
-        >
-          <span class="chip-dot" style="background: var(--text-tertiary)"></span>
-          未检测 {{ stats.unchecked }}
-        </button>
-        <button
-          class="filter-chip chip--valid" :class="{ active: statusFilter === 'valid' }"
-          @click="statusFilter = statusFilter === 'valid' ? null : 'valid'"
-        >
-          <span class="chip-dot" style="background: var(--success)"></span>
-          正常 {{ stats.valid }}
-        </button>
-        <button
-          class="filter-chip chip--all" :class="{ active: statusFilter === 'all' }"
-          @click="statusFilter = statusFilter === 'all' ? null : 'all'"
-        >
-          全部 {{ stats.total }}
-        </button>
+        <template v-if="isLoading && stats.total === 0">
+          <Skeleton width="52px" height="24px" border-radius="20px" />
+          <Skeleton width="65px" height="24px" border-radius="20px" />
+          <Skeleton width="75px" height="24px" border-radius="20px" />
+          <Skeleton width="52px" height="24px" border-radius="20px" />
+          <Skeleton width="52px" height="24px" border-radius="20px" />
+        </template>
+        <template v-else>
+          <button
+            class="filter-chip chip--error" :class="{ active: statusFilter === 'invalid' }"
+            @click="statusFilter = statusFilter === 'invalid' ? null : 'invalid'"
+          >
+            <span class="chip-dot" style="background: var(--error)"></span>
+            失效 {{ stats.invalid }}
+          </button>
+          <button
+            v-if="stats.suspicious > 0"
+            class="filter-chip chip--suspicious" :class="{ active: statusFilter === 'suspicious' }"
+            @click="statusFilter = statusFilter === 'suspicious' ? null : 'suspicious'"
+          >
+            <span class="chip-dot" style="background: var(--pending)"></span>
+            可疑 {{ stats.suspicious }}
+          </button>
+          <button
+            v-if="stats.timeout > 0"
+            class="filter-chip chip--timeout" :class="{ active: statusFilter === 'timeout' }"
+            @click="statusFilter = statusFilter === 'timeout' ? null : 'timeout'"
+          >
+            <span class="chip-dot" style="background: var(--warning)"></span>
+            超时 {{ stats.timeout }}
+          </button>
+          <button
+            v-if="stats.unchecked > 0"
+            class="filter-chip chip--unchecked" :class="{ active: statusFilter === 'unchecked' }"
+            @click="statusFilter = statusFilter === 'unchecked' ? null : 'unchecked'"
+          >
+            <span class="chip-dot" style="background: var(--text-tertiary)"></span>
+            未检测 {{ stats.unchecked }}
+          </button>
+          <button
+            class="filter-chip chip--valid" :class="{ active: statusFilter === 'valid' }"
+            @click="statusFilter = statusFilter === 'valid' ? null : 'valid'"
+          >
+            <span class="chip-dot" style="background: var(--success)"></span>
+            正常 {{ stats.valid }}
+          </button>
+          <button
+            class="filter-chip chip--all" :class="{ active: statusFilter === 'all' }"
+            @click="statusFilter = statusFilter === 'all' ? null : 'all'"
+          >
+            全部 {{ stats.total }}
+          </button>
+        </template>
       </div>
       <div class="chip-spacer"></div>
       <!-- 图床筛选 -->
@@ -458,15 +560,15 @@ function handleDeleteBatch() {
       <div class="search-field" :class="{ focused: searchFocused }">
         <i class="pi pi-search search-field-icon"></i>
         <input
-          v-model="searchQuery" type="text" class="search-field-input"
+          v-model="searchInput" type="text" class="search-field-input"
           placeholder="搜索文件名..."
           @focus="searchFocused = true"
           @blur="searchFocused = false"
         />
         <i
-          v-show="searchQuery"
+          v-show="searchInput"
           class="pi pi-times search-field-clear"
-          @click="searchQuery = ''"
+          @click="searchInput = ''; searchQuery = ''"
         ></i>
       </div>
     </div>
@@ -513,60 +615,68 @@ function handleDeleteBatch() {
         <p class="empty-desc">尚无上传历史记录</p>
       </div>
 
-      <div v-else class="link-list">
+      <TransitionGroup v-else tag="div" name="row-list" class="link-list">
         <div
           v-for="row in visibleRows" :key="row.historyId + row.serviceId"
-          class="link-row" :class="{ 'row-selected': selectedIds.has(row.historyId), 'has-selection': hasSelection }"
+          class="link-row" :class="{ 'row-selected': selectedIds.has(row.historyId), 'fading-out': row.fadingOut }"
+          @click="!isChecking && toggleSelect(row.historyId)"
         >
           <span class="status-dot" :style="{ background: statusDotColor(row) }"></span>
-          <span class="link-filename">{{ row.fileName }}</span>
+          <span
+            class="link-filename"
+            :class="{ 'filename-selected': selectedIds.has(row.historyId) }"
+          >{{ row.fileName }}</span>
           <span class="link-spacer"></span>
           <span
             v-tooltip.top="'点击复制链接'"
             class="service-badge"
-            @click="handleCopyUrl(row)"
+            @click.stop="handleCopyUrl(row)"
           >
             <span class="badge-icon" v-html="getServiceIcon(row.serviceId)"></span>
             <span class="badge-label">{{ getServiceDisplayName(row.serviceId) }}</span>
           </span>
           <span
-            v-if="errorLabel(row)"
             v-tooltip.top="errorTooltip(row)"
             class="error-badge"
-            :class="{
-              'error-badge--error': !row.checkResult?.error_type || row.checkResult?.error_type === 'http_4xx' || row.checkResult?.error_type === 'http_5xx' || row.checkResult?.error_type === 'network',
-              'error-badge--warning': row.checkResult?.error_type === 'timeout',
-              'error-badge--suspicious': row.checkResult?.error_type === 'suspicious',
-            }"
+            :class="errorBadgeClass(row)"
           >
             {{ errorLabel(row) }}
           </span>
-          <button
-            class="recheck-btn"
-            :class="{ spinning: spinningRowId === row.historyId + row.serviceId }"
-            title="重新检测"
-            @click.stop="handleRecheck(row)"
-          >
-            <i class="pi pi-refresh"></i>
-          </button>
-          <button
-            class="delete-btn"
-            :disabled="isChecking"
-            title="删除此记录"
-            @click.stop="emit('delete-row', row)"
-          >
-            <i class="pi pi-trash"></i>
-          </button>
-          <span class="row-checkbox" @click.stop>
-            <Checkbox
-              :model-value="selectedIds.has(row.historyId)"
-              :binary="true"
+          <!-- 右侧操作区：recheck-slot + delete-btn 收紧间距 -->
+          <div class="row-actions">
+            <div class="recheck-slot">
+              <span
+                v-if="row.recheckResult"
+                class="recheck-result-badge"
+                :class="{
+                  'badge-fading':     row.recheckBadgeFading,
+                  'badge-valid':      row.recheckResult.is_valid,
+                  'badge-suspicious': row.recheckResult.error_type === 'suspicious' || row.recheckResult.browser_might_work,
+                  'badge-timeout':    row.recheckResult.error_type === 'timeout',
+                  'badge-invalid':    !row.recheckResult.is_valid && row.recheckResult.error_type !== 'timeout' && row.recheckResult.error_type !== 'suspicious' && !row.recheckResult.browser_might_work,
+                }"
+              >{{ recheckLabel(row.recheckResult) }}</span>
+              <button
+                v-else
+                class="recheck-btn"
+                :class="{ spinning: row.recheckLoading }"
+                title="重新检测"
+                @click.stop="handleRecheck(row)"
+              >
+                <i class="pi pi-refresh"></i>
+              </button>
+            </div>
+            <button
+              class="delete-btn"
               :disabled="isChecking"
-              @update:model-value="toggleSelect(row.historyId)"
-            />
-          </span>
+              title="删除此记录"
+              @click.stop="emit('delete-row', row)"
+            >
+              <i class="pi pi-trash"></i>
+            </button>
+          </div>
         </div>
-      </div>
+      </TransitionGroup>
     </div>
 
     <!-- 底部 -->
@@ -586,41 +696,19 @@ function handleDeleteBatch() {
         </div>
       </div>
       <div class="bottom-main">
-        <!-- 选中模式：底栏变为批量操作 -->
+        <!-- 选中模式：底栏左侧保留分页，右侧显示批量操作 -->
         <template v-if="hasSelection && !isChecking">
-          <div class="batch-bottom-left">
-            <Checkbox
-              :model-value="isAllSelected"
-              :binary="true"
-              :indeterminate="hasSelection && !isAllSelected"
-              @update:model-value="toggleSelectAll"
-            />
-            <span class="batch-count">已选 {{ selectedCount }} 条记录</span>
-          </div>
-          <div class="batch-bottom-right">
-            <button class="btn-danger btn-sm" @click="handleDeleteBatch">
-              <i class="pi pi-trash"></i> 删除选中
-            </button>
-            <button class="btn-ghost btn-sm" @click="clearSelection">
-              取消选择
-            </button>
-          </div>
-        </template>
-
-        <!-- 正常模式 -->
-        <template v-else>
-          <span class="page-summary">{{ bottomSummary }}</span>
-          <div v-if="totalPages > 1" class="pagination">
+          <div class="pagination">
             <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">
               <i class="pi pi-chevron-left"></i>
             </button>
             <span class="page-info">
               <input
                 class="page-input" type="text"
-                :placeholder="String(currentPage)"
                 v-model="pageInput"
                 @keydown.enter="handlePageInput($event)"
                 @blur="handlePageInput($event)"
+                @focus="($event.target as HTMLInputElement).select()"
               />
               / {{ totalPages }}
             </span>
@@ -628,6 +716,47 @@ function handleDeleteBatch() {
               <i class="pi pi-chevron-right"></i>
             </button>
           </div>
+          <div class="batch-bottom-right">
+            <span class="batch-count">已选 {{ selectedCount }} 条记录</span>
+            <button class="btn-ghost btn-sm" @click="toggleSelectAll">
+              {{ isAllSelected ? '取消全选' : '全选' }}
+            </button>
+            <button class="btn-ghost btn-sm" @click="clearSelection">取消选择</button>
+            <button class="btn-primary btn-sm" @click="handleRecheckBatch" :disabled="isChecking">
+              <i class="pi pi-refresh"></i> 重新检测
+            </button>
+            <button class="btn-danger btn-sm" @click="handleDeleteBatch" :disabled="isChecking">
+              <i class="pi pi-trash"></i> 删除选中
+            </button>
+          </div>
+        </template>
+
+        <!-- 正常模式 -->
+        <template v-else>
+          <div class="pagination">
+            <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">
+              <i class="pi pi-chevron-left"></i>
+            </button>
+            <span class="page-info">
+              <input
+                class="page-input" type="text"
+                v-model="pageInput"
+                @keydown.enter="handlePageInput($event)"
+                @blur="handlePageInput($event)"
+                @focus="($event.target as HTMLInputElement).select()"
+              />
+              / {{ totalPages }}
+            </span>
+            <button class="page-btn" :disabled="currentPage >= totalPages" @click="currentPage++">
+              <i class="pi pi-chevron-right"></i>
+            </button>
+          </div>
+          <span class="page-summary">
+            <template v-if="isLoading && stats.total === 0">
+              <Skeleton width="64px" height="14px" border-radius="4px" />
+            </template>
+            <template v-else>{{ bottomSummary }}</template>
+          </span>
           <div class="bottom-actions" @click.stop>
             <button v-tooltip.top="'扫描 Markdown 文件，替换失效图片链接'" class="btn-ghost" @click="emit('open-md-rescue')">
               <i class="pi pi-file-edit"></i> 文档修复
@@ -638,7 +767,7 @@ function handleDeleteBatch() {
             <span class="action-divider"></span>
             <div v-if="!isChecking" class="check-btn-group" :class="{ 'has-dropdown': showDropdownArrow }">
               <button v-tooltip.top="smartCheckTooltip" class="btn-primary" @click="handleSmartCheck">
-                <i class="pi pi-play"></i> {{ smartCheckLabel }}
+                <svg viewBox="0 0 16 16" fill="currentColor" width="10" height="10" style="flex-shrink:0;display:block"><path d="M3 2l10 6-10 6V2z"/></svg> {{ smartCheckLabel }}
               </button>
               <button
                 v-if="showDropdownArrow"
@@ -654,8 +783,10 @@ function handleDeleteBatch() {
                     class="check-dropdown-item"
                     @click="item.action()"
                   >
-                    <span class="dropdown-label">{{ item.label }}</span>
-                    <span class="dropdown-desc">{{ item.desc }}</span>
+                    <div class="dropdown-text">
+                      <span class="dropdown-label">{{ item.label }}</span>
+                      <span class="dropdown-desc">{{ item.desc }}</span>
+                    </div>
                   </div>
                 </div>
               </Transition>
@@ -684,10 +815,11 @@ function handleDeleteBatch() {
 
 /* ===== 按钮 ===== */
 .btn-ghost, .btn-primary, .btn-danger {
-  display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 12px;
+  display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px;
   border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer;
   white-space: nowrap; transition: background 0.15s, opacity 0.15s; border: none;
 }
+.btn-ghost i, .btn-primary i, .btn-danger i { font-size: 11px; }
 .btn-ghost { background: var(--bg-input); color: var(--text-muted); }
 .btn-ghost:hover { background: var(--hover-overlay); color: var(--text-main); }
 .btn-primary { background: var(--primary); color: #fff; }
@@ -705,11 +837,12 @@ function handleDeleteBatch() {
   border: 1px solid var(--border-subtle); overflow: hidden;
 }
 .check-dropdown-item {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 10px 14px; cursor: pointer; transition: background 0.1s;
+  display: flex; flex-direction: row; align-items: center; gap: 8px;
+  padding: 7px 14px; cursor: pointer; transition: background 0.1s;
 }
 .check-dropdown-item:not(:last-child) { border-bottom: 1px solid var(--border-subtle); }
 .check-dropdown-item:hover { background: var(--hover-overlay-subtle); }
+.dropdown-text { display: flex; flex-direction: column; gap: 2px; }
 .dropdown-label { font-size: 13px; font-weight: 500; color: var(--text-main); }
 .dropdown-desc { font-size: 11px; color: var(--text-tertiary); }
 
@@ -747,7 +880,7 @@ function handleDeleteBatch() {
   background: var(--bg-input); color: var(--text-main); border-color: var(--border-subtle);
 }
 .filter-chip.chip--valid.active {
-  background: var(--success-alpha-10, rgba(34, 197, 94, 0.1)); color: var(--success); border-color: var(--success-alpha-10, rgba(34, 197, 94, 0.1));
+  background: var(--success-alpha-10); color: var(--success); border-color: var(--success-alpha-10);
 }
 .filter-chip.chip--all.active {
   background: var(--primary-alpha-10); color: var(--primary); border-color: var(--primary-alpha-10);
@@ -846,8 +979,8 @@ function handleDeleteBatch() {
 .link-list { flex: 1; overflow-y: auto; }
 
 .link-row {
-  display: flex; align-items: center; gap: 10px; padding: 0 16px 0 8px;
-  height: 40px;
+  display: flex; align-items: center; gap: 10px; padding: 0 16px 0 11px;
+  height: 40px; cursor: pointer;
   border-bottom: 1px solid var(--primary-alpha-5);
   transition: background 0.1s;
 }
@@ -882,25 +1015,25 @@ function handleDeleteBatch() {
 }
 /* 错误标签 badge */
 .error-badge {
-  display: inline-flex; align-items: center;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 36px;
   padding: 1px 6px; border-radius: 4px;
   font-size: 10px; font-weight: 600;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   flex-shrink: 0; cursor: default;
 }
+.error-badge--success { background: var(--success-alpha-10); color: var(--success); }
+.error-badge--unchecked { background: var(--hover-overlay-subtle); color: var(--text-tertiary); }
 .error-badge--error { background: var(--error-alpha-10); color: var(--error); }
 .error-badge--warning { background: var(--warning-alpha-8); color: var(--warning); }
 .error-badge--suspicious { background: var(--pending-alpha-8); color: var(--pending); }
 .link-spacer { flex: 1; }
 
-/* Checkbox */
-.row-checkbox {
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; opacity: 0; transition: opacity 0.15s;
+/* 文件名选中 */
+.link-filename.filename-selected {
+  color: var(--primary);
+  font-weight: 600;
 }
-.link-row:hover .row-checkbox,
-.link-row.has-selection .row-checkbox,
-.link-row.row-selected .row-checkbox { opacity: 1; }
 .link-row.row-selected { background: var(--primary-alpha-8) !important; }
 .link-row.row-selected:hover { background: var(--primary-alpha-12) !important; }
 
@@ -908,21 +1041,86 @@ function handleDeleteBatch() {
 .recheck-btn, .delete-btn {
   display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;
   border: none; border-radius: 5px; background: transparent; color: var(--text-tertiary);
-  cursor: pointer; transition: background 0.1s, color 0.1s, opacity 0.15s; font-size: 11px;
-  opacity: 0.2; flex-shrink: 0;
+  cursor: pointer; transition: background 0.1s, color 0.1s; font-size: 11px;
+  flex-shrink: 0;
 }
-.link-row:hover .recheck-btn,
-.link-row:hover .delete-btn { opacity: 1; }
+/* recheck-btn / delete-btn 透明度由父级 row-actions 统一控制 */
+.recheck-btn, .delete-btn { opacity: 1; }
 .recheck-btn:hover { background: var(--primary-alpha-8); color: var(--primary); }
 .delete-btn:hover { background: var(--error-alpha-10); color: var(--error); }
 .delete-btn:disabled { opacity: 0.1; cursor: default; pointer-events: none; }
-.recheck-btn.spinning .pi { animation: spin-once 0.6s ease-out; }
-@keyframes spin-once { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+/* 行离场动画（Case B 重检 / 删除：整行淡出 + 高度收缩，下方行平滑上移） */
+.link-row.fading-out {
+  opacity: 0;
+  height: 0 !important;
+  border-bottom-width: 0 !important;
+  overflow: hidden;
+  transition: opacity 0.3s ease, height 0.35s ease, border-bottom-width 0.2s ease;
+  pointer-events: none;
+}
+
+/* spinning 时用 CSS 圆弧替代字体图标，彻底消除字形不居中导致的晃动 */
+.recheck-btn.spinning .pi {
+  width: 12px;
+  height: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.recheck-btn.spinning .pi::before {
+  content: '' !important;
+  display: block;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin-infinite 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin-infinite { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* 右侧操作区：recheck + delete 整体收紧 */
+.row-actions {
+  display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+}
+
+/* 按钮位置固定宽度槽，防止 badge ↔ button 切换时布局抖动 */
+.recheck-slot {
+  width: 36px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.link-row:not(:hover) .row-actions { opacity: 0.2; }
+.link-row:hover .row-actions { opacity: 1; }
+.row-actions:has(.recheck-result-badge) { opacity: 1 !important; }
+
+/* 按钮位置结果徽章 */
+.recheck-result-badge {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 20px; border-radius: 4px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
+  flex-shrink: 0; cursor: default;
+  opacity: 1; transition: opacity 0.3s ease;
+}
+.recheck-result-badge.badge-fading     { opacity: 0; }
+.recheck-result-badge.badge-valid      { background: var(--success-alpha-15, rgba(34, 197, 94, 0.15)); color: var(--success, #22c55e); }
+.recheck-result-badge.badge-invalid    { background: var(--error-alpha-10); color: var(--error); }
+.recheck-result-badge.badge-timeout    { background: var(--warning-alpha-8); color: var(--warning); }
+.recheck-result-badge.badge-suspicious { background: var(--pending-alpha-8); color: var(--pending); }
 
 /* 底栏批量操作模式 */
-.batch-bottom-left, .batch-bottom-right { display: flex; align-items: center; gap: 8px; }
+.batch-bottom-right { display: flex; align-items: center; gap: 8px; }
 .batch-count { font-size: 12px; color: var(--text-muted); font-weight: 500; }
-.btn-sm { height: 26px; padding: 0 10px; font-size: 11px; }
+
+/* 行入场动画（leave 由 fadingOut class 自行处理，此处只定义 enter） */
+.row-list-enter-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.row-list-enter-from {
+  opacity: 0;
+  transform: translateY(-5px);
+}
 
 /* 下拉动画（复用 settings-shared 定义） */
 .dropdown-enter-active, .dropdown-leave-active { transition: all 0.2s ease; }
@@ -966,7 +1164,7 @@ function handleDeleteBatch() {
   display: flex; align-items: center; justify-content: space-between;
 }
 .page-summary { font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
-.pagination { display: flex; align-items: center; gap: 4px; }
+.pagination { display: flex; align-items: center; gap: 4px; margin-right: 10px; }
 .page-btn {
   display: flex; align-items: center; justify-content: center; width: 26px; height: 26px;
   border: none; border-radius: 5px; background: var(--bg-input); color: var(--text-muted);
@@ -975,15 +1173,17 @@ function handleDeleteBatch() {
 .page-btn:hover:not(:disabled) { background: var(--primary-alpha-8); color: var(--primary); }
 .page-btn:disabled { opacity: 0.3; cursor: default; }
 .page-info {
-  font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: var(--text-muted);
   display: inline-flex; align-items: center; gap: 4px; margin: 0 4px;
 }
 .page-input {
   width: 32px; height: 22px; text-align: center; border: 1px solid var(--border-subtle);
-  border-radius: 4px; background: transparent; color: var(--text-main); font-size: 11px;
-  font-family: 'JetBrains Mono', monospace; outline: none;
+  border-radius: 4px; background: var(--bg-input); color: var(--text-main); font-size: 12px;
+  outline: none;
 }
-.page-input::placeholder { color: var(--text-muted); }
+.page-input::placeholder { color: var(--text-main); opacity: 0.6; }
 .page-input:focus { border-color: var(--primary); }
+
+
 
 </style>

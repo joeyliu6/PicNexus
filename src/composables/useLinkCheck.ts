@@ -10,12 +10,14 @@ import { applyLinkPrefix } from './useCopyLink';
 import { historyDB } from '../services/HistoryDatabase';
 import { useToast } from './useToast';
 import { createLogger } from '../utils/logger';
-import type {
-  BatchCheckProgress,
-  BatchCheckResult,
-  BatchCheckRequestItem,
-  LinkCheckRow,
-  CheckLinkResult,
+import {
+  SEVERITY,
+  type StatusFilter,
+  type BatchCheckProgress,
+  type BatchCheckResult,
+  type BatchCheckRequestItem,
+  type LinkCheckRow,
+  type CheckLinkResult,
 } from '../types/linkCheck';
 
 const log = createLogger('LinkCheck');
@@ -45,14 +47,13 @@ export function useLinkCheckManager() {
   const { loadConfig } = useConfigManager();
 
   /**
-   * 从 HistoryItem 列表构建待检测 URL
+   * 从 HistoryItem 列表构建待检测 URL（同步版，需提前加载 config）
    * 对微博链接自动拼接当前前缀配置
    */
-  async function buildCheckItems(items: HistoryItem[]): Promise<{
+  function buildCheckItemsSync(items: HistoryItem[], config: import('../config/types').UserConfig): {
     requestItems: BatchCheckRequestItem[];
     rows: LinkCheckRow[];
-  }> {
-    const config = await loadConfig();
+  } {
     const requestItems: BatchCheckRequestItem[] = [];
     const rows: LinkCheckRow[] = [];
 
@@ -62,13 +63,19 @@ export function useLinkCheckManager() {
         if (r.status !== 'success' || !r.result?.url) continue;
 
         const rawUrl = r.result.url;
-        // 对微博链接拼接前缀，得到用户实际使用的 URL
         const finalUrl = applyLinkPrefix(rawUrl, r.serviceId, config);
+        // GitHub CDN 启用时：metadata.rawUrl 是原始 raw.githubusercontent.com URL
+        // finalUrl 经模板转换后与 rawUrl 不同，用 rawUrl 作为 fallback
+        const ghRaw = r.serviceId === 'github'
+          ? ((r.result.metadata as Record<string, unknown>)?.rawUrl as string | undefined)
+          : undefined;
+        const fallbackUrl = (ghRaw && ghRaw !== finalUrl) ? ghRaw : undefined;
 
         requestItems.push({
           url: finalUrl,
           history_id: item.id,
           service_id: r.serviceId,
+          fallback_url: fallbackUrl,
         });
 
         rows.push({
@@ -77,6 +84,7 @@ export function useLinkCheckManager() {
           url: finalUrl,
           rawUrl,
           fileName: item.localFileName,
+          fallbackUrl,
         });
       }
     }
@@ -84,9 +92,18 @@ export function useLinkCheckManager() {
     return { requestItems, rows };
   }
 
+  /** async 包装，兼容原有调用 */
+  async function buildCheckItems(items: HistoryItem[]): Promise<{
+    requestItems: BatchCheckRequestItem[];
+    rows: LinkCheckRow[];
+  }> {
+    const config = await loadConfig();
+    return buildCheckItemsSync(items, config);
+  }
+
   /**
    * 从数据库加载所有历史链接，恢复已有的检测状态
-   * 进入页面时自动调用，无需等待用户点击"检测全部"
+   * 分块处理 + yield 主线程，避免长任务阻塞 UI
    */
   async function loadHistoryRows(): Promise<void> {
     if (isChecking.value) return;
@@ -94,42 +111,50 @@ export function useLinkCheckManager() {
 
     try {
       await historyDB.open();
-      const allItems: HistoryItem[] = [];
-      for await (const batch of historyDB.getAllStream(1000)) {
-        allItems.push(...batch);
+      const config = await loadConfig();
+      const allRows: LinkCheckRow[] = [];
+
+      for await (const batch of historyDB.getAllStream(500)) {
+        // 每批立即处理：构建 rows + 恢复检测状态
+        const { rows } = buildCheckItemsSync(batch, config);
+        restoreCheckStatus(rows, batch);
+        allRows.push(...rows);
+
+        // 让出主线程，避免长时间阻塞 UI
+        await yieldToMain();
       }
 
-      if (allItems.length === 0) {
-        checkRows.value = [];
-        return;
-      }
-
-      const { rows } = await buildCheckItems(allItems);
-
-      // 从数据库中恢复已有的检测状态（用 Map 替代 .find()，O(1) 查找）
-      const itemMap = new Map(allItems.map((i) => [i.id, i]));
-      for (const row of rows) {
-        const item = itemMap.get(row.historyId);
-        if (item?.linkCheckStatus?.[row.serviceId]) {
-          const saved = item.linkCheckStatus[row.serviceId];
-          row.checkResult = {
-            link: row.url,
-            is_valid: saved.isValid,
-            status_code: saved.statusCode,
-            error_type: saved.errorType === 'pending' ? 'network' : saved.errorType,
-            response_time: saved.responseTime,
-            error: saved.error,
-            browser_might_work: false,
-          };
-        }
-      }
-
-      checkRows.value = rows;
+      checkRows.value = allRows;
     } catch (err) {
       log.error('加载历史检测数据失败', err);
     } finally {
       isLoading.value = false;
     }
+  }
+
+  /** 恢复已有的检测状态（用 Map O(1) 查找） */
+  function restoreCheckStatus(rows: LinkCheckRow[], items: HistoryItem[]): void {
+    const itemMap = new Map(items.map((i) => [i.id, i]));
+    for (const row of rows) {
+      const item = itemMap.get(row.historyId);
+      if (item?.linkCheckStatus?.[row.serviceId]) {
+        const saved = item.linkCheckStatus[row.serviceId];
+        row.checkResult = {
+          link: row.url,
+          is_valid: saved.isValid,
+          status_code: saved.statusCode,
+          error_type: saved.errorType === 'pending' ? 'network' : saved.errorType,
+          response_time: saved.responseTime,
+          error: saved.error,
+          browser_might_work: false,
+        };
+      }
+    }
+  }
+
+  /** 让出主线程，防止长任务阻塞 UI 渲染 */
+  function yieldToMain(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 0));
   }
 
   /**
@@ -398,7 +423,8 @@ export function useLinkCheckManager() {
    */
   async function checkSubset(filter: {
     serviceId?: string;
-    statusFilter?: 'unchecked' | 'invalid';
+    statusFilter?: 'unchecked' | 'invalid' | 'timeout' | 'suspicious' | 'valid' | 'problems';
+    historyIds?: string[];
   }): Promise<BatchCheckResult | null> {
     if (isChecking.value) {
       toast.warn('检测进行中', '请等待当前检测完成');
@@ -406,11 +432,20 @@ export function useLinkCheckManager() {
     }
 
     const rows = checkRows.value;
+    const idSet = filter.historyIds ? new Set(filter.historyIds) : null;
     const filtered = rows.filter((row) => {
+      if (idSet) return idSet.has(row.historyId);
       if (filter.serviceId && row.serviceId !== filter.serviceId) return false;
-      if (filter.statusFilter === 'unchecked' && row.checkResult) return false;
-      if (filter.statusFilter === 'invalid' && (!row.checkResult || row.checkResult.is_valid)) return false;
-      return true;
+      const cr = row.checkResult;
+      switch (filter.statusFilter) {
+        case 'unchecked': return !cr;
+        case 'invalid': return cr != null && !cr.is_valid && cr.error_type !== 'timeout' && cr.error_type !== 'suspicious' && !cr.browser_might_work;
+        case 'timeout': return cr?.error_type === 'timeout';
+        case 'suspicious': return cr?.error_type === 'suspicious' || cr?.browser_might_work === true;
+        case 'valid': return cr?.is_valid === true;
+        case 'problems': return cr != null && !cr.is_valid;
+        default: return true;
+      }
     });
 
     if (filtered.length === 0) {
@@ -427,6 +462,7 @@ export function useLinkCheckManager() {
         url: row.url,
         history_id: row.historyId,
         service_id: row.serviceId,
+        fallback_url: row.fallbackUrl,
       }));
 
       toast.info('开始检测');
@@ -458,6 +494,7 @@ export function useLinkCheckManager() {
         const row = subsetMap.get(`${itemResult.link}::${itemResult.history_id}`);
         if (row) {
           row.checkResult = itemResult as CheckLinkResult;
+          row.pinnedSortWeight = undefined;
         }
       }
       checkRows.value = allRows;
@@ -490,15 +527,75 @@ export function useLinkCheckManager() {
   /**
    * 重新检测单条链接
    */
-  async function recheckSingle(row: LinkCheckRow): Promise<void> {
+
+  /** 复制 checkRows、找到目标行、执行变更、触发响应式更新。返回 false 表示行已消失 */
+  function updateRow(row: LinkCheckRow, updater: (target: LinkCheckRow) => void): boolean {
+    const rows = [...checkRows.value];
+    const target = rows.find((r) => r.url === row.url && r.historyId === row.historyId);
+    if (!target) return false;
+    updater(target);
+    checkRows.value = rows;
+    return true;
+  }
+
+  /** 判断检测结果是否会导致行离开当前筛选（Case B） */
+  function wouldLeaveFilter(result: CheckLinkResult, filter: StatusFilter | undefined): boolean {
+    if (filter === 'all') return false;
+    if (filter === null) return result.is_valid;
+    switch (filter) {
+      case 'unchecked': return true;
+      case 'valid': return !result.is_valid;
+      case 'invalid': return result.is_valid || result.error_type === 'timeout' || result.error_type === 'suspicious' || result.browser_might_work;
+      case 'timeout': return result.error_type !== 'timeout';
+      case 'suspicious': return result.error_type !== 'suspicious' && !result.browser_might_work;
+      default: return false;
+    }
+  }
+
+  async function recheckSingle(row: LinkCheckRow, currentFilter?: StatusFilter): Promise<void> {
+    // 防并发：已在检测或动画中则跳过
+    const existing = checkRows.value.find((r) => r.url === row.url && r.historyId === row.historyId);
+    if (existing?.recheckLoading || existing?.recheckResult) return;
+
     try {
-      const result = await invoke<CheckLinkResult>('check_image_link', { link: row.url });
-      const allRows = [...checkRows.value];
-      const target = allRows.find((r) => r.url === row.url && r.historyId === row.historyId);
-      if (target) {
-        target.checkResult = result;
+      // 步骤1：按钮转圈（最短 400ms，避免过快闪烁）
+      if (!updateRow(row, (t) => { t.recheckLoading = true; })) return;
+
+      const [result] = await Promise.all([
+        invoke<CheckLinkResult>('check_image_link', {
+          link: row.url,
+          fallbackUrl: row.fallbackUrl ?? null,
+        }),
+        new Promise<void>((resolve) => setTimeout(resolve, 400)),
+      ]);
+
+      // 步骤2：停转，显示结果徽章
+      if (!updateRow(row, (t) => { t.recheckLoading = false; t.recheckResult = result; })) return;
+
+      // 步骤3：用户读结果 1s
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      if (wouldLeaveFilter(result, currentFilter)) {
+        // Case B：整行淡出 → 提交最终状态 → filteredRows 重算，行消失
+        if (!updateRow(row, (t) => { t.fadingOut = true; })) return;
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        updateRow(row, (t) => {
+          t.checkResult = result;
+          t.recheckResult = undefined;
+          t.fadingOut = false;
+        });
+      } else {
+        // Case A：徽章淡出 → 左侧状态更新，行留在列表
+        if (!updateRow(row, (t) => { t.recheckBadgeFading = true; })) return;
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        updateRow(row, (t) => {
+          // 锁定排序位置，防止 checkResult 更新触发行位置跳动
+          t.pinnedSortWeight = SEVERITY[t.checkResult?.error_type ?? 'success'] ?? 5;
+          t.checkResult = result;
+          t.recheckResult = undefined;
+          t.recheckBadgeFading = false;
+        });
       }
-      checkRows.value = allRows;
 
       // 更新 DB
       await historyDB.open();
@@ -516,6 +613,13 @@ export function useLinkCheckManager() {
         await historyDB.update(row.historyId, { linkCheckStatus });
       }
     } catch (err) {
+      updateRow(row, (t) => {
+        t.recheckLoading = false;
+        t.recheckResult = undefined;
+        t.recheckBadgeFading = false;
+        t.fadingOut = false;
+        t.pinnedSortWeight = undefined;
+      });
       log.error('单条检测失败', err);
       toast.error('检测失败', String(err));
     }
@@ -527,6 +631,18 @@ export function useLinkCheckManager() {
   function removeRowsByHistoryIds(ids: string[]): void {
     const idSet = new Set(ids);
     checkRows.value = checkRows.value.filter((r) => !idSet.has(r.historyId));
+  }
+
+  /**
+   * 设置指定行的 fadingOut 状态（用于删除前的淡出动画）
+   */
+  function setFadingOut(historyIds: string[], value: boolean): void {
+    const idSet = new Set(historyIds);
+    const rows = [...checkRows.value];
+    for (const row of rows) {
+      if (idSet.has(row.historyId)) row.fadingOut = value;
+    }
+    checkRows.value = rows;
   }
 
   /** 页面激活时：取消空闲计时，如果数据已被清空则重新加载 */
@@ -572,6 +688,7 @@ export function useLinkCheckManager() {
     exportCsv,
     buildCheckItems,
     removeRowsByHistoryIds,
+    setFadingOut,
     onViewActivated,
     onViewDeactivated,
   };

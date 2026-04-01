@@ -233,7 +233,11 @@ function preloadAndSwitch(newSrc: string, immediateLoading = false) {
 }
 
 function onImageError() {
-  imageError.value = true;
+  // 预加载已确认图片可访问（imageReady = true）时，忽略 img 元素的二次请求错误
+  // 避免「预加载成功 → img 重新请求失败」的竞态误报
+  if (!imageReady.value) {
+    imageError.value = true;
+  }
   imageReady.value = false;
 }
 
