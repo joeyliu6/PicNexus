@@ -20,6 +20,7 @@ import { startupFlags } from './store/startupFlags';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import type { UserConfig } from './config/types';
+import { historyDB } from './services/HistoryDatabase';
 import { createLogger } from './utils/logger';
 
 const log = createLogger('App');
@@ -51,6 +52,25 @@ function handleOffline() {
 
 function handleOnline() {
   toast.showConfig('success', TOAST_MESSAGES.network.restored);
+}
+
+// 窗口恢复处理：休眠/后台回到前台时验证数据库连接
+let unlistenFocus: (() => void) | null = null;
+
+async function handleAppResume() {
+  if (document.visibilityState !== 'visible') return;
+  log.debug('应用从后台恢复，验证数据库连接...');
+  try {
+    await historyDB.healthCheck();
+  } catch {
+    log.warn('数据库连接已失效，尝试重连...');
+    try {
+      await historyDB.reconnect();
+      log.info('数据库重连成功');
+    } catch (reconnectErr) {
+      log.error('数据库重连失败:', reconnectErr);
+    }
+  }
 }
 
 /** continueStartup 的安全包装：失败时兜底显示窗口 */
@@ -128,6 +148,12 @@ onMounted(async () => {
 
   window.addEventListener('offline', handleOffline);
   window.addEventListener('online', handleOnline);
+  document.addEventListener('visibilitychange', handleAppResume);
+
+  // Tauri 窗口焦点事件（双保险：visibilitychange 在某些系统休眠场景下可能不触发）
+  getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+    if (focused) handleAppResume();
+  }).then(unlisten => { unlistenFocus = unlisten; });
 
   if (startupFlags.configResetDueToKeyMismatch) {
     startupFlags.configResetDueToKeyMismatch = false;
@@ -166,6 +192,8 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('offline', handleOffline);
   window.removeEventListener('online', handleOnline);
+  document.removeEventListener('visibilitychange', handleAppResume);
+  if (unlistenFocus) unlistenFocus();
   cleanupGlobalShortcuts().catch((e) => log.warn('快捷键清理失败:', e));
   if (periodicCheckIntervalId !== null) clearInterval(periodicCheckIntervalId);
   if (periodicCheckStopWatch) periodicCheckStopWatch();

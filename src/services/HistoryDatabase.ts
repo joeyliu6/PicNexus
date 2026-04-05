@@ -241,14 +241,60 @@ class HistoryDatabase {
   }
 
   /**
+   * 验证数据库连接有效性（轻量查询）
+   * 供外部调用（如休眠恢复时）
+   */
+  async healthCheck(): Promise<void> {
+    if (!this.db) {
+      throw new Error('数据库未初始化');
+    }
+    await this.db.select<{ v: number }[]>('SELECT 1 as v');
+  }
+
+  /**
+   * 强制关闭并重新打开数据库连接
+   * 用于休眠恢复后连接失效的场景
+   */
+  async reconnect(): Promise<void> {
+    log.warn('强制重连数据库...');
+    this.db = null;
+    this.initialized = false;
+    this.initPromise = null;
+    await this.open();
+    log.info('数据库重连成功');
+  }
+
+  /** 上次健康检查时间戳 */
+  private lastHealthCheck = 0;
+
+  /** 健康检查最小间隔（30 秒） */
+  private static readonly HEALTH_CHECK_INTERVAL = 30_000;
+
+  /**
    * 确保数据库已初始化
+   * 带 30 秒节流的连接健康检查，休眠恢复后自动重连
    */
   private async ensureInitialized(): Promise<Database> {
+    if (this.initialized && this.db) {
+      const now = Date.now();
+      if (now - this.lastHealthCheck > HistoryDatabase.HEALTH_CHECK_INTERVAL) {
+        try {
+          await this.db.select<{ v: number }[]>('SELECT 1 as v');
+          this.lastHealthCheck = now;
+        } catch {
+          log.warn('数据库连接已断开，正在重连...');
+          this.db = null;
+          this.initialized = false;
+          this.initPromise = null;
+        }
+      }
+    }
     if (!this.initialized || !this.db) {
       if (!this.initPromise) {
         this.initPromise = this.open();
       }
       await this.initPromise;
+      this.lastHealthCheck = Date.now();
     }
     return this.db!;
   }

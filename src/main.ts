@@ -39,6 +39,20 @@ const log = createLogger('Init');
 // 创建 Vue 应用实例
 const app = createApp(App);
 
+// 全局错误处理 — 防止未捕获异常导致渲染树崩溃（白屏）
+app.config.errorHandler = (err, _instance, info) => {
+  log.error(`Vue 错误 [${info}]:`, err);
+};
+
+window.addEventListener('unhandledrejection', (event) => {
+  log.error('未处理的 Promise 拒绝:', event.reason);
+  event.preventDefault();
+});
+
+window.addEventListener('error', (event) => {
+  log.error('未捕获的全局错误:', event.error);
+});
+
 // 配置 PrimeVue
 app.use(PrimeVue, {
   theme: {
