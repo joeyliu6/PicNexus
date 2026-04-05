@@ -9,6 +9,8 @@
 | 文档 | 主题 | 分类 |
 |------|------|------|
 | [技能增强模式](./skill-enhancement-pattern.md) | Claude Code 技能扩展的渐进式方法 | AI 工作流 |
+| [三遍自纠提示词模式](./triple-check-prompt-pattern.md) | 高复杂度任务一次到位的提示词工作流 | AI 工作流 |
+| [召唤词词典](./summon-keyword-dictionary.md) | 用高浓度名词替代长提示词的方法论 | AI 工作流 |
 | [Vite Glob 导入](./vite-glob-import.md) | 使用 import.meta.glob 动态导入资源 | 构建工具 |
 | [Toast 消息集中化](./toast-messages-centralization.md) | Toast 通知消息的集中管理模式 | 代码组织 |
 
