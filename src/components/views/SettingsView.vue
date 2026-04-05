@@ -2,7 +2,7 @@
 // 设置视图 - 重构后精简版
 // 核心逻辑保留，UI 组件拆分到独立面板
 
-import { ref, computed, watch, inject, onMounted, onUnmounted, onActivated } from 'vue';
+import { ref, computed, watch, inject, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import type { UnlistenFn } from '@tauri-apps/api/event';
@@ -94,6 +94,13 @@ const applyTargetTab = () => {
 
 // KeepAlive 重新激活时检查
 onActivated(applyTargetTab);
+
+// KeepAlive 停用时清理定时器，防止长时间运行资源泄漏
+onDeactivated(() => {
+  if (_advancedSavedResetTimer) { clearTimeout(_advancedSavedResetTimer); _advancedSavedResetTimer = null; }
+  if (_debouncedEditorApplyTimer) { clearTimeout(_debouncedEditorApplyTimer); _debouncedEditorApplyTimer = null; }
+  if (_debouncedSaveTimer) { clearTimeout(_debouncedSaveTimer); _debouncedSaveTimer = null; }
+});
 
 // watch 兜底：处理时序竞争（settingsTargetTab 在 onActivated 之后才被赋值的情况）
 if (settingsTargetTab) {
