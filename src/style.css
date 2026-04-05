@@ -107,6 +107,7 @@
   --success-alpha-10: rgba(16, 185, 129, 0.1);
   --success-alpha-15: rgba(16, 185, 129, 0.15);
   --warning-alpha-8: rgba(234, 179, 8, 0.08);
+  --warning-alpha-10: rgba(234, 179, 8, 0.1);
   --warning-alpha-15: rgba(234, 179, 8, 0.15);
   --warning-alpha-25: rgba(234, 179, 8, 0.25);
   --warning-alpha-40: rgba(234, 179, 8, 0.4);
@@ -114,6 +115,11 @@
   --error-alpha-15: rgba(239, 68, 68, 0.15);
   --pending-alpha-8: rgba(167, 139, 250, 0.08);
   --pending-alpha-15: rgba(167, 139, 250, 0.15);
+
+  /* Tertiary / Orange — 用于文档修复异常徽章等暖色调场景 */
+  --tertiary: #ea580c;      /* Orange 600 */
+  --tertiary-alpha-10: rgba(234, 88, 12, 0.1);
+  --tertiary-alpha-15: rgba(234, 88, 12, 0.15);
 
   /* Text Colors */
   --text-main: #f4f4f5;    /* Zinc 100 */

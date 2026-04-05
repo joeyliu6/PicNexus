@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
- * 链接检测主视图
- * 检测面板 ↔ 文档修复内联面板 通过 rescueActive 切换
+ * 链接维护主视图
+ * 「链接监控」「文档修复」通过 Tab 栏平行切换
  */
-import { ref, onMounted, onActivated, onDeactivated } from 'vue';
+import { ref, computed, watch, inject, onMounted, onActivated, onDeactivated } from 'vue';
+import type { Ref } from 'vue';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import HistoryCheckPanel from './linkcheck/HistoryCheckPanel.vue';
@@ -14,12 +15,31 @@ import { useToast } from '../../composables/useToast';
 import type { LinkCheckRow } from '../../types/linkCheck';
 
 const toast = useToast();
-const rescueActive = ref(false);
+
+type LinkCheckTab = 'monitor' | 'rescue';
+const activeTab = ref<LinkCheckTab>('monitor');
+
+// 外部导航支持（与 settingsTargetTab 模式一致）
+const linkCheckTargetTab = inject<Ref<string | null>>('linkCheckTargetTab');
+
+function applyTargetTab() {
+  if (linkCheckTargetTab?.value) {
+    if (linkCheckTargetTab.value === 'rescue' || linkCheckTargetTab.value === 'monitor') {
+      activeTab.value = linkCheckTargetTab.value;
+    }
+    linkCheckTargetTab.value = null;
+  }
+}
+
+if (linkCheckTargetTab) {
+  watch(linkCheckTargetTab, (val) => { if (val) applyTargetTab(); });
+}
 
 const {
   isChecking: monitorChecking,
   isLoading,
   progress: monitorProgress,
+  progressSource,
   checkRows,
   loadHistoryRows,
   checkAllHistoryLinks,
@@ -34,6 +54,12 @@ const {
 } = useLinkCheckManager();
 
 const { deleteHistoryItem, bulkDeleteRecords } = useHistoryManager();
+
+// 仅当检测来源为 monitor 时，HistoryCheckPanel 才把自己视为"检测中"
+// 否则文档修复扫描时会误禁用监控 Tab 的按钮
+const monitorIsChecking = computed(
+  () => monitorChecking.value && progressSource.value !== 'rescue',
+);
 
 // ============================================
 // Monitor 操作
@@ -90,38 +116,60 @@ onMounted(() => {
   loadHistoryRows();
 });
 
-// KeepAlive 生命周期：空闲释放内存
-onActivated(onViewActivated);
+onActivated(() => {
+  onViewActivated();
+  applyTargetTab();
+});
 onDeactivated(onViewDeactivated);
 </script>
 
 <template>
   <div class="link-check-view">
-    <Transition name="view-fade" mode="out-in">
+    <!-- Tab 栏 -->
+    <div class="lc-tab-bar">
+      <button
+        class="lc-tab"
+        :class="{ active: activeTab === 'monitor' }"
+        @click="activeTab = 'monitor'"
+      >
+        <i class="pi pi-shield" />
+        链接监控
+      </button>
+      <button
+        class="lc-tab"
+        :class="{ active: activeTab === 'rescue' }"
+        @click="activeTab = 'rescue'"
+      >
+        <i class="pi pi-file-edit" />
+        文档修复
+      </button>
+    </div>
+
+    <!-- Tab 内容区 -->
+    <KeepAlive>
       <HistoryCheckPanel
-        v-if="!rescueActive"
+        v-if="activeTab === 'monitor'"
         key="monitor"
         :check-rows="checkRows"
-        :is-checking="monitorChecking"
+        :is-checking="monitorIsChecking"
         :is-loading="isLoading"
         :progress="monitorProgress"
+        :progress-source="progressSource"
         @check-all="checkAllHistoryLinks"
         @check-subset="(f: { statusFilter?: 'unchecked' | 'invalid' | 'timeout' | 'suspicious' | 'valid' | 'problems'; serviceId?: string }) => checkSubset(f)"
         @cancel-check="cancelCheck"
         @recheck-single="handleRecheckSingle"
         @copy-url="handleCopyUrl"
         @export-csv="handleExportCsv"
-        @open-md-rescue="rescueActive = true"
         @delete-row="handleDeleteRow"
         @delete-batch="handleDeleteBatch"
         @recheck-batch="handleRecheckBatch"
       />
       <MdRescueInline
-        v-else
+        v-else-if="activeTab === 'rescue'"
         key="rescue"
-        @back="rescueActive = false"
       />
-    </Transition>
+    </KeepAlive>
   </div>
 </template>
 
@@ -134,14 +182,53 @@ onDeactivated(onViewDeactivated);
   background: var(--bg-app);
 }
 
-/* 视图切换过渡 */
-.view-fade-enter-active,
-.view-fade-leave-active {
-  transition: opacity 0.15s ease;
+/* Tab 栏 —— 对齐浏览页 .dashboard-strip + .tab-nav */
+.lc-tab-bar {
+  display: flex;
+  gap: 2px;
+  height: 48px;
+  padding: 0 12px;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
-.view-fade-enter-from,
-.view-fade-leave-to {
-  opacity: 0;
+.lc-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.15s, background 0.15s;
+  border-radius: 8px 8px 0 0;
+  font-family: inherit;
+}
+
+.lc-tab i { font-size: 14px; }
+
+.lc-tab:hover {
+  color: var(--text-primary);
+  background: var(--hover-overlay);
+}
+
+.lc-tab.active {
+  color: var(--primary);
+}
+
+.lc-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: var(--primary);
+  border-radius: 1px 1px 0 0;
 }
 </style>

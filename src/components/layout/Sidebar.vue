@@ -21,7 +21,7 @@ watch(() => props.currentView, (v) => {
 const navItems = [
   { id: 'upload' as ViewType, label: '上传', icon: 'pi-cloud-upload', title: '上传' },
   { id: 'history' as ViewType, label: '浏览', icon: 'pi-history', title: '浏览记录' },
-  { id: 'link-check' as ViewType, label: '检测', icon: 'pi-shield', title: '链接检测' },
+  { id: 'link-check' as ViewType, label: '维护', icon: 'pi-shield', title: '链接维护' },
   { id: 'settings' as ViewType, label: '设置', icon: 'pi-cog', title: '设置' }
 ];
 

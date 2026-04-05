@@ -323,7 +323,7 @@ export class MultiServiceUploader {
    * 过滤出已配置的图床
    * 在过滤阶段验证配置完整性，避免上传时才报错
    */
-  private filterConfiguredServices(
+  filterConfiguredServices(
     enabledServices: string[],
     config: UserConfig
   ): string[] {

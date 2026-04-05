@@ -7,7 +7,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { HistoryItem } from '../config/types';
 import { useConfigManager } from './useConfig';
 import { applyLinkPrefix } from './useCopyLink';
-import { historyDB } from '../services/HistoryDatabase';
+import { historyDB, type LinkCheckLiteRow } from '../services/HistoryDatabase';
 import { useToast } from './useToast';
 import { createLogger } from '../utils/logger';
 import {
@@ -29,6 +29,8 @@ const log = createLogger('LinkCheck');
 const isChecking = ref(false);
 const isLoading = ref(false);
 const progress: Ref<BatchCheckProgress | null> = ref(null);
+/** 进度来源标识：区分是链接监控还是文档修复在跑，防止 UI 串扰 */
+const progressSource: Ref<'monitor' | 'rescue' | null> = ref(null);
 const lastBatchResult: Ref<BatchCheckResult | null> = shallowRef(null);
 const checkRows: Ref<LinkCheckRow[]> = shallowRef([]);
 
@@ -38,6 +40,28 @@ let checkSessionId = 0; // 防竞态：每次检测分配唯一 session，旧 fi
 // 空闲释放：离开检测页面 5 分钟后自动清空数据，释放内存
 const IDLE_RELEASE_MS = 5 * 60 * 1000;
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+// TTL 缓存：避免反复切换页面时重复加载
+const CACHE_TTL_MS = 5 * 60 * 1000;
+let lastLoadTime = 0;
+
+/** 将轻量行转为 buildCheckItemsSync 所需的最小 HistoryItem */
+function liteRowToItem(row: LinkCheckLiteRow): HistoryItem {
+  const parsed = typeof row.results === 'string' ? JSON.parse(row.results) : row.results;
+  const linkCheckStatus = row.link_check_status
+    ? (typeof row.link_check_status === 'string' ? JSON.parse(row.link_check_status) : row.link_check_status)
+    : undefined;
+  return {
+    id: row.id,
+    localFileName: row.local_file_name,
+    primaryService: row.primary_service as import('../config/types').ServiceType,
+    results: parsed,
+    linkCheckStatus,
+    // 以下字段不影响链接检测逻辑，填默认值
+    timestamp: 0,
+    generatedLink: '',
+  };
+}
 
 /**
  * 链接检测管理器
@@ -102,29 +126,45 @@ export function useLinkCheckManager() {
   }
 
   /**
-   * 从数据库加载所有历史链接，恢复已有的检测状态
-   * 分块处理 + yield 主线程，避免长任务阻塞 UI
+   * 两阶段加载历史链接，实现"时间差"策略：
+   * Phase 1：优先加载失效/未检测链接（默认标签页内容），用户秒看到数据
+   * Phase 2：后台静默加载剩余记录，切换标签时数据已就绪
    */
   async function loadHistoryRows(): Promise<void> {
     if (isChecking.value) return;
+
+    // TTL 缓存：5 分钟内重复进入直接跳过
+    if (checkRows.value.length > 0 && Date.now() - lastLoadTime < CACHE_TTL_MS) {
+      return;
+    }
+
     isLoading.value = true;
 
     try {
       await historyDB.open();
       const config = await loadConfig();
-      const allRows: LinkCheckRow[] = [];
 
-      for await (const batch of historyDB.getAllStream(500)) {
-        // 每批立即处理：构建 rows + 恢复检测状态
-        const { rows } = buildCheckItemsSync(batch, config);
-        restoreCheckStatus(rows, batch);
-        allRows.push(...rows);
+      // Phase 1：快速加载有问题的记录（失效 + 未检测）
+      const invalidLiteRows = await historyDB.getLinkCheckInvalid();
+      const invalidItems = invalidLiteRows.map(liteRowToItem);
+      const { rows: invalidRows } = buildCheckItemsSync(invalidItems, config);
+      restoreCheckStatus(invalidRows, invalidItems);
+      checkRows.value = invalidRows;
+      rebuildRowIndex();
+      isLoading.value = false; // 提前结束 loading，用户已看到失效数据
 
-        // 让出主线程，避免长时间阻塞 UI
+      // Phase 2：后台静默加载剩余记录
+      const loadedIds = new Set(invalidLiteRows.map((r) => r.id));
+      for await (const batch of historyDB.getLinkCheckRestStream(loadedIds, 2000)) {
+        const batchItems = batch.map(liteRowToItem);
+        const { rows } = buildCheckItemsSync(batchItems, config);
+        restoreCheckStatus(rows, batchItems);
+        checkRows.value = [...checkRows.value, ...rows];
+        rebuildRowIndex();
         await yieldToMain();
       }
 
-      checkRows.value = allRows;
+      lastLoadTime = Date.now();
     } catch (err) {
       log.error('加载历史检测数据失败', err);
     } finally {
@@ -168,25 +208,29 @@ export function useLinkCheckManager() {
 
     const mySession = ++checkSessionId;
     isChecking.value = true;
+    progressSource.value = 'monitor';
     progress.value = null;
     lastBatchResult.value = null;
 
     try {
-      // 加载所有历史记录
-      await historyDB.open();
-      const allItems: HistoryItem[] = [];
-      for await (const batch of historyDB.getAllStream(1000)) {
-        allItems.push(...batch);
+      // 确保数据已加载（复用已加载的 checkRows，避免重复全表扫描）
+      if (checkRows.value.length === 0) {
+        await loadHistoryRows();
       }
 
-      if (allItems.length === 0) {
+      const rows = checkRows.value;
+      if (rows.length === 0) {
         toast.info('无链接可检测', '历史记录为空');
         return null;
       }
 
-      // 构建检测列表
-      const { requestItems, rows } = await buildCheckItems(allItems);
-      checkRows.value = rows;
+      // 从已加载的 rows 构建检测列表
+      const requestItems: BatchCheckRequestItem[] = rows.map((row) => ({
+        url: row.url,
+        history_id: row.historyId,
+        service_id: row.serviceId,
+        fallback_url: row.fallbackUrl,
+      }));
 
       if (requestItems.length === 0) {
         toast.info('无链接可检测', '没有成功上传的链接');
@@ -215,7 +259,7 @@ export function useLinkCheckManager() {
         },
       });
 
-      if (checkSessionId !== mySession) return null;
+      // 即使被取消，也要处理已完成的结果并入库
       lastBatchResult.value = result;
 
       // 将检测结果关联到 rows（用 Map O(1) 查找替代 .find() O(n)）
@@ -227,14 +271,24 @@ export function useLinkCheckManager() {
         }
       }
       checkRows.value = [...rows];
+      rebuildRowIndex();
 
       // 写回 DB
-      await updateHistoryCheckStatus(allItems, result);
+      await updateHistoryCheckStatus(result);
+      lastLoadTime = 0; // 检测完成后清除缓存，下次进入重新加载最新状态
+
+      // session 守卫移到结果入库之后：只控制 toast 显示和返回值
+      if (checkSessionId !== mySession) {
+        if (result.cancelled) {
+          toast.warn('已停止检测', `已完成 ${result.results.length} 条，结果已保存。可通过「仅未检测」继续剩余部分`);
+        }
+        return null;
+      }
 
       if (!result.cancelled) {
         toast.success(
           '检测完成',
-          `有效 ${result.valid} / 失效 ${result.invalid} / 超时 ${result.timeout} / 疑似 ${result.suspicious}`,
+          `共 ${result.total} 条：有效 ${result.valid} / 失效 ${result.invalid} / 超时 ${result.timeout} / 可疑 ${result.suspicious}`,
         );
       }
 
@@ -247,6 +301,7 @@ export function useLinkCheckManager() {
       // 只有当前 session 才执行清理，防止旧 finally 杀死新检测
       if (checkSessionId === mySession) {
         isChecking.value = false;
+        progressSource.value = null;
         if (progressUnlisten) { progressUnlisten(); progressUnlisten = null; }
       }
     }
@@ -255,8 +310,16 @@ export function useLinkCheckManager() {
   /**
    * 检测指定的 URL 列表（用于 MD 救援等）
    */
-  async function checkUrls(items: BatchCheckRequestItem[]): Promise<BatchCheckResult | null> {
+  async function checkUrls(
+    items: BatchCheckRequestItem[],
+    onProgress?: (prog: BatchCheckProgress) => void,
+    source: 'monitor' | 'rescue' = 'rescue',
+  ): Promise<BatchCheckResult | null> {
     if (items.length === 0) return null;
+
+    isChecking.value = true;
+    progressSource.value = source;
+    progress.value = null;
 
     // 监听进度（先清理旧监听器，防止累积泄漏）
     if (progressUnlisten) { progressUnlisten(); progressUnlisten = null; }
@@ -264,6 +327,7 @@ export function useLinkCheckManager() {
       'link-check://progress',
       (event) => {
         progress.value = event.payload;
+        onProgress?.(event.payload);
       },
     );
 
@@ -277,8 +341,13 @@ export function useLinkCheckManager() {
         },
       });
 
+      // 被取消时返回 null，让调用方正确退出
+      if (result.cancelled) return null;
+
       return result;
     } finally {
+      isChecking.value = false;
+      progressSource.value = null;
       if (progressUnlisten) {
         progressUnlisten();
         progressUnlisten = null;
@@ -295,9 +364,9 @@ export function useLinkCheckManager() {
       await invoke('cancel_batch_check');
       ++checkSessionId; // 使旧 finally 失效
       isChecking.value = false;
+      progressSource.value = null;
       if (progressUnlisten) { progressUnlisten(); progressUnlisten = null; }
-      const checkedThisRound = progress.value?.checked ?? 0;
-      toast.warn('检测已取消', `本次已检测 ${checkedThisRound} 条`);
+      // toast 移至检测函数中，入库后再提示（含已入库数量）
       log.info('已发送取消请求');
     } catch (err) {
       log.error('取消失败', err);
@@ -308,7 +377,6 @@ export function useLinkCheckManager() {
    * 批量检测完成后，更新 DB 中的 linkCheckStatus/linkCheckSummary
    */
   async function updateHistoryCheckStatus(
-    _items: HistoryItem[],
     result: BatchCheckResult,
   ): Promise<void> {
     // 按 historyId 分组检测结果
@@ -455,6 +523,7 @@ export function useLinkCheckManager() {
 
     const mySession = ++checkSessionId;
     isChecking.value = true;
+    progressSource.value = 'monitor';
     progress.value = null;
 
     try {
@@ -485,9 +554,7 @@ export function useLinkCheckManager() {
         },
       });
 
-      if (checkSessionId !== mySession) return null;
-
-      // 将检测结果更新到对应 row（用 Map O(1) 查找）
+      // 即使被取消，也要处理已完成的结果并入库
       const allRows = [...checkRows.value];
       const subsetMap = new Map(allRows.map((r) => [`${r.url}::${r.historyId}`, r]));
       for (const itemResult of result.results) {
@@ -500,15 +567,19 @@ export function useLinkCheckManager() {
       checkRows.value = allRows;
 
       // 更新 DB
-      await historyDB.open();
-      const allItems: HistoryItem[] = [];
-      for await (const batch of historyDB.getAllStream(1000)) {
-        allItems.push(...batch);
+      await updateHistoryCheckStatus(result);
+      lastLoadTime = 0; // 检测完成后清除缓存
+
+      // session 守卫移到结果入库之后：只控制 toast 显示和返回值
+      if (checkSessionId !== mySession) {
+        if (result.cancelled) {
+          toast.warn('已停止检测', `已完成 ${result.results.length} 条，结果已保存。可通过「仅未检测」继续剩余部分`);
+        }
+        return null;
       }
-      await updateHistoryCheckStatus(allItems, result);
 
       if (!result.cancelled) {
-        toast.success('检测完成', `有效 ${result.valid} / 失效 ${result.invalid}`);
+        toast.success('检测完成', `共 ${result.total} 条：有效 ${result.valid} / 失效 ${result.invalid}`);
       }
 
       return result;
@@ -519,6 +590,7 @@ export function useLinkCheckManager() {
     } finally {
       if (checkSessionId === mySession) {
         isChecking.value = false;
+        progressSource.value = null;
         if (progressUnlisten) { progressUnlisten(); progressUnlisten = null; }
       }
     }
@@ -528,12 +600,23 @@ export function useLinkCheckManager() {
    * 重新检测单条链接
    */
 
-  /** 复制 checkRows、找到目标行、执行变更、触发响应式更新。返回 false 表示行已消失 */
+  /** 行索引 Map：key = `${url}::${historyId}` → 数组下标，O(1) 查找 */
+  let rowIndexMap = new Map<string, number>();
+
+  /** 重建行索引（checkRows 被重新赋值时调用） */
+  function rebuildRowIndex(): void {
+    rowIndexMap = new Map(
+      checkRows.value.map((r, i) => [`${r.url}::${r.historyId}`, i])
+    );
+  }
+
+  /** 复制 checkRows、通过 Map O(1) 找到目标行、执行变更、触发响应式更新 */
   function updateRow(row: LinkCheckRow, updater: (target: LinkCheckRow) => void): boolean {
+    const key = `${row.url}::${row.historyId}`;
+    const idx = rowIndexMap.get(key);
+    if (idx === undefined || idx >= checkRows.value.length) return false;
     const rows = [...checkRows.value];
-    const target = rows.find((r) => r.url === row.url && r.historyId === row.historyId);
-    if (!target) return false;
-    updater(target);
+    updater(rows[idx]);
     checkRows.value = rows;
     return true;
   }
@@ -554,7 +637,9 @@ export function useLinkCheckManager() {
 
   async function recheckSingle(row: LinkCheckRow, currentFilter?: StatusFilter): Promise<void> {
     // 防并发：已在检测或动画中则跳过
-    const existing = checkRows.value.find((r) => r.url === row.url && r.historyId === row.historyId);
+    const key = `${row.url}::${row.historyId}`;
+    const existingIdx = rowIndexMap.get(key);
+    const existing = existingIdx !== undefined ? checkRows.value[existingIdx] : undefined;
     if (existing?.recheckLoading || existing?.recheckResult) return;
 
     try {
@@ -631,6 +716,7 @@ export function useLinkCheckManager() {
   function removeRowsByHistoryIds(ids: string[]): void {
     const idSet = new Set(ids);
     checkRows.value = checkRows.value.filter((r) => !idSet.has(r.historyId));
+    rebuildRowIndex();
   }
 
   /**
@@ -645,14 +731,14 @@ export function useLinkCheckManager() {
     checkRows.value = rows;
   }
 
-  /** 页面激活时：取消空闲计时，如果数据已被清空则重新加载 */
+  /** 页面激活时：取消空闲计时，利用 TTL 缓存判断是否需要重新加载 */
   function onViewActivated(): void {
     if (idleTimer) {
       clearTimeout(idleTimer);
       idleTimer = null;
     }
-    if (checkRows.value.length === 0 && !isLoading.value) {
-      loadHistoryRows();
+    if (!isLoading.value) {
+      loadHistoryRows(); // 内部有 TTL 缓存检查，不会重复加载
     }
   }
 
@@ -664,6 +750,7 @@ export function useLinkCheckManager() {
       if (!isChecking.value) {
         checkRows.value = [];
         lastBatchResult.value = null;
+        lastLoadTime = 0; // 清除缓存，下次进入重新加载
         log.info('空闲超时，已释放检测数据');
       }
       idleTimer = null;
@@ -675,6 +762,7 @@ export function useLinkCheckManager() {
     isChecking,
     isLoading,
     progress,
+    progressSource,
     lastBatchResult,
     checkRows,
     serviceStats,

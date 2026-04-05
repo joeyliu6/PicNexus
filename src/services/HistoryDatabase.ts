@@ -12,6 +12,15 @@ import { createLogger } from '../utils/logger';
 
 const log = createLogger('HistoryDB');
 
+/** 链接检测专用轻量行类型（仅包含检测所需字段，减少 ~60% 数据传输） */
+export interface LinkCheckLiteRow {
+  id: string;
+  local_file_name: string;
+  primary_service: string;
+  results: string; // JSON 字符串
+  link_check_status: string | null; // JSON 字符串
+}
+
 /** 数据库文件名 */
 const DB_PATH = 'sqlite:history.db';
 
@@ -779,6 +788,58 @@ class HistoryDatabase {
       if (rows.length < batchSize) {
         break;
       }
+    }
+  }
+
+  // ============================================
+  // 链接检测专用轻量查询
+  // ============================================
+
+  /**
+   * Phase 1：快速加载有失效/未检测链接的记录（通常几十~几百条）
+   * 利用 link_check_summary 的 JSON 字段在 SQL 层过滤，避免全表扫描
+   */
+  async getLinkCheckInvalid(): Promise<LinkCheckLiteRow[]> {
+    const db = await this.ensureInitialized();
+    return db.select<LinkCheckLiteRow[]>(`
+      SELECT id, local_file_name, primary_service, results, link_check_status
+      FROM history_items
+      WHERE link_check_summary IS NOT NULL
+        AND (
+          json_extract(link_check_summary, '$.invalidLinks') > 0
+          OR json_extract(link_check_summary, '$.uncheckedLinks') > 0
+        )
+      ORDER BY timestamp DESC
+    `);
+  }
+
+  /**
+   * Phase 2：流式加载剩余记录（跳过 Phase 1 已加载的 ID）
+   * 只查 5 个轻量字段，批大小 2000 减少查询次数
+   */
+  async *getLinkCheckRestStream(loadedIds: Set<string>, batchSize = 2000): AsyncGenerator<LinkCheckLiteRow[]> {
+    const db = await this.ensureInitialized();
+    let offset = 0;
+
+    while (true) {
+      const rows = await db.select<LinkCheckLiteRow[]>(
+        `SELECT id, local_file_name, primary_service, results, link_check_status
+         FROM history_items
+         ORDER BY timestamp DESC
+         LIMIT $1 OFFSET $2`,
+        [batchSize, offset]
+      );
+
+      if (rows.length === 0) break;
+
+      // 客户端过滤已加载的 ID
+      const filtered = rows.filter((r) => !loadedIds.has(r.id));
+      if (filtered.length > 0) {
+        yield filtered;
+      }
+
+      offset += batchSize;
+      if (rows.length < batchSize) break;
     }
   }
 

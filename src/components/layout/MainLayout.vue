@@ -27,6 +27,9 @@ const currentViewComponent = computed(() => viewComponents[currentView.value]);
 const settingsTargetTab = ref<string | null>(null);
 provide('settingsTargetTab', settingsTargetTab);
 
+const linkCheckTargetTab = ref<string | null>(null);
+provide('linkCheckTargetTab', linkCheckTargetTab);
+
 const handleNavigate = (view: ViewType) => {
   currentView.value = view;
 };
@@ -52,6 +55,9 @@ onMounted(async () => {
         if (view === 'settings' && tab) {
           settingsTargetTab.value = tab;
         }
+        if (view === 'link-check' && tab) {
+          linkCheckTargetTab.value = tab;
+        }
         handleNavigate(view as ViewType);
       }
     }
@@ -76,7 +82,7 @@ onUnmounted(() => {
         <!-- 使用 Transition 添加淡入淡出动画 -->
         <!-- 使用 KeepAlive 缓存组件，避免重复销毁和创建 -->
         <Transition name="view-fade" mode="out-in">
-          <KeepAlive :max="6">
+          <KeepAlive :max="4">
             <component :is="currentViewComponent" :key="currentView" />
           </KeepAlive>
         </Transition>

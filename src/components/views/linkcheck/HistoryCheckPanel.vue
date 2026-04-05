@@ -15,6 +15,7 @@ const props = defineProps<{
   isChecking: boolean;
   isLoading: boolean;
   progress: BatchCheckProgress | null;
+  progressSource: 'monitor' | 'rescue' | null;
 }>();
 
 const emit = defineEmits<{
@@ -24,7 +25,6 @@ const emit = defineEmits<{
   (e: 'recheck-single', row: LinkCheckRow, filter: StatusFilter): void;
   (e: 'copy-url', url: string): void;
   (e: 'export-csv'): void;
-  (e: 'open-md-rescue'): void;
   (e: 'delete-row', row: LinkCheckRow): void;
   (e: 'delete-batch', ids: string[]): void;
   (e: 'recheck-batch', ids: string[]): void;
@@ -681,9 +681,9 @@ function handleRecheckBatch() {
 
     <!-- 底部 -->
     <div class="bottom">
-      <!-- 极简进度条 -->
+      <!-- 极简进度条（仅在监控自身检测时显示，防止被文档修复串扰） -->
       <div
-        v-if="isChecking"
+        v-if="isChecking && progressSource !== 'rescue'"
         class="progress-bar"
         @mouseenter="progressHover = true"
         @mouseleave="progressHover = false"
@@ -758,9 +758,6 @@ function handleRecheckBatch() {
             <template v-else>{{ bottomSummary }}</template>
           </span>
           <div class="bottom-actions" @click.stop>
-            <button v-tooltip.top="'扫描 Markdown 文件，替换失效图片链接'" class="btn-ghost" @click="emit('open-md-rescue')">
-              <i class="pi pi-file-edit"></i> 文档修复
-            </button>
             <button v-tooltip.top="'导出检测结果为 CSV 文件'" class="btn-ghost" @click="emit('export-csv')">
               <i class="pi pi-download"></i> 导出
             </button>
