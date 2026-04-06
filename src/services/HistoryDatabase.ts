@@ -112,6 +112,7 @@ interface HistoryItemRow {
   has_alpha: number; // SQLite 没有 boolean，使用 0/1
   is_favorited: number; // 0/1
   success_count: number; // 成功上传的图床数量（冗余字段，加速查询）
+  successful_service_ids: string; // JSON 数组字符串，如 '["jd","qiniu"]'（冗余字段，加速分布查询）
 }
 
 /** 所有列名（INSERT/UPDATE 统一使用，新增列只需改这里） */
@@ -119,6 +120,7 @@ const ALL_COLUMNS = [
   'id', 'timestamp', 'local_file_name', 'local_file_name_lower', 'file_path',
   'primary_service', 'results', 'generated_link', 'link_check_status', 'link_check_summary',
   'width', 'height', 'aspect_ratio', 'file_size', 'format', 'color_type', 'has_alpha', 'is_favorited', 'success_count',
+  'successful_service_ids',
 ] as const;
 
 const COLUMNS_SQL = ALL_COLUMNS.join(', ');
@@ -231,6 +233,8 @@ class HistoryDatabase {
       await this.migrateAddFavoriteColumn();
       // 迁移：添加 success_count 冗余列（加速批量迁移查询）
       await this.migrateAddSuccessCountColumn();
+      // 迁移：添加 successful_service_ids 冗余列（加速图床分布查询）
+      await this.migrateAddSuccessfulServiceIdsColumn();
 
       this.initialized = true;
       log.debug('数据库初始化完成');
@@ -241,14 +245,29 @@ class HistoryDatabase {
   }
 
   /**
+   * 重置连接状态（关闭前 / 重连前 / 健康检查失败时统一调用）
+   */
+  private resetConnection(): void {
+    this.db = null;
+    this.initialized = false;
+    this.initPromise = null;
+  }
+
+  /**
+   * 检查 history_items 表中某列是否已存在
+   */
+  private async columnExists(columnName: string): Promise<boolean> {
+    const rows = await this.db!.select<{ name: string }[]>('PRAGMA table_info(history_items)');
+    return rows.some((r) => r.name === columnName);
+  }
+
+  /**
    * 关闭数据库连接
    */
   async close(): Promise<void> {
     if (this.db) {
       await this.db.close();
-      this.db = null;
-      this.initialized = false;
-      this.initPromise = null;
+      this.resetConnection();
     }
   }
 
@@ -269,9 +288,7 @@ class HistoryDatabase {
    */
   async reconnect(): Promise<void> {
     log.warn('强制重连数据库...');
-    this.db = null;
-    this.initialized = false;
-    this.initPromise = null;
+    this.resetConnection();
     await this.open();
     log.info('数据库重连成功');
   }
@@ -295,9 +312,7 @@ class HistoryDatabase {
           this.lastHealthCheck = now;
         } catch {
           log.warn('数据库连接已断开，正在重连...');
-          this.db = null;
-          this.initialized = false;
-          this.initPromise = null;
+          this.resetConnection();
         }
       }
     }
@@ -316,12 +331,7 @@ class HistoryDatabase {
    */
   private async migrateAddFavoriteColumn(): Promise<void> {
     try {
-      // 检查列是否已存在
-      const rows = await this.db!.select<{ name: string }[]>(
-        `PRAGMA table_info(history_items)`
-      );
-      const hasColumn = rows.some(r => r.name === 'is_favorited');
-      if (hasColumn) return;
+      if (await this.columnExists('is_favorited')) return;
 
       await this.db!.execute(
         `ALTER TABLE history_items ADD COLUMN is_favorited INTEGER NOT NULL DEFAULT 0`
@@ -342,10 +352,7 @@ class HistoryDatabase {
    */
   private async migrateAddSuccessCountColumn(): Promise<void> {
     try {
-      const rows = await this.db!.select<{ name: string }[]>(
-        `PRAGMA table_info(history_items)`
-      );
-      if (rows.some(r => r.name === 'success_count')) return;
+      if (await this.columnExists('success_count')) return;
 
       await this.db!.execute(
         `ALTER TABLE history_items ADD COLUMN success_count INTEGER NOT NULL DEFAULT 0`
@@ -367,6 +374,34 @@ class HistoryDatabase {
       log.info('迁移完成：添加 success_count 列并回填');
     } catch (error) {
       log.error('迁移 success_count 列失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 迁移：添加 successful_service_ids 列（幂等）
+   * 冗余存储"成功上传到了哪些图床"的 JSON 数组，避免 getServiceDistribution 全表 json_each
+   */
+  private async migrateAddSuccessfulServiceIdsColumn(): Promise<void> {
+    try {
+      if (await this.columnExists('successful_service_ids')) return;
+
+      await this.db!.execute(
+        `ALTER TABLE history_items ADD COLUMN successful_service_ids TEXT NOT NULL DEFAULT '[]'`
+      );
+
+      // 回填：用 SQLite 原生 json_group_array 在 DB 层完成
+      await this.db!.execute(`
+        UPDATE history_items SET successful_service_ids = (
+          SELECT COALESCE(json_group_array(je.value ->> 'serviceId'), '[]')
+          FROM json_each(results) AS je
+          WHERE je.value ->> 'status' = 'success'
+        )
+      `);
+
+      log.info('迁移完成：添加 successful_service_ids 列并回填');
+    } catch (error) {
+      log.error('迁移 successful_service_ids 列失败:', error);
       throw error;
     }
   }
@@ -724,7 +759,7 @@ class HistoryDatabase {
 
   /**
    * 获取符合备份条件的记录中，各图床的已成功上传数量分布
-   * 用于批量迁移配置阶段，避免全量加载 items 到 JS
+   * 使用冗余列 successful_service_ids（轻量 JSON 数组）代替 json_each(results)（大 JSON 对象）
    */
   async getServiceDistribution(options: {
     maxSuccessCount: number;
@@ -744,9 +779,9 @@ class HistoryDatabase {
     const where = conditions.join(' AND ');
 
     const rows = await db.select<{ service_id: string; cnt: number }[]>(`
-      SELECT je.value ->> 'serviceId' AS service_id, COUNT(*) AS cnt
-      FROM history_items h, json_each(h.results) AS je
-      WHERE ${where} AND je.value ->> 'status' = 'success'
+      SELECT je.value AS service_id, COUNT(*) AS cnt
+      FROM history_items h, json_each(h.successful_service_ids) AS je
+      WHERE ${where}
       GROUP BY service_id
     `, params);
 
@@ -993,6 +1028,42 @@ class HistoryDatabase {
     }
   }
 
+  /**
+   * 批量更新链接检测状态（仅更新 link_check_status 和 link_check_summary 两列）
+   * 每 200 条一批，避免单条逐次 update 导致的 O(n) 串行等待
+   */
+  async batchUpdateLinkCheckStatus(
+    updates: Array<{
+      id: string;
+      linkCheckStatus: string; // 已序列化的 JSON
+      linkCheckSummary: string; // 已序列化的 JSON
+    }>,
+  ): Promise<void> {
+    if (updates.length === 0) return;
+    const db = await this.ensureInitialized();
+    const BATCH_SIZE = 200;
+
+    for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+      const batch = updates.slice(i, i + BATCH_SIZE);
+      // 用 CASE/WHEN 在一条 SQL 中批量更新，大幅减少 IPC 往返
+      const ids = batch.map((_, j) => `$${j + 1}`).join(',');
+      const statusCases = batch.map((_, j) => `WHEN id = $${j + 1} THEN $${batch.length + j * 2 + 1}`).join(' ');
+      const summaryCases = batch.map((_, j) => `WHEN id = $${j + 1} THEN $${batch.length + j * 2 + 2}`).join(' ');
+      const params: (string)[] = [
+        ...batch.map((u) => u.id),
+        ...batch.flatMap((u) => [u.linkCheckStatus, u.linkCheckSummary]),
+      ];
+      await db.execute(
+        `UPDATE history_items
+         SET link_check_status = CASE ${statusCases} END,
+             link_check_summary = CASE ${summaryCases} END
+         WHERE id IN (${ids})`,
+        params,
+      );
+    }
+    log.info(`批量更新 ${updates.length} 条链接检测状态`);
+  }
+
   // ============================================
   // 导入导出
   // ============================================
@@ -1193,6 +1264,9 @@ class HistoryDatabase {
       has_alpha: 0,
       is_favorited: item.isFavorited ? 1 : 0,
       success_count: item.results.filter(r => r.status === 'success').length,
+      successful_service_ids: JSON.stringify(
+        item.results.filter(r => r.status === 'success').map(r => r.serviceId),
+      ),
     };
   }
 
