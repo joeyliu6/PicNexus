@@ -12,6 +12,7 @@
 | [tauri-async-runtime-spawn-no-abort-handle.md](./tauri-async-runtime-spawn-no-abort-handle.md) | `tauri::async_runtime::spawn` 不支持 `abort_handle()`，需改用 `tokio::task::spawn` | Tauri/tokio |
 | [primevue-scoped-css-width-not-applied.md](./primevue-scoped-css-width-not-applied.md) | PrimeVue 组件上的 scoped CSS 宽度不生效，需用原生 div 包裹 + `:deep()` 穿透 | PrimeVue/CSS |
 | [tauri-csp-nonce-blocks-primevue-styles.md](./tauri-csp-nonce-blocks-primevue-styles.md) | Tauri 2.x CSP nonce 替换导致 PrimeVue 运行时样式被静默拦截，需禁用 style-src 的 nonce 修改 | Tauri/CSP |
+| [primevue-virtualscroller-fixed-itemsize.md](./primevue-virtualscroller-fixed-itemsize.md) | VirtualScroller `itemSize` 只能固定数字，内容高度变化会导致错位；间距必须用 padding 不能用 margin | PrimeVue/虚拟滚动 |
 
 ---
 

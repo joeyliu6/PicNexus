@@ -8,7 +8,7 @@
 
 | 文档 | 优化项 | 效果 |
 |------|------|------|
-| *暂无记录* | - | - |
+| [link-check-large-dataset.md](link-check-large-dataset.md) | 链接监控 5 万条数据性能优化 | DB 写入 50-100s → 1-3s；Phase 2 消除 O(n²) 复制 |
 
 ---
 
