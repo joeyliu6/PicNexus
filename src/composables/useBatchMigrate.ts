@@ -177,6 +177,7 @@ async function processBatch(
 export function useBatchMigrateManager() {
   const phase = ref<MigratePhase>('configuring');
   const isInitialized = ref(false);
+  const isFilterApplied = ref(false);
 
   // 高级筛选
   const maxSuccessCount = ref(999); // 默认"全部"
@@ -191,6 +192,9 @@ export function useBatchMigrateManager() {
   const isCancelled = ref(false);
   const migrateResult = ref<MigrateResult | null>(null);
   const globalProgress = ref({ current: 0, total: 0, percent: 0 });
+
+  // 累计统计（迁移进行中实时更新，UI 可绑定）
+  const cumulativeCounts = ref({ success: 0, failed: 0, skipped: 0 });
 
   // 实时统计（三个统计卡用）
   const migrateStats = ref<MigrateStats>({
@@ -207,7 +211,8 @@ export function useBatchMigrateManager() {
     return Math.max(...checkedTargets.value.map(s => s.pendingCount));
   });
   const allBackedUp = computed(() =>
-    isInitialized.value && targetServices.value.every(s => !s.isConfigured || s.pendingCount === 0),
+    isInitialized.value && isFilterApplied.value &&
+    targetServices.value.every(s => !s.isConfigured || s.pendingCount === 0),
   );
 
   // 统计卡计算
@@ -237,6 +242,15 @@ export function useBatchMigrateManager() {
   let pendingProcessed = 0;
   let pendingTotal = 0;
 
+  function updateStatusDisplay(statuses: MigrateItemStatus[], processed: number, total: number): void {
+    itemStatuses.value = [...statuses];
+    globalProgress.value = {
+      current: processed,
+      total: total,
+      percent: total > 0 ? Math.round((processed / total) * 100) : 0,
+    };
+  }
+
   function scheduleStatusUpdate(statuses: MigrateItemStatus[], processed: number, total: number) {
     pendingStatuses = statuses;
     pendingProcessed = processed;
@@ -245,12 +259,7 @@ export function useBatchMigrateManager() {
     rafPending = true;
     requestAnimationFrame(() => {
       if (pendingStatuses) {
-        itemStatuses.value = [...pendingStatuses];
-        globalProgress.value = {
-          current: pendingProcessed,
-          total: pendingTotal,
-          percent: pendingTotal > 0 ? Math.round((pendingProcessed / pendingTotal) * 100) : 0,
-        };
+        updateStatusDisplay(pendingStatuses, pendingProcessed, pendingTotal);
       }
       rafPending = false;
     });
@@ -258,12 +267,7 @@ export function useBatchMigrateManager() {
 
   function flushStatusUpdate() {
     if (pendingStatuses) {
-      itemStatuses.value = [...pendingStatuses];
-      globalProgress.value = {
-        current: pendingProcessed,
-        total: pendingTotal,
-        percent: pendingTotal > 0 ? Math.round((pendingProcessed / pendingTotal) * 100) : 0,
-      };
+      updateStatusDisplay(pendingStatuses, pendingProcessed, pendingTotal);
     }
     rafPending = false;
     pendingStatuses = null;
@@ -276,10 +280,16 @@ export function useBatchMigrateManager() {
   let cachedConfig: UserConfig | null = null;
   let cachedUploader: MultiServiceUploader | null = null;
 
+  async function getOrCacheConfig(): Promise<UserConfig> {
+    if (cachedConfig) return cachedConfig;
+    cachedConfig = await configStore.get<UserConfig>('config', DEFAULT_CONFIG) ?? DEFAULT_CONFIG;
+    return cachedConfig;
+  }
+
   async function initConfiguring() {
+    isFilterApplied.value = false;
     try {
-      const config = await configStore.get<UserConfig>('config', DEFAULT_CONFIG) ?? DEFAULT_CONFIG;
-      cachedConfig = config;
+      const config = await getOrCacheConfig();
       cachedUploader = new MultiServiceUploader();
 
       const allServices = config.availableServices || [];
@@ -305,6 +315,7 @@ export function useBatchMigrateManager() {
     }
 
     await applyFilter();
+    isFilterApplied.value = true;
   }
 
   /**
@@ -347,7 +358,7 @@ export function useBatchMigrateManager() {
     isCancelled.value = false;
     migrateResult.value = null;
 
-    const config = cachedConfig ?? await configStore.get<UserConfig>('config', DEFAULT_CONFIG) ?? DEFAULT_CONFIG;
+    const config = await getOrCacheConfig();
     const multiUploader = cachedUploader ?? new MultiServiceUploader();
 
     const totalToProcess = totalPending.value;
@@ -359,19 +370,32 @@ export function useBatchMigrateManager() {
     let skippedCount = 0;
     const failures: MigrateResult['failures'] = [];
     let processed = 0;
+    cumulativeCounts.value = { success: 0, failed: 0, skipped: 0 };
 
     globalProgress.value = { current: 0, total: totalToProcess, percent: 0 };
+
+    // 跟踪已处理（跳过/失败）但未从查询中消失的 ID，避免重复处理
+    const processedIds = new Set<string>();
+    let skipOffset = 0;
 
     while (!isCancelled.value) {
       const { items } = await historyDB.getItemsByBackupCount({
         maxSuccessCount: maxSuccessCount.value,
         limit: PAGE_SIZE,
-        offset: 0,
+        offset: skipOffset,
       });
 
       if (items.length === 0) break;
 
-      const batchStatuses: MigrateItemStatus[] = items.map(item => ({
+      // 过滤掉已处理过的项目
+      const newItems = items.filter(item => !processedIds.has(item.id));
+      if (newItems.length === 0) {
+        // 当前页全是已处理项，继续翻页
+        skipOffset += PAGE_SIZE;
+        continue;
+      }
+
+      const batchStatuses: MigrateItemStatus[] = newItems.map(item => ({
         historyId: item.id,
         fileName: item.localFileName,
         status: 'pending' as const,
@@ -379,7 +403,7 @@ export function useBatchMigrateManager() {
       }));
       itemStatuses.value = batchStatuses;
 
-      await processBatch(items, batchStatuses, targets, config, multiUploader, isCancelled, migrateStats, (status) => {
+      await processBatch(newItems, batchStatuses, targets, config, multiUploader, isCancelled, migrateStats, (status) => {
         if (status.status === 'success') successCount++;
         else if (status.status === 'skipped') skippedCount++;
         else {
@@ -387,6 +411,7 @@ export function useBatchMigrateManager() {
           if (status.error) failures.push({ fileName: status.fileName, error: status.error, errorType: status.errorType });
         }
         processed++;
+        cumulativeCounts.value = { success: successCount, failed: failedCount, skipped: skippedCount };
         migrateStats.value = {
           ...migrateStats.value,
           processedCount: processed,
@@ -396,6 +421,16 @@ export function useBatchMigrateManager() {
       });
 
       flushStatusUpdate();
+
+      // 记录未成功的项目 ID（它们不会从查询中消失）
+      for (const status of batchStatuses) {
+        if (status.status !== 'success') {
+          processedIds.add(status.historyId);
+        }
+      }
+
+      // 成功项已从查询中移除，重置 offset；未成功项靠 processedIds 过滤
+      skipOffset = 0;
 
       const batchSuccessCount = batchStatuses.filter(s => s.status === 'success').length;
       if (batchSuccessCount === 0) break;
@@ -418,6 +453,9 @@ export function useBatchMigrateManager() {
     migrateResult.value = null;
     globalProgress.value = { current: 0, total: 0, percent: 0 };
     migrateStats.value = { startTime: 0, elapsedMs: 0, processedCount: 0, totalCount: 0, totalBytes: 0 };
+    cumulativeCounts.value = { success: 0, failed: 0, skipped: 0 };
+    isFilterApplied.value = false;
+    cachedConfig = null;
     await initConfiguring();
   }
 
@@ -426,11 +464,11 @@ export function useBatchMigrateManager() {
   }
 
   return {
-    phase, isInitialized,
+    phase, isInitialized, isFilterApplied,
     maxSuccessCount, showAdvancedFilter,
     targetServices, configuredServices, unconfiguredServices,
     checkedTargets, totalPending, allBackedUp,
-    itemStatuses, isMigrating, globalProgress, migrateResult,
+    itemStatuses, isMigrating, globalProgress, migrateResult, cumulativeCounts,
     migrateStats, estimatedTimeRemaining, averageSpeed, concurrentCount,
     initConfiguring, applyFilter,
     startMigrate, cancelMigrate, retryFailed, resetToConfiguring,

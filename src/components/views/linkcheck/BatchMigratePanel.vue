@@ -1,17 +1,23 @@
 <script setup lang="ts">
 /**
  * 批量迁移面板
- * 两步流程：选目标图床 → 执行迁移 → 完成
+ * 三阶段流程：选目标图床 → 执行迁移 → 完成
  * UI：网格大卡片配置 + 卡片式迁移进度 + 居中完成报告
  */
-import { ref, watch, onActivated } from 'vue';
+import { watch, onActivated } from 'vue';
+import Select from 'primevue/select';
 import { useBatchMigrateManager } from '../../../composables/useBatchMigrate';
+import { useServiceHealth } from '../../../composables/useServiceHealth';
+import { useConfirm } from '../../../composables/useConfirm';
 import { getServiceIcon } from '../../../utils/icons';
 import { emit as tauriEmit } from '@tauri-apps/api/event';
+
+const MAX_VISIBLE_FAILURES = 10;
 
 const {
   phase,
   isInitialized,
+  isFilterApplied,
   maxSuccessCount,
   showAdvancedFilter,
   configuredServices,
@@ -22,6 +28,7 @@ const {
   itemStatuses,
   globalProgress,
   migrateResult,
+  cumulativeCounts,
   estimatedTimeRemaining,
   averageSpeed,
   concurrentCount,
@@ -32,6 +39,9 @@ const {
   retryFailed,
   resetToConfiguring,
 } = useBatchMigrateManager();
+
+const { healthStatusMap, healthTooltipMap } = useServiceHealth();
+const { confirm } = useConfirm();
 
 initConfiguring();
 onActivated(() => { if (phase.value === 'configuring') initConfiguring(); });
@@ -45,6 +55,27 @@ function navigateToSettings() {
 
 function canStart(): boolean {
   return totalPending.value > 0 && checkedTargets.value.length > 0;
+}
+
+async function confirmAndStart() {
+  const confirmed = await confirm(
+    `将备份约 ${formatNumber(totalPending.value)} 张图片到 ${checkedNames()}，确定继续？`,
+    { header: '确认备份', acceptLabel: '开始备份' },
+  );
+  if (confirmed) startMigrate();
+}
+
+// 图床健康状态（合并查询，避免多次读取同一个 Map）
+const healthLabels: Record<string, string> = { verified: '可用', error: '异常', pending: '待验证' };
+
+function getServiceHealthInfo(serviceId: string) {
+  const status = healthStatusMap.value[serviceId] ?? 'pending';
+  return {
+    text: healthLabels[status] ?? '已配置',
+    badgeClass: `badge--${status}`,
+    disabled: status === 'error',
+    tooltip: status === 'error' ? '图床异常，请先检查配置' : undefined,
+  };
 }
 
 // 格式化函数
@@ -69,9 +100,18 @@ function formatNumber(n: number): string {
   return n.toLocaleString();
 }
 
-// 已勾选图床名称列表（底栏显示）
 function checkedNames(): string {
   return checkedTargets.value.map(s => s.displayName).join('、');
+}
+
+// 失败原因映射
+const errorTypeMap: Record<string, { label: string; badgeClass: string }> = {
+  download: { label: '下载失败', badgeClass: 'done-failure-badge--dl' },
+  upload:   { label: '上传失败', badgeClass: 'done-failure-badge--ul' },
+};
+
+function getErrorInfo(errorType: string) {
+  return errorTypeMap[errorType] ?? errorTypeMap.upload;
 }
 
 // 高级筛选下拉选项
@@ -83,8 +123,6 @@ const filterThresholds = [
   { value: 999, label: '全部' },
 ];
 
-// 未配置图床折叠
-const showUnconfigured = ref(false);
 </script>
 
 <template>
@@ -92,14 +130,21 @@ const showUnconfigured = ref(false);
 
     <!-- ====== configuring: 网格大卡片 ====== -->
     <template v-if="phase === 'configuring'">
-      <div class="wk-header">
-        <span class="wk-title">批量迁移</span>
-        <span class="wk-hint">勾选图床 → 自动找出未备份的图片</span>
-      </div>
-
       <div class="wk-body">
-        <!-- 空状态 -->
-        <div v-if="isInitialized && configuredServices.length === 0" class="migrate-empty">
+        <!-- 加载中 -->
+        <div v-if="!isInitialized || !isFilterApplied" class="migrate-loading">
+          <div class="service-grid">
+            <div v-for="i in 3" :key="i" class="skeleton-card">
+              <div class="skeleton-line skeleton-line--short" />
+              <div class="skeleton-line skeleton-line--badge" />
+              <div class="skeleton-line skeleton-line--num" />
+              <div class="skeleton-line skeleton-line--label" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 空状态：无已配置图床 -->
+        <div v-else-if="configuredServices.length === 0" class="migrate-empty">
           <i class="pi pi-cloud migrate-empty-icon" />
           <p>暂无已配置的图床</p>
           <p class="migrate-empty-sub">请先在设置中配置至少一个图床</p>
@@ -110,90 +155,97 @@ const showUnconfigured = ref(false);
         <div v-else-if="allBackedUp" class="migrate-empty">
           <i class="pi pi-check-circle migrate-empty-icon migrate-empty-icon--success" />
           <p>所有图片已备份完毕</p>
-          <p class="migrate-empty-sub">每张图片都已上传到所有已配置的图床</p>
+          <p class="migrate-empty-sub">所有图片都已备份到已配置的图床</p>
         </div>
 
         <!-- 正常配置 -->
         <template v-else>
-          <!-- 服务网格 -->
           <div class="service-grid">
             <label
               v-for="svc in configuredServices"
               :key="svc.serviceId"
               class="service-card"
-              :class="{ 'service-card--checked': svc.checked }"
+              :class="{
+                'service-card--checked': svc.checked,
+                'service-card--disabled': getServiceHealthInfo(svc.serviceId).disabled,
+              }"
+              v-tooltip.top="getServiceHealthInfo(svc.serviceId).tooltip"
             >
               <div class="service-card-header">
                 <span class="service-card-icon" v-html="getServiceIcon(svc.serviceId)" />
                 <span class="service-card-name">{{ svc.displayName }}</span>
-                <input v-model="svc.checked" type="checkbox" class="service-card-checkbox" />
+                <input
+                  v-model="svc.checked"
+                  type="checkbox"
+                  class="service-card-checkbox"
+                  :disabled="getServiceHealthInfo(svc.serviceId).disabled"
+                />
               </div>
-              <span class="service-card-badge">已配置</span>
+              <span
+                class="service-card-badge"
+                :class="getServiceHealthInfo(svc.serviceId).badgeClass"
+                v-tooltip.top="healthTooltipMap[svc.serviceId]"
+              >
+                {{ getServiceHealthInfo(svc.serviceId).text }}
+              </span>
               <span class="service-card-count" :class="{ 'service-card-count--active': svc.checked }">
                 {{ formatNumber(svc.pendingCount) }}
               </span>
-              <span class="service-card-label">张图片待迁移</span>
+              <span class="service-card-label">张待备份</span>
             </label>
 
             <!-- 未配置入口卡 -->
             <div
               v-if="unconfiguredServices.length > 0"
               class="service-card service-card--unconfigured"
-              @click="showUnconfigured = !showUnconfigured"
+              @click="navigateToSettings"
             >
               <span class="unconfigured-count">+{{ unconfiguredServices.length }}</span>
               <span class="unconfigured-label">未配置</span>
-              <button class="link-btn link-btn--primary" @click.stop="navigateToSettings">去设置 →</button>
-            </div>
-          </div>
-
-          <!-- 展开未配置列表 -->
-          <div v-if="showUnconfigured && unconfiguredServices.length > 0" class="unconfigured-expand">
-            <div v-for="svc in unconfiguredServices" :key="svc.serviceId" class="unconfigured-row">
-              <span class="unconfigured-row-icon" v-html="getServiceIcon(svc.serviceId)" />
-              <span class="unconfigured-row-name">{{ svc.displayName }}</span>
-              <span class="unconfigured-row-status">未配置</span>
+              <span class="unconfigured-link">去设置 →</span>
             </div>
           </div>
 
           <!-- 高级筛选 -->
           <button class="adv-toggle" @click="showAdvancedFilter = !showAdvancedFilter">
             <i class="pi" :class="showAdvancedFilter ? 'pi-chevron-down' : 'pi-chevron-right'" />
-            <span>高级筛选（按备份数量过滤）</span>
+            <span>高级筛选</span>
           </button>
           <div v-if="showAdvancedFilter" class="adv-filter-body">
-            <span class="adv-filter-label">仅迁移备份少于</span>
-            <select v-model.number="maxSuccessCount" class="adv-filter-select">
-              <option v-for="opt in filterThresholds" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </option>
-            </select>
-            <span class="adv-filter-label">个图床的图片</span>
+            <span class="adv-filter-label">仅处理备份不足</span>
+            <Select
+              v-model="maxSuccessCount"
+              :options="filterThresholds"
+              optionLabel="label"
+              optionValue="value"
+              class="adv-filter-select"
+            />
+            <span class="adv-filter-label">份的图片</span>
           </div>
 
           <!-- 提示 -->
           <p class="migrate-tip">
             <i class="pi pi-info-circle" />
-            已在目标图床的图片自动跳过，不重复上传
+            已存在的图片会自动跳过
           </p>
         </template>
       </div>
 
       <!-- 底栏 -->
-      <div class="migrate-bottom">
-        <div class="migrate-bottom-main">
-          <div class="migrate-bottom-left">
+      <div class="bottom">
+        <div class="bottom-main">
+          <div class="bottom-left">
             <template v-if="checkedTargets.length > 0">
-              <span class="migrate-stat">
-                <strong class="migrate-stat-num">{{ formatNumber(totalPending) }}</strong>
-                张待迁移 → {{ checkedNames() }}
+              <span class="bottom-stat">
+                约 <strong class="bottom-stat-num">{{ formatNumber(totalPending) }}</strong>
+                张图片将备份到 {{ checkedNames() }}
               </span>
             </template>
-            <span v-else class="migrate-stat">请选择目标图床</span>
+            <span v-else class="bottom-stat bottom-stat--hint">勾选图床 → 自动找出未备份的图片</span>
           </div>
-          <div class="migrate-bottom-actions">
-            <button class="btn-primary" :disabled="!canStart()" @click="startMigrate">
-              <i class="pi pi-play" /> 开始迁移
+          <div class="bottom-actions">
+            <button class="btn-primary" :disabled="!canStart()" @click="confirmAndStart">
+              <i class="pi pi-play" /> 开始备份
             </button>
           </div>
         </div>
@@ -203,7 +255,7 @@ const showUnconfigured = ref(false);
     <!-- ====== migrating: 进度卡片 + 统计卡 ====== -->
     <template v-else-if="phase === 'migrating'">
       <div class="wk-header">
-        <span class="wk-title">正在迁移 → {{ checkedNames() }}</span>
+        <span class="wk-title">正在备份 → {{ checkedNames() }}</span>
         <span class="wk-subtitle">{{ formatNumber(globalProgress.current) }} / {{ formatNumber(globalProgress.total) }} ({{ globalProgress.percent }}%)</span>
       </div>
 
@@ -212,7 +264,19 @@ const showUnconfigured = ref(false);
       </div>
 
       <div class="wk-body">
-        <!-- 文件状态列表（白色卡片） -->
+        <!-- 累计统计条 -->
+        <div class="cumulative-bar" v-if="cumulativeCounts.success + cumulativeCounts.failed + cumulativeCounts.skipped > 0">
+          <span class="cumulative-item cumulative-item--success">
+            <i class="pi pi-check-circle" /> {{ formatNumber(cumulativeCounts.success) }} 成功
+          </span>
+          <span v-if="cumulativeCounts.skipped > 0" class="cumulative-item cumulative-item--muted">
+            {{ formatNumber(cumulativeCounts.skipped) }} 跳过
+          </span>
+          <span v-if="cumulativeCounts.failed > 0" class="cumulative-item cumulative-item--error">
+            <i class="pi pi-times-circle" /> {{ formatNumber(cumulativeCounts.failed) }} 失败
+          </span>
+        </div>
+
         <div class="status-card">
           <div class="status-list">
             <div
@@ -241,7 +305,6 @@ const showUnconfigured = ref(false);
           </div>
         </div>
 
-        <!-- 三个统计小卡片 -->
         <div class="stats-grid">
           <div class="stat-card">
             <span class="stat-card-label">估计剩余时间</span>
@@ -258,17 +321,17 @@ const showUnconfigured = ref(false);
         </div>
       </div>
 
-      <div class="migrate-bottom">
-        <div class="migrate-bottom-main">
-          <div class="migrate-bottom-left">
-            <span class="migrate-stat migrate-stat--phase">
+      <div class="bottom">
+        <div class="bottom-main">
+          <div class="bottom-left">
+            <span class="bottom-stat bottom-stat--phase">
               <i class="pi pi-sync pi-spin" style="font-size: 12px" />
               {{ formatNumber(globalProgress.current) }} / {{ formatNumber(globalProgress.total) }}
             </span>
-            <span class="migrate-stat-sep" />
-            <span class="migrate-stat">正在处理媒体库数据...</span>
+            <span class="bottom-sep" />
+            <span class="bottom-stat">正在备份图片...</span>
           </div>
-          <div class="migrate-bottom-actions">
+          <div class="bottom-actions">
             <button class="btn-danger" @click="cancelMigrate">
               <i class="pi pi-times" /> 取消任务
             </button>
@@ -281,13 +344,11 @@ const showUnconfigured = ref(false);
     <template v-else-if="phase === 'done'">
       <div class="wk-body migrate-done-body">
         <div class="done-card" v-if="migrateResult">
-          <!-- 大绿勾 -->
           <div class="done-icon">
             <i class="pi pi-check-circle" />
           </div>
-          <h2 class="done-title">迁移完成</h2>
+          <h2 class="done-title">备份完成</h2>
 
-          <!-- 统计行 -->
           <div class="done-stats">
             <span class="done-stat done-stat--success">
               <i class="pi pi-check-circle" />
@@ -302,43 +363,49 @@ const showUnconfigured = ref(false);
             </span>
           </div>
 
-          <!-- 失败原因列表 -->
           <div v-if="migrateResult.failures.length > 0" class="done-failures">
             <p class="done-failures-title">失败原因：</p>
-            <div v-for="(f, i) in migrateResult.failures.slice(0, 10)" :key="i" class="done-failure-row">
+            <div v-for="(f, i) in migrateResult.failures.slice(0, MAX_VISIBLE_FAILURES)" :key="i" class="done-failure-row">
               <i class="pi pi-image done-failure-icon" />
               <span class="done-failure-name">{{ f.fileName }}</span>
-              <span class="done-failure-badge" :class="f.errorType === 'download' ? 'done-failure-badge--dl' : 'done-failure-badge--ul'">
-                {{ f.errorType === 'download' ? '下载失败' : '上传失败' }}
+              <span class="done-failure-badge" :class="getErrorInfo(f.errorType).badgeClass">
+                {{ getErrorInfo(f.errorType).label }}
               </span>
               <span class="done-failure-msg">{{ f.error }}</span>
             </div>
-            <p v-if="migrateResult.failures.length > 10" class="done-failures-more">
-              还有更多错误项显示
+            <p v-if="migrateResult.failures.length > MAX_VISIBLE_FAILURES" class="done-failures-more">
+              还有 {{ migrateResult.failures.length - MAX_VISIBLE_FAILURES }} 项未显示
             </p>
           </div>
         </div>
       </div>
 
-      <div class="migrate-bottom">
-        <div class="migrate-bottom-main">
-          <div class="migrate-bottom-left">
+      <div class="bottom">
+        <div class="bottom-main">
+          <div class="bottom-left">
             <template v-if="migrateResult">
-              <span class="migrate-stat">
-                <span class="migrate-stat-dot migrate-stat-dot--success" /> 成功 {{ formatNumber(migrateResult.successCount) }}
+              <span class="bottom-stat">
+                <span class="bottom-dot bottom-dot--success" /> 成功 {{ formatNumber(migrateResult.successCount) }}
               </span>
+              <template v-if="migrateResult.skippedCount > 0">
+                <span class="bottom-sep" />
+                <span class="bottom-stat">
+                  跳过 {{ formatNumber(migrateResult.skippedCount) }}
+                </span>
+              </template>
               <template v-if="migrateResult.failedCount > 0">
-                <span class="migrate-stat-sep" />
-                <span class="migrate-stat">
-                  <span class="migrate-stat-dot migrate-stat-dot--error" /> 失败 {{ formatNumber(migrateResult.failedCount) }}
+                <span class="bottom-sep" />
+                <span class="bottom-stat">
+                  <span class="bottom-dot bottom-dot--error" /> 失败 {{ formatNumber(migrateResult.failedCount) }}
                 </span>
               </template>
             </template>
           </div>
-          <div class="migrate-bottom-actions">
-            <button v-if="migrateResult?.failedCount" class="link-btn link-btn--primary" @click="retryFailed">
+          <div class="bottom-actions">
+            <button v-if="migrateResult?.failedCount" class="btn-ghost" @click="retryFailed">
               重试失败项
             </button>
+            <span v-if="migrateResult?.failedCount" class="action-divider" />
             <button class="btn-primary" @click="resetToConfiguring">
               完成
             </button>
@@ -367,7 +434,6 @@ const showUnconfigured = ref(false);
 }
 
 .wk-title { font-size: 14px; font-weight: 600; color: var(--text-main); }
-.wk-hint { font-size: 12px; color: var(--text-tertiary); }
 .wk-subtitle { font-size: 12px; color: var(--text-tertiary); }
 
 .wk-progress { height: 4px; background: var(--border-subtle); flex-shrink: 0; }
@@ -377,6 +443,31 @@ const showUnconfigured = ref(false);
   flex: 1; overflow-y: auto; padding: 20px;
   display: flex; flex-direction: column; gap: 16px;
 }
+
+/* ============================================================
+   加载态 skeleton
+   ============================================================ */
+.migrate-loading {
+  flex: 1;
+}
+
+.skeleton-card {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 16px; border-radius: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+}
+
+.skeleton-line {
+  border-radius: 4px;
+  background: var(--border-subtle);
+  animation: k-shimmer var(--duration-shimmer) infinite;
+}
+
+.skeleton-line--short { width: 60%; height: 14px; }
+.skeleton-line--badge { width: 48px; height: 16px; border-radius: 9999px; }
+.skeleton-line--num { width: 40%; height: 20px; }
+.skeleton-line--label { width: 50%; height: 12px; }
 
 /* ============================================================
    空状态
@@ -409,12 +500,21 @@ const showUnconfigured = ref(false);
   gap: 6px;
 }
 
-.service-card:hover { border-color: var(--primary-alpha-40, rgba(59,130,246,0.4)); }
+.service-card:hover { border-color: var(--primary-alpha-40); }
 
 .service-card--checked {
   border: 2px solid var(--primary);
-  background: var(--primary-alpha-5, rgba(59,130,246,0.05));
+  background: var(--primary-alpha-5);
 }
+
+.service-card--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: auto;
+}
+
+.service-card--disabled:hover { border-color: var(--border-subtle); }
+.service-card--disabled .service-card-checkbox { cursor: not-allowed; }
 
 .service-card--unconfigured {
   border: 2px dashed var(--border-subtle);
@@ -446,16 +546,20 @@ const showUnconfigured = ref(false);
 
 .service-card-badge {
   font-size: 10px; font-weight: 500;
-  color: var(--success);
-  background: var(--success-alpha-10, rgba(22,163,74,0.1));
   padding: 2px 8px; border-radius: 9999px;
   width: fit-content;
 }
 
+.badge--verified { color: var(--success); background: var(--success-alpha-10); }
+.badge--pending { color: var(--warning); background: var(--warning-alpha-10); }
+.badge--error { color: var(--error); background: var(--error-alpha-10); }
+.badge--unconfigured { color: var(--text-muted); background: var(--bg-input); }
+
 .service-card-count {
-  font-size: 28px; font-weight: 700;
+  font-size: 20px; font-weight: 600;
   color: var(--text-tertiary);
-  line-height: 1.2;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
 }
 
 .service-card-count--active { color: var(--primary); }
@@ -466,29 +570,12 @@ const showUnconfigured = ref(false);
 
 .unconfigured-count { font-size: 24px; font-weight: 600; color: var(--text-tertiary); }
 .unconfigured-label { font-size: 12px; color: var(--text-tertiary); margin-bottom: 4px; }
-
-/* 展开的未配置列表 */
-.unconfigured-expand {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 4px 8px; border-radius: 8px;
-  background: var(--bg-input);
+.unconfigured-link {
+  font-size: 13px; font-weight: 500; color: var(--primary);
+  transition: opacity var(--duration-fast);
 }
 
-.unconfigured-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 8px; font-size: 12px;
-}
-
-.unconfigured-row-icon {
-  width: 16px; height: 16px;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--text-tertiary); opacity: 0.5;
-}
-
-.unconfigured-row-icon :deep(svg) { width: 16px; height: 16px; }
-
-.unconfigured-row-name { color: var(--text-muted); }
-.unconfigured-row-status { margin-left: auto; color: var(--text-tertiary); font-size: 11px; }
+.service-card--unconfigured:hover .unconfigured-link { opacity: 0.8; }
 
 /* 高级筛选 */
 .adv-toggle {
@@ -508,14 +595,19 @@ const showUnconfigured = ref(false);
   background: var(--bg-input); font-size: 13px; color: var(--text-secondary);
 }
 
-.adv-filter-select {
-  padding: 4px 8px; border-radius: 6px;
+.adv-filter-label { white-space: nowrap; }
+
+:deep(.adv-filter-select.p-select) {
+  height: 28px; min-width: 60px;
+  border-radius: 6px;
   border: 1px solid var(--border-subtle);
-  background: var(--bg-card); font-size: 13px; font-family: inherit;
-  color: var(--text-primary);
+  background: var(--bg-card);
+  font-size: 13px;
 }
 
-.adv-filter-label { white-space: nowrap; }
+:deep(.adv-filter-select .p-select-label) {
+  padding: 4px 8px; font-size: 13px;
+}
 
 /* 提示 */
 .migrate-tip {
@@ -524,6 +616,23 @@ const showUnconfigured = ref(false);
 }
 
 .migrate-tip i { font-size: 11px; color: var(--primary); }
+
+/* 累计统计条 */
+.cumulative-bar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 8px 14px; border-radius: 8px;
+  background: var(--bg-card); flex-shrink: 0;
+  font-size: 13px; font-weight: 500;
+}
+
+.cumulative-item {
+  display: inline-flex; align-items: center; gap: 4px;
+}
+
+.cumulative-item i { font-size: 12px; }
+.cumulative-item--success { color: var(--success); }
+.cumulative-item--muted { color: var(--text-muted); }
+.cumulative-item--error { color: var(--error); }
 
 /* ============================================================
    migrating: 状态卡片 + 统计卡
@@ -552,7 +661,7 @@ const showUnconfigured = ref(false);
 .status-row.skipped i { color: var(--text-muted); }
 .status-row.downloading i, .status-row.uploading i { color: var(--primary); }
 .status-row.pending i { color: var(--text-tertiary); }
-.status-row.downloading, .status-row.uploading { background: var(--warning-alpha-8, rgba(245,158,11,0.08)); }
+.status-row.downloading, .status-row.uploading { background: var(--warning-alpha-8); }
 
 .status-filename {
   color: var(--text-primary); flex: 1;
@@ -566,8 +675,8 @@ const showUnconfigured = ref(false);
   background: var(--bg-input); color: var(--text-muted); font-weight: 500;
 }
 
-.svc-badge.success { background: var(--success-alpha-10, rgba(34,197,94,0.1)); color: var(--success); }
-.svc-badge.failed { background: var(--error-alpha-10, rgba(239,68,68,0.1)); color: var(--error); }
+.svc-badge.success { background: var(--success-alpha-10); color: var(--success); }
+.svc-badge.failed { background: var(--error-alpha-10); color: var(--error); }
 
 /* 三个统计小卡片 */
 .stats-grid {
@@ -640,7 +749,8 @@ const showUnconfigured = ref(false);
 
 .done-failure-name {
   font-weight: 500; color: var(--text-primary);
-  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 280px; min-width: 0; flex-shrink: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 .done-failure-badge {
@@ -648,11 +758,13 @@ const showUnconfigured = ref(false);
   border-radius: 4px; flex-shrink: 0;
 }
 
-.done-failure-badge--dl { background: var(--error-alpha-10, rgba(239,68,68,0.1)); color: var(--error); }
-.done-failure-badge--ul { background: var(--error-alpha-10, rgba(239,68,68,0.1)); color: var(--error); }
+.done-failure-badge--dl { background: var(--error-alpha-10); color: var(--error); }
+.done-failure-badge--ul { background: var(--error-alpha-10); color: var(--error); }
 
 .done-failure-msg {
-  font-size: 12px; color: var(--text-muted); flex-shrink: 0;
+  font-size: 12px; color: var(--text-muted);
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 .done-failures-more {
@@ -661,54 +773,58 @@ const showUnconfigured = ref(false);
 }
 
 /* ============================================================
-   底栏
+   底栏（对齐链接监控设计）
    ============================================================ */
-.migrate-bottom {
+.bottom {
   display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;
   padding: 10px 16px 14px;
-  background: var(--bg-card);
 }
 
-.migrate-bottom-main {
+.bottom-main {
   display: flex; align-items: center; justify-content: space-between;
 }
 
-.migrate-bottom-left {
+.bottom-left {
   display: flex; align-items: center; gap: 0; flex-wrap: wrap;
 }
 
-.migrate-stat {
+.bottom-stat {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 12px; font-weight: 500; color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 
-.migrate-stat-num { color: var(--primary); font-weight: 700; }
-.migrate-stat--phase { color: var(--primary); }
-.migrate-stat--success { color: var(--success); }
-.migrate-stat--error { color: var(--error); }
+.bottom-stat-num { color: var(--primary); font-weight: 700; }
+.bottom-stat--hint { color: var(--text-tertiary); }
+.bottom-stat--phase { color: var(--primary); }
 
-.migrate-stat-sep {
+.bottom-sep {
   width: 1px; height: 12px; background: var(--border-subtle);
   margin: 0 10px; flex-shrink: 0;
 }
 
-.migrate-stat-dot {
+.bottom-dot {
   width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
 }
 
-.migrate-stat-dot--success { background: var(--success); }
-.migrate-stat-dot--error { background: var(--error); }
+.bottom-dot--success { background: var(--success); }
+.bottom-dot--error { background: var(--error); }
 
-.migrate-bottom-actions {
-  display: flex; align-items: center; gap: 12px; margin-left: auto;
+.bottom-actions {
+  display: flex; align-items: center; gap: 8px; margin-left: auto;
+}
+
+.action-divider {
+  width: 1px; height: 16px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
 }
 
 /* ============================================================
    按钮
    ============================================================ */
 .btn-primary, .btn-danger {
-  display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 14px;
+  display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 12px;
   border-radius: 7px; font-size: 13px; font-weight: 500; cursor: pointer;
   white-space: nowrap; transition: background var(--duration-fast), opacity var(--duration-fast); border: none;
   font-family: inherit;
@@ -718,19 +834,18 @@ const showUnconfigured = ref(false);
 .btn-primary { background: var(--primary); color: #fff; }
 .btn-primary:hover:not(:disabled) { opacity: 0.9; }
 .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-danger { background: var(--primary); color: #fff; }
+.btn-danger { background: var(--error); color: #fff; }
 .btn-danger:hover { opacity: 0.9; }
 
 .btn-lg { height: 36px; padding: 0 18px; font-size: 14px; border-radius: 8px; }
 
-.link-btn {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 13px; color: var(--text-tertiary);
-  background: none; border: none; cursor: pointer;
-  transition: color var(--duration-fast); font-family: inherit; font-weight: 500;
+.btn-ghost {
+  display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px;
+  border-radius: 7px; font-size: 13px; font-weight: 500; cursor: pointer;
+  white-space: nowrap; border: none; font-family: inherit;
+  background: var(--bg-input); color: var(--text-secondary);
+  transition: background var(--duration-fast), color var(--duration-fast);
 }
 
-.link-btn:hover { color: var(--text-muted); }
-.link-btn--primary { color: var(--primary); }
-.link-btn--primary:hover { opacity: 0.8; }
+.btn-ghost:hover { background: var(--hover-overlay); color: var(--text-primary); }
 </style>
