@@ -70,7 +70,7 @@ const handleNavigate = (view: ViewType) => {
   padding: 8px;
   border-radius: 8px;
   color: var(--text-secondary);
-  transition: all 0.2s;
+  transition: all var(--duration-normal);
   font-size: 0.75rem;
 }
 

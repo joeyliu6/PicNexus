@@ -79,7 +79,7 @@ const closeWindow = () => {
   border: none;
   color: var(--text-primary);
   cursor: pointer;
-  transition: background-color 0.15s;
+  transition: background-color var(--duration-fast);
   padding: 0;
 }
 

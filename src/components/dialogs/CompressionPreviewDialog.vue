@@ -385,16 +385,16 @@ onBeforeUnmount(() => {
 }
 
 .cpd-enter-active {
-  transition: opacity 0.2s ease;
+  transition: opacity var(--duration-normal) ease;
 }
 .cpd-enter-active .cpd-dialog {
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+  transition: transform var(--duration-normal) var(--ease-overshoot), opacity var(--duration-normal) ease;
 }
 .cpd-leave-active {
-  transition: opacity 0.15s ease;
+  transition: opacity var(--duration-fast) ease;
 }
 .cpd-leave-active .cpd-dialog {
-  transition: transform 0.12s ease, opacity 0.12s ease;
+  transition: transform var(--duration-fast) ease, opacity var(--duration-fast) ease;
 }
 .cpd-enter-from {
   opacity: 0;
@@ -472,7 +472,7 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
   flex-shrink: 0;
 }
 
@@ -632,7 +632,7 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -713,7 +713,7 @@ onBeforeUnmount(() => {
   pointer-events: auto;
   color: var(--text-primary);
   font-size: 14px;
-  transition: transform 0.1s;
+  transition: transform var(--duration-micro);
 }
 
 .cpd-slider-handle:hover {
@@ -733,7 +733,7 @@ onBeforeUnmount(() => {
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(4px);
   pointer-events: none;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-fast);
 }
 
 .cpd-badge.hidden {
@@ -783,7 +783,7 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
   border: none;
 }
 

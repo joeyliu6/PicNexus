@@ -367,7 +367,7 @@ defineExpose({
   gap: 4px;
   font-size: 12px;
   color: var(--text-muted);
-  transition: color 0.15s;
+  transition: color var(--duration-fast);
 }
 
 .strength-check i {
@@ -386,7 +386,7 @@ defineExpose({
   font-size: 12px;
   color: var(--text-muted);
   opacity: 0.6;
-  transition: color 0.15s, opacity 0.15s;
+  transition: color var(--duration-fast), opacity var(--duration-fast);
 }
 
 .strength-suggestion i {

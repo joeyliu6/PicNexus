@@ -116,7 +116,7 @@ onUnmounted(() => {
 /* 视图切换过渡动画 */
 .view-fade-enter-active,
 .view-fade-leave-active {
-  transition: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity var(--duration-fast) var(--ease-standard);
 }
 
 .view-fade-enter-from {

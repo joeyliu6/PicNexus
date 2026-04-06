@@ -108,7 +108,7 @@ function handleNext() {
   height: 6px;
   border-radius: 9999px;
   background: var(--border-subtle);
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: all var(--duration-medium) var(--ease-overshoot);
 }
 
 .step-dot.active {
@@ -159,7 +159,7 @@ function handleNext() {
 
 .step-fade-enter-active,
 .step-fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity var(--duration-normal) ease, transform var(--duration-normal) ease;
 }
 
 .step-fade-enter-from {
