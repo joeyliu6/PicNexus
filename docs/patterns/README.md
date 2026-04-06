@@ -13,6 +13,8 @@
 | [召唤词词典](./summon-keyword-dictionary.md) | 用高浓度名词替代长提示词的方法论 | AI 工作流 |
 | [Vite Glob 导入](./vite-glob-import.md) | 使用 import.meta.glob 动态导入资源 | 构建工具 |
 | [Toast 消息集中化](./toast-messages-centralization.md) | Toast 通知消息的集中管理模式 | 代码组织 |
+| [Playwright MCP 桥接测试](./playwright-bridge-testing.md) | AI 自主完成 UI 视觉验证的测试模式 | 测试方法 |
+| [批量操作目标优先](./batch-operation-target-first.md) | 选目标→自动算范围，简化批量操作流程 | UI 设计 |
 
 ---
 
