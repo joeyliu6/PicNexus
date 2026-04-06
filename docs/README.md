@@ -121,6 +121,8 @@ docs/
 │   ├── third-party-apis.md  # 第三方 API
 │   ├── tc-api.md            # TC 图床 API
 │   └── tc-limits.md         # TC 限制
+├── design-previews/          # 设计预览图
+├── plans/                    # 规划文档
 ├── style-design.md          # 样式设计规范
 └── testing-guide.md         # 测试指南
 ```

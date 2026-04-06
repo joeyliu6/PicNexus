@@ -126,8 +126,9 @@ pub async fn test_myservice_connection(
 
 ```rust
 pub mod myservice;
-pub use myservice::*;
 ```
+
+> 注意：项目中只需 `pub mod` 声明，不需要 `pub use *` 重导出。
 
 在 `src-tauri/src/main.rs` 中注册：
 
@@ -290,97 +291,37 @@ export interface UserConfig {
 
 ### 4.2 更新服务信息
 
-在 `src/config/services.ts` 中（如果有）：
+> 注意：项目中没有独立的 `src/config/services.ts` 文件。服务类型统一在 `src/config/types.ts` 的 `ServiceType` 中定义，服务配置在 `UserConfig` 接口中声明。以下为示例，实际请参考 `types.ts` 中已有服务的写法。
 
 ```typescript
-export const SERVICE_INFO: Record<ServiceType, ServiceInfo> = {
-  // ...existing services...
-  myservice: {
-    id: 'myservice',
-    name: 'My Service',
-    icon: 'pi-cloud-upload',
-    requiresAuth: true,
-    authType: 'apiKey',
-  },
-};
+// 在 types.ts 中：
+// 1. ServiceType 联合类型中添加新值
+export type ServiceType = '...' | 'myservice';
+
+// 2. 添加服务配置接口
+export interface MyServiceConfig {
+  apiKey: string;
+}
+
+// 3. 在 UserConfig 中添加字段
+export interface UserConfig {
+  // ...existing fields...
+  myservice?: MyServiceConfig;
+}
 ```
 
 ---
 
 ## 步骤 5: 更新设置界面
 
-在设置面板中添加配置项：
-
-```vue
-<!-- src/components/settings/MyServiceSettings.vue -->
-<template>
-  <div class="service-settings">
-    <h3>My Service 设置</h3>
-
-    <div class="field">
-      <label>API Key</label>
-      <InputText
-        v-model="localConfig.apiKey"
-        type="password"
-        placeholder="输入 API Key"
-      />
-    </div>
-
-    <div class="actions">
-      <Button
-        label="测试连接"
-        :loading="testing"
-        @click="testConnection"
-      />
-      <Button
-        label="保存"
-        :loading="saving"
-        @click="save"
-      />
-    </div>
-  </div>
-</template>
-
-<script setup lang="ts">
-import { ref, reactive } from 'vue';
-import { useConfig } from '@/composables/useConfig';
-
-const { config, saveConfig } = useConfig();
-
-const localConfig = reactive({
-  apiKey: config.value.myservice?.apiKey || '',
-});
-
-const testing = ref(false);
-const saving = ref(false);
-
-async function testConnection() {
-  testing.value = true;
-  try {
-    const uploader = new MyServiceUploader();
-    const result = await uploader.testConnection({ apiKey: localConfig.apiKey });
-    // 显示结果
-  } finally {
-    testing.value = false;
-  }
-}
-
-async function save() {
-  saving.value = true;
-  try {
-    await saveConfig({
-      ...config.value,
-      myservice: {
-        enabled: true,
-        apiKey: localConfig.apiKey,
-      },
-    });
-  } finally {
-    saving.value = false;
-  }
-}
-</script>
-```
+> **注意**：项目中**不为每个图床创建单独的 Settings 组件**。设置面板采用分组架构：
+> - `src/components/settings/HostingSettingsPanel.vue` — 图床设置总面板
+> - `src/components/settings/hosting/BuiltinServiceGroup.vue` — 内建图床组（无需配置）
+> - `src/components/settings/hosting/CookieServiceGroup.vue` — Cookie 类图床组
+> - `src/components/settings/hosting/TokenServiceGroup.vue` — Token/API Key 类图床组
+> - `src/components/settings/hosting/PrivateStorageGroup.vue` — 私有存储图床组
+>
+> 根据新图床的认证方式，将配置项添加到对应的分组组件中。参考已有图床的写法即可。
 
 ---
 

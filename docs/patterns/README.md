@@ -15,6 +15,7 @@
 | [Toast 消息集中化](./toast-messages-centralization.md) | Toast 通知消息的集中管理模式 | 代码组织 |
 | [Playwright MCP 桥接测试](./playwright-bridge-testing.md) | AI 自主完成 UI 视觉验证的测试模式 | 测试方法 |
 | [批量操作目标优先](./batch-operation-target-first.md) | 选目标→自动算范围，简化批量操作流程 | UI 设计 |
+| [动效 Token 统一管理](./motion-token-system.md) | CSS 变量集中管理动效参数，消除硬编码 | 样式架构 |
 
 ---
 

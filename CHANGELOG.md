@@ -17,6 +17,13 @@
 ## [Unreleased]
 
 ### Changed
+- **动效系统统一管理**
+  - 扩展 `motion.css`：新增 9 个 duration token + 11 个共享 `k-*` keyframes + 6 个 Vue Transition class（`t-fade`/`t-slide-up`/`t-dropdown`/`t-scale-fade`/`t-fade-slide`/`t-collapse`）
+  - 消除 14 个重复 `@keyframes` 定义（fadeIn×4、spin×3、shimmer×3、pulse×3、bounce），合并到 motion.css 全局管理
+  - ~200 处硬编码 transition duration/easing 替换为 CSS 变量 Token，覆盖率从 ~0% 提升到 ~97%
+  - `theme/transitions.css` 中 6 处硬编码 cubic-bezier 替换为 `var(--ease-standard)`
+  - 涉及 44 个文件，纯 CSS 层面重构，零功能变更
+
 - **批量迁移功能重新设计**
   - 逻辑简化：砍掉"迁移范围"独立步骤，改为"选目标图床 → 自动算待迁移数"一步到位
   - 配置页：网格大卡片布局，每个已配置图床显示 SVG 图标 + 大字待迁移数，未配置图床折叠为 "+N 去设置" 入口卡

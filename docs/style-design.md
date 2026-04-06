@@ -148,6 +148,79 @@ import './theme/transitions.css';
 |---------|---------|------|
 | 主题相关变量 | `dark-theme.css` / `light-theme.css` | 颜色、阴影等随主题变化的值 |
 | 尺寸、间距 | `style.css` 的 `:root` | 不随主题变化的布局值 |
+| 动效变量 | `styles/motion.css` | duration、easing、transform 预设 |
+
+### 动效变量体系
+
+所有动效参数通过 `styles/motion.css` 集中管理，禁止硬编码 transition/animation 时长和缓动函数。
+
+#### Duration Token
+
+| 变量 | 值 | 适用场景 |
+|------|-----|---------|
+| `--duration-micro` | 100ms | 极速反馈：按钮按下、背景闪变 |
+| `--duration-fast` | 120ms | 微交互：hover、focus、图标切换 |
+| `--duration-normal` | 200ms | 标准过渡：淡入淡出、颜色变化 |
+| `--duration-medium` | 300ms | 折叠面板、中等交互 |
+| `--duration-slow` | 350ms | 面板滑入、遮罩、页面切换 |
+| `--duration-slower` | 500ms | 进度条、复杂编排 |
+| `--duration-spinner` | 800ms | spinner 旋转周期 |
+| `--duration-shimmer` | 1500ms | 骨架屏微光周期 |
+| `--duration-breathe` | 2000ms | 呼吸脉冲周期 |
+
+#### Easing Token
+
+| 变量 | 适用场景 |
+|------|---------|
+| `--ease-standard` | 大多数过渡（Material 标准） |
+| `--ease-decelerate` | 元素进入（快启慢停） |
+| `--ease-accelerate` | 元素退出（慢启快走） |
+| `--ease-overshoot` | 弹出效果（对话框、toast） |
+| `--ease-spring` | 弹性效果（收藏、星形弹出） |
+
+#### 共享 @keyframes（k- 前缀）
+
+新增组件需要动画时，优先使用已有的 `k-*` keyframes：
+
+| keyframes | 效果 | 典型用法 |
+|-----------|------|---------|
+| `k-fade-in` | 纯透明度淡入 | 模态框、预览 |
+| `k-fade-slide-up` | 淡入+上滑 | 设置区块、列表项入场 |
+| `k-fade-slide-down` | 淡入+下滑 | 扫描结果、提示 |
+| `k-fade-slide-left` | 淡入+左滑 | 状态消息 |
+| `k-fade-scale` | 淡入+缩放+上滑 | 药丸/badge 入场 |
+| `k-spin` | 旋转 | 加载 spinner |
+| `k-shimmer` | 骨架屏微光 | 图片占位符 |
+| `k-pulse` | 透明度脉冲 | 加载中/呼吸状态 |
+| `k-sweep` | 水平扫光 | 进度条发光 |
+| `k-bounce` | 弹跳缩放 | 完成确认 |
+| `k-pop` | 多段弹跳 | 收藏星形 |
+
+#### Vue Transition class（t- 前缀）
+
+| 名称 | 效果 |
+|------|------|
+| `t-fade` | 通用淡入淡出 |
+| `t-slide-up` | 从下方浮入 |
+| `t-dropdown` | 下拉菜单展开 |
+| `t-scale-fade` | 对话框弹出 |
+| `t-fade-slide` | 通用淡入+位移 |
+| `t-collapse` | 折叠面板展开/收起 |
+
+#### 用法示例
+
+```css
+/* ✅ 正确：使用 Token */
+transition: all var(--duration-normal) var(--ease-standard);
+animation: k-fade-slide-up var(--duration-medium) var(--ease-decelerate) both;
+
+/* ❌ 错误：硬编码 */
+transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+```
+
+#### 无障碍
+
+`motion.css` 内置 `prefers-reduced-motion` 支持，所有 duration 变量自动归零。新增组件无需额外处理。
 
 ---
 
