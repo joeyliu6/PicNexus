@@ -95,6 +95,11 @@ const toast = useToast();
 /** 表格筛选状态 */
 const activeFilter = ref<'all' | 'rescuable' | 'manual'>('all');
 
+/** 分组列表默认显示行数上限，点击"加载更多"每次递增 */
+const ROW_DISPLAY_LIMIT = 200;
+const ROW_DISPLAY_STEP = 200;
+const displayRowLimit = ref(ROW_DISPLAY_LIMIT);
+
 // ============================================================
 // 计算
 // ============================================================
@@ -206,17 +211,18 @@ function getFileBrokenLinks(filePath: string) {
   return brokenLinksByFile.value.get(filePath) ?? [];
 }
 
+function parsePath(path: string): string[] {
+  return path.replace(/\\/g, '/').split('/').filter(Boolean);
+}
+
 function truncatePath(path: string): string {
-  const parts = path.replace(/\\/g, '/').split('/');
-  if (parts.length <= 2) return path;
-  return '.../' + parts.slice(-2).join('/');
+  const parts = parsePath(path);
+  return parts.length <= 2 ? path : '.../' + parts.slice(-2).join('/');
 }
 
 function getFileDirectory(fullPath: string): string {
-  const normalized = fullPath.replace(/\\/g, '/');
-  const parts = normalized.split('/').filter(Boolean);
-  if (parts.length < 2) return '';
-  return parts[parts.length - 2];
+  const parts = parsePath(fullPath);
+  return parts.length < 2 ? '' : parts[parts.length - 2];
 }
 
 // ---------- 修复策略弹窗 ----------
@@ -239,6 +245,7 @@ function openRepairDialog() {
     }
   }
   showManualSection.value = false;
+  showAllManualLinks.value = false;
   showRepairDialog.value = true;
 }
 
@@ -249,6 +256,15 @@ const rescuableLinks = computed(() =>
       && l.backupLinks?.some((b) => b.checkResult?.is_valid),
   ),
 );
+
+/** 手动选择列表默认最多显示条数 */
+const MANUAL_LIST_LIMIT = 50;
+const showAllManualLinks = ref(false);
+const visibleManualLinks = computed(() => {
+  const all = rescuableLinks.value;
+  if (showAllManualLinks.value || all.length <= MANUAL_LIST_LIMIT) return all;
+  return all.slice(0, MANUAL_LIST_LIMIT);
+});
 
 async function confirmRepair() {
   showRepairDialog.value = false;
@@ -274,16 +290,15 @@ async function confirmRepair() {
 }
 
 // fixing 阶段辅助函数
-function fixingCardClass(file: FileHealth): string {
-  if (file.healed) return 'fixing-card--done';
-  if (fixingFileIsActive(file)) return 'fixing-card--active';
-  return 'fixing-card--pending';
-}
+const FIXING_CARD_CONFIG = {
+  done: { class: 'fixing-card--done', icon: 'pi-check-circle' },
+  active: { class: 'fixing-card--active', icon: 'pi-spin pi-spinner' },
+  pending: { class: 'fixing-card--pending', icon: 'pi-clock' },
+} as const;
 
-function fixingCardIconClass(file: FileHealth): string {
-  if (file.healed) return 'pi-check-circle';
-  if (fixingFileIsActive(file)) return 'pi-spin pi-spinner';
-  return 'pi-clock';
+function getFixingCardState(file: FileHealth): 'done' | 'active' | 'pending' {
+  if (file.healed) return 'done';
+  return fixingFileIsActive(file) ? 'active' : 'pending';
 }
 
 function fixingFileIsActive(file: FileHealth): boolean {
@@ -414,6 +429,31 @@ const groupedRows = computed<GroupedFile[]>(() => {
   return Array.from(map.values());
 });
 
+/** 总行数（用于判断是否需要"加载更多"） */
+const totalFilteredRowCount = computed(() => filteredRows.value.length);
+
+/** 截断后用于渲染的分组（按 displayRowLimit 限制总行数） */
+const visibleGroupedRows = computed<GroupedFile[]>(() => {
+  const limit = displayRowLimit.value;
+  const all = groupedRows.value;
+  if (totalFilteredRowCount.value <= limit) return all;
+
+  const result: GroupedFile[] = [];
+  let count = 0;
+  for (const group of all) {
+    if (count >= limit) break;
+    const remaining = limit - count;
+    if (group.rows.length <= remaining) {
+      result.push(group);
+      count += group.rows.length;
+    } else {
+      result.push({ ...group, rows: group.rows.slice(0, remaining) });
+      count += remaining;
+    }
+  }
+  return result;
+});
+
 /** 会话内折叠状态（默认全部展开） */
 const collapsedGroups = ref<Set<string>>(new Set());
 
@@ -428,30 +468,24 @@ function toggleGroupCollapse(filePath: string): void {
 // 行动函数：定位文件 / 打开编辑器 / 在浏览器打开 / 复制 URL
 // ============================================================
 
+async function withErrorToast(fn: () => Promise<void>, errorMsg: string): Promise<void> {
+  try { await fn(); } catch (err) { toast.error(errorMsg, String(err)); }
+}
+
 async function revealInFolder(filePath: string): Promise<void> {
-  try {
+  await withErrorToast(async () => {
     const dir = await dirname(filePath);
     // 用后端 opener crate 绕过 shell scope 的 regex 限制（只允许 http/mailto/tel）
     await invoke('open_path', { path: dir });
-  } catch (err) {
-    toast.error('无法打开文件夹', String(err));
-  }
+  }, '无法打开文件夹');
 }
 
 async function openMdFile(filePath: string): Promise<void> {
-  try {
-    await invoke('open_path', { path: filePath });
-  } catch (err) {
-    toast.error('无法打开文件', String(err));
-  }
+  await withErrorToast(() => invoke('open_path', { path: filePath }), '无法打开文件');
 }
 
 async function openInBrowser(url: string): Promise<void> {
-  try {
-    await shellOpen(url);
-  } catch (err) {
-    toast.error('无法打开链接', String(err));
-  }
+  await withErrorToast(() => shellOpen(url), '无法打开链接');
 }
 
 async function copyRowUrl(url: string): Promise<void> {
@@ -467,31 +501,28 @@ async function copyRowUrl(url: string): Promise<void> {
 // 状态分色：按 error_type + status_code 映射到红/黄/紫
 // ============================================================
 
-interface StatusDisplay {
-  color: 'red' | 'amber' | 'purple';
-  label: string;
-}
+interface StatusDisplay { color: string; label: string; }
+
+const STATUS_DISPLAY_MAP: Record<string, StatusDisplay> = {
+  timeout: { color: 'amber', label: '超时' },
+  suspicious: { color: 'purple', label: '可疑' },
+  network: { color: 'red', label: '网络' },
+  http_4xx: { color: 'red', label: '404' },
+  http_5xx: { color: 'red', label: '500' },
+};
 
 function getStatusDisplay(cr: CheckLinkResult | null | undefined): StatusDisplay {
   if (!cr) return { color: 'red', label: '失败' };
-  if (cr.error_type === 'timeout') return { color: 'amber', label: '超时' };
-  if (cr.error_type === 'suspicious' || cr.browser_might_work) {
-    return { color: 'purple', label: '可疑' };
-  }
-  if (cr.error_type === 'http_4xx') {
-    if (cr.status_code === 404 || cr.status_code === 410) return { color: 'red', label: '404' };
-    if (cr.status_code === 403) return { color: 'red', label: '403' };
-    return { color: 'red', label: cr.status_code ? `${cr.status_code}` : '4XX' };
-  }
-  if (cr.error_type === 'http_5xx') return { color: 'red', label: cr.status_code ? `${cr.status_code}` : '5XX' };
-  if (cr.error_type === 'network') return { color: 'red', label: '网络' };
-  return { color: 'red', label: '失败' };
+  if (cr.is_valid) return { color: 'green', label: '正常' };
+  if (cr.browser_might_work) return { color: 'purple', label: '可疑' };
+  return STATUS_DISPLAY_MAP[cr.error_type] ?? { color: 'red', label: '失效' };
 }
 
 /** 点击筛选芯片 */
 function selectFilter(f: 'all' | 'rescuable' | 'manual') {
   if (activeFilter.value === f) return;
   activeFilter.value = f;
+  displayRowLimit.value = ROW_DISPLAY_LIMIT;
 }
 
 </script>
@@ -618,7 +649,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
             <!-- 问题链接分组列表 / 筛选为空（互斥切换） -->
             <Transition name="slide-up" mode="out-in">
               <div v-if="groupedRows.length > 0" key="groups" class="mr-groups">
-                <div v-for="group in groupedRows" :key="group.filePath" class="mr-group">
+                <div v-for="group in visibleGroupedRows" :key="group.filePath" class="mr-group">
                   <button
                     type="button"
                     class="mr-group-header"
@@ -627,15 +658,15 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
                     <i class="pi mr-group-chev" :class="collapsedGroups.has(group.filePath) ? 'pi-chevron-right' : 'pi-chevron-down'" />
                     <i class="pi pi-file mr-group-file-icon" />
                     <div class="mr-group-info">
-                      <span class="mr-group-name" :title="group.filePath">{{ group.fileName }}</span>
-                      <span class="mr-group-dir" :title="group.filePath">{{ group.directory }}</span>
+                      <span class="mr-group-name" v-tooltip.top="group.filePath">{{ group.fileName }}</span>
+                      <span class="mr-group-dir" v-tooltip.top="group.filePath">{{ group.directory }}</span>
                     </div>
                     <span class="mr-group-count">{{ group.rows.length }} 条异常链接</span>
                     <span class="mr-group-actions" @click.stop>
-                      <button type="button" class="mr-group-icon-btn" title="在文件管理器中定位" @click="revealInFolder(group.filePath)">
+                      <button type="button" class="mr-group-icon-btn" v-tooltip.top="'在文件管理器中定位'" @click="revealInFolder(group.filePath)">
                         <i class="pi pi-folder-open" />
                       </button>
-                      <button type="button" class="mr-group-icon-btn" title="用默认编辑器打开" @click="openMdFile(group.filePath)">
+                      <button type="button" class="mr-group-icon-btn" v-tooltip.top="'用默认编辑器打开'" @click="openMdFile(group.filePath)">
                         <i class="pi pi-pencil" />
                       </button>
                     </span>
@@ -649,19 +680,27 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
                       <div class="mr-row-status">
                         <span class="mr-status-label" :class="`mr-status-label--${getStatusDisplay(row.link.checkResult).color}`">{{ getStatusDisplay(row.link.checkResult).label }}</span>
                       </div>
-                      <span class="mr-img-name" :title="row.link.url">{{ extractFilenameFromUrl(row.link.url) }}</span>
-                      <span class="mr-host-badge" :class="{ 'mr-host-badge--defunct': isDefunctHost(row.link.url) }" :title="row.link.url">{{ extractHost(row.link.url) }}</span>
+                      <span class="mr-img-name" v-tooltip.top="row.link.url">{{ extractFilenameFromUrl(row.link.url) }}</span>
+                      <span class="mr-host-badge" :class="{ 'mr-host-badge--defunct': isDefunctHost(row.link.url) }" v-tooltip.top="row.link.url">{{ extractHost(row.link.url) }}</span>
                       <div class="mr-row-actions">
-                        <button type="button" class="mr-row-icon-btn" title="复制 URL" @click="copyRowUrl(row.link.url)">
+                        <button type="button" class="mr-row-icon-btn" v-tooltip.top="'复制 URL'" @click="copyRowUrl(row.link.url)">
                           <i class="pi pi-copy" />
                         </button>
-                        <button type="button" class="mr-row-icon-btn" title="在浏览器打开" @click="openInBrowser(row.link.url)">
+                        <button type="button" class="mr-row-icon-btn" v-tooltip.top="'在浏览器打开'" @click="openInBrowser(row.link.url)">
                           <i class="pi pi-external-link" />
                         </button>
                       </div>
                     </div>
                   </div>
                 </div>
+                <button
+                  v-if="totalFilteredRowCount > displayRowLimit"
+                  class="mr-load-more"
+                  @click="displayRowLimit += ROW_DISPLAY_STEP"
+                >
+                  <i class="pi pi-angle-down" />
+                  加载更多（已显示 {{ Math.min(displayRowLimit, totalFilteredRowCount) }} / {{ totalFilteredRowCount }} 条）
+                </button>
               </div>
               <div v-else-if="flatBrokenLinks.length > 0" key="empty-filter" class="mr-empty-filter">
                 <i class="pi pi-filter-slash" />
@@ -681,16 +720,16 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
             <Transition name="fade">
               <div v-if="phase === 'done' && repairReceipt?.backupPath" class="done-backup">
                 <i class="pi pi-save" />
-                <span :title="repairReceipt.backupPath">原文件已备份至 {{ truncatePath(repairReceipt.backupPath) }}</span>
+                <span v-tooltip.top="repairReceipt.backupPath">原文件已备份至 {{ truncatePath(repairReceipt.backupPath) }}</span>
               </div>
             </Transition>
         </template>
 
         <!-- fixing: 三态文件卡片 -->
         <template v-if="phase === 'fixing'">
-          <div v-for="file in fileHealthList" :key="file.path" class="fixing-card" :class="fixingCardClass(file)">
+          <div v-for="file in fileHealthList" :key="file.path" class="fixing-card" :class="FIXING_CARD_CONFIG[getFixingCardState(file)].class">
             <div class="fixing-card-header">
-              <i class="pi fixing-card-icon" :class="fixingCardIconClass(file)" />
+              <i class="pi fixing-card-icon" :class="FIXING_CARD_CONFIG[getFixingCardState(file)].icon" />
               <span class="fixing-card-name">{{ file.name }}</span>
               <span class="fixing-card-status">
                 <template v-if="file.healed">{{ file.rescuableCount }}/{{ file.rescuableCount }} 已修复</template>
@@ -778,7 +817,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
               <button
                 :class="['btn-sm', hasRescuable ? 'btn-primary' : 'btn-ghost']"
                 :disabled="!hasRescuable"
-                :title="hasRescuable ? '自动修复有备用链接的图片' : '当前没有可自动修复的链接'"
+                v-tooltip.top="hasRescuable ? '自动修复有备用链接的图片' : '当前没有可自动修复的链接'"
                 @click="openRepairDialog"
               >
                 <i class="pi pi-wrench" /> 修复链接
@@ -854,7 +893,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
             <i class="pi" :class="showManualSection && repairStrategyType === 'manual' ? 'pi-chevron-up' : 'pi-chevron-down'" @click.stop="showManualSection = !showManualSection" />
           </div>
           <div v-if="repairStrategyType === 'manual' && showManualSection" class="repair-manual-list">
-            <div v-for="link in rescuableLinks" :key="link.url" class="repair-manual-item">
+            <div v-for="link in visibleManualLinks" :key="link.url" class="repair-manual-item">
               <div class="repair-manual-url">
                 <i class="pi pi-image" />
                 <span>{{ smartTruncateUrl(link.url, 40) }}</span>
@@ -879,6 +918,13 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
                 </label>
               </div>
             </div>
+            <button
+              v-if="!showAllManualLinks && rescuableLinks.length > MANUAL_LIST_LIMIT"
+              class="repair-manual-show-all"
+              @click="showAllManualLinks = true"
+            >
+              显示全部 {{ rescuableLinks.length }} 条（当前仅显示前 {{ MANUAL_LIST_LIMIT }} 条）
+            </button>
           </div>
         </div>
       </div>
@@ -1086,7 +1132,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
 .btn-ghost { background: var(--bg-input); color: var(--text-muted); }
 .btn-ghost:hover:not(:disabled) { background: var(--hover-overlay); color: var(--text-main); }
 .btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary { background: var(--primary); color: var(--text-on-primary); }
 .btn-primary:hover:not(:disabled) { opacity: 0.9; }
 .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-danger { background: var(--error-alpha-15); color: var(--error); }
@@ -1275,6 +1321,14 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
   font-size: 10px; color: var(--text-tertiary);
 }
 
+.repair-manual-show-all {
+  width: 100%; padding: 8px 0; border: 1px dashed var(--border-subtle); border-radius: 6px;
+  background: transparent; color: var(--primary); font-size: 12px; font-weight: 500;
+  cursor: pointer; font-family: inherit;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+.repair-manual-show-all:hover { background: var(--primary-alpha-5); border-color: var(--primary-alpha-30); }
+
 .repair-dialog-footer {
   display: flex; justify-content: flex-end; gap: 8px;
 }
@@ -1371,7 +1425,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
 }
 
 .mr-scan-skeleton-done {
-  font-size: 13px; color: var(--green-500, #22c55e); flex-shrink: 0;
+  font-size: 13px; color: var(--success); flex-shrink: 0;
 }
 
 .mr-scan-skeleton.is-finishing {
@@ -1379,7 +1433,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
 }
 
 .mr-scan-skeleton.is-finishing .mr-scan-skeleton-text {
-  color: var(--green-500, #22c55e);
+  color: var(--success);
 }
 
 .mr-scan-skeleton-text {
@@ -1559,6 +1613,17 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
 }
 .mr-row-icon-btn:hover { background: var(--hover-overlay); color: var(--primary); }
 .mr-row-icon-btn > .pi { font-size: 12px; }
+
+/* 加载更多按钮 */
+.mr-load-more {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 10px 0; border: 1px dashed var(--border-subtle); border-radius: 8px;
+  background: transparent; color: var(--text-muted); font-size: 12px; font-weight: 500;
+  cursor: pointer; font-family: inherit; font-variant-numeric: tabular-nums;
+  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
+}
+.mr-load-more:hover { background: var(--hover-overlay-subtle); color: var(--primary); border-color: var(--primary-alpha-30); }
+.mr-load-more > .pi { font-size: 14px; }
 
 /* 筛选后为空 */
 .mr-empty-filter {

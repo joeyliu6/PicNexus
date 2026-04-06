@@ -7,7 +7,7 @@ import { watchDebounced } from '@vueuse/core';
 import { open as dialogOpen } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeTextFile, copyFile, readDir, mkdir, remove, stat } from '@tauri-apps/plugin-fs';
 import { join, dirname, basename } from '@tauri-apps/api/path';
-import type { UserConfig } from '../config/types';
+import type { UserConfig, HistoryItem } from '../config/types';
 import { useConfigManager } from './useConfig';
 import { applyLinkPrefix } from './useCopyLink';
 import { historyDB } from '../services/HistoryDatabase';
@@ -221,11 +221,8 @@ export function useMdRescueManager() {
         if (entry.isDirectory && includeSubfolders.value) {
           const subFiles = await scanMdFiles(fullPath);
           results.push(...subFiles);
-        } else if (entry.isFile) {
-          const lower = entry.name.toLowerCase();
-          if (MD_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
-            results.push(fullPath);
-          }
+        } else if (entry.isFile && isMarkdownFile(entry.name)) {
+          results.push(fullPath);
         }
       }
     } catch (err) {
@@ -235,45 +232,86 @@ export function useMdRescueManager() {
     return results;
   }
 
-  /**
-   * 从文件路径提取文件名
-   */
   function getFileName(path: string): string {
     return path.replace(/\\/g, '/').split('/').pop() || path;
   }
 
-  /**
-   * 选择单个 MD 文件
-   */
+  function isMarkdownFile(path: string): boolean {
+    return MD_EXTENSIONS.some((ext) => path.toLowerCase().endsWith(ext));
+  }
+
+  function wrapLinksWithFile(links: MdImageLink[], file: string): MdImageLinkWithFile[] {
+    const name = getFileName(file);
+    return links.map((l) => ({ ...l, sourceFile: file, sourceFileName: name }));
+  }
+
+  /** 从多个文件中收集所有图片链接 */
+  async function collectLinksFromFiles(files: string[]): Promise<MdImageLinkWithFile[]> {
+    const allLinks: MdImageLinkWithFile[] = [];
+    for (const file of files) {
+      try {
+        const content = await readTextFile(file);
+        allLinks.push(...wrapLinksWithFile(extractImageLinks(content), file));
+      } catch (err) {
+        log.warn(`读取文件失败: ${file}`, err);
+      }
+    }
+    return allLinks;
+  }
+
+  /** 加载单文件核心逻辑（dialog / 拖放共用） */
+  async function loadFileImpl(path: string): Promise<void> {
+    mode.value = 'file';
+    filePath.value = path;
+    folderPath.value = null;
+    mdFiles.value = [];
+    const content = await readTextFile(path);
+    fileContent.value = content;
+    imageLinks.value = wrapLinksWithFile(extractImageLinks(content), path);
+  }
+
+  /** 加载文件夹核心逻辑（dialog / 拖放共用） */
+  async function loadFolderImpl(dir: string): Promise<boolean> {
+    mode.value = 'folder';
+    folderPath.value = dir;
+    filePath.value = null;
+    fileContent.value = null;
+
+    isCollecting.value = true;
+    try {
+      const files = await scanMdFiles(dir);
+      mdFiles.value = files;
+
+      if (files.length === 0) {
+        toast.info('未找到 MD 文件', '该文件夹中没有 Markdown 文件');
+        imageLinks.value = [];
+        return false;
+      }
+
+      imageLinks.value = await collectLinksFromFiles(files);
+      if (imageLinks.value.length === 0) {
+        toast.info('未找到图片链接', `${files.length} 个文件中均无图片链接`);
+      }
+      return true;
+    } finally {
+      isCollecting.value = false;
+    }
+  }
+
   async function selectMdFile(): Promise<boolean> {
     try {
       const selected = await dialogOpen({
         multiple: false,
         filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }],
       });
-
       if (!selected) return false;
       const path = typeof selected === 'string' ? selected : (selected as string[])[0];
       if (!path) return false;
 
-      mode.value = 'file';
-      filePath.value = path;
-      folderPath.value = null;
-      mdFiles.value = [];
-      const content = await readTextFile(path);
-      fileContent.value = content;
-
-      const links = extractImageLinks(content);
-      imageLinks.value = links.map((l) => ({
-        ...l,
-        sourceFile: path,
-        sourceFileName: getFileName(path),
-      }));
-
-      if (links.length === 0) {
+      await loadFileImpl(path);
+      if (imageLinks.value.length === 0) {
         toast.info('未找到图片链接', '该文件中没有图片链接');
       }
-
       return true;
     } catch (err) {
       log.error('选择文件失败', err);
@@ -282,63 +320,14 @@ export function useMdRescueManager() {
     }
   }
 
-  /**
-   * 选择文件夹，递归扫描所有 MD 文件
-   */
   async function selectFolder(): Promise<boolean> {
     try {
-      const selected = await dialogOpen({
-        directory: true,
-        recursive: true,
-      });
-
+      const selected = await dialogOpen({ directory: true, recursive: true });
       if (!selected) return false;
       const dir = typeof selected === 'string' ? selected : (selected as string[])[0];
       if (!dir) return false;
 
-      mode.value = 'folder';
-      folderPath.value = dir;
-      filePath.value = null;
-      fileContent.value = null;
-
-      isCollecting.value = true;
-      try {
-        const files = await scanMdFiles(dir);
-        mdFiles.value = files;
-
-        if (files.length === 0) {
-          toast.info('未找到 MD 文件', '该文件夹中没有 Markdown 文件');
-          imageLinks.value = [];
-          return false;
-        }
-
-        const allLinks: MdImageLinkWithFile[] = [];
-        for (const file of files) {
-          try {
-            const content = await readTextFile(file);
-            const links = extractImageLinks(content);
-            for (const link of links) {
-              allLinks.push({
-                ...link,
-                sourceFile: file,
-                sourceFileName: getFileName(file),
-              });
-            }
-          } catch (err) {
-            log.warn(`读取文件失败: ${file}`, err);
-          }
-        }
-
-        imageLinks.value = allLinks;
-
-        if (allLinks.length === 0) {
-          toast.info('未找到图片链接', `${files.length} 个文件中均无图片链接`);
-        }
-
-        return true;
-      } finally {
-        isCollecting.value = false;
-      }
+      return await loadFolderImpl(dir);
     } catch (err) {
       log.error('选择文件夹失败', err);
       toast.error('文件夹打开失败', String(err));
@@ -346,31 +335,13 @@ export function useMdRescueManager() {
     }
   }
 
-  /**
-   * 通过路径直接加载单个 MD 文件（拖放用，跳过 dialog）
-   */
   async function loadFilePath(path: string): Promise<boolean> {
     try {
-      const lower = path.toLowerCase();
-      if (!MD_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
+      if (!isMarkdownFile(path)) {
         toast.info('不支持的文件类型', '请拖放 Markdown 文件（.md / .markdown）');
         return false;
       }
-
-      mode.value = 'file';
-      filePath.value = path;
-      folderPath.value = null;
-      mdFiles.value = [];
-      const content = await readTextFile(path);
-      fileContent.value = content;
-
-      const links = extractImageLinks(content);
-      imageLinks.value = links.map((l) => ({
-        ...l,
-        sourceFile: path,
-        sourceFileName: getFileName(path),
-      }));
-
+      await loadFileImpl(path);
       return true;
     } catch (err) {
       log.error('加载文件失败', err);
@@ -379,49 +350,9 @@ export function useMdRescueManager() {
     }
   }
 
-  /**
-   * 通过路径直接加载文件夹（拖放用，跳过 dialog）
-   */
   async function loadFolderPath(dir: string): Promise<boolean> {
     try {
-      mode.value = 'folder';
-      folderPath.value = dir;
-      filePath.value = null;
-      fileContent.value = null;
-
-      isCollecting.value = true;
-      try {
-        const files = await scanMdFiles(dir);
-        mdFiles.value = files;
-
-        if (files.length === 0) {
-          toast.info('未找到 MD 文件', '该文件夹中没有 Markdown 文件');
-          imageLinks.value = [];
-          return false;
-        }
-
-        const allLinks: MdImageLinkWithFile[] = [];
-        for (const file of files) {
-          try {
-            const content = await readTextFile(file);
-            const links = extractImageLinks(content);
-            for (const link of links) {
-              allLinks.push({
-                ...link,
-                sourceFile: file,
-                sourceFileName: getFileName(file),
-              });
-            }
-          } catch (err) {
-            log.warn(`读取文件失败: ${file}`, err);
-          }
-        }
-
-        imageLinks.value = allLinks;
-        return true;
-      } finally {
-        isCollecting.value = false;
-      }
+      return await loadFolderImpl(dir);
     } catch (err) {
       log.error('加载文件夹失败', err);
       toast.error('文件夹加载失败', String(err));
@@ -429,12 +360,8 @@ export function useMdRescueManager() {
     }
   }
 
-  /**
-   * 处理拖放的文件路径列表，自动判断文件/文件夹
-   */
   async function handleDropPaths(paths: string[]): Promise<void> {
-    if (paths.length === 0) return;
-    if (phase.value !== 'idle') return;
+    if (paths.length === 0 || phase.value !== 'idle') return;
 
     const first = paths[0];
     try {
@@ -447,39 +374,17 @@ export function useMdRescueManager() {
         if (paths.length === 1) {
           ok = await loadFilePath(first);
         } else {
-          // 多个文件：收集所有 MD 文件
-          const mdPaths = paths.filter((p) => {
-            const lower = p.toLowerCase();
-            return MD_EXTENSIONS.some((ext) => lower.endsWith(ext));
-          });
+          const mdPaths = paths.filter(isMarkdownFile);
           if (mdPaths.length === 0) {
             toast.info('未找到 MD 文件', '拖放的文件中没有 Markdown 文件');
             return;
           }
-          // 用第一个文件的方式处理
           mode.value = 'file';
           filePath.value = mdPaths[0];
           folderPath.value = null;
           mdFiles.value = mdPaths;
-
-          const allLinks: MdImageLinkWithFile[] = [];
-          for (const file of mdPaths) {
-            try {
-              const content = await readTextFile(file);
-              const links = extractImageLinks(content);
-              for (const link of links) {
-                allLinks.push({
-                  ...link,
-                  sourceFile: file,
-                  sourceFileName: getFileName(file),
-                });
-              }
-            } catch (err) {
-              log.warn(`读取文件失败: ${file}`, err);
-            }
-          }
-          imageLinks.value = allLinks;
-          ok = allLinks.length > 0;
+          imageLinks.value = await collectLinksFromFiles(mdPaths);
+          ok = imageLinks.value.length > 0;
         }
       }
 
@@ -503,6 +408,49 @@ export function useMdRescueManager() {
    * 4. 主检测完成后 → 统一批量验证所有备用链接的可用性
    * 5. 验证完毕 → 更新卡片上的备用徽章状态 → 扫描完成
    */
+
+  /**
+   * 构建扫描所需的各种映射索引（从 analyzeFile 提取，减少主函数长度）
+   */
+  function buildScanMappings(links: MdImageLinkWithFile[], excluded: Set<string>) {
+    const uniqueUrls = [...new Set(links.map((l) => l.url))]
+      .filter((url) => !excluded.has(url));
+    const items: BatchCheckRequestItem[] = uniqueUrls.map((url) => ({ url }));
+
+    // url → Set<filePath> 反向映射
+    const urlFileMap = new Map<string, Set<string>>();
+    // file → Set<url>
+    const fileUrlSets = new Map<string, Set<string>>();
+    for (const link of links) {
+      if (excluded.has(link.url)) continue;
+      let fset = fileUrlSets.get(link.sourceFile);
+      if (!fset) { fset = new Set(); fileUrlSets.set(link.sourceFile, fset); }
+      fset.add(link.url);
+      let uset = urlFileMap.get(link.url);
+      if (!uset) { uset = new Set(); urlFileMap.set(link.url, uset); }
+      uset.add(link.sourceFile);
+    }
+
+    // url → 该 URL 对应的图片链接数量（含重复引用），用于进度映射
+    const urlLinkCount = new Map<string, number>();
+    for (const link of links) {
+      if (excluded.has(link.url)) continue;
+      urlLinkCount.set(link.url, (urlLinkCount.get(link.url) ?? 0) + 1);
+    }
+    const totalImageCount = [...urlLinkCount.values()].reduce((a, b) => a + b, 0);
+
+    // file → 在 imageLinks 数组中的索引列表（onFileComplete 用，避免全量遍历）
+    const fileToIndices = new Map<string, number[]>();
+    for (let i = 0; i < links.length; i++) {
+      const file = links[i].sourceFile;
+      const arr = fileToIndices.get(file);
+      if (arr) arr.push(i);
+      else fileToIndices.set(file, [i]);
+    }
+
+    return { items, urlFileMap, fileUrlSets, urlLinkCount, totalImageCount, fileToIndices };
+  }
+
   async function analyzeFile(): Promise<void> {
     if (imageLinks.value.length === 0) return;
     if (isAnalyzing.value) return;
@@ -519,31 +467,8 @@ export function useMdRescueManager() {
     try {
       // --- 准备：构建文件-URL 映射 ---
       const links = imageLinks.value;
-      const uniqueUrls = [...new Set(links.map((l) => l.url))]
-        .filter((url) => !excludedUrls.value.has(url));
-      const items: BatchCheckRequestItem[] = uniqueUrls.map((url) => ({ url }));
-
-      // url → Set<filePath> 反向映射
-      const urlFileMap = new Map<string, Set<string>>();
-      // file → Set<url>
-      const fileUrlSets = new Map<string, Set<string>>();
-      for (const link of links) {
-        if (excludedUrls.value.has(link.url)) continue;
-        let fset = fileUrlSets.get(link.sourceFile);
-        if (!fset) { fset = new Set(); fileUrlSets.set(link.sourceFile, fset); }
-        fset.add(link.url);
-        let uset = urlFileMap.get(link.url);
-        if (!uset) { uset = new Set(); urlFileMap.set(link.url, uset); }
-        uset.add(link.sourceFile);
-      }
-
-      // url → 该 URL 对应的图片链接数量（含重复引用），用于进度映射
-      const urlLinkCount = new Map<string, number>();
-      for (const link of links) {
-        if (excludedUrls.value.has(link.url)) continue;
-        urlLinkCount.set(link.url, (urlLinkCount.get(link.url) ?? 0) + 1);
-      }
-      const totalImageCount = [...urlLinkCount.values()].reduce((a, b) => a + b, 0);
+      const { items, urlFileMap, fileUrlSets, urlLinkCount, totalImageCount, fileToIndices } =
+        buildScanMappings(links, excludedUrls.value);
 
       // buildUrlIndex 并行启动（纯 DB 操作，和 checkUrls 并行）
       const config = await loadConfig();
@@ -571,8 +496,13 @@ export function useMdRescueManager() {
       async function onFileComplete(file: string): Promise<void> {
         if (isCancelled) return;
 
-        const hasBroken = imageLinks.value.some(
-          (l) => l.sourceFile === file && l.checkResult && !l.checkResult.is_valid,
+        // 通过预建索引只访问该文件的链接，避免遍历全部 imageLinks
+        const indices = fileToIndices.get(file);
+        if (!indices) { markReady(file); return; }
+
+        const currentLinks = imageLinks.value;
+        const hasBroken = indices.some(
+          (i) => currentLinks[i].checkResult && !currentLinks[i].checkResult!.is_valid,
         );
 
         if (!hasBroken) {
@@ -583,26 +513,28 @@ export function useMdRescueManager() {
         // 有坏链接 → 等 urlIndex 就绪后查备用链接
         await urlIndexPromise;
 
-        const brokenUrls = [...new Set(
-          imageLinks.value
-            .filter((l) => l.sourceFile === file && l.checkResult && !l.checkResult.is_valid)
-            .map((l) => l.url),
-        )];
+        const brokenUrlSet = new Set<string>();
+        for (const i of indices) {
+          const l = currentLinks[i];
+          if (l.checkResult && !l.checkResult.is_valid) brokenUrlSet.add(l.url);
+        }
 
-        for (const url of brokenUrls) {
+        for (const url of brokenUrlSet) {
           if (!allBackupMap.has(url)) {
             allBackupMap.set(url, await findBackupLinksRaw(url, config));
           }
         }
 
-        // 将备用链接（尚未验证）写入 imageLinks
-        imageLinks.value = imageLinks.value.map((link) => {
-          if (link.sourceFile === file && link.checkResult && !link.checkResult.is_valid) {
+        // 将备用链接（尚未验证）写入 imageLinks（仅更新该文件的链接）
+        const updated = [...imageLinks.value];
+        for (const i of indices) {
+          const link = updated[i];
+          if (link.checkResult && !link.checkResult.is_valid) {
             const backups = allBackupMap.get(link.url);
-            return backups?.length ? { ...link, backupLinks: backups } : link;
+            if (backups?.length) updated[i] = { ...link, backupLinks: backups };
           }
-          return link;
-        });
+        }
+        imageLinks.value = updated;
 
         // 标记 ready → 卡片出现（备用链接暂显示为"待验证"）
         markReady(file);
@@ -645,24 +577,27 @@ export function useMdRescueManager() {
       }
 
       // --- Phase 1: 批量检测 + 边检测边处理文件 ---
-      let pending: Array<{ url: string; result: CheckLinkResult }> = [];
-      let rafId = 0;
+      // 使用 Map 累积结果 + 500ms 节流，避免高频触发 computed 级联
+      const FLUSH_INTERVAL = 500;
+      const pendingResults = new Map<string, CheckLinkResult>();
+      let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
       function flushPending() {
-        if (pending.length === 0) return;
-        const batch = pending;
-        pending = [];
-        rafId = 0;
+        if (pendingResults.size === 0) return;
+        const batch = new Map(pendingResults);
+        pendingResults.clear();
+        flushTimer = null;
 
-        // 写入 checkResult
+        // 写入 checkResult（Map.get 是 O(1)，替代原先的 batch.find O(n)）
         const updated = imageLinks.value.map((link) => {
-          const match = batch.find((b) => b.url === link.url);
-          return match && !link.checkResult ? { ...link, checkResult: match.result } : link;
+          if (link.checkResult) return link;
+          const result = batch.get(link.url);
+          return result ? { ...link, checkResult: result } : link;
         });
         imageLinks.value = updated;
 
         // 检查文件完成度
-        checkFileCompletion(batch.map((b) => b.url));
+        checkFileCompletion([...batch.keys()]);
       }
 
       let mappedChecked = 0;
@@ -670,13 +605,13 @@ export function useMdRescueManager() {
         if (prog.current_result) {
           mappedChecked += urlLinkCount.get(prog.current_url) ?? 1;
           scanProgress.value = { checked: mappedChecked, total: totalImageCount };
-          pending.push({ url: prog.current_url, result: prog.current_result });
-          if (!rafId) rafId = requestAnimationFrame(flushPending);
+          pendingResults.set(prog.current_url, prog.current_result);
+          if (!flushTimer) flushTimer = setTimeout(flushPending, FLUSH_INTERVAL);
         }
       });
 
       // 确保最后一批也刷入
-      if (rafId) cancelAnimationFrame(rafId);
+      if (flushTimer) clearTimeout(flushTimer);
       flushPending();
 
       if (!result) {
@@ -812,7 +747,7 @@ export function useMdRescueManager() {
 
     urlIndex = new Map();
     await historyDB.open();
-    const allItems: Array<{ id: string; results: any[]; [key: string]: any }> = [];
+    const allItems: HistoryItem[] = [];
     for await (const batch of historyDB.getAllStream(1000)) {
       allItems.push(...batch);
     }
@@ -893,20 +828,14 @@ export function useMdRescueManager() {
     let skipped = 0;
 
     for (const link of imageLinks.value) {
-      if (!link.checkResult || link.checkResult.is_valid) {
+      if (!link.checkResult || link.checkResult.is_valid || !link.selectedBackup) {
         skipped++;
         continue;
       }
-      if (link.selectedBackup) {
-        let replacements = fileReplacements.get(link.sourceFile);
-        if (!replacements) {
-          replacements = new Map();
-          fileReplacements.set(link.sourceFile, replacements);
-        }
-        replacements.set(link.url, link.selectedBackup);
-      } else {
-        skipped++;
+      if (!fileReplacements.has(link.sourceFile)) {
+        fileReplacements.set(link.sourceFile, new Map());
       }
+      fileReplacements.get(link.sourceFile)!.set(link.url, link.selectedBackup);
     }
 
     if (fileReplacements.size === 0) {
@@ -952,7 +881,9 @@ export function useMdRescueManager() {
 
           let bakPath: string;
           if (mode.value === 'folder' && folderPath.value) {
-            const relativePath = file.replace(/\\/g, '/').replace(folderPath.value.replace(/\\/g, '/'), '').replace(/^\//, '');
+            // 确保 folderPath 以 / 结尾，避免 /foo 错误匹配 /foobar
+            const normalizedFolder = folderPath.value.replace(/\\/g, '/').replace(/\/?$/, '/');
+            const relativePath = file.replace(/\\/g, '/').replace(normalizedFolder, '');
             bakPath = await join(backupDir, relativePath);
             const bakParent = await dirname(bakPath);
             await mkdir(bakParent, { recursive: true });
