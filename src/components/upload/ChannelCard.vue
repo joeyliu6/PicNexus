@@ -109,14 +109,14 @@ function handleRetry() {
     >
       <button
         class="copy-btn"
-        title="复制链接"
+        v-tooltip.top="'复制链接'"
         @click="handleCopy"
       >
         <i class="pi pi-copy"></i>
       </button>
       <button
         class="copy-menu-btn"
-        title="选择复制格式"
+        v-tooltip.top="'选择复制格式'"
         @click.stop="toggleMenu"
       >
         <i class="pi pi-angle-down"></i>
@@ -140,7 +140,7 @@ function handleRetry() {
     <button
       v-else-if="isStatusError(status)"
       class="retry-btn"
-      title="重试"
+      v-tooltip.top="'重试'"
       @click="handleRetry"
     >
       <i class="pi pi-refresh"></i>
@@ -306,7 +306,7 @@ function handleRetry() {
 
 .copy-format-menu {
   position: absolute;
-  bottom: calc(100% + 6px);
+  top: calc(100% + 4px);
   right: 0;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
@@ -357,6 +357,6 @@ function handleRetry() {
 .copy-menu-enter-from,
 .copy-menu-leave-to {
   opacity: 0;
-  transform: translateY(4px);
+  transform: translateY(-4px);
 }
 </style>

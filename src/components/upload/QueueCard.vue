@@ -100,7 +100,7 @@ function handleCopy(payload: QueueCopyPayload) {
 
       <div class="header-content">
         <div class="header-top">
-          <h3 class="filename" :title="item.fileName">{{ item.fileName }}</h3>
+          <h3 class="filename" v-tooltip.top="item.fileName">{{ item.fileName }}</h3>
           <div class="status-pills">
             <span v-if="counts.success > 0" class="pill success">
               <i class="pi pi-check-circle"></i>
@@ -287,6 +287,6 @@ function handleCopy(payload: QueueCopyPayload) {
 .channel-grid {
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
 }
 </style>

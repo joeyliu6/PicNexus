@@ -98,28 +98,21 @@ const serviceLabels = computed<Record<string, string>>(() => {
   return base;
 });
 
-// 可见的私有图床（需在 availableServices 中且非未配置状态，含自定义 S3）
-const visiblePrivateServices = computed(() => {
-  const builtins = PRIVATE_SERVICES.filter(serviceId =>
-    uploadManager.availableServices.value.includes(serviceId) &&
-    healthStatusMap.value[serviceId] !== 'unconfigured'
+// 过滤可见的图床服务（需在 availableServices 中且非未配置状态）
+const filterVisibleServices = (services: string[]) =>
+  services.filter(s =>
+    uploadManager.availableServices.value.includes(s) &&
+    healthStatusMap.value[s] !== 'unconfigured'
   );
-  const customIds = customS3Profiles.value
-    .map(p => makeCustomS3Id(p.id))
-    .filter(id =>
-      uploadManager.availableServices.value.includes(id) &&
-      healthStatusMap.value[id] !== 'unconfigured'
-    );
-  return [...builtins, ...customIds];
+
+// 可见的私有图床（含自定义 S3）
+const visiblePrivateServices = computed(() => {
+  const customIds = customS3Profiles.value.map(p => makeCustomS3Id(p.id));
+  return filterVisibleServices([...PRIVATE_SERVICES, ...customIds]);
 });
 
-// 可见的公共图床（需在 availableServices 中且非未配置状态）
-const visiblePublicServices = computed(() => {
-  return PUBLIC_SERVICES.filter(serviceId =>
-    uploadManager.availableServices.value.includes(serviceId) &&
-    healthStatusMap.value[serviceId] !== 'unconfigured'
-  );
-});
+// 可见的公共图床
+const visiblePublicServices = computed(() => filterVisibleServices(PUBLIC_SERVICES));
 
 // 当前激活的预设（计算属性）
 const activePreset = computed<CompressionPreset>(() => {
@@ -273,6 +266,12 @@ const hasFailedItems = computed(() => {
 const hasQueueItems = computed(() => {
   return queueItems.value.length > 0;
 });
+
+// 队列统计：总数和已完成数（用于进度指示）
+const queueTotal = computed(() => queueItems.value.length);
+const queueDone = computed(() =>
+  queueItems.value.filter(i => i.status === 'success' || i.status === 'error').length
+);
 
 // 清空确认对话框状态
 
@@ -448,6 +447,8 @@ onUnmounted(() => {
         :has-completed-items="hasCompletedItems"
         :has-queue-items="hasQueueItems"
         :is-batch-retrying="isBatchRetrying"
+        :queue-total="queueTotal"
+        :queue-done="queueDone"
         @batch-retry="handleBatchRetry"
         @clear-completed="handleClearCompleted"
         @clear-queue="handleClearQueue"

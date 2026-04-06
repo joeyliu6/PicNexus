@@ -11,6 +11,8 @@ interface Props {
   hasCompletedItems: boolean;
   hasQueueItems: boolean;
   isBatchRetrying: boolean;
+  queueTotal: number;
+  queueDone: number;
 }
 
 defineProps<Props>();
@@ -47,6 +49,7 @@ defineExpose({
       <h3 class="queue-title">
         <i class="pi pi-list"></i>
         <span>上传队列</span>
+        <span v-if="queueTotal > 0" class="queue-count">{{ queueDone }}/{{ queueTotal }}</span>
       </h3>
       <div class="queue-actions">
         <button
@@ -112,6 +115,13 @@ defineExpose({
   font-size: 1.3rem;
 }
 
+.queue-count {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 2px;
+}
+
 /* 队列操作按钮区域 */
 .queue-actions {
   display: flex;
@@ -142,7 +152,7 @@ defineExpose({
 }
 
 .queue-action-btn.retry-btn:hover:not(:disabled) {
-  background: rgba(245, 158, 11, 0.1);
+  background: var(--warning-alpha-10);
 }
 
 .queue-action-btn.retry-btn:disabled {

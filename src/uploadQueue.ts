@@ -61,6 +61,34 @@ export type UploadProgressCallback = (progress: {
 /**
  * 上传队列管理器类
  */
+/**
+ * 为每个启用的图床创建初始进度状态
+ */
+function createServiceProgress(enabledServices: string[]): Record<string, ServiceProgress> {
+  return Object.fromEntries(
+    enabledServices.map(s => [s, { serviceId: s, progress: 0, status: '等待中...' }])
+  );
+}
+
+/**
+ * 从队列项的 serviceProgress 中提取各服务的链接字段（向后兼容）
+ */
+function buildLinkFields(item: QueueItem): Record<string, any> {
+  const fields: Record<string, any> = {};
+  for (const serviceId of item.enabledServices) {
+    const serviceLink = item.serviceProgress[serviceId]?.link;
+    if (!serviceLink) continue;
+    if (serviceId === 'weibo') {
+      fields.weiboLink = serviceLink;
+      const weiboPid = item.serviceProgress[serviceId]?.metadata?.pid;
+      if (weiboPid) fields.weiboPid = weiboPid;
+    } else if (serviceId === 'r2') {
+      fields.r2Link = serviceLink;
+    }
+  }
+  return fields;
+}
+
 export class UploadQueueManager {
   private queueState = useQueueState();  // 统一使用全局状态管理
 
@@ -107,14 +135,7 @@ export class UploadQueueManager {
     const id = `queue-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
     // 初始化每个图床的进度状态
-    const serviceProgress: Record<string, ServiceProgress> = {};
-    enabledServices.forEach(serviceId => {
-      serviceProgress[serviceId] = {
-        serviceId,
-        progress: 0,
-        status: '等待中...'
-      };
-    });
+    const serviceProgress = createServiceProgress(enabledServices);
 
     const item: QueueItem = {
       id,
@@ -244,32 +265,12 @@ export class UploadQueueManager {
     const thumbUrl = primaryUrl;
 
     // 根据启用的服务设置对应的链接字段
-    const linkFields: any = {
-      thumbUrl,
-      primaryUrl
-    };
-
-    // 重新读取最新的 item 状态来获取链接字段
     const latestItem = this.getItem(itemId);
-    if (latestItem) {
-      latestItem.enabledServices.forEach((serviceId: string) => {
-        const serviceLink = latestItem.serviceProgress[serviceId]?.link;
-        if (serviceLink) {
-          // 设置各个服务的链接字段
-          if (serviceId === 'weibo') {
-            linkFields.weiboLink = serviceLink;
-            // 从 serviceProgress 中获取 PID（如果有的话）
-            const weiboPid = latestItem.serviceProgress[serviceId]?.metadata?.pid;
-            if (weiboPid) {
-              linkFields.weiboPid = weiboPid;
-            }
-          } else if (serviceId === 'r2') {
-            linkFields.r2Link = serviceLink;
-
-          }
-        }
-      });
-    }
+    const linkFields: Record<string, any> = {
+      thumbUrl,
+      primaryUrl,
+      ...(latestItem ? buildLinkFields(latestItem) : {})
+    };
 
     // 只传递需要更新的服务进度，让 updateItem 做深度合并
     this.updateItem(itemId, {
@@ -282,8 +283,9 @@ export class UploadQueueManager {
 
     console.log(`[UploadQueue] ${item.fileName} 上传成功`);
 
-    // 【内存优化】自动修剪队列，保留最近 100 条已完成记录
-    this.trimQueue(100);
+    // 【内存优化】自动修剪队列，保留最近 500 条已完成记录
+    // 注：单次上传上限 200 张，500 确保至少 2 批完整上传记录不被裁剪
+    this.trimQueue(500);
   }
 
   /**
@@ -414,19 +416,9 @@ export class UploadQueueManager {
     }
 
     // 重置所有字段，包括新架构的 serviceProgress
-    const resetServiceProgress: Record<string, ServiceProgress> = {};
-    if (item.enabledServices) {
-      item.enabledServices.forEach(serviceId => {
-        resetServiceProgress[serviceId] = {
-          serviceId, // 必须保留 serviceId
-          progress: 0,
-          status: '等待中...',
-          link: undefined,
-          error: undefined,
-          isRetrying: false
-        };
-      });
-    }
+    const resetServiceProgress = item.enabledServices
+      ? createServiceProgress(item.enabledServices)
+      : {};
 
     // 重置状态
     this.updateItem(itemId, {
