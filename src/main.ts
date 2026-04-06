@@ -33,6 +33,7 @@ import './theme/dark-theme.css';
 import './theme/light-theme.css';
 import './theme/primevue-overrides.css';
 import './theme/transitions.css';
+import './styles/motion.css';
 
 const log = createLogger('Init');
 

@@ -111,13 +111,14 @@ interface HistoryItemRow {
   color_type: string;
   has_alpha: number; // SQLite 没有 boolean，使用 0/1
   is_favorited: number; // 0/1
+  success_count: number; // 成功上传的图床数量（冗余字段，加速查询）
 }
 
 /** 所有列名（INSERT/UPDATE 统一使用，新增列只需改这里） */
 const ALL_COLUMNS = [
   'id', 'timestamp', 'local_file_name', 'local_file_name_lower', 'file_path',
   'primary_service', 'results', 'generated_link', 'link_check_status', 'link_check_summary',
-  'width', 'height', 'aspect_ratio', 'file_size', 'format', 'color_type', 'has_alpha', 'is_favorited',
+  'width', 'height', 'aspect_ratio', 'file_size', 'format', 'color_type', 'has_alpha', 'is_favorited', 'success_count',
 ] as const;
 
 const COLUMNS_SQL = ALL_COLUMNS.join(', ');
@@ -228,6 +229,8 @@ class HistoryDatabase {
 
       // 迁移：添加收藏字段（幂等操作，已存在则忽略）
       await this.migrateAddFavoriteColumn();
+      // 迁移：添加 success_count 冗余列（加速批量迁移查询）
+      await this.migrateAddSuccessCountColumn();
 
       this.initialized = true;
       log.debug('数据库初始化完成');
@@ -329,6 +332,41 @@ class HistoryDatabase {
       log.info('迁移完成：添加 is_favorited 列');
     } catch (error) {
       log.error('迁移 is_favorited 列失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 迁移：添加 success_count 列（幂等）
+   * 冗余存储"成功上传图床数"，避免查询时全表 JSON 解析
+   */
+  private async migrateAddSuccessCountColumn(): Promise<void> {
+    try {
+      const rows = await this.db!.select<{ name: string }[]>(
+        `PRAGMA table_info(history_items)`
+      );
+      if (rows.some(r => r.name === 'success_count')) return;
+
+      await this.db!.execute(
+        `ALTER TABLE history_items ADD COLUMN success_count INTEGER NOT NULL DEFAULT 0`
+      );
+
+      // 回填：用 SQLite 原生 json_each 在 DB 层完成，不经过 JS
+      await this.db!.execute(`
+        UPDATE history_items SET success_count = (
+          SELECT COUNT(*) FROM json_each(results) AS je
+          WHERE je.value ->> 'status' = 'success'
+        )
+      `);
+
+      // 复合索引：同时覆盖筛选（success_count）和排序（timestamp DESC）
+      await this.db!.execute(
+        `CREATE INDEX IF NOT EXISTS idx_success_count ON history_items(success_count, timestamp DESC)`
+      );
+
+      log.info('迁移完成：添加 success_count 列并回填');
+    } catch (error) {
+      log.error('迁移 success_count 列失败:', error);
       throw error;
     }
   }
@@ -605,6 +643,118 @@ class HistoryDatabase {
 
     const result = await db.select<{ count: number }[]>(query, params);
     return result[0]?.count || 0;
+  }
+
+  // ============================================
+  // 批量迁移查询
+  // ============================================
+
+  /**
+   * 按成功上传的图床数量查询历史记录（用于批量迁移筛选）
+   *
+   * @param maxSuccessCount 最大成功图床数（如 1 表示「仅 1 个图床」，2 表示「≤ 2 个图床」）
+   * @param serviceFilter 可选的来源图床过滤
+   * @param timestampAfter 可选的时间范围过滤（仅返回该时间戳之后的记录）
+   * @returns 符合条件的历史记录
+   */
+  async getItemsByBackupCount(options: {
+    maxSuccessCount: number;
+    serviceFilter?: string;
+    timestampAfter?: number;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ items: HistoryItem[]; total: number; hasMore: boolean }> {
+    const db = await this.ensureInitialized();
+    const { maxSuccessCount, serviceFilter, timestampAfter, limit = 500, offset = 0 } = options;
+
+    // 全部条件走索引 idx_success_count(success_count, timestamp DESC)
+    const conditions: string[] = ['success_count > 0', `success_count <= $1`];
+    const params: (string | number)[] = [maxSuccessCount];
+
+    if (serviceFilter && serviceFilter !== 'all') {
+      params.push(serviceFilter);
+      conditions.push(`primary_service = $${params.length}`);
+    }
+
+    if (timestampAfter) {
+      params.push(timestampAfter);
+      conditions.push(`timestamp >= $${params.length}`);
+    }
+
+    const where = `WHERE ${conditions.join(' AND ')}`;
+
+    // 总数查询（走索引，极快）
+    const [countRow] = await db.select<{ cnt: number }[]>(
+      `SELECT COUNT(*) AS cnt FROM history_items ${where}`, params
+    );
+    const total = countRow?.cnt ?? 0;
+
+    // 分页查询（只传需要的行）
+    const pageParams = [...params, limit, offset];
+    const rows = await db.select<HistoryItemRow[]>(
+      `SELECT ${COLUMNS_SQL} FROM history_items ${where}
+       ORDER BY timestamp DESC
+       LIMIT $${pageParams.length - 1} OFFSET $${pageParams.length}`,
+      pageParams
+    );
+
+    const items = rows.map(r => this.rowToItem(r));
+    return { items, total, hasMore: offset + items.length < total };
+  }
+
+  /**
+   * 获取备份数量统计摘要（用于迁移面板展示筛选维度）
+   * 返回各备份数量区间的记录数
+   */
+  async getBackupCountStats(): Promise<{ count1: number; count2: number; countAll: number }> {
+    const db = await this.ensureInitialized();
+
+    // 纯 SQL 聚合，走 idx_success_count 索引，<10ms
+    const [row] = await db.select<{ count1: number; count2: number; countAll: number }[]>(`
+      SELECT
+        SUM(CASE WHEN success_count = 1 THEN 1 ELSE 0 END) AS count1,
+        SUM(CASE WHEN success_count BETWEEN 1 AND 2 THEN 1 ELSE 0 END) AS count2,
+        COUNT(*) AS countAll
+      FROM history_items
+      WHERE success_count > 0
+    `);
+
+    return { count1: row?.count1 ?? 0, count2: row?.count2 ?? 0, countAll: row?.countAll ?? 0 };
+  }
+
+  /**
+   * 获取符合备份条件的记录中，各图床的已成功上传数量分布
+   * 用于批量迁移配置阶段，避免全量加载 items 到 JS
+   */
+  async getServiceDistribution(options: {
+    maxSuccessCount: number;
+    serviceFilter?: string;
+  }): Promise<Map<string, number>> {
+    const db = await this.ensureInitialized();
+    const { maxSuccessCount, serviceFilter } = options;
+
+    const conditions: string[] = ['h.success_count > 0', `h.success_count <= $1`];
+    const params: (string | number)[] = [maxSuccessCount];
+
+    if (serviceFilter && serviceFilter !== 'all') {
+      params.push(serviceFilter);
+      conditions.push(`h.primary_service = $${params.length}`);
+    }
+
+    const where = conditions.join(' AND ');
+
+    const rows = await db.select<{ service_id: string; cnt: number }[]>(`
+      SELECT je.value ->> 'serviceId' AS service_id, COUNT(*) AS cnt
+      FROM history_items h, json_each(h.results) AS je
+      WHERE ${where} AND je.value ->> 'status' = 'success'
+      GROUP BY service_id
+    `, params);
+
+    const map = new Map<string, number>();
+    for (const r of rows) {
+      map.set(r.service_id, r.cnt);
+    }
+    return map;
   }
 
   /**
@@ -1042,6 +1192,7 @@ class HistoryDatabase {
       color_type: 'unknown',
       has_alpha: 0,
       is_favorited: item.isFavorited ? 1 : 0,
+      success_count: item.results.filter(r => r.status === 'success').length,
     };
   }
 

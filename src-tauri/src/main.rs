@@ -193,6 +193,7 @@ fn main() {
             get_or_create_secure_key,
             set_secure_key,
             open_log_dir,
+            open_path,
             check_port_free,
             update_server_config,
             save_cli_config,
@@ -1867,6 +1868,16 @@ fn open_log_dir(app: tauri::AppHandle) -> Result<(), AppError> {
     })?;
     opener::open(&log_dir).map_err(|e| {
         AppError::file_io(format!("无法打开日志目录: {}", e))
+    })?;
+    Ok(())
+}
+
+/// 用系统默认程序打开任意路径（文件或文件夹）
+/// 绕过 tauri-plugin-shell 的 scope regex 限制
+#[tauri::command]
+fn open_path(path: String) -> Result<(), AppError> {
+    opener::open(&path).map_err(|e| {
+        AppError::file_io(format!("无法打开 {}: {}", path, e))
     })?;
     Ok(())
 }

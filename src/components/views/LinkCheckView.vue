@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 链接维护主视图
- * 「链接监控」「文档修复」通过 Tab 栏平行切换
+ * 「链接监控」「文档修复」「批量迁移」通过 Tab 栏平行切换
  */
 import { ref, computed, watch, inject, onMounted, onActivated, onDeactivated } from 'vue';
 import type { Ref } from 'vue';
@@ -9,6 +9,7 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import HistoryCheckPanel from './linkcheck/HistoryCheckPanel.vue';
 import MdRescueInline from './linkcheck/MdRescueInline.vue';
+import BatchMigratePanel from './linkcheck/BatchMigratePanel.vue';
 import { useLinkCheckManager } from '../../composables/useLinkCheck';
 import { useHistoryManager } from '../../composables/useHistory';
 import { useToast } from '../../composables/useToast';
@@ -16,7 +17,7 @@ import type { LinkCheckRow } from '../../types/linkCheck';
 
 const toast = useToast();
 
-type LinkCheckTab = 'monitor' | 'rescue';
+type LinkCheckTab = 'monitor' | 'rescue' | 'migrate';
 const activeTab = ref<LinkCheckTab>('monitor');
 
 // 外部导航支持（与 settingsTargetTab 模式一致）
@@ -24,7 +25,7 @@ const linkCheckTargetTab = inject<Ref<string | null>>('linkCheckTargetTab');
 
 function applyTargetTab() {
   if (linkCheckTargetTab?.value) {
-    if (linkCheckTargetTab.value === 'rescue' || linkCheckTargetTab.value === 'monitor') {
+    if (linkCheckTargetTab.value === 'rescue' || linkCheckTargetTab.value === 'monitor' || linkCheckTargetTab.value === 'migrate') {
       activeTab.value = linkCheckTargetTab.value;
     }
     linkCheckTargetTab.value = null;
@@ -143,6 +144,14 @@ onDeactivated(onViewDeactivated);
         <i class="pi pi-file-edit" />
         文档修复
       </button>
+      <button
+        class="lc-tab"
+        :class="{ active: activeTab === 'migrate' }"
+        @click="activeTab = 'migrate'"
+      >
+        <i class="pi pi-sync" />
+        批量迁移
+      </button>
     </div>
 
     <!-- Tab 内容区 -->
@@ -168,6 +177,10 @@ onDeactivated(onViewDeactivated);
       <MdRescueInline
         v-else-if="activeTab === 'rescue'"
         key="rescue"
+      />
+      <BatchMigratePanel
+        v-else-if="activeTab === 'migrate'"
+        key="migrate"
       />
     </KeepAlive>
   </div>

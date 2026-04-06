@@ -1,0 +1,121 @@
+/* ============================================================
+ * motion.css — PicNexus 统一动效变量体系
+ *
+ * 设计原则：
+ * - 所有动效参数通过 CSS 变量集中管理
+ * - 进入动画略慢（给用户感知），退出动画略快（不拖沓）
+ * - prefers-reduced-motion 自动归零所有 duration
+ * - Vue Transition class 以 t- 前缀命名，避免与现有组件冲突
+ * ============================================================ */
+
+:root {
+  /* ---- Duration ---- */
+  --duration-fast: 120ms;     /* 微交互：hover、focus、图标切换 */
+  --duration-normal: 200ms;   /* 标准过渡：淡入淡出、颜色变化、下拉菜单 */
+  --duration-slow: 350ms;     /* 较大动作：面板滑入、遮罩、页面切换 */
+  --duration-slower: 500ms;   /* 强调动画：进度条、复杂编排 */
+
+  /* ---- Easing ---- */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);          /* 大多数过渡（Material 标准） */
+  --ease-decelerate: cubic-bezier(0.0, 0, 0.2, 1);        /* 元素进入（快启慢停） */
+  --ease-accelerate: cubic-bezier(0.4, 0, 1, 1);          /* 元素退出（慢启快走） */
+  --ease-overshoot: cubic-bezier(0.34, 1.56, 0.64, 1);    /* 弹出效果（对话框、toast） */
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275); /* 弹性效果（收藏、星形弹出） */
+
+  /* ---- Transform 预设 ---- */
+  --translate-sm: 4px;   /* 微妙位移 */
+  --translate-md: 8px;   /* 下拉/上滑 */
+  --translate-lg: 20px;  /* 面板入场 */
+  --scale-subtle: 0.97;  /* 按压效果 */
+  --scale-pop: 0.92;     /* 对话框入场 */
+}
+
+/* ---- 无障碍：减弱动效偏好 ---- */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-slow: 0ms;
+    --duration-slower: 0ms;
+  }
+}
+
+
+/* ============================================================
+ * 可复用 Vue <Transition> class
+ *
+ * 用法：<Transition name="t-fade"> / <Transition name="t-slide-up">
+ * 前缀 t- 避免与现有组件内 scoped 过渡冲突
+ * ============================================================ */
+
+/* -- t-fade：通用淡入淡出 -- */
+.t-fade-enter-active {
+  transition: opacity var(--duration-normal) var(--ease-standard);
+}
+.t-fade-leave-active {
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+.t-fade-enter-from,
+.t-fade-leave-to {
+  opacity: 0;
+}
+
+/* -- t-slide-up：内容从下方出现 -- */
+.t-slide-up-enter-active {
+  transition:
+    opacity var(--duration-normal) var(--ease-decelerate),
+    transform var(--duration-normal) var(--ease-decelerate);
+}
+.t-slide-up-leave-active {
+  transition:
+    opacity var(--duration-fast) var(--ease-accelerate),
+    transform var(--duration-fast) var(--ease-accelerate);
+}
+.t-slide-up-enter-from {
+  opacity: 0;
+  transform: translateY(var(--translate-md));
+}
+.t-slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(calc(-1 * var(--translate-sm)));
+}
+
+/* -- t-dropdown：菜单/弹出层向下展开 -- */
+.t-dropdown-enter-active {
+  transition:
+    opacity var(--duration-normal) var(--ease-decelerate),
+    transform var(--duration-normal) var(--ease-decelerate);
+}
+.t-dropdown-leave-active {
+  transition:
+    opacity var(--duration-fast) var(--ease-accelerate),
+    transform var(--duration-fast) var(--ease-accelerate);
+}
+.t-dropdown-enter-from {
+  opacity: 0;
+  transform: translateY(calc(-1 * var(--translate-md)));
+}
+.t-dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(calc(-1 * var(--translate-sm)));
+}
+
+/* -- t-scale-fade：对话框/遮罩 -- */
+.t-scale-fade-enter-active {
+  transition:
+    opacity var(--duration-slow) var(--ease-standard),
+    transform var(--duration-slow) var(--ease-overshoot);
+}
+.t-scale-fade-leave-active {
+  transition:
+    opacity var(--duration-normal) var(--ease-accelerate),
+    transform var(--duration-normal) var(--ease-accelerate);
+}
+.t-scale-fade-enter-from {
+  opacity: 0;
+  transform: scale(var(--scale-pop));
+}
+.t-scale-fade-leave-to {
+  opacity: 0;
+  transform: scale(var(--scale-pop));
+}

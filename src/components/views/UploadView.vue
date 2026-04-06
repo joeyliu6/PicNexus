@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, onActivated, onDeactivated, computed, nextTick } from 'vue';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { emit as tauriEmit, type UnlistenFn } from '@tauri-apps/api/event';
 import { useConfirm } from '../../composables/useConfirm';
@@ -204,12 +204,18 @@ const handleDrop = (e: DragEvent) => {
   isDragging.value = false;
 };
 
+// KeepAlive 激活状态标记，防止后台页面拦截拖放事件
+const isViewActive = ref(true);
+
 // 设置 Tauri 文件拖拽监听器（Tauri v2 API）
 async function setupTauriFileDropListener() {
   try {
     const webview = getCurrentWebview();
     // Tauri v2 使用 onDragDropEvent 统一监听所有拖拽事件
     const unlisten = await webview.onDragDropEvent(async (event) => {
+      // KeepAlive 缓存时跳过，避免与其他页面的拖放冲突
+      if (!isViewActive.value) return;
+
       if (event.payload.type === 'over') {
         // 悬停状态
         isDragging.value = true;
@@ -377,6 +383,9 @@ onMounted(async () => {
   window.addEventListener('keydown', keydownHandler);
   console.log('[UploadView] Ctrl+V 快捷键监听已设置');
 });
+
+onActivated(() => { isViewActive.value = true; });
+onDeactivated(() => { isViewActive.value = false; });
 
 // 组件卸载时清理监听器
 onUnmounted(() => {

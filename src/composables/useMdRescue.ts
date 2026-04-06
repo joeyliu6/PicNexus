@@ -86,6 +86,8 @@ const mdFiles: Ref<string[]> = shallowRef([]);
 const fileContent: Ref<string | null> = ref(null);
 const imageLinks: Ref<MdImageLinkWithFile[]> = shallowRef([]);
 const isAnalyzing = ref(false);
+/** 正在读取 MD 文件、收集图片链接（selectFolder/loadFolderPath 读文件时为 true） */
+const isCollecting = ref(false);
 const isReplacing = ref(false);
 /** 用户排除的 URL 集合（不参与检测） */
 const excludedUrls: Ref<Set<string>> = ref(new Set());
@@ -104,6 +106,8 @@ const hostPreference: Ref<string[]> = ref([]);
 const scanStage = ref<'checking' | 'backups' | 'complete'>('checking');
 /** 已完成完整管道（URL检测+备用链接）的文件路径集合 */
 const readyFiles: Ref<Set<string>> = shallowRef(new Set());
+/** 映射后的扫描进度（以图片数为单位，而非去重 URL 数） */
+const scanProgress = ref<{ checked: number; total: number } | null>(null);
 
 // URL → historyId 内存索引（延迟建立）
 let urlIndex: Map<string, { historyId: string; serviceId: string }[]> | null = null;
@@ -297,39 +301,44 @@ export function useMdRescueManager() {
       filePath.value = null;
       fileContent.value = null;
 
-      const files = await scanMdFiles(dir);
-      mdFiles.value = files;
+      isCollecting.value = true;
+      try {
+        const files = await scanMdFiles(dir);
+        mdFiles.value = files;
 
-      if (files.length === 0) {
-        toast.info('未找到 MD 文件', '该文件夹中没有 Markdown 文件');
-        imageLinks.value = [];
-        return false;
-      }
-
-      const allLinks: MdImageLinkWithFile[] = [];
-      for (const file of files) {
-        try {
-          const content = await readTextFile(file);
-          const links = extractImageLinks(content);
-          for (const link of links) {
-            allLinks.push({
-              ...link,
-              sourceFile: file,
-              sourceFileName: getFileName(file),
-            });
-          }
-        } catch (err) {
-          log.warn(`读取文件失败: ${file}`, err);
+        if (files.length === 0) {
+          toast.info('未找到 MD 文件', '该文件夹中没有 Markdown 文件');
+          imageLinks.value = [];
+          return false;
         }
+
+        const allLinks: MdImageLinkWithFile[] = [];
+        for (const file of files) {
+          try {
+            const content = await readTextFile(file);
+            const links = extractImageLinks(content);
+            for (const link of links) {
+              allLinks.push({
+                ...link,
+                sourceFile: file,
+                sourceFileName: getFileName(file),
+              });
+            }
+          } catch (err) {
+            log.warn(`读取文件失败: ${file}`, err);
+          }
+        }
+
+        imageLinks.value = allLinks;
+
+        if (allLinks.length === 0) {
+          toast.info('未找到图片链接', `${files.length} 个文件中均无图片链接`);
+        }
+
+        return true;
+      } finally {
+        isCollecting.value = false;
       }
-
-      imageLinks.value = allLinks;
-
-      if (allLinks.length === 0) {
-        toast.info('未找到图片链接', `${files.length} 个文件中均无图片链接`);
-      }
-
-      return true;
     } catch (err) {
       log.error('选择文件夹失败', err);
       toast.error('文件夹打开失败', String(err));
@@ -380,34 +389,39 @@ export function useMdRescueManager() {
       filePath.value = null;
       fileContent.value = null;
 
-      const files = await scanMdFiles(dir);
-      mdFiles.value = files;
+      isCollecting.value = true;
+      try {
+        const files = await scanMdFiles(dir);
+        mdFiles.value = files;
 
-      if (files.length === 0) {
-        toast.info('未找到 MD 文件', '该文件夹中没有 Markdown 文件');
-        imageLinks.value = [];
-        return false;
-      }
-
-      const allLinks: MdImageLinkWithFile[] = [];
-      for (const file of files) {
-        try {
-          const content = await readTextFile(file);
-          const links = extractImageLinks(content);
-          for (const link of links) {
-            allLinks.push({
-              ...link,
-              sourceFile: file,
-              sourceFileName: getFileName(file),
-            });
-          }
-        } catch (err) {
-          log.warn(`读取文件失败: ${file}`, err);
+        if (files.length === 0) {
+          toast.info('未找到 MD 文件', '该文件夹中没有 Markdown 文件');
+          imageLinks.value = [];
+          return false;
         }
-      }
 
-      imageLinks.value = allLinks;
-      return true;
+        const allLinks: MdImageLinkWithFile[] = [];
+        for (const file of files) {
+          try {
+            const content = await readTextFile(file);
+            const links = extractImageLinks(content);
+            for (const link of links) {
+              allLinks.push({
+                ...link,
+                sourceFile: file,
+                sourceFileName: getFileName(file),
+              });
+            }
+          } catch (err) {
+            log.warn(`读取文件失败: ${file}`, err);
+          }
+        }
+
+        imageLinks.value = allLinks;
+        return true;
+      } finally {
+        isCollecting.value = false;
+      }
     } catch (err) {
       log.error('加载文件夹失败', err);
       toast.error('文件夹加载失败', String(err));
@@ -497,6 +511,7 @@ export function useMdRescueManager() {
     scanStage.value = 'checking';
     isAnalyzing.value = true;
     readyFiles.value = new Set();
+    scanProgress.value = null;
 
     // 取消安全标志：cancelCheck 后阻止所有后续异步操作
     let isCancelled = false;
@@ -521,6 +536,14 @@ export function useMdRescueManager() {
         if (!uset) { uset = new Set(); urlFileMap.set(link.url, uset); }
         uset.add(link.sourceFile);
       }
+
+      // url → 该 URL 对应的图片链接数量（含重复引用），用于进度映射
+      const urlLinkCount = new Map<string, number>();
+      for (const link of links) {
+        if (excludedUrls.value.has(link.url)) continue;
+        urlLinkCount.set(link.url, (urlLinkCount.get(link.url) ?? 0) + 1);
+      }
+      const totalImageCount = [...urlLinkCount.values()].reduce((a, b) => a + b, 0);
 
       // buildUrlIndex 并行启动（纯 DB 操作，和 checkUrls 并行）
       const config = await loadConfig();
@@ -642,8 +665,11 @@ export function useMdRescueManager() {
         checkFileCompletion(batch.map((b) => b.url));
       }
 
+      let mappedChecked = 0;
       const result = await checkUrls(items, (prog) => {
         if (prog.current_result) {
+          mappedChecked += urlLinkCount.get(prog.current_url) ?? 1;
+          scanProgress.value = { checked: mappedChecked, total: totalImageCount };
           pending.push({ url: prog.current_url, result: prog.current_result });
           if (!rafId) rafId = requestAnimationFrame(flushPending);
         }
@@ -1260,8 +1286,18 @@ export function useMdRescueManager() {
       }
       problemCount++;
     }
+    // 文件级健康计数：正常 vs 异常（broken + warning）
+    let normalFileCount = 0;
+    let problemFileCount = 0;
+    for (const f of fileHealthList.value) {
+      if (f.status === 'healthy') normalFileCount++;
+      else problemFileCount++;
+    }
     const checkedCount = normalCount + problemCount;
-    return { totalFiles, totalImages, normalCount, problemCount, checkedCount, repairedCount, manualCount };
+    return {
+      totalFiles, totalImages, normalCount, problemCount, checkedCount, repairedCount, manualCount,
+      normalFileCount, problemFileCount,
+    };
   });
 
   /**
@@ -1315,6 +1351,7 @@ export function useMdRescueManager() {
     fileContent.value = null;
     imageLinks.value = [];
     scanStage.value = 'checking';
+    scanProgress.value = null;
     readyFiles.value = new Set();
     urlIndex = null;
     excludedUrls.value = new Set();
@@ -1341,6 +1378,7 @@ export function useMdRescueManager() {
     fileContent,
     imageLinks,
     isAnalyzing,
+    isCollecting,
     isReplacing,
     isChecking,
     progress,
@@ -1395,6 +1433,7 @@ export function useMdRescueManager() {
     reset,
     // 渐进式扫描状态
     scanStage,
+    scanProgress,
     readyFiles,
   };
 }

@@ -50,6 +50,7 @@
     "dialog:allow-confirm",
     "fs:default",
     "fs:allow-exists",
+    "fs:allow-stat",
     "fs:allow-mkdir",
     "fs:allow-read-dir",
     "fs:allow-read-text-file",
@@ -62,6 +63,10 @@
     "fs:scope-applocaldata-recursive",
     "fs:scope-applog-recursive",
     "fs:scope-temp-recursive",
+    {
+      "identifier": "fs:scope",
+      "allow": ["**"]
+    },
     "clipboard-manager:default",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-read-image",
