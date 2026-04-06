@@ -130,7 +130,6 @@ async function loadCurrentPage() {
       totalRecords.value = result.total;
     }
 
-    console.log(`[HistoryTableView] 加载第 ${currentPage.value} 页: ${currentPageData.value.length}/${totalRecords.value} 条`);
   } catch (error) {
     console.error('[HistoryTableView] 加载失败:', error);
     toast.error('加载失败', String(error));
@@ -426,14 +425,15 @@ function handleHeaderCheckboxChange(checked: boolean): void {
   });
 }
 
-const selectedAvailableServices = computed<string[]>(() => {
+const selectedAvailableServices = computed<ServiceType[]>(() => {
   const ids = viewState.selectedIdList.value;
   if (ids.length === 0) return [];
-  const serviceSet = new Set<string>();
+  const idSet = new Set(ids);
+  const serviceSet = new Set<ServiceType>();
   for (const item of currentPageData.value) {
-    if (!ids.includes(item.id)) continue;
+    if (!idSet.has(item.id)) continue;
     for (const r of item.results) {
-      if (r.status === 'success') serviceSet.add(r.serviceId);
+      if (r.status === 'success') serviceSet.add(r.serviceId as ServiceType);
     }
   }
   return Array.from(serviceSet);
@@ -540,7 +540,7 @@ const selectedAvailableServices = computed<string[]>(() => {
           </div>
           <!-- 真实数据 -->
           <div v-else class="filename-cell">
-            <span class="fname" :title="slotProps.data.localFileName">
+            <span class="fname" v-tooltip.top="slotProps.data.localFileName">
               {{ slotProps.data.localFileName }}
             </span>
             <span class="fmeta">
@@ -563,7 +563,7 @@ const selectedAvailableServices = computed<string[]>(() => {
               v-for="serviceId in getSuccessfulServices(data).slice(0, getVisibleCount(getSuccessfulServices(data)))"
               :key="serviceId"
               class="service-badge-icon"
-              :title="`点击复制 ${getServiceDisplayName(serviceId)} 链接`"
+              v-tooltip.top="`点击复制 ${getServiceDisplayName(serviceId)} 链接`"
               @click="handleCopyServiceLink(data, serviceId)"
             >
               <span class="badge-icon" v-html="getServiceIcon(serviceId)" />
@@ -1030,7 +1030,7 @@ const selectedAvailableServices = computed<string[]>(() => {
   max-width: 300px;
   max-height: 300px;
   border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 8px 32px var(--photo-shadow-light);
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   object-fit: contain;

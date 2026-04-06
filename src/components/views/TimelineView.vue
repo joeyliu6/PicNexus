@@ -328,8 +328,6 @@ const handleDragScroll = (progress: number) => {
  * 处理时间轴跳转到未加载的月份
  */
 const handleJumpToPeriod = async (year: number, month: number) => {
-  console.log(`[TimelineView] 跳转到 ${year}年${month + 1}月`);
-
   const success = await historyManager.jumpToMonth(year, month);
 
   if (success) {
@@ -348,7 +346,6 @@ const handleJumpToPeriod = async (year: number, month: number) => {
  * 处理时间轴跳转到指定年份
  */
 const handleJumpToYear = async (year: number) => {
-  console.log(`[TimelineView] 跳转到 ${year}年`);
 
   // 找到该年份的分组
   const yearGroups = groups.value.filter(g => g.year === year);
@@ -447,9 +444,10 @@ const handleLightboxNavigate = async (direction: 'prev' | 'next') => {
 const selectedAvailableServices = computed<ServiceType[]>(() => {
   const ids = viewState.selectedIdList.value;
   if (ids.length === 0) return [];
+  const idSet = new Set(ids);
   const serviceSet = new Set<ServiceType>();
   for (const meta of viewState.filteredMetas.value) {
-    if (ids.includes(meta.id)) serviceSet.add(meta.primaryService);
+    if (idSet.has(meta.id)) serviceSet.add(meta.primaryService);
   }
   return Array.from(serviceSet);
 });
@@ -559,8 +557,6 @@ watch(displayMode, (mode) => {
 
 
 onMounted(async () => {
-  console.log('[TimelineView] Mounted with Justified Layout');
-
   // 并行加载历史记录和时间段统计
   await Promise.all([
     viewState.loadHistory(),
@@ -572,7 +568,6 @@ onMounted(async () => {
     const metas = viewState.filteredMetas.value;
     const needsFix = metas.filter((meta) => !meta.aspectRatio || meta.aspectRatio <= 0);
     if (needsFix.length > 0) {
-      console.log(`[TimelineView] 发现 ${needsFix.length} 张图片缺少宽高比，后台修复中...`);
       metadataFixer.batchFixMissingMetadata(needsFix);
     }
   });
@@ -663,7 +658,7 @@ watch(
 );
 
 watch(
-  [() => viewState.totalCount.value, () => props.visible],
+  [() => viewState.filteredMetas.value.length, () => props.visible],
   ([c, isVisible]) => {
     if (isVisible !== false) emit('update:totalCount', c);
   },

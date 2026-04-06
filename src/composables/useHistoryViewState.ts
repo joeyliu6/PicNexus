@@ -98,7 +98,8 @@ export function useHistoryViewState() {
       return;
     }
 
-    const metas = historyManager.imageMetas.value.filter(meta => ids.includes(meta.id));
+    const idSet = new Set(ids);
+    const metas = historyManager.imageMetas.value.filter(meta => idSet.has(meta.id));
 
     let items: CopyLinkItem[];
 

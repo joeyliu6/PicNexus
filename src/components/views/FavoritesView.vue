@@ -3,7 +3,7 @@
  * FavoritesView - 收藏视图
  * 平铺均匀网格，无日期分组
  */
-import { ref, computed, watch, reactive } from 'vue';
+import { ref, computed, watch, reactive, onUnmounted } from 'vue';
 import Skeleton from 'primevue/skeleton';
 import { useHistoryViewState } from '../../composables/useHistoryViewState';
 import { useHistoryManager } from '../../composables/useHistory';
@@ -39,10 +39,50 @@ let savedScrollTop = 0;
 // 图片加载状态追踪（响应式对象，Vue 3 Proxy 自动追踪属性增删）
 const imageStates = reactive<Record<string, 'loading' | 'loaded' | 'failed'>>({});
 
+// === 增量渲染：避免大量收藏时 DOM 爆炸 ===
+const RENDER_CHUNK_SIZE = 80;
+const renderLimit = ref(RENDER_CHUNK_SIZE);
+let scrollRafId = 0;
+
 // 收藏列表（基于独立 favoriteSet 过滤，避免依赖 imageMetas 的 isFavorited 属性）
 const favoriteMetas = computed<ImageMeta[]>(() => {
   const favSet = historyManager.favoriteSet.value;
   return viewState.filteredMetas.value.filter(m => favSet.has(m.id));
+});
+
+// 实际渲染的收藏列表（增量渲染，避免一次性创建数千个 DOM 节点）
+const renderedMetas = computed<ImageMeta[]>(() => {
+  return favoriteMetas.value.slice(0, renderLimit.value);
+});
+
+// 是否还有未渲染的数据
+const hasMore = computed(() => renderLimit.value < favoriteMetas.value.length);
+
+/**
+ * 滚动到底部时加载更多
+ */
+function onFavoritesScroll(): void {
+  cancelAnimationFrame(scrollRafId);
+  scrollRafId = requestAnimationFrame(() => {
+    const el = scrollContainerRef.value;
+    if (!el || !hasMore.value) return;
+    // 距离底部 300px 时加载下一批
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 300) {
+      renderLimit.value += RENDER_CHUNK_SIZE;
+    }
+  });
+}
+
+// 当收藏数据源变化时（筛选、取消收藏等），重置渲染窗口
+watch(favoriteMetas, () => {
+  renderLimit.value = RENDER_CHUNK_SIZE;
+  // 清理不再存在的图片状态，防止内存泄漏
+  const currentIds = new Set(favoriteMetas.value.map(m => m.id));
+  for (const key of Object.keys(imageStates)) {
+    if (!currentIds.has(key)) {
+      delete imageStates[key];
+    }
+  }
 });
 
 // 灯箱
@@ -101,13 +141,7 @@ const handleLightboxNavigate = async (direction: 'prev' | 'next') => {
   }
 };
 
-const handleToggleFavorite = async (item: HistoryItem) => {
-  try {
-    await historyManager.toggleFavorite(item.id);
-  } catch { /* useHistory 内部已处理 toast */ }
-};
-
-const handleItemToggleFavorite = async (id: string) => {
+const handleToggleFavorite = async (id: string) => {
   try {
     await historyManager.toggleFavorite(id);
   } catch { /* useHistory 内部已处理 toast */ }
@@ -163,6 +197,10 @@ watch(() => favoriteMetas.value.length, (newLen, oldLen) => {
   }
 });
 
+onUnmounted(() => {
+  cancelAnimationFrame(scrollRafId);
+});
+
 // 滚动位置保存/恢复（v-show 兼容，与 TimelineView 保持一致）
 watch(() => props.visible, async (isVisible, wasVisible) => {
   if (!isVisible) {
@@ -180,7 +218,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 
 <template>
   <div class="favorites-view">
-    <div ref="scrollContainerRef" class="favorites-scroll">
+    <div ref="scrollContainerRef" class="favorites-scroll" @scroll="onFavoritesScroll">
 
       <!-- 加载骨架屏 -->
       <template v-if="viewState.isLoading.value">
@@ -212,7 +250,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
           @after-leave="onAfterLeave"
         >
           <div
-            v-for="meta in favoriteMetas"
+            v-for="meta in renderedMetas"
             :key="meta.id"
             class="photo-item"
             :class="{ selected: selectedIdsSet.has(meta.id) }"
@@ -258,12 +296,18 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
             <!-- 收藏按钮（收藏视图中始终为已收藏状态） -->
             <div
               class="favorite-btn favorited"
-              @click.stop="handleItemToggleFavorite(meta.id)"
+              @click.stop="handleToggleFavorite(meta.id)"
             >
               <i class="pi pi-star-fill"></i>
             </div>
           </div>
         </TransitionGroup>
+
+        <!-- 加载更多指示器 -->
+        <div v-if="hasMore" class="load-more-sentinel">
+          <i class="pi pi-spin pi-spinner"></i>
+          <span>加载更多（{{ renderedMetas.length }}/{{ favoriteMetas.length }}）</span>
+        </div>
       </template>
 
     </div>
@@ -276,7 +320,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
       :has-next="lightboxHasNext"
       @delete="handleLightboxDelete"
       @navigate="handleLightboxNavigate"
-      @toggle-favorite="handleToggleFavorite"
+      @toggle-favorite="(item: HistoryItem) => handleToggleFavorite(item.id)"
     />
 
     <!-- 浮动操作栏 -->
@@ -377,7 +421,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 .selection-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.1);
+  background: var(--overlay-light);
   opacity: 0;
   transition: opacity var(--duration-normal);
   pointer-events: none;
@@ -398,8 +442,8 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.8);
-  background: rgba(0, 0, 0, 0.2);
+  border: 2px solid var(--photo-overlay-border);
+  background: var(--photo-overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -414,7 +458,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 }
 
 .checkbox:hover {
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--photo-overlay-bg-hover);
 }
 
 .checkbox.checked {
@@ -437,7 +481,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   height: 20px;
   border: none;
   background: none;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--photo-overlay-border);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -446,7 +490,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   z-index: 2;
   cursor: pointer;
   font-size: 11px;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+  filter: drop-shadow(0 1px 2px var(--photo-overlay-bg-hover));
 }
 
 .photo-item:hover .favorite-btn,
@@ -467,13 +511,29 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   filter: drop-shadow(0 1px 4px rgba(234, 179, 8, 0.6));
 }
 
+/* === 加载更多指示器 === */
+.load-more-sentinel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.load-more-sentinel i {
+  font-size: 14px;
+  color: var(--primary);
+}
+
 /* === 空状态 === */
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: calc(100% - 40px);
+  height: 100%;
   color: var(--text-secondary);
   gap: 8px;
 }
@@ -493,7 +553,8 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 
 /* === TransitionGroup 动画 === */
 .fav-item-enter-active {
-  transition: opacity 0.45s ease, transform 0.45s ease;
+  transition: opacity var(--duration-slower) var(--ease-decelerate),
+              transform var(--duration-slower) var(--ease-decelerate);
 }
 
 .fav-item-enter-from {
@@ -503,7 +564,8 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 
 .fav-item-leave-active {
   position: absolute; /* 脱离 Grid 流，邻居立刻开始滑动填补 */
-  transition: opacity var(--duration-slower) ease-out, transform var(--duration-slower) ease-out;
+  transition: opacity var(--duration-slower) var(--ease-accelerate),
+              transform var(--duration-slower) var(--ease-accelerate);
   z-index: 0;
 }
 
@@ -513,12 +575,13 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 }
 
 .fav-item-move {
-  transition: transform 0.55s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: transform var(--duration-slower) var(--ease-standard);
 }
 
 /* === 最后一项特殊离场：柔和淡出 === */
 .fav-last-enter-active {
-  transition: opacity 0.45s ease, transform 0.45s ease;
+  transition: opacity var(--duration-slower) var(--ease-decelerate),
+              transform var(--duration-slower) var(--ease-decelerate);
 }
 
 .fav-last-enter-from {
@@ -528,7 +591,8 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 
 .fav-last-leave-active {
   position: absolute;
-  transition: opacity 0.33s ease-out, transform 0.33s ease-out;
+  transition: opacity var(--duration-medium) var(--ease-accelerate),
+              transform var(--duration-medium) var(--ease-accelerate);
   z-index: 0;
 }
 
@@ -538,13 +602,13 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 }
 
 .fav-last-move {
-  transition: transform 0.55s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: transform var(--duration-slower) var(--ease-standard);
 }
 
 /* === 空状态入场：下方浮入 + 缩放 + 弹性缓动 === */
 .empty-fade-enter-active {
-  transition: opacity 0.4s var(--ease-standard) 0.15s,
-              transform 0.4s var(--ease-spring) 0.15s;
+  transition: opacity var(--duration-slow) var(--ease-standard) 0.15s,
+              transform var(--duration-slow) var(--ease-spring) 0.15s;
 }
 
 .empty-fade-enter-from {
@@ -562,7 +626,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 
 /* 星形图标入场动画 */
 .empty-fade-enter-active .empty-star-icon {
-  animation: empty-star-arrive 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.3s both;
+  animation: empty-star-arrive var(--duration-medium) var(--ease-spring) var(--duration-medium) both;
 }
 
 @keyframes empty-star-arrive {

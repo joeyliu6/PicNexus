@@ -424,7 +424,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 
         <div v-if="item" class="lightbox-bottom" @click.stop>
           <div class="lightbox-info-cell cell-filename">
-            <span class="cell-value filename-value" :title="item.localFileName">{{ displayFileName }}</span>
+            <span class="cell-value filename-value" v-tooltip.top="item.localFileName">{{ displayFileName }}</span>
             <span class="cell-label">文件名</span>
           </div>
           <div class="lightbox-divider"></div>

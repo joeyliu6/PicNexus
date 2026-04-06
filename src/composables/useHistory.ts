@@ -162,7 +162,7 @@ function initCrossWindowListener(): void {
         break;
     }
   }).catch(e => {
-    console.warn('[历史记录] 跨窗口监听设置失败:', e);
+    log.warn('[历史记录] 跨窗口监听设置失败:', e);
   });
 }
 
@@ -205,9 +205,6 @@ export function useHistoryManager() {
     // 如果缓存有效且不强制刷新，直接返回
     if (isCacheValid() && !forceReload) {
       return;
-    }
-
-    if (isDataLoaded.value && !isCacheValid()) {
     }
 
     try {
@@ -275,7 +272,7 @@ export function useHistoryManager() {
       detailCache.removeDetail(itemId);
 
       emitHistoryDeleted([itemId]).catch(e => {
-        console.warn('[历史记录] 跨窗口通知失败:', e);
+        log.warn('[历史记录] 跨窗口通知失败:', e);
       });
 
       return true;
@@ -316,7 +313,7 @@ export function useHistoryManager() {
       detailCache.clearCache();
 
       emitHistoryCleared().catch(e => {
-        console.warn('[历史记录] 跨窗口通知失败:', e);
+        log.warn('[历史记录] 跨窗口通知失败:', e);
       });
 
     } catch (error) {
@@ -343,7 +340,6 @@ export function useHistoryManager() {
       });
 
       if (!filePath) {
-        console.log('[历史记录] 用户取消导出');
         return;
       }
 
@@ -366,7 +362,8 @@ export function useHistoryManager() {
         return;
       }
 
-      const selectedMetas = imageMetas.value.filter(meta => selectedIds.includes(meta.id));
+      const idSet = new Set(selectedIds);
+      const selectedMetas = imageMetas.value.filter(meta => idSet.has(meta.id));
       const { config } = useConfigManager();
       const currentConfig = config.value;
       const activePrefix = getActivePrefix(currentConfig);
@@ -386,11 +383,10 @@ export function useHistoryManager() {
 
       await writeText(links.join('\n'));
       toast.showConfig('success', TOAST_MESSAGES.common.copySuccess(links.length));
-      console.log(`[批量操作] 已复制 ${links.length} 个链接`);
 
-    } catch (error: any) {
+    } catch (error) {
       log.error('[批量操作] 复制失败:', error);
-      toast.showConfig('error', TOAST_MESSAGES.common.copyFailed(error.message || String(error)));
+      toast.showConfig('error', TOAST_MESSAGES.common.copyFailed(error instanceof Error ? error.message : String(error)));
     }
   }
 
@@ -411,7 +407,7 @@ export function useHistoryManager() {
           const detail = await detailCache.getDetail(id);
           selectedItems.push(detail);
         } catch (e) {
-          console.warn(`[批量操作] 跳过无效记录: ${id}`, e);
+          log.warn(`[批量操作] 跳过无效记录: ${id}`, e);
         }
       }
 
@@ -428,18 +424,15 @@ export function useHistoryManager() {
       });
 
       if (!filePath) {
-        console.log('[批量操作] 用户取消导出');
         return;
       }
 
       await writeTextFile(filePath, jsonContent);
-
       toast.showConfig('success', TOAST_MESSAGES.common.exportSuccess(selectedItems.length));
-      console.log(`[批量操作] 已导出 ${selectedItems.length} 条记录`);
 
-    } catch (error: any) {
+    } catch (error) {
       log.error('[批量操作] 导出失败:', error);
-      toast.showConfig('error', TOAST_MESSAGES.common.exportFailed(error.message || String(error)));
+      toast.showConfig('error', TOAST_MESSAGES.common.exportFailed(error instanceof Error ? error.message : String(error)));
     }
   }
 
@@ -459,14 +452,11 @@ export function useHistoryManager() {
       );
 
       if (!confirmed) {
-        console.log('[批量操作] 用户取消删除');
         return false;
       }
 
       await historyDB.deleteMany(selectedIds);
-
       toast.showConfig('success', TOAST_MESSAGES.common.deleteSuccess(selectedIds.length));
-      console.log(`[批量操作] 已删除 ${selectedIds.length} 条记录`);
 
       const selectedIdSet = new Set(selectedIds);
       imageMetas.value = imageMetas.value.filter(meta => !selectedIdSet.has(meta.id));
@@ -480,13 +470,13 @@ export function useHistoryManager() {
       selectedIds.forEach(id => detailCache.removeDetail(id));
 
       emitHistoryDeleted(selectedIds).catch(e => {
-        console.warn('[历史记录] 跨窗口通知失败:', e);
+        log.warn('[历史记录] 跨窗口通知失败:', e);
       });
 
       return true;
-    } catch (error: any) {
+    } catch (error) {
       log.error('[批量操作] 删除失败:', error);
-      toast.showConfig('error', TOAST_MESSAGES.common.deleteFailed(error.message || String(error)));
+      toast.showConfig('error', TOAST_MESSAGES.common.deleteFailed(error instanceof Error ? error.message : String(error)));
       return false;
     }
   }
@@ -581,7 +571,7 @@ export function useHistoryManager() {
       );
 
       if (!targetPeriod) {
-        console.warn(`[历史记录] 未找到目标月份: ${year}年${month + 1}月`);
+        log.warn(`[历史记录] 未找到目标月份: ${year}年${month + 1}月`);
         return false;
       }
 
@@ -592,11 +582,9 @@ export function useHistoryManager() {
       });
 
       if (!hasData) {
-        console.warn(`[历史记录] 目标月份无数据: ${year}年${month + 1}月`);
+        log.warn(`[历史记录] 目标月份无数据: ${year}年${month + 1}月`);
         return false;
       }
-
-      console.log(`[历史记录] 跳转到 ${year}年${month + 1}月`);
       return true;
 
     } catch (error) {
