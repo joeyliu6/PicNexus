@@ -131,7 +131,7 @@ function handleToggle(serviceId: string) {
   font-family: var(--font-sans);
 
   cursor: pointer;
-  transition: all 0.15s ease-in-out;
+  transition: all var(--duration-fast) ease-in-out;
   user-select: none;
 }
 
@@ -192,7 +192,7 @@ function handleToggle(serviceId: string) {
   font-size: inherit;
   color: var(--primary);
   cursor: pointer;
-  transition: color 0.2s ease;
+  transition: color var(--duration-normal) ease;
 }
 
 .empty-state-link:hover {

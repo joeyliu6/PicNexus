@@ -267,7 +267,7 @@ const handleSelectedCountUpdate = (count: number) => {
   font-weight: 500;
   cursor: pointer;
   position: relative;
-  transition: color 0.15s, background 0.15s;
+  transition: color var(--duration-fast), background var(--duration-fast);
   border-radius: 8px 8px 0 0;
   font-family: inherit;
 }
@@ -316,7 +316,7 @@ const handleSelectedCountUpdate = (count: number) => {
   border: none;
   background: var(--primary-alpha-8);
   font-size: 12px;
-  transition: background 0.15s;
+  transition: background var(--duration-fast);
 }
 
 :deep(.filter-chip.p-select:hover) {
@@ -360,7 +360,7 @@ const handleSelectedCountUpdate = (count: number) => {
   padding: 6px 10px;
   border-radius: 6px;
   color: var(--text-primary);
-  transition: background 0.1s;
+  transition: background var(--duration-micro);
 }
 
 :deep(.p-select-overlay .p-select-option:hover) {
@@ -389,7 +389,7 @@ const handleSelectedCountUpdate = (count: number) => {
   max-width: 260px;
   flex: 1;
   border: 1px solid transparent;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
 }
 
 .search-field:focus-within {
@@ -447,7 +447,7 @@ const handleSelectedCountUpdate = (count: number) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
   opacity: 0.5;
 }
 
@@ -478,7 +478,7 @@ const handleSelectedCountUpdate = (count: number) => {
 
 .sel-fade-enter-active,
 .sel-fade-leave-active {
-  transition: opacity 0.2s, transform 0.2s;
+  transition: opacity var(--duration-normal), transform var(--duration-normal);
 }
 
 .sel-fade-enter-from,

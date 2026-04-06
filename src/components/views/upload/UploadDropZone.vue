@@ -150,7 +150,7 @@ const presetTooltip = computed(() => {
   padding: 60px 40px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all var(--duration-medium) ease;
 }
 
 .drop-zone:hover {
@@ -199,7 +199,7 @@ const presetTooltip = computed(() => {
   font-size: inherit;
   color: var(--primary);
   cursor: pointer;
-  transition: color 0.2s ease;
+  transition: color var(--duration-normal) ease;
   pointer-events: auto;
 }
 
@@ -248,7 +248,7 @@ const presetTooltip = computed(() => {
   font-size: 0.8rem;
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) ease;
   user-select: none;
 }
 
@@ -285,7 +285,7 @@ const presetTooltip = computed(() => {
   font-size: 12px;
   font-family: inherit;
   color: var(--text-primary);
-  transition: background 0.15s;
+  transition: background var(--duration-fast);
 }
 
 .preset-popover-item:hover {

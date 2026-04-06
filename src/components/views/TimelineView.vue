@@ -886,7 +886,7 @@ watch(
   background: transparent;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity var(--duration-medium) ease;
   overflow: visible;
 }
 

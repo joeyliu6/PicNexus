@@ -100,16 +100,7 @@ watch(() => props.srcs, () => {
     var(--bg-input, #f3f4f6) 75%
   );
   background-size: 200% 100%;
-  animation: skeleton-loading 1.5s ease-in-out infinite;
-}
-
-@keyframes skeleton-loading {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
+  animation: k-shimmer 1.5s ease-in-out infinite;
 }
 
 .thumbnail-placeholder {

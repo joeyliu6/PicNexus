@@ -928,7 +928,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
   border: 2px dashed var(--border-subtle);
   border-radius: 8px;
   cursor: default;
-  transition: border-color 0.3s, background 0.3s;
+  transition: border-color var(--duration-medium), background var(--duration-medium);
 }
 
 .idle-zone:hover { border-color: var(--primary-alpha-40); }
@@ -942,7 +942,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
 .idle-icon-wrap {
   margin-bottom: 20px;
   color: var(--primary);
-  transition: transform 0.3s ease;
+  transition: transform var(--duration-medium) ease;
 }
 
 .idle-zone.dragging .idle-icon-wrap { transform: translateY(-4px) scale(1.1); }
@@ -1012,7 +1012,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
 
 /* ---------- 进度条 ---------- */
 .wk-progress { height: 4px; background: var(--border-subtle); flex-shrink: 0; }
-.wk-progress-fill { height: 100%; background: var(--primary); transition: width 0.35s ease; border-radius: 0 2px 2px 0; }
+.wk-progress-fill { height: 100%; background: var(--primary); transition: width var(--duration-slow) ease; border-radius: 0 2px 2px 0; }
 
 /* ---------- 内容区 ---------- */
 .wk-body {
@@ -1078,7 +1078,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
 .btn-ghost, .btn-primary, .btn-danger {
   display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px;
   border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer;
-  white-space: nowrap; transition: background 0.15s, opacity 0.15s; border: none;
+  white-space: nowrap; transition: background var(--duration-fast), opacity var(--duration-fast); border: none;
   font-family: inherit;
 }
 
@@ -1097,7 +1097,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
    ============================================================ */
 .fixing-card {
   border-radius: 10px; border: 1px solid var(--border-subtle);
-  overflow: hidden; transition: background 0.25s, border-color 0.25s;
+  overflow: hidden; transition: background var(--duration-normal), border-color var(--duration-normal);
 }
 
 .fixing-card--done { background: var(--success-alpha-8); border-color: var(--success-alpha-15); }
@@ -1169,7 +1169,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
   display: flex; align-items: flex-start; gap: 10px;
   padding: 12px 14px; border-radius: 10px;
   border: 1px solid var(--border-subtle);
-  cursor: pointer; transition: background 0.15s, border-color 0.15s;
+  cursor: pointer; transition: background var(--duration-fast), border-color var(--duration-fast);
 }
 
 .repair-strategy-option:hover { background: var(--hover-overlay-subtle); }
@@ -1200,7 +1200,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
   border-radius: 14px; font-size: 12px; font-weight: 500; white-space: nowrap;
   cursor: pointer; border: 1px solid var(--border-subtle);
   background: var(--bg-input); color: var(--text-muted); font-family: inherit;
-  transition: background 0.12s, border-color 0.12s;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
 }
 
 .pill-pref-item:hover {
@@ -1282,27 +1282,27 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
 /* ============================================================
    动画
    ============================================================ */
-.fade-enter-active { transition: opacity 0.2s ease; }
-.fade-leave-active { transition: opacity 0.15s ease; }
+.fade-enter-active { transition: opacity var(--duration-normal) ease; }
+.fade-leave-active { transition: opacity var(--duration-fast) ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 
 /* 扫描进度条：进入快、离开柔和 */
-.scan-bar-enter-active { transition: opacity 0.2s ease, transform 0.2s ease; }
+.scan-bar-enter-active { transition: opacity var(--duration-normal) ease, transform var(--duration-normal) ease; }
 .scan-bar-leave-active {
   transition:
-    opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1),
-    transform 0.8s cubic-bezier(0.4, 0, 0.2, 1),
-    max-height 0.6s 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-    padding 0.6s 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-    border-width 0.6s 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity 0.8s var(--ease-standard),
+    transform 0.8s var(--ease-standard),
+    max-height 0.6s 0.3s var(--ease-standard),
+    padding 0.6s 0.3s var(--ease-standard),
+    border-width 0.6s 0.3s var(--ease-standard);
   overflow: hidden;
 }
 .scan-bar-enter-from { opacity: 0; transform: translateY(-4px); }
 .scan-bar-leave-to { opacity: 0; transform: translateY(-8px); max-height: 0; padding-top: 0; padding-bottom: 0; border-width: 0; }
 
-.slide-up-enter-active { transition: opacity 0.3s ease, transform 0.3s ease; }
+.slide-up-enter-active { transition: opacity var(--duration-medium) ease, transform var(--duration-medium) ease; }
 .slide-up-enter-from { opacity: 0; transform: translateY(12px); }
-.slide-up-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
+.slide-up-leave-active { transition: opacity var(--duration-normal) ease, transform var(--duration-normal) ease; }
 .slide-up-leave-to { opacity: 0; transform: translateY(-8px); }
 
 /* ============================================================
@@ -1325,7 +1325,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
   background: var(--bg-input); color: var(--text-muted);
   border: 1px solid transparent;
   font-family: inherit; white-space: nowrap;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
 }
 
 .mr-chip:hover {
@@ -1363,12 +1363,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
   border-radius: 8px;
   background: var(--hover-overlay-subtle);
   max-height: 60px;
-  animation: mr-skeleton-pulse 2s ease-in-out infinite;
-}
-
-@keyframes mr-skeleton-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  animation: k-pulse 2s ease-in-out infinite;
 }
 
 .mr-scan-skeleton-spinner {
@@ -1407,7 +1402,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
 .mr-healthy-row {
   display: flex; align-items: center; gap: 8px;
   height: 32px; font-size: 12px;
-  animation: mr-fade-in 0.25s ease;
+  animation: k-fade-slide-down 0.25s ease;
 }
 
 .mr-healthy-icon {
@@ -1422,11 +1417,6 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
 
 .mr-healthy-meta {
   flex-shrink: 0; color: var(--text-tertiary); font-variant-numeric: tabular-nums;
-}
-
-@keyframes mr-fade-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ---------- 分组列表：每个分组独立成块，组间 6px gap ---------- */
@@ -1446,14 +1436,14 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
   min-height: 52px; padding: 8px 14px;
   background: var(--bg-input); border: none; cursor: pointer; font-family: inherit;
   text-align: left; position: sticky; top: 0; z-index: 2;
-  transition: background 0.12s;
+  transition: background var(--duration-fast);
 }
 
 .mr-group-header:hover { background: var(--hover-overlay-subtle); }
 
 .mr-group-chev {
   font-size: 11px; color: var(--text-tertiary); flex-shrink: 0;
-  transition: transform 0.15s;
+  transition: transform var(--duration-fast);
 }
 
 .mr-group-file-icon { font-size: 14px; color: var(--primary); flex-shrink: 0; }
@@ -1487,7 +1477,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
   width: 26px; height: 26px; border-radius: 6px; border: none;
   background: transparent; color: var(--text-tertiary); cursor: pointer;
   opacity: 0.4;
-  transition: background 0.12s, color 0.12s, opacity 0.12s;
+  transition: background var(--duration-fast), color var(--duration-fast), opacity var(--duration-fast);
   font-family: inherit;
 }
 
@@ -1505,7 +1495,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
 .mr-row {
   display: flex; align-items: center; gap: 12px;
   height: 40px; padding: 0 14px;
-  transition: background 0.1s;
+  transition: background var(--duration-micro);
 }
 .mr-row:hover { background: var(--hover-overlay-subtle); }
 
@@ -1557,7 +1547,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
 
 .mr-row-actions {
   display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0;
-  opacity: 0; transition: opacity 0.15s;
+  opacity: 0; transition: opacity var(--duration-fast);
 }
 .mr-row:hover .mr-row-actions { opacity: 1; }
 
@@ -1565,7 +1555,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
   display: inline-flex; align-items: center; justify-content: center;
   width: 26px; height: 26px; border-radius: 6px; border: none;
   background: transparent; color: var(--text-tertiary); cursor: pointer;
-  transition: background 0.12s, color 0.12s; font-family: inherit;
+  transition: background var(--duration-fast), color var(--duration-fast); font-family: inherit;
 }
 .mr-row-icon-btn:hover { background: var(--hover-overlay); color: var(--primary); }
 .mr-row-icon-btn > .pi { font-size: 12px; }

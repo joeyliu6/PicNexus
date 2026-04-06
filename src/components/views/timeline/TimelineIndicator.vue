@@ -522,7 +522,7 @@ onUnmounted(() => {
   font-weight: 600;
   color: var(--text-secondary);
   opacity: 0.6;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
   pointer-events: auto;
   cursor: pointer;
   padding: 1px 6px;
@@ -574,7 +574,7 @@ onUnmounted(() => {
   background: var(--text-secondary);
   opacity: 0.25;
   transform: translateY(-50%);
-  transition: opacity 0.2s;
+  transition: opacity var(--duration-normal);
   pointer-events: none;
 }
 
@@ -610,7 +610,7 @@ onUnmounted(() => {
   transform: translateY(-50%);
   z-index: 10;
   cursor: row-resize;
-  transition: transform 0.15s ease;
+  transition: transform var(--duration-fast) ease;
 }
 
 /* 激活状态：蓝色底边对齐鼠标位置 */
@@ -658,7 +658,7 @@ onUnmounted(() => {
 /* 气泡动画 */
 .bubble-fade-enter-active,
 .bubble-fade-leave-active {
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
 }
 
 .bubble-fade-enter-from,

@@ -162,7 +162,7 @@ const successfulServices = computed(() => {
   height: 100%;
   object-fit: cover;
   opacity: 0;
-  transition: opacity 0.3s ease-in-out, transform 0.3s;
+  transition: opacity var(--duration-medium) ease-in-out, transform var(--duration-medium);
 }
 
 .photo-img.loaded {
@@ -178,7 +178,7 @@ const successfulServices = computed(() => {
   inset: 0;
   background: rgba(0, 0, 0, 0.1);
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity var(--duration-normal);
   pointer-events: none;
 }
 
@@ -202,7 +202,7 @@ const successfulServices = computed(() => {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: all 0.2s;
+  transition: all var(--duration-normal);
   z-index: 2;
 }
 
@@ -245,7 +245,7 @@ const successfulServices = computed(() => {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: all 0.2s;
+  transition: all var(--duration-normal);
   z-index: 2;
   cursor: pointer;
   font-size: 11px;
@@ -276,16 +276,8 @@ const successfulServices = computed(() => {
   filter: drop-shadow(0 1px 4px rgba(234, 179, 8, 0.6));
 }
 
-@keyframes star-pop {
-  0%   { transform: scale(1); }
-  35%  { transform: scale(1.25); }
-  55%  { transform: scale(0.92); }
-  75%  { transform: scale(1.08); }
-  100% { transform: scale(1); }
-}
-
 .favorite-btn.favorited i {
-  animation: star-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  animation: k-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -299,7 +291,7 @@ const successfulServices = computed(() => {
   inset: 0;
   background: linear-gradient(to bottom, transparent 30%, rgba(0, 0, 0, 0.85) 100%);
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--duration-normal) ease;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -319,7 +311,7 @@ const successfulServices = computed(() => {
   flex-wrap: wrap-reverse;
   justify-content: flex-end;
   transform: translateY(4px);
-  transition: transform 0.2s ease;
+  transition: transform var(--duration-normal) ease;
 }
 
 .photo-wrapper:hover .hover-info .service-badges {

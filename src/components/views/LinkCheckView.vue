@@ -218,7 +218,7 @@ onDeactivated(onViewDeactivated);
   font-weight: 500;
   cursor: pointer;
   position: relative;
-  transition: color 0.15s, background 0.15s;
+  transition: color var(--duration-fast), background var(--duration-fast);
   border-radius: 8px 8px 0 0;
   font-family: inherit;
 }

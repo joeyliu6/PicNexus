@@ -257,7 +257,7 @@ function handleCopy(payload: QueueCopyPayload) {
 
 .segment {
   height: 100%;
-  transition: width 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: width var(--duration-slower) cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .segment.success {
@@ -270,12 +270,7 @@ function handleCopy(payload: QueueCopyPayload) {
 
 .segment.uploading {
   background: var(--primary);
-  animation: progressPulse 1.5s ease-in-out infinite;
-}
-
-@keyframes progressPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+  animation: k-pulse 1.5s ease-in-out infinite;
 }
 
 .status-line {

@@ -253,7 +253,7 @@ function handleCopy(format: LinkFormat): void {
 /* 浮动栏进入/退出动画 */
 .float-bar-enter-active,
 .float-bar-leave-active {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-medium) var(--ease-standard);
 }
 
 .float-bar-enter-from,
@@ -296,7 +296,7 @@ function handleCopy(format: LinkFormat): void {
   color: var(--text-secondary);
   font-size: 11px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) ease;
   white-space: nowrap;
 }
 
@@ -330,7 +330,7 @@ function handleCopy(format: LinkFormat): void {
   font-size: 13px;
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) ease;
   text-align: left;
 }
 
@@ -353,7 +353,7 @@ function handleCopy(format: LinkFormat): void {
 /* 下拉菜单动画 */
 .dropdown-enter-active,
 .dropdown-leave-active {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-normal) var(--ease-standard);
 }
 
 .dropdown-enter-from,

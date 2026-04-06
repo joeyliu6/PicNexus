@@ -814,7 +814,7 @@ function handleRecheckBatch() {
 .btn-ghost, .btn-primary, .btn-danger {
   display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px;
   border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer;
-  white-space: nowrap; transition: background 0.15s, opacity 0.15s; border: none;
+  white-space: nowrap; transition: background var(--duration-fast), opacity var(--duration-fast); border: none;
 }
 .btn-ghost i, .btn-primary i, .btn-danger i { font-size: 11px; }
 .btn-ghost { background: var(--bg-input); color: var(--text-muted); }
@@ -835,7 +835,7 @@ function handleRecheckBatch() {
 }
 .check-dropdown-item {
   display: flex; flex-direction: row; align-items: center; gap: 8px;
-  padding: 7px 14px; cursor: pointer; transition: background 0.1s;
+  padding: 7px 14px; cursor: pointer; transition: background var(--duration-micro);
 }
 .check-dropdown-item:not(:last-child) { border-bottom: 1px solid var(--border-subtle); }
 .check-dropdown-item:hover { background: var(--hover-overlay-subtle); }
@@ -857,7 +857,7 @@ function handleRecheckBatch() {
   font-size: 12px; font-weight: 500; cursor: pointer;
   background: var(--bg-input); color: var(--text-muted);
   border: 1px solid transparent;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
   white-space: nowrap;
 }
 .filter-chip:hover {
@@ -895,8 +895,8 @@ function handleRecheckBatch() {
   background: var(--bg-card); box-shadow: var(--shadow-float);
   border: 1px solid var(--border-subtle); pointer-events: none;
 }
-.fade-enter-active { transition: opacity 0.15s; }
-.fade-leave-active { transition: opacity 0.1s; }
+.fade-enter-active { transition: opacity var(--duration-fast); }
+.fade-leave-active { transition: opacity var(--duration-micro); }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 .progress-bar-inner {
   width: 100%; height: 3px; background: var(--bg-input);
@@ -905,18 +905,14 @@ function handleRecheckBatch() {
 .progress-bar-fill {
   height: 100%;
   background: linear-gradient(90deg, var(--primary), var(--primary-light, #60a5fa));
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width var(--duration-slower) var(--ease-standard);
   position: relative; overflow: hidden;
 }
 .progress-bar-fill::after {
   content: '';
   position: absolute; top: 0; left: 0; right: 0; bottom: 0;
   background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-  animation: progress-glow 1.5s ease-in-out infinite;
-}
-@keyframes progress-glow {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(200%); }
+  animation: k-sweep 1.5s ease-in-out infinite;
 }
 
 /* 图床筛选下拉 */
@@ -932,7 +928,7 @@ function handleRecheckBatch() {
 }
 .service-dropdown-item {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 8px 14px; cursor: pointer; transition: background 0.1s;
+  padding: 8px 14px; cursor: pointer; transition: background var(--duration-micro);
 }
 .service-dropdown-item:hover { background: var(--hover-overlay); }
 .service-dropdown-item.active { background: var(--primary-alpha-10); }
@@ -947,13 +943,13 @@ function handleRecheckBatch() {
   height: 32px; padding: 0 8px 0 10px;
   min-width: 140px; max-width: 260px; flex: 1;
   border: 1px solid transparent;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
   flex-shrink: 0;
 }
 .search-field.focused { border-color: var(--primary); }
 .search-field-icon {
   color: var(--text-secondary); font-size: 12px; flex-shrink: 0;
-  opacity: 0.5; margin-right: 6px; transition: opacity 0.15s, color 0.15s;
+  opacity: 0.5; margin-right: 6px; transition: opacity var(--duration-fast), color var(--duration-fast);
 }
 .search-field.focused .search-field-icon { opacity: 0.8; color: var(--primary); }
 .search-field-input {
@@ -965,7 +961,7 @@ function handleRecheckBatch() {
   color: var(--text-secondary); font-size: 10px; cursor: pointer; flex-shrink: 0;
   width: 20px; height: 20px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  transition: all 0.15s; opacity: 0.5;
+  transition: all var(--duration-fast); opacity: 0.5;
 }
 .search-field-clear:hover { color: var(--text-primary); background: var(--hover-overlay); opacity: 1; }
 
@@ -979,7 +975,7 @@ function handleRecheckBatch() {
   display: flex; align-items: center; gap: 10px; padding: 0 16px 0 11px;
   height: 40px; cursor: pointer;
   border-bottom: 1px solid var(--primary-alpha-5);
-  transition: background 0.1s;
+  transition: background var(--duration-micro);
 }
 .skeleton-row { pointer-events: none; }
 .link-row:last-child { border-bottom: none; }
@@ -998,7 +994,7 @@ function handleRecheckBatch() {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 8px; border-radius: 4px;
   cursor: pointer; flex-shrink: 0;
-  transition: background 0.1s;
+  transition: background var(--duration-micro);
 }
 .service-badge:hover { background: var(--primary-alpha-8); }
 .badge-icon {
@@ -1038,7 +1034,7 @@ function handleRecheckBatch() {
 .recheck-btn, .delete-btn {
   display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;
   border: none; border-radius: 5px; background: transparent; color: var(--text-tertiary);
-  cursor: pointer; transition: background 0.1s, color 0.1s; font-size: 11px;
+  cursor: pointer; transition: background var(--duration-micro), color var(--duration-micro); font-size: 11px;
   flex-shrink: 0;
 }
 /* recheck-btn / delete-btn 透明度由父级 row-actions 统一控制 */
@@ -1052,7 +1048,7 @@ function handleRecheckBatch() {
   height: 0 !important;
   border-bottom-width: 0 !important;
   overflow: hidden;
-  transition: opacity 0.3s ease, height 0.35s ease, border-bottom-width 0.2s ease;
+  transition: opacity var(--duration-medium) ease, height var(--duration-slow) ease, border-bottom-width var(--duration-normal) ease;
   pointer-events: none;
 }
 
@@ -1073,10 +1069,9 @@ function handleRecheckBatch() {
   border: 1.5px solid currentColor;
   border-top-color: transparent;
   border-radius: 50%;
-  animation: spin-infinite 0.7s linear infinite;
+  animation: k-spin 0.7s linear infinite;
   flex-shrink: 0;
 }
-@keyframes spin-infinite { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 /* 右侧操作区：recheck + delete 整体收紧 */
 .row-actions {
@@ -1098,7 +1093,7 @@ function handleRecheckBatch() {
   width: 36px; height: 20px; border-radius: 4px;
   font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
   flex-shrink: 0; cursor: default;
-  opacity: 1; transition: opacity 0.3s ease;
+  opacity: 1; transition: opacity var(--duration-medium) ease;
 }
 .recheck-result-badge.badge-fading     { opacity: 0; }
 .recheck-result-badge.badge-valid      { background: var(--success-alpha-15, rgba(34, 197, 94, 0.15)); color: var(--success, #22c55e); }
@@ -1112,7 +1107,7 @@ function handleRecheckBatch() {
 
 /* 行入场动画（leave 由 fadingOut class 自行处理，此处只定义 enter） */
 .row-list-enter-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity var(--duration-normal) ease, transform var(--duration-normal) ease;
 }
 .row-list-enter-from {
   opacity: 0;
@@ -1120,7 +1115,7 @@ function handleRecheckBatch() {
 }
 
 /* 下拉动画（复用 settings-shared 定义） */
-.dropdown-enter-active, .dropdown-leave-active { transition: all 0.2s ease; }
+.dropdown-enter-active, .dropdown-leave-active { transition: all var(--duration-normal) ease; }
 .dropdown-enter-from, .dropdown-leave-to { opacity: 0; transform: translateY(8px); }
 
 /* ===== Hero 空状态（首次检测） ===== */
@@ -1140,7 +1135,7 @@ function handleRecheckBatch() {
   padding: 10px 28px; margin-top: 8px;
   background: var(--primary); color: #fff; border: none; border-radius: 10px;
   font-size: 14px; font-weight: 600; cursor: pointer;
-  transition: opacity 0.15s, transform 0.1s;
+  transition: opacity var(--duration-fast), transform var(--duration-micro);
 }
 .hero-cta:hover { opacity: 0.9; }
 .hero-cta:active { transform: scale(0.97); }
@@ -1165,7 +1160,7 @@ function handleRecheckBatch() {
 .page-btn {
   display: flex; align-items: center; justify-content: center; width: 26px; height: 26px;
   border: none; border-radius: 5px; background: var(--bg-input); color: var(--text-muted);
-  cursor: pointer; transition: background 0.1s, color 0.1s; font-size: 12px;
+  cursor: pointer; transition: background var(--duration-micro), color var(--duration-micro); font-size: 12px;
 }
 .page-btn:hover:not(:disabled) { background: var(--primary-alpha-8); color: var(--primary); }
 .page-btn:disabled { opacity: 0.3; cursor: default; }

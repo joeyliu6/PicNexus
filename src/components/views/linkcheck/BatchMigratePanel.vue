@@ -371,7 +371,7 @@ const showUnconfigured = ref(false);
 .wk-subtitle { font-size: 12px; color: var(--text-tertiary); }
 
 .wk-progress { height: 4px; background: var(--border-subtle); flex-shrink: 0; }
-.wk-progress-fill { height: 100%; background: var(--primary); transition: width 0.35s ease; border-radius: 0 2px 2px 0; }
+.wk-progress-fill { height: 100%; background: var(--primary); transition: width var(--duration-slow) ease; border-radius: 0 2px 2px 0; }
 
 .wk-body {
   flex: 1; overflow-y: auto; padding: 20px;
@@ -405,7 +405,7 @@ const showUnconfigured = ref(false);
   padding: 16px; border-radius: 10px;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  cursor: pointer; transition: all 0.15s;
+  cursor: pointer; transition: all var(--duration-fast);
   gap: 6px;
 }
 
@@ -496,7 +496,7 @@ const showUnconfigured = ref(false);
   background: none; border: none; cursor: pointer;
   font-size: 12px; font-weight: 500; color: var(--text-muted);
   padding: 6px 0; font-family: inherit;
-  transition: color 0.15s;
+  transition: color var(--duration-fast);
 }
 
 .adv-toggle:hover { color: var(--text-secondary); }
@@ -710,7 +710,7 @@ const showUnconfigured = ref(false);
 .btn-primary, .btn-danger {
   display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 14px;
   border-radius: 7px; font-size: 13px; font-weight: 500; cursor: pointer;
-  white-space: nowrap; transition: background 0.15s, opacity 0.15s; border: none;
+  white-space: nowrap; transition: background var(--duration-fast), opacity var(--duration-fast); border: none;
   font-family: inherit;
 }
 
@@ -727,7 +727,7 @@ const showUnconfigured = ref(false);
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 13px; color: var(--text-tertiary);
   background: none; border: none; cursor: pointer;
-  transition: color 0.15s; font-family: inherit; font-weight: 500;
+  transition: color var(--duration-fast); font-family: inherit; font-weight: 500;
 }
 
 .link-btn:hover { color: var(--text-muted); }

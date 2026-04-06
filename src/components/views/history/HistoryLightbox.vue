@@ -524,7 +524,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
   align-items: center;
   justify-content: center;
   opacity: 0.15;
-  transition: opacity 0.25s ease, background 0.2s ease, color 0.2s ease;
+  transition: opacity var(--duration-normal) ease, background var(--duration-normal) ease, color var(--duration-normal) ease;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
@@ -550,7 +550,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
@@ -582,7 +582,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
   border-radius: 8px;
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
   opacity: 0;
-  transition: opacity 0.3s ease, transform 0.1s ease-out;
+  transition: opacity var(--duration-medium) ease, transform var(--duration-micro) ease-out;
   user-select: none;
 }
 
@@ -642,7 +642,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 /* Loading overlay 淡入淡出 */
 .lightbox-loader-enter-active,
 .lightbox-loader-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity var(--duration-medium) ease;
 }
 
 .lightbox-loader-enter-from,
@@ -768,7 +768,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) ease;
 }
 
 .action-btn:hover {
@@ -806,11 +806,11 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 }
 
 .lightbox-fade-enter-active {
-  transition: opacity 0.25s ease;
+  transition: opacity var(--duration-normal) ease;
 }
 
 .lightbox-fade-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity var(--duration-normal) ease;
 }
 
 .lightbox-fade-enter-from,

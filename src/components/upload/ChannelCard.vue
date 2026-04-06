@@ -158,7 +158,7 @@ function handleRetry() {
   border-radius: 8px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-card);
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
 }
 
 .channel-card:hover {
@@ -187,7 +187,7 @@ function handleRetry() {
   font-weight: 600;
   font-size: 11px;
   flex-shrink: 0;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
 }
 
 .channel-icon.has-svg {
@@ -261,7 +261,7 @@ function handleRetry() {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
 }
 
 .copy-btn {
@@ -329,7 +329,7 @@ function handleRetry() {
   font-size: 12px;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) ease;
   text-align: left;
 }
 
@@ -351,7 +351,7 @@ function handleRetry() {
 
 .copy-menu-enter-active,
 .copy-menu-leave-active {
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) ease;
 }
 
 .copy-menu-enter-from,

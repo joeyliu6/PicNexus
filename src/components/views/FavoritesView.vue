@@ -362,7 +362,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   height: 100%;
   object-fit: cover;
   opacity: 0;
-  transition: opacity 0.3s ease-in-out, transform 0.3s;
+  transition: opacity var(--duration-medium) ease-in-out, transform var(--duration-medium);
 }
 
 .photo-img.loaded {
@@ -379,7 +379,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   inset: 0;
   background: rgba(0, 0, 0, 0.1);
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity var(--duration-normal);
   pointer-events: none;
 }
 
@@ -404,7 +404,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: all 0.2s;
+  transition: all var(--duration-normal);
   z-index: 2;
 }
 
@@ -442,7 +442,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: all 0.2s;
+  transition: all var(--duration-normal);
   z-index: 2;
   cursor: pointer;
   font-size: 11px;
@@ -503,7 +503,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 
 .fav-item-leave-active {
   position: absolute; /* 脱离 Grid 流，邻居立刻开始滑动填补 */
-  transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+  transition: opacity var(--duration-slower) ease-out, transform var(--duration-slower) ease-out;
   z-index: 0;
 }
 
@@ -543,8 +543,8 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 
 /* === 空状态入场：下方浮入 + 缩放 + 弹性缓动 === */
 .empty-fade-enter-active {
-  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.15s,
-              transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.15s;
+  transition: opacity 0.4s var(--ease-standard) 0.15s,
+              transform 0.4s var(--ease-spring) 0.15s;
 }
 
 .empty-fade-enter-from {
@@ -553,7 +553,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 }
 
 .empty-fade-leave-active {
-  transition: opacity 0.15s ease;
+  transition: opacity var(--duration-fast) ease;
 }
 
 .empty-fade-leave-to {

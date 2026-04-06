@@ -662,7 +662,7 @@ const selectedAvailableServices = computed<string[]>(() => {
   border-radius: 8px;
   font-size: 13px;
   color: var(--text-secondary);
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) ease;
 }
 
 :deep(.p-paginator .p-paginator-pages .p-paginator-page:hover) {
@@ -684,7 +684,7 @@ const selectedAvailableServices = computed<string[]>(() => {
   height: 32px;
   border-radius: 8px;
   color: var(--text-muted);
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) ease;
 }
 
 :deep(.p-paginator .p-paginator-first:hover),
@@ -875,7 +875,7 @@ const selectedAvailableServices = computed<string[]>(() => {
   font-size: 11px;
   color: var(--text-primary);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--duration-fast);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -913,7 +913,7 @@ const selectedAvailableServices = computed<string[]>(() => {
   color: var(--text-muted);
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s;
+  transition: background var(--duration-fast);
 }
 
 .service-badge-more:hover {
@@ -942,7 +942,7 @@ const selectedAvailableServices = computed<string[]>(() => {
   font-size: 12px;
   font-family: inherit;
   color: var(--text-primary);
-  transition: background 0.15s;
+  transition: background var(--duration-fast);
 }
 
 .service-popover-item:hover {
@@ -954,7 +954,7 @@ const selectedAvailableServices = computed<string[]>(() => {
   font-size: 11px;
   color: var(--text-muted);
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-fast);
 }
 
 .service-popover-item:hover .pi-copy {
@@ -1023,12 +1023,7 @@ const selectedAvailableServices = computed<string[]>(() => {
   position: fixed;
   z-index: var(--z-lightbox);
   pointer-events: none;
-  animation: globalPreviewFadeIn 0.2s ease;
-}
-
-@keyframes globalPreviewFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  animation: k-fade-in 0.2s ease;
 }
 
 .global-thumb-hover-preview img {
