@@ -385,7 +385,7 @@ const isAnyForceLoading = computed(() =>
   font-size: 13px;
   cursor: pointer;
   text-align: left;
-  transition: background-color 0.15s;
+  transition: background-color var(--duration-fast);
 }
 
 .dropdown-item:hover:not(:disabled) {
@@ -403,7 +403,7 @@ const isAnyForceLoading = computed(() =>
 
 .dropdown-enter-active,
 .dropdown-leave-active {
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) ease;
 }
 
 .dropdown-enter-from,
@@ -414,7 +414,7 @@ const isAnyForceLoading = computed(() =>
 
 .dropdown-up-enter-active,
 .dropdown-up-leave-active {
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) ease;
 }
 
 .dropdown-up-enter-from,

@@ -572,7 +572,7 @@ watch(
   font-size: 12px;
   font-family: var(--font-mono);
   text-align: center;
-  transition: border-color 0.2s;
+  transition: border-color var(--duration-normal);
   flex-shrink: 0;
   -moz-appearance: textfield;
   appearance: textfield;
@@ -623,7 +623,7 @@ watch(
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
 }
 
 .test-connection-btn:hover:not(:disabled) {

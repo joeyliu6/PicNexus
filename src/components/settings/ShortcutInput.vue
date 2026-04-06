@@ -119,7 +119,7 @@ function handleKeyDown(e: KeyboardEvent) {
   background: var(--bg-card);
   cursor: pointer;
   outline: none;
-  transition: all 0.2s;
+  transition: all var(--duration-normal);
   font-size: 13px;
   user-select: none;
 }

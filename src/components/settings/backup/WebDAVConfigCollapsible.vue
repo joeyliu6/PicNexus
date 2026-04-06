@@ -352,7 +352,7 @@ function handleTest() {
   font-size: 13px;
   line-height: 20px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
   border-radius: 6px;
 }
 
@@ -378,7 +378,7 @@ function handleTest() {
   color: var(--text-muted);
   font-size: 16px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
 }
 
 .add-btn:hover {

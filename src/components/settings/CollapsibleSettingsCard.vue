@@ -58,7 +58,7 @@ const emit = defineEmits<{
   border: 1px solid var(--border-subtle);
   border-radius: var(--settings-card-radius, 12px);
   overflow: hidden;
-  transition: border-color 0.2s ease;
+  transition: border-color var(--duration-normal) ease;
 }
 
 .collapsible-card:hover {

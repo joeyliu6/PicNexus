@@ -456,7 +456,7 @@ function toggleFilter(status: ServiceHealthStatus) {
   color: var(--text-muted);
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) ease;
 }
 
 .add-custom-s3-btn:hover {
@@ -488,17 +488,12 @@ function toggleFilter(status: ServiceHealthStatus) {
 }
 
 .ring-progress.stalled {
-  animation: ring-spin 2s linear infinite;
-}
-
-@keyframes ring-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  animation: k-spin 2s linear infinite;
 }
 
 .icon-swap-enter-active,
 .icon-swap-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease;
 }
 
 .icon-swap-enter-from,
@@ -522,22 +517,16 @@ function toggleFilter(status: ServiceHealthStatus) {
   stroke-dashoffset: 56.55;
   transform: rotate(-90deg);
   transform-origin: 50% 50%;
-  transition: stroke-dashoffset 0.35s ease;
+  transition: stroke-dashoffset var(--duration-slow) ease;
 }
 
 .pill-reveal {
-  animation: pillFadeIn 0.3s ease both;
+  animation: k-fade-scale 0.3s ease both;
 }
 
 .health-stats .pill-reveal:nth-child(2) { animation-delay: 80ms; }
 .health-stats .pill-reveal:nth-child(3) { animation-delay: 160ms; }
 .health-stats .pill-reveal:nth-child(4) { animation-delay: 240ms; }
-
-
-@keyframes pillFadeIn {
-  from { opacity: 0; transform: translateY(4px) scale(0.95); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
 
 .health-stats {
   display: flex;
@@ -555,7 +544,7 @@ function toggleFilter(status: ServiceHealthStatus) {
   border-radius: 20px;
   font-size: 12px;
   font-weight: 500;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) ease;
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
@@ -628,7 +617,7 @@ function toggleFilter(status: ServiceHealthStatus) {
   cursor: pointer;
   padding: 6px 12px;
   border-radius: 8px;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--duration-fast) ease;
   white-space: nowrap;
 }
 
@@ -642,15 +631,15 @@ function toggleFilter(status: ServiceHealthStatus) {
 }
 
 .ring-label {
-  transition: color 0.3s ease;
+  transition: color var(--duration-medium) ease;
 }
 
 .health-refresh.is-testing:not(.is-completed) .ring-label {
-  animation: label-breathe 2s ease-in-out infinite;
+  animation: k-pulse 2s ease-in-out infinite;
 }
 
 .health-refresh.is-completed {
-  animation: complete-bounce 0.4s ease-out;
+  animation: k-bounce 0.4s ease-out;
 }
 
 .health-refresh.is-completed .ring-label {
@@ -660,18 +649,6 @@ function toggleFilter(status: ServiceHealthStatus) {
 .health-refresh.is-completed .ring-fill {
   stroke: var(--success);
 }
-
-@keyframes complete-bounce {
-  0%   { transform: scale(1); }
-  40%  { transform: scale(1.08); }
-  100% { transform: scale(1); }
-}
-
-@keyframes label-breathe {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.55; }
-}
-
 
 .service-enable-section {
   padding: 14px;
@@ -712,7 +689,7 @@ function toggleFilter(status: ServiceHealthStatus) {
   border: 1px solid var(--border-subtle-light);
   border-radius: 20px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-normal);
 }
 
 .toggle-chip .toggle-label {
@@ -759,7 +736,7 @@ function toggleFilter(status: ServiceHealthStatus) {
   flex-shrink: 0;
   cursor: pointer;
   font-family: inherit;
-  transition: all 0.2s;
+  transition: all var(--duration-normal);
   opacity: 0.45;
 }
 
@@ -806,7 +783,7 @@ function toggleFilter(status: ServiceHealthStatus) {
   border: 1.5px solid var(--text-muted);
   opacity: 0.3;
   flex-shrink: 0;
-  transition: all 0.2s;
+  transition: all var(--duration-normal);
 }
 .toggle-chip.unconfigured:hover .toggle-empty-circle {
   opacity: 0.5;
@@ -848,14 +825,9 @@ function toggleFilter(status: ServiceHealthStatus) {
     transparent 100%
   );
   background-size: 200% 100%;
-  animation: chip-shimmer 1.4s ease-in-out infinite;
+  animation: k-shimmer 1.4s ease-in-out infinite reverse;
   border-radius: inherit;
   pointer-events: none;
-}
-
-@keyframes chip-shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
 }
 
 /* 单个服务检测完成：蓝色脉冲扩散 */
@@ -884,7 +856,7 @@ function toggleFilter(status: ServiceHealthStatus) {
 .toggle-chip.is-filtered-out {
   opacity: 0.15;
   pointer-events: none;
-  transition: opacity 0.2s;
+  transition: opacity var(--duration-normal);
 }
 
 /* .group-label / .form-group 样式来自 settings-shared.css */

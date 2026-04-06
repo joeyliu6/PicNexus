@@ -398,7 +398,7 @@ async function openLogDir() {
   border-radius: 4px;
   cursor: pointer;
   color: var(--text-muted);
-  transition: color 0.15s, background 0.15s;
+  transition: color var(--duration-fast), background var(--duration-fast);
 }
 
 .copy-version-btn:hover {
@@ -574,7 +574,7 @@ async function openLogDir() {
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-normal);
   text-align: left;
 }
 

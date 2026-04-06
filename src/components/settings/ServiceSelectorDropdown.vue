@@ -127,7 +127,7 @@ function selectService(svc: ServerServiceType | null) {
   color: var(--text-main);
   cursor: pointer;
   font-size: 13px;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background var(--duration-fast) ease, border-color var(--duration-fast) ease;
 }
 
 .service-trigger:hover {
@@ -184,7 +184,7 @@ function selectService(svc: ServerServiceType | null) {
   cursor: pointer;
   font-size: 13px;
   text-align: left;
-  transition: background 0.1s;
+  transition: background var(--duration-micro);
 }
 
 .service-item:hover:not(.disabled) {
@@ -240,7 +240,7 @@ function selectService(svc: ServerServiceType | null) {
   border-radius: 50%;
   background: var(--text-muted);
   flex-shrink: 0;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
 }
 
 .status-dot.configured,

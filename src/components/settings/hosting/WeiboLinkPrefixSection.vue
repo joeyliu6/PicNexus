@@ -204,7 +204,7 @@ function handleAdd() {
 
 .prefix-row {
   border-radius: 6px;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--duration-fast) ease;
 }
 
 .prefix-row:hover {

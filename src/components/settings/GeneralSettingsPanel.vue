@@ -301,7 +301,7 @@ function handleTemplateChange(template: string | undefined) {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  transition: all 0.2s;
+  transition: all var(--duration-normal);
   color: var(--text-secondary);
 }
 
@@ -373,7 +373,7 @@ function handleTemplateChange(template: string | undefined) {
   border-radius: 8px;
   background-color: var(--bg-card);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-normal);
   color: var(--text-secondary);
   font-size: 13px;
 }

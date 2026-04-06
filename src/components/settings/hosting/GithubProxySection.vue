@@ -261,7 +261,7 @@ function renderTemplate(cdn: GithubCdnProvider): string {
 
 .cdn-row {
   border-radius: 6px;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--duration-fast) ease;
 }
 
 .cdn-row:hover {

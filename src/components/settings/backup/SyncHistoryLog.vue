@@ -157,7 +157,7 @@ function formatRelativeTime(timestamp: number): string {
   cursor: pointer;
   padding: 4px 8px;
   border-radius: var(--radius-sm);
-  transition: color 0.15s, background 0.15s;
+  transition: color var(--duration-fast), background var(--duration-fast);
 }
 
 .clear-btn:hover {

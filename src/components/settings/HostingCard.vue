@@ -212,7 +212,7 @@ const statusDotClass = computed(() => {
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   overflow: hidden;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
 }
 
 .hosting-card:hover {

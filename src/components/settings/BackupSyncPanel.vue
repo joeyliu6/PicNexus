@@ -454,7 +454,7 @@ function handleClearPassword() {
   border-radius: 10px;
   background: var(--hover-overlay-subtle);
   border: 1px solid var(--border-subtle);
-  transition: border-color 0.2s;
+  transition: border-color var(--duration-normal);
   display: flex;
   flex-direction: column;
   gap: 6px;

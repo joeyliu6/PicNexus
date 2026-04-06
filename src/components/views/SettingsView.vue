@@ -1407,7 +1407,7 @@ onUnmounted(() => {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.15s, color 0.15s;
+  transition: background-color var(--duration-fast), color var(--duration-fast);
   text-align: left;
   width: 100%;
 }
@@ -1456,11 +1456,6 @@ onUnmounted(() => {
 
 .settings-section {
   max-width: 800px;
-  animation: fadeIn 0.3s ease-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: translateY(0); }
+  animation: k-fade-slide-up 0.3s ease-out;
 }
 </style>

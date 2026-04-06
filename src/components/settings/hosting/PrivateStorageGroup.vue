@@ -268,7 +268,7 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
   color: var(--error);
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) ease;
 }
 
 .delete-profile-btn:hover {

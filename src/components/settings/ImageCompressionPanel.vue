@@ -474,7 +474,7 @@ function openPreviewDialog() {
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
 }
 
 .preset-tab:hover {
@@ -554,7 +554,7 @@ function openPreviewDialog() {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  transition: color 0.15s;
+  transition: color var(--duration-fast);
 }
 
 .delete-preset-btn:hover:not(:disabled) {
@@ -586,7 +586,7 @@ function openPreviewDialog() {
   padding: 2px 8px;
   border-radius: 999px;
   white-space: nowrap;
-  transition: all 0.2s;
+  transition: all var(--duration-normal);
 }
 
 .quality-badge.quality-low {
@@ -649,7 +649,7 @@ function openPreviewDialog() {
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
 }
 
 .format-tab:hover {
@@ -694,7 +694,7 @@ function openPreviewDialog() {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   overflow: hidden;
-  transition: border-color 0.15s;
+  transition: border-color var(--duration-fast);
 }
 
 .skip-input-group:focus-within {
@@ -738,7 +738,7 @@ function openPreviewDialog() {
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
   white-space: nowrap;
 }
 
@@ -766,7 +766,7 @@ function openPreviewDialog() {
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
   flex-shrink: 0;
 }
 
