@@ -181,7 +181,7 @@ function handleTest() {
               {{ profile.name }}
             </button>
           </div>
-          <button class="add-btn" @click="handleAddProfile" title="新建配置">+</button>
+          <button class="add-btn" @click="handleAddProfile" v-tooltip.top="'新建配置'">+</button>
         </div>
 
         <!-- 当前配置表单 -->

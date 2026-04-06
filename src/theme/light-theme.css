@@ -101,6 +101,12 @@
   --primary-border: rgba(59, 130, 246, 0.3);
   --primary-hover-bg: rgba(59, 130, 246, 0.05);
 
+  /* ===== 图片覆盖层（复选框、收藏按钮等浮于图片上的控件） ===== */
+  --photo-overlay-border: rgba(255, 255, 255, 0.8);
+  --photo-overlay-bg: rgba(0, 0, 0, 0.2);
+  --photo-overlay-bg-hover: rgba(0, 0, 0, 0.4);
+  --photo-shadow-light: rgba(0, 0, 0, 0.25);
+
   /* ===== 色彩方案 ===== */
   color-scheme: light;
 }

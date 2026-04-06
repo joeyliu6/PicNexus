@@ -24,13 +24,13 @@ const closeWindow = () => {
       <span class="app-title">PicNexus</span>
     </div>
     <div class="titlebar-controls">
-      <button class="titlebar-button" @click="minimizeWindow" title="最小化">
+      <button class="titlebar-button" @click="minimizeWindow" v-tooltip.bottom="'最小化'">
         <i class="pi pi-minus"></i>
       </button>
-      <button class="titlebar-button" @click="toggleMaximize" title="最大化/还原">
+      <button class="titlebar-button" @click="toggleMaximize" v-tooltip.bottom="'最大化/还原'">
         <i class="pi pi-window-maximize"></i>
       </button>
-      <button class="titlebar-button close" @click="closeWindow" title="关闭">
+      <button class="titlebar-button close" @click="closeWindow" v-tooltip.bottom="'关闭'">
         <i class="pi pi-times"></i>
       </button>
     </div>

@@ -107,7 +107,7 @@ async function openLogDir() {
           </div>
           <div class="app-version">
             版本 {{ appVersion }}
-            <button class="copy-version-btn" title="复制版本号" @click="copyVersion">
+            <button class="copy-version-btn" v-tooltip.top="'复制版本号'" @click="copyVersion">
               <i :class="versionCopied ? 'pi pi-check' : 'pi pi-copy'" />
             </button>
           </div>

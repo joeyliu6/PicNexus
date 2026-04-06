@@ -445,7 +445,7 @@ onUnmounted(() => {
         :key="dot.id"
         class="month-dot"
         :style="{ top: `${dot.position * 100}%` }"
-        :title="`${dot.label} (${dot.count}张)`"
+        v-tooltip.top="`${dot.label} (${dot.count}张)`"
       />
 
       <!-- 年份分隔线 -->
