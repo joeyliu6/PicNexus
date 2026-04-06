@@ -10,10 +10,17 @@
 
 :root {
   /* ---- Duration ---- */
+  --duration-micro: 100ms;    /* 极速反馈：按钮按下、背景闪变 */
   --duration-fast: 120ms;     /* 微交互：hover、focus、图标切换 */
   --duration-normal: 200ms;   /* 标准过渡：淡入淡出、颜色变化、下拉菜单 */
+  --duration-medium: 300ms;   /* 折叠面板、中等交互 */
   --duration-slow: 350ms;     /* 较大动作：面板滑入、遮罩、页面切换 */
   --duration-slower: 500ms;   /* 强调动画：进度条、复杂编排 */
+
+  /* ---- Duration（循环动画周期） ---- */
+  --duration-spinner: 800ms;  /* spinner 旋转周期 */
+  --duration-shimmer: 1500ms; /* 骨架屏微光周期 */
+  --duration-breathe: 2000ms; /* 呼吸脉冲周期 */
 
   /* ---- Easing ---- */
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);          /* 大多数过渡（Material 标准） */
@@ -33,11 +40,93 @@
 /* ---- 无障碍：减弱动效偏好 ---- */
 @media (prefers-reduced-motion: reduce) {
   :root {
+    --duration-micro: 0ms;
     --duration-fast: 0ms;
     --duration-normal: 0ms;
+    --duration-medium: 0ms;
     --duration-slow: 0ms;
     --duration-slower: 0ms;
+    --duration-spinner: 0ms;
+    --duration-shimmer: 0ms;
+    --duration-breathe: 0ms;
   }
+}
+
+
+/* ============================================================
+ * 共享 @keyframes
+ *
+ * 命名规则：k- 前缀，避免与组件 scoped 动画冲突
+ * 用法：animation: k-fade-in var(--duration-normal) var(--ease-standard) both;
+ * ============================================================ */
+
+/* -- k-fade-in：纯透明度淡入 -- */
+@keyframes k-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* -- k-fade-slide-up：淡入 + 从下方滑入（设置区块、列表项入场） -- */
+@keyframes k-fade-slide-up {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* -- k-fade-slide-down：淡入 + 从上方滑入（扫描结果、提示入场） -- */
+@keyframes k-fade-slide-down {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* -- k-fade-slide-left：淡入 + 从右侧滑入（状态消息） -- */
+@keyframes k-fade-slide-left {
+  from { opacity: 0; transform: translateX(-4px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* -- k-fade-scale：淡入 + 缩放 + 上滑（药丸/badge 入场） -- */
+@keyframes k-fade-scale {
+  from { opacity: 0; transform: translateY(4px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* -- k-spin：旋转（加载 spinner） -- */
+@keyframes k-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* -- k-shimmer：背景位置横向移动（骨架屏微光） -- */
+@keyframes k-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* -- k-pulse：透明度脉冲（呼吸/加载中状态） -- */
+@keyframes k-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.6; }
+}
+
+/* -- k-sweep：水平扫光（进度条发光效果） -- */
+@keyframes k-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+/* -- k-bounce：弹跳缩放（完成确认反馈） -- */
+@keyframes k-bounce {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+/* -- k-pop：多段弹跳缩放（收藏星形弹出） -- */
+@keyframes k-pop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.25); }
+  55%  { transform: scale(0.92); }
+  75%  { transform: scale(1.08); }
+  100% { transform: scale(1); }
 }
 
 
@@ -118,4 +207,29 @@
 .t-scale-fade-leave-to {
   opacity: 0;
   transform: scale(var(--scale-pop));
+}
+
+/* -- t-fade-slide：通用淡入 + 位移入场 -- */
+.t-fade-slide-enter-active {
+  animation: k-fade-slide-up var(--duration-medium) var(--ease-decelerate) both;
+}
+.t-fade-slide-leave-active {
+  transition: opacity var(--duration-fast) var(--ease-accelerate);
+}
+.t-fade-slide-leave-to {
+  opacity: 0;
+}
+
+/* -- t-collapse：折叠面板展开/收起 -- */
+.t-collapse-enter-active,
+.t-collapse-leave-active {
+  transition: all var(--duration-normal) var(--ease-standard);
+  overflow: hidden;
+}
+.t-collapse-enter-from,
+.t-collapse-leave-to {
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
 }
