@@ -37,6 +37,21 @@ const checkRows: Ref<LinkCheckRow[]> = shallowRef([]);
 let progressUnlisten: UnlistenFn | null = null;
 let checkSessionId = 0; // 防竞态：每次检测分配唯一 session，旧 finally 不会杀新检测
 
+/** 清理进度监听器，防止累积泄漏 */
+function clearProgressListener(): void {
+  if (progressUnlisten) {
+    progressUnlisten();
+    progressUnlisten = null;
+  }
+}
+
+/** 检测参数默认值 */
+const DEFAULT_CHECK_PARAMS = {
+  concurrency: 10,
+  per_host_limit: 3,
+  timeout_secs: 10,
+} as const;
+
 // 空闲释放：离开检测页面 5 分钟后自动清空数据，释放内存
 const IDLE_RELEASE_MS = 5 * 60 * 1000;
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -69,6 +84,31 @@ function liteRowToItem(row: LinkCheckLiteRow): HistoryItem {
 export function useLinkCheckManager() {
   const toast = useToast();
   const { loadConfig } = useConfigManager();
+
+  /** 重置检测状态 */
+  function resetCheckState(): void {
+    progress.value = null;
+    progressSource.value = null;
+    lastBatchResult.value = null;
+  }
+
+  /** 将检测结果关联到 rows（用 Map O(1) 查找替代 .find() O(n)） */
+  function applyResultsToRows(rows: LinkCheckRow[], results: BatchCheckResult['results']): void {
+    const rowMap = new Map(rows.map((r) => [`${r.url}::${r.historyId}`, r]));
+    for (const itemResult of results) {
+      const row = rowMap.get(`${itemResult.link}::${itemResult.history_id}`);
+      if (row) row.checkResult = itemResult as CheckLinkResult;
+    }
+  }
+
+  /** 检测结束时的清理（带 session 守卫，防止旧 finally 杀死新检测） */
+  function finalizeCheck(session: number): void {
+    if (checkSessionId === session) {
+      isChecking.value = false;
+      progressSource.value = null;
+      clearProgressListener();
+    }
+  }
 
   /**
    * 从 HistoryItem 列表构建待检测 URL（同步版，需提前加载 config）
@@ -154,14 +194,19 @@ export function useLinkCheckManager() {
       isLoading.value = false; // 提前结束 loading，用户已看到失效数据
 
       // Phase 2：后台静默加载剩余记录
+      // 先收集所有批次到临时数组，避免每批都 [...checkRows, ...batch] 导致 O(n²) 复制
       const loadedIds = new Set(invalidLiteRows.map((r) => r.id));
+      const pendingRows: LinkCheckRow[] = [];
       for await (const batch of historyDB.getLinkCheckRestStream(loadedIds, 2000)) {
         const batchItems = batch.map(liteRowToItem);
         const { rows } = buildCheckItemsSync(batchItems, config);
         restoreCheckStatus(rows, batchItems);
-        checkRows.value = [...checkRows.value, ...rows];
-        rebuildRowIndex();
+        pendingRows.push(...rows);
         await yieldToMain();
+      }
+      if (pendingRows.length > 0) {
+        checkRows.value = [...checkRows.value, ...pendingRows];
+        rebuildRowIndex();
       }
 
       lastLoadTime = Date.now();
@@ -208,9 +253,8 @@ export function useLinkCheckManager() {
 
     const mySession = ++checkSessionId;
     isChecking.value = true;
+    resetCheckState();
     progressSource.value = 'monitor';
-    progress.value = null;
-    lastBatchResult.value = null;
 
     try {
       // 确保数据已加载（复用已加载的 checkRows，避免重复全表扫描）
@@ -240,7 +284,7 @@ export function useLinkCheckManager() {
       toast.info('开始检测');
 
       // 监听进度事件（带 session 校验，防止旧会话数据污染新会话）
-      if (progressUnlisten) { progressUnlisten(); progressUnlisten = null; }
+      clearProgressListener();
       progressUnlisten = await listen<BatchCheckProgress>(
         'link-check://progress',
         (event) => {
@@ -253,23 +297,13 @@ export function useLinkCheckManager() {
       const result = await invoke<BatchCheckResult>('batch_check_links', {
         request: {
           links: requestItems,
-          concurrency: 10,
-          per_host_limit: 3,
-          timeout_secs: 10,
+          ...DEFAULT_CHECK_PARAMS,
         },
       });
 
       // 即使被取消，也要处理已完成的结果并入库
       lastBatchResult.value = result;
-
-      // 将检测结果关联到 rows（用 Map O(1) 查找替代 .find() O(n)）
-      const rowMap = new Map(rows.map((r) => [`${r.url}::${r.historyId}`, r]));
-      for (const itemResult of result.results) {
-        const row = rowMap.get(`${itemResult.link}::${itemResult.history_id}`);
-        if (row) {
-          row.checkResult = itemResult as CheckLinkResult;
-        }
-      }
+      applyResultsToRows(rows, result.results);
       checkRows.value = [...rows];
       rebuildRowIndex();
 
@@ -298,12 +332,7 @@ export function useLinkCheckManager() {
       toast.error('检测失败', String(err));
       return null;
     } finally {
-      // 只有当前 session 才执行清理，防止旧 finally 杀死新检测
-      if (checkSessionId === mySession) {
-        isChecking.value = false;
-        progressSource.value = null;
-        if (progressUnlisten) { progressUnlisten(); progressUnlisten = null; }
-      }
+      finalizeCheck(mySession);
     }
   }
 
@@ -322,7 +351,7 @@ export function useLinkCheckManager() {
     progress.value = null;
 
     // 监听进度（先清理旧监听器，防止累积泄漏）
-    if (progressUnlisten) { progressUnlisten(); progressUnlisten = null; }
+    clearProgressListener();
     progressUnlisten = await listen<BatchCheckProgress>(
       'link-check://progress',
       (event) => {
@@ -335,9 +364,7 @@ export function useLinkCheckManager() {
       const result = await invoke<BatchCheckResult>('batch_check_links', {
         request: {
           links: items,
-          concurrency: 10,
-          per_host_limit: 3,
-          timeout_secs: 10,
+          ...DEFAULT_CHECK_PARAMS,
         },
       });
 
@@ -348,10 +375,7 @@ export function useLinkCheckManager() {
     } finally {
       isChecking.value = false;
       progressSource.value = null;
-      if (progressUnlisten) {
-        progressUnlisten();
-        progressUnlisten = null;
-      }
+      clearProgressListener();
     }
   }
 
@@ -365,7 +389,7 @@ export function useLinkCheckManager() {
       ++checkSessionId; // 使旧 finally 失效
       isChecking.value = false;
       progressSource.value = null;
-      if (progressUnlisten) { progressUnlisten(); progressUnlisten = null; }
+      clearProgressListener();
       // toast 移至检测函数中，入库后再提示（含已入库数量）
       log.info('已发送取消请求');
     } catch (err) {
@@ -375,6 +399,7 @@ export function useLinkCheckManager() {
 
   /**
    * 批量检测完成后，更新 DB 中的 linkCheckStatus/linkCheckSummary
+   * 使用 batchUpdateLinkCheckStatus 批量写入，避免逐条 update 的 O(n) 串行等待
    */
   async function updateHistoryCheckStatus(
     result: BatchCheckResult,
@@ -388,14 +413,17 @@ export function useLinkCheckManager() {
       grouped.set(r.history_id, list);
     }
 
-    // 逐条更新
+    // 构建批量更新数据
+    const updates: Array<{ id: string; linkCheckStatus: string; linkCheckSummary: string }> = [];
+    const now = Date.now();
+
     for (const [historyId, checkResults] of grouped) {
       const linkCheckStatus: NonNullable<HistoryItem['linkCheckStatus']> = {};
       for (const cr of checkResults) {
         const sid = cr.service_id || 'unknown';
         linkCheckStatus[sid] = {
           isValid: cr.is_valid,
-          lastCheckTime: Date.now(),
+          lastCheckTime: now,
           statusCode: cr.status_code,
           errorType: cr.error_type as 'success' | 'http_4xx' | 'http_5xx' | 'timeout' | 'network' | 'pending',
           responseTime: cr.response_time,
@@ -411,17 +439,21 @@ export function useLinkCheckManager() {
         validLinks: validCount,
         invalidLinks: totalLinks - validCount,
         uncheckedLinks: 0,
-        lastCheckTime: Date.now(),
+        lastCheckTime: now,
       };
 
-      try {
-        await historyDB.update(historyId, { linkCheckStatus, linkCheckSummary });
-      } catch (err) {
-        log.error(`更新 ${historyId} 检测状态失败`, err);
-      }
+      updates.push({
+        id: historyId,
+        linkCheckStatus: JSON.stringify(linkCheckStatus),
+        linkCheckSummary: JSON.stringify(linkCheckSummary),
+      });
     }
 
-    log.info(`已更新 ${grouped.size} 条历史记录的检测状态`);
+    try {
+      await historyDB.batchUpdateLinkCheckStatus(updates);
+    } catch (err) {
+      log.error('批量更新检测状态失败', err);
+    }
   }
 
   /**
@@ -536,7 +568,7 @@ export function useLinkCheckManager() {
 
       toast.info('开始检测');
 
-      if (progressUnlisten) { progressUnlisten(); progressUnlisten = null; }
+      clearProgressListener();
       progressUnlisten = await listen<BatchCheckProgress>(
         'link-check://progress',
         (event) => {
@@ -548,21 +580,18 @@ export function useLinkCheckManager() {
       const result = await invoke<BatchCheckResult>('batch_check_links', {
         request: {
           links: requestItems,
-          concurrency: 10,
-          per_host_limit: 3,
-          timeout_secs: 10,
+          ...DEFAULT_CHECK_PARAMS,
         },
       });
 
       // 即使被取消，也要处理已完成的结果并入库
       const allRows = [...checkRows.value];
-      const subsetMap = new Map(allRows.map((r) => [`${r.url}::${r.historyId}`, r]));
+      applyResultsToRows(allRows, result.results);
+      // 子集复检需清除排序锁定
+      const rowMap = new Map(allRows.map((r) => [`${r.url}::${r.historyId}`, r]));
       for (const itemResult of result.results) {
-        const row = subsetMap.get(`${itemResult.link}::${itemResult.history_id}`);
-        if (row) {
-          row.checkResult = itemResult as CheckLinkResult;
-          row.pinnedSortWeight = undefined;
-        }
+        const row = rowMap.get(`${itemResult.link}::${itemResult.history_id}`);
+        if (row) row.pinnedSortWeight = undefined;
       }
       checkRows.value = allRows;
 
@@ -588,11 +617,7 @@ export function useLinkCheckManager() {
       toast.error('检测失败', String(err));
       return null;
     } finally {
-      if (checkSessionId === mySession) {
-        isChecking.value = false;
-        progressSource.value = null;
-        if (progressUnlisten) { progressUnlisten(); progressUnlisten = null; }
-      }
+      finalizeCheck(mySession);
     }
   }
 

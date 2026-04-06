@@ -46,8 +46,13 @@ const showCheckMenu = ref(false);
 const searchFocused = ref(false);
 const progressHover = ref(false);
 
-watch(selectedServiceId, () => { pageByFilter.clear(); currentPage.value = 1; });
-watchDebounced(searchInput, (val) => { searchQuery.value = val; pageByFilter.clear(); currentPage.value = 1; }, { debounce: 200 });
+function resetPageState(): void {
+  pageByFilter.clear();
+  currentPage.value = 1;
+}
+
+watch(selectedServiceId, () => { resetPageState(); });
+watchDebounced(searchInput, (val) => { searchQuery.value = val; resetPageState(); }, { debounce: 200 });
 watch(statusFilter, (newFilter, oldFilter) => {
   pageByFilter.set(oldFilter!, currentPage.value);
   currentPage.value = pageByFilter.get(newFilter!) ?? 1;
@@ -129,10 +134,10 @@ const visibleRows = computed(() => {
 });
 
 const progressPercent = computed(() => {
-  if (stats.value.total === 0) return 0;
-  // 历史已检测 + 本轮已检测 = 整体完成度
-  const currentChecked = stats.value.checked + (props.progress?.checked ?? 0);
-  return Math.min(100, Math.round((currentChecked / stats.value.total) * 100));
+  const p = props.progress;
+  if (!p || p.total === 0) return 0;
+  // 仅反映本轮检测进度，语义清晰：本轮已检测 / 本轮总数
+  return Math.min(100, Math.round((p.checked / p.total) * 100));
 });
 
 const progressTooltip = computed(() => {
@@ -292,18 +297,8 @@ const bottomSummary = computed(() => {
 
 function handlePageInput(e: Event) {
   const raw = (e.target as HTMLInputElement).value.trim();
-  if (!raw) {
-    pageInput.value = String(currentPage.value);
-    return;
-  }
   const val = parseInt(raw, 10);
-  if (Number.isNaN(val) || val < 1) {
-    currentPage.value = 1;
-  } else if (val > totalPages.value) {
-    currentPage.value = totalPages.value;
-  } else {
-    currentPage.value = val;
-  }
+  currentPage.value = (!raw || Number.isNaN(val) || val < 1) ? 1 : Math.min(val, totalPages.value);
   pageInput.value = String(currentPage.value);
 }
 
@@ -321,16 +316,19 @@ function statusDotColor(row: LinkCheckRow): string {
   return 'var(--error)';
 }
 
+/** 统一状态判定：未检测 / 成功 / 警告 / 可疑 / 错误 */
+function getErrorStatus(r: CheckLinkResult | null): string {
+  if (!r) return 'unchecked';
+  if (r.is_valid) return 'success';
+  if (r.error_type === 'timeout') return 'warning';
+  if (r.error_type === 'suspicious' || r.browser_might_work) return 'suspicious';
+  return 'error';
+}
+
 /** error-badge 的样式类：recheckResult 优先，与 errorLabel / 圆点同步 */
-function errorBadgeClass(row: LinkCheckRow): Record<string, boolean> {
+function errorBadgeClass(row: LinkCheckRow): string {
   const r = row.recheckResult ?? row.checkResult;
-  return {
-    'error-badge--success': !!r?.is_valid,
-    'error-badge--unchecked': !r,
-    'error-badge--error': !!r && ['http_4xx', 'http_5xx', 'network'].includes(r.error_type) && !r.browser_might_work,
-    'error-badge--warning': r?.error_type === 'timeout',
-    'error-badge--suspicious': r?.error_type === 'suspicious' || !!r?.browser_might_work,
-  };
+  return `error-badge--${getErrorStatus(r)}`;
 }
 
 /** 左侧 error-badge：recheckResult 优先，与圆点同步更新 */
@@ -472,6 +470,7 @@ function handleRecheckBatch() {
         <template v-else>
           <button
             class="filter-chip chip--error" :class="{ active: statusFilter === 'invalid' }"
+            :aria-pressed="statusFilter === 'invalid'"
             @click="statusFilter = statusFilter === 'invalid' ? null : 'invalid'"
           >
             <span class="chip-dot" style="background: var(--error)"></span>
@@ -480,6 +479,7 @@ function handleRecheckBatch() {
           <button
             v-if="stats.suspicious > 0"
             class="filter-chip chip--suspicious" :class="{ active: statusFilter === 'suspicious' }"
+            :aria-pressed="statusFilter === 'suspicious'"
             @click="statusFilter = statusFilter === 'suspicious' ? null : 'suspicious'"
           >
             <span class="chip-dot" style="background: var(--pending)"></span>
@@ -488,6 +488,7 @@ function handleRecheckBatch() {
           <button
             v-if="stats.timeout > 0"
             class="filter-chip chip--timeout" :class="{ active: statusFilter === 'timeout' }"
+            :aria-pressed="statusFilter === 'timeout'"
             @click="statusFilter = statusFilter === 'timeout' ? null : 'timeout'"
           >
             <span class="chip-dot" style="background: var(--warning)"></span>
@@ -496,6 +497,7 @@ function handleRecheckBatch() {
           <button
             v-if="stats.unchecked > 0"
             class="filter-chip chip--unchecked" :class="{ active: statusFilter === 'unchecked' }"
+            :aria-pressed="statusFilter === 'unchecked'"
             @click="statusFilter = statusFilter === 'unchecked' ? null : 'unchecked'"
           >
             <span class="chip-dot" style="background: var(--text-tertiary)"></span>
@@ -503,6 +505,7 @@ function handleRecheckBatch() {
           </button>
           <button
             class="filter-chip chip--valid" :class="{ active: statusFilter === 'valid' }"
+            :aria-pressed="statusFilter === 'valid'"
             @click="statusFilter = statusFilter === 'valid' ? null : 'valid'"
           >
             <span class="chip-dot" style="background: var(--success)"></span>
@@ -510,6 +513,7 @@ function handleRecheckBatch() {
           </button>
           <button
             class="filter-chip chip--all" :class="{ active: statusFilter === 'all' }"
+            :aria-pressed="statusFilter === 'all'"
             @click="statusFilter = statusFilter === 'all' ? null : 'all'"
           >
             全部 {{ stats.total }}
@@ -562,6 +566,7 @@ function handleRecheckBatch() {
         <input
           v-model="searchInput" type="text" class="search-field-input"
           placeholder="搜索文件名..."
+          aria-label="搜索链接文件名"
           @focus="searchFocused = true"
           @blur="searchFocused = false"
         />
@@ -660,7 +665,7 @@ function handleRecheckBatch() {
                 v-else
                 class="recheck-btn"
                 :class="{ spinning: row.recheckLoading }"
-                title="重新检测"
+                v-tooltip.top="'重新检测'"
                 @click.stop="handleRecheck(row)"
               >
                 <i class="pi pi-refresh"></i>
@@ -669,7 +674,7 @@ function handleRecheckBatch() {
             <button
               class="delete-btn"
               :disabled="isChecking"
-              title="删除此记录"
+              v-tooltip.top="'删除此记录'"
               @click.stop="emit('delete-row', row)"
             >
               <i class="pi pi-trash"></i>
@@ -685,6 +690,11 @@ function handleRecheckBatch() {
       <div
         v-if="isChecking && progressSource !== 'rescue'"
         class="progress-bar"
+        role="progressbar"
+        :aria-valuenow="progressPercent"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-label="progressTooltip"
         @mouseenter="progressHover = true"
         @mouseleave="progressHover = false"
       >
@@ -826,7 +836,7 @@ function handleRecheckBatch() {
 
 .check-btn-group { display: flex; position: relative; }
 .check-btn-group.has-dropdown .btn-primary:first-child { border-radius: 7px 0 0 7px; }
-.check-toggle { border-radius: 0 7px 7px 0; padding: 0 7px; border-left: 1px solid rgba(255,255,255,0.2); }
+.check-toggle { border-radius: 0 7px 7px 0; padding: 0 7px; border-left: 1px solid var(--primary-alpha-15); }
 .check-dropdown {
   position: absolute; bottom: calc(100% + 6px); right: 0; min-width: 220px;
   background: var(--bg-card); border-radius: 10px; padding: 4px 0;
