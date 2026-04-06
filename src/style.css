@@ -304,7 +304,7 @@ button:focus-visible {
   width: 46px;
   height: 100%;
   cursor: default;
-  transition: background-color 0.2s;
+  transition: background-color var(--duration-normal);
 }
 
 .titlebar-button img,
@@ -337,7 +337,7 @@ button:focus-visible {
 /* Dashboard Layout */
 .dashboard-container {
   background-color: var(--bg-app);
-  transition: background-color 0.3s ease;
+  transition: background-color var(--duration-medium) ease;
 }
 
 /* 2.3 Content View Area */
@@ -349,7 +349,7 @@ button:focus-visible {
   position: relative;
   
   /* Layout transition */
-  transition: padding 0.3s ease;
+  transition: padding var(--duration-medium) ease;
 }
 
 .view {
@@ -379,7 +379,7 @@ button:focus-visible {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
   color: var(--text-primary);
   font-family: inherit;
   font-size: var(--text-base);
@@ -463,8 +463,8 @@ button:focus-visible {
   color: var(--text-secondary);
   
   /* 动画 */
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  animation: status-message-fade-in 0.3s ease-out;
+  transition: all var(--duration-medium) var(--ease-standard);
+  animation: k-fade-slide-left 0.3s ease-out;
 }
 
 /* 当状态消息为空时隐藏（避免显示空框） */
@@ -477,18 +477,6 @@ button:focus-visible {
   margin: 0;
   border: none;
   background: transparent;
-}
-
-/* 状态消息淡入动画 */
-@keyframes status-message-fade-in {
-  from {
-    opacity: 0;
-    transform: translateX(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
 }
 
 /* 成功状态 */
@@ -555,7 +543,7 @@ button:focus-visible {
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
   white-space: nowrap;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
 }
 
 .service-badge.success {
@@ -584,7 +572,7 @@ button:focus-visible {
   color: var(--text-primary);
   font-size: 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
 }
 
 .service-retry-btn:hover {
@@ -604,7 +592,7 @@ button:focus-visible {
   border-radius: 4px;
   color: var(--text-muted);
   font-size: 0;
-  transition: all 0.2s;
+  transition: all var(--duration-normal);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -693,12 +681,7 @@ button:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: fade-in 0.2s ease-out;
-}
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  animation: k-fade-in 0.2s ease-out;
 }
 
 .modal-overlay {
@@ -778,7 +761,7 @@ button:focus-visible {
   font-weight: var(--weight-medium);
   cursor: pointer;
   border: 1px solid transparent;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-medium) var(--ease-standard);
   position: relative;
   overflow: hidden;
   backdrop-filter: blur(10px);
@@ -793,7 +776,7 @@ button:focus-visible {
   width: 100%;
   height: 100%;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-  transition: left 0.5s;
+  transition: left var(--duration-slower);
 }
 
 .btn:hover::before {
@@ -874,7 +857,7 @@ button:focus-visible {
   right: 0;
   bottom: 0;
   background-color: var(--bg-input);
-  transition: 0.3s;
+  transition: var(--duration-medium);
   border-radius: 24px;
   border: 1px solid var(--border-subtle);
 }
@@ -887,7 +870,7 @@ button:focus-visible {
   left: 2px;
   bottom: 2px;
   background-color: var(--text-secondary);
-  transition: 0.3s;
+  transition: var(--duration-medium);
   border-radius: 50%;
 }
 
@@ -924,7 +907,7 @@ button:focus-visible {
   padding: 12px 16px;
   border-radius: 12px; /* 圆角卡片 */
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
   user-select: none;
 }
 
@@ -950,7 +933,7 @@ button:focus-visible {
   font-size: 14px;
   font-weight: 500;
   color: #64748b; /* 未选中时暗灰色 */
-  transition: color 0.2s ease;
+  transition: color var(--duration-normal) ease;
 }
 
 /* 选中状态：文字恢复正常颜色 */
@@ -966,7 +949,7 @@ button:focus-visible {
   background-color: #64748b; /* 禁用时灰色 */
   border-radius: 50%;
   border: none; /* 移除通用样式的边框 */
-  transition: background-color 0.2s ease;
+  transition: background-color var(--duration-normal) ease;
   flex-shrink: 0;
 }
 
@@ -998,7 +981,7 @@ button:focus-visible {
   color: var(--text-primary);
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
   min-width: 0;
 }
 
@@ -1037,12 +1020,12 @@ button:focus-visible {
   border-radius: 8px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
   flex-shrink: 0;
 }
 
 .prefix-action-btn svg {
-  transition: transform 0.2s ease;
+  transition: transform var(--duration-normal) ease;
 }
 
 .prefix-action-btn:hover {
@@ -1136,7 +1119,7 @@ button:focus-visible {
   color: var(--text-primary);
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
   height: 36px;
   line-height: 1.5;
   box-sizing: border-box;
@@ -1167,7 +1150,7 @@ button:focus-visible {
   font-size: var(--text-sm);
   height: 36px;
   line-height: 1.5;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
   box-sizing: border-box;
 }
 
@@ -1224,7 +1207,7 @@ button:focus-visible {
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
   display: flex;
   flex-direction: column;
 }
@@ -1242,7 +1225,7 @@ button:focus-visible {
   left: 8px;
   z-index: 10;
   opacity: 0;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
   background-color: rgba(15, 23, 42, 0.85);
   backdrop-filter: blur(4px);
   border-radius: 6px;
@@ -1295,7 +1278,7 @@ button:focus-visible {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.3s ease;
+  transition: transform var(--duration-medium) ease;
 }
 
 /* 图片加载动画 */
@@ -1369,13 +1352,7 @@ button:focus-visible {
   border: 3px solid var(--border-subtle);
   border-top-color: var(--primary);
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: k-spin 0.8s linear infinite;
 }
 
 .grid-loading-indicator p {
@@ -1423,7 +1400,7 @@ button:focus-visible {
 /* 表格行：基础背景 */
 :deep(.p-datatable .p-datatable-tbody > tr) {
   background-color: var(--bg-card) !important;
-  transition: background-color 0.2s ease;
+  transition: background-color var(--duration-normal) ease;
 }
 
 /* 斑马纹：让阅读更轻松 */
@@ -1457,7 +1434,7 @@ button:focus-visible {
   color: var(--text-primary);
   font-size: 0.95rem;
   padding: 10px 14px;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
   box-shadow: none;
 }
 
@@ -1479,7 +1456,7 @@ button:focus-visible {
 :deep(.p-button) {
   border-radius: var(--p-border-radius);
   font-weight: 500;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) ease;
 }
 
 :deep(.p-button:hover) {
@@ -1522,7 +1499,7 @@ button:focus-visible {
   width: 32px;
   height: 32px;
   color: var(--text-muted);
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) ease;
 }
 
 :deep(.p-dialog .p-dialog-header-close:hover) {
@@ -1665,7 +1642,7 @@ button:focus-visible {
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) ease;
   order: 1;
 }
 
@@ -1691,7 +1668,7 @@ button:focus-visible {
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) ease;
   order: 0;
 }
 
@@ -1752,7 +1729,7 @@ button:focus-visible {
 
 /* 对话框动画 */
 .p-confirmdialog.p-dialog-enter-active {
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: all var(--duration-normal) var(--ease-overshoot);
 }
 
 .p-confirmdialog.p-dialog-enter-from {
@@ -1761,7 +1738,7 @@ button:focus-visible {
 }
 
 .p-confirmdialog.p-dialog-leave-active {
-  transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-fast) var(--ease-standard);
 }
 
 .p-confirmdialog.p-dialog-leave-to {
@@ -1807,7 +1784,7 @@ button:focus-visible {
   height: 32px;
   border-radius: 8px;
   color: var(--text-muted);
-  transition: all 0.15s ease;
+  transition: all var(--duration-fast) ease;
 }
 
 .p-dialog.backup-password-dlg .p-dialog-header-close:hover {
@@ -1845,7 +1822,7 @@ button:focus-visible {
 }
 
 .backup-password-dlg.p-dialog-enter-active {
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: all var(--duration-normal) var(--ease-overshoot);
 }
 
 .backup-password-dlg.p-dialog-enter-from {
@@ -1854,7 +1831,7 @@ button:focus-visible {
 }
 
 .backup-password-dlg.p-dialog-leave-active {
-  transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-fast) var(--ease-standard);
 }
 
 .backup-password-dlg.p-dialog-leave-to {
