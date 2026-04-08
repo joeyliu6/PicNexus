@@ -222,7 +222,7 @@ function handleCopy(payload: QueueCopyPayload) {
   gap: 3px;
   padding: 2px 6px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   font-weight: 500;
   border: 1px solid transparent;
 }
@@ -270,7 +270,7 @@ function handleCopy(payload: QueueCopyPayload) {
 
 .segment.uploading {
   background: var(--primary);
-  animation: k-pulse 1.5s ease-in-out infinite;
+  animation: k-pulse var(--duration-shimmer) ease-in-out infinite;
 }
 
 .status-line {
@@ -280,7 +280,7 @@ function handleCopy(payload: QueueCopyPayload) {
 }
 
 .status-text {
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   color: var(--text-muted);
 }
 

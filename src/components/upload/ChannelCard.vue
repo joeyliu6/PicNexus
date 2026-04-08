@@ -185,7 +185,7 @@ function handleRetry() {
   background: transparent;
   color: var(--text-muted);
   font-weight: 600;
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   flex-shrink: 0;
   transition: all var(--duration-normal) ease;
 }
@@ -226,7 +226,7 @@ function handleRetry() {
 }
 
 .status-label {
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   color: var(--text-muted);
 }
 
@@ -301,7 +301,7 @@ function handleRetry() {
 }
 
 .copy-menu-btn i {
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
 }
 
 .copy-format-menu {

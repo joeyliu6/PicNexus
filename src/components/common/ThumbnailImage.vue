@@ -100,7 +100,7 @@ watch(() => props.srcs, () => {
     var(--bg-input, #f3f4f6) 75%
   );
   background-size: 200% 100%;
-  animation: k-shimmer 1.5s ease-in-out infinite;
+  animation: k-shimmer var(--duration-shimmer) ease-in-out infinite;
 }
 
 .thumbnail-placeholder {

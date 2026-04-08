@@ -300,7 +300,7 @@ async function openLogDir() {
   <Dialog
     v-model:visible="showWechatQR"
     modal
-    :style="{ width: '336px' }"
+    :style="{ width: 'var(--dialog-width-sm)' }"
     :draggable="false"
     :closable="true"
     :pt="{ root: { class: 'wechat-qr-dialog' } }"

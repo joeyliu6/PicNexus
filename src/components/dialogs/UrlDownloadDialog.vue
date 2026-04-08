@@ -3,7 +3,7 @@
     :visible="visible"
     :modal="true"
     header="从 URL 下载图片"
-    :style="{ width: '460px' }"
+    :style="{ width: 'var(--dialog-width-md)' }"
     :draggable="false"
     @update:visible="handleClose"
   >

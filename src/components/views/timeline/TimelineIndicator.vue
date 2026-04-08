@@ -518,7 +518,7 @@ onUnmounted(() => {
   position: absolute;
   right: 4px;
   transform: translateY(-100%);  /* 标签位于年份底部边界上方 */
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   font-weight: 600;
   color: var(--text-secondary);
   opacity: 0.6;

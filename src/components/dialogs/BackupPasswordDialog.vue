@@ -3,7 +3,7 @@
     v-model:visible="visible"
     modal
     :header="dialogTitle"
-    :style="{ width: '460px' }"
+    :style="{ width: 'var(--dialog-width-md)' }"
     :closable="mode !== 'restore'"
     :draggable="false"
     :pt="{ root: { class: 'backup-password-dlg' }, closeButton: { class: 'backup-pwd-close-btn' } }"

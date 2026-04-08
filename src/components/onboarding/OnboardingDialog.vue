@@ -34,7 +34,7 @@ function handleNext() {
     modal
     :closable="false"
     :draggable="false"
-    :style="{ width: '460px' }"
+    :style="{ width: 'var(--dialog-width-md)' }"
     :pt="{
       root: { class: 'onboarding-dialog' },
       mask: { class: 'onboarding-mask' },

@@ -73,7 +73,7 @@
 }
 
 .method-hint {
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   color: var(--text-muted);
 }
 </style>

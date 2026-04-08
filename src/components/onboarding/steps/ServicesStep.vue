@@ -70,7 +70,7 @@
 }
 
 .group-badge {
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   font-weight: 600;
   padding: 3px 8px;
   border-radius: 6px;

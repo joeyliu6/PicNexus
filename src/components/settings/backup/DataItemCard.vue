@@ -308,7 +308,7 @@ const isAnyForceLoading = computed(() =>
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   font-weight: 500;
   padding: 2px 8px;
   border-radius: 10px;
@@ -346,7 +346,7 @@ const isAnyForceLoading = computed(() =>
 }
 
 .cloud-hint-icon {
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   color: var(--text-muted);
 }
 

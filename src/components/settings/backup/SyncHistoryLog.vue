@@ -247,12 +247,12 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 .row-time {
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   color: var(--text-muted);
 }
 
 .row-details-inline {
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   color: var(--text-muted);
   opacity: 0.7;
   overflow: hidden;

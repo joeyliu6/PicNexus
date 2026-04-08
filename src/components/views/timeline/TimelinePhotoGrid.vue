@@ -148,7 +148,7 @@ function getGroupItemCount(groupId: string): number {
   }
 
   .group-subtitle {
-    font-size: 11px;
+    font-size: var(--text-2xs-xs);
   }
 }
 

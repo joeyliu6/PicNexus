@@ -342,13 +342,13 @@ function renderTemplate(cdn: GithubCdnProvider): string {
 }
 
 .cdn-vars-hint {
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   color: var(--text-muted);
   padding-top: 2px;
 }
 
 .cdn-vars-hint code {
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   padding: 1px 4px;
   background: var(--hover-overlay);
   border-radius: 3px;
@@ -372,13 +372,13 @@ function renderTemplate(cdn: GithubCdnProvider): string {
 
 .cdn-preview-label {
   display: block;
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   color: var(--text-muted);
   margin-bottom: 4px;
 }
 
 .cdn-preview-url {
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   color: var(--primary);
   font-family: var(--font-mono);
   word-break: break-all;

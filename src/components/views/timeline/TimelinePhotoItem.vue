@@ -248,7 +248,7 @@ const successfulServices = computed(() => {
   transition: all var(--duration-normal);
   z-index: 2;
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
 }
 

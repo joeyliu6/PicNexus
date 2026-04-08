@@ -108,6 +108,14 @@
   --photo-overlay-bg-hover: rgba(0, 0, 0, 0.4);
   --photo-shadow-light: rgba(0, 0, 0, 0.25);
 
+  /* ===== Stitch Tonal Layering ===== */
+  --bg-surface-low: #161619;       /* 次级分组背景 */
+  --bg-surface-active: #27272a;    /* 选中/激活态背景 */
+  --bg-glass: rgba(19, 19, 22, 0.75);  /* glassmorphism 底栏 */
+  --primary-gradient: linear-gradient(135deg, var(--primary), #93c5fd);
+  --outline-ghost: rgba(39, 39, 42, 0.2);
+  --shadow-ambient: 0 -1px 12px rgba(0, 0, 0, 0.15);
+
   /* ===== 色彩方案 ===== */
   color-scheme: dark;
 }
