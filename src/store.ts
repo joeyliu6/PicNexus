@@ -6,85 +6,12 @@ import { readTextFile, writeTextFile, exists, mkdir, remove } from '@tauri-apps/
 import { appDataDir, join } from '@tauri-apps/api/path';
 import { secureStorage, isAnyEncryptedData, BackupPasswordRequiredError } from './crypto';
 import { createLogger } from './utils/logger';
+import { Mutex } from './utils/mutex';
+import { StoreError } from './utils/storeErrors';
+
+export { StoreError } from './utils/storeErrors';
 
 const log = createLogger('Store');
-
-/**
- * 简单的 Promise-based 互斥锁
- * 用于防止并发文件操作导致的竞态条件
- */
-class Mutex {
-  private locked = false;
-  private waitQueue: Array<() => void> = [];
-
-  /**
-   * 获取锁
-   * 如果锁已被持有，则等待直到锁可用
-   */
-  async acquire(): Promise<void> {
-    if (!this.locked) {
-      this.locked = true;
-      return;
-    }
-
-    // 等待锁释放
-    return new Promise<void>((resolve) => {
-      this.waitQueue.push(resolve);
-    });
-  }
-
-  /**
-   * 释放锁
-   * 如果有等待的任务，唤醒队列中的第一个任务
-   */
-  release(): void {
-    if (this.waitQueue.length > 0) {
-      // 唤醒队列中的下一个等待者
-      const next = this.waitQueue.shift();
-      if (next) {
-        next();
-      }
-    } else {
-      this.locked = false;
-    }
-  }
-
-  /**
-   * 使用锁执行操作
-   * 自动获取和释放锁，确保操作的原子性
-   * @param fn 要执行的异步操作
-   */
-  async withLock<T>(fn: () => Promise<T>): Promise<T> {
-    await this.acquire();
-    try {
-      return await fn();
-    } finally {
-      this.release();
-    }
-  }
-}
-
-/**
- * 自定义错误类，用于存储操作
- * 提供更详细的错误信息，包括操作类型、键名和原始错误
- */
-export class StoreError extends Error {
-  /**
-   * @param message 错误消息
-   * @param operation 操作类型 ('read' | 'write' | 'clear' | 'init')
-   * @param key 相关的键名（可选）
-   * @param originalError 原始错误对象（可选）
-   */
-  constructor(
-    message: string,
-    public readonly operation: 'read' | 'write' | 'clear' | 'init',
-    public readonly key?: string,
-    public readonly originalError?: any
-  ) {
-    super(message);
-    this.name = 'StoreError';
-  }
-}
 
 /**
  * 简单的键值存储类

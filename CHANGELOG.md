@@ -17,6 +17,12 @@
 ## [Unreleased]
 
 ### Fixed
+- **测试基础设施修复**
+  - 降级 vitest 4.x → 3.x，修复与 Vite 5 ��版本不兼容导致全部 18 个测试文件崩溃
+  - 修复 `MultiServiceUploader` 中无需配置的���床（jd/qiyu）通过 filter 后在 upload 阶���因 config 为空而误报错
+  - 更新 `externalEditorPanel.spec.ts`：补全 `@vueuse/core` mock（`useResizeObserver`）+ 适配组件 UI 重构后的新结构
+  - 更新 `advancedSettingsPanel.spec.ts`：移除已删除的 `retryEditorApply` emit 测试
+
 - **上传队列：虚拟滚动 + UI 修复**
   - VirtualScroller 固定 180px 项高度改为动态计算（基于启用图床数量），修复图床多时卡片截断重叠、图床少时留白过多
   - `.virtual-card` 的 `margin-bottom` 改为 `padding-bottom`，修复虚拟滚动定位累积偏移

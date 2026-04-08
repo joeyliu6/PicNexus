@@ -28,6 +28,9 @@ src-tauri/target
 src-tauri/gen/
 *.dat
 
+# 测试覆盖率报告
+coverage/
+
 .cursorrules
 
 .claude/
