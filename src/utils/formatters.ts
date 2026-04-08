@@ -2,6 +2,39 @@
  * 通用格式化工具函数
  */
 
+import type { HistoryItem } from '../config/types';
+
+const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+/** 格式化时间戳为本地日期时间字符串 */
+export function formatTime(timestamp: number): string {
+  return dateFormatter.format(new Date(timestamp));
+}
+
+/** 从历史记录项提取上传成功的图床 ID 列表 */
+export function getSuccessfulServices(item: HistoryItem): string[] {
+  return item.results.filter(r => r.status === 'success').map(r => r.serviceId);
+}
+
+/** 截断过长文件名（保留头尾 + 扩展名） */
+export function truncateMiddle(name: string, maxLen = 42): string {
+  if (name.length <= maxLen) return name;
+  const extIdx = name.lastIndexOf('.');
+  const ext = extIdx > 0 ? name.slice(extIdx) : '';
+  const base = extIdx > 0 ? name.slice(0, extIdx) : name;
+  const keep = maxLen - ext.length - 3;
+  if (keep <= 0) return name.slice(0, maxLen - 3) + '...';
+  const head = Math.ceil(keep / 2);
+  const tail = Math.floor(keep / 2);
+  return base.slice(0, head) + '...' + base.slice(-tail) + ext;
+}
+
 /**
  * 格式化相对时间（中文）
  */

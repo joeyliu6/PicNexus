@@ -11,11 +11,14 @@
 import { ref, computed, shallowRef } from 'vue';
 import type { Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { remove } from '@tauri-apps/plugin-fs';
 import { MultiServiceUploader } from '../core/MultiServiceUploader';
 import type { SingleServiceResult } from '../core/MultiServiceUploader';
 import { historyDB } from '../services/HistoryDatabase';
 import { configStore } from '../store/instances';
 import { getServiceDisplayName } from '../constants/serviceNames';
+import { needsFormatConversion } from '../constants/serviceFormats';
+import { Semaphore } from '../utils/semaphore';
 import { createLogger } from '../utils/logger';
 import type { HistoryItem, UserConfig } from '../config/types';
 import { DEFAULT_CONFIG } from '../config/types';
@@ -38,6 +41,34 @@ const PAGE_SIZE = 100;
 // 独立辅助函数
 // ============================================
 
+/** 知乎图片 URL 支持直接改后缀获取 JPG，避免下载 webp 后再转换 */
+function optimizeSourceUrl(url: string, targetServiceId: string): string {
+  if (/^https?:\/\/pic[x\d]\.zhimg\.com\//.test(url) && url.endsWith('.webp')) {
+    if (needsFormatConversion(targetServiceId, 'webp')) {
+      const optimized = url.replace(/\.webp$/, '.jpg');
+      log.info(`知乎 URL 优化: webp → jpg（目标: ${targetServiceId}）`);
+      return optimized;
+    }
+  }
+  return url;
+}
+
+/** 下载的文件格式不被目标图床支持时，用 compress_image 转为 JPEG */
+async function convertIfNeeded(filePath: string, targetServiceId: string): Promise<string> {
+  const ext = filePath.split('.').pop()?.toLowerCase() || '';
+  if (!needsFormatConversion(targetServiceId, ext)) return filePath;
+
+  log.info(`格式不兼容，转换 ${ext} → jpeg（目标: ${targetServiceId}）`);
+  const result = await invoke<{ outputPath: string }>('compress_image', {
+    filePath,
+    quality: 92,
+    maxLongSide: 0,
+    outputFormat: 'jpeg',
+    stripExif: true,
+  });
+  return result.outputPath;
+}
+
 async function migrateOneItem(
   item: HistoryItem,
   status: MigrateItemStatus,
@@ -57,6 +88,12 @@ async function migrateOneItem(
     return;
   }
 
+  // L4：下载前检查取消
+  if (isCancelled.value) {
+    status.status = 'skipped';
+    return;
+  }
+
   const sourceResult = item.results.find(r => r.status === 'success' && r.result?.url);
   if (!sourceResult?.result?.url) {
     status.status = 'failed';
@@ -69,8 +106,13 @@ async function migrateOneItem(
   status.status = 'downloading';
   let tempFilePath: string;
   try {
+    // 第一层优化：如果任一目标图床不支持 webp，知乎 URL 直接改后缀获取 JPG
+    const anyNeedsConversion = needUploadTargets.some(sid => needsFormatConversion(sid, 'webp'));
+    const optimizedUrl = anyNeedsConversion
+      ? optimizeSourceUrl(sourceResult.result.url, needUploadTargets.find(sid => needsFormatConversion(sid, 'webp'))!)
+      : sourceResult.result.url;
     const downloadResult = await invoke<{ file_path: string; content_type: string; file_size: number }>(
-      'download_url_image', { url: sourceResult.result.url },
+      'download_url_image', { url: optimizedUrl },
     );
     tempFilePath = downloadResult.file_path;
     // 累加文件大小到统计
@@ -82,15 +124,27 @@ async function migrateOneItem(
     return;
   }
 
+  // L4：上传前检查取消
+  if (isCancelled.value) {
+    // 清理已下载的临时文件
+    remove(tempFilePath).catch((e) => log.warn(`临时文件清理失败: ${tempFilePath}`, e));
+    status.status = 'skipped';
+    return;
+  }
+
   // 上传
   status.status = 'uploading';
   const newResults: SingleServiceResult[] = [];
   let hasSuccess = false;
+  const tempFiles = new Set<string>(); // 跟踪需要清理的临时文件
 
   for (const targetId of needUploadTargets) {
     if (isCancelled.value) break;
     try {
-      const uploadResult = await multiUploader.retryUpload(tempFilePath, targetId, config);
+      // 第二层兜底：文件格式不被目标图床支持时，自动转为 JPEG
+      const uploadPath = await convertIfNeeded(tempFilePath, targetId);
+      if (uploadPath !== tempFilePath) tempFiles.add(uploadPath);
+      const uploadResult = await multiUploader.retryUpload(uploadPath, targetId, config);
       newResults.push({ serviceId: targetId, result: uploadResult, status: 'success' });
       status.serviceResults[targetId] = 'success';
       hasSuccess = true;
@@ -100,6 +154,11 @@ async function migrateOneItem(
       status.serviceResults[targetId] = 'failed';
       log.warn(`迁移到 ${targetId} 失败: ${errorMsg}`);
     }
+  }
+
+  // 清理临时文件（下载的原文件 + 格式转换的文件）
+  for (const f of [tempFilePath, ...tempFiles]) {
+    remove(f).catch((e) => log.warn(`临时文件清理失败: ${f}`, e));
   }
 
   if (hasSuccess) {
@@ -141,33 +200,25 @@ async function processBatch(
   stats: Ref<MigrateStats>,
   onItemDone: (status: MigrateItemStatus) => void,
 ) {
-  let running = 0;
-  let idx = 0;
-
-  async function worker(): Promise<void> {
-    while (idx < batchStatuses.length && !isCancelled.value) {
-      if (running >= MAX_CONCURRENT) {
-        await new Promise(r => setTimeout(r, 100));
-        continue;
+  const semaphore = new Semaphore(MAX_CONCURRENT);
+  const tasks = batchStatuses.map((status, i) => {
+    const item = items[i];
+    return semaphore.withPermit(async () => {
+      if (isCancelled.value) {
+        status.status = 'skipped';
+        return;
       }
-      const i = idx++;
-      const item = items[i];
-      const status = batchStatuses[i];
-      running++;
       try {
         await migrateOneItem(item, status, targets, config, multiUploader, isCancelled, stats);
       } catch (e: unknown) {
         status.status = 'failed';
         status.error = e instanceof Error ? e.message : String(e);
       } finally {
-        running--;
         onItemDone(status);
       }
-    }
-  }
-
-  const workers = Array.from({ length: MAX_CONCURRENT }, () => worker());
-  await Promise.all(workers);
+    });
+  });
+  await Promise.all(tasks);
 }
 
 // ============================================
@@ -181,6 +232,8 @@ export function useBatchMigrateManager() {
 
   // 高级筛选
   const maxSuccessCount = ref(999); // 默认"全部"
+  const sourceServiceFilter = ref<string[]>([]); // 来源图床筛选，空数组 = 全部
+  const availableSourceServices = ref<Array<{ id: string; displayName: string; count: number }>>([]);
   const showAdvancedFilter = ref(false);
 
   // 图床配置
@@ -200,6 +253,9 @@ export function useBatchMigrateManager() {
   const migrateStats = ref<MigrateStats>({
     startTime: 0, elapsedMs: 0, processedCount: 0, totalCount: 0, totalBytes: 0,
   });
+
+  // 错误状态（C6：初始化/筛选失败时暴露给 UI）
+  const initError = ref<string | null>(null);
 
   // 计算属性
   const configuredServices = computed(() => targetServices.value.filter(s => s.isConfigured));
@@ -255,6 +311,14 @@ export function useBatchMigrateManager() {
     pendingStatuses = statuses;
     pendingProcessed = processed;
     pendingTotal = total;
+
+    // C3：页面不可见时 RAF 可能被跳过，直接同步更新
+    if (document.hidden) {
+      updateStatusDisplay(statuses, processed, total);
+      rafPending = false;
+      return;
+    }
+
     if (rafPending) return;
     rafPending = true;
     requestAnimationFrame(() => {
@@ -288,9 +352,19 @@ export function useBatchMigrateManager() {
 
   async function initConfiguring() {
     isFilterApplied.value = false;
+    initError.value = null;
+
+    // L3：始终清空缓存，确保读取最新配置
+    cachedConfig = null;
+
     try {
       const config = await getOrCacheConfig();
       cachedUploader = new MultiServiceUploader();
+
+      // F2：保留旧的勾选状态
+      const prevChecked = new Set(
+        targetServices.value.filter(s => s.checked).map(s => s.serviceId),
+      );
 
       const allServices = config.availableServices || [];
       const configured = cachedUploader.filterConfiguredServices(allServices, config);
@@ -300,21 +374,30 @@ export function useBatchMigrateManager() {
         displayName: getServiceDisplayName(sid),
         isConfigured: configured.includes(sid),
         pendingCount: 0,
-        checked: false,
+        checked: prevChecked.has(sid) && configured.includes(sid),
       }));
 
-      // 如果只有 1 个已配置图床，自动预勾选
+      // 如果无已勾选且只有 1 个已配置图床，自动预勾选
       const configuredList = targetServices.value.filter(s => s.isConfigured);
-      if (configuredList.length === 1) {
+      const hasChecked = targetServices.value.some(s => s.checked);
+      if (!hasChecked && configuredList.length === 1) {
         configuredList[0].checked = true;
       }
 
       isInitialized.value = true;
     } catch (e) {
       log.error('初始化失败', e);
+      initError.value = '初始化失败，请重试';
+      return;
     }
 
     await applyFilter();
+
+    // 默认全选来源图床，减少用户操作步骤
+    if (sourceServiceFilter.value.length === 0) {
+      sourceServiceFilter.value = availableSourceServices.value.map(s => s.id);
+    }
+
     isFilterApplied.value = true;
   }
 
@@ -324,24 +407,35 @@ export function useBatchMigrateManager() {
    */
   async function applyFilter() {
     try {
+      const hasServiceId = sourceServiceFilter.value.length > 0 ? sourceServiceFilter.value : undefined;
       const params = {
         maxSuccessCount: maxSuccessCount.value,
+        hasServiceId,
       };
 
-      // 获取总数 + 各图床分布
-      const [{ total }, existingMap] = await Promise.all([
+      // 获取总数 + 各图床分布（同时获取不带来源筛选的分布，用于构建来源下拉列表）
+      const [{ total }, existingMap, allDistribution] = await Promise.all([
         historyDB.getItemsByBackupCount({ ...params, limit: 1, offset: 0 }),
         historyDB.getServiceDistribution(params),
+        // 不带 hasServiceId 的分布——用于构建来源图床列表
+        historyDB.getServiceDistribution({ maxSuccessCount: maxSuccessCount.value }),
       ]);
 
+      // 更新目标图床的待迁移数
       for (const svc of targetServices.value) {
         if (svc.isConfigured) {
           const existing = existingMap.get(svc.serviceId) || 0;
           svc.pendingCount = total - existing;
         }
       }
+
+      // 构建来源图床列表（所有在 DB 中有记录的图床）
+      availableSourceServices.value = Array.from(allDistribution.entries())
+        .map(([id, count]) => ({ id, displayName: getServiceDisplayName(id), count }))
+        .sort((a, b) => b.count - a.count);
     } catch (e) {
       log.error('筛选失败', e);
+      initError.value = '数据查询失败，请重试';
     }
   }
 
@@ -379,8 +473,9 @@ export function useBatchMigrateManager() {
     let skipOffset = 0;
 
     while (!isCancelled.value) {
-      const { items } = await historyDB.getItemsByBackupCount({
+      const { items, total: queryTotal } = await historyDB.getItemsByBackupCount({
         maxSuccessCount: maxSuccessCount.value,
+        hasServiceId: sourceServiceFilter.value.length > 0 ? sourceServiceFilter.value : undefined,
         limit: PAGE_SIZE,
         offset: skipOffset,
       });
@@ -422,18 +517,22 @@ export function useBatchMigrateManager() {
 
       flushStatusUpdate();
 
-      // 记录未成功的项目 ID（它们不会从查询中消失）
+      // 记录所有已处理项的 ID（含成功项，因为 maxSuccessCount=999 时成功项不会从查询中消失）
       for (const status of batchStatuses) {
-        if (status.status !== 'success') {
-          processedIds.add(status.historyId);
-        }
+        processedIds.add(status.historyId);
       }
 
-      // 成功项已从查询中移除，重置 offset；未成功项靠 processedIds 过滤
-      skipOffset = 0;
-
+      // 本批次有成功项 → 重置 offset（成功项的 success_count 变化可能影响排序）
+      // 本批次无成功项 → 翻页继续查找未备份的项目
       const batchSuccessCount = batchStatuses.filter(s => s.status === 'success').length;
-      if (batchSuccessCount === 0) break;
+      if (batchSuccessCount > 0) {
+        skipOffset = 0;
+      } else {
+        skipOffset += PAGE_SIZE;
+      }
+
+      // L5：防止无限翻页 — 当 offset 超出查询总量时终止
+      if (skipOffset > 0 && skipOffset >= queryTotal) break;
     }
 
     migrateResult.value = { successCount, failedCount, skippedCount, failures };
@@ -454,18 +553,21 @@ export function useBatchMigrateManager() {
     globalProgress.value = { current: 0, total: 0, percent: 0 };
     migrateStats.value = { startTime: 0, elapsedMs: 0, processedCount: 0, totalCount: 0, totalBytes: 0 };
     cumulativeCounts.value = { success: 0, failed: 0, skipped: 0 };
+    sourceServiceFilter.value = [];
     isFilterApplied.value = false;
     cachedConfig = null;
     await initConfiguring();
   }
 
   async function retryFailed() {
+    // L1：重试前重新计算 pendingCount，确保 totalPending 准确
+    await applyFilter();
     await startMigrate();
   }
 
   return {
-    phase, isInitialized, isFilterApplied,
-    maxSuccessCount, showAdvancedFilter,
+    phase, isInitialized, isFilterApplied, initError,
+    maxSuccessCount, sourceServiceFilter, availableSourceServices, showAdvancedFilter,
     targetServices, configuredServices, unconfiguredServices,
     checkedTargets, totalPending, allBackedUp,
     itemStatuses, isMigrating, globalProgress, migrateResult, cumulativeCounts,

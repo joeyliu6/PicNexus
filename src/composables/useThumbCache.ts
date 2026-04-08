@@ -4,6 +4,7 @@
  */
 import { watch } from 'vue';
 import type { HistoryItem } from '../config/types';
+import type { ImageMeta } from '../types/image-meta';
 import { getActivePrefix } from '../config/types';
 import { useConfigManager } from './useConfig';
 import { useHistoryManager } from './useHistory';
@@ -97,6 +98,11 @@ export function generateThumbnailUrl(
   }
 
   return thumbUrl;
+}
+
+/** 从 ImageMeta 生成中等缩略图 URL（便捷方法） */
+export function getMetaThumbnailUrl(meta: ImageMeta, config: unknown): string {
+  return generateMediumThumbnailUrl(meta.primaryService, meta.primaryUrl, meta.primaryFileKey, config);
 }
 
 /**
