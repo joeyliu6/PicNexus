@@ -506,7 +506,7 @@ const handleSelectedCountUpdate = (count: number) => {
 }
 
 .stat-unit {
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   font-weight: 400;
   color: var(--primary);
   opacity: 0.7;

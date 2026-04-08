@@ -2,6 +2,7 @@
 // 图床服务选择器组件
 
 import { computed } from 'vue';
+import EmptyState from '../../common/EmptyState.vue';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
 
 // ==================== Props ====================
@@ -74,9 +75,9 @@ function handleToggle(serviceId: string) {
     </template>
 
     <!-- 空状态引导 -->
-    <div v-else class="empty-state">
-      <span class="empty-state-text">暂无可用图床，<button class="empty-state-link" @click="emit('go-settings')">前往设置配置</button></span>
-    </div>
+    <EmptyState v-else title="暂无可用图床">
+      <button class="empty-state-link" @click="emit('go-settings')">前往设置配置</button>
+    </EmptyState>
   </div>
 </template>
 
@@ -172,18 +173,6 @@ function handleToggle(serviceId: string) {
 }
 
 /* 空状态引导 */
-.empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 0;
-}
-
-.empty-state-text {
-  font-size: 0.95rem;
-  color: var(--text-secondary);
-}
-
 .empty-state-link {
   background: none;
   border: none;

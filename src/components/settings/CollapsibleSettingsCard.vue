@@ -95,6 +95,7 @@ const emit = defineEmits<{
 }
 
 .collapsible-card.allow-overflow.expanded .card-content {
+  /* TODO: 0.25s 无精确动效变量（最近为 --duration-normal: 200ms），暂保留硬编码 */
   animation: show-overflow 0s 0.25s forwards;
 }
 

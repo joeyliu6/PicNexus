@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
-import type { HistoryItem, ServiceType } from '../../../config/types';
-import { useToast } from '../../../composables/useToast';
+import { computed, toRef } from 'vue';
+import type { HistoryItem } from '../../../config/types';
 import { useConfigManager } from '../../../composables/useConfig';
-import { useCopyLink } from '../../../composables/useCopyLink';
-import { useConfirm } from '../../../composables/useConfirm';
 import { useHistoryManager } from '../../../composables/useHistory';
-import { formatFileSize } from '../../../utils/formatters';
+import { useLightboxZoom } from '../../../composables/history/useLightboxZoom';
+import { useLightboxImage } from '../../../composables/history/useLightboxImage';
+import { useLightboxActions } from '../../../composables/history/useLightboxActions';
+import { useLightboxInfo } from '../../../composables/history/useLightboxInfo';
+import { useLightboxKeyboard } from '../../../composables/history/useLightboxKeyboard';
 import { getPrimaryImageUrl } from '../../../utils/imageUrl';
-import { getServiceDisplayName } from '../../../constants/serviceNames';
-import { buildHistoryFailureLine } from '../../../utils/uploadFailureMessage';
+import LightboxBottomBar from './LightboxBottomBar.vue';
 
 const props = withDefaults(defineProps<{
   visible: boolean;
@@ -28,342 +28,77 @@ const emit = defineEmits<{
   (e: 'toggle-favorite', item: HistoryItem): void;
 }>();
 
-const toast = useToast();
 const configManager = useConfigManager();
-const { copyLink: copyLinkAction, applyPrefix } = useCopyLink();
-const { confirmDelete } = useConfirm();
 const historyManager = useHistoryManager();
+const itemRef = computed(() => props.item);
 
-const isItemFavorited = computed(() => {
-  if (!props.item) return false;
-  return historyManager.favoriteSet.value.has(props.item.id);
-});
+// ── 缩放 & 拖拽 ────────────────────────────
+const {
+  imageTransform,
+  imageCursor,
+  resetZoom,
+  handleDoubleClick,
+  handleImgMouseDown,
+  handleMouseMove,
+  handleMouseUp,
+  applyWheelZoom,
+  isDragMove,
+  isRecentDoubleClick,
+  cleanupDrag,
+} = useLightboxZoom();
 
-const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit'
-});
-
-const formatTime = (timestamp: number) => dateFormatter.format(new Date(timestamp));
-
-const getSuccessfulServices = (item: HistoryItem): string[] =>
-  item.results.filter(r => r.status === 'success').map(r => r.serviceId);
-
-const getFailedResults = (item: HistoryItem) =>
-  item.results.filter(r => r.status === 'failed');
-
-const successfulServicesText = computed(() => {
-  if (!props.item) return '';
-  return getSuccessfulServices(props.item).map(serviceId => getServiceDisplayName(serviceId)).join('、');
-});
-
-const failedResults = computed(() => {
-  if (!props.item) return [];
-  return getFailedResults(props.item);
-});
-
-const failedServicesText = computed(() =>
-  failedResults.value
-    .map(result => getServiceDisplayName(result.serviceId))
-    .join('、')
-);
-
-const failedServicesTooltip = computed(() =>
-  failedResults.value
-    .map(result => buildHistoryFailureLine(
-      getServiceDisplayName(result.serviceId),
-      result.error,
-      [result.serviceId]
-    ))
-    .join('；')
-);
-
+// ── 图片预加载 ──────────────────────────────
 const lightboxImage = computed(() => {
   if (!props.item) return '';
   return getPrimaryImageUrl(props.item, configManager.config.value);
 });
 
-const displaySrc = ref('');
-const imageReady = ref(false);
-const showLoadingIndicator = ref(false);
-const imageError = ref(false);
-const imageScale = ref(1);
-const MIN_SCALE = 0.5;
-const MAX_SCALE = 5;
+const itemId = computed(() => props.item?.id);
 
-let preloadInstance: HTMLImageElement | null = null;
-let loadingDelayTimer: ReturnType<typeof setTimeout> | null = null;
+const {
+  displaySrc,
+  imageReady,
+  showLoadingIndicator,
+  imageError,
+  onImageError,
+  cleanupPreload,
+} = useLightboxImage(lightboxImage, toRef(props, 'visible'), itemId, resetZoom);
 
-const translateX = ref(0);
-const translateY = ref(0);
-const isDragging = ref(false);
-let dragStartX = 0;
-let dragStartY = 0;
-let dragStartTranslateX = 0;
-let dragStartTranslateY = 0;
-let dragMoveDistance = 0;
-let dragRafId: number | null = null;
-
-function handleDoubleClick() {
-  recentDoubleClick = true;
-  setTimeout(() => { recentDoubleClick = false; }, 0);
-  if (imageScale.value !== 1) {
-    imageScale.value = 1;
-    translateX.value = 0;
-    translateY.value = 0;
-  }
-}
-
-function handleImgMouseDown(e: MouseEvent) {
-  isDragging.value = true;
-  dragMoveDistance = 0;
-  dragStartX = e.clientX;
-  dragStartY = e.clientY;
-  dragStartTranslateX = translateX.value;
-  dragStartTranslateY = translateY.value;
-  e.preventDefault();
-}
-
-function handleMouseMove(e: MouseEvent) {
-  if (!isDragging.value) return;
-  if (dragRafId !== null) return;
-  dragRafId = requestAnimationFrame(() => {
-    dragRafId = null;
-    const dx = e.clientX - dragStartX;
-    const dy = e.clientY - dragStartY;
-    dragMoveDistance = Math.sqrt(dx * dx + dy * dy);
-    translateX.value = dragStartTranslateX + dx;
-    translateY.value = dragStartTranslateY + dy;
-  });
-}
-
-function handleMouseUp() {
-  isDragging.value = false;
-  // 延迟重置：mouseup → click 序列中，让 closeLightbox 先判断本次是拖拽还是点击
-  setTimeout(() => { dragMoveDistance = 0; }, 0);
-  if (dragRafId !== null) {
-    cancelAnimationFrame(dragRafId);
-    dragRafId = null;
-  }
-}
-
-const imageTransform = computed(() =>
-  `translate(${translateX.value}px, ${translateY.value}px) scale(${imageScale.value})`
-);
-
-const imageCursor = computed(() =>
-  isDragging.value ? 'grabbing' : 'grab'
-);
-
-const truncateMiddle = (name: string, maxLen = 42): string => {
-  if (name.length <= maxLen) return name;
-  const extIdx = name.lastIndexOf('.');
-  const ext = extIdx > 0 ? name.slice(extIdx) : '';
-  const base = extIdx > 0 ? name.slice(0, extIdx) : name;
-  const keep = maxLen - ext.length - 3;
-  if (keep <= 0) return name.slice(0, maxLen - 3) + '...';
-  const head = Math.ceil(keep / 2);
-  const tail = Math.floor(keep / 2);
-  return base.slice(0, head) + '...' + base.slice(-tail) + ext;
-};
-
-const displayFileName = computed(() => {
-  if (!props.item?.localFileName) return '';
-  return truncateMiddle(props.item.localFileName);
+// ── 收藏状态 ────────────────────────────────
+const isItemFavorited = computed(() => {
+  if (!props.item) return false;
+  return historyManager.favoriteSet.value.has(props.item.id);
 });
 
-function cleanupPreload() {
-  if (preloadInstance) {
-    preloadInstance.onload = null;
-    preloadInstance.onerror = null;
-    preloadInstance = null;
-  }
-  if (loadingDelayTimer !== null) {
-    clearTimeout(loadingDelayTimer);
-    loadingDelayTimer = null;
-  }
-  showLoadingIndicator.value = false;
-}
+// ── 信息展示 ────────────────────────────────
+const {
+  displayFileName,
+  successfulServicesText,
+  failedResults,
+  failedServicesText,
+  failedServicesTooltip,
+} = useLightboxInfo(itemRef);
 
-function preloadAndSwitch(newSrc: string, immediateLoading = false) {
-  cleanupPreload();
-
-  if (!newSrc) {
-    displaySrc.value = '';
-    imageError.value = true;
-    return;
-  }
-
-  if (newSrc === displaySrc.value) {
-    imageError.value = false;
-    return;
-  }
-
-  imageError.value = false;
-
-  if (immediateLoading) {
-    showLoadingIndicator.value = true;
-  } else {
-    loadingDelayTimer = setTimeout(() => {
-      if (preloadInstance) showLoadingIndicator.value = true;
-    }, 150);
-  }
-
-  const img = new Image();
-  preloadInstance = img;
-
-  img.onload = () => {
-    if (preloadInstance !== img) return;
-    cleanupPreload();
-    displaySrc.value = newSrc;
-    imageReady.value = true;
-    imageError.value = false;
-  };
-
-  img.onerror = () => {
-    if (preloadInstance !== img) return;
-    cleanupPreload();
-    imageError.value = true;
-  };
-
-  img.src = newSrc;
-}
-
-function onImageError() {
-  // 预加载已确认图片可访问（imageReady = true）时，忽略 img 元素的二次请求错误
-  // 避免「预加载成功 → img 重新请求失败」的竞态误报
-  if (!imageReady.value) {
-    imageError.value = true;
-  }
-  imageReady.value = false;
-}
-
-function resetImageState() {
-  imageScale.value = 1;
-  translateX.value = 0;
-  translateY.value = 0;
-}
-
-function requireLink(): { link: string; item: HistoryItem } | null {
-  const link = props.item?.generatedLink;
-  if (!link || !props.item) {
-    toast.warn('无可用链接', '该项目没有可用的链接');
-    return null;
-  }
-  return { link, item: props.item };
-}
-
-const handleCopyLink = async () => {
-  const ctx = requireLink();
-  if (!ctx) return;
-  await copyLinkAction({
-    url: ctx.link,
-    fileName: ctx.item.localFileName,
-    serviceId: ctx.item.primaryService as ServiceType,
-    width: ctx.item.width,
-    height: ctx.item.height,
-  });
-};
-
-const openInBrowser = async () => {
-  const ctx = requireLink();
-  if (!ctx) return;
-  try {
-    const { open } = await import('@tauri-apps/plugin-shell');
-    const finalUrl = applyPrefix(ctx.link, ctx.item.primaryService as ServiceType);
-    await open(finalUrl);
-  } catch (error) {
-    console.error('[Lightbox] 打开链接失败:', error);
-    toast.error('打开失败', String(error));
-  }
-};
-
-const handleDelete = () => {
-  if (!props.item) return;
-  resetImageState();
-  confirmDelete('确定要删除这条历史记录吗？此操作不可撤销。', () => {
-    emit('delete', props.item!);
-  });
-};
-
-let recentDoubleClick = false;
-
-const closeLightbox = () => {
-  if (dragMoveDistance > 5) return;
-  if (recentDoubleClick) return;
-  emit('update:visible', false);
-};
-
-const navigatePrev = () => {
-  if (props.hasPrev) emit('navigate', 'prev');
-};
-
-const navigateNext = () => {
-  if (props.hasNext) emit('navigate', 'next');
-};
-
-function handleKeydown(e: KeyboardEvent) {
-  if (!props.visible) return;
-  if (e.key === 'Escape') closeLightbox();
-  if (e.key === 'ArrowLeft') navigatePrev();
-  if (e.key === 'ArrowRight') navigateNext();
-}
-
-let wheelThrottleTimer: ReturnType<typeof setTimeout> | null = null;
-
-function handleWheel(e: WheelEvent) {
-  if (!props.visible) return;
-  e.preventDefault();
-
-  if (e.ctrlKey) {
-    const delta = e.deltaY > 0 ? -0.15 : 0.15;
-    imageScale.value = Math.min(MAX_SCALE, Math.max(MIN_SCALE, imageScale.value + delta));
-  } else {
-    if (wheelThrottleTimer) return;
-    wheelThrottleTimer = setTimeout(() => { wheelThrottleTimer = null; }, 200);
-    if (e.deltaY > 0) navigateNext();
-    else if (e.deltaY < 0) navigatePrev();
-  }
-}
-
-function cleanupTimers() {
-  if (wheelThrottleTimer) {
-    clearTimeout(wheelThrottleTimer);
-    wheelThrottleTimer = null;
-  }
-  if (dragRafId !== null) {
-    cancelAnimationFrame(dragRafId);
-    dragRafId = null;
-  }
-  isDragging.value = false;
-  dragMoveDistance = 0;
-  cleanupPreload();
-}
-
-watch(() => props.visible, (val) => {
-  if (val) {
-    resetImageState();
-    displaySrc.value = '';
-    imageReady.value = false;
-    imageError.value = false;
-    preloadAndSwitch(lightboxImage.value, true);
-  } else {
-    cleanupTimers();
-  }
+// ── 操作 ────────────────────────────────────
+const { handleCopyLink, openInBrowser, handleDelete } = useLightboxActions({
+  item: itemRef,
+  resetZoom,
+  onDelete: (record) => emit('delete', record),
 });
 
-watch(() => props.item?.id, () => {
-  if (props.visible) {
-    resetImageState();
-    preloadAndSwitch(lightboxImage.value);
-  }
+// ── 键盘 & 滚轮 & 导航 ─────────────────────
+const { closeLightbox, navigatePrev, navigateNext, handleWheel } = useLightboxKeyboard({
+  visible: toRef(props, 'visible'),
+  hasPrev: toRef(props, 'hasPrev'),
+  hasNext: toRef(props, 'hasNext'),
+  isDragMove,
+  isRecentDoubleClick,
+  applyWheelZoom,
+  cleanupDrag,
+  cleanupPreload,
+  emitClose: () => emit('update:visible', false),
+  emitNavigate: (dir) => emit('navigate', dir),
 });
-
-onMounted(() => window.addEventListener('keydown', handleKeydown));
-onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 </script>
 
 <template>
@@ -422,59 +157,20 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
           <i class="pi pi-chevron-right"></i>
         </button>
 
-        <div v-if="item" class="lightbox-bottom" @click.stop>
-          <div class="lightbox-info-cell cell-filename">
-            <span class="cell-value filename-value" v-tooltip.top="item.localFileName">{{ displayFileName }}</span>
-            <span class="cell-label">文件名</span>
-          </div>
-          <div class="lightbox-divider"></div>
-          <div class="lightbox-info-cell cell-time">
-            <span class="cell-value">{{ formatTime(item.timestamp) }}</span>
-            <span class="cell-label">上传时间</span>
-          </div>
-          <div class="lightbox-divider"></div>
-          <div class="lightbox-info-cell cell-size">
-            <span class="cell-value">{{ formatFileSize(item.fileSize ?? 0) }}</span>
-            <span class="cell-label">文件大小</span>
-          </div>
-          <div class="lightbox-divider"></div>
-          <div
-            class="lightbox-info-cell cell-source"
-            v-tooltip.top="successfulServicesText"
-          >
-            <span class="cell-value source-value">{{ successfulServicesText }}</span>
-            <span class="cell-label">已传图床</span>
-          </div>
-          <template v-if="failedResults.length > 0">
-            <div class="lightbox-divider"></div>
-            <div
-              class="lightbox-info-cell cell-failed"
-              v-tooltip.top="failedServicesTooltip"
-            >
-              <span class="cell-value source-value">{{ failedServicesText }}</span>
-              <span class="cell-label">失败图床</span>
-            </div>
-          </template>
-          <div class="lightbox-actions">
-            <button
-              class="action-btn"
-              :class="{ 'action-btn-favorited': isItemFavorited }"
-              @click="emit('toggle-favorite', item)"
-              v-tooltip.top="isItemFavorited ? '取消收藏' : '收藏'"
-            >
-              <i :class="isItemFavorited ? 'pi pi-star-fill' : 'pi pi-star'"></i>
-            </button>
-            <button class="action-btn" @click="handleCopyLink" v-tooltip.top="'复制链接'">
-              <i class="pi pi-copy"></i>
-            </button>
-            <button class="action-btn" @click="openInBrowser" v-tooltip.top="'在浏览器打开'">
-              <i class="pi pi-external-link"></i>
-            </button>
-            <button class="action-btn action-btn-danger" @click="handleDelete" v-tooltip.top="'删除记录'">
-              <i class="pi pi-trash"></i>
-            </button>
-          </div>
-        </div>
+        <LightboxBottomBar
+          v-if="item"
+          :item="item"
+          :display-file-name="displayFileName"
+          :successful-services-text="successfulServicesText"
+          :failed-results="failedResults"
+          :failed-services-text="failedServicesText"
+          :failed-services-tooltip="failedServicesTooltip"
+          :is-item-favorited="isItemFavorited"
+          @copy-link="handleCopyLink"
+          @open-browser="openInBrowser"
+          @delete="handleDelete"
+          @toggle-favorite="emit('toggle-favorite', item)"
+        />
       </div>
     </Transition>
   </Teleport>
@@ -617,6 +313,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 .lightbox-breathe-icon {
   font-size: 1.5rem;
   color: var(--text-muted);
+  /* TODO: 3s 无对应动效变量（最大为 --duration-breathe: 2000ms），暂保留硬编码 */
   animation: lightbox-breathe 3s ease-in-out infinite;
 }
 
@@ -667,130 +364,6 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 
 .lightbox-error span {
   font-size: 14px;
-}
-
-.lightbox-bottom {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 3;
-  height: 64px;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  box-shadow: 0 -1px 0 0 rgba(255, 255, 255, 0.1);
-  display: flex;
-  align-items: center;
-  padding: 0 24px;
-  cursor: default;
-}
-
-.lightbox-info-cell {
-  display: flex;
-  flex-direction: column;
-  padding: 0 16px;
-  gap: 3px;
-  min-width: 0;
-  flex-shrink: 0;
-}
-
-.cell-filename {
-  flex: 5;
-  flex-shrink: 1;
-  padding-left: 0;
-}
-
-.cell-time {
-  flex: 2;
-}
-
-.cell-size {
-  flex: 1;
-}
-
-.cell-source {
-  flex: 1.5;
-  flex-shrink: 1;
-}
-
-.cell-failed {
-  flex: 1.6;
-  flex-shrink: 1;
-}
-
-.cell-value {
-  color: var(--text-main);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  white-space: nowrap;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-}
-
-.source-value,
-.filename-value {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.cell-label {
-  color: var(--text-tertiary);
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-}
-
-.lightbox-divider {
-  width: 1px;
-  height: 28px;
-  background: var(--border-subtle);
-  flex-shrink: 0;
-}
-
-.lightbox-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-  padding-left: 16px;
-}
-
-.action-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  border: none;
-  background: var(--hover-overlay-subtle);
-  color: var(--text-muted);
-  font-size: 15px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--duration-fast) ease;
-}
-
-.action-btn:hover {
-  background: var(--hover-overlay);
-  color: var(--text-main);
-}
-
-.action-btn-favorited {
-  color: var(--warning) !important;
-}
-
-.action-btn-favorited:hover {
-  background: var(--warning-alpha-15) !important;
-}
-
-.action-btn-danger {
-  color: var(--error);
-}
-
-.action-btn-danger:hover {
-  background: var(--error-soft);
-  color: var(--error);
 }
 
 /* 浅色模式：灯箱始终保持暗色风格，重新绑定为暗色变量值（来源：style.css :root） */

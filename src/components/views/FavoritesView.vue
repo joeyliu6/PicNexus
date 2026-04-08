@@ -3,14 +3,14 @@
  * FavoritesView - 收藏视图
  * 平铺均匀网格，无日期分组
  */
-import { ref, computed, watch, reactive, onUnmounted } from 'vue';
+import { ref, computed, watch, onUnmounted } from 'vue';
 import Skeleton from 'primevue/skeleton';
+import EmptyState from '../common/EmptyState.vue';
 import { useHistoryViewState } from '../../composables/useHistoryViewState';
 import { useHistoryManager } from '../../composables/useHistory';
 import { useConfigManager } from '../../composables/useConfig';
-import { useToast } from '../../composables/useToast';
-import { generateMediumThumbnailUrl } from '../../composables/useThumbCache';
-import type { ImageMeta } from '../../types/image-meta';
+import { useFavoritesData } from '../../composables/favorites/useFavoritesData';
+import { useFavoritesLightbox } from '../../composables/favorites/useFavoritesLightbox';
 import type { HistoryItem, ServiceType } from '../../config/types';
 import HistoryLightbox from './history/HistoryLightbox.vue';
 import FloatingActionBar from './history/FloatingActionBar.vue';
@@ -27,7 +27,6 @@ const emit = defineEmits<{
   (e: 'update:selectedCount', count: number): void;
 }>();
 
-const toast = useToast();
 const viewState = useHistoryViewState();
 const historyManager = useHistoryManager();
 const configManager = useConfigManager();
@@ -36,68 +35,27 @@ const configManager = useConfigManager();
 const scrollContainerRef = ref<HTMLElement | null>(null);
 let savedScrollTop = 0;
 
-// 图片加载状态追踪（响应式对象，Vue 3 Proxy 自动追踪属性增删）
-const imageStates = reactive<Record<string, 'loading' | 'loaded' | 'failed'>>({});
-
-// === 增量渲染：避免大量收藏时 DOM 爆炸 ===
-const RENDER_CHUNK_SIZE = 80;
-const renderLimit = ref(RENDER_CHUNK_SIZE);
-let scrollRafId = 0;
-
-// 收藏列表（基于独立 favoriteSet 过滤，避免依赖 imageMetas 的 isFavorited 属性）
-const favoriteMetas = computed<ImageMeta[]>(() => {
-  const favSet = historyManager.favoriteSet.value;
-  return viewState.filteredMetas.value.filter(m => favSet.has(m.id));
+// 收藏数据管理（过滤、缩略图、增量渲染）
+const {
+  favoriteMetas, renderedMetas, hasMore,
+  imageStates, getThumbnailUrl, onFavoritesScroll,
+} = useFavoritesData({
+  filteredMetas: viewState.filteredMetas,
+  favoriteSet: historyManager.favoriteSet,
+  scrollContainerRef,
+  config: configManager.config,
 });
 
-// 实际渲染的收藏列表（增量渲染，避免一次性创建数千个 DOM 节点）
-const renderedMetas = computed<ImageMeta[]>(() => {
-  return favoriteMetas.value.slice(0, renderLimit.value);
+// 灯箱管理
+const {
+  lightboxVisible, lightboxItem,
+  lightboxHasPrev, lightboxHasNext,
+  openLightbox, handleLightboxNavigate, handleLightboxDelete,
+} = useFavoritesLightbox({
+  favoriteMetas,
+  getDetail: (id: string) => viewState.detailCache.getDetail(id),
+  deleteHistoryItem: (id: string) => viewState.deleteHistoryItem(id),
 });
-
-// 是否还有未渲染的数据
-const hasMore = computed(() => renderLimit.value < favoriteMetas.value.length);
-
-/**
- * 滚动到底部时加载更多
- */
-function onFavoritesScroll(): void {
-  cancelAnimationFrame(scrollRafId);
-  scrollRafId = requestAnimationFrame(() => {
-    const el = scrollContainerRef.value;
-    if (!el || !hasMore.value) return;
-    // 距离底部 300px 时加载下一批
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 300) {
-      renderLimit.value += RENDER_CHUNK_SIZE;
-    }
-  });
-}
-
-// 当收藏数据源变化时（筛选、取消收藏等），重置渲染窗口
-watch(favoriteMetas, () => {
-  renderLimit.value = RENDER_CHUNK_SIZE;
-  // 清理不再存在的图片状态，防止内存泄漏
-  const currentIds = new Set(favoriteMetas.value.map(m => m.id));
-  for (const key of Object.keys(imageStates)) {
-    if (!currentIds.has(key)) {
-      delete imageStates[key];
-    }
-  }
-});
-
-// 灯箱
-const lightboxVisible = ref(false);
-const lightboxItem = ref<HistoryItem | null>(null);
-
-const lightboxIndex = computed(() => {
-  if (!lightboxItem.value) return -1;
-  return favoriteMetas.value.findIndex(m => m.id === lightboxItem.value!.id);
-});
-
-const lightboxHasPrev = computed(() => lightboxIndex.value > 0);
-const lightboxHasNext = computed(() =>
-  lightboxIndex.value >= 0 && lightboxIndex.value < favoriteMetas.value.length - 1
-);
 
 // 多选
 const selectedIdsSet = computed(() => new Set(viewState.selectedIdList.value));
@@ -111,50 +69,10 @@ const selectedAvailableServices = computed<ServiceType[]>(() => {
   return Array.from(serviceSet);
 });
 
-function getThumbnailUrl(meta: ImageMeta): string {
-  return generateMediumThumbnailUrl(
-    meta.primaryService,
-    meta.primaryUrl,
-    meta.primaryFileKey,
-    configManager.config.value
-  );
-}
-
-const openLightbox = async (meta: ImageMeta) => {
-  try {
-    const detail = await viewState.detailCache.getDetail(meta.id);
-    lightboxItem.value = detail;
-    lightboxVisible.value = true;
-  } catch (e) {
-    toast.error('加载失败', String(e));
-  }
-};
-
-const handleLightboxNavigate = async (direction: 'prev' | 'next') => {
-  const metas = favoriteMetas.value;
-  const nextIdx = lightboxIndex.value + (direction === 'prev' ? -1 : 1);
-  if (nextIdx < 0 || nextIdx >= metas.length) return;
-  try {
-    lightboxItem.value = await viewState.detailCache.getDetail(metas[nextIdx].id);
-  } catch (e) {
-    console.error('[FavoritesView] 导航失败:', e);
-  }
-};
-
 const handleToggleFavorite = async (id: string) => {
   try {
     await historyManager.toggleFavorite(id);
   } catch { /* useHistory 内部已处理 toast */ }
-};
-
-const handleLightboxDelete = async (item: HistoryItem) => {
-  try {
-    await viewState.deleteHistoryItem(item.id);
-    lightboxVisible.value = false;
-    toast.success('已删除');
-  } catch (e) {
-    toast.error('删除失败', String(e));
-  }
 };
 
 // 监听 filter/searchTerm 变化（与 TimelineView 保持一致）
@@ -170,6 +88,11 @@ watch(
   { immediate: true }
 );
 watch(() => viewState.selectedIdList.value.length, (c) => emit('update:selectedCount', c), { immediate: true });
+
+// 组件卸载清理
+onUnmounted(() => {
+  viewState.reset();
+});
 
 // TransitionGroup 退场动画：延迟显示空状态，等 leave 动画结束
 const isLeaving = ref(false);
@@ -195,10 +118,6 @@ watch(() => favoriteMetas.value.length, (newLen, oldLen) => {
     isLeaving.value = true;
     isLastLeave.value = true;
   }
-});
-
-onUnmounted(() => {
-  cancelAnimationFrame(scrollRafId);
 });
 
 // 滚动位置保存/恢复（v-show 兼容，与 TimelineView 保持一致）
@@ -233,11 +152,12 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
       <template v-else>
         <!-- 空状态（延迟显示，等 TransitionGroup leave 动画结束后才出现） -->
         <Transition name="empty-fade">
-          <div v-if="showEmptyState" class="empty-state">
-            <i class="pi pi-star empty-star-icon" style="font-size: 2.8rem; opacity: 0.35"></i>
-            <p class="empty-title">暂无收藏</p>
-            <p class="empty-hint">点击图片右上角的 ★ 开始收藏</p>
-          </div>
+          <EmptyState
+            v-if="showEmptyState"
+            icon="pi pi-star"
+            title="暂无收藏"
+            description="点击图片右上角的 ★ 开始收藏"
+          />
         </Transition>
 
         <!-- 均匀网格（始终挂载，v-show 保持 TransitionGroup 存活以执行 leave 动画） -->
@@ -489,7 +409,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   transition: all var(--duration-normal);
   z-index: 2;
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   filter: drop-shadow(0 1px 2px var(--photo-overlay-bg-hover));
 }
 
@@ -525,30 +445,6 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 .load-more-sentinel i {
   font-size: 14px;
   color: var(--primary);
-}
-
-/* === 空状态 === */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--text-secondary);
-  gap: 8px;
-}
-
-.empty-title {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  margin: 8px 0 0;
-}
-
-.empty-hint {
-  font-size: 13px;
-  color: var(--text-tertiary);
-  margin: 0;
 }
 
 /* === TransitionGroup 动画 === */

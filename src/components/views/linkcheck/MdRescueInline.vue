@@ -1,108 +1,29 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount, onActivated, onDeactivated } from 'vue';
+// Markdown 链接救援主容器
+// 子组件：RescueIdleZone（拖放区）、RescueBrokenGroups（分组列表）、RescueFixingCards（修复卡片）
+
+import { ref, computed, watch, onBeforeUnmount } from 'vue';
 import Button from 'primevue/button';
-import Checkbox from 'primevue/checkbox';
-import Dialog from 'primevue/dialog';
-import RadioButton from 'primevue/radiobutton';
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { open as shellOpen } from '@tauri-apps/plugin-shell';
-import { dirname } from '@tauri-apps/api/path';
-import { invoke } from '@tauri-apps/api/core';
+import MdRepairDialog from './MdRepairDialog.vue';
+import RescueIdleZone from './rescue/RescueIdleZone.vue';
+import RescueBrokenGroups from './rescue/RescueBrokenGroups.vue';
+import RescueFixingCards from './rescue/RescueFixingCards.vue';
 import { useMdRescueManager } from '../../../composables/useMdRescue';
-import type { FileHealth, RepairStrategy, MdImageLinkWithFile } from '../../../composables/useMdRescue';
-import { useToast } from '../../../composables/useToast';
-import { getServiceDisplayName } from '../../../constants/serviceNames';
+import type { RepairStrategy } from '../../../composables/useMdRescue';
 import { smartTruncateUrl } from '../../../utils/mdParser';
-import type { CheckLinkResult } from '../../../types/linkCheck';
+import { formatTimeRemaining } from '../../../composables/useLinkStatusDisplay';
 
 const {
-  phase,
-  imageLinks,
-  isAnalyzing,
-  isCollecting,
-  isChecking,
-  progress,
-  fileHealthList,
-  availableBackupServices,
-  fixingProgress,
-  repairReceipt,
-  hostPreference,
-  includeSubfolders,
-  bottomStats,
-  selectMdFile,
-  selectFolder,
-  handleDropPaths,
-  analyzeFile,
-  applyRepairStrategy,
-  loadHostPreference,
-  saveHostPreference,
-  cancelCheck,
-  undoReplace,
-  executeReplace,
-  reset: resetRescue,
-  scanStage,
-  scanProgress,
+  phase, imageLinks, isAnalyzing, isCollecting, collectProgress,
+  isChecking, progress, fileHealthList, availableBackupServices,
+  fixingProgress, repairReceipt, hostPreference, includeSubfolders,
+  bottomStats, selectMdFile, selectFolder, handleDropPaths,
+  analyzeFile, applyRepairStrategy, loadHostPreference, saveHostPreference,
+  cancelCollect, cancelScan, cancelFix, undoReplace, executeReplace,
+  reset: resetRescue, scanStage, scanProgress, skippedDirs, estimatedTimeRemaining,
 } = useMdRescueManager();
 
-// Tauri 拖放
-const isDragging = ref(false);
-const isViewActive = ref(true);
-let dropUnlisten: (() => void) | null = null;
-
-async function setupDropListener() {
-  try {
-    const webview = getCurrentWebview();
-    dropUnlisten = await webview.onDragDropEvent(async (event) => {
-      if (!isViewActive.value) return;
-
-      if (event.payload.type === 'over') {
-        isDragging.value = true;
-      } else if (event.payload.type === 'drop') {
-        isDragging.value = false;
-        await handleDropPaths(event.payload.paths);
-      } else {
-        isDragging.value = false;
-      }
-    });
-  } catch (err) {
-    console.error('[MdRescue] 设置拖放监听失败:', err);
-  }
-}
-
-onMounted(() => { setupDropListener(); });
-onBeforeUnmount(() => {
-  dropUnlisten?.();
-  if (scanFinishTimer) { clearTimeout(scanFinishTimer); scanFinishTimer = null; }
-});
-onActivated(() => { isViewActive.value = true; });
-onDeactivated(() => { isViewActive.value = false; });
-
-// ============================================================
-// 局部 UI 状态
-// ============================================================
-
-const showHealthySummary = ref(false);
-const showRepairDialog = ref(false);
-const repairStrategyType = ref<'priority' | 'fastest' | 'manual'>('priority');
-const showManualSection = ref(false);
-const tempPreference = ref<string[]>([]);
-/** 逐张手选：url → 选中的备用链接 url */
-const manualSelections = ref(new Map<string, string>());
-
-const toast = useToast();
-
-/** 表格筛选状态 */
-const activeFilter = ref<'all' | 'rescuable' | 'manual'>('all');
-
-/** 分组列表默认显示行数上限，点击"加载更多"每次递增 */
-const ROW_DISPLAY_LIMIT = 200;
-const ROW_DISPLAY_STEP = 200;
-const displayRowLimit = ref(ROW_DISPLAY_LIMIT);
-
-// ============================================================
-// 计算
-// ============================================================
+// ---- 计算属性 ----
 
 const rescuableCount = computed(() =>
   imageLinks.value.filter((l) =>
@@ -113,28 +34,23 @@ const rescuableCount = computed(() =>
 
 const hasRescuable = computed(() => rescuableCount.value > 0);
 
-/** 已就绪的有问题文件 */
 const readyBrokenFiles = computed(() =>
   fileHealthList.value.filter((f) => f.ready && f.status !== 'healthy'),
 );
 
-/** 已就绪的健康文件 */
 const readyHealthyFiles = computed(() =>
   fileHealthList.value.filter((f) => f.ready && f.status === 'healthy'),
 );
 
-/** 扫描中展示的最近健康文件（最多 8 条，新的在前） */
 const recentHealthyFiles = computed(() =>
   readyHealthyFiles.value.slice(-8).reverse(),
 );
 
 const fixingPercent = computed(() => {
   const { current, total } = fixingProgress.value;
-  if (total === 0) return 0;
-  return Math.round((current / total) * 100);
+  return total === 0 ? 0 : Math.round((current / total) * 100);
 });
 
-/** 当前扫描 URL 反查到的源文件名 */
 const currentScanFileName = computed(() => {
   if (!progress.value?.current_url) return '';
   const url = progress.value.current_url;
@@ -142,47 +58,34 @@ const currentScanFileName = computed(() => {
   return link ? link.sourceFileName : smartTruncateUrl(url, 40);
 });
 
-/** 是否在修复完成状态（done 阶段或有已修复文件） */
 const isRepaired = computed(() => phase.value === 'done');
 
-/** 扫描完成后的"完成态"停留标记 */
+// ---- 扫描完成停留 ----
+
 const scanFinishing = ref(false);
 let scanFinishTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** 进度条是否可见：正在扫描 或 完成态停留期间 */
 const showScanSkeleton = computed(() =>
   isCollecting.value
-  || (phase.value === 'scanning' && scanStage.value !== 'complete')
+  || (phase.value === 'scanning' && !['complete', 'cancelled'].includes(scanStage.value))
   || scanFinishing.value,
 );
 
-// ============================================================
-// Watch
-// ============================================================
+watch(() => scanStage.value, async (stage) => {
+  if (stage === 'complete') {
+    await loadHostPreference();
+    tempPreference.value = hostPreference.value.length > 0
+      ? [...hostPreference.value]
+      : [...availableBackupServices.value];
+    scanFinishing.value = true;
+    scanFinishTimer = setTimeout(() => { scanFinishing.value = false; scanFinishTimer = null; }, 1500);
+  } else if (stage === 'cancelled') {
+    scanFinishing.value = true;
+    scanFinishTimer = setTimeout(() => { scanFinishing.value = false; scanFinishTimer = null; }, 2000);
+  }
+});
 
-watch(
-  () => scanStage.value,
-  async (stage) => {
-    if (stage === 'complete') {
-      showHealthySummary.value = false;
-      await loadHostPreference();
-      tempPreference.value = hostPreference.value.length > 0
-        ? [...hostPreference.value]
-        : [...availableBackupServices.value];
-
-      // 进度条切换为"完成态"，停留 1.5 秒后淡出
-      scanFinishing.value = true;
-      scanFinishTimer = setTimeout(() => {
-        scanFinishing.value = false;
-        scanFinishTimer = null;
-      }, 1500);
-    }
-  },
-);
-
-// ============================================================
-// 方法
-// ============================================================
+// ---- 方法 ----
 
 async function handleSelectFile() {
   const ok = await selectMdFile();
@@ -194,23 +97,6 @@ async function handleSelectFolder() {
   if (ok && imageLinks.value.length > 0) await analyzeFile();
 }
 
-/** 按文件路径预分组的失效链接（修复中卡片展开时使用） */
-const brokenLinksByFile = computed(() => {
-  const map = new Map<string, typeof imageLinks.value>();
-  for (const l of imageLinks.value) {
-    if (l.checkResult && !l.checkResult.is_valid) {
-      const arr = map.get(l.sourceFile);
-      if (arr) arr.push(l);
-      else map.set(l.sourceFile, [l]);
-    }
-  }
-  return map;
-});
-
-function getFileBrokenLinks(filePath: string) {
-  return brokenLinksByFile.value.get(filePath) ?? [];
-}
-
 function parsePath(path: string): string[] {
   return path.replace(/\\/g, '/').split('/').filter(Boolean);
 }
@@ -220,36 +106,15 @@ function truncatePath(path: string): string {
   return parts.length <= 2 ? path : '.../' + parts.slice(-2).join('/');
 }
 
-function getFileDirectory(fullPath: string): string {
-  const parts = parsePath(fullPath);
-  return parts.length < 2 ? '' : parts[parts.length - 2];
-}
+onBeforeUnmount(() => {
+  if (scanFinishTimer) { clearTimeout(scanFinishTimer); scanFinishTimer = null; }
+});
 
-// ---------- 修复策略弹窗 ----------
+// ---- 修复策略 ----
 
-function moveServiceUp(i: number) {
-  if (i === 0) return;
-  const arr = [...tempPreference.value];
-  [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]];
-  tempPreference.value = arr;
-}
+const showRepairDialog = ref(false);
+const tempPreference = ref<string[]>([]);
 
-function openRepairDialog() {
-  // 初始化手动选择
-  manualSelections.value = new Map();
-  for (const link of imageLinks.value) {
-    if (!link.checkResult || link.checkResult.is_valid) continue;
-    const validBackups = link.backupLinks?.filter((b) => b.checkResult?.is_valid);
-    if (validBackups && validBackups.length > 0) {
-      manualSelections.value.set(link.url, validBackups[0].url);
-    }
-  }
-  showManualSection.value = false;
-  showAllManualLinks.value = false;
-  showRepairDialog.value = true;
-}
-
-/** 可修复的图片链接（用于弹窗手动选择列表） */
 const rescuableLinks = computed(() =>
   imageLinks.value.filter(
     (l) => l.checkResult && !l.checkResult.is_valid
@@ -257,301 +122,35 @@ const rescuableLinks = computed(() =>
   ),
 );
 
-/** 手动选择列表默认最多显示条数 */
-const MANUAL_LIST_LIMIT = 50;
-const showAllManualLinks = ref(false);
-const visibleManualLinks = computed(() => {
-  const all = rescuableLinks.value;
-  if (showAllManualLinks.value || all.length <= MANUAL_LIST_LIMIT) return all;
-  return all.slice(0, MANUAL_LIST_LIMIT);
-});
-
-async function confirmRepair() {
-  showRepairDialog.value = false;
-
-  let strategy: RepairStrategy;
-  switch (repairStrategyType.value) {
-    case 'priority':
-      strategy = { type: 'priority', order: tempPreference.value };
-      // 同时保存为默认偏好
-      hostPreference.value = [...tempPreference.value];
-      await saveHostPreference();
-      break;
-    case 'fastest':
-      strategy = { type: 'fastest' };
-      break;
-    case 'manual':
-      strategy = { type: 'manual', selections: manualSelections.value };
-      break;
+async function handleRepairConfirm(strategy: RepairStrategy, preference: string[]) {
+  if (strategy.type === 'priority') {
+    hostPreference.value = preference;
+    await saveHostPreference();
   }
-
   applyRepairStrategy(strategy);
   await executeReplace();
 }
-
-// fixing 阶段辅助函数
-const FIXING_CARD_CONFIG = {
-  done: { class: 'fixing-card--done', icon: 'pi-check-circle' },
-  active: { class: 'fixing-card--active', icon: 'pi-spin pi-spinner' },
-  pending: { class: 'fixing-card--pending', icon: 'pi-clock' },
-} as const;
-
-function getFixingCardState(file: FileHealth): 'done' | 'active' | 'pending' {
-  if (file.healed) return 'done';
-  return fixingFileIsActive(file) ? 'active' : 'pending';
-}
-
-function fixingFileIsActive(file: FileHealth): boolean {
-  if (file.healed) return false;
-  const notHealed = fileHealthList.value.filter((f) => !f.healed && f.rescuableCount > 0);
-  return notHealed.length > 0 && notHealed[0].path === file.path;
-}
-
-// ============================================================
-// 新设计：扁平表格 & 筛选 & 行动操作
-// ============================================================
-
-/** 扁平化的失效链接列表（含视觉分组标记 firstOfFile） */
-interface FlatRow {
-  link: MdImageLinkWithFile;
-  firstOfFile: boolean;
-  status: 'rescuable' | 'manual' | 'replaced';
-}
-
-/** 扁平行 + 计数，单次遍历 imageLinks 同时产出 */
-const flatBrokenData = computed(() => {
-  const rows: FlatRow[] = [];
-  let manual = 0, rescuable = 0;
-  for (const l of imageLinks.value) {
-    if (!l.checkResult || l.checkResult.is_valid) continue;
-    const hasValidBackup = l.backupLinks?.some((b) => b.checkResult?.is_valid) ?? false;
-    let status: FlatRow['status'];
-    if (isRepaired.value && l.selectedBackup) status = 'replaced';
-    else if (hasValidBackup) status = 'rescuable';
-    else status = 'manual';
-    if (status === 'manual') manual++;
-    else rescuable++;
-    rows.push({ link: l, firstOfFile: false, status });
-  }
-  return { rows, counts: { all: rows.length, rescuable, manual } };
-});
-
-const flatBrokenLinks = computed(() => flatBrokenData.value.rows);
-const filterCounts = computed(() => flatBrokenData.value.counts);
-
-/** 按筛选后的行列表（firstOfFile 在此重算以保证视觉分组正确） */
-const filteredRows = computed<FlatRow[]>(() => {
-  const all = flatBrokenLinks.value;
-  const filter = activeFilter.value;
-
-  // 预估容量，减少数组扩容
-  const expected = filter === 'all'
-    ? all.length
-    : filter === 'manual' ? filterCounts.value.manual : filterCounts.value.rescuable;
-  const result: FlatRow[] = [];
-  if (expected > 0) result.length = 0;
-
-  let prevFile = '';
-  for (let i = 0; i < all.length; i++) {
-    const r = all[i];
-    if (filter === 'rescuable' && r.status === 'manual') continue;
-    if (filter === 'manual' && r.status !== 'manual') continue;
-    result.push({
-      link: r.link,
-      status: r.status,
-      firstOfFile: r.link.sourceFile !== prevFile,
-    });
-    prevFile = r.link.sourceFile;
-  }
-  return result;
-});
-
-/** 可修复芯片标签（done 阶段显示"已修复"） */
-const rescuableChipLabel = computed(() => (isRepaired.value ? '已修复' : '可修复'));
-
-/** 从 URL 中提取 host（用于行内 badge） */
-function extractHost(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return '';
-  }
-}
-
-/** 已知失效图床域名判定 */
-function isDefunctHost(url: string): boolean {
-  const host = extractHost(url);
-  return host.endsWith('.sinaimg.cn') || host === 'sinaimg.cn';
-}
-
-/** 从 URL 中提取文件名 */
-function extractFilenameFromUrl(url: string): string {
-  try {
-    const u = new URL(url);
-    const parts = u.pathname.split('/').filter(Boolean);
-    const last = parts[parts.length - 1];
-    if (last) return decodeURIComponent(last);
-    return u.hostname;
-  } catch {
-    const tail = url.split('/').pop() || url;
-    return tail.split('?')[0] || url;
-  }
-}
-
-// ============================================================
-// 分组视图：按所在文件分组展示坏链接
-// ============================================================
-
-interface GroupedFile {
-  filePath: string;
-  fileName: string;
-  directory: string;
-  rows: FlatRow[];
-}
-
-/** 按 sourceFile 分组的 filteredRows */
-const groupedRows = computed<GroupedFile[]>(() => {
-  const map = new Map<string, GroupedFile>();
-  for (const r of filteredRows.value) {
-    const key = r.link.sourceFile;
-    let entry = map.get(key);
-    if (!entry) {
-      entry = {
-        filePath: key,
-        fileName: r.link.sourceFileName,
-        directory: getFileDirectory(key),
-        rows: [],
-      };
-      map.set(key, entry);
-    }
-    entry.rows.push(r);
-  }
-  return Array.from(map.values());
-});
-
-/** 总行数（用于判断是否需要"加载更多"） */
-const totalFilteredRowCount = computed(() => filteredRows.value.length);
-
-/** 截断后用于渲染的分组（按 displayRowLimit 限制总行数） */
-const visibleGroupedRows = computed<GroupedFile[]>(() => {
-  const limit = displayRowLimit.value;
-  const all = groupedRows.value;
-  if (totalFilteredRowCount.value <= limit) return all;
-
-  const result: GroupedFile[] = [];
-  let count = 0;
-  for (const group of all) {
-    if (count >= limit) break;
-    const remaining = limit - count;
-    if (group.rows.length <= remaining) {
-      result.push(group);
-      count += group.rows.length;
-    } else {
-      result.push({ ...group, rows: group.rows.slice(0, remaining) });
-      count += remaining;
-    }
-  }
-  return result;
-});
-
-/** 会话内折叠状态（默认全部展开） */
-const collapsedGroups = ref<Set<string>>(new Set());
-
-function toggleGroupCollapse(filePath: string): void {
-  const next = new Set(collapsedGroups.value);
-  if (next.has(filePath)) next.delete(filePath);
-  else next.add(filePath);
-  collapsedGroups.value = next;
-}
-
-// ============================================================
-// 行动函数：定位文件 / 打开编辑器 / 在浏览器打开 / 复制 URL
-// ============================================================
-
-async function withErrorToast(fn: () => Promise<void>, errorMsg: string): Promise<void> {
-  try { await fn(); } catch (err) { toast.error(errorMsg, String(err)); }
-}
-
-async function revealInFolder(filePath: string): Promise<void> {
-  await withErrorToast(async () => {
-    const dir = await dirname(filePath);
-    // 用后端 opener crate 绕过 shell scope 的 regex 限制（只允许 http/mailto/tel）
-    await invoke('open_path', { path: dir });
-  }, '无法打开文件夹');
-}
-
-async function openMdFile(filePath: string): Promise<void> {
-  await withErrorToast(() => invoke('open_path', { path: filePath }), '无法打开文件');
-}
-
-async function openInBrowser(url: string): Promise<void> {
-  await withErrorToast(() => shellOpen(url), '无法打开链接');
-}
-
-async function copyRowUrl(url: string): Promise<void> {
-  try {
-    await writeText(url);
-    toast.success('已复制', 'URL 已复制到剪贴板');
-  } catch (err) {
-    toast.error('复制失败', String(err));
-  }
-}
-
-// ============================================================
-// 状态分色：按 error_type + status_code 映射到红/黄/紫
-// ============================================================
-
-interface StatusDisplay { color: string; label: string; }
-
-const STATUS_DISPLAY_MAP: Record<string, StatusDisplay> = {
-  timeout: { color: 'amber', label: '超时' },
-  suspicious: { color: 'purple', label: '可疑' },
-  network: { color: 'red', label: '网络' },
-  http_4xx: { color: 'red', label: '404' },
-  http_5xx: { color: 'red', label: '500' },
-};
-
-function getStatusDisplay(cr: CheckLinkResult | null | undefined): StatusDisplay {
-  if (!cr) return { color: 'red', label: '失败' };
-  if (cr.is_valid) return { color: 'green', label: '正常' };
-  if (cr.browser_might_work) return { color: 'purple', label: '可疑' };
-  return STATUS_DISPLAY_MAP[cr.error_type] ?? { color: 'red', label: '失效' };
-}
-
-/** 点击筛选芯片 */
-function selectFilter(f: 'all' | 'rescuable' | 'manual') {
-  if (activeFilter.value === f) return;
-  activeFilter.value = f;
-  displayRowLimit.value = ROW_DISPLAY_LIMIT;
-}
-
 </script>
 
 <template>
   <div class="md-rescue">
 
-    <!-- ====== idle: 紧凑拖放区 ====== -->
-    <div v-if="phase === 'idle' && !isCollecting" class="rescue-phase rescue-idle">
-      <div class="idle-zone" :class="{ dragging: isDragging }">
-        <div class="idle-icon-wrap"><i class="pi pi-upload" /></div>
-        <p class="idle-feature-desc">扫描文档中的图片链接，检测失效并从历史备用链接自动修复</p>
-        <span class="idle-main-text">拖放 Markdown 文件到此处</span>
-        <span class="idle-sub-text">支持 .md 和 .markdown 文件</span>
-        <div class="idle-buttons">
-          <Button label="选择文件" :loading="isAnalyzing || isChecking" class="idle-btn-primary" @click="handleSelectFile" />
-          <Button label="选择文件夹" severity="secondary" outlined :loading="isAnalyzing || isChecking" class="idle-btn-secondary" @click="handleSelectFolder" />
-        </div>
-        <label class="idle-subfolder-option">
-          <Checkbox v-model="includeSubfolders" :binary="true" />
-          <span>选择文件夹时包含子文件夹</span>
-        </label>
-      </div>
-    </div>
+    <!-- idle: 拖放区（子组件） -->
+    <RescueIdleZone
+      v-if="phase === 'idle' && !isCollecting"
+      :is-analyzing="isAnalyzing"
+      :is-checking="isChecking"
+      :include-subfolders="includeSubfolders"
+      @select-file="handleSelectFile"
+      @select-folder="handleSelectFolder"
+      @update:include-subfolders="includeSubfolders = $event"
+      @drop-paths="handleDropPaths"
+    />
 
-    <!-- ====== working: scanning / fixing / done 统一布局 ====== -->
+    <!-- working: scanning / fixing / done -->
     <div v-else class="rescue-phase rescue-working">
 
-      <!-- fixing / done 阶段顶栏（互斥切换） -->
+      <!-- fixing / done 顶栏 -->
       <Transition name="fade" mode="out-in">
         <div v-if="phase === 'fixing'" key="fixing-header" class="wk-header">
           <span class="wk-title">正在修复...</span>
@@ -569,7 +168,7 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
         </div>
       </Transition>
 
-      <!-- fixing 阶段进度条 -->
+      <!-- fixing 进度条 -->
       <Transition name="fade">
         <div v-if="phase === 'fixing'" class="wk-progress">
           <div class="wk-progress-fill" :style="{ width: fixingPercent + '%' }" />
@@ -579,31 +178,44 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
       <!-- 内容区 -->
       <div class="wk-body">
 
-        <!-- 扫描进度骨架屏（收集 / 扫描 / 验证备用链接 三阶段统一展示） -->
+        <!-- 扫描骨架屏 -->
         <Transition name="scan-bar">
           <div v-if="showScanSkeleton" class="mr-scan-skeleton" :class="{ 'is-finishing': scanFinishing }">
-            <i :class="scanFinishing ? 'pi pi-check-circle mr-scan-skeleton-done' : 'pi pi-spin pi-spinner mr-scan-skeleton-spinner'" />
+            <i :class="[
+              scanFinishing && scanStage !== 'cancelled' ? 'pi pi-check-circle mr-scan-skeleton-done'
+              : scanStage === 'cancelled' ? 'pi pi-info-circle mr-scan-skeleton-done'
+              : 'pi pi-spin pi-spinner mr-scan-skeleton-spinner',
+            ]" />
             <span class="mr-scan-skeleton-text">
-              <template v-if="scanFinishing">扫描完成 · {{ bottomStats.totalImages }} 张图片</template>
-              <template v-else-if="isCollecting">正在收集图片链接…</template>
+              <template v-if="scanFinishing && scanStage === 'cancelled'">已取消扫描 · 已检测 {{ scanProgress?.checked ?? 0 }} / {{ scanProgress?.total ?? 0 }} 张图片</template>
+              <template v-else-if="scanFinishing">扫描完成 · {{ bottomStats.totalImages }} 张图片</template>
+              <template v-else-if="isCollecting">
+                <template v-if="collectProgress && collectProgress.processedFiles > 0">
+                  正在读取文件… · {{ collectProgress.processedFiles }} / {{ collectProgress.scannedFiles }}<template v-if="collectProgress.currentFile"> · {{ collectProgress.currentFile }}</template>
+                </template>
+                <template v-else-if="collectProgress && collectProgress.scannedFiles > 0">正在扫描文件列表… · 已找到 {{ collectProgress.scannedFiles }} 个文件</template>
+                <template v-else>正在扫描文件列表…</template>
+              </template>
+              <template v-else-if="scanStage === 'cancelling'">正在取消… · 等待进行中的请求完成</template>
               <template v-else-if="scanStage === 'backups'">正在验证备用链接…</template>
               <template v-else-if="scanProgress && scanProgress.total > 0">
-                正在扫描图片 · {{ scanProgress.checked }} / {{ scanProgress.total }}<template v-if="currentScanFileName"> · {{ currentScanFileName }}</template>
+                正在扫描图片 · {{ scanProgress.checked }} / {{ scanProgress.total }}<template v-if="estimatedTimeRemaining !== null"> · 预计剩余 {{ formatTimeRemaining(estimatedTimeRemaining) }}</template><template v-else-if="currentScanFileName"> · {{ currentScanFileName }}</template>
               </template>
               <template v-else>正在扫描图片…</template>
             </span>
-            <span v-if="!scanFinishing && bottomStats.totalFiles > 0" class="mr-scan-skeleton-meta">
-              {{ bottomStats.totalFiles }} 文件 · {{ bottomStats.totalImages }} 图片
+            <span v-if="!scanFinishing && (bottomStats.totalFiles > 0 || (isCollecting && collectProgress && collectProgress.foundLinks > 0))" class="mr-scan-skeleton-meta">
+              <template v-if="isCollecting && collectProgress && collectProgress.foundLinks > 0">已找到 {{ collectProgress.foundLinks }} 张图片</template>
+              <template v-else-if="bottomStats.totalFiles > 0">{{ bottomStats.totalFiles }} 文件 · {{ bottomStats.totalImages }} 图片<template v-if="skippedDirs.length > 0"> · {{ skippedDirs.length }} 个目录受限</template></template>
             </span>
+            <button v-if="isCollecting && !scanFinishing" class="mr-scan-skeleton-cancel" title="取消收集" @click="cancelCollect">
+              <i class="pi pi-times" />
+            </button>
           </div>
         </Transition>
 
-        <!-- 扫描中无异常时：已检查的健康文件流水 -->
+        <!-- 健康文件流水 -->
         <Transition name="fade">
-          <div
-            v-if="phase === 'scanning' && scanStage !== 'complete' && groupedRows.length === 0 && recentHealthyFiles.length > 0"
-            class="mr-healthy-stream"
-          >
+          <div v-if="phase === 'scanning' && !['complete', 'cancelling', 'cancelled'].includes(scanStage) && readyBrokenFiles.length === 0 && recentHealthyFiles.length > 0" class="mr-healthy-stream">
             <div v-for="f in recentHealthyFiles" :key="f.path" class="mr-healthy-row">
               <i class="pi pi-check-circle mr-healthy-icon" />
               <span class="mr-healthy-name">{{ f.name }}</span>
@@ -612,523 +224,211 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
           </div>
         </Transition>
 
-        <!-- scanning / done: 扁平表格布局 -->
+        <!-- scanning / done: 分组链接列表（子组件） -->
         <template v-if="phase === 'scanning' || phase === 'done'">
+          <RescueBrokenGroups :image-links="imageLinks" :is-repaired="isRepaired" :phase="phase" :scan-stage="scanStage" />
 
-            <!-- 顶部筛选芯片（"可修复" 计数为 0 时隐藏） -->
-            <Transition name="slide-up">
-            <div v-if="flatBrokenLinks.length > 0" class="mr-action-bar">
-              <div class="mr-chips">
-                <button class="mr-chip" :class="{ active: activeFilter === 'all' }" @click="selectFilter('all')">
-                  <span>全部</span>
-                  <span class="mr-chip-count">{{ filterCounts.all }}</span>
-                </button>
-                <button
-                  class="mr-chip"
-                  :class="{ active: activeFilter === 'rescuable', disabled: filterCounts.rescuable === 0 }"
-                  :disabled="filterCounts.rescuable === 0"
-                  @click="selectFilter('rescuable')"
-                >
-                  <span>{{ rescuableChipLabel }}</span>
-                  <span class="mr-chip-count">{{ filterCounts.rescuable }}</span>
-                </button>
-                <button
-                  class="mr-chip"
-                  :class="{ active: activeFilter === 'manual', disabled: filterCounts.manual === 0 }"
-                  :disabled="filterCounts.manual === 0"
-                  @click="selectFilter('manual')"
-                >
-                  <span class="mr-dot mr-dot--amber" />
-                  <span>需手动</span>
-                  <span class="mr-chip-count">{{ filterCounts.manual }}</span>
-                </button>
-              </div>
+          <!-- 全部正常 -->
+          <Transition name="slide-up">
+            <div v-if="phase === 'scanning' && scanStage === 'complete' && readyBrokenFiles.length === 0 && readyHealthyFiles.length > 0" class="report-empty">
+              <i class="pi pi-check-circle report-empty-icon" />
+              <p>所有图片链接正常</p>
             </div>
-            </Transition>
+          </Transition>
 
-            <!-- 问题链接分组列表 / 筛选为空（互斥切换） -->
-            <Transition name="slide-up" mode="out-in">
-              <div v-if="groupedRows.length > 0" key="groups" class="mr-groups">
-                <div v-for="group in visibleGroupedRows" :key="group.filePath" class="mr-group">
-                  <button
-                    type="button"
-                    class="mr-group-header"
-                    @click="toggleGroupCollapse(group.filePath)"
-                  >
-                    <i class="pi mr-group-chev" :class="collapsedGroups.has(group.filePath) ? 'pi-chevron-right' : 'pi-chevron-down'" />
-                    <i class="pi pi-file mr-group-file-icon" />
-                    <div class="mr-group-info">
-                      <span class="mr-group-name" v-tooltip.top="group.filePath">{{ group.fileName }}</span>
-                      <span class="mr-group-dir" v-tooltip.top="group.filePath">{{ group.directory }}</span>
-                    </div>
-                    <span class="mr-group-count">{{ group.rows.length }} 条异常链接</span>
-                    <span class="mr-group-actions" @click.stop>
-                      <button type="button" class="mr-group-icon-btn" v-tooltip.top="'在文件管理器中定位'" @click="revealInFolder(group.filePath)">
-                        <i class="pi pi-folder-open" />
-                      </button>
-                      <button type="button" class="mr-group-icon-btn" v-tooltip.top="'用默认编辑器打开'" @click="openMdFile(group.filePath)">
-                        <i class="pi pi-pencil" />
-                      </button>
-                    </span>
-                  </button>
-                  <div v-if="!collapsedGroups.has(group.filePath)" class="mr-group-body">
-                    <div
-                      v-for="(row, i) in group.rows"
-                      :key="row.link.url + '|' + i"
-                      class="mr-row"
-                    >
-                      <div class="mr-row-status">
-                        <span class="mr-status-label" :class="`mr-status-label--${getStatusDisplay(row.link.checkResult).color}`">{{ getStatusDisplay(row.link.checkResult).label }}</span>
-                      </div>
-                      <span class="mr-img-name" v-tooltip.top="row.link.url">{{ extractFilenameFromUrl(row.link.url) }}</span>
-                      <span class="mr-host-badge" :class="{ 'mr-host-badge--defunct': isDefunctHost(row.link.url) }" v-tooltip.top="row.link.url">{{ extractHost(row.link.url) }}</span>
-                      <div class="mr-row-actions">
-                        <button type="button" class="mr-row-icon-btn" v-tooltip.top="'复制 URL'" @click="copyRowUrl(row.link.url)">
-                          <i class="pi pi-copy" />
-                        </button>
-                        <button type="button" class="mr-row-icon-btn" v-tooltip.top="'在浏览器打开'" @click="openInBrowser(row.link.url)">
-                          <i class="pi pi-external-link" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  v-if="totalFilteredRowCount > displayRowLimit"
-                  class="mr-load-more"
-                  @click="displayRowLimit += ROW_DISPLAY_STEP"
-                >
-                  <i class="pi pi-angle-down" />
-                  加载更多（已显示 {{ Math.min(displayRowLimit, totalFilteredRowCount) }} / {{ totalFilteredRowCount }} 条）
-                </button>
-              </div>
-              <div v-else-if="flatBrokenLinks.length > 0" key="empty-filter" class="mr-empty-filter">
-                <i class="pi pi-filter-slash" />
-                <span>此筛选条件下没有记录</span>
-              </div>
-            </Transition>
-
-            <!-- 全部正常、无问题 -->
-            <Transition name="slide-up">
-              <div v-if="phase === 'scanning' && scanStage === 'complete' && readyBrokenFiles.length === 0 && readyHealthyFiles.length > 0" class="report-empty">
-                <i class="pi pi-check-circle report-empty-icon" />
-                <p>所有图片链接正常</p>
-              </div>
-            </Transition>
-
-            <!-- done 阶段备份路径提示 -->
-            <Transition name="fade">
-              <div v-if="phase === 'done' && repairReceipt?.backupPath" class="done-backup">
-                <i class="pi pi-save" />
-                <span v-tooltip.top="repairReceipt.backupPath">原文件已备份至 {{ truncatePath(repairReceipt.backupPath) }}</span>
-              </div>
-            </Transition>
+          <!-- done 备份提示 -->
+          <Transition name="fade">
+            <div v-if="phase === 'done' && repairReceipt?.backupPath" class="done-backup">
+              <i class="pi pi-save" />
+              <span v-tooltip.top="repairReceipt.backupPath">原文件已备份至 {{ truncatePath(repairReceipt.backupPath) }}</span>
+            </div>
+          </Transition>
         </template>
 
-        <!-- fixing: 三态文件卡片 -->
-        <template v-if="phase === 'fixing'">
-          <div v-for="file in fileHealthList" :key="file.path" class="fixing-card" :class="FIXING_CARD_CONFIG[getFixingCardState(file)].class">
-            <div class="fixing-card-header">
-              <i class="pi fixing-card-icon" :class="FIXING_CARD_CONFIG[getFixingCardState(file)].icon" />
-              <span class="fixing-card-name">{{ file.name }}</span>
-              <span class="fixing-card-status">
-                <template v-if="file.healed">{{ file.rescuableCount }}/{{ file.rescuableCount }} 已修复</template>
-                <template v-else-if="fixingFileIsActive(file)">修复中…</template>
-                <template v-else>等待中</template>
-              </span>
-            </div>
-            <div v-if="fixingFileIsActive(file)" class="fixing-card-body">
-              <div v-for="(link, i) in getFileBrokenLinks(file.path)" :key="i" class="fixing-link-row">
-                <i class="pi" :class="link.backupLinks?.some(b => b.checkResult?.is_valid) ? 'pi-check-circle fixing-link-ok' : 'pi-spin pi-spinner fixing-link-spin'" />
-                <span class="fixing-link-text">{{ smartTruncateUrl(link.url, 40) }} → 替换中…</span>
-              </div>
-            </div>
-          </div>
-        </template>
-      </div>
-
-      <!-- ============================================================
-           底栏
-           ============================================================ -->
-      <div class="rescue-bottom">
-        <!-- 主操作区 -->
-        <div class="rescue-bottom-main">
-          <!-- 左侧统计（扫描状态已移至顶部进度区，此处只显示最终统计） -->
-          <div class="rescue-bottom-left">
-            <span class="rescue-stat">
-              <i class="pi pi-file rescue-stat-icon" />
-              {{ bottomStats.totalFiles }} 文件
-              <span v-if="bottomStats.problemFileCount > 0" class="rescue-stat-sub">
-                ({{ bottomStats.normalFileCount }} 正常 / {{ bottomStats.problemFileCount }} 异常)
-              </span>
-            </span>
-            <span class="rescue-stat-sep" />
-            <span class="rescue-stat">
-              <i class="pi pi-image rescue-stat-icon" />
-              {{ bottomStats.totalImages }} 图片
-            </span>
-            <template v-if="isRepaired">
-              <span class="rescue-stat-sep" />
-              <span class="rescue-stat rescue-stat--success">
-                <i class="pi pi-check-circle rescue-stat-icon" />
-                {{ bottomStats.repairedCount }} 已修复
-              </span>
-              <template v-if="bottomStats.manualCount > 0">
-                <span class="rescue-stat-sep" />
-                <span class="rescue-stat rescue-stat--warning">
-                  <i class="pi pi-exclamation-triangle rescue-stat-icon" />
-                  {{ bottomStats.manualCount }} 需手动
-                </span>
-              </template>
-            </template>
-            <template v-else-if="bottomStats.checkedCount > 0">
-              <span class="rescue-stat-sep" />
-              <span class="rescue-stat rescue-stat--success">
-                <i class="pi pi-check-circle rescue-stat-icon" />
-                {{ bottomStats.normalCount }} 正常
-              </span>
-              <template v-if="bottomStats.problemCount > 0">
-                <span class="rescue-stat-sep" />
-                <span class="rescue-stat rescue-stat--warning">
-                  <i class="pi pi-exclamation-triangle rescue-stat-icon" />
-                  {{ bottomStats.problemCount }} 问题
-                </span>
-              </template>
-            </template>
-          </div>
-
-          <!-- 右侧按钮 -->
-          <div class="rescue-bottom-actions">
-            <!-- scanning 中 -->
-            <template v-if="phase === 'scanning' && scanStage !== 'complete'">
-              <button class="btn-danger btn-sm" @click="cancelCheck">
-                <i class="pi pi-stop" /> 取消
-              </button>
-            </template>
-
-            <!-- scanning 完成：始终显示两个按钮，按 hasRescuable 互换主次 -->
-            <template v-else-if="phase === 'scanning' && scanStage === 'complete'">
-              <button
-                :class="['btn-sm', hasRescuable ? 'btn-ghost' : 'btn-primary']"
-                @click="resetRescue"
-              >
-                <i class="pi pi-refresh" /> 重新扫描
-              </button>
-              <button
-                :class="['btn-sm', hasRescuable ? 'btn-primary' : 'btn-ghost']"
-                :disabled="!hasRescuable"
-                v-tooltip.top="hasRescuable ? '自动修复有备用链接的图片' : '当前没有可自动修复的链接'"
-                @click="openRepairDialog"
-              >
-                <i class="pi pi-wrench" /> 修复链接
-              </button>
-            </template>
-
-            <!-- fixing -->
-            <template v-else-if="phase === 'fixing'">
-              <!-- 修复进行中无取消按钮 -->
-            </template>
-
-            <!-- done -->
-            <template v-else-if="phase === 'done'">
-              <button class="btn-ghost btn-sm" @click="resetRescue">
-                <i class="pi pi-refresh" /> 重新扫描
-              </button>
-            </template>
-          </div>
-        </div>
+        <!-- fixing: 三态卡片（子组件） -->
+        <RescueFixingCards v-if="phase === 'fixing'" :file-health-list="fileHealthList" :image-links="imageLinks" :fixing-progress="fixingProgress" />
       </div>
     </div>
 
-    <!-- ============================================================
-         修复策略弹窗
-         ============================================================ -->
-    <Dialog
-      v-model:visible="showRepairDialog"
-      modal
-      header="链接修复策略"
-      :style="{ width: '520px' }"
-      :draggable="false"
-      :closable="true"
-    >
-      <div class="repair-dialog-body">
-        <p class="repair-dialog-desc">选择如何为失效图片分配备用链接：</p>
-
-        <!-- 策略 1: 指定图床优先 -->
-        <div class="repair-strategy-option" :class="{ active: repairStrategyType === 'priority' }" @click="repairStrategyType = 'priority'">
-          <RadioButton v-model="repairStrategyType" value="priority" />
-          <div class="repair-strategy-content">
-            <span class="repair-strategy-label">指定图床优先</span>
-            <span class="repair-strategy-desc">按优先级顺序选择第一个可用链接，点击药丸可调整顺序</span>
-            <div v-if="repairStrategyType === 'priority'" class="repair-pref-pills">
-              <template v-for="(serviceId, i) in tempPreference" :key="serviceId">
-                <i v-if="i > 0" class="pi pi-ellipsis-v pill-grip" />
-                <button
-                  class="pill-pref-item"
-                  :class="{ 'pill-pref-item--first': i === 0 }"
-                  @click.stop="moveServiceUp(i)"
-                >{{ i + 1 }} · {{ getServiceDisplayName(serviceId) }}</button>
-              </template>
-            </div>
-          </div>
+    <!-- 底栏 -->
+    <Transition name="slide-up">
+    <div v-if="phase !== 'idle' || isCollecting" class="rescue-bottom">
+      <div class="rescue-bottom-main">
+        <div class="rescue-bottom-left">
+          <i v-if="skippedDirs.length > 0" class="pi pi-exclamation-triangle rescue-stat-skip" v-tooltip.top="skippedDirs.length + ' 个目录因权限限制被跳过：\n' + skippedDirs.join('\n')" />
+          <template v-if="isRepaired">
+            <span class="rescue-stat rescue-stat--success"><i class="pi pi-check-circle rescue-stat-icon" />已修复 {{ bottomStats.repairedCount }} 条链接</span>
+            <template v-if="bottomStats.manualCount > 0">
+              <span class="rescue-stat-sep" />
+              <span class="rescue-stat rescue-stat--warning"><i class="pi pi-exclamation-triangle rescue-stat-icon" />{{ bottomStats.manualCount }} 需手动</span>
+            </template>
+          </template>
+          <template v-else-if="scanStage === 'complete' || scanStage === 'cancelled'">
+            <span v-if="bottomStats.problemCount > 0" class="rescue-stat rescue-stat--warning"><i class="pi pi-exclamation-triangle rescue-stat-icon" />{{ bottomStats.problemCount }} 条问题链接</span>
+            <span v-else class="rescue-stat rescue-stat--success"><i class="pi pi-check-circle rescue-stat-icon" />全部正常</span>
+            <template v-if="bottomStats.problemFileCount > 0">
+              <span class="rescue-stat-sep" />
+              <span class="rescue-stat">{{ bottomStats.problemFileCount }} 个文件受影响</span>
+            </template>
+          </template>
+          <template v-else-if="bottomStats.checkedCount > 0 || bottomStats.totalImages > 0">
+            <span class="rescue-stat"><i class="pi pi-image rescue-stat-icon" />已检测 {{ bottomStats.checkedCount }} / {{ bottomStats.totalImages }}</span>
+            <template v-if="bottomStats.problemCount > 0">
+              <span class="rescue-stat-sep" />
+              <span class="rescue-stat rescue-stat--warning"><i class="pi pi-exclamation-triangle rescue-stat-icon" />{{ bottomStats.problemCount }} 问题</span>
+            </template>
+          </template>
         </div>
 
-        <!-- 策略 2: 响应最快 -->
-        <div class="repair-strategy-option" :class="{ active: repairStrategyType === 'fastest' }" @click="repairStrategyType = 'fastest'">
-          <RadioButton v-model="repairStrategyType" value="fastest" />
-          <div class="repair-strategy-content">
-            <span class="repair-strategy-label">响应最快</span>
-            <span class="repair-strategy-desc">自动选择延迟最低的可用备用链接</span>
-          </div>
-        </div>
-
-        <!-- 策略 3: 逐张手动选择（折叠） -->
-        <div class="repair-strategy-option repair-strategy-manual" :class="{ active: repairStrategyType === 'manual' }">
-          <div class="repair-strategy-manual-header" @click="repairStrategyType = 'manual'; showManualSection = true">
-            <RadioButton v-model="repairStrategyType" value="manual" />
-            <div class="repair-strategy-content">
-              <span class="repair-strategy-label">逐张手动选择</span>
-              <span class="repair-strategy-desc">为每张图片单独指定备用链接</span>
-            </div>
-            <i class="pi" :class="showManualSection && repairStrategyType === 'manual' ? 'pi-chevron-up' : 'pi-chevron-down'" @click.stop="showManualSection = !showManualSection" />
-          </div>
-          <div v-if="repairStrategyType === 'manual' && showManualSection" class="repair-manual-list">
-            <div v-for="link in visibleManualLinks" :key="link.url" class="repair-manual-item">
-              <div class="repair-manual-url">
-                <i class="pi pi-image" />
-                <span>{{ smartTruncateUrl(link.url, 40) }}</span>
-                <span class="repair-manual-file">{{ link.sourceFileName }}</span>
-              </div>
-              <div class="repair-manual-options">
-                <label
-                  v-for="b in link.backupLinks!.filter(b => b.checkResult?.is_valid)"
-                  :key="b.url"
-                  class="repair-manual-radio"
-                  :class="{ selected: manualSelections.get(link.url) === b.url }"
-                >
-                  <input
-                    type="radio"
-                    :name="'manual-' + link.url"
-                    :value="b.url"
-                    :checked="manualSelections.get(link.url) === b.url"
-                    @change="manualSelections.set(link.url, b.url)"
-                  />
-                  <span class="backup-chip">{{ getServiceDisplayName(b.serviceId) }}</span>
-                  <span v-if="b.checkResult?.response_time" class="repair-manual-latency">{{ b.checkResult.response_time }}ms</span>
-                </label>
-              </div>
-            </div>
-            <button
-              v-if="!showAllManualLinks && rescuableLinks.length > MANUAL_LIST_LIMIT"
-              class="repair-manual-show-all"
-              @click="showAllManualLinks = true"
-            >
-              显示全部 {{ rescuableLinks.length }} 条（当前仅显示前 {{ MANUAL_LIST_LIMIT }} 条）
+        <div class="rescue-bottom-actions">
+          <template v-if="phase === 'scanning' && (scanStage === 'checking' || scanStage === 'backups')">
+            <button class="btn-danger btn-sm" @click="cancelScan"><i class="pi pi-stop" /> 取消</button>
+          </template>
+          <template v-else-if="phase === 'scanning' && scanStage === 'cancelling'">
+            <button class="btn-ghost btn-sm" disabled><i class="pi pi-spin pi-spinner" /> 正在取消…</button>
+          </template>
+          <template v-else-if="phase === 'scanning' && scanStage === 'cancelled'">
+            <span v-if="scanProgress" class="mr-cancelled-hint">已检测 {{ scanProgress.checked }} / {{ scanProgress.total }}</span>
+            <button class="btn-ghost btn-sm" @click="resetRescue"><i class="pi pi-refresh" /> 重新扫描</button>
+            <button :class="['btn-sm', hasRescuable ? 'btn-primary' : 'btn-ghost']" :disabled="!hasRescuable" v-tooltip.top="hasRescuable ? '基于已检测的部分结果修复' : '已检测部分无可修复链接'" @click="showRepairDialog = true">
+              <i class="pi pi-wrench" /> 修复链接
             </button>
-          </div>
+          </template>
+          <template v-else-if="phase === 'scanning' && scanStage === 'complete'">
+            <button :class="['btn-sm', hasRescuable ? 'btn-ghost' : 'btn-primary']" @click="resetRescue"><i class="pi pi-refresh" /> 重新扫描</button>
+            <button :class="['btn-sm', hasRescuable ? 'btn-primary' : 'btn-ghost']" :disabled="!hasRescuable" v-tooltip.top="hasRescuable ? '自动修复有备用链接的图片' : '当前没有可自动修复的链接'" @click="showRepairDialog = true">
+              <i class="pi pi-wrench" /> 修复链接
+            </button>
+          </template>
+          <template v-else-if="phase === 'fixing'">
+            <button class="btn-danger btn-sm" @click="cancelFix"><i class="pi pi-stop" /> 取消修复</button>
+          </template>
+          <template v-else-if="phase === 'done'">
+            <button class="btn-ghost btn-sm" @click="resetRescue"><i class="pi pi-refresh" /> 重新扫描</button>
+          </template>
         </div>
       </div>
+    </div>
+    </Transition>
 
-      <template #footer>
-        <div class="repair-dialog-footer">
-          <Button label="取消" severity="secondary" outlined @click="showRepairDialog = false" />
-          <Button :label="`开始修复 (${rescuableCount} 张)`" icon="pi pi-wrench" @click="confirmRepair" />
-        </div>
-      </template>
-    </Dialog>
+    <MdRepairDialog
+      v-model:visible="showRepairDialog"
+      :available-backup-services="availableBackupServices"
+      :rescuable-count="rescuableCount"
+      :rescuable-links="rescuableLinks"
+      :initial-preference="tempPreference"
+      @confirm="handleRepairConfirm"
+    />
   </div>
 </template>
 
 <style scoped>
 .md-rescue {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
+  display: flex; flex-direction: column; height: 100%; overflow: hidden;
+  padding: 0 0 var(--space-lg-xl) var(--space-xl); gap: var(--space-md-lg);
 }
 
 .rescue-phase {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
+  display: flex; flex-direction: column; height: 100%; overflow: hidden;
 }
 
-/* ============================================================
-   idle: 紧凑居中拖放区
-   ============================================================ */
-.rescue-idle {
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-}
+/* working 布局 */
+.rescue-working { overflow: hidden; position: relative; }
 
-.idle-zone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  width: 100%;
-  max-width: 480px;
-  padding: 40px 40px 36px;
-  border: 2px dashed var(--border-subtle);
-  border-radius: 8px;
-  cursor: default;
-  transition: border-color var(--duration-medium), background var(--duration-medium);
-}
-
-.idle-zone:hover { border-color: var(--primary-alpha-40); }
-
-.idle-zone.dragging {
-  border-color: var(--primary);
-  background: var(--primary-alpha-5);
-  border-style: solid;
-}
-
-.idle-icon-wrap {
-  margin-bottom: 20px;
-  color: var(--primary);
-  transition: transform var(--duration-medium) ease;
-}
-
-.idle-zone.dragging .idle-icon-wrap { transform: translateY(-4px) scale(1.1); }
-.idle-icon-wrap i { font-size: 32px; }
-
-.idle-feature-desc {
-  font-size: 13px; color: var(--text-muted);
-  margin: 0 0 20px; text-align: center; line-height: 1.5;
-}
-
-.idle-main-text {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--text-muted);
-  margin-bottom: 6px;
-}
-
-.idle-sub-text {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin-bottom: 36px;
-}
-
-.idle-buttons {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  width: 100%;
-  max-width: 360px;
-}
-
-.idle-btn-primary.p-button {
-  flex: 1; padding: 11px 0; font-size: 14px; font-weight: 600; border-radius: 8px;
-}
-
-.idle-btn-secondary.p-button {
-  flex: 1; padding: 11px 0; font-size: 14px; font-weight: 500; border-radius: 8px;
-  border-color: var(--border-subtle); color: var(--text-muted);
-}
-
-.idle-btn-secondary.p-button:hover { background: var(--hover-overlay-subtle); }
-
-.idle-subfolder-option {
-  display: flex; align-items: center; gap: 6px; margin-top: 16px;
-  font-size: 12px; color: var(--text-tertiary); cursor: pointer; user-select: none;
-}
-
-/* ============================================================
-   working: 统一布局
-   ============================================================ */
-.rescue-working {
-  overflow: hidden;
-  position: relative;
-}
-
-/* ---------- 顶栏 ---------- */
 .wk-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 20px; height: 48px; border-bottom: 1px solid var(--border-subtle); flex-shrink: 0;
+  padding-right: var(--space-xl); height: 48px; border-bottom: 1px solid var(--border-subtle); flex-shrink: 0;
 }
 
-.wk-title-group { display: flex; align-items: center; gap: 12px; }
-.wk-title { font-size: 14px; font-weight: 600; color: var(--text-main); }
+.wk-title-group { display: flex; align-items: center; gap: var(--space-md); }
+.wk-title { font-size: var(--text-base); font-weight: 600; color: var(--text-main); }
 .wk-subtitle { font-size: var(--text-sm); color: var(--text-tertiary); }
 .wk-done-icon { font-size: 18px; color: var(--success); }
-.wk-actions { display: flex; gap: 8px; }
+.wk-actions { display: flex; gap: var(--space-sm); }
 
-/* ---------- 进度条 ---------- */
 .wk-progress { height: 4px; background: var(--border-subtle); flex-shrink: 0; }
 .wk-progress-fill { height: 100%; background: var(--primary); transition: width var(--duration-slow) ease; border-radius: 0 2px 2px 0; }
 
-/* ---------- 内容区 ---------- */
 .wk-body {
-  flex: 1; overflow-y: auto; padding: 10px 16px;
-  display: flex; flex-direction: column; gap: 8px;
+  flex: 1; overflow-y: auto; padding: var(--space-sm-md) var(--space-xl) var(--space-sm-md) 0;
+  display: flex; flex-direction: column; gap: var(--space-sm);
 }
 
-/* backup-chip 仍在修复策略对话框的手动选择里使用 */
-.backup-chip {
-  display: inline-flex; padding: 2px 8px; border-radius: 9999px; font-size: 10px;
-  background: var(--success-alpha-10); color: var(--success);
+/* 扫描骨架屏 */
+.mr-scan-skeleton {
+  display: flex; align-items: center; gap: var(--space-sm-md);
+  padding: var(--space-md) var(--space-md-lg); flex-shrink: 0;
+  border: 1px dashed var(--border-subtle); border-radius: var(--radius-md);
+  background: var(--hover-overlay-subtle); max-height: 60px;
+  animation: k-pulse 2s ease-in-out infinite;
 }
 
-/* report 空状态 */
-.report-empty {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 10px; flex: 1; color: var(--text-tertiary); font-size: var(--text-sm);
+.mr-scan-skeleton-spinner { font-size: 13px; color: var(--text-tertiary); flex-shrink: 0; }
+.mr-scan-skeleton-done { font-size: 13px; color: var(--success); flex-shrink: 0; }
+.mr-scan-skeleton.is-finishing { animation: none; }
+.mr-scan-skeleton.is-finishing .mr-scan-skeleton-text { color: var(--success); }
+
+.mr-scan-skeleton-text {
+  flex: 1; min-width: 0; font-size: var(--text-xs); font-weight: 500; color: var(--text-tertiary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
+.mr-scan-skeleton-meta {
+  flex-shrink: 0; font-size: var(--text-2xs-xs); color: var(--text-tertiary); font-variant-numeric: tabular-nums;
+}
+
+.mr-scan-skeleton-cancel {
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border: none; border-radius: var(--radius-xs);
+  background: transparent; color: var(--text-tertiary); cursor: pointer;
+  transition: background var(--duration-fast), color var(--duration-fast); font-family: inherit;
+}
+.mr-scan-skeleton-cancel:hover { background: var(--hover-overlay); color: var(--text-primary); }
+
+/* 健康文件流水 */
+.mr-healthy-stream { display: flex; flex-direction: column; gap: var(--space-2xs); padding: var(--space-sm) var(--space-md-lg); }
+.mr-healthy-row { display: flex; align-items: center; gap: var(--space-sm); height: 32px; font-size: var(--text-xs); animation: k-fade-slide-down 0.25s ease; }
+.mr-healthy-icon { font-size: 12px; color: var(--success); flex-shrink: 0; }
+.mr-healthy-name { color: var(--text-muted); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.mr-healthy-meta { flex-shrink: 0; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+
+/* 全部正常 */
+.report-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm-md); flex: 1; color: var(--text-tertiary); font-size: var(--text-sm); }
 .report-empty-icon { font-size: 36px; color: var(--success); }
 
-/* ============================================================
-   底栏
-   ============================================================ */
-/* 对齐链接监控面板 .bottom：无 border-top、简洁 gap + padding */
-.rescue-bottom {
-  display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;
-  padding: 10px 16px 14px;
+/* done 备份提示 */
+.done-backup {
+  display: flex; align-items: center; gap: var(--space-sm);
+  font-size: var(--text-xs); color: var(--text-tertiary);
+  padding: var(--space-sm) var(--space-md); background: var(--bg-input); border-radius: var(--radius-md);
 }
+.done-backup i { font-size: 14px; flex-shrink: 0; }
 
-.rescue-bottom-main {
-  display: flex; align-items: center; justify-content: space-between;
-}
-
-.rescue-bottom-left {
-  display: flex; align-items: center; gap: 0; flex-wrap: wrap;
-}
+/* 底栏 */
+.rescue-bottom { display: flex; flex-direction: column; gap: var(--space-sm); flex-shrink: 0; padding-right: var(--space-xl); }
+.rescue-bottom-main { display: flex; align-items: center; justify-content: space-between; }
+.rescue-bottom-left { display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
 
 .rescue-stat {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 12px; font-weight: 500; color: var(--text-muted);
+  display: inline-flex; align-items: center; gap: var(--space-xs);
+  font-size: var(--text-xs); font-weight: 500; color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
-
 .rescue-stat-icon { font-size: 12px; }
-
 .rescue-stat--success { color: var(--success); }
 .rescue-stat--warning { color: var(--warning); }
-.rescue-stat--phase { color: var(--primary); }
+.rescue-stat-sep { width: 1px; height: 12px; background: var(--border-subtle); margin: 0 var(--space-sm-md); flex-shrink: 0; }
+.rescue-stat-skip { color: var(--warning); font-size: 12px; cursor: help; margin-right: var(--space-2xs); }
+.rescue-bottom-actions { display: flex; align-items: center; gap: var(--space-sm); margin-left: auto; }
+.mr-cancelled-hint { font-size: var(--text-xs); color: var(--text-muted); margin-right: auto; }
 
-.rescue-stat-sep {
-  width: 1px; height: 12px; background: var(--border-subtle);
-  margin: 0 10px; flex-shrink: 0;
-}
-
-.rescue-bottom-actions {
-  display: flex; align-items: center; gap: 8px; margin-left: auto;
-}
-
-/* ============================================================
-   按钮
-   ============================================================ */
+/* 按钮 */
 .btn-ghost, .btn-primary, .btn-danger {
   display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px;
-  border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer;
-  white-space: nowrap; transition: background var(--duration-fast), opacity var(--duration-fast); border: none;
-  font-family: inherit;
+  border-radius: 7px; font-size: var(--text-xs); font-weight: 500; cursor: pointer;
+  white-space: nowrap; transition: background var(--duration-fast), opacity var(--duration-fast); border: none; font-family: inherit;
 }
-
-.btn-ghost i, .btn-primary i, .btn-danger i { font-size: 11px; }
+.btn-ghost i, .btn-primary i, .btn-danger i { font-size: var(--text-2xs-xs); }
 .btn-ghost { background: var(--bg-input); color: var(--text-muted); }
 .btn-ghost:hover:not(:disabled) { background: var(--hover-overlay); color: var(--text-main); }
 .btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -1138,217 +438,15 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
 .btn-danger { background: var(--error-alpha-15); color: var(--error); }
 .btn-danger:hover { background: var(--error-alpha-8); }
 
-/* ============================================================
-   Fixing 三态卡片
-   ============================================================ */
-.fixing-card {
-  border-radius: 10px; border: 1px solid var(--border-subtle);
-  overflow: hidden; transition: background var(--duration-normal), border-color var(--duration-normal);
-}
-
-.fixing-card--done { background: var(--success-alpha-8); border-color: var(--success-alpha-15); }
-.fixing-card--active { background: var(--warning-alpha-8); border-color: var(--warning-alpha-15); }
-.fixing-card--pending { background: var(--bg-input); border-color: var(--border-subtle); }
-
-.fixing-card-header {
-  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
-}
-
-.fixing-card-icon { font-size: 16px; flex-shrink: 0; }
-.fixing-card--done .fixing-card-icon { color: var(--success); }
-.fixing-card--active .fixing-card-icon { color: var(--warning); }
-.fixing-card--pending .fixing-card-icon { color: var(--text-tertiary); }
-
-.fixing-card-name {
-  flex: 1; font-size: 14px; font-weight: 500; color: var(--text-main);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-.fixing-card--done .fixing-card-name { color: var(--success); }
-
-.fixing-card-status { font-size: 12px; font-weight: 500; flex-shrink: 0; }
-.fixing-card--done .fixing-card-status { color: var(--success); }
-.fixing-card--active .fixing-card-status { color: var(--warning); }
-.fixing-card--pending .fixing-card-status { color: var(--text-tertiary); }
-
-.fixing-card-body {
-  padding: 0 14px 12px; display: flex; flex-direction: column; gap: 4px;
-}
-
-.fixing-link-row {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 11px; font-family: var(--font-mono, 'JetBrains Mono', monospace); color: var(--text-muted);
-}
-
-.fixing-link-ok { color: var(--success); font-size: 14px; }
-.fixing-link-spin { color: var(--warning); font-size: 14px; }
-
-.fixing-link-text {
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-/* ============================================================
-   Done 备份和提示
-   ============================================================ */
-.done-backup {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 12px; color: var(--text-tertiary);
-  padding: 8px 12px; background: var(--bg-input); border-radius: 8px;
-}
-
-.done-backup i { font-size: 14px; flex-shrink: 0; }
-
-/* (Done 统计卡片行和 done-unrescuable-hint 已移除，功能融入新表格+引导卡片) */
-
-/* ============================================================
-   修复策略弹窗
-   ============================================================ */
-.repair-dialog-body {
-  display: flex; flex-direction: column; gap: 12px;
-}
-
-.repair-dialog-desc {
-  font-size: 13px; color: var(--text-muted); margin: 0;
-}
-
-.repair-strategy-option {
-  display: flex; align-items: flex-start; gap: 10px;
-  padding: 12px 14px; border-radius: 10px;
-  border: 1px solid var(--border-subtle);
-  cursor: pointer; transition: background var(--duration-fast), border-color var(--duration-fast);
-}
-
-.repair-strategy-option:hover { background: var(--hover-overlay-subtle); }
-
-.repair-strategy-option.active {
-  border-color: var(--primary-alpha-30);
-  background: var(--primary-alpha-5);
-}
-
-.repair-strategy-content {
-  display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0;
-}
-
-.repair-strategy-label {
-  font-size: 13px; font-weight: 600; color: var(--text-main);
-}
-
-.repair-strategy-desc {
-  font-size: 11px; color: var(--text-tertiary);
-}
-
-.repair-pref-pills {
-  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
-}
-
-.pill-pref-item {
-  display: inline-flex; align-items: center; height: 28px; padding: 0 10px;
-  border-radius: 14px; font-size: 12px; font-weight: 500; white-space: nowrap;
-  cursor: pointer; border: 1px solid var(--border-subtle);
-  background: var(--bg-input); color: var(--text-muted); font-family: inherit;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
-}
-
-.pill-pref-item:hover {
-  background: var(--primary-alpha-8); border-color: var(--primary-alpha-30); color: var(--primary);
-}
-
-.pill-pref-item--first {
-  background: var(--primary-alpha-10); border-color: var(--primary-alpha-30);
-  color: var(--primary); font-weight: 600;
-}
-
-.pill-grip {
-  font-size: 10px; color: var(--text-tertiary); opacity: 0.5; flex-shrink: 0;
-}
-
-/* 手动选择 */
-.repair-strategy-manual { flex-direction: column; gap: 0; }
-
-.repair-strategy-manual-header {
-  display: flex; align-items: flex-start; gap: 10px; cursor: pointer; width: 100%;
-}
-
-.repair-strategy-manual-header > .pi {
-  margin-left: auto; margin-top: 4px; font-size: 12px; color: var(--text-tertiary);
-}
-
-.repair-manual-list {
-  display: flex; flex-direction: column; gap: 8px;
-  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-subtle);
-  max-height: 280px; overflow-y: auto;
-}
-
-.repair-manual-item {
-  display: flex; flex-direction: column; gap: 6px;
-  padding: 8px 10px; border-radius: 8px; background: var(--bg-input);
-}
-
-.repair-manual-url {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 11px; color: var(--text-muted);
-}
-
-.repair-manual-url i { font-size: 12px; color: var(--text-tertiary); }
-
-.repair-manual-url span {
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-.repair-manual-file {
-  font-family: inherit !important;
-  margin-left: auto; flex-shrink: 0;
-  color: var(--text-tertiary);
-}
-
-.repair-manual-options {
-  display: flex; flex-wrap: wrap; gap: 6px; padding-left: 18px;
-}
-
-.repair-manual-radio {
-  display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
-}
-
-.repair-manual-radio input { display: none; }
-
-.repair-manual-radio.selected .backup-chip {
-  background: var(--primary-alpha-10); color: var(--primary);
-  border-color: var(--primary-alpha-30);
-}
-
-.repair-manual-latency {
-  font-size: 10px; color: var(--text-tertiary);
-}
-
-.repair-manual-show-all {
-  width: 100%; padding: 8px 0; border: 1px dashed var(--border-subtle); border-radius: 6px;
-  background: transparent; color: var(--primary); font-size: 12px; font-weight: 500;
-  cursor: pointer; font-family: inherit;
-  transition: background var(--duration-fast), border-color var(--duration-fast);
-}
-.repair-manual-show-all:hover { background: var(--primary-alpha-5); border-color: var(--primary-alpha-30); }
-
-.repair-dialog-footer {
-  display: flex; justify-content: flex-end; gap: 8px;
-}
-
-/* ============================================================
-   动画
-   ============================================================ */
-.fade-enter-active { transition: opacity var(--duration-normal) ease; }
-.fade-leave-active { transition: opacity var(--duration-fast) ease; }
+/* 动画 */
+.fade-enter-active { transition: opacity var(--duration-normal) var(--ease-standard); }
+.fade-leave-active { transition: opacity var(--duration-medium) var(--ease-accelerate); }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 
-/* 扫描进度条：进入快、离开柔和 */
 .scan-bar-enter-active { transition: opacity var(--duration-normal) ease, transform var(--duration-normal) ease; }
 .scan-bar-leave-active {
-  transition:
-    opacity 0.8s var(--ease-standard),
-    transform 0.8s var(--ease-standard),
-    max-height 0.6s 0.3s var(--ease-standard),
-    padding 0.6s 0.3s var(--ease-standard),
-    border-width 0.6s 0.3s var(--ease-standard);
+  transition: opacity 0.8s var(--ease-standard), transform 0.8s var(--ease-standard),
+    max-height 0.6s 0.3s var(--ease-standard), padding 0.6s 0.3s var(--ease-standard), border-width 0.6s 0.3s var(--ease-standard);
   overflow: hidden;
 }
 .scan-bar-enter-from { opacity: 0; transform: translateY(-4px); }
@@ -1358,282 +456,4 @@ function selectFilter(f: 'all' | 'rescuable' | 'manual') {
 .slide-up-enter-from { opacity: 0; transform: translateY(12px); }
 .slide-up-leave-active { transition: opacity var(--duration-normal) ease, transform var(--duration-normal) ease; }
 .slide-up-leave-to { opacity: 0; transform: translateY(-8px); }
-
-/* ============================================================
-   新设计：筛选芯片 + 扁平表格 + 引导卡片
-   ============================================================ */
-
-/* ---------- 操作栏：芯片 + 健康文件链接 ---------- */
-.mr-action-bar {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 16px; flex-shrink: 0; min-height: 32px;
-}
-
-.mr-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-
-/* 对齐链接监控面板 .filter-chip 视觉 token：26px 胶囊 + bg-input 底色 + primary-alpha-10 激活态 */
-.mr-chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  height: 26px; padding: 0 10px; border-radius: 13px;
-  font-size: 12px; font-weight: 500; cursor: pointer;
-  background: var(--bg-input); color: var(--text-muted);
-  border: 1px solid transparent;
-  font-family: inherit; white-space: nowrap;
-  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
-}
-
-.mr-chip:hover {
-  background: var(--hover-overlay); border-color: var(--border-subtle);
-}
-
-.mr-chip.active {
-  background: var(--primary-alpha-10);
-  color: var(--primary);
-  border-color: var(--primary-alpha-10);
-}
-
-.mr-chip.active .mr-chip-count { color: var(--primary); opacity: 0.85; }
-
-.mr-chip.disabled,
-.mr-chip:disabled {
-  opacity: 0.4; cursor: not-allowed; pointer-events: none;
-  background: var(--bg-input); color: var(--text-tertiary); border-color: transparent;
-}
-
-.mr-chip-count { font-weight: 600; font-variant-numeric: tabular-nums; }
-
-.mr-dot {
-  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
-  background: var(--text-tertiary);
-}
-
-.mr-dot--amber { background: var(--warning); }
-
-/* ---------- 扫描骨架屏（收集/扫描/验证三阶段通用，虚线灰底） ---------- */
-.mr-scan-skeleton {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 14px; flex-shrink: 0;
-  border: 1px dashed var(--border-subtle);
-  border-radius: 8px;
-  background: var(--hover-overlay-subtle);
-  max-height: 60px;
-  animation: k-pulse 2s ease-in-out infinite;
-}
-
-.mr-scan-skeleton-spinner {
-  font-size: 13px; color: var(--text-tertiary); flex-shrink: 0;
-}
-
-.mr-scan-skeleton-done {
-  font-size: 13px; color: var(--success); flex-shrink: 0;
-}
-
-.mr-scan-skeleton.is-finishing {
-  animation: none;
-}
-
-.mr-scan-skeleton.is-finishing .mr-scan-skeleton-text {
-  color: var(--success);
-}
-
-.mr-scan-skeleton-text {
-  flex: 1; min-width: 0;
-  font-size: 12px; font-weight: 500; color: var(--text-tertiary);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-.mr-scan-skeleton-meta {
-  flex-shrink: 0;
-  font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums;
-}
-
-/* ---------- 扫描中：健康文件实时流水 ---------- */
-.mr-healthy-stream {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 8px 14px;
-}
-
-.mr-healthy-row {
-  display: flex; align-items: center; gap: 8px;
-  height: 32px; font-size: 12px;
-  animation: k-fade-slide-down 0.25s ease;
-}
-
-.mr-healthy-icon {
-  font-size: 12px; color: var(--success); flex-shrink: 0;
-}
-
-.mr-healthy-name {
-  color: var(--text-muted); font-weight: 500;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  min-width: 0; flex: 1;
-}
-
-.mr-healthy-meta {
-  flex-shrink: 0; color: var(--text-tertiary); font-variant-numeric: tabular-nums;
-}
-
-/* ---------- 分组列表：每个分组独立成块，组间 6px gap ---------- */
-.mr-groups {
-  display: flex; flex-direction: column; gap: 6px;
-  flex-shrink: 0;
-}
-
-.mr-group {
-  border: 1px solid var(--border-subtle); border-radius: 8px;
-  background: var(--bg-card); overflow: hidden;
-}
-
-/* 分组头（可点击折叠，sticky 粘顶） */
-.mr-group-header {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  min-height: 52px; padding: 8px 14px;
-  background: var(--bg-input); border: none; cursor: pointer; font-family: inherit;
-  text-align: left; position: sticky; top: 0; z-index: 2;
-  transition: background var(--duration-fast);
-}
-
-.mr-group-header:hover { background: var(--hover-overlay-subtle); }
-
-.mr-group-chev {
-  font-size: 11px; color: var(--text-tertiary); flex-shrink: 0;
-  transition: transform var(--duration-fast);
-}
-
-.mr-group-file-icon { font-size: 14px; color: var(--primary); flex-shrink: 0; }
-
-.mr-group-info {
-  display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0;
-}
-
-.mr-group-name {
-  font-size: var(--text-sm); font-weight: var(--weight-bold); color: var(--text-main);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-.mr-group-dir {
-  font-size: var(--text-xs); color: var(--text-tertiary);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-.mr-group-count {
-  font-size: 11px; font-weight: 500;
-  padding: 2px 8px; border-radius: 10px;
-  background: var(--hover-overlay); color: var(--text-muted);
-  flex-shrink: 0; font-variant-numeric: tabular-nums;
-}
-
-.mr-group-actions { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; }
-
-/* 默认半透明，hover 分组头后不透明 */
-.mr-group-icon-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 26px; height: 26px; border-radius: 6px; border: none;
-  background: transparent; color: var(--text-tertiary); cursor: pointer;
-  opacity: 0.4;
-  transition: background var(--duration-fast), color var(--duration-fast), opacity var(--duration-fast);
-  font-family: inherit;
-}
-
-.mr-group-header:hover .mr-group-icon-btn { opacity: 1; }
-.mr-group-icon-btn:hover { background: var(--hover-overlay-subtle); color: var(--primary); }
-.mr-group-icon-btn > .pi { font-size: 13px; }
-
-/* 分组体（行） */
-.mr-group-body {
-  display: flex; flex-direction: column;
-  background: var(--bg-card);
-}
-
-/* 单行：紧凑单行布局（图片名 + host badge + 操作），靠 hover 自然分离 */
-.mr-row {
-  display: flex; align-items: center; gap: 12px;
-  height: 40px; padding: 0 14px;
-  transition: background var(--duration-micro);
-}
-.mr-row:hover { background: var(--hover-overlay-subtle); }
-
-.mr-row-status {
-  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; width: 72px;
-}
-
-/* 状态点分色：红/黄/紫 */
-.mr-dot--red { background: var(--error); }
-.mr-dot--amber { background: var(--warning); }
-.mr-dot--purple { background: var(--pending); }
-
-/* 状态标签 */
-.mr-status-label {
-  font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums;
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  padding: 2px 6px; border-radius: 3px; min-width: 44px; text-align: center;
-  white-space: nowrap;
-}
-
-.mr-status-label--red { background: var(--error-alpha-10); color: var(--error); }
-.mr-status-label--amber { background: var(--warning-alpha-8); color: var(--warning); }
-.mr-status-label--purple { background: var(--pending-alpha-8); color: var(--pending); }
-
-/* 行内：图片名（主，flex: 1）+ host badge（尾部固定） */
-.mr-img-name {
-  flex: 1 1 auto; min-width: 0;
-  font-size: 13px; font-weight: 500; color: var(--text-main);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-.mr-host-badge {
-  flex-shrink: 0;
-  display: inline-flex; align-items: center;
-  height: 20px; padding: 0 8px; border-radius: 4px;
-  background: var(--bg-input); color: var(--text-muted);
-  border: 1px solid var(--border-subtle);
-  font-size: 11px; font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-.mr-row:hover .mr-host-badge { background: var(--hover-overlay); }
-
-.mr-host-badge--defunct {
-  background: var(--error-alpha-10); color: var(--error);
-  border-color: var(--error-alpha-15);
-}
-.mr-row:hover .mr-host-badge--defunct { background: var(--error-alpha-15); }
-
-.mr-row-actions {
-  display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0;
-  opacity: 0; transition: opacity var(--duration-fast);
-}
-.mr-row:hover .mr-row-actions { opacity: 1; }
-
-.mr-row-icon-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 26px; height: 26px; border-radius: 6px; border: none;
-  background: transparent; color: var(--text-tertiary); cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast); font-family: inherit;
-}
-.mr-row-icon-btn:hover { background: var(--hover-overlay); color: var(--primary); }
-.mr-row-icon-btn > .pi { font-size: 12px; }
-
-/* 加载更多按钮 */
-.mr-load-more {
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  width: 100%; padding: 10px 0; border: 1px dashed var(--border-subtle); border-radius: 8px;
-  background: transparent; color: var(--text-muted); font-size: 12px; font-weight: 500;
-  cursor: pointer; font-family: inherit; font-variant-numeric: tabular-nums;
-  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
-}
-.mr-load-more:hover { background: var(--hover-overlay-subtle); color: var(--primary); border-color: var(--primary-alpha-30); }
-.mr-load-more > .pi { font-size: 14px; }
-
-/* 筛选后为空 */
-.mr-empty-filter {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 8px; padding: 32px; color: var(--text-tertiary); font-size: 12px;
-}
-.mr-empty-filter > .pi { font-size: 24px; }
-
-/* 底栏统计：文件数后跟的小字"正常/异常" */
-.rescue-stat-sub {
-  margin-left: 4px; font-size: 11px; font-weight: 400; color: var(--text-tertiary);
-}
 </style>

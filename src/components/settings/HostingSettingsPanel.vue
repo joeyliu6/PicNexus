@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, watchEffect, nextTick, onUnmounted } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import Divider from 'primevue/divider';
 import type { GithubCdnConfig, ServiceType, CustomS3Profile } from '../../config/types';
 import { PRIVATE_SERVICES, PUBLIC_SERVICES } from '../../config/types';
@@ -7,9 +7,11 @@ import PrivateStorageGroup from './hosting/PrivateStorageGroup.vue';
 import CookieServiceGroup from './hosting/CookieServiceGroup.vue';
 import TokenServiceGroup from './hosting/TokenServiceGroup.vue';
 import BuiltinServiceGroup from './hosting/BuiltinServiceGroup.vue';
+import ServiceChipGrid from './ServiceChipGrid.vue';
 import type { BatchTestProgress } from '../../types/batchTest';
 import type { ServiceHealthStatus } from '../../types/serviceHealth';
 import { useServiceHealth } from '../../composables/useServiceHealth';
+import { useHealthCheck } from '../../composables/settings/useHealthCheck';
 
 const { healthStatusMap, healthTooltipMap } = useServiceHealth();
 
@@ -96,6 +98,27 @@ watch(() => props.targetCardId, (val) => {
   }
 });
 
+// ==================== 健康检测 composable ====================
+
+const isBatchTestingRef = computed(() => !!props.isBatchTesting);
+const batchTestProgressRef = computed(() => props.batchTestProgress ?? null);
+const testingConnectionsRef = computed(() => props.testingConnections);
+
+const {
+  progressPercent,
+  ringOffset,
+  isShowingCompleted,
+  ringLabel,
+  isStalled,
+  batchTestedServices,
+  batchDoneServices,
+} = useHealthCheck({
+  isBatchTesting: isBatchTestingRef,
+  batchTestProgress: batchTestProgressRef,
+  testingConnections: testingConnectionsRef,
+});
+
+// ==================== 健康摘要 ====================
 
 const healthSummary = computed(() => {
   const counts: Record<ServiceHealthStatus, number> = { unconfigured: 0, pending: 0, verified: 0, error: 0 };
@@ -106,103 +129,7 @@ const healthSummary = computed(() => {
   return { ...counts, hasConfigured };
 });
 
-
-const progressPercent = computed(() => {
-  const p = props.batchTestProgress;
-  if (!p || p.total === 0) return 0;
-  return Math.round((p.current / p.total) * 100);
-});
-
-const RING_CIRCUMFERENCE = 56.55;
-
-const ringOffset = computed(() =>
-  RING_CIRCUMFERENCE * (1 - progressPercent.value / 100)
-);
-
-const isShowingCompleted = ref(false);
-let completedTimer: ReturnType<typeof setTimeout> | null = null;
-
-watch(progressPercent, (val) => {
-  if (val >= 100 && props.isBatchTesting) {
-    isShowingCompleted.value = true;
-    if (completedTimer) clearTimeout(completedTimer);
-    completedTimer = setTimeout(() => {
-      isShowingCompleted.value = false;
-    }, 3000);
-  }
-});
-
-watch(() => props.isBatchTesting, (testing) => {
-  if (testing) {
-    isShowingCompleted.value = false;
-    if (completedTimer) clearTimeout(completedTimer);
-    completedTimer = null;
-  }
-});
-
-const ringLabel = computed(() => {
-  if (isShowingCompleted.value) return '检测完成';
-  if (!props.isBatchTesting) return '重新检测';
-  if (progressPercent.value >= 100) return '检测完成';
-  return '正在检测';
-});
-
-const isStalled = ref(false);
-let stallTimer: ReturnType<typeof setTimeout> | null = null;
-const STALL_MS = 1500;
-
-watch(progressPercent, () => {
-  if (stallTimer) clearTimeout(stallTimer);
-  isStalled.value = false;
-  if (props.isBatchTesting && progressPercent.value < 100) {
-    stallTimer = setTimeout(() => { isStalled.value = true; }, STALL_MS);
-  }
-});
-
-watch(() => props.isBatchTesting, (testing) => {
-  if (!testing) {
-    if (stallTimer) clearTimeout(stallTimer);
-    stallTimer = null;
-    isStalled.value = false;
-  }
-});
-
-onUnmounted(() => {
-  if (stallTimer) clearTimeout(stallTimer);
-  if (completedTimer) clearTimeout(completedTimer);
-  Object.values(doneTimers).forEach(clearTimeout);
-});
-
-const batchTestedServices = ref<Set<string>>(new Set());
-const batchDoneServices = ref<Set<string>>(new Set());
-let wasTestingMap: Record<string, boolean> = {};
-let doneTimers: Record<string, ReturnType<typeof setTimeout>> = {};
-
-watch(() => props.isBatchTesting, (testing) => {
-  if (testing) {
-    batchTestedServices.value = new Set();
-    batchDoneServices.value = new Set();
-    Object.values(doneTimers).forEach(clearTimeout);
-    doneTimers = {};
-    wasTestingMap = {};
-  }
-});
-
-watchEffect(() => {
-  if (!props.isBatchTesting) return;
-  for (const [svc, isTesting] of Object.entries(props.testingConnections)) {
-    if (wasTestingMap[svc] === true && !isTesting) {
-      batchTestedServices.value = new Set([...batchTestedServices.value, svc]);
-      batchDoneServices.value = new Set([...batchDoneServices.value, svc]);
-      doneTimers[svc] = setTimeout(() => {
-        const next = new Set(batchDoneServices.value);
-        next.delete(svc);
-        batchDoneServices.value = next;
-      }, 600);
-    }
-    wasTestingMap[svc] = isTesting;
-  }
-});
+// ==================== 服务启用切换 ====================
 
 const localAvailableServices = computed({
   get: () => props.availableServices,
@@ -221,11 +148,7 @@ function handleChipClick(svc: ServiceType) {
   emit('scrollToService', svc);
 }
 
-function getChipTooltip(svc: ServiceType): string | null {
-  const status = healthStatusMap.value[svc];
-  if (status === 'unconfigured') return '未配置，点击跳转到配置';
-  return healthTooltipMap.value[svc] ?? null;
-}
+// ==================== 筛选 ====================
 
 const activeFilter = ref<ServiceHealthStatus | null>(null);
 
@@ -245,7 +168,7 @@ function toggleFilter(status: ServiceHealthStatus) {
     <div class="form-group">
     <label class="group-label">启用的服务</label>
     <div class="service-enable-section">
-      <!-- 摘要头部（原连接状态，移入卡片内） -->
+      <!-- 摘要头部 -->
       <div class="service-health-header" v-if="healthSummary.hasConfigured">
         <div class="health-row">
           <div class="health-stats" :key="batchTestCompletionKey">
@@ -287,59 +210,35 @@ function toggleFilter(status: ServiceHealthStatus) {
         </div>
       </div>
 
-      <div class="service-group-section">
-        <div class="service-group-title">私有存储</div>
-        <div class="service-toggles-grid">
-          <div
-            v-for="svc in PRIVATE_SERVICES"
-            :key="svc"
-            class="toggle-chip"
-            :class="[healthStatusMap[svc], { 'is-batch-shimmer': isBatchTesting && !batchTestedServices.has(svc), 'is-batch-done': batchDoneServices.has(svc), 'is-filtered-out': activeFilter && healthStatusMap[svc] !== activeFilter }]"
-            v-tooltip.top="getChipTooltip(svc)"
-            @click="handleChipClick(svc)"
-          >
-            <span v-if="healthStatusMap[svc] === 'unconfigured'" class="toggle-empty-circle"></span>
-            <button
-              v-else
-              class="toggle-indicator"
-              :class="{ checked: localAvailableServices.includes(svc) }"
-              :aria-pressed="localAvailableServices.includes(svc)"
-              :aria-label="`${localAvailableServices.includes(svc) ? '禁用' : '启用'} ${serviceNames[svc]}`"
-              @click.stop="toggleService(svc)"
-            >
-              <i v-if="localAvailableServices.includes(svc)" class="pi pi-check"></i>
-            </button>
-            <span class="toggle-label">{{ serviceNames[svc] }}</span>
-          </div>
-        </div>
-      </div>
+      <ServiceChipGrid
+        :services="PRIVATE_SERVICES"
+        group-title="私有存储"
+        :health-status-map="healthStatusMap"
+        :health-tooltip-map="healthTooltipMap"
+        :available-services="localAvailableServices"
+        :service-names="serviceNames"
+        :is-batch-testing="!!isBatchTesting"
+        :batch-tested-services="batchTestedServices"
+        :batch-done-services="batchDoneServices"
+        :active-filter="activeFilter"
+        @toggle-service="toggleService"
+        @chip-click="handleChipClick"
+      />
 
-      <div class="service-group-section">
-        <div class="service-group-title">公共图床</div>
-        <div class="service-toggles-grid">
-          <div
-            v-for="svc in PUBLIC_SERVICES"
-            :key="svc"
-            class="toggle-chip"
-            :class="[healthStatusMap[svc], { 'is-batch-shimmer': isBatchTesting && !batchTestedServices.has(svc), 'is-batch-done': batchDoneServices.has(svc), 'is-filtered-out': activeFilter && healthStatusMap[svc] !== activeFilter }]"
-            v-tooltip.top="getChipTooltip(svc)"
-            @click="handleChipClick(svc)"
-          >
-            <span v-if="healthStatusMap[svc] === 'unconfigured'" class="toggle-empty-circle"></span>
-            <button
-              v-else
-              class="toggle-indicator"
-              :class="{ checked: localAvailableServices.includes(svc) }"
-              :aria-pressed="localAvailableServices.includes(svc)"
-              :aria-label="`${localAvailableServices.includes(svc) ? '禁用' : '启用'} ${serviceNames[svc]}`"
-              @click.stop="toggleService(svc)"
-            >
-              <i v-if="localAvailableServices.includes(svc)" class="pi pi-check"></i>
-            </button>
-            <span class="toggle-label">{{ serviceNames[svc] }}</span>
-          </div>
-        </div>
-      </div>
+      <ServiceChipGrid
+        :services="PUBLIC_SERVICES"
+        group-title="公共图床"
+        :health-status-map="healthStatusMap"
+        :health-tooltip-map="healthTooltipMap"
+        :available-services="localAvailableServices"
+        :service-names="serviceNames"
+        :is-batch-testing="!!isBatchTesting"
+        :batch-tested-services="batchTestedServices"
+        :batch-done-services="batchDoneServices"
+        :active-filter="activeFilter"
+        @toggle-service="toggleService"
+        @chip-click="handleChipClick"
+      />
     </div>
     </div>
 
@@ -349,7 +248,7 @@ function toggleFilter(status: ServiceHealthStatus) {
       <div class="group-header-row">
         <label class="group-label">私有存储</label>
         <button class="add-custom-s3-btn" @click="emit('addCustomS3')">
-          <i class="pi pi-plus" style="font-size: 11px"></i>
+          <i class="pi pi-plus" style="font-size: var(--text-2xs-xs)"></i>
           <span>添加自定义 S3</span>
         </button>
       </div>
@@ -438,7 +337,7 @@ function toggleFilter(status: ServiceHealthStatus) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: var(--space-sm-md);
 }
 
 .group-header-row .group-label {
@@ -448,13 +347,13 @@ function toggleFilter(status: ServiceHealthStatus) {
 .add-custom-s3-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm-md);
   background: none;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-sm-md);
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--text-xs);
   cursor: pointer;
   transition: all var(--duration-fast) ease;
 }
@@ -466,8 +365,8 @@ function toggleFilter(status: ServiceHealthStatus) {
 }
 
 .service-health-header {
-  margin-bottom: 14px;
-  padding-bottom: 14px;
+  margin-bottom: var(--space-md-lg);
+  padding-bottom: var(--space-md-lg);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -476,7 +375,6 @@ function toggleFilter(status: ServiceHealthStatus) {
   align-items: center;
   width: 100%;
 }
-
 
 .ring-progress {
   width: 14px;
@@ -488,7 +386,7 @@ function toggleFilter(status: ServiceHealthStatus) {
 }
 
 .ring-progress.stalled {
-  animation: k-spin 2s linear infinite;
+  animation: k-spin var(--duration-breathe) linear infinite;
 }
 
 .icon-swap-enter-active,
@@ -521,7 +419,7 @@ function toggleFilter(status: ServiceHealthStatus) {
 }
 
 .pill-reveal {
-  animation: k-fade-scale 0.3s ease both;
+  animation: k-fade-scale var(--duration-medium) ease both;
 }
 
 .health-stats .pill-reveal:nth-child(2) { animation-delay: 80ms; }
@@ -531,7 +429,7 @@ function toggleFilter(status: ServiceHealthStatus) {
 .health-stats {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   flex: 1;
   flex-wrap: wrap;
 }
@@ -539,10 +437,10 @@ function toggleFilter(status: ServiceHealthStatus) {
 .health-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 12px;
+  gap: var(--space-xs-sm);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
   font-weight: 500;
   transition: all var(--duration-fast) ease;
   white-space: nowrap;
@@ -558,7 +456,7 @@ function toggleFilter(status: ServiceHealthStatus) {
 .health-pill .health-dot {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   flex-shrink: 0;
 }
 
@@ -571,7 +469,6 @@ function toggleFilter(status: ServiceHealthStatus) {
   background: var(--success);
 }
 
-
 .health-pill.error {
   background: color-mix(in srgb, var(--error) 12%, transparent);
   color: var(--error);
@@ -581,7 +478,6 @@ function toggleFilter(status: ServiceHealthStatus) {
   background: var(--error);
 }
 
-
 .health-pill.pending {
   background: color-mix(in srgb, var(--pending) 12%, transparent);
   color: var(--pending);
@@ -590,7 +486,6 @@ function toggleFilter(status: ServiceHealthStatus) {
 .health-pill.pending .health-dot {
   background: var(--pending);
 }
-
 
 .health-pill.unconfigured {
   background: color-mix(in srgb, var(--text-muted) 10%, transparent);
@@ -602,21 +497,19 @@ function toggleFilter(status: ServiceHealthStatus) {
   opacity: 0.5;
 }
 
-
-
 .health-refresh {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs-sm);
   background: none;
   border: none;
   color: var(--primary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   cursor: pointer;
-  padding: 6px 12px;
-  border-radius: 8px;
+  padding: var(--space-xs-sm) var(--space-md);
+  border-radius: var(--radius-md);
   transition: background-color var(--duration-fast) ease;
   white-space: nowrap;
 }
@@ -626,7 +519,7 @@ function toggleFilter(status: ServiceHealthStatus) {
 }
 
 .health-refresh .pi {
-  font-size: 12px;
+  font-size: var(--text-xs);
   line-height: 1;
 }
 
@@ -651,215 +544,11 @@ function toggleFilter(status: ServiceHealthStatus) {
 }
 
 .service-enable-section {
-  padding: 14px;
+  padding: var(--space-md-lg);
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  border-radius: var(--radius-sm-md);
 }
-
-.service-group-section {
-  margin-bottom: 16px;
-}
-
-.service-group-section:last-child {
-  margin-bottom: 0;
-}
-
-.service-group-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 8px;
-}
-
-.service-toggles-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.toggle-chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  background: var(--hover-overlay-subtle);
-  border: 1px solid var(--border-subtle-light);
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all var(--duration-normal);
-}
-
-.toggle-chip .toggle-label {
-  font-size: 12px;
-  color: var(--text-primary);
-  white-space: nowrap;
-}
-
-/* 可用 - 淡绿底 */
-.toggle-chip.verified {
-  background: var(--success-alpha-8);
-}
-.toggle-chip.verified:hover {
-  background: var(--success-alpha-15);
-}
-
-/* 未配置 - 明确弱化（安静的多数态） */
-.toggle-chip.unconfigured {
-  cursor: pointer;
-  background: transparent;
-  border-color: var(--hover-overlay-subtle);
-}
-.toggle-chip.unconfigured .toggle-label {
-  opacity: 0.4;
-}
-.toggle-chip.unconfigured:hover {
-  background: var(--primary-alpha-8);
-  border-color: var(--hover-overlay);
-}
-.toggle-chip.unconfigured:hover .toggle-label {
-  opacity: 0.7;
-}
-
-.toggle-indicator {
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  background: none;
-  border-radius: 50%;
-  border: 1.5px solid var(--text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  cursor: pointer;
-  font-family: inherit;
-  transition: all var(--duration-normal);
-  opacity: 0.45;
-}
-
-.toggle-indicator .pi {
-  font-size: 10px;
-  color: var(--text-on-primary);
-  display: none;
-}
-
-.toggle-indicator.checked {
-  opacity: 1;
-  border: none;
-}
-
-.toggle-indicator.checked .pi {
-  display: block;
-}
-
-.toggle-chip.verified .toggle-indicator.checked {
-  background: var(--success);
-}
-
-.toggle-chip.pending .toggle-indicator.checked {
-  background: var(--pending);
-}
-
-.toggle-chip.error .toggle-indicator.checked {
-  background: var(--error);
-}
-
-.toggle-indicator:hover {
-  opacity: 0.8;
-  border-color: var(--primary);
-}
-
-.toggle-indicator.checked:hover {
-  filter: brightness(1.15);
-}
-
-.toggle-empty-circle {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 1.5px solid var(--text-muted);
-  opacity: 0.3;
-  flex-shrink: 0;
-  transition: all var(--duration-normal);
-}
-.toggle-chip.unconfigured:hover .toggle-empty-circle {
-  opacity: 0.5;
-  border-color: var(--primary);
-}
-
-/* 未检测 - 淡紫底 */
-.toggle-chip.pending {
-  background: var(--pending-alpha-8);
-}
-.toggle-chip.pending:hover {
-  background: var(--pending-alpha-15);
-}
-
-/* 有问题 - 淡红底 */
-.toggle-chip.error {
-  background: var(--error-alpha-8);
-}
-.toggle-chip.error:hover {
-  background: var(--error-alpha-15);
-}
-
-/* 批量检测中：统一淡蓝底 + 扫光效果 */
-.toggle-chip.is-batch-shimmer {
-  position: relative;
-  overflow: hidden;
-  background: var(--success-alpha-8) !important;
-  border-color: var(--success-alpha-15);
-}
-
-.toggle-chip.is-batch-shimmer::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    var(--success-alpha-15) 50%,
-    transparent 100%
-  );
-  background-size: 200% 100%;
-  animation: k-shimmer 1.4s ease-in-out infinite reverse;
-  border-radius: inherit;
-  pointer-events: none;
-}
-
-/* 单个服务检测完成：蓝色脉冲扩散 */
-.toggle-chip.is-batch-done {
-  animation: chip-done-pulse 0.6s ease-out;
-}
-
-@keyframes chip-done-pulse {
-  0%   { box-shadow: 0 0 0 0 var(--primary-alpha-30); }
-  50%  { box-shadow: 0 0 0 4px var(--primary-alpha-15); }
-  100% { box-shadow: 0 0 0 0 transparent; }
-}
-
-/* 未配置服务：柔和灰色脉冲 */
-.toggle-chip.unconfigured.is-batch-done {
-  animation: chip-done-pulse-muted 0.6s ease-out;
-}
-
-@keyframes chip-done-pulse-muted {
-  0%   { box-shadow: 0 0 0 0 var(--hover-overlay); }
-  50%  { box-shadow: 0 0 0 4px var(--hover-overlay-subtle); }
-  100% { box-shadow: 0 0 0 0 transparent; }
-}
-
-/* 筛选时未匹配的药丸淡化 */
-.toggle-chip.is-filtered-out {
-  opacity: 0.15;
-  pointer-events: none;
-  transition: opacity var(--duration-normal);
-}
-
-/* .group-label / .form-group 样式来自 settings-shared.css */
 
 .category-icon {
   width: 16px;
@@ -873,13 +562,12 @@ function toggleFilter(status: ServiceHealthStatus) {
 .provider-grid {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-md);
 }
-
 
 .builtin-info {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
 
@@ -889,9 +577,8 @@ function toggleFilter(status: ServiceHealthStatus) {
 
 .cookie-field {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   line-height: 1.5;
   word-break: break-all;
 }
-
 </style>

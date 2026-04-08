@@ -294,7 +294,7 @@ function handleCopy(format: LinkFormat): void {
   border: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--text-2xs-xs);
   cursor: pointer;
   transition: all var(--duration-fast) ease;
   white-space: nowrap;

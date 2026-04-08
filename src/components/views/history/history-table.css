@@ -1,0 +1,331 @@
+/* history-table.css — DataTable 深度选择器样式，从 HistoryTableView.vue 提取 */
+
+/* ---- 分页器 ---- */
+:deep(.p-paginator) {
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  padding: 12px 16px;
+  gap: 4px;
+}
+
+:deep(.p-paginator .p-paginator-pages .p-paginator-page) {
+  min-width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: all var(--duration-fast) ease;
+}
+
+:deep(.p-paginator .p-paginator-pages .p-paginator-page:hover) {
+  background: var(--hover-overlay-subtle);
+  color: var(--text-primary);
+}
+
+:deep(.p-paginator .p-paginator-pages .p-paginator-page.p-highlight) {
+  background: var(--primary);
+  color: white;
+  font-weight: 600;
+}
+
+:deep(.p-paginator .p-paginator-first),
+:deep(.p-paginator .p-paginator-prev),
+:deep(.p-paginator .p-paginator-next),
+:deep(.p-paginator .p-paginator-last) {
+  min-width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--text-muted);
+  transition: all var(--duration-fast) ease;
+}
+
+:deep(.p-paginator .p-paginator-first:hover),
+:deep(.p-paginator .p-paginator-prev:hover),
+:deep(.p-paginator .p-paginator-next:hover),
+:deep(.p-paginator .p-paginator-last:hover) {
+  background: var(--hover-overlay-subtle);
+  color: var(--text-primary);
+}
+
+.table-view-container.is-loading :deep(.p-paginator) {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ---- DataTable 基础 ---- */
+:deep(.minimal-table .p-datatable-table) {
+  table-layout: fixed;
+}
+
+:deep(.history-table .p-datatable-table-container) {
+  overflow: visible !important;
+}
+
+/* ---- 表头 ---- */
+:deep(.minimal-table .p-datatable-thead > tr > th) {
+  background: var(--bg-card) !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+  padding: 12px 16px !important;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  letter-spacing: 0.03em;
+  height: 42px !important;
+  box-sizing: border-box;
+}
+
+/* ---- 行样式 ---- */
+:deep(.minimal-table .p-datatable-tbody > tr) {
+  background: transparent !important;
+}
+
+:deep(.minimal-table .p-datatable-tbody > tr:nth-child(even)) {
+  background: var(--overlay-light) !important;
+}
+
+:deep(.minimal-table .p-datatable-tbody > tr:hover) {
+  background: var(--primary-alpha-8) !important;
+}
+
+:root.dark-theme :deep(.minimal-table .p-datatable-tbody > tr:hover) {
+  background: var(--primary-alpha-15) !important;
+}
+
+:deep(.minimal-table .p-datatable-tbody > tr.row-selected) {
+  background: var(--primary-alpha-12) !important;
+}
+
+:root.dark-theme :deep(.minimal-table .p-datatable-tbody > tr.row-selected) {
+  background: var(--primary-alpha-18) !important;
+}
+
+:deep(.minimal-table .p-datatable-tbody > tr.row-selected:hover) {
+  background: var(--primary-alpha-16) !important;
+}
+
+:root.dark-theme :deep(.minimal-table .p-datatable-tbody > tr.row-selected:hover) {
+  background: var(--primary-alpha-22) !important;
+}
+
+/* ---- 单元格 ---- */
+:deep(.minimal-table .p-datatable-tbody > tr > td) {
+  padding: 8px 16px !important;
+  border-bottom: 1px solid var(--overlay-medium) !important;
+  font-size: 13px;
+  vertical-align: middle;
+  height: 52px !important;  /* 固定行高，与骨架屏一致 */
+  box-sizing: border-box;
+}
+
+:root.dark-theme :deep(.minimal-table .p-datatable-tbody > tr > td) {
+  border-bottom-color: var(--border-subtle) !important;
+}
+
+:deep(.minimal-table .p-datatable-tbody > tr:last-child > td) {
+  border-bottom: none !important;
+}
+
+/* ---- 骨架屏修正 ---- */
+:deep(.minimal-table .p-datatable-tbody .p-skeleton) {
+  display: inline-block !important;
+  vertical-align: middle;
+}
+
+/* ---- 缩略图 ---- */
+.thumb-box {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  cursor: zoom-in;
+  background: var(--bg-input);
+  display: inline-block;
+  position: relative;
+}
+
+.thumb-skeleton {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0;
+  z-index: 0;
+}
+
+.thumb-img {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumb-placeholder {
+  font-size: 1.5rem;
+  color: var(--text-muted);
+  opacity: 0.5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.thumb-preview-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+/* ---- 文件名单元格 ---- */
+.filename-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.fname {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: var(--space-2xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fmeta {
+  font-size: var(--text-2xs-xs);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.fmeta-date {
+  font-family: var(--font-sans);
+}
+
+.fmeta-size {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.meta-dot {
+  margin: 0 5px;
+  color: var(--text-tertiary);
+}
+
+/* ---- 服务 Badge ---- */
+.service-badges {
+  display: flex;
+  gap: var(--space-xs);
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  position: relative;
+}
+
+.service-badge-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 3px var(--space-sm);
+  background: var(--primary-alpha-10);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-2xs-xs);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.service-badge-icon:hover {
+  background: var(--primary-alpha-15);
+}
+
+.badge-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.badge-icon :deep(svg) {
+  width: 100%;
+  height: 100%;
+}
+
+.badge-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.service-badge-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px var(--space-xs-sm);
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-2xs-xs);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--duration-fast);
+}
+
+.service-badge-more:hover {
+  background: var(--primary-alpha-15);
+  color: var(--text-primary);
+}
+
+/* ---- 服务 Popover ---- */
+.service-popover-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  min-width: 140px;
+}
+
+.service-popover-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs-sm) var(--space-sm-md);
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  border-radius: var(--radius-sm-md);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-family: inherit;
+  color: var(--text-primary);
+  transition: background var(--duration-fast);
+}
+
+.service-popover-item:hover {
+  background: var(--primary-alpha-10);
+}
+
+.service-popover-item .pi-copy {
+  margin-left: auto;
+  font-size: var(--text-2xs-xs);
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity var(--duration-fast);
+}
+
+.service-popover-item:hover .pi-copy {
+  opacity: 1;
+}
+
+/* ---- 工具类 ---- */
+.mt-1 {
+  margin-top: var(--space-xs);
+}
+
+.mt-skeleton {
+  margin-top: var(--space-2xs);
+}

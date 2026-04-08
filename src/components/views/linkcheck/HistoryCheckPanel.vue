@@ -3,12 +3,15 @@
  * HistoryCheckPanel — 链接监控面板（方案A 极简克制）
  * 全宽单列、下划线 Tab、单行列表、hover 显示 URL
  */
-import { ref, computed, watch } from 'vue';
-import { watchDebounced } from '@vueuse/core';
+import { computed } from 'vue';
 import Skeleton from 'primevue/skeleton';
+import EmptyState from '../../common/EmptyState.vue';
 import { getServiceIcon } from '../../../utils/icons';
 import { getServiceDisplayName } from '../../../constants/serviceNames';
-import { SEVERITY, type StatusFilter, type LinkCheckRow, type BatchCheckProgress, type CheckLinkResult } from '../../../types/linkCheck';
+import type { StatusFilter, LinkCheckRow, BatchCheckProgress } from '../../../types/linkCheck';
+import { useCheckFilter } from '../../../composables/link-check/useCheckFilter';
+import { useCheckStats } from '../../../composables/link-check/useCheckStats';
+import { useCheckStrategy } from '../../../composables/link-check/useCheckStrategy';
 
 const props = defineProps<{
   checkRows: LinkCheckRow[];
@@ -30,414 +33,51 @@ const emit = defineEmits<{
   (e: 'recheck-batch', ids: string[]): void;
 }>();
 
-// ============================================
-// 筛选 + 分页
-// ============================================
+// ---- Composables ----
+const checkRows = computed(() => props.checkRows);
+const progress = computed(() => props.progress);
 
-const statusFilter = ref<StatusFilter>('invalid');
-const selectedServiceId = ref<string | null>(null);
-const showServiceMenu = ref(false);
-const searchInput = ref('');
-const searchQuery = ref('');
-const PAGE_SIZE = 100;
-const currentPage = ref(1);
-const pageByFilter = new Map<StatusFilter, number>();
-const showCheckMenu = ref(false);
-const searchFocused = ref(false);
-const progressHover = ref(false);
+const {
+  statusFilter, selectedServiceId, showServiceMenu, searchInput, searchQuery,
+  searchFocused, showCheckMenu, progressHover,
+  scopedRows, filteredRows, visibleRows,
+  currentPage, totalPages, pageInput, handlePageInput, bottomSummary,
+  selectedIds, hasSelection, selectedCount, isAllSelected,
+  toggleSelect, toggleSelectAll, clearSelection,
+} = useCheckFilter({ checkRows });
 
-function resetPageState(): void {
-  pageByFilter.clear();
-  currentPage.value = 1;
-}
+const { stats, serviceList, progressPercent, progressTooltip } = useCheckStats({ scopedRows, checkRows, progress });
 
-watch(selectedServiceId, () => { resetPageState(); });
-watchDebounced(searchInput, (val) => { searchQuery.value = val; resetPageState(); }, { debounce: 200 });
-watch(statusFilter, (newFilter, oldFilter) => {
-  pageByFilter.set(oldFilter!, currentPage.value);
-  currentPage.value = pageByFilter.get(newFilter!) ?? 1;
-});
+const {
+  smartCheckLabel, smartCheckTooltip, showDropdownArrow, buildDropdownItems, resolveSmartCheck,
+  statusDotColor, errorBadgeClass, errorLabel, recheckLabel, errorTooltip,
+} = useCheckStrategy({ stats, statusFilter });
 
-// 作用域行：只应用图床 + 搜索筛选，不含状态筛选（供 stats 和 filteredRows 共用）
-const scopedRows = computed(() => {
-  let rows: LinkCheckRow[] = props.checkRows;
-  if (selectedServiceId.value) {
-    rows = rows.filter((row) => row.serviceId === selectedServiceId.value);
-  }
-  const q = searchQuery.value.trim().toLowerCase();
-  if (q) {
-    rows = rows.filter((row) =>
-      row.url.toLowerCase().includes(q) || row.fileName.toLowerCase().includes(q) || row.serviceId.toLowerCase().includes(q),
-    );
-  }
-  return rows;
-});
-
-const stats = computed(() => {
-  const rows = scopedRows.value;
-  let valid = 0, invalid = 0, timeout = 0, suspicious = 0, unchecked = 0;
-  for (const r of rows) {
-    const cr = r.checkResult;
-    if (!cr) { unchecked++; continue; }
-    if (cr.is_valid) { valid++; continue; }
-    if (cr.error_type === 'timeout') { timeout++; }
-    else if (cr.error_type === 'suspicious' || cr.browser_might_work) { suspicious++; }
-    else { invalid++; }
-  }
-  const checked = rows.length - unchecked;
-  return { total: rows.length, valid, invalid, timeout, suspicious, unchecked, checked, problems: invalid + timeout + suspicious };
-});
-
-// 按图床统计
-const serviceList = computed(() => {
-  const map = new Map<string, number>();
-  for (const row of props.checkRows) {
-    map.set(row.serviceId, (map.get(row.serviceId) || 0) + 1);
-  }
-  return Array.from(map.entries())
-    .map(([id, count]) => ({ id, count }))
-    .sort((a, b) => b.count - a.count);
-});
-
-const filteredRows = computed(() => {
-  // 图床 + 搜索筛选已在 scopedRows 完成，这里只做状态筛选 + 排序
-  let rows = scopedRows.value.filter((row) => {
-    // 重检动画中的行始终保留，避免被过滤掉导致动画中断
-    if (row.recheckResult || row.fadingOut) return true;
-    const r = row.checkResult;
-    switch (statusFilter.value) {
-      case null: return r && !r.is_valid;
-      case 'invalid': return r != null && !r.is_valid && r.error_type !== 'timeout' && r.error_type !== 'suspicious' && !r.browser_might_work;
-      case 'suspicious': return r?.error_type === 'suspicious' || r?.browser_might_work === true;
-      case 'timeout': return r?.error_type === 'timeout';
-      case 'unchecked': return !r;
-      case 'valid': return r?.is_valid;
-      case 'all': return true;
-      default: return true;
-    }
-  });
-  // 按严重程度排序：失效 > 超时 > 可疑
-  rows = [...rows].sort((a, b) =>
-    (a.pinnedSortWeight ?? SEVERITY[a.checkResult?.error_type ?? 'success'] ?? 5) -
-    (b.pinnedSortWeight ?? SEVERITY[b.checkResult?.error_type ?? 'success'] ?? 5),
-  );
-  return rows;
-});
-
-const totalPages = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / PAGE_SIZE)));
-watch(totalPages, (newTotal) => {
-  if (currentPage.value > newTotal) currentPage.value = newTotal;
-});
-const visibleRows = computed(() => {
-  const start = (currentPage.value - 1) * PAGE_SIZE;
-  return filteredRows.value.slice(start, start + PAGE_SIZE);
-});
-
-const progressPercent = computed(() => {
-  const p = props.progress;
-  if (!p || p.total === 0) return 0;
-  // 仅反映本轮检测进度，语义清晰：本轮已检测 / 本轮总数
-  return Math.min(100, Math.round((p.checked / p.total) * 100));
-});
-
-const progressTooltip = computed(() => {
-  if (props.progress && props.progress.total > 0) {
-    return `本次已检测 ${props.progress.checked.toLocaleString()} / ${props.progress.total.toLocaleString()} 条`;
-  }
-  return '准备检测...';
-});
-
-// ============================================
-// 智能检测
-// ============================================
-
-// 需要感知上下文的标签（正常/全部/null 不感知，保持原有智能逻辑）
-const CONTEXT_AWARE_FILTERS = new Set(['invalid', 'suspicious', 'timeout', 'unchecked']);
-
-const FILTER_LABEL: Record<string, string> = {
-  invalid: '重检失效链接',
-  suspicious: '重检可疑链接',
-  timeout: '重检超时链接',
-  unchecked: '检测未检测',
-};
-
-const smartCheckLabel = computed(() => {
-  const sf = statusFilter.value;
-  if (sf && CONTEXT_AWARE_FILTERS.has(sf)) {
-    const label = FILTER_LABEL[sf];
-    const count = sf === 'invalid' ? stats.value.invalid : stats.value[sf as keyof typeof stats.value] as number;
-    if (label && count > 0) return `${label} (${count.toLocaleString()})`;
-  }
-  // 默认智能逻辑
-  if (stats.value.unchecked === stats.value.total) return '开始检测';
-  if (stats.value.unchecked > 0) return '继续检测';
-  if (stats.value.problems > 0) return `重检问题链接 (${stats.value.problems})`;
-  return '重新检测全部';
-});
-
-const FILTER_TOOLTIP: Record<string, string> = {
-  invalid: '重新检测当前筛选的失效链接',
-  suspicious: '重新检测当前筛选的可疑链接',
-  timeout: '重新检测当前筛选的超时链接',
-  unchecked: '检测尚未验证的链接',
-};
-
-// 智能检测按钮 tooltip
-const smartCheckTooltip = computed(() => {
-  const sf = statusFilter.value;
-  if (sf && CONTEXT_AWARE_FILTERS.has(sf)) {
-    const count = sf === 'invalid' ? stats.value.invalid : stats.value[sf as keyof typeof stats.value] as number;
-    const tip = FILTER_TOOLTIP[sf];
-    if (tip && count > 0) return `${tip} (${count.toLocaleString()} 条)`;
-  }
-  const { unchecked, total, problems } = stats.value;
-  if (unchecked === total) return `检测全部 ${total.toLocaleString()} 条链接`;
-  if (unchecked > 0) return `检测尚未验证的 ${unchecked.toLocaleString()} 条链接`;
-  if (problems > 0) return `重新验证 ${problems} 条问题链接`;
-  return `重新检测全部 ${total.toLocaleString()} 条链接`;
-});
-
-// 是否显示下拉箭头（只有一种操作时隐藏）
-const showDropdownArrow = computed(() => {
-  // 选中了感知上下文的标签时，始终显示（用户可能想选择其他检测范围）
-  if (statusFilter.value && CONTEXT_AWARE_FILTERS.has(statusFilter.value)) return true;
-  // 全部未检测 → 只有"开始检测"一个动作
-  if (stats.value.unchecked === stats.value.total) return false;
-  // 全部已检测且没有问题 → 只有"重新检测全部"一个动作
-  if (stats.value.unchecked === 0 && stats.value.problems === 0) return false;
-  return true;
-});
-
-// 下拉菜单选项（智能去重：不重复当前默认操作）
-const dropdownItems = computed(() => {
-  const items: Array<{ label: string; desc: string; icon: string; action: () => void }> = [];
-  const { total, unchecked, problems } = stats.value;
-  const sf = statusFilter.value;
-
-  // 始终提供"检测全部"
-  items.push({
-    label: `检测全部 (${total.toLocaleString()})`,
-    desc: '包括已检测的链接',
-    icon: 'pi-play',
-    action: () => { emit('check-all'); showCheckMenu.value = false; },
-  });
-
-  // "仅未检测"：有未检测且当前默认操作不是它时显示
-  if (unchecked > 0 && unchecked < total && sf !== 'unchecked') {
-    items.push({
-      label: `仅未检测 (${unchecked.toLocaleString()})`,
-      desc: '跳过已有结果的链接',
-      icon: 'pi-clock',
-      action: () => { emit('check-subset', { statusFilter: 'unchecked' }); showCheckMenu.value = false; },
-    });
-  }
-
-  // "重检问题链接"：有问题链接且当前不在问题子标签时显示
-  if (problems > 0 && sf !== 'invalid' && sf !== 'timeout' && sf !== 'suspicious') {
-    items.push({
-      label: `重检问题链接 (${problems})`,
-      desc: '重新验证失效、超时、可疑链接',
-      icon: 'pi-exclamation-triangle',
-      action: () => { emit('check-subset', { statusFilter: 'problems' }); showCheckMenu.value = false; },
-    });
-  }
-
-  // 在问题子标签时，提供"重检全部问题链接"作为替代
-  if ((sf === 'invalid' || sf === 'suspicious' || sf === 'timeout') && problems > 0) {
-    const currentCount = sf === 'invalid' ? stats.value.invalid : stats.value[sf as keyof typeof stats.value] as number;
-    if (problems !== currentCount) {
-      items.push({
-        label: `重检全部问题链接 (${problems})`,
-        desc: '包括失效、超时、可疑链接',
-        icon: 'pi-exclamation-triangle',
-        action: () => { emit('check-subset', { statusFilter: 'problems' }); showCheckMenu.value = false; },
-      });
-    }
-  }
-
-  return items;
-});
+// ---- 下拉菜单选项（桥接 composable 与 emit） ----
+const dropdownItems = computed(() =>
+  buildDropdownItems().map((item) => ({
+    ...item,
+    action: () => {
+      if (item.action === 'check-all') emit('check-all');
+      else emit('check-subset', { statusFilter: item.filter as 'unchecked' | 'invalid' | 'timeout' | 'suspicious' | 'problems' });
+      showCheckMenu.value = false;
+    },
+  })),
+);
 
 function handleSmartCheck() {
   showCheckMenu.value = false;
-  const sf = statusFilter.value;
-
-  // 选中了感知上下文的标签时，直接检测对应子集
-  if (sf && CONTEXT_AWARE_FILTERS.has(sf)) {
-    emit('check-subset', { statusFilter: sf as 'unchecked' | 'invalid' | 'timeout' | 'suspicious' });
-    return;
-  }
-
-  // 默认智能逻辑（null / 'all'）
-  const { unchecked, total, problems } = stats.value;
-  if (unchecked === total) {
-    emit('check-all');
-  } else if (unchecked > 0) {
-    emit('check-subset', { statusFilter: 'unchecked' });
-  } else if (problems > 0) {
-    emit('check-subset', { statusFilter: 'problems' });
-  } else {
-    emit('check-all');
-  }
-}
-
-// ============================================
-// 行为辅助
-// ============================================
-
-const pageInput = ref(String(currentPage.value));
-watch(currentPage, (val) => { pageInput.value = String(val); });
-
-// 底栏摘要：始终显示当前筛选结果的数量
-const bottomSummary = computed(() => {
-  const filtered = filteredRows.value.length;
-  if (stats.value.total === 0) return '';
-  return `共 ${filtered.toLocaleString()} 条`;
-});
-
-function handlePageInput(e: Event) {
-  const raw = (e.target as HTMLInputElement).value.trim();
-  const val = parseInt(raw, 10);
-  currentPage.value = (!raw || Number.isNaN(val) || val < 1) ? 1 : Math.min(val, totalPages.value);
-  pageInput.value = String(currentPage.value);
+  const result = resolveSmartCheck();
+  if (result.action === 'check-all') emit('check-all');
+  else emit('check-subset', { statusFilter: result.filter as 'unchecked' | 'invalid' | 'timeout' | 'suspicious' | 'problems' });
 }
 
 function handleCopyUrl(row: LinkCheckRow) {
   emit('copy-url', row.url);
 }
 
-/** 状态圆点：结果回来立刻更新（recheckResult 优先） */
-function statusDotColor(row: LinkCheckRow): string {
-  const r = row.recheckResult ?? row.checkResult;
-  if (!r) return 'var(--text-tertiary)';
-  if (r.is_valid) return 'var(--success)';
-  if (r.error_type === 'timeout') return 'var(--warning)';
-  if (r.error_type === 'suspicious' || r.browser_might_work) return 'var(--pending)';
-  return 'var(--error)';
-}
-
-/** 统一状态判定：未检测 / 成功 / 警告 / 可疑 / 错误 */
-function getErrorStatus(r: CheckLinkResult | null): string {
-  if (!r) return 'unchecked';
-  if (r.is_valid) return 'success';
-  if (r.error_type === 'timeout') return 'warning';
-  if (r.error_type === 'suspicious' || r.browser_might_work) return 'suspicious';
-  return 'error';
-}
-
-/** error-badge 的样式类：recheckResult 优先，与 errorLabel / 圆点同步 */
-function errorBadgeClass(row: LinkCheckRow): string {
-  const r = row.recheckResult ?? row.checkResult;
-  return `error-badge--${getErrorStatus(r)}`;
-}
-
-/** 左侧 error-badge：recheckResult 优先，与圆点同步更新 */
-function errorLabel(row: LinkCheckRow): string {
-  const r = row.recheckResult ?? row.checkResult;
-  if (!r) return '—';
-  if (r.is_valid) return r.status_code ? String(r.status_code) : '200';
-  if (r.status_code) return String(r.status_code);
-  if (r.error_type === 'timeout') return '超时';
-  if (r.error_type === 'network') return '网络';
-  if (r.error_type === 'suspicious' || r.browser_might_work) return '疑似';
-  return '失效';
-}
-
-/** 按钮位置结果徽章文案（两字，与左侧状态码互补） */
-function recheckLabel(result: CheckLinkResult): string {
-  if (result.is_valid) return '可用';
-  if (result.error_type === 'timeout') return '超时';
-  if (result.error_type === 'network') return '断连';
-  if (result.error_type === 'suspicious' || result.browser_might_work) return '疑似';
-  return '失效';
-}
-
-// 状态码友好描述
-const STATUS_DESC: Record<number, string> = {
-  400: '请求异常 · 链接格式可能有误',
-  401: '需要认证 · 图床要求登录才能访问',
-  403: '禁止访问 · 可能触发了防盗链',
-  404: '图片不存在 · 可能已被删除或链接失效',
-  405: '请求方式不允许 · 图床不支持 HEAD 请求',
-  408: '请求超时 · 图床响应过慢',
-  410: '已永久移除 · 图片已被图床永久删除',
-  429: '请求过频 · 检测速度过快被限流，稍后重试',
-  500: '服务器内部错误 · 图床服务异常',
-  502: '网关错误 · 图床服务可能正在维护',
-  503: '服务不可用 · 图床暂时下线，稍后重试',
-  504: '网关超时 · 图床上游服务响应超时',
-};
-
-function errorTooltip(row: LinkCheckRow): string {
-  const r = row.checkResult;
-  if (!r || r.is_valid) return '';
-
-  const parts: string[] = [];
-
-  if (r.status_code) {
-    const desc = STATUS_DESC[r.status_code];
-    if (r.browser_might_work) {
-      parts.push(`防盗链限制 (${r.status_code}) · 浏览器直接打开可正常显示`);
-    } else if (desc) {
-      parts.push(`${desc} (${r.status_code})`);
-    } else {
-      // 未知状态码回退
-      const prefix = r.error_type === 'http_5xx' ? '服务器错误' : '请求失败';
-      parts.push(`${prefix} (${r.status_code})`);
-    }
-  } else {
-    const fallback: Record<string, string> = {
-      timeout: '检测超时 · 网络延迟或图床响应过慢',
-      network: '网络不通 · 无法连接到图床服务器',
-      suspicious: '疑似异常 · 返回了内容但不像是图片（类型或体积异常）',
-    };
-    parts.push(fallback[r.error_type] || '链接失效');
-  }
-
-  if (r.response_time) parts.push(`${r.response_time}ms`);
-
-  return parts.join(' · ');
-}
-
-// 重检按钮：转圈由 row.recheckLoading 驱动，随网络请求时长
-// 将当前 statusFilter 一并传出，供组合式函数判断 Case A/B
 function handleRecheck(row: LinkCheckRow) {
   emit('recheck-single', row, statusFilter.value);
-}
-
-// ============================================
-// 选择 + 删除
-// ============================================
-
-const selectedIds = ref<Set<string>>(new Set());
-const hasSelection = computed(() => selectedIds.value.size > 0);
-
-// 当前筛选结果中的唯一 historyId 列表
-const filteredHistoryIds = computed(() => [...new Set(filteredRows.value.map((r) => r.historyId))]);
-const isAllSelected = computed(() =>
-  filteredHistoryIds.value.length > 0 && filteredHistoryIds.value.every((id) => selectedIds.value.has(id)),
-);
-
-// 选中数量（按唯一 historyId 计算）
-const selectedCount = computed(() => selectedIds.value.size);
-
-function toggleSelect(historyId: string) {
-  const next = new Set(selectedIds.value);
-  if (next.has(historyId)) next.delete(historyId);
-  else next.add(historyId);
-  selectedIds.value = next;
-}
-
-function toggleSelectAll() {
-  if (isAllSelected.value) {
-    selectedIds.value = new Set();
-  } else {
-    selectedIds.value = new Set(filteredHistoryIds.value);
-  }
-}
-
-function clearSelection() {
-  selectedIds.value = new Set();
 }
 
 function handleDeleteBatch() {
@@ -607,18 +247,20 @@ function handleRecheckBatch() {
       </div>
 
       <!-- 普通空状态：筛选无结果 -->
-      <div v-else-if="filteredRows.length === 0 && (stats.checked > 0 || isChecking)" class="empty-state">
-        <i class="pi pi-check-circle"></i>
-        <p class="empty-title">没有问题链接</p>
-        <p class="empty-desc">当前筛选条件下没有匹配结果</p>
-      </div>
+      <EmptyState
+        v-else-if="filteredRows.length === 0 && (stats.checked > 0 || isChecking)"
+        icon="pi pi-check-circle"
+        title="没有问题链接"
+        description="当前筛选条件下没有匹配结果"
+      />
 
       <!-- 真正的空：无数据 -->
-      <div v-else-if="stats.total === 0 && !isLoading" class="empty-state">
-        <i class="pi pi-shield"></i>
-        <p class="empty-title">暂无数据</p>
-        <p class="empty-desc">尚无上传历史记录</p>
-      </div>
+      <EmptyState
+        v-else-if="stats.total === 0 && !isLoading"
+        icon="pi pi-shield"
+        title="暂无数据"
+        description="尚无上传历史记录"
+      />
 
       <TransitionGroup v-else tag="div" name="row-list" class="link-list">
         <div
@@ -826,7 +468,7 @@ function handleRecheckBatch() {
   border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer;
   white-space: nowrap; transition: background var(--duration-fast), opacity var(--duration-fast); border: none;
 }
-.btn-ghost i, .btn-primary i, .btn-danger i { font-size: 11px; }
+.btn-ghost i, .btn-primary i, .btn-danger i { font-size: var(--text-2xs-xs); }
 .btn-ghost { background: var(--bg-input); color: var(--text-muted); }
 .btn-ghost:hover { background: var(--hover-overlay); color: var(--text-main); }
 .btn-primary { background: var(--primary); color: #fff; }
@@ -851,7 +493,7 @@ function handleRecheckBatch() {
 .check-dropdown-item:hover { background: var(--hover-overlay-subtle); }
 .dropdown-text { display: flex; flex-direction: column; gap: 2px; }
 .dropdown-label { font-size: 13px; font-weight: 500; color: var(--text-main); }
-.dropdown-desc { font-size: 11px; color: var(--text-tertiary); }
+.dropdown-desc { font-size: var(--text-2xs-xs); color: var(--text-tertiary); }
 
 /* ===== 芯片栏 ===== */
 .chip-bar {
@@ -901,7 +543,7 @@ function handleRecheckBatch() {
 .progress-tooltip {
   position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
   padding: 4px 10px; border-radius: 6px; white-space: nowrap;
-  font-size: 11px; color: var(--text-main); font-variant-numeric: tabular-nums;
+  font-size: var(--text-2xs-xs); color: var(--text-main); font-variant-numeric: tabular-nums;
   background: var(--bg-card); box-shadow: var(--shadow-float);
   border: 1px solid var(--border-subtle); pointer-events: none;
 }
@@ -944,7 +586,7 @@ function handleRecheckBatch() {
 .service-dropdown-item.active { background: var(--primary-alpha-10); }
 .sdi-label { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--text-main); }
 .sdi-label .badge-icon { width: 14px; height: 14px; color: var(--text-muted); }
-.sdi-count { font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono, 'JetBrains Mono', monospace); }
+.sdi-count { font-size: var(--text-2xs-xs); color: var(--text-tertiary); font-family: var(--font-mono, 'JetBrains Mono', monospace); }
 
 /* 搜索框（药片型，与浏览界面对齐） */
 .search-field {
@@ -1014,7 +656,7 @@ function handleRecheckBatch() {
 }
 .badge-icon :deep(svg) { width: 100%; height: 100%; }
 .badge-label {
-  font-size: 11px; font-weight: 500; color: var(--text-muted);
+  font-size: var(--text-2xs-xs); font-weight: 500; color: var(--text-muted);
 }
 /* 错误标签 badge */
 .error-badge {
@@ -1044,7 +686,7 @@ function handleRecheckBatch() {
 .recheck-btn, .delete-btn {
   display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;
   border: none; border-radius: 5px; background: transparent; color: var(--text-tertiary);
-  cursor: pointer; transition: background var(--duration-micro), color var(--duration-micro); font-size: 11px;
+  cursor: pointer; transition: background var(--duration-micro), color var(--duration-micro); font-size: var(--text-2xs-xs);
   flex-shrink: 0;
 }
 /* recheck-btn / delete-btn 透明度由父级 row-actions 统一控制 */
@@ -1150,15 +792,6 @@ function handleRecheckBatch() {
 .hero-cta:hover { opacity: 0.9; }
 .hero-cta:active { transform: scale(0.97); }
 .hero-meta { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
-
-/* ===== 普通空状态 ===== */
-.empty-state {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-  flex: 1; color: var(--text-muted);
-}
-.empty-state i { font-size: 40px; opacity: 0.1; }
-.empty-title { font-size: 14px; font-weight: 600; color: var(--text-main); }
-.empty-desc { font-size: 12px; color: var(--text-muted); }
 
 /* ===== 底部 ===== */
 .bottom { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; padding-right: 24px; }

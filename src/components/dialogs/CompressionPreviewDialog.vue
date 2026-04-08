@@ -1,18 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
-import { open as dialogOpen } from '@tauri-apps/plugin-dialog';
+import { ref, computed, watch, onMounted, onBeforeUnmount, toRef } from 'vue';
 import type { CompressionPreset } from '../../config/types';
-
-interface CompressResult {
-  outputPath: string;
-  originalSize: number;
-  compressedSize: number;
-  ratio: number;
-  width: number;
-  height: number;
-  format: string;
-}
+import { useImageZoom } from '../../composables/useImageZoom';
+import { useCompressionTask } from '../../composables/useCompressionTask';
 
 interface Props {
   visible: boolean;
@@ -24,64 +14,49 @@ const emit = defineEmits<{
   'update:visible': [value: boolean];
 }>();
 
-type Status = 'compressing' | 'done' | 'error';
-
-const status = ref<Status>('compressing');
-const fileName = ref('');
-const originalSrc = ref('');
-const compressedSrc = ref('');
-const result = ref<CompressResult | null>(null);
-const errorMsg = ref('');
-
-const sliderX = ref(50);
-const scale = ref(1);
-const translateX = ref(0);
-const translateY = ref(0);
-
-const MIN_SCALE = 0.5;
-const MAX_SCALE = 5;
-
-const isDraggingSlider = ref(false);
-const isDraggingImage = ref(false);
-let dragStartX = 0;
-let dragStartY = 0;
-let dragStartTX = 0;
-let dragStartTY = 0;
-let rafId: number | null = null;
-
+// ---- 容器 ref（template 中绑定） ----
 const containerRef = ref<HTMLElement | null>(null);
 
-const saved = computed(() => {
-  if (!result.value) return 0;
-  return Math.round((1 - result.value.ratio) * 100);
+// ---- 缩放 & 平移 ----
+const {
+  scale,
+  sliderX,
+  isDraggingImage,
+  imageTransformStyle,
+  clipStyle,
+  zoomPercent,
+  resetView,
+  onSliderDown,
+  onImageDown,
+  onWheel,
+  onDoubleClick,
+  cleanup: cleanupZoom,
+} = useImageZoom(containerRef, {
+  zoomAtCursor: true,
+  enableSlider: true,
 });
 
-const isLarger = computed(() => result.value ? result.value.ratio >= 1 : false);
+// ---- 压缩任务 ----
+const {
+  status,
+  fileName,
+  originalSrc,
+  compressedSrc,
+  result,
+  errorMsg,
+  getSaved,
+  getIsLarger,
+  formatSize,
+  selectAndCompress,
+} = useCompressionTask(toRef(props, 'preset'), {
+  onDone: () => resetView(),
+});
 
-const imageTransformStyle = computed(() => ({
-  transform: `translate(${translateX.value}px, ${translateY.value}px) scale(${scale.value})`,
-  transformOrigin: 'center center',
-}));
+// ---- 派生计算属性（template 直接使用） ----
+const saved = computed(() => getSaved());
+const isLarger = computed(() => getIsLarger());
 
-const clipStyle = computed(() => ({
-  clipPath: `inset(0 ${100 - sliderX.value}% 0 0)`,
-}));
-
-const zoomPercent = computed(() => Math.round(scale.value * 100));
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-}
-
-function resetView() {
-  scale.value = 1;
-  translateX.value = 0;
-  translateY.value = 0;
-  sliderX.value = 50;
-}
-
+// ---- 对话框控制 ----
 function close() {
   emit('update:visible', false);
 }
@@ -96,152 +71,14 @@ function onOverlayClick(e: MouseEvent) {
   }
 }
 
-// --- 滑块拖拽 ---
-function onSliderDown(e: MouseEvent) {
-  isDraggingSlider.value = true;
-  e.preventDefault();
-  e.stopPropagation();
-  document.addEventListener('mousemove', onSliderMove);
-  document.addEventListener('mouseup', onSliderUp);
-}
-
-function onSliderMove(e: MouseEvent) {
-  if (!isDraggingSlider.value || !containerRef.value) return;
-  const rect = containerRef.value.getBoundingClientRect();
-  const x = ((e.clientX - rect.left) / rect.width) * 100;
-  sliderX.value = Math.max(2, Math.min(98, x));
-}
-
-function onSliderUp() {
-  isDraggingSlider.value = false;
-  document.removeEventListener('mousemove', onSliderMove);
-  document.removeEventListener('mouseup', onSliderUp);
-}
-
-// --- 图片拖拽 ---
-function onImageDown(e: MouseEvent) {
-  if (isDraggingSlider.value) return;
-  isDraggingImage.value = true;
-  dragStartX = e.clientX;
-  dragStartY = e.clientY;
-  dragStartTX = translateX.value;
-  dragStartTY = translateY.value;
-  e.preventDefault();
-  document.addEventListener('mousemove', onImageMove);
-  document.addEventListener('mouseup', onImageUp);
-}
-
-function onImageMove(e: MouseEvent) {
-  if (!isDraggingImage.value) return;
-  if (rafId !== null) return;
-  rafId = requestAnimationFrame(() => {
-    rafId = null;
-    translateX.value = dragStartTX + (e.clientX - dragStartX);
-    translateY.value = dragStartTY + (e.clientY - dragStartY);
-  });
-}
-
-function onImageUp() {
-  isDraggingImage.value = false;
-  document.removeEventListener('mousemove', onImageMove);
-  document.removeEventListener('mouseup', onImageUp);
-  if (rafId !== null) {
-    cancelAnimationFrame(rafId);
-    rafId = null;
-  }
-}
-
-// --- 缩放（以鼠标位置为中心） ---
-function onWheel(e: WheelEvent) {
-  if (!containerRef.value) return;
-  e.preventDefault();
-
-  const rect = containerRef.value.getBoundingClientRect();
-  const mouseX = e.clientX - rect.left - rect.width / 2;
-  const mouseY = e.clientY - rect.top - rect.height / 2;
-
-  const oldScale = scale.value;
-  const delta = e.deltaY > 0 ? -0.12 : 0.12;
-  const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, oldScale + delta));
-
-  if (newScale !== oldScale) {
-    const ratio = newScale / oldScale;
-    translateX.value = mouseX - ratio * (mouseX - translateX.value);
-    translateY.value = mouseY - ratio * (mouseY - translateY.value);
-    scale.value = newScale;
-  }
-}
-
-function onDoubleClick() {
-  resetView();
-}
-
-// --- 压缩逻辑 ---
-watch(() => props.visible, (v) => {
+// ---- 打开时自动选择文件 & 压缩 ----
+watch(() => props.visible, async (v) => {
   if (v) {
     resetView();
-    selectAndCompress();
+    const selected = await selectAndCompress();
+    if (!selected) close();
   }
 });
-
-async function selectAndCompress() {
-  status.value = 'compressing';
-  fileName.value = '';
-  originalSrc.value = '';
-  compressedSrc.value = '';
-  result.value = null;
-  errorMsg.value = '';
-
-  const selected = await dialogOpen({
-    multiple: false,
-    filters: [{ name: '图片', extensions: ['jpg', 'jpeg', 'png', 'webp', 'bmp'] }],
-  });
-
-  if (!selected) {
-    close();
-    return;
-  }
-
-  const filePath = Array.isArray(selected) ? selected[0] : selected;
-  fileName.value = filePath.split(/[/\\]/).pop() || filePath;
-
-  try {
-    const preset = props.preset;
-    let maxLongSide = 0;
-    const scalePercent = preset.scalePercent ?? 100;
-    if (scalePercent > 0 && scalePercent < 100) {
-      const meta = await invoke<{ width: number; height: number }>('get_image_metadata', { path: filePath });
-      maxLongSide = Math.round(Math.max(meta.width, meta.height) * scalePercent / 100);
-    }
-
-    const [compressResult, origB64] = await Promise.all([
-      invoke<CompressResult>('compress_image', {
-        filePath,
-        quality: preset.quality,
-        maxLongSide,
-        outputFormat: preset.outputFormat,
-        stripExif: preset.stripExif,
-      }),
-      invoke<string>('read_image_as_base64', { filePath, maxSide: 1200 }),
-    ]);
-
-    result.value = compressResult;
-    originalSrc.value = origB64;
-
-    const compB64 = await invoke<string>('read_image_as_base64', {
-      filePath: compressResult.outputPath,
-      maxSide: 1200,
-    });
-    compressedSrc.value = compB64;
-
-    invoke('cleanup_compressed_files', { filePaths: [compressResult.outputPath] }).catch(() => {});
-    status.value = 'done';
-    resetView();
-  } catch (err: unknown) {
-    errorMsg.value = err instanceof Error ? err.message : String(err);
-    status.value = 'error';
-  }
-}
 
 function retrySelect() {
   resetView();
@@ -254,8 +91,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeyDown);
-  onSliderUp();
-  onImageUp();
+  cleanupZoom();
 });
 </script>
 
