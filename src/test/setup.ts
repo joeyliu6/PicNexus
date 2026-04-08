@@ -34,3 +34,23 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
   open: vi.fn(),
   save: vi.fn(),
 }));
+
+// Mock @tauri-apps/api/event — 进度事件监听（BaseUploader 依赖）
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn().mockResolvedValue(vi.fn()),  // 默认返回 unlisten 函数
+  emit: vi.fn(),
+}));
+
+// Mock @tauri-apps/plugin-clipboard-manager — 剪贴板操作
+vi.mock('@tauri-apps/plugin-clipboard-manager', () => ({
+  writeText: vi.fn(),
+  readText: vi.fn().mockResolvedValue(''),
+  writeImage: vi.fn(),
+  readImage: vi.fn(),
+}));
+
+// Mock @tauri-apps/plugin-shell — 外部编辑器等
+vi.mock('@tauri-apps/plugin-shell', () => ({
+  open: vi.fn(),
+  Command: vi.fn(),
+}));

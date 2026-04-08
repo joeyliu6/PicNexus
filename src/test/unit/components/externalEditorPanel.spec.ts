@@ -8,13 +8,18 @@ const healthTooltipMap = ref<Record<string, string>>({});
 const selectorTop = ref(100);
 const selectorBottom = ref(300);
 
-vi.mock('@vueuse/core', () => ({
-  onClickOutside: vi.fn(),
-  useElementBounding: () => ({
-    top: selectorTop,
-    bottom: selectorBottom,
-  }),
-}));
+vi.mock('@vueuse/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@vueuse/core')>();
+  return {
+    ...actual,
+    onClickOutside: vi.fn(),
+    useElementBounding: () => ({
+      top: selectorTop,
+      bottom: selectorBottom,
+    }),
+    useResizeObserver: vi.fn(),
+  };
+});
 
 vi.mock('../../../composables/useServiceHealth', () => ({
   useServiceHealth: () => ({
@@ -70,7 +75,7 @@ describe('ExternalEditorPanel', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
   });
 
-  it('shows only configured services in dropdown', async () => {
+  it('configuredServices only includes non-unconfigured services', async () => {
     const wrapper = mount(ExternalEditorPanel, {
       props: {
         editorServer: {
@@ -85,6 +90,10 @@ describe('ExternalEditorPanel', () => {
         stubs: {
           ToggleSwitch: ToggleSwitchStub,
           Button: ButtonStub,
+          ServiceSelectorDropdown: {
+            props: ['configuredServices'],
+            template: '<div class="selector-stub">{{ configuredServices.map(s => s.label).join(",") }}</div>',
+          },
         },
         directives: {
           tooltip: tooltipDirective,
@@ -92,15 +101,13 @@ describe('ExternalEditorPanel', () => {
       },
     });
 
-    await wrapper.findAll('.card-header')[0].trigger('click');
     await flush();
 
-    await wrapper.get('.service-trigger').trigger('click');
-    await flush();
-
-    const items = wrapper.findAll('.service-item').map((node) => node.text());
-    expect(items).toEqual(expect.arrayContaining(['京东图床', 'SM.MS']));
-    expect(items.join(' ')).not.toContain('GitHub');
+    // jd=verified, smms=pending → 这两个应该出现；github=unconfigured → 不出现
+    const selectorText = wrapper.findAll('.selector-stub').map((n) => n.text()).join(',');
+    expect(selectorText).toContain('京东图床');
+    expect(selectorText).toContain('SM.MS');
+    expect(selectorText).not.toContain('GitHub');
   });
 
   it('validates port range and only emits valid port updates', async () => {
@@ -118,6 +125,7 @@ describe('ExternalEditorPanel', () => {
         stubs: {
           ToggleSwitch: ToggleSwitchStub,
           Button: ButtonStub,
+          ServiceSelectorDropdown: { template: '<div />' },
         },
         directives: {
           tooltip: tooltipDirective,
@@ -125,6 +133,7 @@ describe('ExternalEditorPanel', () => {
       },
     });
 
+    // 展开 Obsidian 卡片
     await wrapper.findAll('.card-header')[1].trigger('click');
     await flush();
 
@@ -133,7 +142,8 @@ describe('ExternalEditorPanel', () => {
     await input.trigger('input');
     await flush();
 
-    expect(wrapper.find('.port-error').text()).toContain('1024-65535');
+    // 端口错误信息显示在 .test-error 元素中
+    expect(wrapper.find('.test-error').text()).toContain('1024-65535');
     const updates = (wrapper.emitted('update:editorServer') ?? []) as Array<[Record<string, unknown>]>;
     const invalidUpdates = updates.some(([payload]) => payload.port === 80);
     expect(invalidUpdates).toBe(false);
@@ -147,15 +157,15 @@ describe('ExternalEditorPanel', () => {
     expect(validUpdates).toBe(true);
   });
 
-  it('maps runtime status to unconfigured/ready text from /status', async () => {
-    vi.useFakeTimers();
-
+  it('connection test shows warning/success based on /status response', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({
-        json: async () => ({ ready: false }),
+        ok: true,
+        json: async () => ({ app: 'PicNexus', ready: false }),
       })
       .mockResolvedValueOnce({
-        json: async () => ({ ready: true, serviceName: '京东图床' }),
+        ok: true,
+        json: async () => ({ app: 'PicNexus', ready: true, serviceName: '京东图床' }),
       });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -173,6 +183,7 @@ describe('ExternalEditorPanel', () => {
         stubs: {
           ToggleSwitch: ToggleSwitchStub,
           Button: ButtonStub,
+          ServiceSelectorDropdown: { template: '<div />' },
         },
         directives: {
           tooltip: tooltipDirective,
@@ -180,18 +191,21 @@ describe('ExternalEditorPanel', () => {
       },
     });
 
-    await vi.advanceTimersByTimeAsync(1500);
-    await nextTick();
-    expect(wrapper.text()).toContain('未配置图床');
+    // 展开 Obsidian 卡片
+    await wrapper.findAll('.card-header')[1].trigger('click');
+    await flush();
 
-    const detectBtn = wrapper.findAll('button').find((node) => node.text().includes('检测'));
-    expect(detectBtn).toBeTruthy();
-    await detectBtn!.trigger('click');
-    await vi.advanceTimersByTimeAsync(1500);
-    await nextTick();
+    // 点击测试连接按钮 — 第一次返回 ready: false
+    const testBtn = wrapper.find('.test-connection-btn');
+    await testBtn.trigger('click');
+    await flush();
 
-    expect(wrapper.text()).toContain('就绪');
+    expect(wrapper.text()).toContain('未选择图床');
 
-    vi.useRealTimers();
+    // 再次点击 — 第二次返回 ready: true
+    await testBtn.trigger('click');
+    await flush();
+
+    expect(wrapper.text()).toContain('连接正常');
   });
 });

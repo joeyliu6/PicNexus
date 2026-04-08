@@ -10,12 +10,12 @@ const ImageCompressionStub = {
 };
 
 const ExternalEditorStub = {
-  props: ['editorServer', 'executablePath', 'applyState', 'embedded'],
-  emits: ['update:editorServer', 'retryApply', 'navigateHosting'],
+  props: ['editorServer', 'executablePath', 'embedded'],
+  emits: ['update:editorServer', 'navigateHosting', 'save'],
   template: `
     <div class="editor-stub">
-      <button class="retry-apply-btn" @click="$emit('retryApply')">retry</button>
       <button class="navigate-hosting-btn" @click="$emit('navigateHosting')">nav</button>
+      <button class="save-btn" @click="$emit('save')">save</button>
     </div>
   `,
 };
@@ -53,10 +53,8 @@ describe('AdvancedSettingsPanel', () => {
       },
     });
 
-    await wrapper.get('.retry-apply-btn').trigger('click');
     await wrapper.get('.navigate-hosting-btn').trigger('click');
 
-    expect(wrapper.emitted('retryEditorApply')).toHaveLength(1);
     expect(wrapper.emitted('navigateHosting')).toHaveLength(1);
   });
 });

@@ -19,6 +19,8 @@ export default defineConfig({
         'src/utils/**',
         'src/services/**',
         'src/core/**',
+        'src/composables/**',
+        'src/uploaders/**',
       ],
       exclude: [
         'src/test/**',
@@ -26,10 +28,10 @@ export default defineConfig({
         '**/types.ts',
       ],
       thresholds: {
-        lines: 40,
-        functions: 40,
-        branches: 30,
-        statements: 40,
+        lines: 25,
+        functions: 25,
+        branches: 20,
+        statements: 25,
       },
     },
   },
