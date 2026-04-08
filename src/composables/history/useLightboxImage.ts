@@ -43,7 +43,7 @@ export function useLightboxImage(
 
     if (!newSrc) {
       displaySrc.value = '';
-      imageError.value = true;
+      // 空 URL 时清空显示，等待有效数据
       return;
     }
 
@@ -85,8 +85,7 @@ export function useLightboxImage(
   // ── img 元素 error 回调 ──────────────────────
 
   function onImageError() {
-    // 预加载已确认图片可访问（imageReady = true）时，忽略 img 元素的二次请求错误
-    // 避免「预加载成功 → img 重新请求失败」的竞态误报
+    // 防止预加载成功后 img 元素二次请求的竞态误报
     if (!imageReady.value) {
       imageError.value = true;
     }

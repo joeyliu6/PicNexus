@@ -139,7 +139,7 @@ const { closeLightbox, navigatePrev, navigateNext, handleWheel } = useLightboxKe
             <span>图片加载失败，可能已过期</span>
           </div>
           <img
-            v-show="!imageError && displaySrc"
+            v-if="!imageError && displaySrc"
             :src="displaySrc"
             :class="['lightbox-img', { 'lightbox-img-loaded': imageReady }]"
             :style="{ transform: imageTransform, cursor: imageCursor }"
