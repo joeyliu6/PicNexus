@@ -138,6 +138,7 @@ fn main() {
         .manage(HttpClient(http_client))     // 注册全局 HTTP 客户端
         .manage(CloseToTrayState(AtomicBool::new(true)))
         .manage(commands::link_checker::BatchCheckCancelFlag(Arc::new(AtomicBool::new(false))))
+        .manage(commands::md_scanner::MdScanCancelFlag(Arc::new(AtomicBool::new(false))))
         .manage(ServerState {
             upload_config: Arc::new(TokioMutex::new(None)),
             abort_handle: std::sync::Mutex::new(None),
@@ -190,6 +191,8 @@ fn main() {
             commands::image_compress::cleanup_compressed_files,
             commands::image_compress::strip_exif_only,
             commands::image_compress::read_image_as_base64,
+            commands::md_scanner::scan_md_folder,
+            commands::md_scanner::cancel_md_scan,
             get_or_create_secure_key,
             set_secure_key,
             open_log_dir,

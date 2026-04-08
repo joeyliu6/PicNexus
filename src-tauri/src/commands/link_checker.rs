@@ -82,99 +82,81 @@ fn classify_error(
 }
 
 
-/// 已知有防盗链的图床服务
-const HOTLINK_PROTECTED_SERVICES: &[&str] = &[
-    "weibo", "bilibili", "jd", "zhihu", "chaoxing", "nowcoder",
+/// 通用 Chrome User-Agent（版本号定期随大版本更新）
+const CHROME_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
+
+/// 图床服务配置（集中管理：域名识别、请求头、HEAD 支持、防盗链）
+struct ServiceConfig {
+    id: &'static str,
+    /// Referer 头（None = 不附加）
+    referer: Option<&'static str>,
+    /// User-Agent（None = 使用 CHROME_UA）
+    ua: Option<&'static str>,
+    /// 是否不支持 HEAD（直接用 GET + Range）
+    skip_head: bool,
+    /// 是否有防盗链（403 时浏览器可能能访问）
+    hotlink_protected: bool,
+}
+
+/// 所有已知图床的统一配置表
+const SERVICE_CONFIGS: &[ServiceConfig] = &[
+    ServiceConfig { id: "weibo",    referer: Some("https://weibo.com/"),     ua: None, skip_head: false, hotlink_protected: true },
+    ServiceConfig { id: "bilibili", referer: Some("https://mall.bilibili.com/"), ua: None, skip_head: false, hotlink_protected: true },
+    ServiceConfig { id: "jd",       referer: Some("https://jdcs.jd.com/chat/index.action?venderId=1&appId=jd.waiter&customerAppId=im.customer&entry=jd_web_EnterpriseZC"), ua: None, skip_head: false, hotlink_protected: true },
+    ServiceConfig { id: "zhihu",    referer: Some("https://www.zhihu.com/"), ua: None, skip_head: true,  hotlink_protected: true },
+    ServiceConfig { id: "chaoxing", referer: Some("https://notice.chaoxing.com/"), ua: None, skip_head: true,  hotlink_protected: true },
+    ServiceConfig { id: "nowcoder", referer: Some("https://www.nowcoder.com/creation/write/article"), ua: None, skip_head: false, hotlink_protected: true },
+    ServiceConfig { id: "baidu",    referer: None,                           ua: None, skip_head: true,  hotlink_protected: false },
+    ServiceConfig { id: "github",   referer: None,                           ua: Some("PicNexus"), skip_head: false, hotlink_protected: false },
+    ServiceConfig { id: "imgur",    referer: None,                           ua: None, skip_head: false, hotlink_protected: false },
+    ServiceConfig { id: "oss",      referer: None,                           ua: None, skip_head: false, hotlink_protected: false },
+    ServiceConfig { id: "cos",      referer: None,                           ua: None, skip_head: false, hotlink_protected: false },
+    ServiceConfig { id: "qiniu",    referer: None,                           ua: None, skip_head: false, hotlink_protected: false },
+    ServiceConfig { id: "smms",     referer: None,                           ua: None, skip_head: false, hotlink_protected: false },
+    ServiceConfig { id: "nami",     referer: None,                           ua: None, skip_head: false, hotlink_protected: false },
 ];
 
-/// 不支持 HEAD 请求的图床（直接用 GET + Range）
-const HEAD_UNSUPPORTED_SERVICES: &[&str] = &["zhihu", "chaoxing", "baidu"];
-
-/// 通用 Chrome User-Agent
-const CHROME_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36";
+/// 从服务 ID 查找配置
+fn get_service_config(service_id: &str) -> Option<&'static ServiceConfig> {
+    SERVICE_CONFIGS.iter().find(|c| c.id == service_id)
+}
 
 /// 从 URL 域名识别图床服务
 fn detect_service_from_url(url: &str) -> Option<&'static str> {
-    // 提取域名部分
     let host = url
         .strip_prefix("https://").or_else(|| url.strip_prefix("http://"))
         .and_then(|s| s.split('/').next())
         .unwrap_or("");
 
-    if host.ends_with(".sinaimg.cn") || host == "sinaimg.cn" {
-        return Some("weibo");
-    }
-    if host.contains("image.baidu.com") {
-        return Some("baidu");
-    }
-    if host.ends_with(".hdslb.com") || host == "hdslb.com" {
-        return Some("bilibili");
-    }
-    if host.ends_with(".360buyimg.com") || host == "360buyimg.com" {
-        return Some("jd");
-    }
-    if host.ends_with(".zhimg.com") || host == "zhimg.com" {
-        return Some("zhihu");
-    }
-    if host.contains("chaoxing.com") {
-        return Some("chaoxing");
-    }
-    if host.contains("nowcoder.com") {
-        return Some("nowcoder");
-    }
-    if host == "raw.githubusercontent.com" || host == "github.com" || host.ends_with(".github.io") {
-        return Some("github");
-    }
-    if host == "i.imgur.com" || host == "imgur.com" {
-        return Some("imgur");
-    }
-    if host.ends_with(".aliyuncs.com") {
-        return Some("oss");
-    }
-    if host.ends_with(".myqcloud.com") {
-        return Some("cos");
-    }
-    if host.ends_with(".qiniudn.com") || host.ends_with(".qnssl.com") || host.ends_with(".qbox.me") {
-        return Some("qiniu");
-    }
-    if host.ends_with(".smms.app") || host == "i.loli.net" || host == "vip2.loli.io" {
-        return Some("smms");
-    }
-    if host.ends_with(".nami.observer") || host.contains("nami") {
-        return Some("nami");
-    }
+    if host.ends_with(".sinaimg.cn") || host == "sinaimg.cn" { return Some("weibo"); }
+    if host.contains("image.baidu.com") { return Some("baidu"); }
+    if host.ends_with(".hdslb.com") || host == "hdslb.com" { return Some("bilibili"); }
+    if host.ends_with(".360buyimg.com") || host == "360buyimg.com" { return Some("jd"); }
+    if host.ends_with(".zhimg.com") || host == "zhimg.com" { return Some("zhihu"); }
+    if host.contains("chaoxing.com") { return Some("chaoxing"); }
+    if host.contains("nowcoder.com") { return Some("nowcoder"); }
+    if host == "raw.githubusercontent.com" || host == "github.com" || host.ends_with(".github.io") { return Some("github"); }
+    if host == "i.imgur.com" || host == "imgur.com" { return Some("imgur"); }
+    if host.ends_with(".aliyuncs.com") { return Some("oss"); }
+    if host.ends_with(".myqcloud.com") { return Some("cos"); }
+    if host.ends_with(".qiniudn.com") || host.ends_with(".qnssl.com") || host.ends_with(".qbox.me") { return Some("qiniu"); }
+    if host.ends_with(".smms.app") || host == "i.loli.net" || host == "vip2.loli.io" { return Some("smms"); }
+    if host.ends_with(".nami.observer") || host.contains("nami") { return Some("nami"); }
     None
 }
 
-/// 为请求附加服务特定的 Referer / UA 头以绕过防盗链
+/// 为请求附加服务特定的 Referer / UA 头（从统一配置表读取）
 fn apply_service_headers(
     builder: reqwest::RequestBuilder,
     service: Option<&str>,
 ) -> reqwest::RequestBuilder {
-    match service {
-        Some("weibo") => builder
-            .header("Referer", "https://weibo.com/")
-            .header("User-Agent", CHROME_UA),
-        Some("bilibili") => builder
-            .header("Referer", "https://mall.bilibili.com/")
-            .header("User-Agent", CHROME_UA),
-        Some("jd") => builder
-            .header("Referer", "https://jdcs.jd.com/chat/index.action?venderId=1&appId=jd.waiter&customerAppId=im.customer&entry=jd_web_EnterpriseZC")
-            .header("User-Agent", CHROME_UA),
-        Some("zhihu") => builder
-            .header("Referer", "https://www.zhihu.com/")
-            .header("User-Agent", CHROME_UA),
-        Some("chaoxing") => builder
-            .header("Referer", "https://notice.chaoxing.com/")
-            .header("User-Agent", CHROME_UA),
-        Some("nowcoder") => builder
-            .header("Referer", "https://www.nowcoder.com/creation/write/article")
-            .header("User-Agent", CHROME_UA),
-        Some("github") => builder
-            .header("User-Agent", "PicNexus"),
-        // 对其他服务也附加通用浏览器 UA
-        _ => builder
-            .header("User-Agent", CHROME_UA),
+    let config = service.and_then(get_service_config);
+    let ua = config.and_then(|c| c.ua).unwrap_or(CHROME_UA);
+    let builder = builder.header("User-Agent", ua);
+    if let Some(referer) = config.and_then(|c| c.referer) {
+        builder.header("Referer", referer)
+    } else {
+        builder
     }
 }
 
@@ -204,8 +186,8 @@ async fn check_single_link(
     let timeout = std::time::Duration::from_secs(timeout_secs);
     let start_time = Instant::now();
 
-    // 已知不支持 HEAD 的图床直接用 GET + Range，其他用 HEAD（405 时兜底 fallback GET）
-    let skip_head = service.map_or(false, |s| HEAD_UNSUPPORTED_SERVICES.contains(&s));
+    // 从统一配置表查询是否跳过 HEAD
+    let skip_head = service.and_then(get_service_config).map_or(false, |c| c.skip_head);
 
     let response_result = if skip_head {
         let builder = http_client.get(link).header("Range", "bytes=0-0").timeout(timeout);
@@ -247,9 +229,11 @@ async fn check_single_link(
 
             // 疑似异常判定：200 但内容不是图片或体积过小
             // 206 是 Range 请求的正常响应，其 Content-Length/Content-Type 反映部分内容，不参与 suspicious 判定
+            // SVG 图片天然体积小（badge 通常 < 1KB），豁免 content_length 检查
+            let is_svg = ct.as_deref().map_or(false, |t| t.starts_with("image/svg"));
             let is_suspicious = is_2xx && status_code != 206 && (
                 ct.as_deref().map_or(false, |t| !t.starts_with("image/") && !t.is_empty())
-                || cl.map_or(false, |len| len > 0 && len < 1024)
+                || (!is_svg && cl.map_or(false, |len| len > 0 && len < 1024))
             );
 
             let (mut error_type, mut suggestion) = classify_error(Some(status_code), None);
@@ -259,9 +243,9 @@ async fn check_single_link(
                 suggestion = Some("返回 200 但内容类型或大小异常，可能不是有效图片".to_string());
             }
 
-            // 防盗链判定：403 + 已知防盗链服务
+            // 防盗链判定：403 + 已知防盗链服务（从统一配置表查询）
             let browser_might_work = status_code == 403
-                && service.map_or(false, |s| HOTLINK_PROTECTED_SERVICES.contains(&s));
+                && service.and_then(get_service_config).map_or(false, |c| c.hotlink_protected);
 
             let is_valid = is_2xx && !is_suspicious;
 
@@ -494,7 +478,7 @@ pub async fn download_image_from_url(
     let file_name = format!(
         "{}{}.jpg",
         TEMP_FILE_PREFIX,
-        chrono::Local::now().timestamp()
+        chrono::Local::now().timestamp_nanos_opt().unwrap_or(0)
     );
     let temp_path = temp_dir.join(file_name);
 
@@ -819,7 +803,7 @@ pub async fn batch_check_links(
                 return None;
             }
 
-            // 获取全局并发许���
+            // 获取全局并发许可
             let _global_permit = global_sem.acquire().await.ok()?;
 
             // 再次检查取消

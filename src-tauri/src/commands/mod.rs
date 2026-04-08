@@ -19,4 +19,5 @@ pub mod link_checker;
 pub mod clipboard;
 pub mod image_meta;
 pub mod image_compress;
+pub mod md_scanner;
 
