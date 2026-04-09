@@ -1,128 +1,74 @@
 # PicNexus 开发文档
 
-> 本文档中心为开发者提供架构设计、API 参考和开发指南。
+> 四件套：CLAUDE.md（指挥中心）、flows/（流程图）、design/（设计规范）、reference/（知识库）
+
+## 目录结构
+
+```
+docs/
+├── flows/              # 📊 流程图（Mermaid 格式）
+│   ├── upload-flow.md
+│   ├── data-persistence.md
+│   ├── system-overview.md
+│   ├── app-lifecycle.md
+│   ├── auxiliary-flows.md
+│   ├── history-flow.md
+│   └── sync-flow.md
+├── design/             # 🎨 设计规范
+│   ├── README.md       # 核心原则 + 文件结构
+│   ├── tokens.md       # CSS 变量体系
+│   ├── themes.md       # 主题适配 + PrimeVue
+│   ├── ui-patterns.md  # UI 模式 + 最佳实践
+│   └── settings-layout.md  # 设置页面排版
+└── reference/          # 📚 知识库
+    ├── architecture/     # 🏗 系统架构
+    │   ├── overview.md   # 技术栈、目录结构
+    │   ├── frontend.md   # Vue 3 前端架构
+    │   ├── backend.md    # Rust/Tauri 后端架构
+    │   └── dependencies.md # 模块依赖
+    ├── troubleshooting/  # 问题修复 + 踩坑记录
+    ├── patterns/         # 设计模式 + 最佳实践
+    ├── api/              # API 文档 + 第三方参考
+    └── guides/           # 操作指南
+```
 
 ## 快速导航
 
-### 新手入门
+| 我要做什么 | 去哪里 |
+|-----------|--------|
+| 了解项目架构 | [reference/architecture/overview.md](./reference/architecture/overview.md) |
+| 开发新功能 | 先读 [flows/](./flows/) 对应流程图 |
+| 查 CSS 变量 | [design/tokens.md](./design/tokens.md) |
+| 改设置页面 | [design/settings-layout.md](./design/settings-layout.md) |
+| 遇到 bug | [reference/troubleshooting/](./reference/troubleshooting/) |
+| 查 API 接口 | [reference/api/](./reference/api/) |
+| 新增图床 | [reference/guides/add-new-uploader.md](./reference/guides/add-new-uploader.md) |
 
-| 文档 | 描述 |
-|------|------|
-| [架构总览](./architecture/overview.md) | 5 分钟了解项目结构 |
-| [开发环境搭建](../README.md#开发) | 运行项目 |
-| [贡献指南](../CONTRIBUTING.md) | 如何贡献代码 |
-
-### 架构文档
-
-| 文档 | 描述 |
-|------|------|
-| [架构总览](./architecture/overview.md) | 技术栈、目录结构、核心模块 |
-| [前端架构](./architecture/frontend.md) | Vue 3 + TypeScript + PrimeVue |
-| [后端架构](./architecture/backend.md) | Rust/Tauri 命令和服务 |
-| [数据流](./architecture/data-flow.md) | 上传流程、状态管理、数据存储 |
-
-### API 参考
-
-| 文档 | 描述 |
-|------|------|
-| [上传器接口](./api/uploaders.md) | IUploader 接口规范和实现指南 |
-| [Composables](./api/composables.md) | Vue Composables API 文档 |
-| [Rust 命令](./api/rust-commands.md) | Tauri invoke 命令参考 |
-
-### 开发指南
-
-| 文档 | 描述 |
-|------|------|
-| [添加新图床](./guides/add-new-uploader.md) | 步骤详解：从零实现新图床支持 |
-
-### 规范与约定
-
-| 文档 | 描述 |
-|------|------|
-| [样式设计](./style-design.md) | CSS 变量体系和主题适配 |
-| [测试指南](./testing-guide.md) | 测试规范和用例 |
-| [技术决策](./decisions/) | Architecture Decision Records |
-
-### 问题修复记录
-
-| 文档 | 描述 |
-|------|------|
-| [修复记录索引](./fixes/) | 所有问题修复记录 |
-| [时间线优化](./fixes/timeline-fixed.md) | 快速滚动闪烁问题 |
-| [UI 修复](./fixes/ui-fixed.md) | 表格滚动条、骨架屏偏移 |
-
-### 知识沉淀
-
-| 分类 | 描述 |
-|------|------|
-| [踩坑记录](./gotchas/) | 常见陷阱、易错点、API 误用 |
-| [最佳实践](./patterns/) | 设计模式、代码范式、推荐做法 |
-| [性能优化](./performance/) | 性能调优、渲染优化、资源优化 |
-| [调试技巧](./debugging/) | 调试方法、工具使用、排查思路 |
-
-### 外部参考
-
-| 文档 | 描述 |
-|------|------|
-| [参考文档索引](./references/) | 第三方 API 和服务限制 |
-| [第三方 API](./references/third-party-apis.md) | 各图床 API 文档汇总 |
-| [TC 图床 API](./references/tc-api.md) | TC 图床接口详解 |
-| [TC 限制](./references/tc-limits.md) | TC 图床使用限制 |
+> **flows/ vs reference/guides/ 的区别**：
+> - `flows/` = 系统流程（"系统是怎么运转的"，Mermaid 图为主，运行时视角）
+> - `guides/` = 操作流程（"人该怎么一步步操作"，步骤清单为主，开发者视角）
 
 ---
 
 ## 文档维护
 
-本文档采用 **AI 自动化维护** 机制：
+### 何时新建 vs 更新
 
-1. **代码变更时**：AI 自动更新相关文档和 CHANGELOG
-2. **架构变更时**：更新 `.claude/context/` 下的上下文文件
-3. **重要修复时**：在 `docs/fixes/` 添加修复记录
+- **新建**：全新的业务流程、全新的踩坑记录、全新的设计模式
+- **更新**：已有文档覆盖的主题发生了变化（比如流程新增了分支）
+- **原则**：一个主题只有一个信息源，不要在两个地方写同一件事
 
-详见 [CLAUDE.md](../CLAUDE.md) 中的文档维护规范。
+### troubleshooting 条目模板
 
----
+每个 troubleshooting 文件应包含：
 
-## 文档结构
+1. **问题现象** — 一句话描述用户看到了什么
+2. **根因分析** — 为什么会出现这个问题
+3. **解决方案** — 改了什么、怎么改的
+4. **关联文件** — 涉及的源码路径
 
-```
-docs/
-├── README.md                 # 本文件 - 文档索引
-├── architecture/             # 架构文档
-│   ├── overview.md          # 架构总览
-│   ├── frontend.md          # 前端架构
-│   ├── backend.md           # 后端架构
-│   └── data-flow.md         # 数据流
-├── api/                      # API 参考
-│   ├── uploaders.md         # 上传器接口
-│   ├── composables.md       # Vue Composables
-│   └── rust-commands.md     # Rust 命令
-├── guides/                   # 开发指南
-│   └── add-new-uploader.md  # 添加新图床
-├── decisions/                # 技术决策记录
-│   └── template.md          # ADR 模板
-│
-│   # 知识沉淀
-├── fixes/                    # 问题修复记录
-│   ├── README.md            # 修复记录索引
-│   ├── timeline-fixed.md    # 时间线优化
-│   └── ui-fixed.md          # UI 修复
-├── gotchas/                  # 踩坑记录
-│   └── README.md            # 踩坑记录索引
-├── patterns/                 # 最佳实践
-│   └── README.md            # 最佳实践索引
-├── performance/              # 性能优化
-│   └── README.md            # 性能优化索引
-├── debugging/                # 调试技巧
-│   └── README.md            # 调试技巧索引
-│
-├── references/               # 外部参考文档
-│   ├── README.md            # 参考文档索引
-│   ├── third-party-apis.md  # 第三方 API
-│   ├── tc-api.md            # TC 图床 API
-│   └── tc-limits.md         # TC 限制
-├── design-previews/          # 设计预览图
-├── plans/                    # 规划文档
-├── style-design.md          # 样式设计规范
-└── testing-guide.md         # 测试指南
-```
+### 文档清理
+
+- 删除功能对应的代码时，同步删除或更新相关文档
+- 每次大版本发布前，检查 `reference/` 下的文件是否仍然适用
+- 已废弃的文档直接删除，不留 deprecated 标记（git 历史可追溯）

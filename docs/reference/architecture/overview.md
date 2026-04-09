@@ -200,7 +200,8 @@ PicNexus/
 
 - [前端架构](./frontend.md) - Vue 组件和状态管理详解
 - [后端架构](./backend.md) - Rust 命令和错误处理
-- [数据流](./data-flow.md) - 上传流程图解
+- [流程图（docs/flows/）](../../flows/) - 详细业务流程 Mermaid 图集
+- [数据持久化流程](../../flows/data-persistence.md) - 配置读写、历史记录、缩略图缓存的完整数据流
 - [上传器接口](../api/uploaders.md) - IUploader 接口规范
 
 ---

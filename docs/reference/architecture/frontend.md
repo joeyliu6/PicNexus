@@ -211,7 +211,7 @@ src/theme/
 }
 ```
 
-详见 [样式设计规范](../style-design.md)。
+详见 [设计规范](../../design/)。
 
 ---
 
@@ -335,7 +335,7 @@ const thumbUrl = await getThumb(imagePath);
 
 - [架构总览](./overview.md)
 - [Composables API](../api/composables.md)
-- [样式设计规范](../style-design.md)
+- [设计规范](../../design/)
 
 ---
 
