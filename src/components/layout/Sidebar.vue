@@ -20,8 +20,8 @@ watch(() => props.currentView, (v) => {
 
 const navItems = [
   { id: 'upload' as ViewType, label: '上传', icon: 'pi-cloud-upload', title: '上传' },
-  { id: 'history' as ViewType, label: '浏览', icon: 'pi-history', title: '浏览记录' },
-  { id: 'link-check' as ViewType, label: '维护', icon: 'pi-shield', title: '链接维护' },
+  { id: 'history' as ViewType, label: '浏览', icon: 'pi-images', title: '浏览记录' },
+  { id: 'link-check' as ViewType, label: '维护', icon: 'pi-wrench', title: '链接维护' },
   { id: 'settings' as ViewType, label: '设置', icon: 'pi-cog', title: '设置' }
 ];
 
@@ -54,8 +54,8 @@ const handleNavigate = (view: ViewType) => {
   border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
-  padding: 12px 0;
-  gap: 4px;
+  padding: var(--space-md) 0;
+  gap: var(--space-xs);
   flex-shrink: 0;
 }
 
@@ -66,12 +66,12 @@ const handleNavigate = (view: ViewType) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 8px;
-  border-radius: 8px;
+  gap: var(--space-xs-sm);
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
-  transition: all var(--duration-normal);
-  font-size: var(--text-xs);
+  transition: all var(--duration-normal) var(--ease-standard);
+  font-size: var(--text-sm);
 }
 
 .nav-btn :deep(.p-button-icon) {
@@ -80,8 +80,8 @@ const handleNavigate = (view: ViewType) => {
 }
 
 .nav-btn :deep(.p-button-label) {
-  font-size: var(--text-xs);
-  font-weight: 600;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
 }
 
 .nav-btn:hover {
@@ -92,7 +92,10 @@ const handleNavigate = (view: ViewType) => {
 .nav-btn.nav-btn-active {
   background: var(--primary-alpha-15);
   color: var(--primary);
-  font-weight: 600;
+}
+
+.nav-btn.nav-btn-active :deep(.p-button-label) {
+  font-weight: var(--weight-bold);
 }
 
 .nav-btn.nav-btn-active:hover {
