@@ -88,155 +88,168 @@ export async function loadFileImpl(path: string): Promise<void> {
 }
 
 /**
- * 加载文件夹核心逻辑（dialog / 拖放共用）
- * 使用 Rust scan_md_folder 单次 IPC 完成：递归扫描 + 批量读取 + 正则提取
+ * Composable 工厂：提供 5 个依赖 toast 的 MD 文件加载函数。
+ *
+ * 必须在组件 setup() 或其它 composable 顶层同步调用，因为内部 `useToast()`
+ * 依赖 Vue 的 `inject()`，只在 setup 栈期间可用。返回的函数通过闭包持有
+ * toast 引用，因此可以安全地在 click handler、拖放回调等异步上下文中调用。
  */
-export async function loadFolderImpl(dir: string): Promise<boolean> {
+export function useMdFileLoader() {
   const toast = useToast();
 
-  mode.value = 'folder';
-  folderPath.value = dir;
-  filePath.value = null;
-  fileContent.value = null;
+  /**
+   * 加载文件夹核心逻辑（dialog / 拖放共用）
+   * 使用 Rust scan_md_folder 单次 IPC 完成：递归扫描 + 批量读取 + 正则提取
+   */
+  async function loadFolderImpl(dir: string): Promise<boolean> {
+    mode.value = 'folder';
+    folderPath.value = dir;
+    filePath.value = null;
+    fileContent.value = null;
 
-  // 清空上次扫描的残留数据
-  imageLinks.value = [];
-  mdFiles.value = [];
-  readyFiles.value = new Set();
-  skippedDirs.value = [];
-  phase.value = 'idle';
-  scanStage.value = 'checking';
-  scanProgress.value = null;
-  collectProgress.value = { scannedFiles: 0, processedFiles: 0, foundLinks: 0 };
+    // 清空上次扫描的残留数据
+    imageLinks.value = [];
+    mdFiles.value = [];
+    readyFiles.value = new Set();
+    skippedDirs.value = [];
+    phase.value = 'idle';
+    scanStage.value = 'checking';
+    scanProgress.value = null;
+    collectProgress.value = { scannedFiles: 0, processedFiles: 0, foundLinks: 0 };
 
-  setCollectCancelled(false);
-  isCollecting.value = true;
+    setCollectCancelled(false);
+    isCollecting.value = true;
 
-  // 监听 Rust 侧的实时进度事件
-  let progressUnlisten: UnlistenFn | null = null;
-  try {
-    progressUnlisten = await listen<RustScanProgress>('md-scan://progress', (event) => {
-      const p = event.payload;
-      collectProgress.value = {
-        scannedFiles: p.scannedFiles,
-        processedFiles: p.processedFiles,
-        foundLinks: p.foundLinks,
-        currentFile: p.currentFile || undefined,
-      };
-    });
+    // 监听 Rust 侧的实时进度事件
+    let progressUnlisten: UnlistenFn | null = null;
+    try {
+      progressUnlisten = await listen<RustScanProgress>('md-scan://progress', (event) => {
+        const p = event.payload;
+        collectProgress.value = {
+          scannedFiles: p.scannedFiles,
+          processedFiles: p.processedFiles,
+          foundLinks: p.foundLinks,
+          currentFile: p.currentFile || undefined,
+        };
+      });
 
-    // 单次 IPC：目录扫描 + 文件读取 + 链接提取全部在 Rust 完成
-    const result = await invoke<RustScanResult>('scan_md_folder', {
-      dir,
-      includeSubfolders: includeSubfolders.value,
-    });
+      // 单次 IPC：目录扫描 + 文件读取 + 链接提取全部在 Rust 完成
+      const result = await invoke<RustScanResult>('scan_md_folder', {
+        dir,
+        includeSubfolders: includeSubfolders.value,
+      });
 
-    if (result.cancelled) return false;
+      if (result.cancelled) return false;
 
-    // 保存跳过的目录信息
-    skippedDirs.value = result.skippedDirs ?? [];
+      // 保存跳过的目录信息
+      skippedDirs.value = result.skippedDirs ?? [];
 
-    // 转换 Rust 结果为前端类型
-    const allLinks: MdImageLinkWithFile[] = [];
-    const filePaths: string[] = [];
-    for (const file of result.files) {
-      filePaths.push(file.filePath);
-      for (const link of file.links) {
-        allLinks.push({
-          originalText: link.originalText,
-          url: link.url,
-          altText: link.altText,
-          lineNumber: link.lineNumber,
-          syntax: link.syntax,
-          context: link.context,
-          sourceFile: file.filePath,
-          sourceFileName: file.fileName,
-        });
+      // 转换 Rust 结果为前端类型
+      const allLinks: MdImageLinkWithFile[] = [];
+      const filePaths: string[] = [];
+      for (const file of result.files) {
+        filePaths.push(file.filePath);
+        for (const link of file.links) {
+          allLinks.push({
+            originalText: link.originalText,
+            url: link.url,
+            altText: link.altText,
+            lineNumber: link.lineNumber,
+            syntax: link.syntax,
+            context: link.context,
+            sourceFile: file.filePath,
+            sourceFileName: file.fileName,
+          });
+        }
       }
+
+      mdFiles.value = filePaths;
+      imageLinks.value = allLinks;
+
+      if (filePaths.length === 0) {
+        toast.info('未找到 MD 文件', '该文件夹中没有 Markdown 文件');
+        return false;
+      }
+      if (allLinks.length === 0) {
+        toast.info('未找到图片链接', `${filePaths.length} 个文件中均无图片链接`);
+      }
+
+      log.info(`Rust 扫描完成: ${result.totalFiles} 文件, ${result.totalLinks} 链接, ${result.elapsedMs}ms`);
+      return true;
+    } finally {
+      progressUnlisten?.();
+      isCollecting.value = false;
+      collectProgress.value = null;
     }
+  }
 
-    mdFiles.value = filePaths;
-    imageLinks.value = allLinks;
+  async function selectMdFile(): Promise<boolean> {
+    try {
+      const selected = await dialogOpen({
+        multiple: false,
+        filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }],
+      });
+      if (!selected) return false;
+      const path = typeof selected === 'string' ? selected : (selected as string[])[0];
+      if (!path) return false;
 
-    if (filePaths.length === 0) {
-      toast.info('未找到 MD 文件', '该文件夹中没有 Markdown 文件');
+      await loadFileImpl(path);
+      if (imageLinks.value.length === 0) {
+        toast.info('未找到图片链接', '该文件中没有图片链接');
+      }
+      return true;
+    } catch (err) {
+      log.error('选择文件失败', err);
+      toast.error('文件打开失败', String(err));
       return false;
     }
-    if (allLinks.length === 0) {
-      toast.info('未找到图片链接', `${filePaths.length} 个文件中均无图片链接`);
-    }
-
-    log.info(`Rust 扫描完成: ${result.totalFiles} 文件, ${result.totalLinks} 链接, ${result.elapsedMs}ms`);
-    return true;
-  } finally {
-    progressUnlisten?.();
-    isCollecting.value = false;
-    collectProgress.value = null;
   }
-}
 
-export async function selectMdFile(): Promise<boolean> {
-  const toast = useToast();
-  try {
-    const selected = await dialogOpen({
-      multiple: false,
-      filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }],
-    });
-    if (!selected) return false;
-    const path = typeof selected === 'string' ? selected : (selected as string[])[0];
-    if (!path) return false;
+  async function selectFolder(): Promise<boolean> {
+    try {
+      const selected = await dialogOpen({ directory: true, recursive: true });
+      if (!selected) return false;
+      const dir = typeof selected === 'string' ? selected : (selected as string[])[0];
+      if (!dir) return false;
 
-    await loadFileImpl(path);
-    if (imageLinks.value.length === 0) {
-      toast.info('未找到图片链接', '该文件中没有图片链接');
-    }
-    return true;
-  } catch (err) {
-    log.error('选择文件失败', err);
-    toast.error('文件打开失败', String(err));
-    return false;
-  }
-}
-
-export async function selectFolder(): Promise<boolean> {
-  const toast = useToast();
-  try {
-    const selected = await dialogOpen({ directory: true, recursive: true });
-    if (!selected) return false;
-    const dir = typeof selected === 'string' ? selected : (selected as string[])[0];
-    if (!dir) return false;
-
-    return await loadFolderImpl(dir);
-  } catch (err) {
-    log.error('选择文件夹失败', err);
-    toast.error('文件夹打开失败', String(err));
-    return false;
-  }
-}
-
-export async function loadFilePath(path: string): Promise<boolean> {
-  const toast = useToast();
-  try {
-    if (!isMarkdownFile(path)) {
-      toast.info('不支持的文件类型', '请拖放 Markdown 文件（.md / .markdown）');
+      return await loadFolderImpl(dir);
+    } catch (err) {
+      log.error('选择文件夹失败', err);
+      toast.error('文件夹打开失败', String(err));
       return false;
     }
-    await loadFileImpl(path);
-    return true;
-  } catch (err) {
-    log.error('加载文件失败', err);
-    toast.error('文件加载失败', String(err));
-    return false;
   }
-}
 
-export async function loadFolderPath(dir: string): Promise<boolean> {
-  const toast = useToast();
-  try {
-    return await loadFolderImpl(dir);
-  } catch (err) {
-    log.error('加载文件夹失败', err);
-    toast.error('文件夹加载失败', String(err));
-    return false;
+  async function loadFilePath(path: string): Promise<boolean> {
+    try {
+      if (!isMarkdownFile(path)) {
+        toast.info('不支持的文件类型', '请拖放 Markdown 文件（.md / .markdown）');
+        return false;
+      }
+      await loadFileImpl(path);
+      return true;
+    } catch (err) {
+      log.error('加载文件失败', err);
+      toast.error('文件加载失败', String(err));
+      return false;
+    }
   }
+
+  async function loadFolderPath(dir: string): Promise<boolean> {
+    try {
+      return await loadFolderImpl(dir);
+    } catch (err) {
+      log.error('加载文件夹失败', err);
+      toast.error('文件夹加载失败', String(err));
+      return false;
+    }
+  }
+
+  return {
+    loadFolderImpl,
+    selectMdFile,
+    selectFolder,
+    loadFilePath,
+    loadFolderPath,
+  };
 }

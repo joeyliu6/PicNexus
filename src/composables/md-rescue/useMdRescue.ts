@@ -46,10 +46,7 @@ import { runLinkCheck } from './LinkChecker';
 import {
   isMarkdownFile,
   collectLinksFromFiles,
-  selectMdFile,
-  selectFolder,
-  loadFilePath,
-  loadFolderPath,
+  useMdFileLoader,
 } from './useMdFileLoader';
 import { useMdLinkFilter, generateDiff } from './useMdLinkFilter';
 import { executeReplace as executeReplaceImpl, undoReplace as undoReplaceImpl } from './useFileBackup';
@@ -71,6 +68,9 @@ export function useMdRescueManager() {
   const toast = useToast();
   const { loadConfig } = useConfigManager();
   const { checkUrls, isChecking, progress, cancelCheck } = useLinkCheckManager();
+  // 必须在 setup 栈期间调用 useMdFileLoader，内部会 useToast() → inject()，
+  // 返回的 5 个函数通过闭包持有 toast，之后可在 click / 拖放回调里安全调用。
+  const { selectMdFile, selectFolder, loadFilePath, loadFolderPath } = useMdFileLoader();
 
   // 筛选管道（内含 watch/watchDebounced，必须在 composable 函数内调用）
   const {
