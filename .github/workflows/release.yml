@@ -50,6 +50,13 @@ jobs:
       - name: Run tests before release
         run: npm run test:run
 
+      - name: Generate changelog
+        uses: orhun/git-cliff-action@v3
+        id: changelog
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -58,7 +65,7 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: 'PicNexus v__VERSION__'
-          releaseBody: '请查看 CHANGELOG.md 了解详细变更。'
+          releaseBody: ${{ steps.changelog.outputs.content }}
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true

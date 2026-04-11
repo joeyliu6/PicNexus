@@ -1,0 +1,37 @@
+[changelog]
+header = "# PicNexus 更新日志\n\n"
+body = """
+{% if version %}\
+    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+    ## [unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | upper_first }}
+    {% for commit in commits %}
+        - {{ commit.message | upper_first | split(pat="\\n") | first }}\
+    {% endfor %}
+{% endfor %}\n
+"""
+trim = true
+footer = ""
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+commit_parsers = [
+  { message = "^feat", group = "✨ 新功能" },
+  { message = "^fix", group = "🐛 Bug 修复" },
+  { message = "^perf", group = "⚡ 性能优化" },
+  { message = "^refactor", group = "♻️ 重构" },
+  { message = "^style", group = "💄 样式" },
+  { message = "^docs", group = "📝 文档" },
+  { message = "^test", group = "✅ 测试" },
+  { message = "^chore\\(ci\\)", group = "👷 CI" },
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore", group = "🔧 杂项" },
+]
+filter_commits = true
+tag_pattern = "v[0-9].*"
+topo_order = false
+sort_commits = "newest"
