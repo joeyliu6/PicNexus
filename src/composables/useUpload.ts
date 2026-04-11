@@ -154,7 +154,8 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       log.info('接收到文件:', filePaths);
 
       // 文件类型验证
-      let { valid, invalid } = await filterValidFiles(filePaths);
+      const { valid: initialValid, invalid } = await filterValidFiles(filePaths);
+      let valid = initialValid;
 
       if (valid.length === 0) {
         log.warn('没有有效的图片文件');
@@ -464,7 +465,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             // 修复竞态条件：只更新当前服务的进度，不覆盖其他服务的状态
             // updateItem 会自动做深度合并，所以只需传递要更新的服务即可
             const serviceId = serviceResult.serviceId;
-            let serviceUpdate: Record<string, any> = {};
+            const serviceUpdate: Record<string, any> = {};
 
             if (serviceResult.status === 'success' && serviceResult.result) {
               // 七鱼/京东上传成功，标记为可用（重置检测冷却计时器）
@@ -577,7 +578,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
           log.error(`${fileName} 上传失败:`, errorMsg);
 
           // 从错误消息中提取图床信息（所有图床失败时包含详细信息）
-          let failedServices: string[] = [];
+          const failedServices: string[] = [];
 
           // 尝试从错误消息中解析失败的图床
           const servicePattern = /- (\w+):/g;

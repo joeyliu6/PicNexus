@@ -318,12 +318,13 @@ export class UploadQueueManager {
       const updates: Partial<QueueItem> = {};
 
       switch (progress.type) {
-        case 'weibo_progress':
+        case 'weibo_progress': {
           const weiboPercent = Math.max(0, Math.min(100, Number(progress.payload) || 0));
           updates.weiboProgress = weiboPercent;
           updates.weiboStatus = `${weiboPercent}%`;
           updates.status = 'uploading';
           break;
+        }
 
         case 'weibo_success':
           updates.weiboProgress = 100;
@@ -333,11 +334,12 @@ export class UploadQueueManager {
           updates.baiduLink = progress.payload.baiduLink;
           break;
 
-        case 'r2_progress':
+        case 'r2_progress': {
           const r2Percent = Math.max(0, Math.min(100, Number(progress.payload) || 0));
           updates.r2Progress = r2Percent;
           updates.r2Status = `${r2Percent}%`;
           break;
+        }
 
         case 'r2_success':
           updates.r2Progress = 100;
@@ -345,7 +347,7 @@ export class UploadQueueManager {
           updates.r2Link = progress.payload.r2Link;
           break;
 
-        case 'error':
+        case 'error': {
           updates.status = 'error';
           updates.errorMessage = progress.payload;
 
@@ -358,6 +360,7 @@ export class UploadQueueManager {
             }
           }
           break;
+        }
 
         case 'complete':
           updates.status = 'success';

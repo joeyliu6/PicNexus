@@ -195,7 +195,7 @@ export class MultiServiceUploader {
               case 'nami':
                 structuredError = convertToNamiError(error);
                 break;
-              default:
+              default: {
                 // 其他图床使用通用错误
                 const errorMsg = error instanceof Error ? error.message : String(error);
                 structuredError = createStructuredError(
@@ -208,6 +208,8 @@ export class MultiServiceUploader {
                     serviceId
                   }
                 );
+                break;
+              }
             }
 
             log.error(`${serviceId} 上传失败:`, structuredError);

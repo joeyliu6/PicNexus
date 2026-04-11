@@ -102,7 +102,7 @@ export class WebDAVClient {
    */
   private buildUrl(remotePath: string): string {
     const baseUrl = this.config.url.trim();
-    let path = remotePath.trim();
+    const path = remotePath.trim();
 
     // 处理路径拼接
     if (baseUrl.endsWith('/') && path.startsWith('/')) {

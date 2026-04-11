@@ -74,9 +74,8 @@ export interface R2ServiceConfig extends BaseServiceConfig {
  * 京东图床服务配置
  * 京东图床无需认证，和 TCL 一样开箱即用
  */
-export interface JDServiceConfig extends BaseServiceConfig {
-  // 京东图床不需要额外配置
-}
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- 占位接口，保留用于未来扩展
+export interface JDServiceConfig extends BaseServiceConfig {}
 
 /**
  * 牛客图床服务配置
@@ -91,9 +90,8 @@ export interface NowcoderServiceConfig extends BaseServiceConfig {
  * 基于网易七鱼客服系统的 NOS 对象存储
  * Token 由后端自动获取（通过 Chrome/Edge 浏览器），无需手动配置
  */
-export interface QiyuServiceConfig extends BaseServiceConfig {
-  // Token 已改为后端自动获取，此接口保留用于未来扩展
-}
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- Token 已改为后端自动获取，此接口保留用于未来扩展
+export interface QiyuServiceConfig extends BaseServiceConfig {}
 
 /**
  * 知乎图床服务配置

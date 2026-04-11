@@ -112,7 +112,7 @@ describe('useConfigManager', () => {
     it('加载失败时降级为默认配置', async () => {
       configStoreGetMock.mockRejectedValue(new Error('读取失败'));
 
-      const { loadConfig, config } = useConfigManager();
+      const { loadConfig } = useConfigManager();
       const result = await loadConfig();
 
       expect(result.enabledServices).toBeDefined();

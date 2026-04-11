@@ -126,7 +126,11 @@ async function handleCloseToTrayChange(enabled: boolean) {
 }
 
 function handleAnalyticsToggle() {
-  formData.value.analyticsEnabled ? analytics.enable() : analytics.disable();
+  if (formData.value.analyticsEnabled) {
+    analytics.enable();
+  } else {
+    analytics.disable();
+  }
   saveSettings();
 }
 

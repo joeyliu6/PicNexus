@@ -365,7 +365,11 @@ class SimpleStore {
           log.warn(`创建备份失败:`, backupError);
         }
         if (this.selfHeal) {
-          try { await remove(dataPath); } catch {}
+          try {
+            await remove(dataPath);
+          } catch {
+            // 删除失败不影响自愈流程，配置已备份，下次写入会覆盖
+          }
           log.warn(`⚠ 自愈模式：已备份损坏文件并重置，继续写入新数据 (${this.filePath})`);
           return {};
         }

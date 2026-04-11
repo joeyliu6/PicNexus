@@ -43,7 +43,11 @@ function closeCopyMenu(): void {
 }
 
 function toggleCopyMenu(): void {
-  copyMenuVisible.value ? closeCopyMenu() : (copyMenuVisible.value = true);
+  if (copyMenuVisible.value) {
+    closeCopyMenu();
+  } else {
+    copyMenuVisible.value = true;
+  }
 }
 
 onClickOutside(copyDropdownRef, closeCopyMenu);
@@ -177,7 +181,6 @@ function handleCopy(format: LinkFormat): void {
   transform: translateX(-50%);
   z-index: var(--z-overlay);
   background: rgb(26 26 30 / 90%);
-  backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   border: 1px solid var(--border-subtle);
   border-radius: 20px;

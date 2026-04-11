@@ -593,7 +593,7 @@ export class RetryService {
     log.error(`${item.fileName} 上传失败:`, errorMsg);
 
     // 解析失败的图床
-    let failedServices: string[] = [];
+    const failedServices: string[] = [];
     const servicePattern = /- (\w+):/g;
     let match;
     while ((match = servicePattern.exec(errorMsg)) !== null) {

@@ -3,7 +3,6 @@
 
 import { mount, shallowMount, MountingOptions, VueWrapper } from '@vue/test-utils';
 import { Component, DefineComponent } from 'vue';
-import { vi } from 'vitest';
 
 /**
  * v-tooltip 指令的测试替身
@@ -67,11 +66,12 @@ export function mountWithDefaults<T extends Component>(
         ...options.global?.directives,
       },
       stubs: {
-        ...(defaultGlobal?.stubs as Record<string, unknown>),
-        ...(options.global?.stubs as Record<string, unknown>),
+        ...defaultGlobal?.stubs,
+        ...options.global?.stubs,
       },
     },
-  }) as VueWrapper;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any) as VueWrapper;
 }
 
 /**
@@ -94,11 +94,12 @@ export function shallowMountWithDefaults<T extends Component>(
         ...options.global?.directives,
       },
       stubs: {
-        ...(defaultGlobal?.stubs as Record<string, unknown>),
-        ...(options.global?.stubs as Record<string, unknown>),
+        ...defaultGlobal?.stubs,
+        ...options.global?.stubs,
       },
     },
-  }) as VueWrapper;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any) as VueWrapper;
 }
 
 /**

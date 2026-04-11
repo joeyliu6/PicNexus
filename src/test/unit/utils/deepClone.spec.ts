@@ -57,8 +57,11 @@ describe('deepMerge', () => {
   });
 
   it('递归合并嵌套对象', () => {
-    const target = { nested: { a: 1, b: 2 } };
-    const source = { nested: { b: 3, c: 4 } };
+    // 显式放宽字段为 optional，匹配 deepMerge 的 Partial<T> 签名。
+    const target: { nested: { a?: number; b?: number; c?: number } } = {
+      nested: { a: 1, b: 2 },
+    };
+    const source: Partial<typeof target> = { nested: { b: 3, c: 4 } };
     const result = deepMerge(target, source);
 
     expect(result.nested).toEqual({ a: 1, b: 3, c: 4 });

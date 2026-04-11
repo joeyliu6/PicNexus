@@ -102,7 +102,7 @@ export function createBackupLocalOps(deps: BackupLocalDeps) {
         jsonContent = await tryDecryptContent(content.trim());
       }
 
-      let importedConfig = JSON.parse(jsonContent) as UserConfig;
+      const importedConfig = JSON.parse(jsonContent) as UserConfig;
 
       if (!isValidUserConfig(importedConfig)) {
         toast.showConfig('error', TOAST_MESSAGES.common.importFailed('文件内容不是有效的配置数据格式'));

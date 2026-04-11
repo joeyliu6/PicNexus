@@ -104,7 +104,7 @@ export function createBackupCloudOps(deps: BackupCloudDeps) {
         content = await tryDecryptContent(rawContent.trim());
       }
 
-      let importedConfig = JSON.parse(content) as UserConfig;
+      const importedConfig = JSON.parse(content) as UserConfig;
 
       if (!isValidUserConfig(importedConfig)) {
         updateConfigSyncStatus(profile,'failed', '云端数据格式无效');
@@ -155,7 +155,7 @@ export function createBackupCloudOps(deps: BackupCloudDeps) {
         content = await tryDecryptContent(rawContent.trim());
       }
 
-      let importedConfig = JSON.parse(content) as UserConfig;
+      const importedConfig = JSON.parse(content) as UserConfig;
 
       if (!isValidUserConfig(importedConfig)) {
         updateConfigSyncStatus(profile,'failed', '云端数据格式无效');
@@ -489,7 +489,7 @@ export function createBackupCloudOps(deps: BackupCloudDeps) {
           if (isPasswordEncryptedData(rawContent.trim())) {
             contentStr = await tryDecryptContent(rawContent.trim());
           }
-          let importedConfig = JSON.parse(contentStr) as UserConfig;
+          const importedConfig = JSON.parse(contentStr) as UserConfig;
           if (isValidUserConfig(importedConfig)) {
             hasCloudData = true;
 

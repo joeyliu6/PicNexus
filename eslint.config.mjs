@@ -20,6 +20,11 @@ export default defineConfigWithVueTs(
       'scripts/**',
       '.husky/**',
       'docs/**',
+      // 测试文件：vitest mock 里大量 `as any` / `expect.any(Object)` 是常规做法，
+      // 强行套主应用的 any/unused 规则收益极低。运行时由 vitest 自身 + tsc 兜底。
+      'src/test/**',
+      // Obsidian 插件子项目：有独立的构建与 lint 体系，不归主应用 ESLint 管控。
+      'plugins/**',
       '*.config.mjs',
       '*.config.ts',
     ],
@@ -56,6 +61,15 @@ export default defineConfigWithVueTs(
       // Vue 专用规则降级（现有代码已违反，先可见不阻塞）
       'vue/multi-word-component-names': 'warn',
       'vue/no-mutating-props': 'warn',
+    },
+  },
+  {
+    // 布局级单件组件豁免：Sidebar 是应用唯一侧栏，命名语义明确，
+    // 改名涉及多处引用且收益极低。
+    name: 'app/layout-component-name-overrides',
+    files: ['src/components/layout/Sidebar.vue'],
+    rules: {
+      'vue/multi-word-component-names': 'off',
     },
   },
 );

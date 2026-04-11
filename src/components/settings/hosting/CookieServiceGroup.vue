@@ -61,6 +61,7 @@ const namiAuthToken = computed(() => {
 </script>
 
 <template>
+  <!-- eslint-disable vue/no-mutating-props -- 见 script 顶部 NOTE：cookieFormData 通过引用传递是有意为之的设计，父组件 HostingSettingsPanel 通过 save 事件持久化 -->
   <div class="provider-grid">
     <HostingCard
       v-for="svc in COOKIE_SERVICES"
