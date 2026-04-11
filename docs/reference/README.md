@@ -72,9 +72,9 @@
 
 | 文件 | 内容 |
 |------|------|
-| [composables.md](./api/composables.md) | Vue Composables API 签名与用法 |
-| [rust-commands.md](./api/rust-commands.md) | Tauri invoke 命令参考 |
-| [uploaders.md](./api/uploaders.md) | IUploader 接口规范 |
+| [composables.md](./api/composables.md) | Vue Composables 导航索引 |
+| [rust-commands.md](./api/rust-commands.md) | Rust 命令导航索引 + 进度事件/错误处理 |
+| [uploaders.md](./api/uploaders.md) | 上传器导航索引 + 实现列表 |
 | [tc-platforms.md](./api/tc-platforms.md) | 图床平台速查（上传限制 + 缩略图格式） |
 | [third-party-apis.md](./api/third-party-apis.md) | 第三方库使用约定与陷阱 |
 

@@ -89,6 +89,13 @@ import './theme/transitions.css';
 
 ---
 
+## 相关文档
+
+- [动效 Token 集中管理](../reference/patterns/motion-token-system.md) — duration / easing / keyframes 模式详解
+- [系统总览流程图](../flows/system-overview.md) — 项目宏观架构，定位样式在哪一层
+
+---
+
 ## 维护记录
 
 | 日期 | 变更内容 |

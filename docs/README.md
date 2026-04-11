@@ -7,13 +7,22 @@
 ```
 docs/
 ├── flows/              # 📊 流程图（Mermaid 格式）
-│   ├── upload-flow.md
-│   ├── data-persistence.md
-│   ├── system-overview.md
-│   ├── app-lifecycle.md
-│   ├── auxiliary-flows.md
-│   ├── history-flow.md
-│   └── sync-flow.md
+│   ├── system-overview.md        # 系统总览
+│   ├── app-lifecycle.md          # 启动/白屏/Cookie 登录
+│   ├── upload-flow.md            # 上传流程
+│   ├── history-flow.md           # 历史记录
+│   ├── sync-flow.md              # 同步/备份
+│   ├── data-persistence.md       # 配置/缩略图持久化
+│   ├── auxiliary-flows.md        # 链接检测/压缩
+│   ├── link-check-flow.md        # 链接监控（深度）
+│   ├── md-rescue-flow.md         # 文档修复
+│   ├── batch-migrate-flow.md     # 批量迁移
+│   ├── ipc-command-flow.md       # Tauri 命令/事件
+│   ├── db-migration-flow.md      # 数据库 schema 迁移
+│   ├── window-system-integration.md  # 窗口/托盘/快捷键
+│   ├── logger-diagnostics-flow.md    # 日志/诊断
+│   ├── auto-update-flow.md       # 自动更新/发布签名
+│   └── settings-ui-architecture.md   # 设置面板/主题
 ├── design/             # 🎨 设计规范
 │   ├── README.md       # 核心原则 + 文件结构
 │   ├── tokens.md       # CSS 变量体系
