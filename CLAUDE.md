@@ -62,6 +62,8 @@ Tauri 2.x（Rust + Vue 3 / TypeScript / PrimeVue 4 + SQLite），详见 `docs/re
 | 性能问题 | `docs/reference/patterns/link-check-large-dataset.md` |
 | API/接口规范 | `docs/reference/api/` |
 
+> 🤖 本表的 `flows/` 路由已通过 [scripts/claude-hooks/flows-router.mjs](scripts/claude-hooks/flows-router.mjs) + UserPromptSubmit hook 自动触发：关键词命中时会把对应 flow 路径作为 system-reminder 注入 Claude Code 上下文。**修改或删除 hook 前请先理解这套机制**（配置见 [.claude/settings.json](.claude/settings.json)）。
+
 ## 提交约定
 
 - 原子提交：每个提交 = 一个逻辑单元，3+ 文件改动至少 2 次提交
