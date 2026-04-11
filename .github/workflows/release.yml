@@ -7,7 +7,19 @@ on:
 
 jobs:
   release:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            target: ''
+          - platform: macos-latest
+            target: 'aarch64-apple-darwin'
+          - platform: macos-latest
+            target: 'x86_64-apple-darwin'
+          - platform: ubuntu-latest
+            target: ''
+    runs-on: ${{ matrix.platform }}
 
     steps:
       - uses: actions/checkout@v5
@@ -16,10 +28,21 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install Ubuntu system deps
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev \
+            libssl-dev build-essential curl wget file
+
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm ci
 
       - name: Lint before release
         run: npm run lint
@@ -39,3 +62,4 @@ jobs:
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
+          args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
