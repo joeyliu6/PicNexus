@@ -8,6 +8,10 @@ interface Props {
   expanded: boolean;
   /** 展开后内容区允许溢出（用于包含下拉框的场景） */
   allowOverflow?: boolean;
+  /** 需要用户关注（前置条件未满足），边框和状态点会变为 warning 色 */
+  needsAttention?: boolean;
+  /** needsAttention 激活时，状态点 tooltip 的提示文案 */
+  attentionTooltip?: string;
 }
 
 defineProps<Props>();
@@ -19,13 +23,16 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="collapsible-card" :class="{ expanded, 'allow-overflow': allowOverflow }">
+  <div
+    class="collapsible-card"
+    :class="{ expanded, 'allow-overflow': allowOverflow, 'needs-attention': needsAttention }"
+  >
     <button class="card-header" @click="emit('update:expanded', !expanded)">
       <div class="header-left">
         <span
           class="status-dot"
-          :class="enabled ? 'active' : ''"
-          v-tooltip.top="enabled ? '已启用' : '未启用'"
+          :class="{ active: enabled && !needsAttention, 'needs-attention': needsAttention && enabled }"
+          v-tooltip.top="needsAttention && enabled ? (attentionTooltip || '需要配置') : (enabled ? '已启用' : '未启用')"
         />
         <div class="header-info">
           <span class="card-title">{{ title }}</span>
@@ -51,7 +58,7 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-@import '../../styles/settings-shared.css';
+@import url('../../styles/settings-shared.css');
 
 .collapsible-card {
   background: var(--bg-card);
@@ -67,6 +74,16 @@ const emit = defineEmits<{
 
 .collapsible-card.expanded {
   border-color: var(--primary);
+}
+
+.collapsible-card.needs-attention,
+.collapsible-card.needs-attention:hover,
+.collapsible-card.needs-attention.expanded {
+  border-color: var(--warning);
+}
+
+.status-dot.needs-attention {
+  background: var(--warning);
 }
 
 .collapsible-card.allow-overflow {
