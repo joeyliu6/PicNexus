@@ -38,6 +38,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build sidecar binaries for current platform
+        shell: bash
+        run: |
+          set -e
+          build_sidecar() {
+            local dir=$1
+            local win_script=$2
+            pushd "sidecar/$dir" > /dev/null
+            npm ci
+            npm run build
+            case "$RUNNER_OS" in
+              Windows) npm run "$win_script" ;;
+              macOS)   npm run pkg:mac-arm ;;
+              Linux)   npm run pkg:linux ;;
+            esac
+            popd > /dev/null
+          }
+          build_sidecar qiyu-token-fetcher pkg:win
+          build_sidecar nami-token-fetcher pkg:win:x64
+          ls -la src-tauri/binaries/
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
