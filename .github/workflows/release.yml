@@ -21,6 +21,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
+      - name: Lint before release
+        run: npm run lint
+
       - name: Run tests before release
         run: npm run test:run
 

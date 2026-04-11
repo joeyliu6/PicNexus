@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: windows-latest
@@ -35,6 +39,12 @@ jobs:
 
       - name: Type check
         run: npx vue-tsc --noEmit
+
+      - name: Lint (ESLint + Stylelint)
+        run: npm run lint
+
+      - name: Build (tsc + vite)
+        run: npm run build
 
       - name: Run tests
         run: npm run test:run
