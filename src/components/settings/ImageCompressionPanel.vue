@@ -247,7 +247,7 @@ function openPreviewDialog() {
 </template>
 
 <style scoped>
-@import '../../styles/settings-shared.css';
+@import url('../../styles/settings-shared.css');
 
 /* --- Collapsible Container --- */
 
@@ -303,7 +303,7 @@ function openPreviewDialog() {
   border-radius: 999px;
   background: var(--bg-card);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   cursor: pointer;
   transition: all var(--duration-fast);
@@ -318,7 +318,7 @@ function openPreviewDialog() {
   border-color: var(--primary);
   color: var(--primary);
   background: var(--primary-alpha-8);
-  text-shadow: 0 0 0.5px currentColor;
+  text-shadow: 0 0 0.5px currentcolor;
 }
 
 .preset-tab.add-tab {
@@ -381,7 +381,7 @@ function openPreviewDialog() {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--text-xs);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -413,7 +413,7 @@ function openPreviewDialog() {
 }
 
 .quality-badge {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   padding: 2px 8px;
   border-radius: 999px;
@@ -478,7 +478,7 @@ function openPreviewDialog() {
   border-radius: 999px;
   background: var(--bg-card);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   cursor: pointer;
   transition: all var(--duration-fast);
@@ -493,7 +493,7 @@ function openPreviewDialog() {
   border-color: var(--primary);
   color: var(--primary);
   background: var(--primary-alpha-8);
-  text-shadow: 0 0 0.5px currentColor;
+  text-shadow: 0 0 0.5px currentcolor;
 }
 
 /* --- Input widths --- */
@@ -512,7 +512,7 @@ function openPreviewDialog() {
   width: 100%;
   min-width: 0;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--text-sm);
   text-align: center;
 }
 
@@ -549,7 +549,7 @@ function openPreviewDialog() {
   border: none;
   background: var(--bg-input);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--text-sm);
   text-align: center;
   outline: none;
   box-shadow: none;
@@ -567,7 +567,7 @@ function openPreviewDialog() {
   border-left: 1px solid var(--border-subtle);
   background: var(--bg-input);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   cursor: pointer;
   transition: all var(--duration-fast);
@@ -580,7 +580,7 @@ function openPreviewDialog() {
 }
 
 .skip-unit-btn .pi {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   opacity: 0.6;
 }
 
@@ -595,7 +595,7 @@ function openPreviewDialog() {
   border-radius: 999px;
   background: var(--primary-alpha-8);
   color: var(--primary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   cursor: pointer;
   transition: all var(--duration-fast);
@@ -618,7 +618,7 @@ function openPreviewDialog() {
 
 /* --- Responsive --- */
 
-@media (max-width: 900px) {
+@media (width <= 900px) {
   .settings-row {
     flex-direction: column;
     align-items: flex-start;

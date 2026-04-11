@@ -112,7 +112,7 @@ async function exportResult() {
 </template>
 
 <style scoped>
-@import './migrate-shared.css';
+@import url('./migrate-shared.css');
 
 /* 完成阶段 */
 .done-split { display: flex; flex: 1; min-height: 0; overflow: hidden; }
@@ -125,7 +125,7 @@ async function exportResult() {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md-lg);
 }
 
-.done-icon i { font-size: 48px; color: var(--success); }
+.done-icon i { font-size: var(--text-5xl); color: var(--success); }
 .done-title { font-size: var(--text-xl); font-weight: 700; color: var(--text-primary); margin: 0; }
 
 .done-stats { width: 100%; display: flex; flex-direction: column; gap: var(--space-sm); margin-top: var(--space-sm); }

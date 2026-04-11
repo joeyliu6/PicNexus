@@ -19,7 +19,7 @@ Tauri 2.x（Rust + Vue 3 / TypeScript / PrimeVue 4 + SQLite），详见 `docs/re
 | Config 序列化 | 在 `useConfig.ts` 内部序列化时必须深拷贝（避免 Vue 响应式代理被持久化），禁止直接 `JSON.stringify` 响应式对象 | `src/composables/useConfig.ts` |
 | 文件规模 | 单 `.vue` 文件不超过 500 行，超过必须拆分；新建前先查 `src/components/` 无重复 | — |
 | 文档同步 | 修改 composable/Rust command 的公开接口时，同步更新对应文档 | `docs/reference/api/` |
-| CSS 硬编码 | ❌ 颜色/间距/圆角/字号/动效/z-index 全部禁止硬编码，必须用 CSS 变量 | `docs/design/` |
+| CSS 硬编码 | ❌ 颜色/间距/圆角/字号/动效/z-index 全部禁止硬编码，必须用 CSS 变量 | [tokens.md](docs/design/tokens.md)（[字号](docs/design/tokens.md#typography-scale) · [间距](docs/design/tokens.md#spacing-scale) · [圆角](docs/design/tokens.md#radius-scale) · [z-index](docs/design/tokens.md#z-index-scale)） |
 
 ## 高风险文件
 

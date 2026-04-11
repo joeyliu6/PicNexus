@@ -112,7 +112,7 @@ const {
 </template>
 
 <style scoped>
-@import './migrate-shared.css';
+@import url('./migrate-shared.css');
 
 /* 进度条 */
 .progress-bar { width: 100%; flex-shrink: 0; padding: var(--space-xs) 0; }
@@ -128,12 +128,13 @@ const {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md);
 }
 
-.progress-count-main { font-size: 36px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1; }
+.progress-count-main { font-size: var(--text-4xl); font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1; }
 .progress-count-sep { color: var(--text-tertiary); font-weight: 400; }
 .progress-pct { font-size: var(--text-lg); font-weight: 600; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
 .progress-ring { width: 88px; height: 88px; }
 .progress-ring-bg { fill: none; stroke: var(--bg-input); stroke-width: 5; }
+
 .progress-ring-fill {
   fill: none; stroke: var(--primary); stroke-width: 5; stroke-linecap: round;
   stroke-dasharray: 264; transform: rotate(-90deg); transform-origin: 50% 50%;

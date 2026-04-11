@@ -23,11 +23,14 @@ export default {
         '/^unset$/',
         '/^0$/',
       ],
-      // z-index 必须用变量或 auto
+      // z-index 分两类：
+      // 1) 全局层级必须用 var(--z-*)
+      // 2) 同一堆叠上下文内的相对整数 (0-20) 允许硬编码，属于 stylelint 例外
+      //    例外依据见 docs/design/tokens.md#z-index-scale
       'z-index': [
         '/^var\\(--.+\\)$/',
         '/^auto$/',
-        '/^0$/',
+        '/^(0|[1-9]|1[0-9]|20)$/',
       ],
     },
     // stylelint-config-standard-vue 默认已禁止 color-no-hex 之类，无需额外配置

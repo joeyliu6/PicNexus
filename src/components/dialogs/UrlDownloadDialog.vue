@@ -108,7 +108,7 @@ function handleKeydown(e: KeyboardEvent) {
 
 .section-label {
   display: block;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -121,7 +121,7 @@ function handleKeydown(e: KeyboardEvent) {
   border: none;
   padding: 12px 16px;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   resize: vertical;
   line-height: 1.6;
@@ -147,12 +147,12 @@ function handleKeydown(e: KeyboardEvent) {
   align-items: flex-start;
   gap: 5px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--text-xs);
   line-height: 1.6;
 }
 
 .dialog-note i {
-  font-size: 12px;
+  font-size: var(--text-xs);
   flex-shrink: 0;
   margin-top: 2px;
   opacity: 0.7;
@@ -163,7 +163,7 @@ function handleKeydown(e: KeyboardEvent) {
   flex: 1;
   border-radius: 8px !important;
   padding: 12px 20px !important;
-  font-size: 14px !important;
+  font-size: var(--text-base) !important;
   font-weight: 600 !important;
   background: var(--bg-button-secondary) !important;
   border: none !important;
@@ -178,7 +178,7 @@ function handleKeydown(e: KeyboardEvent) {
   flex: 1;
   border-radius: 8px !important;
   padding: 12px 20px !important;
-  font-size: 14px !important;
+  font-size: var(--text-base) !important;
   font-weight: 600 !important;
 }
 </style>

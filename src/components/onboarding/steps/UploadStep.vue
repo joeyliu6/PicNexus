@@ -30,14 +30,14 @@
 }
 
 .step-title {
-  font-size: 22px;
+  font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-main);
   margin: 0 0 12px;
 }
 
 .step-desc {
-  font-size: 14px;
+  font-size: var(--text-base);
   color: var(--text-muted);
   line-height: 1.6;
   margin: 0 0 24px;
@@ -62,12 +62,12 @@
 }
 
 .method-card .pi {
-  font-size: 22px;
+  font-size: var(--text-2xl);
   color: var(--primary);
 }
 
 .method-label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-main);
 }

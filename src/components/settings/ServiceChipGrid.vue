@@ -136,6 +136,7 @@ const serviceList = computed(() => props.services);
 .toggle-chip.verified {
   background: var(--success-alpha-8);
 }
+
 .toggle-chip.verified:hover {
   background: var(--success-alpha-15);
 }
@@ -146,13 +147,16 @@ const serviceList = computed(() => props.services);
   background: transparent;
   border-color: var(--hover-overlay-subtle);
 }
+
 .toggle-chip.unconfigured .toggle-label {
   opacity: 0.4;
 }
+
 .toggle-chip.unconfigured:hover {
   background: var(--primary-alpha-8);
   border-color: var(--hover-overlay);
 }
+
 .toggle-chip.unconfigured:hover .toggle-label {
   opacity: 0.7;
 }
@@ -161,6 +165,7 @@ const serviceList = computed(() => props.services);
 .toggle-chip.pending {
   background: var(--pending-alpha-8);
 }
+
 .toggle-chip.pending:hover {
   background: var(--pending-alpha-15);
 }
@@ -169,6 +174,7 @@ const serviceList = computed(() => props.services);
 .toggle-chip.error {
   background: var(--error-alpha-8);
 }
+
 .toggle-chip.error:hover {
   background: var(--error-alpha-15);
 }
@@ -191,7 +197,7 @@ const serviceList = computed(() => props.services);
 }
 
 .toggle-indicator .pi {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--text-on-primary);
   display: none;
 }
@@ -235,6 +241,7 @@ const serviceList = computed(() => props.services);
   flex-shrink: 0;
   transition: all var(--duration-normal);
 }
+
 .toggle-chip.unconfigured:hover .toggle-empty-circle {
   opacity: 0.5;
   border-color: var(--primary);

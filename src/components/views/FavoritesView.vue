@@ -267,8 +267,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 
 .favorites-scroll {
   height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden auto;
   padding: 20px 24px;
   scrollbar-width: none;           /* Firefox */
   -ms-overflow-style: none;        /* IE/Edge */
@@ -316,7 +315,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 }
 
 .photo-error i {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
 }
 
 .photo-img {
@@ -387,7 +386,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 }
 
 .checkbox.checked i {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: white;
   font-weight: bold;
 }
@@ -420,7 +419,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 
 .favorite-btn.favorited {
   color: var(--warning);
-  filter: drop-shadow(0 1px 3px rgba(234, 179, 8, 0.4));
+  filter: drop-shadow(0 1px 3px rgb(234 179 8 / 40%));
 }
 
 .favorite-btn:hover {
@@ -428,7 +427,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 }
 
 .favorite-btn.favorited:hover {
-  filter: drop-shadow(0 1px 4px rgba(234, 179, 8, 0.6));
+  filter: drop-shadow(0 1px 4px rgb(234 179 8 / 60%));
 }
 
 /* === 加载更多指示器 === */
@@ -439,11 +438,11 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   gap: 8px;
   padding: 24px 0;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .load-more-sentinel i {
-  font-size: 14px;
+  font-size: var(--text-base);
   color: var(--primary);
 }
 
@@ -530,6 +529,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
     transform: scale(0.5) rotate(-15deg);
     opacity: 0;
   }
+
   100% {
     transform: scale(1) rotate(0deg);
     opacity: 0.35;
@@ -555,7 +555,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 }
 
 /* === 响应式 === */
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .favorites-scroll {
     padding: 16px;
   }
@@ -565,7 +565,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   }
 }
 
-@media (max-width: 480px) {
+@media (width <= 480px) {
   .favorites-grid {
     grid-template-columns: repeat(3, 1fr);
     gap: 2px;

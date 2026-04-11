@@ -295,7 +295,7 @@ watch(
 
       <!-- Empty State -->
       <div v-else-if="groups.length === 0" class="empty-state">
-        <i :class="favoritesOnly ? 'pi pi-star' : 'pi pi-image'" style="font-size: 3rem; opacity: 0.5"></i>
+        <i :class="favoritesOnly ? 'pi pi-star' : 'pi pi-image'" style="font-size: var(--text-5xl); opacity: 0.5"></i>
         <p>{{ favoritesOnly ? '暂无收藏' : '暂无图片' }}</p>
         <p v-if="favoritesOnly" class="empty-state-hint">点击图片上的星形图标即可收藏</p>
       </div>
@@ -393,8 +393,7 @@ watch(
 .timeline-scroll-area {
   flex: 1;
   height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden auto;
   padding: 0 70px 0 20px;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -440,7 +439,7 @@ watch(
 }
 
 .empty-state-hint {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   margin-top: 4px;
 }
@@ -457,26 +456,26 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  z-index: 100;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 20%);
+  z-index: var(--z-dropdown);
 }
 
 .layout-indicator i {
-  font-size: 18px;
+  font-size: var(--text-lg-xl);
   color: var(--primary);
 }
 
 /* ========== 响应式适配 ========== */
 
 /* 平板设备 (≤1024px) */
-@media (max-width: 1024px) {
+@media (width <= 1024px) {
   .timeline-scroll-area {
     padding: 0 50px 0 16px;
   }
 }
 
 /* 手机设备 (≤768px) */
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .timeline-scroll-area {
     padding: 0 40px 0 12px;
   }
@@ -487,7 +486,7 @@ watch(
 }
 
 /* 小屏手机 (≤480px) */
-@media (max-width: 480px) {
+@media (width <= 480px) {
   .timeline-scroll-area {
     padding: 0 8px;
   }

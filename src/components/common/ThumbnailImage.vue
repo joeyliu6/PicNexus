@@ -96,7 +96,7 @@ watch(() => props.srcs, () => {
   height: 100%;
   background: linear-gradient(90deg, 
     var(--bg-input, #f3f4f6) 25%, 
-    var(--bg-card, #ffffff) 50%, 
+    var(--bg-card, #fff) 50%, 
     var(--bg-input, #f3f4f6) 75%
   );
   background-size: 200% 100%;
@@ -114,7 +114,7 @@ watch(() => props.srcs, () => {
 }
 
 .placeholder-icon {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   opacity: 0.5;
 }
 </style>

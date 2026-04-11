@@ -348,7 +348,7 @@ defineExpose({
 .mr-group-header:hover { background: var(--hover-overlay-subtle); }
 
 .mr-group-chev { font-size: var(--text-2xs-xs); color: var(--text-tertiary); flex-shrink: 0; transition: transform var(--duration-fast); }
-.mr-group-file-icon { font-size: 14px; color: var(--primary); flex-shrink: 0; }
+.mr-group-file-icon { font-size: var(--text-base); color: var(--primary); flex-shrink: 0; }
 
 .mr-group-info { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
 
@@ -381,7 +381,7 @@ defineExpose({
 }
 .mr-group-header:hover .mr-group-icon-btn { opacity: 1; }
 .mr-group-icon-btn:hover { background: var(--hover-overlay-subtle); color: var(--primary); }
-.mr-group-icon-btn > .pi { font-size: 13px; }
+.mr-group-icon-btn > .pi { font-size: var(--text-sm); }
 
 .mr-group-body { display: flex; flex-direction: column; background: var(--bg-card); }
 
@@ -398,7 +398,7 @@ defineExpose({
 .mr-status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 
 .mr-status-label {
-  font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums;
+  font-size: var(--text-2xs); font-weight: 600; font-variant-numeric: tabular-nums;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   padding: 1px var(--space-xs-sm); border-radius: var(--radius-xs); min-width: 36px; text-align: center;
   white-space: nowrap; cursor: default;
@@ -454,7 +454,7 @@ defineExpose({
   transition: background var(--duration-fast), color var(--duration-fast); font-family: inherit;
 }
 .mr-row-icon-btn:hover { background: var(--hover-overlay); color: var(--primary); }
-.mr-row-icon-btn > .pi { font-size: 12px; }
+.mr-row-icon-btn > .pi { font-size: var(--text-xs); }
 
 .mr-load-more {
   display: flex; align-items: center; justify-content: center;
@@ -469,7 +469,7 @@ defineExpose({
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: var(--space-sm); padding: var(--space-2xl); color: var(--text-tertiary); font-size: var(--text-xs);
 }
-.mr-empty-filter > .pi { font-size: 24px; }
+.mr-empty-filter > .pi { font-size: var(--text-2xl); }
 
 /* 动画 */
 .slide-up-enter-active { transition: opacity var(--duration-medium) ease, transform var(--duration-medium) ease; }

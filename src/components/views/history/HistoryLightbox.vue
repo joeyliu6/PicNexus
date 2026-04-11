@@ -200,7 +200,7 @@ const { closeLightbox, navigatePrev, navigateNext, handleWheel } = useLightboxKe
 .lightbox-bg-dim {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgb(0 0 0 / 25%);
 }
 
 .lightbox-close {
@@ -214,7 +214,7 @@ const { closeLightbox, navigatePrev, navigateNext, handleWheel } = useLightboxKe
   border: none;
   background: var(--hover-overlay);
   color: var(--text-muted);
-  font-size: 16px;
+  font-size: var(--text-lg);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -222,7 +222,7 @@ const { closeLightbox, navigatePrev, navigateNext, handleWheel } = useLightboxKe
   opacity: 0.15;
   transition: opacity var(--duration-normal) ease, background var(--duration-normal) ease, color var(--duration-normal) ease;
   backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 
 .lightbox-close:hover {
@@ -241,14 +241,14 @@ const { closeLightbox, navigatePrev, navigateNext, handleWheel } = useLightboxKe
   border: none;
   background: var(--hover-overlay);
   color: var(--text-muted);
-  font-size: 18px;
+  font-size: var(--text-lg-xl);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all var(--duration-normal) ease;
   backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 
 .lightbox-nav-prev { left: 20px; }
@@ -276,7 +276,7 @@ const { closeLightbox, navigatePrev, navigateNext, handleWheel } = useLightboxKe
   max-height: calc(100vh - 64px - 48px);
   object-fit: contain;
   border-radius: 8px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 40px rgb(0 0 0 / 50%);
   opacity: 0;
   transition: opacity var(--duration-medium) ease, transform var(--duration-micro) ease-out;
   user-select: none;
@@ -306,13 +306,14 @@ const { closeLightbox, navigatePrev, navigateNext, handleWheel } = useLightboxKe
   justify-content: center;
   background: var(--hover-overlay-subtle);
   backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--border-subtle);
 }
 
 .lightbox-breathe-icon {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   color: var(--text-muted);
+
   /* TODO: 3s 无对应动效变量（最大为 --duration-breathe: 2000ms），暂保留硬编码 */
   animation: lightbox-breathe 3s ease-in-out infinite;
 }
@@ -321,12 +322,13 @@ const { closeLightbox, navigatePrev, navigateNext, handleWheel } = useLightboxKe
   0%, 100% {
     opacity: 0.3;
     transform: scale(0.98);
-    filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0));
+    filter: drop-shadow(0 0 0 rgb(255 255 255 / 0%));
   }
+
   50% {
     opacity: 0.8;
     transform: scale(1);
-    filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.4));
+    filter: drop-shadow(0 0 15px rgb(255 255 255 / 40%));
   }
 }
 
@@ -358,12 +360,12 @@ const { closeLightbox, navigatePrev, navigateNext, handleWheel } = useLightboxKe
 }
 
 .lightbox-error i {
-  font-size: 3rem;
+  font-size: var(--text-5xl);
   color: var(--error);
 }
 
 .lightbox-error span {
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 
 /* 浅色模式：灯箱始终保持暗色风格，重新绑定为暗色变量值（来源：style.css :root） */
@@ -371,11 +373,11 @@ const { closeLightbox, navigatePrev, navigateNext, handleWheel } = useLightboxKe
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
   --text-tertiary: #64748b;
-  --hover-overlay: rgba(255, 255, 255, 0.08);
-  --hover-overlay-subtle: rgba(255, 255, 255, 0.04);
+  --hover-overlay: rgb(255 255 255 / 8%);
+  --hover-overlay-subtle: rgb(255 255 255 / 4%);
   --border-subtle: #334155;
   --error: #ef4444;
-  --error-soft: rgba(239, 68, 68, 0.15);
+  --error-soft: rgb(239 68 68 / 15%);
 }
 
 .lightbox-fade-enter-active {

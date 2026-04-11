@@ -167,7 +167,9 @@
   --text-xl: 20px; /* 页面标题 */
   --text-2xl: 24px; /* 大标题 */
   --text-3xl: 28px; /* 特大标题 */
-  
+  --text-4xl: 36px; /* 空状态插画/大号数字 */
+  --text-5xl: 48px; /* 超大空状态/引导页主标题 */
+
   /* 4. 行高：让文字”呼吸” */
   --leading-tight: 1.2;
   --leading-normal: 1.5;
@@ -699,7 +701,8 @@ button:focus-visible {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 3001; /* Higher than lightbox modal to prevent occlusion */
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 特殊 overlay 必须压过灯箱 --z-lightbox(9999)，此为极少数全屏紧急层 */
+  z-index: 3001;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -723,6 +726,7 @@ button:focus-visible {
   width: 90%;
   max-width: 400px;
   box-shadow: var(--shadow-float);
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- .modal-content 需处于全屏 overlay 之上但低于 lightbox，标准 --z-modal(1100) 不够 */
   z-index: 2001;
   border: 1px solid var(--border-subtle);
   display: flex;
@@ -748,6 +752,7 @@ button:focus-visible {
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- em 是相对父级字号的语义单位，与 --text-* 的绝对 px 语义不同，故意保留 */
   font-size: 1.2em;
   padding: var(--space-xs);
   line-height: 1;
@@ -1358,7 +1363,7 @@ button:focus-visible {
 }
 
 .empty-state__icon {
-  font-size: 36px;
+  font-size: var(--text-4xl);
   color: var(--text-tertiary);
   opacity: 0.4;
   margin-bottom: var(--space-xs);
@@ -1487,7 +1492,7 @@ button:focus-visible {
   border: 1px solid var(--border-subtle);
   border-radius: var(--p-border-radius);
   color: var(--text-primary);
-  font-size: 0.95rem;
+  font-size: var(--text-md);
   padding: var(--space-sm-md) var(--space-md-lg);
   transition: all var(--duration-normal) ease;
   box-shadow: none;
@@ -1606,7 +1611,7 @@ button:focus-visible {
 :deep(.p-tag) {
   border-radius: var(--radius-sm);
   padding: var(--space-xs) var(--space-sm-md);
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 
@@ -1897,5 +1902,6 @@ button:focus-visible {
 /* Tooltip 宽度扩展，避免短文本被强制换行 */
 .p-tooltip {
   max-width: 26rem;
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- PrimeVue tooltip 默认层级需压过 --z-titlebar(10001) 的部分场景外其余全部，此处 !important 覆盖库内置值 */
   z-index: 10000 !important;
 }

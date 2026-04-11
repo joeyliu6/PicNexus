@@ -205,7 +205,7 @@ const statusDotClass = computed(() => {
 </template>
 
 <style scoped>
-@import '../../styles/settings-shared.css';
+@import url('../../styles/settings-shared.css');
 
 .hosting-card {
   background: var(--bg-card);
@@ -255,7 +255,7 @@ const statusDotClass = computed(() => {
 
 .builtin-status.available {
   border-color: var(--success);
-  background: rgba(34, 197, 94, 0.05);
+  background: rgb(34 197 94 / 5%);
 }
 
 .status-icon {
@@ -263,7 +263,7 @@ const statusDotClass = computed(() => {
 }
 
 .status-icon i {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .builtin-status.available .status-icon i {
@@ -275,7 +275,7 @@ const statusDotClass = computed(() => {
 }
 
 .status-text {
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   font-weight: 500;
   color: var(--text-primary);
 }
@@ -292,7 +292,7 @@ const statusDotClass = computed(() => {
   gap: 8px;
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .content-inner {
     padding: 14px;
   }

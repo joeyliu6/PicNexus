@@ -107,7 +107,7 @@ function selectService(svc: ServerServiceType | null) {
 </template>
 
 <style scoped>
-@import '../../styles/settings-shared.css';
+@import url('../../styles/settings-shared.css');
 
 .service-selector {
   position: relative;
@@ -126,7 +126,7 @@ function selectService(svc: ServerServiceType | null) {
   background: var(--bg-input);
   color: var(--text-main);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--text-sm);
   transition: background var(--duration-fast) ease, border-color var(--duration-fast) ease;
 }
 
@@ -143,7 +143,7 @@ function selectService(svc: ServerServiceType | null) {
 }
 
 .service-trigger-chevron {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
 }
 
@@ -182,7 +182,7 @@ function selectService(svc: ServerServiceType | null) {
   background: transparent;
   color: var(--text-main);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--text-sm);
   text-align: left;
   transition: background var(--duration-micro);
 }
@@ -215,20 +215,20 @@ function selectService(svc: ServerServiceType | null) {
 }
 
 .service-empty-icon {
-  font-size: 24px;
+  font-size: var(--text-2xl);
   color: var(--text-muted);
   opacity: 0.5;
   margin-bottom: 4px;
 }
 
 .service-empty-title {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .service-empty-desc {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   line-height: 1.5;
   max-width: 200px;
@@ -266,7 +266,7 @@ function selectService(svc: ServerServiceType | null) {
   flex-shrink: 0;
 }
 
-@media (max-width: 760px) {
+@media (width <= 760px) {
   .service-selector {
     width: 100%;
   }

@@ -176,18 +176,18 @@ function handleCopy(format: LinkFormat): void {
   left: 50%;
   transform: translateX(-50%);
   z-index: var(--z-overlay);
-  background: rgba(26, 26, 30, 0.9);
+  background: rgb(26 26 30 / 90%);
   backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   border: 1px solid var(--border-subtle);
   border-radius: 20px;
-  box-shadow: var(--shadow-float), 0 -1px 0 rgba(255, 255, 255, 0.05) inset;
+  box-shadow: var(--shadow-float), 0 -1px 0 rgb(255 255 255 / 5%) inset;
   padding: 8px 16px;
 }
 
 :root.light-theme .floating-action-bar {
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: var(--shadow-float), 0 1px 0 rgba(0, 0, 0, 0.03) inset;
+  background: rgb(255 255 255 / 95%);
+  box-shadow: var(--shadow-float), 0 1px 0 rgb(0 0 0 / 3%) inset;
 }
 
 .fab-content {
@@ -200,7 +200,7 @@ function handleCopy(format: LinkFormat): void {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--primary);
   padding: 6px 12px;
@@ -210,7 +210,7 @@ function handleCopy(format: LinkFormat): void {
 }
 
 .fab-count i {
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 
 .fab-divider {
@@ -221,7 +221,7 @@ function handleCopy(format: LinkFormat): void {
 }
 
 .fab-btn {
-  font-size: 13px !important;
+  font-size: var(--text-sm) !important;
   padding: 6px 12px !important;
   border-radius: 8px !important;
 }
@@ -327,7 +327,7 @@ function handleCopy(format: LinkFormat): void {
   border: none;
   background: transparent;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   border-radius: 8px;
   cursor: pointer;
   transition: all var(--duration-fast) ease;
@@ -340,7 +340,7 @@ function handleCopy(format: LinkFormat): void {
 }
 
 .copy-menu-item i {
-  font-size: 14px;
+  font-size: var(--text-base);
   color: var(--text-secondary);
   width: 16px;
   text-align: center;
@@ -363,7 +363,7 @@ function handleCopy(format: LinkFormat): void {
 }
 
 /* 响应式：窄屏幕隐藏按钮文字 */
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .fab-btn :deep(.p-button-label) {
     display: none;
   }

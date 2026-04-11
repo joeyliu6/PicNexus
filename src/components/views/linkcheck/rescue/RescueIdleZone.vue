@@ -107,6 +107,7 @@ onDeactivated(() => { isViewActive.value = false; });
 }
 
 .idle-zone.dragging .idle-icon-wrap { transform: translateY(-4px) scale(1.1); }
+/* stylelint-disable-next-line declaration-property-value-allowed-list -- 空闲区域大图标，字号介于 --text-3xl(28) 与 --text-4xl(36) 之间，属无 token 特例 */
 .idle-icon-wrap i { font-size: 32px; }
 
 .idle-feature-desc {

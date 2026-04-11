@@ -134,6 +134,122 @@ transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
 ---
 
+## Typography Scale
+
+字号统一走变量体系，**禁止 `font-size` 硬编码**。所有档位定义在 [src/style.css](../../src/style.css) 的 `:root` 里。
+
+| 变量 | 值 | 适用场景 |
+|------|-----|---------|
+| `--text-2xs` | 10px | 极小标注（角标、图标配文） |
+| `--text-2xs-xs` | 11px | 辅助说明、极小标签 |
+| `--text-xs` | 12px | 辅助文字、L3 行内描述（`.toggle-row-desc`） |
+| `--text-sm` | 13px | 次要内容、L2 区块说明（`.helper-text`）、L4 提示卡片 |
+| `--text-base` | 14px | 正文默认、L1 页面描述、标题行（`.toggle-row-label`） |
+| `--text-md` | 15px | 列表标题 |
+| `--text-lg` | 16px | 小标题 |
+| `--text-lg-xl` | 18px | 对话框标题 |
+| `--text-xl` | 20px | 页面标题 |
+| `--text-2xl` | 24px | 大标题、设置页 `.section-header h2` |
+| `--text-3xl` | 28px | 特大标题 |
+| `--text-4xl` | 36px | 空状态插画、大号数字展示 |
+| `--text-5xl` | 48px | 超大空状态、引导页主标题 |
+
+### 字重与行高
+
+| 变量 | 值 | 场景 |
+|------|-----|------|
+| `--weight-regular` | 400 | 正文 |
+| `--weight-medium` | 500 | 按钮、导航、行标题 |
+| `--weight-bold` | 600 | 标题、强调数据 |
+| `--leading-tight` | 1.2 | 标题、按钮 |
+| `--leading-normal` | 1.5 | 正文默认 |
+| `--leading-relaxed` | 1.6 | 段落长文 |
+
+### 何时破例
+
+- `line-height`、`letter-spacing` **不在本规则范围**，可直接写具体值
+- `box-shadow`、`transform` 内嵌的 px 数字不算 `font-size`，允许硬编码
+- `clamp()` / `calc()` 内部的字号值允许硬编码，外层用变量
+
+---
+
+## Spacing Scale
+
+间距统一走变量，使用 4px 网格系统。**禁止 `margin` / `padding` / `gap` 直接写像素值**。
+
+| 变量 | 值 | 典型用途 |
+|------|-----|---------|
+| `--space-2xs` | 2px | 极微小间距（图标与文字） |
+| `--space-xs` | 4px | 小芯片内边距 |
+| `--space-xs-sm` | 6px | xs 与 sm 之间过渡 |
+| `--space-sm` | 8px | 基础内边距、小卡片 |
+| `--space-sm-md` | 10px | sm 与 md 之间过渡 |
+| `--space-md` | 12px | 卡片内边距、默认 gap |
+| `--space-md-lg` | 14px | md 与 lg 之间过渡 |
+| `--space-lg` | 16px | 区块内边距 |
+| `--space-lg-xl` | 20px | lg 与 xl 之间过渡 |
+| `--space-xl` | 24px | 大卡片、区块间距 |
+| `--space-2xl` | 32px | 大区块间距 |
+| `--space-3xl` | 40px | 页面级间距 |
+| `--space-4xl` | 48px | 超大区块 |
+| `--space-5xl` | 60px | 空状态留白 |
+
+### 何时破例
+
+- `width` / `height` / `min-*` / `max-*` **不受此规则约束**，可直接写像素值
+- `border: 1px solid` 的 1px 允许硬编码
+- `transform: translateX(10px)` 允许硬编码
+- 绝对定位 `top` / `left` / `right` / `bottom` 的微调值允许硬编码（但建议尽量用变量）
+
+---
+
+## Radius Scale
+
+圆角统一走变量，**禁止 `border-radius` 硬编码**。
+
+| 变量 | 值 | 场景 |
+|------|-----|------|
+| `--radius-xs` | 2px | 极小元素 |
+| `--radius-xs-sm` | 3px | 小芯片 |
+| `--radius-sm` | 4px | 输入框、小按钮 |
+| `--radius-sm-md` | 6px | 标签、pill、小型芯片 |
+| `--radius-md` | 8px | 卡片、面板（容器默认） |
+| `--radius-lg` | 12px | 大卡片 |
+| `--radius-xl` | 16px | 对话框 |
+| `--radius-2xl` | 20px | 大对话框 |
+| `--radius-3xl` | 24px | 超大卡片 |
+| `--radius-full` | 9999px | 圆形头像、胶囊按钮 |
+
+**约定**：设置页容器圆角统一 `--radius-md`（8px），小型芯片统一 `--radius-sm-md`（6px），详见 [settings-layout.md](settings-layout.md)。
+
+---
+
+## Z-index Scale
+
+Z-index 分两类管理：**全局层级必须用变量**；**同一堆叠上下文内的相对整数**（≤ 20）作为 stylelint 例外，可直接硬编码。
+
+### 全局层级（必须用变量）
+
+| 变量 | 值 | 用途 |
+|------|-----|------|
+| `--z-base` | 1 | 基础层 |
+| `--z-dropdown` | 100 | 下拉菜单、select |
+| `--z-sticky` | 200 | 吸顶导航、粘性表头 |
+| `--z-overlay` | 1000 | 半透明遮罩 |
+| `--z-modal` | 1100 | 对话框、弹窗 |
+| `--z-toast` | 1200 | Toast 通知 |
+| `--z-tooltip` | 1300 | Tooltip |
+| `--z-lightbox` | 9999 | 图片灯箱 |
+| `--z-titlebar` | 10001 | 自定义窗口标题栏（最高） |
+
+### 局部堆叠（允许硬编码）
+
+当元素处于**同一个父级堆叠上下文**内（比如 card 里 `image` 和 `badge` 的相对排序），使用 `0 | 1 | 2 | 3 | 5 | 10 | 20` 这样的小整数是合理的——用变量反而过度抽象。stylelint 已放行 ≤ 20 的整数值。
+
+**判断原则**：如果这个 `z-index` 影响范围**仅限当前父容器**，用小整数；如果它要**跨容器比较**（比如 dropdown 要压过 sidebar），必须用变量。
+
+---
+
 ## 维护策略
 
 ### 核心原则

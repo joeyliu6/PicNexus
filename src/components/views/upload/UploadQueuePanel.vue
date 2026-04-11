@@ -89,7 +89,7 @@ defineExpose({
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  padding: 19px 24px 24px 24px;
+  padding: 19px 24px 24px;
   flex: 1;
 }
 
@@ -105,18 +105,18 @@ defineExpose({
   align-items: center;
   gap: 10px;
   margin: 0;
-  font-size: 1.1rem;
+  font-size: var(--text-lg-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .queue-title i {
   color: var(--primary);
-  font-size: 1.3rem;
+  font-size: var(--text-xl);
 }
 
 .queue-count {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-muted);
   margin-left: 2px;
@@ -135,7 +135,7 @@ defineExpose({
   padding: 6px 12px;
   border: none;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: all var(--duration-normal) ease;
@@ -143,7 +143,7 @@ defineExpose({
 }
 
 .queue-action-btn i {
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 
 /* 重试按钮 */

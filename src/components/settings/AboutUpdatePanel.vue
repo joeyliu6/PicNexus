@@ -333,7 +333,7 @@ async function openLogDir() {
 </template>
 
 <style scoped>
-@import '../../styles/settings-shared.css';
+@import url('../../styles/settings-shared.css');
 
 /* 应用信息卡片 */
 .app-info-card {
@@ -367,13 +367,13 @@ async function openLogDir() {
 }
 
 .app-name {
-  font-size: 18px;
+  font-size: var(--text-lg-xl);
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .app-tagline {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
@@ -381,7 +381,7 @@ async function openLogDir() {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
+  font-size: var(--text-base);
   color: var(--text-secondary);
   font-family: var(--font-mono);
 }
@@ -407,11 +407,11 @@ async function openLogDir() {
 }
 
 .copy-version-btn i {
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .app-keywords {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   margin-top: 8px;
   line-height: 1.6;
@@ -452,7 +452,7 @@ async function openLogDir() {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 14px;
+  font-size: var(--text-base);
   color: var(--text-primary);
 }
 
@@ -463,7 +463,7 @@ async function openLogDir() {
 }
 
 .update-icon {
-  font-size: 18px;
+  font-size: var(--text-lg-xl);
   color: var(--text-muted);
   flex-shrink: 0;
 }
@@ -496,7 +496,7 @@ async function openLogDir() {
 }
 
 .last-check {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -510,14 +510,14 @@ async function openLogDir() {
 }
 
 .update-notes-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-muted);
   margin-bottom: 6px;
 }
 
 .update-notes-content {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   white-space: pre-wrap;
   line-height: 1.5;
@@ -548,13 +548,13 @@ async function openLogDir() {
 }
 
 .toggle-card .toggle-row-label {
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .toggle-card .toggle-row-desc {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -595,7 +595,7 @@ async function openLogDir() {
 }
 
 .link-card-icon i {
-  font-size: 16px;
+  font-size: var(--text-lg);
   color: var(--primary);
 }
 
@@ -610,13 +610,13 @@ async function openLogDir() {
 }
 
 .link-card-title {
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .link-card-desc {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -652,12 +652,12 @@ async function openLogDir() {
 }
 
 .wechat-header-icon-wrap i {
-  font-size: 14px;
+  font-size: var(--text-base);
   color: var(--primary);
 }
 
 .wechat-header-title {
-  font-size: 15px;
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -667,7 +667,7 @@ async function openLogDir() {
   flex-direction: column;
   align-items: center;
   gap: 18px;
-  padding: 8px 0 8px;
+  padding: 8px 0;
 }
 
 .wechat-qr-frame {
@@ -694,16 +694,16 @@ async function openLogDir() {
   border-radius: 20px;
   background: var(--wechat-green);
   color: var(--wechat-green-text);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 
 .wechat-badge i {
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .wechat-dialog-desc {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   text-align: center;
   line-height: 1.7;

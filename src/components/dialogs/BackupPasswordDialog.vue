@@ -292,13 +292,13 @@ defineExpose({
   border-radius: 8px;
   background: var(--primary-alpha-15);
   color: var(--primary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   line-height: 1.5;
 }
 
 .dialog-description i {
-  font-size: 20px;
+  font-size: var(--text-xl);
   flex-shrink: 0;
   color: var(--primary);
   margin-top: 1px;
@@ -314,12 +314,12 @@ defineExpose({
   align-items: flex-start;
   gap: 5px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--text-xs);
   line-height: 1.6;
 }
 
 .dialog-note-warn i {
-  font-size: 12px;
+  font-size: var(--text-xs);
   flex-shrink: 0;
   margin-top: 2px;
   opacity: 0.7;
@@ -332,7 +332,7 @@ defineExpose({
 }
 
 .field label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
 }
@@ -365,13 +365,13 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   transition: color var(--duration-fast);
 }
 
 .strength-check i {
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .strength-check.passed {
@@ -383,14 +383,14 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   opacity: 0.6;
   transition: color var(--duration-fast), opacity var(--duration-fast);
 }
 
 .strength-suggestion i {
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .strength-suggestion.passed {
@@ -406,13 +406,13 @@ defineExpose({
   border-radius: 8px;
   background: var(--error-alpha-8);
   border: 1px solid var(--error-alpha-15);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--error);
 }
 
 .error-box i {
-  font-size: 14px;
+  font-size: var(--text-base);
   flex-shrink: 0;
 }
 
@@ -420,7 +420,7 @@ defineExpose({
   flex: 1;
   border-radius: 8px !important;
   padding: 12px 20px !important;
-  font-size: 14px !important;
+  font-size: var(--text-base) !important;
   font-weight: 600 !important;
   background: var(--bg-button-secondary) !important;
   border: none !important;
@@ -435,7 +435,7 @@ defineExpose({
   flex: 1;
   border-radius: 8px !important;
   padding: 12px 20px !important;
-  font-size: 14px !important;
+  font-size: var(--text-base) !important;
   font-weight: 600 !important;
 }
 

@@ -212,36 +212,43 @@ onBeforeUnmount(() => {
 .cpd-overlay {
   position: fixed;
   inset: 0;
-  z-index: 9998;
+  z-index: var(--z-lightbox);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgb(0 0 0 / 60%);
   backdrop-filter: blur(8px);
 }
 
 .cpd-enter-active {
   transition: opacity var(--duration-normal) ease;
 }
+
 .cpd-enter-active .cpd-dialog {
   transition: transform var(--duration-normal) var(--ease-overshoot), opacity var(--duration-normal) ease;
 }
+
 .cpd-leave-active {
   transition: opacity var(--duration-fast) ease;
 }
+
 .cpd-leave-active .cpd-dialog {
   transition: transform var(--duration-fast) ease, opacity var(--duration-fast) ease;
 }
+
 .cpd-enter-from {
   opacity: 0;
 }
+
 .cpd-enter-from .cpd-dialog {
   opacity: 0;
   transform: scale(0.92);
 }
+
 .cpd-leave-to {
   opacity: 0;
 }
+
 .cpd-leave-to .cpd-dialog {
   opacity: 0;
   transform: scale(0.95);
@@ -278,14 +285,14 @@ onBeforeUnmount(() => {
 }
 
 .cpd-title {
-  font-size: 18px;
+  font-size: var(--text-lg-xl);
   font-weight: 700;
   color: var(--text-primary);
   flex-shrink: 0;
 }
 
 .cpd-filename {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   max-width: 280px;
   overflow: hidden;
@@ -324,7 +331,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 24px 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   flex-wrap: wrap;
   flex-shrink: 0;
 }
@@ -337,7 +344,7 @@ onBeforeUnmount(() => {
 
 .cpd-size-badge {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   padding: 3px 10px;
   border-radius: 6px;
@@ -354,12 +361,12 @@ onBeforeUnmount(() => {
 }
 
 .cpd-arrow {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
 }
 
 .cpd-ratio-badge {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   padding: 3px 10px;
   border-radius: 6px;
@@ -377,7 +384,7 @@ onBeforeUnmount(() => {
 
 .cpd-dims {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 /* --- 主体 --- */
@@ -389,6 +396,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   position: relative;
   background: var(--bg-input);
+
   /* 棋盘格背景（透明图可见） */
   background-image:
     linear-gradient(45deg, var(--hover-overlay-subtle) 25%, transparent 25%),
@@ -396,7 +404,7 @@ onBeforeUnmount(() => {
     linear-gradient(45deg, transparent 75%, var(--hover-overlay-subtle) 75%),
     linear-gradient(-45deg, transparent 75%, var(--hover-overlay-subtle) 75%);
   background-size: 16px 16px;
-  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
 
 /* --- 状态页 --- */
@@ -422,7 +430,7 @@ onBeforeUnmount(() => {
 }
 
 .cpd-loading-ring .pi {
-  font-size: 24px;
+  font-size: var(--text-2xl);
   color: var(--primary);
 }
 
@@ -437,12 +445,12 @@ onBeforeUnmount(() => {
 }
 
 .cpd-error-icon .pi {
-  font-size: 24px;
+  font-size: var(--text-2xl);
   color: var(--error);
 }
 
 .cpd-state-text {
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -452,7 +460,7 @@ onBeforeUnmount(() => {
 }
 
 .cpd-state-hint {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   max-width: 400px;
   text-align: center;
@@ -466,7 +474,7 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   background: var(--bg-card);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   cursor: pointer;
   transition: all var(--duration-fast);
   display: inline-flex;
@@ -529,7 +537,7 @@ onBeforeUnmount(() => {
   width: 2px;
   margin-left: -1px;
   background: var(--bg-card);
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 4px rgb(0 0 0 / 50%);
 }
 
 .cpd-slider-handle {
@@ -542,13 +550,13 @@ onBeforeUnmount(() => {
   margin-top: -18px;
   border-radius: 50%;
   background: var(--bg-card);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: auto;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: var(--text-base);
   transition: transform var(--duration-micro);
 }
 
@@ -563,10 +571,10 @@ onBeforeUnmount(() => {
   z-index: 3;
   padding: 4px 12px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: white;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgb(0 0 0 / 55%);
   backdrop-filter: blur(4px);
   pointer-events: none;
   transition: opacity var(--duration-fast);
@@ -606,7 +614,7 @@ onBeforeUnmount(() => {
 }
 
 .cpd-zoom-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-family: var(--font-mono);
   color: var(--text-muted);
   min-width: 40px;
@@ -616,7 +624,7 @@ onBeforeUnmount(() => {
 .cpd-btn {
   padding: 8px 20px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: all var(--duration-fast);
@@ -647,14 +655,14 @@ onBeforeUnmount(() => {
 }
 
 .cpd-btn.outline .pi {
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .cpd-btn.ghost {
   background: transparent;
   color: var(--text-muted);
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .cpd-btn.ghost:hover {

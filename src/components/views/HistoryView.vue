@@ -220,8 +220,7 @@ const handleSelectedCountUpdate = (count: number) => {
 
 .history-container {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden auto;
   padding: 20px 24px;
 }
 
@@ -244,7 +243,7 @@ const handleSelectedCountUpdate = (count: number) => {
   justify-content: space-between;
   padding: 0 12px;
   z-index: 10;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
 }
 
 /* 标签页导航 */
@@ -263,7 +262,7 @@ const handleSelectedCountUpdate = (count: number) => {
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   position: relative;
@@ -273,7 +272,7 @@ const handleSelectedCountUpdate = (count: number) => {
 }
 
 .tab-btn i {
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 
 .tab-btn:hover {
@@ -315,7 +314,7 @@ const handleSelectedCountUpdate = (count: number) => {
   border-radius: 14px;
   border: none;
   background: var(--primary-alpha-8);
-  font-size: 12px;
+  font-size: var(--text-xs);
   transition: background var(--duration-fast);
 }
 
@@ -330,7 +329,7 @@ const handleSelectedCountUpdate = (count: number) => {
 
 :deep(.filter-chip .p-select-label) {
   padding: 0 6px 0 10px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--primary);
   font-weight: 500;
   line-height: 28px;
@@ -349,14 +348,14 @@ const handleSelectedCountUpdate = (count: number) => {
 /* 下拉面板样式 */
 :deep(.p-select-overlay) {
   border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
   border: 1px solid var(--border-subtle);
   padding: 4px;
   min-width: 120px;
 }
 
 :deep(.p-select-overlay .p-select-option) {
-  font-size: 12px;
+  font-size: var(--text-xs);
   padding: 6px 10px;
   border-radius: 6px;
   color: var(--text-primary);
@@ -399,7 +398,7 @@ const handleSelectedCountUpdate = (count: number) => {
 
 .search-field-icon {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   flex-shrink: 0;
   opacity: 0.5;
   margin-right: 6px;
@@ -417,7 +416,7 @@ const handleSelectedCountUpdate = (count: number) => {
   box-shadow: none;
   outline: none;
   color: var(--text-primary);
-  font-size: 12.5px;
+  font-size: var(--text-sm);
   padding: 0 !important;
   height: 100%;
   font-family: inherit;
@@ -438,7 +437,7 @@ const handleSelectedCountUpdate = (count: number) => {
 
 .search-field-clear {
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   cursor: pointer;
   flex-shrink: 0;
   width: 20px;
@@ -467,13 +466,13 @@ const handleSelectedCountUpdate = (count: number) => {
   background: var(--primary-alpha-12);
   border-radius: 14px;
   color: var(--primary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   flex-shrink: 0;
 }
 
 .selection-badge i {
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .sel-fade-enter-active,
@@ -499,7 +498,7 @@ const handleSelectedCountUpdate = (count: number) => {
 }
 
 .stat-val {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--primary);
   font-variant-numeric: tabular-nums;

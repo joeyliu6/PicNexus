@@ -282,7 +282,7 @@ function handleTemplateChange(template: string | undefined) {
 </template>
 
 <style scoped>
-@import '../../styles/settings-shared.css';
+@import url('../../styles/settings-shared.css');
 
 /* 主题卡片 */
 .theme-options {
@@ -340,7 +340,7 @@ function handleTemplateChange(template: string | undefined) {
 }
 
 .shortcut-label {
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 500;
   color: var(--text-primary);
 }
@@ -352,7 +352,7 @@ function handleTemplateChange(template: string | undefined) {
 
 .format-section-label {
   display: block;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
   margin-bottom: 8px;
@@ -375,7 +375,7 @@ function handleTemplateChange(template: string | undefined) {
   cursor: pointer;
   transition: all var(--duration-normal);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .format-card:hover {
@@ -392,7 +392,7 @@ function handleTemplateChange(template: string | undefined) {
 }
 
 .format-card i {
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 
 .custom-template-section {
@@ -402,7 +402,7 @@ function handleTemplateChange(template: string | undefined) {
 .template-input {
   width: 100%;
   font-family: 'Fira Code', 'Cascadia Code', monospace;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .template-hint {
@@ -411,7 +411,7 @@ function handleTemplateChange(template: string | undefined) {
 
 .template-hint code {
   font-family: 'Fira Code', 'Cascadia Code', monospace;
-  font-size: 12px;
+  font-size: var(--text-xs);
   padding: 1px 5px;
   background: var(--bg-app);
   border-radius: 3px;

@@ -527,7 +527,7 @@ onUnmounted(() => {
   cursor: pointer;
   padding: 1px 6px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgb(255 255 255 / 60%);
 }
 
 .year-label:hover {
@@ -634,7 +634,7 @@ onUnmounted(() => {
   align-items: stretch;
   background: white;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
   overflow: hidden;
   white-space: nowrap;
 }
@@ -649,7 +649,7 @@ onUnmounted(() => {
 
 .bubble-date {
   padding: 4px 8px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-main);
   letter-spacing: 0.1px;
@@ -675,7 +675,7 @@ onUnmounted(() => {
 
 /* ==================== 响应式 ==================== */
 
-@media (max-width: 1024px) {
+@media (width <= 1024px) {
   .timeline-indicator {
     width: 52px;
   }
@@ -685,11 +685,11 @@ onUnmounted(() => {
   }
 
   .year-label {
-    font-size: 10px;
+    font-size: var(--text-2xs);
   }
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .timeline-indicator {
     width: 40px;
     padding: 16px 4px;
@@ -722,7 +722,7 @@ onUnmounted(() => {
 
   .year-label {
     opacity: 0.8;
-    font-size: 10px;
+    font-size: var(--text-2xs);
   }
 }
 
@@ -731,7 +731,7 @@ onUnmounted(() => {
 :root.dark-theme .scrubber-bubble,
 .dark-theme .scrubber-bubble {
   background: var(--bg-surface);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 12px rgb(0 0 0 / 40%);
 }
 
 :root.dark-theme .bubble-date,
@@ -746,6 +746,6 @@ onUnmounted(() => {
 
 :root.dark-theme .year-label,
 .dark-theme .year-label {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgb(255 255 255 / 15%);
 }
 </style>

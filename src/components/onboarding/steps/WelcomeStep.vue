@@ -33,14 +33,14 @@
 }
 
 .step-title {
-  font-size: 26px;
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-main);
   margin: 0 0 8px;
 }
 
 .step-desc {
-  font-size: 14px;
+  font-size: var(--text-base);
   color: var(--text-muted);
   line-height: 1.6;
   margin: 0 0 28px;
@@ -79,11 +79,11 @@
 }
 
 .highlight-icon .pi {
-  font-size: 22px;
+  font-size: var(--text-2xl);
 }
 
 .highlight-item span {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-main);
 }

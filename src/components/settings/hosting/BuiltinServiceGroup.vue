@@ -61,7 +61,7 @@ const emit = defineEmits<{
 <style scoped>
 .builtin-info {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
 

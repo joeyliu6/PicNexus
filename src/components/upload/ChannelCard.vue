@@ -217,7 +217,7 @@ function handleRetry() {
 }
 
 .channel-name {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
@@ -297,7 +297,7 @@ function handleRetry() {
 .copy-btn i,
 .copy-menu-btn i,
 .retry-btn i {
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .copy-menu-btn i {
@@ -326,7 +326,7 @@ function handleRetry() {
   border: none;
   background: transparent;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   border-radius: 6px;
   cursor: pointer;
   transition: all var(--duration-fast) ease;
@@ -339,7 +339,7 @@ function handleRetry() {
 }
 
 .format-item i {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   width: 14px;
   text-align: center;

@@ -58,7 +58,7 @@ const closeWindow = () => {
 }
 
 .app-title {
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   letter-spacing: 0.5px;
@@ -93,6 +93,6 @@ const closeWindow = () => {
 }
 
 .titlebar-button i {
-  font-size: 0.9rem;
+  font-size: var(--text-base);
 }
 </style>

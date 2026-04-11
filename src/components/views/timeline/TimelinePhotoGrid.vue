@@ -121,13 +121,13 @@ function getGroupItemCount(groupId: string): number {
 }
 
 .group-title {
-  font-size: 18px;
+  font-size: var(--text-lg-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .group-subtitle {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
@@ -138,13 +138,13 @@ function getGroupItemCount(groupId: string): number {
   gap: 8px;
   padding: 20px;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 
 /* 响应式适配 */
-@media (max-width: 1024px) {
+@media (width <= 1024px) {
   .group-title {
-    font-size: 16px;
+    font-size: var(--text-lg);
   }
 
   .group-subtitle {
@@ -152,23 +152,23 @@ function getGroupItemCount(groupId: string): number {
   }
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .group-header {
     padding: 12px 0;
   }
 
   .group-title {
-    font-size: 15px;
+    font-size: var(--text-md);
   }
 
   .group-subtitle {
-    font-size: 10px;
+    font-size: var(--text-2xs);
   }
 }
 
-@media (max-width: 480px) {
+@media (width <= 480px) {
   .group-title {
-    font-size: 14px;
+    font-size: var(--text-base);
   }
 
   .group-subtitle {

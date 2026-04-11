@@ -239,7 +239,7 @@ function renderTemplate(cdn: GithubCdnProvider): string {
 </template>
 
 <style scoped>
-@import '../../../styles/settings-shared.css';
+@import url('../../../styles/settings-shared.css');
 
 .cdn-title-row {
   display: flex;
@@ -290,20 +290,20 @@ function renderTemplate(cdn: GithubCdnProvider): string {
 }
 
 .cdn-name {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
 }
 
 .cdn-dot {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   flex-shrink: 0;
 }
 
 .cdn-domain {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -330,7 +330,7 @@ function renderTemplate(cdn: GithubCdnProvider): string {
 }
 
 .cdn-field-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   width: 32px;
   flex-shrink: 0;
@@ -338,7 +338,7 @@ function renderTemplate(cdn: GithubCdnProvider): string {
 
 .cdn-template-input {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .cdn-vars-hint {

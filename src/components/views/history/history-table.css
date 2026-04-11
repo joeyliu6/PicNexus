@@ -13,7 +13,7 @@
   min-width: 32px;
   height: 32px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   transition: all var(--duration-fast) ease;
 }
@@ -67,7 +67,7 @@
   background: var(--bg-card) !important;
   border-bottom: 1px solid var(--border-subtle) !important;
   padding: 12px 16px !important;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-tertiary);
   letter-spacing: 0.03em;
@@ -112,7 +112,7 @@
 :deep(.minimal-table .p-datatable-tbody > tr > td) {
   padding: 8px 16px !important;
   border-bottom: 1px solid var(--overlay-medium) !important;
-  font-size: 13px;
+  font-size: var(--text-sm);
   vertical-align: middle;
   height: 52px !important;  /* 固定行高，与骨架屏一致 */
   box-sizing: border-box;
@@ -164,7 +164,7 @@
 }
 
 .thumb-placeholder {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   color: var(--text-muted);
   opacity: 0.5;
   display: flex;

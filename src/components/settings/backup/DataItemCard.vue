@@ -284,7 +284,7 @@ const isAnyForceLoading = computed(() =>
 }
 
 .row-label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   font-weight: 500;
   flex-shrink: 0;
@@ -319,7 +319,7 @@ const isAnyForceLoading = computed(() =>
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: currentColor;
+  background: currentcolor;
   flex-shrink: 0;
 }
 
@@ -340,7 +340,7 @@ const isAnyForceLoading = computed(() =>
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   font-weight: 400;
 }
@@ -382,7 +382,7 @@ const isAnyForceLoading = computed(() =>
   border: none;
   background: transparent;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   cursor: pointer;
   text-align: left;
   transition: background-color var(--duration-fast);
@@ -423,7 +423,7 @@ const isAnyForceLoading = computed(() =>
   transform: translateY(4px);
 }
 
-@media (max-width: 480px) {
+@media (width <= 480px) {
   .card-row {
     flex-direction: column;
     align-items: flex-start;

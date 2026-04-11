@@ -154,7 +154,7 @@ const successfulServices = computed(() => {
 }
 
 .photo-error i {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
 }
 
 .photo-img {
@@ -176,7 +176,7 @@ const successfulServices = computed(() => {
 .selection-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.1);
+  background: rgb(0 0 0 / 10%);
   opacity: 0;
   transition: opacity var(--duration-normal);
   pointer-events: none;
@@ -196,8 +196,8 @@ const successfulServices = computed(() => {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.8);
-  background: rgba(0, 0, 0, 0.2);
+  border: 2px solid rgb(255 255 255 / 80%);
+  background: rgb(0 0 0 / 20%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -218,7 +218,7 @@ const successfulServices = computed(() => {
 }
 
 .checkbox:hover {
-  background: rgba(0, 0, 0, 0.4);
+  background: rgb(0 0 0 / 40%);
 }
 
 .checkbox.checked {
@@ -227,7 +227,7 @@ const successfulServices = computed(() => {
 }
 
 .checkbox.checked i {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: white;
   font-weight: bold;
 }
@@ -240,7 +240,7 @@ const successfulServices = computed(() => {
   height: 20px;
   border: none;
   background: none;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgb(255 255 255 / 85%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -249,7 +249,7 @@ const successfulServices = computed(() => {
   z-index: 2;
   cursor: pointer;
   font-size: var(--text-2xs-xs);
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 50%));
 }
 
 .favorite-btn::before {
@@ -265,7 +265,7 @@ const successfulServices = computed(() => {
 
 .favorite-btn.favorited {
   color: var(--warning);
-  filter: drop-shadow(0 1px 3px rgba(234, 179, 8, 0.4));
+  filter: drop-shadow(0 1px 3px rgb(234 179 8 / 40%));
 }
 
 .favorite-btn:hover {
@@ -273,7 +273,7 @@ const successfulServices = computed(() => {
 }
 
 .favorite-btn.favorited:hover {
-  filter: drop-shadow(0 1px 4px rgba(234, 179, 8, 0.6));
+  filter: drop-shadow(0 1px 4px rgb(234 179 8 / 60%));
 }
 
 .favorite-btn.favorited i {
@@ -289,7 +289,7 @@ const successfulServices = computed(() => {
 .hover-info {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, transparent 30%, rgba(0, 0, 0, 0.85) 100%);
+  background: linear-gradient(to bottom, transparent 30%, rgb(0 0 0 / 85%) 100%);
   opacity: 0;
   transition: opacity var(--duration-normal) ease;
   display: flex;
@@ -325,9 +325,9 @@ const successfulServices = computed(() => {
   padding: 3px 7px;
   background: rgb(89 92 96 / 50%);
   border-radius: 4px;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 500;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 30%);
   backdrop-filter: blur(4px);
 }
 
@@ -344,19 +344,20 @@ const successfulServices = computed(() => {
 }
 
 /* 响应式适配 */
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .hover-info {
     padding: 8px;
   }
 
   .service-badge {
+    /* stylelint-disable-next-line declaration-property-value-allowed-list -- 超窄屏下的极小 badge，低于最小 token(--text-2xs=10px)，属无 token 特例 */
     font-size: 9px;
     padding: 2px 5px;
   }
 
 }
 
-@media (max-width: 480px) {
+@media (width <= 480px) {
   .service-badges {
     display: none;
   }

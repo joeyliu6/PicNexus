@@ -84,10 +84,10 @@ const emit = defineEmits<{
   right: 0;
   z-index: 3;
   height: 64px;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgb(0 0 0 / 55%);
   backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  box-shadow: 0 -1px 0 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(40px) saturate(180%);
+  box-shadow: 0 -1px 0 0 rgb(255 255 255 / 10%);
   display: flex;
   align-items: center;
   padding: 0 24px;
@@ -132,7 +132,7 @@ const emit = defineEmits<{
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   white-space: nowrap;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 50%);
 }
 
 .source-value,
@@ -145,7 +145,7 @@ const emit = defineEmits<{
   color: var(--text-tertiary);
   font-size: var(--text-2xs-xs);
   letter-spacing: 0.02em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 40%);
 }
 
 .lightbox-divider {
@@ -171,7 +171,7 @@ const emit = defineEmits<{
   border: none;
   background: var(--hover-overlay-subtle);
   color: var(--text-muted);
-  font-size: 15px;
+  font-size: var(--text-md);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -206,10 +206,10 @@ const emit = defineEmits<{
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
   --text-tertiary: #64748b;
-  --hover-overlay: rgba(255, 255, 255, 0.08);
-  --hover-overlay-subtle: rgba(255, 255, 255, 0.04);
+  --hover-overlay: rgb(255 255 255 / 8%);
+  --hover-overlay-subtle: rgb(255 255 255 / 4%);
   --border-subtle: #334155;
   --error: #ef4444;
-  --error-soft: rgba(239, 68, 68, 0.15);
+  --error-soft: rgb(239 68 68 / 15%);
 }
 </style>

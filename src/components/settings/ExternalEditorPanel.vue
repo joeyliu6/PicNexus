@@ -395,7 +395,7 @@ watch(
 </template>
 
 <style scoped>
-@import '../../styles/settings-shared.css';
+@import url('../../styles/settings-shared.css');
 
 .editor-panel {
   display: flex;
@@ -423,13 +423,13 @@ watch(
 }
 
 .card-service-label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .card-service-desc {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -442,7 +442,7 @@ watch(
   border: 1px solid var(--border-subtle);
   background: var(--bg-input);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .inline-port {
@@ -495,7 +495,7 @@ watch(
   border: 1.5px solid var(--border-subtle);
   background: transparent;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   flex-shrink: 0;
   position: relative;
@@ -505,7 +505,7 @@ watch(
 .step-text {
   flex: 1;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--text-xs);
   line-height: 1.6;
   color: var(--text-muted);
 }
@@ -525,7 +525,7 @@ watch(
 
 .inline-code {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   padding: 1px 5px;
   background: var(--primary-alpha-8);
   border-radius: 3px;
@@ -534,7 +534,7 @@ watch(
 
 .menu-label {
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   padding: 1px 5px;
   background: var(--primary-alpha-8);
@@ -558,7 +558,7 @@ watch(
   flex: 1;
   white-space: nowrap;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--primary);
 }
 
@@ -569,18 +569,18 @@ watch(
   border-radius: 6px;
   background: var(--bg-card);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-family: var(--font-mono);
   text-align: center;
   transition: border-color var(--duration-normal);
   flex-shrink: 0;
-  -moz-appearance: textfield;
+  appearance: textfield;
   appearance: textfield;
 }
 
 .port-input::-webkit-outer-spin-button,
 .port-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
+  appearance: none;
   margin: 0;
 }
 
@@ -594,7 +594,7 @@ watch(
 }
 
 .port-error {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--error);
 }
 
@@ -620,7 +620,7 @@ watch(
   border-radius: 6px;
   background: var(--bg-card);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   cursor: pointer;
   transition: all var(--duration-fast);
@@ -640,11 +640,11 @@ watch(
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .test-result .pi {
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .test-success {
@@ -659,7 +659,7 @@ watch(
   color: var(--error);
 }
 
-@media (max-width: 760px) {
+@media (width <= 760px) {
   .card-service-row {
     flex-direction: column;
     align-items: flex-start;

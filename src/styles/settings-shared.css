@@ -605,7 +605,7 @@
 }
 
 .card-description {
-  font-size: 0.8125rem; /* 13px — 与原组件保持一致 */
+  font-size: var(--text-sm); /* 13px — 与原组件保持一致 */
   color: var(--text-muted);
   line-height: 1.3;
 }

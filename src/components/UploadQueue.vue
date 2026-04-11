@@ -166,6 +166,7 @@ defineExpose({
 }
 
 .empty-icon {
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 空状态图标 32px 无对应 token，介于 --text-3xl(28) 与 --text-4xl(36) 之间 */
   font-size: 2rem;
   color: var(--text-muted);
   opacity: 0.5;
@@ -173,7 +174,7 @@ defineExpose({
 
 .empty-text {
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-style: italic;
   opacity: 0.7;
 }

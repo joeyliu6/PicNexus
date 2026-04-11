@@ -172,10 +172,10 @@ function handleRecheckBatch() {
             {{ getServiceDisplayName(selectedServiceId) }}
           </template>
           <template v-else>
-            <i class="pi pi-images" style="font-size: 10px"></i>
+            <i class="pi pi-images" style="font-size: var(--text-2xs)"></i>
             全部图床
           </template>
-          <i class="pi pi-chevron-down" style="font-size: 8px; margin-left: 2px"></i>
+          <i class="pi pi-chevron-down" style="font-size: var(--text-2xs); margin-left: 2px"></i>
         </button>
         <Transition name="dropdown">
           <div v-if="showServiceMenu" class="service-dropdown">
@@ -423,7 +423,7 @@ function handleRecheckBatch() {
                 class="btn-primary check-toggle"
                 @click="showCheckMenu = !showCheckMenu"
               >
-                <i class="pi pi-chevron-down" style="font-size: 10px"></i>
+                <i class="pi pi-chevron-down" style="font-size: var(--text-2xs)"></i>
               </button>
               <Transition name="dropdown">
                 <div v-if="showCheckMenu && showDropdownArrow" class="check-dropdown">
@@ -458,6 +458,7 @@ function handleRecheckBatch() {
 
 /* ===== 底部操作按钮 ===== */
 .bottom-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
 .action-divider {
   width: 1px; height: 16px; background: var(--border-subtle); flex-shrink: 0;
 }
@@ -465,7 +466,7 @@ function handleRecheckBatch() {
 /* ===== 按钮 ===== */
 .btn-ghost, .btn-primary, .btn-danger {
   display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px;
-  border-radius: 7px; font-size: 12px; font-weight: 500; cursor: pointer;
+  border-radius: 7px; font-size: var(--text-xs); font-weight: 500; cursor: pointer;
   white-space: nowrap; transition: background var(--duration-fast), opacity var(--duration-fast); border: none;
 }
 .btn-ghost i, .btn-primary i, .btn-danger i { font-size: var(--text-2xs-xs); }
@@ -479,12 +480,14 @@ function handleRecheckBatch() {
 .check-btn-group { display: flex; position: relative; }
 .check-btn-group.has-dropdown .btn-primary:first-child { border-radius: 7px 0 0 7px; }
 .check-toggle { border-radius: 0 7px 7px 0; padding: 0 7px; border-left: 1px solid var(--primary-alpha-15); }
+
 .check-dropdown {
   position: absolute; bottom: calc(100% + 6px); right: 0; min-width: 220px;
   background: var(--bg-card); border-radius: 10px; padding: 4px 0;
   box-shadow: var(--shadow-float); z-index: var(--z-dropdown, 100);
   border: 1px solid var(--border-subtle); overflow: hidden;
 }
+
 .check-dropdown-item {
   display: flex; flex-direction: row; align-items: center; gap: 8px;
   padding: 7px 14px; cursor: pointer; transition: background var(--duration-micro);
@@ -492,7 +495,7 @@ function handleRecheckBatch() {
 .check-dropdown-item:not(:last-child) { border-bottom: 1px solid var(--border-subtle); }
 .check-dropdown-item:hover { background: var(--hover-overlay-subtle); }
 .dropdown-text { display: flex; flex-direction: column; gap: 2px; }
-.dropdown-label { font-size: 13px; font-weight: 500; color: var(--text-main); }
+.dropdown-label { font-size: var(--text-sm); font-weight: 500; color: var(--text-main); }
 .dropdown-desc { font-size: var(--text-2xs-xs); color: var(--text-tertiary); }
 
 /* ===== 芯片栏 ===== */
@@ -506,31 +509,38 @@ function handleRecheckBatch() {
 .filter-chip {
   display: inline-flex; align-items: center; gap: 5px;
   height: 26px; padding: 0 10px; border-radius: 13px;
-  font-size: 12px; font-weight: 500; cursor: pointer;
+  font-size: var(--text-xs); font-weight: 500; cursor: pointer;
   background: var(--bg-input); color: var(--text-muted);
   border: 1px solid transparent;
   transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
   white-space: nowrap;
 }
+
 .filter-chip:hover {
   background: var(--hover-overlay); border-color: var(--border-subtle);
 }
+
 .filter-chip.chip--error.active {
   background: var(--error-alpha-15); color: var(--error); border-color: var(--error-alpha-15);
 }
+
 .filter-chip.chip--suspicious.active {
   background: var(--pending-alpha-8); color: var(--pending); border-color: var(--pending-alpha-8);
 }
+
 .filter-chip.chip--timeout.active {
   background: var(--warning-alpha-8); color: var(--warning); border-color: var(--warning-alpha-8);
 }
 .chip-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
 .filter-chip.chip--unchecked.active {
   background: var(--bg-input); color: var(--text-main); border-color: var(--border-subtle);
 }
+
 .filter-chip.chip--valid.active {
   background: var(--success-alpha-10); color: var(--success); border-color: var(--success-alpha-10);
 }
+
 .filter-chip.chip--all.active {
   background: var(--primary-alpha-10); color: var(--primary); border-color: var(--primary-alpha-10);
 }
@@ -540,6 +550,7 @@ function handleRecheckBatch() {
   width: 100%; flex-shrink: 0; cursor: default;
   padding: 5px 0; position: relative;
 }
+
 .progress-tooltip {
   position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
   padding: 4px 10px; border-radius: 6px; white-space: nowrap;
@@ -550,20 +561,23 @@ function handleRecheckBatch() {
 .fade-enter-active { transition: opacity var(--duration-fast); }
 .fade-leave-active { transition: opacity var(--duration-micro); }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
 .progress-bar-inner {
   width: 100%; height: 3px; background: var(--bg-input);
   border-radius: 1.5px; overflow: hidden;
 }
+
 .progress-bar-fill {
   height: 100%;
   background: linear-gradient(90deg, var(--primary), var(--primary-light, #60a5fa));
   transition: width var(--duration-slower) var(--ease-standard);
   position: relative; overflow: hidden;
 }
+
 .progress-bar-fill::after {
   content: '';
-  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 40%), transparent);
   animation: k-sweep 1.5s ease-in-out infinite;
 }
 
@@ -572,19 +586,21 @@ function handleRecheckBatch() {
 .service-filter .filter-chip { gap: 4px; }
 .service-filter .filter-chip.active { background: var(--primary-alpha-10); color: var(--primary); border-color: var(--primary-alpha-10); }
 .service-filter .badge-icon { width: 12px; height: 12px; display: inline-flex; }
+
 .service-dropdown {
   position: absolute; top: calc(100% + 6px); right: 0; min-width: 180px;
   background: var(--bg-card); border-radius: 10px; padding: 4px 0;
   box-shadow: var(--shadow-float); z-index: var(--z-dropdown, 100);
   border: 1px solid var(--border-subtle); overflow: hidden;
 }
+
 .service-dropdown-item {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 8px 14px; cursor: pointer; transition: background var(--duration-micro);
 }
 .service-dropdown-item:hover { background: var(--hover-overlay); }
 .service-dropdown-item.active { background: var(--primary-alpha-10); }
-.sdi-label { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--text-main); }
+.sdi-label { display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); font-weight: 500; color: var(--text-main); }
 .sdi-label .badge-icon { width: 14px; height: 14px; color: var(--text-muted); }
 .sdi-count { font-size: var(--text-2xs-xs); color: var(--text-tertiary); font-family: var(--font-mono, 'JetBrains Mono', monospace); }
 
@@ -599,18 +615,21 @@ function handleRecheckBatch() {
   flex-shrink: 0;
 }
 .search-field.focused { border-color: var(--primary); }
+
 .search-field-icon {
-  color: var(--text-secondary); font-size: 12px; flex-shrink: 0;
+  color: var(--text-secondary); font-size: var(--text-xs); flex-shrink: 0;
   opacity: 0.5; margin-right: 6px; transition: opacity var(--duration-fast), color var(--duration-fast);
 }
 .search-field.focused .search-field-icon { opacity: 0.8; color: var(--primary); }
+
 .search-field-input {
   flex: 1; background: transparent; border: none; box-shadow: none; outline: none;
-  color: var(--text-primary); font-size: 12.5px; padding: 0; height: 100%; min-width: 0;
+  color: var(--text-primary); font-size: var(--text-sm); padding: 0; height: 100%; min-width: 0;
 }
 .search-field-input::placeholder { color: var(--text-secondary); opacity: 0.5; }
+
 .search-field-clear {
-  color: var(--text-secondary); font-size: 10px; cursor: pointer; flex-shrink: 0;
+  color: var(--text-secondary); font-size: var(--text-2xs); cursor: pointer; flex-shrink: 0;
   width: 20px; height: 20px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   transition: all var(--duration-fast); opacity: 0.5;
@@ -636,7 +655,7 @@ function handleRecheckBatch() {
 .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 
 .link-filename {
-  font-size: 13px; font-weight: 500; color: var(--text-main);
+  font-size: var(--text-sm); font-weight: 500; color: var(--text-main);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   flex-shrink: 1; min-width: 0;
 }
@@ -649,21 +668,24 @@ function handleRecheckBatch() {
   transition: background var(--duration-micro);
 }
 .service-badge:hover { background: var(--primary-alpha-8); }
+
 .badge-icon {
   width: 14px; height: 14px;
   display: inline-flex; flex-shrink: 0;
   color: var(--text-muted);
 }
 .badge-icon :deep(svg) { width: 100%; height: 100%; }
+
 .badge-label {
   font-size: var(--text-2xs-xs); font-weight: 500; color: var(--text-muted);
 }
+
 /* 错误标签 badge */
 .error-badge {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 36px;
   padding: 1px 6px; border-radius: 4px;
-  font-size: 10px; font-weight: 600;
+  font-size: var(--text-2xs); font-weight: 600;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   flex-shrink: 0; cursor: default;
 }
@@ -689,11 +711,13 @@ function handleRecheckBatch() {
   cursor: pointer; transition: background var(--duration-micro), color var(--duration-micro); font-size: var(--text-2xs-xs);
   flex-shrink: 0;
 }
+
 /* recheck-btn / delete-btn 透明度由父级 row-actions 统一控制 */
 .recheck-btn, .delete-btn { opacity: 1; }
 .recheck-btn:hover { background: var(--primary-alpha-8); color: var(--primary); }
 .delete-btn:hover { background: var(--error-alpha-10); color: var(--error); }
 .delete-btn:disabled { opacity: 0.1; cursor: default; pointer-events: none; }
+
 /* 行离场动画（Case B 重检 / 删除：整行淡出 + 高度收缩，下方行平滑上移） */
 .link-row.fading-out {
   opacity: 0;
@@ -713,12 +737,13 @@ function handleRecheckBatch() {
   justify-content: center;
   flex-shrink: 0;
 }
+
 .recheck-btn.spinning .pi::before {
   content: '' !important;
   display: block;
   width: 12px;
   height: 12px;
-  border: 1.5px solid currentColor;
+  border: 1.5px solid currentcolor;
   border-top-color: transparent;
   border-radius: 50%;
   animation: k-spin 0.7s linear infinite;
@@ -743,24 +768,25 @@ function handleRecheckBatch() {
 .recheck-result-badge {
   display: flex; align-items: center; justify-content: center;
   width: 36px; height: 20px; border-radius: 4px;
-  font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
   flex-shrink: 0; cursor: default;
   opacity: 1; transition: opacity var(--duration-medium) ease;
 }
 .recheck-result-badge.badge-fading     { opacity: 0; }
-.recheck-result-badge.badge-valid      { background: var(--success-alpha-15, rgba(34, 197, 94, 0.15)); color: var(--success, #22c55e); }
+.recheck-result-badge.badge-valid      { background: var(--success-alpha-15, rgb(34 197 94 / 15%)); color: var(--success, #22c55e); }
 .recheck-result-badge.badge-invalid    { background: var(--error-alpha-10); color: var(--error); }
 .recheck-result-badge.badge-timeout    { background: var(--warning-alpha-8); color: var(--warning); }
 .recheck-result-badge.badge-suspicious { background: var(--pending-alpha-8); color: var(--pending); }
 
 /* 底栏批量操作模式 */
 .batch-bottom-right { display: flex; align-items: center; gap: 8px; }
-.batch-count { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+.batch-count { font-size: var(--text-xs); color: var(--text-muted); font-weight: 500; }
 
 /* 行入场动画（leave 由 fadingOut class 自行处理，此处只定义 enter） */
 .row-list-enter-active {
   transition: opacity var(--duration-normal) ease, transform var(--duration-normal) ease;
 }
+
 .row-list-enter-from {
   opacity: 0;
   transform: translateY(-5px);
@@ -775,45 +801,51 @@ function handleRecheckBatch() {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 10px; flex: 1; padding: 40px 0;
 }
+
 .hero-icon {
   width: 56px; height: 56px; display: flex; align-items: center; justify-content: center;
   border-radius: 16px; background: var(--primary-alpha-10); margin-bottom: 4px;
 }
-.hero-icon .pi { font-size: 24px; color: var(--primary); }
-.hero-title { font-size: 18px; font-weight: 700; color: var(--text-main); margin: 0; }
-.hero-desc { font-size: 13px; color: var(--text-muted); margin: 0; }
+.hero-icon .pi { font-size: var(--text-2xl); color: var(--primary); }
+.hero-title { font-size: var(--text-lg-xl); font-weight: 700; color: var(--text-main); margin: 0; }
+.hero-desc { font-size: var(--text-sm); color: var(--text-muted); margin: 0; }
+
 .hero-cta {
   display: inline-flex; align-items: center; gap: 7px;
   padding: 10px 28px; margin-top: 8px;
   background: var(--primary); color: #fff; border: none; border-radius: 10px;
-  font-size: 14px; font-weight: 600; cursor: pointer;
+  font-size: var(--text-base); font-weight: 600; cursor: pointer;
   transition: opacity var(--duration-fast), transform var(--duration-micro);
 }
 .hero-cta:hover { opacity: 0.9; }
 .hero-cta:active { transform: scale(0.97); }
-.hero-meta { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+.hero-meta { font-size: var(--text-xs); color: var(--text-tertiary); margin-top: 2px; }
 
 /* ===== 底部 ===== */
 .bottom { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; padding-right: 24px; }
+
 .bottom-main {
   display: flex; align-items: center; justify-content: space-between;
 }
-.page-summary { font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
+.page-summary { font-size: var(--text-xs); color: var(--text-tertiary); white-space: nowrap; }
 .pagination { display: flex; align-items: center; gap: 4px; margin-right: 10px; }
+
 .page-btn {
   display: flex; align-items: center; justify-content: center; width: 26px; height: 26px;
   border: none; border-radius: 5px; background: var(--bg-input); color: var(--text-muted);
-  cursor: pointer; transition: background var(--duration-micro), color var(--duration-micro); font-size: 12px;
+  cursor: pointer; transition: background var(--duration-micro), color var(--duration-micro); font-size: var(--text-xs);
 }
 .page-btn:hover:not(:disabled) { background: var(--primary-alpha-8); color: var(--primary); }
 .page-btn:disabled { opacity: 0.3; cursor: default; }
+
 .page-info {
-  font-size: 12px; color: var(--text-muted);
+  font-size: var(--text-xs); color: var(--text-muted);
   display: inline-flex; align-items: center; gap: 4px; margin: 0 4px;
 }
+
 .page-input {
   width: 32px; height: 22px; text-align: center; border: 1px solid var(--border-subtle);
-  border-radius: 4px; background: var(--bg-input); color: var(--text-main); font-size: 12px;
+  border-radius: 4px; background: var(--bg-input); color: var(--text-main); font-size: var(--text-xs);
   outline: none;
 }
 .page-input::placeholder { color: var(--text-main); opacity: 0.6; }

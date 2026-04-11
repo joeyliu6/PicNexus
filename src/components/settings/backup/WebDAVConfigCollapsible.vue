@@ -274,7 +274,7 @@ function handleTest() {
 </template>
 
 <style scoped>
-@import '../../../styles/settings-shared.css';
+@import url('../../../styles/settings-shared.css');
 
 /* 可折叠容器 */
 .webdav-collapsible {
@@ -293,7 +293,7 @@ function handleTest() {
 }
 
 .header-status-text {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -349,7 +349,7 @@ function handleTest() {
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   line-height: 20px;
   cursor: pointer;
   transition: all var(--duration-fast);
@@ -376,7 +376,7 @@ function handleTest() {
   border: 1px solid var(--border-subtle);
   border-radius: 4px;
   color: var(--text-muted);
-  font-size: 16px;
+  font-size: var(--text-lg);
   cursor: pointer;
   transition: all var(--duration-fast);
 }
@@ -400,7 +400,7 @@ function handleTest() {
 }
 
 .form-field label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -411,7 +411,7 @@ function handleTest() {
   gap: 12px;
 }
 
-@media (max-width: 500px) {
+@media (width <= 500px) {
   .form-row-split {
     grid-template-columns: 1fr;
   }

@@ -87,7 +87,7 @@ function handleToggle(serviceId: string) {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  padding: 16px 24px 20px 24px;
+  padding: 16px 24px 20px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -100,7 +100,7 @@ function handleToggle(serviceId: string) {
 }
 
 .service-group-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -118,26 +118,22 @@ function handleToggle(serviceId: string) {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-
   height: 36px;
   padding: 0 16px;
-
   background-color: var(--bg-input);
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 500;
   font-family: var(--font-sans);
-
   cursor: pointer;
   transition: all var(--duration-fast) ease-in-out;
   user-select: none;
 }
 
 /* 悬停效果（排除选中状态） */
-.service-tag:hover:not(:disabled):not(.is-selected) {
+.service-tag:hover:not(:disabled, .is-selected) {
   background-color: var(--hover-overlay-subtle);
   border-color: var(--text-muted);
 }

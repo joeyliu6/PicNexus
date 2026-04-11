@@ -173,20 +173,21 @@ const presetTooltip = computed(() => {
 }
 
 .drop-icon {
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 大号空状态图标，现有 token 最大 48px（--text-5xl），此处 56px 为特殊设计 */
   font-size: 3.5rem;
   color: var(--primary);
   opacity: 0.8;
 }
 
 .drop-text {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 500;
   color: var(--text-primary);
   margin: 0;
 }
 
 .drop-hint {
-  font-size: 0.95rem;
+  font-size: var(--text-md);
   color: var(--text-secondary);
 }
 
@@ -230,7 +231,7 @@ const presetTooltip = computed(() => {
 }
 
 .compress-label {
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   user-select: none;
 }
@@ -245,7 +246,7 @@ const presetTooltip = computed(() => {
   border-radius: 6px;
   background: var(--bg-card);
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   font-family: inherit;
   cursor: pointer;
   transition: all var(--duration-fast) ease;
@@ -259,7 +260,7 @@ const presetTooltip = computed(() => {
 }
 
 .compress-preset-chevron {
-  font-size: 0.6rem;
+  font-size: var(--text-2xs);
   opacity: 0.6;
 }
 
@@ -282,7 +283,7 @@ const presetTooltip = computed(() => {
   text-align: left;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-family: inherit;
   color: var(--text-primary);
   transition: background var(--duration-fast);
@@ -297,7 +298,7 @@ const presetTooltip = computed(() => {
 }
 
 .preset-check {
-  font-size: 0.7rem;
+  font-size: var(--text-2xs-xs);
   color: var(--primary);
   width: 14px;
   flex-shrink: 0;

@@ -183,7 +183,7 @@ function handleCopy(payload: QueueCopyPayload) {
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  font-size: 16px;
+  font-size: var(--text-lg);
 }
 
 .header-content {
@@ -200,7 +200,7 @@ function handleCopy(payload: QueueCopyPayload) {
 }
 
 .filename {
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -228,7 +228,7 @@ function handleCopy(payload: QueueCopyPayload) {
 }
 
 .pill i {
-  font-size: 10px;
+  font-size: var(--text-2xs);
 }
 
 .pill.success {

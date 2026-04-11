@@ -343,7 +343,7 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
 .wk-title-group { display: flex; align-items: center; gap: var(--space-md); }
 .wk-title { font-size: var(--text-base); font-weight: 600; color: var(--text-main); }
 .wk-subtitle { font-size: var(--text-sm); color: var(--text-tertiary); }
-.wk-done-icon { font-size: 18px; color: var(--success); }
+.wk-done-icon { font-size: var(--text-lg-xl); color: var(--success); }
 .wk-actions { display: flex; gap: var(--space-sm); }
 
 .wk-progress { height: 4px; background: var(--border-subtle); flex-shrink: 0; }
@@ -363,8 +363,8 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
   animation: k-pulse 2s ease-in-out infinite;
 }
 
-.mr-scan-skeleton-spinner { font-size: 13px; color: var(--text-tertiary); flex-shrink: 0; }
-.mr-scan-skeleton-done { font-size: 13px; color: var(--success); flex-shrink: 0; }
+.mr-scan-skeleton-spinner { font-size: var(--text-sm); color: var(--text-tertiary); flex-shrink: 0; }
+.mr-scan-skeleton-done { font-size: var(--text-sm); color: var(--success); flex-shrink: 0; }
 .mr-scan-skeleton.is-finishing { animation: none; }
 .mr-scan-skeleton.is-finishing .mr-scan-skeleton-text { color: var(--success); }
 
@@ -388,13 +388,13 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
 /* 健康文件流水 */
 .mr-healthy-stream { display: flex; flex-direction: column; gap: var(--space-2xs); padding: var(--space-sm) var(--space-md-lg); }
 .mr-healthy-row { display: flex; align-items: center; gap: var(--space-sm); height: 32px; font-size: var(--text-xs); animation: k-fade-slide-down 0.25s ease; }
-.mr-healthy-icon { font-size: 12px; color: var(--success); flex-shrink: 0; }
+.mr-healthy-icon { font-size: var(--text-xs); color: var(--success); flex-shrink: 0; }
 .mr-healthy-name { color: var(--text-muted); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
 .mr-healthy-meta { flex-shrink: 0; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 
 /* 全部正常 */
 .report-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm-md); flex: 1; color: var(--text-tertiary); font-size: var(--text-sm); }
-.report-empty-icon { font-size: 36px; color: var(--success); }
+.report-empty-icon { font-size: var(--text-4xl); color: var(--success); }
 
 /* done 备份提示 */
 .done-backup {
@@ -402,7 +402,7 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
   font-size: var(--text-xs); color: var(--text-tertiary);
   padding: var(--space-sm) var(--space-md); background: var(--bg-input); border-radius: var(--radius-md);
 }
-.done-backup i { font-size: 14px; flex-shrink: 0; }
+.done-backup i { font-size: var(--text-base); flex-shrink: 0; }
 
 /* 底栏 */
 .rescue-bottom { display: flex; flex-direction: column; gap: var(--space-sm); flex-shrink: 0; padding-right: var(--space-xl); }
@@ -414,11 +414,11 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
   font-size: var(--text-xs); font-weight: 500; color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
-.rescue-stat-icon { font-size: 12px; }
+.rescue-stat-icon { font-size: var(--text-xs); }
 .rescue-stat--success { color: var(--success); }
 .rescue-stat--warning { color: var(--warning); }
 .rescue-stat-sep { width: 1px; height: 12px; background: var(--border-subtle); margin: 0 var(--space-sm-md); flex-shrink: 0; }
-.rescue-stat-skip { color: var(--warning); font-size: 12px; cursor: help; margin-right: var(--space-2xs); }
+.rescue-stat-skip { color: var(--warning); font-size: var(--text-xs); cursor: help; margin-right: var(--space-2xs); }
 .rescue-bottom-actions { display: flex; align-items: center; gap: var(--space-sm); margin-left: auto; }
 .mr-cancelled-hint { font-size: var(--text-xs); color: var(--text-muted); margin-right: auto; }
 
@@ -444,6 +444,7 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 
 .scan-bar-enter-active { transition: opacity var(--duration-normal) ease, transform var(--duration-normal) ease; }
+
 .scan-bar-leave-active {
   transition: opacity 0.8s var(--ease-standard), transform 0.8s var(--ease-standard),
     max-height 0.6s 0.3s var(--ease-standard), padding 0.6s 0.3s var(--ease-standard), border-width 0.6s 0.3s var(--ease-standard);

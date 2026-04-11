@@ -214,7 +214,7 @@ onDeactivated(onViewDeactivated);
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   position: relative;
@@ -223,7 +223,7 @@ onDeactivated(onViewDeactivated);
   font-family: inherit;
 }
 
-.lc-tab i { font-size: 14px; }
+.lc-tab i { font-size: var(--text-base); }
 
 .lc-tab:hover {
   color: var(--text-primary);

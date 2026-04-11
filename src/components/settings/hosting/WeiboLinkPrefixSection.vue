@@ -182,7 +182,7 @@ function handleAdd() {
 </template>
 
 <style scoped>
-@import '../../../styles/settings-shared.css';
+@import url('../../../styles/settings-shared.css');
 
 .prefix-title-row {
   display: flex;
@@ -233,20 +233,20 @@ function handleAdd() {
 }
 
 .prefix-name {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
 }
 
 .prefix-dot {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   flex-shrink: 0;
 }
 
 .prefix-domain {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -273,7 +273,7 @@ function handleAdd() {
 }
 
 .prefix-field-label {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   width: 32px;
   flex-shrink: 0;

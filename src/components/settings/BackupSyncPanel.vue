@@ -446,7 +446,7 @@ function handleClearPassword() {
 </template>
 
 <style scoped>
-@import '../../styles/settings-shared.css';
+@import url('../../styles/settings-shared.css');
 
 /* 备份密码卡片 */
 .security-card {
@@ -476,13 +476,13 @@ function handleClearPassword() {
 }
 
 .security-status {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--success);
 }
 
 .security-status-inactive {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-muted);
   display: flex;
@@ -491,7 +491,7 @@ function handleClearPassword() {
 }
 
 .security-desc {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   margin: 0;
   line-height: 1.5;
@@ -522,13 +522,13 @@ function handleClearPassword() {
 }
 
 .data-section-title {
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-main);
 }
 
 .data-section-desc {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 </style>

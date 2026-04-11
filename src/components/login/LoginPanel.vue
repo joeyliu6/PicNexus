@@ -104,25 +104,25 @@ defineEmits<{
 }
 
 .icon-container i {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   color: var(--primary);
 }
 
 /* 标题 */
 .dialog-title {
-  font-size: 1.125rem;
+  font-size: var(--text-lg-xl);
   font-weight: 600;
   color: var(--text-main);
-  margin: 0 0 10px 0;
+  margin: 0 0 10px;
   text-align: center;
 }
 
 .dialog-desc {
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   line-height: 1.7;
   text-align: center;
-  margin: 0 0 20px 0;
+  margin: 0 0 20px;
 }
 
 /* 安全提示 */
@@ -143,18 +143,18 @@ defineEmits<{
 }
 
 .tip-header i {
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   color: var(--primary);
 }
 
 .tip-header span {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--primary);
 }
 
 .tip-text {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   line-height: 1.5;
   margin: 0;
@@ -172,7 +172,7 @@ defineEmits<{
   width: 100%;
   height: 40px;
   border-radius: 8px;
-  font-size: 0.875rem;
+  font-size: var(--text-base);
   font-weight: 500;
   justify-content: center;
 }
@@ -181,7 +181,7 @@ defineEmits<{
   width: 100%;
   height: 38px;
   border-radius: 8px;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   justify-content: center;
   border-color: var(--border-subtle);

@@ -144,13 +144,13 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 .log-title {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   font-weight: 500;
 }
 
 .clear-btn {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   background: none;
   border: none;
@@ -180,11 +180,11 @@ function formatRelativeTime(timestamp: number): string {
   gap: 8px;
   padding: 28px 0;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .empty-icon {
-  font-size: 20px;
+  font-size: var(--text-xl);
   opacity: 0.4;
 }
 
@@ -203,7 +203,7 @@ function formatRelativeTime(timestamp: number): string {
 /* ===== 操作图标 ===== */
 .op-icon {
   flex-shrink: 0;
-  font-size: 15px;
+  font-size: var(--text-md);
   width: 28px;
   height: 28px;
   display: flex;
@@ -229,13 +229,13 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 .op-label {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
   white-space: nowrap;
 }
 
 .source-name {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -263,7 +263,7 @@ function formatRelativeTime(timestamp: number): string {
 /* ===== 结果图标 ===== */
 .result-icon {
   flex-shrink: 0;
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 
 .result-success {

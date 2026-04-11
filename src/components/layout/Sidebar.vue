@@ -71,16 +71,16 @@ const handleNavigate = (view: ViewType) => {
   border-radius: 8px;
   color: var(--text-secondary);
   transition: all var(--duration-normal);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .nav-btn :deep(.p-button-icon) {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   margin: 0;
 }
 
 .nav-btn :deep(.p-button-label) {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 

@@ -120,7 +120,7 @@ function handleKeyDown(e: KeyboardEvent) {
   cursor: pointer;
   outline: none;
   transition: all var(--duration-normal);
-  font-size: 13px;
+  font-size: var(--text-sm);
   user-select: none;
 }
 
@@ -142,7 +142,7 @@ function handleKeyDown(e: KeyboardEvent) {
   color: var(--text-primary);
   font-weight: 500;
   font-family: 'Fira Code', 'Cascadia Code', monospace;
-  font-size: 12px;
+  font-size: var(--text-xs);
   letter-spacing: 0.02em;
 }
 
@@ -155,6 +155,6 @@ function handleKeyDown(e: KeyboardEvent) {
 
 .shortcut-placeholder {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 </style>

@@ -255,7 +255,7 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
 </template>
 
 <style scoped>
-@import '../../../styles/settings-shared.css';
+@import url('../../../styles/settings-shared.css');
 
 .delete-profile-btn {
   display: inline-flex;
@@ -266,7 +266,7 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
   border: 1px solid var(--error-alpha-20);
   border-radius: 6px;
   color: var(--error);
-  font-size: 12px;
+  font-size: var(--text-xs);
   cursor: pointer;
   transition: all var(--duration-fast) ease;
 }
