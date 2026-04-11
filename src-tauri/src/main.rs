@@ -262,6 +262,9 @@ fn main() {
             }
 
             // 3. 创建原生托盘菜单（PicGo 方案：0 内存占用）
+            // macOS 使用上面的应用级菜单栏（L206-262）作为入口，不创建系统托盘
+            #[cfg(not(target_os = "macos"))]
+            {
             let menu_settings = MenuItemBuilder::new("打开设置")
                 .id("open_settings")
                 .build(app)?;
@@ -329,6 +332,7 @@ fn main() {
                     }
                 })
                 .build(app)?;
+            } // #[cfg(not(target_os = "macos"))] 块结束
 
             // 5. 窗口初始化
             let window = match app.get_webview_window("main") {
