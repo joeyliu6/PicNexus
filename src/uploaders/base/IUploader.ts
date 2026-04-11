@@ -20,7 +20,7 @@ import {
  * - getPublicUrl: 根据上传结果生成可访问的公开URL
  * - testConnection: 可选方法，用于测试服务连接性
  */
-export interface IUploader {
+export interface IUploader<TConfig = unknown> {
   /**
    * 图床服务唯一标识符
    * 示例: 'weibo', 'r2', 'nami', 'jd', 'nowcoder'
@@ -37,7 +37,7 @@ export interface IUploader {
    * 验证配置完整性
    * 在上传前调用此方法，确保所有必填配置项都已填写
    *
-   * @param config 图床特定的配置对象
+   * @param config 图床特定的配置对象（泛型 TConfig，默认 unknown）
    * @returns 验证结果，包含是否有效、缺失字段、错误信息
    *
    * @example
@@ -47,7 +47,7 @@ export interface IUploader {
    *   return;
    * }
    */
-  validateConfig(config: any): Promise<ValidationResult>;
+  validateConfig(config: TConfig): Promise<ValidationResult>;
 
   /**
    * 上传文件到图床
@@ -103,5 +103,5 @@ export interface IUploader {
    *   console.error('连接失败:', test?.error);
    * }
    */
-  testConnection?(config?: any): Promise<ConnectionTestResult>;
+  testConnection?(config?: TConfig): Promise<ConnectionTestResult>;
 }

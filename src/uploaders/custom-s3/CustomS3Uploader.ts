@@ -2,7 +2,7 @@ import { BaseS3Uploader } from '../s3/BaseS3Uploader';
 import { UploadResult } from '../base/types';
 import type { CustomS3Profile } from '../../config/types';
 
-export class CustomS3Uploader extends BaseS3Uploader {
+export class CustomS3Uploader extends BaseS3Uploader<CustomS3Profile> {
   readonly serviceId = 'custom_s3';
   readonly serviceName = '自定义 S3 存储';
 

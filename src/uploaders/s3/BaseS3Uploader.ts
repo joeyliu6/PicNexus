@@ -1,7 +1,9 @@
 // S3 兼容存储上传器基类
-// 支持：腾讯云 COS、阿里云 OSS、七牛云、又拍云
+// 支持：腾讯云 COS、阿里云 OSS、七牛云、又拍云、Cloudflare R2、自定义 S3
 
 import { BaseUploader } from '../base/BaseUploader';
+import { IUploader } from '../base/IUploader';
+import { S3BaseConfig } from './types';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
 
 interface S3RustResult {
@@ -9,20 +11,23 @@ interface S3RustResult {
   key: string;
 }
 
-export abstract class BaseS3Uploader extends BaseUploader {
-  protected abstract getEndpoint(config: any): string;
-  protected abstract getAccessKey(config: any): string;
-  protected abstract getSecretKey(config: any): string;
-  protected abstract getRegion(config: any): string;
-  protected abstract getBucket(config: any): string;
-  protected abstract getPath(config: any): string;
-  protected abstract getPublicDomain(config: any): string;
+export abstract class BaseS3Uploader<TConfig extends S3BaseConfig>
+  extends BaseUploader
+  implements IUploader<TConfig>
+{
+  protected abstract getEndpoint(config: TConfig): string;
+  protected abstract getAccessKey(config: TConfig): string;
+  protected abstract getSecretKey(config: TConfig): string;
+  protected abstract getRegion(config: TConfig): string;
+  protected abstract getBucket(config: TConfig): string;
+  protected abstract getPath(config: TConfig): string;
+  protected abstract getPublicDomain(config: TConfig): string;
 
   protected getRustCommand(): string {
     return 'upload_to_s3_compatible';
   }
 
-  async validateConfig(config: any): Promise<ValidationResult> {
+  async validateConfig(config: TConfig): Promise<ValidationResult> {
     const errors: string[] = [];
     const missingFields: string[] = [];
 
@@ -67,7 +72,9 @@ export abstract class BaseS3Uploader extends BaseUploader {
   ): Promise<UploadResult> {
     this.log('info', `开始上传到 ${this.serviceName}`, { filePath });
 
-    const config = options.config;
+    // options.config 仍是 any（UploadOptions 尚未泛型化），这里显式断言到 TConfig
+    // 让读者明确：此处接收到的是具体派生类对应的 config 类型
+    const config = options.config as TConfig;
     const fileName = filePath.split(/[/\\]/).pop() || '';
     const path = this.getPath(config);
     // 确保 path 以 / 结尾（如果非空）

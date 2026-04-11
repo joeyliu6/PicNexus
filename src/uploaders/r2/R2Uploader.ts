@@ -9,7 +9,7 @@ import { R2ServiceConfig } from '../../config/types';
  * Cloudflare R2 上传器
  * 基于 S3 兼容协议实现，复用 BaseS3Uploader 的上传逻辑
  */
-export class R2Uploader extends BaseS3Uploader {
+export class R2Uploader extends BaseS3Uploader<R2ServiceConfig> {
   readonly serviceId = 'r2';
   readonly serviceName = 'Cloudflare R2';
 
@@ -69,28 +69,27 @@ export class R2Uploader extends BaseS3Uploader {
    * 验证 R2 配置
    * 覆盖基类方法，提供更友好的中文错误提示
    */
-  async validateConfig(config: any): Promise<ValidationResult> {
-    const r2Config = config as R2ServiceConfig;
+  async validateConfig(config: R2ServiceConfig): Promise<ValidationResult> {
     const missingFields: string[] = [];
     const errors: string[] = [];
 
-    if (this.isEmpty(r2Config.accountId)) {
+    if (this.isEmpty(config.accountId)) {
       missingFields.push('accountId');
       errors.push('账户 ID (Account ID) 不能为空');
     }
-    if (this.isEmpty(r2Config.accessKeyId)) {
+    if (this.isEmpty(config.accessKeyId)) {
       missingFields.push('accessKeyId');
       errors.push('访问密钥 ID (Access Key ID) 不能为空');
     }
-    if (this.isEmpty(r2Config.secretAccessKey)) {
+    if (this.isEmpty(config.secretAccessKey)) {
       missingFields.push('secretAccessKey');
       errors.push('访问密钥 (Secret Access Key) 不能为空');
     }
-    if (this.isEmpty(r2Config.bucketName)) {
+    if (this.isEmpty(config.bucketName)) {
       missingFields.push('bucketName');
       errors.push('存储桶名称 (Bucket Name) 不能为空');
     }
-    if (this.isEmpty(r2Config.publicDomain)) {
+    if (this.isEmpty(config.publicDomain)) {
       missingFields.push('publicDomain');
       errors.push('公开访问域名 (Public Domain) 不能为空');
     }

@@ -1,7 +1,7 @@
 import { BaseS3Uploader } from '../s3/BaseS3Uploader';
 import type { TencentServiceConfig } from '../../config/types';
 
-export class TencentUploader extends BaseS3Uploader {
+export class TencentUploader extends BaseS3Uploader<TencentServiceConfig> {
   readonly serviceId = 'tencent';
   readonly serviceName = '腾讯云';
 
