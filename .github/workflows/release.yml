@@ -103,3 +103,47 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+
+      # Tier 3 B: 安装包冒烟 — 静默装 MSI + 启动 15 秒探活，macOS 跳过
+      - name: Smoke test installer (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem -Path "src-tauri/target/release/bundle/msi" -Filter "*.msi" | Select-Object -First 1
+          if (-not $msi) { throw "MSI not found" }
+          Write-Host "Installing: $($msi.FullName)"
+          Start-Process msiexec.exe -ArgumentList "/i", "`"$($msi.FullName)`"", "/quiet", "/norestart" -Wait
+
+          $exe = "C:\Program Files\PicNexus\PicNexus.exe"
+          if (-not (Test-Path $exe)) { throw "Binary not found after install: $exe" }
+
+          Write-Host "Launching app..."
+          $proc = Start-Process $exe -PassThru
+          Start-Sleep -Seconds 15
+
+          if ($proc.HasExited) {
+            throw "App exited prematurely with code $($proc.ExitCode)"
+          }
+
+          Write-Host "App running OK, killing..."
+          Stop-Process -Id $proc.Id -Force
+
+      - name: Smoke test AppImage (Linux)
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          APPIMAGE=$(find src-tauri/target/release/bundle/appimage -name "*.AppImage" | head -1)
+          if [ -z "$APPIMAGE" ]; then echo "AppImage not found"; exit 1; fi
+          chmod +x "$APPIMAGE"
+
+          sudo apt-get install -y xvfb
+          xvfb-run --auto-servernum "$APPIMAGE" &
+          APP_PID=$!
+          sleep 15
+
+          if ! kill -0 $APP_PID 2>/dev/null; then
+            echo "App exited prematurely"
+            exit 1
+          fi
+
+          echo "App running OK, killing..."
+          kill $APP_PID
