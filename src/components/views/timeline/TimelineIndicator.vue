@@ -6,6 +6,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import type { TimePeriodStats } from '../../../composables/useHistory';
 import { filterMonthPoints, type FilteredPoint } from '../../../utils/timelineFilter';
+import TimelineYearLabels from './timeline-indicator/TimelineYearLabels.vue';
+import TimelineTrack from './timeline-indicator/TimelineTrack.vue';
+import TimelineScrubber from './timeline-indicator/TimelineScrubber.vue';
 
 // ==================== 类型定义 ====================
 
@@ -422,61 +425,27 @@ onUnmounted(() => {
     @wheel.prevent="handleWheel"
   >
     <!-- 年份标签列（空间优先：只显示有足够间距的标签） -->
-    <div class="year-labels">
-      <div
-        v-for="section in visibleYearSections"
-        :key="section.year"
-        class="year-label"
-        :style="{ top: `${section.labelPosition * 100}%` }"
-        @click="handleYearClick(section.year, $event)"
-      >
-        {{ section.year }}
-      </div>
-    </div>
+    <TimelineYearLabels
+      :sections="visibleYearSections"
+      :active="isHovering || isDragging"
+      @year-click="handleYearClick"
+    />
 
     <!-- 时间轴轨道 -->
-    <div class="timeline-track">
-      <!-- 轨道背景 -->
-      <div class="track-background"></div>
-
-      <!-- 月份点（Google Photos 风格：统一灰色圆点，智能过滤） -->
-      <div
-        v-for="dot in filteredDots"
-        :key="dot.id"
-        class="month-dot"
-        :style="{ top: `${dot.position * 100}%` }"
-        v-tooltip.top="`${dot.label} (${dot.count}张)`"
-      />
-
-      <!-- 年份分隔线 -->
-      <div
-        v-for="section in yearSections"
-        :key="`sep-${section.year}`"
-        class="year-separator"
-        :style="{ top: `${section.startPosition * 100}%` }"
-      />
-    </div>
+    <TimelineTrack
+      :filtered-dots="filteredDots"
+      :year-sections="yearSections"
+      :hovered="isHovering"
+    />
 
     <!-- 滑块容器（与轨道对齐） -->
-    <div class="scrubber-container">
-      <div
-        class="scrubber"
-        :class="{ active: showBubble }"
-        :style="scrubberStyle"
-        @mousedown="startDrag"
-      >
-        <!-- 默认小圆点（非悬停时显示） -->
-        <div v-if="!showBubble" class="scrubber-dot"></div>
-
-        <!-- 日期气泡（底部蓝边样式：悬停/拖拽时显示） -->
-        <Transition name="bubble-fade">
-          <div v-if="showBubble" class="scrubber-bubble">
-            <span class="bubble-date">{{ currentDateInfo.year }}年{{ currentDateInfo.month + 1 }}月</span>
-            <div class="bubble-indicator"></div>
-          </div>
-        </Transition>
-      </div>
-    </div>
+    <TimelineScrubber
+      :position-top="scrubberStyle.top"
+      :show-bubble="showBubble"
+      :year="currentDateInfo.year"
+      :month="currentDateInfo.month"
+      @drag-start="startDrag"
+    />
 
     <!-- 可见区域指示器 -->
     <div
@@ -503,170 +472,6 @@ onUnmounted(() => {
   cursor: row-resize;
 }
 
-/* ==================== 年份标签 ==================== */
-
-.year-labels {
-  position: absolute;
-  left: 0;
-  top: 24px;
-  bottom: 24px;
-  width: 36px;
-  pointer-events: none;
-}
-
-.year-label {
-  position: absolute;
-  right: 4px;
-  transform: translateY(-100%);  /* 标签位于年份底部边界上方 */
-  font-size: var(--text-2xs-xs);
-  font-weight: 600;
-  color: var(--text-secondary);
-  opacity: 0.6;
-  transition: all var(--duration-normal) ease;
-  pointer-events: auto;
-  cursor: pointer;
-  padding: 1px 6px;
-  border-radius: 10px;
-  background: rgb(255 255 255 / 60%);
-}
-
-.year-label:hover {
-  opacity: 1;
-  color: var(--primary);
-  background: var(--bg-hover);
-}
-
-.timeline-indicator.is-hovering .year-label,
-.timeline-indicator.is-dragging .year-label {
-  opacity: 1;
-  color: var(--text-primary);
-}
-
-/* ==================== 时间轴轨道 ==================== */
-
-.timeline-track {
-  position: absolute;
-  right: 16px;
-  top: 24px;
-  bottom: 24px;
-  width: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.track-background {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: var(--border-color);
-  border-radius: 1px;
-  opacity: 0.3;
-}
-
-/* 月份点（Google Photos 风格：统一灰色圆点，更小更密集） */
-.month-dot {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--text-secondary);
-  opacity: 0.25;
-  transform: translateY(-50%);
-  transition: opacity var(--duration-normal);
-  pointer-events: none;
-}
-
-.timeline-indicator:hover .month-dot {
-  opacity: 0.4;
-}
-
-/* 年份分隔线 */
-.year-separator {
-  position: absolute;
-  right: -4px;
-  width: 16px;
-  height: 1px;
-  background: var(--border-color);
-  opacity: 0.5;
-}
-
-/* ==================== 滑块/指示器 ==================== */
-
-/* 滑块定位容器（与轨道对齐） */
-.scrubber-container {
-  position: absolute;
-  right: 8px;
-  top: 24px;
-  bottom: 24px;
-  pointer-events: none;
-}
-
-.scrubber {
-  position: absolute;
-  right: 0;
-  pointer-events: auto;
-  transform: translateY(-50%);
-  z-index: 10;
-  cursor: row-resize;
-  transition: transform var(--duration-fast) ease;
-}
-
-/* 激活状态：蓝色底边对齐鼠标位置 */
-.scrubber.active {
-  transform: translateY(calc(-100% + 3px));
-}
-
-/* 默认小圆点（非悬停时显示） */
-.scrubber-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--primary);
-  box-shadow: 0 1px 4px var(--primary-alpha-30);
-}
-
-/* 日期气泡（底部蓝边样式） */
-.scrubber-bubble {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-/* 底部蓝色指示条 */
-.bubble-indicator {
-  width: 100%;
-  height: 3px;
-  background: var(--primary);
-  flex-shrink: 0;
-}
-
-.bubble-date {
-  padding: 4px 8px;
-  font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--text-main);
-  letter-spacing: 0.1px;
-}
-
-/* 气泡动画 */
-.bubble-fade-enter-active,
-.bubble-fade-leave-active {
-  transition: all var(--duration-normal) ease;
-}
-
-.bubble-fade-enter-from,
-.bubble-fade-leave-to {
-  opacity: 0;
-  transform: translateX(12px) scale(0.9);
-}
-
 /* ==================== 可见区域指示器（已隐藏） ==================== */
 
 .visible-indicator {
@@ -679,14 +484,6 @@ onUnmounted(() => {
   .timeline-indicator {
     width: 52px;
   }
-
-  .year-labels {
-    width: 28px;
-  }
-
-  .year-label {
-    font-size: var(--text-2xs);
-  }
 }
 
 @media (width <= 768px) {
@@ -694,58 +491,5 @@ onUnmounted(() => {
     width: 40px;
     padding: 16px 4px;
   }
-
-  .year-labels {
-    display: none;
-  }
-
-  .timeline-track {
-    right: 12px;
-  }
-
-  .scrubber-handle {
-    width: 16px;
-    height: 16px;
-  }
-}
-
-/* 触摸设备 */
-@media (hover: none) {
-  .scrubber-handle {
-    width: 24px;
-    height: 24px;
-  }
-
-  .scrubber-bubble {
-    display: flex;
-  }
-
-  .year-label {
-    opacity: 0.8;
-    font-size: var(--text-2xs);
-  }
-}
-
-/* ==================== 深色主题适配 ==================== */
-
-:root.dark-theme .scrubber-bubble,
-.dark-theme .scrubber-bubble {
-  background: var(--bg-surface);
-  box-shadow: 0 2px 12px rgb(0 0 0 / 40%);
-}
-
-:root.dark-theme .bubble-date,
-.dark-theme .bubble-date {
-  color: var(--text-primary);
-}
-
-:root.dark-theme .year-separator,
-.dark-theme .year-separator {
-  opacity: 0.3;
-}
-
-:root.dark-theme .year-label,
-.dark-theme .year-label {
-  background: rgb(255 255 255 / 15%);
 }
 </style>

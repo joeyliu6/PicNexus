@@ -3,6 +3,9 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, toRef } from 'vue';
 import type { CompressionPreset } from '../../config/types';
 import { useImageZoom } from '../../composables/useImageZoom';
 import { useCompressionTask } from '../../composables/useCompressionTask';
+import CompressionPreviewHeader from './compression-preview/CompressionPreviewHeader.vue';
+import CompressionPreviewInfoBar from './compression-preview/CompressionPreviewInfoBar.vue';
+import CompressionPreviewState from './compression-preview/CompressionPreviewState.vue';
 
 interface Props {
   visible: boolean;
@@ -101,52 +104,31 @@ onBeforeUnmount(() => {
       <div v-if="visible" class="cpd-overlay" @click="onOverlayClick">
         <div class="cpd-dialog">
           <!-- 头部 -->
-          <div class="cpd-header">
-            <div class="cpd-header-left">
-              <span class="cpd-title">压缩预览</span>
-              <span v-if="status === 'done' && result" class="cpd-filename" v-tooltip.top="fileName">{{ fileName }}</span>
-            </div>
-            <button class="cpd-close" @click="close" v-tooltip.bottom="'关闭 (Esc)'">
-              <i class="pi pi-times" />
-            </button>
-          </div>
+          <CompressionPreviewHeader
+            :show-filename="status === 'done' && !!result"
+            :file-name="fileName"
+            @close="close"
+          />
 
           <!-- 信息条 -->
-          <div v-if="status === 'done' && result" class="cpd-info-bar">
-            <div class="cpd-info-left">
-              <span class="cpd-size-badge original">{{ formatSize(result.originalSize) }}</span>
-              <i class="pi pi-arrow-right cpd-arrow" />
-              <span class="cpd-size-badge compressed">{{ formatSize(result.compressedSize) }}</span>
-              <span class="cpd-ratio-badge" :class="isLarger ? 'larger' : 'saved'">
-                {{ isLarger ? '体积增大' : `节省 ${saved}%` }}
-              </span>
-            </div>
-            <span class="cpd-dims">{{ result.width }} × {{ result.height }} · {{ result.format.toUpperCase() }}</span>
-          </div>
+          <CompressionPreviewInfoBar
+            v-if="status === 'done' && result"
+            :result="result"
+            :saved="saved"
+            :is-larger="isLarger"
+            :format-size="formatSize"
+          />
 
           <!-- 主体区域 -->
           <div class="cpd-body">
-            <!-- 加载状态 -->
-            <div v-if="status === 'compressing'" class="cpd-state">
-              <div class="cpd-loading-ring">
-                <i class="pi pi-spin pi-spinner" />
-              </div>
-              <span class="cpd-state-text">{{ fileName ? '压缩中...' : '选择图片...' }}</span>
-              <span v-if="fileName" class="cpd-state-hint">{{ fileName }}</span>
-            </div>
-
-            <!-- 错误状态 -->
-            <div v-else-if="status === 'error'" class="cpd-state">
-              <div class="cpd-error-icon">
-                <i class="pi pi-times-circle" />
-              </div>
-              <span class="cpd-state-text error">压缩失败</span>
-              <span class="cpd-state-hint">{{ errorMsg }}</span>
-              <button class="cpd-retry-btn" @click="retrySelect">
-                <i class="pi pi-refresh" />
-                重新选择
-              </button>
-            </div>
+            <!-- 加载/错误状态 -->
+            <CompressionPreviewState
+              v-if="status === 'compressing' || status === 'error'"
+              :status="status"
+              :file-name="fileName"
+              :error-msg="errorMsg"
+              @retry="retrySelect"
+            />
 
             <!-- 对比视图 -->
             <div
@@ -268,125 +250,6 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-/* --- 头部 --- */
-.cpd-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px 0;
-  flex-shrink: 0;
-}
-
-.cpd-header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.cpd-title {
-  font-size: var(--text-lg-xl);
-  font-weight: 700;
-  color: var(--text-primary);
-  flex-shrink: 0;
-}
-
-.cpd-filename {
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-  max-width: 280px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 2px 10px;
-  background: var(--hover-overlay-subtle);
-  border-radius: 4px;
-  font-family: var(--font-mono);
-}
-
-.cpd-close {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  border-radius: 8px;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all var(--duration-fast);
-  flex-shrink: 0;
-}
-
-.cpd-close:hover {
-  background: var(--hover-overlay);
-  color: var(--text-primary);
-}
-
-/* --- 信息条 --- */
-.cpd-info-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 24px 0;
-  font-size: var(--text-sm);
-  flex-wrap: wrap;
-  flex-shrink: 0;
-}
-
-.cpd-info-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.cpd-size-badge {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  padding: 3px 10px;
-  border-radius: 6px;
-}
-
-.cpd-size-badge.original {
-  color: var(--text-secondary);
-  background: var(--hover-overlay-subtle);
-}
-
-.cpd-size-badge.compressed {
-  color: var(--primary);
-  background: var(--primary-alpha-8);
-}
-
-.cpd-arrow {
-  font-size: var(--text-2xs);
-  color: var(--text-muted);
-}
-
-.cpd-ratio-badge {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: 6px;
-}
-
-.cpd-ratio-badge.saved {
-  color: var(--success);
-  background: var(--success-soft);
-}
-
-.cpd-ratio-badge.larger {
-  color: var(--warning);
-  background: var(--warning-soft);
-}
-
-.cpd-dims {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-
 /* --- 主体 --- */
 .cpd-body {
   flex: 1;
@@ -405,87 +268,6 @@ onBeforeUnmount(() => {
     linear-gradient(-45deg, transparent 75%, var(--hover-overlay-subtle) 75%);
   background-size: 16px 16px;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0;
-}
-
-/* --- 状态页 --- */
-.cpd-state {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  background: var(--bg-input);
-}
-
-.cpd-loading-ring {
-  width: 56px;
-  height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--primary-alpha-8);
-}
-
-.cpd-loading-ring .pi {
-  font-size: var(--text-2xl);
-  color: var(--primary);
-}
-
-.cpd-error-icon {
-  width: 56px;
-  height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--error-soft);
-}
-
-.cpd-error-icon .pi {
-  font-size: var(--text-2xl);
-  color: var(--error);
-}
-
-.cpd-state-text {
-  font-size: var(--text-base);
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.cpd-state-text.error {
-  color: var(--error);
-}
-
-.cpd-state-hint {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  max-width: 400px;
-  text-align: center;
-  word-break: break-all;
-}
-
-.cpd-retry-btn {
-  margin-top: 4px;
-  padding: 7px 18px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--bg-card);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  transition: all var(--duration-fast);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.cpd-retry-btn:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-  background: var(--primary-alpha-8);
 }
 
 /* --- 对比容器 --- */
