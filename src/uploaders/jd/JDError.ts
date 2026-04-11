@@ -1,6 +1,7 @@
 // 京东图床错误处理
 
 import { UploadErrorCode, StructuredError, createStructuredError } from '../base/ErrorTypes';
+import { getErrorMessage } from '../../types/errors';
 
 /**
  * 京东上传错误类
@@ -9,7 +10,7 @@ export class JDUploadError extends Error {
   constructor(
     message: string,
     public readonly code?: UploadErrorCode,
-    public readonly originalError?: any
+    public readonly originalError?: unknown
   ) {
     super(message);
     this.name = 'JDUploadError';
@@ -19,8 +20,8 @@ export class JDUploadError extends Error {
 /**
  * 转换通用错误为京东结构化错误
  */
-export function convertToJDError(error: any): StructuredError {
-  const msg = error?.message || String(error);
+export function convertToJDError(error: unknown): StructuredError {
+  const msg = getErrorMessage(error);
   const lowerMsg = msg.toLowerCase();
 
   // 网络错误

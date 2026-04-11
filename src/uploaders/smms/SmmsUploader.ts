@@ -1,5 +1,7 @@
 import { BaseUploader } from '../base/BaseUploader';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
+import type { SmmsServiceConfig } from '../../config/types';
+import { getErrorMessage } from '../../types/errors';
 
 interface SmmsRustResult {
   url: string;
@@ -7,7 +9,7 @@ interface SmmsRustResult {
   hash?: string;
 }
 
-export class SmmsUploader extends BaseUploader {
+export class SmmsUploader extends BaseUploader<SmmsServiceConfig> {
   readonly serviceId = 'smms';
   readonly serviceName = 'SM.MS';
 
@@ -15,7 +17,7 @@ export class SmmsUploader extends BaseUploader {
     return 'upload_to_smms';
   }
 
-  async validateConfig(config: any): Promise<ValidationResult> {
+  async validateConfig(config: SmmsServiceConfig): Promise<ValidationResult> {
     if (this.isEmpty(config.token)) {
       return {
         valid: false,
@@ -33,9 +35,11 @@ export class SmmsUploader extends BaseUploader {
   ): Promise<UploadResult> {
     this.log('info', '开始上传到 SM.MS', { filePath });
 
+    const config = options.config as SmmsServiceConfig;
+
     const rustResult = await this.uploadViaRust(
       filePath,
-      { smmsToken: options.config.token },
+      { smmsToken: config.token },
       onProgress
     ) as SmmsRustResult;
 
@@ -55,7 +59,10 @@ export class SmmsUploader extends BaseUploader {
     return result.url;
   }
 
-  async testConnection(config: any): Promise<import('../base/types').ConnectionTestResult> {
+  async testConnection(config?: SmmsServiceConfig): Promise<import('../base/types').ConnectionTestResult> {
+    if (!config) {
+      return { success: false, error: '缺少 SM.MS 配置' };
+    }
     const startTime = Date.now();
     try {
       // 调用 SM.MS profile API 验证 Token
@@ -67,12 +74,12 @@ export class SmmsUploader extends BaseUploader {
         return { success: false, latency, error: `HTTP ${response.status}` };
       }
       return { success: true, latency };
-    } catch (error: any) {
+    } catch (error) {
       const latency = Date.now() - startTime;
       return {
         success: false,
         latency,
-        error: error.message || '连接测试失败'
+        error: getErrorMessage(error) || '连接测试失败'
       };
     }
   }

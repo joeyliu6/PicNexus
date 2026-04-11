@@ -34,6 +34,29 @@ export interface SaveFeedbackState {
   updatedAt?: number;
 }
 
+/**
+ * 设置页 formData 中 useConnectionTest / 其他子 composable 会读取的字段的最小子集。
+ * 只列出跨模块消费的字段，其他字段是 SettingsView 自己内部使用。
+ */
+export interface SettingsFormShape {
+  weiboCookie: string;
+  r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; path: string; publicDomain: string };
+  tencent: { secretId: string; secretKey: string; region: string; bucket: string; path: string; publicDomain: string };
+  aliyun: { accessKeyId: string; accessKeySecret: string; region: string; bucket: string; path: string; publicDomain: string };
+  qiniu: { accessKey: string; secretKey: string; region: string; bucket: string; publicDomain: string; path: string };
+  upyun: { operator: string; password: string; bucket: string; publicDomain: string; path: string };
+  custom_s3_profiles: CustomS3Profile[];
+  nowcoder: { cookie: string };
+  zhihu: { cookie: string };
+  nami: { cookie: string; authToken: string };
+  bilibili: { cookie: string };
+  chaoxing: { cookie: string };
+  smms: { token: string };
+  github: import('../../config/types').GithubServiceConfig;
+  imgur: { clientId: string; clientSecret?: string };
+  editorServer: EditorServerConfig;
+}
+
 // ---- composable ----
 
 const log = createLogger('Settings');
@@ -222,7 +245,7 @@ export function useSettingsForm() {
     try {
       const config = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
 
-      formData.value.weiboCookie = (config.services?.weibo as any)?.cookie || '';
+      formData.value.weiboCookie = config.services?.weibo?.cookie || '';
       formData.value.r2 = { ...formData.value.r2, ...(config.services?.r2 || {}) };
       formData.value.tencent = { ...formData.value.tencent, ...(config.services?.tencent || {}) };
       formData.value.aliyun = { ...formData.value.aliyun, ...(config.services?.aliyun || {}) };
@@ -238,7 +261,12 @@ export function useSettingsForm() {
       formData.value.imgur = { ...formData.value.imgur, ...(config.services?.imgur || {}) };
 
       // 迁移旧的单实例 custom_s3 配置到 profiles
-      const oldCustomS3 = (config.services as any)?.custom_s3;
+      // 历史遗留：旧版的 services.custom_s3 单实例结构，新版已改为 custom_s3_profiles 数组
+      // 只在读取/迁移时访问一次，新保存不会再写入，因此允许局部 cast 到 Record
+      const legacyServices = config.services as unknown as Record<string, unknown> | undefined;
+      const oldCustomS3 = legacyServices?.custom_s3 as
+        | { endpoint?: string; accessKeyId?: string; secretAccessKey?: string; region?: string; bucket?: string; path?: string; publicDomain?: string }
+        | undefined;
       if (oldCustomS3 && (!config.custom_s3_profiles || config.custom_s3_profiles.length === 0)) {
         if (oldCustomS3.endpoint || oldCustomS3.accessKeyId) {
           const profileId = generateId();
@@ -262,7 +290,9 @@ export function useSettingsForm() {
             config.availableServices = config.availableServices.filter((s: string) => s !== oldId).concat(newId);
           }
         }
-        delete (config.services as any).custom_s3;
+        if (legacyServices) {
+          delete legacyServices.custom_s3;
+        }
       }
 
       formData.value.custom_s3_profiles = config.custom_s3_profiles || [];
@@ -271,7 +301,7 @@ export function useSettingsForm() {
       // WebDAV 配置（密码解密）
       if (config.webdav) {
         const profiles = await Promise.all(
-          (config.webdav.profiles || []).map(async (p: any) => {
+          (config.webdav.profiles || []).map(async (p: WebDAVProfile) => {
             if (p.passwordEncrypted && !p.password) {
               try {
                 p.password = await invoke<string>('decrypt_webdav_password', { encrypted: p.passwordEncrypted });

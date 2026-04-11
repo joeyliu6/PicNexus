@@ -19,7 +19,7 @@ interface WeiboRustResult {
  * 微博图床上传器
  * 实现微博图片上传功能
  */
-export class WeiboUploader extends BaseUploader {
+export class WeiboUploader extends BaseUploader<WeiboServiceConfig> {
   readonly serviceId = 'weibo';
   readonly serviceName = '新浪微博';
 
@@ -33,8 +33,8 @@ export class WeiboUploader extends BaseUploader {
   /**
    * 验证微博配置
    */
-  async validateConfig(config: any): Promise<ValidationResult> {
-    const weiboConfig = config as WeiboServiceConfig;
+  async validateConfig(config: WeiboServiceConfig): Promise<ValidationResult> {
+    const weiboConfig = config;
 
     // 检查 Cookie 是否存在
     if (!weiboConfig.cookie || this.isEmpty(weiboConfig.cookie)) {

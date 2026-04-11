@@ -1,12 +1,14 @@
 import { BaseUploader } from '../base/BaseUploader';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
+import type { ImgurServiceConfig } from '../../config/types';
+import { getErrorMessage } from '../../types/errors';
 
 interface ImgurRustResult {
   url: string;
   deleteHash?: string;
 }
 
-export class ImgurUploader extends BaseUploader {
+export class ImgurUploader extends BaseUploader<ImgurServiceConfig> {
   readonly serviceId = 'imgur';
   readonly serviceName = 'Imgur';
 
@@ -14,7 +16,7 @@ export class ImgurUploader extends BaseUploader {
     return 'upload_to_imgur';
   }
 
-  async validateConfig(config: any): Promise<ValidationResult> {
+  async validateConfig(config: ImgurServiceConfig): Promise<ValidationResult> {
     if (this.isEmpty(config.clientId)) {
       return {
         valid: false,
@@ -32,11 +34,13 @@ export class ImgurUploader extends BaseUploader {
   ): Promise<UploadResult> {
     this.log('info', '开始上传到 Imgur', { filePath });
 
+    const config = options.config as ImgurServiceConfig;
+
     const rustResult = await this.uploadViaRust(
       filePath,
       {
-        imgurClientId: options.config.clientId,
-        imgurClientSecret: options.config.clientSecret
+        imgurClientId: config.clientId,
+        imgurClientSecret: config.clientSecret
       },
       onProgress
     ) as ImgurRustResult;
@@ -70,7 +74,10 @@ export class ImgurUploader extends BaseUploader {
     return url;
   }
 
-  async testConnection(config: any): Promise<import('../base/types').ConnectionTestResult> {
+  async testConnection(config?: ImgurServiceConfig): Promise<import('../base/types').ConnectionTestResult> {
+    if (!config) {
+      return { success: false, error: '缺少 Imgur 配置' };
+    }
     const startTime = Date.now();
     try {
       // 调用 Imgur credits API 验证 Client ID
@@ -82,12 +89,12 @@ export class ImgurUploader extends BaseUploader {
         return { success: false, latency, error: `HTTP ${response.status}` };
       }
       return { success: true, latency };
-    } catch (error: any) {
+    } catch (error) {
       const latency = Date.now() - startTime;
       return {
         success: false,
         latency,
-        error: error.message || '连接测试失败'
+        error: getErrorMessage(error) || '连接测试失败'
       };
     }
   }

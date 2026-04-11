@@ -13,6 +13,7 @@ export function deepClone<T>(obj: T): T {
   return clonedObj;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- 通用 deepMerge，改成 unknown 会让具体对象类型因为逆变无法赋值
 export function deepMerge<T extends Record<string, any>>(
   target: T,
   source: Partial<T>

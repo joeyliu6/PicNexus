@@ -32,6 +32,9 @@ interface ProgressEvent {
  * 上传器抽象基类
  * 提供通用的 Rust 调用逻辑，减少子类重复代码
  *
+ * 泛型参数 TConfig：派生类对应的具体 *ServiceConfig 类型
+ * （默认 unknown，要求派生类显式 pin 住自己的 config 形状）
+ *
  * 子类需要实现：
  * - serviceId: 服务标识符
  * - serviceName: 服务显示名称
@@ -40,7 +43,7 @@ interface ProgressEvent {
  * - upload(): 实现上传逻辑（通常调用 uploadViaRust）
  * - getPublicUrl(): 生成公开 URL
  */
-export abstract class BaseUploader implements IUploader {
+export abstract class BaseUploader<TConfig = unknown> implements IUploader<TConfig> {
   /** 服务标识符（子类必须实现） */
   abstract readonly serviceId: string;
 
@@ -59,7 +62,7 @@ export abstract class BaseUploader implements IUploader {
   protected abstract getRustCommand(): string;
 
   /** 验证配置（子类必须实现） */
-  abstract validateConfig(config: any): Promise<ValidationResult>;
+  abstract validateConfig(config: TConfig): Promise<ValidationResult>;
 
   /** 上传文件（子类必须实现） */
   abstract upload(
@@ -94,9 +97,9 @@ export abstract class BaseUploader implements IUploader {
    */
   protected async uploadViaRust(
     filePath: string,
-    params: Record<string, any>,
+    params: Record<string, unknown>,
     onProgress?: ProgressCallback
-  ): Promise<any> {
+  ): Promise<unknown> {
     // 1. 生成唯一上传 ID（用于匹配进度事件）
     const uploadId = `${this.serviceId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -224,9 +227,9 @@ export abstract class BaseUploader implements IUploader {
   /**
    * 测试连接（默认实现，子类可覆盖）
    * 默认返回未实现
-   * @param config 可选的服务配置，用于验证凭证
+   * @param _config 可选的服务配置，用于验证凭证
    */
-  async testConnection(_config?: any): Promise<ConnectionTestResult> {
+  async testConnection(_config?: TConfig): Promise<ConnectionTestResult> {
     return {
       success: false,
       error: '此服务暂未实现连接测试'
@@ -253,7 +256,7 @@ export abstract class BaseUploader implements IUploader {
    * 辅助方法：记录日志
    * 统一的日志格式
    */
-  protected log(level: 'info' | 'warn' | 'error', message: string, data?: any): void {
+  protected log(level: 'info' | 'warn' | 'error', message: string, data?: unknown): void {
     switch (level) {
       case 'info':
         log.debug(`${this.serviceName} ${message}`, data ?? '');

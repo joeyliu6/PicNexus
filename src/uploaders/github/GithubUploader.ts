@@ -1,6 +1,7 @@
 import { BaseUploader } from '../base/BaseUploader';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
 import type { GithubServiceConfig } from '../../config/types';
+import { getErrorMessage } from '../../types/errors';
 
 interface GithubRustResult {
   url: string;
@@ -8,7 +9,7 @@ interface GithubRustResult {
   remotePath?: string;
 }
 
-export class GithubUploader extends BaseUploader {
+export class GithubUploader extends BaseUploader<GithubServiceConfig> {
   readonly serviceId = 'github';
   readonly serviceName = 'GitHub';
 
@@ -16,7 +17,7 @@ export class GithubUploader extends BaseUploader {
     return 'upload_to_github';
   }
 
-  async validateConfig(config: any): Promise<ValidationResult> {
+  async validateConfig(config: GithubServiceConfig): Promise<ValidationResult> {
     const errors: string[] = [];
     const missingFields: string[] = [];
 
@@ -109,7 +110,10 @@ export class GithubUploader extends BaseUploader {
     return result.url;
   }
 
-  async testConnection(config: any): Promise<import('../base/types').ConnectionTestResult> {
+  async testConnection(config?: GithubServiceConfig): Promise<import('../base/types').ConnectionTestResult> {
+    if (!config) {
+      return { success: false, error: '缺少 GitHub 配置' };
+    }
     const startTime = Date.now();
     try {
       // 调用 GitHub API 验证仓库权限
@@ -122,12 +126,12 @@ export class GithubUploader extends BaseUploader {
         return { success: false, latency, error: `HTTP ${response.status}` };
       }
       return { success: true, latency };
-    } catch (error: any) {
+    } catch (error) {
       const latency = Date.now() - startTime;
       return {
         success: false,
         latency,
-        error: error.message || '连接测试失败'
+        error: getErrorMessage(error) || '连接测试失败'
       };
     }
   }

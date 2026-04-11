@@ -4,6 +4,9 @@
  */
 
 import { useQueueState } from './composables/useQueueState';
+import { createLogger } from './utils/logger';
+
+const log = createLogger('UploadQueue');
 
 /**
  * 单个图床服务的进度状态
@@ -14,9 +17,36 @@ export interface ServiceProgress {
   status: string;    // 状态文本
   link?: string;     // 上传成功后的链接
   error?: string;    // 错误信息
-  metadata?: Record<string, any>;  // 额外元数据（如微博 PID）
+  metadata?: Record<string, unknown>;  // 额外元数据（如微博 PID）
   isRetrying?: boolean; // 是否正在重试中
 }
+
+/**
+ * 微博上传成功时的 payload 结构
+ */
+interface WeiboSuccessPayload {
+  pid: string;
+  largeUrl: string;
+  baiduLink?: string;
+}
+
+/**
+ * R2 上传成功时的 payload 结构
+ */
+interface R2SuccessPayload {
+  r2Link: string;
+}
+
+/**
+ * 上传进度事件的判别联合类型
+ */
+export type UploadProgressEvent =
+  | { type: 'weibo_progress'; payload: number }
+  | { type: 'r2_progress'; payload: number }
+  | { type: 'weibo_success'; payload: WeiboSuccessPayload }
+  | { type: 'r2_success'; payload: R2SuccessPayload }
+  | { type: 'error'; payload: string }
+  | { type: 'complete'; payload?: unknown };
 
 /**
  * 队列项类型定义（新架构 - 支持多图床）
@@ -53,10 +83,7 @@ export interface QueueItem {
 /**
  * 上传进度回调类型
  */
-export type UploadProgressCallback = (progress: {
-  type: 'weibo_progress' | 'r2_progress' | 'weibo_success' | 'r2_success' | 'error' | 'complete';
-  payload: any;
-}) => void;
+export type UploadProgressCallback = (progress: UploadProgressEvent) => void;
 
 /**
  * 上传队列管理器类
@@ -73,15 +100,15 @@ function createServiceProgress(enabledServices: string[]): Record<string, Servic
 /**
  * 从队列项的 serviceProgress 中提取各服务的链接字段（向后兼容）
  */
-function buildLinkFields(item: QueueItem): Record<string, any> {
-  const fields: Record<string, any> = {};
+function buildLinkFields(item: QueueItem): Record<string, string> {
+  const fields: Record<string, string> = {};
   for (const serviceId of item.enabledServices) {
     const serviceLink = item.serviceProgress[serviceId]?.link;
     if (!serviceLink) continue;
     if (serviceId === 'weibo') {
       fields.weiboLink = serviceLink;
       const weiboPid = item.serviceProgress[serviceId]?.metadata?.pid;
-      if (weiboPid) fields.weiboPid = weiboPid;
+      if (typeof weiboPid === 'string') fields.weiboPid = weiboPid;
     } else if (serviceId === 'r2') {
       fields.r2Link = serviceLink;
     }
@@ -93,7 +120,7 @@ export class UploadQueueManager {
   private queueState = useQueueState();  // 统一使用全局状态管理
 
   constructor() {
-    console.log('[UploadQueue] 初始化队列管理器（新架构）');
+    log.debug('初始化队列管理器（新架构）');
   }
 
   /**
@@ -128,7 +155,7 @@ export class UploadQueueManager {
     // 检查重复
     if (this.isFileInQueue(filePath)) {
       const duplicateCount = this.getDuplicateCount(filePath);
-      console.warn(`[UploadQueue] 文件已在队列中: ${fileName} (重复次数: ${duplicateCount})`);
+      log.warn(`文件已在队列中: ${fileName} (重复次数: ${duplicateCount})`);
       return null; // 返回 null 表示重复，不添加到队列
     }
 
@@ -160,7 +187,7 @@ export class UploadQueueManager {
     // 添加到队列
     this.queueState.addItem(item);
 
-    console.log(`[UploadQueue] 添加文件到队列: ${fileName} (图床: ${enabledServices.join(', ')})`);
+    log.debug(`添加文件到队列: ${fileName} (图床: ${enabledServices.join(', ')})`);
     return id;
   }
 
@@ -177,7 +204,7 @@ export class UploadQueueManager {
   ): void {
     const item = this.getItem(itemId);
     if (!item) {
-      console.warn(`[UploadQueue] 找不到队列项: ${itemId}`);
+      log.warn(`找不到队列项: ${itemId}`);
       return;
     }
 
@@ -237,7 +264,7 @@ export class UploadQueueManager {
   markItemComplete(itemId: string, primaryUrl: string): void {
     const item = this.getItem(itemId);
     if (!item) {
-      console.warn(`[UploadQueue] 找不到队列项: ${itemId}`);
+      log.warn(`找不到队列项: ${itemId}`);
       return;
     }
 
@@ -246,7 +273,7 @@ export class UploadQueueManager {
 
     // 修复竞态条件：只构建需要更新的服务进度
     // 不再使用 { ...item.serviceProgress } 展开全部，避免覆盖并发更新
-    const serviceProgressUpdates: Record<string, any> = {};
+    const serviceProgressUpdates: Record<string, ServiceProgress> = {};
 
     item.enabledServices.forEach((serviceId: string) => {
       const currentProgress = item.serviceProgress[serviceId];
@@ -266,7 +293,7 @@ export class UploadQueueManager {
 
     // 根据启用的服务设置对应的链接字段
     const latestItem = this.getItem(itemId);
-    const linkFields: Record<string, any> = {
+    const linkFields: Record<string, string> = {
       thumbUrl,
       primaryUrl,
       ...(latestItem ? buildLinkFields(latestItem) : {})
@@ -281,7 +308,7 @@ export class UploadQueueManager {
       r2Status: item.enabledServices.includes('r2') ? '✓ 完成' : '已跳过'
     });
 
-    console.log(`[UploadQueue] ${item.fileName} 上传成功`);
+    log.debug(`${item.fileName} 上传成功`);
 
     // 【内存优化】自动修剪队列，保留最近 500 条已完成记录
     // 注：单次上传上限 200 张，500 确保至少 2 批完整上传记录不被裁剪
@@ -294,7 +321,7 @@ export class UploadQueueManager {
   markItemFailed(itemId: string, errorMessage: string): void {
     const item = this.getItem(itemId);
     if (!item) {
-      console.warn(`[UploadQueue] 找不到队列项: ${itemId}`);
+      log.warn(`找不到队列项: ${itemId}`);
       return;
     }
 
@@ -307,7 +334,7 @@ export class UploadQueueManager {
       weiboStatus: '✗ 失败',  // 向后兼容
     });
 
-    console.error(`[UploadQueue] ${item.fileName} 上传失败: ${errorMessage}`);
+    log.error(`${item.fileName} 上传失败: ${errorMessage}`);
   }
 
   /**
@@ -376,7 +403,7 @@ export class UploadQueueManager {
    */
   clearQueue(): void {
     this.queueState.clearQueue();
-    console.log('[UploadQueue] 队列已清空');
+    log.debug('队列已清空');
   }
 
   /**
@@ -414,7 +441,7 @@ export class UploadQueueManager {
   resetItemForRetry(itemId: string): void {
     const item = this.getItem(itemId);
     if (!item) {
-      console.warn(`[UploadQueue] 重试失败: 找不到队列项 ${itemId}`);
+      log.warn(`重试失败: 找不到队列项 ${itemId}`);
       return;
     }
 
@@ -442,7 +469,7 @@ export class UploadQueueManager {
       errorMessage: undefined,
     });
 
-    console.log(`[UploadQueue] ${item.fileName} 已重置为全量重试状态`);
+    log.debug(`${item.fileName} 已重置为全量重试状态`);
   }
 
   /**
@@ -451,7 +478,7 @@ export class UploadQueueManager {
   resetServiceForRetry(itemId: string, serviceId: string): void {
     const item = this.getItem(itemId);
     if (!item || !item.serviceProgress[serviceId]) {
-      console.warn(`[UploadQueue] 重试失败: 找不到服务 ${serviceId}`);
+      log.warn(`重试失败: 找不到服务 ${serviceId}`);
       return;
     }
 
@@ -474,7 +501,7 @@ export class UploadQueueManager {
     }
 
     this.updateItem(itemId, updates);
-    console.log(`[UploadQueue] ${item.fileName} - ${serviceId} 已重置为单独重试状态`);
+    log.debug(`${item.fileName} - ${serviceId} 已重置为单独重试状态`);
   }
 
   /**
@@ -483,7 +510,7 @@ export class UploadQueueManager {
   setRetryCallback(_callback: (itemId: string, serviceId?: string) => void): void {
     // 在新架构中，重试回调直接在 UploadView 中处理
     // 这里保留方法以保持接口兼容
-    console.log('[UploadQueue] 重试回调将由 UploadView 处理');
+    log.debug('重试回调将由 UploadView 处理');
   }
 
   /**
@@ -507,7 +534,7 @@ export class UploadQueueManager {
       // 一次性过滤，只触发一次 Vue 响应式更新
       this.queueState.queueItems.value = items.filter(item => !idsToRemove.has(item.id));
 
-      console.log(`[UploadQueue] 内存优化: 已删除 ${itemsToRemove.length} 条旧记录，保留最近 ${maxSize} 条`);
+      log.debug(`内存优化: 已删除 ${itemsToRemove.length} 条旧记录，保留最近 ${maxSize} 条`);
     }
   }
 }

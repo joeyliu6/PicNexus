@@ -1,6 +1,7 @@
 import { JDRateLimiter } from './JDRateLimiter';
 import { BaseUploader } from '../base/BaseUploader';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
+import type { JDServiceConfig } from '../../config/types';
 
 /**
  * Rust 返回的京东上传结果
@@ -14,7 +15,7 @@ interface JDRustResult {
  * 京东图床上传器
  * 京东图床无需认证，完全开箱即用
  */
-export class JDUploader extends BaseUploader {
+export class JDUploader extends BaseUploader<JDServiceConfig> {
   readonly serviceId = 'jd';
   readonly serviceName = '京东图床';
 
@@ -29,7 +30,7 @@ export class JDUploader extends BaseUploader {
    * 验证京东配置
    * 京东图床无需配置，直接返回 valid
    */
-  async validateConfig(_config: any): Promise<ValidationResult> {
+  async validateConfig(_config: JDServiceConfig): Promise<ValidationResult> {
     return { valid: true };
   }
 
@@ -45,7 +46,7 @@ export class JDUploader extends BaseUploader {
 
     // 最大重试次数
     const MAX_RETRIES = 2;
-    let lastError: any;
+    let lastError: unknown;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
@@ -72,7 +73,7 @@ export class JDUploader extends BaseUploader {
           size: rustResult.size
         };
 
-      } catch (error: any) {
+      } catch (error) {
         lastError = error;
         const errorMsg = String(error);
 

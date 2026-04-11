@@ -13,7 +13,7 @@ export class StoreError extends Error {
     message: string,
     public readonly operation: 'read' | 'write' | 'clear' | 'init',
     public readonly key?: string,
-    public readonly originalError?: any
+    public readonly originalError?: unknown
   ) {
     super(message);
     this.name = 'StoreError';

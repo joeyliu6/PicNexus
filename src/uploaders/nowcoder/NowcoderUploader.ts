@@ -3,6 +3,7 @@
 import { BaseUploader } from '../base/BaseUploader';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
 import { NowcoderServiceConfig } from '../../config/types';
+import { getErrorMessage } from '../../types/errors';
 
 /**
  * Rust 返回的牛客上传结果
@@ -16,7 +17,7 @@ interface NowcoderRustResult {
  * 牛客图床上传器
  * 实现牛客网图片上传功能
  */
-export class NowcoderUploader extends BaseUploader {
+export class NowcoderUploader extends BaseUploader<NowcoderServiceConfig> {
   readonly serviceId = 'nowcoder';
   readonly serviceName = '牛客图床';
 
@@ -31,8 +32,8 @@ export class NowcoderUploader extends BaseUploader {
    * 验证牛客配置
    * 牛客图床需要 Cookie 认证
    */
-  async validateConfig(config: any): Promise<ValidationResult> {
-    const nowcoderConfig = config as NowcoderServiceConfig;
+  async validateConfig(config: NowcoderServiceConfig): Promise<ValidationResult> {
+    const nowcoderConfig = config;
 
     // 检查 Cookie 是否存在
     if (!nowcoderConfig.cookie || this.isEmpty(nowcoderConfig.cookie)) {
@@ -74,9 +75,9 @@ export class NowcoderUploader extends BaseUploader {
         url: rustResult.url,
         size: rustResult.size
       };
-    } catch (error: any) {
+    } catch (error) {
       this.log('error', '牛客图床上传失败', error);
-      throw new Error(`牛客图床上传失败: ${error.message || error.toString()}`);
+      throw new Error(`牛客图床上传失败: ${getErrorMessage(error)}`);
     }
   }
 

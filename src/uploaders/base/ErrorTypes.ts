@@ -62,7 +62,7 @@ export interface StructuredError {
   solution?: string;
 
   /** 原始错误对象 */
-  originalError?: any;
+  originalError?: unknown;
 
   /** 所属图床 */
   serviceId?: string;
@@ -78,7 +78,7 @@ export function createStructuredError(
     details?: string;
     retryable?: boolean;
     solution?: string;
-    originalError?: any;
+    originalError?: unknown;
     serviceId?: string;
   }
 ): StructuredError {

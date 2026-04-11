@@ -10,6 +10,7 @@ import { TOAST_MESSAGES } from '../../constants';
 import type { ServiceType, CustomS3Profile } from '../../config/types';
 import { isCustomS3Id, getCustomS3ProfileId } from '../../config/types';
 import type { BatchTestProgress } from '../../types/batchTest';
+import type { SettingsFormShape } from './useSettingsForm';
 
 const MIN_DISPLAY_MS = 300;
 const COMPLETE_LINGER_MS = 500;
@@ -19,7 +20,7 @@ function delay(ms: number): Promise<void> {
 }
 
 interface UseConnectionTestOptions {
-  formData: Ref<any>;
+  formData: Ref<SettingsFormShape>;
   serviceNames: Record<ServiceType, string>;
   availableServices: Ref<string[]>;
   testingConnections: Ref<Record<string, boolean>>;
@@ -83,7 +84,7 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
   }
 
   async function testS3Connection(serviceId: string) {
-    let config: any;
+    let config: Record<string, unknown>;
     let displayName: string;
 
     if (isCustomS3Id(serviceId)) {
@@ -93,7 +94,8 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
       config = { ...profile };
       displayName = profile.name || '自定义 S3';
     } else {
-      config = formData.value[serviceId as keyof typeof formData.value] as any;
+      // S3 家族已由 SettingsFormShape 约束为已知对象形状，这里按 key 取出即可
+      config = formData.value[serviceId as 'r2' | 'tencent' | 'aliyun' | 'qiniu' | 'upyun'] as unknown as Record<string, unknown>;
       displayName = serviceNames[serviceId as ServiceType];
     }
 
@@ -197,10 +199,10 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
       const profileId = getCustomS3ProfileId(serviceId);
       const profile = formData.value.custom_s3_profiles.find((p: CustomS3Profile) => p.id === profileId);
       if (!profile) return '找不到该自定义 S3 配置';
-      return validateS3Config(serviceId as ServiceType, profile as any);
+      return validateS3Config(serviceId as ServiceType, profile as unknown as Record<string, unknown>);
     }
     if (S3_SERVICE_IDS.includes(serviceId as ServiceType)) {
-      const config = formData.value[serviceId as keyof typeof formData.value] as any;
+      const config = formData.value[serviceId as 'r2' | 'tencent' | 'aliyun' | 'qiniu' | 'upyun'] as unknown as Record<string, unknown>;
       return validateS3Config(serviceId as ServiceType, config);
     }
     return null;

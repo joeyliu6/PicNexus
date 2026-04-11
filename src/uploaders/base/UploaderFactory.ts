@@ -1,6 +1,9 @@
 // 上传器工厂类，负责注册和创建上传器实例
 
 import { IUploader } from './IUploader';
+import { createLogger } from '../../utils/logger';
+
+const log = createLogger('UploaderFactory');
 
 /**
  * 上传器工厂函数类型
@@ -47,11 +50,11 @@ export class UploaderFactory {
     }
 
     if (this.registry.has(serviceId)) {
-      console.warn(`[UploaderFactory] 服务 "${serviceId}" 已存在，将被覆盖`);
+      log.warn(`服务 "${serviceId}" 已存在，将被覆盖`);
     }
 
     this.registry.set(serviceId, factory);
-    console.log(`[UploaderFactory] 已注册上传器: ${serviceId}`);
+    log.debug(`已注册上传器: ${serviceId}`);
   }
 
   /**
@@ -78,10 +81,10 @@ export class UploaderFactory {
 
     try {
       const uploader = factory();
-      console.log(`[UploaderFactory] 已创建上传器: ${serviceId} (${uploader.serviceName})`);
+      log.debug(`已创建上传器: ${serviceId} (${uploader.serviceName})`);
       return uploader;
     } catch (error) {
-      console.error(`[UploaderFactory] 创建上传器失败: ${serviceId}`, error);
+      log.error(`创建上传器失败: ${serviceId}`, error);
       throw new Error(`创建上传器 "${serviceId}" 失败: ${error}`);
     }
   }
@@ -129,9 +132,9 @@ export class UploaderFactory {
 
     if (existed) {
       this.registry.delete(serviceId);
-      console.log(`[UploaderFactory] 已注销上传器: ${serviceId}`);
+      log.debug(`已注销上传器: ${serviceId}`);
     } else {
-      console.warn(`[UploaderFactory] 服务 "${serviceId}" 未注册，无需注销`);
+      log.warn(`服务 "${serviceId}" 未注册，无需注销`);
     }
 
     return existed;
@@ -144,7 +147,7 @@ export class UploaderFactory {
   static clear(): void {
     const count = this.registry.size;
     this.registry.clear();
-    console.log(`[UploaderFactory] 已清空所有注册的上传器 (共 ${count} 个)`);
+    log.debug(`已清空所有注册的上传器 (共 ${count} 个)`);
   }
 
   /**
@@ -159,7 +162,7 @@ export class UploaderFactory {
       try {
         const uploader = factory();
         snapshot.set(serviceId, uploader.serviceName);
-      } catch (error) {
+      } catch {
         snapshot.set(serviceId, '(创建失败)');
       }
     }

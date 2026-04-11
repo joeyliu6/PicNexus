@@ -1,6 +1,7 @@
 // Cloudflare R2 上传错误处理
 
 import { UploadErrorCode, StructuredError, createStructuredError } from '../base/ErrorTypes';
+import { getErrorMessage } from '../../types/errors';
 
 /**
  * R2 上传错误类
@@ -9,7 +10,7 @@ export class R2UploadError extends Error {
   constructor(
     message: string,
     public readonly code?: string,
-    public readonly originalError?: any
+    public readonly originalError?: unknown
   ) {
     super(message);
     this.name = 'R2UploadError';
@@ -19,12 +20,12 @@ export class R2UploadError extends Error {
 /**
  * 转换通用错误为 R2 错误
  */
-export function convertToR2Error(error: any): R2UploadError {
+export function convertToR2Error(error: unknown): R2UploadError {
   if (error instanceof R2UploadError) {
     return error;
   }
 
-  const msg = error?.message || String(error);
+  const msg = getErrorMessage(error);
 
   // 认证错误
   if (msg.includes('authentication') || msg.includes('credentials') || msg.includes('AccessDenied')) {
@@ -73,7 +74,7 @@ export function convertToR2Error(error: any): R2UploadError {
 /**
  * 新增：转换为结构化错误
  */
-export function convertToStructuredR2Error(error: any): StructuredError {
+export function convertToStructuredR2Error(error: unknown): StructuredError {
   const r2Error = convertToR2Error(error);
 
   let code: UploadErrorCode;
@@ -106,7 +107,7 @@ export function convertToStructuredR2Error(error: any): StructuredError {
   }
 
   return createStructuredError(code, r2Error.message, {
-    details: r2Error.originalError?.message,
+    details: r2Error.originalError !== undefined ? getErrorMessage(r2Error.originalError) : undefined,
     retryable,
     solution,
     originalError: r2Error.originalError,

@@ -16,7 +16,7 @@ interface BilibiliRustResult {
  * 哔哩哔哩图床上传器
  * 实现哔哩哔哩图片上传功能
  */
-export class BilibiliUploader extends BaseUploader {
+export class BilibiliUploader extends BaseUploader<BilibiliServiceConfig> {
   readonly serviceId = 'bilibili';
   readonly serviceName = 'B站';
 
@@ -30,8 +30,8 @@ export class BilibiliUploader extends BaseUploader {
   /**
    * 验证哔哩哔哩配置
    */
-  async validateConfig(config: any): Promise<ValidationResult> {
-    const biliConfig = config as BilibiliServiceConfig;
+  async validateConfig(config: BilibiliServiceConfig): Promise<ValidationResult> {
+    const biliConfig = config;
 
     // 检查 Cookie 是否存在
     if (!biliConfig.cookie || this.isEmpty(biliConfig.cookie)) {

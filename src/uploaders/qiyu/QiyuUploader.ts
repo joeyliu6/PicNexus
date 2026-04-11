@@ -5,13 +5,17 @@
 import { invoke } from '@tauri-apps/api/core';
 import { BaseUploader } from '../base/BaseUploader';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
+import type { QiyuServiceConfig } from '../../config/types';
+import { createLogger } from '../../utils/logger';
+
+const log = createLogger('QiyuUploader');
 
 interface QiyuRustResult {
   url: string;
   size: number;
 }
 
-export class QiyuUploader extends BaseUploader {
+export class QiyuUploader extends BaseUploader<QiyuServiceConfig> {
   readonly serviceId = 'qiyu';
   readonly serviceName = '七鱼图床';
 
@@ -19,7 +23,7 @@ export class QiyuUploader extends BaseUploader {
     return 'upload_to_qiyu';
   }
 
-  async validateConfig(_config: any): Promise<ValidationResult> {
+  async validateConfig(_config: QiyuServiceConfig): Promise<ValidationResult> {
     // 七鱼图床不需要手动配置 Token，但需要检查 Chrome 是否安装
     try {
       const chromeInstalled = await invoke<boolean>('check_chrome_installed');
@@ -31,7 +35,7 @@ export class QiyuUploader extends BaseUploader {
       }
       return { valid: true };
     } catch (error) {
-      console.error('[QiyuUploader] 检查 Chrome 失败:', error);
+      log.error('检查 Chrome 失败:', error);
       return {
         valid: false,
         errors: ['无法检测 Chrome 安装状态']

@@ -2,6 +2,7 @@
  * 批量迁移面板 — 共享工具函数
  */
 import { PUBLIC_SERVICES } from '../../../../config/types';
+import type { ServiceType } from '../../../../config/types';
 
 export function formatTime(ms: number | null): string {
   if (!ms || ms <= 0) return '--';
@@ -25,7 +26,7 @@ export function formatNumber(n: number): string {
 }
 
 export function isPublicService(serviceId: string): boolean {
-  return PUBLIC_SERVICES.includes(serviceId as any);
+  return PUBLIC_SERVICES.includes(serviceId as ServiceType);
 }
 
 /** 确认页基于数量的粗略时间估算（每张约 2 秒） */

@@ -55,11 +55,12 @@ class TestUploader extends BaseUploader {
     options: UploadOptions,
     onProgress?: ProgressCallback,
   ): Promise<UploadResult> {
-    const rustResult = await this.uploadViaRust(
+    const config = options.config as { token?: string };
+    const rustResult = (await this.uploadViaRust(
       filePath,
-      { testToken: options.config.token },
+      { testToken: config.token },
       onProgress,
-    );
+    )) as { key?: string; url?: string } | undefined;
     return {
       serviceId: this.serviceId,
       fileKey: rustResult?.key ?? 'default-key',

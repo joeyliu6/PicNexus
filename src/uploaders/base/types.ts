@@ -24,7 +24,7 @@ export interface UploadResult {
   height?: number;
 
   /** 扩展元数据（图床特定的额外信息） */
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -46,8 +46,8 @@ export interface ValidationResult {
  * 传递给上传器的额外参数
  */
 export interface UploadOptions {
-  /** 图床特定的配置对象 */
-  config: any;
+  /** 图床特定的配置对象（派生类入口处 cast 为具体 *ServiceConfig） */
+  config: unknown;
 
   /** 超时时间（毫秒） */
   timeout?: number;

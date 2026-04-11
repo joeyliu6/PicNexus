@@ -140,7 +140,7 @@ async function saveCompressionConfig() {
     const config = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
     config.imageCompression = { ...compressionConfig.value };
     await configManager.saveConfig(config, true);
-  } catch (err) {
+  } catch {
     // 静默保存失败不打扰用户
   }
 }

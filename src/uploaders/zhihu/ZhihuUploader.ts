@@ -3,6 +3,7 @@
 import { BaseUploader } from '../base/BaseUploader';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
 import { ZhihuServiceConfig } from '../../config/types';
+import { getErrorMessage } from '../../types/errors';
 
 /**
  * Rust 返回的知乎上传结果
@@ -16,7 +17,7 @@ interface ZhihuRustResult {
  * 知乎图床上传器
  * 实现知乎图片上传功能
  */
-export class ZhihuUploader extends BaseUploader {
+export class ZhihuUploader extends BaseUploader<ZhihuServiceConfig> {
   readonly serviceId = 'zhihu';
   readonly serviceName = '知乎图床';
 
@@ -31,8 +32,8 @@ export class ZhihuUploader extends BaseUploader {
    * 验证知乎配置
    * 知乎图床需要 Cookie 认证
    */
-  async validateConfig(config: any): Promise<ValidationResult> {
-    const zhihuConfig = config as ZhihuServiceConfig;
+  async validateConfig(config: ZhihuServiceConfig): Promise<ValidationResult> {
+    const zhihuConfig = config;
 
     // 检查 Cookie 是否存在
     if (!zhihuConfig.cookie || this.isEmpty(zhihuConfig.cookie)) {
@@ -74,9 +75,9 @@ export class ZhihuUploader extends BaseUploader {
         url: rustResult.url,
         size: rustResult.size
       };
-    } catch (error: any) {
+    } catch (error) {
       this.log('error', '知乎图床上传失败', error);
-      throw new Error(`知乎图床上传失败: ${error.message || error.toString()}`);
+      throw new Error(`知乎图床上传失败: ${getErrorMessage(error)}`);
     }
   }
 

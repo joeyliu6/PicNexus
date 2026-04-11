@@ -6,6 +6,9 @@ import { configStore } from '../store/instances';
 import { fetch } from '@tauri-apps/plugin-http';
 import { getVersion } from '@tauri-apps/api/app';
 import { UserConfig } from '../config/types';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('Analytics');
 
 /** GA4 配置 */
 const GA_MEASUREMENT_ID = 'G-E8LW7TS55J';
@@ -64,9 +67,9 @@ async function getAppVersion(): Promise<string> {
   try {
     cachedAppVersion = await getVersion();
     return cachedAppVersion;
-  } catch (error) {
+  } catch {
     // Tauri API 不可用时（如开发模式下的纯 Web 环境），返回默认值
-    console.warn('[Analytics] 无法获取应用版本，使用默认值');
+    log.warn('无法获取应用版本，使用默认值');
     return '3.0.0';
   }
 }
@@ -105,10 +108,10 @@ async function getOrCreateClientId(): Promise<string> {
     cachedLastActiveTime = now;
 
     // 修复 #6：移除 Client ID 的详细日志
-    console.log('[Analytics] 新用户，已生成标识');
+    log.debug('新用户，已生成标识');
     return clientId;
   } catch (error) {
-    console.error('[Analytics] 获取 Client ID 失败:', error);
+    log.error('获取 Client ID 失败:', error);
     // 返回临时 ID，不影响功能
     const tempId = generateUUID();
     cachedClientId = tempId;
@@ -171,10 +174,10 @@ async function getOrRefreshSessionId(): Promise<string> {
     cachedSessionId = sessionId;
     cachedLastActiveTime = now;
 
-    console.log('[Analytics] 创建新会话');
+    log.debug('创建新会话');
     return sessionId;
   } catch (error) {
-    console.error('[Analytics] 获取 Session ID 失败:', error);
+    log.error('获取 Session ID 失败:', error);
     const fallbackSessionId = now.toString();
     cachedSessionId = fallbackSessionId;
     cachedLastActiveTime = now;
@@ -217,14 +220,14 @@ async function sendToGA4(
 
     // GA4 Measurement Protocol 成功时返回 204 No Content
     if (response.status === 204 || response.status === 200) {
-      console.log(`[Analytics] ✓ 事件: ${eventName}`);
+      log.debug(`✓ 事件: ${eventName}`);
       return true;
     } else {
-      console.warn(`[Analytics] 事件发送返回非预期状态码: ${response.status}`);
+      log.warn(`事件发送返回非预期状态码: ${response.status}`);
       return false;
     }
   } catch (error) {
-    console.error('[Analytics] 事件发送失败:', error);
+    log.error('事件发送失败:', error);
     return false;
   }
 }
@@ -246,7 +249,7 @@ export function useAnalytics() {
       // 修复 #7：使用 UserConfig 类型
       const config = await configStore.get<UserConfig>('config');
       if (config?.analytics?.enabled === false) {
-        console.log('[Analytics] 用户已禁用，跳过初始化');
+        log.debug('用户已禁用，跳过初始化');
         isEnabled.value = false;
         return false;
       }
@@ -258,7 +261,7 @@ export function useAnalytics() {
       cachedSessionId = await getOrRefreshSessionId();
 
       isInitialized.value = true;
-      console.log('[Analytics] ✓ Measurement Protocol 初始化成功');
+      log.debug('✓ Measurement Protocol 初始化成功');
 
       // 修复 #3：动态获取版本号
       const appVersion = await getAppVersion();
@@ -271,7 +274,7 @@ export function useAnalytics() {
 
       return true;
     } catch (error) {
-      console.error('[Analytics] 初始化失败:', error);
+      log.error('初始化失败:', error);
       return false;
     }
   }
@@ -297,7 +300,7 @@ export function useAnalytics() {
 
       await sendToGA4(cachedClientId, cachedSessionId, eventName, params || {});
     } catch (error) {
-      console.error('[Analytics] 事件追踪失败:', error);
+      log.error('事件追踪失败:', error);
     }
   }
 
@@ -322,9 +325,9 @@ export function useAnalytics() {
         await initialize();
       }
 
-      console.log('[Analytics] 已启用');
+      log.debug('已启用');
     } catch (error) {
-      console.error('[Analytics] 启用失败:', error);
+      log.error('启用失败:', error);
     }
   }
 
@@ -344,9 +347,9 @@ export function useAnalytics() {
         await configStore.save();
       }
 
-      console.log('[Analytics] 已禁用');
+      log.debug('已禁用');
     } catch (error) {
-      console.error('[Analytics] 禁用失败:', error);
+      log.error('禁用失败:', error);
     }
   }
 

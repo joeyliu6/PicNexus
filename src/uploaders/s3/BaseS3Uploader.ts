@@ -12,7 +12,7 @@ interface S3RustResult {
 }
 
 export abstract class BaseS3Uploader<TConfig extends S3BaseConfig>
-  extends BaseUploader
+  extends BaseUploader<TConfig>
   implements IUploader<TConfig>
 {
   protected abstract getEndpoint(config: TConfig): string;

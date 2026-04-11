@@ -1,6 +1,7 @@
 // 纳米图床错误处理
 
 import { UploadErrorCode, StructuredError, createStructuredError } from '../base/ErrorTypes';
+import { getErrorMessage } from '../../types/errors';
 
 /**
  * 纳米上传错误类
@@ -9,7 +10,7 @@ export class NamiUploadError extends Error {
   constructor(
     message: string,
     public readonly code?: UploadErrorCode,
-    public readonly originalError?: any
+    public readonly originalError?: unknown
   ) {
     super(message);
     this.name = 'NamiUploadError';
@@ -19,8 +20,8 @@ export class NamiUploadError extends Error {
 /**
  * 转换通用错误为纳米结构化错误
  */
-export function convertToNamiError(error: any): StructuredError {
-  const msg = error?.message || String(error);
+export function convertToNamiError(error: unknown): StructuredError {
+  const msg = getErrorMessage(error);
   const lowerMsg = msg.toLowerCase();
 
   // Cookie 相关错误

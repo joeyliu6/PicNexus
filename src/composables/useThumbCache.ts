@@ -3,11 +3,21 @@
  * 用于两个视图（表格/瀑布流）共享缩略图 URL 缓存
  */
 import { watch } from 'vue';
-import type { HistoryItem } from '../config/types';
+import type { HistoryItem, UserConfig } from '../config/types';
 import type { ImageMeta } from '../types/image-meta';
+import type { QueueItem } from '../uploadQueue';
 import { getActivePrefix } from '../config/types';
 import { useConfigManager } from './useConfig';
 import { useHistoryManager } from './useHistory';
+
+/** 缩略图生成相关函数接受的 config 类型：UserConfig 或 null（未加载） */
+type ThumbConfig = UserConfig | null | undefined;
+
+/** HistoryItem.results 数组的单个元素类型 */
+type HistoryResultEntry = HistoryItem['results'][number];
+
+/** 缩略图候选列表支持的两种 item 类型 */
+type HistoryOrQueueItem = HistoryItem | QueueItem;
 
 // 缓存上限
 const THUMB_CACHE_MAX_SIZE = 500;
@@ -23,7 +33,7 @@ export function generateThumbnailUrl(
   serviceId: string,
   url: string,
   fileKey?: string,
-  config?: any
+  config?: ThumbConfig
 ): string {
   let thumbUrl: string;
 
@@ -101,7 +111,7 @@ export function generateThumbnailUrl(
 }
 
 /** 从 ImageMeta 生成中等缩略图 URL（便捷方法） */
-export function getMetaThumbnailUrl(meta: ImageMeta, config: unknown): string {
+export function getMetaThumbnailUrl(meta: ImageMeta, config: ThumbConfig): string {
   return generateMediumThumbnailUrl(meta.primaryService, meta.primaryUrl, meta.primaryFileKey, config);
 }
 
@@ -113,7 +123,7 @@ export function generateMediumThumbnailUrl(
   serviceId: string,
   url: string,
   fileKey?: string,
-  config?: any
+  config?: ThumbConfig
 ): string {
   switch (serviceId) {
     case 'weibo':
@@ -182,13 +192,14 @@ const thumbnailCandidatesCache = new Map<string, string[]>();
  * 支持 HistoryItem 和 QueueItem
  */
 export function getThumbnailCandidates(
-  item: HistoryItem | any,
-  config: any
+  item: HistoryOrQueueItem,
+  config: ThumbConfig
 ): string[] {
   // 判断是 QueueItem 还是 HistoryItem
   // QueueItem 有 serviceProgress 且无 results，状态会动态变化，不应缓存
   // HistoryItem 有 results，状态稳定，可以缓存
-  const isQueueItem = item.serviceProgress && !item.results;
+  const isHistoryItem = 'results' in item && Array.isArray(item.results);
+  const isQueueItem = !isHistoryItem && 'serviceProgress' in item;
 
   // 使用 item.id 作为缓存键
   const cacheKey = item.id;
@@ -201,29 +212,33 @@ export function getThumbnailCandidates(
   const candidates: string[] = [];
 
   // 1. 处理 HistoryItem
-  if (item.results && Array.isArray(item.results)) {
+  if (isHistoryItem) {
+    const historyItem = item as HistoryItem;
     // 优先添加主力图床
-    if (item.primaryService) {
-      const primary = item.results.find((r: any) => r.serviceId === item.primaryService && r.status === 'success');
+    if (historyItem.primaryService) {
+      const primary = historyItem.results.find(
+        (r: HistoryResultEntry) => r.serviceId === historyItem.primaryService && r.status === 'success'
+      );
       if (primary && primary.result?.url) {
         candidates.push(generateThumbnailUrl(primary.serviceId, primary.result.url, primary.result.fileKey, config));
       }
     }
 
     // 添加其他成功上传的图床
-    item.results.forEach((r: any) => {
-      if (r.status === 'success' && r.result?.url && r.serviceId !== item.primaryService) {
+    historyItem.results.forEach((r: HistoryResultEntry) => {
+      if (r.status === 'success' && r.result?.url && r.serviceId !== historyItem.primaryService) {
         candidates.push(generateThumbnailUrl(r.serviceId, r.result.url, r.result.fileKey, config));
       }
     });
   }
   // 2. 处理 QueueItem
-  else if (item.serviceProgress) {
+  else if (isQueueItem) {
+    const queueItem = item as QueueItem;
     // 优先使用 enabledServices 以保持确定的顺序
-    const services = item.enabledServices || [];
+    const services = queueItem.enabledServices || [];
 
     services.forEach((serviceId: string) => {
-      const progress = item.serviceProgress[serviceId];
+      const progress = queueItem.serviceProgress[serviceId];
       // 检查状态 (兼容新旧状态文本)
       const isSuccess = progress?.status === 'success' ||
         progress?.status?.includes('完成') ||
@@ -231,10 +246,15 @@ export function getThumbnailCandidates(
         !!progress?.link;
 
       if (progress && isSuccess && progress.link) {
-        let fileKey = undefined;
+        let fileKey: string | undefined = undefined;
         if (serviceId === 'weibo') {
           // 尝试从元数据或根属性获取 PID
-          fileKey = progress.metadata?.pid || item.weiboPid;
+          const pidFromMeta = progress.metadata?.pid;
+          if (typeof pidFromMeta === 'string') {
+            fileKey = pidFromMeta;
+          } else if (queueItem.weiboPid) {
+            fileKey = queueItem.weiboPid;
+          }
         }
         candidates.push(generateThumbnailUrl(serviceId, progress.link, fileKey, config));
       }

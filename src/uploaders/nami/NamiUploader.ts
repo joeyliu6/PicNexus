@@ -4,6 +4,7 @@ import { BaseUploader } from '../base/BaseUploader';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
 import { NamiServiceConfig } from '../../config/types';
 import { invoke } from '@tauri-apps/api/core';
+import { getErrorMessage } from '../../types/errors';
 
 /**
  * 纳米动态 Headers（通过 Sidecar 获取）
@@ -34,7 +35,7 @@ const TOKEN_REFRESH_INTERVAL_MS = 25 * 60 * 1000;
  * - Token 有效期约 30 分钟
  * - 支持自动刷新 Token
  */
-export class NamiUploader extends BaseUploader {
+export class NamiUploader extends BaseUploader<NamiServiceConfig> {
   readonly serviceId = 'nami';
   readonly serviceName = '纳米图床';
 
@@ -55,8 +56,8 @@ export class NamiUploader extends BaseUploader {
    * 验证纳米配置
    * 纳米图床需要 Cookie 和 Auth-Token 认证
    */
-  async validateConfig(config: any): Promise<ValidationResult> {
-    const namiConfig = config as NamiServiceConfig;
+  async validateConfig(config: NamiServiceConfig): Promise<ValidationResult> {
+    const namiConfig = config;
 
     // 检查 Cookie 是否存在
     if (!namiConfig.cookie || this.isEmpty(namiConfig.cookie)) {
@@ -143,16 +144,17 @@ export class NamiUploader extends BaseUploader {
         zmToken: dynamicHeaders.zmToken ? '已获取' : '未获取'
       });
 
-    } catch (error: any) {
+    } catch (error) {
       // Token 刷新失败，但不阻止上传尝试
       // Rust 端会自行获取动态 Headers
+      const tokenErrMsg = getErrorMessage(error);
       this.log('warn', '纳米 Token 刷新失败，将在上传时重新获取', {
-        error: error.message || error.toString()
+        error: tokenErrMsg
       });
 
       // 如果是首次获取失败，抛出错误
       if (this.lastTokenFetchTime === 0) {
-        throw new Error(`无法获取纳米 Token: ${error.message || error}`);
+        throw new Error(`无法获取纳米 Token: ${tokenErrMsg}`);
       }
     }
   }
@@ -172,7 +174,7 @@ export class NamiUploader extends BaseUploader {
     try {
       // 确保有新鲜的 Token（不阻塞主流程）
       await this.ensureFreshToken(config).catch((error) => {
-        this.log('warn', 'Token 预刷新失败，继续尝试上传', { error: error.message });
+        this.log('warn', 'Token 预刷新失败，继续尝试上传', { error: getErrorMessage(error) });
       });
 
       // 调用基类的 Rust 上传方法
@@ -197,11 +199,11 @@ export class NamiUploader extends BaseUploader {
         url: rustResult.url,
         size: rustResult.size
       };
-    } catch (error: any) {
+    } catch (error) {
       this.log('error', '纳米图床上传失败', error);
 
       // 检查是否是 Token 相关错误
-      const errorMsg = error.message || error.toString();
+      const errorMsg = getErrorMessage(error);
       if (
         errorMsg.includes('Token') ||
         errorMsg.includes('认证') ||

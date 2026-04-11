@@ -1,5 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { ValidationResult, UploadResult } from '../../../uploaders/base/types';
+import type {
+  BilibiliServiceConfig,
+  NamiServiceConfig,
+  SmmsServiceConfig,
+  GithubServiceConfig,
+  ImgurServiceConfig,
+  JDServiceConfig,
+} from '../../../config/types';
 
 // Mock 所有上传器的共享依赖
 vi.mock('../../../utils/logger', () => ({
@@ -47,6 +55,14 @@ const { UpyunUploader } = await import('../../../uploaders/upyun/UpyunUploader')
 const { CustomS3Uploader } = await import('../../../uploaders/custom-s3/CustomS3Uploader');
 
 // ─── 辅助函数 ───────────────────────────────────────────
+
+/**
+ * 测试专用：把 `Partial<T>` 当作 `T` 传给 validateConfig。
+ * 这些测试的目的就是验证 validateConfig 对不完整配置的反应，
+ * 为了满足 TS 严格类型，在测试边界处做一次 unsafe cast。
+ */
+const partial = <T>(p: Partial<T>): T => p as T;
+
 
 function makeUploadResult(overrides: Partial<UploadResult> = {}): UploadResult {
   return {
@@ -138,22 +154,22 @@ describe('BilibiliUploader', () => {
   });
 
   it('cookie 为空时验证失败', async () => {
-    const result = await uploader.validateConfig({});
+    const result = await uploader.validateConfig(partial<BilibiliServiceConfig>({}));
     expect(result.valid).toBe(false);
   });
 
   it('cookie 缺少 SESSDATA 时验证失败', async () => {
-    const result = await uploader.validateConfig({ cookie: 'bili_jct=abc' });
+    const result = await uploader.validateConfig(partial<BilibiliServiceConfig>({ cookie: 'bili_jct=abc' }));
     expect(result.valid).toBe(false);
   });
 
   it('cookie 缺少 bili_jct 时验证失败', async () => {
-    const result = await uploader.validateConfig({ cookie: 'SESSDATA=abc' });
+    const result = await uploader.validateConfig(partial<BilibiliServiceConfig>({ cookie: 'SESSDATA=abc' }));
     expect(result.valid).toBe(false);
   });
 
   it('cookie 包含 SESSDATA 和 bili_jct 时验证成功', async () => {
-    const result = await uploader.validateConfig({ cookie: 'SESSDATA=abc; bili_jct=def' });
+    const result = await uploader.validateConfig(partial<BilibiliServiceConfig>({ cookie: 'SESSDATA=abc; bili_jct=def' }));
     expect(result.valid).toBe(true);
   });
 
@@ -174,17 +190,17 @@ describe('NamiUploader', () => {
   });
 
   it('cookie 为空时验证失败', async () => {
-    const result = await uploader.validateConfig({});
+    const result = await uploader.validateConfig(partial<NamiServiceConfig>({}));
     expect(result.valid).toBe(false);
   });
 
   it('有 cookie 但缺少 authToken 时验证失败', async () => {
-    const result = await uploader.validateConfig({ cookie: 'sess=abc' });
+    const result = await uploader.validateConfig(partial<NamiServiceConfig>({ cookie: 'sess=abc' }));
     expect(result.valid).toBe(false);
   });
 
   it('cookie 和 authToken 都存在时验证成功', async () => {
-    const result = await uploader.validateConfig({ cookie: 'sess=abc', authToken: 'tok123' });
+    const result = await uploader.validateConfig(partial<NamiServiceConfig>({ cookie: 'sess=abc', authToken: 'tok123' }));
     expect(result.valid).toBe(true);
   });
 
@@ -205,12 +221,12 @@ describe('SmmsUploader', () => {
   });
 
   it('token 为空时验证失败', async () => {
-    const result = await uploader.validateConfig({});
+    const result = await uploader.validateConfig(partial<SmmsServiceConfig>({}));
     expect(result.valid).toBe(false);
   });
 
   it('token 存在时验证成功', async () => {
-    const result = await uploader.validateConfig({ token: 'abc123' });
+    const result = await uploader.validateConfig(partial<SmmsServiceConfig>({ token: 'abc123' }));
     expect(result.valid).toBe(true);
   });
 
@@ -227,19 +243,19 @@ describe('GithubUploader', () => {
   });
 
   it('所有字段为空时验证失败', async () => {
-    const result = await uploader.validateConfig({});
+    const result = await uploader.validateConfig(partial<GithubServiceConfig>({}));
     expect(result.valid).toBe(false);
   });
 
   it('缺少 owner 时验证失败', async () => {
-    const result = await uploader.validateConfig({ token: 't', repo: 'r', branch: 'main' });
+    const result = await uploader.validateConfig(partial<GithubServiceConfig>({ token: 't', repo: 'r', branch: 'main' }));
     expect(result.valid).toBe(false);
   });
 
   it('所有字段齐全时验证成功', async () => {
-    const result = await uploader.validateConfig({
+    const result = await uploader.validateConfig(partial<GithubServiceConfig>({
       token: 'ghp_xxx', owner: 'user', repo: 'repo', branch: 'main',
-    });
+    }));
     expect(result.valid).toBe(true);
   });
 
@@ -256,12 +272,12 @@ describe('ImgurUploader', () => {
   });
 
   it('clientId 为空时验证失败', async () => {
-    const result = await uploader.validateConfig({});
+    const result = await uploader.validateConfig(partial<ImgurServiceConfig>({}));
     expect(result.valid).toBe(false);
   });
 
   it('clientId 存在时验证成功', async () => {
-    const result = await uploader.validateConfig({ clientId: 'abc' });
+    const result = await uploader.validateConfig(partial<ImgurServiceConfig>({ clientId: 'abc' }));
     expect(result.valid).toBe(true);
   });
 
@@ -282,7 +298,7 @@ describe('JDUploader', () => {
   });
 
   it('无需配置，validateConfig 直接返回成功', async () => {
-    const result = await uploader.validateConfig({});
+    const result = await uploader.validateConfig(partial<JDServiceConfig>({}));
     expect(result.valid).toBe(true);
   });
 

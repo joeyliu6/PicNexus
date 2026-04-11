@@ -325,7 +325,9 @@ export function updateGroupLayout(
   newItems: LayoutItem[],
   options: TimelineLayoutOptions
 ): TimelineLayoutResult {
-  const { headerHeight, groupGap, ...layoutOptions } = options;
+  // 解构时丢掉 headerHeight / groupGap：它们只控制分组之间的垂直间距，
+  // 本函数只重算"某一分组内部"的布局，不涉及组间间距
+  const { headerHeight: _headerHeight, groupGap: _groupGap, ...layoutOptions } = options;
 
   // 找到目标分组的索引
   const targetIndex = layout.groupLayouts.findIndex((g) => g.groupId === targetGroupId);

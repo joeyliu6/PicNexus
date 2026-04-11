@@ -5,6 +5,7 @@
 import { computed, inject } from 'vue';
 import { getServiceIcon } from '../../../../utils/icons';
 import { PUBLIC_SERVICES } from '../../../../config/types';
+import type { ServiceType } from '../../../../config/types';
 import { formatNumber, estimateTime } from './utils';
 import { MIGRATE_KEY } from './keys';
 
@@ -18,7 +19,7 @@ const {
 const emit = defineEmits<{ confirm: []; cancel: [] }>();
 
 const hasPublicTarget = computed(() =>
-  checkedTargets.value.some(s => PUBLIC_SERVICES.includes(s.serviceId as any)),
+  checkedTargets.value.some(s => PUBLIC_SERVICES.includes(s.serviceId as ServiceType)),
 );
 
 function checkedNames(): string {
@@ -85,7 +86,7 @@ function checkedNames(): string {
 </template>
 
 <style scoped>
-@import './migrate-shared.css';
+@import url('./migrate-shared.css');
 
 .confirm-page {
   flex: 1; display: flex; flex-direction: column;
@@ -103,6 +104,7 @@ function checkedNames(): string {
   gap: var(--space-lg); padding: var(--space-xl) 0;
 }
 .confirm-src-icons { display: flex; gap: var(--space-xs-sm); align-items: center; }
+
 .confirm-src-icon {
   width: 32px; height: 32px; border-radius: var(--radius-sm-md);
   background: var(--bg-card); display: flex; align-items: center; justify-content: center;
@@ -112,6 +114,7 @@ function checkedNames(): string {
 .confirm-flow-arrow { font-size: var(--text-lg-xl); color: var(--primary); }
 
 .confirm-tgt-icon-wrap { display: flex; gap: var(--space-xs); }
+
 .confirm-tgt-icon {
   width: 48px; height: 48px; border-radius: var(--radius-sm-md);
   background: var(--primary-alpha-8);

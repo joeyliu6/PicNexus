@@ -33,9 +33,9 @@ export default defineConfigWithVueTs(
   vueTsConfigs.recommended,
   {
     rules: {
-      // === CLAUDE.md 硬指标（warn 先不 block，拆完文件后改 error） ===
+      // === CLAUDE.md 硬指标（重建层收尾后全部正式升级为 error） ===
       'max-lines': [
-        'warn',
+        'error',
         {
           max: 500,
           skipBlankLines: true,
@@ -43,24 +43,29 @@ export default defineConfigWithVueTs(
         },
       ],
 
-      // === 把 vueTsConfigs.recommended 里默认为 error 的严格规则全降为 warn ===
-      // 保留检查可见性，但第一阶段不 block 任何操作。
-      // 理由：这些不是 CLAUDE.md 明文硬指标，现有代码库里命中量大，
-      // 若设为 error 会直接挡住所有 commit，超出第二批范围。
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': 'warn',
-      '@typescript-eslint/no-empty-object-type': 'warn',
-      '@typescript-eslint/no-unused-expressions': 'warn',
-      '@typescript-eslint/no-require-imports': 'warn',
-      '@typescript-eslint/no-unsafe-function-type': 'warn',
-      'prefer-const': 'warn',
-      'no-empty': 'warn',
-      'no-prototype-builtins': 'warn',
-      'no-case-declarations': 'warn',
+      // === vueTsConfigs.recommended 里默认为 error 的严格规则：
+      //     S6 子任务 6a 清零后全部升级为 error，锁死重建层成果 ===
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
+      '@typescript-eslint/no-empty-object-type': 'error',
+      '@typescript-eslint/no-unused-expressions': 'error',
+      '@typescript-eslint/no-require-imports': 'error',
+      '@typescript-eslint/no-unsafe-function-type': 'error',
+      'prefer-const': 'error',
+      'no-empty': 'error',
+      'no-prototype-builtins': 'error',
+      'no-case-declarations': 'error',
       'no-unused-vars': 'off', // 交给 @typescript-eslint 版本
-      // Vue 专用规则降级（现有代码已违反，先可见不阻塞）
-      'vue/multi-word-component-names': 'warn',
-      'vue/no-mutating-props': 'warn',
+      // Vue 专用规则升级
+      'vue/multi-word-component-names': 'error',
+      'vue/no-mutating-props': 'error',
     },
   },
   {

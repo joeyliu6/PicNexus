@@ -16,7 +16,7 @@ interface ChaoxingRustResult {
  * 超星图床上传器
  * 实现超星/学习通图片上传功能
  */
-export class ChaoxingUploader extends BaseUploader {
+export class ChaoxingUploader extends BaseUploader<ChaoxingServiceConfig> {
   readonly serviceId = 'chaoxing';
   readonly serviceName = '超星';
 
@@ -30,8 +30,8 @@ export class ChaoxingUploader extends BaseUploader {
   /**
    * 验证超星配置
    */
-  async validateConfig(config: any): Promise<ValidationResult> {
-    const cxConfig = config as ChaoxingServiceConfig;
+  async validateConfig(config: ChaoxingServiceConfig): Promise<ValidationResult> {
+    const cxConfig = config;
 
     // 检查 Cookie 是否存在
     if (!cxConfig.cookie || this.isEmpty(cxConfig.cookie)) {

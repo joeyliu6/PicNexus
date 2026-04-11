@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import HostingCard from '../HostingCard.vue';
 
-const props = defineProps<{
+defineProps<{
   jdAvailable: boolean;
   qiyuAvailable: boolean;
   isCheckingJd: boolean;

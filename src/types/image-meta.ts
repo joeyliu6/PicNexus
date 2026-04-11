@@ -3,7 +3,7 @@
  * 用于时间轴视图的轻量级数据加载
  */
 
-import type { ServiceType } from '../config/types';
+import type { ServiceType, HistoryItem } from '../config/types';
 
 /**
  * 图片元数据（轻量级）
@@ -56,10 +56,10 @@ export interface ImageMeta {
 /**
  * 从 HistoryItem 提取元数据
  */
-export function extractMetaFromHistoryItem(item: any): ImageMeta {
+export function extractMetaFromHistoryItem(item: HistoryItem): ImageMeta {
   // 提取主力图床的 fileKey
   const primaryResult = item.results?.find(
-    (r: any) => r.serviceId === item.primaryService && r.status === 'success'
+    (r) => r.serviceId === item.primaryService && r.status === 'success'
   );
 
   return {
@@ -67,7 +67,7 @@ export function extractMetaFromHistoryItem(item: any): ImageMeta {
     timestamp: item.timestamp,
     localFileName: item.localFileName || '',
     aspectRatio: item.aspectRatio || 1.0,
-    primaryService: item.primaryService,
+    primaryService: item.primaryService as ServiceType,
     primaryUrl: primaryResult?.result?.url || item.generatedLink,
     primaryFileKey: primaryResult?.result?.fileKey,
     isFavorited: item.isFavorited ?? false,

@@ -37,7 +37,7 @@ function openExternal(url: string) {
 async function openLogDir() {
   try {
     await invoke('open_log_dir');
-  } catch (e) {
+  } catch {
     toast.error('打开失败', '无法打开日志目录');
   }
 }

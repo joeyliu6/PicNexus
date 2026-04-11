@@ -1,6 +1,7 @@
 // 微博上传错误处理
 
 import { UploadErrorCode, StructuredError, createStructuredError } from '../base/ErrorTypes';
+import { getErrorMessage } from '../../types/errors';
 
 /**
  * 微博上传错误类
@@ -10,7 +11,7 @@ export class WeiboUploadError extends Error {
     message: string,
     public readonly code?: string,
     public readonly httpStatus?: number,
-    public readonly originalError?: any
+    public readonly originalError?: unknown
   ) {
     super(message);
     this.name = 'WeiboUploadError';
@@ -20,12 +21,12 @@ export class WeiboUploadError extends Error {
 /**
  * 转换通用错误为微博错误
  */
-export function convertToWeiboError(error: any): WeiboUploadError {
+export function convertToWeiboError(error: unknown): WeiboUploadError {
   if (error instanceof WeiboUploadError) {
     return error;
   }
 
-  const msg = error?.message || String(error);
+  const msg = getErrorMessage(error);
 
   // Cookie 过期
   if (msg.includes('Cookie expired') || msg.includes('100006')) {
@@ -49,7 +50,7 @@ export function convertToWeiboError(error: any): WeiboUploadError {
 /**
  * 新增：转换为结构化错误
  */
-export function convertToStructuredWeiboError(error: any): StructuredError {
+export function convertToStructuredWeiboError(error: unknown): StructuredError {
   const weiboError = convertToWeiboError(error);
 
   let code: UploadErrorCode;
@@ -77,7 +78,7 @@ export function convertToStructuredWeiboError(error: any): StructuredError {
   }
 
   return createStructuredError(code, weiboError.message, {
-    details: weiboError.originalError?.message,
+    details: weiboError.originalError !== undefined ? getErrorMessage(weiboError.originalError) : undefined,
     retryable,
     solution,
     originalError: weiboError.originalError,

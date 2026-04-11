@@ -7,9 +7,10 @@ import { useToast } from '../useToast';
 import type { EditorServerConfig, ServerServiceType, CustomS3Profile } from '../../config/types';
 import { isCustomS3Id, getCustomS3ProfileId } from '../../config/types';
 import { createLogger } from '../../utils/logger';
+import type { SettingsFormShape } from './useSettingsForm';
 
 interface UseEditorIntegrationOptions {
-  formData: Ref<any>;
+  formData: Ref<SettingsFormShape>;
   isSettingsReady: Ref<boolean>;
   errorToString: (error: unknown) => string;
   debouncedApplyCallback?: () => void;

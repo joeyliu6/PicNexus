@@ -184,7 +184,7 @@ async function markServiceAvailable(serviceId: 'qiyu' | 'jd'): Promise<void> {
   let syncStatus: SyncStatus | null = null;
   try {
     syncStatus = await syncStatusStore.get<SyncStatus>('status');
-  } catch (e) {
+  } catch {
     // 忽略读取失败
   }
 

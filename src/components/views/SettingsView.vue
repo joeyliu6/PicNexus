@@ -161,9 +161,11 @@ onMounted(async () => {
   });
 
   cookieUnlisten.value = await configManager.setupCookieListener(async (sid, cookie) => {
-    if (sid === 'weibo') formData.value.weiboCookie = cookie;
-    else if (['nowcoder', 'zhihu', 'nami', 'bilibili', 'chaoxing'].includes(sid)) {
-      (formData.value as any)[sid].cookie = cookie;
+    if (sid === 'weibo') {
+      formData.value.weiboCookie = cookie;
+    } else if (sid === 'nowcoder' || sid === 'zhihu' || sid === 'nami'
+      || sid === 'bilibili' || sid === 'chaoxing') {
+      formData.value[sid].cookie = cookie;
     }
     await saveSettings();
   });
