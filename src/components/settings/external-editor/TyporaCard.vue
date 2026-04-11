@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { useResizeObserver } from '@vueuse/core';
 import Button from 'primevue/button';
 import type { EditorServerConfig, ServerServiceType } from '../../../config/types';
@@ -28,6 +28,21 @@ const typoraExpanded = ref(false);
 const execPathCopied = ref(false);
 const execPathRef = ref<HTMLElement | null>(null);
 const displayPath = ref(props.executablePath || '...');
+
+// 开关已开但未选图床 → 需要提醒用户配置
+const needsService = computed(
+  () => editorServer.value.typoraEnabled && !editorServer.value.typoraService,
+);
+
+// 用户刚把开关从关切到开、且图床还没选时，自动展开卡片引导下一步
+watch(
+  () => editorServer.value.typoraEnabled,
+  (curr, prev) => {
+    if (curr && !prev && !editorServer.value.typoraService) {
+      typoraExpanded.value = true;
+    }
+  },
+);
 
 function updateEditorServer(patch: Partial<EditorServerConfig>) {
   editorServer.value = { ...editorServer.value, ...patch };
@@ -67,11 +82,17 @@ async function copyExecutablePath() {
     description="在 Typora 中粘贴图片时自动上传"
     :enabled="editorServer.typoraEnabled"
     :expanded="typoraExpanded"
+    :needsAttention="needsService"
+    attentionTooltip="需选择图床才能使用"
     allowOverflow
     @update:enabled="(v: boolean) => updateEditorServer({ typoraEnabled: v })"
     @update:expanded="(v: boolean) => typoraExpanded = v"
   >
     <div class="card-content-inner">
+      <div v-if="needsService" class="missing-service-banner">
+        <i class="pi pi-exclamation-circle" />
+        <span>开关已开启，但还没选择图床。请在下方选择一个图床后才能正常使用。</span>
+      </div>
       <div class="card-service-row">
         <div class="card-service-info">
           <span class="card-service-label">上传到</span>
@@ -125,6 +146,23 @@ async function copyExecutablePath() {
 .card-content-inner {
   display: flex;
   flex-direction: column;
+}
+
+.missing-service-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--warning-alpha-8);
+  border-bottom: 1px solid var(--warning-border);
+  color: var(--warning);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.missing-service-banner .pi {
+  font-size: var(--text-sm);
+  flex-shrink: 0;
 }
 
 .card-service-row {

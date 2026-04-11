@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { EditorServerConfig, ServerServiceType } from '../../../config/types';
 import ServiceSelectorDropdown from '../ServiceSelectorDropdown.vue';
@@ -24,6 +24,21 @@ const emit = defineEmits<{
 const obsidianExpanded = ref(false);
 const portDraft = ref(String(editorServer.value.port));
 const portError = ref('');
+
+// 开关已开但未选图床 → 需要提醒用户配置
+const needsService = computed(
+  () => editorServer.value.enabled && !editorServer.value.obsidianService,
+);
+
+// 用户刚把开关从关切到开、且图床还没选时，自动展开卡片引导下一步
+watch(
+  () => editorServer.value.enabled,
+  (curr, prev) => {
+    if (curr && !prev && !editorServer.value.obsidianService) {
+      obsidianExpanded.value = true;
+    }
+  },
+);
 
 const connectionTest = ref<{
   status: 'idle' | 'testing' | 'success' | 'warning' | 'error';
@@ -135,11 +150,17 @@ watch(
     description="在 Obsidian 中粘贴图片时自动上传"
     :enabled="editorServer.enabled"
     :expanded="obsidianExpanded"
+    :needsAttention="needsService"
+    attentionTooltip="需选择图床才能使用"
     allowOverflow
     @update:enabled="(v: boolean) => updateEditorServer({ enabled: v })"
     @update:expanded="(v: boolean) => obsidianExpanded = v"
   >
     <div class="card-content-inner">
+      <div v-if="needsService" class="missing-service-banner">
+        <i class="pi pi-exclamation-circle" />
+        <span>开关已开启，但还没选择图床。请在下方选择一个图床后才能正常使用。</span>
+      </div>
       <div class="card-service-row">
         <div class="card-service-info">
           <span class="card-service-label">上传到</span>
@@ -218,6 +239,23 @@ watch(
 .card-content-inner {
   display: flex;
   flex-direction: column;
+}
+
+.missing-service-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--warning-alpha-8);
+  border-bottom: 1px solid var(--warning-border);
+  color: var(--warning);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.missing-service-banner .pi {
+  font-size: var(--text-sm);
+  flex-shrink: 0;
 }
 
 .card-service-row {
