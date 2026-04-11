@@ -147,3 +147,33 @@ jobs:
 
           echo "App running OK, killing..."
           kill $APP_PID
+
+  # Tier 3 D: matrix 全绿后把手动回归清单追加到 draft release body
+  release-checklist:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Append checklist to release draft body
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const checklist = fs.readFileSync('.github/RELEASE_CHECKLIST.md', 'utf8');
+
+            const tag = context.ref.replace('refs/tags/', '');
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag,
+            });
+
+            const newBody = (release.body || '') + '\n\n---\n\n' + checklist;
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              body: newBody,
+            });
