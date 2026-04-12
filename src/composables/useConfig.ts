@@ -11,7 +11,9 @@ import {
   DEFAULT_CONFIG,
   ServiceType,
   LinkPrefixConfig,
-  DEFAULT_PREFIXES,
+  LinkPrefixItem,
+  DEFAULT_LINK_PREFIXES,
+  cloneDefaultPrefixes,
 } from '../config/types';
 import { getCookieProvider, validateCookie, DEFAULT_LOGIN_WINDOW_SIZE } from '../config/cookieProviders';
 import { useToast } from './useToast';
@@ -95,12 +97,10 @@ export function useConfigManager() {
 
       // 验证链接前缀配置
       if (configToSave.linkPrefixConfig) {
-        // 确保前缀列表不为空
         if (!configToSave.linkPrefixConfig.prefixList || configToSave.linkPrefixConfig.prefixList.length === 0) {
           log.warn('前缀列表为空，恢复默认前缀');
-          configToSave.linkPrefixConfig.prefixList = [...DEFAULT_PREFIXES];
+          configToSave.linkPrefixConfig.prefixList = cloneDefaultPrefixes();
         }
-        // 确保选中索引在有效范围内
         if (configToSave.linkPrefixConfig.selectedIndex < 0 ||
             configToSave.linkPrefixConfig.selectedIndex >= configToSave.linkPrefixConfig.prefixList.length) {
           log.warn('选中索引无效，重置为 0');
@@ -445,38 +445,33 @@ export function useConfigManager() {
 
   /**
    * 从 UI 获取链接前缀配置
-   * @param prefixEnabled 是否启用前缀
-   * @param selectedIndex 选中的前缀索引
-   * @param prefixList 前缀列表
-   * @param savedConfig 已保存的配置（用于向后兼容）
    */
   function getLinkPrefixConfig(
     prefixEnabled: boolean,
     selectedIndex: number,
-    prefixList: string[]
+    prefixList: LinkPrefixItem[]
   ): LinkPrefixConfig {
     return {
       enabled: prefixEnabled,
       selectedIndex: selectedIndex,
-      prefixList: prefixList.length > 0 ? prefixList : DEFAULT_PREFIXES
+      prefixList: prefixList.length > 0 ? prefixList : cloneDefaultPrefixes()
     };
   }
 
   /**
-   * 获取当前选中的前缀
-   * @param linkPrefixConfig 链接前缀配置
+   * 获取当前选中的前缀项
    */
-  function getActivePrefix(linkPrefixConfig: LinkPrefixConfig): string | null {
+  function getActivePrefix(linkPrefixConfig: LinkPrefixConfig): LinkPrefixItem | null {
     if (!linkPrefixConfig.enabled) return null;
 
     const index = linkPrefixConfig.selectedIndex;
-    const list = linkPrefixConfig.prefixList || DEFAULT_PREFIXES;
+    const list = linkPrefixConfig.prefixList || [];
 
     if (index >= 0 && index < list.length) {
       return list[index];
     }
 
-    return list[0] || DEFAULT_PREFIXES[0];
+    return list[0] || { ...DEFAULT_LINK_PREFIXES[0] };
   }
 
   return {

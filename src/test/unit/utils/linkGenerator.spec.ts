@@ -20,7 +20,7 @@ describe('LinkGenerator.generate', () => {
         linkPrefixConfig: {
           enabled: true,
           selectedIndex: 0,
-          prefixList: ['https://proxy.example.com/'],
+          prefixList: [{ name: 'Proxy', template: 'https://proxy.example.com/' }],
         },
       });
       const result = makeResult('weibo');
@@ -35,7 +35,7 @@ describe('LinkGenerator.generate', () => {
         linkPrefixConfig: {
           enabled: false,
           selectedIndex: 0,
-          prefixList: ['https://proxy.example.com/'],
+          prefixList: [{ name: 'Proxy', template: 'https://proxy.example.com/' }],
         },
       });
       const result = makeResult('weibo');
@@ -50,7 +50,7 @@ describe('LinkGenerator.generate', () => {
         linkPrefixConfig: {
           enabled: true,
           selectedIndex: 0,
-          prefixList: ['https://proxy.example.com/'],
+          prefixList: [{ name: 'Proxy', template: 'https://proxy.example.com/' }],
         },
       });
       const result = makeResult('weibo');
@@ -68,7 +68,7 @@ describe('LinkGenerator.generate', () => {
           linkPrefixConfig: {
             enabled: true,
             selectedIndex: 0,
-            prefixList: ['https://proxy.example.com/'],
+            prefixList: [{ name: 'Proxy', template: 'https://proxy.example.com/' }],
           },
         });
         const result = makeResult(serviceId);

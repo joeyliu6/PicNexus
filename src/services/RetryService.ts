@@ -8,6 +8,7 @@ import { UserConfig } from '../config/types';
 import type { Store } from '../store';
 import { UploadResult } from '../uploaders/base/types';
 import { checkNetworkConnectivity } from '../utils/network';
+import { applyPrefixTemplate } from '../utils/linkPrefixTemplate';
 import { invalidateCache } from '../composables/useHistory';
 import { emitHistoryUpdated } from '../events/cacheEvents';
 import { historyDB } from './HistoryDatabase';
@@ -260,7 +261,7 @@ export class RetryService {
     let link = result.url;
 
     if (serviceId === 'weibo' && this.options.activePrefix) {
-      link = this.options.activePrefix + link;
+      link = applyPrefixTemplate(this.options.activePrefix, link);
     }
 
     updates[serviceId] = {
@@ -435,7 +436,7 @@ export class RetryService {
         if (serviceResult.status === 'success' && serviceResult.result) {
           let link = serviceResult.result.url;
           if (serviceResult.serviceId === 'weibo' && this.options.activePrefix) {
-            link = this.options.activePrefix + link;
+            link = applyPrefixTemplate(this.options.activePrefix, link);
           }
 
           updatedServiceProgress[serviceResult.serviceId] = {
@@ -464,7 +465,7 @@ export class RetryService {
     // 更新缩略图
     let thumbUrl = result.primaryUrl;
     if (result.primaryService === 'weibo' && this.options.activePrefix) {
-      thumbUrl = this.options.activePrefix + thumbUrl;
+      thumbUrl = applyPrefixTemplate(this.options.activePrefix, thumbUrl);
     }
     this.options.queueManager.markItemComplete(itemId, thumbUrl);
 

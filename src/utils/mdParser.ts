@@ -2,7 +2,8 @@
 
 import type { MdImageLink } from '../types/linkCheck';
 import type { UserConfig } from '../config/types';
-import { DEFAULT_PREFIXES } from '../config/types';
+import { DEFAULT_LINK_PREFIXES } from '../config/types';
+import { stripPrefixTemplate } from './linkPrefixTemplate';
 
 /** 标准 Markdown 图片语法: ![alt](url "title") */
 const MD_IMAGE_REGEX = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
@@ -117,14 +118,15 @@ function isValidImageUrl(url: string): boolean {
 }
 
 /**
- * 剥离已知的链接前缀（百度图片代理等）
+ * 剥离已知的链接前缀（搜狗/cdnjson/Jetpack/IPFS Scan 等）
  * 用于从 MD 中的 URL 反向匹配数据库中的原始 URL
  */
 export function stripKnownPrefixes(url: string, config: UserConfig): string {
-  const prefixes = config.linkPrefixConfig?.prefixList || DEFAULT_PREFIXES;
-  for (const prefix of prefixes) {
-    if (url.startsWith(prefix)) {
-      return url.slice(prefix.length);
+  const prefixes = config.linkPrefixConfig?.prefixList || DEFAULT_LINK_PREFIXES;
+  for (const item of prefixes) {
+    const original = stripPrefixTemplate(url, item.template);
+    if (original !== null) {
+      return original;
     }
   }
   return url;

@@ -54,6 +54,10 @@ const activePrefix = ref<string | null>(null);
 
 // ==================== 内部辅助函数 ====================
 
+/**
+ * 返回当前选中前缀的模板字符串（供下游 applyPrefixTemplate 使用）
+ * 功能禁用或列表为空时返回 null
+ */
 function getActivePrefixFromConfig(config: UserConfig): string | null {
   if (!config.linkPrefixConfig?.enabled) return null;
 
@@ -61,10 +65,10 @@ function getActivePrefixFromConfig(config: UserConfig): string | null {
   const list = config.linkPrefixConfig.prefixList || [];
 
   if (index >= 0 && index < list.length) {
-    return list[index];
+    return list[index]?.template ?? null;
   }
 
-  return list[0] || null;
+  return list[0]?.template ?? null;
 }
 
 // ==================== 主 Composable ====================

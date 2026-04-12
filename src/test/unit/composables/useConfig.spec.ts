@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, emit } from '@tauri-apps/api/event';
-import { DEFAULT_PREFIXES } from '../../../config/types';
+import { DEFAULT_LINK_PREFIXES } from '../../../config/types';
 
 // ─── Mock 依赖 ──────────────────────────────────────────
 
@@ -175,7 +175,7 @@ describe('useConfigManager', () => {
       await saveConfig(configWithEmptyPrefixes as any);
 
       const savedConfig = configStoreSetMock.mock.calls[0][1];
-      expect(savedConfig.linkPrefixConfig.prefixList).toEqual(DEFAULT_PREFIXES);
+      expect(savedConfig.linkPrefixConfig.prefixList).toEqual(DEFAULT_LINK_PREFIXES);
     });
 
     it('越界 selectedIndex 自动重置为 0', async () => {
@@ -184,7 +184,14 @@ describe('useConfigManager', () => {
         availableServices: ['jd'],
         services: {},
         weiboProxyMode: 'none' as const,
-        linkPrefixConfig: { enabled: true, selectedIndex: 99, prefixList: ['https://a.com/', 'https://b.com/'] },
+        linkPrefixConfig: {
+          enabled: true,
+          selectedIndex: 99,
+          prefixList: [
+            { name: 'A', template: 'https://a.com/' },
+            { name: 'B', template: 'https://b.com/' },
+          ],
+        },
       };
 
       const { saveConfig } = useConfigManager();
@@ -200,7 +207,11 @@ describe('useConfigManager', () => {
         availableServices: ['jd'],
         services: {},
         weiboProxyMode: 'none' as const,
-        linkPrefixConfig: { enabled: true, selectedIndex: -1, prefixList: ['https://a.com/'] },
+        linkPrefixConfig: {
+          enabled: true,
+          selectedIndex: -1,
+          prefixList: [{ name: 'A', template: 'https://a.com/' }],
+        },
       };
 
       const { saveConfig } = useConfigManager();
@@ -369,48 +380,48 @@ describe('useConfigManager', () => {
   // ─── getLinkPrefixConfig ──────────────────────────
 
   describe('getLinkPrefixConfig', () => {
+    const itemA = { name: 'A', template: 'https://a.com/' };
+    const itemB = { name: 'B', template: 'https://b.com/' };
+
     it('返回正确的配置对象', () => {
       const { getLinkPrefixConfig } = useConfigManager();
-      const result = getLinkPrefixConfig(true, 1, ['https://a.com/', 'https://b.com/']);
+      const result = getLinkPrefixConfig(true, 1, [itemA, itemB]);
 
       expect(result.enabled).toBe(true);
       expect(result.selectedIndex).toBe(1);
-      expect(result.prefixList).toEqual(['https://a.com/', 'https://b.com/']);
+      expect(result.prefixList).toEqual([itemA, itemB]);
     });
 
     it('空列表时使用默认前缀', () => {
       const { getLinkPrefixConfig } = useConfigManager();
       const result = getLinkPrefixConfig(true, 0, []);
 
-      expect(result.prefixList).toEqual(DEFAULT_PREFIXES);
+      expect(result.prefixList).toEqual(DEFAULT_LINK_PREFIXES);
     });
   });
 
   // ─── getActivePrefix ──────────────────────────────
 
   describe('getActivePrefix', () => {
+    const itemA = { name: 'A', template: 'https://a.com/' };
+    const itemB = { name: 'B', template: 'https://b.com/' };
+
     it('未启用时返回 null', () => {
       const { getActivePrefix } = useConfigManager();
-      const result = getActivePrefix({
-        enabled: false, selectedIndex: 0, prefixList: ['https://a.com/'],
-      });
+      const result = getActivePrefix({ enabled: false, selectedIndex: 0, prefixList: [itemA] });
       expect(result).toBeNull();
     });
 
-    it('启用且索引有效时返回对应前缀', () => {
+    it('启用且索引有效时返回对应前缀项', () => {
       const { getActivePrefix } = useConfigManager();
-      const result = getActivePrefix({
-        enabled: true, selectedIndex: 1, prefixList: ['https://a.com/', 'https://b.com/'],
-      });
-      expect(result).toBe('https://b.com/');
+      const result = getActivePrefix({ enabled: true, selectedIndex: 1, prefixList: [itemA, itemB] });
+      expect(result).toEqual(itemB);
     });
 
     it('索引越界时回退到第一个', () => {
       const { getActivePrefix } = useConfigManager();
-      const result = getActivePrefix({
-        enabled: true, selectedIndex: 99, prefixList: ['https://a.com/'],
-      });
-      expect(result).toBe('https://a.com/');
+      const result = getActivePrefix({ enabled: true, selectedIndex: 99, prefixList: [itemA] });
+      expect(result).toEqual(itemA);
     });
   });
 });

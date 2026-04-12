@@ -2,6 +2,7 @@
 
 import { UploadResult } from '../uploaders/base/types';
 import { UserConfig, getActivePrefix } from '../config/types';
+import { applyPrefixTemplate } from '../utils/linkPrefixTemplate';
 
 /**
  * 链接生成器
@@ -10,29 +11,24 @@ import { UserConfig, getActivePrefix } from '../config/types';
 export class LinkGenerator {
   /**
    * 生成最终链接
-   * 处理百度前缀等特殊逻辑
+   * 微博 + baidu-proxy 模式下会应用链接前缀模板
    *
    * @param result 上传结果
    * @param config 用户配置
    * @returns 最终生成的链接
    */
   static generate(result: UploadResult, config: UserConfig): string {
-    // 只有微博 + baidu-proxy 模式才加代理前缀
     if (
       result.serviceId === 'weibo' &&
       config.weiboProxyMode === 'baidu-proxy'
     ) {
       const activePrefix = getActivePrefix(config);
-
-      // 如果前缀功能被禁用，返回原始链接
       if (!activePrefix) {
         return result.url;
       }
-
-      return `${activePrefix}${result.url}`;
+      return applyPrefixTemplate(activePrefix.template, result.url);
     }
 
-    // 其他情况直接返回原始 URL
     return result.url;
   }
 

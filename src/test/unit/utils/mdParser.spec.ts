@@ -99,21 +99,30 @@ describe('extractImageLinks', () => {
 describe('stripKnownPrefixes', () => {
   const config = {
     linkPrefixConfig: {
+      enabled: true,
+      selectedIndex: 0,
       prefixList: [
-        'https://image.baidu.com/search/down?thumburl=',
-        'https://cdn.cdnjson.com/pic.html?url=',
+        { name: '搜狗图片', template: 'https://img01.sogoucdn.com/net/a/04/link?appid=100520031&w=4096&url={url_encoded}' },
+        { name: 'CDN JSON', template: 'https://cdn.cdnjson.com/pic.html?url=' },
+        { name: 'Jetpack', template: 'https://i0.wp.com/{url_no_scheme}' },
       ],
     },
   } as UserConfig;
 
-  it('剥离百度代理前缀', () => {
-    const url = 'https://image.baidu.com/search/down?thumburl=https://real.com/a.png';
-    expect(stripKnownPrefixes(url, config)).toBe('https://real.com/a.png');
+  it('剥离搜狗 URL 编码前缀', () => {
+    const original = 'https://real.com/a.png';
+    const url = `https://img01.sogoucdn.com/net/a/04/link?appid=100520031&w=4096&url=${encodeURIComponent(original)}`;
+    expect(stripKnownPrefixes(url, config)).toBe(original);
   });
 
-  it('剥离 cdnjson 前缀', () => {
+  it('剥离 cdnjson 纯前缀', () => {
     const url = 'https://cdn.cdnjson.com/pic.html?url=https://real.com/b.png';
     expect(stripKnownPrefixes(url, config)).toBe('https://real.com/b.png');
+  });
+
+  it('剥离 Jetpack 去协议前缀', () => {
+    const url = 'https://i0.wp.com/real.com/c.png';
+    expect(stripKnownPrefixes(url, config)).toBe('https://real.com/c.png');
   });
 
   it('无匹配前缀时返回原始 URL', () => {
@@ -121,8 +130,8 @@ describe('stripKnownPrefixes', () => {
     expect(stripKnownPrefixes(url, config)).toBe(url);
   });
 
-  it('config 无 prefixList 时使用 DEFAULT_PREFIXES', () => {
-    const url = 'https://image.baidu.com/search/down?thumburl=https://real.com/d.png';
+  it('config 无 prefixList 时使用 DEFAULT_LINK_PREFIXES', () => {
+    const url = 'https://cdn.cdnjson.com/pic.html?url=https://real.com/d.png';
     expect(stripKnownPrefixes(url, {} as UserConfig)).toBe('https://real.com/d.png');
   });
 });

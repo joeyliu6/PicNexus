@@ -8,6 +8,7 @@ import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type { HistoryItem, ServiceType } from '../config/types';
 import { getActivePrefix } from '../config/types';
+import { applyPrefixTemplate } from '../utils/linkPrefixTemplate';
 import { historyDB, type PageResult, type SearchResult, type SearchOptions, type TimePeriodStats } from '../services/HistoryDatabase';
 import type { ImageMeta } from '../types/image-meta';
 import { useImageDetailCache } from './useImageDetailCache';
@@ -371,7 +372,7 @@ export function useHistoryManager() {
       const links = selectedMetas.map(meta => {
         if (!meta.primaryUrl) return null;
         if (meta.primaryService === 'weibo' && activePrefix) {
-          return `${activePrefix}${meta.primaryUrl}`;
+          return applyPrefixTemplate(activePrefix.template, meta.primaryUrl);
         }
         return meta.primaryUrl;
       }).filter((link): link is string => !!link);

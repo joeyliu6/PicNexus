@@ -66,7 +66,7 @@ describe('getPrimaryImageUrl', () => {
       ],
     } as any;
 
-    mockedGetActivePrefix.mockReturnValue('https://proxy.com/?url=');
+    mockedGetActivePrefix.mockReturnValue({ name: 'Proxy', template: 'https://proxy.com/?url=' });
     const url = getPrimaryImageUrl(item, baseConfig);
     expect(url).toBe('https://proxy.com/?url=https://tvax1.sinaimg.cn/large/abc.jpg');
   });

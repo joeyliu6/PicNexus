@@ -6,6 +6,7 @@ import { useConfigManager } from './useConfig';
 import { useToast } from './useToast';
 import { getActivePrefix } from '../config/types';
 import type { UserConfig } from '../config/types';
+import { applyPrefixTemplate } from '../utils/linkPrefixTemplate';
 import { formatLink, FORMAT_NAMES, type LinkFormat } from '../utils/linkFormatter';
 
 export interface CopyLinkItem {
@@ -43,7 +44,7 @@ export interface CopyLinkResult {
 export function applyLinkPrefix(url: string, serviceId: string | undefined, config: UserConfig): string {
   if (serviceId !== 'weibo') return url;
   const prefix = getActivePrefix(config);
-  return prefix ? `${prefix}${url}` : url;
+  return prefix ? applyPrefixTemplate(prefix.template, url) : url;
 }
 
 /**

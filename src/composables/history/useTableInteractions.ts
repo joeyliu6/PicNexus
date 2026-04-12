@@ -8,6 +8,7 @@ import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type PopoverType from 'primevue/popover';
 import type { HistoryItem } from '../../config/types';
 import { getPrimaryImageUrl } from '../../utils/imageUrl';
+import { applyPrefixTemplate } from '../../utils/linkPrefixTemplate';
 import { getServiceDisplayName } from '../../constants/serviceNames';
 import { useHistoryViewState } from '../useHistoryViewState';
 import { useHistoryManager } from '../useHistory';
@@ -117,7 +118,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
       let link = result.result.url;
       if (serviceId === 'weibo' && configManager.config.value.linkPrefixConfig) {
         const activePrefix = configManager.getActivePrefix(configManager.config.value.linkPrefixConfig);
-        if (activePrefix) link = `${activePrefix}${link}`;
+        if (activePrefix) link = applyPrefixTemplate(activePrefix.template, link);
       }
       await writeText(link);
       toast.success('已复制', `${getServiceDisplayName(serviceId)} 链接已复制到剪贴板`, 1500);

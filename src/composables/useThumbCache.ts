@@ -7,6 +7,7 @@ import type { HistoryItem, UserConfig } from '../config/types';
 import type { ImageMeta } from '../types/image-meta';
 import type { QueueItem } from '../uploadQueue';
 import { getActivePrefix } from '../config/types';
+import { applyPrefixTemplate } from '../utils/linkPrefixTemplate';
 import { useConfigManager } from './useConfig';
 import { useHistoryManager } from './useHistory';
 
@@ -46,7 +47,7 @@ export function generateThumbnailUrl(
         if (config) {
           const activePrefix = getActivePrefix(config);
           if (activePrefix) {
-            thumbUrl = `${activePrefix}${thumbUrl}`;
+            thumbUrl = applyPrefixTemplate(activePrefix.template, thumbUrl);
           }
         }
       } else {
@@ -133,7 +134,7 @@ export function generateMediumThumbnailUrl(
         if (config) {
           const activePrefix = getActivePrefix(config);
           if (activePrefix) {
-            thumbUrl = `${activePrefix}${thumbUrl}`;
+            thumbUrl = applyPrefixTemplate(activePrefix.template, thumbUrl);
           }
         }
         return thumbUrl;
@@ -330,7 +331,7 @@ function getThumbUrl(item: HistoryItem, config: ReturnType<typeof useConfigManag
     // 应用链接前缀（如果启用）
     const activePrefix = getActivePrefix(config);
     if (activePrefix) {
-      thumbUrl = `${activePrefix}${thumbUrl}`;
+      thumbUrl = applyPrefixTemplate(activePrefix.template, thumbUrl);
     }
 
     setThumbCache(item.id, thumbUrl);
@@ -381,7 +382,7 @@ function getLargeImageUrl(item: HistoryItem, config: ReturnType<typeof useConfig
 
     const activePrefix = getActivePrefix(config);
     if (activePrefix) {
-      largeUrl = `${activePrefix}${largeUrl}`;
+      largeUrl = applyPrefixTemplate(activePrefix.template, largeUrl);
     }
 
     return largeUrl;
