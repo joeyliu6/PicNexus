@@ -47,6 +47,7 @@ const successfulServices = computed(() => {
   <div
     class="photo-item"
     :class="{ selected: isSelected }"
+    :data-lightbox-id="meta.id"
     :style="{
       transform: `translate3d(${x}px, ${y}px, 0)`,
       width: `${width}px`,
@@ -122,7 +123,7 @@ const successfulServices = computed(() => {
 .photo-item {
   position: absolute;
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   will-change: transform;
 }
@@ -148,7 +149,7 @@ const successfulServices = computed(() => {
   align-items: center;
   justify-content: center;
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
   opacity: 0.6;
 }
@@ -176,6 +177,7 @@ const successfulServices = computed(() => {
 .selection-overlay {
   position: absolute;
   inset: 0;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 半透明遮罩，非主题色 */
   background: rgb(0 0 0 / 10%);
   opacity: 0;
   transition: opacity var(--duration-normal);
@@ -186,7 +188,7 @@ const successfulServices = computed(() => {
   opacity: 1;
   background: var(--primary-alpha-20);
   border: 2px solid var(--primary);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .checkbox {
@@ -195,8 +197,10 @@ const successfulServices = computed(() => {
   left: 8px;
   width: 20px;
   height: 20px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 照片上的半透明边框，非主题色 */
   border: 2px solid rgb(255 255 255 / 80%);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 照片上的半透明背景，非主题色 */
   background: rgb(0 0 0 / 20%);
   display: flex;
   align-items: center;
@@ -218,6 +222,7 @@ const successfulServices = computed(() => {
 }
 
 .checkbox:hover {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 照片上的半透明悬停背景，非主题色 */
   background: rgb(0 0 0 / 40%);
 }
 
@@ -228,6 +233,7 @@ const successfulServices = computed(() => {
 
 .checkbox.checked i {
   font-size: var(--text-2xs);
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 深色勾选框上的白色对勾，固定配色 */
   color: white;
   font-weight: bold;
 }
@@ -240,6 +246,7 @@ const successfulServices = computed(() => {
   height: 20px;
   border: none;
   background: none;
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 照片上的半透明白色图标，固定配色 */
   color: rgb(255 255 255 / 85%);
   display: flex;
   align-items: center;
@@ -277,6 +284,7 @@ const successfulServices = computed(() => {
 }
 
 .favorite-btn.favorited i {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 弹跳动画 0.6s 无对应 token */
   animation: k-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
@@ -289,16 +297,18 @@ const successfulServices = computed(() => {
 .hover-info {
   position: absolute;
   inset: 0;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 照片底部渐变遮罩，固定配色 */
   background: linear-gradient(to bottom, transparent 30%, rgb(0 0 0 / 85%) 100%);
   opacity: 0;
   transition: opacity var(--duration-normal) ease;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  padding: 10px;
+  padding: var(--space-sm-md);
   pointer-events: none;
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 照片遮罩上的白色文字，固定配色 */
   color: white;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .photo-wrapper:hover .hover-info {
@@ -307,7 +317,7 @@ const successfulServices = computed(() => {
 
 .service-badges {
   display: flex;
-  gap: 4px;
+  gap: var(--space-xs);
   flex-wrap: wrap-reverse;
   justify-content: flex-end;
   transform: translateY(4px);
@@ -321,12 +331,14 @@ const successfulServices = computed(() => {
 .service-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 7px;
+  gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-xs-sm);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 照片遮罩上的半透明 badge 背景，固定配色 */
   background: rgb(89 92 96 / 50%);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: var(--text-2xs);
   font-weight: 500;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 照片遮罩上的文字阴影，固定配色 */
   text-shadow: 0 1px 2px rgb(0 0 0 / 30%);
   backdrop-filter: blur(4px);
 }
@@ -346,13 +358,13 @@ const successfulServices = computed(() => {
 /* 响应式适配 */
 @media (width <= 768px) {
   .hover-info {
-    padding: 8px;
+    padding: var(--space-sm);
   }
 
   .service-badge {
     /* stylelint-disable-next-line declaration-property-value-allowed-list -- 超窄屏下的极小 badge，低于最小 token(--text-2xs=10px)，属无 token 特例 */
     font-size: 9px;
-    padding: 2px 5px;
+    padding: var(--space-2xs) var(--space-xs);
   }
 
 }

@@ -23,6 +23,7 @@ const emit = defineEmits<{
   <div
     class="photo-item"
     :class="{ selected }"
+    :data-lightbox-id="meta.id"
     @click="emit('click')"
   >
     <!-- 加载骨架 -->
@@ -78,7 +79,7 @@ const emit = defineEmits<{
   position: relative;
   aspect-ratio: 1;
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   cursor: pointer;
   will-change: transform;
@@ -137,7 +138,7 @@ const emit = defineEmits<{
   opacity: 1;
   background: var(--primary-alpha-20);
   border: 2px solid var(--primary);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 /* 复选框 */
@@ -174,6 +175,7 @@ const emit = defineEmits<{
 
 .checkbox.checked i {
   font-size: var(--text-2xs);
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 深色勾选框上的白色对勾，固定配色 */
   color: white;
   font-weight: bold;
 }

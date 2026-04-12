@@ -148,7 +148,7 @@ onUnmounted(() => {
             @mouseenter="handlePreviewEnter($event, slotProps.data)"
             @mouseleave="handlePreviewLeave"
           >
-            <div class="thumb-box" @click="openLightbox(slotProps.data)">
+            <div class="thumb-box" :data-lightbox-id="slotProps.data.id" @click="openLightbox(slotProps.data)">
               <ThumbnailImage
                 :srcs="getThumbnailCandidates(slotProps.data, configManager.config.value)"
                 :alt="slotProps.data.localFileName"
@@ -280,6 +280,7 @@ onUnmounted(() => {
 }
 
 .table-view-container.has-selection {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 底部浮动操作栏的固定留白高度，非间距 token */
   padding-bottom: 80px;
 }
 
@@ -297,13 +298,13 @@ onUnmounted(() => {
   position: fixed;
   z-index: var(--z-lightbox);
   pointer-events: none;
-  animation: k-fade-in 0.2s ease;
+  animation: k-fade-in var(--duration-normal) ease;
 }
 
 .global-thumb-hover-preview img {
   max-width: 300px;
   max-height: 300px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   box-shadow: 0 8px 32px var(--photo-shadow-light);
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
