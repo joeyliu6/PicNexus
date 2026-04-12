@@ -55,7 +55,6 @@ onDeactivated(() => { isViewActive.value = false; });
       <div class="idle-icon-wrap"><i class="pi pi-upload" /></div>
       <p class="idle-feature-desc">扫描文档中的图片链接，检测失效并从历史备用链接自动修复</p>
       <span class="idle-main-text">拖放 Markdown 文件到此处</span>
-      <span class="idle-sub-text">支持 .md 和 .markdown 文件</span>
       <div class="idle-buttons">
         <Button label="选择文件" :loading="isAnalyzing || isChecking" class="idle-btn-primary" @click="emit('selectFile')" />
         <Button label="选择文件夹" severity="secondary" outlined :loading="isAnalyzing || isChecking" class="idle-btn-secondary" @click="emit('selectFolder')" />
@@ -73,9 +72,9 @@ onDeactivated(() => { isViewActive.value = false; });
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   height: 100%;
-  padding: var(--space-lg-xl) var(--space-3xl) 0 var(--space-lg);
+  padding: var(--space-4xl) var(--space-3xl) 0 var(--space-lg);
 }
 
 .idle-zone {
@@ -120,14 +119,8 @@ onDeactivated(() => { isViewActive.value = false; });
 
 .idle-main-text {
   font-size: var(--text-lg);
-  font-weight: var(--weight-medium);
-  color: var(--text-muted);
-  margin-bottom: var(--space-xs-sm);
-}
-
-.idle-sub-text {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
   margin-bottom: var(--space-2xl);
 }
 

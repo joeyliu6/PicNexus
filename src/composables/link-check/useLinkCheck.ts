@@ -50,6 +50,7 @@ const checkRows: Ref<LinkCheckRow[]> = shallowRef([]);
 
 let progressUnlisten: UnlistenFn | null = null;
 let checkSessionId = 0; // 防竞态：每次检测分配唯一 session，旧 finally 不会杀新检测
+let activeRecheckCount = 0; // 防 onViewDeactivated 在单条复检动画期间误触发空闲释放
 
 /** 清理进度监听器，防止累积泄漏 */
 function clearProgressListener(): void {
@@ -73,6 +74,9 @@ let idleTimer: ReturnType<typeof setTimeout> | null = null;
 // TTL 缓存：避免反复切换页面时重复加载
 const CACHE_TTL_MS = 5 * 60 * 1000;
 let lastLoadTime = 0;
+
+/** recheckSingle 各阶段动画时长（ms）：转圈最短/结果展示/行淡出/徽章淡出 */
+const RECHECK_MS = { SPIN_MIN: 400, RESULT_SHOW: 1000, ROW_FADE: 350, BADGE_FADE: 300 } as const;
 
 /**
  * 链接检测管理器
@@ -463,7 +467,7 @@ export function useLinkCheckManager() {
   }
 
   /**
-   * 重新检测单条链接
+   * 重新检测单条链接（入口 + 三个辅助函数）
    */
 
   /** 行索引 Map：key = `${url}::${historyId}` → 数组下标，O(1) 查找 */
@@ -501,78 +505,79 @@ export function useLinkCheckManager() {
     }
   }
 
+  /** 执行单条检测请求（含最短转圈等待，避免按钮过快闪烁） */
+  async function performRecheckRequest(row: LinkCheckRow): Promise<CheckLinkResult> {
+    const [result] = await Promise.all([
+      invoke<CheckLinkResult>('check_image_link', {
+        link: row.url,
+        fallbackUrl: row.fallbackUrl ?? null,
+      }),
+      new Promise<void>((resolve) => setTimeout(resolve, RECHECK_MS.SPIN_MIN)),
+    ]);
+    return result;
+  }
+
+  /** 复检结果动画：展示徽章 → Case A/B 淡出 */
+  async function animateRecheckResult(row: LinkCheckRow, result: CheckLinkResult, currentFilter: StatusFilter | undefined): Promise<void> {
+    if (!updateRow(row, (t) => { t.recheckLoading = false; t.recheckResult = result; })) return;
+    await new Promise((resolve) => setTimeout(resolve, RECHECK_MS.RESULT_SHOW));
+
+    if (wouldLeaveFilter(result, currentFilter)) {
+      // Case B：整行淡出 → 提交最终状态 → filteredRows 重算，行消失
+      if (!updateRow(row, (t) => { t.fadingOut = true; })) return;
+      await new Promise((resolve) => setTimeout(resolve, RECHECK_MS.ROW_FADE));
+      updateRow(row, (t) => { t.checkResult = result; t.recheckResult = undefined; t.fadingOut = false; });
+    } else {
+      // Case A：徽章淡出 → 左侧状态更新，行留在列表
+      if (!updateRow(row, (t) => { t.recheckBadgeFading = true; })) return;
+      await new Promise((resolve) => setTimeout(resolve, RECHECK_MS.BADGE_FADE));
+      updateRow(row, (t) => {
+        t.pinnedSortWeight = SEVERITY[t.checkResult?.error_type ?? 'success'] ?? 5; // 锁定排序位置
+        t.checkResult = result;
+        t.recheckResult = undefined;
+        t.recheckBadgeFading = false;
+      });
+    }
+  }
+
+  /** 将复检结果持久化到数据库 */
+  async function persistRecheckResult(row: LinkCheckRow, result: CheckLinkResult): Promise<void> {
+    await historyDB.open();
+    const item = await historyDB.getById(row.historyId);
+    if (!item) return;
+    const linkCheckStatus = item.linkCheckStatus || {};
+    linkCheckStatus[row.serviceId] = {
+      isValid: result.is_valid,
+      lastCheckTime: Date.now(),
+      statusCode: result.status_code,
+      errorType: result.error_type as 'success' | 'http_4xx' | 'http_5xx' | 'timeout' | 'network' | 'pending',
+      responseTime: result.response_time,
+      error: result.error || undefined,
+    };
+    await historyDB.update(row.historyId, { linkCheckStatus });
+  }
+
   async function recheckSingle(row: LinkCheckRow, currentFilter?: StatusFilter): Promise<void> {
-    // 防并发：已在检测或动画中则跳过
     const key = `${row.url}::${row.historyId}`;
     const existingIdx = rowIndexMap.get(key);
     const existing = existingIdx !== undefined ? checkRows.value[existingIdx] : undefined;
     if (existing?.recheckLoading || existing?.recheckResult) return;
 
+    activeRecheckCount++;
     try {
-      // 步骤1：按钮转圈（最短 400ms，避免过快闪烁）
       if (!updateRow(row, (t) => { t.recheckLoading = true; })) return;
-
-      const [result] = await Promise.all([
-        invoke<CheckLinkResult>('check_image_link', {
-          link: row.url,
-          fallbackUrl: row.fallbackUrl ?? null,
-        }),
-        new Promise<void>((resolve) => setTimeout(resolve, 400)),
-      ]);
-
-      // 步骤2：停转，显示结果徽章
-      if (!updateRow(row, (t) => { t.recheckLoading = false; t.recheckResult = result; })) return;
-
-      // 步骤3：用户读结果 1s
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      if (wouldLeaveFilter(result, currentFilter)) {
-        // Case B：整行淡出 → 提交最终状态 → filteredRows 重算，行消失
-        if (!updateRow(row, (t) => { t.fadingOut = true; })) return;
-        await new Promise((resolve) => setTimeout(resolve, 350));
-        updateRow(row, (t) => {
-          t.checkResult = result;
-          t.recheckResult = undefined;
-          t.fadingOut = false;
-        });
-      } else {
-        // Case A：徽章淡出 → 左侧状态更新，行留在列表
-        if (!updateRow(row, (t) => { t.recheckBadgeFading = true; })) return;
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        updateRow(row, (t) => {
-          // 锁定排序位置，防止 checkResult 更新触发行位置跳动
-          t.pinnedSortWeight = SEVERITY[t.checkResult?.error_type ?? 'success'] ?? 5;
-          t.checkResult = result;
-          t.recheckResult = undefined;
-          t.recheckBadgeFading = false;
-        });
-      }
-
-      // 更新 DB
-      await historyDB.open();
-      const item = await historyDB.getById(row.historyId);
-      if (item) {
-        const linkCheckStatus = item.linkCheckStatus || {};
-        linkCheckStatus[row.serviceId] = {
-          isValid: result.is_valid,
-          lastCheckTime: Date.now(),
-          statusCode: result.status_code,
-          errorType: result.error_type as 'success' | 'http_4xx' | 'http_5xx' | 'timeout' | 'network' | 'pending',
-          responseTime: result.response_time,
-          error: result.error || undefined,
-        };
-        await historyDB.update(row.historyId, { linkCheckStatus });
-      }
+      const result = await performRecheckRequest(row);
+      await animateRecheckResult(row, result, currentFilter);
+      await persistRecheckResult(row, result);
     } catch (err) {
       updateRow(row, (t) => {
-        t.recheckLoading = false;
-        t.recheckResult = undefined;
-        t.recheckBadgeFading = false;
-        t.fadingOut = false;
-        t.pinnedSortWeight = undefined;
+        t.recheckLoading = false; t.recheckResult = undefined; t.recheckBadgeFading = false;
+        t.fadingOut = false; t.pinnedSortWeight = undefined;
       });
       log.error('单条检测失败', err);
       toast.error('检测失败', String(err));
+    } finally {
+      activeRecheckCount--;
     }
   }
 
@@ -610,7 +615,7 @@ export function useLinkCheckManager() {
 
   /** 页面离开时：启动空闲计时，到期释放数据 */
   function onViewDeactivated(): void {
-    if (isChecking.value || progressUnlisten) return; // 检测进行中或后台仍在工作，不清理
+    if (isChecking.value || isPhase2Loading.value || progressUnlisten || activeRecheckCount > 0) return; // 检测/Phase2加载/复检动画进行中，不清理
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
       if (!isChecking.value) {
