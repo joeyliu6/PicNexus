@@ -92,9 +92,14 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     const w = options.imageWidth.value || 1920;
     const h = options.imageHeight.value || 1080;
 
+    // 从缩略图元素提取已加载的图片 URL 作为过渡占位图，避免动画期间只显示黑色背景
+    const thumbImg = thumbEl?.querySelector('img');
+    const msrc = thumbImg?.currentSrc || thumbImg?.src || undefined;
+
     pswp = new PhotoSwipe({
       dataSource: [{
         src,
+        msrc,
         width: w,
         height: h,
         element: thumbEl,

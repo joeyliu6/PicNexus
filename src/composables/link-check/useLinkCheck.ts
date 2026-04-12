@@ -38,6 +38,10 @@ const log = createLogger('LinkCheck');
 
 const isChecking = ref(false);
 const isLoading = ref(false);
+/** Phase 2 后台加载中标志：Phase 1 结束后为 true，Phase 2 全部到达后为 false */
+const isPhase2Loading = ref(false);
+/** Phase 2 耗时（ms）：用于 UI 侧判断是否跳过动画（<300ms 则跳过） */
+const phase2Duration = ref(0);
 const progress: Ref<BatchCheckProgress | null> = ref(null);
 /** 进度来源标识：区分是链接监控还是文档修复在跑，防止 UI 串扰 */
 const progressSource: Ref<'monitor' | 'rescue' | null> = ref(null);
@@ -137,6 +141,8 @@ export function useLinkCheckManager() {
 
       // Phase 2：后台静默加载剩余记录
       // 先收集所有批次到临时数组，避免每批都 [...checkRows, ...batch] 导致 O(n²) 复制
+      isPhase2Loading.value = true;
+      const phase2Start = Date.now();
       const loadedIds = new Set(invalidLiteRows.map((r) => r.id));
       const pendingRows: LinkCheckRow[] = [];
       for await (const batch of historyDB.getLinkCheckRestStream(loadedIds, 2000)) {
@@ -150,6 +156,8 @@ export function useLinkCheckManager() {
         checkRows.value = [...checkRows.value, ...pendingRows];
         rebuildRowIndex();
       }
+      phase2Duration.value = Date.now() - phase2Start;
+      isPhase2Loading.value = false;
 
       lastLoadTime = Date.now();
     } catch (err) {
@@ -619,6 +627,8 @@ export function useLinkCheckManager() {
     // 状态
     isChecking,
     isLoading,
+    isPhase2Loading,
+    phase2Duration,
     progress,
     progressSource,
     lastBatchResult,
