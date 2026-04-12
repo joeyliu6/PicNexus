@@ -107,7 +107,7 @@ defineExpose({
   gap: var(--space-sm-md);
   margin: 0;
   font-size: var(--text-lg-xl);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
 }
 
