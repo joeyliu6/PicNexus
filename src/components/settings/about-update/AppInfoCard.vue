@@ -42,7 +42,7 @@ async function copyVersion() {
 <style scoped>
 .app-info-card {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-lg-xl);
   padding: var(--space-xl);
   background: var(--bg-card);

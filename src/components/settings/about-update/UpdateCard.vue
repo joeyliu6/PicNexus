@@ -173,7 +173,7 @@ function onToggleAutoUpdate(v: boolean) {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
-  min-height: 34px;
+  min-height: var(--space-4xl); /* 48px，覆盖两行文字内容高度，防止状态切换时跳动 */
 }
 
 .update-status-vertical {
@@ -285,6 +285,8 @@ function onToggleAutoUpdate(v: boolean) {
   display: flex;
   flex-direction: column;
   gap: var(--space-2xs);
+  min-height: var(--space-4xl); /* 与 .update-status 对齐，保持卡片等高 */
+  justify-content: center;
 }
 
 .toggle-card .toggle-row-label {
