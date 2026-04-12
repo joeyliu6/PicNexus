@@ -191,7 +191,8 @@ onUnmounted(() => {
       <Column header="已传图床" style="min-width: 180px; width: 30%">
         <template #body="{ data }">
           <Skeleton v-if="isSkeleton(data)" width="50px" height="22px" borderRadius="4px" />
-          <div v-else class="service-badges">
+          <!-- v-memo 确保同一条记录不因父组件重渲染而重复执行 getSuccessfulServices；用 length 而非引用比较，因为数据库查询每次返回新数组 -->
+          <div v-else v-memo="[data.id, data.results.length]" class="service-badges">
             <span
               v-for="serviceId in getSuccessfulServices(data).slice(0, getVisibleCount(getSuccessfulServices(data)))"
               :key="serviceId"
@@ -256,17 +257,20 @@ onUnmounted(() => {
 
     <!-- 全局悬浮预览层 -->
     <Teleport to="body">
-      <div
-        v-if="hoverPreview.visible && hoverPreview.url"
-        class="global-thumb-hover-preview"
-        :style="hoverPreview.style"
-      >
-        <img
-          :src="hoverPreview.url"
-          :alt="hoverPreview.alt"
-          @error="(e: Event) => (e.target as HTMLImageElement).style.display = 'none'"
-        />
-      </div>
+      <Transition name="thumb-preview">
+        <div
+          v-if="hoverPreview.visible && hoverPreview.url"
+          class="global-thumb-hover-preview"
+          :data-lightbox-id="hoverPreview.itemId"
+          :style="hoverPreview.style"
+        >
+          <img
+            :src="hoverPreview.url"
+            :alt="hoverPreview.alt"
+            @error="(e: Event) => (e.target as HTMLImageElement).style.display = 'none'"
+          />
+        </div>
+      </Transition>
     </Teleport>
   </div>
 </template>
@@ -298,7 +302,24 @@ onUnmounted(() => {
   position: fixed;
   z-index: var(--z-lightbox);
   pointer-events: none;
-  animation: k-fade-in var(--duration-normal) ease;
+}
+
+.thumb-preview-enter-active {
+  transition: opacity var(--duration-normal) ease, transform var(--duration-normal) ease;
+}
+
+.thumb-preview-enter-from {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+.thumb-preview-leave-active {
+  transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease;
+}
+
+.thumb-preview-leave-to {
+  opacity: 0;
+  transform: scale(0.92);
 }
 
 .global-thumb-hover-preview img {

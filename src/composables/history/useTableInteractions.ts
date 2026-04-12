@@ -3,7 +3,7 @@
  * 包含：灯箱、服务 Popover、悬浮预览、复制链接
  * 从 HistoryTableView.vue 提取
  */
-import { ref, computed, type Ref } from 'vue';
+import { ref, computed, watch, onUnmounted, type Ref } from 'vue';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type PopoverType from 'primevue/popover';
 import type { HistoryItem } from '../../config/types';
@@ -21,6 +21,10 @@ const logger = createLogger('TableInteractions');
 
 const PREVIEW_MAX_SIZE = 300;
 const PREVIEW_MARGIN = 8;
+/** 灯箱打开动画时长（ms），与 PhotoSwipe showAnimationDuration 对齐 */
+const OPENING_DURATION = 400;
+/** 灯箱关闭动画时长（ms），用于拦截合成 mouseenter 的防抖窗口 */
+const CLOSING_DURATION = 300;
 
 interface UseTableInteractionsOptions {
   /** 当前页数据（灯箱导航用） */
@@ -43,6 +47,10 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   // ---- 灯箱 ----
   const lightboxVisible = ref(false);
   const lightboxItem = ref<HistoryItem | null>(null);
+  let openingTimer: ReturnType<typeof setTimeout> | null = null;
+  let closingTimer: ReturnType<typeof setTimeout> | null = null;
+  const isLightboxOpening = ref(false);
+  const isLightboxClosing = ref(false);
 
   const lightboxIndex = computed(() => {
     if (!lightboxItem.value) return -1;
@@ -54,8 +62,13 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   );
 
   function openLightbox(item: HistoryItem): void {
+    // 阻止悬浮预览在 Lightbox 打开动画期间消失，
+    // 让 PhotoSwipe 能从预览元素做 FLIP 过渡
+    isLightboxOpening.value = true;
     lightboxItem.value = item;
     lightboxVisible.value = true;
+    if (openingTimer) clearTimeout(openingTimer);
+    openingTimer = setTimeout(() => { isLightboxOpening.value = false; openingTimer = null; }, OPENING_DURATION);
   }
 
   function getItemImageUrl(item: HistoryItem): string {
@@ -135,11 +148,12 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
 
   // ---- 悬浮预览 ----
   const hoverPreview = ref({
-    visible: false, url: '', alt: '',
+    visible: false, url: '', alt: '', itemId: '',
     style: {} as Record<string, string>,
   });
 
   function handlePreviewEnter(event: MouseEvent, item: HistoryItem): void {
+    if (isLightboxOpening.value || isLightboxClosing.value) return;
     const url = thumbCache.getMediumImageUrl(item);
     if (!url) return;
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
@@ -149,12 +163,32 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     if (top + PREVIEW_MAX_SIZE > window.innerHeight - PREVIEW_MARGIN) top = window.innerHeight - PREVIEW_MAX_SIZE - PREVIEW_MARGIN;
     if (left + PREVIEW_MAX_SIZE > window.innerWidth - PREVIEW_MARGIN) left = rect.left - PREVIEW_MAX_SIZE - PREVIEW_MARGIN;
     if (left < PREVIEW_MARGIN) left = PREVIEW_MARGIN;
-    hoverPreview.value = { visible: true, url, alt: item.localFileName, style: { top: `${top}px`, left: `${left}px` } };
+    hoverPreview.value = { visible: true, url, alt: item.localFileName, itemId: item.id, style: { top: `${top}px`, left: `${left}px` } };
   }
 
   function handlePreviewLeave(): void {
+    // Lightbox 打开动画期间保持预览可见，供 PhotoSwipe FLIP 使用
+    if (isLightboxOpening.value) return;
     hoverPreview.value.visible = false;
   }
+
+  // Lightbox 关闭时强制隐藏悬浮预览，
+  // 避免鼠标不在缩略图上时预览卡住不消失；
+  // closing 标记持续 CLOSING_DURATION ms，拦截 PhotoSwipe overlay 消失后
+  // 浏览器对缩略图触发的合成 mouseenter，防止预览闪现一帧。
+  watch(lightboxVisible, (visible) => {
+    if (!visible) {
+      isLightboxClosing.value = true;
+      hoverPreview.value.visible = false;
+      if (closingTimer) clearTimeout(closingTimer);
+      closingTimer = setTimeout(() => { isLightboxClosing.value = false; closingTimer = null; }, CLOSING_DURATION);
+    }
+  });
+
+  onUnmounted(() => {
+    if (openingTimer) { clearTimeout(openingTimer); openingTimer = null; }
+    if (closingTimer) { clearTimeout(closingTimer); closingTimer = null; }
+  });
 
   return {
     // 灯箱
