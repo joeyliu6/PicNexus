@@ -5,14 +5,14 @@
   background: transparent;
   border: none;
   border-top: 1px solid var(--border-subtle);
-  padding: 12px 16px;
-  gap: 4px;
+  padding: var(--space-md) var(--space-lg);
+  gap: var(--space-xs);
 }
 
 :deep(.p-paginator .p-paginator-pages .p-paginator-page) {
   min-width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-size: var(--text-sm);
   color: var(--text-secondary);
   transition: all var(--duration-fast) ease;
@@ -25,7 +25,7 @@
 
 :deep(.p-paginator .p-paginator-pages .p-paginator-page.p-highlight) {
   background: var(--primary);
-  color: white;
+  color: var(--text-on-primary);
   font-weight: var(--weight-semibold);
 }
 
@@ -35,7 +35,7 @@
 :deep(.p-paginator .p-paginator-last) {
   min-width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
   transition: all var(--duration-fast) ease;
 }
@@ -66,7 +66,7 @@
 :deep(.minimal-table .p-datatable-thead > tr > th) {
   background: var(--bg-card) !important;
   border-bottom: 1px solid var(--border-subtle) !important;
-  padding: 12px 16px !important;
+  padding: var(--space-md) var(--space-lg) !important;
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
   color: var(--text-tertiary);
@@ -110,7 +110,7 @@
 
 /* ---- 单元格 ---- */
 :deep(.minimal-table .p-datatable-tbody > tr > td) {
-  padding: 8px 16px !important;
+  padding: var(--space-sm) var(--space-lg) !important;
   border-bottom: 1px solid var(--overlay-medium) !important;
   font-size: var(--text-sm);
   vertical-align: middle;
@@ -210,7 +210,7 @@
 }
 
 .meta-dot {
-  margin: 0 5px;
+  margin: 0 var(--space-xs);
   color: var(--text-tertiary);
 }
 
@@ -228,7 +228,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
-  padding: 3px var(--space-sm);
+  padding: var(--space-2xs) var(--space-sm);
   background: var(--primary-alpha-10);
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
@@ -265,7 +265,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 3px var(--space-xs-sm);
+  padding: var(--space-2xs) var(--space-xs-sm);
   background: var(--bg-input);
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);

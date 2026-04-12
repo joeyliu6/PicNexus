@@ -218,7 +218,7 @@ function renderPreview(prefix: LinkPrefixItem): string {
 .prefix-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2xs);
   margin-top: var(--space-md);
 }
 
@@ -275,7 +275,7 @@ function renderPreview(prefix: LinkPrefixItem): string {
 
 .prefix-actions {
   display: flex;
-  gap: 2px;
+  gap: var(--space-2xs);
   flex-shrink: 0;
 }
 
@@ -283,6 +283,7 @@ function renderPreview(prefix: LinkPrefixItem): string {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 38px 左缩进对齐图标，无对应 spacing token */
   padding: 0 var(--space-sm-md) var(--space-sm-md) 38px;
 }
 
@@ -307,15 +308,17 @@ function renderPreview(prefix: LinkPrefixItem): string {
 .prefix-vars-hint {
   font-size: var(--text-xs);
   color: var(--text-muted);
-  padding-top: 2px;
+  padding-top: var(--space-2xs);
 }
 
 .prefix-vars-hint code {
   font-size: var(--text-xs);
-  padding: 1px 4px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1px 为 inline code 微调间距 */
+  padding: 1px var(--space-xs);
   background: var(--hover-overlay);
   border-radius: var(--radius-xs-sm);
   color: var(--primary);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1px 为 inline code 微调间距 */
   margin: 0 1px;
 }
 

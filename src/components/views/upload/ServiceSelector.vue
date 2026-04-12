@@ -86,17 +86,17 @@ function handleToggle(serviceId: string) {
 .upload-controls {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  padding: 16px 24px 20px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg) var(--space-xl) var(--space-lg-xl);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .service-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .service-group-label {
@@ -110,19 +110,19 @@ function handleToggle(serviceId: string) {
 .service-tags-wrapper {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--space-sm-md);
 }
 
 .service-tag {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   height: 36px;
-  padding: 0 16px;
+  padding: 0 var(--space-lg);
   background-color: var(--bg-input);
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-sm-md);
   color: var(--text-primary);
   font-size: var(--text-base);
   font-weight: var(--weight-medium);
@@ -140,7 +140,7 @@ function handleToggle(serviceId: string) {
 
 /* 选中状态（固定样式，悬浮时不变） */
 .service-tag.is-selected {
-  background-color: color-mix(in srgb, var(--primary) 10%, transparent);
+  background-color: var(--primary-alpha-10);
   border-color: var(--primary);
   color: var(--primary);
   font-weight: var(--weight-semibold);

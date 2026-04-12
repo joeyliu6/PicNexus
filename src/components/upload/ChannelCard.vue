@@ -153,9 +153,9 @@ function handleRetry() {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border-radius: 8px;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   background: var(--bg-card);
   transition: all var(--duration-normal) ease;
@@ -178,7 +178,7 @@ function handleRetry() {
 .channel-icon {
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -213,7 +213,7 @@ function handleRetry() {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2xs);
 }
 
 .channel-name {
@@ -256,8 +256,8 @@ function handleRetry() {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 3px;
-  border-radius: 4px;
+  padding: var(--space-2xs);
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -273,8 +273,8 @@ function handleRetry() {
   color: var(--success);
   opacity: 0.75;
   border-left: 1px solid var(--success-soft);
-  margin-left: 2px;
-  padding: 3px 4px;
+  margin-left: var(--space-2xs);
+  padding: var(--space-2xs) var(--space-xs);
 }
 
 .retry-btn {
@@ -310,9 +310,9 @@ function handleRetry() {
   right: 0;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-float);
-  padding: 4px;
+  padding: var(--space-xs);
   min-width: 120px;
   z-index: var(--z-modal);
 }
@@ -320,14 +320,14 @@ function handleRetry() {
 .format-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   width: 100%;
-  padding: 8px 12px;
+  padding: var(--space-sm) var(--space-md);
   border: none;
   background: transparent;
   color: var(--text-primary);
   font-size: var(--text-xs);
-  border-radius: 6px;
+  border-radius: var(--radius-sm-md);
   cursor: pointer;
   transition: all var(--duration-fast) ease;
   text-align: left;

@@ -229,7 +229,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 .favorites-scroll {
   height: 100%;
   overflow: hidden auto;
-  padding: 20px 24px;
+  padding: var(--space-lg-xl) var(--space-xl);
   scrollbar-width: none;           /* Firefox */
   -ms-overflow-style: none;        /* IE/Edge */
 }
@@ -243,8 +243,8 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 .favorites-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 4px;
-  padding-bottom: 60px;
+  gap: var(--space-xs);
+  padding-bottom: var(--space-5xl);
 }
 
 /* === 加载骨架占位格 === */
@@ -252,7 +252,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   position: relative;
   aspect-ratio: 1;
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -266,8 +266,8 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 24px 0;
+  gap: var(--space-sm);
+  padding: var(--space-xl) 0;
   color: var(--text-muted);
   font-size: var(--text-xs);
 }
@@ -333,8 +333,8 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 
 /* === 空状态入场：下方浮入 + 缩放 + 弹性缓动 === */
 .empty-fade-enter-active {
-  transition: opacity var(--duration-slow) var(--ease-standard) 0.15s,
-              transform var(--duration-slow) var(--ease-spring) 0.15s;
+  transition: opacity var(--duration-slow) var(--ease-standard) var(--duration-fast),
+              transform var(--duration-slow) var(--ease-spring) var(--duration-fast);
 }
 
 .empty-fade-enter-from {
@@ -388,7 +388,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 /* === 响应式 === */
 @media (width <= 768px) {
   .favorites-scroll {
-    padding: 16px;
+    padding: var(--space-lg);
   }
 
   .favorites-grid {
@@ -399,7 +399,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 @media (width <= 480px) {
   .favorites-grid {
     grid-template-columns: repeat(3, 1fr);
-    gap: 2px;
+    gap: var(--space-2xs);
   }
 }
 </style>

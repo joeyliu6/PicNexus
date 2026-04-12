@@ -168,7 +168,7 @@ function handleRecheckBatch() {
 
 <style scoped>
 .monitor-panel {
-  display: flex; flex-direction: column; height: 100%; gap: 14px;
-  padding: 20px 0 20px 24px; overflow: hidden;
+  display: flex; flex-direction: column; height: 100%; gap: var(--space-md-lg);
+  padding: var(--space-lg-xl) 0 var(--space-lg-xl) var(--space-xl); overflow: hidden;
 }
 </style>

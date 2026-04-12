@@ -92,6 +92,7 @@ const emit = defineEmits<{
   background: color-mix(in srgb, var(--bg-surface) 72%, transparent);
   backdrop-filter: blur(12px) saturate(160%);
   border-radius: var(--radius-md) 0 0 0;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- box-shadow 内嵌颜色无语义变量 */
   box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
   overflow: hidden;
   white-space: nowrap;
@@ -106,7 +107,7 @@ const emit = defineEmits<{
 }
 
 .bubble-date {
-  padding: 2px 8px;
+  padding: var(--space-2xs) var(--space-sm);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   color: var(--text-main);
@@ -130,6 +131,7 @@ const emit = defineEmits<{
 .dark-theme .scrubber-bubble,
 :root.dark-theme .scrubber-bubble {
   background: color-mix(in srgb, var(--bg-surface) 72%, transparent);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- box-shadow 内嵌颜色无语义变量 */
   box-shadow: 0 2px 12px rgb(0 0 0 / 40%);
 }
 

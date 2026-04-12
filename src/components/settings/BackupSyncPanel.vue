@@ -304,7 +304,7 @@ function handleRestoreCancel() {
 
 /* 数据管理区块 */
 .data-section {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-lg);
 }
 
 .data-section:last-of-type {
@@ -314,8 +314,8 @@ function handleRestoreCancel() {
 .data-section-header {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin-bottom: 8px;
+  gap: var(--space-2xs);
+  margin-bottom: var(--space-sm);
 }
 
 .data-section-title {

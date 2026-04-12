@@ -468,7 +468,7 @@ onUnmounted(() => {
 .upload-view {
   height: 100%;
   overflow-y: auto;
-  padding: 20px;
+  padding: var(--space-lg-xl);
   background: var(--bg-app);
 }
 
@@ -477,7 +477,7 @@ onUnmounted(() => {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-lg-xl);
 }
 
 /* 滚动条 */

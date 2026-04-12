@@ -159,10 +159,10 @@ function onToggleAutoUpdate(v: boolean) {
 
 <style scoped>
 .update-card {
-  padding: 16px 20px;
+  padding: var(--space-lg) var(--space-lg-xl);
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -172,7 +172,7 @@ function onToggleAutoUpdate(v: boolean) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-md);
   min-height: 34px;
 }
 
@@ -185,13 +185,13 @@ function onToggleAutoUpdate(v: boolean) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .update-status-text {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-sm-md);
   font-size: var(--text-base);
   color: var(--text-primary);
 }
@@ -199,7 +199,7 @@ function onToggleAutoUpdate(v: boolean) {
 .update-status-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2xs);
 }
 
 .update-icon {
@@ -242,18 +242,18 @@ function onToggleAutoUpdate(v: boolean) {
 
 .update-notes {
   background: var(--bg-app);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
   max-height: 120px;
   overflow-y: auto;
-  margin-top: 12px;
+  margin-top: var(--space-md);
 }
 
 .update-notes-label {
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   color: var(--text-muted);
-  margin-bottom: 6px;
+  margin-bottom: var(--space-xs-sm);
 }
 
 .update-notes-content {
@@ -265,7 +265,7 @@ function onToggleAutoUpdate(v: boolean) {
 
 .update-progress {
   height: 6px;
-  margin-top: 12px;
+  margin-top: var(--space-md);
 }
 
 /* 自动更新独立卡片 */
@@ -273,18 +273,18 @@ function onToggleAutoUpdate(v: boolean) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 16px 20px;
+  gap: var(--space-md);
+  padding: var(--space-lg) var(--space-lg-xl);
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  margin-top: 12px;
+  border-radius: var(--radius-lg);
+  margin-top: var(--space-md);
 }
 
 .toggle-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2xs);
 }
 
 .toggle-card .toggle-row-label {

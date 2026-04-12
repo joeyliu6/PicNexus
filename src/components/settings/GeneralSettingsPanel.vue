@@ -259,7 +259,7 @@ function handleTemplateChange(template: string | undefined) {
           </div>
         </div>
       </div>
-      <div class="flex gap-2 flex-wrap" style="margin-top: 20px;">
+      <div class="flex gap-2 flex-wrap" style="margin-top: var(--space-lg-xl);">
         <Button
           label="清空历史记录"
           icon="pi pi-trash"
@@ -287,20 +287,20 @@ function handleTemplateChange(template: string | undefined) {
 /* 主题卡片 */
 .theme-options {
   display: flex;
-  gap: 16px;
+  gap: var(--space-lg);
 }
 
 .theme-card {
   flex: 1;
-  padding: 16px;
+  padding: var(--space-lg);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background-color: var(--bg-card);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--space-sm-md);
   transition: all var(--duration-normal);
   color: var(--text-secondary);
 }
@@ -322,7 +322,7 @@ function handleTemplateChange(template: string | undefined) {
 .behavior-toggles {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 
@@ -331,7 +331,7 @@ function handleTemplateChange(template: string | undefined) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
+  padding: var(--space-md) var(--space-md-lg);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -347,7 +347,7 @@ function handleTemplateChange(template: string | undefined) {
 
 /* 链接输出格式 */
 .format-section {
-  margin-top: 12px;
+  margin-top: var(--space-md);
 }
 
 .format-section-label {
@@ -355,22 +355,22 @@ function handleTemplateChange(template: string | undefined) {
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   color: var(--text-secondary);
-  margin-bottom: 8px;
+  margin-bottom: var(--space-sm);
 }
 
 .format-options {
   display: flex;
-  gap: 10px;
+  gap: var(--space-sm-md);
   flex-wrap: wrap;
 }
 
 .format-card {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
+  gap: var(--space-sm);
+  padding: var(--space-sm-md) var(--space-lg);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background-color: var(--bg-card);
   cursor: pointer;
   transition: all var(--duration-normal);
@@ -396,7 +396,7 @@ function handleTemplateChange(template: string | undefined) {
 }
 
 .custom-template-section {
-  margin-top: 12px;
+  margin-top: var(--space-md);
 }
 
 .template-input {
@@ -406,15 +406,16 @@ function handleTemplateChange(template: string | undefined) {
 }
 
 .template-hint {
-  margin-top: 6px;
+  margin-top: var(--space-xs-sm);
 }
 
 .template-hint code {
   font-family: 'Fira Code', 'Cascadia Code', monospace;
   font-size: var(--text-xs);
-  padding: 1px 5px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1px 垂直内边距微调，无对应 spacing token */
+  padding: 1px var(--space-xs);
   background: var(--bg-app);
-  border-radius: 3px;
+  border-radius: var(--radius-xs-sm);
   color: var(--primary);
 }
 

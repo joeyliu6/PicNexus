@@ -133,7 +133,7 @@ const handleSelectedCountUpdate = (count: number) => {
 .history-container {
   flex: 1;
   overflow: hidden auto;
-  padding: 20px 24px;
+  padding: var(--space-lg-xl) var(--space-xl);
 }
 
 .history-container.no-padding {

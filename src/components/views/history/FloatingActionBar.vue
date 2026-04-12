@@ -180,35 +180,39 @@ function handleCopy(format: LinkFormat): void {
   left: 50%;
   transform: translateX(-50%);
   z-index: var(--z-overlay);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 深色毛玻璃底色，无对应 CSS 变量 */
   background: rgb(26 26 30 / 90%);
   backdrop-filter: blur(12px);
   border: 1px solid var(--border-subtle);
-  border-radius: 20px;
+  border-radius: var(--radius-2xl);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 内阴影高光含 rgb 色值 */
   box-shadow: var(--shadow-float), 0 -1px 0 rgb(255 255 255 / 5%) inset;
-  padding: 8px 16px;
+  padding: var(--space-sm) var(--space-lg);
 }
 
 :root.light-theme .floating-action-bar {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 亮色毛玻璃底色，无对应 CSS 变量 */
   background: rgb(255 255 255 / 95%);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 内阴影高光含 rgb 色值 */
   box-shadow: var(--shadow-float), 0 1px 0 rgb(0 0 0 / 3%) inset;
 }
 
 .fab-content {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .fab-count {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs-sm);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
   color: var(--primary);
-  padding: 6px 12px;
+  padding: var(--space-xs-sm) var(--space-md);
   background: var(--primary-alpha-10);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   white-space: nowrap;
 }
 
@@ -220,13 +224,13 @@ function handleCopy(format: LinkFormat): void {
   width: 1px;
   height: 24px;
   background: var(--border-subtle);
-  margin: 0 4px;
+  margin: 0 var(--space-xs);
 }
 
 .fab-btn {
   font-size: var(--text-sm) !important;
-  padding: 6px 12px !important;
-  border-radius: 8px !important;
+  padding: var(--space-xs-sm) var(--space-md) !important;
+  border-radius: var(--radius-md) !important;
 }
 
 .fab-btn-unfavorite {
@@ -276,9 +280,9 @@ function handleCopy(format: LinkFormat): void {
   transform: translateX(-50%);
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-float);
-  padding: 6px;
+  padding: var(--space-xs-sm);
   min-width: 160px;
   z-index: var(--z-modal);
 }
@@ -287,13 +291,13 @@ function handleCopy(format: LinkFormat): void {
 .service-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: 6px 8px;
+  gap: var(--space-xs);
+  padding: var(--space-xs-sm) var(--space-sm);
 }
 
 .service-chip {
-  padding: 3px 8px;
-  border-radius: 6px;
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius-sm-md);
   border: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
@@ -318,20 +322,20 @@ function handleCopy(format: LinkFormat): void {
 .menu-divider {
   height: 1px;
   background: var(--border-subtle);
-  margin: 4px 8px;
+  margin: var(--space-xs) var(--space-sm);
 }
 
 .copy-menu-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-sm-md);
   width: 100%;
-  padding: 10px 14px;
+  padding: var(--space-sm-md) var(--space-md-lg);
   border: none;
   background: transparent;
   color: var(--text-primary);
   font-size: var(--text-sm);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--duration-fast) ease;
   text-align: left;
@@ -372,7 +376,7 @@ function handleCopy(format: LinkFormat): void {
   }
 
   .floating-action-bar {
-    padding: 8px 12px;
+    padding: var(--space-sm) var(--space-md);
   }
 }
 </style>

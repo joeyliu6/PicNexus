@@ -245,7 +245,7 @@ function renderTemplate(cdn: GithubCdnProvider): string {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .cdn-title-row .subsection-hint {
@@ -255,12 +255,12 @@ function renderTemplate(cdn: GithubCdnProvider): string {
 .cdn-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin-top: 14px;
+  gap: var(--space-2xs);
+  margin-top: var(--space-md-lg);
 }
 
 .cdn-row {
-  border-radius: 6px;
+  border-radius: var(--radius-sm-md);
   transition: background-color var(--duration-fast) ease;
 }
 
@@ -275,15 +275,15 @@ function renderTemplate(cdn: GithubCdnProvider): string {
 .cdn-row-main {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: var(--space-sm-md);
+  padding: var(--space-sm) var(--space-sm-md);
 }
 
 .cdn-info {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs-sm);
   cursor: pointer;
   min-width: 0;
   overflow: hidden;
@@ -312,21 +312,22 @@ function renderTemplate(cdn: GithubCdnProvider): string {
 
 .cdn-actions {
   display: flex;
-  gap: 2px;
+  gap: var(--space-2xs);
   flex-shrink: 0;
 }
 
 .cdn-edit {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 0 10px 10px 38px;
+  gap: var(--space-xs-sm);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 38px 左缩进对齐图标，无对应 spacing token */
+  padding: 0 var(--space-sm-md) var(--space-sm-md) 38px;
 }
 
 .cdn-field-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .cdn-field-label {
@@ -344,37 +345,39 @@ function renderTemplate(cdn: GithubCdnProvider): string {
 .cdn-vars-hint {
   font-size: var(--text-xs);
   color: var(--text-muted);
-  padding-top: 2px;
+  padding-top: var(--space-2xs);
 }
 
 .cdn-vars-hint code {
   font-size: var(--text-xs);
-  padding: 1px 4px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1px 为 inline code 微调间距 */
+  padding: 1px var(--space-xs);
   background: var(--hover-overlay);
-  border-radius: 3px;
+  border-radius: var(--radius-xs-sm);
   color: var(--primary);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1px 为 inline code 微调间距 */
   margin: 0 1px;
 }
 
 .cdn-toolbar {
   display: flex;
-  gap: 8px;
-  margin-top: 8px;
-  padding-left: 10px;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+  padding-left: var(--space-sm-md);
 }
 
 .cdn-preview-inline {
-  margin-top: 8px;
-  padding: 8px 10px;
+  margin-top: var(--space-sm);
+  padding: var(--space-sm) var(--space-sm-md);
   background: var(--hover-overlay-subtle);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
 }
 
 .cdn-preview-label {
   display: block;
   font-size: var(--text-xs);
   color: var(--text-muted);
-  margin-bottom: 4px;
+  margin-bottom: var(--space-xs);
 }
 
 .cdn-preview-url {

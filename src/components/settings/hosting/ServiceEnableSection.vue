@@ -340,11 +340,12 @@ function toggleFilter(status: ServiceHealthStatus) {
 }
 
 .health-refresh.is-testing:not(.is-completed) .ring-label {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 2s 为脉冲循环动画，无对应 duration token */
   animation: k-pulse 2s ease-in-out infinite;
 }
 
 .health-refresh.is-completed {
-  animation: k-bounce 0.4s ease-out;
+  animation: k-bounce var(--duration-slow) ease-out;
 }
 
 .health-refresh.is-completed .ring-label {

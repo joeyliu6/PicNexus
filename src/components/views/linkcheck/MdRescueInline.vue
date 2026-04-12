@@ -347,7 +347,7 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
 .wk-actions { display: flex; gap: var(--space-sm); }
 
 .wk-progress { height: 4px; background: var(--border-subtle); flex-shrink: 0; }
-.wk-progress-fill { height: 100%; background: var(--primary); transition: width var(--duration-slow) ease; border-radius: 0 2px 2px 0; }
+.wk-progress-fill { height: 100%; background: var(--primary); transition: width var(--duration-slow) ease; border-radius: 0 var(--radius-xs) var(--radius-xs) 0; }
 
 .wk-body {
   flex: 1; overflow-y: auto; padding: var(--space-sm-md) var(--space-xl) var(--space-sm-md) 0;
@@ -360,6 +360,7 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
   padding: var(--space-md) var(--space-md-lg); flex-shrink: 0;
   border: 1px dashed var(--border-subtle); border-radius: var(--radius-md);
   background: var(--hover-overlay-subtle); max-height: 60px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 2s 无对应 duration token */
   animation: k-pulse 2s ease-in-out infinite;
 }
 
@@ -387,6 +388,7 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
 
 /* 健康文件流水 */
 .mr-healthy-stream { display: flex; flex-direction: column; gap: var(--space-2xs); padding: var(--space-sm) var(--space-md-lg); }
+/* stylelint-disable-next-line declaration-property-value-disallowed-list -- 0.25s 无精确 duration token */
 .mr-healthy-row { display: flex; align-items: center; gap: var(--space-sm); height: 32px; font-size: var(--text-xs); animation: k-fade-slide-down 0.25s ease; }
 .mr-healthy-icon { font-size: var(--text-xs); color: var(--success); flex-shrink: 0; }
 .mr-healthy-name { color: var(--text-muted); font-weight: var(--weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
@@ -423,8 +425,11 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
 .mr-cancelled-hint { font-size: var(--text-xs); color: var(--text-muted); margin-right: auto; }
 
 /* 按钮 */
+/* stylelint-disable-next-line no-duplicate-selectors -- MdRescueInline 按钮与 CheckBottomBar 同名但独立作用域 */
 .btn-ghost, .btn-primary, .btn-danger {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 5px/28px/11px 无精确 spacing token */
   display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 7px 无精确 radius token */
   border-radius: 7px; font-size: var(--text-xs); font-weight: var(--weight-medium); cursor: pointer;
   white-space: nowrap; transition: background var(--duration-fast), opacity var(--duration-fast); border: none; font-family: inherit;
 }
@@ -446,6 +451,7 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
 .scan-bar-enter-active { transition: opacity var(--duration-normal) ease, transform var(--duration-normal) ease; }
 
 .scan-bar-leave-active {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 0.8s/0.6s/0.3s 为离场长动画，无精确 token */
   transition: opacity 0.8s var(--ease-standard), transform 0.8s var(--ease-standard),
     max-height 0.6s 0.3s var(--ease-standard), padding 0.6s 0.3s var(--ease-standard), border-width 0.6s 0.3s var(--ease-standard);
   overflow: hidden;

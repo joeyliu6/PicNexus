@@ -260,11 +260,11 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
 .delete-profile-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: var(--space-xs-sm);
+  padding: var(--space-xs-sm) var(--space-md);
   background: none;
   border: 1px solid var(--error-alpha-20);
-  border-radius: 6px;
+  border-radius: var(--radius-sm-md);
   color: var(--error);
   font-size: var(--text-xs);
   cursor: pointer;

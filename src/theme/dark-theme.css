@@ -127,12 +127,14 @@
 /* 标题栏在深色主题下的样式 */
 :root.dark-theme #titlebar {
   background-color: var(--bg-titlebar);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 深色主题边框色无语义变量 */
   border-bottom: 1px solid rgba(39, 39, 42, 0.5);
 }
 
 /* 侧边栏在深色主题下的样式 */
 :root.dark-theme .sidebar {
   background-color: var(--bg-sidebar);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 深色主题边框色无语义变量 */
   border-right: 1px solid rgba(39, 39, 42, 0.5);
 }
 
@@ -144,6 +146,7 @@
 
 /* 服务按钮选中状态 */
 :root.dark-theme .service-btn.selected {
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 深色主题专用色值无语义变量 */
   background-color: rgba(16, 185, 129, 0.15);
   border-color: var(--success);
 }
@@ -167,6 +170,7 @@
 
 /* 表格斑马条纹 */
 :root.dark-theme table tr:nth-child(even) {
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 深色主题斑马条纹色无语义变量 */
   background-color: rgba(39, 39, 42, 0.3);
 }
 

@@ -118,11 +118,12 @@ function selectService(svc: ServerServiceType | null) {
 .service-trigger {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs-sm);
   width: 100%;
-  padding: 7px 12px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 7px 无对应 spacing token */
+  padding: 7px var(--space-md);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-input);
   color: var(--text-main);
   cursor: pointer;
@@ -156,9 +157,9 @@ function selectService(svc: ServerServiceType | null) {
   min-width: 220px;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-float);
-  padding: 4px 0;
+  padding: var(--space-xs) 0;
   overflow: hidden;
 }
 
@@ -176,8 +177,9 @@ function selectService(svc: ServerServiceType | null) {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 14px;
+  gap: var(--space-sm);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 9px 无对应 spacing token */
+  padding: 9px var(--space-md-lg);
   border: none;
   background: transparent;
   color: var(--text-main);
@@ -206,19 +208,19 @@ function selectService(svc: ServerServiceType | null) {
 }
 
 .service-empty {
-  padding: 20px 16px;
+  padding: var(--space-lg-xl) var(--space-lg);
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 6px;
+  gap: var(--space-xs-sm);
 }
 
 .service-empty-icon {
   font-size: var(--text-2xl);
   color: var(--text-muted);
   opacity: 0.5;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-xs);
 }
 
 .service-empty-title {

@@ -33,19 +33,19 @@
   font-size: var(--text-2xl);
   font-weight: var(--weight-semibold);
   color: var(--text-main);
-  margin: 0 0 12px;
+  margin: 0 0 var(--space-md);
 }
 
 .step-desc {
   font-size: var(--text-base);
   color: var(--text-muted);
   line-height: 1.6;
-  margin: 0 0 24px;
+  margin: 0 0 var(--space-xl);
 }
 
 .upload-methods {
   display: flex;
-  gap: 12px;
+  gap: var(--space-md);
   justify-content: center;
 }
 
@@ -53,9 +53,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 16px 20px;
-  border-radius: 8px;
+  gap: var(--space-xs-sm);
+  padding: var(--space-lg) var(--space-lg-xl);
+  border-radius: var(--radius-md);
   background: var(--bg-input);
   border: none;
   min-width: 110px;

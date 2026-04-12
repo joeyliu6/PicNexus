@@ -75,7 +75,7 @@ onDeactivated(() => { isViewActive.value = false; });
   align-items: center;
   justify-content: center;
   height: 100%;
-  padding: 20px 40px 0 16px;
+  padding: var(--space-lg-xl) var(--space-3xl) 0 var(--space-lg);
 }
 
 .idle-zone {
@@ -85,7 +85,7 @@ onDeactivated(() => { isViewActive.value = false; });
   text-align: center;
   width: 100%;
   max-width: 480px;
-  padding: 40px 40px 36px;
+  padding: var(--space-3xl) var(--space-3xl) var(--space-2xl);
   border: 2px dashed var(--border-subtle);
   border-radius: var(--radius-md);
   cursor: default;
@@ -128,7 +128,7 @@ onDeactivated(() => { isViewActive.value = false; });
 .idle-sub-text {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
-  margin-bottom: 36px;
+  margin-bottom: var(--space-2xl);
 }
 
 .idle-buttons {
@@ -140,10 +140,12 @@ onDeactivated(() => { isViewActive.value = false; });
 }
 
 .idle-btn-primary.p-button {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 11px 无精确 spacing token */
   flex: 1; padding: 11px 0; font-size: var(--text-base); font-weight: var(--weight-semibold); border-radius: var(--radius-md);
 }
 
 .idle-btn-secondary.p-button {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 11px 无精确 spacing token */
   flex: 1; padding: 11px 0; font-size: var(--text-base); font-weight: var(--weight-medium); border-radius: var(--radius-md);
   border-color: var(--border-subtle); color: var(--text-muted);
 }

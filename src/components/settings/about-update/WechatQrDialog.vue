@@ -56,28 +56,29 @@ function onQrError() {
 
 <style scoped>
 :global(.wechat-qr-dialog) {
-  border-radius: 16px !important;
+  border-radius: var(--radius-xl) !important;
   overflow: hidden;
 }
 
 :global(.wechat-qr-dialog .p-dialog-header) {
   border-bottom: none !important;
-  padding-bottom: 12px !important;
+  padding-bottom: var(--space-md) !important;
 }
 
 :global(.wechat-qr-dialog .p-dialog-content) {
-  padding-top: 8px !important;
+  padding-top: var(--space-sm) !important;
 }
 
 .wechat-dialog-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-sm-md);
 }
 
 .wechat-header-icon-wrap {
   width: 28px;
   height: 28px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 7px 无对应 radius token，介于 sm-md(6) 与 md(8) 之间 */
   border-radius: 7px;
   background: var(--primary-alpha-10);
   display: flex;
@@ -100,14 +101,14 @@ function onQrError() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 18px;
-  padding: 8px 0;
+  gap: var(--space-lg);
+  padding: var(--space-sm) 0;
 }
 
 .wechat-qr-frame {
-  padding: 16px;
+  padding: var(--space-lg);
   background: var(--wechat-qr-bg);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 2px 12px var(--wechat-qr-shadow);
   border: 1px solid var(--wechat-qr-border);
 }
@@ -116,16 +117,16 @@ function onQrError() {
   width: 180px;
   height: 180px;
   display: block;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   object-fit: cover;
 }
 
 .wechat-badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 12px;
-  border-radius: 20px;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-2xl);
   background: var(--wechat-green);
   color: var(--wechat-green-text);
   font-size: var(--text-xs);

@@ -78,7 +78,7 @@ defineEmits<{
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px 24px;
+  padding: var(--space-2xl) var(--space-xl);
   overflow-y: auto;
 }
 
@@ -100,7 +100,7 @@ defineEmits<{
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-lg-xl);
 }
 
 .icon-container i {
@@ -113,7 +113,7 @@ defineEmits<{
   font-size: var(--text-lg-xl);
   font-weight: var(--weight-semibold);
   color: var(--text-main);
-  margin: 0 0 10px;
+  margin: 0 0 var(--space-sm-md);
   text-align: center;
 }
 
@@ -122,7 +122,7 @@ defineEmits<{
   color: var(--text-muted);
   line-height: 1.7;
   text-align: center;
-  margin: 0 0 20px;
+  margin: 0 0 var(--space-lg-xl);
 }
 
 /* 安全提示 */
@@ -130,16 +130,16 @@ defineEmits<{
   width: 100%;
   background: var(--primary-alpha-6);
   border: 1px solid var(--primary-alpha-15);
-  border-radius: 8px;
-  padding: 12px 14px;
-  margin-bottom: 24px;
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-md-lg);
+  margin-bottom: var(--space-xl);
 }
 
 .tip-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: var(--space-xs-sm);
+  margin-bottom: var(--space-xs-sm);
 }
 
 .tip-header i {
@@ -164,14 +164,14 @@ defineEmits<{
 .actions {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-sm-md);
   width: 100%;
 }
 
 :deep(.btn-primary.p-button) {
   width: 100%;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-size: var(--text-base);
   font-weight: var(--weight-medium);
   justify-content: center;
@@ -180,7 +180,7 @@ defineEmits<{
 :deep(.btn-cancel.p-button) {
   width: 100%;
   height: 38px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   justify-content: center;

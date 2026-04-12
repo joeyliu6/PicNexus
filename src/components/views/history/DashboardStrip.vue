@@ -122,15 +122,16 @@ function clearSearch() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px;
+  padding: 0 var(--space-md);
   z-index: 10;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- box-shadow 含 rgb 色值 */
   box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
 }
 
 /* 标签页导航 */
 .tab-nav {
   display: flex;
-  gap: 2px;
+  gap: var(--space-2xs);
   height: 100%;
   align-items: stretch;
 }
@@ -138,8 +139,8 @@ function clearSearch() {
 .tab-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 14px;
+  gap: var(--space-xs-sm);
+  padding: 0 var(--space-md-lg);
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -148,7 +149,7 @@ function clearSearch() {
   cursor: pointer;
   position: relative;
   transition: color var(--duration-fast), background var(--duration-fast);
-  border-radius: 8px 8px 0 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
   font-family: inherit;
 }
 
@@ -173,6 +174,7 @@ function clearSearch() {
   right: 8px;
   height: 2px;
   background: var(--primary);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1px 为指示条微圆角 */
   border-radius: 1px 1px 0 0;
 }
 
@@ -180,7 +182,7 @@ function clearSearch() {
 .strip-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   flex-shrink: 1;
   min-width: 0;
 }
@@ -192,6 +194,7 @@ function clearSearch() {
 
 :deep(.filter-chip.p-select) {
   height: 28px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 14px 为药丸形圆角（高度一半） */
   border-radius: 14px;
   border: none;
   background: var(--primary-alpha-8);
@@ -209,7 +212,7 @@ function clearSearch() {
 }
 
 :deep(.filter-chip .p-select-label) {
-  padding: 0 6px 0 10px;
+  padding: 0 var(--space-xs-sm) 0 var(--space-sm-md);
   font-size: var(--text-xs);
   color: var(--primary);
   font-weight: var(--weight-medium);
@@ -228,17 +231,18 @@ function clearSearch() {
 
 /* 下拉面板样式 */
 :deep(.p-select-overlay) {
-  border-radius: 10px;
+  border-radius: var(--radius-md);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- box-shadow 含 rgb 色值 */
   box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
   border: 1px solid var(--border-subtle);
-  padding: 4px;
+  padding: var(--space-xs);
   min-width: 120px;
 }
 
 :deep(.p-select-overlay .p-select-option) {
   font-size: var(--text-xs);
-  padding: 6px 10px;
-  border-radius: 6px;
+  padding: var(--space-xs-sm) var(--space-sm-md);
+  border-radius: var(--radius-sm-md);
   color: var(--text-primary);
   transition: background var(--duration-micro);
 }
@@ -262,9 +266,9 @@ function clearSearch() {
   display: flex;
   align-items: center;
   background: var(--bg-input);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   height: 32px;
-  padding: 0 8px 0 10px;
+  padding: 0 var(--space-sm) 0 var(--space-sm-md);
   min-width: 140px;
   max-width: 260px;
   flex: 1;
@@ -282,7 +286,7 @@ function clearSearch() {
   font-size: var(--text-xs);
   flex-shrink: 0;
   opacity: 0.5;
-  margin-right: 6px;
+  margin-right: var(--space-xs-sm);
 }
 
 .search-field:focus-within .search-field-icon {
@@ -341,10 +345,11 @@ function clearSearch() {
 .selection-badge {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   height: 28px;
-  padding: 0 10px;
+  padding: 0 var(--space-sm-md);
   background: var(--primary-alpha-12);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 14px 为药丸形圆角（高度一半） */
   border-radius: 14px;
   color: var(--primary);
   font-size: var(--text-xs);
@@ -373,8 +378,9 @@ function clearSearch() {
   align-items: center;
   justify-content: center;
   background: var(--primary-alpha-8);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 14px 为药丸形圆角（高度一半） */
   border-radius: 14px;
-  padding: 0 12px;
+  padding: 0 var(--space-md);
   height: 28px;
 }
 
@@ -390,6 +396,6 @@ function clearSearch() {
   font-weight: var(--weight-regular);
   color: var(--primary);
   opacity: 0.7;
-  margin-left: 2px;
+  margin-left: var(--space-2xs);
 }
 </style>

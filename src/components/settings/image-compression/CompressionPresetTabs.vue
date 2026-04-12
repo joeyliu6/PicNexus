@@ -75,8 +75,8 @@ function onEditInput(e: Event) {
 .preset-tab-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 12px 16px;
+  gap: var(--space-xs-sm);
+  padding: var(--space-md) var(--space-lg);
   border-bottom: 1px solid var(--border-subtle);
   flex-wrap: wrap;
 }
@@ -88,8 +88,9 @@ function onEditInput(e: Event) {
   justify-content: center;
   min-width: 64px;
   min-height: 28px;
-  padding: 5px 14px;
+  padding: var(--space-xs) var(--space-md-lg);
   border: 1px solid var(--border-subtle);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 999px 为药丸形圆角 */
   border-radius: 999px;
   background: var(--bg-card);
   color: var(--text-secondary);
@@ -114,7 +115,7 @@ function onEditInput(e: Event) {
 .preset-tab.add-tab {
   border-style: dashed;
   color: var(--text-muted);
-  padding: 5px 10px;
+  padding: var(--space-xs) var(--space-sm-md);
   min-width: auto;
 }
 
@@ -150,7 +151,7 @@ function onEditInput(e: Event) {
   outline: none;
   color: inherit;
   font: inherit;
-  padding: 5px 14px;
+  padding: var(--space-xs) var(--space-md-lg);
   box-sizing: border-box;
   text-align: center;
 }

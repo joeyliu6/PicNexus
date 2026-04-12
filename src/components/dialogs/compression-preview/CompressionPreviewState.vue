@@ -46,7 +46,7 @@ const emit = defineEmits<{
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--space-sm-md);
   background: var(--bg-input);
 }
 
@@ -99,10 +99,11 @@ const emit = defineEmits<{
 }
 
 .cpd-retry-btn {
-  margin-top: 4px;
-  padding: 7px 18px;
+  margin-top: var(--space-xs);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 7px 无对应 spacing token */
+  padding: 7px var(--space-lg);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-card);
   color: var(--text-secondary);
   font-size: var(--text-sm);
@@ -110,7 +111,7 @@ const emit = defineEmits<{
   transition: all var(--duration-fast);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs-sm);
 }
 
 .cpd-retry-btn:hover {

@@ -54,7 +54,7 @@ const closeWindow = () => {
   height: 100%;
   display: flex;
   align-items: center;
-  padding: 0 12px;
+  padding: 0 var(--space-md);
 }
 
 .app-title {

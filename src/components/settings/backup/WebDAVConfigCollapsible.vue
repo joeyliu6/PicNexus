@@ -280,7 +280,7 @@ function handleTest() {
 .webdav-collapsible {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
@@ -322,11 +322,11 @@ function handleTest() {
 }
 
 .card-content {
-  padding: 0 16px;
+  padding: 0 var(--space-lg);
 }
 
 .expanded .card-content {
-  padding-bottom: 16px;
+  padding-bottom: var(--space-lg);
 }
 
 /* 下划线风格 Tabs */
@@ -334,18 +334,18 @@ function handleTest() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 0;
+  padding: var(--space-xs-sm) 0;
   border-bottom: 1px solid var(--border-subtle);
-  margin-bottom: 16px;
+  margin-bottom: var(--space-lg);
 }
 
 .tabs-list {
   display: flex;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .tab-btn {
-  padding: 6px 12px;
+  padding: var(--space-xs-sm) var(--space-md);
   background: transparent;
   border: none;
   color: var(--text-secondary);
@@ -353,7 +353,7 @@ function handleTest() {
   line-height: 20px;
   cursor: pointer;
   transition: all var(--duration-fast);
-  border-radius: 6px;
+  border-radius: var(--radius-sm-md);
 }
 
 .tab-btn:hover {
@@ -374,7 +374,7 @@ function handleTest() {
   justify-content: center;
   background: transparent;
   border: 1px solid var(--border-subtle);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
   font-size: var(--text-lg);
   cursor: pointer;
@@ -390,13 +390,13 @@ function handleTest() {
 .simple-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--space-md-lg);
 }
 
 .form-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-xs-sm);
 }
 
 .form-field label {
@@ -408,7 +408,7 @@ function handleTest() {
 .form-row-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 @media (width <= 500px) {
@@ -421,9 +421,9 @@ function handleTest() {
 .form-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 8px;
-  padding-top: 14px;
+  gap: var(--space-md);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-md-lg);
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -434,12 +434,12 @@ function handleTest() {
 /* 空状态 */
 .empty-webdav {
   text-align: center;
-  padding: 32px 16px;
+  padding: var(--space-2xl) var(--space-lg);
   color: var(--text-muted);
 }
 
 .empty-webdav p {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-lg);
 }
 
 /* Password 组件样式 */

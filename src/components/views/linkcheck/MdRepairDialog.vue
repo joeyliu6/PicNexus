@@ -178,9 +178,11 @@ function confirm() {
 .repair-dialog-body {
   display: flex; flex-direction: column; gap: var(--space-md);
 }
+
 .repair-dialog-desc {
   font-size: var(--text-sm); color: var(--text-muted); margin: 0;
 }
+
 .repair-strategy-option {
   display: flex; align-items: flex-start; gap: var(--space-sm-md);
   padding: var(--space-md) var(--space-md-lg); border-radius: var(--radius-lg);
@@ -188,22 +190,28 @@ function confirm() {
   cursor: pointer; transition: background var(--duration-fast), border-color var(--duration-fast);
 }
 .repair-strategy-option:hover { background: var(--hover-overlay-subtle); }
+
 .repair-strategy-option.active {
   border-color: var(--primary-alpha-30);
   background: var(--primary-alpha-5);
 }
+
 .repair-strategy-content {
   display: flex; flex-direction: column; gap: var(--space-xs); flex: 1; min-width: 0;
 }
+
 .repair-strategy-label {
   font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text-main);
 }
+
 .repair-strategy-desc {
   font-size: var(--text-xs); color: var(--text-tertiary);
 }
+
 .repair-pref-pills {
   display: flex; flex-wrap: wrap; gap: var(--space-xs-sm); margin-top: var(--space-sm);
 }
+
 .pill-pref-item {
   display: inline-flex; align-items: center; height: 28px; padding: 0 var(--space-sm-md);
   border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: var(--weight-medium); white-space: nowrap;
@@ -211,60 +219,75 @@ function confirm() {
   background: var(--bg-input); color: var(--text-muted); font-family: inherit;
   transition: background var(--duration-fast), border-color var(--duration-fast);
 }
+
 .pill-pref-item:hover {
   background: var(--primary-alpha-8); border-color: var(--primary-alpha-30); color: var(--primary);
 }
+
 .pill-pref-item--first {
   background: var(--primary-alpha-10); border-color: var(--primary-alpha-30);
   color: var(--primary); font-weight: var(--weight-semibold);
 }
+
 .pill-grip {
   font-size: var(--text-2xs); color: var(--text-tertiary); opacity: 0.5; flex-shrink: 0;
 }
 .repair-strategy-manual { flex-direction: column; gap: 0; }
+
 .repair-strategy-manual-header {
   display: flex; align-items: flex-start; gap: var(--space-sm-md); cursor: pointer; width: 100%;
 }
+
 .repair-strategy-manual-header > .pi {
   margin-left: auto; margin-top: var(--space-xs); font-size: var(--text-xs); color: var(--text-tertiary);
 }
+
 .repair-manual-list {
   display: flex; flex-direction: column; gap: var(--space-sm);
   margin-top: var(--space-sm-md); padding-top: var(--space-sm-md); border-top: 1px solid var(--border-subtle);
   max-height: 280px; overflow-y: auto;
 }
+
 .repair-manual-item {
   display: flex; flex-direction: column; gap: var(--space-xs-sm);
   padding: var(--space-sm) var(--space-sm-md); border-radius: var(--radius-md); background: var(--bg-input);
 }
+
 .repair-manual-url {
   display: flex; align-items: center; gap: var(--space-xs-sm);
   font-size: var(--text-xs); color: var(--text-muted);
 }
 .repair-manual-url i { font-size: var(--text-xs); color: var(--text-tertiary); }
+
 .repair-manual-url span {
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
 .repair-manual-file {
   font-family: inherit !important;
   margin-left: auto; flex-shrink: 0;
   color: var(--text-tertiary);
 }
+
 .repair-manual-options {
   display: flex; flex-wrap: wrap; gap: var(--space-xs-sm); padding-left: var(--space-lg-xl);
 }
+
 .repair-manual-radio {
   display: inline-flex; align-items: center; gap: var(--space-xs); cursor: pointer;
 }
 .repair-manual-radio input { display: none; }
+
 .repair-manual-radio.selected .backup-chip {
   background: var(--primary-alpha-10); color: var(--primary);
   border-color: var(--primary-alpha-30);
 }
+
 .repair-manual-latency {
   font-size: var(--text-2xs); color: var(--text-tertiary);
 }
+
 .repair-manual-show-all {
   width: 100%; padding: var(--space-sm) 0; border: 1px dashed var(--border-subtle); border-radius: var(--radius-sm-md);
   background: transparent; color: var(--primary); font-size: var(--text-xs); font-weight: var(--weight-medium);
@@ -272,6 +295,7 @@ function confirm() {
   transition: background var(--duration-fast), border-color var(--duration-fast);
 }
 .repair-manual-show-all:hover { background: var(--primary-alpha-5); border-color: var(--primary-alpha-30); }
+
 .repair-dialog-footer {
   display: flex; justify-content: flex-end; gap: var(--space-sm);
 }

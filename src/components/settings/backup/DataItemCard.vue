@@ -264,14 +264,14 @@ const isAnyForceLoading = computed(() =>
 .data-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
 }
 
 .card-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: var(--space-sm-md) var(--space-md-lg);
 }
 
 .card-row + .card-row {
@@ -280,7 +280,7 @@ const isAnyForceLoading = computed(() =>
 
 .card-row.cloud-row {
   background: var(--hover-overlay-subtle);
-  border-radius: 0 0 12px 12px;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
 .row-label {
@@ -293,13 +293,13 @@ const isAnyForceLoading = computed(() =>
 .row-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .row-label-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   min-width: 0;
 }
 
@@ -307,11 +307,11 @@ const isAnyForceLoading = computed(() =>
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
-  padding: 2px 8px;
-  border-radius: 10px;
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius-md);
   white-space: nowrap;
 }
 
@@ -339,7 +339,7 @@ const isAnyForceLoading = computed(() =>
 .cloud-hint-text {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   font-size: var(--text-xs);
   color: var(--text-muted);
   font-weight: var(--weight-regular);
@@ -362,7 +362,7 @@ const isAnyForceLoading = computed(() =>
   min-width: 200px;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-float);
   z-index: var(--z-overlay);
   overflow: hidden;
@@ -377,8 +377,8 @@ const isAnyForceLoading = computed(() =>
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
+  gap: var(--space-sm);
+  padding: var(--space-sm-md) var(--space-md-lg);
   border: none;
   background: transparent;
   color: var(--text-primary);
@@ -427,7 +427,7 @@ const isAnyForceLoading = computed(() =>
   .card-row {
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--space-sm);
   }
 
   .row-label-group {

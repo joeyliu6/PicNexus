@@ -281,15 +281,15 @@ defineExpose({
 .backup-password-dialog {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-lg);
 }
 
 .dialog-description {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 8px;
+  gap: var(--space-sm-md);
+  padding: var(--space-md) var(--space-md-lg);
+  border-radius: var(--radius-md);
   background: var(--primary-alpha-15);
   color: var(--primary);
   font-size: var(--text-sm);
@@ -301,6 +301,7 @@ defineExpose({
   font-size: var(--text-xl);
   flex-shrink: 0;
   color: var(--primary);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1px 微调对齐，无对应 spacing token */
   margin-top: 1px;
 }
 
@@ -312,7 +313,7 @@ defineExpose({
 .dialog-note-warn {
   display: flex;
   align-items: flex-start;
-  gap: 5px;
+  gap: var(--space-xs);
   color: var(--text-muted);
   font-size: var(--text-xs);
   line-height: 1.6;
@@ -321,14 +322,14 @@ defineExpose({
 .dialog-note-warn i {
   font-size: var(--text-xs);
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: var(--space-2xs);
   opacity: 0.7;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-xs-sm);
 }
 
 .field label {
@@ -343,10 +344,10 @@ defineExpose({
 
 .field :deep(.p-password input) {
   width: 100%;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-input);
   border: none;
-  padding: 12px 16px;
+  padding: var(--space-md) var(--space-lg);
   color: var(--text-primary);
 }
 
@@ -356,15 +357,15 @@ defineExpose({
 
 .strength-hints {
   display: flex;
-  gap: 10px;
+  gap: var(--space-sm-md);
   flex-wrap: wrap;
-  margin-top: 2px;
+  margin-top: var(--space-2xs);
 }
 
 .strength-check {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   font-size: var(--text-xs);
   color: var(--text-muted);
   transition: color var(--duration-fast);
@@ -382,7 +383,7 @@ defineExpose({
 .strength-suggestion {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   font-size: var(--text-xs);
   color: var(--text-muted);
   opacity: 0.6;
@@ -401,9 +402,9 @@ defineExpose({
 .error-box {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: 8px;
+  gap: var(--space-sm);
+  padding: var(--space-sm-md) var(--space-md-lg);
+  border-radius: var(--radius-md);
   background: var(--error-alpha-8);
   border: 1px solid var(--error-alpha-15);
   font-size: var(--text-xs);
@@ -418,12 +419,13 @@ defineExpose({
 
 :deep(.dialog-btn-reject) {
   flex: 1;
-  border-radius: 8px !important;
-  padding: 12px 20px !important;
+  border-radius: var(--radius-md) !important;
+  padding: var(--space-md) var(--space-lg-xl) !important;
   font-size: var(--text-base) !important;
   font-weight: var(--weight-semibold) !important;
   background: var(--bg-button-secondary) !important;
   border: none !important;
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 按钮文字白色为固定设计值 */
   color: white !important;
 }
 
@@ -433,14 +435,14 @@ defineExpose({
 
 :deep(.dialog-btn-accept) {
   flex: 1;
-  border-radius: 8px !important;
-  padding: 12px 20px !important;
+  border-radius: var(--radius-md) !important;
+  padding: var(--space-md) var(--space-lg-xl) !important;
   font-size: var(--text-base) !important;
   font-weight: var(--weight-semibold) !important;
 }
 
 :deep(.dialog-btn-secondary) {
-  border-radius: 8px !important;
+  border-radius: var(--radius-md) !important;
   font-weight: var(--weight-semibold) !important;
 }
 </style>

@@ -396,7 +396,8 @@ watch(
   flex: 1;
   height: 100%;
   overflow: hidden auto;
-  padding: 0 70px 0 20px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 70px 为时间轴右侧留白，无对应 spacing token */
+  padding: 0 70px 0 var(--space-lg-xl);
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -435,7 +436,7 @@ watch(
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px;
+  padding: var(--space-3xl);
   height: 100%;
   color: var(--text-secondary);
 }
@@ -443,7 +444,7 @@ watch(
 .empty-state-hint {
   font-size: var(--text-sm);
   color: var(--text-tertiary);
-  margin-top: 4px;
+  margin-top: var(--space-xs);
 }
 
 /* Layout Indicator */
@@ -458,6 +459,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- box-shadow 含 rgb 色值，无对应 CSS 变量 */
   box-shadow: 0 2px 8px rgb(0 0 0 / 20%);
   z-index: var(--z-dropdown);
 }
@@ -472,14 +474,15 @@ watch(
 /* 平板设备 (≤1024px) */
 @media (width <= 1024px) {
   .timeline-scroll-area {
-    padding: 0 50px 0 16px;
+    /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 50px 为平板端时间轴右侧留白，无对应 spacing token */
+    padding: 0 50px 0 var(--space-lg);
   }
 }
 
 /* 手机设备 (≤768px) */
 @media (width <= 768px) {
   .timeline-scroll-area {
-    padding: 0 40px 0 12px;
+    padding: 0 var(--space-3xl) 0 var(--space-md);
   }
 
   .sidebar-wrapper {
@@ -490,7 +493,7 @@ watch(
 /* 小屏手机 (≤480px) */
 @media (width <= 480px) {
   .timeline-scroll-area {
-    padding: 0 8px;
+    padding: 0 var(--space-sm);
   }
 
   .sidebar-wrapper {

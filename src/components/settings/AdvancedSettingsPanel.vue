@@ -52,7 +52,7 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-@import '../../styles/settings-shared.css';
+@import url('../../styles/settings-shared.css');
 
 .advanced-settings-panel {
   width: 100%;

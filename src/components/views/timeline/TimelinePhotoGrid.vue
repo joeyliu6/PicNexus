@@ -114,8 +114,8 @@ function getGroupItemCount(groupId: string): number {
   right: 0;
   display: flex;
   align-items: baseline;
-  gap: 12px;
-  padding: 10px 0;
+  gap: var(--space-md);
+  padding: var(--space-sm-md) 0;
   background: var(--bg-app);
   z-index: 5;
 }
@@ -135,8 +135,8 @@ function getGroupItemCount(groupId: string): number {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 20px;
+  gap: var(--space-sm);
+  padding: var(--space-lg-xl);
   color: var(--text-secondary);
   font-size: var(--text-base);
 }
@@ -154,7 +154,7 @@ function getGroupItemCount(groupId: string): number {
 
 @media (width <= 768px) {
   .group-header {
-    padding: 12px 0;
+    padding: var(--space-md) 0;
   }
 
   .group-title {

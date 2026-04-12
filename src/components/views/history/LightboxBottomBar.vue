@@ -84,21 +84,22 @@ const emit = defineEmits<{
   right: 0;
   z-index: 3;
   height: 64px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- Lightbox 遮罩背景含 rgb 色值 */
   background: rgb(0 0 0 / 55%);
   backdrop-filter: blur(40px) saturate(180%);
-  backdrop-filter: blur(40px) saturate(180%);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- box-shadow 含 rgb 色值 */
   box-shadow: 0 -1px 0 0 rgb(255 255 255 / 10%);
   display: flex;
   align-items: center;
-  padding: 0 24px;
+  padding: 0 var(--space-xl);
   cursor: default;
 }
 
 .lightbox-info-cell {
   display: flex;
   flex-direction: column;
-  padding: 0 16px;
-  gap: 3px;
+  padding: 0 var(--space-lg);
+  gap: var(--space-2xs);
   min-width: 0;
   flex-shrink: 0;
 }
@@ -132,6 +133,7 @@ const emit = defineEmits<{
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   white-space: nowrap;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- text-shadow 含 rgb 色值 */
   text-shadow: 0 1px 3px rgb(0 0 0 / 50%);
 }
 
@@ -145,6 +147,7 @@ const emit = defineEmits<{
   color: var(--text-tertiary);
   font-size: var(--text-xs);
   letter-spacing: 0.02em;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- text-shadow 含 rgb 色值 */
   text-shadow: 0 1px 2px rgb(0 0 0 / 40%);
 }
 
@@ -159,15 +162,15 @@ const emit = defineEmits<{
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   flex-shrink: 0;
-  padding-left: 16px;
+  padding-left: var(--space-lg);
 }
 
 .action-btn {
   width: 40px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: none;
   background: var(--hover-overlay-subtle);
   color: var(--text-muted);

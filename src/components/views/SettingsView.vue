@@ -332,7 +332,7 @@ onUnmounted(() => {
   height: 45px;
   display: flex;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 var(--space-lg-xl);
   font-size: var(--text-lg);
   font-weight: var(--weight-medium);
   color: var(--text-secondary);
@@ -408,11 +408,11 @@ onUnmounted(() => {
 .settings-content {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-2xl) 48px;
+  padding: var(--space-2xl) var(--space-4xl);
 }
 
 .settings-section {
   max-width: 800px;
-  animation: k-fade-slide-up 0.3s ease-out;
+  animation: k-fade-slide-up var(--duration-medium) ease-out;
 }
 </style>

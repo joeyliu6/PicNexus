@@ -303,7 +303,9 @@ defineExpose({
 .mr-chips { display: flex; align-items: center; gap: var(--space-xs-sm); flex-wrap: wrap; }
 
 .mr-chip {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 5px/26px 无精确 spacing token */
   display: inline-flex; align-items: center; gap: 5px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 13px 为药片型圆角，无 radius token */
   height: 26px; padding: 0 var(--space-sm-md); border-radius: 13px;
   font-size: var(--text-xs); font-weight: var(--weight-medium); cursor: pointer;
   background: var(--bg-input); color: var(--text-muted);
@@ -350,6 +352,7 @@ defineExpose({
 .mr-group-chev { font-size: var(--text-xs); color: var(--text-tertiary); flex-shrink: 0; transition: transform var(--duration-fast); }
 .mr-group-file-icon { font-size: var(--text-base); color: var(--primary); flex-shrink: 0; }
 
+/* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1px 为微间距，无 spacing token */
 .mr-group-info { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
 
 .mr-group-name {
@@ -400,7 +403,8 @@ defineExpose({
 .mr-status-label {
   font-size: var(--text-2xs); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  padding: 1px var(--space-xs-sm); border-radius: var(--radius-xs); min-width: 36px; text-align: center;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1px 为微间距，无 spacing token */
+  padding: 1px var(--space-xs-sm); border-radius: var(--radius-xs); min-width: var(--space-2xl); text-align: center;
   white-space: nowrap; cursor: default;
 }
 

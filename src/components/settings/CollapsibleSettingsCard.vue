@@ -63,7 +63,7 @@ const emit = defineEmits<{
 .collapsible-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--settings-card-radius, 12px);
+  border-radius: var(--settings-card-radius, var(--radius-lg));
   overflow: hidden;
   transition: border-color var(--duration-normal) ease;
 }
@@ -112,8 +112,8 @@ const emit = defineEmits<{
 }
 
 .collapsible-card.allow-overflow.expanded .card-content {
-  /* TODO: 0.25s 无精确动效变量（最近为 --duration-normal: 200ms），暂保留硬编码 */
-  animation: show-overflow 0s 0.25s forwards;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 0s 延迟无对应 duration token */
+  animation: show-overflow 0s var(--duration-normal) forwards;
 }
 
 .card-content > :deep(:first-child) {

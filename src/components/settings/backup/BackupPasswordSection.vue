@@ -196,14 +196,14 @@ defineExpose({
 <style scoped>
 /* 备份密码卡片 */
 .security-card {
-  padding: 12px 16px;
-  border-radius: 10px;
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-md);
   background: var(--hover-overlay-subtle);
   border: 1px solid var(--border-subtle);
   transition: border-color var(--duration-normal);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-xs-sm);
 }
 
 .security-card.is-protected {
@@ -218,7 +218,7 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .security-status {
@@ -233,7 +233,7 @@ defineExpose({
   color: var(--text-muted);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .security-desc {
@@ -246,7 +246,7 @@ defineExpose({
 .security-card-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs-sm);
   flex-shrink: 0;
 }
 </style>

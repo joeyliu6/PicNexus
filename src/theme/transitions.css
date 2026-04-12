@@ -7,10 +7,12 @@
  * 优化：移除通配符选择器，只在根元素应用过渡，避免性能问题
  */
 :root.theme-transitioning {
+  /* stylelint-disable declaration-property-value-disallowed-list -- 200ms 为 CSS 变量 fallback */
   transition:
     background-color var(--theme-transition-duration, 200ms) var(--ease-standard),
     color var(--theme-transition-duration, 200ms) var(--ease-standard),
     border-color var(--theme-transition-duration, 200ms) var(--ease-standard);
+  /* stylelint-enable declaration-property-value-disallowed-list */
 }
 
 /**
@@ -18,10 +20,12 @@
  * 这样可以确保所有使用这些变量的元素都有平滑过渡
  */
 :root.theme-transitioning * {
+  /* stylelint-disable declaration-property-value-disallowed-list -- 200ms 为 CSS 变量 fallback */
   transition:
     background-color var(--theme-transition-duration, 200ms) var(--ease-standard),
     color var(--theme-transition-duration, 200ms) var(--ease-standard),
     border-color var(--theme-transition-duration, 200ms) var(--ease-standard) !important;
+  /* stylelint-enable declaration-property-value-disallowed-list */
 }
 
 /**
@@ -47,5 +51,6 @@
 :root.theme-transitioning input:focus,
 :root.theme-transitioning textarea:focus,
 :root.theme-transitioning select:focus {
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- calc 表达式内含 fallback 值 */
   transition-duration: calc(var(--theme-transition-duration, 300ms) * 0.5) !important;
 }

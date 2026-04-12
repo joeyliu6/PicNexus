@@ -151,7 +151,8 @@ const emit = defineEmits<{
 .link-list { flex: 1; overflow-y: auto; }
 
 .link-row {
-  display: flex; align-items: center; gap: 10px; padding: 0 16px 0 11px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 11px 无精确 spacing token */
+  display: flex; align-items: center; gap: var(--space-sm-md); padding: 0 var(--space-lg) 0 11px;
   height: 40px; cursor: pointer;
   border-bottom: 1px solid var(--primary-alpha-5);
   transition: background var(--duration-micro);
@@ -170,8 +171,8 @@ const emit = defineEmits<{
 
 /* 图床图标 badge */
 .service-badge {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 8px; border-radius: 4px;
+  display: inline-flex; align-items: center; gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-sm); border-radius: var(--space-xs);
   cursor: pointer; flex-shrink: 0;
   transition: background var(--duration-micro);
 }
@@ -192,7 +193,8 @@ const emit = defineEmits<{
 .error-badge {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 36px;
-  padding: 1px 6px; border-radius: 4px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1px 为微间距，无 spacing token */
+  padding: 1px var(--space-xs-sm); border-radius: var(--space-xs);
   font-size: var(--text-2xs); font-weight: var(--weight-semibold);
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   flex-shrink: 0; cursor: default;
@@ -215,12 +217,14 @@ const emit = defineEmits<{
 /* 重检 + 删除按钮共用样式 */
 .recheck-btn, .delete-btn {
   display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 5px 无精确 radius token */
   border: none; border-radius: 5px; background: transparent; color: var(--text-tertiary);
   cursor: pointer; transition: background var(--duration-micro), color var(--duration-micro); font-size: var(--text-xs);
   flex-shrink: 0;
 }
 
 /* recheck-btn / delete-btn 透明度由父级 row-actions 统一控制 */
+/* stylelint-disable-next-line no-duplicate-selectors -- 与上方选择器逻辑分离，hover 态独立声明 */
 .recheck-btn, .delete-btn { opacity: 1; }
 .recheck-btn:hover { background: var(--primary-alpha-8); color: var(--primary); }
 .delete-btn:hover { background: var(--error-alpha-10); color: var(--error); }
@@ -251,16 +255,18 @@ const emit = defineEmits<{
   display: block;
   width: 12px;
   height: 12px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1.5px 为 spinner 描边粗细 */
   border: 1.5px solid currentcolor;
   border-top-color: transparent;
   border-radius: 50%;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 0.7s 为 spinner 旋转周期，无 duration token */
   animation: k-spin 0.7s linear infinite;
   flex-shrink: 0;
 }
 
 /* 右侧操作区：recheck + delete 整体收紧 */
 .row-actions {
-  display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+  display: flex; align-items: center; gap: var(--space-xs); flex-shrink: 0;
 }
 
 /* 按钮位置固定宽度槽，防止 badge ↔ button 切换时布局抖动 */
@@ -275,12 +281,13 @@ const emit = defineEmits<{
 /* 按钮位置结果徽章 */
 .recheck-result-badge {
   display: flex; align-items: center; justify-content: center;
-  width: 36px; height: 20px; border-radius: 4px;
+  width: 36px; height: 20px; border-radius: var(--radius-sm);
   font-size: var(--text-2xs); font-weight: var(--weight-semibold); letter-spacing: 0.02em;
   flex-shrink: 0; cursor: default;
   opacity: 1; transition: opacity var(--duration-medium) ease;
 }
 .recheck-result-badge.badge-fading     { opacity: 0; }
+/* stylelint-disable-next-line declaration-property-value-disallowed-list -- fallback 颜色用于 CSS 变量未定义时 */
 .recheck-result-badge.badge-valid      { background: var(--success-alpha-15, rgb(34 197 94 / 15%)); color: var(--success, #22c55e); }
 .recheck-result-badge.badge-invalid    { background: var(--error-alpha-10); color: var(--error); }
 .recheck-result-badge.badge-timeout    { background: var(--warning-alpha-8); color: var(--warning); }
@@ -299,25 +306,26 @@ const emit = defineEmits<{
 /* ===== Hero 空状态（首次检测） ===== */
 .hero-empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 10px; flex: 1; padding: 40px 0;
+  gap: var(--space-sm-md); flex: 1; padding: var(--space-3xl) 0;
 }
 
 .hero-icon {
   width: 56px; height: 56px; display: flex; align-items: center; justify-content: center;
-  border-radius: 16px; background: var(--primary-alpha-10); margin-bottom: 4px;
+  border-radius: var(--radius-xl); background: var(--primary-alpha-10); margin-bottom: var(--radius-sm);
 }
 .hero-icon .pi { font-size: var(--text-2xl); color: var(--primary); }
 .hero-title { font-size: var(--text-lg-xl); font-weight: var(--weight-bold); color: var(--text-main); margin: 0; }
 .hero-desc { font-size: var(--text-sm); color: var(--text-muted); margin: 0; }
 
 .hero-cta {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 7px 无精确 spacing token */
   display: inline-flex; align-items: center; gap: 7px;
-  padding: 10px 28px; margin-top: 8px;
-  background: var(--primary); color: #fff; border: none; border-radius: 10px;
+  padding: var(--space-sm-md) var(--space-xl); margin-top: var(--space-sm);
+  background: var(--primary); color: var(--text-on-primary); border: none; border-radius: var(--radius-lg);
   font-size: var(--text-base); font-weight: var(--weight-semibold); cursor: pointer;
   transition: opacity var(--duration-fast), transform var(--duration-micro);
 }
 .hero-cta:hover { opacity: 0.9; }
 .hero-cta:active { transform: scale(0.97); }
-.hero-meta { font-size: var(--text-xs); color: var(--text-tertiary); margin-top: 2px; }
+.hero-meta { font-size: var(--text-xs); color: var(--text-tertiary); margin-top: var(--space-2xs); }
 </style>

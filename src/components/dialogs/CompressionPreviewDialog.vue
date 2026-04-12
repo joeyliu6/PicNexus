@@ -198,6 +198,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 遮罩层半透明黑色背景，无对应 token */
   background: rgb(0 0 0 / 60%);
   backdrop-filter: blur(8px);
 }
@@ -243,7 +244,7 @@ onBeforeUnmount(() => {
   height: 680px;
   max-height: 88vh;
   background: var(--bg-card);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-dialog);
   display: flex;
   flex-direction: column;
@@ -254,8 +255,8 @@ onBeforeUnmount(() => {
 .cpd-body {
   flex: 1;
   min-height: 0;
-  margin: 12px 24px;
-  border-radius: 12px;
+  margin: var(--space-md) var(--space-xl);
+  border-radius: var(--radius-lg);
   overflow: hidden;
   position: relative;
   background: var(--bg-input);
@@ -317,8 +318,10 @@ onBeforeUnmount(() => {
   bottom: 0;
   left: 50%;
   width: 2px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 负偏移居中微调，无对应 token */
   margin-left: -1px;
   background: var(--bg-card);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 滑块分割线阴影，无对应 token */
   box-shadow: 0 0 4px rgb(0 0 0 / 50%);
 }
 
@@ -328,10 +331,13 @@ onBeforeUnmount(() => {
   left: 50%;
   width: 36px;
   height: 36px;
-  margin-left: -18px;
-  margin-top: -18px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 负偏移微调，无对应 token */
+  margin-left: -16px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 负偏移微调，无对应 token */
+  margin-top: -16px;
   border-radius: 50%;
   background: var(--bg-card);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 滑块手柄阴影，无对应 token */
   box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
   display: flex;
   align-items: center;
@@ -351,11 +357,13 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 12px;
   z-index: 3;
-  padding: 4px 12px;
-  border-radius: 6px;
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-sm-md);
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 标签文字白色为固定设计值 */
   color: white;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 标签半透明黑色背景，无对应 token */
   background: rgb(0 0 0 / 55%);
   backdrop-filter: blur(4px);
   pointer-events: none;
@@ -379,20 +387,20 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 24px 20px;
+  padding: var(--space-md) var(--space-xl) var(--space-lg-xl);
   flex-shrink: 0;
 }
 
 .cpd-footer-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .cpd-footer-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .cpd-zoom-label {
@@ -404,8 +412,8 @@ onBeforeUnmount(() => {
 
 /* --- 按钮 --- */
 .cpd-btn {
-  padding: 8px 20px;
-  border-radius: 8px;
+  padding: var(--space-sm) var(--space-lg-xl);
+  border-radius: var(--radius-md);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   cursor: pointer;
@@ -415,6 +423,7 @@ onBeforeUnmount(() => {
 
 .cpd-btn.primary {
   background: var(--primary);
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 主要按钮文字白色为固定设计值 */
   color: white;
 }
 
@@ -428,7 +437,7 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs-sm);
 }
 
 .cpd-btn.outline:hover {
@@ -443,7 +452,7 @@ onBeforeUnmount(() => {
 .cpd-btn.ghost {
   background: transparent;
   color: var(--text-muted);
-  padding: 4px 10px;
+  padding: var(--space-xs) var(--space-sm-md);
   font-size: var(--text-xs);
 }
 

@@ -99,13 +99,14 @@ function handleNext() {
 
 .step-indicators {
   display: flex;
-  gap: 6px;
+  gap: var(--space-xs-sm);
   align-items: center;
 }
 
 .step-dot {
   width: 8px;
   height: 6px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 全圆角药丸形，无对应 radius token */
   border-radius: 9999px;
   background: var(--border-subtle);
   transition: all var(--duration-medium) var(--ease-overshoot);
@@ -122,7 +123,7 @@ function handleNext() {
 }
 
 .onboarding-body {
-  padding: 8px 0 16px;
+  padding: var(--space-sm) 0 var(--space-lg);
   min-height: 340px;
   display: flex;
   align-items: center;
@@ -138,18 +139,19 @@ function handleNext() {
 
 .footer-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 :deep(.footer-actions .p-button) {
-  border-radius: 8px !important;
-  padding: 10px 20px !important;
+  border-radius: var(--radius-md) !important;
+  padding: var(--space-sm-md) var(--space-lg-xl) !important;
   font-weight: var(--weight-semibold) !important;
 }
 
 :deep(.footer-actions .p-button-outlined) {
   background: var(--bg-button-secondary) !important;
   border: none !important;
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 按钮文字白色为固定设计值 */
   color: white !important;
 }
 
@@ -175,7 +177,7 @@ function handleNext() {
 
 <style>
 .onboarding-dialog {
-  border-radius: 16px !important;
+  border-radius: var(--radius-xl) !important;
   overflow: hidden;
   background: var(--bg-card) !important;
   border: none !important;
@@ -183,18 +185,18 @@ function handleNext() {
 }
 
 .onboarding-dialog .p-dialog-header {
-  padding: 24px 24px 0 !important;
+  padding: var(--space-xl) var(--space-xl) 0 !important;
   border-bottom: none !important;
   background: transparent !important;
 }
 
 .onboarding-dialog .p-dialog-content {
-  padding: 0 24px !important;
+  padding: 0 var(--space-xl) !important;
   background: transparent !important;
 }
 
 .onboarding-dialog .p-dialog-footer {
-  padding: 0 24px 24px !important;
+  padding: 0 var(--space-xl) var(--space-xl) !important;
   border-top: none !important;
   background: transparent !important;
 }

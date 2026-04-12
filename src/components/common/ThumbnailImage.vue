@@ -94,9 +94,10 @@ watch(() => props.srcs, () => {
 .thumbnail-skeleton {
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, 
-    var(--bg-input, #f3f4f6) 25%, 
-    var(--bg-card, #fff) 50%, 
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 渐变回退色无对应 token */
+  background: linear-gradient(90deg,
+    var(--bg-input, #f3f4f6) 25%,
+    var(--bg-card, #fff) 50%,
     var(--bg-input, #f3f4f6) 75%
   );
   background-size: 200% 100%;

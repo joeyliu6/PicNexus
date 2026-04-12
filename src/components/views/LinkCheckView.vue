@@ -202,9 +202,9 @@ onDeactivated(onViewDeactivated);
 /* Tab 栏 —— 对齐浏览页 .dashboard-strip + .tab-nav */
 .lc-tab-bar {
   display: flex;
-  gap: 2px;
+  gap: var(--space-2xs);
   height: 48px;
-  padding: 0 12px;
+  padding: 0 var(--space-md);
   align-items: stretch;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
@@ -213,8 +213,8 @@ onDeactivated(onViewDeactivated);
 .lc-tab {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 14px;
+  gap: var(--space-xs-sm);
+  padding: 0 var(--space-md-lg);
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -223,7 +223,7 @@ onDeactivated(onViewDeactivated);
   cursor: pointer;
   position: relative;
   transition: color var(--duration-fast), background var(--duration-fast);
-  border-radius: 8px 8px 0 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
   font-family: inherit;
 }
 
@@ -246,6 +246,7 @@ onDeactivated(onViewDeactivated);
   right: 8px;
   height: 2px;
   background: var(--primary);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1px 为指示条微圆角 */
   border-radius: 1px 1px 0 0;
 }
 </style>

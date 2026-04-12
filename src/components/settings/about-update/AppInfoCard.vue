@@ -43,16 +43,17 @@ async function copyVersion() {
 .app-info-card {
   display: flex;
   align-items: flex-start;
-  gap: 20px;
-  padding: 24px;
+  gap: var(--space-lg-xl);
+  padding: var(--space-xl);
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
 }
 
 .app-info-icon {
   width: 56px;
   height: 56px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 14px 图标圆角无对应 radius token */
   border-radius: 14px;
   flex-shrink: 0;
   object-fit: contain;
@@ -61,13 +62,13 @@ async function copyVersion() {
 .app-info-content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2xs);
 }
 
 .app-name-row {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: var(--space-sm-md);
 }
 
 .app-name {
@@ -84,7 +85,7 @@ async function copyVersion() {
 .app-version {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs-sm);
   font-size: var(--text-base);
   color: var(--text-secondary);
   font-family: var(--font-mono);
@@ -99,7 +100,7 @@ async function copyVersion() {
   padding: 0;
   background: none;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--text-muted);
   transition: color var(--duration-fast), background var(--duration-fast);
@@ -117,7 +118,7 @@ async function copyVersion() {
 .app-keywords {
   font-size: var(--text-xs);
   color: var(--text-muted);
-  margin-top: 8px;
+  margin-top: var(--space-sm);
   line-height: 1.6;
 }
 </style>

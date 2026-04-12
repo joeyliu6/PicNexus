@@ -52,15 +52,15 @@ defineProps<{
   right: 0;
   display: flex;
   align-items: baseline;
-  gap: 12px;
-  padding: 10px 0;
+  gap: var(--space-md);
+  padding: var(--space-sm-md) 0;
   height: 48px;
 }
 
 .skeleton-photo {
   position: absolute;
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 </style>

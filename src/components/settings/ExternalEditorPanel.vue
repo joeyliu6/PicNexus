@@ -138,14 +138,15 @@ const summaryText = computed(() => {
 .editor-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .panel-summary {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: var(--space-sm);
+  padding: var(--space-xs-sm) var(--space-sm-md);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 全圆角药丸形，无对应 radius token */
   border-radius: 999px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-input);

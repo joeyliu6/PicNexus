@@ -113,9 +113,9 @@ function handleKeyDown(e: KeyboardEvent) {
   justify-content: center;
   min-width: 160px;
   height: 34px;
-  padding: 0 12px;
+  padding: 0 var(--space-md);
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-sm-md);
   background: var(--bg-card);
   cursor: pointer;
   outline: none;

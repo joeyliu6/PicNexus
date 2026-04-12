@@ -146,8 +146,8 @@ const presetTooltip = computed(() => {
   position: relative;
   background: var(--bg-card);
   border: 2px dashed var(--border-subtle);
-  border-radius: 12px;
-  padding: 60px 40px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-5xl) var(--space-3xl);
   text-align: center;
   cursor: pointer;
   transition: all var(--duration-medium) ease;
@@ -168,7 +168,7 @@ const presetTooltip = computed(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-md);
   pointer-events: none;
 }
 
@@ -221,7 +221,7 @@ const presetTooltip = computed(() => {
   right: 16px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   pointer-events: auto;
   cursor: default;
 }
@@ -240,10 +240,10 @@ const presetTooltip = computed(() => {
 .compress-preset-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
+  gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-sm);
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-sm-md);
   background: var(--bg-card);
   color: var(--text-muted);
   font-size: var(--text-xs);
@@ -268,20 +268,20 @@ const presetTooltip = computed(() => {
 .preset-popover-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2xs);
   min-width: 160px;
 }
 
 .preset-popover-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: var(--space-sm);
+  padding: var(--space-xs-sm) var(--space-sm-md);
   border: none;
   background: none;
   width: 100%;
   text-align: left;
-  border-radius: 6px;
+  border-radius: var(--radius-sm-md);
   cursor: pointer;
   font-size: var(--text-xs);
   font-family: inherit;

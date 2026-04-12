@@ -88,8 +88,9 @@ defineExpose({
 .upload-queue-section {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  padding: 19px 24px 24px;
+  border-radius: var(--radius-lg);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 19px 无精确 spacing token */
+  padding: 19px var(--space-xl) var(--space-xl);
   flex: 1;
 }
 
@@ -97,13 +98,13 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-lg);
 }
 
 .queue-title {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-sm-md);
   margin: 0;
   font-size: var(--text-lg-xl);
   font-weight: var(--weight-semibold);
@@ -119,22 +120,22 @@ defineExpose({
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   color: var(--text-muted);
-  margin-left: 2px;
+  margin-left: var(--space-2xs);
 }
 
 /* 队列操作按钮区域 */
 .queue-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .queue-action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: var(--space-xs-sm);
+  padding: var(--space-xs-sm) var(--space-md);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm-md);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   cursor: pointer;

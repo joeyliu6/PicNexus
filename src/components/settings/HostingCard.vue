@@ -210,7 +210,7 @@ const statusDotClass = computed(() => {
 .hosting-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   transition: all var(--duration-normal) ease;
 }
@@ -237,24 +237,25 @@ const statusDotClass = computed(() => {
 
 .content-inner {
   border-top: 1px solid var(--border-subtle);
-  padding: 16px;
+  padding: var(--space-lg);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-lg);
 }
 
 .builtin-status {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: var(--space-sm-md);
+  padding: var(--space-md) var(--space-md-lg);
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-sm-md);
 }
 
 .builtin-status.available {
   border-color: var(--success);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 内建服务可用状态浅绿背景，无对应 token */
   background: rgb(34 197 94 / 5%);
 }
 
@@ -284,17 +285,17 @@ const statusDotClass = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .actions-left {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 @media (width <= 768px) {
   .content-inner {
-    padding: 14px;
+    padding: var(--space-md-lg);
   }
 
   .card-actions {

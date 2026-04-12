@@ -140,7 +140,7 @@ function formatRelativeTime(timestamp: number): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 18px;
+  padding: var(--space-sm-md) var(--space-lg);
 }
 
 .log-title {
@@ -155,7 +155,7 @@ function formatRelativeTime(timestamp: number): string {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm);
   transition: color var(--duration-fast), background var(--duration-fast);
 }
@@ -177,8 +177,8 @@ function formatRelativeTime(timestamp: number): string {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 28px 0;
+  gap: var(--space-sm);
+  padding: var(--space-xl) 0;
   color: var(--text-muted);
   font-size: var(--text-sm);
 }
@@ -196,8 +196,9 @@ function formatRelativeTime(timestamp: number): string {
 .log-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 11px 18px;
+  gap: var(--space-md);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 11px 无对应 spacing token，介于 sm-md(10) 与 md(12) 之间 */
+  padding: 11px var(--space-lg);
 }
 
 /* ===== 操作图标 ===== */
@@ -219,13 +220,13 @@ function formatRelativeTime(timestamp: number): string {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--space-2xs);
 }
 
 .row-main {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs-sm);
 }
 
 .op-label {
@@ -243,7 +244,7 @@ function formatRelativeTime(timestamp: number): string {
 .row-meta {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .row-time {
@@ -281,6 +282,6 @@ function formatRelativeTime(timestamp: number): string {
 .sync-error-tooltip.p-tooltip .p-tooltip-text {
   max-width: 320px;
   white-space: normal;
-  word-break: break-word;
+  overflow-wrap: break-word;
 }
 </style>

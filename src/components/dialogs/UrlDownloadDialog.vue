@@ -97,13 +97,13 @@ function handleKeydown(e: KeyboardEvent) {
 .url-download-dialog {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-lg);
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .section-label {
@@ -116,10 +116,10 @@ function handleKeydown(e: KeyboardEvent) {
 /* PrimeVue Textarea 直接渲染为 <textarea>，class 在元素自身上 */
 .field :deep(.url-textarea) {
   width: 100%;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-input);
   border: none;
-  padding: 12px 16px;
+  padding: var(--space-md) var(--space-lg);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   color: var(--text-primary);
@@ -145,7 +145,7 @@ function handleKeydown(e: KeyboardEvent) {
 .dialog-note {
   display: flex;
   align-items: flex-start;
-  gap: 5px;
+  gap: var(--space-xs);
   color: var(--text-muted);
   font-size: var(--text-xs);
   line-height: 1.6;
@@ -154,19 +154,20 @@ function handleKeydown(e: KeyboardEvent) {
 .dialog-note i {
   font-size: var(--text-xs);
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: var(--space-2xs);
   opacity: 0.7;
 }
 
 /* 按钮样式 - 对齐 BatchRenameDialog / BackupPasswordDialog */
 :deep(.dialog-btn-reject) {
   flex: 1;
-  border-radius: 8px !important;
-  padding: 12px 20px !important;
+  border-radius: var(--radius-md) !important;
+  padding: var(--space-md) var(--space-lg-xl) !important;
   font-size: var(--text-base) !important;
   font-weight: var(--weight-semibold) !important;
   background: var(--bg-button-secondary) !important;
   border: none !important;
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 按钮文字白色为固定设计值 */
   color: white !important;
 }
 
@@ -176,8 +177,8 @@ function handleKeydown(e: KeyboardEvent) {
 
 :deep(.dialog-btn-accept) {
   flex: 1;
-  border-radius: 8px !important;
-  padding: 12px 20px !important;
+  border-radius: var(--radius-md) !important;
+  padding: var(--space-md) var(--space-lg-xl) !important;
   font-size: var(--text-base) !important;
   font-weight: var(--weight-semibold) !important;
 }

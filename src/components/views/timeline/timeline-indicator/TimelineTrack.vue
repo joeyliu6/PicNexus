@@ -64,6 +64,7 @@ defineProps<{
   bottom: 0;
   width: 2px;
   background: var(--border-color);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1px 无精确 radius token */
   border-radius: 1px;
   opacity: 0.3;
 }

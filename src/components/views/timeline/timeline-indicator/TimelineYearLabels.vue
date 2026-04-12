@@ -59,8 +59,10 @@ const emit = defineEmits<{
   transition: all var(--duration-normal) ease;
   pointer-events: auto;
   cursor: pointer;
-  padding: 1px 6px;
-  border-radius: 10px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1px 为微间距，无 spacing token */
+  padding: 1px var(--space-xs-sm);
+  border-radius: var(--radius-md);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 半透明白色背景无语义变量 */
   background: rgb(255 255 255 / 60%);
 }
 
@@ -106,6 +108,7 @@ const emit = defineEmits<{
 
 :root.dark-theme .year-label,
 .dark-theme .year-label {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 深色主题下半透明白色无语义变量 */
   background: rgb(255 255 255 / 15%);
 }
 </style>

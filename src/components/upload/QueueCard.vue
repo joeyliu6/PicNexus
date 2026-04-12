@@ -149,21 +149,21 @@ function handleCopy(payload: QueueCopyPayload) {
 .queue-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  padding: 14px;
+  border-radius: var(--radius-md);
+  padding: var(--space-md-lg);
 }
 
 .card-header {
   display: flex;
-  gap: 12px;
+  gap: var(--space-md);
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-md);
 }
 
 .thumbnail-wrapper {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   flex-shrink: 0;
   background: var(--bg-input);
@@ -195,8 +195,8 @@ function handleCopy(payload: QueueCopyPayload) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
-  gap: 8px;
+  margin-bottom: var(--space-xs-sm);
+  gap: var(--space-sm);
 }
 
 .filename {
@@ -212,16 +212,16 @@ function handleCopy(payload: QueueCopyPayload) {
 
 .status-pills {
   display: flex;
-  gap: 6px;
+  gap: var(--space-xs-sm);
   flex-shrink: 0;
 }
 
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 2px 6px;
-  border-radius: 4px;
+  gap: var(--space-2xs);
+  padding: var(--space-2xs) var(--space-xs-sm);
+  border-radius: var(--radius-sm);
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
   border: 1px solid transparent;
@@ -249,10 +249,10 @@ function handleCopy(payload: QueueCopyPayload) {
 .stacked-progress {
   height: 4px;
   background: var(--bg-input);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   display: flex;
   overflow: hidden;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-xs);
 }
 
 .segment {
@@ -286,7 +286,7 @@ function handleCopy(payload: QueueCopyPayload) {
 
 .channel-grid {
   display: grid;
-  gap: 8px;
+  gap: var(--space-sm);
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
 }
 </style>

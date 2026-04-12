@@ -36,14 +36,14 @@
   font-size: var(--text-2xl);
   font-weight: var(--weight-bold);
   color: var(--text-main);
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-sm);
 }
 
 .step-desc {
   font-size: var(--text-base);
   color: var(--text-muted);
   line-height: 1.6;
-  margin: 0 0 28px;
+  margin: 0 0 var(--space-xl);
   max-width: 380px;
   margin-left: auto;
   margin-right: auto;
@@ -52,16 +52,16 @@
 .step-highlights {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .highlight-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 20px 12px;
-  border-radius: 12px;
+  gap: var(--space-sm-md);
+  padding: var(--space-lg-xl) var(--space-md);
+  border-radius: var(--radius-lg);
   background: var(--bg-input);
   border: none;
   text-align: center;
@@ -70,7 +70,7 @@
 .highlight-icon {
   width: 48px;
   height: 48px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--primary-alpha-15);
   color: var(--primary);
   display: flex;

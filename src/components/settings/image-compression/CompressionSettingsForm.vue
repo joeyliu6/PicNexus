@@ -134,14 +134,15 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
 
 .format-tabs {
   display: flex;
-  gap: 6px;
+  gap: var(--space-xs-sm);
   flex-wrap: wrap;
   flex-shrink: 0;
 }
 
 .format-tab {
-  padding: 6px 12px;
+  padding: var(--space-xs-sm) var(--space-md);
   border: 1px solid var(--border-subtle);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 999px 为药丸形圆角 */
   border-radius: 999px;
   background: var(--bg-card);
   color: var(--text-secondary);
@@ -169,14 +170,15 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
 .scale-input-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   flex-shrink: 0;
 }
 
 .quality-badge {
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
-  padding: 2px 8px;
+  padding: var(--space-2xs) var(--space-sm);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 999px 为药丸形圆角 */
   border-radius: 999px;
   white-space: nowrap;
   transition: all var(--duration-normal);
@@ -252,7 +254,7 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
   width: 110px;
   flex-shrink: 0;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-sm-md);
   overflow: hidden;
   transition: border-color var(--duration-fast);
 }
@@ -287,7 +289,7 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: var(--space-2xs);
   width: 42px;
   flex-shrink: 0;
   padding: 0;

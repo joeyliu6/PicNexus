@@ -266,6 +266,7 @@ const serviceList = computed(() => props.services);
     transparent 100%
   );
   background-size: 200% 100%;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1.4s 微光动画无对应 duration token */
   animation: k-shimmer 1.4s ease-in-out infinite reverse;
   border-radius: inherit;
   pointer-events: none;
@@ -273,6 +274,7 @@ const serviceList = computed(() => props.services);
 
 /* 单个服务检测完成：脉冲扩散 */
 .toggle-chip.is-batch-done {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 0.6s 脉冲动画无对应 duration token */
   animation: chip-done-pulse 0.6s ease-out;
 }
 
@@ -284,6 +286,7 @@ const serviceList = computed(() => props.services);
 
 /* 未配置服务：柔和灰色脉冲 */
 .toggle-chip.unconfigured.is-batch-done {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 0.6s 脉冲动画无对应 duration token */
   animation: chip-done-pulse-muted 0.6s ease-out;
 }
 

@@ -29,14 +29,14 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px 0;
+  padding: var(--space-lg-xl) var(--space-xl) 0;
   flex-shrink: 0;
 }
 
 .cpd-header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-md);
   min-width: 0;
 }
 
@@ -54,9 +54,9 @@ const emit = defineEmits<{
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding: 2px 10px;
+  padding: var(--space-2xs) var(--space-sm-md);
   background: var(--hover-overlay-subtle);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: var(--font-mono);
 }
 
@@ -68,7 +68,7 @@ const emit = defineEmits<{
   justify-content: center;
   border: none;
   background: transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
   cursor: pointer;
   transition: all var(--duration-fast);

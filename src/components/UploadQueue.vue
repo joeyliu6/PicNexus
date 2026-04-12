@@ -140,7 +140,7 @@ defineExpose({
 .upload-queue {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .virtual-scroller {
@@ -151,7 +151,7 @@ defineExpose({
 }
 
 .virtual-card {
-  padding-bottom: 12px;
+  padding-bottom: var(--space-md);
   box-sizing: border-box;
 }
 
@@ -160,9 +160,9 @@ defineExpose({
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 32px 0;
+  padding: var(--space-2xl) 0;
   text-align: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .empty-icon {

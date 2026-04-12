@@ -160,7 +160,7 @@ function handleEditInputMount(el: HTMLInputElement | null) {
 .compression-collapsible {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--settings-card-radius, 12px);
+  border-radius: var(--settings-card-radius, var(--radius-lg));
   overflow: hidden;
 }
 
@@ -184,12 +184,12 @@ function handleEditInputMount(el: HTMLInputElement | null) {
   align-items: center;
   justify-content: space-between;
   min-height: 40px;
-  padding: 8px 16px 12px;
+  padding: var(--space-sm) var(--space-lg) var(--space-md);
 }
 
 .delete-preset-btn {
   margin: 0;
-  padding: 4px 0;
+  padding: var(--space-xs) 0;
   background: none;
   border: none;
   color: var(--text-muted);
@@ -197,7 +197,7 @@ function handleEditInputMount(el: HTMLInputElement | null) {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   transition: color var(--duration-fast);
 }
 
@@ -219,9 +219,10 @@ function handleEditInputMount(el: HTMLInputElement | null) {
 .preview-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 14px;
+  gap: var(--space-xs-sm);
+  padding: var(--space-xs) var(--space-md-lg);
   border: 1px solid var(--primary-alpha-15);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 全圆角药丸形，无对应 radius token */
   border-radius: 999px;
   background: var(--primary-alpha-8);
   color: var(--primary);

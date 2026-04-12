@@ -42,29 +42,29 @@
   font-size: var(--text-2xl);
   font-weight: var(--weight-semibold);
   color: var(--text-main);
-  margin: 0 0 12px;
+  margin: 0 0 var(--space-md);
 }
 
 .step-desc {
   font-size: var(--text-base);
   color: var(--text-muted);
   line-height: 1.6;
-  margin: 0 0 20px;
+  margin: 0 0 var(--space-lg-xl);
 }
 
 .service-groups {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-sm-md);
   text-align: left;
 }
 
 .service-group {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-radius: 8px;
+  gap: var(--space-md);
+  padding: var(--space-sm-md) var(--space-md-lg);
+  border-radius: var(--radius-md);
   background: var(--bg-input);
   border: none;
 }
@@ -72,8 +72,8 @@
 .group-badge {
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
-  padding: 3px 8px;
-  border-radius: 6px;
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius-sm-md);
   white-space: nowrap;
   min-width: 72px;
   text-align: center;

@@ -460,7 +460,7 @@ onUnmounted(() => {
   bottom: 0;
   width: 64px;
   display: flex;
-  padding: 24px 8px;
+  padding: var(--space-xl) var(--space-sm);
   box-sizing: border-box;
   user-select: none;
   cursor: row-resize;
@@ -483,7 +483,7 @@ onUnmounted(() => {
 @media (width <= 768px) {
   .timeline-indicator {
     width: 40px;
-    padding: 16px 4px;
+    padding: var(--space-lg) var(--space-xs);
   }
 }
 </style>

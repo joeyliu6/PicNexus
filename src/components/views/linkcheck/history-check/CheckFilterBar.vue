@@ -146,7 +146,7 @@ const searchFocused = defineModel<boolean>('searchFocused', { required: true });
           <i class="pi pi-images" style="font-size: var(--text-2xs)"></i>
           全部图床
         </template>
-        <i class="pi pi-chevron-down" style="font-size: var(--text-2xs); margin-left: 2px"></i>
+        <i class="pi pi-chevron-down" style="font-size: var(--text-2xs); margin-left: var(--space-2xs)"></i>
       </button>
       <Transition name="dropdown">
         <div v-if="showServiceMenu" class="service-dropdown">
@@ -193,14 +193,16 @@ const searchFocused = defineModel<boolean>('searchFocused', { required: true });
 <style scoped>
 /* ===== 芯片栏 ===== */
 .chip-bar {
-  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
-  padding-right: 24px;
+  display: flex; align-items: center; gap: var(--space-sm-md); flex-shrink: 0;
+  padding-right: var(--space-xl);
 }
-.chip-group { display: flex; gap: 6px; }
+.chip-group { display: flex; gap: var(--space-xs-sm); }
 .chip-spacer { flex: 1; }
 
 .filter-chip {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 5px/26px 无精确 spacing token */
   display: inline-flex; align-items: center; gap: 5px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 26px/10px/13px 芯片尺寸无精确 token */
   height: 26px; padding: 0 10px; border-radius: 13px;
   font-size: var(--text-xs); font-weight: var(--weight-medium); cursor: pointer;
   background: var(--bg-input); color: var(--text-muted);
@@ -252,24 +254,25 @@ const searchFocused = defineModel<boolean>('searchFocused', { required: true });
 
 /* 图床筛选下拉 */
 .service-filter { position: relative; flex-shrink: 0; }
-.service-filter .filter-chip { gap: 4px; }
+.service-filter .filter-chip { gap: var(--space-xs); }
 .service-filter .filter-chip.active { background: var(--primary-alpha-10); color: var(--primary); border-color: var(--primary-alpha-10); }
 .service-filter .badge-icon { width: 12px; height: 12px; display: inline-flex; }
 
 .service-dropdown {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- calc 内 6px 为偏移量 */
   position: absolute; top: calc(100% + 6px); right: 0; min-width: 180px;
-  background: var(--bg-card); border-radius: 10px; padding: 4px 0;
+  background: var(--bg-card); border-radius: var(--radius-lg); padding: var(--space-xs) 0;
   box-shadow: var(--shadow-float); z-index: var(--z-dropdown, 100);
   border: 1px solid var(--border-subtle); overflow: hidden;
 }
 
 .service-dropdown-item {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 8px 14px; cursor: pointer; transition: background var(--duration-micro);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md-lg); cursor: pointer; transition: background var(--duration-micro);
 }
 .service-dropdown-item:hover { background: var(--hover-overlay); }
 .service-dropdown-item.active { background: var(--primary-alpha-10); }
-.sdi-label { display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-main); }
+.sdi-label { display: flex; align-items: center; gap: var(--space-xs-sm); font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-main); }
 .sdi-label .badge-icon { width: 14px; height: 14px; color: var(--text-muted); }
 .sdi-count { font-size: var(--text-xs); color: var(--text-tertiary); font-family: var(--font-mono, 'JetBrains Mono', monospace); }
 
@@ -282,8 +285,9 @@ const searchFocused = defineModel<boolean>('searchFocused', { required: true });
 /* 搜索框（药片型，与浏览界面对齐） */
 .search-field {
   display: flex; align-items: center;
-  background: var(--bg-input); border-radius: 16px;
-  height: 32px; padding: 0 8px 0 10px;
+  background: var(--bg-input); border-radius: var(--radius-xl);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 32px 为搜索框固定高度 */
+  height: 32px; padding: 0 var(--space-sm) 0 var(--space-sm-md);
   min-width: 140px; max-width: 260px; flex: 1;
   border: 1px solid transparent;
   transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
@@ -293,7 +297,7 @@ const searchFocused = defineModel<boolean>('searchFocused', { required: true });
 
 .search-field-icon {
   color: var(--text-secondary); font-size: var(--text-xs); flex-shrink: 0;
-  opacity: 0.5; margin-right: 6px; transition: opacity var(--duration-fast), color var(--duration-fast);
+  opacity: 0.5; margin-right: var(--space-xs-sm); transition: opacity var(--duration-fast), color var(--duration-fast);
 }
 .search-field.focused .search-field-icon { opacity: 0.8; color: var(--primary); }
 

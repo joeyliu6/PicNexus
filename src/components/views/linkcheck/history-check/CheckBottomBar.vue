@@ -174,7 +174,7 @@ const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
 
 <style scoped>
 /* ===== 底部操作按钮 ===== */
-.bottom-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.bottom-actions { display: flex; align-items: center; gap: var(--space-sm); margin-left: auto; }
 
 .action-divider {
   width: 1px; height: 16px; background: var(--border-subtle); flex-shrink: 0;
@@ -182,48 +182,54 @@ const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
 
 /* ===== 按钮 ===== */
 .btn-ghost, .btn-primary, .btn-danger {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 5px/28px/11px 无精确 spacing token */
   display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 7px 无精确 radius token */
   border-radius: 7px; font-size: var(--text-xs); font-weight: var(--weight-medium); cursor: pointer;
   white-space: nowrap; transition: background var(--duration-fast), opacity var(--duration-fast); border: none;
 }
 .btn-ghost i, .btn-primary i, .btn-danger i { font-size: var(--text-xs); }
 .btn-ghost { background: var(--bg-input); color: var(--text-muted); }
 .btn-ghost:hover { background: var(--hover-overlay); color: var(--text-main); }
-.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary { background: var(--primary); color: var(--text-on-primary); }
 .btn-primary:hover { opacity: 0.9; }
 .btn-danger { background: var(--error-alpha-15); color: var(--error); border: 1px solid transparent; }
 .btn-danger:hover { background: var(--error-alpha-8); border-color: var(--error-alpha-15); box-shadow: none; }
 
 .check-btn-group { display: flex; position: relative; }
+/* stylelint-disable-next-line declaration-property-value-disallowed-list -- 7px 无精确 radius token */
 .check-btn-group.has-dropdown .btn-primary:first-child { border-radius: 7px 0 0 7px; }
+/* stylelint-disable-next-line declaration-property-value-disallowed-list -- 7px 无精确 radius/spacing token */
 .check-toggle { border-radius: 0 7px 7px 0; padding: 0 7px; border-left: 1px solid var(--primary-alpha-15); }
 
 .check-dropdown {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- calc 内 6px 为偏移量 */
   position: absolute; bottom: calc(100% + 6px); right: 0; min-width: 220px;
-  background: var(--bg-card); border-radius: 10px; padding: 4px 0;
+  background: var(--bg-card); border-radius: var(--radius-lg); padding: var(--space-xs) 0;
   box-shadow: var(--shadow-float); z-index: var(--z-dropdown, 100);
   border: 1px solid var(--border-subtle); overflow: hidden;
 }
 
 .check-dropdown-item {
-  display: flex; flex-direction: row; align-items: center; gap: 8px;
-  padding: 7px 14px; cursor: pointer; transition: background var(--duration-micro);
+  display: flex; flex-direction: row; align-items: center; gap: var(--space-sm);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 7px 无精确 spacing token */
+  padding: 7px var(--space-md-lg); cursor: pointer; transition: background var(--duration-micro);
 }
 .check-dropdown-item:not(:last-child) { border-bottom: 1px solid var(--border-subtle); }
 .check-dropdown-item:hover { background: var(--hover-overlay-subtle); }
-.dropdown-text { display: flex; flex-direction: column; gap: 2px; }
+.dropdown-text { display: flex; flex-direction: column; gap: var(--space-2xs); }
 .dropdown-label { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-main); }
 .dropdown-desc { font-size: var(--text-xs); color: var(--text-tertiary); }
 
 /* ===== 极简进度条 ===== */
 .progress-bar {
   width: 100%; flex-shrink: 0; cursor: default;
-  padding: 5px 0; position: relative;
+  padding: var(--space-xs) 0; position: relative;
 }
 
 .progress-tooltip {
   position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
-  padding: 4px 10px; border-radius: 6px; white-space: nowrap;
+  padding: var(--space-xs) var(--space-sm-md); border-radius: var(--space-xs-sm); white-space: nowrap;
   font-size: var(--text-xs); color: var(--text-main); font-variant-numeric: tabular-nums;
   background: var(--bg-card); box-shadow: var(--shadow-float);
   border: 1px solid var(--border-subtle); pointer-events: none;
@@ -233,12 +239,15 @@ const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 
 .progress-bar-inner {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 3px 为进度条高度，无 spacing token */
   width: 100%; height: 3px; background: var(--bg-input);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1.5px 为进度条圆角，无 radius token */
   border-radius: 1.5px; overflow: hidden;
 }
 
 .progress-bar-fill {
   height: 100%;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- fallback 颜色 #60a5fa 用于 --primary-light 未定义时 */
   background: linear-gradient(90deg, var(--primary), var(--primary-light, #60a5fa));
   transition: width var(--duration-slower) var(--ease-standard);
   position: relative; overflow: hidden;
@@ -247,29 +256,33 @@ const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
 .progress-bar-fill::after {
   content: '';
   position: absolute; inset: 0;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 光泽动画中的白色半透明无语义变量 */
   background: linear-gradient(90deg, transparent, rgb(255 255 255 / 40%), transparent);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1.5s 为扫光动画周期，无 duration token */
   animation: k-sweep 1.5s ease-in-out infinite;
 }
 
 /* 底栏批量操作模式 */
-.batch-bottom-right { display: flex; align-items: center; gap: 8px; }
+.batch-bottom-right { display: flex; align-items: center; gap: var(--space-sm); }
 .batch-count { font-size: var(--text-xs); color: var(--text-muted); font-weight: var(--weight-medium); }
 
 /* 下拉动画（复用 settings-shared 定义） */
 .dropdown-enter-active, .dropdown-leave-active { transition: all var(--duration-normal) ease; }
-.dropdown-enter-from, .dropdown-leave-to { opacity: 0; transform: translateY(8px); }
+.dropdown-enter-from, .dropdown-leave-to { opacity: 0; transform: translateY(var(--space-sm)); }
 
 /* ===== 底部 ===== */
-.bottom { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; padding-right: 24px; }
+.bottom { display: flex; flex-direction: column; gap: var(--space-sm); flex-shrink: 0; padding-right: var(--space-xl); }
 
 .bottom-main {
   display: flex; align-items: center; justify-content: space-between;
 }
 .page-summary { font-size: var(--text-xs); color: var(--text-tertiary); white-space: nowrap; }
-.pagination { display: flex; align-items: center; gap: 4px; margin-right: 10px; }
+.pagination { display: flex; align-items: center; gap: var(--space-xs); margin-right: var(--space-sm-md); }
 
 .page-btn {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 26px 为按钮固定尺寸，无 spacing token */
   display: flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 5px 无精确 radius token */
   border: none; border-radius: 5px; background: var(--bg-input); color: var(--text-muted);
   cursor: pointer; transition: background var(--duration-micro), color var(--duration-micro); font-size: var(--text-xs);
 }
@@ -278,12 +291,12 @@ const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
 
 .page-info {
   font-size: var(--text-xs); color: var(--text-muted);
-  display: inline-flex; align-items: center; gap: 4px; margin: 0 4px;
+  display: inline-flex; align-items: center; gap: var(--space-xs); margin: 0 var(--space-xs);
 }
 
 .page-input {
   width: 32px; height: 22px; text-align: center; border: 1px solid var(--border-subtle);
-  border-radius: 4px; background: var(--bg-input); color: var(--text-main); font-size: var(--text-xs);
+  border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-main); font-size: var(--text-xs);
   outline: none;
 }
 .page-input::placeholder { color: var(--text-main); opacity: 0.6; }

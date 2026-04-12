@@ -141,17 +141,17 @@ async function openLogDir() {
 .links-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .link-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
+  gap: var(--space-md);
+  padding: var(--space-lg);
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--duration-normal);
   text-align: left;
@@ -165,7 +165,7 @@ async function openLogDir() {
 .link-card-icon {
   width: 36px;
   height: 36px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--primary-alpha-10);
   display: flex;
   align-items: center;
@@ -185,7 +185,7 @@ async function openLogDir() {
 .link-card-content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2xs);
 }
 
 .link-card-title {

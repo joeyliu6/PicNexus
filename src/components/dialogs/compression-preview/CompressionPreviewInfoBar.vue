@@ -34,8 +34,8 @@ defineProps<Props>();
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 24px 0;
+  gap: var(--space-md);
+  padding: var(--space-sm-md) var(--space-xl) 0;
   font-size: var(--text-sm);
   flex-wrap: wrap;
   flex-shrink: 0;
@@ -44,15 +44,15 @@ defineProps<Props>();
 .cpd-info-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .cpd-size-badge {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
-  padding: 3px 10px;
-  border-radius: 6px;
+  padding: var(--space-2xs) var(--space-sm-md);
+  border-radius: var(--radius-sm-md);
 }
 
 .cpd-size-badge.original {
@@ -73,8 +73,8 @@ defineProps<Props>();
 .cpd-ratio-badge {
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
-  padding: 3px 10px;
-  border-radius: 6px;
+  padding: var(--space-2xs) var(--space-sm-md);
+  border-radius: var(--radius-sm-md);
 }
 
 .cpd-ratio-badge.saved {
