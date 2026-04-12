@@ -1,7 +1,7 @@
 // 默认配置常量
 
-import type { UserConfig } from './configInterface';
-import { DEFAULT_PREFIXES } from './configInterface';
+import type { UserConfig, LinkPrefixItem } from './configInterface';
+import { DEFAULT_LINK_PREFIXES, cloneDefaultPrefixes } from './configInterface';
 import { DEFAULT_GITHUB_CDN_LIST } from './serviceTypes';
 import { DEFAULT_COMPRESSION_PRESET } from './compressionTypes';
 
@@ -121,7 +121,7 @@ export const DEFAULT_CONFIG: UserConfig = {
   linkPrefixConfig: {
     enabled: true,
     selectedIndex: 0,
-    prefixList: [...DEFAULT_PREFIXES]
+    prefixList: cloneDefaultPrefixes()
   },
   webdav: {
     profiles: [],
@@ -164,35 +164,28 @@ export const DEFAULT_CONFIG: UserConfig = {
 };
 
 /**
- * 获取当前激活的前缀
+ * 获取当前激活的前缀项
  * 如果前缀功能禁用，返回 null
  *
  * @param config 用户配置
- * @returns 当前激活的前缀，或 null（如果禁用）
+ * @returns 当前激活的前缀项，或 null（如果禁用）
  */
-export function getActivePrefix(config: UserConfig): string | null {
-  // 如果没有 linkPrefixConfig，尝试使用旧的 baiduPrefix
-  if (!config.linkPrefixConfig) {
-    return config.baiduPrefix || DEFAULT_PREFIXES[0];
-  }
+export function getActivePrefix(config: UserConfig): LinkPrefixItem | null {
+  const linkPrefixConfig = config.linkPrefixConfig;
 
-  // 如果功能禁用，返回 null
-  if (!config.linkPrefixConfig.enabled) {
-    return null;
-  }
+  // 无配置（旧版迁移）→ 用默认；已明确禁用 → null
+  if (!linkPrefixConfig) return { ...DEFAULT_LINK_PREFIXES[0] };
+  if (!linkPrefixConfig.enabled) return null;
 
-  const { selectedIndex, prefixList } = config.linkPrefixConfig;
+  const { selectedIndex, prefixList } = linkPrefixConfig;
 
-  // 如果列表为空，返回默认前缀
   if (!prefixList || prefixList.length === 0) {
-    return DEFAULT_PREFIXES[0];
+    return { ...DEFAULT_LINK_PREFIXES[0] };
   }
 
-  // 确保索引有效
   if (selectedIndex >= 0 && selectedIndex < prefixList.length) {
     return prefixList[selectedIndex];
   }
 
-  // 索引无效，返回第一个
   return prefixList[0];
 }

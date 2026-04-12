@@ -60,6 +60,17 @@ export type WeiboProxyMode = 'direct' | 'baidu-proxy';
 export type OutputFormat = WeiboProxyMode;
 
 /**
+ * 链接前缀单项
+ * name 为 UI 显示名称，template 为 URL 模板（可含占位符）。
+ * 支持的占位符：{url} / {url_no_scheme} / {path} / {url_encoded}。
+ * 若 template 不含任何占位符，将自动在末尾追加 {url}（兼容旧纯前缀写法）。
+ */
+export interface LinkPrefixItem {
+  name: string;
+  template: string;
+}
+
+/**
  * 链接前缀配置
  * 用于微博图床的代理前缀管理
  */
@@ -69,16 +80,36 @@ export interface LinkPrefixConfig {
   /** 当前选中的前缀索引 */
   selectedIndex: number;
   /** 前缀列表 */
-  prefixList: string[];
+  prefixList: LinkPrefixItem[];
 }
 
 /**
  * 默认前缀列表
+ * 顺序：搜狗 → cdnjson → Jetpack → IPFS Scan（搜狗为默认选中）
  */
-export const DEFAULT_PREFIXES: string[] = [
-  'https://image.baidu.com/search/down?thumburl=',
-  'https://cdn.cdnjson.com/pic.html?url='
+export const DEFAULT_LINK_PREFIXES: LinkPrefixItem[] = [
+  {
+    name: '搜狗图片',
+    template: 'https://img01.sogoucdn.com/net/a/04/link?appid=100520031&w=4096&url={url_encoded}',
+  },
+  {
+    name: 'CDN JSON',
+    template: 'https://cdn.cdnjson.com/pic.html?url=',
+  },
+  {
+    name: 'Jetpack',
+    template: 'https://i0.wp.com/{url_no_scheme}',
+  },
+  {
+    name: 'IPFS Scan',
+    template: 'https://cdn.ipfsscan.io/weibo/{path}',
+  },
 ];
+
+/** 返回默认前缀列表的浅拷贝（避免 Vue 响应式代理污染常量） */
+export function cloneDefaultPrefixes(): LinkPrefixItem[] {
+  return DEFAULT_LINK_PREFIXES.map(item => ({ ...item }));
+}
 
 /**
  * 应用行为配置
@@ -185,9 +216,6 @@ export interface UserConfig {
 
   /** 链接输出配置 */
   linkOutput?: LinkOutputConfig;
-
-  /** @deprecated 使用 linkPrefixConfig 代替，保留用于向后兼容 */
-  baiduPrefix?: string;
 
   /** 链接前缀配置（用于微博图床代理） */
   linkPrefixConfig?: LinkPrefixConfig;
