@@ -270,13 +270,16 @@ defineExpose({
                 :key="b.url" :value="b.url"
               >{{ getServiceDisplayName(b.serviceId) }}{{ b.checkResult?.response_time ? ` · ${b.checkResult.response_time}ms` : '' }}</option>
             </select>
-            <span v-else-if="row.status === 'manual'" class="mr-no-backup">无备用</span>
+            <span v-else-if="row.status === 'manual'" class="mr-no-backup" v-tooltip.top="'第 ' + row.link.lineNumber + ' 行 · 需手动处理'">L{{ row.link.lineNumber }}</span>
             <div class="mr-row-actions">
               <button type="button" class="mr-row-icon-btn" v-tooltip.top="'复制 URL'" @click="copyRowUrl(row.link.url)">
                 <i class="pi pi-copy" />
               </button>
               <button type="button" class="mr-row-icon-btn" v-tooltip.top="'在浏览器打开'" @click="openInBrowser(row.link.url)">
                 <i class="pi pi-external-link" />
+              </button>
+              <button v-if="row.status === 'manual'" type="button" class="mr-row-icon-btn" v-tooltip.top="'用编辑器打开源文件'" @click="openMdFile(row.link.sourceFile)">
+                <i class="pi pi-file-edit" />
               </button>
             </div>
           </div>
@@ -443,7 +446,11 @@ defineExpose({
 }
 .mr-inline-select:focus { border-color: var(--primary); }
 
-.mr-no-backup { flex-shrink: 0; font-size: var(--text-xs); color: var(--text-muted); padding: 0 var(--space-xs-sm); }
+.mr-no-backup {
+  flex-shrink: 0; font-size: var(--text-2xs); font-weight: var(--weight-semibold); color: var(--text-tertiary);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace); font-variant-numeric: tabular-nums;
+  padding: 0 var(--space-xs-sm); cursor: default;
+}
 
 .mr-row-actions {
   display: inline-flex; align-items: center; gap: var(--space-2xs); flex-shrink: 0;
