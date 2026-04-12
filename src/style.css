@@ -105,6 +105,7 @@
   --pending: #a78bfa;      /* Violet 400 — 中性"待定"语义 */
   --success-alpha-8: rgba(16, 185, 129, 0.08);
   --success-alpha-10: rgba(16, 185, 129, 0.1);
+  --success-alpha-12: rgba(16, 185, 129, 0.12);
   --success-alpha-15: rgba(16, 185, 129, 0.15);
   --warning-alpha-8: rgba(234, 179, 8, 0.08);
   --warning-alpha-10: rgba(234, 179, 8, 0.1);
@@ -139,6 +140,41 @@
   --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --shadow-float: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   --shadow-dialog: 0 20px 60px rgba(0, 0, 0, 0.7);
+  --shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.2);   /* 按钮/卡片 hover 增强阴影 */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);        /* 浮层小阴影 */
+  --shadow-xs: 0 2px 4px rgba(0, 0, 0, 0.2);        /* 极小阴影（徽章等） */
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);       /* 画廊卡片悬停阴影 */
+
+  /* 遮罩 & 透明叠加层 */
+  --overlay-modal: rgba(0, 0, 0, 0.7);              /* 模态对话框背景遮罩 */
+  --hover-overlay-md: rgba(255, 255, 255, 0.2);     /* 中等白色悬浮叠加（深色主题） */
+  --border-btn-overlay: rgba(255, 255, 255, 0.2);   /* 透明按钮边框（深色主题） */
+
+  /* 状态气泡 / 浮动状态消息 */
+  --bg-status-bubble: rgba(51, 65, 85, 0.2);        /* 状态消息背景 */
+  --border-status-bubble: rgba(51, 65, 85, 0.3);    /* 状态消息边框色 */
+
+  /* 次要按钮变体 */
+  --bg-btn-secondary: rgba(51, 65, 85, 0.2);
+  --border-btn-secondary: rgba(51, 65, 85, 0.4);
+  --bg-btn-secondary-hover: rgba(51, 65, 85, 0.3);
+  --border-btn-secondary-hover: rgba(51, 65, 85, 0.6);
+
+  /* 危险按钮变体 */
+  --error-soft-md: rgba(239, 68, 68, 0.2);          /* 危险按钮悬停背景 */
+  --error-soft-lg: rgba(239, 68, 68, 0.25);         /* 危险按钮强悬停背景 */
+  --error-glow: 0 4px 12px rgba(239, 68, 68, 0.2); /* 危险按钮 hover 光晕 */
+  --error-glow-sm: 0 2px 8px rgba(239, 68, 68, 0.2); /* 小型危险按钮光晕 */
+
+  /* 操作按钮背景 */
+  --bg-action-btn: rgba(51, 65, 85, 0.4);
+
+  /* 服务卡片 & 画廊 */
+  --bg-service-toggle: rgba(30, 41, 59, 0.3);       /* 服务切换卡片背景 */
+  --bg-overlay-checkbox: rgba(15, 23, 42, 0.85);    /* 画廊浮层复选框背景 */
+
+  /* 固定文字色（不随主题变化） */
+  --text-on-warning: #1a1a1a;                        /* Warning 按钮上的深色文字 */
 
   /* --- Typography System --- */
 
@@ -298,6 +334,7 @@ button:focus-visible {
 #titlebar {
   height: 32px; /* Standard Windows titlebar height */
   background: var(--bg-titlebar); /* 顶栏最深，形成顶部深色条 */
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 标题栏基础边框，dark/light-theme.css 均有主题覆盖 */
   border-bottom: 1px solid rgba(51, 65, 85, 0.4); /* 底部边框，与主内容区分离 */
   user-select: none;
   display: flex;
@@ -348,6 +385,7 @@ button:focus-visible {
 }
 
 .titlebar-button.close:hover {
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- Windows 系统关闭按钮标准色，固定系统 UI 色 */
   background-color: #e81123;
 }
 
@@ -377,7 +415,7 @@ button:focus-visible {
 
 .view {
   display: none; /* Hidden by default */
-  padding: clamp(20px, 5vw, 40px); /* Responsive padding */
+  padding: clamp(var(--space-lg-xl), 5vw, var(--space-3xl)); /* Responsive padding */
   box-sizing: border-box;
   height: auto;
   min-height: 100%;
@@ -419,7 +457,7 @@ button:focus-visible {
 
 /* 选中状态 - 统一绿色 */
 .service-btn.selected {
-  background-color: rgba(16, 185, 129, 0.12);
+  background-color: var(--success-alpha-12);
   border-color: var(--success);
   box-shadow: 0 0 0 1px var(--success);
 }
@@ -472,12 +510,12 @@ button:focus-visible {
   padding: var(--space-xs-sm) var(--space-md);
   
   /* 半透明背景 + 磨砂玻璃效果 */
-  background: rgba(51, 65, 85, 0.2);
+  background-color: var(--bg-status-bubble);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  
+
   /* 边框和圆角 */
-  border: 1px solid rgba(51, 65, 85, 0.3);
+  border: 1px solid var(--border-status-bubble);
   border-radius: var(--radius-sm-md);
 
   /* 文字样式 */
@@ -487,7 +525,7 @@ button:focus-visible {
   
   /* 动画 */
   transition: all var(--duration-medium) var(--ease-standard);
-  animation: k-fade-slide-left 0.3s ease-out;
+  animation: k-fade-slide-left var(--duration-medium) ease-out;
 }
 
 /* 当状态消息为空时隐藏（避免显示空框） */
@@ -511,8 +549,8 @@ button:focus-visible {
 #cookie-status.success,
 #r2-status-message.success,
 #webdav-status-message.success {
-  background: rgba(16, 185, 129, 0.15) !important;
-  border-color: rgba(16, 185, 129, 0.3) !important;
+  background-color: var(--state-success-bg) !important;
+  border-color: var(--success-border) !important;
   color: var(--success) !important;
   border-left: 2px solid var(--success);
 }
@@ -526,8 +564,8 @@ button:focus-visible {
 #cookie-status.error,
 #r2-status-message.error,
 #webdav-status-message.error {
-  background: rgba(239, 68, 68, 0.15) !important;
-  border-color: rgba(239, 68, 68, 0.3) !important;
+  background-color: var(--state-error-bg) !important;
+  border-color: var(--error-border) !important;
   color: var(--error) !important;
   border-left: 2px solid var(--error);
 }
@@ -543,8 +581,8 @@ button:focus-visible {
 #cookie-status.warning,
 #r2-status-message.warning,
 #webdav-status-message.warning {
-  background: rgba(234, 179, 8, 0.15) !important;
-  border-color: rgba(234, 179, 8, 0.3) !important;
+  background-color: var(--state-warn-bg) !important;
+  border-color: var(--warning-border) !important;
   color: var(--warning) !important;
   border-left: 2px solid var(--warning);
 }
@@ -570,15 +608,15 @@ button:focus-visible {
 }
 
 .service-badge.success {
-  background-color: rgba(16, 185, 129, 0.15);
+  background-color: var(--success-soft);
   color: var(--success);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  border: 1px solid var(--success-border);
 }
 
 .service-badge.failed {
-  background-color: rgba(239, 68, 68, 0.15);
+  background-color: var(--error-soft);
   color: var(--error);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  border: 1px solid var(--error-border);
 }
 
 .service-retry-btn {
@@ -589,8 +627,8 @@ button:focus-visible {
   height: 18px;
   padding: 0;
   margin-left: var(--space-xs);
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background-color: var(--hover-overlay);
+  border: 1px solid var(--border-btn-overlay);
   border-radius: var(--radius-xs-sm);
   color: var(--text-primary);
   font-size: var(--text-base);
@@ -599,7 +637,7 @@ button:focus-visible {
 }
 
 .service-retry-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background-color: var(--hover-overlay-md);
   border-color: var(--primary);
   color: var(--primary);
   transform: rotate(180deg);
@@ -705,7 +743,7 @@ button:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: k-fade-in 0.2s ease-out;
+  animation: k-fade-in var(--duration-normal) ease-out;
 }
 
 .modal-overlay {
@@ -714,7 +752,7 @@ button:focus-visible {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.7);
+  background-color: var(--overlay-modal);
   backdrop-filter: blur(2px);
 }
 
@@ -759,7 +797,7 @@ button:focus-visible {
 }
 
 .modal-close:hover {
-  background-color: rgba(255,255,255,0.1);
+  background-color: var(--hover-overlay);
   color: var(--text-primary);
 }
 
@@ -801,7 +839,7 @@ button:focus-visible {
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  background: linear-gradient(90deg, transparent, var(--hover-overlay), transparent);
   transition: left var(--duration-slower);
 }
 
@@ -810,27 +848,28 @@ button:focus-visible {
 }
 
 .btn-secondary {
-  background: rgba(51, 65, 85, 0.2);
-  border-color: rgba(51, 65, 85, 0.4);
+  background-color: var(--bg-btn-secondary);
+  border-color: var(--border-btn-secondary);
   color: var(--text-primary);
 }
 
 .btn-secondary:hover {
-  background: rgba(51, 65, 85, 0.3);
-  border-color: rgba(51, 65, 85, 0.6);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background-color: var(--bg-btn-secondary-hover);
+  border-color: var(--border-btn-secondary-hover);
+  box-shadow: var(--shadow-hover);
 }
 
 .btn-danger {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.3);
+  background-color: var(--error-soft);
+  border-color: var(--error-border);
   color: var(--error);
 }
 
 .btn-danger:hover {
-  background: rgba(239, 68, 68, 0.25);
+  background-color: var(--error-soft-lg);
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 0.5 不在调色板内，error hover 加深边框用 */
   border-color: rgba(239, 68, 68, 0.5);
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+  box-shadow: var(--error-glow);
 }
 
 .btn-primary {
@@ -907,7 +946,7 @@ button:focus-visible {
 
 .toggle-switch input:checked + .toggle-slider:before {
   transform: translateX(20px);
-  background-color: white;
+  background-color: var(--text-on-primary);
 }
 
 .toggle-switch input:focus + .toggle-slider {
@@ -928,7 +967,7 @@ button:focus-visible {
   display: flex;
   align-items: center;
   gap: var(--space-sm-md); /* 圆圈与文字间距 */
-  background-color: rgba(30, 41, 59, 0.3);
+  background-color: var(--bg-service-toggle);
   border: 1px solid transparent;
   padding: var(--space-md) var(--space-lg);
   border-radius: var(--radius-lg); /* 圆角卡片 */
@@ -958,7 +997,7 @@ button:focus-visible {
 .service-toggle .toggle-label {
   font-size: var(--text-base);
   font-weight: var(--weight-medium);
-  color: #64748b; /* 未选中时暗灰色 */
+  color: var(--text-muted); /* 未选中时暗灰色 */
   transition: color var(--duration-normal) ease;
 }
 
@@ -972,7 +1011,7 @@ button:focus-visible {
   position: static; /* 重置通用样式的 absolute */
   width: 12px;
   height: 12px;
-  background-color: #64748b; /* 禁用时灰色 */
+  background-color: var(--text-muted); /* 禁用时灰色 */
   border-radius: 50%;
   border: none; /* 移除通用样式的边框 */
   transition: background-color var(--duration-normal) ease;
@@ -986,7 +1025,7 @@ button:focus-visible {
 
 /* 选中状态：圆圈变绿色 */
 .service-toggle input:checked + .toggle-slider {
-  background-color: #22c55e; /* 启用时绿色 */
+  background-color: var(--success); /* 启用时绿色 */
 }
 
 
@@ -1041,7 +1080,7 @@ button:focus-visible {
   width: 36px;
   height: 36px;
   padding: 0;
-  background: rgba(51, 65, 85, 0.4);
+  background-color: var(--bg-action-btn);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   color: var(--text-secondary);
@@ -1071,10 +1110,10 @@ button:focus-visible {
 }
 
 .prefix-delete-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
+  background-color: var(--error-soft-md);
   border-color: var(--error);
   color: var(--error);
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
+  box-shadow: var(--error-glow-sm);
 }
 
 /* 添加前缀模态框 */
@@ -1240,7 +1279,7 @@ button:focus-visible {
 
 .gallery-item:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
   border-color: var(--primary);
 }
 
@@ -1252,12 +1291,12 @@ button:focus-visible {
   z-index: 10;
   opacity: 0;
   transition: all var(--duration-normal) ease;
-  background-color: rgba(15, 23, 42, 0.85);
+  background-color: var(--bg-overlay-checkbox);
   backdrop-filter: blur(4px);
   border-radius: var(--radius-sm-md);
   padding: var(--space-xs-sm);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--hover-overlay);
+  box-shadow: var(--shadow-sm);
 }
 
 .gallery-item:hover .gallery-item-checkbox,
@@ -1287,8 +1326,9 @@ button:focus-visible {
 
 .gallery-item-badge .service-badge {
   font-size: var(--text-2xs);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 3px 是精确像素值，间距档位中无对应变量 */
   padding: 3px var(--space-xs-sm);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-xs);
 }
 
 /* 图片容器 */
@@ -1316,7 +1356,7 @@ button:focus-visible {
     var(--bg-input) 100%
   );
   background-size: 200% 200%;
-  animation: shimmer 1.5s infinite;
+  animation: shimmer var(--duration-shimmer) infinite;
 }
 
 @keyframes shimmer {
@@ -1411,7 +1451,7 @@ button:focus-visible {
   border: 3px solid var(--border-subtle);
   border-top-color: var(--primary);
   border-radius: 50%;
-  animation: k-spin 0.8s linear infinite;
+  animation: k-spin var(--duration-spinner) linear infinite;
 }
 
 .grid-loading-indicator p {
@@ -1437,7 +1477,7 @@ button:focus-visible {
 
 /* 1. 统一圆角 */
 :root {
-  --p-border-radius: 8px;
+  --p-border-radius: var(--radius-md);
 }
 
 /* 2. DataTable 样式优化 - 极简线条风 */
@@ -1464,11 +1504,11 @@ button:focus-visible {
 
 /* 斑马纹：让阅读更轻松 */
 :deep(.p-datatable .p-datatable-tbody > tr:nth-child(even)) {
-  background-color: rgba(0, 0, 0, 0.02) !important;
+  background-color: var(--overlay-light) !important;
 }
 
 :root.dark-theme :deep(.p-datatable .p-datatable-tbody > tr:nth-child(even)) {
-  background-color: rgba(255, 255, 255, 0.02) !important;
+  background-color: var(--overlay-light) !important;
 }
 
 /* hover 高亮 */
@@ -1520,7 +1560,7 @@ button:focus-visible {
 
 :deep(.p-button:hover) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-hover);
 }
 
 :deep(.p-button:active) {
@@ -1538,7 +1578,7 @@ button:focus-visible {
 
 :root.light-theme :deep(.p-dialog) {
   background: var(--bg-surface);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-dialog);
 }
 
 :deep(.p-dialog .p-dialog-header) {
@@ -1591,7 +1631,7 @@ button:focus-visible {
 }
 
 .p-toast .p-toast-message-icon {
-  margin-top: 2px;
+  margin-top: var(--space-2xs);
 }
 
 /* Toast 关闭按钮焦点样式 */
@@ -1634,7 +1674,7 @@ button:focus-visible {
 
 :root.light-theme .p-confirmdialog {
   background: var(--bg-surface);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-dialog);
 }
 
 /* 标题栏 */
@@ -1696,7 +1736,7 @@ button:focus-visible {
 .p-dialog.p-confirmdialog .p-confirmdialog-accept-button {
   background: var(--primary);
   border: none;
-  color: white;
+  color: var(--text-on-primary);
   padding: var(--space-sm-md) var(--space-xl);
   border-radius: var(--radius-md);
   font-size: var(--text-base);
@@ -1762,7 +1802,7 @@ button:focus-visible {
 /* warning 按钮 */
 .p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-warning {
   background: var(--warning);
-  color: #1a1a1a;
+  color: var(--text-on-warning);
 }
 
 .p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-warning:hover {
@@ -1777,13 +1817,14 @@ button:focus-visible {
 /* 浅色主题按钮 */
 :root.light-theme .p-dialog.p-confirmdialog .p-confirmdialog-reject-button {
   background: transparent;
-  border-color: #d1d5db;
+  border-color: var(--border-subtle);
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- Gray-700 无对应 Slate 变量，PrimeVue 覆盖专用 */
   color: #374151;
 }
 
 :root.light-theme .p-dialog.p-confirmdialog .p-confirmdialog-reject-button:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
+  background-color: var(--bg-input);
+  border-color: var(--text-tertiary);
 }
 
 /* 对话框动画 */
@@ -1819,7 +1860,7 @@ button:focus-visible {
 
 :root.light-theme .backup-password-dlg {
   background: var(--bg-surface);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-dialog);
 }
 
 .p-dialog.backup-password-dlg .p-dialog-header {

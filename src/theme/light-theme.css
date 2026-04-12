@@ -115,6 +115,39 @@
   --outline-ghost: rgba(203, 213, 225, 0.15);  /* Ghost border */
   --shadow-ambient: 0 -1px 12px rgba(0, 0, 0, 0.04);  /* 底栏上方阴影 */
 
+  /* ===== 阴影系统覆盖（亮色主题更轻柔） ===== */
+  --shadow-dialog: 0 20px 60px rgba(0, 0, 0, 0.15);
+  --shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.12);
+  --shadow-xs: 0 2px 4px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.1);
+
+  /* ===== 遮罩 & 透明叠加层覆盖 ===== */
+  --overlay-modal: rgba(0, 0, 0, 0.5);
+  --hover-overlay-md: rgba(0, 0, 0, 0.08);
+  --border-btn-overlay: rgba(0, 0, 0, 0.1);
+
+  /* ===== 状态气泡覆盖 ===== */
+  --bg-status-bubble: rgba(241, 245, 249, 0.9);
+  --border-status-bubble: rgba(203, 213, 225, 0.6);
+
+  /* ===== 次要按钮变体覆盖 ===== */
+  --bg-btn-secondary: rgba(203, 213, 225, 0.3);
+  --border-btn-secondary: rgba(148, 163, 184, 0.4);
+  --bg-btn-secondary-hover: rgba(203, 213, 225, 0.5);
+  --border-btn-secondary-hover: rgba(100, 116, 139, 0.5);
+
+  /* ===== 危险按钮变体覆盖 ===== */
+  --error-soft-md: rgba(239, 68, 68, 0.12);
+  --error-soft-lg: rgba(239, 68, 68, 0.15);
+
+  /* ===== 操作按钮背景覆盖 ===== */
+  --bg-action-btn: rgba(203, 213, 225, 0.4);
+
+  /* ===== 服务卡片 & 画廊覆盖 ===== */
+  --bg-service-toggle: rgba(226, 232, 240, 0.5);
+  --bg-overlay-checkbox: rgba(15, 23, 42, 0.7);
+
   /* ===== 色彩方案 ===== */
   color-scheme: light;
 }
@@ -137,12 +170,14 @@
 
 /* 导航按钮激活状态 */
 :root.light-theme .nav-btn.active {
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 亮色主题 Blue-500 at 10%，与深色主题 Blue-400 alpha 系列不同 */
   background-color: rgba(59, 130, 246, 0.1);
   color: var(--primary);
 }
 
 /* 服务按钮选中状态 */
 :root.light-theme .service-btn.selected {
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 亮色主题 success-soft 透明度与深色主题不同，单独定义 */
   background-color: rgba(16, 185, 129, 0.1);
   border-color: var(--success);
 }
