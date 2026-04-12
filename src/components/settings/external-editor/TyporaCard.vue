@@ -148,35 +148,20 @@ async function copyExecutablePath() {
   flex-direction: column;
 }
 
-.missing-service-banner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
-  background: var(--warning-alpha-8);
-  border-bottom: 1px solid var(--warning-border);
-  color: var(--warning);
-  font-size: var(--text-sm);
-  line-height: 1.5;
-}
-
-.missing-service-banner .pi {
-  font-size: var(--text-sm);
-  flex-shrink: 0;
-}
+/* .missing-service-banner 样式定义在 settings-shared.css */
 
 .card-service-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: var(--space-md) var(--space-lg);
   border-bottom: 1px solid var(--border-subtle);
 }
 
 .card-service-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2xs);
 }
 
 .card-service-label {
@@ -191,7 +176,7 @@ async function copyExecutablePath() {
 }
 
 .guide-card {
-  padding: 14px 16px 16px;
+  padding: var(--space-md-lg) var(--space-lg) var(--space-lg);
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -200,9 +185,9 @@ async function copyExecutablePath() {
 .guide-step {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: var(--space-sm-md);
   position: relative;
-  padding-bottom: 12px;
+  padding-bottom: var(--space-md);
 }
 
 .guide-step:last-child {
@@ -249,15 +234,16 @@ async function copyExecutablePath() {
 }
 
 .guide-path-inline {
-  margin-top: 6px;
+  margin-top: var(--space-xs-sm);
 }
 
 .inline-code {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
-  padding: 1px 5px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 微型 code badge，1px 无对应 token */
+  padding: 1px var(--space-xs);
   background: var(--primary-alpha-8);
-  border-radius: 3px;
+  border-radius: var(--radius-xs-sm);
   color: var(--primary);
 }
 
@@ -265,9 +251,10 @@ async function copyExecutablePath() {
   font-family: var(--font-sans);
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
-  padding: 1px 5px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 微型 code badge，1px 无对应 token */
+  padding: 1px var(--space-xs);
   background: var(--primary-alpha-8);
-  border-radius: 3px;
+  border-radius: var(--radius-xs-sm);
   color: var(--primary);
 }
 
@@ -275,11 +262,11 @@ async function copyExecutablePath() {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs-sm);
   background: var(--primary-alpha-8);
   border: 1px solid var(--primary-alpha-15);
-  border-radius: 6px;
-  padding: 5px 6px 5px 10px;
+  border-radius: var(--radius-sm-md);
+  padding: var(--space-xs) var(--space-xs-sm) var(--space-xs) var(--space-sm-md);
 }
 
 .exec-path-text {
@@ -295,7 +282,7 @@ async function copyExecutablePath() {
   .card-service-row {
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--space-sm);
   }
 }
 </style>

@@ -241,35 +241,20 @@ watch(
   flex-direction: column;
 }
 
-.missing-service-banner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
-  background: var(--warning-alpha-8);
-  border-bottom: 1px solid var(--warning-border);
-  color: var(--warning);
-  font-size: var(--text-sm);
-  line-height: 1.5;
-}
-
-.missing-service-banner .pi {
-  font-size: var(--text-sm);
-  flex-shrink: 0;
-}
+/* .missing-service-banner 样式定义在 settings-shared.css */
 
 .card-service-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: var(--space-md) var(--space-lg);
   border-bottom: 1px solid var(--border-subtle);
 }
 
 .card-service-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-2xs);
 }
 
 .card-service-label {
@@ -284,7 +269,7 @@ watch(
 }
 
 .guide-card {
-  padding: 14px 16px 16px;
+  padding: var(--space-md-lg) var(--space-lg) var(--space-lg);
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -293,9 +278,9 @@ watch(
 .guide-step {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: var(--space-sm-md);
   position: relative;
-  padding-bottom: 12px;
+  padding-bottom: var(--space-md);
 }
 
 .guide-step:last-child {
@@ -344,9 +329,10 @@ watch(
 .inline-code {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
-  padding: 1px 5px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 微型 code badge，1px 无对应 token */
+  padding: 1px var(--space-xs);
   background: var(--primary-alpha-8);
-  border-radius: 3px;
+  border-radius: var(--radius-xs-sm);
   color: var(--primary);
 }
 
@@ -354,14 +340,14 @@ watch(
   width: 70px;
   display: inline-block;
   vertical-align: baseline;
-  margin: 0 2px;
+  margin: 0 var(--space-2xs);
 }
 
 .port-input {
   width: 80px;
-  padding: 4px 8px;
+  padding: var(--space-xs) var(--space-sm);
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-sm-md);
   background: var(--bg-card);
   color: var(--text-primary);
   font-size: var(--text-xs);
@@ -390,8 +376,8 @@ watch(
 .test-connection-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 16px 14px;
+  gap: var(--space-sm-md);
+  padding: var(--space-sm-md) var(--space-lg) var(--space-md-lg);
   border-top: 1px solid var(--border-subtle);
   flex-wrap: wrap;
 }
@@ -399,10 +385,10 @@ watch(
 .test-connection-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 14px;
+  gap: var(--space-xs-sm);
+  padding: var(--space-xs) var(--space-md-lg);
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-sm-md);
   background: var(--bg-card);
   color: var(--text-secondary);
   font-size: var(--text-xs);
@@ -424,7 +410,7 @@ watch(
 .test-result {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   font-size: var(--text-xs);
 }
 
@@ -448,7 +434,7 @@ watch(
   .card-service-row {
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--space-sm);
   }
 }
 </style>

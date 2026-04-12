@@ -136,7 +136,7 @@
 
 .settings-section {
   max-width: 800px;
-  animation: k-fade-slide-up 0.3s ease-out;
+  animation: k-fade-slide-up var(--duration-medium) ease-out;
 }
 
 /* ==================== 表单样式 ==================== */
@@ -156,6 +156,7 @@
 .helper-text {
   font-size: var(--text-sm);
   color: var(--text-muted);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 负值微调，无对应 token */
   margin: -3px 0 var(--space-md) 0;
 }
 
@@ -520,7 +521,8 @@
 .settings-row-info {
   display: flex;
   flex-direction: column;
-  gap: 3px; /* 介于 --space-2xs(2px) 和 --space-xs(4px) 之间，无精确变量 */
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 介于 --space-2xs(2px) 和 --space-xs(4px) 之间，无精确变量 */
+  gap: 3px;
   min-width: 0;
   flex: 1;
 }
@@ -641,6 +643,26 @@
   font-size: var(--text-base);
   color: var(--text-muted);
   transition: color var(--duration-normal) ease;
+}
+
+/* ==================== 卡片内警告横幅 ==================== */
+/* 用于"开关已开但未完成配置"等需要引导用户下一步操作的场景 */
+
+.missing-service-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--warning-alpha-8);
+  border-bottom: 1px solid var(--warning-border);
+  color: var(--warning);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.missing-service-banner .pi {
+  font-size: var(--text-sm);
+  flex-shrink: 0;
 }
 
 .card-content-wrapper {
