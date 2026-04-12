@@ -1,13 +1,18 @@
 <script setup lang="ts">
+/**
+ * 图片灯箱 — 基于 PhotoSwipe 5
+ *
+ * PhotoSwipe 处理：FLIP 开/关动画、缩放、平移、手势
+ * Vue 处理：底栏（信息+操作）、导航事件、收藏状态
+ */
 import { computed, toRef } from 'vue';
+import 'photoswipe/style.css';
 import type { HistoryItem } from '../../../config/types';
 import { useConfigManager } from '../../../composables/useConfig';
 import { useHistoryManager } from '../../../composables/useHistory';
-import { useLightboxZoom } from '../../../composables/history/useLightboxZoom';
-import { useLightboxImage } from '../../../composables/history/useLightboxImage';
+import { usePhotoSwipeBridge } from '../../../composables/history/usePhotoSwipeBridge';
 import { useLightboxActions } from '../../../composables/history/useLightboxActions';
 import { useLightboxInfo } from '../../../composables/history/useLightboxInfo';
-import { useLightboxKeyboard } from '../../../composables/history/useLightboxKeyboard';
 import { getPrimaryImageUrl } from '../../../utils/imageUrl';
 import LightboxBottomBar from './LightboxBottomBar.vue';
 
@@ -32,37 +37,27 @@ const configManager = useConfigManager();
 const historyManager = useHistoryManager();
 const itemRef = computed(() => props.item);
 
-// ── 缩放 & 拖拽 ────────────────────────────
-const {
-  imageTransform,
-  imageCursor,
-  resetZoom,
-  handleDoubleClick,
-  handleImgMouseDown,
-  handleMouseMove,
-  handleMouseUp,
-  applyWheelZoom,
-  isDragMove,
-  isRecentDoubleClick,
-  cleanupDrag,
-} = useLightboxZoom();
-
-// ── 图片预加载 ──────────────────────────────
-const lightboxImage = computed(() => {
+// ── PhotoSwipe 桥接 ────────────────────────────
+const imageSrc = computed(() => {
   if (!props.item) return '';
   return getPrimaryImageUrl(props.item, configManager.config.value);
 });
 
 const itemId = computed(() => props.item?.id);
+const imageWidth = computed(() => props.item?.width || 0);
+const imageHeight = computed(() => props.item?.height || 0);
 
-const {
-  displaySrc,
-  imageReady,
-  showLoadingIndicator,
-  imageError,
-  onImageError,
-  cleanupPreload,
-} = useLightboxImage(lightboxImage, toRef(props, 'visible'), itemId, resetZoom);
+const { pswpEl } = usePhotoSwipeBridge({
+  visible: toRef(props, 'visible'),
+  imageSrc,
+  itemId,
+  imageWidth,
+  imageHeight,
+  hasPrev: toRef(props, 'hasPrev'),
+  hasNext: toRef(props, 'hasNext'),
+  onClose: () => emit('update:visible', false),
+  onNavigate: (dir) => emit('navigate', dir),
+});
 
 // ── 收藏状态 ────────────────────────────────
 const isItemFavorited = computed(() => {
@@ -82,159 +77,83 @@ const {
 // ── 操作 ────────────────────────────────────
 const { handleCopyLink, openInBrowser, handleDelete } = useLightboxActions({
   item: itemRef,
-  resetZoom,
+  resetZoom: () => { /* PhotoSwipe 内部管理缩放 */ },
   onDelete: (record) => emit('delete', record),
 });
 
-// ── 键盘 & 滚轮 & 导航 ─────────────────────
-const { closeLightbox, navigatePrev, navigateNext, handleWheel } = useLightboxKeyboard({
-  visible: toRef(props, 'visible'),
-  hasPrev: toRef(props, 'hasPrev'),
-  hasNext: toRef(props, 'hasNext'),
-  isDragMove,
-  isRecentDoubleClick,
-  applyWheelZoom,
-  cleanupDrag,
-  cleanupPreload,
-  emitClose: () => emit('update:visible', false),
-  emitNavigate: (dir) => emit('navigate', dir),
-});
+// ── 导航 ────────────────────────────────────
+function navigatePrev() { if (props.hasPrev) emit('navigate', 'prev'); }
+function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="lightbox-fade">
-      <div v-if="visible" class="lightbox-overlay" @click="closeLightbox" @wheel.prevent="handleWheel" @mousemove="handleMouseMove" @mouseup="handleMouseUp">
-        <div
-          v-if="displaySrc"
-          class="lightbox-bg"
-          :style="{ backgroundImage: `url(${displaySrc})` }"
-        ></div>
-        <div class="lightbox-bg-dim"></div>
+  <!-- 自定义 UI 通过 Teleport 挂入 PhotoSwipe 根元素 -->
+  <Teleport v-if="pswpEl" :to="pswpEl">
+    <!-- 导航箭头 -->
+    <button
+      v-if="hasPrev"
+      class="pswp-nav pswp-nav--prev"
+      @click="navigatePrev"
+    >
+      <i class="pi pi-chevron-left"></i>
+    </button>
+    <button
+      v-if="hasNext"
+      class="pswp-nav pswp-nav--next"
+      @click="navigateNext"
+    >
+      <i class="pi pi-chevron-right"></i>
+    </button>
 
-        <button class="lightbox-close" @click.stop="closeLightbox">
-          <i class="pi pi-times"></i>
-        </button>
-
-        <button
-          v-if="hasPrev"
-          class="lightbox-nav lightbox-nav-prev"
-          @click.stop="navigatePrev"
-        >
-          <i class="pi pi-chevron-left"></i>
-        </button>
-
-        <div class="lightbox-content" @click.stop @dblclick.prevent="handleDoubleClick">
-          <Transition name="lightbox-loader">
-            <div v-if="showLoadingIndicator && !imageError" class="lightbox-loading-overlay">
-              <div class="lightbox-breathe-container">
-                <i class="pi pi-image lightbox-breathe-icon"></i>
-              </div>
-              <span class="lightbox-loading-text">加载中…</span>
-            </div>
-          </Transition>
-
-          <div v-if="imageError" class="lightbox-error">
-            <i class="pi pi-image"></i>
-            <span>图片加载失败，可能已过期</span>
-          </div>
-          <img
-            v-if="!imageError && displaySrc"
-            :src="displaySrc"
-            :class="['lightbox-img', { 'lightbox-img-loaded': imageReady }]"
-            :style="{ transform: imageTransform, cursor: imageCursor }"
-            @error="onImageError"
-            @mousedown="handleImgMouseDown"
-          />
-
-        </div>
-
-        <button
-          v-if="hasNext"
-          class="lightbox-nav lightbox-nav-next"
-          @click.stop="navigateNext"
-        >
-          <i class="pi pi-chevron-right"></i>
-        </button>
-
-        <LightboxBottomBar
-          v-if="item"
-          :item="item"
-          :display-file-name="displayFileName"
-          :successful-services-text="successfulServicesText"
-          :failed-results="failedResults"
-          :failed-services-text="failedServicesText"
-          :failed-services-tooltip="failedServicesTooltip"
-          :is-item-favorited="isItemFavorited"
-          @copy-link="handleCopyLink"
-          @open-browser="openInBrowser"
-          @delete="handleDelete"
-          @toggle-favorite="emit('toggle-favorite', item)"
-        />
-      </div>
-    </Transition>
+    <!-- 底栏 -->
+    <LightboxBottomBar
+      v-if="item"
+      :item="item"
+      :display-file-name="displayFileName"
+      :successful-services-text="successfulServicesText"
+      :failed-results="failedResults"
+      :failed-services-text="failedServicesText"
+      :failed-services-tooltip="failedServicesTooltip"
+      :is-item-favorited="isItemFavorited"
+      @copy-link="handleCopyLink"
+      @open-browser="openInBrowser"
+      @delete="handleDelete"
+      @toggle-favorite="emit('toggle-favorite', item)"
+    />
   </Teleport>
 </template>
 
-<style scoped>
-.lightbox-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-lightbox);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  padding-bottom: 64px; /* 预留底栏空间，图片在底栏上方区域居中 */
+<style>
+/*
+ * PhotoSwipe 主题覆盖（全局样式，不加 scoped）
+ * 所有选择器以 .pswp--picnexus 为前缀，避免污染
+ */
+
+/* 背景透明度由 PhotoSwipe bgOpacity 选项控制 */
+.pswp--picnexus {
+  --pswp-bg: #000;
+
+  z-index: var(--z-lightbox) !important;
 }
 
-.lightbox-bg {
-  position: absolute;
-  inset: -60px;
-  background-size: cover;
-  background-position: center;
-  filter: blur(40px) brightness(0.35) saturate(1.2);
-  transform: scale(1.15);
+/* 隐藏 PhotoSwipe 默认顶栏（用我们自己的底栏） */
+.pswp--picnexus .pswp__top-bar {
+  display: none !important;
 }
 
-.lightbox-bg-dim {
-  position: absolute;
-  inset: 0;
-  background: rgb(0 0 0 / 25%);
+/* 图片圆角 + 阴影 */
+.pswp--picnexus .pswp__img {
+  border-radius: var(--radius-md);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 灯箱暗色环境下的图片阴影，无对应 token */
+  box-shadow: 0 8px 40px rgb(0 0 0 / 50%);
 }
 
-.lightbox-close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 3;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: none;
-  background: var(--hover-overlay);
-  color: var(--text-muted);
-  font-size: var(--text-lg);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.15;
-  transition: opacity var(--duration-normal) ease, background var(--duration-normal) ease, color var(--duration-normal) ease;
-  backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-}
-
-.lightbox-close:hover {
-  opacity: 1;
-  color: var(--text-main);
-}
-
-.lightbox-nav {
+/* 自定义导航箭头 */
+.pswp-nav {
   position: absolute;
   top: calc(50% - 32px);
   transform: translateY(-50%);
-  z-index: 3;
+  z-index: 10;
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -248,128 +167,18 @@ const { closeLightbox, navigatePrev, navigateNext, handleWheel } = useLightboxKe
   justify-content: center;
   transition: all var(--duration-normal) ease;
   backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
 }
 
-.lightbox-nav-prev { left: 20px; }
-.lightbox-nav-next { right: 20px; }
+.pswp-nav--prev { left: 20px; }
+.pswp-nav--next { right: 20px; }
 
-.lightbox-nav:hover {
+.pswp-nav:hover {
   color: var(--text-main);
   transform: translateY(-50%) scale(1.08);
 }
 
-.lightbox-content {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  max-width: calc(100vw - 160px);
-  max-height: calc(100vh - 64px - 48px); /* 底栏64 + 上下留白48 */
-  min-width: 200px;
-  min-height: 200px;
-}
-
-.lightbox-img {
-  max-width: calc(100vw - 160px);
-  max-height: calc(100vh - 64px - 48px);
-  object-fit: contain;
-  border-radius: 8px;
-  box-shadow: 0 8px 40px rgb(0 0 0 / 50%);
-  opacity: 0;
-  transition: opacity var(--duration-medium) ease, transform var(--duration-micro) ease-out;
-  user-select: none;
-}
-
-.lightbox-img-loaded {
-  opacity: 1;
-}
-
-.lightbox-loading-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  z-index: 1;
-}
-
-.lightbox-breathe-container {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--hover-overlay-subtle);
-  backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border-subtle);
-}
-
-.lightbox-breathe-icon {
-  font-size: var(--text-2xl);
-  color: var(--text-muted);
-
-  /* TODO: 3s 无对应动效变量（最大为 --duration-breathe: 2000ms），暂保留硬编码 */
-  animation: lightbox-breathe 3s ease-in-out infinite;
-}
-
-@keyframes lightbox-breathe {
-  0%, 100% {
-    opacity: 0.3;
-    transform: scale(0.98);
-    filter: drop-shadow(0 0 0 rgb(255 255 255 / 0%));
-  }
-
-  50% {
-    opacity: 0.8;
-    transform: scale(1);
-    filter: drop-shadow(0 0 15px rgb(255 255 255 / 40%));
-  }
-}
-
-.lightbox-loading-text {
-  font-size: var(--text-base);
-  color: var(--text-tertiary);
-  letter-spacing: 0.05em;
-}
-
-/* Loading overlay 淡入淡出 */
-.lightbox-loader-enter-active,
-.lightbox-loader-leave-active {
-  transition: opacity var(--duration-medium) ease;
-}
-
-.lightbox-loader-enter-from,
-.lightbox-loader-leave-to {
-  opacity: 0;
-}
-
-.lightbox-error {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 40px;
-  color: var(--text-muted);
-}
-
-.lightbox-error i {
-  font-size: var(--text-5xl);
-  color: var(--error);
-}
-
-.lightbox-error span {
-  font-size: var(--text-base);
-}
-
-/* 浅色模式：灯箱始终保持暗色风格，重新绑定为暗色变量值（来源：style.css :root） */
-:root.light-theme .lightbox-overlay {
+/* 浅色模式：灯箱始终保持暗色风格 */
+:root.light-theme .pswp--picnexus {
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
   --text-tertiary: #64748b;
@@ -378,18 +187,5 @@ const { closeLightbox, navigatePrev, navigateNext, handleWheel } = useLightboxKe
   --border-subtle: #334155;
   --error: #ef4444;
   --error-soft: rgb(239 68 68 / 15%);
-}
-
-.lightbox-fade-enter-active {
-  transition: opacity var(--duration-normal) ease;
-}
-
-.lightbox-fade-leave-active {
-  transition: opacity var(--duration-normal) ease;
-}
-
-.lightbox-fade-enter-from,
-.lightbox-fade-leave-to {
-  opacity: 0;
 }
 </style>

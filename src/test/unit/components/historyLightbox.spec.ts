@@ -1,8 +1,20 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { ref } from 'vue';
 import HistoryLightbox from '../../../components/views/history/HistoryLightbox.vue';
 import type { HistoryItem } from '../../../config/types';
+
+// ── Mock：PhotoSwipe 桥接（返回一个可 Teleport 的容器） ──
+
+const mockPswpEl = document.createElement('div');
+mockPswpEl.id = 'mock-pswp';
+document.body.appendChild(mockPswpEl);
+
+vi.mock('../../../composables/history/usePhotoSwipeBridge', () => ({
+  usePhotoSwipeBridge: () => ({
+    pswpEl: ref(mockPswpEl),
+  }),
+}));
 
 vi.mock('../../../composables/useToast', () => ({
   useToast: () => ({
@@ -14,6 +26,12 @@ vi.mock('../../../composables/useToast', () => ({
 vi.mock('../../../composables/useConfig', () => ({
   useConfigManager: () => ({
     config: ref({}),
+  }),
+}));
+
+vi.mock('../../../composables/useHistory', () => ({
+  useHistoryManager: () => ({
+    favoriteSet: ref(new Set<string>()),
   }),
 }));
 
@@ -77,16 +95,23 @@ function mountLightbox(item: HistoryItem) {
         tooltip: tooltipDirective,
       },
       stubs: {
-        Teleport: true,
-        Transition: false,
+        Teleport: false,
       },
     },
   });
 }
 
 describe('HistoryLightbox', () => {
+  /** 每次测试前清空 Teleport 容器 */
+  beforeEach(() => { mockPswpEl.innerHTML = ''; });
+
+  /** 底栏通过 Teleport 渲染到 mockPswpEl，需在 DOM 中查找 */
+  function findInTeleport(selector: string) {
+    return mockPswpEl.querySelector(selector);
+  }
+
   it('shows failed services with normalized tooltip content', () => {
-    const wrapper = mountLightbox(makeHistoryItem([
+    mountLightbox(makeHistoryItem([
       {
         serviceId: 'jd',
         status: 'success',
@@ -103,15 +128,15 @@ describe('HistoryLightbox', () => {
       },
     ]));
 
-    const failedCell = wrapper.find('.cell-failed');
-    expect(failedCell.exists()).toBe(true);
-    expect(failedCell.text()).toContain('又拍云');
-    expect(failedCell.text()).toContain('失败图床');
-    expect(failedCell.attributes('data-tooltip')).toBe('又拍云：service error');
+    const failedCell = findInTeleport('.cell-failed');
+    expect(failedCell).not.toBeNull();
+    expect(failedCell!.textContent).toContain('又拍云');
+    expect(failedCell!.textContent).toContain('失败图床');
+    expect(failedCell!.getAttribute('data-tooltip')).toBe('又拍云：service error');
   });
 
   it('does not render failed service section when all services succeed', () => {
-    const wrapper = mountLightbox(makeHistoryItem([
+    mountLightbox(makeHistoryItem([
       {
         serviceId: 'jd',
         status: 'success',
@@ -123,6 +148,6 @@ describe('HistoryLightbox', () => {
       },
     ]));
 
-    expect(wrapper.find('.cell-failed').exists()).toBe(false);
+    expect(findInTeleport('.cell-failed')).toBeNull();
   });
 });
