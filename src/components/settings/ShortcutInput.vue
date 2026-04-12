@@ -140,7 +140,7 @@ function handleKeyDown(e: KeyboardEvent) {
 
 .shortcut-text {
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   font-family: 'Fira Code', 'Cascadia Code', monospace;
   font-size: var(--text-xs);
   letter-spacing: 0.02em;
@@ -149,7 +149,7 @@ function handleKeyDown(e: KeyboardEvent) {
 .shortcut-input.recording .shortcut-text {
   color: var(--primary);
   font-style: italic;
-  font-weight: 400;
+  font-weight: var(--weight-regular);
   font-family: inherit;
 }
 

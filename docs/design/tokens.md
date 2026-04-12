@@ -138,32 +138,38 @@ transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
 字号统一走变量体系，**禁止 `font-size` 硬编码**。所有档位定义在 [src/style.css](../../src/style.css) 的 `:root` 里。
 
-| 变量 | 值 | 适用场景 |
-|------|-----|---------|
-| `--text-2xs` | 10px | 极小标注（角标、图标配文） |
-| `--text-2xs-xs` | 11px | 辅助说明、极小标签 |
-| `--text-xs` | 12px | 辅助文字、L3 行内描述（`.toggle-row-desc`） |
-| `--text-sm` | 13px | 次要内容、L2 区块说明（`.helper-text`）、L4 提示卡片 |
-| `--text-base` | 14px | 正文默认、L1 页面描述、标题行（`.toggle-row-label`） |
-| `--text-md` | 15px | 列表标题 |
-| `--text-lg` | 16px | 小标题 |
-| `--text-lg-xl` | 18px | 对话框标题 |
-| `--text-xl` | 20px | 页面标题 |
-| `--text-2xl` | 24px | 大标题、设置页 `.section-header h2` |
-| `--text-3xl` | 28px | 特大标题 |
-| `--text-4xl` | 36px | 空状态插画、大号数字展示 |
-| `--text-5xl` | 48px | 超大空状态、引导页主标题 |
+| 变量 | 值 | 与上级比率 | 适用场景 |
+|------|-----|----------|---------|
+| `--text-2xs` | 10px | — | 角标、极小标注 |
+| `--text-xs` | 12px | 1.20 | 辅助文字、L3 行内描述（`.toggle-row-desc`） |
+| `--text-sm` | 13px | 1.08 | 次要内容、L2 区块说明（`.helper-text`）、L4 提示卡片 |
+| `--text-base` | 14px | 1.08 | 正文默认、L1 页面描述、标题行（`.toggle-row-label`） |
+| `--text-lg` | 16px | 1.14 | 分组标题（`.group-label`）、强调正文 |
+| `--text-lg-xl` | 18px | 1.125 | 对话框标题 |
+| `--text-xl` | 20px | 1.11 | 页面标题 |
+| `--text-2xl` | 24px | 1.20 | 大标题、设置页 `.section-header h2` |
+| `--text-3xl` | 28px | 1.17 | 特大标题 |
+| `--text-4xl` | 36px | 1.29 | 空状态插画、大号数字展示 |
+| `--text-5xl` | 48px | 1.33 | 超大空状态、引导页主标题 |
 
-### 字重与行高
+> **已废弃**：`--text-2xs-xs`(11px) 已合并至 `--text-xs`；`--text-md`(15px) 已合并至 `--text-lg`。
+
+### 字重
 
 | 变量 | 值 | 场景 |
 |------|-----|------|
-| `--weight-regular` | 400 | 正文 |
-| `--weight-medium` | 500 | 按钮、导航、行标题 |
-| `--weight-bold` | 600 | 标题、强调数据 |
-| `--leading-tight` | 1.2 | 标题、按钮 |
-| `--leading-normal` | 1.5 | 正文默认 |
-| `--leading-relaxed` | 1.6 | 段落长文 |
+| `--weight-regular` | 400 | 正文、默认文本 |
+| `--weight-medium` | 500 | 按钮、导航标签、活跃选项卡 |
+| `--weight-semibold` | 600 | 分组标题、区块标题、重要数据 |
+| `--weight-bold` | 700 | 页面大标题、核心焦点数据 |
+
+### 行高
+
+| 变量 | 值 | 场景 |
+|------|-----|------|
+| `--leading-tight` | 1.3 | 标题、按钮（CJK 优化，原 1.2 偏紧） |
+| `--leading-normal` | 1.6 | 正文默认（CJK 推荐 1.6-1.7） |
+| `--leading-relaxed` | 1.75 | 段落长文、多行描述 |
 
 ### 何时破例
 

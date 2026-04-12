@@ -109,7 +109,7 @@ function handleKeydown(e: KeyboardEvent) {
 .section-label {
   display: block;
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
 }
 
@@ -164,7 +164,7 @@ function handleKeydown(e: KeyboardEvent) {
   border-radius: 8px !important;
   padding: 12px 20px !important;
   font-size: var(--text-base) !important;
-  font-weight: 600 !important;
+  font-weight: var(--weight-semibold) !important;
   background: var(--bg-button-secondary) !important;
   border: none !important;
   color: white !important;
@@ -179,6 +179,6 @@ function handleKeydown(e: KeyboardEvent) {
   border-radius: 8px !important;
   padding: 12px 20px !important;
   font-size: var(--text-base) !important;
-  font-weight: 600 !important;
+  font-weight: var(--weight-semibold) !important;
 }
 </style>

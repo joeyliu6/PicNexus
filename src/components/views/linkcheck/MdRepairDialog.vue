@@ -196,17 +196,17 @@ function confirm() {
   display: flex; flex-direction: column; gap: var(--space-xs); flex: 1; min-width: 0;
 }
 .repair-strategy-label {
-  font-size: var(--text-sm); font-weight: 600; color: var(--text-main);
+  font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text-main);
 }
 .repair-strategy-desc {
-  font-size: var(--text-2xs-xs); color: var(--text-tertiary);
+  font-size: var(--text-xs); color: var(--text-tertiary);
 }
 .repair-pref-pills {
   display: flex; flex-wrap: wrap; gap: var(--space-xs-sm); margin-top: var(--space-sm);
 }
 .pill-pref-item {
   display: inline-flex; align-items: center; height: 28px; padding: 0 var(--space-sm-md);
-  border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: 500; white-space: nowrap;
+  border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: var(--weight-medium); white-space: nowrap;
   cursor: pointer; border: 1px solid var(--border-subtle);
   background: var(--bg-input); color: var(--text-muted); font-family: inherit;
   transition: background var(--duration-fast), border-color var(--duration-fast);
@@ -216,7 +216,7 @@ function confirm() {
 }
 .pill-pref-item--first {
   background: var(--primary-alpha-10); border-color: var(--primary-alpha-30);
-  color: var(--primary); font-weight: 600;
+  color: var(--primary); font-weight: var(--weight-semibold);
 }
 .pill-grip {
   font-size: var(--text-2xs); color: var(--text-tertiary); opacity: 0.5; flex-shrink: 0;
@@ -239,7 +239,7 @@ function confirm() {
 }
 .repair-manual-url {
   display: flex; align-items: center; gap: var(--space-xs-sm);
-  font-size: var(--text-2xs-xs); color: var(--text-muted);
+  font-size: var(--text-xs); color: var(--text-muted);
 }
 .repair-manual-url i { font-size: var(--text-xs); color: var(--text-tertiary); }
 .repair-manual-url span {
@@ -267,7 +267,7 @@ function confirm() {
 }
 .repair-manual-show-all {
   width: 100%; padding: var(--space-sm) 0; border: 1px dashed var(--border-subtle); border-radius: var(--radius-sm-md);
-  background: transparent; color: var(--primary); font-size: var(--text-xs); font-weight: 500;
+  background: transparent; color: var(--primary); font-size: var(--text-xs); font-weight: var(--weight-medium);
   cursor: pointer; font-family: inherit;
   transition: background var(--duration-fast), border-color var(--duration-fast);
 }

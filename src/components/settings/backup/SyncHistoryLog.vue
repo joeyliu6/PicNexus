@@ -146,7 +146,7 @@ function formatRelativeTime(timestamp: number): string {
 .log-title {
   font-size: var(--text-xs);
   color: var(--text-muted);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .clear-btn {
@@ -203,7 +203,7 @@ function formatRelativeTime(timestamp: number): string {
 /* ===== 操作图标 ===== */
 .op-icon {
   flex-shrink: 0;
-  font-size: var(--text-md);
+  font-size: var(--text-lg);
   width: 28px;
   height: 28px;
   display: flex;
@@ -247,12 +247,12 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 .row-time {
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
 .row-details-inline {
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
   color: var(--text-muted);
   opacity: 0.7;
   overflow: hidden;

@@ -39,6 +39,8 @@ if (linkCheckTargetTab) {
 const {
   isChecking: monitorChecking,
   isLoading,
+  isPhase2Loading,
+  phase2Duration,
   progress: monitorProgress,
   progressSource,
   checkRows,
@@ -162,6 +164,8 @@ onDeactivated(onViewDeactivated);
         :check-rows="checkRows"
         :is-checking="monitorIsChecking"
         :is-loading="isLoading"
+        :is-phase2-loading="isPhase2Loading"
+        :phase2-duration="phase2Duration"
         :progress="monitorProgress"
         :progress-source="progressSource"
         @check-all="checkAllHistoryLinks"
@@ -215,7 +219,7 @@ onDeactivated(onViewDeactivated);
   background: transparent;
   color: var(--text-secondary);
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   position: relative;
   transition: color var(--duration-fast), background var(--duration-fast);

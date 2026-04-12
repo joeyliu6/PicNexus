@@ -170,24 +170,24 @@ async function exportResult() {
 .done-icon--success i { color: var(--success); }
 .done-icon--warning i { color: var(--warning); }
 .done-icon--error i { color: var(--error); }
-.done-title { font-size: var(--text-xl); font-weight: 700; color: var(--text-primary); margin: 0; }
+.done-title { font-size: var(--text-xl); font-weight: var(--weight-bold); color: var(--text-primary); margin: 0; }
 .done-subtitle { font-size: var(--text-sm); color: var(--text-muted); margin: 0; text-align: center; }
 
 .done-stats { width: 100%; display: flex; flex-direction: column; gap: var(--space-sm); margin-top: var(--space-sm); }
 .done-stat-row { display: flex; justify-content: space-between; align-items: center; font-size: var(--text-sm); }
 .dsl { color: var(--text-muted); }
-.dsv { font-weight: 700; font-size: var(--text-lg-xl); color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.dsv { font-weight: var(--weight-bold); font-size: var(--text-lg-xl); color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .dsv--success { color: var(--success); }
 .dsv--error { color: var(--error); }
 
 .done-detail { flex: 1; min-width: 0; padding: var(--space-xl) var(--space-lg-xl); display: flex; flex-direction: column; overflow: hidden; }
-.done-detail-title { font-size: var(--text-sm); font-weight: 600; color: var(--text-muted); margin-bottom: var(--space-sm-md); flex-shrink: 0; }
+.done-detail-title { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text-muted); margin-bottom: var(--space-sm-md); flex-shrink: 0; }
 
 .done-fail-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-xs-sm); }
 .done-fail-row { display: flex; align-items: center; gap: var(--space-sm); padding: var(--space-sm) var(--space-md); background: var(--bg-card); border-radius: var(--radius-sm-md); font-size: var(--text-xs); }
 .done-fail-row i { font-size: var(--text-base); color: var(--text-tertiary); flex-shrink: 0; }
-.done-fail-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: var(--text-primary); font-family: var(--font-mono, monospace); font-size: var(--text-xs); }
-.done-fail-badge { font-size: var(--text-2xs); font-weight: 500; padding: var(--space-2xs) var(--space-xs-sm); border-radius: var(--radius-sm); flex-shrink: 0; }
+.done-fail-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-medium); color: var(--text-primary); font-family: var(--font-mono, monospace); font-size: var(--text-xs); }
+.done-fail-badge { font-size: var(--text-2xs); font-weight: var(--weight-medium); padding: var(--space-2xs) var(--space-xs-sm); border-radius: var(--radius-sm); flex-shrink: 0; }
 .fail-badge--dl { background: var(--error-alpha-10); color: var(--error); }
 .fail-badge--ul { background: var(--error-alpha-10); color: var(--error); }
 .fail-badge--partial { background: var(--warning-alpha-10); color: var(--warning); }

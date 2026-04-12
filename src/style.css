@@ -152,28 +152,27 @@
 
   /* 2. 字重：定义语义化的字重 */
   --weight-regular: 400;
-  --weight-medium: 500; /* 用于按钮、导航 */
-  --weight-bold: 600;   /* 用于标题、强调数据 */
+  --weight-medium: 500;  /* 按钮、导航、活跃标签 */
+  --weight-semibold: 600; /* 分组标题、区块标题 */
+  --weight-bold: 700;    /* 页面大标题、核心焦点数据 */
 
-  /* 3. 字号：基于 4px 网格系统 */
-  --text-2xs: 10px; /* 极小标注 */
-  --text-2xs-xs: 11px; /* 辅助说明/图标 */
-  --text-xs: 12px; /* 辅助文字 */
-  --text-sm: 13px; /* 次要内容 */
-  --text-base: 14px; /* 正文默认 */
-  --text-md: 15px; /* 列表标题 */
-  --text-lg: 16px; /* 小标题 */
+  /* 3. 字号：10 级梯度，相邻主级 ≥1.14 比率 */
+  --text-2xs: 10px;   /* 角标、极小标注 */
+  --text-xs: 12px;    /* 辅助文字、L3 行内描述 */
+  --text-sm: 13px;    /* 次要内容、L2 区块说明 */
+  --text-base: 14px;  /* 正文默认 */
+  --text-lg: 16px;    /* 分组标题、强调正文 */
   --text-lg-xl: 18px; /* 对话框标题 */
-  --text-xl: 20px; /* 页面标题 */
-  --text-2xl: 24px; /* 大标题 */
-  --text-3xl: 28px; /* 特大标题 */
-  --text-4xl: 36px; /* 空状态插画/大号数字 */
-  --text-5xl: 48px; /* 超大空状态/引导页主标题 */
+  --text-xl: 20px;    /* 页面标题 */
+  --text-2xl: 24px;   /* 大标题、设置页 h2 */
+  --text-3xl: 28px;   /* 特大标题 */
+  --text-4xl: 36px;   /* 空状态插画、大号数字 */
+  --text-5xl: 48px;   /* 超大空状态、引导页主标题 */
 
-  /* 4. 行高：让文字”呼吸” */
-  --leading-tight: 1.2;
-  --leading-normal: 1.5;
-  --leading-relaxed: 1.6;
+  /* 4. 行高：CJK 优化，中文笔画密集需更宽松行距 */
+  --leading-tight: 1.3;
+  --leading-normal: 1.6;
+  --leading-relaxed: 1.75;
 
   /* --- Design Token System --- */
 
@@ -257,7 +256,7 @@ body, html {
 /* 针对 Windows 的特定优化 */
 @media screen and (os-version: windows-10), screen and (os-version: windows-11) {
   body {
-    font-weight: 400;
+    font-weight: var(--weight-regular);
   }
 }
 
@@ -958,7 +957,7 @@ button:focus-visible {
 /* 文字标签 - 未选中时灰色 */
 .service-toggle .toggle-label {
   font-size: var(--text-base);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: #64748b; /* 未选中时暗灰色 */
   transition: color var(--duration-normal) ease;
 }
@@ -1451,7 +1450,7 @@ button:focus-visible {
 :deep(.p-datatable .p-datatable-thead > tr > th) {
   background-color: var(--bg-secondary) !important;
   color: var(--text-primary) !important;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   font-size: var(--text-sm);
   padding: var(--space-md) var(--space-lg) !important;
   border-bottom: 2px solid var(--border-subtle) !important;
@@ -1492,7 +1491,7 @@ button:focus-visible {
   border: 1px solid var(--border-subtle);
   border-radius: var(--p-border-radius);
   color: var(--text-primary);
-  font-size: var(--text-md);
+  font-size: var(--text-lg);
   padding: var(--space-sm-md) var(--space-md-lg);
   transition: all var(--duration-normal) ease;
   box-shadow: none;
@@ -1515,7 +1514,7 @@ button:focus-visible {
 /* 4. 按钮样式微调 */
 :deep(.p-button) {
   border-radius: var(--p-border-radius);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   transition: all var(--duration-normal) ease;
 }
 
@@ -1550,7 +1549,7 @@ button:focus-visible {
 
 :deep(.p-dialog .p-dialog-header .p-dialog-title) {
   font-size: var(--text-xl);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   color: var(--text-main);
 }
 
@@ -1612,7 +1611,7 @@ button:focus-visible {
   border-radius: var(--radius-sm);
   padding: var(--space-xs) var(--space-sm-md);
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 /* ===== 9. ConfirmDialog 确认对话框样式优化 ===== */
@@ -1647,7 +1646,7 @@ button:focus-visible {
 
 .p-dialog.p-confirmdialog .p-dialog-title {
   font-size: var(--text-lg-xl);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   color: var(--text-main);
 }
 
@@ -1701,7 +1700,7 @@ button:focus-visible {
   padding: var(--space-sm-md) var(--space-xl);
   border-radius: var(--radius-md);
   font-size: var(--text-base);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   transition: all var(--duration-fast) ease;
   order: 1;
 }
@@ -1727,7 +1726,7 @@ button:focus-visible {
   padding: var(--space-sm-md) var(--space-xl);
   border-radius: var(--radius-md);
   font-size: var(--text-base);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   transition: all var(--duration-fast) ease;
   order: 0;
 }
@@ -1831,7 +1830,7 @@ button:focus-visible {
 
 .p-dialog.backup-password-dlg .p-dialog-title {
   font-size: var(--text-lg-xl);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   color: var(--text-main);
 }
 

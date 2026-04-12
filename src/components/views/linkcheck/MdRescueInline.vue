@@ -341,7 +341,7 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
 }
 
 .wk-title-group { display: flex; align-items: center; gap: var(--space-md); }
-.wk-title { font-size: var(--text-base); font-weight: 600; color: var(--text-main); }
+.wk-title { font-size: var(--text-base); font-weight: var(--weight-semibold); color: var(--text-main); }
 .wk-subtitle { font-size: var(--text-sm); color: var(--text-tertiary); }
 .wk-done-icon { font-size: var(--text-lg-xl); color: var(--success); }
 .wk-actions { display: flex; gap: var(--space-sm); }
@@ -369,12 +369,12 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
 .mr-scan-skeleton.is-finishing .mr-scan-skeleton-text { color: var(--success); }
 
 .mr-scan-skeleton-text {
-  flex: 1; min-width: 0; font-size: var(--text-xs); font-weight: 500; color: var(--text-tertiary);
+  flex: 1; min-width: 0; font-size: var(--text-xs); font-weight: var(--weight-medium); color: var(--text-tertiary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 .mr-scan-skeleton-meta {
-  flex-shrink: 0; font-size: var(--text-2xs-xs); color: var(--text-tertiary); font-variant-numeric: tabular-nums;
+  flex-shrink: 0; font-size: var(--text-xs); color: var(--text-tertiary); font-variant-numeric: tabular-nums;
 }
 
 .mr-scan-skeleton-cancel {
@@ -389,7 +389,7 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
 .mr-healthy-stream { display: flex; flex-direction: column; gap: var(--space-2xs); padding: var(--space-sm) var(--space-md-lg); }
 .mr-healthy-row { display: flex; align-items: center; gap: var(--space-sm); height: 32px; font-size: var(--text-xs); animation: k-fade-slide-down 0.25s ease; }
 .mr-healthy-icon { font-size: var(--text-xs); color: var(--success); flex-shrink: 0; }
-.mr-healthy-name { color: var(--text-muted); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.mr-healthy-name { color: var(--text-muted); font-weight: var(--weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
 .mr-healthy-meta { flex-shrink: 0; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 
 /* 全部正常 */
@@ -411,7 +411,7 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
 
 .rescue-stat {
   display: inline-flex; align-items: center; gap: var(--space-xs);
-  font-size: var(--text-xs); font-weight: 500; color: var(--text-muted);
+  font-size: var(--text-xs); font-weight: var(--weight-medium); color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 .rescue-stat-icon { font-size: var(--text-xs); }
@@ -425,10 +425,10 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
 /* 按钮 */
 .btn-ghost, .btn-primary, .btn-danger {
   display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px;
-  border-radius: 7px; font-size: var(--text-xs); font-weight: 500; cursor: pointer;
+  border-radius: 7px; font-size: var(--text-xs); font-weight: var(--weight-medium); cursor: pointer;
   white-space: nowrap; transition: background var(--duration-fast), opacity var(--duration-fast); border: none; font-family: inherit;
 }
-.btn-ghost i, .btn-primary i, .btn-danger i { font-size: var(--text-2xs-xs); }
+.btn-ghost i, .btn-primary i, .btn-danger i { font-size: var(--text-xs); }
 .btn-ghost { background: var(--bg-input); color: var(--text-muted); }
 .btn-ghost:hover:not(:disabled) { background: var(--hover-overlay); color: var(--text-main); }
 .btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }

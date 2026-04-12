@@ -235,7 +235,7 @@ const successfulServices = computed(() => {
   font-size: var(--text-2xs);
   /* stylelint-disable-next-line declaration-property-value-allowed-list -- 深色勾选框上的白色对勾，固定配色 */
   color: white;
-  font-weight: bold;
+  font-weight: var(--weight-bold);
 }
 
 .favorite-btn {
@@ -255,7 +255,7 @@ const successfulServices = computed(() => {
   transition: all var(--duration-normal);
   z-index: 2;
   cursor: pointer;
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
   filter: drop-shadow(0 1px 2px rgb(0 0 0 / 50%));
 }
 
@@ -337,7 +337,7 @@ const successfulServices = computed(() => {
   background: rgb(89 92 96 / 50%);
   border-radius: var(--radius-sm);
   font-size: var(--text-2xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 照片遮罩上的文字阴影，固定配色 */
   text-shadow: 0 1px 2px rgb(0 0 0 / 30%);
   backdrop-filter: blur(4px);

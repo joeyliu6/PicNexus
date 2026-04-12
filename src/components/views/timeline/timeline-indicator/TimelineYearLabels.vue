@@ -52,8 +52,8 @@ const emit = defineEmits<{
   position: absolute;
   right: 4px;
   transform: translateY(-100%);  /* 标签位于年份底部边界上方 */
-  font-size: var(--text-2xs-xs);
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
   color: var(--text-secondary);
   opacity: 0.6;
   transition: all var(--duration-normal) ease;

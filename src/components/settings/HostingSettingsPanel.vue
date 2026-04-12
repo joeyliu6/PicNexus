@@ -128,7 +128,7 @@ watch(() => props.targetCardId, (val) => {
       <div class="group-header-row">
         <label class="group-label">私有存储</label>
         <button class="add-custom-s3-btn" @click="emit('addCustomS3')">
-          <i class="pi pi-plus" style="font-size: var(--text-2xs-xs)"></i>
+          <i class="pi pi-plus" style="font-size: var(--text-xs)"></i>
           <span>添加自定义 S3</span>
         </button>
       </div>

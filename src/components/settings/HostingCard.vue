@@ -275,8 +275,8 @@ const statusDotClass = computed(() => {
 }
 
 .status-text {
-  font-size: var(--text-md);
-  font-weight: 500;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
 }
 

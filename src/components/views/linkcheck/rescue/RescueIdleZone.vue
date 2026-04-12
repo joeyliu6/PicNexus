@@ -119,8 +119,8 @@ onDeactivated(() => { isViewActive.value = false; });
 }
 
 .idle-main-text {
-  font-size: var(--text-md);
-  font-weight: 500;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
   color: var(--text-muted);
   margin-bottom: var(--space-xs-sm);
 }
@@ -140,11 +140,11 @@ onDeactivated(() => { isViewActive.value = false; });
 }
 
 .idle-btn-primary.p-button {
-  flex: 1; padding: 11px 0; font-size: var(--text-base); font-weight: 600; border-radius: var(--radius-md);
+  flex: 1; padding: 11px 0; font-size: var(--text-base); font-weight: var(--weight-semibold); border-radius: var(--radius-md);
 }
 
 .idle-btn-secondary.p-button {
-  flex: 1; padding: 11px 0; font-size: var(--text-base); font-weight: 500; border-radius: var(--radius-md);
+  flex: 1; padding: 11px 0; font-size: var(--text-base); font-weight: var(--weight-medium); border-radius: var(--radius-md);
   border-color: var(--border-subtle); color: var(--text-muted);
 }
 

@@ -59,7 +59,7 @@ const closeWindow = () => {
 
 .app-title {
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
   letter-spacing: 0.5px;
 }

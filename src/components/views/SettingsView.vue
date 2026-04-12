@@ -334,7 +334,7 @@ onUnmounted(() => {
   align-items: center;
   padding: 0 20px;
   font-size: var(--text-lg);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-subtle-light);
 }
@@ -363,7 +363,7 @@ onUnmounted(() => {
   background: transparent;
   color: var(--text-secondary);
   font-size: var(--text-base);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: background-color var(--duration-fast), color var(--duration-fast);
   text-align: left;
@@ -385,7 +385,7 @@ onUnmounted(() => {
 .nav-item.active {
   background-color: var(--primary-alpha-12);
   color: var(--primary);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .nav-item.active .nav-icon {
@@ -399,7 +399,7 @@ onUnmounted(() => {
 }
 
 .version-text {
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-family: var(--font-mono);
   opacity: 0.6;

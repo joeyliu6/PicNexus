@@ -144,7 +144,7 @@ function clearSearch() {
   background: transparent;
   color: var(--text-secondary);
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   position: relative;
   transition: color var(--duration-fast), background var(--duration-fast);
@@ -212,7 +212,7 @@ function clearSearch() {
   padding: 0 6px 0 10px;
   font-size: var(--text-xs);
   color: var(--primary);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   line-height: 28px;
 }
 
@@ -250,7 +250,7 @@ function clearSearch() {
 :deep(.p-select-overlay .p-select-option.p-selected) {
   background: var(--primary-alpha-10);
   color: var(--primary);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 :deep(.p-select-overlay .p-select-option.p-selected:hover) {
@@ -348,7 +348,7 @@ function clearSearch() {
   border-radius: 14px;
   color: var(--primary);
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   flex-shrink: 0;
 }
 
@@ -380,14 +380,14 @@ function clearSearch() {
 
 .stat-val {
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--primary);
   font-variant-numeric: tabular-nums;
 }
 
 .stat-unit {
-  font-size: var(--text-2xs-xs);
-  font-weight: 400;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-regular);
   color: var(--primary);
   opacity: 0.7;
   margin-left: 2px;

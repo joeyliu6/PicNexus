@@ -231,7 +231,7 @@ function onToggleAutoUpdate(v: boolean) {
 }
 
 .new-version-label {
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--primary);
 }
 
@@ -251,7 +251,7 @@ function onToggleAutoUpdate(v: boolean) {
 
 .update-notes-label {
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-muted);
   margin-bottom: 6px;
 }
@@ -289,7 +289,7 @@ function onToggleAutoUpdate(v: boolean) {
 
 .toggle-card .toggle-row-label {
   font-size: var(--text-base);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
 }
 

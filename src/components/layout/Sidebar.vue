@@ -95,7 +95,7 @@ const handleNavigate = (view: ViewType) => {
 }
 
 .nav-btn.nav-btn-active :deep(.p-button-label) {
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-semibold);
 }
 
 .nav-btn.nav-btn-active:hover {

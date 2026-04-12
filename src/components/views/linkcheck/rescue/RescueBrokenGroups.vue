@@ -305,7 +305,7 @@ defineExpose({
 .mr-chip {
   display: inline-flex; align-items: center; gap: 5px;
   height: 26px; padding: 0 var(--space-sm-md); border-radius: 13px;
-  font-size: var(--text-xs); font-weight: 500; cursor: pointer;
+  font-size: var(--text-xs); font-weight: var(--weight-medium); cursor: pointer;
   background: var(--bg-input); color: var(--text-muted);
   border: 1px solid transparent;
   font-family: inherit; white-space: nowrap;
@@ -325,7 +325,7 @@ defineExpose({
   background: var(--bg-input); color: var(--text-tertiary); border-color: transparent;
 }
 
-.mr-chip-count { font-weight: 600; font-variant-numeric: tabular-nums; }
+.mr-chip-count { font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; }
 
 .mr-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: var(--text-tertiary); }
 .mr-dot--amber { background: var(--warning); }
@@ -347,13 +347,13 @@ defineExpose({
 }
 .mr-group-header:hover { background: var(--hover-overlay-subtle); }
 
-.mr-group-chev { font-size: var(--text-2xs-xs); color: var(--text-tertiary); flex-shrink: 0; transition: transform var(--duration-fast); }
+.mr-group-chev { font-size: var(--text-xs); color: var(--text-tertiary); flex-shrink: 0; transition: transform var(--duration-fast); }
 .mr-group-file-icon { font-size: var(--text-base); color: var(--primary); flex-shrink: 0; }
 
 .mr-group-info { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
 
 .mr-group-name {
-  font-size: var(--text-sm); font-weight: var(--weight-bold); color: var(--text-main);
+  font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text-main);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
@@ -363,7 +363,7 @@ defineExpose({
 }
 
 .mr-group-count {
-  font-size: var(--text-2xs-xs); font-weight: 500;
+  font-size: var(--text-xs); font-weight: var(--weight-medium);
   padding: var(--space-2xs) var(--space-sm); border-radius: var(--radius-sm-md);
   background: var(--hover-overlay); color: var(--text-muted);
   flex-shrink: 0; font-variant-numeric: tabular-nums;
@@ -398,7 +398,7 @@ defineExpose({
 .mr-status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 
 .mr-status-label {
-  font-size: var(--text-2xs); font-weight: 600; font-variant-numeric: tabular-nums;
+  font-size: var(--text-2xs); font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   padding: 1px var(--space-xs-sm); border-radius: var(--radius-xs); min-width: 36px; text-align: center;
   white-space: nowrap; cursor: default;
@@ -411,7 +411,7 @@ defineExpose({
 
 .mr-img-name {
   flex: 1 1 auto; min-width: 0;
-  font-size: var(--text-sm); font-weight: 500; color: var(--text-main);
+  font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-main);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
@@ -420,7 +420,7 @@ defineExpose({
   height: 20px; padding: 0 var(--space-sm); border-radius: var(--radius-xs);
   background: var(--bg-input); color: var(--text-muted);
   border: 1px solid var(--border-subtle);
-  font-size: var(--text-2xs-xs); font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: var(--text-xs); font-family: var(--font-mono, 'JetBrains Mono', monospace);
   max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .mr-row:hover .mr-host-badge { background: var(--hover-overlay); }
@@ -432,14 +432,14 @@ defineExpose({
 .mr-inline-select {
   flex-shrink: 0; max-width: 140px;
   height: 22px; padding: 0 var(--space-xs); border-radius: var(--radius-sm-md);
-  font-size: var(--text-2xs-xs); font-family: inherit; color: var(--text-main);
+  font-size: var(--text-xs); font-family: inherit; color: var(--text-main);
   background: var(--primary-alpha-8); border: 1px solid var(--primary-alpha-15);
   cursor: pointer; outline: none;
   transition: border-color var(--duration-fast);
 }
 .mr-inline-select:focus { border-color: var(--primary); }
 
-.mr-no-backup { flex-shrink: 0; font-size: var(--text-2xs-xs); color: var(--text-muted); padding: 0 var(--space-xs-sm); }
+.mr-no-backup { flex-shrink: 0; font-size: var(--text-xs); color: var(--text-muted); padding: 0 var(--space-xs-sm); }
 
 .mr-row-actions {
   display: inline-flex; align-items: center; gap: var(--space-2xs); flex-shrink: 0;
@@ -459,7 +459,7 @@ defineExpose({
 .mr-load-more {
   display: flex; align-items: center; justify-content: center;
   width: 100%; padding: var(--space-sm-md) 0; border: none;
-  background: transparent; color: var(--text-muted); font-size: var(--text-xs); font-weight: 500;
+  background: transparent; color: var(--text-muted); font-size: var(--text-xs); font-weight: var(--weight-medium);
   cursor: pointer; font-family: inherit; font-variant-numeric: tabular-nums;
   transition: color var(--duration-fast);
 }

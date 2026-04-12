@@ -354,7 +354,7 @@ onBeforeUnmount(() => {
   padding: 4px 12px;
   border-radius: 6px;
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: white;
   background: rgb(0 0 0 / 55%);
   backdrop-filter: blur(4px);
@@ -407,7 +407,7 @@ onBeforeUnmount(() => {
   padding: 8px 20px;
   border-radius: 8px;
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--duration-fast);
   border: none;

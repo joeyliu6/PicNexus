@@ -95,7 +95,7 @@ function checkedNames(): string {
 }
 
 .confirm-page-header { width: 100%; margin-bottom: var(--space-lg); }
-.confirm-page-title { font-size: var(--text-lg-xl); font-weight: 700; color: var(--text-primary); margin: 0; }
+.confirm-page-title { font-size: var(--text-lg-xl); font-weight: var(--weight-bold); color: var(--text-primary); margin: 0; }
 .confirm-page-sub { font-size: var(--text-sm); color: var(--text-muted); margin: var(--space-xs) 0 0; }
 
 /* 视觉化图标流 */
@@ -123,7 +123,7 @@ function checkedNames(): string {
   color: var(--primary);
 }
 .confirm-tgt-icon :deep(svg) { width: 24px; height: 24px; }
-.confirm-tgt-name { font-size: var(--text-lg); font-weight: 600; color: var(--text-primary); }
+.confirm-tgt-name { font-size: var(--text-lg); font-weight: var(--weight-semibold); color: var(--text-primary); }
 
 /* 详情卡片 */
 .confirm-card {
@@ -134,7 +134,7 @@ function checkedNames(): string {
 }
 .confirm-row { display: flex; justify-content: space-between; align-items: center; font-size: var(--text-sm); }
 .confirm-row-label { color: var(--text-muted); }
-.confirm-row-value { font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.confirm-row-value { font-weight: var(--weight-semibold); color: var(--text-primary); font-variant-numeric: tabular-nums; }
 
 .confirm-warn {
   display: flex; align-items: center; gap: var(--space-sm);

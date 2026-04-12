@@ -72,7 +72,7 @@ async function copyVersion() {
 
 .app-name {
   font-size: var(--text-lg-xl);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   color: var(--text-primary);
 }
 

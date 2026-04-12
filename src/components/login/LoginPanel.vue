@@ -111,7 +111,7 @@ defineEmits<{
 /* 标题 */
 .dialog-title {
   font-size: var(--text-lg-xl);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-main);
   margin: 0 0 10px;
   text-align: center;
@@ -149,7 +149,7 @@ defineEmits<{
 
 .tip-header span {
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--primary);
 }
 
@@ -173,7 +173,7 @@ defineEmits<{
   height: 40px;
   border-radius: 8px;
   font-size: var(--text-base);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   justify-content: center;
 }
 
@@ -182,7 +182,7 @@ defineEmits<{
   height: 38px;
   border-radius: 8px;
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   justify-content: center;
   border-color: var(--border-subtle);
   color: var(--text-muted);

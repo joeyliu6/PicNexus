@@ -146,7 +146,7 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
   background: var(--bg-card);
   color: var(--text-secondary);
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--duration-fast);
 }
@@ -175,7 +175,7 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
 
 .quality-badge {
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   padding: 2px 8px;
   border-radius: 999px;
   white-space: nowrap;
@@ -296,7 +296,7 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
   background: var(--bg-input);
   color: var(--text-primary);
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--duration-fast);
   white-space: nowrap;

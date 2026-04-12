@@ -31,7 +31,7 @@
 
 .step-title {
   font-size: var(--text-2xl);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-main);
   margin: 0 0 12px;
 }
@@ -68,12 +68,12 @@
 
 .method-label {
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-main);
 }
 
 .method-hint {
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 </style>

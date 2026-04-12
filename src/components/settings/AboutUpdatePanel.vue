@@ -190,7 +190,7 @@ async function openLogDir() {
 
 .link-card-title {
   font-size: var(--text-base);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
 }
 

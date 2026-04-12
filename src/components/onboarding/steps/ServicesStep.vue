@@ -40,7 +40,7 @@
 
 .step-title {
   font-size: var(--text-2xl);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-main);
   margin: 0 0 12px;
 }
@@ -70,8 +70,8 @@
 }
 
 .group-badge {
-  font-size: var(--text-2xs-xs);
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
   padding: 3px 8px;
   border-radius: 6px;
   white-space: nowrap;

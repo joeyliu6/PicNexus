@@ -314,7 +314,7 @@ function handleTemplateChange(template: string | undefined) {
   border-color: var(--primary);
   background-color: var(--primary-alpha-8);
   color: var(--primary);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   box-shadow: 0 0 0 1px var(--primary);
 }
 
@@ -341,7 +341,7 @@ function handleTemplateChange(template: string | undefined) {
 
 .shortcut-label {
   font-size: var(--text-base);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
 }
 
@@ -353,7 +353,7 @@ function handleTemplateChange(template: string | undefined) {
 .format-section-label {
   display: block;
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-secondary);
   margin-bottom: 8px;
 }
@@ -387,7 +387,7 @@ function handleTemplateChange(template: string | undefined) {
   border-color: var(--primary);
   background-color: var(--primary-alpha-8);
   color: var(--primary);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   box-shadow: 0 0 0 1px var(--primary);
 }
 

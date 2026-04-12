@@ -293,7 +293,7 @@ defineExpose({
   background: var(--primary-alpha-15);
   color: var(--primary);
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   line-height: 1.5;
 }
 
@@ -333,7 +333,7 @@ defineExpose({
 
 .field label {
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
 }
 
@@ -407,7 +407,7 @@ defineExpose({
   background: var(--error-alpha-8);
   border: 1px solid var(--error-alpha-15);
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--error);
 }
 
@@ -421,7 +421,7 @@ defineExpose({
   border-radius: 8px !important;
   padding: 12px 20px !important;
   font-size: var(--text-base) !important;
-  font-weight: 600 !important;
+  font-weight: var(--weight-semibold) !important;
   background: var(--bg-button-secondary) !important;
   border: none !important;
   color: white !important;
@@ -436,11 +436,11 @@ defineExpose({
   border-radius: 8px !important;
   padding: 12px 20px !important;
   font-size: var(--text-base) !important;
-  font-weight: 600 !important;
+  font-weight: var(--weight-semibold) !important;
 }
 
 :deep(.dialog-btn-secondary) {
   border-radius: 8px !important;
-  font-weight: 600 !important;
+  font-weight: var(--weight-semibold) !important;
 }
 </style>

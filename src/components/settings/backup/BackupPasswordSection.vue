@@ -223,13 +223,13 @@ defineExpose({
 
 .security-status {
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--success);
 }
 
 .security-status-inactive {
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-muted);
   display: flex;
   align-items: center;

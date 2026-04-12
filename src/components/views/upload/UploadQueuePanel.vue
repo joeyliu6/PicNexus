@@ -106,7 +106,7 @@ defineExpose({
   gap: 10px;
   margin: 0;
   font-size: var(--text-lg-xl);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
 }
 
@@ -117,7 +117,7 @@ defineExpose({
 
 .queue-count {
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-muted);
   margin-left: 2px;
 }
@@ -136,7 +136,7 @@ defineExpose({
   border: none;
   border-radius: 6px;
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--duration-normal) ease;
   background: transparent;

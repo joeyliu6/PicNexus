@@ -108,7 +108,7 @@ const emit = defineEmits<{
 .bubble-date {
   padding: 2px 8px;
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-main);
   letter-spacing: 0.1px;
 }

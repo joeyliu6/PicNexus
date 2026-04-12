@@ -3,18 +3,62 @@
  * CheckFilterBar — 链接监控面板的筛选栏
  * 状态 chips + 图床筛选下拉 + 搜索框
  * 从 HistoryCheckPanel.vue 抽出，纯 UI 展示，状态通过 defineModel 回传父级
+ *
+ * Phase 2 加载态：问题类 Chip（失效/可疑/超时）直接显示数字，
+ * 非问题类 Chip（正常/全部/未检测）在 Phase 2 加载中显示脉冲占位符，
+ * 加载完成后用 countUp 动画展示最终数字。
  */
+import { ref, watch } from 'vue';
 import Skeleton from 'primevue/skeleton';
 import { getServiceIcon } from '../../../../utils/icons';
 import { getServiceDisplayName } from '../../../../constants/serviceNames';
 import type { StatusFilter } from '../../../../types/linkCheck';
 import type { CheckStatsResult } from '../../../../composables/link-check/useCheckStats';
 
-defineProps<{
+const props = defineProps<{
   stats: CheckStatsResult;
   serviceList: { id: string; count: number }[];
   isLoading: boolean;
+  isPhase2Loading: boolean;
+  phase2Duration: number;
 }>();
+
+// ---- countUp 动画 ----
+const animatedValid = ref(0);
+const animatedTotal = ref(0);
+const animatedUnchecked = ref(0);
+
+function countUp(to: number, target: typeof animatedValid, durationMs: number) {
+  if (durationMs <= 0) { target.value = to; return; }
+  const from = target.value;
+  const start = performance.now();
+  const step = (now: number) => {
+    const t = Math.min((now - start) / durationMs, 1);
+    const eased = 1 - (1 - t) ** 3; // ease-out
+    target.value = Math.round(from + (to - from) * eased);
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+// Phase 2 结束时触发 countUp 动画
+watch(() => props.isPhase2Loading, (loading) => {
+  if (!loading) {
+    const dur = props.phase2Duration < 300 ? 0 : 500;
+    countUp(props.stats.valid, animatedValid, dur);
+    countUp(props.stats.total, animatedTotal, dur);
+    countUp(props.stats.unchecked, animatedUnchecked, dur);
+  }
+});
+
+// 缓存命中 / 单条重检等场景：Phase 2 未运行时直接同步真实值
+watch(() => props.stats, (s) => {
+  if (!props.isPhase2Loading) {
+    animatedValid.value = s.valid;
+    animatedTotal.value = s.total;
+    animatedUnchecked.value = s.unchecked;
+  }
+}, { immediate: true });
 
 const statusFilter = defineModel<StatusFilter>('statusFilter', { required: true });
 const selectedServiceId = defineModel<string | null>('selectedServiceId', { required: true });
@@ -62,28 +106,28 @@ const searchFocused = defineModel<boolean>('searchFocused', { required: true });
           超时 {{ stats.timeout }}
         </button>
         <button
-          v-if="stats.unchecked > 0"
-          class="filter-chip chip--unchecked" :class="{ active: statusFilter === 'unchecked' }"
+          v-if="isPhase2Loading || stats.unchecked > 0"
+          class="filter-chip chip--unchecked" :class="{ active: statusFilter === 'unchecked', 'chip--phase2': isPhase2Loading }"
           :aria-pressed="statusFilter === 'unchecked'"
           @click="statusFilter = statusFilter === 'unchecked' ? null : 'unchecked'"
         >
           <span class="chip-dot" style="background: var(--text-tertiary)"></span>
-          未检测 {{ stats.unchecked }}
+          未检测 <span v-if="isPhase2Loading" class="chip-loading-placeholder"></span><template v-else>{{ animatedUnchecked.toLocaleString() }}</template>
         </button>
         <button
-          class="filter-chip chip--valid" :class="{ active: statusFilter === 'valid' }"
+          class="filter-chip chip--valid" :class="{ active: statusFilter === 'valid', 'chip--phase2': isPhase2Loading }"
           :aria-pressed="statusFilter === 'valid'"
           @click="statusFilter = statusFilter === 'valid' ? null : 'valid'"
         >
           <span class="chip-dot" style="background: var(--success)"></span>
-          正常 {{ stats.valid }}
+          正常 <span v-if="isPhase2Loading" class="chip-loading-placeholder"></span><template v-else>{{ animatedValid.toLocaleString() }}</template>
         </button>
         <button
-          class="filter-chip chip--all" :class="{ active: statusFilter === 'all' }"
+          class="filter-chip chip--all" :class="{ active: statusFilter === 'all', 'chip--phase2': isPhase2Loading }"
           :aria-pressed="statusFilter === 'all'"
           @click="statusFilter = statusFilter === 'all' ? null : 'all'"
         >
-          全部 {{ stats.total }}
+          全部 <span v-if="isPhase2Loading" class="chip-loading-placeholder"></span><template v-else>{{ animatedTotal.toLocaleString() }}</template>
         </button>
       </template>
     </div>
@@ -158,7 +202,7 @@ const searchFocused = defineModel<boolean>('searchFocused', { required: true });
 .filter-chip {
   display: inline-flex; align-items: center; gap: 5px;
   height: 26px; padding: 0 10px; border-radius: 13px;
-  font-size: var(--text-xs); font-weight: 500; cursor: pointer;
+  font-size: var(--text-xs); font-weight: var(--weight-medium); cursor: pointer;
   background: var(--bg-input); color: var(--text-muted);
   border: 1px solid transparent;
   transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
@@ -181,6 +225,18 @@ const searchFocused = defineModel<boolean>('searchFocused', { required: true });
   background: var(--warning-alpha-8); color: var(--warning); border-color: var(--warning-alpha-8);
 }
 .chip-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+/* Phase 2 加载占位 */
+.chip-loading-placeholder {
+  display: inline-block;
+  width: 16px;
+  height: 2px;
+  background: currentcolor;
+  opacity: 0.4;
+  vertical-align: middle;
+  animation: k-pulse var(--duration-breathe) ease-in-out infinite;
+}
+.filter-chip.chip--phase2 { pointer-events: none; opacity: 0.6; }
 
 .filter-chip.chip--unchecked.active {
   background: var(--bg-input); color: var(--text-main); border-color: var(--border-subtle);
@@ -213,9 +269,9 @@ const searchFocused = defineModel<boolean>('searchFocused', { required: true });
 }
 .service-dropdown-item:hover { background: var(--hover-overlay); }
 .service-dropdown-item.active { background: var(--primary-alpha-10); }
-.sdi-label { display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); font-weight: 500; color: var(--text-main); }
+.sdi-label { display: flex; align-items: center; gap: 6px; font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-main); }
 .sdi-label .badge-icon { width: 14px; height: 14px; color: var(--text-muted); }
-.sdi-count { font-size: var(--text-2xs-xs); color: var(--text-tertiary); font-family: var(--font-mono, 'JetBrains Mono', monospace); }
+.sdi-count { font-size: var(--text-xs); color: var(--text-tertiary); font-family: var(--font-mono, 'JetBrains Mono', monospace); }
 
 .badge-icon {
   display: inline-flex; flex-shrink: 0;

@@ -253,7 +253,7 @@ function toggleFilter(status: ServiceHealthStatus) {
   padding: var(--space-xs) var(--space-md);
   border-radius: var(--radius-full);
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   transition: all var(--duration-fast) ease;
   white-space: nowrap;
   cursor: pointer;
@@ -318,7 +318,7 @@ function toggleFilter(status: ServiceHealthStatus) {
   border: none;
   color: var(--primary);
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   padding: var(--space-xs-sm) var(--space-md);
   border-radius: var(--radius-md);

@@ -286,7 +286,7 @@ const isAnyForceLoading = computed(() =>
 .row-label {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   flex-shrink: 0;
 }
 
@@ -308,8 +308,8 @@ const isAnyForceLoading = computed(() =>
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: var(--text-2xs-xs);
-  font-weight: 500;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   padding: 2px 8px;
   border-radius: 10px;
   white-space: nowrap;
@@ -342,11 +342,11 @@ const isAnyForceLoading = computed(() =>
   gap: 4px;
   font-size: var(--text-xs);
   color: var(--text-muted);
-  font-weight: 400;
+  font-weight: var(--weight-regular);
 }
 
 .cloud-hint-icon {
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 

@@ -91,8 +91,8 @@ function onQrError() {
 }
 
 .wechat-header-title {
-  font-size: var(--text-md);
-  font-weight: 600;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
 }
 
@@ -129,7 +129,7 @@ function onQrError() {
   background: var(--wechat-green);
   color: var(--wechat-green-text);
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .wechat-badge i {

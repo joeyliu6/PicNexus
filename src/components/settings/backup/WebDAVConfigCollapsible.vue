@@ -363,7 +363,7 @@ function handleTest() {
 
 .tab-btn.active {
   color: var(--primary);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .add-btn {

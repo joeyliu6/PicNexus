@@ -64,7 +64,7 @@ function handleClick() {
 .target-card {
   display: flex; flex-direction: column; gap: var(--space-sm);
   padding: var(--space-md) var(--space-md-lg); background: transparent; border-radius: var(--radius-md);
-  cursor: pointer; border: 1.5px solid transparent;
+  cursor: pointer; border: 1.5px solid var(--border-subtle);
   transition: background var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast);
   user-select: none;
 }
@@ -82,7 +82,7 @@ function handleClick() {
 .target-card--checked:hover {
   transform: scale(1.01);
 }
-.target-card--checked .target-name { color: var(--primary); font-weight: 700; }
+.target-card--checked .target-name { color: var(--primary); font-weight: var(--weight-bold); }
 .target-card--disabled { opacity: 0.5; cursor: not-allowed; }
 .target-card--disabled:hover { background: transparent; border-color: transparent; transform: none; }
 
@@ -92,13 +92,13 @@ function handleClick() {
 .target-icon :deep(svg) { width: 14px; height: 14px; }
 .target-card--checked .target-icon { color: var(--primary); }
 
-.target-name { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); }
+.target-name { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text-primary); }
 
-.target-badge { font-size: var(--text-2xs); font-weight: 500; padding: var(--space-2xs) var(--space-xs-sm); border-radius: var(--radius-sm); }
+.target-badge { font-size: var(--text-2xs); font-weight: var(--weight-medium); padding: var(--space-2xs) var(--space-xs-sm); border-radius: var(--radius-sm); }
 .badge--verified { color: var(--success); background: var(--success-alpha-10); }
 .badge--pending { color: var(--warning); background: var(--warning-alpha-10); }
 .badge--error { color: var(--error); background: var(--error-alpha-10); }
 
 .target-count { font-size: var(--text-xs); color: var(--text-muted); }
-.target-count--active { color: var(--primary); font-weight: 500; }
+.target-count--active { color: var(--primary); font-weight: var(--weight-medium); }
 </style>

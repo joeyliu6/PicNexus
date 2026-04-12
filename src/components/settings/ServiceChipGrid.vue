@@ -101,7 +101,7 @@ const serviceList = computed(() => props.services);
 
 .service-group-title {
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;

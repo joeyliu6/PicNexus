@@ -181,13 +181,13 @@ const presetTooltip = computed(() => {
 
 .drop-text {
   font-size: var(--text-xl);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
   margin: 0;
 }
 
 .drop-hint {
-  font-size: var(--text-md);
+  font-size: var(--text-lg);
   color: var(--text-secondary);
 }
 
@@ -298,7 +298,7 @@ const presetTooltip = computed(() => {
 }
 
 .preset-check {
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
   color: var(--primary);
   width: 14px;
   flex-shrink: 0;
@@ -310,12 +310,12 @@ const presetTooltip = computed(() => {
 }
 
 .preset-item-name {
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .preset-item-desc {
   margin-left: auto;
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
 }

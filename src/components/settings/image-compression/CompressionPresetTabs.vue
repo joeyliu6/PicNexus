@@ -94,7 +94,7 @@ function onEditInput(e: Event) {
   background: var(--bg-card);
   color: var(--text-secondary);
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--duration-fast);
 }
@@ -129,7 +129,7 @@ function onEditInput(e: Event) {
 }
 
 .preset-tab.add-tab .pi {
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
 }
 
 .preset-tab-label {

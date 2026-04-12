@@ -143,7 +143,7 @@ const emit = defineEmits<{
 
 .cell-label {
   color: var(--text-tertiary);
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
   letter-spacing: 0.02em;
   text-shadow: 0 1px 2px rgb(0 0 0 / 40%);
 }
@@ -171,7 +171,7 @@ const emit = defineEmits<{
   border: none;
   background: var(--hover-overlay-subtle);
   color: var(--text-muted);
-  font-size: var(--text-md);
+  font-size: var(--text-lg);
   cursor: pointer;
   display: flex;
   align-items: center;

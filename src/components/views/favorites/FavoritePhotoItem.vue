@@ -177,7 +177,7 @@ const emit = defineEmits<{
   font-size: var(--text-2xs);
   /* stylelint-disable-next-line declaration-property-value-allowed-list -- 深色勾选框上的白色对勾，固定配色 */
   color: white;
-  font-weight: bold;
+  font-weight: var(--weight-bold);
 }
 
 /* 收藏按钮 */
@@ -197,7 +197,7 @@ const emit = defineEmits<{
   transition: all var(--duration-normal);
   z-index: 2;
   cursor: pointer;
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
   filter: drop-shadow(0 1px 2px var(--photo-overlay-bg-hover));
 }
 

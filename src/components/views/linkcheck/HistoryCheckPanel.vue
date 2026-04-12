@@ -16,6 +16,8 @@ const props = defineProps<{
   checkRows: LinkCheckRow[];
   isChecking: boolean;
   isLoading: boolean;
+  isPhase2Loading: boolean;
+  phase2Duration: number;
   progress: BatchCheckProgress | null;
   progressSource: 'monitor' | 'rescue' | null;
 }>();
@@ -101,6 +103,8 @@ function handleRecheckBatch() {
       :stats="stats"
       :service-list="serviceList"
       :is-loading="isLoading"
+      :is-phase2-loading="isPhase2Loading"
+      :phase2-duration="phase2Duration"
       v-model:status-filter="statusFilter"
       v-model:selected-service-id="selectedServiceId"
       v-model:show-service-menu="showServiceMenu"

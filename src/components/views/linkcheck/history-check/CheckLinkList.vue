@@ -163,7 +163,7 @@ const emit = defineEmits<{
 .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 
 .link-filename {
-  font-size: var(--text-sm); font-weight: 500; color: var(--text-main);
+  font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-main);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   flex-shrink: 1; min-width: 0;
 }
@@ -185,7 +185,7 @@ const emit = defineEmits<{
 .badge-icon :deep(svg) { width: 100%; height: 100%; }
 
 .badge-label {
-  font-size: var(--text-2xs-xs); font-weight: 500; color: var(--text-muted);
+  font-size: var(--text-xs); font-weight: var(--weight-medium); color: var(--text-muted);
 }
 
 /* 错误标签 badge */
@@ -193,7 +193,7 @@ const emit = defineEmits<{
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 36px;
   padding: 1px 6px; border-radius: 4px;
-  font-size: var(--text-2xs); font-weight: 600;
+  font-size: var(--text-2xs); font-weight: var(--weight-semibold);
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   flex-shrink: 0; cursor: default;
 }
@@ -207,7 +207,7 @@ const emit = defineEmits<{
 /* 文件名选中 */
 .link-filename.filename-selected {
   color: var(--primary);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 .link-row.row-selected { background: var(--primary-alpha-8) !important; }
 .link-row.row-selected:hover { background: var(--primary-alpha-12) !important; }
@@ -216,7 +216,7 @@ const emit = defineEmits<{
 .recheck-btn, .delete-btn {
   display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;
   border: none; border-radius: 5px; background: transparent; color: var(--text-tertiary);
-  cursor: pointer; transition: background var(--duration-micro), color var(--duration-micro); font-size: var(--text-2xs-xs);
+  cursor: pointer; transition: background var(--duration-micro), color var(--duration-micro); font-size: var(--text-xs);
   flex-shrink: 0;
 }
 
@@ -276,7 +276,7 @@ const emit = defineEmits<{
 .recheck-result-badge {
   display: flex; align-items: center; justify-content: center;
   width: 36px; height: 20px; border-radius: 4px;
-  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
+  font-size: var(--text-2xs); font-weight: var(--weight-semibold); letter-spacing: 0.02em;
   flex-shrink: 0; cursor: default;
   opacity: 1; transition: opacity var(--duration-medium) ease;
 }
@@ -307,14 +307,14 @@ const emit = defineEmits<{
   border-radius: 16px; background: var(--primary-alpha-10); margin-bottom: 4px;
 }
 .hero-icon .pi { font-size: var(--text-2xl); color: var(--primary); }
-.hero-title { font-size: var(--text-lg-xl); font-weight: 700; color: var(--text-main); margin: 0; }
+.hero-title { font-size: var(--text-lg-xl); font-weight: var(--weight-bold); color: var(--text-main); margin: 0; }
 .hero-desc { font-size: var(--text-sm); color: var(--text-muted); margin: 0; }
 
 .hero-cta {
   display: inline-flex; align-items: center; gap: 7px;
   padding: 10px 28px; margin-top: 8px;
   background: var(--primary); color: #fff; border: none; border-radius: 10px;
-  font-size: var(--text-base); font-weight: 600; cursor: pointer;
+  font-size: var(--text-base); font-weight: var(--weight-semibold); cursor: pointer;
   transition: opacity var(--duration-fast), transform var(--duration-micro);
 }
 .hero-cta:hover { opacity: 0.9; }

@@ -101,7 +101,7 @@ function handleToggle(serviceId: string) {
 
 .service-group-label {
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -125,7 +125,7 @@ function handleToggle(serviceId: string) {
   border-radius: 6px;
   color: var(--text-primary);
   font-size: var(--text-base);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   font-family: var(--font-sans);
   cursor: pointer;
   transition: all var(--duration-fast) ease-in-out;
@@ -143,7 +143,7 @@ function handleToggle(serviceId: string) {
   background-color: color-mix(in srgb, var(--primary) 10%, transparent);
   border-color: var(--primary);
   color: var(--primary);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 /* 图床健康状态圆点 */

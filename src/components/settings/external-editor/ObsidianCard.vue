@@ -274,7 +274,7 @@ watch(
 
 .card-service-label {
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
 }
 
@@ -327,7 +327,7 @@ watch(
   background: transparent;
   color: var(--text-muted);
   font-size: var(--text-2xs);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   flex-shrink: 0;
   position: relative;
   top: 1px;
@@ -406,7 +406,7 @@ watch(
   background: var(--bg-card);
   color: var(--text-secondary);
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--duration-fast);
 }

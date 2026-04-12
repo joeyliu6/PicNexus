@@ -204,7 +204,7 @@ function handleCopy(format: LinkFormat): void {
   align-items: center;
   gap: 6px;
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--primary);
   padding: 6px 12px;
   background: var(--primary-alpha-10);
@@ -297,7 +297,7 @@ function handleCopy(format: LinkFormat): void {
   border: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
   cursor: pointer;
   transition: all var(--duration-fast) ease;
   white-space: nowrap;
@@ -312,7 +312,7 @@ function handleCopy(format: LinkFormat): void {
   background: var(--primary-alpha-15);
   border-color: var(--primary);
   color: var(--primary);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .menu-divider {

@@ -16,7 +16,7 @@
 
 .section-header h2 {
   font-size: var(--text-2xl);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   color: var(--text-primary);
   margin: 0 0 var(--space-sm) 0;
 }
@@ -53,7 +53,7 @@
   align-items: center;
   padding: 0 var(--space-xl);
   font-size: var(--text-lg-xl);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -77,7 +77,7 @@
   background: transparent;
   color: var(--text-secondary);
   font-size: var(--text-base);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--duration-normal);
   text-align: left;
@@ -91,7 +91,7 @@
 .nav-item.active {
   background-color: var(--primary-alpha-10);
   color: var(--primary);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .nav-item i {
@@ -99,8 +99,8 @@
 }
 
 .nav-label {
-  font-size: var(--text-2xs-xs);
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
   color: var(--text-muted);
   text-transform: uppercase;
   padding: var(--space-lg) var(--space-md) var(--space-xs-sm);
@@ -147,8 +147,8 @@
 
 .group-label {
   display: block;
-  font-size: var(--text-base);
-  font-weight: 600;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
   margin-bottom: var(--space-sm-md);
 }
@@ -183,7 +183,7 @@
 
 .form-item label {
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-secondary);
 }
 
@@ -195,7 +195,7 @@
 
 .sub-section h3 {
   font-size: var(--text-lg);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
   margin: 0 0 var(--space-md) 0;
   display: flex;
@@ -246,8 +246,8 @@
 
 .section-title-row h3 {
   margin: 0;
-  font-size: var(--text-md);
-  font-weight: 600;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
 }
 
@@ -380,7 +380,7 @@
 }
 
 .font-medium {
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .cursor-pointer {
@@ -403,7 +403,7 @@
 .subsection-title {
   display: block;
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
   margin-bottom: var(--space-xs);
 }
@@ -453,7 +453,7 @@
 
 .toggle-row-label {
   font-size: var(--text-base);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
 }
 
@@ -465,8 +465,8 @@
 /* ==================== 状态标签 ==================== */
 
 .status-badge {
-  font-size: var(--text-2xs-xs);
-  font-weight: 500;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   padding: var(--space-2xs) var(--space-sm);
   border-radius: var(--radius-sm);
   line-height: 1.4;
@@ -527,7 +527,7 @@
 
 .settings-row-label {
   font-size: var(--text-base);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
 }
 
@@ -599,7 +599,7 @@
 
 .card-title {
   font-size: var(--text-base);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
   line-height: 1.3;
 }

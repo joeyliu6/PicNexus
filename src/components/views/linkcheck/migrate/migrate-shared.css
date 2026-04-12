@@ -14,7 +14,7 @@
   padding: 0 var(--space-md);
   border-radius: var(--radius-sm-md);
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   white-space: nowrap;
   border: none;
@@ -31,7 +31,7 @@
   background: var(--primary);
   color: var(--text-on-primary);
 }
-.btn-primary:hover:not(:disabled) { opacity: 0.9; }
+.btn-primary:hover:not(:disabled) { box-shadow: 0 2px 8px var(--primary-alpha-15); }
 .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .btn-ghost {
@@ -89,7 +89,7 @@
   align-items: center;
   gap: var(--space-xs);
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }

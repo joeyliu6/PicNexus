@@ -144,7 +144,7 @@ function handleNext() {
 :deep(.footer-actions .p-button) {
   border-radius: 8px !important;
   padding: 10px 20px !important;
-  font-weight: 600 !important;
+  font-weight: var(--weight-semibold) !important;
 }
 
 :deep(.footer-actions .p-button-outlined) {

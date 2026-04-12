@@ -183,10 +183,10 @@ const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
 /* ===== 按钮 ===== */
 .btn-ghost, .btn-primary, .btn-danger {
   display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px;
-  border-radius: 7px; font-size: var(--text-xs); font-weight: 500; cursor: pointer;
+  border-radius: 7px; font-size: var(--text-xs); font-weight: var(--weight-medium); cursor: pointer;
   white-space: nowrap; transition: background var(--duration-fast), opacity var(--duration-fast); border: none;
 }
-.btn-ghost i, .btn-primary i, .btn-danger i { font-size: var(--text-2xs-xs); }
+.btn-ghost i, .btn-primary i, .btn-danger i { font-size: var(--text-xs); }
 .btn-ghost { background: var(--bg-input); color: var(--text-muted); }
 .btn-ghost:hover { background: var(--hover-overlay); color: var(--text-main); }
 .btn-primary { background: var(--primary); color: #fff; }
@@ -212,8 +212,8 @@ const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
 .check-dropdown-item:not(:last-child) { border-bottom: 1px solid var(--border-subtle); }
 .check-dropdown-item:hover { background: var(--hover-overlay-subtle); }
 .dropdown-text { display: flex; flex-direction: column; gap: 2px; }
-.dropdown-label { font-size: var(--text-sm); font-weight: 500; color: var(--text-main); }
-.dropdown-desc { font-size: var(--text-2xs-xs); color: var(--text-tertiary); }
+.dropdown-label { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-main); }
+.dropdown-desc { font-size: var(--text-xs); color: var(--text-tertiary); }
 
 /* ===== 极简进度条 ===== */
 .progress-bar {
@@ -224,7 +224,7 @@ const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
 .progress-tooltip {
   position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
   padding: 4px 10px; border-radius: 6px; white-space: nowrap;
-  font-size: var(--text-2xs-xs); color: var(--text-main); font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs); color: var(--text-main); font-variant-numeric: tabular-nums;
   background: var(--bg-card); box-shadow: var(--shadow-float);
   border: 1px solid var(--border-subtle); pointer-events: none;
 }
@@ -253,7 +253,7 @@ const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
 
 /* 底栏批量操作模式 */
 .batch-bottom-right { display: flex; align-items: center; gap: 8px; }
-.batch-count { font-size: var(--text-xs); color: var(--text-muted); font-weight: 500; }
+.batch-count { font-size: var(--text-xs); color: var(--text-muted); font-weight: var(--weight-medium); }
 
 /* 下拉动画（复用 settings-shared 定义） */
 .dropdown-enter-active, .dropdown-leave-active { transition: all var(--duration-normal) ease; }

@@ -96,6 +96,7 @@ function handleTargetToggle(serviceId: string) {
         :showAdvancedFilter="showAdvancedFilter"
         :maxSuccessCount="maxSuccessCount"
         @toggle="toggleSourceFilter"
+        @clearFilter="sourceServiceFilter = []"
         @update:showAdvancedFilter="showAdvancedFilter = $event"
         @update:maxSuccessCount="maxSuccessCount = $event"
       />
@@ -204,8 +205,8 @@ function handleTargetToggle(serviceId: string) {
   transition: color var(--duration-fast);
 }
 .unconfigured-hint:hover { color: var(--text-secondary); }
-.unconfigured-link { color: var(--primary); font-weight: 500; }
+.unconfigured-link { color: var(--primary); font-weight: var(--weight-medium); }
 
 /* 底栏追加 */
-.bottom-hl { color: var(--primary); font-weight: 600; }
+.bottom-hl { color: var(--primary); font-weight: var(--weight-semibold); }
 </style>

@@ -122,7 +122,7 @@ function getGroupItemCount(groupId: string): number {
 
 .group-title {
   font-size: var(--text-lg-xl);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
 }
 
@@ -148,7 +148,7 @@ function getGroupItemCount(groupId: string): number {
   }
 
   .group-subtitle {
-    font-size: var(--text-2xs-xs);
+    font-size: var(--text-xs);
   }
 }
 
@@ -158,7 +158,7 @@ function getGroupItemCount(groupId: string): number {
   }
 
   .group-title {
-    font-size: var(--text-md);
+    font-size: var(--text-lg);
   }
 
   .group-subtitle {

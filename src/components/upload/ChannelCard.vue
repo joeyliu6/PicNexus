@@ -184,8 +184,8 @@ function handleRetry() {
   justify-content: center;
   background: transparent;
   color: var(--text-muted);
-  font-weight: 600;
-  font-size: var(--text-2xs-xs);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-xs);
   flex-shrink: 0;
   transition: all var(--duration-normal) ease;
 }
@@ -218,7 +218,7 @@ function handleRetry() {
 
 .channel-name {
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -226,7 +226,7 @@ function handleRetry() {
 }
 
 .status-label {
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -301,7 +301,7 @@ function handleRetry() {
 }
 
 .copy-menu-btn i {
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
 }
 
 .copy-format-menu {

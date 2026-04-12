@@ -50,7 +50,7 @@ defineProps<Props>();
 .cpd-size-badge {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   padding: 3px 10px;
   border-radius: 6px;
 }
@@ -72,7 +72,7 @@ defineProps<Props>();
 
 .cpd-ratio-badge {
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   padding: 3px 10px;
   border-radius: 6px;
 }

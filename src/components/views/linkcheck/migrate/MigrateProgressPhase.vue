@@ -129,9 +129,9 @@ const {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md);
 }
 
-.progress-count-main { font-size: var(--text-4xl); font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1; }
-.progress-count-sep { color: var(--text-tertiary); font-weight: 400; }
-.progress-pct { font-size: var(--text-lg); font-weight: 600; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.progress-count-main { font-size: var(--text-4xl); font-weight: var(--weight-bold); color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1; }
+.progress-count-sep { color: var(--text-tertiary); font-weight: var(--weight-regular); }
+.progress-pct { font-size: var(--text-lg); font-weight: var(--weight-semibold); color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
 .progress-ring { width: 88px; height: 88px; }
 .progress-ring-bg { fill: none; stroke: var(--bg-input); stroke-width: 5; }
@@ -145,15 +145,15 @@ const {
 .progress-stats { width: 100%; display: flex; flex-direction: column; gap: var(--space-xs-sm); margin-top: var(--space-sm); }
 .progress-stat-row { display: flex; justify-content: space-between; align-items: center; font-size: var(--text-xs); }
 .psl { color: var(--text-muted); }
-.psv { font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.psv { font-weight: var(--weight-semibold); color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .psv--success { color: var(--success); }
 .psv--error { color: var(--error); }
-.psv--muted { color: var(--text-tertiary); font-weight: 500; }
+.psv--muted { color: var(--text-tertiary); font-weight: var(--weight-medium); }
 
 /* 右栏：文件流 */
 .file-stream { flex: 1; min-width: 0; padding: var(--space-lg) var(--space-lg-xl); display: flex; flex-direction: column; overflow: hidden; }
 .file-stream-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-sm-md); flex-shrink: 0; }
-.file-stream-title { font-size: var(--text-sm); font-weight: 600; color: var(--text-muted); }
+.file-stream-title { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text-muted); }
 .file-stream-hint { font-size: var(--text-xs); color: var(--text-tertiary); }
 .file-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-2xs); }
 
@@ -170,7 +170,7 @@ const {
 .file-row.skipped .file-name, .file-row.pending .file-name { color: var(--text-muted); }
 
 .file-services { display: flex; gap: var(--space-xs); flex-shrink: 0; }
-.svc-tag { font-size: var(--text-2xs); padding: var(--space-2xs) var(--space-xs-sm); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-muted); font-weight: 500; }
+.svc-tag { font-size: var(--text-2xs); padding: var(--space-2xs) var(--space-xs-sm); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-muted); font-weight: var(--weight-medium); }
 .svc-tag.success { background: var(--success-alpha-10); color: var(--success); }
 .svc-tag.failed { background: var(--error-alpha-10); color: var(--error); }
 

@@ -211,7 +211,7 @@ function handleEditInputMount(el: HTMLInputElement | null) {
 }
 
 .delete-preset-btn .pi {
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
 }
 
 /* --- Compression Preview --- */
@@ -226,14 +226,14 @@ function handleEditInputMount(el: HTMLInputElement | null) {
   background: var(--primary-alpha-8);
   color: var(--primary);
   font-size: var(--text-xs);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--duration-fast);
   flex-shrink: 0;
 }
 
 .preview-btn .pi {
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
   line-height: 1;
 }
 

@@ -42,7 +42,7 @@ const emit = defineEmits<{
 
 .cpd-title {
   font-size: var(--text-lg-xl);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   color: var(--text-primary);
   flex-shrink: 0;
 }

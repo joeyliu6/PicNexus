@@ -23,6 +23,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   toggle: [serviceId: string];
+  clearFilter: [];
   'update:showAdvancedFilter': [value: boolean];
   'update:maxSuccessCount': [value: number];
 }>();
@@ -63,10 +64,10 @@ const totalImages = computed(() =>
     </div>
     <span class="source-summary">
       <template v-if="selectedIds.length > 0 && selectedIds.length === sources.length">
-        已选全部来源，点击取消筛选
+        已选全部来源，<span class="source-summary-action" role="button" tabindex="0" @click="emit('clearFilter')" @keydown.enter.prevent="emit('clearFilter')">点击取消筛选</span>
       </template>
       <template v-else-if="selectedIds.length > 0">
-        已选 {{ selectedIds.length }} 个来源，点击取消筛选
+        已选 {{ selectedIds.length }} 个来源，<span class="source-summary-action" role="button" tabindex="0" @click="emit('clearFilter')" @keydown.enter.prevent="emit('clearFilter')">点击取消筛选</span>
       </template>
       <template v-else>
         共 {{ formatNumber(totalImages) }} 张，分布在 {{ sources.length }} 个图床
@@ -119,7 +120,7 @@ const totalImages = computed(() =>
 }
 .source-row:hover { background: var(--bg-surface-low); }
 .source-row--selected { background: var(--primary-alpha-8); border-color: var(--primary-alpha-15); }
-.source-row--selected .source-name { color: var(--primary); font-weight: 600; }
+.source-row--selected .source-name { color: var(--primary); font-weight: var(--weight-semibold); }
 .source-row--selected .source-icon { color: var(--primary); }
 
 .source-checkbox { flex-shrink: 0; }
@@ -127,12 +128,14 @@ const totalImages = computed(() =>
 
 .source-icon { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-secondary); }
 .source-icon :deep(svg) { width: 14px; height: 14px; }
-.source-name { font-weight: 500; color: var(--text-primary); }
+.source-name { font-weight: var(--weight-medium); color: var(--text-primary); }
 .source-count { font-size: var(--text-xs); color: var(--text-tertiary); font-variant-numeric: tabular-nums; margin-left: auto; }
 
-.tag-public { font-size: var(--text-2xs); font-weight: 500; padding: var(--space-2xs) var(--space-xs-sm); border-radius: var(--radius-sm); background: var(--warning-alpha-10); color: var(--warning); flex-shrink: 0; }
+.tag-public { font-size: var(--text-2xs); font-weight: var(--weight-medium); padding: var(--space-2xs) var(--space-xs-sm); border-radius: var(--radius-sm); background: var(--warning-alpha-10); color: var(--warning); flex-shrink: 0; }
 
 .source-summary { font-size: var(--text-xs); color: var(--text-tertiary); margin-top: var(--space-md); padding-top: var(--space-sm); border-top: 1px solid var(--border-subtle); }
+.source-summary-action { color: var(--primary); cursor: pointer; transition: opacity var(--duration-fast); }
+.source-summary-action:hover { opacity: 0.8; }
 
 /* 高级筛选 */
 .filter-toggle {
@@ -144,7 +147,7 @@ const totalImages = computed(() =>
   transition: color var(--duration-fast);
 }
 .filter-toggle:hover { color: var(--text-secondary); }
-.filter-toggle i:first-child { font-size: var(--text-xs); }
+.filter-toggle i:first-child { font-size: var(--text-xs); width: 14px; text-align: center; }
 .filter-arrow { font-size: var(--text-2xs) !important; margin-left: auto; transition: transform var(--duration-fast); }
 .filter-arrow--open { transform: rotate(180deg); }
 

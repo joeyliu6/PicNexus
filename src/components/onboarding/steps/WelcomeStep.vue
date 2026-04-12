@@ -34,7 +34,7 @@
 
 .step-title {
   font-size: var(--text-2xl);
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   color: var(--text-main);
   margin: 0 0 8px;
 }
@@ -84,7 +84,7 @@
 
 .highlight-item span {
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-main);
 }
 </style>

@@ -254,7 +254,7 @@ function renderPreview(prefix: LinkPrefixItem): string {
 
 .prefix-name {
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
   white-space: nowrap;
 }
@@ -305,13 +305,13 @@ function renderPreview(prefix: LinkPrefixItem): string {
 }
 
 .prefix-vars-hint {
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
   color: var(--text-muted);
   padding-top: 2px;
 }
 
 .prefix-vars-hint code {
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
   padding: 1px 4px;
   background: var(--hover-overlay);
   border-radius: var(--radius-xs-sm);
@@ -328,13 +328,13 @@ function renderPreview(prefix: LinkPrefixItem): string {
 
 .prefix-preview-label {
   display: block;
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
   color: var(--text-muted);
   margin-bottom: var(--space-2xs);
 }
 
 .prefix-preview-url {
-  font-size: var(--text-2xs-xs);
+  font-size: var(--text-xs);
   color: var(--primary);
   font-family: var(--font-mono);
   word-break: break-all;

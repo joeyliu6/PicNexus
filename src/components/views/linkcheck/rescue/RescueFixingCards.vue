@@ -83,13 +83,13 @@ function getFileBrokenLinks(filePath: string) {
 .fixing-card--pending .fixing-card-icon { color: var(--text-tertiary); }
 
 .fixing-card-name {
-  flex: 1; font-size: var(--text-base); font-weight: 500; color: var(--text-main);
+  flex: 1; font-size: var(--text-base); font-weight: var(--weight-medium); color: var(--text-main);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 .fixing-card--done .fixing-card-name { color: var(--success); }
 
-.fixing-card-status { font-size: var(--text-xs); font-weight: 500; flex-shrink: 0; }
+.fixing-card-status { font-size: var(--text-xs); font-weight: var(--weight-medium); flex-shrink: 0; }
 .fixing-card--done .fixing-card-status { color: var(--success); }
 .fixing-card--active .fixing-card-status { color: var(--warning); }
 .fixing-card--pending .fixing-card-status { color: var(--text-tertiary); }
@@ -100,7 +100,7 @@ function getFileBrokenLinks(filePath: string) {
 
 .fixing-link-row {
   display: flex; align-items: center; gap: var(--space-sm);
-  font-size: var(--text-2xs-xs); font-family: var(--font-mono, 'JetBrains Mono', monospace); color: var(--text-muted);
+  font-size: var(--text-xs); font-family: var(--font-mono, 'JetBrains Mono', monospace); color: var(--text-muted);
 }
 
 .fixing-link-ok { color: var(--success); font-size: var(--text-base); }
