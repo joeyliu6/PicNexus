@@ -33,6 +33,22 @@ export default {
   defaultSeverity: 'error',
   rules: {
 
+    // ══════════════���════════════════════════���═══════════
+    //  命名 & 格式覆盖 — 适配项目 BEM 约定
+    // ═══════════════════════════════════════════════════
+
+    // BEM: .block-name__element--modifier（允许双下划线 + 双连字符修饰符）
+    'selector-class-pattern': [
+      '^[a-z][a-z0-9]*(-[a-z0-9]+)*(__[a-z0-9]+(-[a-z0-9]+)*)?(--[a-z0-9]+(-[a-z0-9]+)*)?$',
+      { message: '类名应使用 kebab-case 或 BEM（block__element--modifier）' },
+    ],
+
+    // Vue scoped 样式中修饰符常导致误报，关闭
+    'no-descending-specificity': null,
+
+    // 项目紧凑风格：允许单行多声明
+    'declaration-block-single-line-max-declarations': null,
+
     // ═══════════════════════════════════════════════════
     //  白名单 — 单值属性只允许 var(--*) + CSS 关键字
     // ═══════════════════════════════════════════════════
