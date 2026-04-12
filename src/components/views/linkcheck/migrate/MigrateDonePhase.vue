@@ -77,9 +77,10 @@ async function exportResult() {
           <span class="dsv dsv--success">{{ formatNumber(migrateResult.successCount) }}</span>
         </div>
         <div class="done-stat-row">
-          <span class="dsl" v-tooltip.top="'图片已在目标图床中，无需重复迁移'">跳过</span>
-          <span class="dsv">{{ formatNumber(migrateResult.skippedCount) }}</span>
+          <span class="dsl">跳过</span>
+          <span class="dsv dsv--skip">{{ formatNumber(migrateResult.skippedCount) }}</span>
         </div>
+        <p v-if="migrateResult.skippedCount > 0" class="done-skip-hint">图片已在目标图床中，无需重复迁移</p>
         <div v-if="migrateResult.failedCount > 0" class="done-stat-row">
           <span class="dsl">失败</span>
           <span class="dsv dsv--error">{{ formatNumber(migrateResult.failedCount) }}</span>
@@ -129,24 +130,13 @@ async function exportResult() {
 
   <div class="bottom">
     <div class="bottom-main">
-      <div class="bottom-left" v-if="migrateResult">
-        <span class="bottom-stat">
-          <span class="bottom-dot bottom-dot--success" /> 成功 {{ formatNumber(migrateResult.successCount) }}
-        </span>
-        <span v-if="migrateResult.skippedCount > 0" class="bottom-stat" v-tooltip.top="'图片已在目标图床中，无需重复迁移'">
-          跳过 {{ formatNumber(migrateResult.skippedCount) }}
-        </span>
-        <span v-if="migrateResult.failedCount > 0" class="bottom-stat">
-          <span class="bottom-dot bottom-dot--error" /> 失败 {{ formatNumber(migrateResult.failedCount) }}
-        </span>
-      </div>
       <div class="bottom-actions">
-        <button v-if="migrateResult?.failedCount" class="btn-ghost" @click="retryFailed">
+        <button v-if="migrateResult?.failedCount" class="btn-primary" @click="retryFailed">
           重试失败项
         </button>
         <button class="btn-ghost" @click="exportResult">导出</button>
         <span class="action-divider" />
-        <button class="btn-primary" @click="resetToConfiguring">完成</button>
+        <button :class="migrateResult?.failedCount ? 'btn-ghost' : 'btn-primary'" @click="resetToConfiguring">完成</button>
       </div>
     </div>
   </div>
@@ -166,7 +156,7 @@ async function exportResult() {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md-lg);
 }
 
-.done-icon i { font-size: var(--text-5xl); }
+.done-icon i { font-size: var(--text-3xl); }
 .done-icon--success i { color: var(--success); }
 .done-icon--warning i { color: var(--warning); }
 .done-icon--error i { color: var(--error); }
@@ -176,9 +166,11 @@ async function exportResult() {
 .done-stats { width: 100%; display: flex; flex-direction: column; gap: var(--space-sm); margin-top: var(--space-sm); }
 .done-stat-row { display: flex; justify-content: space-between; align-items: center; font-size: var(--text-sm); }
 .dsl { color: var(--text-muted); }
-.dsv { font-weight: var(--weight-bold); font-size: var(--text-lg-xl); color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.dsv { font-weight: var(--weight-bold); font-size: var(--text-lg); color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .dsv--success { color: var(--success); }
 .dsv--error { color: var(--error); }
+.dsv--skip { color: var(--text-muted); }
+.done-skip-hint { font-size: var(--text-xs); color: var(--text-muted); margin: 0; text-align: center; }
 
 .done-detail { flex: 1; min-width: 0; padding: var(--space-xl) var(--space-lg-xl); display: flex; flex-direction: column; overflow: hidden; }
 .done-detail-title { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text-muted); margin-bottom: var(--space-sm-md); flex-shrink: 0; }
@@ -195,8 +187,5 @@ async function exportResult() {
 .done-fail-msg { font-size: var(--text-xs); color: var(--text-muted); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 底栏追加 */
-.bottom-dot { width: 6px; height: 6px; border-radius: var(--radius-full); flex-shrink: 0; }
-.bottom-dot--success { background: var(--success); }
-.bottom-dot--error { background: var(--error); }
 .action-divider { width: 1px; height: 16px; background: var(--border-subtle); flex-shrink: 0; }
 </style>

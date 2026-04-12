@@ -51,7 +51,7 @@ const {
           <span class="psv psv--error">{{ formatNumber(cumulativeCounts.failed) }}</span>
         </div>
         <div class="progress-stat-row">
-          <span class="psl">速度</span>
+          <span class="psl">平均速度</span>
           <span class="psv psv--muted">{{ formatSpeed(averageSpeed) }}</span>
         </div>
         <div class="progress-stat-row">
