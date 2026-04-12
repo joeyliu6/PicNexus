@@ -58,11 +58,3 @@ export function buildUploadFailureTooltip(
   return `${serviceName}上传失败：${ensureTrailingPeriod(reason)}点击右侧重试。`;
 }
 
-export function buildHistoryFailureLine(
-  serviceName: string,
-  error?: string,
-  aliases: string[] = []
-): string {
-  const reason = normalizeUploadFailureReason(serviceName, error, aliases);
-  return reason ? `${serviceName}：${reason}` : `${serviceName}：上传失败`;
-}

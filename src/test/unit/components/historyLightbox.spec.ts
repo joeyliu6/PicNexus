@@ -110,32 +110,7 @@ describe('HistoryLightbox', () => {
     return mockPswpEl.querySelector(selector);
   }
 
-  it('shows failed services with normalized tooltip content', () => {
-    mountLightbox(makeHistoryItem([
-      {
-        serviceId: 'jd',
-        status: 'success',
-        result: {
-          serviceId: 'jd',
-          fileKey: 'key-1',
-          url: 'https://example.com/success.jpg',
-        },
-      },
-      {
-        serviceId: 'upyun',
-        status: 'failed',
-        error: 'upyun 上传失败: 又拍云上传失败: 上传失败: service error',
-      },
-    ]));
-
-    const failedCell = findInTeleport('.cell-failed');
-    expect(failedCell).not.toBeNull();
-    expect(failedCell!.textContent).toContain('又拍云');
-    expect(failedCell!.textContent).toContain('失败图床');
-    expect(failedCell!.getAttribute('data-tooltip')).toBe('又拍云：service error');
-  });
-
-  it('does not render failed service section when all services succeed', () => {
+  it('renders bottom bar with successful services info', () => {
     mountLightbox(makeHistoryItem([
       {
         serviceId: 'jd',
@@ -148,6 +123,10 @@ describe('HistoryLightbox', () => {
       },
     ]));
 
+    const sourceCell = findInTeleport('.cell-source');
+    expect(sourceCell).not.toBeNull();
+    expect(sourceCell!.textContent).toContain('已传图床');
+    // 不应存在失败图床列
     expect(findInTeleport('.cell-failed')).toBeNull();
   });
 });

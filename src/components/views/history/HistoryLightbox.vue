@@ -69,9 +69,6 @@ const isItemFavorited = computed(() => {
 const {
   displayFileName,
   successfulServicesText,
-  failedResults,
-  failedServicesText,
-  failedServicesTooltip,
 } = useLightboxInfo(itemRef);
 
 // ── 操作 ────────────────────────────────────
@@ -111,9 +108,6 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
       :item="item"
       :display-file-name="displayFileName"
       :successful-services-text="successfulServicesText"
-      :failed-results="failedResults"
-      :failed-services-text="failedServicesText"
-      :failed-services-tooltip="failedServicesTooltip"
       :is-item-favorited="isItemFavorited"
       @copy-link="handleCopyLink"
       @open-browser="openInBrowser"

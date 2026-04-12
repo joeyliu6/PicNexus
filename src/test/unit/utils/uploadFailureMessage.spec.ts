@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildHistoryFailureLine,
   buildUploadFailureTooltip,
   normalizeUploadFailureReason,
 } from '../../../utils/uploadFailureMessage';
@@ -35,7 +34,4 @@ describe('uploadFailureMessage', () => {
     ).toBe('又拍云上传失败：service error。点击右侧重试。');
   });
 
-  it('builds a history line with fallback text when reason is empty', () => {
-    expect(buildHistoryFailureLine('又拍云')).toBe('又拍云：上传失败');
-  });
 });

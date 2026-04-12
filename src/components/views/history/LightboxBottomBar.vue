@@ -6,9 +6,6 @@ defineProps<{
   item: HistoryItem;
   displayFileName: string;
   successfulServicesText: string;
-  failedResults: Array<{ serviceId: string; error?: string; status: string }>;
-  failedServicesText: string;
-  failedServicesTooltip: string;
   isItemFavorited: boolean;
 }>();
 
@@ -44,16 +41,6 @@ const emit = defineEmits<{
       <span class="cell-value source-value">{{ successfulServicesText }}</span>
       <span class="cell-label">已传图床</span>
     </div>
-    <template v-if="failedResults.length > 0">
-      <div class="lightbox-divider"></div>
-      <div
-        class="lightbox-info-cell cell-failed"
-        v-tooltip.top="failedServicesTooltip"
-      >
-        <span class="cell-value source-value">{{ failedServicesText }}</span>
-        <span class="cell-label">失败图床</span>
-      </div>
-    </template>
     <div class="lightbox-actions">
       <button
         class="action-btn"
@@ -120,11 +107,6 @@ const emit = defineEmits<{
 
 .cell-source {
   flex: 1.5;
-  flex-shrink: 1;
-}
-
-.cell-failed {
-  flex: 1.6;
   flex-shrink: 1;
 }
 
