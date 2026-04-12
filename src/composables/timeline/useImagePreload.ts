@@ -64,10 +64,17 @@ export function useImagePreload(options: UseImagePreloadOptions) {
     const currentVisibleIds = new Set(visibleItems.value.map(v => v.meta.id));
     const metas = allMetas.value;
 
-    // 找到当前可见区域的边界索引
+    // 找到当前可见区域的边界索引（单次遍历，找到两个目标后提前退出，避免 2×O(n)）
     const visibleMetaIds = visibleItems.value.map(v => v.meta.id);
-    const firstVisibleIndex = metas.findIndex(meta => meta.id === visibleMetaIds[0]);
-    const lastVisibleIndex = metas.findIndex(meta => meta.id === visibleMetaIds[visibleMetaIds.length - 1]);
+    const firstId = visibleMetaIds[0];
+    const lastId = visibleMetaIds[visibleMetaIds.length - 1];
+    let firstVisibleIndex = -1;
+    let lastVisibleIndex = -1;
+    for (let i = 0; i < metas.length; i++) {
+      if (metas[i].id === firstId) firstVisibleIndex = i;
+      if (metas[i].id === lastId) lastVisibleIndex = i;
+      if (firstVisibleIndex !== -1 && lastVisibleIndex !== -1) break;
+    }
 
     if (firstVisibleIndex === -1 || lastVisibleIndex === -1) return;
 

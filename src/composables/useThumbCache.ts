@@ -2,7 +2,7 @@
  * 缩略图缓存 composable
  * 用于两个视图（表格/瀑布流）共享缩略图 URL 缓存
  */
-import { watch } from 'vue';
+import { watch, effectScope } from 'vue';
 import type { HistoryItem, UserConfig } from '../config/types';
 import type { ImageMeta } from '../types/image-meta';
 import type { QueueItem } from '../uploadQueue';
@@ -207,7 +207,11 @@ export function getThumbnailCandidates(
 
   // 只对 HistoryItem 使用缓存（QueueItem 状态会动态变化）
   if (!isQueueItem && thumbnailCandidatesCache.has(cacheKey)) {
-    return thumbnailCandidatesCache.get(cacheKey)!;
+    const cached = thumbnailCandidatesCache.get(cacheKey)!;
+    // 命中时移到末尾，维持真 LRU 顺序（Map 按插入顺序迭代）
+    thumbnailCandidatesCache.delete(cacheKey);
+    thumbnailCandidatesCache.set(cacheKey, cached);
+    return cached;
   }
 
   const candidates: string[] = [];
@@ -280,7 +284,7 @@ export function getThumbnailCandidates(
 
 
 /**
- * 设置缩略图缓存（带 LRU 淘汰）
+ * 设置缩略图缓存（写入末尾；超限时淘汰头部最久未访问项，实现真 LRU）
  */
 function setThumbCache(id: string, url: string | undefined): void {
   // 如果超过上限，删除最早的条目（Map 保持插入顺序）
@@ -305,9 +309,12 @@ function clearThumbCache(): void {
  * 其他图床：直接返回原图 URL
  */
 function getThumbUrl(item: HistoryItem, config: ReturnType<typeof useConfigManager>['config']['value']): string | undefined {
-  // 检查缓存
+  // 检查缓存（命中时移到末尾，维持真 LRU 顺序）
   if (thumbUrlCache.has(item.id)) {
-    return thumbUrlCache.get(item.id);
+    const cached = thumbUrlCache.get(item.id);
+    thumbUrlCache.delete(item.id);
+    thumbUrlCache.set(item.id, cached);
+    return cached;
   }
 
   if (!item.results || item.results.length === 0) {
@@ -391,6 +398,47 @@ function getLargeImageUrl(item: HistoryItem, config: ReturnType<typeof useConfig
   return result.result.url;
 }
 
+/** 模块级 watcher 是否已初始化（只注册一次，避免多实例重复注册） */
+let watchersInitialized = false;
+
+/**
+ * 使用 effectScope(true) 注册模块级 watcher。
+ * effectScope(true) = 脱离组件生命周期的独立 scope，watcher 随应用存活而持续运行。
+ * 只在首次调用 useThumbCache() 时执行一次，解决多组件同时使用时重复注册的问题。
+ */
+function initModuleWatchers(
+  configManager: ReturnType<typeof useConfigManager>,
+  historyManager: ReturnType<typeof useHistoryManager>,
+): void {
+  if (watchersInitialized) return;
+  watchersInitialized = true;
+
+  const scope = effectScope(true);
+  scope.run(() => {
+    // 数据变化时增量清理（只删除已移除项的缓存）
+    watch(() => historyManager.imageMetas.value, (newMetas) => {
+      const newIds = new Set(newMetas.map(m => m.id));
+      for (const id of thumbUrlCache.keys()) {
+        if (!newIds.has(id)) {
+          thumbUrlCache.delete(id);
+          thumbnailCandidatesCache.delete(id);
+        }
+      }
+    }, { deep: false });
+
+    // 监听影响 URL 的前缀配置项变化
+    watch(
+      () => configManager.config.value?.linkPrefixConfig?.enabled,
+      clearThumbCache
+    );
+
+    watch(
+      () => configManager.config.value?.linkPrefixConfig?.selectedIndex,
+      clearThumbCache
+    );
+  });
+}
+
 /**
  * 缩略图缓存 composable
  */
@@ -398,27 +446,7 @@ export function useThumbCache() {
   const configManager = useConfigManager();
   const historyManager = useHistoryManager();
 
-  // 数据变化时增量清理（只删除已移除项的缓存）
-  watch(() => historyManager.imageMetas.value, (newMetas) => {
-    const newIds = new Set(newMetas.map(m => m.id));
-    for (const id of thumbUrlCache.keys()) {
-      if (!newIds.has(id)) {
-        thumbUrlCache.delete(id);
-        thumbnailCandidatesCache.delete(id); // 同时清理候选列表缓存
-      }
-    }
-  }, { deep: false });
-
-  // 监听影响 URL 的前缀配置项变化
-  watch(
-    () => configManager.config.value?.linkPrefixConfig?.enabled,
-    clearThumbCache
-  );
-
-  watch(
-    () => configManager.config.value?.linkPrefixConfig?.selectedIndex,
-    clearThumbCache
-  );
+  initModuleWatchers(configManager, historyManager);
 
   return {
     /**

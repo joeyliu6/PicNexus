@@ -36,6 +36,9 @@ export function useImageLoadManager(
   /** 图片加载重试次数 */
   const imageRetryCount = new Map<string, number>();
 
+  /** 重试定时器集合（onUnmounted 时全部取消，防止 unmount 后仍触发无效请求） */
+  const retryTimers = new Set<ReturnType<typeof setTimeout>>();
+
   /** 清理定时器 */
   let cleanupTimer: number | undefined;
 
@@ -94,7 +97,8 @@ export function useImageLoadManager(
       const originalSrc = img.src;
       // 离屏预加载的 Image 对象不在 DOM 中，重试始终安全
       const isOffscreen = !img.isConnected;
-      setTimeout(() => {
+      const timer = setTimeout(() => {
+        retryTimers.delete(timer);
         // 模板中的 img：如果已被虚拟滚动移出 DOM，跳过重试避免操作过期引用
         if (!isOffscreen && !img.isConnected) return;
         if (originalSrc) {
@@ -102,6 +106,7 @@ export function useImageLoadManager(
           img.src = originalSrc;
         }
       }, 500);
+      retryTimers.add(timer);
     } else {
       const newSet = new Set(failedImages.value);
       newSet.add(id);
@@ -184,6 +189,8 @@ export function useImageLoadManager(
     failedImages.value = new Set();
     lastVisibleTime.clear();
     imageRetryCount.clear();
+    for (const t of retryTimers) clearTimeout(t);
+    retryTimers.clear();
   }
 
   // 组件卸载时清理

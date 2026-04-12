@@ -43,10 +43,10 @@ export class EncryptedStore {
   }
 
   /**
-   * 获取数据文件的绝对路径
+   * 同时返回数据文件路径和应用数据目录（一次 IPC 获取两个路径，避免重复调用 appDataDir）
    * @throws {StoreError} 如果无法获取应用数据目录
    */
-  private async getDataPath(): Promise<string> {
+  private async getPaths(): Promise<{ dataPath: string; appDir: string }> {
     try {
       const appDir = await appDataDir();
       if (!appDir) {
@@ -56,11 +56,19 @@ export class EncryptedStore {
       if (!dataPath) {
         throw new StoreError('无法构建数据文件路径', 'init', undefined, new Error('join returned null or undefined'));
       }
-      return dataPath;
+      return { dataPath, appDir };
     } catch (error) {
       if (error instanceof StoreError) throw error;
       throw new StoreError(`获取数据路径失败: ${toErrorMessage(error)}`, 'init', undefined, error);
     }
+  }
+
+  /**
+   * 获取数据文件的绝对路径
+   * @throws {StoreError} 如果无法获取应用数据目录
+   */
+  private async getDataPath(): Promise<string> {
+    return (await this.getPaths()).dataPath;
   }
 
   /**
@@ -369,8 +377,7 @@ export class EncryptedStore {
    * @param key 当前触发写入的 key（仅用于 StoreError 的 key 字段，便于 UI 层错误分派）
    */
   async writeAll(data: StoreData, key?: string): Promise<void> {
-    const dataPath = await this.getDataPath();
-    const appDir = await appDataDir();
+    const { dataPath, appDir } = await this.getPaths();
 
     try {
       await mkdir(appDir, { recursive: true });
@@ -437,7 +444,13 @@ export class EncryptedStore {
   async readRawAll(): Promise<StoreData | null> {
     const dataPath = await this.getDataPath();
     if (!(await exists(dataPath))) return null;
-    const content = await readTextFile(dataPath);
+    let content: string;
+    try {
+      content = await readTextFile(dataPath);
+    } catch (readError) {
+      const errorMsg = toErrorMessage(readError);
+      throw new StoreError(`读取文件失败: ${errorMsg}`, 'read', undefined, readError);
+    }
     if (!content || !content.trim()) return null;
     const trimmed = content.trim();
     let decoded = content;
