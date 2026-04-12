@@ -1,9 +1,27 @@
-// Stylelint config for PicNexus (Vue 3 SFC)
-// 官方预设: https://github.com/ota-meshi/stylelint-config-standard-vue
-// 策略：只把 CLAUDE.md 明文硬禁令（font-size / z-index 必须用 CSS 变量）配成规则，
-// 其余走 stylelint-config-standard-vue 默认。第一阶段 defaultSeverity=warning 不 block。
+// Stylelint 配置 — PicNexus (Vue 3 SFC)
+// ─────────────────────────────────────
+// 把 CLAUDE.md + tokens.md 的全部硬编码禁令转为 error 级规则，
+// 提交时 lint-staged 自动拦截（仅影响被改动的文件）。
+// 正当例外用行内注释豁免：/* stylelint-disable-next-line <rule> */
 
 /** @type {import('stylelint').Config} */
+
+// ── 共享白名单片段 ────────────────────────────────
+const RESET = ['/^inherit$/', '/^unset$/', '/^initial$/', '/^revert$/'];
+
+const COLOR_ALLOWED = [
+  '/^var\\(--.+\\)$/',
+  ...RESET,
+  '/^currentcolor$/i',
+  '/^transparent$/',
+];
+
+// ── 共享黑名单正则 ────────────────────────────────
+const RAW_LENGTH   = '/\\d+\\.?\\d*(px|r?em)/';      // 8px · 1.5rem · .5em
+const RAW_TIME     = '/\\d+\\.?\\d*m?s/';             // 200ms · 0.3s · 1s
+const RAW_HEX      = '/#[\\da-f]{3,8}/i';             // #fff · #f5f5f5
+const RAW_COLOR_FN = '/(?:rgb|hsl)a?\\s*\\(/i';       // rgb() · rgba() · hsl()
+
 export default {
   extends: ['stylelint-config-standard-vue'],
   ignoreFiles: [
@@ -12,28 +30,76 @@ export default {
     'src-tauri/**',
     'sidecar/**',
   ],
-  defaultSeverity: 'warning',
+  defaultSeverity: 'error',
   rules: {
-    // CLAUDE.md 硬禁令：字号必须用 CSS 变量
-    // 允许: var(--*), inherit, unset, 0（少数场景下 0px 无单位）
-    'declaration-property-value-allowed-list': {
-      'font-size': [
-        '/^var\\(--.+\\)$/',
-        '/^inherit$/',
-        '/^unset$/',
-        '/^0$/',
-      ],
-      // z-index 分两类：
-      // 1) 全局层级必须用 var(--z-*)
-      // 2) 同一堆叠上下文内的相对整数 (0-20) 允许硬编码，属于 stylelint 例外
-      //    例外依据见 docs/design/tokens.md#z-index-scale
-      'z-index': [
-        '/^var\\(--.+\\)$/',
-        '/^auto$/',
-        '/^(0|[1-9]|1[0-9]|20)$/',
-      ],
-    },
-    // stylelint-config-standard-vue 默认已禁止 color-no-hex 之类，无需额外配置
-    // 先让 standard 预设的规则暴露出来，再根据实际命中量调整
+
+    // ═══════════════════════════════════════════════════
+    //  白名单 — 单值属性只允许 var(--*) + CSS 关键字
+    // ═══════════════════════════════════════════════════
+    'declaration-property-value-allowed-list': [
+      {
+        // ── 字号 (tokens.md #typography-scale) ──
+        'font-size': [
+          '/^var\\(--.+\\)$/',
+          ...RESET,
+          '/^0$/',
+          '/^calc\\(.+\\)$/',    // calc/clamp 内部允许硬编码
+          '/^clamp\\(.+\\)$/',
+        ],
+
+        // ── z-index (tokens.md #z-index-scale) ──
+        // 全局层级 → var(--z-*)；局部堆叠 ≤ 20 允许硬编码
+        'z-index': [
+          '/^var\\(--.+\\)$/',
+          '/^auto$/',
+          '/^-?(0|[1-9]|1[0-9]|20)$/',
+        ],
+
+        // ── 所有颜色属性 ──
+        // 匹配 color / background-color / border-*-color / outline-color 等
+        // (?!--) 排除 CSS 自定义属性，以免影响主题文件中的变量定义
+        '/^(?!--).*color$/': COLOR_ALLOWED,
+        'fill':   [...COLOR_ALLOWED, '/^none$/'],
+        'stroke': [...COLOR_ALLOWED, '/^none$/'],
+
+        // ── 动效时长 longhand (tokens.md #duration-token) ──
+        'transition-duration': ['/^var\\(--.+\\)$/', ...RESET, '/^0s?$/'],
+        'animation-duration':  ['/^var\\(--.+\\)$/', ...RESET, '/^0s?$/'],
+      },
+      {
+        message: '禁止硬编码，请使用 CSS 变量 → docs/design/tokens.md',
+      },
+    ],
+
+    // ═══════════════════════════════════════════════════
+    //  黑名单 — 多值/shorthand 禁止裸数值和裸颜色
+    // ═══════════════════════════════════════════════════
+    'declaration-property-value-disallowed-list': [
+      {
+        // ── 间距 (tokens.md #spacing-scale) ──
+        '/^margin/':  [RAW_LENGTH],
+        '/^padding/': [RAW_LENGTH],
+        'gap':        [RAW_LENGTH],
+        'row-gap':    [RAW_LENGTH],
+        'column-gap': [RAW_LENGTH],
+
+        // ── 圆角 (tokens.md #radius-scale) ──
+        '/border.*radius/': [RAW_LENGTH],
+
+        // ── 动效 shorthand (tokens.md #duration-token) ──
+        'transition': [RAW_TIME],
+        'animation':  [RAW_TIME],
+
+        // ── shorthand 里的裸颜色 ──
+        'background':                             [RAW_HEX, RAW_COLOR_FN],
+        '/^border(-(top|right|bottom|left))?$/':  [RAW_HEX, RAW_COLOR_FN],
+        'outline':                                [RAW_HEX, RAW_COLOR_FN],
+        'box-shadow':                             [RAW_HEX, RAW_COLOR_FN],
+        'text-shadow':                            [RAW_HEX, RAW_COLOR_FN],
+      },
+      {
+        message: '禁止硬编码数值/颜色，请使用 CSS 变量 → docs/design/tokens.md',
+      },
+    ],
   },
 };
