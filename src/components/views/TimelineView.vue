@@ -140,6 +140,7 @@ const {
   viewportHeight,
   visibleItems,
   isCalculating,
+  isLoading: viewState.isLoading,
   visible: computed(() => props.visible),
   activationTrigger: computed(() => props.activationTrigger),
   callbacks: {
@@ -147,6 +148,7 @@ const {
     scrollToProgress,
     scrollToItem,
     forceUpdateVisibleArea,
+    hasItem: (id: string) => layoutResult.value?.itemPositionMap.has(id) ?? false,
   },
 });
 

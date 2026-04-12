@@ -3,7 +3,7 @@
  * 时间轴指示器组件
  * 特性：年份标签、密度轨道、拖拽气泡、可见区域指示
  */
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import type { TimePeriodStats } from '../../../composables/useHistory';
 import { filterMonthPoints, type FilteredPoint } from '../../../utils/timelineFilter';
 import TimelineYearLabels from './timeline-indicator/TimelineYearLabels.vue';
@@ -68,6 +68,15 @@ const isHovering = ref(false);
 const hoverPosition = ref<number | null>(null);
 /** 容器可用高度（减去上下 padding） */
 const containerHeight = ref(0);
+
+/**
+ * 气泡"最后一次 hover"的缓存：
+ * hover 时更新，hover 离开（hoverPosition=null）时保持最后值。
+ * 这样气泡 leave 动画期间仍显示正确的位置和年月，不会瞬移到滚动位置或显示错的年月。
+ */
+const lastHoverTopPct = ref('0%');
+const lastHoverYear = ref(new Date().getFullYear());
+const lastHoverMonth = ref(0);
 
 // ResizeObserver 实例
 let resizeObserver: ResizeObserver | null = null;
@@ -236,43 +245,32 @@ const visibleYearSections = computed<YearSection[]>(() => {
 });
 
 /**
- * 当前位置（考虑拖拽和悬停）
+ * 根据进度位置匹配对应的年月
  */
-const currentPosition = computed(() => {
-  if (isDragging.value && hoverPosition.value !== null) {
-    return hoverPosition.value;
-  }
-  if (isHovering.value && hoverPosition.value !== null) {
-    return hoverPosition.value;
-  }
-  return props.scrollProgress;
-});
-
-/**
- * 当前日期信息（用于气泡显示）
- */
-const currentDateInfo = computed(() => {
-  const pos = currentPosition.value;
+function resolveDateInfo(pos: number): { year: number; month: number } {
   const segments = monthSegments.value;
-
   if (segments.length === 0) {
     return { year: new Date().getFullYear(), month: 0 };
   }
-
-  // 区间匹配：pos 落在哪个 segment 的 [start, nextStart) 范围内
-  // segments 按时间降序排列（最新在前），position 从小到大递增
   for (let i = 0; i < segments.length; i++) {
-    const segmentEnd = i + 1 < segments.length
-      ? segments[i + 1].position
-      : 1;
-
+    const segmentEnd = i + 1 < segments.length ? segments[i + 1].position : 1;
     if (pos < segmentEnd) {
       return { year: segments[i].year, month: segments[i].month };
     }
   }
-
   const last = segments[segments.length - 1];
   return { year: last.year, month: last.month };
+}
+
+/**
+ * hover 位置变化时更新缓存；null 时保持最后值
+ */
+watch(hoverPosition, (pos) => {
+  if (pos === null) return;
+  lastHoverTopPct.value = `${pos * 100}%`;
+  const info = resolveDateInfo(pos);
+  lastHoverYear.value = info.year;
+  lastHoverMonth.value = info.month;
 });
 
 /**
@@ -283,14 +281,9 @@ const showBubble = computed(() => {
 });
 
 /**
- * 滑块样式
+ * 细线位置（始终跟随当前滚动进度，与 hover 完全独立）
  */
-const scrubberStyle = computed(() => {
-  const pos = currentPosition.value;
-  return {
-    top: `${pos * 100}%`,
-  };
-});
+const scrollTopStyle = computed(() => `${props.scrollProgress * 100}%`);
 
 // ==================== Methods ====================
 
@@ -328,7 +321,7 @@ function handleMouseMove(e: MouseEvent) {
 function handleClick() {
   if (hoverPosition.value === null) return;
 
-  const info = currentDateInfo.value;
+  const info = resolveDateInfo(hoverPosition.value);
   const monthKey = `${info.year}-${info.month}`;
   const isLoaded = props.loadedMonths?.has(monthKey) ?? true;
 
@@ -438,12 +431,13 @@ onUnmounted(() => {
       :hovered="isHovering"
     />
 
-    <!-- 滑块容器（与轨道对齐） -->
+    <!-- 滑块容器（细线 + 气泡，state 分离避免 hover 离开时视觉跳跃） -->
     <TimelineScrubber
-      :position-top="scrubberStyle.top"
+      :scroll-top="scrollTopStyle"
+      :hover-top="lastHoverTopPct"
       :show-bubble="showBubble"
-      :year="currentDateInfo.year"
-      :month="currentDateInfo.month"
+      :year="lastHoverYear"
+      :month="lastHoverMonth"
       @drag-start="startDrag"
     />
 

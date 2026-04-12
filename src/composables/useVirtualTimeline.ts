@@ -244,7 +244,9 @@ export function useVirtualTimeline(
     }
 
     containerRef.value.scrollTop = targetScrollTop;
-    scrollTop.value = targetScrollTop;
+    // ⚠️ 读回 DOM 实际 scrollTop —— 若 spacer 尚未就绪，浏览器会 clamp 到可达最大值，
+    // 不能用 targetScrollTop 强写 scrollTop.value，否则 visibleItems 会被欺骗去渲染不可见区域
+    scrollTop.value = containerRef.value.scrollTop;
 
     resetVelocity();
     startModeRecovery();
