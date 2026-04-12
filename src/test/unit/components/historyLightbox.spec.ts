@@ -110,6 +110,10 @@ describe('HistoryLightbox', () => {
     return mockPswpEl.querySelector(selector);
   }
 
+  function findAllInTeleport(selector: string) {
+    return mockPswpEl.querySelectorAll(selector);
+  }
+
   it('renders bottom bar with successful services info', () => {
     mountLightbox(makeHistoryItem([
       {
@@ -128,5 +132,42 @@ describe('HistoryLightbox', () => {
     expect(sourceCell!.textContent).toContain('已传图床');
     // 不应存在失败图床列
     expect(findInTeleport('.cell-failed')).toBeNull();
+  });
+
+  it('does not show service menu for single service', () => {
+    mountLightbox(makeHistoryItem([
+      {
+        serviceId: 'jd',
+        status: 'success',
+        result: { serviceId: 'jd', fileKey: 'key-1', url: 'https://example.com/jd.jpg' },
+      },
+    ]));
+
+    // 单图床不应有菜单 wrapper 中的下拉
+    expect(findInTeleport('.service-copy-menu')).toBeNull();
+  });
+
+  it('shows service menu when multiple services succeed', async () => {
+    const wrapper = mountLightbox(makeHistoryItem([
+      {
+        serviceId: 'jd',
+        status: 'success',
+        result: { serviceId: 'jd', fileKey: 'key-1', url: 'https://example.com/jd.jpg' },
+      },
+      {
+        serviceId: 'weibo',
+        status: 'success',
+        result: { serviceId: 'weibo', fileKey: 'key-2', url: 'https://example.com/weibo.jpg' },
+      },
+    ]));
+
+    // 点击复制按钮应弹出菜单
+    const copyBtn = findInTeleport('.copy-btn-wrapper .action-btn') as HTMLButtonElement;
+    expect(copyBtn).not.toBeNull();
+    await copyBtn.click();
+    await wrapper.vm.$nextTick();
+
+    const menuItems = findAllInTeleport('.service-copy-item');
+    expect(menuItems.length).toBe(2);
   });
 });

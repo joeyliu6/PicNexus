@@ -1,20 +1,51 @@
 <script setup lang="ts">
+import { ref, computed, watch } from 'vue';
+import { onClickOutside } from '@vueuse/core';
 import type { HistoryItem } from '../../../config/types';
+import { getServiceDisplayName } from '../../../constants/serviceNames';
 import { formatTime, formatFileSize } from '../../../composables/history/useLightboxInfo';
 
-defineProps<{
+const props = withDefaults(defineProps<{
   item: HistoryItem;
   displayFileName: string;
   successfulServicesText: string;
+  successfulServices?: string[];
   isItemFavorited: boolean;
-}>();
+  copySuccess?: boolean;
+}>(), {
+  successfulServices: () => [],
+  copySuccess: false,
+});
 
 const emit = defineEmits<{
   (e: 'copy-link'): void;
+  (e: 'copy-service-link', serviceId: string): void;
   (e: 'open-browser'): void;
   (e: 'delete'): void;
   (e: 'toggle-favorite'): void;
 }>();
+
+const hasMultipleServices = computed(() => props.successfulServices.length > 1);
+const serviceMenuVisible = ref(false);
+const copyBtnRef = ref<HTMLElement | null>(null);
+
+function handleCopyClick() {
+  if (hasMultipleServices.value) {
+    serviceMenuVisible.value = !serviceMenuVisible.value;
+  } else {
+    emit('copy-link');
+  }
+}
+
+function handleServiceCopy(serviceId: string) {
+  emit('copy-service-link', serviceId);
+  serviceMenuVisible.value = false;
+}
+
+onClickOutside(copyBtnRef, () => { serviceMenuVisible.value = false; });
+
+// 切换图片时关闭菜单
+watch(() => props.item.id, () => { serviceMenuVisible.value = false; });
 </script>
 
 <template>
@@ -50,9 +81,29 @@ const emit = defineEmits<{
       >
         <i :class="isItemFavorited ? 'pi pi-star-fill' : 'pi pi-star'"></i>
       </button>
-      <button class="action-btn" @click="emit('copy-link')" v-tooltip.top="'复制链接'">
-        <i class="pi pi-copy"></i>
-      </button>
+      <div class="copy-btn-wrapper" ref="copyBtnRef" @keydown.escape="serviceMenuVisible = false">
+        <button
+          class="action-btn"
+          :class="{ 'action-btn-success': copySuccess }"
+          @click="handleCopyClick"
+          v-tooltip.top="hasMultipleServices ? '选择图床复制链接' : '复制链接'"
+        >
+          <i :class="copySuccess ? 'pi pi-check' : 'pi pi-copy'"></i>
+        </button>
+        <Transition name="t-slide-up">
+          <div v-if="serviceMenuVisible" class="service-copy-menu">
+            <button
+              v-for="serviceId in successfulServices"
+              :key="serviceId"
+              class="service-copy-item"
+              @click="handleServiceCopy(serviceId)"
+            >
+              <span>{{ getServiceDisplayName(serviceId) }}</span>
+              <i class="pi pi-copy"></i>
+            </button>
+          </div>
+        </Transition>
+      </div>
       <button class="action-btn" @click="emit('open-browser')" v-tooltip.top="'在浏览器打开'">
         <i class="pi pi-external-link"></i>
       </button>
@@ -184,6 +235,63 @@ const emit = defineEmits<{
 .action-btn-danger:hover {
   background: var(--error-soft);
   color: var(--error);
+}
+
+.action-btn-success {
+  color: var(--success) !important;
+}
+
+.copy-btn-wrapper {
+  position: relative;
+}
+
+.service-copy-menu {
+  position: absolute;
+  bottom: calc(100% + var(--space-sm));
+  left: 50%;
+  transform: translateX(-50%);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 灯箱暗色环境弹出菜单背景 */
+  background: rgb(30 30 36 / 95%);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- box-shadow 含 rgb */
+  box-shadow: 0 4px 24px rgb(0 0 0 / 40%);
+  padding: var(--space-xs-sm);
+  min-width: 140px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 灯箱内局部弹层，高于底栏(z:3)但无对应全局 token */
+  z-index: 5;
+}
+
+.service-copy-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm-md);
+  width: 100%;
+  padding: var(--space-sm-md) var(--space-md);
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  font-size: var(--text-sm);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-standard);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.service-copy-item:hover {
+  background: var(--hover-overlay);
+}
+
+.service-copy-item i {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.service-copy-item:hover i {
+  color: var(--text-main);
 }
 
 /* 浅色模式：灯箱始终保持暗色风格 */

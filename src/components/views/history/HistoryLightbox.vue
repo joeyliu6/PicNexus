@@ -68,11 +68,12 @@ const isItemFavorited = computed(() => {
 // ── 信息展示 ────────────────────────────────
 const {
   displayFileName,
+  successfulServices,
   successfulServicesText,
 } = useLightboxInfo(itemRef);
 
 // ── 操作 ────────────────────────────────────
-const { handleCopyLink, openInBrowser, handleDelete } = useLightboxActions({
+const { handleCopyLink, handleCopyServiceLink, copySuccess, openInBrowser, handleDelete } = useLightboxActions({
   item: itemRef,
   resetZoom: () => { /* PhotoSwipe 内部管理缩放 */ },
   onDelete: (record) => emit('delete', record),
@@ -86,21 +87,25 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
 <template>
   <!-- 自定义 UI 通过 Teleport 挂入 PhotoSwipe 根元素 -->
   <Teleport v-if="pswpEl" :to="pswpEl">
-    <!-- 导航箭头 -->
-    <button
-      v-if="hasPrev"
-      class="pswp-nav pswp-nav--prev"
-      @click="navigatePrev"
-    >
-      <i class="pi pi-chevron-left"></i>
-    </button>
-    <button
-      v-if="hasNext"
-      class="pswp-nav pswp-nav--next"
-      @click="navigateNext"
-    >
-      <i class="pi pi-chevron-right"></i>
-    </button>
+    <!-- 导航箭头：t-fade 过渡避免在边界条件（第一张/最后一张）时箭头瞬间消失 -->
+    <Transition name="t-fade">
+      <button
+        v-if="hasPrev"
+        class="pswp-nav pswp-nav--prev"
+        @click="navigatePrev"
+      >
+        <i class="pi pi-chevron-left"></i>
+      </button>
+    </Transition>
+    <Transition name="t-fade">
+      <button
+        v-if="hasNext"
+        class="pswp-nav pswp-nav--next"
+        @click="navigateNext"
+      >
+        <i class="pi pi-chevron-right"></i>
+      </button>
+    </Transition>
 
     <!-- 底栏 -->
     <LightboxBottomBar
@@ -108,8 +113,11 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
       :item="item"
       :display-file-name="displayFileName"
       :successful-services-text="successfulServicesText"
+      :successful-services="successfulServices"
       :is-item-favorited="isItemFavorited"
+      :copy-success="copySuccess"
       @copy-link="handleCopyLink"
+      @copy-service-link="handleCopyServiceLink"
       @open-browser="openInBrowser"
       @delete="handleDelete"
       @toggle-favorite="emit('toggle-favorite', item)"

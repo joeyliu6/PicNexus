@@ -11,15 +11,20 @@ export function useLightboxInfo(item: Ref<HistoryItem | null>) {
     return truncateMiddle(item.value.localFileName);
   });
 
+  const successfulServices = computed(() => {
+    if (!item.value) return [];
+    return getSuccessfulServices(item.value);
+  });
+
   const successfulServicesText = computed(() => {
-    if (!item.value) return '';
-    return getSuccessfulServices(item.value)
+    return successfulServices.value
       .map(serviceId => getServiceDisplayName(serviceId))
       .join('、');
   });
 
   return {
     displayFileName,
+    successfulServices,
     successfulServicesText,
   };
 }
