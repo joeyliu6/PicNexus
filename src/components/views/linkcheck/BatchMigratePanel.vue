@@ -29,7 +29,9 @@ manager.initConfiguring();
 onActivated(() => { if (manager.phase.value === 'configuring') manager.initConfiguring(); });
 
 watch(manager.maxSuccessCount, () => { if (manager.phase.value === 'configuring') manager.applyFilter(); });
-watch(manager.sourceServiceFilter, () => { if (manager.phase.value === 'configuring') manager.applyFilter(); });
+watch(manager.sourceServiceFilter, () => {
+  if (manager.phase.value === 'configuring' && manager.isFilterApplied.value) manager.applyFilter();
+});
 
 // phase 变化时重置确认视图
 watch(manager.phase, () => { showConfirmView.value = false; });

@@ -2,10 +2,11 @@
 /**
  * E4 完成阶段 — 摘要统计 + 失败详情
  */
-import { inject } from 'vue';
+import { computed, inject } from 'vue';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { createLogger } from '../../../../utils/logger';
+import { getServiceDisplayName } from '../../../../constants/serviceNames';
 import { formatNumber, getErrorInfo } from './utils';
 import { MIGRATE_KEY } from './keys';
 
@@ -13,6 +14,24 @@ const log = createLogger('MigrateDonePhase');
 
 const ctx = inject(MIGRATE_KEY)!;
 const { migrateResult, retryFailed, resetToConfiguring } = ctx;
+
+const doneState = computed(() => {
+  const r = migrateResult.value;
+  if (!r) return { icon: 'pi pi-check-circle', title: '备份完成', color: 'success' as const, subtitle: '' };
+  if (r.pauseReason === 'user-cancelled') {
+    return { icon: 'pi pi-ban', title: '迁移已取消', color: 'warning' as const, subtitle: '已处理的部分已保存' };
+  }
+  if (r.pauseReason === 'consecutive-failures') {
+    return { icon: 'pi pi-exclamation-triangle', title: '迁移已暂停', color: 'warning' as const, subtitle: '连续失败过多，请检查网络后重试' };
+  }
+  if (r.failedCount > 0 && r.successCount > 0) {
+    return { icon: 'pi pi-check-circle', title: '备份完成（部分失败）', color: 'warning' as const, subtitle: '' };
+  }
+  if (r.failedCount > 0 && r.successCount === 0) {
+    return { icon: 'pi pi-times-circle', title: '备份失败', color: 'error' as const, subtitle: '' };
+  }
+  return { icon: 'pi pi-check-circle', title: '备份完成', color: 'success' as const, subtitle: '' };
+});
 
 async function exportResult() {
   if (!migrateResult.value) return;
@@ -45,12 +64,13 @@ async function exportResult() {
 </script>
 
 <template>
-  <div :class="migrateResult && migrateResult.failedCount > 0 ? 'done-split' : 'done-center'" v-if="migrateResult">
+  <div :class="migrateResult && (migrateResult.failedCount > 0 || migrateResult.partialFailures.length > 0) ? 'done-split' : 'done-center'" v-if="migrateResult">
     <div class="done-summary">
-      <div class="done-icon">
-        <i class="pi pi-check-circle" />
+      <div class="done-icon" :class="`done-icon--${doneState.color}`">
+        <i :class="doneState.icon" />
       </div>
-      <h2 class="done-title">备份完成</h2>
+      <h2 class="done-title">{{ doneState.title }}</h2>
+      <p v-if="doneState.subtitle" class="done-subtitle">{{ doneState.subtitle }}</p>
       <div class="done-stats">
         <div class="done-stat-row">
           <span class="dsl">成功</span>
@@ -67,22 +87,43 @@ async function exportResult() {
       </div>
     </div>
 
-    <div v-if="migrateResult.failedCount > 0" class="done-detail">
-      <span class="done-detail-title">失败详情</span>
-      <div class="done-fail-list">
-        <div
-          v-for="(f, i) in migrateResult.failures"
-          :key="i"
-          class="done-fail-row"
-        >
-          <i class="pi pi-image" />
-          <span class="done-fail-name">{{ f.fileName }}</span>
-          <span class="done-fail-badge" :class="getErrorInfo(f.errorType).badgeClass">
-            {{ getErrorInfo(f.errorType).label }}
-          </span>
-          <span class="done-fail-msg">{{ f.error }}</span>
+    <div v-if="migrateResult.failedCount > 0 || migrateResult.partialFailures.length > 0" class="done-detail">
+      <template v-if="migrateResult.failedCount > 0">
+        <span class="done-detail-title">失败详情</span>
+        <div class="done-fail-list">
+          <div
+            v-for="(f, i) in migrateResult.failures"
+            :key="i"
+            class="done-fail-row"
+          >
+            <i class="pi pi-image" />
+            <span class="done-fail-name">{{ f.fileName }}</span>
+            <span class="done-fail-badge" :class="getErrorInfo(f.errorType).badgeClass">
+              {{ getErrorInfo(f.errorType).label }}
+            </span>
+            <span class="done-fail-msg">{{ f.error }}</span>
+          </div>
         </div>
-      </div>
+      </template>
+
+      <template v-if="migrateResult.partialFailures.length > 0">
+        <span class="done-detail-title done-detail-title--partial">
+          部分目标失败（{{ migrateResult.partialFailures.length }} 张）
+        </span>
+        <div class="done-fail-list">
+          <div
+            v-for="(pf, i) in migrateResult.partialFailures"
+            :key="'pf-' + i"
+            class="done-fail-row"
+          >
+            <i class="pi pi-image" />
+            <span class="done-fail-name">{{ pf.fileName }}</span>
+            <span class="done-fail-badge fail-badge--partial">
+              {{ pf.failedTargets.map(t => getServiceDisplayName(t)).join('、') }}
+            </span>
+          </div>
+        </div>
+      </template>
     </div>
   </div>
 
@@ -125,8 +166,12 @@ async function exportResult() {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md-lg);
 }
 
-.done-icon i { font-size: var(--text-5xl); color: var(--success); }
+.done-icon i { font-size: var(--text-5xl); }
+.done-icon--success i { color: var(--success); }
+.done-icon--warning i { color: var(--warning); }
+.done-icon--error i { color: var(--error); }
 .done-title { font-size: var(--text-xl); font-weight: 700; color: var(--text-primary); margin: 0; }
+.done-subtitle { font-size: var(--text-sm); color: var(--text-muted); margin: 0; text-align: center; }
 
 .done-stats { width: 100%; display: flex; flex-direction: column; gap: var(--space-sm); margin-top: var(--space-sm); }
 .done-stat-row { display: flex; justify-content: space-between; align-items: center; font-size: var(--text-sm); }
@@ -145,6 +190,8 @@ async function exportResult() {
 .done-fail-badge { font-size: var(--text-2xs); font-weight: 500; padding: var(--space-2xs) var(--space-xs-sm); border-radius: var(--radius-sm); flex-shrink: 0; }
 .fail-badge--dl { background: var(--error-alpha-10); color: var(--error); }
 .fail-badge--ul { background: var(--error-alpha-10); color: var(--error); }
+.fail-badge--partial { background: var(--warning-alpha-10); color: var(--warning); }
+.done-detail-title--partial { margin-top: var(--space-md); }
 .done-fail-msg { font-size: var(--text-xs); color: var(--text-muted); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 底栏追加 */

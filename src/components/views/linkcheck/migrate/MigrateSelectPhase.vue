@@ -1,12 +1,11 @@
 <script setup lang="ts">
 /**
- * E1 选择阶段 — 左栏来源 + 右栏目标（双列网格 + 统计卡片）
+ * E1 选择阶段 — 左栏来源 + 右栏目标（双列网格）
  */
 import { computed, inject } from 'vue';
-import Select from 'primevue/select';
 import EmptyState from '../../../common/EmptyState.vue';
 import { emit as tauriEmit } from '@tauri-apps/api/event';
-import { formatNumber, filterThresholds } from './utils';
+import { formatNumber } from './utils';
 import { MIGRATE_KEY } from './keys';
 import SourceList from './components/SourceList.vue';
 import TargetCard from './components/TargetCard.vue';
@@ -16,7 +15,7 @@ const ctx = inject(MIGRATE_KEY)!;
 const {
   isInitialized, isFilterApplied, maxSuccessCount, sourceServiceFilter,
   availableSourceServices, showAdvancedFilter, configuredServices,
-  unconfiguredServices, checkedTargets, totalPending, allBackedUp,
+  unconfiguredServices, checkedTargets, totalPending, isAllBackedUp,
   initError, initConfiguring, healthStatusMap, healthTooltipMap,
 } = ctx;
 
@@ -41,10 +40,6 @@ const selectedSourceNames = computed(() => {
     .map(id => availableSourceServices.value.find(s => s.id === id)?.displayName ?? id)
     .join('、');
 });
-
-const totalSourceImages = computed(() =>
-  availableSourceServices.value.reduce((sum, s) => sum + s.count, 0),
-);
 
 function getServiceHealthStatus(serviceId: string): 'verified' | 'pending' | 'error' {
   return (healthStatusMap.value[serviceId] as 'verified' | 'pending' | 'error') ?? 'pending';
@@ -98,14 +93,16 @@ function handleTargetToggle(serviceId: string) {
       <SourceList
         :sources="availableSourceServices"
         :selectedIds="sourceServiceFilter"
+        :showAdvancedFilter="showAdvancedFilter"
+        :maxSuccessCount="maxSuccessCount"
         @toggle="toggleSourceFilter"
+        @update:showAdvancedFilter="showAdvancedFilter = $event"
+        @update:maxSuccessCount="maxSuccessCount = $event"
       />
 
       <!-- 右栏：迁移目标 -->
       <div class="split-right">
-        <span class="split-label">迁移目标</span>
-
-        <div v-if="allBackedUp" class="backed-up-banner">
+        <div v-if="isAllBackedUp" class="backed-up-banner">
           <i class="pi pi-check-circle" />
           <span>当前条件下所有图片已备份</span>
         </div>
@@ -124,60 +121,15 @@ function handleTargetToggle(serviceId: string) {
           />
         </div>
 
-        <!-- 统计卡片 -->
-        <div class="migrate-stats">
-          <div class="stat-item">
-            <span class="stat-value">{{ formatNumber(totalSourceImages) }}</span>
-            <span class="stat-label">总图片数</span>
-          </div>
-          <div class="stat-item">
-            <span
-              class="stat-value"
-              :class="totalPending > 0 ? 'stat-primary' : 'stat-muted'"
-            >{{ formatNumber(totalPending) }}</span>
-            <span class="stat-label">待迁移</span>
-          </div>
-          <div class="stat-item">
-            <span
-              class="stat-value"
-              :class="checkedTargets.length > 0 ? 'stat-success' : 'stat-muted'"
-            >{{ checkedTargets.length }}</span>
-            <span class="stat-label">目标图床</span>
-          </div>
-        </div>
-
-        <!-- 未配置入口 -->
-        <div
+        <!-- 未配置脚注 -->
+        <span
           v-if="unconfiguredServices.length > 0"
-          class="unconfigured-bar"
+          class="unconfigured-hint"
           @click="navigateToSettings"
         >
-          <div class="unconfigured-left">
-            <i class="pi pi-external-link" />
-            <span>其他 {{ unconfiguredServices.length }} 个图床（未配置）</span>
-          </div>
+          还有 {{ unconfiguredServices.length }} 个图床未配置
           <span class="unconfigured-link">去设置 →</span>
-        </div>
-
-        <!-- 高级筛选 -->
-        <button class="filter-toggle" @click="showAdvancedFilter = !showAdvancedFilter">
-          <i class="pi pi-sliders-h" />
-          <span>高级筛选</span>
-          <i class="pi pi-chevron-down filter-arrow" :class="{ 'filter-arrow--open': showAdvancedFilter }" />
-        </button>
-        <div v-if="showAdvancedFilter" class="filter-body">
-          <div class="filter-row">
-            <span class="filter-label">仅处理备份不足</span>
-            <Select
-              v-model="maxSuccessCount"
-              :options="filterThresholds"
-              optionLabel="label"
-              optionValue="value"
-              class="filter-select"
-            />
-            <span class="filter-label">份的图片</span>
-          </div>
-        </div>
+        </span>
       </div>
     </div>
   </div>
@@ -210,7 +162,7 @@ function handleTargetToggle(serviceId: string) {
 </template>
 
 <style scoped>
-@import './migrate-shared.css';
+@import url('./migrate-shared.css');
 
 .panel-body {
   flex: 1; overflow-y: auto; padding: 0 var(--space-lg-xl) 0 0;
@@ -228,7 +180,6 @@ function handleTargetToggle(serviceId: string) {
 
 /* 分栏布局 */
 .split-layout { display: flex; flex: 1; min-height: 0; }
-.split-label { font-size: var(--text-sm); font-weight: 600; color: var(--text-muted); margin-bottom: var(--space-md); display: block; }
 
 /* 右栏 */
 .split-right {
@@ -245,41 +196,15 @@ function handleTargetToggle(serviceId: string) {
 
 .target-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-sm); }
 
-/* 统计卡片 */
-.migrate-stats {
-  display: flex; justify-content: space-around; align-items: center;
-  padding: var(--space-lg) var(--space-lg-xl);
-  border-radius: var(--radius-md); border: 1px solid var(--border-subtle);
-  margin-top: var(--space-md);
+/* 未配置脚注 */
+.unconfigured-hint {
+  display: inline-flex; align-items: center; gap: var(--space-xs);
+  font-size: var(--text-2xs); color: var(--text-tertiary);
+  margin-top: var(--space-md); cursor: pointer;
+  transition: color var(--duration-fast);
 }
-.stat-item { display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); }
-.stat-value { font-size: var(--text-xl); font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-.stat-primary { color: var(--primary); }
-.stat-success { color: var(--success); }
-.stat-muted { color: var(--text-muted); }
-.stat-label { font-size: var(--text-xs); color: var(--text-muted); }
-
-/* 未配置入口 */
-.unconfigured-bar { display: flex; align-items: center; justify-content: space-between; padding: var(--space-sm) var(--space-md); margin-top: var(--space-sm); cursor: pointer; transition: background var(--duration-fast); border-radius: var(--radius-sm-md); }
-.unconfigured-bar:hover { background: var(--bg-surface-low); }
-.unconfigured-left { display: flex; align-items: center; gap: var(--space-xs-sm); font-size: var(--text-xs); color: var(--text-tertiary); }
-.unconfigured-left i { font-size: var(--text-2xs); }
-.unconfigured-link { font-size: var(--text-xs); font-weight: 500; color: var(--primary); }
-
-/* 高级筛选 */
-.filter-toggle { display: flex; align-items: center; gap: var(--space-xs-sm); width: 100%; background: none; cursor: pointer; font-size: var(--text-xs); color: var(--text-tertiary); padding: var(--space-sm) 0; margin-top: var(--space-sm); font-family: inherit; border: none; transition: color var(--duration-fast); }
-.filter-toggle:hover { color: var(--text-secondary); }
-.filter-toggle i:first-child { font-size: var(--text-xs); }
-.filter-arrow { font-size: var(--text-2xs) !important; margin-left: auto; transition: transform var(--duration-fast); }
-.filter-arrow--open { transform: rotate(180deg); }
-
-.filter-body { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-sm-md) var(--space-md); border-radius: var(--radius-sm-md); background: transparent; font-size: var(--text-sm); color: var(--text-secondary); }
-.filter-row { display: flex; align-items: center; gap: var(--space-sm); }
-.filter-label { white-space: nowrap; font-size: var(--text-xs); }
-
-:deep(.filter-select.p-select) { height: 28px; min-width: 60px; border-radius: var(--radius-sm-md); border: none; outline: 1px solid var(--outline-ghost); background: var(--bg-card); font-size: var(--text-sm); }
-:deep(.filter-select.p-select:focus-within) { outline: 2px solid var(--primary-alpha-40); }
-:deep(.filter-select .p-select-label) { padding: var(--space-xs) var(--space-sm); font-size: var(--text-sm); }
+.unconfigured-hint:hover { color: var(--text-secondary); }
+.unconfigured-link { color: var(--primary); font-weight: 500; }
 
 /* 底栏追加 */
 .bottom-hl { color: var(--primary); font-weight: 600; }

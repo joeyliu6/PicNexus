@@ -34,8 +34,14 @@ function handleClick() {
       'target-card--checked': checked,
       'target-card--disabled': isDisabled,
     }"
+    tabindex="0"
+    role="checkbox"
+    :aria-checked="checked"
+    :aria-disabled="isDisabled"
     v-tooltip.top="errorTooltip"
     @click="handleClick"
+    @keydown.enter.prevent="handleClick"
+    @keydown.space.prevent="handleClick"
   >
     <div class="target-card-top">
       <span class="target-icon" v-html="getServiceIcon(serviceId)" />
@@ -62,14 +68,17 @@ function handleClick() {
   transition: background var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast);
   user-select: none;
 }
+
 .target-card:hover {
   background: var(--bg-surface-low);
   border-color: var(--primary-alpha-15);
 }
+
 .target-card--checked {
   background: var(--primary-alpha-8);
   border-color: var(--primary);
 }
+
 .target-card--checked:hover {
   transform: scale(1.01);
 }

@@ -4,8 +4,9 @@
  */
 import { computed } from 'vue';
 import Checkbox from 'primevue/checkbox';
+import Select from 'primevue/select';
 import { getServiceIcon } from '../../../../../utils/icons';
-import { formatNumber, isPublicService } from '../utils';
+import { formatNumber, isPublicService, filterThresholds } from '../utils';
 
 interface SourceItem {
   id: string;
@@ -16,31 +17,36 @@ interface SourceItem {
 const props = defineProps<{
   sources: SourceItem[];
   selectedIds: string[];
+  showAdvancedFilter: boolean;
+  maxSuccessCount: number;
 }>();
 
-const emit = defineEmits<{ toggle: [serviceId: string] }>();
+const emit = defineEmits<{
+  toggle: [serviceId: string];
+  'update:showAdvancedFilter': [value: boolean];
+  'update:maxSuccessCount': [value: number];
+}>();
 
 const totalImages = computed(() =>
   props.sources.reduce((sum, s) => sum + s.count, 0),
 );
 
-const selectedNames = computed(() =>
-  props.selectedIds
-    .map(id => props.sources.find(s => s.id === id)?.displayName ?? id)
-    .join('、'),
-);
 </script>
 
 <template>
   <div class="split-left">
-    <span class="split-label">迁移来源</span>
     <div class="source-list">
       <div
         v-for="src in sources"
         :key="src.id"
         class="source-row"
         :class="{ 'source-row--selected': selectedIds.includes(src.id) }"
+        tabindex="0"
+        role="checkbox"
+        :aria-checked="selectedIds.includes(src.id)"
         @click="emit('toggle', src.id)"
+        @keydown.enter.prevent="emit('toggle', src.id)"
+        @keydown.space.prevent="emit('toggle', src.id)"
       >
         <Checkbox
           :modelValue="selectedIds.includes(src.id)"
@@ -56,16 +62,43 @@ const selectedNames = computed(() =>
       </div>
     </div>
     <span class="source-summary">
-      <template v-if="selectedIds.length > 0 && selectedIds.length < sources.length">
-        已选 {{ selectedNames }}，点击取消筛选
+      <template v-if="selectedIds.length > 0 && selectedIds.length === sources.length">
+        已选全部来源，点击取消筛选
       </template>
-      <template v-else-if="selectedIds.length === sources.length">
-        已选全部来源（{{ sources.length }} 个图床），点击取消筛选
+      <template v-else-if="selectedIds.length > 0">
+        已选 {{ selectedIds.length }} 个来源，点击取消筛选
       </template>
       <template v-else>
-        共 {{ formatNumber(totalImages) }} 张图片，分布在 {{ sources.length }} 个图床
+        共 {{ formatNumber(totalImages) }} 张，分布在 {{ sources.length }} 个图床
       </template>
     </span>
+
+    <!-- 高级筛选 -->
+    <button
+      class="filter-toggle"
+      @click="emit('update:showAdvancedFilter', !showAdvancedFilter)"
+    >
+      <i class="pi pi-sliders-h" />
+      <span>高级筛选</span>
+      <i
+        class="pi pi-chevron-down filter-arrow"
+        :class="{ 'filter-arrow--open': showAdvancedFilter }"
+      />
+    </button>
+    <div v-if="showAdvancedFilter" class="filter-body">
+      <div class="filter-row">
+        <span class="filter-label">仅处理备份不足</span>
+        <Select
+          :modelValue="maxSuccessCount"
+          :options="filterThresholds"
+          optionLabel="label"
+          optionValue="value"
+          class="filter-select"
+          @update:modelValue="emit('update:maxSuccessCount', $event)"
+        />
+        <span class="filter-label">份的图片</span>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -75,8 +108,6 @@ const selectedNames = computed(() =>
   border-right: 1px solid var(--border-subtle);
   display: flex; flex-direction: column; overflow-y: auto;
 }
-
-.split-label { font-size: var(--text-sm); font-weight: 600; color: var(--text-muted); margin-bottom: var(--space-md); display: block; }
 
 .source-list { display: flex; flex-direction: column; gap: var(--space-xs-sm); flex: 1; }
 
@@ -102,4 +133,30 @@ const selectedNames = computed(() =>
 .tag-public { font-size: var(--text-2xs); font-weight: 500; padding: var(--space-2xs) var(--space-xs-sm); border-radius: var(--radius-sm); background: var(--warning-alpha-10); color: var(--warning); flex-shrink: 0; }
 
 .source-summary { font-size: var(--text-xs); color: var(--text-tertiary); margin-top: var(--space-md); padding-top: var(--space-sm); border-top: 1px solid var(--border-subtle); }
+
+/* 高级筛选 */
+.filter-toggle {
+  display: flex; align-items: center; gap: var(--space-xs-sm);
+  width: 100%; background: none; cursor: pointer;
+  font-size: var(--text-xs); color: var(--text-tertiary);
+  padding: var(--space-sm) 0; margin-top: var(--space-xs);
+  font-family: inherit; border: none;
+  transition: color var(--duration-fast);
+}
+.filter-toggle:hover { color: var(--text-secondary); }
+.filter-toggle i:first-child { font-size: var(--text-xs); }
+.filter-arrow { font-size: var(--text-2xs) !important; margin-left: auto; transition: transform var(--duration-fast); }
+.filter-arrow--open { transform: rotate(180deg); }
+
+.filter-body {
+  display: flex; flex-direction: column; gap: var(--space-sm);
+  padding: var(--space-sm-md) 0;
+  font-size: var(--text-sm); color: var(--text-secondary);
+}
+.filter-row { display: flex; align-items: center; gap: var(--space-sm); }
+.filter-label { white-space: nowrap; font-size: var(--text-xs); }
+
+:deep(.filter-select.p-select) { height: 28px; min-width: 60px; border-radius: var(--radius-sm-md); border: none; outline: 1px solid var(--outline-ghost); background: var(--bg-card); font-size: var(--text-sm); }
+:deep(.filter-select.p-select:focus-within) { outline: 2px solid var(--primary-alpha-40); }
+:deep(.filter-select .p-select-label) { padding: var(--space-xs) var(--space-sm); font-size: var(--text-sm); }
 </style>

@@ -4,18 +4,19 @@
  */
 import { inject } from 'vue';
 import { formatNumber, formatTime, formatSpeed, MAX_VISIBLE_FILES } from './utils';
+import { getServiceDisplayName } from '../../../../constants/serviceNames';
 import { MIGRATE_KEY } from './keys';
 
 const ctx = inject(MIGRATE_KEY)!;
 
 const {
   globalProgress, cumulativeCounts, estimatedTimeRemaining,
-  averageSpeed, itemStatuses, cancelMigrate,
+  averageSpeed, allItemStatuses, cancelMigrate,
 } = ctx;
 </script>
 
 <template>
-  <div class="progress-bar" role="progressbar" :aria-valuenow="globalProgress.percent">
+  <div class="progress-bar" role="progressbar" :aria-valuenow="globalProgress.percent" aria-valuemin="0" aria-valuemax="100">
     <div class="progress-bar-inner">
       <div class="progress-bar-fill" :style="{ width: globalProgress.percent + '%' }" />
     </div>
@@ -64,13 +65,13 @@ const {
     <div class="file-stream">
       <div class="file-stream-header">
         <span class="file-stream-title">实时文件流</span>
-        <span v-if="itemStatuses.length > MAX_VISIBLE_FILES" class="file-stream-hint">
+        <span v-if="allItemStatuses.length > MAX_VISIBLE_FILES" class="file-stream-hint">
           显示最近 {{ MAX_VISIBLE_FILES }} 条
         </span>
       </div>
       <div class="file-list">
         <div
-          v-for="item in itemStatuses.slice(0, MAX_VISIBLE_FILES)"
+          v-for="item in allItemStatuses.slice(0, MAX_VISIBLE_FILES)"
           :key="item.historyId"
           class="file-row"
           :class="item.status"
@@ -89,7 +90,7 @@ const {
               :key="sid"
               class="svc-tag"
               :class="state"
-            >{{ sid }} {{ state === 'success' ? '✓' : state === 'failed' ? '✗' : '...' }}</span>
+            >{{ getServiceDisplayName(String(sid)) }} {{ state === 'success' ? '✓' : state === 'failed' ? '✗' : '...' }}</span>
           </span>
         </div>
       </div>

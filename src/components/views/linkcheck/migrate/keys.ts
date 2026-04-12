@@ -21,8 +21,9 @@ export interface MigrateContext {
   unconfiguredServices: ComputedRef<MigrateTargetService[]>;
   checkedTargets: ComputedRef<MigrateTargetService[]>;
   totalPending: ComputedRef<number>;
-  allBackedUp: ComputedRef<boolean>;
+  isAllBackedUp: ComputedRef<boolean>;
   itemStatuses: Ref<MigrateItemStatus[]>;
+  allItemStatuses: Ref<MigrateItemStatus[]>;
   globalProgress: Ref<{ current: number; total: number; percent: number }>;
   migrateResult: Ref<MigrateResult | null>;
   cumulativeCounts: Ref<{ success: number; failed: number; skipped: number }>;

@@ -11,7 +11,7 @@
   align-items: center;
   gap: var(--space-xs);
   height: 28px;
-  padding: 0 11px;
+  padding: 0 var(--space-md);
   border-radius: var(--radius-sm-md);
   font-size: var(--text-xs);
   font-weight: 500;
@@ -61,7 +61,7 @@
 }
 .btn-lg {
   height: 36px;
-  padding: 0 18px;
+  padding: 0 var(--space-lg-xl);
   font-size: var(--text-base);
   border-radius: var(--radius-md);
 }

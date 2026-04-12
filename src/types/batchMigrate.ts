@@ -35,6 +35,10 @@ export interface MigrateResult {
   failedCount: number;
   skippedCount: number;
   failures: Array<{ fileName: string; error: string; errorType?: 'download' | 'upload' }>;
+  /** 整体成功但部分目标失败的记录 */
+  partialFailures: Array<{ fileName: string; failedTargets: string[] }>;
+  /** 非正常结束原因 */
+  pauseReason?: 'consecutive-failures' | 'user-cancelled';
 }
 
 /** 迁移实时统计（三个统计卡用） */

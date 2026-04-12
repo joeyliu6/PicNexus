@@ -36,6 +36,7 @@ const log = createLogger('useBatchMigrate');
 
 const MAX_CONCURRENT = 2;
 const PAGE_SIZE = 100;
+const MAX_CONSECUTIVE_FAILURES = 10;
 
 // ============================================
 // 独立辅助函数
@@ -241,6 +242,7 @@ export function useBatchMigrateManager() {
 
   // 执行
   const itemStatuses = shallowRef<MigrateItemStatus[]>([]);
+  const allItemStatuses = shallowRef<MigrateItemStatus[]>([]);
   const isMigrating = ref(false);
   const isCancelled = ref(false);
   const migrateResult = ref<MigrateResult | null>(null);
@@ -266,7 +268,7 @@ export function useBatchMigrateManager() {
     if (checkedTargets.value.length === 0) return 0;
     return Math.max(...checkedTargets.value.map(s => s.pendingCount));
   });
-  const allBackedUp = computed(() =>
+  const isAllBackedUp = computed(() =>
     isInitialized.value && isFilterApplied.value &&
     targetServices.value.every(s => !s.isConfigured || s.pendingCount === 0),
   );
@@ -463,8 +465,11 @@ export function useBatchMigrateManager() {
     let failedCount = 0;
     let skippedCount = 0;
     const failures: MigrateResult['failures'] = [];
+    const partialFailures: MigrateResult['partialFailures'] = [];
     let processed = 0;
     cumulativeCounts.value = { success: 0, failed: 0, skipped: 0 };
+    let consecutiveFailures = 0;
+    let autoPaused = false;
 
     globalProgress.value = { current: 0, total: totalToProcess, percent: 0 };
 
@@ -497,13 +502,32 @@ export function useBatchMigrateManager() {
         serviceResults: Object.fromEntries(targets.map(sid => [sid, 'pending' as const])),
       }));
       itemStatuses.value = batchStatuses;
+      allItemStatuses.value = [...batchStatuses, ...allItemStatuses.value];
 
       await processBatch(newItems, batchStatuses, targets, config, multiUploader, isCancelled, migrateStats, (status) => {
-        if (status.status === 'success') successCount++;
-        else if (status.status === 'skipped') skippedCount++;
-        else {
+        if (status.status === 'success') {
+          successCount++;
+          consecutiveFailures = 0;
+          // 收集部分目标失败的详情
+          const failedTargets = Object.entries(status.serviceResults)
+            .filter(([, state]) => state === 'failed')
+            .map(([sid]) => sid);
+          if (failedTargets.length > 0) {
+            partialFailures.push({ fileName: status.fileName, failedTargets });
+          }
+        } else if (status.status === 'skipped') {
+          skippedCount++;
+          consecutiveFailures = 0;
+        } else {
           failedCount++;
+          consecutiveFailures++;
           if (status.error) failures.push({ fileName: status.fileName, error: status.error, errorType: status.errorType });
+          // 连续失败过多 → 自动暂停
+          if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && !autoPaused) {
+            autoPaused = true;
+            isCancelled.value = true;
+            log.warn(`连续 ${consecutiveFailures} 次失败，自动暂停迁移`);
+          }
         }
         processed++;
         cumulativeCounts.value = { success: successCount, failed: failedCount, skipped: skippedCount };
@@ -535,7 +559,12 @@ export function useBatchMigrateManager() {
       if (skipOffset > 0 && skipOffset >= queryTotal) break;
     }
 
-    migrateResult.value = { successCount, failedCount, skippedCount, failures };
+    const pauseReason = autoPaused
+      ? 'consecutive-failures' as const
+      : isCancelled.value
+        ? 'user-cancelled' as const
+        : undefined;
+    migrateResult.value = { successCount, failedCount, skippedCount, failures, partialFailures, pauseReason };
     isMigrating.value = false;
     phase.value = 'done';
   }
@@ -547,6 +576,7 @@ export function useBatchMigrateManager() {
   async function resetToConfiguring() {
     phase.value = 'configuring';
     itemStatuses.value = [];
+    allItemStatuses.value = [];
     isMigrating.value = false;
     isCancelled.value = false;
     migrateResult.value = null;
@@ -569,8 +599,8 @@ export function useBatchMigrateManager() {
     phase, isInitialized, isFilterApplied, initError,
     maxSuccessCount, sourceServiceFilter, availableSourceServices, showAdvancedFilter,
     targetServices, configuredServices, unconfiguredServices,
-    checkedTargets, totalPending, allBackedUp,
-    itemStatuses, isMigrating, globalProgress, migrateResult, cumulativeCounts,
+    checkedTargets, totalPending, isAllBackedUp,
+    itemStatuses, allItemStatuses, isMigrating, globalProgress, migrateResult, cumulativeCounts,
     migrateStats, estimatedTimeRemaining, averageSpeed, concurrentCount,
     initConfiguring, applyFilter,
     startMigrate, cancelMigrate, retryFailed, resetToConfiguring,
