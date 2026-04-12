@@ -42,6 +42,22 @@ const MAX_CONSECUTIVE_FAILURES = 10;
 // 独立辅助函数
 // ============================================
 
+/** 从未知错误中提取可读消息（处理 Tauri invoke 的 { data: { message } } 结构） */
+function extractErrorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === 'string') return e;
+  if (typeof e === 'object' && e !== null) {
+    const obj = e as Record<string, unknown>;
+    if (typeof obj.message === 'string') return obj.message;
+    const data = obj.data;
+    if (typeof data === 'object' && data !== null && typeof (data as Record<string, unknown>).message === 'string') {
+      return (data as Record<string, unknown>).message as string;
+    }
+    return JSON.stringify(e);
+  }
+  return String(e);
+}
+
 /** 知乎图片 URL 支持直接改后缀获取 JPG，避免下载 webp 后再转换 */
 function optimizeSourceUrl(url: string, targetServiceId: string): string {
   if (/^https?:\/\/pic[x\d]\.zhimg\.com\//.test(url) && url.endsWith('.webp')) {
@@ -120,7 +136,7 @@ async function migrateOneItem(
     stats.value = { ...stats.value, totalBytes: stats.value.totalBytes + downloadResult.file_size };
   } catch (e: unknown) {
     status.status = 'failed';
-    status.error = `下载失败: ${e instanceof Error ? e.message : String(e)}`;
+    status.error = extractErrorMessage(e);
     status.errorType = 'download';
     return;
   }
@@ -213,7 +229,7 @@ async function processBatch(
         await migrateOneItem(item, status, targets, config, multiUploader, isCancelled, stats);
       } catch (e: unknown) {
         status.status = 'failed';
-        status.error = e instanceof Error ? e.message : String(e);
+        status.error = extractErrorMessage(e);
       } finally {
         onItemDone(status);
       }
