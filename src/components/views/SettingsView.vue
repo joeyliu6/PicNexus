@@ -40,7 +40,7 @@ const {
   formData, isSettingsReady, availableServices, serviceNames, serviceConfigStatus,
   loadSettings, saveSettings, debouncedSaveSettings, debouncedSaveSettingsWithStatus,
   cancelDebouncedSave, errorToString, validateS3Config, clearTimers: clearFormTimers,
-  addPrefix, removePrefix, resetToDefaultPrefixes,
+  addPrefix, updatePrefix, removePrefix, resetToDefaultPrefixes,
   addCustomS3Profile, deleteCustomS3Profile, updateCustomS3Profile,
   addWebDAVProfile, deleteWebDAVProfile, switchWebDAVProfile,
 } = useSettingsForm();
@@ -277,10 +277,12 @@ onUnmounted(() => {
           @check-builtin="handleBuiltinCheck"
           @login-cookie="(id) => configManager.openCookieWebView(id as ServiceType)"
           @update:link-prefix-enabled="(v) => { formData.linkPrefixEnabled = v; debouncedSaveSettings(); }"
-          @update:prefix-list="(v) => { formData.linkPrefixList = v; }"
           @update:selected-prefix-index="(v) => { formData.selectedPrefixIndex = v; debouncedSaveSettings(); }"
           @update:github-cdn-config="(v) => { formData.github.cdnConfig = v; }"
-          @add-prefix="addPrefix" @remove-prefix="removePrefix" @reset-to-default="resetToDefaultPrefixes"
+          @add-prefix="addPrefix"
+          @update-prefix="({ index, item }) => updatePrefix(index, item)"
+          @remove-prefix="removePrefix"
+          @reset-to-default="resetToDefaultPrefixes"
           @add-custom-s3="addCustomS3Profile" @delete-custom-s3="deleteCustomS3Profile" @update-custom-s3="updateCustomS3Profile"
         />
       </div>

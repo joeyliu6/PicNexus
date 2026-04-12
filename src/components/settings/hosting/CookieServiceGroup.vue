@@ -4,6 +4,7 @@ import InputText from 'primevue/inputtext';
 import HostingCard from '../HostingCard.vue';
 import WeiboLinkPrefixSection from './WeiboLinkPrefixSection.vue';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
+import type { LinkPrefixItem } from '../../../config/types';
 import { computed } from 'vue';
 
 interface CookieFormData {
@@ -35,7 +36,7 @@ const props = defineProps<{
   healthTooltipMap: Record<string, string>;
   targetCardId?: string | null;
   linkPrefixEnabled: boolean;
-  prefixList: string[];
+  prefixList: LinkPrefixItem[];
   selectedPrefixIndex: number;
 }>();
 
@@ -44,9 +45,9 @@ const emit = defineEmits<{
   testCookie: [providerId: string];
   loginCookie: [providerId: string];
   'update:linkPrefixEnabled': [enabled: boolean];
-  'update:prefixList': [list: string[]];
   'update:selectedPrefixIndex': [index: number];
-  addPrefix: [];
+  addPrefix: [item: LinkPrefixItem];
+  updatePrefix: [payload: { index: number; item: LinkPrefixItem }];
   removePrefix: [index: number];
   resetToDefault: [];
 }>();
@@ -95,10 +96,10 @@ const namiAuthToken = computed(() => {
           :prefix-list="prefixList"
           :selected-prefix-index="selectedPrefixIndex"
           @update:link-prefix-enabled="emit('update:linkPrefixEnabled', $event)"
-          @update:prefix-list="emit('update:prefixList', $event)"
           @update:selected-prefix-index="emit('update:selectedPrefixIndex', $event)"
           @save="emit('save')"
-          @add-prefix="emit('addPrefix')"
+          @add-prefix="emit('addPrefix', $event)"
+          @update-prefix="emit('updatePrefix', $event)"
           @remove-prefix="emit('removePrefix', $event)"
           @reset-to-default="emit('resetToDefault')"
         />

@@ -21,8 +21,9 @@ import type {
   EditorServerConfig,
   ServerServiceType,
   CustomS3Profile,
+  LinkPrefixItem,
 } from '../../config/types';
-import { DEFAULT_CONFIG, DEFAULT_PREFIXES, makeCustomS3Id } from '../../config/types';
+import { DEFAULT_CONFIG, cloneDefaultPrefixes, makeCustomS3Id } from '../../config/types';
 
 // ---- 类型定义 ----
 
@@ -88,7 +89,7 @@ export function useSettingsForm() {
     webdav: { profiles: [] as WebDAVProfile[], activeId: null as string | null },
     linkPrefixEnabled: true,
     selectedPrefixIndex: 0,
-    linkPrefixList: [...DEFAULT_PREFIXES],
+    linkPrefixList: cloneDefaultPrefixes() as LinkPrefixItem[],
     analyticsEnabled: true,
     appBehavior: { autoStart: false, minimizeToTrayOnStart: false, closeToTray: true },
     linkOutput: {
@@ -320,7 +321,8 @@ export function useSettingsForm() {
       if (config.linkPrefixConfig) {
         formData.value.linkPrefixEnabled = config.linkPrefixConfig.enabled ?? true;
         formData.value.selectedPrefixIndex = config.linkPrefixConfig.selectedIndex ?? 0;
-        formData.value.linkPrefixList = config.linkPrefixConfig.prefixList || [...DEFAULT_PREFIXES];
+        const savedList = config.linkPrefixConfig.prefixList;
+        formData.value.linkPrefixList = savedList?.length ? savedList.map(item => ({ ...item })) : cloneDefaultPrefixes();
       }
 
       // 链接输出配置
@@ -416,7 +418,7 @@ export function useSettingsForm() {
       config.linkPrefixConfig = {
         enabled: formData.value.linkPrefixEnabled,
         selectedIndex: formData.value.selectedPrefixIndex,
-        prefixList: [...formData.value.linkPrefixList]
+        prefixList: JSON.parse(JSON.stringify(formData.value.linkPrefixList))
       };
 
       config.linkOutput = { ...formData.value.linkOutput };
@@ -466,25 +468,27 @@ export function useSettingsForm() {
   }
 
   // ---- 链接前缀管理 ----
-
-  function addPrefix() {
-    formData.value.linkPrefixList.push('');
+  function addPrefix(item: LinkPrefixItem) {
+    formData.value.linkPrefixList.push({ ...item });
+    saveSettings();
   }
-
+  function updatePrefix(index: number, item: LinkPrefixItem) {
+    if (index < 0 || index >= formData.value.linkPrefixList.length) return;
+    formData.value.linkPrefixList[index] = { ...item };
+    // 不在此处调用 saveSettings()：编辑名称/模板时每次按键都会触发 updatePrefix，
+    // 持久化由 InputText 的 @blur → emit('save') 统一处理，避免逐字保存
+  }
   function removePrefix(index: number) {
-    if (formData.value.linkPrefixList.length > 1) {
-      formData.value.linkPrefixList.splice(index, 1);
-      if (index < formData.value.selectedPrefixIndex) {
-        formData.value.selectedPrefixIndex--;
-      } else if (formData.value.selectedPrefixIndex >= formData.value.linkPrefixList.length) {
-        formData.value.selectedPrefixIndex = formData.value.linkPrefixList.length - 1;
-      }
-      saveSettings();
+    if (formData.value.linkPrefixList.length <= 1) return;
+    formData.value.linkPrefixList.splice(index, 1);
+    if (index < formData.value.selectedPrefixIndex) formData.value.selectedPrefixIndex--;
+    else if (formData.value.selectedPrefixIndex >= formData.value.linkPrefixList.length) {
+      formData.value.selectedPrefixIndex = formData.value.linkPrefixList.length - 1;
     }
+    saveSettings();
   }
-
   function resetToDefaultPrefixes() {
-    formData.value.linkPrefixList = [...DEFAULT_PREFIXES];
+    formData.value.linkPrefixList = cloneDefaultPrefixes();
     formData.value.selectedPrefixIndex = 0;
     saveSettings();
   }
@@ -588,6 +592,7 @@ export function useSettingsForm() {
     clearTimers,
     // 链接前缀
     addPrefix,
+    updatePrefix,
     removePrefix,
     resetToDefaultPrefixes,
     // 自定义 S3

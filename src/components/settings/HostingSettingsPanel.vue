@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watch, nextTick } from 'vue';
 import Divider from 'primevue/divider';
-import type { GithubCdnConfig, ServiceType, CustomS3Profile } from '../../config/types';
+import type { GithubCdnConfig, ServiceType, CustomS3Profile, LinkPrefixItem } from '../../config/types';
 import PrivateStorageGroup from './hosting/PrivateStorageGroup.vue';
 import CookieServiceGroup from './hosting/CookieServiceGroup.vue';
 import TokenServiceGroup from './hosting/TokenServiceGroup.vue';
@@ -53,7 +53,7 @@ const props = defineProps<{
   isCheckingJd: boolean;
   isCheckingQiyu: boolean;
   linkPrefixEnabled: boolean;
-  prefixList: string[];
+  prefixList: LinkPrefixItem[];
   selectedPrefixIndex: number;
   githubCdnConfig?: GithubCdnConfig;
   targetCardId?: string | null;
@@ -74,10 +74,10 @@ const emit = defineEmits<{
   checkBuiltin: [providerId: string];
   loginCookie: [providerId: string];
   'update:linkPrefixEnabled': [enabled: boolean];
-  'update:prefixList': [list: string[]];
   'update:selectedPrefixIndex': [index: number];
   'update:githubCdnConfig': [config: GithubCdnConfig];
-  addPrefix: [];
+  addPrefix: [item: LinkPrefixItem];
+  updatePrefix: [payload: { index: number; item: LinkPrefixItem }];
   removePrefix: [index: number];
   resetToDefault: [];
   cardNavigated: [];
@@ -179,9 +179,9 @@ watch(() => props.targetCardId, (val) => {
         @test-cookie="emit('testCookie', $event)"
         @login-cookie="emit('loginCookie', $event)"
         @update:link-prefix-enabled="emit('update:linkPrefixEnabled', $event)"
-        @update:prefix-list="emit('update:prefixList', $event)"
         @update:selected-prefix-index="emit('update:selectedPrefixIndex', $event)"
-        @add-prefix="emit('addPrefix')"
+        @add-prefix="emit('addPrefix', $event)"
+        @update-prefix="emit('updatePrefix', $event)"
         @remove-prefix="emit('removePrefix', $event)"
         @reset-to-default="emit('resetToDefault')"
       />

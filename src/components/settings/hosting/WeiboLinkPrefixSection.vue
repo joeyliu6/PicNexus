@@ -4,11 +4,13 @@ import InputText from 'primevue/inputtext';
 import ToggleSwitch from 'primevue/toggleswitch';
 import RadioButton from 'primevue/radiobutton';
 import Button from 'primevue/button';
+import type { LinkPrefixItem } from '../../../config/types';
+import { applyPrefixTemplate } from '../../../utils/linkPrefixTemplate';
 import { useConfirm } from '../../../composables/useConfirm';
 
 interface Props {
   linkPrefixEnabled: boolean;
-  prefixList: string[];
+  prefixList: LinkPrefixItem[];
   selectedPrefixIndex: number;
 }
 
@@ -16,16 +18,17 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   'update:linkPrefixEnabled': [enabled: boolean];
-  'update:prefixList': [list: string[]];
   'update:selectedPrefixIndex': [index: number];
   save: [];
-  addPrefix: [];
+  addPrefix: [item: LinkPrefixItem];
+  updatePrefix: [payload: { index: number; item: LinkPrefixItem }];
   removePrefix: [index: number];
   resetToDefault: [];
 }>();
 
-const editingIndex = ref(-1);
 const { showConfirm } = useConfirm();
+
+const editingIndex = ref(-1);
 
 const localLinkPrefixEnabled = computed({
   get: () => props.linkPrefixEnabled,
@@ -40,32 +43,28 @@ const localSelectedPrefixIndex = computed({
   set: (val) => emit('update:selectedPrefixIndex', val)
 });
 
-const FRIENDLY_NAMES: Record<string, string> = {
-  'image.baidu.com': '百度图片',
-  'cdn.cdnjson.com': 'CDN JSON',
-};
-
-function shortDomain(url: string): string {
+function shortDomain(template: string): string {
   try {
-    return new URL(url).hostname;
+    return new URL(template).hostname;
   } catch {
-    return url.replace(/^https?:\/\//, '').split('/')[0] || url;
+    return template.replace(/^https?:\/\//, '').split('/')[0] || template;
   }
-}
-
-function friendlyName(url: string): string {
-  const domain = shortDomain(url);
-  return FRIENDLY_NAMES[domain] || domain;
 }
 
 function toggleEdit(idx: number) {
   editingIndex.value = editingIndex.value === idx ? -1 : idx;
 }
 
-function handlePrefixChange(index: number, value: string) {
-  const newList = [...props.prefixList];
-  newList[index] = value;
-  emit('update:prefixList', newList);
+function updatePrefixField(index: number, field: keyof LinkPrefixItem, value: string) {
+  const current = props.prefixList[index];
+  if (!current) return;
+  emit('updatePrefix', { index, item: { ...current, [field]: value } });
+}
+
+function handleAdd() {
+  const nextIndex = props.prefixList.length;
+  emit('addPrefix', { name: '自定义前缀', template: 'https://' });
+  editingIndex.value = nextIndex;
 }
 
 function handleRemove(index: number) {
@@ -88,9 +87,12 @@ function handleReset() {
   });
 }
 
-function handleAdd() {
-  emit('addPrefix');
-  editingIndex.value = props.prefixList.length;
+const SAMPLE_URL = 'https://ww1.sinaimg.cn/mw690/abc123.jpg';
+
+function renderPreview(prefix: LinkPrefixItem): string {
+  const t = (prefix.template || '').trim();
+  if (!t) return '';
+  return applyPrefixTemplate(t, SAMPLE_URL);
 }
 </script>
 
@@ -120,41 +122,59 @@ function handleAdd() {
               @change="emit('save')"
             />
             <label :for="'prefix-' + idx" class="prefix-info" @click.stop>
-              <span class="prefix-name">{{ friendlyName(prefix) }}</span>
+              <span class="prefix-name">{{ prefix.name || '未命名' }}</span>
               <span class="prefix-dot">·</span>
-              <span class="prefix-domain">{{ shortDomain(prefix) }}</span>
+              <span class="prefix-domain">{{ shortDomain(prefix.template) }}</span>
             </label>
             <div class="prefix-actions">
               <Button
                 :icon="editingIndex === idx ? 'pi pi-chevron-up' : 'pi pi-pencil'"
-                @click="toggleEdit(idx)"
                 text
                 rounded
                 size="small"
+                @click="toggleEdit(idx)"
               />
               <Button
                 icon="pi pi-trash"
-                @click="handleRemove(idx)"
                 text
                 rounded
                 severity="danger"
                 size="small"
                 :disabled="prefixList.length <= 1"
+                @click="handleRemove(idx)"
               />
             </div>
           </div>
 
           <div v-if="editingIndex === idx" class="prefix-edit">
             <div class="prefix-field-row">
-              <span class="prefix-field-label">地址</span>
+              <span class="prefix-field-label">名称</span>
               <InputText
-                :modelValue="prefix"
-                @update:modelValue="(val) => handlePrefixChange(idx, val as string)"
-                @blur="emit('save')"
-                placeholder="https://"
+                :modelValue="prefix.name"
+                placeholder="如：搜狗图片"
                 class="flex-1"
                 size="small"
+                @update:modelValue="(val) => updatePrefixField(idx, 'name', val as string)"
+                @blur="emit('save')"
               />
+            </div>
+            <div class="prefix-field-row">
+              <span class="prefix-field-label">模板</span>
+              <InputText
+                :modelValue="prefix.template"
+                placeholder="https://example.com/{url_no_scheme}"
+                class="flex-1 prefix-template-input"
+                size="small"
+                @update:modelValue="(val) => updatePrefixField(idx, 'template', val as string)"
+                @blur="emit('save')"
+              />
+            </div>
+            <div class="prefix-vars-hint">
+              可用变量：<code>{url}</code> <code>{url_no_scheme}</code> <code>{path}</code> <code>{url_encoded}</code>
+            </div>
+            <div class="prefix-preview-inline">
+              <span class="prefix-preview-label">转换效果</span>
+              <code class="prefix-preview-url">{{ renderPreview(prefix) }}</code>
             </div>
           </div>
         </div>
@@ -164,17 +184,17 @@ function handleAdd() {
         <Button
           label="添加前缀"
           icon="pi pi-plus"
-          @click="handleAdd"
           outlined
           size="small"
+          @click="handleAdd"
         />
         <Button
           label="恢复默认"
           icon="pi pi-refresh"
-          @click="handleReset"
           outlined
           severity="secondary"
           size="small"
+          @click="handleReset"
         />
       </div>
     </template>
@@ -188,7 +208,7 @@ function handleAdd() {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-sm-md);
 }
 
 .prefix-title-row .subsection-hint {
@@ -199,11 +219,11 @@ function handleAdd() {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-top: 14px;
+  margin-top: var(--space-md);
 }
 
 .prefix-row {
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   transition: background-color var(--duration-fast) ease;
 }
 
@@ -212,21 +232,21 @@ function handleAdd() {
 }
 
 .prefix-row.selected {
-  background: var(--primary-alpha-5);
+  background: var(--primary-alpha-8);
 }
 
 .prefix-row-main {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-sm-md);
 }
 
 .prefix-info {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-xs);
   cursor: pointer;
   min-width: 0;
   overflow: hidden;
@@ -262,14 +282,14 @@ function handleAdd() {
 .prefix-edit {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 0 10px 10px 38px;
+  gap: var(--space-xs);
+  padding: 0 var(--space-sm-md) var(--space-sm-md) 38px;
 }
 
 .prefix-field-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .prefix-field-label {
@@ -279,10 +299,52 @@ function handleAdd() {
   flex-shrink: 0;
 }
 
+.prefix-template-input {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.prefix-vars-hint {
+  font-size: var(--text-2xs-xs);
+  color: var(--text-muted);
+  padding-top: 2px;
+}
+
+.prefix-vars-hint code {
+  font-size: var(--text-2xs-xs);
+  padding: 1px 4px;
+  background: var(--hover-overlay);
+  border-radius: var(--radius-xs-sm);
+  color: var(--primary);
+  margin: 0 1px;
+}
+
+.prefix-preview-inline {
+  margin-top: var(--space-sm);
+  padding: var(--space-sm) var(--space-sm-md);
+  background: var(--hover-overlay-subtle);
+  border-radius: var(--radius-xs-sm);
+}
+
+.prefix-preview-label {
+  display: block;
+  font-size: var(--text-2xs-xs);
+  color: var(--text-muted);
+  margin-bottom: var(--space-2xs);
+}
+
+.prefix-preview-url {
+  font-size: var(--text-2xs-xs);
+  color: var(--primary);
+  font-family: var(--font-mono);
+  word-break: break-all;
+  line-height: 1.4;
+}
+
 .prefix-toolbar {
   display: flex;
-  gap: 8px;
-  margin-top: 8px;
-  padding-left: 10px;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+  padding-left: var(--space-sm-md);
 }
 </style>

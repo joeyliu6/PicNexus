@@ -211,7 +211,7 @@ flowchart TD
 
     P5 --> P5A[config.editorServer]
 
-    P6 --> P6A[linkPrefixConfig<br/>其他高级选项]
+    P6 --> P6A[linkPrefixConfig<br/>LinkPrefixItem 数组<br/>其他高级选项]
 
     P7 --> P7A[展示 version<br/>open_log_dir 按钮<br/>checkForUpdate 按钮]
     P7 -.详见.-> UPD[auto-update-flow]
@@ -250,6 +250,33 @@ flowchart TD
 
 ---
 
+## 链接前缀（微博代理）数据结构
+
+`config.linkPrefixConfig.prefixList` 是 `LinkPrefixItem[]`（不是字符串数组）：
+
+```ts
+interface LinkPrefixItem { name: string; template: string }
+```
+
+`template` 支持 4 种占位符，由 `src/utils/linkPrefixTemplate.ts` 解析：
+
+| 占位符 | 含义 | 典型用法 |
+|--------|------|---------|
+| `{url}` | 完整原 URL | 显式声明位置 |
+| `{url_no_scheme}` | 去掉 `https://` / `http://` | Jetpack 风格 |
+| `{path}` | 去掉协议和域名，仅保留路径 | IPFS Scan 风格 |
+| `{url_encoded}` | `encodeURIComponent` | 搜狗 / query 参数型 |
+
+**兼容规则**：template 若不含任何占位符，拼接时自动在末尾追加 `{url}`，等价于旧版纯前缀行为。
+
+默认列表定义在 [src/config/configInterface.ts](../../src/config/configInterface.ts) 的 `DEFAULT_LINK_PREFIXES`，当前包含搜狗图片 / CDN JSON / Jetpack / IPFS Scan 四项。
+
+新增/编辑由 [LinkPrefixEditDialog.vue](../../src/components/settings/hosting/LinkPrefixEditDialog.vue) 弹窗承载，用户填写 `name` + `template`，保存后 emit 到 `useSettingsForm.addPrefix` / `updatePrefix`。
+
+反向解析（MD 解析器把带前缀的 URL 剥回原始 URL）由 `stripPrefixTemplate()` 完成，[mdParser.ts](../../src/utils/mdParser.ts) 的 `stripKnownPrefixes` 遍历 `prefixList` 尝试匹配。
+
+---
+
 ## 排查指南
 
 | 现象 | 可能原因 | 对照图表位置 |
@@ -264,6 +291,7 @@ flowchart TD
 | 配置文件打不开/解密失败 | 备份密码机制触发,需要引导用户输入 | 图1 D5 |
 | 新增字段迁移老配置报错 | 新字段没在 DEFAULT_CONFIG 加默认值,老 config 读到 undefined | 新增流程 C、D |
 | 样式被硬编码污染 | 违反 CLAUDE.md,用 `docs/design/tokens.md` 里的变量替换 | 图3 |
+| 新加的链接前缀没生效 / 搜狗风格 URL 不对 | template 占位符拼错,或调用方没过 `applyPrefixTemplate` 直接字符串拼接 | 链接前缀数据结构 |
 
 ---
 
