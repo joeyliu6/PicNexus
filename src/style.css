@@ -251,7 +251,7 @@
   --z-sticky: 200;
   --z-overlay: 1000;
   --z-modal: 1100;
-  --z-toast: 1200;
+  --z-toast: 10000;
   --z-tooltip: 1300;
   --z-lightbox: 9999;
   --z-titlebar: 10001;
@@ -673,6 +673,8 @@ button:focus-visible {
 .p-toast.p-toast-top-right {
   top: 52px !important;  /* TitleBar(32px) + 间距(20px) */
   right: var(--space-lg-xl);
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 覆盖 PrimeVue 内联 z-index，确保 Toast 显示在灯箱(--z-lightbox: 9999)之上 */
+  z-index: var(--z-toast) !important;
 }
 
 
