@@ -189,7 +189,7 @@ describe('useUploadManager', () => {
     );
   });
 
-  it('persists failures that arrive before the first success', async () => {
+  it('only persists success results, skips failures', async () => {
     const queueManager = createQueueManager();
     const { useUploadManager } = await import('../../../composables/useUpload');
     const { handleFilesUpload } = useUploadManager(queueManager as never);
@@ -201,13 +201,8 @@ describe('useUploadManager', () => {
       serviceId: 'jd',
       status: 'success',
     });
-    expect(addResultToHistoryItemMock).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        serviceId: 'upyun',
-        status: 'failed',
-      })
-    );
+    // 失败结果不应被持久化到历史记录
+    expect(addResultToHistoryItemMock).not.toHaveBeenCalled();
   });
 
   it('shows a partial-success toast when uploads succeed but some services fail', async () => {

@@ -85,9 +85,7 @@ export async function processUploadQueue(
 
         // 实时处理单个服务完成的函数
         const handleServiceResult = async (serviceResult: SingleServiceResult) => {
-          if (!historyCreated && historyCreating) {
-            pendingResults.push(serviceResult);
-          } else if (!historyCreated && serviceResult.status === 'failed') {
+          if (!historyCreated && historyCreating && serviceResult.status === 'success') {
             pendingResults.push(serviceResult);
           }
 
@@ -116,8 +114,8 @@ export async function processUploadQueue(
               log.error('立即保存失败:', err);
               historyCreating = false; // 重置，允许后续成功结果重试
             }
-          } else if (historyCreated) {
-            // 历史记录已创建后，后续成功/失败结果都追加到已有记录
+          } else if (historyCreated && serviceResult.status === 'success') {
+            // 历史记录已创建后，后续成功结果追加到已有记录（失败结果不持久化）
             const success = await addResultToHistoryItem(historyId, serviceResult);
             if (!success) {
               log.warn(`${serviceResult.serviceId} 结果追加失败，但不影响上传`);
