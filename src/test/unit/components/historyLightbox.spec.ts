@@ -37,7 +37,7 @@ vi.mock('../../../composables/useHistory', () => ({
 
 vi.mock('../../../composables/useCopyLink', () => ({
   useCopyLink: () => ({
-    copyLink: vi.fn(),
+    copyLink: vi.fn().mockResolvedValue({ ok: true }),
     applyPrefix: (url: string) => url,
   }),
 }));
@@ -134,8 +134,8 @@ describe('HistoryLightbox', () => {
     expect(findInTeleport('.cell-failed')).toBeNull();
   });
 
-  it('does not show service menu for single service', () => {
-    mountLightbox(makeHistoryItem([
+  it('does not show service menu and calls copyLink directly for single service', async () => {
+    const wrapper = mountLightbox(makeHistoryItem([
       {
         serviceId: 'jd',
         status: 'success',
@@ -143,7 +143,12 @@ describe('HistoryLightbox', () => {
       },
     ]));
 
-    // 单图床不应有菜单 wrapper 中的下拉
+    // 单图床点击后不弹菜单，直接调用 handleCopyLink
+    const copyBtn = findInTeleport('.copy-btn-wrapper .action-btn') as HTMLButtonElement;
+    expect(copyBtn).not.toBeNull();
+    await copyBtn.click();
+    await wrapper.vm.$nextTick();
+
     expect(findInTeleport('.service-copy-menu')).toBeNull();
   });
 
@@ -169,5 +174,34 @@ describe('HistoryLightbox', () => {
 
     const menuItems = findAllInTeleport('.service-copy-item');
     expect(menuItems.length).toBe(2);
+  });
+
+  it('invokes handleCopyServiceLink and closes menu when clicking a service item', async () => {
+    const wrapper = mountLightbox(makeHistoryItem([
+      {
+        serviceId: 'jd',
+        status: 'success',
+        result: { serviceId: 'jd', fileKey: 'key-1', url: 'https://example.com/jd.jpg' },
+      },
+      {
+        serviceId: 'weibo',
+        status: 'success',
+        result: { serviceId: 'weibo', fileKey: 'key-2', url: 'https://example.com/weibo.jpg' },
+      },
+    ]));
+
+    // 打开菜单
+    const copyBtn = findInTeleport('.copy-btn-wrapper .action-btn') as HTMLButtonElement;
+    await copyBtn.click();
+    await wrapper.vm.$nextTick();
+
+    // 点击第一个菜单项，触发 handleCopyServiceLink
+    const firstItem = findInTeleport('.service-copy-item') as HTMLButtonElement;
+    expect(firstItem).not.toBeNull();
+    await firstItem.click();
+    await wrapper.vm.$nextTick();
+
+    // 菜单应已关闭
+    expect(findInTeleport('.service-copy-menu')).toBeNull();
   });
 });
