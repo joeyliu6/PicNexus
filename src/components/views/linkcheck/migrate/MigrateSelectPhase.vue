@@ -183,7 +183,7 @@ function handleTargetToggle(serviceId: string) {
 
 /* 右栏 */
 .split-right {
-  flex: 1; min-width: 0; padding: var(--space-lg);
+  flex: 1; min-width: 0; padding-left: var(--space-lg);
   display: flex; flex-direction: column; overflow-y: auto;
 }
 

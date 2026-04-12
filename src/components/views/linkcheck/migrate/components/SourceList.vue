@@ -104,7 +104,7 @@ const totalImages = computed(() =>
 
 <style scoped>
 .split-left {
-  width: 320px; flex-shrink: 0; padding: var(--space-lg);
+  width: 320px; flex-shrink: 0; padding-right: var(--space-lg);
   border-right: 1px solid var(--border-subtle);
   display: flex; flex-direction: column; overflow-y: auto;
 }
