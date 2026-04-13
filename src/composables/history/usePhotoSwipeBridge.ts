@@ -10,6 +10,11 @@
 import { ref, watch, onUnmounted, nextTick, type Ref, type ComputedRef } from 'vue';
 import PhotoSwipe from 'photoswipe';
 import type { PhotoSwipeOptions } from 'photoswipe';
+import { prefersReducedMotion, motionDuration } from '../../utils/reducedMotion';
+
+export const SHOW_ANIMATION_DURATION = 300;
+export const HIDE_ANIMATION_DURATION = 200;
+export const ZOOM_ANIMATION_DURATION = 250;
 
 export interface PhotoSwipeBridgeOptions {
   /** 灯箱是否可见 */
@@ -47,6 +52,7 @@ interface PswpSlideOptions {
 
 /** 构建 PhotoSwipe 初始化选项（纯函数，与生命周期解耦，便于阅读）*/
 function buildPswpOptions(slide: PswpSlideOptions): PhotoSwipeOptions {
+  const reduced = prefersReducedMotion();
   return {
     dataSource: [{
       src: slide.src,
@@ -58,10 +64,10 @@ function buildPswpOptions(slide: PswpSlideOptions): PhotoSwipeOptions {
     }],
     index: 0,
     bgOpacity: 0.85,
-    showHideAnimationType: slide.useZoom ? 'zoom' : 'fade',
-    showAnimationDuration: 300,
-    hideAnimationDuration: 200,
-    zoomAnimationDuration: 250,
+    showHideAnimationType: reduced ? 'none' : (slide.useZoom ? 'zoom' : 'fade'),
+    showAnimationDuration: motionDuration(SHOW_ANIMATION_DURATION),
+    hideAnimationDuration: motionDuration(HIDE_ANIMATION_DURATION),
+    zoomAnimationDuration: motionDuration(ZOOM_ANIMATION_DURATION),
     easing: 'cubic-bezier(.4,0,.22,1)',
     // 禁用 PhotoSwipe 默认 UI（用我们自己的）
     arrowPrev: false,

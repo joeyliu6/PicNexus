@@ -148,7 +148,7 @@ onUnmounted(() => {
             @mouseenter="handlePreviewEnter($event, slotProps.data)"
             @mouseleave="handlePreviewLeave"
           >
-            <div class="thumb-box" :data-lightbox-id="slotProps.data.id" @click="openLightbox(slotProps.data)">
+            <div class="thumb-box" :data-lightbox-id="slotProps.data.id" @click="openLightbox(slotProps.data, $event)">
               <ThumbnailImage
                 :srcs="getThumbnailCandidates(slotProps.data, configManager.config.value)"
                 :alt="slotProps.data.localFileName"
@@ -314,12 +314,15 @@ onUnmounted(() => {
 }
 
 .thumb-preview-leave-active {
-  transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease;
+  transition:
+    opacity var(--duration-medium) var(--ease-standard),
+    filter var(--duration-medium) var(--ease-standard);
+  will-change: opacity, filter;
 }
 
 .thumb-preview-leave-to {
   opacity: 0;
-  transform: scale(0.92);
+  filter: blur(3px);
 }
 
 .global-thumb-hover-preview img {
