@@ -264,6 +264,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             saveHistoryItemImmediate,
             addResultToHistoryItem,
             weiboPrefix: activePrefix.value,
+            toast,
           },
           collectedLinks,
           uploadSummary
@@ -347,7 +348,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
     isServiceSelected,
 
     // 方法
-    selectFiles,
+    selectFiles: () => selectFiles(toast),
     handleFilesUpload,
     loadServiceButtonStates,
     toggleServiceSelection,

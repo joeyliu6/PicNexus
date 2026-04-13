@@ -2,7 +2,7 @@
 // 上传文件校验与选择：扩展名过滤 + 系统文件对话框
 
 import { open as dialogOpen } from '@tauri-apps/plugin-dialog';
-import { useToast } from '../useToast';
+import type { useToast } from '../useToast';
 import { TOAST_MESSAGES } from '../../constants';
 import { createLogger } from '../../utils/logger';
 
@@ -39,9 +39,9 @@ export async function filterValidFiles(filePaths: string[]): Promise<{
 
 /**
  * 打开系统文件选择对话框，返回用户选中的图片路径
+ * @param toast toast 实例（由 composable 在 setup 阶段注入，避免在回调中调用 useToast）
  */
-export async function selectFiles(): Promise<string[] | null> {
-  const toast = useToast();
+export async function selectFiles(toast?: ReturnType<typeof useToast>): Promise<string[] | null> {
   try {
     const selected = await dialogOpen({
       multiple: true,
@@ -58,7 +58,7 @@ export async function selectFiles(): Promise<string[] | null> {
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     log.error('文件选择失败:', error);
-    toast.showConfig('error', TOAST_MESSAGES.upload.selectFailed(errorMsg));
+    toast?.showConfig('error', TOAST_MESSAGES.upload.selectFailed(errorMsg));
     return null;
   }
 }

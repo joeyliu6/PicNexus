@@ -8,7 +8,7 @@ import type { CopyLinkItem } from '../useCopyLink';
 import type { UploadSessionSummary } from '../../utils/uploadSummary';
 import { useServiceHealth } from '../useServiceHealth';
 import { useServiceAvailability } from '../useServiceAvailability';
-import { useToast } from '../useToast';
+import type { useToast } from '../useToast';
 import { TOAST_MESSAGES } from '../../constants';
 import { SERVICE_DISPLAY_NAMES } from '../../constants/serviceNames';
 import { AUTH_CONFIG_ERROR_CODES } from '../../types/serviceHealth';
@@ -32,6 +32,8 @@ export interface UploadExecutorContext {
   ) => Promise<boolean>;
   /** 微博前缀快照（由门面在调用前读取 activePrefix.value） */
   weiboPrefix: string | null;
+  /** toast 实例（由门面在 setup 阶段注入，避免在异步函数中调用 useToast） */
+  toast: ReturnType<typeof useToast>;
 }
 
 /**
@@ -53,8 +55,7 @@ export async function processUploadQueue(
   collectedLinks?: CopyLinkItem[],
   uploadSummary?: UploadSessionSummary
 ): Promise<void> {
-  const toast = useToast();
-  const { queueManager, saveHistoryItemImmediate, addResultToHistoryItem, weiboPrefix } = ctx;
+  const { queueManager, saveHistoryItemImmediate, addResultToHistoryItem, weiboPrefix, toast } = ctx;
 
   if (!queueManager) {
     log.error('上传队列管理器未初始化');
