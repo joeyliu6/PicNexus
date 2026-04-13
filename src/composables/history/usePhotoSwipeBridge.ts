@@ -63,7 +63,7 @@ function buildPswpOptions(slide: PswpSlideOptions): PhotoSwipeOptions {
       thumbCropped: slide.isCropped,
     }],
     index: 0,
-    bgOpacity: 0.85,
+    bgOpacity: 0.65,
     showHideAnimationType: reduced ? 'none' : (slide.useZoom ? 'zoom' : 'fade'),
     showAnimationDuration: motionDuration(SHOW_ANIMATION_DURATION),
     hideAnimationDuration: motionDuration(HIDE_ANIMATION_DURATION),
@@ -124,6 +124,8 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
   let pswp: PhotoSwipe | null = null;
   /** PhotoSwipe 根元素，供 Vue Teleport 挂载自定义 UI */
   const pswpEl = ref<HTMLElement | null>(null);
+  /** 模糊背景图源：打开时取已缓存缩略图（msrc），导航时取 imageSrc，关闭时清空 */
+  const blurSrc = ref<string | null>(null);
 
   // ── 键盘导航（PhotoSwipe 原生仅处理 Esc） ──────
 
@@ -177,6 +179,8 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     const useZoom = !!(thumbEl && thumbWidth >= FLIP_MIN_WIDTH);
 
     pswp = new PhotoSwipe(buildPswpOptions({ src, msrc, w, h, thumbEl, useZoom, isCropped }));
+    // 优先使用已缓存的缩略图（msrc），确保模糊背景开场即有图；无缩略图时回退到原图 URL
+    blurSrc.value = msrc || src;
 
     // 关闭事件 → 同步回 Vue
     // thisInstance 守卫：防止旧实例的 close 事件在新实例创建后仍干扰状态
@@ -184,6 +188,7 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     pswp.on('close', () => {
       if (pswp !== thisInstance) return;
       pswpEl.value = null;
+      blurSrc.value = null;
       pswp = null;
       options.onClose();
     });
@@ -231,6 +236,8 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
       ds[0].element = undefined;
     }
     pswp.refreshSlideContent(0);
+    // 导航时缩略图不在 DOM，改用 imageSrc（可能需要网络加载，淡入处理）
+    blurSrc.value = src;
   }
 
   // ── Watch: visible → 打开/关闭 ──────────────
@@ -265,5 +272,5 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     }
   });
 
-  return { pswpEl };
+  return { pswpEl, blurSrc };
 }

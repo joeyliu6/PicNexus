@@ -5,7 +5,7 @@
  * PhotoSwipe 处理：FLIP 开/关动画、缩放、平移、手势
  * Vue 处理：底栏（信息+操作）、导航事件、收藏状态
  */
-import { computed, toRef } from 'vue';
+import { computed, toRef, ref } from 'vue';
 import 'photoswipe/style.css';
 import type { HistoryItem } from '../../../config/types';
 import { useConfigManager } from '../../../composables/useConfig';
@@ -47,7 +47,9 @@ const itemId = computed(() => props.item?.id);
 const imageWidth = computed(() => props.item?.width || 0);
 const imageHeight = computed(() => props.item?.height || 0);
 
-const { pswpEl } = usePhotoSwipeBridge({
+const blurLoadedSrc = ref<string | null>(null);
+
+const { pswpEl, blurSrc } = usePhotoSwipeBridge({
   visible: toRef(props, 'visible'),
   imageSrc,
   itemId,
@@ -87,6 +89,17 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
 <template>
   <!-- 自定义 UI 通过 Teleport 挂入 PhotoSwipe 根元素 -->
   <Teleport v-if="pswpEl" :to="pswpEl">
+    <!-- 高斯模糊背景层（z-index: -1，位于黑色遮罩 .pswp__bg 之后） -->
+    <div class="pswp-blur-bg" aria-hidden="true">
+      <img
+        v-if="blurSrc"
+        :src="blurSrc"
+        :class="{ 'is-loaded': blurLoadedSrc === blurSrc }"
+        alt=""
+        @load="blurLoadedSrc = blurSrc"
+      />
+    </div>
+
     <!-- 导航箭头：t-fade 过渡避免在边界条件（第一张/最后一张）时箭头瞬间消失 -->
     <Transition name="t-fade">
       <button
@@ -177,6 +190,36 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
 .pswp-nav:hover {
   color: var(--text-main);
   transform: translateY(-50%) scale(1.08);
+}
+
+/*
+ * 高斯模糊背景层
+ * z-index: -1 → 渲染在 .pswp__bg 黑色遮罩层（z:auto+transform=0 级）之后
+ * 视觉层序：blur(-1) → 黑色遮罩(0) → 主图(3)
+ * 黑色遮罩作为"调光层"压在 blur 上，只露出少量颜色氛围
+ */
+.pswp--picnexus .pswp-blur-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.pswp--picnexus .pswp-blur-bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.2); /* 消除 blur 边缘白边，scale 需略大于 blur 半径 */
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 灯箱模糊背景复合滤镜，无对应 token */
+  filter: blur(30px) brightness(0.6) saturate(1.3);
+  opacity: 0;
+  transition: opacity var(--duration-slow) ease;
+  pointer-events: none;
+}
+
+.pswp--picnexus .pswp-blur-bg img.is-loaded {
+  opacity: 1;
 }
 
 /* 浅色模式：灯箱始终保持暗色风格 */
