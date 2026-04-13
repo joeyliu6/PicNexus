@@ -102,7 +102,7 @@ describe('preloadNextScreen — 向下预加载', () => {
     ctx.preloadNextScreen();
     // c 已加载，不应调用 getThumbnailUrl('c')
     const calledMetas = (ctx.getThumbnailUrl as ReturnType<typeof vi.fn>).mock.calls
-      .map((call: [ImageMeta]) => call[0].id);
+      .map((call: unknown[]) => (call[0] as ImageMeta).id);
     expect(calledMetas).not.toContain('c');
   });
 });

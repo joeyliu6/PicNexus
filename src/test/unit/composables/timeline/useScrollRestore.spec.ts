@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import { useScrollRestore } from '../../../../composables/timeline/useScrollRestore';
 import type { VisibleItem } from '../../../../composables/useVirtualTimeline';
 
@@ -55,7 +55,6 @@ describe('canRestoreNow', () => {
       activationTrigger: ref(undefined as number | undefined),
       callbacks: { ...NOOP_CALLBACKS },
     });
-    // @ts-expect-error accessing internal
     expect(restore.getLastStableScrollTop()).toBe(0); // indirect test that it initializes
   });
 

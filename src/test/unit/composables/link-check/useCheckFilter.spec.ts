@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ref } from 'vue';
 import { useCheckFilter } from '../../../../composables/link-check/useCheckFilter';
-import type { LinkCheckRow, StatusFilter } from '../../../../types/linkCheck';
+import type { LinkCheckRow } from '../../../../types/linkCheck';
 
 // watchDebounced mock：替换为同步更新，方便直接设置 searchQuery
 vi.mock('@vueuse/core', async (importOriginal) => {
