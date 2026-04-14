@@ -15,6 +15,7 @@ import { useImageDetailCache } from './useImageDetailCache';
 import { useToast } from './useToast';
 import { TOAST_MESSAGES } from '../constants';
 import { useConfirm } from './useConfirm';
+import { useUndoToast } from './useUndoToast';
 import { useConfigManager } from './useConfig';
 import {
   onCacheEvent,
@@ -182,6 +183,7 @@ export function invalidateCache(): void {
 export function useHistoryManager() {
   const toast = useToast();
   const { confirm } = useConfirm();
+  const undoToast = useUndoToast();
   const detailCache = useImageDetailCache();
 
   // 初始化跨窗口事件监听（单例）
@@ -291,11 +293,16 @@ export function useHistoryManager() {
   async function clearHistory(): Promise<void> {
     try {
       const confirmed = await confirm(
-        '确定要清空所有上传历史记录吗？此操作不可撤销。',
+        '确定要清空所有上传历史记录吗？确认后有 5 秒可以撤销。',
         { header: '确认清空', acceptLabel: '清空', acceptClass: 'p-button-danger' }
       );
 
       if (!confirmed) {
+        return;
+      }
+
+      const proceed = await undoToast.show('将清空所有历史记录', 5);
+      if (!proceed) {
         return;
       }
 

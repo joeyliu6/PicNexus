@@ -109,6 +109,14 @@ vi.mock('../../../config/types', async (importOriginal) => {
   };
 });
 
+vi.mock('../../../composables/useUndoToast', () => ({
+  useUndoToast: () => ({
+    show: vi.fn().mockResolvedValue(true),
+    cancel: vi.fn(),
+    state: { summary: '', remaining: 0 },
+  }),
+}));
+
 vi.mock('../../../utils/logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),

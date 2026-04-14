@@ -6,7 +6,9 @@ import MainLayout from './components/layout/MainLayout.vue';
 import OnboardingDialog from './components/onboarding/OnboardingDialog.vue';
 import BackupPasswordDialog from './components/dialogs/BackupPasswordDialog.vue';
 import Toast from 'primevue/toast';
+import Button from 'primevue/button';
 import ConfirmDialog from 'primevue/confirmdialog';
+import { useUndoToast } from './composables/useUndoToast';
 import { useThemeManager } from './composables/useTheme';
 import { useToast } from './composables/useToast';
 import { useOnboarding } from './composables/useOnboarding';
@@ -24,6 +26,8 @@ import { historyDB } from './services/HistoryDatabase';
 import { createLogger } from './utils/logger';
 
 const log = createLogger('App');
+
+const { state: undoState, cancel: cancelUndo } = useUndoToast();
 
 const { effectiveTheme, initializeTheme } = useThemeManager();
 const toast = useToast();
@@ -219,6 +223,24 @@ onUnmounted(() => {
     <!-- 全局 Toast 通知 -->
     <Toast position="top-right" />
 
+    <!-- 撤销倒计时 Toast -->
+    <Toast group="undo" position="top-right">
+      <template #message>
+        <div class="undo-toast-content">
+          <i class="pi pi-exclamation-triangle undo-toast-icon" />
+          <span class="undo-toast-text">{{ undoState.summary }}</span>
+          <span class="undo-toast-countdown">({{ undoState.remaining }}s)</span>
+          <Button
+            label="撤销"
+            severity="secondary"
+            size="small"
+            text
+            @click="cancelUndo"
+          />
+        </div>
+      </template>
+    </Toast>
+
     <!-- 全局确认对话框 -->
     <ConfirmDialog />
   </div>
@@ -233,6 +255,31 @@ onUnmounted(() => {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* 撤销倒计时 Toast 内容布局 */
+.undo-toast-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: 1;
+}
+
+.undo-toast-icon {
+  color: var(--error);
+  flex-shrink: 0;
+}
+
+.undo-toast-text {
+  flex: 1;
+  font-size: var(--text-sm);
+}
+
+.undo-toast-countdown {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  opacity: 0.7;
+  flex-shrink: 0;
 }
 
 /* 确保深色主题类应用到根元素 */
