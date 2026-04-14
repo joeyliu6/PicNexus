@@ -12,7 +12,6 @@ const props = defineProps<{
   viewMode: ViewMode;
   filter: ServiceType | 'all';
   totalCount: number;
-  selectedCount: number;
 }>();
 
 const emit = defineEmits<{
@@ -97,13 +96,6 @@ function clearSearch() {
           @click="clearSearch"
         ></i>
       </div>
-
-      <Transition name="sel-fade">
-        <div v-if="selectedCount > 0" class="selection-badge">
-          <i class="pi pi-check-circle"></i>
-          <span>已选 {{ selectedCount }} 张</span>
-        </div>
-      </Transition>
 
       <div class="stat-badge">
         <span class="stat-val">{{ totalCount.toLocaleString() }}</span>
@@ -339,37 +331,6 @@ function clearSearch() {
   color: var(--text-primary);
   background: var(--hover-overlay);
   opacity: 1;
-}
-
-/* 选中徽章 */
-.selection-badge {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  height: 28px;
-  padding: 0 var(--space-sm-md);
-  background: var(--primary-alpha-12);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 14px 为药丸形圆角（高度一半） */
-  border-radius: 14px;
-  color: var(--primary);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  flex-shrink: 0;
-}
-
-.selection-badge i {
-  font-size: var(--text-xs);
-}
-
-.sel-fade-enter-active,
-.sel-fade-leave-active {
-  transition: opacity var(--duration-normal), transform var(--duration-normal);
-}
-
-.sel-fade-enter-from,
-.sel-fade-leave-to {
-  opacity: 0;
-  transform: scale(0.9);
 }
 
 /* 总数徽章 */

@@ -33,14 +33,15 @@ interface UseHistoryTableDataOptions {
   filter: Ref<ServiceType | 'all'>;
   searchTerm: Ref<string>;
   onPageLoaded?: () => void;
+  viewState?: ReturnType<typeof useHistoryViewState>;
 }
 
 const log = createLogger('HistoryTableData');
 
-export function useHistoryTableData({ filter, searchTerm, onPageLoaded }: UseHistoryTableDataOptions) {
+export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewState: externalViewState }: UseHistoryTableDataOptions) {
   const toast = useToast();
   const historyManager = useHistoryManager();
-  const viewState = useHistoryViewState();
+  const viewState = externalViewState ?? useHistoryViewState();
 
   const currentPageData = shallowRef<HistoryItem[]>([]);
   const currentPage = ref(1);
@@ -58,34 +59,41 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded }: UseHis
     return generateSkeletonData(DEFAULT_SKELETON_COUNT);
   });
 
+  let loadVersion = 0;
+
   async function loadCurrentPage() {
+    const version = ++loadVersion;
     try {
       isLoadingPage.value = true;
       const hasSearch = searchTerm.value?.trim();
 
+      let result: { items: HistoryItem[]; total: number };
       if (hasSearch) {
-        const result = await historyManager.searchHistory(searchTerm.value, {
+        result = await historyManager.searchHistory(searchTerm.value, {
           serviceFilter: filter.value === 'all' ? undefined : filter.value,
           limit: pageSize.value,
           offset: (currentPage.value - 1) * pageSize.value,
         });
-        currentPageData.value = result.items;
-        totalRecords.value = result.total;
       } else {
-        const result = await historyManager.loadPageByNumber(
+        result = await historyManager.loadPageByNumber(
           currentPage.value, pageSize.value, filter.value,
         );
-        currentPageData.value = result.items;
-        totalRecords.value = result.total;
       }
+
+      if (version !== loadVersion) return;
+      currentPageData.value = result.items;
+      totalRecords.value = result.total;
     } catch (error) {
+      if (version !== loadVersion) return;
       log.error('加载失败', error);
       toast.error('加载失败', String(error));
       currentPageData.value = [];
       totalRecords.value = 0;
     } finally {
-      isLoadingPage.value = false;
-      nextTick(() => onPageLoaded?.());
+      if (version === loadVersion) {
+        isLoadingPage.value = false;
+        nextTick(() => onPageLoaded?.());
+      }
     }
   }
 
@@ -141,18 +149,25 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded }: UseHis
   }
 
 
+  // 跨页服务缓存：记录每个已加载条目的成功图床，翻页后仍能保留跨页选中的服务信息
+  const itemServiceCache = new Map<string, string[]>();
+  watch(currentPageData, (pageData) => {
+    for (const item of pageData) {
+      itemServiceCache.set(item.id, getSuccessfulServices(item));
+    }
+  });
+
   const selectedAvailableServices = computed<ServiceType[]>(() => {
     const ids = viewState.selectedIdList.value;
     if (ids.length === 0) return [];
-    const idSet = new Set(ids);
-    const serviceSet = new Set<ServiceType>();
-    for (const item of currentPageData.value) {
-      if (!idSet.has(item.id)) continue;
-      for (const r of item.results) {
-        if (r.status === 'success') serviceSet.add(r.serviceId as ServiceType);
+    const serviceSet = new Set<string>();
+    for (const id of ids) {
+      const services = itemServiceCache.get(id);
+      if (services) {
+        for (const s of services) serviceSet.add(s);
       }
     }
-    return Array.from(serviceSet);
+    return Array.from(serviceSet) as ServiceType[];
   });
 
   return {

@@ -31,7 +31,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:totalCount', count: number): void;
-  (e: 'update:selectedCount', count: number): void;
 }>();
 
 const configManager = useConfigManager();
@@ -54,6 +53,7 @@ const {
   filter: computed(() => props.filter),
   searchTerm: computed(() => props.searchTerm),
   onPageLoaded: setupBadgeWidthObserver,
+  viewState,
 });
 
 const {
@@ -62,6 +62,15 @@ const {
   popoverServices, openServicePopover, handlePopoverCopyLink, handleCopyServiceLink,
   hoverPreview, handlePreviewEnter, handlePreviewLeave,
 } = useTableInteractions({ currentPageData, getSuccessfulServices, servicePopoverRef });
+
+// 计算选中项是否全部已收藏（用于 FloatingActionBar 切换收藏/取消收藏显示）
+const allSelectedFavorited = computed(() => {
+  const ids = new Set(viewState.selectedIdList.value);
+  if (ids.size === 0) return false;
+  const selected = currentPageData.value.filter((item: HistoryItem) => ids.has(item.id));
+  if (selected.length === 0) return false;
+  return selected.every((item: HistoryItem) => item.isFavorited === true);
+});
 
 // ---- emit 联动 ----
 watch(
@@ -72,10 +81,6 @@ watch(
   { immediate: true },
 );
 
-watch(() => viewState.selectedIdList.value.length, (count) => {
-  emit('update:selectedCount', count);
-}, { immediate: true });
-
 onUnmounted(() => {
   viewState.reset();
   thumbCache.clearThumbCache();
@@ -83,7 +88,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="tableViewRef" class="table-view-container" :class="{ 'has-selection': viewState.hasSelection.value, 'is-loading': isLoadingPage }">
+  <div ref="tableViewRef" class="table-view-container" :class="{ 'is-loading': isLoadingPage }">
     <!-- 表格视图（服务端分页，加载时使用骨架数据） -->
     <DataTable
       :value="isLoadingPage ? skeletonData : currentPageData"
@@ -248,11 +253,12 @@ onUnmounted(() => {
       :selected-count="viewState.selectedIdList.value.length"
       :visible="viewState.hasSelection.value"
       :available-services="selectedAvailableServices"
+      :all-favorited="allSelectedFavorited"
       @copy="viewState.bulkCopyFormatted"
       @export="viewState.bulkExport"
       @delete="viewState.bulkDelete"
       @clear-selection="viewState.clearSelection"
-      @batch-favorite="(favorited: boolean) => historyManager.batchSetFavorite(viewState.selectedIdList.value, favorited)"
+      @batch-favorite="async (favorited: boolean) => { await historyManager.batchSetFavorite(viewState.selectedIdList.value, favorited); }"
     />
 
     <!-- 全局悬浮预览层 -->
@@ -281,11 +287,6 @@ onUnmounted(() => {
 <style scoped>
 .table-view-container {
   height: 100%;
-}
-
-.table-view-container.has-selection {
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 底部浮动操作栏的固定留白高度，非间距 token */
-  padding-bottom: 80px;
 }
 
 .history-table {

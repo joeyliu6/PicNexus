@@ -19,7 +19,6 @@ const currentFilter = ref<ServiceType | 'all'>('all');
 const debouncedSearchTerm = ref('');
 
 const totalCount = ref(0);
-const selectedCount = ref(0);
 
 const activationTrigger = ref(0);
 
@@ -46,11 +45,8 @@ onDeactivated(() => {
   }
 });
 
-// 同层 v-show 切换（table ↔ timeline）时保存/恢复滚动位置，并重置选中计数
+// 同层 v-show 切换（table ↔ timeline）时保存/恢复滚动位置
 watch(currentViewMode, async (newMode, oldMode) => {
-  // 切换视图时重置选中计数
-  selectedCount.value = 0;
-
   if (oldMode === 'table') {
     // v-show 切换前 DOM 尚未隐藏，此时 scrollTop 仍可读
     savedTableScrollTop = historyContainerRef.value?.scrollTop ?? savedTableScrollTop;
@@ -67,10 +63,6 @@ watch(currentViewMode, async (newMode, oldMode) => {
 const handleTotalCountUpdate = (count: number) => {
   totalCount.value = count;
 };
-
-const handleSelectedCountUpdate = (count: number) => {
-  selectedCount.value = count;
-};
 </script>
 
 <template>
@@ -80,7 +72,6 @@ const handleSelectedCountUpdate = (count: number) => {
       v-model:view-mode="currentViewMode"
       v-model:filter="currentFilter"
       :total-count="totalCount"
-      :selected-count="selectedCount"
       @update:search-term="debouncedSearchTerm = $event"
     />
 
@@ -93,7 +84,6 @@ const handleSelectedCountUpdate = (count: number) => {
         :filter="currentFilter"
         :search-term="debouncedSearchTerm"
         @update:total-count="handleTotalCountUpdate"
-        @update:selected-count="handleSelectedCountUpdate"
       />
 
       <!-- 时间轴视图 -->
@@ -104,7 +94,6 @@ const handleSelectedCountUpdate = (count: number) => {
         :filter="currentFilter"
         :search-term="debouncedSearchTerm"
         @update:total-count="handleTotalCountUpdate"
-        @update:selected-count="handleSelectedCountUpdate"
       />
 
       <!-- 收藏视图 -->
@@ -115,7 +104,6 @@ const handleSelectedCountUpdate = (count: number) => {
         :filter="currentFilter"
         :search-term="debouncedSearchTerm"
         @update:total-count="handleTotalCountUpdate"
-        @update:selected-count="handleSelectedCountUpdate"
       />
     </div>
   </div>

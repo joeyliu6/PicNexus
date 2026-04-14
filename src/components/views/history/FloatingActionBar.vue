@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onBeforeUnmount } from 'vue';
 import { onClickOutside } from '@vueuse/core';
-import Button from 'primevue/button';
 import type { LinkFormat } from '../../../utils/linkFormatter';
 import { useConfigManager } from '../../../composables/useConfig';
 import { getServiceDisplayName } from '../../../constants/serviceNames';
+
+// Hover 交互延迟：进入短延迟防路过误触，离开较长延迟给用户从气泡到面板的缓冲
+const HOVER_ENTER_DELAY = 80;
+const HOVER_LEAVE_DELAY = 200;
 
 const props = defineProps<{
   selectedCount: number;
   visible: boolean;
   availableServices?: string[];
+  allFavorited?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -22,8 +26,9 @@ const emit = defineEmits<{
 
 const configManager = useConfigManager();
 
-const copyMenuVisible = ref(false);
-const copyDropdownRef = ref<HTMLElement | null>(null);
+const fabContainerRef = ref<HTMLElement | null>(null);
+const panelVisible = ref(false);
+const copySubMenuVisible = ref(false);
 const selectedService = ref<string | undefined>(undefined);
 
 const hasCustomTemplate = computed(() => !!configManager.config.value.linkOutput?.customTemplate);
@@ -37,20 +42,60 @@ const COPY_FORMATS: { type: LinkFormat; icon: string; label: string; needsCustom
   { type: 'custom', icon: 'pi-pencil', label: '自定义', needsCustom: true },
 ];
 
-function closeCopyMenu(): void {
-  copyMenuVisible.value = false;
-  selectedService.value = undefined;
-}
+let hoverTimer: ReturnType<typeof setTimeout> | null = null;
 
-function toggleCopyMenu(): void {
-  if (copyMenuVisible.value) {
-    closeCopyMenu();
-  } else {
-    copyMenuVisible.value = true;
+function clearHoverTimer(): void {
+  if (hoverTimer !== null) {
+    clearTimeout(hoverTimer);
+    hoverTimer = null;
   }
 }
 
-onClickOutside(copyDropdownRef, closeCopyMenu);
+function handleHoverEnter(): void {
+  clearHoverTimer();
+  hoverTimer = setTimeout(() => {
+    panelVisible.value = true;
+    hoverTimer = null;
+  }, HOVER_ENTER_DELAY);
+}
+
+function handleHoverLeave(): void {
+  clearHoverTimer();
+  hoverTimer = setTimeout(() => {
+    panelVisible.value = false;
+    copySubMenuVisible.value = false;
+    selectedService.value = undefined;
+    hoverTimer = null;
+  }, HOVER_LEAVE_DELAY);
+}
+
+// 点击气泡作为 hover 的补充（键盘/触屏 fallback）
+function togglePanel(): void {
+  if (panelVisible.value) {
+    closeAll();
+  } else {
+    clearHoverTimer();
+    panelVisible.value = true;
+  }
+}
+
+function closeAll(): void {
+  clearHoverTimer();
+  panelVisible.value = false;
+  copySubMenuVisible.value = false;
+  selectedService.value = undefined;
+}
+
+onClickOutside(fabContainerRef, closeAll);
+
+onBeforeUnmount(clearHoverTimer);
+
+function toggleCopySubMenu(): void {
+  copySubMenuVisible.value = !copySubMenuVisible.value;
+  if (!copySubMenuVisible.value) {
+    selectedService.value = undefined;
+  }
+}
 
 function handleServiceSelect(serviceId: string): void {
   selectedService.value = selectedService.value === serviceId ? undefined : serviceId;
@@ -58,236 +103,284 @@ function handleServiceSelect(serviceId: string): void {
 
 function handleCopy(format: LinkFormat): void {
   emit('copy', format, selectedService.value);
-  closeCopyMenu();
+  closeAll();
+}
+
+function handleFavoriteClick(): void {
+  emit('batch-favorite', !props.allFavorited);
+  closeAll();
+}
+
+function handleExport(): void {
+  emit('export');
+  closeAll();
+}
+
+function handleDelete(): void {
+  emit('delete');
+  closeAll();
+}
+
+function handleClear(): void {
+  emit('clear-selection');
 }
 </script>
 
 <template>
-  <Transition name="float-bar">
-    <div v-if="visible" class="floating-action-bar">
-      <div class="fab-content">
-        <!-- 选中计数 -->
-        <span class="fab-count">
-          <i class="pi pi-check-circle"></i>
-          {{ selectedCount }}
-        </span>
+  <Transition name="fab-bubble">
+    <div
+      v-if="visible"
+      ref="fabContainerRef"
+      class="fab-container"
+      @mouseenter="handleHoverEnter"
+      @mouseleave="handleHoverLeave"
+    >
+      <!-- 操作面板（从气泡上方弹出）-->
+      <Transition name="fab-panel">
+        <div v-if="panelVisible" class="fab-panel">
+          <!-- 收藏切换（单一按钮，根据 allFavorited 决定文案和色彩）-->
+          <button
+            class="panel-item"
+            :class="{ 'panel-item-warn': allFavorited }"
+            @click="handleFavoriteClick"
+          >
+            <i class="pi" :class="allFavorited ? 'pi-star-fill' : 'pi-star'"></i>
+            <span>{{ allFavorited ? '取消收藏' : '收藏' }}</span>
+          </button>
 
-        <div class="fab-divider"></div>
+          <!-- 复制链接（带子菜单）-->
+          <button
+            class="panel-item"
+            :class="{ 'panel-item-active': copySubMenuVisible }"
+            @click.stop="toggleCopySubMenu"
+          >
+            <i class="pi pi-copy"></i>
+            <span>复制链接</span>
+            <i class="pi pi-chevron-right panel-item-chevron"></i>
+          </button>
 
-        <!-- 收藏 -->
-        <Button
-          icon="pi pi-star"
-          text
-          size="small"
-          class="fab-btn"
-          @click="emit('batch-favorite', true)"
-          v-tooltip.top="'收藏'"
-        />
+          <!-- 导出 -->
+          <button class="panel-item" @click="handleExport">
+            <i class="pi pi-download"></i>
+            <span>导出</span>
+          </button>
 
-        <!-- 取消收藏 -->
-        <Button
-          icon="pi pi-star-fill"
-          text
-          size="small"
-          class="fab-btn fab-btn-unfavorite"
-          @click="emit('batch-favorite', false)"
-          v-tooltip.top="'取消收藏'"
-        />
+          <!-- 删除 -->
+          <button class="panel-item panel-item-danger" @click="handleDelete">
+            <i class="pi pi-trash"></i>
+            <span>删除</span>
+          </button>
 
-        <div class="fab-divider"></div>
+          <div class="panel-divider"></div>
 
-        <!-- 复制链接下拉菜单 -->
-        <div class="fab-copy-dropdown" ref="copyDropdownRef">
-          <Button
-            icon="pi pi-copy"
-            text
-            size="small"
-            class="fab-btn"
-            @click.stop="toggleCopyMenu"
-            v-tooltip.top="'复制链接'"
-          />
-          <Transition name="dropdown">
-            <div v-if="copyMenuVisible" class="copy-menu">
+          <!-- 取消选择 -->
+          <button class="panel-item panel-item-muted" @click="handleClear">
+            <i class="pi pi-times"></i>
+            <span>取消选择</span>
+          </button>
+
+          <!-- 复制链接子菜单（向左展开）-->
+          <Transition name="copy-submenu">
+            <div v-if="copySubMenuVisible" class="copy-submenu">
               <!-- 图床选择芯片（多图床时显示）-->
-              <div v-if="showServiceChips" class="service-chips">
-                <button
-                  v-for="sid in availableServices"
-                  :key="sid"
-                  class="service-chip"
-                  :class="{ active: selectedService === sid }"
-                  @click.stop="handleServiceSelect(sid)"
-                >
-                  {{ getServiceDisplayName(sid) }}
-                </button>
-              </div>
-              <div v-if="showServiceChips" class="menu-divider"></div>
+              <template v-if="showServiceChips">
+                <div class="service-chips">
+                  <button
+                    v-for="sid in availableServices"
+                    :key="sid"
+                    class="service-chip"
+                    :class="{ active: selectedService === sid }"
+                    @click.stop="handleServiceSelect(sid)"
+                  >
+                    {{ getServiceDisplayName(sid) }}
+                  </button>
+                </div>
+                <div class="panel-divider"></div>
+              </template>
 
               <template v-for="fmt in COPY_FORMATS" :key="fmt.type">
                 <button
                   v-if="!fmt.needsCustom || hasCustomTemplate"
-                  class="copy-menu-item"
+                  class="panel-item"
                   @click="handleCopy(fmt.type)"
                 >
-                  <i class="pi" :class="fmt.icon"></i><span>{{ fmt.label }}</span>
+                  <i class="pi" :class="fmt.icon"></i>
+                  <span>{{ fmt.label }}</span>
                 </button>
               </template>
             </div>
           </Transition>
         </div>
+      </Transition>
 
-        <!-- 导出 -->
-        <Button
-          icon="pi pi-download"
-          text
-          size="small"
-          class="fab-btn"
-          @click="emit('export')"
-          v-tooltip.top="'导出'"
-        />
-
-        <!-- 删除 -->
-        <Button
-          icon="pi pi-trash"
-          severity="danger"
-          text
-          size="small"
-          class="fab-btn fab-btn-danger"
-          @click="emit('delete')"
-          v-tooltip.top="'删除'"
-        />
-
-        <div class="fab-divider"></div>
-
-        <!-- 取消选择 -->
-        <Button
-          icon="pi pi-times"
-          text
-          rounded
-          size="small"
-          class="fab-close"
-          @click="emit('clear-selection')"
-          v-tooltip.top="'取消选择'"
-        />
-      </div>
+      <!-- 气泡触发器：hover 自动展开，click 作为键盘/触屏 fallback -->
+      <button
+        class="fab-bubble"
+        :class="{ active: panelVisible }"
+        :aria-expanded="panelVisible"
+        aria-label="批量操作菜单"
+        @click.stop="togglePanel"
+      >
+        <i class="pi pi-check-circle"></i>
+        <span class="fab-bubble-count">{{ selectedCount }}</span>
+      </button>
     </div>
   </Transition>
 </template>
 
 <style scoped>
-.floating-action-bar {
+.fab-container {
   position: fixed;
-  bottom: 70px;
-  left: 50%;
-  transform: translateX(-50%);
+  right: var(--space-xl);
+  bottom: var(--space-xl);
   z-index: var(--z-overlay);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 深色毛玻璃底色，无对应 CSS 变量 */
-  background: rgb(26 26 30 / 90%);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-2xl);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 内阴影高光含 rgb 色值 */
-  box-shadow: var(--shadow-float), 0 -1px 0 rgb(255 255 255 / 5%) inset;
-  padding: var(--space-sm) var(--space-lg);
 }
 
-:root.light-theme .floating-action-bar {
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 亮色毛玻璃底色，无对应 CSS 变量 */
-  background: rgb(255 255 255 / 95%);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 内阴影高光含 rgb 色值 */
-  box-shadow: var(--shadow-float), 0 1px 0 rgb(0 0 0 / 3%) inset;
-}
-
-.fab-content {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.fab-count {
+/* ---- 气泡 ---- */
+.fab-bubble {
   display: flex;
   align-items: center;
   gap: var(--space-xs-sm);
+  padding: var(--space-sm) var(--space-md);
+  min-height: 40px;
+  background: var(--primary);
+  color: var(--text-on-primary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
-  color: var(--primary);
-  padding: var(--space-xs-sm) var(--space-md);
-  background: var(--primary-alpha-10);
-  border-radius: var(--radius-lg);
-  white-space: nowrap;
+  box-shadow: var(--shadow-float);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
 }
 
-.fab-count i {
+.fab-bubble:hover {
+  transform: translateY(-1px);
+}
+
+.fab-bubble.active {
+  background: var(--primary-alpha-15);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.fab-bubble i {
   font-size: var(--text-base);
 }
 
-.fab-divider {
-  width: 1px;
-  height: 24px;
-  background: var(--border-subtle);
-  margin: 0 var(--space-xs);
+.fab-bubble-count {
+  line-height: 1;
 }
 
-.fab-btn {
-  font-size: var(--text-sm) !important;
-  padding: var(--space-xs-sm) var(--space-md) !important;
-  border-radius: var(--radius-md) !important;
-}
-
-.fab-btn-unfavorite {
-  color: var(--warning) !important;
-}
-
-.fab-btn-unfavorite:hover {
-  background: var(--warning-alpha-15) !important;
-}
-
-.fab-btn-danger:hover {
-  color: var(--error) !important;
-  background: var(--error-alpha-10) !important;
-}
-
-.fab-close {
-  width: 32px !important;
-  height: 32px !important;
-  color: var(--text-secondary) !important;
-}
-
-.fab-close:hover {
-  color: var(--text-primary) !important;
-  background: var(--hover-overlay) !important;
-}
-
-/* 浮动栏进入/退出动画 */
-.float-bar-enter-active,
-.float-bar-leave-active {
-  transition: all var(--duration-medium) var(--ease-standard);
-}
-
-.float-bar-enter-from,
-.float-bar-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(20px);
-}
-
-.fab-copy-dropdown {
-  position: relative;
-}
-
-.copy-menu {
+/* ---- 操作面板 ---- */
+.fab-panel {
   position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  right: 0;
+  bottom: calc(100% + var(--space-sm));
+  min-width: 180px;
+  padding: var(--space-xs-sm);
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-float);
-  padding: var(--space-xs-sm);
-  min-width: 160px;
-  z-index: var(--z-modal);
 }
 
-/* 图床芯片选择 */
+.panel-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  width: 100%;
+  padding: var(--space-sm-md) var(--space-md-lg);
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+}
+
+.panel-item:hover {
+  background: var(--hover-overlay);
+}
+
+.panel-item i {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  width: 16px;
+  text-align: center;
+}
+
+.panel-item:hover i {
+  color: var(--text-primary);
+}
+
+.panel-item-chevron {
+  margin-left: auto;
+  font-size: var(--text-xs) !important;
+}
+
+.panel-item-active {
+  background: var(--primary-alpha-8);
+  color: var(--primary);
+}
+
+.panel-item-active i {
+  color: var(--primary);
+}
+
+.panel-item-danger {
+  color: var(--error);
+}
+
+.panel-item-danger i {
+  color: var(--error);
+}
+
+.panel-item-danger:hover {
+  background: var(--error-alpha-10);
+}
+
+.panel-item-warn {
+  color: var(--warning);
+}
+
+.panel-item-warn i {
+  color: var(--warning);
+}
+
+.panel-item-warn:hover {
+  background: var(--warning-alpha-15);
+}
+
+.panel-item-muted {
+  color: var(--text-secondary);
+}
+
+.panel-divider {
+  height: 1px;
+  margin: var(--space-xs) var(--space-sm);
+  background: var(--border-subtle);
+}
+
+/* ---- 复制链接子菜单（向左展开） ---- */
+.copy-submenu {
+  position: absolute;
+  top: 0;
+  right: calc(100% + var(--space-sm));
+  min-width: 180px;
+  padding: var(--space-xs-sm);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+}
+
 .service-chips {
   display: flex;
   flex-wrap: wrap;
@@ -303,8 +396,8 @@ function handleCopy(format: LinkFormat): void {
   color: var(--text-secondary);
   font-size: var(--text-xs);
   cursor: pointer;
-  transition: all var(--duration-fast) ease;
   white-space: nowrap;
+  transition: all var(--duration-fast) ease;
 }
 
 .service-chip:hover {
@@ -319,64 +412,56 @@ function handleCopy(format: LinkFormat): void {
   font-weight: var(--weight-medium);
 }
 
-.menu-divider {
-  height: 1px;
-  background: var(--border-subtle);
-  margin: var(--space-xs) var(--space-sm);
+/* ---- 气泡入场动画 ---- */
+.fab-bubble-enter-active,
+.fab-bubble-leave-active {
+  transition: all var(--duration-medium) var(--ease-standard);
 }
 
-.copy-menu-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm-md);
-  width: 100%;
-  padding: var(--space-sm-md) var(--space-md-lg);
-  border: none;
-  background: transparent;
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all var(--duration-fast) ease;
-  text-align: left;
+.fab-bubble-enter-from,
+.fab-bubble-leave-to {
+  opacity: 0;
+  transform: translateY(12px) scale(0.9);
 }
 
-.copy-menu-item:hover {
-  background: var(--hover-overlay);
-  color: var(--primary);
+/* ---- 面板弹出动画（向上弹出，overshoot） ---- */
+.fab-panel-enter-active {
+  transition: all var(--duration-normal) var(--ease-overshoot);
 }
 
-.copy-menu-item i {
-  font-size: var(--text-base);
-  color: var(--text-secondary);
-  width: 16px;
-  text-align: center;
+.fab-panel-leave-active {
+  transition: all var(--duration-fast) var(--ease-accelerate);
 }
 
-.copy-menu-item:hover i {
-  color: var(--primary);
+.fab-panel-enter-from,
+.fab-panel-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.95);
+  transform-origin: bottom right;
 }
 
-/* 下拉菜单动画 */
-.dropdown-enter-active,
-.dropdown-leave-active {
+/* ---- 子菜单向左展开动画 ---- */
+.copy-submenu-enter-active,
+.copy-submenu-leave-active {
   transition: all var(--duration-normal) var(--ease-standard);
 }
 
-.dropdown-enter-from,
-.dropdown-leave-to {
+.copy-submenu-enter-from,
+.copy-submenu-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(8px);
+  transform: translateX(8px);
 }
 
-/* 响应式：窄屏幕隐藏按钮文字 */
+/* ---- 响应式：窄屏幕收紧间距 ---- */
 @media (width <= 600px) {
-  .fab-btn :deep(.p-button-label) {
-    display: none;
+  .fab-container {
+    right: var(--space-md);
+    bottom: var(--space-md);
   }
 
-  .floating-action-bar {
-    padding: var(--space-sm) var(--space-md);
+  .fab-panel,
+  .copy-submenu {
+    min-width: 160px;
   }
 }
 </style>
