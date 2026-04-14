@@ -120,6 +120,19 @@ export function useHistoryViewState() {
           serviceId,
         });
       }
+
+      if (items.length === 0) {
+        toast.warn('无可用链接', `所选 ${ids.length} 张图片均无该图床链接`);
+        return;
+      }
+
+      await copyLinks(items, { format });
+
+      // 有项目被跳过时给出提示，避免用户误以为全部复制成功
+      const skippedCount = ids.length - items.length;
+      if (skippedCount > 0) {
+        toast.warn(`已跳过 ${skippedCount} 张`, `这 ${skippedCount} 张图片无该图床链接`);
+      }
     } else {
       items = metas
         .filter(meta => !!meta.primaryUrl)
@@ -128,14 +141,14 @@ export function useHistoryViewState() {
           fileName: meta.localFileName,
           serviceId: meta.primaryService,
         }));
-    }
 
-    if (items.length === 0) {
-      toast.warn('无可用链接', '选中的项目没有可用链接');
-      return;
-    }
+      if (items.length === 0) {
+        toast.warn('无可用链接', '选中的项目没有可用链接');
+        return;
+      }
 
-    await copyLinks(items, { format });
+      await copyLinks(items, { format });
+    }
   }
 
   async function bulkExport(): Promise<void> {
