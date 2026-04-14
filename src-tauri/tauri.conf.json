@@ -57,7 +57,7 @@
       "endpoints": [
         "https://github.com/joeyliu6/PicNexus/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDIzRDMyNTkyMTYxRjU3Q0MKUldUTVZ4OFdraVhUSXpwR1E4cW5xa0FSWllHMTB1Z0FCaHExTzNPamxJNjVTR0pacWZ4eVNYQ2YK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDEzQTQ1REY0MTVBQjc2REUKUldUZWRxc1Y5RjJrRTQrb2VnQmFWVWljQXpNRTFxMFBPS3MzajdLNnk0c2VWcnpoc0dUbXJCTjkK",
       "windows": {
         "installMode": "passive"
       }
