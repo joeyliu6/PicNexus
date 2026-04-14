@@ -11,7 +11,10 @@ async function load() {
 }
 
 async function handleClear() {
-  const confirmed = await confirm('确定清空所有操作历史记录？', '清空历史');
+  const confirmed = await confirm('确定清空所有操作历史记录？', {
+    header: '清空历史',
+    acceptClass: 'p-button-danger',
+  });
   if (!confirmed) return;
   await historyDB.clearSyncLogs();
   entries.value = [];
@@ -150,19 +153,28 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 .clear-btn {
+  display: flex;
+  align-items: center;
+  line-height: 1;
   font-size: var(--text-xs);
   color: var(--text-muted);
   background: none;
   border: none;
   cursor: pointer;
   padding: var(--space-xs) var(--space-sm);
+
+  /* 负外边距抵消按钮自身右 padding，使"清空"文本右边缘与下方 ✓ 图标在同一垂直线上 */
+  margin-right: calc(-1 * var(--space-sm));
   border-radius: var(--radius-sm);
   transition: color var(--duration-fast), background var(--duration-fast);
 }
 
-.clear-btn:hover {
+.clear-btn:hover,
+.clear-btn:active,
+.clear-btn:focus-visible {
   color: var(--error);
   background: var(--error-soft);
+  outline: none;
 }
 
 /* ===== 分隔线 ===== */

@@ -57,12 +57,14 @@ onDeactivated(() => { isViewActive.value = false; });
       <span class="idle-main-text">拖放 Markdown 文件到此处</span>
       <div class="idle-buttons">
         <Button label="选择文件" :loading="isAnalyzing || isChecking" class="idle-btn-primary" @click="emit('selectFile')" />
-        <Button label="选择文件夹" severity="secondary" outlined :loading="isAnalyzing || isChecking" class="idle-btn-secondary" @click="emit('selectFolder')" />
+        <div class="idle-folder-col">
+          <Button label="选择文件夹" severity="secondary" outlined :loading="isAnalyzing || isChecking" class="idle-btn-secondary" @click="emit('selectFolder')" />
+          <label class="idle-subfolder-option">
+            <Checkbox :model-value="includeSubfolders" :binary="true" @update:model-value="emit('update:includeSubfolders', $event as boolean)" />
+            <span>包含子文件夹</span>
+          </label>
+        </div>
       </div>
-      <label class="idle-subfolder-option">
-        <Checkbox :model-value="includeSubfolders" :binary="true" @update:model-value="emit('update:includeSubfolders', $event as boolean)" />
-        <span>选择文件夹时包含子文件夹</span>
-      </label>
     </div>
   </div>
 </template>
@@ -72,9 +74,9 @@ onDeactivated(() => { isViewActive.value = false; });
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   height: 100%;
-  padding: var(--space-4xl) var(--space-3xl) 0 var(--space-lg);
+  padding: var(--space-2xl) var(--space-3xl);
 }
 
 .idle-zone {
@@ -106,8 +108,7 @@ onDeactivated(() => { isViewActive.value = false; });
 }
 
 .idle-zone.dragging .idle-icon-wrap { transform: translateY(-4px) scale(1.1); }
-/* stylelint-disable-next-line declaration-property-value-allowed-list -- 空闲区域大图标，字号介于 --text-3xl(28) 与 --text-4xl(36) 之间，属无 token 特例 */
-.idle-icon-wrap i { font-size: 32px; }
+.idle-icon-wrap i { font-size: var(--text-4xl); }
 
 .idle-feature-desc {
   font-size: var(--text-sm);
@@ -135,18 +136,25 @@ onDeactivated(() => { isViewActive.value = false; });
 .idle-btn-primary.p-button {
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 11px 无精确 spacing token */
   flex: 1; padding: 11px 0; font-size: var(--text-base); font-weight: var(--weight-semibold); border-radius: var(--radius-md);
+  background: var(--primary-alpha-40); border-color: transparent; color: var(--primary);
 }
+
+.idle-btn-primary.p-button:hover { background: var(--primary-alpha-40); opacity: 0.85; }
 
 .idle-btn-secondary.p-button {
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 11px 无精确 spacing token */
-  flex: 1; padding: 11px 0; font-size: var(--text-base); font-weight: var(--weight-medium); border-radius: var(--radius-md);
+  width: 100%; padding: 11px 0; font-size: var(--text-base); font-weight: var(--weight-medium); border-radius: var(--radius-md);
   border-color: var(--border-subtle); color: var(--text-muted);
 }
 
 .idle-btn-secondary.p-button:hover { background: var(--hover-overlay-subtle); }
 
+.idle-folder-col {
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-xs); flex: 1;
+}
+
 .idle-subfolder-option {
-  display: flex; align-items: center; gap: var(--space-xs-sm); margin-top: var(--space-lg);
+  display: flex; align-items: center; gap: var(--space-xs-sm);
   font-size: var(--text-xs); color: var(--text-tertiary); cursor: pointer; user-select: none;
 }
 </style>
