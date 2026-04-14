@@ -4,7 +4,6 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useHistoryViewState } from '../../composables/useHistoryViewState';
 import { useHistoryManager } from '../../composables/useHistory';
 import { useVirtualTimeline } from '../../composables/useVirtualTimeline';
-import { useThumbCache } from '../../composables/useThumbCache';
 import { useConfigManager } from '../../composables/useConfig';
 import { useImageMetadataFixer } from '../../composables/useImageMetadataFixer';
 import { useImageLoadManager } from '../../composables/useImageLoadManager';
@@ -39,7 +38,6 @@ const emit = defineEmits<{
 const toast = useToast();
 const viewState = useHistoryViewState();
 const historyManager = useHistoryManager();
-const thumbCache = useThumbCache();
 const metadataFixer = useImageMetadataFixer();
 const configManager = useConfigManager();
 
@@ -248,7 +246,6 @@ onUnmounted(() => {
   cleanupPreload();
 
   viewState.reset();
-  thumbCache.clearThumbCache();
   metadataFixer.flushNow();
 
   cleanupDragAndSkeleton();

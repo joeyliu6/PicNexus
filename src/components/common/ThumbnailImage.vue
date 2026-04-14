@@ -39,11 +39,15 @@ const handleLoad = () => {
   isLoading.value = false;
 };
 
-// 监听源列表变化
-watch(() => props.srcs, () => {
-  currentSrcIndex.value = 0;
-  loadImage();
-}, { immediate: true, deep: true });
+// 监听源列表变化（srcs 由上游 [...new Set()] / computed 产出，每次都是新数组引用，无需 deep）
+watch(
+  () => props.srcs,
+  () => {
+    currentSrcIndex.value = 0;
+    loadImage();
+  },
+  { immediate: true },
+);
 
 </script>
 
@@ -60,6 +64,8 @@ watch(() => props.srcs, () => {
       :class="imageClass"
       class="thumbnail-img"
       referrerpolicy="no-referrer"
+      loading="lazy"
+      decoding="async"
       @error="handleError"
       @load="handleLoad"
     />
