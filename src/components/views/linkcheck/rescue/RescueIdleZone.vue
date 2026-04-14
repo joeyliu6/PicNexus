@@ -134,12 +134,14 @@ onDeactivated(() => { isViewActive.value = false; });
 }
 
 .idle-btn-primary.p-button {
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 11px 无精确 spacing token */
-  flex: 1; padding: 11px 0; font-size: var(--text-base); font-weight: var(--weight-semibold); border-radius: var(--radius-md);
-  background: var(--primary-alpha-40); border-color: transparent; color: var(--primary);
+  flex: 1; height: 40px; padding: 0; font-size: var(--text-sm); font-weight: var(--weight-semibold); border-radius: var(--radius-md);
+  background: var(--primary-alpha-15); border-color: transparent; color: var(--primary);
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
 
-.idle-btn-primary.p-button:hover { background: var(--primary-alpha-40); opacity: 0.85; }
+.idle-btn-primary.p-button:hover { background: var(--primary-alpha-15); filter: brightness(0.94); }
+.idle-btn-primary.p-button:active { background: var(--primary-alpha-15); filter: brightness(0.88); }
+.idle-btn-primary.p-button:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
 
 .idle-btn-secondary.p-button {
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 11px 无精确 spacing token */
@@ -150,11 +152,29 @@ onDeactivated(() => { isViewActive.value = false; });
 .idle-btn-secondary.p-button:hover { background: var(--hover-overlay-subtle); }
 
 .idle-folder-col {
-  display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-xs); flex: 1;
+  position: relative;
+  display: flex; flex-direction: column; align-items: flex-start; flex: 1;
 }
 
 .idle-subfolder-option {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  padding-top: var(--space-xs);
   display: flex; align-items: center; gap: var(--space-xs-sm);
   font-size: var(--text-xs); color: var(--text-tertiary); cursor: pointer; user-select: none;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.idle-folder-col:hover .idle-subfolder-option {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 </style>
