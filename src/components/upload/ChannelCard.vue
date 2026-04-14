@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import { useConfigManager } from '../../composables/useConfig';
 import { LINK_FORMAT_OPTIONS, type LinkFormat } from '../../utils/linkFormatter';
@@ -47,15 +47,33 @@ const cardClass = computed(() => ({
 }));
 
 const menuVisible = ref(false);
-const menuRef = ref<HTMLElement | null>(null);
+const actionsRef = ref<HTMLElement | null>(null);
+const teleportedMenuRef = ref<HTMLElement | null>(null);
+const menuPosition = ref<{ top?: number; bottom?: number; right: number; openUpward: boolean }>({ right: 0, openUpward: false });
 
 const formatOptions = computed(() => {
   const hasCustomTemplate = !!configManager.config.value.linkOutput?.customTemplate;
   return LINK_FORMAT_OPTIONS.filter(opt => opt.format !== 'custom' || hasCustomTemplate);
 });
 
-onClickOutside(menuRef, () => {
+onClickOutside(actionsRef, () => {
   menuVisible.value = false;
+}, { ignore: [teleportedMenuRef] });
+
+function closeMenu() {
+  menuVisible.value = false;
+}
+
+watch(menuVisible, (visible) => {
+  if (visible) {
+    window.addEventListener('scroll', closeMenu, true);
+  } else {
+    window.removeEventListener('scroll', closeMenu, true);
+  }
+});
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', closeMenu, true);
 });
 
 function emitCopy(format?: LinkFormat) {
@@ -73,6 +91,15 @@ function handleCopy() {
 }
 
 function toggleMenu() {
+  if (!menuVisible.value && actionsRef.value) {
+    const rect = actionsRef.value.getBoundingClientRect();
+    const estimatedHeight = formatOptions.value.length * 36 + 8;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUpward = spaceBelow < estimatedHeight + 8;
+    menuPosition.value = openUpward
+      ? { bottom: window.innerHeight - rect.top + 4, right: window.innerWidth - rect.right, openUpward: true }
+      : { top: rect.bottom + 4, right: window.innerWidth - rect.right, openUpward: false };
+  }
   menuVisible.value = !menuVisible.value;
 }
 
@@ -104,7 +131,7 @@ function handleRetry() {
 
     <div
       v-if="isStatusSuccess(status) && link"
-      ref="menuRef"
+      ref="actionsRef"
       class="copy-actions"
     >
       <button
@@ -121,9 +148,21 @@ function handleRetry() {
       >
         <i class="pi pi-angle-down"></i>
       </button>
+    </div>
 
+    <Teleport to="body">
       <Transition name="copy-menu">
-        <div v-if="menuVisible" class="copy-format-menu">
+        <div
+          v-if="menuVisible"
+          ref="teleportedMenuRef"
+          class="copy-format-menu"
+          :class="{ 'open-upward': menuPosition.openUpward }"
+          :style="{
+            top: menuPosition.top !== undefined ? menuPosition.top + 'px' : 'auto',
+            bottom: menuPosition.bottom !== undefined ? menuPosition.bottom + 'px' : 'auto',
+            right: menuPosition.right + 'px',
+          }"
+        >
           <button
             v-for="opt in formatOptions"
             :key="opt.format"
@@ -135,10 +174,10 @@ function handleRetry() {
           </button>
         </div>
       </Transition>
-    </div>
+    </Teleport>
 
     <button
-      v-else-if="isStatusError(status)"
+      v-if="isStatusError(status)"
       class="retry-btn"
       v-tooltip.top="'重试'"
       @click="handleRetry"
@@ -305,9 +344,7 @@ function handleRetry() {
 }
 
 .copy-format-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
+  position: fixed;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -358,5 +395,10 @@ function handleRetry() {
 .copy-menu-leave-to {
   opacity: 0;
   transform: translateY(-4px);
+}
+
+.open-upward.copy-menu-enter-from,
+.open-upward.copy-menu-leave-to {
+  transform: translateY(4px);
 }
 </style>

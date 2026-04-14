@@ -126,7 +126,7 @@ export function useHistoryViewState() {
         return;
       }
 
-      await copyLinks(items, { format });
+      await copyLinks(items, { format, showSuccessToast: false });
 
       // 有项目被跳过时给出提示，避免用户误以为全部复制成功
       const skippedCount = ids.length - items.length;
@@ -147,7 +147,7 @@ export function useHistoryViewState() {
         return;
       }
 
-      await copyLinks(items, { format });
+      await copyLinks(items, { format, showSuccessToast: false });
     }
   }
 

@@ -671,11 +671,6 @@ export function useHistoryManager() {
 
       ids.forEach(id => detailCache.removeDetail(id));
 
-      toast.showConfig('success', {
-        summary: favorited ? '已收藏' : '已取消收藏',
-        detail: `${ids.length} 张图片`,
-        life: 1500,
-      });
     } catch (error) {
       log.error('[历史记录] 批量收藏操作失败:', error);
       toast.showConfig('error', { summary: '操作失败', detail: String(error) });

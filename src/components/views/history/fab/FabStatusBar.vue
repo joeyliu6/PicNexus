@@ -11,9 +11,9 @@ defineEmits<{
 
 <template>
   <div class="fab-status-bar">
+    <span class="fab-status-badge">{{ selectedCount }}</span>
     <span class="fab-status-text">
-      已选 <strong>{{ selectedCount }}</strong> 张
-      <template v-if="serviceCount > 0"> · {{ serviceCount }} 个图床</template>
+      张图片<template v-if="serviceCount > 0"> · {{ serviceCount }} 个图床</template>
     </span>
     <button
       class="fab-status-close"
@@ -30,38 +30,49 @@ defineEmits<{
 .fab-status-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-sm);
-  padding: var(--space-xs) var(--space-sm) var(--space-xs) var(--space-md);
+  padding: var(--space-sm) var(--space-sm) var(--space-sm) var(--space-md);
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border-subtle);
   border-top-left-radius: var(--radius-lg);
   border-top-right-radius: var(--radius-lg);
 }
 
-.fab-status-text {
+.fab-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 var(--space-2xs);
+  border-radius: var(--radius-full);
+  background: var(--primary);
+  color: var(--text-on-primary);
   font-size: var(--text-xs);
-  color: var(--text-muted);
-  user-select: none;
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
 }
 
-.fab-status-text strong {
-  color: var(--text-primary);
-  font-weight: var(--weight-semibold);
-  font-variant-numeric: tabular-nums;
+.fab-status-text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  user-select: none;
 }
 
 .fab-status-close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: none;
-  background: transparent;
+  background: var(--hover-overlay);
   color: var(--text-muted);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-full);
   cursor: pointer;
   transition:
     background var(--duration-fast) var(--ease-standard),
@@ -69,11 +80,11 @@ defineEmits<{
 }
 
 .fab-status-close:hover {
-  background: var(--hover-overlay);
+  background: var(--hover-overlay-md, var(--hover-overlay));
   color: var(--text-primary);
 }
 
 .fab-status-close i {
-  font-size: var(--text-xs);
+  font-size: var(--text-2xs);
 }
 </style>
