@@ -84,7 +84,7 @@ jobs:
         run: npm run test:run
 
       - name: Generate changelog
-        uses: orhun/git-cliff-action@v3
+        uses: orhun/git-cliff-action@v4
         id: changelog
         with:
           config: cliff.toml
