@@ -120,17 +120,17 @@ describe('selectedAvailableServices', () => {
     expect(selectedAvailableServices.value).toHaveLength(0);
   });
 
-  it('选中项返回其 primaryService', () => {
+  it('选中项返回其 primaryService（带 count=1）', () => {
     const metas = [
       makeMeta({ id: 'a', primaryService: 'r2' as import('../../../../config/types').ServiceType }),
     ];
     const { selectedAvailableServices } = useTimelineData(makeOptions(metas, {
       selectedIdList: computed(() => ['a']),
     }));
-    expect(selectedAvailableServices.value).toContain('r2');
+    expect(selectedAvailableServices.value).toEqual([{ serviceId: 'r2', count: 1 }]);
   });
 
-  it('多个相同图床的选中项只返回一个', () => {
+  it('多个相同图床的选中项合并为一条并累加 count', () => {
     const metas = [
       makeMeta({ id: 'a', primaryService: 'r2' as import('../../../../config/types').ServiceType }),
       makeMeta({ id: 'b', primaryService: 'r2' as import('../../../../config/types').ServiceType }),
@@ -139,7 +139,7 @@ describe('selectedAvailableServices', () => {
       selectedIdList: computed(() => ['a', 'b']),
     }));
     expect(selectedAvailableServices.value).toHaveLength(1);
-    expect(selectedAvailableServices.value[0]).toBe('r2');
+    expect(selectedAvailableServices.value[0]).toEqual({ serviceId: 'r2', count: 2 });
   });
 });
 

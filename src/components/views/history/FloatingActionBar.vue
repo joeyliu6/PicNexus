@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onUnmounted, onBeforeUnmount } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import type { LinkFormat } from '../../../utils/linkFormatter';
-import { useConfigManager } from '../../../composables/useConfig';
-import { getServiceDisplayName } from '../../../constants/serviceNames';
+import FabStatusBar from './fab/FabStatusBar.vue';
+import FabCopySection from './fab/FabCopySection.vue';
+import FabServiceChips from './fab/FabServiceChips.vue';
 
 // Hover 交互延迟：进入短延迟防路过误触，离开较长延迟给用户从气泡到面板的缓冲
 const HOVER_ENTER_DELAY = 80;
@@ -12,8 +13,8 @@ const HOVER_LEAVE_DELAY = 200;
 const props = defineProps<{
   selectedCount: number;
   visible: boolean;
-  availableServices?: string[];
-  allFavorited?: boolean;
+  availableServices?: { serviceId: string; count: number }[];
+  favoriteState?: 'all' | 'partial' | 'none';
 }>();
 
 const emit = defineEmits<{
@@ -24,23 +25,27 @@ const emit = defineEmits<{
   (e: 'batch-favorite', favorited: boolean): void;
 }>();
 
-const configManager = useConfigManager();
-
 const fabContainerRef = ref<HTMLElement | null>(null);
 const panelVisible = ref(false);
-const copySubMenuVisible = ref(false);
-const selectedService = ref<string | undefined>(undefined);
 
-const hasCustomTemplate = computed(() => !!configManager.config.value.linkOutput?.customTemplate);
-const showServiceChips = computed(() => (props.availableServices?.length ?? 0) > 1);
+const serviceCount = computed(() => props.availableServices?.length ?? 0);
 
-const COPY_FORMATS: { type: LinkFormat; icon: string; label: string; needsCustom?: boolean }[] = [
-  { type: 'url', icon: 'pi-link', label: 'URL' },
-  { type: 'markdown', icon: 'pi-file-edit', label: 'Markdown' },
-  { type: 'html', icon: 'pi-code', label: 'HTML' },
-  { type: 'bbcode', icon: 'pi-comment', label: 'BBCode' },
-  { type: 'custom', icon: 'pi-pencil', label: '自定义', needsCustom: true },
-];
+const deleteLabel = computed(() =>
+  props.selectedCount > 0 ? `删除 ${props.selectedCount} 张` : '删除'
+);
+
+// 三态收藏逻辑（MECE：none / partial / all，相互独立，完全穷尽）
+const favoriteIconClass = computed(() =>
+  props.favoriteState === 'all' ? 'pi-star-fill' : 'pi-star'
+);
+const favoriteBtnLabel = computed(() =>
+  props.favoriteState === 'all' ? '取消收藏' :
+  props.favoriteState === 'partial' ? '全部收藏' : '收藏'
+);
+const favoriteBtnClass = computed(() => ({
+  'panel-item-warn': props.favoriteState === 'all',
+  'panel-item-active': props.favoriteState === 'partial',
+}));
 
 let hoverTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -63,62 +68,65 @@ function handleHoverLeave(): void {
   clearHoverTimer();
   hoverTimer = setTimeout(() => {
     panelVisible.value = false;
-    copySubMenuVisible.value = false;
-    selectedService.value = undefined;
     hoverTimer = null;
   }, HOVER_LEAVE_DELAY);
 }
 
-// 点击气泡作为 hover 的补充（键盘/触屏 fallback）
 function togglePanel(): void {
   if (panelVisible.value) {
-    closeAll();
+    closePanel();
   } else {
     clearHoverTimer();
     panelVisible.value = true;
   }
 }
 
-function closeAll(): void {
+function closePanel(): void {
   clearHoverTimer();
   panelVisible.value = false;
-  copySubMenuVisible.value = false;
-  selectedService.value = undefined;
 }
 
-onClickOutside(fabContainerRef, closeAll);
-
+// Popover 被 Teleport 到 body，必须在 ignore 里排除，否则点 Popover 会关整个面板
+onClickOutside(fabContainerRef, closePanel, {
+  ignore: ['.cfp-popover'],
+});
 onBeforeUnmount(clearHoverTimer);
 
-function toggleCopySubMenu(): void {
-  copySubMenuVisible.value = !copySubMenuVisible.value;
-  if (!copySubMenuVisible.value) {
-    selectedService.value = undefined;
-  }
+// Esc: 面板开 → 关面板，面板关 → 清选中（Popover 显示时由其自身 capture listener 消费，不触达这里）
+function handleKeydown(e: KeyboardEvent): void {
+  if (e.key !== 'Escape' || !props.visible) return;
+  e.stopPropagation();
+  if (panelVisible.value) panelVisible.value = false;
+  else emit('clear-selection');
 }
 
-function handleServiceSelect(serviceId: string): void {
-  selectedService.value = selectedService.value === serviceId ? undefined : serviceId;
+onMounted(() => document.addEventListener('keydown', handleKeydown));
+onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
+
+function handleCopyFormat(format: LinkFormat): void {
+  emit('copy', format, undefined);
+  closePanel();
 }
 
-function handleCopy(format: LinkFormat): void {
-  emit('copy', format, selectedService.value);
-  closeAll();
+function handleServiceCopy(serviceId: string): void {
+  emit('copy', 'url', serviceId);
+  closePanel();
 }
 
 function handleFavoriteClick(): void {
-  emit('batch-favorite', !props.allFavorited);
-  closeAll();
+  // 'all' → 取消收藏；'none'/'partial' → 收藏所有
+  emit('batch-favorite', props.favoriteState !== 'all');
+  closePanel();
 }
 
 function handleExport(): void {
   emit('export');
-  closeAll();
+  closePanel();
 }
 
 function handleDelete(): void {
   emit('delete');
-  closeAll();
+  closePanel();
 }
 
 function handleClear(): void {
@@ -138,78 +146,48 @@ function handleClear(): void {
       <!-- 操作面板（从气泡上方弹出）-->
       <Transition name="fab-panel">
         <div v-if="panelVisible" class="fab-panel">
-          <!-- 收藏切换（单一按钮，根据 allFavorited 决定文案和色彩）-->
+          <!-- section 0: 状态栏（× 按钮 = 取消选择）-->
+          <FabStatusBar
+            :selected-count="selectedCount"
+            :service-count="serviceCount"
+            @close="handleClear"
+          />
+
+          <!-- section 1: 复制链接（主按钮 + 更多格式 Popover 触发器）-->
+          <FabCopySection @copy="handleCopyFormat" />
+
+          <!-- section 2: 图床筛选（多图床时显示）-->
+          <FabServiceChips
+            v-if="availableServices?.length"
+            :services="availableServices"
+            @copy-service="handleServiceCopy"
+          />
+
+          <div class="panel-divider"></div>
+
+          <!-- section 3: 收藏 -->
           <button
             class="panel-item"
-            :class="{ 'panel-item-warn': allFavorited }"
+            :class="favoriteBtnClass"
             @click="handleFavoriteClick"
           >
-            <i class="pi" :class="allFavorited ? 'pi-star-fill' : 'pi-star'"></i>
-            <span>{{ allFavorited ? '取消收藏' : '收藏' }}</span>
+            <i class="pi" :class="favoriteIconClass"></i>
+            <span>{{ favoriteBtnLabel }}</span>
           </button>
 
-          <!-- 复制链接（带子菜单）-->
-          <button
-            class="panel-item"
-            :class="{ 'panel-item-active': copySubMenuVisible }"
-            @click.stop="toggleCopySubMenu"
-          >
-            <i class="pi pi-copy"></i>
-            <span>复制链接</span>
-            <i class="pi pi-chevron-right panel-item-chevron"></i>
-          </button>
-
-          <!-- 导出 -->
+          <!-- section 4: 导出 -->
           <button class="panel-item" @click="handleExport">
             <i class="pi pi-download"></i>
             <span>导出</span>
           </button>
 
-          <!-- 删除 -->
-          <button class="panel-item panel-item-danger" @click="handleDelete">
-            <i class="pi pi-trash"></i>
-            <span>删除</span>
-          </button>
-
           <div class="panel-divider"></div>
 
-          <!-- 取消选择 -->
-          <button class="panel-item panel-item-muted" @click="handleClear">
-            <i class="pi pi-times"></i>
-            <span>取消选择</span>
+          <!-- section 5: 删除（危险隔离）-->
+          <button class="panel-item panel-item-danger" @click="handleDelete">
+            <i class="pi pi-trash"></i>
+            <span>{{ deleteLabel }}</span>
           </button>
-
-          <!-- 复制链接子菜单（向左展开）-->
-          <Transition name="copy-submenu">
-            <div v-if="copySubMenuVisible" class="copy-submenu">
-              <!-- 图床选择芯片（多图床时显示）-->
-              <template v-if="showServiceChips">
-                <div class="service-chips">
-                  <button
-                    v-for="sid in availableServices"
-                    :key="sid"
-                    class="service-chip"
-                    :class="{ active: selectedService === sid }"
-                    @click.stop="handleServiceSelect(sid)"
-                  >
-                    {{ getServiceDisplayName(sid) }}
-                  </button>
-                </div>
-                <div class="panel-divider"></div>
-              </template>
-
-              <template v-for="fmt in COPY_FORMATS" :key="fmt.type">
-                <button
-                  v-if="!fmt.needsCustom || hasCustomTemplate"
-                  class="panel-item"
-                  @click="handleCopy(fmt.type)"
-                >
-                  <i class="pi" :class="fmt.icon"></i>
-                  <span>{{ fmt.label }}</span>
-                </button>
-              </template>
-            </div>
-          </Transition>
         </div>
       </Transition>
 
@@ -280,19 +258,22 @@ function handleClear(): void {
   position: absolute;
   right: 0;
   bottom: calc(100% + var(--space-sm));
-  min-width: 180px;
-  padding: var(--space-xs-sm);
+  min-width: 220px;
+  padding: 0 0 var(--space-xs-sm) 0;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-float);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
 }
 
 .panel-item {
   display: flex;
   align-items: center;
   gap: var(--space-md);
-  width: 100%;
+  margin: 0 var(--space-xs-sm);
   padding: var(--space-sm-md) var(--space-md-lg);
   border: none;
   background: transparent;
@@ -302,7 +283,9 @@ function handleClear(): void {
   cursor: pointer;
   text-align: left;
   white-space: nowrap;
-  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
 }
 
 .panel-item:hover {
@@ -318,11 +301,6 @@ function handleClear(): void {
 
 .panel-item:hover i {
   color: var(--text-primary);
-}
-
-.panel-item-chevron {
-  margin-left: auto;
-  font-size: var(--text-xs) !important;
 }
 
 .panel-item-active {
@@ -364,52 +342,8 @@ function handleClear(): void {
 
 .panel-divider {
   height: 1px;
-  margin: var(--space-xs) var(--space-sm);
+  margin: var(--space-2xs) var(--space-sm);
   background: var(--border-subtle);
-}
-
-/* ---- 复制链接子菜单（向左展开） ---- */
-.copy-submenu {
-  position: absolute;
-  top: 0;
-  right: calc(100% + var(--space-sm));
-  min-width: 180px;
-  padding: var(--space-xs-sm);
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-float);
-}
-
-.service-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
-  padding: var(--space-xs-sm) var(--space-sm);
-}
-
-.service-chip {
-  padding: var(--space-2xs) var(--space-sm);
-  border-radius: var(--radius-sm-md);
-  border: 1px solid var(--border-subtle);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all var(--duration-fast) ease;
-}
-
-.service-chip:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-.service-chip.active {
-  background: var(--primary-alpha-15);
-  border-color: var(--primary);
-  color: var(--primary);
-  font-weight: var(--weight-medium);
 }
 
 /* ---- 气泡入场动画 ---- */
@@ -424,7 +358,7 @@ function handleClear(): void {
   transform: translateY(12px) scale(0.9);
 }
 
-/* ---- 面板弹出动画（向上弹出，overshoot） ---- */
+/* ---- 面板弹出动画（向上弹出，overshoot）---- */
 .fab-panel-enter-active {
   transition: all var(--duration-normal) var(--ease-overshoot);
 }
@@ -440,18 +374,6 @@ function handleClear(): void {
   transform-origin: bottom right;
 }
 
-/* ---- 子菜单向左展开动画 ---- */
-.copy-submenu-enter-active,
-.copy-submenu-leave-active {
-  transition: all var(--duration-normal) var(--ease-standard);
-}
-
-.copy-submenu-enter-from,
-.copy-submenu-leave-to {
-  opacity: 0;
-  transform: translateX(8px);
-}
-
 /* ---- 响应式：窄屏幕收紧间距 ---- */
 @media (width <= 600px) {
   .fab-container {
@@ -459,9 +381,8 @@ function handleClear(): void {
     bottom: var(--space-md);
   }
 
-  .fab-panel,
-  .copy-submenu {
-    min-width: 160px;
+  .fab-panel {
+    min-width: 200px;
   }
 }
 </style>

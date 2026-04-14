@@ -60,14 +60,19 @@ const {
 
 // 多选
 const selectedIdsSet = computed(() => new Set(viewState.selectedIdList.value));
-const selectedAvailableServices = computed<ServiceType[]>(() => {
+const selectedAvailableServices = computed<{ serviceId: ServiceType; count: number }[]>(() => {
   const ids = viewState.selectedIdList.value;
   if (ids.length === 0) return [];
-  const serviceSet = new Set<ServiceType>();
+  const serviceCountMap = new Map<string, number>();
   for (const meta of favoriteMetas.value) {
-    if (ids.includes(meta.id)) serviceSet.add(meta.primaryService);
+    if (ids.includes(meta.id)) {
+      serviceCountMap.set(meta.primaryService, (serviceCountMap.get(meta.primaryService) ?? 0) + 1);
+    }
   }
-  return Array.from(serviceSet);
+  return Array.from(serviceCountMap.entries()).map(([serviceId, count]) => ({
+    serviceId: serviceId as ServiceType,
+    count,
+  }));
 });
 
 const handleToggleFavorite = async (id: string) => {

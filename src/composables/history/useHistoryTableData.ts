@@ -45,7 +45,9 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
 
   const currentPageData = shallowRef<HistoryItem[]>([]);
   const currentPage = ref(1);
-  const pageSize = ref(100);
+  // 50 是性能/UX 折中点：一屏可见 ~15 行，Chromium native lazy 边距覆盖剩余 35 行
+  // flushJobs / SVG 解析 / 图像解码全部线性减半（详见性能调优记录）
+  const pageSize = ref(50);
   const totalRecords = ref(0);
   const isLoadingPage = ref(true);
   const first = ref(0);
@@ -157,17 +159,23 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
     }
   });
 
-  const selectedAvailableServices = computed<ServiceType[]>(() => {
+  // 返回带覆盖计数的图床列表，保持配置顺序（避免因选中量变化导致顺序突变困惑用户）
+  const selectedAvailableServices = computed<{ serviceId: ServiceType; count: number }[]>(() => {
     const ids = viewState.selectedIdList.value;
     if (ids.length === 0) return [];
-    const serviceSet = new Set<string>();
+    const serviceCountMap = new Map<string, number>();
     for (const id of ids) {
       const services = itemServiceCache.get(id);
       if (services) {
-        for (const s of services) serviceSet.add(s);
+        for (const s of services) {
+          serviceCountMap.set(s, (serviceCountMap.get(s) ?? 0) + 1);
+        }
       }
     }
-    return Array.from(serviceSet) as ServiceType[];
+    return Array.from(serviceCountMap.entries()).map(([serviceId, count]) => ({
+      serviceId: serviceId as ServiceType,
+      count,
+    }));
   });
 
   return {

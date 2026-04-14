@@ -5,7 +5,9 @@
  * 通过 ResizeObserver 监控表格列宽度，动态计算可显示的 badge 数量
  */
 import { ref, onUnmounted, type Ref } from 'vue';
+import type { HistoryItem } from '../../config/types';
 import { getServiceDisplayName } from '../../constants/serviceNames';
+import { getSuccessfulServices } from '../../utils/formatters';
 
 const MORE_BTN_WIDTH = 26;
 const BADGE_GAP = 4;
@@ -26,7 +28,24 @@ export function useHistoryBadgeLayout(tableViewRef: Ref<HTMLElement | null>) {
   const badgeColumnWidth = ref(200);
   let badgeResizeObserver: ResizeObserver | null = null;
   let badgeObservedElement: HTMLElement | null = null;
-  let resizeRafId = 0;
+  let resizeTimerId = 0;
+
+  // 行级缓存：每个 HistoryItem 的成功服务列表只算一次
+  // WeakMap key 为对象引用，翻页时旧 item 被 GC 自动释放
+  const servicesByItem = new WeakMap<HistoryItem, string[]>();
+  function getCachedServices(item: HistoryItem): string[] {
+    let cached = servicesByItem.get(item);
+    if (!cached) {
+      cached = getSuccessfulServices(item);
+      servicesByItem.set(item, cached);
+    }
+    return cached;
+  }
+
+  // visibleCount 缓存：key 为上面 WeakMap 返回的稳定 services 数组引用
+  // badgeColumnWidth 变化时整表换一张新 WeakMap，旧的随 GC 自动回收
+  let visibleCountMap = new WeakMap<string[], number>();
+  let visibleCountMapWidth = -1;
 
   function setupBadgeWidthObserver(): void {
     const root = tableViewRef.value;
@@ -37,7 +56,8 @@ export function useHistoryBadgeLayout(tableViewRef: Ref<HTMLElement | null>) {
 
     const badge = table.querySelector('.service-badges') as HTMLElement | null;
     const td = badge?.closest('td') as HTMLElement | null;
-    const header = table.querySelector('.p-datatable-thead > tr > th:nth-child(4)') as HTMLElement | null;
+    // 用 headerClass="history-badge-col" 精准定位，不依赖 nth-child（列顺序可能变化）
+    const header = table.querySelector('th.history-badge-col') as HTMLElement | null;
     const target = td || header;
     if (!target) return;
 
@@ -55,18 +75,27 @@ export function useHistoryBadgeLayout(tableViewRef: Ref<HTMLElement | null>) {
     badgeColumnWidth.value = Math.max(target.clientWidth - horizontalPadding, 80);
 
     badgeResizeObserver = new ResizeObserver((entries) => {
-      cancelAnimationFrame(resizeRafId);
-      resizeRafId = requestAnimationFrame(() => {
-        for (const entry of entries) {
-          badgeColumnWidth.value = Math.max(entry.contentRect.width, 80);
-        }
-      });
+      const lastEntry = entries[entries.length - 1];
+      clearTimeout(resizeTimerId);
+      resizeTimerId = window.setTimeout(() => {
+        badgeColumnWidth.value = Math.max(lastEntry.contentRect.width, 80);
+      }, 150);
     });
     badgeResizeObserver.observe(target);
   }
 
   function getVisibleCount(services: string[]): number {
     const available = badgeColumnWidth.value;
+
+    // 列宽变化时整表失效一次（换一张新 WeakMap，旧的交给 GC）
+    if (visibleCountMapWidth !== available) {
+      visibleCountMap = new WeakMap();
+      visibleCountMapWidth = available;
+    }
+
+    const hit = visibleCountMap.get(services);
+    if (hit !== undefined) return hit;
+
     let used = 0;
     let count = 0;
 
@@ -81,18 +110,22 @@ export function useHistoryBadgeLayout(tableViewRef: Ref<HTMLElement | null>) {
       count++;
     }
 
-    return Math.max(count, 1);
+    const result = Math.max(count, 1);
+    visibleCountMap.set(services, result);
+    return result;
   }
 
   onUnmounted(() => {
     badgeResizeObserver?.disconnect();
     badgeResizeObserver = null;
     badgeObservedElement = null;
-    cancelAnimationFrame(resizeRafId);
+    clearTimeout(resizeTimerId);
   });
 
   return {
     setupBadgeWidthObserver,
     getVisibleCount,
+    getCachedServices,  // 行级缓存的成功服务列表，模板用它替代 getSuccessfulServices 避免每行多次重算
+    badgeColumnWidth,   // 暴露给模板，用于 v-memo 依赖，否则宽度变化后 badge 数量不会更新
   };
 }

@@ -75,16 +75,21 @@ export function useTimelineData(options: UseTimelineDataOptions) {
     return getMetaThumbnailUrl(meta, config.value);
   }
 
-  /** 从选中项提取可用图床 */
-  const selectedAvailableServices = computed<ServiceType[]>(() => {
+  /** 从选中项提取可用图床（带覆盖计数） */
+  const selectedAvailableServices = computed<{ serviceId: ServiceType; count: number }[]>(() => {
     const ids = selectedIdList.value;
     if (ids.length === 0) return [];
     const idSet = new Set(ids);
-    const serviceSet = new Set<ServiceType>();
+    const serviceCountMap = new Map<string, number>();
     for (const meta of filteredMetas.value) {
-      if (idSet.has(meta.id)) serviceSet.add(meta.primaryService);
+      if (idSet.has(meta.id)) {
+        serviceCountMap.set(meta.primaryService, (serviceCountMap.get(meta.primaryService) ?? 0) + 1);
+      }
     }
-    return Array.from(serviceSet);
+    return Array.from(serviceCountMap.entries()).map(([serviceId, count]) => ({
+      serviceId: serviceId as ServiceType,
+      count,
+    }));
   });
 
   /** 切换收藏 */

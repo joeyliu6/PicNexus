@@ -48,7 +48,18 @@
   color: var(--text-primary);
 }
 
-.table-view-container.is-loading :deep(.p-paginator) {
+/* 翻页中：保留旧数据可读，只变暗 tbody + 锁分页器，给用户原地替换的感知 */
+/* transition 放在基础规则上（而非仅 .is-paginating），否则离开态 opacity 不走补间 */
+.table-view-container :deep(.p-datatable-tbody) {
+  transition: opacity var(--duration-normal) var(--ease-standard);
+}
+
+.table-view-container.is-paginating :deep(.p-datatable-tbody) {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.table-view-container.is-paginating :deep(.p-paginator) {
   opacity: 0.5;
   pointer-events: none;
 }
@@ -73,6 +84,7 @@
   letter-spacing: 0.03em;
   height: 42px !important;
   box-sizing: border-box;
+  vertical-align: middle;
 }
 
 /* ---- 行样式 ---- */
@@ -178,6 +190,7 @@
   display: inline-block;
 }
 
+
 /* ---- 文件名单元格 ---- */
 .filename-cell {
   display: flex;
@@ -192,6 +205,85 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---- 复选框 / 收藏列公共居中容器 ---- */
+.col-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+/* 前两列（复选框 / 收藏）内容很窄，水平 padding 用 space-lg 会让内容溢出；
+   统一去掉 th/td 的水平 padding，让 .col-center 在完整列宽内居中 */
+:deep(.minimal-table .p-datatable-thead > tr > th:nth-child(1)),
+:deep(.minimal-table .p-datatable-thead > tr > th:nth-child(2)),
+:deep(.minimal-table .p-datatable-tbody > tr > td:nth-child(1)),
+:deep(.minimal-table .p-datatable-tbody > tr > td:nth-child(2)) {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* ---- 收藏列（Gmail 模式）---- */
+.row-favorite-btn {
+  font-size: var(--text-lg);   /* 16px，与 17px 复选框视觉大小相当 */
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;        /* inline-flex 与复选框 inline-flex 行为一致 */
+  align-items: center;
+  opacity: 0.4;                /* 淡显而非完全隐藏，保留存在感 */
+  transition: opacity var(--duration-normal), transform var(--duration-fast), color var(--duration-fast);
+}
+
+/* 表头收藏列星标（装饰性，不可点击） */
+.header-fav-icon {
+  font-size: var(--text-base); /* 14px，略小于 body 16px */
+  color: var(--text-tertiary);
+  display: inline-flex;
+  align-items: center;
+}
+
+.row-favorite-btn.favorited {
+  opacity: 1;
+  color: var(--warning);
+}
+
+.row-favorite-btn:hover {
+  transform: scale(1.2);
+}
+
+/* 行悬停时完全显示 outline 星 */
+:deep(.p-datatable-tbody > tr:hover) .row-favorite-btn {
+  opacity: 1;
+}
+
+/* ---- 复选框淡显（未选中 + 非悬停状态）---- */
+:deep(.p-datatable-tbody > tr:not(.row-selected):not(:hover) .p-checkbox .p-checkbox-box) {
+  opacity: 0.4;
+  transition: opacity var(--duration-fast) ease;
+}
+
+
+/* 复选框尺寸 17px，与 16px 星标视觉上平衡 */
+:deep(.p-datatable-tbody > tr > td:first-child .p-checkbox) {
+  width: 17px;
+  height: 17px;
+}
+
+:deep(.p-datatable-tbody > tr > td:first-child .p-checkbox .p-checkbox-box) {
+  width: 17px !important;
+  height: 17px !important;
+}
+
+:deep(.p-datatable-thead > tr > th:first-child .p-checkbox) {
+  width: 17px;
+  height: 17px;
+}
+
+:deep(.p-datatable-thead > tr > th:first-child .p-checkbox .p-checkbox-box) {
+  width: 17px !important;
+  height: 17px !important;
 }
 
 .fmeta {
@@ -329,3 +421,4 @@
 .mt-skeleton {
   margin-top: var(--space-2xs);
 }
+

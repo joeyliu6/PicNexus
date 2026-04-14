@@ -13,7 +13,6 @@ import { formatFileSize } from '../../../utils/formatters';
 import EmptyState from '../../common/EmptyState.vue';
 import { useHistoryViewState } from '../../../composables/useHistoryViewState';
 import { useHistoryManager } from '../../../composables/useHistory';
-import { useThumbCache } from '../../../composables/useThumbCache';
 import { useConfigManager } from '../../../composables/useConfig';
 import HistoryLightbox from './HistoryLightbox.vue';
 import FloatingActionBar from './FloatingActionBar.vue';
@@ -36,14 +35,18 @@ const emit = defineEmits<{
 const configManager = useConfigManager();
 const viewState = useHistoryViewState();
 const historyManager = useHistoryManager();
-const thumbCache = useThumbCache();
 
 const isFilterActive = computed(() => !!(props.searchTerm || props.filter !== 'all'));
 const tableViewRef = ref<HTMLElement | null>(null);
 const servicePopoverRef = ref<InstanceType<typeof PopoverType> | null>(null);
 
 // ---- Composables ----
-const { setupBadgeWidthObserver, getVisibleCount } = useHistoryBadgeLayout(tableViewRef);
+const {
+  setupBadgeWidthObserver,
+  getVisibleCount,
+  getCachedServices,
+  badgeColumnWidth,
+} = useHistoryBadgeLayout(tableViewRef);
 
 const {
   currentPageData, pageSize, totalRecords, isLoadingPage, first,
@@ -56,6 +59,14 @@ const {
   viewState,
 });
 
+// 两种加载态语义拆分：
+//  - showSkeleton：首次进入且无旧数据 → 显示骨架行（真的没东西可看）
+//  - isPaginating：已有旧数据，翻页/筛选中 → 保持旧数据可读，仅 tbody 变暗
+// 这样每次翻页只会触发一次 DataTable row diff（旧数据 → 新数据），
+// 而不是 "旧数据 → skeleton(全删全插) → 新数据(全删全插)" 的三次渲染
+const showSkeleton = computed(() => isLoadingPage.value && currentPageData.value.length === 0);
+const isPaginating = computed(() => isLoadingPage.value && currentPageData.value.length > 0);
+
 const {
   lightboxVisible, lightboxItem, lightboxHasPrev, lightboxHasNext,
   openLightbox, handleLightboxDelete, handleLightboxNavigate, handleToggleFavorite,
@@ -63,13 +74,23 @@ const {
   hoverPreview, handlePreviewEnter, handlePreviewLeave,
 } = useTableInteractions({ currentPageData, getSuccessfulServices, servicePopoverRef });
 
-// 计算选中项是否全部已收藏（用于 FloatingActionBar 切换收藏/取消收藏显示）
-const allSelectedFavorited = computed(() => {
-  const ids = new Set(viewState.selectedIdList.value);
-  if (ids.size === 0) return false;
-  const selected = currentPageData.value.filter((item: HistoryItem) => ids.has(item.id));
-  if (selected.length === 0) return false;
-  return selected.every((item: HistoryItem) => item.isFavorited === true);
+// 收藏状态快路径：favoriteSet 加载较慢（依赖全量 loadHistory），
+// 未就绪时回退到 item.isFavorited（loadCurrentPage 已从 DB 直接读取，即时可用）
+const isItemFavorited = (item: HistoryItem): boolean => {
+  if (historyManager.favoriteSet.value.has(item.id)) return true;
+  // 全局数据已加载：set 为权威源；未加载：用 item 自身字段兜底
+  return historyManager.isDataLoaded.value ? false : item.isFavorited === true;
+};
+
+// 三态收藏状态（MECE：none/partial/all），基于全局 favoriteSet 查询（无跨页限制）
+const favoriteStateOfSelected = computed((): 'all' | 'partial' | 'none' => {
+  const ids = viewState.selectedIdList.value;
+  if (ids.length === 0) return 'none';
+  const favSet = historyManager.favoriteSet.value;
+  const favoritedCount = ids.filter(id => favSet.has(id)).length;
+  if (favoritedCount === 0) return 'none';
+  if (favoritedCount === ids.length) return 'all';
+  return 'partial';
 });
 
 // ---- emit 联动 ----
@@ -83,15 +104,14 @@ watch(
 
 onUnmounted(() => {
   viewState.reset();
-  thumbCache.clearThumbCache();
 });
 </script>
 
 <template>
-  <div ref="tableViewRef" class="table-view-container" :class="{ 'is-loading': isLoadingPage }">
-    <!-- 表格视图（服务端分页，加载时使用骨架数据） -->
+  <div ref="tableViewRef" class="table-view-container" :class="{ 'is-paginating': isPaginating }">
+    <!-- 表格视图（服务端分页，首次无数据时用骨架；翻页期间保留旧数据 + dim） -->
     <DataTable
-      :value="isLoadingPage ? skeletonData : currentPageData"
+      :value="showSkeleton ? skeletonData : currentPageData"
       dataKey="id"
       lazy
       :paginator="totalRecords > 0"
@@ -114,26 +134,50 @@ onUnmounted(() => {
         />
       </template>
 
-      <!-- 复选框列 -->
+      <!-- 复选框列（3rem 宽，给复选框右侧留出呼吸感） -->
       <Column headerStyle="width: 3rem">
         <template #header>
-          <Checkbox
-            v-if="!isLoadingPage"
-            :model-value="selectAll"
-            @update:model-value="handleHeaderCheckboxChange"
-            :binary="true"
-            :indeterminate="currentPageData.some(item => viewState.isSelected(item.id)) && !selectAll"
-          />
-          <Skeleton v-else width="1.25rem" height="1.25rem" borderRadius="4px" />
+          <div class="col-center">
+            <Checkbox
+              v-if="!showSkeleton"
+              :model-value="selectAll"
+              @update:model-value="handleHeaderCheckboxChange"
+              :binary="true"
+              :indeterminate="currentPageData.some(item => viewState.isSelected(item.id)) && !selectAll"
+            />
+            <Skeleton v-else width="1.25rem" height="1.25rem" borderRadius="4px" />
+          </div>
         </template>
         <template #body="slotProps">
-          <Skeleton v-if="isSkeleton(slotProps.data)" width="1.25rem" height="1.25rem" borderRadius="4px" />
-          <Checkbox
-            v-else
-            :model-value="viewState.isSelected(slotProps.data.id)"
-            @update:model-value="viewState.toggleSelection(slotProps.data.id)"
-            :binary="true"
-          />
+          <div class="col-center">
+            <Skeleton v-if="isSkeleton(slotProps.data)" width="1.25rem" height="1.25rem" borderRadius="4px" />
+            <Checkbox
+              v-else
+              :model-value="viewState.isSelected(slotProps.data.id)"
+              @update:model-value="viewState.toggleSelection(slotProps.data.id)"
+              :binary="true"
+            />
+          </div>
+        </template>
+      </Column>
+
+      <!-- 收藏列（Gmail 模式，1.5rem 紧贴复选框） -->
+      <Column headerStyle="width: 1.5rem">
+        <template #header>
+          <div class="col-center">
+            <i class="pi pi-star header-fav-icon" v-tooltip.top="'收藏'" />
+          </div>
+        </template>
+        <template #body="slotProps">
+          <div class="col-center">
+            <Skeleton v-if="isSkeleton(slotProps.data)" width="1rem" height="1rem" borderRadius="2px" />
+            <i
+              v-else
+              :class="['pi row-favorite-btn', isItemFavorited(slotProps.data) ? 'pi-star-fill favorited' : 'pi-star']"
+              v-tooltip.top="isItemFavorited(slotProps.data) ? '取消收藏' : '收藏'"
+              @click.stop="handleToggleFavorite(slotProps.data)"
+            />
+          </div>
         </template>
       </Column>
 
@@ -192,14 +236,14 @@ onUnmounted(() => {
         </template>
       </Column>
 
-      <!-- 已传图床列 -->
-      <Column header="已传图床" style="min-width: 180px; width: 30%">
+      <!-- 已传图床列（固定 180px，确保两个典型中文图床 badge 可同时显示；headerClass 供 useHistoryBadgeLayout selector 精准定位）-->
+      <Column header="已传图床" headerClass="history-badge-col" style="min-width: 180px; width: 30%">
         <template #body="{ data }">
           <Skeleton v-if="isSkeleton(data)" width="50px" height="22px" borderRadius="4px" />
-          <!-- v-memo 确保同一条记录不因父组件重渲染而重复执行 getSuccessfulServices；用 length 而非引用比较，因为数据库查询每次返回新数组 -->
-          <div v-else v-memo="[data.id, data.results.length]" class="service-badges">
+          <!-- v-memo 依赖含 badgeColumnWidth：列宽变化时强制重新计算 getVisibleCount；否则 ResizeObserver 更新了宽度，但 v-memo 不失效，badge 数量会永远冻结在首次渲染值 -->
+          <div v-else v-memo="[data.id, data.results.length, badgeColumnWidth]" class="service-badges">
             <span
-              v-for="serviceId in getSuccessfulServices(data).slice(0, getVisibleCount(getSuccessfulServices(data)))"
+              v-for="serviceId in getCachedServices(data).slice(0, getVisibleCount(getCachedServices(data)))"
               :key="serviceId"
               class="service-badge-icon"
               v-tooltip.top="`点击复制 ${getServiceDisplayName(serviceId)} 链接`"
@@ -209,11 +253,11 @@ onUnmounted(() => {
               <span class="badge-label">{{ getServiceDisplayName(serviceId) }}</span>
             </span>
             <span
-              v-if="getSuccessfulServices(data).length > getVisibleCount(getSuccessfulServices(data))"
+              v-if="getCachedServices(data).length > getVisibleCount(getCachedServices(data))"
               class="service-badge-more"
               @click="openServicePopover($event, data)"
             >
-              +{{ getSuccessfulServices(data).length - getVisibleCount(getSuccessfulServices(data)) }}
+              +{{ getCachedServices(data).length - getVisibleCount(getCachedServices(data)) }}
             </span>
           </div>
         </template>
@@ -253,7 +297,7 @@ onUnmounted(() => {
       :selected-count="viewState.selectedIdList.value.length"
       :visible="viewState.hasSelection.value"
       :available-services="selectedAvailableServices"
-      :all-favorited="allSelectedFavorited"
+      :favorite-state="favoriteStateOfSelected"
       @copy="viewState.bulkCopyFormatted"
       @export="viewState.bulkExport"
       @delete="viewState.bulkDelete"
