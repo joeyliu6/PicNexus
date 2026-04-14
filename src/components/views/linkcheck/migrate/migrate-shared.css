@@ -18,7 +18,6 @@
   cursor: pointer;
   white-space: nowrap;
   border: none;
-  font-family: inherit;
   transition: background var(--duration-fast), opacity var(--duration-fast);
 }
 .btn-primary i,

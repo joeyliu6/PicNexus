@@ -392,7 +392,6 @@
   border-radius: var(--radius-sm-md);
   cursor: pointer;
   font-size: var(--text-xs);
-  font-family: inherit;
   color: var(--text-primary);
   transition: background var(--duration-fast);
 }

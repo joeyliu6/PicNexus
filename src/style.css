@@ -296,6 +296,11 @@ body, html {
   }
 }
 
+/* 修复 button 元素在 Windows 下不继承 font-family 的问题（默认回退 Arial） */
+button {
+  font-family: inherit;
+}
+
 /* 全局文字选中样式 */
 ::selection {
   background: var(--primary-alpha-20);
@@ -442,7 +447,6 @@ button:focus-visible {
   cursor: pointer;
   transition: all var(--duration-normal) ease;
   color: var(--text-primary);
-  font-family: inherit;
   font-size: var(--text-base);
   font-weight: var(--weight-medium);
   position: relative;

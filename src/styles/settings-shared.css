@@ -572,7 +572,6 @@
   cursor: pointer;
   user-select: none;
   color: var(--text-primary);
-  font-family: inherit;
   text-align: left;
   transition: background-color var(--duration-fast) ease;
 }
