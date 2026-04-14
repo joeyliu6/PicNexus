@@ -109,22 +109,31 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
   // ---- 生命周期 ----
   let unlistenUpdated: (() => void) | null = null;
   let unlistenDeleted: (() => void) | null = null;
+  let unlistenCleared: (() => void) | null = null;
 
   onMounted(async () => {
-    unlistenUpdated = await onCacheEventType('history-updated', () => {
-      currentPage.value = 1;
-      first.value = 0;
-      loadCurrentPage();
-    });
-    unlistenDeleted = await onCacheEventType('history-deleted', () => {
-      loadCurrentPage();
-    });
+    [unlistenUpdated, unlistenDeleted, unlistenCleared] = await Promise.all([
+      onCacheEventType('history-updated', () => {
+        currentPage.value = 1;
+        first.value = 0;
+        loadCurrentPage();
+      }),
+      onCacheEventType('history-deleted', () => {
+        loadCurrentPage();
+      }),
+      onCacheEventType('history-cleared', () => {
+        currentPage.value = 1;
+        first.value = 0;
+        loadCurrentPage();
+      }),
+    ]);
     await loadCurrentPage();
   });
 
   onUnmounted(() => {
     unlistenUpdated?.();
     unlistenDeleted?.();
+    unlistenCleared?.();
   });
 
   watch([filter, searchTerm], () => {

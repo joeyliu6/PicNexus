@@ -29,6 +29,7 @@ import {
   updateHistoryCheckStatus,
   exportCsv,
 } from './linkCheckPersistence';
+import { onCacheEvent } from '../../events/cacheEvents';
 
 const log = createLogger('LinkCheck');
 
@@ -77,6 +78,9 @@ let lastLoadTime = 0;
 
 /** recheckSingle 各阶段动画时长（ms）：转圈最短/结果展示/行淡出/徽章淡出 */
 const RECHECK_MS = { SPIN_MIN: 400, RESULT_SHOW: 1000, ROW_FADE: 350, BADGE_FADE: 300 } as const;
+
+// 与历史事件同步——不响应会导致检测视图持有"幽灵行"（历史已清空/更新但检测页仍显示旧状态）
+onCacheEvent((p) => { if (p.type === 'history-cleared') { checkRows.value = []; lastBatchResult.value = null; lastLoadTime = 0; } else if (p.type === 'history-updated') lastLoadTime = 0; }).catch(e => log.warn('[LinkCheck] 缓存事件监听失败:', e));
 
 /**
  * 链接检测管理器
@@ -296,9 +300,6 @@ export function useLinkCheckManager() {
           ...DEFAULT_CHECK_PARAMS,
         },
       });
-
-      // 取消时仍返回部分结果，让调用方决定如何展示
-      if (result.cancelled) return result;
 
       return result;
     } finally {
