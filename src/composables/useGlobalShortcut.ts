@@ -30,6 +30,8 @@ const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
 const isUploading = ref(false);
 let configUnlisten: UnlistenFn | null = null;
 const registeredShortcuts = new Set<string>();
+let lastShortcutConfig: GlobalShortcutConfig | null = null;
+const notifiedConflicts = new Set<string>();
 
 async function notify(title: string, body: string) {
   try {
@@ -45,6 +47,16 @@ async function notify(title: string, body: string) {
   } catch (err) {
     console.error('[全局快捷键] 通知发送失败:', err);
   }
+}
+
+/**
+ * 对比两个快捷键配置是否相等
+ */
+function isShortcutConfigEqual(a: GlobalShortcutConfig | null, b: GlobalShortcutConfig): boolean {
+  if (!a) return false;
+  return a.enabled === b.enabled &&
+         a.uploadClipboard === b.uploadClipboard &&
+         a.uploadFromFile === b.uploadFromFile;
 }
 
 async function loadConfig(): Promise<UserConfig> {
@@ -261,7 +273,11 @@ async function registerShortcuts(shortcutConfig: GlobalShortcutConfig) {
       console.log(`[全局快捷键] ${shortcut.name} 已注册: ${shortcut.key}`);
     } catch (err) {
       console.error(`[全局快捷键] ${shortcut.name} 注册失败:`, err);
-      await notify('PicNexus', `快捷键 ${shortcut.key} 注册失败，可能与其他应用冲突`);
+      // 避免重复通知同一个冲突快捷键
+      if (!notifiedConflicts.has(shortcut.key)) {
+        await notify('PicNexus', `快捷键 ${shortcut.key} 注册失败，可能与其他应用冲突`);
+        notifiedConflicts.add(shortcut.key);
+      }
     }
   }
 }
@@ -292,14 +308,27 @@ export function useGlobalShortcut() {
       const shortcutConfig = config.globalShortcut || DEFAULT_CONFIG.globalShortcut!;
 
       await registerShortcuts(shortcutConfig);
+      // 保存初始配置快照
+      lastShortcutConfig = JSON.parse(JSON.stringify(shortcutConfig));
 
       // 监听配置更新事件，动态重新注册
       configUnlisten = await listen('config-updated', async () => {
-        console.log('[全局快捷键] 配置已更新，重新注册快捷键...');
-        await unregisterAllShortcuts();
         const newConfig = await loadConfig();
         const newShortcutConfig = newConfig.globalShortcut || DEFAULT_CONFIG.globalShortcut!;
+
+        // 对比配置是否变化，只在变化时才重新注册
+        if (isShortcutConfigEqual(lastShortcutConfig, newShortcutConfig)) {
+          console.log('[全局快捷键] 配置未变化，跳过重新注册');
+          return;
+        }
+
+        console.log('[全局快捷键] 配置已更新，重新注册快捷键...');
+        // 配置变化时清空通知记录，允许新配置的冲突通知
+        notifiedConflicts.clear();
+        await unregisterAllShortcuts();
         await registerShortcuts(newShortcutConfig);
+        // 更新配置快照
+        lastShortcutConfig = JSON.parse(JSON.stringify(newShortcutConfig));
       });
 
       console.log('[全局快捷键] 初始化完成');
