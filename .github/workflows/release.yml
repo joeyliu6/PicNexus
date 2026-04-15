@@ -167,11 +167,17 @@ jobs:
             const checklist = fs.readFileSync('.github/RELEASE_CHECKLIST.md', 'utf8');
 
             const tag = context.ref.replace('refs/tags/', '');
-            const { data: release } = await github.rest.repos.getReleaseByTag({
+
+            // getReleaseByTag 不返回 draft，需遍历所有 release
+            const { data: releases } = await github.rest.repos.listReleases({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              tag,
             });
+
+            const release = releases.find(r => r.tag_name === tag);
+            if (!release) {
+              throw new Error(`Release with tag ${tag} not found`);
+            }
 
             const newBody = (release.body || '') + '\n\n---\n\n' + checklist;
             await github.rest.repos.updateRelease({
