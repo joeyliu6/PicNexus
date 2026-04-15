@@ -158,27 +158,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Append checklist to release draft body
+      - name: Fix draft release tag and append checklist
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             const checklist = fs.readFileSync('.github/RELEASE_CHECKLIST.md', 'utf8');
-
             const tag = context.ref.replace('refs/tags/', '');
 
-            // getReleaseByTag 不返回 draft，需遍历所有 release
+            // 获取所有 release（包括 draft）
             const { data: releases } = await github.rest.repos.listReleases({
               owner: context.repo.owner,
               repo: context.repo.repo,
             });
 
-            const release = releases.find(r => r.tag_name === tag);
+            // 先尝试找正确 tag 的 release
+            let release = releases.find(r => r.tag_name === tag);
+
+            // 如果没找到，找最新的 draft release（可能是 untagged-xxx）
             if (!release) {
-              throw new Error(`Release with tag ${tag} not found`);
+              release = releases.find(r => r.draft && r.tag_name.startsWith('untagged-'));
+              if (release) {
+                console.log(`Found untagged draft release: ${release.tag_name}, fixing to ${tag}`);
+                await github.rest.repos.updateRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: release.id,
+                  tag_name: tag,
+                });
+                console.log(`✅ Fixed tag_name to ${tag}`);
+              } else {
+                throw new Error(`No draft release found for tag ${tag}`);
+              }
             }
 
+            // 追加 checklist
             const newBody = (release.body || '') + '\n\n---\n\n' + checklist;
             await github.rest.repos.updateRelease({
               owner: context.repo.owner,
@@ -186,3 +201,4 @@ jobs:
               release_id: release.id,
               body: newBody,
             });
+            console.log('✅ Appended release checklist');
