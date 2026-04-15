@@ -36,5 +36,8 @@ coverage/
 .claude/
 CLAUDE.md
 
+# Kiro
+.kiro/
+
 # Claude Code temp files
 tmpclaude*

@@ -161,7 +161,7 @@ async function exportResult() {
 .done-icon--warning i { color: var(--warning); }
 .done-icon--error i { color: var(--error); }
 .done-title { font-size: var(--text-xl); font-weight: var(--weight-bold); color: var(--text-primary); margin: 0; }
-.done-subtitle { font-size: var(--text-sm); color: var(--text-muted); margin: 0; text-align: center; }
+.done-subtitle { font-size: var(--text-xs); color: var(--text-tertiary); margin: 0; text-align: center; }
 
 .done-stats { width: 100%; display: flex; flex-direction: column; gap: var(--space-sm); margin-top: var(--space-sm); }
 .done-stat-row { display: flex; justify-content: space-between; align-items: center; font-size: var(--text-sm); }

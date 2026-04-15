@@ -127,8 +127,8 @@ function getGroupItemCount(groupId: string): number {
 }
 
 .group-subtitle {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
+  font-size: var(--text-2xs);
+  color: var(--text-tertiary);
 }
 
 .all-loaded {
@@ -148,7 +148,7 @@ function getGroupItemCount(groupId: string): number {
   }
 
   .group-subtitle {
-    font-size: var(--text-xs);
+    font-size: var(--text-2xs);
   }
 }
 
