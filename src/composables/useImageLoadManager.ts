@@ -1,8 +1,12 @@
 /**
  * 图片加载状态管理 Composable
  * 管理图片的加载状态、LRU 缓存、延迟清理
+ *
+ * 性能优化说明：
+ * - 使用 shallowRef + triggerRef 避免深度响应式开销
+ * - cleanupExpiredImages 直接在原 Set 上操作，避免无效复制
  */
-import { shallowRef, onUnmounted, type Ref } from 'vue';
+import { shallowRef, triggerRef, onUnmounted, type Ref } from 'vue';
 import type { VisibleItem } from './useVirtualTimeline';
 
 interface UseImageLoadManagerOptions {
@@ -24,7 +28,7 @@ export function useImageLoadManager(
     maxRetry = 1,
   } = options;
 
-  /** 已加载图片的 ID 集合 */
+  /** 已加载图片的 ID 集合（使用 shallowRef 避免深度响应式） */
   const loadedImages = shallowRef(new Set<string>());
 
   /** 加载失败的图片 ID 集合 */
@@ -64,24 +68,23 @@ export function useImageLoadManager(
    * 标记图片已加载
    */
   function onImageLoad(id: string) {
-    const newSet = new Set(loadedImages.value);
-    newSet.add(id);
-
+    const cache = loadedImages.value;
+    cache.add(id);
     lastVisibleTime.set(id, Date.now());
 
     // LRU 淘汰：超过缓存上限时，淘汰最老的非可见项
-    if (newSet.size > maxCache) {
+    if (cache.size > maxCache) {
       const visibleIds = new Set(visibleItems.value.map((v) => v.meta.id));
       visibleIds.add(id); // 排除当前正在加载的项
 
-      const toEvict = findOldestEvictable(newSet, visibleIds);
+      const toEvict = findOldestEvictable(cache, visibleIds);
       if (toEvict) {
-        newSet.delete(toEvict);
+        cache.delete(toEvict);
         lastVisibleTime.delete(toEvict);
       }
     }
 
-    loadedImages.value = newSet;
+    triggerRef(loadedImages);
     startCleanupTimer();
   }
 
@@ -108,9 +111,8 @@ export function useImageLoadManager(
       }, 500);
       retryTimers.add(timer);
     } else {
-      const newSet = new Set(failedImages.value);
-      newSet.add(id);
-      failedImages.value = newSet;
+      failedImages.value.add(id);
+      triggerRef(failedImages);
     }
   }
 
@@ -133,33 +135,41 @@ export function useImageLoadManager(
    */
   function cleanupExpiredImages() {
     const now = Date.now();
+    const cache = loadedImages.value;
+
+    // 提前判断：没有已加载图片时直接返回
+    if (cache.size === 0) {
+      stopCleanupTimer();
+      return;
+    }
+
     const visibleIds = new Set(visibleItems.value.map((v) => v.meta.id));
-    let hasChanges = false;
+    let hasDeleted = false;
 
     // 更新当前可见图片的时间戳
     for (const id of visibleIds) {
       lastVisibleTime.set(id, now);
     }
 
-    // 清理过期图片
-    const newSet = new Set(loadedImages.value);
-    for (const id of newSet) {
+    // 检查并删除过期图片（直接在原 Set 上操作）
+    for (const id of cache) {
       const lastTime = lastVisibleTime.get(id);
       if (!visibleIds.has(id) && lastTime && now - lastTime > destroyDelay) {
-        newSet.delete(id);
+        cache.delete(id);
         lastVisibleTime.delete(id);
         imageRetryCount.delete(id);
-        hasChanges = true;
+        hasDeleted = true;
       }
     }
 
-    if (hasChanges) {
-      loadedImages.value = newSet;
-    }
+    // 只有真的删除了才触发响应式更新
+    if (hasDeleted) {
+      triggerRef(loadedImages);
 
-    // 无已加载图片时自动停止定时器，避免空转
-    if (newSet.size === 0) {
-      stopCleanupTimer();
+      // 清理后如果为空，停止定时器
+      if (cache.size === 0) {
+        stopCleanupTimer();
+      }
     }
   }
 
