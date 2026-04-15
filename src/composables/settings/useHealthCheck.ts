@@ -1,7 +1,7 @@
 // 健康检测进度环、批量测试动画、完成状态追踪
 // 从 HostingSettingsPanel.vue 提取的 composable
 
-import { ref, computed, watch, watchEffect, onUnmounted, type Ref, type ComputedRef } from 'vue';
+import { ref, computed, watch, onUnmounted, shallowRef, triggerRef, type Ref, type ComputedRef } from 'vue';
 import type { BatchTestProgress } from '../../types/batchTest';
 
 /** 进度环周长常量 */
@@ -114,36 +114,61 @@ export function useHealthCheck(options: UseHealthCheckOptions): UseHealthCheckRe
 
   // ==================== 单服务完成追踪 ====================
 
-  const batchTestedServices = ref<Set<string>>(new Set());
-  const batchDoneServices = ref<Set<string>>(new Set());
-  let wasTestingMap: Record<string, boolean> = {};
+  const batchTestedServices = shallowRef<Set<string>>(new Set());
+  const batchDoneServices = shallowRef<Set<string>>(new Set());
   let doneTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+  let previousTestingState: Record<string, boolean> = {};
 
   watch(isBatchTesting, (testing) => {
     if (testing) {
-      batchTestedServices.value = new Set();
-      batchDoneServices.value = new Set();
+      batchTestedServices.value.clear();
+      batchDoneServices.value.clear();
+      triggerRef(batchTestedServices);
+      triggerRef(batchDoneServices);
       Object.values(doneTimers).forEach(clearTimeout);
       doneTimers = {};
-      wasTestingMap = {};
+      previousTestingState = {};
     }
   });
 
-  watchEffect(() => {
-    if (!isBatchTesting.value) return;
-    for (const [svc, isTesting] of Object.entries(testingConnections.value)) {
-      if (wasTestingMap[svc] === true && !isTesting) {
-        batchTestedServices.value = new Set([...batchTestedServices.value, svc]);
-        batchDoneServices.value = new Set([...batchDoneServices.value, svc]);
-        doneTimers[svc] = setTimeout(() => {
-          const next = new Set(batchDoneServices.value);
-          next.delete(svc);
-          batchDoneServices.value = next;
-        }, DONE_HIGHLIGHT_MS);
+  // 性能优化：watch 替代 watchEffect 避免全量遍历
+  // 注意：deep watch 的 oldVal/newVal 可能共享引用，需手动维护状态快照
+  watch(
+    testingConnections,
+    (newVal) => {
+      if (!isBatchTesting.value) return;
+
+      let hasChanges = false;
+
+      for (const [svc, isTesting] of Object.entries(newVal)) {
+        const wasTesting = previousTestingState[svc] ?? false;
+
+        if (wasTesting && !isTesting) {
+          batchTestedServices.value.add(svc);
+          batchDoneServices.value.add(svc);
+          hasChanges = true;
+
+          // 清理旧 timer 防止内存泄漏
+          if (doneTimers[svc]) {
+            clearTimeout(doneTimers[svc]);
+          }
+
+          doneTimers[svc] = setTimeout(() => {
+            batchDoneServices.value.delete(svc);
+            triggerRef(batchDoneServices);
+          }, DONE_HIGHLIGHT_MS);
+        }
+
+        previousTestingState[svc] = isTesting;
       }
-      wasTestingMap[svc] = isTesting;
-    }
-  });
+
+      if (hasChanges) {
+        triggerRef(batchTestedServices);
+        triggerRef(batchDoneServices);
+      }
+    },
+    { deep: true }
+  );
 
   // ==================== 清理 ====================
 
