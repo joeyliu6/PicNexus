@@ -1951,3 +1951,21 @@ button:focus-visible {
   /* stylelint-disable-next-line declaration-property-value-allowed-list -- PrimeVue tooltip 默认层级需压过 --z-titlebar(10001) 的部分场景外其余全部，此处 !important 覆盖库内置值 */
   z-index: 10000 !important;
 }
+
+/* 全局 Popover 主题覆盖：统一去掉 PrimeVue 默认蓝色背景，使用项目卡片风格
+   影响范围：所有 <Popover> 组件（压缩预设、图床服务、历史记录等） */
+.p-popover {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-subtle) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+.p-popover::before,
+.p-popover::after {
+  border-bottom-color: var(--bg-card) !important;
+}
+
+.p-popover .p-popover-content {
+  padding: var(--space-xs) !important;
+  background: transparent !important;
+}

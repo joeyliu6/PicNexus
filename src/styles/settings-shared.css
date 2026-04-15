@@ -664,14 +664,30 @@
   flex-shrink: 0;
 }
 
+/* ==================== 折叠动效（压缩面板等） ==================== */
+
+/* 高度过渡：收起时慢启快走，展开时快启慢停 */
 .card-content-wrapper {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows var(--duration-normal) ease;
+  transition: grid-template-rows var(--duration-medium) var(--ease-accelerate);
 }
 
+.expanded .card-content-wrapper {
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--duration-medium) var(--ease-decelerate);
+}
+
+/* 内容透明度：与高度过渡同步，避免内容在动画中途就完全显示 */
 .card-content {
   overflow: hidden;
+  opacity: 0;
+  transition: opacity var(--duration-medium) var(--ease-accelerate);
+}
+
+.expanded .card-content {
+  opacity: 1;
+  transition: opacity var(--duration-medium) var(--ease-decelerate);
 }
 
 @media (max-width: 768px) {

@@ -5,6 +5,44 @@ import Popover from 'primevue/popover';
 import type PopoverType from 'primevue/popover';
 import type { CompressionPreset } from '../../../config/types';
 
+// ── 压缩预设展开/收起动效（精确宽度过渡，避免 max-width 跳跃）──
+function onPresetEnter(el: Element) {
+  const elem = el as HTMLElement;
+  elem.style.width = '0';
+  elem.style.opacity = '0';
+  // 强制回流，确保起始状态生效
+  void elem.offsetWidth;
+  const targetWidth = elem.scrollWidth;
+  elem.style.transition = 'width 260ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 200ms ease';
+  elem.style.width = `${targetWidth}px`;
+  elem.style.opacity = '1';
+}
+
+function onPresetAfterEnter(el: Element) {
+  const elem = el as HTMLElement;
+  // 动画结束后释放固定宽度，允许自适应
+  elem.style.width = '';
+  elem.style.transition = '';
+  elem.style.opacity = '';
+}
+
+function onPresetLeave(el: Element) {
+  const elem = el as HTMLElement;
+  elem.style.width = `${elem.offsetWidth}px`;
+  elem.style.opacity = '1';
+  void elem.offsetWidth;
+  elem.style.transition = 'width 200ms cubic-bezier(0.4, 0, 1, 1), opacity 160ms ease';
+  elem.style.width = '0';
+  elem.style.opacity = '0';
+}
+
+function onPresetAfterLeave(el: Element) {
+  const elem = el as HTMLElement;
+  elem.style.width = '';
+  elem.style.transition = '';
+  elem.style.opacity = '';
+}
+
 interface Props {
   isDragging: boolean;
   isPasting: boolean;
@@ -110,15 +148,23 @@ const presetTooltip = computed(() => {
         class="compress-switch"
       />
       <span class="compress-label" v-tooltip.top="'更改将同步到全局设置'">压缩</span>
-      <button
-        v-if="compressionEnabled && activePreset"
-        class="compress-preset-trigger"
-        v-tooltip.top="presetTooltip"
-        @click.stop="togglePresetPopover"
+      <Transition
+        @enter="onPresetEnter"
+        @after-enter="onPresetAfterEnter"
+        @leave="onPresetLeave"
+        @after-leave="onPresetAfterLeave"
       >
-        {{ activePreset.name }}
-        <i class="pi pi-chevron-down compress-preset-chevron" />
-      </button>
+        <div v-if="compressionEnabled && activePreset" class="compress-preset-wrapper">
+          <button
+            class="compress-preset-trigger"
+            v-tooltip.top="presetTooltip"
+            @click.stop="togglePresetPopover"
+          >
+            {{ activePreset.name }}
+            <i class="pi pi-chevron-down compress-preset-chevron" />
+          </button>
+        </div>
+      </Transition>
     </div>
 
     <!-- 预设切换 Popover -->
@@ -234,6 +280,26 @@ const presetTooltip = computed(() => {
   font-size: var(--text-sm);
   color: var(--text-secondary);
   user-select: none;
+  transition: transform var(--duration-normal) var(--ease-standard);
+  transform-origin: center;
+}
+
+/* 标签联动动效：压缩启用时轻微缩放 */
+.compress-corner:has(.compress-preset-wrapper) .compress-label {
+  animation: compress-label-bounce var(--duration-medium) var(--ease-standard);
+}
+
+@keyframes compress-label-bounce {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+/* 预设按钮容器：宽度过渡层 */
+.compress-preset-wrapper {
+  display: inline-flex;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 /* 预设切换触发按钮 */
@@ -264,29 +330,34 @@ const presetTooltip = computed(() => {
   opacity: 0.6;
 }
 
+/* 预设按钮展开/关闭动效（由 JS hook 控制，CSS 仅保留 overflow 裁剪） */
+
 /* 预设 Popover 列表 */
 .preset-popover-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2xs);
-  min-width: 160px;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 2px 列表行间距，介于 --space-2xs(2px) 与 --space-xs(4px) 之间，无精确 token */
+  gap: 2px;
+  min-width: 0;
 }
 
 .preset-popover-item {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-xs-sm) var(--space-sm-md);
+  gap: var(--space-xs);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 5px 上下内边距，介于 --space-2xs(2px) 与 --space-xs(4px) 之间，无精确 token */
+  padding: 5px var(--space-sm);
   border: none;
   background: none;
   width: 100%;
   text-align: left;
-  border-radius: var(--radius-sm-md);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: var(--text-xs);
   font-family: inherit;
   color: var(--text-primary);
   transition: background var(--duration-fast);
+  white-space: nowrap;
 }
 
 .preset-popover-item:hover {
@@ -300,7 +371,7 @@ const presetTooltip = computed(() => {
 .preset-check {
   font-size: var(--text-xs);
   color: var(--primary);
-  width: 14px;
+  width: 12px;
   flex-shrink: 0;
   opacity: 0;
 }
@@ -314,7 +385,7 @@ const presetTooltip = computed(() => {
 }
 
 .preset-item-desc {
-  margin-left: auto;
+  margin-left: var(--space-sm);
   font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;

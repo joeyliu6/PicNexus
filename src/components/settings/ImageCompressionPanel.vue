@@ -76,7 +76,12 @@ function handleEditInputMount(el: HTMLInputElement | null) {
 
 <template>
   <div class="compression-collapsible" :class="{ expanded }">
-    <button class="card-header" @click="toggleExpand">
+    <button
+      class="card-header"
+      @click="toggleExpand"
+      :aria-expanded="expanded"
+      aria-controls="compression-content"
+    >
       <div class="header-left">
         <span class="status-dot" :class="imageCompression.enabled ? 'active' : ''" v-tooltip.top="imageCompression.enabled ? '已启用' : '未启用'" />
         <div class="header-info">
@@ -90,12 +95,12 @@ function handleEditInputMount(el: HTMLInputElement | null) {
           @update:modelValue="toggleEnabled"
           @click.stop
         />
-        <i :class="expanded ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"></i>
+        <i class="pi pi-chevron-down chevron-icon" :class="{ rotated: expanded }"></i>
       </div>
     </button>
 
-    <div class="card-content-wrapper">
-      <div class="card-content">
+    <Transition name="collapse-smooth">
+      <div v-if="expanded" class="card-content" id="compression-content">
         <CompressionPresetTabs
           :presets="imageCompression.presets"
           :activePresetId="imageCompression.activePresetId"
@@ -148,7 +153,7 @@ function handleEditInputMount(el: HTMLInputElement | null) {
           </button>
         </div>
       </div>
-    </div>
+    </Transition>
   </div>
 </template>
 
@@ -164,17 +169,37 @@ function handleEditInputMount(el: HTMLInputElement | null) {
   overflow: hidden;
 }
 
-.expanded .card-content-wrapper {
-  grid-template-rows: 1fr;
-}
-
 .card-content {
   display: flex;
   flex-direction: column;
+  border-top: 1px solid var(--border-subtle);
+
+  /* 覆盖 settings-shared.css 中 .card-content { opacity: 0 }：
+     本组件改用 <Transition> 控制显隐，不依赖 .expanded class */
+  opacity: 1;
 }
 
-.expanded .card-content {
-  border-top: 1px solid var(--border-subtle);
+/* --- 折叠动效 --- */
+
+.collapse-smooth-enter-active,
+.collapse-smooth-leave-active {
+  transition:
+    max-height var(--duration-medium) var(--ease-standard),
+    opacity var(--duration-medium) var(--ease-standard);
+  overflow: hidden;
+  will-change: max-height, opacity;
+}
+
+.collapse-smooth-enter-from,
+.collapse-smooth-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+
+.collapse-smooth-enter-to,
+.collapse-smooth-leave-from {
+  max-height: 1000px;
+  opacity: 1;
 }
 
 /* --- Preset Actions --- */
@@ -245,6 +270,16 @@ function handleEditInputMount(el: HTMLInputElement | null) {
 .preview-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* --- 箭头图标旋转动效 --- */
+
+.chevron-icon {
+  transition: transform var(--duration-medium) var(--ease-standard);
+}
+
+.chevron-icon.rotated {
+  transform: rotate(180deg);
 }
 
 </style>

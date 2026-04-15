@@ -220,10 +220,7 @@ function onToggleAutoUpdate(v: boolean) {
   color: var(--error);
 }
 
-.update-card-success {
-  background: var(--success-alpha-8);
-  border-color: var(--success-border);
-}
+/* 已移除成功状态的绿色背景，保持原来的白底 */
 
 .update-card-available {
   background: var(--primary-alpha-8);
