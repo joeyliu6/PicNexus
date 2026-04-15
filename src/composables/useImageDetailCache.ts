@@ -7,6 +7,9 @@
 import { shallowRef, type Ref } from 'vue';
 import type { HistoryItem } from '../config/types';
 import { historyDB } from '../services/HistoryDatabase';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('DetailCache');
 
 // ==================== 配置 ====================
 
@@ -19,7 +22,7 @@ const DETAIL_CACHE_SIZE = 200; // 200条 × ~5KB ≈ 1MB
 interface CacheNode {
   id: string;
   detail: HistoryItem;
-  timestamp: number; // 最后访问时间（用于统计）
+  timestamp: number; // 最后访问或插入时间（用于统计）
 }
 
 /** 缓存统计信息 */
@@ -38,16 +41,16 @@ export interface CacheStats {
  *
  * 特性：
  * - 最近最少使用（LRU）淘汰策略
- * - O(1) 查询，O(n) 访问顺序更新（n ≤ 200，实际开销可忽略）
+ * - O(1) 查询和访问顺序更新（利用 Map 插入顺序特性）
  * - 自动淘汰超出容量的数据
  * - 统计命中率
  */
 class ImageDetailCache {
-  /** 缓存存储 */
+  /**
+   * 缓存存储（Map 保证迭代顺序 = 插入顺序）
+   * 最近访问的在队尾，最久未访问的在队首
+   */
   private cache = new Map<string, CacheNode>();
-
-  /** 访问顺序（队尾为最近访问） */
-  private accessOrder: string[] = [];
 
   /** 统计：命中次数 */
   private hitCount = 0;
@@ -67,9 +70,7 @@ class ImageDetailCache {
       this.hitCount++;
       const node = this.cache.get(id)!;
       node.timestamp = Date.now();
-
-      // 更新访问顺序（移到队尾）
-      this.updateAccessOrder(id);
+      this.moveToEnd(id, node);
 
       return node.detail;
     }
@@ -110,7 +111,7 @@ class ImageDetailCache {
           this.set(id, detail);
         }
       } catch (e) {
-        console.warn(`[DetailCache] 预加载失败: ${id}`, e);
+        logger.warn(`预加载失败: ${id}`, e);
       }
     });
 
@@ -126,34 +127,32 @@ class ImageDetailCache {
   private set(id: string, detail: HistoryItem): void {
     // LRU 淘汰：缓存满且新 ID 不在缓存中
     if (this.cache.size >= DETAIL_CACHE_SIZE && !this.cache.has(id)) {
-      const oldestId = this.accessOrder.shift();
-      if (oldestId) {
+      // 删除最久未访问的（Map 的第一个键）
+      const oldestId = this.cache.keys().next().value;
+      if (oldestId !== undefined) {
         this.cache.delete(oldestId);
       }
     }
 
-    // 存入缓存
+    // 存入缓存（新键自动在队尾）
     this.cache.set(id, {
       id,
       detail,
       timestamp: Date.now(),
     });
-
-    // 更新访问顺序
-    this.updateAccessOrder(id);
   }
 
   /**
-   * 更新访问顺序（移到队尾）
+   * 更新访问顺序（移到队尾）— O(1)
+   *
+   * 利用 Map 的插入顺序特性：删除后重新插入 = 移到队尾
    *
    * @param id 图片 ID
+   * @param node 缓存节点
    */
-  private updateAccessOrder(id: string): void {
-    const index = this.accessOrder.indexOf(id);
-    if (index > -1) {
-      this.accessOrder.splice(index, 1);
-    }
-    this.accessOrder.push(id);
+  private moveToEnd(id: string, node: CacheNode): void {
+    this.cache.delete(id);
+    this.cache.set(id, node);
   }
 
   /**
@@ -162,11 +161,7 @@ class ImageDetailCache {
    * @param id 图片 ID
    */
   remove(id: string): void {
-    this.cache.delete(id);
-    const index = this.accessOrder.indexOf(id);
-    if (index > -1) {
-      this.accessOrder.splice(index, 1);
-    }
+    this.cache.delete(id); // O(1)
   }
 
   /**
@@ -174,7 +169,6 @@ class ImageDetailCache {
    */
   clear(): void {
     this.cache.clear();
-    this.accessOrder = [];
     this.hitCount = 0;
     this.missCount = 0;
   }
