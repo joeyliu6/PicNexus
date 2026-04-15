@@ -8,6 +8,7 @@ import { deepClone, deepMerge } from '../utils/deepClone';
 import { useConfigManager } from '../composables/useConfig';
 import { useCopyLink } from '../composables/useCopyLink';
 import type { LinkFormat } from '../utils/linkFormatter';
+import InlineEmptyState from './common/InlineEmptyState.vue';
 import QueueCard from './upload/QueueCard.vue';
 
 const VIRTUAL_SCROLL_THRESHOLD = 20;
@@ -100,10 +101,7 @@ defineExpose({
 
 <template>
   <div class="upload-queue">
-    <div v-if="queueItems.length === 0" class="upload-queue-empty">
-      <i class="pi pi-inbox empty-icon"></i>
-      <span class="empty-text">暂无上传队列</span>
-    </div>
+    <InlineEmptyState v-if="queueItems.length === 0" icon="pi pi-inbox" title="暂无上传队列" />
 
     <VirtualScroller
       v-else-if="useVirtualScroll"
@@ -153,29 +151,5 @@ defineExpose({
 .virtual-card {
   padding-bottom: var(--space-md);
   box-sizing: border-box;
-}
-
-.upload-queue-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-2xl) 0;
-  text-align: center;
-  gap: var(--space-sm);
-}
-
-.empty-icon {
-  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 空状态图标 32px 无对应 token，介于 --text-3xl(28) 与 --text-4xl(36) 之间 */
-  font-size: 2rem;
-  color: var(--text-muted);
-  opacity: 0.5;
-}
-
-.empty-text {
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  font-style: italic;
-  opacity: 0.7;
 }
 </style>

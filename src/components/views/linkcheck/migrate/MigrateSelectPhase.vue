@@ -80,7 +80,7 @@ function handleTargetToggle(serviceId: string) {
     <!-- 空状态 -->
     <EmptyState
       v-else-if="configuredServices.length === 0"
-      icon="pi pi-cloud"
+      icon="pi pi-cog"
       title="暂无已配置的图床"
       description="请先在设置中配置至少一个图床"
     >
@@ -105,7 +105,8 @@ function handleTargetToggle(serviceId: string) {
       <div class="split-right">
         <div v-if="isAllBackedUp" class="backed-up-banner">
           <i class="pi pi-check-circle" />
-          <span>当前条件下所有图片已备份</span>
+          <span v-if="availableSourceServices.length === 0">当前无需备份的图片</span>
+          <span v-else>当前条件下所有图片已备份</span>
         </div>
 
         <div class="target-grid">

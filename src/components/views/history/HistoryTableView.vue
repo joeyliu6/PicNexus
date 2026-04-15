@@ -109,8 +109,18 @@ onUnmounted(() => {
 
 <template>
   <div ref="tableViewRef" class="table-view-container" :class="{ 'is-paginating': isPaginating }">
+    <!-- 空状态：无数据时直接居中显示，不显示表格和表头 -->
+    <div v-if="totalRecords === 0 && !isLoadingPage" class="empty-state-wrapper">
+      <EmptyState
+        :icon="isFilterActive ? 'pi pi-search' : 'pi pi-table'"
+        :title="isFilterActive ? '没有找到匹配的记录' : '暂无上传记录'"
+        :description="isFilterActive ? '尝试调整搜索关键词或筛选条件' : '上传图片后，历史记录将在这里显示'"
+      />
+    </div>
+
     <!-- 表格视图（服务端分页，首次无数据时用骨架；翻页期间保留旧数据 + dim） -->
     <DataTable
+      v-else
       :value="showSkeleton ? skeletonData : currentPageData"
       dataKey="id"
       lazy
@@ -124,11 +134,10 @@ onUnmounted(() => {
       class="history-table minimal-table"
       rowHover
       :rowClass="(data: HistoryItem) => isSkeleton(data) ? '' : (viewState.isSelected(data.id) ? 'row-selected' : '')"
-      :emptyMessage="totalRecords === 0 ? '暂无历史记录' : '未找到匹配的记录'"
     >
       <template #empty>
         <EmptyState
-          :icon="isFilterActive ? 'pi pi-search' : 'pi pi-images'"
+          :icon="isFilterActive ? 'pi pi-search' : 'pi pi-table'"
           :title="isFilterActive ? '没有找到匹配的记录' : '暂无上传记录'"
           :description="isFilterActive ? '尝试调整搜索关键词或筛选条件' : '上传图片后，历史记录将在这里显示'"
         />
@@ -330,7 +339,16 @@ onUnmounted(() => {
 
 <style scoped>
 .table-view-container {
-  height: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.empty-state-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .history-table {
@@ -338,6 +356,7 @@ onUnmounted(() => {
   border-radius: var(--radius-lg);
   overflow: hidden;
   width: 100%;
+  flex: 1;
 }
 </style>
 

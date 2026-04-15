@@ -75,7 +75,7 @@ function handleToggle(serviceId: string) {
     </template>
 
     <!-- 空状态引导 -->
-    <EmptyState v-else title="暂无可用图床">
+    <EmptyState v-else icon="pi pi-cog" title="暂无可用图床">
       <button class="empty-state-link" @click="emit('go-settings')">前往设置配置</button>
     </EmptyState>
   </div>

@@ -6,6 +6,7 @@
  */
 import Skeleton from 'primevue/skeleton';
 import EmptyState from '../../../common/EmptyState.vue';
+import HeroEmptyState from '../../../common/HeroEmptyState.vue';
 import { getServiceIcon } from '../../../../utils/icons';
 import { getServiceDisplayName } from '../../../../constants/serviceNames';
 import type { LinkCheckRow, CheckLinkResult } from '../../../../types/linkCheck';
@@ -50,17 +51,17 @@ const emit = defineEmits<{
     </div>
 
     <!-- Hero 空状态：从未检测过 -->
-    <div v-else-if="stats.total > 0 && stats.checked === 0 && !isChecking" class="hero-empty">
-      <div class="hero-icon">
-        <i class="pi pi-shield"></i>
-      </div>
-      <h3 class="hero-title">检查你的图片链接</h3>
-      <p class="hero-desc">扫描全部上传历史，发现失效和异常链接</p>
+    <HeroEmptyState
+      v-else-if="stats.total > 0 && stats.checked === 0 && !isChecking"
+      icon="pi pi-shield"
+      title="检查你的图片链接"
+      description="扫描全部上传历史，发现失效和异常链接"
+      :metaText="`共 ${stats.total.toLocaleString()} 个链接待检测`"
+    >
       <button class="hero-cta" @click="emit('check-all')">
         <i class="pi pi-play"></i> 开始全面检测
       </button>
-      <span class="hero-meta">共 {{ stats.total.toLocaleString() }} 个链接待检测</span>
-    </div>
+    </HeroEmptyState>
 
     <!-- 普通空状态：筛选无结果 -->
     <EmptyState
@@ -73,7 +74,7 @@ const emit = defineEmits<{
     <!-- 真正的空：无数据 -->
     <EmptyState
       v-else-if="stats.total === 0 && !isLoading"
-      icon="pi pi-shield"
+      icon="pi pi-inbox"
       title="暂无数据"
       description="尚无上传历史记录"
     />
@@ -303,20 +304,7 @@ const emit = defineEmits<{
   transform: translateY(-5px);
 }
 
-/* ===== Hero 空状态（首次检测） ===== */
-.hero-empty {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: var(--space-sm-md); flex: 1; padding: var(--space-3xl) 0;
-}
-
-.hero-icon {
-  width: 56px; height: 56px; display: flex; align-items: center; justify-content: center;
-  border-radius: var(--radius-xl); background: var(--primary-alpha-10); margin-bottom: var(--radius-sm);
-}
-.hero-icon .pi { font-size: var(--text-2xl); color: var(--primary); }
-.hero-title { font-size: var(--text-lg-xl); font-weight: var(--weight-bold); color: var(--text-main); margin: 0; }
-.hero-desc { font-size: var(--text-sm); color: var(--text-muted); margin: 0; }
-
+/* ===== Hero CTA 按钮样式 ===== */
 .hero-cta {
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 7px 无精确 spacing token */
   display: inline-flex; align-items: center; gap: 7px;
@@ -327,5 +315,4 @@ const emit = defineEmits<{
 }
 .hero-cta:hover { opacity: 0.9; }
 .hero-cta:active { transform: scale(0.97); }
-.hero-meta { font-size: var(--text-xs); color: var(--text-tertiary); margin-top: var(--space-2xs); }
 </style>

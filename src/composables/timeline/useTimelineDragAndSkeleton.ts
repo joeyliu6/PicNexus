@@ -198,7 +198,8 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
     () => visible.value,
     (isVisible, wasVisible) => {
       if (!isVisible || wasVisible) return;
-      if (groups.value.length === 0) {
+      // 只有在有数据时才显示骨架屏，避免空状态闪烁
+      if (groups.value.length > 0) {
         showSkeletonWithCheck();
       }
     }

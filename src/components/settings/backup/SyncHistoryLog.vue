@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { historyDB, type SyncLogEntry, type SyncLogOperation } from '../../../services/HistoryDatabase';
 import { useConfirm } from '../../../composables/useConfirm';
+import InlineEmptyState from '../../common/InlineEmptyState.vue';
 
 const entries = ref<SyncLogEntry[]>([]);
 const { confirm } = useConfirm();
@@ -82,10 +83,7 @@ function formatRelativeTime(timestamp: number): string {
     <div v-if="entries.length > 0" class="log-divider" />
 
     <!-- 空状态 -->
-    <div v-if="entries.length === 0" class="log-empty">
-      <i class="pi pi-inbox empty-icon" />
-      <span>暂无记录</span>
-    </div>
+    <InlineEmptyState v-if="entries.length === 0" icon="pi pi-inbox" title="暂无记录" />
 
     <!-- 记录列表 -->
     <template v-else>
@@ -182,22 +180,6 @@ function formatRelativeTime(timestamp: number): string {
 .row-divider {
   height: 1px;
   background: var(--border-subtle);
-}
-
-/* ===== 空状态 ===== */
-.log-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-xl) 0;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-}
-
-.empty-icon {
-  font-size: var(--text-xl);
-  opacity: 0.4;
 }
 
 /* ===== 行 ===== */

@@ -16,6 +16,7 @@ import { useTimelineData } from '../../composables/timeline/useTimelineData';
 import { useToast } from '../../composables/useToast';
 import { type ServiceType } from '../../config/types';
 
+import EmptyState from '../common/EmptyState.vue';
 import TimelineSkeleton from './timeline/TimelineSkeleton.vue';
 import TimelinePhotoGrid from './timeline/TimelinePhotoGrid.vue';
 import TimelineIndicator from './timeline/TimelineIndicator.vue';
@@ -284,20 +285,22 @@ watch(
 
 <template>
   <div class="timeline-view">
+    <!-- Empty State - 提升到视图层级，覆盖整个视口 -->
+    <div v-if="groups.length === 0 && !viewState.isLoading.value && !showSkeleton" class="empty-state-wrapper">
+      <EmptyState
+        :icon="favoritesOnly ? 'pi pi-star' : 'pi pi-images'"
+        :title="favoritesOnly ? '暂无收藏' : '暂无上传记录'"
+        :description="favoritesOnly ? '点击图片右上角的 ★ 开始收藏' : '上传图片后，历史记录将在这里显示'"
+      />
+    </div>
+
     <!-- Main Scroll Area -->
-    <div ref="scrollContainer" class="timeline-scroll-area" @scroll="handleScroll">
+    <div v-else ref="scrollContainer" class="timeline-scroll-area" @scroll="handleScroll">
       <!-- Loading State - 使用 Justified Layout 算法的骨架屏 -->
       <TimelineSkeleton
-        v-if="viewState.isLoading.value || showSkeleton"
+        v-if="(viewState.isLoading.value || showSkeleton) && groups.length > 0"
         :layout="skeletonLayout"
       />
-
-      <!-- Empty State -->
-      <div v-else-if="groups.length === 0" class="empty-state">
-        <i :class="favoritesOnly ? 'pi pi-star' : 'pi pi-image'" style="font-size: var(--text-5xl); opacity: 0.5"></i>
-        <p>{{ favoritesOnly ? '暂无收藏' : '暂无图片' }}</p>
-        <p v-if="favoritesOnly" class="empty-state-hint">点击图片上的星形图标即可收藏</p>
-      </div>
 
       <!-- Virtual Scroll Content -->
       <TimelinePhotoGrid
@@ -428,6 +431,16 @@ watch(
 }
 
 /* Empty State */
+.empty-state-wrapper {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  background: var(--bg-app);
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;

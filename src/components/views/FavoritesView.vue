@@ -158,12 +158,13 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
       <template v-else>
         <!-- 空状态（延迟显示，等 TransitionGroup leave 动画结束后才出现） -->
         <Transition name="empty-fade">
-          <EmptyState
-            v-if="showEmptyState"
-            icon="pi pi-star"
-            title="暂无收藏"
-            description="点击图片右上角的 ★ 开始收藏"
-          />
+          <div v-if="showEmptyState" class="empty-state-wrapper">
+            <EmptyState
+              icon="pi pi-star"
+              title="暂无收藏"
+              description="点击图片右上角的 ★ 开始收藏"
+            />
+          </div>
         </Transition>
 
         <!-- 均匀网格（始终挂载，v-show 保持 TransitionGroup 存活以执行 leave 动画） -->
@@ -237,10 +238,20 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   padding: var(--space-lg-xl) var(--space-xl);
   scrollbar-width: none;           /* Firefox */
   -ms-overflow-style: none;        /* IE/Edge */
+  display: flex;
+  flex-direction: column;
 }
 
 .favorites-scroll::-webkit-scrollbar {
   display: none;                   /* Chrome/Safari */
+}
+
+/* 空状态容器：垂直居中 */
+.empty-state-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 

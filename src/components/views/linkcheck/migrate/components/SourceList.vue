@@ -5,6 +5,7 @@
 import { computed } from 'vue';
 import Checkbox from 'primevue/checkbox';
 import Select from 'primevue/select';
+import InlineEmptyState from '../../../../common/InlineEmptyState.vue';
 import { getServiceIcon } from '../../../../../utils/icons';
 import { formatNumber, isPublicService, filterThresholds } from '../utils';
 
@@ -36,7 +37,16 @@ const totalImages = computed(() =>
 
 <template>
   <div class="split-left">
-    <div class="source-list">
+    <!-- 空状态 -->
+    <InlineEmptyState
+      v-if="sources.length === 0"
+      icon="pi pi-inbox"
+      title="暂无可迁移的图片"
+      hint="历史记录中没有符合条件的图片"
+    />
+
+    <!-- 来源列表 -->
+    <div v-else class="source-list">
       <div
         v-for="src in sources"
         :key="src.id"
@@ -62,7 +72,7 @@ const totalImages = computed(() =>
         <span v-if="isPublicService(src.id)" class="tag-public">公共</span>
       </div>
     </div>
-    <span class="source-summary">
+    <span v-if="sources.length > 0" class="source-summary">
       <template v-if="selectedIds.length > 0 && selectedIds.length === sources.length">
         已选全部来源，<span class="source-summary-action" role="button" tabindex="0" @click="emit('clearFilter')" @keydown.enter.prevent="emit('clearFilter')">点击取消筛选</span>
       </template>
@@ -76,6 +86,7 @@ const totalImages = computed(() =>
 
     <!-- 高级筛选 -->
     <button
+      v-if="sources.length > 0"
       class="filter-toggle"
       @click="emit('update:showAdvancedFilter', !showAdvancedFilter)"
     >
@@ -86,7 +97,7 @@ const totalImages = computed(() =>
         :class="{ 'filter-arrow--open': showAdvancedFilter }"
       />
     </button>
-    <div v-if="showAdvancedFilter" class="filter-body">
+    <div v-if="showAdvancedFilter && sources.length > 0" class="filter-body">
       <div class="filter-row">
         <span class="filter-label">仅处理备份不足</span>
         <Select
@@ -129,7 +140,7 @@ const totalImages = computed(() =>
 .source-icon { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-secondary); }
 .source-icon :deep(svg) { width: 14px; height: 14px; }
 .source-name { font-weight: var(--weight-medium); color: var(--text-primary); }
-.source-count { font-size: var(--text-xs); color: var(--text-tertiary); font-variant-numeric: tabular-nums; margin-left: auto; }
+.source-count { font-size: var(--text-2xs); color: var(--text-tertiary); font-variant-numeric: tabular-nums; margin-left: auto; }
 
 .tag-public { font-size: var(--text-2xs); font-weight: var(--weight-medium); padding: var(--space-2xs) var(--space-xs-sm); border-radius: var(--radius-sm); background: var(--warning-alpha-10); color: var(--warning); flex-shrink: 0; }
 
