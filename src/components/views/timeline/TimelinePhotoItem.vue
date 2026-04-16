@@ -1,16 +1,16 @@
 <script setup lang="ts">
 /**
  * TimelinePhotoItem - 单张图片组件
- * 处理：悬停信息、选择状态、图片加载、点击事件
+ * 处理：选择状态、图片加载、点击事件
+ *
+ * 两种交互模式（参考 Google Photos）：
+ * - 普通模式（hasSelection=false）：点击图片 = 打开灯箱
+ * - 选择模式（hasSelection=true）：点击图片 = 选中/取消，放大镜打开灯箱
  */
-import { computed } from 'vue';
 import Skeleton from 'primevue/skeleton';
 import type { ImageMeta } from '../../../types/image-meta';
-import type { HistoryItem } from '../../../config/types';
-import { getServiceDisplayName } from '../../../constants/serviceNames';
-import { getServiceIcon } from '../../../utils/icons';
 
-const props = defineProps<{
+defineProps<{
   meta: ImageMeta;
   x: number;
   y: number;
@@ -20,33 +20,26 @@ const props = defineProps<{
   isFavorited: boolean;
   isLoaded: boolean;
   isFailed: boolean;
+  hasSelection: boolean;
   displayMode: 'fast' | 'smooth' | 'normal';
   thumbnailUrl: string;
-  hoverDetail?: HistoryItem;
 }>();
 
 const emit = defineEmits<{
   (e: 'click'): void;
-  (e: 'toggle-select'): void;
+  (e: 'toggle-select', event: MouseEvent): void;
   (e: 'toggle-favorite'): void;
   (e: 'hover'): void;
   (e: 'image-load'): void;
   (e: 'image-error', event: Event): void;
 }>();
 
-const successfulServices = computed(() => {
-  if (!props.hoverDetail) return [];
-  return props.hoverDetail.results
-    .filter(r => r.status === 'success')
-    .map(r => r.serviceId);
-});
-
 </script>
 
 <template>
   <div
     class="photo-item"
-    :class="{ selected: isSelected }"
+    :class="{ selected: isSelected, 'selection-mode': hasSelection }"
     :data-lightbox-id="meta.id"
     :style="{
       transform: `translate3d(${x}px, ${y}px, 0)`,
@@ -55,7 +48,10 @@ const successfulServices = computed(() => {
     }"
     @mouseenter="emit('hover')"
   >
-    <div class="photo-wrapper" @click="emit('click')">
+    <div
+      class="photo-wrapper"
+      @click="hasSelection ? emit('toggle-select', $event) : emit('click')"
+    >
       <!-- 加载失败占位 -->
       <div v-if="isFailed" class="photo-error">
         <i class="pi pi-image"></i>
@@ -87,7 +83,7 @@ const successfulServices = computed(() => {
       <div
         class="checkbox"
         :class="{ checked: isSelected }"
-        @click.stop="emit('toggle-select')"
+        @click.stop="emit('toggle-select', $event)"
       >
         <i v-if="isSelected" class="pi pi-check"></i>
       </div>
@@ -101,19 +97,13 @@ const successfulServices = computed(() => {
         <i :class="isFavorited ? 'pi pi-star-fill' : 'pi pi-star'"></i>
       </div>
 
-      <!-- 悬停信息层 -->
-      <div class="hover-info" v-if="hoverDetail && successfulServices.length > 0">
-        <div class="service-badges">
-          <span
-            v-for="service in successfulServices"
-            :key="service"
-            class="service-badge"
-            :title="`已上传到 ${getServiceDisplayName(service)}`"
-          >
-            <span class="badge-icon" v-html="getServiceIcon(service)" />
-            {{ getServiceDisplayName(service) }}
-          </span>
-        </div>
+      <!-- 放大镜按钮：选择模式下 hover 显示，点击打开灯箱 -->
+      <div
+        v-if="hasSelection"
+        class="magnifier-btn"
+        @click.stop="emit('click')"
+      >
+        <i class="pi pi-search-plus"></i>
       </div>
     </div>
   </div>
@@ -124,8 +114,11 @@ const successfulServices = computed(() => {
   position: absolute;
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
-  overflow: hidden;
   will-change: transform;
+}
+
+.photo-item.selected {
+  background: var(--primary-alpha-10);
 }
 
 .photo-wrapper {
@@ -133,6 +126,14 @@ const successfulServices = computed(() => {
   height: 100%;
   cursor: pointer;
   position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  transition: transform var(--duration-medium) var(--ease-decelerate);
+}
+
+/* 选中时图片缩小，露出背景色（Google Photos 风格） */
+.photo-item.selected .photo-wrapper {
+  transform: scale(0.88);
 }
 
 .photo-skeleton {
@@ -163,15 +164,11 @@ const successfulServices = computed(() => {
   height: 100%;
   object-fit: cover;
   opacity: 0;
-  transition: opacity var(--duration-medium) ease-in-out, transform var(--duration-medium);
+  transition: opacity var(--duration-medium) ease-in-out;
 }
 
 .photo-img.loaded {
   opacity: 1;
-}
-
-.photo-wrapper:hover .photo-img.loaded {
-  transform: scale(1.03);
 }
 
 .selection-overlay {
@@ -187,7 +184,6 @@ const successfulServices = computed(() => {
 .photo-item.selected .selection-overlay {
   opacity: 1;
   background: var(--primary-alpha-20);
-  border: 2px solid var(--primary);
   border-radius: var(--radius-md);
 }
 
@@ -199,14 +195,14 @@ const successfulServices = computed(() => {
   height: 20px;
   border-radius: var(--radius-full);
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 照片上的半透明边框，非主题色 */
-  border: 2px solid rgb(255 255 255 / 80%);
+  border: 2px solid rgb(255 255 255 / 50%);
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 照片上的半透明背景，非主题色 */
-  background: rgb(0 0 0 / 20%);
+  background: rgb(0 0 0 / 10%);
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: all var(--duration-normal);
+  transition: opacity var(--duration-normal), background var(--duration-normal), border-color var(--duration-normal);
   z-index: 2;
 }
 
@@ -218,6 +214,11 @@ const successfulServices = computed(() => {
 
 .photo-wrapper:hover .checkbox,
 .checkbox.checked {
+  opacity: 1;
+}
+
+/* 选择模式下所有复选框常驻显示 */
+.photo-item.selection-mode .checkbox {
   opacity: 1;
 }
 
@@ -252,7 +253,7 @@ const successfulServices = computed(() => {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: all var(--duration-normal);
+  transition: opacity var(--duration-normal), color var(--duration-normal), transform var(--duration-normal), filter var(--duration-normal);
   z-index: 2;
   cursor: pointer;
   font-size: var(--text-xs);
@@ -294,95 +295,53 @@ const successfulServices = computed(() => {
   }
 }
 
-.hover-info {
+/* 放大镜按钮：选择模式下右下角，hover 时显示 */
+.magnifier-btn {
   position: absolute;
-  inset: 0;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 照片底部渐变遮罩，固定配色 */
-  background: linear-gradient(to bottom, transparent 30%, rgb(0 0 0 / 85%) 100%);
-  opacity: 0;
-  transition: opacity var(--duration-normal) ease;
+  bottom: var(--space-sm);
+  right: var(--space-sm);
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 照片上的半透明白色图标，固定配色 */
+  color: rgb(255 255 255 / 85%);
   display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  padding: var(--space-sm-md);
-  pointer-events: none;
-  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 照片遮罩上的白色文字，固定配色 */
-  color: white;
-  border-radius: var(--radius-md);
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--duration-normal), transform var(--duration-normal);
+  z-index: 2;
+  cursor: pointer;
+  font-size: var(--text-xs);
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 50%));
 }
 
-.photo-wrapper:hover .hover-info {
+/* 扩展可点击区域到 52x52px */
+.magnifier-btn::before {
+  content: '';
+  position: absolute;
+  inset: -16px;
+}
+
+.photo-wrapper:hover .magnifier-btn {
   opacity: 1;
 }
 
-.service-badges {
-  display: flex;
-  gap: var(--space-xs);
-  flex-wrap: wrap-reverse;
-  justify-content: flex-end;
-  transform: translateY(4px);
-  transition: transform var(--duration-normal) ease;
-}
-
-.photo-wrapper:hover .hover-info .service-badges {
-  transform: translateY(0);
-}
-
-.service-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-2xs) var(--space-xs-sm);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 照片遮罩上的半透明 badge 背景，固定配色 */
-  background: rgb(89 92 96 / 50%);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-medium);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 照片遮罩上的文字阴影，固定配色 */
-  text-shadow: 0 1px 2px rgb(0 0 0 / 30%);
-  backdrop-filter: blur(4px);
-}
-
-.badge-icon {
-  width: 14px;
-  height: 14px;
-  display: inline-flex;
-  flex-shrink: 0;
-}
-
-.badge-icon :deep(svg) {
-  width: 14px;
-  height: 14px;
-}
-
-/* 响应式适配 */
-@media (width <= 768px) {
-  .hover-info {
-    padding: var(--space-sm);
-  }
-
-  .service-badge {
-    /* stylelint-disable-next-line declaration-property-value-allowed-list -- 超窄屏下的极小 badge，低于最小 token(--text-2xs=10px)，属无 token 特例 */
-    font-size: 9px;
-    padding: var(--space-2xs) var(--space-xs);
-  }
-
-}
-
-@media (width <= 480px) {
-  .service-badges {
-    display: none;
-  }
+.magnifier-btn:hover {
+  transform: scale(1.15);
 }
 
 @media (hover: none) {
-  .hover-info {
-    display: none;
-  }
-
   .checkbox {
     width: 32px;
     height: 32px;
+  }
+
+  .magnifier-btn {
+    width: 32px;
+    height: 32px;
+    opacity: 1;
   }
 }
 </style>
