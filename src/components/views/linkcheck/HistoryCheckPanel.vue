@@ -29,6 +29,7 @@ const emit = defineEmits<{
   (e: 'recheck-single', row: LinkCheckRow, filter: StatusFilter): void;
   (e: 'copy-url', url: string): void;
   (e: 'export-csv'): void;
+  (e: 'export-csv-selected', rows: LinkCheckRow[]): void;
   (e: 'delete-row', row: LinkCheckRow): void;
   (e: 'delete-batch', ids: string[]): void;
   (e: 'recheck-batch', ids: string[]): void;
@@ -44,7 +45,7 @@ const {
   scopedRows, filteredRows, visibleRows,
   currentPage, totalPages, pageInput, handlePageInput, bottomSummary,
   selectedIds, hasSelection, selectedCount, isAllSelected,
-  toggleSelect, toggleSelectAll, clearSelection,
+  handleToggleSelect, toggleSelectAll, clearSelection,
 } = useCheckFilter({ checkRows });
 
 const { stats, serviceList, progressPercent, progressTooltip } = useCheckStats({ scopedRows, checkRows, progress });
@@ -94,6 +95,12 @@ function handleRecheckBatch() {
   emit('recheck-batch', ids);
   clearSelection();
 }
+
+function handleExportCsvSelected() {
+  const rows = checkRows.value.filter(r => selectedIds.value.has(r.historyId));
+  if (rows.length === 0) return;
+  emit('export-csv-selected', rows);
+}
 </script>
 
 <template>
@@ -126,7 +133,7 @@ function handleRecheckBatch() {
       :error-label="errorLabel"
       :error-tooltip="errorTooltip"
       :recheck-label="recheckLabel"
-      @toggle-select="toggleSelect"
+      @toggle-select="handleToggleSelect"
       @check-all="emit('check-all')"
       @copy-url="handleCopyUrl"
       @recheck-single="handleRecheck"
@@ -159,6 +166,7 @@ function handleRecheckBatch() {
       @recheck-batch="handleRecheckBatch"
       @delete-batch="handleDeleteBatch"
       @export-csv="emit('export-csv')"
+      @export-csv-selected="handleExportCsvSelected"
       @smart-check="handleSmartCheck"
       @cancel-check="emit('cancel-check')"
       @page-input="handlePageInput"

@@ -80,6 +80,18 @@ async function handleExportCsv() {
   }
 }
 
+async function handleExportCsvSelected(rows: LinkCheckRow[]) {
+  const csv = exportCsv(rows);
+  const path = await save({
+    defaultPath: `link-check-selected-${Date.now()}.csv`,
+    filters: [{ name: 'CSV', extensions: ['csv'] }],
+  });
+  if (path) {
+    await writeTextFile(path, csv);
+    toast.success('导出成功', `已保存至 ${path}`);
+  }
+}
+
 function handleCopyUrl(url: string) {
   navigator.clipboard.writeText(url);
   toast.success('已复制到剪贴板');
@@ -174,6 +186,7 @@ onDeactivated(onViewDeactivated);
         @recheck-single="handleRecheckSingle"
         @copy-url="handleCopyUrl"
         @export-csv="handleExportCsv"
+        @export-csv-selected="handleExportCsvSelected"
         @delete-row="handleDeleteRow"
         @delete-batch="handleDeleteBatch"
         @recheck-batch="handleRecheckBatch"
@@ -206,7 +219,10 @@ onDeactivated(onViewDeactivated);
   height: 48px;
   padding: 0 var(--space-md);
   align-items: stretch;
-  border-bottom: 1px solid var(--border-subtle);
+  background-color: var(--bg-card);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- box-shadow 含 rgb 色值 */
+  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+  z-index: 10;
   flex-shrink: 0;
 }
 

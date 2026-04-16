@@ -38,6 +38,7 @@ const emit = defineEmits<{
   (e: 'recheck-batch'): void;
   (e: 'delete-batch'): void;
   (e: 'export-csv'): void;
+  (e: 'export-csv-selected'): void;
   (e: 'smart-check'): void;
   (e: 'cancel-check'): void;
   (e: 'page-input', event: Event): void;
@@ -97,6 +98,9 @@ const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
             {{ isAllSelected ? '取消全选' : '全选' }}
           </button>
           <button class="btn-ghost btn-sm" @click="emit('clear-selection')">取消选择</button>
+          <button class="btn-ghost btn-sm" @click="emit('export-csv-selected')">
+            <i class="pi pi-download"></i> 导出选中
+          </button>
           <button class="btn-primary btn-sm" @click="emit('recheck-batch')" :disabled="isChecking">
             <i class="pi pi-refresh"></i> 重新检测
           </button>

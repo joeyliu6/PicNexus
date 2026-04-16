@@ -27,7 +27,7 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'toggle-select', id: string): void;
+  (e: 'toggle-select', id: string, event: MouseEvent): void;
   (e: 'check-all'): void;
   (e: 'copy-url', row: LinkCheckRow): void;
   (e: 'recheck-single', row: LinkCheckRow): void;
@@ -83,7 +83,7 @@ const emit = defineEmits<{
       <div
         v-for="row in visibleRows" :key="row.historyId + row.serviceId"
         class="link-row" :class="{ 'row-selected': selectedIds.has(row.historyId), 'fading-out': row.fadingOut }"
-        @click="!isChecking && emit('toggle-select', row.historyId)"
+        @click="!isChecking && emit('toggle-select', row.historyId, $event)"
       >
         <span class="status-dot" :style="{ background: statusDotColor(row) }"></span>
         <span
