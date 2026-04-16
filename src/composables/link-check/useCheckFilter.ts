@@ -5,6 +5,7 @@
 import { ref, computed, watch, type Ref } from 'vue';
 import { watchDebounced } from '@vueuse/core';
 import { SEVERITY, type StatusFilter, type LinkCheckRow } from '../../types/linkCheck';
+import { shiftSelect, type ShiftSelectAnchor } from '../../utils/shiftSelect';
 
 const PAGE_SIZE = 100;
 
@@ -103,6 +104,7 @@ export function useCheckFilter({ checkRows }: UseCheckFilterOptions) {
 
   // ---- 选择 ----
   const selectedIds = ref<Set<string>>(new Set());
+  const selectAnchor = ref<ShiftSelectAnchor>({ lastId: null, wasSelect: true });
   const hasSelection = computed(() => selectedIds.value.size > 0);
   const filteredHistoryIds = computed(() => [...new Set(filteredRows.value.map((r) => r.historyId))]);
   const isAllSelected = computed(() =>
@@ -117,6 +119,12 @@ export function useCheckFilter({ checkRows }: UseCheckFilterOptions) {
     selectedIds.value = next;
   }
 
+  function handleToggleSelect(historyId: string, event: MouseEvent): void {
+    const result = shiftSelect(historyId, event.shiftKey, filteredHistoryIds.value, selectedIds.value, selectAnchor.value);
+    selectedIds.value = result.nextSet;
+    selectAnchor.value = result.anchor;
+  }
+
   function toggleSelectAll() {
     if (isAllSelected.value) {
       selectedIds.value = new Set();
@@ -127,6 +135,7 @@ export function useCheckFilter({ checkRows }: UseCheckFilterOptions) {
 
   function clearSelection() {
     selectedIds.value = new Set();
+    selectAnchor.value = { lastId: null, wasSelect: true };
   }
 
   return {
@@ -155,6 +164,7 @@ export function useCheckFilter({ checkRows }: UseCheckFilterOptions) {
     selectedCount,
     isAllSelected,
     toggleSelect,
+    handleToggleSelect,
     toggleSelectAll,
     clearSelection,
   };

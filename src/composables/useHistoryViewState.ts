@@ -3,6 +3,7 @@ import type { ServiceType } from '../config/types';
 import { useHistoryManager } from './useHistory';
 import { useToast } from './useToast';
 import { useCopyLink, type CopyLinkItem } from './useCopyLink';
+import { shiftSelect, type ShiftSelectAnchor } from '../utils/shiftSelect';
 export type { LinkFormat } from '../utils/linkFormatter';
 
 export function useHistoryViewState() {
@@ -11,6 +12,7 @@ export function useHistoryViewState() {
   const { copyLinks } = useCopyLink();
 
   const selectedIds = shallowRef(new Set<string>());
+  const selectAnchor = ref<ShiftSelectAnchor>({ lastId: null, wasSelect: true });
   const currentFilter = ref<ServiceType | 'all'>('all');
   const searchTerm = ref('');
 
@@ -57,6 +59,13 @@ export function useHistoryViewState() {
     updateSelection(set => set.has(id) ? set.delete(id) : set.add(id));
   }
 
+  function handleSelectClick(id: string, event: MouseEvent, orderedIds: string[]): void {
+    const result = shiftSelect(id, event.shiftKey, orderedIds, selectedIds.value, selectAnchor.value);
+    selectedIds.value = result.nextSet;
+    selectAnchor.value = result.anchor;
+    triggerRef(selectedIds);
+  }
+
   function select(id: string): void {
     if (!selectedIds.value.has(id)) updateSelection(set => set.add(id));
   }
@@ -74,6 +83,7 @@ export function useHistoryViewState() {
 
   function clearSelection(): void {
     selectedIds.value = new Set();
+    selectAnchor.value = { lastId: null, wasSelect: true };
     triggerRef(selectedIds);
   }
 
@@ -128,10 +138,15 @@ export function useHistoryViewState() {
 
       await copyLinks(items, { format, showSuccessToast: false });
 
-      // 有项目被跳过时给出提示，避免用户误以为全部复制成功
+      // 成功+跳过合并为一条 toast，避免两条弹窗
       const skippedCount = ids.length - items.length;
       if (skippedCount > 0) {
-        toast.warn(`已跳过 ${skippedCount} 张`, `这 ${skippedCount} 张图片无该图床链接`);
+        toast.warn(
+          `已复制 ${items.length} 张（跳过 ${skippedCount} 张）`,
+          `${skippedCount} 张图片无该图床链接`
+        );
+      } else {
+        toast.success(`已复制 ${items.length} 张`, '链接已复制到剪贴板');
       }
     } else {
       items = metas
@@ -148,6 +163,17 @@ export function useHistoryViewState() {
       }
 
       await copyLinks(items, { format, showSuccessToast: false });
+
+      // 成功+跳过合并为一条 toast（部分图片无 primaryUrl 时会被跳过）
+      const skippedCount = metas.length - items.length;
+      if (skippedCount > 0) {
+        toast.warn(
+          `已复制 ${items.length} 张（跳过 ${skippedCount} 张）`,
+          `${skippedCount} 张图片无可用链接`
+        );
+      } else {
+        toast.success(`已复制 ${items.length} 张`, '链接已复制到剪贴板');
+      }
     }
   }
 
@@ -168,6 +194,7 @@ export function useHistoryViewState() {
 
   function reset(): void {
     selectedIds.value = new Set();
+    selectAnchor.value = { lastId: null, wasSelect: true };
     currentFilter.value = 'all';
     searchTerm.value = '';
   }
@@ -175,7 +202,7 @@ export function useHistoryViewState() {
   return {
     selectedIds, currentFilter, searchTerm, filteredMetas,
     isAllSelected, isSomeSelected, hasSelection, selectedIdList,
-    toggleSelection, select, deselect, toggleSelectAll, clearSelection, isSelected,
+    toggleSelection, handleSelectClick, select, deselect, toggleSelectAll, clearSelection, isSelected,
     setFilter, setSearchTerm,
     bulkCopyFormatted, bulkExport, bulkDelete, reset,
     loadHistory: historyManager.loadHistory,
