@@ -71,7 +71,7 @@ function checkedNames(): string {
       <div class="confirm-warns">
         <div v-if="hasPublicTarget" class="confirm-warn">
           <i class="pi pi-exclamation-triangle" />
-          <span>公共图床有数量限制，大批量迁移可能耗时较长或部分失败</span>
+          <span>公共图床短时间内上传图片有数量限制，不适合大批量迁移</span>
         </div>
         <div class="confirm-warn confirm-warn--info">
           <i class="pi pi-info-circle" />
@@ -92,14 +92,15 @@ function checkedNames(): string {
 
 .confirm-page {
   flex: 1; display: flex; flex-direction: column;
-  align-items: center; padding-right: var(--space-xl);
+  align-items: center; justify-content: center;
+  padding: var(--space-xl);
   overflow-y: auto;
 }
 
 /* ── 卡片容器 ── */
 .confirm-card {
-  width: 100%; max-width: 480px;
-  padding: var(--space-lg-xl) var(--space-xl);
+  width: 100%; max-width: 540px;
+  padding: var(--space-xl) var(--space-2xl);
   background: var(--bg-card); border-radius: var(--radius-lg);
   display: flex; flex-direction: column; gap: var(--space-lg);
 }
@@ -117,7 +118,7 @@ function checkedNames(): string {
   gap: var(--space-lg);
 }
 
-.confirm-src-icons { display: flex; gap: var(--space-xs-sm); align-items: center; }
+.confirm-src-icons { display: flex; gap: var(--space-xs-sm); align-items: center; flex-wrap: wrap; justify-content: center; }
 
 .confirm-src-icon {
   width: 40px; height: 40px; border-radius: var(--radius-sm-md);

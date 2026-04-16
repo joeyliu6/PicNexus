@@ -181,11 +181,11 @@ function handleTargetToggle(serviceId: string) {
 .skeleton-line--long { width: 60%; height: 12px; }
 
 /* 分栏布局 */
-.split-layout { display: flex; flex: 1; min-height: 0; }
+.split-layout { display: flex; flex: 1; min-height: 0; gap: var(--space-xl); }
 
 /* 右栏 */
 .split-right {
-  flex: 1; min-width: 0; padding-left: var(--space-lg);
+  flex: 1; min-width: 0;
   display: flex; flex-direction: column; overflow-y: auto;
 }
 

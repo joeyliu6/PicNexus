@@ -236,6 +236,8 @@ watch(
 </template>
 
 <style scoped>
+@import url('../../../styles/settings-shared.css');
+
 .card-content-inner {
   display: flex;
   flex-direction: column;

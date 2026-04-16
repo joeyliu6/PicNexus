@@ -649,19 +649,26 @@
 
 .missing-service-banner {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--space-sm-md) var(--space-md);
   background: var(--warning-alpha-8);
   border-bottom: 1px solid var(--warning-border);
   color: var(--warning);
   font-size: var(--text-sm);
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .missing-service-banner .pi {
   font-size: var(--text-sm);
   flex-shrink: 0;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 3px 微调图标与首行文字视觉对齐 */
+  margin-top: 3px;
+}
+
+.missing-service-banner span {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ==================== 折叠动效（压缩面板等） ==================== */

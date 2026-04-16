@@ -153,7 +153,7 @@ async function exportResult() {
 .done-summary {
   width: 260px; flex-shrink: 0; padding: var(--space-xl) var(--space-lg-xl);
   background: var(--bg-card);
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md-lg);
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-md-lg);
 }
 
 .done-icon i { font-size: var(--text-3xl); }

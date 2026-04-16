@@ -232,7 +232,7 @@
   cursor: pointer;
   display: inline-flex;        /* inline-flex 与复选框 inline-flex 行为一致 */
   align-items: center;
-  opacity: 0.4;                /* 淡显而非完全隐藏，保留存在感 */
+  opacity: 0.5;                /* 淡显而非完全隐藏，与复选框视觉权重统一 */
   transition: opacity var(--duration-normal), transform var(--duration-fast), color var(--duration-fast);
 }
 
@@ -260,7 +260,7 @@
 
 /* ---- 复选框淡显（未选中 + 非悬停状态）---- */
 :deep(.p-datatable-tbody > tr:not(.row-selected):not(:hover) .p-checkbox .p-checkbox-box) {
-  opacity: 0.4;
+  opacity: 0.5;
   transition: opacity var(--duration-fast) ease;
 }
 
@@ -287,8 +287,8 @@
 }
 
 .fmeta {
-  font-size: var(--text-2xs);
-  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
   line-height: 1.4;
 }
 

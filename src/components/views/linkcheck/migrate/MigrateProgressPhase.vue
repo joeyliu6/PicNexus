@@ -2,7 +2,7 @@
 /**
  * E3 执行阶段 — 进度面板 + 实时文件流
  */
-import { inject } from 'vue';
+import { inject, computed } from 'vue';
 import { formatNumber, formatTime, formatSpeed, MAX_VISIBLE_FILES } from './utils';
 import { getServiceDisplayName } from '../../../../constants/serviceNames';
 import { MIGRATE_KEY } from './keys';
@@ -13,6 +13,18 @@ const {
   globalProgress, cumulativeCounts, estimatedTimeRemaining,
   averageSpeed, allItemStatuses, cancelMigrate,
 } = ctx;
+
+/** 状态优先级：正在处理 > 已完成 > 等待中 */
+const STATUS_PRIORITY: Record<string, number> = {
+  downloading: 0, uploading: 0,
+  success: 1, failed: 1, skipped: 1,
+  pending: 2,
+};
+
+const sortedStatuses = computed(() => {
+  const items = allItemStatuses.value.slice(0, MAX_VISIBLE_FILES);
+  return [...items].sort((a, b) => (STATUS_PRIORITY[a.status] ?? 2) - (STATUS_PRIORITY[b.status] ?? 2));
+});
 </script>
 
 <template>
@@ -71,7 +83,7 @@ const {
       </div>
       <div class="file-list">
         <div
-          v-for="item in allItemStatuses.slice(0, MAX_VISIBLE_FILES)"
+          v-for="item in sortedStatuses"
           :key="item.historyId"
           class="file-row"
           :class="item.status"

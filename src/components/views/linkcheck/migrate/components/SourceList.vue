@@ -116,8 +116,7 @@ const totalImages = computed(() =>
 
 <style scoped>
 .split-left {
-  width: 320px; flex-shrink: 0; padding-right: var(--space-lg);
-  border-right: 1px solid var(--border-subtle);
+  flex: 1; min-width: 0;
   display: flex; flex-direction: column; overflow-y: auto;
 }
 
@@ -140,7 +139,7 @@ const totalImages = computed(() =>
 .source-icon { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-secondary); }
 .source-icon :deep(svg) { width: 14px; height: 14px; }
 .source-name { font-weight: var(--weight-medium); color: var(--text-primary); }
-.source-count { font-size: var(--text-2xs); color: var(--text-tertiary); font-variant-numeric: tabular-nums; margin-left: auto; }
+.source-count { font-size: var(--text-xs); color: var(--text-tertiary); font-variant-numeric: tabular-nums; margin-left: auto; }
 
 .tag-public { font-size: var(--text-2xs); font-weight: var(--weight-medium); padding: var(--space-2xs) var(--space-xs-sm); border-radius: var(--radius-sm); background: var(--warning-alpha-10); color: var(--warning); flex-shrink: 0; }
 
