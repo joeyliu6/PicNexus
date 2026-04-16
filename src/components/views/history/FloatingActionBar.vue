@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, onBeforeUnmount } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import type { LinkFormat } from '../../../utils/linkFormatter';
+import { useFabCopyFormat } from './fab/useFabCopyFormat';
 import FabStatusBar from './fab/FabStatusBar.vue';
 import FabCopySection from './fab/FabCopySection.vue';
 import FabServiceChips from './fab/FabServiceChips.vue';
@@ -9,6 +10,7 @@ import FabServiceChips from './fab/FabServiceChips.vue';
 // Hover 交互延迟：进入短延迟防路过误触，离开较长延迟给用户从气泡到面板的缓冲
 const HOVER_ENTER_DELAY = 80;
 const HOVER_LEAVE_DELAY = 450;
+const CLICK_GRACE_PERIOD = 300; // hover 打开面板后的点击宽限期，避免习惯性点击误关
 
 const props = defineProps<{
   selectedCount: number;
@@ -24,6 +26,9 @@ const emit = defineEmits<{
   (e: 'clear-selection'): void;
   (e: 'batch-favorite', favorited: boolean): void;
 }>();
+
+const { currentDefault } = useFabCopyFormat();
+const currentCopyFormat = ref<LinkFormat>(currentDefault.value);
 
 const fabContainerRef = ref<HTMLElement | null>(null);
 const panelVisible = ref(false);
@@ -59,6 +64,7 @@ const favoriteBtnClass = computed(() => {
 });
 
 let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+let panelOpenedAt = 0;
 
 function clearHoverTimer(): void {
   if (hoverTimer !== null) {
@@ -71,6 +77,7 @@ function handleHoverEnter(): void {
   clearHoverTimer();
   hoverTimer = setTimeout(() => {
     panelVisible.value = true;
+    panelOpenedAt = Date.now();
     hoverTimer = null;
   }, HOVER_ENTER_DELAY);
 }
@@ -85,10 +92,13 @@ function handleHoverLeave(): void {
 
 function togglePanel(): void {
   if (panelVisible.value) {
+    // 面板刚由 hover 打开时，短时间内的点击不关闭，避免习惯性点击误关
+    if (Date.now() - panelOpenedAt < CLICK_GRACE_PERIOD) return;
     closePanel();
   } else {
     clearHoverTimer();
     panelVisible.value = true;
+    panelOpenedAt = Date.now();
   }
 }
 
@@ -121,8 +131,12 @@ function handleCopyFormat(format: LinkFormat): void {
   emit('copy', format, undefined);
 }
 
+function handleFormatChange(format: LinkFormat): void {
+  currentCopyFormat.value = format;
+}
+
 function handleServiceCopy(serviceId: string): void {
-  emit('copy', 'url', serviceId);
+  emit('copy', currentCopyFormat.value, serviceId);
 }
 
 function handleFavoriteClick(): void {
@@ -182,7 +196,11 @@ function handleClear(): void {
           />
 
           <!-- section 1: 复制链接（主按钮 + 更多格式 Popover 触发器）-->
-          <FabCopySection :selected-count="selectedCount" @copy="handleCopyFormat" />
+          <FabCopySection
+            :selected-count="selectedCount"
+            @copy="handleCopyFormat"
+            @format-change="handleFormatChange"
+          />
 
           <!-- section 2: 图床筛选（多图床时显示）-->
           <FabServiceChips

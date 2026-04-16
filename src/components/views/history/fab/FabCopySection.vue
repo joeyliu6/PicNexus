@@ -10,6 +10,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'copy', format: LinkFormat): void;
+  (e: 'format-change', format: LinkFormat): void;
 }>();
 
 const { currentDefault, hasCustomTemplate } = useFabCopyFormat();
@@ -52,6 +53,11 @@ watch(tabOptions, (opts) => {
     selectedFormat.value = currentDefault.value;
   }
 });
+
+// 将当前选中格式上报给父组件，immediate 确保挂载后立即同步初始值
+watch(selectedFormat, (format) => {
+  emit('format-change', format);
+}, { immediate: true });
 
 onUnmounted(() => {
   if (copyTimer) clearTimeout(copyTimer);
