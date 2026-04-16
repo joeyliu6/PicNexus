@@ -281,6 +281,11 @@ watch(
   (c) => emit('update:selectedCount', c),
   { immediate: true }
 );
+
+function handleItemToggleSelect(id: string, event: MouseEvent): void {
+  const orderedIds = viewState.filteredMetas.value.map(m => m.id);
+  viewState.handleSelectClick(id, event, orderedIds);
+}
 </script>
 
 <template>
@@ -312,12 +317,13 @@ watch(
         :display-mode="displayMode"
         :selected-ids="selectedIdsSet"
         :favorite-ids="historyManager.favoriteSet.value"
+        :has-selection="viewState.hasSelection.value"
         :loaded-images="loadedImagesSet"
         :failed-images="failedImagesSet"
         :hover-details-map="hoverDetailsMap"
         :get-thumbnail-url="getThumbnailUrl"
         @item-click="openLightbox"
-        @item-toggle-select="viewState.toggleSelection"
+        @item-toggle-select="handleItemToggleSelect"
         @item-toggle-favorite="handleToggleFavorite"
         @item-hover="handleImageHover"
         @image-load="onImageLoad"

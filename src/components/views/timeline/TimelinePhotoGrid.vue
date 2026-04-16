@@ -31,6 +31,7 @@ const props = defineProps<{
   displayMode: 'fast' | 'smooth' | 'normal';
   selectedIds: Set<string>;
   favoriteIds: Set<string>;
+  hasSelection: boolean;
   loadedImages: Set<string>;
   failedImages: Set<string>;
   hoverDetailsMap: Map<string, HistoryItem>;
@@ -39,7 +40,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'item-click', meta: ImageMeta): void;
-  (e: 'item-toggle-select', id: string): void;
+  (e: 'item-toggle-select', id: string, event: MouseEvent): void;
   (e: 'item-toggle-favorite', id: string): void;
   (e: 'item-hover', meta: ImageMeta): void;
   (e: 'image-load', id: string): void;
@@ -81,13 +82,13 @@ function getGroupItemCount(groupId: string): number {
       :height="visible.height"
       :is-selected="selectedIds.has(visible.meta.id)"
       :is-favorited="favoriteIds.has(visible.meta.id)"
+      :has-selection="hasSelection"
       :is-loaded="loadedImages.has(visible.meta.id)"
       :is-failed="failedImages.has(visible.meta.id)"
       :display-mode="displayMode"
       :thumbnail-url="getThumbnailUrl(visible.meta)"
-      :hover-detail="hoverDetailsMap.get(visible.meta.id)"
       @click="emit('item-click', visible.meta)"
-      @toggle-select="emit('item-toggle-select', visible.meta.id)"
+      @toggle-select="(event: MouseEvent) => emit('item-toggle-select', visible.meta.id, event)"
       @toggle-favorite="emit('item-toggle-favorite', visible.meta.id)"
       @hover="emit('item-hover', visible.meta)"
       @image-load="emit('image-load', visible.meta.id)"

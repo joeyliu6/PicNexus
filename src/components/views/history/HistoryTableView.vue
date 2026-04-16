@@ -105,6 +105,21 @@ watch(
 onUnmounted(() => {
   viewState.reset();
 });
+
+// Shift+Click 支持：capture 阶段存 shiftKey，在 PrimeVue 的 update:model-value 回调中使用
+let _shiftHeld = false;
+
+function captureShiftState(event: MouseEvent) {
+  _shiftHeld = event.shiftKey;
+}
+
+function handleCheckboxToggle(id: string) {
+  const orderedIds = currentPageData.value
+    .filter(item => !isSkeleton(item))
+    .map(item => (item as HistoryItem).id);
+  viewState.handleSelectClick(id, { shiftKey: _shiftHeld } as MouseEvent, orderedIds);
+  _shiftHeld = false;
+}
 </script>
 
 <template>
@@ -158,12 +173,12 @@ onUnmounted(() => {
           </div>
         </template>
         <template #body="slotProps">
-          <div class="col-center">
+          <div class="col-center" @click.capture="captureShiftState">
             <Skeleton v-if="isSkeleton(slotProps.data)" width="1.25rem" height="1.25rem" borderRadius="4px" />
             <Checkbox
               v-else
               :model-value="viewState.isSelected(slotProps.data.id)"
-              @update:model-value="viewState.toggleSelection(slotProps.data.id)"
+              @update:model-value="handleCheckboxToggle(slotProps.data.id)"
               :binary="true"
             />
           </div>
