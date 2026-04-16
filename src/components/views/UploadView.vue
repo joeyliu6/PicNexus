@@ -149,6 +149,10 @@ const navigateToSettings = () => {
   tauriEmit('navigate-to', { view: 'settings', tab: 'hosting' });
 };
 
+const navigateToCompressionSettings = () => {
+  tauriEmit('navigate-to', { view: 'settings', tab: 'compression' });
+};
+
 // 打开文件选择对话框
 const openFileDialog = async () => {
   const filePaths = await uploadManager.selectFiles();
@@ -426,6 +430,7 @@ onUnmounted(() => {
         @drop="handleDrop"
         @update:compression-enabled="handleCompressionToggle"
         @update:active-preset-id="handlePresetSwitch"
+        @go-compression-settings="navigateToCompressionSettings"
       />
 
       <!-- 图床选择区域 -->

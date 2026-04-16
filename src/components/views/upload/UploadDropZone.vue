@@ -64,6 +64,7 @@ const emit = defineEmits<{
   'drop': [event: DragEvent];
   'update:compressionEnabled': [enabled: boolean];
   'update:activePresetId': [presetId: string];
+  'go-compression-settings': [];
 }>();
 
 const presetPopoverRef = ref<InstanceType<typeof PopoverType> | null>(null);
@@ -165,6 +166,14 @@ const presetTooltip = computed(() => {
           </button>
         </div>
       </Transition>
+      <button
+        v-if="compressionEnabled"
+        class="compress-settings-btn"
+        v-tooltip.top="'压缩设置'"
+        @click.stop="emit('go-compression-settings')"
+      >
+        <i class="pi pi-cog" />
+      </button>
     </div>
 
     <!-- 预设切换 Popover -->
@@ -293,6 +302,28 @@ const presetTooltip = computed(() => {
   0% { transform: scale(1); }
   40% { transform: scale(1.05); }
   100% { transform: scale(1); }
+}
+
+/* 压缩设置快捷按钮 */
+.compress-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--duration-fast), background var(--duration-fast);
+  padding: 0;
+  font-size: var(--text-sm);
+}
+
+.compress-settings-btn:hover {
+  color: var(--primary);
+  background: var(--primary-alpha-10);
 }
 
 /* 预设按钮容器：宽度过渡层 */
