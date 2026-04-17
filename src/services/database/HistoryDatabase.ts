@@ -17,7 +17,7 @@ import {
   rowValues, columnPlaceholders,
   itemToRow, rowToItem,
 } from './DataTransformer';
-import { setFavoriteQuery, batchSetFavoriteQuery, getFavoriteCountQuery } from './FavoriteService';
+import { setFavoriteQuery, batchSetFavoriteQuery, getFavoriteCountQuery, getFavoriteIdListQuery } from './FavoriteService';
 import { getLinkCheckInvalidQuery, getLinkCheckRestStreamQuery, batchUpdateLinkCheckStatusQuery } from './LinkCheckQuery';
 import { addSyncLogQuery, getSyncLogsQuery, clearSyncLogsQuery } from './SyncLogService';
 import { getItemsByBackupCountQuery, getBackupCountStatsQuery, getServiceDistributionQuery } from './MigrationQuery';
@@ -113,6 +113,16 @@ class HistoryDatabase {
   async getFavoriteCount(): Promise<number> {
     const db = await this.connection.getDb();
     return getFavoriteCountQuery(db);
+  }
+
+  /**
+   * 获取所有收藏记录的 ID 列表
+   * 轻量级查询：仅返回 ID，不触发 JSON.parse
+   * 用于前端 favoriteSet 初始化
+   */
+  async getFavoriteIdList(): Promise<string[]> {
+    const db = await this.connection.getDb();
+    return getFavoriteIdListQuery(db);
   }
 
   // ============================================

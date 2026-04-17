@@ -6,6 +6,7 @@ const {
   historyDBOpenMock,
   historyDBGetMetaListMock,
   historyDBGetFavoriteCountMock,
+  historyDBGetFavoriteIdListMock,
   historyDBGetPageMock,
   historyDBSearchMock,
   historyDBSetFavoriteMock,
@@ -28,6 +29,7 @@ const {
   historyDBOpenMock: vi.fn().mockResolvedValue(undefined),
   historyDBGetMetaListMock: vi.fn().mockResolvedValue([]),
   historyDBGetFavoriteCountMock: vi.fn().mockResolvedValue(0),
+  historyDBGetFavoriteIdListMock: vi.fn().mockResolvedValue([]),
   historyDBGetPageMock: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 100 }),
   historyDBSearchMock: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   historyDBSetFavoriteMock: vi.fn().mockResolvedValue(undefined),
@@ -53,6 +55,7 @@ vi.mock('../../../services/HistoryDatabase', () => ({
     open: historyDBOpenMock,
     getMetaList: historyDBGetMetaListMock,
     getFavoriteCount: historyDBGetFavoriteCountMock,
+    getFavoriteIdList: historyDBGetFavoriteIdListMock,
     getPage: historyDBGetPageMock,
     search: historyDBSearchMock,
     setFavorite: historyDBSetFavoriteMock,
@@ -221,6 +224,41 @@ describe('useHistoryManager', () => {
 
       expect(imageMetas.value).toEqual([]);
       expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.any(Object));
+    });
+  });
+
+  // ─── loadStats（轻量级加载） ────────────────────────
+
+  describe('loadStats', () => {
+    it('只调用 COUNT / favoriteCount / favoriteIdList，不触发全量 JSON.parse', async () => {
+      historyDBGetCountMock.mockResolvedValue(12345);
+      historyDBGetFavoriteCountMock.mockResolvedValue(7);
+      historyDBGetFavoriteIdListMock.mockResolvedValue(['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+
+      const { loadStats, totalCount, favoriteCount, favoriteSet, isStatsLoaded } = useHistoryManager();
+      await loadStats();
+
+      expect(historyDBGetCountMock).toHaveBeenCalledTimes(1);
+      expect(historyDBGetFavoriteIdListMock).toHaveBeenCalledTimes(1);
+      expect(historyDBGetMetaListMock).not.toHaveBeenCalled();
+      expect(totalCount.value).toBe(12345);
+      expect(favoriteCount.value).toBe(7);
+      expect(favoriteSet.value.has('a')).toBe(true);
+      expect(favoriteSet.value.has('g')).toBe(true);
+      expect(favoriteSet.value.size).toBe(7);
+      expect(isStatsLoaded.value).toBe(true);
+    });
+
+    it('缓存有效时跳过重复查询', async () => {
+      historyDBGetCountMock.mockResolvedValue(1);
+      historyDBGetFavoriteCountMock.mockResolvedValue(0);
+      historyDBGetFavoriteIdListMock.mockResolvedValue([]);
+
+      const { loadStats } = useHistoryManager();
+      await loadStats();
+      await loadStats();
+
+      expect(historyDBGetCountMock).toHaveBeenCalledTimes(1);
     });
   });
 

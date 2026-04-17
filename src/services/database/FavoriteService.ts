@@ -47,3 +47,14 @@ export async function getFavoriteCountQuery(db: Database): Promise<number> {
   );
   return result[0]?.count || 0;
 }
+
+/**
+ * 获取所有收藏记录的 ID 列表（轻量级，仅 ID，无 JSON.parse）
+ * 用于前端 favoriteSet 初始化，代替全量加载 metas
+ */
+export async function getFavoriteIdListQuery(db: Database): Promise<string[]> {
+  const result = await db.select<{ id: string }[]>(
+    `SELECT id FROM history_items WHERE is_favorited = 1 ORDER BY timestamp DESC`
+  );
+  return result.map(r => r.id);
+}

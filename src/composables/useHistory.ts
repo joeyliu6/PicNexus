@@ -3,12 +3,7 @@
 // v3.0: 视图状态已移至 useHistoryViewState.ts
 
 import { ref, shallowRef, type Ref } from 'vue';
-import { save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type { HistoryItem, ServiceType } from '../config/types';
-import { getActivePrefix } from '../config/types';
-import { applyPrefixTemplate } from '../utils/linkPrefixTemplate';
 import { historyDB, type PageResult, type SearchResult, type SearchOptions, type TimePeriodStats } from '../services/HistoryDatabase';
 import type { ImageMeta } from '../types/image-meta';
 import { useImageDetailCache } from './useImageDetailCache';
@@ -16,7 +11,6 @@ import { useToast } from './useToast';
 import { TOAST_MESSAGES } from '../constants';
 import { useConfirm } from './useConfirm';
 import { useUndoToast } from './useUndoToast';
-import { useConfigManager } from './useConfig';
 import {
   onCacheEvent,
   emitHistoryDeleted,
@@ -26,6 +20,7 @@ import {
 } from '../events/cacheEvents';
 import { createLogger } from '../utils/logger';
 import { debounce } from '../utils/debounce';
+import { createBulkOps } from './history/useHistoryBulkOps';
 
 const log = createLogger('History');
 
@@ -39,8 +34,12 @@ const sharedImageMetas: Ref<ImageMeta[]> = shallowRef([]);
 // 加载中状态
 const sharedIsLoading = ref(false);
 
-// 数据是否已加载（用于缓存判断）
+// 全量元数据是否已加载（用于缓存判断；metas 由时间轴/收藏视图按需触发）
 const isDataLoaded = ref(false);
+
+// 统计数字是否已加载（totalCount / favoriteCount / favoriteSet）
+// 表格视图只依赖 stats，不依赖 metas
+const isStatsLoaded = ref(false);
 
 // 数据版本号（用于追踪变化）
 const dataVersion = ref(0);
@@ -48,14 +47,24 @@ const dataVersion = ref(0);
 // === TTL 缓存相关 ===
 const CACHE_TTL = 5 * 60 * 1000;  // 5 分钟 TTL
 const lastLoadTime = ref<number>(0);
+const lastStatsLoadTime = ref<number>(0);
 
 /**
- * 检查缓存是否有效（未过期）
+ * 检查全量 metas 缓存是否有效
  */
 function isCacheValid(): boolean {
   if (!isDataLoaded.value) return false;
   if (lastLoadTime.value === 0) return false;
   return Date.now() - lastLoadTime.value < CACHE_TTL;
+}
+
+/**
+ * 检查统计数据缓存是否有效
+ */
+function isStatsCacheValid(): boolean {
+  if (!isStatsLoaded.value) return false;
+  if (lastStatsLoadTime.value === 0) return false;
+  return Date.now() - lastStatsLoadTime.value < CACHE_TTL;
 }
 
 // === 跨窗口同步 ===
@@ -92,34 +101,54 @@ const isTimePeriodStatsLoaded = ref(false);
 
 /**
  * 模块级别的数据重新加载函数（用于事件处理）
- * 直接更新 sharedImageMetas，供时间轴视图使用
+ *
+ * 策略：metas 按需重载 —— 仅当 metas 之前已加载过（时间轴/收藏视图用过）才重新 JSON.parse 全量；
+ * 表格视图场景下 metas 从未加载，事件只刷新 stats（COUNT + favoriteIdList），避免风扇狂叫。
  */
 async function reloadSharedData(): Promise<void> {
+  // 提前捕获：只有重挡会动 sharedIsLoading，轻挡毫秒级 SQL 不占 UI loading 态
+  const metasAlreadyLoaded = isDataLoaded.value;
+  const needsTimeStats = isTimePeriodStatsLoaded.value;
   try {
-    sharedIsLoading.value = true;
+    if (metasAlreadyLoaded) sharedIsLoading.value = true;
     await historyDB.open();
 
-    // 并行加载元数据和时间段统计
-    const [metas, timePeriodStats, favCount] = await Promise.all([
-      historyDB.getMetaList(),
-      historyDB.getTimePeriodStats(),
-      historyDB.getFavoriteCount(),
-    ]);
+    if (metasAlreadyLoaded) {
+      // 时间轴/收藏视图之前打开过，必须全量刷新保持一致性
+      const [metas, timePeriodStats] = await Promise.all([
+        historyDB.getMetaList(),
+        historyDB.getTimePeriodStats(),
+      ]);
+      sharedImageMetas.value = metas;
+      totalCount.value = metas.length;
+      sharedFavoriteSet.value = new Set(metas.filter(m => m.isFavorited).map(m => m.id));
+      favoriteCount.value = sharedFavoriteSet.value.size;
+      sharedTimePeriodStats.value = timePeriodStats;
+      isTimePeriodStatsLoaded.value = true;
+      isDataLoaded.value = true;
+      lastLoadTime.value = Date.now();
+    } else {
+      // 只有表格视图在用，刷 stats 即可（SQL COUNT + id 列表，毫秒级）
+      const [total, favIds, timeStats] = await Promise.all([
+        historyDB.getCount(),
+        historyDB.getFavoriteIdList(),
+        needsTimeStats ? historyDB.getTimePeriodStats() : Promise.resolve(null),
+      ]);
+      totalCount.value = total;
+      sharedFavoriteSet.value = new Set(favIds);
+      favoriteCount.value = favIds.length;
+      if (timeStats) {
+        sharedTimePeriodStats.value = timeStats;
+      }
+    }
 
-    sharedImageMetas.value = metas;
-    totalCount.value = metas.length;
-    favoriteCount.value = favCount;
-    sharedFavoriteSet.value = new Set(metas.filter(m => m.isFavorited).map(m => m.id));
-    sharedTimePeriodStats.value = timePeriodStats;
-    isTimePeriodStatsLoaded.value = true;
-
-    isDataLoaded.value = true;
-    lastLoadTime.value = Date.now();
+    isStatsLoaded.value = true;
+    lastStatsLoadTime.value = Date.now();
     dataVersion.value++;
   } catch (error) {
     log.error('[历史记录] 事件触发重新加载失败:', error);
   } finally {
-    sharedIsLoading.value = false;
+    if (metasAlreadyLoaded) sharedIsLoading.value = false;
   }
 }
 
@@ -139,10 +168,13 @@ function initCrossWindowListener(): void {
     switch (payload.type) {
       case 'history-deleted':
         if (data?.ids && data.ids.length > 0) {
-          const deletedSet = new Set(data.ids);
-          sharedImageMetas.value = sharedImageMetas.value.filter(
-            meta => !deletedSet.has(meta.id)
-          );
+          // metas 按需存在：已加载才同步过滤，否则表格视图走 SQL 自然生效
+          if (isDataLoaded.value) {
+            const deletedSet = new Set(data.ids);
+            sharedImageMetas.value = sharedImageMetas.value.filter(
+              meta => !deletedSet.has(meta.id)
+            );
+          }
           removeFavoritesFromIds(data.ids);
           totalCount.value = Math.max(0, totalCount.value - data.ids.length);
           dataVersion.value++;
@@ -150,6 +182,10 @@ function initCrossWindowListener(): void {
         break;
 
       case 'history-cleared':
+        // metas=[] + count=0 本身就是一个合法的"已加载的空状态"
+        // 保持 isDataLoaded / isStatsLoaded 不变，这样后续 history-updated
+        // 事件仍会按正确路径（重挡/轻挡）刷新；否则时间轴/收藏视图的本地
+        // hasXxxDataLoaded 闭包标志不会重置，会陷入"totalCount>0 但 metas=[]"的假死状态
         sharedImageMetas.value = [];
         sharedFavoriteSet.value = new Set();
         totalCount.value = 0;
@@ -158,8 +194,9 @@ function initCrossWindowListener(): void {
         break;
 
       case 'history-updated':
-        isDataLoaded.value = false;
-        // 使用 debounce 合并短时间内的多次更新事件，避免并发竞态
+        // 不清零 isDataLoaded/isStatsLoaded：reloadSharedData 内部以此判断"是否曾加载过 metas"
+        // 以决定是全量刷新（时间轴/收藏视图场景）还是只刷 stats（表格视图场景）
+        // 真正的缓存新鲜度由 reloadSharedData 内部重置 lastLoadTime / lastStatsLoadTime 保证
         debouncedReloadSharedData();
         break;
     }
@@ -169,11 +206,13 @@ function initCrossWindowListener(): void {
 }
 
 /**
- * 使缓存失效，下次 loadHistory 将强制重新加载
+ * 使缓存失效，下次 loadHistory / loadStats 将强制重新加载
  */
 export function invalidateCache(): void {
   isDataLoaded.value = false;
   lastLoadTime.value = 0;
+  isStatsLoaded.value = false;
+  lastStatsLoadTime.value = 0;
 }
 
 /**
@@ -201,7 +240,43 @@ export function useHistoryManager() {
   }
 
   /**
+   * 仅加载统计数字（totalCount、favoriteCount、favoriteSet）
+   *
+   * 用于表格视图：不触发全量 JSON.parse，仅跑 SQL COUNT + 收藏 ID 列表
+   * 毫秒级返回，解决首屏风扇狂叫问题
+   *
+   * @param forceReload 是否强制重新加载（忽略缓存）
+   */
+  async function loadStats(forceReload = false): Promise<void> {
+    if (isStatsCacheValid() && !forceReload) return;
+
+    try {
+      await initDatabase();
+
+      const [total, favIds] = await Promise.all([
+        historyDB.getCount(),
+        historyDB.getFavoriteIdList(),
+      ]);
+
+      totalCount.value = total;
+      sharedFavoriteSet.value = new Set(favIds);
+      favoriteCount.value = favIds.length;
+
+      isStatsLoaded.value = true;
+      lastStatsLoadTime.value = Date.now();
+      dataVersion.value++;
+    } catch (error) {
+      log.error('[历史记录] 加载统计失败:', error);
+      toast.showConfig('error', TOAST_MESSAGES.common.loadFailed(String(error)));
+    }
+  }
+
+  /**
    * 加载历史记录元数据（全量加载）
+   *
+   * ⚠️ 重量级：3 万条记录约 300-800ms，会触发全量 JSON.parse
+   * 仅时间轴视图、收藏视图激活时调用
+   *
    * @param forceReload 是否强制重新加载（忽略缓存）
    */
   async function loadHistory(forceReload = false): Promise<void> {
@@ -228,6 +303,9 @@ export function useHistoryManager() {
 
       isDataLoaded.value = true;
       lastLoadTime.value = Date.now();
+      // metas 加载完 stats 也自然最新
+      isStatsLoaded.value = true;
+      lastStatsLoadTime.value = Date.now();
       dataVersion.value++;
 
     } catch (error) {
@@ -264,8 +342,10 @@ export function useHistoryManager() {
 
       toast.showConfig('success', TOAST_MESSAGES.common.deleteSuccess(1));
 
-      // 更新元数据
-      imageMetas.value = imageMetas.value.filter(meta => meta.id !== itemId);
+      // metas 按需：已加载才同步过滤
+      if (isDataLoaded.value) {
+        imageMetas.value = imageMetas.value.filter(meta => meta.id !== itemId);
+      }
       totalCount.value = Math.max(0, totalCount.value - 1);
 
       removeFavoritesFromIds([itemId]);
@@ -330,164 +410,15 @@ export function useHistoryManager() {
     }
   }
 
-  /**
-   * 导出所有历史记录为 JSON
-   */
-  async function exportToJson(): Promise<void> {
-    try {
-      const count = await historyDB.getCount();
-      if (count === 0) {
-        toast.showConfig('warn', TOAST_MESSAGES.sync.noHistory);
-        return;
-      }
-
-      const jsonContent = await historyDB.exportToJSON();
-      const filePath = await saveDialog({
-        defaultPath: 'picnexus_export.json',
-        filters: [{ name: 'JSON', extensions: ['json'] }]
-      });
-
-      if (!filePath) {
-        return;
-      }
-
-      await writeTextFile(filePath, jsonContent);
-      toast.showConfig('success', TOAST_MESSAGES.common.exportSuccess(count));
-
-    } catch (error) {
-      log.error('[历史记录] 导出失败:', error);
-      toast.showConfig('error', TOAST_MESSAGES.common.exportFailed(String(error)));
-    }
-  }
-
-  /**
-   * 批量复制链接
-   */
-  async function bulkCopyLinks(selectedIds: string[]): Promise<void> {
-    try {
-      if (selectedIds.length === 0) {
-        toast.showConfig('warn', TOAST_MESSAGES.common.noSelection);
-        return;
-      }
-
-      const idSet = new Set(selectedIds);
-      const selectedMetas = imageMetas.value.filter(meta => idSet.has(meta.id));
-      const { config } = useConfigManager();
-      const currentConfig = config.value;
-      const activePrefix = getActivePrefix(currentConfig);
-
-      const links = selectedMetas.map(meta => {
-        if (!meta.primaryUrl) return null;
-        if (meta.primaryService === 'weibo' && activePrefix) {
-          return applyPrefixTemplate(activePrefix.template, meta.primaryUrl);
-        }
-        return meta.primaryUrl;
-      }).filter((link): link is string => !!link);
-
-      if (links.length === 0) {
-        toast.showConfig('warn', TOAST_MESSAGES.history.noLink());
-        return;
-      }
-
-      await writeText(links.join('\n'));
-      toast.showConfig('success', TOAST_MESSAGES.common.copySuccess(links.length));
-
-    } catch (error) {
-      log.error('[批量操作] 复制失败:', error);
-      toast.showConfig('error', TOAST_MESSAGES.common.copyFailed(error instanceof Error ? error.message : String(error)));
-    }
-  }
-
-  /**
-   * 批量导出为 JSON
-   */
-  async function bulkExportJSON(selectedIds: string[]): Promise<void> {
-    try {
-      if (selectedIds.length === 0) {
-        toast.showConfig('warn', TOAST_MESSAGES.common.noSelection);
-        return;
-      }
-
-      // 从数据库加载完整详情
-      const selectedItems: HistoryItem[] = [];
-      for (const id of selectedIds) {
-        try {
-          const detail = await detailCache.getDetail(id);
-          selectedItems.push(detail);
-        } catch (e) {
-          log.warn(`[批量操作] 跳过无效记录: ${id}`, e);
-        }
-      }
-
-      if (selectedItems.length === 0) {
-        toast.showConfig('warn', TOAST_MESSAGES.history.noLoadableData);
-        return;
-      }
-
-      const jsonContent = JSON.stringify(selectedItems, null, 2);
-
-      const filePath = await saveDialog({
-        defaultPath: `picnexus-history-${Date.now()}.json`,
-        filters: [{ name: 'JSON', extensions: ['json'] }]
-      });
-
-      if (!filePath) {
-        return;
-      }
-
-      await writeTextFile(filePath, jsonContent);
-      toast.showConfig('success', TOAST_MESSAGES.common.exportSuccess(selectedItems.length));
-
-    } catch (error) {
-      log.error('[批量操作] 导出失败:', error);
-      toast.showConfig('error', TOAST_MESSAGES.common.exportFailed(error instanceof Error ? error.message : String(error)));
-    }
-  }
-
-  /**
-   * 批量删除记录
-   */
-  async function bulkDeleteRecords(selectedIds: string[]): Promise<boolean> {
-    try {
-      if (selectedIds.length === 0) {
-        toast.showConfig('warn', TOAST_MESSAGES.common.noSelection);
-        return false;
-      }
-
-      const confirmed = await confirm(
-        `确定要删除选中的 ${selectedIds.length} 条历史记录吗？此操作不可撤销。`,
-        { header: '批量删除确认', acceptLabel: '删除', acceptClass: 'p-button-danger' }
-      );
-
-      if (!confirmed) {
-        return false;
-      }
-
-      await historyDB.deleteMany(selectedIds);
-      toast.showConfig('success', TOAST_MESSAGES.common.deleteSuccess(selectedIds.length));
-
-      const selectedIdSet = new Set(selectedIds);
-      imageMetas.value = imageMetas.value.filter(meta => !selectedIdSet.has(meta.id));
-      totalCount.value = Math.max(0, totalCount.value - selectedIds.length);
-
-      removeFavoritesFromIds(selectedIds);
-
-      dataVersion.value++;
-
-      // 清除详情缓存
-      selectedIds.forEach(id => detailCache.removeDetail(id));
-
-      emitHistoryDeleted(selectedIds).catch(e => {
-        log.warn('[历史记录] 跨窗口通知失败:', e);
-      });
-
-      return true;
-    } catch (error) {
-      log.error('[批量操作] 删除失败:', error);
-      toast.showConfig('error', TOAST_MESSAGES.common.deleteFailed(error instanceof Error ? error.message : String(error)));
-      return false;
-    }
-  }
+  // 批量操作（导出 JSON / 批量删除）从 useHistoryBulkOps 引入
+  const { bulkExportJSON, bulkDeleteRecords } = createBulkOps({
+    imageMetas,
+    totalCount,
+    isDataLoaded,
+    dataVersion,
+    detailCache,
+    removeFavoritesFromIds,
+  });
 
   /**
    * 加载全量历史记录（独立于分页状态）
@@ -583,15 +514,16 @@ export function useHistoryManager() {
         return false;
       }
 
-      // 验证元数据中是否有该月份的数据
-      const hasData = imageMetas.value.some(meta => {
-        const date = new Date(meta.timestamp);
-        return date.getFullYear() === year && date.getMonth() === month;
-      });
-
-      if (!hasData) {
-        log.warn(`[历史记录] 目标月份无数据: ${year}年${month + 1}月`);
-        return false;
+      // 如果 metas 已加载（时间轴路径应当如此），再二次验证；否则信任 timePeriodStats
+      if (isDataLoaded.value) {
+        const hasData = imageMetas.value.some(meta => {
+          const date = new Date(meta.timestamp);
+          return date.getFullYear() === year && date.getMonth() === month;
+        });
+        if (!hasData) {
+          log.warn(`[历史记录] 目标月份无数据: ${year}年${month + 1}月`);
+          return false;
+        }
       }
       return true;
 
@@ -622,7 +554,8 @@ export function useHistoryManager() {
     favoriteCount.value += targetState ? 1 : -1;
 
     // 静默同步 meta 对象属性（不替换数组引用，不触发 shallowRef 响应）
-    const metaIndex = imageMetas.value.findIndex(m => m.id === id);
+    // metas 未加载时（表格视图），favoriteSet 就是唯一真相源
+    const metaIndex = isDataLoaded.value ? imageMetas.value.findIndex(m => m.id === id) : -1;
     if (metaIndex >= 0) {
       imageMetas.value[metaIndex].isFavorited = targetState;
     }
@@ -670,10 +603,12 @@ export function useHistoryManager() {
       sharedFavoriteSet.value = newSet;
       favoriteCount.value = Math.max(0, favoriteCount.value + deltaCount);
 
-      // 静默同步 meta 对象属性
-      const idSet = new Set(ids);
-      for (const meta of imageMetas.value) {
-        if (idSet.has(meta.id)) meta.isFavorited = favorited;
+      // 静默同步 meta 对象属性（metas 未加载时跳过，favoriteSet 即真相源）
+      if (isDataLoaded.value) {
+        const idSet = new Set(ids);
+        for (const meta of imageMetas.value) {
+          if (idSet.has(meta.id)) meta.isFavorited = favorited;
+        }
       }
 
       ids.forEach(id => detailCache.removeDetail(id));
@@ -689,6 +624,7 @@ export function useHistoryManager() {
     imageMetas,  // ← 改为元数据（原 allHistoryItems）
     isLoading,
     isDataLoaded,
+    isStatsLoaded,
 
     // 统计
     totalCount,
@@ -700,6 +636,7 @@ export function useHistoryManager() {
     detailCache,
 
     // 方法
+    loadStats,
     loadHistory,
     loadAllHistory,
     loadPageByNumber,
@@ -707,8 +644,6 @@ export function useHistoryManager() {
     invalidateCache,
     deleteHistoryItem,
     clearHistory,
-    exportToJson,
-    bulkCopyLinks,
     bulkExportJSON,
     bulkDeleteRecords,
 
