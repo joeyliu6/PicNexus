@@ -118,6 +118,23 @@ flowchart TD
 
 ---
 
+---
+
+## 收藏视图（独立服务端分页）
+
+收藏视图 **不走** sharedImageMetas 全量路径，而是独立调用 `historyDB.getFavoritesMetaPage({offset, limit, serviceFilter, searchTerm})`，SQL 直接 `WHERE is_favorited=1 ORDER BY timestamp DESC LIMIT ? OFFSET ?`。
+
+- 首页由视图可见性触发（`useLazyLoadOnVisible`），默认每批 80 条
+- 滚动至底部 300px 时累积加载下一批
+- `favoriteSet` 变化：少量取消（≤5）→ 本地过滤保留 leave 动画；批量（>5）→ 重载首页
+- 跨窗口 `history-deleted` / `history-cleared` 事件 → 重载首页
+- 灯箱导航到倒数第 3 项时异步触发下一批加载
+- Header 徽章读 `totalCount`（SQL COUNT(*) OVER()）而非数组长度
+
+> **关键源文件**：`src/composables/favorites/useFavoritesData.ts`、`src/services/database/HistoryDatabase.ts` 的 `getFavoritesMetaPage`
+
+---
+
 ## 缓存机制
 
 | 层级 | 策略 | TTL | 失效条件 |

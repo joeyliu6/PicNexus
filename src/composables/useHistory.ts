@@ -4,7 +4,11 @@
 
 import { ref, shallowRef, type Ref } from 'vue';
 import type { HistoryItem, ServiceType } from '../config/types';
-import { historyDB, type PageResult, type SearchResult, type SearchOptions, type TimePeriodStats } from '../services/HistoryDatabase';
+import {
+  historyDB,
+  type PageResult, type SearchResult, type SearchOptions,
+  type TimePeriodStats,
+} from '../services/HistoryDatabase';
 import type { ImageMeta } from '../types/image-meta';
 import { useImageDetailCache } from './useImageDetailCache';
 import { useToast } from './useToast';

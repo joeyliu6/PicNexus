@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * FavoritesView - 收藏视图
- * 平铺均匀网格，无日期分组
+ * 平铺均匀网格，服务端分页（SQL WHERE is_favorited=1 LIMIT/OFFSET）
  */
 import { ref, computed, watch, onUnmounted } from 'vue';
 import Skeleton from 'primevue/skeleton';
@@ -37,43 +37,46 @@ const configManager = useConfigManager();
 const scrollContainerRef = ref<HTMLElement | null>(null);
 let savedScrollTop = 0;
 
-// 收藏数据管理（过滤、缩略图、增量渲染）
+// 本地 filter/searchTerm：useFavoritesData 以它们为分页查询输入；同时 props 变化也同步到 viewState 用于清空多选
+const localFilter = ref<ServiceType | 'all'>(props.filter ?? 'all');
+const localSearchTerm = ref<string>(props.searchTerm ?? '');
+
 const {
-  favoriteMetas, renderedMetas, hasMore,
-  imageStates, getThumbnailUrl, onFavoritesScroll,
+  loadedMetas, totalCount, hasMore, isLoading, hasLoadedOnce,
+  imageStates, getThumbnailUrl, getItemService, onFavoritesScroll,
+  loadFirstPage, loadNextPage,
 } = useFavoritesData({
-  filteredMetas: viewState.filteredMetas,
+  filter: localFilter,
+  searchTerm: localSearchTerm,
   favoriteSet: historyManager.favoriteSet,
   scrollContainerRef,
   config: configManager.config,
 });
 
-// 灯箱管理
 const {
   lightboxVisible, lightboxItem,
   lightboxHasPrev, lightboxHasNext,
   openLightbox, handleLightboxNavigate, handleLightboxDelete,
 } = useFavoritesLightbox({
-  favoriteMetas,
+  favoriteMetas: loadedMetas,
   getDetail: (id: string) => viewState.detailCache.getDetail(id),
   deleteHistoryItem: (id: string) => viewState.deleteHistoryItem(id),
+  hasMore,
+  loadNext: loadNextPage,
 });
 
-// 多选
 const selectedIdsSet = computed(() => new Set(viewState.selectedIdList.value));
 const selectedAvailableServices = computed<{ serviceId: ServiceType; count: number }[]>(() => {
   const ids = viewState.selectedIdList.value;
   if (ids.length === 0) return [];
-  const serviceCountMap = new Map<string, number>();
-  for (const meta of favoriteMetas.value) {
-    if (ids.includes(meta.id)) {
-      serviceCountMap.set(meta.primaryService, (serviceCountMap.get(meta.primaryService) ?? 0) + 1);
+  const serviceCountMap = new Map<ServiceType, number>();
+  for (const id of ids) {
+    const service = getItemService(id);
+    if (service) {
+      serviceCountMap.set(service, (serviceCountMap.get(service) ?? 0) + 1);
     }
   }
-  return Array.from(serviceCountMap.entries()).map(([serviceId, count]) => ({
-    serviceId: serviceId as ServiceType,
-    count,
-  }));
+  return Array.from(serviceCountMap.entries()).map(([serviceId, count]) => ({ serviceId, count }));
 });
 
 const handleToggleFavorite = async (id: string) => {
@@ -82,13 +85,19 @@ const handleToggleFavorite = async (id: string) => {
   } catch { /* useHistory 内部已处理 toast */ }
 };
 
-// 监听 filter/searchTerm 变化（与 TimelineView 保持一致）
-watch(() => props.filter, (val) => { if (val) viewState.setFilter(val); }, { immediate: true });
-watch(() => props.searchTerm, (val) => { if (val !== undefined) viewState.setSearchTerm(val); }, { immediate: true });
+watch(() => props.filter, (val) => {
+  if (val === undefined) return;
+  localFilter.value = val;
+  viewState.setFilter(val);
+}, { immediate: true });
+watch(() => props.searchTerm, (val) => {
+  if (val === undefined) return;
+  localSearchTerm.value = val;
+  viewState.setSearchTerm(val);
+}, { immediate: true });
 
-// 上报收藏数量（让 HistoryView header 的计数徽章显示正确）
 watch(
-  [() => favoriteMetas.value.length, () => props.visible],
+  [() => totalCount.value, () => props.visible],
   ([c, isVisible]) => {
     if (isVisible !== false) emit('update:totalCount', c);
   },
@@ -96,16 +105,18 @@ watch(
 );
 watch(() => viewState.selectedIdList.value.length, (c) => emit('update:selectedCount', c), { immediate: true });
 
-// 组件卸载清理
 onUnmounted(() => {
   viewState.reset();
 });
 
-// TransitionGroup 退场动画：延迟显示空状态，等 leave 动画结束
 const isLeaving = ref(false);
 const isLastLeave = ref(false);
+// gate 在 hasLoadedOnce 上避免首次切到收藏时 v-show 切 block 的一帧露出空状态
 const showEmptyState = computed(() =>
-  favoriteMetas.value.length === 0 && !isLeaving.value
+  hasLoadedOnce.value
+  && totalCount.value === 0
+  && !isLoading.value
+  && !isLeaving.value
 );
 const onAfterLeave = () => {
   isLeaving.value = false;
@@ -120,15 +131,15 @@ const onBeforeLeave = (el: Element) => {
   htmlEl.style.height = `${height}px`;
 };
 
-watch(() => favoriteMetas.value.length, (newLen, oldLen) => {
+watch(() => loadedMetas.value.length, (newLen, oldLen) => {
   if (newLen === 0 && oldLen > 0) {
     isLeaving.value = true;
     isLastLeave.value = true;
   }
 });
 
-// 视图激活时才加载全量 metas（避免首屏被迫加载 3 万条 JSON.parse）
-useLazyLoadOnVisible(() => props.visible, () => historyManager.loadHistory());
+// 视图首次可见时加载首页（避免首屏跑 SQL；也避免切到其他视图时浪费）
+useLazyLoadOnVisible(() => props.visible, () => loadFirstPage());
 
 // 滚动位置保存/恢复（v-show 兼容，与 TimelineView 保持一致）
 watch(() => props.visible, async (isVisible, wasVisible) => {
@@ -149,8 +160,8 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   <div class="favorites-view">
     <div ref="scrollContainerRef" class="favorites-scroll" @scroll="onFavoritesScroll">
 
-      <!-- 加载骨架屏 -->
-      <template v-if="viewState.isLoading.value">
+      <!-- 首次未加载时也走骨架屏分支，避免 v-show 切 block 时的空状态闪烁 -->
+      <template v-if="(!hasLoadedOnce || isLoading) && loadedMetas.length === 0">
         <div class="favorites-grid">
           <div v-for="i in 16" :key="i" class="skeleton-cell">
             <Skeleton width="100%" height="100%" border-radius="8px" class="skeleton-fill" />
@@ -173,7 +184,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
 
         <!-- 均匀网格（始终挂载，v-show 保持 TransitionGroup 存活以执行 leave 动画） -->
         <TransitionGroup
-          v-show="favoriteMetas.length > 0 || isLeaving"
+          v-show="loadedMetas.length > 0 || isLeaving"
           tag="div"
           :name="isLastLeave ? 'fav-last' : 'fav-item'"
           class="favorites-grid"
@@ -181,7 +192,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
           @after-leave="onAfterLeave"
         >
           <FavoritePhotoItem
-            v-for="meta in renderedMetas"
+            v-for="meta in loadedMetas"
             :key="meta.id"
             :meta="meta"
             :thumbnail-url="getThumbnailUrl(meta)"
@@ -197,7 +208,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
         <!-- 加载更多指示器 -->
         <div v-if="hasMore" class="load-more-sentinel">
           <i class="pi pi-spin pi-spinner"></i>
-          <span>加载更多（{{ renderedMetas.length }}/{{ favoriteMetas.length }}）</span>
+          <span>加载更多（{{ loadedMetas.length }}/{{ totalCount }}）</span>
         </div>
       </template>
 
