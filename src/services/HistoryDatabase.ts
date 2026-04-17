@@ -18,4 +18,6 @@ export {
   type FavoritesMetaPageResult,
   type SyncLogOperation,
   type SyncLogEntry,
+  type DayStats,
+  type DayStatsFilter,
 } from './database/HistoryDatabase';

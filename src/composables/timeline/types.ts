@@ -20,6 +20,10 @@ export interface PhotoGroup {
   date: Date;
   /** 该分组的图片元数据 */
   items: ImageMeta[];
+  /** SQL 聚合的预期图片数量（骨架高度估算用，仅按需加载模式下填充） */
+  expectedCount?: number;
+  /** 是否为骨架占位（items 为空，尚未从 DB 加载）*/
+  isSkeleton?: boolean;
 }
 
 /** 可见图片项（用于渲染） */
