@@ -32,6 +32,8 @@ interface MonthSegment {
   isLoaded: boolean;
 }
 
+type DragScrollSource = 'click' | 'drag' | 'wheel';
+
 // ==================== Props & Emits ====================
 
 const props = defineProps<{
@@ -50,7 +52,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'drag-scroll', progress: number): void;
+  (e: 'drag-scroll', progress: number, source?: DragScrollSource): void;
   (e: 'jump-to-period', year: number, month: number): void;
   (e: 'jump-to-year', year: number): void;
 }>();
@@ -328,7 +330,7 @@ function handleClick() {
   if (!isLoaded) {
     emit('jump-to-period', info.year, info.month);
   } else {
-    emit('drag-scroll', hoverPosition.value);
+    emit('drag-scroll', hoverPosition.value, 'click');
   }
 }
 
@@ -353,7 +355,7 @@ function onDrag(e: MouseEvent) {
 
   const progress = positionToProgress(e.clientY);
   hoverPosition.value = progress;
-  emit('drag-scroll', progress);
+  emit('drag-scroll', progress, 'drag');
 }
 
 function stopDrag() {
@@ -367,7 +369,7 @@ function handleWheel(e: WheelEvent) {
   e.preventDefault();
   const delta = e.deltaY > 0 ? 0.02 : -0.02;
   const newProgress = Math.max(0, Math.min(1, props.scrollProgress + delta));
-  emit('drag-scroll', newProgress);
+  emit('drag-scroll', newProgress, 'wheel');
 }
 
 // ==================== Lifecycle ====================

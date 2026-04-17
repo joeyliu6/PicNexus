@@ -13,6 +13,8 @@ import { useTimelineLightbox } from '../../composables/timeline/useTimelineLight
 import { useTimelineDragAndSkeleton } from '../../composables/timeline/useTimelineDragAndSkeleton';
 import { useTimelineData } from '../../composables/timeline/useTimelineData';
 import { useTimelineDayPagination } from '../../composables/timeline/useTimelineDayPagination';
+import { useScrollAnchor } from '../../composables/timeline/useScrollAnchor';
+import { useDebouncedTrue } from '../../composables/useDebouncedTrue';
 import { useToast } from '../../composables/useToast';
 import { type ServiceType } from '../../config/types';
 
@@ -86,6 +88,7 @@ const {
   scrollDirection,
   visibleItems,
   visibleHeaders,
+  fastModeItems,
   layoutResult,
   visibleDayKeys,
   scrollToItem,
@@ -165,6 +168,11 @@ const {
   toast,
 });
 
+// layout 重算时保持视口锚点 → 消除高度估算偏差导致的图片跳动
+const scrollAnchor = useScrollAnchor(scrollContainer, layoutResult, isCalculating, visibleItems);
+// spinner 只在重算持续 >300ms 才显示 → 偶发重算不闪烁
+const isCalculatingVisible = useDebouncedTrue(isCalculating, 300);
+
 const {
   showSkeleton,
   skeletonLayout,
@@ -183,6 +191,7 @@ const {
   isCalculating,
   visible: computed(() => props.visible),
   totalHeight,
+  scrollProgress,
   viewportHeight,
   layoutResult,
   timePeriodStats: computed(() => historyManager.timePeriodStats.value),
@@ -191,6 +200,9 @@ const {
   scrollToItem,
   forceUpdateVisibleArea,
   jumpToMonth: historyManager.jumpToMonth,
+  ensureDaysLoaded,
+  suspendScrollAnchor: scrollAnchor.suspend,
+  resumeScrollAnchor: scrollAnchor.resume,
 });
 
 const handleScroll = () => {
@@ -199,8 +211,8 @@ const handleScroll = () => {
   if (!getIsDragging()) onSidebarScroll();
 };
 
-// 首次激活时加载时间段统计（侧边栏指示器需要）
-watch(() => props.visible, (v) => { if (v) void historyManager.loadTimePeriodStats(); }, { once: true, immediate: true });
+// 激活时加载时间段统计（侧边栏指示器需要）；loadTimePeriodStats 内部幂等，可重复触发
+watch(() => props.visible, (v) => { if (v) void historyManager.loadTimePeriodStats(); }, { immediate: true });
 
 // 视口可见天变化 → 扩展 ±5 天缓冲区后按需加载
 let ensureTimer: ReturnType<typeof setTimeout> | null = null;
@@ -253,7 +265,7 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
 <template>
   <div class="timeline-view">
     <!-- Empty State -->
-    <div v-if="groups.length === 0 && !isLoadingStats.value && !showSkeleton" class="empty-state-wrapper">
+    <div v-if="groups.length === 0 && !isLoadingStats && !showSkeleton" class="empty-state-wrapper">
       <EmptyState
         :icon="favoritesOnly ? 'pi pi-star' : 'pi pi-images'"
         :title="favoritesOnly ? '暂无收藏' : '暂无上传记录'"
@@ -263,16 +275,14 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
 
     <!-- Main Scroll Area -->
     <div v-else ref="scrollContainer" class="timeline-scroll-area" @scroll="handleScroll">
-      <TimelineSkeleton
-        v-if="isLoadingStats.value || showSkeleton"
-        :layout="skeletonLayout"
-      />
+      <div class="timeline-content-stack">
 
       <TimelinePhotoGrid
-        v-else
+        v-show="groups.length > 0"
         :groups="groups"
         :visible-items="visibleItems"
         :visible-headers="visibleHeaders"
+        :fast-mode-items="fastModeItems"
         :total-height="totalHeight"
         :display-mode="displayMode"
         :selected-ids="selectedIdsSet"
@@ -290,9 +300,16 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
         @image-error="onImageError"
       >
         <template #footer>
-          共 {{ dayTotalCount.value }} 张照片
+          共 {{ dayTotalCount }} 张照片
         </template>
       </TimelinePhotoGrid>
+
+        <TimelineSkeleton
+          v-if="isLoadingStats || showSkeleton"
+          class="timeline-skeleton-overlay"
+          :layout="skeletonLayout"
+        />
+      </div>
 
       <div style="height: 100px"></div>
     </div>
@@ -339,7 +356,7 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
       @batch-favorite="(favorited: boolean) => historyManager.batchSetFavorite(viewState.selectedIdList.value, favorited)"
     />
 
-    <div v-if="isCalculating" class="layout-indicator">
+    <div v-if="isCalculatingVisible" class="layout-indicator">
       <i class="pi pi-spin pi-spinner"></i>
     </div>
   </div>
@@ -366,6 +383,18 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
 
 .timeline-scroll-area::-webkit-scrollbar {
   display: none;
+}
+
+.timeline-content-stack {
+  position: relative;
+  min-height: 100%;
+}
+
+.timeline-skeleton-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
 }
 
 .sidebar-wrapper {

@@ -3,6 +3,7 @@
  * TimelinePhotoGrid - 图片网格组件
  * 渲染分组头部 + 虚拟滚动图片列表
  */
+import { computed } from 'vue';
 import TimelinePhotoItem from './TimelinePhotoItem.vue';
 import type { ImageMeta } from '../../../types/image-meta';
 import type { HistoryItem } from '../../../config/types';
@@ -23,10 +24,18 @@ export interface VisibleHeader {
   height: number;
 }
 
+export interface FastModeItem {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 const props = defineProps<{
   groups: PhotoGroup[];
   visibleItems: VisibleItem[];
   visibleHeaders: VisibleHeader[];
+  fastModeItems: FastModeItem[];
   totalHeight: number;
   displayMode: 'fast' | 'smooth' | 'normal';
   selectedIds: Set<string>;
@@ -47,9 +56,17 @@ const emit = defineEmits<{
   (e: 'image-error', event: Event, id: string): void;
 }>();
 
+// skeleton 天显示 expectedCount，避免"先 0 再真数"的跳变；避免每次 render 线性查找
+const groupCountMap = computed(() => {
+  const m = new Map<string, number>();
+  for (const g of props.groups) {
+    m.set(g.id, g.isSkeleton ? (g.expectedCount ?? g.items.length) : g.items.length);
+  }
+  return m;
+});
+
 function getGroupItemCount(groupId: string): number {
-  const group = props.groups.find(g => g.id === groupId);
-  return group?.items.length || 0;
+  return groupCountMap.value.get(groupId) ?? 0;
 }
 </script>
 
@@ -70,6 +87,18 @@ function getGroupItemCount(groupId: string): number {
         {{ getGroupItemCount(header.groupId) }} 张图片
       </span>
     </div>
+
+    <!-- Fast Mode Placeholders -->
+    <div
+      v-for="(item, index) in displayMode === 'fast' ? fastModeItems : []"
+      :key="`fast-mode-${index}`"
+      class="fast-mode-item"
+      :style="{
+        transform: `translate3d(${item.x}px, ${item.y}px, 0)`,
+        width: `${item.width}px`,
+        height: `${item.height}px`,
+      }"
+    />
 
     <!-- Photo Items -->
     <TimelinePhotoItem
@@ -119,6 +148,13 @@ function getGroupItemCount(groupId: string): number {
   padding: var(--space-sm-md) 0;
   background: var(--bg-app);
   z-index: 5;
+}
+
+.fast-mode-item {
+  position: absolute;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
 .group-title {

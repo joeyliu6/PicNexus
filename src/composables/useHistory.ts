@@ -483,16 +483,22 @@ export function useHistoryManager() {
    * 只在首次加载或数据变化时调用
    */
   async function loadTimePeriodStats(): Promise<TimePeriodStats[]> {
-    // 如果已加载，直接返回缓存
-    if (isTimePeriodStatsLoaded.value && sharedTimePeriodStats.value.length > 0) {
+    // 如果已加载过（即使结果为空），直接返回缓存；避免 0 张照片时反复打 DB
+    if (isTimePeriodStatsLoaded.value) {
       return sharedTimePeriodStats.value;
     }
 
-    await initDatabase();
-    const stats = await historyDB.getTimePeriodStats();
-    sharedTimePeriodStats.value = stats;
-    isTimePeriodStatsLoaded.value = true;
-    return stats;
+    try {
+      await initDatabase();
+      const stats = await historyDB.getTimePeriodStats();
+      sharedTimePeriodStats.value = stats;
+      isTimePeriodStatsLoaded.value = true;
+      return stats;
+    } catch (e) {
+      // 失败时不置 isTimePeriodStatsLoaded，允许后续重新尝试
+      log.warn('[历史记录] 加载时间段统计失败:', e);
+      return sharedTimePeriodStats.value;
+    }
   }
 
   /**
