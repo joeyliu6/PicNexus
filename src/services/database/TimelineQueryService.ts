@@ -55,7 +55,7 @@ function rowToImageMeta(row: MetaRow): ImageMeta {
 /**
  * 按日聚合统计（时间轴首屏骨架数据）
  *
- * 返回每天的 count + aspectRatioSum，前端用 count × avgCellHeight 做占位高度。
+ * 返回每天的 count + aspectRatioSum，前端据此估算骨架天占位高度。
  */
 export async function getDayStatsQuery(db: Database, filter?: DayStatsFilter): Promise<DayStats[]> {
   const { serviceFilter = 'all', searchTerm, favoritesOnly } = filter ?? {};
