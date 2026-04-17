@@ -153,7 +153,11 @@ const {
   handleLightboxDelete,
   handleLightboxNavigate,
 } = useTimelineLightbox({
-  filteredMetas: allLoadedMetas,
+  dayMetaCache: timelinePagination.dayMetaCache,
+  loadedDayKeys: timelinePagination.loadedDayKeys,
+  ensureDaysLoaded,
+  findDayBefore: timelinePagination.findDayBefore,
+  findDayAfter: timelinePagination.findDayAfter,
   detailCache: viewState.detailCache,
   config: configManager.config,
   deleteHistoryItem: viewState.deleteHistoryItem,
