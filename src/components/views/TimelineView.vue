@@ -1,12 +1,10 @@
 <script setup lang="ts">
 /** Timeline View — Google Photos 风格虚拟滚动图片浏览 */
-import { ref, computed, onUnmounted, watch, nextTick } from 'vue';
+import { ref, computed, onUnmounted, watch } from 'vue';
 import { useHistoryViewState } from '../../composables/useHistoryViewState';
 import { useHistoryManager } from '../../composables/useHistory';
-import { useLazyLoadOnVisible } from '../../composables/useLazyLoadOnVisible';
 import { useVirtualTimeline } from '../../composables/useVirtualTimeline';
 import { useConfigManager } from '../../composables/useConfig';
-import { useImageMetadataFixer } from '../../composables/useImageMetadataFixer';
 import { useImageLoadManager } from '../../composables/useImageLoadManager';
 import { useTimelineSidebarControl } from '../../composables/useTimelineSidebarControl';
 import { useScrollRestore } from '../../composables/timeline/useScrollRestore';
@@ -14,6 +12,7 @@ import { useImagePreload } from '../../composables/timeline/useImagePreload';
 import { useTimelineLightbox } from '../../composables/timeline/useTimelineLightbox';
 import { useTimelineDragAndSkeleton } from '../../composables/timeline/useTimelineDragAndSkeleton';
 import { useTimelineData } from '../../composables/timeline/useTimelineData';
+import { useTimelineDayPagination } from '../../composables/timeline/useTimelineDayPagination';
 import { useToast } from '../../composables/useToast';
 import { type ServiceType } from '../../config/types';
 
@@ -40,35 +39,35 @@ const emit = defineEmits<{
 const toast = useToast();
 const viewState = useHistoryViewState();
 const historyManager = useHistoryManager();
-const metadataFixer = useImageMetadataFixer();
 const configManager = useConfigManager();
 
-// Scroll container ref
 const scrollContainer = ref<HTMLElement | null>(null);
 
-// Sidebar Control
 const {
   isSidebarVisible,
   onScroll: onSidebarScroll,
   onSidebarEnter: handleSidebarEnter,
   onSidebarLeave: handleSidebarLeave,
   cleanup: cleanupSidebarControl,
-} = useTimelineSidebarControl({
-  scrollHideDelay: 1000,
-  hoverHideDelay: 300,
+} = useTimelineSidebarControl({ scrollHideDelay: 1000, hoverHideDelay: 300 });
+
+// ==================== 服务端分页数据源 ====================
+
+const timelinePagination = useTimelineDayPagination({
+  filter: computed(() => props.filter ?? 'all'),
+  searchTerm: computed(() => props.searchTerm ?? ''),
+  favoritesOnly: computed(() => props.favoritesOnly ?? false),
+  visible: computed(() => props.visible ?? false),
 });
+const { groups, dayStats, ensureDaysLoaded, totalCount: dayTotalCount, isLoadingStats } = timelinePagination;
 
-// ==================== 核心数据 ====================
+/** 所有已加载天的 metas（展平），供选中操作和灯箱导航使用 */
+const allLoadedMetas = computed(() => groups.value.flatMap(g => g.items));
 
-const {
-  groups,
-  getThumbnailUrl,
-  selectedAvailableServices,
-  handleToggleFavorite,
-  hoverDetailsMap,
-  handleImageHover,
-} = useTimelineData({
-  filteredMetas: computed(() => viewState.filteredMetas.value),
+// ==================== 工具函数 ====================
+
+const { getThumbnailUrl, selectedAvailableServices, handleToggleFavorite, hoverDetailsMap, handleImageHover } = useTimelineData({
+  filteredMetas: allLoadedMetas,
   favoriteSet: historyManager.favoriteSet,
   favoritesOnly: computed(() => props.favoritesOnly),
   selectedIdList: computed(() => viewState.selectedIdList.value),
@@ -78,25 +77,17 @@ const {
 });
 
 const {
-  // 状态
   totalHeight,
   scrollTop: virtualScrollTop,
   scrollProgress,
   isCalculating,
   viewportHeight,
-
-  // 三阶段渲染状态（仅用于控制图片加载行为）
   displayMode,
   scrollDirection,
-
-  // 可见数据
   visibleItems,
   visibleHeaders,
-
-  // 布局数据
   layoutResult,
-
-  // 方法
+  visibleDayKeys,
   scrollToItem,
   scrollToProgress,
   forceUpdateVisibleArea,
@@ -117,30 +108,20 @@ const {
   onImageError,
   isImageLoaded,
   clearAll: clearImageLoadState,
-} = useImageLoadManager(visibleItems, {
-  maxCache: 500,
-  destroyDelay: 2500,
-  maxRetry: 1,
-});
+} = useImageLoadManager(visibleItems, { maxCache: 500, destroyDelay: 2500, maxRetry: 1 });
 
-// 转换为 Set 供子组件使用
 const loadedImagesSet = computed(() => new Set(loadedImages.value));
 const failedImagesSet = computed(() => new Set(failedImages.value));
 const selectedIdsSet = computed(() => new Set(viewState.selectedIdList.value));
 
-// ==================== 滚动位置保存与恢复 ====================
-
-const {
-  trackScrollPosition,
-  setLastStableProgress,
-} = useScrollRestore({
+const { trackScrollPosition, setLastStableProgress } = useScrollRestore({
   scrollContainer,
   virtualScrollTop,
   totalHeight,
   viewportHeight,
   visibleItems,
   isCalculating,
-  isLoading: viewState.isLoading,
+  isLoading: isLoadingStats,
   visible: computed(() => props.visible),
   activationTrigger: computed(() => props.activationTrigger),
   callbacks: {
@@ -152,11 +133,9 @@ const {
   },
 });
 
-// ==================== 智能预加载 ====================
-
 const { cleanup: cleanupPreload } = useImagePreload({
   visibleItems,
-  allMetas: computed(() => viewState.filteredMetas.value),
+  allMetas: allLoadedMetas,
   displayMode,
   scrollDirection,
   getThumbnailUrl,
@@ -164,8 +143,6 @@ const { cleanup: cleanupPreload } = useImagePreload({
   onImageLoad,
   onImageError,
 });
-
-// ==================== 灯箱 ====================
 
 const {
   lightboxVisible,
@@ -176,15 +153,13 @@ const {
   handleLightboxDelete,
   handleLightboxNavigate,
 } = useTimelineLightbox({
-  filteredMetas: computed(() => viewState.filteredMetas.value),
+  filteredMetas: allLoadedMetas,
   detailCache: viewState.detailCache,
   config: configManager.config,
   deleteHistoryItem: viewState.deleteHistoryItem,
   scrollToItem,
   toast,
 });
-
-// ==================== 拖拽 + 骨架屏 ====================
 
 const {
   showSkeleton,
@@ -214,64 +189,48 @@ const {
   jumpToMonth: historyManager.jumpToMonth,
 });
 
-/** 滚动事件处理 */
 const handleScroll = () => {
   trackScrollPosition();
   virtualHandleScroll();
-
-  if (!getIsDragging()) {
-    onSidebarScroll();
-  }
+  if (!getIsDragging()) onSidebarScroll();
 };
 
+// 首次激活时加载时间段统计（侧边栏指示器需要）
+watch(() => props.visible, (v) => { if (v) void historyManager.loadTimePeriodStats(); }, { once: true, immediate: true });
 
-// 视图激活时才加载全量 metas（避免首屏被迫加载 3 万条 JSON.parse）
-useLazyLoadOnVisible(() => props.visible, async () => {
-  await Promise.all([
-    viewState.loadHistory(),
-    historyManager.loadTimePeriodStats(),
-  ]);
-  nextTick(() => {
-    const metas = viewState.filteredMetas.value;
-    const needsFix = metas.filter((meta) => !meta.aspectRatio || meta.aspectRatio <= 0);
-    if (needsFix.length > 0) {
-      metadataFixer.batchFixMissingMetadata(needsFix);
-    }
-  });
+// 视口可见天变化 → 扩展 ±5 天缓冲区后按需加载
+let ensureTimer: ReturnType<typeof setTimeout> | null = null;
+watch(visibleDayKeys, (keys) => {
+  if (ensureTimer) clearTimeout(ensureTimer);
+  ensureTimer = setTimeout(() => {
+    ensureTimer = null;
+    if (keys.length === 0) return;
+    const stats = dayStats.value;
+    const keySet = new Set(keys);
+    const indices = stats
+      .map((s, i) => ({ key: `${s.year}-${s.month}-${s.day}`, i }))
+      .filter(({ key }) => keySet.has(key))
+      .map(({ i }) => i);
+    if (indices.length === 0) return;
+    const minIdx = Math.max(0, Math.min(...indices) - 5);
+    const maxIdx = Math.min(stats.length - 1, Math.max(...indices) + 5);
+    const buffered = stats.slice(minIdx, maxIdx + 1).map(s => `${s.year}-${s.month}-${s.day}`);
+    void ensureDaysLoaded(buffered);
+  }, 100);
 });
 
 onUnmounted(() => {
+  if (ensureTimer) clearTimeout(ensureTimer);
   clearImageLoadState();
   cleanupSidebarControl();
   cleanupPreload();
-
   viewState.reset();
-  metadataFixer.flushNow();
-
   cleanupDragAndSkeleton();
 });
 
 watch(
-  () => props.filter,
-  (val) => {
-    if (val) viewState.setFilter(val);
-  },
-  { immediate: true }
-);
-
-watch(
-  () => props.searchTerm,
-  (val) => {
-    if (val !== undefined) viewState.setSearchTerm(val);
-  },
-  { immediate: true }
-);
-
-watch(
-  [() => viewState.filteredMetas.value.length, () => props.visible],
-  ([c, isVisible]) => {
-    if (isVisible !== false) emit('update:totalCount', c);
-  },
+  dayTotalCount,
+  (c) => { if (props.visible !== false) emit('update:totalCount', c); },
   { immediate: true }
 );
 
@@ -282,15 +241,15 @@ watch(
 );
 
 function handleItemToggleSelect(id: string, event: MouseEvent): void {
-  const orderedIds = viewState.filteredMetas.value.map(m => m.id);
+  const orderedIds = allLoadedMetas.value.map(m => m.id);
   viewState.handleSelectClick(id, event, orderedIds);
 }
 </script>
 
 <template>
   <div class="timeline-view">
-    <!-- Empty State - 提升到视图层级，覆盖整个视口 -->
-    <div v-if="groups.length === 0 && !viewState.isLoading.value && !showSkeleton" class="empty-state-wrapper">
+    <!-- Empty State -->
+    <div v-if="groups.length === 0 && !isLoadingStats.value && !showSkeleton" class="empty-state-wrapper">
       <EmptyState
         :icon="favoritesOnly ? 'pi pi-star' : 'pi pi-images'"
         :title="favoritesOnly ? '暂无收藏' : '暂无上传记录'"
@@ -300,14 +259,11 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
 
     <!-- Main Scroll Area -->
     <div v-else ref="scrollContainer" class="timeline-scroll-area" @scroll="handleScroll">
-      <!-- Loading State - 使用 Justified Layout 算法的骨架屏 -->
-      <!-- 去掉 groups.length>0 约束：首次切到时间轴时数据才开始加载，groups 仍为空也需骨架屏 -->
       <TimelineSkeleton
-        v-if="viewState.isLoading.value || showSkeleton"
+        v-if="isLoadingStats.value || showSkeleton"
         :layout="skeletonLayout"
       />
 
-      <!-- Virtual Scroll Content -->
       <TimelinePhotoGrid
         v-else
         :groups="groups"
@@ -330,11 +286,10 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
         @image-error="onImageError"
       >
         <template #footer>
-          共 {{ viewState.totalCount.value }} 张照片
+          共 {{ dayTotalCount.value }} 张照片
         </template>
       </TimelinePhotoGrid>
 
-      <!-- Bottom Spacing -->
       <div style="height: 100px"></div>
     </div>
 
@@ -359,7 +314,6 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
       />
     </div>
 
-    <!-- Lightbox -->
     <HistoryLightbox
       v-model:visible="lightboxVisible"
       :item="lightboxItem"
@@ -370,7 +324,6 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
       @toggle-favorite="handleToggleFavorite"
     />
 
-    <!-- Floating Action Bar -->
     <FloatingActionBar
       :selected-count="viewState.selectedIdList.value.length"
       :visible="viewState.hasSelection.value"
@@ -382,7 +335,6 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
       @batch-favorite="(favorited: boolean) => historyManager.batchSetFavorite(viewState.selectedIdList.value, favorited)"
     />
 
-    <!-- Layout Calculating Indicator -->
     <div v-if="isCalculating" class="layout-indicator">
       <i class="pi pi-spin pi-spinner"></i>
     </div>
@@ -412,7 +364,6 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
   display: none;
 }
 
-/* Sidebar */
 .sidebar-wrapper {
   position: absolute;
   right: 0;
@@ -436,7 +387,6 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
   pointer-events: auto;
 }
 
-/* Empty State */
 .empty-state-wrapper {
   position: absolute;
   inset: 0;
@@ -463,7 +413,6 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
   margin-top: var(--space-xs);
 }
 
-/* Layout Indicator */
 .layout-indicator {
   position: fixed;
   bottom: 20px;
@@ -485,9 +434,6 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
   color: var(--primary);
 }
 
-/* ========== 响应式适配 ========== */
-
-/* 平板设备 (≤1024px) */
 @media (width <= 1024px) {
   .timeline-scroll-area {
     /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 50px 为平板端时间轴右侧留白，无对应 spacing token */
@@ -495,7 +441,6 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
   }
 }
 
-/* 手机设备 (≤768px) */
 @media (width <= 768px) {
   .timeline-scroll-area {
     padding: 0 var(--space-3xl) 0 var(--space-md);
@@ -506,7 +451,6 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
   }
 }
 
-/* 小屏手机 (≤480px) */
 @media (width <= 480px) {
   .timeline-scroll-area {
     padding: 0 var(--space-sm);

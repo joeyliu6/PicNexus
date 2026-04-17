@@ -162,6 +162,13 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
       const firstGroup = yearGroups[yearGroups.length - 1];
       if (firstGroup.items.length > 0) {
         scrollToItem(firstGroup.items[0].id);
+      } else if (layoutResult.value) {
+        // skeleton 天：直接定位到该分组的布局位置
+        const groupLayout = layoutResult.value.groupLayouts.find(gl => gl.groupId === firstGroup.id);
+        if (groupLayout && totalHeight.value > viewportHeight.value) {
+          const maxScroll = totalHeight.value - viewportHeight.value;
+          scrollToProgress(groupLayout.headerY / maxScroll, true);
+        }
       }
     } else {
       const periods = timePeriodStats.value;
