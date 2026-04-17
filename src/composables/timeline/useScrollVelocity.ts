@@ -97,11 +97,8 @@ export function useScrollVelocity(
     // 更新显示模式
     if (scrollVelocity.value > FAST_SCROLL_THRESHOLD) {
       displayMode.value = 'fast';
-      // 清除恢复定时器
-      if (modeRecoveryTimer) {
-        clearTimeout(modeRecoveryTimer);
-        modeRecoveryTimer = null;
-      }
+      // 兜底恢复：即使没有后续低速 scroll 事件，也要在最后一次高速事件后回到 normal
+      startModeRecovery();
     } else if (displayMode.value === 'fast') {
       // 延迟恢复到正常模式
       startModeRecovery();
@@ -188,10 +185,25 @@ export function useScrollVelocity(
    */
   function forceFastMode() {
     displayMode.value = 'fast';
+    // 与 updateScrollVelocity 保持一致：无后续事件时也能自动恢复，避免卡死在 fast
+    startModeRecovery();
+  }
+
+  /**
+   * 强制立即恢复 normal 模式（用于跳转/拖拽结束）
+   * 不走 startModeRecovery 的 200ms 延迟 —— 那个延迟容易被 useScrollAnchor 修正
+   * scrollTop 引发的次级 scroll 事件误判为"高速滚动"重置回 fast，导致图片永不加载。
+   */
+  function forceNormalMode() {
     if (modeRecoveryTimer) {
       clearTimeout(modeRecoveryTimer);
       modeRecoveryTimer = null;
     }
+    displayMode.value = 'normal';
+    // 同步重置速度采样，避免下一次 scroll 事件用旧 lastScrollTop 算出虚假高速
+    lastScrollTopForVelocity = scrollTop.value;
+    lastScrollTime = performance.now();
+    scrollVelocity.value = 0;
   }
 
   /**
@@ -213,6 +225,7 @@ export function useScrollVelocity(
     startModeRecovery,
     resetVelocity,
     forceFastMode,
+    forceNormalMode,
     cleanup,
   };
 }

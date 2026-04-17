@@ -77,6 +77,21 @@ describe('useScrollVelocity — displayMode 切换', () => {
     expect(ctx.displayMode.value).toBe('fast');
   });
 
+  it('单次高速滚动后即使没有后续 scroll 事件，也会在 200ms 后恢复 normal', () => {
+    const ctx = makeVelocity();
+    vi.spyOn(performance, 'now').mockReturnValue(0);
+    ctx.updateScrollVelocity();
+    vi.spyOn(performance, 'now').mockReturnValue(1);
+    ctx.scrollTop.value = 1000;
+    ctx.updateScrollVelocity();
+    expect(ctx.displayMode.value).toBe('fast');
+
+    vi.advanceTimersByTime(199);
+    expect(ctx.displayMode.value).toBe('fast');
+    vi.advanceTimersByTime(1);
+    expect(ctx.displayMode.value).toBe('normal');
+  });
+
   it('forceFastMode 立即切换为 fast', () => {
     const ctx = makeVelocity();
     ctx.forceFastMode();
