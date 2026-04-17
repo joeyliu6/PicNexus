@@ -518,17 +518,7 @@ export function useHistoryManager() {
         return false;
       }
 
-      // 如果 metas 已加载（时间轴路径应当如此），再二次验证；否则信任 timePeriodStats
-      if (isDataLoaded.value) {
-        const hasData = imageMetas.value.some(meta => {
-          const date = new Date(meta.timestamp);
-          return date.getFullYear() === year && date.getMonth() === month;
-        });
-        if (!hasData) {
-          log.warn(`[历史记录] 目标月份无数据: ${year}年${month + 1}月`);
-          return false;
-        }
-      }
+      // timePeriodStats 来自 SQL 聚合，是真相源；不再二次遍历 imageMetas
       return true;
 
     } catch (error) {
