@@ -161,6 +161,7 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
 
 
   // 跨页服务缓存：记录每个已加载条目的成功图床，翻页后仍能保留跨页选中的服务信息
+  // 注：总是覆盖。迁移/救援等操作会更新同 id 的 results 字段，守卫式去重会导致缓存过期
   const itemServiceCache = new Map<string, string[]>();
   watch(currentPageData, (pageData) => {
     for (const item of pageData) {

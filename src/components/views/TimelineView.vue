@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /** Timeline View — Google Photos 风格虚拟滚动图片浏览 */
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { ref, computed, onUnmounted, watch, nextTick } from 'vue';
 import { useHistoryViewState } from '../../composables/useHistoryViewState';
 import { useHistoryManager } from '../../composables/useHistory';
+import { useLazyLoadOnVisible } from '../../composables/useLazyLoadOnVisible';
 import { useVirtualTimeline } from '../../composables/useVirtualTimeline';
 import { useConfigManager } from '../../composables/useConfig';
 import { useImageMetadataFixer } from '../../composables/useImageMetadataFixer';
@@ -224,14 +225,12 @@ const handleScroll = () => {
 };
 
 
-onMounted(async () => {
-  // 并行加载历史记录和时间段统计
+// 视图激活时才加载全量 metas（避免首屏被迫加载 3 万条 JSON.parse）
+useLazyLoadOnVisible(() => props.visible, async () => {
   await Promise.all([
     viewState.loadHistory(),
     historyManager.loadTimePeriodStats(),
   ]);
-
-  // 初始加载后，检查并修复缺失元数据
   nextTick(() => {
     const metas = viewState.filteredMetas.value;
     const needsFix = metas.filter((meta) => !meta.aspectRatio || meta.aspectRatio <= 0);
@@ -302,8 +301,9 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
     <!-- Main Scroll Area -->
     <div v-else ref="scrollContainer" class="timeline-scroll-area" @scroll="handleScroll">
       <!-- Loading State - 使用 Justified Layout 算法的骨架屏 -->
+      <!-- 去掉 groups.length>0 约束：首次切到时间轴时数据才开始加载，groups 仍为空也需骨架屏 -->
       <TimelineSkeleton
-        v-if="(viewState.isLoading.value || showSkeleton) && groups.length > 0"
+        v-if="viewState.isLoading.value || showSkeleton"
         :layout="skeletonLayout"
       />
 

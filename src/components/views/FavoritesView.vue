@@ -8,6 +8,7 @@ import Skeleton from 'primevue/skeleton';
 import EmptyState from '../common/EmptyState.vue';
 import { useHistoryViewState } from '../../composables/useHistoryViewState';
 import { useHistoryManager } from '../../composables/useHistory';
+import { useLazyLoadOnVisible } from '../../composables/useLazyLoadOnVisible';
 import { useConfigManager } from '../../composables/useConfig';
 import { useFavoritesData } from '../../composables/favorites/useFavoritesData';
 import { useFavoritesLightbox } from '../../composables/favorites/useFavoritesLightbox';
@@ -125,6 +126,9 @@ watch(() => favoriteMetas.value.length, (newLen, oldLen) => {
     isLastLeave.value = true;
   }
 });
+
+// 视图激活时才加载全量 metas（避免首屏被迫加载 3 万条 JSON.parse）
+useLazyLoadOnVisible(() => props.visible, () => historyManager.loadHistory());
 
 // 滚动位置保存/恢复（v-show 兼容，与 TimelineView 保持一致）
 watch(() => props.visible, async (isVisible, wasVisible) => {

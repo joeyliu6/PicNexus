@@ -45,7 +45,6 @@ const {
   setupBadgeWidthObserver,
   getVisibleCount,
   getCachedServices,
-  badgeColumnWidth,
 } = useHistoryBadgeLayout(tableViewRef);
 
 const {
@@ -74,12 +73,12 @@ const {
   hoverPreview, handlePreviewEnter, handlePreviewLeave,
 } = useTableInteractions({ currentPageData, getSuccessfulServices, servicePopoverRef });
 
-// 收藏状态快路径：favoriteSet 加载较慢（依赖全量 loadHistory），
-// 未就绪时回退到 item.isFavorited（loadCurrentPage 已从 DB 直接读取，即时可用）
+// 收藏状态快路径：favoriteSet 来自 stats（loadStats/loadHistory 任一加载完即可）
+// stats 未就绪时回退到 item.isFavorited（loadCurrentPage 已从 DB 直接读取，即时可用）
 const isItemFavorited = (item: HistoryItem): boolean => {
   if (historyManager.favoriteSet.value.has(item.id)) return true;
-  // 全局数据已加载：set 为权威源；未加载：用 item 自身字段兜底
-  return historyManager.isDataLoaded.value ? false : item.isFavorited === true;
+  // stats 已加载：set 为权威源；未加载：用 item 自身字段兜底
+  return historyManager.isStatsLoaded.value ? false : item.isFavorited === true;
 };
 
 // 三态收藏状态（MECE：none/partial/all），基于全局 favoriteSet 查询（无跨页限制）
@@ -264,8 +263,8 @@ function handleCheckboxToggle(id: string) {
       <Column header="已传图床" headerClass="history-badge-col" style="min-width: 180px; width: 30%">
         <template #body="{ data }">
           <Skeleton v-if="isSkeleton(data)" width="50px" height="22px" borderRadius="4px" />
-          <!-- v-memo 依赖含 badgeColumnWidth：列宽变化时强制重新计算 getVisibleCount；否则 ResizeObserver 更新了宽度，但 v-memo 不失效，badge 数量会永远冻结在首次渲染值 -->
-          <div v-else v-memo="[data.id, data.results.length, badgeColumnWidth]" class="service-badges">
+          <!-- v-memo 依赖使用稳定的 visibleCount（离散值），避免列宽 ResizeObserver 1-2 像素抖动导致整表重渲 -->
+          <div v-else v-memo="[data.id, data.results.length, getVisibleCount(getCachedServices(data))]" class="service-badges">
             <span
               v-for="serviceId in getCachedServices(data).slice(0, getVisibleCount(getCachedServices(data)))"
               :key="serviceId"

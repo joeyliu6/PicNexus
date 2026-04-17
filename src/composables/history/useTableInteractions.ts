@@ -137,7 +137,8 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   async function handleToggleFavorite(item: HistoryItem): Promise<void> {
     try {
       // toggleFavorite 以 favoriteSet 为 previousState 权威源；未加载时 favSet 空，取反会反向收藏
-      if (!historyManager.isDataLoaded.value) await historyManager.loadHistory();
+      // 只需 stats（含 favoriteSet），不触发全量 metas 加载
+      if (!historyManager.isStatsLoaded.value) await historyManager.loadStats();
       await historyManager.toggleFavorite(item.id);
     } catch {
       // useHistory 内部已处理 toast 通知

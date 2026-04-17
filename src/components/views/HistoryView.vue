@@ -26,10 +26,11 @@ const historyContainerRef = ref<HTMLElement | null>(null);
 let savedTableScrollTop = 0;
 
 // KeepAlive 激活时刷新数据（解决上传后切换回来不更新的问题）
+// 注意：此处只加载统计数字（totalCount/favoriteSet），全量 metas 由时间轴/收藏视图自行按需加载
 onActivated(async () => {
   // 通知子视图激活状态变化
   activationTrigger.value++;
-  await historyManager.loadHistory();
+  await historyManager.loadStats();
   // 恢复表格滚动位置（数据加载后等 DOM flush 再设置）
   if (currentViewMode.value === 'table' && savedTableScrollTop > 0) {
     await nextTick();
