@@ -9,7 +9,11 @@ import type { QueueItem } from '../uploadQueue';
 import { getActivePrefix } from '../config/types';
 import { applyPrefixTemplate } from '../utils/linkPrefixTemplate';
 import { useConfigManager } from './useConfig';
-import { useHistoryManager } from './useHistory';
+import { onCacheEventType } from '../events/cacheEvents';
+import type { HistoryEventData } from '../events/cacheEvents';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('ThumbCache');
 
 /** 缩略图生成相关函数接受的 config 类型：UserConfig 或 null（未加载） */
 type ThumbConfig = UserConfig | null | undefined;
@@ -408,23 +412,27 @@ let watchersInitialized = false;
  */
 function initModuleWatchers(
   configManager: ReturnType<typeof useConfigManager>,
-  historyManager: ReturnType<typeof useHistoryManager>,
 ): void {
   if (watchersInitialized) return;
   watchersInitialized = true;
 
   const scope = effectScope(true);
   scope.run(() => {
-    // 数据变化时增量清理（只删除已移除项的缓存）
-    watch(() => historyManager.imageMetas.value, (newMetas) => {
-      const newIds = new Set(newMetas.map(m => m.id));
-      for (const id of thumbUrlCache.keys()) {
-        if (!newIds.has(id)) {
-          thumbUrlCache.delete(id);
-          thumbnailCandidatesCache.delete(id);
-        }
+    // 事件驱动的增量清理：删除/清空事件定向移除缓存。
+    // 监听注册失败时，滞留条目靠 thumbUrlCache 的 LRU 上限（THUMB_CACHE_MAX_SIZE）自动淘汰兜底
+    onCacheEventType<HistoryEventData>('history-deleted', (data) => {
+      const ids = data?.ids;
+      if (!ids || ids.length === 0) return;
+      for (const id of ids) {
+        thumbUrlCache.delete(id);
+        thumbnailCandidatesCache.delete(id);
       }
-    }, { deep: false });
+    }).catch(e => log.warn('history-deleted 监听注册失败，已删除项将依赖 LRU 淘汰兜底:', e));
+
+    onCacheEventType('history-cleared', () => {
+      thumbUrlCache.clear();
+      thumbnailCandidatesCache.clear();
+    }).catch(e => log.warn('history-cleared 监听注册失败，清空后旧缓存将依赖 LRU 淘汰兜底:', e));
 
     // 监听影响 URL 的前缀配置项变化
     watch(
@@ -444,9 +452,8 @@ function initModuleWatchers(
  */
 export function useThumbCache() {
   const configManager = useConfigManager();
-  const historyManager = useHistoryManager();
 
-  initModuleWatchers(configManager, historyManager);
+  initModuleWatchers(configManager);
 
   return {
     /**
