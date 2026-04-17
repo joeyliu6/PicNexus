@@ -29,12 +29,25 @@ import { exportHistoryToJson, importHistoryFromJson } from './ImportExportServic
 import type {
   LinkCheckLiteRow, PageOptions, PageResult,
   SearchOptions, SearchResult, TimePeriodStats,
+  FavoritesMetaPageOptions, FavoritesMetaPageResult,
   SyncLogOperation, SyncLogEntry,
 } from './types';
+
+interface MetaRow {
+  id: string;
+  timestamp: number;
+  local_file_name: string;
+  aspect_ratio: number;
+  primary_service: string;
+  generated_link: string;
+  results: string;
+  is_favorited: number;
+}
 
 export type {
   LinkCheckLiteRow, PageOptions, PageResult,
   SearchOptions, SearchResult, TimePeriodStats,
+  FavoritesMetaPageOptions, FavoritesMetaPageResult,
   SyncLogOperation, SyncLogEntry,
 };
 
@@ -45,6 +58,11 @@ const DB_PATH = 'sqlite:history.db';
 
 /** 每页加载数量 */
 const PAGE_SIZE = 500;
+
+/** 转义 LIKE 通配符，防止用户输入 % 或 _ 导致意外匹配；配合 `ESCAPE '\\'` 使用 */
+function escapeLikePattern(s: string): string {
+  return s.replace(/[%_\\]/g, '\\$&');
+}
 
 /**
  * 历史记录数据库类
@@ -323,9 +341,7 @@ class HistoryDatabase {
     const db = await this.connection.getDb();
     const { serviceFilter = 'all', limit = 100, offset = 0 } = options;
     const keywordLower = keyword.toLowerCase().trim();
-
-    // 转义 LIKE 通配符，防止用户输入 % 或 _ 导致意外匹配
-    const escaped = keywordLower.replace(/[%_\\]/g, '\\$&');
+    const escaped = escapeLikePattern(keywordLower);
 
     const result = await this.queryWithTotal(
       db, `WHERE local_file_name_lower LIKE $1 ESCAPE '\\'`, [`%${escaped}%`],
@@ -436,17 +452,7 @@ class HistoryDatabase {
   async getMetaList(): Promise<ImageMeta[]> {
     const db = await this.connection.getDb();
 
-    // 只查询必需字段
-    const rows = await db.select<{
-      id: string;
-      timestamp: number;
-      local_file_name: string;
-      aspect_ratio: number;
-      primary_service: string;
-      generated_link: string;
-      results: string;  // JSON 字符串
-      is_favorited: number;
-    }[]>(`
+    const rows = await db.select<MetaRow[]>(`
       SELECT
         id,
         timestamp,
@@ -460,35 +466,78 @@ class HistoryDatabase {
       ORDER BY timestamp DESC
     `);
 
-    // 转换为 ImageMeta
-    return rows.map(row => {
-      // 提取主力图床的 fileKey（轻量级 JSON 解析）
-      let primaryFileKey: string | undefined;
-      try {
-        const results = JSON.parse(row.results) as Array<{
-          serviceId: string;
-          status: string;
-          result?: { fileKey?: string; url?: string };
-        }>;
-        const primaryResult = results.find(
-          r => r.serviceId === row.primary_service && r.status === 'success'
-        );
-        primaryFileKey = primaryResult?.result?.fileKey;
-      } catch (e) {
-        log.warn(`解析 results 失败: ${row.id}`, e);
-      }
+    return rows.map(row => this.rowToImageMeta(row));
+  }
 
-      return {
-        id: row.id,
-        timestamp: row.timestamp,
-        localFileName: row.local_file_name || '',
-        aspectRatio: row.aspect_ratio || 1.0,
-        primaryService: row.primary_service as ServiceType,
-        primaryUrl: row.generated_link,
-        primaryFileKey,
-        isFavorited: row.is_favorited === 1,
-      };
-    });
+  /** 收藏元数据分页查询（服务端过滤 + LIMIT/OFFSET，避免前端全量加载） */
+  async getFavoritesMetaPage(options: FavoritesMetaPageOptions): Promise<FavoritesMetaPageResult> {
+    const db = await this.connection.getDb();
+    const { offset, limit, serviceFilter = 'all', searchTerm } = options;
+
+    const params: (string | number)[] = [];
+    let whereClause = 'WHERE is_favorited = 1';
+    const nextParam = () => `$${params.length + 1}`;
+
+    if (serviceFilter !== 'all') {
+      whereClause += ` AND primary_service = ${nextParam()}`;
+      params.push(serviceFilter);
+    }
+
+    const trimmed = searchTerm?.trim().toLowerCase();
+    if (trimmed) {
+      whereClause += ` AND local_file_name_lower LIKE ${nextParam()} ESCAPE '\\'`;
+      params.push(`%${escapeLikePattern(trimmed)}%`);
+    }
+
+    const limitPh = nextParam();
+    params.push(limit);
+    const offsetPh = nextParam();
+    params.push(offset);
+
+    const rows = await db.select<(MetaRow & { _total: number })[]>(
+      `SELECT
+        id, timestamp, local_file_name, aspect_ratio,
+        primary_service, generated_link, results, is_favorited,
+        COUNT(*) OVER() as _total
+      FROM history_items
+      ${whereClause}
+      ORDER BY timestamp DESC
+      LIMIT ${limitPh} OFFSET ${offsetPh}`,
+      params,
+    );
+
+    const total = rows[0]?._total ?? 0;
+    const items = rows.map(row => this.rowToImageMeta(row));
+    const hasMore = offset + items.length < total;
+    return { items, total, hasMore };
+  }
+
+  private rowToImageMeta(row: MetaRow): ImageMeta {
+    let primaryFileKey: string | undefined;
+    try {
+      const results = JSON.parse(row.results) as Array<{
+        serviceId: string;
+        status: string;
+        result?: { fileKey?: string; url?: string };
+      }>;
+      const primaryResult = results.find(
+        r => r.serviceId === row.primary_service && r.status === 'success'
+      );
+      primaryFileKey = primaryResult?.result?.fileKey;
+    } catch (e) {
+      log.warn(`解析 results 失败: ${row.id}`, e);
+    }
+
+    return {
+      id: row.id,
+      timestamp: row.timestamp,
+      localFileName: row.local_file_name || '',
+      aspectRatio: row.aspect_ratio || 1.0,
+      primaryService: row.primary_service as ServiceType,
+      primaryUrl: row.generated_link,
+      primaryFileKey,
+      isFavorited: row.is_favorited === 1,
+    };
   }
 
   /**

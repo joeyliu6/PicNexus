@@ -2,6 +2,8 @@
  * 数据库服务层公共类型定义
  */
 
+import type { ImageMeta } from '../../types/image-meta';
+
 /** 链接检测专用轻量行类型（仅包含检测所需字段，减少 ~60% 数据传输） */
 export interface LinkCheckLiteRow {
   id: string;
@@ -35,6 +37,21 @@ export interface SearchOptions {
 /** 搜索结果 */
 export interface SearchResult {
   items: HistoryItem[];
+  total: number;
+  hasMore: boolean;
+}
+
+/** 收藏元数据分页查询选项 */
+export interface FavoritesMetaPageOptions {
+  offset: number;
+  limit: number;
+  serviceFilter?: ServiceType | 'all';
+  searchTerm?: string;
+}
+
+/** 收藏元数据分页查询结果（ImageMeta 轻量版，不含 JSON 重字段） */
+export interface FavoritesMetaPageResult {
+  items: ImageMeta[];
   total: number;
   hasMore: boolean;
 }

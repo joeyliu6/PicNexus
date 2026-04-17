@@ -14,6 +14,8 @@ export {
   type SearchOptions,
   type SearchResult,
   type TimePeriodStats,
+  type FavoritesMetaPageOptions,
+  type FavoritesMetaPageResult,
   type SyncLogOperation,
   type SyncLogEntry,
 } from './database/HistoryDatabase';
