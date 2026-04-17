@@ -151,6 +151,21 @@ export function useVisibleArea(
     return Math.min(1, Math.max(0, scrollTop.value / maxScroll));
   });
 
+  /**
+   * 当前视口内可见的 dayKey 集合
+   * 仅返回内容区域与视口有重叠的 group id（即 dayKey）。
+   * TimelineView 在此基础上扩展前后缓冲后调用 ensureDaysLoaded。
+   */
+  const visibleDayKeys = computed<string[]>(() => {
+    if (!layoutResult.value) return [];
+    const viewTop = scrollTop.value;
+    const viewBottom = scrollTop.value + viewportHeight.value;
+
+    return layoutResult.value.groupLayouts
+      .filter(g => g.contentY < viewBottom && g.contentY + g.contentHeight > viewTop)
+      .map(g => g.groupId);
+  });
+
   return {
     visibleRowRange,
     visibleItems,
@@ -158,5 +173,6 @@ export function useVisibleArea(
     currentStickyHeader,
     totalHeight,
     scrollProgress,
+    visibleDayKeys,
   };
 }

@@ -91,6 +91,7 @@ export function useVirtualTimeline(
     currentStickyHeader,
     totalHeight,
     scrollProgress,
+    visibleDayKeys,
   } = useVisibleArea(scrollTop, viewportHeight, layoutResult, groups, containerRef, config);
 
   const {
@@ -378,6 +379,7 @@ export function useVirtualTimeline(
     visibleHeaders,
     currentStickyHeader,
     visibleRowRange,
+    visibleDayKeys,
 
     // 快速模式可见数据
     fastModeItems,
