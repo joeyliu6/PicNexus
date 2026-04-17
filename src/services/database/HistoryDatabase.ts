@@ -21,6 +21,7 @@ import { setFavoriteQuery, batchSetFavoriteQuery, getFavoriteCountQuery, getFavo
 import { getLinkCheckInvalidQuery, getLinkCheckRestStreamQuery, batchUpdateLinkCheckStatusQuery } from './LinkCheckQuery';
 import { addSyncLogQuery, getSyncLogsQuery, clearSyncLogsQuery } from './SyncLogService';
 import { getItemsByBackupCountQuery, getBackupCountStatsQuery, getServiceDistributionQuery } from './MigrationQuery';
+import { getDayStatsQuery, getItemsByDayRangeQuery } from './TimelineQueryService';
 import { createTablesAndIndexes, runMigrations } from './SchemaManager';
 import { ConnectionManager } from './ConnectionManager';
 import { exportHistoryToJson, importHistoryFromJson } from './ImportExportService';
@@ -31,6 +32,7 @@ import type {
   SearchOptions, SearchResult, TimePeriodStats,
   FavoritesMetaPageOptions, FavoritesMetaPageResult,
   SyncLogOperation, SyncLogEntry,
+  DayStats, DayStatsFilter,
 } from './types';
 
 interface MetaRow {
@@ -49,6 +51,7 @@ export type {
   SearchOptions, SearchResult, TimePeriodStats,
   FavoritesMetaPageOptions, FavoritesMetaPageResult,
   SyncLogOperation, SyncLogEntry,
+  DayStats, DayStatsFilter,
 };
 
 const log = createLogger('HistoryDB');
@@ -437,6 +440,18 @@ class HistoryDatabase {
       minTimestamp: row.min_timestamp,
       maxTimestamp: row.max_timestamp,
     }));
+  }
+
+  /** 按日聚合统计（时间轴首屏骨架数据，委托 TimelineQueryService） */
+  async getDayStats(filter?: DayStatsFilter): Promise<DayStats[]> {
+    const db = await this.connection.getDb();
+    return getDayStatsQuery(db, filter);
+  }
+
+  /** 按时间戳闭区间拉取 ImageMeta（时间轴按需加载，委托 TimelineQueryService） */
+  async getItemsByDayRange(startTs: number, endTs: number, filter?: DayStatsFilter): Promise<ImageMeta[]> {
+    const db = await this.connection.getDb();
+    return getItemsByDayRangeQuery(db, startTs, endTs, filter);
   }
 
   /**

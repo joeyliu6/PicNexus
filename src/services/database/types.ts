@@ -65,6 +65,24 @@ export interface TimePeriodStats {
   maxTimestamp: number;
 }
 
+/** 按日聚合统计（时间轴按需加载用） */
+export interface DayStats {
+  year: number;
+  month: number;         // 0-11，与 JS Date.getMonth() 一致
+  day: number;           // 1-31
+  count: number;
+  aspectRatioSum: number;
+  minTimestamp: number;
+  maxTimestamp: number;
+}
+
+/** 时间轴日统计/按需加载的过滤条件 */
+export interface DayStatsFilter {
+  serviceFilter?: ServiceType | 'all';
+  searchTerm?: string;
+  favoritesOnly?: boolean;
+}
+
 // ============================================
 // 同步日志类型
 // ============================================
