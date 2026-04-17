@@ -12,7 +12,7 @@ import {
   type Ref, type ComputedRef, type ShallowRef,
 } from 'vue';
 import { historyDB, type DayStats, type DayStatsFilter } from '../../services/HistoryDatabase';
-import { onCacheEventType } from '../../events/cacheEvents';
+import { onCacheEventType, type HistoryEventData } from '../../events/cacheEvents';
 import { createLogger } from '../../utils/logger';
 import type { ImageMeta } from '../../types/image-meta';
 import type { ServiceType } from '../../config/types';
@@ -48,8 +48,6 @@ export interface UseTimelineDayPaginationReturn {
   loadedDayKeys: Ref<Set<string>>;
   /** 由 dayStats + dayMetaCache 派生的完整 groups（含骨架天） */
   groups: ComputedRef<PhotoGroup[]>;
-  /** 已加载天的平均行高采样值（供 useTimelineLayout skeleton 估算） */
-  avgCellHeight: Ref<number>;
   /** dayStats 的 count 总和 */
   totalCount: ComputedRef<number>;
   isLoadingStats: Ref<boolean>;
@@ -77,14 +75,14 @@ export function useTimelineDayPagination(
   const dayStats = shallowRef<DayStats[]>([]);
   const dayMetaCache = new Map<string, ImageMeta[]>();
   const loadedDayKeys = ref(new Set<string>());
-  // 初始值 = targetRowHeight(200) + gap(4) + headerHeight(48)/avgGroupSize(≈10) ≈ 209
-  const avgCellHeight = ref(209);
   const isLoadingStats = ref(false);
   const isDayLoading = ref(false);
   const hasLoadedStats = ref(false);
 
   let statsVersion = 0;
   let dayLoadVersion = 0;
+  // 在途 ensureDaysLoaded 计数：仅当归 0 时 isDayLoading 才置 false
+  let inflightDayCount = 0;
 
   const totalCount = computed(() => dayStats.value.reduce((sum, d) => sum + d.count, 0));
 
@@ -130,7 +128,28 @@ export function useTimelineDayPagination(
     }
   }
 
+  // microtask batcher：同一 tick 内多个 ensureDaysLoaded 调用合并成一次 DB 查询
+  // + 一次 loadedDayKeys 更新，避免连续多次 layout 重算
+  let pendingKeys: Set<string> | null = null;
+  let pendingPromise: Promise<void> | null = null;
+
   async function ensureDaysLoaded(dayKeys: string[]): Promise<void> {
+    if (pendingKeys) {
+      dayKeys.forEach(k => pendingKeys!.add(k));
+      return pendingPromise!;
+    }
+    pendingKeys = new Set(dayKeys);
+    pendingPromise = (async () => {
+      await Promise.resolve();
+      const keysToLoad = Array.from(pendingKeys!);
+      pendingKeys = null;
+      pendingPromise = null;
+      return ensureDaysLoadedImpl(keysToLoad);
+    })();
+    return pendingPromise;
+  }
+
+  async function ensureDaysLoadedImpl(dayKeys: string[]): Promise<void> {
     const needed = dayKeys.filter(k => !loadedDayKeys.value.has(k));
     if (needed.length === 0) return;
 
@@ -141,8 +160,13 @@ export function useTimelineDayPagination(
 
     const startTs = Math.min(...neededStats.map(s => s.minTimestamp));
     const endTs = Math.max(...neededStats.map(s => s.maxTimestamp));
+    const neededSet = new Set(needed);
 
-    const version = ++dayLoadVersion;
+    // 只读快照：仅 filter 变化 / reloadAll 才递增 dayLoadVersion。
+    // 不自增版本号，使快速滚动/跳转并发的多个 ensureDaysLoaded 结果都能回填，
+    // 避免"前一次请求被后一次作废 → 对应天长时间卡骨架屏"。
+    const version = dayLoadVersion;
+    inflightDayCount++;
     isDayLoading.value = true;
     try {
       const items = await historyDB.getItemsByDayRange(startTs, endTs, buildFilter());
@@ -158,10 +182,14 @@ export function useTimelineDayPagination(
       }
 
       // 回填 cache + 标记 loaded
+      // 范围合并查询可能带回"已加载但不在本次 needed 中"的天，不能覆盖它们的现有缓存
+      // （否则会干扰 removeItemsByIds 的增量删除结果、并引起数组引用抖动）
       const newLoaded = new Set(loadedDayKeys.value);
       for (const [key, bucket] of buckets) {
-        dayMetaCache.set(key, bucket);
-        newLoaded.add(key);
+        if (neededSet.has(key) || !newLoaded.has(key)) {
+          dayMetaCache.set(key, bucket);
+          newLoaded.add(key);
+        }
       }
       // 查询范围内没有结果的 needed keys 也标记为已加载（filter 后为空，不需要重复查）
       for (const key of needed) {
@@ -174,7 +202,8 @@ export function useTimelineDayPagination(
     } catch (e) {
       if (version === dayLoadVersion) log.error('ensureDaysLoaded 失败:', e);
     } finally {
-      if (version === dayLoadVersion) isDayLoading.value = false;
+      inflightDayCount--;
+      if (inflightDayCount === 0) isDayLoading.value = false;
     }
   }
 
@@ -185,11 +214,84 @@ export function useTimelineDayPagination(
     loadedDayKeys.value = next;
   }
 
+  /**
+   * 按 id 从本地缓存增量移除（删除事件走这里，不走 reloadAll）
+   * - 从 dayMetaCache 每个桶过滤掉对应 id
+   * - 递减 dayStats 对应天的 count；count≤0 的天从 dayStats 移除并清理内存
+   * - 不清空 loadedDayKeys，其他天保持已加载态，不触发骨架屏闪烁
+   */
+  function removeItemsByIds(ids: string[]): void {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const affectedDays = new Map<string, number>();
+    let matchedCount = 0;
+
+    for (const [dayKey, bucket] of dayMetaCache) {
+      const before = bucket.length;
+      const after = bucket.filter(m => !idSet.has(m.id));
+      if (after.length !== before) {
+        dayMetaCache.set(dayKey, after);
+        const removed = before - after.length;
+        affectedDays.set(dayKey, removed);
+        matchedCount += removed;
+      }
+    }
+
+    // 只要有 id 没在缓存命中就兜底 reloadAll；否则未加载天的 dayStats.count 会失真
+    if (matchedCount < ids.length) {
+      log.debug(`removeItemsByIds: 仅命中 ${matchedCount}/${ids.length}，走 reloadAll 兜底`);
+      void reloadAll();
+      return;
+    }
+
+    // 递减 count，count≤0 的天从 dayStats 移除并清缓存
+    const nextLoaded = new Set(loadedDayKeys.value);
+    dayStats.value = dayStats.value
+      .map(s => {
+        const key = `${s.year}-${s.month}-${s.day}`;
+        const removed = affectedDays.get(key);
+        return removed ? { ...s, count: s.count - removed } : s;
+      })
+      .filter(s => {
+        if (s.count > 0) return true;
+        const key = `${s.year}-${s.month}-${s.day}`;
+        dayMetaCache.delete(key);
+        nextLoaded.delete(key);
+        return false;
+      });
+
+    // 触发 groups 重算（即使 loadedDayKeys 集合内容不变，也需新 Set 引用来激活响应式）
+    loadedDayKeys.value = nextLoaded;
+    log.debug(`removeItemsByIds: 增量删除完成，影响 ${affectedDays.size} 天`);
+  }
+
+  /**
+   * 全量重载 dayStats，同时尽量保留已加载天的 items 缓存
+   * 保留条件：新 dayStats 里存在 + count 未变。count 变了说明该天有新增/删除，
+   * 必须降级回 skeleton 让 ensureDaysLoaded 重新拉取 items，否则新增项对用户不可见。
+   */
   async function reloadAll(): Promise<void> {
     dayLoadVersion++;
-    dayMetaCache.clear();
-    loadedDayKeys.value = new Set();
+    const oldCountByKey = new Map<string, number>();
+    for (const s of dayStats.value) {
+      oldCountByKey.set(`${s.year}-${s.month}-${s.day}`, s.count);
+    }
+    const staleLoaded = loadedDayKeys.value;
+
     await loadDayStats();
+
+    // 遍历新 dayStats：只有已加载且 count 未变的天才保留，count 变了必须降级回 skeleton 重拉
+    const kept = new Set<string>();
+    for (const s of dayStats.value) {
+      const key = `${s.year}-${s.month}-${s.day}`;
+      if (staleLoaded.has(key) && oldCountByKey.get(key) === s.count) {
+        kept.add(key);
+      }
+    }
+    for (const key of [...dayMetaCache.keys()]) {
+      if (!kept.has(key)) dayMetaCache.delete(key);
+    }
+    loadedDayKeys.value = kept;
   }
 
   /**
@@ -216,8 +318,9 @@ export function useTimelineDayPagination(
   }
 
   // filter 三件套变化 → 重置 cache + 重载 dayStats
+  // 不守卫 hasLoadedStats：首次加载在途时若用户切 filter，应让新 filter 赢得竞态，
+  // loadDayStats 内部的 statsVersion 会自动作废在途的旧请求
   watch([filter, searchTerm, favoritesOnly], () => {
-    if (!hasLoadedStats.value) return;
     dayLoadVersion++;
     dayMetaCache.clear();
     loadedDayKeys.value = new Set();
@@ -229,11 +332,17 @@ export function useTimelineDayPagination(
     if (v && !hasLoadedStats.value) void loadDayStats();
   }, { immediate: true });
 
-  // 历史记录变更事件 → 全量重置
+  // 历史记录变更事件
+  // - updated（新增/重试）：走 reloadAll，新 day 会以 skeleton 进入；已加载天保留不闪
+  // - deleted：能命中缓存走增量，命中不到兜底 reloadAll
+  // - cleared：reloadAll
   const unlistens: Array<() => void> = [];
   Promise.all([
     onCacheEventType('history-updated', () => { void reloadAll(); }),
-    onCacheEventType('history-deleted', () => { void reloadAll(); }),
+    onCacheEventType<HistoryEventData>('history-deleted', (data) => {
+      if (data?.ids && data.ids.length > 0) removeItemsByIds(data.ids);
+      else void reloadAll();
+    }),
     onCacheEventType('history-cleared', () => { void reloadAll(); }),
   ])
     .then(fns => unlistens.push(...fns))
@@ -250,7 +359,6 @@ export function useTimelineDayPagination(
     dayMetaCache,
     loadedDayKeys,
     groups,
-    avgCellHeight,
     totalCount,
     isLoadingStats,
     isDayLoading,
