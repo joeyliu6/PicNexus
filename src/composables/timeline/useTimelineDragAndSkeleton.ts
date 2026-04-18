@@ -276,8 +276,9 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
             forceUpdateVisibleArea();
           }
         }
-        // 延迟真图加载：避免缓存命中时骨架 < 100ms 即逝产生视觉撕裂
-        setTimeout(() => void ensureDaysLoaded(loadKeys), SKELETON_MIN_DISPLAY_MS);
+        // await 真 items 加载完再撤 is-jumping：原 setTimeout 400ms 后撤 class 但 items 还没到，会露出底层
+        // photo-slot-skeleton 静态灰块与 shimmer 骨架断裂。waitMinDisplay 在 finally 兜底 400ms，缓存命中不会闪。
+        await ensureDaysLoaded(loadKeys);
       } else {
         const prefetchKeys = groups.value.filter(g => monthDelta(g.year, g.month) <= 2).map(g => g.id);
         const hitCache = monthGroups.every(g => loadedDayKeys.value.has(g.id));
