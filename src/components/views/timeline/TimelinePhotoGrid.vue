@@ -31,9 +31,18 @@ export interface FastModeItem {
   height: number;
 }
 
+export interface SkeletonSlot {
+  key: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 const props = defineProps<{
   groups: PhotoGroup[];
   visibleItems: VisibleItem[];
+  visibleSkeletonSlots: SkeletonSlot[];
   visibleHeaders: VisibleHeader[];
   fastModeItems: FastModeItem[];
   totalHeight: number;
@@ -100,6 +109,18 @@ function getGroupItemCount(groupId: string): number {
       }"
     />
 
+    <!-- Skeleton Slots: 未加载天的灰色占位（count × 估算宽高），避免 items=[] 时整片空白 -->
+    <div
+      v-for="slot in visibleSkeletonSlots"
+      :key="`slot-${slot.key}`"
+      class="photo-slot-skeleton"
+      :style="{
+        transform: `translate3d(${slot.x}px, ${slot.y}px, 0)`,
+        width: `${slot.width}px`,
+        height: `${slot.height}px`,
+      }"
+    />
+
     <!-- Photo Items -->
     <TimelinePhotoItem
       v-for="visible in visibleItems"
@@ -155,6 +176,14 @@ function getGroupItemCount(groupId: string): number {
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
   overflow: hidden;
+}
+
+/* 未加载天的占位：与 photo-item 的 photo-skeleton 同底色，视觉语义一致 */
+.photo-slot-skeleton {
+  position: absolute;
+  background: var(--bg-titlebar);
+  border-radius: var(--radius-md);
+  will-change: transform;
 }
 
 .group-title {

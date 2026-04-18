@@ -95,6 +95,39 @@ export function useVisibleArea(
     return result;
   });
 
+  /**
+   * 可见的骨架占位矩形（仅对 isSkeleton 天，即 TimelineGroupLayout.skeletonSlots 存在的分组）
+   * 用于按日懒加载场景下,目标天未加载时渲染灰色占位,避免"header 显示但 grid 空白"
+   */
+  const visibleSkeletonSlots = computed<Array<{ key: string; x: number; y: number; width: number; height: number }>>(() => {
+    if (!layoutResult.value) return [];
+    const viewTop = scrollTop.value;
+    const viewBottom = scrollTop.value + viewportHeight.value;
+    const result: Array<{ key: string; x: number; y: number; width: number; height: number }> = [];
+
+    for (const group of layoutResult.value.groupLayouts) {
+      if (!group.skeletonSlots) continue;
+      const groupTop = group.contentY;
+      const groupBottom = group.contentY + group.contentHeight;
+      // 整组与视口不相交 → 跳过
+      if (groupBottom < viewTop || groupTop > viewBottom) continue;
+
+      for (let i = 0; i < group.skeletonSlots.length; i++) {
+        const slot = group.skeletonSlots[i];
+        const absY = groupTop + slot.y;
+        if (absY + slot.height < viewTop || absY > viewBottom) continue;
+        result.push({
+          key: `${group.groupId}__${i}`,
+          x: slot.x,
+          y: absY,
+          width: slot.width,
+          height: slot.height,
+        });
+      }
+    }
+    return result;
+  });
+
   /** 可见的分组头部 */
   const visibleHeaders = computed<VisibleHeader[]>(() => {
     if (!layoutResult.value) return [];
@@ -169,6 +202,7 @@ export function useVisibleArea(
   return {
     visibleRowRange,
     visibleItems,
+    visibleSkeletonSlots,
     visibleHeaders,
     currentStickyHeader,
     totalHeight,

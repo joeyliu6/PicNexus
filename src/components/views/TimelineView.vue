@@ -61,7 +61,7 @@ const timelinePagination = useTimelineDayPagination({
   favoritesOnly: computed(() => props.favoritesOnly ?? false),
   visible: computed(() => props.visible ?? false),
 });
-const { groups, dayStats, ensureDaysLoaded, totalCount: dayTotalCount, isLoadingStats } = timelinePagination;
+const { groups, dayStats, ensureDaysLoaded, prefetchDayAspectRatios, loadedDayKeys, totalCount: dayTotalCount, isLoadingStats, hasLoadedStats, isFullyPreloaded } = timelinePagination;
 
 /** 所有已加载天的 metas（展平），供选中操作和灯箱导航使用 */
 const allLoadedMetas = computed(() => groups.value.flatMap(g => g.items));
@@ -87,6 +87,7 @@ const {
   displayMode,
   scrollDirection,
   visibleItems,
+  visibleSkeletonSlots,
   visibleHeaders,
   fastModeItems,
   layoutResult,
@@ -94,6 +95,7 @@ const {
   scrollToItem,
   scrollToProgress,
   forceUpdateVisibleArea,
+  forceNormalMode,
   restoreScrollTop,
   handleScroll: virtualHandleScroll,
 } = useVirtualTimeline(scrollContainer, groups, {
@@ -169,7 +171,7 @@ const {
 });
 
 // layout 重算时保持视口锚点 → 消除高度估算偏差导致的图片跳动
-const scrollAnchor = useScrollAnchor(scrollContainer, layoutResult, isCalculating, visibleItems);
+const { suspend: suspendScrollAnchor, resume: resumeScrollAnchor } = useScrollAnchor(scrollContainer, layoutResult, isCalculating, visibleItems);
 // spinner 只在重算持续 >300ms 才显示 → 偶发重算不闪烁
 const isCalculatingVisible = useDebouncedTrue(isCalculating, 300);
 
@@ -201,8 +203,12 @@ const {
   forceUpdateVisibleArea,
   jumpToMonth: historyManager.jumpToMonth,
   ensureDaysLoaded,
-  suspendScrollAnchor: scrollAnchor.suspend,
-  resumeScrollAnchor: scrollAnchor.resume,
+  prefetchDayAspectRatios,
+  loadedDayKeys,
+  isFullyPreloaded,
+  hasLoadedStats,
+  forceNormalMode,
+  suspendScrollAnchor, resumeScrollAnchor,
 });
 
 const handleScroll = () => {
@@ -278,9 +284,9 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
       <div class="timeline-content-stack">
 
       <TimelinePhotoGrid
-        v-show="groups.length > 0"
         :groups="groups"
         :visible-items="visibleItems"
+        :visible-skeleton-slots="visibleSkeletonSlots"
         :visible-headers="visibleHeaders"
         :fast-mode-items="fastModeItems"
         :total-height="totalHeight"
@@ -299,16 +305,16 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
         @image-load="onImageLoad"
         @image-error="onImageError"
       >
-        <template #footer>
-          共 {{ dayTotalCount }} 张照片
-        </template>
+        <template #footer>共 {{ dayTotalCount }} 张照片</template>
       </TimelinePhotoGrid>
 
-        <TimelineSkeleton
-          v-if="isLoadingStats || showSkeleton"
-          class="timeline-skeleton-overlay"
-          :layout="skeletonLayout"
-        />
+        <Transition name="t-fade-out">
+          <TimelineSkeleton
+            v-show="isLoadingStats || showSkeleton"
+            class="timeline-skeleton-overlay"
+            :layout="skeletonLayout"
+          />
+        </Transition>
       </div>
 
       <div style="height: 100px"></div>

@@ -149,6 +149,14 @@
   opacity: 0;
 }
 
+/* -- t-fade-out：仅淡出（立即显示 + 柔和淡出），用于需要 <16ms 即时反馈的覆盖层 */
+.t-fade-out-leave-active {
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+.t-fade-out-leave-to {
+  opacity: 0;
+}
+
 /* -- t-slide-up：内容从下方出现 -- */
 .t-slide-up-enter-active {
   transition:

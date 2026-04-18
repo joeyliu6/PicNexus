@@ -140,6 +140,9 @@ const emit = defineEmits<{
   position: absolute;
   inset: 0;
   z-index: 1;
+
+  /* 覆盖 PrimeVue Skeleton 默认背景：用项目最深灰阶 token，保证浅/深主题下与 photo-item 背景有足够对比 */
+  background-color: var(--bg-titlebar);
 }
 
 .photo-error {

@@ -87,6 +87,7 @@ export function useVirtualTimeline(
   const {
     visibleRowRange,
     visibleItems,
+    visibleSkeletonSlots,
     visibleHeaders,
     currentStickyHeader,
     totalHeight,
@@ -380,6 +381,7 @@ export function useVirtualTimeline(
 
     // 可见数据
     visibleItems,
+    visibleSkeletonSlots,
     visibleHeaders,
     currentStickyHeader,
     visibleRowRange,

@@ -4,14 +4,15 @@
  */
 import { ref, computed, watch, nextTick, onUnmounted, type Ref, type ComputedRef } from 'vue';
 import { generateSkeletonLayout } from '../../utils/justifiedLayout';
+import { createLogger } from '../../utils/logger';
 import type { PhotoGroup } from '../useVirtualTimeline';
+
+const log = createLogger('TimelineJump');
 
 /** 骨架屏最小显示时间（毫秒），避免闪烁 */
 const SKELETON_MIN_DISPLAY_MS = 300;
 /** 拖拽结束延迟（毫秒） */
 const DRAG_END_DELAY_MS = 50;
-/** 进度跳变阈值（0-1），超过该值认为是“快速跳转”，展示短时骨架过渡 */
-const QUICK_JUMP_SKELETON_THRESHOLD = 0.06;
 /** 侧边栏宽度预估（px），用于骨架屏容器宽度计算 */
 const SIDEBAR_WIDTH_PX = 90;
 
@@ -54,6 +55,16 @@ interface UseTimelineDragAndSkeletonOptions {
   jumpToMonth: (year: number, month: number) => Promise<boolean>;
   /** 按需加载指定天的图片数据（跳转时拉齐目标月第一天） */
   ensureDaysLoaded: (dayKeys: string[]) => Promise<void>;
+  /** 预取 aspectRatios 到 LRU cache（降级模式或 isFullyPreloaded=false 时使用） */
+  prefetchDayAspectRatios: (dayKeys: string[]) => Promise<void>;
+  /** 已加载的 dayKey 集合（用于跳转时判定缓存命中） */
+  loadedDayKeys: Ref<Set<string>>;
+  /** v7：全量 aspectRatios 是否已预取完成（true → 跳转可跳过 prefetch 等待直接落点） */
+  isFullyPreloaded: Ref<boolean>;
+  /** dayStats 是否已加载（false 时 handleJumpToPeriod 早退,避免在空 groups 上跳转） */
+  hasLoadedStats: Ref<boolean>;
+  /** 强制回到 normal 显示模式（跳转中压制 fast-mode，避免瞬间 scrollTop 大跳被 velocity 误判） */
+  forceNormalMode: () => void;
   /** 跳转期间暂停视口锚点（避免 sync watch 在 spacer 未 flush 时抢写 scrollTop） */
   suspendScrollAnchor?: () => void;
   resumeScrollAnchor?: () => void;
@@ -62,9 +73,11 @@ interface UseTimelineDragAndSkeletonOptions {
 export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOptions) {
   const {
     scrollContainer, groups, isCalculating, visible,
-    totalHeight, scrollProgress, viewportHeight, layoutResult, timePeriodStats,
+    totalHeight, viewportHeight, layoutResult, timePeriodStats,
     setLastStableProgress, scrollToProgress, scrollToItem,
-    forceUpdateVisibleArea, jumpToMonth, ensureDaysLoaded,
+    forceUpdateVisibleArea, jumpToMonth, ensureDaysLoaded, prefetchDayAspectRatios, loadedDayKeys,
+    isFullyPreloaded, hasLoadedStats,
+    forceNormalMode,
     suspendScrollAnchor, resumeScrollAnchor,
   } = options;
 
@@ -79,11 +92,24 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
 
   // ==================== 时间轴指示器 computed ====================
 
-  /** 已加载的月份集合 */
+  /** 已加载的月份集合：该月所有天的 items 都已加载才算；否则视为未加载（未加载月点击走 jump-to-period 预取路径） */
   const loadedMonthsSet = computed(() => {
     const set = new Set<string>();
+    const loaded = loadedDayKeys.value;
+    const perMonth = new Map<string, { total: number; loaded: number }>();
     for (const group of groups.value) {
-      set.add(`${group.year}-${group.month}`);
+      const key = `${group.year}-${group.month}`;
+      const c = perMonth.get(key);
+      const isLoaded = loaded.has(group.id);
+      if (c) {
+        c.total++;
+        if (isLoaded) c.loaded++;
+      } else {
+        perMonth.set(key, { total: 1, loaded: isLoaded ? 1 : 0 });
+      }
+    }
+    for (const [key, { total, loaded }] of perMonth) {
+      if (total > 0 && loaded === total) set.add(key);
     }
     return set;
   });
@@ -154,18 +180,6 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
 
   // ==================== 跳转 ====================
 
-  function waitForPaint(): Promise<void> {
-    return new Promise((resolve) => {
-      requestAnimationFrame(() => resolve());
-    });
-  }
-
-  async function ensureSkeletonVisible(): Promise<void> {
-    showSkeletonWithCheck();
-    await nextTick();
-    await waitForPaint();
-  }
-
   /** 等待 isCalculating 降为 false（layout 异步重算完成），最多等 timeoutMs */
   function waitLayoutSettled(timeoutMs = 500): Promise<void> {
     if (!isCalculating.value) return Promise.resolve();
@@ -178,68 +192,92 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
   }
 
   /**
-   * 跳转到指定月份：
-   * 1. 显示骨架屏
-   * 2. 校验月份存在性
-   * 3. 在 groups 中找该月最上方的天（降序排列时的第一个），拉取其真实数据
-   * 4. 等 layout 重算完成（避免用 skeleton 估算高度定位）
-   * 5. 以该天的 headerY 作为 scrollTop，精确落点
-   *
-   * 旧实现直接 scrollTop=0 滚到最新天，完全不对；且未等 layout 重算，
-   * 会出现"先看到骨架屏→数据回来位置突变"的抖动。
+   * 跳转到指定月份。
+   * - isFullyPreloaded=true：layout 已是精准骨架，单次 scrollTop 直接落点，真图后台加载
+   * - 否则：±2 月 prefetch → 等 layout settled → 早跳 → ensureDaysLoaded → 晚跳兜底
    */
   async function handleJumpToPeriod(year: number, month: number): Promise<void> {
+    if (!hasLoadedStats.value) return;
+
+    log.debug(`[jump] ${year}-${month} path=${isFullyPreloaded.value ? 'normal' : 'downgrade'}`);
+
     isJumping = true;
-    await ensureSkeletonVisible();
-    // 跳转期间禁用视口锚点：我们要主动把 scrollTop 设到目标月，
-    // 锚点的 sync watch 会在 layout 重算瞬间把 scrollTop 锁回旧视口位置，形成抢写
+    // 锚点的 sync watch 会在 layout 重算时把 scrollTop 锁回旧视口位置，必须先关
     suspendScrollAnchor?.();
+    // 跳转瞬间 scrollTop 会跨数万 px，useScrollVelocity 会误判为极高速 → fast 模式灰色网格
+    forceNormalMode();
     try {
       if (!(await jumpToMonth(year, month))) return;
 
-      // 在当前 groups 中找该月最上方的天（dayStats 降序 → 同月 day 最大那条排在最前）
       const monthGroups = groups.value.filter(g => g.year === year && g.month === month);
       if (monthGroups.length === 0) {
-        // 月份在 dayStats 中不存在（可能 filter 下该月全被过滤），降级为滚到顶部
+        // filter 下目标月被过滤 → 滚到顶
         if (scrollContainer.value) scrollContainer.value.scrollTop = 0;
         return;
       }
       const targetDayKey = monthGroups[0].id;
 
-      // 一次加载"目标月整月 + 前后 1 个月"，避免"先 1 天 → 再 ±5 天缓冲"的多阶段重算
-      const prevMonth = month === 0 ? 11 : month - 1;
-      const prevYear = month === 0 ? year - 1 : year;
-      const nextMonth = month === 11 ? 0 : month + 1;
-      const nextYear = month === 11 ? year + 1 : year;
-      const keysToLoad = groups.value
-        .filter(g =>
-          (g.year === year && g.month === month) ||
-          (g.year === prevYear && g.month === prevMonth) ||
-          (g.year === nextYear && g.month === nextMonth),
-        )
-        .map(g => g.id);
-      await ensureDaysLoaded(keysToLoad);
+      const monthDelta = (gy: number, gm: number) => Math.abs((gy * 12 + gm) - (year * 12 + month));
+      const loadKeys = groups.value.filter(g => monthDelta(g.year, g.month) <= 1).map(g => g.id);
 
-      // 顺序至关重要：watch(groups) 是 flush:'pre'，必须先等 nextTick 让它 fire（启动 recalculateLayoutAsync），
-      // 再 waitLayoutSettled 等 rIC 跑完拿到新 layoutResult，最后再 nextTick 等 spacer DOM 高度同步。
-      // 否则 layoutResult 仍是 OLD（skeleton 估算），scrollTop 会落到错误位置。
-      await nextTick();
-      await waitLayoutSettled();
-      await nextTick();
-
-      if (scrollContainer.value) {
-        const targetLayout = layoutResult.value?.groupLayouts.find(gl => gl.groupId === targetDayKey);
-        const targetTop = targetLayout ? targetLayout.headerY : 0;
-        scrollContainer.value.scrollTop = targetTop;
-        // 二次兜底：若上一步被 clamp（极少数情况 spacer 仍未到位），读回实际值后重试一次
-        if (Math.abs(scrollContainer.value.scrollTop - targetTop) > 1) {
+      if (isFullyPreloaded.value) {
+        if (scrollContainer.value) {
+          const target = layoutResult.value?.groupLayouts.find(gl => gl.groupId === targetDayKey);
+          if (target) {
+            scrollContainer.value.scrollTop = target.headerY;
+            forceNormalMode(scrollContainer.value.scrollTop);
+            forceUpdateVisibleArea();
+          }
+        }
+        // 延迟真图加载：避免缓存命中时骨架 < 100ms 即逝产生视觉撕裂
+        setTimeout(() => void ensureDaysLoaded(loadKeys), SKELETON_MIN_DISPLAY_MS);
+      } else {
+        const prefetchKeys = groups.value.filter(g => monthDelta(g.year, g.month) <= 2).map(g => g.id);
+        const hitCache = monthGroups.every(g => loadedDayKeys.value.has(g.id));
+        if (!hitCache) {
+          await prefetchDayAspectRatios(prefetchKeys);
           await nextTick();
-          if (scrollContainer.value) scrollContainer.value.scrollTop = targetTop;
+          await waitLayoutSettled();
+          await nextTick();
+          await new Promise<void>(r => requestAnimationFrame(() => r()));
+          await new Promise<void>(r => requestAnimationFrame(() => r()));
+
+          if (scrollContainer.value) {
+            const earlyLayout = layoutResult.value?.groupLayouts.find(gl => gl.groupId === targetDayKey);
+            const slots = earlyLayout?.skeletonSlots;
+            // slots[0].width ≈ slots[1].width 说明还是等宽骨架（路径 ③），跳了也对不准 → 等晚跳
+            const looksJustified = !slots || slots.length < 2
+              || Math.abs(slots[0].width - slots[1].width) > 0.5;
+            if (earlyLayout && looksJustified) {
+              scrollContainer.value.scrollTop = earlyLayout.headerY;
+              forceNormalMode(scrollContainer.value.scrollTop);
+              forceUpdateVisibleArea();
+            } else if (earlyLayout) {
+              log.warn(`早跳跳过（目标月 ${targetDayKey} skeletonSlots 仍为等宽）`);
+            }
+          }
+        }
+
+        await ensureDaysLoaded(loadKeys);
+        await nextTick();
+        await waitLayoutSettled();
+        await nextTick();
+
+        if (scrollContainer.value) {
+          const targetLayout = layoutResult.value?.groupLayouts.find(gl => gl.groupId === targetDayKey);
+          const targetTop = targetLayout ? targetLayout.headerY : 0;
+          scrollContainer.value.scrollTop = targetTop;
+          if (Math.abs(scrollContainer.value.scrollTop - targetTop) > 1) {
+            await nextTick();
+            if (scrollContainer.value) scrollContainer.value.scrollTop = targetTop;
+          }
+          forceNormalMode(scrollContainer.value.scrollTop);
         }
       }
     } finally {
       forceUpdateVisibleArea();
       forceHideSkeleton();
+      forceNormalMode(scrollContainer.value?.scrollTop);
       resumeScrollAnchor?.();
       isJumping = false;
     }
@@ -337,21 +375,15 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
     }
   }
 
-  async function handleDragScroll(progress: number, source: 'click' | 'drag' | 'wheel' = 'drag'): Promise<void> {
-    const wasDragging = isDragging;
-    const jumpDistance = Math.abs(progress - scrollProgress.value);
-
-    // 仅在“点击跳转”时提供短时骨架过渡；拖拽/滚轮保持实时跟手，不额外闪烁。
-    if (source === 'click' && !wasDragging && jumpDistance >= QUICK_JUMP_SKELETON_THRESHOLD) {
-      await ensureSkeletonVisible();
-    }
-
+  async function handleDragScroll(progress: number, _source: 'click' | 'drag' | 'wheel' = 'drag'): Promise<void> {
+    // _source 仅为保持调用方签名兼容，函数内部不再区分来源（已加载月 click 不显 overlay）
     isDragging = true;
     setLastStableProgress(progress);
 
     if (dragEndTimer) clearTimeout(dragEndTimer);
     dragEndTimer = window.setTimeout(() => {
       isDragging = false;
+      // 数据由 ±5 天 visibleDayKeys 缓冲 watch 补齐，骨架由 watch(isCalculating) 在 layout 重算完成后自然淡出
       forceUpdateVisibleArea();
     }, DRAG_END_DELAY_MS);
 
