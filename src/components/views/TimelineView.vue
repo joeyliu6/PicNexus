@@ -13,6 +13,7 @@ import { useTimelineLightbox } from '../../composables/timeline/useTimelineLight
 import { useTimelineDragAndSkeleton } from '../../composables/timeline/useTimelineDragAndSkeleton';
 import { useTimelineData } from '../../composables/timeline/useTimelineData';
 import { useTimelineDayPagination } from '../../composables/timeline/useTimelineDayPagination';
+import { useVisibleDayBuffer } from '../../composables/timeline/useVisibleDayBuffer';
 import { useScrollAnchor } from '../../composables/timeline/useScrollAnchor';
 import { useDebouncedTrue } from '../../composables/useDebouncedTrue';
 import { useToast } from '../../composables/useToast';
@@ -221,29 +222,11 @@ const handleScroll = () => {
 // 激活时加载时间段统计（侧边栏指示器需要）；loadTimePeriodStats 内部幂等，可重复触发
 watch(() => props.visible, (v) => { if (v) void historyManager.loadTimePeriodStats(); }, { immediate: true });
 
-// 视口可见天变化 → 扩展 ±5 天缓冲区后按需加载
-let ensureTimer: ReturnType<typeof setTimeout> | null = null;
-watch(visibleDayKeys, (keys) => {
-  if (ensureTimer) clearTimeout(ensureTimer);
-  ensureTimer = setTimeout(() => {
-    ensureTimer = null;
-    if (keys.length === 0) return;
-    const stats = dayStats.value;
-    const keySet = new Set(keys);
-    const indices = stats
-      .map((s, i) => ({ key: `${s.year}-${s.month}-${s.day}`, i }))
-      .filter(({ key }) => keySet.has(key))
-      .map(({ i }) => i);
-    if (indices.length === 0) return;
-    const minIdx = Math.max(0, Math.min(...indices) - 5);
-    const maxIdx = Math.min(stats.length - 1, Math.max(...indices) + 5);
-    const buffered = stats.slice(minIdx, maxIdx + 1).map(s => `${s.year}-${s.month}-${s.day}`);
-    void ensureDaysLoaded(buffered);
-  }, 100);
-});
+// 视口可见天 → ±5 天缓冲 → 按需加载
+const { cleanup: cleanupVisibleDayBuffer } = useVisibleDayBuffer({ visibleDayKeys, dayStats, ensureDaysLoaded });
 
 onUnmounted(() => {
-  if (ensureTimer) clearTimeout(ensureTimer);
+  cleanupVisibleDayBuffer();
   clearImageLoadState();
   cleanupSidebarControl();
   cleanupPreload();
@@ -378,36 +361,7 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
   overflow: hidden;
 }
 
-/* 跳转期间：图片透明 + 微缩（0.96）→ 露出 photo-item 灰底；撤 class 后 opacity 0→1、scale 0.96→1 同时 fade，
-   模拟谷歌相册"呼吸感"入场，transition 定义在 .photo-img 自身 */
-.timeline-view.is-jumping :deep(.photo-img.loaded) {
-  opacity: 0;
-  transform: scale(0.96);
-}
-
-/* 跳转期间给 photo-item 加骨架扫光，避免静态灰块显呆 */
-.timeline-view.is-jumping :deep(.photo-item) {
-  background-image: linear-gradient(90deg, var(--bg-secondary) 0%, var(--bg-titlebar) 50%, var(--bg-secondary) 100%);
-  background-size: 200% 100%;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 骨架扫光 1.5s 无对应 duration token */
-  animation: timeline-skeleton-shimmer 1.5s linear infinite;
-}
-
-@keyframes timeline-skeleton-shimmer {
-  0% { background-position: 100% 0; }
-  100% { background-position: -100% 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .timeline-view.is-jumping :deep(.photo-item) {
-    animation: none;
-  }
-
-  /* 前庭敏感用户：保留 opacity 淡入但抑制 scale 过渡 */
-  .timeline-view.is-jumping :deep(.photo-img.loaded) {
-    transform: none;
-  }
-}
+/* .is-jumping 跳转骨架（跨 TimelineView 根 + 子组件子元素，用全局样式） */
 
 .timeline-scroll-area {
   flex: 1;
@@ -532,3 +486,5 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
   }
 }
 </style>
+
+<style src="./timeline/timeline-jumping.css"></style>
