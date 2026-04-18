@@ -1,6 +1,6 @@
 /**
- * 拖拽滚动 + 骨架屏 + 时间轴指示器 Composable
- * 管理时间轴侧边栏拖拽滚动、视图切换骨架屏、指示器定位与跳转
+ * 拖拽滚动 + 跳转骨架 + 时间轴指示器 Composable
+ * 管理时间轴侧边栏拖拽滚动、跳转期间 photo-item 灰底/shimmer、指示器定位与跳转
  */
 import { ref, computed, watch, nextTick, onUnmounted, type Ref, type ComputedRef } from 'vue';
 import { generateSkeletonLayout } from '../../utils/justifiedLayout';
@@ -9,19 +9,23 @@ import type { PhotoGroup } from '../useVirtualTimeline';
 
 const log = createLogger('TimelineJump');
 
-/** 骨架屏最小显示时间（毫秒），避免闪烁 */
-const SKELETON_MIN_DISPLAY_MS = 300;
+/** 跳转期间 photo-item 灰底最小显示时间（毫秒），保证眼睛缓冲窗口 */
+const SKELETON_MIN_DISPLAY_MS = 400;
+/** 首次加载专用 min-display（毫秒）：比跳转更长，给网络下载多留时间 → 撤 class 时更多图片已就绪，一起淡入更稳 */
+const FIRST_LOAD_MIN_DISPLAY_MS = 700;
 /** 拖拽结束延迟（毫秒） */
 const DRAG_END_DELAY_MS = 50;
 /** 侧边栏宽度预估（px），用于骨架屏容器宽度计算 */
 const SIDEBAR_WIDTH_PX = 90;
 
-/** 布局结果中的分组布局信息 */
+/** 布局结果中的分组布局信息（结构对齐 utils/justifiedLayout.ts TimelineGroupLayout 的子集） */
 interface GroupLayoutInfo {
   groupId: string;
   headerY: number;
   contentY: number;
   contentHeight: number;
+  /** 骨架占位矩形（skeleton 天存在，跳转早跳判定是否等宽时读） */
+  skeletonSlots?: Array<{ x: number; y: number; width: number; height: number }>;
 }
 
 interface UseTimelineDragAndSkeletonOptions {
@@ -30,7 +34,7 @@ interface UseTimelineDragAndSkeletonOptions {
   groups: ComputedRef<PhotoGroup[]>;
   /** 布局是否正在计算中 */
   isCalculating: Ref<boolean>;
-  /** 组件是否可见 */
+  /** 视图是否可见（首次可见 + 已有数据时补触发 first-load skeleton，避免数据幕后加载时错过骨架期） */
   visible: ComputedRef<boolean | undefined>;
   /** 虚拟滚动总高度 */
   totalHeight: Ref<number>;
@@ -63,8 +67,9 @@ interface UseTimelineDragAndSkeletonOptions {
   isFullyPreloaded: Ref<boolean>;
   /** dayStats 是否已加载（false 时 handleJumpToPeriod 早退,避免在空 groups 上跳转） */
   hasLoadedStats: Ref<boolean>;
-  /** 强制回到 normal 显示模式（跳转中压制 fast-mode，避免瞬间 scrollTop 大跳被 velocity 误判） */
-  forceNormalMode: () => void;
+  /** 强制回到 normal 显示模式（跳转中压制 fast-mode，避免瞬间 scrollTop 大跳被 velocity 误判）。
+   *  可选参数 syncScrollTop：调用方刚 set 的 DOM scrollTop，避免 velocity 用缓存旧值 clamp 误差 */
+  forceNormalMode: (syncScrollTop?: number) => void;
   /** 跳转期间暂停视口锚点（避免 sync watch 在 spacer 未 flush 时抢写 scrollTop） */
   suspendScrollAnchor?: () => void;
   resumeScrollAnchor?: () => void;
@@ -83,12 +88,39 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
 
   // ==================== 状态 ====================
 
-  const showSkeleton = ref(false);
   let isDragging = false;
   let dragEndTimer: number | undefined;
-  let skeletonMinDisplayTimeout: number | undefined;
-  // 跳转期间禁用 watch(isCalculating) 的自动 hideSkeleton，避免 layout flip 反复重置 300ms timer
-  let isJumping = false;
+  let firstLoadTimer: number | undefined;
+  // 跳转期间：驱动 .timeline-view.is-jumping → .photo-img opacity 0 + photo-item shimmer（露出按真图位置对齐的灰底骨架）
+  const isJumping = ref(false);
+  // 首次可见 + 有数据 时触发：复用 .is-jumping class 让首屏也有 FIRST_LOAD_MIN_DISPLAY_MS 的骨架期
+  const isFirstLoadSkeleton = ref(false);
+  let hasTriggeredFirstLoad = false;
+
+  function triggerFirstLoadSkeleton(): void {
+    isFirstLoadSkeleton.value = true;
+    if (firstLoadTimer) clearTimeout(firstLoadTimer);
+    firstLoadTimer = window.setTimeout(() => {
+      isFirstLoadSkeleton.value = false;
+      firstLoadTimer = undefined;
+    }, FIRST_LOAD_MIN_DISPLAY_MS);
+  }
+
+  // A：groups 0→N 时触发（用户正在看：场景=快速切到时间轴、filter 切换）
+  watch(() => groups.value.length, (newLen, oldLen) => {
+    if ((oldLen ?? 0) === 0 && newLen > 0 && visible.value) {
+      hasTriggeredFirstLoad = true;
+      triggerFirstLoadSkeleton();
+    }
+  });
+
+  // B：visible false→true 且尚未触发过、数据已齐时补触发（场景=数据幕后已加载完成，用户再切过来）
+  watch(() => visible.value, (v) => {
+    if (v && !hasTriggeredFirstLoad && groups.value.length > 0) {
+      hasTriggeredFirstLoad = true;
+      triggerFirstLoadSkeleton();
+    }
+  });
 
   // ==================== 时间轴指示器 computed ====================
 
@@ -191,6 +223,12 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
     });
   }
 
+  /** 补齐 SKELETON_MIN_DISPLAY_MS 最小显示窗口：已到期即刻返回，否则 sleep 剩余量 */
+  function waitMinDisplay(startTime: number): Promise<void> {
+    const remaining = SKELETON_MIN_DISPLAY_MS - (Date.now() - startTime);
+    return remaining > 0 ? new Promise(r => setTimeout(r, remaining)) : Promise.resolve();
+  }
+
   /**
    * 跳转到指定月份。
    * - isFullyPreloaded=true：layout 已是精准骨架，单次 scrollTop 直接落点，真图后台加载
@@ -198,10 +236,14 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
    */
   async function handleJumpToPeriod(year: number, month: number): Promise<void> {
     if (!hasLoadedStats.value) return;
+    // 重入守卫：并发 click 直接忽略第二次，防止 isJumping 状态互相踩脚
+    if (isJumping.value) return;
 
     log.debug(`[jump] ${year}-${month} path=${isFullyPreloaded.value ? 'normal' : 'downgrade'}`);
 
-    isJumping = true;
+    const jumpStartTime = Date.now();
+    // 置位 → 触发 .timeline-view.is-jumping → 所有 .photo-img opacity 0（露出 photo-item 灰底，完美按位置对齐）
+    isJumping.value = true;
     // 锚点的 sync watch 会在 layout 重算时把 scrollTop 锁回旧视口位置，必须先关
     suspendScrollAnchor?.();
     // 跳转瞬间 scrollTop 会跨数万 px，useScrollVelocity 会误判为极高速 → fast 模式灰色网格
@@ -276,32 +318,44 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
       }
     } finally {
       forceUpdateVisibleArea();
-      forceHideSkeleton();
+      // 保证图片隐藏期至少 SKELETON_MIN_DISPLAY_MS，让眼睛有缓冲窗口（normal 分支瞬间跑完）
+      await waitMinDisplay(jumpStartTime);
       forceNormalMode(scrollContainer.value?.scrollTop);
       resumeScrollAnchor?.();
-      isJumping = false;
+      // 复位：.photo-img opacity 0→1 走 --duration-medium 淡入，照片自然显露
+      isJumping.value = false;
     }
   }
 
   /** 跳转到指定年份 */
   async function handleJumpToYear(year: number): Promise<void> {
+    // 重入守卫：与 handleJumpToPeriod 共用 isJumping 防打架
+    if (isJumping.value) return;
+
     const yearGroups = groups.value.filter(g => g.year === year);
 
     if (yearGroups.length > 0) {
-      // 年内跳转：本地滚动，快速加载不需要骨架屏
-      const firstGroup = yearGroups[yearGroups.length - 1];
-      if (firstGroup.items.length > 0) {
-        scrollToItem(firstGroup.items[0].id);
-      } else if (layoutResult.value) {
-        // skeleton 天：直接定位到该分组的布局位置
-        const groupLayout = layoutResult.value.groupLayouts.find(gl => gl.groupId === firstGroup.id);
-        if (groupLayout && totalHeight.value > viewportHeight.value) {
-          const maxScroll = totalHeight.value - viewportHeight.value;
-          scrollToProgress(groupLayout.headerY / maxScroll, true);
+      // 年内跳转：本地滚动路径也要缓冲（缓存命中同样刺眼）
+      const yearJumpStart = Date.now();
+      isJumping.value = true;
+      try {
+        const firstGroup = yearGroups[yearGroups.length - 1];
+        if (firstGroup.items.length > 0) {
+          scrollToItem(firstGroup.items[0].id);
+        } else if (layoutResult.value) {
+          // skeleton 天：直接定位到该分组的布局位置
+          const groupLayout = layoutResult.value.groupLayouts.find(gl => gl.groupId === firstGroup.id);
+          if (groupLayout && totalHeight.value > viewportHeight.value) {
+            const maxScroll = totalHeight.value - viewportHeight.value;
+            scrollToProgress(groupLayout.headerY / maxScroll, true);
+          }
         }
+      } finally {
+        await waitMinDisplay(yearJumpStart);
+        isJumping.value = false;
       }
     } else {
-      // 跨年跳转到未加载区域：走 handleJumpToPeriod（已带骨架屏）
+      // 跨年跳转到未加载区域：走 handleJumpToPeriod（它自己会盖纱帘）
       const periods = timePeriodStats.value;
       const yearPeriods = periods.filter(p => p.year === year);
       if (yearPeriods.length > 0) {
@@ -310,62 +364,6 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
       }
     }
   }
-
-  // ==================== 骨架屏控制 ====================
-
-  function hideSkeleton(): void {
-    if (!showSkeleton.value) return;
-    // 已在倒计时则不重置：避免 watch(isCalculating) 反复重置 300ms timer 导致 skeleton 永不消失
-    if (skeletonMinDisplayTimeout) return;
-    skeletonMinDisplayTimeout = window.setTimeout(() => {
-      showSkeleton.value = false;
-      skeletonMinDisplayTimeout = undefined;
-    }, SKELETON_MIN_DISPLAY_MS);
-  }
-
-  /** 跳转完成时使用：立即 hide 骨架屏，不走 300ms 延迟 */
-  function forceHideSkeleton(): void {
-    if (skeletonMinDisplayTimeout) {
-      clearTimeout(skeletonMinDisplayTimeout);
-      skeletonMinDisplayTimeout = undefined;
-    }
-    showSkeleton.value = false;
-  }
-
-  function showSkeletonWithCheck(): void {
-    if (skeletonMinDisplayTimeout) {
-      clearTimeout(skeletonMinDisplayTimeout);
-      skeletonMinDisplayTimeout = undefined;
-    }
-    showSkeleton.value = true;
-    nextTick(() => {
-      // 跳转期间由 handleJumpToPeriod 末尾统一 hideSkeleton，nextTick 不能抢先启动 timer
-      if (!isCalculating.value && !isJumping) {
-        hideSkeleton();
-      }
-    });
-  }
-
-  watch(
-    () => visible.value,
-    (isVisible, wasVisible) => {
-      if (!isVisible || wasVisible) return;
-      // 只有在有数据时才显示骨架屏，避免空状态闪烁
-      if (groups.value.length > 0) {
-        showSkeletonWithCheck();
-      }
-    }
-  );
-
-  watch(
-    () => isCalculating.value,
-    (calculating) => {
-      // 跳转期间不让 layout flip 反复重置 hideSkeleton 的 300ms timer，由 handleJumpToPeriod 自管理
-      if (!calculating && showSkeleton.value && !isJumping) {
-        hideSkeleton();
-      }
-    }
-  );
 
   // ==================== 拖拽滚动 ====================
 
@@ -376,14 +374,14 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
   }
 
   async function handleDragScroll(progress: number, _source: 'click' | 'drag' | 'wheel' = 'drag'): Promise<void> {
-    // _source 仅为保持调用方签名兼容，函数内部不再区分来源（已加载月 click 不显 overlay）
+    // _source 仅为保持调用方签名兼容，函数内部不再区分来源（click 路径已统一改走 handleJumpToPeriod）
     isDragging = true;
     setLastStableProgress(progress);
 
     if (dragEndTimer) clearTimeout(dragEndTimer);
     dragEndTimer = window.setTimeout(() => {
       isDragging = false;
-      // 数据由 ±5 天 visibleDayKeys 缓冲 watch 补齐，骨架由 watch(isCalculating) 在 layout 重算完成后自然淡出
+      // 数据由 ±5 天 visibleDayKeys 缓冲 watch 补齐
       forceUpdateVisibleArea();
     }, DRAG_END_DELAY_MS);
 
@@ -396,14 +394,15 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
 
   function cleanup(): void {
     if (dragEndTimer) clearTimeout(dragEndTimer);
-    if (skeletonMinDisplayTimeout) clearTimeout(skeletonMinDisplayTimeout);
+    if (firstLoadTimer) clearTimeout(firstLoadTimer);
   }
 
   // 防御性清理：即使调用方忘记手动 cleanup，也能保证定时器释放
   onUnmounted(cleanup);
 
   return {
-    showSkeleton,
+    isJumping,
+    isFirstLoadSkeleton,
     skeletonLayout,
     loadedMonthsSet,
     monthLayoutPositions,
