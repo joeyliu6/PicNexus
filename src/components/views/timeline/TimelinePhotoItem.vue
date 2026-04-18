@@ -167,7 +167,9 @@ const emit = defineEmits<{
   height: 100%;
   object-fit: cover;
   opacity: 0;
-  transition: opacity var(--duration-medium) ease-in-out;
+  transition:
+    opacity var(--duration-medium) ease-in-out,
+    transform var(--duration-medium) ease-in-out;
 }
 
 .photo-img.loaded {

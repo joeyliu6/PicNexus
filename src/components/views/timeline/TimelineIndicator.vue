@@ -324,14 +324,8 @@ function handleClick() {
   if (hoverPosition.value === null) return;
 
   const info = resolveDateInfo(hoverPosition.value);
-  const monthKey = `${info.year}-${info.month}`;
-  const isLoaded = props.loadedMonths?.has(monthKey) ?? true;
-
-  if (!isLoaded) {
-    emit('jump-to-period', info.year, info.month);
-  } else {
-    emit('drag-scroll', hoverPosition.value, 'click');
-  }
+  // 点击统一走跳转流程；缓存命中时也需骨架屏 300ms 缓冲，避免瞬移晃眼
+  emit('jump-to-period', info.year, info.month);
 }
 
 function handleYearClick(year: number, e: MouseEvent) {
