@@ -17,11 +17,38 @@
   animation: timeline-skeleton-shimmer 1.5s linear infinite;
 }
 
-/* 跳转期间 header 文字一起遮：跳转分两步（prefetch → ensureDays）中间 layout 重算会让
- * scrollTop 对应的 header 从"目标日"漂移到"邻近日"再回来，不盖文字会看到日期闪跳 */
+/* 跳转期间 header 文字用骨架条代替：
+ * - > * 把里面的 group-title / group-subtitle 都隐形
+ * - ::before 画一条固定 200px 的 shimmer 骨架（够容纳"2018年10月31日 15张图片"最长态）
+ * - 撤销 is-jumping 时 ::before 消失，子元素 opacity 0→1 淡入真文字 */
 .timeline-view.is-jumping .group-header {
+  position: relative;
+}
+
+.timeline-view.is-jumping .group-header > * {
   opacity: 0;
-  transition: opacity var(--duration-medium) ease-in-out;
+}
+
+.timeline-view.is-jumping .group-header::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 200px 固定宽度够容纳最长 header 文字，无对应 spacing token */
+  width: 200px;
+  height: 1.2em;
+  border-radius: var(--radius-sm);
+  background-image: linear-gradient(90deg, var(--bg-secondary) 0%, var(--bg-titlebar) 50%, var(--bg-secondary) 100%);
+  background-size: 200% 100%;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 骨架扫光 1.5s 无对应 duration token */
+  animation: timeline-skeleton-shimmer 1.5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timeline-view.is-jumping .group-header::before {
+    animation: none;
+  }
 }
 
 @keyframes timeline-skeleton-shimmer {

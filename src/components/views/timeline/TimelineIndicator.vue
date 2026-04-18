@@ -445,7 +445,6 @@ onUnmounted(() => {
       :show-bubble="showBubble"
       :year="lastHoverYear"
       :month="lastHoverMonth"
-      :day="lastHoverDay"
       @drag-start="startDrag"
     />
 
