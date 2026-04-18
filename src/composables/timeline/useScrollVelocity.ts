@@ -193,15 +193,20 @@ export function useScrollVelocity(
    * 强制立即恢复 normal 模式（用于跳转/拖拽结束）
    * 不走 startModeRecovery 的 200ms 延迟 —— 那个延迟容易被 useScrollAnchor 修正
    * scrollTop 引发的次级 scroll 事件误判为"高速滚动"重置回 fast，导致图片永不加载。
+   *
+   * @param syncScrollTop 可选：调用方刚刚 set 的 DOM scrollTop（读 DOM 实际值，避免 clamp 误差）。
+   *   跳转路径必须传此参数——因为 scrollTop.value (Vue ref) 要等浏览器 scroll 事件
+   *   派发 + handleScroll 回调才能同步，而此函数在那之前就跑完了。传 ref 会导致
+   *   lastScrollTopForVelocity 停留在旧位置，下一个 scroll 事件算出的 deltaScroll 是跨月
+   *   的巨大值，velocity 爆表，displayMode 被误切 'fast'，视口出现灰色网格方块。
    */
-  function forceNormalMode() {
+  function forceNormalMode(syncScrollTop?: number) {
     if (modeRecoveryTimer) {
       clearTimeout(modeRecoveryTimer);
       modeRecoveryTimer = null;
     }
     displayMode.value = 'normal';
-    // 同步重置速度采样，避免下一次 scroll 事件用旧 lastScrollTop 算出虚假高速
-    lastScrollTopForVelocity = scrollTop.value;
+    lastScrollTopForVelocity = syncScrollTop ?? scrollTop.value;
     lastScrollTime = performance.now();
     scrollVelocity.value = 0;
   }
