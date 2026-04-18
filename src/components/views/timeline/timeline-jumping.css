@@ -21,10 +21,6 @@
  * - > * 把里面的 group-title / group-subtitle 都隐形
  * - ::before 画一条固定 200px 的 shimmer 骨架（够容纳"2018年10月31日 15张图片"最长态）
  * - 撤销 is-jumping 时 ::before 消失，子元素 opacity 0→1 淡入真文字 */
-.timeline-view.is-jumping .group-header {
-  position: relative;
-}
-
 .timeline-view.is-jumping .group-header > * {
   opacity: 0;
 }
@@ -69,5 +65,5 @@
 
 /* 跳转中指示器鼠标变 wait 提示：告知用户"正在处理"，避免重复点击（重入守卫期间点击会被早退吞掉）*/
 .timeline-view.is-jumping .timeline-indicator {
-  cursor: wait;
+  pointer-events: none;
 }
