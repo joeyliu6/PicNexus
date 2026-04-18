@@ -24,6 +24,18 @@ export interface PhotoGroup {
   expectedCount?: number;
   /** 是否为骨架占位（items 为空，尚未从 DB 加载）*/
   isSkeleton?: boolean;
+  /**
+   * 骨架天的 aspectRatio 数组（按 timestamp DESC，与真图 ORDER BY 同序）。
+   * 仅 isSkeleton=true 且 LRU cache 命中时填充；用于让 skeleton 跑和真图一样的 justifiedLayout，
+   * 消除 skeleton→real 布局跳变。未命中时回落到平均比例 justified 骨架。
+   */
+  aspectRatios?: number[];
+  /**
+   * 该天所有照片 aspectRatio 之和（来自 dayStats，首屏一次性加载，永不变）。
+   * 未命中 aspectRatios cache 时，用 aspectRatioSum/expectedCount 得到平均比例，
+   * 喂 justifiedLayout 生成"平均比例骨架"，高度时间不变（跨跳转阶段稳定）。
+   */
+  aspectRatioSum?: number;
 }
 
 /** 可见图片项（用于渲染） */

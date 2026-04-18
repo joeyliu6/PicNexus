@@ -64,6 +64,11 @@ export interface TimelineGroupLayout {
   rows: LayoutRow[];
   /** 该分组包含的图片数量 */
   itemCount: number;
+  /**
+   * 骨架占位矩形（仅 skeleton 天存在，real 天为 undefined）。
+   * 坐标相对于 contentY，供虚拟滚动按 count × avg 画灰色占位，避免未加载天视觉空白。
+   */
+  skeletonSlots?: Array<{ x: number; y: number; width: number; height: number }>;
 }
 
 /** 完整的时间轴布局结果 */
