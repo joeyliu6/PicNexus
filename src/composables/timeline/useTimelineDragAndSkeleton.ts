@@ -230,19 +230,20 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
   }
 
   /**
-   * 跳转到指定月份。
+   * 跳转到指定年月日（day 为月内进度估算，精度"那附近"；未传则回退为月最新一天）
    * - isFullyPreloaded=true：layout 已是精准骨架，单次 scrollTop 直接落点，真图后台加载
-   * - 否则：±2 月 prefetch → 等 layout settled → 早跳 → ensureDaysLoaded → 晚跳兜底
+   * - 否则：±2 月 prefetch → 等 layout settled → ensureDaysLoaded → 单次 scrollTo
+   *   （骨架期全程盖住，无中间"日期闪跳"现象，所以砍掉旧版的"早跳"）
    */
-  async function handleJumpToPeriod(year: number, month: number): Promise<void> {
+  async function handleJumpToPeriod(year: number, month: number, day?: number): Promise<void> {
     if (!hasLoadedStats.value) return;
     // 重入守卫：并发 click 直接忽略第二次，防止 isJumping 状态互相踩脚
     if (isJumping.value) return;
 
-    log.debug(`[jump] ${year}-${month} path=${isFullyPreloaded.value ? 'normal' : 'downgrade'}`);
+    log.debug(`[jump] ${year}-${month}-${day ?? 'latest'} path=${isFullyPreloaded.value ? 'normal' : 'downgrade'}`);
 
     const jumpStartTime = Date.now();
-    // 置位 → 触发 .timeline-view.is-jumping → 所有 .photo-img opacity 0（露出 photo-item 灰底，完美按位置对齐）
+    // 置位 → 触发 .timeline-view.is-jumping → 所有 .photo-img opacity 0 + header 文字 opacity 0（骨架期盖住一切视觉）
     isJumping.value = true;
     // 锚点的 sync watch 会在 layout 重算时把 scrollTop 锁回旧视口位置，必须先关
     suspendScrollAnchor?.();
@@ -257,7 +258,11 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
         if (scrollContainer.value) scrollContainer.value.scrollTop = 0;
         return;
       }
-      const targetDayKey = monthGroups[0].id;
+      // groups 按时间降序；未传 day → 跳月最新一天（monthGroups[0]）；传 day → 选 |g.day - day| 最小者
+      const targetGroup = day === undefined
+        ? monthGroups[0]
+        : monthGroups.reduce((best, g) => Math.abs(g.day - day) < Math.abs(best.day - day) ? g : best);
+      const targetDayKey = targetGroup.id;
 
       const monthDelta = (gy: number, gm: number) => Math.abs((gy * 12 + gm) - (year * 12 + month));
       const loadKeys = groups.value.filter(g => monthDelta(g.year, g.month) <= 1).map(g => g.id);
@@ -280,24 +285,6 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
           await prefetchDayAspectRatios(prefetchKeys);
           await nextTick();
           await waitLayoutSettled();
-          await nextTick();
-          await new Promise<void>(r => requestAnimationFrame(() => r()));
-          await new Promise<void>(r => requestAnimationFrame(() => r()));
-
-          if (scrollContainer.value) {
-            const earlyLayout = layoutResult.value?.groupLayouts.find(gl => gl.groupId === targetDayKey);
-            const slots = earlyLayout?.skeletonSlots;
-            // slots[0].width ≈ slots[1].width 说明还是等宽骨架（路径 ③），跳了也对不准 → 等晚跳
-            const looksJustified = !slots || slots.length < 2
-              || Math.abs(slots[0].width - slots[1].width) > 0.5;
-            if (earlyLayout && looksJustified) {
-              scrollContainer.value.scrollTop = earlyLayout.headerY;
-              forceNormalMode(scrollContainer.value.scrollTop);
-              forceUpdateVisibleArea();
-            } else if (earlyLayout) {
-              log.warn(`早跳跳过（目标月 ${targetDayKey} skeletonSlots 仍为等宽）`);
-            }
-          }
         }
 
         await ensureDaysLoaded(loadKeys);
@@ -318,7 +305,7 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
       }
     } finally {
       forceUpdateVisibleArea();
-      // 保证图片隐藏期至少 SKELETON_MIN_DISPLAY_MS，让眼睛有缓冲窗口（normal 分支瞬间跑完）
+      // 保证图片隐藏期至少 SKELETON_MIN_DISPLAY_MS，让眼睛有缓冲窗口（缓存命中时 ensureDays 瞬间跑完）
       await waitMinDisplay(jumpStartTime);
       forceNormalMode(scrollContainer.value?.scrollTop);
       resumeScrollAnchor?.();

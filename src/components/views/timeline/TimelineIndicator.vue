@@ -53,7 +53,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'drag-scroll', progress: number, source?: DragScrollSource): void;
-  (e: 'jump-to-period', year: number, month: number): void;
+  (e: 'jump-to-period', year: number, month: number, day?: number): void;
   (e: 'jump-to-year', year: number): void;
 }>();
 
@@ -79,6 +79,7 @@ const containerHeight = ref(0);
 const lastHoverTopPct = ref('0%');
 const lastHoverYear = ref(new Date().getFullYear());
 const lastHoverMonth = ref(0);
+const lastHoverDay = ref(1);
 
 // ResizeObserver 实例
 let resizeObserver: ResizeObserver | null = null;
@@ -247,21 +248,30 @@ const visibleYearSections = computed<YearSection[]>(() => {
 });
 
 /**
- * 根据进度位置匹配对应的年月
+ * 根据进度位置匹配对应的年月日
+ * day 由月内进度线性估算：指示器在该月 segment 内的位置比例 × 月天数，向上取整到 [1, daysInMonth]
+ * Google Photos 风格：精度"大概那附近就行"，不保证命中具体某天，但能显示并跳到大致日期
  */
-function resolveDateInfo(pos: number): { year: number; month: number } {
+function resolveDateInfo(pos: number): { year: number; month: number; day: number } {
   const segments = monthSegments.value;
   if (segments.length === 0) {
-    return { year: new Date().getFullYear(), month: 0 };
+    return { year: new Date().getFullYear(), month: 0, day: 1 };
   }
   for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i];
+    const segmentStart = segment.position;
     const segmentEnd = i + 1 < segments.length ? segments[i + 1].position : 1;
     if (pos < segmentEnd) {
-      return { year: segments[i].year, month: segments[i].month };
+      const span = Math.max(segmentEnd - segmentStart, Number.EPSILON);
+      const ratio = Math.max(0, Math.min(1, (pos - segmentStart) / span));
+      const daysInMonth = new Date(segment.year, segment.month + 1, 0).getDate();
+      const day = Math.max(1, Math.min(daysInMonth, Math.round(1 + ratio * (daysInMonth - 1))));
+      return { year: segment.year, month: segment.month, day };
     }
   }
   const last = segments[segments.length - 1];
-  return { year: last.year, month: last.month };
+  const daysInMonth = new Date(last.year, last.month + 1, 0).getDate();
+  return { year: last.year, month: last.month, day: daysInMonth };
 }
 
 /**
@@ -273,6 +283,7 @@ watch(hoverPosition, (pos) => {
   const info = resolveDateInfo(pos);
   lastHoverYear.value = info.year;
   lastHoverMonth.value = info.month;
+  lastHoverDay.value = info.day;
 });
 
 /**
@@ -325,7 +336,7 @@ function handleClick() {
 
   const info = resolveDateInfo(hoverPosition.value);
   // 点击统一走跳转流程；缓存命中时也需骨架屏 300ms 缓冲，避免瞬移晃眼
-  emit('jump-to-period', info.year, info.month);
+  emit('jump-to-period', info.year, info.month, info.day);
 }
 
 function handleYearClick(year: number, e: MouseEvent) {
@@ -434,6 +445,7 @@ onUnmounted(() => {
       :show-bubble="showBubble"
       :year="lastHoverYear"
       :month="lastHoverMonth"
+      :day="lastHoverDay"
       @drag-start="startDrag"
     />
 

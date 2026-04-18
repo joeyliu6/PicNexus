@@ -17,6 +17,13 @@
   animation: timeline-skeleton-shimmer 1.5s linear infinite;
 }
 
+/* 跳转期间 header 文字一起遮：跳转分两步（prefetch → ensureDays）中间 layout 重算会让
+ * scrollTop 对应的 header 从"目标日"漂移到"邻近日"再回来，不盖文字会看到日期闪跳 */
+.timeline-view.is-jumping .group-header {
+  opacity: 0;
+  transition: opacity var(--duration-medium) ease-in-out;
+}
+
 @keyframes timeline-skeleton-shimmer {
   0% { background-position: 100% 0; }
   100% { background-position: -100% 0; }

@@ -20,6 +20,8 @@ defineProps<{
   year: number;
   /** 气泡显示的月份（对应最后一次 hover 位置） */
   month: number;
+  /** 气泡显示的日（按月内进度线性估算，精度"大概那附近"） */
+  day: number;
 }>();
 
 const emit = defineEmits<{
@@ -41,7 +43,7 @@ const emit = defineEmits<{
         @mousedown="emit('drag-start', $event)"
       >
         <div class="scrubber-bubble">
-          <span class="bubble-date">{{ year }}年{{ month + 1 }}月</span>
+          <span class="bubble-date">{{ year }}年{{ month + 1 }}月{{ day }}日</span>
           <div class="bubble-indicator"></div>
         </div>
       </div>
