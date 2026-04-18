@@ -176,7 +176,8 @@ const { suspend: suspendScrollAnchor, resume: resumeScrollAnchor } = useScrollAn
 const isCalculatingVisible = useDebouncedTrue(isCalculating, 300);
 
 const {
-  showSkeleton,
+  isJumping,
+  isFirstLoadSkeleton,
   skeletonLayout,
   loadedMonthsSet,
   monthLayoutPositions,
@@ -269,9 +270,9 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
 </script>
 
 <template>
-  <div class="timeline-view">
+  <div class="timeline-view" :class="{ 'is-jumping': isJumping || isFirstLoadSkeleton }">
     <!-- Empty State -->
-    <div v-if="groups.length === 0 && !isLoadingStats && !showSkeleton" class="empty-state-wrapper">
+    <div v-if="groups.length === 0 && !isLoadingStats" class="empty-state-wrapper">
       <EmptyState
         :icon="favoritesOnly ? 'pi pi-star' : 'pi pi-images'"
         :title="favoritesOnly ? '暂无收藏' : '暂无上传记录'"
@@ -310,7 +311,7 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
 
         <Transition name="t-fade-out">
           <TimelineSkeleton
-            v-show="isLoadingStats || showSkeleton"
+            v-show="isLoadingStats && groups.length === 0"
             class="timeline-skeleton-overlay"
             :layout="skeletonLayout"
           />
@@ -375,6 +376,37 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
   display: flex;
   background: var(--bg-app);
   overflow: hidden;
+}
+
+/* 跳转期间：图片透明 + 微缩（0.96）→ 露出 photo-item 灰底；撤 class 后 opacity 0→1、scale 0.96→1 同时 fade，
+   模拟谷歌相册"呼吸感"入场，transition 定义在 .photo-img 自身 */
+.timeline-view.is-jumping :deep(.photo-img.loaded) {
+  opacity: 0;
+  transform: scale(0.96);
+}
+
+/* 跳转期间给 photo-item 加骨架扫光，避免静态灰块显呆 */
+.timeline-view.is-jumping :deep(.photo-item) {
+  background-image: linear-gradient(90deg, var(--bg-secondary) 0%, var(--bg-titlebar) 50%, var(--bg-secondary) 100%);
+  background-size: 200% 100%;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 骨架扫光 1.5s 无对应 duration token */
+  animation: timeline-skeleton-shimmer 1.5s linear infinite;
+}
+
+@keyframes timeline-skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timeline-view.is-jumping :deep(.photo-item) {
+    animation: none;
+  }
+
+  /* 前庭敏感用户：保留 opacity 淡入但抑制 scale 过渡 */
+  .timeline-view.is-jumping :deep(.photo-img.loaded) {
+    transform: none;
+  }
 }
 
 .timeline-scroll-area {
