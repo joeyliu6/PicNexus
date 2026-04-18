@@ -12,6 +12,7 @@ import {
   type Ref, type ComputedRef, type ShallowRef,
 } from 'vue';
 import { historyDB, type DayStats, type DayStatsFilter } from '../../services/HistoryDatabase';
+import type { AspectRatioRow } from '../../services/database/TimelineQueryService';
 import { onCacheEventType, type HistoryEventData } from '../../events/cacheEvents';
 import { createLogger } from '../../utils/logger';
 import type { ImageMeta } from '../../types/image-meta';
@@ -20,17 +21,43 @@ import type { PhotoGroup } from './types';
 
 const log = createLogger('DayPagination');
 
+/**
+ * 全量预取阈值：照片总数超过此值时跳过 getAllAspectRatios 全量查询，
+ * 回落到懒加载（跳转时按 ±2 月 prefetchDayAspectRatios）降级模式。
+ *
+ * 20 万张对应 ~7MB 内存 + ~1-2s 查询，是"全量预取"方案的性价比拐点。
+ * 超过此阈值后精准骨架的预取成本 > 收益，懒加载代价（200-500ms/跳）可接受。
+ */
+const MAX_PRELOAD_THRESHOLD = 200_000;
+
+/** 懒加载降级模式下的 LRU 容量上限（约 40KB × 20 张 = 7MB 封顶） */
+const MAX_ASPECT_RATIOS_CACHE = 200;
+
 /** 从毫秒时间戳提取 dayKey（month 0-11，与 DayStats 一致） */
 function tsToDayKey(ts: number): string {
   const d = new Date(ts);
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
-/** 格式化日期为中文标签 */
+/**
+ * 格式化日期为中文标签（带 memoization）
+ *
+ * 为什么必须 memo：groups computed 每次重算都会遍历 3485 天全量 map，
+ * `toLocaleDateString('zh-CN', ...)` 每次 ~65μs，3485 次 ≈ 220ms，
+ * 会阻塞主线程 ~220ms，导致跳转期间视口黑屏、骨架延迟显示。
+ * label 是纯函数（(y,m,d) → string），永不过期，永久缓存即可。
+ */
+const dayLabelCache = new Map<string, string>();
 function formatDayLabel(year: number, month: number, day: number): string {
-  return new Date(year, month, day).toLocaleDateString('zh-CN', {
-    year: 'numeric', month: 'long', day: 'numeric',
-  });
+  const key = `${year}-${month}-${day}`;
+  let label = dayLabelCache.get(key);
+  if (label === undefined) {
+    label = new Date(year, month, day).toLocaleDateString('zh-CN', {
+      year: 'numeric', month: 'long', day: 'numeric',
+    });
+    dayLabelCache.set(key, label);
+  }
+  return label;
 }
 
 export interface UseTimelineDayPaginationParams {
@@ -53,12 +80,14 @@ export interface UseTimelineDayPaginationReturn {
   isLoadingStats: Ref<boolean>;
   isDayLoading: Ref<boolean>;
   hasLoadedStats: Ref<boolean>;
+  /** 全量 aspectRatios 是否已预取完成（规模防护降级模式下恒为 false） */
+  isFullyPreloaded: Ref<boolean>;
 
   loadDayStats(): Promise<void>;
   /** 合并查询 dayKeys 对应的 metas，不重复加载 */
   ensureDaysLoaded(dayKeys: string[]): Promise<void>;
-  /** 使某天失效（单条变更后调用，下次 ensureDaysLoaded 会重新加载） */
-  invalidateDay(dayKey: string): void;
+  /** 预取指定 dayKeys 的 aspectRatios（降级模式或 isFullyPreloaded=false 时使用） */
+  prefetchDayAspectRatios(dayKeys: string[]): Promise<void>;
   /** 清空所有缓存并重载 dayStats（history-updated/cleared 时调用） */
   reloadAll(): Promise<void>;
   /** dayStats 降序中比 dayKey 更早的那天的 key（灯箱 prev 跨日） */
@@ -74,10 +103,24 @@ export function useTimelineDayPagination(
 
   const dayStats = shallowRef<DayStats[]>([]);
   const dayMetaCache = new Map<string, ImageMeta[]>();
+  // v7：全量 aspectRatios 缓存，dayKey → 按 (timestamp DESC, id DESC) 排序的 AspectRatioRow[]
+  // - 正常模式：timeline 挂载时 getAllAspectRatios 一次性填满，永不淘汰
+  // - 降级模式（totalCount > MAX_PRELOAD_THRESHOLD）：按需 prefetchDayAspectRatios 填充 + LRU 淘汰
+  // - id 字段用于增量删除按 id 精确移除
+  const dayAspectRatiosCache = new Map<string, AspectRatioRow[]>();
+  // 每个 bucket 对应的 number[] 视图，按 bucket 引用弱映射。bucket 被替换时自动 GC。
+  const aspectNumbersView = new WeakMap<AspectRatioRow[], number[]>();
+  // aspectRatios cache 版本号：filter 变化时自增，在途 prefetch/preload 结果若 version 失配直接丢弃
+  let aspectRatiosVersion = 0;
   const loadedDayKeys = ref(new Set<string>());
+  // aspectRatios cache 的响应式"变更信号"：cache 更新后递增，用于 groups computed 重新透传 aspectRatios
+  const aspectRatiosRevision = ref(0);
   const isLoadingStats = ref(false);
   const isDayLoading = ref(false);
   const hasLoadedStats = ref(false);
+  // 全量预取完成标志：true 时 handleJumpToPeriod 可跳过 prefetch 等待直接落点
+  // false = 两种情形：① preload 进行中 ② 超阈值降级永不预取（外部无需区分,跳转逻辑都走 v6 路径）
+  const isFullyPreloaded = ref(false);
 
   let statsVersion = 0;
   let dayLoadVersion = 0;
@@ -86,20 +129,65 @@ export function useTimelineDayPagination(
 
   const totalCount = computed(() => dayStats.value.reduce((sum, d) => sum + d.count, 0));
 
+  // groups computed 里 stable 字段（id/label/year/month/day/date/expectedCount）
+  // 在 dayStats 不变时就是同一份数据；但 groups 会被 loadedDayKeys / aspectRatiosRevision 触发频繁重算。
+  // 全量重建 3485 天 × (new Date + toLocaleDateString + 字符串拼接) ≈ 数百 ms，阻塞主线程导致跳转黑屏。
+  // 用单 Map 缓存这些 stable 字段，dayStats 的 (year,month,day) 不变即可复用。
+  interface GroupStableFields {
+    id: string;
+    label: string;
+    year: number;
+    month: number;
+    day: number;
+    date: Date;
+    expectedCount: number;
+    aspectRatioSum: number;
+  }
+  const groupStableCache = new Map<string, GroupStableFields>();
+
   const groups = computed<PhotoGroup[]>(() => {
     const loaded = loadedDayKeys.value; // 作为响应依赖
+    // 建立对 aspectRatiosRevision 的响应依赖：prefetchDayAspectRatios 递增时 groups 重算，透传新命中的 aspectRatios
+    void aspectRatiosRevision.value;
     return dayStats.value.map(stat => {
       const dayKey = `${stat.year}-${stat.month}-${stat.day}`;
+      let stable = groupStableCache.get(dayKey);
+      if (!stable || stable.expectedCount !== stat.count || stable.aspectRatioSum !== stat.aspectRatioSum) {
+        stable = {
+          id: dayKey,
+          label: formatDayLabel(stat.year, stat.month, stat.day),
+          year: stat.year,
+          month: stat.month,
+          day: stat.day,
+          date: new Date(stat.year, stat.month, stat.day),
+          expectedCount: stat.count,
+          aspectRatioSum: stat.aspectRatioSum,
+        };
+        groupStableCache.set(dayKey, stable);
+      }
+      const isSkeleton = !loaded.has(dayKey);
+      // 仅 skeleton 天透传 aspectRatios；通过 WeakMap 视图避免每次 groups 重算都 .map 一次
+      const cached = isSkeleton ? dayAspectRatiosCache.get(dayKey) : undefined;
+      let aspectRatios: number[] | undefined;
+      if (cached) {
+        aspectRatios = aspectNumbersView.get(cached);
+        if (!aspectRatios) {
+          aspectRatios = cached.map(r => r.aspectRatio);
+          aspectNumbersView.set(cached, aspectRatios);
+        }
+      }
       return {
-        id: dayKey,
-        label: formatDayLabel(stat.year, stat.month, stat.day),
-        year: stat.year,
-        month: stat.month,
-        day: stat.day,
-        date: new Date(stat.year, stat.month, stat.day),
+        id: stable.id,
+        label: stable.label,
+        year: stable.year,
+        month: stable.month,
+        day: stable.day,
+        date: stable.date,
+        expectedCount: stable.expectedCount,
+        aspectRatioSum: stable.aspectRatioSum,
         items: dayMetaCache.get(dayKey) ?? [],
-        expectedCount: stat.count,
-        isSkeleton: !loaded.has(dayKey),
+        isSkeleton,
+        aspectRatios,
       };
     });
   });
@@ -112,19 +200,119 @@ export function useTimelineDayPagination(
     };
   }
 
+  /**
+   * v7：timeline 挂载时并行加载 dayStats + 全量 aspectRatios
+   *
+   * 流程：
+   * 1. 先查 dayStats（轻量聚合，<200ms），拿到 totalCount
+   * 2. totalCount ≤ MAX_PRELOAD_THRESHOLD → 顺序拉 getAllAspectRatios 填满 cache
+   *    （两个查询不真正并行，避免超阈值时浪费 SQL 成本；但两个 SQL 都是短查询，感知无差异）
+   * 3. totalCount > MAX_PRELOAD_THRESHOLD → 打 log.warn，进入降级模式，跳转走懒加载
+   *
+   * 之所以顺序而非并行：超阈值用户（>20万张）如果并行查完整 aspectRatios 会浪费 3-10 秒 SQL
+   * 时间 + 内存，然后整批丢弃。顺序让这批用户直接跳过全量查询。
+   */
   async function loadDayStats(): Promise<void> {
     const version = ++statsVersion;
+    const aspectVersion = aspectRatiosVersion;
     isLoadingStats.value = true;
+    isFullyPreloaded.value = false;
     try {
       const result = await historyDB.getDayStats(buildFilter());
       if (version !== statsVersion) return;
       dayStats.value = result;
       hasLoadedStats.value = true;
       log.debug(`dayStats 加载完成: ${result.length} 天`);
+
+      const totalCount = result.reduce((sum, d) => sum + d.count, 0);
+      if (totalCount > MAX_PRELOAD_THRESHOLD) {
+        log.warn(
+          `照片总数 ${totalCount} 超过全量预取阈值 ${MAX_PRELOAD_THRESHOLD},`
+          + `切换懒加载降级模式（跳转时走 ±2 月 prefetch）`,
+        );
+        return;
+      }
+
+      // 全量 aspectRatios 预取（20 万以内 < 2s，HDD 可能略慢但 overlay 全程遮盖）
+      const t0 = performance.now();
+      const rows = await historyDB.getAllAspectRatios(buildFilter());
+      if (version !== statsVersion || aspectVersion !== aspectRatiosVersion) return;
+
+      populateFullAspectCache(rows);
+      isFullyPreloaded.value = true;
+      aspectRatiosRevision.value++;
+      log.info(`aspectRatios 全量预取: ${rows.length} 条,耗时 ${(performance.now() - t0).toFixed(1)}ms`);
     } catch (e) {
       if (version === statsVersion) log.error('loadDayStats 失败:', e);
     } finally {
       if (version === statsVersion) isLoadingStats.value = false;
+    }
+  }
+
+  /** 把 getAllAspectRatios 返回的扁平 rows 按 dayKey 分桶写入 cache（内部顺序保留 timestamp DESC, id DESC） */
+  function populateFullAspectCache(rows: AspectRatioRow[]): void {
+    dayAspectRatiosCache.clear();
+    for (const r of rows) {
+      const key = tsToDayKey(r.timestamp);
+      const bucket = dayAspectRatiosCache.get(key);
+      if (bucket) bucket.push(r);
+      else dayAspectRatiosCache.set(key, [r]);
+    }
+  }
+
+  /**
+   * 按需预取 aspectRatios（懒加载降级模式下 handleJumpToPeriod 调用）。
+   *
+   * v7 行为：
+   * - isFullyPreloaded=true（正常模式）→ **no-op**，cache 已全量命中
+   * - isFullyPreloaded=false 且 isPreloadDowngraded=true（>20 万张）→ LRU 预取 + 淘汰
+   * - isPreloadDowngraded=false 但 isFullyPreloaded 还没到 true（首屏 preload 进行中）→ LRU 兜底
+   */
+  async function prefetchDayAspectRatios(dayKeys: string[]): Promise<void> {
+    if (isFullyPreloaded.value) return; // 全量 cache 已就绪,no-op
+    const needed = dayKeys.filter(k => !dayAspectRatiosCache.has(k));
+    if (needed.length === 0) return;
+
+    const statsIndex = new Map(dayStats.value.map(d => [`${d.year}-${d.month}-${d.day}`, d]));
+    const neededStats = needed.map(k => statsIndex.get(k)).filter((s): s is DayStats => !!s);
+    if (neededStats.length === 0) return;
+
+    const startTs = Math.min(...neededStats.map(s => s.minTimestamp));
+    const endTs = Math.max(...neededStats.map(s => s.maxTimestamp));
+    const version = aspectRatiosVersion;
+
+    try {
+      const rows = await historyDB.getDayAspectRatiosByRange(startTs, endTs, buildFilter());
+      if (version !== aspectRatiosVersion) return;
+      // await 期间全量预取可能已完成：此时 cache 已填满 3000+ 天，若继续执行 LRU 裁剪
+      // 会把 size 截到 MAX_ASPECT_RATIOS_CACHE (200) 条，永久破坏"全量精准骨架"承诺。
+      // 注意：populateFullAspectCache 不 bump aspectRatiosVersion，所以上一行检查捕获不到。
+      if (isFullyPreloaded.value) return;
+
+      const buckets = new Map<string, AspectRatioRow[]>();
+      for (const r of rows) {
+        const key = tsToDayKey(r.timestamp);
+        const arr = buckets.get(key);
+        if (arr) arr.push(r);
+        else buckets.set(key, [r]);
+      }
+
+      // 写入 cache：先 delete 再 set → 移到 Map 末尾（LRU 最新）
+      for (const [key, bucket] of buckets) {
+        dayAspectRatiosCache.delete(key);
+        dayAspectRatiosCache.set(key, bucket);
+      }
+
+      // LRU 淘汰（仅降级模式生效；正常模式此函数短路不进入）
+      while (dayAspectRatiosCache.size > MAX_ASPECT_RATIOS_CACHE) {
+        const firstKey = dayAspectRatiosCache.keys().next().value;
+        if (!firstKey) break;
+        dayAspectRatiosCache.delete(firstKey);
+      }
+
+      aspectRatiosRevision.value++;
+    } catch (e) {
+      if (version === aspectRatiosVersion) log.warn('prefetchDayAspectRatios 失败:', e);
     }
   }
 
@@ -207,13 +395,6 @@ export function useTimelineDayPagination(
     }
   }
 
-  function invalidateDay(dayKey: string): void {
-    dayMetaCache.delete(dayKey);
-    const next = new Set(loadedDayKeys.value);
-    next.delete(dayKey);
-    loadedDayKeys.value = next;
-  }
-
   /**
    * 按 id 从本地缓存增量移除（删除事件走这里，不走 reloadAll）
    * - 从 dayMetaCache 每个桶过滤掉对应 id
@@ -237,9 +418,25 @@ export function useTimelineDayPagination(
       }
     }
 
-    // 只要有 id 没在缓存命中就兜底 reloadAll；否则未加载天的 dayStats.count 会失真
+    // v7：同步清理 aspectRatios cache（支持链接检测批量删、迁移面板删等场景的精确移除）
+    // - 全量预取模式下所有 day 都在 cache 里,按 id 精准过滤
+    // - 降级模式下部分 day 在 cache,过滤到空则从 Map 删除节省内存
+    let aspectModified = false;
+    for (const [dayKey, bucket] of dayAspectRatiosCache) {
+      const before = bucket.length;
+      const filtered = bucket.filter(row => !idSet.has(row.id));
+      if (filtered.length !== before) {
+        if (filtered.length > 0) dayAspectRatiosCache.set(dayKey, filtered);
+        else dayAspectRatiosCache.delete(dayKey);
+        aspectModified = true;
+      }
+    }
+    if (aspectModified) aspectRatiosRevision.value++;
+
+    // 只要有 id 没在 dayMetaCache 命中就兜底 reloadAll；否则未加载天的 dayStats.count 会失真
+    // 注意：即使 aspectCache 命中了（全量预取模式）也不能代替兜底，dayStats.count 仍需精确维护
     if (matchedCount < ids.length) {
-      log.debug(`removeItemsByIds: 仅命中 ${matchedCount}/${ids.length}，走 reloadAll 兜底`);
+      log.debug(`removeItemsByIds: dayMetaCache 仅命中 ${matchedCount}/${ids.length}，走 reloadAll 兜底`);
       void reloadAll();
       return;
     }
@@ -256,6 +453,7 @@ export function useTimelineDayPagination(
         if (s.count > 0) return true;
         const key = `${s.year}-${s.month}-${s.day}`;
         dayMetaCache.delete(key);
+        dayAspectRatiosCache.delete(key);
         nextLoaded.delete(key);
         return false;
       });
@@ -272,6 +470,10 @@ export function useTimelineDayPagination(
    */
   async function reloadAll(): Promise<void> {
     dayLoadVersion++;
+    // aspectRatios cache 里缓存的 count 可能已过期（新增/删除改变了天内数量/顺序），全清最稳
+    aspectRatiosVersion++;
+    dayAspectRatiosCache.clear();
+    isFullyPreloaded.value = false; // loadDayStats 完成后会重置为 true（若未超阈值）
     const oldCountByKey = new Map<string, number>();
     for (const s of dayStats.value) {
       oldCountByKey.set(`${s.year}-${s.month}-${s.day}`, s.count);
@@ -322,15 +524,26 @@ export function useTimelineDayPagination(
   // loadDayStats 内部的 statsVersion 会自动作废在途的旧请求
   watch([filter, searchTerm, favoritesOnly], () => {
     dayLoadVersion++;
+    aspectRatiosVersion++;
     dayMetaCache.clear();
+    dayAspectRatiosCache.clear();
     loadedDayKeys.value = new Set();
+    isFullyPreloaded.value = false;
     void loadDayStats();
   });
 
-  // visible 首次变 true → 触发首次加载
+  // v7：timeline 组件 mounted 就开始预加载,不等 visible=true
+  // HistoryView 用 KeepAlive + v-show 同时挂载三个子 view,TimelineView 在表格视图时
+  // 已经处于 mounted 状态。提前预加载让用户切到 timeline 时零等待。
+  // 代价：用户如果从不开 timeline,浪费 1-2s SQL + 5MB 内存（对图片管理工具可接受）。
+  // 即使 visible=false 时 filter 变化也会触发重载（上面的 watch），逻辑等价。
+  //
+  // 保留 visible watch 作为兜底：极端场景（组件挂载时 loadDayStats 竞态失败）下
+  // 用户切到 timeline 视图仍会补触发一次加载。
+  if (!hasLoadedStats.value) void loadDayStats();
   watch(visible, (v) => {
     if (v && !hasLoadedStats.value) void loadDayStats();
-  }, { immediate: true });
+  });
 
   // 历史记录变更事件
   // - updated（新增/重试）：走 reloadAll，新 day 会以 skeleton 进入；已加载天保留不闪
@@ -352,6 +565,7 @@ export function useTimelineDayPagination(
     for (const fn of unlistens) fn();
     unlistens.length = 0;
     dayMetaCache.clear();
+    dayAspectRatiosCache.clear();
   });
 
   return {
@@ -363,9 +577,10 @@ export function useTimelineDayPagination(
     isLoadingStats,
     isDayLoading,
     hasLoadedStats,
+    isFullyPreloaded,
     loadDayStats,
     ensureDaysLoaded,
-    invalidateDay,
+    prefetchDayAspectRatios,
     reloadAll,
     findDayBefore,
     findDayAfter,
