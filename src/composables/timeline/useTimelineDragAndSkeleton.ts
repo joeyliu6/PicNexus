@@ -13,6 +13,8 @@ const log = createLogger('TimelineJump');
 const SKELETON_MIN_DISPLAY_MS = 400;
 /** 首次加载专用 min-display（毫秒）：比跳转更长，给网络下载多留时间 → 撤 class 时更多图片已就绪，一起淡入更稳 */
 const FIRST_LOAD_MIN_DISPLAY_MS = 700;
+/** ensureDaysLoaded 超时上限（毫秒）：慢 IO / DB 卡死时放弃等，避免骨架期挂死 */
+const ENSURE_DAYS_TIMEOUT_MS = 2000;
 /** 拖拽结束延迟（毫秒） */
 const DRAG_END_DELAY_MS = 50;
 /** 侧边栏宽度预估（px），用于骨架屏容器宽度计算 */
@@ -229,6 +231,17 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
     return remaining > 0 ? new Promise(r => setTimeout(r, remaining)) : Promise.resolve();
   }
 
+  /** ensureDaysLoaded 加超时兜底：慢 IO 时不要让骨架期挂死，超时直接放弃等 */
+  function ensureDaysWithTimeout(keys: string[]): Promise<void> {
+    return Promise.race([
+      ensureDaysLoaded(keys),
+      new Promise<void>(resolve => setTimeout(() => {
+        log.warn(`ensureDaysLoaded 超时 ${ENSURE_DAYS_TIMEOUT_MS}ms，跳转放弃等待`);
+        resolve();
+      }, ENSURE_DAYS_TIMEOUT_MS)),
+    ]);
+  }
+
   /**
    * 跳转到指定年月日（day 为月内进度估算，精度"那附近"；未传则回退为月最新一天）
    * - isFullyPreloaded=true：layout 已是精准骨架，单次 scrollTop 直接落点，真图后台加载
@@ -278,7 +291,8 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
         }
         // await 真 items 加载完再撤 is-jumping：原 setTimeout 400ms 后撤 class 但 items 还没到，会露出底层
         // photo-slot-skeleton 静态灰块与 shimmer 骨架断裂。waitMinDisplay 在 finally 兜底 400ms，缓存命中不会闪。
-        await ensureDaysLoaded(loadKeys);
+        // ensureDaysWithTimeout 加 2s 超时兜底，慢 IO / DB 卡死不挂死骨架期
+        await ensureDaysWithTimeout(loadKeys);
       } else {
         const prefetchKeys = groups.value.filter(g => monthDelta(g.year, g.month) <= 2).map(g => g.id);
         const hitCache = monthGroups.every(g => loadedDayKeys.value.has(g.id));
@@ -288,7 +302,7 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
           await waitLayoutSettled();
         }
 
-        await ensureDaysLoaded(loadKeys);
+        await ensureDaysWithTimeout(loadKeys);
         await nextTick();
         await waitLayoutSettled();
         await nextTick();

@@ -66,3 +66,8 @@
     transform: none;
   }
 }
+
+/* 跳转中指示器鼠标变 wait 提示：告知用户"正在处理"，避免重复点击（重入守卫期间点击会被早退吞掉）*/
+.timeline-view.is-jumping .timeline-indicator {
+  cursor: wait;
+}
