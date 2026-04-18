@@ -21,7 +21,13 @@ import { setFavoriteQuery, batchSetFavoriteQuery, getFavoriteCountQuery, getFavo
 import { getLinkCheckInvalidQuery, getLinkCheckRestStreamQuery, batchUpdateLinkCheckStatusQuery } from './LinkCheckQuery';
 import { addSyncLogQuery, getSyncLogsQuery, clearSyncLogsQuery } from './SyncLogService';
 import { getItemsByBackupCountQuery, getBackupCountStatsQuery, getServiceDistributionQuery } from './MigrationQuery';
-import { getDayStatsQuery, getItemsByDayRangeQuery } from './TimelineQueryService';
+import {
+  getDayStatsQuery,
+  getItemsByDayRangeQuery,
+  getDayAspectRatiosByRangeQuery,
+  getAllAspectRatiosQuery,
+  type AspectRatioRow,
+} from './TimelineQueryService';
 import { createTablesAndIndexes, runMigrations } from './SchemaManager';
 import { ConnectionManager } from './ConnectionManager';
 import { exportHistoryToJson, importHistoryFromJson } from './ImportExportService';
@@ -452,6 +458,22 @@ class HistoryDatabase {
   async getItemsByDayRange(startTs: number, endTs: number, filter?: DayStatsFilter): Promise<ImageMeta[]> {
     const db = await this.connection.getDb();
     return getItemsByDayRangeQuery(db, startTs, endTs, filter);
+  }
+
+  /** 按时间戳闭区间只拉 aspect_ratio 列（跳转前懒加载预取降级路径） */
+  async getDayAspectRatiosByRange(
+    startTs: number,
+    endTs: number,
+    filter?: DayStatsFilter,
+  ): Promise<AspectRatioRow[]> {
+    const db = await this.connection.getDb();
+    return getDayAspectRatiosByRangeQuery(db, startTs, endTs, filter);
+  }
+
+  /** 全量拉 aspect_ratio（v7 时间轴挂载后台预取，超阈值时 useTimelineDayPagination 会跳过） */
+  async getAllAspectRatios(filter?: DayStatsFilter): Promise<AspectRatioRow[]> {
+    const db = await this.connection.getDb();
+    return getAllAspectRatiosQuery(db, filter);
   }
 
   /**
