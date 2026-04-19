@@ -46,7 +46,7 @@ defineExpose({
 <template>
   <div class="upload-queue-section">
     <div class="queue-header">
-      <h3 class="queue-title">
+      <h3 class="queue-title" :class="{ 'has-items': queueTotal > 0 }">
         <i class="pi pi-list"></i>
         <span>上传队列</span>
         <span v-if="queueTotal > 0" class="queue-count">{{ queueDone }}/{{ queueTotal }}</span>
@@ -106,14 +106,19 @@ defineExpose({
   align-items: center;
   gap: var(--space-sm-md);
   margin: 0;
-  font-size: var(--text-lg-xl);
+  font-size: var(--text-lg);
   font-weight: var(--weight-medium);
   color: var(--text-primary);
 }
 
 .queue-title i {
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+  transition: color var(--duration-normal) ease;
+}
+
+.queue-title.has-items i {
   color: var(--primary);
-  font-size: var(--text-xl);
 }
 
 .queue-count {
