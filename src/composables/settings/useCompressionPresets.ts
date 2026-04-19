@@ -14,8 +14,8 @@ import { useConfirm } from '../useConfirm';
 /** 最大预设数量 */
 const MAX_PRESETS = 5;
 
-/** 格式标签映射 */
-const FORMAT_LABEL: Record<string, string> = {
+/** 格式标签映射（输出格式英文 → 中文显示） */
+export const FORMAT_LABEL: Record<string, string> = {
   original: '原格式',
   webp: 'WebP',
   jpeg: 'JPEG',

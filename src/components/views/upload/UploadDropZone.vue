@@ -1,47 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import ToggleSwitch from 'primevue/toggleswitch';
 import Popover from 'primevue/popover';
 import type PopoverType from 'primevue/popover';
 import type { CompressionPreset } from '../../../config/types';
-
-// ── 压缩预设展开/收起动效（精确宽度过渡，避免 max-width 跳跃）──
-function onPresetEnter(el: Element) {
-  const elem = el as HTMLElement;
-  elem.style.width = '0';
-  elem.style.opacity = '0';
-  // 强制回流，确保起始状态生效
-  void elem.offsetWidth;
-  const targetWidth = elem.scrollWidth;
-  elem.style.transition = 'width 260ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 200ms ease';
-  elem.style.width = `${targetWidth}px`;
-  elem.style.opacity = '1';
-}
-
-function onPresetAfterEnter(el: Element) {
-  const elem = el as HTMLElement;
-  // 动画结束后释放固定宽度，允许自适应
-  elem.style.width = '';
-  elem.style.transition = '';
-  elem.style.opacity = '';
-}
-
-function onPresetLeave(el: Element) {
-  const elem = el as HTMLElement;
-  elem.style.width = `${elem.offsetWidth}px`;
-  elem.style.opacity = '1';
-  void elem.offsetWidth;
-  elem.style.transition = 'width 200ms cubic-bezier(0.4, 0, 1, 1), opacity 160ms ease';
-  elem.style.width = '0';
-  elem.style.opacity = '0';
-}
-
-function onPresetAfterLeave(el: Element) {
-  const elem = el as HTMLElement;
-  elem.style.width = '';
-  elem.style.transition = '';
-  elem.style.opacity = '';
-}
+import { FORMAT_LABEL } from '../../../composables/settings/useCompressionPresets';
+import CompressPopoverMenu from './CompressPopoverMenu.vue';
 
 interface Props {
   isDragging: boolean;
@@ -83,34 +46,36 @@ function handleUrlDownload(e: Event) {
   emit('url-download');
 }
 
-function handleCompressToggle(val: boolean) {
-  emit('update:compressionEnabled', val);
+function handleChipMainClick() {
+  // 切换开关时顺手收起 popover（如开着的话），避免状态切换后弹窗与新状态不匹配
+  presetPopoverRef.value?.hide();
+  emit('update:compressionEnabled', !props.compressionEnabled);
 }
 
-function togglePresetPopover(event: Event) {
+function toggleChipPopover(event: Event) {
   presetPopoverRef.value?.toggle(event);
 }
 
 function selectPreset(presetId: string) {
+  // 关闭态点击预设：自动启用压缩 + 选中（一步到位，避免"点了没反应"）
+  if (!props.compressionEnabled) {
+    emit('update:compressionEnabled', true);
+  }
   emit('update:activePresetId', presetId);
   presetPopoverRef.value?.hide();
 }
 
-function formatLabel(fmt: string): string {
-  if (fmt === 'original') return '原格式';
-  if (fmt === 'webp') return 'WebP';
-  return 'JPEG';
+function handleGoSettings() {
+  presetPopoverRef.value?.hide();
+  emit('go-compression-settings');
 }
 
-function formatPresetDesc(p: CompressionPreset): string {
-  return `${formatLabel(p.outputFormat)} · 质量 ${p.quality}`;
-}
-
-const presetTooltip = computed(() => {
+const chipTooltip = computed(() => {
+  if (!props.compressionEnabled) return '点击启用压缩';
   const p = props.activePreset;
-  if (!p) return '';
+  if (!p) return '点击切换压缩预设';
   const skip = p.skipIfSmallerKB > 0 ? `跳过 ${p.skipIfSmallerKB} KB 以下` : '全部压缩';
-  return `质量 ${p.quality} · ${formatLabel(p.outputFormat)} · ${skip}`;
+  return `质量 ${p.quality} · ${FORMAT_LABEL[p.outputFormat] ?? p.outputFormat} · ${skip}`;
 });
 </script>
 
@@ -141,56 +106,49 @@ const presetTooltip = computed(() => {
       </span>
     </div>
 
-    <!-- 压缩控件：右下角 -->
+    <!-- 压缩控件：右下角双区 Chip（主区 toggle + 箭头开 popover） -->
     <div class="compress-corner" @click.stop>
-      <ToggleSwitch
-        :modelValue="compressionEnabled"
-        @update:modelValue="handleCompressToggle"
-        class="compress-switch"
-      />
-      <span class="compress-label" v-tooltip.top="'更改将同步到全局设置'">压缩</span>
-      <Transition
-        @enter="onPresetEnter"
-        @after-enter="onPresetAfterEnter"
-        @leave="onPresetLeave"
-        @after-leave="onPresetAfterLeave"
+      <div
+        class="compress-chip"
+        :class="{ 'compress-chip-active': compressionEnabled }"
       >
-        <div v-if="compressionEnabled && activePreset" class="compress-preset-wrapper">
-          <button
-            class="compress-preset-trigger"
-            v-tooltip.top="presetTooltip"
-            @click.stop="togglePresetPopover"
-          >
-            {{ activePreset.name }}
-            <i class="pi pi-chevron-down compress-preset-chevron" />
-          </button>
-        </div>
-      </Transition>
-      <button
-        v-if="compressionEnabled"
-        class="compress-settings-btn"
-        v-tooltip.top="'压缩设置'"
-        @click.stop="emit('go-compression-settings')"
-      >
-        <i class="pi pi-cog" />
-      </button>
-    </div>
-
-    <!-- 预设切换 Popover -->
-    <Popover ref="presetPopoverRef">
-      <div class="preset-popover-list">
         <button
-          v-for="preset in presets"
-          :key="preset.id"
-          class="preset-popover-item"
-          :class="{ active: activePreset?.id === preset.id }"
-          @click="selectPreset(preset.id)"
+          class="chip-main"
+          :aria-label="compressionEnabled ? '关闭压缩' : '启用压缩'"
+          v-tooltip.top="chipTooltip"
+          @click="handleChipMainClick"
         >
-          <i class="pi pi-check preset-check" />
-          <span class="preset-item-name">{{ preset.name }}</span>
-          <span class="preset-item-desc">{{ formatPresetDesc(preset) }}</span>
+          <i
+            :class="['pi', compressionEnabled ? 'pi-bolt' : 'pi-ban']"
+            class="compress-chip-icon"
+          />
+          <span class="compress-chip-label">压缩</span>
+          <template v-if="compressionEnabled && activePreset">
+            <span class="compress-chip-dot">·</span>
+            <span class="compress-chip-preset">{{ activePreset.name }}</span>
+          </template>
+        </button>
+        <span class="chip-divider" aria-hidden="true" />
+        <button
+          class="chip-trigger"
+          aria-label="展开压缩选项"
+          v-tooltip.top="'切换预设 / 跳转设置'"
+          @click="toggleChipPopover"
+        >
+          <i class="pi pi-chevron-down compress-chip-chevron" />
         </button>
       </div>
+    </div>
+
+    <!-- 压缩控制 Popover：预设列表 + 设置入口（子组件） -->
+    <Popover ref="presetPopoverRef">
+      <CompressPopoverMenu
+        :presets="presets"
+        :active-preset="activePreset"
+        :compression-enabled="compressionEnabled"
+        @select-preset="selectPreset"
+        @go-settings="handleGoSettings"
+      />
     </Popover>
   </div>
 </template>
@@ -276,149 +234,127 @@ const presetTooltip = computed(() => {
   right: 16px;
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
   pointer-events: auto;
   cursor: default;
 }
 
-.compress-switch {
-  transform: scale(0.8);
-}
-
-.compress-label {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  user-select: none;
-  transition: transform var(--duration-normal) var(--ease-standard);
-  transform-origin: center;
-}
-
-/* 标签联动动效：压缩启用时轻微缩放 */
-.compress-corner:has(.compress-preset-wrapper) .compress-label {
-  animation: compress-label-bounce var(--duration-medium) var(--ease-standard);
-}
-
-@keyframes compress-label-bounce {
-  0% { transform: scale(1); }
-  40% { transform: scale(1.05); }
-  100% { transform: scale(1); }
-}
-
-/* 压缩设置快捷按钮 */
-.compress-settings-btn {
+/* 压缩状态 Chip 容器（边框+底色由容器统一负责，内部分主区+箭头两段） */
+.compress-chip {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: color var(--duration-fast), background var(--duration-fast);
-  padding: 0;
-  font-size: var(--text-sm);
-}
-
-.compress-settings-btn:hover {
-  color: var(--primary);
-  background: var(--primary-alpha-10);
-}
-
-/* 预设按钮容器：宽度过渡层 */
-.compress-preset-wrapper {
-  display: inline-flex;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-/* 预设切换触发按钮 */
-.compress-preset-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-2xs) var(--space-sm);
+  align-items: stretch;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm-md);
   background: var(--bg-card);
   color: var(--text-muted);
   font-size: var(--text-xs);
-  font-family: inherit;
-  cursor: pointer;
-  transition: all var(--duration-fast) ease;
+  overflow: hidden;
+  transition: color var(--duration-fast) ease,
+    background var(--duration-fast) ease,
+    border-color var(--duration-fast) ease;
   user-select: none;
 }
 
-.compress-preset-trigger:hover {
+.compress-chip:hover {
   border-color: var(--primary);
   color: var(--text-primary);
+}
+
+/* 启用态：蓝色调 */
+.compress-chip-active {
+  border-color: var(--primary-alpha-30);
+  background: var(--primary-alpha-10);
+  color: var(--text-primary);
+}
+
+.compress-chip-active:hover {
+  border-color: var(--primary);
+}
+
+/* 主区按钮（图标 + 标签 + 可选预设名）：点击 toggle */
+.chip-main {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-sm);
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--duration-fast) ease;
+}
+
+.chip-main:hover {
   background: var(--primary-alpha-5);
 }
 
-.compress-preset-chevron {
-  font-size: var(--text-2xs);
-  opacity: 0.6;
+.compress-chip-active .chip-main:hover {
+  background: var(--primary-alpha-15);
 }
 
-/* 预设按钮展开/关闭动效（由 JS hook 控制，CSS 仅保留 overflow 裁剪） */
-
-/* 预设 Popover 列表 */
-.preset-popover-list {
-  display: flex;
-  flex-direction: column;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 2px 列表行间距，介于 --space-2xs(2px) 与 --space-xs(4px) 之间，无精确 token */
-  gap: 2px;
-  min-width: 0;
+/* 主区与箭头之间的竖向分隔线 */
+.chip-divider {
+  width: 1px;
+  background: var(--border-subtle);
+  align-self: stretch;
+  transition: background var(--duration-fast) ease;
 }
 
-.preset-popover-item {
-  display: flex;
+.compress-chip-active .chip-divider {
+  background: var(--primary-alpha-30);
+}
+
+/* 箭头按钮（点击弹 Popover） */
+.chip-trigger {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-xs);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 5px 上下内边距，介于 --space-2xs(2px) 与 --space-xs(4px) 之间，无精确 token */
-  padding: 5px var(--space-sm);
+  justify-content: center;
+  padding: 0 var(--space-xs);
   border: none;
-  background: none;
-  width: 100%;
-  text-align: left;
-  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
   cursor: pointer;
+  transition: background var(--duration-fast) ease;
+}
+
+.chip-trigger:hover {
+  background: var(--primary-alpha-5);
+}
+
+.compress-chip-active .chip-trigger:hover {
+  background: var(--primary-alpha-15);
+}
+
+.compress-chip-icon {
   font-size: var(--text-xs);
-  font-family: inherit;
-  color: var(--text-primary);
-  transition: background var(--duration-fast);
-  white-space: nowrap;
+  color: var(--text-muted);
+  transition: color var(--duration-fast) ease;
 }
 
-.preset-popover-item:hover {
-  background: var(--primary-alpha-10);
-}
-
-.preset-popover-item.active {
-  background: var(--primary-alpha-8);
-}
-
-.preset-check {
-  font-size: var(--text-xs);
+.compress-chip-active .compress-chip-icon {
   color: var(--primary);
-  width: 12px;
-  flex-shrink: 0;
-  opacity: 0;
 }
 
-.preset-popover-item.active .preset-check {
-  opacity: 1;
-}
-
-.preset-item-name {
+.compress-chip-label {
   font-weight: var(--weight-medium);
 }
 
-.preset-item-desc {
-  margin-left: var(--space-sm);
-  font-size: var(--text-xs);
+.compress-chip-dot {
   color: var(--text-muted);
-  white-space: nowrap;
+  opacity: 0.5;
+}
+
+.compress-chip-preset {
+  color: var(--text-secondary);
+}
+
+.compress-chip-active .compress-chip-preset {
+  color: var(--text-primary);
+}
+
+.compress-chip-chevron {
+  font-size: var(--text-2xs);
+  opacity: 0.6;
 }
 </style>
