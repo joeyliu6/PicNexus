@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, toRef } from 'vue';
+import { ref, toRef, inject, watch, onMounted, type Ref } from 'vue';
 import ToggleSwitch from 'primevue/toggleswitch';
 
 import type { ImageCompressionConfig } from '../../config/types';
@@ -22,6 +22,21 @@ const expanded = ref(false);
 
 function toggleExpand() {
   expanded.value = !expanded.value;
+}
+
+// 外部跳转自动展开：当上游 set settingsTargetSection='imageCompression' 时主动展开本卡片
+const settingsTargetSection = inject<Ref<string | null> | null>('settingsTargetSection', null);
+
+function applyTargetSection() {
+  if (settingsTargetSection?.value === 'imageCompression') {
+    expanded.value = true;
+    settingsTargetSection.value = null;
+  }
+}
+
+onMounted(applyTargetSection);
+if (settingsTargetSection) {
+  watch(settingsTargetSection, applyTargetSection);
 }
 
 function updateCompression(patch: Partial<ImageCompressionConfig>) {

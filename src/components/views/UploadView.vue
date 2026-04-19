@@ -105,7 +105,7 @@ const filterVisibleServices = (services: string[]) =>
     healthStatusMap.value[s] !== 'unconfigured'
   );
 
-// 可见的私有图床（含自定义 S3）
+// 可见的私有存储（含自定义 S3）
 const visiblePrivateServices = computed(() => {
   const customIds = customS3Profiles.value.map(p => makeCustomS3Id(p.id));
   return filterVisibleServices([...PRIVATE_SERVICES, ...customIds]);
@@ -150,7 +150,7 @@ const navigateToSettings = () => {
 };
 
 const navigateToCompressionSettings = () => {
-  tauriEmit('navigate-to', { view: 'settings', tab: 'compression' });
+  tauriEmit('navigate-to', { view: 'settings', tab: 'compression', section: 'imageCompression' });
 };
 
 // 打开文件选择对话框

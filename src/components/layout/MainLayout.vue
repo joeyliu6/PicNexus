@@ -27,6 +27,10 @@ const currentViewComponent = computed(() => viewComponents[currentView.value]);
 const settingsTargetTab = ref<string | null>(null);
 provide('settingsTargetTab', settingsTargetTab);
 
+// 设置页面内需要展开的 section（用于跳转到 tab 后再展开内部折叠卡片）
+const settingsTargetSection = ref<string | null>(null);
+provide('settingsTargetSection', settingsTargetSection);
+
 const linkCheckTargetTab = ref<string | null>(null);
 provide('linkCheckTargetTab', linkCheckTargetTab);
 
@@ -42,7 +46,7 @@ onMounted(async () => {
   // payload 支持两种格式：
   // - 字符串: 'settings' | 'history'
   // - 对象: { view: 'settings', tab: 'hosting' }
-  unlistenNavigate = await listen<string | { view: string; tab?: string }>('navigate-to', (event) => {
+  unlistenNavigate = await listen<string | { view: string; tab?: string; section?: string }>('navigate-to', (event) => {
     const payload = event.payload;
 
     if (typeof payload === 'string') {
@@ -50,10 +54,13 @@ onMounted(async () => {
         handleNavigate(payload);
       }
     } else if (payload && typeof payload === 'object') {
-      const { view, tab } = payload;
+      const { view, tab, section } = payload;
       if (view === 'settings' || view === 'history' || view === 'upload' || view === 'link-check') {
         if (view === 'settings' && tab) {
           settingsTargetTab.value = tab;
+        }
+        if (view === 'settings' && section) {
+          settingsTargetSection.value = section;
         }
         if (view === 'link-check' && tab) {
           linkCheckTargetTab.value = tab;
