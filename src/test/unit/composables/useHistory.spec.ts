@@ -4,8 +4,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const {
   historyDBOpenMock,
-  historyDBGetMetaListMock,
-  historyDBGetFavoriteCountMock,
   historyDBGetFavoriteIdListMock,
   historyDBGetPageMock,
   historyDBSearchMock,
@@ -15,7 +13,6 @@ const {
   historyDBDeleteManyMock,
   historyDBClearMock,
   historyDBGetCountMock,
-  historyDBExportToJSONMock,
   historyDBGetTimePeriodStatsMock,
   toastShowConfigMock,
   confirmMock,
@@ -27,8 +24,6 @@ const {
   emitHistoryClearedMock,
 } = vi.hoisted(() => ({
   historyDBOpenMock: vi.fn().mockResolvedValue(undefined),
-  historyDBGetMetaListMock: vi.fn().mockResolvedValue([]),
-  historyDBGetFavoriteCountMock: vi.fn().mockResolvedValue(0),
   historyDBGetFavoriteIdListMock: vi.fn().mockResolvedValue([]),
   historyDBGetPageMock: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 100 }),
   historyDBSearchMock: vi.fn().mockResolvedValue({ items: [], total: 0 }),
@@ -38,7 +33,6 @@ const {
   historyDBDeleteManyMock: vi.fn().mockResolvedValue(undefined),
   historyDBClearMock: vi.fn().mockResolvedValue(undefined),
   historyDBGetCountMock: vi.fn().mockResolvedValue(0),
-  historyDBExportToJSONMock: vi.fn().mockResolvedValue('[]'),
   historyDBGetTimePeriodStatsMock: vi.fn().mockResolvedValue([]),
   toastShowConfigMock: vi.fn(),
   confirmMock: vi.fn().mockResolvedValue(true),
@@ -53,8 +47,6 @@ const {
 vi.mock('../../../services/HistoryDatabase', () => ({
   historyDB: {
     open: historyDBOpenMock,
-    getMetaList: historyDBGetMetaListMock,
-    getFavoriteCount: historyDBGetFavoriteCountMock,
     getFavoriteIdList: historyDBGetFavoriteIdListMock,
     getPage: historyDBGetPageMock,
     search: historyDBSearchMock,
@@ -64,7 +56,6 @@ vi.mock('../../../services/HistoryDatabase', () => ({
     deleteMany: historyDBDeleteManyMock,
     clear: historyDBClearMock,
     getCount: historyDBGetCountMock,
-    exportToJSON: historyDBExportToJSONMock,
     getTimePeriodStats: historyDBGetTimePeriodStatsMock,
     getAllStream: vi.fn(function* () { yield []; }),
   },
@@ -171,68 +162,11 @@ describe('useHistoryManager', () => {
     invalidateCache();
   });
 
-  // ─── loadHistory ───────────────────────────────────
-
-  describe('loadHistory', () => {
-    it('正常加载历史记录', async () => {
-      const mockMetas = [
-        { id: '1', timestamp: Date.now(), primaryUrl: 'https://a.com/1.jpg', isFavorited: false },
-        { id: '2', timestamp: Date.now(), primaryUrl: 'https://a.com/2.jpg', isFavorited: true },
-      ];
-      historyDBGetMetaListMock.mockResolvedValue(mockMetas);
-      historyDBGetFavoriteCountMock.mockResolvedValue(1);
-
-      const { loadHistory, imageMetas, totalCount, favoriteCount, favoriteSet } = useHistoryManager();
-      await loadHistory();
-
-      expect(historyDBOpenMock).toHaveBeenCalled();
-      expect(imageMetas.value).toEqual(mockMetas);
-      expect(totalCount.value).toBe(2);
-      expect(favoriteCount.value).toBe(1);
-      expect(favoriteSet.value.has('2')).toBe(true);
-      expect(favoriteSet.value.has('1')).toBe(false);
-    });
-
-    it('缓存有效时不重复加载', async () => {
-      historyDBGetMetaListMock.mockResolvedValue([]);
-      historyDBGetFavoriteCountMock.mockResolvedValue(0);
-
-      const { loadHistory } = useHistoryManager();
-      await loadHistory(); // 第一次加载
-      await loadHistory(); // 第二次应跳过
-
-      // getMetaList 只调用一次
-      expect(historyDBGetMetaListMock).toHaveBeenCalledTimes(1);
-    });
-
-    it('forceReload 忽略缓存', async () => {
-      historyDBGetMetaListMock.mockResolvedValue([]);
-      historyDBGetFavoriteCountMock.mockResolvedValue(0);
-
-      const { loadHistory } = useHistoryManager();
-      await loadHistory();
-      await loadHistory(true); // 强制重新加载
-
-      expect(historyDBGetMetaListMock).toHaveBeenCalledTimes(2);
-    });
-
-    it('加载失败时清空数据并显示错误', async () => {
-      historyDBGetMetaListMock.mockRejectedValue(new Error('DB 损坏'));
-
-      const { loadHistory, imageMetas } = useHistoryManager();
-      await loadHistory();
-
-      expect(imageMetas.value).toEqual([]);
-      expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.any(Object));
-    });
-  });
-
-  // ─── loadStats（轻量级加载） ────────────────────────
+  // ─── loadStats（唯一的模块级数据加载路径） ──────────
 
   describe('loadStats', () => {
-    it('只调用 COUNT / favoriteCount / favoriteIdList，不触发全量 JSON.parse', async () => {
+    it('只调用 COUNT / favoriteIdList，不触发全量查询', async () => {
       historyDBGetCountMock.mockResolvedValue(12345);
-      historyDBGetFavoriteCountMock.mockResolvedValue(7);
       historyDBGetFavoriteIdListMock.mockResolvedValue(['a', 'b', 'c', 'd', 'e', 'f', 'g']);
 
       const { loadStats, totalCount, favoriteCount, favoriteSet, isStatsLoaded } = useHistoryManager();
@@ -240,7 +174,6 @@ describe('useHistoryManager', () => {
 
       expect(historyDBGetCountMock).toHaveBeenCalledTimes(1);
       expect(historyDBGetFavoriteIdListMock).toHaveBeenCalledTimes(1);
-      expect(historyDBGetMetaListMock).not.toHaveBeenCalled();
       expect(totalCount.value).toBe(12345);
       expect(favoriteCount.value).toBe(7);
       expect(favoriteSet.value.has('a')).toBe(true);
@@ -251,7 +184,6 @@ describe('useHistoryManager', () => {
 
     it('缓存有效时跳过重复查询', async () => {
       historyDBGetCountMock.mockResolvedValue(1);
-      historyDBGetFavoriteCountMock.mockResolvedValue(0);
       historyDBGetFavoriteIdListMock.mockResolvedValue([]);
 
       const { loadStats } = useHistoryManager();
@@ -260,62 +192,58 @@ describe('useHistoryManager', () => {
 
       expect(historyDBGetCountMock).toHaveBeenCalledTimes(1);
     });
+
+    it('forceReload 忽略缓存', async () => {
+      historyDBGetCountMock.mockResolvedValue(1);
+      historyDBGetFavoriteIdListMock.mockResolvedValue([]);
+
+      const { loadStats } = useHistoryManager();
+      await loadStats();
+      await loadStats(true);
+
+      expect(historyDBGetCountMock).toHaveBeenCalledTimes(2);
+    });
   });
 
   // ─── toggleFavorite ────────────────────────────────
 
+  // sharedFavoriteSet 是模块级状态，测试间会有残留。断言采用"相对变化"而非绝对值，
+  // 并为每个用例使用独立 id，避免跨 it 冲突。
   describe('toggleFavorite', () => {
     it('乐观更新：收藏后立即反映到 favoriteSet', async () => {
-      const mockMetas = [
-        { id: '1', timestamp: Date.now(), primaryUrl: 'u', isFavorited: false },
-      ];
-      historyDBGetMetaListMock.mockResolvedValue(mockMetas);
-      historyDBGetFavoriteCountMock.mockResolvedValue(0);
+      const { toggleFavorite, favoriteSet, favoriteCount } = useHistoryManager();
+      const countBefore = favoriteCount.value;
 
-      const { loadHistory, toggleFavorite, favoriteSet, favoriteCount } = useHistoryManager();
-      await loadHistory();
-
-      const result = await toggleFavorite('1');
+      const result = await toggleFavorite('toggle-optimistic');
 
       expect(result).toBe(true); // 从 false → true
-      expect(favoriteSet.value.has('1')).toBe(true);
-      expect(favoriteCount.value).toBe(1);
-      expect(historyDBSetFavoriteMock).toHaveBeenCalledWith('1', true);
+      expect(favoriteSet.value.has('toggle-optimistic')).toBe(true);
+      expect(favoriteCount.value).toBe(countBefore + 1);
+      expect(historyDBSetFavoriteMock).toHaveBeenCalledWith('toggle-optimistic', true);
     });
 
     it('DB 失败时回滚到原始状态', async () => {
-      const mockMetas = [
-        { id: '1', timestamp: Date.now(), primaryUrl: 'u', isFavorited: false },
-      ];
-      historyDBGetMetaListMock.mockResolvedValue(mockMetas);
-      historyDBGetFavoriteCountMock.mockResolvedValue(0);
       historyDBSetFavoriteMock.mockRejectedValue(new Error('DB 错误'));
 
-      const { loadHistory, toggleFavorite, favoriteSet, favoriteCount } = useHistoryManager();
-      await loadHistory();
+      const { toggleFavorite, favoriteSet, favoriteCount } = useHistoryManager();
+      const idsBefore = Array.from(favoriteSet.value).sort();
+      const countBefore = favoriteCount.value;
 
-      await expect(toggleFavorite('1')).rejects.toThrow('DB 错误');
-      expect(favoriteSet.value.has('1')).toBe(false); // 回滚
-      expect(favoriteCount.value).toBe(0);
+      await expect(toggleFavorite('toggle-rollback')).rejects.toThrow('DB 错误');
+      expect(Array.from(favoriteSet.value).sort()).toEqual(idsBefore);
+      expect(favoriteCount.value).toBe(countBefore);
     });
 
     it('防重入：同一 ID 并发调用不重复执行', async () => {
-      const mockMetas = [
-        { id: '1', timestamp: Date.now(), primaryUrl: 'u', isFavorited: false },
-      ];
-      historyDBGetMetaListMock.mockResolvedValue(mockMetas);
-      historyDBGetFavoriteCountMock.mockResolvedValue(0);
-
       // setFavorite 延迟返回
       let resolveSetFav!: () => void;
       historyDBSetFavoriteMock.mockReturnValue(new Promise<void>((r) => { resolveSetFav = r; }));
 
-      const { loadHistory, toggleFavorite } = useHistoryManager();
-      await loadHistory();
+      const { toggleFavorite } = useHistoryManager();
 
       // 并发调用两次
-      const p1 = toggleFavorite('1');
-      const p2 = toggleFavorite('1');
+      const p1 = toggleFavorite('toggle-concurrent');
+      const p2 = toggleFavorite('toggle-concurrent');
 
       resolveSetFav();
       await p1;
@@ -330,21 +258,15 @@ describe('useHistoryManager', () => {
 
   describe('batchSetFavorite', () => {
     it('批量收藏更新 favoriteSet', async () => {
-      const mockMetas = [
-        { id: '1', timestamp: Date.now(), primaryUrl: 'u', isFavorited: false },
-        { id: '2', timestamp: Date.now(), primaryUrl: 'u', isFavorited: false },
-      ];
-      historyDBGetMetaListMock.mockResolvedValue(mockMetas);
-      historyDBGetFavoriteCountMock.mockResolvedValue(0);
+      const { batchSetFavorite, favoriteSet, favoriteCount } = useHistoryManager();
+      const countBefore = favoriteCount.value;
+      const ids = ['batch-fav-a', 'batch-fav-b'];
 
-      const { loadHistory, batchSetFavorite, favoriteSet, favoriteCount } = useHistoryManager();
-      await loadHistory();
+      await batchSetFavorite(ids, true);
 
-      await batchSetFavorite(['1', '2'], true);
-
-      expect(favoriteSet.value.has('1')).toBe(true);
-      expect(favoriteSet.value.has('2')).toBe(true);
-      expect(favoriteCount.value).toBe(2);
+      expect(favoriteSet.value.has('batch-fav-a')).toBe(true);
+      expect(favoriteSet.value.has('batch-fav-b')).toBe(true);
+      expect(favoriteCount.value).toBe(countBefore + 2);
     });
 
     it('空数组不执行操作', async () => {
@@ -357,24 +279,21 @@ describe('useHistoryManager', () => {
   // ─── deleteHistoryItem ────────────────────────────
 
   describe('deleteHistoryItem', () => {
-    it('确认后删除并更新状态', async () => {
-      const mockMetas = [
-        { id: '1', timestamp: Date.now(), primaryUrl: 'u', isFavorited: false },
-        { id: '2', timestamp: Date.now(), primaryUrl: 'u', isFavorited: true },
-      ];
-      historyDBGetMetaListMock.mockResolvedValue(mockMetas);
-      historyDBGetFavoriteCountMock.mockResolvedValue(1);
+    it('确认后删除并维护 totalCount / favoriteSet', async () => {
+      historyDBGetCountMock.mockResolvedValue(2);
+      historyDBGetFavoriteIdListMock.mockResolvedValue(['1']);
       confirmMock.mockResolvedValue(true);
 
-      const { loadHistory, deleteHistoryItem, imageMetas, totalCount } = useHistoryManager();
-      await loadHistory();
+      const { loadStats, deleteHistoryItem, totalCount, favoriteSet, favoriteCount } = useHistoryManager();
+      await loadStats();
 
       const result = await deleteHistoryItem('1');
 
       expect(result).toBe(true);
       expect(historyDBDeleteMock).toHaveBeenCalledWith('1');
-      expect(imageMetas.value).toHaveLength(1);
       expect(totalCount.value).toBe(1);
+      expect(favoriteSet.value.has('1')).toBe(false);
+      expect(favoriteCount.value).toBe(0);
       expect(emitHistoryDeletedMock).toHaveBeenCalledWith(['1']);
     });
 
@@ -400,23 +319,20 @@ describe('useHistoryManager', () => {
   // ─── clearHistory ─────────────────────────────────
 
   describe('clearHistory', () => {
-    it('确认后清空所有数据', async () => {
-      const mockMetas = [
-        { id: '1', timestamp: Date.now(), primaryUrl: 'u', isFavorited: false },
-      ];
-      historyDBGetMetaListMock.mockResolvedValue(mockMetas);
-      historyDBGetFavoriteCountMock.mockResolvedValue(0);
+    it('确认后清空所有状态', async () => {
+      historyDBGetCountMock.mockResolvedValue(3);
+      historyDBGetFavoriteIdListMock.mockResolvedValue(['1']);
       confirmMock.mockResolvedValue(true);
 
-      const { loadHistory, clearHistory, imageMetas, totalCount, favoriteCount } = useHistoryManager();
-      await loadHistory();
+      const { loadStats, clearHistory, totalCount, favoriteCount, favoriteSet } = useHistoryManager();
+      await loadStats();
 
       await clearHistory();
 
       expect(historyDBClearMock).toHaveBeenCalled();
-      expect(imageMetas.value).toEqual([]);
       expect(totalCount.value).toBe(0);
       expect(favoriteCount.value).toBe(0);
+      expect(favoriteSet.value.size).toBe(0);
       expect(emitHistoryClearedMock).toHaveBeenCalled();
     });
   });
@@ -471,25 +387,18 @@ describe('useHistoryManager', () => {
   // ─── bulkDeleteRecords ────────────────────────────
 
   describe('bulkDeleteRecords', () => {
-    it('确认后批量删除', async () => {
-      const mockMetas = [
-        { id: '1', timestamp: Date.now(), primaryUrl: 'u', isFavorited: false },
-        { id: '2', timestamp: Date.now(), primaryUrl: 'u', isFavorited: false },
-        { id: '3', timestamp: Date.now(), primaryUrl: 'u', isFavorited: false },
-      ];
-      historyDBGetMetaListMock.mockResolvedValue(mockMetas);
-      historyDBGetFavoriteCountMock.mockResolvedValue(0);
+    it('确认后批量删除并维护 totalCount', async () => {
+      historyDBGetCountMock.mockResolvedValue(3);
+      historyDBGetFavoriteIdListMock.mockResolvedValue([]);
       confirmMock.mockResolvedValue(true);
 
-      const { loadHistory, bulkDeleteRecords, imageMetas, totalCount } = useHistoryManager();
-      await loadHistory();
+      const { loadStats, bulkDeleteRecords, totalCount } = useHistoryManager();
+      await loadStats();
 
       const result = await bulkDeleteRecords(['1', '3']);
 
       expect(result).toBe(true);
       expect(historyDBDeleteManyMock).toHaveBeenCalledWith(['1', '3']);
-      expect(imageMetas.value).toHaveLength(1);
-      expect(imageMetas.value[0].id).toBe('2');
       expect(totalCount.value).toBe(1);
     });
 
@@ -505,16 +414,16 @@ describe('useHistoryManager', () => {
   // ─── invalidateCache ──────────────────────────────
 
   describe('invalidateCache', () => {
-    it('使缓存失效后下次 loadHistory 重新加载', async () => {
-      historyDBGetMetaListMock.mockResolvedValue([]);
-      historyDBGetFavoriteCountMock.mockResolvedValue(0);
+    it('使缓存失效后下次 loadStats 重新加载', async () => {
+      historyDBGetCountMock.mockResolvedValue(0);
+      historyDBGetFavoriteIdListMock.mockResolvedValue([]);
 
-      const { loadHistory } = useHistoryManager();
-      await loadHistory();
+      const { loadStats } = useHistoryManager();
+      await loadStats();
       invalidateCache();
-      await loadHistory();
+      await loadStats();
 
-      expect(historyDBGetMetaListMock).toHaveBeenCalledTimes(2);
+      expect(historyDBGetCountMock).toHaveBeenCalledTimes(2);
     });
   });
 });
