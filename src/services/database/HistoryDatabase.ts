@@ -506,6 +506,28 @@ class HistoryDatabase {
     return rows.map(row => this.rowToImageMeta(row));
   }
 
+  /**
+   * 按 ID 批量查询元数据（`WHERE id IN (...)` 一次性返回）
+   *
+   * 用于表格视图批量复制：选中条目可能跨页，不能从内存列表过滤取得。
+   * 与 deleteMany 保持同样的 IN 占位符模式。
+   * ORDER BY timestamp DESC 保持与 getMetaList 一致的顺序，避免批量复制
+   * 粘贴后的链接顺序因 DB 自然顺序而不可预测。
+   */
+  async getMetasByIds(ids: string[]): Promise<ImageMeta[]> {
+    if (ids.length === 0) return [];
+    const db = await this.connection.getDb();
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+    const rows = await db.select<MetaRow[]>(
+      `SELECT id, timestamp, local_file_name, aspect_ratio,
+              primary_service, generated_link, results, is_favorited
+       FROM history_items WHERE id IN (${placeholders})
+       ORDER BY timestamp DESC`,
+      ids,
+    );
+    return rows.map(row => this.rowToImageMeta(row));
+  }
+
   /** 收藏元数据分页查询（服务端过滤 + LIMIT/OFFSET，避免前端全量加载） */
   async getFavoritesMetaPage(options: FavoritesMetaPageOptions): Promise<FavoritesMetaPageResult> {
     const db = await this.connection.getDb();
