@@ -41,6 +41,12 @@ export type {
   FastModeItem,
 };
 
+/**
+ * ResizeObserver 宽度最小阈值：过滤最小化到任务栏/托盘时 WebView2 报出的异常小尺寸（48x0）。
+ * 正常使用场景窗口宽度不会低于这个值；操作系统层面的窗口尺寸在最小化期间不会改变。
+ */
+const MIN_VALID_WIDTH = 200;
+
 // ==================== 主 Composable ====================
 
 /**
@@ -281,8 +287,16 @@ export function useVirtualTimeline(
       const newWidth = entry.contentRect.width;
       const newHeight = entry.contentRect.height;
 
-      // 容器被隐藏/分离时宽度为 0，跳过以保留正确的布局状态
-      if (newWidth === 0) return;
+      // Windows 最小化时 WebView2 会把 viewport 压成 48x0（非零小值）；
+      // 此时操作系统层面窗口尺寸并未改变，渲染引擎的临时收缩状态不应污染布局。
+      // 用 MIN_VALID_WIDTH 兜底 + height===0 兜底，过滤掉所有异常休眠尺寸。
+      if (newHeight === 0 || newWidth < MIN_VALID_WIDTH) {
+        if (resizeDebounceTimer) {
+          clearTimeout(resizeDebounceTimer);
+          resizeDebounceTimer = null;
+        }
+        return;
+      }
 
       // 首次回调立即执行，避免初始化时的布局跳跃
       if (isFirstResize) {
@@ -299,6 +313,7 @@ export function useVirtualTimeline(
       }
 
       resizeDebounceTimer = window.setTimeout(() => {
+        resizeDebounceTimer = null;
         if (Math.abs(newWidth - containerWidth.value) > 1) {
           containerWidth.value = newWidth;
           // 宽度变化需要重算布局
