@@ -3,7 +3,7 @@
  * 包含：灯箱、服务 Popover、悬浮预览、复制链接
  * 从 HistoryTableView.vue 提取
  */
-import { ref, computed, watch, onUnmounted, type Ref } from 'vue';
+import { ref, computed, watch, nextTick, onUnmounted, type Ref } from 'vue';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type PopoverType from 'primevue/popover';
 import type { HistoryItem } from '../../config/types';
@@ -45,6 +45,12 @@ const CLOSING_DURATION = HIDE_ANIMATION_DURATION + PREVIEW_LEAVE_DURATION;
 interface UseTableInteractionsOptions {
   /** 当前页数据（灯箱导航用） */
   currentPageData: Ref<HistoryItem[]>;
+  /** 当前页码（1-based） */
+  currentPage: Ref<number>;
+  /** 总页数 */
+  totalPages: Ref<number>;
+  /** 程序化翻页；返回新页加载完成的 Promise */
+  goToPage: (pageNumber: number) => Promise<void>;
   /** 获取某条记录的成功上传服务列表 */
   getSuccessfulServices: (item: HistoryItem) => string[];
   /** Popover 组件 template ref（由调用方声明，以避免 vue-tsc TS6133） */
@@ -52,7 +58,10 @@ interface UseTableInteractionsOptions {
 }
 
 export function useTableInteractions(options: UseTableInteractionsOptions) {
-  const { currentPageData, getSuccessfulServices, servicePopoverRef } = options;
+  const {
+    currentPageData, currentPage, totalPages, goToPage,
+    getSuccessfulServices, servicePopoverRef,
+  } = options;
 
   const toast = useToast();
   const configManager = useConfigManager();
@@ -80,10 +89,15 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     if (!lightboxItem.value) return -1;
     return currentPageData.value.findIndex((item) => item.id === lightboxItem.value!.id);
   });
-  const lightboxHasPrev = computed(() => lightboxIndex.value > 0);
-  const lightboxHasNext = computed(() =>
-    lightboxIndex.value >= 0 && lightboxIndex.value < currentPageData.value.length - 1,
+  // 跨页能力：到当前页边界时，只要还有相邻页就允许继续翻（handleLightboxNavigate 内部触发加载）
+  const lightboxHasPrev = computed(() =>
+    lightboxIndex.value > 0 || currentPage.value > 1,
   );
+  const lightboxHasNext = computed(() => {
+    const idx = lightboxIndex.value;
+    if (idx < 0) return false;
+    return idx < currentPageData.value.length - 1 || currentPage.value < totalPages.value;
+  });
 
   function openLightbox(item: HistoryItem, event?: MouseEvent): void {
     // 清理可能还在排队的"延后隐藏 timer"：防止上次关闭遗留的 timer
@@ -115,17 +129,53 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     if (url) new Image().src = url;
   }
 
-  function handleLightboxNavigate(direction: 'prev' | 'next'): void {
+  // 跨页导航并发保护：用户快按时多次 goToPage 会互相作废（loadVersion 机制），
+  // 用 isCrossingPage 直接忽略重入，保证 lightboxItem 的落点与最终页数据一致
+  let isCrossingPage = false;
+
+  /** 切到新图的公共收尾：过继悬浮预览 + 预加载相邻原图 */
+  function landOnItem(item: HistoryItem, indexInPage: number, direction: 'prev' | 'next'): void {
+    lightboxItem.value = item;
+    if (hoverPreview.value.visible) syncHoverPreviewToItem(item);
+    preloadAdjacentImage(indexInPage, direction);
+  }
+
+  async function handleLightboxNavigate(direction: 'prev' | 'next'): Promise<void> {
     const idx = lightboxIndex.value;
-    const nextIdx = direction === 'prev' ? idx - 1 : idx + 1;
-    if (nextIdx < 0 || nextIdx >= currentPageData.value.length) return;
-    const nextItem = currentPageData.value[nextIdx];
-    lightboxItem.value = nextItem;
-    // 悬浮预览过继到新图：若本次以 hover 打开（visible=true），翻页后仍保持 300px 预览
-    // 挂在新图所在行旁；关闭动画飞回预览位置再淡出，体验与不翻页时一致。
-    // 键盘打开（visible=false）则保持 false，关闭走 fade，避免"开 fade/关 FLIP"不对称。
-    if (hoverPreview.value.visible) syncHoverPreviewToItem(nextItem);
-    preloadAdjacentImage(nextIdx, direction);
+    const data = currentPageData.value;
+
+    // 页内直接切
+    if (direction === 'next' && idx >= 0 && idx < data.length - 1) {
+      landOnItem(data[idx + 1], idx + 1, 'next');
+      return;
+    }
+    if (direction === 'prev' && idx > 0) {
+      landOnItem(data[idx - 1], idx - 1, 'prev');
+      return;
+    }
+
+    // 跨页：达到当前页边界，触发相邻页加载，表格页码随灯箱自动跟随
+    if (isCrossingPage) return;
+    if (direction === 'next' && currentPage.value >= totalPages.value) return;
+    if (direction === 'prev' && currentPage.value <= 1) return;
+
+    isCrossingPage = true;
+    try {
+      const targetPage = direction === 'next' ? currentPage.value + 1 : currentPage.value - 1;
+      await goToPage(targetPage);
+      // 等 DataTable 把新页渲染到 DOM：syncHoverPreviewToItem 要查
+      // .thumb-box[data-lightbox-id="..."]，不等 tick 新页行还没挂上
+      await nextTick();
+      const newData = currentPageData.value;
+      if (newData.length === 0) return;
+      // next → 新页第 0 张；prev → 新页末张（保持"越切越老/越切越新"的时间方向连续）
+      const landIndex = direction === 'next' ? 0 : newData.length - 1;
+      landOnItem(newData[landIndex], landIndex, direction);
+    } catch (error) {
+      logger.error('灯箱跨页失败:', error);
+    } finally {
+      isCrossingPage = false;
+    }
   }
 
   /** 根据目标行 rect 计算 300px 预览的 top/left（避让视口边界） */

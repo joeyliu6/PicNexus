@@ -48,9 +48,9 @@ const {
 } = useHistoryBadgeLayout(tableViewRef);
 
 const {
-  currentPageData, pageSize, totalRecords, isLoadingPage, first,
+  currentPageData, currentPage, pageSize, totalRecords, totalPages, isLoadingPage, first,
   selectAll, skeletonData, formatTime,
-  onPageChange, handleHeaderCheckboxChange, getSuccessfulServices, selectedAvailableServices,
+  onPageChange, goToPage, handleHeaderCheckboxChange, getSuccessfulServices, selectedAvailableServices,
 } = useHistoryTableData({
   filter: computed(() => props.filter),
   searchTerm: computed(() => props.searchTerm),
@@ -71,7 +71,10 @@ const {
   openLightbox, handleLightboxDelete, handleLightboxNavigate, handleToggleFavorite,
   popoverServices, openServicePopover, handlePopoverCopyLink, handleCopyServiceLink,
   hoverPreview, handlePreviewEnter, handlePreviewLeave,
-} = useTableInteractions({ currentPageData, getSuccessfulServices, servicePopoverRef });
+} = useTableInteractions({
+  currentPageData, currentPage, totalPages, goToPage,
+  getSuccessfulServices, servicePopoverRef,
+});
 
 // 收藏状态快路径：favoriteSet 来自 stats（loadStats/loadHistory 任一加载完即可）
 // stats 未就绪时回退到 item.isFavorited（loadCurrentPage 已从 DB 直接读取，即时可用）

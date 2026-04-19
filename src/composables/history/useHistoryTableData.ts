@@ -106,6 +106,24 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
     loadCurrentPage();
   }
 
+  const totalPages = computed(() =>
+    Math.max(1, Math.ceil(totalRecords.value / pageSize.value))
+  );
+
+  /**
+   * 程序化翻页（灯箱跨页驱动用）。
+   * 返回加载完成的 Promise，以便调用方在新页就绪后落位 lightboxItem。
+   * 与 onPageChange 不同：不守卫 isLoadingPage（顺序 await 即可串行，
+   * 避免在"灯箱触发加载"与 PrimeVue Paginator 点击冲突时静默忽略导航意图）。
+   */
+  async function goToPage(pageNumber: number): Promise<void> {
+    const target = Math.max(1, Math.min(pageNumber, totalPages.value));
+    if (target === currentPage.value) return;
+    currentPage.value = target;
+    first.value = (target - 1) * pageSize.value;
+    await loadCurrentPage();
+  }
+
   // ---- 生命周期 ----
   let unlistenUpdated: (() => void) | null = null;
   let unlistenDeleted: (() => void) | null = null;
@@ -193,6 +211,7 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
     currentPage,
     pageSize,
     totalRecords,
+    totalPages,
     isLoadingPage,
     first,
     selectAll,
@@ -201,6 +220,7 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
     formatTime,
     loadCurrentPage,
     onPageChange,
+    goToPage,
     handleHeaderCheckboxChange,
     getSuccessfulServices,
     selectedAvailableServices,
