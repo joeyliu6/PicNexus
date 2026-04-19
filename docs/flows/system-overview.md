@@ -195,9 +195,9 @@ flowchart LR
 ├─────────────────┬─────────────────┬─────────────────────────────────┤
 │   useConfig     │   useHistory    │      useUpload                  │
 │   ─────────     │   ──────────    │      ────────                   │
-│   config        │   imageMetas    │      selectedServices           │
-│   isLoading     │   isLoading     │      isUploading                │
-│   isSaving      │                 │      serviceConfigStatus        │
+│   config        │   totalCount    │      selectedServices           │
+│   isLoading     │   favoriteSet   │      isUploading                │
+│   isSaving      │   isLoading     │      serviceConfigStatus        │
 └────────┬────────┴────────┬────────┴────────┬────────────────────────┘
          │                 │                 │
          ▼                 ▼                 ▼

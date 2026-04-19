@@ -108,16 +108,22 @@ const {
 
 ```typescript
 const {
-  imageMetas,       // ShallowRef<ImageMeta[]> - 历史列表
-  isLoading,        // Ref<boolean>
-  loadHistory,      // (forceReload?) => Promise<void>
-  deleteHistoryItem,     // (id) => Promise<void>
+  totalCount,            // Ref<number> - 记录总数（stats 缓存）
+  favoriteSet,           // Readonly<Ref<Set<string>>> - 收藏 ID 集合
+  favoriteCount,         // Ref<number>
+  isLoading,             // Ref<boolean>
+  loadStats,             // (forceReload?) => Promise<void> 仅查 COUNT + favoriteIdList
+  deleteHistoryItem,     // (id) => Promise<boolean>
   clearHistory,          // () => Promise<void>
-  searchHistory,         // (keyword, options) => Promise<ImageMeta[]>
+  searchHistory,         // (keyword, options) => Promise<SearchResult>
   loadPageByNumber,      // (page, size, filter?) => Promise<PageResult>
-  loadTimePeriodStats,   // () => Promise<TimePeriodStats>
-} = useHistory();
+  loadTimePeriodStats,   // () => Promise<TimePeriodStats[]>
+  toggleFavorite,        // (id) => Promise<boolean>
+  batchSetFavorite,      // (ids, favorited) => Promise<void>
+} = useHistoryManager();
 ```
+
+> 视图各自走服务端分页取 metas（表格：`loadPageByNumber`；时间轴：`useTimelineDayPagination`；收藏：`useFavoritesData`），模块不再维护全量 `imageMetas`。
 
 #### useUpload
 

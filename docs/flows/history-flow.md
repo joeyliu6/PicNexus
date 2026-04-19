@@ -6,14 +6,20 @@
 
 ## 图 1：历史记录加载主流程
 
-展示从用户进入历史页面到数据展示的完整路径。重点关注**5 分钟 TTL 缓存**和**多视图共享状态**两个关键设计。
+`useHistory` 模块级只维护 **stats**（totalCount / favoriteSet / timePeriodStats），不再全量加载 metas。各视图自己按需走服务端分页：
+
+- 表格视图：`loadPageByNumber` / `searchHistory`（服务端分页 + COUNT OVER()）
+- 时间轴：`useTimelineDayPagination`（按日 SQL 聚合 + 按需加载）
+- 收藏视图：`useFavoritesData.getFavoritesMetaPage`（收藏条件 SQL 分页）
+
+模块 stats 的 5 分钟 TTL 缓存用于表格/视图共用的轻量计数，`history-updated` 事件 / `invalidateCache()` 触发失效。
 
 > **关键源文件**：`src/composables/useHistory.ts`、`src/services/database/HistoryDatabase.ts`
 
 ```mermaid
 flowchart TD
-    A[用户进入历史页面] --> B{isCacheValid?}
-    B -- "缓存有效 + 非强制刷新" --> C[直接返回 sharedImageMetas]
+    A[视图首次激活] --> B{isStatsCacheValid?}
+    B -- "缓存有效 + 非强制刷新" --> C[复用模块 stats]
     B -- "缓存过期 / 首次加载" --> D[historyDB.open 初始化数据库]
 
     D --> E{连接成功?}
@@ -21,20 +27,19 @@ flowchart TD
     E1 --> E
     E -- 是 --> F
 
-    F[并行加载]
-    F --> F1[getMetaList 获取元数据列表]
-    F --> F2[getFavoriteCount 收藏数]
-    F --> F3[getTimePeriodStats 时间统计]
+    F[loadStats 并行查询]
+    F --> F1[getCount 总数]
+    F --> F2[getFavoriteIdList 收藏 ID 列表]
 
-    F1 & F2 & F3 --> G[更新共享状态]
-    G --> G1["sharedImageMetas = metas"]
-    G --> G2["lastLoadTime = now"]
+    F1 & F2 --> G[更新共享 stats]
+    G --> G1["totalCount / favoriteSet / favoriteCount"]
+    G --> G2["lastStatsLoadTime = now"]
     G --> G3["dataVersion++"]
 
-    G1 & G2 & G3 --> H{当前视图?}
-    H -- 表格视图 --> I[HistoryTableView 服务端分页]
-    H -- 时间线视图 --> J[TimelineView 虚拟滚动]
-    H -- 网格视图 --> K[HistoryGridView 瀑布流]
+    G1 & G2 & G3 --> H{视图类型?}
+    H -- 表格 --> I[loadPageByNumber 服务端分页]
+    H -- 时间轴 --> J[按日 SQL 聚合 + 按需加载]
+    H -- 收藏 --> K[getFavoritesMetaPage]
 
     C --> H
 
@@ -122,7 +127,7 @@ flowchart TD
 
 ## 收藏视图（独立服务端分页）
 
-收藏视图 **不走** sharedImageMetas 全量路径，而是独立调用 `historyDB.getFavoritesMetaPage({offset, limit, serviceFilter, searchTerm})`，SQL 直接 `WHERE is_favorited=1 ORDER BY timestamp DESC LIMIT ? OFFSET ?`。
+收藏视图独立调用 `historyDB.getFavoritesMetaPage({offset, limit, serviceFilter, searchTerm})`，SQL 直接 `WHERE is_favorited=1 ORDER BY timestamp DESC LIMIT ? OFFSET ?`。
 
 - 首页由视图可见性触发（`useLazyLoadOnVisible`），默认每批 80 条
 - 滚动至底部 300px 时累积加载下一批
@@ -139,10 +144,10 @@ flowchart TD
 
 | 层级 | 策略 | TTL | 失效条件 |
 |------|------|-----|---------|
-| 模块级（useHistory） | 共享 shallowRef | 5 分钟 | `isCacheValid()` 失败 / `history-updated` 事件 |
+| 模块级 stats（useHistory） | totalCount + favoriteSet + timePeriodStats | 5 分钟 | `isStatsCacheValid()` 失败 / `history-updated` 事件 / `invalidateCache()` |
 | 详情缓存（useImageDetailCache） | 按条目 LRU | 无限制 | 收藏切换 / 删除 / 清空 |
 | 缩略图缓存（useThumbCache） | Blob URL | 会话级 | 组件卸载 |
-| 分页状态 | 内存页缓冲 | 临时 | 筛选/搜索条件变化 |
+| 视图分页缓存 | 当前页 + 相邻缓冲 | 临时 | 筛选/搜索条件变化、跨窗口事件 |
 
 ---
 

@@ -96,24 +96,24 @@ flowchart TD
     end
 
     subgraph 读取路径
-        R1[HistoryView / TimelineView 挂载]
-        R1 --> R2{缓存有效? TTL 5分钟}
-        R2 -- 有效 --> R3[直接使用 sharedImageMetas]
+        R1[视图挂载 / 激活]
+        R1 --> R2{stats 缓存有效? TTL 5 分钟}
+        R2 -- 有效 --> R3[复用 totalCount / favoriteSet / timePeriodStats]
         R2 -- 过期/无 --> R4[historyDB.open → 确保连接]
-        R4 --> R5["并行加载：getMetaList + getTimePeriodStats + getFavoriteCount"]
-        R5 --> R6[sharedImageMetas 更新]
-        R6 --> R7[lastLoadTime 刷新 + dataVersion++]
-        R7 --> R3
-        R3 --> R8[Vue reactivity → 视图渲染]
+        R4 --> R5["loadStats：并行 getCount + getFavoriteIdList"]
+        R5 --> R6[更新 stats + lastStatsLoadTime + dataVersion++]
+        R6 --> R3
+        R3 --> R7[视图各自走服务端分页/按日聚合拉取条目]
+        R7 --> R8[Vue reactivity → 视图渲染]
     end
 
     subgraph 删除路径
         D1[用户点击删除]
         D1 --> D2[historyDB.delete → SQLite DELETE]
         D2 --> D3["emitHistoryDeleted(ids)"]
-        D3 --> D4["onCacheEvent 监听：过滤 sharedImageMetas"]
-        D4 --> D5[totalCount-- / favoriteCount 更新]
-        D5 --> D6[dataVersion++ → 视图响应更新]
+        D3 --> D4["模块只更新 stats：totalCount-- / favoriteSet 移除"]
+        D4 --> D5[视图各自监听 history-deleted 重拉本页]
+        D5 --> D6[dataVersion++ → 响应式更新]
     end
 
     subgraph 搜索路径
