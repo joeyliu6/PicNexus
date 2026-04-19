@@ -119,8 +119,52 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     const idx = lightboxIndex.value;
     const nextIdx = direction === 'prev' ? idx - 1 : idx + 1;
     if (nextIdx < 0 || nextIdx >= currentPageData.value.length) return;
-    lightboxItem.value = currentPageData.value[nextIdx];
+    const nextItem = currentPageData.value[nextIdx];
+    lightboxItem.value = nextItem;
+    // 悬浮预览过继到新图：若本次以 hover 打开（visible=true），翻页后仍保持 300px 预览
+    // 挂在新图所在行旁；关闭动画飞回预览位置再淡出，体验与不翻页时一致。
+    // 键盘打开（visible=false）则保持 false，关闭走 fade，避免"开 fade/关 FLIP"不对称。
+    if (hoverPreview.value.visible) syncHoverPreviewToItem(nextItem);
     preloadAdjacentImage(nextIdx, direction);
+  }
+
+  /** 根据目标行 rect 计算 300px 预览的 top/left（避让视口边界） */
+  function computePreviewPosition(anchor: DOMRect): { top: number; left: number } {
+    let top = anchor.top + anchor.height / 2 - PREVIEW_MAX_SIZE / 2;
+    let left = anchor.right + PREVIEW_MARGIN;
+    if (top < PREVIEW_MARGIN) top = PREVIEW_MARGIN;
+    if (top + PREVIEW_MAX_SIZE > window.innerHeight - PREVIEW_MARGIN) {
+      top = window.innerHeight - PREVIEW_MAX_SIZE - PREVIEW_MARGIN;
+    }
+    if (left + PREVIEW_MAX_SIZE > window.innerWidth - PREVIEW_MARGIN) {
+      left = anchor.left - PREVIEW_MAX_SIZE - PREVIEW_MARGIN;
+    }
+    if (left < PREVIEW_MARGIN) left = PREVIEW_MARGIN;
+    return { top, left };
+  }
+
+  /**
+   * 把悬浮预览同步到指定图：查该图对应行的 wrapper rect，重算预览位置和内容
+   * 找不到行或无 medium url 时收起预览（关闭动画走 fade 兜底）
+   */
+  function syncHoverPreviewToItem(item: HistoryItem): void {
+    const thumbBox = document.querySelector<HTMLElement>(
+      `.thumb-box[data-lightbox-id="${item.id}"]`,
+    );
+    const wrapper = thumbBox?.closest<HTMLElement>('.thumb-preview-wrapper');
+    const url = thumbCache.getMediumImageUrl(item);
+    if (!wrapper || !url) {
+      hoverPreview.value.visible = false;
+      return;
+    }
+    const { top, left } = computePreviewPosition(wrapper.getBoundingClientRect());
+    hoverPreview.value = {
+      visible: true,
+      url,
+      alt: item.localFileName,
+      itemId: item.id,
+      style: { top: `${top}px`, left: `${left}px` },
+    };
   }
 
   async function handleLightboxDelete(item: HistoryItem): Promise<void> {
