@@ -148,8 +148,10 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
    * 找不到行或无 medium url 时收起预览（关闭动画走 fade 兜底）
    */
   function syncHoverPreviewToItem(item: HistoryItem): void {
+    // CSS.escape 防御：即便 HistoryItem.id 当前由 Rust 侧生成 UUID 不含特殊字符，
+    // 未来若 id 规则变动（例如混入文件名派生）拼接特殊字符会让选择器构造失败
     const thumbBox = document.querySelector<HTMLElement>(
-      `.thumb-box[data-lightbox-id="${item.id}"]`,
+      `.thumb-box[data-lightbox-id="${CSS.escape(item.id)}"]`,
     );
     const wrapper = thumbBox?.closest<HTMLElement>('.thumb-preview-wrapper');
     const url = thumbCache.getMediumImageUrl(item);
@@ -237,12 +239,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     const url = thumbCache.getMediumImageUrl(item);
     if (!url) return;
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    let top = rect.top + rect.height / 2 - PREVIEW_MAX_SIZE / 2;
-    let left = rect.right + PREVIEW_MARGIN;
-    if (top < PREVIEW_MARGIN) top = PREVIEW_MARGIN;
-    if (top + PREVIEW_MAX_SIZE > window.innerHeight - PREVIEW_MARGIN) top = window.innerHeight - PREVIEW_MAX_SIZE - PREVIEW_MARGIN;
-    if (left + PREVIEW_MAX_SIZE > window.innerWidth - PREVIEW_MARGIN) left = rect.left - PREVIEW_MAX_SIZE - PREVIEW_MARGIN;
-    if (left < PREVIEW_MARGIN) left = PREVIEW_MARGIN;
+    const { top, left } = computePreviewPosition(rect);
     hoverPreview.value = { visible: true, url, alt: item.localFileName, itemId: item.id, style: { top: `${top}px`, left: `${left}px` } };
   }
 
