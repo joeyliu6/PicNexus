@@ -1,13 +1,12 @@
 /**
  * 跳转期间的骨架屏效果（全局样式，跨 TimelineView 根 class 与 TimelinePhotoItem 子元素）
- * - .photo-img.loaded → opacity 0 + scale 0.96：露出 photo-item 灰底；
- *   撤 class 后 transition（定义在 .photo-img）回到 1/1，模拟谷歌相册"呼吸感"入场
+ * - .photo-img.loaded → opacity 0：露出 photo-item 灰底；
+ *   撤 class 后 transition（定义在 .photo-img）淡入回 1，纯 opacity 入场不缩放
  * - .photo-item → shimmer 扫光：避免静态灰块显呆
  */
 
 .timeline-view.is-jumping .photo-img.loaded {
   opacity: 0;
-  transform: scale(0.96);
 }
 
 .timeline-view.is-jumping .photo-item {
@@ -55,11 +54,6 @@
 @media (prefers-reduced-motion: reduce) {
   .timeline-view.is-jumping .photo-item {
     animation: none;
-  }
-
-  /* 前庭敏感用户：保留 opacity 淡入但抑制 scale 过渡 */
-  .timeline-view.is-jumping .photo-img.loaded {
-    transform: none;
   }
 }
 
