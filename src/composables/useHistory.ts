@@ -18,6 +18,7 @@ import {
   onCacheEvent,
   emitHistoryDeleted,
   emitHistoryCleared,
+  WINDOW_SESSION_ID,
   type CacheEventPayload,
   type HistoryEventData
 } from '../events/cacheEvents';
@@ -132,6 +133,8 @@ function initCrossWindowListener(): void {
 
     switch (payload.type) {
       case 'history-deleted':
+        // 自发事件：本窗口删除时已在 deleteHistoryItem/bulkDeleteRecords 中本地更新过，跳过
+        if (data?.source === WINDOW_SESSION_ID) break;
         if (data?.ids && data.ids.length > 0) {
           // metas 已彻底下线，视图内部各自按 SQL 重拉；此处只维护模块级 stats
           removeFavoritesFromIds(data.ids);
@@ -141,6 +144,8 @@ function initCrossWindowListener(): void {
         break;
 
       case 'history-cleared':
+        // 自发事件：本窗口清空时已在 clearHistory 中本地更新过，跳过
+        if (data?.source === WINDOW_SESSION_ID) break;
         // 保持 isStatsLoaded 不变：下一次 history-updated 事件仍会走 reloadSharedData 刷新
         sharedFavoriteSet.value = new Set();
         totalCount.value = 0;

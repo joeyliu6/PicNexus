@@ -36,6 +36,9 @@ export interface HistoryEventData {
 // 事件名称常量
 const CACHE_EVENT_NAME = 'cache-event';
 
+// 每次窗口会话生成唯一 ID，用于区分自发事件（避免同窗口 emit → listen 双重处理）
+export const WINDOW_SESSION_ID = Math.random().toString(36).slice(2, 10);
+
 /**
  * 发送缓存事件（跨窗口广播）
  *
@@ -122,21 +125,21 @@ export async function onCacheEventType<T = unknown>(
  * 快捷方法：发送历史记录更新事件
  */
 export async function emitHistoryUpdated(ids?: string[]): Promise<void> {
-  await emitCacheEvent('history-updated', { ids });
+  await emitCacheEvent('history-updated', { ids, source: WINDOW_SESSION_ID });
 }
 
 /**
  * 快捷方法：发送历史记录删除事件
  */
 export async function emitHistoryDeleted(ids: string[]): Promise<void> {
-  await emitCacheEvent('history-deleted', { ids });
+  await emitCacheEvent('history-deleted', { ids, source: WINDOW_SESSION_ID });
 }
 
 /**
  * 快捷方法：发送历史记录清空事件
  */
 export async function emitHistoryCleared(): Promise<void> {
-  await emitCacheEvent('history-cleared');
+  await emitCacheEvent('history-cleared', { source: WINDOW_SESSION_ID });
 }
 
 /**
