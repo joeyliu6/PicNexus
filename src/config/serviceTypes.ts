@@ -6,7 +6,7 @@
 export type ServiceType = 'weibo' | 'r2' | 'jd' | 'nowcoder' | 'qiyu' | 'zhihu' | 'nami' | 'bilibili' | 'chaoxing' | 'smms' | 'github' | 'imgur' | 'tencent' | 'aliyun' | 'qiniu' | 'upyun';
 
 /**
- * 私有图床服务列表（内置）
+ * 私有存储服务列表（内置）
  * 用户需要提供自己的存储凭证，数据存储在用户自己的账户中
  */
 export const PRIVATE_SERVICES: ServiceType[] = ['r2', 'tencent', 'aliyun', 'qiniu', 'upyun'];
@@ -209,7 +209,7 @@ export interface ImgurServiceConfig extends BaseServiceConfig {
 
 /**
  * 腾讯云图床服务配置
- * 私有图床，需要 SecretId 和 SecretKey
+ * 私有存储，需要 SecretId 和 SecretKey
  */
 export interface TencentServiceConfig extends BaseServiceConfig {
   /** 腾讯云 SecretId */
@@ -228,7 +228,7 @@ export interface TencentServiceConfig extends BaseServiceConfig {
 
 /**
  * 阿里云图床服务配置
- * 私有图床，需要 AccessKey ID 和 Secret
+ * 私有存储，需要 AccessKey ID 和 Secret
  */
 export interface AliyunServiceConfig extends BaseServiceConfig {
   /** 阿里云 AccessKey ID */
@@ -247,7 +247,7 @@ export interface AliyunServiceConfig extends BaseServiceConfig {
 
 /**
  * 七牛云图床服务配置
- * 私有图床，需要 AK 和 SK
+ * 私有存储，需要 AK 和 SK
  */
 export interface QiniuServiceConfig extends BaseServiceConfig {
   /** 七牛云 AccessKey */
@@ -266,7 +266,7 @@ export interface QiniuServiceConfig extends BaseServiceConfig {
 
 /**
  * 又拍云图床服务配置
- * 私有图床，需要 Operator 和 Password
+ * 私有存储，需要 Operator 和 Password
  */
 export interface UpyunServiceConfig extends BaseServiceConfig {
   /** 又拍云 Operator */

@@ -114,7 +114,7 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
   <div class="settings-row">
     <div class="settings-row-info">
       <span class="settings-row-label">去除 EXIF 元数据</span>
-      <span class="settings-row-desc">上传到公共图床时，EXIF 通常会被自动去除；私有图床建议开启以保护隐私</span>
+      <span class="settings-row-desc">上传到公共图床时，EXIF 通常会被自动去除；私有存储建议开启以保护隐私</span>
     </div>
     <ToggleSwitch
       :modelValue="activePreset.stripExif"

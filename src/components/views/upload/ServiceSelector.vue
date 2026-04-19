@@ -55,9 +55,9 @@ function handleToggle(serviceId: string) {
         </div>
       </div>
 
-      <!-- 私有图床 -->
+      <!-- 私有存储 -->
       <div v-if="privateServices.length > 0" class="service-group">
-        <div class="service-group-label">私有图床</div>
+        <div class="service-group-label">私有存储</div>
         <div class="service-tags-wrapper">
           <button
             v-for="serviceId in privateServices"
