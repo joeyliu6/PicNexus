@@ -62,12 +62,16 @@ export function useTimelineLightbox(options: UseTimelineLightboxOptions) {
     return dayMetaCache.get(currentDayKey.value) ?? [];
   });
 
+  // 方向语义：dayMetaCache 每天 items 按 timestamp DESC 排（index 0 = 当天最新）
+  // → day 内 index++ 是往"更老"的图切，跨日的 next 必须接到更早的天（findDayBefore）
+  // 历史 bug：曾把 next 跨日接到 findDayAfter（更新的天），导致打开最新天切到当天最老一张后
+  // 箭头消失（再没"更新的天"可去）或循环跳回已浏览过的天
   const lightboxHasPrev = computed(() =>
-    indexInDay.value > 0 || findDayBefore(currentDayKey.value) !== null
+    indexInDay.value > 0 || findDayAfter(currentDayKey.value) !== null
   );
   const lightboxHasNext = computed(() => {
     const items = currentDayItems.value;
-    return indexInDay.value < items.length - 1 || findDayAfter(currentDayKey.value) !== null;
+    return indexInDay.value < items.length - 1 || findDayBefore(currentDayKey.value) !== null;
   });
 
   // ==================== 导航（意图缓冲）====================
@@ -85,25 +89,27 @@ export function useTimelineLightbox(options: UseTimelineLightboxOptions) {
       if (indexInDay.value < items.length - 1) {
         indexInDay.value++;
       } else {
-        const nextDay = findDayAfter(currentDayKey.value);
-        if (!nextDay) return false;
-        await ensureDaysLoaded([nextDay]);
-        const nextItems = dayMetaCache.get(nextDay) ?? [];
-        if (nextItems.length === 0) return false;
-        currentDayKey.value = nextDay;
+        // 当天最老一张 → 继续往更老的方向 → findDayBefore（时间更早的天），首张 index=0（该天最新）
+        const olderDay = findDayBefore(currentDayKey.value);
+        if (!olderDay) return false;
+        await ensureDaysLoaded([olderDay]);
+        const olderItems = dayMetaCache.get(olderDay) ?? [];
+        if (olderItems.length === 0) return false;
+        currentDayKey.value = olderDay;
         indexInDay.value = 0;
       }
     } else {
       if (indexInDay.value > 0) {
         indexInDay.value--;
       } else {
-        const prevDay = findDayBefore(currentDayKey.value);
-        if (!prevDay) return false;
-        await ensureDaysLoaded([prevDay]);
-        const prevItems = dayMetaCache.get(prevDay) ?? [];
-        if (prevItems.length === 0) return false;
-        currentDayKey.value = prevDay;
-        indexInDay.value = prevItems.length - 1;
+        // 当天最新一张 → 继续往更新的方向 → findDayAfter（时间更晚的天），末张（该天最老）
+        const newerDay = findDayAfter(currentDayKey.value);
+        if (!newerDay) return false;
+        await ensureDaysLoaded([newerDay]);
+        const newerItems = dayMetaCache.get(newerDay) ?? [];
+        if (newerItems.length === 0) return false;
+        currentDayKey.value = newerDay;
+        indexInDay.value = newerItems.length - 1;
       }
     }
 
@@ -129,13 +135,15 @@ export function useTimelineLightbox(options: UseTimelineLightboxOptions) {
   function silentlyPreloadAdjacentDay(): void {
     const items = currentDayItems.value;
     const remaining = items.length - 1 - indexInDay.value;
+    // 接近当天末尾（越切越老）→ 预取更早的天
     if (remaining <= 3) {
-      const nextDay = findDayAfter(currentDayKey.value);
-      if (nextDay) void ensureDaysLoaded([nextDay]);
+      const olderDay = findDayBefore(currentDayKey.value);
+      if (olderDay) void ensureDaysLoaded([olderDay]);
     }
+    // 接近当天开头（越切越新）→ 预取更新的天
     if (indexInDay.value <= 3) {
-      const prevDay = findDayBefore(currentDayKey.value);
-      if (prevDay) void ensureDaysLoaded([prevDay]);
+      const newerDay = findDayAfter(currentDayKey.value);
+      if (newerDay) void ensureDaysLoaded([newerDay]);
     }
   }
 
