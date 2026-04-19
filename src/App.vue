@@ -23,9 +23,15 @@ import { readTextFile } from '@tauri-apps/plugin-fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import type { UserConfig } from './config/types';
 import { historyDB } from './services/HistoryDatabase';
+import { attachConsole } from '@tauri-apps/plugin-log';
 import { createLogger } from './utils/logger';
 
 const log = createLogger('App');
+
+// 仅在开发模式把 tauri-plugin-log 的日志同步到 DevTools console，便于调试
+if (import.meta.env.DEV) {
+  void attachConsole();
+}
 
 const { state: undoState, cancel: cancelUndo } = useUndoToast();
 
