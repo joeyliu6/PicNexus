@@ -10,10 +10,12 @@ import 'photoswipe/style.css';
 import type { HistoryItem } from '../../../config/types';
 import { useConfigManager } from '../../../composables/useConfig';
 import { useHistoryManager } from '../../../composables/useHistory';
+import { useToast } from '../../../composables/useToast';
 import { usePhotoSwipeBridge } from '../../../composables/history/usePhotoSwipeBridge';
 import { useLightboxActions } from '../../../composables/history/useLightboxActions';
 import { useLightboxInfo } from '../../../composables/history/useLightboxInfo';
 import { getPrimaryImageUrl } from '../../../utils/imageUrl';
+import { generateMediumThumbnailUrl } from '../../../composables/useThumbCache';
 import LightboxBottomBar from './LightboxBottomBar.vue';
 
 const props = withDefaults(defineProps<{
@@ -35,6 +37,7 @@ const emit = defineEmits<{
 
 const configManager = useConfigManager();
 const historyManager = useHistoryManager();
+const toast = useToast();
 const itemRef = computed(() => props.item);
 
 // ── PhotoSwipe 桥接 ────────────────────────────
@@ -43,15 +46,38 @@ const imageSrc = computed(() => {
   return getPrimaryImageUrl(props.item, configManager.config.value);
 });
 
+/**
+ * LQIP 中图：400-800px 缩略图，比原图小一两个数量级、加载秒到
+ * 用作模糊背景占位 + PhotoSwipe msrc，填充大图加载期间的空白
+ */
+const mediumSrc = computed(() => {
+  if (!props.item) return '';
+  const result = props.item.results.find(
+    r => r.serviceId === props.item!.primaryService && r.status === 'success'
+  );
+  if (!result?.result?.url) return '';
+  return generateMediumThumbnailUrl(
+    result.serviceId,
+    result.result.url,
+    result.result.fileKey,
+    configManager.config.value
+  );
+});
+
 const itemId = computed(() => props.item?.id);
 const imageWidth = computed(() => props.item?.width || 0);
 const imageHeight = computed(() => props.item?.height || 0);
 
 const blurLoadedSrc = ref<string | null>(null);
 
-const { pswpEl, blurSrc } = usePhotoSwipeBridge({
+function handleLoadError() {
+  toast.warn('图片加载失败', '图床可能限制了访问。试试切换图床复制链接或在浏览器打开');
+}
+
+const { pswpEl, blurSrc, isLoading } = usePhotoSwipeBridge({
   visible: toRef(props, 'visible'),
   imageSrc,
+  mediumSrc,
   itemId,
   imageWidth,
   imageHeight,
@@ -59,6 +85,7 @@ const { pswpEl, blurSrc } = usePhotoSwipeBridge({
   hasNext: toRef(props, 'hasNext'),
   onClose: () => emit('update:visible', false),
   onNavigate: (dir) => emit('navigate', dir),
+  onLoadError: handleLoadError,
 });
 
 // ── 收藏状态 ────────────────────────────────
@@ -99,6 +126,25 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
         @load="blurLoadedSrc = blurSrc"
       />
     </div>
+
+    <!--
+      加载指示器包裹层占除底栏外的可视区，内部 flex 居中 → spinner 自动落在图片中心
+      大图超过 200ms 未完成时淡入，快图（含缓存命中）不会触发
+      采用纯 SVG 描边环（iOS Photos 风格），无胶囊背景，不抢图片视觉
+    -->
+    <Transition name="t-fade">
+      <div
+        v-if="isLoading"
+        class="pswp-spinner-wrap"
+        role="status"
+        aria-label="图片加载中"
+      >
+        <svg class="pswp-spinner-ring" viewBox="0 0 40 40" aria-hidden="true">
+          <!-- pathLength=100 把周长归一化为 100，dasharray 可用百分比语义（75:25 = 3/4 弧）-->
+          <circle cx="20" cy="20" r="17" pathLength="100" />
+        </svg>
+      </div>
+    </Transition>
 
     <!-- 导航箭头：t-fade 过渡避免在边界条件（第一张/最后一张）时箭头瞬间消失 -->
     <Transition name="t-fade">
@@ -148,6 +194,12 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
 .pswp--picnexus {
   --pswp-bg: #000;
 
+  /*
+   * 底栏预留空间：对应 usePhotoSwipeBridge.ts paddingFn bottom(72px)
+   * = LightboxBottomBar 高度 64px + 8px 间隙；spinner 居中时据此向上偏移
+   */
+  --pswp-bottom-bar-space: 72px;
+
   z-index: var(--z-lightbox) !important;
 }
 
@@ -161,6 +213,55 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
   border-radius: var(--radius-md);
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 灯箱暗色环境下的图片阴影，无对应 token */
   box-shadow: 0 8px 40px rgb(0 0 0 / 50%);
+}
+
+/*
+ * 占位符透明化
+ * 默认 .pswp__img--placeholder（div 版本，无 msrc 时）背景是 --pswp-placeholder-bg(#222)
+ * 项目已通过 msrc 注入中图缩略图作为 LQIP，div 版仅在 msrc 缺失时出现 —
+ * 此时让它透明，露出下方 .pswp-blur-bg，避免出现纯灰大块
+ */
+.pswp--picnexus .pswp__img--placeholder {
+  background: transparent !important;
+}
+
+/*
+ * 加载指示器包裹层：铺满除底栏外的可视区，flex 居中让 spinner 落在图片中心
+ * z-index: --z-base 使其在灯箱内部栈上方但不越过全局层
+ */
+.pswp-spinner-wrap {
+  position: absolute;
+  inset: 0 0 var(--pswp-bottom-bar-space) 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-base);
+  pointer-events: none;
+
+  /* 组件局部几何 token：纯 SVG 描边环的尺寸参数，不属于全局 spacing 体系 */
+  --pswp-spinner-size: 40px;
+  --pswp-spinner-stroke: 2px;
+}
+
+/* 纯描边圆环 — iOS Photos 风：无胶囊背景，不抢图片视觉 */
+.pswp-spinner-ring {
+  width: var(--pswp-spinner-size);
+  height: var(--pswp-spinner-size);
+  animation: k-spin var(--duration-spinner) linear infinite;
+}
+
+.pswp-spinner-ring circle {
+  fill: none;
+  stroke: var(--text-main);
+  stroke-width: var(--pswp-spinner-stroke);
+  stroke-opacity: 0.85;
+  stroke-linecap: round;
+
+  /* pathLength=100 + 75:25 = 3/4 弧可见 + 1/4 空隙，配合旋转产生"追尾"视觉。
+     与 circle 的 r 值解耦 —— 改 r 不用重算 dasharray */
+  stroke-dasharray: 75 25;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 深色环境描边的微投影，无对应 token */
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 40%));
 }
 
 /* 自定义导航箭头 */
