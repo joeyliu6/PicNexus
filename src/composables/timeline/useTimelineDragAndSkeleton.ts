@@ -235,10 +235,7 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
   function ensureDaysWithTimeout(keys: string[]): Promise<void> {
     return Promise.race([
       ensureDaysLoaded(keys),
-      new Promise<void>(resolve => setTimeout(() => {
-        log.warn(`ensureDaysLoaded 超时 ${ENSURE_DAYS_TIMEOUT_MS}ms，跳转放弃等待`);
-        resolve();
-      }, ENSURE_DAYS_TIMEOUT_MS)),
+      new Promise<void>(resolve => setTimeout(resolve, ENSURE_DAYS_TIMEOUT_MS)),
     ]);
   }
 

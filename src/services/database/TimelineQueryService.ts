@@ -124,6 +124,8 @@ export async function getDayStatsQuery(db: Database, filter?: DayStatsFilter): P
  * 多天合并查询：startTs = Math.min(...days.map(d => d.minTimestamp))，endTs 同理。
  * 调用方按 dayKey 分桶回填 dayMetaCache。
  */
+const SLOW_QUERY_WARN_MS = 800;
+
 export async function getItemsByDayRangeQuery(
   db: Database,
   startTs: number,
@@ -134,6 +136,7 @@ export async function getItemsByDayRangeQuery(
   const conditions: string[] = ['timestamp >= $1', 'timestamp <= $2'];
   appendFilterClause(filter, conditions, params);
 
+  const t0 = performance.now();
   const rows = await db.select<MetaRow[]>(
     `SELECT id, timestamp, local_file_name, aspect_ratio,
             primary_service, generated_link, results, is_favorited
@@ -142,6 +145,10 @@ export async function getItemsByDayRangeQuery(
      ORDER BY timestamp DESC, id DESC`,
     params,
   );
+  const durationMs = Math.round(performance.now() - t0);
+  if (durationMs > SLOW_QUERY_WARN_MS) {
+    log.warn('getItemsByDayRange 慢查询', { startTs, endTs, rowCount: rows.length, durationMs });
+  }
 
   return rows.map(rowToImageMeta);
 }
