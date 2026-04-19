@@ -54,6 +54,13 @@ export interface PhotoSwipeBridgeOptions {
 /** FLIP 动画源元素的最小宽度阈值（px），低于此值降级为 fade */
 const FLIP_MIN_WIDTH = 100;
 
+/**
+ * 表示「没有缩略图」的 filter 返回值。
+ * PhotoSwipe TS 上游签名过严 (=> HTMLElement)，但运行时在 photoswipe.esm.js:4377
+ * 有 `if (thumbnail)` 判断 → 返回 undefined 会安全降级 fade，无副作用。
+ */
+const NO_THUMB = undefined as unknown as HTMLElement;
+
 interface PswpSlideOptions {
   src: string;
   msrc: string | undefined;
@@ -248,17 +255,26 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     // 模糊背景优先用中图（LQIP）；回落 FLIP 占位图；再回落原图
     blurSrc.value = options.mediumSrc.value || flipSrc || src;
 
-    // thumbEl filter：每次计算 FLIP 起止点时实时查 DOM
-    // 导航到其他图片后再关闭，仍能精准飞回当前图片对应的缩略图，而非初始那张
-    // 返回 undefined 时 PhotoSwipe 源码会把 _thumbBounds 留空，自动降级 fade（不会报错）
-    pswp.addFilter('thumbEl', (_thumbEl, _data, _index) => {
+    // thumbEl filter：每次计算 FLIP 起止点时实时查 DOM，作为 thumbCropped 的 SSOT
+    //
+    // 为什么 filter 也要管 thumbCropped：
+    // Vue 默认 watch flush='pre' 会让 updateSlideContent 在 DOM 更新前跑，
+    // 此时 findThumbElement 只能匹配旧的悬浮预览 data-lightbox-id → 落在小缩略图上。
+    // 关闭瞬间 DOM 已 flush，filter 能找到真正的悬浮预览（contain），但若 data.thumbCropped
+    // 仍是 updateSlideContent 写入的 true（按 cover 算 innerRect），长宽比悬殊的图会
+    // 在 FLIP 末端出现落点偏移。filter 与 element 一起同步 thumbCropped，避免这种错配。
+    //
+    // 返回 undefined（NO_THUMB）时 PhotoSwipe 源码会把 _thumbBounds 留空，自动降级 fade
+    pswp.addFilter('thumbEl', (_thumbEl, data, _index) => {
       const currentId = options.itemId.value;
       if (!currentId) return _thumbEl as HTMLElement;
       const el = findThumbElement(currentId);
       // 缩略图已被虚拟滚动回收、或源尺寸过小 → 交给 PhotoSwipe 降级 fade
-      if (!el) return undefined as unknown as HTMLElement;
+      if (!el) return NO_THUMB;
       const rect = el.getBoundingClientRect();
-      if (rect.width < FLIP_MIN_WIDTH) return undefined as unknown as HTMLElement;
+      if (rect.width < FLIP_MIN_WIDTH) return NO_THUMB;
+      // 悬浮预览 object-fit:contain → 不裁剪；小缩略图 object-fit:cover → 裁剪
+      data.thumbCropped = !el.classList.contains('global-thumb-hover-preview');
       return el;
     });
 
@@ -322,11 +338,10 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     const h = options.imageHeight.value || 1080;
     if (!src) return;
 
-    // 同步更新 element + thumbCropped，让后续关闭动画能飞回当前图片对应的缩略图
-    // thumbCropped 需与目标元素的 object-fit 一致：悬浮预览 contain 不裁剪，小缩略图 cover 裁剪
-    const newThumbEl = newId ? findThumbElement(newId) : undefined;
-    const isPreviewEl = newThumbEl?.classList.contains('global-thumb-hover-preview');
-
+    // element / thumbCropped 不在此处推断：Vue watch 默认 pre-flush 会让本函数在 DOM
+    // 更新前跑，此时悬浮预览的 data-lightbox-id 仍是旧图，查不到正确元素。统一交给
+    // thumbEl filter 在关闭瞬间实时查 DOM 并同步 thumbCropped，避免窗口期内的错配。
+    //
     // ⚠️ 必须替换整个 dataSource[0] 对象而非修改字段：
     // PhotoSwipe 的 content.data 持有 dataSource[index] 的对象引用，
     // 修改字段会污染旧 content.data（导致孤儿事件过滤失效）
@@ -335,8 +350,6 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
       msrc: medium || undefined,
       width: w,
       height: h,
-      element: newThumbEl,
-      thumbCropped: !!newThumbEl && !isPreviewEl,
       id: newId,
     };
     pswp.options.dataSource = [newData];
