@@ -87,7 +87,7 @@ function buildPswpOptions(slide: PswpSlideOptions): PhotoSwipeOptions {
       id: slide.id,
     }],
     index: 0,
-    bgOpacity: 0.65,
+    bgOpacity: 0.72,
     // 自定义 spinner 由 Vue 层 Teleport 渲染；清空默认错误文案（避免 slide 内显示英文错误）
     errorMsg: '',
     showHideAnimationType: reduced ? 'none' : (slide.useZoom ? 'zoom' : 'fade'),
@@ -309,6 +309,15 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
       if (!isCurrentContent(e.content)) return;
       clearLoadingIndicator();
       if (e.isError) options.onLoadError?.();
+    });
+
+    // 切换图片淡入动画：给每次新激活的 .pswp__img 加 is-switching-in，触发 CSS keyframes
+    // 首次 activate 是开灯箱，FLIP 接管过渡，这里跳过避免双动画打架
+    let isFirstActivate = true;
+    pswp.on('contentActivate', (e) => {
+      if (isFirstActivate) { isFirstActivate = false; return; }
+      const el = e.content?.element;
+      if (el instanceof HTMLElement) el.classList.add('is-switching-in');
     });
 
     pswp.init();

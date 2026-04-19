@@ -216,6 +216,27 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
 }
 
 /*
+ * 切换图片时的淡入动画
+ * 只动 opacity —— PhotoSwipe 用 transform 矩阵管缩放/平移，动 transform 会冲突
+ * 触发点：usePhotoSwipeBridge 的 contentActivate 事件（首次激活跳过，避免和 FLIP 开灯箱动画打架）
+ * class 每次都挂在新生成的 img 上，浏览器自然重放动画
+ */
+@keyframes pswp-img-switch-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.pswp--picnexus .pswp__img.is-switching-in {
+  animation: pswp-img-switch-in var(--duration-normal) var(--ease-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pswp--picnexus .pswp__img.is-switching-in {
+    animation: none;
+  }
+}
+
+/*
  * 占位符透明化
  * 默认 .pswp__img--placeholder（div 版本，无 msrc 时）背景是 --pswp-placeholder-bg(#222)
  * 项目已通过 msrc 注入中图缩略图作为 LQIP，div 版仅在 msrc 缺失时出现 —
@@ -298,6 +319,10 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
  * z-index: -1 → 渲染在 .pswp__bg 黑色遮罩层（z:auto+transform=0 级）之后
  * 视觉层序：blur(-1) → 黑色遮罩(0) → 主图(3)
  * 黑色遮罩作为"调光层"压在 blur 上，只露出少量颜色氛围
+ *
+ * background: #000 兜底：切换图片时 blur <img> 要重新下载新缩略图，
+ * 下载窗口内 img.opacity=0 → 若本层无背景，PhotoSwipe 的 .pswp__bg(65% 不透明)
+ * 留出的 35% 缝隙会透出底层的时间轴/表格视图。实心黑兜底彻底堵死缝隙。
  */
 .pswp--picnexus .pswp-blur-bg {
   position: absolute;
@@ -305,6 +330,7 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
   overflow: hidden;
   z-index: -1;
   pointer-events: none;
+  background: var(--pswp-bg);
 }
 
 .pswp--picnexus .pswp-blur-bg img {
@@ -313,7 +339,7 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
   object-fit: cover;
   transform: scale(1.2); /* 消除 blur 边缘白边，scale 需略大于 blur 半径 */
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 灯箱模糊背景复合滤镜，无对应 token */
-  filter: blur(30px) brightness(0.6) saturate(1.3);
+  filter: blur(30px) brightness(0.45) saturate(1.1);
   opacity: 0;
   transition: opacity var(--duration-slow) ease;
   pointer-events: none;
@@ -321,6 +347,21 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
 
 .pswp--picnexus .pswp-blur-bg img.is-loaded {
   opacity: 1;
+}
+
+/*
+ * 影院暗角（vignette）— 高级感来源
+ * 中心透明露出 blur 氛围，边缘径向沉到近黑 → 视觉焦点自然收束到主图
+ * 位置：blur img 之上、.pswp__bg 之下（仍受父层 z:-1 约束）
+ * 椭圆形 vs 圆形：椭圆更匹配宽屏视口，两侧沉得更深
+ */
+.pswp--picnexus .pswp-blur-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 影院暗角径向渐变，无对应 token */
+  background: radial-gradient(ellipse at center, transparent 30%, rgb(0 0 0 / 80%) 100%);
+  pointer-events: none;
 }
 
 /* 浅色模式：灯箱始终保持暗色风格 */
