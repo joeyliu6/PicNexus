@@ -4,6 +4,7 @@ import { useHistoryManager } from './useHistory';
 import { useToast } from './useToast';
 import { useCopyLink, type CopyLinkItem } from './useCopyLink';
 import { shiftSelect, type ShiftSelectAnchor } from '../utils/shiftSelect';
+import { historyDB } from '../services/HistoryDatabase';
 export type { LinkFormat } from '../utils/linkFormatter';
 
 export function useHistoryViewState() {
@@ -22,35 +23,6 @@ export function useHistoryViewState() {
     selectedIds.value = newSet;
     triggerRef(selectedIds);
   }
-
-  const filteredMetas = computed(() => {
-    let metas = historyManager.imageMetas.value;
-
-    if (currentFilter.value !== 'all') {
-      metas = metas.filter(meta => meta.primaryService === currentFilter.value);
-    }
-
-    if (searchTerm.value.trim()) {
-      const term = searchTerm.value.toLowerCase().trim();
-      metas = metas.filter(meta =>
-        meta.localFileName.toLowerCase().includes(term)
-      );
-    }
-
-    return metas;
-  });
-
-  const isAllSelected = computed(() => {
-    const metas = filteredMetas.value;
-    return metas.length > 0 && metas.every(meta => selectedIds.value.has(meta.id));
-  });
-
-  const isSomeSelected = computed(() => {
-    const metas = filteredMetas.value;
-    if (metas.length === 0) return false;
-    const count = metas.filter(meta => selectedIds.value.has(meta.id)).length;
-    return count > 0 && count < metas.length;
-  });
 
   const hasSelection = computed(() => selectedIds.value.size > 0);
   const selectedIdList = computed(() => Array.from(selectedIds.value));
@@ -72,13 +44,6 @@ export function useHistoryViewState() {
 
   function deselect(id: string): void {
     if (selectedIds.value.has(id)) updateSelection(set => set.delete(id));
-  }
-
-  function toggleSelectAll(checked: boolean): void {
-    selectedIds.value = checked
-      ? new Set(filteredMetas.value.map(m => m.id))
-      : new Set();
-    triggerRef(selectedIds);
   }
 
   function clearSelection(): void {
@@ -108,8 +73,7 @@ export function useHistoryViewState() {
       return;
     }
 
-    const idSet = new Set(ids);
-    const metas = historyManager.imageMetas.value.filter(meta => idSet.has(meta.id));
+    const metas = await historyDB.getMetasByIds(ids);
 
     let items: CopyLinkItem[];
 
@@ -200,17 +164,12 @@ export function useHistoryViewState() {
   }
 
   return {
-    selectedIds, currentFilter, searchTerm, filteredMetas,
-    isAllSelected, isSomeSelected, hasSelection, selectedIdList,
-    toggleSelection, handleSelectClick, select, deselect, toggleSelectAll, clearSelection, isSelected,
+    selectedIds, currentFilter, searchTerm,
+    hasSelection, selectedIdList,
+    toggleSelection, handleSelectClick, select, deselect, clearSelection, isSelected,
     setFilter, setSearchTerm,
     bulkCopyFormatted, bulkExport, bulkDelete, reset,
-    loadHistory: historyManager.loadHistory,
-    loadPageByNumber: historyManager.loadPageByNumber,
-    searchHistory: historyManager.searchHistory,
     deleteHistoryItem: historyManager.deleteHistoryItem,
-    imageMetas: historyManager.imageMetas,
-    isLoading: historyManager.isLoading,
     totalCount: historyManager.totalCount,
     detailCache: historyManager.detailCache,
   };

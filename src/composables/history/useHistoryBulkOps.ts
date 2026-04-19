@@ -5,7 +5,6 @@ import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import type { HistoryItem } from '../../config/types';
 import { historyDB } from '../../services/HistoryDatabase';
-import type { ImageMeta } from '../../types/image-meta';
 import { useToast } from '../useToast';
 import { useConfirm } from '../useConfirm';
 import { TOAST_MESSAGES } from '../../constants';
@@ -16,9 +15,7 @@ import type { useImageDetailCache } from '../useImageDetailCache';
 const log = createLogger('History');
 
 export interface BulkOpsContext {
-  imageMetas: Ref<ImageMeta[]>;
   totalCount: Ref<number>;
-  isDataLoaded: Ref<boolean>;
   dataVersion: Ref<number>;
   detailCache: ReturnType<typeof useImageDetailCache>;
   removeFavoritesFromIds: (ids: string[]) => void;
@@ -76,10 +73,6 @@ export function createBulkOps(ctx: BulkOpsContext) {
       await historyDB.deleteMany(selectedIds);
       toast.showConfig('success', TOAST_MESSAGES.common.deleteSuccess(selectedIds.length));
 
-      if (ctx.isDataLoaded.value) {
-        const selectedIdSet = new Set(selectedIds);
-        ctx.imageMetas.value = ctx.imageMetas.value.filter(meta => !selectedIdSet.has(meta.id));
-      }
       ctx.totalCount.value = Math.max(0, ctx.totalCount.value - selectedIds.length);
       ctx.removeFavoritesFromIds(selectedIds);
       ctx.dataVersion.value++;

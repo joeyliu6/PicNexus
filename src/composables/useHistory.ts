@@ -9,7 +9,6 @@ import {
   type PageResult, type SearchResult, type SearchOptions,
   type TimePeriodStats,
 } from '../services/HistoryDatabase';
-import type { ImageMeta } from '../types/image-meta';
 import { useImageDetailCache } from './useImageDetailCache';
 import { useToast } from './useToast';
 import { TOAST_MESSAGES } from '../constants';
@@ -32,17 +31,11 @@ const log = createLogger('History');
 // 单例共享状态（模块级别）
 // ============================================
 
-// 所有图片元数据（轻量级，全量加载）
-const sharedImageMetas: Ref<ImageMeta[]> = shallowRef([]);
-
 // 加载中状态
 const sharedIsLoading = ref(false);
 
-// 全量元数据是否已加载（用于缓存判断；metas 由时间轴/收藏视图按需触发）
-const isDataLoaded = ref(false);
-
 // 统计数字是否已加载（totalCount / favoriteCount / favoriteSet）
-// 表格视图只依赖 stats，不依赖 metas
+// 表格/时间轴/收藏视图均不再依赖全量 metas，stats 是唯一模块级数据源
 const isStatsLoaded = ref(false);
 
 // 数据版本号（用于追踪变化）
@@ -50,17 +43,7 @@ const dataVersion = ref(0);
 
 // === TTL 缓存相关 ===
 const CACHE_TTL = 5 * 60 * 1000;  // 5 分钟 TTL
-const lastLoadTime = ref<number>(0);
 const lastStatsLoadTime = ref<number>(0);
-
-/**
- * 检查全量 metas 缓存是否有效
- */
-function isCacheValid(): boolean {
-  if (!isDataLoaded.value) return false;
-  if (lastLoadTime.value === 0) return false;
-  return Date.now() - lastLoadTime.value < CACHE_TTL;
-}
 
 /**
  * 检查统计数据缓存是否有效
@@ -80,7 +63,7 @@ const totalCount = ref(0);
 // 收藏总数
 const favoriteCount = ref(0);
 
-// 独立的收藏 ID 集合（解耦收藏状态，避免触发 imageMetas 的全量 reactivity 级联）
+// 独立的收藏 ID 集合（O(1) 查询，解耦收藏状态）
 const sharedFavoriteSet: Ref<Set<string>> = shallowRef(new Set());
 
 // 收藏 toggle 防重入集合（模块级别单例，确保多个 useHistoryManager 实例共享）
@@ -106,44 +89,24 @@ const isTimePeriodStatsLoaded = ref(false);
 /**
  * 模块级别的数据重新加载函数（用于事件处理）
  *
- * 策略：metas 按需重载 —— 仅当 metas 之前已加载过（时间轴/收藏视图用过）才重新 JSON.parse 全量；
- * 表格视图场景下 metas 从未加载，事件只刷新 stats（COUNT + favoriteIdList），避免风扇狂叫。
+ * 所有视图已转为服务端分页（表格/收藏）或按天分页（时间轴），模块级只需维护
+ * stats（COUNT + 收藏 ID 列表 + 可选时间段聚合），毫秒级 SQL 即可。
  */
 async function reloadSharedData(): Promise<void> {
-  // 提前捕获：只有重挡会动 sharedIsLoading，轻挡毫秒级 SQL 不占 UI loading 态
-  const metasAlreadyLoaded = isDataLoaded.value;
   const needsTimeStats = isTimePeriodStatsLoaded.value;
   try {
-    if (metasAlreadyLoaded) sharedIsLoading.value = true;
     await historyDB.open();
 
-    if (metasAlreadyLoaded) {
-      // 时间轴/收藏视图之前打开过，必须全量刷新保持一致性
-      const [metas, timePeriodStats] = await Promise.all([
-        historyDB.getMetaList(),
-        historyDB.getTimePeriodStats(),
-      ]);
-      sharedImageMetas.value = metas;
-      totalCount.value = metas.length;
-      sharedFavoriteSet.value = new Set(metas.filter(m => m.isFavorited).map(m => m.id));
-      favoriteCount.value = sharedFavoriteSet.value.size;
-      sharedTimePeriodStats.value = timePeriodStats;
-      isTimePeriodStatsLoaded.value = true;
-      isDataLoaded.value = true;
-      lastLoadTime.value = Date.now();
-    } else {
-      // 只有表格视图在用，刷 stats 即可（SQL COUNT + id 列表，毫秒级）
-      const [total, favIds, timeStats] = await Promise.all([
-        historyDB.getCount(),
-        historyDB.getFavoriteIdList(),
-        needsTimeStats ? historyDB.getTimePeriodStats() : Promise.resolve(null),
-      ]);
-      totalCount.value = total;
-      sharedFavoriteSet.value = new Set(favIds);
-      favoriteCount.value = favIds.length;
-      if (timeStats) {
-        sharedTimePeriodStats.value = timeStats;
-      }
+    const [total, favIds, timeStats] = await Promise.all([
+      historyDB.getCount(),
+      historyDB.getFavoriteIdList(),
+      needsTimeStats ? historyDB.getTimePeriodStats() : Promise.resolve(null),
+    ]);
+    totalCount.value = total;
+    sharedFavoriteSet.value = new Set(favIds);
+    favoriteCount.value = favIds.length;
+    if (timeStats) {
+      sharedTimePeriodStats.value = timeStats;
     }
 
     isStatsLoaded.value = true;
@@ -151,8 +114,6 @@ async function reloadSharedData(): Promise<void> {
     dataVersion.value++;
   } catch (error) {
     log.error('[历史记录] 事件触发重新加载失败:', error);
-  } finally {
-    if (metasAlreadyLoaded) sharedIsLoading.value = false;
   }
 }
 
@@ -172,13 +133,7 @@ function initCrossWindowListener(): void {
     switch (payload.type) {
       case 'history-deleted':
         if (data?.ids && data.ids.length > 0) {
-          // metas 按需存在：已加载才同步过滤，否则表格视图走 SQL 自然生效
-          if (isDataLoaded.value) {
-            const deletedSet = new Set(data.ids);
-            sharedImageMetas.value = sharedImageMetas.value.filter(
-              meta => !deletedSet.has(meta.id)
-            );
-          }
+          // metas 已彻底下线，视图内部各自按 SQL 重拉；此处只维护模块级 stats
           removeFavoritesFromIds(data.ids);
           totalCount.value = Math.max(0, totalCount.value - data.ids.length);
           dataVersion.value++;
@@ -186,11 +141,7 @@ function initCrossWindowListener(): void {
         break;
 
       case 'history-cleared':
-        // metas=[] + count=0 本身就是一个合法的"已加载的空状态"
-        // 保持 isDataLoaded / isStatsLoaded 不变，这样后续 history-updated
-        // 事件仍会按正确路径（重挡/轻挡）刷新；否则时间轴/收藏视图的本地
-        // hasXxxDataLoaded 闭包标志不会重置，会陷入"totalCount>0 但 metas=[]"的假死状态
-        sharedImageMetas.value = [];
+        // 保持 isStatsLoaded 不变：下一次 history-updated 事件仍会走 reloadSharedData 刷新
         sharedFavoriteSet.value = new Set();
         totalCount.value = 0;
         favoriteCount.value = 0;
@@ -198,9 +149,7 @@ function initCrossWindowListener(): void {
         break;
 
       case 'history-updated':
-        // 不清零 isDataLoaded/isStatsLoaded：reloadSharedData 内部以此判断"是否曾加载过 metas"
-        // 以决定是全量刷新（时间轴/收藏视图场景）还是只刷 stats（表格视图场景）
-        // 真正的缓存新鲜度由 reloadSharedData 内部重置 lastLoadTime / lastStatsLoadTime 保证
+        // 真正的缓存新鲜度由 reloadSharedData 内部重置 lastStatsLoadTime 保证
         debouncedReloadSharedData();
         break;
     }
@@ -210,11 +159,9 @@ function initCrossWindowListener(): void {
 }
 
 /**
- * 使缓存失效，下次 loadHistory / loadStats 将强制重新加载
+ * 使 stats 缓存失效，下次 loadStats 将强制重新加载
  */
 export function invalidateCache(): void {
-  isDataLoaded.value = false;
-  lastLoadTime.value = 0;
   isStatsLoaded.value = false;
   lastStatsLoadTime.value = 0;
 }
@@ -233,7 +180,6 @@ export function useHistoryManager() {
   initCrossWindowListener();
 
   // 使用共享状态（单例）
-  const imageMetas = sharedImageMetas;
   const isLoading = sharedIsLoading;
 
   /**
@@ -276,53 +222,6 @@ export function useHistoryManager() {
   }
 
   /**
-   * 加载历史记录元数据（全量加载）
-   *
-   * ⚠️ 重量级：3 万条记录约 300-800ms，会触发全量 JSON.parse
-   * 仅时间轴视图、收藏视图激活时调用
-   *
-   * @param forceReload 是否强制重新加载（忽略缓存）
-   */
-  async function loadHistory(forceReload = false): Promise<void> {
-    // 如果缓存有效且不强制刷新，直接返回
-    if (isCacheValid() && !forceReload) {
-      return;
-    }
-
-    try {
-      isLoading.value = true;
-
-      await initDatabase();
-
-      // 全量加载元数据 + 收藏计数
-      const [metas, favCount] = await Promise.all([
-        historyDB.getMetaList(),
-        historyDB.getFavoriteCount(),
-      ]);
-
-      imageMetas.value = metas;
-      totalCount.value = metas.length;
-      favoriteCount.value = favCount;
-      sharedFavoriteSet.value = new Set(metas.filter(m => m.isFavorited).map(m => m.id));
-
-      isDataLoaded.value = true;
-      lastLoadTime.value = Date.now();
-      // metas 加载完 stats 也自然最新
-      isStatsLoaded.value = true;
-      lastStatsLoadTime.value = Date.now();
-      dataVersion.value++;
-
-    } catch (error) {
-      log.error('[历史记录] 加载失败:', error);
-      toast.showConfig('error', TOAST_MESSAGES.common.loadFailed(String(error)));
-      imageMetas.value = [];
-    } finally {
-      isLoading.value = false;
-    }
-  }
-
-
-  /**
    * 删除单个历史记录项
    */
   async function deleteHistoryItem(itemId: string): Promise<boolean> {
@@ -346,10 +245,6 @@ export function useHistoryManager() {
 
       toast.showConfig('success', TOAST_MESSAGES.common.deleteSuccess(1));
 
-      // metas 按需：已加载才同步过滤
-      if (isDataLoaded.value) {
-        imageMetas.value = imageMetas.value.filter(meta => meta.id !== itemId);
-      }
       totalCount.value = Math.max(0, totalCount.value - 1);
 
       removeFavoritesFromIds([itemId]);
@@ -394,8 +289,6 @@ export function useHistoryManager() {
 
       toast.showConfig('success', TOAST_MESSAGES.common.clearSuccess('所有历史记录'));
 
-      // 清空元数据
-      imageMetas.value = [];
       totalCount.value = 0;
       favoriteCount.value = 0;
       sharedFavoriteSet.value = new Set();
@@ -416,9 +309,7 @@ export function useHistoryManager() {
 
   // 批量操作（导出 JSON / 批量删除）从 useHistoryBulkOps 引入
   const { bulkExportJSON, bulkDeleteRecords } = createBulkOps({
-    imageMetas,
     totalCount,
-    isDataLoaded,
     dataVersion,
     detailCache,
     removeFavoritesFromIds,
@@ -441,7 +332,7 @@ export function useHistoryManager() {
 
   /**
    * 按页码加载数据（用于表格视图服务端分页）
-   * 不影响 imageMetas，返回独立的分页结果
+   * 返回独立的分页结果，不影响模块级 stats 缓存
    *
    * @param page 页码（从 1 开始）
    * @param pageSize 每页数量（默认 100）
@@ -502,9 +393,8 @@ export function useHistoryManager() {
   }
 
   /**
-   * 跳转到指定月份（验证该月份是否有数据）
-   * 在新架构下，所有元数据已加载，此函数仅验证目标月份存在性
-   * 实际滚动定位由 TimelineView 负责
+   * 跳转到指定月份（仅校验该月份在 SQL 聚合的 timePeriodStats 中存在）
+   * 实际滚动定位由 TimelineView 的按日分页层负责
    *
    * @param year 年份
    * @param month 月份 (0-11)
@@ -528,7 +418,7 @@ export function useHistoryManager() {
       return true;
 
     } catch (error) {
-      console.error(`[历史记录] 跳转失败:`, error);
+      log.error('[历史记录] 跳转失败:', error);
       toast.showConfig('error', TOAST_MESSAGES.history.jumpFailed(String(error)));
       return false;
     } finally {
@@ -538,7 +428,7 @@ export function useHistoryManager() {
 
   /**
    * 切换单张图片的收藏状态
-   * 使用独立的 favoriteSet 避免触发 imageMetas 的全量 reactivity 级联
+   * 只操作 favoriteSet（O(1)），视图各自通过 favoriteSet 响应式渲染
    */
   async function toggleFavorite(id: string): Promise<boolean> {
     if (pendingToggleIds.has(id)) return sharedFavoriteSet.value.has(id);
@@ -547,18 +437,11 @@ export function useHistoryManager() {
     const previousState = sharedFavoriteSet.value.has(id);
     const targetState = !previousState;
 
-    // 乐观更新：只修改 favoriteSet（O(1)），不触碰 imageMetas 数组引用
+    // 乐观更新：只修改 favoriteSet（O(1)）
     const newSet = new Set(sharedFavoriteSet.value);
     if (targetState) newSet.add(id); else newSet.delete(id);
     sharedFavoriteSet.value = newSet;
     favoriteCount.value += targetState ? 1 : -1;
-
-    // 静默同步 meta 对象属性（不替换数组引用，不触发 shallowRef 响应）
-    // metas 未加载时（表格视图），favoriteSet 就是唯一真相源
-    const metaIndex = isDataLoaded.value ? imageMetas.value.findIndex(m => m.id === id) : -1;
-    if (metaIndex >= 0) {
-      imageMetas.value[metaIndex].isFavorited = targetState;
-    }
 
     try {
       await historyDB.setFavorite(id, targetState);
@@ -570,9 +453,6 @@ export function useHistoryManager() {
       if (previousState) rollbackSet.add(id); else rollbackSet.delete(id);
       sharedFavoriteSet.value = rollbackSet;
       favoriteCount.value += previousState ? 1 : -1;
-      if (metaIndex >= 0) {
-        imageMetas.value[metaIndex].isFavorited = previousState;
-      }
       log.error('[历史记录] 切换收藏失败:', error);
       toast.showConfig('error', { summary: '操作失败', detail: String(error) });
       throw error;
@@ -583,7 +463,6 @@ export function useHistoryManager() {
 
   /**
    * 批量设置收藏状态
-   * 使用 favoriteSet 避免 O(n) 遍历 imageMetas
    */
   async function batchSetFavorite(ids: string[], favorited: boolean): Promise<void> {
     if (ids.length === 0) return;
@@ -603,14 +482,6 @@ export function useHistoryManager() {
       sharedFavoriteSet.value = newSet;
       favoriteCount.value = Math.max(0, favoriteCount.value + deltaCount);
 
-      // 静默同步 meta 对象属性（metas 未加载时跳过，favoriteSet 即真相源）
-      if (isDataLoaded.value) {
-        const idSet = new Set(ids);
-        for (const meta of imageMetas.value) {
-          if (idSet.has(meta.id)) meta.isFavorited = favorited;
-        }
-      }
-
       ids.forEach(id => detailCache.removeDetail(id));
 
     } catch (error) {
@@ -621,9 +492,7 @@ export function useHistoryManager() {
 
   return {
     // 状态
-    imageMetas,  // ← 改为元数据（原 allHistoryItems）
     isLoading,
-    isDataLoaded,
     isStatsLoaded,
 
     // 统计
@@ -637,7 +506,6 @@ export function useHistoryManager() {
 
     // 方法
     loadStats,
-    loadHistory,
     loadAllHistory,
     loadPageByNumber,
     searchHistory,
