@@ -3,7 +3,6 @@ import { ref, onMounted, onBeforeUnmount, onActivated, onDeactivated } from 'vue
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import Button from 'primevue/button';
 import Checkbox from 'primevue/checkbox';
-import RescueLibraryCard from './RescueLibraryCard.vue';
 import RescueRecentList from './RescueRecentList.vue';
 import RescueLastRepairCard from './RescueLastRepairCard.vue';
 import { type MruEntry } from '../../../../composables/md-rescue/useMdRescueMru';
@@ -59,13 +58,15 @@ onDeactivated(() => { isViewActive.value = false; });
 
 <template>
   <div class="rescue-idle" :class="{ dragging: isDragging }">
-    <div class="idle-hero">
-      <div class="idle-zone" :class="{ dragging: isDragging }">
-        <i class="idle-zone__icon pi pi-file-import" />
-        <span class="idle-zone__text">
-          <template v-if="isDragging">松开以载入</template>
-          <template v-else>拖入文件夹或 Markdown 文件</template>
-        </span>
+    <div class="idle-zone" :class="{ dragging: isDragging }">
+      <div class="idle-zone__main">
+        <div class="idle-zone__headline">
+          <i class="idle-zone__icon pi pi-file-import" />
+          <span class="idle-zone__text">
+            <template v-if="isDragging">松开以载入</template>
+            <template v-else>拖入文件夹或 Markdown 文件</template>
+          </span>
+        </div>
         <div class="idle-zone__actions">
           <button
             type="button"
@@ -83,18 +84,14 @@ onDeactivated(() => { isViewActive.value = false; });
           />
         </div>
       </div>
-
-      <div class="idle-hero__meta-row">
-        <RescueLibraryCard class="idle-hero__meta" />
-        <label class="idle-subfolder-option">
-          <Checkbox
-            :model-value="includeSubfolders"
-            :binary="true"
-            @update:model-value="emit('update:includeSubfolders', $event as boolean)"
-          />
-          <span>包含子文件夹</span>
-        </label>
-      </div>
+      <label class="idle-subfolder-option">
+        <Checkbox
+          :model-value="includeSubfolders"
+          :binary="true"
+          @update:model-value="emit('update:includeSubfolders', $event as boolean)"
+        />
+        <span>包含子文件夹</span>
+      </label>
     </div>
 
     <RescueRecentList
@@ -105,13 +102,13 @@ onDeactivated(() => { isViewActive.value = false; });
     <RescueLastRepairCard v-if="lastRepairRecord" />
     <div v-else class="last-repair-empty">
       <i class="pi pi-history" />
-      <span>暂未进行过修复</span>
+      <span>还没有修复记录 · 从上方拖入文件即可开始</span>
     </div>
 
-    <ul class="idle-scope">
-      <li><i class="pi pi-circle-fill" /> 只修复曾经上传到 PicNexus 的图片</li>
-      <li><i class="pi pi-circle-fill" /> 修复前自动备份原文件，随时可撤销</li>
-    </ul>
+    <div class="scope-hint">
+      <i class="pi pi-info-circle scope-hint__icon" />
+      <span>仅修复 PicNexus 上传过的图片，修复前自动备份、随时可撤销</span>
+    </div>
   </div>
 </template>
 
@@ -129,53 +126,55 @@ onDeactivated(() => { isViewActive.value = false; });
   overflow-y: auto;
 }
 
-.idle-hero {
+.idle-zone {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
   width: 100%;
-  flex-shrink: 0;
-}
-
-.idle-hero__meta-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-  width: 100%;
-  padding: 0 var(--space-sm);
-}
-
-.idle-hero__meta {
-  min-width: 0;
-}
-
-.idle-zone {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  width: 100%;
-  padding: var(--space-md) var(--space-lg);
+  padding: var(--space-3xl) var(--space-xl);
   background: var(--bg-card);
-  border: 1px dashed var(--border-subtle);
-  border-radius: var(--radius-md);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1.5px 在"虚线细"和"可见度"之间取折中，token 仅有 1/2/3px */
+  border: 1.5px dashed var(--border-subtle);
+  border-radius: var(--radius-lg);
   cursor: default;
+  flex-shrink: 0;
   transition:
     border-color var(--duration-medium),
     background var(--duration-medium);
 }
 
-.idle-zone:hover { border-color: var(--primary-alpha-40); }
+.idle-zone__main {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: var(--space-md);
+  width: 100%;
+  min-height: 36px;
+}
+
+.idle-zone__headline {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: var(--space-sm-md);
+  min-width: 0;
+}
+
+.idle-zone:hover {
+  border-color: var(--primary);
+  background: var(--primary-alpha-5);
+}
 
 .idle-zone.dragging,
 .rescue-idle.dragging .idle-zone {
   border-color: var(--primary);
-  background: var(--primary-alpha-5);
+  background: var(--primary-alpha-10);
   border-style: solid;
 }
 
 .idle-zone__icon {
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
   color: var(--primary);
   flex-shrink: 0;
   transition: transform var(--duration-medium) ease;
@@ -184,11 +183,28 @@ onDeactivated(() => { isViewActive.value = false; });
 .idle-zone.dragging .idle-zone__icon,
 .rescue-idle.dragging .idle-zone__icon { transform: translateY(-2px) scale(1.1); }
 
+.idle-subfolder-option {
+  position: absolute;
+  right: var(--space-xl);
+  bottom: var(--space-md);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs-sm);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.idle-subfolder-option:hover { color: var(--text-secondary); }
+
 .idle-zone__text {
-  flex: 1;
   min-width: 0;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
+  letter-spacing: 0.01em;
   color: var(--text-main);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -198,8 +214,8 @@ onDeactivated(() => { isViewActive.value = false; });
 .idle-zone__actions {
   display: flex;
   align-items: center;
+  justify-self: end;
   gap: var(--space-sm);
-  flex-shrink: 0;
 }
 
 .idle-btn-primary.p-button {
@@ -212,20 +228,6 @@ onDeactivated(() => { isViewActive.value = false; });
 .idle-btn-primary.p-button:hover { background: var(--primary-alpha-15); filter: brightness(0.94); }
 .idle-btn-primary.p-button:active { background: var(--primary-alpha-15); filter: brightness(0.88); }
 .idle-btn-primary.p-button:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
-
-.idle-subfolder-option {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs-sm);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  cursor: pointer;
-  user-select: none;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.idle-subfolder-option:hover { color: var(--text-secondary); }
 
 .idle-secondary-link {
   padding: var(--space-2xs) var(--space-xs);
@@ -246,40 +248,38 @@ onDeactivated(() => { isViewActive.value = false; });
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-sm-md) var(--space-md);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  background: var(--hover-overlay-subtle);
+  padding: var(--space-md);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: var(--primary-alpha-8);
+  border: 1px dashed var(--primary-alpha-30);
   border-radius: var(--radius-md);
 }
 
 .last-repair-empty i {
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
+  font-size: var(--text-base);
+  color: var(--primary);
+  flex-shrink: 0;
 }
 
-.idle-scope {
-  list-style: none;
-  margin: 0;
-  padding: 0 var(--space-sm);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  line-height: var(--leading-normal);
-  width: 100%;
-}
-
-.idle-scope li {
+/* 底部一行功能提示：合并原两行 + 去除关闭按钮 */
+.scope-hint {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+  padding: var(--space-sm-md) var(--space-md);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--success);
+  background: var(--success-alpha-8);
+  border: 1px solid var(--success-border);
+  border-radius: var(--radius-md);
+  width: 100%;
 }
 
-.idle-scope i {
-  font-size: var(--text-2xs);
-  color: var(--text-tertiary);
+.scope-hint__icon {
+  font-size: var(--text-base);
+  color: var(--success);
   flex-shrink: 0;
 }
 </style>

@@ -195,36 +195,34 @@ defineExpose({
 </script>
 
 <template>
-  <!-- 顶部筛选芯片 -->
-  <Transition name="slide-up">
-    <div v-if="flatBrokenLinks.length > 0" class="mr-action-bar">
-      <div class="mr-chips">
-        <button class="mr-chip" :class="{ active: activeFilter === 'all' }" @click="selectFilter('all')">
-          <span>全部</span>
-          <span class="mr-chip-count">{{ filterCounts.all }}</span>
-        </button>
-        <button
-          class="mr-chip"
-          :class="{ active: activeFilter === 'rescuable', disabled: filterCounts.rescuable === 0 }"
-          :disabled="filterCounts.rescuable === 0"
-          @click="selectFilter('rescuable')"
-        >
-          <span>{{ rescuableChipLabel }}</span>
-          <span class="mr-chip-count">{{ filterCounts.rescuable }}</span>
-        </button>
-        <button
-          class="mr-chip"
-          :class="{ active: activeFilter === 'manual', disabled: filterCounts.manual === 0 }"
-          :disabled="filterCounts.manual === 0"
-          @click="selectFilter('manual')"
-        >
-          <span class="mr-dot mr-dot--amber" />
-          <span>需手动</span>
-          <span class="mr-chip-count">{{ filterCounts.manual }}</span>
-        </button>
-      </div>
+  <!-- 顶部筛选芯片（占位显示，扫描一开始就稳定在顶部） -->
+  <div class="mr-action-bar">
+    <div class="mr-chips">
+      <button class="mr-chip" :class="{ active: activeFilter === 'all' }" @click="selectFilter('all')">
+        <span>全部</span>
+        <span class="mr-chip-count">{{ filterCounts.all }}</span>
+      </button>
+      <button
+        class="mr-chip"
+        :class="{ active: activeFilter === 'rescuable', disabled: filterCounts.rescuable === 0 }"
+        :disabled="filterCounts.rescuable === 0"
+        @click="selectFilter('rescuable')"
+      >
+        <span>{{ rescuableChipLabel }}</span>
+        <span class="mr-chip-count">{{ filterCounts.rescuable }}</span>
+      </button>
+      <button
+        class="mr-chip"
+        :class="{ active: activeFilter === 'manual', disabled: filterCounts.manual === 0 }"
+        :disabled="filterCounts.manual === 0"
+        @click="selectFilter('manual')"
+      >
+        <span class="mr-dot mr-dot--amber" />
+        <span>需手动</span>
+        <span class="mr-chip-count">{{ filterCounts.manual }}</span>
+      </button>
     </div>
-  </Transition>
+  </div>
 
   <!-- 分组列表 / 筛选为空 -->
   <Transition name="slide-up" mode="out-in">

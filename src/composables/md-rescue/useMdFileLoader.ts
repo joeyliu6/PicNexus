@@ -231,6 +231,9 @@ export function useMdFileLoader() {
         return false;
       }
       await loadFileImpl(path);
+      if (imageLinks.value.length === 0) {
+        toast.info('未找到图片链接', '该文件中没有图片链接');
+      }
       return true;
     } catch (err) {
       log.error('加载文件失败', err);

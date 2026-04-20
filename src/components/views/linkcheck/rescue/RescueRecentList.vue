@@ -52,25 +52,28 @@ function handleClearAll() {
 </script>
 
 <template>
-  <section v-if="visible.length > 0" class="recent-list" aria-label="最近打开">
+  <section class="recent-list" aria-label="最近打开">
     <div class="recent-list__header">
       <span class="recent-list__title">最近打开</span>
       <button
+        v-if="visible.length > 0"
+        v-tooltip.top="'清空记录'"
         type="button"
         class="recent-list__clear"
+        aria-label="清空最近打开"
         :disabled="disabled"
         @click="handleClearAll"
       >
-        清空
+        <i class="pi pi-trash" />
       </button>
     </div>
-    <ul class="recent-list__items">
+    <ul v-if="visible.length > 0" class="recent-list__items">
       <li v-for="entry in visible" :key="entry.path">
         <button
           type="button"
           class="recent-item"
           :disabled="disabled"
-          :title="entry.path"
+          v-tooltip.top="`点击重新扫描并检测\n${entry.path}`"
           @click="emit('pick', entry)"
         >
           <i
@@ -100,7 +103,7 @@ function handleClearAll() {
 .recent-list__header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--space-xs);
   padding: 0 var(--space-sm);
 }
 
@@ -112,27 +115,25 @@ function handleClearAll() {
 }
 
 .recent-list__clear {
-  padding: var(--space-2xs) var(--space-xs);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2xs);
   background: transparent;
   border: 0;
-  font-size: var(--text-xs);
   color: var(--text-muted);
   cursor: pointer;
   border-radius: var(--radius-sm);
-  opacity: 0;
-  transition:
-    opacity var(--duration-fast) var(--ease-standard),
-    color var(--duration-fast) var(--ease-standard);
+  transition: color var(--duration-fast) var(--ease-standard);
 }
 
-.recent-list:hover .recent-list__clear,
-.recent-list:focus-within .recent-list__clear {
-  opacity: 1;
+.recent-list__clear i {
+  font-size: var(--text-2xs);
 }
 
 .recent-list__clear:hover:not(:disabled) { color: var(--error); }
 .recent-list__clear:disabled { opacity: 0.3; cursor: not-allowed; }
-.recent-list__clear:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; opacity: 1; }
+.recent-list__clear:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
 
 .recent-list__items {
   list-style: none;

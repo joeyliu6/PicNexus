@@ -2,7 +2,7 @@
 // Markdown 链接救援主容器
 // 子组件：RescueIdleZone（拖放区）、RescueBrokenGroups（分组列表）、RescueFixingCards（修复卡片）
 
-import { ref, computed, watch, onBeforeUnmount } from 'vue';
+import { ref, computed, watch } from 'vue';
 import Button from 'primevue/button';
 import MdRepairDialog from './MdRepairDialog.vue';
 import RescueIdleZone from './rescue/RescueIdleZone.vue';
@@ -11,7 +11,7 @@ import RescueFixingCards from './rescue/RescueFixingCards.vue';
 import { useMdRescueManager } from '../../../composables/useMdRescue';
 import type { RepairStrategy } from '../../../composables/useMdRescue';
 import { smartTruncateUrl } from '../../../utils/mdParser';
-import { formatTimeRemaining } from '../../../composables/useLinkStatusDisplay';
+import { useRescueScanHeader } from '../../../composables/md-rescue/useRescueScanHeader';
 import { removeMruEntry, type MruEntry } from '../../../composables/md-rescue/useMdRescueMru';
 import { useToast } from '../../../composables/useToast';
 import { exists } from '@tauri-apps/plugin-fs';
@@ -42,14 +42,6 @@ const readyBrokenFiles = computed(() =>
   fileHealthList.value.filter((f) => f.ready && f.status !== 'healthy'),
 );
 
-const readyHealthyFiles = computed(() =>
-  fileHealthList.value.filter((f) => f.ready && f.status === 'healthy'),
-);
-
-const recentHealthyFiles = computed(() =>
-  readyHealthyFiles.value.slice(-8).reverse(),
-);
-
 const fixingPercent = computed(() => {
   const { current, total } = fixingProgress.value;
   return total === 0 ? 0 : Math.round((current / total) * 100);
@@ -64,16 +56,17 @@ const currentScanFileName = computed(() => {
 
 const isRepaired = computed(() => phase.value === 'done');
 
-// ---- 扫描完成停留 ----
+// ---- 扫描 header / 占位 / 完成停留（详见 useRescueScanHeader）----
 
-const scanFinishing = ref(false);
-let scanFinishTimer: ReturnType<typeof setTimeout> | null = null;
-
-const showScanSkeleton = computed(() =>
-  isCollecting.value
-  || (phase.value === 'scanning' && !['complete', 'cancelled'].includes(scanStage.value))
-  || scanFinishing.value,
-);
+const {
+  scanFinishing, scanHeaderTitle, scanHeaderSubtitle, scanHeaderIconClass, canCancelScan, scanPercent,
+  showScanPlaceholder, scanPlaceholderTitle, scanPlaceholderHint,
+  handleCancelScan, triggerScanFinishing,
+} = useRescueScanHeader({
+  phase, scanStage, isCollecting, collectProgress, scanProgress,
+  bottomStats, estimatedTimeRemaining, currentScanFileName, readyBrokenFiles,
+  onCancelCollect: cancelCollect, onCancelScan: cancelScan,
+});
 
 watch(() => scanStage.value, async (stage) => {
   if (stage === 'complete') {
@@ -81,11 +74,9 @@ watch(() => scanStage.value, async (stage) => {
     tempPreference.value = hostPreference.value.length > 0
       ? [...hostPreference.value]
       : [...availableBackupServices.value];
-    scanFinishing.value = true;
-    scanFinishTimer = setTimeout(() => { scanFinishing.value = false; scanFinishTimer = null; }, 1500);
+    triggerScanFinishing('complete');
   } else if (stage === 'cancelled') {
-    scanFinishing.value = true;
-    scanFinishTimer = setTimeout(() => { scanFinishing.value = false; scanFinishTimer = null; }, 2000);
+    triggerScanFinishing('cancelled');
   }
 });
 
@@ -133,10 +124,6 @@ function truncatePath(path: string): string {
   return parts.length <= 2 ? path : '.../' + parts.slice(-2).join('/');
 }
 
-onBeforeUnmount(() => {
-  if (scanFinishTimer) { clearTimeout(scanFinishTimer); scanFinishTimer = null; }
-});
-
 // ---- 修复策略 ----
 
 const showRepairDialog = ref(false);
@@ -178,9 +165,21 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
     <!-- working: scanning / fixing / done -->
     <div v-else class="rescue-phase rescue-working">
 
-      <!-- fixing / done 顶栏 -->
+      <!-- 统一顶栏 header（collecting / scanning / fixing / done 共用风格） -->
       <Transition name="fade" mode="out-in">
-        <div v-if="phase === 'fixing'" key="fixing-header" class="wk-header">
+        <div v-if="phase === 'scanning' || isCollecting" key="scanning-header" class="wk-header">
+          <div class="wk-title-group">
+            <i :class="['wk-scan-icon', scanHeaderIconClass]" />
+            <span class="wk-title">{{ scanHeaderTitle }}</span>
+            <span v-if="scanHeaderSubtitle" class="wk-subtitle">{{ scanHeaderSubtitle }}</span>
+          </div>
+          <div class="wk-actions">
+            <button v-if="canCancelScan" type="button" class="btn-ghost btn-sm" @click="handleCancelScan">
+              <i class="pi pi-times" /> 取消
+            </button>
+          </div>
+        </div>
+        <div v-else-if="phase === 'fixing'" key="fixing-header" class="wk-header">
           <span class="wk-title">正在修复...</span>
           <span class="wk-subtitle">{{ fixingProgress.current }}/{{ fixingProgress.total }} ({{ fixingPercent }}%)</span>
         </div>
@@ -196,71 +195,36 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
         </div>
       </Transition>
 
-      <!-- fixing 进度条 -->
+      <!-- 顶部进度条 -->
       <Transition name="fade">
         <div v-if="phase === 'fixing'" class="wk-progress">
           <div class="wk-progress-fill" :style="{ width: fixingPercent + '%' }" />
+        </div>
+        <div v-else-if="(phase === 'scanning' && !scanFinishing) || isCollecting" class="wk-progress">
+          <div
+            class="wk-progress-fill"
+            :class="{ 'wk-progress-fill--indeterminate': scanPercent === 0 }"
+            :style="scanPercent > 0 ? { width: scanPercent + '%' } : undefined"
+          />
         </div>
       </Transition>
 
       <!-- 内容区 -->
       <div class="wk-body">
 
-        <!-- 扫描骨架屏 -->
-        <Transition name="scan-bar">
-          <div v-if="showScanSkeleton" class="mr-scan-skeleton" :class="{ 'is-finishing': scanFinishing }">
-            <i :class="[
-              scanFinishing && scanStage !== 'cancelled' ? 'pi pi-check-circle mr-scan-skeleton-done'
-              : scanStage === 'cancelled' ? 'pi pi-info-circle mr-scan-skeleton-done'
-              : 'pi pi-spin pi-spinner mr-scan-skeleton-spinner',
-            ]" />
-            <span class="mr-scan-skeleton-text">
-              <template v-if="scanFinishing && scanStage === 'cancelled'">已取消扫描 · 已检测 {{ scanProgress?.checked ?? 0 }} / {{ scanProgress?.total ?? 0 }} 张图片</template>
-              <template v-else-if="scanFinishing">扫描完成 · {{ bottomStats.totalImages }} 张图片</template>
-              <template v-else-if="isCollecting">
-                <template v-if="collectProgress && collectProgress.processedFiles > 0">
-                  正在读取文件… · {{ collectProgress.processedFiles }} / {{ collectProgress.scannedFiles }}<template v-if="collectProgress.currentFile"> · {{ collectProgress.currentFile }}</template>
-                </template>
-                <template v-else-if="collectProgress && collectProgress.scannedFiles > 0">正在扫描文件列表… · 已找到 {{ collectProgress.scannedFiles }} 个文件</template>
-                <template v-else>正在扫描文件列表…</template>
-              </template>
-              <template v-else-if="scanStage === 'cancelling'">正在取消… · 等待进行中的请求完成</template>
-              <template v-else-if="scanStage === 'backups'">正在验证备用链接…</template>
-              <template v-else-if="scanProgress && scanProgress.total > 0">
-                正在扫描图片 · {{ scanProgress.checked }} / {{ scanProgress.total }}<template v-if="estimatedTimeRemaining !== null"> · 预计剩余 {{ formatTimeRemaining(estimatedTimeRemaining) }}</template><template v-else-if="currentScanFileName"> · {{ currentScanFileName }}</template>
-              </template>
-              <template v-else>正在扫描图片…</template>
-            </span>
-            <span v-if="!scanFinishing && (bottomStats.totalFiles > 0 || (isCollecting && collectProgress && collectProgress.foundLinks > 0))" class="mr-scan-skeleton-meta">
-              <template v-if="isCollecting && collectProgress && collectProgress.foundLinks > 0">已找到 {{ collectProgress.foundLinks }} 张图片</template>
-              <template v-else-if="bottomStats.totalFiles > 0">{{ bottomStats.totalFiles }} 文件 · {{ bottomStats.totalImages }} 图片<template v-if="skippedDirs.length > 0"> · {{ skippedDirs.length }} 个目录受限</template></template>
-            </span>
-            <button v-if="isCollecting && !scanFinishing" class="mr-scan-skeleton-cancel" title="取消收集" @click="cancelCollect">
-              <i class="pi pi-times" />
-            </button>
-          </div>
-        </Transition>
-
-        <!-- 健康文件流水 -->
-        <Transition name="fade">
-          <div v-if="phase === 'scanning' && !['complete', 'cancelling', 'cancelled'].includes(scanStage) && readyBrokenFiles.length === 0 && recentHealthyFiles.length > 0" class="mr-healthy-stream">
-            <div v-for="f in recentHealthyFiles" :key="f.path" class="mr-healthy-row">
-              <i class="pi pi-check-circle mr-healthy-icon" />
-              <span class="mr-healthy-name">{{ f.name }}</span>
-              <span class="mr-healthy-meta">{{ f.totalCount }} 张图片均正常</span>
-            </div>
-          </div>
-        </Transition>
-
         <!-- scanning / done: 分组链接列表（子组件） -->
         <template v-if="phase === 'scanning' || phase === 'done'">
           <RescueBrokenGroups :image-links="imageLinks" :is-repaired="isRepaired" :phase="phase" :scan-stage="scanStage" />
 
-          <!-- 全部正常 -->
+          <!-- 扫描期空态：没有破损文件时居中占位 -->
           <Transition name="slide-up">
-            <div v-if="phase === 'scanning' && scanStage === 'complete' && readyBrokenFiles.length === 0 && readyHealthyFiles.length > 0" class="report-empty">
-              <i class="pi pi-check-circle report-empty-icon" />
-              <p>所有图片链接正常</p>
+            <div v-if="showScanPlaceholder" class="rescue-scan-placeholder">
+              <i
+                class="rescue-scan-placeholder-icon"
+                :class="scanStage === 'cancelled' ? 'pi pi-info-circle' : 'pi pi-shield'"
+              />
+              <p class="rescue-scan-placeholder-title">{{ scanPlaceholderTitle }}</p>
+              <p v-if="scanPlaceholderHint" class="rescue-scan-placeholder-hint">{{ scanPlaceholderHint }}</p>
             </div>
           </Transition>
 
@@ -309,13 +273,7 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
         </div>
 
         <div class="rescue-bottom-actions">
-          <template v-if="phase === 'scanning' && (scanStage === 'checking' || scanStage === 'backups')">
-            <button class="btn-danger btn-sm" @click="cancelScan"><i class="pi pi-stop" /> 取消</button>
-          </template>
-          <template v-else-if="phase === 'scanning' && scanStage === 'cancelling'">
-            <button class="btn-ghost btn-sm" disabled><i class="pi pi-spin pi-spinner" /> 正在取消…</button>
-          </template>
-          <template v-else-if="phase === 'scanning' && scanStage === 'cancelled'">
+          <template v-if="phase === 'scanning' && scanStage === 'cancelled'">
             <span v-if="scanProgress" class="mr-cancelled-hint">已检测 {{ scanProgress.checked }} / {{ scanProgress.total }}</span>
             <button class="btn-ghost btn-sm" @click="resetRescue"><i class="pi pi-refresh" /> 重新扫描</button>
             <button :class="['btn-sm', hasRescuable ? 'btn-primary' : 'btn-ghost']" :disabled="!hasRescuable" v-tooltip.top="hasRescuable ? '基于已检测的部分结果修复' : '已检测部分无可修复链接'" @click="showRepairDialog = true">
@@ -368,63 +326,57 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
   padding-right: var(--space-xl); height: 48px; border-bottom: 1px solid var(--border-subtle); flex-shrink: 0;
 }
 
-.wk-title-group { display: flex; align-items: center; gap: var(--space-md); }
-.wk-title { font-size: var(--text-base); font-weight: var(--weight-semibold); color: var(--text-main); }
-.wk-subtitle { font-size: var(--text-sm); color: var(--text-tertiary); }
+.wk-title-group { display: flex; align-items: center; gap: var(--space-md); min-width: 0; flex: 1; }
+.wk-title { font-size: var(--text-base); font-weight: var(--weight-semibold); color: var(--text-main); white-space: nowrap; }
+.wk-subtitle { font-size: var(--text-sm); color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .wk-done-icon { font-size: var(--text-lg-xl); color: var(--success); }
-.wk-actions { display: flex; gap: var(--space-sm); }
+.wk-scan-icon { font-size: var(--text-base); color: var(--text-tertiary); flex-shrink: 0; }
+.wk-scan-icon--done { color: var(--success); }
+.wk-scan-icon--warn { color: var(--warning); }
+.wk-actions { display: flex; gap: var(--space-sm); flex-shrink: 0; }
 
-.wk-progress { height: 4px; background: var(--border-subtle); flex-shrink: 0; }
-.wk-progress-fill { height: 100%; background: var(--primary); transition: width var(--duration-slow) ease; border-radius: 0 var(--radius-xs) var(--radius-xs) 0; }
+.wk-progress { height: 4px; background: var(--border-subtle); flex-shrink: 0; overflow: hidden; }
+
+.wk-progress-fill {
+  height: 100%; background: var(--primary); transition: width var(--duration-slow) ease;
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+}
+
+.wk-progress-fill--indeterminate {
+  width: 40%;
+  animation: k-scan-indeterminate var(--duration-shimmer) linear infinite;
+}
+
+@keyframes k-scan-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
 
 .wk-body {
-  flex: 1; overflow-y: auto; padding: var(--space-sm-md) var(--space-xl) var(--space-sm-md) 0;
+  flex: 1; overflow-y: auto; padding: var(--space-md) var(--space-xl) var(--space-sm-md) 0;
   display: flex; flex-direction: column; gap: var(--space-sm);
 }
 
-/* 扫描骨架屏 */
-.mr-scan-skeleton {
-  display: flex; align-items: center; gap: var(--space-sm-md);
-  padding: var(--space-md) var(--space-md-lg); flex-shrink: 0;
-  border: 1px dashed var(--border-subtle); border-radius: var(--radius-md);
-  background: var(--hover-overlay-subtle); max-height: 60px;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 2s 无对应 duration token */
-  animation: k-pulse 2s ease-in-out infinite;
+/* 扫描期空态占位 */
+.rescue-scan-placeholder {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--space-sm); flex: 1; padding: var(--space-3xl) var(--space-lg);
+  color: var(--text-tertiary); text-align: center;
 }
 
-.mr-scan-skeleton-spinner { font-size: var(--text-sm); color: var(--text-tertiary); flex-shrink: 0; }
-.mr-scan-skeleton-done { font-size: var(--text-sm); color: var(--success); flex-shrink: 0; }
-.mr-scan-skeleton.is-finishing { animation: none; }
-.mr-scan-skeleton.is-finishing .mr-scan-skeleton-text { color: var(--success); }
-
-.mr-scan-skeleton-text {
-  flex: 1; min-width: 0; font-size: var(--text-xs); font-weight: var(--weight-medium); color: var(--text-tertiary);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.rescue-scan-placeholder-icon {
+  font-size: var(--text-4xl); color: var(--success); opacity: 0.7;
+  animation: k-pulse var(--duration-breathe) ease-in-out infinite;
 }
 
-.mr-scan-skeleton-meta {
-  flex-shrink: 0; font-size: var(--text-xs); color: var(--text-tertiary); font-variant-numeric: tabular-nums;
+.rescue-scan-placeholder-title {
+  font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-muted);
+  margin: 0; font-variant-numeric: tabular-nums;
 }
 
-.mr-scan-skeleton-cancel {
-  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; border: none; border-radius: var(--radius-xs);
-  background: transparent; color: var(--text-tertiary); cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast); font-family: inherit;
+.rescue-scan-placeholder-hint {
+  font-size: var(--text-xs); color: var(--text-tertiary); margin: 0;
 }
-.mr-scan-skeleton-cancel:hover { background: var(--hover-overlay); color: var(--text-primary); }
-
-/* 健康文件流水 */
-.mr-healthy-stream { display: flex; flex-direction: column; gap: var(--space-2xs); padding: var(--space-sm) var(--space-md-lg); }
-/* stylelint-disable-next-line declaration-property-value-disallowed-list -- 0.25s 无精确 duration token */
-.mr-healthy-row { display: flex; align-items: center; gap: var(--space-sm); height: 32px; font-size: var(--text-xs); animation: k-fade-slide-down 0.25s ease; }
-.mr-healthy-icon { font-size: var(--text-xs); color: var(--success); flex-shrink: 0; }
-.mr-healthy-name { color: var(--text-muted); font-weight: var(--weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
-.mr-healthy-meta { flex-shrink: 0; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
-
-/* 全部正常 */
-.report-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-sm-md); flex: 1; color: var(--text-tertiary); font-size: var(--text-sm); }
-.report-empty-icon { font-size: var(--text-4xl); color: var(--success); }
 
 /* done 备份提示 */
 .done-backup {
@@ -475,17 +427,6 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
 .fade-enter-active { transition: opacity var(--duration-normal) var(--ease-standard); }
 .fade-leave-active { transition: opacity var(--duration-medium) var(--ease-accelerate); }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
-
-.scan-bar-enter-active { transition: opacity var(--duration-normal) ease, transform var(--duration-normal) ease; }
-
-.scan-bar-leave-active {
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 0.8s/0.6s/0.3s 为离场长动画，无精确 token */
-  transition: opacity 0.8s var(--ease-standard), transform 0.8s var(--ease-standard),
-    max-height 0.6s 0.3s var(--ease-standard), padding 0.6s 0.3s var(--ease-standard), border-width 0.6s 0.3s var(--ease-standard);
-  overflow: hidden;
-}
-.scan-bar-enter-from { opacity: 0; transform: translateY(-4px); }
-.scan-bar-leave-to { opacity: 0; transform: translateY(-8px); max-height: 0; padding-top: 0; padding-bottom: 0; border-width: 0; }
 
 .slide-up-enter-active { transition: opacity var(--duration-medium) ease, transform var(--duration-medium) ease; }
 .slide-up-enter-from { opacity: 0; transform: translateY(12px); }
