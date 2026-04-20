@@ -134,8 +134,8 @@ defineExpose({
   <div class="form-group">
     <label class="group-label">备份密码</label>
 
-    <div class="security-card" :class="hasBackupPassword ? 'is-protected' : 'is-unprotected'">
-      <div class="security-card-top">
+    <div class="security-card">
+      <div class="security-card-row">
         <span v-if="hasBackupPassword" class="security-status">● 已加密</span>
         <span v-else class="security-status-inactive">
           <i class="pi pi-exclamation-circle"></i> 未设置
@@ -173,12 +173,14 @@ defineExpose({
           />
         </div>
       </div>
-      <p class="security-desc">
-        {{ hasBackupPassword
-          ? '配置文件已加密保护，导出更安全。换机还原时导入备份并输入密码即可。'
-          : '配置默认以明文导出，设置密码后自动加密。换机还原时需输入该密码。'
-        }}
-      </p>
+      <div class="security-card-desc-row">
+        <p class="security-desc">
+          {{ hasBackupPassword
+            ? '配置文件已加密保护，导出更安全。换机还原时导入备份并输入密码即可。'
+            : '配置默认以明文导出，设置密码后自动加密。换机还原时需输入该密码。'
+          }}
+        </p>
+      </div>
     </div>
 
     <!-- 迁移密码对话框 -->
@@ -196,29 +198,24 @@ defineExpose({
 <style scoped>
 /* 备份密码卡片 */
 .security-card {
-  padding: var(--space-md) var(--space-lg);
-  border-radius: var(--radius-md);
-  background: var(--hover-overlay-subtle);
+  background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  transition: border-color var(--duration-normal);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs-sm);
+  border-radius: var(--radius-lg);
 }
 
-.security-card.is-protected {
-  border-color: var(--primary-alpha-15);
-}
-
-.security-card.is-unprotected {
-  border-color: var(--border-subtle);
-}
-
-.security-card-top {
+.security-card-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: var(--space-sm-md) var(--space-md-lg);
   gap: var(--space-md);
+}
+
+.security-card-desc-row {
+  border-top: 1px solid var(--border-subtle);
+  background: var(--hover-overlay-subtle);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  padding: var(--space-sm-md) var(--space-md-lg);
 }
 
 .security-status {
