@@ -88,12 +88,7 @@ export async function importHistoryFromJson(
     log.warn(`导入校验: ${parsed.length} 条中有 ${parsed.length - items.length} 条格式无效被跳过`);
   }
 
-  // replace 策略：先清空所有记录
-  if (mergeStrategy === 'replace') {
-    await db.execute('DELETE FROM history_items');
-  }
-
-  // 预处理：确保所有记录都有 ID
+  // 预处理：确保所有记录都有 ID（在事务外，避免事务中途失败后污染入参）
   for (const item of items) {
     if (!item.id) {
       item.id = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -119,15 +114,30 @@ export async function importHistoryFromJson(
     itemsToImport = items;
   }
 
-  // 分批插入
+  // replace + 批量插入全流程包裹事务：中途任何一步失败都回滚，
+  // 避免"先清空后插入"场景下原有历史被删但新数据未写入导致数据丢失
+  await db.execute('BEGIN TRANSACTION');
   let importedCount = 0;
-  for (let i = 0; i < itemsToImport.length; i += BATCH_SIZE) {
-    const batch = itemsToImport.slice(i, i + BATCH_SIZE);
-    await batchUpsert(db, batch);
-    importedCount += batch.length;
+  try {
+    if (mergeStrategy === 'replace') {
+      await db.execute('DELETE FROM history_items');
+    }
 
-    // 触发进度回调
-    onProgress?.(importedCount, itemsToImport.length);
+    for (let i = 0; i < itemsToImport.length; i += BATCH_SIZE) {
+      const batch = itemsToImport.slice(i, i + BATCH_SIZE);
+      await batchUpsert(db, batch);
+      importedCount += batch.length;
+      onProgress?.(importedCount, itemsToImport.length);
+    }
+
+    await db.execute('COMMIT');
+  } catch (error) {
+    try {
+      await db.execute('ROLLBACK');
+    } catch (rollbackError) {
+      log.error('ROLLBACK 失败', rollbackError);
+    }
+    throw error;
   }
 
   log.info(`导入完成: ${importedCount}/${items.length} 条`);
