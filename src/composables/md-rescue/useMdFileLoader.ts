@@ -104,6 +104,12 @@ export function useMdFileLoader() {
    * 使用 Rust scan_md_folder 单次 IPC 完成：递归扫描 + 批量读取 + 正则提取
    */
   async function loadFolderImpl(dir: string): Promise<boolean> {
+    // 防重入：避免并发扫描导致 Rust 全局 cancel_flag 冲突、事件监听器泄漏与状态串写
+    if (isCollecting.value) {
+      toast.info('扫描进行中', '请等待当前扫描完成或取消后再开始新的扫描');
+      return false;
+    }
+
     mode.value = 'folder';
     folderPath.value = dir;
     filePath.value = null;
