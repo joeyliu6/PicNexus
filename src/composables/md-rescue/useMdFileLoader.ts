@@ -9,6 +9,7 @@ import { Semaphore } from '../../utils/semaphore';
 import { useToast } from '../useToast';
 import { createLogger } from '../../utils/logger';
 import { extractImageLinks } from '../../utils/mdParser';
+import { recordMruEntry } from './useMdRescueMru';
 import type { MdImageLink } from '../../types/linkCheck';
 import {
   type MdImageLinkWithFile,
@@ -85,6 +86,7 @@ export async function loadFileImpl(path: string): Promise<void> {
   const content = await readTextFile(path);
   fileContent.value = content;
   imageLinks.value = wrapLinksWithFile(extractImageLinks(content), path);
+  recordMruEntry(path, 'file');
 }
 
 /**
@@ -170,6 +172,8 @@ export function useMdFileLoader() {
         toast.info('未找到 MD 文件', '该文件夹中没有 Markdown 文件');
         return false;
       }
+
+      recordMruEntry(dir, 'folder');
       if (allLinks.length === 0) {
         toast.info('未找到图片链接', `${filePaths.length} 个文件中均无图片链接`);
       }

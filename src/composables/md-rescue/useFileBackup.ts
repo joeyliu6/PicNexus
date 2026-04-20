@@ -6,6 +6,7 @@ import { join, dirname, basename } from '@tauri-apps/api/path';
 import { useToast } from '../useToast';
 import { createLogger } from '../../utils/logger';
 import { replaceImageLinks } from '../../utils/mdParser';
+import { saveLastRepair, clearLastRepair } from './useMdRescueLastRepair';
 import {
   type RepairReceipt,
   isReplacing,
@@ -147,6 +148,16 @@ export async function executeReplace(unrescuableCount: number): Promise<{
       fileBackupMap,
     };
 
+    if (totalSuccess > 0 && fileBackupMap.length > 0) {
+      saveLastRepair({
+        date: Date.now(),
+        filesFixed: filesProcessed,
+        linksFixed: totalSuccess,
+        backupPath: backupDir,
+        fileBackupMap,
+      });
+    }
+
     phase.value = 'done';
     return { success: totalSuccess, skipped, failed: totalFailed };
   } catch (err) {
@@ -173,6 +184,7 @@ export async function undoReplace(resetFn: () => void): Promise<void> {
       await copyFile(backup, original);
       log.info(`已恢复: ${original}`);
     }
+    clearLastRepair();
     toast.success('撤销完成', '已恢复所有文件至修复前状态');
   } catch (err) {
     log.error('撤销失败', err);
