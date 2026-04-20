@@ -12,12 +12,16 @@ import { useMdRescueManager } from '../../../composables/useMdRescue';
 import type { RepairStrategy } from '../../../composables/useMdRescue';
 import { smartTruncateUrl } from '../../../utils/mdParser';
 import { formatTimeRemaining } from '../../../composables/useLinkStatusDisplay';
+import { removeMruEntry, type MruEntry } from '../../../composables/md-rescue/useMdRescueMru';
+import { useToast } from '../../../composables/useToast';
+import { exists } from '@tauri-apps/plugin-fs';
 
 const {
   phase, imageLinks, isAnalyzing, isCollecting, collectProgress,
   isChecking, progress, fileHealthList, availableBackupServices,
   fixingProgress, repairReceipt, hostPreference, includeSubfolders,
   bottomStats, selectMdFile, selectFolder, handleDropPaths,
+  loadFilePath, loadFolderPath,
   analyzeFile, applyRepairStrategy, loadHostPreference, saveHostPreference,
   cancelCollect, cancelScan, cancelFix, undoReplace, executeReplace,
   reset: resetRescue, scanStage, scanProgress, skippedDirs, estimatedTimeRemaining,
@@ -97,6 +101,29 @@ async function handleSelectFolder() {
   if (ok && imageLinks.value.length > 0) await analyzeFile();
 }
 
+const toast = useToast();
+
+async function handlePickRecent(entry: MruEntry) {
+  // 先判定路径是否还存在：不存在才从 MRU 剔除，其他错误交给 load* 内部 toast，避免误删 + 双 toast
+  let pathExists = true;
+  try {
+    pathExists = await exists(entry.path);
+  } catch {
+    pathExists = true; // exists 自身抛错（权限等）视为"存在"，不擅自删 MRU
+  }
+  if (!pathExists) {
+    removeMruEntry(entry.path);
+    toast.warn('路径已失效', '已从最近打开中移除');
+    return;
+  }
+
+  const ok = entry.kind === 'folder'
+    ? await loadFolderPath(entry.path)
+    : await loadFilePath(entry.path);
+  if (!ok) return; // load* 内部已 toast，外层不再重复提示
+  if (imageLinks.value.length > 0) await analyzeFile();
+}
+
 function parsePath(path: string): string[] {
   return path.replace(/\\/g, '/').split('/').filter(Boolean);
 }
@@ -145,6 +172,7 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
       @select-folder="handleSelectFolder"
       @update:include-subfolders="includeSubfolders = $event"
       @drop-paths="handleDropPaths"
+      @pick-recent="handlePickRecent"
     />
 
     <!-- working: scanning / fixing / done -->

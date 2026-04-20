@@ -3,6 +3,11 @@ import { ref, onMounted, onBeforeUnmount, onActivated, onDeactivated } from 'vue
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import Button from 'primevue/button';
 import Checkbox from 'primevue/checkbox';
+import RescueLibraryCard from './RescueLibraryCard.vue';
+import RescueRecentList from './RescueRecentList.vue';
+import RescueLastRepairCard from './RescueLastRepairCard.vue';
+import { type MruEntry } from '../../../../composables/md-rescue/useMdRescueMru';
+import { useLastRepair } from '../../../../composables/md-rescue/useMdRescueLastRepair';
 import { createLogger } from '../../../../utils/logger';
 
 const log = createLogger('MdRescue');
@@ -18,11 +23,14 @@ const emit = defineEmits<{
   (e: 'selectFolder'): void;
   (e: 'update:includeSubfolders', val: boolean): void;
   (e: 'dropPaths', paths: string[]): void;
+  (e: 'pickRecent', entry: MruEntry): void;
 }>();
 
 const isDragging = ref(false);
 const isViewActive = ref(true);
 let dropUnlisten: (() => void) | null = null;
+
+const { record: lastRepairRecord } = useLastRepair();
 
 async function setupDropListener() {
   try {
@@ -50,22 +58,60 @@ onDeactivated(() => { isViewActive.value = false; });
 </script>
 
 <template>
-  <div class="rescue-idle">
-    <div class="idle-zone" :class="{ dragging: isDragging }">
-      <div class="idle-icon-wrap"><i class="pi pi-upload" /></div>
-      <p class="idle-feature-desc">扫描文档中的图片链接，检测失效并从历史备用链接自动修复</p>
-      <span class="idle-main-text">拖放 Markdown 文件到此处</span>
-      <div class="idle-buttons">
-        <Button label="选择文件" :loading="isAnalyzing || isChecking" class="idle-btn-primary" @click="emit('selectFile')" />
-        <div class="idle-folder-col">
-          <Button label="选择文件夹" severity="secondary" outlined :loading="isAnalyzing || isChecking" class="idle-btn-secondary" @click="emit('selectFolder')" />
-          <label class="idle-subfolder-option">
-            <Checkbox :model-value="includeSubfolders" :binary="true" @update:model-value="emit('update:includeSubfolders', $event as boolean)" />
-            <span>包含子文件夹</span>
-          </label>
+  <div class="rescue-idle" :class="{ dragging: isDragging }">
+    <div class="idle-hero">
+      <div class="idle-zone" :class="{ dragging: isDragging }">
+        <i class="idle-zone__icon pi pi-file-import" />
+        <span class="idle-zone__text">
+          <template v-if="isDragging">松开以载入</template>
+          <template v-else>拖入文件夹或 Markdown 文件</template>
+        </span>
+        <div class="idle-zone__actions">
+          <button
+            type="button"
+            class="idle-secondary-link"
+            :disabled="isAnalyzing || isChecking"
+            @click="emit('selectFile')"
+          >
+            选择单个文件
+          </button>
+          <Button
+            label="选择文件夹"
+            :loading="isAnalyzing || isChecking"
+            class="idle-btn-primary"
+            @click="emit('selectFolder')"
+          />
         </div>
       </div>
+
+      <div class="idle-hero__meta-row">
+        <RescueLibraryCard class="idle-hero__meta" />
+        <label class="idle-subfolder-option">
+          <Checkbox
+            :model-value="includeSubfolders"
+            :binary="true"
+            @update:model-value="emit('update:includeSubfolders', $event as boolean)"
+          />
+          <span>包含子文件夹</span>
+        </label>
+      </div>
     </div>
+
+    <RescueRecentList
+      :disabled="isAnalyzing || isChecking"
+      @pick="emit('pickRecent', $event)"
+    />
+
+    <RescueLastRepairCard v-if="lastRepairRecord" />
+    <div v-else class="last-repair-empty">
+      <i class="pi pi-history" />
+      <span>暂未进行过修复</span>
+    </div>
+
+    <ul class="idle-scope">
+      <li><i class="pi pi-circle-fill" /> 只修复曾经上传到 PicNexus 的图片</li>
+      <li><i class="pi pi-circle-fill" /> 修复前自动备份原文件，随时可撤销</li>
+    </ul>
   </div>
 </template>
 
@@ -73,68 +119,92 @@ onDeactivated(() => { isViewActive.value = false; });
 .rescue-idle {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  gap: var(--space-lg-xl);
+  width: 100%;
+  max-width: 850px;
   height: 100%;
-  padding: var(--space-xl) var(--space-2xl);
+  margin: 0 auto;
+  padding: var(--space-lg-xl) var(--space-lg-xl) var(--space-lg-xl) 0;
+  overflow-y: auto;
+}
+
+.idle-hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.idle-hero__meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  width: 100%;
+  padding: 0 var(--space-sm);
+}
+
+.idle-hero__meta {
+  min-width: 0;
 }
 
 .idle-zone {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
+  gap: var(--space-md);
   width: 100%;
-  max-width: 420px;
-  padding: var(--space-2xl) var(--space-2xl) var(--space-xl);
-  border: 2px dashed var(--border-subtle);
-  border-radius: var(--radius-lg);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--bg-card);
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
   cursor: default;
-  transition: border-color var(--duration-medium), background var(--duration-medium);
+  transition:
+    border-color var(--duration-medium),
+    background var(--duration-medium);
 }
 
 .idle-zone:hover { border-color: var(--primary-alpha-40); }
 
-.idle-zone.dragging {
+.idle-zone.dragging,
+.rescue-idle.dragging .idle-zone {
   border-color: var(--primary);
   background: var(--primary-alpha-5);
   border-style: solid;
 }
 
-.idle-icon-wrap {
-  margin-bottom: var(--space-md);
+.idle-zone__icon {
+  font-size: var(--text-lg);
   color: var(--primary);
+  flex-shrink: 0;
   transition: transform var(--duration-medium) ease;
 }
 
-.idle-zone.dragging .idle-icon-wrap { transform: translateY(-4px) scale(1.1); }
-.idle-icon-wrap i { font-size: var(--text-3xl); }
+.idle-zone.dragging .idle-zone__icon,
+.rescue-idle.dragging .idle-zone__icon { transform: translateY(-2px) scale(1.1); }
 
-.idle-feature-desc {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  margin: 0 0 var(--space-sm);
-  text-align: center;
-  line-height: 1.5;
+.idle-zone__text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.idle-main-text {
-  font-size: var(--text-lg);
-  font-weight: var(--weight-bold);
-  color: var(--text-secondary);
-  margin-bottom: var(--space-lg-xl);
-}
-
-.idle-buttons {
+.idle-zone__actions {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-md);
-  width: 100%;
-  max-width: 360px;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
 }
 
 .idle-btn-primary.p-button {
-  flex: 1; height: 40px; padding: 0; font-size: var(--text-sm); font-weight: var(--weight-semibold); border-radius: var(--radius-md);
+  height: 32px; padding: 0 var(--space-md); font-size: var(--text-xs); font-weight: var(--weight-semibold);
+  border-radius: var(--radius-sm-md);
   background: var(--primary-alpha-15); border-color: transparent; color: var(--primary);
   transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
@@ -143,38 +213,73 @@ onDeactivated(() => { isViewActive.value = false; });
 .idle-btn-primary.p-button:active { background: var(--primary-alpha-15); filter: brightness(0.88); }
 .idle-btn-primary.p-button:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
 
-.idle-btn-secondary.p-button {
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 11px 无精确 spacing token */
-  width: 100%; padding: 11px 0; font-size: var(--text-base); font-weight: var(--weight-medium); border-radius: var(--radius-md);
-  border-color: var(--border-subtle); color: var(--text-muted);
-}
-
-.idle-btn-secondary.p-button:hover { background: var(--hover-overlay-subtle); }
-
-.idle-folder-col {
-  position: relative;
-  display: flex; flex-direction: column; align-items: flex-start; flex: 1;
-}
-
 .idle-subfolder-option {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  padding-top: var(--space-xs);
-  display: flex; align-items: center; gap: var(--space-xs-sm);
-  font-size: var(--text-xs); color: var(--text-tertiary); cursor: pointer; user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs-sm);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
   white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-4px);
-  transition:
-    opacity var(--duration-fast) var(--ease-standard),
-    transform var(--duration-fast) var(--ease-standard);
+  flex-shrink: 0;
 }
 
-.idle-folder-col:hover .idle-subfolder-option {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
+.idle-subfolder-option:hover { color: var(--text-secondary); }
+
+.idle-secondary-link {
+  padding: var(--space-2xs) var(--space-xs);
+  background: transparent;
+  border: 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.idle-secondary-link:hover:not(:disabled) { color: var(--primary); }
+.idle-secondary-link:disabled { opacity: 0.5; cursor: not-allowed; }
+.idle-secondary-link:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+
+.last-repair-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm-md) var(--space-md);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  background: var(--hover-overlay-subtle);
+  border-radius: var(--radius-md);
+}
+
+.last-repair-empty i {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.idle-scope {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: var(--leading-normal);
+  width: 100%;
+}
+
+.idle-scope li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.idle-scope i {
+  font-size: var(--text-2xs);
+  color: var(--text-tertiary);
+  flex-shrink: 0;
 }
 </style>
