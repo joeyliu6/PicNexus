@@ -14,9 +14,26 @@ import MigrateDonePhase from './migrate/MigrateDonePhase.vue';
 const manager = useBatchMigrateManager();
 const { healthStatusMap, healthTooltipMap } = useServiceHealth();
 
-// provide 给子组件
+// 启动前统一过滤健康状态为 error 的目标，首次启动和重试失败项都必须走这条路径，
+// 否则"重试失败"直连 manager.retryFailed() 会绕过过滤，当目标仍为 error 时
+// startMigrate 内部 targets.length===0 静默 return，用户看到按钮点了没反应
+function prefilterUnhealthyTargets() {
+  for (const svc of manager.targetServices.value) {
+    if (svc.checked && healthStatusMap.value[svc.serviceId] === 'error') {
+      svc.checked = false;
+    }
+  }
+}
+
+async function handleRetryFailed() {
+  prefilterUnhealthyTargets();
+  await manager.retryFailed();
+}
+
+// provide 给子组件，retryFailed 替换为带健康过滤的包装版本
 provide(MIGRATE_KEY, {
   ...manager,
+  retryFailed: handleRetryFailed,
   healthStatusMap,
   healthTooltipMap,
 });
@@ -30,12 +47,7 @@ watch(manager.sourceServiceFilter, () => {
 });
 
 function handleStartClick() {
-  // 启动前再过滤一次健康状态为 error 的目标（防渲染到点击之间的竞态）
-  for (const svc of manager.targetServices.value) {
-    if (svc.checked && healthStatusMap.value[svc.serviceId] === 'error') {
-      svc.checked = false;
-    }
-  }
+  prefilterUnhealthyTargets();
   if (manager.checkedTargets.value.length === 0) return;
   manager.startMigrate();
 }
