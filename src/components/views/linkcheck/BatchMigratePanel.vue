@@ -30,6 +30,13 @@ watch(manager.sourceServiceFilter, () => {
 });
 
 function handleStartClick() {
+  // 启动前再过滤一次健康状态为 error 的目标（防渲染到点击之间的竞态）
+  for (const svc of manager.targetServices.value) {
+    if (svc.checked && healthStatusMap.value[svc.serviceId] === 'error') {
+      svc.checked = false;
+    }
+  }
+  if (manager.checkedTargets.value.length === 0) return;
   manager.startMigrate();
 }
 </script>

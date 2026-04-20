@@ -69,7 +69,9 @@ function getServiceHealthStatus(serviceId: string): 'verified' | 'pending' | 'er
 }
 
 function canStart(): boolean {
-  return totalPending.value > 0 && checkedTargets.value.length > 0;
+  if (totalPending.value === 0 || checkedTargets.value.length === 0) return false;
+  // 防止对健康检查异常（error）的目标硬发起迁移，避免连续失败空耗带宽
+  return checkedTargets.value.every(s => getServiceHealthStatus(s.serviceId) !== 'error');
 }
 
 function checkedNames(): string {
