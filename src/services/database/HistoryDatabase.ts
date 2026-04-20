@@ -378,6 +378,28 @@ class HistoryDatabase {
     return result[0]?.count || 0;
   }
 
+  /**
+   * 获取图库总览（单次查询同时取总数/去重图床数/最近一次时间戳）
+   *
+   * 用于文档修复 idle 态的「图库总览卡」展示信任锚点
+   */
+  async getSummary(): Promise<{ totalImages: number; distinctServices: number; lastUpdatedAt: number | null }> {
+    const db = await this.connection.getDb();
+    const rows = await db.select<{ total: number; services: number; lastAt: number | null }[]>(
+      `SELECT
+        COUNT(*) AS total,
+        COUNT(DISTINCT primary_service) AS services,
+        MAX(timestamp) AS lastAt
+      FROM history_items`,
+    );
+    const row = rows[0];
+    return {
+      totalImages: row?.total ?? 0,
+      distinctServices: row?.services ?? 0,
+      lastUpdatedAt: row?.lastAt ?? null,
+    };
+  }
+
   // ============================================
   // 批量迁移查询（委托 MigrationQuery）
   // ============================================
