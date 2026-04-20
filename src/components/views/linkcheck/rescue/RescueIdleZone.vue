@@ -28,13 +28,15 @@ const emit = defineEmits<{
 const isDragging = ref(false);
 const isViewActive = ref(true);
 let dropUnlisten: (() => void) | null = null;
+// 卸载标志：若异步 onDragDropEvent 在 unmount 之后才 resolve，需立即 unlisten 防止监听器泄漏
+let isUnmounted = false;
 
 const { record: lastRepairRecord } = useLastRepair();
 
 async function setupDropListener() {
   try {
     const webview = getCurrentWebview();
-    dropUnlisten = await webview.onDragDropEvent(async (event) => {
+    const unlisten = await webview.onDragDropEvent(async (event) => {
       if (!isViewActive.value) return;
       if (event.payload.type === 'over') {
         isDragging.value = true;
@@ -45,13 +47,21 @@ async function setupDropListener() {
         isDragging.value = false;
       }
     });
+    if (isUnmounted) {
+      unlisten();
+      return;
+    }
+    dropUnlisten = unlisten;
   } catch (err) {
     log.error('设置拖放监听失败', err);
   }
 }
 
 onMounted(() => { setupDropListener(); });
-onBeforeUnmount(() => { dropUnlisten?.(); });
+onBeforeUnmount(() => {
+  isUnmounted = true;
+  dropUnlisten?.();
+});
 onActivated(() => { isViewActive.value = true; });
 onDeactivated(() => { isViewActive.value = false; });
 </script>
