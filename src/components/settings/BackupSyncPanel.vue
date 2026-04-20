@@ -197,15 +197,20 @@ function handleExportWithGuide() {
 }
 
 // 子组件 restore 对话框结果 → 通过 passwordRequest 回传给 useBackupSync
-function handleRestoreConfirm(password: string) {
-  passwordRequest.value?.resolve(password);
+// 密码验证异步进行，成功才关闭对话框；失败则回调对话框计次重试
+async function handleRestoreConfirm(password: string) {
+  const req = passwordRequest.value;
+  if (!req) return;
+  const ok = await req.verify(password);
+  if (ok) {
+    backupPasswordSectionRef.value?.onRestoreSuccess();
+  } else {
+    backupPasswordSectionRef.value?.onRestoreFailed();
+  }
 }
 
 function handleRestoreCancel() {
-  if (passwordRequest.value) {
-    passwordRequest.value.reject(new Error('user_cancelled'));
-    passwordRequest.value = null;
-  }
+  passwordRequest.value?.cancel();
 }
 </script>
 

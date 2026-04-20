@@ -70,9 +70,9 @@ async function swapKeyAndReencrypt(swapFn: () => Promise<void>): Promise<void> {
 
 async function handlePasswordConfirm(password: string) {
   // restore 模式：导入/下载加密数据时的密码请求
+  // 不立即关闭对话框，等 parent 异步验证后通过 onRestoreSuccess/onRestoreFailed 决定
   if (passwordDialogMode.value === 'restore') {
     emit('restore-confirm', password);
-    passwordDialogRef.value?.onPasswordSuccess();
     return;
   }
 
@@ -123,10 +123,22 @@ function handleClearPassword() {
   });
 }
 
+/** 外部（父组件）调用：restore 密码验证通过 → 关闭对话框 */
+function onRestoreSuccess() {
+  passwordDialogRef.value?.onPasswordSuccess();
+}
+
+/** 外部（父组件）调用：restore 密码验证失败 → 对话框计次并提示重试 */
+function onRestoreFailed() {
+  passwordDialogRef.value?.onPasswordFailed();
+}
+
 defineExpose({
   isPasswordMode: () => hasBackupPassword.value,
   openSetPasswordDialog,
   openRestoreDialog,
+  onRestoreSuccess,
+  onRestoreFailed,
 });
 </script>
 

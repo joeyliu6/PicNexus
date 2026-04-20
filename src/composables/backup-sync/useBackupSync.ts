@@ -39,20 +39,30 @@ export function useBackupSync() {
 
   /**
    * 解密加密内容：始终要求用户输入密码
+   *
+   * 对话框会保持打开直到密码验证成功或用户主动取消/跳过，
+   * 期间每次失败都允许用户重试（由对话框内部计次，超过上限自动跳过）。
    */
   async function tryDecryptContent(encryptedContent: string): Promise<string> {
-    const password = await new Promise<string>((resolve, reject) => {
-      state.passwordRequest.value = { resolve, reject };
+    return new Promise<string>((resolve, reject) => {
+      state.passwordRequest.value = {
+        verify: async (password: string): Promise<boolean> => {
+          try {
+            const result = await decryptWithPassword(encryptedContent, password);
+            state.passwordRequest.value = null;
+            resolve(result);
+            return true;
+          } catch {
+            // 密码错误：保持 passwordRequest 不清空，对话框继续等待重试
+            return false;
+          }
+        },
+        cancel: () => {
+          state.passwordRequest.value = null;
+          reject(new Error('user_cancelled'));
+        },
+      };
     });
-
-    try {
-      const result = await decryptWithPassword(encryptedContent, password);
-      state.passwordRequest.value = null;
-      return result;
-    } catch (error) {
-      state.passwordRequest.value = null;
-      throw error;
-    }
   }
 
   // 本地备份操作

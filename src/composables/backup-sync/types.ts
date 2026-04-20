@@ -63,7 +63,12 @@ export interface UseBackupSyncReturn {
   closeAllMenus: () => void;
 
   // 密码请求（用于导入/下载加密数据时弹窗）
-  passwordRequest: Ref<{ resolve: (password: string) => void; reject: (reason?: Error) => void } | null>;
+  // verify: 验证密码，成功返回 true；失败返回 false（不关闭对话框，允许重试）
+  // cancel: 用户取消或跳过，拒绝整个请求
+  passwordRequest: Ref<{
+    verify: (password: string) => Promise<boolean>;
+    cancel: () => void;
+  } | null>;
 
   // 工具函数
   extractErrorCode: (error: unknown) => string;

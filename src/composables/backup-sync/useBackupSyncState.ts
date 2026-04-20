@@ -38,7 +38,12 @@ export function useBackupSyncState() {
   const historySectionExpanded = ref(false);
 
   // 密码请求状态（导入/下载加密数据时使用）
-  const passwordRequest = ref<{ resolve: (password: string) => void; reject: (reason?: Error) => void } | null>(null);
+  // verify: 验证密码，成功返回 true；失败返回 false（不关闭对话框，允许重试）
+  // cancel: 用户取消或跳过，拒绝整个请求
+  const passwordRequest = ref<{
+    verify: (password: string) => Promise<boolean>;
+    cancel: () => void;
+  } | null>(null);
 
   // ==================== 同步状态管理 ====================
 
