@@ -16,7 +16,6 @@ export interface MigrateContext {
   maxSuccessCount: Ref<number>;
   sourceServiceFilter: Ref<string[]>;
   availableSourceServices: Ref<Array<{ id: string; displayName: string; count: number }>>;
-  showAdvancedFilter: Ref<boolean>;
   configuredServices: ComputedRef<MigrateTargetService[]>;
   unconfiguredServices: ComputedRef<MigrateTargetService[]>;
   checkedTargets: ComputedRef<MigrateTargetService[]>;

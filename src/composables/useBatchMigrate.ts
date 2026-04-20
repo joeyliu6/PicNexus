@@ -251,7 +251,6 @@ export function useBatchMigrateManager() {
   const maxSuccessCount = ref(999); // 默认"全部"
   const sourceServiceFilter = ref<string[]>([]); // 来源图床筛选，空数组 = 全部
   const availableSourceServices = ref<Array<{ id: string; displayName: string; count: number }>>([]);
-  const showAdvancedFilter = ref(false);
 
   // 图床配置
   const targetServices = ref<MigrateTargetService[]>([]);
@@ -613,7 +612,7 @@ export function useBatchMigrateManager() {
 
   return {
     phase, isInitialized, isFilterApplied, initError,
-    maxSuccessCount, sourceServiceFilter, availableSourceServices, showAdvancedFilter,
+    maxSuccessCount, sourceServiceFilter, availableSourceServices,
     targetServices, configuredServices, unconfiguredServices,
     checkedTargets, totalPending, isAllBackedUp,
     itemStatuses, allItemStatuses, isMigrating, globalProgress, migrateResult, cumulativeCounts,

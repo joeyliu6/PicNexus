@@ -3,20 +3,16 @@
  * 批量迁移面板 — 容器组件
  * 管理 composable 初始化 + 阶段切换 + provide 给子组件
  */
-import { watch, onActivated, ref, provide } from 'vue';
+import { watch, onActivated, provide } from 'vue';
 import { useBatchMigrateManager } from '../../../composables/useBatchMigrate';
 import { useServiceHealth } from '../../../composables/useServiceHealth';
 import { MIGRATE_KEY } from './migrate/keys';
 import MigrateSelectPhase from './migrate/MigrateSelectPhase.vue';
-import MigrateConfirmPhase from './migrate/MigrateConfirmPhase.vue';
 import MigrateProgressPhase from './migrate/MigrateProgressPhase.vue';
 import MigrateDonePhase from './migrate/MigrateDonePhase.vue';
 
 const manager = useBatchMigrateManager();
 const { healthStatusMap, healthTooltipMap } = useServiceHealth();
-
-// 确认视图（独立全页，不是底栏面板）
-const showConfirmView = ref(false);
 
 // provide 给子组件
 provide(MIGRATE_KEY, {
@@ -33,38 +29,19 @@ watch(manager.sourceServiceFilter, () => {
   if (manager.phase.value === 'configuring' && manager.isFilterApplied.value) manager.applyFilter();
 });
 
-// phase 变化时重置确认视图
-watch(manager.phase, () => { showConfirmView.value = false; });
-
 function handleStartClick() {
-  showConfirmView.value = true;
-}
-
-function confirmStart() {
-  showConfirmView.value = false;
   manager.startMigrate();
-}
-
-function cancelConfirm() {
-  showConfirmView.value = false;
 }
 </script>
 
 <template>
   <div class="migrate-panel">
 
-    <!-- configuring + 确认视图 -->
-    <template v-if="manager.phase.value === 'configuring'">
-      <MigrateConfirmPhase
-        v-if="showConfirmView"
-        @confirm="confirmStart"
-        @cancel="cancelConfirm"
-      />
-      <MigrateSelectPhase
-        v-else
-        @start="handleStartClick"
-      />
-    </template>
+    <!-- configuring -->
+    <MigrateSelectPhase
+      v-if="manager.phase.value === 'configuring'"
+      @start="handleStartClick"
+    />
 
     <!-- migrating -->
     <MigrateProgressPhase v-else-if="manager.phase.value === 'migrating'" />

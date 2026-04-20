@@ -5,7 +5,7 @@
 import { computed, inject } from 'vue';
 import EmptyState from '../../../common/EmptyState.vue';
 import { emit as tauriEmit } from '@tauri-apps/api/event';
-import { formatNumber } from './utils';
+import { formatNumber, isPublicService } from './utils';
 import { MIGRATE_KEY } from './keys';
 import SourceList from './components/SourceList.vue';
 import TargetCard from './components/TargetCard.vue';
@@ -14,10 +14,14 @@ const ctx = inject(MIGRATE_KEY)!;
 
 const {
   isInitialized, isFilterApplied, maxSuccessCount, sourceServiceFilter,
-  availableSourceServices, showAdvancedFilter, configuredServices,
+  availableSourceServices, configuredServices,
   unconfiguredServices, checkedTargets, totalPending, isAllBackedUp,
   initError, initConfiguring, healthStatusMap, healthTooltipMap,
 } = ctx;
+
+const hasPublicTarget = computed(() =>
+  checkedTargets.value.some(s => isPublicService(s.serviceId))
+);
 
 const emit = defineEmits<{ start: [] }>();
 
@@ -34,11 +38,30 @@ function toggleSourceFilter(serviceId: string) {
   }
 }
 
-const selectedSourceNames = computed(() => {
-  if (sourceServiceFilter.value.length === 0) return '';
-  return sourceServiceFilter.value
-    .map(id => availableSourceServices.value.find(s => s.id === id)?.displayName ?? id)
-    .join('、');
+const displayedSourceList = computed(() => {
+  return sourceServiceFilter.value.length === 0
+    ? availableSourceServices.value.map(s => s.displayName)
+    : sourceServiceFilter.value
+        .map(id => availableSourceServices.value.find(s => s.id === id)?.displayName ?? id);
+});
+
+const displayedSourceNames = computed(() => displayedSourceList.value.join('、'));
+
+const displayedSourceShort = computed(() => {
+  const list = displayedSourceList.value;
+  if (list.length <= 3) return list.join('、');
+  return `${list.slice(0, 2).join('、')} 等 ${list.length} 个图床`;
+});
+
+const displayedTargetShort = computed(() => {
+  const list = checkedTargets.value.map(s => s.displayName);
+  if (list.length <= 3) return list.join('、');
+  return `${list.slice(0, 2).join('、')} 等 ${list.length} 个`;
+});
+
+const bottomFullText = computed(() => {
+  if (checkedTargets.value.length === 0) return '选择迁移目标，开始备份';
+  return `从 ${displayedSourceNames.value} 迁移 ${formatNumber(totalPending.value)} 张至 ${checkedTargets.value.map(s => s.displayName).join('、')}`;
 });
 
 function getServiceHealthStatus(serviceId: string): 'verified' | 'pending' | 'error' {
@@ -93,11 +116,8 @@ function handleTargetToggle(serviceId: string) {
       <SourceList
         :sources="availableSourceServices"
         :selectedIds="sourceServiceFilter"
-        :showAdvancedFilter="showAdvancedFilter"
         :maxSuccessCount="maxSuccessCount"
         @toggle="toggleSourceFilter"
-        @clearFilter="sourceServiceFilter = []"
-        @update:showAdvancedFilter="showAdvancedFilter = $event"
         @update:maxSuccessCount="maxSuccessCount = $event"
       />
 
@@ -121,41 +141,49 @@ function handleTargetToggle(serviceId: string) {
             :healthTooltip="healthTooltipMap[svc.serviceId]"
             @toggle="handleTargetToggle(svc.serviceId)"
           />
+          <!-- 未配置图床卡片 -->
+          <div
+            v-if="unconfiguredServices.length > 0"
+            class="target-card-add"
+            tabindex="0"
+            role="button"
+            @click="navigateToSettings"
+            @keydown.enter.prevent="navigateToSettings"
+          >
+            <div class="target-card-add-top">
+              <span class="target-card-add-icon">＋</span>
+              <span class="target-card-add-label">添加新图床</span>
+            </div>
+            <span class="target-card-add-hint">还有 {{ unconfiguredServices.length }} 个未配置</span>
+          </div>
         </div>
-
-        <!-- 未配置脚注 -->
-        <span
-          v-if="unconfiguredServices.length > 0"
-          class="unconfigured-hint"
-          @click="navigateToSettings"
-        >
-          还有 {{ unconfiguredServices.length }} 个图床未配置
-          <span class="unconfigured-link">去设置 →</span>
-        </span>
       </div>
     </div>
   </div>
 
   <!-- 底栏 -->
   <div class="bottom">
+    <div v-if="canStart() && hasPublicTarget" class="bottom-warn">
+      <i class="pi pi-exclamation-triangle" />
+      <span>公共图床随时可能失效，且单日上传数量有限，大量迁移可能中途失败</span>
+    </div>
     <div class="bottom-main">
-      <span class="bottom-stat">
-        <template v-if="checkedTargets.length > 0 && sourceServiceFilter.length > 0 && sourceServiceFilter.length < availableSourceServices.length">
-          从 <strong class="bottom-hl">{{ selectedSourceNames }}</strong> 迁移
-          <strong class="bottom-hl">{{ formatNumber(totalPending) }}</strong> 张至
-          <strong class="bottom-hl">{{ checkedNames() }}</strong>
-        </template>
-        <template v-else-if="checkedTargets.length > 0">
-          <strong class="bottom-hl">{{ formatNumber(totalPending) }}</strong> 张图片将迁移至
-          <strong class="bottom-hl">{{ checkedNames() }}</strong>
+      <span class="bottom-stat" :title="bottomFullText">
+        <template v-if="checkedTargets.length === 0">
+          选择迁移目标，开始备份
         </template>
         <template v-else>
-          选择迁移目标，开始备份
+          <span class="bottom-dim">从</span>
+          <strong class="bottom-hl" :title="displayedSourceNames">{{ displayedSourceShort }}</strong>
+          <span class="bottom-dim">迁移</span>
+          <strong class="bottom-hl">{{ formatNumber(totalPending) }}</strong>
+          <span class="bottom-dim">张至</span>
+          <strong class="bottom-hl" :title="checkedNames()">{{ displayedTargetShort }}</strong>
         </template>
       </span>
       <div class="bottom-actions">
-        <button class="btn-primary" :disabled="!canStart()" @click="emit('start')">
-          <svg viewBox="0 0 16 16" fill="currentColor" width="10" height="10" style="flex-shrink:0;display:block"><path d="M3 2l10 6-10 6V2z"/></svg>
+        <button class="btn-primary btn-lg" :disabled="!canStart()" @click="emit('start')">
+          <svg viewBox="0 0 16 16" fill="currentColor" width="11" height="11" style="flex-shrink:0;display:block"><path d="M3 2l10 6-10 6V2z"/></svg>
           开始迁移
         </button>
       </div>
@@ -191,23 +219,79 @@ function handleTargetToggle(serviceId: string) {
 
 .backed-up-banner {
   display: flex; align-items: center; gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md); border-radius: var(--radius-sm-md); margin-bottom: var(--space-sm);
-  background: var(--success-alpha-10); font-size: var(--text-xs); color: var(--success);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm-md);
+  margin-bottom: var(--space-sm);
+  background: var(--success-alpha-10);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
-.backed-up-banner i { font-size: var(--text-base); flex-shrink: 0; }
+.backed-up-banner i { font-size: var(--text-base); color: var(--success); flex-shrink: 0; }
 
-.target-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-sm); }
+.target-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); }
 
-/* 未配置脚注 */
-.unconfigured-hint {
-  display: inline-flex; align-items: center; gap: var(--space-xs);
-  font-size: var(--text-2xs); color: var(--text-tertiary);
-  margin-top: var(--space-md); cursor: pointer;
-  transition: color var(--duration-fast);
+/* 未配置添加卡片（结构与 TargetCard 对齐，保持高度一致） */
+.target-card-add {
+  display: flex; flex-direction: column; gap: var(--space-sm);
+  padding: var(--space-md-lg) var(--space-lg);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-subtle);
+  background: transparent;
+  cursor: pointer; color: var(--text-tertiary);
+  transition:
+    border-color var(--duration-normal) var(--ease-decelerate),
+    color var(--duration-normal) var(--ease-decelerate),
+    background var(--duration-normal) var(--ease-decelerate);
+  user-select: none;
 }
-.unconfigured-hint:hover { color: var(--text-secondary); }
-.unconfigured-link { color: var(--primary); font-weight: var(--weight-medium); }
 
-/* 底栏追加 */
-.bottom-hl { color: var(--primary); font-weight: var(--weight-semibold); }
+.target-card-add:hover {
+  border-color: var(--primary-alpha-40);
+  color: var(--primary);
+  background: var(--hover-overlay-subtle);
+}
+.target-card-add-top { display: flex; align-items: center; gap: var(--space-sm); }
+
+.target-card-add-icon {
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  font-size: var(--text-lg); line-height: 1; font-weight: var(--weight-regular);
+}
+.target-card-add-label { font-size: var(--text-base); font-weight: var(--weight-semibold); letter-spacing: -0.01em; }
+.target-card-add-hint { font-size: var(--text-xs); color: var(--text-muted); }
+
+/* 底栏警告行 */
+.bottom-warn {
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: var(--space-xs-sm) var(--space-md);
+  border-radius: var(--radius-sm-md);
+  background: var(--warning-alpha-10);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-xs);
+}
+.bottom-warn i { font-size: var(--text-base); color: var(--warning); flex-shrink: 0; }
+
+/* 底栏追加：溢出省略（覆盖共享样式的 inline-flex） */
+.bottom-main { gap: var(--space-md); align-items: center; }
+
+.bottom-stat {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  font-weight: var(--weight-regular);
+}
+.bottom-actions { flex-shrink: 0; }
+.bottom-dim { color: var(--text-muted); margin: 0 var(--space-2xs); }
+
+.bottom-hl {
+  color: var(--primary);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
 </style>

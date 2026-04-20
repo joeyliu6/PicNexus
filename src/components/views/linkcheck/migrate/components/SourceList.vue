@@ -2,7 +2,6 @@
 /**
  * 迁移来源列表 — 左栏
  */
-import { computed } from 'vue';
 import Checkbox from 'primevue/checkbox';
 import Select from 'primevue/select';
 import InlineEmptyState from '../../../../common/InlineEmptyState.vue';
@@ -15,23 +14,17 @@ interface SourceItem {
   count: number;
 }
 
-const props = defineProps<{
+defineProps<{
   sources: SourceItem[];
   selectedIds: string[];
-  showAdvancedFilter: boolean;
   maxSuccessCount: number;
 }>();
 
 const emit = defineEmits<{
   toggle: [serviceId: string];
-  clearFilter: [];
-  'update:showAdvancedFilter': [value: boolean];
   'update:maxSuccessCount': [value: number];
 }>();
 
-const totalImages = computed(() =>
-  props.sources.reduce((sum, s) => sum + s.count, 0),
-);
 
 </script>
 
@@ -68,36 +61,16 @@ const totalImages = computed(() =>
         />
         <span class="source-icon" v-html="getServiceIcon(src.id)" />
         <span class="source-name">{{ src.displayName }}</span>
-        <span class="source-count">{{ formatNumber(src.count) }} 张</span>
-        <span v-if="isPublicService(src.id)" class="tag-public">公共</span>
+        <span class="source-count">
+          <span class="source-count-num">{{ formatNumber(src.count) }}</span>
+          <span class="source-count-unit">张</span>
+        </span>
+        <span v-if="isPublicService(src.id)" class="tag-neutral">公共</span>
+        <span v-else class="tag-neutral tag-neutral--muted">私有</span>
       </div>
     </div>
-    <span v-if="sources.length > 0" class="source-summary">
-      <template v-if="selectedIds.length > 0 && selectedIds.length === sources.length">
-        已选全部来源，<span class="source-summary-action" role="button" tabindex="0" @click="emit('clearFilter')" @keydown.enter.prevent="emit('clearFilter')">点击取消筛选</span>
-      </template>
-      <template v-else-if="selectedIds.length > 0">
-        已选 {{ selectedIds.length }} 个来源，<span class="source-summary-action" role="button" tabindex="0" @click="emit('clearFilter')" @keydown.enter.prevent="emit('clearFilter')">点击取消筛选</span>
-      </template>
-      <template v-else>
-        共 {{ formatNumber(totalImages) }} 张，分布在 {{ sources.length }} 个图床
-      </template>
-    </span>
-
-    <!-- 高级筛选 -->
-    <button
-      v-if="sources.length > 0"
-      class="filter-toggle"
-      @click="emit('update:showAdvancedFilter', !showAdvancedFilter)"
-    >
-      <i class="pi pi-sliders-h" />
-      <span>高级筛选</span>
-      <i
-        class="pi pi-chevron-down filter-arrow"
-        :class="{ 'filter-arrow--open': showAdvancedFilter }"
-      />
-    </button>
-    <div v-if="showAdvancedFilter && sources.length > 0" class="filter-body">
+    <!-- 高级筛选（常驻） -->
+    <div v-if="sources.length > 0" class="filter-body">
       <div class="filter-row">
         <span class="filter-label">仅处理备份不足</span>
         <Select
@@ -116,21 +89,25 @@ const totalImages = computed(() =>
 
 <style scoped>
 .split-left {
-  flex: 1; min-width: 0;
+  flex: 0 0 42%; min-width: 0;
   display: flex; flex-direction: column; overflow-y: auto;
 }
 
-.source-list { display: flex; flex-direction: column; gap: var(--space-xs-sm); flex: 1; }
+.source-list { display: flex; flex-direction: column; gap: var(--space-2xs); flex: 1; }
 
 .source-row {
   display: flex; align-items: center; gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-sm-md); background: transparent; border-radius: var(--radius-sm-md); font-size: var(--text-sm);
-  cursor: pointer; transition: background var(--duration-fast), border-color var(--duration-fast);
-  border: 1px solid transparent;
+  padding: var(--space-sm) var(--space-md);
+  background: transparent; border-radius: var(--radius-sm-md);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background var(--duration-normal) var(--ease-decelerate), color var(--duration-normal) var(--ease-decelerate);
 }
-.source-row:hover { background: var(--bg-surface-low); }
-.source-row--selected { background: var(--primary-alpha-8); border-color: var(--primary-alpha-15); }
-.source-row--selected .source-name { color: var(--primary); font-weight: var(--weight-semibold); }
+.source-row:hover { background: var(--hover-overlay-subtle); }
+
+.source-row--selected,
+.source-row--selected:hover { background: var(--primary-alpha-8); }
+.source-row--selected .source-name { color: var(--primary); }
 .source-row--selected .source-icon { color: var(--primary); }
 
 .source-checkbox { flex-shrink: 0; }
@@ -139,27 +116,23 @@ const totalImages = computed(() =>
 .source-icon { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-secondary); }
 .source-icon :deep(svg) { width: 14px; height: 14px; }
 .source-name { font-weight: var(--weight-medium); color: var(--text-primary); }
-.source-count { font-size: var(--text-xs); color: var(--text-tertiary); font-variant-numeric: tabular-nums; margin-left: auto; }
+.source-count { display: inline-flex; align-items: baseline; gap: var(--space-2xs); margin-left: auto; flex-shrink: 0; }
+.source-count-num { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.source-count-unit { font-size: var(--text-xs); color: var(--text-muted); }
+.source-row--selected .source-count-num { color: var(--primary); }
 
-.tag-public { font-size: var(--text-2xs); font-weight: var(--weight-medium); padding: var(--space-2xs) var(--space-xs-sm); border-radius: var(--radius-sm); background: var(--warning-alpha-10); color: var(--warning); flex-shrink: 0; }
-
-.source-summary { font-size: var(--text-xs); color: var(--text-tertiary); margin-top: var(--space-md); padding-top: var(--space-sm); border-top: 1px solid var(--border-subtle); }
-.source-summary-action { color: var(--primary); cursor: pointer; transition: opacity var(--duration-fast); }
-.source-summary-action:hover { opacity: 0.8; }
+.tag-neutral {
+  font-size: var(--text-2xs); font-weight: var(--weight-medium);
+  padding: var(--space-2xs) var(--space-xs-sm);
+  border-radius: var(--radius-sm-md);
+  background: var(--hover-overlay-subtle);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+.tag-neutral--muted { color: var(--text-muted); }
 
 /* 高级筛选 */
-.filter-toggle {
-  display: flex; align-items: center; gap: var(--space-xs-sm);
-  width: 100%; background: none; cursor: pointer;
-  font-size: var(--text-xs); color: var(--text-tertiary);
-  padding: var(--space-sm) 0; margin-top: var(--space-xs);
-  font-family: inherit; border: none;
-  transition: color var(--duration-fast);
-}
-.filter-toggle:hover { color: var(--text-secondary); }
-.filter-toggle i:first-child { font-size: var(--text-xs); width: 14px; text-align: center; }
-.filter-arrow { font-size: var(--text-2xs) !important; margin-left: auto; transition: transform var(--duration-fast); }
-.filter-arrow--open { transform: rotate(180deg); }
 
 .filter-body {
   display: flex; flex-direction: column; gap: var(--space-sm);
