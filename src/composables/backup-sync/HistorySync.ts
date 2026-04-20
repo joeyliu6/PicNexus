@@ -114,7 +114,14 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
       const jsonContent = JSON.stringify(mergedItems, null, 2);
       await webdav.client.putFile(webdav.remotePath, jsonContent);
 
-      const newCount = mergedItems.length - cloudItems.length;
+      // 真正的"新增"应为本地独有的记录数（云端 id 集合的差集），
+      // 而不是 mergedItems.length - cloudItems.length —— 后者在时间戳更新、
+      // 或云端文件不存在（cloudItems=[]）等场景下会严重高估，误导用户
+      const cloudIds = new Set(cloudItems.map(i => i.id).filter(Boolean));
+      const newCount = localItems.reduce(
+        (acc, item) => acc + (item.id && !cloudIds.has(item.id) ? 1 : 0),
+        0,
+      );
       updateHistorySyncStatus(profile, 'success');
       await writeSyncLog('upload_history_cloud', 'success', `共 ${mergedItems.length} 条`, profile);
       toast.success(
