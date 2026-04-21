@@ -5,12 +5,11 @@
  * PhotoSwipe 处理：FLIP 开/关动画、缩放、平移、手势
  * Vue 处理：底栏（信息+操作）、导航事件、收藏状态
  */
-import { computed, toRef, ref } from 'vue';
+import { computed, toRef, ref, watch, onUnmounted } from 'vue';
 import 'photoswipe/style.css';
 import type { HistoryItem } from '../../../config/types';
 import { useConfigManager } from '../../../composables/useConfig';
 import { useHistoryManager } from '../../../composables/useHistory';
-import { useToast } from '../../../composables/useToast';
 import { usePhotoSwipeBridge } from '../../../composables/history/usePhotoSwipeBridge';
 import { useLightboxActions } from '../../../composables/history/useLightboxActions';
 import { useLightboxInfo } from '../../../composables/history/useLightboxInfo';
@@ -37,7 +36,6 @@ const emit = defineEmits<{
 
 const configManager = useConfigManager();
 const historyManager = useHistoryManager();
-const toast = useToast();
 const itemRef = computed(() => props.item);
 
 // ── PhotoSwipe 桥接 ────────────────────────────
@@ -70,9 +68,22 @@ const imageHeight = computed(() => props.item?.height || 0);
 
 const blurLoadedSrc = ref<string | null>(null);
 
-function handleLoadError() {
-  toast.warn('图片加载失败', '图床可能限制了访问。试试切换图床复制链接或在浏览器打开');
+const loadError = ref(false);
+let loadErrorTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearLoadError() {
+  loadError.value = false;
+  if (loadErrorTimer) { clearTimeout(loadErrorTimer); loadErrorTimer = null; }
 }
+
+function handleLoadError() {
+  if (loadErrorTimer) clearTimeout(loadErrorTimer);
+  loadError.value = true;
+  loadErrorTimer = setTimeout(clearLoadError, 4000);
+}
+
+watch(itemId, () => { if (loadError.value) clearLoadError(); });
+onUnmounted(clearLoadError);
 
 const { pswpEl, blurSrc, isLoading } = usePhotoSwipeBridge({
   visible: toRef(props, 'visible'),
@@ -143,6 +154,20 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
           <!-- pathLength=100 把周长归一化为 100，dasharray 可用百分比语义（75:25 = 3/4 弧）-->
           <circle cx="20" cy="20" r="17" pathLength="100" />
         </svg>
+      </div>
+    </Transition>
+
+    <!-- 图片加载失败横幅 -->
+    <Transition name="t-fade">
+      <div v-if="loadError" class="pswp-error-banner" role="alert">
+        <i class="pi pi-exclamation-triangle pswp-error-icon" aria-hidden="true"></i>
+        <div class="pswp-error-body">
+          <span class="pswp-error-title">图片加载失败</span>
+          <span class="pswp-error-detail">图床可能限制了访问。试试切换图床复制链接或在浏览器打开</span>
+        </div>
+        <button class="pswp-error-close" aria-label="关闭" @click="clearLoadError">
+          <i class="pi pi-times"></i>
+        </button>
       </div>
     </Transition>
 
@@ -375,4 +400,62 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
   --error: #ef4444;
   --error-soft: rgb(239 68 68 / 15%);
 }
+
+/* 图片加载失败横幅 — 内联于 pswp 容器，不依赖全局 Toast */
+.pswp-error-banner {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  max-width: 340px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--warning-alpha-40);
+  border-left: 3px solid var(--warning);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- lightbox 暗色环境需近不透明背景，无对应 token */
+  background: rgb(22 16 2 / 92%);
+  backdrop-filter: blur(12px);
+}
+
+.pswp-error-icon {
+  color: var(--warning);
+  font-size: var(--text-base);
+  flex-shrink: 0;
+}
+
+.pswp-error-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.pswp-error-title {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--warning);
+}
+
+.pswp-error-detail {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.pswp-error-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  font-size: var(--text-sm);
+  transition: color var(--duration-fast) ease;
+}
+
+.pswp-error-close:hover { color: var(--text-main); }
 </style>
