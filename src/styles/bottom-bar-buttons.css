@@ -1,0 +1,73 @@
+/**
+ * 三大底栏共用按钮样式
+ * 适用：链接监控（CheckBottomBar）/ 文档修复（MdRescueInline）/ 批量迁移（migrate-*）
+ *
+ * 作用域说明：全部规则限定在 .bottom-actions 容器内，避免与 style.css
+ * 第 868/881 行的全局半透明 .btn-primary/.btn-danger 冲突（那套服务于
+ * dialog 等场景）。容器类本身也在这里定义，三处底栏直接复用。
+ */
+
+.bottom-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-left: auto;
+}
+
+.bottom-actions .btn-primary,
+.bottom-actions .btn-ghost,
+.bottom-actions .btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  height: 28px;
+  padding: 0 var(--space-md);
+  border-radius: var(--radius-sm-md);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  border: none;
+  transition: background var(--duration-fast), opacity var(--duration-fast);
+}
+
+.bottom-actions .btn-primary i,
+.bottom-actions .btn-ghost i,
+.bottom-actions .btn-danger i {
+  font-size: var(--text-xs);
+}
+
+.bottom-actions .btn-primary {
+  background: var(--primary);
+  color: var(--text-on-primary);
+}
+.bottom-actions .btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.bottom-actions .btn-ghost {
+  background: var(--bg-input);
+  color: var(--text-muted);
+}
+.bottom-actions .btn-ghost:hover:not(:disabled) {
+  background: var(--hover-overlay);
+  color: var(--text-main);
+}
+
+.bottom-actions .btn-danger {
+  background: var(--error-alpha-15);
+  color: var(--error);
+  border: 1px solid transparent;
+}
+.bottom-actions .btn-danger:hover:not(:disabled) {
+  background: var(--error-alpha-8);
+  border-color: var(--error-alpha-15);
+}
+
+.bottom-actions .btn-primary:disabled,
+.bottom-actions .btn-ghost:disabled,
+.bottom-actions .btn-danger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

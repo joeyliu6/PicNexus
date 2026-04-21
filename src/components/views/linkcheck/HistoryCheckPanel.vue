@@ -41,7 +41,7 @@ const progress = computed(() => props.progress);
 
 const {
   statusFilter, selectedServiceId, showServiceMenu, searchInput, searchQuery,
-  searchFocused, showCheckMenu, progressHover,
+  searchFocused, showCheckMenu,
   scopedRows, filteredRows, visibleRows,
   currentPage, totalPages, pageInput, handlePageInput, bottomSummary,
   selectedIds, hasSelection, selectedCount, isAllSelected,
@@ -159,7 +159,6 @@ function handleExportCsvSelected() {
       :dropdown-items="dropdownItems"
       v-model:current-page="currentPage"
       v-model:page-input="pageInput"
-      v-model:progress-hover="progressHover"
       v-model:show-check-menu="showCheckMenu"
       @toggle-select-all="toggleSelectAll"
       @clear-selection="clearSelection"

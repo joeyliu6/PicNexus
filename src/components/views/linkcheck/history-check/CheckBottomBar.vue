@@ -46,7 +46,6 @@ const emit = defineEmits<{
 
 const currentPage = defineModel<number>('currentPage', { required: true });
 const pageInput = defineModel<string>('pageInput', { required: true });
-const progressHover = defineModel<boolean>('progressHover', { required: true });
 const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
 </script>
 
@@ -61,12 +60,7 @@ const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
       aria-valuemin="0"
       aria-valuemax="100"
       :aria-label="progressTooltip"
-      @mouseenter="progressHover = true"
-      @mouseleave="progressHover = false"
     >
-      <Transition name="fade">
-        <div v-if="progressHover" class="progress-tooltip">{{ progressTooltip }}</div>
-      </Transition>
       <div class="progress-bar-inner">
         <div class="progress-bar-fill" :style="{ width: progressPercent + '%' }"></div>
       </div>
@@ -112,30 +106,33 @@ const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
 
       <!-- 正常模式 -->
       <template v-else>
-        <div class="pagination">
-          <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">
-            <i class="pi pi-chevron-left"></i>
-          </button>
-          <span class="page-info">
-            <input
-              class="page-input" type="text"
-              v-model="pageInput"
-              @keydown.enter="emit('page-input', $event)"
-              @blur="emit('page-input', $event)"
-              @focus="($event.target as HTMLInputElement).select()"
-            />
-            / {{ totalPages }}
+        <template v-if="!isChecking">
+          <div class="pagination">
+            <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--">
+              <i class="pi pi-chevron-left"></i>
+            </button>
+            <span class="page-info">
+              <input
+                class="page-input" type="text"
+                v-model="pageInput"
+                @keydown.enter="emit('page-input', $event)"
+                @blur="emit('page-input', $event)"
+                @focus="($event.target as HTMLInputElement).select()"
+              />
+              / {{ totalPages }}
+            </span>
+            <button class="page-btn" :disabled="currentPage >= totalPages" @click="currentPage++">
+              <i class="pi pi-chevron-right"></i>
+            </button>
+          </div>
+          <span class="page-summary">
+            <template v-if="isLoading && stats.total === 0">
+              <Skeleton width="64px" height="14px" border-radius="4px" />
+            </template>
+            <template v-else>{{ bottomSummary }}</template>
           </span>
-          <button class="page-btn" :disabled="currentPage >= totalPages" @click="currentPage++">
-            <i class="pi pi-chevron-right"></i>
-          </button>
-        </div>
-        <span class="page-summary">
-          <template v-if="isLoading && stats.total === 0">
-            <Skeleton width="64px" height="14px" border-radius="4px" />
-          </template>
-          <template v-else>{{ bottomSummary }}</template>
-        </span>
+        </template>
+        <span v-else class="check-progress-text">{{ progressTooltip }}</span>
         <div class="bottom-actions" @click.stop>
           <button v-tooltip.top="'导出检测结果为 CSV 文件'" class="btn-ghost" @click="emit('export-csv')">
             <i class="pi pi-download"></i> 导出
@@ -177,34 +174,25 @@ const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
 </template>
 
 <style scoped>
-/* ===== 底部操作按钮 ===== */
-.bottom-actions { display: flex; align-items: center; gap: var(--space-sm); margin-left: auto; }
+/* 底栏容器 .bottom-actions 与按钮基类 .btn-primary/.btn-ghost/.btn-danger
+   已集中定义在 src/styles/bottom-bar-buttons.css，此处仅保留本组件专属规则 */
 
 .action-divider {
   width: 1px; height: 16px; background: var(--border-subtle); flex-shrink: 0;
 }
 
-/* ===== 按钮 ===== */
-.btn-ghost, .btn-primary, .btn-danger {
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 5px/28px/11px 无精确 spacing token */
-  display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 7px 无精确 radius token */
-  border-radius: 7px; font-size: var(--text-xs); font-weight: var(--weight-medium); cursor: pointer;
-  white-space: nowrap; transition: background var(--duration-fast), opacity var(--duration-fast); border: none;
-}
-.btn-ghost i, .btn-primary i, .btn-danger i { font-size: var(--text-xs); }
-.btn-ghost { background: var(--bg-input); color: var(--text-muted); }
-.btn-ghost:hover { background: var(--hover-overlay); color: var(--text-main); }
-.btn-primary { background: var(--primary); color: var(--text-on-primary); }
-.btn-primary:hover { opacity: 0.9; }
-.btn-danger { background: var(--error-alpha-15); color: var(--error); border: 1px solid transparent; }
-.btn-danger:hover { background: var(--error-alpha-8); border-color: var(--error-alpha-15); box-shadow: none; }
-
+/* 智能检测连体按钮（主按钮 + 下拉箭头） */
 .check-btn-group { display: flex; position: relative; }
-/* stylelint-disable-next-line declaration-property-value-disallowed-list -- 7px 无精确 radius token */
-.check-btn-group.has-dropdown .btn-primary:first-child { border-radius: 7px 0 0 7px; }
-/* stylelint-disable-next-line declaration-property-value-disallowed-list -- 7px 无精确 radius/spacing token */
-.check-toggle { border-radius: 0 7px 7px 0; padding: 0 7px; border-left: 1px solid var(--primary-alpha-15); }
+
+.bottom-actions .check-btn-group.has-dropdown .btn-primary:first-child {
+  border-radius: var(--radius-sm-md) 0 0 var(--radius-sm-md);
+}
+
+.bottom-actions .check-toggle {
+  border-radius: 0 var(--radius-sm-md) var(--radius-sm-md) 0;
+  padding: 0 var(--space-xs-sm);
+  border-left: 1px solid var(--primary-alpha-15);
+}
 
 .check-dropdown {
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- calc 内 6px 为偏移量 */
@@ -230,17 +218,6 @@ const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
   width: 100%; flex-shrink: 0; cursor: default;
   padding: var(--space-xs) 0; position: relative;
 }
-
-.progress-tooltip {
-  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
-  padding: var(--space-xs) var(--space-sm-md); border-radius: var(--space-xs-sm); white-space: nowrap;
-  font-size: var(--text-xs); color: var(--text-main); font-variant-numeric: tabular-nums;
-  background: var(--bg-card); box-shadow: var(--shadow-float);
-  border: 1px solid var(--border-subtle); pointer-events: none;
-}
-.fade-enter-active { transition: opacity var(--duration-fast); }
-.fade-leave-active { transition: opacity var(--duration-micro); }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
 
 .progress-bar-inner {
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 3px 为进度条高度，无 spacing token */
@@ -281,6 +258,11 @@ const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
   display: flex; align-items: center; justify-content: space-between;
 }
 .page-summary { font-size: var(--text-xs); color: var(--text-tertiary); white-space: nowrap; }
+
+.check-progress-text {
+  font-size: var(--text-xs); color: var(--text-tertiary); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 .pagination { display: flex; align-items: center; gap: var(--space-xs); margin-right: var(--space-sm-md); }
 
 .page-btn {

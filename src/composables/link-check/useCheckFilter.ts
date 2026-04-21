@@ -24,7 +24,6 @@ export function useCheckFilter({ checkRows }: UseCheckFilterOptions) {
   const pageByFilter = new Map<StatusFilter, number>();
   const showCheckMenu = ref(false);
   const searchFocused = ref(false);
-  const progressHover = ref(false);
 
   function resetPageState(): void {
     pageByFilter.clear();
@@ -147,7 +146,6 @@ export function useCheckFilter({ checkRows }: UseCheckFilterOptions) {
     searchQuery,
     searchFocused,
     showCheckMenu,
-    progressHover,
     // 计算结果
     scopedRows,
     filteredRows,

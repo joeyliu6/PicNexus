@@ -34,6 +34,7 @@ import './theme/light-theme.css';
 import './theme/primevue-overrides.css';
 import './theme/transitions.css';
 import './styles/motion.css';
+import './styles/bottom-bar-buttons.css';
 
 const log = createLogger('Init');
 
