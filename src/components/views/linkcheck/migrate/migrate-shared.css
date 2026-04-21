@@ -1,71 +1,11 @@
 /**
  * 批量迁移面板 — 公共样式
- * 按钮 + 底栏，4 个 Phase 组件共用
+ * 底栏布局，4 个 Phase 组件共用
+ *
+ * 按钮基类（.btn-primary/.btn-ghost/.btn-danger）与 .bottom-actions 容器
+ * 已集中到 src/styles/bottom-bar-buttons.css，本文件仅保留迁移专属布局。
  */
 
-/* ── 按钮基础 ── */
-.btn-primary,
-.btn-ghost,
-.btn-danger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  height: 28px;
-  padding: 0 var(--space-md);
-  border-radius: var(--radius-sm-md);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
-  white-space: nowrap;
-  border: none;
-  transition: background var(--duration-fast), opacity var(--duration-fast);
-}
-.btn-primary i,
-.btn-ghost i,
-.btn-danger i {
-  font-size: var(--text-xs);
-}
-
-.btn-primary {
-  background: var(--primary);
-  color: var(--text-on-primary);
-}
-.btn-primary:hover:not(:disabled) { box-shadow: 0 2px 8px var(--primary-alpha-15); }
-.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-
-.btn-ghost {
-  background: var(--bg-input);
-  color: var(--text-muted);
-}
-.btn-ghost:hover {
-  background: var(--hover-overlay);
-  color: var(--text-primary);
-}
-
-.btn-danger {
-  background: var(--error-alpha-15);
-  color: var(--error);
-  border: 1px solid transparent;
-}
-.btn-danger:hover {
-  background: var(--error-alpha-8);
-  border-color: var(--error-alpha-15);
-}
-
-/* 按钮尺寸变体 */
-.btn-md {
-  height: 32px;
-  padding: 0 var(--space-lg);
-  font-size: var(--text-sm);
-}
-.btn-lg {
-  height: 36px;
-  padding: 0 var(--space-lg-xl);
-  font-size: var(--text-base);
-  border-radius: var(--radius-md);
-}
-
-/* ── 底栏 ── */
 .bottom {
   display: flex;
   flex-direction: column;
@@ -91,10 +31,4 @@
   font-weight: var(--weight-medium);
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
-}
-.bottom-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-left: auto;
 }

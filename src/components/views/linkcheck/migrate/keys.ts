@@ -8,6 +8,7 @@ import type {
   MigrateItemStatus,
   MigrateResult,
 } from '../../../../types/batchMigrate';
+import type { SlotView } from '../../../../composables/batchMigrate/useActiveSlots';
 
 export interface MigrateContext {
   phase: Ref<MigratePhase>;
@@ -16,6 +17,7 @@ export interface MigrateContext {
   maxSuccessCount: Ref<number>;
   sourceServiceFilter: Ref<string[]>;
   availableSourceServices: Ref<Array<{ id: string; displayName: string; count: number }>>;
+  timestampAfterMs: Ref<number | null>;
   configuredServices: ComputedRef<MigrateTargetService[]>;
   unconfiguredServices: ComputedRef<MigrateTargetService[]>;
   checkedTargets: ComputedRef<MigrateTargetService[]>;
@@ -26,6 +28,8 @@ export interface MigrateContext {
   globalProgress: Ref<{ current: number; total: number; percent: number }>;
   migrateResult: Ref<MigrateResult | null>;
   cumulativeCounts: Ref<{ success: number; failed: number; skipped: number }>;
+  /** 当前正在原地重试的 historyId 集合（驱动失败行 spinner） */
+  retryingIds: Ref<Set<string>>;
   estimatedTimeRemaining: ComputedRef<number | null>;
   averageSpeed: ComputedRef<number>;
   initError: Ref<string | null>;
@@ -33,11 +37,28 @@ export interface MigrateContext {
   applyFilter: () => Promise<void>;
   startMigrate: () => Promise<void>;
   cancelMigrate: () => void;
-  retryFailed: () => Promise<void>;
+  /** 暂停：停止分发新条目，在途条目按保守策略落定（下载中继续下完不上传、上传中完成后不再派发） */
+  pauseMigrate: () => void;
+  /** 恢复：主循环从阻塞中醒来，继续查询下一批 */
+  resumeMigrate: () => void;
+  /** 用户已点暂停（主循环阻塞中） */
+  isPaused: Ref<boolean>;
+  /** "正在暂停..."—— 已点暂停但仍有在途条目未落定 */
+  isPausing: Ref<boolean>;
+  /** 批量原地重试失败项（done 态专用，并发 2） */
+  retryFailed: (historyIds: string[]) => Promise<void>;
+  /** 单条原地重试 */
+  retrySingleFailed: (historyId: string) => Promise<void>;
   resetToConfiguring: () => Promise<void>;
   // UI 层状态
   healthStatusMap: Ref<Record<string, string>>;
   healthTooltipMap: Ref<Record<string, string>>;
+  /** 「正在处理」UI 槽位（固定 2 个，跨批次延续，解决空窗骨架屏抽搐） */
+  slots: Ref<SlotView[]>;
+  /** 至少一个槽位非 idle。骨架屏触发条件为 phase==='migrating' && !hasAnyActive */
+  hasAnyActive: ComputedRef<boolean>;
+  /** 最近完成快照队列（最多 6 张），挂在活跃槽下方 */
+  recentCompleted: Ref<MigrateItemStatus[]>;
 }
 
 export const MIGRATE_KEY: InjectionKey<MigrateContext> = Symbol('migrate');

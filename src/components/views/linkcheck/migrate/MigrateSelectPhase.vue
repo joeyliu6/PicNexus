@@ -9,6 +9,7 @@ import { formatNumber, isPublicService } from './utils';
 import { MIGRATE_KEY } from './keys';
 import SourceList from './components/SourceList.vue';
 import TargetCard from './components/TargetCard.vue';
+import MigrateFilterPopover from './components/MigrateFilterPopover.vue';
 
 const ctx = inject(MIGRATE_KEY)!;
 
@@ -17,6 +18,7 @@ const {
   availableSourceServices, configuredServices,
   unconfiguredServices, checkedTargets, totalPending, isAllBackedUp,
   initError, initConfiguring, healthStatusMap, healthTooltipMap,
+  timestampAfterMs,
 } = ctx;
 
 const hasPublicTarget = computed(() =>
@@ -88,7 +90,7 @@ function handleTargetToggle(serviceId: string) {
   <div class="panel-body">
     <!-- 初始化错误 -->
     <EmptyState v-if="initError" icon="pi pi-exclamation-triangle" :title="initError">
-      <button class="btn-primary btn-lg" @click="initConfiguring">重试</button>
+      <button class="btn-primary" @click="initConfiguring">重试</button>
     </EmptyState>
 
     <!-- 加载中 -->
@@ -109,7 +111,7 @@ function handleTargetToggle(serviceId: string) {
       title="暂无已配置的图床"
       description="请先在设置中配置至少一个图床"
     >
-      <button class="btn-primary btn-lg" @click="navigateToSettings">去设置 →</button>
+      <button class="btn-primary" @click="navigateToSettings">去设置 →</button>
     </EmptyState>
 
     <!-- 分栏布局 -->
@@ -118,13 +120,26 @@ function handleTargetToggle(serviceId: string) {
       <SourceList
         :sources="availableSourceServices"
         :selectedIds="sourceServiceFilter"
-        :maxSuccessCount="maxSuccessCount"
         @toggle="toggleSourceFilter"
-        @update:maxSuccessCount="maxSuccessCount = $event"
-      />
+      >
+        <template #filter-trigger>
+          <MigrateFilterPopover
+            :maxSuccessCount="maxSuccessCount"
+            :timestampAfterMs="timestampAfterMs"
+            @update:maxSuccessCount="maxSuccessCount = $event"
+            @update:timestampAfterMs="timestampAfterMs = $event"
+          />
+        </template>
+      </SourceList>
+
+      <!-- 两栏之间的方向引导 -->
+      <div class="split-divider" aria-hidden="true">
+        <i class="pi pi-arrow-right split-arrow" />
+      </div>
 
       <!-- 右栏：迁移目标 -->
       <div class="split-right">
+        <div v-if="configuredServices.length > 0" class="column-label">到这里</div>
         <div v-if="isAllBackedUp" class="backed-up-banner">
           <i class="pi pi-check-circle" />
           <span v-if="availableSourceServices.length === 0">当前无需备份的图片</span>
@@ -165,10 +180,6 @@ function handleTargetToggle(serviceId: string) {
 
   <!-- 底栏 -->
   <div class="bottom">
-    <div v-if="canStart() && hasPublicTarget" class="bottom-warn">
-      <i class="pi pi-exclamation-triangle" />
-      <span>公共图床随时可能失效，且单日上传数量有限，大量迁移可能中途失败</span>
-    </div>
     <div class="bottom-main">
       <span class="bottom-stat" :title="bottomFullText">
         <template v-if="checkedTargets.length === 0">
@@ -184,7 +195,13 @@ function handleTargetToggle(serviceId: string) {
         </template>
       </span>
       <div class="bottom-actions">
-        <button class="btn-primary btn-lg" :disabled="!canStart()" @click="emit('start')">
+        <i
+          v-if="canStart() && hasPublicTarget"
+          class="pi pi-exclamation-circle bottom-warn-icon"
+          v-tooltip.top="'公共图床随时可能失效，且单日上传数量有限，大量迁移可能中途失败'"
+          aria-label="公共图床风险提示"
+        />
+        <button class="btn-primary" :disabled="!canStart()" @click="emit('start')">
           <svg viewBox="0 0 16 16" fill="currentColor" width="11" height="11" style="flex-shrink:0;display:block"><path d="M3 2l10 6-10 6V2z"/></svg>
           开始迁移
         </button>
@@ -211,7 +228,30 @@ function handleTargetToggle(serviceId: string) {
 .skeleton-line--long { width: 60%; height: 12px; }
 
 /* 分栏布局 */
-.split-layout { display: flex; flex: 1; min-height: 0; gap: var(--space-xl); }
+.split-layout { display: flex; flex: 1; min-height: 0; gap: var(--space-md); }
+
+/* 两栏之间的方向引导 */
+.split-divider {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-sm);
+}
+
+.split-arrow {
+  font-size: var(--text-lg);
+  color: var(--primary-alpha-40);
+}
+
+/* 栏目标签（与左栏「从这里」成对出现） */
+.column-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-weight: var(--weight-regular);
+  margin-bottom: var(--space-sm);
+  letter-spacing: 0.02em;
+}
 
 /* 右栏 */
 .split-right {
@@ -262,17 +302,13 @@ function handleTargetToggle(serviceId: string) {
 .target-card-add-label { font-size: var(--text-base); font-weight: var(--weight-semibold); letter-spacing: -0.01em; }
 .target-card-add-hint { font-size: var(--text-xs); color: var(--text-muted); }
 
-/* 底栏警告行 */
-.bottom-warn {
-  display: flex; align-items: center; gap: var(--space-sm);
-  padding: var(--space-xs-sm) var(--space-md);
-  border-radius: var(--radius-sm-md);
-  background: var(--warning-alpha-10);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  margin-bottom: var(--space-xs);
+/* 底栏公共图床风险图标（按钮左侧 tooltip 触发） */
+.bottom-warn-icon {
+  font-size: var(--text-base);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  cursor: help;
 }
-.bottom-warn i { font-size: var(--text-base); color: var(--warning); flex-shrink: 0; }
 
 /* 底栏追加：溢出省略（覆盖共享样式的 inline-flex） */
 .bottom-main { gap: var(--space-md); align-items: center; }
@@ -289,7 +325,7 @@ function handleTargetToggle(serviceId: string) {
   font-weight: var(--weight-regular);
 }
 .bottom-actions { flex-shrink: 0; }
-.bottom-dim { color: var(--text-muted); margin: 0 var(--space-2xs); }
+.bottom-dim { color: var(--text-muted); margin: 0 var(--space-xs); }
 
 .bottom-hl {
   color: var(--primary);

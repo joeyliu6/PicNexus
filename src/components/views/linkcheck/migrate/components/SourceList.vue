@@ -1,12 +1,14 @@
 <script setup lang="ts">
 /**
  * 迁移来源列表 — 左栏
+ *
+ * 筛选入口（备份数 / 时间范围）通过具名 slot `filter-trigger`
+ * 由父组件 MigrateSelectPhase 注入 MigrateFilterPopover，保证 SourceList 只管渲染列表。
  */
 import Checkbox from 'primevue/checkbox';
-import Select from 'primevue/select';
 import InlineEmptyState from '../../../../common/InlineEmptyState.vue';
 import { getServiceIcon } from '../../../../../utils/icons';
-import { formatNumber, isPublicService, filterThresholds } from '../utils';
+import { formatNumber, isPublicService } from '../utils';
 
 interface SourceItem {
   id: string;
@@ -17,15 +19,11 @@ interface SourceItem {
 defineProps<{
   sources: SourceItem[];
   selectedIds: string[];
-  maxSuccessCount: number;
 }>();
 
 const emit = defineEmits<{
   toggle: [serviceId: string];
-  'update:maxSuccessCount': [value: number];
 }>();
-
-
 </script>
 
 <template>
@@ -38,8 +36,14 @@ const emit = defineEmits<{
       hint="历史记录中没有符合条件的图片"
     />
 
-    <!-- 来源列表 -->
-    <div v-else class="source-list">
+    <!-- 栏目标签 + 来源列表（与右栏「到这里」呼应，暗示从左到右迁移方向） -->
+    <div v-else class="column-label">
+      <span class="column-label-text">从这里</span>
+      <span class="column-label-trigger">
+        <slot name="filter-trigger" />
+      </span>
+    </div>
+    <div v-if="sources.length > 0" class="source-list">
       <div
         v-for="src in sources"
         :key="src.id"
@@ -69,21 +73,6 @@ const emit = defineEmits<{
         <span v-else class="tag-neutral tag-neutral--muted">私有</span>
       </div>
     </div>
-    <!-- 高级筛选（常驻） -->
-    <div v-if="sources.length > 0" class="filter-body">
-      <div class="filter-row">
-        <span class="filter-label">仅处理备份不足</span>
-        <Select
-          :modelValue="maxSuccessCount"
-          :options="filterThresholds"
-          optionLabel="label"
-          optionValue="value"
-          class="filter-select"
-          @update:modelValue="emit('update:maxSuccessCount', $event)"
-        />
-        <span class="filter-label">份的图片</span>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -91,6 +80,25 @@ const emit = defineEmits<{
 .split-left {
   flex: 0 0 42%; min-width: 0;
   display: flex; flex-direction: column; overflow-y: auto;
+}
+
+.column-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-weight: var(--weight-regular);
+  margin-bottom: var(--space-sm);
+  letter-spacing: 0.02em;
+}
+
+.column-label-text { flex-shrink: 0; }
+
+.column-label-trigger {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
 }
 
 .source-list { display: flex; flex-direction: column; gap: var(--space-2xs); flex: 1; }
@@ -131,18 +139,4 @@ const emit = defineEmits<{
   letter-spacing: 0.02em;
 }
 .tag-neutral--muted { color: var(--text-muted); }
-
-/* 高级筛选 */
-
-.filter-body {
-  display: flex; flex-direction: column; gap: var(--space-sm);
-  padding: var(--space-sm-md) 0;
-  font-size: var(--text-sm); color: var(--text-secondary);
-}
-.filter-row { display: flex; align-items: center; gap: var(--space-sm); }
-.filter-label { white-space: nowrap; font-size: var(--text-xs); }
-
-:deep(.filter-select.p-select) { height: 28px; min-width: 60px; border-radius: var(--radius-sm-md); border: none; outline: 1px solid var(--outline-ghost); background: var(--bg-card); font-size: var(--text-sm); }
-:deep(.filter-select.p-select:focus-within) { outline: 2px solid var(--primary-alpha-40); }
-:deep(.filter-select .p-select-label) { padding: var(--space-xs) var(--space-sm); font-size: var(--text-sm); }
 </style>
