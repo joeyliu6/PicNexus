@@ -83,6 +83,7 @@ export async function runMigrations(db: Database): Promise<void> {
   await migrateAddFavoriteColumn(db);
   await migrateAddSuccessCountColumn(db);
   await migrateAddSuccessfulServiceIdsColumn(db);
+  await migrateAddMigrationSkipColumn(db);
 }
 
 /**
@@ -169,6 +170,28 @@ async function migrateAddSuccessfulServiceIdsColumn(db: Database): Promise<void>
     log.info('迁移完成：添加 successful_service_ids 列并回填');
   } catch (error) {
     log.error('迁移 successful_service_ids 列失败:', error);
+    throw error;
+  }
+}
+
+/**
+ * 迁移：添加 migration_skip 列（幂等）
+ * 批量迁移失败项手动「跳过」写入此字段，下次扫描不再入队
+ */
+async function migrateAddMigrationSkipColumn(db: Database): Promise<void> {
+  try {
+    if (await columnExists(db, 'migration_skip')) return;
+
+    await db.execute(
+      `ALTER TABLE history_items ADD COLUMN migration_skip INTEGER NOT NULL DEFAULT 0`
+    );
+    // 复合索引：覆盖 WHERE migration_skip = 0 AND ... ORDER BY timestamp DESC
+    await db.execute(
+      `CREATE INDEX IF NOT EXISTS idx_migration_skip ON history_items(migration_skip, timestamp DESC)`
+    );
+    log.info('迁移完成：添加 migration_skip 列');
+  } catch (error) {
+    log.error('迁移 migration_skip 列失败:', error);
     throw error;
   }
 }

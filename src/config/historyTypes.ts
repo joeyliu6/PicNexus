@@ -80,6 +80,13 @@ export interface HistoryItem {
 
   /** 是否已收藏 */
   isFavorited?: boolean;
+
+  /**
+   * 是否在批量迁移中永久跳过
+   * - true 时 getItemsByBackupCountQuery / getServiceDistributionQuery 不再返回该条
+   * - 用户在失败项手动点「跳过」写入；可在设置页一键清空
+   */
+  migrationSkip?: boolean;
 }
 
 /**

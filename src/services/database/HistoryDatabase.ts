@@ -20,7 +20,7 @@ import {
 import { setFavoriteQuery, batchSetFavoriteQuery, getFavoriteCountQuery, getFavoriteIdListQuery } from './FavoriteService';
 import { getLinkCheckInvalidQuery, getLinkCheckRestStreamQuery, batchUpdateLinkCheckStatusQuery } from './LinkCheckQuery';
 import { addSyncLogQuery, getSyncLogsQuery, clearSyncLogsQuery } from './SyncLogService';
-import { getItemsByBackupCountQuery, getBackupCountStatsQuery, getServiceDistributionQuery } from './MigrationQuery';
+import { getItemsByBackupCountQuery, getBackupCountStatsQuery, getServiceDistributionQuery, getItemsByIdsQuery, setMigrationSkipQuery } from './MigrationQuery';
 import {
   getDayStatsQuery,
   getItemsByDayRangeQuery,
@@ -425,10 +425,14 @@ class HistoryDatabase {
     maxSuccessCount: number;
     serviceFilter?: string;
     hasServiceId?: string | string[];
+    timestampAfter?: number;
   }): Promise<Map<string, number>> {
     const db = await this.connection.getDb();
     return getServiceDistributionQuery(db, options);
   }
+
+  async getItemsByIds(ids: string[]): Promise<HistoryItem[]> { return getItemsByIdsQuery(await this.connection.getDb(), ids); }
+  async setMigrationSkip(id: string, skip: boolean): Promise<void> { await setMigrationSkipQuery(await this.connection.getDb(), id, skip); }
 
   /**
    * 获取所有时间段的统计信息（轻量级查询）

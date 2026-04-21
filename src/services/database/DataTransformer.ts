@@ -33,6 +33,7 @@ export interface HistoryItemRow {
   is_favorited: number; // 0/1
   success_count: number; // 成功上传的图床数量（冗余字段，加速查询）
   successful_service_ids: string; // JSON 数组字符串，如 '["jd","qiniu"]'（冗余字段，加速分布查询）
+  migration_skip: number; // 0/1，批量迁移中永久跳过该条
 }
 
 /** 所有列名（INSERT/UPDATE 统一使用，新增列只需改这里） */
@@ -40,7 +41,7 @@ export const ALL_COLUMNS = [
   'id', 'timestamp', 'local_file_name', 'local_file_name_lower', 'file_path',
   'primary_service', 'results', 'generated_link', 'link_check_status', 'link_check_summary',
   'width', 'height', 'aspect_ratio', 'file_size', 'format', 'color_type', 'has_alpha', 'is_favorited', 'success_count',
-  'successful_service_ids',
+  'successful_service_ids', 'migration_skip',
 ] as const;
 
 export const COLUMNS_SQL = ALL_COLUMNS.join(', ');
@@ -99,6 +100,7 @@ export function itemToRow(item: HistoryItem): HistoryItemRow {
     successful_service_ids: JSON.stringify(
       item.results.filter(r => r.status === 'success').map(r => r.serviceId),
     ),
+    migration_skip: item.migrationSkip ? 1 : 0,
   };
 }
 
@@ -124,5 +126,6 @@ export function rowToItem(row: HistoryItemRow): HistoryItem {
     fileSize: row.file_size,
     format: row.format,
     isFavorited: row.is_favorited === 1,
+    migrationSkip: row.migration_skip === 1,
   };
 }

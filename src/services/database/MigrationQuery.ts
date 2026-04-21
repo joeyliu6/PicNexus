@@ -7,6 +7,9 @@
 import type Database from '@tauri-apps/plugin-sql';
 import type { HistoryItem } from '../../config/types';
 import { type HistoryItemRow, COLUMNS_SQL, rowToItem } from './DataTransformer';
+import { createLogger } from '../../utils/logger';
+
+const log = createLogger('MigrationQuery');
 
 /**
  * 按成功上传的图床数量查询历史记录（用于批量迁移筛选）
@@ -31,7 +34,8 @@ export async function getItemsByBackupCountQuery(
   const { maxSuccessCount, serviceFilter, hasServiceId, timestampAfter, limit = 500, offset = 0 } = options;
 
   // 全部条件走索引 idx_success_count(success_count, timestamp DESC)
-  const conditions: string[] = ['success_count > 0', `success_count <= $1`];
+  // migration_skip = 0 过滤掉用户永久跳过的项
+  const conditions: string[] = ['success_count > 0', 'migration_skip = 0', `success_count <= $1`];
   const params: (string | number)[] = [maxSuccessCount];
 
   if (serviceFilter && serviceFilter !== 'all') {
@@ -103,11 +107,13 @@ export async function getServiceDistributionQuery(
     serviceFilter?: string;
     /** 筛选"在指定图床上有成功记录"的项目（基于 successful_service_ids），支持单个或多个 */
     hasServiceId?: string | string[];
+    /** 时间范围过滤（仅统计该时间戳之后的记录）— 与 getItemsByBackupCountQuery 保持一致 */
+    timestampAfter?: number;
   },
 ): Promise<Map<string, number>> {
-  const { maxSuccessCount, serviceFilter, hasServiceId } = options;
+  const { maxSuccessCount, serviceFilter, hasServiceId, timestampAfter } = options;
 
-  const conditions: string[] = ['h.success_count > 0', `h.success_count <= $1`];
+  const conditions: string[] = ['h.success_count > 0', 'h.migration_skip = 0', `h.success_count <= $1`];
   const params: (string | number)[] = [maxSuccessCount];
 
   if (serviceFilter && serviceFilter !== 'all') {
@@ -119,6 +125,11 @@ export async function getServiceDistributionQuery(
   if (ids.length > 0) {
     const placeholders = ids.map(id => { params.push(id); return `$${params.length}`; }).join(', ');
     conditions.push(`EXISTS (SELECT 1 FROM json_each(h.successful_service_ids) AS _s WHERE _s.value IN (${placeholders}))`);
+  }
+
+  if (timestampAfter) {
+    params.push(timestampAfter);
+    conditions.push(`h.timestamp >= $${params.length}`);
   }
 
   const where = conditions.join(' AND ');
@@ -135,4 +146,39 @@ export async function getServiceDistributionQuery(
     map.set(r.service_id, r.cnt);
   }
   return map;
+}
+
+/**
+ * 按 ID 列表批量获取历史记录（阶段 3 单条重试用）
+ * 保留输入数组顺序
+ */
+export async function getItemsByIdsQuery(db: Database, ids: string[]): Promise<HistoryItem[]> {
+  if (ids.length === 0) return [];
+
+  const BATCH_SIZE = 500;
+  const out: HistoryItem[] = [];
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    const batch = ids.slice(i, i + BATCH_SIZE);
+    const placeholders = batch.map((_, j) => `$${j + 1}`).join(',');
+    const rows = await db.select<HistoryItemRow[]>(
+      `SELECT ${COLUMNS_SQL} FROM history_items WHERE id IN (${placeholders})`,
+      batch,
+    );
+    for (const r of rows) out.push(rowToItem(r));
+  }
+  // 按输入顺序重排（IN 的返回顺序不保证）
+  const idx = new Map(ids.map((id, i) => [id, i]));
+  out.sort((a, b) => (idx.get(a.id) ?? 0) - (idx.get(b.id) ?? 0));
+  return out;
+}
+
+/**
+ * 设置迁移跳过标志（单条）
+ */
+export async function setMigrationSkipQuery(db: Database, id: string, skip: boolean): Promise<void> {
+  await db.execute(
+    `UPDATE history_items SET migration_skip = $1 WHERE id = $2`,
+    [skip ? 1 : 0, id],
+  );
+  log.debug(`设置迁移跳过: ${id} → ${skip}`);
 }
