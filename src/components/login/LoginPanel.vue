@@ -9,9 +9,9 @@
         </div>
 
         <!-- 标题与描述 -->
-        <h2 class="dialog-title">准备登录{{ provider.name }}</h2>
+        <h2 class="dialog-title">准备登录 {{ provider.name }}</h2>
         <p class="dialog-desc">
-          点击下方按钮将在本窗口加载{{ provider.name }}登录页面。登录成功后自动获取
+          点击下方按钮将在本窗口加载 {{ provider.name }} 登录页面。登录成功后自动获取
           Cookie 以便进行图片上传。
         </p>
 
