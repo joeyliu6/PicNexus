@@ -14,6 +14,8 @@ export interface MigrateContext {
   phase: Ref<MigratePhase>;
   isInitialized: Ref<boolean>;
   isFilterApplied: Ref<boolean>;
+  /** counts 正在被异步刷新，派生状态（isAllBackedUp 等）在此期间应保持稳定 */
+  isRefiltering: Ref<boolean>;
   maxSuccessCount: Ref<number>;
   sourceServiceFilter: Ref<string[]>;
   availableSourceServices: Ref<Array<{ id: string; displayName: string; count: number }>>;

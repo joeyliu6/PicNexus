@@ -14,7 +14,7 @@ import MigrateFilterPopover from './components/MigrateFilterPopover.vue';
 const ctx = inject(MIGRATE_KEY)!;
 
 const {
-  isInitialized, isFilterApplied, maxSuccessCount, sourceServiceFilter,
+  isInitialized, isFilterApplied, isRefiltering, maxSuccessCount, sourceServiceFilter,
   availableSourceServices, configuredServices,
   unconfiguredServices, checkedTargets, totalPending, isAllBackedUp,
   initError, initConfiguring, healthStatusMap, healthTooltipMap,
@@ -23,6 +23,10 @@ const {
 
 const hasPublicTarget = computed(() =>
   checkedTargets.value.some(s => isPublicService(s.serviceId))
+);
+
+const noSourceSelected = computed(() =>
+  availableSourceServices.value.length > 0 && sourceServiceFilter.value.length === 0
 );
 
 const emit = defineEmits<{ start: [] }>();
@@ -71,6 +75,7 @@ function getServiceHealthStatus(serviceId: string): 'verified' | 'pending' | 'er
 }
 
 function canStart(): boolean {
+  if (noSourceSelected.value) return false;
   if (totalPending.value === 0 || checkedTargets.value.length === 0) return false;
   // 防止对健康检查异常（error）的目标硬发起迁移，避免连续失败空耗带宽
   return checkedTargets.value.every(s => getServiceHealthStatus(s.serviceId) !== 'error');
@@ -156,6 +161,8 @@ function handleTargetToggle(serviceId: string) {
             :checked="svc.checked"
             :healthStatus="getServiceHealthStatus(svc.serviceId)"
             :healthTooltip="healthTooltipMap[svc.serviceId]"
+            :noSourceSelected="noSourceSelected"
+            :isRefiltering="isRefiltering"
             @toggle="handleTargetToggle(svc.serviceId)"
           />
           <!-- 未配置图床卡片 -->
@@ -182,7 +189,10 @@ function handleTargetToggle(serviceId: string) {
   <div class="bottom">
     <div class="bottom-main">
       <span class="bottom-stat" :title="bottomFullText">
-        <template v-if="checkedTargets.length === 0">
+        <template v-if="noSourceSelected">
+          {{ checkedTargets.length === 0 ? '请先在左侧选择来源图床' : '请先选择来源图床，再开始迁移' }}
+        </template>
+        <template v-else-if="checkedTargets.length === 0">
           选择迁移目标，开始备份
         </template>
         <template v-else>
@@ -300,7 +310,7 @@ function handleTargetToggle(serviceId: string) {
   font-size: var(--text-lg); line-height: 1; font-weight: var(--weight-regular);
 }
 .target-card-add-label { font-size: var(--text-base); font-weight: var(--weight-semibold); letter-spacing: -0.01em; }
-.target-card-add-hint { font-size: var(--text-xs); color: var(--text-muted); }
+.target-card-add-hint { font-size: var(--text-xs); color: var(--text-tertiary); }
 
 /* 底栏公共图床风险图标（按钮左侧 tooltip 触发） */
 .bottom-warn-icon {

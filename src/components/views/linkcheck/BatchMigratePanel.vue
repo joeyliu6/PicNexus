@@ -3,8 +3,9 @@
  * 批量迁移面板 — 容器组件
  * 管理 composable 初始化 + 阶段切换 + provide 给子组件
  */
-import { watch, onActivated, provide } from 'vue';
+import { watch, onActivated, onUnmounted, provide } from 'vue';
 import { useBatchMigrateManager } from '../../../composables/useBatchMigrate';
+import { debounceWithError } from '../../../utils/debounce';
 import { useActiveSlots } from '../../../composables/batchMigrate/useActiveSlots';
 import { useRecentCompleted } from '../../../composables/batchMigrate/useRecentCompleted';
 import { useServiceHealth } from '../../../composables/useServiceHealth';
@@ -49,12 +50,12 @@ provide(MIGRATE_KEY, {
 manager.initConfiguring();
 onActivated(() => { if (manager.phase.value === 'configuring') manager.initConfiguring(); });
 
-watch(manager.maxSuccessCount, () => { if (manager.phase.value === 'configuring') manager.applyFilter(); });
-watch(manager.sourceServiceFilter, () => {
-  if (manager.phase.value === 'configuring' && manager.isFilterApplied.value) manager.applyFilter();
-});
-watch(manager.timestampAfterMs, () => {
-  if (manager.phase.value === 'configuring' && manager.isFilterApplied.value) manager.applyFilter();
+const debouncedApplyFilter = debounceWithError(() => manager.applyFilter(), 150);
+onUnmounted(() => debouncedApplyFilter.cancel());
+
+watch(manager.maxSuccessCount, () => { if (manager.phase.value === 'configuring') debouncedApplyFilter(); });
+watch([manager.sourceServiceFilter, manager.timestampAfterMs], () => {
+  if (manager.phase.value === 'configuring' && manager.isFilterApplied.value) debouncedApplyFilter();
 });
 
 function handleStartClick() {

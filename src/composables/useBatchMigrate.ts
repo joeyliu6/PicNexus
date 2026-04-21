@@ -78,6 +78,9 @@ export function useBatchMigrateManager() {
   // 错误状态（C6：初始化/筛选失败时暴露给 UI）
   const initError = ref<string | null>(null);
 
+  // 正在执行 applyFilter 异步查询（counts 尚未刷新，用于抑制依赖 pendingCount 的派生状态误判）
+  const isRefiltering = ref(false);
+
   // 计算属性
   const configuredServices = computed(() => targetServices.value.filter(s => s.isConfigured));
   const unconfiguredServices = computed(() => targetServices.value.filter(s => !s.isConfigured));
@@ -87,10 +90,14 @@ export function useBatchMigrateManager() {
     if (checkedTargets.value.length === 0) return 0;
     return Math.max(...checkedTargets.value.map(s => s.pendingCount));
   });
-  const isAllBackedUp = computed(() =>
-    isInitialized.value && isFilterApplied.value &&
-    targetServices.value.every(s => !s.isConfigured || s.pendingCount === 0),
-  );
+  const isAllBackedUp = computed(() => {
+    if (!isInitialized.value || !isFilterApplied.value) return false;
+    // counts 正在被异步查询刷新，还不能用来判定"已备份"
+    if (isRefiltering.value) return false;
+    // 来源全未选中时 pendingCount 被短路置 0，语义上无数据可判定
+    if (availableSourceServices.value.length > 0 && sourceServiceFilter.value.length === 0) return false;
+    return targetServices.value.every(s => !s.isConfigured || s.pendingCount === 0);
+  });
 
   // 统计卡计算
   const estimatedTimeRemaining = computed(() => {
@@ -232,6 +239,18 @@ export function useBatchMigrateManager() {
    * 利用 getServiceDistribution 获取"已在该图床上的图片数"，然后 total - existing = pending
    */
   async function applyFilter() {
+    // 来源全未选中（区别于初始化前的空数组）→ pendingCount 全置 0，不发查询
+    const hasAvailableSources = availableSourceServices.value.length > 0;
+    if (hasAvailableSources && sourceServiceFilter.value.length === 0) {
+      for (const svc of targetServices.value) {
+        if (svc.isConfigured) svc.pendingCount = 0;
+      }
+      return;
+    }
+
+    // 标记正在异步刷新（必须在首个 await 之前同步赋值，保证组件渲染时已读到 true）
+    isRefiltering.value = true;
+
     try {
       const hasServiceId = sourceServiceFilter.value.length > 0 ? sourceServiceFilter.value : undefined;
       const timestampAfter = timestampAfterMs.value ?? undefined;
@@ -264,6 +283,8 @@ export function useBatchMigrateManager() {
     } catch (e) {
       log.error('筛选失败', e);
       initError.value = '数据查询失败，请重试';
+    } finally {
+      isRefiltering.value = false;
     }
   }
 
@@ -524,7 +545,7 @@ export function useBatchMigrateManager() {
   }
 
   return {
-    phase, isInitialized, isFilterApplied, initError,
+    phase, isInitialized, isFilterApplied, isRefiltering, initError,
     maxSuccessCount, sourceServiceFilter, availableSourceServices,
     timestampAfterMs,
     targetServices, configuredServices, unconfiguredServices,

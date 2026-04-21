@@ -13,14 +13,21 @@ const props = defineProps<{
   checked: boolean;
   healthStatus: 'verified' | 'pending' | 'error';
   healthTooltip?: string;
+  noSourceSelected?: boolean;
+  isRefiltering?: boolean;
 }>();
 
 const emit = defineEmits<{ toggle: [] }>();
 
 const badgeText = computed(() => healthLabels[props.healthStatus] ?? '已配置');
-const badgeClass = computed(() => `badge--${props.healthStatus}`);
 const isDisabled = computed(() => props.healthStatus === 'error');
 const errorTooltip = computed(() => isDisabled.value ? '图床异常，请先检查配置' : undefined);
+const countClass = computed((): string | undefined => {
+  if (props.noSourceSelected) return 'target-count--no-source';
+  if (props.isRefiltering) return 'target-count--stale';
+  if (props.checked) return 'target-count--active';
+  return undefined;
+});
 
 function handleClick() {
   if (!isDisabled.value) emit('toggle');
@@ -47,16 +54,20 @@ function handleClick() {
       <span class="target-icon" v-html="getServiceIcon(serviceId)" />
       <span class="target-name">{{ displayName }}</span>
       <span
-        class="target-badge"
-        :class="badgeClass"
-        v-tooltip.top="healthTooltip"
-      >
-        {{ badgeText }}
-      </span>
+        class="target-status-dot"
+        :class="`dot--${healthStatus}`"
+        v-tooltip.top="healthTooltip ?? badgeText"
+      />
     </div>
-    <span class="target-count" :class="{ 'target-count--active': checked }">
-      <span class="target-count-num">{{ formatNumber(pendingCount) }}</span>
-      <span class="target-count-unit">张待迁移</span>
+    <span class="target-count" :class="countClass">
+      <template v-if="noSourceSelected">
+        <span class="target-count-num">—</span>
+        <span class="target-count-unit">请先选择来源</span>
+      </template>
+      <template v-else>
+        <span class="target-count-num">{{ formatNumber(pendingCount) }}</span>
+        <span class="target-count-unit">张待迁移</span>
+      </template>
     </span>
   </div>
 </template>
@@ -80,6 +91,9 @@ function handleClick() {
   border-color: var(--primary-alpha-40);
 }
 
+.target-card:not(.target-card--checked, .target-card--disabled):hover .target-name { color: var(--primary); }
+.target-card:not(.target-card--checked, .target-card--disabled):hover .target-icon { color: var(--primary); }
+
 .target-card--checked,
 .target-card--checked:hover {
   background: var(--primary-alpha-8);
@@ -102,20 +116,24 @@ function handleClick() {
 
 .target-name { font-size: var(--text-base); font-weight: var(--weight-semibold); color: var(--text-primary); letter-spacing: -0.01em; }
 
-.target-badge {
-  font-size: var(--text-2xs); font-weight: var(--weight-medium);
-  padding: var(--space-2xs) var(--space-xs-sm);
-  border-radius: var(--radius-sm-md);
+.target-status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
   margin-left: auto;
-  letter-spacing: 0.02em;
+  cursor: help;
+  transition: all var(--duration-normal) ease;
 }
-.badge--verified { color: var(--success); background: var(--success-alpha-10); }
-.badge--pending { color: var(--warning); background: var(--warning-alpha-10); }
-.badge--error { color: var(--error); background: var(--error-alpha-10); }
+.dot--verified { background: var(--success); }
+.dot--pending  { background: var(--warning); }
+.dot--error    { background: var(--error);   }
 
 .target-count { display: inline-flex; align-items: baseline; gap: var(--space-2xs); }
 .target-count-num { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .target-count-unit { font-size: var(--text-xs); color: var(--text-muted); }
 .target-count--active .target-count-num { color: var(--primary); font-weight: var(--weight-semibold); }
 .target-count--active .target-count-unit { color: var(--primary); opacity: 0.7; }
+.target-count--no-source .target-count-num { color: var(--text-tertiary); font-style: italic; font-variant-numeric: normal; }
+.target-count--no-source .target-count-unit { color: var(--text-tertiary); font-style: italic; }
+.target-count--stale { opacity: 0.35; transition: opacity var(--duration-normal) var(--ease-decelerate); }
 </style>

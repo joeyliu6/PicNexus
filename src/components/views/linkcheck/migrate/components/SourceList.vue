@@ -8,7 +8,7 @@
 import Checkbox from 'primevue/checkbox';
 import InlineEmptyState from '../../../../common/InlineEmptyState.vue';
 import { getServiceIcon } from '../../../../../utils/icons';
-import { formatNumber, isPublicService } from '../utils';
+import { formatNumber } from '../utils';
 
 interface SourceItem {
   id: string;
@@ -69,8 +69,6 @@ const emit = defineEmits<{
           <span class="source-count-num">{{ formatNumber(src.count) }}</span>
           <span class="source-count-unit">张</span>
         </span>
-        <span v-if="isPublicService(src.id)" class="tag-neutral">公共</span>
-        <span v-else class="tag-neutral tag-neutral--muted">私有</span>
       </div>
     </div>
   </div>
@@ -129,14 +127,4 @@ const emit = defineEmits<{
 .source-count-unit { font-size: var(--text-xs); color: var(--text-muted); }
 .source-row--selected .source-count-num { color: var(--primary); }
 
-.tag-neutral {
-  font-size: var(--text-2xs); font-weight: var(--weight-medium);
-  padding: var(--space-2xs) var(--space-xs-sm);
-  border-radius: var(--radius-sm-md);
-  background: var(--hover-overlay-subtle);
-  color: var(--text-secondary);
-  flex-shrink: 0;
-  letter-spacing: 0.02em;
-}
-.tag-neutral--muted { color: var(--text-muted); }
 </style>
