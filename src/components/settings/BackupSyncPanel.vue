@@ -222,11 +222,14 @@ function handleRestoreCancel() {
     </div>
 
     <!-- 备份密码 -->
-    <BackupPasswordSection
-      ref="backupPasswordSectionRef"
-      @restore-confirm="handleRestoreConfirm"
-      @restore-cancel="handleRestoreCancel"
-    />
+    <div class="form-group">
+      <label class="group-label">备份密码</label>
+      <BackupPasswordSection
+        ref="backupPasswordSectionRef"
+        @restore-confirm="handleRestoreConfirm"
+        @restore-cancel="handleRestoreCancel"
+      />
+    </div>
 
     <Divider />
 

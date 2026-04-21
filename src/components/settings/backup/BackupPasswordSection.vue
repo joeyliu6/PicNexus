@@ -143,56 +143,52 @@ defineExpose({
 </script>
 
 <template>
-  <div class="form-group">
-    <label class="group-label">备份密码</label>
-
-    <div class="security-card">
-      <div class="security-card-row">
-        <span v-if="hasBackupPassword" class="security-status">● 已加密</span>
-        <span v-else class="security-status-inactive">
-          <i class="pi pi-exclamation-circle"></i> 未设置
-        </span>
-        <div class="security-card-actions">
-          <template v-if="hasBackupPassword">
-            <Button
-              label="修改密码"
-              icon="pi pi-pencil"
-              severity="secondary"
-              outlined
-              size="small"
-              :loading="passwordLoading"
-              @click="openSetPasswordDialog"
-            />
-            <Button
-              label="关闭加密"
-              icon="pi pi-lock-open"
-              severity="danger"
-              outlined
-              size="small"
-              :loading="passwordLoading"
-              @click="handleClearPassword"
-            />
-          </template>
+  <div class="security-card">
+    <div class="security-card-row">
+      <span v-if="hasBackupPassword" class="security-status">● 已加密</span>
+      <span v-else class="security-status-inactive">
+        <i class="pi pi-exclamation-circle"></i> 未设置
+      </span>
+      <div class="security-card-actions">
+        <template v-if="hasBackupPassword">
           <Button
-            v-else
-            label="设置密码"
-            icon="pi pi-lock"
-            severity="primary"
+            label="修改密码"
+            icon="pi pi-pencil"
+            severity="secondary"
             outlined
             size="small"
             :loading="passwordLoading"
             @click="openSetPasswordDialog"
           />
-        </div>
+          <Button
+            label="关闭加密"
+            icon="pi pi-lock-open"
+            severity="danger"
+            outlined
+            size="small"
+            :loading="passwordLoading"
+            @click="handleClearPassword"
+          />
+        </template>
+        <Button
+          v-else
+          label="设置密码"
+          icon="pi pi-lock"
+          severity="primary"
+          outlined
+          size="small"
+          :loading="passwordLoading"
+          @click="openSetPasswordDialog"
+        />
       </div>
-      <div class="security-card-desc-row">
-        <p class="security-desc">
-          {{ hasBackupPassword
-            ? '配置文件已加密保护，导出更安全。换机还原时导入备份并输入密码即可。'
-            : '配置默认以明文导出，设置密码后自动加密。换机还原时需输入该密码。'
-          }}
-        </p>
-      </div>
+    </div>
+    <div class="security-card-desc-row">
+      <p class="security-desc">
+        {{ hasBackupPassword
+          ? '配置文件已加密保护，导出更安全。换机还原时导入备份并输入密码即可。'
+          : '配置默认以明文导出，设置密码后自动加密。换机还原时需输入该密码。'
+        }}
+      </p>
     </div>
 
     <!-- 迁移密码对话框 -->
