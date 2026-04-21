@@ -147,7 +147,7 @@ onDeactivated(onViewDeactivated);
         :class="{ active: activeTab === 'monitor' }"
         @click="activeTab = 'monitor'"
       >
-        <i class="pi pi-shield" />
+        <i class="pi pi-link" />
         链接监控
       </button>
       <button
@@ -155,7 +155,7 @@ onDeactivated(onViewDeactivated);
         :class="{ active: activeTab === 'rescue' }"
         @click="activeTab = 'rescue'"
       >
-        <i class="pi pi-file-edit" />
+        <i class="pi pi-eraser" />
         文档修复
       </button>
       <button
@@ -163,7 +163,7 @@ onDeactivated(onViewDeactivated);
         :class="{ active: activeTab === 'migrate' }"
         @click="activeTab = 'migrate'"
       >
-        <i class="pi pi-sync" />
+        <i class="pi pi-arrow-right-arrow-left" />
         批量迁移
       </button>
     </div>

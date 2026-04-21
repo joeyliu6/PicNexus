@@ -229,7 +229,7 @@ onDeactivated(() => { isViewActive.value = false; });
 }
 
 .idle-btn-primary.p-button {
-  height: 32px; padding: 0 var(--space-md); font-size: var(--text-xs); font-weight: var(--weight-semibold);
+  height: 32px; padding: 0 var(--space-md); font-size: var(--text-sm); font-weight: var(--weight-semibold);
   border-radius: var(--radius-sm-md);
   background: var(--primary-alpha-15); border-color: transparent; color: var(--primary);
   transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
@@ -243,7 +243,7 @@ onDeactivated(() => { isViewActive.value = false; });
   padding: var(--space-2xs) var(--space-xs);
   background: transparent;
   border: 0;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   color: var(--text-muted);
   cursor: pointer;
   border-radius: var(--radius-sm);
