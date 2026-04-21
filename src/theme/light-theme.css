@@ -80,6 +80,11 @@
   --state-warn-bg: rgba(245, 158, 11, 0.1);
   --state-error-bg: rgba(239, 68, 68, 0.1);
 
+  /* ===== 状态背景柔和版（大面积横幅用，对比度更低） ===== */
+  --state-success-bg-soft: rgba(16, 185, 129, 0.06);
+  --state-warn-bg-soft: rgba(245, 158, 11, 0.06);
+  --state-error-bg-soft: rgba(239, 68, 68, 0.06);
+
   /* ===== 状态文字色（亮色主题使用深色文字） ===== */
   --state-info-text: #1e40af;
   --state-success-text: #047857;
