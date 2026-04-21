@@ -107,6 +107,12 @@
   50%      { opacity: 0.6; }
 }
 
+/* -- k-pulse-dot：小圆点波浪脉冲（三点扫描指示器） -- */
+@keyframes k-pulse-dot {
+  0%, 100% { opacity: 0.25; transform: scale(0.85); }
+  50%      { opacity: 1; transform: scale(1); }
+}
+
 /* -- k-sweep：水平扫光（进度条发光效果） -- */
 @keyframes k-sweep {
   0%   { transform: translateX(-100%); }

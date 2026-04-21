@@ -8,6 +8,9 @@
  *   <EmptyState icon="pi pi-search" title="未找到结果">
  *     <button @click="reset">重置筛选</button>
  *   </EmptyState>
+ *
+ * 自定义图标位（用于替换默认 <i> 图标，例如三点动画）：
+ *   <EmptyState title="正在检测"><template #icon><MyDots /></template></EmptyState>
  */
 defineProps<{
   /** PrimeVue 图标 class，如 'pi pi-star' */
@@ -21,7 +24,9 @@ defineProps<{
 
 <template>
   <div class="empty-state">
-    <i v-if="icon" :class="icon" class="empty-state__icon" />
+    <slot name="icon">
+      <i v-if="icon" :class="icon" class="empty-state__icon" />
+    </slot>
     <p v-if="title" class="empty-state__title">{{ title }}</p>
     <p v-if="description" class="empty-state__desc">{{ description }}</p>
     <!-- 操作按钮等自定义内容 -->

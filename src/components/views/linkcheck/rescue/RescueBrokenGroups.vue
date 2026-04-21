@@ -2,14 +2,16 @@
 // 分组链接列表 + 筛选芯片 + 行操作
 // 从 MdRescueInline.vue 提取的最复杂 UI 区块
 
-import { ref, computed } from 'vue';
+import { computed, toRef } from 'vue';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { open as shellOpen } from '@tauri-apps/plugin-shell';
 import { dirname } from '@tauri-apps/api/path';
 import { invoke } from '@tauri-apps/api/core';
+import EmptyState from '../../../common/EmptyState.vue';
 import { useToast } from '../../../../composables/useToast';
 import { getServiceDisplayName } from '../../../../constants/serviceNames';
 import type { MdImageLinkWithFile } from '../../../../composables/useMdRescue';
+import { useFlatBrokenRows } from '../../../../composables/md-rescue/useFlatBrokenRows';
 import {
   getStatusDisplay, statusBadgeLabel, statusDotColor, statusTooltip,
   extractHost, isDefunctHost, extractFilenameFromUrl,
@@ -20,132 +22,41 @@ const props = defineProps<{
   isRepaired: boolean;
   phase: string;
   scanStage: string;
+  isCollecting: boolean;
+  emptyIcon: string;
+  emptyTitle: string;
+  emptyDesc: string;
 }>();
 
 const toast = useToast();
 
-// ---- 筛选 ----
+// ---- 列表数据（展平/筛选/分组） ----
+const {
+  activeFilter,
+  displayRowLimit,
+  flatBrokenLinks,
+  filterCounts,
+  rescuableChipLabel,
+  groupedRows,
+  visibleGroupedRows,
+  totalFilteredRowCount,
+  collapsedGroups,
+  toggleGroupCollapse,
+  selectFilter,
+  loadMoreRows,
+} = useFlatBrokenRows(toRef(props, 'imageLinks'), toRef(props, 'isRepaired'));
 
-const activeFilter = ref<'all' | 'rescuable' | 'manual'>('all');
-const ROW_DISPLAY_LIMIT = 200;
-const ROW_DISPLAY_STEP = 200;
-const displayRowLimit = ref(ROW_DISPLAY_LIMIT);
+// ---- 扫描状态指示器：收集 / 主检测 / 验证备用 / 取消中时显示，扫完即消失 ----
+const scanInProgress = computed(() =>
+  props.isCollecting
+  || (props.phase === 'scanning'
+    && ['checking', 'backups', 'cancelling'].includes(props.scanStage)),
+);
 
-interface FlatRow {
-  link: MdImageLinkWithFile;
-  firstOfFile: boolean;
-  status: 'rescuable' | 'manual' | 'replaced';
-}
-
-const flatBrokenData = computed(() => {
-  const rows: FlatRow[] = [];
-  let manual = 0, rescuable = 0;
-  for (const l of props.imageLinks) {
-    if (!l.checkResult || l.checkResult.is_valid) continue;
-    const hasValidBackup = l.backupLinks?.some((b) => b.checkResult?.is_valid) ?? false;
-    let status: FlatRow['status'];
-    if (props.isRepaired && l.selectedBackup) status = 'replaced';
-    else if (hasValidBackup) status = 'rescuable';
-    else status = 'manual';
-    if (status === 'manual') manual++;
-    else rescuable++;
-    rows.push({ link: l, firstOfFile: false, status });
-  }
-  return { rows, counts: { all: rows.length, rescuable, manual } };
-});
-
-const flatBrokenLinks = computed(() => flatBrokenData.value.rows);
-const filterCounts = computed(() => flatBrokenData.value.counts);
-
-const filteredRows = computed<FlatRow[]>(() => {
-  const all = flatBrokenLinks.value;
-  const filter = activeFilter.value;
-  const result: FlatRow[] = [];
-  let prevFile = '';
-  for (let i = 0; i < all.length; i++) {
-    const r = all[i];
-    if (filter === 'rescuable' && r.status === 'manual') continue;
-    if (filter === 'manual' && r.status !== 'manual') continue;
-    result.push({
-      link: r.link,
-      status: r.status,
-      firstOfFile: r.link.sourceFile !== prevFile,
-    });
-    prevFile = r.link.sourceFile;
-  }
-  return result;
-});
-
-const rescuableChipLabel = computed(() => (props.isRepaired ? '已修复' : '可修复'));
-
-// ---- 分组 ----
-
-interface GroupedFile {
-  filePath: string;
-  fileName: string;
-  directory: string;
-  rows: FlatRow[];
-}
-
-function getFileDirectory(fullPath: string): string {
-  const parts = fullPath.replace(/\\/g, '/').split('/').filter(Boolean);
-  return parts.length < 2 ? '' : parts[parts.length - 2];
-}
-
-const groupedRows = computed<GroupedFile[]>(() => {
-  const map = new Map<string, GroupedFile>();
-  for (const r of filteredRows.value) {
-    const key = r.link.sourceFile;
-    let entry = map.get(key);
-    if (!entry) {
-      entry = {
-        filePath: key,
-        fileName: r.link.sourceFileName,
-        directory: getFileDirectory(key),
-        rows: [],
-      };
-      map.set(key, entry);
-    }
-    entry.rows.push(r);
-  }
-  return Array.from(map.values());
-});
-
-const totalFilteredRowCount = computed(() => filteredRows.value.length);
-
-const visibleGroupedRows = computed<GroupedFile[]>(() => {
-  const limit = displayRowLimit.value;
-  const all = groupedRows.value;
-  if (totalFilteredRowCount.value <= limit) return all;
-  const result: GroupedFile[] = [];
-  let count = 0;
-  for (const group of all) {
-    if (count >= limit) break;
-    const remaining = limit - count;
-    if (group.rows.length <= remaining) {
-      result.push(group);
-      count += group.rows.length;
-    } else {
-      result.push({ ...group, rows: group.rows.slice(0, remaining) });
-      count += remaining;
-    }
-  }
-  return result;
-});
-
-const collapsedGroups = ref<Set<string>>(new Set());
-
-function toggleGroupCollapse(filePath: string): void {
-  const next = new Set(collapsedGroups.value);
-  if (next.has(filePath)) next.delete(filePath);
-  else next.add(filePath);
-  collapsedGroups.value = next;
-}
-
-function selectFilter(f: 'all' | 'rescuable' | 'manual') {
-  if (activeFilter.value === f) return;
-  activeFilter.value = f;
-  displayRowLimit.value = ROW_DISPLAY_LIMIT;
+// 无数据时 chip 的计数显示为 —，避免"全部 0/可修复 0/需手动 0"被误读为"全部扫完无问题"
+// 扫描进行中数字的"还会变"由持续 shimmer 扫光承担（见 .mr-chip-count--scanning）
+function chipCount(n: number): string | number {
+  return flatBrokenLinks.value.length === 0 ? '—' : n;
 }
 
 // ---- 行操作 ----
@@ -200,7 +111,7 @@ defineExpose({
     <div class="mr-chips">
       <button class="mr-chip" :class="{ active: activeFilter === 'all' }" @click="selectFilter('all')">
         <span>全部</span>
-        <span class="mr-chip-count">{{ filterCounts.all }}</span>
+        <span class="mr-chip-count">{{ chipCount(filterCounts.all) }}</span>
       </button>
       <button
         class="mr-chip"
@@ -209,7 +120,7 @@ defineExpose({
         @click="selectFilter('rescuable')"
       >
         <span>{{ rescuableChipLabel }}</span>
-        <span class="mr-chip-count">{{ filterCounts.rescuable }}</span>
+        <span class="mr-chip-count">{{ chipCount(filterCounts.rescuable) }}</span>
       </button>
       <button
         class="mr-chip"
@@ -219,14 +130,36 @@ defineExpose({
       >
         <span class="mr-dot mr-dot--amber" />
         <span>需手动</span>
-        <span class="mr-chip-count">{{ filterCounts.manual }}</span>
+        <span class="mr-chip-count">{{ chipCount(filterCounts.manual) }}</span>
       </button>
     </div>
+    <Transition name="fade">
+      <i
+        v-if="scanInProgress"
+        class="pi pi-spin pi-spinner mr-scan-spinner"
+        role="status"
+        aria-label="扫描进行中"
+        v-tooltip.left="'正在扫描...'"
+      />
+    </Transition>
   </div>
 
-  <!-- 分组列表 / 筛选为空 -->
+  <!-- 内容：空态 / 分组列表 / 筛选为空 -->
   <Transition name="slide-up" mode="out-in">
-    <div v-if="groupedRows.length > 0" key="groups" class="mr-groups">
+    <EmptyState
+      v-if="flatBrokenLinks.length === 0"
+      key="rescue-empty"
+      :icon="emptyIcon"
+      :title="emptyTitle"
+      :description="emptyDesc"
+    >
+      <template v-if="scanInProgress" #icon>
+        <div class="scan-dots" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+      </template>
+    </EmptyState>
+    <div v-else-if="groupedRows.length > 0" key="groups" class="mr-groups">
       <div v-for="group in visibleGroupedRows" :key="group.filePath" class="mr-group">
         <button type="button" class="mr-group-header" @click="toggleGroupCollapse(group.filePath)">
           <i class="pi mr-group-chev" :class="collapsedGroups.has(group.filePath) ? 'pi-chevron-right' : 'pi-chevron-down'" />
@@ -283,7 +216,7 @@ defineExpose({
           </div>
         </div>
       </div>
-      <button v-if="totalFilteredRowCount > displayRowLimit" class="mr-load-more" @click="displayRowLimit += ROW_DISPLAY_STEP">
+      <button v-if="totalFilteredRowCount > displayRowLimit" class="mr-load-more" @click="loadMoreRows">
         显示更多（{{ Math.min(displayRowLimit, totalFilteredRowCount) }} / {{ totalFilteredRowCount }}）
       </button>
     </div>
@@ -332,6 +265,25 @@ defineExpose({
 
 .mr-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: var(--text-tertiary); }
 .mr-dot--amber { background: var(--warning); }
+
+/* 扫描进行中的小旋转图标：贴 Chips 行右侧，扫完即消失 */
+.mr-scan-spinner { font-size: var(--text-lg); color: var(--primary); flex-shrink: 0; }
+
+/* 扫描进行中的三点波浪动画：替代空态大图标的位置 */
+.scan-dots {
+  display: inline-flex; align-items: center; gap: var(--space-xs);
+  margin-bottom: var(--space-xs);
+}
+
+.scan-dots > span {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 8px 为小点尺寸，项目内 .mr-dot / .mr-status-dot 等先例已使用硬编码小尺寸 */
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--primary);
+  animation: k-pulse-dot var(--duration-breathe) var(--ease-standard) infinite;
+}
+
+.scan-dots > span:nth-child(2) { animation-delay: calc(var(--duration-breathe) * 0.15); }
+.scan-dots > span:nth-child(3) { animation-delay: calc(var(--duration-breathe) * 0.3); }
 
 /* 分组列表 */
 .mr-groups { display: flex; flex-direction: column; gap: var(--space-xs-sm); flex-shrink: 0; }
@@ -485,4 +437,7 @@ defineExpose({
 .slide-up-enter-from { opacity: 0; transform: translateY(12px); }
 .slide-up-leave-active { transition: opacity var(--duration-normal) ease, transform var(--duration-normal) ease; }
 .slide-up-leave-to { opacity: 0; transform: translateY(-8px); }
+
+.fade-enter-active, .fade-leave-active { transition: opacity var(--duration-normal) var(--ease-standard); }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>
