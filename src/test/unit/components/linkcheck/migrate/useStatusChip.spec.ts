@@ -13,17 +13,17 @@ describe('getStatusChipMeta', () => {
     expect(meta.spinning).toBe(false);
   });
 
-  it.each<[Status, string]>([
-    ['downloading', '下载中'],
-    ['converting', '转换中'],
-    ['uploading', '上传中'],
-  ])('%s → active tone + spinning', (status, label) => {
-    const meta = getStatusChipMeta({ status });
-    expect(meta.label).toBe(label);
-    expect(meta.tone).toBe('active');
-    expect(meta.spinning).toBe(true);
-    expect(meta.icon).toContain('pi-spin');
-  });
+  it.each<Status>(['downloading', 'converting', 'uploading'])(
+    '%s → 合并为 processing variant（active tone + spinning，文案统一为「处理中…」）',
+    (status) => {
+      const meta = getStatusChipMeta({ status });
+      expect(meta.variant).toBe('processing');
+      expect(meta.label).toBe('处理中…');
+      expect(meta.tone).toBe('active');
+      expect(meta.spinning).toBe(true);
+      expect(meta.icon).toContain('pi-spin');
+    },
+  );
 
   it('success 无 convertedFormat → 已完成', () => {
     const meta = getStatusChipMeta({ status: 'success' });
@@ -71,5 +71,14 @@ describe('getStatusChipMeta', () => {
     const a = getStatusChipMeta({ status: 'uploading' });
     const b = getStatusChipMeta({ status: 'uploading' });
     expect(a.variant).toBe(b.variant);
+  });
+
+  it('downloading/converting/uploading 三态 variant 一致（合并为单一「处理中…」chip，避免闪烁）', () => {
+    const d = getStatusChipMeta({ status: 'downloading' });
+    const c = getStatusChipMeta({ status: 'converting' });
+    const u = getStatusChipMeta({ status: 'uploading' });
+    expect(d.variant).toBe(c.variant);
+    expect(c.variant).toBe(u.variant);
+    expect(d.label).toBe(u.label);
   });
 });

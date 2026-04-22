@@ -5,7 +5,10 @@
  *
  * - tone：驱动背景/文字色 token（active=primary，success=绿，warning=黄，error=红，pending=灰）
  * - variant：稳定 key，让 Vue transition 不会在帧刷新时误判
- * - spinning：true 时图标旋转（active-* 三态）
+ * - spinning：true 时图标旋转（processing 态）
+ *
+ * downloading/converting/uploading 三个中间态合并为单一 `processing` variant，避免小图场景下
+ * chip 文案/颜色在几百毫秒内频繁跳变造成视觉闪烁。数据层 status 仍保持细粒度。
  *
  * done 行、CSV 导出、active 行共用此函数。
  */
@@ -15,9 +18,7 @@ export type StatusChipTone = 'pending' | 'active' | 'success' | 'warning' | 'err
 
 export type StatusChipVariant =
   | 'pending'
-  | 'downloading'
-  | 'converting'
-  | 'uploading'
+  | 'processing'
   | 'success'
   | 'success-converted'
   | 'skipped'
@@ -40,11 +41,9 @@ export function getStatusChipMeta(item: StatusChipInput): StatusChipMeta {
     case 'pending':
       return { variant: 'pending', label: '等待', icon: 'pi pi-circle', tone: 'pending', spinning: false };
     case 'downloading':
-      return { variant: 'downloading', label: '下载中', icon: 'pi pi-spin pi-sync', tone: 'active', spinning: true };
     case 'converting':
-      return { variant: 'converting', label: '转换中', icon: 'pi pi-spin pi-sync', tone: 'active', spinning: true };
     case 'uploading':
-      return { variant: 'uploading', label: '上传中', icon: 'pi pi-spin pi-sync', tone: 'active', spinning: true };
+      return { variant: 'processing', label: '处理中…', icon: 'pi pi-spin pi-sync', tone: 'active', spinning: true };
     case 'success':
       if (item.convertedFormat) {
         return {

@@ -37,12 +37,16 @@ const meta = computed(() => getStatusChipMeta(props.item));
 .m-status-chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 5px chip icon spacing matches link-check .filter-chip */
   gap: 5px;
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 26px chip height matches link-check .filter-chip */
   height: 26px;
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 10px chip horizontal padding matches link-check */
   padding: 0 10px;
+
+  /* 稳定宽度：覆盖"处理中…/已完成/已转 WEBP"等状态文案长度，避免切换时挤动右侧按钮 */
+  min-width: 6em;
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 13px pill radius matches link-check silhouette */
   border-radius: 13px;
   font-size: var(--text-xs);
