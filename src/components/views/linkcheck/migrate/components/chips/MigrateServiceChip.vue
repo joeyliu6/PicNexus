@@ -6,6 +6,10 @@
  * - source: 源图床，muted 灰色
  * - target: 目标图床，primary 色
  * - muted: 统计条等次要位置的极淡色
+ * - existing: 该图已存在的图床（条目行用），中性灰
+ * - new: 迁移新增成功的图床，success 色 + 高亮边
+ * - pending: 正在添加的目标图床，primary 虚线边
+ * - failed: 本次迁移失败的目标图床，error 色
  *
  * 图标用 getServiceIcon；未命中时 fallback pi-cloud + 原 id。
  */
@@ -15,7 +19,7 @@ import { getServiceDisplayName } from '../../../../../../constants/serviceNames'
 
 interface Props {
   serviceId: string;
-  variant?: 'source' | 'target' | 'muted';
+  variant?: 'source' | 'target' | 'muted' | 'existing' | 'new' | 'pending' | 'failed';
 }
 
 const props = withDefaults(defineProps<Props>(), { variant: 'target' });
@@ -81,4 +85,31 @@ const displayName = computed(() => getServiceDisplayName(props.serviceId) || pro
   color: var(--text-tertiary);
 }
 .m-svc-chip--muted .m-svc-chip-ic { color: var(--text-tertiary); }
+
+.m-svc-chip--existing {
+  background: var(--bg-input);
+  color: var(--text-main);
+}
+.m-svc-chip--existing .m-svc-chip-ic { color: var(--text-muted); }
+
+.m-svc-chip--new {
+  background: var(--success-alpha-10);
+  color: var(--success);
+  box-shadow: 0 0 0 1px var(--success-alpha-15);
+}
+.m-svc-chip--new .m-svc-chip-ic { color: var(--success); }
+
+.m-svc-chip--pending {
+  background: var(--primary-alpha-8);
+  color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary-alpha-15);
+}
+.m-svc-chip--pending .m-svc-chip-ic { color: var(--primary); }
+
+.m-svc-chip--failed {
+  background: var(--error-alpha-10);
+  color: var(--error);
+  box-shadow: 0 0 0 1px var(--error-alpha-15);
+}
+.m-svc-chip--failed .m-svc-chip-ic { color: var(--error); }
 </style>

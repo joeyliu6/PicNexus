@@ -8,7 +8,6 @@ import type {
   MigrateItemStatus,
   MigrateResult,
 } from '../../../../types/batchMigrate';
-import type { SlotView } from '../../../../composables/batchMigrate/useActiveSlots';
 
 export interface MigrateContext {
   phase: Ref<MigratePhase>;
@@ -47,7 +46,7 @@ export interface MigrateContext {
   isPaused: Ref<boolean>;
   /** "正在暂停..."—— 已点暂停但仍有在途条目未落定 */
   isPausing: Ref<boolean>;
-  /** 批量原地重试失败项（done 态专用，并发 2） */
+  /** 批量原地重试失败项（done 态专用） */
   retryFailed: (historyIds: string[]) => Promise<void>;
   /** 单条原地重试 */
   retrySingleFailed: (historyId: string) => Promise<void>;
@@ -55,12 +54,6 @@ export interface MigrateContext {
   // UI 层状态
   healthStatusMap: Ref<Record<string, string>>;
   healthTooltipMap: Ref<Record<string, string>>;
-  /** 「正在处理」UI 槽位（固定 2 个，跨批次延续，解决空窗骨架屏抽搐） */
-  slots: Ref<SlotView[]>;
-  /** 至少一个槽位非 idle。骨架屏触发条件为 phase==='migrating' && !hasAnyActive */
-  hasAnyActive: ComputedRef<boolean>;
-  /** 最近完成快照队列（最多 6 张），挂在活跃槽下方 */
-  recentCompleted: Ref<MigrateItemStatus[]>;
 }
 
 export const MIGRATE_KEY: InjectionKey<MigrateContext> = Symbol('migrate');

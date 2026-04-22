@@ -6,8 +6,6 @@
 import { watch, onActivated, onUnmounted, provide } from 'vue';
 import { useBatchMigrateManager } from '../../../composables/useBatchMigrate';
 import { debounceWithError } from '../../../utils/debounce';
-import { useActiveSlots } from '../../../composables/batchMigrate/useActiveSlots';
-import { useRecentCompleted } from '../../../composables/batchMigrate/useRecentCompleted';
 import { useServiceHealth } from '../../../composables/useServiceHealth';
 import { MIGRATE_KEY } from './migrate/keys';
 import MigrateSelectPhase from './migrate/MigrateSelectPhase.vue';
@@ -15,10 +13,6 @@ import MigrateProgressPhase from './migrate/MigrateProgressPhase.vue';
 
 const manager = useBatchMigrateManager();
 const { healthStatusMap, healthTooltipMap } = useServiceHealth();
-// 「正在处理」UI 槽位（跨批次延续，解决空窗骨架屏抽搐 + 单卡闪过）
-const { slots, hasAnyActive } = useActiveSlots(manager.itemStatuses, manager.phase);
-// 最近完成快照队列（活跃槽下方的 N 张小卡片）
-const { recent: recentCompleted } = useRecentCompleted(manager.itemStatuses, manager.phase);
 
 // 启动前统一过滤健康状态为 error 的目标，首次启动和重试失败项都必须走这条路径，
 // 否则"重试失败"直连 manager.retryFailed() 会绕过过滤，当目标仍为 error 时
@@ -42,9 +36,6 @@ provide(MIGRATE_KEY, {
   retryFailed: handleRetryFailed,
   healthStatusMap,
   healthTooltipMap,
-  slots,
-  hasAnyActive,
-  recentCompleted,
 });
 
 manager.initConfiguring();

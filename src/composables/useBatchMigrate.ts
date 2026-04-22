@@ -133,6 +133,9 @@ export function useBatchMigrateManager() {
 
   function updateStatusDisplay(statuses: MigrateItemStatus[], processed: number, total: number): void {
     itemStatuses.value = [...statuses];
+    // 当前批次对象是 allItemStatuses 头部的共享引用——外层 shallowRef 需要新数组引用来触发响应性，
+    // 否则 MigrateProgressPhase 读 allItemStatuses 时看不到批内状态流转
+    allItemStatuses.value = [...allItemStatuses.value];
     globalProgress.value = {
       current: processed,
       total: total,
@@ -360,8 +363,11 @@ export function useBatchMigrateManager() {
       const batchStatuses: MigrateItemStatus[] = newItems.map(item => ({
         historyId: item.id,
         fileName: item.localFileName,
+        // 预填源 URL：取首条 success 的 result.url，便于 pending 阶段 UI 就能显示链接
+        sourceUrl: item.results.find(r => r.status === 'success' && r.result?.url)?.result?.url,
         status: 'pending' as const,
         serviceResults: Object.fromEntries(targets.map(sid => [sid, 'pending' as const])),
+        existingServiceIds: item.results.filter(r => r.status === 'success').map(r => r.serviceId),
       }));
       itemStatuses.value = batchStatuses;
       allItemStatuses.value = [...batchStatuses, ...allItemStatuses.value];
@@ -501,8 +507,10 @@ export function useBatchMigrateManager() {
       const status: MigrateItemStatus = {
         historyId,
         fileName: items[0].localFileName,
+        sourceUrl: items[0].results.find(r => r.status === 'success' && r.result?.url)?.result?.url,
         status: 'pending',
         serviceResults: Object.fromEntries(targets.map(sid => [sid, 'pending' as const])),
+        existingServiceIds: items[0].results.filter(r => r.status === 'success').map(r => r.serviceId),
       };
       const config = await getOrCacheConfig();
       const multiUploader = cachedUploader ?? new MultiServiceUploader();
@@ -536,11 +544,11 @@ export function useBatchMigrateManager() {
 
   /**
    * 批量原地重试失败项（done 态专用，不改 phase）
-   * 并发上限 2，与 MAX_CONCURRENT 对齐
+   * 并发上限与 MAX_CONCURRENT 对齐
    */
   async function retryFailed(historyIds: string[]): Promise<void> {
     if (historyIds.length === 0) return;
-    const sem = new Semaphore(2);
+    const sem = new Semaphore(4);
     await Promise.all(historyIds.map(id => sem.withPermit(() => retrySingleFailed(id))));
   }
 

@@ -36,6 +36,8 @@ export interface MigrateFailureDetail {
 export interface MigrateItemStatus {
   historyId: string;
   fileName: string;
+  /** 实际被下载的源 URL（知乎 webp→jpg 优化后的终值），供 UI 列表展示 */
+  sourceUrl?: string;
   status: 'pending' | 'downloading' | 'converting' | 'uploading' | 'success' | 'failed' | 'skipped';
   /**
    * 易读错误摘要（UI 直接展示用）。
@@ -49,6 +51,11 @@ export interface MigrateItemStatus {
   /** 实际触发了 compress_image 时，记录目标格式（如 'jpeg'）。UI 用来区分「已转 JPEG」与「格式兼容」 */
   convertedFormat?: string;
   serviceResults: Record<string, 'pending' | 'success' | 'failed'>;
+  /**
+   * 迁移前该图片已成功存在的图床 serviceId 列表（从 HistoryItem.results 快照）。
+   * UI 用它渲染「存在于」logo 带；与 serviceResults 里新成功的 target 组合出「新增」视觉。
+   */
+  existingServiceIds?: string[];
 }
 
 /** 失败项记录（done 态跨条目汇总用） */

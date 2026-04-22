@@ -1,7 +1,7 @@
 /**
  * 批量迁移 · 错误展示文案派生
  *
- * 迁移失败/跳过项的展示文案派生：大类标签、类别摘要、原始错误 tooltip。MigrateDoneRow 与导出逻辑共用。
+ * 迁移失败/跳过项的展示文案派生：大类标签、类别摘要、原始错误 tooltip。MigrateItemRow 与导出逻辑共用。
  * - errorTypeLabel: 下载/上传 短标签
  * - primaryReason: 合并去重后的友好大类文案（"网络中断 / 权限不足"）
  * - errorTooltipText: 多目标分行的原始技术错误（给复制/反馈用）

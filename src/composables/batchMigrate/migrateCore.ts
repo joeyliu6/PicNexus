@@ -20,7 +20,7 @@ import type { MigrateItemStatus, MigrateStats, MigrateFailureDetail } from '../.
 
 const log = createLogger('migrateCore');
 
-export const MAX_CONCURRENT = 2;
+export const MAX_CONCURRENT = 4;
 
 /** 从未知错误中提取可读消息（处理 Tauri invoke 的 { data: { message } } 结构） */
 export function extractErrorMessage(e: unknown): string {
@@ -117,6 +117,7 @@ export async function migrateOneItem(
     const optimizedUrl = anyNeedsConversion
       ? optimizeSourceUrl(sourceResult.result.url, needUploadTargets.find(sid => needsFormatConversion(sid, 'webp'))!)
       : sourceResult.result.url;
+    status.sourceUrl = optimizedUrl;
     const downloadResult = await invoke<{ file_path: string; content_type: string; file_size: number }>(
       'download_url_image', { url: optimizedUrl },
     );

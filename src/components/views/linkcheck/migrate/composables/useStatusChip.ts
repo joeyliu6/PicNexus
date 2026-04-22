@@ -1,7 +1,6 @@
 /**
  * 批量迁移 · 单状态 chip 元数据映射
  *
- * 替代原 MigrateActiveCard.buildPipeline 的三段式管道，
  * 根据 MigrateItemStatus 产出单个 chip 的 { variant, label, icon, tone }。
  *
  * - tone：驱动背景/文字色 token（active=primary，success=绿，warning=黄，error=红，pending=灰）

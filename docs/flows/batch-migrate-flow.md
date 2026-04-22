@@ -11,9 +11,16 @@
 
 > **关键源文件**：`src/types/batchMigrate.ts`（`MigratePhase`）、`src/composables/useBatchMigrate.ts`（`useBatchMigrateManager`）
 >
-> **UI 组装**：`migrating` 与 `done` 阶段**共用同一个 `MigrateProgressPhase.vue` 面板**，结构统一为「标题 + 状态 chip 过滤条（`MigrateStatusFilterChips`）+ 可滚动列表」。migrating 态列表用 `MigrateActiveCard`（活跃槽亮色 + 已完成暗色快照），done 态用 `MigrateDoneRow`（失败行带重试按钮）；底栏 `MigrateBottomBar` + `MigrateStatsSummary` 常驻。进入 done 态时若有失败自动选中「失败」chip 并重置滚动。
+> **UI 组装**：`migrating` 与 `done` 阶段**共用同一个 `MigrateProgressPhase.vue` 面板**，结构统一为「状态 chip 过滤条（`MigrateStatusFilterChips`，右侧挂可选『全部重试』按钮）+ 可滚动列表 + 底栏」。两态列表都用统一的 `MigrateItemRow`：
+> - **首行**：文件名（mono）+ 状态 chip（失败 chip 的 `v-tooltip` 悬停显示 `errorTooltipText`）
+> - **次行**：`存在于 [existing chips] → [target chips]` + 右侧上下文操作按钮；其中：
+>   - `existing` chips 读 `MigrateItemStatus.existingServiceIds`（迁移前已成功的图床快照）
+>   - `target` chips 按 `serviceResults[sid]` 着色：`success → 'new'`（绿环）/ `failed → 'failed'`（红环）/ `pending → 'pending'`（蓝环）
+>   - 右侧按钮随状态切换：成功态显示「复制新 URL」（调 `historyDB` 查新增 target 的 URL）；done + failed 态显示「重试」
 >
-> **统计信息位置**：已完成数/速率/剩余时间/目标图床整合到 `MigrateStatsSummary`，显示在 `MigrateBottomBar` 左槽位；右侧是操作按钮组。
+> 底栏 `MigrateBottomBar` 左侧从左到右：**分页条**（`MigratePagination`，仅 `displayList.length > PAGE_SIZE` 时挂载） + **运行状态 pill**（运行中/正在暂停/已暂停）+ `MigrateStatsSummary`；右侧是操作按钮组。进入 done 态时若有失败自动选中「失败」chip 并重置滚动。
+>
+> **统计信息位置**：已完成数/速率/剩余时间/目标图床整合到 `MigrateStatsSummary`；运行态 pill 独立于统计条，收进底栏。
 
 ```mermaid
 flowchart TD
@@ -118,7 +125,7 @@ flowchart TD
 
 > **关键源文件**：`src/composables/batchMigrate/migrateCore.ts`（`migrateOneItem`、`optimizeSourceUrl`、`convertIfNeeded`）
 >
-> **status 取值**：`pending | downloading | converting | uploading | success | failed | skipped`。`converting` 仅在目标图床格式白名单不含源扩展名时进入（探测通过 `needsFormatConversion`）。`convertedFormat` 字段在真触发 `compress_image` 时写入 `'jpeg'`，UI 用它区分「已转 JPEG」与「格式兼容」。
+> **status 取值**：`pending | downloading | converting | uploading | success | failed | skipped`。`converting` 仅在目标图床格式白名单不含源扩展名时进入（探测通过 `needsFormatConversion`）。`convertedFormat` 字段在真触发 `compress_image` 时写入 `'jpeg'`，UI 用它区分「已转 JPEG」与「格式兼容」。`sourceUrl` 在下载入口处填充（`optimizeSourceUrl` 之后的终值），批次初始化时会先从 `item.results` 预填首条 success 的 URL，保证 pending 阶段 UI 就能显示链接。
 
 ```mermaid
 flowchart TD
@@ -219,7 +226,7 @@ flowchart TD
     I -- 否 --> C
 
     G -- 否 --> J["创建 batchStatuses"]
-    J --> K["processBatch<br/>Semaphore(MAX_CONCURRENT=2)"]
+    J --> K["processBatch<br/>Semaphore(MAX_CONCURRENT=4)<br/>网络 I/O 主导，4 并发在 CPU/内存安全档"]
     K --> L["每个 item 完成 → onItemDone<br/>更新 counts + scheduleStatusUpdate"]
     L --> M["flushStatusUpdate()"]
 
@@ -303,84 +310,47 @@ flowchart TD
 |--------|------|---------|
 | 剩余时间 | `(totalCount - processedCount) × (elapsedMs / processedCount)` | `processedCount=0` 时显示「计算中」 |
 | 平均速度 | `totalBytes / (elapsedMs / 1000)` bytes/s | `elapsedMs=0` 时返回 0 |
-| 并发数 | `itemStatuses.filter(s => downloading \| converting \| uploading).length` | 实时反映 Semaphore(2) 占用数 |
+| 并发数 | `itemStatuses.filter(s => downloading \| converting \| uploading).length` | 实时反映 Semaphore(4) 占用数 |
 
 ---
 
-## 图 6：UI 槽位机制 + 最近完成快照
+## 图 6：统一列表视图（chip 过滤驱动）
 
-解耦 UI 显示节奏与数据层真实节奏，解决批次边界骨架屏抽搐、单卡 <100ms 闪过、完成瞬间消失三个视觉故障。
+2026-04-22 精简：砍掉固定槽位 + 最近完成快照的双重机制。`migrating` 和 `done` 两态都走同一条数据路径：数据源 → chip 过滤 → `MigrateItemRow` 单行渲染。
 
-> **双重机制**：
-> - `useActiveSlots`（固定 2 槽，与 `MAX_CONCURRENT=2` 对齐）：活跃槽 + 完成态收尾动画，跨批次延续
-> - `useRecentCompleted`（FIFO 队列，最长 6 张）：活跃槽下方的"最近完成"快照区，让视觉信息密度更足
+> **为什么砍**：`MAX_CONCURRENT` 从 2 升到 4 后，固定槽位视觉密度不再匹配实际并发；用户也想直接按 chip 切换去看「处理中 / 已完成 / 失败 / 已跳过」分桶，而不是被"活跃槽 + 快照"的分区结构束缚。
 
-> **关键源文件**：
-> - `src/composables/batchMigrate/useActiveSlots.ts`（`useActiveSlots`、`adoptIntoSlot`、`completeSlot`）
-> - `src/composables/batchMigrate/useRecentCompleted.ts`（`useRecentCompleted`）
->
-> **渲染位置**：`src/components/views/linkcheck/migrate/MigrateProgressPhase.vue`「正在处理」区：上方 `v-for` 活跃槽位（空态 `MigrateSkeletonCard`），下方"最近完成"网格渲染 `MigrateActiveCard variant="snapshot"`
+> **关键源文件**：`src/components/views/linkcheck/migrate/MigrateProgressPhase.vue`（`rawList` / `displayList` / `filterCounts` 三个 computed）、`src/components/views/linkcheck/migrate/components/MigrateItemRow.vue`
 
-```mermaid
-stateDiagram-v2
-    [*] --> idle
-    idle --> active: 新条目到来<br/>adoptIntoSlot()
-    active --> complete: item 终态<br/>(success/failed/skipped)
-    complete --> active: 有新条目<br/>且 now-completeAt ≥ MIN_STAY_MS<br/>(优先选 priority='stale')
-    complete --> complete: 无新条目<br/>继续保留快照<br/>跨批次不清空
-    note right of complete
-        now - completeAt ≥ MAX_STAY_MS
-        → priority='stale'
-        可被新条目抢占
-        但不主动清空
-    end note
-```
+| 态 | 数据源 | 排序 |
+|----|--------|------|
+| `migrating` | `allItemStatuses`（批次开始时 prepend，新批在前） | `filter='all'` 时：活跃项（pending/downloading/converting/uploading）前置，终态后置；其它 filter 直接按数据源顺序 |
+| `done` | `migrateResult.itemsSnapshot`（失败行合并 `failures[].details`） | 不额外排序 |
 
-### 常量与对齐
+### 分页切片
 
-| 常量 | 值 | 对应 CSS token | 作用 |
-|------|-----|---------------|------|
-| `MIN_STAY_MS` | 800 | `--duration-spinner` | 吸附后最少停留，保证肉眼可辨 |
-| `MAX_STAY_MS` | 1500 | `--duration-shimmer` | 完成态展示时长上限，过后 priority→stale |
-| `TICK_INTERVAL_MS` | 200 | — | 驱动 stale 升级与队列 drain |
-| `SLOT_COUNT` | 2 | — | 与 `MAX_CONCURRENT=2` 对齐 |
+`displayList` 过滤 + 排序后由 `PAGE_SIZE=100` 切出 `visibleList`，仅当前页条目渲染为 DOM。`pageByFilter: Map<MigrateStatusFilter, number>` 保留每个 filter 的独立页码，切 chip 不丢上下文；`totalPages` 变小时自动 clamp。进入 done 态 / 切换 phase 时分页记忆清空。分页仅在 `displayList.length > PAGE_SIZE` 时挂载到 `MigrateBottomBar` 的 `#pagination` slot。
 
-修改 JS 常量时必须同步更新 `styles/motion.css` 对应 token，反之亦然。
+chip 分桶映射（`displayList` 内部）：
 
-### adoptIntoSlot 决策树
+| chip | 命中条件 |
+|------|---------|
+| `all` | 全量 |
+| `processing` | `status ∈ {pending, downloading, converting, uploading}` |
+| `success` | `status === 'success'` |
+| `failed` | `status === 'failed'` |
+| `skipped` | `status === 'skipped'` |
 
-```mermaid
-flowchart TD
-    A["新 active 条目 X"] --> B{存在 idle 槽?}
-    B -- 是 --> C["填入 idle 槽<br/>state='active', priority='fresh'"]
-    B -- 否 --> D["筛 complete 槽<br/>且 now-completeAt ≥ MIN_STAY_MS"]
-    D --> E{有可淘汰槽?}
-    E -- 有 --> F["优先 priority='stale'<br/>次选 completeAt 更早"]
-    F --> G["替换 + seenActiveIds 更新"]
-    E -- 无 --> H["入队 queue<br/>(MAX_CONCURRENT=2 下几乎不走)"]
-    H --> I["下次 tick 或 completeSlot 时 drain"]
+### 运行态 pill（底栏）
 
-    style C fill:#e8f5e9,stroke:#2e7d32
-    style G fill:#e8f5e9,stroke:#2e7d32
-    style H fill:#fff3e0,stroke:#ef6c00
-```
+顶部不再有"正在处理 / 已暂停"指示——运行态收进 `MigrateBottomBar.bm-state-pill`：
 
-### 三驱动源
-
-| 驱动源 | 触发 | 主要动作 |
-|--------|------|---------|
-| `watch(itemStatuses, deep)` | 数据层状态变化 | 1. 已被槽持有的 id → 刷新引用，终态 → `completeSlot`；2. 新 active id → `adoptIntoSlot`；3. 批次换页找不到 id → **保留快照不动**（跨批次延续的关键） |
-| `setInterval(tick, 200ms)` | 定时 | complete 且超 `MAX_STAY_MS` → `priority='stale'`；`drainQueue` 消费排队；`document.hidden` 时跳过 |
-| `watch(phase)` | 阶段切换 | 进入 `migrating` 启动 tick；离开 `migrating` 停 tick + `reset()` |
-
-### 问题→对策映射
-
-| 原问题 | 槽位机制对策 |
-|--------|-------------|
-| 批次边界 activeItems=[] → 骨架屏抽搐 | complete 槽在批次切换时不清空，保留快照直到被下批新条目抢占 |
-| 单卡 <100ms 闪过 | `MIN_STAY_MS=800` 兜底：complete 未满 800ms 不允许被替换 |
-| 完成瞬间消失 | complete 态保留最长 `MAX_STAY_MS=1500`，同时 `data-slot-state="complete"` 触发呼吸停 + 边框渐弱，收尾动画 |
-| shallowRef 反应性丢失（历史 bug） | 槽位读的是 `itemStatuses`（currentBatch），`updateStatusDisplay` 每 RAF 新数组赋值会正常触发 watch |
+| 条件 | pill |
+|------|------|
+| `mode='migrating'` + 未暂停 | `● 运行中`（呼吸绿点） |
+| `mode='migrating'` + `isPausing` | `⏳ 正在暂停…` |
+| `mode='migrating'` + `isPaused` | `⏸ 已暂停` |
+| `mode='done'` | 无 pill（统计条里有用时） |
 
 ---
 
@@ -389,7 +359,7 @@ flowchart TD
 | 现象 | 可能原因 | 对照位置 |
 |------|---------|---------|
 | 目标图床 pendingCount 显示 0 | 所有图片已存在于该图床 | 图 2 `pendingCount = total - existing` |
-| 迁移速度很慢 | `MAX_CONCURRENT=2` 限制 + 大文件下载耗时 | 图 3 信号量 / 图 4 循环 |
+| 迁移速度很慢 | `MAX_CONCURRENT=4` 限制 + 大文件下载耗时；进一步提高并发要同步评估 CPU（`compress_image` 阶段）和家庭带宽上行容量 | 图 3 信号量 / 图 4 循环 |
 | webp 图片上传失败 | 目标图床不支持 webp 且格式转换失败 | 图 3 `convertIfNeeded` |
 | 同一图片被重复迁移 | `processedIds` 未正确过滤或 offset 重置逻辑异常 | 图 4 去重 + offset 策略 |
 | 进度条到 100% 但 phase 未变 done | 最后一批的 `flushStatusUpdate` 延迟 | 图 5 `flushStatusUpdate` |
@@ -398,8 +368,8 @@ flowchart TD
 | 迁移完成后历史记录未更新 | `historyDB.update` 失败 → `errorType='upload'` | 图 3 DB 更新失败分支 |
 | 重试按钮点击后 pending=0 | `retryFailed` 先 `applyFilter` 重算，失败项可能已被其他操作处理 | 图 1 `retryFailed` |
 | 高级筛选不生效 | `sourceServiceFilter` 为空数组表示「全部」，非「无」 | 图 2 `applyFilter` 参数 |
-| 「正在处理」卡片长时间是骨架屏 | 检查 `BatchMigratePanel` 是否正确 provide `slots`/`hasAnyActive`；旧版 `activeItems` 读 shallowRef 内部 mutation 无响应的 bug | 图 6 槽位机制 |
-| 完成卡瞬间消失没停留 | `MAX_STAY_MS` 不生效，检查 tick 是否被 `document.hidden` 跳过；或 `MigrateActiveCard` 的 `data-slot-state` 未绑定 | 图 6 常量表 |
+| 列表空窗期没有任何条目显示 | 批次初始化时会对 `allItemStatuses` prepend，如果列表一直空——检查 `useBatchMigrate.startMigrate` 的 prepend 是否被跳过；或 `rawList` 的过滤条件把全部项都踢掉了 | 图 6 数据源表 |
+| 底栏状态 pill 一直是"正在暂停…" | `isPausing = isPaused && concurrentCount > 0`；concurrentCount 归零不及 → 检查下载是否卡在 HTTP 层（`download_url_image` 无 abort） | 图 1 暂停分支 |
 | 终态 chip 显示「已完成」但期望「已转 JPEG」 | `convertedFormat` 未写入 → 检查 `migrateCore` 里 `willConvert` 探测与 `status='converting'` 赋值顺序；chip 映射见 `useStatusChip.getStatusChipMeta` | 图 3 converting 分支 |
 | 暂停后按钮一直卡在"正在暂停..." | `isPausing` 依赖 `concurrentCount` 归零，若有条目卡在 downloading 下载本身无法中断必须等 HTTP 超时或完成 | 图 1 暂停分支 |
 | 恢复后已暂停的条目没重新迁移 | 检查 `processedIds` 是否误收了 `status='pending'` 的持有条目 | 图 4 offset 策略表 |
