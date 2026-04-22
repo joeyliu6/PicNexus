@@ -104,14 +104,21 @@ export async function setLinkCheckSkipQuery(
 ): Promise<number> {
   if (ids.length === 0) return 0;
 
-  const placeholders = ids.map((_, index) => `$${index + 2}`).join(',');
-  const result = await db.execute(
-    `UPDATE history_items
-     SET link_check_skip = $1
-     WHERE id IN (${placeholders})`,
-    [skip ? 1 : 0, ...ids],
-  );
+  // SQLite 默认单条 SQL 绑定参数上限 32766；按 500 分批兜底超大 IN 列表
+  const BATCH_SIZE = 500;
+  let totalAffected = 0;
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    const batch = ids.slice(i, i + BATCH_SIZE);
+    const placeholders = batch.map((_, index) => `$${index + 2}`).join(',');
+    const result = await db.execute(
+      `UPDATE history_items
+       SET link_check_skip = $1
+       WHERE id IN (${placeholders})`,
+      [skip ? 1 : 0, ...batch],
+    );
+    totalAffected += result.rowsAffected;
+  }
 
   log.info(`批量${skip ? '标记' : '恢复'}链接监控跳过 ${ids.length} 条`);
-  return result.rowsAffected;
+  return totalAffected;
 }
