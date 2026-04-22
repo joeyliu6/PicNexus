@@ -121,6 +121,8 @@ export const isReplacing = ref(false);
 export const excludedUrls: Ref<Set<string>> = ref(new Set());
 /** 文件夹模式下是否递归扫描子文件夹 */
 export const includeSubfolders = ref(true);
+/** 是否提取代码块（围栏 + 行内 backtick）内的图片链接 */
+export const includeCodeBlocks = ref(false);
 
 /** fixing 阶段进度 */
 export const fixingProgress: Ref<{ current: number; total: number }> = ref({ current: 0, total: 0 });

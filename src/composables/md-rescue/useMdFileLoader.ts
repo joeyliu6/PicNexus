@@ -26,6 +26,7 @@ import {
   isCollecting,
   collectProgress,
   includeSubfolders,
+  includeCodeBlocks,
   phase,
   scanStage,
   scanProgress,
@@ -65,7 +66,7 @@ export async function collectLinksFromFiles(
       try {
         const content = await readTextFile(file);
         if (getCollectCancelled()) return;
-        allLinks.push(...wrapLinksWithFile(extractImageLinks(content), file));
+        allLinks.push(...wrapLinksWithFile(extractImageLinks(content, { includeCodeBlocks: includeCodeBlocks.value }), file));
       } catch (err) {
         log.warn(`读取文件失败: ${file}`, err);
       }
@@ -85,7 +86,7 @@ export async function loadFileImpl(path: string): Promise<void> {
   mdFiles.value = [];
   const content = await readTextFile(path);
   fileContent.value = content;
-  imageLinks.value = wrapLinksWithFile(extractImageLinks(content), path);
+  imageLinks.value = wrapLinksWithFile(extractImageLinks(content, { includeCodeBlocks: includeCodeBlocks.value }), path);
   recordMruEntry(path, 'file');
 }
 
@@ -145,6 +146,7 @@ export function useMdFileLoader() {
       const result = await invoke<RustScanResult>('scan_md_folder', {
         dir,
         includeSubfolders: includeSubfolders.value,
+        includeCodeBlocks: includeCodeBlocks.value,
       });
 
       if (result.cancelled) return false;
@@ -230,6 +232,9 @@ export function useMdFileLoader() {
     }
   }
 
+  // 点击拖曳框时打开文件夹选择器（Windows/macOS 系统对话框不支持同时选文件和文件夹）
+  const selectAny = selectFolder;
+
   async function loadFilePath(path: string): Promise<boolean> {
     try {
       if (!isMarkdownFile(path)) {
@@ -262,6 +267,7 @@ export function useMdFileLoader() {
     loadFolderImpl,
     selectMdFile,
     selectFolder,
+    selectAny,
     loadFilePath,
     loadFolderPath,
   };

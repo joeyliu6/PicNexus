@@ -37,9 +37,14 @@ function detectContext(line: string): 'normal' | 'blockquote' | 'table' {
 
 /**
  * 从 Markdown 内容中提取所有图片链接
- * 自动跳过围栏代码块和行内代码中的链接
+ * 默认跳过围栏代码块和行内代码中的链接；
+ * 传入 `{ includeCodeBlocks: true }` 时一并提取代码块内的图片链接。
  */
-export function extractImageLinks(content: string): MdImageLink[] {
+export function extractImageLinks(
+  content: string,
+  options?: { includeCodeBlocks?: boolean },
+): MdImageLink[] {
+  const includeCodeBlocks = options?.includeCodeBlocks ?? false;
   const results: MdImageLink[] = [];
   const seenUrls = new Set<string>();
   const lines = content.split('\n');
@@ -51,17 +56,18 @@ export function extractImageLinks(content: string): MdImageLink[] {
     const line = lines[i];
     const lineNumber = i + 1;
 
-    // 围栏代码块状态切换
-    if (FENCE_REGEX.test(line)) {
-      insideFence = !insideFence;
-      continue;
+    if (!includeCodeBlocks) {
+      // 围栏代码块状态切换
+      if (FENCE_REGEX.test(line)) {
+        insideFence = !insideFence;
+        continue;
+      }
+      // 跳过围栏代码块内的行
+      if (insideFence) continue;
     }
 
-    // 跳过围栏代码块内的行
-    if (insideFence) continue;
-
-    // 剥离行内代码后用于正则匹配
-    const stripped = stripInlineCode(line);
+    // 代码块模式下直接用原始行，否则剥离行内代码后再匹配
+    const stripped = includeCodeBlocks ? line : stripInlineCode(line);
     const context = detectContext(line);
 
     // Markdown 图片语法

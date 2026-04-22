@@ -18,12 +18,12 @@ import { exists } from '@tauri-apps/plugin-fs';
 const {
   phase, imageLinks, isAnalyzing, isCollecting, collectProgress,
   isChecking, fileHealthList, availableBackupServices,
-  fixingProgress, repairReceipt, hostPreference, includeSubfolders,
+  fixingProgress, repairReceipt, hostPreference, includeSubfolders, includeCodeBlocks,
   bottomStats, selectMdFile, selectFolder, handleDropPaths,
   loadFilePath, loadFolderPath,
   analyzeFile, applyRepairStrategy, loadHostPreference, saveHostPreference,
   cancelCollect, cancelScan, cancelFix, undoReplace, executeReplace,
-  reset: resetRescue, scanStage, scanProgress, skippedDirs,
+  reset: resetRescue, scanStage, scanProgress, skippedDirs, selectAny,
 } = useMdRescueManager();
 
 // ---- 计算属性 ----
@@ -97,6 +97,11 @@ async function handleSelectFolder() {
   if (ok && imageLinks.value.length > 0) await analyzeFile();
 }
 
+async function handleSelectAny() {
+  const ok = await selectAny();
+  if (ok && imageLinks.value.length > 0) await analyzeFile();
+}
+
 const toast = useToast();
 
 async function handlePickRecent(entry: MruEntry) {
@@ -160,9 +165,12 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
       :is-analyzing="isAnalyzing"
       :is-checking="isChecking"
       :include-subfolders="includeSubfolders"
+      :include-code-blocks="includeCodeBlocks"
       @select-file="handleSelectFile"
       @select-folder="handleSelectFolder"
+      @select-any="handleSelectAny"
       @update:include-subfolders="includeSubfolders = $event"
+      @update:include-code-blocks="includeCodeBlocks = $event"
       @drop-paths="handleDropPaths"
       @pick-recent="handlePickRecent"
     />

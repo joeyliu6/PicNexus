@@ -11,16 +11,19 @@ import { createLogger } from '../../../../utils/logger';
 
 const log = createLogger('MdRescue');
 
-defineProps<{
+const props = defineProps<{
   isAnalyzing: boolean;
   isChecking: boolean;
   includeSubfolders: boolean;
+  includeCodeBlocks: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: 'selectFile'): void;
   (e: 'selectFolder'): void;
+  (e: 'selectAny'): void;
   (e: 'update:includeSubfolders', val: boolean): void;
+  (e: 'update:includeCodeBlocks', val: boolean): void;
   (e: 'dropPaths', paths: string[]): void;
   (e: 'pickRecent', entry: MruEntry): void;
 }>();
@@ -32,6 +35,11 @@ let dropUnlisten: (() => void) | null = null;
 let isUnmounted = false;
 
 const { record: lastRepairRecord } = useLastRepair();
+
+function handleZoneClick() {
+  if (props.isAnalyzing || props.isChecking) return;
+  emit('selectAny');
+}
 
 async function setupDropListener() {
   try {
@@ -68,40 +76,53 @@ onDeactivated(() => { isViewActive.value = false; });
 
 <template>
   <div class="rescue-idle" :class="{ dragging: isDragging }">
-    <div class="idle-zone" :class="{ dragging: isDragging }">
-      <div class="idle-zone__main">
-        <div class="idle-zone__headline">
-          <i class="idle-zone__icon pi pi-file-import" />
-          <span class="idle-zone__text">
-            <template v-if="isDragging">松开以载入</template>
-            <template v-else>拖入文件夹或 Markdown 文件</template>
-          </span>
-        </div>
-        <div class="idle-zone__actions">
-          <button
-            type="button"
-            class="idle-secondary-link"
-            :disabled="isAnalyzing || isChecking"
-            @click="emit('selectFile')"
-          >
-            选择单个文件
-          </button>
-          <Button
-            label="选择文件夹"
-            :loading="isAnalyzing || isChecking"
-            class="idle-btn-primary"
-            @click="emit('selectFolder')"
-          />
+    <div class="idle-zone-wrapper">
+      <div class="idle-zone" :class="{ dragging: isDragging }" @click="handleZoneClick">
+        <div class="idle-zone__main">
+          <div class="idle-zone__headline">
+            <i class="idle-zone__icon pi pi-file-import" />
+            <span class="idle-zone__text">
+              <template v-if="isDragging">松开以载入</template>
+              <template v-else>拖入文件夹或 Markdown 文件</template>
+            </span>
+          </div>
+          <div class="idle-zone__actions" @click.stop>
+            <button
+              type="button"
+              class="idle-secondary-link"
+              :disabled="isAnalyzing || isChecking"
+              @click="emit('selectFile')"
+            >
+              选择单个文件
+            </button>
+            <Button
+              label="选择文件夹"
+              :loading="isAnalyzing || isChecking"
+              class="idle-btn-primary"
+              @click="emit('selectFolder')"
+            />
+          </div>
         </div>
       </div>
-      <label class="idle-subfolder-option">
-        <Checkbox
-          :model-value="includeSubfolders"
-          :binary="true"
-          @update:model-value="emit('update:includeSubfolders', $event as boolean)"
-        />
-        <span>包含子文件夹</span>
-      </label>
+      <div class="option-row-group">
+        <label class="subfolder-option-row" @click.stop>
+          <Checkbox
+            :model-value="includeSubfolders"
+            :binary="true"
+            @update:model-value="emit('update:includeSubfolders', $event as boolean)"
+          />
+          <span>包含子文件夹</span>
+          <span class="subfolder-option-row__hint">选择文件夹时扫描所有层级</span>
+        </label>
+        <label class="subfolder-option-row" @click.stop>
+          <Checkbox
+            :model-value="includeCodeBlocks"
+            :binary="true"
+            @update:model-value="emit('update:includeCodeBlocks', $event as boolean)"
+          />
+          <span>包含代码块内的图片链接</span>
+        </label>
+      </div>
     </div>
 
     <RescueRecentList
@@ -137,7 +158,6 @@ onDeactivated(() => { isViewActive.value = false; });
 }
 
 .idle-zone {
-  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
@@ -147,7 +167,7 @@ onDeactivated(() => { isViewActive.value = false; });
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1.5px 在"虚线细"和"可见度"之间取折中，token 仅有 1/2/3px */
   border: 1.5px dashed var(--border-subtle);
   border-radius: var(--radius-lg);
-  cursor: default;
+  cursor: pointer;
   flex-shrink: 0;
   transition:
     border-color var(--duration-medium),
@@ -193,21 +213,48 @@ onDeactivated(() => { isViewActive.value = false; });
 .idle-zone.dragging .idle-zone__icon,
 .rescue-idle.dragging .idle-zone__icon { transform: translateY(-2px) scale(1.1); }
 
-.idle-subfolder-option {
-  position: absolute;
-  right: var(--space-xl);
-  bottom: var(--space-md);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs-sm);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  cursor: pointer;
-  user-select: none;
-  white-space: nowrap;
+.option-row-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
 }
 
-.idle-subfolder-option:hover { color: var(--text-secondary); }
+.idle-zone-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.subfolder-option-row {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-xs-sm) var(--space-sm-md);
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm-md);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.subfolder-option-row:hover {
+  color: var(--text-main);
+  border-color: var(--primary);
+}
+
+.subfolder-option-row__hint {
+  padding-left: var(--space-xs-sm);
+  border-left: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+}
 
 .idle-zone__text {
   min-width: 0;
@@ -292,4 +339,5 @@ onDeactivated(() => { isViewActive.value = false; });
   color: var(--success);
   flex-shrink: 0;
 }
+
 </style>

@@ -160,7 +160,8 @@ fn strip_inline_code(line: &str) -> String {
 }
 
 /// 从 Markdown 内容中提取图片链接（与 JS 侧 extractImageLinks 逻辑一致）
-fn extract_image_links(content: &str) -> Vec<MdImageLink> {
+/// include_code_blocks=true 时不跳过围栏块和行内代码，与 JS 侧 options.includeCodeBlocks 语义相同
+fn extract_image_links(content: &str, include_code_blocks: bool) -> Vec<MdImageLink> {
     let mut results = Vec::new();
     let mut seen_urls = std::collections::HashSet::new();
     let mut inside_fence = false;
@@ -168,17 +169,23 @@ fn extract_image_links(content: &str) -> Vec<MdImageLink> {
     for (i, line) in content.lines().enumerate() {
         let line_number = i + 1;
 
-        // 围栏代码块
-        if FENCE_RE.is_match(line) {
-            inside_fence = !inside_fence;
-            continue;
-        }
-        if inside_fence {
-            continue;
+        if !include_code_blocks {
+            // 围栏代码块
+            if FENCE_RE.is_match(line) {
+                inside_fence = !inside_fence;
+                continue;
+            }
+            if inside_fence {
+                continue;
+            }
         }
 
-        // 剥离行内代码（按 ``` → `` → ` 优先级，替换为等长空格）
-        let stripped = strip_inline_code(line);
+        // 代码块模式下直接用原始行，否则剥离行内代码
+        let stripped = if include_code_blocks {
+            line.to_string()
+        } else {
+            strip_inline_code(line)
+        };
 
         let context = detect_context(line);
 
@@ -236,6 +243,7 @@ pub async fn scan_md_folder(
     window: tauri::Window,
     dir: String,
     include_subfolders: bool,
+    include_code_blocks: bool,
     cancel_flag: tauri::State<'_, MdScanCancelFlag>,
 ) -> Result<ScanResult, AppError> {
     let start = std::time::Instant::now();
@@ -309,7 +317,7 @@ pub async fn scan_md_folder(
 
             match std::fs::read_to_string(path_str) {
                 Ok(content) => {
-                    let links = extract_image_links(&content);
+                    let links = extract_image_links(&content, include_code_blocks);
                     total_links += links.len();
                     results.push(MdFileResult {
                         file_path: path_str.clone(),

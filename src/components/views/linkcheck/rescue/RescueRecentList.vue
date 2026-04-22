@@ -73,7 +73,7 @@ function handleClearAll() {
           type="button"
           class="recent-item"
           :disabled="disabled"
-          v-tooltip.top="`点击重新扫描并检测\n${entry.path}`"
+          v-tooltip.top="'点击重新扫描并检测'"
           @click="emit('pick', entry)"
         >
           <i

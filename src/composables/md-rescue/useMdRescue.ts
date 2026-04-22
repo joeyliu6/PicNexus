@@ -26,6 +26,7 @@ import {
   isReplacing,
   excludedUrls,
   includeSubfolders,
+  includeCodeBlocks,
   fixingProgress,
   repairReceipt,
   healedFiles,
@@ -70,7 +71,7 @@ export function useMdRescueManager() {
   const { checkUrls, isChecking, progress, cancelCheck } = useLinkCheckManager();
   // 必须在 setup 栈期间调用 useMdFileLoader，内部会 useToast() → inject()，
   // 返回的 5 个函数通过闭包持有 toast，之后可在 click / 拖放回调里安全调用。
-  const { selectMdFile, selectFolder, loadFilePath, loadFolderPath } = useMdFileLoader();
+  const { selectMdFile, selectFolder, selectAny, loadFilePath, loadFolderPath } = useMdFileLoader();
 
   // 筛选管道（内含 watch/watchDebounced，必须在 composable 函数内调用）
   const {
@@ -307,6 +308,7 @@ export function useMdRescueManager() {
     setUrlIndex(null);
     excludedUrls.value = new Set();
     includeSubfolders.value = true;
+    includeCodeBlocks.value = false;
     statusFilter.value = 'all';
     selectedSourceFile.value = null;
     searchInput.value = '';
@@ -379,9 +381,11 @@ export function useMdRescueManager() {
     PAGE_SIZE,
     excludedUrls,
     includeSubfolders,
+    includeCodeBlocks,
     // 方法
     selectMdFile,
     selectFolder,
+    selectAny,
     loadFilePath,
     loadFolderPath,
     handleDropPaths,
