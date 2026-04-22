@@ -2,11 +2,9 @@
 /**
  * 迁移执行面板 — migrating / done 双态统一
  *
- * 结构简化为：chip 过滤条（含可选"全部重试"按钮） + 统一单行列表（MigrateItemRow）+ 底栏。
- * 顶部不再有"正在处理 / 已暂停 / 全部成功"这类指示——运行状态收到底栏的 state-pill。
- *
- * migrating 态列表数据源为 allItemStatuses（含正在处理和已落地两类），
- * 由 chip 过滤分桶；done 态列表数据源为 migrateResult.itemsSnapshot。
+ * 结构：MigrateFilterBar（chip 过滤条 + 搜索框 + 来源图床筛选）
+ *       + 单行列表（MigrateItemRow）+ 底栏。
+ * 搜索和来源图床筛选逻辑由 useFilterBar composable 管理。
  */
 import { inject, computed, ref, watch, nextTick } from 'vue';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
@@ -16,13 +14,13 @@ import { createLogger } from '../../../../utils/logger';
 import { historyDB } from '../../../../services/database';
 import { MIGRATE_KEY } from './keys';
 import { buildCsvReport, buildTxtReport } from './reportExport';
+import { useFilterBar } from './composables/useFilterBar';
 import type { MigrateItemStatus } from '../../../../types/batchMigrate';
 import MigrateItemRow, { type MigrateRowItem } from './components/MigrateItemRow.vue';
-import MigrateBottomBar from './components/MigrateBottomBar.vue';
+import MigrateBottomBar, { type StatePill } from './components/MigrateBottomBar.vue';
 import MigratePagination from './components/MigratePagination.vue';
-import MigrateStatusFilterChips, {
-  type MigrateStatusFilter,
-} from './components/chips/MigrateStatusFilterChips.vue';
+import MigrateFilterBar from './components/MigrateFilterBar.vue';
+import { type MigrateStatusFilter } from './components/chips/MigrateStatusFilterChips.vue';
 
 const PAGE_SIZE = 100;
 
@@ -44,33 +42,8 @@ const {
 
 const activeFilter = ref<MigrateStatusFilter>('all');
 const listRef = ref<HTMLElement | null>(null);
-/** 每个 filter 独立保留当前页码，切换 filter 不丢上下文 */
 const pageByFilter = new Map<MigrateStatusFilter, number>();
 const currentPage = ref(1);
-
-watch(phase, (p) => {
-  // 进入 done：有失败自动选中「失败」chip，全成功则「全部」
-  if (p === 'done') {
-    const failCount = migrateResult.value?.failedCount ?? 0;
-    activeFilter.value = failCount > 0 ? 'failed' : 'all';
-  } else if (p === 'migrating') {
-    activeFilter.value = 'all';
-  }
-  // 重置分页记忆
-  pageByFilter.clear();
-  currentPage.value = 1;
-  nextTick(() => {
-    if (listRef.value) listRef.value.scrollTop = 0;
-  });
-});
-
-watch(activeFilter, (next, prev) => {
-  if (prev !== undefined) pageByFilter.set(prev, currentPage.value);
-  currentPage.value = pageByFilter.get(next) ?? 1;
-  nextTick(() => {
-    if (listRef.value) listRef.value.scrollTop = 0;
-  });
-});
 
 // ============================================
 // 数据源：migrating 用 allItemStatuses；done 用 migrateResult.itemsSnapshot
@@ -103,19 +76,37 @@ const rawList = computed<MigrateRowItem[]>(() => {
       toRowItem(item, item.status === 'failed' ? failureDetailsById.get(item.historyId) : undefined),
     );
   }
-  // migrating 态：allItemStatuses 头部是最新一批（批次开始时 prepend）
   return allItemStatuses.value.map(item => toRowItem(item));
 });
+
+// ============================================
+// 搜索 & 来源图床筛选（useFilterBar）
+// ============================================
+
+const {
+  searchInput,
+  searchQuery,
+  selectedSourceServiceId,
+  showServiceMenu,
+  sourceServiceOptions,
+  applyFilters,
+  resetFilters,
+} = useFilterBar(rawList);
+
+const hasActiveFilter = computed(() =>
+  !!searchQuery.value || !!selectedSourceServiceId.value,
+);
+
+// rawList → 搜索+图床筛选后的中间列表（再由 displayList 做状态过滤）
+const scopedList = computed<MigrateRowItem[]>(() => applyFilters(rawList.value));
 
 // ============================================
 // 过滤
 // ============================================
 
-// 保持源顺序稳定：不再对 filter='all' 做活跃前置排序，避免条目状态切换引起的整列重排闪烁。
-// 想快速看"哪些在进行中"走 chip 过滤条的「处理中」tab。
 const displayList = computed<MigrateRowItem[]>(() => {
   const f = activeFilter.value;
-  const items = rawList.value;
+  const items = scopedList.value;
   if (f === 'processing') return items.filter(s => ACTIVE_STATUSES.has(s.status));
   if (f === 'success') return items.filter(s => s.status === 'success');
   if (f === 'failed') return items.filter(s => s.status === 'failed');
@@ -124,28 +115,37 @@ const displayList = computed<MigrateRowItem[]>(() => {
 });
 
 const filterCounts = computed(() => {
-  const items = rawList.value;
-  let processing = 0, success = 0, failed = 0, skipped = 0;
+  const items = scopedList.value;
+  let success = 0, failed = 0, skipped = 0;
   for (const it of items) {
-    if (ACTIVE_STATUSES.has(it.status)) processing++;
-    else if (it.status === 'success') success++;
+    if (it.status === 'success') success++;
     else if (it.status === 'failed') failed++;
     else if (it.status === 'skipped') skipped++;
   }
-  // migrating 态预加载期间 totalCount 可能大于 items.length，chip 会渲染「已加载 / 总数」
-  const total = phase.value === 'migrating' ? migrateStats.value.totalCount : undefined;
+  // "已加载/总数" 预填仅在 migrating 且无搜索/图床筛选时有意义
+  const showTotal = phase.value === 'migrating' && !hasActiveFilter.value;
+  const total = showTotal ? migrateStats.value.totalCount : undefined;
+  const effectiveTotal = showTotal && total && total > 0 ? total : items.length;
+  const processing = Math.max(0, effectiveTotal - success - failed - skipped);
   return { all: items.length, processing, success, failed, skipped, total };
 });
 
 // ============================================
-// 分页切片：displayList → visibleList（仅渲染当前页）
+// 分页切片
 // ============================================
 
+const effectiveTotalCount = computed(() => {
+  if (phase.value === 'migrating' && activeFilter.value === 'all' && !hasActiveFilter.value) {
+    const known = migrateStats.value.totalCount;
+    if (known > 0) return known;
+  }
+  return displayList.value.length;
+});
+
 const totalPages = computed(() =>
-  Math.max(1, Math.ceil(displayList.value.length / PAGE_SIZE)),
+  Math.max(1, Math.ceil(effectiveTotalCount.value / PAGE_SIZE)),
 );
 
-// 当前列表收缩导致页码越界时自动 clamp
 watch([totalPages, currentPage], ([tp, cp]) => {
   if (cp > tp) currentPage.value = tp;
   if (cp < 1) currentPage.value = 1;
@@ -156,14 +156,44 @@ const visibleList = computed(() => {
   return displayList.value.slice(start, start + PAGE_SIZE);
 });
 
-const showPagination = computed(() => displayList.value.length > PAGE_SIZE);
+const showPagination = computed(() => effectiveTotalCount.value > 0);
+
+// ============================================
+// Phase 切换：重置分页 + 所有筛选状态
+// ============================================
+
+watch(phase, (p) => {
+  if (p === 'done') {
+    const failCount = migrateResult.value?.failedCount ?? 0;
+    activeFilter.value = failCount > 0 ? 'failed' : 'all';
+  } else if (p === 'migrating') {
+    activeFilter.value = 'all';
+  }
+  resetFilters();
+  pageByFilter.clear();
+  currentPage.value = 1;
+  nextTick(() => {
+    if (listRef.value) listRef.value.scrollTop = 0;
+  });
+});
+
+watch(activeFilter, (next, prev) => {
+  if (prev !== undefined) pageByFilter.set(prev, currentPage.value);
+  currentPage.value = pageByFilter.get(next) ?? 1;
+  nextTick(() => {
+    if (listRef.value) listRef.value.scrollTop = 0;
+  });
+});
 
 // ============================================
 // 派生 UI
 // ============================================
 
 const emptyHint = computed(() => {
-  if (displayList.value.length > 0) return '';
+  if (displayList.value.length > 0) {
+    return phase.value === 'migrating' ? '正在加载更多数据…' : '';
+  }
+  if (hasActiveFilter.value) return '没有匹配的条目';
   if (phase.value === 'migrating' && rawList.value.length === 0) return '正在启动迁移…';
   switch (activeFilter.value) {
     case 'processing': return '当前没有正在处理的项';
@@ -174,15 +204,11 @@ const emptyHint = computed(() => {
   }
 });
 
-/** "全部重试" 按钮仅 done 态 + 有失败时显示 */
 const canRetryAll = computed(() =>
   phase.value === 'done'
     && !!migrateResult.value
     && migrateResult.value.failures.length > 0,
 );
-
-type StatePillTone = 'running' | 'pausing' | 'paused';
-interface StatePill { tone: StatePillTone; icon: string; label: string }
 
 const statePill = computed<StatePill | null>(() => {
   if (phase.value !== 'migrating') return null;
@@ -190,10 +216,6 @@ const statePill = computed<StatePill | null>(() => {
   if (isPaused.value) return { tone: 'paused', icon: 'pi pi-pause', label: '已暂停' };
   return { tone: 'running', icon: '', label: '运行中' };
 });
-
-// ============================================
-// 服务 ID（chip group 消费）
-// ============================================
 
 const currentTargetServiceIds = computed(() => {
   if (phase.value === 'done') return migrateResult.value?.targetServiceIds ?? [];
@@ -248,33 +270,19 @@ function handleResume() { resumeMigrate(); }
 </script>
 
 <template>
-  <div class="focus-area">
-    <div class="chip-row">
-      <MigrateStatusFilterChips
-        v-model="activeFilter"
-        :counts="filterCounts"
-        :show-processing="phase === 'migrating'"
-      />
-      <span class="chip-row__spacer" />
-      <span
-        v-if="statePill"
-        class="pp-state-pill"
-        :class="`pp-state-pill--${statePill.tone}`"
-      >
-        <span v-if="statePill.tone === 'running'" class="pp-state-pill__dot" />
-        <i v-else :class="statePill.icon" aria-hidden="true" />
-        {{ statePill.label }}
-      </span>
-      <button
-        v-if="canRetryAll"
-        class="chip-row__retry-all"
-        type="button"
-        :disabled="retryingIds.size > 0"
-        @click="handleRetryAll"
-      >
-        <i class="pi pi-refresh" /> 全部重试
-      </button>
-    </div>
+  <div class="focus-area" @click="showServiceMenu = false">
+    <MigrateFilterBar
+      v-model:active-filter="activeFilter"
+      v-model:selected-source-service-id="selectedSourceServiceId"
+      v-model:show-service-menu="showServiceMenu"
+      v-model:search-input="searchInput"
+      :counts="filterCounts"
+      :show-processing="phase === 'migrating'"
+      :can-retry-all="canRetryAll"
+      :retrying-count="retryingIds.size"
+      :source-service-options="sourceServiceOptions"
+      @retry-all="handleRetryAll"
+    />
 
     <div ref="listRef" class="focus-list">
       <template v-if="visibleList.length > 0">
@@ -300,6 +308,7 @@ function handleResume() { resumeMigrate(); }
     :mode="phase === 'done' ? 'done' : 'migrating'"
     :is-paused="isPaused"
     :is-pausing="isPausing"
+    :state-pill="statePill"
     @pause="handlePause"
     @resume="handleResume"
     @cancel="cancelMigrate"
@@ -312,7 +321,7 @@ function handleResume() { resumeMigrate(); }
         v-if="showPagination"
         :current-page="currentPage"
         :total-pages="totalPages"
-        :total-items="displayList.length"
+        :total-items="effectiveTotalCount"
         @update:current-page="(p: number) => { currentPage = p; if (listRef) listRef.scrollTop = 0; }"
       />
     </template>
@@ -329,68 +338,6 @@ function handleResume() { resumeMigrate(); }
   flex: 1 1 auto;
   min-height: 0;
 }
-
-.chip-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  flex-shrink: 0;
-  flex-wrap: wrap;
-  padding-right: var(--space-xl);
-}
-.chip-row__spacer { flex: 1; }
-
-.chip-row__retry-all {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-sm-md);
-  border: none;
-  border-radius: var(--radius-sm-md);
-  background: var(--error);
-  color: var(--text-on-error, #fff);
-  font-family: inherit;
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background var(--duration-fast);
-}
-.chip-row__retry-all:disabled { opacity: 0.55; cursor: not-allowed; }
-
-.chip-row__retry-all:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--error) 85%, black);
-}
-.chip-row__retry-all i { font-size: var(--text-2xs); }
-
-.pp-state-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-medium);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.pp-state-pill i { font-size: var(--text-2xs); }
-
-.pp-state-pill--running { color: var(--success); }
-
-.pp-state-pill__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--radius-full);
-  background: var(--success);
-  animation: pp-pulse var(--duration-breathe) ease-in-out infinite;
-}
-
-@keyframes pp-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-
-.pp-state-pill--pausing { color: var(--state-warn-text); }
-.pp-state-pill--paused { color: var(--text-muted); }
 
 .focus-list {
   display: flex;

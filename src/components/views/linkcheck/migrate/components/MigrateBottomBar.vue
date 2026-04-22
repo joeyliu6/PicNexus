@@ -6,15 +6,19 @@
 import { ref } from 'vue';
 import Menu from 'primevue/menu';
 
+export type StatePillTone = 'running' | 'pausing' | 'paused';
+export interface StatePill { tone: StatePillTone; icon: string; label: string }
+
 interface Props {
   mode: 'migrating' | 'done';
   /** 用户已点暂停 */
   isPaused?: boolean;
   /** 已点暂停但在途条目未落定（正在暂停...） */
   isPausing?: boolean;
+  statePill?: StatePill | null;
 }
 
-withDefaults(defineProps<Props>(), { isPaused: false, isPausing: false });
+withDefaults(defineProps<Props>(), { isPaused: false, isPausing: false, statePill: null });
 
 const emit = defineEmits<{
   pause: [];
@@ -41,6 +45,11 @@ function toggleExportMenu(ev: MouseEvent) {
   <div class="bm-bottom">
     <div class="bm-left">
       <slot name="pagination" />
+      <span v-if="statePill" class="bm-state-pill" :class="`bm-state-pill--${statePill.tone}`">
+        <span v-if="statePill.tone === 'running'" class="bm-state-pill__dot" />
+        <i v-else :class="statePill.icon" aria-hidden="true" />
+        {{ statePill.label }}
+      </span>
     </div>
     <div class="bottom-actions">
       <template v-if="mode === 'migrating'">
@@ -118,5 +127,49 @@ function toggleExportMenu(ev: MouseEvent) {
 .bm-pause-pending {
   /* 让 "正在暂停..." 外观与普通 btn-ghost 统一，只靠 disabled 降不透明度 */
   cursor: progress;
+}
+
+/* ── 运行状态 pill ── */
+.bm-state-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 4px/10px pill 内边距无对应 spacing token */
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.bm-state-pill i { font-size: var(--text-2xs); }
+
+.bm-state-pill--running {
+  background: var(--state-success-bg);
+  color: var(--state-success-text);
+}
+
+.bm-state-pill__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--state-success-text);
+  animation: bm-pulse var(--duration-breathe) ease-in-out infinite;
+}
+
+@keyframes bm-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.bm-state-pill--pausing {
+  background: var(--state-warn-bg);
+  color: var(--state-warn-text);
+}
+
+.bm-state-pill--paused {
+  background: var(--bg-secondary);
+  color: var(--text-muted);
 }
 </style>

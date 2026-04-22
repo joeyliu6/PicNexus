@@ -10,7 +10,10 @@
 import { computed } from 'vue';
 import type { MigrateFailureDetail, MigrateItemStatus } from '../../../../../types/batchMigrate';
 import { errorTooltipText } from '../composables/useErrorPresentation';
+import { getServiceDisplayName } from '../../../../../constants/serviceNames';
 import MigrateServiceChip from './chips/MigrateServiceChip.vue';
+
+const VISIBLE_EXISTING_MAX = 3;
 
 /** DoneRow 旧签名的兼容型——让导出/终态快照仍然可以传入不是完整 MigrateItemStatus 的对象 */
 export interface MigrateRowItem {
@@ -52,6 +55,11 @@ const isActive = computed(() =>
 const isFailed = computed(() => props.item.status === 'failed');
 
 const existingChips = computed(() => props.item.existingServiceIds ?? []);
+const visibleExistingChips = computed(() => existingChips.value.slice(0, VISIBLE_EXISTING_MAX));
+const overflowExistingChips = computed(() => existingChips.value.slice(VISIBLE_EXISTING_MAX));
+const overflowTooltip = computed(() =>
+  overflowExistingChips.value.map(sid => getServiceDisplayName(sid) || sid).join('、'),
+);
 
 interface TargetChipState {
   serviceId: string;
@@ -102,6 +110,26 @@ const dotColor = computed(() => {
   }
 });
 
+/**
+ * 目标 chip 状态说明 tooltip：
+ * - new（可点击）→ 由 chip 内部处理"点击复制链接"，此处返回 undefined
+ * - failed → 优先取该服务的 detail 错误，否则降级到全局 errorTooltipText
+ * - pending → 按当前 item.status 给出处理步骤说明
+ */
+function targetChipTooltip(chip: TargetChipState): string | undefined {
+  if (chip.variant === 'new') return undefined;
+  if (chip.variant === 'failed') {
+    const detail = props.item.details?.find(d => d.serviceId === chip.serviceId);
+    return detail?.message ?? (errorTooltipText(props.item) || '上传失败');
+  }
+  switch (props.item.status) {
+    case 'downloading': return '正在下载原图…';
+    case 'converting':  return '正在转换格式…';
+    case 'uploading':   return '正在上传…';
+    default:            return '等待处理';
+  }
+}
+
 function onRetry() {
   if (props.item.historyId) emit('retry', props.item.historyId);
 }
@@ -123,34 +151,38 @@ function onChipCopy(serviceId: string) {
     <span
       class="mi-dot"
       :style="{ background: dotColor }"
-      v-tooltip.top="isFailed && failedTooltip ? { value: failedTooltip, autoHide: false } : undefined"
+      v-tooltip.top="isFailed && failedTooltip ? { value: failedTooltip, autoHide: false } : (item.status === 'skipped' ? '已在目标图床，已跳过' : undefined)"
     />
 
     <!-- 文件名 -->
-    <span
-      class="mi-row__name"
-      v-tooltip.top="item.sourceUrl || item.fileName"
-    >{{ item.fileName }}</span>
+    <span class="mi-row__name">{{ item.fileName }}</span>
 
     <span class="mi-row__spacer" />
 
     <!-- 服务流向 chips -->
     <div v-if="hasServices" class="mi-row__services">
       <MigrateServiceChip
-        v-for="sid in existingChips"
+        v-for="sid in visibleExistingChips"
         :key="`e-${sid}`"
         :service-id="sid"
         variant="existing"
+        icon-only
         clickable
         @copy="onChipCopy(sid)"
       />
-      <span v-if="existingChips.length > 0 && hasTargets" class="mi-row__sep" aria-hidden="true">»</span>
+      <span
+        v-if="overflowExistingChips.length > 0"
+        class="mi-row__overflow"
+        v-tooltip.top="overflowTooltip"
+        aria-hidden="true"
+      >+{{ overflowExistingChips.length }}</span>
       <MigrateServiceChip
         v-for="t in targetChips"
         :key="`t-${t.serviceId}`"
         :service-id="t.serviceId"
         :variant="t.variant"
         :clickable="t.variant === 'new'"
+        :tooltip="targetChipTooltip(t)"
         @copy="onChipCopy(t.serviceId)"
       />
     </div>
@@ -178,7 +210,7 @@ function onChipCopy(serviceId: string) {
   display: flex;
   align-items: center;
   gap: var(--space-sm-md);
-  padding: 0 var(--space-md);
+  padding: 0 0 0 var(--space-md);
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 40px 对齐链接监控 .link-row 行高 */
   height: 40px;
 
@@ -208,7 +240,6 @@ function onChipCopy(serviceId: string) {
 
 /* ── 文件名 ── */
 .mi-row__name {
-  font-family: var(--font-mono, monospace);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   color: var(--text-main);
@@ -217,7 +248,6 @@ function onChipCopy(serviceId: string) {
   white-space: nowrap;
   flex-shrink: 1;
   min-width: 0;
-  cursor: help;
 }
 
 .mi-row__spacer { flex: 1; }
@@ -230,10 +260,17 @@ function onChipCopy(serviceId: string) {
   flex-shrink: 0;
 }
 
-.mi-row__sep {
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
+
+.mi-row__overflow {
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-xs);
   flex-shrink: 0;
+  cursor: help;
+  white-space: nowrap;
+  line-height: 20px;
   user-select: none;
 }
 

@@ -393,6 +393,7 @@ const serviceTotal = () => (statusFilter.value === 'skipped' ? props.stats.skipp
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   color: var(--text-main);
+  white-space: nowrap;
 }
 
 .sdi-label .badge-icon {

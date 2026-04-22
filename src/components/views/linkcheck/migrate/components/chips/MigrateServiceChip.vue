@@ -22,9 +22,13 @@ interface Props {
   variant?: 'source' | 'target' | 'muted' | 'existing' | 'new' | 'pending' | 'failed';
   /** 可点击态：触发 copy 事件并展示 tooltip，由父组件决定是否启用（仅 URL 已就绪的变体传 true） */
   clickable?: boolean;
+  /** 仅显示图标，隐藏文字标签；悬浮通过 tooltip 显示名称 */
+  iconOnly?: boolean;
+  /** 外部强制覆盖的 tooltip 文本（不可点击时的状态说明）；clickable 时始终显示"点击复制链接" */
+  tooltip?: string;
 }
 
-const props = withDefaults(defineProps<Props>(), { variant: 'target', clickable: false });
+const props = withDefaults(defineProps<Props>(), { variant: 'target', clickable: false, iconOnly: false, tooltip: undefined });
 
 const emit = defineEmits<{ copy: [] }>();
 
@@ -39,13 +43,13 @@ function onClick() {
 <template>
   <span
     class="m-svc-chip"
-    :class="[`m-svc-chip--${variant}`, { 'm-svc-chip--clickable': clickable }]"
-    v-tooltip.top="clickable ? '点击复制链接' : undefined"
+    :class="[`m-svc-chip--${variant}`, { 'm-svc-chip--clickable': clickable, 'm-svc-chip--icon-only': iconOnly }]"
+    v-tooltip.top="clickable ? '点击复制链接' : (tooltip ?? (iconOnly ? displayName : undefined))"
     @click.stop="onClick"
   >
     <span v-if="svg" class="m-svc-chip-ic" v-html="svg" />
     <i v-else class="pi pi-cloud m-svc-chip-ic m-svc-chip-ic--fallback" aria-hidden="true" />
-    <span class="m-svc-chip-label">{{ displayName }}</span>
+    <span v-if="!iconOnly" class="m-svc-chip-label">{{ displayName }}</span>
   </span>
 </template>
 
@@ -124,6 +128,11 @@ function onClick() {
   color: var(--error);
 }
 .m-svc-chip--failed .m-svc-chip-ic { color: var(--error); }
+
+/* 仅图标模式：正方形 padding，无文字标签 */
+.m-svc-chip--icon-only {
+  padding: var(--space-2xs);
+}
 
 /* 可点击态：鼠标手型 + hover 色深一档 */
 .m-svc-chip--clickable { cursor: pointer; }

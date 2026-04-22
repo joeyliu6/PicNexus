@@ -52,7 +52,7 @@ function fmt(n: number): string {
     >
       <span>全部</span>
       <span class="mf-chip-count">
-        {{ fmt(counts.all) }}<template v-if="counts.total != null && counts.total > counts.all"> / {{ fmt(counts.total) }}</template>
+        {{ fmt(counts.total != null && counts.total > 0 ? counts.total : counts.all) }}
       </span>
     </button>
     <button
