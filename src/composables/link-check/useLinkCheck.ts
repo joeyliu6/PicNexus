@@ -69,8 +69,8 @@ const DEFAULT_CHECK_PARAMS = {
   timeout_secs: 10,
 } as const;
 
-// 空闲释放：离开检测页面 5 分钟后自动清空数据，释放内存
-const IDLE_RELEASE_MS = 5 * 60 * 1000;
+// 空闲释放：离开检测页面 3 分钟后自动清空数据，释放内存
+const IDLE_RELEASE_MS = 3 * 60 * 1000;
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
 // TTL 缓存：避免反复切换页面时重复加载

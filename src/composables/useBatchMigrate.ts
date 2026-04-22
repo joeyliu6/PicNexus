@@ -14,7 +14,7 @@ import { historyDB } from '../services/HistoryDatabase';
 import { configStore } from '../store/instances';
 import { getServiceDisplayName } from '../constants/serviceNames';
 import { createLogger } from '../utils/logger';
-import type { UserConfig } from '../config/types';
+import type { HistoryItem, UserConfig } from '../config/types';
 import { DEFAULT_CONFIG } from '../config/types';
 import type {
   MigratePhase,
@@ -25,6 +25,7 @@ import type {
   MigrateFailureDetail,
 } from '../types/batchMigrate';
 import { migrateOneItem, processBatch } from './batchMigrate/migrateCore';
+import { preloadAllPending } from './batchMigrate/preloadPending';
 import { Semaphore } from '../utils/semaphore';
 
 export type { MigratePhase, MigrateTargetService, MigrateItemStatus, MigrateResult, MigrateStats, MigrateFailureDetail };
@@ -33,8 +34,11 @@ const log = createLogger('useBatchMigrate');
 
 const PAGE_SIZE = 100;
 const MAX_CONSECUTIVE_FAILURES = 10;
+/** 离开面板 3 分钟后释放内存（对齐链接监控） */
+const IDLE_RELEASE_MS = 3 * 60 * 1000;
 
 // 迁移核心逻辑（migrateOneItem / processBatch / extractErrorMessage 等）抽至 batchMigrate/migrateCore.ts
+// 预加载逻辑（preloadAllPending / PreloadedItem）抽至 batchMigrate/preloadPending.ts
 
 // ============================================
 // 管理器 Composable
@@ -304,13 +308,32 @@ export function useBatchMigrateManager() {
     isCancelled.value = false;
     isPaused.value = false;
     migrateResult.value = null;
+    allItemStatuses.value = [];
 
     const config = await getOrCacheConfig();
     const multiUploader = cachedUploader ?? new MultiServiceUploader();
 
-    const totalToProcess = totalPending.value;
     const startTime = Date.now();
-    migrateStats.value = { startTime, elapsedMs: 0, processedCount: 0, totalCount: totalToProcess, totalBytes: 0 };
+    // 初始 totalCount 用 totalPending（DB 统计），预加载完成后用实际过滤后的数量覆盖
+    migrateStats.value = {
+      startTime, elapsedMs: 0, processedCount: 0,
+      totalCount: totalPending.value, totalBytes: 0,
+    };
+    globalProgress.value = { current: 0, total: totalPending.value, percent: 0 };
+
+    // ===== Phase 1：预加载所有待迁移项（流式） =====
+    const preloaded = await preloadAllPending({
+      targets,
+      maxSuccessCount: maxSuccessCount.value,
+      sourceServiceFilter: sourceServiceFilter.value,
+      timestampAfter: timestampAfterMs.value,
+      allItemStatuses,
+      isCancelled,
+      isPaused,
+    });
+    const totalToProcess = preloaded.length;
+    migrateStats.value = { ...migrateStats.value, totalCount: totalToProcess };
+    globalProgress.value = { current: 0, total: totalToProcess, percent: 0 };
 
     let successCount = 0;
     let failedCount = 0;
@@ -318,67 +341,76 @@ export function useBatchMigrateManager() {
     const failures: MigrateResult['failures'] = [];
     const partialFailures: MigrateResult['partialFailures'] = [];
     let processed = 0;
-    cumulativeCounts.value = { success: 0, failed: 0, skipped: 0 };
     let consecutiveFailures = 0;
     let autoAborted = false;
+    cumulativeCounts.value = { success: 0, failed: 0, skipped: 0 };
 
-    globalProgress.value = { current: 0, total: totalToProcess, percent: 0 };
+    // 空列表或预加载中途被取消 → 直接收尾
+    if (totalToProcess === 0 || isCancelled.value) {
+      finalizeResult(targets, startTime, successCount, failedCount, skippedCount, failures, partialFailures,
+        isCancelled.value ? 'user-cancelled' : undefined);
+      return;
+    }
 
-    // 跟踪已处理（跳过/失败）但未从查询中消失的 ID，避免重复处理
-    const processedIds = new Set<string>();
-    let skipOffset = 0;
-
-    while (!isCancelled.value) {
-      // 暂停等待：在拉取下一批前阻塞，直至 resume 或取消
+    // ===== Phase 2：按 PAGE_SIZE 分块处理预加载好的列表 =====
+    let cursor = 0;
+    while (cursor < preloaded.length && !isCancelled.value) {
       while (isPaused.value && !isCancelled.value) {
         await new Promise(resolve => setTimeout(resolve, 200));
       }
       if (isCancelled.value) break;
 
-      const { items, total: queryTotal } = await historyDB.getItemsByBackupCount({
-        maxSuccessCount: maxSuccessCount.value,
-        hasServiceId: sourceServiceFilter.value.length > 0 ? sourceServiceFilter.value : undefined,
-        timestampAfter: timestampAfterMs.value ?? undefined,
-        limit: PAGE_SIZE,
-        offset: skipOffset,
-      });
-
-      if (items.length === 0) break;
-
-      // 过滤掉已处理过的 + 对所有勾选目标都已存在的项
-      // 后者避免 migrateCore 白跑一轮判定为 skipped，也不再污染结果列表
-      const newItems = items.filter(item => {
-        if (processedIds.has(item.id)) return false;
-        const existingIds = new Set(
-          item.results.filter(r => r.status === 'success').map(r => r.serviceId),
-        );
-        return targets.some(t => !existingIds.has(t));
-      });
-      if (newItems.length === 0) {
-        // 当前页全是已处理或已备份项，继续翻页
-        skipOffset += PAGE_SIZE;
+      const end = Math.min(cursor + PAGE_SIZE, preloaded.length);
+      const chunk = preloaded.slice(cursor, end);
+      // 过滤出仍为 pending 的（暂停回退 / 上一轮未处理完的重试）
+      const pendingChunk = chunk.filter(p => p.status.status === 'pending');
+      if (pendingChunk.length === 0) {
+        cursor = end;
         continue;
       }
 
-      const batchStatuses: MigrateItemStatus[] = newItems.map(item => ({
-        historyId: item.id,
-        fileName: item.localFileName,
-        // 预填源 URL：取首条 success 的 result.url，便于 pending 阶段 UI 就能显示链接
-        sourceUrl: item.results.find(r => r.status === 'success' && r.result?.url)?.result?.url,
-        status: 'pending' as const,
-        serviceResults: Object.fromEntries(targets.map(sid => [sid, 'pending' as const])),
-        existingServiceIds: item.results.filter(r => r.status === 'success').map(r => r.serviceId),
-      }));
-      itemStatuses.value = batchStatuses;
-      allItemStatuses.value = [...batchStatuses, ...allItemStatuses.value];
+      // 按需拉取当前 chunk 的完整 HistoryItem：
+      // preloaded 只存 id，避免整个待迁移集合的 HistoryItem 常驻内存
+      const fetched = await historyDB.getItemsByIds(pendingChunk.map(p => p.id));
+      const byId = new Map(fetched.map(i => [i.id, i]));
 
-      await processBatch(newItems, batchStatuses, targets, config, multiUploader, isCancelled, isPaused, migrateStats, (status) => {
-        // 暂停期间被"持有"的条目保持 pending 不计入统计，resume 后会重新查询
+      const batchItems: HistoryItem[] = [];
+      const batchStatuses: MigrateItemStatus[] = [];
+      for (const p of pendingChunk) {
+        const item = byId.get(p.id);
+        if (!item) {
+          // 预加载到处理间隙被删除 → 视为 skipped，不再走 processBatch
+          p.status.status = 'skipped';
+          skippedCount++;
+          processed++;
+          continue;
+        }
+        batchItems.push(item);
+        batchStatuses.push(p.status);
+      }
+      if (batchStatuses.length === 0) {
+        cumulativeCounts.value = { success: successCount, failed: failedCount, skipped: skippedCount };
+        migrateStats.value = {
+          ...migrateStats.value,
+          processedCount: processed,
+          elapsedMs: Date.now() - startTime,
+        };
+        allItemStatuses.value = [...allItemStatuses.value];
+        globalProgress.value = {
+          current: processed,
+          total: totalToProcess,
+          percent: totalToProcess > 0 ? Math.round((processed / totalToProcess) * 100) : 0,
+        };
+        cursor = end;
+        continue;
+      }
+      itemStatuses.value = batchStatuses;
+
+      await processBatch(batchItems, batchStatuses, targets, config, multiUploader, isCancelled, isPaused, migrateStats, (status) => {
         if (status.status === 'pending') return;
         if (status.status === 'success') {
           successCount++;
           consecutiveFailures = 0;
-          // 收集部分目标失败的详情
           const failedTargets = Object.entries(status.serviceResults)
             .filter(([, state]) => state === 'failed')
             .map(([sid]) => sid);
@@ -398,7 +430,6 @@ export function useBatchMigrateManager() {
             errorType: status.errorType,
             details: status.failureDetails ?? [{ message: status.error }],
           });
-          // 连续失败过多 → 自动终止（走 isCancelled 分支，pauseReason 记为 consecutive-failures）
           if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && !autoAborted) {
             autoAborted = true;
             isCancelled.value = true;
@@ -417,23 +448,9 @@ export function useBatchMigrateManager() {
 
       flushStatusUpdate();
 
-      // 记录所有已处理项的 ID（含成功项，因为 maxSuccessCount=999 时成功项不会从查询中消失）
-      // 暂停期间被持有的 pending 条目不入集合，resume 后可以被重新查询到
-      for (const status of batchStatuses) {
-        if (status.status !== 'pending') processedIds.add(status.historyId);
-      }
-
-      // 本批次有成功项 → 重置 offset（成功项的 success_count 变化可能影响排序）
-      // 本批次无成功项 → 翻页继续查找未备份的项目
-      const batchSuccessCount = batchStatuses.filter(s => s.status === 'success').length;
-      if (batchSuccessCount > 0) {
-        skipOffset = 0;
-      } else {
-        skipOffset += PAGE_SIZE;
-      }
-
-      // L5：防止无限翻页 — 当 offset 超出查询总量时终止
-      if (skipOffset > 0 && skipOffset >= queryTotal) break;
+      // 当前 chunk 所有项都落定 → 推进 cursor；否则重试本 chunk（暂停场景回退为 pending 时）
+      const allSettled = batchStatuses.every(s => s.status !== 'pending');
+      if (allSettled) cursor = end;
     }
 
     const pauseReason = autoAborted
@@ -441,6 +458,20 @@ export function useBatchMigrateManager() {
       : isCancelled.value
         ? 'user-cancelled' as const
         : undefined;
+    finalizeResult(targets, startTime, successCount, failedCount, skippedCount, failures, partialFailures, pauseReason);
+  }
+
+  /** 收尾：构造 migrateResult + 切 done 态 */
+  function finalizeResult(
+    targets: string[],
+    startTime: number,
+    successCount: number,
+    failedCount: number,
+    skippedCount: number,
+    failures: MigrateResult['failures'],
+    partialFailures: MigrateResult['partialFailures'],
+    pauseReason?: MigrateResult['pauseReason'],
+  ) {
     const finalElapsed = Date.now() - startTime;
     migrateResult.value = {
       successCount, failedCount, skippedCount, failures, partialFailures, pauseReason,
@@ -552,6 +583,59 @@ export function useBatchMigrateManager() {
     await Promise.all(historyIds.map(id => sem.withPermit(() => retrySingleFailed(id))));
   }
 
+  // ============================================
+  // 内存空闲释放（对齐链接监控 useLinkCheck）
+  // 离开面板超过 IDLE_RELEASE_MS 且非活跃迁移/重试 → 清空预加载/结果释放内存
+  // UI 回到面板时通过 wasIdleCleared 标志触发 toast 告知用户
+  // ============================================
+
+  /** idle 定时器已触发过清理，UI 下次 onActivated 读到后显示 toast 再重置 */
+  const wasIdleCleared = ref(false);
+  let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function cancelIdleTimer() {
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+  }
+
+  function onViewActivated() {
+    cancelIdleTimer();
+  }
+
+  /**
+   * 宿主组件真正 unmount 时调用：仅取消挂起的 idle 定时器，
+   * 避免孤立的 setTimeout 持有整个 composable 闭包到超时才释放。
+   */
+  function dispose() {
+    cancelIdleTimer();
+  }
+
+  function onViewDeactivated() {
+    cancelIdleTimer();
+    // 迁移中 / 存在正在重试项 → 绝不启动清理（避免打断进行中的工作）
+    if (isMigrating.value) return;
+    if (retryingIds.value.size > 0) return;
+    // 列表/结果本来就是空 → 没必要启动定时器
+    if (allItemStatuses.value.length === 0 && !migrateResult.value) return;
+
+    idleTimer = setTimeout(() => {
+      idleTimer = null;
+      // 触发时再次校验，避免 race（用户刚好在定时器触发前开始新迁移）
+      if (isMigrating.value || retryingIds.value.size > 0) return;
+      // 清空大块内存
+      itemStatuses.value = [];
+      allItemStatuses.value = [];
+      migrateResult.value = null;
+      globalProgress.value = { current: 0, total: 0, percent: 0 };
+      migrateStats.value = { startTime: 0, elapsedMs: 0, processedCount: 0, totalCount: 0, totalBytes: 0 };
+      cumulativeCounts.value = { success: 0, failed: 0, skipped: 0 };
+      // 回到配置页（保留目标图床勾选状态，用户回来不用重选）
+      phase.value = 'configuring';
+      isFilterApplied.value = false;
+      wasIdleCleared.value = true;
+      log.info(`迁移面板闲置 ${IDLE_RELEASE_MS / 60_000} 分钟，已释放内存`);
+    }, IDLE_RELEASE_MS);
+  }
+
   return {
     phase, isInitialized, isFilterApplied, isRefiltering, initError,
     maxSuccessCount, sourceServiceFilter, availableSourceServices,
@@ -565,5 +649,6 @@ export function useBatchMigrateManager() {
     initConfiguring, applyFilter,
     startMigrate, cancelMigrate, pauseMigrate, resumeMigrate,
     retryFailed, retrySingleFailed, resetToConfiguring,
+    onViewActivated, onViewDeactivated, wasIdleCleared, dispose,
   };
 }

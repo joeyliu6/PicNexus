@@ -3,16 +3,18 @@
  * 批量迁移面板 — 容器组件
  * 管理 composable 初始化 + 阶段切换 + provide 给子组件
  */
-import { watch, onActivated, onUnmounted, provide } from 'vue';
+import { watch, onActivated, onDeactivated, onUnmounted, provide } from 'vue';
 import { useBatchMigrateManager } from '../../../composables/useBatchMigrate';
 import { debounceWithError } from '../../../utils/debounce';
 import { useServiceHealth } from '../../../composables/useServiceHealth';
+import { useToast } from '../../../composables/useToast';
 import { MIGRATE_KEY } from './migrate/keys';
 import MigrateSelectPhase from './migrate/MigrateSelectPhase.vue';
 import MigrateProgressPhase from './migrate/MigrateProgressPhase.vue';
 
 const manager = useBatchMigrateManager();
 const { healthStatusMap, healthTooltipMap } = useServiceHealth();
+const toast = useToast();
 
 // 启动前统一过滤健康状态为 error 的目标，首次启动和重试失败项都必须走这条路径，
 // 否则"重试失败"直连 manager.retryFailed() 会绕过过滤，当目标仍为 error 时
@@ -39,10 +41,24 @@ provide(MIGRATE_KEY, {
 });
 
 manager.initConfiguring();
-onActivated(() => { if (manager.phase.value === 'configuring') manager.initConfiguring(); });
+
+onActivated(() => {
+  manager.onViewActivated();
+  // 若上次被空闲计时器清理过，提示用户原因
+  if (manager.wasIdleCleared.value) {
+    manager.wasIdleCleared.value = false;
+    toast.info('迁移数据已自动释放', '面板闲置 3 分钟后已清空列表和结果以释放内存');
+  }
+  if (manager.phase.value === 'configuring') manager.initConfiguring();
+});
+
+onDeactivated(() => manager.onViewDeactivated());
 
 const debouncedApplyFilter = debounceWithError(() => manager.applyFilter(), 150);
-onUnmounted(() => debouncedApplyFilter.cancel());
+onUnmounted(() => {
+  debouncedApplyFilter.cancel();
+  manager.dispose();
+});
 
 watch(manager.maxSuccessCount, () => { if (manager.phase.value === 'configuring') debouncedApplyFilter(); });
 watch([manager.sourceServiceFilter, manager.timestampAfterMs], () => {
@@ -78,14 +94,7 @@ function handleStartClick() {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-
-  /* 两侧对称 padding，让页面视觉不贴边 */
-  padding: var(--space-xl) var(--space-xl) var(--space-lg-xl);
-  gap: var(--space-xl);
-
-  /* 内容区最大宽度，居中呼吸 */
-  max-width: 960px;
-  margin: 0 auto;
-  width: 100%;
+  padding: var(--space-lg-xl) 0 var(--space-lg-xl) var(--space-xl);
+  gap: var(--space-md-lg);
 }
 </style>
