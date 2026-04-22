@@ -40,6 +40,8 @@ export interface PreloadArgs {
   allItemStatuses: ShallowRef<MigrateItemStatus[]>;
   isCancelled: Ref<boolean>;
   isPaused: Ref<boolean>;
+  /** 每批预加载完成后触发，用于流水线即时处理 */
+  onBatch?: (batch: PreloadedItem[]) => void;
 }
 
 export async function preloadAllPending(args: PreloadArgs): Promise<PreloadedItem[]> {
@@ -78,6 +80,7 @@ export async function preloadAllPending(args: PreloadArgs): Promise<PreloadedIte
     items.push(...batch);
     // spread 触发 shallowRef 响应，UI「全部 N」递增
     allItemStatuses.value = items.map(p => p.status);
+    args.onBatch?.(batch);
   }
 
   // 首屏：100 条让用户立刻看到列表

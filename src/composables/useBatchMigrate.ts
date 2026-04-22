@@ -25,7 +25,7 @@ import type {
   MigrateFailureDetail,
 } from '../types/batchMigrate';
 import { migrateOneItem, processBatch } from './batchMigrate/migrateCore';
-import { preloadAllPending } from './batchMigrate/preloadPending';
+import { preloadAllPending, type PreloadedItem } from './batchMigrate/preloadPending';
 import { Semaphore } from '../utils/semaphore';
 
 export type { MigratePhase, MigrateTargetService, MigrateItemStatus, MigrateResult, MigrateStats, MigrateFailureDetail };
@@ -321,8 +321,12 @@ export function useBatchMigrateManager() {
     };
     globalProgress.value = { current: 0, total: totalPending.value, percent: 0 };
 
-    // ===== Phase 1：预加载所有待迁移项（流式） =====
-    const preloaded = await preloadAllPending({
+    // ===== 流水线：预加载与处理并发，首批 100 条加载完立即开始处理 =====
+    const processQueue: PreloadedItem[] = [];
+    let preloadDone = false;
+    let preloadError: unknown = null;
+
+    const preloadPromise = preloadAllPending({
       targets,
       maxSuccessCount: maxSuccessCount.value,
       sourceServiceFilter: sourceServiceFilter.value,
@@ -330,10 +334,16 @@ export function useBatchMigrateManager() {
       allItemStatuses,
       isCancelled,
       isPaused,
+      onBatch(batch) { processQueue.push(...batch); },
+    }).then(all => {
+      migrateStats.value = { ...migrateStats.value, totalCount: all.length };
+      globalProgress.value = { ...globalProgress.value, total: all.length };
+      preloadDone = true;
+    }).catch((err) => {
+      log.error('预加载失败', err);
+      preloadError = err;
+      preloadDone = true;
     });
-    const totalToProcess = preloaded.length;
-    migrateStats.value = { ...migrateStats.value, totalCount: totalToProcess };
-    globalProgress.value = { current: 0, total: totalToProcess, percent: 0 };
 
     let successCount = 0;
     let failedCount = 0;
@@ -345,23 +355,24 @@ export function useBatchMigrateManager() {
     let autoAborted = false;
     cumulativeCounts.value = { success: 0, failed: 0, skipped: 0 };
 
-    // 空列表或预加载中途被取消 → 直接收尾
-    if (totalToProcess === 0 || isCancelled.value) {
-      finalizeResult(targets, startTime, successCount, failedCount, skippedCount, failures, partialFailures,
-        isCancelled.value ? 'user-cancelled' : undefined);
-      return;
-    }
-
-    // ===== Phase 2：按 PAGE_SIZE 分块处理预加载好的列表 =====
     let cursor = 0;
-    while (cursor < preloaded.length && !isCancelled.value) {
+    while (true) {
+      if (isCancelled.value) break;
+
       while (isPaused.value && !isCancelled.value) {
         await new Promise(resolve => setTimeout(resolve, 200));
       }
       if (isCancelled.value) break;
 
-      const end = Math.min(cursor + PAGE_SIZE, preloaded.length);
-      const chunk = preloaded.slice(cursor, end);
+      if (cursor >= processQueue.length) {
+        if (preloadDone) break; // 全部加载完且已全部处理 → 退出
+        await new Promise(r => setTimeout(r, 0)); // yield：等 onBatch 推入新条目
+        continue;
+      }
+
+      const totalToProcess = migrateStats.value.totalCount;
+      const end = Math.min(cursor + PAGE_SIZE, processQueue.length);
+      const chunk = processQueue.slice(cursor, end);
       // 过滤出仍为 pending 的（暂停回退 / 上一轮未处理完的重试）
       const pendingChunk = chunk.filter(p => p.status.status === 'pending');
       if (pendingChunk.length === 0) {
@@ -370,7 +381,7 @@ export function useBatchMigrateManager() {
       }
 
       // 按需拉取当前 chunk 的完整 HistoryItem：
-      // preloaded 只存 id，避免整个待迁移集合的 HistoryItem 常驻内存
+      // processQueue 只存 id，避免整个待迁移集合的 HistoryItem 常驻内存
       const fetched = await historyDB.getItemsByIds(pendingChunk.map(p => p.id));
       const byId = new Map(fetched.map(i => [i.id, i]));
 
@@ -453,11 +464,12 @@ export function useBatchMigrateManager() {
       if (allSettled) cursor = end;
     }
 
-    const pauseReason = autoAborted
-      ? 'consecutive-failures' as const
-      : isCancelled.value
-        ? 'user-cancelled' as const
-        : undefined;
+    await preloadPromise; // 确保预加载 Promise 落定（cancel 时也需干净退出）
+
+    let pauseReason: MigrateResult['pauseReason'];
+    if (autoAborted) pauseReason = 'consecutive-failures';
+    else if (isCancelled.value) pauseReason = 'user-cancelled';
+    else if (preloadError !== null) pauseReason = 'preload-error';
     finalizeResult(targets, startTime, successCount, failedCount, skippedCount, failures, partialFailures, pauseReason);
   }
 

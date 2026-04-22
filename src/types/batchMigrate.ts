@@ -79,7 +79,7 @@ export interface MigrateResult {
   /** 整体成功但部分目标失败的记录 */
   partialFailures: Array<{ fileName: string; failedTargets: string[] }>;
   /** 非正常结束原因 */
-  pauseReason?: 'consecutive-failures' | 'user-cancelled';
+  pauseReason?: 'consecutive-failures' | 'user-cancelled' | 'preload-error';
   /** 总耗时（毫秒） */
   durationMs: number;
   /** 平均速度（字节/秒） */

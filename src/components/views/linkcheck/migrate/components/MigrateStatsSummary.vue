@@ -54,6 +54,9 @@ const doneTargetServiceIds = computed(() =>
       </span>
     </template>
     <template v-else-if="migrateResult">
+      <span v-if="migrateResult.pauseReason === 'preload-error'" class="ss-error-hint">
+        <i class="pi pi-exclamation-circle" /> 数据加载失败
+      </span>
       <span class="ss-chip ss-chip--total">
         共 <b>{{ formatNumber(migrateResult.successCount + migrateResult.failedCount + migrateResult.skippedCount) }}</b> 项
       </span>
@@ -128,6 +131,15 @@ const doneTargetServiceIds = computed(() =>
   background: var(--warning-alpha-8);
   color: var(--warning);
 }
+
+.ss-error-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--error);
+  white-space: nowrap;
+}
+.ss-error-hint i { font-size: var(--text-xs); }
 
 .ss-of {
   opacity: 0.6;
