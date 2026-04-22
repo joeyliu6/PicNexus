@@ -1,35 +1,210 @@
 <script setup lang="ts">
 /**
  * 迁移执行面板 — migrating / done 双态统一
- * 结构：正在处理（含最近完成快照）→ 跳过/失败区 → 已完成折叠区 → 底栏（左侧统计 + 右侧操作）
  *
- * 顶部横幅与状态条已移除：
- *   - 横幅的点击失败列表行为已精简（done 态失败区本身即显眼）
- *   - 统计信息下移到 MigrateBottomBar 的左槽位，让主内容区获得更多竖直空间
+ * 两态共享同一结构：
+ *   顶部 chip 过滤条（全部 / 处理中仅 migrating / 已完成 / 失败 / 已跳过）
+ *   + 可滚动的统一列表（migrating 用 MigrateActiveCard，done 用 MigrateDoneRow）
+ *
+ * done 态进入时，有失败自动选中「失败」chip；切换 phase 时滚动重置到顶部。
  */
-import { inject, computed } from 'vue';
+import { inject, computed, ref, watch, nextTick } from 'vue';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { createLogger } from '../../../../utils/logger';
-import { getServiceDisplayName } from '../../../../constants/serviceNames';
-import { formatSpeed, formatTime, getErrorInfo } from './utils';
 import { MIGRATE_KEY } from './keys';
+import { buildCsvReport, buildTxtReport } from './reportExport';
+import type { MigrateFailureDetail, MigrateItemStatus } from '../../../../types/batchMigrate';
 import MigrateActiveCard from './components/MigrateActiveCard.vue';
 import MigrateSkeletonCard from './components/MigrateSkeletonCard.vue';
-import MigrateSkippedSection from './components/MigrateSkippedSection.vue';
-import MigrateCompletedSection from './components/MigrateCompletedSection.vue';
+import MigrateDoneRow, { type DoneRowItem } from './components/MigrateDoneRow.vue';
 import MigrateBottomBar from './components/MigrateBottomBar.vue';
+import MigrateStatusFilterChips, {
+  type MigrateStatusFilter,
+} from './components/chips/MigrateStatusFilterChips.vue';
 
 const log = createLogger('MigrateProgressPhase');
 
 const ctx = inject(MIGRATE_KEY)!;
 const {
-  phase, cumulativeCounts, allItemStatuses, checkedTargets, cancelMigrate,
+  phase, allItemStatuses, checkedTargets, cancelMigrate,
   migrateResult, resetToConfiguring, retryingIds, retryFailed,
   retrySingleFailed,
-  slots, hasAnyActive, recentCompleted,
+  slots, hasAnyActive,
   isPaused, isPausing, pauseMigrate, resumeMigrate,
+  sourceServiceFilter, availableSourceServices,
 } = ctx;
+
+// ============================================
+// chip 过滤状态 & 滚动控制
+// ============================================
+
+const activeFilter = ref<MigrateStatusFilter>('all');
+const listRef = ref<HTMLElement | null>(null);
+
+watch(phase, (p) => {
+  // 进入 done：有失败自动选中「失败」chip，全成功则「全部」
+  if (p === 'done') {
+    const failCount = migrateResult.value?.failedCount ?? 0;
+    activeFilter.value = failCount > 0 ? 'failed' : 'all';
+  } else if (p === 'migrating') {
+    activeFilter.value = 'all';
+  }
+  nextTick(() => {
+    if (listRef.value) listRef.value.scrollTop = 0;
+  });
+});
+
+// ============================================
+// migrating 态数据源
+// ============================================
+
+const activeItems = computed<MigrateItemStatus[]>(() =>
+  slots.value.map(s => s.item).filter((x): x is MigrateItemStatus => !!x),
+);
+
+const processedItems = computed<MigrateItemStatus[]>(() =>
+  allItemStatuses.value
+    .filter(s => s.status === 'success' || s.status === 'failed' || s.status === 'skipped')
+    .slice()
+    .reverse(),
+);
+
+// ============================================
+// done 态数据源：以 itemsSnapshot 为基础，失败项合并 migrateResult.failures 的 details
+// ============================================
+
+function toDoneRowItem(item: MigrateItemStatus, detailsOverride?: MigrateFailureDetail[]): DoneRowItem {
+  return {
+    historyId: item.historyId,
+    fileName: item.fileName,
+    status: item.status,
+    errorType: item.errorType,
+    convertedFormat: item.convertedFormat,
+    error: item.error,
+    details: detailsOverride ?? item.failureDetails,
+  };
+}
+
+const doneItems = computed<DoneRowItem[]>(() => {
+  const r = migrateResult.value;
+  if (!r) return [];
+  const failureDetailsById = new Map(r.failures.map(f => [f.historyId, f.details]));
+  return r.itemsSnapshot.map(item =>
+    toDoneRowItem(item, item.status === 'failed' ? failureDetailsById.get(item.historyId) : undefined),
+  );
+});
+
+// ============================================
+// chip 计数（两态共用）
+// ============================================
+
+const filterCounts = computed(() => {
+  if (phase.value === 'done') {
+    const all = doneItems.value;
+    return {
+      all: all.length,
+      processing: 0,
+      success: all.filter(s => s.status === 'success').length,
+      failed: all.filter(s => s.status === 'failed').length,
+      skipped: all.filter(s => s.status === 'skipped').length,
+    };
+  }
+  return {
+    all: activeItems.value.length + processedItems.value.length,
+    processing: activeItems.value.length,
+    success: processedItems.value.filter(s => s.status === 'success').length,
+    failed: processedItems.value.filter(s => s.status === 'failed').length,
+    skipped: processedItems.value.filter(s => s.status === 'skipped').length,
+  };
+});
+
+// ============================================
+// 过滤结果 —— migrating：ListEntry；done：DoneRowItem
+// ============================================
+
+interface MigratingListEntry {
+  item: MigrateItemStatus;
+  role: 'active' | 'done';
+}
+
+const filteredMigratingList = computed<MigratingListEntry[]>(() => {
+  const f = activeFilter.value;
+  const active = activeItems.value.map(it => ({ item: it, role: 'active' as const }));
+  const doneOf = (predicate: (s: MigrateItemStatus) => boolean) =>
+    processedItems.value.filter(predicate).map(it => ({ item: it, role: 'done' as const }));
+  if (f === 'processing') return active;
+  if (f === 'success') return doneOf(s => s.status === 'success');
+  if (f === 'failed') return doneOf(s => s.status === 'failed');
+  if (f === 'skipped') return doneOf(s => s.status === 'skipped');
+  return [...active, ...doneOf(() => true)];
+});
+
+const filteredDoneList = computed<DoneRowItem[]>(() => {
+  const f = activeFilter.value;
+  const all = doneItems.value;
+  if (f === 'success') return all.filter(s => s.status === 'success');
+  if (f === 'failed') return all.filter(s => s.status === 'failed');
+  if (f === 'skipped') return all.filter(s => s.status === 'skipped');
+  return all; // 'all' / 'processing'（done 态不出现 processing，兜底）
+});
+
+// ============================================
+// 派生 UI
+// ============================================
+
+const showInitialSkeleton = computed(() =>
+  phase.value === 'migrating' && !hasAnyActive.value && processedItems.value.length === 0,
+);
+
+const emptyHint = computed(() => {
+  if (showInitialSkeleton.value) return '';
+  const listLen = phase.value === 'done' ? filteredDoneList.value.length : filteredMigratingList.value.length;
+  if (listLen > 0) return '';
+  switch (activeFilter.value) {
+    case 'processing': return '当前没有正在处理的项';
+    case 'success': return '暂无已完成项';
+    case 'failed': return '暂无失败项';
+    case 'skipped': return '暂无跳过项';
+    default: return '暂无数据';
+  }
+});
+
+const focusTitle = computed(() => (phase.value === 'done' ? '迁移结果' : '正在处理'));
+
+/** done 态全成功指示器（失败时不显示，red chip 已足够） */
+const showAllSuccess = computed(() =>
+  phase.value === 'done'
+    && !!migrateResult.value
+    && migrateResult.value.failedCount === 0
+    && migrateResult.value.successCount > 0,
+);
+
+/** "全部重试" 按钮仅 done 态 + 有失败时显示 */
+const canRetryAll = computed(() =>
+  phase.value === 'done'
+    && !!migrateResult.value
+    && migrateResult.value.failures.length > 0,
+);
+
+// ============================================
+// 服务 ID（chip group 消费）
+// ============================================
+
+const targetServiceIds = computed(() => checkedTargets.value.map(t => t.serviceId));
+
+const sourceServiceIds = computed(() => {
+  const filterIds = sourceServiceFilter.value;
+  const all = availableSourceServices.value;
+  const active = filterIds.length > 0 ? all.filter(s => filterIds.includes(s.id)) : all;
+  return active.map(s => s.id);
+});
+
+const doneTargetServiceIds = computed(() => migrateResult.value?.targetServiceIds ?? []);
+
+// ============================================
+// 操作处理
+// ============================================
 
 function handleRetryAll() {
   if (!migrateResult.value) return;
@@ -37,49 +212,6 @@ function handleRetryAll() {
   if (ids.length > 0) retryFailed(ids);
 }
 function handleRetryOne(id: string) { retrySingleFailed(id); }
-
-const MAX_LOG_ROWS = 30;
-
-// migrating 态 —— 已完成列表（最近 30 条）
-const migratingCompletedItems = computed(() =>
-  allItemStatuses.value
-    .filter(s => s.status === 'success' || s.status === 'failed' || s.status === 'skipped')
-    .slice(-MAX_LOG_ROWS)
-    .reverse(),
-);
-
-// done 态 —— 完整快照
-const snapshotItems = computed(() => migrateResult.value?.itemsSnapshot ?? []);
-
-// done 态 —— 已完成区仅展示成功项 + 系统跳过（已存在于目标图床），失败项独占上方跳过区
-const completedItemsForSection = computed(() =>
-  phase.value === 'done'
-    ? snapshotItems.value.filter(s => s.status !== 'failed')
-    : migratingCompletedItems.value,
-);
-
-const migratingFailureCount = computed(() => cumulativeCounts.value.failed);
-
-const targetDisplay = computed(() => {
-  const names = checkedTargets.value.map(t => t.displayName);
-  if (names.length === 0) return '';
-  if (names.length === 1) return names[0];
-  return `${names[0]} 等 ${names.length} 项`;
-});
-
-// done 态跳过/失败区的标题与提示
-const doneSkippedTitle = computed(() => {
-  const r = migrateResult.value;
-  if (!r) return '已跳过';
-  return r.failedCount > 0 && r.successCount === 0 ? '失败项' : '已跳过';
-});
-const doneSkippedHint = computed(() => {
-  const r = migrateResult.value;
-  if (!r) return '';
-  return r.failedCount > 0 && r.successCount === 0
-    ? '· 可重试单条或全部重试'
-    : '· 已保留原链接，可重新发起迁移';
-});
 
 async function handleExport(format: 'csv' | 'txt') {
   const r = migrateResult.value;
@@ -97,140 +229,97 @@ async function handleExport(format: 'csv' | 'txt') {
   }
 }
 
-function buildCsvReport(r: NonNullable<typeof migrateResult.value>): string {
-  const lines = ['文件名,状态,错误类型,错误信息'];
-  for (const item of r.itemsSnapshot) {
-    const statusText =
-      item.status === 'success' ? '成功' :
-      item.status === 'skipped' ? '跳过' :
-      item.status === 'failed' ? '失败' :
-      item.status === 'converting' ? '转换中' :
-      item.status;
-    const errorTypeText = item.errorType
-      ? (item.errorType === 'download' ? '下载失败' : '上传失败')
-      : '';
-    const escapedError = `"${(item.error || '').replace(/"/g, '""')}"`;
-    const escapedName = `"${item.fileName.replace(/"/g, '""')}"`;
-    lines.push(`${escapedName},${statusText},${errorTypeText},${escapedError}`);
-  }
-  lines.push('');
-  lines.push(`# 成功: ${r.successCount}，跳过: ${r.skippedCount}，失败: ${r.failedCount}`);
-  lines.push(`# 用时: ${formatTime(r.durationMs)}，平均速度: ${formatSpeed(r.avgBytesPerSec)}`);
-  return '﻿' + lines.join('\n');
-}
-
-function buildTxtReport(r: NonNullable<typeof migrateResult.value>): string {
-  const header = [
-    'PicNexus · 批量迁移报告',
-    `导出时间：${new Date().toLocaleString()}`,
-    `目标图床：${r.targetServiceIds.map(id => getServiceDisplayName(id)).join('、')}`,
-    `用时：${formatTime(r.durationMs)}，平均速度：${formatSpeed(r.avgBytesPerSec)}`,
-    `成功 ${r.successCount} · 跳过 ${r.skippedCount} · 失败 ${r.failedCount}`,
-    '',
-    '─'.repeat(60),
-    '',
-  ];
-  const sections: string[] = [];
-  const success = r.itemsSnapshot.filter(s => s.status === 'success');
-  const skipped = r.itemsSnapshot.filter(s => s.status === 'skipped');
-  const failed = r.itemsSnapshot.filter(s => s.status === 'failed');
-
-  if (failed.length > 0) {
-    sections.push(`[失败 ${failed.length}]`);
-    for (const f of failed) {
-      const info = getErrorInfo(f.errorType);
-      sections.push(`  • ${f.fileName}`);
-      sections.push(`    [${info.label}] ${f.error ?? ''}`);
-    }
-    sections.push('');
-  }
-  if (skipped.length > 0) {
-    sections.push(`[跳过 ${skipped.length}] 已在目标图床中，无需迁移`);
-    for (const s of skipped) sections.push(`  • ${s.fileName}`);
-    sections.push('');
-  }
-  if (success.length > 0) {
-    sections.push(`[成功 ${success.length}]`);
-    for (const s of success) sections.push(`  • ${s.fileName}`);
-  }
-  return header.join('\n') + sections.join('\n');
-}
-
 function handlePause() { pauseMigrate(); }
 function handleResume() { resumeMigrate(); }
 </script>
 
 <template>
-  <!-- migrating: 正在处理主区（活跃槽 + 最近完成快照） -->
-  <div v-if="phase === 'migrating'" class="focus-area">
+  <div class="focus-area">
     <div class="focus-header">
-      <span class="focus-title">正在处理</span>
+      <span class="focus-title">{{ focusTitle }}</span>
+      <!-- migrating: 暂停指示 -->
       <span
-        v-if="isPausing"
+        v-if="phase === 'migrating' && isPausing"
         class="focus-pause-tag focus-pause-tag--pending"
       >
         <i class="pi pi-spin pi-spinner" /> 正在暂停…
       </span>
       <span
-        v-else-if="isPaused"
+        v-else-if="phase === 'migrating' && isPaused"
         class="focus-pause-tag focus-pause-tag--paused"
       >
         <i class="pi pi-pause-circle" /> 已暂停
       </span>
+      <!-- done: 全成功指示 -->
+      <span
+        v-else-if="showAllSuccess"
+        class="focus-status focus-status--ok"
+      >
+        <span class="focus-status-dot" /> 全部成功
+      </span>
+      <span class="focus-spacer" />
+      <button
+        v-if="canRetryAll"
+        class="focus-retry-all"
+        type="button"
+        :disabled="retryingIds.size > 0"
+        @click="handleRetryAll"
+      >
+        <i class="pi pi-refresh" /> 全部重试
+      </button>
     </div>
 
-    <div v-if="!hasAnyActive" class="active-cards active-cards--skeleton">
-      <MigrateSkeletonCard v-for="slot in slots" :key="slot.id" />
-    </div>
+    <MigrateStatusFilterChips
+      v-model="activeFilter"
+      :counts="filterCounts"
+      :show-processing="phase === 'migrating'"
+    />
 
-    <div v-else class="active-cards">
-      <template v-for="slot in slots" :key="slot.id">
-        <MigrateActiveCard
-          v-if="slot.item"
-          :item="slot.item"
-          :slot-state="slot.state === 'complete' ? 'complete' : 'active'"
-          :target-display="targetDisplay"
-        />
-        <MigrateSkeletonCard v-else />
+    <div ref="listRef" class="focus-list">
+      <!-- migrating -->
+      <template v-if="phase === 'migrating'">
+        <template v-if="showInitialSkeleton">
+          <MigrateSkeletonCard v-for="slot in slots" :key="slot.id" />
+        </template>
+        <template v-else-if="filteredMigratingList.length > 0">
+          <MigrateActiveCard
+            v-for="entry in filteredMigratingList"
+            :key="entry.item.historyId"
+            :item="entry.item"
+            :source-service-ids="sourceServiceIds"
+            :target-service-ids="targetServiceIds"
+            :variant="entry.role === 'active' ? 'slot' : 'snapshot'"
+            :slot-state="entry.role === 'active' ? 'active' : 'complete'"
+          />
+        </template>
+        <div v-else class="focus-empty">
+          <i class="pi pi-inbox focus-empty-ic" />
+          <span>{{ emptyHint }}</span>
+        </div>
       </template>
-    </div>
 
-    <div v-if="recentCompleted.length > 0" class="recent-section">
-      <span class="recent-title">最近完成</span>
-      <div class="recent-cards">
-        <MigrateActiveCard
-          v-for="item in recentCompleted"
-          :key="item.historyId"
-          :item="item"
-          :target-display="targetDisplay"
-          variant="snapshot"
-          slot-state="complete"
-        />
-      </div>
+      <!-- done -->
+      <template v-else-if="phase === 'done'">
+        <template v-if="filteredDoneList.length > 0">
+          <MigrateDoneRow
+            v-for="item in filteredDoneList"
+            :key="item.historyId"
+            :item="item"
+            :source-service-ids="sourceServiceIds"
+            :target-service-ids="doneTargetServiceIds"
+            :show-retry="item.status === 'failed'"
+            :retrying="!!(item.historyId && retryingIds.has(item.historyId))"
+            @retry="handleRetryOne"
+          />
+        </template>
+        <div v-else class="focus-empty">
+          <i class="pi pi-inbox focus-empty-ic" />
+          <span>{{ emptyHint }}</span>
+        </div>
+      </template>
     </div>
   </div>
 
-  <!-- done: 跳过/失败折叠区 -->
-  <MigrateSkippedSection
-    v-else-if="migrateResult && migrateResult.failures.length > 0"
-    :items="migrateResult.failures"
-    :default-expanded="true"
-    :title="doneSkippedTitle"
-    :hint="doneSkippedHint"
-    :retrying-ids="retryingIds"
-    :is-failure-view="true"
-    @retry-all="handleRetryAll"
-    @retry-one="handleRetryOne"
-  />
-
-  <!-- 已完成折叠区（migrating / done 都渲染）。done 态下失败项已独占"已跳过"区，这里徽章不再显示失败计数 -->
-  <MigrateCompletedSection
-    :items="completedItemsForSection"
-    :failure-count="phase === 'done' ? 0 : migratingFailureCount"
-    :default-expanded="phase === 'done'"
-  />
-
-  <!-- 底栏 -->
   <MigrateBottomBar
     :mode="phase === 'done' ? 'done' : 'migrating'"
     :is-paused="isPaused"
@@ -251,7 +340,8 @@ function handleResume() { resumeMigrate(); }
   display: flex;
   flex-direction: column;
   gap: var(--space-sm-md);
-  flex-shrink: 0;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .focus-header {
@@ -259,8 +349,10 @@ function handleResume() { resumeMigrate(); }
   align-items: center;
   gap: var(--space-sm);
   font-size: var(--text-sm);
+  flex-shrink: 0;
 }
 .focus-title { font-weight: var(--weight-semibold); color: var(--text-primary); }
+.focus-spacer { flex: 1; }
 
 .focus-pause-tag {
   display: inline-flex;
@@ -283,30 +375,67 @@ function handleResume() { resumeMigrate(); }
   color: var(--text-muted);
 }
 
-.active-cards {
+.focus-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.focus-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--success);
+}
+
+.focus-retry-all {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm-md);
+  border: none;
+  border-radius: var(--radius-sm-md);
+  background: var(--error);
+  color: var(--text-on-error, #fff);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--duration-fast);
+}
+.focus-retry-all:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.focus-retry-all:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--error) 85%, black);
+}
+.focus-retry-all i { font-size: var(--text-2xs); }
+
+.focus-list {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm-md);
-  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--space-xs);
 }
-.active-cards--skeleton { opacity: 0.9; }
 
-.recent-section {
+.focus-empty {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: var(--space-sm);
-  margin-top: var(--space-sm);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  padding: var(--space-2xl) 0;
 }
 
-.recent-title {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  font-weight: var(--weight-medium);
-}
-
-.recent-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: var(--space-sm);
+.focus-empty-ic {
+  font-size: var(--text-2xl);
+  opacity: 0.6;
 }
 </style>

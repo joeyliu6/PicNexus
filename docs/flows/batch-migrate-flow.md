@@ -11,7 +11,7 @@
 
 > **关键源文件**：`src/types/batchMigrate.ts`（`MigratePhase`）、`src/composables/useBatchMigrate.ts`（`useBatchMigrateManager`）
 >
-> **UI 组装**：`migrating` 与 `done` 阶段**共用同一个 `MigrateProgressPhase.vue` 面板**，通过子组件（`MigrateActiveCard`、`MigrateSkippedSection`、`MigrateCompletedSection`、`MigrateBottomBar`、`MigrateStatsSummary`）切换渲染。终态不再跳独立页面。顶部失败横幅已移除——失败项直接呈现在「已跳过/失败项」折叠区，用户心智更直接。
+> **UI 组装**：`migrating` 与 `done` 阶段**共用同一个 `MigrateProgressPhase.vue` 面板**，结构统一为「标题 + 状态 chip 过滤条（`MigrateStatusFilterChips`）+ 可滚动列表」。migrating 态列表用 `MigrateActiveCard`（活跃槽亮色 + 已完成暗色快照），done 态用 `MigrateDoneRow`（失败行带重试按钮）；底栏 `MigrateBottomBar` + `MigrateStatsSummary` 常驻。进入 done 态时若有失败自动选中「失败」chip 并重置滚动。
 >
 > **统计信息位置**：已完成数/速率/剩余时间/目标图床整合到 `MigrateStatsSummary`，显示在 `MigrateBottomBar` 左槽位；右侧是操作按钮组。
 
@@ -178,11 +178,13 @@ flowchart TD
 
 ### 格式兼容性表
 
-| 场景 | 检测方法 | 处理 | UI 适配阶段文案 |
+| 场景 | 检测方法 | 处理 | 状态 chip 文案（终态） |
 |------|---------|------|--------------|
-| 知乎 webp → 不支持 webp 的目标 | `needsFormatConversion(targetId, 'webp')` | URL 改后缀 `.webp` → `.jpg`（知乎原生支持），下载后 ext='jpg' | **格式兼容**（URL 优化已生效，未调 `compress_image`） |
-| 下载文件格式不被目标支持 | `needsFormatConversion(targetId, ext)` 在循环内按 target 探测 | `status='converting'` → `compress_image` 转 jpeg（quality=92）→ `convertedFormat='jpeg'` → `status='uploading'` | **已转 JPEG** |
-| 目标图床无格式白名单（对象存储类） | `needsFormatConversion` 返回 false | 直接上传原文件 | **格式兼容** |
+| 知乎 webp → 不支持 webp 的目标 | `needsFormatConversion(targetId, 'webp')` | URL 改后缀 `.webp` → `.jpg`（知乎原生支持），下载后 ext='jpg' | **已完成**（URL 优化已生效，未调 `compress_image`，`convertedFormat` 未写入） |
+| 下载文件格式不被目标支持 | `needsFormatConversion(targetId, ext)` 在循环内按 target 探测 | `status='converting'` → `compress_image` 转 jpeg（quality=92）→ `convertedFormat='jpeg'` → `status='uploading'` | **已转 JPEG**（由 `convertedFormat` 字段驱动） |
+| 目标图床无格式白名单（对象存储类） | `needsFormatConversion` 返回 false | 直接上传原文件 | **已完成** |
+
+> 状态 chip 映射集中在 `src/components/views/linkcheck/migrate/composables/useStatusChip.ts` 的 `getStatusChipMeta()`。原"三段管道（下载 → 适配 → 上传）"已由单个状态 chip 替代，过程态（`downloading/converting/uploading`）以 chip 文字切换呈现。
 
 > 公共图床（有白名单）：京东、牛客、B 站、知乎、超星、SM.MS、Imgur、奇遇；对象存储（无限制）：R2、腾讯云、阿里云、七牛、又拍、GitHub、微博、纳米。详见 `src/constants/serviceFormats.ts`。
 
@@ -398,7 +400,7 @@ flowchart TD
 | 高级筛选不生效 | `sourceServiceFilter` 为空数组表示「全部」，非「无」 | 图 2 `applyFilter` 参数 |
 | 「正在处理」卡片长时间是骨架屏 | 检查 `BatchMigratePanel` 是否正确 provide `slots`/`hasAnyActive`；旧版 `activeItems` 读 shallowRef 内部 mutation 无响应的 bug | 图 6 槽位机制 |
 | 完成卡瞬间消失没停留 | `MAX_STAY_MS` 不生效，检查 tick 是否被 `document.hidden` 跳过；或 `MigrateActiveCard` 的 `data-slot-state` 未绑定 | 图 6 常量表 |
-| 「适配」阶段显示「格式兼容」与期望不符 | `convertedFormat` 未写入 → 检查 `migrateCore` 里 `willConvert` 探测与 `status='converting'` 赋值顺序 | 图 3 converting 分支 |
+| 终态 chip 显示「已完成」但期望「已转 JPEG」 | `convertedFormat` 未写入 → 检查 `migrateCore` 里 `willConvert` 探测与 `status='converting'` 赋值顺序；chip 映射见 `useStatusChip.getStatusChipMeta` | 图 3 converting 分支 |
 | 暂停后按钮一直卡在"正在暂停..." | `isPausing` 依赖 `concurrentCount` 归零，若有条目卡在 downloading 下载本身无法中断必须等 HTTP 超时或完成 | 图 1 暂停分支 |
 | 恢复后已暂停的条目没重新迁移 | 检查 `processedIds` 是否误收了 `status='pending'` 的持有条目 | 图 4 offset 策略表 |
 | 失败项显示的错误信息是英文 | 原始错误未命中 `categorizeMigrateError` 的映射规则，fallback 到"未知错误"，悬停 ⓘ 看 tooltip 原文 | `src/utils/uploadFailureMessage.ts` 的 `MIGRATE_ERROR_PATTERNS` |

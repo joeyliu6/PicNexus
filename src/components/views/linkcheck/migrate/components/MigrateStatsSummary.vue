@@ -1,74 +1,82 @@
 <script setup lang="ts">
 /**
  * 底栏左下角的统计条 —— migrating / done 双态
- * 单行·点分隔，过长时省略次要项（剩余时间、目标）
+ *
+ * 视觉 chip 化：成功/失败/跳过分色 chip + 总数 chip + 目标服务 chip group。
+ * 窄屏保留主进度，隐藏次要信息（速度、目标 chip 组）。
  */
 import { computed, inject } from 'vue';
-import { getServiceDisplayName } from '../../../../../constants/serviceNames';
 import { MIGRATE_KEY } from '../keys';
 import { formatNumber, formatSpeed, formatTime } from '../utils';
+import MigrateServiceChipGroup from './chips/MigrateServiceChipGroup.vue';
 
 const ctx = inject(MIGRATE_KEY)!;
 const {
-  phase, globalProgress, cumulativeCounts, averageSpeed,
-  estimatedTimeRemaining, checkedTargets, migrateResult,
+  phase, globalProgress, cumulativeCounts, checkedTargets, migrateResult,
 } = ctx;
 
 const migratingCompletedCount = computed(() =>
   cumulativeCounts.value.success + cumulativeCounts.value.failed + cumulativeCounts.value.skipped,
 );
 
-const migratingTargetDisplay = computed(() => {
-  const names = checkedTargets.value.map(t => t.displayName);
-  if (names.length === 0) return '';
-  if (names.length === 1) return names[0];
-  return `${names[0]} 等 ${names.length} 项`;
-});
+const migratingTargetServiceIds = computed(() =>
+  checkedTargets.value.map(t => t.serviceId),
+);
 
-const doneTargetDisplay = computed(() => {
-  const ids = migrateResult.value?.targetServiceIds ?? [];
-  if (ids.length === 0) return '';
-  const names = ids.map(id => getServiceDisplayName(id));
-  if (names.length === 1) return names[0];
-  return `${names[0]} 等 ${names.length} 项`;
-});
+const doneTargetServiceIds = computed(() =>
+  migrateResult.value?.targetServiceIds ?? [],
+);
 </script>
 
 <template>
   <div class="stats-summary">
     <template v-if="phase === 'migrating'">
-      <span class="ss-item">
-        已完成 <b>{{ formatNumber(migratingCompletedCount) }}</b>
+      <span class="ss-chip ss-chip--progress">
+        <b>{{ formatNumber(migratingCompletedCount) }}</b>
         <span class="ss-of">/</span>
         <b>{{ formatNumber(globalProgress.total) }}</b>
       </span>
-      <span class="ss-sep">·</span>
-      <span class="ss-item">{{ formatSpeed(averageSpeed) }}</span>
-      <span class="ss-sep ss-minor">·</span>
-      <span class="ss-item ss-minor">剩余 {{ formatTime(estimatedTimeRemaining) }}</span>
-      <template v-if="migratingTargetDisplay">
-        <span class="ss-sep ss-minor">·</span>
-        <span class="ss-item ss-target ss-minor">
-          <i class="pi pi-arrow-right ss-target-icon" />
-          {{ migratingTargetDisplay }}
-        </span>
-      </template>
+      <span v-if="cumulativeCounts.success > 0" class="ss-chip ss-chip--success">
+        <i class="pi pi-check" /> {{ formatNumber(cumulativeCounts.success) }}
+      </span>
+      <span v-if="cumulativeCounts.failed > 0" class="ss-chip ss-chip--failed">
+        <i class="pi pi-times" /> {{ formatNumber(cumulativeCounts.failed) }}
+      </span>
+      <span v-if="cumulativeCounts.skipped > 0" class="ss-chip ss-chip--skipped">
+        <i class="pi pi-eye-slash" /> {{ formatNumber(cumulativeCounts.skipped) }}
+      </span>
+      <span v-if="migratingTargetServiceIds.length > 0" class="ss-target ss-minor">
+        <i class="pi pi-arrow-right ss-target-icon" />
+        <MigrateServiceChipGroup
+          :services="migratingTargetServiceIds"
+          variant="muted"
+        />
+      </span>
     </template>
     <template v-else-if="migrateResult">
-      <span class="ss-item">共 <b>{{ formatNumber(migrateResult.successCount + migrateResult.failedCount + migrateResult.skippedCount) }}</b> 项</span>
-      <span class="ss-sep">·</span>
-      <span class="ss-item">用时 {{ formatTime(migrateResult.durationMs) }}</span>
-      <template v-if="migrateResult.avgBytesPerSec > 0">
-        <span class="ss-sep ss-minor">·</span>
-        <span class="ss-item ss-minor">平均 {{ formatSpeed(migrateResult.avgBytesPerSec) }}</span>
-      </template>
-      <template v-if="doneTargetDisplay">
-        <span class="ss-sep ss-minor">·</span>
-        <span class="ss-item ss-target ss-minor">
-          <i class="pi pi-arrow-right ss-target-icon" />
-          {{ doneTargetDisplay }}
-        </span>
-      </template>
+      <span class="ss-chip ss-chip--total">
+        共 <b>{{ formatNumber(migrateResult.successCount + migrateResult.failedCount + migrateResult.skippedCount) }}</b> 项
+      </span>
+      <span v-if="migrateResult.successCount > 0" class="ss-chip ss-chip--success">
+        <i class="pi pi-check" /> {{ formatNumber(migrateResult.successCount) }}
+      </span>
+      <span v-if="migrateResult.failedCount > 0" class="ss-chip ss-chip--failed">
+        <i class="pi pi-times" /> {{ formatNumber(migrateResult.failedCount) }}
+      </span>
+      <span v-if="migrateResult.skippedCount > 0" class="ss-chip ss-chip--skipped">
+        <i class="pi pi-eye-slash" /> {{ formatNumber(migrateResult.skippedCount) }}
+      </span>
+      <span class="ss-plain">用时 {{ formatTime(migrateResult.durationMs) }}</span>
+      <span v-if="migrateResult.avgBytesPerSec > 0" class="ss-plain ss-minor">
+        · 平均 {{ formatSpeed(migrateResult.avgBytesPerSec) }}
+      </span>
+      <span v-if="doneTargetServiceIds.length > 0" class="ss-target ss-minor">
+        <i class="pi pi-arrow-right ss-target-icon" />
+        <MigrateServiceChipGroup
+          :services="doneTargetServiceIds"
+          variant="muted"
+        />
+      </span>
     </template>
   </div>
 </template>
@@ -77,7 +85,7 @@ const doneTargetDisplay = computed(() => {
 .stats-summary {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
+  gap: var(--space-xs-sm);
   min-width: 0;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
@@ -86,16 +94,39 @@ const doneTargetDisplay = computed(() => {
   flex-wrap: wrap;
 }
 
-.ss-item {
+.ss-chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2xs);
+  gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-xs-sm);
+  border-radius: var(--radius-sm-md);
+  font-weight: var(--weight-medium);
   white-space: nowrap;
+  border: 1px solid transparent;
+}
+.ss-chip i { font-size: var(--text-2xs); }
+.ss-chip b { font-weight: var(--weight-semibold); }
+
+.ss-chip--progress,
+.ss-chip--total {
+  background: var(--primary-alpha-8);
+  color: var(--primary);
+  border-color: var(--primary-alpha-10);
 }
 
-.ss-item b {
-  color: var(--text-muted);
-  font-weight: var(--weight-semibold);
+.ss-chip--success {
+  background: var(--success-alpha-10);
+  color: var(--success);
+}
+
+.ss-chip--failed {
+  background: var(--error-alpha-10);
+  color: var(--error);
+}
+
+.ss-chip--skipped {
+  background: var(--warning-alpha-8);
+  color: var(--warning);
 }
 
 .ss-of {
@@ -103,19 +134,17 @@ const doneTargetDisplay = computed(() => {
   margin: 0 var(--space-2xs);
 }
 
-.ss-sep {
-  color: var(--text-tertiary);
-  opacity: 0.5;
-}
+.ss-plain { white-space: nowrap; color: var(--text-muted); }
 
 .ss-target {
-  color: var(--primary);
-  font-weight: var(--weight-medium);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
 }
+.ss-target-icon { font-size: var(--text-xs); color: var(--text-tertiary); }
 
-.ss-target-icon { font-size: var(--text-xs); }
-
-/* 窄屏：隐藏次要项（剩余时间、目标图床），保留主进度 */
+/* 窄屏：隐藏次要项（平均速度、目标图床 chip 组），保留主进度和成功/失败/跳过 chip */
 @media (width <= 720px) {
   .ss-minor { display: none; }
 }
