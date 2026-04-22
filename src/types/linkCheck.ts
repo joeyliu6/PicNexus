@@ -1,13 +1,22 @@
-// 链接检测功能类型定义
-// 镜像 Rust link_checker.rs 中的结构体
+export type StatusFilter =
+  | 'invalid'
+  | 'suspicious'
+  | 'timeout'
+  | 'unchecked'
+  | 'valid'
+  | 'skipped'
+  | 'all'
+  | null;
 
-/** 状态筛选类型 */
-export type StatusFilter = 'invalid' | 'suspicious' | 'timeout' | 'unchecked' | 'valid' | 'all' | null;
+export const SEVERITY: Record<string, number> = {
+  http_4xx: 0,
+  http_5xx: 1,
+  network: 2,
+  timeout: 3,
+  suspicious: 4,
+  success: 5,
+};
 
-/** error_type → 严重度权重（数值越小越严重），用于列表排序 */
-export const SEVERITY: Record<string, number> = { http_4xx: 0, http_5xx: 1, network: 2, timeout: 3, suspicious: 4, success: 5 };
-
-/** 单条链接检测结果（对应 Rust CheckLinkResult） */
 export interface CheckLinkResult {
   link: string;
   is_valid: boolean;
@@ -22,7 +31,6 @@ export interface CheckLinkResult {
   content_length?: number;
 }
 
-/** 批量检测进度（通过 Tauri 事件接收） */
 export interface BatchCheckProgress {
   checked: number;
   total: number;
@@ -30,13 +38,11 @@ export interface BatchCheckProgress {
   current_result?: CheckLinkResult;
 }
 
-/** 批量检测单条结果（带关联信息） */
 export interface BatchCheckItemResult extends CheckLinkResult {
   history_id?: string;
   service_id?: string;
 }
 
-/** 批量检测最终结果 */
 export interface BatchCheckResult {
   results: BatchCheckItemResult[];
   total: number;
@@ -48,7 +54,6 @@ export interface BatchCheckResult {
   cancelled: boolean;
 }
 
-/** 发送给 Rust 的批量检测请求 */
 export interface BatchCheckRequest {
   links: BatchCheckRequestItem[];
   concurrency?: number;
@@ -56,76 +61,54 @@ export interface BatchCheckRequest {
   timeout_secs?: number;
 }
 
-/** 批量检测请求中的单条链接 */
 export interface BatchCheckRequestItem {
   url: string;
   history_id?: string;
   service_id?: string;
-  /** GitHub CDN 启用时的原始 raw.githubusercontent.com URL，用于双重检测 */
   fallback_url?: string;
 }
 
-/** 前端展示用的检测结果行 */
 export interface LinkCheckRow {
   historyId: string;
   serviceId: string;
   url: string;
   rawUrl: string;
   fileName: string;
-  /** GitHub CDN 启用时的原始 raw.githubusercontent.com URL，用于单条重检双重检测 */
   fallbackUrl?: string;
+  linkCheckSkip?: boolean;
   checkResult?: CheckLinkResult;
-  /** 重检临时结果（动画结束前不写入 checkResult，避免过滤器提前剔除行） */
   recheckResult?: CheckLinkResult;
-  /** 重检中：按钮转圈（随网络请求，不再是固定时长） */
   recheckLoading?: boolean;
-  /** 重检结果徽章淡出触发器（Case A：行留在列表） */
   recheckBadgeFading?: boolean;
-  /** 整行淡出触发器（Case B：行要离开当前筛选） */
   fadingOut?: boolean;
-  /** 单条重试后锁定的排序权重，防止 checkResult 更新触发位置移动 */
   pinnedSortWeight?: number;
 }
 
-/** MD 文件中的图片链接 */
 export interface MdImageLink {
-  /** 完整匹配文本 ![alt](url) 或 <img src="url"> */
   originalText: string;
-  /** 图片 URL */
   url: string;
-  /** alt 文本 */
   altText: string;
-  /** 所在行号 */
   lineNumber: number;
-  /** 语法类型 */
   syntax: 'markdown' | 'html';
-  /** 链接所在的 Markdown 上下文 */
   context?: 'normal' | 'blockquote' | 'table';
-  /** 用户标记排除（不参与检测） */
   excluded?: boolean;
-  /** 检测结果 */
   checkResult?: CheckLinkResult;
-  /** 可用的备用链接 */
   backupLinks?: MdBackupLink[];
-  /** 用户选择的替换 URL */
   selectedBackup?: string;
 }
 
-/** MD 救援中的备用链接 */
 export interface MdBackupLink {
   url: string;
   serviceId: string;
   checkResult?: CheckLinkResult;
 }
 
-/** MD 替换操作 */
 export interface MdReplacement {
   originalUrl: string;
   newUrl: string;
   lineNumber: number;
 }
 
-/** 按图床分组的健康统计 */
 export interface ServiceStat {
   serviceId: string;
   total: number;

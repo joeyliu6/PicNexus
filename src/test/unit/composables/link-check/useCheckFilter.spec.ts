@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ref } from 'vue';
-import { useCheckFilter } from '../../../../composables/link-check/useCheckFilter';
+import { rowKey, useCheckFilter } from '../../../../composables/link-check/useCheckFilter';
 import type { LinkCheckRow } from '../../../../types/linkCheck';
+
+function clickEvent(shiftKey = false): MouseEvent {
+  return { shiftKey } as MouseEvent;
+}
 
 // watchDebounced mock：替换为同步更新，方便直接设置 searchQuery
 vi.mock('@vueuse/core', async (importOriginal) => {
@@ -194,23 +198,41 @@ describe('选择逻辑', () => {
     expect(selectedCount.value).toBe(0);
   });
 
-  it('toggleSelect 选中/取消选中', () => {
-    const checkRows = ref([makeRow({ historyId: 'h1' })]);
-    const { toggleSelect, selectedIds, hasSelection } = useCheckFilter({ checkRows });
+  it('handleToggleSelect 选中/取消选中（按 rowKey 作键）', () => {
+    const checkRows = ref([makeValidRow({ historyId: 'h1', serviceId: 'r2' })]);
+    const { handleToggleSelect, selectedIds, hasSelection, statusFilter } = useCheckFilter({ checkRows });
+    statusFilter.value = 'valid';
+    const key = rowKey({ historyId: 'h1', serviceId: 'r2' });
 
-    toggleSelect('h1');
-    expect(selectedIds.value.has('h1')).toBe(true);
+    handleToggleSelect(key, clickEvent());
+    expect(selectedIds.value.has(key)).toBe(true);
     expect(hasSelection.value).toBe(true);
 
-    toggleSelect('h1');
-    expect(selectedIds.value.has('h1')).toBe(false);
+    handleToggleSelect(key, clickEvent());
+    expect(selectedIds.value.has(key)).toBe(false);
+  });
+
+  it('同一 historyId 的不同 serviceId 是两条独立选中', () => {
+    const checkRows = ref([
+      makeValidRow({ historyId: 'h1', serviceId: 'r2' }),
+      makeValidRow({ historyId: 'h1', serviceId: 'github' }),
+    ]);
+    const { toggleSelectAll, selectedCount, statusFilter } = useCheckFilter({ checkRows });
+    statusFilter.value = 'valid';
+
+    toggleSelectAll();
+    expect(selectedCount.value).toBe(2);
   });
 
   it('clearSelection 清空所有选中', () => {
-    const checkRows = ref([makeRow({ historyId: 'h1' }), makeRow({ historyId: 'h2' })]);
-    const { toggleSelect, clearSelection, hasSelection } = useCheckFilter({ checkRows });
-    toggleSelect('h1');
-    toggleSelect('h2');
+    const checkRows = ref([
+      makeValidRow({ historyId: 'h1', serviceId: 'r2' }),
+      makeValidRow({ historyId: 'h2', serviceId: 'r2' }),
+    ]);
+    const { handleToggleSelect, clearSelection, hasSelection, statusFilter } = useCheckFilter({ checkRows });
+    statusFilter.value = 'valid';
+    handleToggleSelect(rowKey({ historyId: 'h1', serviceId: 'r2' }), clickEvent());
+    handleToggleSelect(rowKey({ historyId: 'h2', serviceId: 'r2' }), clickEvent());
     clearSelection();
     expect(hasSelection.value).toBe(false);
   });

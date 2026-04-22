@@ -65,6 +65,13 @@ export class ConnectionManager {
   }
 
   /**
+   * 连接是否已经成功打开过（用于区分"还没首次 open"和"连接失效"两种状态）
+   */
+  isInitialized(): boolean {
+    return this.initialized && this.db !== null;
+  }
+
+  /**
    * 验证数据库连接有效性（轻量查询）
    * 供外部调用（如休眠恢复时）
    */

@@ -69,6 +69,8 @@ let unlistenFocus: (() => void) | null = null;
 
 async function handleAppResume() {
   if (document.visibilityState !== 'visible') return;
+  // 冷启动时窗口获得焦点会触发此回调，但数据库是懒加载的，从未打开过就别假装"重连"
+  if (!historyDB.isInitialized()) return;
   log.debug('应用从后台恢复，验证数据库连接...');
   try {
     await historyDB.healthCheck();

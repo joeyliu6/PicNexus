@@ -78,6 +78,8 @@ private async ensureInitialized(): Promise<Database> {
 ```typescript
 async function handleAppResume() {
   if (document.visibilityState !== 'visible') return;
+  // 冷启动时窗口 focus 会触发此回调，但 DB 是懒加载的——没打开过就不是"连接失效"
+  if (!historyDB.isInitialized()) return;
   try {
     await historyDB.healthCheck();
   } catch {
@@ -90,6 +92,8 @@ getCurrentWindow().onFocusChanged(({ payload: focused }) => {
   if (focused) handleAppResume();
 });
 ```
+
+> ⚠️ `isInitialized()` 守卫是必需的：`healthCheck()` 对"从未打开过"和"连接失效"都抛异常，冷启动窗口 focus 会把虚惊一场的"首次 open"记成"重连成功"误导排障。
 
 #### 4. KeepAlive 资源清理
 

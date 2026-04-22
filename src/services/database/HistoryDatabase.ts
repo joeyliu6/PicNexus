@@ -5,6 +5,7 @@
  * 支持 10 万条以上记录的分页加载和模糊搜索
  */
 
+/* eslint-disable max-lines -- central database facade intentionally groups delegated query APIs */
 import Database from '@tauri-apps/plugin-sql';
 import type { HistoryItem, ServiceType } from '../../config/types';
 import type { ImageMeta } from '../../types/image-meta';
@@ -18,7 +19,12 @@ import {
   itemToRow, rowToItem,
 } from './DataTransformer';
 import { setFavoriteQuery, batchSetFavoriteQuery, getFavoriteCountQuery, getFavoriteIdListQuery } from './FavoriteService';
-import { getLinkCheckInvalidQuery, getLinkCheckRestStreamQuery, batchUpdateLinkCheckStatusQuery } from './LinkCheckQuery';
+import {
+  getLinkCheckInvalidQuery,
+  getLinkCheckRestStreamQuery,
+  batchUpdateLinkCheckStatusQuery,
+  setLinkCheckSkipQuery,
+} from './LinkCheckQuery';
 import { addSyncLogQuery, getSyncLogsQuery, clearSyncLogsQuery } from './SyncLogService';
 import { getItemsByBackupCountQuery, getBackupCountStatsQuery, getServiceDistributionQuery, getItemsByIdsQuery, setMigrationSkipQuery } from './MigrationQuery';
 import {
@@ -34,7 +40,7 @@ import { exportHistoryToJson, importHistoryFromJson } from './ImportExportServic
 
 // 类型重新导出
 import type {
-  LinkCheckLiteRow, PageOptions, PageResult,
+  LinkCheckLiteRow, LinkCheckQueryOptions, PageOptions, PageResult,
   SearchOptions, SearchResult, TimePeriodStats,
   FavoritesMetaPageOptions, FavoritesMetaPageResult,
   SyncLogOperation, SyncLogEntry,
@@ -53,7 +59,7 @@ interface MetaRow {
 }
 
 export type {
-  LinkCheckLiteRow, PageOptions, PageResult,
+  LinkCheckLiteRow, LinkCheckQueryOptions, PageOptions, PageResult,
   SearchOptions, SearchResult, TimePeriodStats,
   FavoritesMetaPageOptions, FavoritesMetaPageResult,
   SyncLogOperation, SyncLogEntry,
@@ -111,6 +117,11 @@ class HistoryDatabase {
   /** 关闭数据库连接 */
   async close(): Promise<void> {
     return this.connection.close();
+  }
+
+  /** 连接是否已首次打开（用于区分"未初始化"与"连接失效"） */
+  isInitialized(): boolean {
+    return this.connection.isInitialized();
   }
 
   /** 验证数据库连接有效性（轻量查询），供休眠恢复等场景外部调用 */
@@ -259,6 +270,11 @@ class HistoryDatabase {
   /**
    * 清空所有历史记录
    */
+  async setLinkCheckSkip(ids: string[], skip: boolean): Promise<number> {
+    const db = await this.connection.getDb();
+    return setLinkCheckSkipQuery(db, ids, skip);
+  }
+
   async clear(): Promise<void> {
     const db = await this.connection.getDb();
     await db.execute('DELETE FROM history_items');
@@ -699,14 +715,18 @@ class HistoryDatabase {
   // 链接检测专用轻量查询（委托 LinkCheckQuery）
   // ============================================
 
-  async getLinkCheckInvalid(): Promise<LinkCheckLiteRow[]> {
+  async getLinkCheckInvalid(options: LinkCheckQueryOptions = {}): Promise<LinkCheckLiteRow[]> {
     const db = await this.connection.getDb();
-    return getLinkCheckInvalidQuery(db);
+    return getLinkCheckInvalidQuery(db, options);
   }
 
-  async *getLinkCheckRestStream(loadedIds: Set<string>, batchSize = 2000): AsyncGenerator<LinkCheckLiteRow[]> {
+  async *getLinkCheckRestStream(
+    loadedIds: Set<string>,
+    batchSize = 2000,
+    options: LinkCheckQueryOptions = {},
+  ): AsyncGenerator<LinkCheckLiteRow[]> {
     const db = await this.connection.getDb();
-    yield* getLinkCheckRestStreamQuery(db, loadedIds, batchSize);
+    yield* getLinkCheckRestStreamQuery(db, loadedIds, batchSize, options);
   }
 
   async batchUpdateLinkCheckStatus(

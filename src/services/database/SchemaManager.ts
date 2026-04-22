@@ -84,6 +84,7 @@ export async function runMigrations(db: Database): Promise<void> {
   await migrateAddSuccessCountColumn(db);
   await migrateAddSuccessfulServiceIdsColumn(db);
   await migrateAddMigrationSkipColumn(db);
+  await migrateAddLinkCheckSkipColumn(db);
 }
 
 /**
@@ -192,6 +193,23 @@ async function migrateAddMigrationSkipColumn(db: Database): Promise<void> {
     log.info('迁移完成：添加 migration_skip 列');
   } catch (error) {
     log.error('迁移 migration_skip 列失败:', error);
+    throw error;
+  }
+}
+
+async function migrateAddLinkCheckSkipColumn(db: Database): Promise<void> {
+  try {
+    if (await columnExists(db, 'link_check_skip')) return;
+
+    await db.execute(
+      `ALTER TABLE history_items ADD COLUMN link_check_skip INTEGER NOT NULL DEFAULT 0`
+    );
+    await db.execute(
+      `CREATE INDEX IF NOT EXISTS idx_link_check_skip ON history_items(link_check_skip, timestamp DESC)`
+    );
+    log.info('迁移完成：添加 link_check_skip 列');
+  } catch (error) {
+    log.error('迁移 link_check_skip 列失败', error);
     throw error;
   }
 }

@@ -81,6 +81,8 @@ export interface HistoryItem {
   /** 是否已收藏 */
   isFavorited?: boolean;
 
+  linkCheckSkip?: boolean;
+
   /**
    * 是否在批量迁移中永久跳过
    * - true 时 getItemsByBackupCountQuery / getServiceDistributionQuery 不再返回该条

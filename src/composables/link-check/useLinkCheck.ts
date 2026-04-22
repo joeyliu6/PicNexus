@@ -1,6 +1,7 @@
 // 链接检测 Composable（单例模式）
 // 负责批量检测历史链接有效性，管理检测状态和进度
 
+/* eslint-disable max-lines -- singleton state machine kept together for link monitor behavior */
 import { ref, shallowRef, computed, type Ref, type ComputedRef } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -153,7 +154,7 @@ export function useLinkCheckManager() {
       const phase2Start = Date.now();
       const loadedIds = new Set(invalidLiteRows.map((r) => r.id));
       const pendingRows: LinkCheckRow[] = [];
-      for await (const batch of historyDB.getLinkCheckRestStream(loadedIds, 2000)) {
+      for await (const batch of historyDB.getLinkCheckRestStream(loadedIds, 2000, { includeSkipped: true })) {
         const batchItems = batch.map(liteRowToItem);
         const { rows } = buildCheckItemsSync(batchItems, config);
         restoreCheckStatus(rows, batchItems);
@@ -195,7 +196,7 @@ export function useLinkCheckManager() {
         await loadHistoryRows();
       }
 
-      const rows = checkRows.value;
+      const rows = checkRows.value.filter((row) => !row.linkCheckSkip);
       if (rows.length === 0) {
         toast.info('无链接可检测', '历史记录为空');
         return null;
@@ -338,6 +339,7 @@ export function useLinkCheckManager() {
     const map = new Map<string, { total: number; valid: number; invalid: number; unchecked: number }>();
 
     for (const row of rows) {
+      if (row.linkCheckSkip) continue;
       const sid = row.serviceId;
       const entry = map.get(sid) || { total: 0, valid: 0, invalid: 0, unchecked: 0 };
       entry.total++;
@@ -380,6 +382,7 @@ export function useLinkCheckManager() {
     const rows = checkRows.value;
     const idSet = filter.historyIds ? new Set(filter.historyIds) : null;
     const filtered = rows.filter((row) => {
+      if (row.linkCheckSkip) return false;
       if (idSet) return idSet.has(row.historyId);
       if (filter.serviceId && row.serviceId !== filter.serviceId) return false;
       const cr = row.checkResult;
@@ -591,6 +594,19 @@ export function useLinkCheckManager() {
     rebuildRowIndex();
   }
 
+  function setLinkCheckSkipState(historyIds: string[], skip: boolean): void {
+    const idSet = new Set(historyIds);
+    const rows = [...checkRows.value];
+
+    for (const row of rows) {
+      if (idSet.has(row.historyId)) {
+        row.linkCheckSkip = skip;
+      }
+    }
+
+    checkRows.value = rows;
+  }
+
   /**
    * 设置指定行的 fadingOut 状态（用于删除前的淡出动画）
    */
@@ -650,6 +666,7 @@ export function useLinkCheckManager() {
     exportCsv,
     buildCheckItems,
     removeRowsByHistoryIds,
+    setLinkCheckSkipState,
     setFadingOut,
     onViewActivated,
     onViewDeactivated,
