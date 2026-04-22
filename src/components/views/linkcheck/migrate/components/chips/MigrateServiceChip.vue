@@ -20,16 +20,29 @@ import { getServiceDisplayName } from '../../../../../../constants/serviceNames'
 interface Props {
   serviceId: string;
   variant?: 'source' | 'target' | 'muted' | 'existing' | 'new' | 'pending' | 'failed';
+  /** 可点击态：触发 copy 事件并展示 tooltip，由父组件决定是否启用（仅 URL 已就绪的变体传 true） */
+  clickable?: boolean;
 }
 
-const props = withDefaults(defineProps<Props>(), { variant: 'target' });
+const props = withDefaults(defineProps<Props>(), { variant: 'target', clickable: false });
+
+const emit = defineEmits<{ copy: [] }>();
 
 const svg = computed(() => getServiceIcon(props.serviceId));
 const displayName = computed(() => getServiceDisplayName(props.serviceId) || props.serviceId);
+
+function onClick() {
+  if (props.clickable) emit('copy');
+}
 </script>
 
 <template>
-  <span class="m-svc-chip" :class="`m-svc-chip--${variant}`">
+  <span
+    class="m-svc-chip"
+    :class="[`m-svc-chip--${variant}`, { 'm-svc-chip--clickable': clickable }]"
+    v-tooltip.top="clickable ? '点击复制链接' : undefined"
+    @click.stop="onClick"
+  >
     <span v-if="svg" class="m-svc-chip-ic" v-html="svg" />
     <i v-else class="pi pi-cloud m-svc-chip-ic m-svc-chip-ic--fallback" aria-hidden="true" />
     <span class="m-svc-chip-label">{{ displayName }}</span>
@@ -86,30 +99,45 @@ const displayName = computed(() => getServiceDisplayName(props.serviceId) || pro
 }
 .m-svc-chip--muted .m-svc-chip-ic { color: var(--text-tertiary); }
 
+/* existing: 默认透明底 + 弱灰字，对齐链接监控 .service-badge；hover 才浮出底色 */
 .m-svc-chip--existing {
-  background: var(--bg-input);
-  color: var(--text-main);
+  background: transparent;
+  color: var(--text-muted);
 }
 .m-svc-chip--existing .m-svc-chip-ic { color: var(--text-muted); }
 
+/* new/pending/failed 保留淡色底，但去掉 box-shadow 描边，对齐链接监控 .error-badge 的简洁感 */
 .m-svc-chip--new {
   background: var(--success-alpha-10);
   color: var(--success);
-  box-shadow: 0 0 0 1px var(--success-alpha-15);
 }
 .m-svc-chip--new .m-svc-chip-ic { color: var(--success); }
 
 .m-svc-chip--pending {
   background: var(--primary-alpha-8);
   color: var(--primary);
-  box-shadow: 0 0 0 1px var(--primary-alpha-15);
 }
 .m-svc-chip--pending .m-svc-chip-ic { color: var(--primary); }
 
 .m-svc-chip--failed {
   background: var(--error-alpha-10);
   color: var(--error);
-  box-shadow: 0 0 0 1px var(--error-alpha-15);
 }
 .m-svc-chip--failed .m-svc-chip-ic { color: var(--error); }
+
+/* 可点击态：鼠标手型 + hover 色深一档 */
+.m-svc-chip--clickable { cursor: pointer; }
+
+.m-svc-chip--clickable.m-svc-chip--existing:hover {
+  background: var(--hover-overlay);
+}
+
+.m-svc-chip--clickable.m-svc-chip--new:hover {
+  background: var(--success-alpha-15);
+}
+
+.m-svc-chip--clickable.m-svc-chip--source:hover,
+.m-svc-chip--clickable.m-svc-chip--target:hover {
+  background: var(--primary-alpha-15);
+}
 </style>

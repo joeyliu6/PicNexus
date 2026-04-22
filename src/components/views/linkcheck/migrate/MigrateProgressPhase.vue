@@ -35,6 +35,7 @@ const {
   migrateResult, resetToConfiguring, retryingIds, retryFailed,
   retrySingleFailed,
   isPaused, isPausing, pauseMigrate, resumeMigrate,
+  migrateStats,
 } = ctx;
 
 // ============================================
@@ -107,31 +108,18 @@ const rawList = computed<MigrateRowItem[]>(() => {
 });
 
 // ============================================
-// 过滤 & 排序
+// 过滤
 // ============================================
 
+// 保持源顺序稳定：不再对 filter='all' 做活跃前置排序，避免条目状态切换引起的整列重排闪烁。
+// 想快速看"哪些在进行中"走 chip 过滤条的「处理中」tab。
 const displayList = computed<MigrateRowItem[]>(() => {
   const f = activeFilter.value;
-  let items = rawList.value;
-  if (f === 'processing') {
-    items = items.filter(s => ACTIVE_STATUSES.has(s.status));
-  } else if (f === 'success') {
-    items = items.filter(s => s.status === 'success');
-  } else if (f === 'failed') {
-    items = items.filter(s => s.status === 'failed');
-  } else if (f === 'skipped') {
-    items = items.filter(s => s.status === 'skipped');
-  }
-  // migrating 态的「全部」视图：活跃项在前，终态在后
-  if (phase.value === 'migrating' && f === 'all') {
-    const grouped = [...items];
-    grouped.sort((a, b) => {
-      const aActive = ACTIVE_STATUSES.has(a.status) ? 0 : 1;
-      const bActive = ACTIVE_STATUSES.has(b.status) ? 0 : 1;
-      return aActive - bActive;
-    });
-    return grouped;
-  }
+  const items = rawList.value;
+  if (f === 'processing') return items.filter(s => ACTIVE_STATUSES.has(s.status));
+  if (f === 'success') return items.filter(s => s.status === 'success');
+  if (f === 'failed') return items.filter(s => s.status === 'failed');
+  if (f === 'skipped') return items.filter(s => s.status === 'skipped');
   return items;
 });
 
@@ -144,7 +132,9 @@ const filterCounts = computed(() => {
     else if (it.status === 'failed') failed++;
     else if (it.status === 'skipped') skipped++;
   }
-  return { all: items.length, processing, success, failed, skipped };
+  // migrating 态预加载期间 totalCount 可能大于 items.length，chip 会渲染「已加载 / 总数」
+  const total = phase.value === 'migrating' ? migrateStats.value.totalCount : undefined;
+  return { all: items.length, processing, success, failed, skipped, total };
 });
 
 // ============================================
@@ -191,6 +181,16 @@ const canRetryAll = computed(() =>
     && migrateResult.value.failures.length > 0,
 );
 
+type StatePillTone = 'running' | 'pausing' | 'paused';
+interface StatePill { tone: StatePillTone; icon: string; label: string }
+
+const statePill = computed<StatePill | null>(() => {
+  if (phase.value !== 'migrating') return null;
+  if (isPausing.value) return { tone: 'pausing', icon: 'pi pi-spin pi-spinner', label: '正在暂停…' };
+  if (isPaused.value) return { tone: 'paused', icon: 'pi pi-pause', label: '已暂停' };
+  return { tone: 'running', icon: '', label: '运行中' };
+});
+
 // ============================================
 // 服务 ID（chip group 消费）
 // ============================================
@@ -211,28 +211,18 @@ function handleRetryAll() {
 }
 function handleRetryOne(id: string) { retrySingleFailed(id); }
 
-async function handleCopyNewUrl(historyId: string) {
+async function handleCopyUrl(historyId: string, serviceId: string) {
   try {
-    // 定位本次新增的目标图床：在 rawList 里找到该条，取 serviceResults=success 且不在 existingServiceIds 中的第一个
-    const row = rawList.value.find(r => r.historyId === historyId);
-    if (!row) return;
-    const existing = new Set(row.existingServiceIds ?? []);
-    const newTargetId = Object.entries(row.serviceResults ?? {})
-      .find(([sid, state]) => state === 'success' && !existing.has(sid))?.[0];
-    if (!newTargetId) {
-      toast.warn('未找到新 URL', '该图床尚无成功记录');
-      return;
-    }
     const items = await historyDB.getItemsByIds([historyId]);
-    const url = items[0]?.results.find(r => r.serviceId === newTargetId && r.status === 'success')?.result?.url;
+    const url = items[0]?.results.find(r => r.serviceId === serviceId && r.status === 'success')?.result?.url;
     if (!url) {
       toast.warn('复制失败', 'URL 未就绪');
       return;
     }
     await navigator.clipboard.writeText(url);
-    toast.success('已复制新 URL');
+    toast.success('已复制链接');
   } catch (e) {
-    log.error('复制新 URL 失败', e);
+    log.error('复制链接失败', e);
     toast.error('复制失败', String(e));
   }
 }
@@ -266,6 +256,15 @@ function handleResume() { resumeMigrate(); }
         :show-processing="phase === 'migrating'"
       />
       <span class="chip-row__spacer" />
+      <span
+        v-if="statePill"
+        class="pp-state-pill"
+        :class="`pp-state-pill--${statePill.tone}`"
+      >
+        <span v-if="statePill.tone === 'running'" class="pp-state-pill__dot" />
+        <i v-else :class="statePill.icon" aria-hidden="true" />
+        {{ statePill.label }}
+      </span>
       <button
         v-if="canRetryAll"
         class="chip-row__retry-all"
@@ -287,7 +286,7 @@ function handleResume() { resumeMigrate(); }
           :show-retry="phase === 'done' && item.status === 'failed'"
           :retrying="!!(item.historyId && retryingIds.has(item.historyId))"
           @retry="handleRetryOne"
-          @copy-url="handleCopyNewUrl"
+          @copy-url="handleCopyUrl"
         />
       </template>
       <div v-else class="focus-empty">
@@ -337,6 +336,7 @@ function handleResume() { resumeMigrate(); }
   gap: var(--space-sm);
   flex-shrink: 0;
   flex-wrap: wrap;
+  padding-right: var(--space-xl);
 }
 .chip-row__spacer { flex: 1; }
 
@@ -363,14 +363,42 @@ function handleResume() { resumeMigrate(); }
 }
 .chip-row__retry-all i { font-size: var(--text-2xs); }
 
+.pp-state-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.pp-state-pill i { font-size: var(--text-2xs); }
+
+.pp-state-pill--running { color: var(--success); }
+
+.pp-state-pill__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--success);
+  animation: pp-pulse var(--duration-breathe) ease-in-out infinite;
+}
+
+@keyframes pp-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.pp-state-pill--pausing { color: var(--state-warn-text); }
+.pp-state-pill--paused { color: var(--text-muted); }
+
 .focus-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm-md);
   flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
-  padding-right: var(--space-xs);
+  padding-right: var(--space-lg);
 }
 
 .focus-empty {

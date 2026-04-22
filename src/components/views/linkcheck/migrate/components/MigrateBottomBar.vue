@@ -1,18 +1,10 @@
 <script setup lang="ts">
 /**
  * 迁移底栏 — migrating / done 双态切换
- * 左槽位：运行状态 pill + MigrateStatsSummary 统计条；右槽位：操作按钮组
- * 暂停按钮三态：暂停 → 正在暂停...（disabled + spinner）→ 继续
- *
- * 运行状态 pill（替代原顶部"正在处理 / 已暂停"指示）：
- *   migrating + running → ● 运行中
- *   migrating + isPausing → ⏳ 正在暂停…
- *   migrating + isPaused → ⏸ 已暂停
- *   done → 无 pill（统计条里已有用时信息）
+ * 左槽位：分页；右槽位：操作按钮组
  */
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import Menu from 'primevue/menu';
-import MigrateStatsSummary from './MigrateStatsSummary.vue';
 
 interface Props {
   mode: 'migrating' | 'done';
@@ -22,17 +14,8 @@ interface Props {
   isPausing?: boolean;
 }
 
-const props = withDefaults(defineProps<Props>(), { isPaused: false, isPausing: false });
+withDefaults(defineProps<Props>(), { isPaused: false, isPausing: false });
 
-type StatePillTone = 'running' | 'pausing' | 'paused';
-interface StatePill { tone: StatePillTone; icon: string; label: string }
-
-const statePill = computed<StatePill | null>(() => {
-  if (props.mode !== 'migrating') return null;
-  if (props.isPausing) return { tone: 'pausing', icon: 'pi pi-spin pi-spinner', label: '正在暂停…' };
-  if (props.isPaused) return { tone: 'paused', icon: 'pi pi-pause-circle', label: '已暂停' };
-  return { tone: 'running', icon: '', label: '运行中' };
-});
 const emit = defineEmits<{
   pause: [];
   resume: [];
@@ -58,16 +41,6 @@ function toggleExportMenu(ev: MouseEvent) {
   <div class="bm-bottom">
     <div class="bm-left">
       <slot name="pagination" />
-      <span
-        v-if="statePill"
-        class="bm-state-pill"
-        :class="`bm-state-pill--${statePill.tone}`"
-      >
-        <span v-if="statePill.tone === 'running'" class="bm-state-pill__dot" />
-        <i v-else :class="statePill.icon" aria-hidden="true" />
-        {{ statePill.label }}
-      </span>
-      <MigrateStatsSummary />
     </div>
     <div class="bottom-actions">
       <template v-if="mode === 'migrating'">
@@ -123,9 +96,8 @@ function toggleExportMenu(ev: MouseEvent) {
 
 <style scoped>
 .bm-bottom {
-  margin-top: auto;
   flex-shrink: 0;
-  padding-top: var(--space-md);
+  padding-right: var(--space-xl);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -139,47 +111,6 @@ function toggleExportMenu(ev: MouseEvent) {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-}
-
-.bm-state-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-2xs) var(--space-xs-sm);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-medium);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.bm-state-pill i { font-size: var(--text-2xs); }
-
-.bm-state-pill--running {
-  background: var(--success-alpha-10);
-  color: var(--success);
-}
-
-.bm-state-pill__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--radius-full);
-  background: var(--success);
-  animation: bm-pulse var(--duration-breathe) ease-in-out infinite;
-}
-
-.bm-state-pill--pausing {
-  background: var(--state-warn-bg-soft);
-  color: var(--state-warn-text);
-}
-
-.bm-state-pill--paused {
-  background: var(--bg-input);
-  color: var(--text-muted);
-}
-
-@keyframes bm-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
 }
 
 .bm-caret { font-size: var(--text-2xs); opacity: 0.7; }

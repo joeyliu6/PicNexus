@@ -13,6 +13,11 @@ export interface MigrateStatusCounts {
   success: number;
   failed: number;
   skipped: number;
+  /**
+   * 预加载期间的全局总数；大于 all 时「全部」chip 显示「已加载 / 总数」。
+   * 等于或未提供时只显示 all，done 态自动回到单数字。
+   */
+  total?: number;
 }
 
 interface Props {
@@ -46,7 +51,9 @@ function fmt(n: number): string {
       @click="select('all')"
     >
       <span>全部</span>
-      <span class="mf-chip-count">{{ fmt(counts.all) }}</span>
+      <span class="mf-chip-count">
+        {{ fmt(counts.all) }}<template v-if="counts.total != null && counts.total > counts.all"> / {{ fmt(counts.total) }}</template>
+      </span>
     </button>
     <button
       v-if="showProcessing"

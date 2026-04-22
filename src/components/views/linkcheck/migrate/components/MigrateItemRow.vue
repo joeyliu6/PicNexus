@@ -1,19 +1,15 @@
 <script setup lang="ts">
 /**
- * 批量迁移 · 统一条目行
+ * 批量迁移 · 统一条目行（单行链接监控风格）
  *
- * 两行紧凑布局（已去除完整 URL 行）：
- * - 第一行：文件名 + 状态 chip（失败 chip 的 tooltip 展示错误详情）
- * - 第二行：存在于 [已有图床 chips] → [本次迁移 target chips，按成功/失败/进行中分色]
- *          右侧按状态切换操作按钮：
- *            · 已完成 → 复制新 URL
- *            · 已完成（done 态）+ 失败 → 重试
- *            · 其他 → 无按钮
+ * 布局：[6px 圆点] [filename 省略号] [spacer] [existing chips » target chips] [重试按钮 · 仅失败+done]
+ * - 圆点颜色：pending 灰 / active 蓝 / success 绿 / failed 红 / skipped 黄
+ * - 错误信息改为悬停红点的 tooltip（useErrorPresentation 已提供）
+ * - 复制 URL 入口下沉到可点击的服务徽章，单条重试用缩小版 24px 图标按钮
  */
 import { computed } from 'vue';
 import type { MigrateFailureDetail, MigrateItemStatus } from '../../../../../types/batchMigrate';
 import { errorTooltipText } from '../composables/useErrorPresentation';
-import MigrateStatusChip from './chips/MigrateStatusChip.vue';
 import MigrateServiceChip from './chips/MigrateServiceChip.vue';
 
 /** DoneRow 旧签名的兼容型——让导出/终态快照仍然可以传入不是完整 MigrateItemStatus 的对象 */
@@ -32,11 +28,8 @@ export interface MigrateRowItem {
 
 interface Props {
   item: MigrateRowItem;
-  /** 本批次选定的目标图床 ID 列表（用于无 serviceResults 时的回退渲染） */
   targetServiceIds?: string[];
-  /** 是否显示重试按钮（仅 failed 行） */
   showRetry?: boolean;
-  /** 正在重试中（由父组件的 retryingIds 决定） */
   retrying?: boolean;
 }
 
@@ -48,7 +41,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   retry: [historyId: string];
-  copyUrl: [historyId: string];
+  copyUrl: [historyId: string, serviceId: string];
 }>();
 
 const isActive = computed(() =>
@@ -56,14 +49,10 @@ const isActive = computed(() =>
     || props.item.status === 'converting'
     || props.item.status === 'uploading',
 );
-
 const isFailed = computed(() => props.item.status === 'failed');
-const isSuccess = computed(() => props.item.status === 'success');
 
-/** 已存在的图床列表 —— 迁移前的快照 */
 const existingChips = computed(() => props.item.existingServiceIds ?? []);
 
-/** 本次迁移涉及的 target 列表 + 各自的实际状态 */
 interface TargetChipState {
   serviceId: string;
   variant: 'pending' | 'new' | 'failed';
@@ -87,25 +76,38 @@ const targetChips = computed<TargetChipState[]>(() => {
 });
 
 const hasTargets = computed(() => targetChips.value.length > 0);
+const hasServices = computed(() => existingChips.value.length > 0 || hasTargets.value);
 
-/** 失败态 tooltip：错误详情 */
+/** 失败行 tooltip：挂在红点上 */
 const failedTooltip = computed(() => {
   if (!isFailed.value) return '';
   return errorTooltipText(props.item);
 });
 
-/** 已完成项用于「复制新 URL」的数据：本次新增的第一个成功 target */
-const newlyAddedTargetId = computed<string | null>(() => {
-  const t = targetChips.value.find(c => c.variant === 'new');
-  return t?.serviceId ?? null;
+/** 圆点颜色：沿用链接监控 statusDotColor 的 CSS 变量模式 */
+const dotColor = computed(() => {
+  switch (props.item.status) {
+    case 'downloading':
+    case 'converting':
+    case 'uploading':
+      return 'var(--primary)';
+    case 'success':
+      return 'var(--success)';
+    case 'failed':
+      return 'var(--error)';
+    case 'skipped':
+      return 'var(--warning)';
+    default:
+      return 'var(--text-tertiary)';
+  }
 });
 
 function onRetry() {
   if (props.item.historyId) emit('retry', props.item.historyId);
 }
 
-function onCopyUrl() {
-  if (props.item.historyId) emit('copyUrl', props.item.historyId);
+function onChipCopy(serviceId: string) {
+  if (props.item.historyId) emit('copyUrl', props.item.historyId, serviceId);
 }
 </script>
 
@@ -114,118 +116,98 @@ function onCopyUrl() {
     class="mi-row"
     :class="{
       'mi-row--active': isActive,
-      'mi-row--failed': isFailed,
-      'mi-row--success': isSuccess,
       'mi-row--retrying': retrying,
     }"
   >
-    <div class="mi-row__line mi-row__line--head">
-      <span
-        class="mi-row__name"
-        v-tooltip.top="item.sourceUrl || item.fileName"
-      >{{ item.fileName }}</span>
-      <MigrateStatusChip
-        :item="item"
-        v-tooltip.top="failedTooltip ? { value: failedTooltip, autoHide: false } : undefined"
+    <!-- 6px 状态圆点 -->
+    <span
+      class="mi-dot"
+      :style="{ background: dotColor }"
+      v-tooltip.top="isFailed && failedTooltip ? { value: failedTooltip, autoHide: false } : undefined"
+    />
+
+    <!-- 文件名 -->
+    <span
+      class="mi-row__name"
+      v-tooltip.top="item.sourceUrl || item.fileName"
+    >{{ item.fileName }}</span>
+
+    <span class="mi-row__spacer" />
+
+    <!-- 服务流向 chips -->
+    <div v-if="hasServices" class="mi-row__services">
+      <MigrateServiceChip
+        v-for="sid in existingChips"
+        :key="`e-${sid}`"
+        :service-id="sid"
+        variant="existing"
+        clickable
+        @copy="onChipCopy(sid)"
+      />
+      <span v-if="existingChips.length > 0 && hasTargets" class="mi-row__sep" aria-hidden="true">»</span>
+      <MigrateServiceChip
+        v-for="t in targetChips"
+        :key="`t-${t.serviceId}`"
+        :service-id="t.serviceId"
+        :variant="t.variant"
+        :clickable="t.variant === 'new'"
+        @copy="onChipCopy(t.serviceId)"
       />
     </div>
 
-    <div class="mi-row__line mi-row__line--services">
-      <span class="mi-row__label">存在于</span>
-      <template v-if="existingChips.length > 0">
-        <MigrateServiceChip
-          v-for="sid in existingChips"
-          :key="`e-${sid}`"
-          :service-id="sid"
-          variant="existing"
-        />
-      </template>
-      <span v-else class="mi-row__muted">无记录</span>
-
-      <template v-if="hasTargets">
-        <i
-          class="pi mi-row__arrow"
-          :class="isFailed ? 'pi-times' : 'pi-arrow-right'"
-          aria-hidden="true"
-        />
-        <MigrateServiceChip
-          v-for="t in targetChips"
-          :key="`t-${t.serviceId}`"
-          :service-id="t.serviceId"
-          :variant="t.variant"
-        />
-      </template>
-
-      <span class="mi-row__spacer" />
-
-      <template v-if="isSuccess && newlyAddedTargetId">
-        <button
-          class="mi-row__action"
-          type="button"
-          @click="onCopyUrl"
-          v-tooltip.top="'复制新图床 URL'"
-        >
-          <i class="pi pi-copy" /> 复制新 URL
-        </button>
-      </template>
-
-      <template v-if="showRetry && item.historyId">
-        <span v-if="retrying" class="mi-row__retrying">
-          <i class="pi pi-spin pi-spinner" /> 重试中
-        </span>
-        <button
-          v-else
-          class="mi-row__action mi-row__action--retry"
-          type="button"
-          @click="onRetry"
-        >
-          <i class="pi pi-refresh" /> 重试
-        </button>
-      </template>
-    </div>
+    <!-- 失败条目的 24px 重试按钮 -->
+    <template v-if="showRetry && item.historyId">
+      <span v-if="retrying" class="mi-row__retry-spin">
+        <i class="pi pi-spin pi-spinner" aria-hidden="true" />
+      </span>
+      <button
+        v-else
+        class="mi-row__retry-btn"
+        type="button"
+        v-tooltip.top="'重试'"
+        @click.stop="onRetry"
+      >
+        <i class="pi pi-refresh" aria-hidden="true" />
+      </button>
+    </template>
   </div>
 </template>
 
 <style scoped>
 .mi-row {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-xs-sm);
-  padding: var(--space-sm-md) var(--space-md);
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  align-items: center;
+  gap: var(--space-sm-md);
+  padding: 0 var(--space-md);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 40px 对齐链接监控 .link-row 行高 */
+  height: 40px;
+
+  /* 父容器 .focus-list 是 flex column，子项默认 flex-shrink:1 会被压缩，固定高度失效 */
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--primary-alpha-5);
   transition:
-    background var(--duration-fast),
-    border-color var(--duration-fast),
+    background var(--duration-micro),
     opacity var(--duration-fast);
 }
+
+.mi-row:last-child { border-bottom: none; }
 .mi-row:hover { background: var(--hover-overlay-subtle); }
-.mi-row--retrying { opacity: 0.6; }
+.mi-row--retrying { opacity: 0.55; }
 
-/* 处理中：主色淡背景 + 蓝边 */
-.mi-row--active {
-  background: var(--primary-alpha-8);
-  border-color: var(--primary-alpha-15);
+/* 处理中行：淡蓝背景辅助扫视 */
+.mi-row--active { background: var(--primary-alpha-8); }
+.mi-row--active:hover { background: var(--primary-alpha-15); }
+
+/* ── 6px 状态圆点 ── */
+.mi-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
 }
 
-/* 失败：整卡浅红底 + 红边 */
-.mi-row--failed {
-  background: var(--error-alpha-8);
-  border-color: var(--error-alpha-15);
-}
-
-.mi-row__line {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  min-width: 0;
-}
-.mi-row__line--head { gap: var(--space-sm-md); }
-
+/* ── 文件名 ── */
 .mi-row__name {
-  flex: 1;
-  min-width: 0;
   font-family: var(--font-mono, monospace);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
@@ -233,73 +215,59 @@ function onCopyUrl() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
   cursor: help;
 }
 
-.mi-row__line--services {
-  padding-left: var(--space-xs-sm);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  flex-wrap: wrap;
-  gap: var(--space-xs);
-}
-
-.mi-row__label {
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-  flex-shrink: 0;
-}
-
-.mi-row__muted {
-  color: var(--text-tertiary);
-  font-style: italic;
-}
-
-.mi-row__arrow {
-  color: var(--text-tertiary);
-  font-size: var(--text-2xs);
-  margin: 0 var(--space-2xs);
-}
-.mi-row--failed .mi-row__arrow { color: var(--error); }
-
 .mi-row__spacer { flex: 1; }
 
-.mi-row__action {
-  display: inline-flex;
+/* ── 服务流向 ── */
+.mi-row__services {
+  display: flex;
   align-items: center;
   gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  background: var(--bg-input);
-  border: 1px solid transparent;
-  color: var(--text-main);
-  font-family: inherit;
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  cursor: pointer;
   flex-shrink: 0;
-  transition: background var(--duration-fast);
-}
-.mi-row__action:hover { background: var(--hover-overlay); }
-.mi-row__action i { font-size: var(--text-2xs); }
-
-.mi-row__action--retry {
-  background: var(--error);
-  color: var(--text-on-error);
-  border-color: transparent;
 }
 
-.mi-row__action--retry:hover {
-  background: color-mix(in srgb, var(--error) 85%, black);
+.mi-row__sep {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  flex-shrink: 0;
+  user-select: none;
 }
 
-.mi-row__retrying {
-  display: inline-flex;
+/* ── 重试按钮（对齐链接监控 .delete-btn 的 24px 图标按钮） ── */
+.mi-row__retry-btn {
+  display: flex;
   align-items: center;
-  gap: var(--space-xs);
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 5px 图标按钮圆角，沿用链接监控同源规范 */
+  border-radius: 5px;
+  background: transparent;
+  color: var(--error);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  flex-shrink: 0;
+  transition: background var(--duration-micro), color var(--duration-micro);
+}
+
+.mi-row__retry-btn:hover {
+  background: var(--error-alpha-10);
+  color: var(--error);
+}
+
+.mi-row__retry-spin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   color: var(--primary);
   font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
   flex-shrink: 0;
 }
 </style>
