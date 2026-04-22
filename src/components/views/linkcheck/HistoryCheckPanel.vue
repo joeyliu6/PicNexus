@@ -6,6 +6,7 @@ import CheckLinkList from './history-check/CheckLinkList.vue';
 import { rowKey, useCheckFilter } from '../../../composables/link-check/useCheckFilter';
 import { useCheckStats } from '../../../composables/link-check/useCheckStats';
 import { useCheckStrategy } from '../../../composables/link-check/useCheckStrategy';
+import type { MoreMenuKind } from '../../../composables/link-check/useCheckStrategy';
 import type { BatchCheckProgress, LinkCheckRow, StatusFilter } from '../../../types/linkCheck';
 
 const props = defineProps<{
@@ -79,6 +80,7 @@ const {
   smartCheckTooltip,
   showDropdownArrow,
   buildDropdownItems,
+  buildMoreMenuItems,
   resolveSmartCheck,
   statusDotColor,
   errorBadgeClass,
@@ -90,18 +92,13 @@ const {
 const disableCheckActions = computed(() => statusFilter.value === 'skipped');
 const filteredActionRows = computed(() => filteredRows.value.filter((row) => !row.linkCheckSkip));
 
-const showBatchMenu = ref(false);
-const batchFilterLabel = computed<string | null>(() => {
-  if (statusFilter.value === 'all' || statusFilter.value === 'skipped') return null;
-  if (filteredActionRows.value.length === 0) return null;
-  switch (statusFilter.value) {
-    case 'invalid': return '失效链接';
-    case 'suspicious': return '可疑链接';
-    case 'timeout': return '超时链接';
-    case 'unchecked': return '未检测链接';
-    case 'valid': return '正常链接';
-    default: return '当前筛选链接';
+const showOverflowMenu = ref(false);
+
+const moreMenuItems = computed(() => {
+  if (hasSelection.value) {
+    return buildMoreMenuItems({ mode: 'selection', count: selectedCount.value });
   }
+  return buildMoreMenuItems({ mode: 'filter', count: filteredRows.value.length });
 });
 
 const dropdownItems = computed(() =>
@@ -165,7 +162,7 @@ const bulkTargetRows = computed<LinkCheckRow[]>(() => {
   if (hasSelection.value) {
     return checkRows.value.filter((row) => selectedIds.value.has(rowKey(row)));
   }
-  return filteredActionRows.value;
+  return disableCheckActions.value ? filteredRows.value : filteredActionRows.value;
 });
 
 function clearAfterBulk(): void {
@@ -202,10 +199,28 @@ function handleBulkDelete(): void {
   emit('bulk-delete', rows);
   clearAfterBulk();
 }
+
+function handleExportAction(): void {
+  if (hasSelection.value) {
+    handleExportCsvSelected();
+  } else {
+    emit('export-csv');
+  }
+}
+
+function handleMoreAction(kind: MoreMenuKind): void {
+  switch (kind) {
+    case 'export': handleExportAction(); break;
+    case 'recheck': handleBulkRecheck(); break;
+    case 'skip': handleBulkSkip(); break;
+    case 'copy': handleBulkCopy(); break;
+    case 'delete': handleBulkDelete(); break;
+  }
+}
 </script>
 
 <template>
-  <div class="monitor-panel" @click="showCheckMenu = false; showServiceMenu = false; showBatchMenu = false">
+  <div class="monitor-panel" @click="showCheckMenu = false; showServiceMenu = false; showOverflowMenu = false">
     <CheckFilterBar
       :stats="stats"
       :service-list="serviceList"
@@ -260,22 +275,17 @@ function handleBulkDelete(): void {
       :smart-check-tooltip="smartCheckTooltip"
       :show-dropdown-arrow="showDropdownArrow"
       :dropdown-items="dropdownItems"
-      :batch-filter-label="batchFilterLabel"
-      :batch-filter-count="filteredActionRows.length"
+      :more-menu-items="moreMenuItems"
       v-model:current-page="currentPage"
       v-model:page-input="pageInput"
       v-model:show-check-menu="showCheckMenu"
-      v-model:show-batch-menu="showBatchMenu"
+      v-model:show-overflow-menu="showOverflowMenu"
       @toggle-select-all="toggleSelectAll"
-      @export-csv="emit('export-csv')"
-      @export-csv-selected="handleExportCsvSelected"
+      @clear-selection="clearSelection"
       @smart-check="handleSmartCheck"
       @cancel-check="emit('cancel-check')"
       @page-input="handlePageInput"
-      @bulk-recheck="handleBulkRecheck"
-      @bulk-skip="handleBulkSkip"
-      @bulk-copy="handleBulkCopy"
-      @bulk-delete="handleBulkDelete"
+      @more-action="handleMoreAction"
     />
   </div>
 </template>

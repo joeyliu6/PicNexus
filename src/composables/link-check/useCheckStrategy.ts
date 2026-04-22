@@ -5,6 +5,15 @@ import type { CheckStatsResult } from './useCheckStats';
 
 const CONTEXT_AWARE_FILTERS = new Set<StatusFilter>(['invalid', 'suspicious', 'timeout', 'unchecked']);
 
+export type MoreMenuKind = 'export' | 'recheck' | 'skip' | 'copy' | 'delete';
+
+export interface MoreMenuItem {
+  kind: MoreMenuKind;
+  label: string;
+  icon: string;
+  danger?: boolean;
+}
+
 const FILTER_LABEL: Record<string, string> = {
   invalid: '重检失效链接',
   suspicious: '重检可疑链接',
@@ -127,6 +136,64 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
     return items;
   }
 
+  function buildMoreMenuItems(args: {
+    mode: 'selection' | 'filter';
+    count: number;
+  }): MoreMenuItem[] {
+    const { mode, count } = args;
+    const filter = statusFilter.value;
+    const isSkippedMode = filter === 'skipped';
+    const countLabel = count.toLocaleString();
+    const items: MoreMenuItem[] = [];
+
+    items.push({
+      kind: 'export',
+      label: mode === 'selection'
+        ? `导出选中 ${countLabel} 条`
+        : filter === 'all'
+          ? '导出全部'
+          : isSkippedMode
+            ? '导出已跳过'
+            : '导出当前筛选',
+      icon: 'pi-download',
+    });
+
+    const allowBulk = mode === 'selection' || filter !== 'all';
+    if (!allowBulk) return items;
+
+    items.push({
+      kind: 'recheck',
+      label: isSkippedMode
+        ? `恢复检测这 ${countLabel} 条`
+        : `重检这 ${countLabel} 条`,
+      icon: isSkippedMode ? 'pi-eye' : 'pi-refresh',
+    });
+
+    const allowSkip = !isSkippedMode && filter !== 'unchecked';
+    if (allowSkip) {
+      items.push({
+        kind: 'skip',
+        label: `不再检测这 ${countLabel} 条`,
+        icon: 'pi-eye-slash',
+      });
+    }
+
+    items.push({
+      kind: 'copy',
+      label: `复制这 ${countLabel} 条链接`,
+      icon: 'pi-copy',
+    });
+
+    items.push({
+      kind: 'delete',
+      label: `删除这 ${countLabel} 条`,
+      icon: 'pi-trash',
+      danger: true,
+    });
+
+    return items;
+  }
+
   function resolveSmartCheck(): { action: 'check-all' | 'check-subset'; filter?: string } {
     const filter = statusFilter.value;
     if (filter && CONTEXT_AWARE_FILTERS.has(filter)) {
@@ -200,6 +267,7 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
     smartCheckTooltip,
     showDropdownArrow,
     buildDropdownItems,
+    buildMoreMenuItems,
     resolveSmartCheck,
     statusDotColor,
     errorBadgeClass,

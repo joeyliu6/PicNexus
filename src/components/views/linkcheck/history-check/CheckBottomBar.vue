@@ -2,6 +2,7 @@
 import Skeleton from 'primevue/skeleton';
 import CheckBatchMenu from './CheckBatchMenu.vue';
 import type { CheckStatsResult } from '../../../../composables/link-check/useCheckStats';
+import type { MoreMenuItem, MoreMenuKind } from '../../../../composables/link-check/useCheckStrategy';
 
 interface DropdownItem {
   label: string;
@@ -28,35 +29,22 @@ defineProps<{
   smartCheckTooltip: string;
   showDropdownArrow: boolean;
   dropdownItems: DropdownItem[];
-  batchFilterLabel: string | null;
-  batchFilterCount: number;
+  moreMenuItems: MoreMenuItem[];
 }>();
 
 const emit = defineEmits<{
   (e: 'toggle-select-all'): void;
-  (e: 'export-csv'): void;
-  (e: 'export-csv-selected'): void;
+  (e: 'clear-selection'): void;
   (e: 'smart-check'): void;
   (e: 'cancel-check'): void;
   (e: 'page-input', event: Event): void;
-  (e: 'bulk-recheck'): void;
-  (e: 'bulk-skip'): void;
-  (e: 'bulk-copy'): void;
-  (e: 'bulk-delete'): void;
+  (e: 'more-action', kind: MoreMenuKind): void;
 }>();
 
 const currentPage = defineModel<number>('currentPage', { required: true });
 const pageInput = defineModel<string>('pageInput', { required: true });
 const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
-const showBatchMenu = defineModel<boolean>('showBatchMenu', { required: true });
-
-function runBulkAction(action: 'recheck' | 'skip' | 'copy' | 'delete'): void {
-  showBatchMenu.value = false;
-  if (action === 'recheck') emit('bulk-recheck');
-  else if (action === 'skip') emit('bulk-skip');
-  else if (action === 'copy') emit('bulk-copy');
-  else emit('bulk-delete');
-}
+const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: true });
 </script>
 
 <template>
@@ -101,25 +89,39 @@ function runBulkAction(action: 'recheck' | 'skip' | 'copy' | 'delete'): void {
         </div>
 
         <div class="bottom-actions" @click.stop>
-          <span class="batch-count">已选 {{ selectedCount }} 条</span>
-          <button class="btn-ghost" :disabled="isActionLocked" @click="emit('toggle-select-all')">
-            {{ isAllSelected ? '取消全选' : '全选' }}
+          <button
+            class="selection-chip"
+            :disabled="isActionLocked"
+            aria-label="清空选择"
+            v-tooltip.top="'点击清空选择'"
+            @click="emit('clear-selection')"
+          >
+            <span>已选 {{ selectedCount.toLocaleString() }} 条</span>
+            <i class="pi pi-times"></i>
           </button>
-          <button class="btn-ghost" :disabled="isActionLocked" @click="emit('export-csv-selected')">
+          <button
+            class="btn-ghost"
+            :disabled="isActionLocked || isAllSelected"
+            @click="emit('toggle-select-all')"
+          >
+            全选
+          </button>
+          <span class="action-divider"></span>
+          <button
+            v-if="moreMenuItems.length === 1 && moreMenuItems[0].kind === 'export'"
+            class="btn-ghost"
+            :disabled="isActionLocked"
+            @click="emit('more-action', 'export')"
+          >
             <i class="pi pi-download"></i>
-            导出选中
+            {{ moreMenuItems[0].label }}
           </button>
           <CheckBatchMenu
-            target-label="已选记录"
-            :filter-count="selectedCount"
+            v-else
+            :items="moreMenuItems"
             :is-action-locked="isActionLocked"
-            :show-recheck="!disableCheckActions"
-            :is-skipped-mode="disableCheckActions"
-            v-model:show-menu="showBatchMenu"
-            @recheck="runBulkAction('recheck')"
-            @skip="runBulkAction('skip')"
-            @copy="runBulkAction('copy')"
-            @delete="runBulkAction('delete')"
+            v-model:show-menu="showOverflowMenu"
+            @action="(kind) => emit('more-action', kind)"
           />
         </div>
       </template>
@@ -162,79 +164,62 @@ function runBulkAction(action: 'recheck' | 'skip' | 'copy' | 'delete'): void {
         <span v-else class="check-progress-text">{{ progressTooltip }}</span>
 
         <div class="bottom-actions" @click.stop>
-          <button
-            v-tooltip.top="'导出检测结果为 CSV 文件'"
-            class="btn-ghost"
-            :disabled="isActionLocked"
-            @click="emit('export-csv')"
-          >
-            <i class="pi pi-download"></i>
-            导出
-          </button>
+          <template v-if="!isChecking">
+            <CheckBatchMenu
+              :items="moreMenuItems"
+              :is-action-locked="isActionLocked"
+              v-model:show-menu="showOverflowMenu"
+              @action="(kind) => emit('more-action', kind)"
+            />
 
-          <CheckBatchMenu
-            v-if="batchFilterLabel && !isChecking && !disableCheckActions"
-            :target-label="batchFilterLabel"
-            :filter-count="batchFilterCount"
-            :is-action-locked="isActionLocked"
-            v-model:show-menu="showBatchMenu"
-            @recheck="runBulkAction('recheck')"
-            @skip="runBulkAction('skip')"
-            @copy="runBulkAction('copy')"
-            @delete="runBulkAction('delete')"
-          />
-
-          <span v-if="!disableCheckActions || isChecking" class="action-divider"></span>
-
-          <div
-            v-if="!isChecking && !disableCheckActions"
-            class="check-btn-group"
-            :class="{ 'has-dropdown': showDropdownArrow }"
-          >
-            <button
-              v-tooltip.top="smartCheckTooltip"
-              class="btn-primary"
-              :disabled="isActionLocked"
-              @click="emit('smart-check')"
-            >
-              <svg viewBox="0 0 16 16" fill="currentColor" width="10" height="10" style="flex-shrink: 0; display: block;">
-                <path d="M3 2l10 6-10 6V2z" />
-              </svg>
-              {{ smartCheckLabel }}
-            </button>
-
-            <button
-              v-if="showDropdownArrow"
-              class="btn-primary check-toggle"
-              :disabled="isActionLocked"
-              @click="showCheckMenu = !showCheckMenu"
-            >
-              <i class="pi pi-chevron-down" style="font-size: var(--text-2xs)"></i>
-            </button>
-
-            <Transition name="dropdown">
-              <div v-if="showCheckMenu && showDropdownArrow" class="check-dropdown">
-                <div
-                  v-for="(item, index) in dropdownItems"
-                  :key="index"
-                  class="check-dropdown-item"
-                  @click="item.action()"
+            <template v-if="!disableCheckActions">
+              <span class="action-divider"></span>
+              <div class="check-btn-group" :class="{ 'has-dropdown': showDropdownArrow }">
+                <button
+                  v-tooltip.top="smartCheckTooltip"
+                  class="btn-primary"
+                  :disabled="isActionLocked"
+                  @click="emit('smart-check')"
                 >
-                  <div class="dropdown-text">
-                    <span class="dropdown-label">{{ item.label }}</span>
-                    <span class="dropdown-desc">{{ item.desc }}</span>
-                  </div>
-                </div>
-              </div>
-            </Transition>
-          </div>
+                  <svg viewBox="0 0 16 16" fill="currentColor" width="10" height="10" style="flex-shrink: 0; display: block;">
+                    <path d="M3 2l10 6-10 6V2z" />
+                  </svg>
+                  {{ smartCheckLabel }}
+                </button>
 
-          <button v-else-if="isChecking" class="btn-danger" @click="emit('cancel-check')">
+                <button
+                  v-if="showDropdownArrow"
+                  class="btn-primary check-toggle"
+                  :disabled="isActionLocked"
+                  @click="showCheckMenu = !showCheckMenu"
+                >
+                  <i class="pi pi-chevron-down" style="font-size: var(--text-2xs)"></i>
+                </button>
+
+                <Transition name="dropdown">
+                  <div v-if="showCheckMenu && showDropdownArrow" class="check-dropdown">
+                    <div
+                      v-for="(item, index) in dropdownItems"
+                      :key="index"
+                      class="check-dropdown-item"
+                      @click="item.action()"
+                    >
+                      <i class="pi" :class="item.icon"></i>
+                      <div class="dropdown-text">
+                        <span class="dropdown-label">{{ item.label }}</span>
+                        <span class="dropdown-desc">{{ item.desc }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </Transition>
+              </div>
+            </template>
+          </template>
+
+          <button v-else class="btn-danger" @click="emit('cancel-check')">
             <i class="pi pi-stop"></i>
             取消
           </button>
-
-          <span v-else class="skip-hint">已跳过链接不会参与检测</span>
         </div>
       </template>
     </div>
@@ -247,6 +232,41 @@ function runBulkAction(action: 'recheck' | 'skip' | 'copy' | 'delete'): void {
   height: 16px;
   background: var(--border-subtle);
   flex-shrink: 0;
+}
+
+.selection-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--bg-input);
+  border: none;
+  border-radius: var(--radius-sm-md);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background var(--duration-micro), color var(--duration-micro);
+}
+
+.selection-chip:hover:not(:disabled) {
+  background: var(--hover-overlay-subtle);
+  color: var(--text-main);
+}
+
+.selection-chip .pi {
+  font-size: var(--text-2xs);
+  color: var(--text-tertiary);
+  transition: color var(--duration-micro);
+}
+
+.selection-chip:hover:not(:disabled) .pi {
+  color: var(--error);
+}
+
+.selection-chip:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .check-btn-group {
@@ -288,8 +308,10 @@ function runBulkAction(action: 'recheck' | 'skip' | 'copy' | 'delete'): void {
   transition: background var(--duration-micro);
 }
 
-.check-dropdown-item:not(:last-child) {
-  border-bottom: 1px solid var(--border-subtle);
+.check-dropdown-item > .pi {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  flex-shrink: 0;
 }
 
 .check-dropdown-item:hover {
@@ -346,17 +368,6 @@ function runBulkAction(action: 'recheck' | 'skip' | 'copy' | 'delete'): void {
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- translucent highlight is intentional for sweep effect */
   background: linear-gradient(90deg, transparent, rgb(255 255 255 / 40%), transparent);
   animation: k-sweep var(--duration-shimmer) ease-in-out infinite;
-}
-
-.batch-count,
-.skip-hint {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  font-weight: var(--weight-medium);
-}
-
-.skip-hint {
-  color: var(--warning);
 }
 
 .dropdown-enter-active,

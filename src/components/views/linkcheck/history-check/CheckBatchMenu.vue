@@ -1,108 +1,98 @@
 <script setup lang="ts">
+import type { MoreMenuItem, MoreMenuKind } from '../../../../composables/link-check/useCheckStrategy';
+
 withDefaults(defineProps<{
-  targetLabel: string;
-  filterCount: number;
+  items: MoreMenuItem[];
   isActionLocked: boolean;
-  showRecheck?: boolean;
-  isSkippedMode?: boolean;
+  buttonLabel?: string;
+  tooltipLabel?: string;
 }>(), {
-  showRecheck: true,
-  isSkippedMode: false,
+  buttonLabel: '更多',
+  tooltipLabel: '更多操作',
 });
 
 const emit = defineEmits<{
-  (e: 'recheck'): void;
-  (e: 'skip'): void;
-  (e: 'copy'): void;
-  (e: 'delete'): void;
+  (e: 'action', kind: MoreMenuKind): void;
 }>();
 
 const showMenu = defineModel<boolean>('showMenu', { required: true });
 
-function runAction(action: 'recheck' | 'skip' | 'copy' | 'delete'): void {
+function runAction(kind: MoreMenuKind): void {
   showMenu.value = false;
-  emit(action);
+  emit('action', kind);
+}
+
+function needsDivider(index: number, items: MoreMenuItem[]): boolean {
+  if (index === 0) return false;
+  const prev = items[index - 1];
+  const curr = items[index];
+  if (prev.kind === 'export' && curr.kind !== 'export') return true;
+  if (curr.danger && !prev.danger) return true;
+  return false;
 }
 </script>
 
 <template>
-  <div class="batch-btn-group">
-    <span class="action-divider"></span>
-
+  <div class="overflow-btn-group">
     <button
-      v-tooltip.top="`对当前 ${filterCount} 条${targetLabel}批量执行`"
-      class="btn-ghost batch-toggle"
+      v-tooltip.top="tooltipLabel"
+      class="btn-ghost overflow-toggle"
       :class="{ 'is-open': showMenu }"
       :disabled="isActionLocked"
       @click="showMenu = !showMenu"
     >
-      <i class="pi pi-sliders-h"></i>
-      批量
+      <i class="pi pi-ellipsis-h"></i>
+      {{ buttonLabel }}
       <i class="pi pi-chevron-down chevron" style="font-size: var(--text-2xs)"></i>
     </button>
 
     <Transition name="dropdown">
-      <div v-if="showMenu" class="batch-dropdown">
-        <div class="batch-dropdown-head">
-          对 <strong>{{ filterCount.toLocaleString() }}</strong> 条{{ targetLabel }}执行
-        </div>
-        <div v-if="showRecheck" class="batch-dropdown-item" @click="runAction('recheck')">
-          <i class="pi pi-refresh"></i>
-          <span>重检这 {{ filterCount }} 条</span>
-        </div>
-        <div class="batch-dropdown-item" @click="runAction('skip')">
-          <i :class="isSkippedMode ? 'pi pi-eye' : 'pi pi-eye-slash'"></i>
-          <span>{{ isSkippedMode ? '恢复检测' : '不再检测' }}</span>
-        </div>
-        <div class="batch-dropdown-item" @click="runAction('copy')">
-          <i class="pi pi-copy"></i>
-          <span>复制链接</span>
-        </div>
-        <div class="batch-dropdown-item batch-dropdown-item--danger" @click="runAction('delete')">
-          <i class="pi pi-trash"></i>
-          <span>删除</span>
-        </div>
+      <div v-if="showMenu" class="overflow-dropdown">
+        <template v-for="(item, index) in items" :key="item.kind">
+          <div v-if="needsDivider(index, items)" class="overflow-dropdown-divider"></div>
+          <div
+            class="overflow-dropdown-item"
+            :class="{ 'overflow-dropdown-item--danger': item.danger }"
+            @click="runAction(item.kind)"
+          >
+            <i class="pi" :class="item.icon"></i>
+            <span>{{ item.label }}</span>
+          </div>
+        </template>
       </div>
     </Transition>
   </div>
 </template>
 
 <style scoped>
-.action-divider {
-  width: 1px;
-  height: 16px;
-  background: var(--border-subtle);
-  flex-shrink: 0;
-}
-
-.batch-btn-group {
+.overflow-btn-group {
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs-sm);
   position: relative;
 }
 
-.batch-toggle {
+.overflow-toggle {
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
   transition: background var(--duration-micro), color var(--duration-micro);
 }
 
-.batch-toggle .chevron {
+.overflow-toggle .chevron {
   transition: transform var(--duration-micro);
 }
 
-.batch-toggle.is-open {
+.overflow-toggle.is-open {
   background: var(--primary-alpha-8);
   color: var(--primary);
 }
 
-.batch-toggle.is-open .chevron {
+.overflow-toggle.is-open .chevron {
   transform: rotate(180deg);
 }
 
-.batch-dropdown {
+.overflow-dropdown {
   position: absolute;
   bottom: calc(100% + 6px);
   right: 0;
@@ -116,19 +106,13 @@ function runAction(action: 'recheck' | 'skip' | 'copy' | 'delete'): void {
   overflow: hidden;
 }
 
-.batch-dropdown-head {
-  padding: var(--space-xs-sm) var(--space-md-lg);
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  border-bottom: 1px solid var(--border-subtle);
+.overflow-dropdown-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: var(--space-xs) 0;
 }
 
-.batch-dropdown-head strong {
-  color: var(--text-main);
-  font-weight: var(--weight-semibold);
-}
-
-.batch-dropdown-item {
+.overflow-dropdown-item {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
@@ -139,24 +123,24 @@ function runAction(action: 'recheck' | 'skip' | 'copy' | 'delete'): void {
   transition: background var(--duration-micro), color var(--duration-micro);
 }
 
-.batch-dropdown-item i {
+.overflow-dropdown-item i {
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
-.batch-dropdown-item:hover {
+.overflow-dropdown-item:hover {
   background: var(--hover-overlay-subtle);
 }
 
-.batch-dropdown-item--danger {
+.overflow-dropdown-item--danger {
   color: var(--error);
 }
 
-.batch-dropdown-item--danger i {
+.overflow-dropdown-item--danger i {
   color: var(--error);
 }
 
-.batch-dropdown-item--danger:hover {
+.overflow-dropdown-item--danger:hover {
   background: var(--error-alpha-8);
 }
 
