@@ -116,8 +116,7 @@ function clearSearch() {
   justify-content: space-between;
   padding: 0 var(--space-md);
   z-index: 10;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- box-shadow 含 rgb 色值 */
-  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 /* 标签页导航 */

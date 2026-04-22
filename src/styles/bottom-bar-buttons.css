@@ -44,6 +44,7 @@
 }
 .bottom-actions .btn-primary:hover:not(:disabled) {
   opacity: 0.9;
+  box-shadow: none;
 }
 
 .bottom-actions .btn-ghost {
@@ -63,6 +64,7 @@
 .bottom-actions .btn-danger:hover:not(:disabled) {
   background: var(--error-alpha-8);
   border-color: var(--error-alpha-15);
+  box-shadow: none;
 }
 
 .bottom-actions .btn-primary:disabled,

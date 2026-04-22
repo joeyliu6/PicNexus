@@ -224,7 +224,7 @@ onDeactivated(onViewDeactivated);
   padding: 0 var(--space-md);
   align-items: stretch;
   background-color: var(--bg-card);
-  box-shadow: var(--shadow-card);
+  border-bottom: 1px solid var(--border-subtle);
   z-index: 10;
   flex-shrink: 0;
 }
