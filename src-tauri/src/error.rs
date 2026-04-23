@@ -302,3 +302,339 @@ impl<T, E: std::fmt::Display> IntoAppError<T> for Result<T, E> {
         self.map_err(|e| AppError::validation(format!("{}: {}", prefix, e)))
     }
 }
+
+// ==================== 单元测试 ====================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ---------- 构造方法 ----------
+
+    #[test]
+    fn network_constructor_sets_message() {
+        let err = AppError::network("连接超时");
+        match err {
+            AppError::Network { message } => assert_eq!(message, "连接超时"),
+            _ => panic!("应为 Network 变体"),
+        }
+    }
+
+    #[test]
+    fn auth_constructor_sets_message() {
+        match AppError::auth("Cookie 过期") {
+            AppError::Auth { message } => assert_eq!(message, "Cookie 过期"),
+            _ => panic!("应为 Auth 变体"),
+        }
+    }
+
+    #[test]
+    fn file_io_constructor_sets_message() {
+        match AppError::file_io("权限不足") {
+            AppError::FileIo { message } => assert_eq!(message, "权限不足"),
+            _ => panic!("应为 FileIo 变体"),
+        }
+    }
+
+    #[test]
+    fn upload_constructor_has_no_code() {
+        match AppError::upload("weibo", "上传失败") {
+            AppError::Upload { service, code, message } => {
+                assert_eq!(service, "weibo");
+                assert!(code.is_none());
+                assert_eq!(message, "上传失败");
+            }
+            _ => panic!("应为 Upload 变体"),
+        }
+    }
+
+    #[test]
+    fn upload_with_code_carries_code() {
+        match AppError::upload_with_code("jd", 403, "禁止访问") {
+            AppError::Upload { service, code, message } => {
+                assert_eq!(service, "jd");
+                assert_eq!(code, Some(403));
+                assert_eq!(message, "禁止访问");
+            }
+            _ => panic!("应为 Upload 变体"),
+        }
+    }
+
+    #[test]
+    fn config_constructor_sets_message() {
+        match AppError::config("缺失 token") {
+            AppError::Config { message } => assert_eq!(message, "缺失 token"),
+            _ => panic!("应为 Config 变体"),
+        }
+    }
+
+    #[test]
+    fn clipboard_constructor_sets_message() {
+        match AppError::clipboard("无法访问剪贴板") {
+            AppError::Clipboard { message } => assert_eq!(message, "无法访问剪贴板"),
+            _ => panic!("应为 Clipboard 变体"),
+        }
+    }
+
+    #[test]
+    fn external_constructor_sets_message() {
+        match AppError::external("sidecar 未启动") {
+            AppError::External { message } => assert_eq!(message, "sidecar 未启动"),
+            _ => panic!("应为 External 变体"),
+        }
+    }
+
+    #[test]
+    fn validation_constructor_sets_message() {
+        match AppError::validation("参数为空") {
+            AppError::Validation { message } => assert_eq!(message, "参数为空"),
+            _ => panic!("应为 Validation 变体"),
+        }
+    }
+
+    #[test]
+    fn webdav_constructor_sets_message() {
+        match AppError::webdav("PROPFIND 失败") {
+            AppError::WebDAV { message } => assert_eq!(message, "PROPFIND 失败"),
+            _ => panic!("应为 WebDAV 变体"),
+        }
+    }
+
+    #[test]
+    fn storage_constructor_sets_message() {
+        match AppError::storage("桶不存在") {
+            AppError::Storage { message } => assert_eq!(message, "桶不存在"),
+            _ => panic!("应为 Storage 变体"),
+        }
+    }
+
+    // ---------- Into<String> / Into<&str> 传入 ----------
+
+    #[test]
+    fn constructors_accept_string_and_str() {
+        let owned = String::from("owned");
+        let err1 = AppError::network(owned);
+        let err2 = AppError::network("borrowed");
+        // 两种输入都能正确构造
+        assert!(matches!(err1, AppError::Network { .. }));
+        assert!(matches!(err2, AppError::Network { .. }));
+    }
+
+    // ---------- From trait ----------
+
+    #[test]
+    fn from_io_error_maps_to_file_io() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file missing");
+        let app_err: AppError = io_err.into();
+        match app_err {
+            AppError::FileIo { message } => assert!(message.contains("file missing")),
+            _ => panic!("io::Error 应映射到 FileIo"),
+        }
+    }
+
+    #[test]
+    fn from_serde_error_maps_to_validation() {
+        let bad: Result<serde_json::Value, _> = serde_json::from_str("not json");
+        let serde_err = bad.unwrap_err();
+        let app_err: AppError = serde_err.into();
+        match app_err {
+            AppError::Validation { message } => {
+                assert!(message.contains("JSON 解析失败"));
+            }
+            _ => panic!("serde_json::Error 应映射到 Validation"),
+        }
+    }
+
+    #[test]
+    fn from_string_maps_to_network() {
+        let app_err: AppError = String::from("断网了").into();
+        match app_err {
+            AppError::Network { message } => assert_eq!(message, "断网了"),
+            _ => panic!("String 应映射到 Network"),
+        }
+    }
+
+    #[test]
+    fn from_str_maps_to_network() {
+        let app_err: AppError = "静态字面量".into();
+        match app_err {
+            AppError::Network { message } => assert_eq!(message, "静态字面量"),
+            _ => panic!("&str 应映射到 Network"),
+        }
+    }
+
+    // ---------- Display ----------
+
+    #[test]
+    fn display_includes_kind_prefix_for_each_variant() {
+        let cases: Vec<(AppError, &str)> = vec![
+            (AppError::network("x"), "网络错误"),
+            (AppError::auth("x"), "认证错误"),
+            (AppError::file_io("x"), "文件错误"),
+            (AppError::config("x"), "配置错误"),
+            (AppError::clipboard("x"), "剪贴板错误"),
+            (AppError::external("x"), "外部服务错误"),
+            (AppError::validation("x"), "验证错误"),
+            (AppError::webdav("x"), "WebDAV 错误"),
+            (AppError::storage("x"), "存储错误"),
+        ];
+        for (err, prefix) in cases {
+            let s = format!("{}", err);
+            assert!(s.starts_with(prefix), "{} 应以 {:?} 开头，实际: {}", s, prefix, s);
+        }
+    }
+
+    #[test]
+    fn display_upload_contains_service_name() {
+        let err = AppError::upload("weibo", "500");
+        let s = format!("{}", err);
+        assert!(s.contains("weibo"));
+        assert!(s.contains("500"));
+    }
+
+    // ---------- Serde 序列化（前端依赖的 tag/content 格式） ----------
+
+    #[test]
+    fn serde_uses_type_and_data_fields() {
+        let err = AppError::network("timeout");
+        let json = serde_json::to_value(&err).unwrap();
+        assert_eq!(json["type"], "NETWORK");
+        assert_eq!(json["data"]["message"], "timeout");
+    }
+
+    #[test]
+    fn serde_emits_renamed_tags_for_all_variants() {
+        let cases: Vec<(AppError, &str)> = vec![
+            (AppError::network("x"), "NETWORK"),
+            (AppError::auth("x"), "AUTH"),
+            (AppError::file_io("x"), "FILE_IO"),
+            (AppError::config("x"), "CONFIG"),
+            (AppError::clipboard("x"), "CLIPBOARD"),
+            (AppError::external("x"), "EXTERNAL"),
+            (AppError::validation("x"), "VALIDATION"),
+            (AppError::webdav("x"), "WEBDAV"),
+            (AppError::storage("x"), "STORAGE"),
+            (AppError::upload("s", "m"), "UPLOAD"),
+        ];
+        for (err, tag) in cases {
+            let json = serde_json::to_value(&err).unwrap();
+            assert_eq!(json["type"], tag, "变体 tag 不一致: {:?}", json);
+        }
+    }
+
+    #[test]
+    fn serde_upload_preserves_service_code_and_message() {
+        let err = AppError::upload_with_code("jd", 418, "teapot");
+        let json = serde_json::to_value(&err).unwrap();
+        assert_eq!(json["type"], "UPLOAD");
+        assert_eq!(json["data"]["service"], "jd");
+        assert_eq!(json["data"]["code"], 418);
+        assert_eq!(json["data"]["message"], "teapot");
+    }
+
+    #[test]
+    fn serde_upload_without_code_emits_null() {
+        let err = AppError::upload("jd", "msg");
+        let json = serde_json::to_value(&err).unwrap();
+        assert!(json["data"]["code"].is_null());
+    }
+
+    // ---------- IntoAppError 扩展 trait ----------
+
+    fn err<T>() -> Result<T, &'static str> {
+        Err("底层错误")
+    }
+
+    #[test]
+    fn into_network_err_wraps_display() {
+        let r: Result<(), AppError> = err().into_network_err();
+        match r.unwrap_err() {
+            AppError::Network { message } => assert_eq!(message, "底层错误"),
+            _ => panic!("应为 Network"),
+        }
+    }
+
+    #[test]
+    fn into_file_io_err_wraps_display() {
+        let r: Result<(), AppError> = err().into_file_io_err();
+        assert!(matches!(r.unwrap_err(), AppError::FileIo { .. }));
+    }
+
+    #[test]
+    fn into_config_err_wraps_display() {
+        let r: Result<(), AppError> = err().into_config_err();
+        assert!(matches!(r.unwrap_err(), AppError::Config { .. }));
+    }
+
+    #[test]
+    fn into_external_err_wraps_display() {
+        let r: Result<(), AppError> = err().into_external_err();
+        assert!(matches!(r.unwrap_err(), AppError::External { .. }));
+    }
+
+    #[test]
+    fn into_storage_err_wraps_display() {
+        let r: Result<(), AppError> = err().into_storage_err();
+        assert!(matches!(r.unwrap_err(), AppError::Storage { .. }));
+    }
+
+    #[test]
+    fn into_webdav_err_wraps_display() {
+        let r: Result<(), AppError> = err().into_webdav_err();
+        assert!(matches!(r.unwrap_err(), AppError::WebDAV { .. }));
+    }
+
+    #[test]
+    fn into_file_io_err_with_prepends_prefix() {
+        let r: Result<(), AppError> = err().into_file_io_err_with("读取配置");
+        match r.unwrap_err() {
+            AppError::FileIo { message } => {
+                assert!(message.starts_with("读取配置: "));
+                assert!(message.ends_with("底层错误"));
+            }
+            _ => panic!("应为 FileIo"),
+        }
+    }
+
+    #[test]
+    fn into_network_err_with_prepends_prefix() {
+        let r: Result<(), AppError> = err().into_network_err_with("调用 API");
+        match r.unwrap_err() {
+            AppError::Network { message } => assert!(message.starts_with("调用 API: ")),
+            _ => panic!("应为 Network"),
+        }
+    }
+
+    #[test]
+    fn into_external_err_with_prepends_prefix() {
+        let r: Result<(), AppError> = err().into_external_err_with("启动 sidecar");
+        match r.unwrap_err() {
+            AppError::External { message } => assert!(message.starts_with("启动 sidecar: ")),
+            _ => panic!("应为 External"),
+        }
+    }
+
+    #[test]
+    fn into_storage_err_with_prepends_prefix() {
+        let r: Result<(), AppError> = err().into_storage_err_with("上传到 R2");
+        match r.unwrap_err() {
+            AppError::Storage { message } => assert!(message.starts_with("上传到 R2: ")),
+            _ => panic!("应为 Storage"),
+        }
+    }
+
+    #[test]
+    fn into_validation_err_with_prepends_prefix() {
+        let r: Result<(), AppError> = err().into_validation_err_with("参数校验");
+        match r.unwrap_err() {
+            AppError::Validation { message } => assert!(message.starts_with("参数校验: ")),
+            _ => panic!("应为 Validation"),
+        }
+    }
+
+    #[test]
+    fn ok_passes_through_unchanged() {
+        let r: Result<i32, AppError> = Ok::<i32, &str>(42).into_network_err();
+        assert_eq!(r.unwrap(), 42);
+    }
+}
