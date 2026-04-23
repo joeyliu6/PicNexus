@@ -90,16 +90,21 @@ export class GithubUploader extends BaseUploader<GithubServiceConfig> {
     const cdn = cdnList[selectedIndex] || cdnList[0];
     if (!cdn?.url || !cdn?.template) return rawUrl;
 
-    const match = rawUrl.match(/^https?:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/);
-    if (!match) return rawUrl;
+    // 用配置中的 owner/repo/branch 构造已知前缀，再切出剩余 path
+    // Why: 正则 `[^/]+` 无法正确切分含斜杠的分支名（例如 `feature/foo`），
+    //      会误把 `feature` 当分支、把 `foo/...` 当 path
+    const branch = config.branch || 'main';
+    const expectedPrefix = `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${branch}/`;
+    if (!rawUrl.startsWith(expectedPrefix)) return rawUrl;
+    const path = rawUrl.slice(expectedPrefix.length);
+    if (!path) return rawUrl;
 
-    const [, owner, repo, branch, path] = match;
     const domain = cdn.url.replace(/\/$/, '');
 
     return cdn.template
       .replace(/\{domain\}/g, domain)
-      .replace(/\{owner\}/g, owner)
-      .replace(/\{repo\}/g, repo)
+      .replace(/\{owner\}/g, config.owner)
+      .replace(/\{repo\}/g, config.repo)
       .replace(/\{branch\}/g, branch)
       .replace(/\{path\}/g, path)
       .replace(/\{rawUrl\}/g, rawUrl);
