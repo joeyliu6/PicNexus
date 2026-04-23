@@ -93,6 +93,19 @@ const isSyncing = ref(false);
 const currentProgress: Ref<SyncProgress | null> = ref(null);
 const pendingConflict: Ref<SyncConflict | null> = ref(null);
 
+// Why: 多次同步共享同一 currentProgress ref，若每次 finally 裸跑 setTimeout(clearProgress, 2000)，
+// 旧 timer 会在下一次同步进行中触发，把正在显示的进度条硬清空。保存 id 以便新调用先取消旧 timer。
+let pendingClearTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleClearProgress(delayMs = 2000): void {
+  if (pendingClearTimer !== null) {
+    clearTimeout(pendingClearTimer);
+  }
+  pendingClearTimer = setTimeout(() => {
+    currentProgress.value = null;
+    pendingClearTimer = null;
+  }, delayMs);
+}
+
 // ==================== 辅助函数 ====================
 
 /**
@@ -106,6 +119,24 @@ function formatTimestamp(date: Date): string {
   const minutes = String(date.getMinutes()).padStart(2, '0');
   const seconds = String(date.getSeconds()).padStart(2, '0');
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+/**
+ * 稳定键序序列化：递归对对象 key 排序，保证等价对象产生相同字符串
+ * Why: 配置对象在不同版本/迁移路径下插入顺序不同，直接 stringify 对比会误判为"有冲突"
+ */
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return '[' + value.map(stableStringify).join(',') + ']';
+  }
+  const keys = Object.keys(value as Record<string, unknown>).sort();
+  const parts = keys.map((k) => {
+    return JSON.stringify(k) + ':' + stableStringify((value as Record<string, unknown>)[k]);
+  });
+  return '{' + parts.join(',') + '}';
 }
 
 /**
@@ -224,13 +255,6 @@ export function useWebDAVSync() {
     currentProgress.value = { target, operation, stage, percent, message };
   }
 
-  /**
-   * 清除进度
-   */
-  function clearProgress(): void {
-    currentProgress.value = null;
-  }
-
   // ==================== WebDAV 客户端 ====================
 
   /**
@@ -289,7 +313,7 @@ export function useWebDAVSync() {
       return { success: false, target: 'settings', operation: 'upload', message: errorMsg };
     } finally {
       isSyncing.value = false;
-      setTimeout(clearProgress, 2000);
+      scheduleClearProgress();
     }
   }
 
@@ -357,7 +381,7 @@ export function useWebDAVSync() {
       return { success: false, target: 'settings', operation: 'download', message: errorMsg };
     } finally {
       isSyncing.value = false;
-      setTimeout(clearProgress, 2000);
+      scheduleClearProgress();
     }
   }
 
@@ -443,7 +467,7 @@ export function useWebDAVSync() {
       return { success: false, target: 'history', operation: 'upload', message: errorMsg };
     } finally {
       isSyncing.value = false;
-      setTimeout(clearProgress, 2000);
+      scheduleClearProgress();
     }
   }
 
@@ -503,7 +527,7 @@ export function useWebDAVSync() {
       return { success: false, target: 'history', operation: 'download', message: errorMsg };
     } finally {
       isSyncing.value = false;
-      setTimeout(clearProgress, 2000);
+      scheduleClearProgress();
     }
   }
 
@@ -529,11 +553,9 @@ export function useWebDAVSync() {
       }
       const localConfig = await configStore.get<UserConfig>('config');
 
-      // 简单对比：检查配置是否相同
-      const localJson = JSON.stringify(localConfig, null, 0);
-      const remoteJson = JSON.stringify(remoteConfig, null, 0);
-
-      if (localJson === remoteJson) {
+      // Why: 直接 JSON.stringify 依赖属性插入顺序，等价对象因键序不同会误报冲突
+      // （例如不同版本写入顺序不同），改用稳定键序比较
+      if (stableStringify(localConfig) === stableStringify(remoteConfig)) {
         return null;
       }
 
