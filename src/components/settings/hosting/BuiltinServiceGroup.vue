@@ -7,6 +7,7 @@ defineProps<{
   isCheckingJd: boolean;
   isCheckingQiyu: boolean;
   healthTooltipMap: Record<string, string>;
+  refreshingServiceIds: Set<string>;
   targetCardId?: string | null;
 }>();
 
@@ -28,6 +29,7 @@ const emit = defineEmits<{
       :isConfigured="jdAvailable"
       :isAvailable="jdAvailable"
       :isChecking="isCheckingJd"
+      :is-refreshing="refreshingServiceIds.has('jd')"
       :health-tooltip="healthTooltipMap['jd']"
       :showTestButton="false"
       @check="emit('checkBuiltin', $event)"
@@ -47,6 +49,7 @@ const emit = defineEmits<{
       :isConfigured="qiyuAvailable"
       :isAvailable="qiyuAvailable"
       :isChecking="isCheckingQiyu"
+      :is-refreshing="refreshingServiceIds.has('qiyu')"
       :health-tooltip="healthTooltipMap['qiyu']"
       :showTestButton="false"
       @check="emit('checkBuiltin', $event)"

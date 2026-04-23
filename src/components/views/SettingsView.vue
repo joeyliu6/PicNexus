@@ -45,18 +45,13 @@ const {
   addWebDAVProfile, deleteWebDAVProfile, switchWebDAVProfile,
 } = useSettingsForm();
 
-const testingConnections = ref<Record<string, boolean>>({
-  weibo: false, r2: false, tencent: false, aliyun: false, qiniu: false, upyun: false,
-  nowcoder: false, zhihu: false, nami: false, bilibili: false, chaoxing: false,
-  smms: false, github: false, imgur: false, webdav: false
-});
-
 const {
   qiyuAvailable, jdAvailable, isCheckingQiyu, isCheckingJd,
-  isBatchTesting, batchTestProgress, batchTestAborted, batchTestCompletionKey,
-  handleServiceTest, handleBuiltinCheck, testAllConfiguredServices,
+  testingConnections, activeSession, visibleRefreshingServiceIds,
+  isBatchTesting, batchTestProgress, batchTestCompletionKey,
+  handleServiceTest, handleBuiltinCheck, testAllConfiguredServices, cancelBatchTest,
 } = useConnectionTest({
-  formData, serviceNames, availableServices, testingConnections,
+  formData, serviceNames,
   errorToString, validateS3Config,
 });
 
@@ -264,13 +259,15 @@ onUnmounted(() => {
           :is-batch-testing="isBatchTesting"
           :batch-test-progress="batchTestProgress"
           :batch-test-completion-key="batchTestCompletionKey"
+          :service-check-session="activeSession"
+          :refreshing-service-ids="visibleRefreshingServiceIds"
           :service-names="serviceNames"
           :available-services="availableServices"
           :service-config-status="serviceConfigStatus"
           @update:available-services="(v) => { availableServices = v; debouncedSaveSettings(); }"
           @card-navigated="targetCardId = null"
           @test-all="testAllConfiguredServices"
-          @cancel-batch-test="batchTestAborted = true"
+          @cancel-batch-test="cancelBatchTest"
           @scroll-to-service="(id) => { targetCardId = id; }"
           @save="debouncedSaveSettings"
           @test-private="handleServiceTest" @test-token="handleServiceTest" @test-cookie="handleServiceTest"

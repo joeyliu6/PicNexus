@@ -21,6 +21,8 @@ const props = defineProps<{
   serviceNames: Record<string, string>;
   /** 是否正在批量检测 */
   isBatchTesting: boolean;
+  /** 当前处于骨架刷新态的服务 */
+  refreshingServiceIds: Set<string>;
   /** 已完成检测的服务集合 */
   batchTestedServices: Set<string>;
   /** 刚完成检测的服务集合（短暂高亮） */
@@ -38,6 +40,7 @@ const emit = defineEmits<{
 
 /** 生成芯片 tooltip */
 function getChipTooltip(svc: ServiceType): string | null {
+  if (props.refreshingServiceIds.has(svc)) return '正在检测...';
   const status = props.healthStatusMap[svc];
   if (status === 'unconfigured') return '未配置，点击跳转到配置';
   return props.healthTooltipMap[svc] ?? null;
@@ -51,10 +54,17 @@ function isEnabled(svc: ServiceType): boolean {
 /** 生成芯片的 CSS class 数组 */
 function chipClasses(svc: ServiceType): Record<string, boolean> {
   return {
-    'is-batch-shimmer': props.isBatchTesting && !props.batchTestedServices.has(svc),
-    'is-batch-done': props.batchDoneServices.has(svc),
-    'is-filtered-out': !!props.activeFilter && props.healthStatusMap[svc] !== props.activeFilter,
+    'is-refreshing': props.refreshingServiceIds.has(svc),
+    'is-batch-done': props.batchDoneServices.has(svc) && !props.refreshingServiceIds.has(svc),
+    'is-filtered-out': !!props.activeFilter
+      && !props.refreshingServiceIds.has(svc)
+      && props.healthStatusMap[svc] !== props.activeFilter,
   };
+}
+
+/** 检测中不沿用旧健康状态色，统一交给中性骨架样式 */
+function chipStatusClass(svc: ServiceType): ServiceHealthStatus | '' {
+  return props.refreshingServiceIds.has(svc) ? '' : props.healthStatusMap[svc];
 }
 
 /** 服务列表（直接使用 props，无需额外计算） */
@@ -69,7 +79,7 @@ const serviceList = computed(() => props.services);
         v-for="svc in serviceList"
         :key="svc"
         class="toggle-chip"
-        :class="[healthStatusMap[svc], chipClasses(svc)]"
+        :class="[chipStatusClass(svc), chipClasses(svc)]"
         v-tooltip.top="getChipTooltip(svc)"
         @click="emit('chipClick', svc)"
       >
@@ -127,8 +137,10 @@ const serviceList = computed(() => props.services);
 }
 
 .toggle-chip .toggle-label {
+  display: inline-block;
   font-size: var(--text-xs);
   color: var(--text-primary);
+  position: relative;
   white-space: nowrap;
 }
 
@@ -247,29 +259,65 @@ const serviceList = computed(() => props.services);
   border-color: var(--primary);
 }
 
-/* 批量检测中：统一淡蓝底 + 扫光效果 */
-.toggle-chip.is-batch-shimmer {
-  position: relative;
-  overflow: hidden;
-  background: var(--success-alpha-8) !important;
-  border-color: var(--success-alpha-15);
+/* 刷新态：中性骨架，不继承旧的健康色 */
+.toggle-chip.is-refreshing {
+  background: color-mix(in srgb, var(--bg-card) 84%, var(--hover-overlay-subtle)) !important;
+  border-color: transparent;
+  cursor: default;
+  pointer-events: none;
 }
 
-.toggle-chip.is-batch-shimmer::before {
+/* 刷新态标签保留原有自然宽度：文字透明占位，shimmer 条沿用文字宽度，
+   检测前/中/后三个阶段芯片尺寸完全一致，避免布局抖动。 */
+.toggle-chip.is-refreshing .toggle-label {
+  color: transparent;
+}
+
+.toggle-chip.is-refreshing .toggle-label::before {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: 50% 0 auto;
+  height: 14px;
+  transform: translateY(-50%);
+  border-radius: var(--radius-full);
   background: linear-gradient(
     90deg,
-    transparent 0%,
-    var(--success-alpha-15) 50%,
-    transparent 100%
+    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 0%,
+    color-mix(in srgb, var(--hover-overlay) 60%, var(--bg-card)) 50%,
+    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 100%
   );
   background-size: 200% 100%;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1.4s 微光动画无对应 duration token */
-  animation: k-shimmer 1.4s ease-in-out infinite reverse;
-  border-radius: inherit;
-  pointer-events: none;
+  animation: k-shimmer var(--duration-shimmer) ease-in-out infinite;
+}
+
+/* 刷新态下圆圈统一变成 shimmer 填充圆盘，视觉语言与顶栏 .health-dot 完全对齐：
+   - 保持 18px 尺寸（避免布局抖动）
+   - 用同一条 linear-gradient 渐变填充 + k-shimmer 横向扫光
+   - checked / unchecked / empty-circle 全部长成一样，配合标签 shimmer 一起"呼吸" */
+.toggle-chip.is-refreshing .toggle-indicator,
+.toggle-chip.is-refreshing .toggle-empty-circle {
+  border-color: transparent;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 0%,
+    color-mix(in srgb, var(--hover-overlay) 60%, var(--bg-card)) 50%,
+    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  box-shadow: none;
+  opacity: 1;
+  animation: k-shimmer var(--duration-shimmer) ease-in-out infinite;
+}
+
+/* checked 继承上方 shimmer 规则；这里只确保基础 .checked { border: none } 不让边框漏出，
+   同时清掉 filter: brightness(1.15)（非刷新态 hover 残留）保持与顶栏色值一致 */
+.toggle-chip.is-refreshing .toggle-indicator.checked {
+  border-color: transparent;
+  filter: none;
+}
+
+.toggle-chip.is-refreshing .toggle-indicator .pi {
+  color: transparent;
 }
 
 /* 单个服务检测完成：脉冲扩散 */

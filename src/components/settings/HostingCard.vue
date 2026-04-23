@@ -11,6 +11,7 @@ interface Props {
   healthStatus?: ServiceHealthStatus;
   healthTooltip?: string;
   isTesting?: boolean;
+  isRefreshing?: boolean;
   defaultExpanded?: boolean;
   isBuiltin?: boolean;
   isAvailable?: boolean;
@@ -24,6 +25,7 @@ const props = withDefaults(defineProps<Props>(), {
   healthStatus: undefined,
   healthTooltip: undefined,
   isTesting: false,
+  isRefreshing: false,
   defaultExpanded: false,
   isBuiltin: false,
   isAvailable: false,
@@ -119,6 +121,9 @@ const handleCheck = () => {
 };
 
 const statusDotClass = computed(() => {
+  if (props.isRefreshing) {
+    return 'status-dot refreshing';
+  }
   if (props.isBuiltin) {
     return props.isAvailable ? 'status-dot verified' : 'status-dot';
   }
@@ -127,13 +132,18 @@ const statusDotClass = computed(() => {
   }
   return props.isConfigured ? 'status-dot verified' : 'status-dot';
 });
+
+const statusTooltip = computed(() => {
+  if (props.isRefreshing) return '正在检测...';
+  return props.healthTooltip || null;
+});
 </script>
 
 <template>
   <div ref="cardRef" class="hosting-card" :class="{ expanded: isExpanded }">
     <div class="card-header" @click="toggleExpanded">
       <div class="header-left">
-        <span :class="statusDotClass" v-tooltip.top="healthTooltip || null"></span>
+        <span :class="statusDotClass" v-tooltip.top="statusTooltip"></span>
         <div class="header-info">
           <span class="card-title">{{ name }}</span>
           <span class="card-description">{{ description }}</span>
@@ -149,7 +159,7 @@ const statusDotClass = computed(() => {
         <div class="content-inner">
         <slot></slot>
 
-        <div v-if="isBuiltin" class="builtin-status" :class="{ available: isAvailable }">
+        <div v-if="isBuiltin" class="builtin-status" :class="{ available: isAvailable && !isRefreshing, refreshing: isRefreshing }">
           <div class="status-icon">
             <i v-if="isChecking" class="pi pi-spin pi-spinner"></i>
             <i v-else-if="isAvailable" class="pi pi-check-circle"></i>
@@ -169,6 +179,7 @@ const statusDotClass = computed(() => {
               label="自动获取"
               icon="pi pi-sign-in"
               @click="handleLogin"
+              :disabled="isRefreshing"
               outlined
               size="small"
             />
@@ -178,6 +189,7 @@ const statusDotClass = computed(() => {
               :icon="isChecking ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"
               @click="handleCheck"
               :loading="isChecking"
+              :disabled="isRefreshing"
               severity="secondary"
               outlined
               size="small"
@@ -188,7 +200,7 @@ const statusDotClass = computed(() => {
               icon="pi pi-check"
               @click="handleTest"
               :loading="isTesting"
-              :disabled="!isConfigured && !isBuiltin"
+              :disabled="isRefreshing || (!isConfigured && !isBuiltin)"
               severity="secondary"
               outlined
               size="small"
@@ -259,7 +271,18 @@ const statusDotClass = computed(() => {
   background: rgb(34 197 94 / 5%);
 }
 
+.builtin-status.refreshing {
+  background: color-mix(in srgb, var(--bg-card) 84%, var(--hover-overlay-subtle));
+  border-color: transparent;
+}
+
 .status-icon {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
@@ -281,6 +304,52 @@ const statusDotClass = computed(() => {
   color: var(--text-primary);
 }
 
+.status-text span {
+  display: inline-block;
+  position: relative;
+}
+
+.builtin-status.refreshing .status-icon i,
+.builtin-status.refreshing .status-text span {
+  color: transparent;
+}
+
+.builtin-status.refreshing .status-icon i {
+  opacity: 0;
+}
+
+.builtin-status.refreshing .status-icon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-full);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 0%,
+    color-mix(in srgb, var(--hover-overlay) 60%, var(--bg-card)) 50%,
+    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: k-shimmer var(--duration-shimmer) ease-in-out infinite;
+}
+
+.builtin-status.refreshing .status-text span::before {
+  content: '';
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 12px;
+  transform: translateY(-50%);
+  border-radius: var(--radius-full);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 0%,
+    color-mix(in srgb, var(--hover-overlay) 60%, var(--bg-card)) 50%,
+    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: k-shimmer var(--duration-shimmer) ease-in-out infinite;
+}
+
 .card-actions {
   display: flex;
   justify-content: space-between;
@@ -291,6 +360,11 @@ const statusDotClass = computed(() => {
 .actions-left {
   display: flex;
   gap: var(--space-sm);
+}
+
+.status-dot.refreshing {
+  background: var(--text-muted);
+  box-shadow: 0 0 0 1px var(--border-subtle);
 }
 
 @media (width <= 768px) {

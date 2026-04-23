@@ -1,50 +1,47 @@
 // 连接测试逻辑 - 从 SettingsView.vue 提取
-// 负责单项连接测试、批量测试引擎
+// 负责单项连接测试、批量测试编排，并统一接入共享检测 runner
 
-import { ref, type Ref } from 'vue';
+import { type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { useToast, suppressToasts } from '../useToast';
-import { useServiceAvailability } from '../useServiceAvailability';
+import { useServiceAvailability, probeBuiltinServiceAvailability } from '../useServiceAvailability';
 import { useServiceHealth } from '../useServiceHealth';
+import { buildServiceCheckSummarySnapshot, useServiceCheckRunner } from '../useServiceCheckRunner';
 import { TOAST_MESSAGES } from '../../constants';
 import type { ServiceType, CustomS3Profile } from '../../config/types';
 import { isCustomS3Id, getCustomS3ProfileId } from '../../config/types';
-import type { BatchTestProgress } from '../../types/batchTest';
 import type { SettingsFormShape } from './useSettingsForm';
-
-const MIN_DISPLAY_MS = 300;
-const COMPLETE_LINGER_MS = 500;
-
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+import type { ServiceHealthStatus } from '../../types/serviceHealth';
 
 interface UseConnectionTestOptions {
   formData: Ref<SettingsFormShape>;
   serviceNames: Record<ServiceType, string>;
-  availableServices: Ref<string[]>;
-  testingConnections: Ref<Record<string, boolean>>;
   errorToString: (error: unknown) => string;
   validateS3Config: (serviceId: ServiceType, config: Record<string, unknown>) => string | null;
 }
 
 export function useConnectionTest(options: UseConnectionTestOptions) {
-  const { formData, serviceNames, testingConnections, errorToString, validateS3Config } = options;
+  const { formData, serviceNames, errorToString, validateS3Config } = options;
 
   const toast = useToast();
   const serviceHealth = useServiceHealth();
   const {
-    qiyuAvailable, jdAvailable,
-    isCheckingQiyu, isCheckingJd,
-    checkQiyuAvailability, checkJdAvailable,
+    qiyuAvailable,
+    jdAvailable,
+    isCheckingQiyu,
+    isCheckingJd,
   } = useServiceAvailability();
 
-  // ---- 批量测试状态 ----
-
-  const isBatchTesting = ref(false);
-  const batchTestProgress = ref<BatchTestProgress | null>(null);
-  const batchTestAborted = ref(false);
-  const batchTestCompletionKey = ref(0);
+  const {
+    testingConnections,
+    activeSession,
+    visibleRefreshingServiceIds,
+    isBatchTesting,
+    batchTestProgress,
+    batchTestCompletionKey,
+    runServiceChecks,
+    cancelBatchTest,
+  } = useServiceCheckRunner();
 
   // ---- 单项测试函数 ----
 
@@ -53,12 +50,12 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
       if (serviceId === 'smms') {
         const res = await fetch('https://sm.ms/api/v2/upload', {
           method: 'POST',
-          headers: { 'Authorization': token }
+          headers: { Authorization: token },
         });
         if (!res.ok) throw new Error('Token 无效');
       } else if (serviceId === 'imgur') {
         const res = await fetch('https://api.imgur.com/3/account/albums', {
-          headers: { 'Authorization': `Client-ID ${token}` }
+          headers: { Authorization: `Client-ID ${token}` },
         });
         if (!res.ok) throw new Error('Client ID 无效');
       }
@@ -73,7 +70,7 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
     try {
       const config = formData.value.github;
       const res = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}`, {
-        headers: { 'Authorization': `token ${config.token}`, 'User-Agent': 'PicNexus' }
+        headers: { Authorization: `token ${config.token}`, 'User-Agent': 'PicNexus' },
       });
       if (!res.ok) throw new Error('验证失败');
       toast.showConfig('success', TOAST_MESSAGES.auth.configValid('GitHub'));
@@ -89,12 +86,11 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
 
     if (isCustomS3Id(serviceId)) {
       const profileId = getCustomS3ProfileId(serviceId);
-      const profile = formData.value.custom_s3_profiles.find((p: CustomS3Profile) => p.id === profileId);
+      const profile = formData.value.custom_s3_profiles.find((item: CustomS3Profile) => item.id === profileId);
       if (!profile) throw new Error('找不到该自定义 S3 配置');
       config = { ...profile };
       displayName = profile.name || '自定义 S3';
     } else {
-      // S3 家族已由 SettingsFormShape 约束为已知对象形状，这里按 key 取出即可
       config = formData.value[serviceId as 'r2' | 'tencent' | 'aliyun' | 'qiniu' | 'upyun'] as unknown as Record<string, unknown>;
       displayName = serviceNames[serviceId as ServiceType];
     }
@@ -104,6 +100,7 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
       toast.showConfig('error', TOAST_MESSAGES.auth.connectionFailed(displayName, validationError));
       throw new Error(validationError);
     }
+
     try {
       await invoke('test_s3_connection', { serviceId, config });
       toast.showConfig('success', TOAST_MESSAGES.auth.configValid(displayName));
@@ -114,25 +111,13 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
     }
   }
 
-  async function testConn(fn: () => Promise<void>, key: string) {
-    testingConnections.value[key] = true;
-    try {
-      await fn();
-      serviceHealth.markVerified(key as ServiceType);
-    } catch (e) {
-      serviceHealth.markTestFailed(key as ServiceType, errorToString(e));
-    } finally {
-      testingConnections.value[key] = false;
-    }
-  }
-
   async function testCookieConnection(command: string, params: Record<string, string>, serviceId: ServiceType) {
     try {
       await invoke(command, params);
       toast.showConfig('success', TOAST_MESSAGES.auth.cookieValid(serviceNames[serviceId]));
-    } catch (e) {
-      toast.showConfig('error', TOAST_MESSAGES.auth.testFailed(String(e)));
-      throw e;
+    } catch (error) {
+      toast.showConfig('error', TOAST_MESSAGES.auth.testFailed(String(error)));
+      throw error;
     }
   }
 
@@ -158,37 +143,9 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
       const authToken = formData.value.nami.authToken || (tokenMatch ? tokenMatch[1] : '');
       return testCookieConnection('test_nami_connection', { cookie, authToken }, 'nami');
     },
-    jd: async () => {
-      await checkJdAvailable(true);
-      if (!jdAvailable.value) throw new Error('京东图床当前不可用');
-    },
-    qiyu: async () => {
-      await checkQiyuAvailability(true);
-      if (!qiyuAvailable.value) throw new Error('七鱼图床当前不可用');
-    },
+    jd: () => probeBuiltinServiceAvailability('jd', true),
+    qiyu: () => probeBuiltinServiceAvailability('qiyu', true),
   };
-
-  async function handleServiceTest(serviceId: string) {
-    if (isCustomS3Id(serviceId)) {
-      await testConn(() => testS3Connection(serviceId), serviceId);
-      return;
-    }
-    await testConn(actions[serviceId], serviceId);
-  }
-
-  async function handleBuiltinCheck(serviceId: string) {
-    if (serviceId === 'jd') {
-      await checkJdAvailable();
-      toast.showConfig('info', jdAvailable.value
-        ? TOAST_MESSAGES.auth.serviceAvailable('京东图床')
-        : TOAST_MESSAGES.auth.serviceUnavailable('京东图床'));
-    } else if (serviceId === 'qiyu') {
-      await checkQiyuAvailability(true);
-      toast.showConfig('info', qiyuAvailable.value
-        ? TOAST_MESSAGES.auth.serviceAvailable('七鱼图床')
-        : TOAST_MESSAGES.auth.serviceUnavailable('七鱼图床'));
-    }
-  }
 
   // ---- 预校验 ----
 
@@ -197,121 +154,152 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
   function preValidateService(serviceId: string): string | null {
     if (isCustomS3Id(serviceId)) {
       const profileId = getCustomS3ProfileId(serviceId);
-      const profile = formData.value.custom_s3_profiles.find((p: CustomS3Profile) => p.id === profileId);
+      const profile = formData.value.custom_s3_profiles.find((item: CustomS3Profile) => item.id === profileId);
       if (!profile) return '找不到该自定义 S3 配置';
       return validateS3Config(serviceId as ServiceType, profile as unknown as Record<string, unknown>);
     }
+
     if (S3_SERVICE_IDS.includes(serviceId as ServiceType)) {
       const config = formData.value[serviceId as 'r2' | 'tencent' | 'aliyun' | 'qiniu' | 'upyun'] as unknown as Record<string, unknown>;
       return validateS3Config(serviceId as ServiceType, config);
     }
+
     return null;
   }
 
-  async function runServiceTest(serviceId: ServiceType, task: Promise<void>) {
+  function getServiceLabel(serviceId: string): string {
+    if (isCustomS3Id(serviceId)) {
+      const profileId = getCustomS3ProfileId(serviceId);
+      const profile = formData.value.custom_s3_profiles.find((item: CustomS3Profile) => item.id === profileId);
+      return profile?.name || '自定义 S3';
+    }
+
+    return serviceNames[serviceId as ServiceType] || serviceId;
+  }
+
+  function getHealthStatus(serviceId: string): ServiceHealthStatus {
+    return serviceHealth.healthStatusMap.value[serviceId] ?? 'pending';
+  }
+
+  function getHealthStatusMapSnapshot(): Record<string, ServiceHealthStatus> {
+    return serviceHealth.healthStatusMap.value ?? {};
+  }
+
+  const BUILTIN_PROBE_IDS = new Set<string>(['jd', 'qiyu']);
+  const BUILTIN_LABELS: Record<string, string> = { jd: '京东图床', qiyu: '七鱼图床' };
+
+  function resolveServiceTask(serviceId: string): (() => Promise<void>) | undefined {
+    return isCustomS3Id(serviceId) ? () => testS3Connection(serviceId) : actions[serviceId];
+  }
+
+  async function executeServiceTask(serviceId: string, task: () => Promise<void>) {
+    const isBuiltinProbe = BUILTIN_PROBE_IDS.has(serviceId);
     try {
-      await task;
-      serviceHealth.markVerified(serviceId);
-    } catch (e) {
-      serviceHealth.markTestFailed(serviceId, errorToString(e));
+      const validationError = preValidateService(serviceId);
+      if (validationError) {
+        serviceHealth.markTestFailed(serviceId, validationError);
+        // 预校验失败时，下游 task（testS3Connection）不会执行，需在此补一条错误 toast；
+        // 批量路径有 suppressToasts 吃掉，不会打扰用户。
+        toast.showConfig(
+          'error',
+          TOAST_MESSAGES.auth.connectionFailed(getServiceLabel(serviceId), validationError)
+        );
+        throw new Error(validationError);
+      }
+
+      await task();
+
+      if (!isBuiltinProbe) serviceHealth.markVerified(serviceId);
+    } catch (error) {
+      if (!isBuiltinProbe) serviceHealth.markTestFailed(serviceId, errorToString(error));
+      throw error;
     }
   }
 
-  // ---- 批量测试 ----
+  async function runSingleServiceCheck(serviceId: string) {
+    const task = resolveServiceTask(serviceId);
+    if (!task) return;
+
+    await runServiceChecks({
+      mode: 'single',
+      tasks: [{
+        serviceId,
+        label: getServiceLabel(serviceId),
+        run: () => executeServiceTask(serviceId, task),
+      }],
+      baselineStatuses: {
+        [serviceId]: getHealthStatus(serviceId),
+      },
+      summarySnapshot: buildServiceCheckSummarySnapshot(getHealthStatusMapSnapshot()),
+      resolveStatus: getHealthStatus,
+    });
+  }
+
+  // ---- 暴露给设置页的方法 ----
+
+  async function handleServiceTest(serviceId: string) {
+    await runSingleServiceCheck(serviceId);
+  }
+
+  async function handleBuiltinCheck(serviceId: string) {
+    if (!BUILTIN_PROBE_IDS.has(serviceId)) return;
+
+    await runSingleServiceCheck(serviceId);
+
+    const available = serviceId === 'jd' ? jdAvailable.value : qiyuAvailable.value;
+    const label = BUILTIN_LABELS[serviceId];
+    toast.showConfig('info', available
+      ? TOAST_MESSAGES.auth.serviceAvailable(label)
+      : TOAST_MESSAGES.auth.serviceUnavailable(label));
+  }
 
   async function testAllConfiguredServices() {
     if (isBatchTesting.value) return;
 
-    const MIN_TOTAL_MS = 1500;
-    const SLOW_SERVICES: ServiceType[] = ['qiyu'];
+    const serviceIds = Object.entries(serviceHealth.healthStatusMap.value)
+      .filter(([serviceId, status]) => {
+        if (status === 'unconfigured') return false;
+        return isCustomS3Id(serviceId) || !!actions[serviceId];
+      })
+      .map(([serviceId]) => serviceId);
 
-    const allServices = (Object.entries(serviceHealth.healthStatusMap.value) as [ServiceType, string][])
-      .filter(([id]) => actions[id])
-      .map(([id, status]) => ({ id: id as ServiceType, status }));
+    if (serviceIds.length === 0) return;
 
-    if (allServices.length === 0) return;
-
-    const normalServices = allServices.filter(s => !SLOW_SERVICES.includes(s.id));
-    const slowServiceEntries = allServices.filter(s => SLOW_SERVICES.includes(s.id));
-    const orderedServices = [...normalServices, ...slowServiceEntries];
-
-    isBatchTesting.value = true;
-    batchTestAborted.value = false;
-    batchTestProgress.value = { current: 0, total: orderedServices.length, currentService: '' };
     suppressToasts(true);
 
-    const slowPromises = new Map<ServiceType, Promise<void>>();
-    for (const s of slowServiceEntries) {
-      if (s.status !== 'unconfigured' && !preValidateService(s.id)) {
-        slowPromises.set(s.id, actions[s.id]());
-      }
-    }
-
-    const overallStartTime = Date.now();
-
     try {
-      for (let i = 0; i < orderedServices.length; i++) {
-        if (batchTestAborted.value) break;
-
-        const { id: serviceId, status } = orderedServices[i];
-        const startTime = Date.now();
-
-        batchTestProgress.value = {
-          current: i,
-          total: orderedServices.length,
-          currentService: serviceNames[serviceId],
-        };
-        testingConnections.value[serviceId] = true;
-
-        if (status === 'unconfigured') {
-          await delay(MIN_DISPLAY_MS);
-        } else {
-          const validationError = preValidateService(serviceId);
-          if (validationError) {
-            serviceHealth.markTestFailed(serviceId, validationError);
-            await delay(MIN_DISPLAY_MS);
-          } else {
-            const task = slowPromises.get(serviceId) ?? actions[serviceId]();
-            await runServiceTest(serviceId, task);
-            const elapsed = Date.now() - startTime;
-            if (elapsed < MIN_DISPLAY_MS) await delay(MIN_DISPLAY_MS - elapsed);
-          }
-        }
-
-        testingConnections.value[serviceId] = false;
-      }
-
-      if (!batchTestAborted.value) {
-        batchTestProgress.value = {
-          current: orderedServices.length,
-          total: orderedServices.length,
-          currentService: '',
-        };
-        const totalElapsed = Date.now() - overallStartTime;
-        await delay(Math.max(COMPLETE_LINGER_MS, MIN_TOTAL_MS - totalElapsed));
-      }
+      await runServiceChecks({
+        mode: 'batch',
+        tasks: serviceIds.map((serviceId) => ({
+          serviceId,
+          label: getServiceLabel(serviceId),
+          run: () => executeServiceTask(serviceId, resolveServiceTask(serviceId)!),
+        })),
+        baselineStatuses: Object.fromEntries(
+          serviceIds.map((serviceId) => [serviceId, getHealthStatus(serviceId)])
+        ) as Record<string, ServiceHealthStatus>,
+        summarySnapshot: buildServiceCheckSummarySnapshot(getHealthStatusMapSnapshot()),
+        resolveStatus: getHealthStatus,
+      });
     } finally {
       suppressToasts(false);
-      isBatchTesting.value = false;
-      batchTestProgress.value = null;
-      batchTestCompletionKey.value++;
     }
   }
 
   return {
-    // 服务可用性
     qiyuAvailable,
     jdAvailable,
     isCheckingQiyu,
     isCheckingJd,
-    // 测试状态
+    testingConnections,
+    activeSession,
+    visibleRefreshingServiceIds,
     isBatchTesting,
     batchTestProgress,
-    batchTestAborted,
     batchTestCompletionKey,
-    // 方法
     handleServiceTest,
     handleBuiltinCheck,
     testAllConfiguredServices,
+    cancelBatchTest,
   };
 }

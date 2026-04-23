@@ -116,7 +116,6 @@ export function useSettingsForm() {
   // 图床名称映射
   const serviceNames: Record<ServiceType, string> = {
     ...SERVICE_DISPLAY_NAMES,
-    r2: 'R2',
   };
 
   // ---- 服务配置状态 ----

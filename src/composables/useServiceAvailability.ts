@@ -2,14 +2,21 @@
 // 从 SettingsView.vue 中抽取，提供七鱼、京东等服务的可用性检测
 // 使用模块级单例模式，确保状态跨组件共享
 
-import { ref, watch, type Ref } from 'vue';
+import { computed, ref, watch, type ComputedRef, type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { SyncStatus } from '../config/types';
 import { syncStatusStore } from '../store/instances';
 import { useServiceHealth } from './useServiceHealth';
 import { isUploading } from './uploadState';
+import { buildServiceCheckSummarySnapshot, useServiceCheckRunner } from './useServiceCheckRunner';
+import type { ServiceCheckMode } from '../types/serviceCheck';
+import type { ServiceHealthStatus } from '../types/serviceHealth';
 
-const { markVerified, markTestFailed } = useServiceHealth();
+const serviceHealth = useServiceHealth();
+const { markVerified, markTestFailed } = serviceHealth;
+const { runServiceChecks, testingConnections } = useServiceCheckRunner();
+
+type BuiltinServiceId = 'qiyu' | 'jd';
 
 // ==================== 类型定义 ====================
 
@@ -18,14 +25,14 @@ export interface UseServiceAvailabilityReturn {
   // 状态（共享单例）
   qiyuAvailable: Ref<boolean>;
   jdAvailable: Ref<boolean>;
-  isCheckingQiyu: Ref<boolean>;
-  isCheckingJd: Ref<boolean>;
+  isCheckingQiyu: ComputedRef<boolean>;
+  isCheckingJd: ComputedRef<boolean>;
 
   // 方法
   checkQiyuAvailability: (forceCheck?: boolean) => Promise<void>;
   checkJdAvailable: (forceCheck?: boolean) => Promise<void>;
   checkAllAvailabilityWithCooldown: (syncStatus?: SyncStatus) => Promise<void>;
-  markServiceAvailable: (serviceId: 'qiyu' | 'jd') => Promise<void>;
+  markServiceAvailable: (serviceId: BuiltinServiceId) => Promise<void>;
   startPeriodicCheck: () => { intervalId: ReturnType<typeof setInterval>; stopWatch: () => void };
 }
 
@@ -37,121 +44,194 @@ const CHECK_SUCCESS_COOLDOWN = 12 * 60 * 60 * 1000;
 /** 检测失败后冷却时间（30分钟，快速重试） */
 const CHECK_FAIL_COOLDOWN = 30 * 60 * 1000;
 
+const BUILTIN_SERVICE_LABELS: Record<BuiltinServiceId, string> = {
+  jd: '京东图床',
+  qiyu: '七鱼图床',
+};
+
+const BUILTIN_SERVICE_COMMANDS: Record<BuiltinServiceId, string> = {
+  jd: 'check_jd_available',
+  qiyu: 'check_qiyu_available',
+};
+
 // ==================== 模块级共享状态（单例） ====================
 
 const qiyuAvailable = ref(false);
-const isCheckingQiyu = ref(false);
 const jdAvailable = ref(false);
-const isCheckingJd = ref(false);
 
-// ==================== 检测方法 ====================
+const isCheckingQiyu = computed(() => !!testingConnections.value.qiyu);
+const isCheckingJd = computed(() => !!testingConnections.value.jd);
 
-/**
- * 七鱼可用性检测
- * 采用智能检测策略：如果上次检测成功，则延长下次检测间隔
- *
- * @param forceCheck 是否强制检测（忽略冷却时间）
- */
-async function checkQiyuAvailability(forceCheck = false): Promise<void> {
-  // 从存储加载当前状态
-  let syncStatus: SyncStatus | null = null;
+let syncStatusWriteChain: Promise<void> = Promise.resolve();
+
+// ==================== 工具函数 ====================
+
+function getAvailabilityRef(serviceId: BuiltinServiceId): Ref<boolean> {
+  return serviceId === 'qiyu' ? qiyuAvailable : jdAvailable;
+}
+
+function getHealthStatus(serviceId: string): ServiceHealthStatus {
+  return serviceHealth.healthStatusMap?.value?.[serviceId] ?? 'pending';
+}
+
+function getHealthStatusMapSnapshot(): Record<string, ServiceHealthStatus> {
+  return serviceHealth.healthStatusMap?.value ?? {};
+}
+
+function getSyncStatusKey(serviceId: BuiltinServiceId): 'qiyuCheckStatus' | 'jdCheckStatus' {
+  return serviceId === 'qiyu' ? 'qiyuCheckStatus' : 'jdCheckStatus';
+}
+
+function getUnavailableMessage(serviceId: BuiltinServiceId): string {
+  return `${BUILTIN_SERVICE_LABELS[serviceId]}当前不可用`;
+}
+
+async function loadSyncStatusSafe(): Promise<SyncStatus | null> {
   try {
-    syncStatus = await syncStatusStore.get<SyncStatus>('status');
-  } catch (e) {
-    console.error('[服务检测] 加载同步状态失败:', e);
-  }
-
-  const now = Date.now();
-
-  // 如果不是强制检测，检查是否在冷却期内
-  if (!forceCheck && syncStatus?.qiyuCheckStatus?.nextCheckTime) {
-    if (now < syncStatus.qiyuCheckStatus.nextCheckTime) {
-      qiyuAvailable.value = syncStatus.qiyuCheckStatus.lastCheckResult ?? false;
-      console.debug('[七鱼检测] 在冷却期内，使用缓存结果:', qiyuAvailable.value);
-      return;
-    }
-  }
-
-  isCheckingQiyu.value = true;
-  let checkResult = false;
-  try {
-    checkResult = await invoke<boolean>('check_qiyu_available');
-    qiyuAvailable.value = checkResult;
-    if (checkResult) markVerified('qiyu');
-  } catch (e) {
-    qiyuAvailable.value = false;
-    markTestFailed('qiyu', String(e));
-    console.error('[七鱼检测] 检测失败:', e);
-  } finally {
-    isCheckingQiyu.value = false;
-  }
-
-  // 持久化单独处理，失败不影响检测结果
-  try {
-    const updatedStatus: SyncStatus = syncStatus || { syncByProfile: {} };
-    updatedStatus.qiyuCheckStatus = {
-      lastCheckTime: now,
-      lastCheckResult: checkResult,
-      nextCheckTime: checkResult ? now + CHECK_SUCCESS_COOLDOWN : now + CHECK_FAIL_COOLDOWN,
-    };
-    await syncStatusStore.set('status', updatedStatus);
-    await syncStatusStore.save();
-  } catch (e) {
-    console.warn('[七鱼检测] 状态持久化失败（不影响检测结果）:', e);
+    return await syncStatusStore.get<SyncStatus>('status');
+  } catch (error) {
+    console.error('[服务检测] 加载同步状态失败:', error);
+    return null;
   }
 }
 
-/**
- * 京东可用性检测
- * 采用与七鱼相同的智能检测策略，支持缓存恢复
- *
- * @param forceCheck 是否强制检测（忽略冷却时间）
- */
-async function checkJdAvailable(forceCheck = false): Promise<void> {
-  let syncStatus: SyncStatus | null = null;
-  try {
-    syncStatus = await syncStatusStore.get<SyncStatus>('status');
-  } catch (e) {
-    console.error('[服务检测] 加载同步状态失败:', e);
+function applyCachedAvailability(serviceId: BuiltinServiceId, syncStatus?: SyncStatus | null): void {
+  const checkStatus = syncStatus?.[getSyncStatusKey(serviceId)];
+  if (checkStatus?.lastCheckResult !== undefined) {
+    getAvailabilityRef(serviceId).value = checkStatus.lastCheckResult;
+  }
+}
+
+function shouldSkipBuiltinCheck(
+  serviceId: BuiltinServiceId,
+  syncStatus: SyncStatus | null,
+  forceCheck: boolean
+): boolean {
+  if (forceCheck) return false;
+  const checkStatus = syncStatus?.[getSyncStatusKey(serviceId)];
+  if (!checkStatus?.nextCheckTime) return false;
+  return Date.now() < checkStatus.nextCheckTime;
+}
+
+async function persistBuiltinCheckStatus(
+  patch: Partial<Pick<SyncStatus, 'qiyuCheckStatus' | 'jdCheckStatus'>>
+): Promise<void> {
+  syncStatusWriteChain = syncStatusWriteChain
+    .catch(() => {
+      // 上一轮写入失败后继续后续队列
+    })
+    .then(async () => {
+      try {
+        const latest = await syncStatusStore.get<SyncStatus>('status').catch(() => null);
+        const updatedStatus: SyncStatus = latest || { syncByProfile: {} };
+
+        if (patch.qiyuCheckStatus) updatedStatus.qiyuCheckStatus = patch.qiyuCheckStatus;
+        if (patch.jdCheckStatus) updatedStatus.jdCheckStatus = patch.jdCheckStatus;
+
+        await syncStatusStore.set('status', updatedStatus);
+        await syncStatusStore.save();
+      } catch (error) {
+        console.warn('[服务检测] 状态持久化失败（不影响检测结果）:', error);
+      }
+    });
+
+  await syncStatusWriteChain;
+}
+
+export async function probeBuiltinServiceAvailability(
+  serviceId: BuiltinServiceId,
+  forceCheck: boolean = false,
+  syncStatus?: SyncStatus | null
+): Promise<void> {
+  const status = syncStatus ?? await loadSyncStatusSafe();
+
+  if (shouldSkipBuiltinCheck(serviceId, status, forceCheck)) {
+    applyCachedAvailability(serviceId, status);
+    return;
   }
 
+  const availability = getAvailabilityRef(serviceId);
   const now = Date.now();
-
-  if (!forceCheck && syncStatus?.jdCheckStatus?.nextCheckTime) {
-    if (now < syncStatus.jdCheckStatus.nextCheckTime) {
-      jdAvailable.value = syncStatus.jdCheckStatus.lastCheckResult ?? false;
-      console.debug('[京东检测] 在冷却期内，使用缓存结果:', jdAvailable.value);
-      return;
-    }
-  }
-
-  isCheckingJd.value = true;
   let checkResult = false;
+
   try {
-    checkResult = await invoke<boolean>('check_jd_available');
-    jdAvailable.value = checkResult;
-    if (checkResult) markVerified('jd');
-  } catch (e) {
-    jdAvailable.value = false;
-    markTestFailed('jd', String(e));
-    console.error('[京东检测] 检测失败:', e);
+    checkResult = await invoke<boolean>(BUILTIN_SERVICE_COMMANDS[serviceId]);
+    availability.value = checkResult;
+
+    if (checkResult) {
+      markVerified(serviceId);
+    } else {
+      markTestFailed(serviceId, getUnavailableMessage(serviceId));
+    }
+  } catch (error) {
+    availability.value = false;
+    markTestFailed(serviceId, String(error));
+    throw error;
   } finally {
-    isCheckingJd.value = false;
+    await persistBuiltinCheckStatus({
+      [getSyncStatusKey(serviceId)]: {
+        lastCheckTime: now,
+        lastCheckResult: checkResult,
+        nextCheckTime: checkResult ? now + CHECK_SUCCESS_COOLDOWN : now + CHECK_FAIL_COOLDOWN,
+      },
+    });
+  }
+}
+
+async function runBuiltinChecks(
+  serviceIds: BuiltinServiceId[],
+  options: {
+    forceCheck?: boolean;
+    mode: ServiceCheckMode;
+    initialSyncStatus?: SyncStatus;
+  }
+): Promise<void> {
+  const persistedSyncStatus = await loadSyncStatusSafe();
+  const cachedSyncStatus = options.initialSyncStatus ?? persistedSyncStatus;
+  const syncStatus = persistedSyncStatus ?? cachedSyncStatus;
+
+  // 只回填本轮要检测的服务，避免顺带覆盖另一个服务刚由 markServiceAvailable 写入的活动状态。
+  for (const serviceId of serviceIds) {
+    applyCachedAvailability(serviceId, cachedSyncStatus);
   }
 
-  // 持久化单独处理，失败不影响检测结果
-  try {
-    const updatedStatus: SyncStatus = syncStatus || { syncByProfile: {} };
-    updatedStatus.jdCheckStatus = {
-      lastCheckTime: now,
-      lastCheckResult: checkResult,
-      nextCheckTime: checkResult ? now + CHECK_SUCCESS_COOLDOWN : now + CHECK_FAIL_COOLDOWN,
-    };
-    await syncStatusStore.set('status', updatedStatus);
-    await syncStatusStore.save();
-  } catch (e) {
-    console.warn('[京东检测] 状态持久化失败（不影响检测结果）:', e);
-  }
+  const dueServiceIds = serviceIds.filter((serviceId) => {
+    return !shouldSkipBuiltinCheck(serviceId, syncStatus, !!options.forceCheck);
+  });
+
+  if (dueServiceIds.length === 0) return;
+
+  const baselineStatuses = Object.fromEntries(
+    dueServiceIds.map((serviceId) => [serviceId, getHealthStatus(serviceId)])
+  ) as Record<string, ServiceHealthStatus>;
+
+  await runServiceChecks({
+    mode: options.mode,
+    tasks: dueServiceIds.map((serviceId) => ({
+      serviceId,
+      label: BUILTIN_SERVICE_LABELS[serviceId],
+      run: () => probeBuiltinServiceAvailability(serviceId, true, syncStatus),
+    })),
+    baselineStatuses,
+    summarySnapshot: buildServiceCheckSummarySnapshot(getHealthStatusMapSnapshot()),
+    resolveStatus: getHealthStatus,
+  });
+}
+
+// ==================== 检测方法 ====================
+
+async function checkQiyuAvailability(forceCheck = false): Promise<void> {
+  await runBuiltinChecks(['qiyu'], {
+    forceCheck,
+    mode: forceCheck ? 'single' : 'background',
+  });
+}
+
+async function checkJdAvailable(forceCheck = false): Promise<void> {
+  await runBuiltinChecks(['jd'], {
+    forceCheck,
+    mode: forceCheck ? 'single' : 'background',
+  });
 }
 
 /**
@@ -160,7 +240,6 @@ async function checkJdAvailable(forceCheck = false): Promise<void> {
  * @param initialSyncStatus 初始同步状态（用于恢复缓存值）
  */
 async function checkAllAvailabilityWithCooldown(initialSyncStatus?: SyncStatus): Promise<void> {
-  // 如果提供了初始状态，先恢复缓存值
   if (initialSyncStatus?.qiyuCheckStatus?.lastCheckResult !== undefined) {
     qiyuAvailable.value = initialSyncStatus.qiyuCheckStatus.lastCheckResult;
   }
@@ -168,43 +247,32 @@ async function checkAllAvailabilityWithCooldown(initialSyncStatus?: SyncStatus):
     jdAvailable.value = initialSyncStatus.jdCheckStatus.lastCheckResult;
   }
 
-  // 串行检测，避免并发写 syncStatusStore 同一 key 导致互相覆盖
-  await checkQiyuAvailability(false);
-  await checkJdAvailable(false);
+  await runBuiltinChecks(['qiyu', 'jd'], {
+    forceCheck: false,
+    mode: 'background',
+    initialSyncStatus,
+  });
 }
 
 /**
  * 标记某图床上传成功（视为可用，重置冷却计时器）
  * 供 useUpload.ts 在上传成功后调用
  */
-async function markServiceAvailable(serviceId: 'qiyu' | 'jd'): Promise<void> {
+async function markServiceAvailable(serviceId: BuiltinServiceId): Promise<void> {
   const now = Date.now();
   const nextCheckTime = now + CHECK_SUCCESS_COOLDOWN;
+  const availability = getAvailabilityRef(serviceId);
 
-  let syncStatus: SyncStatus | null = null;
-  try {
-    syncStatus = await syncStatusStore.get<SyncStatus>('status');
-  } catch {
-    // 忽略读取失败
-  }
+  availability.value = true;
+  markVerified(serviceId);
 
-  const updatedStatus: SyncStatus = syncStatus || { syncByProfile: {} };
-  const checkStatus = { lastCheckTime: now, lastCheckResult: true, nextCheckTime };
-
-  if (serviceId === 'qiyu') {
-    qiyuAvailable.value = true;
-    updatedStatus.qiyuCheckStatus = checkStatus;
-  } else {
-    jdAvailable.value = true;
-    updatedStatus.jdCheckStatus = checkStatus;
-  }
-
-  try {
-    await syncStatusStore.set('status', updatedStatus);
-    await syncStatusStore.save();
-  } catch (e) {
-    console.warn('[服务检测] 标记可用状态持久化失败:', e);
-  }
+  await persistBuiltinCheckStatus({
+    [getSyncStatusKey(serviceId)]: {
+      lastCheckTime: now,
+      lastCheckResult: true,
+      nextCheckTime,
+    },
+  });
 }
 
 /**
@@ -236,32 +304,12 @@ function startPeriodicCheck(): { intervalId: ReturnType<typeof setInterval>; sto
 
 // ==================== 主 Composable ====================
 
-/**
- * 图床服务可用性检测 Composable
- *
- * 使用模块级单例模式，所有组件共享同一份状态
- *
- * @example
- * ```typescript
- * const {
- *   qiyuAvailable,
- *   jdAvailable,
- *   checkAllAvailabilityWithCooldown
- * } = useServiceAvailability();
- *
- * // 检测所有服务可用性
- * await checkAllAvailabilityWithCooldown(syncStatus);
- * ```
- */
 export function useServiceAvailability(): UseServiceAvailabilityReturn {
   return {
-    // 状态（共享单例）
     qiyuAvailable,
     jdAvailable,
     isCheckingQiyu,
     isCheckingJd,
-
-    // 方法
     checkQiyuAvailability,
     checkJdAvailable,
     checkAllAvailabilityWithCooldown,

@@ -6,6 +6,7 @@ import ServiceChipGrid from '../ServiceChipGrid.vue';
 import type { BatchTestProgress } from '../../../types/batchTest';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
 import { useHealthCheck } from '../../../composables/settings/useHealthCheck';
+import type { ServiceCheckSession } from '../../../types/serviceCheck';
 
 const props = defineProps<{
   healthStatusMap: Record<string, ServiceHealthStatus>;
@@ -13,6 +14,8 @@ const props = defineProps<{
   isBatchTesting?: boolean;
   batchTestProgress?: BatchTestProgress | null;
   batchTestCompletionKey?: number;
+  serviceCheckSession?: ServiceCheckSession | null;
+  refreshingServiceIds: Set<string>;
   testingConnections: Record<string, boolean>;
   isCheckingJd: boolean;
   isCheckingQiyu: boolean;
@@ -52,11 +55,42 @@ const {
 
 const healthSummary = computed(() => {
   const counts: Record<ServiceHealthStatus, number> = { unconfigured: 0, pending: 0, verified: 0, error: 0 };
+  const session = props.serviceCheckSession;
+
+  if (!session) {
+    for (const status of Object.values(props.healthStatusMap)) {
+      counts[status as ServiceHealthStatus]++;
+    }
+
+    const hasConfigured = counts.pending > 0 || counts.verified > 0 || counts.error > 0;
+    return {
+      ...counts,
+      hasConfigured,
+      refreshingConfigured: false,
+      snapshot: {
+        verified: `${counts.verified} 个正常`,
+        error: `${counts.error} 个异常`,
+        pending: `${counts.pending} 个未检测`,
+        unconfigured: `${counts.unconfigured} 个未配置`,
+      },
+    };
+  }
+
   for (const status of Object.values(props.healthStatusMap)) {
     counts[status as ServiceHealthStatus]++;
   }
-  const hasConfigured = counts.pending > 0 || counts.verified > 0 || counts.error > 0;
-  return { ...counts, hasConfigured };
+
+  const hasConfigured = counts.pending > 0
+    || counts.verified > 0
+    || counts.error > 0
+    || session.targetIds.length > 0;
+
+  return {
+    ...counts,
+    hasConfigured,
+    refreshingConfigured: true,
+    snapshot: session.summarySnapshot,
+  };
 });
 
 // ==================== 服务启用切换 ====================
@@ -85,6 +119,11 @@ const activeFilter = ref<ServiceHealthStatus | null>(null);
 function toggleFilter(status: ServiceHealthStatus) {
   activeFilter.value = activeFilter.value === status ? null : status;
 }
+
+// 顶部骨架 pill 集合：严格跟随 session 启动时的 count 快照，保证刷新前/中/后 pill 数量一致
+const skeletonStatuses = computed<ServiceHealthStatus[]>(() => {
+  return props.serviceCheckSession?.summarySkeletonStatuses ?? [];
+});
 </script>
 
 <template>
@@ -95,28 +134,40 @@ function toggleFilter(status: ServiceHealthStatus) {
       <div class="service-health-header" v-if="healthSummary.hasConfigured">
         <div class="health-row">
           <div class="health-stats" :key="batchTestCompletionKey">
-            <span v-if="healthSummary.verified > 0" class="health-pill verified pill-reveal" :class="{ active: activeFilter === 'verified' }" @click="toggleFilter('verified')">
-              <span class="health-dot"></span>
-              {{ healthSummary.verified }} 个正常
-            </span>
-            <span v-if="healthSummary.error > 0" class="health-pill error pill-reveal" :class="{ active: activeFilter === 'error' }" @click="toggleFilter('error')">
-              <span class="health-dot"></span>
-              {{ healthSummary.error }} 个异常
-            </span>
-            <span v-if="healthSummary.pending > 0" class="health-pill pending pill-reveal" :class="{ active: activeFilter === 'pending' }" @click="toggleFilter('pending')">
-              <span class="health-dot"></span>
-              {{ healthSummary.pending }} 个未检测
-            </span>
-            <span v-if="healthSummary.unconfigured > 0" class="health-pill unconfigured pill-reveal" :class="{ active: activeFilter === 'unconfigured' }" @click="toggleFilter('unconfigured')">
-              <span class="health-dot"></span>
-              {{ healthSummary.unconfigured }} 个未配置
-            </span>
+            <template v-if="healthSummary.refreshingConfigured">
+              <span
+                v-for="status in skeletonStatuses"
+                :key="status"
+                class="health-pill health-pill--refreshing"
+              >
+                <span class="health-dot"></span>
+                <span class="health-pill-text">{{ healthSummary.snapshot[status] }}</span>
+              </span>
+            </template>
+            <template v-else>
+              <span v-if="healthSummary.verified > 0" class="health-pill verified pill-reveal" :class="{ active: activeFilter === 'verified' }" @click="toggleFilter('verified')">
+                <span class="health-dot"></span>
+                <span class="health-pill-text">{{ healthSummary.verified }} 个正常</span>
+              </span>
+              <span v-if="healthSummary.error > 0" class="health-pill error pill-reveal" :class="{ active: activeFilter === 'error' }" @click="toggleFilter('error')">
+                <span class="health-dot"></span>
+                <span class="health-pill-text">{{ healthSummary.error }} 个异常</span>
+              </span>
+              <span v-if="healthSummary.pending > 0" class="health-pill pending pill-reveal" :class="{ active: activeFilter === 'pending' }" @click="toggleFilter('pending')">
+                <span class="health-dot"></span>
+                <span class="health-pill-text">{{ healthSummary.pending }} 个未检测</span>
+              </span>
+              <span v-if="healthSummary.unconfigured > 0" class="health-pill unconfigured pill-reveal" :class="{ active: activeFilter === 'unconfigured' }" @click="toggleFilter('unconfigured')">
+                <span class="health-dot"></span>
+                <span class="health-pill-text">{{ healthSummary.unconfigured }} 个未配置</span>
+              </span>
+            </template>
           </div>
           <button
             class="health-refresh"
             :class="{ 'is-testing': isBatchTesting || isShowingCompleted, 'is-completed': isShowingCompleted || (isBatchTesting && progressPercent >= 100) }"
             @click="isBatchTesting ? emit('cancelBatchTest') : emit('testAll')"
-            :disabled="isCheckingQiyu || isCheckingJd"
+            :disabled="isCheckingJd || isCheckingQiyu || serviceCheckSession?.mode === 'single'"
           >
             <Transition name="icon-swap" mode="out-in">
               <i v-if="!isBatchTesting" key="refresh" class="pi pi-refresh"></i>
@@ -141,6 +192,7 @@ function toggleFilter(status: ServiceHealthStatus) {
         :available-services="localAvailableServices"
         :service-names="serviceNames"
         :is-batch-testing="!!isBatchTesting"
+        :refreshing-service-ids="refreshingServiceIds"
         :batch-tested-services="batchTestedServices"
         :batch-done-services="batchDoneServices"
         :active-filter="activeFilter"
@@ -156,6 +208,7 @@ function toggleFilter(status: ServiceHealthStatus) {
         :available-services="localAvailableServices"
         :service-names="serviceNames"
         :is-batch-testing="!!isBatchTesting"
+        :refreshing-service-ids="refreshingServiceIds"
         :batch-tested-services="batchTestedServices"
         :batch-done-services="batchDoneServices"
         :active-filter="activeFilter"
@@ -258,6 +311,51 @@ function toggleFilter(status: ServiceHealthStatus) {
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
+}
+
+.health-pill-text {
+  display: inline-block;
+  position: relative;
+}
+
+.health-pill--refreshing {
+  background: color-mix(in srgb, var(--bg-card) 84%, var(--hover-overlay-subtle));
+  color: transparent;
+  cursor: default;
+  pointer-events: none;
+}
+
+.health-pill--refreshing .health-dot {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 0%,
+    color-mix(in srgb, var(--hover-overlay) 60%, var(--bg-card)) 50%,
+    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  box-shadow: none;
+  animation: k-shimmer var(--duration-shimmer) ease-in-out infinite;
+}
+
+.health-pill--refreshing .health-pill-text {
+  color: transparent;
+}
+
+.health-pill--refreshing .health-pill-text::before {
+  content: '';
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 12px;
+  transform: translateY(-50%);
+  border-radius: var(--radius-full);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 0%,
+    color-mix(in srgb, var(--hover-overlay) 60%, var(--bg-card)) 50%,
+    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: k-shimmer var(--duration-shimmer) ease-in-out infinite;
 }
 
 .health-pill.active {

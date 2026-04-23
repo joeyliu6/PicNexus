@@ -9,6 +9,7 @@ import BuiltinServiceGroup from './hosting/BuiltinServiceGroup.vue';
 import ServiceEnableSection from './hosting/ServiceEnableSection.vue';
 import type { BatchTestProgress } from '../../types/batchTest';
 import { useServiceHealth } from '../../composables/useServiceHealth';
+import type { ServiceCheckSession } from '../../types/serviceCheck';
 
 const { healthStatusMap, healthTooltipMap } = useServiceHealth();
 
@@ -60,6 +61,8 @@ const props = defineProps<{
   isBatchTesting?: boolean;
   batchTestProgress?: BatchTestProgress | null;
   batchTestCompletionKey?: number;
+  serviceCheckSession?: ServiceCheckSession | null;
+  refreshingServiceIds: Set<string>;
   serviceNames: Record<string, string>;
   availableServices: string[];
   serviceConfigStatus: Record<ServiceType, boolean>;
@@ -110,6 +113,8 @@ watch(() => props.targetCardId, (val) => {
       :is-batch-testing="isBatchTesting"
       :batch-test-progress="batchTestProgress"
       :batch-test-completion-key="batchTestCompletionKey"
+      :service-check-session="serviceCheckSession"
+      :refreshing-service-ids="refreshingServiceIds"
       :testing-connections="testingConnections"
       :is-checking-jd="isCheckingJd"
       :is-checking-qiyu="isCheckingQiyu"
@@ -139,6 +144,7 @@ watch(() => props.targetCardId, (val) => {
         :testing-connections="testingConnections"
         :health-status-map="healthStatusMap"
         :health-tooltip-map="healthTooltipMap"
+        :refreshing-service-ids="refreshingServiceIds"
         :target-card-id="targetCardId"
         @save="emit('save')"
         @test-private="emit('testPrivate', $event)"
@@ -157,6 +163,7 @@ watch(() => props.targetCardId, (val) => {
         :is-checking-jd="isCheckingJd"
         :is-checking-qiyu="isCheckingQiyu"
         :health-tooltip-map="healthTooltipMap"
+        :refreshing-service-ids="refreshingServiceIds"
         :target-card-id="targetCardId"
         @check-builtin="emit('checkBuiltin', $event)"
       />
@@ -171,6 +178,7 @@ watch(() => props.targetCardId, (val) => {
         :testing-connections="testingConnections"
         :health-status-map="healthStatusMap"
         :health-tooltip-map="healthTooltipMap"
+        :refreshing-service-ids="refreshingServiceIds"
         :target-card-id="targetCardId"
         :link-prefix-enabled="linkPrefixEnabled"
         :prefix-list="prefixList"
@@ -196,6 +204,7 @@ watch(() => props.targetCardId, (val) => {
         :testing-connections="testingConnections"
         :health-status-map="healthStatusMap"
         :health-tooltip-map="healthTooltipMap"
+        :refreshing-service-ids="refreshingServiceIds"
         :target-card-id="targetCardId"
         :github-cdn-config="githubCdnConfig"
         @save="emit('save')"
