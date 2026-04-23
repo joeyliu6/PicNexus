@@ -357,9 +357,10 @@ export function useConfigManager() {
   async function setupCookieListener(
     onCookieUpdate: (serviceId: string, cookie: string) => Promise<void>
   ): Promise<UnlistenFn> {
+    let unlisten: UnlistenFn | null = null;
     try {
       // 监听新格式的事件 {serviceId, cookie}
-      const unlisten = await listen<CookieUpdatedPayload>('cookie-updated', async (event) => {
+      unlisten = await listen<CookieUpdatedPayload>('cookie-updated', async (event) => {
         try {
           const payload = event.payload;
 
@@ -413,21 +414,29 @@ export function useConfigManager() {
       });
 
       // 监听 Cookie 监控超时事件
-      const unlistenTimeout = await listen<string>('cookie-monitoring-timeout', (event) => {
-        const serviceId = event.payload;
-        const provider = getCookieProvider(serviceId);
-        const serviceName = provider?.name || serviceId;
-        log.warn(`${serviceName} 自动获取超时`);
-        toast.showConfig('warn', {
-          summary: '自动获取超时',
-          detail: `${serviceName} Cookie 自动获取超时，请手动点击「获取 Cookie」按钮`,
-          life: 8000
+      // Why: 若此处 listen 抛异常，上面成功注册的 unlisten 必须被清理，否则会泄漏监听器
+      let unlistenTimeout: UnlistenFn;
+      try {
+        unlistenTimeout = await listen<string>('cookie-monitoring-timeout', (event) => {
+          const serviceId = event.payload;
+          const provider = getCookieProvider(serviceId);
+          const serviceName = provider?.name || serviceId;
+          log.warn(`${serviceName} 自动获取超时`);
+          toast.showConfig('warn', {
+            summary: '自动获取超时',
+            detail: `${serviceName} Cookie 自动获取超时，请手动点击「获取 Cookie」按钮`,
+            life: 8000
+          });
         });
-      });
+      } catch (timeoutErr) {
+        unlisten?.();
+        throw timeoutErr;
+      }
 
       log.debug('✓ 监听器已设置（支持多服务 + 超时通知）');
+      const firstUnlisten = unlisten;
       return () => {
-        unlisten();
+        firstUnlisten?.();
         unlistenTimeout();
       };
     } catch (error) {
