@@ -190,12 +190,17 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
           if (isValidUserConfig(importedConfig)) {
             hasCloudData = true;
 
+            // Why: 首次使用/配置缺失场景下 currentConfig 为 null，若仅在 currentConfig 存在时保存，
+            // 云端合法配置会被静默丢弃，随后 step 2 读不到本地配置抛"无法读取本地配置"
             if (currentConfig) {
               const mergedConfig: UserConfig = {
                 ...importedConfig,
                 webdav: currentConfig.webdav,
               };
               await configStore.set('config', mergedConfig);
+              await configStore.save();
+            } else {
+              await configStore.set('config', importedConfig);
               await configStore.save();
             }
           }
