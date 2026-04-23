@@ -7,7 +7,7 @@ import type { StatusFilter, LinkCheckRow } from '../../../../types/linkCheck';
 function makeStats(overrides: Partial<CheckStatsResult> = {}): CheckStatsResult {
   return {
     total: 10, valid: 5, invalid: 2, timeout: 1, suspicious: 1,
-    unchecked: 1, checked: 9, problems: 4,
+    unchecked: 1, checked: 9, problems: 4, skipped: 0,
     ...overrides,
   };
 }
