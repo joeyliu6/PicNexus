@@ -121,8 +121,9 @@ function handleClick() {
   border-radius: 50%;
   flex-shrink: 0;
   margin-left: auto;
+  background: var(--text-muted);
+  box-shadow: 0 0 0 1px var(--border-subtle);
   cursor: help;
-  transition: all var(--duration-normal) ease;
 }
 .dot--verified { background: var(--success); }
 .dot--pending  { background: var(--warning); }
