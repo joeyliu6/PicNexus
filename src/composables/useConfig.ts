@@ -23,7 +23,8 @@ import { createLogger } from '../utils/logger';
 const log = createLogger('useConfig');
 
 // --- 全局单例状态（所有组件共享） ---
-const config: Ref<UserConfig> = ref<UserConfig>({ ...DEFAULT_CONFIG });
+// 使用 structuredClone 深拷贝，避免 reactive 代理直接挂到模块级 DEFAULT_CONFIG 上导致常量被污染
+const config: Ref<UserConfig> = ref<UserConfig>(structuredClone(DEFAULT_CONFIG));
 const isLoading = ref(false);
 const isSaving = ref(false);
 
@@ -62,7 +63,7 @@ export function useConfigManager() {
 
     try {
       const loadedConfig = await configStore.get<UserConfig>('config', DEFAULT_CONFIG);
-      config.value = loadedConfig || DEFAULT_CONFIG;
+      config.value = loadedConfig || structuredClone(DEFAULT_CONFIG);
       log.info('✓ 配置加载成功');
       return config.value;
     } catch (error) {
@@ -71,7 +72,7 @@ export function useConfigManager() {
       }
       // 读取失败时降级为默认配置
       log.error('读取配置失败，使用默认配置:', error);
-      config.value = { ...DEFAULT_CONFIG };
+      config.value = structuredClone(DEFAULT_CONFIG);
       toast.showConfig('error', TOAST_MESSAGES.config.loadFailed('已使用默认配置'));
       return config.value;
     } finally {
