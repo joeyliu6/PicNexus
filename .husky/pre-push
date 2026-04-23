@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+# Pre-push 质检：
+#   1. 全量前端测试（覆盖最近修改可能间接影响的模块）
+#   2. 全量 Rust 测试（commands/error 纯函数）
+#
+# 不跑 test:coverage——门槛由 CI 保障；本地只做快速自检（约 25-35s）。
+# 如需跳过（紧急热修、CI 已验过）：git push --no-verify
+
+set -e
+
+echo "→ [pre-push] 跑前端测试..."
+npm run test:run
+
+echo "→ [pre-push] 跑 Rust 测试..."
+(cd src-tauri && cargo test --quiet)
+
+echo "✓ [pre-push] 全部通过，开始推送"
