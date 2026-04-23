@@ -45,6 +45,13 @@ const { checkAllAvailabilityWithCooldown, startPeriodicCheck } = useServiceAvail
 let periodicCheckIntervalId: ReturnType<typeof setInterval> | null = null;
 let periodicCheckStopWatch: (() => void) | null = null;
 
+function ensurePeriodicCheckStarted() {
+  if (periodicCheckIntervalId !== null || periodicCheckStopWatch !== null) return;
+  const periodicCheck = startPeriodicCheck();
+  periodicCheckIntervalId = periodicCheck.intervalId;
+  periodicCheckStopWatch = periodicCheck.stopWatch;
+}
+
 const rootClass = computed(() => {
   return effectiveTheme.value === 'dark' ? 'dark-theme' : 'light-theme';
 });
@@ -143,6 +150,7 @@ async function continueStartup() {
 
   await checkOnboarding();
   await initGlobalShortcuts();
+  ensurePeriodicCheckStarted();
 
   if (config?.autoUpdate?.enabled !== false) {
     setTimeout(() => {
@@ -195,10 +203,6 @@ onMounted(async () => {
     try { await getCurrentWindow().show(); } catch { /* ignore */ }
   }
 
-  // 启动 12 小时周期性图床检测定时器
-  const periodicCheck = startPeriodicCheck();
-  periodicCheckIntervalId = periodicCheck.intervalId;
-  periodicCheckStopWatch = periodicCheck.stopWatch;
 });
 
 onUnmounted(() => {

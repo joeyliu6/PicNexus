@@ -1,21 +1,17 @@
 <script setup lang="ts">
-import { ref, computed, provide, onMounted, onUnmounted } from 'vue';
+import { ref, computed, provide, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import TitleBar from './TitleBar.vue';
 import Sidebar from './Sidebar.vue';
-import UploadView from '../views/UploadView.vue';
-import HistoryView from '../views/HistoryView.vue';
-import LinkCheckView from '../views/LinkCheckView.vue';
-import SettingsView from '../views/SettingsView.vue';
 
 type ViewType = 'upload' | 'history' | 'link-check' | 'settings';
 
-// 组件映射对象
+// 组件映射对象（按视图懒加载，减少首屏包体）
 const viewComponents = {
-  upload: UploadView,
-  history: HistoryView,
-  'link-check': LinkCheckView,
-  settings: SettingsView
+  upload: defineAsyncComponent(() => import('../views/UploadView.vue')),
+  history: defineAsyncComponent(() => import('../views/HistoryView.vue')),
+  'link-check': defineAsyncComponent(() => import('../views/LinkCheckView.vue')),
+  settings: defineAsyncComponent(() => import('../views/SettingsView.vue')),
 } as const;
 
 const currentView = ref<ViewType>('upload');

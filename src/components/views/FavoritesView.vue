@@ -381,22 +381,6 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
   opacity: 0;
 }
 
-/* 星形图标入场动画 */
-.empty-fade-enter-active .empty-star-icon {
-  animation: empty-star-arrive var(--duration-medium) var(--ease-spring) var(--duration-medium) both;
-}
-
-@keyframes empty-star-arrive {
-  0% {
-    transform: scale(0.5) rotate(-15deg);
-    opacity: 0;
-  }
-
-  100% {
-    transform: scale(1) rotate(0deg);
-    opacity: 0.35;
-  }
-}
 
 /* === 无障碍：减少动态效果 === */
 @media (prefers-reduced-motion: reduce) {

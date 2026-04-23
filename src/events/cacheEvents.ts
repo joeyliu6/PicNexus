@@ -1,6 +1,7 @@
 // 跨窗口缓存事件管理
 
 import { listen, emit, type UnlistenFn } from '@tauri-apps/api/event';
+import { createLogger } from '../utils/logger';
 
 /**
  * 缓存事件类型
@@ -35,6 +36,12 @@ export interface HistoryEventData {
 
 // 事件名称常量
 const CACHE_EVENT_NAME = 'cache-event';
+const log = createLogger('CacheEvents');
+
+function debugEvent(message: string, payload: unknown): void {
+  if (!import.meta.env.DEV) return;
+  log.debug(message, payload);
+}
 
 // 每次窗口会话生成唯一 ID，用于区分自发事件（避免同窗口 emit → listen 双重处理）
 export const WINDOW_SESSION_ID = Math.random().toString(36).slice(2, 10);
@@ -61,9 +68,9 @@ export async function emitCacheEvent(
       timestamp: Date.now(),
       data
     } as CacheEventPayload);
-    console.log(`[缓存事件] 已发送: ${type}`);
+    debugEvent(`已发送: ${type}`, data);
   } catch (e) {
-    console.warn(`[缓存事件] 发送失败:`, e);
+    log.warn(`发送失败: ${type}`, e);
   }
 }
 
@@ -90,7 +97,7 @@ export async function onCacheEvent(
   handler: (payload: CacheEventPayload) => void
 ): Promise<UnlistenFn> {
   return await listen<CacheEventPayload>(CACHE_EVENT_NAME, (event) => {
-    console.log(`[缓存事件] 收到: ${event.payload.type}`);
+    debugEvent(`收到: ${event.payload.type}`, event.payload.data);
     handler(event.payload);
   });
 }
@@ -115,7 +122,7 @@ export async function onCacheEventType<T = unknown>(
 ): Promise<UnlistenFn> {
   return await listen<CacheEventPayload>(CACHE_EVENT_NAME, (event) => {
     if (event.payload.type === type) {
-      console.log(`[缓存事件] 处理: ${type}`);
+      debugEvent(`处理: ${type}`, event.payload.data);
       handler(event.payload.data as T | undefined);
     }
   });
