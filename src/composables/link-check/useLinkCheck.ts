@@ -76,6 +76,8 @@ let idleTimer: ReturnType<typeof setTimeout> | null = null;
 // TTL 缓存：避免反复切换页面时重复加载
 const CACHE_TTL_MS = 5 * 60 * 1000;
 let lastLoadTime = 0;
+/** 首次加载骨架屏最小可见时长，防止加载太快一闪而过 */
+const MIN_SKELETON_MS = 500;
 
 /** recheckSingle 各阶段动画时长（ms）：转圈最短/结果展示/行淡出/徽章淡出 */
 const RECHECK_MS = { SPIN_MIN: 400, RESULT_SHOW: 1000, ROW_FADE: 350, BADGE_FADE: 300 } as const;
@@ -133,6 +135,8 @@ export function useLinkCheckManager() {
       return;
     }
 
+    const isFirstLoad = checkRows.value.length === 0;
+    const skeletonStart = isFirstLoad ? Date.now() : 0;
     isLoading.value = true;
 
     try {
@@ -144,6 +148,14 @@ export function useLinkCheckManager() {
       const invalidItems = invalidLiteRows.map(liteRowToItem);
       const { rows: invalidRows } = buildCheckItemsSync(invalidItems, config);
       restoreCheckStatus(invalidRows, invalidItems);
+
+      // 先等骨架屏显示满 MIN_SKELETON_MS，再赋值 checkRows 触发 stats 刷新
+      // （骨架屏依赖 stats.total === 0，一旦赋值即失效）
+      if (isFirstLoad) {
+        const remaining = MIN_SKELETON_MS - (Date.now() - skeletonStart);
+        if (remaining > 0) await new Promise<void>(r => setTimeout(r, remaining));
+      }
+
       checkRows.value = invalidRows;
       rebuildRowIndex();
       isLoading.value = false; // 提前结束 loading，用户已看到失效数据

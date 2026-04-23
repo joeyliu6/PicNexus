@@ -220,7 +220,39 @@ function handleMoreAction(kind: MoreMenuKind): void {
 </script>
 
 <template>
-  <div class="monitor-panel" @click="showCheckMenu = false; showServiceMenu = false; showOverflowMenu = false">
+  <!-- 首次加载整屏骨架：覆盖 FilterBar/List/BottomBar，避免混显真实搜索框/分页/按钮 -->
+  <div
+    v-if="isLoading && stats.total === 0 && stats.skipped === 0"
+    class="monitor-panel monitor-panel--skeleton"
+    aria-busy="true"
+    aria-live="polite"
+  >
+    <div class="sk-filterbar">
+      <div class="sk-chips">
+        <div v-for="i in 6" :key="'c' + i" class="sk-chip" />
+      </div>
+      <div class="sk-searchbox" />
+    </div>
+
+    <div class="sk-link-list">
+      <div v-for="i in 15" :key="'r' + i" class="sk-link-row">
+        <div class="sk-dot" />
+        <div class="sk-line sk-line--name" />
+        <div class="sk-line sk-line--svc" />
+        <div class="sk-line sk-line--badge" />
+        <div class="sk-circle" />
+        <div class="sk-circle" />
+      </div>
+    </div>
+
+    <div class="sk-bottombar">
+      <div class="sk-pager" />
+      <div class="sk-more-btn" />
+      <div class="sk-primary-btn" />
+    </div>
+  </div>
+
+  <div v-else class="monitor-panel" @click="showCheckMenu = false; showServiceMenu = false; showOverflowMenu = false">
     <CheckFilterBar
       :stats="stats"
       :service-list="serviceList"
@@ -299,4 +331,45 @@ function handleMoreAction(kind: MoreMenuKind): void {
   padding: var(--space-lg-xl) 0 var(--space-lg-xl) var(--space-xl);
   overflow: hidden;
 }
+
+/* 骨架通用样式：shimmer 动画靠 background-position，必须配 gradient 才可见 */
+.monitor-panel--skeleton :where(.sk-chip, .sk-searchbox, .sk-line, .sk-dot, .sk-circle, .sk-pager, .sk-more-btn, .sk-primary-btn) {
+  background: linear-gradient(90deg, var(--border-subtle-light) 25%, var(--bg-card) 50%, var(--border-subtle-light) 75%);
+  background-size: 200% 100%;
+  animation: k-shimmer var(--duration-shimmer) ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* 顶部 FilterBar 骨架：左侧 chip 组 + 右侧搜索框 */
+.sk-filterbar {
+  display: flex; align-items: center; gap: var(--space-md);
+  padding: var(--space-sm) var(--space-lg-xl) var(--space-sm) 0;
+}
+.sk-chips { display: flex; gap: var(--space-sm); flex: 1; min-width: 0; }
+.sk-chip { height: 28px; width: 72px; border-radius: var(--radius-lg); flex-shrink: 0; }
+.sk-searchbox { width: 260px; height: 34px; border-radius: var(--radius-md); flex-shrink: 0; }
+
+/* 中间 List 骨架：15 行 */
+.sk-link-list { flex: 1; min-height: 0; padding-right: var(--space-lg-xl); overflow: hidden; }
+
+.sk-link-row {
+  display: flex; align-items: center; gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  height: 36px;
+}
+.sk-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.sk-circle { width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; }
+.sk-line { height: var(--text-sm); }
+.sk-line--name { flex: 1; max-width: 40%; }
+.sk-line--svc { width: 56px; flex-shrink: 0; margin-left: auto; }
+.sk-line--badge { width: 32px; flex-shrink: 0; }
+
+/* 底部 BottomBar 骨架：分页 + 更多 + 主按钮 */
+.sk-bottombar {
+  display: flex; align-items: center; gap: var(--space-md);
+  padding: var(--space-sm) var(--space-lg-xl) 0 0;
+}
+.sk-pager { width: 96px; height: 28px; border-radius: var(--radius-md); }
+.sk-more-btn { width: 72px; height: 32px; border-radius: var(--radius-md); margin-left: auto; }
+.sk-primary-btn { width: 110px; height: 36px; border-radius: var(--radius-md); }
 </style>

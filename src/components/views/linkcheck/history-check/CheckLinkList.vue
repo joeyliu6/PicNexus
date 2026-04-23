@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import Skeleton from 'primevue/skeleton';
 import { rowKey } from '../../../../composables/link-check/useCheckFilter';
 import type { CheckStatsResult } from '../../../../composables/link-check/useCheckStats';
 import type { CheckLinkResult, LinkCheckRow, StatusFilter } from '../../../../types/linkCheck';
@@ -36,20 +35,8 @@ const emit = defineEmits<{
 
 <template>
   <div class="link-list-wrap">
-    <div v-if="isLoading && stats.total === 0 && stats.skipped === 0" class="link-list">
-      <div v-for="i in 15" :key="'sk-' + i" class="link-row skeleton-row">
-        <Skeleton width="6px" height="6px" shape="circle" />
-        <Skeleton width="28%" height="14px" border-radius="4px" />
-        <span class="link-spacer"></span>
-        <Skeleton width="56px" height="18px" border-radius="4px" />
-        <Skeleton width="32px" height="14px" border-radius="3px" />
-        <Skeleton width="18px" height="18px" shape="circle" />
-        <Skeleton width="18px" height="18px" shape="circle" />
-      </div>
-    </div>
-
     <HeroEmptyState
-      v-else-if="statusFilter !== 'skipped' && stats.total > 0 && stats.checked === 0 && !isChecking"
+      v-if="statusFilter !== 'skipped' && stats.total > 0 && stats.checked === 0 && !isChecking"
       icon="pi pi-shield"
       title="检查你的图片链接"
       description="扫描全部上传历史，发现失效和异常链接"
@@ -196,10 +183,6 @@ const emit = defineEmits<{
   cursor: pointer;
   border-bottom: 1px solid var(--primary-alpha-5);
   transition: background var(--duration-micro);
-}
-
-.skeleton-row {
-  pointer-events: none;
 }
 
 .link-row:last-child {
