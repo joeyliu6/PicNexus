@@ -100,15 +100,16 @@ async function columnExists(db: Database, columnName: string): Promise<boolean> 
  */
 async function migrateAddFavoriteColumn(db: Database): Promise<void> {
   try {
-    if (await columnExists(db, 'is_favorited')) return;
-
-    await db.execute(
-      `ALTER TABLE history_items ADD COLUMN is_favorited INTEGER NOT NULL DEFAULT 0`
-    );
+    if (!(await columnExists(db, 'is_favorited'))) {
+      await db.execute(
+        `ALTER TABLE history_items ADD COLUMN is_favorited INTEGER NOT NULL DEFAULT 0`
+      );
+      log.info('迁移完成：添加 is_favorited 列');
+    }
+    // 索引创建与列添加解耦：若上次迁移半途失败（列已加但索引未建），本次仍可补建
     await db.execute(
       `CREATE INDEX IF NOT EXISTS idx_favorited ON history_items(is_favorited, timestamp DESC)`
     );
-    log.info('迁移完成：添加 is_favorited 列');
   } catch (error) {
     log.error('迁移 is_favorited 列失败:', error);
     throw error;
@@ -121,26 +122,25 @@ async function migrateAddFavoriteColumn(db: Database): Promise<void> {
  */
 async function migrateAddSuccessCountColumn(db: Database): Promise<void> {
   try {
-    if (await columnExists(db, 'success_count')) return;
+    if (!(await columnExists(db, 'success_count'))) {
+      await db.execute(
+        `ALTER TABLE history_items ADD COLUMN success_count INTEGER NOT NULL DEFAULT 0`
+      );
 
-    await db.execute(
-      `ALTER TABLE history_items ADD COLUMN success_count INTEGER NOT NULL DEFAULT 0`
-    );
+      // 回填：用 SQLite 原生 json_each 在 DB 层完成，不经过 JS
+      await db.execute(`
+        UPDATE history_items SET success_count = (
+          SELECT COUNT(*) FROM json_each(results) AS je
+          WHERE je.value ->> 'status' = 'success'
+        )
+      `);
 
-    // 回填：用 SQLite 原生 json_each 在 DB 层完成，不经过 JS
-    await db.execute(`
-      UPDATE history_items SET success_count = (
-        SELECT COUNT(*) FROM json_each(results) AS je
-        WHERE je.value ->> 'status' = 'success'
-      )
-    `);
-
+      log.info('迁移完成：添加 success_count 列并回填');
+    }
     // 复合索引：同时覆盖筛选（success_count）和排序（timestamp DESC）
     await db.execute(
       `CREATE INDEX IF NOT EXISTS idx_success_count ON history_items(success_count, timestamp DESC)`
     );
-
-    log.info('迁移完成：添加 success_count 列并回填');
   } catch (error) {
     log.error('迁移 success_count 列失败:', error);
     throw error;
@@ -181,16 +181,16 @@ async function migrateAddSuccessfulServiceIdsColumn(db: Database): Promise<void>
  */
 async function migrateAddMigrationSkipColumn(db: Database): Promise<void> {
   try {
-    if (await columnExists(db, 'migration_skip')) return;
-
-    await db.execute(
-      `ALTER TABLE history_items ADD COLUMN migration_skip INTEGER NOT NULL DEFAULT 0`
-    );
+    if (!(await columnExists(db, 'migration_skip'))) {
+      await db.execute(
+        `ALTER TABLE history_items ADD COLUMN migration_skip INTEGER NOT NULL DEFAULT 0`
+      );
+      log.info('迁移完成：添加 migration_skip 列');
+    }
     // 复合索引：覆盖 WHERE migration_skip = 0 AND ... ORDER BY timestamp DESC
     await db.execute(
       `CREATE INDEX IF NOT EXISTS idx_migration_skip ON history_items(migration_skip, timestamp DESC)`
     );
-    log.info('迁移完成：添加 migration_skip 列');
   } catch (error) {
     log.error('迁移 migration_skip 列失败:', error);
     throw error;
@@ -199,15 +199,15 @@ async function migrateAddMigrationSkipColumn(db: Database): Promise<void> {
 
 async function migrateAddLinkCheckSkipColumn(db: Database): Promise<void> {
   try {
-    if (await columnExists(db, 'link_check_skip')) return;
-
-    await db.execute(
-      `ALTER TABLE history_items ADD COLUMN link_check_skip INTEGER NOT NULL DEFAULT 0`
-    );
+    if (!(await columnExists(db, 'link_check_skip'))) {
+      await db.execute(
+        `ALTER TABLE history_items ADD COLUMN link_check_skip INTEGER NOT NULL DEFAULT 0`
+      );
+      log.info('迁移完成：添加 link_check_skip 列');
+    }
     await db.execute(
       `CREATE INDEX IF NOT EXISTS idx_link_check_skip ON history_items(link_check_skip, timestamp DESC)`
     );
-    log.info('迁移完成：添加 link_check_skip 列');
   } catch (error) {
     log.error('迁移 link_check_skip 列失败', error);
     throw error;
