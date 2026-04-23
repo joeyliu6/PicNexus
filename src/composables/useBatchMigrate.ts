@@ -37,7 +37,7 @@ const MAX_CONSECUTIVE_FAILURES = 10;
 /** 离开面板 3 分钟后释放内存（对齐链接监控） */
 const IDLE_RELEASE_MS = 3 * 60 * 1000;
 /** 冷启动骨架屏最小可见时长，防止加载太快一闪而过 */
-const MIN_SKELETON_MS = 500;
+const MIN_SKELETON_MS = 400;
 
 // 迁移核心逻辑（migrateOneItem / processBatch / extractErrorMessage 等）抽至 batchMigrate/migrateCore.ts
 // 预加载逻辑（preloadAllPending / PreloadedItem）抽至 batchMigrate/preloadPending.ts

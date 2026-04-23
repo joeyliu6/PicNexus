@@ -77,7 +77,7 @@ let idleTimer: ReturnType<typeof setTimeout> | null = null;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 let lastLoadTime = 0;
 /** 首次加载骨架屏最小可见时长，防止加载太快一闪而过 */
-const MIN_SKELETON_MS = 500;
+const MIN_SKELETON_MS = 400;
 
 /** recheckSingle 各阶段动画时长（ms）：转圈最短/结果展示/行淡出/徽章淡出 */
 const RECHECK_MS = { SPIN_MIN: 400, RESULT_SHOW: 1000, ROW_FADE: 350, BADGE_FADE: 300 } as const;
