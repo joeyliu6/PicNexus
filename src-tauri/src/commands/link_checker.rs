@@ -145,6 +145,188 @@ fn detect_service_from_url(url: &str) -> Option<&'static str> {
     None
 }
 
+// ==================== 单元测试（放在使用点之前，便于在 tests 模块中访问） ====================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ---------- classify_error ----------
+
+    #[test]
+    fn classify_error_4xx_returns_http_4xx() {
+        let (kind, hint) = classify_error(Some(404), None);
+        assert_eq!(kind, "http_4xx");
+        assert!(hint.unwrap().contains("已被删除"));
+    }
+
+    #[test]
+    fn classify_error_5xx_returns_http_5xx() {
+        let (kind, hint) = classify_error(Some(503), None);
+        assert_eq!(kind, "http_5xx");
+        assert!(hint.unwrap().contains("服务器"));
+    }
+
+    #[test]
+    fn classify_error_2xx_returns_success_with_no_hint() {
+        let (kind, hint) = classify_error(Some(200), None);
+        assert_eq!(kind, "success");
+        assert!(hint.is_none());
+    }
+
+    #[test]
+    fn classify_error_edge_cases_at_boundaries() {
+        assert_eq!(classify_error(Some(400), None).0, "http_4xx");
+        assert_eq!(classify_error(Some(499), None).0, "http_4xx");
+        assert_eq!(classify_error(Some(500), None).0, "http_5xx");
+        assert_eq!(classify_error(Some(599), None).0, "http_5xx");
+        assert_eq!(classify_error(Some(299), None).0, "success");
+    }
+
+    #[test]
+    fn classify_error_without_status_or_error_defaults_to_network() {
+        let (kind, hint) = classify_error(None, None);
+        assert_eq!(kind, "network");
+        assert!(hint.is_some());
+    }
+
+    #[test]
+    fn classify_error_3xx_falls_through_to_default() {
+        // 3xx 未被显式处理，会走到默认分支
+        let (kind, _) = classify_error(Some(302), None);
+        assert_eq!(kind, "network");
+    }
+
+    // ---------- detect_service_from_url ----------
+
+    #[test]
+    fn detect_weibo_from_sinaimg_host() {
+        assert_eq!(detect_service_from_url("https://tvax1.sinaimg.cn/large/abc.jpg"), Some("weibo"));
+        assert_eq!(detect_service_from_url("http://sinaimg.cn/foo"), Some("weibo"));
+    }
+
+    #[test]
+    fn detect_bilibili_from_hdslb_host() {
+        assert_eq!(detect_service_from_url("https://i0.hdslb.com/bfs/x.jpg"), Some("bilibili"));
+        assert_eq!(detect_service_from_url("https://hdslb.com/x.jpg"), Some("bilibili"));
+    }
+
+    #[test]
+    fn detect_jd_from_360buyimg_host() {
+        assert_eq!(detect_service_from_url("https://img30.360buyimg.com/jfs/x.jpg"), Some("jd"));
+    }
+
+    #[test]
+    fn detect_zhihu_from_zhimg_host() {
+        assert_eq!(detect_service_from_url("https://pic1.zhimg.com/80/v2-abc.jpg"), Some("zhihu"));
+    }
+
+    #[test]
+    fn detect_chaoxing_by_substring_match() {
+        assert_eq!(detect_service_from_url("https://p.ananas.chaoxing.com/x.jpg"), Some("chaoxing"));
+        assert_eq!(detect_service_from_url("https://notice.chaoxing.com/x.jpg"), Some("chaoxing"));
+        // 注意：匹配的是 host（第一个 / 之前的部分），query 里出现 chaoxing.com 不算
+        assert_eq!(detect_service_from_url("https://p.cldisk.com/x.jpg?from=chaoxing.com"), None);
+    }
+
+    #[test]
+    fn detect_nowcoder_by_substring_match() {
+        assert_eq!(detect_service_from_url("https://uploadfiles.nowcoder.com/files/x.jpg"), Some("nowcoder"));
+    }
+
+    #[test]
+    fn detect_github_from_raw_and_io_hosts() {
+        assert_eq!(
+            detect_service_from_url("https://raw.githubusercontent.com/u/r/main/x.jpg"),
+            Some("github"),
+        );
+        assert_eq!(detect_service_from_url("https://github.com/u/r/raw/x.jpg"), Some("github"));
+        assert_eq!(detect_service_from_url("https://user.github.io/page.jpg"), Some("github"));
+    }
+
+    #[test]
+    fn detect_imgur_only_for_exact_hosts() {
+        assert_eq!(detect_service_from_url("https://i.imgur.com/x.jpg"), Some("imgur"));
+        assert_eq!(detect_service_from_url("https://imgur.com/x.jpg"), Some("imgur"));
+        // 非官方域名不匹配
+        assert_ne!(detect_service_from_url("https://fake.imgur.com.evil.com/x"), Some("imgur"));
+    }
+
+    #[test]
+    fn detect_oss_cos_qiniu_smms_nami() {
+        assert_eq!(detect_service_from_url("https://bucket.oss-cn-beijing.aliyuncs.com/x"), Some("oss"));
+        assert_eq!(detect_service_from_url("https://bucket.cos.ap-guangzhou.myqcloud.com/x"), Some("cos"));
+        assert_eq!(detect_service_from_url("https://cdn.qiniudn.com/x"), Some("qiniu"));
+        assert_eq!(detect_service_from_url("https://foo.qnssl.com/x"), Some("qiniu"));
+        assert_eq!(detect_service_from_url("https://foo.qbox.me/x"), Some("qiniu"));
+        assert_eq!(detect_service_from_url("https://s3.smms.app/x"), Some("smms"));
+        assert_eq!(detect_service_from_url("https://i.loli.net/x.jpg"), Some("smms"));
+        assert_eq!(detect_service_from_url("https://vip2.loli.io/x.jpg"), Some("smms"));
+        assert_eq!(detect_service_from_url("https://api.nami.observer/x"), Some("nami"));
+    }
+
+    #[test]
+    fn detect_returns_none_for_unknown_host() {
+        assert_eq!(detect_service_from_url("https://example.com/x.jpg"), None);
+        assert_eq!(detect_service_from_url("https://random-cdn.io/y.png"), None);
+    }
+
+    #[test]
+    fn detect_handles_missing_scheme_returning_none() {
+        // 没有 http/https 前缀时，host 被当成空字符串，返回 None
+        assert_eq!(detect_service_from_url("example.com/x.jpg"), None);
+    }
+
+    #[test]
+    fn detect_handles_http_scheme() {
+        assert_eq!(detect_service_from_url("http://tvax1.sinaimg.cn/x.jpg"), Some("weibo"));
+    }
+
+    // ---------- get_service_config ----------
+
+    #[test]
+    fn get_service_config_finds_registered_services() {
+        assert!(get_service_config("weibo").is_some());
+        assert!(get_service_config("jd").is_some());
+        assert!(get_service_config("github").is_some());
+    }
+
+    #[test]
+    fn get_service_config_returns_none_for_unknown_id() {
+        assert!(get_service_config("unknown_service").is_none());
+        assert!(get_service_config("").is_none());
+    }
+
+    #[test]
+    fn weibo_config_has_referer_and_hotlink_protection() {
+        let c = get_service_config("weibo").unwrap();
+        assert_eq!(c.referer, Some("https://weibo.com/"));
+        assert!(c.hotlink_protected);
+    }
+
+    #[test]
+    fn zhihu_config_skips_head_request() {
+        let c = get_service_config("zhihu").unwrap();
+        assert!(c.skip_head, "知乎应标记为不支持 HEAD");
+    }
+
+    #[test]
+    fn github_config_uses_picnexus_ua_and_no_referer() {
+        let c = get_service_config("github").unwrap();
+        assert_eq!(c.ua, Some("PicNexus"));
+        assert!(c.referer.is_none());
+        assert!(!c.hotlink_protected);
+    }
+
+    #[test]
+    fn public_oss_services_have_no_hotlink_protection() {
+        for id in ["oss", "cos", "qiniu", "smms", "imgur", "nami", "github"] {
+            let c = get_service_config(id).unwrap_or_else(|| panic!("{} 应该注册", id));
+            assert!(!c.hotlink_protected, "{} 不应标记为防盗链", id);
+        }
+    }
+}
+
 /// 为请求附加服务特定的 Referer / UA 头（从统一配置表读取）
 fn apply_service_headers(
     builder: reqwest::RequestBuilder,

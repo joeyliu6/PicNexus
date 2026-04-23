@@ -378,3 +378,242 @@ pub async fn cancel_md_scan(
     cancel_flag.0.store(true, Ordering::SeqCst);
     Ok(())
 }
+
+// ==================== 单元测试 ====================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ---------- is_markdown_file ----------
+
+    #[test]
+    fn is_markdown_file_accepts_common_extensions() {
+        assert!(is_markdown_file("README.md"));
+        assert!(is_markdown_file("note.markdown"));
+    }
+
+    #[test]
+    fn is_markdown_file_is_case_insensitive() {
+        assert!(is_markdown_file("README.MD"));
+        assert!(is_markdown_file("Note.Markdown"));
+    }
+
+    #[test]
+    fn is_markdown_file_rejects_non_md_extensions() {
+        assert!(!is_markdown_file("image.png"));
+        assert!(!is_markdown_file("script.js"));
+        assert!(!is_markdown_file("noext"));
+        assert!(!is_markdown_file(""));
+    }
+
+    #[test]
+    fn is_markdown_file_rejects_similar_but_wrong_extensions() {
+        assert!(!is_markdown_file("file.mdx"));
+        assert!(!is_markdown_file("file.md.bak"));
+    }
+
+    // ---------- detect_context ----------
+
+    #[test]
+    fn detect_context_blockquote() {
+        assert_eq!(detect_context("> quoted line"), "blockquote");
+        assert_eq!(detect_context("  > indented quote"), "blockquote");
+    }
+
+    #[test]
+    fn detect_context_table() {
+        assert_eq!(detect_context("| col1 | col2 |"), "table");
+        assert_eq!(detect_context("a | b | c"), "table");
+    }
+
+    #[test]
+    fn detect_context_normal() {
+        assert_eq!(detect_context("plain paragraph"), "normal");
+        assert_eq!(detect_context(""), "normal");
+        assert_eq!(detect_context("only one | pipe"), "normal");
+    }
+
+    // ---------- is_valid_image_url ----------
+
+    #[test]
+    fn valid_http_and_https_urls() {
+        assert!(is_valid_image_url("http://example.com/img.jpg"));
+        assert!(is_valid_image_url("https://example.com/img.png"));
+    }
+
+    #[test]
+    fn invalid_data_urls_and_anchors() {
+        assert!(!is_valid_image_url(""));
+        assert!(!is_valid_image_url("data:image/png;base64,xxx"));
+        assert!(!is_valid_image_url("#anchor"));
+    }
+
+    #[test]
+    fn invalid_relative_paths() {
+        assert!(!is_valid_image_url("./local.jpg"));
+        assert!(!is_valid_image_url("/abs/path.jpg"));
+        assert!(!is_valid_image_url("ftp://example.com/x"));
+    }
+
+    // ---------- strip_inline_code ----------
+
+    #[test]
+    fn strip_inline_code_replaces_backticks_with_spaces() {
+        let result = strip_inline_code("This `code` and more");
+        // `code` 长度 6，应被替换为 6 个空格
+        assert_eq!(result, "This        and more");
+        assert_eq!(result.len(), "This `code` and more".len());
+    }
+
+    #[test]
+    fn strip_inline_code_handles_multiple_spans() {
+        let result = strip_inline_code("`a` and `bb` end");
+        assert!(!result.contains('`'));
+        assert_eq!(result.len(), "`a` and `bb` end".len());
+    }
+
+    #[test]
+    fn strip_inline_code_preserves_non_code_text() {
+        assert_eq!(strip_inline_code("no code here"), "no code here");
+    }
+
+    #[test]
+    fn strip_inline_code_handles_triple_backtick_inline() {
+        // ```x``` 也应被处理
+        let result = strip_inline_code("a ```x``` b");
+        assert_eq!(result.len(), "a ```x``` b".len());
+        assert!(!result.contains("```x```"));
+    }
+
+    // ---------- extract_image_links ----------
+
+    #[test]
+    fn extract_markdown_image_syntax() {
+        let content = "![alt text](https://example.com/img.jpg)";
+        let links = extract_image_links(content, false);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].url, "https://example.com/img.jpg");
+        assert_eq!(links[0].alt_text, "alt text");
+        assert_eq!(links[0].syntax, "markdown");
+        assert_eq!(links[0].line_number, 1);
+        assert_eq!(links[0].context, "normal");
+    }
+
+    #[test]
+    fn extract_html_img_tag() {
+        let content = r#"<img src="https://example.com/x.png" alt="x" />"#;
+        let links = extract_image_links(content, false);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].url, "https://example.com/x.png");
+        assert_eq!(links[0].syntax, "html");
+        assert_eq!(links[0].alt_text, ""); // HTML 正则不提取 alt
+    }
+
+    #[test]
+    fn extract_skips_fenced_code_block_by_default() {
+        let content = "\
+![before](https://example.com/a.jpg)
+```
+![inside](https://example.com/b.jpg)
+```
+![after](https://example.com/c.jpg)";
+        let links = extract_image_links(content, false);
+        let urls: Vec<&str> = links.iter().map(|l| l.url.as_str()).collect();
+        assert!(urls.contains(&"https://example.com/a.jpg"));
+        assert!(urls.contains(&"https://example.com/c.jpg"));
+        assert!(!urls.contains(&"https://example.com/b.jpg"));
+    }
+
+    #[test]
+    fn extract_includes_fenced_code_when_flag_set() {
+        let content = "\
+```
+![inside](https://example.com/b.jpg)
+```";
+        let links = extract_image_links(content, true);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].url, "https://example.com/b.jpg");
+    }
+
+    #[test]
+    fn extract_deduplicates_same_url() {
+        let content = "\
+![](https://example.com/same.jpg)
+![again](https://example.com/same.jpg)";
+        let links = extract_image_links(content, false);
+        assert_eq!(links.len(), 1);
+    }
+
+    #[test]
+    fn extract_detects_blockquote_context() {
+        let content = "> ![](https://example.com/q.jpg)";
+        let links = extract_image_links(content, false);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].context, "blockquote");
+    }
+
+    #[test]
+    fn extract_detects_table_context() {
+        let content = "| cell | ![](https://example.com/t.jpg) |";
+        let links = extract_image_links(content, false);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].context, "table");
+    }
+
+    #[test]
+    fn extract_ignores_image_inside_inline_code() {
+        // ![inline](https://example.com/x.jpg) 包在反引号里应被忽略
+        let content = "前 `![inline](https://example.com/x.jpg)` 后";
+        let links = extract_image_links(content, false);
+        assert!(links.is_empty(), "行内代码里的 markdown 图片应被忽略");
+    }
+
+    #[test]
+    fn extract_ignores_data_url_and_anchors() {
+        let content = "\
+![bad](data:image/png;base64,abc)
+![bad2](#anchor)
+![good](https://example.com/ok.jpg)";
+        let links = extract_image_links(content, false);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].url, "https://example.com/ok.jpg");
+    }
+
+    #[test]
+    fn extract_assigns_correct_line_numbers() {
+        let content = "\
+line 1
+line 2
+![x](https://example.com/y.jpg)
+line 4";
+        let links = extract_image_links(content, false);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].line_number, 3);
+    }
+
+    #[test]
+    fn extract_handles_mixed_markdown_and_html() {
+        let content = "\
+![md](https://example.com/md.jpg)
+<img src=\"https://example.com/html.jpg\" />";
+        let links = extract_image_links(content, false);
+        assert_eq!(links.len(), 2);
+        let syntaxes: Vec<&str> = links.iter().map(|l| l.syntax.as_str()).collect();
+        assert!(syntaxes.contains(&"markdown"));
+        assert!(syntaxes.contains(&"html"));
+    }
+
+    #[test]
+    fn extract_empty_content_returns_empty() {
+        assert!(extract_image_links("", false).is_empty());
+        assert!(extract_image_links("no images here", false).is_empty());
+    }
+
+    #[test]
+    fn extract_original_text_preserves_exact_markdown() {
+        let content = "![alt](https://example.com/x.jpg)";
+        let links = extract_image_links(content, false);
+        assert_eq!(links[0].original_text, "![alt](https://example.com/x.jpg)");
+    }
+}
