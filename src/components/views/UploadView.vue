@@ -18,6 +18,9 @@ import { useConfigManager } from '../../composables/useConfig';
 import type { MultiUploadResult } from '../../core/MultiServiceUploader';
 import type { ImageCompressionConfig, CompressionPreset } from '../../config/types';
 import { DEFAULT_COMPRESSION_PRESET } from '../../config/types';
+import { createLogger } from '../../utils/logger';
+
+const log = createLogger('UploadView');
 
 import UploadDropZone from './upload/UploadDropZone.vue';
 import ServiceSelector from './upload/ServiceSelector.vue';
@@ -219,7 +222,7 @@ async function setupTauriFileDropListener() {
       } else if (event.payload.type === 'drop') {
         // 放下文件
         const filePaths = event.payload.paths;
-        console.log('[上传] 收到拖拽文件:', filePaths);
+        log.info('收到拖拽文件:', filePaths);
         await uploadManager.handleFilesUpload(filePaths);
         isDragging.value = false;
       } else {
@@ -229,9 +232,9 @@ async function setupTauriFileDropListener() {
     });
 
     fileDropUnlisteners.value = [unlisten];
-    console.log('[上传] Tauri 文件拖拽监听器已设置 (v2 API)');
+    log.info('Tauri 文件拖拽监听器已设置 (v2 API)');
   } catch (error) {
-    console.error('[上传] 设置 Tauri 文件拖拽监听器失败:', error);
+    log.error('设置 Tauri 文件拖拽监听器失败:', error);
   }
 }
 
@@ -330,7 +333,7 @@ const handleClearCompleted = () => {
 onMounted(async () => {
   // 加载服务按钮状态
   await uploadManager.loadServiceButtonStates();
-  console.log('[UploadView] 服务按钮状态已加载');
+  log.info('服务按钮状态已加载');
 
   // 初始化图床健康状态（与设置页同步）
   await loadHealthStatus();
@@ -360,7 +363,7 @@ onMounted(async () => {
     compressionUnlisten();
   };
 
-  console.log('[UploadView] 配置更新监听器已设置');
+  log.info('配置更新监听器已设置');
 
   // 设置文件拖拽监听
   await setupTauriFileDropListener();
@@ -384,7 +387,7 @@ onMounted(async () => {
     }
   };
   window.addEventListener('keydown', keydownHandler);
-  console.log('[UploadView] Ctrl+V 快捷键监听已设置');
+  log.info('Ctrl+V 快捷键监听已设置');
 });
 
 onActivated(() => { isViewActive.value = true; });
