@@ -8,26 +8,12 @@
  * - 复制 URL 入口下沉到可点击的服务徽章，单条重试用缩小版 24px 图标按钮
  */
 import { computed } from 'vue';
-import type { MigrateFailureDetail, MigrateItemStatus } from '../../../../../types/batchMigrate';
 import { errorTooltipText } from '../composables/useErrorPresentation';
 import { getServiceDisplayName } from '../../../../../constants/serviceNames';
 import MigrateServiceChip from './chips/MigrateServiceChip.vue';
+import type { MigrateRowItem } from './migrateRowTypes';
 
 const VISIBLE_EXISTING_MAX = 3;
-
-/** DoneRow 旧签名的兼容型——让导出/终态快照仍然可以传入不是完整 MigrateItemStatus 的对象 */
-export interface MigrateRowItem {
-  historyId?: string;
-  fileName: string;
-  sourceUrl?: string;
-  status: MigrateItemStatus['status'];
-  errorType?: 'download' | 'upload';
-  convertedFormat?: string;
-  error?: string;
-  details?: MigrateFailureDetail[];
-  existingServiceIds?: string[];
-  serviceResults?: Record<string, 'pending' | 'success' | 'failed'>;
-}
 
 interface Props {
   item: MigrateRowItem;

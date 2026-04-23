@@ -2,7 +2,7 @@ import { ref, shallowRef, watch } from 'vue';
 import type { ComputedRef } from 'vue';
 import { watchDebounced } from '@vueuse/core';
 import { getServiceDisplayName } from '../../../../../constants/serviceNames';
-import type { MigrateRowItem } from '../components/MigrateItemRow.vue';
+import type { MigrateRowItem } from '../components/migrateRowTypes';
 
 export interface SourceServiceOption {
   serviceId: string;

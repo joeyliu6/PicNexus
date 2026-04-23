@@ -7,6 +7,7 @@ import type {
   MigrateTargetService,
   MigrateItemStatus,
   MigrateResult,
+  MigrateStats,
 } from '../../../../types/batchMigrate';
 
 export interface MigrateContext {
@@ -51,6 +52,8 @@ export interface MigrateContext {
   /** 单条原地重试 */
   retrySingleFailed: (historyId: string) => Promise<void>;
   resetToConfiguring: () => Promise<void>;
+  /** 迁移统计信息（耗时、字节数、已处理数等） */
+  migrateStats: Ref<MigrateStats>;
   // UI 层状态
   healthStatusMap: Ref<Record<string, string>>;
   healthTooltipMap: Ref<Record<string, string>>;

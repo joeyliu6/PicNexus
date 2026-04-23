@@ -16,7 +16,7 @@ export function rowKey(row: Pick<LinkCheckRow, 'historyId' | 'serviceId'>): stri
 
 function matchesStatusFilter(row: LinkCheckRow, filter: StatusFilter): boolean {
   if (filter === 'skipped') {
-    return row.linkCheckSkip;
+    return !!row.linkCheckSkip;
   }
 
   if (row.linkCheckSkip) {
