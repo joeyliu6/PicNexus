@@ -270,12 +270,12 @@ const emit = defineEmits<{
   inset: -8px;
 }
 
-.photo-wrapper:hover .favorite-btn,
-.favorite-btn.favorited {
+.photo-wrapper:hover .favorite-btn {
   opacity: 1;
 }
 
 .favorite-btn.favorited {
+  opacity: 0.5;
   color: var(--warning);
   filter: drop-shadow(0 1px 3px rgb(234 179 8 / 40%));
 }
@@ -285,6 +285,7 @@ const emit = defineEmits<{
 }
 
 .favorite-btn.favorited:hover {
+  opacity: 1;
   filter: drop-shadow(0 1px 4px rgb(234 179 8 / 60%));
 }
 

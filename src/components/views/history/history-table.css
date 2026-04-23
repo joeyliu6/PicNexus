@@ -245,11 +245,12 @@
 }
 
 .row-favorite-btn.favorited {
-  opacity: 1;
+  opacity: 0.5;
   color: var(--warning);
 }
 
 .row-favorite-btn:hover {
+  opacity: 1;
   transform: scale(1.2);
 }
 
