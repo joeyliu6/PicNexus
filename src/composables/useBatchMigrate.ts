@@ -36,6 +36,8 @@ const PAGE_SIZE = 100;
 const MAX_CONSECUTIVE_FAILURES = 10;
 /** 离开面板 3 分钟后释放内存（对齐链接监控） */
 const IDLE_RELEASE_MS = 3 * 60 * 1000;
+/** 冷启动骨架屏最小可见时长，防止加载太快一闪而过 */
+const MIN_SKELETON_MS = 500;
 
 // 迁移核心逻辑（migrateOneItem / processBatch / extractErrorMessage 等）抽至 batchMigrate/migrateCore.ts
 // 预加载逻辑（preloadAllPending / PreloadedItem）抽至 batchMigrate/preloadPending.ts
@@ -140,11 +142,7 @@ export function useBatchMigrateManager() {
     // 当前批次对象是 allItemStatuses 头部的共享引用——外层 shallowRef 需要新数组引用来触发响应性，
     // 否则 MigrateProgressPhase 读 allItemStatuses 时看不到批内状态流转
     allItemStatuses.value = [...allItemStatuses.value];
-    globalProgress.value = {
-      current: processed,
-      total: total,
-      percent: total > 0 ? Math.round((processed / total) * 100) : 0,
-    };
+    globalProgress.value = { current: processed, total, percent: total > 0 ? Math.round((processed / total) * 100) : 0 };
   }
 
   function scheduleStatusUpdate(statuses: MigrateItemStatus[], processed: number, total: number) {
@@ -191,7 +189,15 @@ export function useBatchMigrateManager() {
   }
 
   async function initConfiguring() {
-    isFilterApplied.value = false;
+    // 冷启动：列表是空的，需要走骨架屏；热刷新：保留旧数据，仅用 isRefiltering 做轻刷新
+    const isColdStart = targetServices.value.length === 0;
+    if (isColdStart) isFilterApplied.value = false;
+    // 只要本次会触发骨架屏显示（isInitialized/isFilterApplied 任一为 false），就保证最小可见时长
+    // 覆盖 IDLE 清理回来、resetToConfiguring 等场景（targetServices 还在但 isFilterApplied 被置回 false）
+    const willShowSkeleton = !isInitialized.value || !isFilterApplied.value;
+    const skeletonStart = willShowSkeleton ? Date.now() : 0;
+    // 立刻标脏，让 TargetCard 的 pendingCount 进入 stale 态；applyFilter 结束后自动恢复
+    isRefiltering.value = true;
     initError.value = null;
 
     // L3：始终清空缓存，确保读取最新配置
@@ -205,6 +211,8 @@ export function useBatchMigrateManager() {
       const prevChecked = new Set(
         targetServices.value.filter(s => s.checked).map(s => s.serviceId),
       );
+      // 保留旧 pendingCount，避免热刷新期间数字被瞬间清零闪烁
+      const prevPending = new Map(targetServices.value.map(s => [s.serviceId, s.pendingCount] as const));
 
       const allServices = config.availableServices || [];
       const configured = cachedUploader.filterConfiguredServices(allServices, config);
@@ -213,7 +221,7 @@ export function useBatchMigrateManager() {
         serviceId: sid,
         displayName: getServiceDisplayName(sid),
         isConfigured: configured.includes(sid),
-        pendingCount: 0,
+        pendingCount: prevPending.get(sid) ?? 0,
         checked: prevChecked.has(sid) && configured.includes(sid),
       }));
 
@@ -228,6 +236,7 @@ export function useBatchMigrateManager() {
     } catch (e) {
       log.error('初始化失败', e);
       initError.value = '初始化失败，请重试';
+      isRefiltering.value = false;
       return;
     }
 
@@ -236,6 +245,11 @@ export function useBatchMigrateManager() {
     // 默认全选来源图床，减少用户操作步骤
     if (sourceServiceFilter.value.length === 0) {
       sourceServiceFilter.value = availableSourceServices.value.map(s => s.id);
+    }
+
+    if (willShowSkeleton) {
+      const remaining = MIN_SKELETON_MS - (Date.now() - skeletonStart);
+      if (remaining > 0) await new Promise<void>(r => setTimeout(r, remaining));
     }
 
     isFilterApplied.value = true;
@@ -252,6 +266,8 @@ export function useBatchMigrateManager() {
       for (const svc of targetServices.value) {
         if (svc.isConfigured) svc.pendingCount = 0;
       }
+      // initConfiguring 在调用前可能已把 isRefiltering 拉起来，这里兜底归位
+      isRefiltering.value = false;
       return;
     }
 
@@ -345,14 +361,10 @@ export function useBatchMigrateManager() {
       preloadDone = true;
     });
 
-    let successCount = 0;
-    let failedCount = 0;
-    let skippedCount = 0;
+    let successCount = 0, failedCount = 0, skippedCount = 0;
     const failures: MigrateResult['failures'] = [];
     const partialFailures: MigrateResult['partialFailures'] = [];
-    let processed = 0;
-    let consecutiveFailures = 0;
-    let autoAborted = false;
+    let processed = 0, consecutiveFailures = 0, autoAborted = false;
     cumulativeCounts.value = { success: 0, failed: 0, skipped: 0 };
 
     let cursor = 0;

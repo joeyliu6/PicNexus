@@ -98,13 +98,36 @@ function handleTargetToggle(serviceId: string) {
       <button class="btn-primary" @click="initConfiguring">重试</button>
     </EmptyState>
 
-    <!-- 加载中 -->
-    <div v-else-if="!isInitialized || !isFilterApplied" class="loading-state">
-      <div v-for="i in 3" :key="i" class="skeleton-row">
-        <div class="skeleton-icon" />
-        <div class="skeleton-text">
-          <div class="skeleton-line skeleton-line--short" />
-          <div class="skeleton-line skeleton-line--long" />
+    <!-- 骨架屏：冷启动（!isFilterApplied）或首次 init 期间；热刷新时两者均为 true 故不显示 -->
+    <div v-else-if="!isInitialized || !isFilterApplied" class="sk-layout" aria-busy="true" aria-live="polite">
+      <div class="sk-left">
+        <div class="sk-column-label" />
+        <div v-for="i in 6" :key="i" class="sk-source-row">
+          <div class="sk-checkbox" />
+          <div class="sk-icon" />
+          <div class="sk-line sk-line--name" />
+          <div class="sk-line sk-line--count" />
+        </div>
+      </div>
+      <div class="sk-divider" aria-hidden="true" />
+      <div class="sk-right">
+        <div class="sk-column-label" />
+        <div class="sk-target-grid">
+          <div v-for="i in 4" :key="i" class="sk-target-card">
+            <div class="sk-target-top">
+              <div class="sk-icon" />
+              <div class="sk-line sk-line--title" />
+              <div class="sk-dot" />
+            </div>
+            <div class="sk-line sk-line--subtitle" />
+          </div>
+          <div class="sk-target-card">
+            <div class="sk-target-top">
+              <div class="sk-icon sk-icon--ghost" />
+              <div class="sk-line sk-line--title" />
+            </div>
+            <div class="sk-line sk-line--subtitle" />
+          </div>
         </div>
       </div>
     </div>
@@ -185,8 +208,16 @@ function handleTargetToggle(serviceId: string) {
     </div>
   </div>
 
+  <!-- 底栏骨架：与 sk-layout 同步 -->
+  <div v-if="!isInitialized || !isFilterApplied" class="bottom" aria-busy="true" aria-live="polite">
+    <div class="bottom-main">
+      <div class="sk-bottom-text" />
+      <div class="sk-bottom-btn" />
+    </div>
+  </div>
+
   <!-- 底栏 -->
-  <div class="bottom">
+  <div v-else class="bottom">
     <div class="bottom-main">
       <span class="bottom-stat" :title="bottomFullText">
         <template v-if="noSourceSelected">
@@ -228,14 +259,54 @@ function handleTargetToggle(serviceId: string) {
   display: flex; flex-direction: column;
 }
 
-/* 加载态 */
-.loading-state { display: flex; flex-direction: column; gap: var(--space-md); }
-.skeleton-row { display: flex; align-items: center; gap: var(--space-md-lg); padding: var(--space-md) var(--space-lg); border-radius: var(--radius-md); background: var(--bg-card); }
-.skeleton-icon { width: 36px; height: 36px; border-radius: var(--radius-md); background: var(--bg-surface-low); flex-shrink: 0; animation: k-shimmer var(--duration-shimmer) infinite; }
-.skeleton-text { flex: 1; display: flex; flex-direction: column; gap: var(--space-sm); }
-.skeleton-line { border-radius: var(--radius-sm); background: var(--bg-surface-low); animation: k-shimmer var(--duration-shimmer) infinite; }
-.skeleton-line--short { width: 40%; height: 14px; }
-.skeleton-line--long { width: 60%; height: 12px; }
+/* 冷启动骨架屏：镜像真实布局的几何结构，避免加载完成后 UI 跳跃 */
+.sk-layout { display: flex; flex: 1; min-height: 0; gap: var(--space-md); }
+.sk-left { flex: 0 0 42%; min-width: 0; display: flex; flex-direction: column; }
+.sk-divider { flex: 0 0 auto; width: calc(var(--text-lg) + var(--space-sm) * 2); }
+.sk-right { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* 共用 shimmer：用 border-subtle-light 作底（比 bg-surface-low 色深更多，更明显） */
+.sk-column-label, .sk-checkbox, .sk-icon, .sk-dot, .sk-line, .sk-bottom-text, .sk-bottom-btn {
+  background: linear-gradient(90deg, var(--border-subtle-light) 25%, var(--bg-card) 50%, var(--border-subtle-light) 75%);
+  background-size: 200% 100%;
+  animation: k-shimmer var(--duration-shimmer) ease-in-out infinite;
+}
+.sk-column-label, .sk-checkbox, .sk-icon, .sk-line, .sk-bottom-text { border-radius: var(--radius-sm); }
+
+.sk-column-label { width: 80px; height: var(--text-xs); margin-bottom: var(--space-sm); }
+
+.sk-source-row {
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm-md);
+}
+.sk-source-row + .sk-source-row { margin-top: var(--space-2xs); }
+
+.sk-checkbox { width: 16px; height: 16px; flex-shrink: 0; }
+.sk-icon { width: 16px; height: 16px; flex-shrink: 0; }
+.sk-icon--ghost { opacity: 0.5; }
+.sk-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-left: auto; }
+
+.sk-line--name { flex: 1; height: var(--text-sm); max-width: 120px; }
+.sk-line--count { width: 48px; height: var(--text-sm); margin-left: auto; }
+.sk-line--title { flex: 1; height: var(--text-base); max-width: 100px; }
+.sk-line--subtitle { width: 70%; height: var(--text-sm); }
+
+.sk-target-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); }
+
+/* 底栏骨架：文字条 + 按钮块 */
+.sk-bottom-text { flex: 1; max-width: 260px; height: var(--text-sm); }
+.sk-bottom-btn { width: 120px; height: 36px; border-radius: var(--radius-md); flex-shrink: 0; }
+
+/* 骨架卡片用虚线弱化边框，避免看起来像"已加载的空卡" */
+.sk-target-card {
+  display: flex; flex-direction: column; gap: var(--space-sm);
+  padding: var(--space-md-lg) var(--space-lg);
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-subtle);
+  background: transparent;
+}
+.sk-target-top { display: flex; align-items: center; gap: var(--space-sm); }
 
 /* 分栏布局 */
 .split-layout { display: flex; flex: 1; min-height: 0; gap: var(--space-md); }
