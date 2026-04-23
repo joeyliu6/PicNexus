@@ -9,6 +9,9 @@ import { useToast } from './useToast';
 import { useServiceAvailability } from './useServiceAvailability';
 import { TOAST_MESSAGES } from '../constants';
 import { debounceWithError } from '../utils/debounce';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('ServiceSelector');
 
 // ==================== 类型定义 ====================
 
@@ -88,7 +91,7 @@ export function useServiceSelector(): UseServiceSelectorReturn {
   const saveEnabledServicesToConfigDebounced = debounceWithError(
     async (services: string[]) => {
       try {
-        console.log('[配置保存] 保存图床选择到配置:', services);
+        log.info('保存图床选择到配置:', services);
 
         let config = await configStore.get<UserConfig>('config');
         if (!config) {
@@ -101,9 +104,9 @@ export function useServiceSelector(): UseServiceSelectorReturn {
         await configStore.set('config', configToSave);
         await configStore.save();
 
-        console.log('[配置保存] ✓ 图床选择已保存');
+        log.info('✓ 图床选择已保存');
       } catch (error) {
-        console.error('[配置保存] 保存失败:', error);
+        log.error('保存失败:', error);
         throw error;
       }
     },
@@ -157,7 +160,7 @@ export function useServiceSelector(): UseServiceSelectorReturn {
       await checkQiyuAvailability(false);
       serviceConfigStatus.value.qiyu = qiyuAvailable.value;
     } catch (error) {
-      console.error('[七鱼] 检测失败:', error);
+      log.error('七鱼检测失败:', error);
       serviceConfigStatus.value.qiyu = false;
     }
 
@@ -256,7 +259,7 @@ export function useServiceSelector(): UseServiceSelectorReturn {
         try {
           await saveEnabledServicesToConfigDebounced.immediate([...selectedServices.value]);
         } catch (error) {
-          console.warn('[服务按钮] 初始同步保存失败:', error);
+          log.warn('初始同步保存失败:', error);
         }
       }
 
@@ -268,19 +271,19 @@ export function useServiceSelector(): UseServiceSelectorReturn {
       );
 
       if (previousSelected.length !== selectedServices.value.length) {
-        console.log('[服务按钮] 自动取消未配置图床的选中状态');
+        log.info('自动取消未配置图床的选中状态');
         try {
           await saveEnabledServicesToConfigDebounced.immediate([...selectedServices.value]);
         } catch (error) {
-          console.warn('[服务按钮] 保存选择状态失败:', error);
+          log.warn('保存选择状态失败:', error);
         }
       }
 
       activePrefix.value = getActivePrefixFromConfig(config);
 
-      console.log('[服务按钮] 已加载状态:', selectedServices.value, '(可用:', availableServices.value, ')');
+      log.info('已加载状态:', selectedServices.value, '(可用:', availableServices.value, ')');
     } catch (error) {
-      console.error('[服务按钮] 加载状态失败:', error);
+      log.error('加载状态失败:', error);
     }
   }
 
@@ -295,7 +298,7 @@ export function useServiceSelector(): UseServiceSelectorReturn {
       selectedServices.value.push(serviceId);
     }
 
-    console.log('[上传] 选中的图床:', selectedServices.value);
+    log.info('选中的图床:', selectedServices.value);
     saveEnabledServicesToConfig([...selectedServices.value]);
   }
 
@@ -318,7 +321,7 @@ export function useServiceSelector(): UseServiceSelectorReturn {
    */
   async function setupConfigListener(): Promise<UnlistenFn> {
     return await listen('config-updated', async () => {
-      console.log('[上传管理] 收到配置更新事件，刷新服务按钮状态');
+      log.info('收到配置更新事件，刷新服务按钮状态');
       await loadServiceButtonStates();
     });
   }

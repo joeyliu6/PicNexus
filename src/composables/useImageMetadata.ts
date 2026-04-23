@@ -3,6 +3,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { ImageMetadata } from '../config/types';
 import { Semaphore } from '../utils/semaphore';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('ImageMetadata');
 
 // ==================== 常量 ====================
 
@@ -40,7 +43,7 @@ export async function getImageMetadata(filePath: string): Promise<ImageMetadata>
     imageMetadataCache.set(filePath, metadata);
     return metadata;
   } catch (error) {
-    console.error('[元信息] 获取图片元信息失败:', error);
+    log.error('获取图片元信息失败:', error);
     return {
       width: 0,
       height: 0,
@@ -86,7 +89,7 @@ export async function fetchMetadataBatch(
       return { filePath, metadata, success: true as const };
     } catch (error) {
       // getImageMetadata 内部已有 try-catch，这里是额外保护
-      console.warn('[元信息] 批量获取时单个文件失败:', filePath, error);
+      log.warn('批量获取时单个文件失败:', filePath, error);
       return {
         filePath,
         metadata: {

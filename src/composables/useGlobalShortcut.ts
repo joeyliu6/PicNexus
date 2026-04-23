@@ -24,6 +24,9 @@ import { MultiServiceUploader, SingleServiceResult } from '../core/MultiServiceU
 import { useHistorySaver } from './useHistorySaver';
 import { formatLinkWithConfig, getLinkFormatConfig } from './useCopyLink';
 import { buildUploadSummaryToast, type UploadCopySummary } from '../utils/uploadSummary';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('GlobalShortcut');
 
 const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
 
@@ -45,7 +48,7 @@ async function notify(title: string, body: string) {
       sendNotification({ title, body, icon });
     }
   } catch (err) {
-    console.error('[全局快捷键] 通知发送失败:', err);
+    log.error('通知发送失败:', err);
   }
 }
 
@@ -104,13 +107,13 @@ async function uploadFileInBackground(filePath: string, config: UserConfig): Pro
         try {
           await historySaver.saveHistoryItemImmediate(filePath, serviceResult, historyId);
         } catch (err) {
-          console.error('[全局快捷键] 保存历史记录失败:', err);
+          log.error('保存历史记录失败:', err);
         }
       } else if (serviceResult.status === 'success' && firstSaved) {
         try {
           await historySaver.addResultToHistoryItem(historyId, serviceResult);
         } catch (err) {
-          console.error('[全局快捷键] 追加历史记录失败:', err);
+          log.error('追加历史记录失败:', err);
         }
       }
     }
@@ -133,7 +136,7 @@ async function withUploadGuard(label: string, fn: () => Promise<void>) {
     await fn();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[全局快捷键] ${label}失败:`, err);
+    log.error(`${label}失败:`, err);
     await notify('上传失败', msg);
   } finally {
     isUploading.value = false;
@@ -192,7 +195,7 @@ const handleClipboardUpload = () => withUploadGuard('剪贴板上传', async () 
       copySummary.copiedCount = 1;
     } catch (err) {
       copySummary.copyFailed = true;
-      console.error('[全局快捷键] 自动复制失败:', err);
+      log.error('自动复制失败:', err);
     }
   }
   await notifyUploadSummary(1, 1, copySummary);
@@ -223,7 +226,7 @@ const handleFileSelectUpload = () => withUploadGuard('文件选择上传', async
         allLinks.push(formatted);
       }
     } catch (err) {
-      console.error(`[全局快捷键] 文件上传失败: ${filePath}`, err);
+      log.error(`文件上传失败: ${filePath}`, err);
     }
   }
 
@@ -233,7 +236,7 @@ const handleFileSelectUpload = () => withUploadGuard('文件选择上传', async
       copySummary.copiedCount = allLinks.length;
     } catch (err) {
       copySummary.copyFailed = true;
-      console.error('[全局快捷键] 自动复制失败:', err);
+      log.error('自动复制失败:', err);
     }
   }
 
@@ -270,9 +273,9 @@ async function registerShortcuts(shortcutConfig: GlobalShortcutConfig) {
         }
       });
       registeredShortcuts.add(shortcut.key);
-      console.log(`[全局快捷键] ${shortcut.name} 已注册: ${shortcut.key}`);
+      log.info(`${shortcut.name} 已注册: ${shortcut.key}`);
     } catch (err) {
-      console.error(`[全局快捷键] ${shortcut.name} 注册失败:`, err);
+      log.error(`${shortcut.name} 注册失败:`, err);
       // 避免重复通知同一个冲突快捷键
       if (!notifiedConflicts.has(shortcut.key)) {
         await notify('PicNexus', `快捷键 ${shortcut.key} 注册失败，可能与其他应用冲突`);
@@ -289,9 +292,9 @@ async function unregisterAllShortcuts() {
   try {
     await unregisterAll();
     registeredShortcuts.clear();
-    console.log('[全局快捷键] 所有快捷键已注销');
+    log.info('所有快捷键已注销');
   } catch (err) {
-    console.error('[全局快捷键] 注销失败:', err);
+    log.error('注销失败:', err);
   }
 }
 
@@ -318,11 +321,11 @@ export function useGlobalShortcut() {
 
         // 对比配置是否变化，只在变化时才重新注册
         if (isShortcutConfigEqual(lastShortcutConfig, newShortcutConfig)) {
-          console.log('[全局快捷键] 配置未变化，跳过重新注册');
+          log.info('配置未变化，跳过重新注册');
           return;
         }
 
-        console.log('[全局快捷键] 配置已更新，重新注册快捷键...');
+        log.info('配置已更新，重新注册快捷键...');
         // 配置变化时清空通知记录，允许新配置的冲突通知
         notifiedConflicts.clear();
         await unregisterAllShortcuts();
@@ -331,9 +334,9 @@ export function useGlobalShortcut() {
         lastShortcutConfig = JSON.parse(JSON.stringify(newShortcutConfig));
       });
 
-      console.log('[全局快捷键] 初始化完成');
+      log.info('初始化完成');
     } catch (err) {
-      console.error('[全局快捷键] 初始化失败:', err);
+      log.error('初始化失败:', err);
     }
   }
 

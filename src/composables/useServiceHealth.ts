@@ -16,6 +16,9 @@ import { SERVICE_REQUIRED_FIELDS, NO_CONFIG_SERVICES, CUSTOM_S3_REQUIRED_FIELDS 
 import { syncStatusStore } from '../store/instances';
 import type { StructuredError } from '../uploaders/base/ErrorTypes';
 import { formatRelativeTime } from '../utils/formatters';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('ServiceHealth');
 
 // ==================== 常量 ====================
 
@@ -56,10 +59,10 @@ function autoLoadFromDisk(): Promise<void> {
             record.errorSource = saved.errorSource;
           }
           triggerRef(healthMap);
-          console.log('[健康状态] 自动加载完成');
+          log.info('自动加载完成');
         }
       } catch (error) {
-        console.error('[健康状态] 自动加载失败:', error);
+        log.error('自动加载失败:', error);
       }
 
     })();
@@ -205,7 +208,7 @@ async function persistHealthStatus(): Promise<void> {
     }
     await syncStatusStore.set(PERSIST_KEY, data);
   } catch (error) {
-    console.error('[健康状态] 持久化失败:', error);
+    log.error('持久化失败:', error);
   }
 }
 

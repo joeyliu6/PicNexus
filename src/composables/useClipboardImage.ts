@@ -60,7 +60,7 @@ export function useClipboardImage() {
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[剪贴板] 读取失败:', error);
+      log.error('读取失败:', error);
       return {
         success: false,
         error: errorMsg

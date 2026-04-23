@@ -2,6 +2,9 @@ import { ref, readonly } from 'vue';
 import { ThemeManager } from '../theme/ThemeManager';
 import { DEFAULT_CONFIG, type UserConfig, type ThemeMode } from '../config/types';
 import { configStore } from '../store/instances';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('ThemeManager');
 let themeManager: ThemeManager | null = null;
 const themeMode = ref<ThemeMode>('auto');
 const effectiveTheme = ref<'light' | 'dark'>('dark');
@@ -24,7 +27,7 @@ export function useThemeManager() {
       effectiveTheme.value = themeManager.getEffectiveTheme();
       isInitialized.value = true;
     } catch (error) {
-      console.error('[ThemeManager] Initialization failed:', error);
+      log.error('Initialization failed:', error);
       themeMode.value = 'auto';
       effectiveTheme.value = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
@@ -38,7 +41,7 @@ export function useThemeManager() {
       themeMode.value = themeManager.getCurrentTheme();
       effectiveTheme.value = themeManager.getEffectiveTheme();
     } catch (error) {
-      console.error('[ThemeManager] Failed to toggle theme:', error);
+      log.error('Failed to toggle theme:', error);
     }
   };
 
@@ -50,7 +53,7 @@ export function useThemeManager() {
       themeMode.value = mode;
       effectiveTheme.value = themeManager.getEffectiveTheme();
     } catch (error) {
-      console.error('[ThemeManager] Failed to set theme:', error);
+      log.error('Failed to set theme:', error);
     }
   };
 

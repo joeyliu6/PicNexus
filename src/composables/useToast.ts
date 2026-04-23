@@ -2,6 +2,9 @@
 
 import { useToast as usePrimeToast } from 'primevue/usetoast';
 import type { ToastMessageConfig } from '../constants/toastMessages';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('Toast');
 
 // 全局静默开关（批量操作时抑制所有 Toast）
 let globalSuppressed = false;
@@ -33,7 +36,7 @@ function isDuplicate(severity: string, summary: string, detail?: string): boolea
 
   // 2秒内重复 → 阻止
   if (lastTime && now - lastTime < DUPLICATE_WINDOW) {
-    console.log(`[Toast防重复] 阻止重复提示: ${summary}`);
+    log.debug(`防重复: 阻止重复提示 ${summary}`);
     return true;
   }
 

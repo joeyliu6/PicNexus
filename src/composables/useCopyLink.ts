@@ -8,6 +8,9 @@ import { getActivePrefix } from '../config/types';
 import type { UserConfig } from '../config/types';
 import { applyPrefixTemplate } from '../utils/linkPrefixTemplate';
 import { formatLink, FORMAT_NAMES, type LinkFormat } from '../utils/linkFormatter';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('CopyLink');
 
 export interface CopyLinkItem {
   url: string;
@@ -140,7 +143,7 @@ export function useCopyLink() {
         format: finalFormat,
       };
     } catch (error) {
-      console.error('[复制链接] 失败:', error);
+      log.error('失败:', error);
       const errorMsg = String(error);
       if (showErrorToast) {
         toast.error('复制失败', errorMsg);
@@ -204,7 +207,7 @@ export function useCopyLink() {
         format: finalFormat,
       };
     } catch (error) {
-      console.error('[批量复制] 失败:', error);
+      log.error('批量复制失败:', error);
       const errorMsg = String(error);
       if (showErrorToast) {
         toast.error('复制失败', errorMsg);

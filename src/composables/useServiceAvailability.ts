@@ -11,6 +11,9 @@ import { isUploading } from './uploadState';
 import { buildServiceCheckSummarySnapshot, useServiceCheckRunner } from './useServiceCheckRunner';
 import type { ServiceCheckMode } from '../types/serviceCheck';
 import type { ServiceHealthStatus } from '../types/serviceHealth';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('ServiceAvailability');
 
 const serviceHealth = useServiceHealth();
 const { markVerified, markTestFailed } = serviceHealth;
@@ -90,7 +93,7 @@ async function loadSyncStatusSafe(): Promise<SyncStatus | null> {
   try {
     return await syncStatusStore.get<SyncStatus>('status');
   } catch (error) {
-    console.error('[服务检测] 加载同步状态失败:', error);
+    log.error('加载同步状态失败:', error);
     return null;
   }
 }
@@ -131,7 +134,7 @@ async function persistBuiltinCheckStatus(
         await syncStatusStore.set('status', updatedStatus);
         await syncStatusStore.save();
       } catch (error) {
-        console.warn('[服务检测] 状态持久化失败（不影响检测结果）:', error);
+        log.warn('状态持久化失败（不影响检测结果）:', error);
       }
     });
 

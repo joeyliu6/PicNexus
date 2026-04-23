@@ -7,6 +7,9 @@
 import { ref, shallowRef } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { HistoryItem, ImageMetadata } from '../config/types';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('MetadataFixer');
 
 // ==================== 类型定义 ====================
 
@@ -82,7 +85,7 @@ export function useImageMetadataFixer() {
           return metadata;
         }
       } catch (e) {
-        console.warn(`[MetadataFixer] 无法读取本地文件: ${item.filePath}`, e);
+        log.warn(`无法读取本地文件: ${item.filePath}`, e);
       }
     }
 
@@ -197,11 +200,11 @@ export function useImageMetadataFixer() {
           });
           successCount++;
         } catch (e) {
-          console.error(`[MetadataFixer] 更新失败: ${update.id}`, e);
+          log.error(`更新失败: ${update.id}`, e);
         }
       }
 
-      console.log(`[MetadataFixer] 批量更新完成: ${successCount}/${updates.length}`);
+      log.info(`批量更新完成: ${successCount}/${updates.length}`);
       return successCount;
     } finally {
       isFlushing.value = false;
@@ -271,7 +274,7 @@ async function getMetadataFromFile(filePath: string): Promise<MetadataFixResult 
     }
   } catch (e) {
     // 文件可能已被删除或移动
-    console.warn(`[MetadataFixer] 无法获取文件元数据: ${filePath}`, e);
+    log.warn(`无法获取文件元数据: ${filePath}`, e);
   }
 
   return null;
