@@ -115,6 +115,7 @@ const props = defineProps<{
   testingConnections: Record<string, boolean>;
   healthStatusMap: Record<string, ServiceHealthStatus>;
   healthTooltipMap: Record<string, string>;
+  refreshingServiceIds: Set<string>;
   targetCardId?: string | null;
 }>();
 
@@ -167,9 +168,10 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
       :health-status="healthStatusMap[svc.id]"
       :health-tooltip="healthTooltipMap[svc.id]"
       :isTesting="testingConnections[svc.id]"
+      :is-refreshing="refreshingServiceIds.has(svc.id)"
       @test="emit('testPrivate', $event)"
     >
-      <div class="form-grid">
+      <form class="form-grid" @submit.prevent>
         <div
           v-for="field in svc.fields"
           :key="field.key"
@@ -186,6 +188,7 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
             toggleMask
             fluid
             :placeholder="field.placeholder"
+            :inputProps="{ autocomplete: 'new-password' }"
           />
           <InputText
             v-else
@@ -197,7 +200,7 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
           />
           <small v-if="field.hint" class="field-hint">{{ field.hint }}</small>
         </div>
-      </div>
+      </form>
     </HostingCard>
 
     <!-- 自定义 S3 多实例 -->
@@ -212,9 +215,10 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
       :health-status="healthStatusMap[makeCustomS3Id(profile.id)]"
       :health-tooltip="healthTooltipMap[makeCustomS3Id(profile.id)]"
       :isTesting="testingConnections[makeCustomS3Id(profile.id)]"
+      :is-refreshing="refreshingServiceIds.has(makeCustomS3Id(profile.id))"
       @test="emit('testPrivate', $event)"
     >
-      <div class="form-grid">
+      <form class="form-grid" @submit.prevent>
         <div
           v-for="field in CUSTOM_S3_FIELDS"
           :key="field.key"
@@ -231,6 +235,7 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
             toggleMask
             fluid
             :placeholder="field.placeholder"
+            :inputProps="{ autocomplete: 'new-password' }"
           />
           <InputText
             v-else
@@ -242,7 +247,7 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
           />
           <small v-if="field.hint" class="field-hint">{{ field.hint }}</small>
         </div>
-      </div>
+      </form>
       <template #actions-right>
         <button class="delete-profile-btn" @click.stop="emit('deleteCustomS3', profile.id)">
           <i class="pi pi-trash"></i>

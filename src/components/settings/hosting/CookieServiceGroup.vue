@@ -34,6 +34,7 @@ const props = defineProps<{
   testingConnections: Record<string, boolean>;
   healthStatusMap: Record<string, ServiceHealthStatus>;
   healthTooltipMap: Record<string, string>;
+  refreshingServiceIds: Set<string>;
   targetCardId?: string | null;
   linkPrefixEnabled: boolean;
   prefixList: LinkPrefixItem[];
@@ -75,11 +76,12 @@ const namiAuthToken = computed(() => {
       :health-status="healthStatusMap[svc.id]"
       :health-tooltip="healthTooltipMap[svc.id]"
       :isTesting="testingConnections[svc.id]"
+      :is-refreshing="refreshingServiceIds.has(svc.id)"
       :showLoginButton="true"
       @test="emit('testCookie', $event)"
       @login="emit('loginCookie', $event)"
     >
-      <div class="form-grid">
+      <form class="form-grid" @submit.prevent>
         <div class="form-item span-full">
           <label>Cookie</label>
           <Textarea v-model="cookieFormData[svc.id].cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
@@ -89,7 +91,7 @@ const namiAuthToken = computed(() => {
           <label>Auth-Token（自动提取）</label>
           <InputText :modelValue="namiAuthToken" readonly class="w-full" disabled />
         </div>
-      </div>
+      </form>
       <template v-if="svc.id === 'weibo'" #extra>
         <WeiboLinkPrefixSection
           :link-prefix-enabled="linkPrefixEnabled"

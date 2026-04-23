@@ -185,7 +185,7 @@ function handleTest() {
         </div>
 
         <!-- 当前配置表单 -->
-        <div v-if="activeProfile" class="simple-form">
+        <form v-if="activeProfile" class="simple-form" @submit.prevent>
           <!-- 配置名称（单列） -->
           <div class="form-field">
             <label>配置名称</label>
@@ -226,6 +226,7 @@ function handleTest() {
                 @blur="handleSave"
                 :feedback="false"
                 toggleMask
+                :inputProps="{ autocomplete: 'new-password' }"
               />
             </div>
           </div>
@@ -261,7 +262,7 @@ function handleTest() {
               size="small"
             />
           </div>
-        </div>
+        </form>
 
         <!-- 无配置提示 -->
         <div v-else class="empty-webdav">

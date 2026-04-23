@@ -26,6 +26,7 @@ const props = defineProps<{
   testingConnections: Record<string, boolean>;
   healthStatusMap: Record<string, ServiceHealthStatus>;
   healthTooltipMap: Record<string, string>;
+  refreshingServiceIds: Set<string>;
   targetCardId?: string | null;
   githubCdnConfig?: GithubCdnConfig;
 }>();
@@ -65,15 +66,16 @@ function isTokenConfigured(providerId: keyof TokenFormData): boolean {
       :health-status="healthStatusMap['smms']"
       :health-tooltip="healthTooltipMap['smms']"
       :isTesting="testingConnections['smms']"
+      :is-refreshing="refreshingServiceIds.has('smms')"
       @test="emit('testToken', $event)"
     >
-      <div class="form-grid">
+      <form class="form-grid" @submit.prevent>
         <div class="form-item span-full">
           <label>API Token</label>
-          <Password v-model="tokenFormData.smms.token" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="从 SM.MS 官网获取 API Token" />
+          <Password v-model="tokenFormData.smms.token" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="从 SM.MS 官网获取 API Token" :inputProps="{ autocomplete: 'new-password' }" />
           <small class="form-hint">访问 <a href="https://sm.ms/home/apitoken" target="_blank">https://sm.ms/home/apitoken</a> 获取 API Token</small>
         </div>
-      </div>
+      </form>
     </HostingCard>
 
     <!-- GitHub -->
@@ -86,12 +88,13 @@ function isTokenConfigured(providerId: keyof TokenFormData): boolean {
       :health-status="healthStatusMap['github']"
       :health-tooltip="healthTooltipMap['github']"
       :isTesting="testingConnections['github']"
+      :is-refreshing="refreshingServiceIds.has('github')"
       @test="emit('testToken', $event)"
     >
-      <div class="form-grid">
+      <form class="form-grid" @submit.prevent>
         <div class="form-item">
           <label>Personal Access Token</label>
-          <Password v-model="tokenFormData.github.token" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="ghp_xxxxxxxxxxxx" />
+          <Password v-model="tokenFormData.github.token" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="ghp_xxxxxxxxxxxx" :inputProps="{ autocomplete: 'new-password' }" />
         </div>
         <div class="form-item">
           <label>Repository Owner</label>
@@ -113,7 +116,7 @@ function isTokenConfigured(providerId: keyof TokenFormData): boolean {
         <div class="form-item span-full">
           <small class="form-hint">访问 <a href="https://github.com/settings/tokens/new?scopes=repo&description=PicNexus" target="_blank">GitHub Token 创建页面</a> 获取 Personal Access Token（需要 repo 权限）</small>
         </div>
-      </div>
+      </form>
       <template #extra>
         <GithubProxySection
           :cdn-config="githubCdnConfig"
@@ -133,21 +136,22 @@ function isTokenConfigured(providerId: keyof TokenFormData): boolean {
       :health-status="healthStatusMap['imgur']"
       :health-tooltip="healthTooltipMap['imgur']"
       :isTesting="testingConnections['imgur']"
+      :is-refreshing="refreshingServiceIds.has('imgur')"
       @test="emit('testToken', $event)"
     >
-      <div class="form-grid">
+      <form class="form-grid" @submit.prevent>
         <div class="form-item">
           <label>Client ID</label>
-          <Password v-model="tokenFormData.imgur.clientId" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="从 Imgur API 获取" />
+          <Password v-model="tokenFormData.imgur.clientId" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="从 Imgur API 获取" :inputProps="{ autocomplete: 'new-password' }" />
         </div>
         <div class="form-item">
           <label>Client Secret（可选）</label>
-          <Password v-model="tokenFormData.imgur.clientSecret" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="可选配置" />
+          <Password v-model="tokenFormData.imgur.clientSecret" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="可选配置" :inputProps="{ autocomplete: 'new-password' }" />
         </div>
         <div class="form-item span-full">
           <small class="form-hint">访问 <a href="https://api.imgur.com/oauth2/addclient" target="_blank">Imgur API</a> 注册应用获取 Client ID</small>
         </div>
-      </div>
+      </form>
     </HostingCard>
   </div>
 </template>
