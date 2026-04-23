@@ -122,9 +122,13 @@ export class GithubUploader extends BaseUploader<GithubServiceConfig> {
     const startTime = Date.now();
     try {
       // 调用 GitHub API 验证仓库权限
+      // Why: 无超时时遇上 GFW/代理 TCP 半开会挂到浏览器默认超时（分钟级），UI 卡 loading
       const response = await fetch(
         `https://api.github.com/repos/${config.owner}/${config.repo}`,
-        { headers: { 'Authorization': `token ${config.token}`, 'User-Agent': 'PicNexus' } }
+        {
+          headers: { 'Authorization': `token ${config.token}`, 'User-Agent': 'PicNexus' },
+          signal: AbortSignal.timeout(10_000)
+        }
       );
       const latency = Date.now() - startTime;
       if (!response.ok) {
