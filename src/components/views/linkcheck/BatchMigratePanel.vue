@@ -60,9 +60,16 @@ onUnmounted(() => {
   manager.dispose();
 });
 
-watch(manager.maxSuccessCount, () => { if (manager.phase.value === 'configuring') debouncedApplyFilter(); });
+// 同步抢占式置 isRefiltering=true，避免 debounce 窗口内 pendingCount 仍为旧值时
+// isAllBackedUp 误判亮起"已全部备份"横幅（闪一下的根因）
+function scheduleRefilter() {
+  manager.isRefiltering.value = true;
+  debouncedApplyFilter();
+}
+
+watch(manager.maxSuccessCount, () => { if (manager.phase.value === 'configuring') scheduleRefilter(); });
 watch([manager.sourceServiceFilter, manager.timestampAfterMs], () => {
-  if (manager.phase.value === 'configuring' && manager.isFilterApplied.value) debouncedApplyFilter();
+  if (manager.phase.value === 'configuring' && manager.isFilterApplied.value) scheduleRefilter();
 });
 
 function handleStartClick() {
