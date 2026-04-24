@@ -8,8 +8,17 @@
 
 set -e
 
+# GitHub Desktop 自带的 bash PATH 找不到 env/bash 解释器，
+# 会让 `npm` 这个 shell 脚本报 "No such file or directory"。
+# Windows 上优先用 npm.cmd（原生 .cmd，不依赖 bash 解释器）。
+if command -v npm.cmd >/dev/null 2>&1; then
+  NPM=npm.cmd
+else
+  NPM=npm
+fi
+
 echo "→ [pre-push] 跑前端测试..."
-npm run test:run
+"$NPM" run test:run
 
 echo "→ [pre-push] 跑 Rust 测试..."
 (cd src-tauri && cargo test --quiet)
