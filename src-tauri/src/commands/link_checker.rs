@@ -148,7 +148,7 @@ fn detect_service_from_url(url: &str) -> Option<&'static str> {
     if host.ends_with(".myqcloud.com") { return Some("cos"); }
     if host.ends_with(".qiniudn.com") || host.ends_with(".qnssl.com") || host.ends_with(".qbox.me") { return Some("qiniu"); }
     if host.ends_with(".smms.app") || host == "i.loli.net" || host == "vip2.loli.io" { return Some("smms"); }
-    if host.ends_with(".nami.observer") || host.contains("nami") { return Some("nami"); }
+    if host.ends_with(".nami.observer") || host == "nami.observer" { return Some("nami"); }
     None
 }
 

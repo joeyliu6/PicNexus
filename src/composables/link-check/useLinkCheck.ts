@@ -52,6 +52,9 @@ const checkRows: Ref<LinkCheckRow[]> = shallowRef([]);
 
 let progressUnlisten: UnlistenFn | null = null;
 let checkSessionId = 0; // 防竞态：每次检测分配唯一 session，旧 finally 不会杀新检测
+// 仅在批量检测「启动」时递增（取消不改），用于判定旧批次结果是否已被新批次替代
+// checkSessionId 会被 cancel 递增，无法区分「只是取消」与「取消后又开新批次」两种场景
+let latestStartedBatchSession = 0;
 let activeRecheckCount = 0; // 防 onViewDeactivated 在单条复检动画期间误触发空闲释放
 
 /** 清理进度监听器，防止累积泄漏 */
@@ -198,6 +201,7 @@ export function useLinkCheckManager() {
     }
 
     const mySession = ++checkSessionId;
+    const myBatchSession = ++latestStartedBatchSession;
     isChecking.value = true;
     resetCheckState();
     progressSource.value = 'monitor';
@@ -247,9 +251,17 @@ export function useLinkCheckManager() {
         },
       });
 
+      // 被新批次替代：老批次返回的结果不再写入 UI/DB，避免与正在运行的新批次竞争
+      if (latestStartedBatchSession !== myBatchSession) {
+        log.info('[LinkCheck] 全量批量结果被新批次替代，已丢弃');
+        return null;
+      }
+
       // 即使被取消，也要处理已完成的结果并入库
       lastBatchResult.value = result;
       applyResultsToRows(rows, result.results);
+      // 全量批量后清除单条重检遗留的排序锁定（否则旧 pinnedSortWeight 会锁死位置）
+      for (const row of rows) row.pinnedSortWeight = undefined;
       checkRows.value = [...rows];
       rebuildRowIndex();
 
@@ -291,6 +303,13 @@ export function useLinkCheckManager() {
     source: 'monitor' | 'rescue' = 'rescue',
   ): Promise<BatchCheckResult | null> {
     if (items.length === 0) return null;
+
+    // 阻断并发：Rust 侧 cancel_flag + 前端 progressUnlisten 均为全局单例，
+    // 同时跑多个批次会相互取消/覆盖监听器
+    if (isChecking.value) {
+      toast.warn('检测进行中', '请等待当前检测完成后再试');
+      return null;
+    }
 
     isChecking.value = true;
     progressSource.value = source;
@@ -415,6 +434,7 @@ export function useLinkCheckManager() {
     }
 
     const mySession = ++checkSessionId;
+    const myBatchSession = ++latestStartedBatchSession;
     isChecking.value = true;
     progressSource.value = 'monitor';
     progress.value = null;
@@ -444,6 +464,12 @@ export function useLinkCheckManager() {
           ...DEFAULT_CHECK_PARAMS,
         },
       });
+
+      // 被新批次替代：老批次结果不再写入，避免污染新批次状态
+      if (latestStartedBatchSession !== myBatchSession) {
+        log.info('[LinkCheck] 子集批量结果被新批次替代，已丢弃');
+        return null;
+      }
 
       // 即使被取消，也要处理已完成的结果并入库
       const allRows = [...checkRows.value];
