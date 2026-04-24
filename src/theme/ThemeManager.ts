@@ -1,5 +1,8 @@
 import { Store } from '../store';
 import type { UserConfig, ThemeMode } from '../config/types';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('ThemeManager');
 
 type EffectiveTheme = 'light' | 'dark';
 
@@ -33,27 +36,31 @@ export class ThemeManager {
   }
 
   async setTheme(mode: ThemeMode): Promise<void> {
-    this.stopSystemListener();
-
-    if (mode === 'auto') {
-      this.startSystemListener();
-    }
-
-    const effective = this.resolveEffectiveTheme(mode);
-    this.applyThemeClass(effective);
-
-    this.config.theme = {
+    const previousMode = this.config.theme?.mode || 'auto';
+    const nextConfigTheme = {
       mode,
       enableTransitions: false,
-      transitionDuration: this.config.theme?.transitionDuration || 300
+      transitionDuration: this.config.theme?.transitionDuration || 300,
     };
 
+    // 先落盘，成功后再改 DOM / 切换监听。避免"DOM 已切到新主题但
+    // 磁盘写入失败"，下次启动读旧 config 恢复旧主题导致抽搐。
+    this.config.theme = nextConfigTheme;
     try {
       await this.store.set('config', this.config);
       await this.store.save();
     } catch (error) {
-      console.error('Failed to save theme configuration:', error);
+      // 回滚内存 config，保持与磁盘一致
+      this.config.theme = { ...nextConfigTheme, mode: previousMode };
+      log.error('保存主题配置失败，已回滚', error);
+      throw error;
     }
+
+    this.stopSystemListener();
+    if (mode === 'auto') {
+      this.startSystemListener();
+    }
+    this.applyThemeClass(this.resolveEffectiveTheme(mode));
   }
 
   /**
