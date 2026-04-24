@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use image::imageops::FilterType;
@@ -8,6 +9,9 @@ use serde::Serialize;
 use tauri::Manager;
 
 use crate::error::AppError;
+
+/// 全局原子计数器，为压缩临时文件生成唯一后缀，避免同名文件在同一毫秒并发压缩时覆盖。
+static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Serialize)]
 pub struct CompressResult {
@@ -140,7 +144,10 @@ pub async fn compress_image(
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis();
-        let output_path = compress_dir.join(format!("{}_{}.{}", stem, timestamp, out_ext));
+        // Why: 毫秒时间戳在并发场景下可能碰撞（用户同时压缩不同目录的同名文件），
+        //      拼接原子计数器彻底消除命名竞争。
+        let seq = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let output_path = compress_dir.join(format!("{}_{}_{}.{}", stem, timestamp, seq, out_ext));
 
         // 当关闭 strip_exif 时，在 JPEG → JPEG 路径尽量保留原始 EXIF。
         // 其他格式受当前编码链路限制，无法稳定保留。
@@ -523,7 +530,9 @@ pub async fn strip_exif_only(
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis();
-        let output_path = compress_dir.join(format!("{}_{}.{}", stem, timestamp, out_ext));
+        // 同 compress_image：拼接原子计数器避免并发同名碰撞
+        let seq = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let output_path = compress_dir.join(format!("{}_{}_{}.{}", stem, timestamp, seq, out_ext));
 
         // 用高质量重编码，自然去除 EXIF
         match out_ext {
