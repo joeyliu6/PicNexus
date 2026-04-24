@@ -105,13 +105,25 @@ async function handleThemeChange(mode: ThemeMode) {
 }
 
 async function handleAutoStartChange(enabled: boolean) {
+  // Why: OS 侧（autostart 插件）与磁盘配置必须同步落地。旧逻辑把 saveSettings 放在
+  //   try/catch 外，invoke 成功但 saveSettings 失败时会出现"OS 已改、disk 未改"漂移，
+  //   重启后 initialize 读旧 config 又尝试改 OS 状态，形成二次不一致。
+  // saveSettings 内部吞异常，以 boolean 返回成败；所以这里用返回值而非 try/catch。
+  const prev = formData.value.appBehavior.autoStart;
   formData.value.appBehavior.autoStart = enabled;
-  try { await invoke(enabled ? 'plugin:autostart|enable' : 'plugin:autostart|disable'); }
-  catch (e) {
+  try {
+    await invoke(enabled ? 'plugin:autostart|enable' : 'plugin:autostart|disable');
+  } catch (e) {
     toast.showConfig('error', TOAST_MESSAGES.config.saveFailed(String(e)));
-    formData.value.appBehavior.autoStart = !enabled;
+    formData.value.appBehavior.autoStart = prev;
+    return;
   }
-  saveSettings();
+  const saved = await saveSettings();
+  if (!saved) {
+    // 磁盘写入失败：回滚 OS 状态以保持一致（saveSettings 已 toast 过错误原因）
+    try { await invoke(prev ? 'plugin:autostart|enable' : 'plugin:autostart|disable'); } catch { /* 回滚失败也只能如此 */ }
+    formData.value.appBehavior.autoStart = prev;
+  }
 }
 
 async function handleCloseToTrayChange(enabled: boolean) {

@@ -8,7 +8,26 @@
 //
 // 若 template 不含任何占位符，自动在末尾追加 {url}，等价于旧版纯前缀拼接。
 
+export const KNOWN_PLACEHOLDERS = ['url', 'url_no_scheme', 'path', 'url_encoded'] as const;
+
 const PLACEHOLDER_RE = /\{(url|url_no_scheme|path|url_encoded)\}/g;
+/** 宽松匹配任意 {xxx} 占位符片段，用于检测未知占位符 */
+const ANY_PLACEHOLDER_RE = /\{([a-zA-Z_][\w-]*)\}/g;
+
+/**
+ * 找出模板中不在已知白名单内的占位符（去重，原样不含花括号）
+ * 用于 UI 层校验：允许保存，但提示这些字面量不会被替换
+ */
+export function findUnknownPlaceholders(template: string): string[] {
+  const known = new Set<string>(KNOWN_PLACEHOLDERS);
+  const unknown = new Set<string>();
+  ANY_PLACEHOLDER_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = ANY_PLACEHOLDER_RE.exec(template)) !== null) {
+    if (!known.has(m[1])) unknown.add(m[1]);
+  }
+  return [...unknown];
+}
 
 function stripScheme(url: string): string {
   return url.replace(/^https?:\/\//, '');

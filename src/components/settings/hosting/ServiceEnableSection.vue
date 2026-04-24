@@ -7,6 +7,7 @@ import type { BatchTestProgress } from '../../../types/batchTest';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
 import { useHealthCheck } from '../../../composables/settings/useHealthCheck';
 import type { ServiceCheckSession } from '../../../types/serviceCheck';
+import { useToast } from '../../../composables/useToast';
 
 const props = defineProps<{
   healthStatusMap: Record<string, ServiceHealthStatus>;
@@ -97,9 +98,22 @@ const localAvailableServices = computed({
   set: (val) => emit('update:availableServices', val)
 });
 
+const toast = useToast();
+
 function toggleService(service: ServiceType) {
   const current = localAvailableServices.value;
-  localAvailableServices.value = current.includes(service)
+  const isRemoving = current.includes(service);
+  // Why: useConfig.saveConfig 会在 availableServices 为空时拒绝保存并 toast,
+  //   但 UI 状态已先变空产生闪烁，也容易触发上传空图床路径。这里在 UI 层直接拦截。
+  if (isRemoving && current.length <= 1) {
+    toast.showConfig('warn', {
+      summary: '至少保留一个图床',
+      detail: '启用的图床不能全部关闭，请先启用另一个再关闭当前服务。',
+      life: 3000,
+    });
+    return;
+  }
+  localAvailableServices.value = isRemoving
     ? current.filter(s => s !== service)
     : [...current, service];
   emit('save');

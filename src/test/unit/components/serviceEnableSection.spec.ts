@@ -1,5 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
+
+// 组件内用 useToast 做"至少保留一个图床"拦截提示；单测无 PrimeVue ToastService 上下文，
+// 直接 mock 成 no-op 避免 mount 时抛 "No PrimeVue Toast provided"
+vi.mock('../../../composables/useToast', () => ({
+  useToast: () => ({
+    success: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn(),
+    show: vi.fn(), clear: vi.fn(),
+    showConfig: vi.fn(),
+  }),
+}));
+
 import ServiceEnableSection from '../../../components/settings/hosting/ServiceEnableSection.vue';
 
 const tooltipDirective = {

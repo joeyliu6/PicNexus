@@ -5,8 +5,9 @@ import ToggleSwitch from 'primevue/toggleswitch';
 import RadioButton from 'primevue/radiobutton';
 import Button from 'primevue/button';
 import type { LinkPrefixItem } from '../../../config/types';
-import { applyPrefixTemplate } from '../../../utils/linkPrefixTemplate';
+import { applyPrefixTemplate, findUnknownPlaceholders, KNOWN_PLACEHOLDERS } from '../../../utils/linkPrefixTemplate';
 import { useConfirm } from '../../../composables/useConfirm';
+import { useToast } from '../../../composables/useToast';
 
 interface Props {
   linkPrefixEnabled: boolean;
@@ -27,6 +28,7 @@ const emit = defineEmits<{
 }>();
 
 const { showConfirm } = useConfirm();
+const toast = useToast();
 
 const editingIndex = ref(-1);
 
@@ -59,6 +61,64 @@ function updatePrefixField(index: number, field: keyof LinkPrefixItem, value: st
   const current = props.prefixList[index];
   if (!current) return;
   emit('updatePrefix', { index, item: { ...current, [field]: value } });
+}
+
+// blur 时：trim 并校验占位符，再统一触发 save
+// Why: 防止用户误输入纯空白/空字符串/未知占位符（如 {wrong}）落盘后产生畸形链接
+function handleFieldBlur(index: number) {
+  const current = props.prefixList[index];
+  if (!current) { emit('save'); return; }
+
+  const trimmedName = (current.name ?? '').trim();
+  const trimmedTemplate = (current.template ?? '').trim();
+
+  let nextName = trimmedName;
+  const nextTemplate = trimmedTemplate;
+  let changed = false;
+
+  if (nextName !== current.name) { changed = true; }
+  if (nextTemplate !== current.template) { changed = true; }
+
+  // 名称空 → 回退到"未命名"占位，避免持久化空串
+  if (!nextName) {
+    nextName = '未命名';
+    changed = true;
+    toast.showConfig('warn', {
+      summary: '前缀名称不能为空',
+      detail: '已自动填入"未命名"，请稍后重新命名。',
+      life: 3000,
+    });
+  }
+
+  // 模板空 → 阻止保存并回滚，提示用户
+  if (!nextTemplate) {
+    toast.showConfig('warn', {
+      summary: '模板不能为空',
+      detail: '请填入 https:// 开头的地址或包含 {url} 等占位符的模板。',
+      life: 3500,
+    });
+    // 不 emit save，让用户继续编辑；同步清理名称 trim
+    if (changed && nextName !== current.name) {
+      emit('updatePrefix', { index, item: { ...current, name: nextName } });
+    }
+    return;
+  }
+
+  // 校验未知占位符：宽松模式——不阻止保存，仅 warn（用户可能是故意写字面量）
+  const unknown = findUnknownPlaceholders(nextTemplate);
+  if (unknown.length > 0) {
+    const supported = KNOWN_PLACEHOLDERS.map(t => `{${t}}`).join(' ');
+    toast.showConfig('warn', {
+      summary: '存在未知占位符',
+      detail: `以下占位符不会被替换，将作为字面量保留：${unknown.map(t => `{${t}}`).join(' ')}。支持的占位符：${supported}。`,
+      life: 5000,
+    });
+  }
+
+  if (changed) {
+    emit('updatePrefix', { index, item: { ...current, name: nextName, template: nextTemplate } });
+  }
+  emit('save');
 }
 
 function handleAdd() {
@@ -155,7 +215,7 @@ function renderPreview(prefix: LinkPrefixItem): string {
                 class="flex-1"
                 size="small"
                 @update:modelValue="(val) => updatePrefixField(idx, 'name', val as string)"
-                @blur="emit('save')"
+                @blur="handleFieldBlur(idx)"
               />
             </div>
             <div class="prefix-field-row">
@@ -166,7 +226,7 @@ function renderPreview(prefix: LinkPrefixItem): string {
                 class="flex-1 prefix-template-input"
                 size="small"
                 @update:modelValue="(val) => updatePrefixField(idx, 'template', val as string)"
-                @blur="emit('save')"
+                @blur="handleFieldBlur(idx)"
               />
             </div>
             <div class="prefix-vars-hint">

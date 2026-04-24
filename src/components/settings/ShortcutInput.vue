@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onUnmounted } from 'vue';
 
 interface Props {
   modelValue: string;
@@ -17,9 +17,41 @@ const emit = defineEmits<{
 const isRecording = ref(false);
 const inputRef = ref<HTMLDivElement | null>(null);
 
+// 按键拒绝提示（仅在录制中显示一次性文案）
+const rejectHint = ref(false);
+let rejectHintTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Tauri accelerator 支持的主键白名单：非字母/数字/F 键的 code → Tauri token
+// 参考 tauri-apps/global-hotkey 的 Code 枚举命名
+const CODE_TO_TOKEN: Record<string, string> = {
+  Space: 'Space', Tab: 'Tab', Enter: 'Enter',
+  Backspace: 'Backspace', Delete: 'Delete', Insert: 'Insert',
+  Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown',
+  ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right',
+  Minus: 'Minus', Equal: 'Equal',
+  BracketLeft: 'BracketLeft', BracketRight: 'BracketRight', Backslash: 'Backslash',
+  Semicolon: 'Semicolon', Quote: 'Quote',
+  Comma: 'Comma', Period: 'Period', Slash: 'Slash', Backquote: 'Backquote',
+};
+
+function codeToAcceleratorToken(code: string): string | null {
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+  if (/^Digit\d$/.test(code)) return code.slice(5);
+  if (/^F([1-9]|1\d|2[0-4])$/.test(code)) return code;
+  return CODE_TO_TOKEN[code] ?? null;
+}
+
+function showRejectHint() {
+  rejectHint.value = true;
+  if (rejectHintTimer) clearTimeout(rejectHintTimer);
+  rejectHintTimer = setTimeout(() => { rejectHint.value = false; }, 1600);
+}
+
 /** 将 Tauri 格式快捷键转为人类可读格式 */
 const displayValue = computed(() => {
-  if (isRecording.value) return '请按下快捷键...';
+  if (isRecording.value) {
+    return rejectHint.value ? '按键不支持，请用字母/数字/F 键等' : '请按下快捷键...';
+  }
   if (!props.modelValue) return '';
   return props.modelValue
     .replace(/CommandOrControl/g, isMac() ? '⌘' : 'Ctrl')
@@ -39,6 +71,8 @@ function handleFocus() {
 
 function handleBlur() {
   isRecording.value = false;
+  rejectHint.value = false;
+  if (rejectHintTimer) { clearTimeout(rejectHintTimer); rejectHintTimer = null; }
 }
 
 function handleKeyDown(e: KeyboardEvent) {
@@ -68,19 +102,19 @@ function handleKeyDown(e: KeyboardEvent) {
   // 至少需要一个修饰键
   if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) return;
 
+  // 主键白名单校验：非白名单键（如 =、/、;、方向键已映射为 Up/Down/…）直接拒绝
+  // Why: 旧逻辑用 e.key.toUpperCase() 会把 = / ; 等字面量塞进 accelerator,
+  //   Tauri globalShortcut 无法识别，用户看似录入成功但注册时静默失败
+  const mainKey = codeToAcceleratorToken(e.code);
+  if (!mainKey) {
+    showRejectHint();
+    return;
+  }
+
   const parts: string[] = [];
   if (e.ctrlKey || e.metaKey) parts.push('CommandOrControl');
   if (e.shiftKey) parts.push('Shift');
   if (e.altKey) parts.push('Alt');
-
-  // 获取主键
-  let mainKey = e.key.toUpperCase();
-  if (e.code.startsWith('Key')) {
-    mainKey = e.code.replace('Key', '');
-  } else if (e.code.startsWith('Digit')) {
-    mainKey = e.code.replace('Digit', '');
-  }
-
   parts.push(mainKey);
   const shortcut = parts.join('+');
 
@@ -88,6 +122,10 @@ function handleKeyDown(e: KeyboardEvent) {
   isRecording.value = false;
   inputRef.value?.blur();
 }
+
+onUnmounted(() => {
+  if (rejectHintTimer) { clearTimeout(rejectHintTimer); rejectHintTimer = null; }
+});
 </script>
 
 <template>
