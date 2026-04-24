@@ -18,11 +18,23 @@ import {
   mode,
   filePath,
   folderPath,
+  mdFiles,
   imageLinks,
   fileContent,
 } from './shared';
 
 const log = createLogger('MdRescue:Backup');
+
+/** 对路径计算短 hash（6 字符），用于多文件拖入时做备份文件名防撞前缀 */
+function hashPath(path: string): string {
+  let h = 0x811c9dc5; // FNV-1a 32bit seed
+  const normalized = path.replace(/\\/g, '/');
+  for (let i = 0; i < normalized.length; i++) {
+    h ^= normalized.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0').slice(0, 6);
+}
 
 /**
  * 执行链接替换（支持多文件），推进 fixing → done 阶段
@@ -108,6 +120,11 @@ export async function executeReplace(unrescuableCount: number): Promise<{
           bakPath = await join(backupDir, relativePath);
           const bakParent = await dirname(bakPath);
           await mkdir(bakParent, { recursive: true });
+        } else if (mdFiles.value.length > 1) {
+          // 多文件拖入：不同目录下的同名文件不能共用 basename，否则 undo 会互相覆盖
+          // 用 path hash 前缀 + basename 保留可读性
+          const fileName = await basename(file);
+          bakPath = await join(backupDir, `${hashPath(file)}_${fileName}`);
         } else {
           const fileName = await basename(file);
           bakPath = await join(backupDir, fileName);

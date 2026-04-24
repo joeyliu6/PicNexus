@@ -401,7 +401,14 @@ export async function runLinkCheck(params: {
     }
   }
 
-  if (!isCancelled.value) {
+  // Phase 1 取消已在前面分支处理（L352 scanStage='cancelled'）
+  // 这里兜底 Phase 2 期间被取消的场景：否则 scanStage 会卡在 'cancelling'
+  if (isCancelled.value) {
+    if (scanStage.value !== 'cancelled') {
+      scanStage.value = 'cancelled';
+      log.info('Phase 2 期间被取消，保留已验证的备用链接结果');
+    }
+  } else {
     scanStage.value = 'complete';
   }
 }

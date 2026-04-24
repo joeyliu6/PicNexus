@@ -106,6 +106,10 @@ export function useMdLinkFilter() {
   });
 
   const totalPages = computed(() => Math.max(1, Math.ceil(filteredLinks.value.length / PAGE_SIZE)));
+  // 扫描过程中 imageLinks 持续变化，filteredLinks 可能缩水导致 currentPage 越界 → 页面空白
+  watch(totalPages, (tp) => {
+    if (currentPage.value > tp) currentPage.value = tp;
+  });
   const visibleLinks = computed(() => {
     const start = (currentPage.value - 1) * PAGE_SIZE;
     return filteredLinks.value.slice(start, start + PAGE_SIZE);
