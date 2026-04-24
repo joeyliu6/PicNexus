@@ -195,7 +195,19 @@ export async function migrateOneItem(
         ...item.results,
         ...newResults.map(r => ({ serviceId: r.serviceId, result: r.result, status: r.status, error: r.error })),
       ];
-      await historyDB.update(item.id, { results: updatedResults });
+
+      // 同步 linkCheckSummary：新追加的成功图床尚未检测，计入 total 和 unchecked
+      const appendedSuccess = newResults.filter(r => r.status === 'success').length;
+      const updates: Partial<HistoryItem> = { results: updatedResults };
+      if (appendedSuccess > 0 && item.linkCheckSummary) {
+        updates.linkCheckSummary = {
+          ...item.linkCheckSummary,
+          totalLinks: item.linkCheckSummary.totalLinks + appendedSuccess,
+          uncheckedLinks: item.linkCheckSummary.uncheckedLinks + appendedSuccess,
+        };
+      }
+
+      await historyDB.update(item.id, updates);
       status.status = 'success';
     } catch (e) {
       log.error(`更新历史记录失败: ${item.id}`, e);

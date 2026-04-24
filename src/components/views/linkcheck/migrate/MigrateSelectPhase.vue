@@ -44,6 +44,12 @@ function toggleSourceFilter(serviceId: string) {
   }
 }
 
+function toggleAllSources(selectAll: boolean) {
+  sourceServiceFilter.value = selectAll
+    ? availableSourceServices.value.map(s => s.id)
+    : [];
+}
+
 const displayedSourceList = computed(() => {
   return sourceServiceFilter.value.length === 0
     ? availableSourceServices.value.map(s => s.displayName)
@@ -103,6 +109,7 @@ function handleTargetToggle(serviceId: string) {
       <div class="sk-left">
         <div class="sk-column-head">
           <div class="sk-column-label" />
+          <div class="sk-toggle-all" />
           <div class="sk-filter-trigger" />
         </div>
         <div v-for="i in 8" :key="i" class="sk-source-row">
@@ -152,6 +159,7 @@ function handleTargetToggle(serviceId: string) {
         :sources="availableSourceServices"
         :selectedIds="sourceServiceFilter"
         @toggle="toggleSourceFilter"
+        @toggle-all="toggleAllSources"
       >
         <template #filter-trigger>
           <MigrateFilterPopover
@@ -269,7 +277,7 @@ function handleTargetToggle(serviceId: string) {
 .sk-right { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 
 /* 共用 shimmer：用 border-subtle-light 作底（比 bg-surface-low 色深更多，更明显） */
-.sk-column-label, .sk-filter-trigger, .sk-checkbox, .sk-icon, .sk-dot, .sk-line, .sk-bottom-text, .sk-bottom-btn {
+.sk-column-label, .sk-filter-trigger, .sk-toggle-all, .sk-checkbox, .sk-icon, .sk-dot, .sk-line, .sk-bottom-text, .sk-bottom-btn {
   background: linear-gradient(90deg, var(--border-subtle-light) 25%, var(--bg-card) 50%, var(--border-subtle-light) 75%);
   background-size: 200% 100%;
   animation: k-shimmer var(--duration-shimmer) ease-in-out infinite;
@@ -284,7 +292,8 @@ function handleTargetToggle(serviceId: string) {
 }
 
 .sk-column-label { width: 64px; height: var(--text-xs); }
-.sk-filter-trigger { width: 24px; height: 24px; margin-left: auto; border-radius: var(--radius-sm-md); }
+.sk-toggle-all { width: 32px; height: var(--text-xs); margin-left: auto; border-radius: var(--radius-sm); }
+.sk-filter-trigger { width: 24px; height: 24px; border-radius: var(--radius-sm-md); }
 
 .sk-source-row {
   display: flex; align-items: center; gap: var(--space-sm);

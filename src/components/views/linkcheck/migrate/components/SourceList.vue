@@ -5,6 +5,7 @@
  * 筛选入口（备份数 / 时间范围）通过具名 slot `filter-trigger`
  * 由父组件 MigrateSelectPhase 注入 MigrateFilterPopover，保证 SourceList 只管渲染列表。
  */
+import { computed } from 'vue';
 import Checkbox from 'primevue/checkbox';
 import InlineEmptyState from '../../../../common/InlineEmptyState.vue';
 import { getServiceIcon } from '../../../../../utils/icons';
@@ -16,14 +17,25 @@ interface SourceItem {
   count: number;
 }
 
-defineProps<{
+const props = defineProps<{
   sources: SourceItem[];
   selectedIds: string[];
 }>();
 
 const emit = defineEmits<{
   toggle: [serviceId: string];
+  toggleAll: [selectAll: boolean];
 }>();
+
+const allSelected = computed(
+  () => props.sources.length > 0 && props.selectedIds.length === props.sources.length,
+);
+
+const toggleAllLabel = computed(() => (allSelected.value ? '清空' : '全选'));
+
+function handleToggleAll() {
+  emit('toggleAll', !allSelected.value);
+}
 </script>
 
 <template>
@@ -39,6 +51,13 @@ const emit = defineEmits<{
     <!-- 栏目标签 + 来源列表（与右栏「到这里」呼应，暗示从左到右迁移方向） -->
     <div v-else class="column-label">
       <span class="column-label-text">从这里</span>
+      <button
+        type="button"
+        class="toggle-all-btn"
+        @click="handleToggleAll"
+      >
+        {{ toggleAllLabel }}
+      </button>
       <span class="column-label-trigger">
         <slot name="filter-trigger" />
       </span>
@@ -93,10 +112,35 @@ const emit = defineEmits<{
 
 .column-label-text { flex-shrink: 0; }
 
+.toggle-all-btn {
+  margin-left: auto;
+  padding: var(--space-2xs) var(--space-xs);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition:
+    color var(--duration-normal) var(--ease-decelerate),
+    background var(--duration-normal) var(--ease-decelerate);
+}
+
+.toggle-all-btn:hover {
+  color: var(--primary);
+  background: var(--hover-overlay-subtle);
+}
+
+.toggle-all-btn:focus-visible {
+  outline: 2px solid var(--primary-alpha-40);
+  outline-offset: 1px;
+}
+
 .column-label-trigger {
   display: inline-flex;
   align-items: center;
-  margin-left: auto;
 }
 
 .source-list { display: flex; flex-direction: column; gap: var(--space-2xs); flex: 1; }
