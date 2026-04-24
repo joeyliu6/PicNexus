@@ -6,14 +6,14 @@ const {
   toastWarnMock,
   toastErrorMock,
   copyLinkActionMock,
-  applyPrefixMock,
+  applyConfiguredUrlMock,
   confirmDeleteMock,
   shellOpenMock,
 } = vi.hoisted(() => ({
   toastWarnMock: vi.fn(),
   toastErrorMock: vi.fn(),
   copyLinkActionMock: vi.fn(),
-  applyPrefixMock: vi.fn((url: string, serviceId?: string) => `prefixed:${serviceId}:${url}`),
+  applyConfiguredUrlMock: vi.fn((url: string, serviceId?: string) => `prefixed:${serviceId}:${url}`),
   confirmDeleteMock: vi.fn(),
   shellOpenMock: vi.fn(),
 }));
@@ -28,7 +28,7 @@ vi.mock('../../../../composables/useToast', () => ({
 vi.mock('../../../../composables/useCopyLink', () => ({
   useCopyLink: () => ({
     copyLink: copyLinkActionMock,
-    applyPrefix: applyPrefixMock,
+    applyConfiguredUrl: applyConfiguredUrlMock,
   }),
 }));
 
@@ -196,7 +196,7 @@ describe('useLightboxActions', () => {
 
     await harness.api().openInBrowser();
 
-    expect(applyPrefixMock).toHaveBeenCalledWith('https://img.example.com/demo.png', 'weibo');
+    expect(applyConfiguredUrlMock).toHaveBeenCalledWith('https://img.example.com/demo.png', 'weibo');
     expect(shellOpenMock).toHaveBeenCalledWith('prefixed:weibo:https://img.example.com/demo.png');
 
     shellOpenMock.mockRejectedValueOnce(new Error('denied'));

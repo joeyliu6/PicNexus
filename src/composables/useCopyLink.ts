@@ -7,6 +7,7 @@ import { useToast } from './useToast';
 import { getActivePrefix } from '../config/types';
 import type { UserConfig } from '../config/types';
 import { applyPrefixTemplate } from '../utils/linkPrefixTemplate';
+import { applyZhihuSourceFromConfig } from '../utils/zhihuSource';
 import { formatLink, FORMAT_NAMES, type LinkFormat } from '../utils/linkFormatter';
 import { createLogger } from '../utils/logger';
 
@@ -51,6 +52,14 @@ export function applyLinkPrefix(url: string, serviceId: string | undefined, conf
 }
 
 /**
+ * 对原始 URL 应用所有配置化的 URL 变换（知乎 source、微博前缀等）。
+ */
+export function applyConfiguredUrlWithConfig(url: string, serviceId: string | undefined, config: UserConfig): string {
+  const withZhihuSource = applyZhihuSourceFromConfig(url, config);
+  return applyLinkPrefix(withZhihuSource, serviceId, config);
+}
+
+/**
  * 从 config 中提取格式配置
  */
 export function getLinkFormatConfig(config: UserConfig) {
@@ -72,7 +81,7 @@ export function formatLinkWithConfig(
 ): string {
   const { format: defaultFormat, customTemplate } = getLinkFormatConfig(config);
   const finalFormat = format || defaultFormat;
-  const finalUrl = applyLinkPrefix(item.url, item.serviceId, config);
+  const finalUrl = applyConfiguredUrlWithConfig(item.url, item.serviceId, config);
   return formatLink(finalUrl, item.fileName, finalFormat, customTemplate, {
     width: item.width,
     height: item.height,
@@ -91,6 +100,10 @@ export function useCopyLink() {
 
   function applyPrefix(url: string, serviceId?: string): string {
     return applyLinkPrefix(url, serviceId, configManager.config.value);
+  }
+
+  function applyConfiguredUrl(url: string, serviceId?: string): string {
+    return applyConfiguredUrlWithConfig(url, serviceId, configManager.config.value);
   }
 
   function getFormatConfig() {
@@ -226,6 +239,7 @@ export function useCopyLink() {
     copyLinks,
     formatSingleLink,
     applyPrefix,
+    applyConfiguredUrl,
     getFormatConfig,
   };
 }
