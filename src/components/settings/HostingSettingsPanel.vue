@@ -23,7 +23,7 @@ interface PrivateFormData {
 
 interface CookieFormData {
   weibo: { cookie: string };
-  zhihu: { cookie: string };
+  zhihu: { cookie: string; sourceParamEnabled?: boolean; sourceParamValue?: string };
   nowcoder: { cookie: string };
   nami: { cookie: string };
   bilibili: { cookie: string };

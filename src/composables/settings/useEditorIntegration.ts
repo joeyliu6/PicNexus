@@ -53,7 +53,12 @@ export function useEditorIntegration(options: UseEditorIntegrationOptions) {
       case 'chaoxing':
         return JSON.stringify({ type: 'chaoxing', cookie: fd.chaoxing.cookie });
       case 'zhihu':
-        return JSON.stringify({ type: 'zhihu', cookie: fd.zhihu.cookie });
+        return JSON.stringify({
+          type: 'zhihu',
+          cookie: fd.zhihu.cookie,
+          sourceParamEnabled: fd.zhihu.sourceParamEnabled ?? true,
+          sourceParamValue: fd.zhihu.sourceParamValue,
+        });
       case 'nami': {
         const cookie = fd.nami.cookie;
         const tokenMatch = cookie.match(/token=([^;]+)/);
@@ -113,7 +118,11 @@ export function useEditorIntegration(options: UseEditorIntegrationOptions) {
       case 'chaoxing':
         return fd.chaoxing.cookie;
       case 'zhihu':
-        return fd.zhihu.cookie;
+        return [
+          fd.zhihu.cookie,
+          fd.zhihu.sourceParamEnabled ?? true,
+          fd.zhihu.sourceParamValue ?? '',
+        ].join('|');
       case 'nami':
         return [fd.nami.cookie, fd.nami.authToken].join('|');
       case 'r2':

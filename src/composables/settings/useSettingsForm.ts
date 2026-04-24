@@ -48,7 +48,7 @@ export interface SettingsFormShape {
   upyun: { operator: string; password: string; bucket: string; publicDomain: string; path: string };
   custom_s3_profiles: CustomS3Profile[];
   nowcoder: { cookie: string };
-  zhihu: { cookie: string };
+  zhihu: { cookie: string; sourceParamEnabled?: boolean; sourceParamValue?: string };
   nami: { cookie: string; authToken: string };
   bilibili: { cookie: string };
   chaoxing: { cookie: string };
@@ -79,7 +79,7 @@ export function useSettingsForm() {
     upyun: { operator: '', password: '', bucket: '', publicDomain: '', path: '' },
     custom_s3_profiles: [] as CustomS3Profile[],
     nowcoder: { cookie: '' },
-    zhihu: { cookie: '' },
+    zhihu: { cookie: '', sourceParamEnabled: true, sourceParamValue: '172ae18b' },
     nami: { cookie: '', authToken: '' },
     bilibili: { cookie: '' },
     chaoxing: { cookie: '' },

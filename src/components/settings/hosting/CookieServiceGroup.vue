@@ -3,13 +3,14 @@ import Textarea from 'primevue/textarea';
 import InputText from 'primevue/inputtext';
 import HostingCard from '../HostingCard.vue';
 import WeiboLinkPrefixSection from './WeiboLinkPrefixSection.vue';
+import ZhihuSourceSection from './ZhihuSourceSection.vue';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
 import type { LinkPrefixItem } from '../../../config/types';
 import { computed } from 'vue';
 
 interface CookieFormData {
   weibo: { cookie: string };
-  zhihu: { cookie: string };
+  zhihu: { cookie: string; sourceParamEnabled?: boolean; sourceParamValue?: string };
   nowcoder: { cookie: string };
   nami: { cookie: string };
   bilibili: { cookie: string };
@@ -92,8 +93,9 @@ const namiAuthToken = computed(() => {
           <InputText :modelValue="namiAuthToken" readonly class="w-full" disabled />
         </div>
       </form>
-      <template v-if="svc.id === 'weibo'" #extra>
+      <template #extra>
         <WeiboLinkPrefixSection
+          v-if="svc.id === 'weibo'"
           :link-prefix-enabled="linkPrefixEnabled"
           :prefix-list="prefixList"
           :selected-prefix-index="selectedPrefixIndex"
@@ -104,6 +106,14 @@ const namiAuthToken = computed(() => {
           @update-prefix="emit('updatePrefix', $event)"
           @remove-prefix="emit('removePrefix', $event)"
           @reset-to-default="emit('resetToDefault')"
+        />
+        <ZhihuSourceSection
+          v-else-if="svc.id === 'zhihu'"
+          :enabled="cookieFormData.zhihu.sourceParamEnabled ?? true"
+          :value="cookieFormData.zhihu.sourceParamValue ?? ''"
+          @update:enabled="(v: boolean) => { cookieFormData.zhihu.sourceParamEnabled = v; }"
+          @update:value="(v: string) => { cookieFormData.zhihu.sourceParamValue = v; }"
+          @save="emit('save')"
         />
       </template>
     </HostingCard>
