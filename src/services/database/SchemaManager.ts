@@ -78,13 +78,28 @@ export async function createTablesAndIndexes(db: Database): Promise<void> {
 
 /**
  * 运行所有 schema 迁移（幂等，按顺序执行）
+ *
+ * 整体包裹事务：任一子迁移（ALTER TABLE / 回填 UPDATE / CREATE INDEX）
+ * 失败则整体 ROLLBACK，避免"列已加但回填失败"后下次启动因 columnExists
+ * 判断为真而永久跳过回填，导致数据长期停留在 DEFAULT 值。
  */
 export async function runMigrations(db: Database): Promise<void> {
-  await migrateAddFavoriteColumn(db);
-  await migrateAddSuccessCountColumn(db);
-  await migrateAddSuccessfulServiceIdsColumn(db);
-  await migrateAddMigrationSkipColumn(db);
-  await migrateAddLinkCheckSkipColumn(db);
+  await db.execute('BEGIN IMMEDIATE TRANSACTION');
+  try {
+    await migrateAddFavoriteColumn(db);
+    await migrateAddSuccessCountColumn(db);
+    await migrateAddSuccessfulServiceIdsColumn(db);
+    await migrateAddMigrationSkipColumn(db);
+    await migrateAddLinkCheckSkipColumn(db);
+    await db.execute('COMMIT');
+  } catch (error) {
+    try {
+      await db.execute('ROLLBACK');
+    } catch (rollbackError) {
+      log.error('迁移 ROLLBACK 失败', rollbackError);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -128,11 +143,13 @@ async function migrateAddSuccessCountColumn(db: Database): Promise<void> {
       );
 
       // 回填：用 SQLite 原生 json_each 在 DB 层完成，不经过 JS
+      // WHERE json_valid 防御：若某行 results 被第三方工具污染成非法 JSON，
+      // json_each 会让整条 UPDATE 失败；过滤掉坏行后其他正常行仍能正确回填。
       await db.execute(`
         UPDATE history_items SET success_count = (
           SELECT COUNT(*) FROM json_each(results) AS je
           WHERE je.value ->> 'status' = 'success'
-        )
+        ) WHERE json_valid(results) = 1
       `);
 
       log.info('迁移完成：添加 success_count 列并回填');
@@ -160,12 +177,13 @@ async function migrateAddSuccessfulServiceIdsColumn(db: Database): Promise<void>
     );
 
     // 回填：用 SQLite 原生 json_group_array 在 DB 层完成
+    // WHERE json_valid 防御非法 JSON 行（详见 migrateAddSuccessCountColumn 注释）
     await db.execute(`
       UPDATE history_items SET successful_service_ids = (
         SELECT COALESCE(json_group_array(je.value ->> 'serviceId'), '[]')
         FROM json_each(results) AS je
         WHERE je.value ->> 'status' = 'success'
-      )
+      ) WHERE json_valid(results) = 1
     `);
 
     log.info('迁移完成：添加 successful_service_ids 列并回填');
