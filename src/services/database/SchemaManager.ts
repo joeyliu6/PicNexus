@@ -79,27 +79,19 @@ export async function createTablesAndIndexes(db: Database): Promise<void> {
 /**
  * 运行所有 schema 迁移（幂等，按顺序执行）
  *
- * 整体包裹事务：任一子迁移（ALTER TABLE / 回填 UPDATE / CREATE INDEX）
- * 失败则整体 ROLLBACK，避免"列已加但回填失败"后下次启动因 columnExists
- * 判断为真而永久跳过回填，导致数据长期停留在 DEFAULT 值。
+ * 注意：tauri-plugin-sql 的 JS API 基于 sqlx 连接池，每次 execute/select 都会
+ * 从池中临时借用一根连接用完即归还；BEGIN/COMMIT 无法跨多次调用保持在同一连接上，
+ * 因此**不能用显式事务包裹**（详见 plugins-workspace issue #886）。
+ *
+ * 幂等保证：每个子迁移内部都通过 columnExists + IF NOT EXISTS 兜底，
+ * 即使上次半途失败（列已加但索引/回填未完成），本次启动仍会补齐缺失步骤。
  */
 export async function runMigrations(db: Database): Promise<void> {
-  await db.execute('BEGIN IMMEDIATE TRANSACTION');
-  try {
-    await migrateAddFavoriteColumn(db);
-    await migrateAddSuccessCountColumn(db);
-    await migrateAddSuccessfulServiceIdsColumn(db);
-    await migrateAddMigrationSkipColumn(db);
-    await migrateAddLinkCheckSkipColumn(db);
-    await db.execute('COMMIT');
-  } catch (error) {
-    try {
-      await db.execute('ROLLBACK');
-    } catch (rollbackError) {
-      log.error('迁移 ROLLBACK 失败', rollbackError);
-    }
-    throw error;
-  }
+  await migrateAddFavoriteColumn(db);
+  await migrateAddSuccessCountColumn(db);
+  await migrateAddSuccessfulServiceIdsColumn(db);
+  await migrateAddMigrationSkipColumn(db);
+  await migrateAddLinkCheckSkipColumn(db);
 }
 
 /**
