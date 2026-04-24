@@ -105,14 +105,19 @@ onDeactivated(() => { isViewActive.value = false; });
         </div>
       </div>
       <div class="option-row-group">
-        <label class="subfolder-option-row" @click.stop>
+        <label
+          class="subfolder-option-row subfolder-option-row--folder-only"
+          v-tooltip.top="'仅在选择文件夹或拖入文件夹时生效，对单个文件无影响'"
+          @click.stop
+        >
           <Checkbox
             :model-value="includeSubfolders"
             :binary="true"
             @update:model-value="emit('update:includeSubfolders', $event as boolean)"
           />
+          <i class="pi pi-folder subfolder-option-row__icon" aria-hidden="true" />
           <span>包含子文件夹</span>
-          <span class="subfolder-option-row__hint">选择文件夹时扫描所有层级</span>
+          <span class="subfolder-option-row__hint">仅文件夹场景 · 扫描所有层级</span>
         </label>
         <label class="subfolder-option-row" @click.stop>
           <Checkbox
@@ -254,6 +259,16 @@ onDeactivated(() => { isViewActive.value = false; });
   padding-left: var(--space-xs-sm);
   border-left: 1px solid var(--border-subtle);
   color: var(--text-muted);
+}
+
+.subfolder-option-row__icon {
+  font-size: var(--text-xs);
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.subfolder-option-row--folder-only {
+  cursor: help;
 }
 
 .idle-zone__text {

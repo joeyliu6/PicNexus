@@ -307,8 +307,7 @@ export function useMdRescueManager() {
     readyFiles.value = new Set();
     setUrlIndex(null);
     excludedUrls.value = new Set();
-    includeSubfolders.value = true;
-    includeCodeBlocks.value = false;
+    // includeSubfolders / includeCodeBlocks 跨扫描周期保留用户意图，不在 reset 里重置
     statusFilter.value = 'all';
     selectedSourceFile.value = null;
     searchInput.value = '';
