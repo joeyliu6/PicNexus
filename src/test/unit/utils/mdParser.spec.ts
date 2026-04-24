@@ -94,6 +94,113 @@ describe('extractImageLinks', () => {
     expect(links).toHaveLength(1);
     expect(links[0].url).toBe('https://title.com/a.png');
   });
+
+  it('tilde 围栏内出现反引号不应提前关闭围栏', () => {
+    const md = [
+      '~~~text',
+      '![inside](https://e.com/a.png)',
+      '```',
+      '~~~',
+      '![after](https://e.com/b.png)',
+    ].join('\n');
+    const links = extractImageLinks(md);
+    // inside 被 tilde 围栏包住，after 在围栏关闭后
+    expect(links).toHaveLength(1);
+    expect(links[0].url).toBe('https://e.com/b.png');
+  });
+
+  it('嵌套围栏：4-tick 开，内部 3-tick 视为字面量', () => {
+    const md = [
+      '````markdown',
+      '```',
+      '![inside](https://e.com/nested.png)',
+      '```',
+      '````',
+      '![after](https://e.com/after.png)',
+    ].join('\n');
+    const links = extractImageLinks(md);
+    // 4-tick 围栏未关闭前，内部的 3-tick 和图片均为字面量，不应提取
+    expect(links).toHaveLength(1);
+    expect(links[0].url).toBe('https://e.com/after.png');
+  });
+
+  it('4+ 空格缩进不视为 fence（按 CommonMark 为缩进代码块）', () => {
+    // 4 空格缩进的 ``` 不应开启围栏，后续图片应照常提取
+    const md = [
+      '    ```',
+      '![x](https://e.com/a.png)',
+      '    ```',
+      '![y](https://e.com/b.png)',
+    ].join('\n');
+    const links = extractImageLinks(md);
+    expect(links).toHaveLength(2);
+  });
+
+  it('0-3 空格缩进仍视为合法 fence', () => {
+    const md = [
+      '   ```',
+      '![inside](https://e.com/a.png)',
+      '   ```',
+      '![after](https://e.com/b.png)',
+    ].join('\n');
+    const links = extractImageLinks(md);
+    expect(links).toHaveLength(1);
+    expect(links[0].url).toBe('https://e.com/b.png');
+  });
+
+  it('close fence 尾部带 info string 时不关闭（CommonMark）', () => {
+    const md = [
+      '```',
+      '![inside](https://e.com/a.png)',
+      '``` notes',
+      '![still-inside](https://e.com/b.png)',
+      '```',
+      '![after](https://e.com/c.png)',
+    ].join('\n');
+    const links = extractImageLinks(md);
+    // "``` notes" 不是合法 close（尾部非空白），前两张仍在围栏内
+    expect(links).toHaveLength(1);
+    expect(links[0].url).toBe('https://e.com/c.png');
+  });
+
+  it('close fence 尾部纯空白（空格/tab）仍视为合法 close', () => {
+    const md = [
+      '```',
+      '![in](https://e.com/a.png)',
+      '```   \t',
+      '![after](https://e.com/b.png)',
+    ].join('\n');
+    const links = extractImageLinks(md);
+    expect(links).toHaveLength(1);
+    expect(links[0].url).toBe('https://e.com/b.png');
+  });
+
+  it('open fence 允许带 info string 正常开启', () => {
+    const md = [
+      '``` python',
+      '![inside](https://e.com/a.png)',
+      '```',
+      '![after](https://e.com/b.png)',
+    ].join('\n');
+    const links = extractImageLinks(md);
+    expect(links).toHaveLength(1);
+    expect(links[0].url).toBe('https://e.com/b.png');
+  });
+
+  it('close fence 反引号数少于 open 时不关闭', () => {
+    const md = [
+      '````',
+      '![x](https://e.com/a.png)',
+      '```',
+      '![y](https://e.com/b.png)',
+      '````',
+      '![z](https://e.com/c.png)',
+    ].join('\n');
+    const links = extractImageLinks(md);
+    // 前 2 张图在 4-tick 围栏内（3-tick 不足以关闭）；z 在围栏关闭后
+    expect(links).toHaveLength(1);
+    expect(links[0].url).toBe('https://e.com/c.png');
+  });
 });
 
 describe('stripKnownPrefixes', () => {

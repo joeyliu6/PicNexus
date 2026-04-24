@@ -11,8 +11,14 @@ const MD_IMAGE_REGEX = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 /** HTML img 标签: <img src="url" ... /> */
 const HTML_IMG_REGEX = /<img[^>]+src=["']([^"']+)["'][^>]*\/?>/gi;
 
-/** 围栏代码块开始/结束标记 */
-const FENCE_REGEX = /^\s*(```|~~~)/;
+/**
+ * 围栏代码块首行正则（捕获 3+ 连续反引号或波浪号）
+ * 按 CommonMark：
+ * - 允许 0-3 空格缩进（≥4 空格属于缩进代码块，不是围栏）
+ * - open fence 可以带 info string（如 ```python）
+ * - close fence 必须与 open 同字符、数量 ≥ open，且尾部只能是空白
+ */
+const FENCE_REGEX = /^ {0,3}(`{3,}|~{3,})/;
 
 /** 行内代码（支持单、双、三反引号） */
 const INLINE_CODE_REGEX = /(`{1,3})(?:(?!\1).)+\1/g;
@@ -49,7 +55,9 @@ export function extractImageLinks(
   const seenUrls = new Set<string>();
   const lines = content.split('\n');
 
-  let insideFence = false;
+  // 当前打开的围栏：{ 开头字符, 反引号/波浪数 }；null 表示未在围栏内
+  // 仅同字符 + 反引号数 ≥ open 时才关闭，避免 ``` 与 ~~~ 串扰和嵌套误判
+  let fenceOpen: { char: string; len: number } | null = null;
 
   // 逐行扫描，以便获取准确的行号
   for (let i = 0; i < lines.length; i++) {
@@ -57,13 +65,25 @@ export function extractImageLinks(
     const lineNumber = i + 1;
 
     if (!includeCodeBlocks) {
-      // 围栏代码块状态切换
-      if (FENCE_REGEX.test(line)) {
-        insideFence = !insideFence;
-        continue;
+      const fenceMatch = FENCE_REGEX.exec(line);
+      if (fenceMatch) {
+        const seq = fenceMatch[1];
+        const char = seq[0];
+        const len = seq.length;
+        // close fence 尾部必须只有空白（CommonMark 4.5），否则仍视为围栏内字面量
+        const tailWs = /^\s*$/.test(line.slice(fenceMatch[0].length));
+        if (fenceOpen === null) {
+          fenceOpen = { char, len };
+          continue;
+        }
+        if (fenceOpen.char === char && len >= fenceOpen.len && tailWs) {
+          fenceOpen = null;
+          continue;
+        }
+        // 同字符长度不足 / 不同字符 / 尾部带 info string：落到下方"仍在围栏内"分支被跳过
       }
-      // 跳过围栏代码块内的行
-      if (insideFence) continue;
+      // 当前仍在围栏内 → 跳过（含上方未关闭成功的 fence 行字面量）
+      if (fenceOpen !== null) continue;
     }
 
     // 代码块模式下直接用原始行，否则剥离行内代码后再匹配

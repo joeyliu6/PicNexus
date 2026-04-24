@@ -20,7 +20,12 @@ static MD_IMAGE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)"#).unwrap());
 static HTML_IMG_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"<img[^>]+src=["']([^"']+)["'][^>]*/?\s*>"#).unwrap());
-static FENCE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s*(```|~~~)").unwrap());
+// 围栏代码块首行（3+ 连续反引号或波浪号）
+// 按 CommonMark：
+// - 允许 0-3 空格缩进（≥4 空格属于缩进代码块，不是围栏）
+// - open fence 可以带 info string（如 ```python）
+// - close fence 必须与 open 同字符、数量 ≥ open，且尾部只能是空白
+static FENCE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^ {0,3}(`{3,}|~{3,})").unwrap());
 // 行内代码：使用 fancy-regex 支持 backreference，与 JS 侧正则完全一致
 static INLINE_CODE_RE: LazyLock<FancyRegex> =
     LazyLock::new(|| FancyRegex::new(r"(`{1,3})(?:(?!\1).)+\1").unwrap());
@@ -201,18 +206,34 @@ fn strip_inline_code(line: &str) -> String {
 fn extract_image_links(content: &str, include_code_blocks: bool) -> Vec<MdImageLink> {
     let mut results = Vec::new();
     let mut seen_urls = std::collections::HashSet::new();
-    let mut inside_fence = false;
+    // 当前打开的围栏：(开头字符, 反引号/波浪数)；None 表示未在围栏内
+    // 仅同字符且反引号数 ≥ open 时才关闭，避免 ``` 与 ~~~ 串扰和嵌套误判
+    let mut fence_open: Option<(char, usize)> = None;
 
     for (i, line) in content.lines().enumerate() {
         let line_number = i + 1;
 
         if !include_code_blocks {
-            // 围栏代码块
-            if FENCE_RE.is_match(line) {
-                inside_fence = !inside_fence;
-                continue;
+            if let Some(caps) = FENCE_RE.captures(line) {
+                let m = caps.get(1).unwrap();
+                let seq = m.as_str();
+                let c = seq.chars().next().unwrap();
+                let len = seq.len();
+                // close fence 尾部必须只有空白（CommonMark 4.5），否则仍视为围栏内字面量
+                let tail_ws = line[m.end()..].chars().all(char::is_whitespace);
+                match fence_open {
+                    None => {
+                        fence_open = Some((c, len));
+                        continue;
+                    }
+                    Some((oc, olen)) if oc == c && len >= olen && tail_ws => {
+                        fence_open = None;
+                        continue;
+                    }
+                    _ => {} // 同字符但长度不足 / 不同字符 / 尾部带 info string：视为围栏内字面量
+                }
             }
-            if inside_fence {
+            if fence_open.is_some() {
                 continue;
             }
         }
@@ -571,6 +592,107 @@ mod tests {
         assert!(urls.contains(&"https://example.com/a.jpg"));
         assert!(urls.contains(&"https://example.com/c.jpg"));
         assert!(!urls.contains(&"https://example.com/b.jpg"));
+    }
+
+    #[test]
+    fn extract_tilde_fence_not_closed_by_backtick() {
+        // ~~~ 围栏不应被 ``` 误关闭
+        let content = "\
+~~~text
+![inside](https://example.com/a.jpg)
+```
+~~~
+![after](https://example.com/b.jpg)";
+        let links = extract_image_links(content, false);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].url, "https://example.com/b.jpg");
+    }
+
+    #[test]
+    fn extract_nested_fence_inner_shorter_is_literal() {
+        // 4-tick 围栏内的 3-tick 应为字面量
+        let content = "\
+````markdown
+```
+![inside](https://example.com/nested.jpg)
+```
+````
+![after](https://example.com/after.jpg)";
+        let links = extract_image_links(content, false);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].url, "https://example.com/after.jpg");
+    }
+
+    #[test]
+    fn extract_ignores_4plus_space_indent_as_fence() {
+        // 4+ 空格缩进的 ``` 按 CommonMark 属于缩进代码块首行，不是 fence 开头
+        // 注意：Rust `"\` 连续行会吞掉下一行的前导空格，这里用显式 \n 拼接以保留 4 空格
+        let content = "    ```\n![x](https://example.com/a.jpg)\n    ```\n![y](https://example.com/b.jpg)";
+        let links = extract_image_links(content, false);
+        // 两张图片都应提取（围栏从未开启）
+        assert_eq!(links.len(), 2);
+    }
+
+    #[test]
+    fn extract_accepts_0_to_3_space_indent_fence() {
+        // 3 空格缩进仍合法（同样需避开 `\` 吞缩进的陷阱，使用显式 \n 拼接）
+        let content = "   ```\n![inside](https://example.com/a.jpg)\n   ```\n![after](https://example.com/b.jpg)";
+        let links = extract_image_links(content, false);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].url, "https://example.com/b.jpg");
+    }
+
+    #[test]
+    fn extract_close_fence_must_have_whitespace_tail() {
+        // close fence 尾部带 info string 按 CommonMark 不闭合（仍在围栏内）
+        let content = "\
+```
+![inside](https://example.com/a.jpg)
+``` notes
+![still-inside](https://example.com/b.jpg)
+```
+![after](https://example.com/c.jpg)";
+        let links = extract_image_links(content, false);
+        // 前两张仍在围栏内，最后一张才应被提取
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].url, "https://example.com/c.jpg");
+    }
+
+    #[test]
+    fn extract_close_fence_allows_trailing_spaces_and_tabs() {
+        // 尾部纯空白（空格/制表符）按规范仍视为合法 close
+        let content = "```\n![in](https://example.com/a.jpg)\n```   \t\n![after](https://example.com/b.jpg)";
+        let links = extract_image_links(content, false);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].url, "https://example.com/b.jpg");
+    }
+
+    #[test]
+    fn extract_open_fence_info_string_still_opens() {
+        // open fence 允许带 info string（``` python），不影响开启
+        let content = "\
+``` python
+![inside](https://example.com/a.jpg)
+```
+![after](https://example.com/b.jpg)";
+        let links = extract_image_links(content, false);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].url, "https://example.com/b.jpg");
+    }
+
+    #[test]
+    fn extract_close_fence_must_match_length() {
+        // close fence 反引号数 < open 时不关闭
+        let content = "\
+````
+![x](https://example.com/a.jpg)
+```
+![y](https://example.com/b.jpg)
+````
+![z](https://example.com/c.jpg)";
+        let links = extract_image_links(content, false);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].url, "https://example.com/c.jpg");
     }
 
     #[test]
