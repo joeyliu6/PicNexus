@@ -24,6 +24,24 @@ use sha1::Sha1;
 
 type HmacSha1 = Hmac<Sha1>;
 
+/// 错误响应预览最大字节数（用于失败日志/错误信息截断）
+const ERROR_RESPONSE_PREVIEW_LEN: usize = 200;
+
+/// UTF-8 安全的字符串预览：按字节数截断，但保证不切在多字节字符中间
+///
+/// `&s[..n]` 在 n 落到 UTF-8 多字节字符内部时会 panic。本函数先向前
+/// 回退到最近的字符边界，确保切片合法，避免响应含中文时主线程崩溃。
+fn safe_preview(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
 // ==================== 配置枚举 ====================
 
 /// Server/CLI 专用图床配置
@@ -760,7 +778,7 @@ async fn server_upload_weibo(path: &std::path::Path, cookie: &str) -> Result<Str
     }
 
     let pid = extract_xml_tag(&text, "pid")
-        .ok_or_else(|| format!("微博响应中未找到 pid 字段（响应：{}）", &text[..text.len().min(200)]))?;
+        .ok_or_else(|| format!("微博响应中未找到 pid 字段（响应：{}）", safe_preview(&text, ERROR_RESPONSE_PREVIEW_LEN)))?;
 
     Ok(format!("https://tvax1.sinaimg.cn/large/{}.jpg", pid))
 }
@@ -995,7 +1013,7 @@ async fn server_upload_zhihu(path: &std::path::Path, cookie: &str) -> Result<Str
         .map_err(|e| format!("读取凭证响应失败: {}", e))?;
 
     let credentials: serde_json::Value = serde_json::from_str(&credentials_text)
-        .map_err(|e| format!("解析知乎凭证失败: {} (响应: {})", e, &credentials_text[..credentials_text.len().min(200)]))?;
+        .map_err(|e| format!("解析知乎凭证失败: {} (响应: {})", e, safe_preview(&credentials_text, ERROR_RESPONSE_PREVIEW_LEN)))?;
 
     let image_id = credentials["upload_file"]["image_id"]
         .as_str()
