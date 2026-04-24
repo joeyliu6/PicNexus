@@ -114,34 +114,49 @@ export async function importHistoryFromJson(
     itemsToImport = items;
   }
 
-  // replace + 批量插入全流程包裹事务：中途任何一步失败都回滚，
-  // 避免"先清空后插入"场景下原有历史被删但新数据未写入导致数据丢失
-  await db.execute('BEGIN TRANSACTION');
+  // 注意：tauri-plugin-sql 基于 sqlx 连接池，每次 execute 都借用不同连接，
+  // BEGIN/COMMIT 无法跨调用生效（见 plugins-workspace #886），所以不能用事务包裹。
+  //
+  // replace 模式的安全策略：先全部 INSERT OR REPLACE 入库，全部成功后再 DELETE 掉
+  // "老库里有但导入集里没有"的记录。中途失败时老数据仍在，只是多了些被覆写的新行，
+  // 比"先 DELETE 后 INSERT"中途失败导致彻底丢数据安全得多。
   let importedCount = 0;
-  try {
-    if (mergeStrategy === 'replace') {
-      await db.execute('DELETE FROM history_items');
-    }
+  for (let i = 0; i < itemsToImport.length; i += BATCH_SIZE) {
+    const batch = itemsToImport.slice(i, i + BATCH_SIZE);
+    await batchUpsert(db, batch);
+    importedCount += batch.length;
+    onProgress?.(importedCount, itemsToImport.length);
+  }
 
-    for (let i = 0; i < itemsToImport.length; i += BATCH_SIZE) {
-      const batch = itemsToImport.slice(i, i + BATCH_SIZE);
-      await batchUpsert(db, batch);
-      importedCount += batch.length;
-      onProgress?.(importedCount, itemsToImport.length);
-    }
-
-    await db.execute('COMMIT');
-  } catch (error) {
-    try {
-      await db.execute('ROLLBACK');
-    } catch (rollbackError) {
-      log.error('ROLLBACK 失败', rollbackError);
-    }
-    throw error;
+  if (mergeStrategy === 'replace') {
+    await deleteRowsNotIn(db, new Set(items.map((item) => item.id)));
   }
 
   log.info(`导入完成: ${importedCount}/${items.length} 条`);
   return importedCount;
+}
+
+/**
+ * 删除 history_items 里所有 id 不在 keepIds 集合中的行。
+ * 分批执行，避免单条 SQL 参数数量超 SQLite 上限。
+ */
+async function deleteRowsNotIn(db: Database, keepIds: Set<string>): Promise<void> {
+  const existingRows = await db.select<{ id: string }[]>('SELECT id FROM history_items');
+  const toDelete = existingRows
+    .map((row) => row.id)
+    .filter((id) => !keepIds.has(id));
+
+  if (toDelete.length === 0) return;
+
+  for (let i = 0; i < toDelete.length; i += BATCH_SIZE) {
+    const batch = toDelete.slice(i, i + BATCH_SIZE);
+    const placeholders = batch.map((_, idx) => `$${idx + 1}`).join(',');
+    await db.execute(
+      `DELETE FROM history_items WHERE id IN (${placeholders})`,
+      batch
+    );
+  }
+  log.info(`replace 模式: 清理旧记录 ${toDelete.length} 条`);
 }
 
 /**

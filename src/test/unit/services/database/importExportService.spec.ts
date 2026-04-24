@@ -94,16 +94,24 @@ describe('ImportExportService', () => {
 
     expect(importedCount).toBe(599);
     expect(db.select).toHaveBeenCalledTimes(2);
-    expect(db.execute).toHaveBeenNthCalledWith(1, 'BEGIN TRANSACTION');
+    // merge 模式不触发事务和 DELETE，只做 INSERT OR REPLACE 批量
     const insertCalls = db.execute.mock.calls.filter(([sql]) => String(sql).startsWith('INSERT OR REPLACE'));
     expect(insertCalls).toHaveLength(2);
     expect(insertCalls[0][1]?.[0]).toBe('item-1');
     expect(onProgress).toHaveBeenNthCalledWith(1, 500, 599);
     expect(onProgress).toHaveBeenNthCalledWith(2, 599, 599);
-    expect(db.execute).toHaveBeenLastCalledWith('COMMIT');
+    const sqlCalls = db.execute.mock.calls.map(([sql]) => String(sql));
+    expect(sqlCalls.some((sql) => sql.includes('BEGIN') || sql.includes('COMMIT') || sql.includes('ROLLBACK'))).toBe(false);
   });
 
-  it('deletes existing rows first when replace mode is used', async () => {
+  it('replace mode inserts new rows first then deletes orphaned rows not in the imported set', async () => {
+    // 模拟老库里有 3 条：keep / alpha / orphan，导入集只有 alpha
+    db.select.mockResolvedValueOnce([
+      { id: 'keep', timestamp: 1 },
+      { id: 'alpha', timestamp: 1 },
+      { id: 'orphan', timestamp: 1 },
+    ]);
+
     const importedCount = await importHistoryFromJson(
       db as never,
       JSON.stringify([makeHistoryItem('alpha')]),
@@ -111,14 +119,24 @@ describe('ImportExportService', () => {
     );
 
     expect(importedCount).toBe(1);
-    expect(db.execute).toHaveBeenNthCalledWith(1, 'BEGIN TRANSACTION');
-    expect(db.execute).toHaveBeenNthCalledWith(2, 'DELETE FROM history_items');
-    expect(db.execute).toHaveBeenLastCalledWith('COMMIT');
+    // 第一个 execute 必须是 INSERT OR REPLACE（不是 DELETE 优先，避免丢数据）
+    const sqlCalls = db.execute.mock.calls.map(([sql]) => String(sql));
+    expect(sqlCalls[0]).toMatch(/^INSERT OR REPLACE/);
+    // 紧跟着的 DELETE 只删除 id NOT IN 导入集里的行
+    const deleteCall = db.execute.mock.calls.find(([sql]) => String(sql).startsWith('DELETE'));
+    expect(deleteCall).toBeDefined();
+    const deleteParams = deleteCall?.[1] as string[];
+    expect(deleteParams).toContain('keep');
+    expect(deleteParams).toContain('orphan');
+    expect(deleteParams).not.toContain('alpha');
+    // 不再使用 BEGIN/COMMIT/ROLLBACK（连接池不支持）
+    expect(sqlCalls.some((sql) => sql.includes('BEGIN') || sql.includes('COMMIT') || sql.includes('ROLLBACK'))).toBe(false);
   });
 
-  it('rolls back the transaction when batch upsert fails', async () => {
+  it('replace mode preserves existing rows when insert fails mid-way', async () => {
+    // 关键安全性质：INSERT 中途挂掉时，DELETE 不应执行，老数据不能丢
     db.execute.mockImplementation(async (sql: string) => {
-      if (sql.startsWith('INSERT OR REPLACE')) {
+      if (String(sql).startsWith('INSERT OR REPLACE')) {
         throw new Error('insert failed');
       }
     });
@@ -129,7 +147,8 @@ describe('ImportExportService', () => {
       'replace',
     )).rejects.toThrow('insert failed');
 
-    expect(db.execute).toHaveBeenNthCalledWith(1, 'BEGIN TRANSACTION');
-    expect(db.execute).toHaveBeenCalledWith('ROLLBACK');
+    const sqlCalls = db.execute.mock.calls.map(([sql]) => String(sql));
+    // 没有 DELETE 发生 = 老数据保留
+    expect(sqlCalls.some((sql) => sql.startsWith('DELETE'))).toBe(false);
   });
 });
