@@ -269,7 +269,9 @@ async function registerShortcuts(shortcutConfig: GlobalShortcutConfig) {
       }
       await register(shortcut.key, (event) => {
         if (event.state === 'Pressed') {
-          shortcut.handler();
+          // Why: register 回调是同步签名，handler 返回的 Promise 若在 withUploadGuard 之外抛异常
+          // （例如 notify 内部 requestPermission 失败）会变成浏览器层 unhandledrejection，这里兜底记日志。
+          shortcut.handler().catch((err) => log.error(`${shortcut.name} 执行异常:`, err));
         }
       });
       registeredShortcuts.add(shortcut.key);
