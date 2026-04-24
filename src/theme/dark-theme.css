@@ -81,6 +81,12 @@
   --state-warn-bg: rgba(234, 179, 8, 0.15);
   --state-error-bg: rgba(239, 68, 68, 0.15);
 
+  /* Toast floats above overlays, so use opaque tonal surfaces. */
+  --toast-info-bg: #172033;
+  --toast-success-bg: #10251f;
+  --toast-warn-bg: #2a2310;
+  --toast-error-bg: #2a1518;
+
   /* ===== 状态背景柔和版（大面积横幅用，对比度更低） ===== */
   --state-success-bg-soft: rgba(16, 185, 129, 0.08);
   --state-warn-bg-soft: rgba(234, 179, 8, 0.08);

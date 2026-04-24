@@ -318,62 +318,61 @@
   color: var(--text-main);
 }
 
+.p-toast .p-toast-message .p-toast-summary,
 .p-toast .p-toast-message .p-toast-detail {
   color: var(--text-main);
 }
 
+.p-toast .p-toast-message .p-toast-message-icon,
+.p-toast .p-toast-message .p-toast-icon-close-button,
+.p-toast .p-toast-message .p-toast-close-button {
+  color: inherit;
+}
+
 /* Toast Info 状态 */
 .p-toast .p-toast-message.p-toast-message-info {
-  background-color: var(--state-info-bg);
+  background-color: var(--toast-info-bg, var(--state-info-bg));
   border-color: var(--primary);
 }
 
-.p-toast .p-toast-message.p-toast-message-info .p-toast-message-content {
-  color: var(--state-info-text);
-}
-
+.p-toast .p-toast-message.p-toast-message-info .p-toast-message-content,
+.p-toast .p-toast-message.p-toast-message-info .p-toast-summary,
 .p-toast .p-toast-message.p-toast-message-info .p-toast-detail {
-  color: var(--text-main);
+  color: var(--state-info-text);
 }
 
 /* Toast Success 状态 */
 .p-toast .p-toast-message.p-toast-message-success {
-  background-color: var(--state-success-bg);
+  background-color: var(--toast-success-bg, var(--state-success-bg));
   border-color: var(--success);
 }
 
-.p-toast .p-toast-message.p-toast-message-success .p-toast-message-content {
-  color: var(--state-success-text);
-}
-
+.p-toast .p-toast-message.p-toast-message-success .p-toast-message-content,
+.p-toast .p-toast-message.p-toast-message-success .p-toast-summary,
 .p-toast .p-toast-message.p-toast-message-success .p-toast-detail {
-  color: var(--text-main);
+  color: var(--state-success-text);
 }
 
 /* Toast Warn 状态 */
 .p-toast .p-toast-message.p-toast-message-warn {
-  background-color: var(--state-warn-bg);
+  background-color: var(--toast-warn-bg, var(--state-warn-bg));
   border-color: var(--warning);
 }
 
-.p-toast .p-toast-message.p-toast-message-warn .p-toast-message-content {
-  color: var(--state-warn-text);
-}
-
+.p-toast .p-toast-message.p-toast-message-warn .p-toast-message-content,
+.p-toast .p-toast-message.p-toast-message-warn .p-toast-summary,
 .p-toast .p-toast-message.p-toast-message-warn .p-toast-detail {
-  color: var(--text-main);
+  color: var(--state-warn-text);
 }
 
 /* Toast Error 状态 */
 .p-toast .p-toast-message.p-toast-message-error {
-  background-color: var(--state-error-bg);
+  background-color: var(--toast-error-bg, var(--state-error-bg));
   border-color: var(--error);
 }
 
-.p-toast .p-toast-message.p-toast-message-error .p-toast-message-content {
-  color: var(--state-error-text);
-}
-
+.p-toast .p-toast-message.p-toast-message-error .p-toast-message-content,
+.p-toast .p-toast-message.p-toast-message-error .p-toast-summary,
 .p-toast .p-toast-message.p-toast-message-error .p-toast-detail {
-  color: var(--text-main);
+  color: var(--state-error-text);
 }
