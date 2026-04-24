@@ -13,6 +13,7 @@ import {
   emitHistoryUpdated,
 } from '../../events/cacheEvents';
 import { createLogger } from '../../utils/logger';
+import { recomputeLinkCheckSummary } from '../../types/linkCheckSummary';
 import type { useImageDetailCache } from '../useImageDetailCache';
 
 const log = createLogger('History');
@@ -46,34 +47,7 @@ function stripServiceFromItem(
   const nextStatus = item.linkCheckStatus ? { ...item.linkCheckStatus } : undefined;
   if (nextStatus) delete nextStatus[serviceId];
 
-  // summary 只统计 success 上传（与 linkCheckPersistence 构造 summary 时的口径一致，
-  // 否则 failed 上传会被算成 unchecked，造成"未检测"数量虚增）
-  const successResults = nextResults.filter((r) => r.status === 'success' && r.result?.url);
-  const total = successResults.length;
-  let valid = 0;
-  let invalid = 0;
-  let unchecked = 0;
-  if (nextStatus) {
-    for (const r of successResults) {
-      const s = nextStatus[r.serviceId];
-      if (!s) { unchecked += 1; continue; }
-      if (s.errorType === 'pending') { unchecked += 1; continue; }
-      if (s.isValid) valid += 1;
-      else invalid += 1;
-    }
-  } else {
-    unchecked = total;
-  }
-
-  const nextSummary = item.linkCheckSummary
-    ? {
-        ...item.linkCheckSummary,
-        totalLinks: total,
-        validLinks: valid,
-        invalidLinks: invalid,
-        uncheckedLinks: unchecked,
-      }
-    : undefined;
+  const nextSummary = recomputeLinkCheckSummary(nextResults, nextStatus, item.linkCheckSummary);
 
   let nextPrimary = item.primaryService;
   let nextGeneratedLink = item.generatedLink;

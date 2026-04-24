@@ -397,4 +397,40 @@ describe('HistoryDatabase', () => {
       historyDB.removeMirror('mirror-remove-missing', 'github'),
     ).rejects.toThrow(/镜像不存在/);
   });
+
+  it('removeMirror() 删镜像后同步 linkCheckSummary（按 success 口径重算）', async () => {
+    const { historyDB } = await import('../../../services/HistoryDatabase');
+    const item = makeMultiMirrorItem('mirror-remove-summary');
+    // weibo: invalid, r2: valid；failed 的 jd 不计入 summary
+    item.linkCheckSummary = {
+      totalLinks: 2,
+      validLinks: 1,
+      invalidLinks: 1,
+      uncheckedLinks: 0,
+      lastCheckTime: 1,
+    };
+    await historyDB.insert(item);
+
+    // 删 r2（非主服务、valid）→ 剩 weibo(invalid)
+    await historyDB.removeMirror('mirror-remove-summary', 'r2');
+
+    const updated = await historyDB.getById('mirror-remove-summary');
+    expect(updated?.linkCheckSummary).toMatchObject({
+      totalLinks: 1,
+      validLinks: 0,
+      invalidLinks: 1,
+      uncheckedLinks: 0,
+    });
+  });
+
+  it('removeMirror() 原本无 linkCheckSummary 时不凭空创建', async () => {
+    const { historyDB } = await import('../../../services/HistoryDatabase');
+    // makeMultiMirrorItem 默认不设 linkCheckSummary
+    await historyDB.insert(makeMultiMirrorItem('mirror-remove-no-summary'));
+
+    await historyDB.removeMirror('mirror-remove-no-summary', 'r2');
+
+    const updated = await historyDB.getById('mirror-remove-no-summary');
+    expect(updated?.linkCheckSummary).toBeUndefined();
+  });
 });

@@ -10,6 +10,7 @@ import Database from '@tauri-apps/plugin-sql';
 import type { HistoryItem, ServiceType } from '../../config/types';
 import type { ImageMeta } from '../../types/image-meta';
 import { extractMirrorServices } from '../../types/image-meta';
+import { recomputeLinkCheckSummary } from '../../types/linkCheckSummary';
 import { createLogger } from '../../utils/logger';
 
 // 子模块导入
@@ -290,9 +291,19 @@ class HistoryDatabase {
     }
 
     const updates: Partial<HistoryItem> = { results: newResults };
+    let newStatus = existing.linkCheckStatus;
     if (existing.linkCheckStatus && serviceId in existing.linkCheckStatus) {
       const { [serviceId]: _removed, ...rest } = existing.linkCheckStatus;
+      newStatus = rest;
       updates.linkCheckStatus = rest;
+    }
+
+    // 与 useHistoryResultOps.stripServiceFromItem 保持一致：删镜像后同步 summary，
+    // 否则已被剥掉的镜像还会继续计入 totalLinks/validLinks/invalidLinks，直到下次
+    // 手动跑 link check 才被 linkCheckPersistence 覆盖
+    const nextSummary = recomputeLinkCheckSummary(newResults, newStatus, existing.linkCheckSummary);
+    if (nextSummary) {
+      updates.linkCheckSummary = nextSummary;
     }
 
     await this.update(id, updates);
