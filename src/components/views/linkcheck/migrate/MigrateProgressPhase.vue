@@ -33,7 +33,7 @@ const {
   phase, allItemStatuses, checkedTargets, cancelMigrate,
   migrateResult, resetToConfiguring, retryingIds, retryFailed,
   retrySingleFailed,
-  isPaused, isPausing, pauseMigrate, resumeMigrate,
+  isPaused, isPausing, isCancelling, pauseMigrate, resumeMigrate,
   migrateStats,
 } = ctx;
 
@@ -213,6 +213,8 @@ const canRetryAll = computed(() =>
 
 const statePill = computed<StatePill | null>(() => {
   if (phase.value !== 'migrating') return null;
+  // 取消状态优先——用户点取消同时若在途条目未落定，pausing 会被短暂命中，以取消语义为准
+  if (isCancelling.value) return { tone: 'cancelling', icon: 'pi pi-spin pi-spinner', label: '正在取消…' };
   if (isPausing.value) return { tone: 'pausing', icon: 'pi pi-spin pi-spinner', label: '正在暂停…' };
   if (isPaused.value) return { tone: 'paused', icon: 'pi pi-pause', label: '已暂停' };
   return { tone: 'running', icon: '', label: '运行中' };
@@ -306,6 +308,7 @@ function handleResume() { resumeMigrate(); }
     :mode="phase === 'done' ? 'done' : 'migrating'"
     :is-paused="isPaused"
     :is-pausing="isPausing"
+    :is-cancelling="isCancelling"
     :state-pill="statePill"
     :can-retry-all="canRetryAll"
     :retrying-count="retryingIds.size"

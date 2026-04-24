@@ -6,7 +6,7 @@
 import { ref } from 'vue';
 import Menu from 'primevue/menu';
 
-export type StatePillTone = 'running' | 'pausing' | 'paused';
+export type StatePillTone = 'running' | 'pausing' | 'paused' | 'cancelling';
 export interface StatePill { tone: StatePillTone; icon: string; label: string }
 
 interface Props {
@@ -15,6 +15,8 @@ interface Props {
   isPaused?: boolean;
   /** 已点暂停但在途条目未落定（正在暂停...） */
   isPausing?: boolean;
+  /** 已点取消但 finalizeResult 尚未触发（正在取消...） */
+  isCancelling?: boolean;
   statePill?: StatePill | null;
   /** done 态：是否有失败项可重试（由父组件判定） */
   canRetryAll?: boolean;
@@ -25,6 +27,7 @@ interface Props {
 withDefaults(defineProps<Props>(), {
   isPaused: false,
   isPausing: false,
+  isCancelling: false,
   statePill: null,
   canRetryAll: false,
   retryingCount: 0,
@@ -64,6 +67,7 @@ function toggleExportMenu(ev: MouseEvent) {
     </div>
     <div class="bottom-actions">
       <template v-if="mode === 'migrating'">
+        <!-- 暂停/继续：取消进行中时整体禁用；正在暂停中显 spinner -->
         <button
           v-if="isPausing"
           class="btn-ghost bm-pause-pending"
@@ -76,6 +80,7 @@ function toggleExportMenu(ev: MouseEvent) {
           v-else-if="isPaused"
           class="btn-primary"
           type="button"
+          :disabled="isCancelling"
           @click="emit('resume')"
         >
           <i class="pi pi-play" /> 继续
@@ -84,11 +89,21 @@ function toggleExportMenu(ev: MouseEvent) {
           v-else
           class="btn-ghost"
           type="button"
+          :disabled="isCancelling"
           @click="emit('pause')"
         >
           <i class="pi pi-pause" /> 暂停
         </button>
-        <button class="btn-danger" type="button" @click="emit('cancel')">
+        <!-- 取消按钮：点击后切换为 disabled 的 "正在取消…" 占位（对齐 isPausing 交互） -->
+        <button
+          v-if="isCancelling"
+          class="btn-danger bm-cancel-pending"
+          type="button"
+          disabled
+        >
+          <i class="pi pi-spin pi-spinner" /> 正在取消…
+        </button>
+        <button v-else class="btn-danger" type="button" @click="emit('cancel')">
           <i class="pi pi-times" /> 取消迁移
         </button>
       </template>
@@ -146,8 +161,9 @@ function toggleExportMenu(ev: MouseEvent) {
 
 .bm-caret { font-size: var(--text-2xs); opacity: 0.7; }
 
-.bm-pause-pending {
-  /* 让 "正在暂停..." 外观与普通 btn-ghost 统一，只靠 disabled 降不透明度 */
+.bm-pause-pending,
+.bm-cancel-pending {
+  /* 让 "正在暂停/取消..." 外观与原按钮统一，只靠 disabled 降不透明度 */
   cursor: progress;
 }
 
@@ -193,5 +209,10 @@ function toggleExportMenu(ev: MouseEvent) {
 .bm-state-pill--paused {
   background: var(--bg-secondary);
   color: var(--text-muted);
+}
+
+.bm-state-pill--cancelling {
+  background: var(--state-error-bg);
+  color: var(--state-error-text);
 }
 </style>

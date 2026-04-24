@@ -47,6 +47,8 @@ export interface MigrateContext {
   isPaused: Ref<boolean>;
   /** "正在暂停..."—— 已点暂停但仍有在途条目未落定 */
   isPausing: Ref<boolean>;
+  /** "正在取消..."—— 已点取消但 finalizeResult 尚未触发（在途 Promise.all 还在落定） */
+  isCancelling: Ref<boolean>;
   /** 批量原地重试失败项（done 态专用） */
   retryFailed: (historyIds: string[]) => Promise<void>;
   /** 单条原地重试 */

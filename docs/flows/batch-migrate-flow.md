@@ -356,10 +356,13 @@ chip 分桶映射（`displayList` 内部）：
 
 | 条件 | pill |
 |------|------|
-| `mode='migrating'` + 未暂停 | `● 运行中`（呼吸绿点） |
+| `mode='migrating'` + 未暂停/取消 | `● 运行中`（呼吸绿点） |
+| `mode='migrating'` + `isCancelling` | `⏳ 正在取消…`（红色 tone，优先级最高：用户点取消时同步禁用暂停/继续按钮并把取消按钮替成 disabled 占位） |
 | `mode='migrating'` + `isPausing` | `⏳ 正在暂停…` |
 | `mode='migrating'` + `isPaused` | `⏸ 已暂停` |
 | `mode='done'` | 无 pill（统计条里有用时） |
+
+> `isCancelling = isCancelled && isMigrating`——用户点"取消迁移"后 `isCancelled` 立即置 true，但在途的 `processBatch` Promise.all 需要等所有目标自然落定（或 HTTP 超时），这段"等落定"窗口由此 pill + disabled 占位反馈给用户。`finalizeResult` 里 `isMigrating=false` 后 pill 自动消失。
 
 ---
 
