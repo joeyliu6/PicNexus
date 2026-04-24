@@ -299,10 +299,55 @@ describe('replaceImageLinks', () => {
     expect(replaceImageLinks(content, new Map())).toBe(content);
   });
 
-  it('URL 中包含正则特殊字符时正常替换', () => {
-    const content = '![a](https://cdn.com/a(1).png)';
-    const replacements = new Map([['https://cdn.com/a(1).png', 'https://new.com/b.png']]);
+  it('URL 中包含正则特殊字符（查询串 ? + . *）时正常替换', () => {
+    const content = '![a](https://cdn.com/a.png?v=1+2*3)';
+    const replacements = new Map([['https://cdn.com/a.png?v=1+2*3', 'https://new.com/b.png']]);
     expect(replaceImageLinks(content, replacements))
       .toBe('![a](https://new.com/b.png)');
+  });
+
+  it('newUrl 含 $& / $1 不被当作反向引用（callback 形式替换）', () => {
+    const content = '![a](https://old.com/a.png)';
+    const replacements = new Map([['https://old.com/a.png', 'https://new.com/b.png?sig=$&$1']]);
+    expect(replaceImageLinks(content, replacements))
+      .toBe('![a](https://new.com/b.png?sig=$&$1)');
+  });
+
+  it('不替换普通链接 [text](url) 中的同 URL（只认图片语法）', () => {
+    const content = '![img](https://x.com/a.png)\n\n[source](https://x.com/a.png)';
+    const replacements = new Map([['https://x.com/a.png', 'https://y.com/b.png']]);
+    const result = replaceImageLinks(content, replacements);
+    expect(result).toContain('![img](https://y.com/b.png)');
+    // 普通链接保持原样
+    expect(result).toContain('[source](https://x.com/a.png)');
+  });
+
+  it('不替换围栏代码块内的同 URL', () => {
+    const content = [
+      '![a](https://x.com/a.png)',
+      '```',
+      '![demo](https://x.com/a.png)',
+      '```',
+    ].join('\n');
+    const replacements = new Map([['https://x.com/a.png', 'https://y.com/b.png']]);
+    const result = replaceImageLinks(content, replacements);
+    expect(result).toContain('![a](https://y.com/b.png)');
+    // 代码块内保持原 URL
+    expect(result).toContain('![demo](https://x.com/a.png)');
+  });
+
+  it('不替换行内代码中的同 URL', () => {
+    const content = '前 `![demo](https://x.com/a.png)` 后 ![real](https://x.com/a.png)';
+    const replacements = new Map([['https://x.com/a.png', 'https://y.com/b.png']]);
+    const result = replaceImageLinks(content, replacements);
+    expect(result).toContain('`![demo](https://x.com/a.png)`');
+    expect(result).toContain('![real](https://y.com/b.png)');
+  });
+
+  it('保留图片标题 ![alt](url "title")', () => {
+    const content = '![a](https://old.com/a.png "标题")';
+    const replacements = new Map([['https://old.com/a.png', 'https://new.com/b.png']]);
+    expect(replaceImageLinks(content, replacements))
+      .toBe('![a](https://new.com/b.png "标题")');
   });
 });

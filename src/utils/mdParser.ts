@@ -182,18 +182,87 @@ export function smartTruncateUrl(url: string, maxLen = 60): string {
 
 /**
  * 在 Markdown 内容中替换图片链接
- * 严格只替换图片链接，不改变任何其他内容
+ *
+ * 严格只替换图片语法（![alt](url) / <img src="url">）中的 URL：
+ * - 跳过围栏代码块内容（与 extractImageLinks 同步跟踪 fence 状态）
+ * - 跳过行内代码 spans
+ * - 普通链接 [text](url)、正文里出现的裸 URL、注释均不会被改写
+ * - 使用 callback 形式替换，newUrl 中的 `$&` / `$1` 不会被当作反向引用
  */
 export function replaceImageLinks(
   content: string,
   replacements: Map<string, string>,
 ): string {
-  let result = content;
-  for (const [oldUrl, newUrl] of replacements) {
-    // 转义 URL 中的正则特殊字符
-    const escaped = oldUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // 只替换在图片语法上下文中的 URL
-    result = result.replace(new RegExp(escaped, 'g'), newUrl);
+  if (replacements.size === 0) return content;
+
+  const lines = content.split('\n');
+  let fenceOpen: { char: string; len: number } | null = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // 围栏跟踪（与 extractImageLinks 的 fence 状态机完全一致）
+    const fenceMatch = FENCE_REGEX.exec(line);
+    if (fenceMatch) {
+      const seq = fenceMatch[1];
+      const char = seq[0];
+      const len = seq.length;
+      const tailWs = /^\s*$/.test(line.slice(fenceMatch[0].length));
+      if (fenceOpen === null) {
+        fenceOpen = { char, len };
+        continue;
+      }
+      if (fenceOpen.char === char && len >= fenceOpen.len && tailWs) {
+        fenceOpen = null;
+        continue;
+      }
+    }
+    if (fenceOpen !== null) continue;
+
+    lines[i] = replaceInLine(line, replacements);
   }
+
+  return lines.join('\n');
+}
+
+/** 单行内：仅在图片语法中替换 URL，跳过行内代码 */
+function replaceInLine(line: string, replacements: Map<string, string>): string {
+  // 先定位行内代码 spans；图片语法命中时若 offset 落在 span 内则不替换
+  const codeSpans = locateInlineCode(line);
+  const inCode = (pos: number) => codeSpans.some((s) => pos >= s.start && pos < s.end);
+
+  // Markdown 图片：![alt](url "title"?)
+  const mdRe = /!\[([^\]]*)\]\(([^)\s]+)((?:\s+"[^"]*")?)\)/g;
+  let result = line.replace(mdRe, (match, alt: string, url: string, title: string, offset: number) => {
+    if (inCode(offset)) return match;
+    const newUrl = replacements.get(url.trim());
+    if (newUrl === undefined) return match;
+    return `![${alt}](${newUrl}${title ?? ''})`;
+  });
+
+  // HTML 替换后偏移量变了，重新定位行内代码
+  const codeSpans2 = locateInlineCode(result);
+  const inCode2 = (pos: number) => codeSpans2.some((s) => pos >= s.start && pos < s.end);
+
+  const htmlRe = /(<img[^>]+src=["'])([^"']+)(["'][^>]*\/?>)/gi;
+  result = result.replace(htmlRe, (match, prefix: string, url: string, suffix: string, offset: number) => {
+    if (inCode2(offset)) return match;
+    const newUrl = replacements.get(url.trim());
+    if (newUrl === undefined) return match;
+    return `${prefix}${newUrl}${suffix}`;
+  });
+
   return result;
+}
+
+function locateInlineCode(line: string): Array<{ start: number; end: number }> {
+  const spans: Array<{ start: number; end: number }> = [];
+  // 复用模块级 regex：避免大文件下每行多次 new RegExp 的构造开销
+  // 调用前必须显式重置 lastIndex——String.replace 对 g flag 会自动归零，但 exec 不会
+  INLINE_CODE_REGEX.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = INLINE_CODE_REGEX.exec(line)) !== null) {
+    spans.push({ start: m.index, end: m.index + m[0].length });
+  }
+  return spans;
 }
