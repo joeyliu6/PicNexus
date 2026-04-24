@@ -37,21 +37,24 @@ pub async fn read_file_bytes(path: &str) -> Result<(Vec<u8>, u64), AppError> {
 mod tests {
     use super::*;
     use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
-    /// 在系统临时目录下写一个带随机后缀的文件，返回其路径。
-    /// 用 nanos 避免并发冲突；测试结束后由 Drop 清理。
+    /// 在系统临时目录下写一个文件，返回其路径。测试结束后由 Drop 清理。
+    ///
+    /// 文件名用"进程号 + 单调递增计数器"保证唯一：
+    /// Windows 时钟精度有时只有 ~15ms，光靠 nanos 在并行跑的测试之间会撞
+    /// 导致互相覆盖、读到空内容。
     struct TempFile {
         path: std::path::PathBuf,
     }
 
+    static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
     impl TempFile {
         fn new(content: &[u8]) -> Self {
-            let nanos = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos();
+            let seq = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
             let path = std::env::temp_dir()
-                .join(format!("picnexus_test_{}_{:x}.bin", std::process::id(), nanos));
+                .join(format!("picnexus_test_{}_{}.bin", std::process::id(), seq));
             let mut f = std::fs::File::create(&path).expect("创建临时文件失败");
             f.write_all(content).expect("写入临时文件失败");
             Self { path }
