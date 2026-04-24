@@ -133,13 +133,46 @@ export function extractImageLinks(
 }
 
 /**
- * 判断是否为有效的图片 URL（过滤 data:、相对路径等）
+ * 明确"不是图片"的文件扩展名黑名单（小写，不带点）
+ * 用于过滤徽章/代理服务 URL 中嵌套的 .js/.css 等资源路径被误识为图片
+ * 未列出的扩展名（包括图床 ID 无扩展 URL）一律放行
+ */
+const NON_IMAGE_EXTENSIONS = new Set([
+  // 脚本/样式/源码
+  'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'css', 'scss', 'sass', 'less',
+  // 标记/数据
+  'html', 'htm', 'xml', 'json', 'yaml', 'yml', 'toml', 'csv',
+  // 文档
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md', 'markdown',
+  // 归档
+  'zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2',
+  // 可执行/安装包
+  'exe', 'dmg', 'msi', 'deb', 'rpm', 'apk', 'ipa',
+  // 音视频
+  'mp4', 'webm', 'mkv', 'avi', 'mov', 'mp3', 'wav', 'ogg', 'flac', 'aac',
+]);
+
+/** 提取 URL path 末段的扩展名（小写），无扩展或 dotfile 返回 null */
+function getUrlPathExtension(url: string): string | null {
+  // 去掉 query / fragment 再取最后一段
+  const pathOnly = url.split('?')[0].split('#')[0];
+  const lastSeg = pathOnly.split('/').pop() || '';
+  const dotIdx = lastSeg.lastIndexOf('.');
+  // dotIdx<=0 覆盖了"无扩展"与".htaccess"这种纯 dotfile
+  if (dotIdx <= 0) return null;
+  return lastSeg.slice(dotIdx + 1).toLowerCase();
+}
+
+/**
+ * 判断是否为有效的图片 URL（过滤 data:、相对路径、非图片扩展名等）
  */
 function isValidImageUrl(url: string): boolean {
   if (!url) return false;
   if (url.startsWith('data:')) return false;
   if (url.startsWith('#')) return false;
   if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
+  const ext = getUrlPathExtension(url);
+  if (ext !== null && NON_IMAGE_EXTENSIONS.has(ext)) return false;
   return true;
 }
 

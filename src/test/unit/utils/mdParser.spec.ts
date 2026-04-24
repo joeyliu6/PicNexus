@@ -57,6 +57,49 @@ describe('extractImageLinks', () => {
     expect(extractImageLinks(md)).toHaveLength(0);
   });
 
+  it('过滤末尾扩展名为 .js 的徽章代理 URL', () => {
+    // badge-size.now.sh / shields.io 这类徽章代理会把 JS 文件 URL 拼到 path 里
+    // 虽然服务端返回 SVG，但末尾扩展名一眼看是 .js，按黑名单过滤避免被当图片扫
+    const md = '![popper](https://badge-size.now.sh/https://unpkg.com/@popperjs/core/dist/umd/popper.min.js?compression=brotli&label=popper)';
+    expect(extractImageLinks(md)).toHaveLength(0);
+  });
+
+  it('过滤末尾扩展名为 .css / .html / .pdf / .zip 等明显非图片资源', () => {
+    const md = [
+      '![a](https://cdn.com/style.css)',
+      '![b](https://cdn.com/page.html)',
+      '![c](https://cdn.com/doc.pdf)',
+      '![d](https://cdn.com/pkg.zip)',
+      '![e](https://cdn.com/video.mp4)',
+    ].join('\n');
+    expect(extractImageLinks(md)).toHaveLength(0);
+  });
+
+  it('扩展名大小写不敏感（.JS 也应被过滤）', () => {
+    const md = '![x](https://cdn.com/foo.JS)';
+    expect(extractImageLinks(md)).toHaveLength(0);
+  });
+
+  it('黑名单不影响正常图片扩展（.svg/.webp/.avif 等通过）', () => {
+    const md = [
+      '![a](https://cdn.com/a.svg)',
+      '![b](https://cdn.com/b.webp)',
+      '![c](https://cdn.com/c.avif)',
+    ].join('\n');
+    expect(extractImageLinks(md)).toHaveLength(3);
+  });
+
+  it('无扩展名的图床 ID URL 仍通过（不误杀 imgur/sm.ms 风格）', () => {
+    const md = '![a](https://i.imgur.com/abc123XYZ)';
+    expect(extractImageLinks(md)).toHaveLength(1);
+  });
+
+  it('query/fragment 不参与扩展名判定', () => {
+    // path 末段是 .png，query 里带 .js 不应影响判定
+    const md = '![a](https://cdn.com/image.png?ref=foo.js#section)';
+    expect(extractImageLinks(md)).toHaveLength(1);
+  });
+
   it('正确记录行号', () => {
     const md = '第一行\n第二行\n![pic](https://line3.com/a.png)\n第四行';
     const links = extractImageLinks(md);

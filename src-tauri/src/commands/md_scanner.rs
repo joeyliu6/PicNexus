@@ -184,12 +184,51 @@ fn detect_context(line: &str) -> &'static str {
     "normal"
 }
 
-/// 判断是否为有效的图片 URL
+/// 明确"不是图片"的文件扩展名黑名单（小写，不带点）
+/// 用于过滤徽章/代理服务 URL 中嵌套的 .js/.css 等资源路径被误识为图片
+/// 未列出的扩展名（包括图床 ID 无扩展 URL）一律放行
+/// 必须与 JS 侧 `src/utils/mdParser.ts` 的 NON_IMAGE_EXTENSIONS 保持一致
+const NON_IMAGE_EXTENSIONS: &[&str] = &[
+    // 脚本/样式/源码
+    "js", "mjs", "cjs", "ts", "tsx", "jsx", "css", "scss", "sass", "less",
+    // 标记/数据
+    "html", "htm", "xml", "json", "yaml", "yml", "toml", "csv",
+    // 文档
+    "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "md", "markdown",
+    // 归档
+    "zip", "rar", "7z", "tar", "gz", "tgz", "bz2",
+    // 可执行/安装包
+    "exe", "dmg", "msi", "deb", "rpm", "apk", "ipa",
+    // 音视频
+    "mp4", "webm", "mkv", "avi", "mov", "mp3", "wav", "ogg", "flac", "aac",
+];
+
+/// 提取 URL path 末段的扩展名（小写），无扩展或 dotfile 返回 None
+fn get_url_path_extension(url: &str) -> Option<String> {
+    // 去掉 query / fragment 再取最后一段
+    let path_only = url.split(['?', '#']).next().unwrap_or("");
+    let last_seg = path_only.rsplit('/').next().unwrap_or("");
+    // rfind 找最后一个点；位置为 0 视为 dotfile（.htaccess 之类），不算扩展
+    match last_seg.rfind('.') {
+        Some(idx) if idx > 0 => Some(last_seg[idx + 1..].to_lowercase()),
+        _ => None,
+    }
+}
+
+/// 判断是否为有效的图片 URL（过滤 data:、相对路径、非图片扩展名等）
 fn is_valid_image_url(url: &str) -> bool {
     if url.is_empty() || url.starts_with("data:") || url.starts_with('#') {
         return false;
     }
-    url.starts_with("http://") || url.starts_with("https://")
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return false;
+    }
+    if let Some(ext) = get_url_path_extension(url) {
+        if NON_IMAGE_EXTENSIONS.iter().any(|&e| e == ext) {
+            return false;
+        }
+    }
+    true
 }
 
 /// 剥离行内代码，替换为等长空格（与 JS 侧 stripInlineCode 一致）
@@ -523,6 +562,70 @@ mod tests {
         assert!(!is_valid_image_url("./local.jpg"));
         assert!(!is_valid_image_url("/abs/path.jpg"));
         assert!(!is_valid_image_url("ftp://example.com/x"));
+    }
+
+    #[test]
+    fn invalid_non_image_extension_badge_url() {
+        // badge-size.now.sh 徽章代理把 .js 文件 URL 拼到 path 里 —— 按黑名单过滤
+        assert!(!is_valid_image_url(
+            "https://badge-size.now.sh/https://unpkg.com/@popperjs/core/dist/umd/popper.min.js?compression=brotli&label=popper"
+        ));
+    }
+
+    #[test]
+    fn invalid_various_non_image_extensions() {
+        assert!(!is_valid_image_url("https://cdn.com/style.css"));
+        assert!(!is_valid_image_url("https://cdn.com/page.html"));
+        assert!(!is_valid_image_url("https://cdn.com/doc.pdf"));
+        assert!(!is_valid_image_url("https://cdn.com/pkg.zip"));
+        assert!(!is_valid_image_url("https://cdn.com/video.mp4"));
+    }
+
+    #[test]
+    fn extension_check_is_case_insensitive() {
+        assert!(!is_valid_image_url("https://cdn.com/foo.JS"));
+        assert!(!is_valid_image_url("https://cdn.com/foo.Css"));
+    }
+
+    #[test]
+    fn valid_image_extensions_pass_blocklist() {
+        assert!(is_valid_image_url("https://cdn.com/a.svg"));
+        assert!(is_valid_image_url("https://cdn.com/b.webp"));
+        assert!(is_valid_image_url("https://cdn.com/c.avif"));
+    }
+
+    #[test]
+    fn valid_no_extension_cdn_id_url() {
+        // 图床 ID 风格 URL 无扩展 —— 应放行
+        assert!(is_valid_image_url("https://i.imgur.com/abc123XYZ"));
+    }
+
+    #[test]
+    fn extension_check_ignores_query_and_fragment() {
+        // path 末段是 .png，query 里的 .js 不应影响判定
+        assert!(is_valid_image_url("https://cdn.com/image.png?ref=foo.js#sec"));
+    }
+
+    // ---------- get_url_path_extension ----------
+
+    #[test]
+    fn get_ext_handles_query_and_fragment() {
+        assert_eq!(get_url_path_extension("https://a.com/x.png?v=1"), Some("png".to_string()));
+        assert_eq!(get_url_path_extension("https://a.com/x.js#sec"), Some("js".to_string()));
+        assert_eq!(get_url_path_extension("https://a.com/x.png?foo.js"), Some("png".to_string()));
+    }
+
+    #[test]
+    fn get_ext_returns_none_for_no_extension_or_dotfile() {
+        assert_eq!(get_url_path_extension("https://a.com/abc123"), None);
+        assert_eq!(get_url_path_extension("https://a.com/"), None);
+        // ".htaccess" 这类 dotfile 首字符就是点，不算扩展
+        assert_eq!(get_url_path_extension("https://a.com/.htaccess"), None);
+    }
+
+    #[test]
+    fn get_ext_lowercases_result() {
+        assert_eq!(get_url_path_extension("https://a.com/X.JPG"), Some("jpg".to_string()));
     }
 
     // ---------- strip_inline_code ----------

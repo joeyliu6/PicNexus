@@ -334,6 +334,7 @@ flowchart TD
 | 撤销恢复失败 | `.picnexus-backup` 目录被手动删除 | 图 5 `undoReplace` |
 | 「无法修复」数量比预期多 | 该图片未上传到其他图床（DB 中无备用记录） | 图 4 `findBackupLinksRaw` |
 | 图床偏好设置不生效 | `hostPreference` 为空数组（未设置偏好则不排序） | 图 6 `priority` 策略 |
+| 徽章/代理服务 URL 里的 `.js`/`.css` 被当图片扫 | `isValidImageUrl` / `is_valid_image_url` 按 URL path 末尾扩展名做黑名单过滤（`js/css/html/pdf/zip/mp4/...`），query/fragment 不参与 | `src/utils/mdParser.ts` `NON_IMAGE_EXTENSIONS`、`src-tauri/src/commands/md_scanner.rs` 同名常量（两侧必须保持一致） |
 
 ---
 
