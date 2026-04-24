@@ -2,7 +2,7 @@
 // 上传执行器：并发调度 + 单文件多图床上传 + 历史记录联动
 
 import type { UserConfig, ServiceType } from '../../config/types';
-import { MultiServiceUploader, SingleServiceResult } from '../../core/MultiServiceUploader';
+import { MultiServiceUploader, SingleServiceResult, MultiUploadResult } from '../../core/MultiServiceUploader';
 import { UploadQueueManager, type ServiceProgress } from '../../uploadQueue';
 import type { CopyLinkItem } from '../useCopyLink';
 import type { UploadSessionSummary } from '../../utils/uploadSummary';
@@ -30,6 +30,13 @@ export interface UploadExecutorContext {
     historyId: string,
     result: SingleServiceResult
   ) => Promise<boolean>;
+  /** 兜底保存：saveHistoryItemImmediate 全程失败（DB 锁/磁盘满）时的最后一次完整写入尝试 */
+  saveHistoryItem: (
+    filePath: string,
+    uploadResult: MultiUploadResult,
+    customId?: string,
+    liveResults?: SingleServiceResult[]
+  ) => Promise<string | undefined>;
   /** 微博前缀快照（由门面在调用前读取 activePrefix.value） */
   weiboPrefix: string | null;
   /** toast 实例（由门面在 setup 阶段注入，避免在异步函数中调用 useToast） */
@@ -55,7 +62,7 @@ export async function processUploadQueue(
   collectedLinks?: CopyLinkItem[],
   uploadSummary?: UploadSessionSummary
 ): Promise<void> {
-  const { queueManager, saveHistoryItemImmediate, addResultToHistoryItem, weiboPrefix, toast } = ctx;
+  const { queueManager, saveHistoryItemImmediate, addResultToHistoryItem, saveHistoryItem, weiboPrefix, toast } = ctx;
 
   if (!queueManager) {
     log.error('上传队列管理器未初始化');
@@ -197,6 +204,19 @@ export async function processUploadQueue(
         );
 
         log.info(`${fileName} 全部完成，主力图床: ${result.primaryService}`);
+
+        // 兜底：saveHistoryItemImmediate 在 handleServiceResult 里持续抛错（如 DB 锁/磁盘满），
+        // pendingResults 累积但从未落库 → 此时上传 UI 显示成功但历史面板找不到记录。
+        // 在所有 service 完成后再做一次完整保存尝试，给极端场景一次救济机会。
+        if (!historyCreated && result.primaryUrl) {
+          log.warn(`[历史记录] ${fileName} 立即保存全程失败，触发兜底完整保存`);
+          try {
+            await saveHistoryItem(filePath, result, historyId);
+            historyCreated = true;
+          } catch (fallbackError) {
+            log.error(`[历史记录] ${fileName} 兜底保存仍失败，本次上传无历史记录:`, fallbackError);
+          }
+        }
 
         // 双重保险：确保 UI 状态一致
         // 注意：不需要遍历 result.results，因为 handleServiceResult 已经处理了
