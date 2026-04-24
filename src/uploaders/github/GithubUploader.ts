@@ -93,8 +93,12 @@ export class GithubUploader extends BaseUploader<GithubServiceConfig> {
     // 用配置中的 owner/repo/branch 构造已知前缀，再切出剩余 path
     // Why: 正则 `[^/]+` 无法正确切分含斜杠的分支名（例如 `feature/foo`），
     //      会误把 `feature` 当分支、把 `foo/...` 当 path
+    // Why: GitHub `download_url` 会对非 ASCII 分支/路径做 URL 编码（如中文、空格），
+    //      若 expectedPrefix 用裸字符串拼，会导致 startsWith 失配、CDN 规则整个失效；
+    //      对 branch 的每一段分别 encode 以保留 `feat/foo` 这样的斜杠结构。
     const branch = config.branch || 'main';
-    const expectedPrefix = `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${branch}/`;
+    const encodedBranch = branch.split('/').map(encodeURIComponent).join('/');
+    const expectedPrefix = `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${encodedBranch}/`;
     if (!rawUrl.startsWith(expectedPrefix)) return rawUrl;
     const path = rawUrl.slice(expectedPrefix.length);
     if (!path) return rawUrl;
