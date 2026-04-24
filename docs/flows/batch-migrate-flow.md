@@ -11,14 +11,14 @@
 
 > **关键源文件**：`src/types/batchMigrate.ts`（`MigratePhase`）、`src/composables/useBatchMigrate.ts`（`useBatchMigrateManager`）
 >
-> **UI 组装**：`migrating` 与 `done` 阶段**共用同一个 `MigrateProgressPhase.vue` 面板**，结构统一为「状态 chip 过滤条（`MigrateStatusFilterChips`，右侧挂可选『全部重试』按钮）+ 可滚动列表 + 底栏」。两态列表都用统一的 `MigrateItemRow`：
+> **UI 组装**：`migrating` 与 `done` 阶段**共用同一个 `MigrateProgressPhase.vue` 面板**，结构统一为「状态 chip 过滤条（`MigrateStatusFilterChips`）+ 可滚动列表 + 底栏」。两态列表都用统一的 `MigrateItemRow`：
 > - **首行**：文件名（mono）+ 状态 chip（失败 chip 的 `v-tooltip` 悬停显示 `errorTooltipText`）
 > - **次行**：`存在于 [existing chips] → [target chips]` + 右侧上下文操作按钮；其中：
 >   - `existing` chips 读 `MigrateItemStatus.existingServiceIds`（迁移前已成功的图床快照）
->   - `target` chips 按 `serviceResults[sid]` 着色：`success → 'new'`（绿环）/ `failed → 'failed'`（红环）/ `pending → 'pending'`（蓝环）
+>   - `target` chips **始终按 `targetServiceIds` 渲染**（选了几个目标就显几个），`serviceResults[sid]` 只决定着色：`success → 'new'`（绿环）/ `failed → 'failed'`（红环）/ 未写入或 `pending → 'pending'`（蓝环）；未写入代表"取消前没轮到尝试"
 >   - 右侧按钮随状态切换：成功态显示「复制新 URL」（调 `historyDB` 查新增 target 的 URL）；done + failed 态显示「重试」
 >
-> 底栏 `MigrateBottomBar` 左侧从左到右：**分页条**（`MigratePagination`，仅 `displayList.length > PAGE_SIZE` 时挂载） + **运行状态 pill**（运行中/正在暂停/已暂停）+ `MigrateStatsSummary`；右侧是操作按钮组。进入 done 态时若有失败自动选中「失败」chip 并重置滚动。
+> 底栏 `MigrateBottomBar` 左侧从左到右：**分页条**（`MigratePagination`，仅 `displayList.length > PAGE_SIZE` 时挂载） + **运行状态 pill**（运行中/正在暂停/已暂停）+ `MigrateStatsSummary`；右侧是操作按钮组（done 态：导出报告 | 完成 | 【全部重试：有失败项才挂】| 重新发起迁移）。进入 done 态时若有失败自动选中「失败」chip 并重置滚动。
 >
 > **统计信息位置**：已完成数/速率/剩余时间/目标图床整合到 `MigrateStatsSummary`；运行态 pill 独立于统计条，收进底栏。
 
@@ -119,17 +119,28 @@ flowchart TD
 
 ---
 
-## 图 3：单图迁移管线
+## 图 3：单图迁移管线（并行上传版）
 
-展示 `migrateOneItem` 中单张图片从下载到多目标上传的完整管线，包含格式转换逻辑。
+展示 `migrateOneItem` 中单张图片从下载到**多目标并行上传**的完整管线，包含格式转换逻辑。
 
 > **关键源文件**：`src/composables/batchMigrate/migrateCore.ts`（`migrateOneItem`、`optimizeSourceUrl`、`convertIfNeeded`）
 >
-> **status 取值**：`pending | downloading | converting | uploading | success | failed | skipped`。`converting` 仅在目标图床格式白名单不含源扩展名时进入（探测通过 `needsFormatConversion`）。`convertedFormat` 字段在真触发 `compress_image` 时写入 `'jpeg'`，UI 用它区分「已转 JPEG」与「格式兼容」。`sourceUrl` 在下载入口处填充（`optimizeSourceUrl` 之后的终值），批次初始化时会先从 `item.results` 预填首条 success 的 URL，保证 pending 阶段 UI 就能显示链接。
+> **status 取值**：`pending | downloading | converting | uploading | success | failed | skipped`。并行上传后，`status` 在"当前阶段聚合值"语义下工作：
+> - 有任一目标还在转换 → `converting`
+> - 任一目标已进入上传（或无需转换） → `uploading`
+> - 所有目标落定 → 终态（hasSuccess ? success : failed）
+>
+> `convertedFormat` 字段：只要任一目标真触发了 `compress_image`，就写入 `'jpeg'`，UI 用它区分「已转 JPEG」与「格式兼容」。`sourceUrl` 在下载入口处填充。
+>
+> **并行上传关键点**：
+> - 所有目标通过 `Promise.all` 同时发起（内部 try/catch，Promise.all 不会因单目标失败而 reject）
+> - 每个目标完成后**立即写 `status.serviceResults[targetId]`**，然后调用 `onTargetSettled` 回调——外层用它触发 RAF 节流的 `scheduleStatusUpdate`，让 UI chip 一个个变色（不是等整条落定一起跳）
+> - 取消（`isCancelled=true`）不会打断已发起的并行上传；只影响主循环下一张图不被取出
+> - 信号量 `MAX_CONCURRENT=3` 控制图片级并发。由于每张图只向每个图床发 1 次上传，**每图床的峰值并发数 = MAX_CONCURRENT（= 3），与目标数无关**
 
 ```mermaid
 flowchart TD
-    A["migrateOneItem(item, status, targets)"] --> B["计算 needUploadTargets<br/>过滤已存在于 item.results 的目标"]
+    A["migrateOneItem(item, status, targets, onTargetSettled?)"] --> B["计算 needUploadTargets<br/>过滤已存在于 item.results 的目标"]
     B --> C{needUploadTargets<br/>为空?}
     C -- 是 --> C1["status = skipped"]
     C -- 否 --> D{isCancelled?}
@@ -152,23 +163,20 @@ flowchart TD
 
     L --> M{isCancelled?}
     M -- 是 --> M1["清理临时文件<br/>status = skipped"]
-    M -- 否 --> O["逐目标上传循环"]
+    M -- 否 --> N["anyNeedsConvert?<br/>status = converting/uploading"]
 
-    O --> P{isCancelled?}
-    P -- 是 --> Q["中断循环"]
-    P -- 否 --> P1{needsFormatConversion<br/>targetId, ext?}
-    P1 -- 是 --> P2["status = converting"]
-    P1 -- 否 --> P3["status = uploading"]
-    P2 --> R["convertIfNeeded<br/>compress_image → jpeg"]
-    R --> R1["convertedFormat = 'jpeg'<br/>status = uploading"]
-    R1 --> S["multiUploader.retryUpload<br/>上传到目标图床"]
-    P3 --> S
-    S --> S1{上传成功?}
-    S1 -- 是 --> T["serviceResults[target] = success"]
-    S1 -- 否 --> U["serviceResults[target] = failed"]
-    T & U --> O
+    N --> O["Promise.all 并行处理所有目标"]
 
-    Q & O --> V["清理临时文件<br/>下载的 + 格式转换的"]
+    subgraph 每目标独立 Promise
+        direction TB
+        P1["convertIfNeeded<br/>（若需转换）"] --> P2["status.convertedFormat='jpeg'<br/>推进 status→uploading"]
+        P2 --> P3["multiUploader.retryUpload"]
+        P3 --> P4{成功?}
+        P4 -- 是 --> P5["serviceResults[target]='success'<br/>onTargetSettled()"]
+        P4 -- 否 --> P6["serviceResults[target]='failed'<br/>onTargetSettled()"]
+    end
+
+    O --> V["清理临时文件<br/>下载的 + 所有格式转换的"]
     V --> W{hasSuccess?<br/>至少一个目标成功}
     W -- 是 --> X["historyDB.update<br/>追加 results"]
     X --> X1{DB 更新成功?}
@@ -181,6 +189,7 @@ flowchart TD
     style F1 fill:#ffebee,stroke:#c62828
     style K2 fill:#ffebee,stroke:#c62828
     style Y fill:#ffebee,stroke:#c62828
+    style O fill:#e3f2fd,stroke:#1976d2
 ```
 
 ### 格式兼容性表
@@ -226,7 +235,7 @@ flowchart TD
     I -- 否 --> C
 
     G -- 否 --> J["创建 batchStatuses"]
-    J --> K["processBatch<br/>Semaphore(MAX_CONCURRENT=4)<br/>网络 I/O 主导，4 并发在 CPU/内存安全档"]
+    J --> K["processBatch<br/>Semaphore(MAX_CONCURRENT=3)<br/>图片级并发；图内多目标改 Promise.all 并行"]
     K --> L["每个 item 完成 → onItemDone<br/>更新 counts + scheduleStatusUpdate"]
     L --> M["flushStatusUpdate()"]
 
@@ -264,7 +273,7 @@ flowchart TD
 |---------|---------|---------|
 | 未开始下载（刚拿到 semaphore permit） | `migrateOneItem` 入口 `if (isPaused) return` —— 保持 `status='pending'`，`onItemDone` 不计入统计，不入 `processedIds` | `migrateCore.ts` `migrateOneItem` 入口 |
 | 下载中 | 下载本身无法中断（Tauri `download_url_image` 无 abort），下载完成后检查 `isPaused`——清理临时文件 + 状态回退为 `'pending'` | `migrateCore.ts` 下载成功分支 |
-| 上传中 | 不中断——完成当前目标上传后，若还有剩余目标循环入口会继续（现有 `isCancelled` 检查点即可兼任） | `migrateCore.ts` 上传循环 |
+| 上传中 | 不中断——所有目标已通过 `Promise.all` 并行发起，等每个目标自然完成或 HTTP 超时；暂停/取消都只影响下一张图不被主循环取出 | `migrateCore.ts` Promise.all 并行块 |
 
 **UI 反馈**：`isPausing = isPaused && concurrentCount > 0` —— 只要有条目还在途就显示"正在暂停..."；所有在途条目落定后 `isPausing` 自然 flip 到 false，底栏切换为"已暂停 + 继续"按钮。
 
@@ -296,7 +305,7 @@ flowchart TD
     subgraph 统计卡计算
         O1["剩余时间<br/>(totalCount - processedCount) × avgMs<br/>processedCount=0 时显示「计算中」"]
         O2["平均速度<br/>totalBytes / (elapsedMs / 1000)<br/>单位 bytes/s"]
-        O3["并发数<br/>itemStatuses.filter(downloading|uploading).length<br/>实时反映 Semaphore 占用"]
+        O3["并发数<br/>itemStatuses.filter(downloading|converting|uploading).length<br/>实时反映 Semaphore(3) 占用"]
     end
 
     style F fill:#fff3e0,stroke:#ef6c00
@@ -310,7 +319,7 @@ flowchart TD
 |--------|------|---------|
 | 剩余时间 | `(totalCount - processedCount) × (elapsedMs / processedCount)` | `processedCount=0` 时显示「计算中」 |
 | 平均速度 | `totalBytes / (elapsedMs / 1000)` bytes/s | `elapsedMs=0` 时返回 0 |
-| 并发数 | `itemStatuses.filter(s => downloading \| converting \| uploading).length` | 实时反映 Semaphore(4) 占用数 |
+| 并发数 | `itemStatuses.filter(s => downloading \| converting \| uploading).length` | 实时反映 Semaphore(3) 占用数 |
 
 ---
 
@@ -359,7 +368,7 @@ chip 分桶映射（`displayList` 内部）：
 | 现象 | 可能原因 | 对照位置 |
 |------|---------|---------|
 | 目标图床 pendingCount 显示 0 | 所有图片已存在于该图床 | 图 2 `pendingCount = total - existing` |
-| 迁移速度很慢 | `MAX_CONCURRENT=4` 限制 + 大文件下载耗时；进一步提高并发要同步评估 CPU（`compress_image` 阶段）和家庭带宽上行容量 | 图 3 信号量 / 图 4 循环 |
+| 迁移速度很慢 | `MAX_CONCURRENT=3` 图片级 + 图内多目标并行；进一步提高要同步评估 CPU（`compress_image` 峰值）和上行带宽 | 图 3 并行管线 / 图 4 循环 |
 | webp 图片上传失败 | 目标图床不支持 webp 且格式转换失败 | 图 3 `convertIfNeeded` |
 | 同一图片被重复迁移 | `processedIds` 未正确过滤或 offset 重置逻辑异常 | 图 4 去重 + offset 策略 |
 | 进度条到 100% 但 phase 未变 done | 最后一批的 `flushStatusUpdate` 延迟 | 图 5 `flushStatusUpdate` |
@@ -374,6 +383,9 @@ chip 分桶映射（`displayList` 内部）：
 | 暂停后按钮一直卡在"正在暂停..." | `isPausing` 依赖 `concurrentCount` 归零，若有条目卡在 downloading 下载本身无法中断必须等 HTTP 超时或完成 | 图 1 暂停分支 |
 | 恢复后已暂停的条目没重新迁移 | 检查 `processedIds` 是否误收了 `status='pending'` 的持有条目 | 图 4 offset 策略表 |
 | 失败项显示的错误信息是英文 | 原始错误未命中 `categorizeMigrateError` 的映射规则，fallback 到"未知错误"，悬停 ⓘ 看 tooltip 原文 | `src/utils/uploadFailureMessage.ts` 的 `MIGRATE_ERROR_PATTERNS` |
+| 取消迁移后底栏仍显示「全部重试」| `canRetryAll = phase==='done' && failures.length>0`；取消只把在途条目转 skipped，取消前已落定的失败条目保留，按钮就挂出来——语义正确 | `MigrateProgressPhase.vue` `canRetryAll` / `MigrateBottomBar.vue` done 态按钮组 |
+| 目标 chip 只显示尝试过的那几个 | 旧行为；现改为始终按 `targetServiceIds` 渲染，`serviceResults` 只决定颜色。未写入的目标 = pending chip（取消前没轮到） | `MigrateItemRow.vue` `targetChips` computed |
+| 目标 chip 没有一个一个变色，全部一起跳 | `onTargetSettled` 回调未触发或 `scheduleStatusUpdate` 没挂到批次状态 → 检查 `useBatchMigrate.startMigrate` 里 `processBatch` 的第 10 个参数 | 图 3 并行上传关键点 |
 
 ---
 

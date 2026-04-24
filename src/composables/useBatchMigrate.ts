@@ -467,7 +467,8 @@ export function useBatchMigrateManager() {
           elapsedMs: Date.now() - startTime,
         };
         scheduleStatusUpdate(batchStatuses, processed, totalToProcess);
-      });
+      // 目标级落定（并行上传时单个目标成功/失败）→ RAF 节流刷新 chip，让 UI 一个个变色
+      }, () => scheduleStatusUpdate(batchStatuses, processed, totalToProcess));
 
       flushStatusUpdate();
 

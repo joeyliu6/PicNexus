@@ -20,7 +20,12 @@ import type { MigrateItemStatus, MigrateStats, MigrateFailureDetail } from '../.
 
 const log = createLogger('migrateCore');
 
-export const MAX_CONCURRENT = 4;
+/**
+ * 图片级并发上限。
+ * 单张图内部多目标改为 Promise.allSettled 并行后，每图床的峰值并发数 = MAX_CONCURRENT（和目标数无关）。
+ * 取 3 是「网络 I/O 为主 + compress_image CPU 峰值 + 多目标并行转换临时文件」的折中档位。
+ */
+export const MAX_CONCURRENT = 3;
 
 /** 从未知错误中提取可读消息（处理 Tauri invoke 的 { data: { message } } 结构） */
 export function extractErrorMessage(e: unknown): string {
@@ -72,6 +77,9 @@ async function convertIfNeeded(filePath: string, targetServiceId: string): Promi
 /**
  * 单条迁移：下载 → 可选转换 → 多目标上传 → 更新历史记录
  * 就地修改 status，不返回值
+ *
+ * @param onTargetSettled 并行上传时每个目标落定（成功/失败）后调用，
+ *   用于让外层触发 shallowRef 刷新，保证 chip 一个一个变色（而不是等整条落定一起跳）。
  */
 export async function migrateOneItem(
   item: HistoryItem,
@@ -82,6 +90,7 @@ export async function migrateOneItem(
   isCancelled: Ref<boolean>,
   isPaused: Ref<boolean>,
   stats: Ref<MigrateStats>,
+  onTargetSettled?: () => void,
 ) {
   const existingServiceIds = new Set(
     item.results.filter(r => r.status === 'success').map(r => r.serviceId),
@@ -141,38 +150,39 @@ export async function migrateOneItem(
     return;
   }
 
-  // 上传：每个 target 按需转换（转换发生时先切到 'converting' 让 UI 显示真实阶段）
+  // 上传：所有目标并行（Promise.allSettled），每个目标独立完成独立写 serviceResults，
+  // Vue 响应式会逐个刷新对应 chip，一成功一显示。
+  // 任一目标失败不影响其它；取消不打断已发起的上传，只是下一张图不再被取出处理。
   const ext = tempFilePath.split('.').pop()?.toLowerCase() || '';
-  const newResults: SingleServiceResult[] = [];
-  let hasSuccess = false;
+  const anyNeedsConvert = needUploadTargets.some(t => needsFormatConversion(t, ext));
+  status.status = anyNeedsConvert ? 'converting' : 'uploading';
   const tempFiles = new Set<string>();
 
-  for (const targetId of needUploadTargets) {
-    if (isCancelled.value) break;
+  const newResults: SingleServiceResult[] = await Promise.all(needUploadTargets.map(async (targetId): Promise<SingleServiceResult> => {
     const willConvert = needsFormatConversion(targetId, ext);
-    if (willConvert) {
-      status.status = 'converting';
-    } else if (status.status !== 'uploading') {
-      status.status = 'uploading';
-    }
     try {
       const uploadPath = await convertIfNeeded(tempFilePath, targetId);
       if (willConvert) {
         status.convertedFormat = 'jpeg';
-        status.status = 'uploading';
+        // 任一目标完成转换后把整体状态推进到 uploading
+        if (status.status === 'converting') status.status = 'uploading';
       }
       if (uploadPath !== tempFilePath) tempFiles.add(uploadPath);
       const uploadResult = await multiUploader.retryUpload(uploadPath, targetId, config);
-      newResults.push({ serviceId: targetId, result: uploadResult, status: 'success' });
       status.serviceResults[targetId] = 'success';
-      hasSuccess = true;
+      onTargetSettled?.();
+      return { serviceId: targetId, result: uploadResult, status: 'success' };
     } catch (e: unknown) {
       const errorMsg = e instanceof Error ? e.message : String(e);
-      newResults.push({ serviceId: targetId, status: 'failed', error: errorMsg });
       status.serviceResults[targetId] = 'failed';
+      onTargetSettled?.();
       log.warn(`迁移到 ${targetId} 失败: ${errorMsg}`);
+      return { serviceId: targetId, status: 'failed', error: errorMsg };
     }
-  }
+  }));
+  const hasSuccess = newResults.some(r => r.status === 'success');
+  // 兜底：若全部目标不需要转换也没有进入 uploading 态（理论上不会发生），修正为 uploading
+  if (status.status === 'converting') status.status = 'uploading';
 
   // 清理临时文件
   for (const f of [tempFilePath, ...tempFiles]) {
@@ -216,6 +226,7 @@ export async function processBatch(
   isPaused: Ref<boolean>,
   stats: Ref<MigrateStats>,
   onItemDone: (status: MigrateItemStatus) => void,
+  onTargetSettled?: () => void,
 ) {
   const semaphore = new Semaphore(MAX_CONCURRENT);
   const tasks = batchStatuses.map((status, i) => {
@@ -230,7 +241,7 @@ export async function processBatch(
         return;
       }
       try {
-        await migrateOneItem(item, status, targets, config, multiUploader, isCancelled, isPaused, stats);
+        await migrateOneItem(item, status, targets, config, multiUploader, isCancelled, isPaused, stats, onTargetSettled);
       } catch (e: unknown) {
         markStatusFailed(status, [{ message: cleanMigrateError(undefined, extractErrorMessage(e)) }]);
       } finally {

@@ -65,7 +65,7 @@ describe('markStatusFailed', () => {
 });
 
 describe('MAX_CONCURRENT', () => {
-  it('固定为 4', () => {
-    expect(MAX_CONCURRENT).toBe(4);
+  it('固定为 3（并行上传后每图床峰值并发 = MAX_CONCURRENT）', () => {
+    expect(MAX_CONCURRENT).toBe(3);
   });
 });
