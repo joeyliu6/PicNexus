@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 
-// applyLinkPrefix 对非微博图床直接返回原 URL，这里简化 mock 为透传
+// URL 转换在此处不做展开测试，这里简化 mock 为透传
 vi.mock('../../../../composables/useCopyLink', () => ({
-  applyLinkPrefix: (url: string) => url,
+  applyConfiguredUrlWithConfig: (url: string) => url,
 }));
 
 import {
@@ -15,7 +15,7 @@ import type { LinkCheckLiteRow } from '../../../../services/HistoryDatabase';
 import type { HistoryItem, UserConfig } from '../../../../config/types';
 import type { LinkCheckRow } from '../../../../types/linkCheck';
 
-// 最小化的空 UserConfig（buildCheckItemsSync 使用 applyLinkPrefix，已 mock）
+// 最小化的空 UserConfig（buildCheckItemsSync 使用 URL 转换 helper，已 mock）
 const EMPTY_CONFIG = {} as UserConfig;
 
 // ─── liteRowToItem ────────────────────────────────────────────────────────────

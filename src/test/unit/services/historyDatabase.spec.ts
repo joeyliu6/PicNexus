@@ -290,12 +290,12 @@ describe('HistoryDatabase', () => {
         {
           serviceId: 'weibo',
           status: 'success',
-          result: { serviceId: 'weibo', url: 'https://example.com/weibo.jpg' },
+          result: { serviceId: 'weibo', url: 'https://example.com/weibo.jpg', fileKey: 'weibo-file-key' },
         },
         {
           serviceId: 'r2',
           status: 'success',
-          result: { serviceId: 'r2', url: 'https://example.com/r2.jpg' },
+          result: { serviceId: 'r2', url: 'https://example.com/r2.jpg', fileKey: 'r2-file-key' },
         },
         {
           serviceId: 'jd',

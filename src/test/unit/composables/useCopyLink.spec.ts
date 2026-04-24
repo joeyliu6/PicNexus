@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 import { DEFAULT_CONFIG, type UserConfig } from '../../../config/types';
 import {
+  applyConfiguredUrlWithConfig,
   applyLinkPrefix,
   formatLinkWithConfig,
   getLinkFormatConfig,
@@ -74,6 +75,13 @@ describe('useCopyLink helpers', () => {
       .toBe('https://proxy.example.com/https://example.com/a.png');
     expect(applyLinkPrefix('https://example.com/a.png', 'jd', config))
       .toBe('https://example.com/a.png');
+  });
+
+  it('applyConfiguredUrlWithConfig applies zhihu source before weibo prefix handling', () => {
+    const config = makeConfig();
+
+    expect(applyConfiguredUrlWithConfig('https://picx.zhimg.com/v2-abc.webp', 'zhihu', config))
+      .toBe('https://picx.zhimg.com/v2-abc.webp?source=172ae18b');
   });
 
   it('getLinkFormatConfig falls back to url format', () => {
