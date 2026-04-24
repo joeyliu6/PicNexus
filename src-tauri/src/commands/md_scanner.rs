@@ -6,10 +6,14 @@ use fancy_regex::Regex as FancyRegex;
 use regex::Regex;
 use std::sync::LazyLock;
 use serde::Serialize;
-use std::path::Path;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::Emitter;
+
+/// 递归深度上限。Windows MAX_PATH 260 字符，深度超过这个量级基本是循环或恶意构造。
+const MAX_SCAN_DEPTH: usize = 64;
 
 // 预编译正则（全局只编译一次）
 static MD_IMAGE_RE: LazyLock<Regex> =
@@ -87,14 +91,26 @@ fn is_markdown_file(name: &str) -> bool {
 }
 
 /// 递归扫描目录，收集所有 MD 文件路径
+///
+/// 安全约束：
+/// - visited 记录已规范化的目录，避免符号链接循环导致栈溢出
+/// - depth 限制递归深度，兜底防止 visited 因规范化失败失守
 fn scan_md_files(
     dir: &Path,
     include_subfolders: bool,
     cancel: &AtomicBool,
     results: &mut Vec<String>,
     skipped_dirs: &mut Vec<String>,
+    visited: &mut HashSet<PathBuf>,
+    depth: usize,
 ) {
     if cancel.load(Ordering::Relaxed) {
+        return;
+    }
+
+    if depth > MAX_SCAN_DEPTH {
+        log::warn!("[MdScanner] 超过最大递归深度，跳过: {:?}", dir);
+        skipped_dirs.push(dir.to_string_lossy().into_owned());
         return;
     }
 
@@ -126,7 +142,28 @@ fn scan_md_files(
     }
 
     for sub in sub_dirs {
-        scan_md_files(&sub, include_subfolders, cancel, results, skipped_dirs);
+        // 规范化后再查重：解析符号链接，避免 a/link → a 的循环
+        let canonical = match std::fs::canonicalize(&sub) {
+            Ok(c) => c,
+            Err(e) => {
+                log::warn!("[MdScanner] 规范化子目录失败，跳过: {:?} - {}", sub, e);
+                skipped_dirs.push(sub.to_string_lossy().into_owned());
+                continue;
+            }
+        };
+        if !visited.insert(canonical) {
+            log::debug!("[MdScanner] 跳过已访问目录（防循环）: {:?}", sub);
+            continue;
+        }
+        scan_md_files(
+            &sub,
+            include_subfolders,
+            cancel,
+            results,
+            skipped_dirs,
+            visited,
+            depth + 1,
+        );
     }
 }
 
@@ -265,7 +302,18 @@ pub async fn scan_md_folder(
     let scan_result = tokio::task::spawn_blocking(move || {
         let mut paths = Vec::new();
         let mut skipped = Vec::new();
-        scan_md_files(Path::new(&dir_clone), include_subfolders, &cancel_clone, &mut paths, &mut skipped);
+        let mut visited: HashSet<PathBuf> = HashSet::new();
+        // 入口目录已在外层 canonicalize 过，先塞入 visited 防自环
+        visited.insert(PathBuf::from(&dir_clone));
+        scan_md_files(
+            Path::new(&dir_clone),
+            include_subfolders,
+            &cancel_clone,
+            &mut paths,
+            &mut skipped,
+            &mut visited,
+            0,
+        );
 
         // 发送扫描完成进度
         let _ = window_clone.emit("md-scan://progress", ScanProgress {
