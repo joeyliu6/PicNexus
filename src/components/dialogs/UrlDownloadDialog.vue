@@ -5,12 +5,14 @@
     header="从 URL 下载图片"
     :style="{ width: 'var(--dialog-width-md)' }"
     :draggable="false"
+    :pt="{ root: { class: 'app-dialog' }, closeButton: { class: 'app-dialog-close-btn' } }"
     @update:visible="handleClose"
   >
     <div class="url-download-dialog">
       <div class="field">
-        <label class="section-label">图片 URL（每行一个）</label>
+        <label for="url-download-input">图片 URL（每行一个）</label>
         <Textarea
+          id="url-download-input"
           v-model="urlInput"
           placeholder="https://example.com/image.jpg"
           :rows="5"
@@ -70,7 +72,7 @@ watch(() => props.visible, async (val) => {
   if (val) {
     urlInput.value = '';
     await nextTick();
-    const el = document.querySelector('.url-textarea') as HTMLTextAreaElement | null;
+    const el = document.getElementById('url-download-input') as HTMLTextAreaElement | null;
     el?.focus();
   }
 });
@@ -103,13 +105,12 @@ function handleKeydown(e: KeyboardEvent) {
 .field {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: var(--space-xs-sm);
 }
 
-.section-label {
-  display: block;
+.field label {
   font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-medium);
   color: var(--text-primary);
 }
 
@@ -125,10 +126,10 @@ function handleKeydown(e: KeyboardEvent) {
   color: var(--text-primary);
   resize: vertical;
   line-height: 1.6;
+  transition: background var(--duration-fast);
 }
 
 :root.light-theme .field :deep(.url-textarea) {
-  background: var(--bg-input);
   color: var(--text-main);
 }
 

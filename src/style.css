@@ -1852,10 +1852,9 @@ button:focus-visible {
   transform: scale(0.95);
 }
 
-/* ===== 10. BackupPasswordDialog ===== */
+/* ===== 10. AppDialog（通用弹窗外壳：BackupPasswordDialog、UrlDownloadDialog 等）===== */
 
-.backup-password-dlg {
-  width: 460px;
+.app-dialog {
   max-width: 90vw;
   border-radius: var(--radius-xl);
   overflow: hidden;
@@ -1864,28 +1863,28 @@ button:focus-visible {
   box-shadow: var(--shadow-dialog);
 }
 
-:root.light-theme .backup-password-dlg {
+:root.light-theme .app-dialog {
   background: var(--bg-surface);
   box-shadow: var(--shadow-dialog);
 }
 
-.p-dialog.backup-password-dlg .p-dialog-header {
+.p-dialog.app-dialog .p-dialog-header {
   background: transparent;
   border-bottom: none;
   padding: var(--space-xl) var(--space-xl) 0;
 }
 
-.p-dialog.backup-password-dlg .p-dialog-title {
+.p-dialog.app-dialog .p-dialog-title {
   font-size: var(--text-lg-xl);
   font-weight: var(--weight-bold);
   color: var(--text-main);
 }
 
-:root.light-theme .p-dialog.backup-password-dlg .p-dialog-title {
+:root.light-theme .p-dialog.app-dialog .p-dialog-title {
   color: var(--text-on-surface);
 }
 
-.p-dialog.backup-password-dlg .p-dialog-header-close {
+.p-dialog.app-dialog .p-dialog-header-close {
   width: 32px;
   height: 32px;
   border-radius: var(--radius-md);
@@ -1893,32 +1892,32 @@ button:focus-visible {
   transition: all var(--duration-fast) ease;
 }
 
-.p-dialog.backup-password-dlg .p-dialog-header-close:hover {
+.p-dialog.app-dialog .p-dialog-header-close:hover {
   background: var(--hover-overlay);
   color: var(--text-main);
 }
 
-.p-dialog.backup-password-dlg .p-dialog-header-close:focus,
-.p-dialog.backup-password-dlg .p-dialog-header-close:focus-visible {
+.p-dialog.app-dialog .p-dialog-header-close:focus,
+.p-dialog.app-dialog .p-dialog-header-close:focus-visible {
   outline: none !important;
   box-shadow: none !important;
 }
 
 /* 通过 :pt closeButton 注入的 class，精准移除焦点环 */
-.backup-pwd-close-btn:focus,
-.backup-pwd-close-btn:focus-visible,
-.backup-pwd-close-btn:focus-within {
+.app-dialog-close-btn:focus,
+.app-dialog-close-btn:focus-visible,
+.app-dialog-close-btn:focus-within {
   outline: none !important;
   box-shadow: none !important;
   border: none !important;
 }
 
-.p-dialog.backup-password-dlg .p-dialog-content {
+.p-dialog.app-dialog .p-dialog-content {
   background: transparent;
   padding: var(--space-lg-xl) var(--space-xl) var(--space-xl);
 }
 
-.p-dialog.backup-password-dlg .p-dialog-footer {
+.p-dialog.app-dialog .p-dialog-footer {
   background: transparent;
   border-top: none;
   padding: var(--space-sm) var(--space-xl) var(--space-xl);
@@ -1927,20 +1926,20 @@ button:focus-visible {
   gap: var(--space-md);
 }
 
-.backup-password-dlg.p-dialog-enter-active {
+.app-dialog.p-dialog-enter-active {
   transition: all var(--duration-normal) var(--ease-overshoot);
 }
 
-.backup-password-dlg.p-dialog-enter-from {
+.app-dialog.p-dialog-enter-from {
   opacity: 0;
   transform: scale(0.92);
 }
 
-.backup-password-dlg.p-dialog-leave-active {
+.app-dialog.p-dialog-leave-active {
   transition: all var(--duration-fast) var(--ease-standard);
 }
 
-.backup-password-dlg.p-dialog-leave-to {
+.app-dialog.p-dialog-leave-to {
   opacity: 0;
   transform: scale(0.95);
 }

@@ -6,7 +6,7 @@
     :style="{ width: 'var(--dialog-width-md)' }"
     :closable="mode !== 'restore'"
     :draggable="false"
-    :pt="{ root: { class: 'backup-password-dlg' }, closeButton: { class: 'backup-pwd-close-btn' } }"
+    :pt="{ root: { class: 'app-dialog' }, closeButton: { class: 'app-dialog-close-btn' } }"
     @hide="handleCancel"
   >
     <div class="backup-password-dialog">
