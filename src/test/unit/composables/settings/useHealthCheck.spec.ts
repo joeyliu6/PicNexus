@@ -33,23 +33,6 @@ describe('useHealthCheck', () => {
     vi.useRealTimers();
   });
 
-  it('progressPercent - null 或 total=0 时为 0', () => {
-    const a = harness({ progress: null });
-    expect(a.api().progressPercent.value).toBe(0);
-    const b = harness({ progress: { total: 0, current: 5, completed: [], failed: [] } as any });
-    expect(b.api().progressPercent.value).toBe(0);
-  });
-
-  it('progressPercent 四舍五入', () => {
-    const h = harness({ progress: { total: 3, current: 1, completed: [], failed: [] } as any });
-    expect(h.api().progressPercent.value).toBe(33);
-  });
-
-  it('ringOffset 随百分比线性变化', () => {
-    const h = harness({ progress: { total: 100, current: 50, completed: [], failed: [] } as any });
-    expect(h.api().ringOffset.value).toBeCloseTo(56.55 * 0.5, 2);
-  });
-
   it('ringLabel - 非 testing 时为"重新检测"', () => {
     const h = harness({ isBatchTesting: false });
     expect(h.api().ringLabel.value).toBe('重新检测');

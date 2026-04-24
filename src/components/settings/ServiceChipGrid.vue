@@ -259,9 +259,9 @@ const serviceList = computed(() => props.services);
   border-color: var(--primary);
 }
 
-/* 刷新态：中性骨架，不继承旧的健康色 */
+/* 刷新态：chip 外壳透明，只让内部 indicator 圆盘 + label shimmer 条浮出，与顶栏 pill 完全一致 */
 .toggle-chip.is-refreshing {
-  background: color-mix(in srgb, var(--bg-card) 84%, var(--hover-overlay-subtle)) !important;
+  background: transparent !important;
   border-color: transparent;
   cursor: default;
   pointer-events: none;
@@ -282,9 +282,9 @@ const serviceList = computed(() => props.services);
   border-radius: var(--radius-full);
   background: linear-gradient(
     90deg,
-    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 0%,
-    color-mix(in srgb, var(--hover-overlay) 60%, var(--bg-card)) 50%,
-    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 100%
+    var(--border-subtle-light) 25%,
+    var(--bg-card) 50%,
+    var(--border-subtle-light) 75%
   );
   background-size: 200% 100%;
   animation: k-shimmer var(--duration-shimmer) ease-in-out infinite;
@@ -299,9 +299,9 @@ const serviceList = computed(() => props.services);
   border-color: transparent;
   background: linear-gradient(
     90deg,
-    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 0%,
-    color-mix(in srgb, var(--hover-overlay) 60%, var(--bg-card)) 50%,
-    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 100%
+    var(--border-subtle-light) 25%,
+    var(--bg-card) 50%,
+    var(--border-subtle-light) 75%
   );
   background-size: 200% 100%;
   box-shadow: none;

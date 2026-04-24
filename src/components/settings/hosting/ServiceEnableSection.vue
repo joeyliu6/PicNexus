@@ -38,11 +38,8 @@ const batchTestProgressRef = computed(() => props.batchTestProgress ?? null);
 const testingConnectionsRef = computed(() => props.testingConnections);
 
 const {
-  progressPercent,
-  ringOffset,
   isShowingCompleted,
   ringLabel,
-  isStalled,
   batchTestedServices,
   batchDoneServices,
 } = useHealthCheck({
@@ -165,19 +162,17 @@ const skeletonStatuses = computed<ServiceHealthStatus[]>(() => {
           </div>
           <button
             class="health-refresh"
-            :class="{ 'is-testing': isBatchTesting || isShowingCompleted, 'is-completed': isShowingCompleted || (isBatchTesting && progressPercent >= 100) }"
+            :class="{
+              'is-testing': isBatchTesting && !isShowingCompleted,
+              'is-completed': isShowingCompleted,
+            }"
             @click="isBatchTesting ? emit('cancelBatchTest') : emit('testAll')"
             :disabled="isCheckingJd || isCheckingQiyu || serviceCheckSession?.mode === 'single'"
           >
             <Transition name="icon-swap" mode="out-in">
-              <i v-if="!isBatchTesting" key="refresh" class="pi pi-refresh"></i>
-              <svg v-else key="ring"
-                   :class="['ring-progress', { stalled: isStalled }]"
-                   viewBox="0 0 24 24">
-                <circle class="ring-bg" cx="12" cy="12" r="9"/>
-                <circle class="ring-fill" cx="12" cy="12" r="9"
-                        :style="{ strokeDashoffset: ringOffset }"/>
-              </svg>
+              <i v-if="isShowingCompleted" key="done" class="pi pi-check"></i>
+              <i v-else-if="isBatchTesting" key="spin" class="pi pi-sync is-spinning"></i>
+              <i v-else key="idle" class="pi pi-sync"></i>
             </Transition>
             <span class="ring-label">{{ ringLabel }}</span>
           </button>
@@ -241,19 +236,6 @@ const skeletonStatuses = computed<ServiceHealthStatus[]>(() => {
   width: 100%;
 }
 
-.ring-progress {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  overflow: visible;
-  transform-origin: center;
-  vertical-align: -1.5px;
-}
-
-.ring-progress.stalled {
-  animation: k-spin var(--duration-breathe) linear infinite;
-}
-
 .icon-swap-enter-active,
 .icon-swap-leave-active {
   transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease;
@@ -263,24 +245,6 @@ const skeletonStatuses = computed<ServiceHealthStatus[]>(() => {
 .icon-swap-leave-to {
   opacity: 0;
   transform: scale(0.7);
-}
-
-.ring-bg {
-  fill: none;
-  stroke: var(--border-subtle);
-  stroke-width: 2.5;
-}
-
-.ring-fill {
-  fill: none;
-  stroke: var(--primary);
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  stroke-dasharray: 56.55;
-  stroke-dashoffset: 56.55;
-  transform: rotate(-90deg);
-  transform-origin: 50% 50%;
-  transition: stroke-dashoffset var(--duration-slow) ease;
 }
 
 .pill-reveal {
@@ -318,19 +282,21 @@ const skeletonStatuses = computed<ServiceHealthStatus[]>(() => {
   position: relative;
 }
 
+/* 刷新态 pill 外壳透明，只让内部 dot + text shimmer 浮出，视觉最轻 */
 .health-pill--refreshing {
-  background: color-mix(in srgb, var(--bg-card) 84%, var(--hover-overlay-subtle));
+  background: transparent;
   color: transparent;
   cursor: default;
   pointer-events: none;
 }
 
+/* shimmer 配方与链接监控/批量迁移保持一致：border-subtle-light ↔ bg-card 对比度更强 */
 .health-pill--refreshing .health-dot {
   background: linear-gradient(
     90deg,
-    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 0%,
-    color-mix(in srgb, var(--hover-overlay) 60%, var(--bg-card)) 50%,
-    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 100%
+    var(--border-subtle-light) 25%,
+    var(--bg-card) 50%,
+    var(--border-subtle-light) 75%
   );
   background-size: 200% 100%;
   box-shadow: none;
@@ -350,9 +316,9 @@ const skeletonStatuses = computed<ServiceHealthStatus[]>(() => {
   border-radius: var(--radius-full);
   background: linear-gradient(
     90deg,
-    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 0%,
-    color-mix(in srgb, var(--hover-overlay) 60%, var(--bg-card)) 50%,
-    color-mix(in srgb, var(--hover-overlay) 86%, transparent) 100%
+    var(--border-subtle-light) 25%,
+    var(--bg-card) 50%,
+    var(--border-subtle-light) 75%
   );
   background-size: 200% 100%;
   animation: k-shimmer var(--duration-shimmer) ease-in-out infinite;
@@ -420,7 +386,7 @@ const skeletonStatuses = computed<ServiceHealthStatus[]>(() => {
   cursor: pointer;
   padding: var(--space-xs-sm) var(--space-md);
   border-radius: var(--radius-md);
-  transition: background-color var(--duration-fast) ease;
+  transition: background-color var(--duration-fast) ease, color var(--duration-fast) ease;
   white-space: nowrap;
 }
 
@@ -433,24 +399,17 @@ const skeletonStatuses = computed<ServiceHealthStatus[]>(() => {
   line-height: 1;
 }
 
+.health-refresh .pi.is-spinning {
+  animation: k-spin var(--duration-breathe) linear infinite;
+}
+
 .ring-label {
-  transition: color var(--duration-medium) ease;
+  transition: color var(--duration-fast) ease;
 }
 
-.health-refresh.is-testing:not(.is-completed) .ring-label {
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 2s 为脉冲循环动画，无对应 duration token */
-  animation: k-pulse 2s ease-in-out infinite;
-}
-
+/* 完成态：整按钮 color 切成 success，图标和文字一起变绿 */
 .health-refresh.is-completed {
-  animation: k-bounce var(--duration-slow) ease-out;
-}
-
-.health-refresh.is-completed .ring-label {
   color: var(--success);
-}
-
-.health-refresh.is-completed .ring-fill {
-  stroke: var(--success);
+  animation: k-bounce var(--duration-slow) ease-out;
 }
 </style>

@@ -4,9 +4,6 @@
 import { ref, computed, watch, onUnmounted, shallowRef, triggerRef, type Ref, type ComputedRef } from 'vue';
 import type { BatchTestProgress } from '../../types/batchTest';
 
-/** 进度环周长常量 */
-const RING_CIRCUMFERENCE = 56.55;
-
 /** 停滞判定阈值（毫秒） */
 const STALL_MS = 1500;
 
@@ -26,15 +23,9 @@ interface UseHealthCheckOptions {
 }
 
 export interface UseHealthCheckReturn {
-  /** 进度百分比（0-100） */
-  progressPercent: ComputedRef<number>;
-  /** 进度环 SVG stroke-dashoffset */
-  ringOffset: ComputedRef<number>;
-  /** 进度环周长常量 */
-  ringCircumference: number;
   /** 是否正在显示"检测完成" */
   isShowingCompleted: Ref<boolean>;
-  /** 进度环旁的文本标签 */
+  /** 刷新按钮旁的文本标签 */
   ringLabel: ComputedRef<string>;
   /** 进度是否停滞（用于旋转动画） */
   isStalled: Ref<boolean>;
@@ -47,17 +38,13 @@ export interface UseHealthCheckReturn {
 export function useHealthCheck(options: UseHealthCheckOptions): UseHealthCheckReturn {
   const { isBatchTesting, batchTestProgress, testingConnections } = options;
 
-  // ==================== 进度百分比 ====================
+  // ==================== 进度百分比（内部使用，驱动完成态/停滞态/ringLabel） ====================
 
   const progressPercent = computed(() => {
     const p = batchTestProgress.value;
     if (!p || p.total === 0) return 0;
     return Math.round((p.current / p.total) * 100);
   });
-
-  const ringOffset = computed(() =>
-    RING_CIRCUMFERENCE * (1 - progressPercent.value / 100)
-  );
 
   // ==================== 完成状态 ====================
 
@@ -179,9 +166,6 @@ export function useHealthCheck(options: UseHealthCheckOptions): UseHealthCheckRe
   });
 
   return {
-    progressPercent,
-    ringOffset,
-    ringCircumference: RING_CIRCUMFERENCE,
     isShowingCompleted,
     ringLabel,
     isStalled,
