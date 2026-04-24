@@ -11,6 +11,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use reqwest::multipart;
+use url::Url;
 
 // S3 SDK
 use aws_sdk_s3::{Client as S3Client, Config as S3Config};
@@ -26,6 +27,7 @@ type HmacSha1 = Hmac<Sha1>;
 
 /// 错误响应预览最大字节数（用于失败日志/错误信息截断）
 const ERROR_RESPONSE_PREVIEW_LEN: usize = 200;
+const ZHIHU_SOURCE_DEFAULT_VALUE: &str = "172ae18b";
 
 /// UTF-8 安全的字符串预览：按字节数截断，但保证不切在多字节字符中间
 ///
@@ -40,6 +42,40 @@ fn safe_preview(s: &str, max_bytes: usize) -> &str {
         end -= 1;
     }
     &s[..end]
+}
+
+fn is_zhimg_host(host: &str) -> bool {
+    host.eq_ignore_ascii_case("zhimg.com") || host.to_ascii_lowercase().ends_with(".zhimg.com")
+}
+
+fn apply_zhihu_source_param(
+    image_url: &str,
+    source_param_enabled: Option<bool>,
+    source_param_value: Option<&String>,
+) -> String {
+    if source_param_enabled == Some(false) {
+        return image_url.to_string();
+    }
+
+    let source_value = source_param_value
+        .map(|v| v.trim())
+        .filter(|v| !v.is_empty())
+        .unwrap_or(ZHIHU_SOURCE_DEFAULT_VALUE);
+
+    let Ok(mut parsed) = Url::parse(image_url) else {
+        return image_url.to_string();
+    };
+
+    if !parsed.host_str().is_some_and(is_zhimg_host) {
+        return image_url.to_string();
+    }
+
+    if parsed.query_pairs().any(|(key, _)| key == "source") {
+        return image_url.to_string();
+    }
+
+    parsed.query_pairs_mut().append_pair("source", source_value);
+    parsed.to_string()
 }
 
 // ==================== 配置枚举 ====================
@@ -77,7 +113,13 @@ pub enum ServerUploadConfig {
     /// 超星图床
     Chaoxing { cookie: String },
     /// 知乎图床
-    Zhihu { cookie: String },
+    Zhihu {
+        cookie: String,
+        #[serde(rename = "sourceParamEnabled")]
+        source_param_enabled: Option<bool>,
+        #[serde(rename = "sourceParamValue")]
+        source_param_value: Option<String>,
+    },
 
     // ── S3 私有存储 ───────────────────────────────
     /// Cloudflare R2
@@ -404,7 +446,9 @@ pub async fn upload_single_file(file_path: &str, config: &ServerUploadConfig) ->
         ServerUploadConfig::Bilibili { cookie } => server_upload_bilibili(&canonical, cookie).await,
         ServerUploadConfig::Nowcoder { cookie } => server_upload_nowcoder(&canonical, cookie).await,
         ServerUploadConfig::Chaoxing { cookie } => server_upload_chaoxing(&canonical, cookie).await,
-        ServerUploadConfig::Zhihu { cookie } => server_upload_zhihu(&canonical, cookie).await,
+        ServerUploadConfig::Zhihu { cookie, source_param_enabled, source_param_value } => {
+            server_upload_zhihu(&canonical, cookie, *source_param_enabled, source_param_value.as_ref()).await
+        },
         ServerUploadConfig::R2 { account_id, access_key_id, secret_access_key, bucket_name, path, public_domain } => {
             server_upload_r2(&canonical, account_id, access_key_id, secret_access_key, bucket_name, path, public_domain).await
         }
@@ -972,7 +1016,12 @@ async fn server_upload_chaoxing(path: &std::path::Path, cookie: &str) -> Result<
 
 // ── 知乎图床 ──────────────────────────────────────────
 
-async fn server_upload_zhihu(path: &std::path::Path, cookie: &str) -> Result<String, String> {
+async fn server_upload_zhihu(
+    path: &std::path::Path,
+    cookie: &str,
+    source_param_enabled: Option<bool>,
+    source_param_value: Option<&String>,
+) -> Result<String, String> {
     let buffer = tokio::fs::read(path).await
         .map_err(|e| format!("读取文件失败: {}", e))?;
 
@@ -1103,7 +1152,11 @@ async fn server_upload_zhihu(path: &std::path::Path, cookie: &str) -> Result<Str
             } else {
                 url.to_string()
             };
-            return Ok(normalized);
+            return Ok(apply_zhihu_source_param(
+                &normalized,
+                source_param_enabled,
+                source_param_value,
+            ));
         }
     }
 

@@ -4,6 +4,7 @@ import type { UserConfig, LinkPrefixItem } from './configInterface';
 import { DEFAULT_LINK_PREFIXES, cloneDefaultPrefixes } from './configInterface';
 import { DEFAULT_GITHUB_CDN_LIST } from './serviceTypes';
 import { DEFAULT_COMPRESSION_PRESET } from './compressionTypes';
+import { ZHIHU_SOURCE_DEFAULT_VALUE } from '../utils/zhihuSource';
 
 /**
  * 默认配置
@@ -38,7 +39,9 @@ export const DEFAULT_CONFIG: UserConfig = {
     },
     zhihu: {
       enabled: false,  // 知乎图床需要 Cookie，默认不启用
-      cookie: ''
+      cookie: '',
+      sourceParamEnabled: true,
+      sourceParamValue: ZHIHU_SOURCE_DEFAULT_VALUE
     },
     nami: {
       enabled: false,  // 纳米图床需要 Cookie，默认不启用

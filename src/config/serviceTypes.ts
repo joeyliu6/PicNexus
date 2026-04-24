@@ -100,6 +100,16 @@ export interface QiyuServiceConfig extends BaseServiceConfig {}
 export interface ZhihuServiceConfig extends BaseServiceConfig {
   /** 知乎 Cookie */
   cookie: string;
+  /**
+   * 是否给 *.zhimg.com 链接追加 source 参数（绕过防盗链）
+   * 影响复制链接和应用内图片显示
+   */
+  sourceParamEnabled?: boolean;
+  /**
+   * source 参数值（默认 172ae18b——社区验证过的知乎网页端渠道标识）
+   * 若此值失效，用户可自行填入抓到的其他可用值
+   */
+  sourceParamValue?: string;
 }
 
 /**
