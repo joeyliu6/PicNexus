@@ -77,12 +77,21 @@ export class MutexStore {
    * 执行实际的读取操作（在锁内调用）
    */
   private async _performRead<T>(key: string, defaultValue?: T): Promise<T | null> {
+    // Why: 调用方常传入 DEFAULT_CONFIG 作默认值，若原样返回则 Vue ref 会把模块级常量包成 Proxy，
+    //      后续任何 config.value.xxx = ... 会直接污染 DEFAULT_CONFIG。此处统一克隆一次。
+    const cloneDefault = (): T | null => {
+      if (defaultValue === undefined) return null;
+      return typeof defaultValue === 'object' && defaultValue !== null
+        ? structuredClone(defaultValue)
+        : defaultValue;
+    };
+
     try {
       // 缓存命中：跳过文件 I/O 和解密
       if (this.cache.isLoaded()) {
         const cached = this.cache.get<T>(key);
         if (cached !== undefined) return cached;
-        return defaultValue !== undefined ? defaultValue : null;
+        return cloneDefault();
       }
 
       // 缓存未加载 → 从磁盘加载
@@ -100,7 +109,7 @@ export class MutexStore {
       const value = data[key];
       if (value === undefined) {
         log.debug(`键 "${key}" 不存在于数据文件中`);
-        return defaultValue !== undefined ? defaultValue : null;
+        return cloneDefault();
       }
       return value as T;
     } catch (error) {
