@@ -109,7 +109,9 @@ export class GithubUploader extends BaseUploader<GithubServiceConfig> {
       .replace(/\{domain\}/g, domain)
       .replace(/\{owner\}/g, config.owner)
       .replace(/\{repo\}/g, config.repo)
-      .replace(/\{branch\}/g, branch)
+      // Why: {path} 来自 encodedBranch 切割后的剩余串（已编码），{branch} 必须同样用编码值，
+      //      否则模板里 `{branch}/{path}` 拼出来的 CDN URL 编码不一致，含中文/空格分支会 404。
+      .replace(/\{branch\}/g, encodedBranch)
       .replace(/\{path\}/g, path)
       .replace(/\{rawUrl\}/g, rawUrl);
   }
