@@ -229,13 +229,18 @@ function handleMoreAction(kind: MoreMenuKind): void {
   >
     <div class="sk-filterbar">
       <div class="sk-chips">
-        <div v-for="i in 6" :key="'c' + i" class="sk-chip" />
+        <div class="sk-chip sk-chip--error" />
+        <div class="sk-chip sk-chip--suspicious" />
+        <div class="sk-chip sk-chip--unchecked" />
+        <div class="sk-chip sk-chip--valid" />
+        <div class="sk-chip sk-chip--all" />
       </div>
+      <div class="sk-service-filter" />
       <div class="sk-searchbox" />
     </div>
 
     <div class="sk-link-list">
-      <div v-for="i in 15" :key="'r' + i" class="sk-link-row">
+      <div v-for="i in 12" :key="'r' + i" class="sk-link-row">
         <div class="sk-dot" />
         <div class="sk-line sk-line--name" />
         <div class="sk-line sk-line--svc" />
@@ -333,7 +338,7 @@ function handleMoreAction(kind: MoreMenuKind): void {
 }
 
 /* 骨架通用样式：shimmer 动画靠 background-position，必须配 gradient 才可见 */
-.monitor-panel--skeleton :where(.sk-chip, .sk-searchbox, .sk-line, .sk-dot, .sk-circle, .sk-pager, .sk-more-btn, .sk-primary-btn) {
+.monitor-panel--skeleton :where(.sk-chip, .sk-service-filter, .sk-searchbox, .sk-line, .sk-dot, .sk-circle, .sk-pager, .sk-more-btn, .sk-primary-btn) {
   background: linear-gradient(90deg, var(--border-subtle-light) 25%, var(--bg-card) 50%, var(--border-subtle-light) 75%);
   background-size: 200% 100%;
   animation: k-shimmer var(--duration-shimmer) ease-in-out infinite;
@@ -342,34 +347,47 @@ function handleMoreAction(kind: MoreMenuKind): void {
 
 /* 顶部 FilterBar 骨架：左侧 chip 组 + 右侧搜索框 */
 .sk-filterbar {
-  display: flex; align-items: center; gap: var(--space-md);
-  padding: var(--space-sm) var(--space-lg-xl) var(--space-sm) 0;
+  display: flex; align-items: center; gap: var(--space-sm-md);
+  padding: 0 var(--space-xl) 0 0;
+  min-height: 32px;
 }
-.sk-chips { display: flex; gap: var(--space-sm); flex: 1; min-width: 0; }
-.sk-chip { height: 28px; width: 72px; border-radius: var(--radius-lg); flex-shrink: 0; }
-.sk-searchbox { width: 260px; height: 34px; border-radius: var(--radius-md); flex-shrink: 0; }
+.sk-chips { display: flex; gap: var(--space-xs-sm); flex-wrap: nowrap; min-width: 0; flex-shrink: 0; }
+/* stylelint-disable-next-line declaration-property-value-disallowed-list -- 13px pill radius mirrors .filter-chip's 26px height */
+.sk-chip { height: 26px; border-radius: 13px; flex-shrink: 0; }
+.sk-chip--error { width: 116px; }
+.sk-chip--suspicious { width: 112px; }
+.sk-chip--unchecked { width: 188px; }
+.sk-chip--valid { width: 156px; }
+.sk-chip--all { width: 156px; }
+/* stylelint-disable-next-line declaration-property-value-disallowed-list -- 13px pill radius mirrors .filter-chip's 26px height */
+.sk-service-filter { width: 174px; height: 26px; border-radius: 13px; margin-left: auto; flex-shrink: 0; }
+.sk-searchbox { width: 246px; min-width: 180px; height: 32px; border-radius: var(--radius-xl); flex-shrink: 1; }
 
 /* 中间 List 骨架：15 行 */
-.sk-link-list { flex: 1; min-height: 0; padding-right: var(--space-lg-xl); overflow: hidden; }
+.sk-link-list { flex: 1; min-height: 0; padding-right: var(--space-xl); overflow: hidden; }
 
 .sk-link-row {
-  display: flex; align-items: center; gap: var(--space-md);
-  padding: var(--space-sm) var(--space-md);
-  height: 36px;
+  display: flex; align-items: center; gap: var(--space-sm-md);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 11px left inset aligns with .link-row */
+  padding: 0 var(--space-lg) 0 11px;
+  height: 40px;
+  border-bottom: 1px solid var(--primary-alpha-5);
 }
 .sk-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.sk-circle { width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; }
+/* stylelint-disable-next-line declaration-property-value-disallowed-list -- 5px icon-button radius mirrors row action buttons */
+.sk-circle { width: 24px; height: 24px; border-radius: 5px; flex-shrink: 0; opacity: 0.2; }
 .sk-line { height: var(--text-sm); }
-.sk-line--name { flex: 1; max-width: 40%; }
-.sk-line--svc { width: 56px; flex-shrink: 0; margin-left: auto; }
-.sk-line--badge { width: 32px; flex-shrink: 0; }
+.sk-line--name { flex: 1; max-width: 542px; }
+.sk-line--svc { width: 74px; height: 24px; flex-shrink: 0; margin-left: auto; }
+.sk-line--badge { width: 64px; height: 20px; flex-shrink: 0; }
 
 /* 底部 BottomBar 骨架：分页 + 更多 + 主按钮 */
 .sk-bottombar {
   display: flex; align-items: center; gap: var(--space-md);
-  padding: var(--space-sm) var(--space-lg-xl) 0 0;
+  padding: 0 var(--space-xl) 0 0;
+  min-height: 28px;
 }
-.sk-pager { width: 96px; height: 28px; border-radius: var(--radius-md); }
-.sk-more-btn { width: 72px; height: 32px; border-radius: var(--radius-md); margin-left: auto; }
-.sk-primary-btn { width: 110px; height: 36px; border-radius: var(--radius-md); }
+.sk-pager { width: 214px; height: 28px; border-radius: var(--radius-md); }
+.sk-more-btn { width: 136px; height: 28px; border-radius: var(--radius-sm-md); margin-left: auto; }
+.sk-primary-btn { width: 184px; height: 28px; border-radius: var(--radius-sm-md); }
 </style>
