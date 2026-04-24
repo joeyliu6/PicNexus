@@ -21,11 +21,31 @@ class Logger {
 
   private format(msg: string, args: unknown[]): string {
     if (args.length === 0) return `[${this.module}] ${msg}`;
-    // 错误对象特殊处理，提取 message
-    const extra = args.map(a =>
-      a instanceof Error ? a.message : JSON.stringify(a)
-    ).join(' ');
+    const extra = args.map(a => safeStringify(a)).join(' ');
     return `[${this.module}] ${msg} ${extra}`;
+  }
+}
+
+/**
+ * 序列化任意值到字符串，logger 必须 infallible。
+ * Why: 原实现直接 JSON.stringify 遇到循环引用/BigInt/不可序列化值会抛异常，
+ *      导致 log.error 本身成为异常源，遮蔽真正的业务异常。
+ */
+function safeStringify(value: unknown): string {
+  if (value instanceof Error) return value.message;
+  if (value === null || value === undefined) return String(value);
+  const t = typeof value;
+  if (t === 'string' || t === 'number' || t === 'boolean') return String(value);
+  if (t === 'bigint') return `${value}n`;
+  if (t === 'function' || t === 'symbol') return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    try {
+      return Object.prototype.toString.call(value);
+    } catch {
+      return '[Unserializable]';
+    }
   }
 }
 
