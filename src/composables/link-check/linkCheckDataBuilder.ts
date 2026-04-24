@@ -6,7 +6,7 @@ import type {
   CheckLinkResult,
   LinkCheckRow,
 } from '../../types/linkCheck';
-import { applyLinkPrefix } from '../useCopyLink';
+import { applyConfiguredUrlWithConfig } from '../useCopyLink';
 
 export function liteRowToItem(row: LinkCheckLiteRow): HistoryItem {
   const parsedResults = typeof row.results === 'string' ? JSON.parse(row.results) : row.results;
@@ -44,7 +44,7 @@ export function buildCheckItemsSync(
       if (result.status !== 'success' || !result.result?.url) continue;
 
       const rawUrl = result.result.url;
-      const finalUrl = applyLinkPrefix(rawUrl, result.serviceId, config);
+      const finalUrl = applyConfiguredUrlWithConfig(rawUrl, result.serviceId, config);
       const rawGithubUrl = result.serviceId === 'github'
         ? ((result.result.metadata as Record<string, unknown>)?.rawUrl as string | undefined)
         : undefined;

@@ -6,13 +6,16 @@ import type { Ref } from 'vue';
 import { useHistoryManager } from '../../composables/useHistory';
 import { useLinkCheckBulkActions } from '../../composables/link-check/useLinkCheckBulkActions';
 import { useLinkCheckManager } from '../../composables/useLinkCheck';
+import { useConfigManager } from '../../composables/useConfig';
 import { useToast } from '../../composables/useToast';
+import { applyZhihuSourceFromConfig } from '../../utils/zhihuSource';
 import type { LinkCheckRow } from '../../types/linkCheck';
 import BatchMigratePanel from './linkcheck/BatchMigratePanel.vue';
 import HistoryCheckPanel from './linkcheck/HistoryCheckPanel.vue';
 import MdRescueInline from './linkcheck/MdRescueInline.vue';
 
 const toast = useToast();
+const configManager = useConfigManager();
 
 type LinkCheckTab = 'monitor' | 'rescue' | 'migrate';
 
@@ -92,7 +95,8 @@ async function handleExportCsvSelected(rows: LinkCheckRow[]): Promise<void> {
 }
 
 function handleCopyUrl(url: string): void {
-  void navigator.clipboard.writeText(url);
+  const finalUrl = applyZhihuSourceFromConfig(url, configManager.config.value);
+  void navigator.clipboard.writeText(finalUrl);
   toast.success('已复制到剪贴板');
 }
 

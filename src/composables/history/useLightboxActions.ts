@@ -16,7 +16,7 @@ interface LightboxActionsOptions {
 
 export function useLightboxActions({ item, resetZoom, onDelete }: LightboxActionsOptions) {
   const toast = useToast();
-  const { copyLink: copyLinkAction, applyPrefix } = useCopyLink();
+  const { copyLink: copyLinkAction, applyConfiguredUrl } = useCopyLink();
   const { confirmDelete } = useConfirm();
   const copySuccess = ref(false);
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -85,7 +85,7 @@ export function useLightboxActions({ item, resetZoom, onDelete }: LightboxAction
     if (!ctx) return;
     try {
       const { open } = await import('@tauri-apps/plugin-shell');
-      const finalUrl = applyPrefix(ctx.link, ctx.record.primaryService as ServiceType);
+      const finalUrl = applyConfiguredUrl(ctx.link, ctx.record.primaryService as ServiceType);
       await open(finalUrl);
     } catch (err) {
       logger.error('打开链接失败:', err);

@@ -9,6 +9,7 @@ import type PopoverType from 'primevue/popover';
 import type { HistoryItem } from '../../config/types';
 import { getPrimaryImageUrl } from '../../utils/imageUrl';
 import { applyPrefixTemplate } from '../../utils/linkPrefixTemplate';
+import { applyZhihuSourceFromConfig } from '../../utils/zhihuSource';
 import { getServiceDisplayName } from '../../constants/serviceNames';
 import { useHistoryViewState } from '../useHistoryViewState';
 import { useHistoryManager } from '../useHistory';
@@ -260,7 +261,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
         toast.warn('无可用链接', `${getServiceDisplayName(serviceId)} 图床没有可用的链接`);
         return;
       }
-      let link = result.result.url;
+      let link = applyZhihuSourceFromConfig(result.result.url, configManager.config.value);
       if (serviceId === 'weibo' && configManager.config.value.linkPrefixConfig) {
         const activePrefix = configManager.getActivePrefix(configManager.config.value.linkPrefixConfig);
         if (activePrefix) link = applyPrefixTemplate(activePrefix.template, link);

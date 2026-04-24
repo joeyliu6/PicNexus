@@ -9,6 +9,8 @@ import { dirname } from '@tauri-apps/api/path';
 import { invoke } from '@tauri-apps/api/core';
 import EmptyState from '../../../common/EmptyState.vue';
 import { useToast } from '../../../../composables/useToast';
+import { useConfigManager } from '../../../../composables/useConfig';
+import { applyConfiguredUrlWithConfig } from '../../../../composables/useCopyLink';
 import { getServiceDisplayName } from '../../../../constants/serviceNames';
 import type { MdImageLinkWithFile } from '../../../../composables/useMdRescue';
 import { useFlatBrokenRows } from '../../../../composables/md-rescue/useFlatBrokenRows';
@@ -29,6 +31,7 @@ const props = defineProps<{
 }>();
 
 const toast = useToast();
+const configManager = useConfigManager();
 
 // ---- 列表数据（展平/筛选/分组） ----
 const {
@@ -77,16 +80,20 @@ async function openMdFile(filePath: string): Promise<void> {
 }
 
 async function openInBrowser(url: string): Promise<void> {
-  await withErrorToast(() => shellOpen(url), '无法打开链接');
+  await withErrorToast(() => shellOpen(resolveConfiguredUrl(url)), '无法打开链接');
 }
 
 async function copyRowUrl(url: string): Promise<void> {
   try {
-    await writeText(url);
+    await writeText(resolveConfiguredUrl(url));
     toast.success('已复制', 'URL 已复制到剪贴板');
   } catch (err) {
     toast.error('复制失败', String(err));
   }
+}
+
+function resolveConfiguredUrl(url: string): string {
+  return applyConfiguredUrlWithConfig(url, undefined, configManager.config.value);
 }
 
 function getFirstValidBackup(link: MdImageLinkWithFile): string {

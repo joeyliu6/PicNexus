@@ -4,7 +4,7 @@
 // / findBackupLinksRaw / runLinkCheck（包含 analyzeFile 的核心逻辑）
 
 import type { UserConfig, HistoryItem } from '../../config/types';
-import { applyLinkPrefix } from '../useCopyLink';
+import { applyConfiguredUrlWithConfig } from '../useCopyLink';
 import { historyDB } from '../../services/HistoryDatabase';
 import { createLogger } from '../../utils/logger';
 import { stripKnownPrefixes } from '../../utils/mdParser';
@@ -101,7 +101,7 @@ export async function buildUrlIndex(config: UserConfig): Promise<void> {
       if (r.status !== 'success' || !r.result?.url) continue;
 
       const rawUrl = r.result.url;
-      const finalUrl = applyLinkPrefix(rawUrl, r.serviceId, config);
+      const finalUrl = applyConfiguredUrlWithConfig(rawUrl, r.serviceId, config);
       const entry = { historyId: item.id, serviceId: r.serviceId };
 
       for (const url of [rawUrl, finalUrl]) {
@@ -148,7 +148,7 @@ export async function findBackupLinksRaw(
       if (r.status !== 'success' || !r.result?.url) continue;
 
       const rawUrl = r.result.url;
-      const finalUrl = applyLinkPrefix(rawUrl, r.serviceId, config);
+      const finalUrl = applyConfiguredUrlWithConfig(rawUrl, r.serviceId, config);
 
       if (seenUrls.has(finalUrl)) continue;
       seenUrls.add(finalUrl);

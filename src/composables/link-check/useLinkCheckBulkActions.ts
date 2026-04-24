@@ -1,6 +1,8 @@
 import { ref } from 'vue';
 import type { LinkCheckRow } from '../../types/linkCheck';
 import { useToast } from '../useToast';
+import { useConfigManager } from '../useConfig';
+import { applyZhihuSourceFromConfig } from '../../utils/zhihuSource';
 
 const COPY_LIMIT = 1000;
 
@@ -19,6 +21,7 @@ function uniqueUrls(rows: LinkCheckRow[]): string[] {
 
 export function useLinkCheckBulkActions(options: UseLinkCheckBulkActionsOptions) {
   const toast = useToast();
+  const configManager = useConfigManager();
   const isBulkActing = ref(false);
 
   async function bulkRecheck(rows: LinkCheckRow[]): Promise<void> {
@@ -40,7 +43,9 @@ export function useLinkCheckBulkActions(options: UseLinkCheckBulkActionsOptions)
       return;
     }
 
-    const copiedUrls = urls.slice(0, COPY_LIMIT);
+    const copiedUrls = urls
+      .slice(0, COPY_LIMIT)
+      .map((u) => applyZhihuSourceFromConfig(u, configManager.config.value));
 
     try {
       await navigator.clipboard.writeText(copiedUrls.join('\n'));

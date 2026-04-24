@@ -10,6 +10,8 @@ import { inject, computed, ref, watch, nextTick } from 'vue';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { useToast } from '../../../../composables/useToast';
+import { useConfigManager } from '../../../../composables/useConfig';
+import { applyConfiguredUrlWithConfig } from '../../../../composables/useCopyLink';
 import { createLogger } from '../../../../utils/logger';
 import { historyDB } from '../../../../services/database';
 import { MIGRATE_KEY } from './keys';
@@ -27,6 +29,7 @@ const PAGE_SIZE = 100;
 
 const log = createLogger('MigrateProgressPhase');
 const toast = useToast();
+const configManager = useConfigManager();
 
 const ctx = inject(MIGRATE_KEY)!;
 const {
@@ -244,7 +247,8 @@ async function handleCopyUrl(historyId: string, serviceId: string) {
       toast.warn('复制失败', 'URL 未就绪');
       return;
     }
-    await navigator.clipboard.writeText(url);
+    const finalUrl = applyConfiguredUrlWithConfig(url, serviceId, configManager.config.value);
+    await navigator.clipboard.writeText(finalUrl);
     toast.success('已复制链接');
   } catch (e) {
     log.error('复制链接失败', e);
