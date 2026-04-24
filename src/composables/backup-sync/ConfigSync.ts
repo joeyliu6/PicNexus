@@ -171,12 +171,13 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
     if (!webdav) return;
 
     let stage: 'download' | 'upload' = 'download';
+    // Why: 需要在外层 catch 里根据是否已合并云端数据来决定 toast 文案，所以声明挪到 try 之外
+    let hasCloudData = false;
 
     try {
       syncConfigLoading.value = true;
 
       const currentConfig = await configStore.get<UserConfig>('config');
-      let hasCloudData = false;
 
       // 步骤 1：拉取云端配置并合并到本地（保留本地 WebDAV 配置）
       try {
@@ -205,8 +206,15 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
             }
           }
         }
-      } catch {
-        // 云端文件不存在，跳过下载步骤
+      } catch (downloadError) {
+        // Why: 原实现 catch {} 会连 user_cancelled（用户取消输密码）和网络/解密/JSON 错误
+        // 一起吞掉，直接进入上传步骤有覆盖云端合法数据的风险。
+        // - user_cancelled 必须向外抛，让上层 return 掉整个同步流程；
+        // - 其他错误至少落一条 warn 日志便于排障，流程仍容忍（因为也可能只是云端文件不存在）。
+        if (downloadError instanceof Error && downloadError.message === 'user_cancelled') {
+          throw downloadError;
+        }
+        log.warn('拉取云端配置失败（将按云端无数据处理）:', downloadError);
       }
 
       // 步骤 2：将本地配置上传到云端
@@ -237,8 +245,14 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
       await writeSyncLog('sync_settings', 'failed', errorCode, profile);
 
       if (stage === 'upload') {
-        updateConfigSyncStatus(profile, 'partial', errorCode);
-        toast.error('云端数据已合并到本地，但上传失败', errorCode);
+        // Why: hasCloudData=false 时 step 1 实际上什么都没合并，旧文案会误导用户"云端数据已覆盖本地"。
+        if (hasCloudData) {
+          updateConfigSyncStatus(profile, 'partial', errorCode);
+          toast.error('云端数据已合并到本地，但上传失败', errorCode);
+        } else {
+          updateConfigSyncStatus(profile, 'failed', errorCode);
+          toast.error('同步失败：本地配置上传失败', errorCode);
+        }
       } else {
         updateConfigSyncStatus(profile, 'failed', errorCode);
         toast.error('同步失败：无法获取云端配置', errorCode);
