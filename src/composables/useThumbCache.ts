@@ -8,6 +8,7 @@ import type { ImageMeta } from '../types/image-meta';
 import type { QueueItem } from '../uploadQueue';
 import { getActivePrefix } from '../config/types';
 import { applyPrefixTemplate } from '../utils/linkPrefixTemplate';
+import { applyZhihuSourceFromConfig } from '../utils/zhihuSource';
 import { useConfigManager } from './useConfig';
 import { onCacheEventType } from '../events/cacheEvents';
 import type { HistoryEventData } from '../events/cacheEvents';
@@ -112,7 +113,8 @@ export function generateThumbnailUrl(
       thumbUrl = url;
   }
 
-  return thumbUrl;
+  // 知乎 source 参数（仅对 *.zhimg.com 生效，其他 URL 原样返回）
+  return applyZhihuSourceFromConfig(thumbUrl, config);
 }
 
 /** 从 ImageMeta 生成中等缩略图 URL（便捷方法） */
@@ -147,63 +149,74 @@ export function generateMediumThumbnailUrl(
   fileKey?: string,
   config?: ThumbConfig
 ): string {
+  let mediumUrl: string;
+
   switch (serviceId) {
     case 'weibo':
       // 微博：mw690 约 690px 宽
       if (fileKey) {
-        let thumbUrl = `https://tvax1.sinaimg.cn/mw690/${fileKey}.jpg`;
+        mediumUrl = `https://tvax1.sinaimg.cn/mw690/${fileKey}.jpg`;
         if (config) {
           const activePrefix = getActivePrefix(config);
           if (activePrefix) {
-            thumbUrl = applyPrefixTemplate(activePrefix.template, thumbUrl);
+            mediumUrl = applyPrefixTemplate(activePrefix.template, mediumUrl);
           }
         }
-        return thumbUrl;
+      } else {
+        mediumUrl = url;
       }
-      return url;
+      break;
 
     case 'r2':
       // R2：wsrv.nl 代理，宽度 800px
-      return `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=800&q=80&output=webp`;
+      mediumUrl = `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=800&q=80&output=webp`;
+      break;
 
     case 'jd':
       // 京东：s500x0 约 500px 宽
-      return url.replace('/jfs/', '/s500x0_jfs/');
+      mediumUrl = url.replace('/jfs/', '/s500x0_jfs/');
+      break;
 
     case 'zhihu':
       // 知乎：_qhd 后缀（高清缩略图）
-      return url.replace(/\.(\w+)$/, '_qhd.$1');
+      mediumUrl = url.replace(/\.(\w+)$/, '_qhd.$1');
+      break;
 
     case 'qiyu':
       // 七鱼：thumbnail=400x0
-      return `${url}?imageView&thumbnail=400x0`;
+      mediumUrl = `${url}?imageView&thumbnail=400x0`;
+      break;
 
     case 'nami':
       // 纳米：l_500 宽度 500px
-      return `${url}?x-tos-process=image/resize,l_500/quality,q_80/format,jpg`;
+      mediumUrl = `${url}?x-tos-process=image/resize,l_500/quality,q_80/format,jpg`;
+      break;
 
     case 'nowcoder':
       // 牛客：w_400
-      return `${url}?x-oss-process=image%2Fresize%2Cw_400%2Cm_mfit%2Fformat%2Cpng`;
+      mediumUrl = `${url}?x-oss-process=image%2Fresize%2Cw_400%2Cm_mfit%2Fformat%2Cpng`;
+      break;
 
     case 'bilibili':
       // B站：800宽，80质量 WebP
-      return `${url}@800w_80q.webp`;
+      mediumUrl = `${url}@800w_80q.webp`;
+      break;
 
     case 'chaoxing': {
       // 超星：替换域名 + 替换文件名为中等尺寸
-      // 原图: https://p.cldisk.com/star4/{hash}/origin.jpg
-      // 中图: https://p.ananas.chaoxing.com/star4/{hash}/800_0cQ80.webp
       let cxMediumUrl = url;
       if (cxMediumUrl.includes('p.cldisk.com')) {
         cxMediumUrl = cxMediumUrl.replace('p.cldisk.com', 'p.ananas.chaoxing.com');
       }
-      return cxMediumUrl.replace(/\/origin\.[a-zA-Z0-9]+(\?.*)?$/, '/800_0cQ80.webp');
+      mediumUrl = cxMediumUrl.replace(/\/origin\.[a-zA-Z0-9]+(\?.*)?$/, '/800_0cQ80.webp');
+      break;
     }
 
     default:
-      return url;
+      mediumUrl = url;
   }
+
+  return applyZhihuSourceFromConfig(mediumUrl, config);
 }
 
 // 缩略图候选列表缓存
@@ -367,7 +380,7 @@ function getThumbUrl(item: HistoryItem, config: ReturnType<typeof useConfigManag
   }
 
   // 非微博图床：直接使用原图 URL（写入缓存避免重复查找）
-  const resultUrl = targetResult.result.url;
+  const resultUrl = applyZhihuSourceFromConfig(targetResult.result.url, config);
   setThumbCache(item.id, resultUrl);
   return resultUrl;
 }
@@ -416,7 +429,7 @@ function getLargeImageUrl(item: HistoryItem, config: ReturnType<typeof useConfig
     return largeUrl;
   }
 
-  return result.result.url;
+  return applyZhihuSourceFromConfig(result.result.url, config);
 }
 
 /** 模块级 watcher 是否已初始化（只注册一次，避免多实例重复注册） */
@@ -459,6 +472,17 @@ function initModuleWatchers(
 
     watch(
       () => configManager.config.value?.linkPrefixConfig?.selectedIndex,
+      clearThumbCache
+    );
+
+    // 知乎 source 参数开关/值变化时清缓存，确保缩略图 URL 立即更新
+    // 注意：用多源写法让 Vue 对每个原始值单独比对；若用单 getter 返回数组，
+    // 每次执行都生成新数组引用会导致任意配置保存都误触发清缓存。
+    watch(
+      [
+        () => configManager.config.value?.services?.zhihu?.sourceParamEnabled,
+        () => configManager.config.value?.services?.zhihu?.sourceParamValue,
+      ],
       clearThumbCache
     );
   });
