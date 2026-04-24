@@ -10,7 +10,6 @@ export interface CheckStatsResult {
   unchecked: number;
   checked: number;
   problems: number;
-  skipped: number;
 }
 
 interface UseCheckStatsOptions {
@@ -20,10 +19,9 @@ interface UseCheckStatsOptions {
   statusFilter?: Ref<StatusFilter>;
 }
 
-export function useCheckStats({ scopedRows, checkRows, progress, statusFilter }: UseCheckStatsOptions) {
+export function useCheckStats({ scopedRows, checkRows, progress }: UseCheckStatsOptions) {
   const stats = computed<CheckStatsResult>(() => {
-    const activeRows = scopedRows.value.filter((row) => !row.linkCheckSkip);
-    const skipped = scopedRows.value.length - activeRows.length;
+    const activeRows = scopedRows.value;
     let valid = 0;
     let invalid = 0;
     let timeout = 0;
@@ -59,18 +57,13 @@ export function useCheckStats({ scopedRows, checkRows, progress, statusFilter }:
       unchecked,
       checked,
       problems: invalid + timeout + suspicious,
-      skipped,
     };
   });
 
   const serviceList = computed(() => {
-    const currentFilter = statusFilter?.value ?? null;
-    const sourceRows = checkRows.value.filter((row) =>
-      currentFilter === 'skipped' ? row.linkCheckSkip : !row.linkCheckSkip,
-    );
     const map = new Map<string, number>();
 
-    for (const row of sourceRows) {
+    for (const row of checkRows.value) {
       map.set(row.serviceId, (map.get(row.serviceId) || 0) + 1);
     }
 

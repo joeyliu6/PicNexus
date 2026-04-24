@@ -49,18 +49,32 @@ export interface ImageMeta {
    */
   primaryFileKey?: string;
 
+  // ==================== 镜像 fallback ====================
+
+  /**
+   * 全部成功上传的镜像服务（主服务排在第 0 位，其他按原 results 顺序）
+   * 用于浏览视图主图加载失败时按序 fallback 到其他镜像
+   * 仅当一张图片上传到多个图床时才有多个元素
+   */
+  mirrorServices?: MirrorService[];
+
   /** 是否已收藏 */
   isFavorited?: boolean;
+}
+
+/** 单个镜像图床的精简信息（用于列表缩略图的 fallback 链） */
+export interface MirrorService {
+  serviceId: ServiceType;
+  url: string;
+  fileKey?: string;
 }
 
 /**
  * 从 HistoryItem 提取元数据
  */
 export function extractMetaFromHistoryItem(item: HistoryItem): ImageMeta {
-  // 提取主力图床的 fileKey
-  const primaryResult = item.results?.find(
-    (r) => r.serviceId === item.primaryService && r.status === 'success'
-  );
+  const mirrorServices = extractMirrorServices(item.results, item.primaryService);
+  const primary = mirrorServices[0];
 
   return {
     id: item.id,
@@ -68,8 +82,36 @@ export function extractMetaFromHistoryItem(item: HistoryItem): ImageMeta {
     localFileName: item.localFileName || '',
     aspectRatio: item.aspectRatio || 1.0,
     primaryService: item.primaryService as ServiceType,
-    primaryUrl: primaryResult?.result?.url || item.generatedLink,
-    primaryFileKey: primaryResult?.result?.fileKey,
+    primaryUrl: primary?.url || item.generatedLink,
+    primaryFileKey: primary?.fileKey,
+    mirrorServices: mirrorServices.length > 0 ? mirrorServices : undefined,
     isFavorited: item.isFavorited ?? false,
   };
+}
+
+/**
+ * 从 results 数组抽出所有成功镜像，主服务排在首位
+ * 供 HistoryItem 和底层 rowToImageMeta 共用
+ */
+export function extractMirrorServices(
+  results: HistoryItem['results'] | undefined,
+  primaryService: string,
+): MirrorService[] {
+  if (!results || results.length === 0) return [];
+  const mirrors: MirrorService[] = [];
+  let primary: MirrorService | undefined;
+  for (const r of results) {
+    if (r.status !== 'success' || !r.result?.url) continue;
+    const entry: MirrorService = {
+      serviceId: r.serviceId as ServiceType,
+      url: r.result.url,
+      fileKey: r.result.fileKey,
+    };
+    if (r.serviceId === primaryService && !primary) {
+      primary = entry;
+    } else {
+      mirrors.push(entry);
+    }
+  }
+  return primary ? [primary, ...mirrors] : mirrors;
 }

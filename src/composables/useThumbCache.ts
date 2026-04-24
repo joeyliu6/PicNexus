@@ -121,6 +121,23 @@ export function getMetaThumbnailUrl(meta: ImageMeta, config: ThumbConfig): strin
 }
 
 /**
+ * 从 ImageMeta 生成中等缩略图候选列表（按镜像 fallback 顺序）
+ *
+ * 主服务排第 0 位，其余镜像按 results 原顺序。主图失效时浏览器 onerror 会自动试下一条。
+ * 无 mirrorServices 数据时降级到 [primaryUrl]，保持向后兼容。
+ */
+export function getMetaThumbnailCandidates(meta: ImageMeta, config: ThumbConfig): string[] {
+  if (meta.mirrorServices && meta.mirrorServices.length > 0) {
+    const urls = meta.mirrorServices
+      .map(m => generateMediumThumbnailUrl(m.serviceId, m.url, m.fileKey, config))
+      .filter(u => !!u);
+    return [...new Set(urls)];
+  }
+  const single = generateMediumThumbnailUrl(meta.primaryService, meta.primaryUrl, meta.primaryFileKey, config);
+  return single ? [single] : [];
+}
+
+/**
  * 根据图床类型生成中等尺寸缩略图 URL（~400-800px）
  * 用于悬浮预览和时间线视图
  */

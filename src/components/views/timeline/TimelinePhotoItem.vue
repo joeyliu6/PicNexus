@@ -6,11 +6,15 @@
  * 两种交互模式（参考 Google Photos）：
  * - 普通模式（hasSelection=false）：点击图片 = 打开灯箱
  * - 选择模式（hasSelection=true）：点击图片 = 选中/取消，放大镜打开灯箱
+ *
+ * 镜像 fallback：thumbnailUrls 按优先级排列（主服务在前），主图 onerror
+ * 时自动试下一条，全部失效后才向父视图 emit image-error。
  */
+import { ref, computed, watch } from 'vue';
 import Skeleton from 'primevue/skeleton';
 import type { ImageMeta } from '../../../types/image-meta';
 
-defineProps<{
+const props = defineProps<{
   meta: ImageMeta;
   x: number;
   y: number;
@@ -22,7 +26,7 @@ defineProps<{
   isFailed: boolean;
   hasSelection: boolean;
   displayMode: 'fast' | 'smooth' | 'normal';
-  thumbnailUrl: string;
+  thumbnailUrls: string[];
 }>();
 
 const emit = defineEmits<{
@@ -34,6 +38,22 @@ const emit = defineEmits<{
   (e: 'image-error', event: Event): void;
 }>();
 
+const currentSrcIndex = ref(0);
+const currentSrc = computed(() => props.thumbnailUrls[currentSrcIndex.value] ?? '');
+
+watch(
+  () => props.thumbnailUrls,
+  () => { currentSrcIndex.value = 0; },
+);
+
+function handleImgError(e: Event): void {
+  const next = currentSrcIndex.value + 1;
+  if (next < props.thumbnailUrls.length) {
+    currentSrcIndex.value = next;
+    return;
+  }
+  emit('image-error', e);
+}
 </script>
 
 <template>
@@ -68,12 +88,12 @@ const emit = defineEmits<{
 
       <!-- 图片 - 快速滚动时不加载新图片，但已加载的始终显示 -->
       <img
-        v-if="!isFailed && thumbnailUrl && (isLoaded || displayMode !== 'fast')"
-        :src="thumbnailUrl"
+        v-if="!isFailed && currentSrc && (isLoaded || displayMode !== 'fast')"
+        :src="currentSrc"
         class="photo-img"
         :class="{ loaded: isLoaded }"
         @load="emit('image-load')"
-        @error="emit('image-error', $event)"
+        @error="handleImgError"
       />
 
       <!-- Selection Overlay -->

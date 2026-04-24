@@ -92,7 +92,7 @@ describe('getItemsByDayRangeQuery', () => {
 
   it('映射 MetaRow 为 ImageMeta，包含 primary_service hit 的 fileKey', async () => {
     const results = JSON.stringify([
-      { serviceId: 'weibo', status: 'success', result: { fileKey: 'key-weibo' } },
+      { serviceId: 'weibo', status: 'success', result: { url: 'https://u', fileKey: 'key-weibo' } },
       { serviceId: 'r2', status: 'failed' },
     ]);
     db.select.mockResolvedValue([{

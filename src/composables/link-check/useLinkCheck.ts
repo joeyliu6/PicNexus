@@ -169,7 +169,7 @@ export function useLinkCheckManager() {
       const phase2Start = Date.now();
       const loadedIds = new Set(invalidLiteRows.map((r) => r.id));
       const pendingRows: LinkCheckRow[] = [];
-      for await (const batch of historyDB.getLinkCheckRestStream(loadedIds, 2000, { includeSkipped: true })) {
+      for await (const batch of historyDB.getLinkCheckRestStream(loadedIds, 2000)) {
         const batchItems = batch.map(liteRowToItem);
         const { rows } = buildCheckItemsSync(batchItems, config);
         restoreCheckStatus(rows, batchItems);
@@ -212,7 +212,7 @@ export function useLinkCheckManager() {
         await loadHistoryRows();
       }
 
-      const rows = checkRows.value.filter((row) => !row.linkCheckSkip);
+      const rows = checkRows.value;
       if (rows.length === 0) {
         toast.info('无链接可检测', '历史记录为空');
         return null;
@@ -370,7 +370,6 @@ export function useLinkCheckManager() {
     const map = new Map<string, { total: number; valid: number; invalid: number; unchecked: number }>();
 
     for (const row of rows) {
-      if (row.linkCheckSkip) continue;
       const sid = row.serviceId;
       const entry = map.get(sid) || { total: 0, valid: 0, invalid: 0, unchecked: 0 };
       entry.total++;
@@ -413,7 +412,6 @@ export function useLinkCheckManager() {
     const rows = checkRows.value;
     const idSet = filter.historyIds ? new Set(filter.historyIds) : null;
     const filtered = rows.filter((row) => {
-      if (row.linkCheckSkip) return false;
       if (idSet) return idSet.has(row.historyId);
       if (filter.serviceId && row.serviceId !== filter.serviceId) return false;
       const cr = row.checkResult;
@@ -632,27 +630,31 @@ export function useLinkCheckManager() {
     rebuildRowIndex();
   }
 
-  function setLinkCheckSkipState(historyIds: string[], skip: boolean): void {
-    const idSet = new Set(historyIds);
-    const rows = [...checkRows.value];
-
-    for (const row of rows) {
-      if (idSet.has(row.historyId)) {
-        row.linkCheckSkip = skip;
-      }
-    }
-
-    checkRows.value = rows;
+  /**
+   * 按 (historyId, serviceId) 键精准移除 checkRows 中的行
+   * 用于链接监控"仅删除单条图床链接"的场景：同一 historyId 下其他图床的行应保留
+   */
+  function removeRowsByKeys(keys: Array<{ historyId: string; serviceId: string }>): void {
+    if (keys.length === 0) return;
+    const keySet = new Set(keys.map((k) => `${k.historyId}::${k.serviceId}`));
+    checkRows.value = checkRows.value.filter((r) => !keySet.has(`${r.historyId}::${r.serviceId}`));
+    rebuildRowIndex();
   }
 
   /**
-   * 设置指定行的 fadingOut 状态（用于删除前的淡出动画）
+   * 按 (historyId, serviceId) 键设置指定行的 fadingOut 状态
    */
-  function setFadingOut(historyIds: string[], value: boolean): void {
-    const idSet = new Set(historyIds);
+  function setFadingOutRows(
+    keys: Array<{ historyId: string; serviceId: string }>,
+    value: boolean,
+  ): void {
+    if (keys.length === 0) return;
+    const keySet = new Set(keys.map((k) => `${k.historyId}::${k.serviceId}`));
     const rows = [...checkRows.value];
     for (const row of rows) {
-      if (idSet.has(row.historyId)) row.fadingOut = value;
+      if (keySet.has(`${row.historyId}::${row.serviceId}`)) {
+        row.fadingOut = value;
+      }
     }
     checkRows.value = rows;
   }
@@ -704,8 +706,8 @@ export function useLinkCheckManager() {
     exportCsv,
     buildCheckItems,
     removeRowsByHistoryIds,
-    setLinkCheckSkipState,
-    setFadingOut,
+    removeRowsByKeys,
+    setFadingOutRows,
     onViewActivated,
     onViewDeactivated,
   };

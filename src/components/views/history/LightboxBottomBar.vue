@@ -4,6 +4,8 @@ import { onClickOutside } from '@vueuse/core';
 import type { HistoryItem } from '../../../config/types';
 import { getServiceDisplayName } from '../../../constants/serviceNames';
 import { formatTime, formatFileSize } from '../../../composables/history/useLightboxInfo';
+import type { MirrorInfo } from '../../../composables/history/useMirrorFallback';
+import LightboxMirrorMenu from './LightboxMirrorMenu.vue';
 
 const props = withDefaults(defineProps<{
   item: HistoryItem;
@@ -12,9 +14,15 @@ const props = withDefaults(defineProps<{
   successfulServices?: string[];
   isItemFavorited: boolean;
   copySuccess?: boolean;
+  mirrors?: MirrorInfo[];
+  isPrimaryBroken?: boolean;
+  allMirrorsBroken?: boolean;
 }>(), {
   successfulServices: () => [],
   copySuccess: false,
+  mirrors: () => [],
+  isPrimaryBroken: false,
+  allMirrorsBroken: false,
 });
 
 const emit = defineEmits<{
@@ -23,11 +31,20 @@ const emit = defineEmits<{
   (e: 'open-browser'): void;
   (e: 'delete'): void;
   (e: 'toggle-favorite'): void;
+  (e: 'switch-primary', serviceId: string): void;
+  (e: 'remove-mirror', serviceId: string): void;
 }>();
 
 const hasMultipleServices = computed(() => props.successfulServices.length > 1);
 const serviceMenuVisible = ref(false);
 const copyBtnRef = ref<HTMLElement | null>(null);
+
+/** 镜像管理按钮仅当存在非主镜像 或 主图已失效（引导切换）时显示 */
+const canManageMirrors = computed(() =>
+  props.mirrors.length > 1 || props.isPrimaryBroken
+);
+const mirrorMenuVisible = ref(false);
+const mirrorBtnRef = ref<HTMLElement | null>(null);
 
 function handleCopyClick() {
   if (hasMultipleServices.value) {
@@ -42,10 +59,28 @@ function handleServiceCopy(serviceId: string) {
   serviceMenuVisible.value = false;
 }
 
+function handleMirrorClick() {
+  mirrorMenuVisible.value = !mirrorMenuVisible.value;
+}
+
+function handleSwitchPrimary(serviceId: string) {
+  emit('switch-primary', serviceId);
+  mirrorMenuVisible.value = false;
+}
+
+function handleRemoveMirror(serviceId: string) {
+  emit('remove-mirror', serviceId);
+  mirrorMenuVisible.value = false;
+}
+
 onClickOutside(copyBtnRef, () => { serviceMenuVisible.value = false; });
+onClickOutside(mirrorBtnRef, () => { mirrorMenuVisible.value = false; });
 
 // 切换图片时关闭菜单
-watch(() => props.item.id, () => { serviceMenuVisible.value = false; });
+watch(() => props.item.id, () => {
+  serviceMenuVisible.value = false;
+  mirrorMenuVisible.value = false;
+});
 </script>
 
 <template>
@@ -101,6 +136,33 @@ watch(() => props.item.id, () => { serviceMenuVisible.value = false; });
               <span>{{ getServiceDisplayName(serviceId) }}</span>
               <i class="pi pi-copy"></i>
             </button>
+          </div>
+        </Transition>
+      </div>
+      <div
+        v-if="canManageMirrors"
+        class="copy-btn-wrapper"
+        ref="mirrorBtnRef"
+        @keydown.escape="mirrorMenuVisible = false"
+      >
+        <button
+          class="action-btn"
+          :class="{ 'action-btn-alert': isPrimaryBroken }"
+          @click="handleMirrorClick"
+          v-tooltip.top="isPrimaryBroken ? '主图已失效 · 管理镜像' : '管理镜像'"
+        >
+          <i class="pi pi-sync"></i>
+          <span v-if="isPrimaryBroken" class="action-btn-dot" aria-hidden="true"></span>
+        </button>
+        <Transition name="t-slide-up">
+          <div v-if="mirrorMenuVisible" class="service-copy-menu mirror-menu-wrap">
+            <LightboxMirrorMenu
+              :mirrors="mirrors"
+              :is-primary-broken="isPrimaryBroken"
+              :all-mirrors-broken="allMirrorsBroken"
+              @switch-primary="handleSwitchPrimary"
+              @remove-mirror="handleRemoveMirror"
+            />
           </div>
         </Transition>
       </div>
@@ -201,6 +263,7 @@ watch(() => props.item.id, () => { serviceMenuVisible.value = false; });
 }
 
 .action-btn {
+  position: relative;
   width: 40px;
   height: 40px;
   border-radius: var(--radius-md);
@@ -241,6 +304,29 @@ watch(() => props.item.id, () => { serviceMenuVisible.value = false; });
   color: var(--success) !important;
 }
 
+.action-btn-alert {
+  color: var(--warning);
+}
+
+.action-btn-alert:hover {
+  background: var(--warning-alpha-15);
+  color: var(--warning);
+}
+
+/* 主图失效的红点徽标：落在按钮右上角，尺寸 8×8 */
+.action-btn-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--warning);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 暗色灯箱按钮上的描边对比，固定配色 */
+  box-shadow: 0 0 0 2px rgb(0 0 0 / 55%);
+  pointer-events: none;
+}
+
 .copy-btn-wrapper {
   position: relative;
 }
@@ -261,6 +347,14 @@ watch(() => props.item.id, () => { serviceMenuVisible.value = false; });
   min-width: 140px;
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 灯箱内局部弹层，高于底栏(z:3)但无对应全局 token */
   z-index: 5;
+}
+
+/* 镜像管理菜单更宽，对齐按钮右侧避免超出视口右缘 */
+.mirror-menu-wrap {
+  left: auto;
+  right: 0;
+  transform: none;
+  padding: var(--space-sm);
 }
 
 .service-copy-item {

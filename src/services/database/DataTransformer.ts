@@ -87,7 +87,8 @@ export function itemToRow(item: HistoryItem): HistoryItemRow {
     generated_link: item.generatedLink,
     link_check_status: item.linkCheckStatus ? JSON.stringify(item.linkCheckStatus) : null,
     link_check_summary: item.linkCheckSummary ? JSON.stringify(item.linkCheckSummary) : null,
-    link_check_skip: item.linkCheckSkip ? 1 : 0,
+    // 列保留但功能已废弃：始终写 0；前端模型不再读出 linkCheckSkip
+    link_check_skip: 0,
     width: item.width ?? 0,
     height: item.height ?? 0,
     aspect_ratio: item.aspectRatio ?? 1,
@@ -115,7 +116,6 @@ export function rowToItem(row: HistoryItemRow): HistoryItem {
     generatedLink: row.generated_link,
     linkCheckStatus: safeJsonParse(row.link_check_status, undefined, 'linkCheckStatus', row.id),
     linkCheckSummary: safeJsonParse(row.link_check_summary, undefined, 'linkCheckSummary', row.id),
-    linkCheckSkip: row.link_check_skip === 1,
     width: row.width,
     height: row.height,
     aspectRatio: row.aspect_ratio,

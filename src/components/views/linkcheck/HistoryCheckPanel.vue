@@ -28,14 +28,11 @@ const emit = defineEmits<{
   }): void;
   (e: 'cancel-check'): void;
   (e: 'recheck-single', row: LinkCheckRow, filter: StatusFilter): void;
-  (e: 'restore-skip', row: LinkCheckRow): void;
   (e: 'copy-url', url: string): void;
   (e: 'export-csv'): void;
   (e: 'export-csv-selected', rows: LinkCheckRow[]): void;
   (e: 'delete-row', row: LinkCheckRow): void;
   (e: 'bulk-recheck', rows: LinkCheckRow[]): void;
-  (e: 'bulk-skip', rows: LinkCheckRow[]): void;
-  (e: 'bulk-restore', rows: LinkCheckRow[]): void;
   (e: 'bulk-copy', rows: LinkCheckRow[]): void;
   (e: 'bulk-delete', rows: LinkCheckRow[]): void;
 }>();
@@ -89,9 +86,6 @@ const {
   errorTooltip,
 } = useCheckStrategy({ stats, statusFilter });
 
-const disableCheckActions = computed(() => statusFilter.value === 'skipped');
-const filteredActionRows = computed(() => filteredRows.value.filter((row) => !row.linkCheckSkip));
-
 const showOverflowMenu = ref(false);
 
 const moreMenuItems = computed(() => {
@@ -117,17 +111,7 @@ const dropdownItems = computed(() =>
   })),
 );
 
-function uniqueHistoryRows(rows: LinkCheckRow[]): LinkCheckRow[] {
-  const seen = new Set<string>();
-  return rows.filter((row) => {
-    if (seen.has(row.historyId)) return false;
-    seen.add(row.historyId);
-    return true;
-  });
-}
-
 function handleSmartCheck(): void {
-  if (disableCheckActions.value) return;
   showCheckMenu.value = false;
 
   const result = resolveSmartCheck();
@@ -148,10 +132,6 @@ function handleRecheck(row: LinkCheckRow): void {
   emit('recheck-single', row, statusFilter.value);
 }
 
-function handleRestoreSkip(row: LinkCheckRow): void {
-  emit('restore-skip', row);
-}
-
 function handleExportCsvSelected(): void {
   const rows = checkRows.value.filter((row) => selectedIds.value.has(rowKey(row)));
   if (rows.length === 0) return;
@@ -162,7 +142,7 @@ const bulkTargetRows = computed<LinkCheckRow[]>(() => {
   if (hasSelection.value) {
     return checkRows.value.filter((row) => selectedIds.value.has(rowKey(row)));
   }
-  return disableCheckActions.value ? filteredRows.value : filteredActionRows.value;
+  return filteredRows.value;
 });
 
 function clearAfterBulk(): void {
@@ -176,17 +156,6 @@ function handleBulkRecheck(): void {
   clearAfterBulk();
 }
 
-function handleBulkSkip(): void {
-  const rows = bulkTargetRows.value;
-  if (rows.length === 0) return;
-  if (disableCheckActions.value) {
-    emit('bulk-restore', rows);
-  } else {
-    emit('bulk-skip', rows);
-  }
-  clearAfterBulk();
-}
-
 function handleBulkCopy(): void {
   const rows = bulkTargetRows.value;
   if (rows.length === 0) return;
@@ -194,7 +163,7 @@ function handleBulkCopy(): void {
 }
 
 function handleBulkDelete(): void {
-  const rows = uniqueHistoryRows(bulkTargetRows.value);
+  const rows = bulkTargetRows.value;
   if (rows.length === 0) return;
   emit('bulk-delete', rows);
   clearAfterBulk();
@@ -212,7 +181,6 @@ function handleMoreAction(kind: MoreMenuKind): void {
   switch (kind) {
     case 'export': handleExportAction(); break;
     case 'recheck': handleBulkRecheck(); break;
-    case 'skip': handleBulkSkip(); break;
     case 'copy': handleBulkCopy(); break;
     case 'delete': handleBulkDelete(); break;
   }
@@ -222,7 +190,7 @@ function handleMoreAction(kind: MoreMenuKind): void {
 <template>
   <!-- 首次加载整屏骨架：覆盖 FilterBar/List/BottomBar，避免混显真实搜索框/分页/按钮 -->
   <div
-    v-if="isLoading && stats.total === 0 && stats.skipped === 0"
+    v-if="isLoading && stats.total === 0"
     class="monitor-panel monitor-panel--skeleton"
     aria-busy="true"
     aria-live="polite"
@@ -290,14 +258,12 @@ function handleMoreAction(kind: MoreMenuKind): void {
       @check-all="emit('check-all')"
       @copy-url="handleCopyUrl"
       @recheck-single="handleRecheck"
-      @restore-skip="handleRestoreSkip"
       @delete-row="(row: LinkCheckRow) => emit('delete-row', row)"
     />
 
     <CheckBottomBar
       :is-checking="isChecking"
       :is-action-locked="isActionLocked"
-      :disable-check-actions="disableCheckActions"
       :progress-source="progressSource"
       :progress-percent="progressPercent"
       :progress-tooltip="progressTooltip"

@@ -28,7 +28,6 @@ const emit = defineEmits<{
   (e: 'check-all'): void;
   (e: 'copy-url', row: LinkCheckRow): void;
   (e: 'recheck-single', row: LinkCheckRow): void;
-  (e: 'restore-skip', row: LinkCheckRow): void;
   (e: 'delete-row', row: LinkCheckRow): void;
 }>();
 </script>
@@ -36,7 +35,7 @@ const emit = defineEmits<{
 <template>
   <div class="link-list-wrap">
     <HeroEmptyState
-      v-if="statusFilter !== 'skipped' && stats.total > 0 && stats.checked === 0 && !isChecking"
+      v-if="stats.total > 0 && stats.checked === 0 && !isChecking"
       icon="pi pi-shield"
       title="检查你的图片链接"
       description="扫描全部上传历史，发现失效和异常链接"
@@ -49,20 +48,6 @@ const emit = defineEmits<{
     </HeroEmptyState>
 
     <EmptyState
-      v-else-if="statusFilter === 'skipped' && filteredRows.length === 0 && !isLoading"
-      icon="pi pi-eye-slash"
-      title="没有已跳过链接"
-      description="标记为“不再检测”的记录会显示在这里。"
-    />
-
-    <EmptyState
-      v-else-if="statusFilter !== 'skipped' && stats.total === 0 && stats.skipped > 0 && !isLoading"
-      icon="pi pi-eye-slash"
-      title="当前没有可监控链接"
-      description="所有链接都已标记为跳过，可在“已跳过”标签中恢复。"
-    />
-
-    <EmptyState
       v-else-if="filteredRows.length === 0 && (stats.checked > 0 || isChecking || stats.total > 0)"
       icon="pi pi-check-circle"
       title="当前筛选暂无结果"
@@ -70,7 +55,7 @@ const emit = defineEmits<{
     />
 
     <EmptyState
-      v-else-if="stats.total === 0 && stats.skipped === 0 && !isLoading"
+      v-else-if="stats.total === 0 && !isLoading"
       icon="pi pi-inbox"
       title="暂无数据"
       description="尚无上传历史记录。"
@@ -123,16 +108,6 @@ const emit = defineEmits<{
             </span>
 
             <button
-              v-else-if="row.linkCheckSkip"
-              class="restore-btn"
-              :disabled="isChecking || isActionLocked"
-              v-tooltip.top="'恢复检测'"
-              @click.stop="emit('restore-skip', row)"
-            >
-              <i class="pi pi-eye"></i>
-            </button>
-
-            <button
               v-else
               class="recheck-btn"
               :class="{ spinning: row.recheckLoading }"
@@ -147,7 +122,7 @@ const emit = defineEmits<{
           <button
             class="delete-btn"
             :disabled="isChecking || isActionLocked"
-            v-tooltip.top="'删除此记录'"
+            v-tooltip.top="'删除此链接'"
             @click.stop="emit('delete-row', row)"
           >
             <i class="pi pi-trash"></i>
@@ -285,11 +260,6 @@ const emit = defineEmits<{
   color: var(--pending);
 }
 
-.error-badge--skipped {
-  background: var(--warning-alpha-8);
-  color: var(--warning);
-}
-
 .link-spacer {
   flex: 1;
 }
@@ -308,7 +278,6 @@ const emit = defineEmits<{
 }
 
 .recheck-btn,
-.restore-btn,
 .delete-btn {
   display: flex;
   align-items: center;
@@ -327,8 +296,7 @@ const emit = defineEmits<{
   opacity: 1;
 }
 
-.recheck-btn:hover:not(:disabled),
-.restore-btn:hover:not(:disabled) {
+.recheck-btn:hover:not(:disabled) {
   background: var(--primary-alpha-8);
   color: var(--primary);
 }
@@ -339,7 +307,6 @@ const emit = defineEmits<{
 }
 
 .recheck-btn:disabled,
-.restore-btn:disabled,
 .delete-btn:disabled {
   opacity: 0.12;
   cursor: default;

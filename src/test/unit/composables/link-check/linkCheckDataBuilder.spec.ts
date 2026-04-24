@@ -28,7 +28,6 @@ describe('liteRowToItem', () => {
       primary_service: 'r2',
       results: JSON.stringify([{ serviceId: 'r2', status: 'success' }]),
       link_check_status: null,
-      link_check_skip: 0,
     };
     const item = liteRowToItem(row);
     expect(item.results).toEqual([{ serviceId: 'r2', status: 'success' }]);
@@ -42,7 +41,6 @@ describe('liteRowToItem', () => {
       primary_service: 'r2',
       results: parsed as unknown as string,
       link_check_status: null,
-      link_check_skip: 0,
     };
     const item = liteRowToItem(row);
     expect(item.results).toBe(parsed);
@@ -56,7 +54,6 @@ describe('liteRowToItem', () => {
       primary_service: 'r2',
       results: '[]',
       link_check_status: JSON.stringify(status),
-      link_check_skip: 0,
     };
     const item = liteRowToItem(row);
     expect(item.linkCheckStatus).toEqual(status);
@@ -69,7 +66,6 @@ describe('liteRowToItem', () => {
       primary_service: 'r2',
       results: '[]',
       link_check_status: null,
-      link_check_skip: 0,
     };
     const item = liteRowToItem(row);
     expect(item.linkCheckStatus).toBeUndefined();
@@ -82,7 +78,6 @@ describe('liteRowToItem', () => {
       primary_service: 'github',
       results: '[]',
       link_check_status: null,
-      link_check_skip: 0,
     };
     const item = liteRowToItem(row);
     expect(item.id).toBe('id-x');

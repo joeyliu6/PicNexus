@@ -1,26 +1,16 @@
 import type Database from '@tauri-apps/plugin-sql';
-import type { LinkCheckLiteRow, LinkCheckQueryOptions } from './types';
+import type { LinkCheckLiteRow } from './types';
 import { createLogger } from '../../utils/logger';
 
 const log = createLogger('LinkCheckQuery');
 
-function buildSkipWhereClause(options: LinkCheckQueryOptions = {}): string {
-  if (options.onlySkipped) return 'link_check_skip = 1';
-  if (options.includeSkipped) return '1 = 1';
-  return 'link_check_skip = 0';
-}
-
 export async function getLinkCheckInvalidQuery(
   db: Database,
-  options: LinkCheckQueryOptions = {},
 ): Promise<LinkCheckLiteRow[]> {
-  const skipWhere = buildSkipWhereClause(options);
-
   return db.select<LinkCheckLiteRow[]>(`
-    SELECT id, local_file_name, primary_service, results, link_check_status, link_check_skip
+    SELECT id, local_file_name, primary_service, results, link_check_status
     FROM history_items
-    WHERE ${skipWhere}
-      AND link_check_summary IS NOT NULL
+    WHERE link_check_summary IS NOT NULL
       AND (
         json_extract(link_check_summary, '$.invalidLinks') > 0
         OR json_extract(link_check_summary, '$.uncheckedLinks') > 0
@@ -33,16 +23,13 @@ export async function* getLinkCheckRestStreamQuery(
   db: Database,
   loadedIds: Set<string>,
   batchSize = 2000,
-  options: LinkCheckQueryOptions = {},
 ): AsyncGenerator<LinkCheckLiteRow[]> {
-  const skipWhere = buildSkipWhereClause(options);
   let offset = 0;
 
   while (true) {
     const rows = await db.select<LinkCheckLiteRow[]>(
-      `SELECT id, local_file_name, primary_service, results, link_check_status, link_check_skip
+      `SELECT id, local_file_name, primary_service, results, link_check_status
        FROM history_items
-       WHERE ${skipWhere}
        ORDER BY timestamp DESC
        LIMIT $1 OFFSET $2`,
       [batchSize, offset],
@@ -95,30 +82,4 @@ export async function batchUpdateLinkCheckStatusQuery(
   }
 
   log.info(`批量更新 ${updates.length} 条链接检测状态`);
-}
-
-export async function setLinkCheckSkipQuery(
-  db: Database,
-  ids: string[],
-  skip: boolean,
-): Promise<number> {
-  if (ids.length === 0) return 0;
-
-  // SQLite 默认单条 SQL 绑定参数上限 32766；按 500 分批兜底超大 IN 列表
-  const BATCH_SIZE = 500;
-  let totalAffected = 0;
-  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
-    const batch = ids.slice(i, i + BATCH_SIZE);
-    const placeholders = batch.map((_, index) => `$${index + 2}`).join(',');
-    const result = await db.execute(
-      `UPDATE history_items
-       SET link_check_skip = $1
-       WHERE id IN (${placeholders})`,
-      [skip ? 1 : 0, ...batch],
-    );
-    totalAffected += result.rowsAffected;
-  }
-
-  log.info(`批量${skip ? '标记' : '恢复'}链接监控跳过 ${ids.length} 条`);
-  return totalAffected;
 }

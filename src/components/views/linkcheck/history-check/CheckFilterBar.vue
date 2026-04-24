@@ -17,7 +17,6 @@ const props = defineProps<{
 const animatedValid = ref(0);
 const animatedTotal = ref(0);
 const animatedUnchecked = ref(0);
-const animatedSkipped = ref(0);
 
 function countUp(to: number, target: typeof animatedValid, durationMs: number): void {
   if (durationMs <= 0) {
@@ -42,7 +41,6 @@ watch(() => props.isPhase2Loading, (loading) => {
   countUp(props.stats.valid, animatedValid, duration);
   countUp(props.stats.total, animatedTotal, duration);
   countUp(props.stats.unchecked, animatedUnchecked, duration);
-  countUp(props.stats.skipped, animatedSkipped, duration);
 });
 
 watch(
@@ -52,7 +50,6 @@ watch(
     animatedValid.value = stats.valid;
     animatedTotal.value = stats.total;
     animatedUnchecked.value = stats.unchecked;
-    animatedSkipped.value = stats.skipped;
   },
   { immediate: true },
 );
@@ -64,19 +61,18 @@ const searchInput = defineModel<string>('searchInput', { required: true });
 const searchQuery = defineModel<string>('searchQuery', { required: true });
 const searchFocused = defineModel<boolean>('searchFocused', { required: true });
 
-const serviceTotal = () => (statusFilter.value === 'skipped' ? props.stats.skipped : props.stats.total);
+const serviceTotal = () => props.stats.total;
 </script>
 
 <template>
   <div class="chip-bar">
     <div class="chip-group">
-      <template v-if="isLoading && stats.total === 0 && stats.skipped === 0">
+      <template v-if="isLoading && stats.total === 0">
         <Skeleton width="52px" height="24px" border-radius="20px" />
         <Skeleton width="65px" height="24px" border-radius="20px" />
         <Skeleton width="75px" height="24px" border-radius="20px" />
         <Skeleton width="52px" height="24px" border-radius="20px" />
         <Skeleton width="52px" height="24px" border-radius="20px" />
-        <Skeleton width="62px" height="24px" border-radius="20px" />
       </template>
 
       <template v-else>
@@ -146,17 +142,6 @@ const serviceTotal = () => (statusFilter.value === 'skipped' ? props.stats.skipp
           全部
           <span v-if="isPhase2Loading" class="chip-loading-placeholder"></span>
           <template v-else>{{ animatedTotal.toLocaleString() }}</template>
-        </button>
-
-        <button
-          v-if="stats.skipped > 0 || statusFilter === 'skipped'"
-          class="filter-chip chip--skipped"
-          :class="{ active: statusFilter === 'skipped' }"
-          :aria-pressed="statusFilter === 'skipped'"
-          @click="statusFilter = statusFilter === 'skipped' ? null : 'skipped'"
-        >
-          <i class="pi pi-eye-slash" style="font-size: var(--text-2xs)"></i>
-          已跳过 {{ animatedSkipped.toLocaleString() }}
         </button>
       </template>
     </div>
@@ -303,12 +288,6 @@ const serviceTotal = () => (statusFilter.value === 'skipped' ? props.stats.skipp
   background: var(--primary-alpha-10);
   color: var(--primary);
   border-color: var(--primary-alpha-10);
-}
-
-.filter-chip.chip--skipped.active {
-  background: var(--warning-alpha-8);
-  color: var(--warning);
-  border-color: var(--warning-alpha-15);
 }
 
 .chip-dot {

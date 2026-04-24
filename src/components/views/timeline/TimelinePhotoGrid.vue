@@ -53,7 +53,7 @@ const props = defineProps<{
   loadedImages: Set<string>;
   failedImages: Set<string>;
   hoverDetailsMap: Map<string, HistoryItem>;
-  getThumbnailUrl: (meta: ImageMeta) => string;
+  getThumbnailUrls: (meta: ImageMeta) => string[];
 }>();
 
 const emit = defineEmits<{
@@ -136,7 +136,7 @@ function getGroupItemCount(groupId: string): number {
       :is-loaded="loadedImages.has(visible.meta.id)"
       :is-failed="failedImages.has(visible.meta.id)"
       :display-mode="displayMode"
-      :thumbnail-url="getThumbnailUrl(visible.meta)"
+      :thumbnail-urls="getThumbnailUrls(visible.meta)"
       @click="emit('item-click', visible.meta)"
       @toggle-select="(event: MouseEvent) => emit('item-toggle-select', visible.meta.id, event)"
       @toggle-favorite="emit('item-toggle-favorite', visible.meta.id)"

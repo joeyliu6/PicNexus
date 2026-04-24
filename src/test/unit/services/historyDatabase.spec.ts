@@ -40,7 +40,19 @@ class MockDatabase {
       const id = params[params.length - 1] as string;
       const index = this.rows.findIndex((row) => row.id === id);
       if (index === -1) return { rowsAffected: 0 };
-      this.rows[index] = { ...this.rows[index], _updated: true };
+      // 通用 UPDATE：HistoryDatabase.update() 按 ALL_COLUMNS.slice(1) 顺序传参（去掉 id 列），末尾追加 id
+      const updateColumns = [
+        'timestamp', 'local_file_name', 'local_file_name_lower', 'file_path',
+        'primary_service', 'results', 'generated_link', 'link_check_status',
+        'link_check_summary', 'link_check_skip', 'width', 'height', 'aspect_ratio',
+        'file_size', 'format', 'color_type', 'has_alpha', 'is_favorited',
+        'success_count', 'successful_service_ids', 'migration_skip',
+      ];
+      const next: Row = { ...this.rows[index] };
+      for (let i = 0; i < updateColumns.length && i < params.length - 1; i++) {
+        next[updateColumns[i]] = params[i];
+      }
+      this.rows[index] = next;
       return { rowsAffected: 1 };
     }
 
@@ -215,18 +227,6 @@ describe('HistoryDatabase', () => {
     expect(await historyDB.getById('d3')).not.toBeNull();
   });
 
-  it('setLinkCheckSkip() updates skip state in batch', async () => {
-    const { historyDB } = await import('../../../services/HistoryDatabase');
-    await historyDB.insert(makeHistoryItem({ id: 'skip-1' }));
-    await historyDB.insert(makeHistoryItem({ id: 'skip-2' }));
-
-    const affected = await historyDB.setLinkCheckSkip(['skip-1', 'skip-2'], true);
-
-    expect(affected).toBe(2);
-    expect((await historyDB.getById('skip-1'))?.linkCheckSkip).toBe(true);
-    expect((await historyDB.getById('skip-2'))?.linkCheckSkip).toBe(true);
-  });
-
   it('clear() removes all history', async () => {
     const { historyDB } = await import('../../../services/HistoryDatabase');
     await historyDB.insert(makeHistoryItem({ id: 'c1' }));
@@ -277,5 +277,124 @@ describe('HistoryDatabase', () => {
     expect(importedCount).toBe(1);
     expect(await historyDB.getById('old-1')).toBeNull();
     expect(await historyDB.getById('new-1')).not.toBeNull();
+  });
+
+  // ==================== 镜像管理 ====================
+
+  function makeMultiMirrorItem(id: string): HistoryItem {
+    return makeHistoryItem({
+      id,
+      primaryService: 'weibo',
+      generatedLink: 'https://example.com/weibo.jpg',
+      results: [
+        {
+          serviceId: 'weibo',
+          status: 'success',
+          result: { serviceId: 'weibo', url: 'https://example.com/weibo.jpg' },
+        },
+        {
+          serviceId: 'r2',
+          status: 'success',
+          result: { serviceId: 'r2', url: 'https://example.com/r2.jpg' },
+        },
+        {
+          serviceId: 'jd',
+          status: 'failed',
+          error: 'upload failed',
+        },
+      ],
+      linkCheckStatus: {
+        weibo: { isValid: false, lastCheckTime: 1, errorType: 'http_4xx' },
+        r2: { isValid: true, lastCheckTime: 1, errorType: 'success' },
+      },
+    });
+  }
+
+  it('switchPrimaryService() 切主服务到已成功上传的镜像', async () => {
+    const { historyDB } = await import('../../../services/HistoryDatabase');
+    await historyDB.insert(makeMultiMirrorItem('mirror-switch-1'));
+
+    await historyDB.switchPrimaryService('mirror-switch-1', 'r2');
+
+    const updated = await historyDB.getById('mirror-switch-1');
+    expect(updated?.primaryService).toBe('r2');
+    expect(updated?.generatedLink).toBe('https://example.com/r2.jpg');
+  });
+
+  it('switchPrimaryService() 切到相同主服务时为 no-op', async () => {
+    const { historyDB } = await import('../../../services/HistoryDatabase');
+    await historyDB.insert(makeMultiMirrorItem('mirror-switch-noop'));
+
+    await expect(
+      historyDB.switchPrimaryService('mirror-switch-noop', 'weibo'),
+    ).resolves.toBeUndefined();
+
+    const updated = await historyDB.getById('mirror-switch-noop');
+    expect(updated?.primaryService).toBe('weibo');
+  });
+
+  it('switchPrimaryService() 目标镜像未成功上传时抛错', async () => {
+    const { historyDB } = await import('../../../services/HistoryDatabase');
+    await historyDB.insert(makeMultiMirrorItem('mirror-switch-fail'));
+
+    await expect(
+      historyDB.switchPrimaryService('mirror-switch-fail', 'jd'),
+    ).rejects.toThrow(/目标镜像不可用/);
+  });
+
+  it('switchPrimaryService() 目标镜像不存在时抛错', async () => {
+    const { historyDB } = await import('../../../services/HistoryDatabase');
+    await historyDB.insert(makeMultiMirrorItem('mirror-switch-missing'));
+
+    await expect(
+      historyDB.switchPrimaryService('mirror-switch-missing', 'github'),
+    ).rejects.toThrow(/目标镜像不可用/);
+  });
+
+  it('switchPrimaryService() 记录不存在时抛错', async () => {
+    const { historyDB } = await import('../../../services/HistoryDatabase');
+    await expect(
+      historyDB.switchPrimaryService('nope', 'r2'),
+    ).rejects.toThrow(/记录不存在/);
+  });
+
+  it('removeMirror() 删除非主服务镜像并清理 linkCheckStatus', async () => {
+    const { historyDB } = await import('../../../services/HistoryDatabase');
+    await historyDB.insert(makeMultiMirrorItem('mirror-remove-1'));
+
+    await historyDB.removeMirror('mirror-remove-1', 'r2');
+
+    const updated = await historyDB.getById('mirror-remove-1');
+    expect(updated?.results.some(r => r.serviceId === 'r2')).toBe(false);
+    expect(updated?.linkCheckStatus?.r2).toBeUndefined();
+    expect(updated?.linkCheckStatus?.weibo).toBeDefined();
+  });
+
+  it('removeMirror() 删除失败的镜像也允许', async () => {
+    const { historyDB } = await import('../../../services/HistoryDatabase');
+    await historyDB.insert(makeMultiMirrorItem('mirror-remove-failed'));
+
+    await historyDB.removeMirror('mirror-remove-failed', 'jd');
+
+    const updated = await historyDB.getById('mirror-remove-failed');
+    expect(updated?.results.some(r => r.serviceId === 'jd')).toBe(false);
+  });
+
+  it('removeMirror() 删除当前主服务时抛错', async () => {
+    const { historyDB } = await import('../../../services/HistoryDatabase');
+    await historyDB.insert(makeMultiMirrorItem('mirror-remove-primary'));
+
+    await expect(
+      historyDB.removeMirror('mirror-remove-primary', 'weibo'),
+    ).rejects.toThrow(/无法删除当前主服务镜像/);
+  });
+
+  it('removeMirror() 镜像不存在时抛错', async () => {
+    const { historyDB } = await import('../../../services/HistoryDatabase');
+    await historyDB.insert(makeMultiMirrorItem('mirror-remove-missing'));
+
+    await expect(
+      historyDB.removeMirror('mirror-remove-missing', 'github'),
+    ).rejects.toThrow(/镜像不存在/);
   });
 });

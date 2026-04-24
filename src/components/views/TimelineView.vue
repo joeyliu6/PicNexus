@@ -69,7 +69,7 @@ const allLoadedMetas = computed(() => groups.value.flatMap(g => g.items));
 
 // ==================== 工具函数 ====================
 
-const { getThumbnailUrl, selectedAvailableServices, handleToggleFavorite, hoverDetailsMap, handleImageHover } = useTimelineData({
+const { getThumbnailUrl, getThumbnailUrls, selectedAvailableServices, handleToggleFavorite, hoverDetailsMap, handleImageHover } = useTimelineData({
   filteredMetas: allLoadedMetas,
   favoriteSet: historyManager.favoriteSet,
   favoritesOnly: computed(() => props.favoritesOnly),
@@ -281,7 +281,7 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
         :loaded-images="loadedImagesSet"
         :failed-images="failedImagesSet"
         :hover-details-map="hoverDetailsMap"
-        :get-thumbnail-url="getThumbnailUrl"
+        :get-thumbnail-urls="getThumbnailUrls"
         @item-click="openLightbox"
         @item-toggle-select="handleItemToggleSelect"
         @item-toggle-favorite="handleToggleFavorite"

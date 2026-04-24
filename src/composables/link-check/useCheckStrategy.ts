@@ -5,7 +5,7 @@ import type { CheckStatsResult } from './useCheckStats';
 
 const CONTEXT_AWARE_FILTERS = new Set<StatusFilter>(['invalid', 'suspicious', 'timeout', 'unchecked']);
 
-export type MoreMenuKind = 'export' | 'recheck' | 'skip' | 'copy' | 'delete';
+export type MoreMenuKind = 'export' | 'recheck' | 'copy' | 'delete';
 
 export interface MoreMenuItem {
   kind: MoreMenuKind;
@@ -142,7 +142,6 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
   }): MoreMenuItem[] {
     const { mode, count } = args;
     const filter = statusFilter.value;
-    const isSkippedMode = filter === 'skipped';
     const countLabel = count.toLocaleString();
     const items: MoreMenuItem[] = [];
 
@@ -152,9 +151,7 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
         ? `导出选中 ${countLabel} 条`
         : filter === 'all'
           ? '导出全部'
-          : isSkippedMode
-            ? '导出已跳过'
-            : '导出当前筛选',
+          : '导出当前筛选',
       icon: 'pi-download',
     });
 
@@ -163,20 +160,9 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
 
     items.push({
       kind: 'recheck',
-      label: isSkippedMode
-        ? `恢复检测这 ${countLabel} 条`
-        : `重检这 ${countLabel} 条`,
-      icon: isSkippedMode ? 'pi-eye' : 'pi-refresh',
+      label: `重检这 ${countLabel} 条`,
+      icon: 'pi-refresh',
     });
-
-    const allowSkip = !isSkippedMode && filter !== 'unchecked';
-    if (allowSkip) {
-      items.push({
-        kind: 'skip',
-        label: `不再检测这 ${countLabel} 条`,
-        icon: 'pi-eye-slash',
-      });
-    }
 
     items.push({
       kind: 'copy',
@@ -208,10 +194,6 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
   }
 
   function statusDotColor(row: LinkCheckRow): string {
-    if (row.linkCheckSkip && !row.recheckResult) {
-      return 'var(--warning)';
-    }
-
     const result = row.recheckResult ?? row.checkResult;
     if (!result) return 'var(--text-tertiary)';
     if (result.is_valid) return 'var(--success)';
@@ -220,8 +202,7 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
     return 'var(--error)';
   }
 
-  function getErrorStatus(result: CheckLinkResult | null, row: LinkCheckRow): string {
-    if (row.linkCheckSkip && !row.recheckResult) return 'skipped';
+  function getErrorStatus(result: CheckLinkResult | null): string {
     if (!result) return 'unchecked';
     if (result.is_valid) return 'success';
     if (result.error_type === 'timeout') return 'warning';
@@ -231,12 +212,10 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
 
   function errorBadgeClass(row: LinkCheckRow): string {
     const result = row.recheckResult ?? row.checkResult ?? null;
-    return `error-badge--${getErrorStatus(result, row)}`;
+    return `error-badge--${getErrorStatus(result)}`;
   }
 
   function errorLabel(row: LinkCheckRow): string {
-    if (row.linkCheckSkip && !row.recheckResult) return '跳过';
-
     const result = row.recheckResult ?? row.checkResult;
     if (!result) return '—';
     if (result.is_valid) return result.status_code ? String(result.status_code) : '200';
@@ -256,9 +235,6 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
   }
 
   function errorTooltip(row: LinkCheckRow): string {
-    if (row.linkCheckSkip && !row.recheckResult) {
-      return '已标记为不再检测，可在“已跳过”标签中恢复。';
-    }
     return baseStatusTooltip(row.checkResult ?? null);
   }
 

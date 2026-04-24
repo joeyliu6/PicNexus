@@ -7,12 +7,6 @@ export interface LinkCheckLiteRow {
   primary_service: string;
   results: string;
   link_check_status: string | null;
-  link_check_skip: number;
-}
-
-export interface LinkCheckQueryOptions {
-  includeSkipped?: boolean;
-  onlySkipped?: boolean;
 }
 
 export interface PageOptions {

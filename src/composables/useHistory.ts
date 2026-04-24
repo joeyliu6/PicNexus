@@ -25,6 +25,7 @@ import {
 import { createLogger } from '../utils/logger';
 import { debounce } from '../utils/debounce';
 import { createBulkOps } from './history/useHistoryBulkOps';
+import { createResultOps } from './history/useHistoryResultOps';
 
 const log = createLogger('History');
 
@@ -320,6 +321,14 @@ export function useHistoryManager() {
     removeFavoritesFromIds,
   });
 
+  // 按图床结果粒度删除（链接监控专用）
+  const { deleteHistoryResult, bulkDeleteHistoryResults } = createResultOps({
+    totalCount,
+    dataVersion,
+    detailCache,
+    removeFavoritesFromIds,
+  });
+
   /**
    * 加载全量历史记录（独立于分页状态）
    * 用于 LinkCheckerView 等需要完整数据的场景
@@ -519,6 +528,8 @@ export function useHistoryManager() {
     clearHistory,
     bulkExportJSON,
     bulkDeleteRecords,
+    deleteHistoryResult,
+    bulkDeleteHistoryResults,
 
     // 时间轴相关
     loadTimePeriodStats,

@@ -53,14 +53,13 @@ const {
   recheckSingle,
   cancelCheck,
   exportCsv,
-  removeRowsByHistoryIds,
-  setLinkCheckSkipState,
-  setFadingOut,
+  removeRowsByKeys,
+  setFadingOutRows,
   onViewActivated,
   onViewDeactivated,
 } = useLinkCheckManager();
 
-const { deleteHistoryItem, bulkDeleteRecords } = useHistoryManager();
+const { deleteHistoryResult, bulkDeleteHistoryResults } = useHistoryManager();
 
 const monitorIsChecking = computed(
   () => monitorChecking.value && progressSource.value !== 'rescue',
@@ -99,28 +98,29 @@ function handleCopyUrl(url: string): void {
 
 async function handleRecheckSingle(
   row: LinkCheckRow,
-  filter?: 'unchecked' | 'invalid' | 'timeout' | 'suspicious' | 'valid' | 'all' | 'skipped' | null,
+  filter?: 'unchecked' | 'invalid' | 'timeout' | 'suspicious' | 'valid' | 'all' | null,
 ): Promise<void> {
   await recheckSingle(row, filter ?? undefined);
 }
 
-async function deleteRowsByIds(ids: string[]): Promise<boolean> {
-  const ok = await bulkDeleteRecords(ids);
+async function deleteRowsByTargets(rows: LinkCheckRow[]): Promise<boolean> {
+  const ok = await bulkDeleteHistoryResults(
+    rows.map((r) => ({ historyId: r.historyId, serviceId: r.serviceId })),
+  );
   if (ok) {
-    setFadingOut(ids, true);
+    setFadingOutRows(rows, true);
     await new Promise((resolve) => setTimeout(resolve, 380));
-    removeRowsByHistoryIds(ids);
+    removeRowsByKeys(rows);
   }
   return ok;
 }
 
 async function handleDeleteRow(row: LinkCheckRow): Promise<void> {
-  const ok = await deleteHistoryItem(row.historyId);
-  if (ok) {
-    setFadingOut([row.historyId], true);
-    await new Promise((resolve) => setTimeout(resolve, 380));
-    removeRowsByHistoryIds([row.historyId]);
-  }
+  const outcome = await deleteHistoryResult(row.historyId, row.serviceId);
+  if (!outcome) return;
+  setFadingOutRows([row], true);
+  await new Promise((resolve) => setTimeout(resolve, 380));
+  removeRowsByKeys([row]);
 }
 
 async function recheckRowsByIds(ids: string[]): Promise<void> {
@@ -130,20 +130,12 @@ async function recheckRowsByIds(ids: string[]): Promise<void> {
 const {
   isBulkActing,
   bulkRecheck,
-  bulkMarkSkip,
-  restoreSkipped,
   bulkCopyUrls,
   bulkDelete,
 } = useLinkCheckBulkActions({
   recheckRows: recheckRowsByIds,
-  deleteRows: deleteRowsByIds,
-  setFadingOut,
-  applySkipState: setLinkCheckSkipState,
+  deleteRows: deleteRowsByTargets,
 });
-
-async function handleRestoreSkip(row: LinkCheckRow): Promise<void> {
-  await restoreSkipped([row]);
-}
 
 onMounted(() => {
   void loadHistoryRows();
@@ -190,14 +182,11 @@ onDeactivated(onViewDeactivated);
         @check-subset="(filter) => checkSubset(filter)"
         @cancel-check="cancelCheck"
         @recheck-single="handleRecheckSingle"
-        @restore-skip="handleRestoreSkip"
         @copy-url="handleCopyUrl"
         @export-csv="handleExportCsv"
         @export-csv-selected="handleExportCsvSelected"
         @delete-row="handleDeleteRow"
         @bulk-recheck="bulkRecheck"
-        @bulk-skip="bulkMarkSkip"
-        @bulk-restore="restoreSkipped"
         @bulk-copy="bulkCopyUrls"
         @bulk-delete="bulkDelete"
       />

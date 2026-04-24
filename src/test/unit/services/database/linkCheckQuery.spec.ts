@@ -3,7 +3,6 @@ import {
   getLinkCheckInvalidQuery,
   getLinkCheckRestStreamQuery,
   batchUpdateLinkCheckStatusQuery,
-  setLinkCheckSkipQuery,
 } from '../../../../services/database/LinkCheckQuery';
 
 function makeDb(): any {
@@ -17,24 +16,6 @@ describe('getLinkCheckInvalidQuery', () => {
   let db: ReturnType<typeof makeDb>;
 
   beforeEach(() => { db = makeDb(); });
-
-  it('默认只查未跳过的', async () => {
-    await getLinkCheckInvalidQuery(db);
-    const sql = db.select.mock.calls[0][0];
-    expect(sql).toContain('link_check_skip = 0');
-  });
-
-  it('onlySkipped=true → 查跳过的', async () => {
-    await getLinkCheckInvalidQuery(db, { onlySkipped: true });
-    const sql = db.select.mock.calls[0][0];
-    expect(sql).toContain('link_check_skip = 1');
-  });
-
-  it('includeSkipped=true → 不过滤跳过', async () => {
-    await getLinkCheckInvalidQuery(db, { includeSkipped: true });
-    const sql = db.select.mock.calls[0][0];
-    expect(sql).toContain('1 = 1');
-  });
 
   it('SQL 包含 invalidLinks / uncheckedLinks 判断', async () => {
     await getLinkCheckInvalidQuery(db);
@@ -78,14 +59,6 @@ describe('getLinkCheckRestStreamQuery', () => {
     for await (const rows of gen) results.push(rows);
     expect(results).toHaveLength(2);
   });
-
-  it('onlySkipped 选项传给 SQL', async () => {
-    db.select.mockResolvedValue([]);
-    const gen = getLinkCheckRestStreamQuery(db, new Set(), 10, { onlySkipped: true });
-    await gen.next();
-    const sql = db.select.mock.calls[0][0];
-    expect(sql).toContain('link_check_skip = 1');
-  });
 });
 
 describe('batchUpdateLinkCheckStatusQuery', () => {
@@ -112,34 +85,5 @@ describe('batchUpdateLinkCheckStatusQuery', () => {
     }));
     await batchUpdateLinkCheckStatusQuery(db, updates);
     expect(db.execute).toHaveBeenCalledTimes(3);
-  });
-});
-
-describe('setLinkCheckSkipQuery', () => {
-  let db: ReturnType<typeof makeDb>;
-
-  beforeEach(() => { db = makeDb(); });
-
-  it('空数组返回 0', async () => {
-    expect(await setLinkCheckSkipQuery(db, [], true)).toBe(0);
-    expect(db.execute).not.toHaveBeenCalled();
-  });
-
-  it('skip=true → 1', async () => {
-    await setLinkCheckSkipQuery(db, ['a'], true);
-    expect(db.execute.mock.calls[0][1][0]).toBe(1);
-  });
-
-  it('skip=false → 0', async () => {
-    await setLinkCheckSkipQuery(db, ['a'], false);
-    expect(db.execute.mock.calls[0][1][0]).toBe(0);
-  });
-
-  it('累加 rowsAffected', async () => {
-    db.execute.mockResolvedValueOnce({ rowsAffected: 3 }).mockResolvedValueOnce({ rowsAffected: 2 });
-    const ids = Array.from({ length: 600 }, (_, i) => `id${i}`);
-    const total = await setLinkCheckSkipQuery(db, ids, true);
-    expect(total).toBe(5);
-    expect(db.execute).toHaveBeenCalledTimes(2);
   });
 });

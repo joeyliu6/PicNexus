@@ -58,7 +58,6 @@ function makeHistoryItem() {
       uncheckedLinks: 0,
       lastCheckTime: 2000,
     },
-    linkCheckSkip: true,
     width: 100,
     height: 80,
     aspectRatio: 1.25,
@@ -76,7 +75,8 @@ describe('DataTransformer', () => {
     expect(row.local_file_name).toBe('Alpha.PNG');
     expect(row.local_file_name_lower).toBe('alpha.png');
     expect(row.file_path).toBe('/tmp/Alpha.PNG');
-    expect(row.link_check_skip).toBe(1);
+    // link_check_skip 列保留但功能已废弃，始终写入 0
+    expect(row.link_check_skip).toBe(0);
     expect(row.is_favorited).toBe(1);
     expect(row.migration_skip).toBe(1);
     expect(row.success_count).toBe(1);
@@ -115,7 +115,6 @@ describe('DataTransformer', () => {
     expect(item.results).toEqual([{ serviceId: 'weibo', status: 'success' }]);
     expect(item.linkCheckStatus).toEqual({ weibo: { isValid: true, lastCheckTime: 2000, errorType: 'success' } });
     expect(item.linkCheckSummary).toEqual({ totalLinks: 1 });
-    expect(item.linkCheckSkip).toBe(true);
     expect(item.isFavorited).toBe(true);
     expect(item.migrationSkip).toBe(true);
   });

@@ -42,7 +42,7 @@ const localSearchTerm = ref<string>(props.searchTerm ?? '');
 
 const {
   loadedMetas, totalCount, hasMore, isLoading, hasLoadedOnce,
-  imageStates, getThumbnailUrl, getItemService, onFavoritesScroll,
+  imageStates, getThumbnailUrls, getItemService, onFavoritesScroll,
   loadFirstPage, loadNextPage,
 } = useFavoritesData({
   filter: localFilter,
@@ -194,7 +194,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
             v-for="meta in loadedMetas"
             :key="meta.id"
             :meta="meta"
-            :thumbnail-url="getThumbnailUrl(meta)"
+            :thumbnail-urls="getThumbnailUrls(meta)"
             :image-state="imageStates[meta.id]"
             :selected="selectedIdsSet.has(meta.id)"
             @click="openLightbox(meta)"

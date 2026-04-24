@@ -14,7 +14,6 @@ interface DropdownItem {
 defineProps<{
   isChecking: boolean;
   isActionLocked: boolean;
-  disableCheckActions: boolean;
   progressSource: 'monitor' | 'rescue' | null;
   progressPercent: number;
   progressTooltip: string;
@@ -152,7 +151,7 @@ const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: tr
           </div>
 
           <span class="page-summary">
-            <template v-if="isLoading && stats.total === 0 && stats.skipped === 0">
+            <template v-if="isLoading && stats.total === 0">
               <Skeleton width="64px" height="14px" border-radius="4px" />
             </template>
             <template v-else>
@@ -172,9 +171,8 @@ const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: tr
               @action="(kind) => emit('more-action', kind)"
             />
 
-            <template v-if="!disableCheckActions">
-              <span class="action-divider"></span>
-              <div class="check-btn-group" :class="{ 'has-dropdown': showDropdownArrow }">
+            <span class="action-divider"></span>
+            <div class="check-btn-group" :class="{ 'has-dropdown': showDropdownArrow }">
                 <button
                   v-tooltip.top="smartCheckTooltip"
                   class="btn-primary"
@@ -213,7 +211,6 @@ const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: tr
                   </div>
                 </Transition>
               </div>
-            </template>
           </template>
 
           <button v-else class="btn-danger" @click="emit('cancel-check')">

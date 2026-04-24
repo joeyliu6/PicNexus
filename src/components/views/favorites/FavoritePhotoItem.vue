@@ -1,12 +1,17 @@
 <script setup lang="ts">
+/**
+ * 镜像 fallback：thumbnailUrls 按主服务优先排序，主图加载失败时内部先尝试
+ * 下一条镜像，全部失效后才向父视图 emit 'failed' 最终状态。
+ */
+import { ref, computed, watch } from 'vue';
 import Skeleton from 'primevue/skeleton';
 import type { ImageMeta } from '../../../types/image-meta';
 
 type ImageState = 'loading' | 'loaded' | 'failed' | undefined;
 
-defineProps<{
+const props = defineProps<{
   meta: ImageMeta;
-  thumbnailUrl: string;
+  thumbnailUrls: string[];
   imageState: ImageState;
   selected: boolean;
 }>();
@@ -17,6 +22,23 @@ const emit = defineEmits<{
   'toggle-favorite': [];
   'image-state-change': [state: 'loaded' | 'failed'];
 }>();
+
+const currentSrcIndex = ref(0);
+const currentSrc = computed(() => props.thumbnailUrls[currentSrcIndex.value] ?? '');
+
+watch(
+  () => props.thumbnailUrls,
+  () => { currentSrcIndex.value = 0; },
+);
+
+function handleImgError(): void {
+  const next = currentSrcIndex.value + 1;
+  if (next < props.thumbnailUrls.length) {
+    currentSrcIndex.value = next;
+    return;
+  }
+  emit('image-state-change', 'failed');
+}
 </script>
 
 <template>
@@ -42,13 +64,13 @@ const emit = defineEmits<{
 
     <!-- 图片 -->
     <img
-      v-if="imageState !== 'failed'"
-      :src="thumbnailUrl"
+      v-if="imageState !== 'failed' && currentSrc"
+      :src="currentSrc"
       class="photo-img"
       :class="{ loaded: imageState === 'loaded' }"
       loading="lazy"
       @load="emit('image-state-change', 'loaded')"
-      @error="emit('image-state-change', 'failed')"
+      @error="handleImgError"
     />
 
     <!-- 选中遮罩 -->

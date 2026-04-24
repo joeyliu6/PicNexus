@@ -15,14 +15,6 @@ export function rowKey(row: Pick<LinkCheckRow, 'historyId' | 'serviceId'>): stri
 }
 
 function matchesStatusFilter(row: LinkCheckRow, filter: StatusFilter): boolean {
-  if (filter === 'skipped') {
-    return !!row.linkCheckSkip;
-  }
-
-  if (row.linkCheckSkip) {
-    return false;
-  }
-
   const result = row.checkResult;
   switch (filter) {
     case null:
@@ -101,7 +93,7 @@ export function useCheckFilter({ checkRows }: UseCheckFilterOptions) {
     const rows = scopedRows.value
       .filter((row) => {
         if (row.fadingOut) return true;
-        if (row.recheckResult && statusFilter.value !== 'skipped') return !row.linkCheckSkip;
+        if (row.recheckResult) return true;
         return matchesStatusFilter(row, statusFilter.value);
       })
       .slice()

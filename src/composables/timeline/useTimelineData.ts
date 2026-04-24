@@ -3,7 +3,7 @@
  * 管理分组数据、缩略图 URL、选中服务、悬停详情等
  */
 import { computed, shallowRef, type Ref, type ComputedRef } from 'vue';
-import { getMetaThumbnailUrl } from '../../composables/useThumbCache';
+import { getMetaThumbnailUrl, getMetaThumbnailCandidates } from '../../composables/useThumbCache';
 import { createLogger } from '../../utils/logger';
 import { type HistoryItem, type ServiceType, type UserConfig } from '../../config/types';
 import type { ImageMeta } from '../../types/image-meta';
@@ -75,6 +75,11 @@ export function useTimelineData(options: UseTimelineDataOptions) {
     return getMetaThumbnailUrl(meta, config.value);
   }
 
+  /** 主图失效时供 <img> 自动 fallback 的候选列表（主服务排第 0 位） */
+  function getThumbnailUrls(meta: ImageMeta): string[] {
+    return getMetaThumbnailCandidates(meta, config.value);
+  }
+
   /** 从选中项提取可用图床（带覆盖计数） */
   const selectedAvailableServices = computed<{ serviceId: ServiceType; count: number }[]>(() => {
     const ids = selectedIdList.value;
@@ -128,6 +133,7 @@ export function useTimelineData(options: UseTimelineDataOptions) {
   return {
     groups,
     getThumbnailUrl,
+    getThumbnailUrls,
     selectedAvailableServices,
     handleToggleFavorite,
     hoverDetailsMap,

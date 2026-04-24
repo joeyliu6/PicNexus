@@ -7,7 +7,9 @@
 
 import type Database from '@tauri-apps/plugin-sql';
 import type { ImageMeta } from '../../types/image-meta';
+import { extractMirrorServices } from '../../types/image-meta';
 import type { DayStats, DayStatsFilter, ServiceType } from './types';
+import type { HistoryItem } from '../../config/types';
 import { createLogger } from '../../utils/logger';
 
 const log = createLogger('TimelineQuery');
@@ -51,14 +53,14 @@ function appendFilterClause(
 
 function rowToImageMeta(row: MetaRow): ImageMeta {
   let primaryFileKey: string | undefined;
+  let mirrorServices: ImageMeta['mirrorServices'];
   try {
-    const parsed = JSON.parse(row.results) as Array<{
-      serviceId: string;
-      status: string;
-      result?: { fileKey?: string };
-    }>;
-    const hit = parsed.find(r => r.serviceId === row.primary_service && r.status === 'success');
-    primaryFileKey = hit?.result?.fileKey;
+    const parsed = JSON.parse(row.results) as HistoryItem['results'];
+    const mirrors = extractMirrorServices(parsed, row.primary_service);
+    if (mirrors.length > 0) {
+      primaryFileKey = mirrors[0].fileKey;
+      mirrorServices = mirrors;
+    }
   } catch {
     log.warn(`解析 results 失败: ${row.id}`);
   }
@@ -70,6 +72,7 @@ function rowToImageMeta(row: MetaRow): ImageMeta {
     primaryService: row.primary_service as ServiceType,
     primaryUrl: row.generated_link,
     primaryFileKey,
+    mirrorServices,
     isFavorited: row.is_favorited === 1,
   };
 }

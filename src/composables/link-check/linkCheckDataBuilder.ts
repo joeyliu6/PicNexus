@@ -24,7 +24,6 @@ export function liteRowToItem(row: LinkCheckLiteRow): HistoryItem {
     results: parsedResults,
     generatedLink: '',
     linkCheckStatus,
-    linkCheckSkip: row.link_check_skip === 1,
   };
 }
 
@@ -65,7 +64,6 @@ export function buildCheckItemsSync(
         rawUrl,
         fileName: item.localFileName,
         fallbackUrl,
-        linkCheckSkip: item.linkCheckSkip === true,
       });
     }
   }

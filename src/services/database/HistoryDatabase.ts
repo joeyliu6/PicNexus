@@ -9,6 +9,7 @@
 import Database from '@tauri-apps/plugin-sql';
 import type { HistoryItem, ServiceType } from '../../config/types';
 import type { ImageMeta } from '../../types/image-meta';
+import { extractMirrorServices } from '../../types/image-meta';
 import { createLogger } from '../../utils/logger';
 
 // 子模块导入
@@ -23,7 +24,6 @@ import {
   getLinkCheckInvalidQuery,
   getLinkCheckRestStreamQuery,
   batchUpdateLinkCheckStatusQuery,
-  setLinkCheckSkipQuery,
 } from './LinkCheckQuery';
 import { addSyncLogQuery, getSyncLogsQuery, clearSyncLogsQuery } from './SyncLogService';
 import { getItemsByBackupCountQuery, getBackupCountStatsQuery, getServiceDistributionQuery, getItemsByIdsQuery, setMigrationSkipQuery } from './MigrationQuery';
@@ -40,7 +40,7 @@ import { exportHistoryToJson, importHistoryFromJson } from './ImportExportServic
 
 // 类型重新导出
 import type {
-  LinkCheckLiteRow, LinkCheckQueryOptions, PageOptions, PageResult,
+  LinkCheckLiteRow, PageOptions, PageResult,
   SearchOptions, SearchResult, TimePeriodStats,
   FavoritesMetaPageOptions, FavoritesMetaPageResult,
   SyncLogOperation, SyncLogEntry,
@@ -59,7 +59,7 @@ interface MetaRow {
 }
 
 export type {
-  LinkCheckLiteRow, LinkCheckQueryOptions, PageOptions, PageResult,
+  LinkCheckLiteRow, PageOptions, PageResult,
   SearchOptions, SearchResult, TimePeriodStats,
   FavoritesMetaPageOptions, FavoritesMetaPageResult,
   SyncLogOperation, SyncLogEntry,
@@ -233,6 +233,73 @@ class HistoryDatabase {
   }
 
   /**
+   * 切换主服务到另一个已成功上传的镜像
+   *
+   * 仅改 primaryService + generatedLink，不动 results / linkCheckStatus。
+   * 若目标镜像不存在或未成功上传则抛错；目标已是当前主服务则直接返回。
+   */
+  async switchPrimaryService(id: string, newServiceId: string): Promise<void> {
+    const existing = await this.getById(id);
+    if (!existing) {
+      throw new Error(`记录不存在: ${id}`);
+    }
+    if (existing.primaryService === newServiceId) {
+      return;
+    }
+
+    const target = existing.results.find(
+      r => r.serviceId === newServiceId && r.status === 'success'
+    );
+    if (!target?.result?.url) {
+      throw new Error(`目标镜像不可用或未成功上传: ${newServiceId}`);
+    }
+
+    await this.update(id, {
+      primaryService: newServiceId,
+      generatedLink: target.result.url,
+    });
+    log.info(`切换主服务: ${id} → ${newServiceId}`);
+  }
+
+  /**
+   * 从记录中删除某个镜像（从 results 数组移除该条目 + 清理 linkCheckStatus）
+   *
+   * 边界：
+   * - 镜像是当前主服务 → 抛错，调用方需先 switchPrimaryService
+   * - 删除后无剩余成功镜像 → 抛错，应改为删除整条记录
+   */
+  async removeMirror(id: string, serviceId: string): Promise<void> {
+    const existing = await this.getById(id);
+    if (!existing) {
+      throw new Error(`记录不存在: ${id}`);
+    }
+
+    const target = existing.results.find(r => r.serviceId === serviceId);
+    if (!target) {
+      throw new Error(`镜像不存在: ${serviceId}`);
+    }
+
+    if (existing.primaryService === serviceId) {
+      throw new Error('无法删除当前主服务镜像，请先切换到其他镜像');
+    }
+
+    const newResults = existing.results.filter(r => r.serviceId !== serviceId);
+    const remainingSuccess = newResults.filter(r => r.status === 'success').length;
+    if (remainingSuccess === 0) {
+      throw new Error('至少需要保留一条成功镜像，如需全删请直接删除整条记录');
+    }
+
+    const updates: Partial<HistoryItem> = { results: newResults };
+    if (existing.linkCheckStatus && serviceId in existing.linkCheckStatus) {
+      const { [serviceId]: _removed, ...rest } = existing.linkCheckStatus;
+      updates.linkCheckStatus = rest;
+    }
+
+    await this.update(id, updates);
+    log.info(`删除镜像: ${id} / ${serviceId}`);
+  }
+
+  /**
    * 插入或更新一条记录（UPSERT）
    */
   async upsert(item: HistoryItem): Promise<void> {
@@ -270,11 +337,6 @@ class HistoryDatabase {
   /**
    * 清空所有历史记录
    */
-  async setLinkCheckSkip(ids: string[], skip: boolean): Promise<number> {
-    const db = await this.connection.getDb();
-    return setLinkCheckSkipQuery(db, ids, skip);
-  }
-
   async clear(): Promise<void> {
     const db = await this.connection.getDb();
     await db.execute('DELETE FROM history_items');
@@ -615,16 +677,14 @@ class HistoryDatabase {
 
   private rowToImageMeta(row: MetaRow): ImageMeta {
     let primaryFileKey: string | undefined;
+    let mirrorServices: ImageMeta['mirrorServices'];
     try {
-      const results = JSON.parse(row.results) as Array<{
-        serviceId: string;
-        status: string;
-        result?: { fileKey?: string; url?: string };
-      }>;
-      const primaryResult = results.find(
-        r => r.serviceId === row.primary_service && r.status === 'success'
-      );
-      primaryFileKey = primaryResult?.result?.fileKey;
+      const results = JSON.parse(row.results) as HistoryItem['results'];
+      const mirrors = extractMirrorServices(results, row.primary_service);
+      if (mirrors.length > 0) {
+        primaryFileKey = mirrors[0].fileKey;
+        mirrorServices = mirrors;
+      }
     } catch (e) {
       log.warn(`解析 results 失败: ${row.id}`, e);
     }
@@ -637,6 +697,7 @@ class HistoryDatabase {
       primaryService: row.primary_service as ServiceType,
       primaryUrl: row.generated_link,
       primaryFileKey,
+      mirrorServices,
       isFavorited: row.is_favorited === 1,
     };
   }
@@ -715,18 +776,17 @@ class HistoryDatabase {
   // 链接检测专用轻量查询（委托 LinkCheckQuery）
   // ============================================
 
-  async getLinkCheckInvalid(options: LinkCheckQueryOptions = {}): Promise<LinkCheckLiteRow[]> {
+  async getLinkCheckInvalid(): Promise<LinkCheckLiteRow[]> {
     const db = await this.connection.getDb();
-    return getLinkCheckInvalidQuery(db, options);
+    return getLinkCheckInvalidQuery(db);
   }
 
   async *getLinkCheckRestStream(
     loadedIds: Set<string>,
     batchSize = 2000,
-    options: LinkCheckQueryOptions = {},
   ): AsyncGenerator<LinkCheckLiteRow[]> {
     const db = await this.connection.getDb();
-    yield* getLinkCheckRestStreamQuery(db, loadedIds, batchSize, options);
+    yield* getLinkCheckRestStreamQuery(db, loadedIds, batchSize);
   }
 
   async batchUpdateLinkCheckStatus(

@@ -4,7 +4,6 @@ export type StatusFilter =
   | 'timeout'
   | 'unchecked'
   | 'valid'
-  | 'skipped'
   | 'all'
   | null;
 
@@ -75,7 +74,6 @@ export interface LinkCheckRow {
   rawUrl: string;
   fileName: string;
   fallbackUrl?: string;
-  linkCheckSkip?: boolean;
   checkResult?: CheckLinkResult;
   recheckResult?: CheckLinkResult;
   recheckLoading?: boolean;

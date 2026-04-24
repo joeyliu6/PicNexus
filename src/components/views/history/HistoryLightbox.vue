@@ -13,6 +13,7 @@ import { useHistoryManager } from '../../../composables/useHistory';
 import { usePhotoSwipeBridge } from '../../../composables/history/usePhotoSwipeBridge';
 import { useLightboxActions } from '../../../composables/history/useLightboxActions';
 import { useLightboxInfo } from '../../../composables/history/useLightboxInfo';
+import { useMirrorFallback } from '../../../composables/history/useMirrorFallback';
 import { useToast } from '../../../composables/useToast';
 import { getPrimaryImageUrl } from '../../../utils/imageUrl';
 import { generateMediumThumbnailUrl } from '../../../composables/useThumbCache';
@@ -109,6 +110,15 @@ const { handleCopyLink, handleCopyServiceLink, copySuccess, openInBrowser, handl
   onDelete: (record) => emit('delete', record),
 });
 
+// ── 镜像管理 ────────────────────────────────
+const {
+  mirrors,
+  isPrimaryBroken,
+  allMirrorsBroken,
+  switchPrimary,
+  removeMirror,
+} = useMirrorFallback(itemRef);
+
 // ── 导航 ────────────────────────────────────
 function navigatePrev() { if (props.hasPrev) emit('navigate', 'prev'); }
 function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
@@ -176,10 +186,15 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
       :successful-services="successfulServices"
       :is-item-favorited="isItemFavorited"
       :copy-success="copySuccess"
+      :mirrors="mirrors"
+      :is-primary-broken="isPrimaryBroken"
+      :all-mirrors-broken="allMirrorsBroken"
       @copy-link="handleCopyLink"
       @copy-service-link="handleCopyServiceLink"
       @open-browser="openInBrowser"
       @delete="handleDelete"
+      @switch-primary="switchPrimary"
+      @remove-mirror="removeMirror"
       @toggle-favorite="emit('toggle-favorite', item)"
     />
   </Teleport>
