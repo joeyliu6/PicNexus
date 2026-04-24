@@ -24,9 +24,9 @@ import type {
   MigrateStats,
   MigrateFailureDetail,
 } from '../types/batchMigrate';
-import { migrateOneItem, processBatch } from './batchMigrate/migrateCore';
+import { processBatch } from './batchMigrate/migrateCore';
 import { preloadAllPending, type PreloadedItem } from './batchMigrate/preloadPending';
-import { Semaphore } from '../utils/semaphore';
+import { createRetry } from './batchMigrate/retryFailed';
 
 export type { MigratePhase, MigrateTargetService, MigrateItemStatus, MigrateResult, MigrateStats, MigrateFailureDetail };
 
@@ -127,6 +127,9 @@ export function useBatchMigrateManager() {
 
   // "正在暂停..." —— 用户已点暂停但仍有在途条目未落定（下载/转换/上传中）
   const isPausing = computed(() => isPaused.value && concurrentCount.value > 0);
+
+  // "正在取消..." —— 用户已点取消但 finalizeResult 尚未触发（在途 Promise.all 还在落定）
+  const isCancelling = computed(() => isCancelled.value && isMigrating.value);
 
   // ============================================
   // RAF 节流
@@ -537,76 +540,20 @@ export function useBatchMigrateManager() {
     migrateStats.value = { startTime: 0, elapsedMs: 0, processedCount: 0, totalCount: 0, totalBytes: 0 };
     cumulativeCounts.value = { success: 0, failed: 0, skipped: 0 };
     sourceServiceFilter.value = [];
+    // 同步清空，避免 applyFilter 命中"来源未选"短路把 pendingCount 全置 0 误判"已备份"
+    availableSourceServices.value = [];
     timestampAfterMs.value = null;
     isFilterApplied.value = false;
     cachedConfig = null;
     await initConfiguring();
   }
 
-  /**
-   * 单条原地重试（done 态专用）
-   * 不改 phase，失败行视觉上变为「重试中」，完成后根据结果更新 migrateResult
-   */
-  async function retrySingleFailed(historyId: string): Promise<void> {
-    if (!migrateResult.value) return;
-    if (retryingIds.value.has(historyId)) return;
-    const result = migrateResult.value;
-    const failureIdx = result.failures.findIndex(f => f.historyId === historyId);
-    if (failureIdx < 0) return;
-    const targets = result.targetServiceIds;
-    if (targets.length === 0) return;
-
-    retryingIds.value = new Set([...retryingIds.value, historyId]);
-    try {
-      const items = await historyDB.getItemsByIds([historyId]);
-      if (items.length === 0) return;
-      const status: MigrateItemStatus = {
-        historyId,
-        fileName: items[0].localFileName,
-        sourceUrl: items[0].results.find(r => r.status === 'success' && r.result?.url)?.result?.url,
-        status: 'pending',
-        serviceResults: Object.fromEntries(targets.map(sid => [sid, 'pending' as const])),
-        existingServiceIds: items[0].results.filter(r => r.status === 'success').map(r => r.serviceId),
-      };
-      const config = await getOrCacheConfig();
-      const multiUploader = cachedUploader ?? new MultiServiceUploader();
-      const localCancelled = ref(false);
-      const localPaused = ref(false);
-      await migrateOneItem(items[0], status, targets, config, multiUploader, localCancelled, localPaused, migrateStats);
-
-      const newResult = { ...result, failures: [...result.failures], itemsSnapshot: [...result.itemsSnapshot] };
-      if (status.status === 'success') {
-        newResult.failures.splice(failureIdx, 1);
-        newResult.successCount++;
-        newResult.failedCount = Math.max(0, newResult.failedCount - 1);
-      } else if (status.status === 'failed') {
-        newResult.failures[failureIdx] = {
-          historyId, fileName: status.fileName,
-          error: status.error ?? '', errorType: status.errorType,
-          details: status.failureDetails ?? [{ message: status.error ?? '' }],
-        };
-      }
-      const snapIdx = newResult.itemsSnapshot.findIndex(s => s.historyId === historyId);
-      if (snapIdx >= 0) newResult.itemsSnapshot[snapIdx] = { ...status };
-      migrateResult.value = newResult;
-    } catch (e) {
-      log.error('单条重试失败', e);
-    } finally {
-      const next = new Set(retryingIds.value);
-      next.delete(historyId);
-      retryingIds.value = next;
-    }
-  }
-
-  /**
-   * 批量原地重试失败项（done 态专用，不改 phase）
-   * 并发上限与 MAX_CONCURRENT 对齐
-   */
-  async function retryFailed(historyIds: string[]): Promise<void> {
-    if (historyIds.length === 0) return;
-    const sem = new Semaphore(4);
-    await Promise.all(historyIds.map(id => sem.withPermit(() => retrySingleFailed(id))));
-  }
+  // done 态失败项重试（含并发安全的 migrateResult 更新）抽至 batchMigrate/retryFailed.ts
+  const { retrySingleFailed, retryFailed } = createRetry({
+    migrateResult, retryingIds, migrateStats,
+    getOrCacheConfig,
+    getMultiUploader: () => cachedUploader ?? new MultiServiceUploader(),
+  });
 
   // ============================================
   // 内存空闲释放（对齐链接监控 useLinkCheck）
@@ -669,7 +616,7 @@ export function useBatchMigrateManager() {
     checkedTargets, totalPending, isAllBackedUp,
     itemStatuses, allItemStatuses, isMigrating, globalProgress, migrateResult, cumulativeCounts,
     retryingIds,
-    isPaused, isPausing,
+    isPaused, isPausing, isCancelling,
     migrateStats, estimatedTimeRemaining, averageSpeed, concurrentCount,
     initConfiguring, applyFilter,
     startMigrate, cancelMigrate, pauseMigrate, resumeMigrate,

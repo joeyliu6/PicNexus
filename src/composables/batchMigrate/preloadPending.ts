@@ -78,8 +78,9 @@ export async function preloadAllPending(args: PreloadArgs): Promise<PreloadedIte
   function commit(batch: PreloadedItem[]) {
     if (batch.length === 0) return;
     items.push(...batch);
-    // spread 触发 shallowRef 响应，UI「全部 N」递增
-    allItemStatuses.value = items.map(p => p.status);
+    // 增量 concat 而非全量 map：25k+ 条历史场景下累积 commit 原本是 O(N²)
+    // （每批重建整个状态数组），改为 O(batch) 单次 push
+    allItemStatuses.value = allItemStatuses.value.concat(batch.map(p => p.status));
     args.onBatch?.(batch);
   }
 
