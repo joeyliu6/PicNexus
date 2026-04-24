@@ -12,6 +12,9 @@ import type { BackupCloudDeps } from './useBackupCloud';
 
 const log = createLogger('ConfigSync');
 
+/** 配置写入 store 后到提示"请刷新页面"的延迟，让成功 toast 先出再叠加刷新提示 */
+const REFRESH_HINT_DELAY_MS = 1000;
+
 export function createConfigSyncOps(deps: BackupCloudDeps) {
   const {
     toast, confirmDialog, tryDecryptContent,
@@ -79,7 +82,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
         content = await tryDecryptContent(rawContent.trim());
       }
 
-      const importedConfig = JSON.parse(content) as UserConfig;
+      const importedConfig = JSON.parse(content) as unknown;
 
       if (!isValidUserConfig(importedConfig)) {
         updateConfigSyncStatus(profile, 'failed', '云端数据格式无效');
@@ -96,7 +99,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
 
       setTimeout(() => {
         toast.showConfig('info', TOAST_MESSAGES.sync.refreshHint);
-      }, 1000);
+      }, REFRESH_HINT_DELAY_MS);
     } catch (error) {
       if (error instanceof Error && error.message === 'user_cancelled') return;
       const errorCode = extractErrorCode(error);
@@ -130,7 +133,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
         content = await tryDecryptContent(rawContent.trim());
       }
 
-      const importedConfig = JSON.parse(content) as UserConfig;
+      const importedConfig = JSON.parse(content) as unknown;
 
       if (!isValidUserConfig(importedConfig)) {
         updateConfigSyncStatus(profile, 'failed', '云端数据格式无效');
@@ -152,7 +155,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
 
       setTimeout(() => {
         toast.info('请刷新页面以使配置生效');
-      }, 1000);
+      }, REFRESH_HINT_DELAY_MS);
     } catch (error) {
       if (error instanceof Error && error.message === 'user_cancelled') return;
       const errorCode = extractErrorCode(error);
@@ -187,7 +190,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
           if (isPasswordEncryptedData(rawContent.trim())) {
             contentStr = await tryDecryptContent(rawContent.trim());
           }
-          const importedConfig = JSON.parse(contentStr) as UserConfig;
+          const importedConfig = JSON.parse(contentStr) as unknown;
           if (isValidUserConfig(importedConfig)) {
             hasCloudData = true;
 
@@ -236,7 +239,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
       if (hasCloudData) {
         setTimeout(() => {
           toast.info('请刷新页面以使配置生效');
-        }, 1000);
+        }, REFRESH_HINT_DELAY_MS);
       }
     } catch (error) {
       if (error instanceof Error && error.message === 'user_cancelled') return;
