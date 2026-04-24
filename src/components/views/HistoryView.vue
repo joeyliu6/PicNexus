@@ -61,6 +61,15 @@ watch(currentViewMode, async (newMode, oldMode) => {
   }
 });
 
+// 表格模式下 filter / search 变化前抢先快照 scrollTop：
+// 数据变短时浏览器会把 scrollTop clamp 到新 scrollHeight，若等切视图再读已是被 clamp 值，
+// 回到表格时恢复到截断位而非用户原先 5000px 处
+watch([currentFilter, debouncedSearchTerm], () => {
+  if (currentViewMode.value === 'table' && historyContainerRef.value) {
+    savedTableScrollTop = historyContainerRef.value.scrollTop;
+  }
+});
+
 const handleTotalCountUpdate = (count: number) => {
   totalCount.value = count;
 };
@@ -101,7 +110,6 @@ const handleTotalCountUpdate = (count: number) => {
       <FavoritesView
         v-show="currentViewMode === 'favorites'"
         :visible="currentViewMode === 'favorites'"
-        :activation-trigger="activationTrigger"
         :filter="currentFilter"
         :search-term="debouncedSearchTerm"
         @update:total-count="handleTotalCountUpdate"

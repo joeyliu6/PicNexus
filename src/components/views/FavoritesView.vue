@@ -21,7 +21,6 @@ const props = defineProps<{
   filter?: ServiceType | 'all';
   searchTerm?: string;
   visible?: boolean;
-  activationTrigger?: number;
 }>();
 
 const emit = defineEmits<{

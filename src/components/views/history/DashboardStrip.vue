@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, onUnmounted } from 'vue';
 import Select from 'primevue/select';
 import InputText from 'primevue/inputtext';
 import type { ServiceType } from '../../../config/types';
@@ -47,13 +47,21 @@ function switchViewMode(mode: ViewMode) {
 }
 
 function handleFilterChange(filter: ServiceType | 'all') {
+  // filter 切换前先把 pending 的 search 同步吐给父级；
+  // Vue 本 tick 内 batch 两次 emit，父级 watch([filter, searchTerm]) 只会触发一次 loadCurrentPage
+  updateSearchTerm.immediate(localSearchTerm.value);
   emit('update:filter', filter);
 }
 
 function clearSearch() {
+  updateSearchTerm.cancel();
   localSearchTerm.value = '';
   emit('update:searchTerm', '');
 }
+
+onUnmounted(() => {
+  updateSearchTerm.cancel();
+});
 </script>
 
 <template>
