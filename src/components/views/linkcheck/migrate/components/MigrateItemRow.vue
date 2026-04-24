@@ -13,6 +13,8 @@ import { getServiceDisplayName } from '../../../../../constants/serviceNames';
 import MigrateServiceChip from './chips/MigrateServiceChip.vue';
 import type { MigrateRowItem } from './migrateRowTypes';
 
+const TERMINAL_STATUSES = new Set(['success', 'failed', 'skipped']);
+
 const VISIBLE_EXISTING_MAX = 3;
 
 interface Props {
@@ -55,7 +57,11 @@ interface TargetChipState {
 const targetChips = computed<TargetChipState[]>(() => {
   const existing = new Set(existingChips.value);
   const results = props.item.serviceResults;
-  const ids = results ? Object.keys(results) : props.targetServiceIds;
+  // 始终以 targetServiceIds 为准：选了几个目标就显几个 chip
+  // 如果没有 targetServiceIds（fallback），退回读 serviceResults 的 key
+  const ids = props.targetServiceIds.length > 0
+    ? props.targetServiceIds
+    : (results ? Object.keys(results) : []);
 
   return ids
     .filter(sid => !existing.has(sid))
@@ -108,11 +114,21 @@ function targetChipTooltip(chip: TargetChipState): string | undefined {
     const detail = props.item.details?.find(d => d.serviceId === chip.serviceId);
     return detail?.message ?? (errorTooltipText(props.item) || '上传失败');
   }
+  // pending chip 的语义按 item 整体状态分叉：
+  // - 运行态（downloading/converting/uploading/pending）→ 说明当前阶段
+  // - 终态 failed/skipped → 这个目标没轮到尝试
+  const targetName = getServiceDisplayName(chip.serviceId) || chip.serviceId;
+  if (TERMINAL_STATUSES.has(props.item.status)) {
+    if (props.item.status === 'skipped') return `迁移已取消，未尝试 ${targetName}`;
+    if (props.item.status === 'failed')  return `未尝试 ${targetName}`;
+    return undefined;
+  }
   switch (props.item.status) {
     case 'downloading': return '正在下载原图…';
     case 'converting':  return '正在转换格式…';
-    case 'uploading':   return '正在上传…';
-    default:            return '等待处理';
+    // 并行上传后，pending 意味着"还没落定结果"——可能正在传，也可能正在等转换完成
+    case 'uploading':   return `正在上传到 ${targetName}…`;
+    default:            return `等待上传到 ${targetName}`;
   }
 }
 

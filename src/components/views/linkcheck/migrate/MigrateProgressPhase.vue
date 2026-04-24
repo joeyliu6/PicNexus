@@ -279,10 +279,7 @@ function handleResume() { resumeMigrate(); }
       v-model:search-input="searchInput"
       :counts="filterCounts"
       :show-processing="phase === 'migrating'"
-      :can-retry-all="canRetryAll"
-      :retrying-count="retryingIds.size"
       :source-service-options="sourceServiceOptions"
-      @retry-all="handleRetryAll"
     />
 
     <div ref="listRef" class="focus-list">
@@ -310,11 +307,14 @@ function handleResume() { resumeMigrate(); }
     :is-paused="isPaused"
     :is-pausing="isPausing"
     :state-pill="statePill"
+    :can-retry-all="canRetryAll"
+    :retrying-count="retryingIds.size"
     @pause="handlePause"
     @resume="handleResume"
     @cancel="cancelMigrate"
     @done="resetToConfiguring"
     @restart="resetToConfiguring"
+    @retry-all="handleRetryAll"
     @export="handleExport"
   >
     <template #pagination>

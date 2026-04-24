@@ -16,9 +16,19 @@ interface Props {
   /** 已点暂停但在途条目未落定（正在暂停...） */
   isPausing?: boolean;
   statePill?: StatePill | null;
+  /** done 态：是否有失败项可重试（由父组件判定） */
+  canRetryAll?: boolean;
+  /** done 态：正在重试的条目数（>0 时禁用按钮 + 显 spinner） */
+  retryingCount?: number;
 }
 
-withDefaults(defineProps<Props>(), { isPaused: false, isPausing: false, statePill: null });
+withDefaults(defineProps<Props>(), {
+  isPaused: false,
+  isPausing: false,
+  statePill: null,
+  canRetryAll: false,
+  retryingCount: 0,
+});
 
 const emit = defineEmits<{
   pause: [];
@@ -26,6 +36,7 @@ const emit = defineEmits<{
   cancel: [];
   done: [];
   restart: [];
+  retryAll: [];
   export: [format: 'csv' | 'txt'];
 }>();
 
@@ -94,6 +105,17 @@ function toggleExportMenu(ev: MouseEvent) {
         />
         <button class="btn-ghost" type="button" @click="emit('done')">
           完成
+        </button>
+        <button
+          v-if="canRetryAll"
+          class="btn-ghost"
+          type="button"
+          :disabled="retryingCount > 0"
+          @click="emit('retryAll')"
+        >
+          <i v-if="retryingCount > 0" class="pi pi-spin pi-spinner" />
+          <i v-else class="pi pi-refresh" />
+          全部重试
         </button>
         <button class="btn-primary" type="button" @click="emit('restart')">
           <i class="pi pi-refresh" /> 重新发起迁移

@@ -11,17 +11,10 @@ import type { SourceServiceOption } from '../composables/useFilterBar';
 interface Props {
   counts: MigrateStatusCounts;
   showProcessing: boolean;
-  canRetryAll?: boolean;
-  retryingCount?: number;
   sourceServiceOptions: SourceServiceOption[];
 }
 
-withDefaults(defineProps<Props>(), {
-  canRetryAll: false,
-  retryingCount: 0,
-});
-
-const emit = defineEmits<{ retryAll: [] }>();
+defineProps<Props>();
 
 const activeFilter = defineModel<MigrateStatusFilter>('activeFilter', { required: true });
 const selectedSourceServiceId = defineModel<string | null>('selectedSourceServiceId', { required: true });
@@ -125,17 +118,6 @@ function selectService(id: string | null) {
         <i class="pi pi-times" aria-hidden="true" />
       </button>
     </div>
-
-    <!-- 全部重试 -->
-    <button
-      v-if="canRetryAll"
-      class="mf-retry-all"
-      type="button"
-      :disabled="retryingCount > 0"
-      @click="emit('retryAll')"
-    >
-      <i class="pi pi-refresh" aria-hidden="true" /> 全部重试
-    </button>
   </div>
 </template>
 
@@ -328,28 +310,6 @@ function selectService(id: string | null) {
   background: var(--hover-overlay);
   opacity: 1;
 }
-
-/* ── 全部重试按钮 ── */
-.mf-retry-all {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-sm-md);
-  border: none;
-  border-radius: var(--radius-sm-md);
-  background: var(--error);
-  color: var(--text-on-error, #fff);
-  font-family: inherit;
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background var(--duration-fast);
-}
-
-.mf-retry-all:disabled { opacity: 0.55; cursor: not-allowed; }
-.mf-retry-all:hover:not(:disabled) { background: color-mix(in srgb, var(--error) 85%, black); }
-.mf-retry-all i { font-size: var(--text-2xs); }
 
 /* ── 下拉动画 ── */
 .mf-dropdown-enter-active,
