@@ -171,7 +171,9 @@ export function useHistorySaver(): UseHistorySaverReturn {
     log.info('[历史记录] 立即保存:', newItem.localFileName, '(主力图床:', firstResult.serviceId, ')');
 
     invalidateCache();
-    emitHistoryUpdated([historyId]);
+    // Why: addResultToHistoryItem 同名调用是 await 的，这里若不 await 会让"首次创建"事件
+    //      晚于"后续追加"事件抵达 UI 监听器，触发瞬间空白/记录闪现。
+    await emitHistoryUpdated([historyId]);
     clearImageMetadataCache(filePath);
   }
 
