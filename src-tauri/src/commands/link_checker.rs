@@ -24,6 +24,13 @@ const URL_DOWNLOAD_PREFIX: &str = "picnexus_url_";
 /// 临时文件过期时间（1小时 = 3600秒）
 const TEMP_FILE_MAX_AGE_SECS: u64 = 3600;
 
+/// 批量检测进度事件节流：每 N 条 emit 一次（首末强制 emit 保证准确性）
+/// 避免 5w+ 条批量检测下每毫秒数千事件打爆前端事件队列
+const PROGRESS_EMIT_EVERY_N: usize = 10;
+
+/// 批量检测单次最多接收的链接数，防止恶意/失误传入巨量链接耗尽 tokio 任务池
+const MAX_BATCH_CHECK_LINKS: usize = 100_000;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckLinkResult {
     pub link: String,
@@ -943,6 +950,14 @@ pub async fn batch_check_links(
     cancel_flag: tauri::State<'_, BatchCheckCancelFlag>,
 ) -> Result<BatchCheckResult, AppError> {
     let total = request.links.len();
+    if total > MAX_BATCH_CHECK_LINKS {
+        return Err(AppError::Validation {
+            message: format!(
+                "批量检测链接数 {} 超过上限 {}",
+                total, MAX_BATCH_CHECK_LINKS
+            ),
+        });
+    }
     let concurrency = request.concurrency.unwrap_or(10).max(1).min(50);
     let per_host_limit = request.per_host_limit.unwrap_or(3).max(1).min(10);
     let timeout_secs = request.timeout_secs.unwrap_or(10).max(3).min(30);
@@ -1022,14 +1037,19 @@ pub async fn batch_check_links(
                 service_id: item.service_id,
             };
 
-            // 更新进度并上报
+            // 更新进度并上报（节流：首末强制 + 每 N 条）
             let done = checked.fetch_add(1, Ordering::SeqCst) + 1;
-            let _ = window.emit("link-check://progress", BatchCheckProgress {
-                checked: done,
-                total: total_count,
-                current_url: item.url,
-                current_result: Some(check_result),
-            });
+            let should_emit = done == 1
+                || done == total_count
+                || done % PROGRESS_EMIT_EVERY_N == 0;
+            if should_emit {
+                let _ = window.emit("link-check://progress", BatchCheckProgress {
+                    checked: done,
+                    total: total_count,
+                    current_url: item.url,
+                    current_result: Some(check_result),
+                });
+            }
 
             Some(result)
         });
