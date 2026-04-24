@@ -347,6 +347,22 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
   z-index: -1;
   pointer-events: none;
   background: var(--pswp-bg);
+
+  /* 开场整体淡入（含 #000 兜底 + ::after 暗角），与 .pswp__bg(300ms) 同步；
+   * 不做这个 animation 则 t=0 瞬间父层纯黑铺满，浅色主图 FLIP pop 对比强烈，
+   * 视觉上表现为"眼前一闪一亮"。翻页不触发（只有 Teleport 挂载时才跑一次） */
+  animation: pswp-blur-bg-open var(--duration-slow) ease-out;
+}
+
+@keyframes pswp-blur-bg-open {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pswp--picnexus .pswp-blur-bg {
+    animation: none;
+  }
 }
 
 .pswp--picnexus .pswp-blur-bg img {
@@ -357,6 +373,9 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 灯箱模糊背景复合滤镜，无对应 token */
   filter: blur(30px) brightness(0.45) saturate(1.1);
   opacity: 0;
+
+  /* 时长必须 >= PhotoSwipe SHOW_ANIMATION_DURATION(300ms)，确保 blur 不早于 .pswp__bg 完成淡入；
+   * 否则 blur 先到 100% 而 bg 尚未压满，浅色图会出现亮度峰值（视觉上一闪而亮） */
   transition: opacity var(--duration-slow) ease;
   pointer-events: none;
 }
@@ -376,7 +395,7 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
   position: absolute;
   inset: 0;
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 影院暗角径向渐变，无对应 token */
-  background: radial-gradient(ellipse at center, transparent 30%, rgb(0 0 0 / 80%) 100%);
+  background: radial-gradient(ellipse at center, transparent 30%, rgb(0 0 0 / 65%) 100%);
   pointer-events: none;
 }
 

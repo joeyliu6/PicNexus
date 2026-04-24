@@ -87,7 +87,7 @@ function buildPswpOptions(slide: PswpSlideOptions): PhotoSwipeOptions {
       id: slide.id,
     }],
     index: 0,
-    bgOpacity: 0.72,
+    bgOpacity: 0.65,
     // 自定义 spinner 由 Vue 层 Teleport 渲染；清空默认错误文案（避免 slide 内显示英文错误）
     errorMsg: '',
     showHideAnimationType: reduced ? 'none' : (slide.useZoom ? 'zoom' : 'fade'),
