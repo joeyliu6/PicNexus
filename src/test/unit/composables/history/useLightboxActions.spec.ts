@@ -86,7 +86,7 @@ function mountHarness(initialItem = makeHistoryItem()) {
   const Harness = defineComponent({
     setup() {
       api = useLightboxActions({
-        item,
+        item: item as never,
         resetZoom,
         onDelete,
       });

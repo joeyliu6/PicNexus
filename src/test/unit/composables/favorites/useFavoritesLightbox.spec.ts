@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
+import type { ServiceType } from '../../../../config/types';
 
 const {
   toastSuccessMock,
@@ -33,7 +34,7 @@ function makeMeta(id: string) {
     timestamp: 1000,
     localFileName: `${id}.png`,
     aspectRatio: 1,
-    primaryService: 'weibo',
+    primaryService: 'weibo' as ServiceType,
     primaryUrl: `https://img.example.com/${id}.png`,
   };
 }
@@ -43,7 +44,7 @@ function makeDetail(id: string) {
     id,
     timestamp: 1000,
     localFileName: `${id}.png`,
-    primaryService: 'weibo',
+    primaryService: 'weibo' as ServiceType,
     results: [],
     generatedLink: `https://img.example.com/${id}.png`,
   };

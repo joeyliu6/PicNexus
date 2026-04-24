@@ -27,8 +27,8 @@ describe('ServiceChipGrid', () => {
         },
         isBatchTesting: true,
         refreshingServiceIds: new Set(['weibo']),
-        batchTestedServices: new Set(),
-        batchDoneServices: new Set(),
+        batchTestedServices: new Set<string>(),
+        batchDoneServices: new Set<string>(),
         activeFilter: null,
       },
       global: {

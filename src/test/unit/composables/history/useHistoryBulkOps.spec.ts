@@ -63,6 +63,9 @@ function makeCtx() {
   const detailCache = {
     getDetail: vi.fn(),
     removeDetail: vi.fn(),
+    prefetchDetails: vi.fn(),
+    clearCache: vi.fn(),
+    cacheStats: ref({ size: 0, maxSize: 200, hitCount: 0, missCount: 0, hitRate: 0 }),
   };
 
   return {

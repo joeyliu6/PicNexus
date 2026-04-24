@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick, ref } from 'vue';
 import { flushPromises, mount } from '@vue/test-utils';
+import type { UserConfig } from '../../../../config/types';
 
 const {
   getFavoritesMetaPageMock,
@@ -61,7 +62,7 @@ function mountHarness() {
   const searchTerm = ref('');
   const favoriteSet = ref(new Set<string>());
   const scrollContainerRef = ref<HTMLElement | null>(null);
-  const config = ref({ theme: 'light' } as never);
+  const config = ref({ theme: 'light' } as unknown as UserConfig);
 
   let api: ReturnType<typeof useFavoritesData> | null = null;
   const Harness = defineComponent({
