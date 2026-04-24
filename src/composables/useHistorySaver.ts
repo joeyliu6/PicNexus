@@ -143,38 +143,44 @@ export function useHistorySaver(): UseHistorySaverReturn {
   /**
    * 立即保存历史记录（第一个成功结果到达时调用）
    * 创建只包含首个成功结果的历史记录，后续结果通过 addResultToHistoryItem 追加
+   *
+   * Why: 必须与 addResultToHistoryItem 共享同一把 historyId 串行锁，否则会出现
+   *      insertOrIgnore 还没 commit 时 addResult 的 getById 返回 null，导致后续
+   *      图床结果静默丢失（50ms 重试是 workaround，根本上要靠串行化）。
    */
   async function saveHistoryItemImmediate(
     filePath: string,
     firstResult: SingleServiceResult,
     historyId: string
   ): Promise<void> {
-    const fileName = await getFileName(filePath);
-    const metadata = await getImageMetadata(filePath);
+    return withHistoryUpdateQueue(historyId, async () => {
+      const fileName = await getFileName(filePath);
+      const metadata = await getImageMetadata(filePath);
 
-    const newItem: HistoryItem = {
-      id: historyId,
-      localFileName: fileName,
-      timestamp: Date.now(),
-      filePath: filePath,
-      results: [firstResult],
-      primaryService: firstResult.serviceId,
-      generatedLink: firstResult.result?.url || '',
-      width: metadata.width,
-      height: metadata.height,
-      aspectRatio: metadata.aspect_ratio,
-      fileSize: metadata.file_size,
-      format: metadata.format
-    };
+      const newItem: HistoryItem = {
+        id: historyId,
+        localFileName: fileName,
+        timestamp: Date.now(),
+        filePath: filePath,
+        results: [firstResult],
+        primaryService: firstResult.serviceId,
+        generatedLink: firstResult.result?.url || '',
+        width: metadata.width,
+        height: metadata.height,
+        aspectRatio: metadata.aspect_ratio,
+        fileSize: metadata.file_size,
+        format: metadata.format
+      };
 
-    await historyDB.insertOrIgnore(newItem);
-    log.info('[历史记录] 立即保存:', newItem.localFileName, '(主力图床:', firstResult.serviceId, ')');
+      await historyDB.insertOrIgnore(newItem);
+      log.info('[历史记录] 立即保存:', newItem.localFileName, '(主力图床:', firstResult.serviceId, ')');
 
-    invalidateCache();
-    // Why: addResultToHistoryItem 同名调用是 await 的，这里若不 await 会让"首次创建"事件
-    //      晚于"后续追加"事件抵达 UI 监听器，触发瞬间空白/记录闪现。
-    await emitHistoryUpdated([historyId]);
-    clearImageMetadataCache(filePath);
+      invalidateCache();
+      // Why: addResultToHistoryItem 同名调用是 await 的，这里若不 await 会让"首次创建"事件
+      //      晚于"后续追加"事件抵达 UI 监听器，触发瞬间空白/记录闪现。
+      await emitHistoryUpdated([historyId]);
+      clearImageMetadataCache(filePath);
+    });
   }
 
   /**
