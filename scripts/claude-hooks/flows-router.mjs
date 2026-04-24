@@ -29,6 +29,7 @@ process.stdin.on('end', () => {
     { re: /启动|白屏|闪退|cookie\s*登录|开机/i, doc: 'docs/flows/app-lifecycle.md', tag: '生命周期' },
     // 链接监控优先于压缩/链接检测：正则用否定环视避开"链接监控"被误判为辅助
     { re: /链接监控|link.?check|批量检测/i, doc: 'docs/flows/link-check-flow.md', tag: '链接监控' },
+    { re: /镜像|mirror|切换主服务|主图失效|fallback/i, doc: 'docs/flows/mirror-fallback-flow.md', tag: '镜像 fallback' },
     { re: /压缩|链接检测(?!.*监控)/i, doc: 'docs/flows/auxiliary-flows.md', tag: '辅助' },
     { re: /文档修复|md.?rescue|markdown\s*修复/i, doc: 'docs/flows/md-rescue-flow.md', tag: 'MD 修复' },
     { re: /批量迁移|batch.?migrate|迁移/i, doc: 'docs/flows/batch-migrate-flow.md', tag: '批量迁移' },

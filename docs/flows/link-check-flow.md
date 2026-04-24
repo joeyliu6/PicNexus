@@ -265,6 +265,61 @@ flowchart TD
 
 ---
 
+## 图 5：按行精准删除（per-link 删除语义）
+
+展示链接监控视图中"删除一行"的数据层行为。链接监控列表的逻辑单位是**单个图床链接**（一张图如果上传到 N 个图床，会展开成 N 行），因此删除操作必须精准到 `(historyId, serviceId)`，而不是整条 `HistoryItem`。
+
+> **关键源文件**：`src/composables/history/useHistoryResultOps.ts`（`deleteHistoryResult`、`bulkDeleteHistoryResults`、`stripServiceFromItem`）；`src/composables/link-check/useLinkCheck.ts`（`removeRowsByKeys`、`setFadingOutRows`）；`src/components/views/LinkCheckView.vue`（`handleDeleteRow`、`deleteRowsByTargets`）
+
+```mermaid
+flowchart TD
+    A["点单行垃圾桶 / 批量删除"] --> B["收集 (historyId, serviceId) 列表"]
+    B --> C["按 historyId 分组<br/>同一张图多行合并为一次 update"]
+    C --> D["弹确认<br/>单行：区分『最后一个图床』文案<br/>批量：『可能整条被移除』"]
+    D -- 取消 --> Z1["退出，不改数据"]
+    D -- 确认 --> E["读 HistoryItem"]
+    E --> F["stripServiceFromItem<br/>从 results[] 过滤掉该 serviceId"]
+    F --> G{results 数 = 0?}
+
+    G -- 是 --> H1["historyDB.delete(id)<br/>整条降级删除"]
+    H1 --> H2["emitHistoryDeleted<br/>totalCount--"]
+
+    G -- 否 --> I1["清理 linkCheckStatus[serviceId]"]
+    I1 --> I2["重算 linkCheckSummary<br/>total/valid/invalid/unchecked"]
+    I2 --> J{删除的是 primaryService?}
+    J -- 是 --> K1["从剩余 success 结果补选主力<br/>更新 generatedLink"]
+    J -- 否 --> K2["保持主力不变"]
+    K1 --> L1["historyDB.update<br/>写回 results/status/summary/primary/link"]
+    K2 --> L1
+    L1 --> L2["emitHistoryUpdated"]
+
+    H2 --> M["UI 层：setFadingOutRows(keys, true)<br/>仅淡出被删行，同图其他行不闪"]
+    L2 --> M
+    M --> M1["等待 380ms"]
+    M1 --> M2["removeRowsByKeys(keys)<br/>精准剔除行"]
+
+    style H1 fill:#ffebee,stroke:#c62828
+    style K1 fill:#fff3e0,stroke:#ef6c00
+    style L1 fill:#e8f5e9,stroke:#2e7d32
+    style M2 fill:#e3f2fd,stroke:#1976d2
+```
+
+### 关键不变量
+
+| 不变量 | 说明 |
+|--------|------|
+| 行键 = `${historyId}::${serviceId}` | 淡出/移除只作用于该键对应的单行，不会牵连同图其他图床 |
+| 删主力 → 补选 | 从剩余 `status === 'success' && result?.url` 的结果里挑第一个，更新 `generatedLink`；Timeline/收藏的缩略图会自动跟上 |
+| 结果归零 → 整条删 | `results[]` 空壳记录没有展示价值，直接 `historyDB.delete` 降级 |
+| 批量合并 | 同一 `historyId` 下多个 serviceId 合并为一次 `update`，不会 N 次写库 |
+| 事件分流 | 整条删走 `emitHistoryDeleted`，仅改走 `emitHistoryUpdated`；其他视图依赖这两类事件刷新缓存 |
+
+### 为什么不共用 `deleteHistoryItem`
+
+`deleteHistoryItem` / `bulkDeleteRecords` 的语义是"删图"（Timeline、收藏、历史视图的逻辑单位是图片）。链接监控的逻辑单位是**链接**——同一张图的多个图床链接应当可以独立删除，共用会导致"删一个失效微博链接，顺手把有效的 GitHub 链接也删了"这种体验事故。
+
+---
+
 ## 排查指南
 
 | 现象 | 可能原因 | 对照位置 |
@@ -279,6 +334,9 @@ flowchart TD
 | 检测速度异常慢 | 单域名大量链接被 `per_host_limit=3` 限制 | 图 3 域名信号量 |
 | 取消后仍有检测在跑 | 已进入 HTTP 请求的任务无法中断，只能等其自然结束 | 图 3 三次取消检查 |
 | 按钮显示「继续检测」但想全量检测 | 当前有 unchecked 行，使用下拉菜单选「检测全部」 | 图 4 下拉菜单构建 |
+| 删除一条链接后同图其他行也消失了 | 逻辑退化成按 `historyId` 删整条——检查是否调的 `deleteHistoryResult` 而不是 `deleteHistoryItem` | 图 5 / useHistoryResultOps.ts |
+| 删主力图床后 Timeline 卡片缩略图没换 | `primaryService` 未切换或 `emitHistoryUpdated` 未发 | 图 5 补选主力 + 事件分流 |
+| 删完所有图床后历史里还有空壳 | `results[]` 归零兜底未触发，检查 `stripServiceFromItem` 返回值 | 图 5 结果归零分支 |
 
 ---
 
