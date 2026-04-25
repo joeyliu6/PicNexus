@@ -52,23 +52,43 @@ export function useCheckFilter({ checkRows, isChecking }: UseCheckFilterOptions)
   const pageByFilter = new Map<StatusFilter, number>();
   const searchFocused = ref(false);
 
+  const selectedIds = ref<Set<string>>(new Set());
+  const selectAnchor = ref<ShiftSelectAnchor>({ lastId: null, wasSelect: true });
+
   function resetPageState(): void {
     pageByFilter.clear();
     currentPage.value = 1;
   }
 
-  watch(selectedServiceId, resetPageState);
+  /**
+   * 视图作用域变化（切 statusFilter / 切图床 / 改搜索）时清空选择
+   * 否则跨 tab 残留的 selectedIds 会让「重检/复制/删除选中」操作到用户看不见的行——
+   * 尤其批量删除会误删另一个 tab 里的不可见选中行
+   */
+  function resetSelectionOnScopeChange(): void {
+    if (selectedIds.value.size > 0) {
+      selectedIds.value = new Set();
+      selectAnchor.value = { lastId: null, wasSelect: true };
+    }
+  }
+
+  watch(selectedServiceId, () => {
+    resetPageState();
+    resetSelectionOnScopeChange();
+  });
   watchDebounced(
     searchInput,
     (value) => {
       searchQuery.value = value;
       resetPageState();
+      resetSelectionOnScopeChange();
     },
     { debounce: 200 },
   );
   watch(statusFilter, (nextFilter, previousFilter) => {
     pageByFilter.set(previousFilter!, currentPage.value);
     currentPage.value = pageByFilter.get(nextFilter!) ?? 1;
+    resetSelectionOnScopeChange();
   });
 
   const scopedRows = computed(() => {
@@ -160,8 +180,6 @@ export function useCheckFilter({ checkRows, isChecking }: UseCheckFilterOptions)
     pageInput.value = String(currentPage.value);
   }
 
-  const selectedIds = ref<Set<string>>(new Set());
-  const selectAnchor = ref<ShiftSelectAnchor>({ lastId: null, wasSelect: true });
   const hasSelection = computed(() => selectedIds.value.size > 0);
   const filteredRowKeys = computed(() => filteredRows.value.map(rowKey));
   const isAllSelected = computed(() =>

@@ -97,6 +97,12 @@ const {
   resetFilters,
 } = useFilterBar(rawList);
 
+// 搜索/来源图床筛选变化时把分页拉回首页，
+// 否则 displayList 缩短后 visibleList 会先闪一帧空白再被 totalPages watcher clamp 回来
+watch([searchQuery, selectedSourceServiceId], () => {
+  currentPage.value = 1;
+});
+
 const hasActiveFilter = computed(() =>
   !!searchQuery.value || !!selectedSourceServiceId.value,
 );
