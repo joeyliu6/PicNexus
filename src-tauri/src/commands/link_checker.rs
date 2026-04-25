@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tauri::Emitter;
 
 use crate::error::AppError;
@@ -879,8 +879,28 @@ pub async fn download_url_image(
 
 // ===== 批量检测引擎 =====
 
+/// 暂停状态下的轮询间隔（毫秒）。
+/// 权衡：间隔短 → 恢复延迟低但 CPU 空转多；间隔长 → 反之。
+/// 100ms 在用户感知上几乎即时，空转代价可忽略。
+const PAUSE_POLL_INTERVAL_MS: u64 = 100;
+
+/// 若当前处于 paused 状态则轮询等待直至 resume 或 cancel；
+/// 返回 true 表示"应立即退出任务"（即 cancel 已置位）。
+async fn await_resume_or_cancel(pause: &Arc<AtomicBool>, cancel: &Arc<AtomicBool>) -> bool {
+    while pause.load(Ordering::SeqCst) && !cancel.load(Ordering::SeqCst) {
+        tokio::time::sleep(Duration::from_millis(PAUSE_POLL_INTERVAL_MS)).await;
+    }
+    cancel.load(Ordering::SeqCst)
+}
+
 /// 批量检测取消标志（Tauri State 管理）
 pub struct BatchCheckCancelFlag(pub Arc<AtomicBool>);
+
+/// 批量检测暂停标志（Tauri State 管理）
+///
+/// 与 cancel_flag 解耦：cancel 优先 pause——即使处于 paused 状态，只要 cancel flag 置位，
+/// 被 pause 卡住的任务会立即退出，不会"暂停中无法取消"。
+pub struct BatchCheckPauseFlag(pub Arc<AtomicBool>);
 
 /// 批量检测请求
 #[derive(Debug, Deserialize)]
@@ -948,6 +968,7 @@ pub async fn batch_check_links(
     request: BatchCheckRequest,
     http_client: tauri::State<'_, crate::HttpClient>,
     cancel_flag: tauri::State<'_, BatchCheckCancelFlag>,
+    pause_flag: tauri::State<'_, BatchCheckPauseFlag>,
 ) -> Result<BatchCheckResult, AppError> {
     let total = request.links.len();
     if total > MAX_BATCH_CHECK_LINKS {
@@ -967,12 +988,14 @@ pub async fn batch_check_links(
         total, concurrency, per_host_limit, timeout_secs
     );
 
-    // 重置取消标志
+    // 重置取消 / 暂停标志
     cancel_flag.0.store(false, Ordering::SeqCst);
+    pause_flag.0.store(false, Ordering::SeqCst);
 
     let start_time = Instant::now();
     let global_semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
     let cancel = cancel_flag.0.clone();
+    let pause = pause_flag.0.clone();
     let client = http_client.0.clone();
 
     // 构建按域名分组的限速信号量
@@ -989,22 +1012,23 @@ pub async fn batch_check_links(
         let global_sem = global_semaphore.clone();
         let host_sems = host_semaphores.clone();
         let cancel = cancel.clone();
+        let pause = pause.clone();
         let client = client.clone();
         let window = window.clone();
         let checked = checked_count.clone();
         let total_count = total;
 
         let handle = tokio::spawn(async move {
-            // 检查取消标志
-            if cancel.load(Ordering::SeqCst) {
+            // 检查取消 / 暂停标志（cancel 优先 pause）
+            if await_resume_or_cancel(&pause, &cancel).await {
                 return None;
             }
 
             // 获取全局并发许可
             let _global_permit = global_sem.acquire().await.ok()?;
 
-            // 再次检查取消
-            if cancel.load(Ordering::SeqCst) {
+            // 再次检查取消 / 暂停
+            if await_resume_or_cancel(&pause, &cancel).await {
                 return None;
             }
 
@@ -1018,8 +1042,8 @@ pub async fn batch_check_links(
             };
             let _host_permit = host_sem.acquire().await.ok()?;
 
-            // 最后一次检查取消
-            if cancel.load(Ordering::SeqCst) {
+            // 最后一次检查取消 / 暂停
+            if await_resume_or_cancel(&pause, &cancel).await {
                 return None;
             }
 
@@ -1099,6 +1123,26 @@ pub async fn cancel_batch_check(
 ) -> Result<(), AppError> {
     log::info!("[批量检测] 收到取消请求");
     cancel_flag.0.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
+/// 暂停正在进行的批量检测
+#[tauri::command]
+pub async fn pause_batch_check(
+    pause_flag: tauri::State<'_, BatchCheckPauseFlag>,
+) -> Result<(), AppError> {
+    log::info!("[批量检测] 收到暂停请求");
+    pause_flag.0.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
+/// 恢复被暂停的批量检测
+#[tauri::command]
+pub async fn resume_batch_check(
+    pause_flag: tauri::State<'_, BatchCheckPauseFlag>,
+) -> Result<(), AppError> {
+    log::info!("[批量检测] 收到恢复请求");
+    pause_flag.0.store(false, Ordering::SeqCst);
     Ok(())
 }
 

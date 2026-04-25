@@ -216,6 +216,20 @@ flowchart TD
 - 第 2 次：拿到全局许可后、域名许可前，快速释放资源
 - 第 3 次：拿到双重许可后、发 HTTP 前，避免已取消仍发请求
 
+### 暂停 / 恢复：轮询语义
+
+`BatchCheckPauseFlag`（`AtomicBool`）与 `BatchCheckCancelFlag` 并行管理。三次取消检查点实际调用的是复合辅助函数 `await_resume_or_cancel(pause, cancel)`：
+
+1. 循环：`while pause=true && cancel=false { sleep 100ms }`
+2. 退出后返回 `cancel.load()` —— **true 则任务立即 `return None`**（cancel 优先 pause）
+
+**关键不变量**：
+- 暂停期间任务仍持有 semaphore permit（全局 + 域名），保证恢复后原地复工而非重新排队
+- cancel 能"穿透"pause——已暂停的任务收到取消不会被 pause flag 阻塞
+- HTTP 在途的请求无法中断（reqwest 不暴露 abort），暂停只影响尚未进入 HTTP 阶段的任务；正在下载的任务会完成后自然退出
+
+**相关 command**：`pause_batch_check` / `resume_batch_check`（仅翻转 flag，不做其他工作）
+
 ---
 
 ## 图 4：智能检测策略决策
@@ -333,6 +347,8 @@ flowchart TD
 | 重检后排序位置跳动 | `pinnedSortWeight` 未设置或被清除 | 图 2 Case A `pinnedSortWeight` |
 | 检测速度异常慢 | 单域名大量链接被 `per_host_limit=3` 限制 | 图 3 域名信号量 |
 | 取消后仍有检测在跑 | 已进入 HTTP 请求的任务无法中断，只能等其自然结束 | 图 3 三次取消检查 |
+| 暂停后进度仍在少量增长 | HTTP 在途任务不可中断，pause 只阻塞尚未进入 HTTP 的任务 | 图 3 暂停 / 恢复：轮询语义 |
+| 暂停后点取消无响应 | 不应出现——cancel 优先 pause；若确实发生检查 `await_resume_or_cancel` 返回值 | 图 3 暂停 / 恢复：轮询语义 |
 | 按钮显示「继续检测」但想全量检测 | 当前有 unchecked 行，使用下拉菜单选「检测全部」 | 图 4 下拉菜单构建 |
 | 删除一条链接后同图其他行也消失了 | 逻辑退化成按 `historyId` 删整条——检查是否调的 `deleteHistoryResult` 而不是 `deleteHistoryItem` | 图 5 / useHistoryResultOps.ts |
 | 删主力图床后 Timeline 卡片缩略图没换 | `primaryService` 未切换或 `emitHistoryUpdated` 未发 | 图 5 补选主力 + 事件分流 |

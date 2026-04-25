@@ -44,6 +44,7 @@ if (linkCheckTargetTab) {
 
 const {
   isChecking: monitorChecking,
+  isPaused: monitorPaused,
   isLoading,
   isPhase2Loading,
   phase2Duration,
@@ -55,6 +56,8 @@ const {
   checkSubset,
   recheckSingle,
   cancelCheck,
+  pauseCheck,
+  resumeCheck,
   exportCsv,
   removeRowsByKeys,
   setFadingOutRows,
@@ -176,6 +179,7 @@ onDeactivated(onViewDeactivated);
         key="monitor"
         :check-rows="checkRows"
         :is-checking="monitorIsChecking"
+        :is-paused="monitorPaused"
         :is-loading="isLoading"
         :is-phase2-loading="isPhase2Loading"
         :phase2-duration="phase2Duration"
@@ -185,6 +189,8 @@ onDeactivated(onViewDeactivated);
         @check-all="checkAllHistoryLinks"
         @check-subset="(filter) => checkSubset(filter)"
         @cancel-check="cancelCheck"
+        @pause-check="pauseCheck"
+        @resume-check="resumeCheck"
         @recheck-single="handleRecheckSingle"
         @copy-url="handleCopyUrl"
         @export-csv="handleExportCsv"

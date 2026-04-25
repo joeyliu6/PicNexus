@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import CheckBottomBar from './history-check/CheckBottomBar.vue';
 import CheckFilterBar from './history-check/CheckFilterBar.vue';
 import CheckLinkList from './history-check/CheckLinkList.vue';
+import type { StatePill } from './common/StatePill.vue';
 import { rowKey, useCheckFilter } from '../../../composables/link-check/useCheckFilter';
 import { useCheckStats } from '../../../composables/link-check/useCheckStats';
 import { useCheckStrategy } from '../../../composables/link-check/useCheckStrategy';
@@ -12,6 +13,7 @@ import type { BatchCheckProgress, LinkCheckRow, StatusFilter } from '../../../ty
 const props = defineProps<{
   checkRows: LinkCheckRow[];
   isChecking: boolean;
+  isPaused: boolean;
   isLoading: boolean;
   isPhase2Loading: boolean;
   phase2Duration: number;
@@ -27,6 +29,8 @@ const emit = defineEmits<{
     serviceId?: string;
   }): void;
   (e: 'cancel-check'): void;
+  (e: 'pause-check'): void;
+  (e: 'resume-check'): void;
   (e: 'recheck-single', row: LinkCheckRow, filter: StatusFilter): void;
   (e: 'copy-url', url: string): void;
   (e: 'export-csv'): void;
@@ -87,6 +91,13 @@ const {
 } = useCheckStrategy({ stats, statusFilter });
 
 const showOverflowMenu = ref(false);
+
+/** 底栏运行状态 pill —— 仅在链接监控自己检测时显示，rescue/迁移不借此渲染 */
+const statePill = computed<StatePill | null>(() => {
+  if (!props.isChecking || props.progressSource === 'rescue') return null;
+  if (props.isPaused) return { tone: 'paused', icon: 'pi pi-pause', label: '已暂停' };
+  return { tone: 'running', label: '检测中' };
+});
 
 const moreMenuItems = computed(() => {
   if (hasSelection.value) {
@@ -263,6 +274,8 @@ function handleMoreAction(kind: MoreMenuKind): void {
 
     <CheckBottomBar
       :is-checking="isChecking"
+      :is-paused="isPaused"
+      :state-pill="statePill"
       :is-action-locked="isActionLocked"
       :progress-source="progressSource"
       :progress-percent="progressPercent"
@@ -287,6 +300,8 @@ function handleMoreAction(kind: MoreMenuKind): void {
       @clear-selection="clearSelection"
       @smart-check="handleSmartCheck"
       @cancel-check="emit('cancel-check')"
+      @pause-check="emit('pause-check')"
+      @resume-check="emit('resume-check')"
       @page-input="handlePageInput"
       @more-action="handleMoreAction"
     />

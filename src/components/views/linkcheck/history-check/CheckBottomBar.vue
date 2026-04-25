@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Skeleton from 'primevue/skeleton';
 import CheckBatchMenu from './CheckBatchMenu.vue';
+import StatePill, { type StatePill as StatePillType } from '../common/StatePill.vue';
 import type { CheckStatsResult } from '../../../../composables/link-check/useCheckStats';
 import type { MoreMenuItem, MoreMenuKind } from '../../../../composables/link-check/useCheckStrategy';
 
@@ -13,6 +14,8 @@ interface DropdownItem {
 
 defineProps<{
   isChecking: boolean;
+  isPaused: boolean;
+  statePill: StatePillType | null;
   isActionLocked: boolean;
   progressSource: 'monitor' | 'rescue' | null;
   progressPercent: number;
@@ -36,6 +39,8 @@ const emit = defineEmits<{
   (e: 'clear-selection'): void;
   (e: 'smart-check'): void;
   (e: 'cancel-check'): void;
+  (e: 'pause-check'): void;
+  (e: 'resume-check'): void;
   (e: 'page-input', event: Event): void;
   (e: 'more-action', kind: MoreMenuKind): void;
 }>();
@@ -160,7 +165,10 @@ const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: tr
           </span>
         </template>
 
-        <span v-else class="check-progress-text">{{ progressTooltip }}</span>
+        <div v-else class="check-progress-wrap">
+          <StatePill :pill="statePill" />
+          <span class="check-progress-text">{{ progressTooltip }}</span>
+        </div>
 
         <div class="bottom-actions" @click.stop>
           <template v-if="!isChecking">
@@ -213,10 +221,30 @@ const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: tr
               </div>
           </template>
 
-          <button v-else class="btn-danger" @click="emit('cancel-check')">
-            <i class="pi pi-stop"></i>
-            取消
-          </button>
+          <template v-else>
+            <button
+              v-if="isPaused"
+              class="btn-primary"
+              type="button"
+              @click="emit('resume-check')"
+            >
+              <i class="pi pi-play"></i>
+              继续
+            </button>
+            <button
+              v-else
+              class="btn-ghost"
+              type="button"
+              @click="emit('pause-check')"
+            >
+              <i class="pi pi-pause"></i>
+              暂停
+            </button>
+            <button class="btn-danger" type="button" @click="emit('cancel-check')">
+              <i class="pi pi-stop"></i>
+              取消
+            </button>
+          </template>
         </div>
       </template>
     </div>
@@ -224,12 +252,7 @@ const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: tr
 </template>
 
 <style scoped>
-.action-divider {
-  width: 1px;
-  height: 16px;
-  background: var(--border-subtle);
-  flex-shrink: 0;
-}
+.action-divider { width: 1px; height: 16px; background: var(--border-subtle); flex-shrink: 0; }
 
 .selection-chip {
   display: inline-flex;
@@ -246,30 +269,12 @@ const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: tr
   transition: background var(--duration-micro), color var(--duration-micro);
 }
 
-.selection-chip:hover:not(:disabled) {
-  background: var(--hover-overlay-subtle);
-  color: var(--text-main);
-}
+.selection-chip:hover:not(:disabled) { background: var(--hover-overlay-subtle); color: var(--text-main); }
+.selection-chip .pi { font-size: var(--text-2xs); color: var(--text-tertiary); transition: color var(--duration-micro); }
+.selection-chip:hover:not(:disabled) .pi { color: var(--error); }
+.selection-chip:disabled { opacity: 0.5; cursor: default; }
 
-.selection-chip .pi {
-  font-size: var(--text-2xs);
-  color: var(--text-tertiary);
-  transition: color var(--duration-micro);
-}
-
-.selection-chip:hover:not(:disabled) .pi {
-  color: var(--error);
-}
-
-.selection-chip:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.check-btn-group {
-  display: flex;
-  position: relative;
-}
+.check-btn-group { display: flex; position: relative; }
 
 .bottom-actions .check-btn-group.has-dropdown .btn-primary:first-child {
   border-radius: var(--radius-sm-md) 0 0 var(--radius-sm-md);
@@ -396,6 +401,13 @@ const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: tr
   font-size: var(--text-xs);
   color: var(--text-tertiary);
   white-space: nowrap;
+}
+
+.check-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
 }
 
 .check-progress-text {

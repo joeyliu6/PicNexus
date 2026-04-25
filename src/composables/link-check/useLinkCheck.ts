@@ -39,6 +39,7 @@ const log = createLogger('LinkCheck');
 // ============================================
 
 const isChecking = ref(false);
+const isPaused = ref(false);
 const isLoading = ref(false);
 /** Phase 2 后台加载中标志：Phase 1 结束后为 true，Phase 2 全部到达后为 false */
 const isPhase2Loading = ref(false);
@@ -106,6 +107,7 @@ export function useLinkCheckManager() {
   function finalizeCheck(session: number): void {
     if (checkSessionId === session) {
       isChecking.value = false;
+      isPaused.value = false;
       progressSource.value = null;
       clearProgressListener();
     }
@@ -203,6 +205,7 @@ export function useLinkCheckManager() {
     const mySession = ++checkSessionId;
     const myBatchSession = ++latestStartedBatchSession;
     isChecking.value = true;
+    isPaused.value = false;
     resetCheckState();
     progressSource.value = 'monitor';
 
@@ -312,6 +315,7 @@ export function useLinkCheckManager() {
     }
 
     isChecking.value = true;
+    isPaused.value = false;
     progressSource.value = source;
     progress.value = null;
 
@@ -336,6 +340,7 @@ export function useLinkCheckManager() {
       return result;
     } finally {
       isChecking.value = false;
+      isPaused.value = false;
       progressSource.value = null;
       clearProgressListener();
     }
@@ -350,12 +355,37 @@ export function useLinkCheckManager() {
       await invoke('cancel_batch_check');
       ++checkSessionId; // 使旧 finally 失效
       isChecking.value = false;
+      isPaused.value = false;
       progressSource.value = null;
       clearProgressListener();
       // toast 移至检测函数中，入库后再提示（含已入库数量）
       log.info('已发送取消请求');
     } catch (err) {
       log.error('取消失败', err);
+    }
+  }
+
+  /** 暂停正在进行的批量检测（Rust 侧 pause_flag 轮询，cancel 优先 pause） */
+  async function pauseCheck(): Promise<void> {
+    if (!isChecking.value || isPaused.value) return;
+    try {
+      await invoke('pause_batch_check');
+      isPaused.value = true;
+      log.info('已发送暂停请求');
+    } catch (err) {
+      log.error('暂停失败', err);
+    }
+  }
+
+  /** 恢复被暂停的批量检测 */
+  async function resumeCheck(): Promise<void> {
+    if (!isChecking.value || !isPaused.value) return;
+    try {
+      await invoke('resume_batch_check');
+      isPaused.value = false;
+      log.info('已发送恢复请求');
+    } catch (err) {
+      log.error('恢复失败', err);
     }
   }
 
@@ -434,6 +464,7 @@ export function useLinkCheckManager() {
     const mySession = ++checkSessionId;
     const myBatchSession = ++latestStartedBatchSession;
     isChecking.value = true;
+    isPaused.value = false;
     progressSource.value = 'monitor';
     progress.value = null;
 
@@ -688,6 +719,7 @@ export function useLinkCheckManager() {
   return {
     // 状态
     isChecking,
+    isPaused,
     isLoading,
     isPhase2Loading,
     phase2Duration,
@@ -703,6 +735,8 @@ export function useLinkCheckManager() {
     recheckSingle,
     checkUrls,
     cancelCheck,
+    pauseCheck,
+    resumeCheck,
     exportCsv,
     buildCheckItems,
     removeRowsByHistoryIds,
