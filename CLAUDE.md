@@ -20,6 +20,7 @@ Tauri 2.x（Rust + Vue 3 / TypeScript / PrimeVue 4 + SQLite），详见 `docs/re
 | 文件规模 | 单 `.vue` 文件不超过 500 行，超过必须拆分；新建前先查 `src/components/` 无重复 | — |
 | 文档同步 | 修改 composable/Rust command 的公开接口时，同步更新对应文档 | `docs/reference/api/` |
 | CSS 硬编码 | ❌ 颜色/间距/圆角/字号/动效/z-index 全部禁止硬编码，必须用 CSS 变量 | [tokens.md](docs/design/tokens.md)（[字号](docs/design/tokens.md#typography-scale) · [间距](docs/design/tokens.md#spacing-scale) · [圆角](docs/design/tokens.md#radius-scale) · [z-index](docs/design/tokens.md#z-index-scale)） |
+| 弹窗/通知 | 新增 toast/confirm/banner 前先查通道决策树，避免 UI 状态本身已传达的"双重反馈" | [notification-patterns.md](docs/design/notification-patterns.md) |
 
 ## 高风险文件
 
