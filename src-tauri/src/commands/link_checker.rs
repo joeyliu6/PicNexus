@@ -929,12 +929,17 @@ pub struct BatchCheckItem {
 }
 
 /// 批量检测进度（通过 Tauri 事件上报）
+///
+/// `recent_results`：自上次广播以来累积的逐条结果（含关联 history_id/service_id）。
+/// 前端用它把每条结果实时 patch 到 `checkRows`，触发顶部 chips 与列表徽章联动刷新。
+/// 节流时一次性吐出，事件频率不变（仍为 PROGRESS_EMIT_EVERY_N 控制）。
 #[derive(Debug, Clone, Serialize)]
 pub struct BatchCheckProgress {
     pub checked: usize,
     pub total: usize,
     pub current_url: String,
     pub current_result: Option<CheckLinkResult>,
+    pub recent_results: Vec<BatchCheckItemResult>,
 }
 
 /// 批量检测最终结果
@@ -1004,6 +1009,9 @@ pub async fn batch_check_links(
 
     // 已完成计数（用于进度上报）
     let checked_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    // 待广播的逐条结果缓冲：节流广播触发时 take 出来塞进事件 payload
+    let pending_results: Arc<tokio::sync::Mutex<Vec<BatchCheckItemResult>>> =
+        Arc::new(tokio::sync::Mutex::new(Vec::with_capacity(PROGRESS_EMIT_EVERY_N * 2)));
 
     // 为每条链接创建异步任务
     let mut handles = Vec::with_capacity(total);
@@ -1016,6 +1024,7 @@ pub async fn batch_check_links(
         let client = client.clone();
         let window = window.clone();
         let checked = checked_count.clone();
+        let pending = pending_results.clone();
         let total_count = total;
 
         let handle = tokio::spawn(async move {
@@ -1061,17 +1070,28 @@ pub async fn batch_check_links(
                 service_id: item.service_id,
             };
 
+            // 先把本条结果塞进缓冲，再决定是否触发节流广播
+            {
+                let mut buf = pending.lock().await;
+                buf.push(result.clone());
+            }
+
             // 更新进度并上报（节流：首末强制 + 每 N 条）
             let done = checked.fetch_add(1, Ordering::SeqCst) + 1;
             let should_emit = done == 1
                 || done == total_count
                 || done % PROGRESS_EMIT_EVERY_N == 0;
             if should_emit {
+                let recent = {
+                    let mut buf = pending.lock().await;
+                    std::mem::take(&mut *buf)
+                };
                 let _ = window.emit("link-check://progress", BatchCheckProgress {
                     checked: done,
                     total: total_count,
                     current_url: item.url,
                     current_result: Some(check_result),
+                    recent_results: recent,
                 });
             }
 

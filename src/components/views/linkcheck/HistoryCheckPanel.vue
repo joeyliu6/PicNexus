@@ -43,6 +43,7 @@ const emit = defineEmits<{
 
 const checkRows = computed(() => props.checkRows);
 const progress = computed(() => props.progress);
+const isCheckingRef = computed(() => props.isChecking);
 
 const {
   statusFilter,
@@ -67,7 +68,7 @@ const {
   handleToggleSelect,
   toggleSelectAll,
   clearSelection,
-} = useCheckFilter({ checkRows });
+} = useCheckFilter({ checkRows, isChecking: isCheckingRef });
 
 const { stats, serviceList, progressPercent, progressTooltip } = useCheckStats({
   scopedRows,

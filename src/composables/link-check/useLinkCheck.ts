@@ -2,7 +2,7 @@
 // 负责批量检测历史链接有效性，管理检测状态和进度
 
 /* eslint-disable max-lines -- singleton state machine kept together for link monitor behavior */
-import { ref, shallowRef, computed, type Ref, type ComputedRef } from 'vue';
+import { ref, shallowRef, computed, triggerRef, type Ref, type ComputedRef } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { HistoryItem } from '../../config/types';
@@ -15,6 +15,7 @@ import {
   type StatusFilter,
   type BatchCheckProgress,
   type BatchCheckResult,
+  type BatchCheckItemResult,
   type BatchCheckRequestItem,
   type LinkCheckRow,
   type CheckLinkResult,
@@ -243,6 +244,7 @@ export function useLinkCheckManager() {
         (event) => {
           if (checkSessionId !== mySession) return;
           progress.value = event.payload;
+          applyRecentResults(event.payload.recent_results ?? []);
         },
       );
 
@@ -484,6 +486,7 @@ export function useLinkCheckManager() {
         (event) => {
           if (checkSessionId !== mySession) return;
           progress.value = event.payload;
+          applyRecentResults(event.payload.recent_results ?? []);
         },
       );
 
@@ -549,6 +552,28 @@ export function useLinkCheckManager() {
     rowIndexMap = new Map(
       checkRows.value.map((r, i) => [`${r.url}::${r.historyId}`, i])
     );
+  }
+
+  /**
+   * 把进度事件里的逐条结果实时 patch 到对应行——配合 useCheckFilter 冻结，
+   * 列表里的徽章和顶部 chips（依赖 checkRows 的 computed）会自动跟着刷新。
+   * 走 mutation + triggerRef 而非整数组替换，避免 32k 条数据下的高频 O(n) 拷贝。
+   */
+  function applyRecentResults(recent: BatchCheckItemResult[]): void {
+    if (recent.length === 0) return;
+    let mutated = false;
+    for (const itemResult of recent) {
+      const key = `${itemResult.link}::${itemResult.history_id}`;
+      const idx = rowIndexMap.get(key);
+      if (idx === undefined || idx >= checkRows.value.length) continue;
+      const target = checkRows.value[idx];
+      // 让位给手动重检：用户已点击 recheck 时不被批量结果覆盖
+      if (target.recheckLoading || target.recheckResult) continue;
+      const { history_id: _hid, service_id: _sid, ...result } = itemResult;
+      target.checkResult = result;
+      mutated = true;
+    }
+    if (mutated) triggerRef(checkRows);
   }
 
   /** 复制 checkRows、通过 Map O(1) 找到目标行、执行变更、触发响应式更新 */

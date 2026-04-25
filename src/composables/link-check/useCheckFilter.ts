@@ -1,4 +1,4 @@
-import { computed, ref, watch, type Ref } from 'vue';
+import { computed, ref, shallowRef, watch, type Ref } from 'vue';
 import { watchDebounced } from '@vueuse/core';
 import type { LinkCheckRow, StatusFilter } from '../../types/linkCheck';
 import { SEVERITY } from '../../types/linkCheck';
@@ -8,6 +8,8 @@ const PAGE_SIZE = 100;
 
 interface UseCheckFilterOptions {
   checkRows: Ref<LinkCheckRow[]>;
+  /** 是否正在批量检测——为 true 时冻结 filteredRows 集合，避免行因状态实时变化而消失/重排 */
+  isChecking?: Ref<boolean>;
 }
 
 export function rowKey(row: Pick<LinkCheckRow, 'historyId' | 'serviceId'>): string {
@@ -40,7 +42,7 @@ function matchesStatusFilter(row: LinkCheckRow, filter: StatusFilter): boolean {
   }
 }
 
-export function useCheckFilter({ checkRows }: UseCheckFilterOptions) {
+export function useCheckFilter({ checkRows, isChecking }: UseCheckFilterOptions) {
   const statusFilter = ref<StatusFilter>('invalid');
   const selectedServiceId = ref<string | null>(null);
   const showServiceMenu = ref(false);
@@ -89,8 +91,15 @@ export function useCheckFilter({ checkRows }: UseCheckFilterOptions) {
     return rows;
   });
 
-  const filteredRows = computed(() => {
-    const rows = scopedRows.value
+  /**
+   * 检测期间冻结的可见集合 snapshot。
+   * 进入检测时记录当时的 filteredRows，期间不再重新过滤/重排——
+   * 即使行的 checkResult 实时变化（chips/徽章自动响应），列表行不会消失或乱序。
+   */
+  const lockedFilteredRows = shallowRef<LinkCheckRow[] | null>(null);
+
+  function liveFilter(): LinkCheckRow[] {
+    return scopedRows.value
       .filter((row) => {
         if (row.fadingOut) return true;
         if (row.recheckResult) return true;
@@ -101,9 +110,26 @@ export function useCheckFilter({ checkRows }: UseCheckFilterOptions) {
         (left.pinnedSortWeight ?? SEVERITY[left.checkResult?.error_type ?? 'success'] ?? 5)
         - (right.pinnedSortWeight ?? SEVERITY[right.checkResult?.error_type ?? 'success'] ?? 5),
       );
+  }
 
-    return rows;
-  });
+  const filteredRows = computed(() => lockedFilteredRows.value ?? liveFilter());
+
+  if (isChecking) {
+    watch(isChecking, (now, prev) => {
+      if (now && !prev) {
+        // 进入检测：冻结当时的可见集合（数组按值 snapshot，row 对象身份保留以便实时响应 mutation）
+        lockedFilteredRows.value = liveFilter();
+      } else if (!now && prev) {
+        // 退出检测：解冻，恢复实时过滤
+        lockedFilteredRows.value = null;
+      }
+    });
+    // 检测期间用户主动改 filter/服务/搜索 时手动刷一次 snapshot——
+    // 冻结只锁"行因 checkResult 变化而消失/重排"，不锁用户主观切换的视图
+    watch([statusFilter, selectedServiceId, searchQuery], () => {
+      if (isChecking.value) lockedFilteredRows.value = liveFilter();
+    });
+  }
 
   const totalPages = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / PAGE_SIZE)));
   watch(totalPages, (nextTotal) => {

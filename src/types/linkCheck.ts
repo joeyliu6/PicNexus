@@ -35,6 +35,8 @@ export interface BatchCheckProgress {
   total: number;
   current_url: string;
   current_result?: CheckLinkResult;
+  /** 自上次广播以来累积的逐条结果，前端用它把状态实时 patch 到 checkRows */
+  recent_results?: BatchCheckItemResult[];
 }
 
 export interface BatchCheckItemResult extends CheckLinkResult {

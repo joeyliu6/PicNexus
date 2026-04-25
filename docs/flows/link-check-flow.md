@@ -185,9 +185,12 @@ flowchart TD
     M -- 已取消 --> M1["释放双重许可, return None"]
     M -- 继续 --> N["check_link_with_fallback<br/>实际 HTTP 检测"]
 
-    N --> O["checked_count.fetch_add(1)<br/>原子计数 +1"]
-    O --> P["window.emit('link-check://progress')<br/>实时上报进度"]
-    P --> Q["return Some(result)"]
+    N --> N1["pending_results.push(result)<br/>本条结果先入缓冲"]
+    N1 --> O["checked_count.fetch_add(1)<br/>原子计数 +1"]
+    O --> O1{should_emit?<br/>首末/每 N 条}
+    O1 -- 否 --> Q["return Some(result)"]
+    O1 -- 是 --> P["take(pending_results) → recent_results<br/>window.emit('link-check://progress')"]
+    P --> Q
 
     %% 主流程汇总
     Q --> R["── 主线程 ──<br/>await 所有 handles"]
@@ -229,6 +232,16 @@ flowchart TD
 - HTTP 在途的请求无法中断（reqwest 不暴露 abort），暂停只影响尚未进入 HTTP 阶段的任务；正在下载的任务会完成后自然退出
 
 **相关 command**：`pause_batch_check` / `resume_batch_check`（仅翻转 flag，不做其他工作）
+
+### 实时反馈：进度事件携带批量结果
+
+`BatchCheckProgress` 除 `checked` / `total` / `current_url` 外，还带 `recent_results: Vec<BatchCheckItemResult>` —— 自上次广播以来累积的逐条结果。
+
+- **Rust 端**：每个任务完成后将 `BatchCheckItemResult` 推入 `pending_results` 缓冲（Mutex<Vec>）；触发节流广播时 `std::mem::take` 整批 drain 出来塞入 payload。事件频率仍由 `PROGRESS_EMIT_EVERY_N`（默认 10）控制，单次 IPC 数量不增加。
+- **前端端**：`useLinkCheck` 在 `link-check://progress` 回调里调用 `applyRecentResults`，按 `${url}::${historyId}` 用 `rowIndexMap` 做 O(1) 定位，对命中行 mutate `checkResult` 后 `triggerRef(checkRows)`——避开 32k 条 shallowRef 整数组重写的开销。
+- **配套机制**：`useCheckFilter` 接受 `isChecking: Ref<boolean>`，在检测开始时 snapshot 当前 `filteredRows` 写入 `lockedFilteredRows`，期间不再实时过滤/重排——行的 `checkResult` 变化会让顶部 chips 与列表行徽章自然响应，但行不会消失或换位置；检测结束自动解冻。
+
+**为什么这样设计**：高频整数组替换在百万级条目下会导致 GC 抖动；逐条 mutation + 显式 trigger 把代价压到 O(变化条数)。冻结可见集合是为了"用户体验稳定"——失效行检测变绿时不应该当场消失，让用户能持续看到刚才在看的那批数据。
 
 ---
 
