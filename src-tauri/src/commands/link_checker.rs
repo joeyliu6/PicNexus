@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::Emitter;
@@ -20,6 +20,12 @@ const TEMP_FILE_PREFIX: &str = "weibo_reupload_";
 
 /// URL 下载临时文件前缀
 const URL_DOWNLOAD_PREFIX: &str = "picnexus_url_";
+
+/// URL 下载临时文件序号计数器。
+/// Why: Windows 下 SystemTime 实际精度通常 100ns 级，批量迁移 3 路并发同秒触发时
+/// `subsec_nanos()` 会撞名 → 后写者覆盖前者文件，正在上传的进程读到错的字节。
+/// 对齐 image_compress.rs 的实现风格，用原子计数器彻底消除命名竞争。
+static URL_DOWNLOAD_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 /// 临时文件过期时间（1小时 = 3600秒）
 const TEMP_FILE_MAX_AGE_SECS: u64 = 3600;
@@ -853,11 +859,13 @@ pub async fn download_url_image(
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .subsec_nanos();
+    let seq = URL_DOWNLOAD_COUNTER.fetch_add(1, Ordering::Relaxed);
     let file_name = format!(
-        "{}{}_{}.{}",
+        "{}{}_{}_{}.{}",
         URL_DOWNLOAD_PREFIX,
         chrono::Local::now().format("%Y%m%d_%H%M%S"),
         nanos,
+        seq,
         ext
     );
     let temp_path = temp_dir.join(file_name);
