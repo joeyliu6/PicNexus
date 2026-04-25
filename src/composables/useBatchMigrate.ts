@@ -27,6 +27,7 @@ import type {
 import { processBatch } from './batchMigrate/migrateCore';
 import { preloadAllPending, type PreloadedItem } from './batchMigrate/preloadPending';
 import { createRetry } from './batchMigrate/retryFailed';
+import { createRafThrottle } from './batchMigrate/rafThrottle';
 
 export type { MigratePhase, MigrateTargetService, MigrateItemStatus, MigrateResult, MigrateStats, MigrateFailureDetail };
 
@@ -96,6 +97,15 @@ export function useBatchMigrateManager() {
     if (checkedTargets.value.length === 0) return 0;
     return Math.max(...checkedTargets.value.map(s => s.pendingCount));
   });
+  /**
+   * 进度上界：选了多个目标时，真实待迁移集合是各目标 pending 的「并集」，
+   * 满足 max ≤ union ≤ sum。startMigrate 初始 totalCount 用 sum 作为上界，
+   * 保证 percent 永远不会溢 100%；preload 完成后再用真实 N 覆盖。
+   */
+  const totalPendingUpperBound = computed(() => {
+    if (checkedTargets.value.length === 0) return 0;
+    return checkedTargets.value.reduce((sum, s) => sum + s.pendingCount, 0);
+  });
   const isAllBackedUp = computed(() => {
     if (!isInitialized.value || !isFilterApplied.value) return false;
     // counts 正在被异步查询刷新，还不能用来判定"已备份"
@@ -110,7 +120,9 @@ export function useBatchMigrateManager() {
     const s = migrateStats.value;
     if (s.processedCount === 0) return null;
     const avgMs = s.elapsedMs / s.processedCount;
-    return (s.totalCount - s.processedCount) * avgMs;
+    // 兜底：preload 完成前 totalCount 仍是初始上界估计，
+    // 极端 race 下 processedCount 可能短暂大于 totalCount，避免显示负数
+    return Math.max(0, (s.totalCount - s.processedCount) * avgMs);
   });
 
   const averageSpeed = computed(() => {
@@ -131,52 +143,10 @@ export function useBatchMigrateManager() {
   // "正在取消..." —— 用户已点取消但 finalizeResult 尚未触发（在途 Promise.all 还在落定）
   const isCancelling = computed(() => isCancelled.value && isMigrating.value);
 
-  // ============================================
-  // RAF 节流
-  // ============================================
-
-  let rafPending = false;
-  let pendingStatuses: MigrateItemStatus[] | null = null;
-  let pendingProcessed = 0;
-  let pendingTotal = 0;
-
-  function updateStatusDisplay(statuses: MigrateItemStatus[], processed: number, total: number): void {
-    itemStatuses.value = [...statuses];
-    // 当前批次对象是 allItemStatuses 头部的共享引用——外层 shallowRef 需要新数组引用来触发响应性，
-    // 否则 MigrateProgressPhase 读 allItemStatuses 时看不到批内状态流转
-    allItemStatuses.value = [...allItemStatuses.value];
-    globalProgress.value = { current: processed, total, percent: total > 0 ? Math.round((processed / total) * 100) : 0 };
-  }
-
-  function scheduleStatusUpdate(statuses: MigrateItemStatus[], processed: number, total: number) {
-    pendingStatuses = statuses;
-    pendingProcessed = processed;
-    pendingTotal = total;
-
-    // C3：页面不可见时 RAF 可能被跳过，直接同步更新
-    if (document.hidden) {
-      updateStatusDisplay(statuses, processed, total);
-      rafPending = false;
-      return;
-    }
-
-    if (rafPending) return;
-    rafPending = true;
-    requestAnimationFrame(() => {
-      if (pendingStatuses) {
-        updateStatusDisplay(pendingStatuses, pendingProcessed, pendingTotal);
-      }
-      rafPending = false;
-    });
-  }
-
-  function flushStatusUpdate() {
-    if (pendingStatuses) {
-      updateStatusDisplay(pendingStatuses, pendingProcessed, pendingTotal);
-    }
-    rafPending = false;
-    pendingStatuses = null;
-  }
+  // RAF 节流（updateStatusDisplay / scheduleStatusUpdate / flushStatusUpdate）抽至 batchMigrate/rafThrottle.ts
+  const { scheduleStatusUpdate, flushStatusUpdate } = createRafThrottle({
+    itemStatuses, allItemStatuses, globalProgress,
+  });
 
   // ============================================
   // 初始化 + 筛选
@@ -333,12 +303,14 @@ export function useBatchMigrateManager() {
     const multiUploader = cachedUploader ?? new MultiServiceUploader();
 
     const startTime = Date.now();
-    // 初始 totalCount 用 totalPending（DB 统计），预加载完成后用实际过滤后的数量覆盖
+    // 初始 totalCount 用 sum（上界估计），保证 percent 永远不溢 100%；
+    // preload 完成后再用真实并集大小（all.length）覆盖
+    const initialTotal = totalPendingUpperBound.value;
     migrateStats.value = {
       startTime, elapsedMs: 0, processedCount: 0,
-      totalCount: totalPending.value, totalBytes: 0,
+      totalCount: initialTotal, totalBytes: 0,
     };
-    globalProgress.value = { current: 0, total: totalPending.value, percent: 0 };
+    globalProgress.value = { current: 0, total: initialTotal, percent: 0 };
 
     // ===== 流水线：预加载与处理并发，首批 100 条加载完立即开始处理 =====
     const processQueue: PreloadedItem[] = [];
@@ -425,7 +397,7 @@ export function useBatchMigrateManager() {
         globalProgress.value = {
           current: processed,
           total: totalToProcess,
-          percent: totalToProcess > 0 ? Math.round((processed / totalToProcess) * 100) : 0,
+          percent: totalToProcess > 0 ? Math.min(100, Math.round((processed / totalToProcess) * 100)) : 0,
         };
         cursor = end;
         continue;
@@ -550,7 +522,7 @@ export function useBatchMigrateManager() {
 
   // done 态失败项重试（含并发安全的 migrateResult 更新）抽至 batchMigrate/retryFailed.ts
   const { retrySingleFailed, retryFailed } = createRetry({
-    migrateResult, retryingIds, migrateStats,
+    migrateResult, retryingIds,
     getOrCacheConfig,
     getMultiUploader: () => cachedUploader ?? new MultiServiceUploader(),
   });

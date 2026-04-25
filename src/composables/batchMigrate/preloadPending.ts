@@ -12,6 +12,7 @@
  * 加载期间 allItemStatuses 持续增长，UI 的「全部」计数会从 100 → N 递增，
  * 配合 MigrateStatusFilterChips 的 total 提示显示「已加载 / 总数」。
  */
+import { triggerRef } from 'vue';
 import type { Ref, ShallowRef } from 'vue';
 import type { HistoryItem } from '../../config/types';
 import type { MigrateItemStatus } from '../../types/batchMigrate';
@@ -78,9 +79,12 @@ export async function preloadAllPending(args: PreloadArgs): Promise<PreloadedIte
   function commit(batch: PreloadedItem[]) {
     if (batch.length === 0) return;
     items.push(...batch);
-    // 增量 concat 而非全量 map：25k+ 条历史场景下累积 commit 原本是 O(N²)
-    // （每批重建整个状态数组），改为 O(batch) 单次 push
-    allItemStatuses.value = allItemStatuses.value.concat(batch.map(p => p.status));
+    // 原地 push + triggerRef 是真 O(batch)：拼接式赋值在 25k 条规模下退化为 O(N²)。
+    // 与 rafThrottle 的 `[...allItemStatuses.value]` 解耦：每次 commit 重读 .value，
+    // 无论上游是否替换了底层数组引用，push 都落到当前的 ref 数组上。
+    const arr = allItemStatuses.value;
+    for (const p of batch) arr.push(p.status);
+    triggerRef(allItemStatuses);
     args.onBatch?.(batch);
   }
 

@@ -181,8 +181,6 @@ export async function migrateOneItem(
     }
   }));
   const hasSuccess = newResults.some(r => r.status === 'success');
-  // 兜底：若全部目标不需要转换也没有进入 uploading 态（理论上不会发生），修正为 uploading
-  if (status.status === 'converting') status.status = 'uploading';
 
   // 清理临时文件
   for (const f of [tempFilePath, ...tempFiles]) {

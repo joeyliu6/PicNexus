@@ -23,13 +23,12 @@ const log = createLogger('retryFailed');
 export interface RetryDeps {
   migrateResult: Ref<MigrateResult | null>;
   retryingIds: Ref<Set<string>>;
-  migrateStats: Ref<MigrateStats>;
   getOrCacheConfig: () => Promise<UserConfig>;
   getMultiUploader: () => MultiServiceUploader;
 }
 
 export function createRetry(deps: RetryDeps) {
-  const { migrateResult, retryingIds, migrateStats, getOrCacheConfig, getMultiUploader } = deps;
+  const { migrateResult, retryingIds, getOrCacheConfig, getMultiUploader } = deps;
 
   async function retrySingleFailed(historyId: string): Promise<void> {
     if (!migrateResult.value) return;
@@ -53,7 +52,12 @@ export function createRetry(deps: RetryDeps) {
       const config = await getOrCacheConfig();
       const localCancelled = ref(false);
       const localPaused = ref(false);
-      await migrateOneItem(items[0], status, targets, config, getMultiUploader(), localCancelled, localPaused, migrateStats);
+      // 不复用主 migrateStats：done 态下主 stats 的 elapsedMs 已停在迁移结束时刻，
+      // 若把 retry 下载字节累加进去会让 totalBytes / elapsedMs 平均速度被人为拉高
+      const localStats = ref<MigrateStats>({
+        startTime: Date.now(), elapsedMs: 0, processedCount: 0, totalCount: 0, totalBytes: 0,
+      });
+      await migrateOneItem(items[0], status, targets, config, getMultiUploader(), localCancelled, localPaused, localStats);
 
       // 现读最新 migrateResult（而非 await 前的闭包快照）——并发重试不会互相覆盖
       const current = migrateResult.value;

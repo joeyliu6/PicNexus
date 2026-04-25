@@ -327,7 +327,7 @@ flowchart TD
 
 2026-04-22 精简：砍掉固定槽位 + 最近完成快照的双重机制。`migrating` 和 `done` 两态都走同一条数据路径：数据源 → chip 过滤 → `MigrateItemRow` 单行渲染。
 
-> **为什么砍**：`MAX_CONCURRENT` 从 2 升到 4 后，固定槽位视觉密度不再匹配实际并发；用户也想直接按 chip 切换去看「处理中 / 已完成 / 失败 / 已跳过」分桶，而不是被"活跃槽 + 快照"的分区结构束缚。
+> **为什么砍**：`MAX_CONCURRENT` 从 2 升到 3 后，固定槽位视觉密度不再匹配实际并发；用户也想直接按 chip 切换去看「处理中 / 已完成 / 失败 / 已跳过」分桶，而不是被"活跃槽 + 快照"的分区结构束缚。
 
 > **关键源文件**：`src/components/views/linkcheck/migrate/MigrateProgressPhase.vue`（`rawList` / `displayList` / `filterCounts` 三个 computed）、`src/components/views/linkcheck/migrate/components/MigrateItemRow.vue`
 
