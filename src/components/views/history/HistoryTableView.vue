@@ -191,7 +191,7 @@ function handleCheckboxToggle(id: string) {
       <Column headerStyle="width: 1.5rem">
         <template #header>
           <div class="col-center">
-            <i class="pi pi-star header-fav-icon" v-tooltip.top="'收藏'" />
+            <i class="pi pi-star header-fav-icon" />
           </div>
         </template>
         <template #body="slotProps">

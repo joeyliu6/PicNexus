@@ -173,7 +173,7 @@ defineExpose({
           <i class="pi pi-file mr-group-file-icon" />
           <div class="mr-group-info">
             <span class="mr-group-name" v-tooltip.top="group.filePath">{{ group.fileName }}</span>
-            <span class="mr-group-dir" v-tooltip.top="group.filePath">{{ group.directory }}</span>
+            <span class="mr-group-dir">{{ group.directory }}</span>
           </div>
           <span class="mr-group-count">{{ group.rows.length }} 条异常链接</span>
           <span class="mr-group-actions" @click.stop>
@@ -196,7 +196,7 @@ defineExpose({
               >{{ statusBadgeLabel(row.link.checkResult) }}</span>
             </div>
             <span class="mr-img-name" v-tooltip.top="row.link.url">{{ extractFilenameFromUrl(row.link.url) }}</span>
-            <span class="mr-host-badge" :class="{ 'mr-host-badge--defunct': isDefunctHost(row.link.url) }" v-tooltip.top="row.link.url">{{ extractHost(row.link.url) }}</span>
+            <span class="mr-host-badge" :class="{ 'mr-host-badge--defunct': isDefunctHost(row.link.url) }">{{ extractHost(row.link.url) }}</span>
             <select
               v-if="row.status === 'rescuable' && row.link.backupLinks?.some(b => b.checkResult?.is_valid)"
               class="mr-inline-select"

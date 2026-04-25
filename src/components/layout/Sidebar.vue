@@ -40,7 +40,6 @@ const handleNavigate = (view: ViewType) => {
       :icon="`pi ${item.icon}`"
       @click="handleNavigate(item.id)"
       :class="{ 'nav-btn-active': activeView === item.id }"
-      v-tooltip.right="item.title"
       text
       class="nav-btn"
     />
