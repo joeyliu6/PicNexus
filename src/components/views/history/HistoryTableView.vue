@@ -248,7 +248,7 @@ function handleCheckboxToggle(id: string) {
           </div>
           <!-- 真实数据 -->
           <div v-else class="filename-cell">
-            <span class="fname" v-tooltip.top="slotProps.data.localFileName">
+            <span class="fname">
               {{ slotProps.data.localFileName }}
             </span>
             <span class="fmeta">
@@ -272,7 +272,7 @@ function handleCheckboxToggle(id: string) {
               v-for="serviceId in getCachedServices(data).slice(0, getVisibleCount(getCachedServices(data)))"
               :key="serviceId"
               class="service-badge-icon"
-              v-tooltip.top="`点击复制 ${getServiceDisplayName(serviceId)} 链接`"
+              v-tooltip.top="'点击复制链接'"
               @click="handleCopyServiceLink(data, serviceId)"
             >
               <span class="badge-icon" v-html="getServiceIcon(serviceId)" />
