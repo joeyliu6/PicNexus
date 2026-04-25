@@ -638,3 +638,148 @@ pub async fn read_image_as_base64(
     .await
     .map_err(|e| AppError::external(format!("读取图片失败: {}", e)))?
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -------- calculate_target_size --------
+
+    #[test]
+    fn target_size_max_zero_returns_original() {
+        assert_eq!(calculate_target_size(1920, 1080, 0), (1920, 1080));
+    }
+
+    #[test]
+    fn target_size_smaller_than_limit_returns_original() {
+        assert_eq!(calculate_target_size(800, 600, 1200), (800, 600));
+    }
+
+    #[test]
+    fn target_size_landscape_scales_to_long_side() {
+        let (w, h) = calculate_target_size(2000, 1000, 1000);
+        assert_eq!(w, 1000);
+        assert_eq!(h, 500);
+    }
+
+    #[test]
+    fn target_size_portrait_scales_to_long_side() {
+        let (w, h) = calculate_target_size(1000, 2000, 1000);
+        assert_eq!(w, 500);
+        assert_eq!(h, 1000);
+    }
+
+    #[test]
+    fn target_size_short_side_at_least_1_for_extreme_aspect() {
+        // 1x10000 缩放到长边 100：短边按比例 0.01，必须夹到 1
+        let (w, h) = calculate_target_size(1, 10000, 100);
+        assert_eq!(h, 100);
+        assert!(w >= 1);
+    }
+
+    // -------- check_pixel_limit --------
+
+    #[test]
+    fn pixel_limit_under_50m_passes() {
+        assert!(check_pixel_limit(7000, 7000).is_ok()); // 49M
+    }
+
+    #[test]
+    fn pixel_limit_over_50m_fails() {
+        assert!(check_pixel_limit(8000, 8000).is_err()); // 64M
+    }
+
+    #[test]
+    fn pixel_limit_overflow_returns_err() {
+        // u32::MAX * u32::MAX 用 u64 不会溢出，但远超阈值
+        assert!(check_pixel_limit(u32::MAX, u32::MAX).is_err());
+    }
+
+    // -------- extract_jpeg_exif_segment --------
+
+    /// 构造一个最小合法 JPEG 字节流：SOI + APP1(EXIF) + SOS + EOI
+    fn build_jpeg_with_exif(exif_payload: &[u8]) -> (Vec<u8>, Vec<u8>) {
+        let mut bytes = vec![0xFF, 0xD8]; // SOI
+
+        // APP1 段：FF E1 + length(2) + "Exif\0\0" + payload
+        let app1_body_len = 6 + exif_payload.len(); // "Exif\0\0" + payload
+        let seg_len = (app1_body_len + 2) as u16; // 包含 length 字段自身的 2 字节
+        let mut app1 = vec![0xFF, 0xE1];
+        app1.extend_from_slice(&seg_len.to_be_bytes());
+        app1.extend_from_slice(b"Exif\0\0");
+        app1.extend_from_slice(exif_payload);
+
+        bytes.extend_from_slice(&app1);
+        // SOS 段（让循环里走到 0xDA 提前退出）：FF DA + length(2)=2
+        bytes.extend_from_slice(&[0xFF, 0xDA, 0x00, 0x02]);
+        // EOI
+        bytes.extend_from_slice(&[0xFF, 0xD9]);
+
+        (bytes, app1)
+    }
+
+    #[test]
+    fn extract_exif_finds_app1_segment() {
+        let (jpeg, expected_app1) = build_jpeg_with_exif(b"\x49\x49\x2A\x00mock-exif");
+        let extracted = extract_jpeg_exif_segment(&jpeg).expect("应找到 EXIF 段");
+        assert_eq!(extracted, expected_app1);
+    }
+
+    #[test]
+    fn extract_exif_returns_none_for_non_jpeg() {
+        // 错误 SOI
+        let bad = vec![0x89, 0x50, 0x4E, 0x47];
+        assert!(extract_jpeg_exif_segment(&bad).is_none());
+    }
+
+    #[test]
+    fn extract_exif_returns_none_when_no_exif_app1() {
+        // 仅 SOI + SOS + EOI，无 APP1
+        let bytes = vec![0xFF, 0xD8, 0xFF, 0xDA, 0x00, 0x02, 0xFF, 0xD9];
+        assert!(extract_jpeg_exif_segment(&bytes).is_none());
+    }
+
+    #[test]
+    fn extract_exif_returns_none_for_truncated_input() {
+        let bytes = vec![0xFF, 0xD8, 0xFF];
+        assert!(extract_jpeg_exif_segment(&bytes).is_none());
+    }
+
+    // -------- inject_jpeg_exif_segment --------
+
+    #[test]
+    fn inject_exif_round_trips_with_extract() {
+        let (original_jpeg, exif_segment) = build_jpeg_with_exif(b"\x49\x49\x2A\x00payload");
+
+        // 从无 EXIF 的"裸" JPEG 起步：SOI + SOS + EOI
+        let bare = vec![0xFF, 0xD8, 0xFF, 0xDA, 0x00, 0x02, 0xFF, 0xD9];
+        let injected = inject_jpeg_exif_segment(&bare, &exif_segment).expect("注入应成功");
+
+        // SOI 之后立即出现 EXIF 段
+        assert_eq!(&injected[0..2], &[0xFF, 0xD8]);
+        assert_eq!(&injected[2..2 + exif_segment.len()], exif_segment.as_slice());
+
+        // 再次提取应拿回同一段
+        let re_extracted = extract_jpeg_exif_segment(&injected).expect("应再次找到 EXIF");
+        assert_eq!(re_extracted, exif_segment);
+
+        // 与重建的 original 不必字节相同（取决于排列），但提取出的 EXIF 应一致
+        let re_extracted_orig = extract_jpeg_exif_segment(&original_jpeg).unwrap();
+        assert_eq!(re_extracted, re_extracted_orig);
+    }
+
+    #[test]
+    fn inject_exif_rejects_non_jpeg_target() {
+        let exif = vec![0xFF, 0xE1, 0x00, 0x08, b'E', b'x', b'i', b'f', 0, 0];
+        let bad_target = vec![0x00, 0x01, 0x02];
+        assert!(inject_jpeg_exif_segment(&bad_target, &exif).is_none());
+    }
+
+    #[test]
+    fn inject_exif_rejects_invalid_segment_marker() {
+        let valid_jpeg = vec![0xFF, 0xD8, 0xFF, 0xD9];
+        // 非 FF E1 起头
+        let bad_seg = vec![0xFF, 0xE0, 0x00, 0x08, b'E', b'x', b'i', b'f', 0, 0];
+        assert!(inject_jpeg_exif_segment(&valid_jpeg, &bad_seg).is_none());
+    }
+}
