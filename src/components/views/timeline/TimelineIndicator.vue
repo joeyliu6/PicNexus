@@ -32,7 +32,7 @@ interface MonthSegment {
   isLoaded: boolean;
 }
 
-type DragScrollSource = 'click' | 'drag' | 'wheel';
+type DragScrollSource = 'click' | 'drag';
 
 // ==================== Props & Emits ====================
 
@@ -369,14 +369,6 @@ function stopDrag() {
   document.removeEventListener('mouseup', stopDrag);
 }
 
-// 滚轮处理
-function handleWheel(e: WheelEvent) {
-  e.preventDefault();
-  const delta = e.deltaY > 0 ? 0.02 : -0.02;
-  const newProgress = Math.max(0, Math.min(1, props.scrollProgress + delta));
-  emit('drag-scroll', newProgress, 'wheel');
-}
-
 // ==================== Lifecycle ====================
 
 onMounted(() => {
@@ -422,7 +414,6 @@ onUnmounted(() => {
     @mouseleave="handleMouseLeave"
     @mousemove="handleMouseMove"
     @click="handleClick"
-    @wheel.prevent="handleWheel"
   >
     <!-- 年份标签列（空间优先：只显示有足够间距的标签） -->
     <TimelineYearLabels

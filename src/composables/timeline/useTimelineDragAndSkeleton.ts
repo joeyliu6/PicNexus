@@ -372,7 +372,7 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
     }
   }
 
-  async function handleDragScroll(progress: number, _source: 'click' | 'drag' | 'wheel' = 'drag'): Promise<void> {
+  async function handleDragScroll(progress: number, _source: 'click' | 'drag' = 'drag'): Promise<void> {
     // _source 仅为保持调用方签名兼容，函数内部不再区分来源（click 路径已统一改走 handleJumpToPeriod）
     isDragging = true;
     setLastStableProgress(progress);
