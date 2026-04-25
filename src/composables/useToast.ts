@@ -84,6 +84,16 @@ export function useToast() {
   };
 
   /**
+   * 直接转发底层 PrimeVue Toast.add（不走去重 / suppress 检查）
+   * 仅供需要自定义模板渲染（带 group）的高级场景使用，例如 useUndoToast。
+   */
+  const addRaw = (options: Parameters<typeof toast.add>[0]) => {
+    if (globalSuppressed) return;
+    toast.add(options);
+  };
+  const removeGroup = (group: string) => toast.removeGroup(group);
+
+  /**
    * 静默日志（仅记录日志，不显示通知）
    * @param level 日志级别
    * @param summary 标题
@@ -102,6 +112,8 @@ export function useToast() {
     show,
     clear,
     showConfig,
-    silent
+    silent,
+    addRaw,
+    removeGroup,
   };
 }

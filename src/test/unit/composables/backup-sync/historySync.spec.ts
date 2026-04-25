@@ -81,6 +81,8 @@ function makeDeps() {
       clear: vi.fn(),
       showConfig: vi.fn(),
       silent: vi.fn(),
+      addRaw: vi.fn(),
+      removeGroup: vi.fn(),
     },
     confirmDialog: confirmDialogMock,
     tryDecryptContent: vi.fn(),
