@@ -17,31 +17,47 @@
 }
 
 /* 跳转期间 header 文字用骨架条代替：
- * - > * 把里面的 group-date / group-divider / group-count 都隐形
- * - ::before 画一条固定 200px 的 shimmer 骨架（够容纳最长态）
- * - 撤销 is-jumping 时 ::before 消失，子元素 opacity 0→1 淡入真文字 */
-.timeline-view.is-jumping .group-header > * {
+ * - .group-date / .group-count 隐形（文字消失），.group-divider 保留显示（虚线本身是装饰）
+ * - ::before 画左侧日期 shimmer，::after 画右侧张数 shimmer
+ * - 撤销 is-jumping 时伪元素消失，子元素 opacity 0→1 淡入真文字 */
+.timeline-view.is-jumping .group-header .group-date,
+.timeline-view.is-jumping .group-header .group-count {
   opacity: 0;
 }
 
-.timeline-view.is-jumping .group-header::before {
+.timeline-view.is-jumping .group-header::before,
+.timeline-view.is-jumping .group-header::after {
   content: '';
   position: absolute;
   top: 50%;
-  left: 0;
   transform: translateY(-50%);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 200px 固定宽度够容纳最长 header 文字，无对应 spacing token */
-  width: 200px;
-  height: 1.2em;
-  border-radius: var(--radius-sm);
   background-image: linear-gradient(90deg, var(--bg-secondary) 0%, var(--bg-titlebar) 50%, var(--bg-secondary) 100%);
   background-size: 200% 100%;
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 骨架扫光 1.5s 无对应 duration token */
   animation: timeline-skeleton-shimmer 1.5s linear infinite;
 }
 
+/* 左侧日期 shimmer：覆盖 "MM.DD YYYY" 的视觉宽度 */
+.timeline-view.is-jumping .group-header::before {
+  left: 0;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 140px 模拟 MM.DD+年份的最长态，无对应 spacing token */
+  width: 140px;
+  height: 1.6em;
+  border-radius: var(--radius-sm);
+}
+
+/* 右侧张数 shimmer：胶囊形，对应 "📷 N 张" 的自然簇 */
+.timeline-view.is-jumping .group-header::after {
+  right: 0;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 68px 模拟 icon+num+unit 的视觉宽度，无对应 spacing token */
+  width: 68px;
+  height: 1.2em;
+  border-radius: var(--radius-full);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .timeline-view.is-jumping .group-header::before {
+  .timeline-view.is-jumping .group-header::before,
+  .timeline-view.is-jumping .group-header::after {
     animation: none;
   }
 }
