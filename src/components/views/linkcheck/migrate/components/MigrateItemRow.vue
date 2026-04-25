@@ -49,6 +49,15 @@ const overflowTooltip = computed(() =>
   overflowExistingChips.value.map(sid => getServiceDisplayName(sid) || sid).join('、'),
 );
 
+/**
+ * 用户本次勾选但图本来就在的"被跳过目标"——代码里 targetChips 已被 filter 掉，
+ * 这里反向标注到 existing 上，让 existing 图标右上角出小角标告知用户"你选了它但已在"
+ */
+const alsoTargetSet = computed(() => {
+  const targetSet = new Set(props.targetServiceIds);
+  return new Set(existingChips.value.filter(sid => targetSet.has(sid)));
+});
+
 interface TargetChipState {
   serviceId: string;
   variant: 'pending' | 'new' | 'failed';
@@ -106,7 +115,7 @@ const dotColor = computed(() => {
  * 目标 chip 状态说明 tooltip：
  * - new（可点击）→ 由 chip 内部处理"点击复制链接"，此处返回 undefined
  * - failed → 优先取该服务的 detail 错误，否则降级到全局 errorTooltipText
- * - pending → 按当前 item.status 给出处理步骤说明
+ * - pending → 运行态下整行圆点 + active 背景已传达进度，不再重复技术细节；终态需说明"未尝试"
  */
 function targetChipTooltip(chip: TargetChipState): string | undefined {
   if (chip.variant === 'new') return undefined;
@@ -114,22 +123,13 @@ function targetChipTooltip(chip: TargetChipState): string | undefined {
     const detail = props.item.details?.find(d => d.serviceId === chip.serviceId);
     return detail?.message ?? (errorTooltipText(props.item) || '上传失败');
   }
-  // pending chip 的语义按 item 整体状态分叉：
-  // - 运行态（downloading/converting/uploading/pending）→ 说明当前阶段
-  // - 终态 failed/skipped → 这个目标没轮到尝试
+  // 运行态：整行圆点 + active 背景已经在表达"处理中"，不再用技术细节文案噪声打扰
+  if (!TERMINAL_STATUSES.has(props.item.status)) return undefined;
+  // 终态下的 pending：这个目标没轮到尝试，保留告知（有行动指引：用户可知需要重试）
   const targetName = getServiceDisplayName(chip.serviceId) || chip.serviceId;
-  if (TERMINAL_STATUSES.has(props.item.status)) {
-    if (props.item.status === 'skipped') return `迁移已取消，未尝试 ${targetName}`;
-    if (props.item.status === 'failed')  return `未尝试 ${targetName}`;
-    return undefined;
-  }
-  switch (props.item.status) {
-    case 'downloading': return '正在下载原图…';
-    case 'converting':  return '正在转换格式…';
-    // 并行上传后，pending 意味着"还没落定结果"——可能正在传，也可能正在等转换完成
-    case 'uploading':   return `正在上传到 ${targetName}…`;
-    default:            return `等待上传到 ${targetName}`;
-  }
+  if (props.item.status === 'skipped') return `迁移已取消，未尝试 ${targetName}`;
+  if (props.item.status === 'failed')  return `未尝试 ${targetName}`;
+  return undefined;
 }
 
 function onRetry() {
@@ -161,7 +161,7 @@ function onChipCopy(serviceId: string) {
 
     <span class="mi-row__spacer" />
 
-    <!-- 服务流向 chips -->
+    <!-- 服务流向 chips：existing badge 组 → 呼吸 gap → target chip 组 -->
     <div v-if="hasServices" class="mi-row__services">
       <MigrateServiceChip
         v-for="sid in visibleExistingChips"
@@ -170,6 +170,7 @@ function onChipCopy(serviceId: string) {
         variant="existing"
         icon-only
         clickable
+        :also-target="alsoTargetSet.has(sid)"
         @copy="onChipCopy(sid)"
       />
       <span
@@ -178,6 +179,12 @@ function onChipCopy(serviceId: string) {
         v-tooltip.top="overflowTooltip"
         aria-hidden="true"
       >+{{ overflowExistingChips.length }}</span>
+      <!-- 呼吸 gap：只在 existing 和 target 两组都有内容时出现，替代 → 箭头符号表达"源→目标"方向 -->
+      <span
+        v-if="(existingChips.length > 0) && hasTargets"
+        class="mi-row__services-gap"
+        aria-hidden="true"
+      />
       <MigrateServiceChip
         v-for="t in targetChips"
         :key="`t-${t.serviceId}`"
@@ -259,6 +266,12 @@ function onChipCopy(serviceId: string) {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
+  flex-shrink: 0;
+}
+
+/* 呼吸 gap：让 existing badge 组和 target chip 组之间有视觉断句，替代 → 箭头 */
+.mi-row__services-gap {
+  width: var(--space-sm);
   flex-shrink: 0;
 }
 

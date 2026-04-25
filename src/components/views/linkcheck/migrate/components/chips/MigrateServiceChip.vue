@@ -26,14 +26,29 @@ interface Props {
   iconOnly?: boolean;
   /** 外部强制覆盖的 tooltip 文本（不可点击时的状态说明）；clickable 时始终显示"点击复制链接" */
   tooltip?: string;
+  /**
+   * 该 existing 服务同时被勾选为本次迁移目标（但已存在所以被跳过）。
+   * 仅在 existing 变体（iconOnly）上传 true，用右上角小角标告知用户"你选了它但已在，已跳过"
+   */
+  alsoTarget?: boolean;
 }
 
-const props = withDefaults(defineProps<Props>(), { variant: 'target', clickable: false, iconOnly: false, tooltip: undefined });
+const props = withDefaults(defineProps<Props>(), { variant: 'target', clickable: false, iconOnly: false, tooltip: undefined, alsoTarget: false });
 
 const emit = defineEmits<{ copy: [] }>();
 
 const svg = computed(() => getServiceIcon(props.serviceId));
 const displayName = computed(() => getServiceDisplayName(props.serviceId) || props.serviceId);
+
+/** 角标态的 existing：tooltip 里拼上"已存在，本次跳过"说明 */
+const tooltipText = computed<string | undefined>(() => {
+  if (props.alsoTarget && props.iconOnly) {
+    const prefix = `${displayName.value} · 已存在，本次跳过`;
+    return props.clickable ? `${prefix} · 点击复制链接` : prefix;
+  }
+  if (props.clickable) return '点击复制链接';
+  return props.tooltip ?? (props.iconOnly ? displayName.value : undefined);
+});
 
 function onClick() {
   if (props.clickable) emit('copy');
@@ -43,13 +58,15 @@ function onClick() {
 <template>
   <span
     class="m-svc-chip"
-    :class="[`m-svc-chip--${variant}`, { 'm-svc-chip--clickable': clickable, 'm-svc-chip--icon-only': iconOnly }]"
-    v-tooltip.top="clickable ? '点击复制链接' : (tooltip ?? (iconOnly ? displayName : undefined))"
+    :class="[`m-svc-chip--${variant}`, { 'm-svc-chip--clickable': clickable, 'm-svc-chip--icon-only': iconOnly, 'm-svc-chip--also-target': alsoTarget && iconOnly }]"
+    v-tooltip.top="tooltipText"
     @click.stop="onClick"
   >
     <span v-if="svg" class="m-svc-chip-ic" v-html="svg" />
     <i v-else class="pi pi-cloud m-svc-chip-ic m-svc-chip-ic--fallback" aria-hidden="true" />
     <span v-if="!iconOnly" class="m-svc-chip-label">{{ displayName }}</span>
+    <!-- 角标：该 existing 同时被选为本次迁移目标，视觉告知"已在 · 已跳过" -->
+    <span v-if="alsoTarget && iconOnly" class="m-svc-chip-dot" aria-hidden="true" />
   </span>
 </template>
 
@@ -108,7 +125,10 @@ function onClick() {
   background: transparent;
   color: var(--text-muted);
 }
-.m-svc-chip--existing .m-svc-chip-ic { color: var(--text-muted); }
+
+/* existing 图标进一步降权重：12px 而非 14px，让"过去持有"视觉上退后一档 */
+/* stylelint-disable-next-line declaration-property-value-disallowed-list -- width/height 允许硬编码（tokens.md 例外规则） */
+.m-svc-chip--existing .m-svc-chip-ic { color: var(--text-muted); width: 12px; height: 12px; }
 
 /* new/pending/failed 保留淡色底，但去掉 box-shadow 描边，对齐链接监控 .error-badge 的简洁感 */
 .m-svc-chip--new {
@@ -132,6 +152,21 @@ function onClick() {
 /* 仅图标模式：正方形 padding，无文字标签 */
 .m-svc-chip--icon-only {
   padding: var(--space-2xs);
+  position: relative; /* 角标定位锚点 */
+}
+
+/* "已在 · 已跳过"角标：6×6 success 色圆点，描边避免与图标混色 */
+/* stylelint-disable-next-line declaration-property-value-disallowed-list -- 角标 6×6 为 width/height，按 tokens.md 例外规则允许硬编码 */
+.m-svc-chip-dot {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 6px;
+  height: 6px;
+  background: var(--success);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--bg-card);
+  pointer-events: none;
 }
 
 /* 可点击态：鼠标手型 + hover 色深一档 */
