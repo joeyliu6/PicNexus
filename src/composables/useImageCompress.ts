@@ -56,7 +56,7 @@ export function useImageCompress() {
       let maxLongSide = preset.maxLongSide ?? 0;
       const scalePercent = preset.scalePercent ?? 100;
       if (scalePercent > 0 && scalePercent < 100) {
-        const meta = await invoke<{ width: number; height: number }>('get_image_metadata', { path: filePath });
+        const meta = await invoke<{ width: number; height: number }>('get_image_metadata', { filePath });
         const longSide = Math.max(meta.width, meta.height);
         maxLongSide = Math.round(longSide * scalePercent / 100);
       }
