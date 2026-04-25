@@ -17,8 +17,8 @@
 }
 
 /* 跳转期间 header 文字用骨架条代替：
- * - > * 把里面的 group-title / group-subtitle 都隐形
- * - ::before 画一条固定 200px 的 shimmer 骨架（够容纳"2018年10月31日 15张图片"最长态）
+ * - > * 把里面的 group-date / group-divider / group-count 都隐形
+ * - ::before 画一条固定 200px 的 shimmer 骨架（够容纳最长态）
  * - 撤销 is-jumping 时 ::before 消失，子元素 opacity 0→1 淡入真文字 */
 .timeline-view.is-jumping .group-header > * {
   opacity: 0;

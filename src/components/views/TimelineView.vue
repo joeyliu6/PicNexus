@@ -102,7 +102,7 @@ const {
 } = useVirtualTimeline(scrollContainer, groups, {
   targetRowHeight: 200,
   gap: 4,
-  headerHeight: 48,
+  headerHeight: 64,
   groupGap: 24,
   overscan: 3,
 });
@@ -234,9 +234,11 @@ onUnmounted(() => {
   cleanupDragAndSkeleton();
 });
 
+// 同时 watch visible：Tab 切回来（false → true）时主动重发 totalCount，
+// 避免父组件在不可见期间错过 dayTotalCount 变化、切回后顶栏计数停留在旧值
 watch(
-  dayTotalCount,
-  (c) => { if (props.visible !== false) emit('update:totalCount', c); },
+  [dayTotalCount, () => props.visible],
+  ([c, isVisible]) => { if (isVisible !== false) emit('update:totalCount', c); },
   { immediate: true }
 );
 

@@ -74,8 +74,28 @@ const groupCountMap = computed(() => {
   return m;
 });
 
+const groupMetaMap = computed(() => {
+  const m = new Map<string, PhotoGroup>();
+  for (const g of props.groups) m.set(g.id, g);
+  return m;
+});
+
 function getGroupItemCount(groupId: string): number {
   return groupCountMap.value.get(groupId) ?? 0;
+}
+
+// MM.DD 形式：月/日补零，纵向叠多组时和 tabular-nums 配合实现整齐对齐
+function formatGroupDate(groupId: string): string {
+  const g = groupMetaMap.value.get(groupId);
+  if (!g) return '';
+  const mm = String(g.month + 1).padStart(2, '0');
+  const dd = String(g.day).padStart(2, '0');
+  return `${mm}.${dd}`;
+}
+
+function getGroupYear(groupId: string): string {
+  const y = groupMetaMap.value.get(groupId)?.year;
+  return y == null ? '' : String(y);
 }
 </script>
 
@@ -91,10 +111,16 @@ function getGroupItemCount(groupId: string): number {
         height: `${header.height}px`,
       }"
     >
-      <span class="group-title">{{ header.label }}</span>
-      <span class="group-subtitle">
-        {{ getGroupItemCount(header.groupId) }} 张图片
-      </span>
+      <div class="group-date">
+        <span class="group-date-num">{{ formatGroupDate(header.groupId) }}</span>
+        <span class="group-date-year">{{ getGroupYear(header.groupId) }}</span>
+      </div>
+      <div class="group-divider" aria-hidden="true"></div>
+      <div class="group-count">
+        <i class="pi pi-image group-count-icon" aria-hidden="true"></i>
+        <span class="group-count-num">{{ getGroupItemCount(header.groupId) }}</span>
+        <span class="group-count-unit">张</span>
+      </div>
     </div>
 
     <!-- Fast Mode Placeholders -->
@@ -164,11 +190,50 @@ function getGroupItemCount(groupId: string): number {
   left: 0;
   right: 0;
   display: flex;
-  align-items: baseline;
-  gap: var(--space-md);
+  align-items: center;
+  gap: var(--space-md-lg);
   padding: var(--space-sm-md) 0;
   background: var(--bg-app);
   z-index: 5;
+}
+
+.group-date {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-shrink: 0;
+}
+
+/* dashed 虚线：1px 间隔的破折号，仿日记本/胶片孔的低调质感
+ * - 用 background-image 而非 border-style: dashed，浏览器对 dash 长度/间隔的渲染更可控
+ * - mask 让两端轻微淡出，避免硬切日期/计数文字 */
+.group-divider {
+  flex: 1 1 auto;
+  height: 1px;
+  min-width: var(--space-lg);
+  background-image: linear-gradient(
+    to right,
+    var(--border-subtle) 0,
+    var(--border-subtle) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+  background-size: 8px 1px;
+  background-repeat: repeat-x;
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 16px,
+    #000 calc(100% - 16px),
+    transparent 100%
+  );
+}
+
+.group-count {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs-sm);
+  flex-shrink: 0;
 }
 
 .fast-mode-item {
@@ -186,14 +251,37 @@ function getGroupItemCount(groupId: string): number {
   will-change: transform;
 }
 
-.group-title {
-  font-size: var(--text-lg-xl);
+.group-date-num {
+  font-size: var(--text-3xl);
   font-weight: var(--weight-semibold);
-  color: var(--text-primary);
+  line-height: 1;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
-.group-subtitle {
-  font-size: var(--text-2xs);
+.group-date-year {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.group-count-icon {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.group-count-num {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.group-count-unit {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   color: var(--text-tertiary);
 }
 
@@ -209,12 +297,8 @@ function getGroupItemCount(groupId: string): number {
 
 /* 响应式适配 */
 @media (width <= 1024px) {
-  .group-title {
-    font-size: var(--text-lg);
-  }
-
-  .group-subtitle {
-    font-size: var(--text-2xs);
+  .group-date-num {
+    font-size: var(--text-2xl);
   }
 }
 
@@ -223,21 +307,18 @@ function getGroupItemCount(groupId: string): number {
     padding: var(--space-md) 0;
   }
 
-  .group-title {
-    font-size: var(--text-lg);
-  }
-
-  .group-subtitle {
-    font-size: var(--text-2xs);
+  .group-date-num {
+    font-size: var(--text-xl);
   }
 }
 
 @media (width <= 480px) {
-  .group-title {
-    font-size: var(--text-base);
+  .group-date-num {
+    font-size: var(--text-lg);
   }
 
-  .group-subtitle {
+  .group-date-year,
+  .group-divider {
     display: none;
   }
 }
