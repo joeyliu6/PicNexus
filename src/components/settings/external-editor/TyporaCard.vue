@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { nextTick, ref, watch } from 'vue';
 import { useResizeObserver } from '@vueuse/core';
 import Button from 'primevue/button';
 import type { EditorServerConfig, ServerServiceType } from '../../../config/types';
 import { middleTruncate } from '../../../utils/pathUtils';
-import ServiceSelectorDropdown from '../ServiceSelectorDropdown.vue';
-import CollapsibleSettingsCard from '../CollapsibleSettingsCard.vue';
+import { useToast } from '../../../composables/useToast';
+import EditorServiceCard from './EditorServiceCard.vue';
 
 interface Props {
   executablePath?: string;
@@ -24,32 +24,14 @@ const emit = defineEmits<{
   navigateHosting: [];
 }>();
 
-const typoraExpanded = ref(false);
+const toast = useToast();
+
 const execPathCopied = ref(false);
 const execPathRef = ref<HTMLElement | null>(null);
 const displayPath = ref(props.executablePath || '...');
 
-// 开关已开但未选图床 → 需要提醒用户配置
-const needsService = computed(
-  () => editorServer.value.typoraEnabled && !editorServer.value.typoraService,
-);
-
-// 用户刚把开关从关切到开、且图床还没选时，自动展开卡片引导下一步
-watch(
-  () => editorServer.value.typoraEnabled,
-  (curr, prev) => {
-    if (curr && !prev && !editorServer.value.typoraService) {
-      typoraExpanded.value = true;
-    }
-  },
-);
-
 function updateEditorServer(patch: Partial<EditorServerConfig>) {
   editorServer.value = { ...editorServer.value, ...patch };
-}
-
-function selectTyporaService(svc: ServerServiceType | null) {
-  updateEditorServer({ typoraService: svc });
 }
 
 function recalcDisplayPath() {
@@ -70,183 +52,67 @@ watch(() => props.executablePath, () => nextTick(recalcDisplayPath));
 
 async function copyExecutablePath() {
   if (!props.executablePath) return;
-  await navigator.clipboard.writeText(props.executablePath);
-  execPathCopied.value = true;
-  setTimeout(() => { execPathCopied.value = false; }, 2000);
+  try {
+    await navigator.clipboard.writeText(props.executablePath);
+    execPathCopied.value = true;
+    setTimeout(() => { execPathCopied.value = false; }, 2000);
+  } catch (_e) {
+    // 剪贴板权限被拒或 webview 不支持时，按钮不会变绿勾，必须显式提示
+    toast.error('复制失败', '请手动选中路径复制');
+  }
 }
 </script>
 
 <template>
-  <CollapsibleSettingsCard
+  <EditorServiceCard
     title="Typora"
     description="在 Typora 中粘贴图片时自动上传"
+    serviceDesc="Typora 上传时使用的图床"
+    :configuredServices="configuredServices"
+    :healthStatusMap="healthStatusMap"
+    :healthTooltipMap="healthTooltipMap"
+    :cliUnsupportedServices="cliUnsupportedServices"
+    :serviceLabelMap="serviceLabelMap"
     :enabled="editorServer.typoraEnabled"
-    :expanded="typoraExpanded"
-    :needsAttention="needsService"
-    attentionTooltip="需选择图床才能使用"
-    allowOverflow
+    :service="editorServer.typoraService"
     @update:enabled="(v: boolean) => updateEditorServer({ typoraEnabled: v })"
-    @update:expanded="(v: boolean) => typoraExpanded = v"
+    @update:service="(v: ServerServiceType | null) => updateEditorServer({ typoraService: v })"
+    @navigateHosting="emit('navigateHosting')"
   >
-    <div class="card-content-inner">
-      <div v-if="needsService" class="missing-service-banner">
-        <i class="pi pi-exclamation-circle" />
-        <span>开关已开启，但还没选择图床。请在下方选择一个图床后才能正常使用。</span>
+    <div class="guide-card">
+      <div class="guide-step">
+        <span class="step-badge">1</span>
+        <span class="step-text">打开 Typora，进入 <code class="menu-label">偏好设置</code> → <code class="menu-label">图像</code></span>
       </div>
-      <div class="card-service-row">
-        <div class="card-service-info">
-          <span class="card-service-label">上传到</span>
-          <span class="card-service-desc">Typora 上传时使用的图床</span>
-        </div>
-        <ServiceSelectorDropdown
-          :modelValue="editorServer.typoraService"
-          :configuredServices="configuredServices"
-          :healthStatusMap="healthStatusMap"
-          :healthTooltipMap="healthTooltipMap"
-          :cliUnsupportedServices="cliUnsupportedServices"
-          :serviceLabelMap="serviceLabelMap"
-          @update:modelValue="selectTyporaService"
-          @navigateHosting="emit('navigateHosting')"
-        />
+      <div class="guide-step">
+        <span class="step-badge">2</span>
+        <span class="step-text">「上传服务」选择 <code class="inline-code">Custom Command</code></span>
       </div>
-
-      <div class="guide-card">
-        <div class="guide-step">
-          <span class="step-badge">1</span>
-          <span class="step-text">打开 Typora，进入 <code class="menu-label">偏好设置</code> → <code class="menu-label">图像</code></span>
-        </div>
-        <div class="guide-step">
-          <span class="step-badge">2</span>
-          <span class="step-text">「上传服务」选择 <code class="inline-code">Custom Command</code></span>
-        </div>
-        <div class="guide-step">
-          <span class="step-badge">3</span>
-          <span class="step-text">
-            「命令」栏填入以下路径：
-            <div class="guide-path-inline">
-              <div class="exec-path-row">
-                <code ref="execPathRef" class="exec-path-text" v-tooltip.top="executablePath || ''">{{ displayPath }}</code>
-                <Button
-                  :icon="execPathCopied ? 'pi pi-check' : 'pi pi-copy'"
-                  text
-                  size="small"
-                  v-tooltip.top="execPathCopied ? '已复制！' : '复制路径'"
-                  @click="copyExecutablePath"
-                />
-              </div>
+      <div class="guide-step">
+        <span class="step-badge">3</span>
+        <span class="step-text">
+          「命令」栏填入以下路径：
+          <div class="guide-path-inline">
+            <div class="exec-path-row">
+              <code ref="execPathRef" class="exec-path-text" v-tooltip.top="executablePath || ''">{{ displayPath }}</code>
+              <Button
+                :icon="execPathCopied ? 'pi pi-check' : 'pi pi-copy'"
+                text
+                size="small"
+                v-tooltip.top="execPathCopied ? '已复制！' : '复制路径'"
+                @click="copyExecutablePath"
+              />
             </div>
-          </span>
-        </div>
+          </div>
+        </span>
       </div>
     </div>
-  </CollapsibleSettingsCard>
+  </EditorServiceCard>
 </template>
 
 <style scoped>
-@import url('../../../styles/settings-shared.css');
-
-.card-content-inner {
-  display: flex;
-  flex-direction: column;
-}
-
-/* .missing-service-banner 样式定义在 settings-shared.css */
-
-.card-service-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-md) var(--space-lg);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.card-service-info {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2xs);
-}
-
-.card-service-label {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  color: var(--text-primary);
-}
-
-.card-service-desc {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-}
-
-.guide-card {
-  padding: var(--space-md-lg) var(--space-lg) var(--space-lg);
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.guide-step {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-sm-md);
-  position: relative;
-  padding-bottom: var(--space-md);
-}
-
-.guide-step:last-child {
-  padding-bottom: 0;
-}
-
-.guide-step::before {
-  content: '';
-  position: absolute;
-  left: 8px;
-  top: 18px;
-  bottom: 0;
-  width: 1px;
-  background: var(--border-subtle);
-}
-
-.guide-step:last-child::before {
-  display: none;
-}
-
-.step-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  border: 1.5px solid var(--border-subtle);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-semibold);
-  flex-shrink: 0;
-  position: relative;
-  top: 1px;
-}
-
-.step-text {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--text-xs);
-  line-height: 1.6;
-  color: var(--text-muted);
-}
-
 .guide-path-inline {
   margin-top: var(--space-xs-sm);
-}
-
-.inline-code {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 微型 code badge，1px 无对应 token */
-  padding: 1px var(--space-xs);
-  background: var(--primary-alpha-8);
-  border-radius: var(--radius-xs-sm);
-  color: var(--primary);
 }
 
 .menu-label {
@@ -278,13 +144,5 @@ async function copyExecutablePath() {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--primary);
-}
-
-@media (width <= 760px) {
-  .card-service-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-sm);
-  }
 }
 </style>

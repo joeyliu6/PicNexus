@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { EditorServerConfig, ServerServiceType } from '../../../config/types';
-import ServiceSelectorDropdown from '../ServiceSelectorDropdown.vue';
-import CollapsibleSettingsCard from '../CollapsibleSettingsCard.vue';
+import EditorServiceCard from './EditorServiceCard.vue';
 
 interface Props {
   configuredServices: Array<{ value: ServerServiceType; label: string }>;
@@ -21,24 +20,8 @@ const emit = defineEmits<{
   navigateHosting: [];
 }>();
 
-const obsidianExpanded = ref(false);
 const portDraft = ref(String(editorServer.value.port));
 const portError = ref('');
-
-// 开关已开但未选图床 → 需要提醒用户配置
-const needsService = computed(
-  () => editorServer.value.enabled && !editorServer.value.obsidianService,
-);
-
-// 用户刚把开关从关切到开、且图床还没选时，自动展开卡片引导下一步
-watch(
-  () => editorServer.value.enabled,
-  (curr, prev) => {
-    if (curr && !prev && !editorServer.value.obsidianService) {
-      obsidianExpanded.value = true;
-    }
-  },
-);
 
 const connectionTest = ref<{
   status: 'idle' | 'testing' | 'success' | 'warning' | 'error';
@@ -47,10 +30,6 @@ const connectionTest = ref<{
 
 function updateEditorServer(patch: Partial<EditorServerConfig>) {
   editorServer.value = { ...editorServer.value, ...patch };
-}
-
-function selectObsidianService(svc: ServerServiceType | null) {
-  updateEditorServer({ obsidianService: svc });
 }
 
 async function testObsidianConnection() {
@@ -145,65 +124,48 @@ watch(
 </script>
 
 <template>
-  <CollapsibleSettingsCard
+  <EditorServiceCard
     title="Obsidian"
     description="在 Obsidian 中粘贴图片时自动上传"
+    serviceDesc="Obsidian 上传时使用的图床"
+    :configuredServices="configuredServices"
+    :healthStatusMap="healthStatusMap"
+    :healthTooltipMap="healthTooltipMap"
+    :cliUnsupportedServices="cliUnsupportedServices"
+    :serviceLabelMap="serviceLabelMap"
     :enabled="editorServer.enabled"
-    :expanded="obsidianExpanded"
-    :needsAttention="needsService"
-    attentionTooltip="需选择图床才能使用"
-    allowOverflow
+    :service="editorServer.obsidianService"
     @update:enabled="(v: boolean) => updateEditorServer({ enabled: v })"
-    @update:expanded="(v: boolean) => obsidianExpanded = v"
+    @update:service="(v: ServerServiceType | null) => updateEditorServer({ obsidianService: v })"
+    @navigateHosting="emit('navigateHosting')"
   >
-    <div class="card-content-inner">
-      <div v-if="needsService" class="missing-service-banner">
-        <i class="pi pi-exclamation-circle" />
-        <span>开关已开启，但还没选择图床。请在下方选择一个图床后才能正常使用。</span>
+    <div class="guide-card">
+      <div class="guide-step">
+        <span class="step-badge">1</span>
+        <span class="step-text">在 Obsidian 插件市场安装 <code class="inline-code">obsidian-picnexus</code> 插件</span>
       </div>
-      <div class="card-service-row">
-        <div class="card-service-info">
-          <span class="card-service-label">上传到</span>
-          <span class="card-service-desc">Obsidian 上传时使用的图床</span>
-        </div>
-        <ServiceSelectorDropdown
-          :modelValue="editorServer.obsidianService"
-          :configuredServices="configuredServices"
-          :healthStatusMap="healthStatusMap"
-          :healthTooltipMap="healthTooltipMap"
-          :cliUnsupportedServices="cliUnsupportedServices"
-          :serviceLabelMap="serviceLabelMap"
-          @update:modelValue="selectObsidianService"
-          @navigateHosting="emit('navigateHosting')"
-        />
+      <div class="guide-step">
+        <span class="step-badge">2</span>
+        <span class="step-text">
+          在插件设置中填写端口
+          <input
+            type="number"
+            class="port-input inline-port"
+            :class="{ invalid: !!portError }"
+            :value="portDraft"
+            min="1024"
+            max="65535"
+            @input="handlePortInput"
+            @blur="commitPortInput"
+            @keyup.enter="commitPortInput"
+            @click.stop
+          />
+          ，保存后即可生效
+        </span>
       </div>
+    </div>
 
-      <div class="guide-card">
-        <div class="guide-step">
-          <span class="step-badge">1</span>
-          <span class="step-text">在 Obsidian 插件市场安装 <code class="inline-code">obsidian-picnexus</code> 插件</span>
-        </div>
-        <div class="guide-step">
-          <span class="step-badge">2</span>
-          <span class="step-text">
-            在插件设置中填写端口
-            <input
-              type="number"
-              class="port-input inline-port"
-              :class="{ invalid: !!portError }"
-              :value="portDraft"
-              min="1024"
-              max="65535"
-              @input="handlePortInput"
-              @blur="commitPortInput"
-              @keyup.enter="commitPortInput"
-              @click.stop
-            />
-            ，保存后即可生效
-          </span>
-        </div>
-      </div>
-
+    <template #footer>
       <div class="test-connection-row">
         <button
           class="test-connection-btn"
@@ -231,113 +193,11 @@ watch(
           {{ connectionTest.message }}
         </span>
       </div>
-    </div>
-  </CollapsibleSettingsCard>
+    </template>
+  </EditorServiceCard>
 </template>
 
 <style scoped>
-@import url('../../../styles/settings-shared.css');
-
-.card-content-inner {
-  display: flex;
-  flex-direction: column;
-}
-
-/* .missing-service-banner 样式定义在 settings-shared.css */
-
-.card-service-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-md) var(--space-lg);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.card-service-info {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2xs);
-}
-
-.card-service-label {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  color: var(--text-primary);
-}
-
-.card-service-desc {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-}
-
-.guide-card {
-  padding: var(--space-md-lg) var(--space-lg) var(--space-lg);
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.guide-step {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-sm-md);
-  position: relative;
-  padding-bottom: var(--space-md);
-}
-
-.guide-step:last-child {
-  padding-bottom: 0;
-}
-
-.guide-step::before {
-  content: '';
-  position: absolute;
-  left: 8px;
-  top: 18px;
-  bottom: 0;
-  width: 1px;
-  background: var(--border-subtle);
-}
-
-.guide-step:last-child::before {
-  display: none;
-}
-
-.step-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  border: 1.5px solid var(--border-subtle);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-semibold);
-  flex-shrink: 0;
-  position: relative;
-  top: 1px;
-}
-
-.step-text {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--text-xs);
-  line-height: 1.6;
-  color: var(--text-muted);
-}
-
-.inline-code {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 微型 code badge，1px 无对应 token */
-  padding: 1px var(--space-xs);
-  background: var(--primary-alpha-8);
-  border-radius: var(--radius-xs-sm);
-  color: var(--primary);
-}
-
 .inline-port {
   width: 70px;
   display: inline-block;
@@ -430,13 +290,5 @@ watch(
 
 .test-error {
   color: var(--error);
-}
-
-@media (width <= 760px) {
-  .card-service-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-sm);
-  }
 }
 </style>

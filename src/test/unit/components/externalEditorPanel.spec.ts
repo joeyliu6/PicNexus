@@ -1,6 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick, ref } from 'vue';
+
+// TyporaCard 用 useToast 做剪贴板失败提示；单测无 PrimeVue ToastService 上下文，
+// 直接 mock 成 no-op 避免 mount 时抛 "No PrimeVue Toast provided"
+vi.mock('../../../composables/useToast', () => ({
+  useToast: () => ({
+    success: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn(),
+    show: vi.fn(), clear: vi.fn(),
+    showConfig: vi.fn(),
+  }),
+}));
+
 import ExternalEditorPanel from '../../../components/settings/ExternalEditorPanel.vue';
 
 const healthStatusMap = ref<Record<string, string>>({});

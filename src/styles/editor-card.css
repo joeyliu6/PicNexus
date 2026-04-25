@@ -1,0 +1,111 @@
+/**
+ * 外部编辑器卡片共享样式
+ * 被 EditorServiceCard / ObsidianCard / TyporaCard 复用
+ * 无 :scoped，依赖 class 名命名空间隔离（card-* / guide-* 等较为独有）
+ */
+
+.editor-card-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-service-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.card-service-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+.card-service-label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+}
+
+.card-service-desc {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.guide-card {
+  padding: var(--space-md-lg) var(--space-lg) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.guide-step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm-md);
+  position: relative;
+  padding-bottom: var(--space-md);
+}
+
+.guide-step:last-child {
+  padding-bottom: 0;
+}
+
+.guide-step::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 18px;
+  bottom: 0;
+  width: 1px;
+  background: var(--border-subtle);
+}
+
+.guide-step:last-child::before {
+  display: none;
+}
+
+.step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  flex-shrink: 0;
+  position: relative;
+  top: 1px;
+}
+
+.step-text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.inline-code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 微型 code badge，1px 无对应 token */
+  padding: 1px var(--space-xs);
+  background: var(--primary-alpha-8);
+  border-radius: var(--radius-xs-sm);
+  color: var(--primary);
+}
+
+@media (width <= 760px) {
+  .card-service-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-sm);
+  }
+}
