@@ -237,7 +237,7 @@ export function useLinkCheckManager() {
 
       const rows = checkRows.value;
       if (rows.length === 0) {
-        toast.info('无链接可检测', '历史记录为空');
+        toast.info('无可检测的链接', '历史记录为空');
         return null;
       }
 
@@ -250,7 +250,7 @@ export function useLinkCheckManager() {
       }));
 
       if (requestItems.length === 0) {
-        toast.info('无链接可检测', '没有成功上传的链接');
+        toast.info('无可检测的链接', '没有成功上传的链接');
         return null;
       }
 
@@ -476,7 +476,7 @@ export function useLinkCheckManager() {
     });
 
     if (filtered.length === 0) {
-      toast.info('无链接可检测', '筛选结果为空');
+      toast.info('无可检测的链接', '筛选结果为空');
       return null;
     }
 
@@ -542,7 +542,7 @@ export function useLinkCheckManager() {
       }
 
       if (!result.cancelled) {
-        toast.success('检测完成', `共 ${result.total} 条：有效 ${result.valid} / 失效 ${result.invalid}`);
+        toast.success('已检测', `共 ${result.total} 条：有效 ${result.valid} / 失效 ${result.invalid}`);
       }
 
       return result;

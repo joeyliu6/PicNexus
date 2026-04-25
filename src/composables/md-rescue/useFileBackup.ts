@@ -251,7 +251,7 @@ export async function undoReplace(resetFn: () => void): Promise<void> {
 
   if (failedPairs.length === 0) {
     clearLastRepair();
-    toast.success('撤销完成', '已恢复所有文件至修复前状态');
+    toast.success('已撤销', '已恢复所有文件至修复前状态');
     resetFn();
     return;
   }

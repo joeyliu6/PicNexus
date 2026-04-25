@@ -51,7 +51,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
       log.error('强制上传历史记录失败:', error);
       updateHistorySyncStatus(profile, 'failed', errorCode);
       await writeSyncLog('upload_history_cloud', 'failed', errorCode, profile);
-      toast.error('上传失败', errorCode);
+      toast.error('上传失败', `${errorCode}\n请检查网络或 WebDAV 配置后重试`);
     } finally {
       uploadHistoryLoading.value = false;
     }
@@ -125,15 +125,15 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
       updateHistorySyncStatus(profile, 'success');
       await writeSyncLog('upload_history_cloud', 'success', `共 ${mergedItems.length} 条`, profile);
       toast.success(
-        `合并上传完成：共 ${mergedItems.length} 条记录`,
-        newCount > 0 ? `新增 ${newCount} 条到云端` : '云端数据已是最新'
+        '已合并上传',
+        `共 ${mergedItems.length} 条记录，${newCount > 0 ? `新增 ${newCount} 条到云端` : '云端数据已是最新'}`
       );
     } catch (error) {
       const errorCode = extractErrorCode(error);
       log.error('智能合并上传失败:', error);
       updateHistorySyncStatus(profile, 'failed', errorCode);
       await writeSyncLog('upload_history_cloud', 'failed', errorCode, profile);
-      toast.error('上传失败', errorCode);
+      toast.error('上传失败', `${errorCode}\n请检查网络或 WebDAV 配置后重试`);
     } finally {
       uploadHistoryLoading.value = false;
     }
@@ -192,7 +192,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
       updateHistorySyncStatus(profile, 'success');
       await writeSyncLog('upload_history_cloud', 'success', `新增 ${newItems.length} 条`, profile);
       toast.success(
-        `增量上传完成`,
+        '已增量上传',
         `新增 ${newItems.length} 条记录到云端，共 ${mergedItems.length} 条`
       );
     } catch (error) {
@@ -200,7 +200,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
       log.error('增量上传失败:', error);
       updateHistorySyncStatus(profile, 'failed', errorCode);
       await writeSyncLog('upload_history_cloud', 'failed', errorCode, profile);
-      toast.error('上传失败', errorCode);
+      toast.error('上传失败', `${errorCode}\n请检查网络或 WebDAV 配置后重试`);
     } finally {
       uploadHistoryLoading.value = false;
     }
@@ -240,13 +240,13 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
 
       updateHistorySyncStatus(profile, 'success');
       await writeSyncLog('download_history_cloud', 'success', `${cloudItems.length} 条记录`, profile);
-      toast.success(`下载完成：共 ${cloudItems.length} 条记录（覆盖本地）`);
+      toast.success('已下载', `共 ${cloudItems.length} 条记录（覆盖本地）`);
     } catch (error) {
       const errorCode = extractErrorCode(error);
       log.error('下载历史记录失败:', error);
       updateHistorySyncStatus(profile, 'failed', errorCode);
       await writeSyncLog('download_history_cloud', 'failed', errorCode, profile);
-      toast.error('下载失败', errorCode);
+      toast.error('下载失败', `${errorCode}\n请检查网络或 WebDAV 配置后重试`);
     } finally {
       downloadHistoryLoading.value = false;
     }
@@ -294,7 +294,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
       log.error('下载历史记录失败:', error);
       updateHistorySyncStatus(profile, 'failed', errorCode);
       await writeSyncLog('download_history_cloud', 'failed', errorCode, profile);
-      toast.error('下载失败', errorCode);
+      toast.error('下载失败', `${errorCode}\n请检查网络或 WebDAV 配置后重试`);
     } finally {
       downloadHistoryLoading.value = false;
     }
@@ -362,7 +362,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
 
       updateHistorySyncStatus(profile, 'success');
       await writeSyncLog('sync_history', 'success', `共 ${mergedItems.length} 条记录`, profile);
-      toast.success(`同步完成：共 ${mergedItems.length} 条记录`);
+      toast.success('已同步', `共 ${mergedItems.length} 条记录`);
     } catch (error) {
       const errorCode = extractErrorCode(error);
       log.error('历史记录同步失败:', error);

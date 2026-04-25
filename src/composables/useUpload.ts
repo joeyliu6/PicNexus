@@ -180,7 +180,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       if (!isNetworkAvailable) {
         toast.error(
           '网络请求失败',
-          `${valid.length} 个文件请求超时或中断，请检查网络`,
+          `${valid.length} 个文件请求超时或中断，请检查网络\n建议：检查图床配置 / 切换图床`,
           6000
         );
         return;

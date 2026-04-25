@@ -228,7 +228,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
 
       updateConfigSyncStatus(profile, 'success');
       await writeSyncLog('sync_settings', 'success', undefined, profile);
-      toast.success('配置同步完成');
+      toast.success('已同步配置');
 
       if (hasCloudData) {
         needsReload.value = true;

@@ -92,7 +92,7 @@ async function handleStartLogin() {
       unlistenReady = null;
     }
     console.error('[LoginWebview] Start login failed:', error);
-    alert(`启动监控失败: ${error}`);
+    alert(`启动 Cookie 监控失败\n${error}\n请重新打开登录窗口`);
   }
 }
 
@@ -142,7 +142,7 @@ async function handleGetCookie() {
     setTimeout(() => appWindow.close(), 2000);
   } catch (error) {
     console.error('[LoginWebview] Get cookie failed:', error);
-    alert(`获取Cookie失败: ${error}`);
+    alert(`获取 Cookie 失败\n${error}\n请确认已登录后重试`);
   }
 }
 

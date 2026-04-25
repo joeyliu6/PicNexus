@@ -39,7 +39,7 @@ export function useLinkCheckBulkActions(options: UseLinkCheckBulkActionsOptions)
   async function bulkCopyUrls(rows: LinkCheckRow[]): Promise<void> {
     const urls = uniqueUrls(rows);
     if (urls.length === 0) {
-      toast.warn('没有可复制的链接');
+      toast.warn('无可用链接', '没有可复制的链接');
       return;
     }
 
