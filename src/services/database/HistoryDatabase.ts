@@ -25,6 +25,7 @@ import {
   getLinkCheckInvalidQuery,
   getLinkCheckRestStreamQuery,
   batchUpdateLinkCheckStatusQuery,
+  getLinkCheckContextByIdsQuery,
 } from './LinkCheckQuery';
 import { addSyncLogQuery, getSyncLogsQuery, clearSyncLogsQuery } from './SyncLogService';
 import { getItemsByBackupCountQuery, getBackupCountStatsQuery, getServiceDistributionQuery, getItemsByIdsQuery, setMigrationSkipQuery } from './MigrationQuery';
@@ -809,6 +810,17 @@ class HistoryDatabase {
   ): Promise<void> {
     const db = await this.connection.getDb();
     await batchUpdateLinkCheckStatusQuery(db, updates);
+  }
+
+  /**
+   * 批量读取指定 id 的 link_check_status + results 原始 JSON 字符串
+   * 子集复检在写回前用它 merge，避免覆盖未参与本批的图床状态
+   */
+  async getLinkCheckContextByIds(
+    ids: string[],
+  ): Promise<Map<string, { results: string | null; linkCheckStatus: string | null }>> {
+    const db = await this.connection.getDb();
+    return getLinkCheckContextByIdsQuery(db, ids);
   }
 
   // ============================================

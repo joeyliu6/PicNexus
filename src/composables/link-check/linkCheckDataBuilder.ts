@@ -83,10 +83,12 @@ export function restoreCheckStatus(rows: LinkCheckRow[], items: HistoryItem[]): 
       link: row.url,
       is_valid: saved.isValid,
       status_code: saved.statusCode,
+      // 'pending' 是历史遗留状态，运行态不再使用，退化成 'network'
       error_type: saved.errorType === 'pending' ? 'network' : saved.errorType,
       response_time: saved.responseTime,
       error: saved.error,
-      browser_might_work: false,
+      // 防盗链命中必须从持久化字段恢复，否则微博/B站等会从「可疑」错落成「失效」
+      browser_might_work: saved.browserMightWork === true,
     };
   }
 }

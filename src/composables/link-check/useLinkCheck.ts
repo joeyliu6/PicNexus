@@ -30,6 +30,7 @@ import {
 import {
   updateHistoryCheckStatus,
   exportCsv,
+  normalizeErrorType,
 } from './linkCheckPersistence';
 import { onCacheEvent } from '../../events/cacheEvents';
 
@@ -88,7 +89,21 @@ const MIN_SKELETON_MS = 400;
 const RECHECK_MS = { SPIN_MIN: 400, RESULT_SHOW: 1000, ROW_FADE: 350, BADGE_FADE: 300 } as const;
 
 // 与历史事件同步——不响应会导致检测视图持有"幽灵行"（历史已清空/更新但检测页仍显示旧状态）
-onCacheEvent((p) => { if (p.type === 'history-cleared') { checkRows.value = []; lastBatchResult.value = null; lastLoadTime = 0; } else if (p.type === 'history-updated') lastLoadTime = 0; }).catch(e => log.warn('[LinkCheck] 缓存事件监听失败:', e));
+onCacheEvent((p) => {
+  if (p.type === 'history-cleared') {
+    checkRows.value = [];
+    lastBatchResult.value = null;
+    lastLoadTime = 0;
+    // 历史被清空时，必须丢弃正在跑的批量结果——否则 finally 里的 applyResultsToRows
+    // 会把这一批 result 重新塞回空的 checkRows，造成「幽灵行」与对已删 historyId 的写库
+    if (progressUnlisten) {
+      ++latestStartedBatchSession; // 触发 useLinkCheckManager 内部「被新批次替代」守卫
+      void invoke('cancel_batch_check').catch(() => undefined);
+    }
+  } else if (p.type === 'history-updated') {
+    lastLoadTime = 0;
+  }
+}).catch(e => log.warn('[LinkCheck] 缓存事件监听失败:', e));
 
 /**
  * 链接检测管理器
@@ -646,9 +661,10 @@ export function useLinkCheckManager() {
       isValid: result.is_valid,
       lastCheckTime: Date.now(),
       statusCode: result.status_code,
-      errorType: result.error_type as 'success' | 'http_4xx' | 'http_5xx' | 'timeout' | 'network' | 'pending',
+      errorType: normalizeErrorType(result.error_type),
       responseTime: result.response_time,
       error: result.error || undefined,
+      browserMightWork: result.browser_might_work || undefined,
     };
     await historyDB.update(row.historyId, { linkCheckStatus });
   }

@@ -47,6 +47,34 @@ export async function* getLinkCheckRestStreamQuery(
   }
 }
 
+/**
+ * 批量读取指定 id 的 link_check_status + results 上下文
+ * 用于子集复检场景：写回前先 merge 已存在的其他图床状态，避免被误覆盖
+ */
+export async function getLinkCheckContextByIdsQuery(
+  db: Database,
+  ids: string[],
+): Promise<Map<string, { results: string | null; linkCheckStatus: string | null }>> {
+  const map = new Map<string, { results: string | null; linkCheckStatus: string | null }>();
+  if (ids.length === 0) return map;
+
+  const batchSize = 200;
+  for (let i = 0; i < ids.length; i += batchSize) {
+    const batch = ids.slice(i, i + batchSize);
+    const placeholders = batch.map((_, j) => `$${j + 1}`).join(',');
+    const rows = await db.select<Array<{ id: string; results: string | null; link_check_status: string | null }>>(
+      `SELECT id, results, link_check_status
+       FROM history_items
+       WHERE id IN (${placeholders})`,
+      batch,
+    );
+    for (const row of rows) {
+      map.set(row.id, { results: row.results, linkCheckStatus: row.link_check_status });
+    }
+  }
+  return map;
+}
+
 export async function batchUpdateLinkCheckStatusQuery(
   db: Database,
   updates: Array<{

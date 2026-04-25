@@ -46,9 +46,14 @@ export interface HistoryItem {
       isValid: boolean;
       lastCheckTime: number;
       statusCode?: number;
-      errorType: 'success' | 'http_4xx' | 'http_5xx' | 'timeout' | 'network' | 'pending';
+      errorType: 'success' | 'http_4xx' | 'http_5xx' | 'timeout' | 'network' | 'suspicious' | 'pending';
       responseTime?: number;
       error?: string;
+      /**
+       * 防盗链命中：HTTP 失败但浏览器可能仍可访问（403 + 已知防盗链图床）
+       * 持久化必须保留——否则重启后微博/B站等防盗链失败会从「可疑」错落成「失效」
+       */
+      browserMightWork?: boolean;
     };
   };
 
