@@ -71,11 +71,17 @@ function handleGoSettings() {
 }
 
 const chipTooltip = computed(() => {
-  if (!props.compressionEnabled) return '点击启用压缩';
+  if (!props.compressionEnabled) return '点击启用压缩（当前已关）';
   const p = props.activePreset;
   if (!p) return '点击切换压缩预设';
   const skip = p.skipIfSmallerKB > 0 ? `跳过 ${p.skipIfSmallerKB} KB 以下` : '全部压缩';
   return `质量 ${p.quality} · ${FORMAT_LABEL[p.outputFormat] ?? p.outputFormat} · ${skip}`;
+});
+
+// 后缀文案：关闭态显示「已关」，开启态显示当前预设名；空字符串则后缀整体收起
+const chipSuffixText = computed(() => {
+  if (!props.compressionEnabled) return '已关';
+  return props.activePreset?.name ?? '';
 });
 </script>
 
@@ -119,14 +125,20 @@ const chipTooltip = computed(() => {
           @click="handleChipMainClick"
         >
           <i
-            :class="['pi', compressionEnabled ? 'pi-bolt' : 'pi-ban']"
+            :class="['pi', compressionEnabled ? 'pi-bolt' : 'pi-circle']"
             class="compress-chip-icon"
           />
           <span class="compress-chip-label">压缩</span>
-          <template v-if="compressionEnabled && activePreset">
-            <span class="compress-chip-dot">·</span>
-            <span class="compress-chip-preset">{{ activePreset.name }}</span>
-          </template>
+          <!-- 后缀：用 grid 0fr/1fr 技巧实现「展开/收起」时宽度的丝滑动画 -->
+          <span
+            class="compress-chip-suffix"
+            :class="{ 'is-empty': !chipSuffixText }"
+          >
+            <span class="compress-chip-suffix-inner">
+              <span class="compress-chip-dot">·</span>
+              <span class="compress-chip-preset">{{ chipSuffixText }}</span>
+            </span>
+          </span>
         </button>
         <span class="chip-divider" aria-hidden="true" />
         <button
@@ -351,6 +363,26 @@ const chipTooltip = computed(() => {
 
 .compress-chip-active .compress-chip-preset {
   color: var(--text-primary);
+}
+
+/* 后缀容器：grid 0fr/1fr 技巧让宽度变化丝滑过渡 */
+.compress-chip-suffix {
+  display: inline-grid;
+  grid-template-columns: 1fr;
+  transition: grid-template-columns var(--duration-normal) var(--ease-standard);
+}
+
+.compress-chip-suffix.is-empty {
+  grid-template-columns: 0fr;
+}
+
+.compress-chip-suffix-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .compress-chip-chevron {
