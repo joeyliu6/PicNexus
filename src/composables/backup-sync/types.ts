@@ -70,6 +70,9 @@ export interface UseBackupSyncReturn {
     cancel: () => void;
   } | null>;
 
+  // 配置同步后需要刷新页面才能生效（常驻 banner，由 UI 层渲染）
+  needsReload: Ref<boolean>;
+
   // 工具函数
   extractErrorCode: (error: unknown) => string;
   getFullTimestamp: () => string;

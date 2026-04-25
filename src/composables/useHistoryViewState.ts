@@ -68,10 +68,7 @@ export function useHistoryViewState() {
 
   async function bulkCopyFormatted(format?: import('../utils/linkFormatter').LinkFormat, serviceId?: string): Promise<void> {
     const ids = selectedIdList.value;
-    if (ids.length === 0) {
-      toast.warn('未选择项目', '请先选择要复制的项目');
-      return;
-    }
+    if (ids.length === 0) return;
 
     const metas = await historyDB.getMetasByIds(ids);
 
@@ -147,10 +144,7 @@ export function useHistoryViewState() {
 
   async function bulkDelete(): Promise<void> {
     const ids = selectedIdList.value;
-    if (ids.length === 0) {
-      toast.warn('未选择项目', '请先选择要删除的项目');
-      return;
-    }
+    if (ids.length === 0) return;
 
     await historyManager.bulkDeleteRecords(ids);
     clearSelection();

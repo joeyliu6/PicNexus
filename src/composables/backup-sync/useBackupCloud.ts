@@ -22,6 +22,7 @@ export interface BackupCloudDeps {
   uploadHistoryMenuVisible: Ref<boolean>;
   downloadSettingsMenuVisible: Ref<boolean>;
   downloadHistoryMenuVisible: Ref<boolean>;
+  needsReload: Ref<boolean>;
 }
 
 export function createBackupCloudOps(deps: BackupCloudDeps) {

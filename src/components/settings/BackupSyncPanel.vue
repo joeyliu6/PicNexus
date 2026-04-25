@@ -9,6 +9,7 @@ import DataItemCard from './backup/DataItemCard.vue';
 import WebDAVConfigCollapsible from './backup/WebDAVConfigCollapsible.vue';
 import BackupPasswordSection from './backup/BackupPasswordSection.vue';
 import SyncHistoryLog from './backup/SyncHistoryLog.vue';
+import ReloadBanner from '../common/ReloadBanner.vue';
 
 interface Props {
   webdavConfig: WebDAVConfig;
@@ -50,7 +51,12 @@ const {
   uploadHistoryForce,
   downloadHistoryOverwrite,
   passwordRequest,
+  needsReload,
 } = useBackupSync();
+
+function handleReload(): void {
+  location.reload();
+}
 
 const syncHistoryLogRef = ref<InstanceType<typeof SyncHistoryLog> | null>(null);
 const backupPasswordSectionRef = ref<InstanceType<typeof BackupPasswordSection> | null>(null);
@@ -220,6 +226,12 @@ function handleRestoreCancel() {
       <h2>备份与同步</h2>
       <p class="section-desc">管理你的设置和上传记录，支持多设备同步</p>
     </div>
+
+    <ReloadBanner
+      :visible="needsReload"
+      message="云端配置已下载到本地，刷新页面后生效"
+      @reload="handleReload"
+    />
 
     <!-- 备份密码 -->
     <div class="form-group">

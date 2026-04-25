@@ -273,7 +273,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
         if (activePrefix) link = applyPrefixTemplate(activePrefix.template, link);
       }
       await writeText(link);
-      toast.success('已复制', `${getServiceDisplayName(serviceId)} 链接已复制到剪贴板`, 1500);
+      toast.silent('log', '已复制', `${getServiceDisplayName(serviceId)} 链接已复制到剪贴板`);
     } catch (error) {
       logger.error(`复制 ${serviceId} 链接失败:`, error);
       toast.error('复制失败', String(error));

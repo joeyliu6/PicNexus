@@ -114,6 +114,7 @@ function makeState() {
     downloadHistoryMenuVisible: ref(false),
     configSectionExpanded: ref(false),
     historySectionExpanded: ref(false),
+    needsReload: ref(false),
     passwordRequest: ref<{
       verify: (password: string) => Promise<boolean>;
       cancel: () => void;
@@ -124,6 +125,8 @@ function makeState() {
     getAllSyncRecords: getAllSyncRecordsMock,
     updateConfigSyncStatus: vi.fn(),
     updateHistorySyncStatus: vi.fn(),
+    acquireCloudSync: vi.fn(() => true),
+    releaseCloudSync: vi.fn(),
     toggleUploadHistoryMenu: toggleUploadHistoryMenuMock,
     toggleDownloadSettingsMenu: toggleDownloadSettingsMenuMock,
     toggleDownloadHistoryMenu: toggleDownloadHistoryMenuMock,

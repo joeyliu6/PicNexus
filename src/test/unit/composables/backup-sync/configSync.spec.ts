@@ -109,6 +109,9 @@ function makeDeps() {
     uploadHistoryMenuVisible: ref(false),
     downloadSettingsMenuVisible: ref(true),
     downloadHistoryMenuVisible: ref(false),
+    needsReload: ref(false),
+    acquireCloudSync: vi.fn(() => true),
+    releaseCloudSync: vi.fn(),
   };
 }
 
@@ -181,7 +184,7 @@ describe('createConfigSyncOps', () => {
     expect(configStoreSaveMock).toHaveBeenCalledTimes(1);
     expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'success');
     expect(toastShowConfigMock).toHaveBeenCalledWith('success', expect.any(Object));
-    expect(toastShowConfigMock).toHaveBeenCalledWith('info', expect.any(Object));
+    expect(deps.needsReload.value).toBe(true);
   });
 
   it('merges downloaded settings while preserving the current WebDAV config', async () => {

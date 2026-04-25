@@ -86,7 +86,7 @@ async function openInBrowser(url: string): Promise<void> {
 async function copyRowUrl(url: string): Promise<void> {
   try {
     await writeText(resolveConfiguredUrl(url));
-    toast.success('已复制', 'URL 已复制到剪贴板');
+    toast.silent('log', '已复制', 'URL 已复制到剪贴板');
   } catch (err) {
     toast.error('复制失败', String(err));
   }

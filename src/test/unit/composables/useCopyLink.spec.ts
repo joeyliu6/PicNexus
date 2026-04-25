@@ -9,11 +9,12 @@ import {
   useCopyLink,
 } from '../../../composables/useCopyLink';
 
-const { writeTextMock, toastSuccessMock, toastWarnMock, toastErrorMock } = vi.hoisted(() => ({
+const { writeTextMock, toastSuccessMock, toastWarnMock, toastErrorMock, toastSilentMock } = vi.hoisted(() => ({
   writeTextMock: vi.fn(),
   toastSuccessMock: vi.fn(),
   toastWarnMock: vi.fn(),
   toastErrorMock: vi.fn(),
+  toastSilentMock: vi.fn(),
 }));
 const configRef = ref<UserConfig>(makeConfig());
 
@@ -26,6 +27,7 @@ vi.mock('../../../composables/useToast', () => ({
     success: toastSuccessMock,
     warn: toastWarnMock,
     error: toastErrorMock,
+    silent: toastSilentMock,
   }),
 }));
 
@@ -58,6 +60,7 @@ beforeEach(() => {
   toastSuccessMock.mockReset();
   toastWarnMock.mockReset();
   toastErrorMock.mockReset();
+  toastSilentMock.mockReset();
   configRef.value = makeConfig();
 });
 

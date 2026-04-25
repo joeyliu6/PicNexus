@@ -12,15 +12,13 @@ import type { BackupCloudDeps } from './useBackupCloud';
 
 const log = createLogger('ConfigSync');
 
-/** 配置写入 store 后到提示"请刷新页面"的延迟，让成功 toast 先出再叠加刷新提示 */
-const REFRESH_HINT_DELAY_MS = 1000;
-
 export function createConfigSyncOps(deps: BackupCloudDeps) {
   const {
     toast, confirmDialog, tryDecryptContent,
     updateConfigSyncStatus,
     uploadSettingsLoading, downloadSettingsLoading, syncConfigLoading,
     downloadSettingsMenuVisible,
+    needsReload,
   } = deps;
 
   async function uploadSettingsCloud(profile: WebDAVProfile | null): Promise<void> {
@@ -97,9 +95,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
       await writeSyncLog('download_settings_cloud', 'success', undefined, profile);
       toast.showConfig('success', TOAST_MESSAGES.sync.downloadSuccess('config'));
 
-      setTimeout(() => {
-        toast.showConfig('info', TOAST_MESSAGES.sync.refreshHint);
-      }, REFRESH_HINT_DELAY_MS);
+      needsReload.value = true;
     } catch (error) {
       if (error instanceof Error && error.message === 'user_cancelled') return;
       const errorCode = extractErrorCode(error);
@@ -153,9 +149,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
       await writeSyncLog('download_settings_cloud', 'success', undefined, profile);
       toast.success('配置已从云端恢复（保留本地 WebDAV）');
 
-      setTimeout(() => {
-        toast.info('请刷新页面以使配置生效');
-      }, REFRESH_HINT_DELAY_MS);
+      needsReload.value = true;
     } catch (error) {
       if (error instanceof Error && error.message === 'user_cancelled') return;
       const errorCode = extractErrorCode(error);
@@ -237,9 +231,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
       toast.success('配置同步完成');
 
       if (hasCloudData) {
-        setTimeout(() => {
-          toast.info('请刷新页面以使配置生效');
-        }, REFRESH_HINT_DELAY_MS);
+        needsReload.value = true;
       }
     } catch (error) {
       if (error instanceof Error && error.message === 'user_cancelled') return;

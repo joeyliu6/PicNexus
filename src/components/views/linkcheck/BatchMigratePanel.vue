@@ -7,14 +7,12 @@ import { watch, onActivated, onDeactivated, onUnmounted, provide } from 'vue';
 import { useBatchMigrateManager } from '../../../composables/useBatchMigrate';
 import { debounceWithError } from '../../../utils/debounce';
 import { useServiceHealth } from '../../../composables/useServiceHealth';
-import { useToast } from '../../../composables/useToast';
 import { MIGRATE_KEY } from './migrate/keys';
 import MigrateSelectPhase from './migrate/MigrateSelectPhase.vue';
 import MigrateProgressPhase from './migrate/MigrateProgressPhase.vue';
 
 const manager = useBatchMigrateManager();
 const { healthStatusMap, healthTooltipMap } = useServiceHealth();
-const toast = useToast();
 
 // 启动前统一过滤健康状态为 error 的目标，首次启动和重试失败项都必须走这条路径，
 // 否则"重试失败"直连 manager.retryFailed() 会绕过过滤，当目标仍为 error 时
@@ -44,11 +42,6 @@ manager.initConfiguring();
 
 onActivated(() => {
   manager.onViewActivated();
-  // 若上次被空闲计时器清理过，提示用户原因
-  if (manager.wasIdleCleared.value) {
-    manager.wasIdleCleared.value = false;
-    toast.info('迁移数据已自动释放', '面板闲置 3 分钟后已清空列表和结果以释放内存');
-  }
   if (manager.phase.value === 'configuring') manager.initConfiguring();
 });
 

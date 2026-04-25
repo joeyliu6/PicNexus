@@ -94,6 +94,7 @@ export function useBackupSync() {
     uploadHistoryMenuVisible: state.uploadHistoryMenuVisible,
     downloadSettingsMenuVisible: state.downloadSettingsMenuVisible,
     downloadHistoryMenuVisible: state.downloadHistoryMenuVisible,
+    needsReload: state.needsReload,
   });
 
   return {
@@ -144,6 +145,9 @@ export function useBackupSync() {
 
     // 密码请求
     passwordRequest: state.passwordRequest,
+
+    // 配置生效需重启
+    needsReload: state.needsReload,
 
     // 工具函数
     extractErrorCode,

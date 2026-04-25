@@ -37,6 +37,9 @@ export function useBackupSyncState() {
   const configSectionExpanded = ref(false);
   const historySectionExpanded = ref(false);
 
+  // 配置同步后需提示用户刷新（常驻 banner，由 UI 层渲染并提供 Reload 按钮）
+  const needsReload = ref(false);
+
   // 密码请求状态（导入/下载加密数据时使用）
   // verify: 验证密码，成功返回 true；失败返回 false（不关闭对话框，允许重试）
   // cancel: 用户取消或跳过，拒绝整个请求
@@ -178,6 +181,7 @@ export function useBackupSyncState() {
     downloadHistoryMenuVisible,
     configSectionExpanded,
     historySectionExpanded,
+    needsReload,
     passwordRequest,
 
     // 同步状态管理

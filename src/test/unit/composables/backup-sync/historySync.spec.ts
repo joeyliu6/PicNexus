@@ -97,6 +97,9 @@ function makeDeps() {
     uploadHistoryMenuVisible: ref(true),
     downloadSettingsMenuVisible: ref(false),
     downloadHistoryMenuVisible: ref(true),
+    needsReload: ref(false),
+    acquireCloudSync: vi.fn(() => true),
+    releaseCloudSync: vi.fn(),
   };
 }
 

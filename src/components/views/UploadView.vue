@@ -293,10 +293,7 @@ const handleBatchRetry = async () => {
     .filter(item => hasFailedServices(item))
     .map(item => item.id);
 
-  if (failedItemIds.length === 0) {
-    toast.info('无需重试', '没有失败的上传项');
-    return;
-  }
+  if (failedItemIds.length === 0) return;
 
   isBatchRetrying.value = true;
   try {
@@ -318,7 +315,6 @@ const handleClearQueue = () => {
     acceptClass: 'p-button-danger',
     accept: () => {
       clearQueue();
-      toast.success('已清空', '上传队列已清空');
     }
   });
 };
@@ -326,7 +322,6 @@ const handleClearQueue = () => {
 // 清空已完成的队列项（无需确认，不影响进行中的上传）
 const handleClearCompleted = () => {
   clearCompletedItems();
-  toast.success('已清空', '已完成的上传项已清理');
 };
 
 // 加载配置

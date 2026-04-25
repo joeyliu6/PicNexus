@@ -2,7 +2,8 @@
 // 负责批量检测历史链接有效性，管理检测状态和进度
 
 /* eslint-disable max-lines -- singleton state machine kept together for link monitor behavior */
-import { ref, shallowRef, computed, triggerRef, type Ref, type ComputedRef } from 'vue';
+import { ref, shallowRef, computed, type Ref, type ComputedRef } from 'vue';
+import { createRafScheduler } from '../../utils/rafScheduler';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { HistoryItem } from '../../config/types';
@@ -127,6 +128,9 @@ export function useLinkCheckManager() {
       progressSource.value = null;
       clearProgressListener();
     }
+    // 同帧合并的 mutation 强制落地：避免最后一批结果还在 rAF 队列里就被
+    // 后续 checkRows 重赋值（applyResultsToRows）覆盖
+    checkRowsRefreshScheduler.flush();
   }
 
   /** async 包装，兼容原有调用 */
@@ -249,8 +253,6 @@ export function useLinkCheckManager() {
         toast.info('无链接可检测', '没有成功上传的链接');
         return null;
       }
-
-      toast.info('开始检测');
 
       // 监听进度事件（带 session 校验，防止旧会话数据污染新会话）
       clearProgressListener();
@@ -493,8 +495,6 @@ export function useLinkCheckManager() {
         fallback_url: row.fallbackUrl,
       }));
 
-      toast.info('开始检测');
-
       clearProgressListener();
       progressUnlisten = await listen<BatchCheckProgress>(
         'link-check://progress',
@@ -569,10 +569,20 @@ export function useLinkCheckManager() {
     );
   }
 
+  /** rAF 节流刷新（同帧内多次 mutate 合并为一次数组引用替换，对齐批量迁移的实现） */
+  const checkRowsRefreshScheduler = createRafScheduler();
+  function refreshCheckRowsRef(): void {
+    // 必须替换数组引用而非 triggerRef：HistoryCheckPanel 通过 prop 接收 checkRows，
+    // Vue 的 prop 更新走引用比对——同一个数组引用 = prop 没变 = 子组件 computed 不重算。
+    // .slice() 仅复制指针表（34k 条 ≈ 272KB），rAF 合并后每帧最多一次。
+    checkRows.value = checkRows.value.slice();
+  }
+
   /**
    * 把进度事件里的逐条结果实时 patch 到对应行——配合 useCheckFilter 冻结，
    * 列表里的徽章和顶部 chips（依赖 checkRows 的 computed）会自动跟着刷新。
-   * 走 mutation + triggerRef 而非整数组替换，避免 32k 条数据下的高频 O(n) 拷贝。
+   * 行对象 mutate-in-place + rAF 节流换数组引用：高频事件（默认每 10 条触发一次）
+   * 同帧合并，跨越 prop 边界唤醒子组件，但不会让重渲染轰炸 UI。
    */
   function applyRecentResults(recent: BatchCheckItemResult[]): void {
     if (recent.length === 0) return;
@@ -588,7 +598,7 @@ export function useLinkCheckManager() {
       target.checkResult = result;
       mutated = true;
     }
-    if (mutated) triggerRef(checkRows);
+    if (mutated) checkRowsRefreshScheduler.schedule(refreshCheckRowsRef);
   }
 
   /** 复制 checkRows、通过 Map O(1) 找到目标行、执行变更、触发响应式更新 */

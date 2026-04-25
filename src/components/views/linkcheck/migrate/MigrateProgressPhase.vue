@@ -255,7 +255,7 @@ async function handleCopyUrl(historyId: string, serviceId: string) {
     }
     const finalUrl = applyConfiguredUrlWithConfig(url, serviceId, configManager.config.value);
     await navigator.clipboard.writeText(finalUrl);
-    toast.success('已复制链接');
+    toast.silent('log', '已复制链接');
   } catch (e) {
     log.error('复制链接失败', e);
     toast.error('复制失败', String(e));

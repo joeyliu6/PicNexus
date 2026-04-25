@@ -147,7 +147,7 @@ export function useCopyLink() {
 
       await writeText(formatted);
       if (showSuccessToast) {
-        toast.success('已复制', `${FORMAT_NAMES[finalFormat]} 链接已复制`, TOAST_DURATION);
+        toast.silent('log', '已复制', `${FORMAT_NAMES[finalFormat]} 链接已复制`);
       }
 
       return {

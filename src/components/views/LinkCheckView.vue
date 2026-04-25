@@ -100,7 +100,7 @@ async function handleExportCsvSelected(rows: LinkCheckRow[]): Promise<void> {
 function handleCopyUrl(url: string): void {
   const finalUrl = applyZhihuSourceFromConfig(url, configManager.config.value);
   void navigator.clipboard.writeText(finalUrl);
-  toast.success('已复制到剪贴板');
+  toast.silent('log', '已复制到剪贴板');
 }
 
 async function handleRecheckSingle(
