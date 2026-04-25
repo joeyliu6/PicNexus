@@ -11,21 +11,30 @@ export interface MoreMenuItem {
   kind: MoreMenuKind;
   label: string;
   icon: string;
+  count: number;
   danger?: boolean;
 }
 
 const FILTER_LABEL: Record<string, string> = {
-  invalid: '重检失效链接',
-  suspicious: '重检可疑链接',
-  timeout: '重检超时链接',
-  unchecked: '检测未检测',
+  invalid: '重检失效',
+  suspicious: '重检可疑',
+  timeout: '重检超时',
+  unchecked: '开始检测',
 };
 
-const FILTER_TOOLTIP: Record<string, string> = {
-  invalid: '重新检测当前筛选的失效链接',
-  suspicious: '重新检测当前筛选的可疑链接',
-  timeout: '重新检测当前筛选的超时链接',
-  unchecked: '检测尚未验证的链接',
+const FILTER_TOOLTIP: Record<string, (count: string) => string> = {
+  invalid: (c) => `重新检测这 ${c} 条失效链接`,
+  suspicious: (c) => `重新检测这 ${c} 条可疑链接`,
+  timeout: (c) => `重新检测这 ${c} 条超时链接`,
+  unchecked: (c) => `开始检测这 ${c} 条未检测链接`,
+};
+
+const SCOPE_FILTER_LABEL: Record<string, string> = {
+  invalid: '失效',
+  suspicious: '可疑',
+  timeout: '超时',
+  unchecked: '未检测',
+  valid: '可用',
 };
 
 interface UseCheckStrategyOptions {
@@ -34,36 +43,36 @@ interface UseCheckStrategyOptions {
 }
 
 export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOptions) {
+  function contextAwareCount(filter: StatusFilter): number {
+    return stats.value[filter as 'invalid' | 'suspicious' | 'timeout' | 'unchecked'];
+  }
+
   const smartCheckLabel = computed(() => {
     const filter = statusFilter.value;
     if (filter && CONTEXT_AWARE_FILTERS.has(filter)) {
       const label = FILTER_LABEL[filter];
-      const count = filter === 'invalid'
-        ? stats.value.invalid
-        : stats.value[filter as 'suspicious' | 'timeout' | 'unchecked'];
-      if (label && count > 0) return `${label} (${count.toLocaleString()})`;
+      if (label && contextAwareCount(filter) > 0) return label;
     }
 
-    if (stats.value.unchecked === stats.value.total) return '开始检测';
-    if (stats.value.unchecked > 0) return '继续检测';
-    if (stats.value.problems > 0) return `重检问题链接 (${stats.value.problems})`;
-    return '重新检测全部';
+    const { unchecked, total, problems } = stats.value;
+    if (unchecked === total) return '开始检测';
+    if (unchecked > 0) return '继续检测';
+    if (problems > 0) return '重检问题';
+    return '重检全部';
   });
 
   const smartCheckTooltip = computed(() => {
     const filter = statusFilter.value;
     if (filter && CONTEXT_AWARE_FILTERS.has(filter)) {
-      const count = filter === 'invalid'
-        ? stats.value.invalid
-        : stats.value[filter as 'suspicious' | 'timeout' | 'unchecked'];
-      const tooltip = FILTER_TOOLTIP[filter];
-      if (tooltip && count > 0) return `${tooltip} (${count.toLocaleString()} 条)`;
+      const count = contextAwareCount(filter);
+      const tooltipFn = FILTER_TOOLTIP[filter];
+      if (tooltipFn && count > 0) return tooltipFn(count.toLocaleString());
     }
 
     const { unchecked, total, problems } = stats.value;
-    if (unchecked === total) return `检测全部 ${total.toLocaleString()} 条链接`;
-    if (unchecked > 0) return `检测尚未验证的 ${unchecked.toLocaleString()} 条链接`;
-    if (problems > 0) return `重新验证 ${problems.toLocaleString()} 条问题链接`;
+    if (unchecked === total) return `开始检测全部 ${total.toLocaleString()} 条链接`;
+    if (unchecked > 0) return `继续检测剩余 ${unchecked.toLocaleString()} 条链接`;
+    if (problems > 0) return `重新检测 ${problems.toLocaleString()} 条问题链接`;
     return `重新检测全部 ${total.toLocaleString()} 条链接`;
   });
 
@@ -73,42 +82,31 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
   }): MoreMenuItem[] {
     const { mode, count } = args;
     const filter = statusFilter.value;
-    const countLabel = count.toLocaleString();
     const items: MoreMenuItem[] = [];
 
-    items.push({
-      kind: 'export',
-      label: mode === 'selection'
-        ? `导出选中 ${countLabel} 条`
-        : filter === 'all'
-          ? '导出全部'
-          : '导出当前筛选',
-      icon: 'pi-download',
-    });
+    items.push({ kind: 'export', label: '导出', icon: 'pi-download', count });
 
     const allowBulk = mode === 'selection' || filter !== 'all';
     if (!allowBulk) return items;
 
-    items.push({
-      kind: 'recheck',
-      label: `重检这 ${countLabel} 条`,
-      icon: 'pi-refresh',
-    });
-
-    items.push({
-      kind: 'copy',
-      label: `复制这 ${countLabel} 条链接`,
-      icon: 'pi-copy',
-    });
-
-    items.push({
-      kind: 'delete',
-      label: `删除这 ${countLabel} 条`,
-      icon: 'pi-trash',
-      danger: true,
-    });
+    items.push({ kind: 'recheck', label: '重新检测', icon: 'pi-refresh', count });
+    items.push({ kind: 'copy', label: '复制链接', icon: 'pi-copy', count });
+    items.push({ kind: 'delete', label: '删除', icon: 'pi-trash', count, danger: true });
 
     return items;
+  }
+
+  function buildScopeLabel(args: {
+    mode: 'selection' | 'filter';
+    count: number;
+  }): string {
+    if (args.mode === 'selection') {
+      return `针对已选 ${args.count.toLocaleString()} 条`;
+    }
+    const filter = statusFilter.value;
+    if (!filter || filter === 'all') return '针对全部数据';
+    const sub = SCOPE_FILTER_LABEL[filter];
+    return sub ? `针对当前筛选 · ${sub}` : '针对当前筛选';
   }
 
   function resolveSmartCheck(): { action: 'check-all' | 'check-subset'; filter?: string } {
@@ -173,6 +171,7 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
     smartCheckLabel,
     smartCheckTooltip,
     buildMoreMenuItems,
+    buildScopeLabel,
     resolveSmartCheck,
     statusDotColor,
     errorBadgeClass,

@@ -31,31 +31,28 @@ describe('smartCheckLabel', () => {
     expect(smartCheckLabel.value).toBe('继续检测');
   });
 
-  it('全部已检测且有问题时显示"重检问题链接 (N)"', () => {
+  it('全部已检测且有问题时显示"重检问题"（计数已挪到徽章）', () => {
     const { smartCheckLabel } = makeStrategy({ total: 10, unchecked: 0, problems: 3 });
-    expect(smartCheckLabel.value).toContain('重检问题链接');
-    expect(smartCheckLabel.value).toContain('3');
+    expect(smartCheckLabel.value).toBe('重检问题');
   });
 
-  it('全部已检测且无问题时显示"重新检测全部"', () => {
+  it('全部已检测且无问题时显示"重检全部"', () => {
     const { smartCheckLabel } = makeStrategy({ total: 5, unchecked: 0, problems: 0 });
-    expect(smartCheckLabel.value).toBe('重新检测全部');
+    expect(smartCheckLabel.value).toBe('重检全部');
   });
 
-  it('筛选器为 invalid 时显示对应标签（含数量）', () => {
+  it('筛选器为 invalid 时显示"重检失效"', () => {
     const stats = computed(() => makeStats({ invalid: 4 }));
     const statusFilter = ref<StatusFilter>('invalid');
     const { smartCheckLabel } = useCheckStrategy({ stats, statusFilter });
-    expect(smartCheckLabel.value).toContain('重检失效链接');
-    expect(smartCheckLabel.value).toContain('4');
+    expect(smartCheckLabel.value).toBe('重检失效');
   });
 
-  it('筛选器为 unchecked 时显示"检测未检测 (N)"', () => {
+  it('筛选器为 unchecked 时显示"开始检测"', () => {
     const stats = computed(() => makeStats({ unchecked: 7 }));
     const statusFilter = ref<StatusFilter>('unchecked');
     const { smartCheckLabel } = useCheckStrategy({ stats, statusFilter });
-    expect(smartCheckLabel.value).toContain('检测未检测');
-    expect(smartCheckLabel.value).toContain('7');
+    expect(smartCheckLabel.value).toBe('开始检测');
   });
 });
 

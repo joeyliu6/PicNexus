@@ -80,6 +80,7 @@ const {
   smartCheckLabel,
   smartCheckTooltip,
   buildMoreMenuItems,
+  buildScopeLabel,
   resolveSmartCheck,
   statusDotColor,
   errorBadgeClass,
@@ -104,6 +105,13 @@ const moreMenuItems = computed(() => {
       .filter((item) => item.kind !== 'recheck');
   }
   return buildMoreMenuItems({ mode: 'filter', count: filteredRows.value.length });
+});
+
+const moreMenuScopeLabel = computed(() => {
+  if (hasSelection.value) {
+    return buildScopeLabel({ mode: 'selection', count: selectedCount.value });
+  }
+  return buildScopeLabel({ mode: 'filter', count: filteredRows.value.length });
 });
 
 const effectiveSmartCheckLabel = computed(() => {
@@ -286,6 +294,7 @@ function handleMoreAction(kind: MoreMenuKind): void {
       :smart-check-label="effectiveSmartCheckLabel"
       :smart-check-tooltip="effectiveSmartCheckTooltip"
       :more-menu-items="moreMenuItems"
+      :more-menu-scope-label="moreMenuScopeLabel"
       v-model:current-page="currentPage"
       v-model:page-input="pageInput"
       v-model:show-overflow-menu="showOverflowMenu"

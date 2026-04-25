@@ -12,6 +12,7 @@ defineProps<{
   smartCheckLabel: string;
   smartCheckTooltip: string;
   moreMenuItems: MoreMenuItem[];
+  moreMenuScopeLabel: string;
 }>();
 
 const emit = defineEmits<{
@@ -80,6 +81,7 @@ const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: tr
 
       <CheckBatchMenu
         :items="moreMenuItems"
+        :scope-label="moreMenuScopeLabel"
         :is-action-locked="isActionLocked"
         v-model:show-menu="showOverflowMenu"
         @action="(kind) => emit('more-action', kind)"

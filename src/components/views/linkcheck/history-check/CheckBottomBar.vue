@@ -23,6 +23,7 @@ defineProps<{
   smartCheckLabel: string;
   smartCheckTooltip: string;
   moreMenuItems: MoreMenuItem[];
+  moreMenuScopeLabel: string;
 }>();
 
 const emit = defineEmits<{
@@ -91,6 +92,7 @@ const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: tr
         :smart-check-label="smartCheckLabel"
         :smart-check-tooltip="smartCheckTooltip"
         :more-menu-items="moreMenuItems"
+        :more-menu-scope-label="moreMenuScopeLabel"
         v-model:show-overflow-menu="showOverflowMenu"
         @toggle-select-all="emit('toggle-select-all')"
         @clear-selection="emit('clear-selection')"
