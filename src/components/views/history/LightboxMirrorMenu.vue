@@ -3,7 +3,7 @@
  * 灯箱图床管理菜单 — 整合"复制 / 切主图床 / 移除 / 重新检测"四种动作
  *
  * 行布局（左到右）：
- *   [ 服务名 ][ 主徽章 ]               [ 设为主 ][ 移除 ][ 状态 chip ]
+ *   [ 圆点(主) ][ 服务名 ]             [ 图钉(设为主) ][ 移除 ][ 状态 chip ]
  * 所有行三列按钮位固定对齐；主行的"设为主"按禁用态渲染（已经是主）。
  *
  * 交互：
@@ -87,15 +87,23 @@ function stateLabel(state: MirrorInfo['checkState']): string {
           'mirror-row--primary': mirror.isPrimary,
           'mirror-row--invalid': mirror.checkState === 'invalid',
         }"
+        :aria-current="mirror.isPrimary ? 'true' : undefined"
         role="menuitem"
         tabindex="0"
         @click="handleRowClick(mirror)"
         @keydown.enter.prevent="handleRowClick(mirror)"
         @keydown.space.prevent="handleRowClick(mirror)"
       >
-        <span class="mirror-row-name">
+        <span
+          class="mirror-row-name"
+          v-tooltip.top="'点击复制链接'"
+        >
+          <span
+            class="mirror-row-dot"
+            :class="{ 'mirror-row-dot--placeholder': !mirror.isPrimary }"
+            aria-hidden="true"
+          ></span>
           {{ getServiceDisplayName(mirror.serviceId) }}
-          <span v-if="mirror.isPrimary" class="mirror-row-badge" aria-label="主图床">主</span>
         </span>
 
         <div class="mirror-row-actions">
@@ -107,7 +115,7 @@ function stateLabel(state: MirrorInfo['checkState']): string {
             v-tooltip.top="mirror.isPrimary ? '当前主图床' : '设为主图床'"
             @click="handleSwitchClick(mirror, $event)"
           >
-            <i class="pi pi-arrow-up" aria-hidden="true" />
+            <i class="pi pi-thumbtack" aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -145,7 +153,9 @@ function stateLabel(state: MirrorInfo['checkState']): string {
 
 <style scoped>
 .mirror-menu {
-  min-width: 320px;
+  /* 短名（2 字）下贴近实际内容宽度，长名（含"自定义服务"等）由 flex 名称区 + ellipsis 兜底 */
+  min-width: 260px;
+  max-width: 360px;
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
@@ -228,20 +238,17 @@ function stateLabel(state: MirrorInfo['checkState']): string {
   text-overflow: ellipsis;
 }
 
-.mirror-row-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 18px;
-  padding: 0 var(--space-2xs);
-  border-radius: var(--radius-sm);
-  background: var(--primary-alpha-15);
-  color: var(--primary);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-medium);
-  letter-spacing: 0.04em;
+/* 6px 圆点紧贴服务名前标主图床；非主行渲染同尺寸隐形占位保持名称左对齐 */
+.mirror-row-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--primary);
   flex-shrink: 0;
+}
+
+.mirror-row-dot--placeholder {
+  visibility: hidden;
 }
 
 .mirror-row-actions {

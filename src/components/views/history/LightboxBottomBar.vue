@@ -49,10 +49,6 @@ const hasMultipleServices = computed(() => props.successfulServices.length > 1);
 const mirrorMenuVisible = ref(false);
 const copyBtnRef = ref<HTMLElement | null>(null);
 
-const copyTooltip = computed(() =>
-  hasMultipleServices.value ? '复制 · 管理图床' : '复制链接'
-);
-
 function handleCopyClick() {
   if (hasMultipleServices.value) {
     mirrorMenuVisible.value = !mirrorMenuVisible.value;
@@ -67,8 +63,8 @@ function handleCopyMirror(serviceId: string) {
 }
 
 function handleSwitchPrimary(serviceId: string) {
+  // 不关菜单：用户期望立即看到圆点跳到目标行，并继续在菜单里复制/检测
   emit('switch-primary', serviceId);
-  mirrorMenuVisible.value = false;
 }
 
 function handleRemoveMirror(serviceId: string) {
@@ -130,7 +126,7 @@ watch(() => props.item.id, () => {
             'action-btn-alert': isPrimaryBroken && !copySuccess,
           }"
           @click="handleCopyClick"
-          v-tooltip.top="copyTooltip"
+          v-tooltip.top="'复制链接'"
         >
           <i :class="copySuccess ? 'pi pi-check' : 'pi pi-link'"></i>
           <span

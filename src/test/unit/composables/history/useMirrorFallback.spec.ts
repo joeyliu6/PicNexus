@@ -131,7 +131,7 @@ const invokeMock = vi.mocked(invoke);
 describe('useMirrorFallback - 派生态', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
-  it('mirrors 按主服务首位 + 过滤失败/空 URL 条目排序', () => {
+  it('mirrors 按 results 原序输出（不再把主服务提到首位），过滤失败/空 URL 条目', () => {
     const item = makeItem('qiyu', {
       jd: { isValid: true, lastCheckTime: 1, errorType: 'success' },
       qiyu: { isValid: false, lastCheckTime: 2, errorType: 'http_4xx' },
@@ -140,10 +140,12 @@ describe('useMirrorFallback - 派生态', () => {
     const list = harness.api().mirrors.value;
 
     expect(list).toHaveLength(3);
-    expect(list[0].serviceId).toBe('qiyu');
-    expect(list[0].isPrimary).toBe(true);
-    expect(list[0].checkState).toBe('invalid');
-    expect(list[1].checkState).toBe('valid'); // jd
+    // 行顺序严格按 results 原序：jd → qiyu → weibo（切主图床不挪行）
+    expect(list.map(m => m.serviceId)).toEqual(['jd', 'qiyu', 'weibo']);
+    // 但 isPrimary 标记落在 qiyu 上（圆点跟着 primary 走）
+    expect(list.find(m => m.isPrimary)?.serviceId).toBe('qiyu');
+    expect(list[0].checkState).toBe('valid'); // jd
+    expect(list[1].checkState).toBe('invalid'); // qiyu
     expect(list[2].checkState).toBe('unchecked'); // weibo
   });
 
@@ -192,14 +194,15 @@ describe('useMirrorFallback - 派生态', () => {
 describe('useMirrorFallback - switchPrimary', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
-  it('成功切换：调 DB + 失效缓存 + emit 事件 + toast.success', async () => {
+  it('成功切换：调 DB + 失效缓存 + emit 事件，但不弹 toast.success', async () => {
     const harness = mountHarness();
     await harness.api().switchPrimary('qiyu');
 
     expect(dbSwitchPrimaryMock).toHaveBeenCalledWith('hist-1', 'qiyu');
     expect(invalidateCacheMock).toHaveBeenCalled();
     expect(emitHistoryUpdatedMock).toHaveBeenCalledWith(['hist-1']);
-    expect(toastSuccessMock).toHaveBeenCalledWith('已切换主图床', expect.any(String));
+    // 切主图床是无害的瞬时操作，UI 圆点已即时反馈，不再弹成功 toast
+    expect(toastSuccessMock).not.toHaveBeenCalled();
   });
 
   it('切到当前主图床是 no-op', async () => {
@@ -208,6 +211,35 @@ describe('useMirrorFallback - switchPrimary', () => {
 
     expect(dbSwitchPrimaryMock).not.toHaveBeenCalled();
     expect(toastSuccessMock).not.toHaveBeenCalled();
+  });
+
+  it('连切两次（jd → qiyu → jd）：第二次回切原主必须真正调 DB，不被 props 陈旧值误判 no-op', async () => {
+    // props.item 是 snapshot ref 不监听 history-updated（见 useLightboxCore），所以
+    // 第一次切完 props.primaryService 仍是初始值 jd；如果守卫只看 props 就会把
+    // 第二次"回切到 jd"判成 no-op，UI 留在 qiyu，DB 留在 qiyu，永久错位。
+    const harness = mountHarness();
+    await harness.api().switchPrimary('qiyu');
+    await harness.api().switchPrimary('jd');
+
+    expect(dbSwitchPrimaryMock).toHaveBeenCalledTimes(2);
+    expect(dbSwitchPrimaryMock).toHaveBeenNthCalledWith(1, 'hist-1', 'qiyu');
+    expect(dbSwitchPrimaryMock).toHaveBeenNthCalledWith(2, 'hist-1', 'jd');
+  });
+
+  it('点击瞬间圆点立即跳到目标行（乐观更新）', async () => {
+    const harness = mountHarness();
+    // 阻塞 DB 写入到我们手动 resolve，模拟"DB 还没回来"的瞬间
+    let release: (v: unknown) => void = () => undefined;
+    dbSwitchPrimaryMock.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+
+    const promise = harness.api().switchPrimary('qiyu');
+    await Promise.resolve();
+    // DB 还在 pending，但 mirrors 计算态已经把 qiyu 视作主图床
+    const primaryNow = harness.api().mirrors.value.find(m => m.isPrimary);
+    expect(primaryNow?.serviceId).toBe('qiyu');
+
+    release(undefined);
+    await promise;
   });
 
   it('DB 抛错时走 toast.error 不中断', async () => {
@@ -316,7 +348,7 @@ describe('useMirrorFallback - removeMirror', () => {
 describe('useMirrorFallback - checkMirror', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
-  it('成功：invoke + 写 DB + toast.success + checkingServices 清理', async () => {
+  it('成功：invoke + 写 DB + 本地 chip 立即变 valid，且不弹 toast', async () => {
     invokeMock.mockResolvedValueOnce({
       link: 'https://qiyu.example/pic.png',
       is_valid: true,
@@ -339,11 +371,15 @@ describe('useMirrorFallback - checkMirror', () => {
       }),
     }));
     expect(emitHistoryUpdatedMock).toHaveBeenCalledWith(['hist-1']);
-    expect(toastSuccessMock).toHaveBeenCalledWith('检测完成', expect.stringContaining('可用'));
+    // 本地 override 让 mirrors 里 qiyu 的 chip 立刻变 valid
+    expect(harness.api().mirrors.value.find(m => m.serviceId === 'qiyu')?.checkState).toBe('valid');
+    // 检测完成不再弹 toast，菜单里 chip 变色就是反馈
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+    expect(toastWarnMock).not.toHaveBeenCalled();
     expect(harness.api().checkingServices.value.has('qiyu')).toBe(false);
   });
 
-  it('失效：写 DB 标记 invalid + toast.warn', async () => {
+  it('失效：写 DB 标记 invalid + 本地 chip 立即变 invalid，且不弹 toast', async () => {
     invokeMock.mockResolvedValueOnce({
       link: 'https://qiyu.example/pic.png',
       is_valid: false,
@@ -361,7 +397,8 @@ describe('useMirrorFallback - checkMirror', () => {
         qiyu: expect.objectContaining({ isValid: false, errorType: 'http_4xx' }),
       }),
     }));
-    expect(toastWarnMock).toHaveBeenCalledWith('检测完成', expect.stringContaining('失效'));
+    expect(harness.api().mirrors.value.find(m => m.serviceId === 'qiyu')?.checkState).toBe('invalid');
+    expect(toastWarnMock).not.toHaveBeenCalled();
   });
 
   it('并发守卫：同一 serviceId 已在检测中，再次触发被忽略', async () => {
