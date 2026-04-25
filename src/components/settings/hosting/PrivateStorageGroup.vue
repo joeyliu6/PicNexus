@@ -5,6 +5,7 @@ import HostingCard from '../HostingCard.vue';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
 import type { CustomS3Profile } from '../../../config/types';
 import { makeCustomS3Id } from '../../../config/types';
+import { hasNonEmptyFields } from '../../../utils/validators';
 
 interface PrivateFormData {
   r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; path: string; publicDomain: string };
@@ -127,12 +128,14 @@ const emit = defineEmits<{
 }>();
 
 function isConfigured(svc: ServiceConfig): boolean {
-  const data = props.privateFormData[svc.id] as Record<string, string>;
-  return svc.requiredKeys.every(k => !!data[k]?.trim());
+  return hasNonEmptyFields(
+    props.privateFormData[svc.id] as unknown as Record<string, unknown>,
+    svc.requiredKeys,
+  );
 }
 
 function isCustomS3Configured(profile: CustomS3Profile): boolean {
-  return CUSTOM_S3_REQUIRED_KEYS.every(k => !!(profile[k as keyof CustomS3Profile] as string)?.trim());
+  return hasNonEmptyFields(profile as unknown as Record<string, unknown>, CUSTOM_S3_REQUIRED_KEYS);
 }
 
 function getCustomS3Field(profile: CustomS3Profile, key: string): string {

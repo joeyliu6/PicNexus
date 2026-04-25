@@ -5,6 +5,7 @@ import HostingCard from '../HostingCard.vue';
 import GithubProxySection from './GithubProxySection.vue';
 import type { GithubCdnConfig } from '../../../config/types';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
+import { hasNonEmptyFields } from '../../../utils/validators';
 
 interface TokenFormData {
   smms: { token: string };
@@ -37,18 +38,18 @@ const emit = defineEmits<{
   'update:githubCdnConfig': [config: GithubCdnConfig];
 }>();
 
+// 各服务"已配置"所需的必填字段（添加新服务时只需在此扩展）
+const TOKEN_REQUIRED_FIELDS = {
+  smms: ['token'],
+  github: ['token', 'owner', 'repo'],
+  imgur: ['clientId'],
+} as const satisfies { [K in keyof TokenFormData]: ReadonlyArray<keyof TokenFormData[K]> };
+
 function isTokenConfigured(providerId: keyof TokenFormData): boolean {
-  const data = props.tokenFormData;
-  switch (providerId) {
-    case 'smms':
-      return !!data.smms.token?.trim();
-    case 'github':
-      return !!(data.github.token?.trim() && data.github.owner?.trim() && data.github.repo?.trim());
-    case 'imgur':
-      return !!data.imgur.clientId?.trim();
-    default:
-      return false;
-  }
+  return hasNonEmptyFields(
+    props.tokenFormData[providerId] as Record<string, unknown>,
+    TOKEN_REQUIRED_FIELDS[providerId] as ReadonlyArray<string>,
+  );
 }
 
 </script>

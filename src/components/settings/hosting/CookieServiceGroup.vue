@@ -7,6 +7,7 @@ import ZhihuSourceSection from './ZhihuSourceSection.vue';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
 import type { LinkPrefixItem } from '../../../config/types';
 import { computed } from 'vue';
+import { hasNonEmptyFields } from '../../../utils/validators';
 
 interface CookieFormData {
   weibo: { cookie: string };
@@ -55,7 +56,7 @@ const emit = defineEmits<{
 }>();
 
 function isCookieConfigured(providerId: CookieProviderId): boolean {
-  return !!props.cookieFormData[providerId].cookie?.trim();
+  return hasNonEmptyFields(props.cookieFormData[providerId], ['cookie']);
 }
 
 const namiAuthToken = computed(() => {
