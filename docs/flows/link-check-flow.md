@@ -1,4 +1,4 @@
-# 链接监控流程（深度展开）
+# 链接检测流程（深度展开）
 
 > 链接检测的深层机制图解：服务感知请求、并发控制、单条重检动画、智能策略决策。
 > 基础检测主流程见 [auxiliary-flows.md 图 11](./auxiliary-flows.md#图-11链接检测流程)，本文档是其深度展开。
@@ -247,9 +247,11 @@ flowchart TD
 
 ## 图 4：智能检测策略决策
 
-展示 `useCheckStrategy` 中按钮标签和下拉菜单的动态决策逻辑。开发者修改检测入口 UI 时参考。
+展示 `useCheckStrategy` 中检测主按钮的动态决策逻辑。开发者修改检测入口 UI 时参考。
 
-> **关键源文件**：`src/composables/link-check/useCheckStrategy.ts`（`smartCheckLabel`、`resolveSmartCheck`、`buildDropdownItems`、`showDropdownArrow`）
+> **关键源文件**：`src/composables/link-check/useCheckStrategy.ts`（`smartCheckLabel`、`resolveSmartCheck`）
+>
+> **设计决策**：检测主按钮是唯一入口，没有"检测全部 / 重检问题链接"等下拉备选。要重检某一类问题链接，先点顶部 chip 切到对应筛选 tab，主按钮的 label 与 action 会自动适配。
 
 ```mermaid
 flowchart TD
@@ -275,14 +277,6 @@ flowchart TD
     O -- 是 --> O1["check-subset + problems"]
     O -- 否 --> O2["check-all"]
 
-    P["showDropdownArrow"] --> P1{CONTEXT_AWARE_FILTERS?}
-    P1 -- 是 --> P2["显示箭头 ▼"]
-    P1 -- 否 --> P3{unchecked === total?}
-    P3 -- 是 --> P4["隐藏箭头"]
-    P3 -- 否 --> P5{unchecked=0 且 problems=0?}
-    P5 -- 是 --> P6["隐藏箭头"]
-    P5 -- 否 --> P7["显示箭头 ▼"]
-
     style C fill:#e3f2fd,stroke:#1976d2
     style E fill:#e8f5e9,stroke:#2e7d32
     style G fill:#e3f2fd,stroke:#1976d2
@@ -294,7 +288,7 @@ flowchart TD
 
 ## 图 5：按行精准删除（per-link 删除语义）
 
-展示链接监控视图中"删除一行"的数据层行为。链接监控列表的逻辑单位是**单个图床链接**（一张图如果上传到 N 个图床，会展开成 N 行），因此删除操作必须精准到 `(historyId, serviceId)`，而不是整条 `HistoryItem`。
+展示链接检测视图中"删除一行"的数据层行为。链接检测列表的逻辑单位是**单个图床链接**（一张图如果上传到 N 个图床，会展开成 N 行），因此删除操作必须精准到 `(historyId, serviceId)`，而不是整条 `HistoryItem`。
 
 > **关键源文件**：`src/composables/history/useHistoryResultOps.ts`（`deleteHistoryResult`、`bulkDeleteHistoryResults`、`stripServiceFromItem`）；`src/composables/link-check/useLinkCheck.ts`（`removeRowsByKeys`、`setFadingOutRows`）；`src/components/views/LinkCheckView.vue`（`handleDeleteRow`、`deleteRowsByTargets`）
 
@@ -343,7 +337,7 @@ flowchart TD
 
 ### 为什么不共用 `deleteHistoryItem`
 
-`deleteHistoryItem` / `bulkDeleteRecords` 的语义是"删图"（Timeline、收藏、历史视图的逻辑单位是图片）。链接监控的逻辑单位是**链接**——同一张图的多个图床链接应当可以独立删除，共用会导致"删一个失效微博链接，顺手把有效的 GitHub 链接也删了"这种体验事故。
+`deleteHistoryItem` / `bulkDeleteRecords` 的语义是"删图"（Timeline、收藏、历史视图的逻辑单位是图片）。链接检测的逻辑单位是**链接**——同一张图的多个图床链接应当可以独立删除，共用会导致"删一个失效微博链接，顺手把有效的 GitHub 链接也删了"这种体验事故。
 
 ---
 
@@ -362,7 +356,7 @@ flowchart TD
 | 取消后仍有检测在跑 | 已进入 HTTP 请求的任务无法中断，只能等其自然结束 | 图 3 三次取消检查 |
 | 暂停后进度仍在少量增长 | HTTP 在途任务不可中断，pause 只阻塞尚未进入 HTTP 的任务 | 图 3 暂停 / 恢复：轮询语义 |
 | 暂停后点取消无响应 | 不应出现——cancel 优先 pause；若确实发生检查 `await_resume_or_cancel` 返回值 | 图 3 暂停 / 恢复：轮询语义 |
-| 按钮显示「继续检测」但想全量检测 | 当前有 unchecked 行，使用下拉菜单选「检测全部」 | 图 4 下拉菜单构建 |
+| 按钮显示「继续检测」但想全量检测 | 等未检测全部跑完，按钮会自动变成「重新检测全部」；想跳过这步，可点顶部「失效/可疑」chip 切 tab 直接重检该类 | 图 4 主按钮决策 |
 | 删除一条链接后同图其他行也消失了 | 逻辑退化成按 `historyId` 删整条——检查是否调的 `deleteHistoryResult` 而不是 `deleteHistoryItem` | 图 5 / useHistoryResultOps.ts |
 | 删主力图床后 Timeline 卡片缩略图没换 | `primaryService` 未切换或 `emitHistoryUpdated` 未发 | 图 5 补选主力 + 事件分流 |
 | 删完所有图床后历史里还有空壳 | `results[]` 归零兜底未触发，检查 `stripServiceFromItem` 返回值 | 图 5 结果归零分支 |

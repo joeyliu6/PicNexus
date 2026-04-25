@@ -2,7 +2,7 @@
 /**
  * 批量迁移 · 单个服务 chip
  *
- * 视觉对齐链接监控 `.service-badge`（图标 + 文字），不同的 variant 驱动色调：
+ * 视觉对齐链接检测 `.service-badge`（图标 + 文字），不同的 variant 驱动色调：
  * - source: 源图床，muted 灰色
  * - target: 目标图床，primary 色
  * - muted: 统计条等次要位置的极淡色
@@ -120,7 +120,7 @@ function onClick() {
 }
 .m-svc-chip--muted .m-svc-chip-ic { color: var(--text-tertiary); }
 
-/* existing: 默认透明底 + 弱灰字，对齐链接监控 .service-badge；hover 才浮出底色 */
+/* existing: 默认透明底 + 弱灰字，对齐链接检测 .service-badge；hover 才浮出底色 */
 .m-svc-chip--existing {
   background: transparent;
   color: var(--text-muted);
@@ -130,7 +130,7 @@ function onClick() {
 /* stylelint-disable-next-line declaration-property-value-disallowed-list -- width/height 允许硬编码（tokens.md 例外规则） */
 .m-svc-chip--existing .m-svc-chip-ic { color: var(--text-muted); width: 12px; height: 12px; }
 
-/* new/pending/failed 保留淡色底，但去掉 box-shadow 描边，对齐链接监控 .error-badge 的简洁感 */
+/* new/pending/failed 保留淡色底，但去掉 box-shadow 描边，对齐链接检测 .error-badge 的简洁感 */
 .m-svc-chip--new {
   background: var(--success-alpha-10);
   color: var(--success);

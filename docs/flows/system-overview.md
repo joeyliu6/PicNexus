@@ -233,7 +233,7 @@ flowchart LR
 - [数据持久化](./data-persistence.md) — 配置/历史/缩略图的底层存储机制
 - [应用生命周期](./app-lifecycle.md) — 启动流程与 Cookie 登录
 - [辅助流程](./auxiliary-flows.md) — 链接检测/压缩/备份摘要
-- [链接监控(深度)](./link-check-flow.md) — 服务感知/并发/策略决策
+- [链接检测(深度)](./link-check-flow.md) — 服务感知/并发/策略决策
 - [文档修复](./md-rescue-flow.md) — MD 失效链接检测与修复
 - [批量迁移](./batch-migrate-flow.md) — 批量迁移图片至目标图床
 

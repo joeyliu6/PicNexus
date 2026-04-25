@@ -25,7 +25,7 @@ export interface PreloadedItem {
 
 /** 预加载首屏条数：让用户立刻看到列表 */
 const PRELOAD_FIRST_CHUNK = 100;
-/** 预加载流式分块大小：对齐链接监控的 2000/块 */
+/** 预加载流式分块大小：对齐链接检测的 2000/块 */
 const PRELOAD_STREAM_CHUNK = 2000;
 
 function yieldToMain(): Promise<void> {

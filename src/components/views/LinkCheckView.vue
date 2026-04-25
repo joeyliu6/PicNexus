@@ -161,7 +161,7 @@ onDeactivated(onViewDeactivated);
     <div class="lc-tab-bar">
       <button class="lc-tab" :class="{ active: activeTab === 'monitor' }" @click="activeTab = 'monitor'">
         <i class="pi pi-link"></i>
-        链接监控
+        链接检测
       </button>
       <button class="lc-tab" :class="{ active: activeTab === 'rescue' }" @click="activeTab = 'rescue'">
         <i class="pi pi-eraser"></i>

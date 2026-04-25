@@ -14,7 +14,7 @@ docs/
 │   ├── sync-flow.md              # 同步/备份
 │   ├── data-persistence.md       # 配置/缩略图持久化
 │   ├── auxiliary-flows.md        # 链接检测/压缩
-│   ├── link-check-flow.md        # 链接监控（深度）
+│   ├── link-check-flow.md        # 链接检测（深度）
 │   ├── md-rescue-flow.md         # 文档修复
 │   ├── batch-migrate-flow.md     # 批量迁移
 │   ├── ipc-command-flow.md       # Tauri 命令/事件

@@ -396,5 +396,5 @@ chip 分桶映射（`displayList` 内部）：
 
 - [上传流程](./upload-flow.md) — MultiServiceUploader 上传机制
 - [数据持久化](./data-persistence.md) — historyDB 的查询和更新
-- [链接监控流程](./link-check-flow.md) — 链接检测结果是迁移的数据来源
+- [链接检测流程](./link-check-flow.md) — 链接检测结果是迁移的数据来源
 - [文档修复流程](./md-rescue-flow.md) — 另一个复用历史数据的功能

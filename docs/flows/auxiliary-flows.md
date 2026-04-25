@@ -84,7 +84,7 @@ flowchart TD
 ## 图 11：链接检测流程
 
 展示两阶段加载和批量检测的完整路径。排查**检测卡住**或**结果不准**时查看。
-> 深度展开（服务感知请求、并发控制、动画状态机、智能策略）见 [链接监控流程](./link-check-flow.md)。
+> 深度展开（服务感知请求、并发控制、动画状态机、智能策略）见 [链接检测流程](./link-check-flow.md)。
 
 > **关键源文件**：`src/composables/link-check/useLinkCheck.ts`、`src/composables/link-check/linkCheckDataBuilder.ts`
 
@@ -256,6 +256,6 @@ flowchart TD
 - [Composables API](../reference/api/composables.md) — useWebDAVSync / useAutoSync 接口索引
 - [链接检测性能优化](../reference/patterns/link-check-large-dataset.md) — 5 万条记录场景的优化方案
 - [同步流程](./sync-flow.md) — WebDAV 配置/历史同步的完整流程
-- [链接监控流程（深度展开）](./link-check-flow.md) — 服务感知请求、并发控制、动画状态机
+- [链接检测流程（深度展开）](./link-check-flow.md) — 服务感知请求、并发控制、动画状态机
 - [文档修复流程](./md-rescue-flow.md) — MD 文件失效图片链接的自动检测与修复
 - [批量迁移流程](./batch-migrate-flow.md) — 跨图床批量迁移图片

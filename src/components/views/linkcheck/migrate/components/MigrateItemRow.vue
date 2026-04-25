@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 批量迁移 · 统一条目行（单行链接监控风格）
+ * 批量迁移 · 统一条目行（单行链接检测风格）
  *
  * 布局：[6px 圆点] [filename 省略号] [spacer] [existing chips » target chips] [重试按钮 · 仅失败+done]
  * - 圆点颜色：pending 灰 / active 蓝 / success 绿 / failed 红 / skipped 黄
@@ -93,7 +93,7 @@ const failedTooltip = computed(() => {
   return errorTooltipText(props.item);
 });
 
-/** 圆点颜色：沿用链接监控 statusDotColor 的 CSS 变量模式 */
+/** 圆点颜色：沿用链接检测 statusDotColor 的 CSS 变量模式 */
 const dotColor = computed(() => {
   switch (props.item.status) {
     case 'downloading':
@@ -220,7 +220,7 @@ function onChipCopy(serviceId: string) {
   align-items: center;
   gap: var(--space-sm-md);
   padding: 0 0 0 var(--space-md);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 40px 对齐链接监控 .link-row 行高 */
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 40px 对齐链接检测 .link-row 行高 */
   height: 40px;
 
   /* 父容器 .focus-list 是 flex column，子项默认 flex-shrink:1 会被压缩，固定高度失效 */
@@ -289,7 +289,7 @@ function onChipCopy(serviceId: string) {
   user-select: none;
 }
 
-/* ── 重试按钮（对齐链接监控 .delete-btn 的 24px 图标按钮） ── */
+/* ── 重试按钮（对齐链接检测 .delete-btn 的 24px 图标按钮） ── */
 .mi-row__retry-btn {
   display: flex;
   align-items: center;
@@ -297,7 +297,7 @@ function onChipCopy(serviceId: string) {
   width: 24px;
   height: 24px;
   border: none;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 5px 图标按钮圆角，沿用链接监控同源规范 */
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 5px 图标按钮圆角，沿用链接检测同源规范 */
   border-radius: 5px;
   background: transparent;
   color: var(--error);

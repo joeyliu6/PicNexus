@@ -171,7 +171,7 @@ step6-reset-idle.png
 
 ## 推广到其他功能
 
-### 链接监控（HistoryCheckPanel）
+### 链接检测（HistoryCheckPanel）
 
 ```typescript
 if (import.meta.env.DEV) {

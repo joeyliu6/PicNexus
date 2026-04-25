@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
- * 运行状态 pill —— 批量迁移与链接监控共用
+ * 运行状态 pill —— 批量迁移与链接检测共用
  *
  * - running：呼吸绿点（检测/迁移进行中）
- * - pausing：暖色 tone + spinner（已点暂停但在途条目未落定，链接监控当前不用）
+ * - pausing：暖色 tone + spinner（已点暂停但在途条目未落定，链接检测当前不用）
  * - paused：中性灰（已暂停，可恢复）
  * - cancelling：红色 tone + spinner（已点取消但未落定）
  */

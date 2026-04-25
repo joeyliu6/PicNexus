@@ -27,10 +27,11 @@ process.stdin.on('end', () => {
     { re: /同步|备份|webdav|sync/i, doc: 'docs/flows/sync-flow.md', tag: '同步/备份' },
     { re: /配置|缩略图|持久化|config\s*store/i, doc: 'docs/flows/data-persistence.md', tag: '持久化' },
     { re: /启动|白屏|闪退|cookie\s*登录|开机/i, doc: 'docs/flows/app-lifecycle.md', tag: '生命周期' },
-    // 链接监控优先于压缩/链接检测：正则用否定环视避开"链接监控"被误判为辅助
-    { re: /链接监控|link.?check|批量检测/i, doc: 'docs/flows/link-check-flow.md', tag: '链接监控' },
+    // 链接检测优先于压缩：用户提到检测时直接路由到深度文档，避免被辅助流程吃掉
+    // 「链接监控」是旧词，保留兼容，命中后仍走链接检测路由
+    { re: /链接检测|链接监控|link.?check|批量检测/i, doc: 'docs/flows/link-check-flow.md', tag: '链接检测' },
     { re: /镜像|mirror|切换主服务|主图失效|fallback/i, doc: 'docs/flows/mirror-fallback-flow.md', tag: '镜像 fallback' },
-    { re: /压缩|链接检测(?!.*监控)/i, doc: 'docs/flows/auxiliary-flows.md', tag: '辅助' },
+    { re: /压缩/i, doc: 'docs/flows/auxiliary-flows.md', tag: '辅助' },
     { re: /文档修复|md.?rescue|markdown\s*修复/i, doc: 'docs/flows/md-rescue-flow.md', tag: 'MD 修复' },
     { re: /批量迁移|batch.?migrate|迁移/i, doc: 'docs/flows/batch-migrate-flow.md', tag: '批量迁移' },
     { re: /tauri|command|ipc|invoke|emit|事件/i, doc: 'docs/flows/ipc-command-flow.md', tag: 'IPC' },

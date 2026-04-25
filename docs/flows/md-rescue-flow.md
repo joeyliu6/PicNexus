@@ -341,5 +341,5 @@ flowchart TD
 ## 相关文档
 
 - [辅助功能流程 图 11](./auxiliary-flows.md#图-11链接检测流程) — 复用的链接检测引擎
-- [链接监控流程](./link-check-flow.md) — 服务感知请求和并发控制细节
+- [链接检测流程](./link-check-flow.md) — 服务感知请求和并发控制细节
 - [批量迁移流程](./batch-migrate-flow.md) — 另一个复用历史数据的功能

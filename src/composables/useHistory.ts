@@ -321,7 +321,7 @@ export function useHistoryManager() {
     removeFavoritesFromIds,
   });
 
-  // 按图床结果粒度删除（链接监控专用）
+  // 按图床结果粒度删除（链接检测专用）
   const { deleteHistoryResult, bulkDeleteHistoryResults } = createResultOps({
     totalCount,
     dataVersion,

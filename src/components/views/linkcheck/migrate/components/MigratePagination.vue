@@ -106,12 +106,12 @@ function selectAll(ev: FocusEvent) {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 26px 方形对齐链接监控分页按钮 */
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 26px 方形对齐链接检测分页按钮 */
   width: 26px;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 26px 方形对齐链接监控分页按钮 */
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 26px 方形对齐链接检测分页按钮 */
   height: 26px;
   border: none;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 5px 圆角沿用链接监控现有规范无对应 token */
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 5px 圆角沿用链接检测现有规范无对应 token */
   border-radius: 5px;
   background: var(--bg-input);
   color: var(--text-muted);

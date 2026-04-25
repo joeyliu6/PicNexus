@@ -47,7 +47,7 @@ const isPhase2Loading = ref(false);
 /** Phase 2 耗时（ms）：用于 UI 侧判断是否跳过动画（<300ms 则跳过） */
 const phase2Duration = ref(0);
 const progress: Ref<BatchCheckProgress | null> = ref(null);
-/** 进度来源标识：区分是链接监控还是文档修复在跑，防止 UI 串扰 */
+/** 进度来源标识：区分是链接检测还是文档修复在跑，防止 UI 串扰 */
 const progressSource: Ref<'monitor' | 'rescue' | null> = ref(null);
 const lastBatchResult: Ref<BatchCheckResult | null> = shallowRef(null);
 const checkRows: Ref<LinkCheckRow[]> = shallowRef([]);
@@ -688,7 +688,7 @@ export function useLinkCheckManager() {
 
   /**
    * 按 (historyId, serviceId) 键精准移除 checkRows 中的行
-   * 用于链接监控"仅删除单条图床链接"的场景：同一 historyId 下其他图床的行应保留
+   * 用于链接检测"仅删除单条图床链接"的场景：同一 historyId 下其他图床的行应保留
    */
   function removeRowsByKeys(keys: Array<{ historyId: string; serviceId: string }>): void {
     if (keys.length === 0) return;

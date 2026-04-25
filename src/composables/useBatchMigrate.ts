@@ -34,7 +34,7 @@ const log = createLogger('useBatchMigrate');
 
 const PAGE_SIZE = 100;
 const MAX_CONSECUTIVE_FAILURES = 10;
-/** 离开面板 3 分钟后释放内存（对齐链接监控） */
+/** 离开面板 3 分钟后释放内存（对齐链接检测） */
 const IDLE_RELEASE_MS = 3 * 60 * 1000;
 /** 冷启动骨架屏最小可见时长，防止加载太快一闪而过 */
 const MIN_SKELETON_MS = 400;
@@ -556,7 +556,7 @@ export function useBatchMigrateManager() {
   });
 
   // ============================================
-  // 内存空闲释放（对齐链接监控 useLinkCheck）
+  // 内存空闲释放（对齐链接检测 useLinkCheck）
   // 离开面板超过 IDLE_RELEASE_MS 且非活跃迁移/重试 → 清空预加载/结果释放内存
   // UI 回到面板时通过 wasIdleCleared 标志触发 toast 告知用户
   // ============================================

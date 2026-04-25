@@ -3,7 +3,7 @@
  * 批量迁移 · 单状态 chip
  *
  * 替代原三段 pipeline，每行只渲染一个 chip。
- * 视觉对齐链接监控 `.filter-chip`（26px 高，药丸轮廓）。
+ * 视觉对齐链接检测 `.filter-chip`（26px 高，药丸轮廓）。
  * tone 驱动背景/文字色：active 用 primary，success/warning/error 各自色系。
  */
 import { computed } from 'vue';

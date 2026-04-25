@@ -46,7 +46,7 @@ Tauri 2.x（Rust + Vue 3 / TypeScript / PrimeVue 4 + SQLite），详见 `docs/re
 | 数据持久化（配置/缩略图） | `docs/flows/data-persistence.md` |
 | 启动/白屏/Cookie 登录 | `docs/flows/app-lifecycle.md` |
 | 链接检测/压缩 | `docs/flows/auxiliary-flows.md` |
-| 链接监控（深度） | `docs/flows/link-check-flow.md` |
+| 链接检测（深度） | `docs/flows/link-check-flow.md` |
 | 多图床镜像 fallback / 切换主服务 / 删除镜像 | `docs/flows/mirror-fallback-flow.md` |
 | 文档修复 | `docs/flows/md-rescue-flow.md` |
 | 批量迁移 | `docs/flows/batch-migrate-flow.md` |

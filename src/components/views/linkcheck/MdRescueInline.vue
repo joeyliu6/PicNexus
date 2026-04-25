@@ -178,7 +178,7 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
     <!-- working: scanning / fixing / done -->
     <div v-else class="rescue-phase rescue-working">
 
-      <!-- 顶栏：仅"修复完成"阶段保留（扫描/修复进行中的状态与进度统一由底栏承担，对齐链接监控） -->
+      <!-- 顶栏：仅"修复完成"阶段保留（扫描/修复进行中的状态与进度统一由底栏承担，对齐链接检测） -->
       <Transition name="fade">
         <div v-if="phase === 'done'" class="wk-header">
           <div class="wk-title-group">
@@ -220,7 +220,7 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
     <!-- 底栏 -->
     <Transition name="slide-up">
     <div v-if="phase !== 'idle' || isCollecting" class="rescue-bottom">
-      <!-- 极简进度条（与链接监控 CheckBottomBar 一致），scanning / collecting / fixing 共用 -->
+      <!-- 极简进度条（与链接检测 CheckBottomBar 一致），scanning / collecting / fixing 共用 -->
       <Transition name="fade">
         <div v-if="showBottomProgress" class="progress-bar" role="progressbar" :aria-valuenow="bottomProgressPercent" aria-valuemin="0" aria-valuemax="100">
           <div class="progress-bar-inner">
@@ -350,7 +350,7 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
 /* 底栏 */
 .rescue-bottom { display: flex; flex-direction: column; gap: var(--space-sm); flex-shrink: 0; padding-right: var(--space-xl); }
 
-/* 极简进度条（样式与 CheckBottomBar 一致，确保视觉节奏对齐链接监控） */
+/* 极简进度条（样式与 CheckBottomBar 一致，确保视觉节奏对齐链接检测） */
 .progress-bar {
   width: 100%; flex-shrink: 0; cursor: default;
   padding: var(--space-xs) 0; position: relative;

@@ -238,6 +238,6 @@ flowchart TD
 ## 相关文档
 
 - [历史查询流程](./history-flow.md) — 历史记录 CRUD + 搜索，镜像管理是其上的扩展动作
-- [链接监控流程](./link-check-flow.md) — `linkCheckStatus` 的写入源，判定哪些镜像被标记失效
+- [链接检测流程](./link-check-flow.md) — `linkCheckStatus` 的写入源，判定哪些镜像被标记失效
 - [辅助功能流程 图 11](./auxiliary-flows.md#图-11链接检测流程) — 链接检测主流程
 - [数据持久化流程](./data-persistence.md) — `results` JSON 字段的序列化位置

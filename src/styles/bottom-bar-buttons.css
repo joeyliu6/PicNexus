@@ -1,6 +1,6 @@
 /**
  * 三大底栏共用按钮样式
- * 适用：链接监控（CheckBottomBar）/ 文档修复（MdRescueInline）/ 批量迁移（migrate-*）
+ * 适用：链接检测（CheckBottomBar）/ 文档修复（MdRescueInline）/ 批量迁移（migrate-*）
  *
  * 作用域说明：全部规则限定在 .bottom-actions 容器内，避免与 style.css
  * 第 868/881 行的全局半透明 .btn-primary/.btn-danger 冲突（那套服务于

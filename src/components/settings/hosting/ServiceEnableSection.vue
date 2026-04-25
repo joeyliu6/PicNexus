@@ -304,7 +304,7 @@ const skeletonStatuses = computed<ServiceHealthStatus[]>(() => {
   pointer-events: none;
 }
 
-/* shimmer 配方与链接监控/批量迁移保持一致：border-subtle-light ↔ bg-card 对比度更强 */
+/* shimmer 配方与链接检测/批量迁移保持一致：border-subtle-light ↔ bg-card 对比度更强 */
 .health-pill--refreshing .health-dot {
   background: linear-gradient(
     90deg,
