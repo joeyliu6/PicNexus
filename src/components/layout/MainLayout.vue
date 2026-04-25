@@ -86,13 +86,10 @@ onUnmounted(() => {
     <div class="dashboard-container">
       <Sidebar :current-view="currentView" @navigate="handleNavigate" />
       <div class="content-area">
-        <!-- 使用 Transition 添加淡入淡出动画 -->
-        <!-- 使用 KeepAlive 缓存组件，避免重复销毁和创建 -->
-        <Transition name="view-fade" mode="out-in">
-          <KeepAlive :max="4">
-            <component :is="currentViewComponent" :key="currentView" />
-          </KeepAlive>
-        </Transition>
+        <!-- KeepAlive 缓存四个视图组件，切换瞬时无动画 -->
+        <KeepAlive :max="4">
+          <component :is="currentViewComponent" :key="currentView" />
+        </KeepAlive>
       </div>
     </div>
   </div>
@@ -118,19 +115,5 @@ onUnmounted(() => {
   flex: 1;
   overflow: auto;
   background: var(--bg-app);
-}
-
-/* 视图切换过渡动画 */
-.view-fade-enter-active,
-.view-fade-leave-active {
-  transition: opacity var(--duration-fast) var(--ease-standard);
-}
-
-.view-fade-enter-from {
-  opacity: 0;
-}
-
-.view-fade-leave-to {
-  opacity: 0;
 }
 </style>

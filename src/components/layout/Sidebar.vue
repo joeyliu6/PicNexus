@@ -69,7 +69,9 @@ const handleNavigate = (view: ViewType) => {
   padding: var(--space-sm);
   border-radius: var(--radius-md);
   color: var(--text-secondary);
-  transition: all var(--duration-normal) var(--ease-standard);
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
   font-size: var(--text-sm);
 }
 
