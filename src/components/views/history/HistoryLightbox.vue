@@ -76,7 +76,7 @@ function handleLoadError() {
   toast.warn('图片加载失败', '图床可能限制了访问。试试切换图床复制链接或在浏览器打开');
 }
 
-const { pswpEl, blurSrc, isLoading } = usePhotoSwipeBridge({
+const { pswpEl, blurSrc, isLoading, setSwitchDirection } = usePhotoSwipeBridge({
   visible: toRef(props, 'visible'),
   imageSrc,
   mediumSrc,
@@ -122,8 +122,17 @@ const {
 } = useMirrorFallback(itemRef);
 
 // ── 导航 ────────────────────────────────────
-function navigatePrev() { if (props.hasPrev) emit('navigate', 'prev'); }
-function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
+// emit 之前先告诉桥接方向，contentActivate 触发时才能拿到正确的 dataset.switchDir
+function navigatePrev() {
+  if (!props.hasPrev) return;
+  setSwitchDirection('prev');
+  emit('navigate', 'prev');
+}
+function navigateNext() {
+  if (!props.hasNext) return;
+  setSwitchDirection('next');
+  emit('navigate', 'next');
+}
 </script>
 
 <template>
@@ -220,6 +229,13 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
    */
   --pswp-bottom-bar-space: 72px;
 
+  /*
+   * 切换图片入场动画的方向位移距离
+   * 复用 motion.css 的 --translate-lg(20px)：在全屏视野里足够给方向感、不张扬
+   * 想加大可在此覆盖（如 calc(var(--translate-lg) * 2) → 40px）
+   */
+  --pswp-switch-distance: var(--translate-lg);
+
   z-index: var(--z-lightbox) !important;
 }
 
@@ -236,22 +252,69 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
 }
 
 /*
- * 切换图片时的淡入动画
- * 只动 opacity —— PhotoSwipe 用 transform 矩阵管缩放/平移，动 transform 会冲突
- * 触发点：usePhotoSwipeBridge 的 contentActivate 事件（首次激活跳过，避免和 FLIP 开灯箱动画打架）
- * class 每次都挂在新生成的 img 上，浏览器自然重放动画
+ * 切换图片时的入场动画（参考 Google Photos / Apple Photos 风格）
+ *
+ * 默认 keyframes 走纯淡入（无方向时兜底，例如外部代码直接改 itemId）
+ * 方向化 keyframes 加 translateX —— next 从右滑入、prev 从左滑入，建立方向感
+ *
+ * 为什么 transform 不冲突：PhotoSwipe 的 zoom/pan 矩阵作用在 .pswp__zoom-wrap 上，
+ * 不会动 .pswp__img 自身的 transform，所以这里给 img 加 translateX 是安全的
+ *
+ * 触发链路：键盘/滚轮/箭头 → setSwitchDirection → onNavigate → 父组件改 item →
+ * itemId watch → updateSlideContent → contentActivate 给新 img 写 dataset.switchDir + class
+ *
+ * 为什么没有旧图退出动画：PhotoSwipe refreshSlideContent 即时销毁旧 content 创建新的，
+ * 强行加幽灵层做退出会增加闪烁风险且复杂度爆炸；快速连击时 Google Photos 也会截断旧图
  */
 @keyframes pswp-img-switch-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
+@keyframes pswp-img-switch-in-next {
+  from { opacity: 0; transform: translateX(var(--pswp-switch-distance)); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pswp-img-switch-in-prev {
+  from { opacity: 0; transform: translateX(calc(var(--pswp-switch-distance) * -1)); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/*
+ * ease-decelerate（快启慢停）匹配"进入"的语义节奏：
+ * 起始位移变化快 → 末段轻轻落位，比 ease-standard 更有"图片送到位"的踏实感
+ */
 .pswp--picnexus .pswp__img.is-switching-in {
-  animation: pswp-img-switch-in var(--duration-normal) var(--ease-standard);
+  animation: pswp-img-switch-in var(--duration-normal) var(--ease-decelerate);
+}
+
+.pswp--picnexus .pswp__img.is-switching-in[data-switch-dir="next"] {
+  animation: pswp-img-switch-in-next var(--duration-normal) var(--ease-decelerate);
+}
+
+.pswp--picnexus .pswp__img.is-switching-in[data-switch-dir="prev"] {
+  animation: pswp-img-switch-in-prev var(--duration-normal) var(--ease-decelerate);
+}
+
+/*
+ * 占位图（msrc 中图模糊版）的入场淡入
+ * 仅 opacity 0→1，不动 transform —— PhotoSwipe Placeholder 自身用
+ * inline transform: scale() 做尺寸缩放（placeholder.js:44），
+ * 加了 transform 关键帧会覆盖 inline 样式导致占位图错位/消失
+ *
+ * 大图未到位时占位图就是用户能看见的全部；不淡入它，
+ * 就会出现"切换瞬间占位图凭空蹦出来"的明显跳变
+ */
+.pswp--picnexus .pswp__img--placeholder.is-switching-in {
+  animation: pswp-img-switch-in var(--duration-normal) var(--ease-decelerate);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pswp--picnexus .pswp__img.is-switching-in {
+  .pswp--picnexus .pswp__img.is-switching-in,
+  .pswp--picnexus .pswp__img.is-switching-in[data-switch-dir="next"],
+  .pswp--picnexus .pswp__img.is-switching-in[data-switch-dir="prev"],
+  .pswp--picnexus .pswp__img--placeholder.is-switching-in {
     animation: none;
   }
 }

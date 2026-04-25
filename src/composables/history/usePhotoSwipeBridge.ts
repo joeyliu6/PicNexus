@@ -157,6 +157,16 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
   let loadingDelayTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
+   * 切换方向（驱动入场动画的方向位移）
+   * 由三个调用点同步：键盘方向键、滚轮翻页、Vue 层导航箭头
+   * contentActivate 事件读取该值写入 .pswp__img 的 dataset.switchDir，CSS 选择器据此走不同 keyframes
+   */
+  const switchDirection = ref<'prev' | 'next' | null>(null);
+  function setSwitchDirection(dir: 'prev' | 'next') {
+    switchDirection.value = dir;
+  }
+
+  /**
    * 当前在加载的 itemId，用于过滤「孤儿 content」的串扰事件
    *
    * 背景：PhotoSwipe 的 slide.destroy() 不清 content.element.onload，
@@ -203,10 +213,12 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     if (!pswp) return;
     if (e.key === 'ArrowLeft' && options.hasPrev.value) {
       e.preventDefault();
+      setSwitchDirection('prev');
       options.onNavigate('prev');
     }
     if (e.key === 'ArrowRight' && options.hasNext.value) {
       e.preventDefault();
+      setSwitchDirection('next');
       options.onNavigate('next');
     }
   }
@@ -219,8 +231,13 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     if (!pswp || e.ctrlKey) return; // Ctrl+wheel 交给 PhotoSwipe 缩放
     if (wheelTimer) return;
     wheelTimer = setTimeout(() => { wheelTimer = null; }, 200);
-    if (e.deltaY > 0 && options.hasNext.value) options.onNavigate('next');
-    else if (e.deltaY < 0 && options.hasPrev.value) options.onNavigate('prev');
+    if (e.deltaY > 0 && options.hasNext.value) {
+      setSwitchDirection('next');
+      options.onNavigate('next');
+    } else if (e.deltaY < 0 && options.hasPrev.value) {
+      setSwitchDirection('prev');
+      options.onNavigate('prev');
+    }
   }
 
   // ── 打开 PhotoSwipe ─────────────────────────
@@ -252,6 +269,8 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
 
     pswp = new PhotoSwipe(buildPswpOptions({ src, msrc, w, h, thumbEl, useZoom, isCropped, id }));
     currentLoadingId = id;
+    // 重置方向：上一次会话残留的值不应影响新灯箱的首次切换判定
+    switchDirection.value = null;
     // 模糊背景优先用中图（LQIP）；回落 FLIP 占位图；再回落原图
     blurSrc.value = options.mediumSrc.value || flipSrc || src;
 
@@ -317,7 +336,22 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     pswp.on('contentActivate', (e) => {
       if (isFirstActivate) { isFirstActivate = false; return; }
       const el = e.content?.element;
-      if (el instanceof HTMLElement) el.classList.add('is-switching-in');
+      if (!(el instanceof HTMLElement)) return;
+      // 方向 attr 决定 keyframes 的起始 translateX 方向（next 从右进、prev 从左进）
+      // 缺省方向（如外部代码绕过 setSwitchDirection 触发 itemId 变更）走纯 fade
+      if (switchDirection.value) el.dataset.switchDir = switchDirection.value;
+      el.classList.add('is-switching-in');
+
+      // 同步给占位图（PhotoSwipe 自带的 .pswp__img--placeholder）加纯 opacity 淡入：
+      // 大图未加载完时占位图是用户唯一可见的视觉主体，
+      // 不淡入它就会"凭空蹦出来"形成切换瞬间的明显跳变。
+      // 注意：占位图自身有 transform: scale() 用作尺寸缩放（placeholder.js:44），
+      // CSS keyframes 必须只动 opacity，否则会覆盖 inline transform 导致占位图错位。
+      const slide = e.content?.slide;
+      const placeholderEl = slide?.placeholder?.element;
+      if (placeholderEl instanceof HTMLElement) {
+        placeholderEl.classList.add('is-switching-in');
+      }
     });
 
     pswp.init();
@@ -403,5 +437,5 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     }
   });
 
-  return { pswpEl, blurSrc, isLoading };
+  return { pswpEl, blurSrc, isLoading, setSwitchDirection };
 }
