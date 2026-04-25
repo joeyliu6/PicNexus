@@ -114,7 +114,6 @@ onDeactivated(() => { isViewActive.value = false; });
             :binary="true"
             @update:model-value="emit('update:includeSubfolders', $event as boolean)"
           />
-          <i class="pi pi-folder subfolder-option-row__icon" aria-hidden="true" />
           <span>包含子文件夹</span>
         </label>
         <label class="subfolder-option-row" @click.stop>
@@ -251,12 +250,6 @@ onDeactivated(() => { isViewActive.value = false; });
 .subfolder-option-row:hover {
   color: var(--text-main);
   border-color: var(--primary);
-}
-
-.subfolder-option-row__icon {
-  font-size: var(--text-xs);
-  color: var(--primary);
-  flex-shrink: 0;
 }
 
 .idle-zone__text {
