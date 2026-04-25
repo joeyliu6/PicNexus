@@ -272,8 +272,26 @@ export function useMdRescueManager() {
           filePath.value = mdPaths[0];
           folderPath.value = null;
           mdFiles.value = mdPaths;
-          imageLinks.value = await collectLinksFromFiles(mdPaths);
-          ok = imageLinks.value.length > 0;
+
+          // 与 loadFolderImpl 的收集态保持一致：重置取消标志 + 上报进度。
+          // 缺这一段时，用户取消一次再次拖放会让 collectLinksFromFiles 内部
+          // 的 getCollectCancelled() 仍为 true，每个文件早 return 静默失败。
+          setCollectCancelled(false);
+          isCollecting.value = true;
+          collectProgress.value = { scannedFiles: mdPaths.length, processedFiles: 0, foundLinks: 0 };
+          try {
+            imageLinks.value = await collectLinksFromFiles(mdPaths, (processed, found) => {
+              collectProgress.value = {
+                scannedFiles: mdPaths.length,
+                processedFiles: processed,
+                foundLinks: found,
+              };
+            });
+            ok = imageLinks.value.length > 0;
+          } finally {
+            isCollecting.value = false;
+            collectProgress.value = null;
+          }
         }
       }
 

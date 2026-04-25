@@ -3,6 +3,7 @@
 
 import { readTextFile, writeTextFile, copyFile, readDir, mkdir, remove } from '@tauri-apps/plugin-fs';
 import { join, dirname, basename } from '@tauri-apps/api/path';
+import pLimit from 'p-limit';
 import { useToast } from '../useToast';
 import { createLogger } from '../../utils/logger';
 import { formatTimestampCompact } from '../../utils/formatters';
@@ -26,7 +27,35 @@ import {
 
 const log = createLogger('MdRescue:Backup');
 
-/** 对路径计算短 hash（6 字符），用于多文件拖入时做备份文件名防撞前缀 */
+/**
+ * 撤销时的 copyFile 并发上限。
+ * Why: folder 模式批量修复后，fileBackupMap 可能上千项，一次性 fan-out
+ * Promise.all 会同时打开同等数量的文件描述符，Windows 上易触发 EMFILE 或资源争用。
+ * 8 是经验值，足够吃满 SSD IO 又不至于压垮系统。
+ */
+const UNDO_COPY_CONCURRENCY = 8;
+
+/**
+ * 计算文件相对于文件夹的路径。
+ * Windows 上 selectFolder 与 Rust canonicalize 可能返回不同大小写（如 `C:\Users\Foo`
+ * vs `c:\users\foo`），直接 string.replace 会匹配失败导致 relativePath = 完整绝对路径，
+ * 进而 backup 拼出含驱动器盘符的非法目录名。这里做大小写不敏感前缀比对。
+ *
+ * Linux 大小写敏感 FS 上不会出现伪命中：file 路径全部来自扫描同一 folder 子树，
+ * 与 folder 的大小写天然一致。
+ */
+function computeRelativePath(folder: string, file: string): string {
+  const normFolder = folder.replace(/\\/g, '/').replace(/\/+$/, '');
+  const normFile = file.replace(/\\/g, '/');
+  const folderPrefix = normFolder.toLowerCase() + '/';
+  if (normFile.toLowerCase().startsWith(folderPrefix)) {
+    return normFile.slice(normFolder.length + 1);
+  }
+  // 兜底：file 不在 folder 下时退化为 basename，避免备份目录构造异常
+  return normFile.split('/').pop() || normFile;
+}
+
+/** 对路径计算短 hash（8 字符），用于多文件拖入时做备份文件名防撞前缀 */
 function hashPath(path: string): string {
   let h = 0x811c9dc5; // FNV-1a 32bit seed
   const normalized = path.replace(/\\/g, '/');
@@ -34,7 +63,8 @@ function hashPath(path: string): string {
     h ^= normalized.charCodeAt(i);
     h = Math.imul(h, 0x01000193);
   }
-  return (h >>> 0).toString(16).padStart(8, '0').slice(0, 6);
+  // 8 字符 = 32 bit 全输出（FNV-1a 32 上限）。原 6 字符在 4096 文件量级即有 ~50% 碰撞概率
+  return (h >>> 0).toString(16).padStart(8, '0');
 }
 
 /**
@@ -114,9 +144,7 @@ export async function executeReplace(unrescuableCount: number): Promise<{
 
         let bakPath: string;
         if (mode.value === 'folder' && folderPath.value) {
-          // 确保 folderPath 以 / 结尾，避免 /foo 错误匹配 /foobar
-          const normalizedFolder = folderPath.value.replace(/\\/g, '/').replace(/\/?$/, '/');
-          const relativePath = file.replace(/\\/g, '/').replace(normalizedFolder, '');
+          const relativePath = computeRelativePath(folderPath.value, file);
           bakPath = await join(backupDir, relativePath);
           const bakParent = await dirname(bakPath);
           await mkdir(bakParent, { recursive: true });
@@ -194,21 +222,52 @@ export async function executeReplace(unrescuableCount: number): Promise<{
 export async function undoReplace(resetFn: () => void): Promise<void> {
   const toast = useToast();
 
-  if (!repairReceipt.value?.fileBackupMap.length) return;
+  const receipt = repairReceipt.value;
+  if (!receipt?.fileBackupMap.length) return;
 
-  try {
-    for (const { original, backup } of repairReceipt.value.fileBackupMap) {
-      await copyFile(backup, original);
-      log.info(`已恢复: ${original}`);
+  // 半失败语义：单文件 copyFile 失败不应中断其余文件的恢复，也不应整体回滚 receipt
+  // 原 try/for-await 实现里，第 N 个失败会丢失前 N-1 个已恢复文件的可见性，
+  // 且 resetFn() 仍执行 → 用户失去重试入口
+  // 用 p-limit 限并发，避免 fileBackupMap 上千项时同时打开等量文件描述符
+  const limit = pLimit(UNDO_COPY_CONCURRENCY);
+  const results = await Promise.allSettled(
+    receipt.fileBackupMap.map(({ backup, original }) =>
+      limit(() => copyFile(backup, original)),
+    ),
+  );
+
+  let restored = 0;
+  const failedPairs: RepairReceipt['fileBackupMap'] = [];
+  results.forEach((r, i) => {
+    const pair = receipt.fileBackupMap[i];
+    if (r.status === 'fulfilled') {
+      restored++;
+      log.info(`已恢复: ${pair.original}`);
+    } else {
+      log.error(`恢复失败: ${pair.original}`, r.reason);
+      failedPairs.push(pair);
     }
+  });
+
+  if (failedPairs.length === 0) {
     clearLastRepair();
     toast.success('撤销完成', '已恢复所有文件至修复前状态');
-  } catch (err) {
-    log.error('撤销失败', err);
-    toast.error('撤销失败', String(err));
+    resetFn();
+    return;
   }
 
-  resetFn();
+  if (restored === 0) {
+    // 全失败：保留 receipt，让用户能再次点击撤销重试
+    toast.error('撤销失败', `${failedPairs.length} 个文件恢复失败`);
+    return;
+  }
+
+  // 半成功：把 receipt 收窄到失败项，用户可针对性重试
+  repairReceipt.value = { ...receipt, fileBackupMap: failedPairs };
+  toast.error(
+    '部分撤销失败',
+    `已恢复 ${restored} 个，${failedPairs.length} 个失败（保留以便重试）`,
+  );
 }
 
 /**
@@ -226,11 +285,16 @@ export async function cleanupOldBackups(rootDir: string, keepCount: number): Pro
     if (dirs.length <= keepCount) return;
 
     const toRemove = dirs.slice(0, dirs.length - keepCount);
-    for (const dir of toRemove) {
+    // 并行清理：旧目录互不依赖，且单目录被外部锁定也不阻塞其余
+    await Promise.allSettled(toRemove.map(async (dir) => {
       const dirPath = await join(backupBase, dir);
-      await remove(dirPath, { recursive: true });
-      log.info(`已清理旧备份: ${dirPath}`);
-    }
+      try {
+        await remove(dirPath, { recursive: true });
+        log.info(`已清理旧备份: ${dirPath}`);
+      } catch (err) {
+        log.warn(`清理旧备份失败，跳过: ${dirPath}`, err);
+      }
+    }));
   } catch {
     // 清理失败不影响主流程
   }
