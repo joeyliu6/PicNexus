@@ -52,7 +52,6 @@ const {
   searchInput,
   searchQuery,
   searchFocused,
-  showCheckMenu,
   scopedRows,
   filteredRows,
   visibleRows,
@@ -80,8 +79,6 @@ const { stats, serviceList, progressPercent, progressTooltip } = useCheckStats({
 const {
   smartCheckLabel,
   smartCheckTooltip,
-  showDropdownArrow,
-  buildDropdownItems,
   buildMoreMenuItems,
   resolveSmartCheck,
   statusDotColor,
@@ -93,7 +90,7 @@ const {
 
 const showOverflowMenu = ref(false);
 
-/** 底栏运行状态 pill —— 仅在链接监控自己检测时显示，rescue/迁移不借此渲染 */
+/** 底栏运行状态 pill —— 仅在链接检测自己检测时显示，rescue/迁移不借此渲染 */
 const statePill = computed<StatePill | null>(() => {
   if (!props.isChecking || props.progressSource === 'rescue') return null;
   if (props.isPaused) return { tone: 'paused', icon: 'pi pi-pause', label: '已暂停' };
@@ -102,30 +99,28 @@ const statePill = computed<StatePill | null>(() => {
 
 const moreMenuItems = computed(() => {
   if (hasSelection.value) {
-    return buildMoreMenuItems({ mode: 'selection', count: selectedCount.value });
+    // recheck 已上升为底栏主按钮（重检选中），更多菜单里不再重复
+    return buildMoreMenuItems({ mode: 'selection', count: selectedCount.value })
+      .filter((item) => item.kind !== 'recheck');
   }
   return buildMoreMenuItems({ mode: 'filter', count: filteredRows.value.length });
 });
 
-const dropdownItems = computed(() =>
-  buildDropdownItems().map((item) => ({
-    ...item,
-    action: () => {
-      if (item.action === 'check-all') {
-        emit('check-all');
-      } else {
-        emit('check-subset', {
-          statusFilter: item.filter as 'unchecked' | 'invalid' | 'timeout' | 'suspicious' | 'problems',
-        });
-      }
-      showCheckMenu.value = false;
-    },
-  })),
-);
+const effectiveSmartCheckLabel = computed(() => {
+  if (hasSelection.value) return `重检选中 (${selectedCount.value.toLocaleString()})`;
+  return smartCheckLabel.value;
+});
+
+const effectiveSmartCheckTooltip = computed(() => {
+  if (hasSelection.value) return `重新检测选中的 ${selectedCount.value.toLocaleString()} 条链接`;
+  return smartCheckTooltip.value;
+});
 
 function handleSmartCheck(): void {
-  showCheckMenu.value = false;
-
+  if (hasSelection.value) {
+    handleBulkRecheck();
+    return;
+  }
   const result = resolveSmartCheck();
   if (result.action === 'check-all') {
     emit('check-all');
@@ -237,7 +232,7 @@ function handleMoreAction(kind: MoreMenuKind): void {
     </div>
   </div>
 
-  <div v-else class="monitor-panel" @click="showCheckMenu = false; showServiceMenu = false; showOverflowMenu = false">
+  <div v-else class="monitor-panel" @click="showServiceMenu = false; showOverflowMenu = false">
     <CheckFilterBar
       :stats="stats"
       :service-list="serviceList"
@@ -288,14 +283,11 @@ function handleMoreAction(kind: MoreMenuKind): void {
       :bottom-summary="bottomSummary"
       :is-loading="isLoading"
       :stats="stats"
-      :smart-check-label="smartCheckLabel"
-      :smart-check-tooltip="smartCheckTooltip"
-      :show-dropdown-arrow="showDropdownArrow"
-      :dropdown-items="dropdownItems"
+      :smart-check-label="effectiveSmartCheckLabel"
+      :smart-check-tooltip="effectiveSmartCheckTooltip"
       :more-menu-items="moreMenuItems"
       v-model:current-page="currentPage"
       v-model:page-input="pageInput"
-      v-model:show-check-menu="showCheckMenu"
       v-model:show-overflow-menu="showOverflowMenu"
       @toggle-select-all="toggleSelectAll"
       @clear-selection="clearSelection"

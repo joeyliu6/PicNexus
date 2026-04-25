@@ -5,13 +5,6 @@ import StatePill, { type StatePill as StatePillType } from '../common/StatePill.
 import type { CheckStatsResult } from '../../../../composables/link-check/useCheckStats';
 import type { MoreMenuItem, MoreMenuKind } from '../../../../composables/link-check/useCheckStrategy';
 
-interface DropdownItem {
-  label: string;
-  desc: string;
-  icon: string;
-  action: () => void;
-}
-
 defineProps<{
   isChecking: boolean;
   isPaused: boolean;
@@ -29,8 +22,6 @@ defineProps<{
   stats: CheckStatsResult;
   smartCheckLabel: string;
   smartCheckTooltip: string;
-  showDropdownArrow: boolean;
-  dropdownItems: DropdownItem[];
   moreMenuItems: MoreMenuItem[];
 }>();
 
@@ -47,7 +38,6 @@ const emit = defineEmits<{
 
 const currentPage = defineModel<number>('currentPage', { required: true });
 const pageInput = defineModel<string>('pageInput', { required: true });
-const showCheckMenu = defineModel<boolean>('showCheckMenu', { required: true });
 const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: true });
 </script>
 
@@ -100,10 +90,7 @@ const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: tr
         :is-action-locked="isActionLocked"
         :smart-check-label="smartCheckLabel"
         :smart-check-tooltip="smartCheckTooltip"
-        :show-dropdown-arrow="showDropdownArrow"
-        :dropdown-items="dropdownItems"
         :more-menu-items="moreMenuItems"
-        v-model:show-check-menu="showCheckMenu"
         v-model:show-overflow-menu="showOverflowMenu"
         @toggle-select-all="emit('toggle-select-all')"
         @clear-selection="emit('clear-selection')"

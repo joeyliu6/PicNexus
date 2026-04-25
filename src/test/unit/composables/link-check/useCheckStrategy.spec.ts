@@ -90,36 +90,6 @@ describe('resolveSmartCheck', () => {
   });
 });
 
-// ─── buildDropdownItems ───────────────────────────────────────────────────────
-
-describe('buildDropdownItems', () => {
-  it('始终包含"检测全部"选项', () => {
-    const { buildDropdownItems } = makeStrategy({ total: 10, unchecked: 0, problems: 0 });
-    const items = buildDropdownItems();
-    expect(items.some((i) => i.label.includes('检测全部'))).toBe(true);
-  });
-
-  it('有未检测且非 unchecked 筛选时包含"仅未检测"', () => {
-    const { buildDropdownItems } = makeStrategy({ total: 10, unchecked: 3 }, null);
-    const items = buildDropdownItems();
-    expect(items.some((i) => i.label.includes('仅未检测'))).toBe(true);
-  });
-
-  it('筛选器为 unchecked 时不显示"仅未检测"选项', () => {
-    const stats = computed(() => makeStats({ total: 10, unchecked: 3 }));
-    const statusFilter = ref<StatusFilter>('unchecked');
-    const { buildDropdownItems } = useCheckStrategy({ stats, statusFilter });
-    const items = buildDropdownItems();
-    expect(items.some((i) => i.label.includes('仅未检测'))).toBe(false);
-  });
-
-  it('有问题时包含"重检问题链接"选项', () => {
-    const { buildDropdownItems } = makeStrategy({ total: 10, unchecked: 0, problems: 3 }, null);
-    const items = buildDropdownItems();
-    expect(items.some((i) => i.label.includes('重检问题链接'))).toBe(true);
-  });
-});
-
 // ─── 行状态展示函数 ────────────────────────────────────────────────────────────
 
 describe('statusDotColor', () => {

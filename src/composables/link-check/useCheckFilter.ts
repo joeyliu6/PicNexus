@@ -50,7 +50,6 @@ export function useCheckFilter({ checkRows, isChecking }: UseCheckFilterOptions)
   const searchQuery = ref('');
   const currentPage = ref(1);
   const pageByFilter = new Map<StatusFilter, number>();
-  const showCheckMenu = ref(false);
   const searchFocused = ref(false);
 
   function resetPageState(): void {
@@ -201,7 +200,6 @@ export function useCheckFilter({ checkRows, isChecking }: UseCheckFilterOptions)
     searchInput,
     searchQuery,
     searchFocused,
-    showCheckMenu,
     scopedRows,
     filteredRows,
     visibleRows,

@@ -67,75 +67,6 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
     return `重新检测全部 ${total.toLocaleString()} 条链接`;
   });
 
-  const showDropdownArrow = computed(() => {
-    if (statusFilter.value && CONTEXT_AWARE_FILTERS.has(statusFilter.value)) return true;
-    if (stats.value.unchecked === stats.value.total) return false;
-    if (stats.value.unchecked === 0 && stats.value.problems === 0) return false;
-    return true;
-  });
-
-  function buildDropdownItems(): Array<{
-    label: string;
-    desc: string;
-    icon: string;
-    action: 'check-all' | 'check-subset';
-    filter?: string;
-  }> {
-    const items: Array<{
-      label: string;
-      desc: string;
-      icon: string;
-      action: 'check-all' | 'check-subset';
-      filter?: string;
-    }> = [];
-    const { total, unchecked, problems } = stats.value;
-    const filter = statusFilter.value;
-
-    items.push({
-      label: `检测全部 (${total.toLocaleString()})`,
-      desc: '包括已经检测过的链接',
-      icon: 'pi-play',
-      action: 'check-all',
-    });
-
-    if (unchecked > 0 && unchecked < total && filter !== 'unchecked') {
-      items.push({
-        label: `仅未检测 (${unchecked.toLocaleString()})`,
-        desc: '跳过已有结果的链接',
-        icon: 'pi-clock',
-        action: 'check-subset',
-        filter: 'unchecked',
-      });
-    }
-
-    if (problems > 0 && filter !== 'invalid' && filter !== 'timeout' && filter !== 'suspicious') {
-      items.push({
-        label: `重检问题链接 (${problems.toLocaleString()})`,
-        desc: '重新验证失效、超时和可疑链接',
-        icon: 'pi-exclamation-triangle',
-        action: 'check-subset',
-        filter: 'problems',
-      });
-    }
-
-    if ((filter === 'invalid' || filter === 'suspicious' || filter === 'timeout') && problems > 0) {
-      const currentCount = filter === 'invalid'
-        ? stats.value.invalid
-        : stats.value[filter as 'suspicious' | 'timeout'];
-      if (problems !== currentCount) {
-        items.push({
-          label: `重检全部问题链接 (${problems.toLocaleString()})`,
-          desc: '包括失效、超时和可疑链接',
-          icon: 'pi-exclamation-triangle',
-          action: 'check-subset',
-          filter: 'problems',
-        });
-      }
-    }
-
-    return items;
-  }
-
   function buildMoreMenuItems(args: {
     mode: 'selection' | 'filter';
     count: number;
@@ -241,8 +172,6 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
   return {
     smartCheckLabel,
     smartCheckTooltip,
-    showDropdownArrow,
-    buildDropdownItems,
     buildMoreMenuItems,
     resolveSmartCheck,
     statusDotColor,
