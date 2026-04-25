@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MultiServiceUploader } from '../../../core/MultiServiceUploader';
 import type { SingleServiceResult } from '../../../core/MultiServiceUploader';
-import type { UserConfig, ServiceType } from '../../../config/types';
+import type { UserConfig } from '../../../config/types';
 import type { UploadResult, ValidationResult } from '../../../uploaders/base/types';
 
 vi.mock('../../../uploaders/base/UploaderFactory', () => ({

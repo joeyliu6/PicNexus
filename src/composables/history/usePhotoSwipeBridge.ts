@@ -347,8 +347,7 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
       // 不淡入它就会"凭空蹦出来"形成切换瞬间的明显跳变。
       // 注意：占位图自身有 transform: scale() 用作尺寸缩放（placeholder.js:44），
       // CSS keyframes 必须只动 opacity，否则会覆盖 inline transform 导致占位图错位。
-      const slide = e.content?.slide;
-      const placeholderEl = slide?.placeholder?.element;
+      const placeholderEl = e.content?.placeholder?.element;
       if (placeholderEl instanceof HTMLElement) {
         placeholderEl.classList.add('is-switching-in');
       }
