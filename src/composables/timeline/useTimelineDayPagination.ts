@@ -15,6 +15,7 @@ import { historyDB, type DayStats, type DayStatsFilter } from '../../services/Hi
 import type { AspectRatioRow } from '../../services/database/TimelineQueryService';
 import { onCacheEventType, type HistoryEventData } from '../../events/cacheEvents';
 import { createLogger } from '../../utils/logger';
+import { getDayKey } from '../../utils/formatters';
 import type { ImageMeta } from '../../types/image-meta';
 import type { ServiceType } from '../../config/types';
 import type { PhotoGroup } from './types';
@@ -33,11 +34,8 @@ const MAX_PRELOAD_THRESHOLD = 200_000;
 /** 懒加载降级模式下的 LRU 容量上限（约 40KB × 20 张 = 7MB 封顶） */
 const MAX_ASPECT_RATIOS_CACHE = 200;
 
-/** 从毫秒时间戳提取 dayKey（month 0-11，与 DayStats 一致） */
-function tsToDayKey(ts: number): string {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-}
+/** 从毫秒时间戳提取 dayKey（month 0-11，与 DayStats 一致），统一来源 utils/formatters */
+const tsToDayKey = getDayKey;
 
 /**
  * 格式化日期为中文标签（带 memoization）

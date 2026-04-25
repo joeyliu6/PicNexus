@@ -6,6 +6,7 @@ import { useToast } from '../useToast';
 import { TOAST_MESSAGES } from '../../constants';
 import type { WebDAVProfile } from '../../config/types';
 import { createLogger } from '../../utils/logger';
+import { formatTimestampFull } from '../../utils/formatters';
 
 const log = createLogger('BackupSync');
 
@@ -37,8 +38,7 @@ export async function writeSyncLog(
  * 获取当前时间的完整格式字符串
  */
 export function getFullTimestamp(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+  return formatTimestampFull();
 }
 
 /**

@@ -5,6 +5,7 @@ import { readTextFile, writeTextFile, copyFile, readDir, mkdir, remove } from '@
 import { join, dirname, basename } from '@tauri-apps/api/path';
 import { useToast } from '../useToast';
 import { createLogger } from '../../utils/logger';
+import { formatTimestampCompact } from '../../utils/formatters';
 import { replaceImageLinks } from '../../utils/mdParser';
 import { saveLastRepair, clearLastRepair } from './useMdRescueLastRepair';
 import {
@@ -86,8 +87,7 @@ export async function executeReplace(unrescuableCount: number): Promise<{
     let totalFailed = 0;
     const fileBackupMap: RepairReceipt['fileBackupMap'] = [];
 
-    const now = new Date();
-    const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+    const ts = formatTimestampCompact();
 
     const backupRoot = mode.value === 'folder' && folderPath.value
       ? folderPath.value

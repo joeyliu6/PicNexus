@@ -63,3 +63,25 @@ export function formatFileSize(bytes: number, options?: { emptyText?: string }):
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * 时间戳 → dayKey（如 "2026-3-25"）
+ * 注意：month 是 0-11，与 Date.getMonth() 一致；用作 Map key 而非展示文本。
+ * 必须保持此格式以与 DayStats / TimelineData 内部约定兼容。
+ */
+export function getDayKey(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/** 完整时间戳 "YYYY-MM-DD HH:mm:ss"，用于日志/同步标记 */
+export function formatTimestampFull(date: Date = new Date()): string {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+}
+
+/** 紧凑时间戳 "YYYYMMDD_HHmmss"，可用于安全文件名 */
+export function formatTimestampCompact(date: Date = new Date()): string {
+  return `${date.getFullYear()}${pad2(date.getMonth() + 1)}${pad2(date.getDate())}_${pad2(date.getHours())}${pad2(date.getMinutes())}${pad2(date.getSeconds())}`;
+}
+
