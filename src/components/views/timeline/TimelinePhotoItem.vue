@@ -236,24 +236,26 @@ function handleImgError(e: Event): void {
   inset: -8px;
 }
 
-.photo-wrapper:hover .checkbox,
-.checkbox.checked {
-  opacity: 1;
+/* 两段式露出：图片 hover 时半亮，复选框直接 hover 才全亮 */
+.photo-wrapper:hover .checkbox {
+  opacity: 0.6;
 }
 
-/* 选择模式下所有复选框常驻显示 */
+.checkbox.checked {
+  opacity: 1;
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+/* 选择模式下所有复选框常驻全亮（用户意图明确，不走两段式） */
 .photo-item.selection-mode .checkbox {
   opacity: 1;
 }
 
 .checkbox:hover {
+  opacity: 1;
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 照片上的半透明悬停背景，非主题色 */
   background: rgb(0 0 0 / 40%);
-}
-
-.checkbox.checked {
-  background: var(--primary);
-  border-color: var(--primary);
 }
 
 .checkbox.checked i {
@@ -271,13 +273,14 @@ function handleImgError(e: Event): void {
   height: 20px;
   border: none;
   background: none;
+  border-radius: var(--radius-full);
   /* stylelint-disable-next-line declaration-property-value-allowed-list -- 照片上的半透明白色图标，固定配色 */
   color: rgb(255 255 255 / 85%);
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity var(--duration-normal), color var(--duration-normal), transform var(--duration-normal), filter var(--duration-normal);
+  transition: opacity var(--duration-normal), color var(--duration-normal), transform var(--duration-normal), filter var(--duration-normal), background var(--duration-normal);
   z-index: 2;
   cursor: pointer;
   font-size: var(--text-xs);
@@ -290,18 +293,26 @@ function handleImgError(e: Event): void {
   inset: -8px;
 }
 
+/* 两段式露出：图片 hover 半亮，按钮直接 hover 才全亮 */
 .photo-wrapper:hover .favorite-btn {
-  opacity: 1;
+  opacity: 0.6;
 }
 
 .favorite-btn.favorited {
-  opacity: 0.5;
+  opacity: 0.6;
   color: var(--warning);
   filter: drop-shadow(0 1px 3px rgb(234 179 8 / 40%));
 }
 
 .favorite-btn:hover {
+  opacity: 1;
   transform: scale(1.15);
+}
+
+/* 未收藏的空心星 hover 时加圆形毛玻璃底，跟复选框节奏对齐 */
+.favorite-btn:not(.favorited):hover {
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 照片上的半透明悬停背景，非主题色 */
+  background: rgb(0 0 0 / 35%);
 }
 
 .favorite-btn.favorited:hover {
@@ -329,13 +340,14 @@ function handleImgError(e: Event): void {
   height: 20px;
   border: none;
   background: none;
+  border-radius: var(--radius-full);
   /* stylelint-disable-next-line declaration-property-value-allowed-list -- 照片上的半透明白色图标，固定配色 */
   color: rgb(255 255 255 / 85%);
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity var(--duration-normal), transform var(--duration-normal);
+  transition: opacity var(--duration-normal), transform var(--duration-normal), background var(--duration-normal);
   z-index: 2;
   cursor: pointer;
   font-size: var(--text-xs);
@@ -349,12 +361,16 @@ function handleImgError(e: Event): void {
   inset: -16px;
 }
 
+/* 两段式露出：图片 hover 半亮，按钮直接 hover 才全亮 */
 .photo-wrapper:hover .magnifier-btn {
-  opacity: 1;
+  opacity: 0.6;
 }
 
 .magnifier-btn:hover {
+  opacity: 1;
   transform: scale(1.15);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 照片上的半透明悬停背景，非主题色 */
+  background: rgb(0 0 0 / 35%);
 }
 
 @media (hover: none) {
