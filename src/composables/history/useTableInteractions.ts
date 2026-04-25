@@ -19,6 +19,7 @@ import { useToast } from '../useToast';
 import { createLogger } from '../../utils/logger';
 import { motionDuration } from '../../utils/reducedMotion';
 import { HIDE_ANIMATION_DURATION, SHOW_ANIMATION_DURATION } from './usePhotoSwipeBridge';
+import { useLightboxPreloader } from '../useLightboxPreloader';
 
 const logger = createLogger('TableInteractions');
 
@@ -123,22 +124,27 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     return getPrimaryImageUrl(item, configManager.config.value);
   }
 
-  function preloadAdjacentImage(currentIdx: number, direction: 'prev' | 'next'): void {
-    const preloadIdx = direction === 'prev' ? currentIdx - 1 : currentIdx + 1;
-    if (preloadIdx < 0 || preloadIdx >= currentPageData.value.length) return;
-    const url = getItemImageUrl(currentPageData.value[preloadIdx]);
-    if (url) new Image().src = url;
-  }
+  // 双向 ±1 预加载交给 useLightboxPreloader 统一处理：监听 lightboxItem 变化、
+  // 防抖 100ms 后并发预热前后两张大图。这里只需提供"按方向解析 URL"的同步逻辑。
+  useLightboxPreloader({
+    currentItemId: computed(() => lightboxItem.value?.id ?? null),
+    resolveAdjacentUrl: (direction) => {
+      const idx = lightboxIndex.value;
+      if (idx < 0) return null;
+      const targetIdx = direction === 'prev' ? idx - 1 : idx + 1;
+      const target = currentPageData.value[targetIdx];
+      return target ? getItemImageUrl(target) : null;
+    },
+  });
 
   // 跨页导航并发保护：用户快按时多次 goToPage 会互相作废（loadVersion 机制），
   // 用 isCrossingPage 直接忽略重入，保证 lightboxItem 的落点与最终页数据一致
   let isCrossingPage = false;
 
-  /** 切到新图的公共收尾：过继悬浮预览 + 预加载相邻原图 */
-  function landOnItem(item: HistoryItem, indexInPage: number, direction: 'prev' | 'next'): void {
+  /** 切到新图的公共收尾：过继悬浮预览（预加载由 useLightboxPreloader 自动接管） */
+  function landOnItem(item: HistoryItem): void {
     lightboxItem.value = item;
     if (hoverPreview.value.visible) syncHoverPreviewToItem(item);
-    preloadAdjacentImage(indexInPage, direction);
   }
 
   async function handleLightboxNavigate(direction: 'prev' | 'next'): Promise<void> {
@@ -147,11 +153,11 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
 
     // 页内直接切
     if (direction === 'next' && idx >= 0 && idx < data.length - 1) {
-      landOnItem(data[idx + 1], idx + 1, 'next');
+      landOnItem(data[idx + 1]);
       return;
     }
     if (direction === 'prev' && idx > 0) {
-      landOnItem(data[idx - 1], idx - 1, 'prev');
+      landOnItem(data[idx - 1]);
       return;
     }
 
@@ -171,7 +177,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
       if (newData.length === 0) return;
       // next → 新页第 0 张；prev → 新页末张（保持"越切越老/越切越新"的时间方向连续）
       const landIndex = direction === 'next' ? 0 : newData.length - 1;
-      landOnItem(newData[landIndex], landIndex, direction);
+      landOnItem(newData[landIndex]);
     } catch (error) {
       logger.error('灯箱跨页失败:', error);
     } finally {

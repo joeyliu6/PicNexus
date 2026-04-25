@@ -62,6 +62,7 @@ const {
   deleteHistoryItem: (id: string) => viewState.deleteHistoryItem(id),
   hasMore,
   loadNext: loadNextPage,
+  config: configManager.config,
 });
 
 const selectedIdsSet = computed(() => new Set(viewState.selectedIdList.value));

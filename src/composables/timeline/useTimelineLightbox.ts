@@ -1,20 +1,23 @@
 /**
  * 灯箱（Lightbox）逻辑 Composable
  * 支持日内快翻（无延迟）和跨日按需加载（意图缓冲）
+ *
+ * 公共部分（visible / item / showItem / deleteCurrent）走 useLightboxCore，
+ * 这里只负责时间轴特有的「日内 + 跨日」复杂导航与意图缓冲。
  */
 import { ref, computed, type Ref } from 'vue';
 import { createLogger } from '../../utils/logger';
 import { getPrimaryImageUrl } from '../../utils/imageUrl';
+import { getDayKey } from '../../utils/formatters';
 import { type HistoryItem, type UserConfig } from '../../config/types';
 import type { ImageMeta } from '../../types/image-meta';
+import { useLightboxPreloader } from '../useLightboxPreloader';
+import { useLightboxCore } from '../common/useLightboxCore';
 
 const logger = createLogger('TimelineLightbox');
 
-/** 从毫秒时间戳提取 dayKey，与 useTimelineDayPagination 保持一致 */
-function tsToDayKey(ts: number): string {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-}
+/** 从毫秒时间戳提取 dayKey，与 useTimelineDayPagination 保持一致（共用 utils/formatters 实现） */
+const tsToDayKey = getDayKey;
 
 interface UseTimelineLightboxOptions {
   /** 日 meta 缓存（key = dayKey） */
@@ -49,8 +52,8 @@ export function useTimelineLightbox(options: UseTimelineLightboxOptions) {
     detailCache, config, deleteHistoryItem, scrollToItem, toast,
   } = options;
 
-  const lightboxVisible = ref(false);
-  const lightboxItem = ref<HistoryItem | null>(null);
+  const core = useLightboxCore({ silentLoadError: true, toast });
+
   /** 当前灯箱图片所在天 */
   const currentDayKey = ref('');
   /** 当前图片在该天内的索引 */
@@ -122,8 +125,7 @@ export function useTimelineLightbox(options: UseTimelineLightboxOptions) {
     if (!meta) return;
 
     try {
-      const detail = await detailCache.getDetail(meta.id);
-      lightboxItem.value = detail;
+      await core.loadItem(() => detailCache.getDetail(meta.id));
       scrollToItem(meta.id);
       silentlyPreloadAdjacentDay();
     } catch (e) {
@@ -147,18 +149,20 @@ export function useTimelineLightbox(options: UseTimelineLightboxOptions) {
     }
   }
 
-  /** 预加载相邻图片的原始 URL（灯箱流畅翻页用） */
-  async function preloadAdjacentImage(direction: 'prev' | 'next'): Promise<void> {
-    const items = currentDayItems.value;
-    const preloadIdx = direction === 'next' ? indexInDay.value + 1 : indexInDay.value - 1;
-    const meta = items[preloadIdx];
-    if (!meta) return;
-    try {
+  // 双向 ±1 预加载交给 useLightboxPreloader 统一管理：
+  // 监听 lightboxItem 变化、防抖 100ms 后并发预热。跨日的相邻天预热由
+  // silentlyPreloadAdjacentDay 单独负责（拉 dayMeta），不在此 hook 范围内。
+  useLightboxPreloader({
+    currentItemId: computed(() => core.lightboxItem.value?.id ?? null),
+    resolveAdjacentUrl: async (direction) => {
+      const items = currentDayItems.value;
+      const preloadIdx = direction === 'next' ? indexInDay.value + 1 : indexInDay.value - 1;
+      const meta = items[preloadIdx];
+      if (!meta) return null;
       const detail = await detailCache.getDetail(meta.id);
-      const url = getPrimaryImageUrl(detail, config.value);
-      if (url) new Image().src = url;
-    } catch { /* 预加载失败不影响用户体验 */ }
-  }
+      return getPrimaryImageUrl(detail, config.value) || null;
+    },
+  });
 
   /** 灯箱导航：意图缓冲——导航中的快速按键会在当前步骤完成后立即处理 */
   async function handleLightboxNavigate(direction: 'prev' | 'next'): Promise<void> {
@@ -195,30 +199,20 @@ export function useTimelineLightbox(options: UseTimelineLightboxOptions) {
     indexInDay.value = Math.max(0, idx);
 
     try {
-      const detail = await detailCache.getDetail(meta.id);
-      lightboxItem.value = detail;
-      lightboxVisible.value = true;
+      await core.showItem(() => detailCache.getDetail(meta.id));
       silentlyPreloadAdjacentDay();
-      void preloadAdjacentImage('next');
+      // 相邻图大图预热由 useLightboxPreloader 监听 lightboxItem 变化自动触发（双向 ±1）
     } catch (e) {
       logger.error('加载详情失败:', e);
-      toast.error('加载失败', String(e));
     }
   }
 
-  async function handleLightboxDelete(item: HistoryItem): Promise<void> {
-    try {
-      await deleteHistoryItem(item.id);
-      lightboxVisible.value = false;
-      toast.success('已删除');
-    } catch (e) {
-      toast.error('删除失败', String(e));
-    }
-  }
+  const handleLightboxDelete = (item: HistoryItem) =>
+    core.deleteCurrent(item, deleteHistoryItem);
 
   return {
-    lightboxVisible,
-    lightboxItem,
+    lightboxVisible: core.lightboxVisible,
+    lightboxItem: core.lightboxItem,
     lightboxHasPrev,
     lightboxHasNext,
     openLightbox,
