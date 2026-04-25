@@ -1,12 +1,16 @@
 <script setup lang="ts">
 /**
- * 灯箱镜像管理菜单 - 列出一张图的所有成功镜像 + 切换/删除动作
+ * 灯箱图床管理菜单 — 整合"复制 / 切主图床 / 移除 / 重新检测"四种动作
+ *
+ * 行布局（左到右）：
+ *   [ 服务名 ][ 主徽章 ]               [ 设为主 ][ 移除 ][ 状态 chip ]
+ * 所有行三列按钮位固定对齐；主行的"设为主"按禁用态渲染（已经是主）。
  *
  * 交互：
- * - 点击非主服务行 → 触发 switch-primary
- * - 点击行尾 trash 图标 → 触发 remove-mirror
- * - 当前主服务行显示"主服务"标签，不可删除
- * - 头部可选横幅：主图失效 / 全部失效 时提示用户
+ * - 点击整行 = 复制此图床链接
+ * - 点"设为主"图标 = 切换主图床（主行禁用；失效行禁用，不可扶正）
+ * - 点"移除"图标 = 从记录中删除此链接；主行也可移除（自动迁移到备选）
+ * - 点 chip = 重新检测此链接的有效性（实时）
  */
 import { computed } from 'vue';
 import { getServiceDisplayName } from '../../../constants/serviceNames';
@@ -16,34 +20,46 @@ const props = defineProps<{
   mirrors: MirrorInfo[];
   isPrimaryBroken: boolean;
   allMirrorsBroken: boolean;
+  checkingServices: Set<string>;
 }>();
 
 const emit = defineEmits<{
+  (e: 'copy-mirror', serviceId: string): void;
   (e: 'switch-primary', serviceId: string): void;
   (e: 'remove-mirror', serviceId: string): void;
+  (e: 'check-mirror', serviceId: string): void;
 }>();
 
-/** 头部横幅：优先展示"全部失效"，其次"主图失效" */
 const banner = computed<{ kind: 'danger' | 'warning'; text: string } | null>(() => {
   if (props.allMirrorsBroken) {
-    return { kind: 'danger', text: '所有镜像均已失效，建议删除整条记录' };
+    return { kind: 'danger', text: '全部图床链接均已失效，建议删除整条记录' };
   }
   if (props.isPrimaryBroken) {
-    return { kind: 'warning', text: '主图已失效，可切换到其他可用镜像' };
+    return { kind: 'warning', text: '主图床已失效，可切换到其他可用图床' };
   }
   return null;
 });
 
 function handleRowClick(mirror: MirrorInfo): void {
+  emit('copy-mirror', mirror.serviceId);
+}
+
+function handleSwitchClick(mirror: MirrorInfo, event: Event): void {
+  event.stopPropagation();
   if (mirror.isPrimary) return;
-  if (mirror.checkState === 'invalid') return; // 已知失效的不让设为主服务
+  if (mirror.checkState === 'invalid') return;
   emit('switch-primary', mirror.serviceId);
 }
 
 function handleRemoveClick(mirror: MirrorInfo, event: Event): void {
   event.stopPropagation();
-  if (mirror.isPrimary) return;
   emit('remove-mirror', mirror.serviceId);
+}
+
+function handleChipClick(mirror: MirrorInfo, event: Event): void {
+  event.stopPropagation();
+  if (props.checkingServices.has(mirror.serviceId)) return;
+  emit('check-mirror', mirror.serviceId);
 }
 
 function stateLabel(state: MirrorInfo['checkState']): string {
@@ -56,7 +72,7 @@ function stateLabel(state: MirrorInfo['checkState']): string {
 </script>
 
 <template>
-  <div class="mirror-menu" role="menu" aria-label="镜像管理">
+  <div class="mirror-menu" role="menu" aria-label="图床管理">
     <div v-if="banner" class="mirror-menu-banner" :class="`mirror-menu-banner--${banner.kind}`">
       <i class="pi pi-exclamation-triangle" aria-hidden="true" />
       <span>{{ banner.text }}</span>
@@ -70,30 +86,58 @@ function stateLabel(state: MirrorInfo['checkState']): string {
         :class="{
           'mirror-row--primary': mirror.isPrimary,
           'mirror-row--invalid': mirror.checkState === 'invalid',
-          'mirror-row--clickable': !mirror.isPrimary && mirror.checkState !== 'invalid',
         }"
-        :aria-disabled="mirror.isPrimary || mirror.checkState === 'invalid' ? 'true' : 'false'"
+        role="menuitem"
+        tabindex="0"
         @click="handleRowClick(mirror)"
+        @keydown.enter.prevent="handleRowClick(mirror)"
+        @keydown.space.prevent="handleRowClick(mirror)"
       >
-        <span class="mirror-row-name">{{ getServiceDisplayName(mirror.serviceId) }}</span>
-        <span
-          class="mirror-row-chip"
-          :class="`mirror-row-chip--${mirror.checkState}`"
-          :aria-label="`状态：${stateLabel(mirror.checkState)}`"
-        >
-          {{ stateLabel(mirror.checkState) }}
+        <span class="mirror-row-name">
+          {{ getServiceDisplayName(mirror.serviceId) }}
+          <span v-if="mirror.isPrimary" class="mirror-row-badge" aria-label="主图床">主</span>
         </span>
-        <span v-if="mirror.isPrimary" class="mirror-row-tag">主服务</span>
-        <button
-          v-else
-          type="button"
-          class="mirror-row-remove"
-          aria-label="删除此镜像"
-          v-tooltip.top="'删除此镜像链接'"
-          @click="handleRemoveClick(mirror, $event)"
-        >
-          <i class="pi pi-trash" aria-hidden="true" />
-        </button>
+
+        <div class="mirror-row-actions">
+          <button
+            type="button"
+            class="mirror-row-action mirror-row-action--switch"
+            :disabled="mirror.isPrimary || mirror.checkState === 'invalid'"
+            :aria-label="mirror.isPrimary ? '当前主图床' : '设为主图床'"
+            v-tooltip.top="mirror.isPrimary ? '当前主图床' : '设为主图床'"
+            @click="handleSwitchClick(mirror, $event)"
+          >
+            <i class="pi pi-arrow-up" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            class="mirror-row-action mirror-row-action--remove"
+            aria-label="移除此链接"
+            v-tooltip.top="'移除此链接'"
+            @click="handleRemoveClick(mirror, $event)"
+          >
+            <i class="pi pi-trash" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            class="mirror-row-chip"
+            :class="[
+              `mirror-row-chip--${mirror.checkState}`,
+              { 'mirror-row-chip--checking': checkingServices.has(mirror.serviceId) },
+            ]"
+            :disabled="checkingServices.has(mirror.serviceId)"
+            :aria-label="`状态：${stateLabel(mirror.checkState)}，点击重新检测`"
+            v-tooltip.top="'重新检测'"
+            @click="handleChipClick(mirror, $event)"
+          >
+            <i
+              v-if="checkingServices.has(mirror.serviceId)"
+              class="pi pi-spin pi-spinner"
+              aria-hidden="true"
+            />
+            <span v-else>{{ stateLabel(mirror.checkState) }}</span>
+          </button>
+        </div>
       </li>
     </ul>
   </div>
@@ -101,7 +145,7 @@ function stateLabel(state: MirrorInfo['checkState']): string {
 
 <style scoped>
 .mirror-menu {
-  min-width: 240px;
+  min-width: 320px;
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
@@ -151,19 +195,22 @@ function stateLabel(state: MirrorInfo['checkState']): string {
   color: var(--text-main);
   background: transparent;
   transition: background var(--duration-fast) var(--ease-standard);
-  cursor: default;
-}
-
-.mirror-row--clickable {
   cursor: pointer;
 }
 
-.mirror-row--clickable:hover {
+.mirror-row:hover,
+.mirror-row:focus-visible {
   background: var(--hover-overlay);
+  outline: none;
 }
 
 .mirror-row--primary {
-  background: var(--hover-overlay-subtle);
+  background: var(--primary-alpha-8);
+}
+
+.mirror-row--primary:hover,
+.mirror-row--primary:focus-visible {
+  background: var(--primary-alpha-15);
 }
 
 .mirror-row--invalid {
@@ -173,23 +220,114 @@ function stateLabel(state: MirrorInfo['checkState']): string {
 .mirror-row-name {
   flex: 1;
   min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.mirror-row-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 var(--space-2xs);
+  border-radius: var(--radius-sm);
+  background: var(--primary-alpha-15);
+  color: var(--primary);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.mirror-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  flex-shrink: 0;
+}
+
+.mirror-row-action {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.mirror-row-action:hover:not(:disabled) {
+  background: var(--hover-overlay);
+  color: var(--text-main);
+}
+
+.mirror-row-action--switch:hover:not(:disabled) {
+  color: var(--primary);
+}
+
+.mirror-row-action--remove:hover:not(:disabled) {
+  background: var(--error-alpha-15);
+  color: var(--error);
+}
+
+.mirror-row-action:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.mirror-row-action:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.mirror-row-action--remove:focus-visible {
+  outline-color: var(--error);
+}
+
+/* 状态 chip 兼职"重新检测"按钮：hover 微亮、focus 有 ring、loading 锁定 */
 .mirror-row-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 40px;
-  height: 20px;
-  padding: 0 var(--space-xs);
+  min-width: 56px;
+  height: 24px;
+  padding: 0 var(--space-sm);
+  border: none;
   border-radius: var(--radius-full);
   font-size: var(--text-2xs);
   font-weight: var(--weight-medium);
   letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
   flex-shrink: 0;
+}
+
+.mirror-row-chip:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
+.mirror-row-chip:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.mirror-row-chip:disabled {
+  cursor: progress;
 }
 
 .mirror-row-chip--valid {
@@ -207,37 +345,12 @@ function stateLabel(state: MirrorInfo['checkState']): string {
   color: var(--text-muted);
 }
 
-.mirror-row-tag {
-  font-size: var(--text-2xs);
-  color: var(--text-muted);
-  flex-shrink: 0;
+.mirror-row-chip--checking {
+  background: var(--primary-alpha-15);
+  color: var(--primary);
 }
 
-.mirror-row-remove {
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  border-radius: var(--radius-sm);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.mirror-row-chip .pi-spinner {
   font-size: var(--text-xs);
-  cursor: pointer;
-  transition:
-    background var(--duration-fast) var(--ease-standard),
-    color var(--duration-fast) var(--ease-standard);
-  flex-shrink: 0;
-}
-
-.mirror-row-remove:hover {
-  background: var(--error-alpha-15);
-  color: var(--error);
-}
-
-.mirror-row-remove:focus-visible {
-  outline: 2px solid var(--error);
-  outline-offset: -2px;
 }
 </style>

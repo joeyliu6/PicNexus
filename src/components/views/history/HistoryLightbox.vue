@@ -110,13 +110,15 @@ const { handleCopyLink, handleCopyServiceLink, copySuccess, openInBrowser, handl
   onDelete: (record) => emit('delete', record),
 });
 
-// ── 镜像管理 ────────────────────────────────
+// ── 图床备份管理 ─────────────────────────────
 const {
   mirrors,
   isPrimaryBroken,
   allMirrorsBroken,
+  checkingServices,
   switchPrimary,
   removeMirror,
+  checkMirror,
 } = useMirrorFallback(itemRef);
 
 // ── 导航 ────────────────────────────────────
@@ -189,12 +191,14 @@ function navigateNext() { if (props.hasNext) emit('navigate', 'next'); }
       :mirrors="mirrors"
       :is-primary-broken="isPrimaryBroken"
       :all-mirrors-broken="allMirrorsBroken"
+      :checking-services="checkingServices"
       @copy-link="handleCopyLink"
       @copy-service-link="handleCopyServiceLink"
       @open-browser="openInBrowser"
       @delete="handleDelete"
       @switch-primary="switchPrimary"
       @remove-mirror="removeMirror"
+      @check-mirror="checkMirror"
       @toggle-favorite="emit('toggle-favorite', item)"
     />
   </Teleport>

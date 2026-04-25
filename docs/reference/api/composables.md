@@ -20,7 +20,7 @@
 | useQueueState | 上传队列状态 | `src/composables/useQueueState.ts` |
 | useVirtualTimeline | 虚拟滚动时间线 | `src/composables/useVirtualTimeline.ts` |
 | useAnalytics | 分析统计 | `src/composables/useAnalytics.ts` |
-| useMirrorFallback | 灯箱镜像管理（派生态 + 切主/删镜像） | `src/composables/history/useMirrorFallback.ts` |
+| useMirrorFallback | 灯箱多图床备份管理（切主图床 / 移除链接 / 重新检测） | `src/composables/history/useMirrorFallback.ts` |
 
 ## 通用模式
 

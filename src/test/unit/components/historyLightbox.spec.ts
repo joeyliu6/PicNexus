@@ -32,6 +32,7 @@ vi.mock('../../../composables/useConfig', () => ({
 vi.mock('../../../composables/useHistory', () => ({
   useHistoryManager: () => ({
     favoriteSet: ref(new Set<string>()),
+    invalidateCache: vi.fn(),
   }),
 }));
 
@@ -134,7 +135,7 @@ describe('HistoryLightbox', () => {
     expect(findInTeleport('.cell-failed')).toBeNull();
   });
 
-  it('does not show service menu and calls copyLink directly for single service', async () => {
+  it('does not show mirror menu and calls copyLink directly for single service', async () => {
     const wrapper = mountLightbox(makeHistoryItem([
       {
         serviceId: 'jd',
@@ -149,10 +150,10 @@ describe('HistoryLightbox', () => {
     await copyBtn.click();
     await wrapper.vm.$nextTick();
 
-    expect(findInTeleport('.service-copy-menu')).toBeNull();
+    expect(findInTeleport('.mirror-menu-popup')).toBeNull();
   });
 
-  it('shows service menu when multiple services succeed', async () => {
+  it('shows unified mirror menu when multiple services succeed', async () => {
     const wrapper = mountLightbox(makeHistoryItem([
       {
         serviceId: 'jd',
@@ -166,17 +167,17 @@ describe('HistoryLightbox', () => {
       },
     ]));
 
-    // 点击复制按钮应弹出菜单
+    // 点击复制按钮应弹出统一镜像菜单
     const copyBtn = findInTeleport('.copy-btn-wrapper .action-btn') as HTMLButtonElement;
     expect(copyBtn).not.toBeNull();
     await copyBtn.click();
     await wrapper.vm.$nextTick();
 
-    const menuItems = findAllInTeleport('.service-copy-item');
-    expect(menuItems.length).toBe(2);
+    const mirrorRows = findAllInTeleport('.mirror-menu-popup .mirror-row');
+    expect(mirrorRows.length).toBe(2);
   });
 
-  it('invokes handleCopyServiceLink and closes menu when clicking a service item', async () => {
+  it('invokes handleCopyServiceLink and closes menu when clicking a mirror row', async () => {
     const wrapper = mountLightbox(makeHistoryItem([
       {
         serviceId: 'jd',
@@ -195,13 +196,13 @@ describe('HistoryLightbox', () => {
     await copyBtn.click();
     await wrapper.vm.$nextTick();
 
-    // 点击第一个菜单项，触发 handleCopyServiceLink
-    const firstItem = findInTeleport('.service-copy-item') as HTMLButtonElement;
-    expect(firstItem).not.toBeNull();
-    await firstItem.click();
+    // 点击第一行镜像，整行点击即触发复制
+    const firstRow = findInTeleport('.mirror-menu-popup .mirror-row') as HTMLElement;
+    expect(firstRow).not.toBeNull();
+    await firstRow.click();
     await wrapper.vm.$nextTick();
 
     // 菜单应已关闭
-    expect(findInTeleport('.service-copy-menu')).toBeNull();
+    expect(findInTeleport('.mirror-menu-popup')).toBeNull();
   });
 });

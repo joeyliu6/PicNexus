@@ -1,8 +1,15 @@
 <script setup lang="ts">
+/**
+ * 灯箱底栏 — 文件信息 + 一组操作按钮
+ *
+ * 链接按钮（pi-link）：多图床备份场景下的统一入口
+ * - 单图床：直接复制主图链接（保持小白友好，不弹菜单）
+ * - 多图床：弹出 LightboxMirrorMenu，承载复制/切主图床/移除链接/重新检测
+ * - 主图床失效时按钮右上角保留红点警示
+ */
 import { ref, computed, watch } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import type { HistoryItem } from '../../../config/types';
-import { getServiceDisplayName } from '../../../constants/serviceNames';
 import { formatTime, formatFileSize } from '../../../composables/history/useLightboxInfo';
 import type { MirrorInfo } from '../../../composables/history/useMirrorFallback';
 import LightboxMirrorMenu from './LightboxMirrorMenu.vue';
@@ -17,12 +24,14 @@ const props = withDefaults(defineProps<{
   mirrors?: MirrorInfo[];
   isPrimaryBroken?: boolean;
   allMirrorsBroken?: boolean;
+  checkingServices?: Set<string>;
 }>(), {
   successfulServices: () => [],
   copySuccess: false,
   mirrors: () => [],
   isPrimaryBroken: false,
   allMirrorsBroken: false,
+  checkingServices: () => new Set<string>(),
 });
 
 const emit = defineEmits<{
@@ -33,34 +42,28 @@ const emit = defineEmits<{
   (e: 'toggle-favorite'): void;
   (e: 'switch-primary', serviceId: string): void;
   (e: 'remove-mirror', serviceId: string): void;
+  (e: 'check-mirror', serviceId: string): void;
 }>();
 
 const hasMultipleServices = computed(() => props.successfulServices.length > 1);
-const serviceMenuVisible = ref(false);
+const mirrorMenuVisible = ref(false);
 const copyBtnRef = ref<HTMLElement | null>(null);
 
-/** 镜像管理按钮仅当存在非主镜像 或 主图已失效（引导切换）时显示 */
-const canManageMirrors = computed(() =>
-  props.mirrors.length > 1 || props.isPrimaryBroken
+const copyTooltip = computed(() =>
+  hasMultipleServices.value ? '复制 · 管理图床' : '复制链接'
 );
-const mirrorMenuVisible = ref(false);
-const mirrorBtnRef = ref<HTMLElement | null>(null);
 
 function handleCopyClick() {
   if (hasMultipleServices.value) {
-    serviceMenuVisible.value = !serviceMenuVisible.value;
+    mirrorMenuVisible.value = !mirrorMenuVisible.value;
   } else {
     emit('copy-link');
   }
 }
 
-function handleServiceCopy(serviceId: string) {
+function handleCopyMirror(serviceId: string) {
   emit('copy-service-link', serviceId);
-  serviceMenuVisible.value = false;
-}
-
-function handleMirrorClick() {
-  mirrorMenuVisible.value = !mirrorMenuVisible.value;
+  mirrorMenuVisible.value = false;
 }
 
 function handleSwitchPrimary(serviceId: string) {
@@ -69,16 +72,19 @@ function handleSwitchPrimary(serviceId: string) {
 }
 
 function handleRemoveMirror(serviceId: string) {
+  // 带二次确认：菜单保持打开，等业务层完成后自然刷新数据
   emit('remove-mirror', serviceId);
-  mirrorMenuVisible.value = false;
 }
 
-onClickOutside(copyBtnRef, () => { serviceMenuVisible.value = false; });
-onClickOutside(mirrorBtnRef, () => { mirrorMenuVisible.value = false; });
+function handleCheckMirror(serviceId: string) {
+  // 重新检测不关菜单——用户还想看新的 chip 状态
+  emit('check-mirror', serviceId);
+}
+
+onClickOutside(copyBtnRef, () => { mirrorMenuVisible.value = false; });
 
 // 切换图片时关闭菜单
 watch(() => props.item.id, () => {
-  serviceMenuVisible.value = false;
   mirrorMenuVisible.value = false;
 });
 </script>
@@ -116,52 +122,34 @@ watch(() => props.item.id, () => {
       >
         <i :class="isItemFavorited ? 'pi pi-star-fill' : 'pi pi-star'"></i>
       </button>
-      <div class="copy-btn-wrapper" ref="copyBtnRef" @keydown.escape="serviceMenuVisible = false">
+      <div class="copy-btn-wrapper" ref="copyBtnRef" @keydown.escape="mirrorMenuVisible = false">
         <button
           class="action-btn"
-          :class="{ 'action-btn-success': copySuccess }"
+          :class="{
+            'action-btn-success': copySuccess,
+            'action-btn-alert': isPrimaryBroken && !copySuccess,
+          }"
           @click="handleCopyClick"
-          v-tooltip.top="hasMultipleServices ? '选择图床复制链接' : '复制链接'"
+          v-tooltip.top="copyTooltip"
         >
-          <i :class="copySuccess ? 'pi pi-check' : 'pi pi-copy'"></i>
+          <i :class="copySuccess ? 'pi pi-check' : 'pi pi-link'"></i>
+          <span
+            v-if="isPrimaryBroken && !copySuccess"
+            class="action-btn-dot"
+            aria-hidden="true"
+          ></span>
         </button>
         <Transition name="t-slide-up">
-          <div v-if="serviceMenuVisible" class="service-copy-menu">
-            <button
-              v-for="serviceId in successfulServices"
-              :key="serviceId"
-              class="service-copy-item"
-              @click="handleServiceCopy(serviceId)"
-            >
-              <span>{{ getServiceDisplayName(serviceId) }}</span>
-              <i class="pi pi-copy"></i>
-            </button>
-          </div>
-        </Transition>
-      </div>
-      <div
-        v-if="canManageMirrors"
-        class="copy-btn-wrapper"
-        ref="mirrorBtnRef"
-        @keydown.escape="mirrorMenuVisible = false"
-      >
-        <button
-          class="action-btn"
-          :class="{ 'action-btn-alert': isPrimaryBroken }"
-          @click="handleMirrorClick"
-          v-tooltip.top="isPrimaryBroken ? '主图已失效 · 管理镜像' : '管理镜像'"
-        >
-          <i class="pi pi-sync"></i>
-          <span v-if="isPrimaryBroken" class="action-btn-dot" aria-hidden="true"></span>
-        </button>
-        <Transition name="t-slide-up">
-          <div v-if="mirrorMenuVisible" class="service-copy-menu mirror-menu-wrap">
+          <div v-if="mirrorMenuVisible" class="mirror-menu-popup">
             <LightboxMirrorMenu
               :mirrors="mirrors"
               :is-primary-broken="isPrimaryBroken"
               :all-mirrors-broken="allMirrorsBroken"
+              :checking-services="checkingServices"
+              @copy-mirror="handleCopyMirror"
               @switch-primary="handleSwitchPrimary"
               @remove-mirror="handleRemoveMirror"
+              @check-mirror="handleCheckMirror"
             />
           </div>
         </Transition>
@@ -331,11 +319,11 @@ watch(() => props.item.id, () => {
   position: relative;
 }
 
-.service-copy-menu {
+/* 镜像菜单弹层：右对齐按钮，避免宽菜单溢出视口右缘 */
+.mirror-menu-popup {
   position: absolute;
   bottom: calc(100% + var(--space-sm));
-  left: 50%;
-  transform: translateX(-50%);
+  right: 0;
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 灯箱暗色环境弹出菜单背景 */
   background: rgb(30 30 36 / 95%);
   backdrop-filter: blur(12px);
@@ -343,49 +331,9 @@ watch(() => props.item.id, () => {
   border-radius: var(--radius-lg);
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- box-shadow 含 rgb */
   box-shadow: 0 4px 24px rgb(0 0 0 / 40%);
-  padding: var(--space-xs-sm);
-  min-width: 140px;
+  padding: var(--space-sm);
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 灯箱内局部弹层，高于底栏(z:3)但无对应全局 token */
   z-index: 5;
-}
-
-/* 镜像管理菜单更宽，对齐按钮右侧避免超出视口右缘 */
-.mirror-menu-wrap {
-  left: auto;
-  right: 0;
-  transform: none;
-  padding: var(--space-sm);
-}
-
-.service-copy-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm-md);
-  width: 100%;
-  padding: var(--space-sm-md) var(--space-md);
-  border: none;
-  background: transparent;
-  color: var(--text-main);
-  font-size: var(--text-sm);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-standard);
-  text-align: left;
-  white-space: nowrap;
-}
-
-.service-copy-item:hover {
-  background: var(--hover-overlay);
-}
-
-.service-copy-item i {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-
-.service-copy-item:hover i {
-  color: var(--text-main);
 }
 
 /* 浅色模式：灯箱始终保持暗色风格 */
