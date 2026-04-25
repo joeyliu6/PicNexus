@@ -11,6 +11,8 @@ export interface UploadSessionSummary {
   failed: number;
   partialServiceFailureCount?: number;
   partialFailedServices?: UploadFailedServiceSummary[];
+  /** 因路径已在上传队列被静默丢弃的张数（同批次重复路径） */
+  duplicatesSkipped?: number;
 }
 
 export interface UploadCopySummary {
@@ -39,18 +41,36 @@ function formatFailedServices(summary: UploadSessionSummary): string {
     .join('、');
 }
 
+function appendDuplicates(detail: string, summary: UploadSessionSummary): string {
+  const skipped = summary.duplicatesSkipped ?? 0;
+  if (skipped === 0) return detail;
+  const suffix = `已忽略 ${skipped} 张重复文件。`;
+  return detail ? `${detail}${suffix}` : suffix;
+}
+
 export function buildUploadSummaryToast(
   summary: UploadSessionSummary,
   copy: UploadCopySummary
 ): UploadSummaryToastPayload | null {
-  if (summary.total === 0) return null;
+  // 没有真正入队的文件，但有重复被丢弃 → 单独提示，避免静默
+  if (summary.total === 0) {
+    const skipped = summary.duplicatesSkipped ?? 0;
+    if (skipped > 0) {
+      return {
+        severity: 'warn',
+        summary: '已忽略重复文件',
+        detail: `${skipped} 张文件已在上传队列中，无需重复添加。`,
+      };
+    }
+    return null;
+  }
 
   // 全部失败：显示 error toast
   if (summary.success === 0) {
     return {
       severity: 'error',
       summary: '上传失败',
-      detail: '所有图片上传失败，请检查网络或图床配置',
+      detail: appendDuplicates('所有图片上传失败，请检查网络或图床配置。', summary),
     };
   }
 
@@ -72,13 +92,16 @@ export function buildUploadSummaryToast(
     }
   }
 
+  // 有重复被丢弃 → 即使全成功也升级为 warn，确保用户看到"少了几张"
+  const hasDuplicates = (summary.duplicatesSkipped ?? 0) > 0;
+
   // 场景一：全部成功
   if (!isWarn) {
     const summaryText = summary.success === 1 ? '上传成功' : `${summary.success} 张图片上传完成`;
     return {
-      severity: 'success',
+      severity: hasDuplicates ? 'warn' : 'success',
       summary: summaryText,
-      detail: copyDetail,
+      detail: appendDuplicates(copyDetail, summary),
     };
   }
 
@@ -89,7 +112,7 @@ export function buildUploadSummaryToast(
     return {
       severity: 'warn',
       summary: summaryText,
-      detail: parts.join(''),
+      detail: appendDuplicates(parts.join(''), summary),
     };
   }
 
@@ -107,6 +130,6 @@ export function buildUploadSummaryToast(
   return {
     severity: 'warn',
     summary: summaryText,
-    detail: parts.join(''),
+    detail: appendDuplicates(parts.join(''), summary),
   };
 }

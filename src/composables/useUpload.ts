@@ -200,6 +200,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         failed: 0,
         partialServiceFailureCount: 0,
         partialFailedServices: [],
+        duplicatesSkipped: 0,
       };
 
       const compressionConfig = config.imageCompression ?? DEFAULT_CONFIG.imageCompression!;
@@ -248,6 +249,13 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
           const itemId = queueManager!.addFile(filePath, fileName, [...enabledServices]);
           return { itemId, filePath, fileName };
         }).filter(item => item.itemId);
+
+        // 同批次内被 isFileInQueue 拦截的重复路径计数（addFile 返回 null 时被 filter 过滤）
+        const droppedAsDuplicate = actualFiles.length - queueItems.length;
+        if (droppedAsDuplicate > 0) {
+          uploadSummary.duplicatesSkipped = (uploadSummary.duplicatesSkipped ?? 0) + droppedAsDuplicate;
+          log.info(`批次 ${batchIndex + 1}: ${droppedAsDuplicate} 张重复路径被忽略`);
+        }
 
         if (queueItems.length === 0) {
           return;

@@ -67,17 +67,78 @@ describe('buildUploadSummaryToast', () => {
     expect(payload).toEqual({
       severity: 'error',
       summary: '上传失败',
-      detail: '所有图片上传失败，请检查网络或图床配置',
+      detail: '所有图片上传失败，请检查网络或图床配置。',
     });
   });
 
-  it('total 为 0 时返回 null', () => {
+  it('total 为 0 且无重复：返回 null', () => {
     const payload = buildUploadSummaryToast(
       { total: 0, success: 0, failed: 0 },
       { autoCopyEnabled: true, copiedCount: 0, format: 'url' }
     );
 
     expect(payload).toBeNull();
+  });
+
+  // --- 重复路径被忽略 ---
+
+  it('total 为 0 但有重复路径：返回 warn 提示已忽略', () => {
+    const payload = buildUploadSummaryToast(
+      { total: 0, success: 0, failed: 0, duplicatesSkipped: 3 },
+      { autoCopyEnabled: true, copiedCount: 0, format: 'url' }
+    );
+
+    expect(payload).toEqual({
+      severity: 'warn',
+      summary: '已忽略重复文件',
+      detail: '3 张文件已在上传队列中，无需重复添加。',
+    });
+  });
+
+  it('全部成功 + 部分重复被忽略：升级为 warn 并附加提示', () => {
+    const payload = buildUploadSummaryToast(
+      { total: 3, success: 3, failed: 0, duplicatesSkipped: 2 },
+      { autoCopyEnabled: true, copiedCount: 3, format: 'url' }
+    );
+
+    expect(payload).toEqual({
+      severity: 'warn',
+      summary: '3 张图片上传完成',
+      detail: '全部链接已复制。已忽略 2 张重复文件。',
+    });
+  });
+
+  it('全部失败 + 部分重复被忽略：error toast 末尾追加提示', () => {
+    const payload = buildUploadSummaryToast(
+      { total: 2, success: 0, failed: 2, duplicatesSkipped: 1 },
+      { autoCopyEnabled: false, copiedCount: 0, format: 'url' }
+    );
+
+    expect(payload).toEqual({
+      severity: 'error',
+      summary: '上传失败',
+      detail: '所有图片上传失败，请检查网络或图床配置。已忽略 1 张重复文件。',
+    });
+  });
+
+  it('部分图床失败 + 部分重复被忽略：detail 末尾追加重复提示', () => {
+    const payload = buildUploadSummaryToast(
+      {
+        total: 2,
+        success: 2,
+        failed: 0,
+        partialServiceFailureCount: 1,
+        partialFailedServices: [{ serviceName: '又拍云', count: 1 }],
+        duplicatesSkipped: 4,
+      },
+      { autoCopyEnabled: true, copiedCount: 2, format: 'url' }
+    );
+
+    expect(payload).toEqual({
+      severity: 'warn',
+      summary: '2 张图片上传完成，又拍云上传失败',
+      detail: '成功的链接已复制。可在队列中对失败项重试。已忽略 4 张重复文件。',
+    });
   });
 
   // --- 有整张图失败 ---
