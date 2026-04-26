@@ -7,6 +7,7 @@ import { useToast } from '../useToast';
 import type { EditorServerConfig, ServerServiceType, CustomS3Profile } from '../../config/types';
 import { isCustomS3Id, getCustomS3ProfileId } from '../../config/types';
 import { createLogger } from '../../utils/logger';
+import { extractNamiAuthToken } from '../../utils/namiAuthToken';
 import type { SettingsFormShape } from './useSettingsForm';
 
 interface UseEditorIntegrationOptions {
@@ -61,8 +62,7 @@ export function useEditorIntegration(options: UseEditorIntegrationOptions) {
         });
       case 'nami': {
         const cookie = fd.nami.cookie;
-        const tokenMatch = cookie.match(/token=([^;]+)/);
-        const authToken = fd.nami.authToken || (tokenMatch ? tokenMatch[1] : '');
+        const authToken = fd.nami.authToken || extractNamiAuthToken(cookie);
         return JSON.stringify({ type: 'nami', cookie, authToken });
       }
       case 'r2':

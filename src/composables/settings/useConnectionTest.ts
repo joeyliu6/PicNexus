@@ -10,6 +10,7 @@ import { buildServiceCheckSummarySnapshot, useServiceCheckRunner } from '../useS
 import { TOAST_MESSAGES } from '../../constants';
 import type { ServiceType, CustomS3Profile } from '../../config/types';
 import { isCustomS3Id, getCustomS3ProfileId } from '../../config/types';
+import { extractNamiAuthToken } from '../../utils/namiAuthToken';
 import type { SettingsFormShape } from './useSettingsForm';
 import type { ServiceHealthStatus } from '../../types/serviceHealth';
 
@@ -139,8 +140,7 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
     chaoxing: () => testCookieConnection('test_chaoxing_connection', { chaoxingCookie: formData.value.chaoxing?.cookie || '' }, 'chaoxing'),
     nami: () => {
       const cookie = formData.value.nami.cookie || '';
-      const tokenMatch = cookie.match(/token=([^;]+)/);
-      const authToken = formData.value.nami.authToken || (tokenMatch ? tokenMatch[1] : '');
+      const authToken = formData.value.nami.authToken || extractNamiAuthToken(cookie);
       return testCookieConnection('test_nami_connection', { cookie, authToken }, 'nami');
     },
     jd: () => probeBuiltinServiceAvailability('jd', true),

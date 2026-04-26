@@ -8,6 +8,7 @@ import type { ServiceHealthStatus } from '../../../types/serviceHealth';
 import type { LinkPrefixItem } from '../../../config/types';
 import { computed } from 'vue';
 import { hasNonEmptyFields } from '../../../utils/validators';
+import { extractNamiAuthToken } from '../../../utils/namiAuthToken';
 
 interface CookieFormData {
   weibo: { cookie: string };
@@ -59,9 +60,7 @@ function isCookieConfigured(providerId: CookieProviderId): boolean {
   return hasNonEmptyFields(props.cookieFormData[providerId], ['cookie']);
 }
 
-const namiAuthToken = computed(() => {
-  return props.cookieFormData.nami.cookie?.match(/auth-token=([^;]+)/)?.[1] || '';
-});
+const namiAuthToken = computed(() => extractNamiAuthToken(props.cookieFormData.nami.cookie));
 </script>
 
 <template>
