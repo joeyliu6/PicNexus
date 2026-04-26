@@ -54,7 +54,14 @@ export interface UploadExecutorContext {
  * @param uploadSummary 上传会话统计（可选）
  */
 export async function processUploadQueue(
-  queueItems: Array<{ itemId: string | null; filePath: string; fileName: string }>,
+  queueItems: Array<{
+    itemId: string | null;
+    /** 用户原图路径：写入历史/队列、供后续重试与元数据修复使用 */
+    filePath: string;
+    /** 实际喂给 uploader 的路径，可能为压缩后的临时文件，会话结束被清理 */
+    uploadFilePath: string;
+    fileName: string;
+  }>,
   config: UserConfig,
   enabledServices: string[],
   maxConcurrent: number = 5,
@@ -73,7 +80,7 @@ export async function processUploadQueue(
   const multiServiceUploader = new MultiServiceUploader();
 
   // 为每个队列项创建上传任务
-  const uploadTasks = queueItems.map(({ itemId, filePath, fileName }) => {
+  const uploadTasks = queueItems.map(({ itemId, filePath, uploadFilePath, fileName }) => {
     // itemId 在创建时已经过重复检查
     if (!itemId) {
       log.debug(`跳过无效队列项: ${fileName}`);
@@ -183,9 +190,9 @@ export async function processUploadQueue(
           });
         };
 
-        // 使用多图床上传编排器
+        // 使用多图床上传编排器（uploadFilePath 可能是压缩后的临时文件）
         const result = await multiServiceUploader.uploadToMultipleServices(
-          filePath,
+          uploadFilePath,
           enabledServices,
           config,
           // 进度回调

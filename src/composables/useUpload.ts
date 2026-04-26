@@ -242,12 +242,14 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         }
 
         // 2. 将该批文件加入队列
-        const queueItems = actualFiles.map((filePath, index) => {
-          // 使用原始文件名（不是压缩后的临时文件名）
+        // 关键：filePath 写入队列与历史的应该是用户原图路径，
+        // uploadFilePath（可能是压缩后的临时文件）只用于喂给 uploader，
+        // 否则上传后 cleanupTempFiles 把临时文件删掉，重试/元数据修复就找不到原图了
+        const queueItems = actualFiles.map((uploadFilePath, index) => {
           const originalPath = batchFiles[index];
           const fileName = originalPath.split(/[/\\]/).pop() || originalPath;
-          const itemId = queueManager!.addFile(filePath, fileName, [...enabledServices]);
-          return { itemId, filePath, fileName };
+          const itemId = queueManager!.addFile(originalPath, fileName, [...enabledServices]);
+          return { itemId, filePath: originalPath, uploadFilePath, fileName };
         }).filter(item => item.itemId);
 
         // 同批次内被 isFileInQueue 拦截的重复路径计数（addFile 返回 null 时被 filter 过滤）

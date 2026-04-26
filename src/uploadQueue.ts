@@ -285,6 +285,16 @@ export class UploadQueueManager {
           status: '✓ 完成',
           isRetrying: false // 清除重试标记
         };
+      } else if ((currentProgress?.progress ?? 0) === 0 && currentStatus === '等待中...') {
+        // 上传到此处仍是初始 '等待中...' 状态 = 该服务被 filterConfiguredServices 过滤、从未启动过 task
+        // 此时整体上传已成功（至少一个图床成功才会进 markItemComplete），把未启动的服务标为已跳过，避免 UI 永远卡在 '等待中...'
+        serviceProgressUpdates[serviceId] = {
+          ...currentProgress,
+          serviceId,
+          progress: 0,
+          status: '已跳过（未配置）',
+          isRetrying: false
+        };
       }
     });
 

@@ -34,6 +34,10 @@ export function useCompressionTask(
   const result = ref<CompressResult | null>(null);
   const errorMsg = ref('');
 
+  // 用户在压缩中点"换一张"会发起第二次 selectAndCompress；旧 invoke 还在飞，回来时不能覆盖新结果。
+  // 自增序号充当 cancel token——回调里对不上就当作过期任务丢弃。
+  let activeSeq = 0;
+
   /** 节省百分比 */
   function getSaved(): number {
     if (!result.value) return 0;
@@ -67,6 +71,7 @@ export function useCompressionTask(
    * @returns 用户是否选择了文件（false = 用户取消了选择）
    */
   async function selectAndCompress(): Promise<boolean> {
+    const mySeq = ++activeSeq;
     resetState();
 
     const selected = await dialogOpen({
@@ -74,6 +79,7 @@ export function useCompressionTask(
       filters: [{ name: '图片', extensions: ['jpg', 'jpeg', 'png', 'webp', 'bmp'] }],
     });
 
+    if (mySeq !== activeSeq) return true;
     if (!selected) return false;
 
     const filePath = Array.isArray(selected) ? selected[0] : selected;
@@ -88,6 +94,7 @@ export function useCompressionTask(
           'get_image_metadata',
           { path: filePath },
         );
+        if (mySeq !== activeSeq) return true;
         maxLongSide = Math.round(
           Math.max(meta.width, meta.height) * scalePercent / 100,
         );
@@ -104,6 +111,12 @@ export function useCompressionTask(
         invoke<string>('read_image_as_base64', { filePath, maxSide: 1200 }),
       ]);
 
+      if (mySeq !== activeSeq) {
+        // 已被新任务取代——这次产出的临时压缩文件还得清掉，避免泄漏
+        invoke('cleanup_compressed_files', { filePaths: [compressResult.outputPath] }).catch(() => {});
+        return true;
+      }
+
       result.value = compressResult;
       originalSrc.value = origB64;
 
@@ -111,16 +124,18 @@ export function useCompressionTask(
         filePath: compressResult.outputPath,
         maxSide: 1200,
       });
-      compressedSrc.value = compB64;
 
       // 清理临时文件（不阻塞）
       invoke('cleanup_compressed_files', {
         filePaths: [compressResult.outputPath],
       }).catch(() => {});
 
+      if (mySeq !== activeSeq) return true;
+      compressedSrc.value = compB64;
       status.value = 'done';
       options.onDone?.();
     } catch (err: unknown) {
+      if (mySeq !== activeSeq) return true;
       errorMsg.value = err instanceof Error ? err.message : String(err);
       status.value = 'error';
       options.onError?.();
