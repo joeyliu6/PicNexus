@@ -490,6 +490,22 @@ class HistoryDatabase {
     };
   }
 
+  /**
+   * 按 primary_service 分组统计每个图床的图片数量
+   * 用于浏览视图的图床下拉筛选展示分布
+   */
+  async getServiceCounts(): Promise<Array<{ id: string; count: number }>> {
+    const db = await this.connection.getDb();
+    const rows = await db.select<{ id: string; count: number }[]>(
+      `SELECT primary_service AS id, COUNT(*) AS count
+       FROM history_items
+       WHERE primary_service IS NOT NULL AND primary_service <> ''
+       GROUP BY primary_service
+       ORDER BY count DESC`,
+    );
+    return rows;
+  }
+
   // ============================================
   // 批量迁移查询（委托 MigrationQuery）
   // ============================================

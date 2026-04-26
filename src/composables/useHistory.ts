@@ -62,6 +62,9 @@ let crossWindowListenerInitialized = false;
 // 总数（无需分页）
 const totalCount = ref(0);
 
+// 各图床图片数量分布（按 primary_service 聚合）
+const sharedServiceCounts: Ref<Array<{ id: string; count: number }>> = shallowRef([]);
+
 // 收藏总数
 const favoriteCount = ref(0);
 
@@ -85,6 +88,14 @@ function removeFavoritesFromIds(ids: string[]): void {
 }
 
 // 时间段统计（用于时间轴完整显示）
+async function refreshServiceCounts(): Promise<void> {
+  try {
+    sharedServiceCounts.value = await historyDB.getServiceCounts();
+  } catch (error) {
+    log.warn('[历史记录] 刷新图床计数失败:', error);
+  }
+}
+
 const sharedTimePeriodStats: Ref<TimePeriodStats[]> = shallowRef([]);
 const isTimePeriodStatsLoaded = ref(false);
 
@@ -99,14 +110,16 @@ async function reloadSharedData(): Promise<void> {
   try {
     await historyDB.open();
 
-    const [total, favIds, timeStats] = await Promise.all([
+    const [total, favIds, serviceCounts, timeStats] = await Promise.all([
       historyDB.getCount(),
       historyDB.getFavoriteIdList(),
+      historyDB.getServiceCounts(),
       needsTimeStats ? historyDB.getTimePeriodStats() : Promise.resolve(null),
     ]);
     totalCount.value = total;
     sharedFavoriteSet.value = new Set(favIds);
     favoriteCount.value = favIds.length;
+    sharedServiceCounts.value = serviceCounts;
     if (timeStats) {
       sharedTimePeriodStats.value = timeStats;
     }
@@ -140,6 +153,7 @@ function initCrossWindowListener(): void {
           // metas 已彻底下线，视图内部各自按 SQL 重拉；此处只维护模块级 stats
           removeFavoritesFromIds(data.ids);
           totalCount.value = Math.max(0, totalCount.value - data.ids.length);
+          void refreshServiceCounts();
           dataVersion.value++;
         }
         break;
@@ -151,6 +165,7 @@ function initCrossWindowListener(): void {
         sharedFavoriteSet.value = new Set();
         totalCount.value = 0;
         favoriteCount.value = 0;
+        sharedServiceCounts.value = [];
         dataVersion.value++;
         break;
 
@@ -209,14 +224,16 @@ export function useHistoryManager() {
     try {
       await initDatabase();
 
-      const [total, favIds] = await Promise.all([
+      const [total, favIds, serviceCounts] = await Promise.all([
         historyDB.getCount(),
         historyDB.getFavoriteIdList(),
+        historyDB.getServiceCounts(),
       ]);
 
       totalCount.value = total;
       sharedFavoriteSet.value = new Set(favIds);
       favoriteCount.value = favIds.length;
+      sharedServiceCounts.value = serviceCounts;
 
       isStatsLoaded.value = true;
       lastStatsLoadTime.value = Date.now();
@@ -254,6 +271,7 @@ export function useHistoryManager() {
       totalCount.value = Math.max(0, totalCount.value - 1);
 
       removeFavoritesFromIds([itemId]);
+      await refreshServiceCounts();
       dataVersion.value++;
 
       // 清除详情缓存
@@ -298,6 +316,7 @@ export function useHistoryManager() {
       totalCount.value = 0;
       favoriteCount.value = 0;
       sharedFavoriteSet.value = new Set();
+      sharedServiceCounts.value = [];
       dataVersion.value++;
 
       // 清除详情缓存
@@ -319,6 +338,7 @@ export function useHistoryManager() {
     dataVersion,
     detailCache,
     removeFavoritesFromIds,
+    refreshServiceCounts,
   });
 
   // 按图床结果粒度删除（链接检测专用）
@@ -327,6 +347,7 @@ export function useHistoryManager() {
     dataVersion,
     detailCache,
     removeFavoritesFromIds,
+    refreshServiceCounts,
   });
 
   /**
@@ -511,6 +532,7 @@ export function useHistoryManager() {
 
     // 统计
     totalCount,
+    serviceCounts: sharedServiceCounts as Readonly<Ref<Array<{ id: string; count: number }>>>,
 
     // 时间段统计
     timePeriodStats: sharedTimePeriodStats,

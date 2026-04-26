@@ -23,6 +23,7 @@ export interface ResultOpsContext {
   dataVersion: Ref<number>;
   detailCache: ReturnType<typeof useImageDetailCache>;
   removeFavoritesFromIds: (ids: string[]) => void;
+  refreshServiceCounts: () => Promise<void>;
 }
 
 export interface ResultDeleteTarget {
@@ -89,6 +90,7 @@ export function createResultOps(ctx: ResultOpsContext) {
       updatedItemIds.forEach((id) => ctx.detailCache.removeDetail(id));
     }
     if (deletedItemIds.length + updatedItemIds.length > 0) {
+      await ctx.refreshServiceCounts();
       ctx.dataVersion.value += 1;
     }
 

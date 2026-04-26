@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, watch, onUnmounted } from 'vue';
-import Select from 'primevue/select';
+import { ref, watch, onMounted, onUnmounted } from 'vue';
 import InputText from 'primevue/inputtext';
 import type { ServiceType } from '../../../config/types';
-import { SERVICE_DISPLAY_NAMES } from '../../../constants/serviceNames';
+import { getServiceDisplayName } from '../../../constants/serviceNames';
+import { getServiceIcon } from '../../../utils/icons';
 import { debounce } from '../../../utils/debounce';
 
 export type ViewMode = 'table' | 'timeline' | 'favorites';
@@ -12,6 +12,7 @@ const props = defineProps<{
   viewMode: ViewMode;
   filter: ServiceType | 'all';
   totalCount: number;
+  serviceCounts: Array<{ id: string; count: number }>;
 }>();
 
 const emit = defineEmits<{
@@ -26,12 +27,22 @@ const viewOptions = [
   { label: '收藏', value: 'favorites' as ViewMode, icon: 'pi pi-star' },
 ];
 
-const serviceOptions: Array<{ label: string; value: ServiceType | 'all' }> = [
-  { label: '全部来源', value: 'all' },
-  ...Object.entries(SERVICE_DISPLAY_NAMES).map(([id, name]) => ({
-    label: name, value: id as ServiceType
-  }))
-];
+// 图床下拉菜单开关（自包含，文档点击关闭）
+const showServiceMenu = ref(false);
+const serviceFilterRef = ref<HTMLElement | null>(null);
+const triggerRef = ref<HTMLButtonElement | null>(null);
+
+function closeMenu(refocusTrigger = true) {
+  if (!showServiceMenu.value) return;
+  showServiceMenu.value = false;
+  // Esc/Enter 后焦点要回到 trigger，避免 tab 链断裂
+  if (refocusTrigger) triggerRef.value?.focus();
+}
+
+function selectOption(filter: ServiceType | 'all') {
+  handleFilterChange(filter);
+  triggerRef.value?.focus();
+}
 
 // 防抖搜索词
 const localSearchTerm = ref('');
@@ -51,6 +62,7 @@ function handleFilterChange(filter: ServiceType | 'all') {
   // Vue 本 tick 内 batch 两次 emit，父级 watch([filter, searchTerm]) 只会触发一次 loadCurrentPage
   updateSearchTerm.immediate(localSearchTerm.value);
   emit('update:filter', filter);
+  showServiceMenu.value = false;
 }
 
 function clearSearch() {
@@ -59,8 +71,20 @@ function clearSearch() {
   emit('update:searchTerm', '');
 }
 
+function handleDocumentClick(event: MouseEvent) {
+  if (!showServiceMenu.value) return;
+  const target = event.target as Node | null;
+  if (target && serviceFilterRef.value && serviceFilterRef.value.contains(target)) return;
+  showServiceMenu.value = false;
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleDocumentClick);
+});
+
 onUnmounted(() => {
   updateSearchTerm.cancel();
+  document.removeEventListener('click', handleDocumentClick);
 });
 </script>
 
@@ -82,14 +106,63 @@ onUnmounted(() => {
 
     <!-- 右侧：所有控件共存 -->
     <div class="strip-right">
-      <Select
-        :model-value="filter"
-        @update:model-value="handleFilterChange"
-        :options="serviceOptions"
-        optionLabel="label"
-        optionValue="value"
-        class="filter-chip"
-      />
+      <div ref="serviceFilterRef" class="service-filter" @keydown.esc.stop="closeMenu()">
+        <button
+          ref="triggerRef"
+          class="filter-chip"
+          :class="{ active: filter !== 'all' }"
+          aria-haspopup="listbox"
+          :aria-expanded="showServiceMenu"
+          @click="showServiceMenu = !showServiceMenu"
+        >
+          <template v-if="filter !== 'all'">
+            <span class="badge-icon" v-html="getServiceIcon(filter)"></span>
+            {{ getServiceDisplayName(filter) }}
+          </template>
+          <template v-else>
+            <i class="pi pi-images" style="font-size: var(--text-2xs)"></i>
+            全部图床
+          </template>
+          <i class="pi pi-chevron-down" style="font-size: var(--text-2xs); margin-left: var(--space-2xs)"></i>
+        </button>
+
+        <Transition name="dropdown">
+          <div v-if="showServiceMenu" class="service-dropdown" role="listbox" aria-label="按图床筛选">
+            <div
+              class="service-dropdown-item"
+              :class="{ active: filter === 'all' }"
+              role="option"
+              tabindex="0"
+              :aria-selected="filter === 'all'"
+              @click="selectOption('all')"
+              @keydown.enter.prevent="selectOption('all')"
+              @keydown.space.prevent="selectOption('all')"
+            >
+              <span class="sdi-label">全部图床</span>
+              <span class="sdi-count">{{ totalCount.toLocaleString() }}</span>
+            </div>
+
+            <div
+              v-for="service in serviceCounts"
+              :key="service.id"
+              class="service-dropdown-item"
+              :class="{ active: filter === service.id }"
+              role="option"
+              tabindex="0"
+              :aria-selected="filter === service.id"
+              @click="selectOption(service.id as ServiceType)"
+              @keydown.enter.prevent="selectOption(service.id as ServiceType)"
+              @keydown.space.prevent="selectOption(service.id as ServiceType)"
+            >
+              <span class="sdi-label">
+                <span class="badge-icon" v-html="getServiceIcon(service.id)"></span>
+                {{ getServiceDisplayName(service.id) }}
+              </span>
+              <span class="sdi-count">{{ service.count.toLocaleString() }}</span>
+            </div>
+          </div>
+        </Transition>
+      </div>
 
       <div class="search-field">
         <i class="pi pi-search search-field-icon"></i>
@@ -186,78 +259,125 @@ onUnmounted(() => {
   min-width: 0;
 }
 
-/* 图床筛选 chip */
-.filter-chip {
+/* 图床筛选（参照 link-check CheckFilterBar 的 chip + 下拉） */
+.service-filter {
+  position: relative;
   flex-shrink: 0;
 }
 
-:deep(.filter-chip.p-select) {
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
   height: 28px;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 14px 为药丸形圆角（高度一半） */
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 14px 药丸圆角（高度一半） */
   border-radius: 14px;
-  border: none;
-  background: var(--primary-alpha-8);
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 10px 内边距与 link-check chip 对齐 */
+  padding: 0 10px;
   font-size: var(--text-xs);
-  transition: background var(--duration-fast);
-}
-
-:deep(.filter-chip.p-select:hover) {
-  background: var(--primary-alpha-15);
-}
-
-:deep(.filter-chip.p-select.p-focus) {
-  background: var(--primary-alpha-15);
-  box-shadow: none;
-}
-
-:deep(.filter-chip .p-select-label) {
-  padding: 0 var(--space-xs-sm) 0 var(--space-sm-md);
-  font-size: var(--text-xs);
-  color: var(--primary);
   font-weight: var(--weight-medium);
-  line-height: 28px;
+  cursor: pointer;
+  background: var(--bg-input);
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
+  white-space: nowrap;
+  font-family: inherit;
 }
 
-:deep(.filter-chip .p-select-dropdown) {
-  width: 20px;
+.filter-chip:hover {
+  background: var(--hover-overlay);
+  border-color: var(--border-subtle);
+}
+
+.filter-chip.active {
+  background: var(--primary-alpha-10);
   color: var(--primary);
+  border-color: var(--primary-alpha-10);
 }
 
-:deep(.filter-chip .p-select-dropdown .p-icon) {
-  width: 10px;
-  height: 10px;
+.badge-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  color: var(--text-muted);
 }
 
-/* 下拉面板样式 */
-:deep(.p-select-overlay) {
-  border-radius: var(--radius-md);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- box-shadow 含 rgb 色值 */
-  box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
+.badge-icon :deep(svg) {
+  width: 100%;
+  height: 100%;
+}
+
+.service-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xs) 0;
+  box-shadow: var(--shadow-float);
+  z-index: var(--z-dropdown);
   border: 1px solid var(--border-subtle);
-  padding: var(--space-xs);
-  min-width: 120px;
+  overflow: hidden;
 }
 
-:deep(.p-select-overlay .p-select-option) {
-  font-size: var(--text-xs);
-  padding: var(--space-xs-sm) var(--space-sm-md);
-  border-radius: var(--radius-sm-md);
-  color: var(--text-primary);
+.service-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md-lg);
+  cursor: pointer;
   transition: background var(--duration-micro);
 }
 
-:deep(.p-select-overlay .p-select-option:hover) {
+.service-dropdown-item:hover {
   background: var(--hover-overlay);
 }
 
-:deep(.p-select-overlay .p-select-option.p-selected) {
-  background: var(--primary-alpha-10);
-  color: var(--primary);
-  font-weight: var(--weight-medium);
+.service-dropdown-item:focus-visible {
+  background: var(--hover-overlay);
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
 }
 
-:deep(.p-select-overlay .p-select-option.p-selected:hover) {
-  background: var(--primary-alpha-15);
+.service-dropdown-item.active {
+  background: var(--primary-alpha-10);
+}
+
+.sdi-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-main);
+  white-space: nowrap;
+}
+
+.sdi-label .badge-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+}
+
+.sdi-count {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+.dropdown-enter-active,
+.dropdown-leave-active {
+  transition: all var(--duration-normal) ease;
+}
+
+.dropdown-enter-from,
+.dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
 }
 
 /* 始终可见的搜索栏 */

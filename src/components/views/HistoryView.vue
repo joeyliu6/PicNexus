@@ -13,6 +13,7 @@ import DashboardStrip, { type ViewMode } from './history/DashboardStrip.vue';
 import 'primeicons/primeicons.css';
 
 const historyManager = useHistoryManager();
+const serviceCounts = historyManager.serviceCounts;
 
 const currentViewMode = ref<ViewMode>('table');
 const currentFilter = ref<ServiceType | 'all'>('all');
@@ -82,6 +83,7 @@ const handleTotalCountUpdate = (count: number) => {
       v-model:view-mode="currentViewMode"
       v-model:filter="currentFilter"
       :total-count="totalCount"
+      :service-counts="serviceCounts"
       @update:search-term="debouncedSearchTerm = $event"
     />
 

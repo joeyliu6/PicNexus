@@ -67,6 +67,7 @@ function makeCtx() {
     clearCache: vi.fn(),
     cacheStats: ref({ size: 0, maxSize: 200, hitCount: 0, missCount: 0, hitRate: 0 }),
   };
+  const refreshServiceCounts = vi.fn().mockResolvedValue(undefined);
 
   return {
     ctx: {
@@ -76,9 +77,11 @@ function makeCtx() {
       removeFavoritesFromIds: (ids: string[]) => {
         removedFavoriteBatches.push(ids);
       },
+      refreshServiceCounts,
     },
     detailCache,
     removedFavoriteBatches,
+    refreshServiceCounts,
   };
 }
 
@@ -115,7 +118,7 @@ describe('createBulkOps', () => {
   });
 
   it('deletes records, updates counters and clears caches on a successful bulk delete', async () => {
-    const { ctx, detailCache, removedFavoriteBatches } = makeCtx();
+    const { ctx, detailCache, removedFavoriteBatches, refreshServiceCounts } = makeCtx();
     const { bulkDeleteRecords } = createBulkOps(ctx);
 
     const result = await bulkDeleteRecords(['a', 'b']);
@@ -125,6 +128,7 @@ describe('createBulkOps', () => {
     expect(ctx.totalCount.value).toBe(3);
     expect(ctx.dataVersion.value).toBe(2);
     expect(removedFavoriteBatches).toEqual([['a', 'b']]);
+    expect(refreshServiceCounts).toHaveBeenCalledTimes(1);
     expect(detailCache.removeDetail).toHaveBeenCalledTimes(2);
     expect(detailCache.removeDetail).toHaveBeenNthCalledWith(1, 'a');
     expect(detailCache.removeDetail).toHaveBeenNthCalledWith(2, 'b');

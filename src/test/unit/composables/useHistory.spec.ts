@@ -13,6 +13,7 @@ const {
   historyDBDeleteManyMock,
   historyDBClearMock,
   historyDBGetCountMock,
+  historyDBGetServiceCountsMock,
   historyDBGetTimePeriodStatsMock,
   toastShowConfigMock,
   confirmMock,
@@ -33,6 +34,7 @@ const {
   historyDBDeleteManyMock: vi.fn().mockResolvedValue(undefined),
   historyDBClearMock: vi.fn().mockResolvedValue(undefined),
   historyDBGetCountMock: vi.fn().mockResolvedValue(0),
+  historyDBGetServiceCountsMock: vi.fn().mockResolvedValue([]),
   historyDBGetTimePeriodStatsMock: vi.fn().mockResolvedValue([]),
   toastShowConfigMock: vi.fn(),
   confirmMock: vi.fn().mockResolvedValue(true),
@@ -56,6 +58,7 @@ vi.mock('../../../services/HistoryDatabase', () => ({
     deleteMany: historyDBDeleteManyMock,
     clear: historyDBClearMock,
     getCount: historyDBGetCountMock,
+    getServiceCounts: historyDBGetServiceCountsMock,
     getTimePeriodStats: historyDBGetTimePeriodStatsMock,
     getAllStream: vi.fn(function* () { yield []; }),
   },
@@ -158,6 +161,7 @@ const { useHistoryManager, invalidateCache } = await import('../../../composable
 describe('useHistoryManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    historyDBGetServiceCountsMock.mockResolvedValue([]);
     // 使缓存失效，确保每个测试从干净状态开始
     invalidateCache();
   });
@@ -168,14 +172,17 @@ describe('useHistoryManager', () => {
     it('只调用 COUNT / favoriteIdList，不触发全量查询', async () => {
       historyDBGetCountMock.mockResolvedValue(12345);
       historyDBGetFavoriteIdListMock.mockResolvedValue(['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+      historyDBGetServiceCountsMock.mockResolvedValue([{ id: 'weibo', count: 12 }]);
 
-      const { loadStats, totalCount, favoriteCount, favoriteSet, isStatsLoaded } = useHistoryManager();
+      const { loadStats, totalCount, favoriteCount, favoriteSet, serviceCounts, isStatsLoaded } = useHistoryManager();
       await loadStats();
 
       expect(historyDBGetCountMock).toHaveBeenCalledTimes(1);
       expect(historyDBGetFavoriteIdListMock).toHaveBeenCalledTimes(1);
+      expect(historyDBGetServiceCountsMock).toHaveBeenCalledTimes(1);
       expect(totalCount.value).toBe(12345);
       expect(favoriteCount.value).toBe(7);
+      expect(serviceCounts.value).toEqual([{ id: 'weibo', count: 12 }]);
       expect(favoriteSet.value.has('a')).toBe(true);
       expect(favoriteSet.value.has('g')).toBe(true);
       expect(favoriteSet.value.size).toBe(7);

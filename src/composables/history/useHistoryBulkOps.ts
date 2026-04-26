@@ -19,6 +19,7 @@ export interface BulkOpsContext {
   dataVersion: Ref<number>;
   detailCache: ReturnType<typeof useImageDetailCache>;
   removeFavoritesFromIds: (ids: string[]) => void;
+  refreshServiceCounts: () => Promise<void>;
 }
 
 export function createBulkOps(ctx: BulkOpsContext) {
@@ -75,6 +76,7 @@ export function createBulkOps(ctx: BulkOpsContext) {
 
       ctx.totalCount.value = Math.max(0, ctx.totalCount.value - selectedIds.length);
       ctx.removeFavoritesFromIds(selectedIds);
+      await ctx.refreshServiceCounts();
       ctx.dataVersion.value++;
 
       selectedIds.forEach(id => ctx.detailCache.removeDetail(id));
