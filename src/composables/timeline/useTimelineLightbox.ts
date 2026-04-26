@@ -13,6 +13,8 @@ import { type HistoryItem, type UserConfig } from '../../config/types';
 import type { ImageMeta } from '../../types/image-meta';
 import { useLightboxPreloader } from '../useLightboxPreloader';
 import { useLightboxCore } from '../common/useLightboxCore';
+import { warmImages } from '../../utils/imagePreload';
+import { getMetaThumbnailUrl } from '../useThumbCache';
 
 const logger = createLogger('TimelineLightbox');
 
@@ -82,6 +84,13 @@ export function useTimelineLightbox(options: UseTimelineLightboxOptions) {
   let pendingDirection: 'prev' | 'next' | null = null;
   let isNavigating = false;
 
+  function warmCurrentUrls(meta: ImageMeta, detail: HistoryItem): void {
+    const largeUrl = Array.isArray(detail.results)
+      ? getPrimaryImageUrl(detail, config.value)
+      : null;
+    warmImages([getMetaThumbnailUrl(meta, config.value), largeUrl]);
+  }
+
   /**
    * 单步导航，返回是否成功移动
    */
@@ -125,7 +134,11 @@ export function useTimelineLightbox(options: UseTimelineLightboxOptions) {
     if (!meta) return;
 
     try {
-      await core.loadItem(() => detailCache.getDetail(meta.id));
+      await core.loadItem(async () => {
+        const detail = await detailCache.getDetail(meta.id);
+        warmCurrentUrls(meta, detail);
+        return detail;
+      });
       scrollToItem(meta.id);
       silentlyPreloadAdjacentDay();
     } catch (e) {
@@ -199,7 +212,11 @@ export function useTimelineLightbox(options: UseTimelineLightboxOptions) {
     indexInDay.value = Math.max(0, idx);
 
     try {
-      await core.showItem(() => detailCache.getDetail(meta.id));
+      await core.showItem(async () => {
+        const detail = await detailCache.getDetail(meta.id);
+        warmCurrentUrls(meta, detail);
+        return detail;
+      });
       silentlyPreloadAdjacentDay();
       // 相邻图大图预热由 useLightboxPreloader 监听 lightboxItem 变化自动触发（双向 ±1）
     } catch (e) {

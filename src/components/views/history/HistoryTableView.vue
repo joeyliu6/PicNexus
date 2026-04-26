@@ -381,7 +381,7 @@ function handleCheckboxToggle(id: string) {
 <style>
 .global-thumb-hover-preview {
   position: fixed;
-  z-index: var(--z-lightbox);
+  z-index: var(--z-modal);
   pointer-events: none;
 }
 

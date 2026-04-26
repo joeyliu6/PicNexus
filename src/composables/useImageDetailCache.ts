@@ -7,6 +7,7 @@
 import { shallowRef, type Ref } from 'vue';
 import type { HistoryItem } from '../config/types';
 import { historyDB } from '../services/HistoryDatabase';
+import { onCacheEventType, type HistoryEventData } from '../events/cacheEvents';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('DetailCache');
@@ -192,6 +193,27 @@ class ImageDetailCache {
 
 /** 全局单例缓存 */
 const detailCache = new ImageDetailCache();
+let cacheEventListenerInitialized = false;
+
+function removeDetails(ids?: string[]): void {
+  if (!ids || ids.length === 0) {
+    detailCache.clear();
+    return;
+  }
+  ids.forEach(id => detailCache.remove(id));
+}
+
+function initCacheEventListener(): void {
+  if (cacheEventListenerInitialized) return;
+  cacheEventListenerInitialized = true;
+  Promise.all([
+    onCacheEventType<HistoryEventData>('history-updated', data => removeDetails(data?.ids)),
+    onCacheEventType<HistoryEventData>('history-deleted', data => removeDetails(data?.ids)),
+    onCacheEventType('history-cleared', () => detailCache.clear()),
+  ]).catch(e => {
+    logger.warn('详情缓存事件监听初始化失败', e);
+  });
+}
 
 // ==================== Composable ====================
 
@@ -201,6 +223,8 @@ const detailCache = new ImageDetailCache();
  * 提供详情加载、预加载、缓存管理功能
  */
 export function useImageDetailCache() {
+  initCacheEventListener();
+
   /** 缓存统计（响应式） */
   const cacheStats: Ref<CacheStats> = shallowRef({
     size: 0,

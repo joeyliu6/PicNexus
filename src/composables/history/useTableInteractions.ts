@@ -20,6 +20,7 @@ import { createLogger } from '../../utils/logger';
 import { motionDuration } from '../../utils/reducedMotion';
 import { HIDE_ANIMATION_DURATION, SHOW_ANIMATION_DURATION } from './usePhotoSwipeBridge';
 import { useLightboxPreloader } from '../useLightboxPreloader';
+import { warmImages } from '../../utils/imagePreload';
 
 const logger = createLogger('TableInteractions');
 
@@ -114,6 +115,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     // 阻止悬浮预览在 Lightbox 打开动画期间消失，
     // 让 PhotoSwipe 能从预览元素做 FLIP 过渡
     isLightboxOpening.value = true;
+    warmImages([thumbCache.getMediumImageUrl(item), getItemImageUrl(item)]);
     lightboxItem.value = item;
     lightboxVisible.value = true;
     if (openingTimer) clearTimeout(openingTimer);
@@ -295,6 +297,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     if (isLightboxOpening.value || isLightboxClosing.value) return;
     const url = thumbCache.getMediumImageUrl(item);
     if (!url) return;
+    warmImages([url, getItemImageUrl(item)]);
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     const { top, left } = computePreviewPosition(rect);
     hoverPreview.value = { visible: true, url, alt: item.localFileName, itemId: item.id, style: { top: `${top}px`, left: `${left}px` } };

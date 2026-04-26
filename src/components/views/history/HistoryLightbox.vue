@@ -5,7 +5,7 @@
  * PhotoSwipe 处理：FLIP 开/关动画、缩放、平移、手势
  * Vue 处理：底栏（信息+操作）、导航事件、收藏状态
  */
-import { computed, toRef, ref } from 'vue';
+import { computed, toRef, ref, watch } from 'vue';
 import 'photoswipe/style.css';
 import type { HistoryItem } from '../../../config/types';
 import { useConfigManager } from '../../../composables/useConfig';
@@ -38,12 +38,20 @@ const emit = defineEmits<{
 
 const configManager = useConfigManager();
 const historyManager = useHistoryManager();
-const itemRef = computed(() => props.item);
+const currentItem = ref<HistoryItem | null>(props.item);
+watch(
+  () => props.item,
+  (next) => {
+    currentItem.value = next;
+  },
+  { immediate: true },
+);
+const itemRef = currentItem;
 
 // ── PhotoSwipe 桥接 ────────────────────────────
 const imageSrc = computed(() => {
-  if (!props.item) return '';
-  return getPrimaryImageUrl(props.item, configManager.config.value);
+  if (!currentItem.value) return '';
+  return getPrimaryImageUrl(currentItem.value, configManager.config.value);
 });
 
 /**
@@ -51,9 +59,10 @@ const imageSrc = computed(() => {
  * 用作模糊背景占位 + PhotoSwipe msrc，填充大图加载期间的空白
  */
 const mediumSrc = computed(() => {
-  if (!props.item) return '';
-  const result = props.item.results.find(
-    r => r.serviceId === props.item!.primaryService && r.status === 'success'
+  const item = currentItem.value;
+  if (!item) return '';
+  const result = item.results.find(
+    r => r.serviceId === item.primaryService && r.status === 'success'
   );
   if (!result?.result?.url) return '';
   return generateMediumThumbnailUrl(
@@ -64,9 +73,9 @@ const mediumSrc = computed(() => {
   );
 });
 
-const itemId = computed(() => props.item?.id);
-const imageWidth = computed(() => props.item?.width || 0);
-const imageHeight = computed(() => props.item?.height || 0);
+const itemId = computed(() => currentItem.value?.id);
+const imageWidth = computed(() => currentItem.value?.width || 0);
+const imageHeight = computed(() => currentItem.value?.height || 0);
 
 const blurLoadedSrc = ref<string | null>(null);
 
@@ -92,8 +101,8 @@ const { pswpEl, blurSrc, isLoading, setSwitchDirection } = usePhotoSwipeBridge({
 
 // ── 收藏状态 ────────────────────────────────
 const isItemFavorited = computed(() => {
-  if (!props.item) return false;
-  return historyManager.favoriteSet.value.has(props.item.id);
+  if (!currentItem.value) return false;
+  return historyManager.favoriteSet.value.has(currentItem.value.id);
 });
 
 // ── 信息展示 ────────────────────────────────
@@ -190,8 +199,8 @@ function navigateNext() {
 
     <!-- 底栏 -->
     <LightboxBottomBar
-      v-if="item"
-      :item="item"
+      v-if="currentItem"
+      :item="currentItem"
       :display-file-name="displayFileName"
       :successful-services-text="successfulServicesText"
       :successful-services="successfulServices"
@@ -208,7 +217,7 @@ function navigateNext() {
       @switch-primary="switchPrimary"
       @remove-mirror="removeMirror"
       @check-mirror="checkMirror"
-      @toggle-favorite="emit('toggle-favorite', item)"
+      @toggle-favorite="emit('toggle-favorite', currentItem)"
     />
   </Teleport>
 </template>
@@ -244,11 +253,18 @@ function navigateNext() {
   display: none !important;
 }
 
+.pswp--picnexus .pswp__bg,
+.pswp--picnexus .pswp__zoom-wrap {
+  will-change: opacity, transform;
+}
+
 /* 图片圆角 + 阴影 */
 .pswp--picnexus .pswp__img {
   border-radius: var(--radius-md);
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 灯箱暗色环境下的图片阴影，无对应 token */
   box-shadow: 0 8px 40px rgb(0 0 0 / 50%);
+  backface-visibility: hidden;
+  will-change: opacity, transform;
 }
 
 /*
@@ -385,7 +401,10 @@ function navigateNext() {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--duration-normal) ease;
+  transition:
+    background-color var(--duration-normal) ease,
+    color var(--duration-normal) ease,
+    transform var(--duration-normal) ease;
   backdrop-filter: blur(8px);
 }
 
@@ -415,14 +434,16 @@ function navigateNext() {
   pointer-events: none;
   background: var(--pswp-bg);
 
-  /* 开场整体淡入（含 #000 兜底 + ::after 暗角），与 .pswp__bg(300ms) 同步；
-   * 不做这个 animation 则 t=0 瞬间父层纯黑铺满，浅色主图 FLIP pop 对比强烈，
-   * 视觉上表现为"眼前一闪一亮"。翻页不触发（只有 Teleport 挂载时才跑一次） */
-  animation: pswp-blur-bg-open var(--duration-slow) ease-out;
+  /*
+   * 开场从稳定暗场开始，而不是从 0 透明度开始；这样浅色图打开时不会先透出底下视图，
+   * 再被 PhotoSwipe 遮罩压暗，视觉上少一次亮暗波动。
+   */
+  animation: pswp-blur-bg-open var(--duration-normal) ease-out both;
+  contain: paint;
 }
 
 @keyframes pswp-blur-bg-open {
-  from { opacity: 0; }
+  from { opacity: 0.78; }
   to { opacity: 1; }
 }
 
@@ -436,19 +457,17 @@ function navigateNext() {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transform: scale(1.2); /* 消除 blur 边缘白边，scale 需略大于 blur 半径 */
+  transform: translateZ(0) scale(1.18); /* 消除 blur 边缘白边，scale 需略大于 blur 半径 */
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 灯箱模糊背景复合滤镜，无对应 token */
-  filter: blur(30px) brightness(0.45) saturate(1.1);
+  filter: blur(26px) brightness(0.42) saturate(1.05);
   opacity: 0;
-
-  /* 时长必须 >= PhotoSwipe SHOW_ANIMATION_DURATION(300ms)，确保 blur 不早于 .pswp__bg 完成淡入；
-   * 否则 blur 先到 100% 而 bg 尚未压满，浅色图会出现亮度峰值（视觉上一闪而亮） */
-  transition: opacity var(--duration-slow) ease;
+  transition: opacity var(--duration-normal) ease;
   pointer-events: none;
+  will-change: opacity;
 }
 
 .pswp--picnexus .pswp-blur-bg img.is-loaded {
-  opacity: 1;
+  opacity: 0.72;
 }
 
 /*

@@ -87,7 +87,7 @@ function buildPswpOptions(slide: PswpSlideOptions): PhotoSwipeOptions {
       id: slide.id,
     }],
     index: 0,
-    bgOpacity: 0.65,
+    bgOpacity: 0.76,
     // 自定义 spinner 由 Vue 层 Teleport 渲染；清空默认错误文案（避免 slide 内显示英文错误）
     errorMsg: '',
     showHideAnimationType: reduced ? 'none' : (slide.useZoom ? 'zoom' : 'fade'),
@@ -423,6 +423,14 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
       nextTick(() => updateSlideContent());
     }
   });
+
+  watch(
+    () => [options.itemId.value, options.imageSrc.value, options.mediumSrc.value] as const,
+    ([newId, newSrc], [oldId, oldSrc]) => {
+      if (!newId || newId !== oldId || newSrc === oldSrc || !pswp) return;
+      nextTick(() => updateSlideContent());
+    },
+  );
 
   // ── 清理 ────────────────────────────────────
 

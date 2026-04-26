@@ -12,6 +12,7 @@
  */
 import { watch, onUnmounted, getCurrentInstance, type Ref } from 'vue';
 import { createLogger } from '../utils/logger';
+import { warmImage } from '../utils/imagePreload';
 
 const log = createLogger('LightboxPreload');
 
@@ -49,7 +50,7 @@ export function useLightboxPreloader(options: UseLightboxPreloaderOptions): void
       const url = await Promise.resolve(options.resolveAdjacentUrl(direction));
       // new Image() 触发浏览器 HTTP 缓存即可，不用挂 onload —
       // 我们不关心成功与否，只在意"下次访问 URL 时能从缓存取"
-      if (url) new Image().src = url;
+      warmImage(url);
     } catch (e) {
       log.debug(`预加载 ${direction} 失败`, e);
     }

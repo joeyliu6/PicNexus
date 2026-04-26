@@ -14,6 +14,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { HistoryItem } from '../../config/types';
 import type { CheckLinkResult } from '../../types/linkCheck';
 import { historyDB } from '../../services/HistoryDatabase';
+import { recomputeLinkCheckSummary } from '../../types/linkCheckSummary';
 import { emitHistoryUpdated } from '../../events/cacheEvents';
 import { useHistoryManager } from '../useHistory';
 import { useToast } from '../useToast';
@@ -182,6 +183,45 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
     }
   }
 
+  function findSuccessResult(record: HistoryItem, serviceId: string) {
+    return record.results.find(
+      r => r.serviceId === serviceId && r.status === 'success' && r.result?.url,
+    );
+  }
+
+  function applyCurrentItemPatch(patch: Partial<HistoryItem>): void {
+    const cur = item.value;
+    if (!cur) return;
+    item.value = { ...cur, ...patch };
+  }
+
+  function applyPrimaryToCurrent(newServiceId: string): void {
+    const cur = item.value;
+    if (!cur) return;
+    const target = findSuccessResult(cur, newServiceId);
+    if (!target?.result?.url) return;
+    applyCurrentItemPatch({
+      primaryService: newServiceId,
+      generatedLink: target.result.url,
+    });
+  }
+
+  function applyMirrorRemovalToCurrent(serviceId: string): void {
+    const cur = item.value;
+    if (!cur) return;
+    const nextResults = cur.results.filter(r => r.serviceId !== serviceId);
+    let nextStatus = cur.linkCheckStatus;
+    if (cur.linkCheckStatus && serviceId in cur.linkCheckStatus) {
+      const { [serviceId]: _removed, ...rest } = cur.linkCheckStatus;
+      nextStatus = rest;
+    }
+    applyCurrentItemPatch({
+      results: nextResults,
+      linkCheckStatus: nextStatus,
+      linkCheckSummary: recomputeLinkCheckSummary(nextResults, nextStatus, cur.linkCheckSummary),
+    });
+  }
+
   /**
    * 切换主图床到指定备份
    * - 乐观更新：立即把 optimisticPrimary 设到目标 sid，UI 圆点同步跳过去
@@ -200,6 +240,7 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
 
     try {
       await historyDB.switchPrimaryService(cur.id, newServiceId);
+      applyPrimaryToCurrent(newServiceId);
       await notifyUpdated(cur.id);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -234,7 +275,9 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
           try {
             await historyDB.switchPrimaryService(cur.id, successor.serviceId);
             switched = true;
+            applyPrimaryToCurrent(successor.serviceId);
             await historyDB.removeMirror(cur.id, serviceId);
+            applyMirrorRemovalToCurrent(serviceId);
             await notifyUpdated(cur.id);
             toast.success('已移除原主链接', `已切换到 ${successor.serviceId} 作为主图床`);
           } catch (err) {
@@ -262,6 +305,7 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
       async () => {
         try {
           await historyDB.removeMirror(cur.id, serviceId);
+          applyMirrorRemovalToCurrent(serviceId);
           await notifyUpdated(cur.id);
           toast.success('链接已移除', `${serviceId} 的链接已从此记录中移除`);
         } catch (err) {
@@ -309,6 +353,12 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
 
       // 先把 chip 状态写到本地 override，UI 立即看到结果
       localStatusOverride.value = { ...localStatusOverride.value, [serviceId]: entry };
+      applyCurrentItemPatch({
+        linkCheckStatus: {
+          ...(item.value?.linkCheckStatus ?? {}),
+          [serviceId]: entry,
+        },
+      });
 
       // 串行化 DB 写入：等上一笔回写完成再读 → 合并 → 写。
       // 失败也要继续放行队列，避免一次抛错导致所有后续写永远卡住。

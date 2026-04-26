@@ -242,6 +242,15 @@ describe('useMirrorFallback - switchPrimary', () => {
     await promise;
   });
 
+  it('切换成功后同步当前灯箱 item，使主链接操作立即使用新图床', async () => {
+    const harness = mountHarness();
+
+    await harness.api().switchPrimary('qiyu');
+
+    expect(harness.item.value?.primaryService).toBe('qiyu');
+    expect(harness.item.value?.generatedLink).toBe('https://qiyu.example/pic.png');
+  });
+
   it('DB 抛错时走 toast.error 不中断', async () => {
     dbSwitchPrimaryMock.mockRejectedValueOnce(new Error('db offline'));
     const harness = mountHarness();
@@ -280,6 +289,7 @@ describe('useMirrorFallback - removeMirror', () => {
     expect(dbRemoveMirrorMock).toHaveBeenCalledWith('hist-1', 'qiyu');
     expect(dbSwitchPrimaryMock).not.toHaveBeenCalled();
     expect(toastSuccessMock).toHaveBeenCalledWith('链接已移除', expect.any(String));
+    expect(harness.item.value?.results.map(r => r.serviceId)).toEqual(['jd', 'weibo']);
   });
 
   it('主图床 + 有 successor：确认后先 switchPrimary(successor) 再 removeMirror(原主)', async () => {

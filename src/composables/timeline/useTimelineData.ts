@@ -5,6 +5,8 @@
 import { computed, shallowRef, type Ref, type ComputedRef } from 'vue';
 import { getMetaThumbnailUrl, getMetaThumbnailCandidates } from '../../composables/useThumbCache';
 import { createLogger } from '../../utils/logger';
+import { getPrimaryImageUrl } from '../../utils/imageUrl';
+import { warmImages } from '../../utils/imagePreload';
 import { type HistoryItem, type ServiceType, type UserConfig } from '../../config/types';
 import type { ImageMeta } from '../../types/image-meta';
 import type { PhotoGroup } from '../useVirtualTimeline';
@@ -117,6 +119,10 @@ export function useTimelineData(options: UseTimelineDataOptions) {
 
     try {
       const detail = await detailCache.getDetail(meta.id);
+      const largeUrl = Array.isArray(detail.results)
+        ? getPrimaryImageUrl(detail, config.value)
+        : null;
+      warmImages([getMetaThumbnailUrl(meta, config.value), largeUrl]);
       const newMap = new Map(hoverDetailsMap.value);
       newMap.set(meta.id, detail);
       // LRU 淘汰：超出上限时删除最早的条目
