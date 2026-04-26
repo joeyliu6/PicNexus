@@ -31,6 +31,10 @@ const { showConfirm } = useConfirm();
 const toast = useToast();
 
 const editingIndex = ref(-1);
+// 编辑开始时拍快照，blur 校验失败时用于回滚 template，避免空值污染 formData
+// Why: updatePrefixField 实时同步到 formData；若用户清空 template 后未重新输入即触发
+//   其他设置项的 debouncedSave / 视图卸载兜底 save，空 template 会被持久化到磁盘
+const editingSnapshot = ref<LinkPrefixItem | null>(null);
 
 const localLinkPrefixEnabled = computed({
   get: () => props.linkPrefixEnabled,
@@ -54,7 +58,14 @@ function shortDomain(template: string): string {
 }
 
 function toggleEdit(idx: number) {
-  editingIndex.value = editingIndex.value === idx ? -1 : idx;
+  if (editingIndex.value === idx) {
+    editingIndex.value = -1;
+    editingSnapshot.value = null;
+  } else {
+    editingIndex.value = idx;
+    const cur = props.prefixList[idx];
+    editingSnapshot.value = cur ? { ...cur } : null;
+  }
 }
 
 function updatePrefixField(index: number, field: keyof LinkPrefixItem, value: string) {
@@ -90,17 +101,16 @@ function handleFieldBlur(index: number) {
     });
   }
 
-  // 模板空 → 阻止保存并回滚，提示用户
+  // 模板空 → 回滚到编辑前的快照，提示用户
+  // Why: 仅 toast 不回滚会让 formData 的 template 保持为空，被后续任意 save 触发持久化
   if (!nextTemplate) {
+    const fallbackTemplate = editingSnapshot.value?.template ?? current.template;
     toast.showConfig('warn', {
       summary: '模板不能为空',
-      detail: '请填入 https:// 开头的地址或包含 {url} 等占位符的模板。',
+      detail: fallbackTemplate ? '已恢复为编辑前的模板，请重新填写。' : '请填入 https:// 开头的地址或包含 {url} 等占位符的模板。',
       life: 3500,
     });
-    // 不 emit save，让用户继续编辑；同步清理名称 trim
-    if (changed && nextName !== current.name) {
-      emit('updatePrefix', { index, item: { ...current, name: nextName } });
-    }
+    emit('updatePrefix', { index, item: { ...current, name: nextName, template: fallbackTemplate } });
     return;
   }
 
@@ -123,13 +133,19 @@ function handleFieldBlur(index: number) {
 
 function handleAdd() {
   const nextIndex = props.prefixList.length;
-  emit('addPrefix', { name: '自定义前缀', template: 'https://' });
+  const newItem: LinkPrefixItem = { name: '自定义前缀', template: 'https://' };
+  emit('addPrefix', newItem);
   editingIndex.value = nextIndex;
+  editingSnapshot.value = { ...newItem };
 }
 
 function handleRemove(index: number) {
-  if (editingIndex.value === index) editingIndex.value = -1;
-  else if (editingIndex.value > index) editingIndex.value--;
+  if (editingIndex.value === index) {
+    editingIndex.value = -1;
+    editingSnapshot.value = null;
+  } else if (editingIndex.value > index) {
+    editingIndex.value--;
+  }
   emit('removePrefix', index);
 }
 
@@ -142,6 +158,7 @@ function handleReset() {
     rejectLabel: '取消',
     accept: () => {
       editingIndex.value = -1;
+      editingSnapshot.value = null;
       emit('resetToDefault');
     }
   });

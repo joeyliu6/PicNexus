@@ -161,6 +161,7 @@ describe('ExternalEditorPanel', () => {
 
     await input.setValue('36800');
     await input.trigger('input');
+    await input.trigger('blur');
     await flush();
 
     const allUpdates = (wrapper.emitted('update:editorServer') ?? []) as Array<[Record<string, unknown>]>;

@@ -66,6 +66,10 @@ vi.mock('../../../constants', () => ({
   },
 }));
 
+vi.mock('@tauri-apps/api/webview', () => ({
+  getCurrentWebview: () => ({ label: 'test-webview' }),
+}));
+
 vi.mock('../../../config/cookieProviders', () => ({
   getCookieProvider: (id: string) => {
     const providers: Record<string, unknown> = {
@@ -156,7 +160,7 @@ describe('useConfigManager', () => {
       };
 
       const { saveConfig } = useConfigManager();
-      await saveConfig(badConfig as any);
+      await expect(saveConfig(badConfig as any)).rejects.toThrow('至少需要启用一个图床');
 
       expect(configStoreSetMock).not.toHaveBeenCalled();
       expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.any(Object));

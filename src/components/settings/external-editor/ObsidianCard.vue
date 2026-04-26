@@ -90,15 +90,11 @@ function validatePortInput(value: string): string | null {
 }
 
 function handlePortInput(e: Event) {
+  // Why: 旧实现一边输入就 emit，外层 SettingsView 直接 await applyEditorServer 会让本地 HTTP server
+  //   每个中间合法值都重启一次（4773→47731 期间至少 bounce 两次，期间 Obsidian 插件断连）。
+  //   现在 input 阶段只更新 draft + 校验提示，真正提交端口走 commitPortInput（blur / Enter）。
   portDraft.value = (e.target as HTMLInputElement).value;
-  const error = validatePortInput(portDraft.value);
-  portError.value = error ?? '';
-  if (!error) {
-    const port = Number(portDraft.value);
-    if (port !== editorServer.value.port) {
-      updateEditorServer({ port });
-    }
-  }
+  portError.value = validatePortInput(portDraft.value) ?? '';
 }
 
 function commitPortInput() {

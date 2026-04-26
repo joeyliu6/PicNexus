@@ -3,6 +3,7 @@
 import { ref, Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn, emit } from '@tauri-apps/api/event';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { configStore } from '../store/instances';
 import type { Store } from '../store';
 import { BackupPasswordRequiredError } from '../crypto';
@@ -19,6 +20,7 @@ import { getCookieProvider, validateCookie, DEFAULT_LOGIN_WINDOW_SIZE } from '..
 import { useToast } from './useToast';
 import { TOAST_MESSAGES } from '../constants';
 import { createLogger } from '../utils/logger';
+import { extractNamiAuthToken } from '../utils/namiAuthToken';
 
 const log = createLogger('useConfig');
 
@@ -47,6 +49,16 @@ interface TestConnectionResult {
 
 function toPlainConfig(input: UserConfig): UserConfig {
   return JSON.parse(JSON.stringify(input)) as UserConfig;
+}
+
+/**
+ * 配置验证失败错误（已自带 toast 提示，catch 时无需再次 toast）
+ */
+class ConfigValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConfigValidationError';
+  }
 }
 
 /**
@@ -91,9 +103,13 @@ export function useConfigManager() {
       const configToSave = toPlainConfig(newConfig);
 
       // 验证至少有一个可用图床
+      // Why: 旧实现 silent return → 上层 saveSettings 抓不到失败信号，
+      //   会继续走 syncCustomS3Uploaders / setAdvancedSaveState('saved')，
+      //   导致 UI 显示「已保存」但磁盘其实没改、上传器被错误清空。
+      //   改为 throw 让上层 catch 并回滚 in-memory 表单到磁盘真值。
       if (!configToSave.availableServices || configToSave.availableServices.length === 0) {
         toast.showConfig('error', TOAST_MESSAGES.config.validationFailed('至少需要启用一个图床'));
-        return;
+        throw new ConfigValidationError('至少需要启用一个图床');
       }
 
       // 验证链接前缀配置
@@ -117,13 +133,17 @@ export function useConfigManager() {
       config.value = { ...configToSave };
 
       // 发送配置更新事件，通知其他组件刷新状态
-      await emit('config-updated', { timestamp: Date.now() });
+      // Why: 带上 source（当前 webview label），监听方可据此跳过自身回灌，
+      //   避免在防抖窗口期间用户的连续输入被自身的 echo 覆盖
+      const sourceLabel = getCurrentWebview().label;
+      await emit('config-updated', { timestamp: Date.now(), source: sourceLabel });
 
       log.info('✓ 配置保存成功');
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       log.error('保存配置失败:', error);
-      if (!silent) {
+      // 验证错误已经自带 toast，避免重复提示
+      if (!silent && !(error instanceof ConfigValidationError)) {
         toast.showConfig('error', TOAST_MESSAGES.config.saveFailed(errorMsg));
       }
       throw error;
@@ -272,9 +292,8 @@ export function useConfigManager() {
    * 测试纳米连接
    */
   async function testNamiConnection(cookie: string): Promise<TestConnectionResult> {
-    // 从 Cookie 中提取 Auth-Token
-    const authTokenMatch = cookie.match(/Auth-Token=([^;]+)/);
-    const authToken = authTokenMatch ? authTokenMatch[1] : '';
+    // 走统一的 extractNamiAuthToken（大小写不敏感、空字段保护），与其余 4 处 token 提取一致
+    const authToken = extractNamiAuthToken(cookie);
 
     return testCookieConnectionGeneric('纳米', cookie, 'test_nami_connection', { cookie, authToken }, () => {
       const provider = getCookieProvider('nami');

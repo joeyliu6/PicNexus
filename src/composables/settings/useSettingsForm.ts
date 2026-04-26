@@ -13,6 +13,7 @@ import { SERVICE_REQUIRED_FIELDS } from '../../constants/serviceRequiredFields';
 import { syncCustomS3Uploaders } from '../../uploaders';
 import { useConfirm } from '../useConfirm';
 import { createLogger } from '../../utils/logger';
+import { extractNamiAuthToken } from '../../utils/namiAuthToken';
 import type {
   UserConfig,
   ServiceType,
@@ -201,25 +202,24 @@ export function useSettingsForm() {
 
   // ---- 配置变化自动同步可用服务 ----
 
+  // Why: 只保留"配置变空 → 自动移除"，不再"自动添加"。旧实现会在用户主动取消勾选后
+  //   又重新填了 cookie 时把服务悄悄加回 availableServices，违反禁用意图；要重新启用请去芯片手动勾。
   watch(serviceConfigStatus, (newStatus, oldStatus) => {
     if (!oldStatus) return;
-    let changed = false;
+    const toRemove: ServiceType[] = [];
     for (const [svc, configured] of Object.entries(newStatus)) {
-      const serviceId = svc as ServiceType;
-      if (configured && !oldStatus[serviceId]) {
-        if (!availableServices.value.includes(serviceId)) {
-          availableServices.value.push(serviceId);
-          changed = true;
-        }
-      } else if (!configured && oldStatus[serviceId]) {
-        const idx = availableServices.value.indexOf(serviceId);
-        if (idx !== -1) {
-          availableServices.value.splice(idx, 1);
-          changed = true;
-        }
-      }
+      const sid = svc as ServiceType;
+      if (!configured && oldStatus[sid] && availableServices.value.includes(sid)) toRemove.push(sid);
     }
-    if (changed) debouncedSaveSettings();
+    if (!toRemove.length) return;
+    // Why: 防止变空被 saveConfig 的"至少一个图床"校验拒绝；但 stale 服务会让芯片显示启用、上传时却凭证缺失——必须显式告知用户原因，否则就是静默 UX 陷阱。
+    if (availableServices.value.length - toRemove.length <= 0) {
+      const names = toRemove.map((sid) => SERVICE_DISPLAY_NAMES[sid] ?? sid).join('、');
+      toast.showConfig('warn', { summary: '保留最后一个图床', detail: `「${names}」凭证已清空但仍处于启用状态。请补全凭证或先启用其他图床后再禁用。`, life: 4000 });
+      return;
+    }
+    availableServices.value = availableServices.value.filter(s => !toRemove.includes(s as ServiceType));
+    debouncedSaveSettings();
   });
 
   // ---- 工具函数 ----
@@ -389,20 +389,21 @@ export function useSettingsForm() {
 
       config.custom_s3_profiles = formData.value.custom_s3_profiles;
 
-      // Nami Token 提取
+      // Nami Token 提取（统一走 extractNamiAuthToken，避免大小写错位的旧正则误命中其他 *_token= 字段）
       const namiCookie = formData.value.nami.cookie;
-      let namiAuthToken = formData.value.nami.authToken || '';
-      if (namiCookie) {
-        const tokenMatch = namiCookie.match(/token=([^;]+)/);
-        if (tokenMatch) namiAuthToken = tokenMatch[1];
-      }
+      const extractedToken = extractNamiAuthToken(namiCookie);
+      const namiAuthToken = extractedToken || formData.value.nami.authToken || '';
       config.services.nami = { enabled: true, cookie: namiCookie, authToken: namiAuthToken };
 
       // WebDAV 密码加密
+      // Why: 旧条件 `p.password && !passwordEncrypted` 在"已加载过的 profile 用户改密码"时永远为 false——
+      //   loadSettings 解密后 password / passwordEncrypted 都填了，UI 改 password 时也没清 passwordEncrypted，
+      //   导致跳过加密、旧密文被回写。改成"只要 password 非空就重新加密"，密文每次都按当前明文重算，
+      //   多算一次 IPC 但避免静默丢失改动。空 password 视作"保持已加密值不变"。
       const encryptedProfiles = await Promise.all(
         formData.value.webdav.profiles.map(async (p) => {
           let passwordEncrypted = p.passwordEncrypted;
-          if (p.password && !passwordEncrypted) {
+          if (p.password) {
             try {
               passwordEncrypted = await invoke<string>('encrypt_webdav_password', { password: p.password });
             } catch (e) {
@@ -439,10 +440,14 @@ export function useSettingsForm() {
       return true;
     } catch (e) {
       log.error('保存失败', e);
-      toast.showConfig('error', TOAST_MESSAGES.config.saveFailed(String(e)));
-      if (trackAdvancedStatus) {
-        setAdvancedSaveState('error', `保存失败：${errorToString(e)}`);
+      const msg = errorToString(e);
+      // saveConfig 已对该 validation 错误 toast，跳过避免重复刷屏
+      if (!msg.includes('至少需要启用一个图床')) {
+        toast.showConfig('error', TOAST_MESSAGES.config.saveFailed(msg));
       }
+      if (trackAdvancedStatus) setAdvancedSaveState('error', `保存失败：${msg}`);
+      // 失败时把 in-memory 表单回滚到磁盘真值，避免 UI 与磁盘脱节（例如删最后一个 profile 被拒后让它重新出现）
+      try { await loadSettings(); } catch (reloadErr) { log.error('回滚加载失败', reloadErr); }
       return false;
     }
   }
@@ -477,12 +482,18 @@ export function useSettingsForm() {
     // 不在此处调用 saveSettings()：编辑名称/模板时每次按键都会触发 updatePrefix，
     // 持久化由 InputText 的 @blur → emit('save') 统一处理，避免逐字保存
   }
+  // Why: 旧实现遗漏 index === selectedIndex 分支，splice 后后继元素顶上原位，
+  //   selectedIndex 静默指向另一个前缀，用户上传链接格式突变还不知道为啥。
   function removePrefix(index: number) {
     if (formData.value.linkPrefixList.length <= 1) return;
+    const prevSelected = formData.value.selectedPrefixIndex;
     formData.value.linkPrefixList.splice(index, 1);
-    if (index < formData.value.selectedPrefixIndex) formData.value.selectedPrefixIndex--;
-    else if (formData.value.selectedPrefixIndex >= formData.value.linkPrefixList.length) {
-      formData.value.selectedPrefixIndex = formData.value.linkPrefixList.length - 1;
+    if (index < prevSelected) {
+      formData.value.selectedPrefixIndex = prevSelected - 1;
+    } else if (index === prevSelected) {
+      formData.value.selectedPrefixIndex = Math.min(prevSelected, formData.value.linkPrefixList.length - 1);
+      const next = formData.value.linkPrefixList[formData.value.selectedPrefixIndex];
+      if (next) toast.showConfig('info', { summary: '已切换链接前缀', detail: `当前前缀已删除，自动切换到「${next.name || '未命名'}」`, life: 3000 });
     }
     saveSettings();
   }
@@ -494,38 +505,38 @@ export function useSettingsForm() {
 
   // ---- 自定义 S3 管理 ----
 
+  // Why: 用"现存最大序号 + 1"命名，避免旧 length+1 在删中间项后撞名
   function addCustomS3Profile() {
-    const newProfile: CustomS3Profile = {
+    const usedIndices = formData.value.custom_s3_profiles
+      .map((p: CustomS3Profile) => parseInt(p.name?.match(/^自定义 S3 (\d+)$/)?.[1] ?? '', 10))
+      .filter((n) => Number.isFinite(n));
+    const nextIndex = usedIndices.length ? Math.max(...usedIndices) + 1 : 1;
+    formData.value.custom_s3_profiles.push({
       id: generateId(),
-      name: `自定义 S3 ${formData.value.custom_s3_profiles.length + 1}`,
+      name: `自定义 S3 ${nextIndex}`,
       endpoint: '', accessKeyId: '', secretAccessKey: '',
       region: '', bucket: '', path: '', publicDomain: ''
-    };
-    formData.value.custom_s3_profiles.push(newProfile);
+    });
     saveSettings();
   }
 
   async function deleteCustomS3Profile(profileId: string) {
     const profile = formData.value.custom_s3_profiles.find((p: CustomS3Profile) => p.id === profileId);
     const profileName = profile?.name || '自定义 S3';
-    const confirmed = await confirmDialog(
-      `确定要删除「${profileName}」配置吗？删除后相关的编辑器服务绑定也会一并清除。`,
-      '删除配置'
-    );
-    if (!confirmed) return;
-
-    formData.value.custom_s3_profiles = formData.value.custom_s3_profiles.filter((p: CustomS3Profile) => p.id !== profileId);
     const compositeId = makeCustomS3Id(profileId);
+
+    // 预校验：删后 availableServices 不能空，否则 saveConfig 会拒绝→走回滚，体验奇怪
+    if (availableServices.value.filter(s => s !== compositeId).length === 0) {
+      toast.showConfig('warn', { summary: '至少保留一个图床', detail: `「${profileName}」是当前唯一启用的图床，请先启用其他图床后再删除。`, life: 3500 });
+      return;
+    }
+    const confirmed = await confirmDialog(`确定要删除「${profileName}」配置吗？删除后相关的编辑器服务绑定也会一并清除。`, '删除配置');
+    if (!confirmed) return;
+    formData.value.custom_s3_profiles = formData.value.custom_s3_profiles.filter((p: CustomS3Profile) => p.id !== profileId);
     availableServices.value = availableServices.value.filter(s => s !== compositeId);
-
     const editor = formData.value.editorServer;
-    if (editor.typoraService === compositeId) {
-      editor.typoraService = '' as ServerServiceType;
-    }
-    if (editor.obsidianService === compositeId) {
-      editor.obsidianService = '' as ServerServiceType;
-    }
-
+    if (editor.typoraService === compositeId) editor.typoraService = '' as ServerServiceType;
+    if (editor.obsidianService === compositeId) editor.obsidianService = '' as ServerServiceType;
     saveSettings();
   }
 

@@ -334,7 +334,7 @@ describe('useCompressionPresets - 防抖参数', () => {
     h.clearUpdates();
     h.api().handleQualityInput(null);
     vi.advanceTimersByTime(301);
-    expect(h.updates().some(u => u.presets?.[0].quality === 80)).toBe(true);
+    expect(h.updates()).toEqual([]);
     vi.useRealTimers();
   });
 
@@ -358,7 +358,7 @@ describe('useCompressionPresets - 防抖参数', () => {
     h.clearUpdates();
     h.api().handleScaleInput(null);
     vi.advanceTimersByTime(301);
-    expect(h.updates().some(u => u.presets?.[0].scalePercent === 100)).toBe(true);
+    expect(h.updates()).toEqual([]);
     vi.useRealTimers();
   });
 

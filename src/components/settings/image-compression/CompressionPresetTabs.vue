@@ -27,8 +27,10 @@ function onEditInputRef(el: Element | ComponentPublicInstance | null) {
 }
 
 function onEditInput(e: Event) {
+  // Why: 旧实现每次 input 就 trim，外层 :value=editDraft 单向回灌时若值变化 Vue 会写回 DOM input.value，
+  //   浏览器把 caret 复位到末尾——用户在中间插入字符时光标会跳。trim 改在 commitEdit 时统一做。
   const target = e.target as HTMLInputElement;
-  emit('update:editDraft', target.value.trim());
+  emit('update:editDraft', target.value);
 }
 </script>
 

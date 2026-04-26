@@ -121,7 +121,17 @@ async function handleAutoStartChange(enabled: boolean) {
   const saved = await saveSettings();
   if (!saved) {
     // 磁盘写入失败：回滚 OS 状态以保持一致（saveSettings 已 toast 过错误原因）
-    try { await invoke(prev ? 'plugin:autostart|enable' : 'plugin:autostart|disable'); } catch { /* 回滚失败也只能如此 */ }
+    try {
+      await invoke(prev ? 'plugin:autostart|enable' : 'plugin:autostart|disable');
+    } catch (e) {
+      // 回滚也失败 → OS 与磁盘配置已不一致，必须告知用户
+      // Why: 静默吞异常会让用户后续重启时遇到"我明明关了为什么还自启"的迷惑
+      toast.showConfig('error', {
+        summary: '自启动状态不一致',
+        detail: `操作系统与配置文件状态可能不同步：${String(e)}。建议重启应用后手动调整。`,
+        life: 8000,
+      });
+    }
     formData.value.appBehavior.autoStart = prev;
   }
 }
@@ -162,7 +172,11 @@ onMounted(async () => {
   await applyEditorServer(formData.value.editorServer, { force: true });
 
   const { listen } = await import('@tauri-apps/api/event');
-  compressionSyncUnlisten.value = await listen('config-updated', async () => {
+  const myLabel = getCurrentWebview().label;
+  compressionSyncUnlisten.value = await listen<{ source?: string }>('config-updated', async (event) => {
+    // Why: 跳过自身保存触发的 echo，避免在防抖窗口期间把用户连续拖动的滑块值
+    //   被磁盘旧值覆盖（emit→listen 同窗口仍走 IPC，期间用户可能已输入新值）
+    if (event.payload?.source === myLabel) return;
     const updated = await configStore.get<UserConfig>('config');
     if (updated?.imageCompression) formData.value.imageCompression = { ...updated.imageCompression };
   });

@@ -1,7 +1,7 @@
 // 压缩预设管理 composable
 // 负责预设增删改查、编辑状态、参数防抖处理
 
-import { computed, nextTick, onBeforeUnmount, ref, watch, type Ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, type Ref } from 'vue';
 import type {
   ImageCompressionConfig,
   CompressionPreset,
@@ -174,8 +174,17 @@ export function useCompressionPresets({ imageCompression, onUpdate, editInputRef
 
   /** 提交编辑 */
   function commitEdit() {
-    const name = editDraft.value.trim();
-    if (name && editingPresetId.value) {
+    const trimmed = editDraft.value.trim();
+    if (trimmed && editingPresetId.value) {
+      // 排除自己之后查重，撞名自动加序号——和 createPresetName 保持一致的策略
+      const others = imageCompression.value.presets.filter((p) => p.id !== editingPresetId.value);
+      const existing = new Set(others.map((p) => p.name));
+      let name = trimmed;
+      let index = 2;
+      while (existing.has(name)) {
+        name = `${trimmed} ${index}`;
+        index += 1;
+      }
       const presets = imageCompression.value.presets.map((p) =>
         p.id === editingPresetId.value ? { ...p, name } : p,
       );
@@ -201,13 +210,17 @@ export function useCompressionPresets({ imageCompression, onUpdate, editInputRef
 
   /** 质量输入处理（防抖） */
   function handleQualityInput(v: number | null) {
-    const q = v === null ? 80 : Math.round(Math.min(100, Math.max(1, v)));
+    // null 表示用户清空了输入框、准备重打，不能替用户决定默认值——直接放弃这次更新，
+    // 等用户输完合法值再写。失焦时 commitQualityInput 会按当前 activePreset.quality 兜底。
+    if (v === null) return;
+    const q = Math.round(Math.min(100, Math.max(1, v)));
     debouncedQualityUpdate(q);
   }
 
   /** 缩放输入处理（防抖） */
   function handleScaleInput(v: number | null) {
-    const s = v === null ? 100 : Math.round(Math.min(100, Math.max(1, v)));
+    if (v === null) return;
+    const s = Math.round(Math.min(100, Math.max(1, v)));
     debouncedScaleUpdate(s);
   }
 
@@ -227,19 +240,25 @@ export function useCompressionPresets({ imageCompression, onUpdate, editInputRef
 
   // ── 跳过阈值 ──
 
-  /** 切换预设时同步单位显示 */
-  watch(
-    () => activePreset.value.id,
-    () => {
-      const kb = activePreset.value.skipIfSmallerKB;
-      skipUnit.value = (kb >= 1024 && kb % 1024 === 0) ? 'MB' : 'KB';
-    },
-    { immediate: true },
-  );
+  // 单位是用户在会话内的状态，切预设不应该洗掉用户的选择。
+  // 挂载时按当前激活预设的 kb 做一次"聪明默认"推断；之后由用户通过 toggleSkipUnit 显式改。
+  {
+    const kb = activePreset.value.skipIfSmallerKB;
+    skipUnit.value = (kb >= 1024 && kb % 1024 === 0) ? 'MB' : 'KB';
+  }
 
   /** 跳过阈值变更 */
   function handleSkipValueChange(v: number | null) {
     const raw = v ?? 0;
+    // MB 单位下：如果用户输入的就是当前 kb 的舍入显示值（如 1500KB 在 MB 下显示 1.5），
+    // 不要回写——否则 1500→1.5→1536 会发生静默漂移。
+    const currentKb = activePreset.value.skipIfSmallerKB;
+    if (skipUnit.value === 'MB') {
+      const currentDisplay = Math.round((currentKb / 1024) * 10) / 10;
+      if (raw === currentDisplay) return;
+    } else if (raw === currentKb) {
+      return;
+    }
     const kb = skipUnit.value === 'MB' ? Math.round(raw * 1024) : raw;
     updateActivePreset({ skipIfSmallerKB: kb });
   }
