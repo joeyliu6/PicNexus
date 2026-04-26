@@ -20,8 +20,11 @@ const {
   downloadProgress,
   errorMessage,
   lastCheckTime,
+  pendingUpdateAvailable,
   checkForUpdate,
   downloadAndInstall,
+  retryRelaunch,
+  retryDownload,
 } = useAutoUpdate();
 
 watch(status, (val) => {
@@ -102,6 +105,10 @@ const refreshLabel = computed(() => {
     default: return '重新检查';
   }
 });
+
+// Why: 错误来源区分 — 有 pendingUpdate 说明是下载阶段失败，否则是检查阶段失败。
+// 原实现统一硬编码 "无法连接到更新服务器" 误导用户：签名失败 / 404 / 权限拒绝都被吞成"网络问题"。
+const errorTitle = computed(() => pendingUpdateAvailable.value ? '下载更新失败' : '检查更新失败');
 
 function onToggleAutoUpdate(v: boolean) {
   autoUpdateEnabled.value = v;
@@ -196,24 +203,49 @@ function onToggleAutoUpdate(v: boolean) {
       </div>
     </div>
 
+    <!-- install-pending: 下载完成但自动重启失败 -->
+    <div v-else-if="status === 'install-pending'" class="update-status">
+      <div class="update-status-text">
+        <div class="update-status-info">
+          <span>更新已下载，需要重启应用以完成安装</span>
+          <span v-if="errorMessage" class="last-check error-hint">{{ errorMessage }}</span>
+        </div>
+      </div>
+      <Button
+        label="立即重启"
+        icon="pi pi-replay"
+        size="small"
+        @click="retryRelaunch"
+      />
+    </div>
+
     <!-- error -->
     <div v-else-if="status === 'error' && !postCheckResult" class="update-status">
       <div class="update-status-text">
         <div class="update-status-info">
-          <span>无法连接到更新服务器</span>
+          <span>{{ errorTitle }}</span>
           <span class="last-check error-hint">
             <template v-if="lastCheckText">上次检查：{{ lastCheckText }} · </template>
-            请检查网络连接后重试
+            {{ errorMessage || '请检查网络连接后重试' }}
           </span>
         </div>
       </div>
-      <Button
-        label="重试"
-        icon="pi pi-refresh"
-        size="small"
-        outlined
-        @click="checkForUpdate"
-      />
+      <div class="error-actions">
+        <Button
+          v-if="pendingUpdateAvailable"
+          label="重新下载"
+          icon="pi pi-download"
+          size="small"
+          @click="retryDownload"
+        />
+        <Button
+          :label="pendingUpdateAvailable ? '重新检查' : '重试'"
+          icon="pi pi-refresh"
+          size="small"
+          outlined
+          @click="checkForUpdate"
+        />
+      </div>
     </div>
 
   </div>
@@ -377,6 +409,13 @@ function onToggleAutoUpdate(v: boolean) {
 
 .error-hint {
   color: var(--error);
+  overflow-wrap: anywhere;
+}
+
+.error-actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-shrink: 0;
 }
 
 /* 已移除成功状态的绿色背景，保持原来的白底 */
