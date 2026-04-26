@@ -13,7 +13,7 @@ import type { PhotoSwipeOptions } from 'photoswipe';
 import { prefersReducedMotion, motionDuration } from '../../utils/reducedMotion';
 
 export const SHOW_ANIMATION_DURATION = 300;
-export const HIDE_ANIMATION_DURATION = 200;
+export const HIDE_ANIMATION_DURATION = 280;
 export const ZOOM_ANIMATION_DURATION = 250;
 
 /**
@@ -22,6 +22,8 @@ export const ZOOM_ANIMATION_DURATION = 250;
  * 超出则认定为"慢图"淡入指示器。200ms 是人感「即时」阈值上限（NN Group 研究：<400ms 感受为即时）
  */
 const LOADING_INDICATOR_DELAY = 200;
+
+export type PhotoSwipeCloseTargetMode = 'auto' | 'preview' | 'thumb' | 'fade';
 
 export interface PhotoSwipeBridgeOptions {
   /** 灯箱是否可见 */
@@ -45,6 +47,8 @@ export interface PhotoSwipeBridgeOptions {
   onNavigate: (direction: 'prev' | 'next') => void;
   /** 大图加载失败回调（PhotoSwipe loadError 事件） */
   onLoadError?: () => void;
+  /** 关闭动画计算 bounds 前，同步决定收回到预览图、小缩略图或淡出 */
+  resolveCloseTargetMode?: () => PhotoSwipeCloseTargetMode;
   /** 是否有上一张 */
   hasPrev: Ref<boolean>;
   /** 是否有下一张 */
@@ -129,18 +133,33 @@ function buildPswpOptions(slide: PswpSlideOptions): PhotoSwipeOptions {
  * 使 FLIP 动画从更大、比例更正确的预览开始，避免跳跃感和模糊占位图。
  * 如果缩略图已被虚拟滚动回收或在隐藏视图中，返回 undefined → PhotoSwipe 降级为 fade。
  */
-function findThumbElement(itemId: string): HTMLElement | undefined {
-  const els = document.querySelectorAll(`[data-lightbox-id="${itemId}"]`);
+function findThumbElement(itemId: string, mode: PhotoSwipeCloseTargetMode = 'auto'): HTMLElement | undefined {
+  if (mode === 'fade') return undefined;
+
+  const els = document.querySelectorAll(`[data-lightbox-id="${CSS.escape(itemId)}"]`);
+  const visibleEls = Array.from(els).filter((el): el is HTMLElement => {
+    if (!(el instanceof HTMLElement)) return false;
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.bottom > 0 && rect.top < window.innerHeight;
+  });
+
+  if (mode === 'thumb') {
+    return visibleEls.find(el => el.classList.contains('thumb-box'));
+  }
+
+  if (mode === 'preview') {
+    return visibleEls.find(el => el.classList.contains('global-thumb-hover-preview'))
+      ?? visibleEls.find(el => el.classList.contains('thumb-box'));
+  }
+
   let bestEl: HTMLElement | undefined;
   let bestArea = 0;
-  for (const el of els) {
+  for (const el of visibleEls) {
     const rect = el.getBoundingClientRect();
-    if (rect.width > 0 && rect.bottom > 0 && rect.top < window.innerHeight) {
-      const area = rect.width * rect.height;
-      if (area > bestArea) {
-        bestArea = area;
-        bestEl = el as HTMLElement;
-      }
+    const area = rect.width * rect.height;
+    if (area > bestArea) {
+      bestArea = area;
+      bestEl = el;
     }
   }
   return bestEl;
@@ -148,6 +167,7 @@ function findThumbElement(itemId: string): HTMLElement | undefined {
 
 export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
   let pswp: PhotoSwipe | null = null;
+  let closeTargetMode: PhotoSwipeCloseTargetMode = 'auto';
   /** PhotoSwipe 根元素，供 Vue Teleport 挂载自定义 UI */
   const pswpEl = ref<HTMLElement | null>(null);
   /** 模糊背景图源：全程优先取中图（LQIP），加载秒到；无中图时回落到原图 */
@@ -249,7 +269,7 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     const id = options.itemId.value;
     if (!src || !id) return;
 
-    const thumbEl = findThumbElement(id);
+    const thumbEl = findThumbElement(id, 'auto');
     const w = options.imageWidth.value || 1920;
     const h = options.imageHeight.value || 1080;
 
@@ -269,6 +289,7 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
 
     pswp = new PhotoSwipe(buildPswpOptions({ src, msrc, w, h, thumbEl, useZoom, isCropped, id }));
     currentLoadingId = id;
+    closeTargetMode = 'auto';
     // 重置方向：上一次会话残留的值不应影响新灯箱的首次切换判定
     switchDirection.value = null;
     // 模糊背景优先用中图（LQIP）；回落 FLIP 占位图；再回落原图
@@ -287,11 +308,11 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     pswp.addFilter('thumbEl', (_thumbEl, data, _index) => {
       const currentId = options.itemId.value;
       if (!currentId) return _thumbEl as HTMLElement;
-      const el = findThumbElement(currentId);
+      const el = findThumbElement(currentId, closeTargetMode);
       // 缩略图已被虚拟滚动回收、或源尺寸过小 → 交给 PhotoSwipe 降级 fade
       if (!el) return NO_THUMB;
       const rect = el.getBoundingClientRect();
-      if (rect.width < FLIP_MIN_WIDTH) return NO_THUMB;
+      if (closeTargetMode !== 'thumb' && rect.width < FLIP_MIN_WIDTH) return NO_THUMB;
       // 悬浮预览 object-fit:contain → 不裁剪；小缩略图 object-fit:cover → 裁剪
       data.thumbCropped = !el.classList.contains('global-thumb-hover-preview');
       return el;
@@ -302,6 +323,7 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     const thisInstance = pswp;
     pswp.on('close', () => {
       if (pswp !== thisInstance) return;
+      closeTargetMode = options.resolveCloseTargetMode?.() ?? 'auto';
       pswpEl.value = null;
       blurSrc.value = null;
       clearLoadingIndicator();

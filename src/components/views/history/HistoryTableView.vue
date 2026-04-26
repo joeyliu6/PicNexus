@@ -69,6 +69,7 @@ const isPaginating = computed(() => isLoadingPage.value && currentPageData.value
 const {
   lightboxVisible, lightboxItem, lightboxHasPrev, lightboxHasNext,
   openLightbox, handleLightboxDelete, handleLightboxNavigate, handleToggleFavorite,
+  resolveLightboxCloseTargetMode,
   popoverServices, openServicePopover, handlePopoverCopyLink, handleCopyServiceLink,
   hoverPreview, handlePreviewEnter, handlePreviewLeave,
 } = useTableInteractions({
@@ -313,6 +314,7 @@ function handleCheckboxToggle(id: string) {
       :item="lightboxItem"
       :has-prev="lightboxHasPrev"
       :has-next="lightboxHasNext"
+      :resolve-close-target-mode="resolveLightboxCloseTargetMode"
       @delete="handleLightboxDelete"
       @navigate="handleLightboxNavigate"
       @toggle-favorite="handleToggleFavorite"
@@ -337,6 +339,7 @@ function handleCheckboxToggle(id: string) {
         <div
           v-if="hoverPreview.visible && hoverPreview.url"
           class="global-thumb-hover-preview"
+          :class="{ 'is-closing': hoverPreview.closing }"
           :data-lightbox-id="hoverPreview.itemId"
           :style="hoverPreview.style"
         >
@@ -383,6 +386,8 @@ function handleCheckboxToggle(id: string) {
   position: fixed;
   z-index: var(--z-modal);
   pointer-events: none;
+
+  --preview-close-duration: 180ms;
 }
 
 .thumb-preview-enter-active {
@@ -414,5 +419,20 @@ function handleCheckboxToggle(id: string) {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   object-fit: contain;
+  transition:
+    opacity var(--preview-close-duration) var(--ease-standard),
+    filter var(--preview-close-duration) var(--ease-standard),
+    transform var(--preview-close-duration) var(--ease-standard);
+  transition-delay: 0ms;
+  transform: translateZ(0) scale(1);
+}
+
+.global-thumb-hover-preview.is-closing.thumb-preview-leave-active {
+  transition: none;
+}
+
+.global-thumb-hover-preview.is-closing img {
+  opacity: 0;
+  filter: blur(2px);
 }
 </style>

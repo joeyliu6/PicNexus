@@ -11,6 +11,7 @@ import type { HistoryItem } from '../../../config/types';
 import { useConfigManager } from '../../../composables/useConfig';
 import { useHistoryManager } from '../../../composables/useHistory';
 import { usePhotoSwipeBridge } from '../../../composables/history/usePhotoSwipeBridge';
+import type { PhotoSwipeCloseTargetMode } from '../../../composables/history/usePhotoSwipeBridge';
 import { useLightboxActions } from '../../../composables/history/useLightboxActions';
 import { useLightboxInfo } from '../../../composables/history/useLightboxInfo';
 import { useMirrorFallback } from '../../../composables/history/useMirrorFallback';
@@ -24,6 +25,7 @@ const props = withDefaults(defineProps<{
   item: HistoryItem | null;
   hasPrev?: boolean;
   hasNext?: boolean;
+  resolveCloseTargetMode?: () => PhotoSwipeCloseTargetMode;
 }>(), {
   hasPrev: false,
   hasNext: false,
@@ -97,6 +99,7 @@ const { pswpEl, blurSrc, isLoading, setSwitchDirection } = usePhotoSwipeBridge({
   onClose: () => emit('update:visible', false),
   onNavigate: (dir) => emit('navigate', dir),
   onLoadError: handleLoadError,
+  resolveCloseTargetMode: props.resolveCloseTargetMode,
 });
 
 // ── 收藏状态 ────────────────────────────────
