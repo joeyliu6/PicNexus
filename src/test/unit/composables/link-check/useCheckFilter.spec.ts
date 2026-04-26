@@ -341,3 +341,72 @@ describe('high throughput display snapshot', () => {
     expect(filteredRows.value.map((row) => row.historyId)).toEqual(['h1', 'h2']);
   });
 });
+
+describe('checking snapshot filter behavior', () => {
+  it('keeps the current filtered list stable while checking', async () => {
+    const isChecking = ref(false);
+    const checkRows = ref([
+      makeRow({ historyId: 'h1' }),
+      makeRow({ historyId: 'h2' }),
+    ]);
+    const { filteredRows, statusFilter, suppressListMotion } = useCheckFilter({ checkRows, isChecking });
+
+    statusFilter.value = 'unchecked';
+    await nextTick();
+    isChecking.value = true;
+    await nextTick();
+
+    checkRows.value = [
+      makeValidRow({ historyId: 'h1' }),
+      makeRow({ historyId: 'h2' }),
+      makeRow({ historyId: 'h3' }),
+    ];
+    await nextTick();
+
+    expect(filteredRows.value.map((row) => row.historyId)).toEqual(['h1', 'h2']);
+    expect(suppressListMotion.value).toBe(true);
+  });
+
+  it('auto applies the current filter shortly after checking ends', async () => {
+    vi.useFakeTimers();
+    try {
+      const isChecking = ref(false);
+      const checkRows = ref([
+        makeRow({ historyId: 'h1' }),
+        makeRow({ historyId: 'h2' }),
+      ]);
+      const { filteredRows, statusFilter } = useCheckFilter({ checkRows, isChecking });
+
+      statusFilter.value = 'unchecked';
+      await nextTick();
+      isChecking.value = true;
+      await nextTick();
+
+      checkRows.value = [
+        makeValidRow({ historyId: 'h1', recentlyCompletedAt: Date.now() }),
+        makeRow({ historyId: 'h2' }),
+      ];
+      await nextTick();
+      expect(filteredRows.value.map((row) => row.historyId)).toEqual(['h1', 'h2']);
+
+      isChecking.value = false;
+      await nextTick();
+      vi.advanceTimersByTime(449);
+      await nextTick();
+      expect(filteredRows.value.map((row) => row.historyId)).toEqual(['h1', 'h2']);
+
+      vi.advanceTimersByTime(1);
+      await nextTick();
+      expect(filteredRows.value.map((row) => row.historyId)).toEqual(['h2']);
+
+      checkRows.value = [
+        makeValidRow({ historyId: 'h1', recentlyCompletedAt: Date.now(), uncheckedLeavingAt: Date.now() }),
+        makeRow({ historyId: 'h2' }),
+      ];
+      await nextTick();
+      expect(filteredRows.value.map((row) => row.historyId)).toEqual(['h2']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

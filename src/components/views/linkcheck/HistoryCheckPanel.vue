@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onScopeDispose, ref, watch } from 'vue';
 import CheckBottomBar from './history-check/CheckBottomBar.vue';
 import CheckFilterBar from './history-check/CheckFilterBar.vue';
 import CheckLinkList from './history-check/CheckLinkList.vue';
 import type { StatePill } from './common/StatePill.vue';
 import { rowKey, useCheckFilter } from '../../../composables/link-check/useCheckFilter';
-import { useCheckStats } from '../../../composables/link-check/useCheckStats';
+import { useCheckStats, type CheckStatsResult } from '../../../composables/link-check/useCheckStats';
 import { useCheckStrategy } from '../../../composables/link-check/useCheckStrategy';
 import type { MoreMenuKind } from '../../../composables/link-check/useCheckStrategy';
 import type { BatchCheckProgress, LinkCheckRow, StatusFilter } from '../../../types/linkCheck';
@@ -43,6 +43,7 @@ const emit = defineEmits<{
 
 const checkRows = computed(() => props.checkRows);
 const progress = computed(() => props.progress);
+const isMonitorChecking = computed(() => props.isChecking && props.progressSource !== 'rescue');
 const isHighThroughputSignal = ref(false);
 
 const {
@@ -68,16 +69,13 @@ const {
   handleToggleSelect,
   toggleSelectAll,
   clearSelection,
-} = useCheckFilter({ checkRows, isHighThroughput: isHighThroughputSignal });
+} = useCheckFilter({ checkRows, isChecking: isMonitorChecking, isHighThroughput: isHighThroughputSignal });
 
 const {
   stats,
   serviceList,
   progressPercent,
   progressTooltip,
-  rateLabel,
-  etaLabel,
-  stalled,
   isHighThroughput,
 } = useCheckStats({
   scopedRows,
@@ -85,6 +83,45 @@ const {
   progress,
   statusFilter,
 });
+
+const frozenStats = ref<CheckStatsResult | null>(null);
+let frozenStatsTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearFrozenStatsTimer(): void {
+  if (frozenStatsTimer !== null) {
+    clearTimeout(frozenStatsTimer);
+    frozenStatsTimer = null;
+  }
+}
+
+function cloneStats(value: CheckStatsResult): CheckStatsResult {
+  return { ...value };
+}
+
+const displayStats = computed(() => frozenStats.value ?? stats.value);
+const showStatsSkeleton = computed(() => isMonitorChecking.value || frozenStats.value !== null);
+
+watch(isMonitorChecking, (active, wasActive) => {
+  clearFrozenStatsTimer();
+  if (active) {
+    frozenStats.value = cloneStats(stats.value);
+    return;
+  }
+  if (wasActive) {
+    frozenStatsTimer = setTimeout(() => {
+      frozenStats.value = null;
+      frozenStatsTimer = null;
+    }, 450);
+  }
+}, { immediate: true });
+
+watch([selectedServiceId, searchQuery], () => {
+  if (isMonitorChecking.value) {
+    frozenStats.value = cloneStats(stats.value);
+  }
+});
+
+onScopeDispose(() => clearFrozenStatsTimer());
 
 watch(isHighThroughput, (value) => {
   isHighThroughputSignal.value = value;
@@ -101,15 +138,19 @@ const {
   errorLabel,
   recheckLabel,
   errorTooltip,
-} = useCheckStrategy({ stats, statusFilter });
+} = useCheckStrategy({ stats: displayStats, statusFilter });
 
 const showOverflowMenu = ref(false);
 
 /** 底栏运行状态 pill —— 仅在链接检测自己检测时显示，rescue/迁移不借此渲染 */
 const statePill = computed<StatePill | null>(() => {
-  if (!props.isChecking || props.progressSource === 'rescue') return null;
-  if (props.isPaused) return { tone: 'paused', icon: 'pi pi-pause', label: '已暂停' };
-  return { tone: 'running', label: '检测中' };
+  if (!isMonitorChecking.value) return null;
+  const progressMeta = {
+    progressPercent: progressPercent.value,
+    progressLabel: progressTooltip.value,
+  };
+  if (props.isPaused) return { tone: 'paused', icon: 'pi pi-pause', label: '已暂停', ...progressMeta };
+  return { tone: 'running', label: '检测中', ...progressMeta };
 });
 
 const moreMenuItems = computed(() => {
@@ -256,9 +297,10 @@ function handleMoreAction(kind: MoreMenuKind): void {
 
   <div v-else class="monitor-panel" @click="showServiceMenu = false; showOverflowMenu = false">
     <CheckFilterBar
-      :stats="stats"
+      :stats="displayStats"
       :service-list="serviceList"
       :is-loading="isLoading"
+      :is-checking="showStatsSkeleton"
       :is-phase2-loading="isPhase2Loading"
       :phase2-duration="phase2Duration"
       v-model:status-filter="statusFilter"
@@ -272,7 +314,7 @@ function handleMoreAction(kind: MoreMenuKind): void {
     <CheckLinkList
       :visible-rows="visibleRows"
       :filtered-rows="filteredRows"
-      :stats="stats"
+      :stats="displayStats"
       :status-filter="statusFilter"
       :is-loading="isLoading"
       :is-checking="isChecking"
@@ -297,18 +339,13 @@ function handleMoreAction(kind: MoreMenuKind): void {
       :state-pill="statePill"
       :is-action-locked="isActionLocked"
       :progress-source="progressSource"
-      :progress-percent="progressPercent"
-      :progress-tooltip="progressTooltip"
-      :rate-label="rateLabel"
-      :eta-label="etaLabel"
-      :stalled="stalled"
       :has-selection="hasSelection"
       :selected-count="selectedCount"
       :is-all-selected="isAllSelected"
       :total-pages="totalPages"
       :bottom-summary="bottomSummary"
       :is-loading="isLoading"
-      :stats="stats"
+      :stats="displayStats"
       :smart-check-label="effectiveSmartCheckLabel"
       :smart-check-tooltip="effectiveSmartCheckTooltip"
       :more-menu-items="moreMenuItems"

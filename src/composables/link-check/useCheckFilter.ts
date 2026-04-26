@@ -9,6 +9,7 @@ const HIGH_THROUGHPUT_COMMIT_MS = 400;
 
 interface UseCheckFilterOptions {
   checkRows: Ref<LinkCheckRow[]>;
+  isChecking?: Ref<boolean>;
   isHighThroughput?: Ref<boolean>;
 }
 
@@ -42,7 +43,7 @@ function matchesStatusFilter(row: LinkCheckRow, filter: StatusFilter): boolean {
   }
 }
 
-export function useCheckFilter({ checkRows, isHighThroughput }: UseCheckFilterOptions) {
+export function useCheckFilter({ checkRows, isChecking, isHighThroughput }: UseCheckFilterOptions) {
   const statusFilter = ref<StatusFilter>('invalid');
   const selectedServiceId = ref<string | null>(null);
   const showServiceMenu = ref(false);
@@ -56,8 +57,12 @@ export function useCheckFilter({ checkRows, isHighThroughput }: UseCheckFilterOp
   const selectAnchor = ref<ShiftSelectAnchor>({ lastId: null, wasSelect: true });
   const displayedRows = shallowRef<LinkCheckRow[]>([]);
   const suppressListMotion = ref(false);
+  const runSnapshotKeys = shallowRef<Set<string> | null>(null);
+  const isRunSnapshotActive = ref(false);
+  const suppressPostRunHeldRows = ref(false);
 
   let snapshotCommitTimer: ReturnType<typeof setTimeout> | null = null;
+  let autoApplyFilterTimer: ReturnType<typeof setTimeout> | null = null;
   let restoreMotionCancel: (() => void) | null = null;
   let hasInitializedDisplay = false;
   let restoringFromHighThroughput = false;
@@ -83,10 +88,21 @@ export function useCheckFilter({ checkRows, isHighThroughput }: UseCheckFilterOp
     return isHighThroughput?.value === true;
   }
 
+  function shouldSuppressListMotion(): boolean {
+    return inHighThroughputMode() || isRunSnapshotActive.value;
+  }
+
   function clearSnapshotCommitTimer(): void {
     if (snapshotCommitTimer !== null) {
       clearTimeout(snapshotCommitTimer);
       snapshotCommitTimer = null;
+    }
+  }
+
+  function clearAutoApplyFilterTimer(): void {
+    if (autoApplyFilterTimer !== null) {
+      clearTimeout(autoApplyFilterTimer);
+      autoApplyFilterTimer = null;
     }
   }
 
@@ -124,7 +140,7 @@ export function useCheckFilter({ checkRows, isHighThroughput }: UseCheckFilterOp
     cancelMotionRestore();
     if (!restoreMotionNextFrame) restoringFromHighThroughput = false;
     suppressListMotion.value = suppressMotion;
-    displayedRows.value = liveRows.value;
+    displayedRows.value = displaySourceRows.value;
     if (restoreMotionNextFrame) scheduleMotionRestore();
   }
 
@@ -146,7 +162,14 @@ export function useCheckFilter({ checkRows, isHighThroughput }: UseCheckFilterOp
 
   function forceCommitForScopeChange(): void {
     clearSnapshotCommitTimer();
-    commitDisplayedRows(inHighThroughputMode());
+    clearAutoApplyFilterTimer();
+    if (isChecking?.value) {
+      captureRunSnapshot();
+    } else {
+      isRunSnapshotActive.value = false;
+      runSnapshotKeys.value = null;
+    }
+    commitDisplayedRows(shouldSuppressListMotion());
   }
 
   watch(selectedServiceId, () => {
@@ -197,10 +220,10 @@ export function useCheckFilter({ checkRows, isHighThroughput }: UseCheckFilterOp
    * 让用户先看清新状态再走 TransitionGroup leave 动画淡出；目标 tab（valid/invalid 等）
    * 没有 hold 概念，新状态命中 matchesStatusFilter 立即出现。
    */
-  function liveFilter(): LinkCheckRow[] {
+  function liveFilter(includeHeldRows = true): LinkCheckRow[] {
     const filter = statusFilter.value;
     const sortWeight = (row: LinkCheckRow): number => {
-      if (filter === 'unchecked' && row.recentlyCompletedAt !== undefined) {
+      if (includeHeldRows && filter === 'unchecked' && row.recentlyCompletedAt !== undefined) {
         return SEVERITY.success;
       }
       return row.pinnedSortWeight ?? SEVERITY[row.checkResult?.error_type ?? 'success'] ?? SEVERITY.success;
@@ -212,7 +235,7 @@ export function useCheckFilter({ checkRows, isHighThroughput }: UseCheckFilterOp
         if (row.recheckResult) return true;
         if (matchesStatusFilter(row, filter)) return true;
         // 仅"未检测"tab 享受 hold；高速模式下进入离场窗口后交给快照批量移除，不播放逐行动画。
-        if (filter === 'unchecked' && row.recentlyCompletedAt !== undefined) {
+        if (includeHeldRows && filter === 'unchecked' && row.recentlyCompletedAt !== undefined) {
           return !inHighThroughputMode() || row.uncheckedLeavingAt === undefined;
         }
         return false;
@@ -221,13 +244,55 @@ export function useCheckFilter({ checkRows, isHighThroughput }: UseCheckFilterOp
       .sort((left, right) => sortWeight(left) - sortWeight(right));
   }
 
-  const liveRows = computed(() => liveFilter());
+  const liveRows = computed(() => liveFilter(!suppressPostRunHeldRows.value));
+  const strictRows = computed(() => liveFilter(false));
+  const snapshotRows = computed(() => {
+    const keys = runSnapshotKeys.value;
+    if (!keys) return liveRows.value;
+
+    const order = new Map<string, number>();
+    let index = 0;
+    for (const key of keys) {
+      order.set(key, index++);
+    }
+
+    return scopedRows.value
+      .filter((row) => keys.has(rowKey(row)))
+      .slice()
+      .sort((left, right) => (order.get(rowKey(left)) ?? 0) - (order.get(rowKey(right)) ?? 0));
+  });
+  const displaySourceRows = computed(() =>
+    isRunSnapshotActive.value ? snapshotRows.value : liveRows.value,
+  );
   const filteredRows = computed(() => displayedRows.value);
 
-  watch(liveRows, () => {
+  function captureRunSnapshot(): void {
+    isRunSnapshotActive.value = true;
+    runSnapshotKeys.value = new Set(liveRows.value.map(rowKey));
+  }
+
+  function applyCurrentFilter(): void {
+    clearAutoApplyFilterTimer();
+    clearSnapshotCommitTimer();
+    const rows = strictRows.value;
+    suppressPostRunHeldRows.value = true;
+    if (isChecking?.value) {
+      isRunSnapshotActive.value = true;
+      runSnapshotKeys.value = new Set(rows.map(rowKey));
+    } else {
+      isRunSnapshotActive.value = false;
+      runSnapshotKeys.value = null;
+    }
+    cancelMotionRestore();
+    restoringFromHighThroughput = false;
+    suppressListMotion.value = false;
+    displayedRows.value = rows;
+  }
+
+  watch(displaySourceRows, () => {
     if (!hasInitializedDisplay) {
       hasInitializedDisplay = true;
-      commitDisplayedRows(inHighThroughputMode());
+      commitDisplayedRows(shouldSuppressListMotion());
       return;
     }
     if (inHighThroughputMode()) {
@@ -235,7 +300,7 @@ export function useCheckFilter({ checkRows, isHighThroughput }: UseCheckFilterOp
       return;
     }
     clearSnapshotCommitTimer();
-    commitDisplayedRows(restoringFromHighThroughput, restoringFromHighThroughput);
+    commitDisplayedRows(shouldSuppressListMotion() || restoringFromHighThroughput, restoringFromHighThroughput);
   }, { immediate: true });
 
   if (isHighThroughput) {
@@ -254,9 +319,27 @@ export function useCheckFilter({ checkRows, isHighThroughput }: UseCheckFilterOp
     });
   }
 
+  if (isChecking) {
+    watch(isChecking, (active, wasActive) => {
+      clearAutoApplyFilterTimer();
+      if (active) {
+        suppressPostRunHeldRows.value = false;
+        captureRunSnapshot();
+        commitDisplayedRows(true);
+        return;
+      }
+      if (wasActive && isRunSnapshotActive.value) {
+        autoApplyFilterTimer = setTimeout(() => {
+          applyCurrentFilter();
+        }, 450);
+      }
+    }, { immediate: true });
+  }
+
   if (getCurrentScope()) {
     onScopeDispose(() => {
       clearSnapshotCommitTimer();
+      clearAutoApplyFilterTimer();
       cancelMotionRestore();
     });
   }

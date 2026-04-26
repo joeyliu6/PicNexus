@@ -11,14 +11,6 @@ defineProps<{
   statePill: StatePillType | null;
   isActionLocked: boolean;
   progressSource: 'monitor' | 'rescue' | null;
-  progressPercent: number;
-  progressTooltip: string;
-  /** "18/s" 已格式化的速率标签；空串表示尚未建立基线 */
-  rateLabel: string;
-  /** "26m" / "1h26m" 已格式化的剩余时间；空串表示无法估算 */
-  etaLabel: string;
-  /** >10s 没新结果到达：显示"在等慢域名"提示 */
-  stalled: boolean;
   hasSelection: boolean;
   selectedCount: number;
   isAllSelected: boolean;
@@ -75,19 +67,12 @@ const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: tr
         </button>
       </div>
 
-      <!-- 中：summary / pill —— 检测中显示进度文字 + pill；空闲显示总数 -->
+      <!-- 中：summary / pill —— 检测中保持安静 -->
       <div class="bottom-info">
         <span v-if="isLoading && stats.total === 0" class="page-summary">
           <Skeleton width="64px" height="14px" border-radius="4px" />
         </span>
         <template v-else-if="isChecking && progressSource !== 'rescue'">
-          <span class="page-summary">{{ progressTooltip }}</span>
-          <span v-if="rateLabel" class="rate-meta">· {{ rateLabel }}</span>
-          <span v-if="etaLabel" class="rate-meta">· 剩余 {{ etaLabel }}</span>
-          <span v-if="stalled" class="stall-hint" v-tooltip.top="'微博、知乎等图床有 per-host 限速（≤3 并发），需等待慢域名按序返回'">
-            <i class="pi pi-clock"></i>
-            等待慢域名返回
-          </span>
           <StatePill :pill="statePill" />
         </template>
         <span v-else class="page-summary">{{ bottomSummary }}</span>
@@ -114,19 +99,6 @@ const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: tr
         @cancel-check="emit('cancel-check')"
         @more-action="(kind) => emit('more-action', kind)"
       />
-    </div>
-
-    <!-- 底沿薄进度条：仅监控自身检测中显示 -->
-    <div
-      v-if="isChecking && progressSource !== 'rescue'"
-      class="progress-strip"
-      role="progressbar"
-      :aria-valuenow="progressPercent"
-      aria-valuemin="0"
-      aria-valuemax="100"
-      :aria-label="progressTooltip"
-    >
-      <div class="progress-strip-fill" :style="{ width: progressPercent + '%' }"></div>
     </div>
   </div>
 </template>
@@ -160,25 +132,6 @@ const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: tr
   color: var(--text-tertiary);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-}
-
-/* 速率/ETA 元信息：跟在进度文字后，用更弱的 muted 色减轻视觉权重 */
-.rate-meta {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-/* 失速提示：用 warning 色把"等慢域名"信号显式化，消除"是不是卡了"的焦虑 */
-.stall-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2xs);
-  font-size: var(--text-xs);
-  color: var(--warning);
-  white-space: nowrap;
-  cursor: help;
 }
 
 .pagination {
@@ -233,35 +186,4 @@ const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: tr
 .page-input::placeholder { color: var(--text-main); opacity: 0.6; }
 .page-input:focus { border-color: var(--primary); }
 
-/* 底沿薄进度条：贴底 1.5px，检测中可见 */
-.progress-strip {
-  position: absolute;
-  left: 0;
-  right: var(--space-xl);
-  bottom: calc(var(--space-sm) * -1);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1.5px progress strip height has no token */
-  height: 1.5px;
-  background: var(--bg-input);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1.5px progress rounding has no token */
-  border-radius: 1.5px;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.progress-strip-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--primary), var(--primary-hover));
-  transition: width var(--duration-slower) var(--ease-standard);
-  position: relative;
-  overflow: hidden;
-}
-
-.progress-strip-fill::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- translucent highlight is intentional for sweep effect */
-  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 40%), transparent);
-  animation: k-sweep var(--duration-shimmer) ease-in-out infinite;
-}
 </style>

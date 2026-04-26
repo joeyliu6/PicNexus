@@ -85,14 +85,6 @@ export function useCheckStats({ scopedRows, checkRows, progress }: UseCheckStats
     return Math.min(100, Math.round((current.checked / current.total) * 100));
   });
 
-  const progressTooltip = computed(() => {
-    const current = progress.value;
-    if (current && current.total > 0) {
-      return `本次已检测 ${current.checked.toLocaleString()} / ${current.total.toLocaleString()} 条`;
-    }
-    return '准备检测...';
-  });
-
   // ============================================
   // 速率 / ETA / 失速预警
   // ============================================
@@ -203,6 +195,30 @@ export function useCheckStats({ scopedRows, checkRows, progress }: UseCheckStats
     const r = progressRate.value;
     if (r <= 0) return '';
     return r >= 10 ? `${Math.round(r)}/s` : `${r.toFixed(1)}/s`;
+  });
+
+  const progressTooltip = computed(() => {
+    const current = progress.value;
+    if (!current || current.total <= 0) return '准备检测...';
+
+    const checked = Math.min(current.checked, current.total);
+    const percent = Math.min(100, Math.round((checked / current.total) * 100));
+    const currentStats = stats.value;
+    const failed = currentStats.invalid + currentStats.timeout;
+    const lines = [
+      '链接检测中',
+      `已完成：${checked.toLocaleString()} / ${current.total.toLocaleString()}`,
+      `完成度：${percent}%`,
+      `正常：${currentStats.valid.toLocaleString()}`,
+      `失败：${failed.toLocaleString()}`,
+      `可疑：${currentStats.suspicious.toLocaleString()}`,
+    ];
+
+    if (rateLabel.value) lines.push(`速度：${rateLabel.value}`);
+    if (etaLabel.value) lines.push(`预计剩余：${etaLabel.value}`);
+    if (stalled.value) lines.push('正在等待较慢的域名响应');
+
+    return lines.join('\n');
   });
 
   return {

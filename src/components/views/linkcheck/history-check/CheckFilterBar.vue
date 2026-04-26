@@ -10,13 +10,14 @@ const props = defineProps<{
   stats: CheckStatsResult;
   serviceList: { id: string; count: number }[];
   isLoading: boolean;
+  isChecking: boolean;
   isPhase2Loading: boolean;
   phase2Duration: number;
 }>();
 
-const animatedValid = ref(0);
-const animatedTotal = ref(0);
-const animatedUnchecked = ref(0);
+const animatedValid = ref(props.stats.valid);
+const animatedTotal = ref(props.stats.total);
+const animatedUnchecked = ref(props.stats.unchecked);
 
 function countUp(to: number, target: typeof animatedValid, durationMs: number): void {
   if (durationMs <= 0) {
@@ -65,7 +66,7 @@ const serviceTotal = () => props.stats.total;
 </script>
 
 <template>
-  <div class="chip-bar">
+  <div class="chip-bar" :aria-busy="isChecking || isPhase2Loading">
     <div class="chip-group">
       <template v-if="isLoading && stats.total === 0">
         <Skeleton width="52px" height="24px" border-radius="20px" />
@@ -83,7 +84,8 @@ const serviceTotal = () => props.stats.total;
           @click="statusFilter = statusFilter === 'invalid' ? null : 'invalid'"
         >
           <span class="chip-dot" style="background: var(--error)"></span>
-          失效 {{ stats.invalid }}
+          失效
+          {{ stats.invalid }}
         </button>
 
         <button
@@ -94,7 +96,8 @@ const serviceTotal = () => props.stats.total;
           @click="statusFilter = statusFilter === 'suspicious' ? null : 'suspicious'"
         >
           <span class="chip-dot" style="background: var(--pending)"></span>
-          可疑 {{ stats.suspicious }}
+          可疑
+          {{ stats.suspicious }}
         </button>
 
         <button
@@ -105,7 +108,8 @@ const serviceTotal = () => props.stats.total;
           @click="statusFilter = statusFilter === 'timeout' ? null : 'timeout'"
         >
           <span class="chip-dot" style="background: var(--warning)"></span>
-          超时 {{ stats.timeout }}
+          超时
+          {{ stats.timeout }}
         </button>
 
         <button
@@ -113,6 +117,7 @@ const serviceTotal = () => props.stats.total;
           class="filter-chip chip--unchecked"
           :class="{ active: statusFilter === 'unchecked', 'chip--phase2': isPhase2Loading }"
           :aria-pressed="statusFilter === 'unchecked'"
+          :disabled="isPhase2Loading"
           @click="statusFilter = statusFilter === 'unchecked' ? null : 'unchecked'"
         >
           <span class="chip-dot" style="background: var(--text-tertiary)"></span>
@@ -125,6 +130,7 @@ const serviceTotal = () => props.stats.total;
           class="filter-chip chip--valid"
           :class="{ active: statusFilter === 'valid', 'chip--phase2': isPhase2Loading }"
           :aria-pressed="statusFilter === 'valid'"
+          :disabled="isPhase2Loading"
           @click="statusFilter = statusFilter === 'valid' ? null : 'valid'"
         >
           <span class="chip-dot" style="background: var(--success)"></span>
@@ -137,6 +143,7 @@ const serviceTotal = () => props.stats.total;
           class="filter-chip chip--all"
           :class="{ active: statusFilter === 'all', 'chip--phase2': isPhase2Loading }"
           :aria-pressed="statusFilter === 'all'"
+          :disabled="isPhase2Loading"
           @click="statusFilter = statusFilter === 'all' ? null : 'all'"
         >
           全部
@@ -310,6 +317,7 @@ const serviceTotal = () => props.stats.total;
 .filter-chip.chip--phase2 {
   pointer-events: none;
   opacity: 0.6;
+  cursor: default;
 }
 
 .service-filter {
