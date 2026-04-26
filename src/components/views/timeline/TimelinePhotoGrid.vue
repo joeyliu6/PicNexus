@@ -252,7 +252,7 @@ function getGroupYear(groupId: string): string {
 }
 
 .group-date-num {
-  font-size: var(--text-3xl);
+  font-size: var(--text-2xl);
   font-weight: var(--weight-semibold);
   line-height: 1;
   color: var(--text-secondary);
@@ -298,7 +298,7 @@ function getGroupYear(groupId: string): string {
 /* 响应式适配 */
 @media (width <= 1024px) {
   .group-date-num {
-    font-size: var(--text-2xl);
+    font-size: var(--text-xl);
   }
 }
 
@@ -308,7 +308,7 @@ function getGroupYear(groupId: string): string {
   }
 
   .group-date-num {
-    font-size: var(--text-xl);
+    font-size: var(--text-lg);
   }
 }
 

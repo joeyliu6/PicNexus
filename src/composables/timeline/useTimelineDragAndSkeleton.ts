@@ -207,8 +207,8 @@ export function useTimelineDragAndSkeleton(options: UseTimelineDragAndSkeletonOp
       viewportHeight: height,
       targetRowHeight: 200,
       gap: 4,
-      headerHeight: 48,
-      groupGap: 24,
+      headerHeight: 36,
+      groupGap: 16,
     });
   });
 

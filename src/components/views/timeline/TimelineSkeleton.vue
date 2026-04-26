@@ -60,8 +60,8 @@ defineProps<{
   display: flex;
   align-items: center;
   gap: var(--space-md-lg);
-  padding: var(--space-sm-md) 0;
-  height: 48px;
+  padding: var(--space-xs-sm) 0;
+  height: 36px;
 }
 
 .skeleton-date {

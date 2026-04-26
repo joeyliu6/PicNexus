@@ -86,8 +86,8 @@ export interface VirtualTimelineOptions {
 export const DEFAULT_OPTIONS: Required<VirtualTimelineOptions> = {
   targetRowHeight: 200,
   gap: 4,
-  headerHeight: 48,
-  groupGap: 24,
+  headerHeight: 36,
+  groupGap: 16,
   maxRowHeight: 300,
   overscan: 3,
 };

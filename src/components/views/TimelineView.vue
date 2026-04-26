@@ -102,8 +102,8 @@ const {
 } = useVirtualTimeline(scrollContainer, groups, {
   targetRowHeight: 200,
   gap: 4,
-  headerHeight: 64,
-  groupGap: 24,
+  headerHeight: 36,
+  groupGap: 16,
   overscan: 3,
 });
 
