@@ -2,7 +2,7 @@
 // 负责批量检测历史链接有效性，管理检测状态和进度
 
 /* eslint-disable max-lines -- singleton state machine kept together for link monitor behavior */
-import { ref, shallowRef, computed, type Ref, type ComputedRef } from 'vue';
+import { ref, shallowRef, computed, getCurrentScope, onScopeDispose, type Ref, type ComputedRef } from 'vue';
 import { createRafScheduler } from '../../utils/rafScheduler';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -377,6 +377,9 @@ export function useLinkCheckManager() {
       isPaused.value = false;
       progressSource.value = null;
       clearProgressListener();
+      // 取消时立即清空 hold，让残留过渡态行尽快归位，不再拖 2s
+      clearAllHolds();
+      checkRowsRefreshScheduler.schedule(refreshCheckRowsRef);
       // toast 移至检测函数中，入库后再提示（含已入库数量）
       log.info('已发送取消请求');
     } catch (err) {
@@ -578,14 +581,89 @@ export function useLinkCheckManager() {
     checkRows.value = checkRows.value.slice();
   }
 
+  // ============================================
+  // 检测完成过渡态：行在原 tab 停留 HOLD_MS 后淡出
+  // ============================================
+  // 设计意图：批量检测时新结果到达不立刻把行从「未检测」tab 抽走（突兀），而是
+  // 在原位停留约 2s 让用户看清新状态（dot 变色 + 徽章），再进入「未检测」离场动画。
+  // 对应 tab（如「正常」）那边没有 hold 概念，新结果立即出现。
+
+  /** 完成态停留时长（ms）：用户能看清结果的最小阅读时长 */
+  const HOLD_MS = 2000;
+  /** 「未检测」tab 离场动画窗口，需与 CheckLinkList.vue 的 leaving-unchecked 过渡保持一致 */
+  const UNCHECKED_LEAVE_MS = 520;
+  /** 扫描 hold/leave 过期的轮询间隔；250ms 既不过密也不过疏，高速场景自然分批 */
+  const HOLD_SWEEP_MS = 250;
+  /** 当前处于 hold 态的行集合——避免每次扫全量 checkRows */
+  const rowsInHold = new Set<LinkCheckRow>();
+  let holdSweepInterval: ReturnType<typeof setInterval> | null = null;
+
+  function ensureHoldSweep(): void {
+    if (holdSweepInterval !== null) return;
+    holdSweepInterval = setInterval(() => {
+      const now = Date.now();
+      let mutated = false;
+      for (const row of rowsInHold) {
+        if (row.recentlyCompletedAt === undefined) {
+          row.uncheckedLeavingAt = undefined;
+          rowsInHold.delete(row);
+          mutated = true;
+          continue;
+        }
+
+        if (row.uncheckedLeavingAt !== undefined) {
+          if (now - row.uncheckedLeavingAt >= UNCHECKED_LEAVE_MS) {
+            row.recentlyCompletedAt = undefined;
+            row.uncheckedLeavingAt = undefined;
+            rowsInHold.delete(row);
+            mutated = true;
+          }
+          continue;
+        }
+
+        if (now - row.recentlyCompletedAt >= HOLD_MS) {
+          row.uncheckedLeavingAt = now;
+          mutated = true;
+        }
+      }
+      if (mutated) checkRowsRefreshScheduler.schedule(refreshCheckRowsRef);
+      if (rowsInHold.size === 0) stopHoldSweep();
+    }, HOLD_SWEEP_MS);
+  }
+
+  function stopHoldSweep(): void {
+    if (holdSweepInterval !== null) {
+      clearInterval(holdSweepInterval);
+      holdSweepInterval = null;
+    }
+  }
+
+  /** 检测取消/重置/视图切换时清空 hold——防止下次进入看到残影 */
+  function clearAllHolds(): void {
+    for (const row of rowsInHold) {
+      row.recentlyCompletedAt = undefined;
+      row.uncheckedLeavingAt = undefined;
+    }
+    rowsInHold.clear();
+    stopHoldSweep();
+  }
+
+  // composable scope 释放（视图卸载/热更新/路由切换）时必须停掉 sweep interval；
+  // 否则 timer 会继续按 HOLD_SWEEP_MS 调用 schedule(refreshCheckRowsRef)，对已无消费者的 checkRows 做无用更新，
+  // 直到最后一行 hold 过期才自然熄火，期间形成短时间的内存与计算泄漏。
+  if (getCurrentScope()) {
+    onScopeDispose(() => { clearAllHolds(); });
+  }
+
   /**
-   * 把进度事件里的逐条结果实时 patch 到对应行——配合 useCheckFilter 冻结，
-   * 列表里的徽章和顶部 chips（依赖 checkRows 的 computed）会自动跟着刷新。
-   * 行对象 mutate-in-place + rAF 节流换数组引用：高频事件（默认每 10 条触发一次）
-   * 同帧合并，跨越 prop 边界唤醒子组件，但不会让重渲染轰炸 UI。
+   * 把进度事件里的逐条结果实时 patch 到对应行——同时打 recentlyCompletedAt 时间戳
+   * 让 useCheckFilter 在 hold 窗口内继续把它们留在原 tab；窗口到期由 sweep 清零。
+   * 行对象 mutate-in-place + rAF 节流换数组引用：跨越 prop 边界唤醒子组件、
+   * 同帧多条结果合并为一次重渲染，避免轰炸 UI。
    */
   function applyRecentResults(recent: BatchCheckItemResult[]): void {
     if (recent.length === 0) return;
+    const now = Date.now();
     let mutated = false;
     for (const itemResult of recent) {
       const key = `${itemResult.link}::${itemResult.history_id}`;
@@ -596,9 +674,15 @@ export function useLinkCheckManager() {
       if (target.recheckLoading || target.recheckResult) continue;
       const { history_id: _hid, service_id: _sid, ...result } = itemResult;
       target.checkResult = result;
+      target.recentlyCompletedAt = now;
+      target.uncheckedLeavingAt = undefined;
+      rowsInHold.add(target);
       mutated = true;
     }
-    if (mutated) checkRowsRefreshScheduler.schedule(refreshCheckRowsRef);
+    if (mutated) {
+      ensureHoldSweep();
+      checkRowsRefreshScheduler.schedule(refreshCheckRowsRef);
+    }
   }
 
   /** 复制 checkRows、通过 Map O(1) 找到目标行、执行变更、触发响应式更新 */

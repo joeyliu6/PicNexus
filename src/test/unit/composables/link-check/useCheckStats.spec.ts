@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { ref, computed } from 'vue';
+import { describe, it, expect, vi } from 'vitest';
+import { ref, computed, nextTick } from 'vue';
 import { useCheckStats } from '../../../../composables/link-check/useCheckStats';
 import type { LinkCheckRow, BatchCheckProgress } from '../../../../types/linkCheck';
 
@@ -67,6 +67,79 @@ describe('useCheckStats — stats', () => {
     ]);
     const { stats } = useCheckStats({ scopedRows: computed(() => rows.value), checkRows: rows, progress: ref(null) });
     expect(stats.value.problems).toBe(3);
+  });
+});
+
+describe('useCheckStats high throughput mode', () => {
+  it('enters high throughput mode when smoothed rate reaches 12/s', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(100);
+      const rows = ref<LinkCheckRow[]>([]);
+      const progress = ref<BatchCheckProgress | null>(null);
+      const { isHighThroughput } = useCheckStats({ scopedRows: computed(() => rows.value), checkRows: rows, progress });
+
+      progress.value = { checked: 0, total: 100, current_url: '' };
+      await nextTick();
+      vi.setSystemTime(1100);
+      progress.value = { checked: 20, total: 100, current_url: '' };
+      await nextTick();
+
+      expect(isHighThroughput.value).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('exits high throughput mode when smoothed rate falls to 6/s', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(100);
+      const rows = ref<LinkCheckRow[]>([]);
+      const progress = ref<BatchCheckProgress | null>(null);
+      const { isHighThroughput } = useCheckStats({ scopedRows: computed(() => rows.value), checkRows: rows, progress });
+
+      progress.value = { checked: 0, total: 100, current_url: '' };
+      await nextTick();
+      vi.setSystemTime(1100);
+      progress.value = { checked: 20, total: 100, current_url: '' };
+      await nextTick();
+      expect(isHighThroughput.value).toBe(true);
+
+      for (const [time, checked] of [[2100, 21], [3100, 22], [4100, 23], [5100, 24]] as const) {
+        vi.setSystemTime(time);
+        progress.value = { checked, total: 100, current_url: '' };
+        await nextTick();
+      }
+
+      expect(isHighThroughput.value).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('resets high throughput mode when progress is cleared', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(100);
+      const rows = ref<LinkCheckRow[]>([]);
+      const progress = ref<BatchCheckProgress | null>(null);
+      const { isHighThroughput } = useCheckStats({ scopedRows: computed(() => rows.value), checkRows: rows, progress });
+
+      progress.value = { checked: 0, total: 100, current_url: '' };
+      await nextTick();
+      vi.setSystemTime(1100);
+      progress.value = { checked: 20, total: 100, current_url: '' };
+      await nextTick();
+      expect(isHighThroughput.value).toBe(true);
+
+      progress.value = null;
+      await nextTick();
+
+      expect(isHighThroughput.value).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

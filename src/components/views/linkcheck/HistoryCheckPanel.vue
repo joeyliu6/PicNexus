@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import CheckBottomBar from './history-check/CheckBottomBar.vue';
 import CheckFilterBar from './history-check/CheckFilterBar.vue';
 import CheckLinkList from './history-check/CheckLinkList.vue';
@@ -43,7 +43,7 @@ const emit = defineEmits<{
 
 const checkRows = computed(() => props.checkRows);
 const progress = computed(() => props.progress);
-const isCheckingRef = computed(() => props.isChecking);
+const isHighThroughputSignal = ref(false);
 
 const {
   statusFilter,
@@ -64,17 +64,31 @@ const {
   hasSelection,
   selectedCount,
   isAllSelected,
+  suppressListMotion,
   handleToggleSelect,
   toggleSelectAll,
   clearSelection,
-} = useCheckFilter({ checkRows, isChecking: isCheckingRef });
+} = useCheckFilter({ checkRows, isHighThroughput: isHighThroughputSignal });
 
-const { stats, serviceList, progressPercent, progressTooltip } = useCheckStats({
+const {
+  stats,
+  serviceList,
+  progressPercent,
+  progressTooltip,
+  rateLabel,
+  etaLabel,
+  stalled,
+  isHighThroughput,
+} = useCheckStats({
   scopedRows,
   checkRows,
   progress,
   statusFilter,
 });
+
+watch(isHighThroughput, (value) => {
+  isHighThroughputSignal.value = value;
+}, { immediate: true });
 
 const {
   smartCheckLabel,
@@ -263,6 +277,7 @@ function handleMoreAction(kind: MoreMenuKind): void {
       :is-loading="isLoading"
       :is-checking="isChecking"
       :is-action-locked="isActionLocked"
+      :suppress-list-motion="suppressListMotion"
       :selected-ids="selectedIds"
       :status-dot-color="statusDotColor"
       :error-badge-class="errorBadgeClass"
@@ -284,6 +299,9 @@ function handleMoreAction(kind: MoreMenuKind): void {
       :progress-source="progressSource"
       :progress-percent="progressPercent"
       :progress-tooltip="progressTooltip"
+      :rate-label="rateLabel"
+      :eta-label="etaLabel"
+      :stalled="stalled"
       :has-selection="hasSelection"
       :selected-count="selectedCount"
       :is-all-selected="isAllSelected"

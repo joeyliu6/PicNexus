@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
 import { rowKey, useCheckFilter } from '../../../../composables/link-check/useCheckFilter';
 import type { LinkCheckRow } from '../../../../types/linkCheck';
 
@@ -247,5 +247,97 @@ describe('选择逻辑', () => {
 
     toggleSelectAll();
     expect(isAllSelected.value).toBe(false);
+  });
+});
+
+describe('held rows in unchecked filter', () => {
+  it('keeps recently completed rows during the source-tab hold', () => {
+    const checkRows = ref([
+      makeRow({ historyId: 'h1' }),
+      makeValidRow({ historyId: 'h2', recentlyCompletedAt: Date.now() }),
+    ]);
+    const { filteredRows, statusFilter } = useCheckFilter({ checkRows });
+    statusFilter.value = 'unchecked';
+    expect(filteredRows.value.map((row) => row.historyId)).toEqual(['h1', 'h2']);
+  });
+
+  it('keeps held invalid rows in their original source order', () => {
+    const checkRows = ref([
+      makeRow({ historyId: 'h1' }),
+      makeInvalidRow({ historyId: 'h2', recentlyCompletedAt: Date.now() }),
+      makeRow({ historyId: 'h3' }),
+    ]);
+    const { filteredRows, statusFilter } = useCheckFilter({ checkRows });
+    statusFilter.value = 'unchecked';
+    expect(filteredRows.value.map((row) => row.historyId)).toEqual(['h1', 'h2', 'h3']);
+  });
+});
+
+describe('high throughput display snapshot', () => {
+  it('batches target-tab membership changes for 400ms', async () => {
+    vi.useFakeTimers();
+    try {
+      const isHighThroughput = ref(false);
+      const checkRows = ref<LinkCheckRow[]>([]);
+      const { filteredRows, statusFilter, suppressListMotion } = useCheckFilter({ checkRows, isHighThroughput });
+
+      statusFilter.value = 'valid';
+      await nextTick();
+      isHighThroughput.value = true;
+      await nextTick();
+
+      checkRows.value = [makeValidRow({ historyId: 'h1' })];
+      await nextTick();
+
+      expect(suppressListMotion.value).toBe(true);
+      expect(filteredRows.value).toHaveLength(0);
+
+      vi.advanceTimersByTime(399);
+      await nextTick();
+      expect(filteredRows.value).toHaveLength(0);
+
+      vi.advanceTimersByTime(1);
+      await nextTick();
+      expect(filteredRows.value.map((row) => row.historyId)).toEqual(['h1']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('commits immediately when the user changes filter scope', async () => {
+    vi.useFakeTimers();
+    try {
+      const isHighThroughput = ref(true);
+      const checkRows = ref([
+        makeInvalidRow({ historyId: 'h1' }),
+        makeValidRow({ historyId: 'h2' }),
+      ]);
+      const { filteredRows, statusFilter } = useCheckFilter({ checkRows, isHighThroughput });
+
+      await nextTick();
+      expect(filteredRows.value.map((row) => row.historyId)).toEqual(['h1']);
+
+      statusFilter.value = 'valid';
+      await nextTick();
+      expect(filteredRows.value.map((row) => row.historyId)).toEqual(['h2']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('drops unchecked leaving rows from the next high-throughput snapshot', async () => {
+    const isHighThroughput = ref(true);
+    const checkRows = ref([
+      makeRow({ historyId: 'h1' }),
+      makeValidRow({ historyId: 'h2', recentlyCompletedAt: Date.now() }),
+      makeInvalidRow({ historyId: 'h3', recentlyCompletedAt: Date.now(), uncheckedLeavingAt: Date.now() }),
+    ]);
+    const { filteredRows, statusFilter, suppressListMotion } = useCheckFilter({ checkRows, isHighThroughput });
+
+    statusFilter.value = 'unchecked';
+    await nextTick();
+
+    expect(suppressListMotion.value).toBe(true);
+    expect(filteredRows.value.map((row) => row.historyId)).toEqual(['h1', 'h2']);
   });
 });

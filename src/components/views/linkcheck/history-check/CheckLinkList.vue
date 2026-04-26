@@ -15,6 +15,7 @@ defineProps<{
   isLoading: boolean;
   isChecking: boolean;
   isActionLocked: boolean;
+  suppressListMotion: boolean;
   selectedIds: Set<string>;
   statusDotColor: (row: LinkCheckRow) => string;
   errorBadgeClass: (row: LinkCheckRow) => string;
@@ -61,12 +62,21 @@ const emit = defineEmits<{
       description="尚无上传历史记录。"
     />
 
-    <TransitionGroup v-else tag="div" name="row-list" class="link-list">
+    <TransitionGroup
+      v-else
+      tag="div"
+      :name="suppressListMotion ? 'row-list-silent' : 'row-list'"
+      class="link-list"
+    >
       <div
         v-for="row in visibleRows"
         :key="rowKey(row)"
         class="link-row"
-        :class="{ 'row-selected': selectedIds.has(rowKey(row)), 'fading-out': row.fadingOut }"
+        :class="{
+          'row-selected': selectedIds.has(rowKey(row)),
+          'fading-out': !suppressListMotion && row.fadingOut,
+          'leaving-unchecked': !suppressListMotion && statusFilter === 'unchecked' && row.uncheckedLeavingAt !== undefined,
+        }"
         @click="!(isChecking || isActionLocked) && emit('toggle-select', rowKey(row), $event)"
       >
         <span class="status-dot" :style="{ background: statusDotColor(row) }"></span>
@@ -322,6 +332,19 @@ const emit = defineEmits<{
   pointer-events: none;
 }
 
+.link-row.leaving-unchecked {
+  opacity: 0;
+  height: 0 !important;
+  border-bottom-width: 0 !important;
+  overflow: hidden;
+  pointer-events: none;
+  will-change: opacity, height;
+  transition:
+    opacity var(--duration-medium) var(--ease-standard),
+    height var(--duration-slow) var(--ease-standard) var(--duration-fast),
+    border-bottom-width var(--duration-normal) var(--ease-standard) var(--duration-fast);
+}
+
 .recheck-btn.spinning .pi {
   width: 12px;
   height: 12px;
@@ -411,15 +434,6 @@ const emit = defineEmits<{
   color: var(--pending);
 }
 
-.row-list-enter-active {
-  transition: opacity var(--duration-normal) ease, transform var(--duration-normal) ease;
-}
-
-.row-list-enter-from {
-  opacity: 0;
-  transform: translateY(-5px);
-}
-
 .hero-cta {
   display: inline-flex;
   align-items: center;
@@ -442,5 +456,34 @@ const emit = defineEmits<{
 
 .hero-cta:active {
   transform: scale(0.97);
+}
+
+/* TransitionGroup 行进出动画
+ *
+ * 设计意图：批量检测时已完成的行 hold 约 2s 后从「未检测」tab 淡出，目标 tab 立即淡入。
+ * 「未检测」离场先由 .leaving-unchecked 在原布局流里淡出并收起高度，再真正移出列表；
+ * 高速场景会自然按 sweep 批量收起，避免下方行被每条结果单独顶动。
+ */
+.row-list-enter-active,
+.row-list-leave-active {
+  transition: opacity var(--duration-medium) var(--ease-standard);
+}
+
+.row-list-enter-from,
+.row-list-leave-to {
+  opacity: 0;
+}
+
+.row-list-leave-active {
+  position: absolute;
+
+  /* 离开期间宽度撑满容器，避免脱离文档流后视觉宽度塌缩 */
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 100% in absolute keeps row width visually intact while leaving layout flow */
+  width: 100%;
+}
+
+/* move 过渡：行因离开/重排被推上去时也要平滑滑动而非瞬间跳 */
+.row-list-move {
+  transition: transform var(--duration-medium) var(--ease-standard);
 }
 </style>

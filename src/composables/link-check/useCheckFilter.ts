@@ -1,15 +1,15 @@
-import { computed, ref, shallowRef, watch, type Ref } from 'vue';
+import { computed, getCurrentScope, onScopeDispose, ref, shallowRef, watch, type Ref } from 'vue';
 import { watchDebounced } from '@vueuse/core';
 import type { LinkCheckRow, StatusFilter } from '../../types/linkCheck';
 import { SEVERITY } from '../../types/linkCheck';
 import { shiftSelect, type ShiftSelectAnchor } from '../../utils/shiftSelect';
 
 const PAGE_SIZE = 100;
+const HIGH_THROUGHPUT_COMMIT_MS = 400;
 
 interface UseCheckFilterOptions {
   checkRows: Ref<LinkCheckRow[]>;
-  /** 是否正在批量检测——为 true 时冻结 filteredRows 集合，避免行因状态实时变化而消失/重排 */
-  isChecking?: Ref<boolean>;
+  isHighThroughput?: Ref<boolean>;
 }
 
 export function rowKey(row: Pick<LinkCheckRow, 'historyId' | 'serviceId'>): string {
@@ -42,7 +42,7 @@ function matchesStatusFilter(row: LinkCheckRow, filter: StatusFilter): boolean {
   }
 }
 
-export function useCheckFilter({ checkRows, isChecking }: UseCheckFilterOptions) {
+export function useCheckFilter({ checkRows, isHighThroughput }: UseCheckFilterOptions) {
   const statusFilter = ref<StatusFilter>('invalid');
   const selectedServiceId = ref<string | null>(null);
   const showServiceMenu = ref(false);
@@ -54,6 +54,13 @@ export function useCheckFilter({ checkRows, isChecking }: UseCheckFilterOptions)
 
   const selectedIds = ref<Set<string>>(new Set());
   const selectAnchor = ref<ShiftSelectAnchor>({ lastId: null, wasSelect: true });
+  const displayedRows = shallowRef<LinkCheckRow[]>([]);
+  const suppressListMotion = ref(false);
+
+  let snapshotCommitTimer: ReturnType<typeof setTimeout> | null = null;
+  let restoreMotionCancel: (() => void) | null = null;
+  let hasInitializedDisplay = false;
+  let restoringFromHighThroughput = false;
 
   function resetPageState(): void {
     pageByFilter.clear();
@@ -72,24 +79,97 @@ export function useCheckFilter({ checkRows, isChecking }: UseCheckFilterOptions)
     }
   }
 
+  function inHighThroughputMode(): boolean {
+    return isHighThroughput?.value === true;
+  }
+
+  function clearSnapshotCommitTimer(): void {
+    if (snapshotCommitTimer !== null) {
+      clearTimeout(snapshotCommitTimer);
+      snapshotCommitTimer = null;
+    }
+  }
+
+  function cancelMotionRestore(): void {
+    restoreMotionCancel?.();
+    restoreMotionCancel = null;
+  }
+
+  function scheduleMotionRestore(): void {
+    cancelMotionRestore();
+    let cancelled = false;
+    const restore = () => {
+      if (cancelled) return;
+      restoreMotionCancel = null;
+      restoringFromHighThroughput = false;
+      suppressListMotion.value = false;
+    };
+
+    if (typeof requestAnimationFrame === 'function') {
+      const id = requestAnimationFrame(restore);
+      restoreMotionCancel = () => {
+        cancelled = true;
+        cancelAnimationFrame(id);
+      };
+    } else {
+      const id = setTimeout(restore, 0);
+      restoreMotionCancel = () => {
+        cancelled = true;
+        clearTimeout(id);
+      };
+    }
+  }
+
+  function commitDisplayedRows(suppressMotion: boolean, restoreMotionNextFrame = false): void {
+    cancelMotionRestore();
+    if (!restoreMotionNextFrame) restoringFromHighThroughput = false;
+    suppressListMotion.value = suppressMotion;
+    displayedRows.value = liveRows.value;
+    if (restoreMotionNextFrame) scheduleMotionRestore();
+  }
+
+  function refreshDisplayedRowsReference(): void {
+    displayedRows.value = displayedRows.value.slice();
+  }
+
+  function scheduleHighThroughputCommit(): void {
+    cancelMotionRestore();
+    suppressListMotion.value = true;
+    refreshDisplayedRowsReference();
+
+    if (snapshotCommitTimer !== null) return;
+    snapshotCommitTimer = setTimeout(() => {
+      snapshotCommitTimer = null;
+      commitDisplayedRows(true);
+    }, HIGH_THROUGHPUT_COMMIT_MS);
+  }
+
+  function forceCommitForScopeChange(): void {
+    clearSnapshotCommitTimer();
+    commitDisplayedRows(inHighThroughputMode());
+  }
+
   watch(selectedServiceId, () => {
     resetPageState();
     resetSelectionOnScopeChange();
-  });
+    forceCommitForScopeChange();
+  }, { flush: 'sync' });
   watchDebounced(
     searchInput,
     (value) => {
       searchQuery.value = value;
       resetPageState();
       resetSelectionOnScopeChange();
+      forceCommitForScopeChange();
     },
-    { debounce: 200 },
+    { debounce: 200, flush: 'sync' },
   );
   watch(statusFilter, (nextFilter, previousFilter) => {
     pageByFilter.set(previousFilter!, currentPage.value);
     currentPage.value = pageByFilter.get(nextFilter!) ?? 1;
     resetSelectionOnScopeChange();
-  });
+    forceCommitForScopeChange();
+  }, { flush: 'sync' });
 
   const scopedRows = computed(() => {
     let rows = checkRows.value;
@@ -111,42 +191,73 @@ export function useCheckFilter({ checkRows, isChecking }: UseCheckFilterOptions)
   });
 
   /**
-   * 检测期间冻结的可见集合 snapshot。
-   * 进入检测时记录当时的 filteredRows，期间不再重新过滤/重排——
-   * 即使行的 checkResult 实时变化（chips/徽章自动响应），列表行不会消失或乱序。
+   * 实时过滤——每次 checkRows 变化都会重算（scopedRows 返回新引用，链上 hasChanged 都为 true）。
+   *
+   * 已检测完的行在「未检测」tab 享受 `recentlyCompletedAt` hold 窗口（HOLD_MS≈2s 见 useLinkCheck.ts），
+   * 让用户先看清新状态再走 TransitionGroup leave 动画淡出；目标 tab（valid/invalid 等）
+   * 没有 hold 概念，新状态命中 matchesStatusFilter 立即出现。
    */
-  const lockedFilteredRows = shallowRef<LinkCheckRow[] | null>(null);
-
   function liveFilter(): LinkCheckRow[] {
+    const filter = statusFilter.value;
+    const sortWeight = (row: LinkCheckRow): number => {
+      if (filter === 'unchecked' && row.recentlyCompletedAt !== undefined) {
+        return SEVERITY.success;
+      }
+      return row.pinnedSortWeight ?? SEVERITY[row.checkResult?.error_type ?? 'success'] ?? SEVERITY.success;
+    };
+
     return scopedRows.value
       .filter((row) => {
         if (row.fadingOut) return true;
         if (row.recheckResult) return true;
-        return matchesStatusFilter(row, statusFilter.value);
+        if (matchesStatusFilter(row, filter)) return true;
+        // 仅"未检测"tab 享受 hold；高速模式下进入离场窗口后交给快照批量移除，不播放逐行动画。
+        if (filter === 'unchecked' && row.recentlyCompletedAt !== undefined) {
+          return !inHighThroughputMode() || row.uncheckedLeavingAt === undefined;
+        }
+        return false;
       })
       .slice()
-      .sort((left, right) =>
-        (left.pinnedSortWeight ?? SEVERITY[left.checkResult?.error_type ?? 'success'] ?? 5)
-        - (right.pinnedSortWeight ?? SEVERITY[right.checkResult?.error_type ?? 'success'] ?? 5),
-      );
+      .sort((left, right) => sortWeight(left) - sortWeight(right));
   }
 
-  const filteredRows = computed(() => lockedFilteredRows.value ?? liveFilter());
+  const liveRows = computed(() => liveFilter());
+  const filteredRows = computed(() => displayedRows.value);
 
-  if (isChecking) {
-    watch(isChecking, (now, prev) => {
-      if (now && !prev) {
-        // 进入检测：冻结当时的可见集合（数组按值 snapshot，row 对象身份保留以便实时响应 mutation）
-        lockedFilteredRows.value = liveFilter();
-      } else if (!now && prev) {
-        // 退出检测：解冻，恢复实时过滤
-        lockedFilteredRows.value = null;
+  watch(liveRows, () => {
+    if (!hasInitializedDisplay) {
+      hasInitializedDisplay = true;
+      commitDisplayedRows(inHighThroughputMode());
+      return;
+    }
+    if (inHighThroughputMode()) {
+      scheduleHighThroughputCommit();
+      return;
+    }
+    clearSnapshotCommitTimer();
+    commitDisplayedRows(restoringFromHighThroughput, restoringFromHighThroughput);
+  }, { immediate: true });
+
+  if (isHighThroughput) {
+    watch(isHighThroughput, (active, wasActive) => {
+      if (active) {
+        restoringFromHighThroughput = false;
+        suppressListMotion.value = true;
+        refreshDisplayedRowsReference();
+        return;
+      }
+      if (wasActive) {
+        restoringFromHighThroughput = true;
+        clearSnapshotCommitTimer();
+        commitDisplayedRows(true, true);
       }
     });
-    // 检测期间用户主动改 filter/服务/搜索 时手动刷一次 snapshot——
-    // 冻结只锁"行因 checkResult 变化而消失/重排"，不锁用户主观切换的视图
-    watch([statusFilter, selectedServiceId, searchQuery], () => {
-      if (isChecking.value) lockedFilteredRows.value = liveFilter();
+  }
+
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      clearSnapshotCommitTimer();
+      cancelMotionRestore();
     });
   }
 
@@ -218,6 +329,7 @@ export function useCheckFilter({ checkRows, isChecking }: UseCheckFilterOptions)
     searchInput,
     searchQuery,
     searchFocused,
+    suppressListMotion,
     scopedRows,
     filteredRows,
     visibleRows,

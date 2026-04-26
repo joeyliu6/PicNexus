@@ -1,5 +1,12 @@
-import { computed, type ComputedRef, type Ref } from 'vue';
+import { computed, getCurrentScope, onScopeDispose, ref, watch, type ComputedRef, type Ref } from 'vue';
 import type { BatchCheckProgress, LinkCheckRow, StatusFilter } from '../../types/linkCheck';
+
+/** 失速判定阈值：>N 毫秒无新结果即判定为"卡在慢域名"，向用户显式提示 */
+const STALL_THRESHOLD_MS = 10_000;
+/** 速率 EWMA 平滑系数：越高越敏感、越低越平滑（防止瞬时抖动）*/
+const RATE_EWMA_ALPHA = 0.3;
+const HIGH_THROUGHPUT_ENTER_RATE = 12;
+const HIGH_THROUGHPUT_EXIT_RATE = 6;
 
 export interface CheckStatsResult {
   total: number;
@@ -86,5 +93,128 @@ export function useCheckStats({ scopedRows, checkRows, progress }: UseCheckStats
     return '准备检测...';
   });
 
-  return { stats, serviceList, progressPercent, progressTooltip };
+  // ============================================
+  // 速率 / ETA / 失速预警
+  // ============================================
+  // 设计目标：把"系统在干活吗 + 还要多久"这两个核心问题用数字直接回答，
+  // 比堆动效更可靠——速率掉到 0 就说明卡了，逐行 spinner 反而看不出整体状态。
+
+  /** 平滑后的检测速率（条/秒），0 = 还没建立基线或已失速 */
+  const progressRate = ref(0);
+  /** 预估剩余秒数；null = 速率不足以估算（刚开始或失速）*/
+  const etaSeconds = ref<number | null>(null);
+  /** 失速：>STALL_THRESHOLD_MS 没有新结果到达，提示用户"在等慢域名" */
+  const stalled = ref(false);
+  const isHighThroughput = ref(false);
+
+  let lastChecked = 0;
+  let lastUpdateTime = 0;
+  let stallTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function clearStallTimer(): void {
+    if (stallTimer !== null) {
+      clearTimeout(stallTimer);
+      stallTimer = null;
+    }
+  }
+
+  function resetRateState(): void {
+    progressRate.value = 0;
+    etaSeconds.value = null;
+    stalled.value = false;
+    isHighThroughput.value = false;
+    lastChecked = 0;
+    lastUpdateTime = 0;
+    clearStallTimer();
+  }
+
+  function updateHighThroughputState(rate: number): void {
+    if (!isHighThroughput.value && rate >= HIGH_THROUGHPUT_ENTER_RATE) {
+      isHighThroughput.value = true;
+    } else if (isHighThroughput.value && rate <= HIGH_THROUGHPUT_EXIT_RATE) {
+      isHighThroughput.value = false;
+    }
+  }
+
+  function armStallTimer(): void {
+    clearStallTimer();
+    stallTimer = setTimeout(() => {
+      stalled.value = true;
+      isHighThroughput.value = false;
+    }, STALL_THRESHOLD_MS);
+  }
+
+  watch(progress, (cur) => {
+    if (!cur) {
+      // 检测结束/取消/重置：清零所有派生状态，下次开检从头算
+      resetRateState();
+      return;
+    }
+
+    const now = Date.now();
+
+    // 首次进度事件：仅建立基线，不算速率（dt=0 没意义）
+    if (lastUpdateTime === 0) {
+      lastChecked = cur.checked;
+      lastUpdateTime = now;
+      stalled.value = false;
+      armStallTimer();
+      return;
+    }
+
+    const dtSec = (now - lastUpdateTime) / 1000;
+    const dn = cur.checked - lastChecked;
+    if (dtSec > 0 && dn > 0) {
+      const instantRate = dn / dtSec;
+      progressRate.value = progressRate.value === 0
+        ? instantRate
+        : RATE_EWMA_ALPHA * instantRate + (1 - RATE_EWMA_ALPHA) * progressRate.value;
+
+      const remaining = Math.max(0, cur.total - cur.checked);
+      etaSeconds.value = progressRate.value > 0 ? Math.round(remaining / progressRate.value) : null;
+      updateHighThroughputState(progressRate.value);
+
+      lastChecked = cur.checked;
+      lastUpdateTime = now;
+
+      // 有新结果到达：重置失速判定
+      stalled.value = false;
+      armStallTimer();
+    }
+  });
+
+  if (getCurrentScope()) {
+    onScopeDispose(() => clearStallTimer());
+  }
+
+  /** "26m" / "1h26m" / "45s" 紧凑格式；null 时返回空串 */
+  const etaLabel = computed<string>(() => {
+    const sec = etaSeconds.value;
+    if (sec === null || !Number.isFinite(sec) || sec <= 0) return '';
+    if (sec < 60) return `${sec}s`;
+    const m = Math.round(sec / 60);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    return `${h}h${m % 60}m`;
+  });
+
+  /** "18/s" 紧凑格式；速率为 0 时返回空串 */
+  const rateLabel = computed<string>(() => {
+    const r = progressRate.value;
+    if (r <= 0) return '';
+    return r >= 10 ? `${Math.round(r)}/s` : `${r.toFixed(1)}/s`;
+  });
+
+  return {
+    stats,
+    serviceList,
+    progressPercent,
+    progressTooltip,
+    progressRate,
+    etaSeconds,
+    isHighThroughput,
+    rateLabel,
+    etaLabel,
+    stalled,
+  };
 }

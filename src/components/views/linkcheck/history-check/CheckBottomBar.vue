@@ -13,6 +13,12 @@ defineProps<{
   progressSource: 'monitor' | 'rescue' | null;
   progressPercent: number;
   progressTooltip: string;
+  /** "18/s" 已格式化的速率标签；空串表示尚未建立基线 */
+  rateLabel: string;
+  /** "26m" / "1h26m" 已格式化的剩余时间；空串表示无法估算 */
+  etaLabel: string;
+  /** >10s 没新结果到达：显示"在等慢域名"提示 */
+  stalled: boolean;
   hasSelection: boolean;
   selectedCount: number;
   isAllSelected: boolean;
@@ -76,6 +82,12 @@ const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: tr
         </span>
         <template v-else-if="isChecking && progressSource !== 'rescue'">
           <span class="page-summary">{{ progressTooltip }}</span>
+          <span v-if="rateLabel" class="rate-meta">· {{ rateLabel }}</span>
+          <span v-if="etaLabel" class="rate-meta">· 剩余 {{ etaLabel }}</span>
+          <span v-if="stalled" class="stall-hint" v-tooltip.top="'微博、知乎等图床有 per-host 限速（≤3 并发），需等待慢域名按序返回'">
+            <i class="pi pi-clock"></i>
+            等待慢域名返回
+          </span>
           <StatePill :pill="statePill" />
         </template>
         <span v-else class="page-summary">{{ bottomSummary }}</span>
@@ -148,6 +160,25 @@ const showOverflowMenu = defineModel<boolean>('showOverflowMenu', { required: tr
   color: var(--text-tertiary);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+/* 速率/ETA 元信息：跟在进度文字后，用更弱的 muted 色减轻视觉权重 */
+.rate-meta {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 失速提示：用 warning 色把"等慢域名"信号显式化，消除"是不是卡了"的焦虑 */
+.stall-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  font-size: var(--text-xs);
+  color: var(--warning);
+  white-space: nowrap;
+  cursor: help;
 }
 
 .pagination {

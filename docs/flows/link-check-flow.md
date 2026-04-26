@@ -238,10 +238,43 @@ flowchart TD
 `BatchCheckProgress` 除 `checked` / `total` / `current_url` 外，还带 `recent_results: Vec<BatchCheckItemResult>` —— 自上次广播以来累积的逐条结果。
 
 - **Rust 端**：每个任务完成后将 `BatchCheckItemResult` 推入 `pending_results` 缓冲（Mutex<Vec>）；触发节流广播时 `std::mem::take` 整批 drain 出来塞入 payload。事件频率仍由 `PROGRESS_EMIT_EVERY_N`（默认 10）控制，单次 IPC 数量不增加。
-- **前端端**：`useLinkCheck` 在 `link-check://progress` 回调里调用 `applyRecentResults`，按 `${url}::${historyId}` 用 `rowIndexMap` 做 O(1) 定位，对命中行 mutate `checkResult` 后 `triggerRef(checkRows)`——避开 32k 条 shallowRef 整数组重写的开销。
-- **配套机制**：`useCheckFilter` 接受 `isChecking: Ref<boolean>`，在检测开始时 snapshot 当前 `filteredRows` 写入 `lockedFilteredRows`，期间不再实时过滤/重排——行的 `checkResult` 变化会让顶部 chips 与列表行徽章自然响应，但行不会消失或换位置；检测结束自动解冻。
+- **前端端**：`useLinkCheck` 在 `link-check://progress` 回调里调用 `applyRecentResults`，按 `${url}::${historyId}` 用 `rowIndexMap` 做 O(1) 定位，对命中行 mutate `checkResult` 后通过 `createRafScheduler()` 把"换数组引用"动作（`checkRows.value = checkRows.value.slice()`）合并到下一帧执行——同帧多次 mutation 只触发一次重渲染，跨过 `HistoryCheckPanel` 的 prop 边界唤醒下游 computed。
+- **行级过渡（hold-with-fade）**：每条 mutation 同时打 `recentlyCompletedAt = Date.now()` 时间戳，并加入 `rowsInHold` Set。`liveFilter` 在「未检测」tab 内特别保留 `recentlyCompletedAt !== undefined` 的行，让用户能看到"灰点变绿/红"的状态变化。一个 250ms 间隔的 sweep interval 扫过 `rowsInHold`，到 `HOLD_MS=2000` 后清零时间戳→liveFilter 自然把它过滤掉→`<TransitionGroup name="row-list">` 走 leave 动画淡出（`opacity` 300ms + `position:absolute` 让下方行平滑上移）。目标 tab（valid/invalid 等）没有 hold 概念，新结果命中 matchesStatusFilter 立即出现。
+- **取消时立即归位**：`cancelCheck` 调 `clearAllHolds()` 把所有 recentlyCompletedAt 清零，残留过渡态行 ≤ 一帧内全部归位，不再拖 2s。
+- **Vue 3 同值跳过陷阱（历史教训）**：早期实现用 `lockedFilteredRows` 在检测期间冻结整个 filteredRows；Vue 3 的 `refreshComputed` 在 `hasChanged(newValue, oldValue)` 返回 false 时**不会**bump dep version，下游 visibleRows 收不到通知，即使 filteredRows 被标脏也不会重算——表现为"行级状态不更新，翻页才看到"。改为 hold-with-fade 后，每次 liveFilter 都返回 `.slice().sort()` 的新数组引用，hasChanged 总是 true，下游正常传播。
 
-**为什么这样设计**：高频整数组替换在百万级条目下会导致 GC 抖动；逐条 mutation + 显式 trigger 把代价压到 O(变化条数)。冻结可见集合是为了"用户体验稳定"——失效行检测变绿时不应该当场消失，让用户能持续看到刚才在看的那批数据。
+**为什么这样设计反馈节奏**：
+- 2000ms hold 让用户"看清"新状态（dot 变色 + 徽章），低于这个时长容易看不清就消失了
+- 300ms 淡出对应 `--duration-medium`，与项目其他过渡保持一致
+- 高速场景（59/s）下，同一帧的多条 mutation 共享几乎相同的时间戳→2000ms 后整批同步淡出，节奏稳定不会一闪一闪
+- 不引入额外动画噱头，符合"动效只在传递空间关系时才加"的设计原则——TransitionGroup 的 leave + move 传递的是"行进出列表"的空间关系，是必要的
+- **flush 时机**：检测结束（成功/取消/出错）走 `finalizeCheck`，里面调 `scheduler.flush()` 强制落地最后一批 mutation，避免还在 rAF 队列时就被 `applyResultsToRows` 的全量重赋值覆盖。
+
+**为什么这样设计**：单纯 `triggerRef(checkRows)` 在同作用域有效，但跨组件 prop 时 Vue 走引用比对——同一数组引用 = prop 没变 = 子组件不重渲染。早期实现踩过这个坑（chips/行徽章僵死），改成数组引用替换 + rAF 节流后才真正实时。冻结可见集合是为了"用户体验稳定"——失效行检测变绿时不应该当场消失，让用户能持续看到刚才在看的那批数据。
+
+**与批量迁移共享实现**：[utils/rafScheduler.ts](../../src/utils/rafScheduler.ts) 提供通用 `createRafScheduler`，被 [composables/batchMigrate/rafThrottle.ts](../../src/composables/batchMigrate/rafThrottle.ts) 与 [composables/link-check/useLinkCheck.ts](../../src/composables/link-check/useLinkCheck.ts) 共用。任何"高频 shallowRef 数组刷新 → 跨 prop 边界生效"的场景都应优先复用。
+
+### 进度反馈：速率 / ETA / 失速预警
+
+逐行 dot 变色由于 per-host 限速 + 锁定快照排序，单看一屏感知不到检测在动；底栏聚合的数字反馈才是"系统是否活跃"的可靠锚点。
+
+> **关键源文件**：[useCheckStats.ts](../../src/composables/link-check/useCheckStats.ts)（`progressRate` / `etaSeconds` / `stalled` / `rateLabel` / `etaLabel`）、[CheckBottomBar.vue](../../src/components/views/linkcheck/history-check/CheckBottomBar.vue)
+
+| 字段 | 含义 | 计算方式 |
+|------|------|---------|
+| `progressRate` | 平滑后的检测速率（条/秒） | EWMA：每次 progress 事件取 `(Δchecked / Δt)` 做指数加权移动平均，α=0.3 |
+| `etaSeconds` | 预估剩余秒数 | `(total - checked) / progressRate`；速率为 0 时为 null |
+| `stalled` | 失速标志 | 每次 progress 事件重置 `setTimeout(10s)`，超时未刷新则置 true |
+| `rateLabel` | 紧凑文字 | `>=10` 显示整数 `18/s`；`<10` 显示一位小数 `2.4/s` |
+| `etaLabel` | 紧凑文字 | `<60s` → `45s`；`<60min` → `26m`；否则 `1h26m` |
+
+**为什么聚合到底栏而非逐行**：
+1. 用户的核心问题是"系统在干活吗 + 还要多久"，速率和 ETA 一并直答
+2. 速率为 0 比"逐行 spinner 不动" 更早暴露真正的卡死（HTTP 全部 timeout 等场景）
+3. 失速预警把 per-host 限流的副作用显式化——"在等微博等慢域名"，消除卡死焦虑
+4. 不引入动画噱头，符合"动效只在传递空间关系时才加"的设计原则
+
+**何时清零**：检测结束/取消时 `progress.value = null`（[useLinkCheck.ts](../../src/composables/link-check/useLinkCheck.ts)），watcher 重置所有派生状态；下次开检从首次 progress 事件重新建立基线。
 
 ---
 
