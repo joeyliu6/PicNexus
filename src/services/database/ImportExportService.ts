@@ -69,6 +69,13 @@ export async function importHistoryFromJson(
     throw new Error('无效的 JSON 格式：期望数组');
   }
 
+  // Why: replace 模式遇到空数组会走到 deleteRowsNotIn(空 keepIds) 把本地全表清空，
+  // 这是一条没有任何拦截的"删库"路径（云端文件被手工编辑成 [] 即触发）。
+  // merge 模式遇到空数组是无操作，无需拦截。
+  if (parsed.length === 0 && mergeStrategy === 'replace') {
+    throw new Error('云端数据为空数组，已拒绝覆盖本地（防止误清空）');
+  }
+
   // 校验每条记录的必需字段，过滤掉格式不合法的数据
   const items = (parsed as HistoryItem[]).filter(item => {
     if (!item || typeof item !== 'object') return false;
@@ -114,6 +121,17 @@ export async function importHistoryFromJson(
     itemsToImport = items;
   }
 
+  // Why: replace 模式必须在 import 开始前先快照旧 id 集合，导入完成后只删除
+  // "旧集合 - 导入集合" 的差集。原实现在 import 完后 SELECT 全表来算差集，
+  // 期间任何外部 historyDB.insert（例如用户边下载边继续上传图片）写入的新 id
+  // 会被误判为"导入集没有"而被一并 DELETE，造成数据丢失。
+  const oldIdsSnapshot: Set<string> | null =
+    mergeStrategy === 'replace'
+      ? new Set(
+          (await db.select<{ id: string }[]>('SELECT id FROM history_items')).map((r) => r.id),
+        )
+      : null;
+
   // 注意：tauri-plugin-sql 基于 sqlx 连接池，每次 execute 都借用不同连接，
   // BEGIN/COMMIT 无法跨调用生效（见 plugins-workspace #886），所以不能用事务包裹。
   //
@@ -128,8 +146,10 @@ export async function importHistoryFromJson(
     onProgress?.(importedCount, itemsToImport.length);
   }
 
-  if (mergeStrategy === 'replace') {
-    await deleteRowsNotIn(db, new Set(items.map((item) => item.id)));
+  if (mergeStrategy === 'replace' && oldIdsSnapshot) {
+    const importIdSet = new Set(items.map((item) => item.id));
+    const toDelete = [...oldIdsSnapshot].filter((id) => !importIdSet.has(id));
+    await deleteByIds(db, toDelete);
   }
 
   log.info(`导入完成: ${importedCount}/${items.length} 条`);
@@ -137,26 +157,20 @@ export async function importHistoryFromJson(
 }
 
 /**
- * 删除 history_items 里所有 id 不在 keepIds 集合中的行。
- * 分批执行，避免单条 SQL 参数数量超 SQLite 上限。
+ * 按 id 列表分批 DELETE，避免单条 SQL 参数数量超 SQLite 上限。
  */
-async function deleteRowsNotIn(db: Database, keepIds: Set<string>): Promise<void> {
-  const existingRows = await db.select<{ id: string }[]>('SELECT id FROM history_items');
-  const toDelete = existingRows
-    .map((row) => row.id)
-    .filter((id) => !keepIds.has(id));
+async function deleteByIds(db: Database, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
 
-  if (toDelete.length === 0) return;
-
-  for (let i = 0; i < toDelete.length; i += BATCH_SIZE) {
-    const batch = toDelete.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    const batch = ids.slice(i, i + BATCH_SIZE);
     const placeholders = batch.map((_, idx) => `$${idx + 1}`).join(',');
     await db.execute(
       `DELETE FROM history_items WHERE id IN (${placeholders})`,
       batch
     );
   }
-  log.info(`replace 模式: 清理旧记录 ${toDelete.length} 条`);
+  log.info(`replace 模式: 清理旧记录 ${ids.length} 条`);
 }
 
 /**

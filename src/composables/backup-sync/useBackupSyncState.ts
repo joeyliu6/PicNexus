@@ -5,6 +5,7 @@ import type { SyncStatus, ProfileSyncRecord, WebDAVProfile } from '../../config/
 import { syncStatusStore } from '../../store/instances';
 import { createLogger } from '../../utils/logger';
 import { getFullTimestamp } from './backupSyncUtils';
+import type { useToast } from '../useToast';
 
 const log = createLogger('BackupSync');
 
@@ -39,6 +40,24 @@ export function useBackupSyncState() {
 
   // 配置同步后需提示用户刷新（常驻 banner，由 UI 层渲染并提供 Reload 按钮）
   const needsReload = ref(false);
+
+  // Why: 整个 backup-sync 模块原本只有各操作各自的 loading ref，操作之间没有互斥。
+  // 用户在双向同步进行中再点强制上传/合并下载，两个 putFile/importFromJSON 会并发跑，
+  // last-write-wins 直接丢数据。补一个全局锁来串行化所有云端操作。
+  const isCloudSyncing = ref(false);
+
+  function acquireCloudSync(toast: ReturnType<typeof useToast>): boolean {
+    if (isCloudSyncing.value) {
+      toast.warn('已有同步任务进行中，请稍候完成');
+      return false;
+    }
+    isCloudSyncing.value = true;
+    return true;
+  }
+
+  function releaseCloudSync(): void {
+    isCloudSyncing.value = false;
+  }
 
   // 密码请求状态（导入/下载加密数据时使用）
   // verify: 验证密码，成功返回 true；失败返回 false（不关闭对话框，允许重试）
@@ -183,6 +202,11 @@ export function useBackupSyncState() {
     historySectionExpanded,
     needsReload,
     passwordRequest,
+    isCloudSyncing,
+
+    // 云端同步互斥锁
+    acquireCloudSync,
+    releaseCloudSync,
 
     // 同步状态管理
     loadSyncStatus,

@@ -23,6 +23,8 @@ export interface BackupCloudDeps {
   downloadSettingsMenuVisible: Ref<boolean>;
   downloadHistoryMenuVisible: Ref<boolean>;
   needsReload: Ref<boolean>;
+  acquireCloudSync: (toast: ReturnType<typeof useToast>) => boolean;
+  releaseCloudSync: () => void;
 }
 
 export function createBackupCloudOps(deps: BackupCloudDeps) {

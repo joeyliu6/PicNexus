@@ -17,6 +17,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
     updateHistorySyncStatus,
     uploadHistoryLoading, downloadHistoryLoading, syncHistoryLoading,
     uploadHistoryMenuVisible, downloadHistoryMenuVisible,
+    acquireCloudSync, releaseCloudSync,
   } = deps;
 
   async function uploadHistoryForce(profile: WebDAVProfile | null): Promise<void> {
@@ -30,6 +31,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
       { header: '强制覆盖云端', acceptLabel: '覆盖', acceptClass: 'p-button-danger' }
     );
     if (!confirmed) return;
+    if (!acquireCloudSync(toast)) return;
 
     try {
       uploadHistoryLoading.value = true;
@@ -54,6 +56,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
       toast.error('上传失败', `${errorCode}\n请检查网络或 WebDAV 配置后重试`);
     } finally {
       uploadHistoryLoading.value = false;
+      releaseCloudSync();
     }
   }
 
@@ -62,6 +65,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
 
     const webdav = await getWebDAVClientAndPath(profile, 'history', toast);
     if (!webdav) return;
+    if (!acquireCloudSync(toast)) return;
 
     try {
       uploadHistoryLoading.value = true;
@@ -136,6 +140,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
       toast.error('上传失败', `${errorCode}\n请检查网络或 WebDAV 配置后重试`);
     } finally {
       uploadHistoryLoading.value = false;
+      releaseCloudSync();
     }
   }
 
@@ -144,6 +149,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
 
     const webdav = await getWebDAVClientAndPath(profile, 'history', toast);
     if (!webdav) return;
+    if (!acquireCloudSync(toast)) return;
 
     try {
       uploadHistoryLoading.value = true;
@@ -203,6 +209,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
       toast.error('上传失败', `${errorCode}\n请检查网络或 WebDAV 配置后重试`);
     } finally {
       uploadHistoryLoading.value = false;
+      releaseCloudSync();
     }
   }
 
@@ -217,6 +224,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
       { header: '覆盖本地数据', acceptLabel: '覆盖', acceptClass: 'p-button-danger' }
     );
     if (!confirmed) return;
+    if (!acquireCloudSync(toast)) return;
 
     try {
       downloadHistoryLoading.value = true;
@@ -249,6 +257,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
       toast.error('下载失败', `${errorCode}\n请检查网络或 WebDAV 配置后重试`);
     } finally {
       downloadHistoryLoading.value = false;
+      releaseCloudSync();
     }
   }
 
@@ -257,6 +266,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
 
     const webdav = await getWebDAVClientAndPath(profile, 'history', toast);
     if (!webdav) return;
+    if (!acquireCloudSync(toast)) return;
 
     try {
       downloadHistoryLoading.value = true;
@@ -297,6 +307,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
       toast.error('下载失败', `${errorCode}\n请检查网络或 WebDAV 配置后重试`);
     } finally {
       downloadHistoryLoading.value = false;
+      releaseCloudSync();
     }
   }
 
@@ -304,6 +315,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
     if (!profile) return;
     const webdav = await getWebDAVClientAndPath(profile, 'history', toast);
     if (!webdav) return;
+    if (!acquireCloudSync(toast)) return;
 
     let stage: 'download' | 'upload' = 'download';
 
@@ -323,8 +335,25 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
             emitHistoryUpdated();
           }
         }
-      } catch {
-        // 云端文件不存在，跳过下载步骤
+      } catch (downloadError) {
+        // Why: 原实现是空 catch，会把 401/网络错/解密失败/JSON 异常和"云端文件不存在"
+        // 一视同仁地吞掉，下一步的合并上传就会用本地数据整个覆盖云端，丢失增量。
+        // 历史记录比配置更不可逆，所以只容忍"文件不存在"（404 / 路径不存在），
+        // 其他错误必须抛出，让外层 catch 标记 failed 并提示用户，避免覆盖云端。
+        if (downloadError instanceof Error && downloadError.message === 'user_cancelled') {
+          throw downloadError;
+        }
+        const msg = downloadError instanceof Error ? downloadError.message : String(downloadError);
+        const isNotFound =
+          /\b404\b/.test(msg) ||
+          /not\s*found/i.test(msg) ||
+          /file.*not.*exist/i.test(msg) ||
+          msg.includes('文件不存在');
+        if (!isNotFound) {
+          log.error('拉取云端历史失败，已中止以避免覆盖云端数据:', downloadError);
+          throw downloadError;
+        }
+        log.info('云端历史文件不存在，将进行全量上传');
       }
 
       // 步骤 2：将本地数据合并上传到云端
@@ -377,6 +406,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
       }
     } finally {
       syncHistoryLoading.value = false;
+      releaseCloudSync();
     }
   }
 

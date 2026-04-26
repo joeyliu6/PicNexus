@@ -48,8 +48,13 @@ export function extractErrorCode(error: unknown): string {
   const msg = error instanceof Error ? error.message : String(error);
 
   // HTTP 状态码
-  const httpMatch = msg.match(/(?:HTTP|status(?:\s*code)?)[:\s]*(\d{3})/i)
-    || msg.match(/\b([45]\d{2})\b/);
+  // Why: 原 fallback `/\b([45]\d{2})\b/` 会把任何含 4xx/5xx 数字的错误误判为 HTTP 状态码，
+  // 比如 "Cannot connect to port 443"、"timeout after 500ms"、"parse error at column 502"
+  // 都会被翻译成"服务器返回错误 4xx"，误导用户排障。这里只匹配明确带 HTTP/status 上下文
+  // 或以 4xx/5xx + 空白 + 含义文本起始的错误体（如 "404 Not Found" / "501: ..."）。
+  const httpMatch =
+    msg.match(/(?:HTTP|status(?:\s*code)?)[:\s]*(\d{3})/i)
+    || msg.match(/(?:^|[\s(])([45]\d{2})(?=[\s:,)\-—]|\s*[A-Z])/);
   if (httpMatch) {
     const code = httpMatch[1];
     const statusTexts: Record<string, string> = {

@@ -95,6 +95,8 @@ export function useBackupSync() {
     downloadSettingsMenuVisible: state.downloadSettingsMenuVisible,
     downloadHistoryMenuVisible: state.downloadHistoryMenuVisible,
     needsReload: state.needsReload,
+    acquireCloudSync: state.acquireCloudSync,
+    releaseCloudSync: state.releaseCloudSync,
   });
 
   return {

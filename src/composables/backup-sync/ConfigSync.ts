@@ -19,11 +19,13 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
     uploadSettingsLoading, downloadSettingsLoading, syncConfigLoading,
     downloadSettingsMenuVisible,
     needsReload,
+    acquireCloudSync, releaseCloudSync,
   } = deps;
 
   async function uploadSettingsCloud(profile: WebDAVProfile | null): Promise<void> {
     const webdav = await getWebDAVClientAndPath(profile, 'settings', toast);
     if (!webdav) return;
+    if (!acquireCloudSync(toast)) return;
 
     try {
       uploadSettingsLoading.value = true;
@@ -51,6 +53,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
       toast.showConfig('error', TOAST_MESSAGES.sync.uploadFailed(errorCode));
     } finally {
       uploadSettingsLoading.value = false;
+      releaseCloudSync();
     }
   }
 
@@ -65,6 +68,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
       { header: '覆盖本地配置', acceptLabel: '覆盖', acceptClass: 'p-button-danger' }
     );
     if (!confirmed) return;
+    if (!acquireCloudSync(toast)) return;
 
     try {
       downloadSettingsLoading.value = true;
@@ -105,6 +109,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
       toast.showConfig('error', TOAST_MESSAGES.sync.downloadFailed(errorCode));
     } finally {
       downloadSettingsLoading.value = false;
+      releaseCloudSync();
     }
   }
 
@@ -113,6 +118,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
 
     const webdav = await getWebDAVClientAndPath(profile, 'settings', toast);
     if (!webdav) return;
+    if (!acquireCloudSync(toast)) return;
 
     try {
       downloadSettingsLoading.value = true;
@@ -159,6 +165,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
       toast.error('下载失败', errorCode);
     } finally {
       downloadSettingsLoading.value = false;
+      releaseCloudSync();
     }
   }
 
@@ -166,6 +173,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
     if (!profile) return;
     const webdav = await getWebDAVClientAndPath(profile, 'settings', toast);
     if (!webdav) return;
+    if (!acquireCloudSync(toast)) return;
 
     let stage: 'download' | 'upload' = 'download';
     // Why: 需要在外层 catch 里根据是否已合并云端数据来决定 toast 文案，所以声明挪到 try 之外
@@ -254,6 +262,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
       }
     } finally {
       syncConfigLoading.value = false;
+      releaseCloudSync();
     }
   }
 
