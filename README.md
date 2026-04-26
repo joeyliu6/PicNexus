@@ -8,7 +8,7 @@
 
 [![License](https://img.shields.io/badge/License-PolyForm%20Shield-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)]()
-[![Version](https://img.shields.io/badge/Version-1.0.2-green)]()
+[![Version](https://img.shields.io/badge/Version-1.0.4-green)]()
 
 </div>
 
