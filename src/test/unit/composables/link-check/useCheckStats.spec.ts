@@ -207,4 +207,39 @@ describe('useCheckStats — progressTooltip', () => {
     expect(progressTooltip.value).toContain('30');
     expect(progressTooltip.value).toContain('100');
   });
+
+  it('结构化 tooltip 包含完成数、结果统计、速度、ETA 和失速提示', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(100);
+      const rows = ref<LinkCheckRow[]>([
+        makeRow({ checkResult: { link: '', is_valid: true, error_type: 'success', browser_might_work: false } }),
+        makeRow({ checkResult: { link: '', is_valid: false, error_type: 'network', browser_might_work: false } }),
+        makeRow({ checkResult: { link: '', is_valid: false, error_type: 'suspicious', browser_might_work: true } }),
+      ]);
+      const progress = ref<BatchCheckProgress | null>(null);
+      const { progressTooltipDetails } = useCheckStats({ scopedRows: computed(() => rows.value), checkRows: rows, progress });
+
+      progress.value = { checked: 0, total: 100, current_url: '' };
+      await nextTick();
+      vi.setSystemTime(1100);
+      progress.value = { checked: 20, total: 100, current_url: '' };
+      await nextTick();
+
+      expect(progressTooltipDetails.value.items).toContainEqual({ label: '已完成', value: '20 / 100' });
+      expect(progressTooltipDetails.value.items).toContainEqual({ label: '完成度', value: '20%' });
+      expect(progressTooltipDetails.value.items).toContainEqual({ label: '正常', value: '1', tone: 'success' });
+      expect(progressTooltipDetails.value.items).toContainEqual({ label: '失败', value: '1', tone: 'danger' });
+      expect(progressTooltipDetails.value.items).toContainEqual({ label: '可疑', value: '1', tone: 'warning' });
+      expect(progressTooltipDetails.value.items).toContainEqual({ label: '速度', value: '20/s' });
+      expect(progressTooltipDetails.value.items).toContainEqual({ label: '预计剩余', value: '4s' });
+
+      vi.advanceTimersByTime(10_000);
+      await nextTick();
+
+      expect(progressTooltipDetails.value.notes).toContain('正在等待较慢的域名响应');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

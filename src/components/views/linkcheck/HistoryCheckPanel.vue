@@ -85,6 +85,7 @@ const {
   serviceList,
   progressPercent,
   progressTooltip,
+  progressTooltipDetails,
   isHighThroughput,
 } = useCheckStats({
   scopedRows,
@@ -157,6 +158,7 @@ const statePill = computed<StatePill | null>(() => {
   const progressMeta = {
     progressPercent: progressPercent.value,
     progressLabel: progressTooltip.value,
+    tooltip: progressTooltipDetails.value,
   };
   if (props.isPaused) return { tone: 'paused', icon: 'pi pi-pause', label: '已暂停', ...progressMeta };
   return { tone: 'running', label: '检测中', ...progressMeta };

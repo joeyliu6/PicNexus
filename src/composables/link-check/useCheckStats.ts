@@ -19,6 +19,18 @@ export interface CheckStatsResult {
   problems: number;
 }
 
+export interface CheckProgressTooltipItem {
+  label: string;
+  value: string;
+  tone?: 'neutral' | 'success' | 'danger' | 'warning' | 'muted';
+}
+
+export interface CheckProgressTooltip {
+  title: string;
+  items: CheckProgressTooltipItem[];
+  notes?: string[];
+}
+
 interface UseCheckStatsOptions {
   scopedRows: ComputedRef<LinkCheckRow[]>;
   checkRows: Ref<LinkCheckRow[]>;
@@ -221,11 +233,40 @@ export function useCheckStats({ scopedRows, checkRows, progress }: UseCheckStats
     return lines.join('\n');
   });
 
+  const progressTooltipDetails = computed<CheckProgressTooltip>(() => {
+    const current = progress.value;
+    if (!current || current.total <= 0) {
+      return { title: '准备检测', items: [], notes: ['正在整理待检测链接'] };
+    }
+
+    const checked = Math.min(current.checked, current.total);
+    const percent = Math.min(100, Math.round((checked / current.total) * 100));
+    const currentStats = stats.value;
+    const failed = currentStats.invalid + currentStats.timeout;
+    const items: CheckProgressTooltipItem[] = [
+      { label: '已完成', value: `${checked.toLocaleString()} / ${current.total.toLocaleString()}` },
+      { label: '完成度', value: `${percent}%` },
+      { label: '正常', value: currentStats.valid.toLocaleString(), tone: 'success' },
+      { label: '失败', value: failed.toLocaleString(), tone: failed > 0 ? 'danger' : 'neutral' },
+      { label: '可疑', value: currentStats.suspicious.toLocaleString(), tone: currentStats.suspicious > 0 ? 'warning' : 'neutral' },
+    ];
+
+    if (rateLabel.value) items.push({ label: '速度', value: rateLabel.value });
+    if (etaLabel.value) items.push({ label: '预计剩余', value: etaLabel.value });
+
+    return {
+      title: '链接检测中',
+      items,
+      notes: stalled.value ? ['正在等待较慢的域名响应'] : undefined,
+    };
+  });
+
   return {
     stats,
     serviceList,
     progressPercent,
     progressTooltip,
+    progressTooltipDetails,
     progressRate,
     etaSeconds,
     isHighThroughput,
