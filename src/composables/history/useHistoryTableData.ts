@@ -113,9 +113,16 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
     const version = ++loadVersion;
     try {
       isLoadingPage.value = true;
-      const result = await peekPage(currentPage.value);
+      let result = await peekPage(currentPage.value);
 
       if (version !== loadVersion) return;
+      const maxPage = Math.max(1, Math.ceil(result.total / pageSize.value));
+      if (result.total > 0 && result.items.length === 0 && currentPage.value > maxPage) {
+        currentPage.value = maxPage;
+        first.value = (maxPage - 1) * pageSize.value;
+        result = await peekPage(maxPage);
+        if (version !== loadVersion) return;
+      }
       currentPageData.value = result.items;
       totalRecords.value = result.total;
     } catch (error) {

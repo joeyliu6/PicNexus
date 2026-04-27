@@ -407,6 +407,7 @@ class HistoryDatabase {
       params.push(serviceFilter);
     }
 
+    const countParams = [...params];
     const limitOffset = `LIMIT ${nextParam()}`;
     params.push(limit);
     const offsetClause = `OFFSET ${nextParam()}`;
@@ -417,7 +418,14 @@ class HistoryDatabase {
       params
     );
 
-    const total = rows[0]?._total || 0;
+    let total = rows[0]?._total ?? 0;
+    if (rows.length === 0 && offset > 0) {
+      const countRows = await db.select<{ count: number }[]>(
+        `SELECT COUNT(*) as count FROM history_items ${whereClause}`,
+        countParams
+      );
+      total = countRows[0]?.count ?? 0;
+    }
     const items = rows.map((row) => rowToItem(row));
     const hasMore = offset + items.length < total;
     return { items, total, hasMore };

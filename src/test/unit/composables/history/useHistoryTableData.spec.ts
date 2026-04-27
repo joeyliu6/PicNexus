@@ -299,4 +299,39 @@ describe('useHistoryTableData', () => {
     expect(unlistenDeletedMock).toHaveBeenCalledTimes(1);
     expect(unlistenClearedMock).toHaveBeenCalledTimes(1);
   });
+
+  it('falls back to the last valid page when deletion makes the current page empty', async () => {
+    loadPageByNumberMock
+      .mockResolvedValueOnce({
+        items: [{ id: 'last' }],
+        total: 51,
+      })
+      .mockResolvedValueOnce({
+        items: [],
+        total: 50,
+      })
+      .mockResolvedValueOnce({
+        items: [{ id: 'first' }],
+        total: 50,
+      });
+
+    const harness = mountHarness({
+      filter: ref('all'),
+      searchTerm: ref(''),
+      viewState: makeViewState(),
+    });
+    await flushPromises();
+
+    harness.api().currentPage.value = 2;
+    harness.api().first.value = 50;
+    eventHandlers['history-deleted']();
+    await flushPromises();
+
+    expect(loadPageByNumberMock).toHaveBeenNthCalledWith(2, 2, 50, 'all');
+    expect(loadPageByNumberMock).toHaveBeenNthCalledWith(3, 1, 50, 'all');
+    expect(harness.api().currentPage.value).toBe(1);
+    expect(harness.api().first.value).toBe(0);
+    expect(harness.api().currentPageData.value).toEqual([{ id: 'first' }]);
+    expect(harness.api().totalRecords.value).toBe(50);
+  });
 });
