@@ -33,6 +33,9 @@ coverage/
 
 .cursorrules
 
+# Codex project-local skills/config
+.codex/
+
 .claude/
 CLAUDE.md
 
