@@ -5,6 +5,7 @@ import type { UserConfig } from '../../../../config/types';
 
 vi.mock('../../../../composables/useThumbCache', () => ({
   getMetaThumbnailUrl: (_meta: unknown, _config: unknown) => 'https://thumb.example.com/img.jpg',
+  getMetaThumbnailCandidates: (_meta: unknown, _config: unknown) => ['https://thumb.example.com/img.jpg'],
 }));
 
 vi.mock('../../../../utils/logger', () => ({
@@ -140,6 +141,26 @@ describe('selectedAvailableServices', () => {
     }));
     expect(selectedAvailableServices.value).toHaveLength(1);
     expect(selectedAvailableServices.value[0]).toEqual({ serviceId: 'r2', count: 2 });
+  });
+
+  it('selected multi-mirror images expose every copyable service', () => {
+    const metas = [
+      makeMeta({
+        id: 'a',
+        primaryService: 'r2' as import('../../../../config/types').ServiceType,
+        mirrorServices: [
+          { serviceId: 'r2' as import('../../../../config/types').ServiceType, url: 'https://r2.example.com/a.jpg' },
+          { serviceId: 'weibo' as import('../../../../config/types').ServiceType, url: 'https://weibo.example.com/a.jpg' },
+        ],
+      }),
+    ];
+    const { selectedAvailableServices } = useTimelineData(makeOptions(metas, {
+      selectedIdList: computed(() => ['a']),
+    }));
+    expect(selectedAvailableServices.value).toEqual([
+      { serviceId: 'r2', count: 1 },
+      { serviceId: 'weibo', count: 1 },
+    ]);
   });
 });
 

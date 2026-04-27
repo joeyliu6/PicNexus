@@ -90,7 +90,12 @@ export function useTimelineData(options: UseTimelineDataOptions) {
     const serviceCountMap = new Map<string, number>();
     for (const meta of filteredMetas.value) {
       if (idSet.has(meta.id)) {
-        serviceCountMap.set(meta.primaryService, (serviceCountMap.get(meta.primaryService) ?? 0) + 1);
+        const services = meta.mirrorServices?.length
+          ? meta.mirrorServices.map(service => service.serviceId)
+          : [meta.primaryService];
+        for (const serviceId of new Set(services)) {
+          serviceCountMap.set(serviceId, (serviceCountMap.get(serviceId) ?? 0) + 1);
+        }
       }
     }
     return Array.from(serviceCountMap.entries()).map(([serviceId, count]) => ({
