@@ -108,7 +108,7 @@ function mockRect(el: HTMLElement, rect: Partial<DOMRect>) {
   });
 }
 
-function appendSourceThumb(itemId: string) {
+function appendSourceThumb(itemId: string, parent: HTMLElement = document.body) {
   const wrapper = document.createElement('div');
   wrapper.className = 'thumb-preview-wrapper';
   mockRect(wrapper, { left: 0, top: 0, right: 36, bottom: 36, width: 36, height: 36 });
@@ -117,21 +117,38 @@ function appendSourceThumb(itemId: string) {
   thumb.className = 'thumb-box';
   thumb.dataset.lightboxId = itemId;
   wrapper.appendChild(thumb);
-  document.body.appendChild(wrapper);
+  parent.appendChild(wrapper);
   return wrapper;
 }
 
-function mountHarness(item = makeItem()) {
+function mountHarness(
+  item = makeItem(),
+  options: {
+    currentPageData?: Ref<HistoryItem[]>;
+    currentPage?: Ref<number>;
+    totalPages?: Ref<number>;
+    goToPage?: (pageNumber: number) => Promise<void>;
+    peekPage?: (pageNumber: number) => Promise<{ items: HistoryItem[]; total: number }>;
+  } = {},
+) {
   let api: ReturnType<typeof useTableInteractions> | null = null;
-  const currentPageData = ref([item]) as Ref<HistoryItem[]>;
+  const currentPageData = options.currentPageData ?? ref([item]) as Ref<HistoryItem[]>;
+  const currentPage = options.currentPage ?? ref(1);
+  const totalPages = options.totalPages ?? ref(1);
+  const goToPage = options.goToPage ?? vi.fn().mockResolvedValue(undefined);
+  const peekPage = options.peekPage ?? vi.fn(async () => ({
+    items: currentPageData.value,
+    total: currentPageData.value.length,
+  }));
 
   const Harness = defineComponent({
     setup() {
       api = useTableInteractions({
         currentPageData,
-        currentPage: ref(1),
-        totalPages: ref(1),
-        goToPage: vi.fn().mockResolvedValue(undefined),
+        currentPage,
+        totalPages,
+        goToPage,
+        peekPage,
         getSuccessfulServices: vi.fn(() => []),
         servicePopoverRef: ref(null),
       });
@@ -200,5 +217,167 @@ describe('useTableInteractions lightbox close preview motion', () => {
 
     harness.api().handlePreviewLeave();
     expect(harness.api().hoverPreview.value.visible).toBe(false);
+  });
+});
+
+describe('useTableInteractions lightbox cross-page tracking', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+    document.body.innerHTML = '';
+  });
+
+  it('lands on a prefetched crossed-page item before syncing the table page', async () => {
+    const lastItem = makeItem('page-1-last');
+    const nextItem = makeItem('page-2-first');
+    const currentPageData = ref([lastItem]) as Ref<HistoryItem[]>;
+    const currentPage = ref(1);
+    const goToPage = vi.fn(async (pageNumber: number) => {
+      currentPage.value = pageNumber;
+      currentPageData.value = [nextItem];
+    });
+    const targetWrapper = appendSourceThumb(nextItem.id);
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(targetWrapper, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    const peekPage = vi.fn().mockResolvedValue({
+      items: [nextItem],
+      total: 2,
+    });
+    const harness = mountHarness(lastItem, {
+      currentPageData,
+      currentPage,
+      totalPages: ref(2),
+      goToPage,
+      peekPage,
+    });
+
+    harness.api().openLightbox(lastItem);
+    await harness.api().handleLightboxNavigate('next');
+
+    expect(peekPage).toHaveBeenCalledWith(2);
+    expect(goToPage).not.toHaveBeenCalled();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(harness.api().lightboxItem.value?.id).toBe(nextItem.id);
+  });
+
+  it('uses the history scroll container instead of document scrolling when available', async () => {
+    const firstItem = makeItem('page-item-1');
+    const secondItem = makeItem('page-item-2');
+    const historyContainer = document.createElement('div');
+    historyContainer.className = 'history-container';
+    mockRect(historyContainer, {
+      left: 0,
+      right: 640,
+      top: 100,
+      bottom: 500,
+      width: 640,
+      height: 400,
+    });
+    Object.defineProperty(historyContainer, 'clientHeight', { configurable: true, value: 400 });
+    Object.defineProperty(historyContainer, 'scrollHeight', { configurable: true, value: 1000 });
+    historyContainer.scrollTop = 0;
+    document.body.appendChild(historyContainer);
+
+    const targetWrapper = appendSourceThumb(secondItem.id, historyContainer);
+    mockRect(targetWrapper, {
+      left: 0,
+      right: 36,
+      top: 520,
+      bottom: 556,
+      width: 36,
+      height: 36,
+    });
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(targetWrapper, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    const harness = mountHarness(firstItem, {
+      currentPageData: ref([firstItem, secondItem]) as Ref<HistoryItem[]>,
+    });
+
+    harness.api().openLightbox(firstItem);
+    await harness.api().handleLightboxNavigate('next');
+
+    expect(historyContainer.scrollTop).toBe(238);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(harness.api().lightboxItem.value?.id).toBe(secondItem.id);
+  });
+
+  it('does not move the history scroll container when the target thumb is already visible', async () => {
+    const firstItem = makeItem('visible-item-1');
+    const secondItem = makeItem('visible-item-2');
+    const historyContainer = document.createElement('div');
+    historyContainer.className = 'history-container';
+    mockRect(historyContainer, {
+      left: 0,
+      right: 640,
+      top: 100,
+      bottom: 500,
+      width: 640,
+      height: 400,
+    });
+    Object.defineProperty(historyContainer, 'clientHeight', { configurable: true, value: 400 });
+    Object.defineProperty(historyContainer, 'scrollHeight', { configurable: true, value: 1000 });
+    historyContainer.scrollTop = 123;
+    document.body.appendChild(historyContainer);
+
+    const targetWrapper = appendSourceThumb(secondItem.id, historyContainer);
+    mockRect(targetWrapper, {
+      left: 0,
+      right: 36,
+      top: 200,
+      bottom: 236,
+      width: 36,
+      height: 36,
+    });
+    const harness = mountHarness(firstItem, {
+      currentPageData: ref([firstItem, secondItem]) as Ref<HistoryItem[]>,
+    });
+
+    harness.api().openLightbox(firstItem);
+    await harness.api().handleLightboxNavigate('next');
+
+    expect(historyContainer.scrollTop).toBe(123);
+    expect(harness.api().lightboxItem.value?.id).toBe(secondItem.id);
+  });
+});
+
+describe('useTableInteractions hover preview positioning', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+    document.body.innerHTML = '';
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 720 });
+  });
+
+  it('centers wide short previews by their rendered height instead of a 300px square', () => {
+    const item = {
+      ...makeItem('wide-short'),
+      width: 240,
+      height: 48,
+      aspectRatio: 5,
+    };
+    const source = document.createElement('div');
+    mockRect(source, {
+      left: 320,
+      right: 356,
+      top: 180,
+      bottom: 216,
+      width: 36,
+      height: 36,
+    });
+    const harness = mountHarness(item);
+
+    harness.api().handlePreviewEnter({ currentTarget: source } as unknown as MouseEvent, item);
+
+    expect(harness.api().hoverPreview.value.style).toEqual({
+      top: '174px',
+      left: '364px',
+    });
   });
 });

@@ -50,7 +50,7 @@ const {
 const {
   currentPageData, currentPage, pageSize, totalRecords, totalPages, isLoadingPage, first,
   selectAll, skeletonData, formatTime,
-  onPageChange, goToPage, handleHeaderCheckboxChange, getSuccessfulServices, selectedAvailableServices,
+  onPageChange, goToPage, peekPage, handleHeaderCheckboxChange, getSuccessfulServices, selectedAvailableServices,
 } = useHistoryTableData({
   filter: computed(() => props.filter),
   searchTerm: computed(() => props.searchTerm),
@@ -74,6 +74,7 @@ const {
   hoverPreview, handlePreviewEnter, handlePreviewLeave,
 } = useTableInteractions({
   currentPageData, currentPage, totalPages, goToPage,
+  peekPage,
   getSuccessfulServices, servicePopoverRef,
 });
 

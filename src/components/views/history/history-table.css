@@ -1,53 +1,5 @@
 /* history-table.css — DataTable 深度选择器样式，从 HistoryTableView.vue 提取 */
 
-/* ---- 分页器 ---- */
-:deep(.p-paginator) {
-  background: transparent;
-  border: none;
-  border-top: 1px solid var(--border-subtle);
-  padding: var(--space-md) var(--space-lg);
-  gap: var(--space-xs);
-}
-
-:deep(.p-paginator .p-paginator-pages .p-paginator-page) {
-  min-width: 32px;
-  height: 32px;
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  transition: all var(--duration-fast) ease;
-}
-
-:deep(.p-paginator .p-paginator-pages .p-paginator-page:hover) {
-  background: var(--hover-overlay-subtle);
-  color: var(--text-primary);
-}
-
-:deep(.p-paginator .p-paginator-pages .p-paginator-page.p-highlight) {
-  background: var(--primary);
-  color: var(--text-on-primary);
-  font-weight: var(--weight-semibold);
-}
-
-:deep(.p-paginator .p-paginator-first),
-:deep(.p-paginator .p-paginator-prev),
-:deep(.p-paginator .p-paginator-next),
-:deep(.p-paginator .p-paginator-last) {
-  min-width: 32px;
-  height: 32px;
-  border-radius: var(--radius-md);
-  color: var(--text-muted);
-  transition: all var(--duration-fast) ease;
-}
-
-:deep(.p-paginator .p-paginator-first:hover),
-:deep(.p-paginator .p-paginator-prev:hover),
-:deep(.p-paginator .p-paginator-next:hover),
-:deep(.p-paginator .p-paginator-last:hover) {
-  background: var(--hover-overlay-subtle);
-  color: var(--text-primary);
-}
-
 /* 翻页中：保留旧数据可读，只变暗 tbody + 锁分页器，给用户原地替换的感知 */
 /* transition 放在基础规则上（而非仅 .is-paginating），否则离开态 opacity 不走补间 */
 .table-view-container :deep(.p-datatable-tbody) {
@@ -56,11 +8,6 @@
 
 .table-view-container.is-paginating :deep(.p-datatable-tbody) {
   opacity: 0.55;
-  pointer-events: none;
-}
-
-.table-view-container.is-paginating :deep(.p-paginator) {
-  opacity: 0.5;
   pointer-events: none;
 }
 

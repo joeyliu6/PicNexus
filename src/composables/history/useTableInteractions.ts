@@ -3,7 +3,7 @@
  * 包含：灯箱、服务 Popover、悬浮预览、复制链接
  * 从 HistoryTableView.vue 提取
  */
-import { ref, computed, watch, nextTick, onUnmounted, type Ref } from 'vue';
+import { ref, shallowRef, computed, watch, nextTick, onUnmounted, type Ref } from 'vue';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type PopoverType from 'primevue/popover';
 import type { HistoryItem } from '../../config/types';
@@ -44,16 +44,28 @@ interface UseTableInteractionsOptions {
   totalPages: Ref<number>;
   /** 程序化翻页；返回新页加载完成的 Promise */
   goToPage: (pageNumber: number) => Promise<void>;
+  /** 轻量预取页数据，不立即更新表格 */
+  peekPage: (pageNumber: number) => Promise<{ items: HistoryItem[]; total: number }>;
   /** 获取某条记录的成功上传服务列表 */
   getSuccessfulServices: (item: HistoryItem) => string[];
   /** Popover 组件 template ref（由调用方声明，以避免 vue-tsc TS6133） */
   servicePopoverRef: Ref<InstanceType<typeof PopoverType> | null>;
 }
 
+interface PreviewSize {
+  width: number;
+  height: number;
+}
+
+interface TargetVisibilityResult {
+  found: boolean;
+  scrolled: boolean;
+}
+
 export function useTableInteractions(options: UseTableInteractionsOptions) {
   const {
     currentPageData, currentPage, totalPages, goToPage,
-    getSuccessfulServices, servicePopoverRef,
+    peekPage, getSuccessfulServices, servicePopoverRef,
   } = options;
 
   const toast = useToast();
@@ -65,6 +77,8 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   // ---- 灯箱 ----
   const lightboxVisible = ref(false);
   const lightboxItem = ref<HistoryItem | null>(null);
+  const lightboxPageData = shallowRef<HistoryItem[]>([]);
+  const lightboxPage = ref(1);
   let openingTimer: ReturnType<typeof setTimeout> | null = null;
   let closingTimer: ReturnType<typeof setTimeout> | null = null;
   const isLightboxOpening = ref(false);
@@ -98,16 +112,16 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
 
   const lightboxIndex = computed(() => {
     if (!lightboxItem.value) return -1;
-    return currentPageData.value.findIndex((item) => item.id === lightboxItem.value!.id);
+    return lightboxPageData.value.findIndex((item) => item.id === lightboxItem.value!.id);
   });
   // 跨页能力：到当前页边界时，只要还有相邻页就允许继续翻（handleLightboxNavigate 内部触发加载）
   const lightboxHasPrev = computed(() =>
-    lightboxIndex.value > 0 || currentPage.value > 1,
+    lightboxIndex.value > 0 || lightboxPage.value > 1,
   );
   const lightboxHasNext = computed(() => {
     const idx = lightboxIndex.value;
     if (idx < 0) return false;
-    return idx < currentPageData.value.length - 1 || currentPage.value < totalPages.value;
+    return idx < lightboxPageData.value.length - 1 || lightboxPage.value < totalPages.value;
   });
 
   function openLightbox(item: HistoryItem, event?: MouseEvent): void {
@@ -126,6 +140,8 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     // 让 PhotoSwipe 能从预览元素做 FLIP 过渡
     isLightboxOpening.value = true;
     warmImages([thumbCache.getMediumImageUrl(item), getItemImageUrl(item)]);
+    lightboxPageData.value = currentPageData.value;
+    lightboxPage.value = currentPage.value;
     lightboxItem.value = item;
     lightboxVisible.value = true;
     if (openingTimer) clearTimeout(openingTimer);
@@ -140,56 +156,157 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   // 防抖 100ms 后并发预热前后两张大图。这里只需提供"按方向解析 URL"的同步逻辑。
   useLightboxPreloader({
     currentItemId: computed(() => lightboxItem.value?.id ?? null),
-    resolveAdjacentUrl: (direction) => {
+    resolveAdjacentUrl: async (direction) => {
       const idx = lightboxIndex.value;
       if (idx < 0) return null;
       const targetIdx = direction === 'prev' ? idx - 1 : idx + 1;
-      const target = currentPageData.value[targetIdx];
-      return target ? getItemImageUrl(target) : null;
+      const target = lightboxPageData.value[targetIdx];
+      if (target) return getItemImageUrl(target);
+
+      const targetPage = direction === 'prev' ? lightboxPage.value - 1 : lightboxPage.value + 1;
+      if (targetPage < 1 || targetPage > totalPages.value) return null;
+      const result = await peekPage(targetPage);
+      const adjacent = direction === 'prev'
+        ? result.items[result.items.length - 1]
+        : result.items[0];
+      return adjacent ? getItemImageUrl(adjacent) : null;
     },
   });
 
   // 跨页导航并发保护：用户快按时多次 goToPage 会互相作废（loadVersion 机制），
   // 用 isCrossingPage 直接忽略重入，保证 lightboxItem 的落点与最终页数据一致
   let isCrossingPage = false;
+  let tableSyncVersion = 0;
 
   /** 切到新图的公共收尾：过继悬浮预览（预加载由 useLightboxPreloader 自动接管） */
-  function landOnItem(item: HistoryItem): void {
+  async function landOnItem(item: HistoryItem, options: { ensureVisible?: boolean } = {}): Promise<void> {
+    if (options.ensureVisible !== false) {
+      const visibility = ensureLightboxTargetVisible(item);
+      if (visibility.scrolled) await waitForFrame();
+    }
     lightboxItem.value = item;
     if (hoverPreview.value.visible) syncHoverPreviewToItem(item);
   }
 
+  function scheduleTablePageSync(pageNumber: number): void {
+    const version = ++tableSyncVersion;
+    void (async () => {
+      await waitForFrame();
+      await waitForFrame();
+      if (version !== tableSyncVersion || lightboxPage.value !== pageNumber) return;
+      await goToPage(pageNumber);
+      await nextTick();
+
+      const item = lightboxItem.value;
+      if (!item || lightboxPage.value !== pageNumber) return;
+      const visibility = ensureLightboxTargetVisible(item);
+      if (visibility.scrolled) await waitForFrame();
+      if (hoverPreview.value.visible) syncHoverPreviewToItem(item);
+    })().catch((error) => {
+      logger.error('灯箱同步表格页失败:', error);
+    });
+  }
+
+  function findThumbWrapper(itemId: string): HTMLElement | null {
+    const thumbBox = document.querySelector<HTMLElement>(
+      `.thumb-box[data-lightbox-id="${CSS.escape(itemId)}"]`,
+    );
+    return thumbBox?.closest<HTMLElement>('.thumb-preview-wrapper') ?? null;
+  }
+
+  function waitForFrame(): Promise<void> {
+    if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+  }
+
+  function findScrollContainer(el: HTMLElement): HTMLElement | null {
+    const historyContainer = el.closest<HTMLElement>('.history-container');
+    if (historyContainer) return historyContainer;
+
+    let parent = el.parentElement;
+    while (parent && parent !== document.body) {
+      const style = window.getComputedStyle(parent);
+      const canScrollY = /(auto|scroll|overlay)/.test(style.overflowY);
+      if (canScrollY && parent.scrollHeight > parent.clientHeight) return parent;
+      parent = parent.parentElement;
+    }
+    return null;
+  }
+
+  function isFullyVisibleInContainer(el: HTMLElement, container: HTMLElement): boolean {
+    const rect = el.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    return rect.top >= containerRect.top + PREVIEW_MARGIN &&
+      rect.bottom <= containerRect.bottom - PREVIEW_MARGIN;
+  }
+
+  function centerElementInContainer(el: HTMLElement, container: HTMLElement): void {
+    const rect = el.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const elementTop = container.scrollTop + rect.top - containerRect.top;
+    const targetScrollTop = elementTop - (container.clientHeight - rect.height) / 2;
+    const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+    container.scrollTop = Math.min(maxScrollTop, Math.max(0, targetScrollTop));
+  }
+
+  function ensureLightboxTargetVisible(item: HistoryItem): TargetVisibilityResult {
+    const wrapper = findThumbWrapper(item.id);
+    if (!wrapper) return { found: false, scrolled: false };
+
+    const scrollContainer = findScrollContainer(wrapper);
+    if (scrollContainer) {
+      if (isFullyVisibleInContainer(wrapper, scrollContainer)) {
+        return { found: true, scrolled: false };
+      }
+      centerElementInContainer(wrapper, scrollContainer);
+      return { found: true, scrolled: true };
+    }
+
+    wrapper.scrollIntoView({
+      block: 'center',
+      inline: 'nearest',
+      behavior: 'auto',
+    });
+    return { found: true, scrolled: true };
+  }
+
   async function handleLightboxNavigate(direction: 'prev' | 'next'): Promise<void> {
     const idx = lightboxIndex.value;
-    const data = currentPageData.value;
+    const data = lightboxPageData.value;
 
     // 页内直接切
     if (direction === 'next' && idx >= 0 && idx < data.length - 1) {
-      landOnItem(data[idx + 1]);
+      await landOnItem(data[idx + 1]);
       return;
     }
     if (direction === 'prev' && idx > 0) {
-      landOnItem(data[idx - 1]);
+      await landOnItem(data[idx - 1]);
       return;
     }
 
     // 跨页：达到当前页边界，触发相邻页加载，表格页码随灯箱自动跟随
     if (isCrossingPage) return;
-    if (direction === 'next' && currentPage.value >= totalPages.value) return;
-    if (direction === 'prev' && currentPage.value <= 1) return;
+    if (direction === 'next' && lightboxPage.value >= totalPages.value) return;
+    if (direction === 'prev' && lightboxPage.value <= 1) return;
 
     isCrossingPage = true;
     try {
-      const targetPage = direction === 'next' ? currentPage.value + 1 : currentPage.value - 1;
-      await goToPage(targetPage);
+      const targetPage = direction === 'next' ? lightboxPage.value + 1 : lightboxPage.value - 1;
+      const result = await peekPage(targetPage);
       // 等 DataTable 把新页渲染到 DOM：syncHoverPreviewToItem 要查
       // .thumb-box[data-lightbox-id="..."]，不等 tick 新页行还没挂上
       await nextTick();
-      const newData = currentPageData.value;
+      const newData = result.items;
       if (newData.length === 0) return;
       // next → 新页第 0 张；prev → 新页末张（保持"越切越老/越切越新"的时间方向连续）
       const landIndex = direction === 'next' ? 0 : newData.length - 1;
-      landOnItem(newData[landIndex]);
+      const targetItem = newData[landIndex];
+      lightboxPage.value = targetPage;
+      lightboxPageData.value = newData;
+      await landOnItem(targetItem, { ensureVisible: false });
+      scheduleTablePageSync(targetPage);
     } catch (error) {
       logger.error('灯箱跨页失败:', error);
     } finally {
@@ -197,16 +314,39 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     }
   }
 
-  /** 根据目标行 rect 计算 300px 预览的 top/left（避让视口边界） */
-  function computePreviewPosition(anchor: DOMRect): { top: number; left: number } {
-    let top = anchor.top + anchor.height / 2 - PREVIEW_MAX_SIZE / 2;
+  function computePreviewSize(item: HistoryItem): PreviewSize {
+    const width = Number(item.width);
+    const height = Number(item.height);
+
+    if (Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0) {
+      const scale = Math.min(1, PREVIEW_MAX_SIZE / width, PREVIEW_MAX_SIZE / height);
+      return {
+        width: width * scale,
+        height: height * scale,
+      };
+    }
+
+    const aspectRatio = Number(item.aspectRatio);
+    if (Number.isFinite(aspectRatio) && aspectRatio > 0) {
+      if (aspectRatio >= 1) {
+        return { width: PREVIEW_MAX_SIZE, height: PREVIEW_MAX_SIZE / aspectRatio };
+      }
+      return { width: PREVIEW_MAX_SIZE * aspectRatio, height: PREVIEW_MAX_SIZE };
+    }
+
+    return { width: PREVIEW_MAX_SIZE, height: PREVIEW_MAX_SIZE };
+  }
+
+  /** 根据目标行 rect 计算预览的 top/left（避让视口边界） */
+  function computePreviewPosition(anchor: DOMRect, previewSize: PreviewSize): { top: number; left: number } {
+    let top = anchor.top + anchor.height / 2 - previewSize.height / 2;
     let left = anchor.right + PREVIEW_MARGIN;
     if (top < PREVIEW_MARGIN) top = PREVIEW_MARGIN;
-    if (top + PREVIEW_MAX_SIZE > window.innerHeight - PREVIEW_MARGIN) {
-      top = window.innerHeight - PREVIEW_MAX_SIZE - PREVIEW_MARGIN;
+    if (top + previewSize.height > window.innerHeight - PREVIEW_MARGIN) {
+      top = window.innerHeight - previewSize.height - PREVIEW_MARGIN;
     }
-    if (left + PREVIEW_MAX_SIZE > window.innerWidth - PREVIEW_MARGIN) {
-      left = anchor.left - PREVIEW_MAX_SIZE - PREVIEW_MARGIN;
+    if (left + previewSize.width > window.innerWidth - PREVIEW_MARGIN) {
+      left = anchor.left - previewSize.width - PREVIEW_MARGIN;
     }
     if (left < PREVIEW_MARGIN) left = PREVIEW_MARGIN;
     return { top, left };
@@ -219,17 +359,14 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   function syncHoverPreviewToItem(item: HistoryItem): void {
     // CSS.escape 防御：即便 HistoryItem.id 当前由 Rust 侧生成 UUID 不含特殊字符，
     // 未来若 id 规则变动（例如混入文件名派生）拼接特殊字符会让选择器构造失败
-    const thumbBox = document.querySelector<HTMLElement>(
-      `.thumb-box[data-lightbox-id="${CSS.escape(item.id)}"]`,
-    );
-    const wrapper = thumbBox?.closest<HTMLElement>('.thumb-preview-wrapper');
+    const wrapper = findThumbWrapper(item.id);
     const url = thumbCache.getMediumImageUrl(item);
     if (!wrapper || !url) {
       hoverPreview.value.visible = false;
       hoverPreview.value.closing = false;
       return;
     }
-    const { top, left } = computePreviewPosition(wrapper.getBoundingClientRect());
+    const { top, left } = computePreviewPosition(wrapper.getBoundingClientRect(), computePreviewSize(item));
     hoverPreview.value = {
       visible: true,
       closing: false,
@@ -311,7 +448,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     if (!url) return;
     warmImages([url, getItemImageUrl(item)]);
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    const { top, left } = computePreviewPosition(rect);
+    const { top, left } = computePreviewPosition(rect, computePreviewSize(item));
     hoverPreview.value = { visible: true, closing: false, url, alt: item.localFileName, itemId: item.id, style: { top: `${top}px`, left: `${left}px` } };
   }
 
@@ -365,6 +502,15 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
         isLightboxClosing.value = false;
         closingTimer = null;
       }, motionDuration(CLOSING_DURATION));
+    }
+  });
+
+  watch([currentPageData, currentPage], ([pageData, page]) => {
+    const current = lightboxItem.value;
+    if (!lightboxVisible.value || !current) return;
+    if (pageData.some((item) => item.id === current.id)) {
+      lightboxPageData.value = pageData;
+      lightboxPage.value = page;
     }
   });
 

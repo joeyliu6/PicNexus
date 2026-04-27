@@ -38,6 +38,11 @@ interface UseHistoryTableDataOptions {
 
 const log = createLogger('HistoryTableData');
 
+interface TablePageResult {
+  items: HistoryItem[];
+  total: number;
+}
+
 export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewState: externalViewState }: UseHistoryTableDataOptions) {
   const toast = useToast();
   const historyManager = useHistoryManager();
@@ -62,25 +67,53 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
   });
 
   let loadVersion = 0;
+  const pageCache = new Map<string, TablePageResult>();
+
+  function getPageCacheKey(pageNumber: number): string {
+    return [
+      filter.value,
+      searchTerm.value?.trim() ?? '',
+      pageSize.value,
+      pageNumber,
+    ].join('\u0000');
+  }
+
+  function clearPageCache(): void {
+    pageCache.clear();
+  }
+
+  async function fetchPage(pageNumber: number): Promise<TablePageResult> {
+    const hasSearch = searchTerm.value?.trim();
+
+    if (hasSearch) {
+      return historyManager.searchHistory(searchTerm.value, {
+        serviceFilter: filter.value === 'all' ? undefined : filter.value,
+        limit: pageSize.value,
+        offset: (pageNumber - 1) * pageSize.value,
+      });
+    }
+
+    return historyManager.loadPageByNumber(
+      pageNumber, pageSize.value, filter.value,
+    );
+  }
+
+  async function peekPage(pageNumber: number): Promise<TablePageResult> {
+    const target = Math.max(1, Math.min(pageNumber, totalPages.value));
+    const key = getPageCacheKey(target);
+    const cached = pageCache.get(key);
+    if (cached) return cached;
+
+    const result = await fetchPage(target);
+    pageCache.set(key, result);
+    return result;
+  }
 
   async function loadCurrentPage() {
     const version = ++loadVersion;
     try {
       isLoadingPage.value = true;
-      const hasSearch = searchTerm.value?.trim();
-
-      let result: { items: HistoryItem[]; total: number };
-      if (hasSearch) {
-        result = await historyManager.searchHistory(searchTerm.value, {
-          serviceFilter: filter.value === 'all' ? undefined : filter.value,
-          limit: pageSize.value,
-          offset: (currentPage.value - 1) * pageSize.value,
-        });
-      } else {
-        result = await historyManager.loadPageByNumber(
-          currentPage.value, pageSize.value, filter.value,
-        );
-      }
+      const result = await peekPage(currentPage.value);
 
       if (version !== loadVersion) return;
       currentPageData.value = result.items;
@@ -132,14 +165,17 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
   onMounted(async () => {
     [unlistenUpdated, unlistenDeleted, unlistenCleared] = await Promise.all([
       onCacheEventType('history-updated', () => {
+        clearPageCache();
         currentPage.value = 1;
         first.value = 0;
         loadCurrentPage();
       }),
       onCacheEventType('history-deleted', () => {
+        clearPageCache();
         loadCurrentPage();
       }),
       onCacheEventType('history-cleared', () => {
+        clearPageCache();
         currentPage.value = 1;
         first.value = 0;
         loadCurrentPage();
@@ -155,6 +191,7 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
   });
 
   watch([filter, searchTerm], () => {
+    clearPageCache();
     currentPage.value = 1;
     first.value = 0;
     viewState.clearSelection();
@@ -219,6 +256,7 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
     isSkeleton,
     formatTime,
     loadCurrentPage,
+    peekPage,
     onPageChange,
     goToPage,
     handleHeaderCheckboxChange,
