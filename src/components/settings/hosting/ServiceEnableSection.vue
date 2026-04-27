@@ -39,7 +39,7 @@ const batchTestProgressRef = computed(() => props.batchTestProgress ?? null);
 const testingConnectionsRef = computed(() => props.testingConnections);
 
 const {
-  isShowingCompleted,
+  isRingCompleted,
   ringLabel,
   batchTestedServices,
   batchDoneServices,
@@ -47,6 +47,22 @@ const {
   isBatchTesting: isBatchTestingRef,
   batchTestProgress: batchTestProgressRef,
   testingConnections: testingConnectionsRef,
+});
+
+type HealthRefreshState = 'done' | 'testing' | 'idle';
+
+const healthRefreshState = computed<HealthRefreshState>(() => {
+  if (isRingCompleted.value) return 'done';
+  if (props.isBatchTesting) return 'testing';
+  return 'idle';
+});
+
+const healthRefreshIconClass = computed(() => {
+  switch (healthRefreshState.value) {
+    case 'done': return 'pi pi-check';
+    case 'testing': return 'pi pi-sync is-spinning';
+    default: return 'pi pi-sync';
+  }
 });
 
 // ==================== 健康摘要 ====================
@@ -177,18 +193,18 @@ const skeletonStatuses = computed<ServiceHealthStatus[]>(() => {
           <button
             class="health-refresh"
             :class="{
-              'is-testing': isBatchTesting && !isShowingCompleted,
-              'is-completed': isShowingCompleted,
+              'is-testing': healthRefreshState === 'testing',
+              'is-completed': healthRefreshState === 'done',
             }"
             @click="isBatchTesting ? emit('cancelBatchTest') : emit('testAll')"
             :disabled="isCheckingJd || isCheckingQiyu || serviceCheckSession?.mode === 'single'"
           >
             <Transition name="icon-swap" mode="out-in">
-              <i v-if="isShowingCompleted" key="done" class="pi pi-check"></i>
-              <i v-else-if="isBatchTesting" key="spin" class="pi pi-sync is-spinning"></i>
-              <i v-else key="idle" class="pi pi-sync"></i>
+              <span :key="healthRefreshState" class="health-refresh-content">
+                <i :class="healthRefreshIconClass"></i>
+                <span class="ring-label">{{ ringLabel }}</span>
+              </span>
             </Transition>
-            <span class="ring-label">{{ ringLabel }}</span>
           </button>
         </div>
       </div>
@@ -252,13 +268,12 @@ const skeletonStatuses = computed<ServiceHealthStatus[]>(() => {
 
 .icon-swap-enter-active,
 .icon-swap-leave-active {
-  transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease;
+  transition: opacity var(--duration-fast) ease;
 }
 
 .icon-swap-enter-from,
 .icon-swap-leave-to {
   opacity: 0;
-  transform: scale(0.7);
 }
 
 .pill-reveal {
@@ -406,6 +421,12 @@ const skeletonStatuses = computed<ServiceHealthStatus[]>(() => {
 
 .health-refresh:hover {
   background: var(--hover-overlay-subtle);
+}
+
+.health-refresh-content {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs-sm);
 }
 
 .health-refresh .pi {

@@ -25,6 +25,8 @@ interface UseHealthCheckOptions {
 export interface UseHealthCheckReturn {
   /** 是否正在显示"检测完成" */
   isShowingCompleted: Ref<boolean>;
+  /** 刷新按钮是否应展示完成态（图标和文本共用） */
+  isRingCompleted: ComputedRef<boolean>;
   /** 刷新按钮旁的文本标签 */
   ringLabel: ComputedRef<string>;
   /** 进度是否停滞（用于旋转动画） */
@@ -71,10 +73,13 @@ export function useHealthCheck(options: UseHealthCheckOptions): UseHealthCheckRe
 
   // ==================== 标签文本 ====================
 
+  const isRingCompleted = computed(() => {
+    return isShowingCompleted.value || (isBatchTesting.value && progressPercent.value >= 100);
+  });
+
   const ringLabel = computed(() => {
-    if (isShowingCompleted.value) return '检测完成';
+    if (isRingCompleted.value) return '检测完成';
     if (!isBatchTesting.value) return '重新检测';
-    if (progressPercent.value >= 100) return '检测完成';
     return '正在检测';
   });
 
@@ -167,6 +172,7 @@ export function useHealthCheck(options: UseHealthCheckOptions): UseHealthCheckRe
 
   return {
     isShowingCompleted,
+    isRingCompleted,
     ringLabel,
     isStalled,
     batchTestedServices,
