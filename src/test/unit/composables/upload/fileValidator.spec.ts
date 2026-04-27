@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { open as dialogOpen } from '@tauri-apps/plugin-dialog';
+import { invoke } from '@tauri-apps/api/core';
 import {
   filterValidFiles,
   selectFiles,
@@ -8,6 +9,11 @@ import {
 } from '../../../../composables/upload/FileValidator';
 
 const mockDialogOpen = vi.mocked(dialogOpen);
+const mockInvoke = vi.mocked(invoke);
+
+beforeEach(() => {
+  mockInvoke.mockReset().mockResolvedValue({ width: 100, height: 80 });
+});
 
 describe('常量', () => {
   it('VALID_IMAGE_EXTENSIONS 包含常见图片扩展', () => {
@@ -44,6 +50,14 @@ describe('filterValidFiles', () => {
   it('路径中带点但无扩展名 → invalid', async () => {
     const result = await filterValidFiles(['/weird/file.with.multiple/dots']);
     expect(result.invalid).toContain('/weird/file.with.multiple/dots');
+  });
+  it('rejects files whose extension looks valid but image headers cannot be read', async () => {
+    mockInvoke.mockRejectedValueOnce(new Error('invalid image header'));
+
+    const result = await filterValidFiles(['/tmp/fake.png']);
+
+    expect(result.valid).toEqual([]);
+    expect(result.invalid).toEqual(['/tmp/fake.png']);
   });
 });
 

@@ -2,9 +2,11 @@
 // 上传文件校验与选择：扩展名过滤 + 系统文件对话框
 
 import { open as dialogOpen } from '@tauri-apps/plugin-dialog';
+import { invoke } from '@tauri-apps/api/core';
 import type { useToast } from '../useToast';
 import { TOAST_MESSAGES } from '../../constants';
 import { createLogger } from '../../utils/logger';
+import { Semaphore } from '../../utils/semaphore';
 
 const log = createLogger('FileValidator');
 
@@ -13,6 +15,28 @@ export const VALID_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp
 
 /** 单次上传最大文件数，防止内存溢出 */
 export const MAX_FILES_PER_UPLOAD = 200;
+
+const IMAGE_VALIDATION_CONCURRENCY = 5;
+
+interface ImageHeaderMetadata {
+  width: number;
+  height: number;
+}
+
+function hasValidImageExtension(filePath: string): boolean {
+  const ext = filePath.split('.').pop()?.toLowerCase();
+  return !!ext && (VALID_IMAGE_EXTENSIONS as readonly string[]).includes(ext);
+}
+
+async function canReadImageHeader(filePath: string): Promise<boolean> {
+  try {
+    const metadata = await invoke<ImageHeaderMetadata>('get_image_metadata', { filePath });
+    return Number(metadata?.width) > 0 && Number(metadata?.height) > 0;
+  } catch (error) {
+    log.warn('图片文件头校验失败:', filePath, error);
+    return false;
+  }
+}
 
 /**
  * 按扩展名过滤有效的图片文件
@@ -25,14 +49,24 @@ export async function filterValidFiles(filePaths: string[]): Promise<{
   const valid: string[] = [];
   const invalid: string[] = [];
 
-  for (const filePath of filePaths) {
-    const ext = filePath.split('.').pop()?.toLowerCase();
-    if (ext && (VALID_IMAGE_EXTENSIONS as readonly string[]).includes(ext)) {
-      valid.push(filePath);
-    } else {
-      invalid.push(filePath);
+  const semaphore = new Semaphore(IMAGE_VALIDATION_CONCURRENCY);
+  const checks = await Promise.all(filePaths.map(async (filePath) => {
+    if (!hasValidImageExtension(filePath)) {
+      return { filePath, isValid: false };
     }
-  }
+
+    await semaphore.acquire();
+    try {
+      return { filePath, isValid: await canReadImageHeader(filePath) };
+    } finally {
+      semaphore.release();
+    }
+  }));
+
+  checks.forEach(({ filePath, isValid }) => {
+    if (isValid) valid.push(filePath);
+    else invalid.push(filePath);
+  });
 
   return { valid, invalid };
 }
