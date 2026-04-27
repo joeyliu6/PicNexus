@@ -66,11 +66,7 @@ export async function updateHistoryCheckStatus(
   }
 
   if (grouped.size === 0) {
-    try {
-      await historyDB.batchUpdateLinkCheckStatus([]);
-    } catch (err) {
-      log.error('批量更新检测状态失败', err);
-    }
+    await historyDB.batchUpdateLinkCheckStatus([]);
     return;
   }
 
@@ -129,6 +125,7 @@ export async function updateHistoryCheckStatus(
     await historyDB.batchUpdateLinkCheckStatus(updates);
   } catch (err) {
     log.error('批量更新检测状态失败', err);
+    throw err;
   }
 }
 

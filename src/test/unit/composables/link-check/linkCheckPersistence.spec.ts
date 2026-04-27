@@ -156,6 +156,7 @@ describe('exportCsv', () => {
 describe('updateHistoryCheckStatus', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    batchUpdateMock.mockResolvedValue(undefined);
     getContextMock.mockResolvedValue(new Map());
   });
 
@@ -165,6 +166,19 @@ describe('updateHistoryCheckStatus', () => {
     };
     await updateHistoryCheckStatus(result);
     expect(batchUpdateMock).toHaveBeenCalledWith([]);
+  });
+
+  it('[BUG 回归] DB 写入失败时向调用方抛错，避免前端误报检测成功', async () => {
+    const error = new Error('database locked');
+    batchUpdateMock.mockRejectedValueOnce(error);
+    const result: BatchCheckResult = {
+      results: [
+        { link: 'a.jpg', history_id: 'h1', service_id: 'r2', is_valid: true, error_type: 'success', browser_might_work: false },
+      ],
+      total: 1, valid: 1, invalid: 0, timeout: 0, suspicious: 0, elapsed_ms: 0, cancelled: false,
+    };
+
+    await expect(updateHistoryCheckStatus(result)).rejects.toThrow('database locked');
   });
 
   it('按 historyId 分组并构建正确的 linkCheckStatus', async () => {
