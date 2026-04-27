@@ -68,7 +68,7 @@ const log = createLogger('MdRescue');
 export function useMdRescueManager() {
   const toast = useToast();
   const { loadConfig } = useConfigManager();
-  const { checkUrls, isChecking, progress, cancelCheck } = useLinkCheckManager();
+  const { checkUrls, isChecking, progress, progressSource, cancelCheck } = useLinkCheckManager();
   // 必须在 setup 栈期间调用 useMdFileLoader，内部会 useToast() → inject()，
   // 返回的 5 个函数通过闭包持有 toast，之后可在 click / 拖放回调里安全调用。
   const { selectMdFile, selectFolder, selectAny, loadFilePath, loadFolderPath } = useMdFileLoader();
@@ -206,6 +206,10 @@ export function useMdRescueManager() {
   async function analyzeFile(): Promise<void> {
     if (imageLinks.value.length === 0) return;
     if (isAnalyzing.value) return;
+    if (isChecking.value && progressSource.value !== 'rescue') {
+      toast.warn('检测进行中', '请等待当前链接检测完成后再修复文档');
+      return;
+    }
 
     phase.value = 'scanning';
     scanStage.value = 'checking';
@@ -251,6 +255,10 @@ export function useMdRescueManager() {
   /** 拖放处理（handleDropPaths 调用 analyzeFile，留在主文件） */
   async function handleDropPaths(paths: string[]): Promise<void> {
     if (paths.length === 0 || phase.value !== 'idle') return;
+    if (isChecking.value && progressSource.value !== 'rescue') {
+      toast.warn('检测进行中', '请等待当前链接检测完成后再拖入文档');
+      return;
+    }
 
     const first = paths[0];
     try {
