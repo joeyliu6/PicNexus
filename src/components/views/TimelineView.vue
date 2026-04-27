@@ -64,6 +64,30 @@ const timelinePagination = useTimelineDayPagination({
 });
 const { groups, dayStats, ensureDaysLoaded, prefetchDayAspectRatios, loadedDayKeys, totalCount: dayTotalCount, isLoadingStats, hasLoadedStats, isFullyPreloaded } = timelinePagination;
 
+const filteredTimePeriodStats = computed(() => {
+  const periods = new Map<string, { year: number; month: number; count: number; minTimestamp: number; maxTimestamp: number }>();
+  for (const day of dayStats.value) {
+    const key = `${day.year}-${day.month}`;
+    const existing = periods.get(key);
+    if (existing) {
+      existing.count += day.count;
+      existing.minTimestamp = Math.min(existing.minTimestamp, day.minTimestamp);
+      existing.maxTimestamp = Math.max(existing.maxTimestamp, day.maxTimestamp);
+    } else {
+      periods.set(key, {
+        year: day.year,
+        month: day.month,
+        count: day.count,
+        minTimestamp: day.minTimestamp,
+        maxTimestamp: day.maxTimestamp,
+      });
+    }
+  }
+  return Array.from(periods.values()).sort((a, b) =>
+    b.year - a.year || b.month - a.month
+  );
+});
+
 /** 所有已加载天的 metas（展平），供选中操作和灯箱导航使用 */
 const allLoadedMetas = computed(() => groups.value.flatMap(g => g.items));
 
@@ -198,7 +222,7 @@ const {
   scrollProgress,
   viewportHeight,
   layoutResult,
-  timePeriodStats: computed(() => historyManager.timePeriodStats.value),
+  timePeriodStats: filteredTimePeriodStats,
   setLastStableProgress,
   scrollToProgress,
   scrollToItem,
@@ -315,7 +339,7 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
       @wheel.prevent="handleSidebarWheel"
     >
       <TimelineIndicator
-        :periods="historyManager.timePeriodStats.value"
+        :periods="filteredTimePeriodStats"
         :scroll-progress="scrollProgress"
         :visible-ratio="visibleRatio"
         :total-height="totalHeight"
