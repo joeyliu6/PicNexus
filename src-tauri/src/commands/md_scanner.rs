@@ -16,8 +16,6 @@ use tauri::Emitter;
 const MAX_SCAN_DEPTH: usize = 64;
 
 // 预编译正则（全局只编译一次）
-static MD_IMAGE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)"#).unwrap());
 static HTML_IMG_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"<img[^>]+src=["']([^"']+)["'][^>]*/?\s*>"#).unwrap());
 // 围栏代码块首行（3+ 连续反引号或波浪号）
@@ -240,6 +238,144 @@ fn strip_inline_code(line: &str) -> String {
         .into_owned()
 }
 
+struct MarkdownImageMatch {
+    start: usize,
+    end: usize,
+    alt: String,
+    url: String,
+}
+
+fn is_escaped(bytes: &[u8], index: usize) -> bool {
+    let mut count = 0usize;
+    let mut i = index;
+    while i > 0 {
+        i -= 1;
+        if bytes[i] == b'\\' {
+            count += 1;
+        } else {
+            break;
+        }
+    }
+    count % 2 == 1
+}
+
+fn find_unescaped_byte(bytes: &[u8], target: u8, from: usize) -> Option<usize> {
+    (from..bytes.len()).find(|&i| bytes[i] == target && !is_escaped(bytes, i))
+}
+
+fn parse_title_and_close(bytes: &[u8], pos: usize) -> Option<usize> {
+    let mut i = pos;
+    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1;
+    }
+    if i == pos || i >= bytes.len() || bytes[i] != b'"' {
+        return None;
+    }
+    i += 1;
+    while i < bytes.len() {
+        if bytes[i] == b'"' && !is_escaped(bytes, i) {
+            i += 1;
+            return if i < bytes.len() && bytes[i] == b')' {
+                Some(i + 1)
+            } else {
+                None
+            };
+        }
+        i += 1;
+    }
+    None
+}
+
+fn parse_markdown_image_at(line: &str, start: usize) -> Option<MarkdownImageMatch> {
+    let bytes = line.as_bytes();
+    if start + 1 >= bytes.len() || bytes[start] != b'!' || bytes[start + 1] != b'[' {
+        return None;
+    }
+
+    let alt_end = find_unescaped_byte(bytes, b']', start + 2)?;
+    if alt_end + 1 >= bytes.len() || bytes[alt_end + 1] != b'(' {
+        return None;
+    }
+
+    let url_start = alt_end + 2;
+    if url_start >= bytes.len() {
+        return None;
+    }
+
+    let alt = line[start + 2..alt_end].to_string();
+
+    if bytes[url_start] == b'<' {
+        let url_end = find_unescaped_byte(bytes, b'>', url_start + 1)?;
+        let close = if url_end + 1 < bytes.len() && bytes[url_end + 1] == b')' {
+            url_end + 2
+        } else {
+            parse_title_and_close(bytes, url_end + 1)?
+        };
+        return Some(MarkdownImageMatch {
+            start,
+            end: close,
+            alt,
+            url: line[url_start + 1..url_end].trim().to_string(),
+        });
+    }
+
+    let mut depth = 0usize;
+    let mut i = url_start;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if is_escaped(bytes, i) {
+            i += 1;
+            continue;
+        }
+
+        if b == b'(' {
+            depth += 1;
+        } else if b == b')' {
+            if depth > 0 {
+                depth -= 1;
+            } else {
+                return Some(MarkdownImageMatch {
+                    start,
+                    end: i + 1,
+                    alt,
+                    url: line[url_start..i].trim().to_string(),
+                });
+            }
+        } else if b.is_ascii_whitespace() && depth == 0 {
+            let close = parse_title_and_close(bytes, i)?;
+            return Some(MarkdownImageMatch {
+                start,
+                end: close,
+                alt,
+                url: line[url_start..i].trim().to_string(),
+            });
+        }
+        i += 1;
+    }
+
+    None
+}
+
+fn parse_markdown_image_matches(line: &str) -> Vec<MarkdownImageMatch> {
+    let mut matches = Vec::new();
+    let mut search_from = 0usize;
+
+    while search_from < line.len() {
+        let Some(relative_start) = line[search_from..].find("![") else {
+            break;
+        };
+        let start = search_from + relative_start;
+        if let Some(m) = parse_markdown_image_at(line, start) {
+            search_from = m.end;
+            matches.push(m);
+        } else {
+            search_from = start + 2;
+        }
+    }
+
+    matches
+}
+
 /// 从 Markdown 内容中提取图片链接（与 JS 侧 extractImageLinks 逻辑一致）
 /// include_code_blocks=true 时不跳过围栏块和行内代码，与 JS 侧 options.includeCodeBlocks 语义相同
 fn extract_image_links(content: &str, include_code_blocks: bool) -> Vec<MdImageLink> {
@@ -287,20 +423,18 @@ fn extract_image_links(content: &str, include_code_blocks: bool) -> Vec<MdImageL
         let context = detect_context(line);
 
         // Markdown 图片
-        for cap in MD_IMAGE_RE.captures_iter(&stripped) {
-            let url = cap[2].trim();
+        for md_match in parse_markdown_image_matches(&stripped) {
+            let url = md_match.url.trim();
             if is_valid_image_url(url) && seen_urls.insert(url.to_string()) {
-                let start = cap.get(0).unwrap().start();
-                let len = cap.get(0).unwrap().len();
-                let original_text = if start + len <= line.len() {
-                    line[start..start + len].to_string()
+                let original_text = if md_match.end <= line.len() {
+                    line[md_match.start..md_match.end].to_string()
                 } else {
-                    cap[0].to_string()
+                    stripped[md_match.start..md_match.end].to_string()
                 };
                 results.push(MdImageLink {
                     original_text,
                     url: url.to_string(),
-                    alt_text: cap[1].to_string(),
+                    alt_text: md_match.alt,
                     line_number,
                     syntax: "markdown".to_string(),
                     context: context.to_string(),
@@ -683,6 +817,15 @@ mod tests {
     }
 
     #[test]
+    fn extract_markdown_title_with_escaped_quotes() {
+        let content = r#"![alt](https://example.com/img.jpg "some \"quoted\" title")"#;
+        let links = extract_image_links(content, false);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].url, "https://example.com/img.jpg");
+        assert_eq!(links[0].original_text, content);
+    }
+
+    #[test]
     fn extract_skips_fenced_code_block_by_default() {
         let content = "\
 ![before](https://example.com/a.jpg)
@@ -807,6 +950,23 @@ mod tests {
         let links = extract_image_links(content, true);
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].url, "https://example.com/b.jpg");
+    }
+
+    #[test]
+    fn extract_includes_inline_code_when_flag_set() {
+        let content = "前 `![inline](https://example.com/in.jpg)` 后";
+        let links = extract_image_links(content, true);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].url, "https://example.com/in.jpg");
+    }
+
+    #[test]
+    fn extract_markdown_url_with_balanced_parentheses() {
+        let content = "![alt](https://cdn.example.com/photo_(1).png)";
+        let links = extract_image_links(content, false);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].url, "https://cdn.example.com/photo_(1).png");
+        assert_eq!(links[0].original_text, content);
     }
 
     #[test]

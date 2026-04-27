@@ -5,9 +5,6 @@ import type { UserConfig } from '../config/types';
 import { DEFAULT_LINK_PREFIXES } from '../config/types';
 import { stripPrefixTemplate } from './linkPrefixTemplate';
 
-/** 标准 Markdown 图片语法: ![alt](url "title") */
-const MD_IMAGE_REGEX = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
-
 /** HTML img 标签: <img src="url" ... /> */
 const HTML_IMG_REGEX = /<img[^>]+src=["']([^"']+)["'][^>]*\/?>/gi;
 
@@ -39,6 +36,133 @@ function detectContext(line: string): 'normal' | 'blockquote' | 'table' {
   // 简单判断表格行：以 | 开头或包含至少两个 |
   if (trimmed.startsWith('|') || (trimmed.match(/\|/g)?.length ?? 0) >= 2) return 'table';
   return 'normal';
+}
+
+interface MarkdownImageMatch {
+  start: number;
+  end: number;
+  alt: string;
+  url: string;
+  urlStart: number;
+  urlEnd: number;
+}
+
+function isEscaped(text: string, index: number): boolean {
+  let count = 0;
+  for (let i = index - 1; i >= 0 && text[i] === '\\'; i--) count++;
+  return count % 2 === 1;
+}
+
+function findUnescaped(text: string, char: string, from: number): number {
+  for (let i = from; i < text.length; i++) {
+    if (text[i] === char && !isEscaped(text, i)) return i;
+  }
+  return -1;
+}
+
+function parseTitleAndClose(line: string, pos: number): number | null {
+  let i = pos;
+  while (i < line.length && /\s/.test(line[i])) i++;
+  if (i === pos || line[i] !== '"') return null;
+
+  i++;
+  while (i < line.length) {
+    if (line[i] === '"' && !isEscaped(line, i)) {
+      i++;
+      return line[i] === ')' ? i + 1 : null;
+    }
+    i++;
+  }
+
+  return null;
+}
+
+function parseMarkdownImageAt(line: string, start: number): MarkdownImageMatch | null {
+  if (line[start] !== '!' || line[start + 1] !== '[') return null;
+
+  const altEnd = findUnescaped(line, ']', start + 2);
+  if (altEnd === -1 || line[altEnd + 1] !== '(') return null;
+
+  const urlStart = altEnd + 2;
+  if (urlStart >= line.length) return null;
+
+  // CommonMark 允许目的地址用尖括号包裹，这里保留括号外的 title 兼容。
+  if (line[urlStart] === '<') {
+    const urlEnd = findUnescaped(line, '>', urlStart + 1);
+    if (urlEnd === -1) return null;
+    const close = line[urlEnd + 1] === ')'
+      ? urlEnd + 2
+      : parseTitleAndClose(line, urlEnd + 1);
+    if (close === null) return null;
+    return {
+      start,
+      end: close,
+      alt: line.slice(start + 2, altEnd),
+      url: line.slice(urlStart + 1, urlEnd).trim(),
+      urlStart: urlStart + 1,
+      urlEnd,
+    };
+  }
+
+  let depth = 0;
+  for (let i = urlStart; i < line.length; i++) {
+    const ch = line[i];
+    if (isEscaped(line, i)) continue;
+
+    if (ch === '(') {
+      depth++;
+      continue;
+    }
+
+    if (ch === ')') {
+      if (depth > 0) {
+        depth--;
+        continue;
+      }
+      return {
+        start,
+        end: i + 1,
+        alt: line.slice(start + 2, altEnd),
+        url: line.slice(urlStart, i).trim(),
+        urlStart,
+        urlEnd: i,
+      };
+    }
+
+    if (/\s/.test(ch) && depth === 0) {
+      const close = parseTitleAndClose(line, i);
+      if (close === null) return null;
+      return {
+        start,
+        end: close,
+        alt: line.slice(start + 2, altEnd),
+        url: line.slice(urlStart, i).trim(),
+        urlStart,
+        urlEnd: i,
+      };
+    }
+  }
+
+  return null;
+}
+
+function parseMarkdownImageMatches(line: string): MarkdownImageMatch[] {
+  const matches: MarkdownImageMatch[] = [];
+  let searchFrom = 0;
+
+  while (searchFrom < line.length) {
+    const start = line.indexOf('![', searchFrom);
+    if (start === -1) break;
+    const match = parseMarkdownImageAt(line, start);
+    if (match) {
+      matches.push(match);
+      searchFrom = match.end;
+    } else {
+      searchFrom = start + 2;
+    }
+  }
+
+  return matches;
 }
 
 /**
@@ -92,17 +216,16 @@ export function extractImageLinks(
 
     // Markdown 图片语法
     let match: RegExpExecArray | null;
-    MD_IMAGE_REGEX.lastIndex = 0;
-    while ((match = MD_IMAGE_REGEX.exec(stripped)) !== null) {
-      const url = match[2].trim();
+    for (const mdMatch of parseMarkdownImageMatches(stripped)) {
+      const url = mdMatch.url.trim();
       if (isValidImageUrl(url) && !seenUrls.has(url)) {
         seenUrls.add(url);
         // 从原始行提取 originalText（保持原文不变）
-        const originalText = line.substring(match.index, match.index + match[0].length);
+        const originalText = line.substring(mdMatch.start, mdMatch.end);
         results.push({
           originalText,
           url,
-          altText: match[1] || '',
+          altText: mdMatch.alt || '',
           lineNumber,
           syntax: 'markdown',
           context,
@@ -225,56 +348,65 @@ export function smartTruncateUrl(url: string, maxLen = 60): string {
 export function replaceImageLinks(
   content: string,
   replacements: Map<string, string>,
+  options?: { includeCodeBlocks?: boolean },
 ): string {
   if (replacements.size === 0) return content;
 
+  const includeCodeBlocks = options?.includeCodeBlocks ?? false;
   const lines = content.split('\n');
   let fenceOpen: { char: string; len: number } | null = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    // 围栏跟踪（与 extractImageLinks 的 fence 状态机完全一致）
-    const fenceMatch = FENCE_REGEX.exec(line);
-    if (fenceMatch) {
-      const seq = fenceMatch[1];
-      const char = seq[0];
-      const len = seq.length;
-      const tailWs = /^\s*$/.test(line.slice(fenceMatch[0].length));
-      if (fenceOpen === null) {
-        fenceOpen = { char, len };
-        continue;
+    if (!includeCodeBlocks) {
+      // 围栏跟踪（与 extractImageLinks 的 fence 状态机完全一致）
+      const fenceMatch = FENCE_REGEX.exec(line);
+      if (fenceMatch) {
+        const seq = fenceMatch[1];
+        const char = seq[0];
+        const len = seq.length;
+        const tailWs = /^\s*$/.test(line.slice(fenceMatch[0].length));
+        if (fenceOpen === null) {
+          fenceOpen = { char, len };
+          continue;
+        }
+        if (fenceOpen.char === char && len >= fenceOpen.len && tailWs) {
+          fenceOpen = null;
+          continue;
+        }
       }
-      if (fenceOpen.char === char && len >= fenceOpen.len && tailWs) {
-        fenceOpen = null;
-        continue;
-      }
+      if (fenceOpen !== null) continue;
     }
-    if (fenceOpen !== null) continue;
 
-    lines[i] = replaceInLine(line, replacements);
+    lines[i] = replaceInLine(line, replacements, { includeInlineCode: includeCodeBlocks });
   }
 
   return lines.join('\n');
 }
 
 /** 单行内：仅在图片语法中替换 URL，跳过行内代码 */
-function replaceInLine(line: string, replacements: Map<string, string>): string {
+function replaceInLine(
+  line: string,
+  replacements: Map<string, string>,
+  options?: { includeInlineCode?: boolean },
+): string {
   // 先定位行内代码 spans；图片语法命中时若 offset 落在 span 内则不替换
-  const codeSpans = locateInlineCode(line);
+  const codeSpans = options?.includeInlineCode ? [] : locateInlineCode(line);
   const inCode = (pos: number) => codeSpans.some((s) => pos >= s.start && pos < s.end);
 
-  // Markdown 图片：![alt](url "title"?)
-  const mdRe = /!\[([^\]]*)\]\(([^)\s]+)((?:\s+"[^"]*")?)\)/g;
-  let result = line.replace(mdRe, (match, alt: string, url: string, title: string, offset: number) => {
-    if (inCode(offset)) return match;
-    const newUrl = replacements.get(url.trim());
-    if (newUrl === undefined) return match;
-    return `![${alt}](${newUrl}${title ?? ''})`;
-  });
+  let result = line;
+  const mdMatches = parseMarkdownImageMatches(line)
+    .filter((match) => !inCode(match.start))
+    .reverse();
+  for (const match of mdMatches) {
+    const newUrl = replacements.get(match.url.trim());
+    if (newUrl === undefined) continue;
+    result = result.slice(0, match.urlStart) + newUrl + result.slice(match.urlEnd);
+  }
 
   // HTML 替换后偏移量变了，重新定位行内代码
-  const codeSpans2 = locateInlineCode(result);
+  const codeSpans2 = options?.includeInlineCode ? [] : locateInlineCode(result);
   const inCode2 = (pos: number) => codeSpans2.some((s) => pos >= s.start && pos < s.end);
 
   const htmlRe = /(<img[^>]+src=["'])([^"']+)(["'][^>]*\/?>)/gi;

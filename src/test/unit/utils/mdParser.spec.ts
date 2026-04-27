@@ -138,6 +138,36 @@ describe('extractImageLinks', () => {
     expect(links[0].url).toBe('https://title.com/a.png');
   });
 
+  it('supports escaped quotes inside Markdown image titles', () => {
+    const md = '![alt](https://title.com/a.png "some \\"quoted\\" title")';
+    const links = extractImageLinks(md);
+    expect(links).toHaveLength(1);
+    expect(links[0].url).toBe('https://title.com/a.png');
+    expect(links[0].originalText).toBe(md);
+  });
+
+  it('支持 URL 路径中带成对括号的 Markdown 图片语法', () => {
+    const md = '![alt](https://cdn.example.com/photo_(1).png)';
+    const links = extractImageLinks(md);
+    expect(links).toHaveLength(1);
+    expect(links[0].url).toBe('https://cdn.example.com/photo_(1).png');
+    expect(links[0].originalText).toBe(md);
+  });
+
+  it('includeCodeBlocks=true 时提取围栏与行内代码中的图片', () => {
+    const md = [
+      '```markdown',
+      '![fenced](https://code.com/a.png)',
+      '```',
+      '`![inline](https://code.com/b.png)`',
+    ].join('\n');
+    const links = extractImageLinks(md, { includeCodeBlocks: true });
+    expect(links.map((l) => l.url)).toEqual([
+      'https://code.com/a.png',
+      'https://code.com/b.png',
+    ]);
+  });
+
   it('tilde 围栏内出现反引号不应提前关闭围栏', () => {
     const md = [
       '~~~text',
@@ -349,6 +379,20 @@ describe('replaceImageLinks', () => {
       .toBe('![a](https://new.com/b.png)');
   });
 
+  it('URL 路径中包含成对括号时完整替换且不破坏 Markdown', () => {
+    const content = '![a](https://cdn.example.com/photo_(1).png)';
+    const replacements = new Map([['https://cdn.example.com/photo_(1).png', 'https://new.com/b.png']]);
+    expect(replaceImageLinks(content, replacements))
+      .toBe('![a](https://new.com/b.png)');
+  });
+
+  it('replaces URLs when Markdown image titles contain escaped quotes', () => {
+    const content = '![a](https://old.com/a.png "some \\"quoted\\" title")';
+    const replacements = new Map([['https://old.com/a.png', 'https://new.com/b.png']]);
+    expect(replaceImageLinks(content, replacements))
+      .toBe('![a](https://new.com/b.png "some \\"quoted\\" title")');
+  });
+
   it('newUrl 含 $& / $1 不被当作反向引用（callback 形式替换）', () => {
     const content = '![a](https://old.com/a.png)';
     const replacements = new Map([['https://old.com/a.png', 'https://new.com/b.png?sig=$&$1']]);
@@ -377,6 +421,19 @@ describe('replaceImageLinks', () => {
     expect(result).toContain('![a](https://y.com/b.png)');
     // 代码块内保持原 URL
     expect(result).toContain('![demo](https://x.com/a.png)');
+  });
+
+  it('includeCodeBlocks=true 时替换围栏和行内代码中的图片链接', () => {
+    const content = [
+      '```markdown',
+      '![demo](https://x.com/a.png)',
+      '```',
+      '`![inline](https://x.com/a.png)`',
+    ].join('\n');
+    const replacements = new Map([['https://x.com/a.png', 'https://y.com/b.png']]);
+    const result = replaceImageLinks(content, replacements, { includeCodeBlocks: true });
+    expect(result).toContain('![demo](https://y.com/b.png)');
+    expect(result).toContain('`![inline](https://y.com/b.png)`');
   });
 
   it('不替换行内代码中的同 URL', () => {
