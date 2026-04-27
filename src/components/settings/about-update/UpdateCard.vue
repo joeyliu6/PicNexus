@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, onUnmounted } from 'vue';
 import Button from 'primevue/button';
-import ProgressBar from 'primevue/progressbar';
 import ToggleSwitch from 'primevue/toggleswitch';
 import { useAutoUpdate } from '../../../composables/useAutoUpdate';
 import { useToast } from '../../../composables/useToast';
@@ -17,7 +16,6 @@ const toast = useToast();
 const {
   status,
   updateInfo,
-  downloadProgress,
   errorMessage,
   lastCheckTime,
   pendingUpdateAvailable,
@@ -168,32 +166,30 @@ function onToggleAutoUpdate(v: boolean) {
     </div>
 
     <!-- available -->
-    <div v-else-if="status === 'available'" class="update-status update-status-vertical">
-      <div class="update-status-row">
-        <div class="update-status-text">
-          <i class="pi pi-arrow-circle-up update-icon available" />
-          <span class="new-version-label">新版本 v{{ updateInfo?.version }} 可用</span>
+    <div v-else-if="status === 'available'" class="update-status">
+      <div class="update-status-text">
+        <span class="update-version-icon" aria-hidden="true">
+          <i class="pi pi-arrow-up" />
+        </span>
+        <div class="update-status-info">
+          <span class="new-version-label">发现新版本</span>
+          <span class="version-chip">v{{ updateInfo?.version }}</span>
         </div>
-        <Button
-          label="立即更新"
-          icon="pi pi-download"
-          size="small"
-          @click="downloadAndInstall"
-        />
       </div>
-      <div v-if="updateInfo?.body" class="update-notes">
-        <div class="update-notes-label">更新日志</div>
-        <div class="update-notes-content">{{ updateInfo.body }}</div>
-      </div>
+      <Button
+        label="立即更新"
+        icon="pi pi-download"
+        size="small"
+        @click="downloadAndInstall"
+      />
     </div>
 
     <!-- downloading -->
-    <div v-else-if="status === 'downloading'" class="update-status update-status-vertical">
+    <div v-else-if="status === 'downloading'" class="update-status">
       <div class="update-status-text">
         <i class="pi pi-spin pi-spinner update-icon checking" />
-        <span>正在下载更新... {{ downloadProgress }}%</span>
+        <span>正在下载更新...</span>
       </div>
-      <ProgressBar :value="downloadProgress" class="update-progress" />
     </div>
 
     <!-- ready -->
@@ -279,18 +275,6 @@ function onToggleAutoUpdate(v: boolean) {
   justify-content: space-between;
   gap: var(--space-md);
   min-height: var(--space-4xl); /* 48px，覆盖两行文字内容高度，防止状态切换时跳动 */
-}
-
-.update-status-vertical {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.update-status-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
 }
 
 .update-status-text {
@@ -403,10 +387,6 @@ function onToggleAutoUpdate(v: boolean) {
   opacity: 0;
 }
 
-.update-icon.available {
-  color: var(--primary);
-}
-
 .error-hint {
   color: var(--error);
   overflow-wrap: anywhere;
@@ -425,42 +405,42 @@ function onToggleAutoUpdate(v: boolean) {
   border-color: var(--primary-border);
 }
 
+.update-version-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--primary-alpha-10);
+  color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.update-version-icon .pi {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+}
+
 .new-version-label {
   font-weight: var(--weight-semibold);
   color: var(--primary);
 }
 
+.version-chip {
+  width: fit-content;
+  padding: var(--space-2xs) var(--space-xs-sm);
+  border-radius: var(--radius-full);
+  background: var(--primary-alpha-10);
+  color: var(--primary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  line-height: 1.35;
+}
+
 .last-check {
   font-size: var(--text-xs);
   color: var(--text-muted);
-}
-
-.update-notes {
-  background: var(--bg-app);
-  border-radius: var(--radius-md);
-  padding: var(--space-md);
-  max-height: 120px;
-  overflow-y: auto;
-  margin-top: var(--space-md);
-}
-
-.update-notes-label {
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  color: var(--text-muted);
-  margin-bottom: var(--space-xs-sm);
-}
-
-.update-notes-content {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  white-space: pre-wrap;
-  line-height: 1.5;
-}
-
-.update-progress {
-  height: 6px;
-  margin-top: var(--space-md);
 }
 
 /* 自动更新独立卡片 */

@@ -1,6 +1,6 @@
 {
   "name": "picnexus",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "PicNexus - 多图床上传工具",
   "type": "module",
   "scripts": {
