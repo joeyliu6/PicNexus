@@ -137,13 +137,18 @@ function selectService(svc: ServerServiceType | null) {
 }
 
 .service-trigger-name {
+  min-width: 0;
+  flex: 1;
   max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: left;
 }
 
 .service-trigger-chevron {
+  flex-shrink: 0;
+  margin-left: auto;
   font-size: var(--text-2xs);
   color: var(--text-muted);
 }
@@ -275,7 +280,6 @@ function selectService(svc: ServerServiceType | null) {
 
   .service-trigger {
     width: 100%;
-    justify-content: space-between;
   }
 }
 </style>

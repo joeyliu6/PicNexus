@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, toRef, inject, watch, onMounted, type Ref } from 'vue';
-import ToggleSwitch from 'primevue/toggleswitch';
 
 import type { ImageCompressionConfig } from '../../config/types';
 import { useCompressionPresets } from '../../composables/settings/useCompressionPresets';
 import CompressionPreviewDialog from '../dialogs/CompressionPreviewDialog.vue';
+import CollapsibleSettingsCard from './CollapsibleSettingsCard.vue';
 import CompressionPresetTabs from './image-compression/CompressionPresetTabs.vue';
 import CompressionSettingsForm from './image-compression/CompressionSettingsForm.vue';
 
@@ -19,10 +19,6 @@ const emit = defineEmits<{
 }>();
 
 const expanded = ref(false);
-
-function toggleExpand() {
-  expanded.value = !expanded.value;
-}
 
 // 外部跳转自动展开：当上游 set settingsTargetSection='imageCompression' 时主动展开本卡片
 const settingsTargetSection = inject<Ref<string | null> | null>('settingsTargetSection', null);
@@ -90,132 +86,70 @@ function handleEditInputMount(el: HTMLInputElement | null) {
 </script>
 
 <template>
-  <div class="compression-collapsible" :class="{ expanded }">
-    <button
-      class="card-header"
-      @click="toggleExpand"
-      :aria-expanded="expanded"
-      aria-controls="compression-content"
-    >
-      <div class="header-left">
-        <span class="status-dot" :class="imageCompression.enabled ? 'active' : ''" v-tooltip.top="imageCompression.enabled ? '已启用' : '未启用'" />
-        <div class="header-info">
-          <span class="card-title">图片压缩</span>
-          <span class="card-description">{{ statusDesc }}</span>
-        </div>
-      </div>
-      <div class="header-right">
-        <ToggleSwitch
-          :modelValue="imageCompression.enabled"
-          @update:modelValue="toggleEnabled"
-          @click.stop
-        />
-        <i class="pi pi-chevron-down chevron-icon" :class="{ rotated: expanded }"></i>
-      </div>
-    </button>
+  <CollapsibleSettingsCard
+    title="图片压缩"
+    :description="statusDesc"
+    :enabled="imageCompression.enabled"
+    :expanded="expanded"
+    @update:enabled="toggleEnabled"
+    @update:expanded="(v: boolean) => expanded = v"
+  >
+    <CompressionPresetTabs
+      :presets="imageCompression.presets"
+      :activePresetId="imageCompression.activePresetId"
+      :editingPresetId="editingPresetId"
+      :editDraft="editDraft"
+      :canAddPreset="canAddPreset"
+      @update:editDraft="(v) => editDraft = v"
+      @select="selectPreset"
+      @add="addPreset"
+      @startEdit="startEditing"
+      @commitEdit="commitEdit"
+      @cancelEdit="cancelEdit"
+      @editInputMount="handleEditInputMount"
+    />
 
-    <Transition name="collapse-smooth">
-      <div v-if="expanded" class="card-content" id="compression-content">
-        <CompressionPresetTabs
-          :presets="imageCompression.presets"
-          :activePresetId="imageCompression.activePresetId"
-          :editingPresetId="editingPresetId"
-          :editDraft="editDraft"
-          :canAddPreset="canAddPreset"
-          @update:editDraft="(v) => editDraft = v"
-          @select="selectPreset"
-          @add="addPreset"
-          @startEdit="startEditing"
-          @commitEdit="commitEdit"
-          @cancelEdit="cancelEdit"
-          @editInputMount="handleEditInputMount"
-        />
+    <CompressionSettingsForm
+      :activePreset="activePreset"
+      :qualityLevel="qualityLevel"
+      :scaleLevel="scaleLevel"
+      :skipDisplayValue="skipDisplayValue"
+      :skipUnit="skipUnit"
+      @updatePreset="updateActivePreset"
+      @qualityInput="handleQualityInput"
+      @commitQuality="commitQualityInput"
+      @scaleInput="handleScaleInput"
+      @commitScale="commitScaleInput"
+      @skipValueChange="handleSkipValueChange"
+      @toggleSkipUnit="toggleSkipUnit"
+    />
 
-        <CompressionSettingsForm
-          :activePreset="activePreset"
-          :qualityLevel="qualityLevel"
-          :scaleLevel="scaleLevel"
-          :skipDisplayValue="skipDisplayValue"
-          :skipUnit="skipUnit"
-          @updatePreset="updateActivePreset"
-          @qualityInput="handleQualityInput"
-          @commitQuality="commitQualityInput"
-          @scaleInput="handleScaleInput"
-          @commitScale="commitScaleInput"
-          @skipValueChange="handleSkipValueChange"
-          @toggleSkipUnit="toggleSkipUnit"
-        />
+    <CompressionPreviewDialog
+      :visible="previewDialogVisible"
+      :preset="activePreset"
+      @update:visible="previewDialogVisible = $event"
+    />
 
-        <CompressionPreviewDialog
-          :visible="previewDialogVisible"
-          :preset="activePreset"
-          @update:visible="previewDialogVisible = $event"
-        />
-
-        <div class="preset-actions">
-          <button class="preview-btn" @click="openPreviewDialog">
-            <i class="pi pi-image" />
-            试一试
-          </button>
-          <button
-            class="delete-preset-btn"
-            :disabled="imageCompression.presets.length <= 1"
-            v-tooltip.top="imageCompression.presets.length <= 1 ? '至少保留一个方案' : undefined"
-            @click="handleDeletePreset(imageCompression.activePresetId)"
-          >
-            <i class="pi pi-trash" />
-            删除此方案
-          </button>
-        </div>
-      </div>
-    </Transition>
-  </div>
+    <div class="preset-actions">
+      <button class="preview-btn" @click="openPreviewDialog">
+        <i class="pi pi-image" />
+        试一试
+      </button>
+      <button
+        class="delete-preset-btn"
+        :disabled="imageCompression.presets.length <= 1"
+        v-tooltip.top="imageCompression.presets.length <= 1 ? '至少保留一个方案' : undefined"
+        @click="handleDeletePreset(imageCompression.activePresetId)"
+      >
+        <i class="pi pi-trash" />
+        删除此方案
+      </button>
+    </div>
+  </CollapsibleSettingsCard>
 </template>
 
 <style scoped>
 @import url('../../styles/settings-shared.css');
-
-/* --- Collapsible Container --- */
-
-.compression-collapsible {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--settings-card-radius, var(--radius-lg));
-  overflow: hidden;
-}
-
-.card-content {
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--border-subtle);
-
-  /* 覆盖 settings-shared.css 中 .card-content { opacity: 0 }：
-     本组件改用 <Transition> 控制显隐，不依赖 .expanded class */
-  opacity: 1;
-}
-
-/* --- 折叠动效 --- */
-
-.collapse-smooth-enter-active,
-.collapse-smooth-leave-active {
-  transition:
-    max-height var(--duration-medium) var(--ease-standard),
-    opacity var(--duration-medium) var(--ease-standard);
-  overflow: hidden;
-  will-change: max-height, opacity;
-}
-
-.collapse-smooth-enter-from,
-.collapse-smooth-leave-to {
-  max-height: 0;
-  opacity: 0;
-}
-
-.collapse-smooth-enter-to,
-.collapse-smooth-leave-from {
-  max-height: 1000px;
-  opacity: 1;
-}
 
 /* --- Preset Actions --- */
 
@@ -285,16 +219,6 @@ function handleEditInputMount(el: HTMLInputElement | null) {
 .preview-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-/* --- 箭头图标旋转动效 --- */
-
-.chevron-icon {
-  transition: transform var(--duration-medium) var(--ease-standard);
-}
-
-.chevron-icon.rotated {
-  transform: rotate(180deg);
 }
 
 </style>
