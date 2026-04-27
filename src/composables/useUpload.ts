@@ -194,6 +194,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
 
       // 收集成功上传的链接（用于自动复制）
       const collectedLinks: CopyLinkItem[] = [];
+      const batchCollectedLinks: Array<Array<CopyLinkItem | undefined> | undefined> = [];
       const uploadSummary: UploadSessionSummary = {
         total: 0,
         success: 0,
@@ -264,7 +265,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         }
 
         // 3. 立即开始上传该批
-        await processUploadQueue(
+        const batchLinks = await processUploadQueue(
           queueItems,
           config,
           enabledServices,
@@ -277,9 +278,10 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             weiboPrefix: activePrefix.value,
             toast,
           },
-          collectedLinks,
+          undefined,
           uploadSummary
         );
+        batchCollectedLinks[batchIndex] = batchLinks;
 
         log.debug(`批次 ${batchIndex + 1}/${batches.length} 完成：${queueItems.length} 个文件`);
       };
@@ -316,6 +318,11 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       });
 
       log.info('所有批次处理完成');
+      collectedLinks.push(
+        ...batchCollectedLinks.flatMap(batchLinks =>
+          (batchLinks ?? []).filter((item): item is CopyLinkItem => Boolean(item))
+        )
+      );
 
       // 自动复制链接到剪贴板（使用统一 useCopyLink）
       const autoCopyEnabled = config.linkOutput?.autoCopy !== false;

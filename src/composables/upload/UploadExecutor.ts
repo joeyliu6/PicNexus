@@ -68,19 +68,20 @@ export async function processUploadQueue(
   ctx: UploadExecutorContext,
   collectedLinks?: CopyLinkItem[],
   uploadSummary?: UploadSessionSummary
-): Promise<void> {
+): Promise<Array<CopyLinkItem | undefined>> {
   const { queueManager, saveHistoryItemImmediate, addResultToHistoryItem, saveHistoryItem, weiboPrefix, toast } = ctx;
 
   if (!queueManager) {
     log.error('上传队列管理器未初始化');
     toast.showConfig('error', TOAST_MESSAGES.upload.failed('队列管理器未初始化'));
-    return;
+    return [];
   }
 
   const multiServiceUploader = new MultiServiceUploader();
+  const orderedCollectedLinks: Array<CopyLinkItem | undefined> = [];
 
   // 为每个队列项创建上传任务
-  const uploadTasks = queueItems.map(({ itemId, filePath, uploadFilePath, fileName }) => {
+  const uploadTasks = queueItems.map(({ itemId, filePath, uploadFilePath, fileName }, queueIndex) => {
     // itemId 在创建时已经过重复检查
     if (!itemId) {
       log.debug(`跳过无效队列项: ${fileName}`);
@@ -253,12 +254,12 @@ export async function processUploadQueue(
         }
 
         // 收集主力图床链接（用于自动复制，serviceId 用于统一前缀处理）
-        if (result.primaryUrl && collectedLinks) {
-          collectedLinks.push({
+        if (result.primaryUrl) {
+          orderedCollectedLinks[queueIndex] = {
             url: result.primaryUrl,
             fileName,
             serviceId: result.primaryService as ServiceType,
-          });
+          };
         }
 
         queueManager.markItemComplete(itemId, thumbUrl);
@@ -332,7 +333,7 @@ export async function processUploadQueue(
   let taskIndex = 0;
   const results: PromiseSettledResult<void>[] = [];
 
-  return new Promise<void>((resolve) => {
+  await new Promise<void>((resolve) => {
     const runNext = () => {
       // 所有任务都已启动且完成
       if (taskIndex >= uploadTasks.length && activeCount === 0) {
@@ -364,4 +365,12 @@ export async function processUploadQueue(
 
     runNext(); // 启动初始批次
   });
+
+  if (collectedLinks) {
+    collectedLinks.push(
+      ...orderedCollectedLinks.filter((item): item is CopyLinkItem => Boolean(item))
+    );
+  }
+
+  return orderedCollectedLinks;
 }

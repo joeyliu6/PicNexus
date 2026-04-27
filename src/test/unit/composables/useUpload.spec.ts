@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 import { DEFAULT_CONFIG } from '../../../config/types';
 
 const {
@@ -36,6 +37,7 @@ const selectedServicesRef = ref(['jd', 'upyun']);
 const availableServicesRef = ref(['jd', 'upyun']);
 const serviceConfigStatusRef = ref({});
 const activePrefixRef = ref<string | null>(null);
+const invokeMock = vi.mocked(invoke);
 
 vi.mock('../../../store/instances', () => ({
   configStore: {
@@ -131,6 +133,46 @@ function createQueueManager() {
   };
 }
 
+function createMultiQueueManager() {
+  const items = new Map<string, any>();
+  let nextId = 0;
+
+  return {
+    addFile: vi.fn((filePath: string, fileName: string, enabledServices: string[]) => {
+      const id = `queue-${nextId++}`;
+      items.set(id, {
+        id,
+        fileName,
+        filePath,
+        enabledServices,
+        serviceProgress: Object.fromEntries(
+          enabledServices.map(serviceId => [
+            serviceId,
+            { serviceId, progress: 0, status: '等待中...' },
+          ]),
+        ),
+        status: 'pending',
+      });
+      return id;
+    }),
+    getItem: vi.fn((itemId: string) => items.get(itemId)),
+    updateItem: vi.fn((itemId: string, updates: Record<string, unknown>) => {
+      const item = items.get(itemId);
+      if (!item) return;
+      if (updates.serviceProgress) {
+        item.serviceProgress = {
+          ...item.serviceProgress,
+          ...(updates.serviceProgress as Record<string, unknown>),
+        };
+      }
+      Object.assign(item, updates);
+    }),
+    updateServiceProgress: vi.fn(),
+    markItemComplete: vi.fn(),
+    markItemFailed: vi.fn(),
+  };
+}
+
 describe('useUploadManager', () => {
   beforeEach(() => {
     configStoreGetMock.mockReset().mockResolvedValue({
@@ -147,6 +189,7 @@ describe('useUploadManager', () => {
     addResultToHistoryItemMock.mockReset().mockResolvedValue(true);
     copyLinksMock.mockReset().mockResolvedValue({ ok: true, copiedCount: 0, format: 'url' });
     checkNetworkConnectivityMock.mockReset().mockResolvedValue(true);
+    invokeMock.mockReset().mockResolvedValue({ width: 100, height: 80 });
     toastSuccessMock.mockReset();
     toastWarnMock.mockReset();
     toastErrorMock.mockReset();
@@ -227,5 +270,65 @@ describe('useUploadManager', () => {
       '成功的链接已复制。可在队列中对失败项重试。'
     );
     expect(toastSuccessMock).not.toHaveBeenCalled();
+  });
+
+  it('copies uploaded links in input order even when the second batch finishes first', async () => {
+    configStoreGetMock.mockResolvedValue({
+      ...DEFAULT_CONFIG,
+      enabledServices: ['jd'],
+      linkOutput: {
+        ...DEFAULT_CONFIG.linkOutput!,
+        autoCopy: true,
+      },
+    });
+    copyLinksMock.mockResolvedValue({ ok: true, copiedCount: 51, format: 'url' });
+    uploadToMultipleServicesMock.mockImplementation(
+      async (
+        filePath: string,
+        _enabledServices: string[],
+        _config: unknown,
+        _onProgress?: unknown,
+        onServiceResult?: (result: any) => void | Promise<void>
+      ) => {
+        const fileName = filePath.split(/[\\/]/).pop() ?? filePath;
+        if (fileName !== 'file-51.jpg') {
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+
+        const success = {
+          serviceId: 'jd',
+          status: 'success' as const,
+          result: {
+            serviceId: 'jd',
+            fileKey: `${fileName}-key`,
+            url: `https://example.com/${fileName}`,
+          },
+        };
+
+        await onServiceResult?.(success);
+
+        return {
+          primaryService: 'jd',
+          primaryUrl: success.result.url,
+          results: [success],
+        };
+      }
+    );
+
+    const queueManager = createMultiQueueManager();
+    const { useUploadManager } = await import('../../../composables/useUpload');
+    const { handleFilesUpload } = useUploadManager(queueManager as never);
+    const filePaths = Array.from(
+      { length: 51 },
+      (_, index) => `C:/tmp/file-${String(index + 1).padStart(2, '0')}.jpg`
+    );
+
+    await handleFilesUpload(filePaths);
+
+    expect(copyLinksMock).toHaveBeenCalledTimes(1);
+    const copiedItems = copyLinksMock.mock.calls[0][0];
+    expect(copiedItems.map((item: { fileName: string }) => item.fileName)).toEqual(
+      filePaths.map(filePath => filePath.split(/[\\/]/).pop())
+    );
   });
 });

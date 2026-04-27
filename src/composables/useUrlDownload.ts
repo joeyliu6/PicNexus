@@ -77,7 +77,7 @@ export function useUrlDownload() {
     isDownloading.value = true;
 
     try {
-      const filePaths: string[] = [];
+      const filePathsByIndex: Array<string | undefined> = [];
       const errors: string[] = [];
 
       // 并发下载，限制并发数
@@ -91,11 +91,12 @@ export function useUrlDownload() {
             return;
           }
           while (active < MAX_CONCURRENT_DOWNLOADS && index < urls.length) {
-            const currentUrl = urls[index++];
+            const currentIndex = index++;
+            const currentUrl = urls[currentIndex];
             active++;
             downloadSingle(currentUrl)
               .then((path) => {
-                filePaths.push(path);
+                filePathsByIndex[currentIndex] = path;
                 log.info(`下载成功: ${currentUrl}`);
               })
               .catch((error) => {
@@ -113,6 +114,7 @@ export function useUrlDownload() {
       });
 
       // 结果处理
+      const filePaths = filePathsByIndex.filter((path): path is string => Boolean(path));
       if (filePaths.length === 0) {
         const detail = errors.length === 1
           ? errors[0]
