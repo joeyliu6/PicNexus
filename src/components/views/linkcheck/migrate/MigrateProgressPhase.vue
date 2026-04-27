@@ -17,11 +17,13 @@ import { createLogger } from '../../../../utils/logger';
 import { historyDB } from '../../../../services/database';
 import { MIGRATE_KEY } from './keys';
 import { buildCsvReport, buildTxtReport } from './reportExport';
+import { buildMigrateProgressTooltip } from './utils';
 import { useFilterBar } from './composables/useFilterBar';
 import type { MigrateItemStatus } from '../../../../types/batchMigrate';
 import MigrateItemRow from './components/MigrateItemRow.vue';
 import type { MigrateRowItem } from './components/migrateRowTypes';
-import MigrateBottomBar, { type StatePill } from './components/MigrateBottomBar.vue';
+import MigrateBottomBar from './components/MigrateBottomBar.vue';
+import type { StatePill } from '../common/StatePill.vue';
 import MigratePagination from './components/MigratePagination.vue';
 import MigrateFilterBar from './components/MigrateFilterBar.vue';
 import { type MigrateStatusFilter } from './components/chips/MigrateStatusFilterChips.vue';
@@ -42,7 +44,8 @@ const {
   migrateResult, resetToConfiguring, retryingIds, retryFailed,
   retrySingleFailed,
   isPaused, isPausing, isCancelling, pauseMigrate, resumeMigrate,
-  migrateStats,
+  migrateStats, globalProgress, cumulativeCounts,
+  estimatedTimeRemaining, averageSpeed, concurrentCount,
 } = ctx;
 
 // ============================================
@@ -227,11 +230,27 @@ const canRetryAll = computed(() =>
 
 const statePill = computed<StatePill | null>(() => {
   if (phase.value !== 'migrating') return null;
+  const tooltip = migrateProgressTooltip.value;
   // 取消状态优先——用户点取消同时若在途条目未落定，pausing 会被短暂命中，以取消语义为准
-  if (isCancelling.value) return { tone: 'cancelling', icon: 'pi pi-spin pi-spinner', label: '正在取消…' };
-  if (isPausing.value) return { tone: 'pausing', icon: 'pi pi-spin pi-spinner', label: '正在暂停…' };
-  if (isPaused.value) return { tone: 'paused', icon: 'pi pi-pause', label: '已暂停' };
-  return { tone: 'running', icon: '', label: '运行中' };
+  if (isCancelling.value) return { tone: 'cancelling', icon: 'pi pi-spin pi-spinner', label: '正在取消…', tooltip };
+  if (isPausing.value) return { tone: 'pausing', icon: 'pi pi-spin pi-spinner', label: '正在暂停…', tooltip };
+  if (isPaused.value) return { tone: 'paused', icon: 'pi pi-pause', label: '已暂停', tooltip };
+  return { tone: 'running', label: '运行中', tooltip };
+});
+
+const migrateProgressTooltip = computed(() => {
+  const counts = cumulativeCounts.value;
+  const total = globalProgress.value.total || migrateStats.value.totalCount;
+  return buildMigrateProgressTooltip({
+    success: counts.success,
+    failed: counts.failed,
+    skipped: counts.skipped,
+    total,
+    avgBytesPerSec: averageSpeed.value,
+    etaMs: estimatedTimeRemaining.value,
+    concurrentCount: concurrentCount.value,
+    state: isCancelling.value ? 'cancelling' : isPausing.value ? 'pausing' : isPaused.value ? 'paused' : 'running',
+  });
 });
 
 const currentTargetServiceIds = computed(() => {

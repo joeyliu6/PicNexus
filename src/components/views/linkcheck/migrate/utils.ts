@@ -33,6 +33,61 @@ export function formatNumber(n: number): string {
   return n.toLocaleString();
 }
 
+export type MigrateProgressTooltipState = 'running' | 'pausing' | 'paused' | 'cancelling';
+
+export interface MigrateProgressTooltipInput {
+  success: number;
+  failed: number;
+  skipped: number;
+  total: number;
+  avgBytesPerSec: number;
+  etaMs: number | null;
+  concurrentCount: number;
+  state: MigrateProgressTooltipState;
+}
+
+export type MigrateProgressTooltipItemTone = 'neutral' | 'success' | 'danger' | 'warning' | 'muted';
+
+export interface MigrateProgressTooltipItem {
+  label: string;
+  value: string;
+  tone?: MigrateProgressTooltipItemTone;
+}
+
+export interface MigrateProgressTooltip {
+  title: string;
+  items: MigrateProgressTooltipItem[];
+  notes?: string[];
+}
+
+export function buildMigrateProgressTooltip(input: MigrateProgressTooltipInput): MigrateProgressTooltip {
+  const processed = input.success + input.failed + input.skipped;
+  const percent = input.total > 0 ? Math.min(100, Math.round((processed / input.total) * 100)) : 0;
+  const notes: string[] = [];
+  if (input.state === 'cancelling') {
+    notes.push('正在等待已发起的迁移任务落定，已成功写入的数据会保留');
+  } else if (input.state === 'pausing') {
+    notes.push('正在等待在途条目落定，暂停后不会继续分发新条目');
+  } else if (input.state === 'paused') {
+    notes.push('迁移已暂停，可继续后处理剩余条目');
+  }
+
+  return {
+    title: '批量迁移进度',
+    items: [
+      { label: '已处理', value: `${formatNumber(processed)} / ${formatNumber(input.total)}` },
+      { label: '完成度', value: `${percent}%` },
+      { label: '成功', value: formatNumber(input.success), tone: 'success' },
+      { label: '失败', value: formatNumber(input.failed), tone: input.failed > 0 ? 'danger' : 'neutral' },
+      { label: '跳过', value: formatNumber(input.skipped), tone: input.skipped > 0 ? 'warning' : 'neutral' },
+      { label: '平均速度', value: formatSpeed(input.avgBytesPerSec) },
+      { label: '预计剩余', value: formatTime(input.etaMs) },
+      { label: '并发数', value: formatNumber(input.concurrentCount) },
+    ],
+    notes: notes.length > 0 ? notes : undefined,
+  };
+}
+
 export function isPublicService(serviceId: string): boolean {
   return PUBLIC_SERVICES.includes(serviceId as ServiceType);
 }
