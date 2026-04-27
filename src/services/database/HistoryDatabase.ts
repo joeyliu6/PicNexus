@@ -523,6 +523,8 @@ class HistoryDatabase {
     serviceFilter?: string;
     hasServiceId?: string | string[];
     timestampAfter?: number;
+    cursorTimestamp?: number;
+    cursorId?: string;
     limit?: number;
     offset?: number;
   }): Promise<{ items: HistoryItem[]; total: number; hasMore: boolean }> {

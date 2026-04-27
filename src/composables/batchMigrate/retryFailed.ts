@@ -25,15 +25,16 @@ export interface RetryDeps {
   retryingIds: Ref<Set<string>>;
   getOrCacheConfig: () => Promise<UserConfig>;
   getMultiUploader: () => MultiServiceUploader;
+  getRetryTargets?: () => string[];
 }
 
 export function createRetry(deps: RetryDeps) {
-  const { migrateResult, retryingIds, getOrCacheConfig, getMultiUploader } = deps;
+  const { migrateResult, retryingIds, getOrCacheConfig, getMultiUploader, getRetryTargets } = deps;
 
   async function retrySingleFailed(historyId: string): Promise<void> {
     if (!migrateResult.value) return;
     if (retryingIds.value.has(historyId)) return;
-    const targets = migrateResult.value.targetServiceIds;
+    const targets = getRetryTargets?.() ?? migrateResult.value.targetServiceIds;
     if (targets.length === 0) return;
     if (migrateResult.value.failures.findIndex(f => f.historyId === historyId) < 0) return;
 

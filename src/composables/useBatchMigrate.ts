@@ -525,6 +525,7 @@ export function useBatchMigrateManager() {
     migrateResult, retryingIds,
     getOrCacheConfig,
     getMultiUploader: () => cachedUploader ?? new MultiServiceUploader(),
+    getRetryTargets: () => checkedTargets.value.map(s => s.serviceId),
   });
 
   // ============================================

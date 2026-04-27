@@ -89,23 +89,41 @@ export async function preloadAllPending(args: PreloadArgs): Promise<PreloadedIte
   }
 
   // 首屏：100 条让用户立刻看到列表
+  let cursorTimestamp: number | undefined;
+  let cursorId: string | undefined;
+  const updateCursor = (batch: HistoryItem[]) => {
+    const last = batch[batch.length - 1];
+    if (last) {
+      cursorTimestamp = last.timestamp;
+      cursorId = last.id;
+    }
+  };
+
   const first = await historyDB.getItemsByBackupCount({ ...params, limit: PRELOAD_FIRST_CHUNK, offset: 0 });
   const totalInDB = first.total;
   commit(first.items.map(makePreloaded).filter((p): p is PreloadedItem => p !== null));
-  let offset = first.items.length;
+  updateCursor(first.items);
+  let loadedFromDb = first.items.length;
 
   // 流式加载剩余（每块 2000），每块之间让出主线程
-  while (offset < totalInDB && !isCancelled.value) {
+  while (loadedFromDb < totalInDB && !isCancelled.value) {
     while (isPaused.value && !isCancelled.value) {
       await new Promise(resolve => setTimeout(resolve, 200));
     }
     if (isCancelled.value) break;
 
     await yieldToMain();
-    const chunk = await historyDB.getItemsByBackupCount({ ...params, limit: PRELOAD_STREAM_CHUNK, offset });
+    const chunk = await historyDB.getItemsByBackupCount({
+      ...params,
+      limit: PRELOAD_STREAM_CHUNK,
+      offset: 0,
+      cursorTimestamp,
+      cursorId,
+    });
     if (chunk.items.length === 0) break;
     commit(chunk.items.map(makePreloaded).filter((p): p is PreloadedItem => p !== null));
-    offset += chunk.items.length;
+    updateCursor(chunk.items);
+    loadedFromDb += chunk.items.length;
   }
 
   return items;

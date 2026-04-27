@@ -27,11 +27,22 @@ export async function getItemsByBackupCountQuery(
     /** 筛选"在指定图床上有成功记录"的项目（基于 successful_service_ids），支持单个或多个 */
     hasServiceId?: string | string[];
     timestampAfter?: number;
+    cursorTimestamp?: number;
+    cursorId?: string;
     limit?: number;
     offset?: number;
   },
 ): Promise<{ items: HistoryItem[]; total: number; hasMore: boolean }> {
-  const { maxSuccessCount, serviceFilter, hasServiceId, timestampAfter, limit = 500, offset = 0 } = options;
+  const {
+    maxSuccessCount,
+    serviceFilter,
+    hasServiceId,
+    timestampAfter,
+    cursorTimestamp,
+    cursorId,
+    limit = 500,
+    offset = 0,
+  } = options;
 
   // 全部条件走索引 idx_success_count(success_count, timestamp DESC)
   // migration_skip = 0 过滤掉用户永久跳过的项
@@ -55,6 +66,11 @@ export async function getItemsByBackupCountQuery(
     conditions.push(`timestamp >= $${params.length}`);
   }
 
+  if (cursorTimestamp !== undefined && cursorId) {
+    params.push(cursorTimestamp, cursorId);
+    conditions.push(`(timestamp < $${params.length - 1} OR (timestamp = $${params.length - 1} AND id < $${params.length}))`);
+  }
+
   const where = `WHERE ${conditions.join(' AND ')}`;
 
   // 总数查询（走索引，极快）
@@ -67,7 +83,7 @@ export async function getItemsByBackupCountQuery(
   const pageParams = [...params, limit, offset];
   const rows = await db.select<HistoryItemRow[]>(
     `SELECT ${COLUMNS_SQL} FROM history_items ${where}
-     ORDER BY timestamp DESC
+     ORDER BY timestamp DESC, id DESC
      LIMIT $${pageParams.length - 1} OFFSET $${pageParams.length}`,
     pageParams
   );

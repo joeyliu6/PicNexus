@@ -244,6 +244,7 @@ export async function processBatch(
     return semaphore.withPermit(async () => {
       if (isCancelled.value) {
         status.status = 'skipped';
+        onItemDone(status);
         return;
       }
       // 暂停期间拿到 permit 的新条目：保持 pending，不计入统计，主循环 resume 后重新查询
