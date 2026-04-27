@@ -26,6 +26,10 @@ const migratingTargetServiceIds = computed(() =>
 const doneTargetServiceIds = computed(() =>
   migrateResult.value?.targetServiceIds ?? [],
 );
+
+const donePartialFailureCount = computed(() =>
+  migrateResult.value?.partialFailures.length ?? 0,
+);
 </script>
 
 <template>
@@ -65,6 +69,9 @@ const doneTargetServiceIds = computed(() =>
       </span>
       <span v-if="migrateResult.failedCount > 0" class="ss-chip ss-chip--failed">
         <i class="pi pi-times" /> {{ formatNumber(migrateResult.failedCount) }}
+      </span>
+      <span v-if="donePartialFailureCount > 0" class="ss-chip ss-chip--partial">
+        <i class="pi pi-exclamation-triangle" /> {{ formatNumber(donePartialFailureCount) }} 部分成功
       </span>
       <span v-if="migrateResult.skippedCount > 0" class="ss-chip ss-chip--skipped">
         <i class="pi pi-eye-slash" /> {{ formatNumber(migrateResult.skippedCount) }}
@@ -125,6 +132,11 @@ const doneTargetServiceIds = computed(() =>
 .ss-chip--failed {
   background: var(--error-alpha-10);
   color: var(--error);
+}
+
+.ss-chip--partial {
+  background: var(--warning-alpha-10);
+  color: var(--warning);
 }
 
 .ss-chip--skipped {
