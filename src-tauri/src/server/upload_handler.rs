@@ -8,6 +8,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::Mutex;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use reqwest::multipart;
@@ -28,6 +29,7 @@ type HmacSha1 = Hmac<Sha1>;
 /// 错误响应预览最大字节数（用于失败日志/错误信息截断）
 const ERROR_RESPONSE_PREVIEW_LEN: usize = 200;
 const ZHIHU_SOURCE_DEFAULT_VALUE: &str = "172ae18b";
+static UPLOAD_TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// UTF-8 安全的字符串预览：按字节数截断，但保证不切在多字节字符中间
 ///
@@ -42,6 +44,12 @@ fn safe_preview(s: &str, max_bytes: usize) -> &str {
         end -= 1;
     }
     &s[..end]
+}
+
+fn unique_upload_temp_dir(base_dir: &std::path::Path) -> std::path::PathBuf {
+    let counter = UPLOAD_TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let timestamp = chrono::Utc::now().timestamp_millis();
+    base_dir.join(format!("{}-{}-{}", timestamp, std::process::id(), counter))
 }
 
 fn is_zhimg_host(host: &str) -> bool {
@@ -383,8 +391,21 @@ pub async fn handle_file_upload(
         .and_then(|n| n.to_str())
         .unwrap_or("upload.png")
         .to_string();
-    let temp_path = temp_dir.join(&safe_filename);
+    let request_temp_dir = unique_upload_temp_dir(&temp_dir);
+    if let Err(e) = std::fs::create_dir_all(&request_temp_dir) {
+        return (
+            StatusCode::OK,
+            Json(UploadResponse {
+                success: false,
+                result: None,
+                message: Some(format!("无法创建请求临时目录: {}", e)),
+            }),
+        );
+    }
+
+    let temp_path = request_temp_dir.join(&safe_filename);
     if let Err(e) = std::fs::write(&temp_path, &body) {
+        let _ = std::fs::remove_dir_all(&request_temp_dir);
         return (
             StatusCode::OK,
             Json(UploadResponse {
@@ -397,6 +418,7 @@ pub async fn handle_file_upload(
 
     let result = upload_single_file(temp_path.to_str().unwrap_or(""), cfg).await;
     let _ = std::fs::remove_file(&temp_path);
+    let _ = std::fs::remove_dir(&request_temp_dir);
 
     match result {
         Ok(url) => {
@@ -1311,4 +1333,21 @@ async fn server_upload_upyun(
         format!("{}/{}", public_domain.trim_end_matches('/'), file_name)
     };
     Ok(url)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unique_upload_temp_dir;
+
+    #[test]
+    fn unique_upload_temp_dir_creates_distinct_request_dirs() {
+        let base = std::env::temp_dir().join("picnexus_uploads_test");
+
+        let first = unique_upload_temp_dir(&base);
+        let second = unique_upload_temp_dir(&base);
+
+        assert_ne!(first, second);
+        assert_eq!(first.parent(), Some(base.as_path()));
+        assert_eq!(second.parent(), Some(base.as_path()));
+    }
 }
