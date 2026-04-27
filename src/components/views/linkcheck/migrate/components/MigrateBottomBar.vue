@@ -5,9 +5,7 @@
  */
 import { ref } from 'vue';
 import Menu from 'primevue/menu';
-
-export type StatePillTone = 'running' | 'pausing' | 'paused' | 'cancelling';
-export interface StatePill { tone: StatePillTone; icon: string; label: string }
+import StatePill, { type StatePill as StatePillType } from '../../common/StatePill.vue';
 
 interface Props {
   mode: 'migrating' | 'done';
@@ -17,7 +15,7 @@ interface Props {
   isPausing?: boolean;
   /** 已点取消但 finalizeResult 尚未触发（正在取消...） */
   isCancelling?: boolean;
-  statePill?: StatePill | null;
+  statePill?: StatePillType | null;
   /** done 态：是否有失败项可重试（由父组件判定） */
   canRetryAll?: boolean;
   /** done 态：正在重试的条目数（>0 时禁用按钮 + 显 spinner） */
@@ -59,11 +57,7 @@ function toggleExportMenu(ev: MouseEvent) {
   <div class="bm-bottom">
     <div class="bm-left">
       <slot name="pagination" />
-      <span v-if="statePill" class="bm-state-pill" :class="`bm-state-pill--${statePill.tone}`">
-        <span v-if="statePill.tone === 'running'" class="bm-state-pill__dot" />
-        <i v-else :class="statePill.icon" aria-hidden="true" />
-        {{ statePill.label }}
-      </span>
+      <StatePill :pill="statePill" />
     </div>
     <div class="bottom-actions">
       <template v-if="mode === 'migrating'">
@@ -167,52 +161,4 @@ function toggleExportMenu(ev: MouseEvent) {
   cursor: progress;
 }
 
-/* ── 运行状态 pill ── */
-.bm-state-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 4px/10px pill 内边距无对应 spacing token */
-  padding: 4px 10px;
-  border-radius: var(--radius-full);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-medium);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.bm-state-pill i { font-size: var(--text-2xs); }
-
-.bm-state-pill--running {
-  background: var(--state-success-bg);
-  color: var(--state-success-text);
-}
-
-.bm-state-pill__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--radius-full);
-  background: var(--state-success-text);
-  animation: bm-pulse var(--duration-breathe) ease-in-out infinite;
-}
-
-@keyframes bm-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-
-.bm-state-pill--pausing {
-  background: var(--state-warn-bg);
-  color: var(--state-warn-text);
-}
-
-.bm-state-pill--paused {
-  background: var(--bg-secondary);
-  color: var(--text-muted);
-}
-
-.bm-state-pill--cancelling {
-  background: var(--state-error-bg);
-  color: var(--state-error-text);
-}
 </style>

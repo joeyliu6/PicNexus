@@ -11,26 +11,46 @@ import { computed } from 'vue';
  */
 
 export type StatePillTone = 'running' | 'pausing' | 'paused' | 'cancelling';
+
+export type StatePillTooltipTone = 'neutral' | 'success' | 'danger' | 'warning' | 'muted';
+
+export interface StatePillTooltipItem {
+  label: string;
+  value: string;
+  tone?: StatePillTooltipTone;
+}
+
+export interface StatePillTooltip {
+  title: string;
+  items?: StatePillTooltipItem[];
+  notes?: string[];
+}
+
 export interface StatePill {
   tone: StatePillTone;
   /** PrimeIcons class（running 态会被替换为自带圆点，无需传） */
   icon?: string;
   label: string;
+  /** 仅保留为上游进度语义，不再渲染底栏圆环 */
   progressPercent?: number;
+  /** 兼容旧调用：首行作为标题，后续行作为提示文本 */
   progressLabel?: string;
+  tooltip?: StatePillTooltip;
 }
 
 const props = defineProps<{ pill: StatePill | null }>();
 
-const progressPercent = computed(() => {
-  const value = props.pill?.progressPercent;
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  return Math.min(100, Math.max(0, Math.round(value)));
-});
+const tooltip = computed<StatePillTooltip | null>(() => {
+  if (!props.pill) return null;
+  if (props.pill.tooltip) return props.pill.tooltip;
+  if (!props.pill.progressLabel) return null;
 
-const progressStyle = computed(() => {
-  if (progressPercent.value === null) return undefined;
-  return { '--pill-progress': `${progressPercent.value}%` };
+  const lines = props.pill.progressLabel.split('\n').filter(Boolean);
+  if (lines.length === 0) return null;
+  return {
+    title: lines[0],
+    notes: lines.slice(1),
+  };
 });
 </script>
 
@@ -39,24 +59,26 @@ const progressStyle = computed(() => {
     v-if="pill"
     class="bm-state-pill"
     :class="`bm-state-pill--${pill.tone}`"
+    :tabindex="tooltip ? 0 : undefined"
   >
-    <span
-      v-if="progressPercent !== null"
-      class="bm-state-pill__progress"
-      :style="progressStyle"
-      role="progressbar"
-      :aria-valuenow="progressPercent"
-      aria-valuemin="0"
-      aria-valuemax="100"
-      :aria-label="pill.progressLabel || `${progressPercent}%`"
-    >
-      <span class="bm-state-pill__progress-core" />
-    </span>
-    <span v-else-if="pill.tone === 'running'" class="bm-state-pill__dot" />
+    <span v-if="pill.tone === 'running'" class="bm-state-pill__dot" />
     <i v-else-if="pill.icon" :class="pill.icon" aria-hidden="true" />
-    {{ pill.label }}
-    <span v-if="pill.progressLabel" class="bm-state-pill__tooltip" role="tooltip">
-      {{ pill.progressLabel }}
+    <span class="bm-state-pill__label">{{ pill.label }}</span>
+    <span v-if="tooltip" class="bm-state-pill__tooltip" role="tooltip">
+      <span class="bm-state-pill__tooltip-title">{{ tooltip.title }}</span>
+      <span v-if="tooltip.items?.length" class="bm-state-pill__tooltip-grid">
+        <template v-for="item in tooltip.items" :key="`${item.label}-${item.value}`">
+          <span class="bm-state-pill__tooltip-key">{{ item.label }}</span>
+          <span class="bm-state-pill__tooltip-value" :class="item.tone ? `is-${item.tone}` : undefined">
+            {{ item.value }}
+          </span>
+        </template>
+      </span>
+      <span v-if="tooltip.notes?.length" class="bm-state-pill__tooltip-notes">
+        <span v-for="note in tooltip.notes" :key="note" class="bm-state-pill__tooltip-note">
+          {{ note }}
+        </span>
+      </span>
     </span>
   </span>
 </template>
@@ -75,9 +97,14 @@ const progressStyle = computed(() => {
   white-space: nowrap;
   flex-shrink: 0;
   cursor: help;
+  outline: none;
 }
 
 .bm-state-pill i { font-size: var(--text-2xs); }
+
+.bm-state-pill:focus-visible {
+  box-shadow: 0 0 0 2px var(--primary-alpha-15);
+}
 
 .bm-state-pill__tooltip {
   position: absolute;
@@ -85,18 +112,19 @@ const progressStyle = computed(() => {
   bottom: calc(100% + var(--space-sm));
   z-index: var(--z-tooltip);
   width: max-content;
-  max-width: 260px;
-  padding: var(--space-sm) var(--space-sm-md);
-  border-radius: var(--radius-sm);
+  min-width: 230px;
+  max-width: 320px;
+  padding: var(--space-sm-md);
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   background: var(--bg-card);
   color: var(--text-secondary);
   box-shadow: var(--shadow-float);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-regular);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   line-height: var(--leading-normal);
   text-align: left;
-  white-space: pre-line;
+  white-space: normal;
   pointer-events: none;
   opacity: 0;
   transform: translateX(-50%) translateY(var(--space-2xs));
@@ -124,24 +152,51 @@ const progressStyle = computed(() => {
   transform: translateX(-50%);
 }
 
-.bm-state-pill__progress {
-  width: 18px;
-  height: 18px;
-  display: inline-grid;
-  place-items: center;
-  flex-shrink: 0;
-  border-radius: var(--radius-full);
-  background:
-    conic-gradient(currentcolor var(--pill-progress, 0%), transparent 0),
-    color-mix(in srgb, currentcolor 18%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentcolor 10%, transparent);
+.bm-state-pill__tooltip-title {
+  display: block;
+  margin-bottom: var(--space-sm);
+  color: var(--text-main);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
 }
 
-.bm-state-pill__progress-core {
-  width: 10px;
-  height: 10px;
-  border-radius: var(--radius-full);
-  background: var(--bg-secondary);
+.bm-state-pill__tooltip-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-xs) var(--space-md);
+}
+
+.bm-state-pill__tooltip-key {
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.bm-state-pill__tooltip-value {
+  justify-self: end;
+  color: var(--text-main);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.bm-state-pill__tooltip-value.is-success { color: var(--success); }
+.bm-state-pill__tooltip-value.is-danger { color: var(--error); }
+.bm-state-pill__tooltip-value.is-warning { color: var(--warning); }
+.bm-state-pill__tooltip-value.is-muted { color: var(--text-muted); }
+
+.bm-state-pill__tooltip-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.bm-state-pill__tooltip-note {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
 }
 
 .bm-state-pill--running {
@@ -170,10 +225,6 @@ const progressStyle = computed(() => {
 .bm-state-pill--paused {
   background: var(--bg-secondary);
   color: var(--text-muted);
-}
-
-.bm-state-pill--paused .bm-state-pill__progress-core {
-  background: var(--bg-primary);
 }
 
 .bm-state-pill--cancelling {
