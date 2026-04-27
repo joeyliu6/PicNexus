@@ -445,6 +445,10 @@ function navigateNext() {
   transform: translateY(-50%) scale(1.08);
 }
 
+.pswp--low-effects .pswp-nav {
+  backdrop-filter: none;
+}
+
 /*
  * 高斯模糊背景层
  * z-index: -1 → 渲染在 .pswp__bg 黑色遮罩层（z:auto+transform=0 级）之后
@@ -497,6 +501,15 @@ function navigateNext() {
 
 .pswp--picnexus .pswp-blur-bg img.is-loaded {
   opacity: 0.72;
+}
+
+.pswp--low-effects .pswp-blur-bg img {
+  filter: brightness(0.28);
+  transform: translateZ(0) scale(1.04);
+}
+
+.pswp--low-effects .pswp-blur-bg img.is-loaded {
+  opacity: 0.36;
 }
 
 /*

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { prefersReducedMotion, motionDuration } from '../../../utils/reducedMotion';
+import { prefersReducedMotion, prefersReducedVisualEffects, motionDuration } from '../../../utils/reducedMotion';
 
 function mockMatchMedia(matches: boolean) {
   vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches }));
@@ -36,5 +36,47 @@ describe('motionDuration', () => {
     mockMatchMedia(false);
     expect(motionDuration(300)).toBe(300);
     expect(motionDuration(0)).toBe(0);
+  });
+});
+
+describe('prefersReducedVisualEffects', () => {
+  it('偏好减弱动效时返回 true', () => {
+    mockMatchMedia(true);
+    expect(prefersReducedVisualEffects()).toBe(true);
+  });
+
+  it('CPU 核心较少时返回 true', () => {
+    mockMatchMedia(false);
+    Object.defineProperty(navigator, 'hardwareConcurrency', {
+      configurable: true,
+      value: 4,
+    });
+    expect(prefersReducedVisualEffects()).toBe(true);
+  });
+
+  it('设备内存较少时返回 true', () => {
+    mockMatchMedia(false);
+    Object.defineProperty(navigator, 'hardwareConcurrency', {
+      configurable: true,
+      value: 8,
+    });
+    Object.defineProperty(navigator, 'deviceMemory', {
+      configurable: true,
+      value: 4,
+    });
+    expect(prefersReducedVisualEffects()).toBe(true);
+  });
+
+  it('资源足够且无减弱偏好时返回 false', () => {
+    mockMatchMedia(false);
+    Object.defineProperty(navigator, 'hardwareConcurrency', {
+      configurable: true,
+      value: 8,
+    });
+    Object.defineProperty(navigator, 'deviceMemory', {
+      configurable: true,
+      value: 8,
+    });
+    expect(prefersReducedVisualEffects()).toBe(false);
   });
 });

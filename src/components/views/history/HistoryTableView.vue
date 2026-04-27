@@ -415,15 +415,12 @@ function handleCheckboxToggle(id: string) {
 }
 
 .thumb-preview-leave-active {
-  transition:
-    opacity var(--duration-medium) var(--ease-standard),
-    filter var(--duration-medium) var(--ease-standard);
-  will-change: opacity, filter;
+  transition: opacity var(--duration-medium) var(--ease-standard);
+  will-change: opacity;
 }
 
 .thumb-preview-leave-to {
   opacity: 0;
-  filter: blur(3px);
 }
 
 .global-thumb-hover-preview img {
@@ -436,7 +433,6 @@ function handleCheckboxToggle(id: string) {
   object-fit: contain;
   transition:
     opacity var(--preview-close-duration) var(--ease-standard),
-    filter var(--preview-close-duration) var(--ease-standard),
     transform var(--preview-close-duration) var(--ease-standard);
   transition-delay: 0ms;
   transform: translateZ(0) scale(1);
@@ -448,6 +444,5 @@ function handleCheckboxToggle(id: string) {
 
 .global-thumb-hover-preview.is-closing img {
   opacity: 0;
-  filter: blur(2px);
 }
 </style>

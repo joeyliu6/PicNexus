@@ -10,7 +10,7 @@
 import { ref, watch, onUnmounted, nextTick, type Ref, type ComputedRef } from 'vue';
 import PhotoSwipe from 'photoswipe';
 import type { PhotoSwipeOptions } from 'photoswipe';
-import { prefersReducedMotion, motionDuration } from '../../utils/reducedMotion';
+import { prefersReducedMotion, prefersReducedVisualEffects, motionDuration } from '../../utils/reducedMotion';
 
 export const SHOW_ANIMATION_DURATION = 300;
 export const HIDE_ANIMATION_DURATION = 280;
@@ -86,6 +86,7 @@ interface PswpSlideOptions {
 /** 构建 PhotoSwipe 初始化选项（纯函数，与生命周期解耦，便于阅读）*/
 function buildPswpOptions(slide: PswpSlideOptions): PhotoSwipeOptions {
   const reduced = prefersReducedMotion();
+  const lowEffects = prefersReducedVisualEffects();
   return {
     dataSource: [{
       src: slide.src,
@@ -126,7 +127,7 @@ function buildPswpOptions(slide: PswpSlideOptions): PhotoSwipeOptions {
     imageClickAction: 'zoom-or-close',
     doubleTapAction: 'zoom',
     // 主容器样式类
-    mainClass: 'pswp--picnexus',
+    mainClass: lowEffects ? 'pswp--picnexus pswp--low-effects' : 'pswp--picnexus',
   };
 }
 

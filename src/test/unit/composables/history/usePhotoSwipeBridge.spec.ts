@@ -48,6 +48,7 @@ vi.mock('photoswipe', () => ({
 
 vi.mock('../../../../utils/reducedMotion', () => ({
   prefersReducedMotion: () => false,
+  prefersReducedVisualEffects: () => false,
   motionDuration: (duration: number) => duration,
 }));
 
