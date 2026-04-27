@@ -34,6 +34,7 @@ export interface MigrateContext {
   retryingIds: Ref<Set<string>>;
   estimatedTimeRemaining: ComputedRef<number | null>;
   averageSpeed: ComputedRef<number>;
+  concurrentCount: ComputedRef<number>;
   initError: Ref<string | null>;
   initConfiguring: () => Promise<void>;
   applyFilter: () => Promise<void>;
