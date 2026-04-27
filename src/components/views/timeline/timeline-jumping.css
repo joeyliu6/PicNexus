@@ -17,16 +17,14 @@
 }
 
 /* 跳转期间 header 文字用骨架条代替：
- * - .group-date / .group-count 隐形（文字消失），.group-divider 保留显示（虚线本身是装饰）
- * - ::before 画左侧日期 shimmer，::after 画右侧张数 shimmer
+ * - .group-date 隐形（文字消失）
+ * - ::before 画左侧日期 shimmer
  * - 撤销 is-jumping 时伪元素消失，子元素 opacity 0→1 淡入真文字 */
-.timeline-view.is-jumping .group-header .group-date,
-.timeline-view.is-jumping .group-header .group-count {
+.timeline-view.is-jumping .group-header .group-date {
   opacity: 0;
 }
 
-.timeline-view.is-jumping .group-header::before,
-.timeline-view.is-jumping .group-header::after {
+.timeline-view.is-jumping .group-header::before {
   content: '';
   position: absolute;
   top: 50%;
@@ -46,18 +44,8 @@
   border-radius: var(--radius-sm);
 }
 
-/* 右侧张数 shimmer：胶囊形，对应 "📷 N 张" 的自然簇 */
-.timeline-view.is-jumping .group-header::after {
-  right: 0;
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 68px 模拟 icon+num+unit 的视觉宽度，无对应 spacing token */
-  width: 68px;
-  height: 1.2em;
-  border-radius: var(--radius-full);
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .timeline-view.is-jumping .group-header::before,
-  .timeline-view.is-jumping .group-header::after {
+  .timeline-view.is-jumping .group-header::before {
     animation: none;
   }
 }

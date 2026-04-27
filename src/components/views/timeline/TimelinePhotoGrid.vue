@@ -65,24 +65,11 @@ const emit = defineEmits<{
   (e: 'image-error', event: Event, id: string): void;
 }>();
 
-// skeleton 天显示 expectedCount，避免"先 0 再真数"的跳变；避免每次 render 线性查找
-const groupCountMap = computed(() => {
-  const m = new Map<string, number>();
-  for (const g of props.groups) {
-    m.set(g.id, g.isSkeleton ? (g.expectedCount ?? g.items.length) : g.items.length);
-  }
-  return m;
-});
-
 const groupMetaMap = computed(() => {
   const m = new Map<string, PhotoGroup>();
   for (const g of props.groups) m.set(g.id, g);
   return m;
 });
-
-function getGroupItemCount(groupId: string): number {
-  return groupCountMap.value.get(groupId) ?? 0;
-}
 
 // MM.DD 形式：月/日补零，纵向叠多组时和 tabular-nums 配合实现整齐对齐
 function formatGroupDate(groupId: string): string {
@@ -114,12 +101,6 @@ function getGroupYear(groupId: string): string {
       <div class="group-date">
         <span class="group-date-num">{{ formatGroupDate(header.groupId) }}</span>
         <span class="group-date-year">{{ getGroupYear(header.groupId) }}</span>
-      </div>
-      <div class="group-divider" aria-hidden="true"></div>
-      <div class="group-count">
-        <i class="pi pi-image group-count-icon" aria-hidden="true"></i>
-        <span class="group-count-num">{{ getGroupItemCount(header.groupId) }}</span>
-        <span class="group-count-unit">张</span>
       </div>
     </div>
 
@@ -204,38 +185,6 @@ function getGroupYear(groupId: string): string {
   flex-shrink: 0;
 }
 
-/* dashed 虚线：1px 间隔的破折号，仿日记本/胶片孔的低调质感
- * - 用 background-image 而非 border-style: dashed，浏览器对 dash 长度/间隔的渲染更可控
- * - mask 让两端轻微淡出，避免硬切日期/计数文字 */
-.group-divider {
-  flex: 1 1 auto;
-  height: 1px;
-  min-width: var(--space-lg);
-  background-image: linear-gradient(
-    to right,
-    var(--border-subtle) 0,
-    var(--border-subtle) 4px,
-    transparent 4px,
-    transparent 8px
-  );
-  background-size: 8px 1px;
-  background-repeat: repeat-x;
-  mask-image: linear-gradient(
-    to right,
-    transparent 0,
-    #000 16px,
-    #000 calc(100% - 16px),
-    transparent 100%
-  );
-}
-
-.group-count {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs-sm);
-  flex-shrink: 0;
-}
-
 .fast-mode-item {
   position: absolute;
   background: var(--bg-secondary);
@@ -265,24 +214,6 @@ function getGroupYear(groupId: string): string {
   letter-spacing: 0.04em;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
-}
-
-.group-count-icon {
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
-}
-
-.group-count-num {
-  font-size: var(--text-lg);
-  font-weight: var(--weight-semibold);
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-
-.group-count-unit {
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  color: var(--text-tertiary);
 }
 
 .all-loaded {
@@ -317,8 +248,7 @@ function getGroupYear(groupId: string): string {
     font-size: var(--text-lg);
   }
 
-  .group-date-year,
-  .group-divider {
+  .group-date-year {
     display: none;
   }
 }
