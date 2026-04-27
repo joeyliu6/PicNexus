@@ -280,7 +280,7 @@ function handleImgError(e: Event): void {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity var(--duration-normal), color var(--duration-normal), transform var(--duration-normal), filter var(--duration-normal), background var(--duration-normal);
+  transition: opacity var(--duration-normal), color var(--duration-normal), transform var(--duration-normal), filter var(--duration-normal);
   z-index: 2;
   cursor: pointer;
   font-size: var(--text-xs);
@@ -307,12 +307,6 @@ function handleImgError(e: Event): void {
 .favorite-btn:hover {
   opacity: 1;
   transform: scale(1.15);
-}
-
-/* 未收藏的空心星 hover 时加圆形毛玻璃底，跟复选框节奏对齐 */
-.favorite-btn:not(.favorited):hover {
-  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 照片上的半透明悬停背景，非主题色 */
-  background: rgb(0 0 0 / 35%);
 }
 
 .favorite-btn.favorited:hover {

@@ -203,7 +203,6 @@ function handleCheckboxToggle(id: string) {
             <i
               v-else
               :class="['pi row-favorite-btn', isItemFavorited(slotProps.data) ? 'pi-star-fill favorited' : 'pi-star']"
-              v-tooltip.top="isItemFavorited(slotProps.data) ? '取消收藏' : '收藏'"
               @click.stop="handleToggleFavorite(slotProps.data)"
             />
           </div>

@@ -119,7 +119,6 @@ watch(() => props.item.id, () => {
         class="action-btn"
         :class="{ 'action-btn-favorited': isItemFavorited }"
         @click="emit('toggle-favorite')"
-        v-tooltip.top="isItemFavorited ? '取消收藏' : '收藏'"
       >
         <i :class="isItemFavorited ? 'pi pi-star-fill' : 'pi pi-star'"></i>
       </button>
