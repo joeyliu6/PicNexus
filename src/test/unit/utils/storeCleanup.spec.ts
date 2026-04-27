@@ -1,24 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-
-// 覆盖 setup.ts 里没有 readDir 的 plugin-fs mock
-vi.mock('@tauri-apps/plugin-fs', () => ({
-  readDir: vi.fn(),
-  remove: vi.fn(),
-}));
-
-import { readDir, remove } from '@tauri-apps/plugin-fs';
-import { appDataDir } from '@tauri-apps/api/path';
+import { getFsMocks, getPathMocks } from '../../helpers/tauriMock';
 import { cleanupStoreBackups } from '../../../utils/storeCleanup';
 
-const mockReadDir = vi.mocked(readDir);
-const mockRemove = vi.mocked(remove);
-const mockAppDataDir = vi.mocked(appDataDir);
+const { readDir: mockReadDir, remove: mockRemove } = getFsMocks();
+const mockAppDataDir = getPathMocks().appDataDir;
 
 const NOW = 1_700_000_000_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function makeEntry(name: string, isFile = true) {
-  return { name, isFile, isDirectory: false, isSymlink: false } as Awaited<ReturnType<typeof readDir>>[number];
+  return { name, isFile, isDirectory: false, isSymlink: false } as any;
 }
 
 describe('cleanupStoreBackups', () => {
@@ -28,7 +19,7 @@ describe('cleanupStoreBackups', () => {
     vi.spyOn(Date, 'now').mockReturnValue(NOW);
   });
 
-  it('无备份文件时不调用 remove', async () => {
+  it('没有备份文件时不调用 remove', async () => {
     mockReadDir.mockResolvedValue([
       makeEntry('unrelated.txt'),
       makeEntry('.settings.dat'),
@@ -49,7 +40,6 @@ describe('cleanupStoreBackups', () => {
 
   it('保留最新 KEEP_COUNT 个，删除超龄的旧备份', async () => {
     const backups: string[] = [];
-    // 5 个超过 30 天的备份（都是旧的）
     for (let i = 1; i <= 5; i++) {
       backups.push(`.settings.dat.corrupted.${NOW - (40 + i) * DAY_MS}`);
     }
@@ -57,7 +47,6 @@ describe('cleanupStoreBackups', () => {
 
     await cleanupStoreBackups();
 
-    // 按时间倒序，保留最新 3 个，删除最后 2 个
     expect(mockRemove).toHaveBeenCalledTimes(2);
   });
 
@@ -91,7 +80,7 @@ describe('cleanupStoreBackups', () => {
     expect(mockRemove).not.toHaveBeenCalled();
   });
 
-  it('时间戳不是有效数字 → 不识别为备份', async () => {
+  it('时间戳不是有效数字时不识别为备份', async () => {
     mockReadDir.mockResolvedValue([
       makeEntry('.settings.dat.corrupted.notanumber'),
       makeEntry('.settings.dat.corrupted.-1'),
@@ -100,7 +89,7 @@ describe('cleanupStoreBackups', () => {
     expect(mockRemove).not.toHaveBeenCalled();
   });
 
-  it('readDir 抛错时不抛出（静默失败）', async () => {
+  it('readDir 抛错时不抛出', async () => {
     mockReadDir.mockRejectedValue(new Error('fs error'));
     await expect(cleanupStoreBackups()).resolves.toBeUndefined();
   });

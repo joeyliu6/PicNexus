@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mountWithDefaults } from '../../helpers/vueMount';
 import ServiceChipGrid from '../../../components/settings/ServiceChipGrid.vue';
 
 const tooltipDirective = {
@@ -8,7 +8,7 @@ const tooltipDirective = {
 
 describe('ServiceChipGrid', () => {
   it('keeps the real chip DOM while refreshing and removes stale health classes', () => {
-    const wrapper = mount(ServiceChipGrid, {
+    const wrapper = mountWithDefaults(ServiceChipGrid, {
       props: {
         services: ['weibo', 'jd'],
         groupTitle: 'Public Services',

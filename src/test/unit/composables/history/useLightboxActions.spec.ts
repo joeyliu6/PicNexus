@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick, ref } from 'vue';
 import { mount } from '@vue/test-utils';
+import { getShellOpenMock } from '../../../helpers/tauriMock';
 
 const {
   toastWarnMock,
@@ -8,15 +9,14 @@ const {
   copyLinkActionMock,
   applyConfiguredUrlMock,
   confirmDeleteMock,
-  shellOpenMock,
 } = vi.hoisted(() => ({
   toastWarnMock: vi.fn(),
   toastErrorMock: vi.fn(),
   copyLinkActionMock: vi.fn(),
   applyConfiguredUrlMock: vi.fn((url: string, serviceId?: string) => `prefixed:${serviceId}:${url}`),
   confirmDeleteMock: vi.fn(),
-  shellOpenMock: vi.fn(),
 }));
+const shellOpenMock = getShellOpenMock();
 
 vi.mock('../../../../composables/useToast', () => ({
   useToast: () => ({
@@ -36,10 +36,6 @@ vi.mock('../../../../composables/useConfirm', () => ({
   useConfirm: () => ({
     confirmDelete: confirmDeleteMock,
   }),
-}));
-
-vi.mock('@tauri-apps/plugin-shell', () => ({
-  open: shellOpenMock,
 }));
 
 vi.mock('../../../../utils/logger', () => ({

@@ -1,14 +1,12 @@
 // ZhihuUploader 测试：validateConfig / upload / 缩略图 URL
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { getInvokeMock, getListenMock } from '../../helpers/tauriMock';
 import type { UploadOptions } from '../../../uploaders/base/types';
 import type { ZhihuServiceConfig } from '../../../config/types';
 
-const invokeMock = vi.fn();
-const listenMock = vi.fn(async () => () => void 0);
-
-vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
-vi.mock('@tauri-apps/api/event', () => ({ listen: listenMock }));
+const invokeMock = getInvokeMock();
+const listenMock = getListenMock();
 
 vi.mock('../../../utils/logger', () => ({
   createLogger: () => ({

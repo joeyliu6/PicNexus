@@ -1,11 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-vi.mock('@tauri-apps/plugin-fs', () => ({
-  copyFile: vi.fn(),
-  exists: vi.fn(),
-}));
-
-import { copyFile, exists } from '@tauri-apps/plugin-fs';
+import { getFsMocks } from '../../../helpers/tauriMock';
 import {
   readLastRepair,
   saveLastRepair,
@@ -17,8 +11,7 @@ import {
 
 const STORAGE_KEY = 'lastRepair.md-rescue';
 
-const mockCopyFile = vi.mocked(copyFile);
-const mockExists = vi.mocked(exists);
+const { copyFile: mockCopyFile, exists: mockExists } = getFsMocks();
 
 function makeRecord(partial: Partial<LastRepairRecord> = {}): LastRepairRecord {
   return {

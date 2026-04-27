@@ -20,9 +20,6 @@ const {
   emitHistoryUpdatedMock: vi.fn(),
 }));
 
-vi.mock('@tauri-apps/api/path', () => ({
-  basename: vi.fn(async (filePath: string) => filePath.split(/[/\\]/).pop() || 'unknown.jpg'),
-}));
 
 vi.mock('../../../services/HistoryDatabase', () => ({
   historyDB: {

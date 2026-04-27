@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
 import { ref } from 'vue';
+import { mountWithDefaults } from '../../helpers/vueMount';
 import ChannelCard from '../../../components/upload/ChannelCard.vue';
 
 vi.mock('@vueuse/core', () => ({
@@ -36,7 +36,7 @@ const tooltipDirective = {
 
 describe('ChannelCard tooltip', () => {
   it('失败状态时只显示一套自定义 tooltip，且文案会去重', () => {
-    const wrapper = mount(ChannelCard, {
+    const wrapper = mountWithDefaults(ChannelCard, {
       props: {
         service: 'upyun',
         status: '✗ 失败',
@@ -55,7 +55,7 @@ describe('ChannelCard tooltip', () => {
   });
 
   it('失败状态但无错误原因时显示兜底 tooltip 文案', () => {
-    const wrapper = mount(ChannelCard, {
+    const wrapper = mountWithDefaults(ChannelCard, {
       props: {
         service: 'upyun',
         status: '✗ 失败',
@@ -73,7 +73,7 @@ describe('ChannelCard tooltip', () => {
   });
 
   it('非失败状态不显示失败 tooltip', () => {
-    const wrapper = mount(ChannelCard, {
+    const wrapper = mountWithDefaults(ChannelCard, {
       props: {
         service: 'weibo',
         status: '✓ 完成',

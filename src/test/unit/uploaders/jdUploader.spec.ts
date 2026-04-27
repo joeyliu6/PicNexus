@@ -2,20 +2,12 @@
 // 覆盖：成功路径、重试机制、风控熔断触发、错误分类
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { getInvokeMock } from '../../helpers/tauriMock';
 import type { UploadOptions } from '../../../uploaders/base/types';
 import type { JDServiceConfig } from '../../../config/types';
 
 // ─── Mock: 避免真实 Tauri 调用 ───────────────────────────
-const invokeMock = vi.fn();
-const listenMock = vi.fn(async () => () => void 0); // 返回 unlisten
-
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: invokeMock,
-}));
-
-vi.mock('@tauri-apps/api/event', () => ({
-  listen: listenMock,
-}));
+const invokeMock = getInvokeMock();
 
 // ─── Mock: 禁用限速器与 logger 的副作用 ─────────────────
 const acquireMock = vi.fn(async () => void 0);

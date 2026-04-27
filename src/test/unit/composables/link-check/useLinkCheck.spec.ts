@@ -4,13 +4,12 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { nextTick } from 'vue';
+import { getInvokeMock } from '../../../helpers/tauriMock';
 import type { LinkCheckRow } from '../../../../types/linkCheck';
 
 // ─── Hoisted Mock 句柄 ──────────────────────────────────────────
 
 const {
-  invokeMock,
-  listenMock,
   toastWarnMock,
   toastInfoMock,
   toastSuccessMock,
@@ -23,8 +22,6 @@ const {
   historyDBGetLinkCheckContextByIdsMock,
   onCacheEventMock,
 } = vi.hoisted(() => ({
-  invokeMock: vi.fn(),
-  listenMock: vi.fn(async () => () => void 0),
   toastWarnMock: vi.fn(),
   toastInfoMock: vi.fn(),
   toastSuccessMock: vi.fn(),
@@ -37,9 +34,7 @@ const {
   historyDBGetLinkCheckContextByIdsMock: vi.fn().mockResolvedValue(new Map()),
   onCacheEventMock: vi.fn().mockResolvedValue(() => void 0),
 }));
-
-vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
-vi.mock('@tauri-apps/api/event', () => ({ listen: listenMock }));
+const invokeMock = getInvokeMock();
 
 vi.mock('../../../../composables/useToast', () => ({
   useToast: () => ({
@@ -327,7 +322,8 @@ describe('useLinkCheckManager.checkSubset', () => {
     await m.checkSubset({ targets: [{ historyId: 'h1', serviceId: 'r2' }] });
 
     const [, payload] = invokeMock.mock.calls.find(([command]) => command === 'batch_check_links')!;
-    expect(payload.request.links).toHaveLength(1);
-    expect(payload.request.links[0]).toMatchObject({ history_id: 'h1', service_id: 'r2' });
+    const requestPayload = payload as { request: { links: unknown[] } };
+    expect(requestPayload.request.links).toHaveLength(1);
+    expect(requestPayload.request.links[0]).toMatchObject({ history_id: 'h1', service_id: 'r2' });
   });
 });

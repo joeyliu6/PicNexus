@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mountWithDefaults } from '../../helpers/vueMount';
 import AdvancedSettingsPanel from '../../../components/settings/AdvancedSettingsPanel.vue';
 import { DEFAULT_CONFIG } from '../../../config/types';
 
@@ -28,7 +28,7 @@ describe('AdvancedSettingsPanel', () => {
   };
 
   it('renders title and description', () => {
-    const wrapper = mount(AdvancedSettingsPanel, {
+    const wrapper = mountWithDefaults(AdvancedSettingsPanel, {
       props: baseProps,
       global: {
         stubs: {
@@ -43,7 +43,7 @@ describe('AdvancedSettingsPanel', () => {
   });
 
   it('forwards editor actions to parent events', async () => {
-    const wrapper = mount(AdvancedSettingsPanel, {
+    const wrapper = mountWithDefaults(AdvancedSettingsPanel, {
       props: baseProps,
       global: {
         stubs: {

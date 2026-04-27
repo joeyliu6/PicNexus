@@ -1,14 +1,11 @@
 // SmmsUploader 测试：validateConfig / upload / testConnection
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { getInvokeMock } from '../../helpers/tauriMock';
 import type { UploadOptions } from '../../../uploaders/base/types';
 import type { SmmsServiceConfig } from '../../../config/types';
 
-const invokeMock = vi.fn();
-const listenMock = vi.fn(async () => () => void 0);
-
-vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
-vi.mock('@tauri-apps/api/event', () => ({ listen: listenMock }));
+const invokeMock = getInvokeMock();
 
 vi.mock('../../../utils/logger', () => ({
   createLogger: () => ({

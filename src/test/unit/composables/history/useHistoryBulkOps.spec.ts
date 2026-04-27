@@ -1,29 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
+import { getDialogSaveMock, getFsMocks } from '../../../helpers/tauriMock';
 
 const {
-  saveDialogMock,
-  writeTextFileMock,
   historyDeleteManyMock,
   toastShowConfigMock,
   confirmMock,
   emitHistoryDeletedMock,
 } = vi.hoisted(() => ({
-  saveDialogMock: vi.fn(),
-  writeTextFileMock: vi.fn(),
   historyDeleteManyMock: vi.fn(),
   toastShowConfigMock: vi.fn(),
   confirmMock: vi.fn(),
   emitHistoryDeletedMock: vi.fn(),
 }));
 
-vi.mock('@tauri-apps/plugin-dialog', () => ({
-  save: saveDialogMock,
-}));
-
-vi.mock('@tauri-apps/plugin-fs', () => ({
-  writeTextFile: writeTextFileMock,
-}));
+const saveDialogMock = getDialogSaveMock();
+const writeTextFileMock = getFsMocks().writeTextFile;
 
 vi.mock('../../../../services/HistoryDatabase', () => ({
   historyDB: {

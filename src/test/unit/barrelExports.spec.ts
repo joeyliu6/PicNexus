@@ -24,7 +24,7 @@ describe('barrel exports', () => {
       'tencent', 'aliyun', 'qiniu', 'upyun', 'custom-s3',
     ];
     for (const svc of services) {
-      const mod = await import(`../../uploaders/${svc}/index`);
+      const mod = await import(`../../uploaders/${svc}/index.ts`);
       // 任一导出都能证明 barrel 被执行
       expect(Object.keys(mod).length).toBeGreaterThan(0);
     }

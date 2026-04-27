@@ -1,13 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { getInvokeMock } from '../../helpers/tauriMock';
 import type { CompressionPreset } from '../../../config/types';
 
-const { invokeMock } = vi.hoisted(() => ({
-  invokeMock: vi.fn(),
-}));
-
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: invokeMock,
-}));
+const invokeMock = getInvokeMock();
 
 vi.mock('../../../utils/logger', () => ({
   createLogger: () => ({

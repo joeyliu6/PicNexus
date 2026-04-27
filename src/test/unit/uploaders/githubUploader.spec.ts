@@ -2,14 +2,11 @@
 // 覆盖：upload 成功路径 + CDN 转换（applyUrlTransform 私有方法间接验证）、testConnection 三种结局
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { getInvokeMock } from '../../helpers/tauriMock';
 import type { UploadOptions } from '../../../uploaders/base/types';
 import type { GithubServiceConfig } from '../../../config/types';
 
-const invokeMock = vi.fn();
-const listenMock = vi.fn(async () => () => void 0);
-
-vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
-vi.mock('@tauri-apps/api/event', () => ({ listen: listenMock }));
+const invokeMock = getInvokeMock();
 
 vi.mock('../../../utils/logger', () => ({
   createLogger: () => ({
@@ -287,4 +284,3 @@ describe('GithubUploader.testConnection', () => {
     expect(typeof r.latency).toBe('number');
   });
 });
-

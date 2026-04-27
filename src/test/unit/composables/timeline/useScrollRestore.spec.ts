@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { ref } from 'vue';
+import { defineComponent, ref } from 'vue';
+import type { VueWrapper } from '@vue/test-utils';
+import { mountWithDefaults } from '../../../helpers/vueMount';
 import { useScrollRestore } from '../../../../composables/timeline/useScrollRestore';
 import type { VisibleItem } from '../../../../composables/useVirtualTimeline';
 
@@ -19,7 +21,9 @@ function makeScrollContainer(scrollTopValue = 0): HTMLElement {
   } as unknown as HTMLElement;
 }
 
-function makeRestore(overrides: Partial<Parameters<typeof useScrollRestore>[0]> = {}) {
+const mountedWrappers: VueWrapper[] = [];
+
+function createRestoreContext(overrides: Partial<Parameters<typeof useScrollRestore>[0]> = {}) {
   return useScrollRestore({
     scrollContainer: ref<HTMLElement | null>(null),
     virtualScrollTop: ref(0),
@@ -35,7 +39,23 @@ function makeRestore(overrides: Partial<Parameters<typeof useScrollRestore>[0]> 
   });
 }
 
+function makeRestore(overrides: Partial<Parameters<typeof useScrollRestore>[0]> = {}) {
+  let restore!: ReturnType<typeof createRestoreContext>;
+  const Harness = defineComponent({
+    setup() {
+      restore = createRestoreContext(overrides);
+      return () => null;
+    },
+  });
+
+  mountedWrappers.push(mountWithDefaults(Harness));
+  return restore;
+}
+
 afterEach(() => {
+  for (const wrapper of mountedWrappers.splice(0)) {
+    wrapper.unmount();
+  }
   vi.clearAllMocks();
 });
 
@@ -43,7 +63,7 @@ afterEach(() => {
 
 describe('canRestoreNow', () => {
   it('totalHeight = 0 时返回 false', () => {
-    const restore = useScrollRestore({
+    const restore = makeRestore({
       scrollContainer: ref(null),
       virtualScrollTop: ref(0),
       totalHeight: ref(0),
@@ -59,7 +79,7 @@ describe('canRestoreNow', () => {
   });
 
   it('isLoading = true 时 saveStablePosition 不更新 progress（layoutReady 为 false）', () => {
-    const restore = useScrollRestore({
+    const restore = makeRestore({
       scrollContainer: ref(makeScrollContainer(100)),
       virtualScrollTop: ref(100),
       totalHeight: ref(5000),

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mountWithDefaults } from '../../helpers/vueMount';
 
 // 组件内用 useToast 做"至少保留一个图床"拦截提示；单测无 PrimeVue ToastService 上下文，
 // 直接 mock 成 no-op 避免 mount 时抛 "No PrimeVue Toast provided"
@@ -19,7 +19,7 @@ const tooltipDirective = {
 
 describe('ServiceEnableSection', () => {
   it('活跃 session 期间顶部统计统一进入骨架态（包含 unconfigured）', () => {
-    const wrapper = mount(ServiceEnableSection, {
+    const wrapper = mountWithDefaults(ServiceEnableSection, {
       props: {
         healthStatusMap: {
           weibo: 'verified',

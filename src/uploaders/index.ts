@@ -20,13 +20,16 @@ import { QiniuUploader } from './qiniu/QiniuUploader';
 import { UpyunUploader } from './upyun/UpyunUploader';
 import { CustomS3Uploader } from './custom-s3/CustomS3Uploader';
 import type { CustomS3Profile } from '../config/types';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('Uploaders');
 
 /**
  * 初始化所有上传器
  * 在应用启动时调用一次
  */
 export function initializeUploaders(): void {
-  console.log('[Uploaders] 开始注册上传器...');
+  log.info('开始注册上传器...');
 
   // 注册微博上传器
   UploaderFactory.register('weibo', () => new WeiboUploader());
@@ -79,7 +82,7 @@ export function initializeUploaders(): void {
   UploaderFactory.register('upyun', () => new UpyunUploader());
 
   const registered = UploaderFactory.getAvailableServices();
-  console.log('[Uploaders] 已注册的上传器:', registered);
+  log.info('已注册的上传器:', registered);
 }
 
 /**

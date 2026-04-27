@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { ref } from 'vue';
+import { defineComponent, ref } from 'vue';
+import type { VueWrapper } from '@vue/test-utils';
+import { mountWithDefaults } from '../../../helpers/vueMount';
 import type { ImageMeta } from '../../../../types/image-meta';
 import type { VisibleItem } from '../../../../composables/useVirtualTimeline';
 
@@ -24,7 +26,9 @@ function makeVisibleItem(id: string): VisibleItem {
   };
 }
 
-function makePreload(overrides: Partial<Parameters<typeof useImagePreload>[0]> = {}) {
+const mountedWrappers: VueWrapper[] = [];
+
+function createPreloadContext(overrides: Partial<Parameters<typeof useImagePreload>[0]> = {}) {
   const visibleItems = ref<VisibleItem[]>([]);
   const allMetas = ref<ImageMeta[]>([]);
   const displayMode = ref<'fast' | 'normal'>('normal');
@@ -41,7 +45,23 @@ function makePreload(overrides: Partial<Parameters<typeof useImagePreload>[0]> =
   };
 }
 
+function makePreload(overrides: Partial<Parameters<typeof useImagePreload>[0]> = {}) {
+  let ctx!: ReturnType<typeof createPreloadContext>;
+  const Harness = defineComponent({
+    setup() {
+      ctx = createPreloadContext(overrides);
+      return () => null;
+    },
+  });
+
+  mountedWrappers.push(mountWithDefaults(Harness));
+  return ctx;
+}
+
 afterEach(() => {
+  for (const wrapper of mountedWrappers.splice(0)) {
+    wrapper.unmount();
+  }
   vi.clearAllMocks();
 });
 

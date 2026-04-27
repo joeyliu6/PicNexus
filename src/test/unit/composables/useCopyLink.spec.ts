@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
+import { getClipboardMocks } from '../../helpers/tauriMock';
 import { DEFAULT_CONFIG, type UserConfig } from '../../../config/types';
 import {
   applyConfiguredUrlWithConfig,
@@ -9,18 +10,14 @@ import {
   useCopyLink,
 } from '../../../composables/useCopyLink';
 
-const { writeTextMock, toastSuccessMock, toastWarnMock, toastErrorMock, toastSilentMock } = vi.hoisted(() => ({
-  writeTextMock: vi.fn(),
+const { toastSuccessMock, toastWarnMock, toastErrorMock, toastSilentMock } = vi.hoisted(() => ({
   toastSuccessMock: vi.fn(),
   toastWarnMock: vi.fn(),
   toastErrorMock: vi.fn(),
   toastSilentMock: vi.fn(),
 }));
+const writeTextMock = getClipboardMocks().writeText;
 const configRef = ref<UserConfig>(makeConfig());
-
-vi.mock('@tauri-apps/plugin-clipboard-manager', () => ({
-  writeText: writeTextMock,
-}));
 
 vi.mock('../../../composables/useToast', () => ({
   useToast: () => ({

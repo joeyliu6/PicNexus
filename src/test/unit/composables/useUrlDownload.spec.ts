@@ -1,12 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { getInvokeMock } from '../../helpers/tauriMock';
 import { useUrlDownload } from '../../../composables/useUrlDownload';
 
-const invokeMock = vi.hoisted(() => vi.fn());
 const toastShowConfigMock = vi.hoisted(() => vi.fn());
-
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: invokeMock,
-}));
+const invokeMock = getInvokeMock();
 
 vi.mock('../../../composables/useToast', () => ({
   useToast: () => ({
@@ -28,7 +25,8 @@ describe('useUrlDownload', () => {
   });
 
   it('keeps downloaded file paths in input URL order even when later downloads finish first', async () => {
-    invokeMock.mockImplementation(async (_cmd: string, { url }: { url: string }) => {
+    invokeMock.mockImplementation(async (_cmd, args) => {
+      const { url } = args as { url: string };
       if (url.endsWith('a.png')) {
         await new Promise(resolve => setTimeout(resolve, 20));
       }
@@ -52,7 +50,8 @@ describe('useUrlDownload', () => {
   });
 
   it('preserves input order among successful downloads when some URLs fail', async () => {
-    invokeMock.mockImplementation(async (_cmd: string, { url }: { url: string }) => {
+    invokeMock.mockImplementation(async (_cmd, args) => {
+      const { url } = args as { url: string };
       if (url.endsWith('b.png')) throw new Error('download failed');
       if (url.endsWith('a.png')) {
         await new Promise(resolve => setTimeout(resolve, 20));

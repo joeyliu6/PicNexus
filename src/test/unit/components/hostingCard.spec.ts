@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mountWithDefaults } from '../../helpers/vueMount';
 import HostingCard from '../../../components/settings/HostingCard.vue';
 
 const ButtonStub = {
@@ -13,7 +13,7 @@ const tooltipDirective = {
 
 describe('HostingCard', () => {
   it('内建图床刷新时保留真实状态条 DOM，并禁用检测按钮', () => {
-    const wrapper = mount(HostingCard, {
+    const wrapper = mountWithDefaults(HostingCard, {
       props: {
         id: 'qiyu',
         name: '七鱼',

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
 import { nextTick, ref } from 'vue';
+import { mountWithDefaults } from '../../helpers/vueMount';
 
 // TyporaCard 用 useToast 做剪贴板失败提示；单测无 PrimeVue ToastService 上下文，
 // 直接 mock 成 no-op 避免 mount 时抛 "No PrimeVue Toast provided"
@@ -87,7 +87,7 @@ describe('ExternalEditorPanel', () => {
   });
 
   it('configuredServices only includes non-unconfigured services', async () => {
-    const wrapper = mount(ExternalEditorPanel, {
+    const wrapper = mountWithDefaults(ExternalEditorPanel, {
       props: {
         editorServer: {
           enabled: false,
@@ -122,7 +122,7 @@ describe('ExternalEditorPanel', () => {
   });
 
   it('validates port range and only emits valid port updates', async () => {
-    const wrapper = mount(ExternalEditorPanel, {
+    const wrapper = mountWithDefaults(ExternalEditorPanel, {
       props: {
         editorServer: {
           enabled: true,
@@ -181,7 +181,7 @@ describe('ExternalEditorPanel', () => {
       });
     vi.stubGlobal('fetch', fetchMock);
 
-    const wrapper = mount(ExternalEditorPanel, {
+    const wrapper = mountWithDefaults(ExternalEditorPanel, {
       props: {
         editorServer: {
           enabled: true,

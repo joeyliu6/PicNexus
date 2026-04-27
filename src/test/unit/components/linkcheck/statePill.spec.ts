@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mountWithDefaults } from '../../../helpers/vueMount';
 import StatePill from '../../../../components/views/linkcheck/common/StatePill.vue';
 
 describe('StatePill', () => {
   it('running 态显示呼吸点，不再显示圆环进度', () => {
-    const wrapper = mount(StatePill, {
+    const wrapper = mountWithDefaults(StatePill, {
       props: {
         pill: {
           tone: 'running',
@@ -24,7 +24,7 @@ describe('StatePill', () => {
   });
 
   it('暂停/取消态显示传入图标和 tooltip 内容', () => {
-    const wrapper = mount(StatePill, {
+    const wrapper = mountWithDefaults(StatePill, {
       props: {
         pill: {
           tone: 'cancelling',

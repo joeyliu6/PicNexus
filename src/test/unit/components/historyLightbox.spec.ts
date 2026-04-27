@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
 import { ref } from 'vue';
+import { mountWithDefaults } from '../../helpers/vueMount';
 import HistoryLightbox from '../../../components/views/history/HistoryLightbox.vue';
 import type { HistoryItem } from '../../../config/types';
 
@@ -105,7 +105,7 @@ function makeHistoryItem(results: HistoryItem['results']): HistoryItem {
 }
 
 function mountLightbox(item: HistoryItem) {
-  return mount(HistoryLightbox, {
+  return mountWithDefaults(HistoryLightbox, {
     props: {
       visible: true,
       item,
@@ -116,6 +116,7 @@ function mountLightbox(item: HistoryItem) {
       },
       stubs: {
         Teleport: false,
+        Transition: true,
       },
     },
   });

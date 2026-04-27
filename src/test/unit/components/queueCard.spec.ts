@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { shallowMount } from '@vue/test-utils';
+import { shallowMountWithDefaults } from '../../helpers/vueMount';
 import QueueCard from '../../../components/upload/QueueCard.vue';
 import ChannelCard from '../../../components/upload/ChannelCard.vue';
 import { DEFAULT_CONFIG } from '../../../config/types';
 
 describe('QueueCard', () => {
   it('向 ChannelCard 透传失败错误信息用于 tooltip', () => {
-    const wrapper = shallowMount(QueueCard, {
+    const wrapper = shallowMountWithDefaults(QueueCard, {
       props: {
         item: {
           id: 'queue-1',
