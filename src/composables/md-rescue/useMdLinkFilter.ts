@@ -9,6 +9,7 @@ import {
   imageLinks,
   mode,
   fileContent,
+  includeCodeBlocks,
 } from './shared';
 
 export type StatusFilter = 'invalid' | 'suspicious' | 'timeout' | 'unchecked' | 'valid' | 'all' | null;
@@ -159,7 +160,9 @@ export function generateDiff(): Array<{ line: number; type: 'unchanged' | 'remov
     }
 
     const oldLines = fileContent.value.split('\n');
-    const newContent = replaceImageLinks(fileContent.value, replacements);
+    const newContent = replaceImageLinks(fileContent.value, replacements, {
+      includeCodeBlocks: includeCodeBlocks.value,
+    });
     const newLines = newContent.split('\n');
 
     const maxLen = Math.max(oldLines.length, newLines.length);

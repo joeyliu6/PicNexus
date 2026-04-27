@@ -22,6 +22,7 @@ import {
   folderPath,
   mdFiles,
   imageLinks,
+  includeCodeBlocks,
   fileContent,
 } from './shared';
 
@@ -160,7 +161,9 @@ export async function executeReplace(unrescuableCount: number): Promise<{
         await copyFile(file, bakPath);
         fileBackupMap.push({ original: file, backup: bakPath });
 
-        const newContent = replaceImageLinks(content, replacements);
+        const newContent = replaceImageLinks(content, replacements, {
+          includeCodeBlocks: includeCodeBlocks.value,
+        });
         await writeTextFile(file, newContent);
 
         if (mode.value === 'file' && file === filePath.value) {

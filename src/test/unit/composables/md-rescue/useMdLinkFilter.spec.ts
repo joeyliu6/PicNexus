@@ -5,6 +5,7 @@ import {
   imageLinks,
   mode,
   fileContent,
+  includeCodeBlocks,
   type MdImageLinkWithFile,
 } from '../../../../composables/md-rescue/shared';
 
@@ -45,6 +46,7 @@ function resetState(): void {
   imageLinks.value = [];
   mode.value = null;
   fileContent.value = null;
+  includeCodeBlocks.value = false;
 }
 
 describe('useMdLinkFilter - stats', () => {
@@ -241,5 +243,20 @@ describe('generateDiff', () => {
     expect(removed.length).toBeGreaterThan(0);
     expect(added.length).toBeGreaterThan(0);
     expect(diff.some(d => d.type === 'unchanged')).toBe(true);
+  });
+
+  it('includeCodeBlocks=true keeps diff preview in sync with code block replacements', () => {
+    mode.value = 'file';
+    includeCodeBlocks.value = true;
+    fileContent.value = ['```markdown', '![](old)', '```'].join('\n');
+    imageLinks.value = [
+      { ...makeLink('old', { valid: false, selectedBackup: 'new', backups: [{ url: 'new', valid: true }] }),
+        originalText: '![](old)', lineNumber: 2 },
+    ];
+
+    const diff = generateDiff();
+
+    expect(diff.some(d => d.type === 'removed' && d.text === '![](old)')).toBe(true);
+    expect(diff.some(d => d.type === 'added' && d.text === '![](new)')).toBe(true);
   });
 });
