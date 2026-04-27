@@ -16,6 +16,7 @@ import { useHistoryManager } from '../useHistory';
 import { useThumbCache } from '../useThumbCache';
 import { useConfigManager } from '../useConfig';
 import { useToast } from '../useToast';
+import { makeCopyBadgeKey, useCopyBadgeFeedback } from '../useCopyBadgeFeedback';
 import { createLogger } from '../../utils/logger';
 import { motionDuration } from '../../utils/reducedMotion';
 import { HIDE_ANIMATION_DURATION, SHOW_ANIMATION_DURATION } from './usePhotoSwipeBridge';
@@ -73,6 +74,10 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   const viewState = useHistoryViewState();
   const historyManager = useHistoryManager();
   const thumbCache = useThumbCache();
+  const {
+    copiedKey: copiedServiceKey,
+    markCopied: markServiceCopied,
+  } = useCopyBadgeFeedback();
 
   // ---- 灯箱 ----
   const lightboxVisible = ref(false);
@@ -424,6 +429,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
         if (activePrefix) link = applyPrefixTemplate(activePrefix.template, link);
       }
       await writeText(link);
+      markServiceCopied(getServiceCopyKey(item.id, serviceId));
       toast.silent('log', '已复制', `${getServiceDisplayName(serviceId)} 链接已复制到剪贴板`);
     } catch (error) {
       logger.error(`复制 ${serviceId} 链接失败:`, error);
@@ -434,6 +440,15 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   function handlePopoverCopyLink(serviceId: string): void {
     if (!popoverItem.value) return;
     handleCopyServiceLink(popoverItem.value, serviceId);
+  }
+
+  function getServiceCopyKey(historyId: string, serviceId: string): string {
+    return makeCopyBadgeKey('history-table', historyId, serviceId);
+  }
+
+  function isPopoverServiceCopied(serviceId: string): boolean {
+    if (!popoverItem.value) return false;
+    return copiedServiceKey.value === getServiceCopyKey(popoverItem.value.id, serviceId);
   }
 
   // ---- 悬浮预览 ----
@@ -536,6 +551,9 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     openServicePopover,
     handlePopoverCopyLink,
     handleCopyServiceLink,
+    copiedServiceKey,
+    getServiceCopyKey,
+    isPopoverServiceCopied,
     // 悬浮预览
     hoverPreview,
     handlePreviewEnter,

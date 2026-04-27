@@ -17,6 +17,7 @@ defineProps<{
   isActionLocked: boolean;
   suppressListMotion: boolean;
   selectedIds: Set<string>;
+  copiedKey?: string | null;
   statusDotColor: (row: LinkCheckRow) => string;
   errorBadgeClass: (row: LinkCheckRow) => string;
   errorLabel: (row: LinkCheckRow) => string;
@@ -86,11 +87,17 @@ const emit = defineEmits<{
         <span class="link-spacer"></span>
 
         <span
-          v-tooltip.top="'点击复制链接'"
+          v-tooltip.top="copiedKey === `link-check:${rowKey(row)}` ? '已复制' : '点击复制链接'"
           class="service-badge"
+          :class="{ 'is-copied': copiedKey === `link-check:${rowKey(row)}` }"
           @click.stop="emit('copy-url', row)"
         >
-          <span class="badge-icon" v-html="getServiceIcon(row.serviceId)"></span>
+          <i
+            v-if="copiedKey === `link-check:${rowKey(row)}`"
+            class="pi pi-check badge-icon copied-check"
+            aria-hidden="true"
+          ></i>
+          <span v-else class="badge-icon" v-html="getServiceIcon(row.serviceId)"></span>
           <span class="badge-label">{{ getServiceDisplayName(row.serviceId) }}</span>
         </span>
 
@@ -204,19 +211,39 @@ const emit = defineEmits<{
   border-radius: var(--space-xs);
   cursor: pointer;
   flex-shrink: 0;
-  transition: background var(--duration-micro);
+  transition: background var(--duration-micro), color var(--duration-fast);
 }
 
 .service-badge:hover {
   background: var(--primary-alpha-8);
 }
 
+.service-badge.is-copied {
+  background: var(--success-alpha-10);
+  color: var(--success);
+}
+
+.service-badge.is-copied:hover {
+  background: var(--success-alpha-15);
+}
+
 .badge-icon {
   width: 14px;
   height: 14px;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   color: var(--text-muted);
+}
+
+.service-badge.is-copied .badge-icon,
+.copied-check {
+  color: var(--success);
+}
+
+.copied-check {
+  font-size: var(--text-xs);
 }
 
 .badge-icon :deep(svg) {
@@ -228,6 +255,10 @@ const emit = defineEmits<{
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
   color: var(--text-muted);
+}
+
+.service-badge.is-copied .badge-label {
+  color: var(--success);
 }
 
 .error-badge {

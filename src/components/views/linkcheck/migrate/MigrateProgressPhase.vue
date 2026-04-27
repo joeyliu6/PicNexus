@@ -11,6 +11,7 @@ import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { useToast } from '../../../../composables/useToast';
 import { useConfigManager } from '../../../../composables/useConfig';
+import { makeCopyBadgeKey, useCopyBadgeFeedback } from '../../../../composables/useCopyBadgeFeedback';
 import { applyConfiguredUrlWithConfig } from '../../../../composables/useCopyLink';
 import { createLogger } from '../../../../utils/logger';
 import { historyDB } from '../../../../services/database';
@@ -30,6 +31,10 @@ const PAGE_SIZE = 100;
 const log = createLogger('MigrateProgressPhase');
 const toast = useToast();
 const configManager = useConfigManager();
+const {
+  copiedKey: copiedMigrateKey,
+  markCopied: markMigrateCopied,
+} = useCopyBadgeFeedback();
 
 const ctx = inject(MIGRATE_KEY)!;
 const {
@@ -255,6 +260,7 @@ async function handleCopyUrl(historyId: string, serviceId: string) {
     }
     const finalUrl = applyConfiguredUrlWithConfig(url, serviceId, configManager.config.value);
     await navigator.clipboard.writeText(finalUrl);
+    markMigrateCopied(makeCopyBadgeKey('migrate', historyId, serviceId));
     toast.silent('log', '已复制链接');
   } catch (e) {
     log.error('复制链接失败', e);
@@ -303,6 +309,7 @@ function handleResume() { resumeMigrate(); }
           :target-service-ids="currentTargetServiceIds"
           :show-retry="phase === 'done' && item.status === 'failed'"
           :retrying="!!(item.historyId && retryingIds.has(item.historyId))"
+          :copied-key="copiedMigrateKey"
           @retry="handleRetryOne"
           @copy-url="handleCopyUrl"
         />

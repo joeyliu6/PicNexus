@@ -274,7 +274,7 @@
   font-size: var(--text-xs);
   color: var(--text-primary);
   cursor: pointer;
-  transition: background var(--duration-fast);
+  transition: background var(--duration-fast), color var(--duration-fast);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -283,12 +283,32 @@
   background: var(--primary-alpha-15);
 }
 
+.service-badge-icon.is-copied {
+  background: var(--success-alpha-12);
+  color: var(--success);
+}
+
+.service-badge-icon.is-copied:hover {
+  background: var(--success-alpha-15);
+}
+
 .badge-icon {
   width: 14px;
   height: 14px;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   color: var(--text-muted);
+}
+
+.is-copied .badge-icon,
+.copied-check {
+  color: var(--success);
+}
+
+.copied-check {
+  font-size: var(--text-xs);
 }
 
 .badge-icon :deep(svg) {
@@ -346,6 +366,11 @@
 
 .service-popover-item:hover {
   background: var(--primary-alpha-10);
+}
+
+.service-popover-item.is-copied {
+  background: var(--success-alpha-10);
+  color: var(--success);
 }
 
 .service-popover-item .pi-copy {

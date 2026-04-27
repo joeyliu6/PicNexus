@@ -71,6 +71,7 @@ const {
   openLightbox, handleLightboxDelete, handleLightboxNavigate, handleToggleFavorite,
   resolveLightboxCloseTargetMode,
   popoverServices, openServicePopover, handlePopoverCopyLink, handleCopyServiceLink,
+  copiedServiceKey, getServiceCopyKey, isPopoverServiceCopied,
   hoverPreview, handlePreviewEnter, handlePreviewLeave,
 } = useTableInteractions({
   currentPageData, currentPage, totalPages, goToPage,
@@ -269,16 +270,24 @@ function handleCheckboxToggle(id: string) {
         <template #body="{ data }">
           <Skeleton v-if="isSkeleton(data)" width="50px" height="22px" borderRadius="4px" />
           <!-- v-memo 依赖使用稳定的 visibleCount（离散值），避免列宽 ResizeObserver 1-2 像素抖动导致整表重渲 -->
-          <div v-else v-memo="[data.id, data.results.length, getVisibleCount(getCachedServices(data))]" class="service-badges">
+          <div v-else v-memo="[data.id, data.results.length, getVisibleCount(getCachedServices(data)), copiedServiceKey]" class="service-badges">
             <span
               v-for="serviceId in getCachedServices(data).slice(0, getVisibleCount(getCachedServices(data)))"
               :key="serviceId"
               class="service-badge-icon"
-              v-tooltip.top="'点击复制链接'"
-              @click="handleCopyServiceLink(data, serviceId)"
+              :class="{ 'is-copied': copiedServiceKey === getServiceCopyKey(data.id, serviceId) }"
+              v-tooltip.top="copiedServiceKey === getServiceCopyKey(data.id, serviceId) ? '已复制' : '点击复制链接'"
+              @click.stop="handleCopyServiceLink(data, serviceId)"
             >
-              <span class="badge-icon" v-html="getServiceIcon(serviceId)" />
-              <span class="badge-label">{{ getServiceDisplayName(serviceId) }}</span>
+              <i
+                v-if="copiedServiceKey === getServiceCopyKey(data.id, serviceId)"
+                class="pi pi-check badge-icon copied-check"
+                aria-hidden="true"
+              />
+              <span v-else class="badge-icon" v-html="getServiceIcon(serviceId)" />
+              <span class="badge-label">
+                {{ getServiceDisplayName(serviceId) }}
+              </span>
             </span>
             <span
               v-if="getCachedServices(data).length > getVisibleCount(getCachedServices(data))"
@@ -299,10 +308,16 @@ function handleCheckboxToggle(id: string) {
           v-for="serviceId in popoverServices"
           :key="serviceId"
           class="service-popover-item"
+          :class="{ 'is-copied': isPopoverServiceCopied(serviceId) }"
           :aria-label="`复制 ${getServiceDisplayName(serviceId)} 链接`"
           @click="handlePopoverCopyLink(serviceId)"
         >
-          <span class="badge-icon" v-html="getServiceIcon(serviceId)" />
+          <i
+            v-if="isPopoverServiceCopied(serviceId)"
+            class="pi pi-check badge-icon copied-check"
+            aria-hidden="true"
+          />
+          <span v-else class="badge-icon" v-html="getServiceIcon(serviceId)" />
           <span>{{ getServiceDisplayName(serviceId) }}</span>
           <i class="pi pi-copy" />
         </button>

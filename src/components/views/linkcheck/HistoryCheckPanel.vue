@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed, onScopeDispose, ref, watch } from 'vue';
+import { useConfigManager } from '../../../composables/useConfig';
+import { makeCopyBadgeKey, useCopyBadgeFeedback } from '../../../composables/useCopyBadgeFeedback';
+import { useToast } from '../../../composables/useToast';
 import CheckBottomBar from './history-check/CheckBottomBar.vue';
 import CheckFilterBar from './history-check/CheckFilterBar.vue';
 import CheckLinkList from './history-check/CheckLinkList.vue';
@@ -9,6 +12,7 @@ import { useCheckStats, type CheckStatsResult } from '../../../composables/link-
 import { useCheckStrategy } from '../../../composables/link-check/useCheckStrategy';
 import type { MoreMenuKind } from '../../../composables/link-check/useCheckStrategy';
 import type { BatchCheckProgress, LinkCheckRow, StatusFilter } from '../../../types/linkCheck';
+import { applyZhihuSourceFromConfig } from '../../../utils/zhihuSource';
 
 const props = defineProps<{
   checkRows: LinkCheckRow[];
@@ -32,7 +36,6 @@ const emit = defineEmits<{
   (e: 'pause-check'): void;
   (e: 'resume-check'): void;
   (e: 'recheck-single', row: LinkCheckRow, filter: StatusFilter): void;
-  (e: 'copy-url', url: string): void;
   (e: 'export-csv'): void;
   (e: 'export-csv-selected', rows: LinkCheckRow[]): void;
   (e: 'delete-row', row: LinkCheckRow): void;
@@ -45,6 +48,12 @@ const checkRows = computed(() => props.checkRows);
 const progress = computed(() => props.progress);
 const isMonitorChecking = computed(() => props.isChecking && props.progressSource !== 'rescue');
 const isHighThroughputSignal = ref(false);
+const configManager = useConfigManager();
+const toast = useToast();
+const {
+  copiedKey: copiedLinkKey,
+  markCopied: markLinkCopied,
+} = useCopyBadgeFeedback();
 
 const {
   statusFilter,
@@ -194,8 +203,19 @@ function handleSmartCheck(): void {
   }
 }
 
-function handleCopyUrl(row: LinkCheckRow): void {
-  emit('copy-url', row.url);
+function getLinkCopyKey(row: LinkCheckRow): string {
+  return makeCopyBadgeKey('link-check', rowKey(row));
+}
+
+async function handleCopyUrl(row: LinkCheckRow): Promise<void> {
+  try {
+    const finalUrl = applyZhihuSourceFromConfig(row.url, configManager.config.value);
+    await navigator.clipboard.writeText(finalUrl);
+    markLinkCopied(getLinkCopyKey(row));
+    toast.silent('log', '已复制到剪贴板');
+  } catch (error) {
+    toast.error('复制失败', error instanceof Error ? error.message : String(error));
+  }
 }
 
 function handleRecheck(row: LinkCheckRow): void {
@@ -326,6 +346,7 @@ function handleMoreAction(kind: MoreMenuKind): void {
       :error-label="errorLabel"
       :error-tooltip="errorTooltip"
       :recheck-label="recheckLabel"
+      :copied-key="copiedLinkKey"
       @toggle-select="handleToggleSelect"
       @check-all="emit('check-all')"
       @copy-url="handleCopyUrl"

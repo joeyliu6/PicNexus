@@ -26,6 +26,8 @@ interface Props {
   iconOnly?: boolean;
   /** 外部强制覆盖的 tooltip 文本（不可点击时的状态说明）；clickable 时始终显示"点击复制链接" */
   tooltip?: string;
+  /** 复制成功后的短暂内联反馈态 */
+  copied?: boolean;
   /**
    * 该 existing 服务同时被勾选为本次迁移目标（但已存在所以被跳过）。
    * 仅在 existing 变体（iconOnly）上传 true，用右上角小角标告知用户"你选了它但已在，已跳过"
@@ -33,7 +35,7 @@ interface Props {
   alsoTarget?: boolean;
 }
 
-const props = withDefaults(defineProps<Props>(), { variant: 'target', clickable: false, iconOnly: false, tooltip: undefined, alsoTarget: false });
+const props = withDefaults(defineProps<Props>(), { variant: 'target', clickable: false, iconOnly: false, tooltip: undefined, copied: false, alsoTarget: false });
 
 const emit = defineEmits<{ copy: [] }>();
 
@@ -42,6 +44,7 @@ const displayName = computed(() => getServiceDisplayName(props.serviceId) || pro
 
 /** 角标态的 existing：tooltip 里拼上"已存在，本次跳过"说明 */
 const tooltipText = computed<string | undefined>(() => {
+  if (props.copied) return '已复制';
   if (props.alsoTarget && props.iconOnly) {
     const prefix = `${displayName.value} · 已存在，本次跳过`;
     return props.clickable ? `${prefix} · 点击复制链接` : prefix;
@@ -58,11 +61,12 @@ function onClick() {
 <template>
   <span
     class="m-svc-chip"
-    :class="[`m-svc-chip--${variant}`, { 'm-svc-chip--clickable': clickable, 'm-svc-chip--icon-only': iconOnly, 'm-svc-chip--also-target': alsoTarget && iconOnly }]"
+    :class="[`m-svc-chip--${variant}`, { 'm-svc-chip--clickable': clickable, 'm-svc-chip--icon-only': iconOnly, 'm-svc-chip--copied': copied, 'm-svc-chip--also-target': alsoTarget && iconOnly }]"
     v-tooltip.top="tooltipText"
     @click.stop="onClick"
   >
-    <span v-if="svg" class="m-svc-chip-ic" v-html="svg" />
+    <i v-if="copied" class="pi pi-check m-svc-chip-ic m-svc-chip-ic--copied" aria-hidden="true" />
+    <span v-else-if="svg" class="m-svc-chip-ic" v-html="svg" />
     <i v-else class="pi pi-cloud m-svc-chip-ic m-svc-chip-ic--fallback" aria-hidden="true" />
     <span v-if="!iconOnly" class="m-svc-chip-label">{{ displayName }}</span>
     <!-- 角标：该 existing 同时被选为本次迁移目标，视觉告知"已在 · 已跳过" -->
@@ -81,7 +85,7 @@ function onClick() {
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
   font-variant-numeric: tabular-nums;
-  transition: background var(--duration-micro);
+  transition: background var(--duration-micro), color var(--duration-fast);
 }
 
 .m-svc-chip-ic {
@@ -94,6 +98,7 @@ function onClick() {
 }
 .m-svc-chip-ic :deep(svg) { width: 100%; height: 100%; }
 .m-svc-chip-ic--fallback { font-size: var(--text-xs); }
+.m-svc-chip-ic--copied { font-size: var(--text-xs); }
 
 .m-svc-chip-label {
   max-width: 96px;
@@ -183,5 +188,22 @@ function onClick() {
 .m-svc-chip--clickable.m-svc-chip--source:hover,
 .m-svc-chip--clickable.m-svc-chip--target:hover {
   background: var(--primary-alpha-15);
+}
+
+.m-svc-chip--copied,
+.m-svc-chip--copied.m-svc-chip--existing,
+.m-svc-chip--copied.m-svc-chip--new,
+.m-svc-chip--copied.m-svc-chip--source,
+.m-svc-chip--copied.m-svc-chip--target {
+  background: var(--success-alpha-10);
+  color: var(--success);
+}
+
+.m-svc-chip--copied .m-svc-chip-ic {
+  color: var(--success);
+}
+
+.m-svc-chip--clickable.m-svc-chip--copied:hover {
+  background: var(--success-alpha-15);
 }
 </style>

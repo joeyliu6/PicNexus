@@ -8,6 +8,7 @@
  * - 复制 URL 入口下沉到可点击的服务徽章，单条重试用缩小版 24px 图标按钮
  */
 import { computed } from 'vue';
+import { makeCopyBadgeKey } from '../../../../../composables/useCopyBadgeFeedback';
 import { errorTooltipText } from '../composables/useErrorPresentation';
 import { getServiceDisplayName } from '../../../../../constants/serviceNames';
 import MigrateServiceChip from './chips/MigrateServiceChip.vue';
@@ -22,12 +23,14 @@ interface Props {
   targetServiceIds?: string[];
   showRetry?: boolean;
   retrying?: boolean;
+  copiedKey?: string | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   targetServiceIds: () => [],
   showRetry: false,
   retrying: false,
+  copiedKey: null,
 });
 
 const emit = defineEmits<{
@@ -139,6 +142,10 @@ function onRetry() {
 function onChipCopy(serviceId: string) {
   if (props.item.historyId) emit('copyUrl', props.item.historyId, serviceId);
 }
+
+function chipCopyKey(serviceId: string): string {
+  return makeCopyBadgeKey('migrate', props.item.historyId, serviceId);
+}
 </script>
 
 <template>
@@ -170,6 +177,7 @@ function onChipCopy(serviceId: string) {
         variant="existing"
         icon-only
         clickable
+        :copied="copiedKey === chipCopyKey(sid)"
         :also-target="alsoTargetSet.has(sid)"
         @copy="onChipCopy(sid)"
       />
@@ -191,6 +199,7 @@ function onChipCopy(serviceId: string) {
         :service-id="t.serviceId"
         :variant="t.variant"
         :clickable="t.variant === 'new'"
+        :copied="copiedKey === chipCopyKey(t.serviceId)"
         :tooltip="targetChipTooltip(t)"
         @copy="onChipCopy(t.serviceId)"
       />
