@@ -4,6 +4,16 @@ import { ref } from 'vue';
 import HistoryLightbox from '../../../components/views/history/HistoryLightbox.vue';
 import type { HistoryItem } from '../../../config/types';
 
+const { bridgeState, toastWarnMock } = vi.hoisted(() => ({
+  bridgeState: {
+    options: null as null | {
+      onLoadError?: () => void;
+      onLoadSuccess?: () => void;
+    },
+  },
+  toastWarnMock: vi.fn(),
+}));
+
 // ── Mock：PhotoSwipe 桥接（返回一个可 Teleport 的容器） ──
 
 const mockPswpEl = document.createElement('div');
@@ -11,14 +21,23 @@ mockPswpEl.id = 'mock-pswp';
 document.body.appendChild(mockPswpEl);
 
 vi.mock('../../../composables/history/usePhotoSwipeBridge', () => ({
-  usePhotoSwipeBridge: () => ({
-    pswpEl: ref(mockPswpEl),
-  }),
+  usePhotoSwipeBridge: (options: {
+    onLoadError?: () => void;
+    onLoadSuccess?: () => void;
+  }) => {
+    bridgeState.options = options;
+    return {
+      pswpEl: ref(mockPswpEl),
+      blurSrc: ref(null),
+      isLoading: ref(false),
+      setSwitchDirection: vi.fn(),
+    };
+  },
 }));
 
 vi.mock('../../../composables/useToast', () => ({
   useToast: () => ({
-    warn: vi.fn(),
+    warn: toastWarnMock,
     error: vi.fn(),
   }),
 }));
@@ -104,7 +123,11 @@ function mountLightbox(item: HistoryItem) {
 
 describe('HistoryLightbox', () => {
   /** 每次测试前清空 Teleport 容器 */
-  beforeEach(() => { mockPswpEl.innerHTML = ''; });
+  beforeEach(() => {
+    mockPswpEl.innerHTML = '';
+    bridgeState.options = null;
+    toastWarnMock.mockClear();
+  });
 
   /** 底栏通过 Teleport 渲染到 mockPswpEl，需在 DOM 中查找 */
   function findInTeleport(selector: string) {
@@ -204,5 +227,44 @@ describe('HistoryLightbox', () => {
 
     // 菜单应已关闭
     expect(findInTeleport('.mirror-menu-popup')).toBeNull();
+  });
+
+  it('marks only the current primary service as failed after a lightbox load error', async () => {
+    const wrapper = mountLightbox({
+      ...makeHistoryItem([
+        {
+          serviceId: 'weibo',
+          status: 'success',
+          result: { serviceId: 'weibo', fileKey: 'pid-1', url: 'https://example.com/weibo.jpg' },
+        },
+        {
+          serviceId: 'jd',
+          status: 'success',
+          result: { serviceId: 'jd', fileKey: 'key-1', url: 'https://example.com/jd.jpg' },
+        },
+      ]),
+      primaryService: 'weibo',
+    });
+
+    bridgeState.options?.onLoadError?.();
+    await wrapper.vm.$nextTick();
+
+    expect(toastWarnMock).toHaveBeenCalledWith(
+      '微博图片加载失败',
+      expect.stringContaining('手动切换图床'),
+    );
+    expect(findInTeleport('.action-btn-dot')).not.toBeNull();
+
+    const copyBtn = findInTeleport('.copy-btn-wrapper .action-btn') as HTMLButtonElement;
+    await copyBtn.click();
+    await wrapper.vm.$nextTick();
+
+    const menu = findInTeleport('.mirror-menu-popup') as HTMLElement;
+    expect(menu.textContent).toContain('微博 本次加载失败');
+    expect(menu.textContent).toContain('本次失败');
+
+    bridgeState.options?.onLoadSuccess?.();
+    await wrapper.vm.$nextTick();
+    expect(findInTeleport('.action-btn-dot')).toBeNull();
   });
 });

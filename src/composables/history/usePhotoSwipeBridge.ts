@@ -22,6 +22,10 @@ export const ZOOM_ANIMATION_DURATION = 250;
  * 超出则认定为"慢图"淡入指示器。200ms 是人感「即时」阈值上限（NN Group 研究：<400ms 感受为即时）
  */
 const LOADING_INDICATOR_DELAY = 200;
+const LOAD_RETRY_DELAY = 500;
+const MAX_LOAD_RETRIES = 1;
+const FULL_IMAGE_WAITING_CLASS = 'is-waiting-full-image';
+const FULL_IMAGE_READY_CLASS = 'is-full-image-ready';
 
 export type PhotoSwipeCloseTargetMode = 'auto' | 'preview' | 'thumb' | 'fade';
 
@@ -47,6 +51,8 @@ export interface PhotoSwipeBridgeOptions {
   onNavigate: (direction: 'prev' | 'next') => void;
   /** 大图加载失败回调（PhotoSwipe loadError 事件） */
   onLoadError?: () => void;
+  /** 大图加载成功回调 */
+  onLoadSuccess?: () => void;
   /** 关闭动画计算 bounds 前，同步决定收回到预览图、小缩略图或淡出 */
   resolveCloseTargetMode?: () => PhotoSwipeCloseTargetMode;
   /** 是否有上一张 */
@@ -175,6 +181,8 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
   /** 大图加载中（延迟 LOADING_INDICATOR_DELAY 后才置 true，避免快图闪 spinner） */
   const isLoading = ref(false);
   let loadingDelayTimer: ReturnType<typeof setTimeout> | null = null;
+  let loadRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  const loadRetryCounts = new Map<string, number>();
 
   /**
    * 切换方向（驱动入场动画的方向位移）
@@ -198,6 +206,7 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
    * B) dataSource[0].id 与 currentLoadingId 对比（itemId 语义层兜底 A 的时机缝隙）
    */
   let currentLoadingId: string | undefined;
+  let currentLoadingSrc: string | undefined;
 
   /** 判断事件对应的 content 是否为当前 active content（孤儿过滤） */
   function isCurrentContent(eventContent: unknown): boolean {
@@ -205,8 +214,54 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     const active = pswp.currSlide?.content;
     if (active && eventContent === active) return true;
     // A 方案时机缝隙兜底（refreshSlideContent 瞬间 currSlide 可能短暂不稳定）
-    const data = (eventContent as { data?: { id?: string } } | null)?.data;
-    return data?.id !== undefined && data.id === currentLoadingId;
+    const data = (eventContent as { data?: { id?: string; src?: string } } | null)?.data;
+    if (data?.id === undefined || data.id !== currentLoadingId) return false;
+    return data.src === undefined || data.src === currentLoadingSrc;
+  }
+
+  function getContentId(eventContent: unknown): string | undefined {
+    return (eventContent as { data?: { id?: string } } | null)?.data?.id;
+  }
+
+  function applyImageRequestAttributes(eventContent: unknown): void {
+    const el = (eventContent as { element?: unknown } | null)?.element;
+    if (!(el instanceof HTMLImageElement)) return;
+    el.referrerPolicy = 'no-referrer';
+    el.decoding = 'async';
+  }
+
+  function getContentImageElement(eventContent: unknown): HTMLImageElement | null {
+    const el = (eventContent as { element?: unknown } | null)?.element;
+    return el instanceof HTMLImageElement ? el : null;
+  }
+
+  function markFullImageWaiting(eventContent: unknown): void {
+    const el = getContentImageElement(eventContent);
+    if (!el) return;
+    el.classList.add(FULL_IMAGE_WAITING_CLASS);
+    el.classList.remove(FULL_IMAGE_READY_CLASS);
+  }
+
+  function revealFullImageWhenDecoded(eventContent: unknown, onReady: () => void): void {
+    const el = getContentImageElement(eventContent);
+    if (!el) {
+      onReady();
+      return;
+    }
+
+    const reveal = () => {
+      if (!isCurrentContent(eventContent)) return;
+      el.classList.remove(FULL_IMAGE_WAITING_CLASS);
+      el.classList.add(FULL_IMAGE_READY_CLASS);
+      onReady();
+    };
+
+    if (typeof el.decode === 'function') {
+      void el.decode().catch(() => {}).finally(reveal);
+      return;
+    }
+
+    reveal();
   }
 
   /** 调度加载指示器显示：延迟触发，期间若 loadComplete 会取消 */
@@ -225,6 +280,32 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
       loadingDelayTimer = null;
     }
     isLoading.value = false;
+  }
+
+  function clearLoadRetryTimer() {
+    if (loadRetryTimer) {
+      clearTimeout(loadRetryTimer);
+      loadRetryTimer = null;
+    }
+  }
+
+  function scheduleLoadRetry(eventContent: unknown): boolean {
+    if (!pswp) return false;
+    const id = getContentId(eventContent);
+    if (!id || id !== currentLoadingId) return false;
+
+    const retryCount = loadRetryCounts.get(id) ?? 0;
+    if (retryCount >= MAX_LOAD_RETRIES) return false;
+
+    loadRetryCounts.set(id, retryCount + 1);
+    clearLoadRetryTimer();
+    loadRetryTimer = setTimeout(() => {
+      loadRetryTimer = null;
+      if (!pswp || currentLoadingId !== id) return;
+      clearLoadingIndicator();
+      pswp.refreshSlideContent(0);
+    }, LOAD_RETRY_DELAY);
+    return true;
   }
 
   // ── 键盘导航（PhotoSwipe 原生仅处理 Esc） ──────
@@ -289,6 +370,7 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
 
     pswp = new PhotoSwipe(buildPswpOptions({ src, msrc, w, h, thumbEl, useZoom, isCropped, id }));
     currentLoadingId = id;
+    currentLoadingSrc = src;
     closeTargetMode = 'auto';
     // 重置方向：上一次会话残留的值不应影响新灯箱的首次切换判定
     switchDirection.value = null;
@@ -327,7 +409,10 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
       pswpEl.value = null;
       blurSrc.value = null;
       clearLoadingIndicator();
+      clearLoadRetryTimer();
+      loadRetryCounts.clear();
       currentLoadingId = undefined;
+      currentLoadingSrc = undefined;
       pswp = null;
       options.onClose();
     });
@@ -346,10 +431,24 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
       if (!isCurrentContent(e.content)) return;
       scheduleLoadingIndicator();
     });
+    pswp.on('contentLoadImage', (e) => {
+      if (!isCurrentContent(e.content)) return;
+      applyImageRequestAttributes(e.content);
+      markFullImageWaiting(e.content);
+    });
     pswp.on('loadComplete', (e) => {
       if (!isCurrentContent(e.content)) return;
-      clearLoadingIndicator();
-      if (e.isError) options.onLoadError?.();
+      if (e.isError) {
+        clearLoadingIndicator();
+        if (!scheduleLoadRetry(e.content)) options.onLoadError?.();
+      } else {
+        revealFullImageWhenDecoded(e.content, () => {
+          clearLoadingIndicator();
+          const id = getContentId(e.content);
+          if (id) loadRetryCounts.delete(id);
+          options.onLoadSuccess?.();
+        });
+      }
     });
 
     // 切换图片淡入动画：给每次新激活的 .pswp__img 加 is-switching-in，触发 CSS keyframes
@@ -418,8 +517,11 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     };
     pswp.options.dataSource = [newData];
     currentLoadingId = newId;
+    currentLoadingSrc = src;
+    if (newId) loadRetryCounts.delete(newId);
     // 旧 content 的孤儿事件可能在 refresh 后延迟触发，主动预清避免残留 spinner
     clearLoadingIndicator();
+    clearLoadRetryTimer();
     pswp.refreshSlideContent(0);
     // 模糊背景：导航时用中图（秒到），避免切换瞬间变黑
     blurSrc.value = medium || src;
@@ -460,6 +562,8 @@ export function usePhotoSwipeBridge(options: PhotoSwipeBridgeOptions) {
     window.removeEventListener('keydown', handleKeydown);
     if (wheelTimer) { clearTimeout(wheelTimer); wheelTimer = null; }
     clearLoadingIndicator();
+    clearLoadRetryTimer();
+    loadRetryCounts.clear();
     if (pswp) {
       pswp.destroy();
       pswp = null;

@@ -23,6 +23,7 @@ const props = withDefaults(defineProps<{
   copySuccess?: boolean;
   mirrors?: MirrorInfo[];
   isPrimaryBroken?: boolean;
+  loadFailedServiceId?: string | null;
   allMirrorsBroken?: boolean;
   checkingServices?: Set<string>;
 }>(), {
@@ -30,6 +31,7 @@ const props = withDefaults(defineProps<{
   copySuccess: false,
   mirrors: () => [],
   isPrimaryBroken: false,
+  loadFailedServiceId: null,
   allMirrorsBroken: false,
   checkingServices: () => new Set<string>(),
 });
@@ -46,6 +48,9 @@ const emit = defineEmits<{
 }>();
 
 const hasMultipleServices = computed(() => props.successfulServices.length > 1);
+const hasPrimaryAlert = computed(() =>
+  props.isPrimaryBroken || props.loadFailedServiceId === props.item.primaryService
+);
 const mirrorMenuVisible = ref(false);
 const copyBtnRef = ref<HTMLElement | null>(null);
 
@@ -123,14 +128,14 @@ watch(() => props.item.id, () => {
           class="action-btn"
           :class="{
             'action-btn-success': copySuccess,
-            'action-btn-alert': isPrimaryBroken && !copySuccess,
+            'action-btn-alert': hasPrimaryAlert && !copySuccess,
           }"
           @click="handleCopyClick"
           v-tooltip.top="'复制链接'"
         >
           <i :class="copySuccess ? 'pi pi-check' : 'pi pi-link'"></i>
           <span
-            v-if="isPrimaryBroken && !copySuccess"
+            v-if="hasPrimaryAlert && !copySuccess"
             class="action-btn-dot"
             aria-hidden="true"
           ></span>
@@ -140,6 +145,7 @@ watch(() => props.item.id, () => {
             <LightboxMirrorMenu
               :mirrors="mirrors"
               :is-primary-broken="isPrimaryBroken"
+              :load-failed-service-id="loadFailedServiceId"
               :all-mirrors-broken="allMirrorsBroken"
               :checking-services="checkingServices"
               @copy-mirror="handleCopyMirror"

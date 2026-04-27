@@ -1,6 +1,7 @@
 const MAX_WARMED_IMAGES = 160;
 
 const warmedImages = new Map<string, number>();
+const warmingImages = new Set<string>();
 
 function remember(url: string): void {
   if (warmedImages.has(url)) warmedImages.delete(url);
@@ -14,12 +15,24 @@ function remember(url: string): void {
 }
 
 export function warmImage(url: string | null | undefined): void {
-  if (!url || warmedImages.has(url) || typeof Image === 'undefined') return;
+  if (!url || warmedImages.has(url) || warmingImages.has(url) || typeof Image === 'undefined') return;
 
-  remember(url);
+  warmingImages.add(url);
   const img = new Image();
+  img.referrerPolicy = 'no-referrer';
   img.decoding = 'async';
+  img.onload = () => {
+    warmingImages.delete(url);
+    remember(url);
+  };
+  img.onerror = () => {
+    warmingImages.delete(url);
+  };
   img.src = url;
+  if (img.complete && img.naturalWidth > 0) {
+    warmingImages.delete(url);
+    remember(url);
+  }
 }
 
 export function warmImages(urls: Array<string | null | undefined>): void {

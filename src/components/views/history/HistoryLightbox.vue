@@ -18,6 +18,7 @@ import { useMirrorFallback } from '../../../composables/history/useMirrorFallbac
 import { useToast } from '../../../composables/useToast';
 import { getPrimaryImageUrl } from '../../../utils/imageUrl';
 import { generateMediumThumbnailUrl } from '../../../composables/useThumbCache';
+import { getServiceDisplayName } from '../../../constants/serviceNames';
 import LightboxBottomBar from './LightboxBottomBar.vue';
 
 const props = withDefaults(defineProps<{
@@ -80,11 +81,19 @@ const imageWidth = computed(() => currentItem.value?.width || 0);
 const imageHeight = computed(() => currentItem.value?.height || 0);
 
 const blurLoadedSrc = ref<string | null>(null);
+const currentLoadFailedServiceId = ref<string | null>(null);
 
 const toast = useToast();
 
 function handleLoadError() {
-  toast.warn('图片加载失败', '图床可能限制了访问。试试切换图床复制链接或在浏览器打开');
+  const serviceId = currentItem.value?.primaryService ?? null;
+  currentLoadFailedServiceId.value = serviceId;
+  const serviceName = serviceId ? getServiceDisplayName(serviceId, configManager.config.value) : '当前图床';
+  toast.warn(`${serviceName}图片加载失败`, '当前主图床访问失败。可在底栏链接菜单手动切换图床，或在浏览器打开确认');
+}
+
+function handleLoadSuccess() {
+  currentLoadFailedServiceId.value = null;
 }
 
 const { pswpEl, blurSrc, isLoading, setSwitchDirection } = usePhotoSwipeBridge({
@@ -99,8 +108,16 @@ const { pswpEl, blurSrc, isLoading, setSwitchDirection } = usePhotoSwipeBridge({
   onClose: () => emit('update:visible', false),
   onNavigate: (dir) => emit('navigate', dir),
   onLoadError: handleLoadError,
+  onLoadSuccess: handleLoadSuccess,
   resolveCloseTargetMode: props.resolveCloseTargetMode,
 });
+
+watch(
+  () => [currentItem.value?.id, currentItem.value?.primaryService] as const,
+  () => {
+    currentLoadFailedServiceId.value = null;
+  },
+);
 
 // ── 收藏状态 ────────────────────────────────
 const isItemFavorited = computed(() => {
@@ -211,6 +228,7 @@ function navigateNext() {
       :copy-success="copySuccess"
       :mirrors="mirrors"
       :is-primary-broken="isPrimaryBroken"
+      :load-failed-service-id="currentLoadFailedServiceId"
       :all-mirrors-broken="allMirrorsBroken"
       :checking-services="checkingServices"
       @copy-link="handleCopyLink"
@@ -259,6 +277,14 @@ function navigateNext() {
 .pswp--picnexus .pswp__bg,
 .pswp--picnexus .pswp__zoom-wrap {
   will-change: opacity, transform;
+}
+
+.pswp--picnexus .pswp__img.is-waiting-full-image {
+  opacity: 0 !important;
+}
+
+.pswp--picnexus .pswp__img.is-full-image-ready {
+  transition: opacity var(--duration-normal) var(--ease-decelerate);
 }
 
 /* 图片圆角 + 阴影 */

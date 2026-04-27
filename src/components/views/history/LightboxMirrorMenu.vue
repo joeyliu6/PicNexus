@@ -19,6 +19,7 @@ import type { MirrorInfo } from '../../../composables/history/useMirrorFallback'
 const props = defineProps<{
   mirrors: MirrorInfo[];
   isPrimaryBroken: boolean;
+  loadFailedServiceId?: string | null;
   allMirrorsBroken: boolean;
   checkingServices: Set<string>;
 }>();
@@ -33,6 +34,10 @@ const emit = defineEmits<{
 const banner = computed<{ kind: 'danger' | 'warning'; text: string } | null>(() => {
   if (props.allMirrorsBroken) {
     return { kind: 'danger', text: '全部图床链接均已失效，建议删除整条记录' };
+  }
+  if (props.loadFailedServiceId) {
+    const serviceName = getServiceDisplayName(props.loadFailedServiceId);
+    return { kind: 'warning', text: `${serviceName} 本次加载失败，可手动切换到其他图床` };
   }
   if (props.isPrimaryBroken) {
     return { kind: 'warning', text: '主图床已失效，可切换到其他可用图床' };
@@ -62,12 +67,21 @@ function handleChipClick(mirror: MirrorInfo, event: Event): void {
   emit('check-mirror', mirror.serviceId);
 }
 
-function stateLabel(state: MirrorInfo['checkState']): string {
-  switch (state) {
+function isLoadFailed(mirror: MirrorInfo): boolean {
+  return mirror.serviceId === props.loadFailedServiceId;
+}
+
+function stateLabel(mirror: MirrorInfo): string {
+  if (isLoadFailed(mirror)) return '本次失败';
+  switch (mirror.checkState) {
     case 'valid': return '可用';
     case 'invalid': return '已失效';
     case 'unchecked': return '未检测';
   }
+}
+
+function stateTone(mirror: MirrorInfo): MirrorInfo['checkState'] | 'load-failed' {
+  return isLoadFailed(mirror) ? 'load-failed' : mirror.checkState;
 }
 </script>
 
@@ -86,6 +100,7 @@ function stateLabel(state: MirrorInfo['checkState']): string {
         :class="{
           'mirror-row--primary': mirror.isPrimary,
           'mirror-row--invalid': mirror.checkState === 'invalid',
+          'mirror-row--load-failed': isLoadFailed(mirror),
         }"
         :aria-current="mirror.isPrimary ? 'true' : undefined"
         role="menuitem"
@@ -130,11 +145,11 @@ function stateLabel(state: MirrorInfo['checkState']): string {
             type="button"
             class="mirror-row-chip"
             :class="[
-              `mirror-row-chip--${mirror.checkState}`,
+              `mirror-row-chip--${stateTone(mirror)}`,
               { 'mirror-row-chip--checking': checkingServices.has(mirror.serviceId) },
             ]"
             :disabled="checkingServices.has(mirror.serviceId)"
-            :aria-label="`状态：${stateLabel(mirror.checkState)}，点击重新检测`"
+            :aria-label="`状态：${stateLabel(mirror)}，点击重新检测`"
             v-tooltip.top="'重新检测'"
             @click="handleChipClick(mirror, $event)"
           >
@@ -143,7 +158,7 @@ function stateLabel(state: MirrorInfo['checkState']): string {
               class="pi pi-spin pi-spinner"
               aria-hidden="true"
             />
-            <span v-else>{{ stateLabel(mirror.checkState) }}</span>
+            <span v-else>{{ stateLabel(mirror) }}</span>
           </button>
         </div>
       </li>
@@ -225,6 +240,15 @@ function stateLabel(state: MirrorInfo['checkState']): string {
 
 .mirror-row--invalid {
   opacity: 0.7;
+}
+
+.mirror-row--load-failed {
+  background: var(--warning-alpha-15);
+}
+
+.mirror-row--load-failed:hover,
+.mirror-row--load-failed:focus-visible {
+  background: var(--warning-alpha-15);
 }
 
 .mirror-row-name {
@@ -355,6 +379,11 @@ function stateLabel(state: MirrorInfo['checkState']): string {
 .mirror-row-chip--checking {
   background: var(--primary-alpha-15);
   color: var(--primary);
+}
+
+.mirror-row-chip--load-failed {
+  background: var(--warning-alpha-15);
+  color: var(--warning);
 }
 
 .mirror-row-chip .pi-spinner {
