@@ -448,6 +448,18 @@ function initModuleWatchers(
 
   const scope = effectScope(true);
   scope.run(() => {
+    onCacheEventType<HistoryEventData>('history-updated', (data) => {
+      const ids = data?.ids;
+      if (!ids || ids.length === 0) {
+        clearThumbCache();
+        return;
+      }
+      for (const id of ids) {
+        thumbUrlCache.delete(id);
+        thumbnailCandidatesCache.delete(id);
+      }
+    }).catch(e => log.warn('history-updated listener registration failed; updated thumb cache entries will rely on LRU fallback:', e));
+
     // 事件驱动的增量清理：删除/清空事件定向移除缓存。
     // 监听注册失败时，滞留条目靠 thumbUrlCache 的 LRU 上限（THUMB_CACHE_MAX_SIZE）自动淘汰兜底
     onCacheEventType<HistoryEventData>('history-deleted', (data) => {

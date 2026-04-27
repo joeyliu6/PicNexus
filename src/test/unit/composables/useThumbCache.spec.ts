@@ -1,11 +1,33 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+
+const { cacheEventHandlers } = vi.hoisted(() => ({
+  cacheEventHandlers: {} as Record<string, (data?: unknown) => void>,
+}));
+
+vi.mock('../../../events/cacheEvents', () => ({
+  onCacheEventType: vi.fn(async (type: string, handler: (data?: unknown) => void) => {
+    cacheEventHandlers[type] = handler;
+    return vi.fn();
+  }),
+}));
+
+vi.mock('../../../composables/useConfig', () => ({
+  useConfigManager: () => ({
+    config: { value: {} },
+  }),
+}));
 import {
   generateThumbnailUrl,
   generateMediumThumbnailUrl,
   getMetaThumbnailUrl,
   getThumbnailCandidates,
+  useThumbCache,
 } from '../../../composables/useThumbCache';
 import type { ImageMeta } from '../../../types/image-meta';
+
+beforeEach(() => {
+  cacheEventHandlers['history-cleared']?.();
+});
 
 describe('generateThumbnailUrl', () => {
   it('weibo + fileKey → thumb150 URL', () => {
@@ -147,6 +169,25 @@ describe('getThumbnailCandidates', () => {
     const first = getThumbnailCandidates(item, null);
     const second = getThumbnailCandidates(item, null);
     expect(first).toEqual(second);
+  });
+
+  it('HistoryItem - history-updated invalidates cached candidates for the changed item', () => {
+    useThumbCache();
+    const item: any = {
+      id: 'h-updated',
+      primaryService: 'r2',
+      results: [
+        { serviceId: 'r2', status: 'success', result: { url: 'http://r2' } },
+      ],
+    };
+
+    expect(getThumbnailCandidates(item, null)).toHaveLength(1);
+    item.results.push({ serviceId: 'weibo', status: 'success', result: { url: 'http://weibo', fileKey: 'pid' } });
+    expect(getThumbnailCandidates(item, null)).toHaveLength(1);
+
+    cacheEventHandlers['history-updated']?.({ ids: ['h-updated'] });
+
+    expect(getThumbnailCandidates(item, null)).toHaveLength(2);
   });
 
   it('HistoryItem - 失败 / 无 url 的结果被忽略', () => {
