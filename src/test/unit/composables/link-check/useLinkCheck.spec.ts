@@ -19,6 +19,8 @@ const {
   historyDBOpenMock,
   historyDBGetByIdMock,
   historyDBUpdateMock,
+  historyDBBatchUpdateLinkCheckStatusMock,
+  historyDBGetLinkCheckContextByIdsMock,
   onCacheEventMock,
 } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
@@ -31,6 +33,8 @@ const {
   historyDBOpenMock: vi.fn().mockResolvedValue(undefined),
   historyDBGetByIdMock: vi.fn().mockResolvedValue(null),
   historyDBUpdateMock: vi.fn().mockResolvedValue(undefined),
+  historyDBBatchUpdateLinkCheckStatusMock: vi.fn().mockResolvedValue(undefined),
+  historyDBGetLinkCheckContextByIdsMock: vi.fn().mockResolvedValue(new Map()),
   onCacheEventMock: vi.fn().mockResolvedValue(() => void 0),
 }));
 
@@ -55,6 +59,8 @@ vi.mock('../../../../services/HistoryDatabase', () => ({
     open: historyDBOpenMock,
     getById: historyDBGetByIdMock,
     update: historyDBUpdateMock,
+    batchUpdateLinkCheckStatus: historyDBBatchUpdateLinkCheckStatusMock,
+    getLinkCheckContextByIds: historyDBGetLinkCheckContextByIdsMock,
     getLinkCheckInvalid: vi.fn().mockResolvedValue([]),
     getLinkCheckRestStream: vi.fn(async function* () { /* 空流 */ }),
   },
@@ -93,6 +99,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   loadConfigMock.mockResolvedValue({});
   historyDBOpenMock.mockResolvedValue(undefined);
+  historyDBBatchUpdateLinkCheckStatusMock.mockResolvedValue(undefined);
+  historyDBGetLinkCheckContextByIdsMock.mockResolvedValue(new Map());
 });
 
 // ─── serviceStats computed ──────────────────────────────────────
@@ -291,5 +299,35 @@ describe('useLinkCheckManager.checkAllHistoryLinks', () => {
     const result = await m.checkAllHistoryLinks();
     expect(result).toBeNull();
     expect(toastWarnMock).toHaveBeenCalled();
+  });
+});
+
+describe('useLinkCheckManager.checkSubset', () => {
+  it('[BUG 回归] targets 精确到 (historyId, serviceId)，不会把同图其他图床一起重检', async () => {
+    const m = await freshManager();
+    m.checkRows.value = [
+      makeRow({ historyId: 'h1', serviceId: 'r2', url: 'https://cdn.example.com/a.jpg' }),
+      makeRow({ historyId: 'h1', serviceId: 'github', url: 'https://github.example.com/a.jpg' }),
+      makeRow({ historyId: 'h2', serviceId: 'r2', url: 'https://cdn.example.com/b.jpg' }),
+    ];
+    invokeMock.mockResolvedValueOnce({
+      results: [
+        {
+          link: 'https://cdn.example.com/a.jpg',
+          history_id: 'h1',
+          service_id: 'r2',
+          is_valid: true,
+          error_type: 'success',
+          browser_might_work: false,
+        },
+      ],
+      total: 1, valid: 1, invalid: 0, timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: false,
+    });
+
+    await m.checkSubset({ targets: [{ historyId: 'h1', serviceId: 'r2' }] });
+
+    const [, payload] = invokeMock.mock.calls.find(([command]) => command === 'batch_check_links')!;
+    expect(payload.request.links).toHaveLength(1);
+    expect(payload.request.links[0]).toMatchObject({ history_id: 'h1', service_id: 'r2' });
   });
 });

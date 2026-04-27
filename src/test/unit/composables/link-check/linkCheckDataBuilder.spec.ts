@@ -242,10 +242,10 @@ describe('applyResultsToRows', () => {
     expect(rows[0].checkResult!.is_valid).toBe(true);
   });
 
-  it('url 不匹配时不设置 checkResult', () => {
+  it('serviceId 不匹配时不设置 checkResult', () => {
     const rows: LinkCheckRow[] = [{
-      historyId: 'h1', serviceId: 'r2',
-      url: 'https://r2.example.com/other.jpg', rawUrl: 'https://r2.example.com/other.jpg', fileName: 'other.jpg',
+      historyId: 'h1', serviceId: 'github',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg', fileName: 'other.jpg',
     }];
     const results = [{
       link: 'https://r2.example.com/img.jpg',
@@ -276,6 +276,32 @@ describe('applyResultsToRows', () => {
 
     applyResultsToRows(rows, results);
     expect(rows[0].checkResult).toBeUndefined();
+  });
+
+  it('[BUG 回归] 同一历史记录下 URL 相同但 serviceId 不同，只更新对应服务行', () => {
+    const rows: LinkCheckRow[] = [
+      {
+        historyId: 'h1', serviceId: 'r2',
+        url: 'https://cdn.example.com/shared.jpg', rawUrl: 'https://cdn.example.com/shared.jpg', fileName: 'img.jpg',
+      },
+      {
+        historyId: 'h1', serviceId: 'github',
+        url: 'https://cdn.example.com/shared.jpg', rawUrl: 'https://cdn.example.com/shared.jpg', fileName: 'img.jpg',
+      },
+    ];
+    const results = [{
+      link: 'https://cdn.example.com/shared.jpg',
+      history_id: 'h1',
+      service_id: 'r2',
+      is_valid: false,
+      error_type: 'http_4xx' as const,
+      browser_might_work: false,
+    }];
+
+    applyResultsToRows(rows, results);
+
+    expect(rows[0].checkResult?.is_valid).toBe(false);
+    expect(rows[1].checkResult).toBeUndefined();
   });
 
   it('空 results 时不修改 rows', () => {

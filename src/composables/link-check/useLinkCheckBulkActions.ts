@@ -7,12 +7,8 @@ import { applyZhihuSourceFromConfig } from '../../utils/zhihuSource';
 const COPY_LIMIT = 1000;
 
 interface UseLinkCheckBulkActionsOptions {
-  recheckRows: (ids: string[]) => Promise<void>;
+  recheckRows: (rows: LinkCheckRow[]) => Promise<void>;
   deleteRows: (rows: LinkCheckRow[]) => Promise<boolean>;
-}
-
-function uniqueHistoryIds(rows: LinkCheckRow[]): string[] {
-  return [...new Set(rows.map((row) => row.historyId))];
 }
 
 function uniqueUrls(rows: LinkCheckRow[]): string[] {
@@ -25,12 +21,11 @@ export function useLinkCheckBulkActions(options: UseLinkCheckBulkActionsOptions)
   const isBulkActing = ref(false);
 
   async function bulkRecheck(rows: LinkCheckRow[]): Promise<void> {
-    const ids = uniqueHistoryIds(rows);
-    if (ids.length === 0) return;
+    if (rows.length === 0) return;
 
     isBulkActing.value = true;
     try {
-      await options.recheckRows(ids);
+      await options.recheckRows(rows);
     } finally {
       isBulkActing.value = false;
     }

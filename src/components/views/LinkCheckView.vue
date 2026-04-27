@@ -121,8 +121,13 @@ async function handleDeleteRow(row: LinkCheckRow): Promise<void> {
   removeRowsByKeys([row]);
 }
 
-async function recheckRowsByIds(ids: string[]): Promise<void> {
-  await checkSubset({ historyIds: ids });
+async function recheckRows(rows: LinkCheckRow[]): Promise<void> {
+  await checkSubset({
+    targets: rows.map((row) => ({
+      historyId: row.historyId,
+      serviceId: row.serviceId,
+    })),
+  });
 }
 
 const {
@@ -131,7 +136,7 @@ const {
   bulkCopyUrls,
   bulkDelete,
 } = useLinkCheckBulkActions({
-  recheckRows: recheckRowsByIds,
+  recheckRows,
   deleteRows: deleteRowsByTargets,
 });
 

@@ -8,6 +8,15 @@ import type {
 } from '../../types/linkCheck';
 import { applyConfiguredUrlWithConfig } from '../useCopyLink';
 
+export function linkCheckRowKey(row: Pick<LinkCheckRow, 'historyId' | 'serviceId'>): string {
+  return `${row.historyId}::${row.serviceId}`;
+}
+
+function resultRowKey(result: Pick<BatchCheckResult['results'][number], 'history_id' | 'service_id' | 'link'>): string | null {
+  if (!result.history_id || !result.service_id) return null;
+  return `${result.history_id}::${result.service_id}`;
+}
+
 export function liteRowToItem(row: LinkCheckLiteRow): HistoryItem {
   const parsedResults = typeof row.results === 'string' ? JSON.parse(row.results) : row.results;
   const linkCheckStatus = row.link_check_status
@@ -94,10 +103,12 @@ export function restoreCheckStatus(rows: LinkCheckRow[], items: HistoryItem[]): 
 }
 
 export function applyResultsToRows(rows: LinkCheckRow[], results: BatchCheckResult['results']): void {
-  const rowMap = new Map(rows.map((row) => [`${row.url}::${row.historyId}`, row]));
+  const rowMap = new Map(rows.map((row) => [linkCheckRowKey(row), row]));
 
   for (const itemResult of results) {
-    const row = rowMap.get(`${itemResult.link}::${itemResult.history_id}`);
+    const key = resultRowKey(itemResult);
+    if (!key) continue;
+    const row = rowMap.get(key);
     if (row) row.checkResult = itemResult as CheckLinkResult;
   }
 }

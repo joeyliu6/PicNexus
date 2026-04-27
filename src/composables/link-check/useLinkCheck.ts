@@ -23,6 +23,7 @@ import {
   type ServiceStat,
 } from '../../types/linkCheck';
 import {
+  linkCheckRowKey,
   liteRowToItem,
   buildCheckItemsSync,
   restoreCheckStatus,
@@ -31,7 +32,6 @@ import {
 import {
   updateHistoryCheckStatus,
   exportCsv,
-  normalizeErrorType,
 } from './linkCheckPersistence';
 import { onCacheEvent } from '../../events/cacheEvents';
 
@@ -455,6 +455,7 @@ export function useLinkCheckManager() {
     serviceId?: string;
     statusFilter?: 'unchecked' | 'invalid' | 'timeout' | 'suspicious' | 'valid' | 'problems';
     historyIds?: string[];
+    targets?: Array<{ historyId: string; serviceId: string }>;
   }): Promise<BatchCheckResult | null> {
     if (isChecking.value) {
       toast.warn('检测进行中', '请等待当前检测完成');
@@ -463,7 +464,9 @@ export function useLinkCheckManager() {
 
     const rows = checkRows.value;
     const idSet = filter.historyIds ? new Set(filter.historyIds) : null;
+    const targetSet = filter.targets ? new Set(filter.targets.map((target) => `${target.historyId}::${target.serviceId}`)) : null;
     const filtered = rows.filter((row) => {
+      if (targetSet) return targetSet.has(linkCheckRowKey(row));
       if (idSet) return idSet.has(row.historyId);
       if (filter.serviceId && row.serviceId !== filter.serviceId) return false;
       const cr = row.checkResult;
@@ -525,9 +528,10 @@ export function useLinkCheckManager() {
       const allRows = [...checkRows.value];
       applyResultsToRows(allRows, result.results);
       // 子集复检需清除排序锁定
-      const rowMap = new Map(allRows.map((r) => [`${r.url}::${r.historyId}`, r]));
+      const rowMap = new Map(allRows.map((r) => [linkCheckRowKey(r), r]));
       for (const itemResult of result.results) {
-        const row = rowMap.get(`${itemResult.link}::${itemResult.history_id}`);
+        if (!itemResult.history_id || !itemResult.service_id) continue;
+        const row = rowMap.get(`${itemResult.history_id}::${itemResult.service_id}`);
         if (row) row.pinnedSortWeight = undefined;
       }
       checkRows.value = allRows;
@@ -568,7 +572,7 @@ export function useLinkCheckManager() {
   /** 重建行索引（checkRows 被重新赋值时调用） */
   function rebuildRowIndex(): void {
     rowIndexMap = new Map(
-      checkRows.value.map((r, i) => [`${r.url}::${r.historyId}`, i])
+      checkRows.value.map((r, i) => [linkCheckRowKey(r), i])
     );
   }
 
@@ -666,7 +670,8 @@ export function useLinkCheckManager() {
     const now = Date.now();
     let mutated = false;
     for (const itemResult of recent) {
-      const key = `${itemResult.link}::${itemResult.history_id}`;
+      if (!itemResult.history_id || !itemResult.service_id) continue;
+      const key = `${itemResult.history_id}::${itemResult.service_id}`;
       const idx = rowIndexMap.get(key);
       if (idx === undefined || idx >= checkRows.value.length) continue;
       const target = checkRows.value[idx];
@@ -687,7 +692,7 @@ export function useLinkCheckManager() {
 
   /** 复制 checkRows、通过 Map O(1) 找到目标行、执行变更、触发响应式更新 */
   function updateRow(row: LinkCheckRow, updater: (target: LinkCheckRow) => void): boolean {
-    const key = `${row.url}::${row.historyId}`;
+    const key = linkCheckRowKey(row);
     const idx = rowIndexMap.get(key);
     if (idx === undefined || idx >= checkRows.value.length) return false;
     const rows = [...checkRows.value];
@@ -747,24 +752,24 @@ export function useLinkCheckManager() {
 
   /** 将复检结果持久化到数据库 */
   async function persistRecheckResult(row: LinkCheckRow, result: CheckLinkResult): Promise<void> {
-    await historyDB.open();
-    const item = await historyDB.getById(row.historyId);
-    if (!item) return;
-    const linkCheckStatus = item.linkCheckStatus || {};
-    linkCheckStatus[row.serviceId] = {
-      isValid: result.is_valid,
-      lastCheckTime: Date.now(),
-      statusCode: result.status_code,
-      errorType: normalizeErrorType(result.error_type),
-      responseTime: result.response_time,
-      error: result.error || undefined,
-      browserMightWork: result.browser_might_work || undefined,
-    };
-    await historyDB.update(row.historyId, { linkCheckStatus });
+    await updateHistoryCheckStatus({
+      results: [{
+        ...result,
+        history_id: row.historyId,
+        service_id: row.serviceId,
+      }],
+      total: 1,
+      valid: result.is_valid ? 1 : 0,
+      invalid: !result.is_valid && result.error_type !== 'timeout' && result.error_type !== 'suspicious' ? 1 : 0,
+      timeout: result.error_type === 'timeout' ? 1 : 0,
+      suspicious: result.error_type === 'suspicious' ? 1 : 0,
+      elapsed_ms: result.response_time ?? 0,
+      cancelled: false,
+    });
   }
 
   async function recheckSingle(row: LinkCheckRow, currentFilter?: StatusFilter): Promise<void> {
-    const key = `${row.url}::${row.historyId}`;
+    const key = linkCheckRowKey(row);
     const existingIdx = rowIndexMap.get(key);
     const existing = existingIdx !== undefined ? checkRows.value[existingIdx] : undefined;
     if (existing?.recheckLoading || existing?.recheckResult) return;
