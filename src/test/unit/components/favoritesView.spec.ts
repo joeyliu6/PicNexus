@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
+import { flushPromises } from '@vue/test-utils';
 import { mountWithDefaults } from '../../helpers/vueMount';
 import FavoritesView from '../../../components/views/FavoritesView.vue';
 import FavoritePhotoItem from '../../../components/views/favorites/FavoritePhotoItem.vue';
@@ -205,9 +206,17 @@ function mountFavoritesView() {
           props: ['selectedCount', 'visible', 'availableServices'],
           emits: ['copy', 'export', 'delete', 'clear-selection', 'batch-favorite'],
           template: `
-            <section v-if="visible" class="floating-action-stub">
+            <section
+              v-if="visible"
+              class="floating-action-stub"
+              :data-selected-count="selectedCount"
+              :data-services="availableServices.map(s => \`\${s.serviceId}:\${s.count}\`).join('|')"
+            >
               <button class="fab-copy" @click="$emit('copy', 'markdown')">copy</button>
+              <button class="fab-copy-r2" @click="$emit('copy', 'url', 'r2')">copy r2</button>
+              <button class="fab-export" @click="$emit('export')">export</button>
               <button class="fab-delete" @click="$emit('delete')">delete</button>
+              <button class="fab-clear" @click="$emit('clear-selection')">clear</button>
               <button class="fab-favorite" @click="$emit('batch-favorite', false)">favorite</button>
             </section>
           `,
@@ -244,6 +253,31 @@ describe('FavoritesView P1 coverage', () => {
     expect(wrapper.emitted('update:totalCount')).toEqual([[0]]);
   });
 
+  it('shows initial loading skeletons and the load-more indicator for paged lists', async () => {
+    mockRefs.data!.hasLoadedOnce.value = false;
+    mockRefs.data!.isLoading.value = true;
+
+    const wrapper = mountFavoritesView();
+
+    expect(wrapper.findAll('.skeleton-cell')).toHaveLength(16);
+    expect(wrapper.find('.empty-state-stub').exists()).toBe(false);
+
+    mockRefs.data!.loadedMetas.value = [meta({ id: 'fav-1' })];
+    mockRefs.data!.totalCount.value = 2;
+    mockRefs.data!.hasMore.value = true;
+    mockRefs.data!.isLoading.value = false;
+    mockRefs.data!.hasLoadedOnce.value = true;
+    mockRefs.data!.imageStates['fav-1'] = 'loaded';
+    await nextTick();
+
+    expect(wrapper.findAll('.photo-item')).toHaveLength(1);
+    expect(wrapper.find('.load-more-sentinel').exists()).toBe(true);
+
+    await wrapper.get('.favorites-scroll').trigger('scroll');
+
+    expect(favoritesDataMock.onFavoritesScroll).toHaveBeenCalledTimes(1);
+  });
+
   it('renders favorites, opens lightbox, toggles selection, and unfavorites items', async () => {
     const first = meta({ id: 'fav-1', primaryUrl: 'https://img.example.com/fav-1.jpg' });
     const second = meta({ id: 'fav-2', primaryUrl: 'https://img.example.com/fav-2.jpg' });
@@ -266,6 +300,23 @@ describe('FavoritesView P1 coverage', () => {
     expect(wrapper.findAll('.photo-error')).toHaveLength(1);
   });
 
+  it('keeps the page stable when unfavoriting fails', async () => {
+    const first = meta({ id: 'fav-1' });
+    mockRefs.data!.loadedMetas.value = [first];
+    mockRefs.data!.totalCount.value = 1;
+    mockRefs.data!.imageStates['fav-1'] = 'loaded';
+    historyManagerMock.toggleFavorite.mockRejectedValueOnce(new Error('db unavailable'));
+
+    const wrapper = mountFavoritesView();
+
+    await wrapper.get('.favorite-btn').trigger('click');
+    await flushPromises();
+
+    expect(historyManagerMock.toggleFavorite).toHaveBeenCalledWith('fav-1');
+    expect(wrapper.findAll('.photo-item')).toHaveLength(1);
+    expect(wrapper.find('.empty-state-stub').exists()).toBe(false);
+  });
+
   it('wires selected favorites to bulk action handlers', async () => {
     mockRefs.data!.loadedMetas.value = [meta({ id: 'fav-1' })];
     mockRefs.data!.totalCount.value = 1;
@@ -276,13 +327,42 @@ describe('FavoritesView P1 coverage', () => {
     const wrapper = mountFavoritesView();
 
     await wrapper.get('.fab-copy').trigger('click');
+    await wrapper.get('.fab-export').trigger('click');
     await wrapper.get('.fab-delete').trigger('click');
+    await wrapper.get('.fab-clear').trigger('click');
     await wrapper.get('.fab-favorite').trigger('click');
 
     expect(historyViewStateMock.bulkCopyFormatted).toHaveBeenCalledWith('markdown');
+    expect(historyViewStateMock.bulkExport).toHaveBeenCalled();
     expect(historyViewStateMock.bulkDelete).toHaveBeenCalled();
+    expect(historyViewStateMock.clearSelection).toHaveBeenCalled();
     expect(historyManagerMock.batchSetFavorite).toHaveBeenCalledWith(['fav-1'], false);
     expect(wrapper.emitted('update:selectedCount')).toEqual([[1]]);
+  });
+
+  it('exposes selected service counts and forwards service-specific copy requests', async () => {
+    mockRefs.data!.loadedMetas.value = [
+      meta({ id: 'fav-jd', primaryService: 'jd' }),
+      meta({ id: 'fav-r2-a', primaryService: 'r2' }),
+      meta({ id: 'fav-r2-b', primaryService: 'r2' }),
+      meta({ id: 'fav-unselected', primaryService: 'github' }),
+    ];
+    mockRefs.data!.totalCount.value = 4;
+    for (const meta of mockRefs.data!.loadedMetas.value) {
+      mockRefs.data!.imageStates[meta.id] = 'loaded';
+    }
+    mockRefs.viewState!.selectedIdList.value = ['fav-r2-a', 'fav-jd', 'fav-r2-b'];
+    mockRefs.viewState!.hasSelection.value = true;
+
+    const wrapper = mountFavoritesView();
+    const actions = wrapper.get('.floating-action-stub');
+
+    expect(actions.attributes('data-selected-count')).toBe('3');
+    expect(actions.attributes('data-services')).toBe('r2:2|jd:1');
+
+    await wrapper.get('.fab-copy-r2').trigger('click');
+
+    expect(historyViewStateMock.bulkCopyFormatted).toHaveBeenCalledWith('url', 'r2');
   });
 });
 
