@@ -53,6 +53,10 @@ async function openStatefulUi(page: Page, visualPage: string, state: string): Pr
   if (visualPage === 'history' && state === 'service-menu') {
     await page.locator('.visual-history .service-filter .filter-chip').click();
   }
+  if (visualPage === 'markdown-repair' && state === 'repair-confirm-dialog') {
+    await page.locator('.visual-native-body .bottom-actions .btn-primary').click();
+    await expect(page.locator('.p-dialog')).toBeVisible();
+  }
 }
 
 export async function captureVisualState(page: Page, visualPage: string, state: string): Promise<void> {
@@ -63,7 +67,10 @@ export async function captureVisualState(page: Page, visualPage: string, state: 
   await expect(root).toHaveAttribute('data-visual-ready', 'true');
   await openStatefulUi(page, visualPage, state);
   await waitForVisualAssets(page);
-  await expect(root).toHaveScreenshot(`${visualPage}-${state}.png`, {
+  const screenshotTarget = visualPage === 'markdown-repair' && state === 'repair-confirm-dialog'
+    ? page
+    : root;
+  await expect(screenshotTarget).toHaveScreenshot(`${visualPage}-${state}.png`, {
     animations: 'disabled',
     caret: 'hide',
     scale: 'css',

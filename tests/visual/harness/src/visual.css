@@ -251,6 +251,11 @@ body,
   padding: var(--space-lg-xl) 0 var(--space-lg-xl) var(--space-xl);
 }
 
+.visual-linkcheck--native {
+  gap: 0;
+  padding: 0;
+}
+
 .visual-tabs {
   display: flex;
   gap: var(--space-2xs);
@@ -260,6 +265,12 @@ body,
   margin: calc(var(--space-lg-xl) * -1) 0 0 calc(var(--space-xl) * -1);
   padding-left: var(--space-md);
   background: var(--bg-card);
+  flex-shrink: 0;
+}
+
+.visual-linkcheck--native .visual-tabs {
+  height: 48px;
+  margin: 0;
 }
 
 .visual-tabs span {
@@ -273,6 +284,31 @@ body,
 .visual-tabs .active {
   color: var(--primary);
   border-bottom: 2px solid var(--primary);
+}
+
+.visual-native-body,
+.visual-migrate-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.visual-native-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.visual-native-body .md-rescue {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+.visual-migrate-panel {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-lg-xl) 0 var(--space-lg-xl) var(--space-xl);
+  gap: var(--space-md-lg);
 }
 
 .monitor-panel--skeleton {
@@ -393,9 +429,17 @@ body,
     padding-left: var(--space-md);
   }
 
+  .visual-linkcheck--native {
+    padding-left: 0;
+  }
+
   .visual-tabs {
     margin-left: calc(var(--space-md) * -1);
     overflow: hidden;
+  }
+
+  .visual-linkcheck--native .visual-tabs {
+    margin-left: 0;
   }
 
   .settings-sidebar {

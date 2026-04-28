@@ -1,16 +1,21 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, provide, ref } from 'vue';
 import UploadDropZone from '@/components/views/upload/UploadDropZone.vue';
 import CompressPopoverMenu from '@/components/views/upload/CompressPopoverMenu.vue';
 import ServiceSelector from '@/components/views/upload/ServiceSelector.vue';
 import QueueCard from '@/components/upload/QueueCard.vue';
 import DashboardStrip from '@/components/views/history/DashboardStrip.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
+import MdRescueInline from '@/components/views/linkcheck/MdRescueInline.vue';
+import MigrateSelectPhase from '@/components/views/linkcheck/migrate/MigrateSelectPhase.vue';
+import MigrateProgressPhase from '@/components/views/linkcheck/migrate/MigrateProgressPhase.vue';
+import { MIGRATE_KEY } from '@/components/views/linkcheck/migrate/keys';
 import CheckFilterBar from '@/components/views/linkcheck/history-check/CheckFilterBar.vue';
 import CheckLinkList from '@/components/views/linkcheck/history-check/CheckLinkList.vue';
 import CheckBottomBar from '@/components/views/linkcheck/history-check/CheckBottomBar.vue';
 import GeneralSettingsPanel from '@/components/settings/GeneralSettingsPanel.vue';
 import ServiceEnableSection from '@/components/settings/hosting/ServiceEnableSection.vue';
+import { applyMarkdownRepairFixture, createMigrateContext } from './linkFeatureFixtures';
 import type { QueueItem, ServiceProgress } from '@/uploadQueue';
 import type { CheckLinkResult, LinkCheckRow, StatusFilter, BatchCheckProgress } from '@/types/linkCheck';
 import type { CheckStatsResult } from '@/composables/link-check/useCheckStats';
@@ -21,7 +26,7 @@ import type { ServiceHealthStatus } from '@/types/serviceHealth';
 import type { ServiceCheckSession } from '@/types/serviceCheck';
 import type { LinkFormat } from '@/utils/linkFormatter';
 
-type VisualPage = 'upload' | 'history' | 'link-check' | 'settings';
+type VisualPage = 'upload' | 'history' | 'link-check' | 'markdown-repair' | 'batch-migrate' | 'settings';
 type VisualState = string;
 
 const params = new URLSearchParams(window.location.search);
@@ -30,9 +35,17 @@ const state = (params.get('state') || 'empty') as VisualState;
 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 const isDark = state === 'dark-theme' || prefersDark;
 const rootClass = isDark ? 'dark-theme' : 'light-theme';
+const isLinkFeaturePage = computed(() => page === 'link-check' || page === 'markdown-repair' || page === 'batch-migrate');
 
 document.documentElement.classList.toggle('dark-theme', isDark);
 document.documentElement.classList.toggle('light-theme', !isDark);
+
+const migrateContext = createMigrateContext(state);
+provide(MIGRATE_KEY, migrateContext);
+
+if (page === 'markdown-repair') {
+  applyMarkdownRepairFixture(state);
+}
 
 const image = (seed: string) => {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#60a5fa"/><stop offset="0.55" stop-color="#22c55e"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><rect width="640" height="420" fill="url(#g)"/><circle cx="486" cy="104" r="70" fill="rgba(255,255,255,.35)"/><path d="M0 330 150 190l92 78 86-112 312 174v90H0z" fill="rgba(15,23,42,.38)"/><text x="36" y="62" fill="white" font-family="Arial" font-size="30" font-weight="700">${seed}</text></svg>`;
@@ -282,7 +295,7 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
       <div class="visual-logo">PN</div>
       <div class="visual-nav" :class="{ active: page === 'upload' }"><i class="pi pi-cloud-upload"></i><span>Upload</span></div>
       <div class="visual-nav" :class="{ active: page === 'history' }"><i class="pi pi-images"></i><span>History</span></div>
-      <div class="visual-nav" :class="{ active: page === 'link-check' }"><i class="pi pi-wrench"></i><span>Links</span></div>
+      <div class="visual-nav" :class="{ active: isLinkFeaturePage }"><i class="pi pi-wrench"></i><span>Links</span></div>
       <div class="visual-nav" :class="{ active: page === 'settings' }"><i class="pi pi-cog"></i><span>Settings</span></div>
     </aside>
 
@@ -344,9 +357,27 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
         </div>
       </section>
 
-      <section v-else-if="page === 'link-check'" class="visual-page visual-linkcheck">
-        <div class="visual-tabs"><span class="active">Link check</span><span>Markdown repair</span><span>Batch migrate</span></div>
-        <div v-if="state === 'skeleton'" class="monitor-panel monitor-panel--skeleton">
+      <section
+        v-else-if="isLinkFeaturePage"
+        class="visual-page visual-linkcheck"
+        :class="{ 'visual-linkcheck--native': page !== 'link-check' }"
+      >
+        <div class="visual-tabs">
+          <span :class="{ active: page === 'link-check' }">Link check</span>
+          <span :class="{ active: page === 'markdown-repair' }">Markdown repair</span>
+          <span :class="{ active: page === 'batch-migrate' }">Batch migrate</span>
+        </div>
+        <div v-if="page === 'markdown-repair'" class="visual-native-body">
+          <MdRescueInline />
+        </div>
+        <div v-else-if="page === 'batch-migrate'" class="visual-migrate-panel">
+          <MigrateSelectPhase
+            v-if="migrateContext.phase.value === 'configuring'"
+            @start="migrateContext.startMigrate"
+          />
+          <MigrateProgressPhase v-else />
+        </div>
+        <div v-else-if="state === 'skeleton'" class="monitor-panel monitor-panel--skeleton">
           <div class="sk-filterbar"><div class="sk-chip"></div><div class="sk-chip wide"></div><div class="sk-chip"></div><div class="sk-searchbox"></div></div>
           <div class="sk-link-list"><div v-for="i in 12" :key="i" class="sk-link-row"><div class="sk-dot"></div><div class="sk-line"></div><div class="sk-line small"></div><div class="sk-circle"></div></div></div>
         </div>
