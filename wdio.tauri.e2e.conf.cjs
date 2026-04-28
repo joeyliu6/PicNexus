@@ -6,7 +6,7 @@ const rootDir = __dirname;
 const isWindows = process.platform === 'win32';
 const isLinux = process.platform === 'linux';
 const isMac = process.platform === 'darwin';
-const npmCommand = isWindows ? 'npm.cmd' : 'npm';
+const npxCommand = isWindows ? 'npx.cmd' : 'npx';
 const appBinary = isWindows ? 'picnexus.exe' : 'picnexus';
 const appPath = path.join(rootDir, 'src-tauri', 'target', 'debug', appBinary);
 
@@ -49,11 +49,11 @@ function missingExecutableMessage(command, envName, installHint) {
   ].join('\n');
 }
 
-function runCommand(command, args) {
+function runCommand(command, args, cwd = rootDir) {
   const result = spawnSync(command, args, {
-    cwd: rootDir,
+    cwd,
     stdio: 'inherit',
-    shell: false,
+    shell: isWindows,
   });
 
   if (result.status !== 0) {
@@ -185,7 +185,8 @@ exports.config = {
 
   onPrepare() {
     assertPrerequisites();
-    runCommand(npmCommand, ['run', 'tauri', 'build', '--', '--debug', '--no-bundle']);
+    runCommand(npxCommand, ['vite', 'build']);
+    runCommand('cargo', ['build', '--features', 'custom-protocol'], path.join(rootDir, 'src-tauri'));
 
     if (!fs.existsSync(appPath)) {
       throw new Error(`Tauri debug binary was not found after build: ${appPath}`);
