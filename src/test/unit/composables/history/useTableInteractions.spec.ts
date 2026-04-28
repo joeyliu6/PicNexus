@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick, ref, type Ref } from 'vue';
 import { mount } from '@vue/test-utils';
+import type PopoverType from 'primevue/popover';
 import { getClipboardMocks } from '../../../helpers/tauriMock';
 import type { HistoryItem } from '../../../../config/types';
 
@@ -13,6 +14,8 @@ const {
   toastWarnMock,
   toastErrorMock,
   toastSilentMock,
+  lightboxPreloaderMock,
+  isStatsLoadedRef,
 } = vi.hoisted(() => ({
   warmImagesMock: vi.fn(),
   toggleFavoriteMock: vi.fn(),
@@ -22,8 +25,11 @@ const {
   toastWarnMock: vi.fn(),
   toastErrorMock: vi.fn(),
   toastSilentMock: vi.fn(),
+  lightboxPreloaderMock: vi.fn(),
+  isStatsLoadedRef: { value: true },
 }));
 const writeTextMock = getClipboardMocks().writeText;
+type ServicePopoverRef = Ref<InstanceType<typeof PopoverType> | null>;
 
 vi.mock('../../../../composables/useToast', () => ({
   useToast: () => ({
@@ -44,7 +50,7 @@ vi.mock('../../../../composables/useConfig', () => ({
 vi.mock('../../../../composables/useHistory', () => ({
   useHistoryManager: () => ({
     favoriteSet: ref(new Set<string>()),
-    isStatsLoaded: ref(true),
+    isStatsLoaded: isStatsLoadedRef,
     loadStats: loadStatsMock,
     toggleFavorite: toggleFavoriteMock,
   }),
@@ -63,7 +69,7 @@ vi.mock('../../../../composables/useThumbCache', () => ({
 }));
 
 vi.mock('../../../../composables/useLightboxPreloader', () => ({
-  useLightboxPreloader: vi.fn(),
+  useLightboxPreloader: lightboxPreloaderMock,
 }));
 
 vi.mock('../../../../utils/imageUrl', () => ({
@@ -85,6 +91,7 @@ const { useTableInteractions } = await import('../../../../composables/history/u
 beforeEach(() => {
   writeTextMock.mockReset();
   writeTextMock.mockResolvedValue(undefined);
+  isStatsLoadedRef.value = true;
 });
 
 function makeItem(id = 'item-1'): HistoryItem {
@@ -144,6 +151,8 @@ function mountHarness(
     totalPages?: Ref<number>;
     goToPage?: (pageNumber: number) => Promise<void>;
     peekPage?: (pageNumber: number) => Promise<{ items: HistoryItem[]; total: number }>;
+    getSuccessfulServices?: (item: HistoryItem) => string[];
+    servicePopoverRef?: ServicePopoverRef;
   } = {},
 ) {
   let api: ReturnType<typeof useTableInteractions> | null = null;
@@ -155,6 +164,8 @@ function mountHarness(
     items: currentPageData.value,
     total: currentPageData.value.length,
   }));
+  const getSuccessfulServices = options.getSuccessfulServices ?? vi.fn(() => []);
+  const servicePopoverRef = options.servicePopoverRef ?? ref(null) as ServicePopoverRef;
 
   const Harness = defineComponent({
     setup() {
@@ -164,8 +175,8 @@ function mountHarness(
         totalPages,
         goToPage,
         peekPage,
-        getSuccessfulServices: vi.fn(() => []),
-        servicePopoverRef: ref(null),
+        getSuccessfulServices,
+        servicePopoverRef,
       });
       return () => h('div');
     },
@@ -240,6 +251,75 @@ describe('useTableInteractions lightbox cross-page tracking', () => {
     vi.clearAllMocks();
     vi.useRealTimers();
     document.body.innerHTML = '';
+  });
+
+  it('resolves adjacent preload URLs within the page, across pages, and at boundaries', async () => {
+    const prevItem = makeItem('page-1-last');
+    const firstItem = makeItem('page-2-first');
+    const secondItem = makeItem('page-2-second');
+    const nextItem = makeItem('page-3-first');
+    const currentPageData = ref([firstItem, secondItem]) as Ref<HistoryItem[]>;
+    const currentPage = ref(2);
+    const peekPage = vi.fn(async (pageNumber: number) => ({
+      items: pageNumber === 1 ? [prevItem] : [nextItem],
+      total: 1,
+    }));
+    const harness = mountHarness(firstItem, {
+      currentPageData,
+      currentPage,
+      totalPages: ref(3),
+      peekPage,
+    });
+    const preloaderOptions = lightboxPreloaderMock.mock.calls.at(-1)![0] as {
+      resolveAdjacentUrl: (direction: 'prev' | 'next') => Promise<string | null>;
+    };
+
+    harness.api().openLightbox(firstItem);
+    expect(await preloaderOptions.resolveAdjacentUrl('next')).toBe('https://example.com/full.jpg');
+    expect(peekPage).not.toHaveBeenCalled();
+
+    expect(await preloaderOptions.resolveAdjacentUrl('prev')).toBe('https://example.com/full.jpg');
+    expect(peekPage).toHaveBeenCalledWith(1);
+
+    harness.api().openLightbox(secondItem);
+    expect(await preloaderOptions.resolveAdjacentUrl('next')).toBe('https://example.com/full.jpg');
+    expect(peekPage).toHaveBeenCalledWith(3);
+
+    currentPage.value = 1;
+    currentPageData.value = [firstItem];
+    harness.api().openLightbox(firstItem);
+    expect(await preloaderOptions.resolveAdjacentUrl('prev')).toBeNull();
+
+    currentPage.value = 3;
+    harness.api().openLightbox(firstItem);
+    expect(await preloaderOptions.resolveAdjacentUrl('next')).toBeNull();
+  });
+
+  it('moves to the previous item and keeps the current item when the crossed page is empty', async () => {
+    const firstItem = makeItem('page-2-first');
+    const secondItem = makeItem('page-2-second');
+    const peekPage = vi.fn().mockResolvedValue({
+      items: [],
+      total: 0,
+    });
+    const harness = mountHarness(secondItem, {
+      currentPageData: ref([firstItem, secondItem]) as Ref<HistoryItem[]>,
+      currentPage: ref(2),
+      totalPages: ref(2),
+      peekPage,
+    });
+
+    harness.api().openLightbox(secondItem);
+    expect(harness.api().lightboxHasPrev.value).toBe(true);
+    expect(harness.api().lightboxHasNext.value).toBe(false);
+
+    await harness.api().handleLightboxNavigate('prev');
+    expect(harness.api().lightboxItem.value?.id).toBe(firstItem.id);
+    expect(peekPage).not.toHaveBeenCalled();
+
+    await harness.api().handleLightboxNavigate('prev');
+    expect(peekPage).toHaveBeenCalledWith(1);
+    expect(harness.api().lightboxItem.value?.id).toBe(firstItem.id);
   });
 
   it('lands on a prefetched crossed-page item before syncing the table page', async () => {
@@ -359,6 +439,50 @@ describe('useTableInteractions lightbox cross-page tracking', () => {
     expect(historyContainer.scrollTop).toBe(123);
     expect(harness.api().lightboxItem.value?.id).toBe(secondItem.id);
   });
+
+  it('centers the target in the nearest scrollable parent when no history container exists', async () => {
+    const firstItem = makeItem('scroll-parent-1');
+    const secondItem = makeItem('scroll-parent-2');
+    const scrollParent = document.createElement('div');
+    scrollParent.style.overflowY = 'auto';
+    mockRect(scrollParent, {
+      left: 0,
+      right: 640,
+      top: 100,
+      bottom: 500,
+      width: 640,
+      height: 400,
+    });
+    Object.defineProperty(scrollParent, 'clientHeight', { configurable: true, value: 400 });
+    Object.defineProperty(scrollParent, 'scrollHeight', { configurable: true, value: 1000 });
+    scrollParent.scrollTop = 0;
+    document.body.appendChild(scrollParent);
+
+    const targetWrapper = appendSourceThumb(secondItem.id, scrollParent);
+    mockRect(targetWrapper, {
+      left: 0,
+      right: 36,
+      top: 520,
+      bottom: 556,
+      width: 36,
+      height: 36,
+    });
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(targetWrapper, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    const harness = mountHarness(firstItem, {
+      currentPageData: ref([firstItem, secondItem]) as Ref<HistoryItem[]>,
+    });
+
+    harness.api().openLightbox(firstItem);
+    await harness.api().handleLightboxNavigate('next');
+
+    expect(scrollParent.scrollTop).toBe(238);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(harness.api().lightboxItem.value?.id).toBe(secondItem.id);
+  });
 });
 
 describe('useTableInteractions lightbox delete result handling', () => {
@@ -381,6 +505,30 @@ describe('useTableInteractions lightbox delete result handling', () => {
     expect(harness.api().lightboxVisible.value).toBe(true);
     expect(toastSuccessMock).not.toHaveBeenCalled();
 
+    harness.wrapper.unmount();
+  });
+
+  it('loads stats before toggling favorites when stats are not ready', async () => {
+    isStatsLoadedRef.value = false;
+    loadStatsMock.mockResolvedValueOnce(undefined);
+    const item = makeItem('favorite-lazy-stats');
+    const harness = mountHarness(item);
+
+    await harness.api().handleToggleFavorite(item);
+
+    expect(loadStatsMock).toHaveBeenCalledTimes(1);
+    expect(toggleFavoriteMock).toHaveBeenCalledWith('favorite-lazy-stats');
+    harness.wrapper.unmount();
+  });
+
+  it('swallows favorite toggle errors because the history manager owns the toast', async () => {
+    toggleFavoriteMock.mockRejectedValueOnce(new Error('favorite failed'));
+    const item = makeItem('favorite-error');
+    const harness = mountHarness(item);
+
+    await expect(harness.api().handleToggleFavorite(item)).resolves.toBeUndefined();
+
+    expect(toggleFavoriteMock).toHaveBeenCalledWith('favorite-error');
     harness.wrapper.unmount();
   });
 });
@@ -429,6 +577,36 @@ describe('useTableInteractions service badge copy', () => {
 
     harness.wrapper.unmount();
   });
+
+  it('opens the service popover and warns when the selected service has no copyable link', async () => {
+    const item = makeItem('popover-no-link');
+    item.results = [{
+      serviceId: 'jd',
+      status: 'failed',
+      error: 'upload failed',
+    }];
+    const toggle = vi.fn();
+    const harness = mountHarness(item, {
+      getSuccessfulServices: vi.fn(() => ['jd', 'weibo']),
+      servicePopoverRef: ref({ toggle } as unknown as InstanceType<typeof PopoverType>),
+    });
+
+    harness.api().handlePopoverCopyLink('jd');
+    expect(toastWarnMock).not.toHaveBeenCalled();
+
+    const event = new Event('click');
+    harness.api().openServicePopover(event, item);
+    expect(toggle).toHaveBeenCalledWith(event);
+    expect(harness.api().popoverServices.value).toEqual(['jd', 'weibo']);
+    expect(harness.api().isPopoverServiceCopied('jd')).toBe(false);
+
+    harness.api().handlePopoverCopyLink('jd');
+    await Promise.resolve();
+
+    expect(toastWarnMock).toHaveBeenCalledTimes(1);
+    expect(writeTextMock).not.toHaveBeenCalled();
+    harness.wrapper.unmount();
+  });
 });
 
 describe('useTableInteractions hover preview positioning', () => {
@@ -463,6 +641,43 @@ describe('useTableInteractions hover preview positioning', () => {
     expect(harness.api().hoverPreview.value.style).toEqual({
       top: '174px',
       left: '364px',
+    });
+  });
+
+  it('positions portrait and unknown-size previews with aspect ratio fallbacks', () => {
+    const source = document.createElement('div');
+    mockRect(source, {
+      left: 16,
+      right: 52,
+      top: 8,
+      bottom: 44,
+      width: 36,
+      height: 36,
+    });
+    const portrait = {
+      ...makeItem('portrait-ratio'),
+      width: 0,
+      height: 0,
+      aspectRatio: 0.5,
+    };
+    const unknown = {
+      ...makeItem('unknown-size'),
+      width: 0,
+      height: 0,
+      aspectRatio: 0,
+    };
+    const harness = mountHarness(portrait);
+
+    harness.api().handlePreviewEnter({ currentTarget: source } as unknown as MouseEvent, portrait);
+    expect(harness.api().hoverPreview.value.style).toEqual({
+      top: '8px',
+      left: '60px',
+    });
+
+    harness.api().handlePreviewEnter({ currentTarget: source } as unknown as MouseEvent, unknown);
+    expect(harness.api().hoverPreview.value.style).toEqual({
+      top: '8px',
+      left: '60px',
     });
   });
 });
