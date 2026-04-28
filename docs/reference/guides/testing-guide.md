@@ -114,9 +114,27 @@ export function renderWithPlugins(component, options?) {
   "test": "vitest",
   "test:run": "vitest run",
   "test:coverage": "vitest run --coverage",
-  "test:ui": "vitest --ui"
+  "test:ui": "vitest --ui",
+  "test:e2e": "playwright test -c playwright.e2e.config.ts",
+  "test:tauri:e2e": "node scripts/check-tauri-e2e-prereqs.cjs && wdio run wdio.tauri.e2e.conf.cjs"
 }
 ```
+
+### 真实 Tauri 桌面冒烟
+
+`npm run test:e2e` 仍然是 mocked Playwright Web harness，用来覆盖 mocked 原生 API 边界。
+
+`npm run test:tauri:e2e` 是独立的真实桌面壳层冒烟测试，只验证应用启动、不白屏、主布局出现，以及上传 / 历史 / 链接检测 / 设置四个主导航能进入。它不测真实上传、真实账号、真实图床或真实外网。
+
+运行前需要安装 `tauri-driver` 和当前平台的原生 WebDriver：
+
+```bash
+cargo install tauri-driver --locked
+```
+
+- Windows：安装与 Microsoft Edge 版本匹配的 `msedgedriver`，并加入 `PATH`；也可以参考 Tauri CI 示例运行 `cargo install --git https://github.com/chippers/msedgedriver-tool && msedgedriver-tool` 后生成驱动，或用 `TAURI_NATIVE_DRIVER` 指向可执行文件。
+- Linux：安装 `webkit2gtk-driver`，无桌面环境时用 `xvfb` 包裹运行。
+- macOS：`tauri-driver` 当前不支持 macOS 桌面 WebView，发版前用手动 checklist 做启动冒烟。
 
 ## CI 集成
 
