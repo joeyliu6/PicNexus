@@ -9,7 +9,29 @@ permissions:
   contents: write
 
 jobs:
+  web-smoke:
+    name: Web smoke E2E
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run web smoke E2E before release
+        run: npm run test:e2e
+
   release:
+    needs: web-smoke
     strategy:
       fail-fast: false
       matrix:
@@ -83,8 +105,8 @@ jobs:
       - name: Lint before release
         run: npm run lint
 
-      - name: Run tests before release
-        run: npm run test:run
+      - name: Run unit tests before release
+        run: npm run test:unit
 
       - name: Generate changelog
         uses: orhun/git-cliff-action@v4
