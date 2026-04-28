@@ -10,6 +10,10 @@ vi.mock('../../../../services/HistoryDatabase', () => ({
   },
 }));
 
+function uploadResult(serviceId: string, url: string) {
+  return { serviceId, fileKey: `${serviceId}-key`, url };
+}
+
 function makeItem(index: number): HistoryItem {
   return {
     id: `id-${String(index).padStart(3, '0')}`,
@@ -17,7 +21,7 @@ function makeItem(index: number): HistoryItem {
     localFileName: `image-${index}.png`,
     primaryService: 'source',
     results: [
-      { serviceId: 'source', status: 'success', result: { url: `https://img/${index}.png` } },
+      { serviceId: 'source', status: 'success', result: uploadResult('source', `https://img/${index}.png`) },
     ],
     generatedLink: '',
   } as HistoryItem;
@@ -56,5 +60,80 @@ describe('preloadAllPending', () => {
       cursorTimestamp: first[99].timestamp,
       cursorId: first[99].id,
     });
+  });
+
+  it('builds statuses only for targets that are still missing and filters completed items', async () => {
+    const needsGithub = makeItem(1);
+    needsGithub.results.push({ serviceId: 'r2', status: 'success', result: uploadResult('r2', 'https://r2/1.png') });
+    const alreadyComplete = makeItem(2);
+    alreadyComplete.results.push(
+      { serviceId: 'r2', status: 'success', result: uploadResult('r2', 'https://r2/2.png') },
+      { serviceId: 'github', status: 'success', result: uploadResult('github', 'https://github/2.png') },
+    );
+    vi.mocked(historyDB.getItemsByBackupCount)
+      .mockResolvedValueOnce({ items: [needsGithub, alreadyComplete], total: 2, hasMore: false });
+
+    const allItemStatuses = shallowRef([]);
+    const result = await preloadAllPending({
+      targets: ['r2', 'github'],
+      maxSuccessCount: 2,
+      sourceServiceFilter: ['source'],
+      timestampAfter: 1234,
+      allItemStatuses,
+      isCancelled: ref(false),
+      isPaused: ref(false),
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe(needsGithub.id);
+    expect(result[0].status.serviceResults).toEqual({ github: 'pending' });
+    expect(result[0].status.existingServiceIds).toEqual(expect.arrayContaining(['source', 'r2']));
+    expect(allItemStatuses.value).toHaveLength(1);
+    expect(historyDB.getItemsByBackupCount).toHaveBeenCalledWith(expect.objectContaining({
+      hasServiceId: ['source'],
+      timestampAfter: 1234,
+    }));
+  });
+
+  it('omits source filter when all sources are selected', async () => {
+    vi.mocked(historyDB.getItemsByBackupCount)
+      .mockResolvedValueOnce({ items: [makeItem(1)], total: 1, hasMore: false });
+
+    await preloadAllPending({
+      targets: ['r2'],
+      maxSuccessCount: 999,
+      sourceServiceFilter: [],
+      timestampAfter: null,
+      allItemStatuses: shallowRef([]),
+      isCancelled: ref(false),
+      isPaused: ref(false),
+    });
+
+    expect(vi.mocked(historyDB.getItemsByBackupCount).mock.calls[0][0]).toMatchObject({
+      maxSuccessCount: 999,
+      hasServiceId: undefined,
+      timestampAfter: undefined,
+    });
+  });
+
+  it('stops streaming more pages after cancellation', async () => {
+    const first = Array.from({ length: 100 }, (_, i) => makeItem(i));
+    vi.mocked(historyDB.getItemsByBackupCount)
+      .mockResolvedValueOnce({ items: first, total: 101, hasMore: true });
+    const isCancelled = ref(false);
+
+    const result = await preloadAllPending({
+      targets: ['r2'],
+      maxSuccessCount: 1,
+      sourceServiceFilter: ['source'],
+      timestampAfter: null,
+      allItemStatuses: shallowRef([]),
+      isCancelled,
+      isPaused: ref(false),
+      onBatch: () => { isCancelled.value = true; },
+    });
+
+    expect(result).toHaveLength(100);
+    expect(historyDB.getItemsByBackupCount).toHaveBeenCalledTimes(1);
   });
 });

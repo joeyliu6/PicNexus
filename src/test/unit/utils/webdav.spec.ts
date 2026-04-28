@@ -1,13 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fetch } from '@tauri-apps/plugin-http';
 import { WebDAVClient } from '../../../utils/webdav';
+import { getHttpFetchMock } from '../../helpers/tauriMock';
 
 // ─── Mock 外部依赖 ────────────────────────────────────────
-// webdav.ts 依赖 @tauri-apps/plugin-http 的 fetch（不是原生 fetch）
-vi.mock('@tauri-apps/plugin-http', () => ({
-  fetch: vi.fn(),
-}));
-
 // webdav.ts 依赖 ../crypto 的 secureStorage 做密码加解密
 vi.mock('../../../crypto', () => ({
   secureStorage: {
@@ -19,7 +14,7 @@ vi.mock('../../../crypto', () => ({
 // 动态 import secureStorage 以便在测试里控制 mock 行为
 const { secureStorage } = await import('../../../crypto');
 
-const mockedFetch = vi.mocked(fetch);
+const mockedFetch = getHttpFetchMock();
 const mockedEncrypt = vi.mocked(secureStorage.encrypt);
 const mockedDecrypt = vi.mocked(secureStorage.decrypt);
 

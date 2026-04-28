@@ -6,6 +6,7 @@ export default defineConfig({
   testDir: './tests/visual',
   testMatch: /.*\.visual\.spec\.ts/,
   fullyParallel: true,
+  workers: process.env.CI ? 2 : 4,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? [['html'], ['github']] : [['list'], ['html', { open: 'never' }]],

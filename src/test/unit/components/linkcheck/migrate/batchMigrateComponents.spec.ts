@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, ref, type Component } from 'vue';
+import { computed, defineComponent, ref, type Component } from 'vue';
 import { mountWithDefaults } from '../../../../helpers/vueMount';
+import { getDialogSaveMock, getFsMocks } from '../../../../helpers/tauriMock';
 import SourceList from '../../../../../components/views/linkcheck/migrate/components/SourceList.vue';
 import TargetCard from '../../../../../components/views/linkcheck/migrate/components/TargetCard.vue';
 import MigrateFilterBar from '../../../../../components/views/linkcheck/migrate/components/MigrateFilterBar.vue';
 import MigrateBottomBar from '../../../../../components/views/linkcheck/migrate/components/MigrateBottomBar.vue';
+import MigrateSelectPhase from '../../../../../components/views/linkcheck/migrate/MigrateSelectPhase.vue';
 import MigrateProgressPhase from '../../../../../components/views/linkcheck/migrate/MigrateProgressPhase.vue';
 import { MIGRATE_KEY, type MigrateContext } from '../../../../../components/views/linkcheck/migrate/keys';
 import type { MigrateItemStatus, MigrateResult, MigrateTargetService } from '../../../../../types/batchMigrate';
@@ -149,16 +151,20 @@ function createMigrateContext(overrides: Partial<MigrateContext> = {}): MigrateC
   };
 }
 
-function mountWithMigrateContext(component: Component, ctx: MigrateContext, options = {}) {
+function mountWithMigrateContext(component: Component, ctx: MigrateContext, options: any = {}) {
+  const optionGlobal = options.global ?? {};
   return mountWithDefaults(component, {
     ...options,
     global: {
+      ...optionGlobal,
       provide: {
+        ...optionGlobal.provide,
         [MIGRATE_KEY as symbol]: ctx,
       },
       stubs: {
         Checkbox: CheckboxStub,
         Menu: MenuStub,
+        ...optionGlobal.stubs,
       },
     },
   });
@@ -250,6 +256,45 @@ describe('batch migrate P1 components', () => {
     expect(wrapper.emitted('update:searchInput')?.at(-1)).toEqual(['failed']);
   });
 
+  it('MigrateSelectPhase blocks start until a source is selected', async () => {
+    const sourceServiceFilter = ref<string[]>([]);
+    const targetServices = ref<MigrateTargetService[]>([
+      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 3, checked: true },
+    ]);
+    const ctx = createMigrateContext({
+      phase: ref('configuring'),
+      sourceServiceFilter,
+      availableSourceServices: ref([{ id: 'jd', displayName: 'JD', count: 3 }]),
+      configuredServices: computed(() => targetServices.value),
+      unconfiguredServices: computed(() => []),
+      checkedTargets: computed(() => targetServices.value.filter(service => service.checked)),
+      totalPending: computed(() => 3),
+      isAllBackedUp: computed(() => false),
+      healthStatusMap: ref({ r2: 'verified' }),
+      healthTooltipMap: ref({ r2: 'ready' }),
+    });
+
+    const wrapper = mountWithMigrateContext(MigrateSelectPhase, ctx, {
+      global: {
+        stubs: {
+          MigrateFilterPopover: { template: '<button class="filter-popover-stub" />' },
+        },
+      },
+    });
+
+    const startButton = wrapper.get('.bottom-actions .btn-primary');
+    expect(startButton.attributes('disabled')).toBeDefined();
+
+    await wrapper.get('.source-row').trigger('click');
+    await flushPromisesAndTicks();
+
+    expect(sourceServiceFilter.value).toEqual(['jd']);
+    expect(startButton.attributes('disabled')).toBeUndefined();
+
+    await startButton.trigger('click');
+    expect(wrapper.emitted('start')).toHaveLength(1);
+  });
+
   it('MigrateProgressPhase filters terminal results and retries failed rows', async () => {
     const retrySingleFailed = vi.fn();
     const items = [
@@ -290,6 +335,41 @@ describe('batch migrate P1 components', () => {
     expect(retrySingleFailed).toHaveBeenCalledWith('h-failed');
   });
 
+  it('MigrateProgressPhase exports the final report through Tauri file APIs', async () => {
+    getDialogSaveMock().mockResolvedValue('C:/tmp/migrate.csv');
+    getFsMocks().writeTextFile.mockResolvedValue(undefined);
+    const items = [
+      createStatus({ historyId: 'h-success', fileName: 'success-alpha.jpg', status: 'success', existingServiceIds: ['jd'] }),
+    ];
+    const ctx = createMigrateContext({
+      phase: ref('done'),
+      migrateResult: ref(createMigrateResult(items)),
+    });
+    const BottomBarExportStub = defineComponent({
+      emits: ['export'],
+      template: '<button class="export-csv" type="button" @click="$emit(\'export\', \'csv\')">export</button>',
+    });
+
+    const wrapper = mountWithMigrateContext(MigrateProgressPhase, ctx, {
+      global: {
+        stubs: {
+          MigrateBottomBar: BottomBarExportStub,
+        },
+      },
+    });
+
+    await wrapper.get('.export-csv').trigger('click');
+    await flushPromisesAndTicks();
+
+    expect(getDialogSaveMock()).toHaveBeenCalledWith(expect.objectContaining({
+      filters: [{ name: 'CSV', extensions: ['csv'] }],
+    }));
+    expect(getFsMocks().writeTextFile).toHaveBeenCalledWith(
+      'C:/tmp/migrate.csv',
+      expect.stringContaining('success-alpha.jpg'),
+    );
+  });
+
   it('MigrateBottomBar covers pause, resume, cancel, retrying, and export states', async () => {
     const running = mountWithDefaults(MigrateBottomBar, {
       props: { mode: 'migrating', isPaused: false, isPausing: false, isCancelling: false },
@@ -314,5 +394,18 @@ describe('batch migrate P1 components', () => {
 
     const retryAll = pending.findAll('button').find(button => button.classes().includes('btn-ghost') && button.attributes('disabled') !== undefined);
     expect(retryAll?.exists()).toBe(true);
+
+    const ExportMenuStub = defineComponent({
+      props: ['model'],
+      template: '<button class="menu-csv" type="button" @click="model[0].command()">csv</button>',
+    });
+    const done = mountWithDefaults(MigrateBottomBar, {
+      props: { mode: 'done', canRetryAll: false, retryingCount: 0 },
+      global: { stubs: { Menu: ExportMenuStub } },
+    });
+
+    await done.get('.menu-csv').trigger('click');
+
+    expect(done.emitted('export')).toEqual([['csv']]);
   });
 });

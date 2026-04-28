@@ -1,19 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-vi.mock('@tauri-apps/plugin-updater', () => ({
-  check: vi.fn(),
-}));
-
-vi.mock('@tauri-apps/plugin-process', () => ({
-  relaunch: vi.fn(),
-}));
-
-import { check } from '@tauri-apps/plugin-updater';
-import { relaunch } from '@tauri-apps/plugin-process';
+import { getRelaunchMock, getUpdaterCheckMock } from '../../helpers/tauriMock';
 import { useAutoUpdate } from '../../../composables/useAutoUpdate';
 
-const mockCheck = vi.mocked(check);
-const mockRelaunch = vi.mocked(relaunch);
+const mockCheck = getUpdaterCheckMock();
+const mockRelaunch = getRelaunchMock();
 
 function makeUpdate(overrides: Partial<any> = {}): any {
   return {

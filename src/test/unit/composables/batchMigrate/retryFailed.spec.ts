@@ -12,50 +12,56 @@ vi.mock('../../../../services/HistoryDatabase', () => ({
 }));
 
 vi.mock('../../../../composables/batchMigrate/migrateCore', () => ({
-  migrateOneItem: vi.fn(async (_item, status) => {
-    status.status = 'success';
-  }),
+  migrateOneItem: vi.fn(),
 }));
 
-function makeResult(): MigrateResult {
+function makeResult(ids = ['h1']): MigrateResult {
   return {
     successCount: 0,
-    failedCount: 1,
+    failedCount: ids.length,
     skippedCount: 0,
-    failures: [{
-      historyId: 'h1',
-      fileName: 'a.png',
+    failures: ids.map(id => ({
+      historyId: id,
+      fileName: `${id}.png`,
       error: 'failed',
-      errorType: 'upload',
+      errorType: 'upload' as const,
       details: [{ serviceId: 'github', message: 'bad token' }],
-    }],
+    })),
     partialFailures: [],
     durationMs: 100,
     avgBytesPerSec: 0,
     targetServiceIds: ['r2', 'github'],
-    itemsSnapshot: [{
-      historyId: 'h1',
-      fileName: 'a.png',
-      status: 'failed',
+    itemsSnapshot: ids.map(id => ({
+      historyId: id,
+      fileName: `${id}.png`,
+      status: 'failed' as const,
       error: 'failed',
-      serviceResults: { r2: 'failed', github: 'failed' },
+      serviceResults: { r2: 'failed' as const, github: 'failed' as const },
       existingServiceIds: ['source'],
-    }],
+    })),
+  };
+}
+
+function makeHistoryItem(id = 'h1') {
+  return {
+    id,
+    localFileName: `${id}.png`,
+    results: [{ serviceId: 'source', status: 'success', result: { url: `https://img/${id}.png` } }],
   };
 }
 
 describe('createRetry', () => {
   beforeEach(() => {
     vi.mocked(historyDB.getItemsByIds).mockReset();
-    vi.mocked(migrateOneItem).mockClear();
+    vi.mocked(migrateOneItem).mockReset();
+    vi.mocked(migrateOneItem).mockImplementation(async (_item, status) => {
+      status.status = 'success';
+      status.serviceResults.r2 = 'success';
+    });
   });
 
-  it('重试时使用过滤后的目标图床，而不是原始迁移快照里的异常图床', async () => {
-    vi.mocked(historyDB.getItemsByIds).mockResolvedValue([{
-      id: 'h1',
-      localFileName: 'a.png',
-      results: [{ serviceId: 'source', status: 'success', result: { url: 'https://img/a.png' } }],
-    } as any]);
+  it('uses filtered retry targets instead of stale result snapshot targets', async () => {
+    vi.mocked(historyDB.getItemsByIds).mockResolvedValue([makeHistoryItem() as any]);
 
     const retry = createRetry({
       migrateResult: ref(makeResult()),
@@ -69,5 +75,113 @@ describe('createRetry', () => {
 
     expect(migrateOneItem).toHaveBeenCalledTimes(1);
     expect(vi.mocked(migrateOneItem).mock.calls[0][2]).toEqual(['r2']);
+  });
+
+  it('removes a failed row and updates counts after a successful retry', async () => {
+    vi.mocked(historyDB.getItemsByIds).mockResolvedValue([makeHistoryItem() as any]);
+    const migrateResult = ref(makeResult());
+    const retryingIds = ref(new Set<string>());
+    const retry = createRetry({
+      migrateResult,
+      retryingIds,
+      getOrCacheConfig: async () => ({} as any),
+      getMultiUploader: () => ({} as any),
+    });
+
+    await retry.retrySingleFailed('h1');
+
+    expect(migrateResult.value?.failures).toHaveLength(0);
+    expect(migrateResult.value?.successCount).toBe(1);
+    expect(migrateResult.value?.failedCount).toBe(0);
+    expect(migrateResult.value?.itemsSnapshot[0].status).toBe('success');
+    expect(retryingIds.value.size).toBe(0);
+  });
+
+  it('removes a failed row as skipped when targets are already complete', async () => {
+    vi.mocked(historyDB.getItemsByIds).mockResolvedValue([makeHistoryItem() as any]);
+    vi.mocked(migrateOneItem).mockImplementation(async (_item, status) => {
+      status.status = 'skipped';
+    });
+    const migrateResult = ref(makeResult());
+    const retry = createRetry({
+      migrateResult,
+      retryingIds: ref(new Set<string>()),
+      getOrCacheConfig: async () => ({} as any),
+      getMultiUploader: () => ({} as any),
+    });
+
+    await retry.retrySingleFailed('h1');
+
+    expect(migrateResult.value?.failures).toHaveLength(0);
+    expect(migrateResult.value?.failedCount).toBe(0);
+    expect(migrateResult.value?.skippedCount).toBe(1);
+    expect(migrateResult.value?.itemsSnapshot[0].status).toBe('skipped');
+  });
+
+  it('keeps the failed row and refreshes details when retry fails again', async () => {
+    vi.mocked(historyDB.getItemsByIds).mockResolvedValue([makeHistoryItem() as any]);
+    vi.mocked(migrateOneItem).mockImplementation(async (_item, status) => {
+      status.status = 'failed';
+      status.error = 'GitHub | still bad';
+      status.errorType = 'upload';
+      status.failureDetails = [{ serviceId: 'github', message: 'still bad' }];
+    });
+    const migrateResult = ref(makeResult());
+    const retry = createRetry({
+      migrateResult,
+      retryingIds: ref(new Set<string>()),
+      getOrCacheConfig: async () => ({} as any),
+      getMultiUploader: () => ({} as any),
+    });
+
+    await retry.retrySingleFailed('h1');
+
+    expect(migrateResult.value?.failedCount).toBe(1);
+    expect(migrateResult.value?.successCount).toBe(0);
+    expect(migrateResult.value?.failures[0]).toEqual(expect.objectContaining({
+      historyId: 'h1',
+      error: 'GitHub | still bad',
+      details: [{ serviceId: 'github', message: 'still bad' }],
+    }));
+  });
+
+  it('ignores duplicate or stale retry requests', async () => {
+    vi.mocked(historyDB.getItemsByIds).mockResolvedValue([makeHistoryItem() as any]);
+    const retry = createRetry({
+      migrateResult: ref(makeResult()),
+      retryingIds: ref(new Set(['h1'])),
+      getOrCacheConfig: async () => ({} as any),
+      getMultiUploader: () => ({} as any),
+    });
+
+    await retry.retrySingleFailed('h1');
+    await retry.retrySingleFailed('missing');
+
+    expect(historyDB.getItemsByIds).not.toHaveBeenCalled();
+    expect(migrateOneItem).not.toHaveBeenCalled();
+  });
+
+  it('applies concurrent retry updates without losing earlier completions', async () => {
+    const ids = ['h1', 'h2', 'h3', 'h4'];
+    vi.mocked(historyDB.getItemsByIds).mockImplementation(async ([id]) => [makeHistoryItem(String(id)) as any]);
+    vi.mocked(migrateOneItem).mockImplementation(async (_item, status) => {
+      await Promise.resolve();
+      status.status = 'success';
+      status.serviceResults.r2 = 'success';
+    });
+    const migrateResult = ref(makeResult(ids));
+    const retry = createRetry({
+      migrateResult,
+      retryingIds: ref(new Set<string>()),
+      getOrCacheConfig: async () => ({} as any),
+      getMultiUploader: () => ({} as any),
+    });
+
+    await retry.retryFailed(ids);
+
+    expect(migrateResult.value?.failures).toHaveLength(0);
+    expect(migrateResult.value?.successCount).toBe(4);
+    expect(migrateResult.value?.failedCount).toBe(0);
+    expect(migrateResult.value?.itemsSnapshot.every(item => item.status === 'success')).toBe(true);
   });
 });

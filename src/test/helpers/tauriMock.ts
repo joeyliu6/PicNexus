@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, emit } from '@tauri-apps/api/event';
+import { getVersion } from '@tauri-apps/api/app';
 import { appDataDir, basename, dirname, join } from '@tauri-apps/api/path';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open as dialogOpen, save as dialogSave } from '@tauri-apps/plugin-dialog';
@@ -20,6 +21,9 @@ import {
   writeText,
 } from '@tauri-apps/plugin-clipboard-manager';
 import { open as shellOpen } from '@tauri-apps/plugin-shell';
+import { fetch as httpFetch } from '@tauri-apps/plugin-http';
+import { check as updaterCheck } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
 
 vi.mock('@tauri-apps/plugin-log', () => ({
   debug: vi.fn(),
@@ -31,6 +35,10 @@ vi.mock('@tauri-apps/plugin-log', () => ({
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
+}));
+
+vi.mock('@tauri-apps/api/app', () => ({
+  getVersion: vi.fn().mockResolvedValue('1.0.5'),
 }));
 
 vi.mock('@tauri-apps/api/path', () => ({
@@ -82,6 +90,18 @@ vi.mock('@tauri-apps/plugin-clipboard-manager', () => ({
 vi.mock('@tauri-apps/plugin-shell', () => ({
   open: vi.fn(),
   Command: vi.fn(),
+}));
+
+vi.mock('@tauri-apps/plugin-http', () => ({
+  fetch: vi.fn(),
+}));
+
+vi.mock('@tauri-apps/plugin-updater', () => ({
+  check: vi.fn(),
+}));
+
+vi.mock('@tauri-apps/plugin-process', () => ({
+  relaunch: vi.fn(),
 }));
 
 type InvokeResponder = (
@@ -146,6 +166,9 @@ export function resetTauriMocks(): void {
   getListenMock().mockResolvedValue(vi.fn());
   getEmitMock().mockReset();
 
+  getVersionMock().mockReset();
+  getVersionMock().mockResolvedValue('1.0.5');
+
   getDialogOpenMock().mockReset();
   getDialogSaveMock().mockReset();
 
@@ -187,6 +210,14 @@ export function resetTauriMocks(): void {
   clipboard.readImage.mockResolvedValue(undefined as never);
 
   getShellOpenMock().mockReset();
+
+  getHttpFetchMock().mockReset();
+
+  getUpdaterCheckMock().mockReset();
+  getUpdaterCheckMock().mockResolvedValue(null as never);
+
+  getRelaunchMock().mockReset();
+  getRelaunchMock().mockResolvedValue(undefined as never);
 }
 
 export function getInvokeMock() {
@@ -199,6 +230,10 @@ export function getListenMock() {
 
 export function getEmitMock() {
   return vi.mocked(emit);
+}
+
+export function getVersionMock() {
+  return vi.mocked(getVersion);
 }
 
 export function getDialogOpenMock() {
@@ -245,6 +280,18 @@ export function getClipboardMocks() {
 
 export function getShellOpenMock() {
   return vi.mocked(shellOpen);
+}
+
+export function getHttpFetchMock() {
+  return vi.mocked(httpFetch);
+}
+
+export function getUpdaterCheckMock() {
+  return vi.mocked(updaterCheck);
+}
+
+export function getRelaunchMock() {
+  return vi.mocked(relaunch);
 }
 
 export function emitProgressEvent(

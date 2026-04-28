@@ -66,10 +66,6 @@ vi.mock('../../../constants', () => ({
   },
 }));
 
-vi.mock('@tauri-apps/api/webview', () => ({
-  getCurrentWebview: () => ({ label: 'test-webview' }),
-}));
-
 vi.mock('../../../config/cookieProviders', () => ({
   getCookieProvider: (id: string) => {
     const providers: Record<string, unknown> = {
