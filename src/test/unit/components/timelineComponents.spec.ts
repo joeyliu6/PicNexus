@@ -25,6 +25,8 @@ const timelineFns = vi.hoisted(() => ({
   handleImageHover: vi.fn(),
   onImageLoad: vi.fn(),
   onImageError: vi.fn(),
+  handleLightboxNavigate: vi.fn(),
+  handleLightboxDelete: vi.fn(),
 }));
 
 const timelineRefs = vi.hoisted(() => ({
@@ -178,8 +180,8 @@ vi.mock('../../../composables/timeline/useTimelineLightbox', async () => {
       lightboxHasPrev: timelineRefs.lightbox!.hasPrev,
       lightboxHasNext: timelineRefs.lightbox!.hasNext,
       openLightbox: timelineFns.openLightbox,
-      handleLightboxDelete: vi.fn(),
-      handleLightboxNavigate: vi.fn(),
+      handleLightboxDelete: timelineFns.handleLightboxDelete,
+      handleLightboxNavigate: timelineFns.handleLightboxNavigate,
     }),
   };
 });
@@ -325,7 +327,17 @@ function mountTimelineView(props = {}) {
           props: ['title', 'description'],
           template: '<section class="empty-state-stub">{{ title }}{{ description }}</section>',
         },
-        HistoryLightbox: { template: '<section class="lightbox-stub" />' },
+        HistoryLightbox: {
+          props: ['visible', 'item', 'hasPrev', 'hasNext'],
+          emits: ['navigate', 'delete'],
+          template: `
+            <section class="lightbox-stub" :data-visible="visible" :data-prev="hasPrev" :data-next="hasNext">
+              <button class="lightbox-prev" @click="$emit('navigate', 'prev')"></button>
+              <button class="lightbox-next" @click="$emit('navigate', 'next')"></button>
+              <button class="lightbox-delete" @click="$emit('delete', item)"></button>
+            </section>
+          `,
+        },
         FloatingActionBar: { template: '<section class="floating-action-stub" />' },
         TimelineIndicator: { template: '<section class="timeline-indicator-stub" />' },
       },
@@ -351,6 +363,10 @@ describe('TimelineView P1 coverage', () => {
     timelineRefs.viewState!.selectedIdList.value = [];
     timelineRefs.viewState!.hasSelection.value = false;
     timelineRefs.history!.favoriteSet.value = new Set();
+    timelineRefs.lightbox!.visible.value = false;
+    timelineRefs.lightbox!.item.value = null;
+    timelineRefs.lightbox!.hasPrev.value = false;
+    timelineRefs.lightbox!.hasNext.value = false;
   });
 
   it('loads time stats and renders the empty timeline state', () => {
@@ -399,6 +415,26 @@ describe('TimelineView P1 coverage', () => {
     expect(wrapper.find('.empty-state-stub').exists()).toBe(false);
     expect(wrapper.find('.timeline-skeleton-overlay').exists()).toBe(true);
     expect(wrapper.find('.photo-slot-skeleton').exists()).toBe(true);
+  });
+
+  it('passes lightbox state through and wires navigate/delete events', async () => {
+    const lightboxItem = { id: 'lightbox-item' } as HistoryItem;
+    timelineRefs.lightbox!.visible.value = true;
+    timelineRefs.lightbox!.item.value = lightboxItem;
+    timelineRefs.lightbox!.hasPrev.value = true;
+    timelineRefs.lightbox!.hasNext.value = true;
+
+    const wrapper = mountTimelineView();
+
+    expect(wrapper.get('.lightbox-stub').attributes('data-visible')).toBe('true');
+    expect(wrapper.get('.lightbox-stub').attributes('data-prev')).toBe('true');
+    expect(wrapper.get('.lightbox-stub').attributes('data-next')).toBe('true');
+
+    await wrapper.get('.lightbox-next').trigger('click');
+    await wrapper.get('.lightbox-delete').trigger('click');
+
+    expect(timelineFns.handleLightboxNavigate).toHaveBeenCalledWith('next');
+    expect(timelineFns.handleLightboxDelete).toHaveBeenCalledWith(lightboxItem);
   });
 });
 

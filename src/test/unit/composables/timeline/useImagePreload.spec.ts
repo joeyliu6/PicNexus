@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import type { VueWrapper } from '@vue/test-utils';
 import { mountWithDefaults } from '../../../helpers/vueMount';
+import { flushPromisesAndTicks } from '../../../helpers/wait';
 import type { ImageMeta } from '../../../../types/image-meta';
 import type { VisibleItem } from '../../../../composables/useVirtualTimeline';
 
@@ -27,6 +28,22 @@ function makeVisibleItem(id: string): VisibleItem {
 }
 
 const mountedWrappers: VueWrapper[] = [];
+const createdImages: MockImage[] = [];
+
+class MockImage {
+  onload: ((event: Event) => void) | null = null;
+  onerror: ((event: Event) => void) | null = null;
+  private currentSrc = '';
+
+  set src(value: string) {
+    this.currentSrc = value;
+    createdImages.push(this);
+  }
+
+  get src(): string {
+    return this.currentSrc;
+  }
+}
 
 function createPreloadContext(overrides: Partial<Parameters<typeof useImagePreload>[0]> = {}) {
   const visibleItems = ref<VisibleItem[]>([]);
@@ -58,11 +75,18 @@ function makePreload(overrides: Partial<Parameters<typeof useImagePreload>[0]> =
   return ctx;
 }
 
+beforeEach(() => {
+  createdImages.length = 0;
+  vi.stubGlobal('Image', MockImage);
+});
+
 afterEach(() => {
   for (const wrapper of mountedWrappers.splice(0)) {
     wrapper.unmount();
   }
   vi.clearAllMocks();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 // ─── preloadNextScreen 跳过条件 ───────────────────────────────────────────────
@@ -125,6 +149,37 @@ describe('preloadNextScreen — 向下预加载', () => {
       .map((call: unknown[]) => (call[0] as ImageMeta).id);
     expect(calledMetas).not.toContain('c');
   });
+
+  it('creates background Image objects and reports successful preloads', () => {
+    const metas = [makeMeta('a'), makeMeta('b')];
+    const ctx = makePreload();
+    ctx.allMetas.value = metas;
+    ctx.visibleItems.value = [makeVisibleItem('a')];
+    ctx.scrollDirection.value = 'down';
+
+    ctx.preloadNextScreen();
+
+    expect(createdImages).toHaveLength(1);
+    expect(createdImages[0].src).toBe('https://thumb.example.com/img.jpg');
+
+    createdImages[0].onload?.(new Event('load'));
+
+    expect(ctx.onImageLoad).toHaveBeenCalledWith('b');
+  });
+
+  it('forwards background Image errors to the provided error handler', () => {
+    const metas = [makeMeta('a'), makeMeta('b')];
+    const ctx = makePreload();
+    ctx.allMetas.value = metas;
+    ctx.visibleItems.value = [makeVisibleItem('a')];
+    ctx.scrollDirection.value = 'down';
+
+    ctx.preloadNextScreen();
+    const errorEvent = new Event('error');
+    createdImages[0].onerror?.(errorEvent);
+
+    expect(ctx.onImageError).toHaveBeenCalledWith(errorEvent, 'b');
+  });
 });
 
 // ─── preloadNextScreen 向上预加载 ────────────────────────────────────────────
@@ -148,5 +203,22 @@ describe('cleanup', () => {
   it('cleanup 方法可被调用而不抛出', () => {
     const ctx = makePreload();
     expect(() => ctx.cleanup()).not.toThrow();
+  });
+
+  it('cancels the debounced preload timer', async () => {
+    vi.useFakeTimers();
+    const ctx = makePreload();
+    ctx.allMetas.value = [makeMeta('a'), makeMeta('b')];
+    ctx.visibleItems.value = [makeVisibleItem('a')];
+    ctx.scrollDirection.value = 'down';
+
+    ctx.displayMode.value = 'fast';
+    await flushPromisesAndTicks(1);
+    ctx.displayMode.value = 'normal';
+    await flushPromisesAndTicks(1);
+    ctx.cleanup();
+    await vi.advanceTimersByTimeAsync(300);
+
+    expect(ctx.getThumbnailUrl).not.toHaveBeenCalled();
   });
 });
