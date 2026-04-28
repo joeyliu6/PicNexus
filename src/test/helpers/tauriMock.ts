@@ -74,20 +74,101 @@ vi.mock('@tauri-apps/plugin-shell', () => ({
   Command: vi.fn(),
 }));
 
-type InvokeResponseMap = Record<string, unknown>;
+type InvokeResponder = (
+  args: unknown,
+  command: string,
+) => unknown | Promise<unknown>;
+type InvokeResponse =
+  | unknown
+  | InvokeResponder;
+type InvokeResponseMap = Record<string, InvokeResponse>;
+
+type InvokeHandler = (
+  command: string,
+  args?: unknown,
+) => unknown | Promise<unknown>;
 
 export function setupInvokeResponses(responses: InvokeResponseMap): void {
-  getInvokeMock().mockImplementation(async (cmd: string) => {
+  getInvokeMock().mockImplementation(async (cmd, args) => {
     const response = responses[cmd];
     if (response instanceof Error) {
       throw response;
+    }
+    if (typeof response === 'function') {
+      return (response as InvokeResponder)(args, cmd);
     }
     return response;
   });
 }
 
+export function setupInvokeHandler(handler: InvokeHandler): void {
+  getInvokeMock().mockImplementation(async (cmd, args) => handler(cmd, args));
+}
+
+export function mockInvokeResponse(command: string, response: InvokeResponse): void {
+  const current = getInvokeMock().getMockImplementation();
+
+  getInvokeMock().mockImplementation(async (cmd, args) => {
+    if (cmd === command) {
+      if (response instanceof Error) throw response;
+      if (typeof response === 'function') {
+        return (response as InvokeResponder)(args, cmd);
+      }
+      return response;
+    }
+
+    return current?.(cmd, args);
+  });
+}
+
+export function mockInvokeError(command: string, error: unknown): void {
+  mockInvokeResponse(command, error instanceof Error ? error : new Error(String(error)));
+}
+
 export function resetInvokeMock(): void {
   getInvokeMock().mockReset();
+}
+
+export function resetTauriMocks(): void {
+  getInvokeMock().mockReset();
+
+  getListenMock().mockReset();
+  getListenMock().mockResolvedValue(vi.fn());
+  getEmitMock().mockReset();
+
+  getDialogOpenMock().mockReset();
+  getDialogSaveMock().mockReset();
+
+  const path = getPathMocks();
+  path.appDataDir.mockReset();
+  path.appDataDir.mockResolvedValue('/mock/appdata');
+  path.join.mockReset();
+  path.join.mockImplementation(async (...parts: string[]) => parts.join('/'));
+  path.basename.mockReset();
+  path.basename.mockImplementation(async (filePath: string) => filePath.split(/[/\\]/).pop() || '');
+
+  const fs = getFsMocks();
+  fs.readTextFile.mockReset();
+  fs.writeTextFile.mockReset();
+  fs.exists.mockReset();
+  fs.exists.mockResolvedValue(false);
+  fs.mkdir.mockReset();
+  fs.remove.mockReset();
+  fs.readDir.mockReset();
+  fs.readDir.mockResolvedValue([]);
+  fs.copyFile.mockReset();
+
+  const clipboard = getClipboardMocks();
+  clipboard.writeText.mockReset();
+  clipboard.writeText.mockResolvedValue(undefined);
+  clipboard.readText.mockReset();
+  clipboard.readText.mockResolvedValue('');
+  clipboard.writeImage.mockReset();
+  clipboard.writeImage.mockResolvedValue(undefined);
+  clipboard.readImage.mockReset();
+  clipboard.readImage.mockResolvedValue(undefined as never);
+
+  getShellOpenMock().mockReset();
 }
 
 export function getInvokeMock() {
