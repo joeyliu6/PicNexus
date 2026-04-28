@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import UploadDropZone from '@/components/views/upload/UploadDropZone.vue';
 import CompressPopoverMenu from '@/components/views/upload/CompressPopoverMenu.vue';
+import ServiceSelector from '@/components/views/upload/ServiceSelector.vue';
 import QueueCard from '@/components/upload/QueueCard.vue';
 import DashboardStrip from '@/components/views/history/DashboardStrip.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
@@ -18,6 +19,7 @@ import type { CompressionPreset, ServiceType, ThemeMode } from '@/config/types';
 import { DEFAULT_CONFIG } from '@/config/types';
 import type { ServiceHealthStatus } from '@/types/serviceHealth';
 import type { ServiceCheckSession } from '@/types/serviceCheck';
+import type { LinkFormat } from '@/utils/linkFormatter';
 
 type VisualPage = 'upload' | 'history' | 'link-check' | 'settings';
 type VisualState = string;
@@ -45,6 +47,34 @@ const presets: CompressionPreset[] = [
 
 const activePreset = presets[1];
 const config = structuredClone(DEFAULT_CONFIG);
+const uploadServiceLabels: Record<string, string> = {
+  jd: '京东',
+  weibo: '微博',
+  qiyu: '七鱼',
+  zhihu: '知乎',
+  r2: 'Cloudflare R2',
+  github: 'GitHub',
+};
+const selectedUploadServices = new Set(['jd', 'weibo', 'r2']);
+const uploadHealthMap: Record<string, ServiceHealthStatus> = {
+  jd: 'verified',
+  weibo: 'pending',
+  qiyu: 'error',
+  zhihu: 'verified',
+  r2: 'verified',
+  github: 'pending',
+};
+const uploadHealthTooltipMap: Record<string, string> = {
+  jd: '连接正常',
+  weibo: '等待检测 Cookie',
+  qiyu: '内置图床暂不可用',
+  zhihu: '连接正常',
+  r2: '连接正常',
+  github: '等待检测 Token',
+};
+const uploadPublicServices = computed(() => state === 'no-services' ? [] : ['jd', 'weibo', 'qiyu', 'zhihu']);
+const uploadPrivateServices = computed(() => state === 'no-services' ? [] : ['r2', 'github']);
+const isUploadServiceSelected = (serviceId: string) => selectedUploadServices.has(serviceId);
 
 function progress(serviceId: string, status: string, pct: number, link?: string, error?: string): ServiceProgress {
   return { serviceId, status, progress: pct, link, error };
@@ -53,10 +83,11 @@ function progress(serviceId: string, status: string, pct: number, link?: string,
 function queueItem(kind: 'uploading' | 'failed' | 'success', index = 1): QueueItem {
   const enabledServices = ['jd', 'weibo', 'r2'];
   const suffix = `${kind}-${index}`;
+  const link = (serviceId: string) => `https://img.example/${suffix}/${serviceId}.jpg`;
   const serviceProgress = {
-    jd: progress('jd', kind === 'uploading' ? '68%' : '完成', kind === 'uploading' ? 68 : 100, `https://img.example/${suffix}/jd.jpg`),
-    weibo: progress('weibo', kind === 'failed' ? '失败' : kind === 'uploading' ? '上传中...' : '完成', kind === 'failed' ? 0 : kind === 'uploading' ? 42 : 100, kind === 'failed' ? undefined : `https://img.example/${suffix}/weibo.jpg`, kind === 'failed' ? 'HTTP 403' : undefined),
-    r2: progress('r2', kind === 'uploading' ? '等待中...' : '完成', kind === 'uploading' ? 0 : 100, `https://img.example/${suffix}/r2.jpg`),
+    jd: progress('jd', kind === 'uploading' ? '68%' : '完成', kind === 'uploading' ? 68 : 100, kind === 'uploading' ? undefined : link('jd')),
+    weibo: progress('weibo', kind === 'failed' ? '失败' : kind === 'uploading' ? '上传中...' : '完成', kind === 'failed' ? 0 : kind === 'uploading' ? 42 : 100, kind === 'failed' || kind === 'uploading' ? undefined : link('weibo'), kind === 'failed' ? 'HTTP 403' : undefined),
+    r2: progress('r2', kind === 'uploading' ? '等待中...' : '完成', kind === 'uploading' ? 0 : 100, kind === 'uploading' ? undefined : link('r2')),
   };
   return {
     id: `queue-${suffix}`,
@@ -66,7 +97,7 @@ function queueItem(kind: 'uploading' | 'failed' | 'success', index = 1): QueueIt
     serviceProgress,
     status: kind === 'failed' ? 'error' : kind,
     errorMessage: kind === 'failed' ? 'One target rejected the upload' : undefined,
-    primaryUrl: kind === 'uploading' ? undefined : `https://img.example/${suffix}/jd.jpg`,
+    primaryUrl: kind === 'uploading' ? undefined : link('jd'),
     thumbUrl: image(suffix),
     retryCount: kind === 'failed' ? 1 : 0,
     maxRetries: 3,
@@ -113,7 +144,14 @@ const linkRows = computed<LinkCheckRow[]>(() => {
   ];
   if (state === 'running' || state === 'paused') {
     rows[4].recheckLoading = true;
-    rows[5].recentlyCompletedAt = Date.now();
+    rows[5].recentlyCompletedAt = Date.now() - 500;
+  }
+  if (state === 'phase2-loading') {
+    rows[4].recentlyCompletedAt = Date.now() - 250;
+  }
+  if (state === 'recheck-result') {
+    rows[1].recheckResult = result('valid');
+    rows[2].recheckResult = result('timeout');
   }
   return rows;
 });
@@ -140,13 +178,13 @@ const serviceList = computed(() => Array.from(new Set(linkRows.value.map((item) 
 const selectedIds = computed(() => state === 'bulk-select' ? new Set(['history-2|weibo', 'history-3|r2', 'history-4|github']) : new Set<string>());
 const statusFilter = ref<StatusFilter>(state === 'empty' ? null : 'all');
 const selectedServiceId = ref<string | null>(null);
-const showServiceMenu = ref(false);
+const showServiceMenu = ref(state === 'service-menu');
 const searchInput = ref(state === 'mixed-results' ? 'gallery' : '');
 const searchQuery = ref('');
 const searchFocused = ref(false);
 const currentPage = ref(1);
 const pageInput = ref('1');
-const showOverflowMenu = ref(false);
+const showOverflowMenu = ref(state === 'overflow-menu');
 const progressValue = computed<BatchCheckProgress | null>(() => (state === 'running' || state === 'paused') ? { checked: 5, total: 8, current_url: 'https://img.example/5/jd.jpg' } : null);
 const moreItems: MoreMenuItem[] = [
   { kind: 'export', label: 'Export', icon: 'pi-download', count: 8 },
@@ -193,6 +231,7 @@ const historyRows = Array.from({ length: 7 }, (_, index) => ({
 }));
 
 const themeMode = ref<ThemeMode>(isDark ? 'dark' : 'light');
+const settingsLinkFormat = computed<LinkFormat>(() => state === 'custom-template' ? 'custom' : 'markdown');
 const healthMap = computed<Record<string, ServiceHealthStatus>>(() => ({
   jd: state === 'error' ? 'error' : 'verified',
   qiyu: state === 'connection-testing' ? 'pending' : 'verified',
@@ -257,6 +296,14 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
           :active-preset="activePreset"
           :presets="presets"
         />
+        <ServiceSelector
+          :public-services="uploadPublicServices"
+          :private-services="uploadPrivateServices"
+          :service-labels="uploadServiceLabels"
+          :is-service-selected="isUploadServiceSelected"
+          :service-health-map="uploadHealthMap"
+          :service-health-tooltip-map="uploadHealthTooltipMap"
+        />
         <div v-if="state === 'compression-menu'" class="visual-popover">
           <CompressPopoverMenu :presets="presets" :active-preset="activePreset" compression-enabled />
         </div>
@@ -315,7 +362,7 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
             :service-list="serviceList"
             :is-loading="false"
             :is-checking="state === 'running' || state === 'paused'"
-            :is-phase2-loading="false"
+            :is-phase2-loading="state === 'phase2-loading'"
             :phase2-duration="500"
           />
           <CheckLinkList
@@ -375,8 +422,8 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
                 close-to-tray
                 analytics-enabled
                 :is-clearing-cache="false"
-                link-default-format="markdown"
-                link-custom-template="{url}"
+                :link-default-format="settingsLinkFormat"
+                link-custom-template="![{filename}]({url}?w={width}&h={height})"
                 link-auto-copy
                 global-shortcut-enabled
                 shortcut-upload-clipboard="Ctrl+Shift+V"

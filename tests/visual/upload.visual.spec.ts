@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { captureVisualState } from './helpers';
 
-const states = ['empty', 'uploading', 'failed', 'success', 'compression-menu'];
+const states = ['empty', 'no-services', 'uploading', 'failed', 'success', 'compression-menu'];
 
 test.describe('upload visual states', () => {
   for (const state of states) {

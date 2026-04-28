@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { captureVisualState } from './helpers';
 
-const states = ['default', 'connection-testing', 'error', 'dark-theme'];
+const states = ['default', 'custom-template', 'connection-testing', 'error', 'dark-theme'];
 
 test.describe('settings visual states', () => {
   for (const state of states) {
