@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 import { createConfig } from '../../../factories/configFactory';
 import { createHistoryItem } from '../../../factories/historyFactory';
+import {
+  getDialogOpenMock,
+  getDialogSaveMock,
+  getFsMocks,
+  resetTauriMocks,
+} from '../../../helpers/tauriMock';
 
 const {
-  dialogSaveMock,
-  dialogOpenMock,
-  writeTextFileMock,
-  readTextFileMock,
   historyGetCountMock,
   historyExportToJSONMock,
   historyImportFromJSONMock,
@@ -27,10 +29,6 @@ const {
   confirmThreeWayMock,
   tryDecryptContentMock,
 } = vi.hoisted(() => ({
-  dialogSaveMock: vi.fn(),
-  dialogOpenMock: vi.fn(),
-  writeTextFileMock: vi.fn(),
-  readTextFileMock: vi.fn(),
   historyGetCountMock: vi.fn(),
   historyExportToJSONMock: vi.fn(),
   historyImportFromJSONMock: vi.fn(),
@@ -49,16 +47,6 @@ const {
   confirmDialogMock: vi.fn(),
   confirmThreeWayMock: vi.fn(),
   tryDecryptContentMock: vi.fn(),
-}));
-
-vi.mock('@tauri-apps/plugin-dialog', () => ({
-  save: dialogSaveMock,
-  open: dialogOpenMock,
-}));
-
-vi.mock('@tauri-apps/plugin-fs', () => ({
-  writeTextFile: writeTextFileMock,
-  readTextFile: readTextFileMock,
 }));
 
 vi.mock('../../../../services/HistoryDatabase', () => ({
@@ -116,6 +104,9 @@ vi.mock('../../../../composables/backup-sync/backupSyncUtils', () => ({
 }));
 
 const { createBackupLocalOps } = await import('../../../../composables/backup-sync/useBackupLocal');
+const dialogSaveMock = getDialogSaveMock();
+const dialogOpenMock = getDialogOpenMock();
+const { writeTextFile: writeTextFileMock, readTextFile: readTextFileMock } = getFsMocks();
 
 function makeDeps() {
   return {
@@ -144,6 +135,7 @@ function makeDeps() {
 
 describe('createBackupLocalOps', () => {
   beforeEach(() => {
+    resetTauriMocks();
     vi.clearAllMocks();
     vi.useRealTimers();
     dialogSaveMock.mockResolvedValue('C:/backup.json');
