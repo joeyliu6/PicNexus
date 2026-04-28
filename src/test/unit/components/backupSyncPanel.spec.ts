@@ -147,6 +147,7 @@ describe('DataItemCard backup and cloud actions', () => {
     });
 
     expect(wrapper.get('.status-badge').classes()).toContain('failed');
+    expect(wrapper.get('.status-badge').attributes('data-tooltip')).toContain('remote rejected');
 
     await wrapper.findAll('.button-stub')[3].trigger('click');
     await wrapper.findAll('.dropdown-item')[0].trigger('click');
@@ -281,6 +282,23 @@ describe('BackupSyncPanel P1 orchestration', () => {
 
     await wrapper.get('.restore-cancel-stub').trigger('click');
     expect(cancel).toHaveBeenCalled();
+  });
+
+  it('keeps the password restore dialog open when verification fails', async () => {
+    const verify = vi.fn().mockResolvedValue(false);
+    const cancel = vi.fn();
+    const wrapper = mountPanel();
+
+    backupRefs.passwordRequest!.value = { verify, cancel };
+    await nextTick();
+
+    await wrapper.get('.restore-confirm-stub').trigger('click');
+    await nextTick();
+
+    expect(verify).toHaveBeenCalledWith('secret');
+    expect(passwordSectionApi.onRestoreFailed).toHaveBeenCalledTimes(1);
+    expect(passwordSectionApi.onRestoreSuccess).not.toHaveBeenCalled();
+    expect(cancel).not.toHaveBeenCalled();
   });
 
   it('passes WebDAV error hints to data cards when the active profile failed connection', () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountWithDefaults } from '../../helpers/vueMount';
 import HostingCard from '../../../components/settings/HostingCard.vue';
 
@@ -12,6 +12,17 @@ const tooltipDirective = {
 };
 
 describe('HostingCard', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal('getComputedStyle', () => ({ overflowY: 'visible' }));
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
   it('内建图床刷新时保留真实状态条 DOM，并禁用检测按钮', () => {
     const wrapper = mountWithDefaults(HostingCard, {
       props: {

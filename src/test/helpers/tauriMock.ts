@@ -12,6 +12,7 @@ import {
   readDir,
   readTextFile,
   remove,
+  stat,
   writeTextFile,
 } from '@tauri-apps/plugin-fs';
 import {
@@ -68,6 +69,7 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
   remove: vi.fn(),
   readDir: vi.fn(),
   copyFile: vi.fn(),
+  stat: vi.fn(),
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
@@ -198,6 +200,7 @@ export function resetTauriMocks(): void {
   fs.readDir.mockReset();
   fs.readDir.mockResolvedValue([]);
   fs.copyFile.mockReset();
+  fs.stat.mockReset();
 
   const clipboard = getClipboardMocks();
   clipboard.writeText.mockReset();
@@ -266,6 +269,7 @@ export function getFsMocks() {
     remove: vi.mocked(remove),
     readDir: vi.mocked(readDir),
     copyFile: vi.mocked(copyFile),
+    stat: vi.mocked(stat),
   };
 }
 

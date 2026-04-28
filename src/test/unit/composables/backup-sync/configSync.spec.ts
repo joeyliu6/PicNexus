@@ -187,6 +187,40 @@ describe('createConfigSyncOps', () => {
     expect(deps.needsReload.value).toBe(true);
   });
 
+  it('does not download overwrite settings when the destructive confirmation is rejected', async () => {
+    confirmDialogMock.mockResolvedValueOnce(false);
+
+    const deps = makeDeps();
+    const ops = createConfigSyncOps(deps);
+
+    await ops.downloadSettingsOverwrite(profile);
+
+    expect(deps.downloadSettingsMenuVisible.value).toBe(false);
+    expect(deps.acquireCloudSync).not.toHaveBeenCalled();
+    expect(clientGetFileMock).not.toHaveBeenCalled();
+    expect(configStoreSetMock).not.toHaveBeenCalled();
+    expect(updateConfigSyncStatusMock).not.toHaveBeenCalled();
+  });
+
+  it('marks download overwrite as failed when cloud settings are not a valid config', async () => {
+    clientGetFileMock.mockResolvedValueOnce(JSON.stringify({ results: [] }));
+    isValidUserConfigMock.mockReturnValueOnce(false);
+
+    const deps = makeDeps();
+    const ops = createConfigSyncOps(deps);
+
+    await ops.downloadSettingsOverwrite(profile);
+
+    expect(configStoreSetMock).not.toHaveBeenCalled();
+    expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'failed', expect.any(String));
+    expect(writeSyncLogMock.mock.calls.some(([operation, result]) => (
+      operation === 'download_settings_cloud' && result === 'success'
+    ))).toBe(false);
+    expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.any(Object));
+    expect(deps.releaseCloudSync).toHaveBeenCalledTimes(1);
+    expect(deps.downloadSettingsLoading.value).toBe(false);
+  });
+
   it('merges downloaded settings while preserving the current WebDAV config', async () => {
     configStoreGetMock.mockResolvedValueOnce({
       webdav: { url: 'https://local.example.com' },
@@ -236,6 +270,24 @@ describe('createConfigSyncOps', () => {
     expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'partial', 'PUT_FAILED');
     expect(writeSyncLogMock).toHaveBeenCalledWith('sync_settings', 'failed', 'PUT_FAILED', profile);
     expect(toastErrorMock).toHaveBeenCalledTimes(1);
+    expect(deps.syncConfigLoading.value).toBe(false);
+  });
+
+  it('cancels syncConfig without uploading when the password dialog is cancelled during cloud download', async () => {
+    clientGetFileMock.mockResolvedValueOnce('encrypted-payload');
+    isPasswordEncryptedDataMock.mockReturnValueOnce(true);
+
+    const deps = makeDeps();
+    deps.tryDecryptContent.mockRejectedValueOnce(new Error('user_cancelled'));
+    const ops = createConfigSyncOps(deps);
+
+    await ops.syncConfig(profile);
+
+    expect(clientPutFileMock).not.toHaveBeenCalled();
+    expect(updateConfigSyncStatusMock).not.toHaveBeenCalled();
+    expect(writeSyncLogMock).not.toHaveBeenCalled();
+    expect(toastErrorMock).not.toHaveBeenCalled();
+    expect(deps.releaseCloudSync).toHaveBeenCalledTimes(1);
     expect(deps.syncConfigLoading.value).toBe(false);
   });
 });

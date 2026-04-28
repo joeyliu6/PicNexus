@@ -159,6 +159,47 @@ describe('createHistorySyncOps', () => {
     expect(toastSuccessMock).toHaveBeenCalledTimes(1);
   });
 
+  it('force uploads local history after confirmation and closes the upload menu', async () => {
+    historyGetCountMock.mockResolvedValueOnce(2);
+    historyExportToJSONMock.mockResolvedValueOnce(JSON.stringify([
+      { id: 'local-a', timestamp: 200 },
+      { id: 'local-b', timestamp: 100 },
+    ]));
+
+    const deps = makeDeps();
+    const ops = createHistorySyncOps(deps);
+
+    await ops.uploadHistoryForce(profile);
+
+    expect(deps.uploadHistoryMenuVisible.value).toBe(false);
+    expect(confirmDialogMock).toHaveBeenCalledTimes(1);
+    expect(clientPutFileMock).toHaveBeenCalledWith(
+      '/PicNexus/history.json',
+      JSON.stringify([
+        { id: 'local-a', timestamp: 200 },
+        { id: 'local-b', timestamp: 100 },
+      ]),
+    );
+    expect(updateHistorySyncStatusMock).toHaveBeenCalledWith(profile, 'success');
+    expect(writeSyncLogMock).toHaveBeenCalledWith('upload_history_cloud', 'success', expect.any(String), profile);
+    expect(toastSuccessMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not force upload history when confirmation is rejected', async () => {
+    confirmDialogMock.mockResolvedValueOnce(false);
+
+    const deps = makeDeps();
+    const ops = createHistorySyncOps(deps);
+
+    await ops.uploadHistoryForce(profile);
+
+    expect(deps.uploadHistoryMenuVisible.value).toBe(false);
+    expect(deps.acquireCloudSync).not.toHaveBeenCalled();
+    expect(historyExportToJSONMock).not.toHaveBeenCalled();
+    expect(clientPutFileMock).not.toHaveBeenCalled();
+    expect(updateHistorySyncStatusMock).not.toHaveBeenCalled();
+  });
+
   it('skips incremental upload when the cloud already has every local history id', async () => {
     historyExportToJSONMock.mockResolvedValueOnce(JSON.stringify([
       { id: 'a', timestamp: 200 },
@@ -191,6 +232,26 @@ describe('createHistorySyncOps', () => {
     expect(deps.downloadHistoryMenuVisible.value).toBe(false);
   });
 
+  it('force downloads cloud history in replace mode and refreshes cached views', async () => {
+    const cloudJson = JSON.stringify([
+      { id: 'cloud-a', timestamp: 200 },
+      { id: 'cloud-b', timestamp: 100 },
+    ]);
+    clientGetFileMock.mockResolvedValueOnce(cloudJson);
+
+    const deps = makeDeps();
+    const ops = createHistorySyncOps(deps);
+
+    await ops.downloadHistoryOverwrite(profile);
+
+    expect(historyImportFromJSONMock).toHaveBeenCalledWith(cloudJson, 'replace');
+    expect(invalidateCacheMock).toHaveBeenCalledTimes(1);
+    expect(emitHistoryUpdatedMock).toHaveBeenCalledTimes(1);
+    expect(updateHistorySyncStatusMock).toHaveBeenCalledWith(profile, 'success');
+    expect(writeSyncLogMock).toHaveBeenCalledWith('download_history_cloud', 'success', expect.any(String), profile);
+    expect(toastSuccessMock).toHaveBeenCalledTimes(1);
+  });
+
   it('marks syncHistory as partial when upload fails after cloud data has already been merged locally', async () => {
     clientGetFileMock.mockResolvedValueOnce(JSON.stringify([
       { id: 'cloud', timestamp: 100 },
@@ -217,5 +278,23 @@ describe('createHistorySyncOps', () => {
     expect(writeSyncLogMock).toHaveBeenCalledWith('sync_history', 'failed', 'UPLOAD_FAILED', profile);
     expect(toastErrorMock).toHaveBeenCalledTimes(1);
     expect(deps.syncHistoryLoading.value).toBe(false);
+  });
+
+  it('stops syncHistory before upload when cloud download fails with a non-404 WebDAV error', async () => {
+    clientGetFileMock.mockRejectedValueOnce(new Error('401 Unauthorized'));
+    extractErrorCodeMock.mockReturnValueOnce('AUTH_FAILED');
+
+    const deps = makeDeps();
+    const ops = createHistorySyncOps(deps);
+
+    await ops.syncHistory(profile);
+
+    expect(historyImportFromJSONMock).not.toHaveBeenCalled();
+    expect(historyExportToJSONMock).not.toHaveBeenCalled();
+    expect(clientPutFileMock).not.toHaveBeenCalled();
+    expect(updateHistorySyncStatusMock).toHaveBeenCalledWith(profile, 'failed', 'AUTH_FAILED');
+    expect(writeSyncLogMock).toHaveBeenCalledWith('sync_history', 'failed', 'AUTH_FAILED', profile);
+    expect(toastErrorMock).toHaveBeenCalledTimes(1);
+    expect(deps.releaseCloudSync).toHaveBeenCalledTimes(1);
   });
 });

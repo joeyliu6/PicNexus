@@ -147,6 +147,9 @@ const tooltipContent = computed(() => {
   if (props.syncStatus.lastSync) {
     lines.push(formatDate(props.syncStatus.lastSync));
   }
+  if ((props.syncStatus.result === 'failed' || props.syncStatus.result === 'partial') && props.syncStatus.error) {
+    lines.push(props.syncStatus.error);
+  }
   if (props.otherProfiles?.length) {
     const isConfig = props.type === 'config';
     for (const r of props.otherProfiles) {
