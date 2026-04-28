@@ -148,6 +148,7 @@ class MockDatabase {
 
 let mockDb: MockDatabase;
 
+// Keep plugin-sql local: this suite needs a stateful in-memory SQL adapter.
 vi.mock('@tauri-apps/plugin-sql', () => ({
   default: {
     load: vi.fn().mockImplementation(async () => mockDb),

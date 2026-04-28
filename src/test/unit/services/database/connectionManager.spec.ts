@@ -4,6 +4,7 @@ const { loadMock } = vi.hoisted(() => ({
   loadMock: vi.fn(),
 }));
 
+// Keep plugin-sql local: this suite needs exact load timing and connection failures.
 vi.mock('@tauri-apps/plugin-sql', () => ({
   default: {
     load: loadMock,

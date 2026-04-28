@@ -12,6 +12,11 @@ on:
         required: false
         default: false
         type: boolean
+      run_e2e:
+        description: 'Run mocked Playwright E2E smoke tests'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -135,6 +140,39 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: playwright-visual-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  e2e:
+    name: E2E smoke
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_e2e == 'true'
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install chromium
+
+      - name: Run E2E smoke tests
+        run: npm run test:e2e
+
+      - name: Upload E2E report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-e2e-report
           path: |
             playwright-report/
             test-results/

@@ -1,19 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
+import {
+  getHttpFetchMock,
+  getVersionMock as getTauriVersionMock,
+  resetTauriMocks,
+} from '../../helpers/tauriMock';
 
 const {
   configStoreGetMock,
   configStoreSetMock,
   configStoreSaveMock,
-  httpFetchMock,
-  getVersionMock,
   loggerMock,
 } = vi.hoisted(() => ({
   configStoreGetMock: vi.fn(),
   configStoreSetMock: vi.fn(),
   configStoreSaveMock: vi.fn(),
-  httpFetchMock: vi.fn(),
-  getVersionMock: vi.fn(),
   loggerMock: {
     debug: vi.fn(),
     info: vi.fn(),
@@ -22,20 +23,15 @@ const {
   },
 }));
 
+let httpFetchMock: ReturnType<typeof getHttpFetchMock>;
+let appVersionMock: ReturnType<typeof getTauriVersionMock>;
+
 vi.mock('../../../store/instances', () => ({
   configStore: {
     get: configStoreGetMock,
     set: configStoreSetMock,
     save: configStoreSaveMock,
   },
-}));
-
-vi.mock('@tauri-apps/plugin-http', () => ({
-  fetch: httpFetchMock,
-}));
-
-vi.mock('@tauri-apps/api/app', () => ({
-  getVersion: getVersionMock,
 }));
 
 vi.mock('../../../utils/logger', () => ({
@@ -54,11 +50,14 @@ function mockConfigStoreGet(data: Record<string, unknown>): void {
 describe('useAnalytics', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    resetTauriMocks();
     vi.clearAllMocks();
+    httpFetchMock = getHttpFetchMock();
+    appVersionMock = getTauriVersionMock();
     configStoreSetMock.mockResolvedValue(undefined);
     configStoreSaveMock.mockResolvedValue(undefined);
-    httpFetchMock.mockResolvedValue({ status: 204 });
-    getVersionMock.mockResolvedValue('1.2.3');
+    httpFetchMock.mockResolvedValue({ status: 204 } as never);
+    appVersionMock.mockResolvedValue('1.2.3');
   });
 
   it('skips initialization when analytics is disabled in config', async () => {
@@ -99,7 +98,7 @@ describe('useAnalytics', () => {
       lastActiveTime: 1700000000000,
     });
     expect(configStoreSaveMock).toHaveBeenCalled();
-    expect(getVersionMock).toHaveBeenCalledTimes(1);
+    expect(appVersionMock).toHaveBeenCalledTimes(1);
     expect(httpFetchMock).toHaveBeenCalledTimes(1);
 
     const [url, request] = httpFetchMock.mock.calls[0];
@@ -127,7 +126,7 @@ describe('useAnalytics', () => {
         lastActiveTime: 1700000000000,
       },
     });
-    httpFetchMock.mockResolvedValue({ status: 500 });
+    httpFetchMock.mockResolvedValue({ status: 500 } as never);
 
     const { useAnalytics } = await importFreshAnalytics();
     const analytics = useAnalytics();
@@ -216,7 +215,7 @@ describe('useAnalytics', () => {
       if (key === 'config') return { analytics: { enabled: true } };
       throw new Error('store unavailable');
     });
-    getVersionMock.mockRejectedValue(new Error('version unavailable'));
+    appVersionMock.mockRejectedValue(new Error('version unavailable'));
 
     const { useAnalytics } = await importFreshAnalytics();
     const analytics = useAnalytics();
