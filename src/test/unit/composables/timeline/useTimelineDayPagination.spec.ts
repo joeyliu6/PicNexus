@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, ref } from 'vue';
+import { defineComponent, ref, type Ref } from 'vue';
 import type { VueWrapper } from '@vue/test-utils';
 import { mountWithDefaults } from '../../../helpers/vueMount';
 import { flushPromisesAndTicks } from '../../../helpers/wait';
@@ -75,15 +75,15 @@ function makeMeta(id: string, timestamp: number, overrides: Partial<ImageMeta> =
 }
 
 function mountPagination(overrides: {
-  filter?: ReturnType<typeof ref<ServiceType | 'all'>>;
-  searchTerm?: ReturnType<typeof ref<string>>;
-  favoritesOnly?: ReturnType<typeof ref<boolean>>;
-  visible?: ReturnType<typeof ref<boolean>>;
+  filter?: Ref<ServiceType | 'all'>;
+  searchTerm?: Ref<string>;
+  favoritesOnly?: Ref<boolean>;
+  visible?: Ref<boolean>;
 } = {}) {
-  const filter = overrides.filter ?? ref<ServiceType | 'all'>('all');
-  const searchTerm = overrides.searchTerm ?? ref('');
-  const favoritesOnly = overrides.favoritesOnly ?? ref(false);
-  const visible = overrides.visible ?? ref(true);
+  const filter: Ref<ServiceType | 'all'> = overrides.filter ?? ref<ServiceType | 'all'>('all');
+  const searchTerm: Ref<string> = overrides.searchTerm ?? ref('');
+  const favoritesOnly: Ref<boolean> = overrides.favoritesOnly ?? ref(false);
+  const visible: Ref<boolean> = overrides.visible ?? ref(true);
   let api!: ReturnType<typeof useTimelineDayPagination>;
 
   const Harness = defineComponent({

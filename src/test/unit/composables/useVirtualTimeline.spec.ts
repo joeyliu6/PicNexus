@@ -54,11 +54,16 @@ function setElementMetrics(
     writable: true,
     value: metrics.scrollTop ?? 0,
   });
-  el.scrollTo = vi.fn((options?: ScrollToOptions) => {
-    if (typeof options?.top === 'number') {
-      el.scrollTop = options.top;
+  const scrollToMock = vi.fn((optionsOrX?: ScrollToOptions | number, y?: number) => {
+    if (typeof optionsOrX === 'number') {
+      el.scrollTop = y ?? el.scrollTop;
+      return;
+    }
+    if (typeof optionsOrX?.top === 'number') {
+      el.scrollTop = optionsOrX.top;
     }
   });
+  el.scrollTo = scrollToMock as typeof el.scrollTo;
 }
 
 function mountVirtualTimeline(initialGroups: PhotoGroup[]) {

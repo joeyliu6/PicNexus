@@ -3,6 +3,11 @@ import { defineComponent, ref } from 'vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { useClickOutside, useMultiClickOutside } from '../../../composables/useClickOutside';
 
+interface ClickOutsideControls {
+  start: () => void;
+  stop: () => void;
+}
+
 describe('useClickOutside', () => {
   let wrapper: VueWrapper | undefined;
 
@@ -32,18 +37,19 @@ describe('useClickOutside', () => {
     });
 
     wrapper = mount(Component, { attachTo: document.body });
+    const controls = wrapper.vm as unknown as ClickOutsideControls;
 
     await wrapper.find('.outside').trigger('click');
     expect(onOutside).not.toHaveBeenCalled();
 
-    wrapper.vm.start();
+    controls.start();
     await wrapper.find('.inside').trigger('click');
     expect(onOutside).not.toHaveBeenCalled();
 
     await wrapper.find('.outside').trigger('click');
     expect(onOutside).toHaveBeenCalledTimes(1);
 
-    wrapper.vm.stop();
+    controls.stop();
     await wrapper.find('.outside').trigger('click');
     expect(onOutside).toHaveBeenCalledTimes(1);
 
@@ -85,6 +91,7 @@ describe('useMultiClickOutside', () => {
     });
 
     wrapper = mount(Component, { attachTo: document.body });
+    const controls = wrapper.vm as unknown as ClickOutsideControls;
 
     await wrapper.find('.inside-first').trigger('click');
     await wrapper.find('.inside-second').trigger('click');
@@ -93,11 +100,11 @@ describe('useMultiClickOutside', () => {
     await wrapper.find('.outside').trigger('click');
     expect(onOutside).toHaveBeenCalledTimes(1);
 
-    wrapper.vm.stop();
+    controls.stop();
     await wrapper.find('.outside').trigger('click');
     expect(onOutside).toHaveBeenCalledTimes(1);
 
-    wrapper.vm.start();
+    controls.start();
     await wrapper.find('.outside').trigger('click');
     expect(onOutside).toHaveBeenCalledTimes(2);
   });

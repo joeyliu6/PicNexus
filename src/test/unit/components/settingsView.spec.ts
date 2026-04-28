@@ -222,7 +222,16 @@ function makeFormData() {
       enabled: false,
       activePresetId: 'balanced',
       presets: [
-        { id: 'balanced', name: 'Balanced', quality: 80, maxWidth: 1920, maxHeight: 1080 },
+        {
+          id: 'balanced',
+          name: 'Balanced',
+          quality: 80,
+          outputFormat: 'original',
+          maxLongSide: 1920,
+          scalePercent: 100,
+          skipIfSmallerKB: 0,
+          stripExif: true,
+        },
       ],
     },
   });
