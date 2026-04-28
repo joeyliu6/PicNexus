@@ -1,7 +1,8 @@
 import { vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, emit } from '@tauri-apps/api/event';
-import { appDataDir, basename, join } from '@tauri-apps/api/path';
+import { appDataDir, basename, dirname, join } from '@tauri-apps/api/path';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open as dialogOpen, save as dialogSave } from '@tauri-apps/plugin-dialog';
 import {
   copyFile,
@@ -36,6 +37,15 @@ vi.mock('@tauri-apps/api/path', () => ({
   appDataDir: vi.fn().mockResolvedValue('/mock/appdata'),
   join: vi.fn((...parts: string[]) => parts.join('/')),
   basename: vi.fn(async (filePath: string) => filePath.split(/[/\\]/).pop() || ''),
+  dirname: vi.fn(async (filePath: string) => filePath.split(/[/\\]/).slice(0, -1).join('/') || '/'),
+}));
+
+vi.mock('@tauri-apps/api/webview', () => ({
+  getCurrentWebview: vi.fn(() => ({
+    label: 'mock-webview',
+    clearAllBrowsingData: vi.fn().mockResolvedValue(undefined),
+    onDragDropEvent: vi.fn().mockResolvedValue(vi.fn()),
+  })),
 }));
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
@@ -146,6 +156,14 @@ export function resetTauriMocks(): void {
   path.join.mockImplementation(async (...parts: string[]) => parts.join('/'));
   path.basename.mockReset();
   path.basename.mockImplementation(async (filePath: string) => filePath.split(/[/\\]/).pop() || '');
+  path.dirname.mockReset();
+  path.dirname.mockImplementation(async (filePath: string) => filePath.split(/[/\\]/).slice(0, -1).join('/') || '/');
+  getCurrentWebviewMock().mockReset();
+  getCurrentWebviewMock().mockReturnValue({
+    label: 'mock-webview',
+    clearAllBrowsingData: vi.fn().mockResolvedValue(undefined),
+    onDragDropEvent: vi.fn().mockResolvedValue(vi.fn()),
+  } as never);
 
   const fs = getFsMocks();
   fs.readTextFile.mockReset();
@@ -196,7 +214,12 @@ export function getPathMocks() {
     appDataDir: vi.mocked(appDataDir),
     join: vi.mocked(join),
     basename: vi.mocked(basename),
+    dirname: vi.mocked(dirname),
   };
+}
+
+export function getCurrentWebviewMock() {
+  return vi.mocked(getCurrentWebview);
 }
 
 export function getFsMocks() {
