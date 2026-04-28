@@ -31,6 +31,10 @@ src-tauri/gen/
 # 测试覆盖率报告
 coverage/
 
+# Playwright runtime artifacts
+test-results/
+playwright-report/
+
 .cursorrules
 
 # Codex project-local skills/config

@@ -23,6 +23,7 @@ export default defineConfigWithVueTs(
       // 测试文件：vitest mock 里大量 `as any` / `expect.any(Object)` 是常规做法，
       // 强行套主应用的 any/unused 规则收益极低。运行时由 vitest 自身 + tsc 兜底。
       'src/test/**',
+      'tests/**',
       'coverage/**',
       // Obsidian 插件子项目：有独立的构建与 lint 体系，不归主应用 ESLint 管控。
       'plugins/**',
