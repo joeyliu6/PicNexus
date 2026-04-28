@@ -173,6 +173,7 @@ const FloatingActionBarStub = defineComponent({
       <button class="fab-delete" @click="$emit('delete')">delete</button>
       <button class="fab-clear" @click="$emit('clearSelection')">clear</button>
       <button class="fab-favorite" @click="$emit('batchFavorite', true)">favorite</button>
+      <button class="fab-unfavorite" @click="$emit('batchFavorite', false)">unfavorite</button>
     </section>
   `,
 });
@@ -370,11 +371,16 @@ describe('HistoryTableView page interactions', () => {
 
     const loadingWrapper = mountHistoryTable();
     expect(loadingWrapper.find('.skeleton-stub').exists()).toBe(true);
+    expect(loadingWrapper.find('[data-testid="empty-state"]').exists()).toBe(false);
 
     loadingWrapper.unmount();
     mockState.tableState = makeTableState([]);
     mockState.tableState.isLoadingPage.value = false;
     mockState.tableState.totalRecords.value = 0;
+
+    const emptyDefaultWrapper = mountHistoryTable();
+    expect(emptyDefaultWrapper.get('[data-testid="empty-state"]').attributes('data-icon')).toBe('pi pi-table');
+    emptyDefaultWrapper.unmount();
 
     const emptyWrapper = mountHistoryTable({ searchTerm: 'missing' });
     expect(emptyWrapper.get('[data-testid="empty-state"]').attributes('data-icon')).toBe('pi pi-search');
@@ -402,6 +408,9 @@ describe('HistoryTableView page interactions', () => {
     await wrapper.get('.fab-copy-service').trigger('click');
     expect(mockState.bulkCopyFormatted).toHaveBeenCalledWith('url', 'jd');
 
+    await wrapper.get('.fab-favorite').trigger('click');
+    expect(mockState.batchSetFavorite).toHaveBeenCalledWith([historyRows[0].id], true);
+
     await wrapper.get('.fab-delete').trigger('click');
     await flushPromisesAndTicks();
     expect(mockState.bulkDelete).toHaveBeenCalled();
@@ -415,6 +424,20 @@ describe('HistoryTableView page interactions', () => {
     await wrapper.get('.fab-clear').trigger('click');
     await flushPromisesAndTicks();
     expect(mockState.clearSelection).toHaveBeenCalled();
+  });
+
+  it('requests batch unfavorite when every selected row is already favorited', async () => {
+    mockState.viewState = makeViewState([historyRows[0].id]);
+    mockState.historyManager.favoriteSet = ref(new Set([historyRows[0].id]));
+
+    const wrapper = mountHistoryTable();
+    await flushPromisesAndTicks(2);
+
+    expect(wrapper.get('[data-testid="floating-actions"]').attributes('data-favorite-state')).toBe('all');
+
+    await wrapper.get('.fab-unfavorite').trigger('click');
+
+    expect(mockState.batchSetFavorite).toHaveBeenCalledWith([historyRows[0].id], false);
   });
 
   it('copies a service badge, opens the lightbox, and forwards lightbox actions', async () => {

@@ -97,7 +97,8 @@ export function useHistoryViewState() {
         return;
       }
 
-      await copyLinks(items, { format, showSuccessToast: false });
+      const copyResult = await copyLinks(items, { format, showSuccessToast: false });
+      if (!copyResult.ok) return;
 
       // 成功+跳过合并为一条 toast，避免两条弹窗
       const skippedCount = ids.length - items.length;
@@ -123,7 +124,8 @@ export function useHistoryViewState() {
         return;
       }
 
-      await copyLinks(items, { format, showSuccessToast: false });
+      const copyResult = await copyLinks(items, { format, showSuccessToast: false });
+      if (!copyResult.ok) return;
 
       // 成功+跳过合并为一条 toast（部分图片无 primaryUrl 时会被跳过）
       const skippedCount = metas.length - items.length;
@@ -146,8 +148,8 @@ export function useHistoryViewState() {
     const ids = selectedIdList.value;
     if (ids.length === 0) return;
 
-    await historyManager.bulkDeleteRecords(ids);
-    clearSelection();
+    const deleted = await historyManager.bulkDeleteRecords(ids);
+    if (deleted) clearSelection();
   }
 
   function reset(): void {

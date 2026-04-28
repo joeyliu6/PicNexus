@@ -276,6 +276,24 @@ describe('useHistoryManager', () => {
       expect(favoriteCount.value).toBe(countBefore + 2);
     });
 
+    it('removes ids from favoriteSet when batchSetFavorite is called with false', async () => {
+      historyDBGetCountMock.mockResolvedValue(3);
+      historyDBGetFavoriteIdListMock.mockResolvedValue(['batch-unfav-a', 'batch-unfav-b', 'still-fav']);
+
+      const { loadStats, batchSetFavorite, favoriteSet, favoriteCount } = useHistoryManager();
+      await loadStats();
+
+      await batchSetFavorite(['batch-unfav-a', 'batch-unfav-b'], false);
+
+      expect(historyDBBatchSetFavoriteMock).toHaveBeenCalledWith(['batch-unfav-a', 'batch-unfav-b'], false);
+      expect(favoriteSet.value.has('batch-unfav-a')).toBe(false);
+      expect(favoriteSet.value.has('batch-unfav-b')).toBe(false);
+      expect(favoriteSet.value.has('still-fav')).toBe(true);
+      expect(favoriteCount.value).toBe(1);
+      expect(detailCacheRemoveDetailMock).toHaveBeenCalledWith('batch-unfav-a');
+      expect(detailCacheRemoveDetailMock).toHaveBeenCalledWith('batch-unfav-b');
+    });
+
     it('空数组不执行操作', async () => {
       const { batchSetFavorite } = useHistoryManager();
       await batchSetFavorite([], true);
@@ -319,6 +337,25 @@ describe('useHistoryManager', () => {
       const result = await deleteHistoryItem('');
 
       expect(result).toBe(false);
+      expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.any(Object));
+    });
+
+    it('returns false and preserves local state when the database delete fails', async () => {
+      historyDBGetCountMock.mockResolvedValue(1);
+      historyDBGetFavoriteIdListMock.mockResolvedValue(['delete-fail']);
+      historyDBDeleteMock.mockRejectedValueOnce(new Error('delete failed'));
+      confirmMock.mockResolvedValue(true);
+
+      const { loadStats, deleteHistoryItem, totalCount, favoriteSet, favoriteCount } = useHistoryManager();
+      await loadStats();
+
+      const result = await deleteHistoryItem('delete-fail');
+
+      expect(result).toBe(false);
+      expect(totalCount.value).toBe(1);
+      expect(favoriteSet.value.has('delete-fail')).toBe(true);
+      expect(favoriteCount.value).toBe(1);
+      expect(emitHistoryDeletedMock).not.toHaveBeenCalledWith(['delete-fail']);
       expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.any(Object));
     });
   });

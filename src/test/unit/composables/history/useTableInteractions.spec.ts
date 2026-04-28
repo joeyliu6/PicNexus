@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick, ref, type Ref } from 'vue';
 import { mount } from '@vue/test-utils';
+import { getClipboardMocks } from '../../../helpers/tauriMock';
 import type { HistoryItem } from '../../../../config/types';
 
 const {
@@ -8,19 +9,28 @@ const {
   toggleFavoriteMock,
   loadStatsMock,
   deleteHistoryItemMock,
+  toastSuccessMock,
+  toastWarnMock,
+  toastErrorMock,
+  toastSilentMock,
 } = vi.hoisted(() => ({
   warmImagesMock: vi.fn(),
   toggleFavoriteMock: vi.fn(),
   loadStatsMock: vi.fn(),
   deleteHistoryItemMock: vi.fn(),
+  toastSuccessMock: vi.fn(),
+  toastWarnMock: vi.fn(),
+  toastErrorMock: vi.fn(),
+  toastSilentMock: vi.fn(),
 }));
+const writeTextMock = getClipboardMocks().writeText;
 
 vi.mock('../../../../composables/useToast', () => ({
   useToast: () => ({
-    success: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    silent: vi.fn(),
+    success: toastSuccessMock,
+    warn: toastWarnMock,
+    error: toastErrorMock,
+    silent: toastSilentMock,
   }),
 }));
 
@@ -71,6 +81,11 @@ vi.mock('../../../../utils/logger', () => ({
 }));
 
 const { useTableInteractions } = await import('../../../../composables/history/useTableInteractions');
+
+beforeEach(() => {
+  writeTextMock.mockReset();
+  writeTextMock.mockResolvedValue(undefined);
+});
 
 function makeItem(id = 'item-1'): HistoryItem {
   return {
@@ -343,6 +358,76 @@ describe('useTableInteractions lightbox cross-page tracking', () => {
 
     expect(historyContainer.scrollTop).toBe(123);
     expect(harness.api().lightboxItem.value?.id).toBe(secondItem.id);
+  });
+});
+
+describe('useTableInteractions lightbox delete result handling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    document.body.innerHTML = '';
+    deleteHistoryItemMock.mockResolvedValue(true);
+  });
+
+  it('keeps the lightbox open and does not show success when deletion returns false', async () => {
+    deleteHistoryItemMock.mockResolvedValueOnce(false);
+    const item = makeItem('delete-failed');
+    const harness = mountHarness(item);
+
+    harness.api().openLightbox(item);
+    await harness.api().handleLightboxDelete(item);
+
+    expect(deleteHistoryItemMock).toHaveBeenCalledWith('delete-failed');
+    expect(harness.api().lightboxVisible.value).toBe(true);
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+
+    harness.wrapper.unmount();
+  });
+});
+
+describe('useTableInteractions service badge copy', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+    document.body.innerHTML = '';
+  });
+
+  it('writes the service URL and marks only that badge as copied on success', async () => {
+    const item = makeItem('copy-success');
+    item.results = [{
+      serviceId: 'jd',
+      status: 'success',
+      result: { serviceId: 'jd', fileKey: 'jd-copy', url: 'https://cdn.example.com/jd-copy.jpg' },
+    }];
+    const harness = mountHarness(item);
+
+    await harness.api().handleCopyServiceLink(item, 'jd');
+
+    const copiedKey = harness.api().getServiceCopyKey('copy-success', 'jd');
+    expect(writeTextMock).toHaveBeenCalledWith('https://cdn.example.com/jd-copy.jpg');
+    expect(harness.api().copiedServiceKey.value).toBe(copiedKey);
+    expect(harness.api().isPopoverServiceCopied('jd')).toBe(false);
+    expect(toastSilentMock).toHaveBeenCalledTimes(1);
+
+    harness.wrapper.unmount();
+  });
+
+  it('does not mark a service badge copied when clipboard write fails', async () => {
+    writeTextMock.mockRejectedValueOnce(new Error('clipboard denied'));
+    const item = makeItem('copy-failed');
+    item.results = [{
+      serviceId: 'jd',
+      status: 'success',
+      result: { serviceId: 'jd', fileKey: 'jd-fail', url: 'https://cdn.example.com/jd-fail.jpg' },
+    }];
+    const harness = mountHarness(item);
+
+    await harness.api().handleCopyServiceLink(item, 'jd');
+
+    expect(harness.api().copiedServiceKey.value).toBeNull();
+    expect(toastErrorMock).toHaveBeenCalledWith('复制失败', expect.stringContaining('clipboard denied'));
+
+    harness.wrapper.unmount();
   });
 });
 

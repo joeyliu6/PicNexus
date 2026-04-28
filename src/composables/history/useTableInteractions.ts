@@ -384,7 +384,8 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
 
   async function handleLightboxDelete(item: HistoryItem): Promise<void> {
     try {
-      await viewState.deleteHistoryItem(item.id);
+      const deleted = await viewState.deleteHistoryItem(item.id);
+      if (deleted === false) return;
       lightboxVisible.value = false;
       toast.success('已删除', '1 条记录');
     } catch (error) {
