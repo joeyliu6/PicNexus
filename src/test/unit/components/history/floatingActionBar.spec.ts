@@ -83,7 +83,7 @@ describe('FloatingActionBar', () => {
     await wrapper.get('.format-html-stub').trigger('click');
     await wrapper.get('.service-copy-stub').trigger('click');
 
-    expect(wrapper.get('.fab-panel').exists()).toBe(true);
+    expect(wrapper.find('.fab-panel').exists()).toBe(true);
     expect(wrapper.emitted('copy')).toEqual([
       ['url', undefined],
       ['html', 'jd'],
