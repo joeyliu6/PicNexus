@@ -89,7 +89,7 @@ jobs:
         working-directory: src-tauri
 
       - name: Type check
-        run: npx vue-tsc --noEmit
+        run: npm run typecheck
 
       - name: Lint (ESLint + Stylelint)
         run: npm run lint

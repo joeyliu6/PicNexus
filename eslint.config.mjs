@@ -29,6 +29,7 @@ export default defineConfigWithVueTs(
       'plugins/**',
       '*.config.mjs',
       '*.config.ts',
+      '*.conf.cjs',
     ],
   },
   pluginVue.configs['flat/essential'],

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "typecheck": "vue-tsc --noEmit",
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest",
@@ -76,6 +77,7 @@
     "typescript": "^5.3.3",
     "typescript-eslint": "^8.58.1",
     "vite": "^5.0.8",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "vue-tsc": "^3.2.7"
   }
 }
