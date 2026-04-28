@@ -47,6 +47,30 @@ function mockConfigStoreGet(data: Record<string, unknown>): void {
   configStoreGetMock.mockImplementation(async (key: string) => data[key]);
 }
 
+function getAnalyticsFetchCall(index = 0) {
+  const call = httpFetchMock.mock.calls[index];
+
+  if (!call) {
+    throw new Error(`Expected analytics fetch call #${index + 1}`);
+  }
+
+  const [url, request] = call;
+
+  if (!request) {
+    throw new Error(`Expected analytics fetch call #${index + 1} to include request options`);
+  }
+
+  if (typeof request.body !== 'string') {
+    throw new Error(`Expected analytics fetch call #${index + 1} to include a JSON string body`);
+  }
+
+  return {
+    payload: JSON.parse(request.body),
+    request,
+    url: String(url),
+  };
+}
+
 describe('useAnalytics', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -101,10 +125,9 @@ describe('useAnalytics', () => {
     expect(appVersionMock).toHaveBeenCalledTimes(1);
     expect(httpFetchMock).toHaveBeenCalledTimes(1);
 
-    const [url, request] = httpFetchMock.mock.calls[0];
+    const { payload, request, url } = getAnalyticsFetchCall();
     expect(url).toContain('https://www.google-analytics.com/mp/collect');
     expect(request.method).toBe('POST');
-    const payload = JSON.parse(request.body);
     expect(payload.client_id).toBe('88888888-8888-4888-8888-888888888888');
     expect(payload.events[0]).toMatchObject({
       name: GA_EVENTS.APP_LAUNCH,
@@ -140,7 +163,7 @@ describe('useAnalytics', () => {
     });
     expect(configStoreSaveMock).toHaveBeenCalledTimes(1);
     expect(httpFetchMock).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(httpFetchMock.mock.calls[0][1].body)).toMatchObject({
+    expect(getAnalyticsFetchCall().payload).toMatchObject({
       client_id: 'client-1',
       events: [{
         name: 'upload_finished',
@@ -173,7 +196,7 @@ describe('useAnalytics', () => {
       sessionId: '1700005000000',
       lastActiveTime: 1700005000000,
     });
-    expect(JSON.parse(httpFetchMock.mock.calls[0][1].body).events[0].params.session_id)
+    expect(getAnalyticsFetchCall().payload.events[0].params.session_id)
       .toBe('1700005000000');
   });
 
@@ -222,7 +245,7 @@ describe('useAnalytics', () => {
 
     await expect(analytics.initialize()).resolves.toBe(true);
 
-    const payload = JSON.parse(httpFetchMock.mock.calls[0][1].body);
+    const { payload } = getAnalyticsFetchCall();
     expect(payload.client_id).toBe('44444444-4444-4444-8444-444444444444');
     expect(payload.events[0].params.app_version).toBe('3.0.0');
     expect(loggerMock.error).toHaveBeenCalled();

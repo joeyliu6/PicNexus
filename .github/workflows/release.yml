@@ -119,6 +119,22 @@ jobs:
       - name: Run unit tests before release
         run: npm run test:unit
 
+      - name: Install Tauri desktop E2E drivers (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          cargo install tauri-driver --locked
+          cargo install --git https://github.com/chippers/msedgedriver-tool
+          & "$HOME/.cargo/bin/msedgedriver-tool.exe"
+
+          $cargoBin = Join-Path $HOME ".cargo/bin"
+          $cargoBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $PWD.Path | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Run Tauri desktop E2E before release (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: npm run test:tauri:e2e
+
       - name: Generate changelog
         uses: orhun/git-cliff-action@v4
         id: changelog
