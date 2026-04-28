@@ -12,11 +12,6 @@ on:
         required: false
         default: false
         type: boolean
-      run_e2e:
-        description: 'Run Playwright web smoke E2E tests'
-        required: false
-        default: false
-        type: boolean
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -105,11 +100,12 @@ jobs:
         run: npm run test:coverage
 
       - name: Upload coverage artifact
-        if: matrix.os == 'ubuntu-latest'
+        if: always() && matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v7
         with:
-          name: coverage
+          name: coverage-report
           path: coverage/
+          if-no-files-found: ignore
           retention-days: 14
 
   visual:
@@ -142,36 +138,5 @@ jobs:
           path: |
             playwright-report/
             test-results/
-          retention-days: 14
-
-  e2e:
-    name: Web smoke E2E
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_e2e == 'true'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
-
-      - name: Run smoke E2E tests
-        run: npm run test:e2e
-
-      - name: Upload E2E report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-e2e-report
-          path: |
-            playwright-report/
-            test-results/
+          if-no-files-found: ignore
           retention-days: 14

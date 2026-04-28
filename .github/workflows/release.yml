@@ -30,6 +30,17 @@ jobs:
       - name: Run web smoke E2E before release
         run: npm run test:e2e
 
+      - name: Upload web smoke E2E report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-release-smoke-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
   release:
     needs: web-smoke
     strategy:
