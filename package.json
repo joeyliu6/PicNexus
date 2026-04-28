@@ -13,6 +13,7 @@
     "test:coverage": "vitest run --coverage",
     "test:visual": "playwright test",
     "test:visual:update": "playwright test --update-snapshots=all",
+    "test:e2e": "playwright test -c playwright.e2e.config.ts",
     "lint": "eslint . && stylelint \"src/**/*.{css,vue}\"",
     "lint:fix": "eslint . --fix && stylelint \"src/**/*.{css,vue}\" --fix",
     "prepare": "husky"
