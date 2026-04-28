@@ -12,6 +12,8 @@ interface E2EState {
   calls: E2ECall[];
   files: Record<string, string>;
   clipboardText: string;
+  dialogOpenResult: string[] | string | null;
+  failWriteTextFile: Record<string, string>;
 }
 
 declare global {
@@ -43,6 +45,8 @@ export function getState(): E2EState {
       }),
     },
     clipboardText: '',
+    dialogOpenResult: null,
+    failWriteTextFile: {},
   };
   return globalThis.__PICNEXUS_E2E__;
 }

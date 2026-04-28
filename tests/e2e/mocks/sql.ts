@@ -44,6 +44,9 @@ export default class Database {
     if (/COUNT\(DISTINCT primary_service\)/i.test(query)) {
       return [{ total: 0, services: 0, lastAt: null }] as T;
     }
+    if (/strftime\('%Y'|GROUP BY year|SUM\(COALESCE\(aspect_ratio/i.test(query)) {
+      return [] as T;
+    }
     if (/COUNT\(\*\) as count/i.test(query) || /COUNT\(\*\) AS count/i.test(query)) {
       return [{ count: 0 }] as T;
     }

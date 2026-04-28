@@ -21,6 +21,11 @@ export async function readTextFile(path: string): Promise<string> {
 
 export async function writeTextFile(path: string, contents: string): Promise<void> {
   record({ type: 'fs.writeTextFile', path, contents });
+  const failure = getState().failWriteTextFile[path];
+  if (failure) {
+    delete getState().failWriteTextFile[path];
+    throw new Error(failure);
+  }
   getState().files[path] = contents;
 }
 
