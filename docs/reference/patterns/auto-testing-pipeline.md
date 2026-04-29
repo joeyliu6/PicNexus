@@ -20,13 +20,16 @@
 push 到 main 或开 PR 时自动跑全量测试 + 类型检查。
 
 - **配置文件**：`.github/workflows/ci.yml`
-- **步骤**：`npm ci` → `vue-tsc --noEmit` → `npm run test:run`
+- **PR / main 必跑**：typecheck、lint、build、unit、coverage（coverage 只在 Ubuntu 跑并上传 `coverage-report`）
+- **手动触发**：`run_visual=true` 跑 visual regression，`run_e2e=true` 跑 mocked Playwright E2E，`run_tauri_e2e=true` 跑 Windows 真实 Tauri 桌面冒烟
 
 ### 第三层：Release 门禁
 
 发布前跑一遍测试，不过则阻止 release。
 
-- **配置文件**：`.github/workflows/release.yml` 中的 `Run tests before release` 步骤
+- **配置文件**：`.github/workflows/release.yml`
+- **tag 后自动门禁**：Ubuntu mocked web smoke E2E、release matrix 中的 lint / unit、Windows 真实 Tauri E2E、Windows / Linux 安装包启动冒烟
+- **打 tag 前建议手动跑**：visual、mocked E2E、真实 Tauri E2E（平台和 driver 可用时）
 
 ## Tauri 应用的测试边界
 
@@ -65,8 +68,9 @@ husky 是**触发式**运行，不是后台常驻。原理很简单：
 | 场景 | 触发方式 | 跑什么 | 耗时 |
 |------|---------|--------|------|
 | `git commit` | 自动（pre-commit hook） | 只跑跟改动文件相关的测试 | 2-5 秒 |
-| push 到 main / 开 PR | 自动（GitHub Actions） | 全量测试 + 类型检查 | 1-2 分钟 |
-| 打 tag 发版 | 自动（release workflow） | 全量测试 | 1-2 分钟 |
+| push 到 main / 开 PR | 自动（GitHub Actions） | typecheck + lint + build + unit + coverage | 数分钟，受三平台和 sidecar 构建影响 |
+| 手动 CI | workflow_dispatch | visual / mocked E2E / 真实 Tauri E2E 按输入选择 | 视所选 job 而定 |
+| 打 tag 发版 | 自动（release workflow） | mocked web smoke + lint + unit + Windows Tauri E2E + 安装包冒烟 | 视打包矩阵而定 |
 | 手动 | 你自己在终端跑 | 看你用什么命令 | — |
 
 ## 日常使用
@@ -87,6 +91,9 @@ git commit -m "feat: xxx"
 ```bash
 npm run test:run        # 跑一遍所有测试
 npm run test:coverage   # 跑测试 + 生成覆盖率报告（在 coverage/ 目录）
+npm run test:visual     # 跑 Playwright 视觉截图测试
+npm run test:e2e        # 跑 mocked Playwright E2E
+npm run test:tauri:e2e  # 跑真实 Tauri 桌面冒烟（需要平台 driver）
 npm test                # 监听模式，改一下文件自动重跑（开发时用）
 ```
 

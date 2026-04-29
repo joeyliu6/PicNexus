@@ -131,12 +131,31 @@ mocked E2E 当前手动触发：
 - 勾选 `run_e2e=true`。
 - Windows runner 执行 `npm run test:e2e`，上传 `playwright-e2e-report`。
 
+真实 Tauri E2E 当前手动触发：
+
+- GitHub Actions 运行 `CI` workflow。
+- 勾选 `run_tauri_e2e=true`。
+- Windows runner 构建 sidecar、安装 `tauri-driver` / `msedgedriver`，执行 `npm run test:tauri:e2e`。
+
+CI artifact：
+
+- `coverage-report`：`coverage/`，来自 Ubuntu 覆盖率 job。
+- `playwright-visual-report`：`playwright-report/` 和 `test-results/`，来自手动 visual job。
+- `playwright-e2e-report`：`playwright-report/` 和 `test-results/`，来自手动 mocked E2E job。
+
 release 当前还会跑：
 
 - tag 触发时先在 Ubuntu 跑 `npm run test:e2e` 的 web smoke。
 - release matrix 中跑 `npm run lint`、`npm run test:unit`。
 - Windows release runner 安装 Tauri E2E drivers 后跑 `npm run test:tauri:e2e`。
 - 打包后 Windows / Linux 还有安装包或 AppImage 启动冒烟。
+
+发版前建议：
+
+- 打 tag 前手动触发 `CI` workflow 跑 `run_visual=true`，人工确认视觉 diff 不包含真实 UI 回归。
+- 打 tag 前手动触发 `CI` workflow 跑 `run_e2e=true`，确认 mocked E2E 主流程稳定。
+- 如果 Windows driver 环境可用，打 tag 前手动触发 `run_tauri_e2e=true`，或本地运行 `npm run test:tauri:e2e` 做真实桌面冒烟。
+- tag 后的 `Release` workflow 会再次跑 mocked web smoke 和 Windows 真实 Tauri E2E，但 visual 仍保留为发版前手动门禁。
 
 未来稳定后适合进入 PR 必跑：
 
