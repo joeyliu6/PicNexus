@@ -2,15 +2,15 @@
 // S3 兼容存储通用上传模块
 // 支持腾讯云 COS、阿里云 OSS、七牛云、又拍云
 
-use tauri::{Window, Emitter};
-use serde::{Deserialize, Serialize};
-use aws_sdk_s3::{Client, Config};
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::primitives::ByteStream;
+use aws_sdk_s3::{Client, Config};
+use serde::{Deserialize, Serialize};
+use tauri::{Emitter, Window};
 use tokio::time::{timeout, Duration};
 
-use crate::error::AppError;
 use super::utils::read_file_bytes;
+use crate::error::AppError;
 
 // ==================== 常量 ====================
 
@@ -25,19 +25,8 @@ pub struct S3UploadResult {
 }
 
 /// 创建 S3 客户端（内部复用函数）
-fn create_s3_client(
-    endpoint: &str,
-    access_key: &str,
-    secret_key: &str,
-    region: &str,
-) -> Client {
-    let credentials = Credentials::new(
-        access_key,
-        secret_key,
-        None,
-        None,
-        "PicNexus",
-    );
+fn create_s3_client(endpoint: &str, access_key: &str, secret_key: &str, region: &str) -> Client {
+    let credentials = Credentials::new(access_key, secret_key, None, None, "PicNexus");
 
     let config = Config::builder()
         .endpoint_url(endpoint)
@@ -67,14 +56,17 @@ pub async fn upload_to_s3_compatible(
     log::info!("[S3兼容] 开始上传文件: {}", file_path);
 
     // 发送进度: 0% - 读取文件
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 0,
-        "total": 100,
-        "step": "读取文件...",
-        "step_index": 1,
-        "total_steps": 3
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 0,
+            "total": 100,
+            "step": "读取文件...",
+            "step_index": 1,
+            "total_steps": 3
+        }),
+    );
 
     // 1. 读取文件
     let (buffer, file_size) = read_file_bytes(&file_path).await?;
@@ -82,42 +74,53 @@ pub async fn upload_to_s3_compatible(
     log::debug!("[S3兼容] 文件大小: {} bytes", file_size);
 
     // 发送进度: 33% - 创建客户端
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 33,
-        "total": 100,
-        "step": "创建客户端...",
-        "step_index": 2,
-        "total_steps": 3
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 33,
+            "total": 100,
+            "step": "创建客户端...",
+            "step_index": 2,
+            "total_steps": 3
+        }),
+    );
 
     // 2. 创建 S3 客户端
     let client = create_s3_client(&endpoint, &access_key, &secret_key, &region);
 
     // 发送进度: 66% - 正在上传
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 66,
-        "total": 100,
-        "step": "正在上传...",
-        "step_index": 3,
-        "total_steps": 3
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 66,
+            "total": 100,
+            "step": "正在上传...",
+            "step_index": 3,
+            "total_steps": 3
+        }),
+    );
 
     // 3. 上传文件（带超时保护）
     let body = ByteStream::from(buffer);
 
     timeout(
-        Duration::from_secs(S3_OPERATION_TIMEOUT_SECS * 2),  // 上传操作给予更长超时
+        Duration::from_secs(S3_OPERATION_TIMEOUT_SECS * 2), // 上传操作给予更长超时
         client
             .put_object()
             .bucket(&bucket)
             .key(&key)
             .body(body)
-            .send()
+            .send(),
     )
     .await
-    .map_err(|_| AppError::upload("S3兼容", format!("上传超时 ({}秒)", S3_OPERATION_TIMEOUT_SECS * 2)))?
+    .map_err(|_| {
+        AppError::upload(
+            "S3兼容",
+            format!("上传超时 ({}秒)", S3_OPERATION_TIMEOUT_SECS * 2),
+        )
+    })?
     .map_err(|e| AppError::upload("S3兼容", format!("上传失败: {}", e)))?;
 
     log::info!("[S3兼容] 上传成功 - Key: {}", key);
@@ -131,10 +134,7 @@ pub async fn upload_to_s3_compatible(
         format!("{}/{}", domain, key)
     };
 
-    Ok(S3UploadResult {
-        url,
-        key,
-    })
+    Ok(S3UploadResult { url, key })
 }
 
 /// S3 兼容存储测试配置
@@ -165,22 +165,23 @@ pub struct S3TestConfig {
 
 impl S3TestConfig {
     fn get_access_key(&self) -> Option<String> {
-        self.access_key_id.clone()
+        self.access_key_id
+            .clone()
             .or_else(|| self.secret_id.clone())
             .or_else(|| self.access_key.clone())
             .or_else(|| self.operator.clone())
     }
 
     fn get_secret_key(&self) -> Option<String> {
-        self.secret_access_key.clone()
+        self.secret_access_key
+            .clone()
             .or_else(|| self.secret_key.clone())
             .or_else(|| self.access_key_secret.clone())
             .or_else(|| self.password.clone())
     }
 
     fn get_bucket(&self) -> Option<String> {
-        self.bucket_name.clone()
-            .or_else(|| self.bucket.clone())
+        self.bucket_name.clone().or_else(|| self.bucket.clone())
     }
 }
 
@@ -194,15 +195,18 @@ pub async fn test_s3_connection(
 ) -> Result<String, AppError> {
     log::info!("[S3测试] 开始测试 {} 连接", service_id);
 
-    let access_key = config.get_access_key()
+    let access_key = config
+        .get_access_key()
         .filter(|s| !s.is_empty())
         .ok_or_else(|| AppError::config("Access Key 不能为空"))?;
 
-    let secret_key = config.get_secret_key()
+    let secret_key = config
+        .get_secret_key()
         .filter(|s| !s.is_empty())
         .ok_or_else(|| AppError::config("Secret Key 不能为空"))?;
 
-    let bucket = config.get_bucket()
+    let bucket = config
+        .get_bucket()
         .filter(|s| !s.is_empty())
         .ok_or_else(|| AppError::config("Bucket 名称不能为空"))?;
 
@@ -214,7 +218,12 @@ pub async fn test_s3_connection(
     // 构建 endpoint 和 region
     let (endpoint, region) = build_s3_endpoint(&service_id, &config, &bucket)?;
 
-    log::debug!("[S3测试] Endpoint: {}, Region: {}, Bucket: {}", endpoint, region, bucket);
+    log::debug!(
+        "[S3测试] Endpoint: {}, Region: {}, Bucket: {}",
+        endpoint,
+        region,
+        bucket
+    );
 
     // 单次测试，快速反馈优先
     let test_timeout = Duration::from_secs(10);
@@ -233,8 +242,11 @@ pub async fn test_s3_connection(
     match result {
         Ok(Ok(response)) => {
             let object_count = response.contents().len();
-            log::info!("[S3测试] {} 连接成功，存储桶内有 {} 个对象",
-                service_id, object_count);
+            log::info!(
+                "[S3测试] {} 连接成功，存储桶内有 {} 个对象",
+                service_id,
+                object_count
+            );
             Ok(format!("{} 连接成功！", get_service_name(&service_id)))
         }
         Ok(Err(e)) => {
@@ -243,7 +255,8 @@ pub async fn test_s3_connection(
 
             if error_msg.contains("NoSuchBucket") {
                 Err(AppError::storage(format!("存储桶不存在: {}", bucket)))
-            } else if error_msg.contains("AccessDenied") || error_msg.contains("InvalidAccessKeyId") {
+            } else if error_msg.contains("AccessDenied") || error_msg.contains("InvalidAccessKeyId")
+            {
                 Err(AppError::auth("认证失败: 请检查 Access Key 和 Secret Key"))
             } else if error_msg.contains("SignatureDoesNotMatch") {
                 Err(AppError::auth("签名错误: 请检查 Secret Key 是否正确"))
@@ -268,7 +281,9 @@ fn build_s3_endpoint(
 ) -> Result<(String, String), AppError> {
     match service_id {
         "r2" => {
-            let account_id = config.account_id.as_ref()
+            let account_id = config
+                .account_id
+                .as_ref()
                 .filter(|s| !s.is_empty())
                 .ok_or_else(|| AppError::config("R2 Account ID 不能为空"))?;
             Ok((
@@ -277,7 +292,9 @@ fn build_s3_endpoint(
             ))
         }
         "tencent" => {
-            let region = config.region.as_ref()
+            let region = config
+                .region
+                .as_ref()
                 .filter(|s| !s.is_empty())
                 .ok_or_else(|| AppError::config("腾讯云 Region 不能为空"))?;
             Ok((
@@ -286,7 +303,9 @@ fn build_s3_endpoint(
             ))
         }
         "aliyun" => {
-            let region = config.region.as_ref()
+            let region = config
+                .region
+                .as_ref()
                 .filter(|s| !s.is_empty())
                 .ok_or_else(|| AppError::config("阿里云 Region 不能为空"))?;
             Ok((
@@ -295,22 +314,24 @@ fn build_s3_endpoint(
             ))
         }
         "qiniu" => {
-            let region = config.region.as_ref()
+            let region = config
+                .region
+                .as_ref()
                 .filter(|s| !s.is_empty())
                 .ok_or_else(|| AppError::config("七牛云 Region 不能为空"))?;
-            Ok((
-                format!("https://s3-{}.qiniucs.com", region),
-                region.clone(),
-            ))
+            Ok((format!("https://s3-{}.qiniucs.com", region), region.clone()))
         }
         s if s == "custom_s3" || s.starts_with("custom_s3:") => {
-            let endpoint = config.endpoint.as_ref()
+            let endpoint = config
+                .endpoint
+                .as_ref()
                 .filter(|s| !s.is_empty())
                 .ok_or_else(|| AppError::config("自定义 S3 Endpoint 不能为空"))?;
 
             // 校验 endpoint 是合法的 HTTP(S) URL，防止 SSRF
-            let parsed = url::Url::parse(endpoint)
-                .map_err(|_| AppError::config("Endpoint 不是合法的 URL，请输入完整的 https://... 地址"))?;
+            let parsed = url::Url::parse(endpoint).map_err(|_| {
+                AppError::config("Endpoint 不是合法的 URL，请输入完整的 https://... 地址")
+            })?;
             match parsed.scheme() {
                 "http" | "https" => {}
                 _ => return Err(AppError::config("Endpoint 仅支持 http 或 https 协议")),
@@ -335,12 +356,17 @@ fn build_s3_endpoint(
                 }
             }
 
-            let region = config.region.as_ref()
+            let region = config
+                .region
+                .as_ref()
                 .filter(|s| !s.is_empty())
                 .ok_or_else(|| AppError::config("自定义 S3 Region 不能为空"))?;
             Ok((endpoint.clone(), region.clone()))
         }
-        _ => Err(AppError::config(format!("不支持的服务类型: {}", service_id))),
+        _ => Err(AppError::config(format!(
+            "不支持的服务类型: {}",
+            service_id
+        ))),
     }
 }
 
@@ -350,7 +376,7 @@ async fn test_upyun_connection(
     password: &str,
     bucket: &str,
 ) -> Result<String, AppError> {
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
 
     let url = format!("https://v0.api.upyun.com/{}/", bucket);
     let auth = STANDARD.encode(format!("{}:{}", operator, password));
@@ -398,4 +424,3 @@ fn get_service_name(service_id: &str) -> &str {
         _ => service_id,
     }
 }
-

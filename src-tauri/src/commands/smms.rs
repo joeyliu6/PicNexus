@@ -1,12 +1,12 @@
 // src-tauri/src/commands/smms.rs
 // SM.MS 图床上传命令
 
-use tauri::{Window, Emitter};
-use serde::{Deserialize, Serialize};
 use reqwest::multipart;
+use serde::{Deserialize, Serialize};
+use tauri::{Emitter, Window};
 
-use crate::error::{AppError, IntoAppError};
 use super::utils::read_file_bytes;
+use crate::error::{AppError, IntoAppError};
 
 /// SM.MS 上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -50,14 +50,17 @@ pub async fn upload_to_smms(
     log::info!("[SM.MS] 开始上传文件: {}", file_path);
 
     // 发送进度: 0% - 读取文件
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 0,
-        "total": 100,
-        "step": "读取文件...",
-        "step_index": 1,
-        "total_steps": 3
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 0,
+            "total": 100,
+            "step": "读取文件...",
+            "step_index": 1,
+            "total_steps": 3
+        }),
+    );
 
     // 1. 读取文件
     let (buffer, file_size) = read_file_bytes(&file_path).await?;
@@ -76,23 +79,30 @@ pub async fn upload_to_smms(
         .and_then(|n| n.to_str())
         .ok_or_else(|| AppError::validation("无法获取文件名"))?;
 
-    let ext = file_name.split('.').next_back()
+    let ext = file_name
+        .split('.')
+        .next_back()
         .ok_or_else(|| AppError::validation("无法获取文件扩展名"))?
         .to_lowercase();
 
     if !["jpg", "jpeg", "png", "gif", "bmp", "webp"].contains(&ext.as_str()) {
-        return Err(AppError::validation("只支持 JPG、PNG、GIF、BMP、WebP 格式的图片"));
+        return Err(AppError::validation(
+            "只支持 JPG、PNG、GIF、BMP、WebP 格式的图片",
+        ));
     }
 
     // 发送进度: 33% - 准备上传
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 33,
-        "total": 100,
-        "step": "准备上传...",
-        "step_index": 2,
-        "total_steps": 3
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 33,
+            "total": 100,
+            "step": "准备上传...",
+            "step_index": 2,
+            "total_steps": 3
+        }),
+    );
 
     // 4. 构建 multipart form
     let part = multipart::Part::bytes(buffer)
@@ -103,14 +113,17 @@ pub async fn upload_to_smms(
     let form = multipart::Form::new().part("smfile", part);
 
     // 发送进度: 66% - 正在上传
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 66,
-        "total": 100,
-        "step": "正在上传...",
-        "step_index": 3,
-        "total_steps": 3
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 66,
+            "total": 100,
+            "step": "正在上传...",
+            "step_index": 3,
+            "total_steps": 3
+        }),
+    );
 
     // 5. 发送请求到 SM.MS API
     let client = reqwest::Client::new();
@@ -129,18 +142,24 @@ pub async fn upload_to_smms(
         let response_text = response.text().await.unwrap_or_default();
         log::error!("[SM.MS] API 错误响应: {}", response_text);
         return match status {
-            reqwest::StatusCode::UNAUTHORIZED =>
-                Err(AppError::auth("SM.MS Token 无效或已过期")),
-            reqwest::StatusCode::TOO_MANY_REQUESTS =>
-                Err(AppError::upload("SM.MS", "API 调用频率超限，请稍后重试")),
-            reqwest::StatusCode::PAYLOAD_TOO_LARGE =>
-                Err(AppError::validation("文件大小超过限制 (5MB)")),
-            _ => Err(AppError::upload("SM.MS", format!("上传失败 (HTTP {}): {}", status, response_text)))
+            reqwest::StatusCode::UNAUTHORIZED => Err(AppError::auth("SM.MS Token 无效或已过期")),
+            reqwest::StatusCode::TOO_MANY_REQUESTS => {
+                Err(AppError::upload("SM.MS", "API 调用频率超限，请稍后重试"))
+            }
+            reqwest::StatusCode::PAYLOAD_TOO_LARGE => {
+                Err(AppError::validation("文件大小超过限制 (5MB)"))
+            }
+            _ => Err(AppError::upload(
+                "SM.MS",
+                format!("上传失败 (HTTP {}): {}", status, response_text),
+            )),
         };
     }
 
     // 7. 解析响应
-    let response_text = response.text().await
+    let response_text = response
+        .text()
+        .await
         .into_network_err_with("无法读取响应")?;
 
     log::debug!("[SM.MS] API 响应: {}", response_text);
@@ -154,7 +173,8 @@ pub async fn upload_to_smms(
         return Err(AppError::upload("SM.MS", error_msg));
     }
 
-    let data = smms_response.data
+    let data = smms_response
+        .data
         .ok_or_else(|| AppError::upload("SM.MS", "API 未返回数据"))?;
 
     log::info!("[SM.MS] 上传成功 - URL: {}", data.url);

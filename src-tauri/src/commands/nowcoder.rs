@@ -2,13 +2,13 @@
 // 牛客图床上传命令
 // v2.10: 迁移到 AppError 统一错误类型
 
-use tauri::Window;
-use serde::{Deserialize, Serialize};
 use reqwest::multipart;
+use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::Window;
 
-use crate::error::{AppError, IntoAppError};
 use super::utils::read_file_bytes;
+use crate::error::{AppError, IntoAppError};
 
 /// 测试牛客 Cookie 是否有效
 #[tauri::command]
@@ -22,15 +22,11 @@ pub async fn test_nowcoder_cookie(nowcoder_cookie: String) -> Result<String, App
 
     // 最小的 1x1 透明 PNG（67 字节）
     let minimal_png: Vec<u8> = vec![
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-        0x42, 0x60, 0x82,
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F,
+        0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00,
+        0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
     ];
 
     // 构建带时间戳的 URL
@@ -39,7 +35,10 @@ pub async fn test_nowcoder_cookie(nowcoder_cookie: String) -> Result<String, App
         .into_external_err_with("无法获取时间戳")?
         .as_millis();
 
-    let url = format!("https://www.nowcoder.com/uploadImage?type=1&_={}", timestamp);
+    let url = format!(
+        "https://www.nowcoder.com/uploadImage?type=1&_={}",
+        timestamp
+    );
 
     // 构建 multipart form
     let part = multipart::Part::bytes(minimal_png)
@@ -62,7 +61,9 @@ pub async fn test_nowcoder_cookie(nowcoder_cookie: String) -> Result<String, App
         .await
         .into_network_err_with("请求失败")?;
 
-    let response_text = response.text().await
+    let response_text = response
+        .text()
+        .await
         .into_network_err_with("无法读取响应")?;
 
     log::debug!("[Nowcoder] 测试响应: {}", response_text);
@@ -74,7 +75,11 @@ pub async fn test_nowcoder_cookie(nowcoder_cookie: String) -> Result<String, App
     if api_response.code == 0 {
         Ok("Cookie 验证通过".to_string())
     } else {
-        Err(AppError::auth(format!("{} (code: {})", api_response.msg.trim(), api_response.code)))
+        Err(AppError::auth(format!(
+            "{} (code: {})",
+            api_response.msg.trim(),
+            api_response.code
+        )))
     }
 }
 
@@ -109,7 +114,9 @@ pub async fn upload_to_nowcoder(
         .and_then(|n| n.to_str())
         .ok_or_else(|| AppError::validation("无法获取文件名"))?;
 
-    let ext = file_name.split('.').next_back()
+    let ext = file_name
+        .split('.')
+        .next_back()
         .ok_or_else(|| AppError::validation("无法获取文件扩展名"))?
         .to_lowercase();
 
@@ -123,7 +130,10 @@ pub async fn upload_to_nowcoder(
         .into_external_err_with("无法获取时间戳")?
         .as_millis();
 
-    let url = format!("https://www.nowcoder.com/uploadImage?type=1&_={}", timestamp);
+    let url = format!(
+        "https://www.nowcoder.com/uploadImage?type=1&_={}",
+        timestamp
+    );
 
     // 4. 构建 multipart form
     // 将扩展名转为小写（避免服务器不支持大写扩展名）
@@ -138,8 +148,7 @@ pub async fn upload_to_nowcoder(
         .mime_str("image/*")
         .into_validation_err_with("无法设置 MIME 类型")?;
 
-    let form = multipart::Form::new()
-        .part("file", part);
+    let form = multipart::Form::new().part("file", part);
 
     // 5. 发送请求到牛客 API（带必须的 Headers）
     let client = reqwest::Client::new();
@@ -155,20 +164,31 @@ pub async fn upload_to_nowcoder(
         .into_network_err_with("请求失败")?;
 
     // 6. 解析响应
-    let response_text = response.text().await
+    let response_text = response
+        .text()
+        .await
         .into_network_err_with("无法读取响应")?;
 
     log::debug!("[Nowcoder] API 响应: {}", response_text);
 
-    let api_response: NowcoderApiResponse = serde_json::from_str(&response_text)
-        .map_err(|e| AppError::upload("牛客", format!("JSON 解析失败: {} (响应: {})", e, response_text)))?;
+    let api_response: NowcoderApiResponse = serde_json::from_str(&response_text).map_err(|e| {
+        AppError::upload(
+            "牛客",
+            format!("JSON 解析失败: {} (响应: {})", e, response_text),
+        )
+    })?;
 
     // 7. 检查上传结果
     if api_response.code != 0 {
-        return Err(AppError::upload_with_code("牛客", api_response.code, format!("API 返回错误: {}", api_response.msg)));
+        return Err(AppError::upload_with_code(
+            "牛客",
+            api_response.code,
+            format!("API 返回错误: {}", api_response.msg),
+        ));
     }
 
-    let image_url = api_response.url
+    let image_url = api_response
+        .url
         .ok_or_else(|| AppError::upload("牛客", "API 未返回图片链接"))?;
 
     // 8. 将 http 转换为 https
@@ -187,7 +207,11 @@ pub async fn upload_to_nowcoder(
         let after_compress = &https_url[compress_pos + "/compress/".len()..];
         if let Some(next_slash) = after_compress.find('/') {
             // 拼接: 前半部分 + 后半部分（跳过 /compress/mwXXX 部分）
-            format!("{}{}", &https_url[..compress_pos], &after_compress[next_slash..])
+            format!(
+                "{}{}",
+                &https_url[..compress_pos],
+                &after_compress[next_slash..]
+            )
         } else {
             https_url
         }

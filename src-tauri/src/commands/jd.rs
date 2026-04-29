@@ -2,12 +2,12 @@
 // 京东图床上传命令
 // v2.10: 迁移到 AppError 统一错误类型
 
-use tauri::{Window, Emitter};
-use serde::{Deserialize, Serialize};
 use reqwest::multipart;
+use serde::{Deserialize, Serialize};
+use tauri::{Emitter, Window};
 
-use crate::error::{AppError, IntoAppError};
 use super::utils::read_file_bytes;
+use crate::error::{AppError, IntoAppError};
 
 /// 京东上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -48,7 +48,9 @@ async fn get_aid_info() -> Result<AidInfo, AppError> {
         .await
         .into_network_err_with("获取 aid 请求失败")?;
 
-    let response_text = response.text().await
+    let response_text = response
+        .text()
+        .await
         .into_network_err_with("无法读取 aid 响应")?;
 
     log::debug!("[JD] Aid API 响应: {}", response_text);
@@ -70,7 +72,7 @@ async fn get_aid_info() -> Result<AidInfo, AppError> {
 
     let pin = json_value["pin"]
         .as_str()
-        .unwrap_or("")  // pin 可能为空字符串
+        .unwrap_or("") // pin 可能为空字符串
         .to_string();
 
     Ok(AidInfo { aid, pin })
@@ -86,8 +88,11 @@ pub async fn check_jd_available() -> bool {
     match get_aid_info().await {
         Ok(aid_info) => {
             let elapsed = start_time.elapsed();
-            log::info!("[JD] 检测完成 - aid: {}, 耗时: {:?}, 结果: 可用",
-                aid_info.aid, elapsed);
+            log::info!(
+                "[JD] 检测完成 - aid: {}, 耗时: {:?}, 结果: 可用",
+                aid_info.aid,
+                elapsed
+            );
             true
         }
         Err(e) => {
@@ -107,14 +112,17 @@ pub async fn upload_to_jd(
     log::info!("[JD] 开始上传文件: {}", file_path);
 
     // 发送进度: 0% - 读取文件
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 0,
-        "total": 100,
-        "step": "读取文件...",
-        "step_index": 1,
-        "total_steps": 4
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 0,
+            "total": 100,
+            "step": "读取文件...",
+            "step_index": 1,
+            "total_steps": 4
+        }),
+    );
 
     // 1. 读取文件
     let (buffer, file_size) = read_file_bytes(&file_path).await?;
@@ -133,7 +141,9 @@ pub async fn upload_to_jd(
         .and_then(|n| n.to_str())
         .ok_or_else(|| AppError::validation("无法获取文件名"))?;
 
-    let ext = file_name.split('.').next_back()
+    let ext = file_name
+        .split('.')
+        .next_back()
         .ok_or_else(|| AppError::validation("无法获取文件扩展名"))?
         .to_lowercase();
 
@@ -142,14 +152,17 @@ pub async fn upload_to_jd(
     }
 
     // 发送进度: 25% - 获取凭证
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 25,
-        "total": 100,
-        "step": "获取上传凭证...",
-        "step_index": 2,
-        "total_steps": 4
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 25,
+            "total": 100,
+            "step": "获取上传凭证...",
+            "step_index": 2,
+            "total_steps": 4
+        }),
+    );
 
     // 4. 获取 aid 和 pin
     log::debug!("[JD] 正在获取 aid 和 pin...");
@@ -170,21 +183,24 @@ pub async fn upload_to_jd(
         .into_validation_err_with("无法设置 MIME 类型")?;
 
     let form = multipart::Form::new()
-        .part("upload", part)  // 京东用 "upload" 字段名
+        .part("upload", part) // 京东用 "upload" 字段名
         .text("appId", "im.customer")
         .text("aid", aid_info.aid)
         .text("clientType", "comet")
         .text("pin", aid_info.pin);
 
     // 发送进度: 50% - 正在上传
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 50,
-        "total": 100,
-        "step": "正在上传...",
-        "step_index": 3,
-        "total_steps": 4
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 50,
+            "total": 100,
+            "step": "正在上传...",
+            "step_index": 3,
+            "total_steps": 4
+        }),
+    );
 
     // 6. 发送请求到京东上传 API
     let client = reqwest::Client::new();
@@ -201,17 +217,22 @@ pub async fn upload_to_jd(
         .into_network_err_with("上传请求失败")?;
 
     // 发送进度: 75% - 处理响应
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 75,
-        "total": 100,
-        "step": "处理响应...",
-        "step_index": 4,
-        "total_steps": 4
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 75,
+            "total": 100,
+            "step": "处理响应...",
+            "step_index": 4,
+            "total_steps": 4
+        }),
+    );
 
     // 7. 解析响应
-    let response_text = response.text().await
+    let response_text = response
+        .text()
+        .await
         .into_network_err_with("无法读取响应")?;
 
     log::debug!("[JD] 上传 API 响应: {}", response_text);
@@ -221,17 +242,19 @@ pub async fn upload_to_jd(
 
     // 8. 检查上传结果
     if upload_response.code != 0 {
-        return Err(AppError::upload_with_code("京东", upload_response.code, format!("API 返回错误码: {}", upload_response.code)));
+        return Err(AppError::upload_with_code(
+            "京东",
+            upload_response.code,
+            format!("API 返回错误码: {}", upload_response.code),
+        ));
     }
 
-    let raw_url = upload_response.path
+    let raw_url = upload_response
+        .path
         .ok_or_else(|| AppError::upload("京东", "API 未返回图片链接"))?;
 
     // 替换域名：dd-static.jd.com/ddimgp -> img30.360buyimg.com/imgzone
-    let image_url = raw_url.replace(
-        "dd-static.jd.com/ddimgp",
-        "img30.360buyimg.com/imgzone"
-    );
+    let image_url = raw_url.replace("dd-static.jd.com/ddimgp", "img30.360buyimg.com/imgzone");
 
     log::info!("[JD] 上传成功（原始URL: {}）", raw_url);
     log::debug!("[JD] 转换后URL: {}", image_url);

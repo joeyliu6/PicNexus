@@ -10,18 +10,18 @@
 // 5. 轮询图片状态直到处理完成
 // 6. URL 标准化为 https://picx.zhimg.com/v2-{hash}.webp
 
-use tauri::Window;
-use serde::{Deserialize, Serialize};
-use reqwest::Client;
-use std::time::Duration;
-use md5::{Md5, Digest};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use hmac::{Hmac, Mac};
-use sha1::Sha1;
-use base64::{Engine, engine::general_purpose::STANDARD};
+use md5::{Digest, Md5};
 use regex::Regex;
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use sha1::Sha1;
+use std::time::Duration;
+use tauri::Window;
 
-use crate::error::{AppError, IntoAppError};
 use super::utils::read_file_bytes;
+use crate::error::{AppError, IntoAppError};
 
 type HmacSha1 = Hmac<Sha1>;
 
@@ -139,7 +139,7 @@ pub async fn upload_to_zhihu(
 
     for attempt in 0..=MAX_UPLOAD_RETRIES {
         if attempt > 0 {
-            let delay = attempt * 2;  // 2, 4, 6 秒
+            let delay = attempt * 2; // 2, 4, 6 秒
             log::debug!("[Zhihu] 第 {} 次重试，等待 {} 秒", attempt, delay);
             tokio::time::sleep(Duration::from_secs(delay as u64)).await;
         }
@@ -159,7 +159,12 @@ pub async fn upload_to_zhihu(
         }
     }
 
-    Err(last_error.unwrap_or_else(|| AppError::upload("知乎", format!("上传失败，已重试 {} 次", MAX_UPLOAD_RETRIES))))
+    Err(last_error.unwrap_or_else(|| {
+        AppError::upload(
+            "知乎",
+            format!("上传失败，已重试 {} 次", MAX_UPLOAD_RETRIES),
+        )
+    }))
 }
 
 /// 内部上传函数
@@ -178,12 +183,16 @@ async fn upload_to_zhihu_inner(
         .and_then(|n| n.to_str())
         .ok_or_else(|| AppError::validation("无法获取文件名"))?;
 
-    let ext = file_name.split('.').next_back()
+    let ext = file_name
+        .split('.')
+        .next_back()
         .ok_or_else(|| AppError::validation("无法获取文件扩展名"))?
         .to_lowercase();
 
     if !["jpg", "jpeg", "png", "gif", "webp"].contains(&ext.as_str()) {
-        return Err(AppError::validation("只支持 JPG、PNG、GIF、WebP 格式的图片"));
+        return Err(AppError::validation(
+            "只支持 JPG、PNG、GIF、WebP 格式的图片",
+        ));
     }
 
     let content_type = get_mime_type(&ext);
@@ -213,10 +222,13 @@ async fn upload_to_zhihu_inner(
         .await
         .into_network_err_with("获取上传凭证失败")?;
 
-    let credentials_text = credentials_response.text().await
+    let credentials_text = credentials_response
+        .text()
+        .await
         .into_network_err_with("读取凭证响应失败")?;
 
-    log::debug!("[Zhihu] 凭证状态: state={}",
+    log::debug!(
+        "[Zhihu] 凭证状态: state={}",
         serde_json::from_str::<serde_json::Value>(&credentials_text)
             .ok()
             .and_then(|v| v.get("upload_file").and_then(|f| f.get("state")).cloned())
@@ -224,11 +236,20 @@ async fn upload_to_zhihu_inner(
             .unwrap_or_else(|| "unknown".to_string())
     );
 
-    let credentials: UploadCredentialsResponse = serde_json::from_str(&credentials_text)
-        .map_err(|e| AppError::upload("知乎", format!("解析凭证失败: {} (响应: {})", e, credentials_text)))?;
+    let credentials: UploadCredentialsResponse =
+        serde_json::from_str(&credentials_text).map_err(|e| {
+            AppError::upload(
+                "知乎",
+                format!("解析凭证失败: {} (响应: {})", e, credentials_text),
+            )
+        })?;
 
     let image_id = credentials.upload_file.image_id.clone();
-    log::debug!("[Zhihu] Image ID: {}, State: {}", image_id, credentials.upload_file.state);
+    log::debug!(
+        "[Zhihu] Image ID: {}, State: {}",
+        image_id,
+        credentials.upload_file.state
+    );
 
     // 5. 判断 state
     let final_url = if credentials.upload_file.state == 1 {
@@ -237,9 +258,12 @@ async fn upload_to_zhihu_inner(
         poll_image_status(&client, zhihu_cookie, &image_id, 30).await?
     } else {
         // 需要上传到 OSS
-        let upload_token = credentials.upload_token
+        let upload_token = credentials
+            .upload_token
             .ok_or_else(|| AppError::upload("知乎", "state=0 但未返回 upload_token"))?;
-        let object_key = credentials.upload_file.object_key
+        let object_key = credentials
+            .upload_file
+            .object_key
             .ok_or_else(|| AppError::upload("知乎", "state=0 但未返回 object_key"))?;
 
         log::info!("[Zhihu] 开始上传到 OSS");
@@ -272,7 +296,10 @@ async fn upload_to_zhihu_inner(
         let oss_status = oss_response.status();
         if !oss_status.is_success() {
             let oss_error = oss_response.text().await.unwrap_or_default();
-            return Err(AppError::upload("知乎", format!("OSS 上传失败 ({}): {}", oss_status, oss_error)));
+            return Err(AppError::upload(
+                "知乎",
+                format!("OSS 上传失败 ({}): {}", oss_status, oss_error),
+            ));
         }
 
         log::info!("[Zhihu] OSS 上传成功");
@@ -336,11 +363,17 @@ async fn poll_image_status(
             .await
             .into_network_err_with("查询图片状态失败")?;
 
-        let response_text = response.text().await
+        let response_text = response
+            .text()
+            .await
             .into_network_err_with("读取状态响应失败")?;
 
-        let status: ImageStatusResponse = serde_json::from_str(&response_text)
-            .map_err(|e| AppError::upload("知乎", format!("解析状态响应失败: {} (响应: {})", e, response_text)))?;
+        let status: ImageStatusResponse = serde_json::from_str(&response_text).map_err(|e| {
+            AppError::upload(
+                "知乎",
+                format!("解析状态响应失败: {} (响应: {})", e, response_text),
+            )
+        })?;
 
         log::debug!("[Zhihu] 轮询 #{}: status={:?}", attempt + 1, status.status);
 
@@ -349,7 +382,10 @@ async fn poll_image_status(
             if let Some(url) = status.url.or(status.original_src) {
                 return Ok(url);
             } else {
-                return Err(AppError::upload("知乎", format!("图片处理完成但未返回 URL (响应: {})", response_text)));
+                return Err(AppError::upload(
+                    "知乎",
+                    format!("图片处理完成但未返回 URL (响应: {})", response_text),
+                ));
             }
         }
     }
@@ -360,12 +396,11 @@ async fn poll_image_status(
 /// 测试知乎 Cookie 连接
 #[tauri::command]
 pub async fn test_zhihu_connection(zhihu_cookie: String) -> Result<String, AppError> {
-
     // 创建 1x1 透明 PNG 测试图片 (68 bytes)
     let test_image = vec![
-        137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1,
-        8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 8, 153, 99, 0, 1, 0, 0, 5,
-        0, 1, 13, 10, 45, 180, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130
+        137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6,
+        0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 8, 153, 99, 0, 1, 0, 0, 5, 0, 1,
+        13, 10, 45, 180, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
     ];
 
     // 计算 MD5
@@ -381,7 +416,10 @@ pub async fn test_zhihu_connection(zhihu_cookie: String) -> Result<String, AppEr
         .post("https://api.zhihu.com/images")
         .header("Cookie", zhihu_cookie)
         .header("Content-Type", "application/json")
-        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        .header(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        )
         .header("Referer", "https://www.zhihu.com/")
         .header("Origin", "https://www.zhihu.com")
         .json(&serde_json::json!({
@@ -405,6 +443,9 @@ pub async fn test_zhihu_connection(zhihu_cookie: String) -> Result<String, AppEr
     } else if status.as_u16() == 401 || status.as_u16() == 403 {
         Err(AppError::auth("Cookie 已失效或无效，请重新获取"))
     } else {
-        Err(AppError::upload("知乎", format!("测试失败 (HTTP {}): {}", status, response_text)))
+        Err(AppError::upload(
+            "知乎",
+            format!("测试失败 (HTTP {}): {}", status, response_text),
+        ))
     }
 }

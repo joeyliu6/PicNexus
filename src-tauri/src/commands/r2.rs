@@ -2,11 +2,11 @@
 // Cloudflare R2 上传命令
 // v2.10: 迁移到 AppError 统一错误类型
 
-use tauri::{Window, Emitter};
-use serde::{Serialize, Deserialize};
-use std::path::Path;
-use aws_sdk_s3::{Client, Config, primitives::ByteStream};
 use aws_sdk_s3::config::{Credentials, Region};
+use aws_sdk_s3::{primitives::ByteStream, Client, Config};
+use serde::{Deserialize, Serialize};
+use std::path::Path;
+use tauri::{Emitter, Window};
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 use tokio::time::{timeout, Duration};
@@ -72,13 +72,7 @@ pub async fn upload_to_r2(
     let endpoint = format!("https://{}.r2.cloudflarestorage.com", account_id);
     log::debug!("[R2] 端点: {}", endpoint);
 
-    let credentials = Credentials::new(
-        &access_key_id,
-        &secret_access_key,
-        None,
-        None,
-        "r2"
-    );
+    let credentials = Credentials::new(&access_key_id, &secret_access_key, None, None, "r2");
 
     let config = Config::builder()
         .endpoint_url(&endpoint)
@@ -136,7 +130,9 @@ pub async fn upload_to_r2(
         if error_msg.contains("NoSuchBucket") {
             return AppError::storage(format!("存储桶不存在: {}", bucket_name));
         } else if error_msg.contains("AccessDenied") || error_msg.contains("InvalidAccessKeyId") {
-            return AppError::auth("R2 认证失败: 请检查 Account ID、Access Key ID 和 Secret Access Key");
+            return AppError::auth(
+                "R2 认证失败: 请检查 Account ID、Access Key ID 和 Secret Access Key",
+            );
         } else if error_msg.contains("SignatureDoesNotMatch") {
             return AppError::auth("R2 签名错误: 请检查 Secret Access Key 是否正确");
         } else if error_msg.contains("timeout") {
@@ -159,9 +155,12 @@ pub async fn upload_to_r2(
 
 /// 辅助函数：发送进度事件
 fn emit_progress(window: &Window, id: &str, progress: u64, total: u64) {
-    let _ = window.emit("upload://progress", ProgressPayload {
-        id: id.to_string(),
-        progress,
-        total,
-    });
+    let _ = window.emit(
+        "upload://progress",
+        ProgressPayload {
+            id: id.to_string(),
+            progress,
+            total,
+        },
+    );
 }

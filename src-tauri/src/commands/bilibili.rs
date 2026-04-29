@@ -1,13 +1,13 @@
 // src-tauri/src/commands/bilibili.rs
 // 哔哩哔哩图床上传命令
 
-use tauri::Window;
-use serde::{Deserialize, Serialize};
-use reqwest::multipart;
 use regex::Regex;
+use reqwest::multipart;
+use serde::{Deserialize, Serialize};
+use tauri::Window;
 
-use crate::error::{AppError, IntoAppError};
 use super::utils::read_file_bytes;
+use crate::error::{AppError, IntoAppError};
 
 /// 哔哩哔哩上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -41,17 +41,18 @@ struct BilibiliNavData {
 
 /// 从完整 Cookie 中提取 SESSDATA 和 bili_jct
 fn extract_bilibili_cookies(cookie: &str) -> Result<(String, String), AppError> {
-    let sessdata_re = Regex::new(r"SESSDATA=([^;]+)")
-        .into_external_err_with("正则表达式编译失败")?;
-    let csrf_re = Regex::new(r"bili_jct=([^;]+)")
-        .into_external_err_with("正则表达式编译失败")?;
+    let sessdata_re =
+        Regex::new(r"SESSDATA=([^;]+)").into_external_err_with("正则表达式编译失败")?;
+    let csrf_re = Regex::new(r"bili_jct=([^;]+)").into_external_err_with("正则表达式编译失败")?;
 
-    let sessdata = sessdata_re.captures(cookie)
+    let sessdata = sessdata_re
+        .captures(cookie)
         .and_then(|c| c.get(1))
         .map(|m| m.as_str().to_string())
         .ok_or_else(|| AppError::auth("Cookie 中缺少 SESSDATA 字段"))?;
 
-    let csrf = csrf_re.captures(cookie)
+    let csrf = csrf_re
+        .captures(cookie)
         .and_then(|c| c.get(1))
         .map(|m| m.as_str().to_string())
         .ok_or_else(|| AppError::auth("Cookie 中缺少 bili_jct (csrf) 字段"))?;
@@ -84,7 +85,9 @@ pub async fn test_bilibili_connection(bilibili_cookie: String) -> Result<String,
         .await
         .into_network_err_with("请求失败")?;
 
-    let response_text = response.text().await
+    let response_text = response
+        .text()
+        .await
         .into_network_err_with("无法读取响应")?;
 
     log::debug!("[Bilibili] 导航 API 响应: {} bytes", response_text.len());
@@ -106,8 +109,13 @@ pub async fn test_bilibili_connection(bilibili_cookie: String) -> Result<String,
         Err(AppError::auth("Cookie 无效：未登录状态"))
     } else {
         // code != 0，通常是 -101 表示未登录
-        let msg = nav_response.message.unwrap_or_else(|| "未知错误".to_string());
-        Err(AppError::auth(format!("Cookie 无效: {} (code: {})", msg, nav_response.code)))
+        let msg = nav_response
+            .message
+            .unwrap_or_else(|| "未知错误".to_string());
+        Err(AppError::auth(format!(
+            "Cookie 无效: {} (code: {})",
+            msg, nav_response.code
+        )))
     }
 }
 
@@ -142,13 +150,17 @@ pub async fn upload_to_bilibili(
         .and_then(|n| n.to_str())
         .ok_or_else(|| AppError::validation("无法获取文件名"))?;
 
-    let ext = file_name.split('.').next_back()
+    let ext = file_name
+        .split('.')
+        .next_back()
         .ok_or_else(|| AppError::validation("无法获取文件扩展名"))?
         .to_lowercase();
 
     // 5. 验证文件类型
     if !["jpg", "jpeg", "png", "gif", "webp"].contains(&ext.as_str()) {
-        return Err(AppError::validation("只支持 JPG、PNG、GIF、WebP 格式的图片"));
+        return Err(AppError::validation(
+            "只支持 JPG、PNG、GIF、WebP 格式的图片",
+        ));
     }
 
     // 6. 确定 MIME 类型
@@ -166,9 +178,7 @@ pub async fn upload_to_bilibili(
         .mime_str(mime_type)
         .into_validation_err_with("无法设置 MIME 类型")?;
 
-    let form = multipart::Form::new()
-        .part("file", part)
-        .text("csrf", csrf);
+    let form = multipart::Form::new().part("file", part).text("csrf", csrf);
 
     // 8. 发送请求
     let client = reqwest::Client::new();
@@ -185,21 +195,34 @@ pub async fn upload_to_bilibili(
         .into_network_err_with("请求失败")?;
 
     // 9. 解析响应
-    let response_text = response.text().await
+    let response_text = response
+        .text()
+        .await
         .into_network_err_with("无法读取响应")?;
 
     log::debug!("[Bilibili] API 响应: {}", response_text);
 
-    let api_response: BilibiliApiResponse = serde_json::from_str(&response_text)
-        .map_err(|e| AppError::upload("哔哩哔哩", format!("JSON 解析失败: {} (响应: {})", e, response_text)))?;
+    let api_response: BilibiliApiResponse = serde_json::from_str(&response_text).map_err(|e| {
+        AppError::upload(
+            "哔哩哔哩",
+            format!("JSON 解析失败: {} (响应: {})", e, response_text),
+        )
+    })?;
 
     // 10. 检查上传结果
     if api_response.code != 0 {
-        let msg = api_response.message.unwrap_or_else(|| "未知错误".to_string());
-        return Err(AppError::upload_with_code("哔哩哔哩", api_response.code, msg));
+        let msg = api_response
+            .message
+            .unwrap_or_else(|| "未知错误".to_string());
+        return Err(AppError::upload_with_code(
+            "哔哩哔哩",
+            api_response.code,
+            msg,
+        ));
     }
 
-    let image_url = api_response.data
+    let image_url = api_response
+        .data
         .ok_or_else(|| AppError::upload("哔哩哔哩", "API 未返回图片链接"))?;
 
     // 11. 处理 URL（添加协议前缀）

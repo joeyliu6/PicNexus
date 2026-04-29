@@ -53,8 +53,11 @@ mod tests {
     impl TempFile {
         fn new(content: &[u8]) -> Self {
             let seq = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
-            let path = std::env::temp_dir()
-                .join(format!("picnexus_test_{}_{}.bin", std::process::id(), seq));
+            let path = std::env::temp_dir().join(format!(
+                "picnexus_test_{}_{}.bin",
+                std::process::id(),
+                seq
+            ));
             let mut f = std::fs::File::create(&path).expect("创建临时文件失败");
             f.write_all(content).expect("写入临时文件失败");
             Self { path }
@@ -108,8 +111,7 @@ mod tests {
 
     #[tokio::test]
     async fn read_nonexistent_file_returns_file_io_error() {
-        let bogus = std::env::temp_dir()
-            .join("picnexus_test_does_not_exist_12345.bin");
+        let bogus = std::env::temp_dir().join("picnexus_test_does_not_exist_12345.bin");
         // 万一存在（极小概率），先删掉
         let _ = std::fs::remove_file(&bogus);
 
@@ -117,7 +119,11 @@ mod tests {
 
         match result {
             Err(AppError::FileIo { message }) => {
-                assert!(message.contains("无法打开文件"), "错误消息应指明打开失败: {}", message);
+                assert!(
+                    message.contains("无法打开文件"),
+                    "错误消息应指明打开失败: {}",
+                    message
+                );
             }
             Err(e) => panic!("应为 FileIo 错误，实际: {:?}", e),
             Ok(_) => panic!("不存在的文件不应成功读取"),

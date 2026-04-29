@@ -4,8 +4,8 @@
 // v2.10: 迁移到 AppError 统一错误类型
 
 use serde::{Deserialize, Serialize};
-use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandEvent;
+use tauri_plugin_shell::ShellExt;
 
 use crate::error::{AppError, IntoAppError};
 
@@ -61,7 +61,7 @@ fn sanitize_sidecar_log_line(line: &str) -> String {
 pub async fn fetch_nami_token(
     app: tauri::AppHandle,
     cookie: String,
-    auth_token: String
+    auth_token: String,
 ) -> Result<NamiDynamicHeaders, AppError> {
     fetch_nami_token_internal(&app, cookie, auth_token).await
 }
@@ -70,16 +70,23 @@ pub async fn fetch_nami_token(
 pub async fn fetch_nami_token_internal(
     app: &tauri::AppHandle,
     cookie: String,
-    auth_token: String
+    auth_token: String,
 ) -> Result<NamiDynamicHeaders, AppError> {
     log::info!("[NamiToken] 开始获取动态 Headers (Sidecar)");
 
-    let sidecar = app.shell()
+    let sidecar = app
+        .shell()
         .sidecar("nami-token-fetcher")
         .into_external_err_with("创建 sidecar 失败")?;
 
     let (mut rx, _child) = sidecar
-        .args(["fetch-token", "--cookie", &cookie, "--auth-token", &auth_token])
+        .args([
+            "fetch-token",
+            "--cookie",
+            &cookie,
+            "--auth-token",
+            &auth_token,
+        ])
         .spawn()
         .into_external_err_with("启动 sidecar 失败")?;
 
@@ -120,6 +127,8 @@ pub async fn fetch_nami_token_internal(
         }
         Err(AppError::external("响应中没有 Headers 数据"))
     } else {
-        Err(AppError::external(response.error.unwrap_or_else(|| "未知错误".to_string())))
+        Err(AppError::external(
+            response.error.unwrap_or_else(|| "未知错误".to_string()),
+        ))
     }
 }

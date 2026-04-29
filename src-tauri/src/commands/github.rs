@@ -1,12 +1,12 @@
 // src-tauri/src/commands/github.rs
 // GitHub 图床上传命令
 
-use tauri::{Window, Emitter};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
-use base64::{Engine as _, engine::general_purpose::STANDARD};
+use tauri::{Emitter, Window};
 
-use crate::error::{AppError, IntoAppError};
 use super::utils::read_file_bytes;
+use crate::error::{AppError, IntoAppError};
 
 /// GitHub 上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -59,14 +59,17 @@ pub async fn upload_to_github(
     log::info!("[GitHub] 开始上传文件: {}", file_path);
 
     // 发送进度: 0% - 读取文件
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 0,
-        "total": 100,
-        "step": "读取文件...",
-        "step_index": 1,
-        "total_steps": 3
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 0,
+            "total": 100,
+            "step": "读取文件...",
+            "step_index": 1,
+            "total_steps": 3
+        }),
+    );
 
     // 1. 读取文件
     let (buffer, file_size) = read_file_bytes(&file_path).await?;
@@ -86,14 +89,17 @@ pub async fn upload_to_github(
         .ok_or_else(|| AppError::validation("无法获取文件名"))?;
 
     // 发送进度: 33% - 编码文件
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 33,
-        "total": 100,
-        "step": "编码文件...",
-        "step_index": 2,
-        "total_steps": 3
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 33,
+            "total": 100,
+            "step": "编码文件...",
+            "step_index": 2,
+            "total_steps": 3
+        }),
+    );
 
     // 4. Base64 编码文件内容
     let content = STANDARD.encode(&buffer);
@@ -120,14 +126,17 @@ pub async fn upload_to_github(
     };
 
     // 发送进度: 66% - 正在上传
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 66,
-        "total": 100,
-        "step": "正在上传...",
-        "step_index": 3,
-        "total_steps": 3
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 66,
+            "total": 100,
+            "step": "正在上传...",
+            "step_index": 3,
+            "total_steps": 3
+        }),
+    );
 
     // 6. 发送请求到 GitHub API
     let client = reqwest::Client::new();
@@ -144,7 +153,9 @@ pub async fn upload_to_github(
 
     // 7. 解析响应
     let status = response.status();
-    let response_text = response.text().await
+    let response_text = response
+        .text()
+        .await
         .into_network_err_with("无法读取响应")?;
 
     log::debug!("[GitHub] API 响应状态: {}", status);
@@ -158,15 +169,23 @@ pub async fn upload_to_github(
         } else if status == reqwest::StatusCode::NOT_FOUND {
             return Err(AppError::storage("GitHub 仓库或分支不存在，请检查配置"));
         } else if status.as_u16() == 422 {
-            return Err(AppError::validation("GitHub 上传失败：文件过大或存在验证错误"));
+            return Err(AppError::validation(
+                "GitHub 上传失败：文件过大或存在验证错误",
+            ));
         }
-        return Err(AppError::upload("GitHub", format!("上传失败 (HTTP {}): {}", status, response_text)));
+        return Err(AppError::upload(
+            "GitHub",
+            format!("上传失败 (HTTP {}): {}", status, response_text),
+        ));
     }
 
     let github_response: GithubUploadResponse = serde_json::from_str(&response_text)
         .map_err(|e| AppError::upload("GitHub", format!("JSON 解析失败: {}", e)))?;
 
-    log::info!("[GitHub] 上传成功 - URL: {}", github_response.content.download_url);
+    log::info!(
+        "[GitHub] 上传成功 - URL: {}",
+        github_response.content.download_url
+    );
 
     Ok(GithubUploadResult {
         url: github_response.content.download_url,

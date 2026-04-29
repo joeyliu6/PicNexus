@@ -1,14 +1,14 @@
-use tokio::fs::File;
-use tokio_util::codec::{BytesCodec, FramedRead};
 use crate::error::AppError;
-use serde::Serialize;
-use reqwest::header;
-use std::path::Path;
+use futures::StreamExt;
 use quick_xml::events::Event;
 use quick_xml::Reader;
-use tauri::{Window, Emitter};
-use futures::StreamExt;
+use reqwest::header;
+use serde::Serialize;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
+use tauri::{Emitter, Window};
+use tokio::fs::File;
+use tokio_util::codec::{BytesCodec, FramedRead};
 
 #[derive(Serialize)]
 pub struct UploadResponse {
@@ -37,12 +37,12 @@ struct ProgressPayload {
 fn parse_weibo_response(xml: &str) -> Result<UploadResponse, AppError> {
     // 首先检查认证错误
     if xml.contains("<data>100006</data>") {
-         return Err(AppError::auth("Cookie expired (code 100006)"));
+        return Err(AppError::auth("Cookie expired (code 100006)"));
     }
-    
+
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true); // 自动修剪文本内容
-    
+
     let mut buf = Vec::new();
     let mut pid: Option<String> = None;
     let mut width: i32 = 0;
@@ -52,18 +52,16 @@ fn parse_weibo_response(xml: &str) -> Result<UploadResponse, AppError> {
     let mut in_width = false;
     let mut in_height = false;
     let mut in_size = false;
-    
+
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) => {
-                match e.name().as_ref() {
-                    b"pid" => in_pid = true,
-                    b"width" => in_width = true,
-                    b"height" => in_height = true,
-                    b"size" => in_size = true,
-                    _ => {}
-                }
-            }
+            Ok(Event::Start(e)) => match e.name().as_ref() {
+                b"pid" => in_pid = true,
+                b"width" => in_width = true,
+                b"height" => in_height = true,
+                b"size" => in_size = true,
+                _ => {}
+            },
             Ok(Event::Text(e)) => {
                 let text = e.unescape().unwrap_or_default().to_string();
                 if in_pid {
@@ -76,15 +74,13 @@ fn parse_weibo_response(xml: &str) -> Result<UploadResponse, AppError> {
                     size = text.parse().unwrap_or(0);
                 }
             }
-            Ok(Event::End(e)) => {
-                match e.name().as_ref() {
-                    b"pid" => in_pid = false,
-                    b"width" => in_width = false,
-                    b"height" => in_height = false,
-                    b"size" => in_size = false,
-                    _ => {}
-                }
-            }
+            Ok(Event::End(e)) => match e.name().as_ref() {
+                b"pid" => in_pid = false,
+                b"width" => in_width = false,
+                b"height" => in_height = false,
+                b"size" => in_size = false,
+                _ => {}
+            },
             Ok(Event::Eof) => break,
             Err(e) => {
                 // XML 解析失败，尝试回退到正则匹配
@@ -95,10 +91,11 @@ fn parse_weibo_response(xml: &str) -> Result<UploadResponse, AppError> {
         }
         buf.clear();
     }
-    
+
     // 验证必需字段
-    let pid = pid.ok_or_else(|| AppError::upload("微博", "Failed to parse PID from XML response"))?;
-    
+    let pid =
+        pid.ok_or_else(|| AppError::upload("微博", "Failed to parse PID from XML response"))?;
+
     Ok(UploadResponse {
         pid,
         width,
@@ -114,19 +111,19 @@ fn parse_weibo_response_fallback(xml: &str) -> Result<UploadResponse, AppError> 
     // 查找 <pid> 或 <pid > 等变体
     let pid = find_xml_tag_content(xml, "pid")
         .ok_or_else(|| AppError::upload("微博", "Failed to parse PID (fallback)"))?;
-    
+
     let width = find_xml_tag_content(xml, "width")
         .and_then(|s| s.trim().parse().ok())
         .unwrap_or(0);
-    
+
     let height = find_xml_tag_content(xml, "height")
         .and_then(|s| s.trim().parse().ok())
         .unwrap_or(0);
-    
+
     let size = find_xml_tag_content(xml, "size")
         .and_then(|s| s.trim().parse().ok())
         .unwrap_or(0);
-    
+
     Ok(UploadResponse {
         pid,
         width,
@@ -144,9 +141,9 @@ fn find_xml_tag_content(xml: &str, tag: &str) -> Option<String> {
         format!("<{}\n>", tag),
         format!("<{}\r\n>", tag),
     ];
-    
+
     let closing_tag = format!("</{}>", tag);
-    
+
     for pattern in &patterns {
         if let Some(start) = xml.find(pattern) {
             let content_start = start + pattern.len();
@@ -156,10 +153,9 @@ fn find_xml_tag_content(xml: &str, tag: &str) -> Option<String> {
             }
         }
     }
-    
+
     None
 }
-
 
 // HttpClient 在 main.rs 中定义，这里直接使用
 use crate::HttpClient;
@@ -170,9 +166,8 @@ pub async fn upload_file_stream(
     id: String,
     file_path: String,
     weibo_cookie: String,
-    http_client: tauri::State<'_, HttpClient>
+    http_client: tauri::State<'_, HttpClient>,
 ) -> Result<UploadResponse, AppError> {
-
     // 安全验证：防止路径遍历攻击
     // 使用 canonicalize 解析真实路径，防止通过 ../ 或符号链接访问未授权文件
     let canonical_path = std::fs::canonicalize(&file_path)
@@ -184,18 +179,24 @@ pub async fn upload_file_stream(
     }
 
     // 发送步骤1进度：读取文件 (0%)
-    let _ = window.emit("upload://progress", ProgressPayload {
-        id: id.clone(),
-        progress: 0,
-        total: 100,
-        step: Some("读取文件...".to_string()),
-        step_index: Some(1),
-        total_steps: Some(3),
-    });
+    let _ = window.emit(
+        "upload://progress",
+        ProgressPayload {
+            id: id.clone(),
+            progress: 0,
+            total: 100,
+            step: Some("读取文件...".to_string()),
+            step_index: Some(1),
+            total_steps: Some(3),
+        },
+    );
 
     let path = Path::new(&file_path);
     // Unused variable file_name
-    let _file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("image.jpg");
+    let _file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("image.jpg");
 
     // 使用规范化后的路径打开文件
     let file = File::open(&canonical_path).await?;
@@ -204,56 +205,61 @@ pub async fn upload_file_stream(
 
     // 使用 FramedRead 读取文件流
     let stream = FramedRead::new(file, BytesCodec::new());
-    
+
     // 关键优化：通过 map 包装流，在此处注入进度监控
     let uploaded = Arc::new(Mutex::new(0u64));
     let uploaded_clone = Arc::clone(&uploaded);
     let window_clone = window.clone();
     let id_clone = id.clone();
     let total_len_clone = total_len;
-    
-    let progress_stream = stream.map(move |chunk: Result<tokio_util::bytes::BytesMut, std::io::Error>| {
-        if let Ok(bytes) = &chunk {
-            // 安全处理 Mutex lock，避免 panic
-            // 使用 unwrap_or_else 恢复被污染的 Mutex（进度计数器不影响业务正确性）
-            let mut uploaded_guard = match uploaded_clone.lock() {
-                Ok(guard) => guard,
-                Err(poisoned) => {
-                    // Mutex 被污染（之前有 panic），尝试恢复
-                    // 对于进度计数器，恢复是安全的，因为它不影响上传结果
-                    log::warn!("[上传] Mutex 锁被污染，尝试恢复进度计数器");
-                    poisoned.into_inner()
-                }
-            };
 
-            *uploaded_guard += bytes.len() as u64;
-            let current_progress = *uploaded_guard;
-            drop(uploaded_guard); // 尽早释放锁
+    let progress_stream = stream.map(
+        move |chunk: Result<tokio_util::bytes::BytesMut, std::io::Error>| {
+            if let Ok(bytes) = &chunk {
+                // 安全处理 Mutex lock，避免 panic
+                // 使用 unwrap_or_else 恢复被污染的 Mutex（进度计数器不影响业务正确性）
+                let mut uploaded_guard = match uploaded_clone.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => {
+                        // Mutex 被污染（之前有 panic），尝试恢复
+                        // 对于进度计数器，恢复是安全的，因为它不影响上传结果
+                        log::warn!("[上传] Mutex 锁被污染，尝试恢复进度计数器");
+                        poisoned.into_inner()
+                    }
+                };
 
-            // ✅ 修复: 限制进度最高99%，防止在业务验证前就显示100%
-            let safe_progress = if current_progress >= total_len_clone {
-                // 数据已发送完毕，但服务器尚未响应，保持在99%
-                if total_len_clone > 0 {
-                    total_len_clone.saturating_sub(total_len_clone / 100).max(1)
+                *uploaded_guard += bytes.len() as u64;
+                let current_progress = *uploaded_guard;
+                drop(uploaded_guard); // 尽早释放锁
+
+                // ✅ 修复: 限制进度最高99%，防止在业务验证前就显示100%
+                let safe_progress = if current_progress >= total_len_clone {
+                    // 数据已发送完毕，但服务器尚未响应，保持在99%
+                    if total_len_clone > 0 {
+                        total_len_clone.saturating_sub(total_len_clone / 100).max(1)
+                    } else {
+                        0
+                    }
                 } else {
-                    0
-                }
-            } else {
-                current_progress
-            };
+                    current_progress
+                };
 
-            // 发送进度事件到前端(带步骤信息)
-            let _ = window_clone.emit("upload://progress", ProgressPayload {
-                id: id_clone.clone(),
-                progress: safe_progress,
-                total: total_len_clone,
-                step: Some("正在上传...".to_string()),
-                step_index: Some(2),
-                total_steps: Some(3),
-            });
-        }
-        chunk
-    });
+                // 发送进度事件到前端(带步骤信息)
+                let _ = window_clone.emit(
+                    "upload://progress",
+                    ProgressPayload {
+                        id: id_clone.clone(),
+                        progress: safe_progress,
+                        total: total_len_clone,
+                        step: Some("正在上传...".to_string()),
+                        step_index: Some(2),
+                        total_steps: Some(3),
+                    },
+                );
+            }
+            chunk
+        },
+    );
 
     let body = reqwest::Body::wrap_stream(progress_stream);
 
@@ -274,14 +280,17 @@ pub async fn upload_file_stream(
     let text = res.text().await?;
 
     // 发送步骤3进度：处理响应 (95%)
-    let _ = window.emit("upload://progress", ProgressPayload {
-        id: id.clone(),
-        progress: 95,
-        total: 100,
-        step: Some("处理响应...".to_string()),
-        step_index: Some(3),
-        total_steps: Some(3),
-    });
+    let _ = window.emit(
+        "upload://progress",
+        ProgressPayload {
+            id: id.clone(),
+            progress: 95,
+            total: 100,
+            step: Some("处理响应...".to_string()),
+            step_index: Some(3),
+            total_steps: Some(3),
+        },
+    );
 
     // ✅ 修复: 删除此处的100%事件发送
     // 只有parse_weibo_response成功返回后，前端才会在收到Ok结果时设置100%
@@ -295,7 +304,7 @@ pub async fn upload_file_stream(
 #[tauri::command]
 pub async fn test_weibo_connection(
     weibo_cookie: String,
-    http_client: tauri::State<'_, HttpClient>
+    http_client: tauri::State<'_, HttpClient>,
 ) -> Result<String, AppError> {
     log::info!("[Weibo] 测试 Cookie 有效性...");
 
@@ -311,15 +320,11 @@ pub async fn test_weibo_connection(
 
     // 最小的 1x1 透明 PNG（67 字节）- 与牛客测试相同
     let minimal_png: Vec<u8> = vec![
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-        0x42, 0x60, 0x82,
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F,
+        0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00,
+        0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
     ];
 
     let url = "https://picupload.weibo.com/interface/pic_upload.php?s=xml&ori=1&data=1&rotate=0&wm=&app=miniblog&mime=image/jpeg";
@@ -346,7 +351,9 @@ pub async fn test_weibo_connection(
             }
         })?;
 
-    let response_text = response.text().await
+    let response_text = response
+        .text()
+        .await
         .map_err(|e| AppError::network(format!("无法读取响应: {}", e)))?;
 
     log::debug!("[Weibo] 测试响应: {} bytes", response_text.len());
@@ -367,4 +374,3 @@ pub async fn test_weibo_connection(
         Err(AppError::external("无法验证 Cookie 有效性（响应格式异常）"))
     }
 }
-

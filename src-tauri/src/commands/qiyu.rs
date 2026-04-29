@@ -4,14 +4,14 @@
 // 自动获取 Token，无需手动配置
 // v2.10: 迁移到 AppError 统一错误类型
 
-use tauri::{Window, Emitter, Manager};
-use serde::Serialize;
 use reqwest::Client;
-use std::time::{SystemTime, UNIX_EPOCH, Duration};
+use serde::Serialize;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tauri::{Emitter, Manager, Window};
 
-use crate::error::{AppError, IntoAppError};
 use super::qiyu_token::fetch_qiyu_token_internal;
 use super::utils::read_file_bytes;
+use crate::error::{AppError, IntoAppError};
 
 #[derive(Debug, Serialize)]
 pub struct QiyuUploadResult {
@@ -31,14 +31,17 @@ pub async fn upload_to_qiyu(
     log::info!("[Qiyu] 开始上传文件: {}", file_path);
 
     // 发送步骤1进度：获取上传凭证 (0%)
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 0,
-        "total": 100,
-        "step": "获取上传凭证中...",
-        "step_index": 1,
-        "total_steps": 2
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 0,
+            "total": 100,
+            "step": "获取上传凭证中...",
+            "step_index": 1,
+            "total_steps": 2
+        }),
+    );
 
     // 1. 自动获取新的 Token（每次上传都获取新的，确保 Object 路径唯一）
     let token_info = fetch_qiyu_token_internal(window.app_handle()).await?;
@@ -54,7 +57,9 @@ pub async fn upload_to_qiyu(
         .and_then(|n| n.to_str())
         .ok_or_else(|| AppError::validation("无法获取文件名"))?;
 
-    let ext = file_name.split('.').next_back()
+    let ext = file_name
+        .split('.')
+        .next_back()
         .ok_or_else(|| AppError::validation("无法获取文件扩展名"))?
         .to_lowercase();
 
@@ -64,7 +69,11 @@ pub async fn upload_to_qiyu(
         "png" => "image/png",
         "gif" => "image/gif",
         "webp" => "image/webp",
-        _ => return Err(AppError::validation("只支持 JPG、PNG、GIF、WebP 格式的图片")),
+        _ => {
+            return Err(AppError::validation(
+                "只支持 JPG、PNG、GIF、WebP 格式的图片",
+            ))
+        }
     };
 
     // 5. 构建上传 URL
@@ -74,14 +83,17 @@ pub async fn upload_to_qiyu(
     );
 
     // 发送步骤2进度：上传文件 (50%)
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 50,
-        "total": 100,
-        "step": "上传文件中...",
-        "step_index": 2,
-        "total_steps": 2
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 50,
+            "total": 100,
+            "step": "上传文件中...",
+            "step_index": 2,
+            "total_steps": 2
+        }),
+    );
 
     // 6. 发送上传请求（直接 POST 二进制数据）
     // 注意：使用标准 TLS 验证，确保通信安全
@@ -103,13 +115,18 @@ pub async fn upload_to_qiyu(
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
-        return Err(AppError::upload("七鱼", format!("上传失败 (HTTP {}): {}", status, body)));
+        return Err(AppError::upload(
+            "七鱼",
+            format!("上传失败 (HTTP {}): {}", status, body),
+        ));
     }
 
     // 8. 记录响应（仅用于调试，不解析 JSON）
     // API 响应格式: {"requestId": "...", "offset": ..., "context": "...", "callbackRetMsg": "..."}
     // HTTP 200 即视为成功
-    let response_text = response.text().await
+    let response_text = response
+        .text()
+        .await
         .into_network_err_with("无法读取响应")?;
     log::debug!("[Qiyu] API 响应: {}", response_text);
 
@@ -121,8 +138,7 @@ pub async fn upload_to_qiyu(
 
     let cdn_url = format!(
         "https://xlx03.cdn.qiyukf.net/{}?createTime={}",
-        object_path,
-        create_time
+        object_path, create_time
     );
 
     log::info!("[Qiyu] 上传成功: {}", cdn_url);

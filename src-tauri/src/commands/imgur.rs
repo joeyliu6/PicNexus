@@ -1,12 +1,12 @@
 // src-tauri/src/commands/imgur.rs
 // Imgur 图床上传命令
 
-use tauri::{Window, Emitter};
-use serde::{Deserialize, Serialize};
 use reqwest::multipart;
+use serde::{Deserialize, Serialize};
+use tauri::{Emitter, Window};
 
-use crate::error::{AppError, IntoAppError};
 use super::utils::read_file_bytes;
+use crate::error::{AppError, IntoAppError};
 
 /// Imgur 上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -46,14 +46,17 @@ pub async fn upload_to_imgur(
     log::info!("[Imgur] 开始上传文件: {}", file_path);
 
     // 发送进度: 0% - 读取文件
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 0,
-        "total": 100,
-        "step": "读取文件...",
-        "step_index": 1,
-        "total_steps": 3
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 0,
+            "total": 100,
+            "step": "读取文件...",
+            "step_index": 1,
+            "total_steps": 3
+        }),
+    );
 
     // 1. 读取文件
     let (buffer, file_size) = read_file_bytes(&file_path).await?;
@@ -64,13 +67,19 @@ pub async fn upload_to_imgur(
         .and_then(|n| n.to_str())
         .ok_or_else(|| AppError::validation("无法获取文件名"))?;
 
-    let ext = file_name.split('.').next_back()
+    let ext = file_name
+        .split('.')
+        .next_back()
         .ok_or_else(|| AppError::validation("无法获取文件扩展名"))?
         .to_lowercase();
 
     // 3. 验证文件类型
     let is_gif = ext == "gif";
-    let max_size = if is_gif { MAX_FILE_SIZE_GIF } else { MAX_FILE_SIZE_IMAGE };
+    let max_size = if is_gif {
+        MAX_FILE_SIZE_GIF
+    } else {
+        MAX_FILE_SIZE_IMAGE
+    };
 
     if file_size > max_size {
         return Err(AppError::validation(format!(
@@ -81,18 +90,23 @@ pub async fn upload_to_imgur(
     }
 
     if !["jpg", "jpeg", "png", "gif", "apng", "tiff", "bmp", "webp"].contains(&ext.as_str()) {
-        return Err(AppError::validation("只支持 JPG、PNG、GIF、WebP、APNG、TIFF、BMP 格式的图片"));
+        return Err(AppError::validation(
+            "只支持 JPG、PNG、GIF、WebP、APNG、TIFF、BMP 格式的图片",
+        ));
     }
 
     // 发送进度: 33% - 准备上传
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 33,
-        "total": 100,
-        "step": "准备上传...",
-        "step_index": 2,
-        "total_steps": 3
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 33,
+            "total": 100,
+            "step": "准备上传...",
+            "step_index": 2,
+            "total_steps": 3
+        }),
+    );
 
     // 4. 构建 multipart form
     let part = multipart::Part::bytes(buffer)
@@ -100,8 +114,7 @@ pub async fn upload_to_imgur(
         .mime_str("image/*")
         .into_validation_err_with("无法设置 MIME 类型")?;
 
-    let mut form_builder = multipart::Form::new()
-        .part("image", part);
+    let mut form_builder = multipart::Form::new().part("image", part);
 
     // 如果提供了 Client Secret，添加到 form 中
     if let Some(secret) = imgur_client_secret {
@@ -109,14 +122,17 @@ pub async fn upload_to_imgur(
     }
 
     // 发送进度: 66% - 正在上传
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 66,
-        "total": 100,
-        "step": "正在上传...",
-        "step_index": 3,
-        "total_steps": 3
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 66,
+            "total": 100,
+            "step": "正在上传...",
+            "step_index": 3,
+            "total_steps": 3
+        }),
+    );
 
     // 5. 发送请求到 Imgur API
     let client = reqwest::Client::new();
@@ -135,18 +151,22 @@ pub async fn upload_to_imgur(
         let response_text = response.text().await.unwrap_or_default();
         log::error!("[Imgur] API 错误响应: {}", response_text);
         return match status {
-            reqwest::StatusCode::UNAUTHORIZED =>
-                Err(AppError::auth("Imgur Client ID 无效")),
-            reqwest::StatusCode::TOO_MANY_REQUESTS =>
-                Err(AppError::upload("Imgur", "API 调用频率超限 (1250次/天)")),
-            reqwest::StatusCode::FORBIDDEN =>
-                Err(AppError::auth("Imgur API 访问被拒绝")),
-            _ => Err(AppError::upload("Imgur", format!("上传失败 (HTTP {}): {}", status, response_text)))
+            reqwest::StatusCode::UNAUTHORIZED => Err(AppError::auth("Imgur Client ID 无效")),
+            reqwest::StatusCode::TOO_MANY_REQUESTS => {
+                Err(AppError::upload("Imgur", "API 调用频率超限 (1250次/天)"))
+            }
+            reqwest::StatusCode::FORBIDDEN => Err(AppError::auth("Imgur API 访问被拒绝")),
+            _ => Err(AppError::upload(
+                "Imgur",
+                format!("上传失败 (HTTP {}): {}", status, response_text),
+            )),
         };
     }
 
     // 7. 解析响应
-    let response_text = response.text().await
+    let response_text = response
+        .text()
+        .await
         .into_network_err_with("无法读取响应")?;
 
     log::debug!("[Imgur] API 响应: {}", response_text);
@@ -156,10 +176,14 @@ pub async fn upload_to_imgur(
 
     // 8. 检查上传结果
     if !imgur_response.success {
-        return Err(AppError::upload("Imgur", "上传失败，请检查 Client ID 是否正确"));
+        return Err(AppError::upload(
+            "Imgur",
+            "上传失败，请检查 Client ID 是否正确",
+        ));
     }
 
-    let data = imgur_response.data
+    let data = imgur_response
+        .data
         .ok_or_else(|| AppError::upload("Imgur", "API 未返回数据"))?;
 
     log::info!("[Imgur] 上传成功 - URL: {}", data.link);

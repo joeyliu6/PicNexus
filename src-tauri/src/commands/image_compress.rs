@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use base64::{Engine as _, engine::general_purpose::STANDARD};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use image::imageops::FilterType;
 use image::GenericImageView;
 use serde::Serialize;
@@ -357,7 +357,8 @@ fn inject_jpeg_exif_segment(jpeg: &[u8], exif_segment: &[u8]) -> Option<Vec<u8>>
 
 /// 像素数预检：防止超大图片导致内存耗尽（上限 5000 万像素）
 fn check_pixel_limit(width: u32, height: u32) -> Result<(), AppError> {
-    let pixel_count = (width as u64).checked_mul(height as u64)
+    let pixel_count = (width as u64)
+        .checked_mul(height as u64)
         .ok_or_else(|| AppError::file_io("图片尺寸溢出"))?;
     if pixel_count > 50_000_000 {
         return Err(AppError::file_io(format!(
@@ -382,10 +383,12 @@ fn encode_jpeg_mozjpeg(
     comp.set_size(width as usize, height as usize);
     comp.set_quality(quality as f32);
 
-    let mut started = comp.start_compress(Vec::new())
+    let mut started = comp
+        .start_compress(Vec::new())
         .map_err(|e| AppError::file_io(format!("MozJPEG 初始化失败: {}", e)))?;
 
-    let row_stride = (width as usize).checked_mul(3)
+    let row_stride = (width as usize)
+        .checked_mul(3)
         .ok_or_else(|| AppError::file_io("行步长计算溢出"))?;
     let raw = rgb.as_raw();
     for row in 0..height as usize {
@@ -394,11 +397,13 @@ fn encode_jpeg_mozjpeg(
         if end > raw.len() {
             return Err(AppError::file_io("图像数据不完整，扫描行越界"));
         }
-        started.write_scanlines(&raw[start..end])
+        started
+            .write_scanlines(&raw[start..end])
             .map_err(|e| AppError::file_io(format!("MozJPEG 写入扫描行失败: {}", e)))?;
     }
 
-    started.finish()
+    started
+        .finish()
         .map_err(|e| AppError::file_io(format!("MozJPEG 编码失败: {}", e)))
 }
 
@@ -414,7 +419,12 @@ fn encode_png_lossy(
     let rgba = img.to_rgba8();
     let pixels: Vec<imagequant::RGBA> = rgba
         .pixels()
-        .map(|p| imagequant::RGBA { r: p[0], g: p[1], b: p[2], a: p[3] })
+        .map(|p| imagequant::RGBA {
+            r: p[0],
+            g: p[1],
+            b: p[2],
+            a: p[3],
+        })
         .collect();
 
     let mut liq = imagequant::new();
@@ -429,35 +439,48 @@ fn encode_png_lossy(
     liq.set_quality(iq_min, iq_max)
         .map_err(|e| AppError::file_io(format!("imagequant 设置质量失败: {}", e)))?;
 
-    let mut liq_image = liq.new_image(pixels, width as usize, height as usize, 0.0)
+    let mut liq_image = liq
+        .new_image(pixels, width as usize, height as usize, 0.0)
         .map_err(|e| AppError::file_io(format!("imagequant 创建图像失败: {}", e)))?;
 
-    let mut result = liq.quantize(&mut liq_image)
+    let mut result = liq
+        .quantize(&mut liq_image)
         .map_err(|e| AppError::file_io(format!("imagequant 量化失败: {}", e)))?;
 
-    result.set_dithering_level(1.0)
+    result
+        .set_dithering_level(1.0)
         .map_err(|e| AppError::file_io(format!("imagequant 设置抖动失败: {}", e)))?;
 
-    let (palette, indexed_pixels) = result.remapped(&mut liq_image)
+    let (palette, indexed_pixels) = result
+        .remapped(&mut liq_image)
         .map_err(|e| AppError::file_io(format!("imagequant 重映射失败: {}", e)))?;
 
     let mut encoder = lodepng::Encoder::new();
     encoder.set_auto_convert(false);
 
     // 设置 info 和 raw 两套调色板（lodepng 要求两者一致）
-    fn apply_palette(mode: &mut lodepng::ColorMode, palette: &[imagequant::RGBA]) -> Result<(), AppError> {
+    fn apply_palette(
+        mode: &mut lodepng::ColorMode,
+        palette: &[imagequant::RGBA],
+    ) -> Result<(), AppError> {
         mode.colortype = lodepng::ColorType::PALETTE;
         mode.set_bitdepth(8);
         for c in palette {
-            mode.palette_add(lodepng::RGBA { r: c.r, g: c.g, b: c.b, a: c.a })
-                .map_err(|e| AppError::file_io(format!("lodepng 调色板失败: {:?}", e)))?;
+            mode.palette_add(lodepng::RGBA {
+                r: c.r,
+                g: c.g,
+                b: c.b,
+                a: c.a,
+            })
+            .map_err(|e| AppError::file_io(format!("lodepng 调色板失败: {:?}", e)))?;
         }
         Ok(())
     }
     apply_palette(&mut encoder.info_png_mut().color, &palette)?;
     apply_palette(encoder.info_raw_mut(), &palette)?;
 
-    encoder.encode(&indexed_pixels, width as usize, height as usize)
+    encoder
+        .encode(&indexed_pixels, width as usize, height as usize)
         .map_err(|e| AppError::file_io(format!("lodepng 编码失败: {:?}", e)))
 }
 
@@ -538,9 +561,8 @@ pub async fn strip_exif_only(
         match out_ext {
             "jpg" => {
                 let encoded = encode_jpeg_mozjpeg(&img, w, h, 100)?;
-                fs::write(&output_path, &encoded).map_err(|e| {
-                    AppError::file_io(format!("写入 JPEG 文件失败: {}", e))
-                })?;
+                fs::write(&output_path, &encoded)
+                    .map_err(|e| AppError::file_io(format!("写入 JPEG 文件失败: {}", e)))?;
             }
             _ => {
                 img.save(&output_path)
@@ -620,7 +642,8 @@ pub async fn read_image_as_base64(
 
         if has_alpha {
             let mut buf = Vec::new();
-            final_img.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png)
+            final_img
+                .write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png)
                 .map_err(|e| AppError::file_io(format!("预览 PNG 编码失败: {}", e)))?;
             let b64 = STANDARD.encode(&buf);
             Ok(format!("data:image/png;base64,{}", b64))
@@ -629,7 +652,8 @@ pub async fn read_image_as_base64(
             let (fw, fh) = rgb.dimensions();
             let mut buf = std::io::Cursor::new(Vec::new());
             let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, 85);
-            encoder.encode(rgb.as_raw(), fw, fh, image::ExtendedColorType::Rgb8)
+            encoder
+                .encode(rgb.as_raw(), fw, fh, image::ExtendedColorType::Rgb8)
                 .map_err(|e| AppError::file_io(format!("预览 JPEG 编码失败: {}", e)))?;
             let b64 = STANDARD.encode(buf.into_inner());
             Ok(format!("data:image/jpeg;base64,{}", b64))
@@ -757,7 +781,10 @@ mod tests {
 
         // SOI 之后立即出现 EXIF 段
         assert_eq!(&injected[0..2], &[0xFF, 0xD8]);
-        assert_eq!(&injected[2..2 + exif_segment.len()], exif_segment.as_slice());
+        assert_eq!(
+            &injected[2..2 + exif_segment.len()],
+            exif_segment.as_slice()
+        );
 
         // 再次提取应拿回同一段
         let re_extracted = extract_jpeg_exif_segment(&injected).expect("应再次找到 EXIF");

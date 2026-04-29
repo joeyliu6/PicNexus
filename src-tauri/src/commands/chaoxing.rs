@@ -1,12 +1,12 @@
 // src-tauri/src/commands/chaoxing.rs
 // 超星图床上传命令
 
-use tauri::Window;
-use serde::{Deserialize, Serialize};
 use reqwest::multipart;
+use serde::{Deserialize, Serialize};
+use tauri::Window;
 
-use crate::error::{AppError, IntoAppError};
 use super::utils::read_file_bytes;
+use crate::error::{AppError, IntoAppError};
 
 /// 超星上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -42,15 +42,11 @@ pub async fn test_chaoxing_connection(chaoxing_cookie: String) -> Result<String,
 
     // 最小的 1x1 透明 PNG（67 字节）
     let minimal_png: Vec<u8> = vec![
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-        0x42, 0x60, 0x82,
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F,
+        0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00,
+        0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
     ];
 
     // 构建 multipart form
@@ -75,7 +71,9 @@ pub async fn test_chaoxing_connection(chaoxing_cookie: String) -> Result<String,
         .await
         .into_network_err_with("请求失败")?;
 
-    let response_text = response.text().await
+    let response_text = response
+        .text()
+        .await
         .into_network_err_with("无法读取响应")?;
 
     log::debug!("[Chaoxing] 测试响应: {} bytes", response_text.len());
@@ -131,13 +129,17 @@ pub async fn upload_to_chaoxing(
         .and_then(|n| n.to_str())
         .ok_or_else(|| AppError::validation("无法获取文件名"))?;
 
-    let ext = file_name.split('.').next_back()
+    let ext = file_name
+        .split('.')
+        .next_back()
         .ok_or_else(|| AppError::validation("无法获取文件扩展名"))?
         .to_lowercase();
 
     // 5. 验证文件类型
     if !["jpg", "jpeg", "png", "gif", "webp", "bmp"].contains(&ext.as_str()) {
-        return Err(AppError::validation("只支持 JPG、PNG、GIF、WebP、BMP 格式的图片"));
+        return Err(AppError::validation(
+            "只支持 JPG、PNG、GIF、WebP、BMP 格式的图片",
+        ));
     }
 
     // 6. 确定 MIME 类型
@@ -173,7 +175,9 @@ pub async fn upload_to_chaoxing(
         .into_network_err_with("请求失败")?;
 
     // 9. 解析响应
-    let response_text = response.text().await
+    let response_text = response
+        .text()
+        .await
         .into_network_err_with("无法读取响应")?;
 
     log::debug!("[Chaoxing] API 响应: {}", response_text);
@@ -183,8 +187,12 @@ pub async fn upload_to_chaoxing(
         return Err(AppError::auth("Cookie 已过期或无效，请重新登录"));
     }
 
-    let api_response: ChaoxingApiResponse = serde_json::from_str(&response_text)
-        .map_err(|e| AppError::upload("超星", format!("JSON 解析失败: {} (响应: {})", e, response_text)))?;
+    let api_response: ChaoxingApiResponse = serde_json::from_str(&response_text).map_err(|e| {
+        AppError::upload(
+            "超星",
+            format!("JSON 解析失败: {} (响应: {})", e, response_text),
+        )
+    })?;
 
     // 10. 检查上传结果
     if api_response.status != Some(true) {
@@ -192,11 +200,16 @@ pub async fn upload_to_chaoxing(
         return Err(AppError::upload("超星", msg));
     }
 
-    let image_url = api_response.url
+    let image_url = api_response
+        .url
         .ok_or_else(|| AppError::upload("超星", "API 未返回图片链接"))?;
 
     // 11. 去掉 URL 中的查询参数
-    let final_url = image_url.split('?').next().unwrap_or(&image_url).to_string();
+    let final_url = image_url
+        .split('?')
+        .next()
+        .unwrap_or(&image_url)
+        .to_string();
 
     log::info!("[Chaoxing] 上传成功: {}", final_url);
 

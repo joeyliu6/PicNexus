@@ -1,23 +1,22 @@
-pub mod upload;
 pub mod r2;
+pub mod upload;
 
+pub mod bilibili;
+pub mod chaoxing;
+pub mod clipboard;
+pub mod github;
+pub mod image_compress;
+pub mod image_meta;
+pub mod imgur;
 pub mod jd;
+pub mod link_checker;
+pub mod md_scanner;
+pub mod nami;
+pub mod nami_token;
 pub mod nowcoder;
 pub mod qiyu;
 pub mod qiyu_token;
-pub mod zhihu;
-pub mod nami;
-pub mod nami_token;
-pub mod bilibili;
-pub mod chaoxing;
-pub mod smms;
-pub mod github;
-pub mod imgur;
 pub mod s3_compatible;
+pub mod smms;
 pub mod utils;
-pub mod link_checker;
-pub mod clipboard;
-pub mod image_meta;
-pub mod image_compress;
-pub mod md_scanner;
-
+pub mod zhihu;

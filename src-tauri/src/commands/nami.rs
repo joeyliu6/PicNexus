@@ -3,17 +3,17 @@
 // 使用火山引擎 TOS 对象存储，需要 TOS4-HMAC-SHA256 签名
 // v2.10: 迁移到 AppError 统一错误类型
 
-use tauri::{Window, Emitter, Manager};
-use serde::{Deserialize, Serialize};
-use reqwest::Client;
-use sha1::{Sha1, Digest as Sha1Digest};
-use sha2::Sha256;
-use hmac::{Hmac, Mac};
 use chrono::Utc;
+use hmac::{Hmac, Mac};
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use sha1::{Digest as Sha1Digest, Sha1};
+use sha2::Sha256;
+use tauri::{Emitter, Manager, Window};
 
-use crate::error::{AppError, IntoAppError};
 use super::nami_token::fetch_nami_token_internal;
 use super::utils::read_file_bytes;
+use crate::error::{AppError, IntoAppError};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -26,7 +26,7 @@ const CDN_BASE: &str = "https://bfns.zhaomi.cn";
 pub struct NamiUploadResult {
     pub url: String,
     pub size: u64,
-    pub instant: bool,  // 是否秒传
+    pub instant: bool, // 是否秒传
 }
 
 #[derive(Debug, Deserialize)]
@@ -88,8 +88,7 @@ impl TosSigner {
 
     /// HMAC-SHA256（安全处理，避免 panic）
     fn hmac_sha256(key: &[u8], data: &str) -> Result<Vec<u8>, AppError> {
-        let mut mac = HmacSha256::new_from_slice(key)
-            .into_external_err_with("HMAC 初始化失败")?;
+        let mut mac = HmacSha256::new_from_slice(key).into_external_err_with("HMAC 初始化失败")?;
         mac.update(data.as_bytes());
         Ok(mac.finalize().into_bytes().to_vec())
     }
@@ -103,7 +102,12 @@ impl TosSigner {
     }
 
     /// 签名请求
-    fn sign(&self, method: &str, uri: &str, query_params: &[(&str, &str)]) -> Result<Vec<(String, String)>, AppError> {
+    fn sign(
+        &self,
+        method: &str,
+        uri: &str,
+        query_params: &[(&str, &str)],
+    ) -> Result<Vec<(String, String)>, AppError> {
         let timestamp = Self::get_timestamp();
         let date = &timestamp[0..8];
 
@@ -116,7 +120,8 @@ impl TosSigner {
         ];
 
         // 构建规范请求
-        let canonical_request = self.build_canonical_request(method, uri, query_params, &sign_headers);
+        let canonical_request =
+            self.build_canonical_request(method, uri, query_params, &sign_headers);
 
         // 构建签名字符串
         let scope = format!("{}/{}/{}/request", date, TOS_REGION, TOS_SERVICE);
@@ -127,7 +132,8 @@ impl TosSigner {
         let signature = hex::encode(Self::hmac_sha256(&signing_key, &string_to_sign)?);
 
         // 构建 Authorization
-        let signed_headers_str: String = sign_headers.iter()
+        let signed_headers_str: String = sign_headers
+            .iter()
             .map(|(k, _)| k.to_string())
             .collect::<Vec<_>>()
             .join(";");
@@ -138,7 +144,8 @@ impl TosSigner {
         );
 
         // 返回所有需要的 Headers
-        let mut headers = sign_headers.iter()
+        let mut headers = sign_headers
+            .iter()
             .map(|(k, v)| (k.to_string(), v.clone()))
             .collect::<Vec<_>>();
         headers.push(("authorization".to_string(), authorization));
@@ -147,30 +154,40 @@ impl TosSigner {
     }
 
     /// 构建规范请求
-    fn build_canonical_request(&self, method: &str, uri: &str, query_params: &[(&str, &str)], headers: &[(&str, String)]) -> String {
+    fn build_canonical_request(
+        &self,
+        method: &str,
+        uri: &str,
+        query_params: &[(&str, &str)],
+        headers: &[(&str, String)],
+    ) -> String {
         // 规范 URI
         let canonical_uri = if uri.is_empty() { "/" } else { uri };
 
         // 规范查询字符串
         let mut sorted_params: Vec<_> = query_params.to_vec();
         sorted_params.sort_by(|a, b| a.0.cmp(b.0));
-        let canonical_query_string: String = sorted_params.iter()
+        let canonical_query_string: String = sorted_params
+            .iter()
             .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
             .collect::<Vec<_>>()
             .join("&");
 
         // 规范头部
-        let mut sorted_headers: Vec<_> = headers.iter()
+        let mut sorted_headers: Vec<_> = headers
+            .iter()
             .map(|(k, v)| (k.to_lowercase(), v.clone()))
             .collect();
         sorted_headers.sort_by(|a, b| a.0.cmp(&b.0));
 
-        let canonical_headers: String = sorted_headers.iter()
+        let canonical_headers: String = sorted_headers
+            .iter()
             .map(|(k, v)| format!("{}:{}", k, v))
             .collect::<Vec<_>>()
             .join("\n");
 
-        let signed_headers: String = sorted_headers.iter()
+        let signed_headers: String = sorted_headers
+            .iter()
             .map(|(k, _)| k.clone())
             .collect::<Vec<_>>()
             .join(";");
@@ -178,25 +195,24 @@ impl TosSigner {
         // TOS4 格式: 需要空行
         format!(
             "{}\n{}\n{}\n{}\n\n{}\nUNSIGNED-PAYLOAD",
-            method,
-            canonical_uri,
-            canonical_query_string,
-            canonical_headers,
-            signed_headers
+            method, canonical_uri, canonical_query_string, canonical_headers, signed_headers
         )
     }
 
     /// 构建签名字符串
-    fn build_string_to_sign(&self, timestamp: &str, scope: &str, canonical_request: &str) -> String {
+    fn build_string_to_sign(
+        &self,
+        timestamp: &str,
+        scope: &str,
+        canonical_request: &str,
+    ) -> String {
         let mut hasher = Sha256::new();
         hasher.update(canonical_request.as_bytes());
         let hashed_request = hex::encode(hasher.finalize());
 
         format!(
             "TOS4-HMAC-SHA256\n{}\n{}\n{}",
-            timestamp,
-            scope,
-            hashed_request
+            timestamp, scope, hashed_request
         )
     }
 }
@@ -204,7 +220,12 @@ impl TosSigner {
 /// 检查文件是否已存在（秒传检测）
 async fn check_file_exists(client: &Client, file_key: &str) -> bool {
     let url = format!("{}/{}", CDN_BASE, file_key);
-    match client.head(&url).timeout(std::time::Duration::from_secs(5)).send().await {
+    match client
+        .head(&url)
+        .timeout(std::time::Duration::from_secs(5))
+        .send()
+        .await
+    {
         Ok(response) => response.status().is_success(),
         Err(_) => false,
     }
@@ -253,22 +274,33 @@ async fn get_sts_credentials(
         .into_network_err_with("STS 请求失败")?;
 
     let status = response.status();
-    let text = response.text().await.into_network_err_with("读取 STS 响应失败")?;
+    let text = response
+        .text()
+        .await
+        .into_network_err_with("读取 STS 响应失败")?;
 
     log::debug!("[Nami] STS 响应状态: HTTP {}", status);
 
     if !status.is_success() {
-        return Err(AppError::upload("纳米", format!("STS 请求失败 (HTTP {}): {}", status, text)));
+        return Err(AppError::upload(
+            "纳米",
+            format!("STS 请求失败 (HTTP {}): {}", status, text),
+        ));
     }
 
     let sts_response: STSResponse = serde_json::from_str(&text)
         .map_err(|e| AppError::upload("纳米", format!("解析 STS 响应失败: {}", e)))?;
 
     if sts_response.code != 0 {
-        return Err(AppError::upload("纳米", format!("STS 返回错误: {}", sts_response.msg.unwrap_or_default())));
+        return Err(AppError::upload(
+            "纳米",
+            format!("STS 返回错误: {}", sts_response.msg.unwrap_or_default()),
+        ));
     }
 
-    sts_response.data.ok_or_else(|| AppError::upload("纳米", "STS 响应中没有 data"))
+    sts_response
+        .data
+        .ok_or_else(|| AppError::upload("纳米", "STS 响应中没有 data"))
 }
 
 /// 初始化分片上传
@@ -290,10 +322,15 @@ async fn init_multipart_upload(
     let signed_headers = signer.sign("POST", &uri, &query_params)?;
 
     // URL 中对路径进行编码
-    let encoded_path: String = file_key.split('/').map(|p| urlencoding::encode(p).to_string()).collect::<Vec<_>>().join("/");
+    let encoded_path: String = file_key
+        .split('/')
+        .map(|p| urlencoding::encode(p).to_string())
+        .collect::<Vec<_>>()
+        .join("/");
     let url = format!("https://{}/{}?uploads=", TOS_HOST, encoded_path);
 
-    let mut request = client.post(&url)
+    let mut request = client
+        .post(&url)
         .header("content-type", content_type)
         .header("content-length", "0");
 
@@ -301,12 +338,21 @@ async fn init_multipart_upload(
         request = request.header(&key, &value);
     }
 
-    let response = request.send().await.into_network_err_with("初始化上传请求失败")?;
+    let response = request
+        .send()
+        .await
+        .into_network_err_with("初始化上传请求失败")?;
     let status = response.status();
-    let text = response.text().await.into_network_err_with("读取初始化响应失败")?;
+    let text = response
+        .text()
+        .await
+        .into_network_err_with("读取初始化响应失败")?;
 
     if !status.is_success() {
-        return Err(AppError::upload("纳米", format!("初始化上传失败 (HTTP {}): {}", status, text)));
+        return Err(AppError::upload(
+            "纳米",
+            format!("初始化上传失败 (HTTP {}): {}", status, text),
+        ));
     }
 
     // 解析响应获取 UploadId
@@ -318,8 +364,12 @@ async fn init_multipart_upload(
             #[serde(rename = "UploadId")]
             upload_id: String,
         }
-        let parsed: InitResponse = serde_json::from_str(&text)
-            .map_err(|e| AppError::upload("纳米", format!("解析 JSON UploadId 失败: {} - 原始响应: {}", e, text)))?;
+        let parsed: InitResponse = serde_json::from_str(&text).map_err(|e| {
+            AppError::upload(
+                "纳米",
+                format!("解析 JSON UploadId 失败: {} - 原始响应: {}", e, text),
+            )
+        })?;
         parsed.upload_id
     } else {
         // XML 格式响应（兼容）
@@ -356,19 +406,25 @@ async fn upload_part(
         ("partNumber", part_number.to_string()),
         ("uploadId", upload_id.to_string()),
     ];
-    let query_params_ref: Vec<(&str, &str)> = query_params_owned.iter()
+    let query_params_ref: Vec<(&str, &str)> = query_params_owned
+        .iter()
         .map(|(k, v)| (*k, v.as_str()))
         .collect();
 
     let signed_headers = signer.sign("PUT", &uri, &query_params_ref)?;
 
-    let encoded_path: String = file_key.split('/').map(|p| urlencoding::encode(p).to_string()).collect::<Vec<_>>().join("/");
+    let encoded_path: String = file_key
+        .split('/')
+        .map(|p| urlencoding::encode(p).to_string())
+        .collect::<Vec<_>>()
+        .join("/");
     let url = format!(
         "https://{}/{}?partNumber={}&uploadId={}",
         TOS_HOST, encoded_path, part_number, upload_id
     );
 
-    let mut request = client.put(&url)
+    let mut request = client
+        .put(&url)
         .header("content-length", data.len().to_string())
         .body(data.to_vec());
 
@@ -381,11 +437,15 @@ async fn upload_part(
 
     if !status.is_success() {
         let text = response.text().await.unwrap_or_default();
-        return Err(AppError::upload("纳米", format!("上传分片失败 (HTTP {}): {}", status, text)));
+        return Err(AppError::upload(
+            "纳米",
+            format!("上传分片失败 (HTTP {}): {}", status, text),
+        ));
     }
 
     // 获取 ETag
-    let etag = response.headers()
+    let etag = response
+        .headers()
         .get("etag")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string())
@@ -425,10 +485,18 @@ async fn complete_multipart_upload(
     });
     let body_str = body.to_string();
 
-    let encoded_path: String = file_key.split('/').map(|p| urlencoding::encode(p).to_string()).collect::<Vec<_>>().join("/");
-    let url = format!("https://{}/{}?uploadId={}", TOS_HOST, encoded_path, upload_id);
+    let encoded_path: String = file_key
+        .split('/')
+        .map(|p| urlencoding::encode(p).to_string())
+        .collect::<Vec<_>>()
+        .join("/");
+    let url = format!(
+        "https://{}/{}?uploadId={}",
+        TOS_HOST, encoded_path, upload_id
+    );
 
-    let mut request = client.post(&url)
+    let mut request = client
+        .post(&url)
         .header("content-type", "application/json")
         .header("content-length", body_str.len().to_string())
         .body(body_str);
@@ -437,12 +505,18 @@ async fn complete_multipart_upload(
         request = request.header(&key, &value);
     }
 
-    let response = request.send().await.into_network_err_with("完成上传请求失败")?;
+    let response = request
+        .send()
+        .await
+        .into_network_err_with("完成上传请求失败")?;
     let status = response.status();
 
     if !status.is_success() {
         let text = response.text().await.unwrap_or_default();
-        return Err(AppError::upload("纳米", format!("完成上传失败 (HTTP {}): {}", status, text)));
+        return Err(AppError::upload(
+            "纳米",
+            format!("完成上传失败 (HTTP {}): {}", status, text),
+        ));
     }
 
     Ok(())
@@ -468,7 +542,9 @@ pub async fn upload_to_nami(
         .and_then(|n| n.to_str())
         .ok_or_else(|| AppError::validation("无法获取文件名"))?;
 
-    let ext = file_name.split('.').next_back()
+    let ext = file_name
+        .split('.')
+        .next_back()
         .ok_or_else(|| AppError::validation("无法获取文件扩展名"))?
         .to_lowercase();
 
@@ -499,43 +575,54 @@ pub async fn upload_to_nami(
     }
 
     // 发送步骤1进度：获取动态Headers (0%)
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 0,
-        "total": 100,
-        "step": "获取动态Headers中...",
-        "step_index": 1,
-        "total_steps": 5
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 0,
+            "total": 100,
+            "step": "获取动态Headers中...",
+            "step_index": 1,
+            "total_steps": 5
+        }),
+    );
 
     // 6. 获取动态 Headers
     log::info!("[Nami] 获取动态 Headers...");
-    let dynamic_headers = fetch_nami_token_internal(window.app_handle(), cookie.clone(), auth_token.clone()).await?;
+    let dynamic_headers =
+        fetch_nami_token_internal(window.app_handle(), cookie.clone(), auth_token.clone()).await?;
 
     // 发送步骤2进度：获取STS凭证 (20%)
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 20,
-        "total": 100,
-        "step": "获取STS凭证中...",
-        "step_index": 2,
-        "total_steps": 5
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 20,
+            "total": 100,
+            "step": "获取STS凭证中...",
+            "step_index": 2,
+            "total_steps": 5
+        }),
+    );
 
     // 7. 获取 STS 凭证
     log::info!("[Nami] 获取 STS 凭证...");
-    let credentials = get_sts_credentials(&client, &file_key, &cookie, &auth_token, &dynamic_headers).await?;
+    let credentials =
+        get_sts_credentials(&client, &file_key, &cookie, &auth_token, &dynamic_headers).await?;
     log::info!("[Nami] STS 凭证获取成功");
 
     // 发送步骤3进度：初始化分片上传 (40%)
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 40,
-        "total": 100,
-        "step": "初始化分片上传中...",
-        "step_index": 3,
-        "total_steps": 5
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 40,
+            "total": 100,
+            "step": "初始化分片上传中...",
+            "step_index": 3,
+            "total_steps": 5
+        }),
+    );
 
     // 8. 初始化分片上传
     let content_type = get_content_type(&ext);
@@ -543,28 +630,34 @@ pub async fn upload_to_nami(
     let upload_id = init_multipart_upload(&client, &credentials, &file_key, content_type).await?;
 
     // 发送步骤4进度：上传分片 (60%)
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 60,
-        "total": 100,
-        "step": "上传分片中...",
-        "step_index": 4,
-        "total_steps": 5
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 60,
+            "total": 100,
+            "step": "上传分片中...",
+            "step_index": 4,
+            "total_steps": 5
+        }),
+    );
 
     // 9. 上传分片（单分片）
     log::debug!("[Nami] 上传分片...");
     let etag = upload_part(&client, &credentials, &file_key, &upload_id, 1, &buffer).await?;
 
     // 发送步骤5进度：完成上传 (80%)
-    let _ = window.emit("upload://progress", serde_json::json!({
-        "id": id,
-        "progress": 80,
-        "total": 100,
-        "step": "完成上传中...",
-        "step_index": 5,
-        "total_steps": 5
-    }));
+    let _ = window.emit(
+        "upload://progress",
+        serde_json::json!({
+            "id": id,
+            "progress": 80,
+            "total": 100,
+            "step": "完成上传中...",
+            "step_index": 5,
+            "total_steps": 5
+        }),
+    );
 
     // 10. 完成上传
     log::debug!("[Nami] 完成上传...");
@@ -586,7 +679,11 @@ pub async fn upload_to_nami(
 
 /// 测试纳米 Cookie 和 Auth-Token 连接
 #[tauri::command]
-pub async fn test_nami_connection(app: tauri::AppHandle, cookie: String, auth_token: String) -> Result<String, AppError> {
+pub async fn test_nami_connection(
+    app: tauri::AppHandle,
+    cookie: String,
+    auth_token: String,
+) -> Result<String, AppError> {
     log::info!("[Nami Test] 开始测试连接");
 
     // 创建 HTTP 客户端
@@ -605,14 +702,25 @@ pub async fn test_nami_connection(app: tauri::AppHandle, cookie: String, auth_to
             // 进一步验证：尝试创建一个测试的 file_key 并获取 STS 凭证
             let test_file_key = "web/test.png";
 
-            match get_sts_credentials(&client, test_file_key, &cookie, &auth_token, &dynamic_headers).await {
+            match get_sts_credentials(
+                &client,
+                test_file_key,
+                &cookie,
+                &auth_token,
+                &dynamic_headers,
+            )
+            .await
+            {
                 Ok(_credentials) => {
                     log::info!("[Nami Test] STS 凭证获取成功，Cookie 和 Auth-Token 有效");
                     Ok("Cookie 验证通过".to_string())
-                },
+                }
                 Err(e) => {
                     let error_str = format!("{}", e);
-                    if error_str.contains("401") || error_str.contains("403") || error_str.contains("Unauthorized") {
+                    if error_str.contains("401")
+                        || error_str.contains("403")
+                        || error_str.contains("Unauthorized")
+                    {
                         Err(AppError::auth("Cookie 或 Auth-Token 已失效，请重新获取"))
                     } else {
                         // STS 请求失败但不一定是认证问题
@@ -620,11 +728,16 @@ pub async fn test_nami_connection(app: tauri::AppHandle, cookie: String, auth_to
                     }
                 }
             }
-        },
+        }
         Err(e) => {
             let error_str = format!("{}", e);
-            if error_str.contains("401") || error_str.contains("403") || error_str.contains("Cookie") {
-                Err(AppError::auth("Cookie 或 Auth-Token 无效或已过期，请重新获取"))
+            if error_str.contains("401")
+                || error_str.contains("403")
+                || error_str.contains("Cookie")
+            {
+                Err(AppError::auth(
+                    "Cookie 或 Auth-Token 无效或已过期，请重新获取",
+                ))
             } else {
                 Err(AppError::upload("纳米", format!("测试失败: {}", error_str)))
             }

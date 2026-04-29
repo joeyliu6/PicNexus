@@ -339,7 +339,11 @@ mod tests {
     #[test]
     fn upload_constructor_has_no_code() {
         match AppError::upload("weibo", "上传失败") {
-            AppError::Upload { service, code, message } => {
+            AppError::Upload {
+                service,
+                code,
+                message,
+            } => {
                 assert_eq!(service, "weibo");
                 assert!(code.is_none());
                 assert_eq!(message, "上传失败");
@@ -351,7 +355,11 @@ mod tests {
     #[test]
     fn upload_with_code_carries_code() {
         match AppError::upload_with_code("jd", 403, "禁止访问") {
-            AppError::Upload { service, code, message } => {
+            AppError::Upload {
+                service,
+                code,
+                message,
+            } => {
                 assert_eq!(service, "jd");
                 assert_eq!(code, Some(403));
                 assert_eq!(message, "禁止访问");
@@ -480,7 +488,13 @@ mod tests {
         ];
         for (err, prefix) in cases {
             let s = format!("{}", err);
-            assert!(s.starts_with(prefix), "{} 应以 {:?} 开头，实际: {}", s, prefix, s);
+            assert!(
+                s.starts_with(prefix),
+                "{} 应以 {:?} 开头，实际: {}",
+                s,
+                prefix,
+                s
+            );
         }
     }
 

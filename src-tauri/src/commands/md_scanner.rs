@@ -4,12 +4,12 @@
 use crate::error::AppError;
 use fancy_regex::Regex as FancyRegex;
 use regex::Regex;
-use std::sync::LazyLock;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::LazyLock;
 use tauri::Emitter;
 
 /// 递归深度上限。Windows MAX_PATH 260 字符，深度超过这个量级基本是循环或恶意构造。
@@ -190,14 +190,11 @@ const NON_IMAGE_EXTENSIONS: &[&str] = &[
     // 脚本/样式/源码
     "js", "mjs", "cjs", "ts", "tsx", "jsx", "css", "scss", "sass", "less",
     // 标记/数据
-    "html", "htm", "xml", "json", "yaml", "yml", "toml", "csv",
-    // 文档
+    "html", "htm", "xml", "json", "yaml", "yml", "toml", "csv", // 文档
     "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "md", "markdown",
     // 归档
-    "zip", "rar", "7z", "tar", "gz", "tgz", "bz2",
-    // 可执行/安装包
-    "exe", "dmg", "msi", "deb", "rpm", "apk", "ipa",
-    // 音视频
+    "zip", "rar", "7z", "tar", "gz", "tgz", "bz2", // 可执行/安装包
+    "exe", "dmg", "msi", "deb", "rpm", "apk", "ipa", // 音视频
     "mp4", "webm", "mkv", "avi", "mov", "mp3", "wav", "ogg", "flac", "aac",
 ];
 
@@ -482,9 +479,8 @@ pub async fn scan_md_folder(
     cancel.store(false, Ordering::SeqCst);
 
     // 路径安全校验：规范化 + 确认是目录
-    let canonical = std::fs::canonicalize(&dir).map_err(|e| {
-        AppError::file_io(format!("路径无效或不存在: {} ({})", dir, e))
-    })?;
+    let canonical = std::fs::canonicalize(&dir)
+        .map_err(|e| AppError::file_io(format!("路径无效或不存在: {} ({})", dir, e)))?;
     if !canonical.is_dir() {
         return Err(AppError::file_io(format!("路径不是目录: {}", dir)));
     }
@@ -510,14 +506,17 @@ pub async fn scan_md_folder(
         );
 
         // 发送扫描完成进度
-        let _ = window_clone.emit("md-scan://progress", ScanProgress {
-            phase: "scanning".to_string(),
-            scanned_files: paths.len(),
-            processed_files: 0,
-            total_files: 0,
-            found_links: 0,
-            current_file: String::new(),
-        });
+        let _ = window_clone.emit(
+            "md-scan://progress",
+            ScanProgress {
+                phase: "scanning".to_string(),
+                scanned_files: paths.len(),
+                processed_files: 0,
+                total_files: 0,
+                found_links: 0,
+                current_file: String::new(),
+            },
+        );
 
         (paths, skipped)
     })
@@ -574,14 +573,17 @@ pub async fn scan_md_folder(
 
             // 每 5 个文件或最后一个文件发送进度
             if (idx + 1) % 5 == 0 || idx + 1 == total_files {
-                let _ = window_clone.emit("md-scan://progress", ScanProgress {
-                    phase: "reading".to_string(),
-                    scanned_files: total_files,
-                    processed_files: idx + 1,
-                    total_files,
-                    found_links: total_links,
-                    current_file: file_name,
-                });
+                let _ = window_clone.emit(
+                    "md-scan://progress",
+                    ScanProgress {
+                        phase: "reading".to_string(),
+                        scanned_files: total_files,
+                        processed_files: idx + 1,
+                        total_files,
+                        found_links: total_links,
+                        current_file: file_name,
+                    },
+                );
             }
         }
 
@@ -737,16 +739,27 @@ mod tests {
     #[test]
     fn extension_check_ignores_query_and_fragment() {
         // path 末段是 .png，query 里的 .js 不应影响判定
-        assert!(is_valid_image_url("https://cdn.com/image.png?ref=foo.js#sec"));
+        assert!(is_valid_image_url(
+            "https://cdn.com/image.png?ref=foo.js#sec"
+        ));
     }
 
     // ---------- get_url_path_extension ----------
 
     #[test]
     fn get_ext_handles_query_and_fragment() {
-        assert_eq!(get_url_path_extension("https://a.com/x.png?v=1"), Some("png".to_string()));
-        assert_eq!(get_url_path_extension("https://a.com/x.js#sec"), Some("js".to_string()));
-        assert_eq!(get_url_path_extension("https://a.com/x.png?foo.js"), Some("png".to_string()));
+        assert_eq!(
+            get_url_path_extension("https://a.com/x.png?v=1"),
+            Some("png".to_string())
+        );
+        assert_eq!(
+            get_url_path_extension("https://a.com/x.js#sec"),
+            Some("js".to_string())
+        );
+        assert_eq!(
+            get_url_path_extension("https://a.com/x.png?foo.js"),
+            Some("png".to_string())
+        );
     }
 
     #[test]
@@ -759,7 +772,10 @@ mod tests {
 
     #[test]
     fn get_ext_lowercases_result() {
-        assert_eq!(get_url_path_extension("https://a.com/X.JPG"), Some("jpg".to_string()));
+        assert_eq!(
+            get_url_path_extension("https://a.com/X.JPG"),
+            Some("jpg".to_string())
+        );
     }
 
     // ---------- strip_inline_code ----------
@@ -873,7 +889,8 @@ mod tests {
     fn extract_ignores_4plus_space_indent_as_fence() {
         // 4+ 空格缩进的 ``` 按 CommonMark 属于缩进代码块首行，不是 fence 开头
         // 注意：Rust `"\` 连续行会吞掉下一行的前导空格，这里用显式 \n 拼接以保留 4 空格
-        let content = "    ```\n![x](https://example.com/a.jpg)\n    ```\n![y](https://example.com/b.jpg)";
+        let content =
+            "    ```\n![x](https://example.com/a.jpg)\n    ```\n![y](https://example.com/b.jpg)";
         let links = extract_image_links(content, false);
         // 两张图片都应提取（围栏从未开启）
         assert_eq!(links.len(), 2);
@@ -907,7 +924,8 @@ mod tests {
     #[test]
     fn extract_close_fence_allows_trailing_spaces_and_tabs() {
         // 尾部纯空白（空格/制表符）按规范仍视为合法 close
-        let content = "```\n![in](https://example.com/a.jpg)\n```   \t\n![after](https://example.com/b.jpg)";
+        let content =
+            "```\n![in](https://example.com/a.jpg)\n```   \t\n![after](https://example.com/b.jpg)";
         let links = extract_image_links(content, false);
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].url, "https://example.com/b.jpg");

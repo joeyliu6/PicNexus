@@ -7,7 +7,7 @@
 //
 // Typora 自定义命令模式：偏好设置 → 图像 → 上传服务 → 自定义命令 → 填入 PicNexus 可执行文件路径
 
-use crate::server::upload_handler::{ServerUploadConfig, upload_single_file};
+use crate::server::upload_handler::{upload_single_file, ServerUploadConfig};
 
 /// Tauri 的 bundle identifier（与 tauri.conf.json 中的 identifier 一致）
 const APP_IDENTIFIER: &str = "us.picnex.app";
@@ -16,16 +16,18 @@ const APP_IDENTIFIER: &str = "us.picnex.app";
 fn get_app_data_dir() -> Option<std::path::PathBuf> {
     #[cfg(target_os = "windows")]
     {
-        std::env::var("APPDATA").ok()
+        std::env::var("APPDATA")
+            .ok()
             .map(|p| std::path::PathBuf::from(p).join(APP_IDENTIFIER))
     }
     #[cfg(target_os = "macos")]
     {
-        std::env::var("HOME").ok()
-            .map(|p| std::path::PathBuf::from(p)
+        std::env::var("HOME").ok().map(|p| {
+            std::path::PathBuf::from(p)
                 .join("Library")
                 .join("Application Support")
-                .join(APP_IDENTIFIER))
+                .join(APP_IDENTIFIER)
+        })
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
@@ -33,7 +35,8 @@ fn get_app_data_dir() -> Option<std::path::PathBuf> {
             .ok()
             .map(std::path::PathBuf::from)
             .or_else(|| {
-                std::env::var("HOME").ok()
+                std::env::var("HOME")
+                    .ok()
                     .map(|p| std::path::PathBuf::from(p).join(".local").join("share"))
             })
             .map(|p| p.join(APP_IDENTIFIER))
@@ -43,7 +46,10 @@ fn get_app_data_dir() -> Option<std::path::PathBuf> {
 /// CLI 参数解析结果
 pub enum CliAction {
     /// 正常上传文件
-    Upload { files: Vec<String>, json_output: bool },
+    Upload {
+        files: Vec<String>,
+        json_output: bool,
+    },
     /// 显示帮助
     Help,
     /// 显示版本
@@ -69,7 +75,8 @@ pub fn parse_cli_args() -> CliAction {
 
     let json_output = args.iter().any(|a| a == "--json");
 
-    let file_args: Vec<String> = args.iter()
+    let file_args: Vec<String> = args
+        .iter()
         .filter(|a| !a.starts_with('-'))
         .filter(|a| std::path::Path::new(a.as_str()).is_file())
         .cloned()
@@ -79,7 +86,10 @@ pub fn parse_cli_args() -> CliAction {
         return CliAction::None;
     }
 
-    CliAction::Upload { files: file_args, json_output }
+    CliAction::Upload {
+        files: file_args,
+        json_output,
+    }
 }
 
 /// 显示帮助信息
@@ -144,7 +154,9 @@ pub fn run_cli_upload(file_paths: Vec<String>, json_output: bool) {
 
         if !config_path.exists() {
             eprintln!("[PicNexus] 未找到配置文件: {}", config_path.display());
-            eprintln!("[PicNexus] 请先打开 PicNexus，在「设置 → 通用 → 编辑器兼容」中配置默认图床并保存");
+            eprintln!(
+                "[PicNexus] 请先打开 PicNexus，在「设置 → 通用 → 编辑器兼容」中配置默认图床并保存"
+            );
             std::process::exit(1);
         }
 
@@ -176,13 +188,23 @@ pub fn run_cli_upload(file_paths: Vec<String>, json_output: bool) {
                 .unwrap_or_else(|| file_path.clone());
 
             if !json_output {
-                eprintln!("[PicNexus] 正在上传 ({}/{}): {} ...", idx + 1, total, file_name);
+                eprintln!(
+                    "[PicNexus] 正在上传 ({}/{}): {} ...",
+                    idx + 1,
+                    total,
+                    file_name
+                );
             }
 
             match upload_single_file(file_path, &config).await {
                 Ok(url) => {
                     if !json_output {
-                        eprintln!("[PicNexus] \u{2713} 成功 ({}/{}): {}", idx + 1, total, file_name);
+                        eprintln!(
+                            "[PicNexus] \u{2713} 成功 ({}/{}): {}",
+                            idx + 1,
+                            total,
+                            file_name
+                        );
                     }
                     // Typora 格式：stdout 输出 URL
                     if !json_output {
@@ -196,7 +218,13 @@ pub fn run_cli_upload(file_paths: Vec<String>, json_output: bool) {
                 }
                 Err(e) => {
                     if !json_output {
-                        eprintln!("[PicNexus] \u{2717} 失败 ({}/{}): {} — {}", idx + 1, total, file_name, e);
+                        eprintln!(
+                            "[PicNexus] \u{2717} 失败 ({}/{}): {} — {}",
+                            idx + 1,
+                            total,
+                            file_name,
+                            e
+                        );
                     }
                     json_results.push(JsonFileResult {
                         file: file_name,
@@ -213,7 +241,10 @@ pub fn run_cli_upload(file_paths: Vec<String>, json_output: bool) {
                 success: !any_failed,
                 results: json_results,
             };
-            println!("{}", serde_json::to_string_pretty(&result).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&result).unwrap_or_default()
+            );
         }
 
         if any_failed {
