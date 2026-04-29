@@ -167,17 +167,32 @@ function failureRecord(item: MigrateItemStatus): MigrateFailureRecord {
 
 function makeMigrateResult(state: string, items: MigrateItemStatus[]): MigrateResult | null {
   if (state === 'migrating' || state === 'paused') return null;
+  const fullFailureCount = items.filter((item) => item.status === 'failed').length;
   const failures = items.filter((item) => item.status === 'failed').map(failureRecord);
+  if (state === 'partial-failed') {
+    const partial = items.find((item) => item.historyId === 'migrate-2');
+    if (partial) {
+      failures.push({
+        historyId: partial.historyId,
+        fileName: partial.fileName,
+        error: 'GitHub: API rate limit exceeded',
+        errorType: 'upload',
+        details: [{ serviceId: 'github', message: 'API rate limit exceeded' }],
+        isPartial: true,
+        failedTargets: ['github'],
+      });
+    }
+  }
   const successCount = items.filter((item) => item.status === 'success').length;
   const skippedCount = items.filter((item) => item.status === 'skipped').length;
 
   return {
     successCount,
-    failedCount: failures.length,
+    failedCount: fullFailureCount,
     skippedCount,
     failures,
     partialFailures: state === 'partial-failed'
-      ? [{ fileName: 'migration-fixture-02.jpg', failedTargets: ['github'] }]
+      ? [{ historyId: 'migrate-2', fileName: 'migration-fixture-02.jpg', failedTargets: ['github'] }]
       : [],
     durationMs: state === 'complete' ? 42_000 : 68_000,
     avgBytesPerSec: state === 'complete' ? 7_800_000 : 4_200_000,

@@ -18,7 +18,7 @@
 >   - `target` chips **始终按 `targetServiceIds` 渲染**（选了几个目标就显几个），`serviceResults[sid]` 只决定着色：`success → 'new'`（绿环）/ `failed → 'failed'`（红环）/ 未写入或 `pending → 'pending'`（蓝环）；未写入代表"取消前没轮到尝试"
 >   - 右侧按钮随状态切换：成功态显示「复制新 URL」（调 `historyDB` 查新增 target 的 URL）；done + failed 态显示「重试」
 >
-> 底栏 `MigrateBottomBar` 左侧从左到右：**分页条**（`MigratePagination`，仅 `displayList.length > PAGE_SIZE` 时挂载） + **运行状态 pill**（运行中/正在暂停/已暂停）+ `MigrateStatsSummary`；右侧是操作按钮组（done 态：导出报告 | 完成 | 【全部重试：有失败项才挂】| 重新发起迁移）。进入 done 态时若有失败自动选中「失败」chip 并重置滚动。
+> 底栏 `MigrateBottomBar` 左侧从左到右：**分页条**（`MigratePagination`，仅 `displayList.length > PAGE_SIZE` 时挂载） + **运行状态 pill**（运行中/正在暂停/已暂停）+ `MigrateStatsSummary`；右侧是操作按钮组（done 态：导出报告 | 完成 | 【全部重试：有失败项或部分失败项才挂】| 重新发起迁移）。进入 done 态时若有完全失败或部分失败自动选中「失败」chip 并重置滚动。
 >
 > **统计信息位置**：已完成数/速率/剩余时间/目标图床整合到 `MigrateStatsSummary`；运行态 pill 独立于统计条，收进底栏。
 
@@ -135,6 +135,7 @@ flowchart TD
 > **并行上传关键点**：
 > - 所有目标通过 `Promise.all` 同时发起（内部 try/catch，Promise.all 不会因单目标失败而 reject）
 > - 每个目标完成后**立即写 `status.serviceResults[targetId]`**，然后调用 `onTargetSettled` 回调——外层用它触发 RAF 节流的 `scheduleStatusUpdate`，让 UI chip 一个个变色（不是等整条落定一起跳）
+> - 若至少一个目标成功、另有目标失败，条目保持 `success`，同时写入 `partialFailures` 和一条 `isPartial` 的 `failures` 记录；结果页「失败」筛选和重试按钮会只针对失败目标重试，不会重复上传已成功目标
 > - 取消（`isCancelled=true`）不会打断已发起的并行上传；只影响主循环下一张图不被取出
 > - 信号量 `MAX_CONCURRENT=3` 控制图片级并发。由于每张图只向每个图床发 1 次上传，**每图床的峰值并发数 = MAX_CONCURRENT（= 3），与目标数无关**
 

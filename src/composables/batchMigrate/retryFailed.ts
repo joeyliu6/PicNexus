@@ -20,6 +20,8 @@ import { migrateOneItem } from './migrateCore';
 
 const log = createLogger('retryFailed');
 
+type FailureRecord = NonNullable<MigrateResult['failures'][number]>;
+
 export interface RetryDeps {
   migrateResult: Ref<MigrateResult | null>;
   retryingIds: Ref<Set<string>>;
@@ -31,12 +33,136 @@ export interface RetryDeps {
 export function createRetry(deps: RetryDeps) {
   const { migrateResult, retryingIds, getOrCacheConfig, getMultiUploader, getRetryTargets } = deps;
 
+  function targetsForFailure(failure: FailureRecord, baseTargets: string[]): string[] {
+    if (!failure.isPartial) return baseTargets;
+    const failedTargets = failure.failedTargets?.length
+      ? failure.failedTargets
+      : failure.details.map(detail => detail.serviceId).filter((sid): sid is string => !!sid);
+    return failedTargets.filter(sid => baseTargets.includes(sid));
+  }
+
+  function failedTargetsForPartial(failure: FailureRecord | undefined): string[] {
+    if (!failure?.isPartial) return [];
+    if (failure.failedTargets?.length) return failure.failedTargets;
+    return failure.details.map(detail => detail.serviceId).filter((sid): sid is string => !!sid);
+  }
+
+  function failedTargetsFromStatus(status: MigrateItemStatus): string[] {
+    return Object.entries(status.serviceResults)
+      .filter(([, state]) => state === 'failed')
+      .map(([sid]) => sid);
+  }
+
+  function remainingPartialTargets(
+    status: MigrateItemStatus,
+    currentFailure: FailureRecord | undefined,
+    targets: string[],
+  ): string[] {
+    const previous = failedTargetsForPartial(currentFailure);
+    const attempted = new Set(targets);
+    const remaining = new Set<string>();
+
+    for (const sid of previous) {
+      if (!attempted.has(sid)) remaining.add(sid);
+    }
+    for (const sid of failedTargetsFromStatus(status)) {
+      remaining.add(sid);
+    }
+
+    // Download/metadata failures happen before per-target upload state changes,
+    // so keep the attempted partial targets marked unresolved instead of
+    // overwriting their failed chips with "pending".
+    if (currentFailure?.isPartial && status.status === 'failed' && failedTargetsFromStatus(status).length === 0) {
+      for (const sid of previous) {
+        if (attempted.has(sid)) remaining.add(sid);
+      }
+    }
+
+    return [...remaining];
+  }
+
+  function detailsForTargets(
+    status: MigrateItemStatus,
+    currentFailure: FailureRecord | undefined,
+    failedTargets: string[],
+  ): MigrateResult['failures'][number]['details'] {
+    const targetSet = new Set(failedTargets);
+    const byService = new Map<string, MigrateResult['failures'][number]['details'][number]>();
+    for (const detail of currentFailure?.details ?? []) {
+      if (detail.serviceId && targetSet.has(detail.serviceId)) byService.set(detail.serviceId, detail);
+    }
+    for (const detail of status.failureDetails ?? []) {
+      if (detail.serviceId && targetSet.has(detail.serviceId)) byService.set(detail.serviceId, detail);
+    }
+
+    const fallbackMessage = status.failureDetails?.find(detail => !detail.serviceId)?.message
+      ?? status.error
+      ?? currentFailure?.error
+      ?? '上传失败';
+    return failedTargets.map(serviceId =>
+      byService.get(serviceId) ?? { serviceId, message: fallbackMessage },
+    );
+  }
+
+  function makePartialFailure(
+    historyId: string,
+    status: MigrateItemStatus,
+    currentFailure: FailureRecord | undefined,
+    failedTargets: string[],
+  ): FailureRecord {
+    const details = detailsForTargets(status, currentFailure, failedTargets);
+    return {
+      historyId,
+      fileName: status.fileName,
+      error: status.error ?? currentFailure?.error ?? '部分目标上传失败',
+      errorType: status.errorType ?? currentFailure?.errorType ?? 'upload',
+      details,
+      isPartial: true,
+      failedTargets,
+    };
+  }
+
+  function mergePartialSnapshot(
+    current: MigrateResult,
+    historyId: string,
+    status: MigrateItemStatus,
+    failedTargets: string[],
+  ): MigrateItemStatus[] {
+    return current.itemsSnapshot.map(item => {
+      if (item.historyId !== historyId) return item;
+      if (failedTargets.length > 0) {
+        const serviceResults = { ...item.serviceResults, ...status.serviceResults };
+        for (const sid of failedTargets) {
+          if (serviceResults[sid] !== 'success') serviceResults[sid] = 'failed';
+        }
+        return {
+          ...item,
+          sourceUrl: status.sourceUrl ?? item.sourceUrl,
+          convertedFormat: status.convertedFormat ?? item.convertedFormat,
+          existingServiceIds: status.existingServiceIds ?? item.existingServiceIds,
+          serviceResults,
+          status: 'success',
+          error: status.error ?? item.error,
+          errorType: status.errorType ?? item.errorType,
+          failureDetails: status.failureDetails ?? item.failureDetails,
+        };
+      }
+      return {
+        ...status,
+        status: 'success',
+      };
+    });
+  }
+
   async function retrySingleFailed(historyId: string): Promise<void> {
-    if (!migrateResult.value) return;
+    const initial = migrateResult.value;
+    if (!initial) return;
     if (retryingIds.value.has(historyId)) return;
-    const targets = getRetryTargets?.() ?? migrateResult.value.targetServiceIds;
+    const failure = initial.failures.find(f => f.historyId === historyId);
+    if (!failure) return;
+    const baseTargets = getRetryTargets?.() ?? initial.targetServiceIds;
+    const targets = targetsForFailure(failure, baseTargets);
     if (targets.length === 0) return;
-    if (migrateResult.value.failures.findIndex(f => f.historyId === historyId) < 0) return;
 
     retryingIds.value = new Set([...retryingIds.value, historyId]);
     try {
@@ -64,30 +190,66 @@ export function createRetry(deps: RetryDeps) {
       const current = migrateResult.value;
       if (!current) return;
       const nextFailures = [...current.failures];
-      const nextSnapshot = [...current.itemsSnapshot];
       const idx = nextFailures.findIndex(f => f.historyId === historyId);
-      const snapIdx = nextSnapshot.findIndex(s => s.historyId === historyId);
+      const currentFailure = idx >= 0 ? nextFailures[idx] : failure;
+      const wasPartial = currentFailure?.isPartial === true;
+      const remainingTargets = remainingPartialTargets(status, currentFailure, targets);
+      let nextSnapshot = [...current.itemsSnapshot];
+      let nextPartialFailures = current.partialFailures.filter(f => f.historyId !== historyId);
       let successDelta = 0, failedDelta = 0, skippedDelta = 0;
 
       if (status.status === 'success') {
-        if (idx >= 0) { nextFailures.splice(idx, 1); failedDelta = -1; }
-        successDelta = 1;
+        if (remainingTargets.length > 0) {
+          const nextFailure = makePartialFailure(historyId, status, currentFailure, remainingTargets);
+          if (idx >= 0) nextFailures[idx] = nextFailure;
+          else nextFailures.push(nextFailure);
+          nextPartialFailures = [
+            ...nextPartialFailures,
+            { historyId, fileName: status.fileName, failedTargets: remainingTargets },
+          ];
+          if (!wasPartial) { failedDelta = -1; successDelta = 1; }
+        } else {
+          if (idx >= 0) { nextFailures.splice(idx, 1); if (!wasPartial) failedDelta = -1; }
+          if (!wasPartial) successDelta = 1;
+        }
       } else if (status.status === 'skipped') {
         // 目标在 DB 中已全部补齐（其它任务先成功或本次命中 needUploadTargets=0）→ 移出失败列表
-        if (idx >= 0) { nextFailures.splice(idx, 1); failedDelta = -1; }
-        skippedDelta = 1;
+        if (remainingTargets.length > 0) {
+          const nextFailure = makePartialFailure(historyId, status, currentFailure, remainingTargets);
+          if (idx >= 0) nextFailures[idx] = nextFailure;
+          else nextFailures.push(nextFailure);
+          nextPartialFailures = [
+            ...nextPartialFailures,
+            { historyId, fileName: status.fileName, failedTargets: remainingTargets },
+          ];
+        } else {
+          if (idx >= 0) { nextFailures.splice(idx, 1); if (!wasPartial) failedDelta = -1; }
+          if (!wasPartial) skippedDelta = 1;
+        }
       } else if (status.status === 'failed') {
-        if (idx >= 0) nextFailures[idx] = {
-          historyId, fileName: status.fileName,
-          error: status.error ?? '', errorType: status.errorType,
-          details: status.failureDetails ?? [{ message: status.error ?? '' }],
-        };
+        const nextFailure = wasPartial
+          ? makePartialFailure(historyId, status, currentFailure, remainingTargets)
+          : {
+              historyId, fileName: status.fileName,
+              error: status.error ?? '', errorType: status.errorType,
+              details: status.failureDetails ?? [{ message: status.error ?? '' }],
+            };
+        if (idx >= 0) nextFailures[idx] = nextFailure;
+        if (wasPartial) {
+          nextPartialFailures = [
+            ...nextPartialFailures,
+            { historyId, fileName: status.fileName, failedTargets: remainingTargets },
+          ];
+        }
       }
-      if (snapIdx >= 0) nextSnapshot[snapIdx] = { ...status };
+      nextSnapshot = (wasPartial || remainingTargets.length > 0)
+        ? mergePartialSnapshot(current, historyId, status, remainingTargets)
+        : nextSnapshot.map(item => item.historyId === historyId ? { ...status } : item);
 
       migrateResult.value = {
         ...current,
         failures: nextFailures,
+        partialFailures: nextPartialFailures,
         itemsSnapshot: nextSnapshot,
         successCount: Math.max(0, current.successCount + successDelta),
         failedCount: Math.max(0, current.failedCount + failedDelta),

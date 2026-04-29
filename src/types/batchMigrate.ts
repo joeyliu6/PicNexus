@@ -68,6 +68,10 @@ export interface MigrateFailureRecord {
   errorType?: 'download' | 'upload';
   /** 结构化失败详情 */
   details: MigrateFailureDetail[];
+  /** 是否为多目标迁移中的部分失败；条目本身已至少有一个目标成功 */
+  isPartial?: boolean;
+  /** 部分失败时需要重试的目标图床 */
+  failedTargets?: string[];
 }
 
 /** 迁移最终结果 */
@@ -77,9 +81,9 @@ export interface MigrateResult {
   skippedCount: number;
   failures: MigrateFailureRecord[];
   /** 整体成功但部分目标失败的记录 */
-  partialFailures: Array<{ fileName: string; failedTargets: string[] }>;
+  partialFailures: Array<{ historyId: string; fileName: string; failedTargets: string[] }>;
   /** 非正常结束原因 */
-  pauseReason?: 'consecutive-failures' | 'user-cancelled' | 'preload-error';
+  pauseReason?: 'consecutive-failures' | 'user-cancelled' | 'preload-error' | 'runtime-error';
   /** 总耗时（毫秒） */
   durationMs: number;
   /** 平均速度（字节/秒） */

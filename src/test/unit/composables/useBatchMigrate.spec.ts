@@ -284,10 +284,15 @@ describe('useBatchMigrateManager', () => {
       targetServiceIds: ['r2', 'github'],
     }));
     expect(manager.migrateResult.value?.failures).toEqual([
+      expect.objectContaining({
+        historyId: 'success-one',
+        isPartial: true,
+        failedTargets: ['github'],
+      }),
       expect.objectContaining({ historyId: 'failed-one', errorType: 'upload' }),
     ]);
     expect(manager.migrateResult.value?.partialFailures).toEqual([
-      { fileName: 'success-one.png', failedTargets: ['github'] },
+      { historyId: 'success-one', fileName: 'success-one.png', failedTargets: ['github'] },
     ]);
     expect(manager.globalProgress.value).toEqual({ current: 3, total: 3, percent: 100 });
     expect(manager.cumulativeCounts.value).toEqual({ success: 1, failed: 1, skipped: 1 });
@@ -305,6 +310,27 @@ describe('useBatchMigrateManager', () => {
     expect(manager.phase.value).toBe('done');
     expect(manager.migrateResult.value?.pauseReason).toBe('preload-error');
     expect(manager.migrateResult.value?.itemsSnapshot).toEqual([]);
+  });
+
+  it('finalizes with runtime-error when processing fails after preload', async () => {
+    const preloaded = createPreloaded(['db-busy']);
+    mocks.preloadAllPending.mockImplementation(async (args) => {
+      args.allItemStatuses.value = preloaded.map(item => item.status);
+      args.onBatch?.(preloaded);
+      return preloaded;
+    });
+    mocks.getItemsByIds.mockRejectedValueOnce(new Error('database is locked'));
+    const manager = useBatchMigrateManager();
+    manager.targetServices.value = [
+      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 1, checked: true },
+    ];
+
+    await manager.startMigrate();
+
+    expect(manager.phase.value).toBe('done');
+    expect(manager.isMigrating.value).toBe(false);
+    expect(manager.migrateResult.value?.pauseReason).toBe('runtime-error');
+    expect(processBatch).not.toHaveBeenCalled();
   });
 
   it('exposes pause, resume, cancelling, and cancelled result states while a batch is in flight', async () => {

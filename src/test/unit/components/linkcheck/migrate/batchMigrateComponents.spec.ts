@@ -335,6 +335,46 @@ describe('batch migrate P1 components', () => {
     expect(retrySingleFailed).toHaveBeenCalledWith('h-failed');
   });
 
+  it('MigrateProgressPhase treats partial successes as retryable failed-filter rows', async () => {
+    const retrySingleFailed = vi.fn();
+    const partial = createStatus({
+      historyId: 'h-partial',
+      fileName: 'partial-delta.jpg',
+      status: 'success',
+      error: 'GitHub · bad token',
+      errorType: 'upload',
+      failureDetails: [{ serviceId: 'github', message: 'bad token' }],
+      serviceResults: { github: 'failed', smms: 'success' },
+      existingServiceIds: ['jd'],
+    });
+    const result = createMigrateResult([partial]);
+    result.failures = [{
+      historyId: 'h-partial',
+      fileName: 'partial-delta.jpg',
+      error: 'GitHub · bad token',
+      errorType: 'upload',
+      details: [{ serviceId: 'github', message: 'bad token' }],
+      isPartial: true,
+      failedTargets: ['github'],
+    }];
+    result.partialFailures = [{ historyId: 'h-partial', fileName: 'partial-delta.jpg', failedTargets: ['github'] }];
+    const ctx = createMigrateContext({
+      phase: ref('done'),
+      migrateResult: ref(result),
+      retrySingleFailed,
+    });
+
+    const wrapper = mountWithMigrateContext(MigrateProgressPhase, ctx);
+    await flushPromisesAndTicks();
+
+    await wrapper.get('.mf-chip--failed').trigger('click');
+    await flushPromisesAndTicks();
+
+    expect(wrapper.text()).toContain('partial-delta.jpg');
+    await wrapper.get('.mi-row__retry-btn').trigger('click');
+    expect(retrySingleFailed).toHaveBeenCalledWith('h-partial');
+  });
+
   it('MigrateProgressPhase exports the final report through Tauri file APIs', async () => {
     getDialogSaveMock().mockResolvedValue('C:/tmp/migrate.csv');
     getFsMocks().writeTextFile.mockResolvedValue(undefined);

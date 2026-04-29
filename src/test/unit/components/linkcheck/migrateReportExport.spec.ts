@@ -8,7 +8,7 @@ function makeResult(): MigrateResult {
     failedCount: 0,
     skippedCount: 0,
     failures: [],
-    partialFailures: [{ fileName: 'a.png', failedTargets: ['github'] }],
+    partialFailures: [{ historyId: 'h1', fileName: 'a.png', failedTargets: ['github'] }],
     durationMs: 1000,
     avgBytesPerSec: 1024,
     targetServiceIds: ['r2', 'github'],

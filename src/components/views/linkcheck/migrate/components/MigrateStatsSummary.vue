@@ -61,6 +61,9 @@ const donePartialFailureCount = computed(() =>
       <span v-if="migrateResult.pauseReason === 'preload-error'" class="ss-error-hint">
         <i class="pi pi-exclamation-circle" /> 数据加载失败
       </span>
+      <span v-else-if="migrateResult.pauseReason === 'runtime-error'" class="ss-error-hint">
+        <i class="pi pi-exclamation-circle" /> 迁移中断
+      </span>
       <span class="ss-chip ss-chip--total">
         共 <b>{{ formatNumber(migrateResult.successCount + migrateResult.failedCount + migrateResult.skippedCount) }}</b> 项
       </span>

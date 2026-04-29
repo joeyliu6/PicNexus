@@ -40,6 +40,21 @@ const IDLE_RELEASE_MS = 3 * 60 * 1000;
 /** 冷启动骨架屏最小可见时长，防止加载太快一闪而过 */
 const MIN_SKELETON_MS = 400;
 
+function getFailedTargets(status: MigrateItemStatus): string[] {
+  return Object.entries(status.serviceResults)
+    .filter(([, state]) => state === 'failed')
+    .map(([sid]) => sid);
+}
+
+function getFailureDetails(status: MigrateItemStatus, failedTargets: string[]): MigrateFailureDetail[] {
+  const targetSet = new Set(failedTargets);
+  const details = status.failureDetails?.filter(detail =>
+    detail.serviceId ? targetSet.has(detail.serviceId) : true,
+  );
+  if (details && details.length > 0) return details;
+  return failedTargets.map(serviceId => ({ serviceId, message: status.error ?? '上传失败' }));
+}
+
 // 迁移核心逻辑（migrateOneItem / processBatch / extractErrorMessage 等）抽至 batchMigrate/migrateCore.ts
 // 预加载逻辑（preloadAllPending / PreloadedItem）抽至 batchMigrate/preloadPending.ts
 
@@ -299,9 +314,6 @@ export function useBatchMigrateManager() {
     migrateResult.value = null;
     allItemStatuses.value = [];
 
-    const config = await getOrCacheConfig();
-    const multiUploader = cachedUploader ?? new MultiServiceUploader();
-
     const startTime = Date.now();
     // 初始 totalCount 用 sum（上界估计），保证 percent 永远不溢 100%；
     // preload 完成后再用真实并集大小（all.length）覆盖
@@ -312,150 +324,171 @@ export function useBatchMigrateManager() {
     };
     globalProgress.value = { current: 0, total: initialTotal, percent: 0 };
 
-    // ===== 流水线：预加载与处理并发，首批 100 条加载完立即开始处理 =====
-    const processQueue: PreloadedItem[] = [];
-    let preloadDone = false;
-    let preloadError: unknown = null;
-
-    const preloadPromise = preloadAllPending({
-      targets,
-      maxSuccessCount: maxSuccessCount.value,
-      sourceServiceFilter: sourceServiceFilter.value,
-      timestampAfter: timestampAfterMs.value,
-      allItemStatuses,
-      isCancelled,
-      isPaused,
-      onBatch(batch) { processQueue.push(...batch); },
-    }).then(all => {
-      migrateStats.value = { ...migrateStats.value, totalCount: all.length };
-      globalProgress.value = { ...globalProgress.value, total: all.length };
-      preloadDone = true;
-    }).catch((err) => {
-      log.error('预加载失败', err);
-      preloadError = err;
-      preloadDone = true;
-    });
-
     let successCount = 0, failedCount = 0, skippedCount = 0;
     const failures: MigrateResult['failures'] = [];
     const partialFailures: MigrateResult['partialFailures'] = [];
     let processed = 0, consecutiveFailures = 0, autoAborted = false;
+    let preloadError: unknown = null;
+    let runtimeError: unknown = null;
+    let preloadPromise: Promise<void> | null = null;
     cumulativeCounts.value = { success: 0, failed: 0, skipped: 0 };
 
-    let cursor = 0;
-    while (true) {
-      if (isCancelled.value) break;
+    try {
+      const config = await getOrCacheConfig();
+      const multiUploader = cachedUploader ?? new MultiServiceUploader();
 
-      while (isPaused.value && !isCancelled.value) {
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-      if (isCancelled.value) break;
+      // ===== 流水线：预加载与处理并发，首批 100 条加载完立即开始处理 =====
+      const processQueue: PreloadedItem[] = [];
+      let preloadDone = false;
 
-      if (cursor >= processQueue.length) {
-        if (preloadDone) break; // 全部加载完且已全部处理 → 退出
-        await new Promise(r => setTimeout(r, 0)); // yield：等 onBatch 推入新条目
-        continue;
-      }
+      preloadPromise = preloadAllPending({
+        targets,
+        maxSuccessCount: maxSuccessCount.value,
+        sourceServiceFilter: sourceServiceFilter.value,
+        timestampAfter: timestampAfterMs.value,
+        allItemStatuses,
+        isCancelled,
+        isPaused,
+        onBatch(batch) { processQueue.push(...batch); },
+      }).then(all => {
+        migrateStats.value = { ...migrateStats.value, totalCount: all.length };
+        globalProgress.value = { ...globalProgress.value, total: all.length };
+        preloadDone = true;
+      }).catch((err) => {
+        log.error('预加载失败', err);
+        preloadError = err;
+        preloadDone = true;
+      });
 
-      const totalToProcess = migrateStats.value.totalCount;
-      const end = Math.min(cursor + PAGE_SIZE, processQueue.length);
-      const chunk = processQueue.slice(cursor, end);
-      // 过滤出仍为 pending 的（暂停回退 / 上一轮未处理完的重试）
-      const pendingChunk = chunk.filter(p => p.status.status === 'pending');
-      if (pendingChunk.length === 0) {
-        cursor = end;
-        continue;
-      }
+      let cursor = 0;
+      while (true) {
+        if (isCancelled.value) break;
 
-      // 按需拉取当前 chunk 的完整 HistoryItem：
-      // processQueue 只存 id，避免整个待迁移集合的 HistoryItem 常驻内存
-      const fetched = await historyDB.getItemsByIds(pendingChunk.map(p => p.id));
-      const byId = new Map(fetched.map(i => [i.id, i]));
+        while (isPaused.value && !isCancelled.value) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        if (isCancelled.value) break;
 
-      const batchItems: HistoryItem[] = [];
-      const batchStatuses: MigrateItemStatus[] = [];
-      for (const p of pendingChunk) {
-        const item = byId.get(p.id);
-        if (!item) {
-          // 预加载到处理间隙被删除 → 视为 skipped，不再走 processBatch
-          p.status.status = 'skipped';
-          skippedCount++;
-          processed++;
+        if (cursor >= processQueue.length) {
+          if (preloadDone) break; // 全部加载完且已全部处理 → 退出
+          await new Promise(r => setTimeout(r, 0)); // yield：等 onBatch 推入新条目
           continue;
         }
-        batchItems.push(item);
-        batchStatuses.push(p.status);
-      }
-      if (batchStatuses.length === 0) {
-        cumulativeCounts.value = { success: successCount, failed: failedCount, skipped: skippedCount };
-        migrateStats.value = {
-          ...migrateStats.value,
-          processedCount: processed,
-          elapsedMs: Date.now() - startTime,
-        };
-        allItemStatuses.value = [...allItemStatuses.value];
-        globalProgress.value = {
-          current: processed,
-          total: totalToProcess,
-          percent: totalToProcess > 0 ? Math.min(100, Math.round((processed / totalToProcess) * 100)) : 0,
-        };
-        cursor = end;
-        continue;
-      }
-      itemStatuses.value = batchStatuses;
 
-      await processBatch(batchItems, batchStatuses, targets, config, multiUploader, isCancelled, isPaused, migrateStats, (status) => {
-        if (status.status === 'pending') return;
-        if (status.status === 'success') {
-          successCount++;
-          consecutiveFailures = 0;
-          const failedTargets = Object.entries(status.serviceResults)
-            .filter(([, state]) => state === 'failed')
-            .map(([sid]) => sid);
-          if (failedTargets.length > 0) {
-            partialFailures.push({ fileName: status.fileName, failedTargets });
-          }
-        } else if (status.status === 'skipped') {
-          skippedCount++;
-          consecutiveFailures = 0;
-        } else {
-          failedCount++;
-          consecutiveFailures++;
-          if (status.error) failures.push({
-            historyId: status.historyId,
-            fileName: status.fileName,
-            error: status.error,
-            errorType: status.errorType,
-            details: status.failureDetails ?? [{ message: status.error }],
-          });
-          if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && !autoAborted) {
-            autoAborted = true;
-            isCancelled.value = true;
-            log.warn(`连续 ${consecutiveFailures} 次失败，自动终止迁移`);
-          }
+        const totalToProcess = migrateStats.value.totalCount;
+        const end = Math.min(cursor + PAGE_SIZE, processQueue.length);
+        const chunk = processQueue.slice(cursor, end);
+        // 过滤出仍为 pending 的（暂停回退 / 上一轮未处理完的重试）
+        const pendingChunk = chunk.filter(p => p.status.status === 'pending');
+        if (pendingChunk.length === 0) {
+          cursor = end;
+          continue;
         }
-        processed++;
-        cumulativeCounts.value = { success: successCount, failed: failedCount, skipped: skippedCount };
-        migrateStats.value = {
-          ...migrateStats.value,
-          processedCount: processed,
-          elapsedMs: Date.now() - startTime,
-        };
-        scheduleStatusUpdate(batchStatuses, processed, totalToProcess);
-      // 目标级落定（并行上传时单个目标成功/失败）→ RAF 节流刷新 chip，让 UI 一个个变色
-      }, () => scheduleStatusUpdate(batchStatuses, processed, totalToProcess));
 
-      flushStatusUpdate();
+        // 按需拉取当前 chunk 的完整 HistoryItem：
+        // processQueue 只存 id，避免整个待迁移集合的 HistoryItem 常驻内存
+        const fetched = await historyDB.getItemsByIds(pendingChunk.map(p => p.id));
+        const byId = new Map(fetched.map(i => [i.id, i]));
 
-      // 当前 chunk 所有项都落定 → 推进 cursor；否则重试本 chunk（暂停场景回退为 pending 时）
-      const allSettled = batchStatuses.every(s => s.status !== 'pending');
-      if (allSettled) cursor = end;
+        const batchItems: HistoryItem[] = [];
+        const batchStatuses: MigrateItemStatus[] = [];
+        for (const p of pendingChunk) {
+          const item = byId.get(p.id);
+          if (!item) {
+            // 预加载到处理间隙被删除 → 视为 skipped，不再走 processBatch
+            p.status.status = 'skipped';
+            skippedCount++;
+            processed++;
+            continue;
+          }
+          batchItems.push(item);
+          batchStatuses.push(p.status);
+        }
+        if (batchStatuses.length === 0) {
+          cumulativeCounts.value = { success: successCount, failed: failedCount, skipped: skippedCount };
+          migrateStats.value = {
+            ...migrateStats.value,
+            processedCount: processed,
+            elapsedMs: Date.now() - startTime,
+          };
+          allItemStatuses.value = [...allItemStatuses.value];
+          globalProgress.value = {
+            current: processed,
+            total: totalToProcess,
+            percent: totalToProcess > 0 ? Math.min(100, Math.round((processed / totalToProcess) * 100)) : 0,
+          };
+          cursor = end;
+          continue;
+        }
+        itemStatuses.value = batchStatuses;
+
+        await processBatch(batchItems, batchStatuses, targets, config, multiUploader, isCancelled, isPaused, migrateStats, (status) => {
+          if (status.status === 'pending') return;
+          if (status.status === 'success') {
+            successCount++;
+            consecutiveFailures = 0;
+            const failedTargets = getFailedTargets(status);
+            if (failedTargets.length > 0) {
+              const details = getFailureDetails(status, failedTargets);
+              partialFailures.push({ historyId: status.historyId, fileName: status.fileName, failedTargets });
+              failures.push({
+                historyId: status.historyId,
+                fileName: status.fileName,
+                error: status.error ?? '部分目标上传失败',
+                errorType: status.errorType ?? 'upload',
+                details,
+                isPartial: true,
+                failedTargets,
+              });
+            }
+          } else if (status.status === 'skipped') {
+            skippedCount++;
+            consecutiveFailures = 0;
+          } else {
+            failedCount++;
+            consecutiveFailures++;
+            if (status.error) failures.push({
+              historyId: status.historyId,
+              fileName: status.fileName,
+              error: status.error,
+              errorType: status.errorType,
+              details: status.failureDetails ?? [{ message: status.error }],
+            });
+            if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && !autoAborted) {
+              autoAborted = true;
+              isCancelled.value = true;
+              log.warn(`连续 ${consecutiveFailures} 次失败，自动终止迁移`);
+            }
+          }
+          processed++;
+          cumulativeCounts.value = { success: successCount, failed: failedCount, skipped: skippedCount };
+          migrateStats.value = {
+            ...migrateStats.value,
+            processedCount: processed,
+            elapsedMs: Date.now() - startTime,
+          };
+          scheduleStatusUpdate(batchStatuses, processed, totalToProcess);
+        // 目标级落定（并行上传时单个目标成功/失败）→ RAF 节流刷新 chip，让 UI 一个个变色
+        }, () => scheduleStatusUpdate(batchStatuses, processed, totalToProcess));
+
+        flushStatusUpdate();
+
+        // 当前 chunk 所有项都落定 → 推进 cursor；否则重试本 chunk（暂停场景回退为 pending 时）
+        const allSettled = batchStatuses.every(s => s.status !== 'pending');
+        if (allSettled) cursor = end;
+      }
+
+      await preloadPromise; // 确保预加载 Promise 落定（cancel 时也需干净退出）
+    } catch (err) {
+      log.error('迁移执行失败', err);
+      runtimeError = err;
+      isCancelled.value = true;
+      if (preloadPromise) await preloadPromise.catch(() => undefined);
     }
-
-    await preloadPromise; // 确保预加载 Promise 落定（cancel 时也需干净退出）
 
     let pauseReason: MigrateResult['pauseReason'];
     if (autoAborted) pauseReason = 'consecutive-failures';
+    else if (runtimeError !== null) pauseReason = 'runtime-error';
     else if (isCancelled.value) pauseReason = 'user-cancelled';
     else if (preloadError !== null) pauseReason = 'preload-error';
     finalizeResult(targets, startTime, successCount, failedCount, skippedCount, failures, partialFailures, pauseReason);

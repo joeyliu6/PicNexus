@@ -30,10 +30,16 @@ async function handleRetryFailed(historyIds: string[]) {
   await manager.retryFailed(historyIds);
 }
 
+async function handleRetrySingleFailed(historyId: string) {
+  prefilterUnhealthyTargets();
+  await manager.retrySingleFailed(historyId);
+}
+
 // provide 给子组件，retryFailed 替换为带健康过滤的包装版本
 provide(MIGRATE_KEY, {
   ...manager,
   retryFailed: handleRetryFailed,
+  retrySingleFailed: handleRetrySingleFailed,
   healthStatusMap,
   healthTooltipMap,
 });

@@ -89,9 +89,15 @@ const SelectStub = defineComponent({
 const ProgressRetryStub = defineComponent({
   setup() {
     const ctx = inject(MIGRATE_KEY)!;
-    return { retry: () => ctx.retryFailed(['h1']) };
+    return {
+      retry: () => ctx.retryFailed(['h1']),
+      retryOne: () => ctx.retrySingleFailed('h1'),
+    };
   },
-  template: '<button class="retry-failed" type="button" @click="retry">retry</button>',
+  template: `
+    <button class="retry-failed" type="button" @click="retry">retry</button>
+    <button class="retry-single" type="button" @click="retryOne">retry one</button>
+  `,
 });
 
 function mountPanel() {
@@ -155,5 +161,20 @@ describe('BatchMigratePanel', () => {
 
     expect(manager.targetServices.value.find((service: MigrateTargetService) => service.serviceId === 'smms')?.checked).toBe(false);
     expect(manager.retryFailed).toHaveBeenCalledWith(['h1']);
+  });
+
+  it('filters unhealthy targets before retrying a single failed row', async () => {
+    const manager = createManager([
+      { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 1, checked: true },
+      { serviceId: 'smms', displayName: 'SM.MS', isConfigured: true, pendingCount: 1, checked: true },
+    ], 'done');
+    mockState.manager = manager;
+    mockState.healthStatusMap.value = { github: 'verified', smms: 'error' };
+    const wrapper = mountPanel();
+
+    await wrapper.get('.retry-single').trigger('click');
+
+    expect(manager.targetServices.value.find((service: MigrateTargetService) => service.serviceId === 'smms')?.checked).toBe(false);
+    expect(manager.retrySingleFailed).toHaveBeenCalledWith('h1');
   });
 });

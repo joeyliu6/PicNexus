@@ -136,4 +136,23 @@ describe('preloadAllPending', () => {
     expect(result).toHaveLength(100);
     expect(historyDB.getItemsByBackupCount).toHaveBeenCalledTimes(1);
   });
+
+  it('does not commit the first page when cancellation happens before the query returns', async () => {
+    vi.mocked(historyDB.getItemsByBackupCount)
+      .mockResolvedValueOnce({ items: [makeItem(1)], total: 1, hasMore: false });
+    const allItemStatuses = shallowRef([]);
+
+    const result = await preloadAllPending({
+      targets: ['r2'],
+      maxSuccessCount: 1,
+      sourceServiceFilter: ['source'],
+      timestampAfter: null,
+      allItemStatuses,
+      isCancelled: ref(true),
+      isPaused: ref(false),
+    });
+
+    expect(result).toHaveLength(0);
+    expect(allItemStatuses.value).toHaveLength(0);
+  });
 });

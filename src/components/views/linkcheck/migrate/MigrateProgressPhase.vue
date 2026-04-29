@@ -65,6 +65,16 @@ const ACTIVE_STATUSES = new Set<MigrateItemStatus['status']>([
   'pending', 'downloading', 'converting', 'uploading',
 ]);
 
+function hasFailedTarget(item: Pick<MigrateRowItem, 'serviceResults'>): boolean {
+  return Object.values(item.serviceResults ?? {}).some(state => state === 'failed');
+}
+
+function needsRetry(item: Pick<MigrateRowItem, 'historyId'>): boolean {
+  if (phase.value !== 'done' || !migrateResult.value) return false;
+  if (!item.historyId) return false;
+  return migrateResult.value.failures.some(f => f.historyId === item.historyId);
+}
+
 function toRowItem(item: MigrateItemStatus, detailsOverride?: MigrateItemStatus['failureDetails']): MigrateRowItem {
   return {
     historyId: item.historyId,
@@ -85,7 +95,7 @@ const rawList = computed<MigrateRowItem[]>(() => {
     const r = migrateResult.value;
     const failureDetailsById = new Map(r.failures.map(f => [f.historyId, f.details]));
     return r.itemsSnapshot.map(item =>
-      toRowItem(item, item.status === 'failed' ? failureDetailsById.get(item.historyId) : undefined),
+      toRowItem(item, (item.status === 'failed' || hasFailedTarget(item)) ? failureDetailsById.get(item.historyId) : undefined),
     );
   }
   return allItemStatuses.value.map(item => toRowItem(item));
@@ -127,24 +137,25 @@ const displayList = computed<MigrateRowItem[]>(() => {
   const items = scopedList.value;
   if (f === 'processing') return items.filter(s => ACTIVE_STATUSES.has(s.status));
   if (f === 'success') return items.filter(s => s.status === 'success');
-  if (f === 'failed') return items.filter(s => s.status === 'failed');
+  if (f === 'failed') return items.filter(s => s.status === 'failed' || hasFailedTarget(s));
   if (f === 'skipped') return items.filter(s => s.status === 'skipped');
   return items;
 });
 
 const filterCounts = computed(() => {
   const items = scopedList.value;
-  let success = 0, failed = 0, skipped = 0;
+  let success = 0, failed = 0, skipped = 0, terminal = 0;
   for (const it of items) {
-    if (it.status === 'success') success++;
-    else if (it.status === 'failed') failed++;
-    else if (it.status === 'skipped') skipped++;
+    if (it.status === 'success') { success++; terminal++; }
+    else if (it.status === 'failed') terminal++;
+    else if (it.status === 'skipped') { skipped++; terminal++; }
+    if (it.status === 'failed' || hasFailedTarget(it)) failed++;
   }
   // "已加载/总数" 预填仅在 migrating 且无搜索/图床筛选时有意义
   const showTotal = phase.value === 'migrating' && !hasActiveFilter.value;
   const total = showTotal ? migrateStats.value.totalCount : undefined;
   const effectiveTotal = showTotal && total && total > 0 ? total : items.length;
-  const processing = Math.max(0, effectiveTotal - success - failed - skipped);
+  const processing = Math.max(0, effectiveTotal - terminal);
   return { all: items.length, processing, success, failed, skipped, total };
 });
 
@@ -182,7 +193,7 @@ const showPagination = computed(() => effectiveTotalCount.value > 0);
 
 watch(phase, (p) => {
   if (p === 'done') {
-    const failCount = migrateResult.value?.failedCount ?? 0;
+    const failCount = migrateResult.value?.failures.length ?? 0;
     activeFilter.value = failCount > 0 ? 'failed' : 'all';
   } else if (p === 'migrating') {
     activeFilter.value = 'all';
@@ -326,7 +337,7 @@ function handleResume() { resumeMigrate(); }
           :key="item.historyId || `${item.fileName}-${idx}`"
           :item="item"
           :target-service-ids="currentTargetServiceIds"
-          :show-retry="phase === 'done' && item.status === 'failed'"
+          :show-retry="needsRetry(item)"
           :retrying="!!(item.historyId && retryingIds.has(item.historyId))"
           :copied-key="copiedMigrateKey"
           @retry="handleRetryOne"

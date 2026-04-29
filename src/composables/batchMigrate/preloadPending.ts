@@ -101,6 +101,7 @@ export async function preloadAllPending(args: PreloadArgs): Promise<PreloadedIte
 
   const first = await historyDB.getItemsByBackupCount({ ...params, limit: PRELOAD_FIRST_CHUNK, offset: 0 });
   const totalInDB = first.total;
+  if (isCancelled.value) return items;
   commit(first.items.map(makePreloaded).filter((p): p is PreloadedItem => p !== null));
   updateCursor(first.items);
   let loadedFromDb = first.items.length;

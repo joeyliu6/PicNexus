@@ -181,6 +181,12 @@ export async function migrateOneItem(
     }
   }));
   const hasSuccess = newResults.some(r => r.status === 'success');
+  const failedDetails = newResults
+    .filter(r => r.status === 'failed')
+    .map<MigrateFailureDetail>(r => ({
+      serviceId: r.serviceId,
+      message: cleanMigrateError(r.serviceId, r.error ?? ''),
+    }));
 
   // 清理临时文件
   for (const f of [tempFilePath, ...tempFiles]) {
@@ -188,6 +194,11 @@ export async function migrateOneItem(
   }
 
   if (hasSuccess) {
+    if (failedDetails.length > 0) {
+      status.errorType = 'upload';
+      status.failureDetails = failedDetails;
+      status.error = formatMigrateFailureSummary(failedDetails);
+    }
     try {
       const updatedResults = [
         ...item.results,
@@ -212,13 +223,7 @@ export async function migrateOneItem(
       markStatusFailed(status, [{ message: '历史记录更新失败' }], 'upload');
     }
   } else {
-    const details = newResults
-      .filter(r => r.status === 'failed')
-      .map<MigrateFailureDetail>(r => ({
-        serviceId: r.serviceId,
-        message: cleanMigrateError(r.serviceId, r.error ?? ''),
-      }));
-    markStatusFailed(status, details, 'upload');
+    markStatusFailed(status, failedDetails, 'upload');
   }
 }
 
