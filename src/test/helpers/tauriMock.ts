@@ -2,9 +2,10 @@ import { vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, emit } from '@tauri-apps/api/event';
 import { getVersion } from '@tauri-apps/api/app';
-import { appDataDir, basename, dirname, join } from '@tauri-apps/api/path';
+import { appDataDir, basename, dirname, join, resolveResource } from '@tauri-apps/api/path';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open as dialogOpen, save as dialogSave } from '@tauri-apps/plugin-dialog';
+import { register, unregisterAll, isRegistered, unregister } from '@tauri-apps/plugin-global-shortcut';
 import {
   copyFile,
   exists,
@@ -23,6 +24,11 @@ import {
 } from '@tauri-apps/plugin-clipboard-manager';
 import { open as shellOpen } from '@tauri-apps/plugin-shell';
 import { fetch as httpFetch } from '@tauri-apps/plugin-http';
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from '@tauri-apps/plugin-notification';
 import { check as updaterCheck } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 
@@ -47,6 +53,7 @@ vi.mock('@tauri-apps/api/path', () => ({
   join: vi.fn((...parts: string[]) => parts.join('/')),
   basename: vi.fn(async (filePath: string) => filePath.split(/[/\\]/).pop() || ''),
   dirname: vi.fn(async (filePath: string) => filePath.split(/[/\\]/).slice(0, -1).join('/') || '/'),
+  resolveResource: vi.fn(async (resourcePath: string) => `/mock/resources/${resourcePath}`),
 }));
 
 vi.mock('@tauri-apps/api/webview', () => ({
@@ -77,6 +84,13 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
   save: vi.fn(),
 }));
 
+vi.mock('@tauri-apps/plugin-global-shortcut', () => ({
+  register: vi.fn(),
+  unregisterAll: vi.fn(),
+  isRegistered: vi.fn().mockResolvedValue(false),
+  unregister: vi.fn(),
+}));
+
 vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn().mockResolvedValue(vi.fn()),
   emit: vi.fn(),
@@ -96,6 +110,12 @@ vi.mock('@tauri-apps/plugin-shell', () => ({
 
 vi.mock('@tauri-apps/plugin-http', () => ({
   fetch: vi.fn(),
+}));
+
+vi.mock('@tauri-apps/plugin-notification', () => ({
+  isPermissionGranted: vi.fn().mockResolvedValue(true),
+  requestPermission: vi.fn().mockResolvedValue('granted'),
+  sendNotification: vi.fn(),
 }));
 
 vi.mock('@tauri-apps/plugin-updater', () => ({
@@ -174,6 +194,16 @@ export function resetTauriMocks(): void {
   getDialogOpenMock().mockReset();
   getDialogSaveMock().mockReset();
 
+  const shortcut = getGlobalShortcutMocks();
+  shortcut.register.mockReset();
+  shortcut.register.mockResolvedValue(undefined);
+  shortcut.unregisterAll.mockReset();
+  shortcut.unregisterAll.mockResolvedValue(undefined);
+  shortcut.isRegistered.mockReset();
+  shortcut.isRegistered.mockResolvedValue(false);
+  shortcut.unregister.mockReset();
+  shortcut.unregister.mockResolvedValue(undefined);
+
   const path = getPathMocks();
   path.appDataDir.mockReset();
   path.appDataDir.mockResolvedValue('/mock/appdata');
@@ -183,6 +213,8 @@ export function resetTauriMocks(): void {
   path.basename.mockImplementation(async (filePath: string) => filePath.split(/[/\\]/).pop() || '');
   path.dirname.mockReset();
   path.dirname.mockImplementation(async (filePath: string) => filePath.split(/[/\\]/).slice(0, -1).join('/') || '/');
+  path.resolveResource.mockReset();
+  path.resolveResource.mockImplementation(async (resourcePath: string) => `/mock/resources/${resourcePath}`);
   getCurrentWebviewMock().mockReset();
   getCurrentWebviewMock().mockReturnValue({
     label: 'mock-webview',
@@ -216,6 +248,13 @@ export function resetTauriMocks(): void {
 
   getHttpFetchMock().mockReset();
 
+  const notification = getNotificationMocks();
+  notification.isPermissionGranted.mockReset();
+  notification.isPermissionGranted.mockResolvedValue(true);
+  notification.requestPermission.mockReset();
+  notification.requestPermission.mockResolvedValue('granted');
+  notification.sendNotification.mockReset();
+
   getUpdaterCheckMock().mockReset();
   getUpdaterCheckMock().mockResolvedValue(null as never);
 
@@ -247,12 +286,22 @@ export function getDialogSaveMock() {
   return vi.mocked(dialogSave);
 }
 
+export function getGlobalShortcutMocks() {
+  return {
+    register: vi.mocked(register),
+    unregisterAll: vi.mocked(unregisterAll),
+    isRegistered: vi.mocked(isRegistered),
+    unregister: vi.mocked(unregister),
+  };
+}
+
 export function getPathMocks() {
   return {
     appDataDir: vi.mocked(appDataDir),
     join: vi.mocked(join),
     basename: vi.mocked(basename),
     dirname: vi.mocked(dirname),
+    resolveResource: vi.mocked(resolveResource),
   };
 }
 
@@ -288,6 +337,14 @@ export function getShellOpenMock() {
 
 export function getHttpFetchMock() {
   return vi.mocked(httpFetch);
+}
+
+export function getNotificationMocks() {
+  return {
+    isPermissionGranted: vi.mocked(isPermissionGranted),
+    requestPermission: vi.mocked(requestPermission),
+    sendNotification: vi.mocked(sendNotification),
+  };
 }
 
 export function getUpdaterCheckMock() {
