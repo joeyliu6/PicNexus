@@ -10,11 +10,9 @@ export async function getLinkCheckInvalidQuery(
   return db.select<LinkCheckLiteRow[]>(`
     SELECT id, local_file_name, primary_service, results, link_check_status
     FROM history_items
-    WHERE link_check_summary IS NOT NULL
-      AND (
-        json_extract(link_check_summary, '$.invalidLinks') > 0
-        OR json_extract(link_check_summary, '$.uncheckedLinks') > 0
-      )
+    WHERE link_check_summary IS NULL
+      OR json_extract(link_check_summary, '$.invalidLinks') > 0
+      OR json_extract(link_check_summary, '$.uncheckedLinks') > 0
     ORDER BY timestamp DESC
   `);
 }

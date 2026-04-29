@@ -137,7 +137,7 @@ fn main() {
         )
         .manage(HttpClient(http_client))     // 注册全局 HTTP 客户端
         .manage(CloseToTrayState(AtomicBool::new(true)))
-        .manage(commands::link_checker::BatchCheckCancelFlag(Arc::new(AtomicBool::new(false))))
+        .manage(commands::link_checker::BatchCheckCancelFlag::new())
         .manage(commands::link_checker::BatchCheckPauseFlag(Arc::new(AtomicBool::new(false))))
         .manage(commands::md_scanner::MdScanCancelFlag(Arc::new(AtomicBool::new(false))))
         .manage(ServerState {

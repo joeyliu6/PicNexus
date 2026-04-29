@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { nextTick } from 'vue';
-import { getInvokeMock } from '../../../helpers/tauriMock';
+import { getInvokeMock, getListenMock } from '../../../helpers/tauriMock';
 import type { LinkCheckRow } from '../../../../types/linkCheck';
 
 // ─── Hoisted Mock 句柄 ──────────────────────────────────────────
@@ -35,6 +35,7 @@ const {
   onCacheEventMock: vi.fn().mockResolvedValue(() => void 0),
 }));
 const invokeMock = getInvokeMock();
+const listenMock = getListenMock();
 
 vi.mock('../../../../composables/useToast', () => ({
   useToast: () => ({
@@ -92,6 +93,7 @@ function makeRow(overrides: Partial<LinkCheckRow> = {}): LinkCheckRow {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  listenMock.mockResolvedValue(vi.fn());
   loadConfigMock.mockResolvedValue({});
   historyDBOpenMock.mockResolvedValue(undefined);
   historyDBBatchUpdateLinkCheckStatusMock.mockResolvedValue(undefined);
@@ -325,5 +327,64 @@ describe('useLinkCheckManager.checkSubset', () => {
     const requestPayload = payload as { request: { links: unknown[] } };
     expect(requestPayload.request.links).toHaveLength(1);
     expect(requestPayload.request.links[0]).toMatchObject({ history_id: 'h1', service_id: 'r2' });
+    expect(requestPayload.request).toHaveProperty('batch_id');
+  });
+
+  it('[BUG 回归] 忽略非当前 batch_id 的进度事件，避免取消后旧批次污染新进度', async () => {
+    const m = await freshManager();
+    let progressHandler: ((event: { payload: any }) => void) | undefined;
+    listenMock.mockImplementationOnce(async (_event, handler) => {
+      progressHandler = handler as (event: { payload: any }) => void;
+      return vi.fn();
+    });
+
+    m.checkRows.value = [
+      makeRow({ historyId: 'h1', serviceId: 'r2', url: 'https://cdn.example.com/a.jpg' }),
+    ];
+    invokeMock.mockImplementationOnce(async (_command, payload) => {
+      const requestPayload = payload as { request: { batch_id: string } };
+      progressHandler?.({
+        payload: { batch_id: 'old-batch', checked: 1, total: 1, current_url: 'old' },
+      });
+      progressHandler?.({
+        payload: { batch_id: requestPayload.request.batch_id, checked: 1, total: 1, current_url: 'current' },
+      });
+      return {
+        batch_id: requestPayload.request.batch_id,
+        results: [],
+        total: 1, valid: 0, invalid: 0, timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: false,
+      };
+    });
+
+    await m.checkSubset({ targets: [{ historyId: 'h1', serviceId: 'r2' }] });
+
+    expect(m.progress.value?.current_url).toBe('current');
+  });
+
+  it('[BUG 回归] 非当前 batch_id 的最终结果不会写入 UI/DB', async () => {
+    const m = await freshManager();
+    m.checkRows.value = [
+      makeRow({ historyId: 'h1', serviceId: 'r2', url: 'https://cdn.example.com/a.jpg' }),
+    ];
+    invokeMock.mockResolvedValueOnce({
+      batch_id: 'old-batch',
+      results: [
+        {
+          link: 'https://cdn.example.com/a.jpg',
+          history_id: 'h1',
+          service_id: 'r2',
+          is_valid: true,
+          error_type: 'success',
+          browser_might_work: false,
+        },
+      ],
+      total: 1, valid: 1, invalid: 0, timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: false,
+    });
+
+    const result = await m.checkSubset({ targets: [{ historyId: 'h1', serviceId: 'r2' }] });
+
+    expect(result).toBeNull();
+    expect(m.checkRows.value[0].checkResult).toBeUndefined();
+    expect(historyDBBatchUpdateLinkCheckStatusMock).not.toHaveBeenCalled();
   });
 });

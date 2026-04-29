@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::Emitter;
@@ -892,17 +892,49 @@ pub async fn download_url_image(
 /// 100ms 在用户感知上几乎即时，空转代价可忽略。
 const PAUSE_POLL_INTERVAL_MS: u64 = 100;
 
-/// 若当前处于 paused 状态则轮询等待直至 resume 或 cancel；
-/// 返回 true 表示"应立即退出任务"（即 cancel 已置位）。
-async fn await_resume_or_cancel(pause: &Arc<AtomicBool>, cancel: &Arc<AtomicBool>) -> bool {
-    while pause.load(Ordering::SeqCst) && !cancel.load(Ordering::SeqCst) {
-        tokio::time::sleep(Duration::from_millis(PAUSE_POLL_INTERVAL_MS)).await;
-    }
-    cancel.load(Ordering::SeqCst)
+fn is_batch_cancelled(cancel_generation: &Arc<AtomicU64>, batch_generation: u64) -> bool {
+    cancel_generation.load(Ordering::SeqCst) >= batch_generation
 }
 
-/// 批量检测取消标志（Tauri State 管理）
-pub struct BatchCheckCancelFlag(pub Arc<AtomicBool>);
+/// 若当前处于 paused 状态则轮询等待直至 resume 或 cancel；
+/// 返回 true 表示"应立即退出任务"（即当前批次已被取消）。
+async fn await_resume_or_cancel(
+    pause: &Arc<AtomicBool>,
+    cancel_generation: &Arc<AtomicU64>,
+    batch_generation: u64,
+) -> bool {
+    while pause.load(Ordering::SeqCst) && !is_batch_cancelled(cancel_generation, batch_generation) {
+        tokio::time::sleep(Duration::from_millis(PAUSE_POLL_INTERVAL_MS)).await;
+    }
+    is_batch_cancelled(cancel_generation, batch_generation)
+}
+
+/// 批量检测取消代际（Tauri State 管理）
+pub struct BatchCheckCancelFlag {
+    active_generation: Arc<AtomicU64>,
+    cancelled_generation: Arc<AtomicU64>,
+}
+
+impl BatchCheckCancelFlag {
+    pub fn new() -> Self {
+        Self {
+            active_generation: Arc::new(AtomicU64::new(0)),
+            cancelled_generation: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    fn start_batch(&self) -> u64 {
+        let generation = self.active_generation.fetch_add(1, Ordering::SeqCst) + 1;
+        // 新批次开始时只取消更老的批次；当前批次需要保持可运行。
+        self.cancelled_generation.store(generation.saturating_sub(1), Ordering::SeqCst);
+        generation
+    }
+
+    fn cancel_active(&self) {
+        let generation = self.active_generation.load(Ordering::SeqCst);
+        self.cancelled_generation.store(generation, Ordering::SeqCst);
+    }
+}
 
 /// 批量检测暂停标志（Tauri State 管理）
 ///
@@ -915,6 +947,8 @@ pub struct BatchCheckPauseFlag(pub Arc<AtomicBool>);
 pub struct BatchCheckRequest {
     /// 待检测链接列表
     pub links: Vec<BatchCheckItem>,
+    /// 前端生成的批次 ID，用于隔离旧批次进度事件
+    pub batch_id: Option<String>,
     /// 全局并发数（默认 10）
     pub concurrency: Option<usize>,
     /// 单图床最大并发数（默认 3）
@@ -943,6 +977,7 @@ pub struct BatchCheckItem {
 /// 节流时一次性吐出，事件频率不变（仍为 PROGRESS_EMIT_EVERY_N 控制）。
 #[derive(Debug, Clone, Serialize)]
 pub struct BatchCheckProgress {
+    pub batch_id: Option<String>,
     pub checked: usize,
     pub total: usize,
     pub current_url: String,
@@ -953,6 +988,7 @@ pub struct BatchCheckProgress {
 /// 批量检测最终结果
 #[derive(Debug, Serialize)]
 pub struct BatchCheckResult {
+    pub batch_id: Option<String>,
     pub results: Vec<BatchCheckItemResult>,
     pub total: usize,
     pub valid: usize,
@@ -1001,13 +1037,15 @@ pub async fn batch_check_links(
         total, concurrency, per_host_limit, timeout_secs
     );
 
-    // 重置取消 / 暂停标志
-    cancel_flag.0.store(false, Ordering::SeqCst);
+    // 分配批次代际：取消只作用于当时的 active generation，后续新批次不会复活旧任务。
+    let batch_generation = cancel_flag.start_batch();
+    let batch_id = request.batch_id.clone();
+    // 重置暂停标志
     pause_flag.0.store(false, Ordering::SeqCst);
 
     let start_time = Instant::now();
     let global_semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
-    let cancel = cancel_flag.0.clone();
+    let cancel_generation = cancel_flag.cancelled_generation.clone();
     let pause = pause_flag.0.clone();
     let client = http_client.0.clone();
 
@@ -1027,17 +1065,18 @@ pub async fn batch_check_links(
     for item in request.links {
         let global_sem = global_semaphore.clone();
         let host_sems = host_semaphores.clone();
-        let cancel = cancel.clone();
+        let cancel_generation = cancel_generation.clone();
         let pause = pause.clone();
         let client = client.clone();
         let window = window.clone();
         let checked = checked_count.clone();
         let pending = pending_results.clone();
         let total_count = total;
+        let event_batch_id = batch_id.clone();
 
         let handle = tokio::spawn(async move {
             // 检查取消 / 暂停标志（cancel 优先 pause）
-            if await_resume_or_cancel(&pause, &cancel).await {
+            if await_resume_or_cancel(&pause, &cancel_generation, batch_generation).await {
                 return None;
             }
 
@@ -1045,7 +1084,7 @@ pub async fn batch_check_links(
             let _global_permit = global_sem.acquire().await.ok()?;
 
             // 再次检查取消 / 暂停
-            if await_resume_or_cancel(&pause, &cancel).await {
+            if await_resume_or_cancel(&pause, &cancel_generation, batch_generation).await {
                 return None;
             }
 
@@ -1060,7 +1099,7 @@ pub async fn batch_check_links(
             let _host_permit = host_sem.acquire().await.ok()?;
 
             // 最后一次检查取消 / 暂停
-            if await_resume_or_cancel(&pause, &cancel).await {
+            if await_resume_or_cancel(&pause, &cancel_generation, batch_generation).await {
                 return None;
             }
 
@@ -1095,6 +1134,7 @@ pub async fn batch_check_links(
                     std::mem::take(&mut *buf)
                 };
                 let _ = window.emit("link-check://progress", BatchCheckProgress {
+                    batch_id: event_batch_id,
                     checked: done,
                     total: total_count,
                     current_url: item.url,
@@ -1120,12 +1160,12 @@ pub async fn batch_check_links(
     }
 
     let elapsed_ms = start_time.elapsed().as_millis() as u64;
-    let cancelled = cancel.load(Ordering::SeqCst);
+    let cancelled = is_batch_cancelled(&cancel_flag.cancelled_generation, batch_generation);
 
     let valid = results.iter().filter(|r| r.check.is_valid).count();
-    let invalid = results.iter().filter(|r| !r.check.is_valid && r.check.error_type != "timeout" && r.check.error_type != "suspicious").count();
+    let invalid = results.iter().filter(|r| !r.check.is_valid && r.check.error_type != "timeout" && r.check.error_type != "suspicious" && !r.check.browser_might_work).count();
     let timeout = results.iter().filter(|r| r.check.error_type == "timeout").count();
-    let suspicious = results.iter().filter(|r| r.check.error_type == "suspicious").count();
+    let suspicious = results.iter().filter(|r| r.check.error_type == "suspicious" || r.check.browser_might_work).count();
 
     log::info!(
         "[批量检测] 完成: 总={}, 有效={}, 失效={}, 超时={}, 疑似={}, 耗时={}ms, 取消={}",
@@ -1133,6 +1173,7 @@ pub async fn batch_check_links(
     );
 
     Ok(BatchCheckResult {
+        batch_id,
         results,
         total,
         valid,
@@ -1150,7 +1191,7 @@ pub async fn cancel_batch_check(
     cancel_flag: tauri::State<'_, BatchCheckCancelFlag>,
 ) -> Result<(), AppError> {
     log::info!("[批量检测] 收到取消请求");
-    cancel_flag.0.store(true, Ordering::SeqCst);
+    cancel_flag.cancel_active();
     Ok(())
 }
 

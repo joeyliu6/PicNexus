@@ -60,6 +60,8 @@ let checkSessionId = 0; // 防竞态：每次检测分配唯一 session，旧 fi
 // checkSessionId 会被 cancel 递增，无法区分「只是取消」与「取消后又开新批次」两种场景
 let latestStartedBatchSession = 0;
 let activeRecheckCount = 0; // 防 onViewDeactivated 在单条复检动画期间误触发空闲释放
+let loadHistoryRowsPromise: Promise<void> | null = null;
+let nextClientBatchSeq = 0;
 
 /** 清理进度监听器，防止累积泄漏 */
 function clearProgressListener(): void {
@@ -75,6 +77,19 @@ const DEFAULT_CHECK_PARAMS = {
   per_host_limit: 3,
   timeout_secs: 10,
 } as const;
+
+function createClientBatchId(source: 'monitor' | 'rescue'): string {
+  nextClientBatchSeq += 1;
+  return `${source}-${Date.now()}-${nextClientBatchSeq}`;
+}
+
+function isProgressForBatch(payload: BatchCheckProgress, batchId: string): boolean {
+  return payload.batch_id === undefined || payload.batch_id === batchId;
+}
+
+function isResultForBatch(result: BatchCheckResult, batchId: string): boolean {
+  return result.batch_id === undefined || result.batch_id === batchId;
+}
 
 // 空闲释放：离开检测页面 3 分钟后自动清空数据，释放内存
 const IDLE_RELEASE_MS = 3 * 60 * 1000;
@@ -152,11 +167,20 @@ export function useLinkCheckManager() {
    * Phase 1：优先加载失效/未检测链接（默认标签页内容），用户秒看到数据
    * Phase 2：后台静默加载剩余记录，切换标签时数据已就绪
    */
-  async function loadHistoryRows(): Promise<void> {
-    if (isChecking.value) return;
+  async function loadHistoryRows(options: { allowDuringCheck?: boolean } = {}): Promise<void> {
+    if (loadHistoryRowsPromise) return loadHistoryRowsPromise;
+
+    loadHistoryRowsPromise = doLoadHistoryRows(options).finally(() => {
+      loadHistoryRowsPromise = null;
+    });
+    return loadHistoryRowsPromise;
+  }
+
+  async function doLoadHistoryRows(options: { allowDuringCheck?: boolean } = {}): Promise<void> {
+    if (isChecking.value && !options.allowDuringCheck) return;
 
     // TTL 缓存：5 分钟内重复进入直接跳过
-    if (checkRows.value.length > 0 && Date.now() - lastLoadTime < CACHE_TTL_MS) {
+    if (checkRows.value.length > 0 && Date.now() - lastLoadTime < CACHE_TTL_MS && !isPhase2Loading.value) {
       return;
     }
 
@@ -210,6 +234,7 @@ export function useLinkCheckManager() {
       log.error('加载历史检测数据失败', err);
     } finally {
       isLoading.value = false;
+      isPhase2Loading.value = false;
     }
   }
 
@@ -224,16 +249,15 @@ export function useLinkCheckManager() {
 
     const mySession = ++checkSessionId;
     const myBatchSession = ++latestStartedBatchSession;
+    const myBatchId = createClientBatchId('monitor');
     isChecking.value = true;
     isPaused.value = false;
     resetCheckState();
     progressSource.value = 'monitor';
 
     try {
-      // 确保数据已加载（复用已加载的 checkRows，避免重复全表扫描）
-      if (checkRows.value.length === 0) {
-        await loadHistoryRows();
-      }
+      // 确保 Phase 2 已完成，避免只检测到首批问题链接。
+      await loadHistoryRows({ allowDuringCheck: true });
 
       const rows = checkRows.value;
       if (rows.length === 0) {
@@ -260,6 +284,7 @@ export function useLinkCheckManager() {
         'link-check://progress',
         (event) => {
           if (checkSessionId !== mySession) return;
+          if (!isProgressForBatch(event.payload, myBatchId)) return;
           progress.value = event.payload;
           applyRecentResults(event.payload.recent_results ?? []);
         },
@@ -269,12 +294,13 @@ export function useLinkCheckManager() {
       const result = await invoke<BatchCheckResult>('batch_check_links', {
         request: {
           links: requestItems,
+          batch_id: myBatchId,
           ...DEFAULT_CHECK_PARAMS,
         },
       });
 
       // 被新批次替代：老批次返回的结果不再写入 UI/DB，避免与正在运行的新批次竞争
-      if (latestStartedBatchSession !== myBatchSession) {
+      if (latestStartedBatchSession !== myBatchSession || !isResultForBatch(result, myBatchId)) {
         log.info('[LinkCheck] 全量批量结果被新批次替代，已丢弃');
         return null;
       }
@@ -337,12 +363,14 @@ export function useLinkCheckManager() {
     isPaused.value = false;
     progressSource.value = source;
     progress.value = null;
+    const myBatchId = createClientBatchId(source);
 
     // 监听进度（先清理旧监听器，防止累积泄漏）
     clearProgressListener();
     progressUnlisten = await listen<BatchCheckProgress>(
       'link-check://progress',
       (event) => {
+        if (!isProgressForBatch(event.payload, myBatchId)) return;
         progress.value = event.payload;
         onProgress?.(event.payload);
       },
@@ -352,11 +380,12 @@ export function useLinkCheckManager() {
       const result = await invoke<BatchCheckResult>('batch_check_links', {
         request: {
           links: items,
+          batch_id: myBatchId,
           ...DEFAULT_CHECK_PARAMS,
         },
       });
 
-      return result;
+      return isResultForBatch(result, myBatchId) ? result : null;
     } finally {
       isChecking.value = false;
       isPaused.value = false;
@@ -462,6 +491,15 @@ export function useLinkCheckManager() {
       return null;
     }
 
+    const requiresFullLoad = !filter.targets && !filter.historyIds;
+    if (requiresFullLoad) {
+      await loadHistoryRows();
+      if (isChecking.value) {
+        toast.warn('检测进行中', '请等待当前检测完成');
+        return null;
+      }
+    }
+
     const rows = checkRows.value;
     const idSet = filter.historyIds ? new Set(filter.historyIds) : null;
     const targetSet = filter.targets ? new Set(filter.targets.map((target) => `${target.historyId}::${target.serviceId}`)) : null;
@@ -488,6 +526,7 @@ export function useLinkCheckManager() {
 
     const mySession = ++checkSessionId;
     const myBatchSession = ++latestStartedBatchSession;
+    const myBatchId = createClientBatchId('monitor');
     isChecking.value = true;
     isPaused.value = false;
     progressSource.value = 'monitor';
@@ -506,6 +545,7 @@ export function useLinkCheckManager() {
         'link-check://progress',
         (event) => {
           if (checkSessionId !== mySession) return;
+          if (!isProgressForBatch(event.payload, myBatchId)) return;
           progress.value = event.payload;
           applyRecentResults(event.payload.recent_results ?? []);
         },
@@ -514,12 +554,13 @@ export function useLinkCheckManager() {
       const result = await invoke<BatchCheckResult>('batch_check_links', {
         request: {
           links: requestItems,
+          batch_id: myBatchId,
           ...DEFAULT_CHECK_PARAMS,
         },
       });
 
       // 被新批次替代：老批次结果不再写入，避免污染新批次状态
-      if (latestStartedBatchSession !== myBatchSession) {
+      if (latestStartedBatchSession !== myBatchSession || !isResultForBatch(result, myBatchId)) {
         log.info('[LinkCheck] 子集批量结果被新批次替代，已丢弃');
         return null;
       }

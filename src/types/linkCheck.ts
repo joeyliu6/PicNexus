@@ -31,6 +31,7 @@ export interface CheckLinkResult {
 }
 
 export interface BatchCheckProgress {
+  batch_id?: string;
   checked: number;
   total: number;
   current_url: string;
@@ -45,6 +46,7 @@ export interface BatchCheckItemResult extends CheckLinkResult {
 }
 
 export interface BatchCheckResult {
+  batch_id?: string;
   results: BatchCheckItemResult[];
   total: number;
   valid: number;
@@ -57,6 +59,7 @@ export interface BatchCheckResult {
 
 export interface BatchCheckRequest {
   links: BatchCheckRequestItem[];
+  batch_id?: string;
   concurrency?: number;
   per_host_limit?: number;
   timeout_secs?: number;

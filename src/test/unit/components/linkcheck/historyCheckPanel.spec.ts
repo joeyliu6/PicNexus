@@ -156,7 +156,7 @@ describe('HistoryCheckPanel', () => {
       .find(item => item.text().includes('删除'))!
       .trigger('click');
 
-    expect(wrapper.emitted('export-csv')).toHaveLength(1);
+    expect(wrapper.emitted('export-csv')).toEqual([[[row]]]);
     expect(wrapper.emitted('bulk-copy')).toEqual([[[row]]]);
     expect(wrapper.emitted('bulk-delete')).toEqual([[[row]]]);
   });

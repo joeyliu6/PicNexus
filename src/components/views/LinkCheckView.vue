@@ -68,8 +68,8 @@ const monitorIsChecking = computed(
   () => monitorChecking.value && progressSource.value !== 'rescue',
 );
 
-async function handleExportCsv(): Promise<void> {
-  const csv = exportCsv(checkRows.value);
+async function handleExportCsv(rows: LinkCheckRow[] = checkRows.value): Promise<void> {
+  const csv = exportCsv(rows);
   const path = await save({
     defaultPath: `link-check-${Date.now()}.csv`,
     filters: [{ name: 'CSV', extensions: ['csv'] }],

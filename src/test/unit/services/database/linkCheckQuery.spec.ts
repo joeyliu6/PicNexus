@@ -17,9 +17,10 @@ describe('getLinkCheckInvalidQuery', () => {
 
   beforeEach(() => { db = makeDb(); });
 
-  it('SQL 包含 invalidLinks / uncheckedLinks 判断', async () => {
+  it('SQL 包含未检测 summary / invalidLinks / uncheckedLinks 判断', async () => {
     await getLinkCheckInvalidQuery(db);
     const sql = db.select.mock.calls[0][0];
+    expect(sql).toContain('link_check_summary IS NULL');
     expect(sql).toContain('invalidLinks');
     expect(sql).toContain('uncheckedLinks');
   });

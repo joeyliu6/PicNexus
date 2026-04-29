@@ -36,7 +36,7 @@ const emit = defineEmits<{
   (e: 'pause-check'): void;
   (e: 'resume-check'): void;
   (e: 'recheck-single', row: LinkCheckRow, filter: StatusFilter): void;
-  (e: 'export-csv'): void;
+  (e: 'export-csv', rows?: LinkCheckRow[]): void;
   (e: 'export-csv-selected', rows: LinkCheckRow[]): void;
   (e: 'delete-row', row: LinkCheckRow): void;
   (e: 'bulk-recheck', rows: LinkCheckRow[]): void;
@@ -265,7 +265,9 @@ function handleExportAction(): void {
   if (hasSelection.value) {
     handleExportCsvSelected();
   } else {
-    emit('export-csv');
+    const rows = filteredRows.value;
+    if (rows.length === 0) return;
+    emit('export-csv', rows);
   }
 }
 
