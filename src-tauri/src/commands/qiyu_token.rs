@@ -31,6 +31,19 @@ struct CheckChromeData {
     name: Option<String>,
 }
 
+fn sanitize_sidecar_log_line(line: &str) -> String {
+    let lower = line.to_ascii_lowercase();
+    let has_sensitive_marker = ["upload ", "x-nos-token", "nos token"]
+        .iter()
+        .any(|marker| lower.contains(marker));
+
+    if has_sensitive_marker {
+        "[QiyuToken] sidecar 敏感日志已脱敏".to_string()
+    } else {
+        line.to_string()
+    }
+}
+
 /// 检测系统是否安装了 Chrome 浏览器
 #[tauri::command]
 pub async fn check_chrome_installed(app: tauri::AppHandle) -> Result<bool, AppError> {
@@ -75,7 +88,7 @@ pub async fn check_chrome_installed(app: tauri::AppHandle) -> Result<bool, AppEr
     // 输出 stderr 日志
     if !stderr_output.is_empty() {
         for line in stderr_output.lines() {
-            log::debug!("{}", line);
+            log::debug!("{}", sanitize_sidecar_log_line(line));
         }
     }
 
@@ -166,7 +179,7 @@ pub async fn fetch_qiyu_token_internal(app: &tauri::AppHandle) -> Result<QiyuTok
     // 输出 stderr 日志（包含进度信息）
     if !stderr_output.is_empty() {
         for line in stderr_output.lines() {
-            log::debug!("{}", line);
+            log::debug!("{}", sanitize_sidecar_log_line(line));
         }
     }
 

@@ -291,7 +291,7 @@ async fn init_multipart_upload(
 
     // URL 中对路径进行编码
     let encoded_path: String = file_key.split('/').map(|p| urlencoding::encode(p).to_string()).collect::<Vec<_>>().join("/");
-    let url = format!("https://{}{}?uploads=", TOS_HOST, format!("/{}", encoded_path));
+    let url = format!("https://{}/{}?uploads=", TOS_HOST, encoded_path);
 
     let mut request = client.post(&url)
         .header("content-type", content_type)
@@ -363,7 +363,10 @@ async fn upload_part(
     let signed_headers = signer.sign("PUT", &uri, &query_params_ref)?;
 
     let encoded_path: String = file_key.split('/').map(|p| urlencoding::encode(p).to_string()).collect::<Vec<_>>().join("/");
-    let url = format!("https://{}{}?partNumber={}&uploadId={}", TOS_HOST, format!("/{}", encoded_path), part_number, upload_id);
+    let url = format!(
+        "https://{}/{}?partNumber={}&uploadId={}",
+        TOS_HOST, encoded_path, part_number, upload_id
+    );
 
     let mut request = client.put(&url)
         .header("content-length", data.len().to_string())
@@ -423,7 +426,7 @@ async fn complete_multipart_upload(
     let body_str = body.to_string();
 
     let encoded_path: String = file_key.split('/').map(|p| urlencoding::encode(p).to_string()).collect::<Vec<_>>().join("/");
-    let url = format!("https://{}{}?uploadId={}", TOS_HOST, format!("/{}", encoded_path), upload_id);
+    let url = format!("https://{}/{}?uploadId={}", TOS_HOST, encoded_path, upload_id);
 
     let mut request = client.post(&url)
         .header("content-type", "application/json")
@@ -465,7 +468,7 @@ pub async fn upload_to_nami(
         .and_then(|n| n.to_str())
         .ok_or_else(|| AppError::validation("无法获取文件名"))?;
 
-    let ext = file_name.split('.').last()
+    let ext = file_name.split('.').next_back()
         .ok_or_else(|| AppError::validation("无法获取文件扩展名"))?
         .to_lowercase();
 
@@ -507,7 +510,7 @@ pub async fn upload_to_nami(
 
     // 6. 获取动态 Headers
     log::info!("[Nami] 获取动态 Headers...");
-    let dynamic_headers = fetch_nami_token_internal(&window.app_handle(), cookie.clone(), auth_token.clone()).await?;
+    let dynamic_headers = fetch_nami_token_internal(window.app_handle(), cookie.clone(), auth_token.clone()).await?;
 
     // 发送步骤2进度：获取STS凭证 (20%)
     let _ = window.emit("upload://progress", serde_json::json!({

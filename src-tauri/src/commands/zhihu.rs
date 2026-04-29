@@ -178,7 +178,7 @@ async fn upload_to_zhihu_inner(
         .and_then(|n| n.to_str())
         .ok_or_else(|| AppError::validation("无法获取文件名"))?;
 
-    let ext = file_name.split('.').last()
+    let ext = file_name.split('.').next_back()
         .ok_or_else(|| AppError::validation("无法获取文件扩展名"))?
         .to_lowercase();
 
@@ -234,7 +234,7 @@ async fn upload_to_zhihu_inner(
     let final_url = if credentials.upload_file.state == 1 {
         // 图片已存在，直接查询状态获取 URL
         log::info!("[Zhihu] 图片已存在，跳过上传");
-        poll_image_status(&client, &zhihu_cookie, &image_id, 30).await?
+        poll_image_status(&client, zhihu_cookie, &image_id, 30).await?
     } else {
         // 需要上传到 OSS
         let upload_token = credentials.upload_token
@@ -279,7 +279,7 @@ async fn upload_to_zhihu_inner(
 
         // 5.2 通知知乎上传完成
         let notify_response = client
-            .put(&format!("https://api.zhihu.com/images/{}/uploading_status", image_id))
+            .put(format!("https://api.zhihu.com/images/{}/uploading_status", image_id))
             .header("Cookie", zhihu_cookie)
             .header("Content-Type", "application/json")
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -301,7 +301,7 @@ async fn upload_to_zhihu_inner(
         log::debug!("[Zhihu] 开始轮询图片状态");
 
         // 5.3 轮询图片状态
-        poll_image_status(&client, &zhihu_cookie, &image_id, 30).await?
+        poll_image_status(&client, zhihu_cookie, &image_id, 30).await?
     };
 
     // 6. 标准化 URL
@@ -328,7 +328,7 @@ async fn poll_image_status(
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         let response = client
-            .get(&format!("https://api.zhihu.com/images/{}", image_id))
+            .get(format!("https://api.zhihu.com/images/{}", image_id))
             .header("Cookie", cookie)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .header("Referer", "https://www.zhihu.com/")
@@ -397,7 +397,7 @@ pub async fn test_zhihu_connection(zhihu_cookie: String) -> Result<String, AppEr
 
     if status.is_success() {
         // 尝试解析响应以验证格式正确
-        if let Ok(_) = serde_json::from_str::<UploadCredentialsResponse>(&response_text) {
+        if serde_json::from_str::<UploadCredentialsResponse>(&response_text).is_ok() {
             Ok("Cookie 验证通过".to_string())
         } else {
             Ok("知乎 Cookie 可能有效，但响应格式异常".to_string())

@@ -563,7 +563,7 @@ async fn server_upload_jd(path: &std::path::Path) -> Result<String, String> {
         .and_then(|n| n.to_str())
         .ok_or("无法获取文件名")?;
 
-    let ext = file_name.split('.').last().unwrap_or("jpg").to_lowercase();
+    let ext = file_name.split('.').next_back().unwrap_or("jpg").to_lowercase();
     if !["jpg", "jpeg", "png", "gif"].contains(&ext.as_str()) {
         return Err(format!("京东图床不支持 .{} 格式，仅支持 JPG、PNG、GIF", ext));
     }
@@ -723,7 +723,7 @@ async fn server_upload_smms(path: &std::path::Path, token: &str) -> Result<Strin
         .and_then(|n| n.to_str())
         .ok_or("无法获取文件名")?;
 
-    let ext = file_name.split('.').last().unwrap_or("jpg").to_lowercase();
+    let ext = file_name.split('.').next_back().unwrap_or("jpg").to_lowercase();
     if !["jpg", "jpeg", "png", "gif", "bmp", "webp"].contains(&ext.as_str()) {
         return Err(format!("SM.MS 不支持 .{} 格式", ext));
     }
@@ -860,7 +860,7 @@ async fn server_upload_bilibili(path: &std::path::Path, cookie: &str) -> Result<
         .to_string();
 
     let file_name = path.file_name().and_then(|n| n.to_str()).ok_or("无法获取文件名")?;
-    let ext = file_name.split('.').last().unwrap_or("jpg").to_lowercase();
+    let ext = file_name.split('.').next_back().unwrap_or("jpg").to_lowercase();
     let buffer = tokio::fs::read(path).await
         .map_err(|e| format!("读取文件失败: {}", e))?;
 
@@ -985,7 +985,7 @@ async fn server_upload_nowcoder(path: &std::path::Path, cookie: &str) -> Result<
 
 async fn server_upload_chaoxing(path: &std::path::Path, cookie: &str) -> Result<String, String> {
     let file_name = path.file_name().and_then(|n| n.to_str()).ok_or("无法获取文件名")?;
-    let ext = file_name.split('.').last().unwrap_or("jpg").to_lowercase();
+    let ext = file_name.split('.').next_back().unwrap_or("jpg").to_lowercase();
     let buffer = tokio::fs::read(path).await
         .map_err(|e| format!("读取文件失败: {}", e))?;
 
@@ -1048,7 +1048,7 @@ async fn server_upload_zhihu(
         .map_err(|e| format!("读取文件失败: {}", e))?;
 
     let file_name = path.file_name().and_then(|n| n.to_str()).ok_or("无法获取文件名")?;
-    let ext = file_name.split('.').last().unwrap_or("jpg").to_lowercase();
+    let ext = file_name.split('.').next_back().unwrap_or("jpg").to_lowercase();
     let content_type = match ext.as_str() {
         "jpg" | "jpeg" => "image/jpeg",
         "png" => "image/png",
@@ -1132,7 +1132,7 @@ async fn server_upload_zhihu(
 
         // 通知知乎上传完成
         let _ = client
-            .put(&format!("https://api.zhihu.com/images/{}/uploading_status", image_id))
+            .put(format!("https://api.zhihu.com/images/{}/uploading_status", image_id))
             .header("Cookie", cookie)
             .header("Content-Type", "application/json")
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
@@ -1143,12 +1143,15 @@ async fn server_upload_zhihu(
             .await;
     }
 
+    let zhihu_image_hash_re = regex::Regex::new(r"v2-[a-f0-9]+")
+        .map_err(|e| format!("创建知乎 URL 正则失败: {}", e))?;
+
     // 轮询图片状态（最多 30 次）
     for _ in 0..30 {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
         let status_resp = client
-            .get(&format!("https://api.zhihu.com/images/{}", image_id))
+            .get(format!("https://api.zhihu.com/images/{}", image_id))
             .header("Cookie", cookie)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             .header("Referer", "https://www.zhihu.com/")
@@ -1168,8 +1171,7 @@ async fn server_upload_zhihu(
                 .ok_or("知乎图片处理完成但未返回 URL")?;
 
             // 标准化 URL → https://picx.zhimg.com/v2-{hash}.webp
-            let re = regex::Regex::new(r"v2-[a-f0-9]+").unwrap();
-            let normalized = if let Some(m) = re.find(url) {
+            let normalized = if let Some(m) = zhihu_image_hash_re.find(url) {
                 format!("https://picx.zhimg.com/{}.webp", m.as_str())
             } else {
                 url.to_string()

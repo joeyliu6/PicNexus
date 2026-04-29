@@ -51,6 +51,7 @@ fn create_s3_client(
 
 /// 上传文件到 S3 兼容存储
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Tauri IPC 参数与 S3 兼容配置字段一致，避免大改前端调用。
 pub async fn upload_to_s3_compatible(
     window: Window,
     id: String,
@@ -327,7 +328,7 @@ fn build_s3_endpoint(
                         host.split('.')
                             .nth(1)
                             .and_then(|s| s.parse::<u8>().ok())
-                            .map_or(false, |n| (16..=31).contains(&n))
+                            .is_some_and(|n| (16..=31).contains(&n))
                     });
                 if is_private {
                     return Err(AppError::config("Endpoint 不能指向内网或元数据地址"));

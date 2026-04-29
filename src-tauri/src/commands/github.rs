@@ -45,6 +45,7 @@ const MAX_FILE_SIZE: u64 = 25 * 1024 * 1024;
 
 /// 上传文件到 GitHub
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Tauri IPC 参数与前端上传配置一一对应，保留现有调用面。
 pub async fn upload_to_github(
     window: Window,
     id: String,

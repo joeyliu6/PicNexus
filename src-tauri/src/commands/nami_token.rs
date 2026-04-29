@@ -33,6 +33,28 @@ struct SidecarResponse<T> {
     error: Option<String>,
 }
 
+fn sanitize_sidecar_log_line(line: &str) -> String {
+    let lower = line.to_ascii_lowercase();
+    let has_sensitive_marker = [
+        "upload ",
+        "access-token",
+        "accesstoken",
+        "zm-token",
+        "zmtoken",
+        "auth-token",
+        "authtoken",
+        "--cookie",
+        "cookie:",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker));
+
+    if has_sensitive_marker {
+        "[NamiToken] sidecar 敏感日志已脱敏".to_string()
+    } else {
+        line.to_string()
+    }
+}
 
 /// 从纳米页面获取动态 Headers (Tauri command)
 #[tauri::command]
@@ -83,7 +105,7 @@ pub async fn fetch_nami_token_internal(
     // 输出 stderr 日志（包含进度信息）
     if !stderr_output.is_empty() {
         for line in stderr_output.lines() {
-            log::debug!("{}", line);
+            log::debug!("{}", sanitize_sidecar_log_line(line));
         }
     }
 

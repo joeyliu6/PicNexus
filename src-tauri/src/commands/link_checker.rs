@@ -60,7 +60,7 @@ fn classify_error(
 ) -> (String, Option<String>) {
     // HTTP 4xx 错误
     if let Some(code) = status_code {
-        if code >= 400 && code < 500 {
+        if (400..500).contains(&code) {
             return (
                 "http_4xx".to_string(),
                 Some("图片已被删除或无权访问，建议从其他有效图床重新上传".to_string()),
@@ -70,7 +70,7 @@ fn classify_error(
                 "http_5xx".to_string(),
                 Some("图床服务器暂时不可用，建议稍后重试".to_string()),
             );
-        } else if code >= 200 && code < 300 {
+        } else if (200..300).contains(&code) {
             return ("success".to_string(), None);
         }
     }
@@ -382,7 +382,7 @@ async fn check_single_link(
     let start_time = Instant::now();
 
     // 从统一配置表查询是否跳过 HEAD
-    let skip_head = service.and_then(get_service_config).map_or(false, |c| c.skip_head);
+    let skip_head = service.and_then(get_service_config).is_some_and(|c| c.skip_head);
 
     let response_result = if skip_head {
         let builder = http_client.get(link).header("Range", "bytes=0-0").timeout(timeout);
@@ -425,10 +425,10 @@ async fn check_single_link(
             // 疑似异常判定：200 但内容不是图片或体积过小
             // 206 是 Range 请求的正常响应，其 Content-Length/Content-Type 反映部分内容，不参与 suspicious 判定
             // SVG 图片天然体积小（badge 通常 < 1KB），豁免 content_length 检查
-            let is_svg = ct.as_deref().map_or(false, |t| t.starts_with("image/svg"));
+            let is_svg = ct.as_deref().is_some_and(|t| t.starts_with("image/svg"));
             let is_suspicious = is_2xx && status_code != 206 && (
-                ct.as_deref().map_or(false, |t| !t.starts_with("image/") && !t.is_empty())
-                || (!is_svg && cl.map_or(false, |len| len > 0 && len < 1024))
+                ct.as_deref().is_some_and(|t| !t.starts_with("image/") && !t.is_empty())
+                || (!is_svg && cl.is_some_and(|len| len > 0 && len < 1024))
             );
 
             let (mut error_type, mut suggestion) = classify_error(Some(status_code), None);
@@ -440,7 +440,7 @@ async fn check_single_link(
 
             // 防盗链判定：403 + 已知防盗链服务（从统一配置表查询）
             let browser_might_work = status_code == 403
-                && service.and_then(get_service_config).map_or(false, |c| c.hotlink_protected);
+                && service.and_then(get_service_config).is_some_and(|c| c.hotlink_protected);
 
             let is_valid = is_2xx && !is_suspicious;
 
@@ -1028,9 +1028,9 @@ pub async fn batch_check_links(
             ),
         });
     }
-    let concurrency = request.concurrency.unwrap_or(10).max(1).min(50);
-    let per_host_limit = request.per_host_limit.unwrap_or(3).max(1).min(10);
-    let timeout_secs = request.timeout_secs.unwrap_or(10).max(3).min(30);
+    let concurrency = request.concurrency.unwrap_or(10).clamp(1, 50);
+    let per_host_limit = request.per_host_limit.unwrap_or(3).clamp(1, 10);
+    let timeout_secs = request.timeout_secs.unwrap_or(10).clamp(3, 30);
 
     log::info!(
         "[批量检测] 开始: {} 条链接, 并发={}, 单图床限制={}, 超时={}s",
@@ -1127,7 +1127,7 @@ pub async fn batch_check_links(
             let done = checked.fetch_add(1, Ordering::SeqCst) + 1;
             let should_emit = done == 1
                 || done == total_count
-                || done % PROGRESS_EMIT_EVERY_N == 0;
+                || done.is_multiple_of(PROGRESS_EMIT_EVERY_N);
             if should_emit {
                 let recent = {
                     let mut buf = pending.lock().await;

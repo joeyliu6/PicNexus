@@ -245,8 +245,8 @@ export async function fetchNamiToken(config: NamiConfig): Promise<NamiDynamicHea
           };
 
           console.error('[NamiToken] Headers 捕获成功', {
-            accessToken: result.accessToken ? result.accessToken.substring(0, 20) + '...' : '(empty)',
-            zmToken: result.zmToken ? result.zmToken.substring(0, 20) + '...' : '(empty)',
+            accessTokenLength: result.accessToken.length,
+            zmTokenLength: result.zmToken.length,
           });
 
           clearTimeout(timeout);

@@ -41,7 +41,7 @@ pub async fn upload_to_qiyu(
     }));
 
     // 1. 自动获取新的 Token（每次上传都获取新的，确保 Object 路径唯一）
-    let token_info = fetch_qiyu_token_internal(&window.app_handle()).await?;
+    let token_info = fetch_qiyu_token_internal(window.app_handle()).await?;
     let qiyu_token = &token_info.token;
     let object_path = &token_info.object_path;
 
@@ -54,7 +54,7 @@ pub async fn upload_to_qiyu(
         .and_then(|n| n.to_str())
         .ok_or_else(|| AppError::validation("无法获取文件名"))?;
 
-    let ext = file_name.split('.').last()
+    let ext = file_name.split('.').next_back()
         .ok_or_else(|| AppError::validation("无法获取文件扩展名"))?
         .to_lowercase();
 
@@ -70,7 +70,7 @@ pub async fn upload_to_qiyu(
     // 5. 构建上传 URL
     let upload_url = format!(
         "https://cdn-nimup-chunk.qiyukf.net/nim/{}?offset=0&complete=true&version=1.0",
-        urlencoding::encode(&object_path)
+        urlencoding::encode(object_path)
     );
 
     // 发送步骤2进度：上传文件 (50%)

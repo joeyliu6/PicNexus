@@ -38,6 +38,7 @@ pub struct ProgressPayload {
 /// - `bucket_name`: 存储桶名称
 /// - `key`: 对象存储 Key（文件在 R2 中的路径）
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Tauri IPC 参数与前端上传配置一一对应，保留现有调用面。
 pub async fn upload_to_r2(
     window: Window,
     id: String,
@@ -88,7 +89,7 @@ pub async fn upload_to_r2(
     let client = Client::from_conf(config);
 
     // 5. 检测 MIME 类型
-    let content_type = mime_guess::from_path(&path)
+    let content_type = mime_guess::from_path(path)
         .first_or_octet_stream()
         .to_string();
 

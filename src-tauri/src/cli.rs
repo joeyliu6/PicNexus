@@ -16,27 +16,27 @@ const APP_IDENTIFIER: &str = "us.picnex.app";
 fn get_app_data_dir() -> Option<std::path::PathBuf> {
     #[cfg(target_os = "windows")]
     {
-        return std::env::var("APPDATA").ok()
-            .map(|p| std::path::PathBuf::from(p).join(APP_IDENTIFIER));
+        std::env::var("APPDATA").ok()
+            .map(|p| std::path::PathBuf::from(p).join(APP_IDENTIFIER))
     }
     #[cfg(target_os = "macos")]
     {
-        return std::env::var("HOME").ok()
+        std::env::var("HOME").ok()
             .map(|p| std::path::PathBuf::from(p)
                 .join("Library")
                 .join("Application Support")
-                .join(APP_IDENTIFIER));
+                .join(APP_IDENTIFIER))
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
-        return std::env::var("XDG_DATA_HOME")
+        std::env::var("XDG_DATA_HOME")
             .ok()
             .map(std::path::PathBuf::from)
             .or_else(|| {
                 std::env::var("HOME").ok()
                     .map(|p| std::path::PathBuf::from(p).join(".local").join("share"))
             })
-            .map(|p| p.join(APP_IDENTIFIER));
+            .map(|p| p.join(APP_IDENTIFIER))
     }
 }
 
