@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const net = require('node:net');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
@@ -13,6 +14,48 @@ const appPath = path.join(rootDir, 'src-tauri', 'target', 'debug', appBinary);
 let tauriDriverProcess;
 let resolvedTauriDriverPath;
 let resolvedNativeDriverPath;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function canConnect(host, port, timeout = 500) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let done = false;
+
+    const finish = (result) => {
+      if (done) return;
+      done = true;
+      socket.destroy();
+      resolve(result);
+    };
+
+    socket.setTimeout(timeout);
+    socket.once('connect', () => finish(true));
+    socket.once('error', () => finish(false));
+    socket.once('timeout', () => finish(false));
+    socket.connect(port, host);
+  });
+}
+
+async function waitForTauriDriverReady(timeout = 30_000) {
+  const deadline = Date.now() + timeout;
+
+  while (Date.now() < deadline) {
+    if (await canConnect('127.0.0.1', 4444)) {
+      return;
+    }
+
+    if (tauriDriverProcess?.exitCode !== null && tauriDriverProcess?.exitCode !== undefined) {
+      throw new Error(`tauri-driver exited before accepting connections, exit code ${tauriDriverProcess.exitCode}`);
+    }
+
+    await sleep(250);
+  }
+
+  throw new Error(`tauri-driver did not accept connections on 127.0.0.1:4444 within ${timeout}ms`);
+}
 
 function findExecutable(command) {
   const lookup = isWindows ? 'where.exe' : 'which';
@@ -121,9 +164,14 @@ function assertPrerequisites() {
   }
 }
 
-function startTauriDriver() {
+async function startTauriDriver() {
   if (!resolvedTauriDriverPath || !resolvedNativeDriverPath) {
     assertPrerequisites();
+  }
+
+  if (tauriDriverProcess && !tauriDriverProcess.killed) {
+    await waitForTauriDriverReady();
+    return;
   }
 
   tauriDriverProcess = spawn(
@@ -149,6 +197,8 @@ function startTauriDriver() {
       process.stderr.write(`[tauri-driver] exited with signal ${signal}\n`);
     }
   });
+
+  await waitForTauriDriverReady();
 }
 
 function stopTauriDriver() {
@@ -193,8 +243,8 @@ exports.config = {
     }
   },
 
-  beforeSession() {
-    startTauriDriver();
+  async beforeSession() {
+    await startTauriDriver();
   },
 
   afterSession() {
