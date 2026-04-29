@@ -158,6 +158,7 @@ export const DEFAULT_CONFIG: UserConfig = {
     port: 36799,
     typoraService: null,
     obsidianService: null,
+    authToken: '',
   },
   imageCompression: {
     enabled: false,

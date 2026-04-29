@@ -4,25 +4,25 @@
     windows_subsystem = "windows"
 )]
 
-mod error;
-mod commands;
-mod server;
 mod cli;
+mod commands;
+mod error;
+mod server;
 
-use tauri::{Manager, Emitter};
-use tauri_plugin_log::{Target, TargetKind};
-use log::LevelFilter;
 use error::AppError;
+use log::LevelFilter;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
+use tauri::image::Image;
 #[cfg(target_os = "macos")]
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 #[cfg(not(target_os = "macos"))]
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
-use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};
-use tauri::image::Image;
-use std::path::{Path, PathBuf};
-use std::time::Duration;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{Emitter, Manager};
+use tauri_plugin_log::{Target, TargetKind};
 use tokio::sync::Mutex as TokioMutex;
 
 /// 关闭按钮行为状态：true = 最小化到托盘，false = 直接退出
@@ -33,6 +33,7 @@ pub struct CloseToTrayState(pub AtomicBool);
 /// abort_handle: 当前 Server 任务的取消句柄（停止/重启时使用）
 pub struct ServerState {
     pub upload_config: Arc<TokioMutex<Option<server::ServerUploadConfig>>>,
+    pub auth_token: Arc<TokioMutex<Option<String>>>,
     pub abort_handle: std::sync::Mutex<Option<tokio::task::AbortHandle>>,
 }
 
@@ -42,7 +43,7 @@ use sha2::{Digest, Sha256};
 type HmacSha256 = Hmac<Sha256>;
 
 // 用于密钥管理
-use base64::{Engine as _, engine::general_purpose::STANDARD};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use keyring::Entry;
 use rand::Rng;
 
@@ -53,13 +54,21 @@ const KEY_NAME: &str = "config_encryption_key";
 /// 验证字段名是否安全（防止 JavaScript 注入）
 /// 只允许字母、数字、下划线和连字符
 fn is_safe_field_name(field: &str) -> bool {
-    !field.is_empty() && field.len() <= 64 && field.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    !field.is_empty()
+        && field.len() <= 64
+        && field
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 /// 验证服务 ID 是否安全（防止 JavaScript 注入）
 /// 只允许字母、数字、下划线和连字符
 fn is_safe_service_id(service: &str) -> bool {
-    !service.is_empty() && service.len() <= 32 && service.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    !service.is_empty()
+        && service.len() <= 32
+        && service
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 /// 全局 HTTP 客户端状态
@@ -86,10 +95,10 @@ fn main() {
 
     // 创建全局 HTTP 客户端（带连接池配置）
     let http_client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(60))  // 60秒超时
-        .connect_timeout(std::time::Duration::from_secs(10))  // 10秒连接超时
-        .pool_idle_timeout(std::time::Duration::from_secs(90))  // 连接池空闲超时
-        .pool_max_idle_per_host(10)  // 每个主机最多保持10个空闲连接
+        .timeout(std::time::Duration::from_secs(60)) // 60秒超时
+        .connect_timeout(std::time::Duration::from_secs(10)) // 10秒连接超时
+        .pool_idle_timeout(std::time::Duration::from_secs(90)) // 连接池空闲超时
+        .pool_max_idle_per_host(10) // 每个主机最多保持10个空闲连接
         .build()
         .unwrap_or_else(|e| {
             log::warn!("[HTTP Client] 创建失败: {:?}，使用默认配置", e);
@@ -136,13 +145,18 @@ fn main() {
                 .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
                 .build(),
         )
-        .manage(HttpClient(http_client))     // 注册全局 HTTP 客户端
+        .manage(HttpClient(http_client)) // 注册全局 HTTP 客户端
         .manage(CloseToTrayState(AtomicBool::new(true)))
         .manage(commands::link_checker::BatchCheckCancelFlag::new())
-        .manage(commands::link_checker::BatchCheckPauseFlag(Arc::new(AtomicBool::new(false))))
-        .manage(commands::md_scanner::MdScanCancelFlag(Arc::new(AtomicBool::new(false))))
+        .manage(commands::link_checker::BatchCheckPauseFlag(Arc::new(
+            AtomicBool::new(false),
+        )))
+        .manage(commands::md_scanner::MdScanCancelFlag(Arc::new(
+            AtomicBool::new(false),
+        )))
         .manage(ServerState {
             upload_config: Arc::new(TokioMutex::new(None)),
+            auth_token: Arc::new(TokioMutex::new(None)),
             abort_handle: std::sync::Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
@@ -158,7 +172,6 @@ fn main() {
             commands::upload::upload_file_stream,
             commands::upload::test_weibo_connection,
             commands::r2::upload_to_r2,
-
             commands::jd::upload_to_jd,
             commands::jd::check_jd_available,
             commands::nowcoder::upload_to_nowcoder,
@@ -212,25 +225,24 @@ fn main() {
             // 在 Windows 上不设置原生菜单栏，避免启动时菜单栏闪烁
             #[cfg(target_os = "macos")]
             {
-                let preferences = MenuItem::with_id(app, "preferences", "偏好设置...", true, Some("CmdOrCtrl+,"))?;
-                let history = MenuItem::with_id(app, "history", "上传历史记录", true, Some("CmdOrCtrl+H"))?;
+                let preferences = MenuItem::with_id(
+                    app,
+                    "preferences",
+                    "偏好设置...",
+                    true,
+                    Some("CmdOrCtrl+,"),
+                )?;
+                let history =
+                    MenuItem::with_id(app, "history", "上传历史记录", true, Some("CmdOrCtrl+H"))?;
 
                 let file_menu = Submenu::with_items(
                     app,
                     "PicNexus",
                     true,
-                    &[
-                        &preferences,
-                        &PredefinedMenuItem::quit(app, Some("退出"))?,
-                    ],
+                    &[&preferences, &PredefinedMenuItem::quit(app, Some("退出"))?],
                 )?;
 
-                let window_menu = Submenu::with_items(
-                    app,
-                    "窗口",
-                    true,
-                    &[&history],
-                )?;
+                let window_menu = Submenu::with_items(app, "窗口", true, &[&history])?;
 
                 let menu = Menu::with_items(app, &[&file_menu, &window_menu])?;
                 app.set_menu(menu)?;
@@ -270,73 +282,72 @@ fn main() {
             // macOS 使用上面的应用级菜单栏（L206-262）作为入口，不创建系统托盘
             #[cfg(not(target_os = "macos"))]
             {
-            let menu_settings = MenuItemBuilder::new("打开设置")
-                .id("open_settings")
-                .build(app)?;
-            let menu_history = MenuItemBuilder::new("上传历史")
-                .id("open_history")
-                .build(app)?;
-            let menu_quit = MenuItemBuilder::new("退出")
-                .id("quit")
-                .build(app)?;
+                let menu_settings = MenuItemBuilder::new("打开设置")
+                    .id("open_settings")
+                    .build(app)?;
+                let menu_history = MenuItemBuilder::new("上传历史")
+                    .id("open_history")
+                    .build(app)?;
+                let menu_quit = MenuItemBuilder::new("退出").id("quit").build(app)?;
 
-            let tray_menu = MenuBuilder::new(app)
-                .items(&[&menu_settings, &menu_history, &menu_quit])
-                .build()?;
+                let tray_menu = MenuBuilder::new(app)
+                    .items(&[&menu_settings, &menu_history, &menu_quit])
+                    .build()?;
 
-            // 4. 创建系统托盘（原生菜单，右键显示）
-            // 使用 256x256 PNG 作为托盘图标（适合高分屏缩放）
-            let tray_icon = Image::from_bytes(include_bytes!("../icons/128x128@2x.png"))
-                .unwrap_or_else(|_| app.default_window_icon().unwrap().clone());
-            let _tray = TrayIconBuilder::new()
-                .icon(tray_icon)
-                .icon_as_template(false)  // Windows 不使用模板模式以显示彩色图标
-                .menu(&tray_menu)
-                .show_menu_on_left_click(false)  // 左键不显示菜单
-                .on_menu_event(|app, event| {
-                    // 处理原生菜单点击事件
-                    match event.id().as_ref() {
-                        "open_settings" => {
+                // 4. 创建系统托盘（原生菜单，右键显示）
+                // 使用 256x256 PNG 作为托盘图标（适合高分屏缩放）
+                let tray_icon = Image::from_bytes(include_bytes!("../icons/128x128@2x.png"))
+                    .unwrap_or_else(|_| app.default_window_icon().unwrap().clone());
+                let _tray = TrayIconBuilder::new()
+                    .icon(tray_icon)
+                    .icon_as_template(false) // Windows 不使用模板模式以显示彩色图标
+                    .menu(&tray_menu)
+                    .show_menu_on_left_click(false) // 左键不显示菜单
+                    .on_menu_event(|app, event| {
+                        // 处理原生菜单点击事件
+                        match event.id().as_ref() {
+                            "open_settings" => {
+                                if let Some(window) = app.get_webview_window("main") {
+                                    let _ = window.unminimize();
+                                    let _ = window.show();
+                                    let _ = window.set_focus();
+                                    let _ = window.emit("navigate-to", "settings");
+                                }
+                            }
+                            "open_history" => {
+                                if let Some(window) = app.get_webview_window("main") {
+                                    let _ = window.unminimize();
+                                    let _ = window.show();
+                                    let _ = window.set_focus();
+                                    let _ = window.emit("navigate-to", "history");
+                                }
+                            }
+                            "quit" => {
+                                std::process::exit(0);
+                            }
+                            _ => {}
+                        }
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        // 将事件传递给 positioner 插件
+                        tauri_plugin_positioner::on_tray_event(tray.app_handle(), &event);
+
+                        // 左键点击：显示主窗口
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            let app = tray.app_handle();
                             if let Some(window) = app.get_webview_window("main") {
                                 let _ = window.unminimize();
                                 let _ = window.show();
                                 let _ = window.set_focus();
-                                let _ = window.emit("navigate-to", "settings");
                             }
                         }
-                        "open_history" => {
-                            if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.unminimize();
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                                let _ = window.emit("navigate-to", "history");
-                            }
-                        }
-                        "quit" => {
-                            std::process::exit(0);
-                        }
-                        _ => {}
-                    }
-                })
-                .on_tray_icon_event(|tray, event| {
-                    // 将事件传递给 positioner 插件
-                    tauri_plugin_positioner::on_tray_event(tray.app_handle(), &event);
-
-                    // 左键点击：显示主窗口
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event {
-                        let app = tray.app_handle();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.unminimize();
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
-                })
-                .build(app)?;
+                    })
+                    .build(app)?;
             } // #[cfg(not(target_os = "macos"))] 块结束
 
             // 5. 窗口初始化
@@ -442,8 +453,12 @@ fn main() {
                                             } else {
                                                 COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL
                                             };
-                                            if core19.SetMemoryUsageTargetLevel(level_value).is_ok() {
-                                                log::trace!("[内存优化] ✓ 已设置为 {} 模式", level_str);
+                                            if core19.SetMemoryUsageTargetLevel(level_value).is_ok()
+                                            {
+                                                log::trace!(
+                                                    "[内存优化] ✓ 已设置为 {} 模式",
+                                                    level_str
+                                                );
                                             }
                                         }
                                     }
@@ -463,9 +478,13 @@ fn main() {
                     let path = entry.path();
                     let is_log = path.extension().and_then(|e| e.to_str()) == Some("log")
                         || path.to_string_lossy().contains(".log.");
-                    if !is_log { continue; }
+                    if !is_log {
+                        continue;
+                    }
 
-                    let expired = entry.metadata().ok()
+                    let expired = entry
+                        .metadata()
+                        .ok()
                         .and_then(|m| m.modified().or_else(|_| m.created()).ok())
                         .and_then(|t| now.duration_since(t).ok())
                         .is_some_and(|age| age > max_age);
@@ -508,10 +527,13 @@ async fn open_login_window(
     titlebar_url: String,
     content_url: String,
 ) -> Result<(), AppError> {
-    use tauri::{WebviewUrl, LogicalPosition, LogicalSize};
+    use tauri::{LogicalPosition, LogicalSize, WebviewUrl};
 
     if !is_safe_service_id(&service_id) {
-        return Err(AppError::validation(format!("无效的服务 ID: {}", service_id)));
+        return Err(AppError::validation(format!(
+            "无效的服务 ID: {}",
+            service_id
+        )));
     }
 
     // URL 路径白名单校验
@@ -545,24 +567,28 @@ async fn open_login_window(
         .map_err(|e| AppError::external(format!("创建登录窗口失败: {}", e)))?;
 
     // 添加标题栏 Webview
-    let _titlebar = window.add_child(
-        tauri::webview::WebviewBuilder::new(
-            "login-titlebar",
-            WebviewUrl::App(titlebar_url.into()),
-        ),
-        LogicalPosition::new(0.0, 0.0),
-        LogicalSize::new(width, titlebar_height),
-    ).map_err(|e| AppError::external(format!("创建标题栏失败: {}", e)))?;
+    let _titlebar = window
+        .add_child(
+            tauri::webview::WebviewBuilder::new(
+                "login-titlebar",
+                WebviewUrl::App(titlebar_url.into()),
+            ),
+            LogicalPosition::new(0.0, 0.0),
+            LogicalSize::new(width, titlebar_height),
+        )
+        .map_err(|e| AppError::external(format!("创建标题栏失败: {}", e)))?;
 
     // 添加内容区 Webview
-    let _content = window.add_child(
-        tauri::webview::WebviewBuilder::new(
-            "login-content",
-            WebviewUrl::App(content_url.into()),
-        ),
-        LogicalPosition::new(0.0, titlebar_height),
-        LogicalSize::new(width, height - titlebar_height),
-    ).map_err(|e| AppError::external(format!("创建内容区失败: {}", e)))?;
+    let _content = window
+        .add_child(
+            tauri::webview::WebviewBuilder::new(
+                "login-content",
+                WebviewUrl::App(content_url.into()),
+            ),
+            LogicalPosition::new(0.0, titlebar_height),
+            LogicalSize::new(width, height - titlebar_height),
+        )
+        .map_err(|e| AppError::external(format!("创建内容区失败: {}", e)))?;
 
     // 监听窗口 resize，同步更新子 Webview 尺寸
     let win_clone = window.clone();
@@ -604,7 +630,9 @@ async fn open_login_window(
 #[tauri::command]
 async fn show_login_window(app: tauri::AppHandle) -> Result<(), AppError> {
     if let Some(window) = app.get_window("login-window") {
-        window.show().map_err(|e| AppError::external(format!("显示窗口失败: {}", e)))?;
+        window
+            .show()
+            .map_err(|e| AppError::external(format!("显示窗口失败: {}", e)))?;
     }
     Ok(())
 }
@@ -615,23 +643,35 @@ async fn save_cookie_from_login(
     service_id: Option<String>,
     required_fields: Option<Vec<String>>,
     any_of_fields: Option<Vec<String>>,
-    app: tauri::AppHandle
+    app: tauri::AppHandle,
 ) -> Result<(), AppError> {
     let service = service_id.unwrap_or_else(|| "weibo".to_string());
     let fields = required_fields.unwrap_or_default();
     let any_fields = any_of_fields.unwrap_or_default();
-    log::debug!("[保存Cookie] 开始保存Cookie，服务: {}，长度: {}，必要字段: {:?}，任意字段: {:?}",
-        service, cookie.len(), fields, any_fields);
+    log::debug!(
+        "[保存Cookie] 开始保存Cookie，服务: {}，长度: {}，必要字段: {:?}，任意字段: {:?}",
+        service,
+        cookie.len(),
+        fields,
+        any_fields
+    );
 
     if cookie.trim().is_empty() {
         return Err(AppError::validation("Cookie不能为空"));
     }
 
-    if (!fields.is_empty() || !any_fields.is_empty()) && !validate_cookie_fields(&service, &cookie, &fields, &any_fields) {
+    if (!fields.is_empty() || !any_fields.is_empty())
+        && !validate_cookie_fields(&service, &cookie, &fields, &any_fields)
+    {
         return Err(AppError::auth(format!(
             "Cookie 缺少必要字段，{}需要包含: {:?}{}",
-            service, fields,
-            if any_fields.is_empty() { String::new() } else { format!("，且至少包含: {:?} 之一", any_fields) }
+            service,
+            fields,
+            if any_fields.is_empty() {
+                String::new()
+            } else {
+                format!("，且至少包含: {:?} 之一", any_fields)
+            }
         )));
     }
 
@@ -695,7 +735,11 @@ fn check_cookie_field(cookie: &str, field: &str, _service_id: &str) -> bool {
 
             let value = &remaining[..value_end];
             // 安全日志：只打印字段名和长度，不打印实际值，防止敏感信息泄露
-            log::debug!("[Cookie验证] 字段 {} 存在 (长度: {} 字符)", field, value.len());
+            log::debug!(
+                "[Cookie验证] 字段 {} 存在 (长度: {} 字符)",
+                field,
+                value.len()
+            );
 
             return true;
         }
@@ -712,7 +756,10 @@ fn get_default_validation_rules(service_id: &str) -> (Vec<&'static str>, Vec<&'s
         // 微博：SUB 和 SUBP 是登录凭证，还需要额外检查 MLOGIN=1
         "weibo" => (vec!["SUB", "SUBP"], vec![]),
         "zhihu" => (vec!["z_c0"], vec![]),
-        "nowcoder" => (vec!["t", "csrfToken"], vec!["acw_tc", "SERVERID", "__snaker__id", "gdxidpyhxdE"]),
+        "nowcoder" => (
+            vec!["t", "csrfToken"],
+            vec!["acw_tc", "SERVERID", "__snaker__id", "gdxidpyhxdE"],
+        ),
         "nami" => (vec!["Auth-Token"], vec!["Q", "T"]),
         // 哔哩哔哩：需要 SESSDATA 和 bili_jct (csrf)
         "bilibili" => (vec!["SESSDATA", "bili_jct"], vec![]),
@@ -723,7 +770,10 @@ fn get_default_validation_rules(service_id: &str) -> (Vec<&'static str>, Vec<&'s
 }
 
 /// 检查字段值是否匹配期望值（泛化的登录状态检查，替代硬编码的服务特定逻辑）
-fn check_field_value_matches(cookie: &str, field_value_checks: &std::collections::HashMap<String, String>) -> bool {
+fn check_field_value_matches(
+    cookie: &str,
+    field_value_checks: &std::collections::HashMap<String, String>,
+) -> bool {
     if field_value_checks.is_empty() {
         return true;
     }
@@ -753,7 +803,12 @@ fn check_field_value_matches(cookie: &str, field_value_checks: &std::collections
                     found = true;
                     break;
                 } else {
-                    log::debug!("[字段值检查] ✗ {} 值不匹配，期望 {}，实际 {}", field, expected_value, actual_value);
+                    log::debug!(
+                        "[字段值检查] ✗ {} 值不匹配，期望 {}，实际 {}",
+                        field,
+                        expected_value,
+                        actual_value
+                    );
                     return false;
                 }
             }
@@ -777,8 +832,19 @@ fn get_default_field_value_checks(service_id: &str) -> std::collections::HashMap
     checks
 }
 
-fn validate_cookie_fields(service_id: &str, cookie: &str, required_fields: &[String], any_of_fields: &[String]) -> bool {
-    validate_cookie_fields_with_value_checks(service_id, cookie, required_fields, any_of_fields, &None)
+fn validate_cookie_fields(
+    service_id: &str,
+    cookie: &str,
+    required_fields: &[String],
+    any_of_fields: &[String],
+) -> bool {
+    validate_cookie_fields_with_value_checks(
+        service_id,
+        cookie,
+        required_fields,
+        any_of_fields,
+        &None,
+    )
 }
 
 fn validate_cookie_fields_with_value_checks(
@@ -803,7 +869,12 @@ fn validate_cookie_fields_with_value_checks(
         any_of_fields.to_vec()
     };
 
-    log::debug!("[Cookie验证] 服务: {}, 必要字段: {:?}, 任意字段: {:?}", service_id, actual_required, actual_any);
+    log::debug!(
+        "[Cookie验证] 服务: {}, 必要字段: {:?}, 任意字段: {:?}",
+        service_id,
+        actual_required,
+        actual_any
+    );
 
     if actual_required.is_empty() && actual_any.is_empty() {
         return !cookie.trim().is_empty();
@@ -820,9 +891,14 @@ fn validate_cookie_fields_with_value_checks(
 
     // 检查任意字段
     if !actual_any.is_empty() {
-        let has_any = actual_any.iter().any(|f| check_cookie_field(cookie, f, service_id));
+        let has_any = actual_any
+            .iter()
+            .any(|f| check_cookie_field(cookie, f, service_id));
         if !has_any {
-            log::warn!("[Cookie验证] ✗ 缺少任意安全字段，需要至少包含: {:?}", actual_any);
+            log::warn!(
+                "[Cookie验证] ✗ 缺少任意安全字段，需要至少包含: {:?}",
+                actual_any
+            );
             return false;
         }
         log::debug!("[Cookie验证] ✓ 通过 anyOfFields 检查");
@@ -865,23 +941,25 @@ async fn start_cookie_monitoring(
     let service = service_id.unwrap_or_else(|| "weibo".to_string());
 
     if !is_safe_service_id(&service) {
-        return Err(AppError::validation(format!("无效的服务 ID: {}，只允许字母、数字、下划线和连字符", service)));
+        return Err(AppError::validation(format!(
+            "无效的服务 ID: {}，只允许字母、数字、下划线和连字符",
+            service
+        )));
     }
 
     // 不再默认回退到微博域名，使用前端传入的配置
     let domains: Vec<String> = target_domains
         .filter(|v| !v.is_empty())
-        .unwrap_or_else(|| {
-            target_domain
-                .map(|d| vec![d])
-                .unwrap_or_default()
-        });
+        .unwrap_or_else(|| target_domain.map(|d| vec![d]).unwrap_or_default());
     let fields = required_fields.unwrap_or_default();
     let any_fields = any_of_fields.unwrap_or_default();
 
     for field in fields.iter().chain(any_fields.iter()) {
         if !is_safe_field_name(field) {
-            return Err(AppError::validation(format!("无效的字段名: {}，只允许字母、数字、下划线和连字符", field)));
+            return Err(AppError::validation(format!(
+                "无效的字段名: {}，只允许字母、数字、下划线和连字符",
+                field
+            )));
         }
     }
 
@@ -906,7 +984,8 @@ async fn start_cookie_monitoring(
 
         let mut check_count = 0;
         let max_timeout_ms = 240000u64;
-        let max_checks = ((max_timeout_ms.saturating_sub(initial_delay)) / polling_interval).max(10) as i32;
+        let max_checks =
+            ((max_timeout_ms.saturating_sub(initial_delay)) / polling_interval).max(10) as i32;
 
         log::debug!(
             "[Cookie监控] 最大检查次数: {} (预计总时长: {}ms)",
@@ -918,7 +997,12 @@ async fn start_cookie_monitoring(
             std::thread::sleep(Duration::from_millis(polling_interval));
             check_count += 1;
 
-            log::debug!("[Cookie监控] 第 {}/{} 次检查 (服务: {})", check_count, max_checks, service);
+            log::debug!(
+                "[Cookie监控] 第 {}/{} 次检查 (服务: {})",
+                check_count,
+                max_checks,
+                service
+            );
 
             if let Some(login_webview) = app_handle.get_webview("login-content") {
                 #[cfg(target_os = "windows")]
@@ -929,7 +1013,7 @@ async fn start_cookie_monitoring(
                         &service,
                         &domains,
                         &fields,
-                        &any_fields
+                        &any_fields,
                     ) {
                         break;
                     }
@@ -954,13 +1038,20 @@ async fn start_cookie_monitoring(
                     } else if required_checks.is_empty() {
                         format!("({})", any_checks.join(" || "))
                     } else {
-                        format!("({}) && ({})", required_checks.join(" && "), any_checks.join(" || "))
+                        format!(
+                            "({}) && ({})",
+                            required_checks.join(" && "),
+                            any_checks.join(" || ")
+                        )
                     };
 
-                    let fields_json = serde_json::to_string(&fields).unwrap_or_else(|_| "[]".to_string());
-                    let any_fields_json = serde_json::to_string(&any_fields).unwrap_or_else(|_| "[]".to_string());
+                    let fields_json =
+                        serde_json::to_string(&fields).unwrap_or_else(|_| "[]".to_string());
+                    let any_fields_json =
+                        serde_json::to_string(&any_fields).unwrap_or_else(|_| "[]".to_string());
 
-                    let check_js = format!(r#"
+                    let check_js = format!(
+                        r#"
                         (async function() {{
                             try {{
                                 const cookie = document.cookie || '';
@@ -979,7 +1070,12 @@ async fn start_cookie_monitoring(
                                 return false;
                             }}
                         }})()
-                    "#, condition = condition, service = service, fields_json = fields_json, any_fields_json = any_fields_json);
+                    "#,
+                        condition = condition,
+                        service = service,
+                        fields_json = fields_json,
+                        any_fields_json = any_fields_json
+                    );
 
                     if let Err(e) = login_webview.eval(&check_js) {
                         log::warn!("[Cookie监控] 执行JS脚本失败: {:?}", e);
@@ -1016,9 +1112,7 @@ async fn setup_cookie_event_monitoring(
         return Err(AppError::validation(format!("无效的服务 ID: {}", service)));
     }
 
-    let domains: Vec<String> = target_domains
-        .filter(|v| !v.is_empty())
-        .unwrap_or_default();
+    let domains: Vec<String> = target_domains.filter(|v| !v.is_empty()).unwrap_or_default();
     let fields = required_fields.unwrap_or_default();
     let any_fields = any_of_fields.unwrap_or_default();
 
@@ -1032,16 +1126,23 @@ async fn setup_cookie_event_monitoring(
     if let Some(ref checks) = field_value_checks {
         for key in checks.keys() {
             if !is_safe_field_name(key) {
-                return Err(AppError::validation(format!("无效的字段值检查 key: {}", key)));
+                return Err(AppError::validation(format!(
+                    "无效的字段值检查 key: {}",
+                    key
+                )));
             }
         }
     }
 
-    let timeout = timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS).clamp(10000, 300000);
+    let timeout = timeout_ms
+        .unwrap_or(DEFAULT_TIMEOUT_MS)
+        .clamp(10000, 300000);
 
     log::debug!(
         "[事件监控] 开始监控 {} 的Cookie (域名: {:?}, 超时: {}ms)",
-        service, domains, timeout
+        service,
+        domains,
+        timeout
     );
 
     #[cfg(target_os = "windows")]
@@ -1115,11 +1216,18 @@ async fn setup_cookie_event_monitoring(
                             let _ = unsafe { s.Source(&mut url_ptr) };
                         }
                         let current_url = unsafe { url_ptr.to_string().unwrap_or_default() };
-                        log::debug!("[事件监控] NavigationCompleted: {} (成功: {})", current_url, is_success.as_bool());
+                        log::debug!(
+                            "[事件监控] NavigationCompleted: {} (成功: {})",
+                            current_url,
+                            is_success.as_bool()
+                        );
 
                         // 首次导航完成（登录页加载好），启动超时计时器 + 轮询兜底
                         if !self.first_nav_done.swap(true, Ordering::SeqCst) {
-                            log::debug!("[事件监控] 登录页加载完成，启动 {}ms 超时计时器 + 轮询兜底", self.timeout_ms);
+                            log::debug!(
+                                "[事件监控] 登录页加载完成，启动 {}ms 超时计时器 + 轮询兜底",
+                                self.timeout_ms
+                            );
                             let timeout = self.timeout_ms;
                             let completed_for_timeout = self.completed.clone();
                             let app_for_timeout = self.app_handle.clone();
@@ -1143,8 +1251,13 @@ async fn setup_cookie_event_monitoring(
                                         return;
                                     }
                                 }
-                                log::warn!("[事件监控] ⏰ {} 超时（{}ms），发送通知", service_for_timeout, timeout);
-                                let _ = app_for_timeout.emit("cookie-monitoring-timeout", &service_for_timeout);
+                                log::warn!(
+                                    "[事件监控] ⏰ {} 超时（{}ms），发送通知",
+                                    service_for_timeout,
+                                    timeout
+                                );
+                                let _ = app_for_timeout
+                                    .emit("cookie-monitoring-timeout", &service_for_timeout);
                             });
 
                             // 轮询兜底：SPA 登录流程不触发 NavigationCompleted，定期提取 Cookie
@@ -1176,7 +1289,10 @@ async fn setup_cookie_event_monitoring(
                         let completed = self.completed.clone();
 
                         std::thread::spawn(move || {
-                            log::debug!("[事件监控] 检测到页面跳转，尝试提取 {} Cookie...", service);
+                            log::debug!(
+                                "[事件监控] 检测到页面跳转，尝试提取 {} Cookie...",
+                                service
+                            );
 
                             let login_webview = match app.get_webview("login-content") {
                                 Some(w) => w,
@@ -1186,7 +1302,11 @@ async fn setup_cookie_event_monitoring(
                                 }
                             };
 
-                            let merged_cookie = match extract_and_merge_cookies(&login_webview, &domains, "事件监控") {
+                            let merged_cookie = match extract_and_merge_cookies(
+                                &login_webview,
+                                &domains,
+                                "事件监控",
+                            ) {
                                 Some(c) => c,
                                 None => {
                                     log::debug!("[事件监控] 未提取到 Cookie，等待下次导航...");
@@ -1202,7 +1322,15 @@ async fn setup_cookie_event_monitoring(
                                 &field_value_checks,
                             ) {
                                 log::debug!("[事件监控] ✓ {} Cookie 验证通过！保存中...", service);
-                                if completed.compare_exchange(false, true, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst).is_err() {
+                                if completed
+                                    .compare_exchange(
+                                        false,
+                                        true,
+                                        std::sync::atomic::Ordering::SeqCst,
+                                        std::sync::atomic::Ordering::SeqCst,
+                                    )
+                                    .is_err()
+                                {
                                     log::debug!("[事件监控] 已被其他线程完成，跳过保存");
                                     return;
                                 }
@@ -1219,7 +1347,9 @@ async fn setup_cookie_event_monitoring(
                                         Some(fields_save),
                                         Some(any_fields_save),
                                         app_save,
-                                    ).await {
+                                    )
+                                    .await
+                                    {
                                         log::warn!("[事件监控] 保存Cookie失败: {}", e);
                                     }
                                 });
@@ -1242,7 +1372,8 @@ async fn setup_cookie_event_monitoring(
                     completed: completed_for_handler,
                     first_nav_done: first_nav_for_handler,
                     timeout_ms: timeout,
-                }.into();
+                }
+                .into();
 
                 let mut token: i64 = 0;
                 if let Err(e) = core.add_NavigationCompleted(&handler, &mut token) {
@@ -1270,7 +1401,8 @@ async fn setup_cookie_event_monitoring(
                 Some(any_fields),
                 None,
                 None,
-            ).await;
+            )
+            .await;
         }
     }
 
@@ -1286,7 +1418,8 @@ async fn setup_cookie_event_monitoring(
             Some(any_fields),
             None,
             None,
-        ).await;
+        )
+        .await;
     }
 
     Ok(())
@@ -1304,23 +1437,25 @@ async fn get_request_header_cookie(
     let service = service_id.unwrap_or_else(|| "weibo".to_string());
 
     if !is_safe_service_id(&service) {
-        return Err(AppError::validation(format!("无效的服务 ID: {}，只允许字母、数字、下划线和连字符", service)));
+        return Err(AppError::validation(format!(
+            "无效的服务 ID: {}，只允许字母、数字、下划线和连字符",
+            service
+        )));
     }
 
     // 不再默认回退到微博域名，使用前端传入的配置
     let domains: Vec<String> = target_domains
         .filter(|v| !v.is_empty())
-        .unwrap_or_else(|| {
-            target_domain
-                .map(|d| vec![d])
-                .unwrap_or_default()
-        });
+        .unwrap_or_else(|| target_domain.map(|d| vec![d]).unwrap_or_default());
     let fields = required_fields.unwrap_or_default();
     let any_fields = any_of_fields.unwrap_or_default();
 
     for field in fields.iter().chain(any_fields.iter()) {
         if !is_safe_field_name(field) {
-            return Err(AppError::validation(format!("无效的字段名: {}，只允许字母、数字、下划线和连字符", field)));
+            return Err(AppError::validation(format!(
+                "无效的字段名: {}，只允许字母、数字、下划线和连字符",
+                field
+            )));
         }
     }
 
@@ -1330,19 +1465,28 @@ async fn get_request_header_cookie(
             return Err(AppError::external("登录窗口未打开，请先点击「开始登录」"));
         };
 
-        let merged_cookie = match extract_and_merge_cookies(&login_webview, &domains, "Cookie获取") {
+        let merged_cookie = match extract_and_merge_cookies(&login_webview, &domains, "Cookie获取")
+        {
             Some(c) => c,
             None => return Err(AppError::auth("未检测到 Cookie，请确认已完成登录后再试")),
         };
 
         if validate_cookie_fields(&service, &merged_cookie, &fields, &any_fields) {
-            log::debug!("[Cookie获取] {} 请求头Cookie长度: {}", service, merged_cookie.len());
+            log::debug!(
+                "[Cookie获取] {} 请求头Cookie长度: {}",
+                service,
+                merged_cookie.len()
+            );
             Ok(merged_cookie)
         } else {
             Err(AppError::auth(format!(
                 "提取到的 Cookie 缺少关键字段（{:?}{}），请确认已成功登录{}",
                 fields,
-                if any_fields.is_empty() { String::new() } else { format!(" 或 {:?} 之一", any_fields) },
+                if any_fields.is_empty() {
+                    String::new()
+                } else {
+                    format!(" 或 {:?} 之一", any_fields)
+                },
                 service
             )))
         }
@@ -1351,7 +1495,9 @@ async fn get_request_header_cookie(
     #[cfg(not(target_os = "windows"))]
     {
         let _ = (app, service, domains, fields, any_fields);
-        Err(AppError::external("当前操作系统暂不支持请求头 Cookie 提取，请使用页面内的手动复制方式"))
+        Err(AppError::external(
+            "当前操作系统暂不支持请求头 Cookie 提取，请使用页面内的手动复制方式",
+        ))
     }
 }
 
@@ -1364,7 +1510,8 @@ fn attempt_cookie_capture_and_save_generic(
     required_fields: &[String],
     any_of_fields: &[String],
 ) -> bool {
-    let merged_cookie = match extract_and_merge_cookies(login_window, target_domains, "Cookie监控") {
+    let merged_cookie = match extract_and_merge_cookies(login_window, target_domains, "Cookie监控")
+    {
         Some(c) => c,
         None => {
             log::debug!("[Cookie监控] 未从任何域名提取到 Cookie，继续等待...");
@@ -1419,9 +1566,7 @@ fn spawn_cookie_poll_fallback(
         // 初始延迟 3 秒，分段 sleep 以感知窗口关闭
         for _ in 0..3 {
             std::thread::sleep(Duration::from_secs(1));
-            if completed.load(Ordering::SeqCst)
-                || app.get_window("login-window").is_none()
-            {
+            if completed.load(Ordering::SeqCst) || app.get_window("login-window").is_none() {
                 return;
             }
         }
@@ -1438,12 +1583,21 @@ fn spawn_cookie_poll_fallback(
                 return;
             };
 
-            if let Some(merged_cookie) = extract_and_merge_cookies(&login_webview, &domains, "轮询兜底") {
+            if let Some(merged_cookie) =
+                extract_and_merge_cookies(&login_webview, &domains, "轮询兜底")
+            {
                 if validate_cookie_fields_with_value_checks(
-                    &service_id, &merged_cookie, &required_fields, &any_of_fields, &field_value_checks,
+                    &service_id,
+                    &merged_cookie,
+                    &required_fields,
+                    &any_of_fields,
+                    &field_value_checks,
                 ) {
                     log::debug!("[轮询兜底] ✓ {} Cookie 验证通过！保存中...", service_id);
-                    if completed.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+                    if completed
+                        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                        .is_err()
+                    {
                         log::debug!("[轮询兜底] 已被其他线程完成，跳过保存");
                         return;
                     }
@@ -1455,8 +1609,14 @@ fn spawn_cookie_poll_fallback(
 
                     tauri::async_runtime::spawn(async move {
                         if let Err(e) = save_cookie_from_login(
-                            merged_cookie, Some(service_save), Some(fields_save), Some(any_fields_save), app_save,
-                        ).await {
+                            merged_cookie,
+                            Some(service_save),
+                            Some(fields_save),
+                            Some(any_fields_save),
+                            app_save,
+                        )
+                        .await
+                        {
                             log::warn!("[轮询兜底] 保存Cookie失败: {}", e);
                         }
                     });
@@ -1478,12 +1638,18 @@ fn extract_and_merge_cookies(
     domains: &[String],
     log_prefix: &str,
 ) -> Option<String> {
-    let mut all_cookies: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    let mut all_cookies: std::collections::BTreeMap<String, String> =
+        std::collections::BTreeMap::new();
 
     for domain in domains {
         match try_extract_cookie_header_generic(webview, domain) {
             Ok(Some(cookie)) => {
-                log::debug!("[{}] 从 {} 提取到 Cookie (长度: {})", log_prefix, domain, cookie.len());
+                log::debug!(
+                    "[{}] 从 {} 提取到 Cookie (长度: {})",
+                    log_prefix,
+                    domain,
+                    cookie.len()
+                );
                 for part in cookie.split("; ") {
                     if let Some(eq_pos) = part.find('=') {
                         let key = part[..eq_pos].to_string();
@@ -1512,14 +1678,22 @@ fn extract_and_merge_cookies(
         .join("; ");
 
     let field_count = merged.matches('=').count();
-    log::debug!("[{}] 合并 Cookie: {} 个字段，{} 字符", log_prefix, field_count, merged.len());
+    log::debug!(
+        "[{}] 合并 Cookie: {} 个字段，{} 字符",
+        log_prefix,
+        field_count,
+        merged.len()
+    );
     Some(merged)
 }
 
 // WebView2 Cookie 自动提取功能 (Windows)
 // 使用 WebView2 CookieManager API 从指定域名提取 Cookie
 #[cfg(target_os = "windows")]
-fn try_extract_cookie_header_generic(window: &tauri::Webview, domain: &str) -> Result<Option<String>, String> {
+fn try_extract_cookie_header_generic(
+    window: &tauri::Webview,
+    domain: &str,
+) -> Result<Option<String>, String> {
     use std::sync::mpsc;
     use std::time::Duration;
 
@@ -1597,7 +1771,9 @@ fn try_extract_cookie_header_generic(window: &tauri::Webview, domain: &str) -> R
                                         let mut name = PWSTR::null();
                                         let mut value = PWSTR::null();
 
-                                        if cookie.Name(&mut name).is_ok() && cookie.Value(&mut value).is_ok() {
+                                        if cookie.Name(&mut name).is_ok()
+                                            && cookie.Value(&mut value).is_ok()
+                                        {
                                             let name_str = name.to_string().unwrap_or_default();
                                             let value_str = value.to_string().unwrap_or_default();
 
@@ -1622,7 +1798,8 @@ fn try_extract_cookie_header_generic(window: &tauri::Webview, domain: &str) -> R
                 }
             }
 
-            let handler: ICoreWebView2GetCookiesCompletedHandler = GetCookiesHandler { tx: tx_clone }.into();
+            let handler: ICoreWebView2GetCookiesCompletedHandler =
+                GetCookiesHandler { tx: tx_clone }.into();
 
             // 调用 GetCookies
             if let Err(e) = cookie_manager.GetCookies(PCWSTR(uri_hstring.as_ptr()), &handler) {
@@ -1641,7 +1818,11 @@ fn try_extract_cookie_header_generic(window: &tauri::Webview, domain: &str) -> R
     match rx.recv_timeout(Duration::from_secs(5)) {
         Ok(cookie_opt) => {
             if let Some(ref cookies) = cookie_opt {
-                log::debug!("[Cookie提取] ✓ 从 {} 提取到 {} 个 Cookie", domain, cookies.matches('=').count());
+                log::debug!(
+                    "[Cookie提取] ✓ 从 {} 提取到 {} 个 Cookie",
+                    domain,
+                    cookies.matches('=').count()
+                );
             }
             Ok(cookie_opt)
         }
@@ -1684,16 +1865,22 @@ struct WebDAVConfig {
 #[tauri::command]
 async fn test_r2_connection(
     config: R2Config,
-    http_client: tauri::State<'_, HttpClient>
+    http_client: tauri::State<'_, HttpClient>,
 ) -> Result<String, AppError> {
     if config.account_id.is_empty()
         || config.access_key_id.is_empty()
         || config.secret_access_key.is_empty()
-        || config.bucket_name.is_empty() {
-        return Err(AppError::config("配置不完整: AccountID、KeyID、Secret 和 Bucket 均为必填项。"));
+        || config.bucket_name.is_empty()
+    {
+        return Err(AppError::config(
+            "配置不完整: AccountID、KeyID、Secret 和 Bucket 均为必填项。",
+        ));
     }
 
-    let endpoint_url = format!("https://{}.r2.cloudflarestorage.com/{}", config.account_id, config.bucket_name);
+    let endpoint_url = format!(
+        "https://{}.r2.cloudflarestorage.com/{}",
+        config.account_id, config.bucket_name
+    );
 
     let now = chrono::Utc::now();
     let date_str = now.format("%Y%m%d").to_string();
@@ -1704,7 +1891,10 @@ async fn test_r2_connection(
     let host = format!("{}.r2.cloudflarestorage.com", config.account_id);
     let canonical_uri = format!("/{}", config.bucket_name);
     let canonical_querystring = "";
-    let canonical_headers = format!("host:{}\nx-amz-content-sha256:UNSIGNED-PAYLOAD\nx-amz-date:{}\n", host, datetime_str);
+    let canonical_headers = format!(
+        "host:{}\nx-amz-content-sha256:UNSIGNED-PAYLOAD\nx-amz-date:{}\n",
+        host, datetime_str
+    );
     let signed_headers = "host;x-amz-content-sha256;x-amz-date";
     let payload_hash = "UNSIGNED-PAYLOAD";
 
@@ -1723,7 +1913,10 @@ async fn test_r2_connection(
         datetime_str, credential_scope, canonical_request_hash
     );
 
-    let k_date = hmac_sha256(format!("AWS4{}", config.secret_access_key).as_bytes(), date_str.as_bytes());
+    let k_date = hmac_sha256(
+        format!("AWS4{}", config.secret_access_key).as_bytes(),
+        date_str.as_bytes(),
+    );
     let k_region = hmac_sha256(&k_date, region.as_bytes());
     let k_service = hmac_sha256(&k_region, service.as_bytes());
     let k_signing = hmac_sha256(&k_service, b"aws4_request");
@@ -1734,7 +1927,8 @@ async fn test_r2_connection(
         config.access_key_id, credential_scope, signed_headers, signature
     );
 
-    match http_client.0
+    match http_client
+        .0
         .head(&endpoint_url)
         .header("Host", host)
         .header("x-amz-date", datetime_str)
@@ -1748,9 +1942,14 @@ async fn test_r2_connection(
             if status.is_success() {
                 Ok("R2 连接成功！".to_string())
             } else if status == reqwest::StatusCode::NOT_FOUND {
-                Err(AppError::storage(format!("存储桶 (Bucket) '{}' 未找到", config.bucket_name)))
+                Err(AppError::storage(format!(
+                    "存储桶 (Bucket) '{}' 未找到",
+                    config.bucket_name
+                )))
             } else if status == reqwest::StatusCode::FORBIDDEN {
-                Err(AppError::auth("R2 认证失败: Access Key ID 或 Secret Access Key 无效，或权限不足"))
+                Err(AppError::auth(
+                    "R2 认证失败: Access Key ID 或 Secret Access Key 无效，或权限不足",
+                ))
             } else {
                 Err(AppError::storage(format!("连接失败: HTTP {}", status)))
             }
@@ -1776,18 +1975,24 @@ fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
 #[tauri::command]
 async fn test_webdav_connection(
     config: WebDAVConfig,
-    http_client: tauri::State<'_, HttpClient>
+    http_client: tauri::State<'_, HttpClient>,
 ) -> Result<String, AppError> {
     if config.url.is_empty() || config.username.is_empty() || config.password.is_empty() {
-        return Err(AppError::config("配置不完整: URL、用户名和密码均为必填项。"));
+        return Err(AppError::config(
+            "配置不完整: URL、用户名和密码均为必填项。",
+        ));
     }
     let auth_header = format!(
         "Basic {}",
         STANDARD.encode(format!("{}:{}", config.username, config.password))
     );
 
-    let response = http_client.0
-        .request(reqwest::Method::from_bytes(b"PROPFIND").unwrap(), &config.url)
+    let response = http_client
+        .0
+        .request(
+            reqwest::Method::from_bytes(b"PROPFIND").unwrap(),
+            &config.url,
+        )
         .header("Authorization", auth_header)
         .header("Depth", "0")
         .send()
@@ -1820,24 +2025,23 @@ async fn test_webdav_connection(
 
 #[tauri::command]
 fn get_or_create_secure_key() -> Result<String, AppError> {
-    let entry = Entry::new(SERVICE_NAME, KEY_NAME).map_err(|e| {
-        AppError::external(format!("无法访问系统钥匙串: {}", e))
-    })?;
+    let entry = Entry::new(SERVICE_NAME, KEY_NAME)
+        .map_err(|e| AppError::external(format!("无法访问系统钥匙串: {}", e)))?;
 
     match entry.get_password() {
         Ok(key) => {
             log::debug!("[密钥管理] 从钥匙串读取现有密钥");
             Ok(key)
-        },
+        }
         Err(_) => {
             log::debug!("[密钥管理] 生成新的加密密钥");
             let mut key_bytes = [0u8; 32];
             rand::thread_rng().fill(&mut key_bytes);
             let new_key = STANDARD.encode(key_bytes);
 
-            entry.set_password(&new_key).map_err(|e| {
-                AppError::external(format!("无法保存密钥到系统钥匙串: {}", e))
-            })?;
+            entry
+                .set_password(&new_key)
+                .map_err(|e| AppError::external(format!("无法保存密钥到系统钥匙串: {}", e)))?;
 
             log::debug!("[密钥管理] ✓ 新密钥已保存到系统钥匙串");
             Ok(new_key)
@@ -1848,22 +2052,22 @@ fn get_or_create_secure_key() -> Result<String, AppError> {
 #[tauri::command]
 fn set_secure_key(key: String) -> Result<(), AppError> {
     // 校验密钥格式：必须是合法 Base64 且解码后正好 32 字节（AES-256）
-    let decoded = STANDARD.decode(&key).map_err(|_| {
-        AppError::external("密钥格式无效：非法 Base64".to_string())
-    })?;
+    let decoded = STANDARD
+        .decode(&key)
+        .map_err(|_| AppError::external("密钥格式无效：非法 Base64".to_string()))?;
     if decoded.len() != 32 {
         return Err(AppError::external(format!(
-            "密钥长度无效：期望 32 字节，实际 {} 字节", decoded.len()
+            "密钥长度无效：期望 32 字节，实际 {} 字节",
+            decoded.len()
         )));
     }
 
-    let entry = Entry::new(SERVICE_NAME, KEY_NAME).map_err(|e| {
-        AppError::external(format!("无法访问系统钥匙串: {}", e))
-    })?;
+    let entry = Entry::new(SERVICE_NAME, KEY_NAME)
+        .map_err(|e| AppError::external(format!("无法访问系统钥匙串: {}", e)))?;
 
-    entry.set_password(&key).map_err(|e| {
-        AppError::external(format!("无法更新密钥到系统钥匙串: {}", e))
-    })?;
+    entry
+        .set_password(&key)
+        .map_err(|e| AppError::external(format!("无法更新密钥到系统钥匙串: {}", e)))?;
 
     log::debug!("[密钥管理] ✓ 密钥已更新到系统钥匙串");
     Ok(())
@@ -1872,15 +2076,13 @@ fn set_secure_key(key: String) -> Result<(), AppError> {
 /// 打开日志目录
 #[tauri::command]
 fn open_log_dir(app: tauri::AppHandle) -> Result<(), AppError> {
-    let log_dir = app.path().app_log_dir().map_err(|e| {
-        AppError::file_io(format!("无法获取日志目录: {}", e))
-    })?;
-    std::fs::create_dir_all(&log_dir).map_err(|e| {
-        AppError::file_io(format!("无法创建日志目录: {}", e))
-    })?;
-    opener::open(&log_dir).map_err(|e| {
-        AppError::file_io(format!("无法打开日志目录: {}", e))
-    })?;
+    let log_dir = app
+        .path()
+        .app_log_dir()
+        .map_err(|e| AppError::file_io(format!("无法获取日志目录: {}", e)))?;
+    std::fs::create_dir_all(&log_dir)
+        .map_err(|e| AppError::file_io(format!("无法创建日志目录: {}", e)))?;
+    opener::open(&log_dir).map_err(|e| AppError::file_io(format!("无法打开日志目录: {}", e)))?;
     Ok(())
 }
 
@@ -1893,9 +2095,8 @@ enum OpenTarget {
 
 const ALLOWED_OPEN_URL_SCHEMES: &[&str] = &["http", "https", "mailto", "tel"];
 const DANGEROUS_OPEN_EXTENSIONS: &[&str] = &[
-    "app", "appimage", "bat", "cmd", "com", "cpl", "dll", "exe", "hta", "jar",
-    "js", "jse", "lnk", "msi", "msp", "pif", "ps1", "reg", "scr", "sh", "url",
-    "vb", "vbe", "vbs", "wsf",
+    "app", "appimage", "bat", "cmd", "com", "cpl", "dll", "exe", "hta", "jar", "js", "jse", "lnk",
+    "msi", "msp", "pif", "ps1", "reg", "scr", "sh", "url", "vb", "vbe", "vbs", "wsf",
 ];
 
 #[cfg(windows)]
@@ -1952,8 +2153,8 @@ fn validate_open_file_path(input: &str) -> Result<OpenTarget, AppError> {
         return Err(AppError::validation("只能打开绝对路径"));
     }
 
-    let metadata = std::fs::metadata(path)
-        .map_err(|e| AppError::file_io(format!("无法访问路径: {}", e)))?;
+    let metadata =
+        std::fs::metadata(path).map_err(|e| AppError::file_io(format!("无法访问路径: {}", e)))?;
     if !metadata.is_file() && !metadata.is_dir() {
         return Err(AppError::validation("只能打开文件或文件夹"));
     }
@@ -2045,8 +2246,7 @@ mod open_target_tests {
 fn open_path(path: String) -> Result<(), AppError> {
     match validate_open_target(&path)? {
         OpenTarget::Url(url) => {
-            opener::open(&url)
-                .map_err(|e| AppError::file_io(format!("无法打开链接: {}", e)))?;
+            opener::open(&url).map_err(|e| AppError::file_io(format!("无法打开链接: {}", e)))?;
         }
         OpenTarget::Path(validated_path) => {
             opener::open(&validated_path).map_err(|e| {
@@ -2075,7 +2275,9 @@ async fn save_cli_config(
     app: tauri::AppHandle,
     service_config_json: Option<String>,
 ) -> Result<(), AppError> {
-    let config_dir = app.path().app_data_dir()
+    let config_dir = app
+        .path()
+        .app_data_dir()
         .map_err(|e| AppError::file_io(format!("无法获取应用数据目录: {}", e)))?;
 
     std::fs::create_dir_all(&config_dir)
@@ -2092,7 +2294,10 @@ async fn save_cli_config(
             std::fs::write(&config_path, &json)
                 .map_err(|e| AppError::file_io(format!("写入 cli-config.json 失败: {}", e)))?;
 
-            log::info!("[CLI Config] ✓ cli-config.json 已更新: {}", config_path.display());
+            log::info!(
+                "[CLI Config] ✓ cli-config.json 已更新: {}",
+                config_path.display()
+            );
         }
         None => {
             if config_path.exists() {
@@ -2124,7 +2329,12 @@ async fn update_server_config(
     enabled: bool,
     port: u16,
     service_config_json: Option<String>,
+    auth_token: Option<String>,
 ) -> Result<String, AppError> {
+    let normalized_auth_token = auth_token
+        .map(|token| token.trim().to_string())
+        .filter(|token| !token.is_empty());
+
     // 1. 更新图床配置
     {
         let mut config = state.upload_config.lock().await;
@@ -2142,11 +2352,17 @@ async fn update_server_config(
             *config = None;
         }
     }
+    {
+        let mut token = state.auth_token.lock().await;
+        *token = normalized_auth_token;
+    }
 
     // 2. 停止当前运行的 Server（如有），等待端口释放
     {
         let abort_handle = {
-            let mut handle = state.abort_handle.lock()
+            let mut handle = state
+                .abort_handle
+                .lock()
                 .map_err(|_| AppError::external("锁定 abort_handle 失败"))?;
             handle.take()
         };
@@ -2159,17 +2375,21 @@ async fn update_server_config(
 
     // 3. 如果 enabled，两阶段启动：先 bind（同步等结果），再 spawn serve
     if enabled {
-        let listener = server::bind_server(port).await
+        let listener = server::bind_server(port)
+            .await
             .map_err(AppError::external)?;
 
         let config_arc = Arc::clone(&state.upload_config);
+        let auth_token_arc = Arc::clone(&state.auth_token);
         let task = tokio::task::spawn(async move {
-            if let Err(e) = server::run_server(listener, config_arc).await {
+            if let Err(e) = server::run_server(listener, config_arc, auth_token_arc).await {
                 log::error!("[Server] 运行失败: {}", e);
             }
         });
 
-        let mut handle = state.abort_handle.lock()
+        let mut handle = state
+            .abort_handle
+            .lock()
             .map_err(|_| AppError::external("锁定 abort_handle 失败"))?;
         *handle = Some(task.abort_handle());
 
@@ -2180,4 +2400,3 @@ async fn update_server_config(
         Ok("Server 已停止".to_string())
     }
 }
-

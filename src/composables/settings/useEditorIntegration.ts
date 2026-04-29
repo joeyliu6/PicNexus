@@ -8,6 +8,7 @@ import type { EditorServerConfig, ServerServiceType, CustomS3Profile } from '../
 import { isCustomS3Id, getCustomS3ProfileId } from '../../config/types';
 import { createLogger } from '../../utils/logger';
 import { extractNamiAuthToken } from '../../utils/namiAuthToken';
+import { generateEditorServerAuthToken } from '../../utils/editorServerAuth';
 import type { SettingsFormShape } from './useSettingsForm';
 
 interface UseEditorIntegrationOptions {
@@ -88,11 +89,21 @@ export function useEditorIntegration(options: UseEditorIntegrationOptions) {
     }
   }
 
-  function buildObsidianApplyPayload(cfg: EditorServerConfig) {
+  function ensureEditorServerAuthToken(cfg: EditorServerConfig): string {
+    const existing = cfg.authToken?.trim();
+    if (existing) return existing;
+
+    const authToken = generateEditorServerAuthToken();
+    formData.value.editorServer = { ...cfg, authToken };
+    return authToken;
+  }
+
+  function buildObsidianApplyPayload(cfg: EditorServerConfig, authToken: string | null) {
     return {
       enabled: cfg.enabled,
       port: cfg.port,
       serviceConfigJson: buildServiceConfigJson(cfg.obsidianService),
+      authToken,
     };
   }
 
@@ -180,7 +191,9 @@ export function useEditorIntegration(options: UseEditorIntegrationOptions) {
       return false;
     }
 
-    const obsidianPayload = buildObsidianApplyPayload(cfg);
+    const authToken = cfg.enabled ? ensureEditorServerAuthToken(cfg) : (cfg.authToken?.trim() || null);
+    const activeCfg = formData.value.editorServer;
+    const obsidianPayload = buildObsidianApplyPayload(activeCfg, authToken);
     const cliConfigJson = buildServiceConfigJson(cfg.typoraService);
     const payloadKey = JSON.stringify({ obsidian: obsidianPayload, cli: cliConfigJson });
 

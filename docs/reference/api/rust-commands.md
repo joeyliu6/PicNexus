@@ -43,6 +43,15 @@
 
 ---
 
+## Editor Server auth
+
+`update_server_config` accepts optional `authToken`. Browser-originated `POST /upload` and
+`POST /upload/file` requests must include the token in `X-PicNexus-Token`,
+`Authorization: Bearer <token>`, or the query string (`?token=...` / `?authToken=...`).
+`GET /status` remains unauthenticated for connection checks.
+
+---
+
 ## 进度事件
 
 上传命令通过 Tauri 事件报告进度，事件名格式 `upload-progress-{taskId}`。

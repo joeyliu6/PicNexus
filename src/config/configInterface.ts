@@ -174,6 +174,8 @@ export interface EditorServerConfig {
   typoraService: ServerServiceType | null;
   /** Obsidian 专用图床（null = 未配置） */
   obsidianService: ServerServiceType | null;
+  /** Browser-origin upload requests must include this token */
+  authToken?: string;
 }
 
 /**

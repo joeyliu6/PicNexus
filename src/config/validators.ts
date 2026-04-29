@@ -92,7 +92,11 @@ export function sanitizeConfig(config: UserConfig): UserConfig {
         password: sanitizeString(profile.password, 0, 0)
       })),
       activeId: config.webdav.activeId
-    } : undefined
+    } : undefined,
+    editorServer: config.editorServer ? {
+      ...config.editorServer,
+      authToken: sanitizeString(config.editorServer.authToken, 4, 4)
+    } : config.editorServer
   };
 
   return sanitized;

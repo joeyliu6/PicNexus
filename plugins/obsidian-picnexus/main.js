@@ -8,7 +8,7 @@ var __export = (target, all) => {
 };
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
-    for (const key of __getOwnPropNames(from))
+    for (let key of __getOwnPropNames(from))
       if (!__hasOwnProp.call(to, key) && key !== except)
         __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
   }
@@ -138,7 +138,24 @@ var DEFAULT_SETTINGS = {
 };
 
 // src/main.ts
-var IMAGE_EXTS = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "tiff", "avif"];
+var IMAGE_CONTENT_TYPES = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  bmp: "image/bmp",
+  svg: "image/svg+xml",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+  ico: "image/x-icon",
+  avif: "image/avif"
+};
+var IMAGE_EXTS = Object.keys(IMAGE_CONTENT_TYPES);
+function getImageContentType(fileName) {
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+  return IMAGE_CONTENT_TYPES[ext] || "application/octet-stream";
+}
 var PicNexusPlugin = class extends import_obsidian3.Plugin {
   settings = { ...DEFAULT_SETTINGS };
   uploader = new PicNexusUploader(DEFAULT_SETTINGS.port);
@@ -225,7 +242,11 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
       editor.replaceSelection(placeholder);
       try {
         const buffer = await file.arrayBuffer();
-        const resp = await this.uploader.uploadByContent(buffer, file.name, file.type);
+        const resp = await this.uploader.uploadByContent(
+          buffer,
+          file.name,
+          file.type || getImageContentType(file.name)
+        );
         if (resp.success && resp.result && resp.result.length > 0) {
           const url = resp.result[0];
           const imageLink = this.formatImageLink(file.name, url);
@@ -282,7 +303,7 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
         const resp = await this.uploader.uploadByContent(
           buffer,
           imgFile.name,
-          `image/${ext === "jpg" ? "jpeg" : ext}`
+          getImageContentType(imgFile.name)
         );
         if (resp.success && resp.result && resp.result.length > 0) {
           const url = resp.result[0];

@@ -3,7 +3,26 @@ import { PicNexusUploader } from './uploader';
 import { PicNexusSettingTab } from './settings';
 import { DEFAULT_SETTINGS, type PicNexusSettings } from './types';
 
-const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'tiff', 'avif'];
+const IMAGE_CONTENT_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  bmp: 'image/bmp',
+  svg: 'image/svg+xml',
+  tif: 'image/tiff',
+  tiff: 'image/tiff',
+  ico: 'image/x-icon',
+  avif: 'image/avif',
+};
+
+const IMAGE_EXTS = Object.keys(IMAGE_CONTENT_TYPES);
+
+function getImageContentType(fileName: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  return IMAGE_CONTENT_TYPES[ext] || 'application/octet-stream';
+}
 
 export default class PicNexusPlugin extends Plugin {
   settings: PicNexusSettings = { ...DEFAULT_SETTINGS };
@@ -115,7 +134,11 @@ export default class PicNexusPlugin extends Plugin {
 
       try {
         const buffer = await file.arrayBuffer();
-        const resp = await this.uploader.uploadByContent(buffer, file.name, file.type);
+        const resp = await this.uploader.uploadByContent(
+          buffer,
+          file.name,
+          file.type || getImageContentType(file.name)
+        );
 
         if (resp.success && resp.result && resp.result.length > 0) {
           const url = resp.result[0];
@@ -186,7 +209,7 @@ export default class PicNexusPlugin extends Plugin {
         const resp = await this.uploader.uploadByContent(
           buffer,
           imgFile.name,
-          `image/${ext === 'jpg' ? 'jpeg' : ext}`
+          getImageContentType(imgFile.name)
         );
 
         if (resp.success && resp.result && resp.result.length > 0) {
