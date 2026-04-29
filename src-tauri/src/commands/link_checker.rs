@@ -43,7 +43,7 @@ pub struct CheckLinkResult {
     pub is_valid: bool,
     pub status_code: Option<u16>,
     pub error: Option<String>,
-    pub error_type: String,         // "success" | "http_4xx" | "http_5xx" | "timeout" | "network" | "suspicious"
+    pub error_type: String, // "success" | "http_4xx" | "http_5xx" | "timeout" | "network" | "suspicious"
     pub suggestion: Option<String>,
     pub response_time: Option<u64>,
     // v3.0 新增
@@ -94,7 +94,6 @@ fn classify_error(
     ("network".to_string(), Some("未知错误".to_string()))
 }
 
-
 /// 通用 Chrome User-Agent（版本号定期随大版本更新）
 const CHROME_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
 
@@ -137,24 +136,54 @@ fn get_service_config(service_id: &str) -> Option<&'static ServiceConfig> {
 /// 从 URL 域名识别图床服务
 fn detect_service_from_url(url: &str) -> Option<&'static str> {
     let host = url
-        .strip_prefix("https://").or_else(|| url.strip_prefix("http://"))
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
         .and_then(|s| s.split('/').next())
         .unwrap_or("");
 
-    if host.ends_with(".sinaimg.cn") || host == "sinaimg.cn" { return Some("weibo"); }
-    if host.contains("image.baidu.com") { return Some("baidu"); }
-    if host.ends_with(".hdslb.com") || host == "hdslb.com" { return Some("bilibili"); }
-    if host.ends_with(".360buyimg.com") || host == "360buyimg.com" { return Some("jd"); }
-    if host.ends_with(".zhimg.com") || host == "zhimg.com" { return Some("zhihu"); }
-    if host.contains("chaoxing.com") { return Some("chaoxing"); }
-    if host.contains("nowcoder.com") { return Some("nowcoder"); }
-    if host == "raw.githubusercontent.com" || host == "github.com" || host.ends_with(".github.io") { return Some("github"); }
-    if host == "i.imgur.com" || host == "imgur.com" { return Some("imgur"); }
-    if host.ends_with(".aliyuncs.com") { return Some("oss"); }
-    if host.ends_with(".myqcloud.com") { return Some("cos"); }
-    if host.ends_with(".qiniudn.com") || host.ends_with(".qnssl.com") || host.ends_with(".qbox.me") { return Some("qiniu"); }
-    if host.ends_with(".smms.app") || host == "i.loli.net" || host == "vip2.loli.io" { return Some("smms"); }
-    if host.ends_with(".nami.observer") || host == "nami.observer" { return Some("nami"); }
+    if host.ends_with(".sinaimg.cn") || host == "sinaimg.cn" {
+        return Some("weibo");
+    }
+    if host.contains("image.baidu.com") {
+        return Some("baidu");
+    }
+    if host.ends_with(".hdslb.com") || host == "hdslb.com" {
+        return Some("bilibili");
+    }
+    if host.ends_with(".360buyimg.com") || host == "360buyimg.com" {
+        return Some("jd");
+    }
+    if host.ends_with(".zhimg.com") || host == "zhimg.com" {
+        return Some("zhihu");
+    }
+    if host.contains("chaoxing.com") {
+        return Some("chaoxing");
+    }
+    if host.contains("nowcoder.com") {
+        return Some("nowcoder");
+    }
+    if host == "raw.githubusercontent.com" || host == "github.com" || host.ends_with(".github.io") {
+        return Some("github");
+    }
+    if host == "i.imgur.com" || host == "imgur.com" {
+        return Some("imgur");
+    }
+    if host.ends_with(".aliyuncs.com") {
+        return Some("oss");
+    }
+    if host.ends_with(".myqcloud.com") {
+        return Some("cos");
+    }
+    if host.ends_with(".qiniudn.com") || host.ends_with(".qnssl.com") || host.ends_with(".qbox.me")
+    {
+        return Some("qiniu");
+    }
+    if host.ends_with(".smms.app") || host == "i.loli.net" || host == "vip2.loli.io" {
+        return Some("smms");
+    }
+    if host.ends_with(".nami.observer") || host == "nami.observer" {
+        return Some("nami");
+    }
     None
 }
 
@@ -214,37 +243,67 @@ mod tests {
 
     #[test]
     fn detect_weibo_from_sinaimg_host() {
-        assert_eq!(detect_service_from_url("https://tvax1.sinaimg.cn/large/abc.jpg"), Some("weibo"));
-        assert_eq!(detect_service_from_url("http://sinaimg.cn/foo"), Some("weibo"));
+        assert_eq!(
+            detect_service_from_url("https://tvax1.sinaimg.cn/large/abc.jpg"),
+            Some("weibo")
+        );
+        assert_eq!(
+            detect_service_from_url("http://sinaimg.cn/foo"),
+            Some("weibo")
+        );
     }
 
     #[test]
     fn detect_bilibili_from_hdslb_host() {
-        assert_eq!(detect_service_from_url("https://i0.hdslb.com/bfs/x.jpg"), Some("bilibili"));
-        assert_eq!(detect_service_from_url("https://hdslb.com/x.jpg"), Some("bilibili"));
+        assert_eq!(
+            detect_service_from_url("https://i0.hdslb.com/bfs/x.jpg"),
+            Some("bilibili")
+        );
+        assert_eq!(
+            detect_service_from_url("https://hdslb.com/x.jpg"),
+            Some("bilibili")
+        );
     }
 
     #[test]
     fn detect_jd_from_360buyimg_host() {
-        assert_eq!(detect_service_from_url("https://img30.360buyimg.com/jfs/x.jpg"), Some("jd"));
+        assert_eq!(
+            detect_service_from_url("https://img30.360buyimg.com/jfs/x.jpg"),
+            Some("jd")
+        );
     }
 
     #[test]
     fn detect_zhihu_from_zhimg_host() {
-        assert_eq!(detect_service_from_url("https://pic1.zhimg.com/80/v2-abc.jpg"), Some("zhihu"));
+        assert_eq!(
+            detect_service_from_url("https://pic1.zhimg.com/80/v2-abc.jpg"),
+            Some("zhihu")
+        );
     }
 
     #[test]
     fn detect_chaoxing_by_substring_match() {
-        assert_eq!(detect_service_from_url("https://p.ananas.chaoxing.com/x.jpg"), Some("chaoxing"));
-        assert_eq!(detect_service_from_url("https://notice.chaoxing.com/x.jpg"), Some("chaoxing"));
+        assert_eq!(
+            detect_service_from_url("https://p.ananas.chaoxing.com/x.jpg"),
+            Some("chaoxing")
+        );
+        assert_eq!(
+            detect_service_from_url("https://notice.chaoxing.com/x.jpg"),
+            Some("chaoxing")
+        );
         // 注意：匹配的是 host（第一个 / 之前的部分），query 里出现 chaoxing.com 不算
-        assert_eq!(detect_service_from_url("https://p.cldisk.com/x.jpg?from=chaoxing.com"), None);
+        assert_eq!(
+            detect_service_from_url("https://p.cldisk.com/x.jpg?from=chaoxing.com"),
+            None
+        );
     }
 
     #[test]
     fn detect_nowcoder_by_substring_match() {
-        assert_eq!(detect_service_from_url("https://uploadfiles.nowcoder.com/files/x.jpg"), Some("nowcoder"));
+        assert_eq!(
+            detect_service_from_url("https://uploadfiles.nowcoder.com/files/x.jpg"),
+            Some("nowcoder")
+        );
     }
 
     #[test]
@@ -253,29 +312,71 @@ mod tests {
             detect_service_from_url("https://raw.githubusercontent.com/u/r/main/x.jpg"),
             Some("github"),
         );
-        assert_eq!(detect_service_from_url("https://github.com/u/r/raw/x.jpg"), Some("github"));
-        assert_eq!(detect_service_from_url("https://user.github.io/page.jpg"), Some("github"));
+        assert_eq!(
+            detect_service_from_url("https://github.com/u/r/raw/x.jpg"),
+            Some("github")
+        );
+        assert_eq!(
+            detect_service_from_url("https://user.github.io/page.jpg"),
+            Some("github")
+        );
     }
 
     #[test]
     fn detect_imgur_only_for_exact_hosts() {
-        assert_eq!(detect_service_from_url("https://i.imgur.com/x.jpg"), Some("imgur"));
-        assert_eq!(detect_service_from_url("https://imgur.com/x.jpg"), Some("imgur"));
+        assert_eq!(
+            detect_service_from_url("https://i.imgur.com/x.jpg"),
+            Some("imgur")
+        );
+        assert_eq!(
+            detect_service_from_url("https://imgur.com/x.jpg"),
+            Some("imgur")
+        );
         // 非官方域名不匹配
-        assert_ne!(detect_service_from_url("https://fake.imgur.com.evil.com/x"), Some("imgur"));
+        assert_ne!(
+            detect_service_from_url("https://fake.imgur.com.evil.com/x"),
+            Some("imgur")
+        );
     }
 
     #[test]
     fn detect_oss_cos_qiniu_smms_nami() {
-        assert_eq!(detect_service_from_url("https://bucket.oss-cn-beijing.aliyuncs.com/x"), Some("oss"));
-        assert_eq!(detect_service_from_url("https://bucket.cos.ap-guangzhou.myqcloud.com/x"), Some("cos"));
-        assert_eq!(detect_service_from_url("https://cdn.qiniudn.com/x"), Some("qiniu"));
-        assert_eq!(detect_service_from_url("https://foo.qnssl.com/x"), Some("qiniu"));
-        assert_eq!(detect_service_from_url("https://foo.qbox.me/x"), Some("qiniu"));
-        assert_eq!(detect_service_from_url("https://s3.smms.app/x"), Some("smms"));
-        assert_eq!(detect_service_from_url("https://i.loli.net/x.jpg"), Some("smms"));
-        assert_eq!(detect_service_from_url("https://vip2.loli.io/x.jpg"), Some("smms"));
-        assert_eq!(detect_service_from_url("https://api.nami.observer/x"), Some("nami"));
+        assert_eq!(
+            detect_service_from_url("https://bucket.oss-cn-beijing.aliyuncs.com/x"),
+            Some("oss")
+        );
+        assert_eq!(
+            detect_service_from_url("https://bucket.cos.ap-guangzhou.myqcloud.com/x"),
+            Some("cos")
+        );
+        assert_eq!(
+            detect_service_from_url("https://cdn.qiniudn.com/x"),
+            Some("qiniu")
+        );
+        assert_eq!(
+            detect_service_from_url("https://foo.qnssl.com/x"),
+            Some("qiniu")
+        );
+        assert_eq!(
+            detect_service_from_url("https://foo.qbox.me/x"),
+            Some("qiniu")
+        );
+        assert_eq!(
+            detect_service_from_url("https://s3.smms.app/x"),
+            Some("smms")
+        );
+        assert_eq!(
+            detect_service_from_url("https://i.loli.net/x.jpg"),
+            Some("smms")
+        );
+        assert_eq!(
+            detect_service_from_url("https://vip2.loli.io/x.jpg"),
+            Some("smms")
+        );
+        assert_eq!(
+            detect_service_from_url("https://api.nami.observer/x"),
+            Some("nami")
+        );
     }
 
     #[test]
@@ -292,7 +393,70 @@ mod tests {
 
     #[test]
     fn detect_handles_http_scheme() {
-        assert_eq!(detect_service_from_url("http://tvax1.sinaimg.cn/x.jpg"), Some("weibo"));
+        assert_eq!(
+            detect_service_from_url("http://tvax1.sinaimg.cn/x.jpg"),
+            Some("weibo")
+        );
+    }
+
+    // ---------- image extension detection ----------
+
+    #[test]
+    fn detect_image_extension_prefers_real_png_bytes() {
+        assert_eq!(
+            detect_image_extension(b"\x89PNG\r\n\x1a\nrest"),
+            Some("png")
+        );
+    }
+
+    #[test]
+    fn validate_downloaded_image_payload_rejects_fake_ico_magic() {
+        let err = validate_downloaded_image_payload(&[0x00, 0x00, 0x01, 0x00], "ico")
+            .expect_err("ICO header without directory entries should be rejected");
+
+        assert!(err.to_string().contains("有效图片"));
+    }
+
+    #[test]
+    fn validate_downloaded_image_payload_accepts_svg_with_viewbox() {
+        let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 9"></svg>"#;
+
+        validate_downloaded_image_payload(svg, "svg").expect("SVG with dimensions should pass");
+    }
+
+    #[test]
+    fn extension_from_content_type_handles_uppercase_and_new_formats() {
+        assert_eq!(
+            extension_from_content_type("IMAGE/AVIF; charset=binary"),
+            "avif"
+        );
+        assert_eq!(
+            extension_from_content_type("image/vnd.microsoft.icon"),
+            "ico"
+        );
+    }
+
+    #[test]
+    fn extension_from_url_supports_extended_image_formats() {
+        assert_eq!(extension_from_url("https://example.com/a.avif?x=1"), "avif");
+        assert_eq!(
+            extension_from_url("https://example.com/a.tif#preview"),
+            "tiff"
+        );
+        assert_eq!(extension_from_url("https://example.com/a.svg"), "svg");
+    }
+
+    #[test]
+    fn infer_downloaded_image_extension_prefers_real_bytes_over_url() {
+        assert_eq!(
+            infer_downloaded_image_extension(
+                b"\x89PNG\r\n\x1a\nrest",
+                "image/jpeg",
+                "https://example.com/a.jpg",
+            )
+            .expect("extension should be inferred"),
+            "png"
+        );
     }
 
     // ---------- get_service_config ----------
@@ -382,10 +546,15 @@ async fn check_single_link(
     let start_time = Instant::now();
 
     // 从统一配置表查询是否跳过 HEAD
-    let skip_head = service.and_then(get_service_config).is_some_and(|c| c.skip_head);
+    let skip_head = service
+        .and_then(get_service_config)
+        .is_some_and(|c| c.skip_head);
 
     let response_result = if skip_head {
-        let builder = http_client.get(link).header("Range", "bytes=0-0").timeout(timeout);
+        let builder = http_client
+            .get(link)
+            .header("Range", "bytes=0-0")
+            .timeout(timeout);
         apply_service_headers(builder, service).send().await
     } else {
         let head_result = {
@@ -394,7 +563,10 @@ async fn check_single_link(
         };
         match &head_result {
             Ok(resp) if resp.status().as_u16() == 405 => {
-                let builder = http_client.get(link).header("Range", "bytes=0-0").timeout(timeout);
+                let builder = http_client
+                    .get(link)
+                    .header("Range", "bytes=0-0")
+                    .timeout(timeout);
                 apply_service_headers(builder, service).send().await
             }
             _ => head_result,
@@ -426,10 +598,12 @@ async fn check_single_link(
             // 206 是 Range 请求的正常响应，其 Content-Length/Content-Type 反映部分内容，不参与 suspicious 判定
             // SVG 图片天然体积小（badge 通常 < 1KB），豁免 content_length 检查
             let is_svg = ct.as_deref().is_some_and(|t| t.starts_with("image/svg"));
-            let is_suspicious = is_2xx && status_code != 206 && (
-                ct.as_deref().is_some_and(|t| !t.starts_with("image/") && !t.is_empty())
-                || (!is_svg && cl.is_some_and(|len| len > 0 && len < 1024))
-            );
+            let is_suspicious = is_2xx
+                && status_code != 206
+                && (ct
+                    .as_deref()
+                    .is_some_and(|t| !t.starts_with("image/") && !t.is_empty())
+                    || (!is_svg && cl.is_some_and(|len| len > 0 && len < 1024)));
 
             let (mut error_type, mut suggestion) = classify_error(Some(status_code), None);
 
@@ -440,7 +614,9 @@ async fn check_single_link(
 
             // 防盗链判定：403 + 已知防盗链服务（从统一配置表查询）
             let browser_might_work = status_code == 403
-                && service.and_then(get_service_config).is_some_and(|c| c.hotlink_protected);
+                && service
+                    .and_then(get_service_config)
+                    .is_some_and(|c| c.hotlink_protected);
 
             let is_valid = is_2xx && !is_suspicious;
 
@@ -566,7 +742,9 @@ fn cleanup_old_temp_files() {
 
         // 只处理以特定前缀开头的文件
         if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-            if !file_name.starts_with(TEMP_FILE_PREFIX) && !file_name.starts_with(URL_DOWNLOAD_PREFIX) {
+            if !file_name.starts_with(TEMP_FILE_PREFIX)
+                && !file_name.starts_with(URL_DOWNLOAD_PREFIX)
+            {
                 continue;
             }
 
@@ -631,12 +809,32 @@ pub async fn download_image_from_url(
         )));
     }
 
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    let content_type_mime = content_type
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    if !content_type.is_empty() && !content_type_mime.starts_with("image/") {
+        return Err(AppError::validation(format!(
+            "URL 指向的不是图片（Content-Type: {}）",
+            content_type
+        )));
+    }
+
     // 预检查 Content-Length（如果服务器提供）
     if let Some(content_length) = response.content_length() {
         if content_length as usize > MAX_DOWNLOAD_SIZE {
             log::warn!(
                 "[下载图片] 文件过大: {} bytes (最大 {} bytes)",
-                content_length, MAX_DOWNLOAD_SIZE
+                content_length,
+                MAX_DOWNLOAD_SIZE
             );
             return Err(AppError::validation(format!(
                 "文件过大: {} MB (最大 {} MB)",
@@ -667,13 +865,16 @@ pub async fn download_image_from_url(
     }
 
     log::debug!("[下载图片] 下载成功，大小: {} bytes", bytes.len());
+    let ext = infer_downloaded_image_extension(&bytes, &content_type, &url)?;
+    validate_downloaded_image_payload(&bytes, ext)?;
 
     // 创建临时文件
     let temp_dir = std::env::temp_dir();
     let file_name = format!(
-        "{}{}.jpg",
+        "{}{}.{}",
         TEMP_FILE_PREFIX,
-        chrono::Local::now().timestamp_nanos_opt().unwrap_or(0)
+        chrono::Local::now().timestamp_nanos_opt().unwrap_or(0),
+        ext
     );
     let temp_path = temp_dir.join(file_name);
 
@@ -702,19 +903,139 @@ pub struct UrlDownloadResult {
 
 /// 从 Content-Type 推断文件扩展名
 fn extension_from_content_type(content_type: &str) -> &str {
-    let mime = content_type.split(';').next().unwrap_or("").trim();
-    match mime {
+    let mime = content_type
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    match mime.as_str() {
         "image/png" => "png",
         "image/gif" => "gif",
         "image/webp" => "webp",
         "image/bmp" | "image/x-ms-bmp" => "bmp",
         "image/jpeg" | "image/jpg" => "jpg",
         "image/svg+xml" => "svg",
+        "image/tiff" => "tiff",
+        "image/x-icon" | "image/vnd.microsoft.icon" => "ico",
+        "image/avif" => "avif",
         _ => "",
     }
 }
 
 /// 从 URL 路径推断文件扩展名
+fn detect_image_extension(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.len() >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF {
+        return Some("jpg");
+    }
+    if bytes.len() >= 8 && bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]) {
+        return Some("png");
+    }
+    if bytes.len() >= 6 && (bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a")) {
+        return Some("gif");
+    }
+    if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
+        return Some("webp");
+    }
+    if bytes.len() >= 2 && bytes.starts_with(b"BM") {
+        return Some("bmp");
+    }
+    if bytes.len() >= 4 && (bytes.starts_with(b"II*\0") || bytes.starts_with(b"MM\0*")) {
+        return Some("tiff");
+    }
+    if bytes.len() >= 4 && bytes.starts_with(&[0x00, 0x00, 0x01, 0x00]) {
+        return Some("ico");
+    }
+    if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" {
+        let brands = &bytes[8..bytes.len().min(64)];
+        if brands
+            .windows(4)
+            .any(|brand| brand == b"avif" || brand == b"avis")
+        {
+            return Some("avif");
+        }
+    }
+
+    let preview_len = bytes.len().min(512);
+    let preview = String::from_utf8_lossy(&bytes[..preview_len]);
+    let trimmed = preview.trim_start_matches('\u{feff}').trim_start();
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.starts_with("<svg") || (lower.starts_with("<?xml") && lower.contains("<svg")) {
+        return Some("svg");
+    }
+
+    None
+}
+
+fn parse_svg_number(value: &str) -> Option<f64> {
+    let value = value.trim();
+    let numeric = value
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || matches!(c, '.' | '+' | '-' | 'e' | 'E'))
+        .collect::<String>();
+    if numeric.is_empty() {
+        return None;
+    }
+    numeric
+        .parse::<f64>()
+        .ok()
+        .filter(|n| n.is_finite() && *n > 0.0)
+}
+
+fn extract_svg_attr(svg: &str, attr: &str) -> Option<String> {
+    for pattern in [
+        format!(r#"(?is)\b{}\s*=\s*"([^"]+)""#, regex::escape(attr)),
+        format!(r#"(?is)\b{}\s*=\s*'([^']+)'"#, regex::escape(attr)),
+    ] {
+        let re = regex::Regex::new(&pattern).ok()?;
+        if let Some(captures) = re.captures(svg) {
+            if let Some(value) = captures.get(1) {
+                return Some(value.as_str().to_string());
+            }
+        }
+    }
+    None
+}
+
+fn has_valid_svg_dimensions(bytes: &[u8]) -> bool {
+    let Ok(svg) = std::str::from_utf8(bytes) else {
+        return false;
+    };
+    if let (Some(width), Some(height)) = (
+        extract_svg_attr(svg, "width"),
+        extract_svg_attr(svg, "height"),
+    ) {
+        if parse_svg_number(&width).is_some() && parse_svg_number(&height).is_some() {
+            return true;
+        }
+    }
+
+    let Some(view_box) = extract_svg_attr(svg, "viewBox") else {
+        return false;
+    };
+    let parts = view_box
+        .split(|c: char| c.is_ascii_whitespace() || c == ',')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    parts.len() == 4 && parse_svg_number(parts[2]).is_some() && parse_svg_number(parts[3]).is_some()
+}
+
+fn validate_downloaded_image_payload(bytes: &[u8], ext: &str) -> Result<(), AppError> {
+    if ext == "svg" {
+        if has_valid_svg_dimensions(bytes) {
+            return Ok(());
+        }
+        return Err(AppError::validation("URL 指向的 SVG 缺少有效尺寸信息"));
+    }
+
+    let size =
+        imagesize::blob_size(bytes).map_err(|_| AppError::validation("URL 指向的不是有效图片"))?;
+    if size.width == 0 || size.height == 0 {
+        return Err(AppError::validation("URL 指向的图片尺寸无效"));
+    }
+    Ok(())
+}
+
 fn extension_from_url(url: &str) -> &str {
     // 去除查询参数和锚点
     let path = url.split('?').next().unwrap_or(url);
@@ -727,11 +1048,38 @@ fn extension_from_url(url: &str) -> &str {
             "gif" => "gif",
             "webp" => "webp",
             "bmp" => "bmp",
+            "svg" => "svg",
+            "tif" | "tiff" => "tiff",
+            "ico" => "ico",
+            "avif" => "avif",
             _ => "",
         }
     } else {
         ""
     }
+}
+
+fn infer_downloaded_image_extension<'a>(
+    bytes: &[u8],
+    content_type: &'a str,
+    url: &'a str,
+) -> Result<&'a str, AppError> {
+    if let Some(ext) = detect_image_extension(bytes) {
+        return Ok(ext);
+    }
+
+    if !content_type.is_empty() {
+        let from_ct = extension_from_content_type(content_type);
+        if !from_ct.is_empty() {
+            return Ok(from_ct);
+        }
+    }
+
+    let from_url = extension_from_url(url);
+    if from_url.is_empty() {
+        return Err(AppError::validation("URL 指向的不是图片"));
+    }
+    Ok(from_url)
 }
 
 /// 从 URL 下载图片到临时目录（通用版）
@@ -753,7 +1101,9 @@ pub async fn download_url_image(
         return Err(AppError::validation("URL 不能为空"));
     }
     if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
-        return Err(AppError::validation("请输入有效的 URL（以 http:// 或 https:// 开头）"));
+        return Err(AppError::validation(
+            "请输入有效的 URL（以 http:// 或 https:// 开头）",
+        ));
     }
 
     // 清理过期临时文件
@@ -774,7 +1124,10 @@ pub async fn download_url_image(
     if !response.status().is_success() {
         let status = response.status();
         log::error!("[URL下载] HTTP 错误: {}", status);
-        return Err(AppError::network(format!("下载失败: HTTP {}", status.as_u16())));
+        return Err(AppError::network(format!(
+            "下载失败: HTTP {}",
+            status.as_u16()
+        )));
     }
 
     // 获取 Content-Type
@@ -786,7 +1139,13 @@ pub async fn download_url_image(
         .to_string();
 
     // 校验是否为图片
-    let is_image = content_type.starts_with("image/");
+    let content_type_mime = content_type
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    let is_image = content_type_mime.starts_with("image/");
     if !content_type.is_empty() && !is_image {
         log::warn!("[URL下载] 非图片类型: {}", content_type);
         return Err(AppError::validation(format!(
@@ -820,36 +1179,10 @@ pub async fn download_url_image(
         )));
     }
 
-    // 推断扩展名：优先 Content-Type，其次 URL 路径，兜底 jpg
-    let ext = {
-        let from_ct = extension_from_content_type(&content_type);
-        if !from_ct.is_empty() {
-            from_ct
-        } else {
-            let from_url = extension_from_url(trimmed);
-            if !from_url.is_empty() { from_url } else { "jpg" }
-        }
-    };
+    // 推断扩展名：优先真实字节，其次 Content-Type / URL 路径
+    let ext = infer_downloaded_image_extension(&bytes, &content_type, trimmed)?;
 
-    // 如果没有 Content-Type 且无法从 URL 推断，通过魔术字节验证
-    if content_type.is_empty() {
-        let is_valid_image = bytes.len() >= 4 && (
-            // JPEG: FF D8 FF
-            (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) ||
-            // PNG: 89 50 4E 47
-            (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) ||
-            // GIF: 47 49 46
-            (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46) ||
-            // BMP: 42 4D
-            (bytes[0] == 0x42 && bytes[1] == 0x4D) ||
-            // WEBP: RIFF....WEBP
-            (bytes.len() >= 12 && bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46
-                && bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50)
-        );
-        if !is_valid_image {
-            return Err(AppError::validation("URL 指向的不是图片"));
-        }
-    }
+    validate_downloaded_image_payload(&bytes, ext)?;
 
     let file_size = bytes.len() as u64;
 
@@ -876,7 +1209,12 @@ pub async fn download_url_image(
     })?;
 
     let path_str = temp_path.to_string_lossy().to_string();
-    log::info!("[URL下载] 已保存到: {} ({} bytes, {})", path_str, file_size, content_type);
+    log::info!(
+        "[URL下载] 已保存到: {} ({} bytes, {})",
+        path_str,
+        file_size,
+        content_type
+    );
 
     Ok(UrlDownloadResult {
         file_path: path_str,
@@ -926,13 +1264,15 @@ impl BatchCheckCancelFlag {
     fn start_batch(&self) -> u64 {
         let generation = self.active_generation.fetch_add(1, Ordering::SeqCst) + 1;
         // 新批次开始时只取消更老的批次；当前批次需要保持可运行。
-        self.cancelled_generation.store(generation.saturating_sub(1), Ordering::SeqCst);
+        self.cancelled_generation
+            .store(generation.saturating_sub(1), Ordering::SeqCst);
         generation
     }
 
     fn cancel_active(&self) {
         let generation = self.active_generation.load(Ordering::SeqCst);
-        self.cancelled_generation.store(generation, Ordering::SeqCst);
+        self.cancelled_generation
+            .store(generation, Ordering::SeqCst);
     }
 }
 
@@ -1034,7 +1374,10 @@ pub async fn batch_check_links(
 
     log::info!(
         "[批量检测] 开始: {} 条链接, 并发={}, 单图床限制={}, 超时={}s",
-        total, concurrency, per_host_limit, timeout_secs
+        total,
+        concurrency,
+        per_host_limit,
+        timeout_secs
     );
 
     // 分配批次代际：取消只作用于当时的 active generation，后续新批次不会复活旧任务。
@@ -1056,8 +1399,9 @@ pub async fn batch_check_links(
     // 已完成计数（用于进度上报）
     let checked_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     // 待广播的逐条结果缓冲：节流广播触发时 take 出来塞进事件 payload
-    let pending_results: Arc<tokio::sync::Mutex<Vec<BatchCheckItemResult>>> =
-        Arc::new(tokio::sync::Mutex::new(Vec::with_capacity(PROGRESS_EMIT_EVERY_N * 2)));
+    let pending_results: Arc<tokio::sync::Mutex<Vec<BatchCheckItemResult>>> = Arc::new(
+        tokio::sync::Mutex::new(Vec::with_capacity(PROGRESS_EMIT_EVERY_N * 2)),
+    );
 
     // 为每条链接创建异步任务
     let mut handles = Vec::with_capacity(total);
@@ -1109,7 +1453,8 @@ pub async fn batch_check_links(
                 item.fallback_url.as_deref(),
                 &client,
                 timeout_secs,
-            ).await;
+            )
+            .await;
 
             let result = BatchCheckItemResult {
                 check: check_result.clone(),
@@ -1125,22 +1470,24 @@ pub async fn batch_check_links(
 
             // 更新进度并上报（节流：首末强制 + 每 N 条）
             let done = checked.fetch_add(1, Ordering::SeqCst) + 1;
-            let should_emit = done == 1
-                || done == total_count
-                || done.is_multiple_of(PROGRESS_EMIT_EVERY_N);
+            let should_emit =
+                done == 1 || done == total_count || done.is_multiple_of(PROGRESS_EMIT_EVERY_N);
             if should_emit {
                 let recent = {
                     let mut buf = pending.lock().await;
                     std::mem::take(&mut *buf)
                 };
-                let _ = window.emit("link-check://progress", BatchCheckProgress {
-                    batch_id: event_batch_id,
-                    checked: done,
-                    total: total_count,
-                    current_url: item.url,
-                    current_result: Some(check_result),
-                    recent_results: recent,
-                });
+                let _ = window.emit(
+                    "link-check://progress",
+                    BatchCheckProgress {
+                        batch_id: event_batch_id,
+                        checked: done,
+                        total: total_count,
+                        current_url: item.url,
+                        current_result: Some(check_result),
+                        recent_results: recent,
+                    },
+                );
             }
 
             Some(result)
@@ -1163,13 +1510,33 @@ pub async fn batch_check_links(
     let cancelled = is_batch_cancelled(&cancel_flag.cancelled_generation, batch_generation);
 
     let valid = results.iter().filter(|r| r.check.is_valid).count();
-    let invalid = results.iter().filter(|r| !r.check.is_valid && r.check.error_type != "timeout" && r.check.error_type != "suspicious" && !r.check.browser_might_work).count();
-    let timeout = results.iter().filter(|r| r.check.error_type == "timeout").count();
-    let suspicious = results.iter().filter(|r| r.check.error_type == "suspicious" || r.check.browser_might_work).count();
+    let invalid = results
+        .iter()
+        .filter(|r| {
+            !r.check.is_valid
+                && r.check.error_type != "timeout"
+                && r.check.error_type != "suspicious"
+                && !r.check.browser_might_work
+        })
+        .count();
+    let timeout = results
+        .iter()
+        .filter(|r| r.check.error_type == "timeout")
+        .count();
+    let suspicious = results
+        .iter()
+        .filter(|r| r.check.error_type == "suspicious" || r.check.browser_might_work)
+        .count();
 
     log::info!(
         "[批量检测] 完成: 总={}, 有效={}, 失效={}, 超时={}, 疑似={}, 耗时={}ms, 取消={}",
-        results.len(), valid, invalid, timeout, suspicious, elapsed_ms, cancelled
+        results.len(),
+        valid,
+        invalid,
+        timeout,
+        suspicious,
+        elapsed_ms,
+        cancelled
     );
 
     Ok(BatchCheckResult {
