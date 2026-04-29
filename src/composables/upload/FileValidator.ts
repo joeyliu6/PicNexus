@@ -23,6 +23,12 @@ interface ImageHeaderMetadata {
   height: number;
 }
 
+export interface FileValidationResult {
+  valid: string[];
+  invalid: string[];
+  truncatedCount: number;
+}
+
 function hasValidImageExtension(filePath: string): boolean {
   const ext = filePath.split('.').pop()?.toLowerCase();
   return !!ext && (VALID_IMAGE_EXTENSIONS as readonly string[]).includes(ext);
@@ -42,19 +48,29 @@ async function canReadImageHeader(filePath: string): Promise<boolean> {
  * 按扩展名过滤有效的图片文件
  * @param filePaths 文件路径列表
  */
-export async function filterValidFiles(filePaths: string[]): Promise<{
-  valid: string[];
-  invalid: string[];
-}> {
+export async function filterValidFiles(
+  filePaths: string[],
+  maxValidFiles: number = MAX_FILES_PER_UPLOAD
+): Promise<FileValidationResult> {
   const valid: string[] = [];
-  const invalid: string[] = [];
+  const invalidByExtension: string[] = [];
+  const candidates: string[] = [];
+
+  for (const filePath of filePaths) {
+    if (hasValidImageExtension(filePath)) {
+      candidates.push(filePath);
+    } else {
+      invalidByExtension.push(filePath);
+    }
+  }
+
+  const safeLimit = Math.max(0, maxValidFiles);
+  const candidatesToValidate = candidates.slice(0, safeLimit);
+  const truncatedCount = Math.max(0, candidates.length - candidatesToValidate.length);
+  const invalid = [...invalidByExtension];
 
   const semaphore = new Semaphore(IMAGE_VALIDATION_CONCURRENCY);
-  const checks = await Promise.all(filePaths.map(async (filePath) => {
-    if (!hasValidImageExtension(filePath)) {
-      return { filePath, isValid: false };
-    }
-
+  const checks = await Promise.all(candidatesToValidate.map(async (filePath) => {
     await semaphore.acquire();
     try {
       return { filePath, isValid: await canReadImageHeader(filePath) };
@@ -68,7 +84,7 @@ export async function filterValidFiles(filePaths: string[]): Promise<{
     else invalid.push(filePath);
   });
 
-  return { valid, invalid };
+  return { valid, invalid, truncatedCount };
 }
 
 /**

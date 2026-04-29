@@ -23,12 +23,11 @@ import type { ServiceType } from '../config/types';
 import { MultiServiceUploader, SingleServiceResult } from '../core/MultiServiceUploader';
 import { useHistorySaver } from './useHistorySaver';
 import { formatLinkWithConfig, getLinkFormatConfig } from './useCopyLink';
+import { filterValidFiles, MAX_FILES_PER_UPLOAD, VALID_IMAGE_EXTENSIONS } from './upload/FileValidator';
 import { buildUploadSummaryToast, type UploadCopySummary } from '../utils/uploadSummary';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('GlobalShortcut');
-
-const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
 
 const isUploading = ref(false);
 let configUnlisten: UnlistenFn | null = null;
@@ -173,6 +172,24 @@ async function notifyUploadSummary(total: number, success: number, copy: UploadC
   await notify(payload.summary, payload.detail);
 }
 
+async function validateShortcutFileSelection(filePaths: string[]): Promise<string[]> {
+  const { valid, invalid, truncatedCount } = await filterValidFiles(filePaths);
+
+  if (invalid.length > 0) {
+    await notify('PicNexus', `已忽略 ${invalid.length} 个无效或损坏的图片文件`);
+  }
+
+  if (truncatedCount > 0) {
+    await notify('PicNexus', `单次最多上传 ${MAX_FILES_PER_UPLOAD} 个文件，已截断多余的 ${truncatedCount} 个`);
+  }
+
+  if (valid.length === 0) {
+    await notify('PicNexus', '未检测到有效图片');
+  }
+
+  return valid;
+}
+
 const handleClipboardUpload = () => withUploadGuard('剪贴板上传', async () => {
   const hasImage = await invoke<boolean>('clipboard_has_image');
   if (!hasImage) {
@@ -204,10 +221,13 @@ const handleClipboardUpload = () => withUploadGuard('剪贴板上传', async () 
 const handleFileSelectUpload = () => withUploadGuard('文件选择上传', async () => {
   const selected = await dialogOpen({
     multiple: true,
-    filters: [{ name: '图片', extensions: ALLOWED_EXTENSIONS }],
+    filters: [{ name: '图片', extensions: [...VALID_IMAGE_EXTENSIONS] }],
   });
 
-  const filePaths = Array.isArray(selected) ? selected : selected ? [selected] : [];
+  const selectedFilePaths = Array.isArray(selected) ? selected : selected ? [selected] : [];
+  if (selectedFilePaths.length === 0) return;
+
+  const filePaths = await validateShortcutFileSelection(selectedFilePaths);
   if (filePaths.length === 0) return;
 
   const config = await loadConfig();

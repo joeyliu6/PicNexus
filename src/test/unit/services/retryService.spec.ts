@@ -489,6 +489,58 @@ describe('RetryService', () => {
     expect(toast.warn).toHaveBeenCalledTimes(1);
   });
 
+  it('同一队列项两个失败服务批量重传并发成功后都保持完成', async () => {
+    const weiboRetry = createDeferred<UploadResult>();
+    const r2Retry = createDeferred<UploadResult>();
+    retryUploadMock.mockImplementation((_filePath: string, serviceId: string) => {
+      if (serviceId === 'r2') return r2Retry.promise;
+      return weiboRetry.promise;
+    });
+
+    const toast = makeToast();
+    const queueManager = createQueueManager([
+      createItem({
+        enabledServices: ['weibo', 'r2'],
+        serviceProgress: {
+          weibo: {
+            serviceId: 'weibo',
+            progress: 0,
+            status: '\u5931\u8d25',
+          },
+          r2: {
+            serviceId: 'r2',
+            progress: 0,
+            status: '\u5931\u8d25',
+          },
+        },
+      }),
+    ]);
+    const service = new RetryService(makeOptions({ toast, queueManager }));
+
+    const retryPromise = service.retryAllFailed(['item-1'], DEFAULT_CONFIG);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    r2Retry.resolve({
+      ...makeUploadResult('https://img.example.com/r2.png'),
+      serviceId: 'r2',
+      fileKey: 'r2-key',
+    });
+    await Promise.resolve();
+    weiboRetry.resolve(makeUploadResult('https://img.example.com/weibo.png'));
+
+    const result = await retryPromise;
+
+    const item = queueManager.items.get('item-1')!;
+    expect(result).toEqual({ success: 2, failed: 0 });
+    expect(item.status).toBe('success');
+    expect(item.serviceProgress.weibo?.status).toContain('完成');
+    expect(item.serviceProgress.r2?.status).toContain('完成');
+    expect(item.serviceProgress.weibo?.link).toBe('https://img.example.com/weibo.png');
+    expect(item.serviceProgress.r2?.link).toBe('https://img.example.com/r2.png');
+    expect(toast.success).toHaveBeenCalledTimes(1);
+  });
+
   it('counts every pending failed service as failed when retryAllFailed cannot start because the network is down', async () => {
     checkNetworkConnectivityMock.mockResolvedValueOnce(false);
     const toast = makeToast();

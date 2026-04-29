@@ -39,7 +39,7 @@ describe('filterValidFiles', () => {
 
   it('空数组返回空结果', async () => {
     const result = await filterValidFiles([]);
-    expect(result).toEqual({ valid: [], invalid: [] });
+    expect(result).toEqual({ valid: [], invalid: [], truncatedCount: 0 });
   });
 
   it('带路径的文件名正确取扩展', async () => {
@@ -58,6 +58,16 @@ describe('filterValidFiles', () => {
 
     expect(result.valid).toEqual([]);
     expect(result.invalid).toEqual(['/tmp/fake.png']);
+  });
+
+  it('达到单次上传上限后不继续读取图片头', async () => {
+    const files = Array.from({ length: MAX_FILES_PER_UPLOAD + 5 }, (_, index) => `/tmp/${index}.jpg`);
+
+    const result = await filterValidFiles(files);
+
+    expect(mockInvoke).toHaveBeenCalledTimes(MAX_FILES_PER_UPLOAD);
+    expect(result.valid).toHaveLength(MAX_FILES_PER_UPLOAD);
+    expect(result.truncatedCount).toBe(5);
   });
 });
 

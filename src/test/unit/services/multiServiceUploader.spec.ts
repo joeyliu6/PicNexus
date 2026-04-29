@@ -426,5 +426,24 @@ describe('MultiServiceUploader', () => {
         onProgress,
       );
     });
+
+    it.each(['jd', 'qiyu'] as const)('无需配置的服务 %s 重试时使用空配置继续上传', async (serviceId) => {
+      const mock = makeMockUploader({ url: `https://${serviceId}.example.com/retry.png` });
+      mockCreate.mockReturnValue(mock as never);
+
+      const result = await uploader.retryUpload(
+        '/tmp/test.jpg',
+        serviceId as ServiceType,
+        { services: {} } as unknown as UserConfig,
+      );
+
+      expect(result.url).toBe(`https://${serviceId}.example.com/retry.png`);
+      expect(mock.validateConfig).toHaveBeenCalledWith({});
+      expect(mock.upload).toHaveBeenCalledWith(
+        '/tmp/test.jpg',
+        { config: {} },
+        undefined,
+      );
+    });
   });
 });

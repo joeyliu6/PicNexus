@@ -301,7 +301,8 @@ export class MultiServiceUploader {
     };
 
     const uploader = UploaderFactory.create(serviceId);
-    const serviceConfig = getServiceConfig(serviceId, safeConfig);
+    const serviceConfig = getServiceConfig(serviceId, safeConfig)
+      ?? (NO_CONFIG_SERVICES.includes(serviceId as ServiceType) ? {} as Record<string, unknown> : undefined);
     if (!serviceConfig) {
       throw new Error(`服务 ${serviceId} 的配置不存在，请检查设置`);
     }

@@ -99,7 +99,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       log.info('接收到文件:', filePaths);
 
       // 文件类型验证
-      const { valid: initialValid, invalid } = await filterValidFiles(filePaths);
+      const { valid: initialValid, invalid, truncatedCount } = await filterValidFiles(filePaths);
       let valid = initialValid;
 
       if (valid.length === 0) {
@@ -112,9 +112,14 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         toast.showConfig('warn', TOAST_MESSAGES.upload.invalidFormat(invalid.length));
       }
 
-      // 文件数量限制，防止内存溢出
+      if (truncatedCount > 0) {
+        toast.showConfig('warn', { summary: '文件数量超限', detail: `单次最多上传 ${MAX_FILES_PER_UPLOAD} 个文件，已截断多余的 ${truncatedCount} 个` });
+      }
+
+      // 防御性限制：filterValidFiles 默认会截断，这里兜底避免调用方传入不同上限。
       if (valid.length > MAX_FILES_PER_UPLOAD) {
-        toast.showConfig('warn', { summary: '文件数量超限', detail: `单次最多上传 ${MAX_FILES_PER_UPLOAD} 个文件，已截断多余的 ${valid.length - MAX_FILES_PER_UPLOAD} 个` });
+        const overflowCount = valid.length - MAX_FILES_PER_UPLOAD;
+        toast.showConfig('warn', { summary: '文件数量超限', detail: `单次最多上传 ${MAX_FILES_PER_UPLOAD} 个文件，已截断多余的 ${overflowCount} 个` });
         valid = valid.slice(0, MAX_FILES_PER_UPLOAD);
       }
 
@@ -140,8 +145,8 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         config = DEFAULT_CONFIG;
       }
 
-      // 关键修改：使用配置中的服务列表，而不是界面状态
-      const enabledServices = config.enabledServices || selectedServices.value;
+      // 上传必须使用当前界面选择快照，避免防抖保存尚未落盘时读到旧配置。
+      const enabledServices = [...selectedServices.value];
 
       // 验证是否选中了图床服务
       if (enabledServices.length === 0) {
@@ -160,13 +165,16 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
         return;
       }
 
-      // 同步界面状态和配置状态（修复：先复制再排序，避免修改原数组）
       const sortedEnabled = [...enabledServices].sort();
-      const sortedSelected = [...selectedServices.value].sort();
-      if (JSON.stringify(sortedEnabled) !== JSON.stringify(sortedSelected)) {
-        log.warn('检测到状态不一致，同步中...');
-        selectedServices.value = [...enabledServices];
+      const sortedConfigured = [...(config.enabledServices ?? [])].sort();
+      if (JSON.stringify(sortedEnabled) !== JSON.stringify(sortedConfigured)) {
+        log.warn('检测到界面选择与配置不一致，本次上传使用界面选择快照');
       }
+
+      config = {
+        ...config,
+        enabledServices: [...enabledServices],
+      };
 
       // ⭐ 检查队列管理器
       if (!queueManager) {

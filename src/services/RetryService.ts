@@ -257,15 +257,15 @@ export class RetryService {
     item: QueueItem,
     result: UploadResult
   ): Promise<void> {
-    const updates = { ...item.serviceProgress };
+    const currentItem = this.options.queueManager.getItem(itemId) ?? item;
     let link = result.url;
 
     if (serviceId === 'weibo' && this.options.activePrefix) {
       link = applyPrefixTemplate(this.options.activePrefix, link);
     }
 
-    updates[serviceId] = {
-      ...updates[serviceId],
+    const serviceUpdate = {
+      ...currentItem.serviceProgress[serviceId],
       serviceId,
       status: '✓ 完成',
       progress: 100,
@@ -275,17 +275,23 @@ export class RetryService {
     };
 
     // 检查是否所有服务都成功
-    const allSuccess = item.enabledServices.every(s =>
-      (updates[s]?.status?.includes('完成') || updates[s]?.status?.includes('✓'))
+    const nextServiceProgress = {
+      ...currentItem.serviceProgress,
+      [serviceId]: serviceUpdate
+    };
+    const allSuccess = currentItem.enabledServices.every(s =>
+      (nextServiceProgress[s]?.status?.includes('完成') || nextServiceProgress[s]?.status?.includes('✓'))
     );
 
     this.options.queueManager.updateItem(itemId, {
-      serviceProgress: updates,
+      serviceProgress: {
+        [serviceId]: serviceUpdate
+      },
       status: allSuccess ? 'success' : 'uploading'
     });
 
     // 如果这是主力图床或尚无主力图床，设置它
-    if (!item.primaryUrl || serviceId === item.enabledServices[0]) {
+    if (!currentItem.primaryUrl || serviceId === currentItem.enabledServices[0]) {
       this.options.queueManager.updateItem(itemId, {
         primaryUrl: link,
         thumbUrl: link
@@ -293,7 +299,7 @@ export class RetryService {
     }
 
     // 更新历史记录
-    await this.updateHistoryRecord(item.filePath, serviceId, result, link);
+    await this.updateHistoryRecord(currentItem.filePath, serviceId, result, link);
   }
 
   /**
@@ -380,9 +386,9 @@ export class RetryService {
     const errorMsg = error instanceof Error ? error.message : String(error);
     log.error(`${serviceId} 失败:`, errorMsg);
 
-    const updates = { ...item.serviceProgress };
-    updates[serviceId] = {
-      ...updates[serviceId],
+    const currentItem = this.options.queueManager.getItem(itemId) ?? item;
+    const serviceUpdate = {
+      ...currentItem.serviceProgress[serviceId],
       serviceId,
       status: '✗ 失败',
       progress: 0,
@@ -390,14 +396,18 @@ export class RetryService {
       isRetrying: false
     };
 
-    this.options.queueManager.updateItem(itemId, { serviceProgress: updates });
+    this.options.queueManager.updateItem(itemId, {
+      serviceProgress: {
+        [serviceId]: serviceUpdate
+      }
+    });
 
     // 检查是否需要更新整体状态
     // 如果没有任何服务正在上传或成功，应该将整体状态改回 error
-    const currentItem = this.options.queueManager.getItem(itemId);
-    if (currentItem) {
-      const hasActiveOrSuccessService = currentItem.enabledServices.some(s => {
-        const sp = currentItem.serviceProgress[s];
+    const latestItem = this.options.queueManager.getItem(itemId);
+    if (latestItem) {
+      const hasActiveOrSuccessService = latestItem.enabledServices.some(s => {
+        const sp = latestItem.serviceProgress[s];
         if (!sp) return false;
         // 正在上传（isRetrying 或进度 > 0 且不是失败）
         const isActive = sp.isRetrying ||
@@ -408,7 +418,7 @@ export class RetryService {
       });
 
       // 如果没有活跃或成功的服务，将整体状态改回 error
-      if (!hasActiveOrSuccessService && currentItem.status === 'uploading') {
+      if (!hasActiveOrSuccessService && latestItem.status === 'uploading') {
         this.options.queueManager.updateItem(itemId, { status: 'error' });
       }
     }

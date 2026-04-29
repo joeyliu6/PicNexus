@@ -18,6 +18,11 @@ interface RustDownloadResult {
 const MAX_URLS = 20;
 const MAX_CONCURRENT_DOWNLOADS = 3;
 
+interface ParsedUrls {
+  urls: string[];
+  truncatedCount: number;
+}
+
 /**
  * URL 图片下载 Composable
  * 提供从 URL 下载图片并触发上传的功能
@@ -29,10 +34,11 @@ export function useUrlDownload() {
   /**
    * 解析用户输入，提取有效 URL
    */
-  function parseUrls(input: string): string[] {
+  function parseUrlInput(input: string): ParsedUrls {
     const lines = input.split('\n');
     const urls: string[] = [];
     const seen = new Set<string>();
+    let truncatedCount = 0;
 
     for (const line of lines) {
       const trimmed = line.trim();
@@ -41,11 +47,18 @@ export function useUrlDownload() {
       if (seen.has(trimmed)) continue;
 
       seen.add(trimmed);
-      urls.push(trimmed);
-
-      if (urls.length >= MAX_URLS) break;
+      if (urls.length < MAX_URLS) {
+        urls.push(trimmed);
+      } else {
+        truncatedCount += 1;
+      }
     }
 
+    return { urls, truncatedCount };
+  }
+
+  function parseUrls(input: string): string[] {
+    const { urls } = parseUrlInput(input);
     return urls;
   }
 
@@ -68,10 +81,14 @@ export function useUrlDownload() {
   ): Promise<void> {
     if (isDownloading.value) return;
 
-    const urls = parseUrls(input);
+    const { urls, truncatedCount } = parseUrlInput(input);
     if (urls.length === 0) {
       toast.showConfig('warn', TOAST_MESSAGES.urlDownload.invalidUrl);
       return;
+    }
+
+    if (truncatedCount > 0) {
+      toast.showConfig('warn', TOAST_MESSAGES.urlDownload.tooManyUrls(MAX_URLS, truncatedCount));
     }
 
     isDownloading.value = true;

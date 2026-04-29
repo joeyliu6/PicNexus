@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { DEFAULT_CONFIG } from '../../../config/types';
+import { MAX_FILES_PER_UPLOAD } from '../../../composables/upload/FileValidator';
 
 const {
   configStoreGetMock,
@@ -175,6 +176,10 @@ function createMultiQueueManager() {
 
 describe('useUploadManager', () => {
   beforeEach(() => {
+    selectedServicesRef.value = ['jd', 'upyun'];
+    availableServicesRef.value = ['jd', 'upyun'];
+    serviceConfigStatusRef.value = {};
+    activePrefixRef.value = null;
     configStoreGetMock.mockReset().mockResolvedValue({
       ...DEFAULT_CONFIG,
       enabledServices: ['jd', 'upyun'],
@@ -246,6 +251,117 @@ describe('useUploadManager', () => {
     });
     // 失败结果不应被持久化到历史记录
     expect(addResultToHistoryItemMock).not.toHaveBeenCalled();
+  });
+
+  it('切换图床后立刻上传使用当前界面选择快照', async () => {
+    selectedServicesRef.value = ['jd'];
+    availableServicesRef.value = ['jd', 'upyun'];
+    configStoreGetMock.mockResolvedValue({
+      ...DEFAULT_CONFIG,
+      enabledServices: ['upyun'],
+      linkOutput: {
+        ...DEFAULT_CONFIG.linkOutput!,
+        autoCopy: false,
+      },
+    });
+    uploadToMultipleServicesMock.mockImplementationOnce(
+      async (
+        _filePath: string,
+        enabledServices: string[],
+        _config: unknown,
+        _onProgress?: unknown,
+        onServiceResult?: (result: any) => void | Promise<void>
+      ) => {
+        const serviceId = enabledServices[0];
+        const success = {
+          serviceId,
+          status: 'success' as const,
+          result: {
+            serviceId,
+            fileKey: `${serviceId}-key`,
+            url: `https://example.com/${serviceId}.jpg`,
+          },
+        };
+        await onServiceResult?.(success);
+        return {
+          primaryService: serviceId,
+          primaryUrl: success.result.url,
+          results: [success],
+        };
+      }
+    );
+
+    const queueManager = createMultiQueueManager();
+    const { useUploadManager } = await import('../../../composables/useUpload');
+    const { handleFilesUpload } = useUploadManager(queueManager as never);
+
+    await handleFilesUpload(['C:/tmp/test.jpg']);
+
+    expect(queueManager.addFile).toHaveBeenCalledWith('C:/tmp/test.jpg', 'test.jpg', ['jd']);
+    expect(uploadToMultipleServicesMock).toHaveBeenCalledWith(
+      'C:/tmp/test.jpg',
+      ['jd'],
+      expect.objectContaining({ enabledServices: ['jd'] }),
+      expect.any(Function),
+      expect.any(Function),
+    );
+    expect(selectedServicesRef.value).toEqual(['jd']);
+  });
+
+  it('超过 200 张时不会对全部路径调用 get_image_metadata', async () => {
+    selectedServicesRef.value = ['jd'];
+    configStoreGetMock.mockResolvedValue({
+      ...DEFAULT_CONFIG,
+      enabledServices: ['jd'],
+      linkOutput: {
+        ...DEFAULT_CONFIG.linkOutput!,
+        autoCopy: false,
+      },
+    });
+    uploadToMultipleServicesMock.mockImplementation(
+      async (
+        filePath: string,
+        enabledServices: string[],
+        _config: unknown,
+        _onProgress?: unknown,
+        onServiceResult?: (result: any) => void | Promise<void>
+      ) => {
+        const serviceId = enabledServices[0];
+        const fileName = filePath.split(/[\\/]/).pop() ?? filePath;
+        const success = {
+          serviceId,
+          status: 'success' as const,
+          result: {
+            serviceId,
+            fileKey: `${fileName}-key`,
+            url: `https://example.com/${fileName}`,
+          },
+        };
+        await onServiceResult?.(success);
+        return {
+          primaryService: serviceId,
+          primaryUrl: success.result.url,
+          results: [success],
+        };
+      }
+    );
+
+    const queueManager = createMultiQueueManager();
+    const { useUploadManager } = await import('../../../composables/useUpload');
+    const { handleFilesUpload } = useUploadManager(queueManager as never);
+    const filePaths = Array.from(
+      { length: MAX_FILES_PER_UPLOAD + 25 },
+      (_, index) => `C:/tmp/overflow-${index + 1}.jpg`
+    );
+
+    await handleFilesUpload(filePaths);
+
+    expect(invokeMock).toHaveBeenCalledTimes(MAX_FILES_PER_UPLOAD);
+    expect(queueManager.addFile).toHaveBeenCalledTimes(MAX_FILES_PER_UPLOAD);
+    expect(toastShowConfigMock).toHaveBeenCalledWith('warn', expect.objectContaining({
+      summary: '文件数量超限',
+      detail: expect.stringContaining('25'),
+    }));
   });
 
   it('shows a partial-success toast when uploads succeed but some services fail', async () => {

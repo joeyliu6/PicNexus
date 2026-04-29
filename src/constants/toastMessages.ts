@@ -172,6 +172,10 @@ export const TOAST_MESSAGES = {
       summary: '部分下载失败',
       detail: `成功下载 ${success} 个，失败 ${failed} 个，已上传成功的部分`
     }),
+    tooManyUrls: (limit: number, truncated: number): ToastMessageConfig => ({
+      summary: 'URL 数量超限',
+      detail: `单次最多处理 ${limit} 个 URL，已忽略多余的 ${truncated} 个`
+    }),
   },
 
   // === 同步相关 ===

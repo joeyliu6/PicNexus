@@ -75,4 +75,30 @@ describe('useUrlDownload', () => {
     expect(uploadHandler).toHaveBeenCalledWith(['C:/tmp/a.png', 'C:/tmp/c.png']);
     expect(toastShowConfigMock).toHaveBeenCalledWith('warn', expect.anything());
   });
+
+  it('超过 20 个 URL 时提示截断并只下载前 20 个', async () => {
+    invokeMock.mockImplementation(async (_cmd, args) => {
+      const { url } = args as { url: string };
+      return {
+        file_path: `C:/tmp/${url.split('/').pop()}`,
+        content_type: 'image/png',
+        file_size: 1,
+      };
+    });
+
+    const uploadHandler = vi.fn(async () => undefined);
+    const { downloadAndUpload } = useUrlDownload();
+    const urls = Array.from({ length: 23 }, (_, index) => `https://example.com/${index + 1}.png`);
+
+    await downloadAndUpload(urls.join('\n'), uploadHandler);
+
+    expect(invokeMock).toHaveBeenCalledTimes(20);
+    expect(uploadHandler).toHaveBeenCalledWith(
+      Array.from({ length: 20 }, (_, index) => `C:/tmp/${index + 1}.png`),
+    );
+    expect(toastShowConfigMock).toHaveBeenCalledWith('warn', expect.objectContaining({
+      summary: 'URL 数量超限',
+      detail: expect.stringContaining('3'),
+    }));
+  });
 });
