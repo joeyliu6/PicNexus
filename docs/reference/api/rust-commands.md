@@ -24,6 +24,7 @@
 | | `test_nami_connection` | 测试纳米连接 |
 | **剪贴板** | `clipboard_has_image` | 检测剪贴板图片 |
 | | `read_clipboard_image` | 读取剪贴板图片 |
+| | `cleanup_clipboard_temp_file` | 安全清理本次剪贴板图片临时文件（仅允许系统临时目录下 `clipboard_image_*.png`） |
 | **工具** | `get_image_metadata` | 获取图片元数据 |
 | | `check_image_link` | 检测链接有效性 |
 | | `download_image_from_url` | 下载远程图片 |
