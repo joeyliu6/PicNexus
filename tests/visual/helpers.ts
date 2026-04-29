@@ -53,6 +53,36 @@ async function openStatefulUi(page: Page, visualPage: string, state: string): Pr
   if (visualPage === 'history' && state === 'service-menu') {
     await page.locator('.visual-history .service-filter .filter-chip').click();
   }
+  if (visualPage === 'favorites' && state === 'scroll-middle') {
+    await page.locator('.visual-favorites-scroll').evaluate((element) => {
+      element.scrollTop = 520;
+    });
+  }
+  if (visualPage === 'timeline' && state === 'scroll-restored') {
+    await page.locator('.visual-timeline-scroll').evaluate((element) => {
+      element.scrollTop = 360;
+    });
+  }
+  if (visualPage === 'timeline' && state === 'indicator-visible') {
+    await expect(page.locator('.visual-timeline-indicator-shell .timeline-indicator')).toBeVisible();
+  }
+  if (visualPage === 'backup-sync' && (state === 'webdav-expanded' || state === 'webdav-testing')) {
+    await page.locator('.visual-backup-sync .webdav-collapsible .card-header').click();
+    await expect(page.locator('.visual-backup-sync .webdav-collapsible .simple-form')).toBeVisible();
+  }
+  if (visualPage === 'backup-sync' && state === 'overwrite-menu-open') {
+    await page.locator('.visual-backup-sync .dropdown-wrapper button').first().click();
+    await expect(page.locator('.visual-backup-sync .dropdown-menu')).toBeVisible();
+  }
+  if (visualPage === 'backup-sync' && state === 'overwrite-confirm-dialog') {
+    await expect(page.locator('.p-confirmdialog')).toBeVisible();
+  }
+  if (visualPage === 'backup-sync' && ['password-dialog', 'password-set-dialog', 'restore-password-error'].includes(state)) {
+    await expect(page.locator('.p-dialog')).toBeVisible();
+  }
+  if (visualPage === 'backup-sync' && state === 'restore-password-error') {
+    await expect(page.locator('.backup-password-dialog .error-box')).toBeVisible();
+  }
   if (visualPage === 'markdown-repair' && state === 'repair-confirm-dialog') {
     await page.locator('.visual-native-body .bottom-actions .btn-primary').click();
     await expect(page.locator('.p-dialog')).toBeVisible();
@@ -67,7 +97,8 @@ export async function captureVisualState(page: Page, visualPage: string, state: 
   await expect(root).toHaveAttribute('data-visual-ready', 'true');
   await openStatefulUi(page, visualPage, state);
   await waitForVisualAssets(page);
-  const screenshotTarget = visualPage === 'markdown-repair' && state === 'repair-confirm-dialog'
+  const screenshotTarget = (visualPage === 'markdown-repair' && state === 'repair-confirm-dialog')
+    || (visualPage === 'backup-sync' && ['password-dialog', 'password-set-dialog', 'restore-password-error', 'overwrite-confirm-dialog'].includes(state))
     ? page
     : root;
   await expect(screenshotTarget).toHaveScreenshot(`${visualPage}-${state}.png`, {
