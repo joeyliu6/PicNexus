@@ -153,8 +153,9 @@ jobs:
 
   e2e:
     name: E2E smoke
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_e2e == 'true'
-    runs-on: windows-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_e2e }}
+    needs: test
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v5
@@ -168,7 +169,7 @@ jobs:
         run: npm ci
 
       - name: Install Playwright browser
-        run: npx playwright install chromium
+        run: npx playwright install --with-deps chromium
 
       - name: Run E2E smoke tests
         run: npm run test:e2e
