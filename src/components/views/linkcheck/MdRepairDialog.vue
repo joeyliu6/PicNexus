@@ -40,14 +40,24 @@ function onShow() {
     ? [...props.initialPreference]
     : [...props.availableBackupServices];
 
+  const hasExistingSelection = props.rescuableLinks.some((link) =>
+    Boolean(link.selectedBackup && link.backupLinks?.some((b) =>
+      b.checkResult?.is_valid && b.url === link.selectedBackup,
+    )),
+  );
+
   manualSelections.value = new Map();
   for (const link of props.rescuableLinks) {
     const validBackups = link.backupLinks?.filter((b) => b.checkResult?.is_valid);
     if (validBackups && validBackups.length > 0) {
-      manualSelections.value.set(link.url, validBackups[0].url);
+      const selected = link.selectedBackup && validBackups.some((b) => b.url === link.selectedBackup)
+        ? link.selectedBackup
+        : validBackups[0].url;
+      manualSelections.value.set(link.url, selected);
     }
   }
-  showManualSection.value = false;
+  repairStrategyType.value = hasExistingSelection ? 'manual' : 'priority';
+  showManualSection.value = hasExistingSelection;
   showAllManualLinks.value = false;
 }
 

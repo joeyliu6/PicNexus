@@ -233,9 +233,53 @@ describe('LinkChecker', () => {
 
     expect(scanStage.value).toBe('cancelled');
     expect(isCancelled.value).toBe(true);
-    // 取消语义：保留已检测 checkResult，但不再推进文件 ready 状态。
-    expect(readyFiles.value).toEqual(new Set());
+    expect(readyFiles.value).toEqual(new Set(['C:/docs/a.md']));
     expect(imageLinks.value[0].checkResult).toEqual(makeResult(okUrl, true));
     expect(checkUrls).toHaveBeenCalledTimes(1);
+  });
+
+  it('runLinkCheck 取消后仍为已完整检测的坏链查找并验证备用链接', async () => {
+    const deadUrl = 'https://dead.example/a.png';
+    const pendingUrl = 'https://pending.example/b.png';
+    const backupUrl = 'https://cdn.example/a.png';
+    const item = makeHistoryItem('h1', [
+      { serviceId: 'primary', url: deadUrl },
+      { serviceId: 'mirror', url: backupUrl },
+    ]);
+    historyMocks.getAllStream.mockReturnValue(streamBatches([item]));
+    historyMocks.getById.mockResolvedValue(item);
+    imageLinks.value = [
+      makeLink(deadUrl, 'C:/docs/done.md'),
+      makeLink(pendingUrl, 'C:/docs/pending.md'),
+    ];
+
+    const checkUrls: CheckUrlsFn = vi.fn(async (
+      items: BatchCheckRequestItem[],
+      onProgress?: (prog: { current_url: string; current_result?: CheckLinkResult }) => void,
+    ) => {
+      if (vi.mocked(checkUrls).mock.calls.length === 1) {
+        const result = makeResult(deadUrl, false);
+        onProgress?.({ current_url: deadUrl, current_result: result });
+        return makeBatch([result], true);
+      }
+
+      const results = items.map((item) => makeResult(item.url, true, item.url === backupUrl ? 20 : 50));
+      return makeBatch(results);
+    }) as CheckUrlsFn;
+
+    await runLinkCheck({ config, checkUrls });
+
+    expect(scanStage.value).toBe('cancelled');
+    expect(readyFiles.value).toEqual(new Set(['C:/docs/done.md']));
+    expect(checkUrls).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(checkUrls).mock.calls[1][0]).toEqual([{ url: backupUrl }]);
+    expect(imageLinks.value[0].backupLinks).toEqual([
+      {
+        url: backupUrl,
+        serviceId: 'mirror',
+        checkResult: makeResult(backupUrl, true, 20),
+      },
+    ]);
+    expect(imageLinks.value[1].checkResult).toBeUndefined();
   });
 });

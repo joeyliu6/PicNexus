@@ -8,7 +8,7 @@ import { useToast } from '../useToast';
 import { createLogger } from '../../utils/logger';
 import { formatTimestampCompact } from '../../utils/formatters';
 import { replaceImageLinks } from '../../utils/mdParser';
-import { saveLastRepair, clearLastRepair } from './useMdRescueLastRepair';
+import { saveLastRepair, clearLastRepair, readLastRepair } from './useMdRescueLastRepair';
 import {
   type RepairReceipt,
   isReplacing,
@@ -267,6 +267,14 @@ export async function undoReplace(resetFn: () => void): Promise<void> {
 
   // 半成功：把 receipt 收窄到失败项，用户可针对性重试
   repairReceipt.value = { ...receipt, fileBackupMap: failedPairs };
+  const persisted = readLastRepair();
+  if (persisted?.backupPath === receipt.backupPath) {
+    saveLastRepair({
+      ...persisted,
+      filesFixed: failedPairs.length,
+      fileBackupMap: failedPairs,
+    });
+  }
   toast.error(
     '部分撤销失败',
     `已恢复 ${restored} 个，${failedPairs.length} 个失败（保留以便重试）`,

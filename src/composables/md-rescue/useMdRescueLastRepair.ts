@@ -3,6 +3,7 @@
 
 import { ref, onMounted, onActivated } from 'vue';
 import { copyFile, exists } from '@tauri-apps/plugin-fs';
+import pLimit from 'p-limit';
 import { createLogger } from '../../utils/logger';
 
 const log = createLogger('MdRescue:LastRepair');
@@ -20,7 +21,14 @@ export interface LastRepairRecord {
   fileBackupMap: FileBackupPair[];
 }
 
+export interface UndoLastRepairResult {
+  restored: number;
+  failed: number;
+  failedPairs: FileBackupPair[];
+}
+
 const STORAGE_KEY = 'lastRepair.md-rescue';
+const UNDO_COPY_CONCURRENCY = 8;
 
 function isRecord(value: unknown): value is LastRepairRecord {
   if (!value || typeof value !== 'object') return false;
@@ -76,23 +84,29 @@ export function clearLastRepair(): void {
 /**
  * 从备份恢复所有文件（用于 idle 态"撤销上次修复"）
  * 与 useFileBackup.undoReplace 不同：不依赖运行时 repairReceipt，直接从持久化记录恢复
- * 并发恢复：单文件耗时极短，文件数量通常几到几十，串行浪费 I/O 等待
+ * 用有限并发恢复，避免文件夹模式一次打开过多文件句柄。
  */
-export async function undoLastRepair(record: LastRepairRecord): Promise<{ restored: number; failed: number }> {
+export async function undoLastRepair(record: LastRepairRecord): Promise<UndoLastRepairResult> {
+  const limit = pLimit(UNDO_COPY_CONCURRENCY);
   const results = await Promise.allSettled(
-    record.fileBackupMap.map((pair) => copyFile(pair.backup, pair.original)),
+    record.fileBackupMap.map((pair) =>
+      limit(() => copyFile(pair.backup, pair.original)),
+    ),
   );
   let restored = 0;
   let failed = 0;
+  const failedPairs: FileBackupPair[] = [];
   results.forEach((r, i) => {
+    const pair = record.fileBackupMap[i];
     if (r.status === 'fulfilled') {
       restored++;
-    } else {
-      log.error(`恢复失败: ${record.fileBackupMap[i]?.original}`, r.reason);
+    } else if (pair) {
+      log.error(`恢复失败: ${pair.original}`, r.reason);
       failed++;
+      failedPairs.push(pair);
     }
   });
-  return { restored, failed };
+  return { restored, failed, failedPairs };
 }
 
 /**

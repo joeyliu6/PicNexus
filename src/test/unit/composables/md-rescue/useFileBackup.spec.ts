@@ -10,6 +10,7 @@ const toastMocks = vi.hoisted(() => ({
 }));
 
 const lastRepairMocks = vi.hoisted(() => ({
+  readLastRepair: vi.fn(),
   saveLastRepair: vi.fn(),
   clearLastRepair: vi.fn(),
 }));
@@ -19,6 +20,7 @@ vi.mock('../../../../composables/useToast', () => ({
 }));
 
 vi.mock('../../../../composables/md-rescue/useMdRescueLastRepair', () => ({
+  readLastRepair: lastRepairMocks.readLastRepair,
   saveLastRepair: lastRepairMocks.saveLastRepair,
   clearLastRepair: lastRepairMocks.clearLastRepair,
 }));
@@ -91,6 +93,7 @@ describe('useFileBackup', () => {
   beforeEach(() => {
     resetTauriMocks();
     vi.clearAllMocks();
+    lastRepairMocks.readLastRepair.mockReturnValue(null);
     resetSharedState();
   });
 
@@ -235,6 +238,16 @@ describe('useFileBackup', () => {
         { original: 'C:/docs/b.md', backup: 'C:/backup/b.md' },
       ],
     };
+    lastRepairMocks.readLastRepair.mockReturnValue({
+      date: 1_700_000_000,
+      filesFixed: 2,
+      linksFixed: 2,
+      backupPath: 'C:/docs/.picnexus-backup/20260428_120000',
+      fileBackupMap: [
+        { original: 'C:/docs/a.md', backup: 'C:/backup/a.md' },
+        { original: 'C:/docs/b.md', backup: 'C:/backup/b.md' },
+      ],
+    });
     fs.copyFile.mockImplementation(async (backup) => {
       if (backup === 'C:/backup/b.md') throw new Error('locked');
     });
@@ -246,6 +259,15 @@ describe('useFileBackup', () => {
     expect(repairReceipt.value?.fileBackupMap).toEqual([
       { original: 'C:/docs/b.md', backup: 'C:/backup/b.md' },
     ]);
+    expect(lastRepairMocks.saveLastRepair).toHaveBeenCalledWith({
+      date: 1_700_000_000,
+      filesFixed: 1,
+      linksFixed: 2,
+      backupPath: 'C:/docs/.picnexus-backup/20260428_120000',
+      fileBackupMap: [
+        { original: 'C:/docs/b.md', backup: 'C:/backup/b.md' },
+      ],
+    });
     expect(toastMocks.error).toHaveBeenCalledWith(
       '部分撤销失败',
       '已恢复 1 个，1 个失败（保留以便重试）',

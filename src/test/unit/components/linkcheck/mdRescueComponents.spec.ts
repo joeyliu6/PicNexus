@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent } from 'vue';
+import { defineComponent, ref } from 'vue';
 import { mountWithDefaults } from '../../../helpers/vueMount';
 import { flushPromisesAndTicks } from '../../../helpers/wait';
 import {
@@ -10,14 +10,24 @@ import {
 import RescueIdleZone from '../../../../components/views/linkcheck/rescue/RescueIdleZone.vue';
 import RescueBrokenGroups from '../../../../components/views/linkcheck/rescue/RescueBrokenGroups.vue';
 import RescueFixingCards from '../../../../components/views/linkcheck/rescue/RescueFixingCards.vue';
+import RescueLastRepairCard from '../../../../components/views/linkcheck/rescue/RescueLastRepairCard.vue';
 import MdRepairDialog from '../../../../components/views/linkcheck/MdRepairDialog.vue';
 import type { FileHealth, MdImageLinkWithFile } from '../../../../composables/useMdRescue';
 import type { CheckLinkResult } from '../../../../types/linkCheck';
+
+const lastRepairMocks = vi.hoisted(() => ({
+  state: { record: null as { value: unknown } | null },
+  clearLastRepair: vi.fn(),
+  saveLastRepair: vi.fn(),
+  undoLastRepair: vi.fn(),
+  isLastRepairRestorable: vi.fn(),
+}));
 
 vi.mock('../../../../composables/useToast', () => ({
   useToast: () => ({
     error: vi.fn(),
     warn: vi.fn(),
+    success: vi.fn(),
     silent: vi.fn(),
   }),
 }));
@@ -35,8 +45,15 @@ vi.mock('../../../../composables/useConfig', async () => {
 
 vi.mock('../../../../composables/md-rescue/useMdRescueLastRepair', async () => {
   const { ref } = await import('vue');
+  if (!lastRepairMocks.state.record) {
+    lastRepairMocks.state.record = ref(null);
+  }
   return {
-    useLastRepair: () => ({ record: ref(null) }),
+    useLastRepair: () => ({ record: lastRepairMocks.state.record }),
+    clearLastRepair: lastRepairMocks.clearLastRepair,
+    saveLastRepair: lastRepairMocks.saveLastRepair,
+    undoLastRepair: lastRepairMocks.undoLastRepair,
+    isLastRepairRestorable: lastRepairMocks.isLastRepairRestorable,
   };
 });
 
@@ -123,6 +140,9 @@ describe('Markdown rescue P1 components', () => {
   beforeEach(() => {
     resetTauriMocks();
     vi.clearAllMocks();
+    lastRepairMocks.state.record = ref(null);
+    lastRepairMocks.isLastRepairRestorable.mockResolvedValue(false);
+    lastRepairMocks.undoLastRepair.mockResolvedValue({ restored: 0, failed: 0, failedPairs: [] });
   });
 
   it('RescueIdleZone emits empty-state entry actions and option toggles', async () => {
@@ -305,5 +325,104 @@ describe('Markdown rescue P1 components', () => {
 
     expect(wrapper.emitted('confirm')).toEqual([[{ type: 'fastest' }, ['smms', 'github']]]);
     expect(wrapper.emitted('update:visible')?.at(-1)).toEqual([false]);
+  });
+
+  it('MdRepairDialog preserves an inline selected backup as manual default', async () => {
+    const wrapper = mountWithDefaults(MdRepairDialog, {
+      props: {
+        visible: true,
+        availableBackupServices: ['github', 'smms'],
+        rescuableCount: 1,
+        rescuableLinks: [
+          mdLink({
+            selectedBackup: 'https://smms.example.com/a.png',
+            backupLinks: [
+              validBackup('https://cdn.example.com/a.png'),
+              validBackup('https://smms.example.com/a.png'),
+            ],
+          }),
+        ],
+        initialPreference: ['github', 'smms'],
+      },
+      global: {
+        stubs: {
+          Dialog: DialogStub,
+          Button: ButtonStub,
+          RadioButton: RadioButtonStub,
+        },
+      },
+    });
+    await flushPromisesAndTicks();
+
+    await wrapper.findAll('.button-stub').at(-1)!.trigger('click');
+
+    expect(wrapper.emitted('confirm')).toEqual([[
+      { type: 'manual', selections: new Map([['https://dead.example.com/a.png', 'https://smms.example.com/a.png']]) },
+      ['github', 'smms'],
+    ]]);
+  });
+
+  it('RescueLastRepairCard restores from the persisted backup record', async () => {
+    const record = {
+      date: Date.now(),
+      filesFixed: 1,
+      linksFixed: 2,
+      backupPath: 'C:/docs/.picnexus-backup/20260429_120000',
+      fileBackupMap: [{ original: 'C:/docs/a.md', backup: 'C:/backup/a.md' }],
+    };
+    lastRepairMocks.state.record!.value = record;
+    lastRepairMocks.isLastRepairRestorable.mockResolvedValue(true);
+    lastRepairMocks.undoLastRepair.mockResolvedValue({ restored: 1, failed: 0, failedPairs: [] });
+
+    const wrapper = mountWithDefaults(RescueLastRepairCard, {
+      global: { stubs: { Button: ButtonStub } },
+    });
+    await flushPromisesAndTicks();
+
+    const undoButton = wrapper.findAll('.button-stub').find((button) => button.text() === '撤销');
+    expect(undoButton?.attributes('disabled')).toBeUndefined();
+    await undoButton!.trigger('click');
+    await flushPromisesAndTicks();
+
+    expect(lastRepairMocks.isLastRepairRestorable).toHaveBeenCalledWith(record);
+    expect(lastRepairMocks.undoLastRepair).toHaveBeenCalledWith(record);
+    expect(lastRepairMocks.clearLastRepair).toHaveBeenCalled();
+  });
+
+  it('RescueLastRepairCard keeps only failed backup entries after partial undo', async () => {
+    const failedPair = { original: 'C:/docs/b.md', backup: 'C:/backup/b.md' };
+    const record = {
+      date: Date.now(),
+      filesFixed: 2,
+      linksFixed: 3,
+      backupPath: 'C:/docs/.picnexus-backup/20260429_120000',
+      fileBackupMap: [
+        { original: 'C:/docs/a.md', backup: 'C:/backup/a.md' },
+        failedPair,
+      ],
+    };
+    lastRepairMocks.state.record!.value = record;
+    lastRepairMocks.isLastRepairRestorable.mockResolvedValue(true);
+    lastRepairMocks.undoLastRepair.mockResolvedValue({
+      restored: 1,
+      failed: 1,
+      failedPairs: [failedPair],
+    });
+
+    const wrapper = mountWithDefaults(RescueLastRepairCard, {
+      global: { stubs: { Button: ButtonStub } },
+    });
+    await flushPromisesAndTicks();
+
+    const undoButton = wrapper.findAll('.button-stub').find((button) => button.text() === '撤销');
+    await undoButton!.trigger('click');
+    await flushPromisesAndTicks();
+
+    expect(lastRepairMocks.clearLastRepair).not.toHaveBeenCalled();
+    expect(lastRepairMocks.saveLastRepair).toHaveBeenCalledWith({
+      ...record,
+      filesFixed: 1,
+      fileBackupMap: [failedPair],
+    });
   });
 });

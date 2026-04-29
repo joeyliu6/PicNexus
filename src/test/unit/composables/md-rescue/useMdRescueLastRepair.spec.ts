@@ -97,7 +97,7 @@ describe('undoLastRepair', () => {
       ],
     });
     const result = await undoLastRepair(record);
-    expect(result).toEqual({ restored: 2, failed: 0 });
+    expect(result).toEqual({ restored: 2, failed: 0, failedPairs: [] });
     expect(mockCopyFile).toHaveBeenCalledTimes(2);
   });
 
@@ -112,12 +112,16 @@ describe('undoLastRepair', () => {
       ],
     });
     const result = await undoLastRepair(record);
-    expect(result).toEqual({ restored: 1, failed: 1 });
+    expect(result).toEqual({
+      restored: 1,
+      failed: 1,
+      failedPairs: [{ original: '/a.md', backup: '/b/a.bak' }],
+    });
   });
 
   it('空映射', async () => {
     const result = await undoLastRepair(makeRecord({ fileBackupMap: [] }));
-    expect(result).toEqual({ restored: 0, failed: 0 });
+    expect(result).toEqual({ restored: 0, failed: 0, failedPairs: [] });
   });
 });
 

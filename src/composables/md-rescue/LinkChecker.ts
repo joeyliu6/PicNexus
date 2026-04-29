@@ -206,8 +206,11 @@ export async function runLinkCheck(params: {
   /**
    * 单个文件完成后的处理：查备用链接 + 标记 ready
    */
-  async function onFileComplete(file: string): Promise<void> {
-    if (isCancelled.value) return;
+  async function onFileComplete(
+    file: string,
+    options: { allowCancelled?: boolean } = {},
+  ): Promise<void> {
+    if (isCancelled.value && !options.allowCancelled) return;
 
     const indices = fileToIndices.get(file);
     if (!indices) { markReady(file); return; }
@@ -249,6 +252,16 @@ export async function runLinkCheck(params: {
     markReady(file);
   }
 
+  function enqueueFileComplete(
+    file: string,
+    options: { allowCancelled?: boolean } = {},
+  ): Promise<void> {
+    const p = backupChain.then(() => onFileComplete(file, options));
+    backupChain = p.catch(() => { /* 单文件失败不影响其他 */ });
+    backupPromises.push(p);
+    return p;
+  }
+
   /**
    * 检查 batch 中的 URL 是否使某些文件全部完成，如果是就触发处理
    */
@@ -276,9 +289,45 @@ export async function runLinkCheck(params: {
 
       completedFiles.add(file);
 
-      const p = backupChain.then(() => onFileComplete(file));
-      backupChain = p.catch(() => { /* 单文件失败不影响其他 */ });
-      backupPromises.push(p);
+      enqueueFileComplete(file);
+    }
+  }
+
+  async function verifyBackupLinks(options: { allowCancelled?: boolean } = {}): Promise<void> {
+    if (isCancelled.value && !options.allowCancelled) return;
+
+    const allBackupUrls = new Set<string>();
+    for (const backups of allBackupMap.values()) {
+      for (const b of backups) allBackupUrls.add(b.url);
+    }
+
+    if (allBackupUrls.size === 0) return;
+
+    scanStage.value = 'backups';
+
+    const backupResult = await checkUrls([...allBackupUrls].map((url) => ({ url })));
+    if (backupResult && !backupResult.cancelled) {
+      const backupResultMap = new Map(backupResult.results.map((r) => [r.link, r]));
+      for (const backups of allBackupMap.values()) {
+        for (const b of backups) {
+          const cr = backupResultMap.get(b.url);
+          if (cr) b.checkResult = cr as CheckLinkResult;
+        }
+        backups.sort((a, b) => {
+          const aV = a.checkResult?.is_valid ? 1 : 0;
+          const bV = b.checkResult?.is_valid ? 1 : 0;
+          if (aV !== bV) return bV - aV;
+          return (a.checkResult?.response_time || 99999) - (b.checkResult?.response_time || 99999);
+        });
+      }
+
+      imageLinks.value = imageLinks.value.map((link) => {
+        if (link.backupLinks) {
+          const verified = allBackupMap.get(link.url);
+          return verified ? { ...link, backupLinks: verified } : link;
+        }
+        return link;
+      });
     }
   }
 
@@ -322,6 +371,7 @@ export async function runLinkCheck(params: {
   // 补漏：rAF 可能遗漏部分结果
   const resultMap = new Map<string, CheckLinkResult>();
   for (const r of result.results) resultMap.set(r.link, r as CheckLinkResult);
+  for (const r of result.results) checkedUrls.add(r.link);
   imageLinks.value = imageLinks.value.map((link) => {
     if (!link.checkResult) {
       const r = resultMap.get(link.url);
@@ -334,20 +384,23 @@ export async function runLinkCheck(params: {
   if (result.cancelled) {
     isCancelled.value = true;
 
+    await Promise.allSettled(backupPromises);
+
+    const partialBackupPromises: Promise<void>[] = [];
     for (const [file, urls] of fileUrlSets) {
-      if (completedFiles.has(file)) continue;
+      if (readyFiles.value.has(file)) continue;
       let allDone = true;
       for (const u of urls) {
         if (!checkedUrls.has(u)) { allDone = false; break; }
       }
       if (allDone) {
         completedFiles.add(file);
-        const p = backupChain.then(() => onFileComplete(file));
-        backupChain = p.catch(() => {});
-        backupPromises.push(p);
+        partialBackupPromises.push(enqueueFileComplete(file, { allowCancelled: true }));
       }
     }
-    await Promise.all(backupPromises);
+    await Promise.allSettled(partialBackupPromises);
+
+    await verifyBackupLinks({ allowCancelled: true });
 
     scanStage.value = 'cancelled';
     log.info(`扫描已取消，已检测 ${result.results.length} 条链接`);
@@ -358,48 +411,14 @@ export async function runLinkCheck(params: {
   for (const [file] of fileUrlSets) {
     if (!completedFiles.has(file)) {
       completedFiles.add(file);
-      const p = backupChain.then(() => onFileComplete(file));
-      backupChain = p.catch(() => {});
-      backupPromises.push(p);
+      enqueueFileComplete(file);
     }
   }
 
   await Promise.all(backupPromises);
 
   // --- Phase 2: 统一批量验证备用链接可用性 ---
-  const allBackupUrls = new Set<string>();
-  for (const backups of allBackupMap.values()) {
-    for (const b of backups) allBackupUrls.add(b.url);
-  }
-
-  if (allBackupUrls.size > 0 && !isCancelled.value) {
-    scanStage.value = 'backups';
-
-    const backupResult = await checkUrls([...allBackupUrls].map((url) => ({ url })));
-    if (backupResult && !backupResult.cancelled) {
-      const backupResultMap = new Map(backupResult.results.map((r) => [r.link, r]));
-      for (const backups of allBackupMap.values()) {
-        for (const b of backups) {
-          const cr = backupResultMap.get(b.url);
-          if (cr) b.checkResult = cr as CheckLinkResult;
-        }
-        backups.sort((a, b) => {
-          const aV = a.checkResult?.is_valid ? 1 : 0;
-          const bV = b.checkResult?.is_valid ? 1 : 0;
-          if (aV !== bV) return bV - aV;
-          return (a.checkResult?.response_time || 99999) - (b.checkResult?.response_time || 99999);
-        });
-      }
-
-      imageLinks.value = imageLinks.value.map((link) => {
-        if (link.backupLinks) {
-          const verified = allBackupMap.get(link.url);
-          return verified ? { ...link, backupLinks: verified } : link;
-        }
-        return link;
-      });
-    }
-  }
+  await verifyBackupLinks();
 
   // Phase 1 取消已在前面分支处理（L352 scanStage='cancelled'）
   // 这里兜底 Phase 2 期间被取消的场景：否则 scanStage 会卡在 'cancelling'
