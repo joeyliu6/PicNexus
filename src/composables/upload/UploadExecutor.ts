@@ -11,6 +11,11 @@ import { useServiceAvailability } from '../useServiceAvailability';
 import type { useToast } from '../useToast';
 import { TOAST_MESSAGES } from '../../constants';
 import { SERVICE_DISPLAY_NAMES } from '../../constants/serviceNames';
+import {
+  getFileExtension,
+  getSupportedServicesForFormat,
+  getUnsupportedServicesForFormat,
+} from '../../constants/serviceFormats';
 import { AUTH_CONFIG_ERROR_CODES } from '../../types/serviceHealth';
 import { createLogger } from '../../utils/logger';
 
@@ -87,6 +92,8 @@ export async function processUploadQueue(
     }
 
     return async () => {
+      let attemptedServices = [...enabledServices];
+
       try {
         // 使用 UUID 生成唯一 ID，避免高并发时的 ID 碰撞
         const historyId = crypto.randomUUID();
@@ -193,10 +200,38 @@ export async function processUploadQueue(
           });
         };
 
+        const uploadExt = getFileExtension(uploadFilePath);
+        const unsupportedServices = getUnsupportedServicesForFormat(enabledServices, uploadExt);
+        const supportedServices = getSupportedServicesForFormat(enabledServices, uploadExt);
+        attemptedServices = supportedServices;
+
+        if (unsupportedServices.length > 0) {
+          const item = queueManager.getItem(itemId);
+          if (item) {
+            const skippedProgress = Object.fromEntries(
+              unsupportedServices.map(serviceId => [
+                serviceId,
+                {
+                  ...item.serviceProgress?.[serviceId],
+                  serviceId,
+                  progress: 0,
+                  status: `已跳过（不支持 .${uploadExt || 'unknown'}）`,
+                  error: `该图床不支持 .${uploadExt || 'unknown'} 格式`,
+                } satisfies ServiceProgress,
+              ]),
+            );
+            queueManager.updateItem(itemId, { serviceProgress: skippedProgress });
+          }
+        }
+
+        if (supportedServices.length === 0) {
+          throw new Error(`已选图床不支持 .${uploadExt || 'unknown'} 格式`);
+        }
+
         // 使用多图床上传编排器（uploadFilePath 可能是压缩后的临时文件）
         const result = await multiServiceUploader.uploadToMultipleServices(
           uploadFilePath,
-          enabledServices,
+          supportedServices,
           config,
           // 进度回调
           (serviceId, percent, step, stepIndex, totalSteps) => {
@@ -300,7 +335,7 @@ export async function processUploadQueue(
         const item = queueManager.getItem(itemId);
         if (item) {
           const updatedServiceProgress = { ...(item.serviceProgress || {}) };
-          enabledServices.forEach(serviceId => {
+          attemptedServices.forEach(serviceId => {
             updatedServiceProgress[serviceId] = {
               ...updatedServiceProgress[serviceId],
               serviceId,

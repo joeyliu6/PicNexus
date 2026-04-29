@@ -27,6 +27,12 @@ import { filterValidFiles, MAX_FILES_PER_UPLOAD, VALID_IMAGE_EXTENSIONS } from '
 import { buildUploadSummaryToast, type UploadCopySummary } from '../utils/uploadSummary';
 import { createLogger } from '../utils/logger';
 import { cleanupClipboardTempFile } from '../utils/clipboardTempFile';
+import {
+  getFileExtension,
+  getSupportedServicesForFormat,
+  getUnsupportedServicesForFormat,
+} from '../constants/serviceFormats';
+import { getServiceDisplayName } from '../constants/serviceNames';
 
 const log = createLogger('GlobalShortcut');
 
@@ -93,12 +99,25 @@ async function uploadFileInBackground(filePath: string, config: UserConfig): Pro
     return null;
   }
 
+  const ext = getFileExtension(filePath);
+  const supportedServices = getSupportedServicesForFormat(enabledServices, ext);
+  const unsupportedServices = getUnsupportedServicesForFormat(enabledServices, ext);
+  if (unsupportedServices.length > 0) {
+    const names = unsupportedServices.map(serviceId => getServiceDisplayName(serviceId, config)).join('、');
+    await notify('PicNexus', `${names} 不支持 .${ext || 'unknown'} 格式，已跳过`);
+  }
+
+  if (supportedServices.length === 0) {
+    await notify('PicNexus', `已选图床不支持 .${ext || 'unknown'} 格式`);
+    return null;
+  }
+
   const historyId = crypto.randomUUID();
   let firstSaved = false;
 
   const result = await uploader.uploadToMultipleServices(
     filePath,
-    enabledServices,
+    supportedServices,
     config,
     undefined,
     async (serviceResult: SingleServiceResult) => {

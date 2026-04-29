@@ -341,7 +341,10 @@ describe('useGlobalShortcut 触发上传', () => {
 
     expect(dialogOpenMock).toHaveBeenCalledWith(expect.objectContaining({
       multiple: true,
-      filters: [{ name: '图片', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'] }],
+      filters: [{
+        name: '图片',
+        extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tif', 'tiff', 'ico', 'avif'],
+      }],
     }));
     expect(writeTextMock).toHaveBeenCalledWith([
       'imgur:a.jpg:https://i.imgur.com/a.jpg',
@@ -401,6 +404,27 @@ describe('useGlobalShortcut 触发上传', () => {
     expect(notificationMocks.sendNotification).toHaveBeenCalledWith(expect.objectContaining({
       title: 'PicNexus',
       body: expect.stringContaining('已截断多余的 5 个'),
+    }));
+  });
+
+  it('文件选择快捷键会跳过当前图床不支持的格式', async () => {
+    configGetMock.mockResolvedValue(makeConfig({ enabledServices: ['jd'] }));
+    dialogOpenMock.mockResolvedValue(['C:/images/icon.svg']);
+    invokeMock.mockImplementation(async (cmd) => {
+      if (cmd === 'get_image_metadata') return { width: 100, height: 80 };
+      throw new Error(`unexpected command: ${cmd}`);
+    });
+    const api = await loadComposable();
+    await api.initGlobalShortcuts();
+
+    shortcutHandlers.get('CommandOrControl+Shift+O')?.({ state: 'Pressed' });
+    await flushAsyncWork(12);
+
+    expect(uploadToMultipleServicesMock).not.toHaveBeenCalled();
+    expect(writeTextMock).not.toHaveBeenCalled();
+    expect(notificationMocks.sendNotification).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'PicNexus',
+      body: expect.stringContaining('不支持 .svg 格式'),
     }));
   });
 

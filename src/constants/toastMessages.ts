@@ -138,7 +138,7 @@ export const TOAST_MESSAGES = {
     }),
     noImage: {
       summary: '未检测到图片',
-      detail: '请选择有效的图片文件（支持 JPG, PNG, GIF, WEBP, BMP）'
+      detail: '请选择有效的图片文件（支持 JPG, PNG, GIF, WEBP, BMP, SVG, TIFF, ICO, AVIF）'
     } as StaticMessage,
     queueCleared: {
       summary: '已清空',

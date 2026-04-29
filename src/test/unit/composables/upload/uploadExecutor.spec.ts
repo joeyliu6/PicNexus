@@ -208,4 +208,102 @@ describe('processUploadQueue', () => {
     expect(thumb.match(/img01\.sogoucdn\.com/g) ?? []).toHaveLength(1);
     expect(new URL(thumb).searchParams.get('url')).toBe('https://tvax1.sinaimg.cn/thumb150/pid123.jpg');
   });
+
+  it('skips selected services that do not support the current file format', async () => {
+    const queueManager = createQueueManager();
+    queueManager.seed('q-svg', 'icon.svg', ['jd', 'github']);
+    const githubUrl = 'https://raw.githubusercontent.com/owner/repo/icon.svg';
+
+    uploadToMultipleServicesMock.mockImplementationOnce(async (
+      _filePath: string,
+      enabledServices: string[],
+      _config: unknown,
+      _onProgress?: unknown,
+      onServiceResult?: (result: unknown) => Promise<void> | void,
+    ) => {
+      expect(enabledServices).toEqual(['github']);
+      const singleResult = {
+        serviceId: 'github',
+        status: 'success' as const,
+        result: {
+          serviceId: 'github',
+          fileKey: 'icon.svg',
+          url: githubUrl,
+        },
+      };
+      await onServiceResult?.(singleResult);
+      return {
+        primaryService: 'github',
+        primaryUrl: githubUrl,
+        results: [singleResult],
+      };
+    });
+
+    await processUploadQueue(
+      [
+        {
+          itemId: 'q-svg',
+          filePath: 'C:/tmp/icon.svg',
+          uploadFilePath: 'C:/tmp/icon.svg',
+          fileName: 'icon.svg',
+        },
+      ],
+      { services: { github: { token: 't', owner: 'o', repo: 'r', branch: 'main', path: '' } } } as any,
+      ['jd', 'github'],
+      1,
+      {
+        queueManager: queueManager as any,
+        saveHistoryItemImmediate: vi.fn(async () => undefined),
+        addResultToHistoryItem: vi.fn(async () => true),
+        saveHistoryItem: vi.fn(async () => undefined),
+        toast: { showConfig: vi.fn() } as any,
+      },
+    );
+
+    const skippedJd = queueManager.updateItem.mock.calls
+      .map(([, updates]) => updates.serviceProgress?.jd)
+      .find((update) => update?.status?.includes('不支持 .svg'));
+
+    expect(skippedJd?.status).toBe('已跳过（不支持 .svg）');
+    expect(uploadToMultipleServicesMock).toHaveBeenCalledWith(
+      'C:/tmp/icon.svg',
+      ['github'],
+      expect.anything(),
+      expect.any(Function),
+      expect.any(Function),
+    );
+    expect(queueManager.markItemComplete).toHaveBeenCalledWith('q-svg', githubUrl);
+  });
+
+  it('fails before upload when no selected service supports the file format', async () => {
+    const queueManager = createQueueManager();
+    queueManager.seed('q-svg', 'icon.svg', ['jd']);
+
+    await processUploadQueue(
+      [
+        {
+          itemId: 'q-svg',
+          filePath: 'C:/tmp/icon.svg',
+          uploadFilePath: 'C:/tmp/icon.svg',
+          fileName: 'icon.svg',
+        },
+      ],
+      { services: { jd: {} } } as any,
+      ['jd'],
+      1,
+      {
+        queueManager: queueManager as any,
+        saveHistoryItemImmediate: vi.fn(async () => undefined),
+        addResultToHistoryItem: vi.fn(async () => true),
+        saveHistoryItem: vi.fn(async () => undefined),
+        toast: { showConfig: vi.fn() } as any,
+      },
+    );
+
+    expect(uploadToMultipleServicesMock).not.toHaveBeenCalled();
+    expect(queueManager.markItemFailed).toHaveBeenCalledWith(
+      'q-svg',
+      expect.stringContaining('不支持 .svg 格式'),
+    );
+  });
 });

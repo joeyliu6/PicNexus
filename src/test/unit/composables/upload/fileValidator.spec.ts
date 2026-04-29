@@ -17,7 +17,7 @@ beforeEach(() => {
 
 describe('常量', () => {
   it('VALID_IMAGE_EXTENSIONS 包含常见图片扩展', () => {
-    for (const ext of ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']) {
+    for (const ext of ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tif', 'tiff', 'ico', 'avif']) {
       expect(VALID_IMAGE_EXTENSIONS).toContain(ext);
     }
   });
@@ -31,9 +31,17 @@ describe('filterValidFiles', () => {
   it('按扩展名区分 valid / invalid', async () => {
     const result = await filterValidFiles([
       '/a.png', '/b.JPG', '/c.txt', '/no-ext',
-      '/d.GIF', '/e.webp', '/f.bmp',
+      '/d.GIF', '/e.webp', '/f.bmp', '/g.avif', '/h.svg',
     ]);
-    expect(result.valid.sort()).toEqual(['/a.png', '/b.JPG', '/d.GIF', '/e.webp', '/f.bmp'].sort());
+    expect(result.valid.sort()).toEqual([
+      '/a.png',
+      '/b.JPG',
+      '/d.GIF',
+      '/e.webp',
+      '/f.bmp',
+      '/g.avif',
+      '/h.svg',
+    ].sort());
     expect(result.invalid.sort()).toEqual(['/c.txt', '/no-ext'].sort());
   });
 

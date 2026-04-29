@@ -11,7 +11,19 @@ import { Semaphore } from '../../utils/semaphore';
 const log = createLogger('FileValidator');
 
 /** 允许上传的图片扩展名 */
-export const VALID_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'] as const;
+export const VALID_IMAGE_EXTENSIONS = [
+  'jpg',
+  'jpeg',
+  'png',
+  'gif',
+  'webp',
+  'bmp',
+  'svg',
+  'tif',
+  'tiff',
+  'ico',
+  'avif',
+] as const;
 
 /** 单次上传最大文件数，防止内存溢出 */
 export const MAX_FILES_PER_UPLOAD = 200;
