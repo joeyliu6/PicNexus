@@ -1,10 +1,30 @@
 // 全局上传队列状态管理
 
 import { ref, computed, type Ref } from 'vue';
-import type { QueueItem } from '../uploadQueue';
+import type { QueueItem, ServiceProgress } from '../uploadQueue';
+import { isStatusError } from '../utils/uploadStatus';
+import { cleanupClipboardTempFile } from '../utils/clipboardTempFile';
 
 // 全局队列状态（单例）
 const queueItems: Ref<QueueItem[]> = ref([]);
+
+function hasFailedServiceProgress(
+  serviceProgress: Partial<Record<string, ServiceProgress>> | undefined
+): boolean {
+  if (!serviceProgress) return false;
+  return Object.values(serviceProgress).some(progress => isStatusError(progress?.status));
+}
+
+function canClearAsCompleted(item: QueueItem): boolean {
+  if (item.status !== 'success' && item.status !== 'error') return false;
+  return !hasFailedServiceProgress(item.serviceProgress);
+}
+
+function cleanupQueueItemTempFile(item: QueueItem | undefined): void {
+  if (item?.filePath) {
+    void cleanupClipboardTempFile(item.filePath);
+  }
+}
 
 // ========== 进度更新节流机制 ==========
 
@@ -200,6 +220,7 @@ export function useQueueState() {
   const removeItem = (itemId: string) => {
     const index = queueItems.value.findIndex(item => item.id === itemId);
     if (index !== -1) {
+      cleanupQueueItemTempFile(queueItems.value[index]);
       queueItems.value.splice(index, 1);
     }
   };
@@ -208,25 +229,27 @@ export function useQueueState() {
    * 清空队列
    */
   const clearQueue = () => {
+    queueItems.value.forEach(cleanupQueueItemTempFile);
     queueItems.value = [];
   };
 
   /**
-   * 清空已完成的队列项（保留 pending 和 uploading 状态的项）
+   * 清空已完成且没有失败服务的队列项，保留可重试的部分失败项。
    */
   const clearCompletedItems = () => {
+    queueItems.value
+      .filter(canClearAsCompleted)
+      .forEach(cleanupQueueItemTempFile);
     queueItems.value = queueItems.value.filter(
-      item => item.status === 'pending' || item.status === 'uploading'
+      item => !canClearAsCompleted(item)
     );
   };
 
   /**
-   * 检查是否有已完成的项（success 或 error）
+   * 检查是否有可被“清空已完成”清理的项。
    */
   const hasCompletedItems = computed(() => {
-    return queueItems.value.some(
-      item => item.status === 'success' || item.status === 'error'
-    );
+    return queueItems.value.some(canClearAsCompleted);
   });
 
   return {

@@ -8,12 +8,17 @@ import { UserConfig } from '../config/types';
 import type { Store } from '../store';
 import { UploadResult } from '../uploaders/base/types';
 import { checkNetworkConnectivity } from '../utils/network';
-import { applyPrefixTemplate } from '../utils/linkPrefixTemplate';
 import { invalidateCache } from '../composables/useHistory';
 import { emitHistoryUpdated } from '../events/cacheEvents';
 import { historyDB } from './HistoryDatabase';
 import { getServiceDisplayName } from '../constants/serviceNames';
 import { createLogger } from '../utils/logger';
+import { cleanupClipboardTempFile } from '../utils/clipboardTempFile';
+import {
+  areAllEnabledServicesSuccessful,
+  mergeSuccessMetadata,
+  resolveQueueStatus,
+} from './retryStatus';
 
 const log = createLogger('RetryService');
 
@@ -22,8 +27,6 @@ export interface RetryOptions {
   configStore: Store;
   /** 队列管理器 */
   queueManager: UploadQueueManager;
-  /** 活跃链接前缀 */
-  activePrefix: string | null;
   /** Toast 通知回调 */
   toast: {
     success: (title: string, message: string) => void;
@@ -51,6 +54,13 @@ export class RetryService {
   private static historyUpdateLock: Promise<void> = Promise.resolve();
 
   constructor(private options: RetryOptions) { }
+
+  private async cleanupClipboardTempFileIfComplete(itemId: string): Promise<void> {
+    const latestItem = this.options.queueManager.getItem(itemId);
+    if (latestItem && areAllEnabledServicesSuccessful(latestItem)) {
+      await cleanupClipboardTempFile(latestItem.filePath);
+    }
+  }
 
   /**
    * 单个服务重试
@@ -258,11 +268,8 @@ export class RetryService {
     result: UploadResult
   ): Promise<void> {
     const currentItem = this.options.queueManager.getItem(itemId) ?? item;
-    let link = result.url;
-
-    if (serviceId === 'weibo' && this.options.activePrefix) {
-      link = applyPrefixTemplate(this.options.activePrefix, link);
-    }
+    const link = result.url;
+    const metadata = mergeSuccessMetadata(serviceId, currentItem.serviceProgress[serviceId], result);
 
     const serviceUpdate = {
       ...currentItem.serviceProgress[serviceId],
@@ -271,23 +278,21 @@ export class RetryService {
       progress: 100,
       link: link,
       isRetrying: false,
-      error: undefined
+      error: undefined,
+      ...(metadata ? { metadata } : {}),
     };
 
-    // 检查是否所有服务都成功
     const nextServiceProgress = {
       ...currentItem.serviceProgress,
       [serviceId]: serviceUpdate
     };
-    const allSuccess = currentItem.enabledServices.every(s =>
-      (nextServiceProgress[s]?.status?.includes('完成') || nextServiceProgress[s]?.status?.includes('✓'))
-    );
+    const nextStatus = resolveQueueStatus(currentItem.enabledServices, nextServiceProgress);
 
     this.options.queueManager.updateItem(itemId, {
       serviceProgress: {
         [serviceId]: serviceUpdate
       },
-      status: allSuccess ? 'success' : 'uploading'
+      status: nextStatus
     });
 
     // 如果这是主力图床或尚无主力图床，设置它
@@ -300,6 +305,7 @@ export class RetryService {
 
     // 更新历史记录
     await this.updateHistoryRecord(currentItem.filePath, serviceId, result, link);
+    await this.cleanupClipboardTempFileIfComplete(itemId);
   }
 
   /**
@@ -402,24 +408,11 @@ export class RetryService {
       }
     });
 
-    // 检查是否需要更新整体状态
-    // 如果没有任何服务正在上传或成功，应该将整体状态改回 error
     const latestItem = this.options.queueManager.getItem(itemId);
     if (latestItem) {
-      const hasActiveOrSuccessService = latestItem.enabledServices.some(s => {
-        const sp = latestItem.serviceProgress[s];
-        if (!sp) return false;
-        // 正在上传（isRetrying 或进度 > 0 且不是失败）
-        const isActive = sp.isRetrying ||
-          (sp.progress > 0 && !sp.status?.includes('失败') && !sp.status?.includes('✗'));
-        // 已成功
-        const isSuccess = sp.status?.includes('完成') || sp.status?.includes('✓');
-        return isActive || isSuccess;
-      });
-
-      // 如果没有活跃或成功的服务，将整体状态改回 error
-      if (!hasActiveOrSuccessService && latestItem.status === 'uploading') {
-        this.options.queueManager.updateItem(itemId, { status: 'error' });
+      const nextStatus = resolveQueueStatus(latestItem.enabledServices, latestItem.serviceProgress);
+      if (latestItem.status !== nextStatus) {
+        this.options.queueManager.updateItem(itemId, { status: nextStatus });
       }
     }
 
@@ -444,17 +437,20 @@ export class RetryService {
     result.results.forEach(serviceResult => {
       if (updatedServiceProgress[serviceResult.serviceId]) {
         if (serviceResult.status === 'success' && serviceResult.result) {
-          let link = serviceResult.result.url;
-          if (serviceResult.serviceId === 'weibo' && this.options.activePrefix) {
-            link = applyPrefixTemplate(this.options.activePrefix, link);
-          }
+          const link = serviceResult.result.url;
+          const metadata = mergeSuccessMetadata(
+            serviceResult.serviceId,
+            updatedServiceProgress[serviceResult.serviceId],
+            serviceResult.result
+          );
 
           updatedServiceProgress[serviceResult.serviceId] = {
             ...updatedServiceProgress[serviceResult.serviceId],
             serviceId: serviceResult.serviceId,
             status: '✓ 完成',
             progress: 100,
-            link: link
+            link,
+            ...(metadata ? { metadata } : {}),
           };
         } else if (serviceResult.status === 'failed') {
           updatedServiceProgress[serviceResult.serviceId] = {
@@ -473,14 +469,11 @@ export class RetryService {
     });
 
     // 更新缩略图
-    let thumbUrl = result.primaryUrl;
-    if (result.primaryService === 'weibo' && this.options.activePrefix) {
-      thumbUrl = applyPrefixTemplate(this.options.activePrefix, thumbUrl);
-    }
-    this.options.queueManager.markItemComplete(itemId, thumbUrl);
+    this.options.queueManager.markItemComplete(itemId, result.primaryUrl);
 
     // 保存历史记录
     await this.options.saveHistoryItem(item.filePath, result);
+    await this.cleanupClipboardTempFileIfComplete(itemId);
   }
 
   /**

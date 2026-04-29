@@ -37,8 +37,6 @@ export interface UploadExecutorContext {
     customId?: string,
     liveResults?: SingleServiceResult[]
   ) => Promise<string | undefined>;
-  /** 微博前缀快照（由门面在调用前读取 activePrefix.value） */
-  weiboPrefix: string | null;
   /** toast 实例（由门面在 setup 阶段注入，避免在异步函数中调用 useToast） */
   toast: ReturnType<typeof useToast>;
 }
@@ -69,7 +67,7 @@ export async function processUploadQueue(
   collectedLinks?: CopyLinkItem[],
   uploadSummary?: UploadSessionSummary
 ): Promise<Array<CopyLinkItem | undefined>> {
-  const { queueManager, saveHistoryItemImmediate, addResultToHistoryItem, saveHistoryItem, weiboPrefix, toast } = ctx;
+  const { queueManager, saveHistoryItemImmediate, addResultToHistoryItem, saveHistoryItem, toast } = ctx;
 
   if (!queueManager) {
     log.error('上传队列管理器未初始化');
@@ -153,18 +151,22 @@ export async function processUploadQueue(
               markServiceAvailable(serviceId as 'qiyu' | 'jd').catch(() => {});
             }
 
-            // 成功：立即更新状态并显示链接
-            let link = serviceResult.result.url;
-            if (serviceId === 'weibo' && weiboPrefix) {
-              link = weiboPrefix + link;
-            }
-
+            // 队列里保存原始图床 URL，复制格式和微博前缀统一交给 useCopyLink 处理。
+            const link = serviceResult.result.url;
             serviceUpdate[serviceId] = {
               ...item.serviceProgress?.[serviceId],
               serviceId,
               status: '✓ 完成',
               progress: 100,
-              link: link
+              link,
+              metadata: {
+                ...item.serviceProgress?.[serviceId]?.metadata,
+                ...serviceResult.result.metadata,
+                ...(serviceResult.result.fileKey ? { fileKey: serviceResult.result.fileKey } : {}),
+                ...(serviceId === 'weibo' && serviceResult.result.fileKey
+                  ? { pid: serviceResult.result.fileKey }
+                  : {}),
+              },
             };
           } else if (serviceResult.status === 'failed') {
             // 失败：更新错误状态
@@ -230,10 +232,7 @@ export async function processUploadQueue(
         // 注意：不需要遍历 result.results，因为 handleServiceResult 已经处理了
 
         // 通知队列管理器上传成功（谁先上传完用谁的链接）
-        let thumbUrl = result.primaryUrl;
-        if (result.primaryService === 'weibo' && weiboPrefix) {
-          thumbUrl = weiboPrefix + thumbUrl;
-        }
+        const thumbUrl = result.primaryUrl;
 
         if (uploadSummary && result.partialFailures?.length) {
           const failureCounts = new Map(

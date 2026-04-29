@@ -4,13 +4,24 @@ import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { useToast } from './useToast';
+import { useQueueState } from './useQueueState';
 import { createLogger } from '../utils/logger';
+import { cleanupClipboardTempFile } from '../utils/clipboardTempFile';
+import { isStatusError } from '../utils/uploadStatus';
 
 const log = createLogger('useClipboardImage');
 
 /** 判断文本是否为图片 URL */
 function isImageUrl(text: string): boolean {
-  return /^https?:\/\/.+\.(jpe?g|png|gif|webp|bmp)([?#].*)?$/i.test(text);
+  return /^https?:\/\/.+\.(jpe?g|png|gif|webp|bmp|svg|tiff?|ico|avif)([?#].*)?$/i.test(text);
+}
+
+function hasRetryableFailureForFile(filePath: string): boolean {
+  const { queueItems } = useQueueState();
+  return queueItems.value.some(item =>
+    item.filePath === filePath &&
+    Object.values(item.serviceProgress || {}).some(progress => isStatusError(progress?.status))
+  );
 }
 
 /** 剪贴板图片读取结果 */
@@ -80,7 +91,15 @@ export function useClipboardImage() {
     const result = await readClipboardImage();
 
     if (result.success && result.filePath) {
-      await uploadHandler([result.filePath]);
+      try {
+        await uploadHandler([result.filePath]);
+      } finally {
+        if (hasRetryableFailureForFile(result.filePath)) {
+          log.debug('检测到剪贴板上传仍有失败服务，保留临时文件用于重试:', result.filePath);
+        } else {
+          await cleanupClipboardTempFile(result.filePath);
+        }
+      }
       return;
     }
 

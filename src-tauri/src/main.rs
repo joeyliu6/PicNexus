@@ -190,6 +190,7 @@ fn main() {
             commands::link_checker::resume_batch_check,
             commands::clipboard::clipboard_has_image,
             commands::clipboard::read_clipboard_image,
+            commands::clipboard::cleanup_clipboard_temp_file,
             commands::image_meta::get_image_metadata,
             commands::image_compress::compress_image,
             commands::image_compress::cleanup_compressed_files,

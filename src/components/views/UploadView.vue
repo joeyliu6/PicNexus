@@ -65,7 +65,6 @@ const compressionConfig = ref<ImageCompressionConfig>(DEFAULT_CONFIG.imageCompre
 const retryService = new RetryService({
   configStore,
   queueManager,
-  get activePrefix() { return uploadManager.activePrefix.value; },
   toast: toast,
   saveHistoryItem: async (filePath: string, result: MultiUploadResult) => {
     await uploadManager.saveHistoryItem(filePath, result);

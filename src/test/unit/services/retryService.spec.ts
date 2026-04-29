@@ -12,8 +12,8 @@ const {
   historyUpdateMock,
   invalidateCacheMock,
   emitHistoryUpdatedMock,
-  applyPrefixTemplateMock,
   getServiceDisplayNameMock,
+  invokeMock,
 } = vi.hoisted(() => ({
   checkNetworkConnectivityMock: vi.fn(),
   retryUploadMock: vi.fn(),
@@ -22,8 +22,12 @@ const {
   historyUpdateMock: vi.fn(),
   invalidateCacheMock: vi.fn(),
   emitHistoryUpdatedMock: vi.fn(),
-  applyPrefixTemplateMock: vi.fn((prefix: string, url: string) => `${prefix}|${url}`),
   getServiceDisplayNameMock: vi.fn((serviceId: string) => `name:${serviceId}`),
+  invokeMock: vi.fn(),
+}));
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: invokeMock,
 }));
 
 vi.mock('../../../utils/network', () => ({
@@ -50,10 +54,6 @@ vi.mock('../../../composables/useHistory', () => ({
 
 vi.mock('../../../events/cacheEvents', () => ({
   emitHistoryUpdated: emitHistoryUpdatedMock,
-}));
-
-vi.mock('../../../utils/linkPrefixTemplate', () => ({
-  applyPrefixTemplate: applyPrefixTemplateMock,
 }));
 
 vi.mock('../../../constants/serviceNames', () => ({
@@ -221,7 +221,6 @@ function makeOptions(overrides: Partial<RetryOptions> = {}): RetryOptions {
   return {
     configStore: {} as RetryOptions['configStore'],
     queueManager: createQueueManager(),
-    activePrefix: null,
     toast: makeToast(),
     saveHistoryItem: vi.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -263,6 +262,7 @@ describe('RetryService', () => {
     });
     historyUpdateMock.mockResolvedValue(undefined);
     emitHistoryUpdatedMock.mockResolvedValue(undefined);
+    invokeMock.mockResolvedValue(true);
   });
 
   it('shows an error when retrySingleService cannot find the queue item', async () => {
@@ -321,15 +321,15 @@ describe('RetryService', () => {
     const service = new RetryService(makeOptions({
       toast,
       queueManager,
-      activePrefix: 'prefix',
     }));
 
     await service.retrySingleService('item-1', 'weibo', DEFAULT_CONFIG);
 
     const item = queueManager.items.get('item-1')!;
-    expect(item.primaryUrl).toBe('prefix|https://img.example.com/demo.png');
-    expect(item.thumbUrl).toBe('prefix|https://img.example.com/demo.png');
-    expect(item.serviceProgress.weibo?.link).toBe('prefix|https://img.example.com/demo.png');
+    expect(item.status).toBe('success');
+    expect(item.primaryUrl).toBe('https://img.example.com/demo.png');
+    expect(item.thumbUrl).toBe('https://img.example.com/demo.png');
+    expect(item.serviceProgress.weibo?.link).toBe('https://img.example.com/demo.png');
     expect(historyGetByFilePathMock).toHaveBeenCalledWith('/tmp/demo.png');
     expect(historyUpdateMock).toHaveBeenCalledWith('history-1', expect.objectContaining({
       results: [
@@ -342,6 +342,116 @@ describe('RetryService', () => {
     expect(invalidateCacheMock).toHaveBeenCalled();
     expect(emitHistoryUpdatedMock).toHaveBeenCalledWith(['history-1']);
     expect(toast.success).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the whole item in error after one failed service is fixed but another failed service remains', async () => {
+    const toast = makeToast();
+    const filePath = 'C:/Temp/clipboard_image_retry_pending.png';
+    const queueManager = createQueueManager([
+      createItem({
+        filePath,
+        status: 'error',
+        enabledServices: ['weibo', 'r2', 'github'],
+        serviceProgress: {
+          weibo: {
+            serviceId: 'weibo',
+            progress: 100,
+            status: '\u5b8c\u6210',
+            link: 'https://img.example.com/weibo.png',
+          },
+          r2: {
+            serviceId: 'r2',
+            progress: 0,
+            status: '\u5931\u8d25',
+            error: 'old r2 error',
+          },
+          github: {
+            serviceId: 'github',
+            progress: 0,
+            status: '\u5931\u8d25',
+            error: 'old github error',
+          },
+        },
+        primaryUrl: 'https://img.example.com/weibo.png',
+      }),
+    ]);
+    const service = new RetryService(makeOptions({ toast, queueManager }));
+
+    await service.retrySingleService('item-1', 'r2', DEFAULT_CONFIG);
+
+    const item = queueManager.items.get('item-1')!;
+    expect(item.status).toBe('error');
+    expect(item.serviceProgress.r2?.status).toContain('\u5b8c\u6210');
+    expect(item.serviceProgress.github?.status).toContain('\u5931\u8d25');
+    expect(toast.success).toHaveBeenCalledTimes(1);
+    expect(invokeMock).not.toHaveBeenCalledWith('cleanup_clipboard_temp_file', { path: filePath });
+  });
+
+  it('cleans a retained clipboard temp file after the last failed service is fixed', async () => {
+    const filePath = 'C:/Temp/clipboard_image_retry_done.png';
+    const queueManager = createQueueManager([
+      createItem({
+        filePath,
+        status: 'error',
+        enabledServices: ['weibo', 'r2'],
+        serviceProgress: {
+          weibo: {
+            serviceId: 'weibo',
+            progress: 100,
+            status: '\u5b8c\u6210',
+            link: 'https://img.example.com/weibo.png',
+          },
+          r2: {
+            serviceId: 'r2',
+            progress: 0,
+            status: '\u5931\u8d25',
+            error: 'old r2 error',
+          },
+        },
+      }),
+    ]);
+    const service = new RetryService(makeOptions({ queueManager }));
+
+    await service.retrySingleService('item-1', 'r2', DEFAULT_CONFIG);
+
+    expect(queueManager.items.get('item-1')?.status).toBe('success');
+    expect(invokeMock).toHaveBeenCalledWith('cleanup_clipboard_temp_file', { path: filePath });
+  });
+
+  it('treats skipped unconfigured services as complete when the remaining failed service is fixed', async () => {
+    const filePath = 'C:/Temp/clipboard_image_retry_done_with_skip.png';
+    const queueManager = createQueueManager([
+      createItem({
+        filePath,
+        status: 'error',
+        enabledServices: ['weibo', 'r2', 'github'],
+        serviceProgress: {
+          weibo: {
+            serviceId: 'weibo',
+            progress: 100,
+            status: '\u5b8c\u6210',
+            link: 'https://img.example.com/weibo.png',
+          },
+          r2: {
+            serviceId: 'r2',
+            progress: 0,
+            status: '\u5931\u8d25',
+            error: 'old r2 error',
+          },
+          github: {
+            serviceId: 'github',
+            progress: 0,
+            status: '\u5df2\u8df3\u8fc7\uff08\u672a\u914d\u7f6e\uff09',
+          },
+        },
+      }),
+    ]);
+    const service = new RetryService(makeOptions({ queueManager }));
+
+    await service.retrySingleService('item-1', 'r2', DEFAULT_CONFIG);
+
+    expect(queueManager.items.get('item-1')?.status).toBe('success');
+    expect(invokeMock).toHaveBeenCalledWith('cleanup_clipboard_temp_file', { path: filePath });
   });
 
   it('marks the whole item as error when a single-service retry fails and nothing else is active', async () => {
@@ -433,7 +543,6 @@ describe('RetryService', () => {
     const service = new RetryService(makeOptions({
       toast,
       queueManager,
-      activePrefix: 'prefix',
       saveHistoryItem,
     }));
 
@@ -446,11 +555,35 @@ describe('RetryService', () => {
     const item = queueManager.items.get('item-1')!;
     expect(item.retryCount).toBe(2);
     expect(item.isRetrying).toBe(false);
-    expect(queueManager.markItemComplete).toHaveBeenCalledWith('item-1', 'prefix|https://img.example.com/demo.png');
+    expect(queueManager.markItemComplete).toHaveBeenCalledWith('item-1', 'https://img.example.com/demo.png');
     expect(saveHistoryItem).toHaveBeenCalledWith('/tmp/demo.png', expect.objectContaining({
       isPartialSuccess: true,
     }));
     expect(toast.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleans a retained clipboard temp file after full retry succeeds completely', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    const filePath = 'C:/Temp/clipboard_image_full_retry_done.png';
+    const queueManager = createQueueManager([
+      createItem({
+        filePath,
+        retryCount: 0,
+        maxRetries: 3,
+        enabledServices: ['weibo'],
+      }),
+    ]);
+    const service = new RetryService(makeOptions({ queueManager }));
+
+    const promise = service.retryAll('item-1', DEFAULT_CONFIG);
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(1000);
+    await promise;
+
+    expect(queueManager.items.get('item-1')?.status).toBe('success');
+    expect(invokeMock).toHaveBeenCalledWith('cleanup_clipboard_temp_file', { path: filePath });
   });
 
   it('aggregates mixed retryAllFailed outcomes across multiple failed services', async () => {

@@ -5,6 +5,7 @@
 
 import { useQueueState } from './composables/useQueueState';
 import { createLogger } from './utils/logger';
+import { cleanupClipboardTempFile } from './utils/clipboardTempFile';
 
 const log = createLogger('UploadQueue');
 
@@ -540,6 +541,7 @@ export class UploadQueueManager {
       // 队列是按时间倒序排列的（最新在前），所以取后面的删除
       const itemsToRemove = completedItems.slice(maxSize);
       const idsToRemove = new Set(itemsToRemove.map(item => item.id));
+      itemsToRemove.forEach(item => void cleanupClipboardTempFile(item.filePath));
 
       // 一次性过滤，只触发一次 Vue 响应式更新
       this.queueState.queueItems.value = items.filter(item => !idsToRemove.has(item.id));

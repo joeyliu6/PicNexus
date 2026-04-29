@@ -26,6 +26,7 @@ import { formatLinkWithConfig, getLinkFormatConfig } from './useCopyLink';
 import { filterValidFiles, MAX_FILES_PER_UPLOAD, VALID_IMAGE_EXTENSIONS } from './upload/FileValidator';
 import { buildUploadSummaryToast, type UploadCopySummary } from '../utils/uploadSummary';
 import { createLogger } from '../utils/logger';
+import { cleanupClipboardTempFile } from '../utils/clipboardTempFile';
 
 const log = createLogger('GlobalShortcut');
 
@@ -198,24 +199,28 @@ const handleClipboardUpload = () => withUploadGuard('剪贴板上传', async () 
   }
 
   const tempFilePath = await invoke<string>('read_clipboard_image');
-  const config = await loadConfig();
-  const uploadResult = await uploadFileInBackground(tempFilePath, config);
-  if (!uploadResult) return;
+  try {
+    const config = await loadConfig();
+    const uploadResult = await uploadFileInBackground(tempFilePath, config);
+    if (!uploadResult) return;
 
-  const linkOutput = config.linkOutput || DEFAULT_CONFIG.linkOutput!;
-  const autoCopyEnabled = linkOutput.autoCopy !== false;
-  const copySummary = createShortcutCopySummary(config, autoCopyEnabled);
-  const formatted = await formatLinkForShortcut(uploadResult.primaryUrl, tempFilePath, config, uploadResult.primaryService);
-  if (autoCopyEnabled) {
-    try {
-      await writeText(formatted);
-      copySummary.copiedCount = 1;
-    } catch (err) {
-      copySummary.copyFailed = true;
-      log.error('自动复制失败:', err);
+    const linkOutput = config.linkOutput || DEFAULT_CONFIG.linkOutput!;
+    const autoCopyEnabled = linkOutput.autoCopy !== false;
+    const copySummary = createShortcutCopySummary(config, autoCopyEnabled);
+    const formatted = await formatLinkForShortcut(uploadResult.primaryUrl, tempFilePath, config, uploadResult.primaryService);
+    if (autoCopyEnabled) {
+      try {
+        await writeText(formatted);
+        copySummary.copiedCount = 1;
+      } catch (err) {
+        copySummary.copyFailed = true;
+        log.error('自动复制失败:', err);
+      }
     }
+    await notifyUploadSummary(1, 1, copySummary);
+  } finally {
+    await cleanupClipboardTempFile(tempFilePath);
   }
-  await notifyUploadSummary(1, 1, copySummary);
 });
 
 const handleFileSelectUpload = () => withUploadGuard('文件选择上传', async () => {

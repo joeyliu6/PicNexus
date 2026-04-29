@@ -5,6 +5,7 @@ import {
   setupInvokeHandler,
 } from '../../helpers/tauriMock';
 import { useClipboardImage } from '../../../composables/useClipboardImage';
+import { useQueueState } from '../../../composables/useQueueState';
 
 const toastWarnMock = vi.hoisted(() => vi.fn());
 const invokeMock = getInvokeMock();
@@ -38,6 +39,7 @@ function deferred<T>() {
 describe('useClipboardImage.readClipboardImage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useQueueState().clearQueue();
     readTextMock.mockResolvedValue('');
   });
 
@@ -113,15 +115,63 @@ describe('useClipboardImage.pasteAndUpload', () => {
   it('剪贴板图片读取成功后，把临时路径交给上传处理器', async () => {
     setupInvokeHandler(async (cmd) => {
       if (cmd === 'clipboard_has_image') return true;
-      if (cmd === 'read_clipboard_image') return 'C:/tmp/from-clipboard.webp';
+      if (cmd === 'read_clipboard_image') return 'C:/tmp/clipboard_image_from_clipboard.png';
+      if (cmd === 'cleanup_clipboard_temp_file') return true;
       throw new Error(`unexpected command: ${cmd}`);
     });
     const uploadHandler = vi.fn(async () => undefined);
 
     await useClipboardImage().pasteAndUpload(uploadHandler);
 
-    expect(uploadHandler).toHaveBeenCalledWith(['C:/tmp/from-clipboard.webp']);
+    expect(uploadHandler).toHaveBeenCalledWith(['C:/tmp/clipboard_image_from_clipboard.png']);
+    expect(invokeMock).toHaveBeenCalledWith('cleanup_clipboard_temp_file', {
+      path: 'C:/tmp/clipboard_image_from_clipboard.png',
+    });
     expect(toastWarnMock).not.toHaveBeenCalled();
+  });
+
+  it('剪贴板图片上传处理器失败时仍清理本次临时文件', async () => {
+    setupInvokeHandler(async (cmd) => {
+      if (cmd === 'clipboard_has_image') return true;
+      if (cmd === 'read_clipboard_image') return 'C:/tmp/clipboard_image_from_clipboard.png';
+      if (cmd === 'cleanup_clipboard_temp_file') return true;
+      throw new Error(`unexpected command: ${cmd}`);
+    });
+    const uploadHandler = vi.fn(async () => {
+      throw new Error('upload failed');
+    });
+
+    await expect(useClipboardImage().pasteAndUpload(uploadHandler)).rejects.toThrow('upload failed');
+
+    expect(invokeMock).toHaveBeenCalledWith('cleanup_clipboard_temp_file', {
+      path: 'C:/tmp/clipboard_image_from_clipboard.png',
+    });
+  });
+
+  it('剪贴板图片上传后若队列仍有失败服务，则保留临时文件用于重试', async () => {
+    setupInvokeHandler(async (cmd) => {
+      if (cmd === 'clipboard_has_image') return true;
+      if (cmd === 'read_clipboard_image') return 'C:/tmp/clipboard_image_from_clipboard.png';
+      if (cmd === 'cleanup_clipboard_temp_file') return true;
+      throw new Error(`unexpected command: ${cmd}`);
+    });
+    const uploadHandler = vi.fn(async () => {
+      useQueueState().addItem({
+        id: 'q-clip',
+        fileName: 'clipboard_image_from_clipboard.png',
+        filePath: 'C:/tmp/clipboard_image_from_clipboard.png',
+        enabledServices: ['weibo', 'r2'],
+        serviceProgress: {
+          weibo: { serviceId: 'weibo', progress: 100, status: '✓ 完成' },
+          r2: { serviceId: 'r2', progress: 0, status: '✗ 失败', error: 'boom' },
+        },
+        status: 'success',
+      } as any);
+    });
+
+    await useClipboardImage().pasteAndUpload(uploadHandler);
+
+    expect(invokeMock).not.toHaveBeenCalledWith('cleanup_clipboard_temp_file', expect.anything());
   });
 
   it('剪贴板没有图片但包含图片 URL 时，先下载再上传', async () => {

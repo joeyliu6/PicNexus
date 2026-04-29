@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CopyLinkItem } from '../../../../composables/useCopyLink';
 import { processUploadQueue } from '../../../../composables/upload/UploadExecutor';
+import { DEFAULT_CONFIG, DEFAULT_LINK_PREFIXES, type UserConfig } from '../../../../config/types';
+import { formatLinkWithConfig } from '../../../../composables/useCopyLink';
+import { generateThumbnailUrl } from '../../../../composables/useThumbCache';
 
 const uploadToMultipleServicesMock = vi.hoisted(() => vi.fn());
 
@@ -31,15 +34,18 @@ function createQueueManager() {
   const items = new Map<string, any>();
 
   return {
-    seed(id: string, fileName: string) {
+    seed(id: string, fileName: string, enabledServices = ['jd']) {
       items.set(id, {
         id,
         fileName,
         filePath: `C:/tmp/${fileName}`,
-        enabledServices: ['jd'],
-        serviceProgress: {
-          jd: { serviceId: 'jd', progress: 0, status: '等待中...' },
-        },
+        enabledServices,
+        serviceProgress: Object.fromEntries(
+          enabledServices.map(serviceId => [
+            serviceId,
+            { serviceId, progress: 0, status: '等待中...' },
+          ]),
+        ),
         status: 'pending',
       });
     },
@@ -107,7 +113,6 @@ describe('processUploadQueue', () => {
         saveHistoryItemImmediate: vi.fn(async () => undefined),
         addResultToHistoryItem: vi.fn(async () => true),
         saveHistoryItem: vi.fn(async () => undefined),
-        weiboPrefix: null,
         toast: { showConfig: vi.fn() } as any,
       },
       collectedLinks,
@@ -118,5 +123,89 @@ describe('processUploadQueue', () => {
       'https://img.example/a.jpg',
       'https://img.example/b.jpg',
     ]);
+  });
+
+  it('keeps weibo queue links raw and lets copy/thumb helpers apply the default template once', async () => {
+    const queueManager = createQueueManager();
+    queueManager.seed('q-weibo', 'weibo.jpg', ['weibo']);
+    const rawUrl = 'https://tvax1.sinaimg.cn/large/pid123.jpg';
+    const config: UserConfig = {
+      ...DEFAULT_CONFIG,
+      linkOutput: {
+        ...DEFAULT_CONFIG.linkOutput!,
+        defaultFormat: 'url',
+      },
+      linkPrefixConfig: {
+        enabled: true,
+        selectedIndex: 0,
+        prefixList: [DEFAULT_LINK_PREFIXES[0]],
+      },
+    };
+
+    uploadToMultipleServicesMock.mockImplementationOnce(async (
+      _filePath: string,
+      _enabledServices: string[],
+      _config: unknown,
+      _onProgress?: unknown,
+      onServiceResult?: (result: unknown) => Promise<void> | void,
+    ) => {
+      const singleResult = {
+        serviceId: 'weibo',
+        status: 'success' as const,
+        result: {
+          serviceId: 'weibo',
+          fileKey: 'pid123',
+          url: rawUrl,
+        },
+      };
+      await onServiceResult?.(singleResult);
+      return {
+        primaryService: 'weibo',
+        primaryUrl: rawUrl,
+        results: [singleResult],
+      };
+    });
+
+    await processUploadQueue(
+      [
+        {
+          itemId: 'q-weibo',
+          filePath: 'C:/tmp/weibo.jpg',
+          uploadFilePath: 'C:/tmp/weibo.jpg',
+          fileName: 'weibo.jpg',
+        },
+      ],
+      config,
+      ['weibo'],
+      1,
+      {
+        queueManager: queueManager as any,
+        saveHistoryItemImmediate: vi.fn(async () => undefined),
+        addResultToHistoryItem: vi.fn(async () => true),
+        saveHistoryItem: vi.fn(async () => undefined),
+        toast: { showConfig: vi.fn() } as any,
+      },
+    );
+
+    const serviceUpdate = queueManager.updateItem.mock.calls
+      .map(([, updates]) => updates.serviceProgress?.weibo)
+      .find(Boolean);
+    expect(serviceUpdate?.link).toBe(rawUrl);
+    expect(serviceUpdate?.metadata?.pid).toBe('pid123');
+    expect(queueManager.markItemComplete).toHaveBeenCalledWith('q-weibo', rawUrl);
+
+    const copied = formatLinkWithConfig({
+      url: serviceUpdate!.link!,
+      fileName: 'weibo.jpg',
+      serviceId: 'weibo',
+    }, config);
+    expect(copied).not.toContain('{url_encoded}');
+    expect(copied.match(/img01\.sogoucdn\.com/g) ?? []).toHaveLength(1);
+    expect(new URL(copied).searchParams.get('url')).toBe(rawUrl);
+
+    const thumb = generateThumbnailUrl('weibo', serviceUpdate!.link!, 'pid123', config);
+    expect(thumb).not.toContain('{url_encoded}');
+    expect(thumb.match(/img01\.sogoucdn\.com/g) ?? []).toHaveLength(1);
+    expect(new URL(thumb).searchParams.get('url')).toBe('https://tvax1.sinaimg.cn/thumb150/pid123.jpg');
   });
 });

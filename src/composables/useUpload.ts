@@ -283,7 +283,6 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             saveHistoryItemImmediate,
             addResultToHistoryItem,
             saveHistoryItem,
-            weiboPrefix: activePrefix.value,
             toast,
           },
           undefined,

@@ -5,14 +5,67 @@
 use arboard::Clipboard;
 use image::ImageFormat;
 use std::io::Cursor;
+use std::path::Path;
 
 use crate::error::AppError;
+
+const CLIPBOARD_TEMP_PREFIX: &str = "clipboard_image_";
+const CLIPBOARD_TEMP_EXTENSION: &str = "png";
+
+fn is_clipboard_temp_path(path: &Path) -> bool {
+    let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    if !file_name.starts_with(CLIPBOARD_TEMP_PREFIX) {
+        return false;
+    }
+    let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+        return false;
+    };
+    if !ext.eq_ignore_ascii_case(CLIPBOARD_TEMP_EXTENSION) {
+        return false;
+    }
+
+    let Some(parent) = path.parent() else {
+        return false;
+    };
+    let Ok(temp_dir) = std::env::temp_dir().canonicalize() else {
+        return false;
+    };
+    let Ok(parent_dir) = parent.canonicalize() else {
+        return false;
+    };
+    parent_dir == temp_dir
+}
+
+/// 安全清理本次剪贴板图片临时文件。
+///
+/// 只允许删除系统临时目录下由 read_clipboard_image 创建的
+/// clipboard_image_*.png，避免前端传入任意路径造成误删。
+#[tauri::command]
+pub fn cleanup_clipboard_temp_file(path: String) -> Result<bool, AppError> {
+    let path = Path::new(&path);
+    if !is_clipboard_temp_path(path) {
+        return Err(AppError::validation(
+            "只允许清理 PicNexus 创建的剪贴板临时图片",
+        ));
+    }
+    if !path.exists() {
+        return Ok(false);
+    }
+
+    std::fs::remove_file(path).map_err(|e| {
+        log::warn!("[剪贴板] 删除临时文件失败 {:?}: {}", path, e);
+        AppError::file_io(format!("删除剪贴板临时文件失败: {}", e))
+    })?;
+    Ok(true)
+}
 
 /// 检查剪贴板是否包含图片
 #[tauri::command]
 pub fn clipboard_has_image() -> Result<bool, AppError> {
-    let mut clipboard = Clipboard::new()
-        .map_err(|e| AppError::clipboard(format!("无法访问剪贴板: {}", e)))?;
+    let mut clipboard =
+        Clipboard::new().map_err(|e| AppError::clipboard(format!("无法访问剪贴板: {}", e)))?;
 
     match clipboard.get_image() {
         Ok(_) => Ok(true),
@@ -30,8 +83,8 @@ pub fn read_clipboard_image() -> Result<String, AppError> {
     log::info!("[剪贴板] 正在读取剪贴板图片...");
 
     // 获取剪贴板访问
-    let mut clipboard = Clipboard::new()
-        .map_err(|e| AppError::clipboard(format!("无法访问剪贴板: {}", e)))?;
+    let mut clipboard =
+        Clipboard::new().map_err(|e| AppError::clipboard(format!("无法访问剪贴板: {}", e)))?;
 
     // 读取图片数据
     let image_data = clipboard.get_image().map_err(|e| match e {
@@ -41,7 +94,8 @@ pub fn read_clipboard_image() -> Result<String, AppError> {
 
     log::debug!(
         "[剪贴板] 读取成功，尺寸: {}x{}",
-        image_data.width, image_data.height
+        image_data.width,
+        image_data.height
     );
 
     // 将 RGBA 数据转换为 PNG 格式
@@ -64,8 +118,10 @@ pub fn read_clipboard_image() -> Result<String, AppError> {
     // 创建临时文件路径
     let temp_dir = std::env::temp_dir();
     let file_name = format!(
-        "clipboard_image_{}.png",
-        chrono::Local::now().format("%Y%m%d_%H%M%S_%3f")
+        "{}{}.{}",
+        CLIPBOARD_TEMP_PREFIX,
+        chrono::Local::now().format("%Y%m%d_%H%M%S_%3f"),
+        CLIPBOARD_TEMP_EXTENSION
     );
     let temp_path = temp_dir.join(&file_name);
 
@@ -79,4 +135,38 @@ pub fn read_clipboard_image() -> Result<String, AppError> {
     log::info!("[剪贴板] 图片已保存到临时文件: {}", path_str);
 
     Ok(path_str)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{cleanup_clipboard_temp_file, CLIPBOARD_TEMP_PREFIX};
+
+    #[test]
+    fn cleanup_clipboard_temp_file_removes_only_owned_temp_png() {
+        let path = std::env::temp_dir().join(format!(
+            "{}test_{}_{}.png",
+            CLIPBOARD_TEMP_PREFIX,
+            std::process::id(),
+            chrono::Utc::now().timestamp_millis()
+        ));
+        std::fs::write(&path, b"temp").expect("test temp file should be writable");
+
+        let removed = cleanup_clipboard_temp_file(path.to_string_lossy().to_string())
+            .expect("owned clipboard temp file should be removable");
+
+        assert!(removed);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn cleanup_clipboard_temp_file_rejects_unowned_path() {
+        let path = std::env::temp_dir().join("not_clipboard_image.png");
+        std::fs::write(&path, b"keep").expect("test temp file should be writable");
+
+        let result = cleanup_clipboard_temp_file(path.to_string_lossy().to_string());
+
+        assert!(result.is_err());
+        assert!(path.exists());
+        let _ = std::fs::remove_file(path);
+    }
 }

@@ -2,6 +2,14 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useQueueState } from '../../../composables/useQueueState';
 import type { QueueItem } from '../../../uploadQueue';
 
+const { invokeMock } = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
+}));
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: invokeMock,
+}));
+
 function makeItem(overrides: Partial<QueueItem> = {}): QueueItem {
   return {
     id: 'item-1',
@@ -18,8 +26,10 @@ function makeItem(overrides: Partial<QueueItem> = {}): QueueItem {
 
 describe('useQueueState - CRUD', () => {
   beforeEach(() => {
+    invokeMock.mockResolvedValue(true);
     const { clearQueue } = useQueueState();
     clearQueue();
+    invokeMock.mockClear();
   });
 
   it('addItem 从头部插入', () => {
@@ -92,6 +102,17 @@ describe('useQueueState - CRUD', () => {
     expect(queueItems.value.map(i => i.id)).toEqual(['b']);
   });
 
+  it('removeItem 清理剪贴板临时文件', async () => {
+    const { addItem, removeItem } = useQueueState();
+    const filePath = 'C:/Temp/clipboard_image_remove.png';
+    addItem(makeItem({ id: 'clip', filePath }));
+
+    removeItem('clip');
+    await Promise.resolve();
+
+    expect(invokeMock).toHaveBeenCalledWith('cleanup_clipboard_temp_file', { path: filePath });
+  });
+
   it('removeItem 对不存在的 id 安全', () => {
     const { removeItem, queueItems } = useQueueState();
     removeItem('ghost');
@@ -116,6 +137,59 @@ describe('useQueueState - CRUD', () => {
     expect(queueItems.value.map(i => i.id).sort()).toEqual(['b', 'd']);
   });
 
+  it('clearCompletedItems 保留包含失败服务的混合成功项', () => {
+    const { addItem, clearCompletedItems, queueItems } = useQueueState();
+    addItem(makeItem({
+      id: 'mixed',
+      status: 'success',
+      serviceProgress: {
+        weibo: { serviceId: 'weibo', progress: 100, status: '✓ 完成', link: 'https://weibo/a.jpg' },
+        r2: { serviceId: 'r2', progress: 0, status: '✗ 失败', error: 'boom' },
+      },
+    }));
+    addItem(makeItem({
+      id: 'all-ok',
+      status: 'success',
+      serviceProgress: {
+        weibo: { serviceId: 'weibo', progress: 100, status: '✓ 完成', link: 'https://weibo/a.jpg' },
+        r2: { serviceId: 'r2', progress: 100, status: '✓ 完成', link: 'https://r2/a.jpg' },
+      },
+    }));
+
+    clearCompletedItems();
+
+    expect(queueItems.value.map(i => i.id)).toEqual(['mixed']);
+  });
+
+  it('clearCompletedItems 只清理被移除项的剪贴板临时文件', async () => {
+    const { addItem, clearCompletedItems } = useQueueState();
+    const removablePath = 'C:/Temp/clipboard_image_all_ok.png';
+    const retainedPath = 'C:/Temp/clipboard_image_partial.png';
+    addItem(makeItem({
+      id: 'partial',
+      filePath: retainedPath,
+      status: 'success',
+      serviceProgress: {
+        weibo: { serviceId: 'weibo', progress: 100, status: '\u2705 \u5b8c\u6210' },
+        r2: { serviceId: 'r2', progress: 0, status: '\u274c \u5931\u8d25' },
+      },
+    }));
+    addItem(makeItem({
+      id: 'all-ok',
+      filePath: removablePath,
+      status: 'success',
+      serviceProgress: {
+        weibo: { serviceId: 'weibo', progress: 100, status: '\u2705 \u5b8c\u6210' },
+      },
+    }));
+
+    clearCompletedItems();
+    await Promise.resolve();
+
+    expect(invokeMock).toHaveBeenCalledWith('cleanup_clipboard_temp_file', { path: removablePath });
+    expect(invokeMock).not.toHaveBeenCalledWith('cleanup_clipboard_temp_file', { path: retainedPath });
+  });
+
   it('hasCompletedItems 检测 success/error', () => {
     const { addItem, hasCompletedItems } = useQueueState();
     expect(hasCompletedItems.value).toBe(false);
@@ -123,6 +197,20 @@ describe('useQueueState - CRUD', () => {
     expect(hasCompletedItems.value).toBe(false);
     addItem(makeItem({ id: 'b', status: 'success' }));
     expect(hasCompletedItems.value).toBe(true);
+  });
+
+  it('hasCompletedItems 不把含失败服务的保留项视为可清理', () => {
+    const { addItem, hasCompletedItems } = useQueueState();
+    addItem(makeItem({
+      id: 'mixed',
+      status: 'success',
+      serviceProgress: {
+        weibo: { serviceId: 'weibo', progress: 100, status: '✓ 完成' },
+        r2: { serviceId: 'r2', progress: 0, status: '✗ 失败' },
+      },
+    }));
+
+    expect(hasCompletedItems.value).toBe(false);
   });
 });
 
