@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # Nightly full visual regression run at 02:00 Asia/Shanghai.
+    - cron: '0 18 * * *'
   workflow_dispatch:
     inputs:
       run_visual:
@@ -24,11 +27,16 @@ on:
         type: boolean
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   test:
+    if: github.event_name != 'schedule'
     strategy:
       fail-fast: false
       matrix:
@@ -118,10 +126,61 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  visual-impact:
+    name: Detect visual impact
+    runs-on: ubuntu-latest
+
+    outputs:
+      visual: ${{ steps.filter.outputs.visual || steps.non_pr.outputs.visual || 'false' }}
+
+    steps:
+      - name: Detect changed UI and visual files
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            visual:
+              - '.github/workflows/ci.yml'
+              - 'playwright.config.ts'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'tests/visual/**'
+              - 'src/**/*.vue'
+              - 'src/**/*.css'
+              - 'src/**/*.scss'
+              - 'src/assets/**'
+              - 'src/components/**'
+              - 'src/composables/**'
+              - 'src/config/**'
+              - 'src/constants/**'
+              - 'src/main.ts'
+              - 'src/style.css'
+              - 'src/styles/**'
+              - 'src/theme/**'
+              - 'src/types/**'
+              - 'src/uploadQueue.ts'
+              - 'src/utils/**'
+
+      - name: Mark non-PR events for explicit full visual runs
+        id: non_pr
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: echo "visual=true" >> "$GITHUB_OUTPUT"
+
   visual:
     name: Visual regression
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_visual == 'true'
+    needs: visual-impact
+    if: >-
+      ${{
+        (
+          github.event_name == 'schedule' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.run_visual == 'true') ||
+          (github.event_name == 'pull_request' && needs.visual-impact.outputs.visual == 'true')
+        )
+      }}
     runs-on: windows-latest
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v5
@@ -153,7 +212,7 @@ jobs:
 
   e2e:
     name: E2E smoke
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_e2e }}
+    if: ${{ github.event_name != 'schedule' && (github.event_name != 'workflow_dispatch' || inputs.run_e2e) }}
     needs: test
     runs-on: ubuntu-latest
 
