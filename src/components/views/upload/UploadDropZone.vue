@@ -117,6 +117,7 @@ const chipSuffixText = computed(() => {
       <div
         class="compress-chip"
         :class="{ 'compress-chip-active': compressionEnabled }"
+        v-ripple
       >
         <button
           class="chip-main"
@@ -252,6 +253,7 @@ const chipSuffixText = computed(() => {
 
 /* 压缩状态 Chip 容器（边框+底色由容器统一负责，内部分主区+箭头两段） */
 .compress-chip {
+  position: relative;
   display: inline-flex;
   align-items: stretch;
   border: 1px solid var(--border-subtle);

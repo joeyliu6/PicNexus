@@ -93,6 +93,12 @@ describe('UploadDropZone', () => {
     expect(wrapper.findAll('.paste-link').every(button => button.attributes('disabled') !== undefined)).toBe(true);
   });
 
+  it('压缩 chip 使用 ripple 点击反馈', () => {
+    const wrapper = mountDropZone();
+
+    expect(wrapper.get('.compress-chip').attributes('data-ripple')).toBe('true');
+  });
+
   it('压缩开关与预设选择会 emit 配置更新', async () => {
     const wrapper = mountDropZone({ compressionEnabled: false });
 

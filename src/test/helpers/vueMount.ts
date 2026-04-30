@@ -23,6 +23,12 @@ export const tooltipDirective = {
   },
 };
 
+export const rippleDirective = {
+  mounted(el: HTMLElement) {
+    el.setAttribute('data-ripple', 'true');
+  },
+};
+
 /**
  * 默认的全局配置
  * 包含常用的 stubs 和 directives
@@ -31,6 +37,7 @@ function getDefaultGlobalConfig(): MountingOptions<any>['global'] {
   return {
     directives: {
       tooltip: tooltipDirective,
+      ripple: rippleDirective,
     },
     stubs: {
       Teleport: true,
