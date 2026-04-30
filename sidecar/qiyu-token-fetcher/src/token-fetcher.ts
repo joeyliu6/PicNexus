@@ -3,6 +3,7 @@ import { detectChromePath } from './browser-detector';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { logDiagnostic } from './diagnostic-logger';
 
 const QIYU_PAGE_URL = 'https://qiyukf.com/client?k=d65beefd7552d92ee02344b3cc6173de';
 
@@ -307,9 +308,9 @@ export async function fetchQiyuToken(): Promise<QiyuToken> {
           inputs: document.querySelectorAll('input[type="file"]').length,
           title: document.title
         })`);
-        console.error(`[QiyuToken] Token 获取失败 - ${JSON.stringify(debugInfo)}, wsMsg: ${wsMessageCount}`);
+        logDiagnostic(`[QiyuToken] Token 获取失败 - ${JSON.stringify(debugInfo)}, wsMsg: ${wsMessageCount}`);
       } catch (e) {
-        console.error(`[QiyuToken] Token 获取失败 - wsMsg: ${wsMessageCount}`);
+        logDiagnostic(`[QiyuToken] Token 获取失败 - wsMsg: ${wsMessageCount}`);
       }
 
       throw new Error('未能捕获到上传 Token');
@@ -354,7 +355,7 @@ function parseToken(token: string): QiyuToken {
 
   const expires = policy.Expires || 0;
 
-  console.error(`[QiyuToken] 解析成功 - object: ${objectPath}, expires: ${expires}`);
+  logDiagnostic(`[QiyuToken] 解析成功 - object: ${objectPath}, expires: ${expires}`);
 
   return {
     token,

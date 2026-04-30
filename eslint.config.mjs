@@ -65,6 +65,7 @@ export default defineConfigWithVueTs(
       'no-empty': 'error',
       'no-prototype-builtins': 'error',
       'no-case-declarations': 'error',
+      'no-console': 'error',
       'no-unused-vars': 'off', // 交给 @typescript-eslint 版本
       // Vue 专用规则升级
       'vue/multi-word-component-names': 'error',

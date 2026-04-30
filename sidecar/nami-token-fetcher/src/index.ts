@@ -1,5 +1,6 @@
 import { fetchNamiToken, NamiDynamicHeaders } from './token-fetcher';
 import { detectChromePath, BrowserInfo } from './browser-detector';
+import { writeJsonResult } from './diagnostic-logger';
 
 interface SuccessResponse<T> {
   success: true;
@@ -106,10 +107,10 @@ async function main() {
   }
 
   // 输出 JSON 结果到 stdout
-  console.log(JSON.stringify(result));
+  writeJsonResult(result);
 }
 
 main().catch((err) => {
-  console.log(JSON.stringify(error(err.message || 'Unexpected error')));
+  writeJsonResult(error(err.message || 'Unexpected error'));
   process.exitCode = 1;
 });

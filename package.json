@@ -17,7 +17,7 @@
     "test:visual:update": "playwright test -c playwright.config.ts --update-snapshots=all",
     "test:e2e": "playwright test -c playwright.e2e.config.ts",
     "test:tauri:e2e": "node scripts/check-tauri-e2e-prereqs.cjs && wdio run wdio.tauri.e2e.conf.cjs",
-    "lint": "eslint . && stylelint \"src/**/*.{css,vue}\"",
+    "lint": "node scripts/check-logging-guards.mjs && eslint . && stylelint \"src/**/*.{css,vue}\"",
     "lint:fix": "eslint . --fix && stylelint \"src/**/*.{css,vue}\" --fix",
     "prepare": "husky"
   },

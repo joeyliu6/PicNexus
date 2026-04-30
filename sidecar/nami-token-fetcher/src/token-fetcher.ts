@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as zlib from 'zlib';
+import { logDiagnostic } from './diagnostic-logger';
 
 const NAMI_PAGE_URL = 'https://www.n.cn';
 
@@ -82,7 +83,7 @@ function createTempImage(): Buffer {
   const g = (seed >> 8) & 0xFF;
   const b = seed & 0xFF;
 
-  console.error(`[NamiToken] 生成唯一图片: RGB(${r}, ${g}, ${b})`);
+  logDiagnostic(`[NamiToken] 生成唯一图片: RGB(${r}, ${g}, ${b})`);
 
   const chunks: Buffer[] = [];
 
@@ -133,7 +134,7 @@ function cleanupTempFile(filePath: string): void {
   try {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
-      console.error(`[NamiToken] 已删除临时文件: ${filePath}`);
+      logDiagnostic(`[NamiToken] 已删除临时文件: ${filePath}`);
     }
   } catch (e) {
     // 忽略删除失败
@@ -149,14 +150,14 @@ function sleep(ms: number): Promise<void> {
  * 通过 CDP 监听 /api/byte/assumerole 请求来捕获动态生成的 headers
  */
 export async function fetchNamiToken(config: NamiConfig): Promise<NamiDynamicHeaders> {
-  console.error('[NamiToken] ========== 开始获取动态 Token ==========');
+  logDiagnostic('[NamiToken] ========== 开始获取动态 Token ==========');
 
   const browserInfo = detectChromePath();
   if (!browserInfo) {
     throw new Error('未检测到 Chrome 或 Edge 浏览器');
   }
 
-  console.error(`[NamiToken] 使用浏览器: ${browserInfo.name} (${browserInfo.path})`);
+    logDiagnostic(`[NamiToken] 使用浏览器: ${browserInfo.name} (${browserInfo.path})`);
 
   let browser: Browser | null = null;
   let tempImagePath: string | null = null;
@@ -167,7 +168,7 @@ export async function fetchNamiToken(config: NamiConfig): Promise<NamiDynamicHea
     tempImagePath = path.join(tempDir, `nami-test-${Date.now()}.png`);
     const tempImageBuffer = createTempImage();
     fs.writeFileSync(tempImagePath, tempImageBuffer);
-    console.error(`[NamiToken] 创建临时测试图片: ${tempImagePath}`);
+    logDiagnostic(`[NamiToken] 创建临时测试图片: ${tempImagePath}`);
 
     browser = await puppeteer.launch({
       executablePath: browserInfo.path,
@@ -207,7 +208,7 @@ export async function fetchNamiToken(config: NamiConfig): Promise<NamiDynamicHea
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36');
 
     // 注入 Cookie
-    console.error('[NamiToken] 注入 Cookie...');
+    logDiagnostic('[NamiToken] 注入 Cookie...');
     const cookies = parseCookies(config.cookie);
     await page.setCookie(...cookies);
 
@@ -229,7 +230,7 @@ export async function fetchNamiToken(config: NamiConfig): Promise<NamiDynamicHea
 
         // 捕获 assumerole 请求的 headers
         if (url.includes('/api/byte/assumerole')) {
-          console.error('[NamiToken] 捕获到 assumerole 请求!');
+          logDiagnostic('[NamiToken] 捕获到 assumerole 请求!');
 
           const headers = params.request.headers;
 
@@ -244,7 +245,7 @@ export async function fetchNamiToken(config: NamiConfig): Promise<NamiDynamicHea
             headerTid: headers['header-tid'] || '',
           };
 
-          console.error('[NamiToken] Headers 捕获成功', {
+          logDiagnostic('[NamiToken] Headers 捕获成功', {
             accessTokenLength: result.accessToken.length,
             zmTokenLength: result.zmToken.length,
           });
@@ -256,24 +257,24 @@ export async function fetchNamiToken(config: NamiConfig): Promise<NamiDynamicHea
     });
 
     // 导航到纳米页面
-    console.error(`[NamiToken] 正在打开纳米页面: ${NAMI_PAGE_URL}`);
+    logDiagnostic(`[NamiToken] 正在打开纳米页面: ${NAMI_PAGE_URL}`);
     await page.goto(NAMI_PAGE_URL, {
       waitUntil: 'networkidle2',
       timeout: 30000
     });
 
     // 等待页面完全加载
-    console.error('[NamiToken] 等待页面完全加载 (3秒)...');
+    logDiagnostic('[NamiToken] 等待页面完全加载 (3秒)...');
     await sleep(3000);
 
     // 查找文件输入框并上传
-    console.error('[NamiToken] 查找文件输入框...');
+    logDiagnostic('[NamiToken] 查找文件输入框...');
     const fileInputs = await page.$$('input[type="file"]');
-    console.error(`[NamiToken] 找到 ${fileInputs.length} 个文件输入框`);
+    logDiagnostic(`[NamiToken] 找到 ${fileInputs.length} 个文件输入框`);
 
     if (fileInputs.length === 0) {
       // 尝试点击上传按钮触发文件选择
-      console.error('[NamiToken] 尝试点击上传按钮...');
+      logDiagnostic('[NamiToken] 尝试点击上传按钮...');
       const uploadSelectors = [
         '#Tag_UploadImgButton',
         '.upload-btn',
@@ -286,7 +287,7 @@ export async function fetchNamiToken(config: NamiConfig): Promise<NamiDynamicHea
         const btn = await page.$(selector);
         if (btn) {
           await btn.click();
-          console.error(`[NamiToken] 点击了 ${selector}`);
+          logDiagnostic(`[NamiToken] 点击了 ${selector}`);
           await sleep(1000);
           break;
         }
@@ -303,11 +304,11 @@ export async function fetchNamiToken(config: NamiConfig): Promise<NamiDynamicHea
     // 尝试每个文件输入框
     for (let i = 0; i < fileInputs.length; i++) {
       const fileInput = fileInputs[i];
-      console.error(`[NamiToken] 尝试使用第 ${i + 1} 个文件输入框上传...`);
+      logDiagnostic(`[NamiToken] 尝试使用第 ${i + 1} 个文件输入框上传...`);
 
       try {
         await fileInput.uploadFile(tempImagePath);
-        console.error(`[NamiToken] 已设置文件到第 ${i + 1} 个输入框`);
+        logDiagnostic(`[NamiToken] 已设置文件到第 ${i + 1} 个输入框`);
 
         // 手动触发 change 事件
         await fileInput.evaluate((el: any) => {
@@ -317,12 +318,12 @@ export async function fetchNamiToken(config: NamiConfig): Promise<NamiDynamicHea
 
         await sleep(2000);
       } catch (e: any) {
-        console.error(`[NamiToken] 第 ${i + 1} 个输入框失败: ${e.message}`);
+        logDiagnostic(`[NamiToken] 第 ${i + 1} 个输入框失败: ${e.message}`);
       }
     }
 
     // 等待捕获 Headers
-    console.error('[NamiToken] 等待 Headers 捕获...');
+    logDiagnostic('[NamiToken] 等待 Headers 捕获...');
 
     try {
       capturedHeaders = await Promise.race([
@@ -332,7 +333,7 @@ export async function fetchNamiToken(config: NamiConfig): Promise<NamiDynamicHea
         )
       ]);
     } catch (e) {
-      console.error('[NamiToken] 第一次尝试失败，重试点击上传按钮...');
+      logDiagnostic('[NamiToken] 第一次尝试失败，重试点击上传按钮...');
 
       // 重试：点击上传按钮
       const uploadButton = await page.$('#Tag_UploadImgButton');
@@ -349,7 +350,7 @@ export async function fetchNamiToken(config: NamiConfig): Promise<NamiDynamicHea
       throw new Error('无法捕获动态 Headers，请检查 Cookie 是否有效');
     }
 
-    console.error('[NamiToken] ========== Token 获取成功 ==========');
+    logDiagnostic('[NamiToken] ========== Token 获取成功 ==========');
     return capturedHeaders;
 
   } finally {
