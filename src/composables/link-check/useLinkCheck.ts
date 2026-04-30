@@ -483,6 +483,7 @@ export function useLinkCheckManager() {
   async function checkSubset(filter: {
     serviceId?: string;
     statusFilter?: 'unchecked' | 'invalid' | 'timeout' | 'suspicious' | 'valid' | 'problems';
+    searchQuery?: string;
     historyIds?: string[];
     targets?: Array<{ historyId: string; serviceId: string }>;
   }): Promise<BatchCheckResult | null> {
@@ -503,10 +504,19 @@ export function useLinkCheckManager() {
     const rows = checkRows.value;
     const idSet = filter.historyIds ? new Set(filter.historyIds) : null;
     const targetSet = filter.targets ? new Set(filter.targets.map((target) => `${target.historyId}::${target.serviceId}`)) : null;
+    const searchQuery = filter.searchQuery?.trim().toLowerCase() ?? '';
     const filtered = rows.filter((row) => {
       if (targetSet) return targetSet.has(linkCheckRowKey(row));
       if (idSet) return idSet.has(row.historyId);
       if (filter.serviceId && row.serviceId !== filter.serviceId) return false;
+      if (
+        searchQuery
+        && !row.url.toLowerCase().includes(searchQuery)
+        && !row.fileName.toLowerCase().includes(searchQuery)
+        && !row.serviceId.toLowerCase().includes(searchQuery)
+      ) {
+        return false;
+      }
       const cr = row.checkResult;
       switch (filter.statusFilter) {
         case 'unchecked': return !cr;

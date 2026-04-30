@@ -300,6 +300,46 @@ describe('useLinkCheckManager.checkAllHistoryLinks', () => {
 });
 
 describe('useLinkCheckManager.checkSubset', () => {
+  it('[BUG 回归] searchQuery 会限制实际检测列表，而不是检测搜索前的状态全集', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+      const m = await freshManager();
+      const loadPromise = m.loadHistoryRows();
+      await vi.advanceTimersByTimeAsync(400);
+      await loadPromise;
+
+      m.checkRows.value = [
+        makeRow({ historyId: 'h-alpha', serviceId: 'r2', fileName: 'alpha-pending.jpg', url: 'https://r2.example.com/alpha.jpg' }),
+        makeRow({ historyId: 'h-beta', serviceId: 'r2', fileName: 'beta-pending.jpg', url: 'https://r2.example.com/beta.jpg' }),
+        makeRow({ historyId: 'h-alpha-github', serviceId: 'github', fileName: 'alpha-pending.jpg', url: 'https://github.example.com/alpha.jpg' }),
+      ];
+      invokeMock.mockResolvedValueOnce({
+        results: [
+          {
+            link: 'https://r2.example.com/alpha.jpg',
+            history_id: 'h-alpha',
+            service_id: 'r2',
+            is_valid: true,
+            error_type: 'success',
+            browser_might_work: false,
+          },
+        ],
+        total: 1, valid: 1, invalid: 0, timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: false,
+      });
+
+      await m.checkSubset({ statusFilter: 'unchecked', serviceId: 'r2', searchQuery: 'alpha' });
+
+      const [, payload] = invokeMock.mock.calls.find(([command]) => command === 'batch_check_links')!;
+      const requestPayload = payload as { request: { links: unknown[] } };
+      expect(requestPayload.request.links).toEqual([
+        expect.objectContaining({ history_id: 'h-alpha', service_id: 'r2' }),
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('[BUG 回归] targets 精确到 (historyId, serviceId)，不会把同图其他图床一起重检', async () => {
     const m = await freshManager();
     m.checkRows.value = [

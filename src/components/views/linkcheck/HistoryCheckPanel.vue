@@ -31,6 +31,7 @@ const emit = defineEmits<{
   (e: 'check-subset', filter: {
     statusFilter?: 'unchecked' | 'invalid' | 'timeout' | 'suspicious' | 'valid' | 'problems';
     serviceId?: string;
+    searchQuery?: string;
   }): void;
   (e: 'cancel-check'): void;
   (e: 'pause-check'): void;
@@ -190,6 +191,26 @@ const effectiveSmartCheckTooltip = computed(() => {
   return smartCheckTooltip.value;
 });
 
+function currentSubsetScope(statusFilter?: 'unchecked' | 'invalid' | 'timeout' | 'suspicious' | 'valid' | 'problems') {
+  const payload: {
+    statusFilter?: 'unchecked' | 'invalid' | 'timeout' | 'suspicious' | 'valid' | 'problems';
+    serviceId?: string;
+    searchQuery?: string;
+  } = {};
+
+  if (statusFilter) payload.statusFilter = statusFilter;
+  if (selectedServiceId.value) payload.serviceId = selectedServiceId.value;
+
+  const query = searchInput.value.trim();
+  if (query) payload.searchQuery = query;
+
+  return payload;
+}
+
+function hasScopedSubset(): boolean {
+  return !!selectedServiceId.value || searchInput.value.trim().length > 0;
+}
+
 function handleSmartCheck(): void {
   if (hasSelection.value) {
     handleBulkRecheck();
@@ -197,11 +218,16 @@ function handleSmartCheck(): void {
   }
   const result = resolveSmartCheck();
   if (result.action === 'check-all') {
+    if (hasScopedSubset()) {
+      emit('check-subset', currentSubsetScope());
+      return;
+    }
     emit('check-all');
   } else {
-    emit('check-subset', {
-      statusFilter: result.filter as 'unchecked' | 'invalid' | 'timeout' | 'suspicious' | 'problems',
-    });
+    emit(
+      'check-subset',
+      currentSubsetScope(result.filter as 'unchecked' | 'invalid' | 'timeout' | 'suspicious' | 'problems'),
+    );
   }
 }
 

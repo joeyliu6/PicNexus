@@ -109,6 +109,29 @@ describe('HistoryCheckPanel', () => {
     timers.restore();
   });
 
+  it('[BUG 回归] 主检测按钮会把当前搜索条件带入状态子集检测', async () => {
+    const timers = useFakeTimers();
+    try {
+      const wrapper = mountPanel({
+        checkRows: [
+          createLinkCheckRow({ historyId: 'hist-alpha', serviceId: 'jd', fileName: 'alpha-pending.jpg' }),
+          createLinkCheckRow({ historyId: 'hist-beta', serviceId: 'jd', fileName: 'beta-pending.jpg' }),
+        ],
+      });
+
+      await wrapper.get('.chip--unchecked').trigger('click');
+      await wrapper.get('input[aria-label="搜索链接文件名"]').setValue('alpha');
+      await timers.advanceBy(250);
+      await wrapper.get('.btn-primary').trigger('click');
+
+      expect(wrapper.emitted('check-subset')).toEqual([[
+        { statusFilter: 'unchecked', searchQuery: 'alpha' },
+      ]]);
+    } finally {
+      timers.restore();
+    }
+  });
+
   it('复制链接会写入剪贴板并显示复制反馈', async () => {
     const row = invalidRow({ url: 'https://img.example.com/broken.jpg' });
     const wrapper = mountPanel({ checkRows: [row] });
