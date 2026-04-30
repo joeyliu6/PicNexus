@@ -1,15 +1,10 @@
 use regex::Regex;
-use std::path::Path;
 use url::Url;
 
 const MAX_PREVIEW_CHARS: usize = 160;
 
 pub fn safe_path(path: &str) -> String {
-    let basename = Path::new(path)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .unwrap_or("path");
+    let basename = basename_from_any_platform_path(path).unwrap_or("path");
     format!("[path:{}#{}]", basename, short_hash(path))
 }
 
@@ -78,6 +73,10 @@ fn short_hash(value: &str) -> String {
     format!("{:08x}", hash)
 }
 
+fn basename_from_any_platform_path(path: &str) -> Option<&str> {
+    path.split(['/', '\\']).rev().find(|part| !part.is_empty())
+}
+
 fn sensitive_assignment_regex() -> Regex {
     Regex::new(
         r#"(?i)["']?\b(cookie|token|auth|password|secret|credential|session|authorization|apiKey|accessKey|secretKey|privateKey)\b["']?\s*[:=]\s*("[^"]*"|'[^']*'|[^;,\s}\]]+)"#,
@@ -123,6 +122,15 @@ mod tests {
     #[test]
     fn safe_path_keeps_only_basename() {
         let result = safe_path(r"C:\Users\alice\Pictures\secret.png");
+
+        assert!(result.contains("secret.png#"));
+        assert!(!result.contains("Users"));
+        assert!(!result.contains("Pictures"));
+    }
+
+    #[test]
+    fn safe_path_handles_unix_paths() {
+        let result = safe_path("/Users/alice/Pictures/secret.png");
 
         assert!(result.contains("secret.png#"));
         assert!(!result.contains("Users"));
