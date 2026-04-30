@@ -151,7 +151,6 @@ function mountHarness(
     totalPages?: Ref<number>;
     goToPage?: (pageNumber: number) => Promise<void>;
     peekPage?: (pageNumber: number) => Promise<{ items: HistoryItem[]; total: number }>;
-    getSuccessfulServices?: (item: HistoryItem) => string[];
     servicePopoverRef?: ServicePopoverRef;
   } = {},
 ) {
@@ -164,7 +163,6 @@ function mountHarness(
     items: currentPageData.value,
     total: currentPageData.value.length,
   }));
-  const getSuccessfulServices = options.getSuccessfulServices ?? vi.fn(() => []);
   const servicePopoverRef = options.servicePopoverRef ?? ref(null) as ServicePopoverRef;
 
   const Harness = defineComponent({
@@ -175,7 +173,6 @@ function mountHarness(
         totalPages,
         goToPage,
         peekPage,
-        getSuccessfulServices,
         servicePopoverRef,
       });
       return () => h('div');
@@ -587,7 +584,6 @@ describe('useTableInteractions service badge copy', () => {
     }];
     const toggle = vi.fn();
     const harness = mountHarness(item, {
-      getSuccessfulServices: vi.fn(() => ['jd', 'weibo']),
       servicePopoverRef: ref({ toggle } as unknown as InstanceType<typeof PopoverType>),
     });
 
@@ -595,7 +591,7 @@ describe('useTableInteractions service badge copy', () => {
     expect(toastWarnMock).not.toHaveBeenCalled();
 
     const event = new Event('click');
-    harness.api().openServicePopover(event, item);
+    harness.api().openServicePopover(event, item, ['jd', 'weibo']);
     expect(toggle).toHaveBeenCalledWith(event);
     expect(harness.api().popoverServices.value).toEqual(['jd', 'weibo']);
     expect(harness.api().isPopoverServiceCopied('jd')).toBe(false);
@@ -605,6 +601,30 @@ describe('useTableInteractions service badge copy', () => {
 
     expect(toastWarnMock).toHaveBeenCalledTimes(1);
     expect(writeTextMock).not.toHaveBeenCalled();
+    harness.wrapper.unmount();
+  });
+
+  it('opens the service popover with only hidden overflow services', () => {
+    const item = makeItem('popover-overflow-only');
+    item.results = ['bilibili', 'chaoxing', 'jd', 'weibo'].map((serviceId) => ({
+      serviceId,
+      status: 'success' as const,
+      result: {
+        serviceId,
+        fileKey: `${serviceId}-key`,
+        url: `https://cdn.example.com/${serviceId}.jpg`,
+      },
+    }));
+    const toggle = vi.fn();
+    const harness = mountHarness(item, {
+      servicePopoverRef: ref({ toggle } as unknown as InstanceType<typeof PopoverType>),
+    });
+
+    const event = new Event('click');
+    harness.api().openServicePopover(event, item, ['jd', 'weibo']);
+
+    expect(toggle).toHaveBeenCalledWith(event);
+    expect(harness.api().popoverServices.value).toEqual(['jd', 'weibo']);
     harness.wrapper.unmount();
   });
 });

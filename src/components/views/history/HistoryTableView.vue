@@ -44,13 +44,15 @@ const servicePopoverRef = ref<InstanceType<typeof PopoverType> | null>(null);
 const {
   setupBadgeWidthObserver,
   getVisibleCount,
+  getVisibleServices,
+  getOverflowServices,
   getCachedServices,
 } = useHistoryBadgeLayout(tableViewRef);
 
 const {
   currentPageData, currentPage, pageSize, totalRecords, totalPages, isLoadingPage, first,
   selectAll, skeletonData, formatTime,
-  onPageChange, goToPage, peekPage, handleHeaderCheckboxChange, getSuccessfulServices, selectedAvailableServices,
+  onPageChange, goToPage, peekPage, handleHeaderCheckboxChange, selectedAvailableServices,
 } = useHistoryTableData({
   filter: computed(() => props.filter),
   searchTerm: computed(() => props.searchTerm),
@@ -76,7 +78,7 @@ const {
 } = useTableInteractions({
   currentPageData, currentPage, totalPages, goToPage,
   peekPage,
-  getSuccessfulServices, servicePopoverRef,
+  servicePopoverRef,
 });
 
 // 收藏状态快路径：favoriteSet 来自 stats（loadStats/loadHistory 任一加载完即可）
@@ -271,7 +273,7 @@ function handleCheckboxToggle(id: string) {
           <!-- v-memo 依赖使用稳定的 visibleCount（离散值），避免列宽 ResizeObserver 1-2 像素抖动导致整表重渲 -->
           <div v-else v-memo="[data.id, data.results.length, getVisibleCount(getCachedServices(data)), copiedServiceKey]" class="service-badges">
             <span
-              v-for="serviceId in getCachedServices(data).slice(0, getVisibleCount(getCachedServices(data)))"
+              v-for="serviceId in getVisibleServices(getCachedServices(data))"
               :key="serviceId"
               class="service-badge-icon"
               :class="{ 'is-copied': copiedServiceKey === getServiceCopyKey(data.id, serviceId) }"
@@ -289,11 +291,11 @@ function handleCheckboxToggle(id: string) {
               </span>
             </span>
             <span
-              v-if="getCachedServices(data).length > getVisibleCount(getCachedServices(data))"
+              v-if="getOverflowServices(getCachedServices(data)).length > 0"
               class="service-badge-more"
-              @click="openServicePopover($event, data)"
+              @click="openServicePopover($event, data, getOverflowServices(getCachedServices(data)))"
             >
-              +{{ getCachedServices(data).length - getVisibleCount(getCachedServices(data)) }}
+              +{{ getOverflowServices(getCachedServices(data)).length }}
             </span>
           </div>
         </template>

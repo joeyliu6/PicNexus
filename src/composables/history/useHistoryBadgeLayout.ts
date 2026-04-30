@@ -115,6 +115,14 @@ export function useHistoryBadgeLayout(tableViewRef: Ref<HTMLElement | null>) {
     return result;
   }
 
+  function getVisibleServices(services: string[]): string[] {
+    return services.slice(0, getVisibleCount(services));
+  }
+
+  function getOverflowServices(services: string[]): string[] {
+    return services.slice(getVisibleCount(services));
+  }
+
   onUnmounted(() => {
     badgeResizeObserver?.disconnect();
     badgeResizeObserver = null;
@@ -125,6 +133,8 @@ export function useHistoryBadgeLayout(tableViewRef: Ref<HTMLElement | null>) {
   return {
     setupBadgeWidthObserver,
     getVisibleCount,
+    getVisibleServices,
+    getOverflowServices,
     getCachedServices,  // 行级缓存的成功服务列表，模板用它替代 getSuccessfulServices 避免每行多次重算
     badgeColumnWidth,   // 暴露给模板，用于 v-memo 依赖，否则宽度变化后 badge 数量不会更新
   };

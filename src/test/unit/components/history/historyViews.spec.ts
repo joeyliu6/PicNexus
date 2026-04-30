@@ -4,6 +4,7 @@ import { mountWithDefaults } from '../../../helpers/vueMount';
 import { flushPromisesAndTicks } from '../../../helpers/wait';
 import { resetTauriMocks } from '../../../helpers/tauriMock';
 import { historyRows } from '../../../fixtures/historyRows';
+import { createHistoryItem, createHistoryResult } from '../../../factories/historyFactory';
 import HistoryView from '../../../../components/views/HistoryView.vue';
 import HistoryTableView from '../../../../components/views/history/HistoryTableView.vue';
 
@@ -25,6 +26,7 @@ const mockState = vi.hoisted(() => ({
   viewState: undefined as any,
   tableState: undefined as any,
   interactions: undefined as any,
+  visibleServiceCount: 4,
 }));
 
 vi.mock('../../../../composables/useToast', () => ({
@@ -49,7 +51,9 @@ vi.mock('../../../../composables/useHistoryViewState', () => ({
 vi.mock('../../../../composables/history/useHistoryBadgeLayout', () => ({
   useHistoryBadgeLayout: () => ({
     setupBadgeWidthObserver: vi.fn(),
-    getVisibleCount: () => 4,
+    getVisibleCount: () => mockState.visibleServiceCount,
+    getVisibleServices: (services: string[]) => services.slice(0, mockState.visibleServiceCount),
+    getOverflowServices: (services: string[]) => services.slice(mockState.visibleServiceCount),
     getCachedServices: (item: any) => item.results
       .filter((result: any) => result.status === 'success')
       .map((result: any) => result.serviceId),
@@ -327,6 +331,7 @@ beforeEach(() => {
   mockState.viewState = makeViewState();
   mockState.tableState = makeTableState();
   mockState.interactions = makeInteractions();
+  mockState.visibleServiceCount = 4;
 });
 
 describe('HistoryView page shell', () => {
@@ -457,6 +462,38 @@ describe('HistoryTableView page interactions', () => {
 
     await wrapper.get('.lightbox-next').trigger('click');
     expect(mockState.handleLightboxNavigate).toHaveBeenCalledWith('next');
+  });
+
+  it('opens the overflow popover with only hidden service badges', async () => {
+    const serviceIds = ['bilibili', 'chaoxing', 'jd', 'weibo'] as const;
+    const overflowRow = createHistoryItem({
+      id: 'hist-overflow-services',
+      results: serviceIds.map((serviceId) => createHistoryResult({
+        serviceId,
+        result: {
+          serviceId,
+          fileKey: `${serviceId}-key`,
+          url: `https://cdn.example.com/${serviceId}.jpg`,
+          size: 2048,
+        },
+      })),
+    });
+    mockState.visibleServiceCount = 2;
+    mockState.tableState = makeTableState([overflowRow]);
+
+    const wrapper = mountHistoryTable();
+    await flushPromisesAndTicks(2);
+
+    expect(wrapper.findAll('.service-badge-icon')).toHaveLength(2);
+    expect(wrapper.get('.service-badge-more').text()).toBe('+2');
+
+    await wrapper.get('.service-badge-more').trigger('click');
+
+    expect(mockState.interactions.openServicePopover).toHaveBeenCalledWith(
+      expect.any(MouseEvent),
+      overflowRow,
+      ['jd', 'weibo'],
+    );
   });
 
   it('keeps selected and error-fallback visual states deterministic', async () => {

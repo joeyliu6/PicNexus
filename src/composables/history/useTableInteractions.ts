@@ -47,8 +47,6 @@ interface UseTableInteractionsOptions {
   goToPage: (pageNumber: number) => Promise<void>;
   /** 轻量预取页数据，不立即更新表格 */
   peekPage: (pageNumber: number) => Promise<{ items: HistoryItem[]; total: number }>;
-  /** 获取某条记录的成功上传服务列表 */
-  getSuccessfulServices: (item: HistoryItem) => string[];
   /** Popover 组件 template ref（由调用方声明，以避免 vue-tsc TS6133） */
   servicePopoverRef: Ref<InstanceType<typeof PopoverType> | null>;
 }
@@ -66,7 +64,7 @@ interface TargetVisibilityResult {
 export function useTableInteractions(options: UseTableInteractionsOptions) {
   const {
     currentPageData, currentPage, totalPages, goToPage,
-    peekPage, getSuccessfulServices, servicePopoverRef,
+    peekPage, servicePopoverRef,
   } = options;
 
   const toast = useToast();
@@ -407,13 +405,16 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
 
   // ---- 服务 Popover ----
   const popoverItem = ref<HistoryItem | null>(null);
-  const popoverServices = computed<string[]>(() => {
-    if (!popoverItem.value) return [];
-    return getSuccessfulServices(popoverItem.value);
-  });
+  const popoverServices = ref<string[]>([]);
 
-  function openServicePopover(event: Event, item: HistoryItem): void {
+  function openServicePopover(event: Event, item: HistoryItem, serviceIds: string[]): void {
+    if (serviceIds.length === 0) {
+      popoverItem.value = null;
+      popoverServices.value = [];
+      return;
+    }
     popoverItem.value = item;
+    popoverServices.value = [...serviceIds];
     servicePopoverRef.value?.toggle(event);
   }
 
