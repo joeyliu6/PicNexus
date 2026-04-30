@@ -2,6 +2,7 @@
 // 单次 IPC 完成递归目录遍历 + 文件读取 + 正则提取，消除 JS 侧数百次 IPC 往返
 
 use crate::error::AppError;
+use crate::log_utils::safe_path;
 use fancy_regex::Regex as FancyRegex;
 use regex::Regex;
 use serde::Serialize;
@@ -567,7 +568,7 @@ pub async fn scan_md_folder(
                     });
                 }
                 Err(e) => {
-                    log::warn!("[MdScanner] 读取文件失败: {} - {}", path_str, e);
+                    log::warn!("[MdScanner] 读取文件失败: {} - {}", safe_path(path_str), e);
                 }
             }
 

@@ -7,6 +7,7 @@ use tauri::Window;
 
 use super::utils::read_file_bytes;
 use crate::error::{AppError, IntoAppError};
+use crate::log_utils::{safe_path, safe_url, summarize_text};
 
 /// 超星上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -104,7 +105,7 @@ pub async fn upload_to_chaoxing(
     file_path: String,
     chaoxing_cookie: String,
 ) -> Result<ChaoxingUploadResult, AppError> {
-    log::info!("[Chaoxing] 开始上传文件: {}", file_path);
+    log::info!("[Chaoxing] 开始上传文件: {}", safe_path(&file_path));
 
     // 1. 检查 Cookie
     if chaoxing_cookie.trim().is_empty() {
@@ -180,7 +181,7 @@ pub async fn upload_to_chaoxing(
         .await
         .into_network_err_with("无法读取响应")?;
 
-    log::debug!("[Chaoxing] API 响应: {}", response_text);
+    log::debug!("[Chaoxing] API 响应: {}", summarize_text(&response_text));
 
     // 检查是否返回 HTML（Cookie 失效的典型特征）
     if response_text.contains("<!DOCTYPE html>") || response_text.contains("<html") {
@@ -190,7 +191,11 @@ pub async fn upload_to_chaoxing(
     let api_response: ChaoxingApiResponse = serde_json::from_str(&response_text).map_err(|e| {
         AppError::upload(
             "超星",
-            format!("JSON 解析失败: {} (响应: {})", e, response_text),
+            format!(
+                "JSON 解析失败: {} (响应摘要: {})",
+                e,
+                summarize_text(&response_text)
+            ),
         )
     })?;
 
@@ -211,7 +216,7 @@ pub async fn upload_to_chaoxing(
         .unwrap_or(&image_url)
         .to_string();
 
-    log::info!("[Chaoxing] 上传成功: {}", final_url);
+    log::info!("[Chaoxing] 上传成功: {}", safe_url(&final_url));
 
     Ok(ChaoxingUploadResult {
         url: final_url,

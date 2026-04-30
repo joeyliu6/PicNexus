@@ -14,6 +14,7 @@ use tauri::{Emitter, Manager, Window};
 use super::nami_token::fetch_nami_token_internal;
 use super::utils::read_file_bytes;
 use crate::error::{AppError, IntoAppError};
+use crate::log_utils::{safe_path, safe_url, summarize_text};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -367,7 +368,11 @@ async fn init_multipart_upload(
         let parsed: InitResponse = serde_json::from_str(&text).map_err(|e| {
             AppError::upload(
                 "纳米",
-                format!("解析 JSON UploadId 失败: {} - 原始响应: {}", e, text),
+                format!(
+                    "解析 JSON UploadId 失败: {} - 响应摘要: {}",
+                    e,
+                    summarize_text(&text)
+                ),
             )
         })?;
         parsed.upload_id
@@ -531,7 +536,7 @@ pub async fn upload_to_nami(
     cookie: String,
     auth_token: String,
 ) -> Result<NamiUploadResult, AppError> {
-    log::info!("[Nami] 开始上传文件: {}", file_path);
+    log::info!("[Nami] 开始上传文件: {}", safe_path(&file_path));
 
     // 1. 读取文件
     let (buffer, file_size) = read_file_bytes(&file_path).await?;
@@ -562,7 +567,7 @@ pub async fn upload_to_nami(
     // 5. 检查文件是否已存在（秒传）
     if check_file_exists(&client, &file_key).await {
         let url = format!("{}/{}", CDN_BASE, file_key);
-        log::info!("[Nami] 文件已存在，秒传成功: {}", url);
+        log::info!("[Nami] 文件已存在，秒传成功: {}", safe_url(&url));
 
         // ✅ 修复: 删除此处的100%事件发送
         // 前端会在收到Ok结果时自动设置100%
@@ -665,7 +670,7 @@ pub async fn upload_to_nami(
 
     // 11. 返回结果
     let url = format!("{}/{}", CDN_BASE, file_key);
-    log::info!("[Nami] 上传成功: {}", url);
+    log::info!("[Nami] 上传成功: {}", safe_url(&url));
 
     // ✅ 修复: 删除此处的100%事件发送
     // 前端会在收到Ok结果时自动设置100%

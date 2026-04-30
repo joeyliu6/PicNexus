@@ -9,6 +9,7 @@ use tauri::Window;
 
 use super::utils::read_file_bytes;
 use crate::error::{AppError, IntoAppError};
+use crate::log_utils::{safe_path, safe_url, summarize_text};
 
 /// 测试牛客 Cookie 是否有效
 #[tauri::command]
@@ -66,7 +67,7 @@ pub async fn test_nowcoder_cookie(nowcoder_cookie: String) -> Result<String, App
         .await
         .into_network_err_with("无法读取响应")?;
 
-    log::debug!("[Nowcoder] 测试响应: {}", response_text);
+    log::debug!("[Nowcoder] 测试响应: {}", summarize_text(&response_text));
 
     // 解析响应
     let api_response: NowcoderApiResponse = serde_json::from_str(&response_text)
@@ -103,7 +104,7 @@ pub async fn upload_to_nowcoder(
     file_path: String,
     nowcoder_cookie: String,
 ) -> Result<NowcoderUploadResult, AppError> {
-    log::info!("[Nowcoder] 开始上传文件: {}", file_path);
+    log::info!("[Nowcoder] 开始上传文件: {}", safe_path(&file_path));
 
     // 1. 读取文件
     let (buffer, file_size) = read_file_bytes(&file_path).await?;
@@ -169,12 +170,16 @@ pub async fn upload_to_nowcoder(
         .await
         .into_network_err_with("无法读取响应")?;
 
-    log::debug!("[Nowcoder] API 响应: {}", response_text);
+    log::debug!("[Nowcoder] API 响应: {}", summarize_text(&response_text));
 
     let api_response: NowcoderApiResponse = serde_json::from_str(&response_text).map_err(|e| {
         AppError::upload(
             "牛客",
-            format!("JSON 解析失败: {} (响应: {})", e, response_text),
+            format!(
+                "JSON 解析失败: {} (响应摘要: {})",
+                e,
+                summarize_text(&response_text)
+            ),
         )
     })?;
 
@@ -219,7 +224,7 @@ pub async fn upload_to_nowcoder(
         https_url
     };
 
-    log::info!("[Nowcoder] 上传成功: {}", final_url);
+    log::info!("[Nowcoder] 上传成功: {}", safe_url(&final_url));
 
     // ✅ 修复: 删除此处的100%事件发送
     // 前端会在收到Ok结果时自动设置100%

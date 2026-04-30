@@ -8,6 +8,7 @@ use std::io::Cursor;
 use std::path::Path;
 
 use crate::error::AppError;
+use crate::log_utils::safe_path;
 
 const CLIPBOARD_TEMP_PREFIX: &str = "clipboard_image_";
 const CLIPBOARD_TEMP_EXTENSION: &str = "png";
@@ -55,7 +56,11 @@ pub fn cleanup_clipboard_temp_file(path: String) -> Result<bool, AppError> {
     }
 
     std::fs::remove_file(path).map_err(|e| {
-        log::warn!("[剪贴板] 删除临时文件失败 {:?}: {}", path, e);
+        log::warn!(
+            "[剪贴板] 删除临时文件失败 {}: {}",
+            safe_path(&path.to_string_lossy()),
+            e
+        );
         AppError::file_io(format!("删除剪贴板临时文件失败: {}", e))
     })?;
     Ok(true)
@@ -132,7 +137,7 @@ pub fn read_clipboard_image() -> Result<String, AppError> {
     })?;
 
     let path_str = temp_path.to_string_lossy().to_string();
-    log::info!("[剪贴板] 图片已保存到临时文件: {}", path_str);
+    log::info!("[剪贴板] 图片已保存到临时文件: {}", safe_path(&path_str));
 
     Ok(path_str)
 }

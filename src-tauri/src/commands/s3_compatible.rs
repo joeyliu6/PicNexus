@@ -11,6 +11,7 @@ use tokio::time::{timeout, Duration};
 
 use super::utils::read_file_bytes;
 use crate::error::AppError;
+use crate::log_utils::safe_path;
 
 // ==================== 常量 ====================
 
@@ -53,7 +54,7 @@ pub async fn upload_to_s3_compatible(
     key: String,
     public_domain: String,
 ) -> Result<S3UploadResult, AppError> {
-    log::info!("[S3兼容] 开始上传文件: {}", file_path);
+    log::info!("[S3兼容] 开始上传文件: {}", safe_path(&file_path));
 
     // 发送进度: 0% - 读取文件
     let _ = window.emit(

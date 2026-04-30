@@ -9,6 +9,7 @@ use tauri_plugin_shell::ShellExt;
 use tokio::time::{timeout, Duration};
 
 use crate::error::{AppError, IntoAppError};
+use crate::log_utils::{safe_path, sanitize_text, summarize_text};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct QiyuToken {
@@ -38,9 +39,12 @@ fn sanitize_sidecar_log_line(line: &str) -> String {
         .any(|marker| lower.contains(marker));
 
     if has_sensitive_marker {
-        "[QiyuToken] sidecar 敏感日志已脱敏".to_string()
+        format!(
+            "[QiyuToken] sidecar 敏感日志已脱敏 ({})",
+            summarize_text(line)
+        )
     } else {
-        line.to_string()
+        sanitize_text(line)
     }
 }
 
@@ -97,14 +101,20 @@ pub async fn check_chrome_installed(app: tauri::AppHandle) -> Result<bool, AppEr
     }
 
     // 解析 JSON 响应
-    let response: SidecarResponse<CheckChromeData> = serde_json::from_str(&output)
-        .map_err(|e| AppError::external(format!("解析响应失败: {}. 原始输出: {}", e, output)))?;
+    let response: SidecarResponse<CheckChromeData> =
+        serde_json::from_str(&output).map_err(|e| {
+            AppError::external(format!(
+                "解析响应失败: {}. 输出摘要: {}",
+                e,
+                summarize_text(&output)
+            ))
+        })?;
 
     if response.success {
         if let Some(data) = response.data {
             if data.installed {
                 if let (Some(name), Some(path)) = (&data.name, &data.path) {
-                    log::debug!("[QiyuToken] 检测到 {}: {}", name, path);
+                    log::debug!("[QiyuToken] 检测到 {}: {}", name, safe_path(path));
                 }
                 return Ok(true);
             }
@@ -198,8 +208,13 @@ pub async fn fetch_qiyu_token_internal(app: &tauri::AppHandle) -> Result<QiyuTok
     }
 
     // 解析 JSON 响应
-    let response: SidecarResponse<QiyuToken> = serde_json::from_str(&output)
-        .map_err(|e| AppError::external(format!("解析响应失败: {}. 原始输出: {}", e, output)))?;
+    let response: SidecarResponse<QiyuToken> = serde_json::from_str(&output).map_err(|e| {
+        AppError::external(format!(
+            "解析响应失败: {}. 输出摘要: {}",
+            e,
+            summarize_text(&output)
+        ))
+    })?;
 
     if response.success {
         if let Some(token) = response.data {

@@ -9,6 +9,7 @@ use serde::Serialize;
 use tauri::Manager;
 
 use crate::error::AppError;
+use crate::log_utils::safe_path;
 
 /// 全局原子计数器，为压缩临时文件生成唯一后缀，避免同名文件在同一毫秒并发压缩时覆盖。
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -264,7 +265,7 @@ pub async fn cleanup_compressed_files(
                     cleaned += 1;
                 }
             } else {
-                log::warn!("[清理] 拒绝删除非临时目录文件: {}", file_path);
+                log::warn!("[清理] 拒绝删除非临时目录文件: {}", safe_path(file_path));
             }
         }
     }

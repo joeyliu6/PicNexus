@@ -8,6 +8,7 @@ use tauri::Window;
 
 use super::utils::read_file_bytes;
 use crate::error::{AppError, IntoAppError};
+use crate::log_utils::{safe_path, safe_url, summarize_text};
 
 /// 哔哩哔哩上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -127,7 +128,7 @@ pub async fn upload_to_bilibili(
     file_path: String,
     bilibili_cookie: String,
 ) -> Result<BilibiliUploadResult, AppError> {
-    log::info!("[Bilibili] 开始上传文件: {}", file_path);
+    log::info!("[Bilibili] 开始上传文件: {}", safe_path(&file_path));
 
     // 1. 提取 SESSDATA 和 csrf
     let (sessdata, csrf) = extract_bilibili_cookies(&bilibili_cookie)?;
@@ -200,12 +201,16 @@ pub async fn upload_to_bilibili(
         .await
         .into_network_err_with("无法读取响应")?;
 
-    log::debug!("[Bilibili] API 响应: {}", response_text);
+    log::debug!("[Bilibili] API 响应: {}", summarize_text(&response_text));
 
     let api_response: BilibiliApiResponse = serde_json::from_str(&response_text).map_err(|e| {
         AppError::upload(
             "哔哩哔哩",
-            format!("JSON 解析失败: {} (响应: {})", e, response_text),
+            format!(
+                "JSON 解析失败: {} (响应摘要: {})",
+                e,
+                summarize_text(&response_text)
+            ),
         )
     })?;
 
@@ -234,7 +239,7 @@ pub async fn upload_to_bilibili(
         image_url
     };
 
-    log::info!("[Bilibili] 上传成功: {}", final_url);
+    log::info!("[Bilibili] 上传成功: {}", safe_url(&final_url));
 
     Ok(BilibiliUploadResult {
         url: final_url,

@@ -8,6 +8,7 @@ use tauri::{Emitter, Window};
 
 use super::utils::read_file_bytes;
 use crate::error::{AppError, IntoAppError};
+use crate::log_utils::{safe_path, safe_url, summarize_text};
 
 /// 京东上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -53,7 +54,7 @@ async fn get_aid_info() -> Result<AidInfo, AppError> {
         .await
         .into_network_err_with("无法读取 aid 响应")?;
 
-    log::debug!("[JD] Aid API 响应: {}", response_text);
+    log::debug!("[JD] Aid API 响应: {}", summarize_text(&response_text));
 
     // 解析 JSONP 响应: jsonp1({...})
     let json_str = response_text
@@ -109,7 +110,7 @@ pub async fn upload_to_jd(
     id: String,
     file_path: String,
 ) -> Result<JDUploadResult, AppError> {
-    log::info!("[JD] 开始上传文件: {}", file_path);
+    log::info!("[JD] 开始上传文件: {}", safe_path(&file_path));
 
     // 发送进度: 0% - 读取文件
     let _ = window.emit(
@@ -235,7 +236,7 @@ pub async fn upload_to_jd(
         .await
         .into_network_err_with("无法读取响应")?;
 
-    log::debug!("[JD] 上传 API 响应: {}", response_text);
+    log::debug!("[JD] 上传 API 响应: {}", summarize_text(&response_text));
 
     let upload_response: JDUploadResponse = serde_json::from_str(&response_text)
         .map_err(|e| AppError::upload("京东", format!("JSON 解析失败: {}", e)))?;
@@ -256,8 +257,8 @@ pub async fn upload_to_jd(
     // 替换域名：dd-static.jd.com/ddimgp -> img30.360buyimg.com/imgzone
     let image_url = raw_url.replace("dd-static.jd.com/ddimgp", "img30.360buyimg.com/imgzone");
 
-    log::info!("[JD] 上传成功（原始URL: {}）", raw_url);
-    log::debug!("[JD] 转换后URL: {}", image_url);
+    log::info!("[JD] 上传成功（原始URL: {}）", safe_url(&raw_url));
+    log::debug!("[JD] 转换后URL: {}", safe_url(&image_url));
 
     // ✅ 修复: 删除此处的100%事件发送
     // 前端会在收到Ok结果时自动设置100%

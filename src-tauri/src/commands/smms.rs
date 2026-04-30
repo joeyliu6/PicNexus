@@ -7,6 +7,7 @@ use tauri::{Emitter, Window};
 
 use super::utils::read_file_bytes;
 use crate::error::{AppError, IntoAppError};
+use crate::log_utils::{safe_path, safe_url, summarize_text};
 
 /// SM.MS 上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -47,7 +48,7 @@ pub async fn upload_to_smms(
     file_path: String,
     smms_token: String,
 ) -> Result<SmmsUploadResult, AppError> {
-    log::info!("[SM.MS] 开始上传文件: {}", file_path);
+    log::info!("[SM.MS] 开始上传文件: {}", safe_path(&file_path));
 
     // 发送进度: 0% - 读取文件
     let _ = window.emit(
@@ -140,7 +141,7 @@ pub async fn upload_to_smms(
     let status = response.status();
     if !status.is_success() {
         let response_text = response.text().await.unwrap_or_default();
-        log::error!("[SM.MS] API 错误响应: {}", response_text);
+        log::error!("[SM.MS] API 错误响应: {}", summarize_text(&response_text));
         return match status {
             reqwest::StatusCode::UNAUTHORIZED => Err(AppError::auth("SM.MS Token 无效或已过期")),
             reqwest::StatusCode::TOO_MANY_REQUESTS => {
@@ -151,7 +152,11 @@ pub async fn upload_to_smms(
             }
             _ => Err(AppError::upload(
                 "SM.MS",
-                format!("上传失败 (HTTP {}): {}", status, response_text),
+                format!(
+                    "上传失败 (HTTP {}): {}",
+                    status,
+                    summarize_text(&response_text)
+                ),
             )),
         };
     }
@@ -162,7 +167,7 @@ pub async fn upload_to_smms(
         .await
         .into_network_err_with("无法读取响应")?;
 
-    log::debug!("[SM.MS] API 响应: {}", response_text);
+    log::debug!("[SM.MS] API 响应: {}", summarize_text(&response_text));
 
     let smms_response: SmmsResponse = serde_json::from_str(&response_text)
         .map_err(|e| AppError::upload("SM.MS", format!("JSON 解析失败: {}", e)))?;
@@ -177,7 +182,7 @@ pub async fn upload_to_smms(
         .data
         .ok_or_else(|| AppError::upload("SM.MS", "API 未返回数据"))?;
 
-    log::info!("[SM.MS] 上传成功 - URL: {}", data.url);
+    log::info!("[SM.MS] 上传成功 - URL: {}", safe_url(&data.url));
 
     Ok(SmmsUploadResult {
         url: data.url,

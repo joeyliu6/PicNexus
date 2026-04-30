@@ -7,6 +7,7 @@
 mod cli;
 mod commands;
 mod error;
+mod log_utils;
 mod server;
 
 use error::AppError;
@@ -105,6 +106,13 @@ fn main() {
             reqwest::Client::new()
         });
 
+    let mut log_targets = vec![
+        Target::new(TargetKind::Stdout),
+        Target::new(TargetKind::LogDir { file_name: None }),
+    ];
+    #[cfg(debug_assertions)]
+    log_targets.push(Target::new(TargetKind::Webview));
+
     tauri::Builder::default()
         // 注册 Tauri 2.0 插件
         .plugin(tauri_plugin_positioner::init())
@@ -124,11 +132,7 @@ fn main() {
         .plugin(tauri_plugin_process::init())
         .plugin(
             tauri_plugin_log::Builder::new()
-                .targets([
-                    Target::new(TargetKind::Stdout),
-                    Target::new(TargetKind::LogDir { file_name: None }),
-                    Target::new(TargetKind::Webview),
-                ])
+                .targets(log_targets)
                 .level(LevelFilter::Info)
                 .level_for("picnexus", LevelFilter::Debug)
                 .level_for("hyper", LevelFilter::Warn)
@@ -142,7 +146,7 @@ fn main() {
                 .level_for("aws_smithy_runtime", LevelFilter::Warn)
                 .level_for("tracing", LevelFilter::Warn)
                 .max_file_size(10_000_000)
-                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(5))
                 .build(),
         )
         .manage(HttpClient(http_client)) // 注册全局 HTTP 客户端
@@ -491,7 +495,10 @@ fn main() {
 
                     if expired {
                         let _ = std::fs::remove_file(&path);
-                        log::debug!("[日志清理] 已删除过期日志: {}", path.display());
+                        log::debug!(
+                            "[日志清理] 已删除过期日志: {}",
+                            log_utils::safe_path(&path.to_string_lossy())
+                        );
                     }
                 }
             }
@@ -799,15 +806,15 @@ fn check_field_value_matches(
                 let actual_value = remaining[..value_end].trim();
 
                 if actual_value == expected_value.as_str() {
-                    log::debug!("[字段值检查] ✓ {}={}", field, expected_value);
+                    log::debug!("[字段值检查] ✓ {} 值匹配", field);
                     found = true;
                     break;
                 } else {
                     log::debug!(
-                        "[字段值检查] ✗ {} 值不匹配，期望 {}，实际 {}",
+                        "[字段值检查] ✗ {} 值不匹配，期望长度 {}，实际长度 {}",
                         field,
-                        expected_value,
-                        actual_value
+                        expected_value.len(),
+                        actual_value.len()
                     );
                     return false;
                 }

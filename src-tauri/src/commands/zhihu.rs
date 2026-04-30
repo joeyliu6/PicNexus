@@ -22,6 +22,7 @@ use tauri::Window;
 
 use super::utils::read_file_bytes;
 use crate::error::{AppError, IntoAppError};
+use crate::log_utils::{safe_path, safe_url, summarize_text};
 
 type HmacSha1 = Hmac<Sha1>;
 
@@ -172,7 +173,7 @@ async fn upload_to_zhihu_inner(
     file_path: &str,
     zhihu_cookie: &str,
 ) -> Result<ZhihuUploadResult, AppError> {
-    log::info!("[Zhihu] 开始上传文件: {}", file_path);
+    log::info!("[Zhihu] 开始上传文件: {}", safe_path(file_path));
 
     // 1. 读取文件
     let (buffer, file_size) = read_file_bytes(file_path).await?;
@@ -240,7 +241,11 @@ async fn upload_to_zhihu_inner(
         serde_json::from_str(&credentials_text).map_err(|e| {
             AppError::upload(
                 "知乎",
-                format!("解析凭证失败: {} (响应: {})", e, credentials_text),
+                format!(
+                    "解析凭证失败: {} (响应摘要: {})",
+                    e,
+                    summarize_text(&credentials_text)
+                ),
             )
         })?;
 
@@ -333,7 +338,7 @@ async fn upload_to_zhihu_inner(
 
     // 6. 标准化 URL
     let normalized_url = normalize_image_url(&final_url);
-    log::info!("[Zhihu] 上传成功: {}", normalized_url);
+    log::info!("[Zhihu] 上传成功: {}", safe_url(&normalized_url));
 
     // ✅ 修复: 删除此处的100%事件发送
     // 前端会在收到Ok结果时自动设置100%
@@ -371,7 +376,11 @@ async fn poll_image_status(
         let status: ImageStatusResponse = serde_json::from_str(&response_text).map_err(|e| {
             AppError::upload(
                 "知乎",
-                format!("解析状态响应失败: {} (响应: {})", e, response_text),
+                format!(
+                    "解析状态响应失败: {} (响应摘要: {})",
+                    e,
+                    summarize_text(&response_text)
+                ),
             )
         })?;
 
@@ -384,7 +393,10 @@ async fn poll_image_status(
             } else {
                 return Err(AppError::upload(
                     "知乎",
-                    format!("图片处理完成但未返回 URL (响应: {})", response_text),
+                    format!(
+                        "图片处理完成但未返回 URL (响应摘要: {})",
+                        summarize_text(&response_text)
+                    ),
                 ));
             }
         }
@@ -445,7 +457,11 @@ pub async fn test_zhihu_connection(zhihu_cookie: String) -> Result<String, AppEr
     } else {
         Err(AppError::upload(
             "知乎",
-            format!("测试失败 (HTTP {}): {}", status, response_text),
+            format!(
+                "测试失败 (HTTP {}): {}",
+                status,
+                summarize_text(&response_text)
+            ),
         ))
     }
 }

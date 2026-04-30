@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 use tauri::Emitter;
 
 use crate::error::AppError;
+use crate::log_utils::{safe_path, safe_url};
 
 /// 最大允许下载的文件大小（50MB）
 const MAX_DOWNLOAD_SIZE: usize = 50 * 1024 * 1024;
@@ -755,7 +756,11 @@ fn cleanup_old_temp_files() {
                         if age.as_secs() > TEMP_FILE_MAX_AGE_SECS {
                             // 删除过期文件
                             if let Err(e) = std::fs::remove_file(&path) {
-                                log::error!("[临时文件清理] 删除失败 {:?}: {}", path, e);
+                                log::error!(
+                                    "[临时文件清理] 删除失败 {}: {}",
+                                    safe_path(&path.to_string_lossy()),
+                                    e
+                                );
                             } else {
                                 cleaned_count += 1;
                             }
@@ -783,7 +788,7 @@ pub async fn download_image_from_url(
     url: String,
     http_client: tauri::State<'_, crate::HttpClient>,
 ) -> Result<String, AppError> {
-    log::info!("[下载图片] 开始下载: {}", url);
+    log::info!("[下载图片] 开始下载: {}", safe_url(&url));
 
     // 首先清理过期的临时文件，防止磁盘空间耗尽
     cleanup_old_temp_files();
@@ -885,7 +890,7 @@ pub async fn download_image_from_url(
     })?;
 
     let path_str = temp_path.to_string_lossy().to_string();
-    log::info!("[下载图片] 已保存到: {}", path_str);
+    log::info!("[下载图片] 已保存到: {}", safe_path(&path_str));
 
     Ok(path_str)
 }
@@ -1093,7 +1098,7 @@ pub async fn download_url_image(
     url: String,
     http_client: tauri::State<'_, crate::HttpClient>,
 ) -> Result<UrlDownloadResult, AppError> {
-    log::info!("[URL下载] 开始下载: {}", url);
+    log::info!("[URL下载] 开始下载: {}", safe_url(&url));
 
     // 验证 URL 格式
     let trimmed = url.trim();
@@ -1211,7 +1216,7 @@ pub async fn download_url_image(
     let path_str = temp_path.to_string_lossy().to_string();
     log::info!(
         "[URL下载] 已保存到: {} ({} bytes, {})",
-        path_str,
+        safe_path(&path_str),
         file_size,
         content_type
     );

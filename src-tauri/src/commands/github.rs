@@ -7,6 +7,7 @@ use tauri::{Emitter, Window};
 
 use super::utils::read_file_bytes;
 use crate::error::{AppError, IntoAppError};
+use crate::log_utils::{safe_path, safe_url, summarize_text};
 
 /// GitHub 上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -56,7 +57,7 @@ pub async fn upload_to_github(
     branch: String,
     path: String,
 ) -> Result<GithubUploadResult, AppError> {
-    log::info!("[GitHub] 开始上传文件: {}", file_path);
+    log::info!("[GitHub] 开始上传文件: {}", safe_path(&file_path));
 
     // 发送进度: 0% - 读取文件
     let _ = window.emit(
@@ -159,7 +160,7 @@ pub async fn upload_to_github(
         .into_network_err_with("无法读取响应")?;
 
     log::debug!("[GitHub] API 响应状态: {}", status);
-    log::debug!("[GitHub] API 响应: {}", response_text);
+    log::debug!("[GitHub] API 响应: {}", summarize_text(&response_text));
 
     if !status.is_success() {
         if status == reqwest::StatusCode::UNAUTHORIZED {
@@ -175,7 +176,11 @@ pub async fn upload_to_github(
         }
         return Err(AppError::upload(
             "GitHub",
-            format!("上传失败 (HTTP {}): {}", status, response_text),
+            format!(
+                "上传失败 (HTTP {}): {}",
+                status,
+                summarize_text(&response_text)
+            ),
         ));
     }
 
@@ -184,7 +189,7 @@ pub async fn upload_to_github(
 
     log::info!(
         "[GitHub] 上传成功 - URL: {}",
-        github_response.content.download_url
+        safe_url(&github_response.content.download_url)
     );
 
     Ok(GithubUploadResult {

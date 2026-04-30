@@ -12,6 +12,7 @@ use tokio::io::AsyncReadExt;
 use tokio::time::{timeout, Duration};
 
 use crate::error::{AppError, IntoAppError};
+use crate::log_utils::safe_path;
 
 #[derive(Serialize, Deserialize)]
 pub struct R2UploadResult {
@@ -49,7 +50,7 @@ pub async fn upload_to_r2(
     bucket_name: String,
     key: String,
 ) -> Result<R2UploadResult, AppError> {
-    log::info!("[R2] 开始上传: {} -> {}", file_path, key);
+    log::info!("[R2] 开始上传: {} -> {}", safe_path(&file_path), key);
 
     // 1. 检查文件是否存在
     let path = Path::new(&file_path);

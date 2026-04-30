@@ -24,10 +24,10 @@ use hmac::{Hmac, Mac};
 use md5::{Digest, Md5};
 use sha1::Sha1;
 
+use crate::log_utils::{safe_path, safe_url, summarize_text};
+
 type HmacSha1 = Hmac<Sha1>;
 
-/// 错误响应预览最大字节数（用于失败日志/错误信息截断）
-const ERROR_RESPONSE_PREVIEW_LEN: usize = 200;
 const ZHIHU_SOURCE_DEFAULT_VALUE: &str = "172ae18b";
 pub(crate) const MAX_SERVER_UPLOAD_SIZE: usize = 50 * 1024 * 1024;
 pub(crate) const SERVER_AUTH_TOKEN_HEADER: &str = "x-picnexus-token";
@@ -316,21 +316,6 @@ fn validate_image_file(path: &std::path::Path) -> Result<DetectedImageKind, Stri
     Ok(kind)
 }
 
-/// UTF-8 安全的字符串预览：按字节数截断，但保证不切在多字节字符中间
-///
-/// `&s[..n]` 在 n 落到 UTF-8 多字节字符内部时会 panic。本函数先向前
-/// 回退到最近的字符边界，确保切片合法，避免响应含中文时主线程崩溃。
-fn safe_preview(s: &str, max_bytes: usize) -> &str {
-    if s.len() <= max_bytes {
-        return s;
-    }
-    let mut end = max_bytes;
-    while end > 0 && !s.is_char_boundary(end) {
-        end -= 1;
-    }
-    &s[..end]
-}
-
 fn unique_upload_temp_dir(base_dir: &std::path::Path) -> std::path::PathBuf {
     let counter = UPLOAD_TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let timestamp = chrono::Utc::now().timestamp_millis();
@@ -603,11 +588,11 @@ pub async fn handle_upload(
 
         match upload_single_file(path, config).await {
             Ok(url) => {
-                log::info!("[Server] ✓ 上传成功: {}", url);
+                log::info!("[Server] ✓ 上传成功: {}", safe_url(&url));
                 urls.push(url);
             }
             Err(e) => {
-                log::warn!("[Server] ✗ 上传失败 ({}): {}", path, e);
+                log::warn!("[Server] ✗ 上传失败 ({}): {}", safe_path(path), e);
                 return Json(UploadResponse {
                     success: false,
                     result: None,
@@ -782,7 +767,7 @@ pub async fn handle_file_upload(
 
     match result {
         Ok(url) => {
-            log::info!("[Server] ✓ 文件上传成功: {}", url);
+            log::info!("[Server] ✓ 文件上传成功: {}", safe_url(&url));
             (
                 StatusCode::OK,
                 Json(UploadResponse {
@@ -1278,8 +1263,8 @@ async fn server_upload_weibo(path: &std::path::Path, cookie: &str) -> Result<Str
 
     let pid = extract_xml_tag(&text, "pid").ok_or_else(|| {
         format!(
-            "微博响应中未找到 pid 字段（响应：{}）",
-            safe_preview(&text, ERROR_RESPONSE_PREVIEW_LEN)
+            "微博响应中未找到 pid 字段（响应摘要：{}）",
+            summarize_text(&text)
         )
     })?;
 
@@ -1573,9 +1558,9 @@ async fn server_upload_zhihu(
 
     let credentials: serde_json::Value = serde_json::from_str(&credentials_text).map_err(|e| {
         format!(
-            "解析知乎凭证失败: {} (响应: {})",
+            "解析知乎凭证失败: {} (响应摘要: {})",
             e,
-            safe_preview(&credentials_text, ERROR_RESPONSE_PREVIEW_LEN)
+            summarize_text(&credentials_text)
         )
     })?;
 

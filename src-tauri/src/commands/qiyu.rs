@@ -12,6 +12,7 @@ use tauri::{Emitter, Manager, Window};
 use super::qiyu_token::fetch_qiyu_token_internal;
 use super::utils::read_file_bytes;
 use crate::error::{AppError, IntoAppError};
+use crate::log_utils::{safe_path, safe_url, summarize_text};
 
 #[derive(Debug, Serialize)]
 pub struct QiyuUploadResult {
@@ -28,7 +29,7 @@ pub async fn upload_to_qiyu(
     id: String,
     file_path: String,
 ) -> Result<QiyuUploadResult, AppError> {
-    log::info!("[Qiyu] 开始上传文件: {}", file_path);
+    log::info!("[Qiyu] 开始上传文件: {}", safe_path(&file_path));
 
     // 发送步骤1进度：获取上传凭证 (0%)
     let _ = window.emit(
@@ -128,7 +129,7 @@ pub async fn upload_to_qiyu(
         .text()
         .await
         .into_network_err_with("无法读取响应")?;
-    log::debug!("[Qiyu] API 响应: {}", response_text);
+    log::debug!("[Qiyu] API 响应: {}", summarize_text(&response_text));
 
     // 9. 构建 CDN URL (使用当前时间戳作为 createTime)
     let create_time = SystemTime::now()
@@ -141,7 +142,7 @@ pub async fn upload_to_qiyu(
         object_path, create_time
     );
 
-    log::info!("[Qiyu] 上传成功: {}", cdn_url);
+    log::info!("[Qiyu] 上传成功: {}", safe_url(&cdn_url));
 
     // ✅ 修复: 删除此处的100%事件发送
     // 前端会在收到Ok结果时自动设置100%

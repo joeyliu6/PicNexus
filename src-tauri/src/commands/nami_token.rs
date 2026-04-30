@@ -8,6 +8,7 @@ use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 
 use crate::error::{AppError, IntoAppError};
+use crate::log_utils::{sanitize_text, summarize_text};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NamiDynamicHeaders {
@@ -50,9 +51,12 @@ fn sanitize_sidecar_log_line(line: &str) -> String {
     .any(|marker| lower.contains(marker));
 
     if has_sensitive_marker {
-        "[NamiToken] sidecar 敏感日志已脱敏".to_string()
+        format!(
+            "[NamiToken] sidecar 敏感日志已脱敏 ({})",
+            summarize_text(line)
+        )
     } else {
-        line.to_string()
+        sanitize_text(line)
     }
 }
 
@@ -117,8 +121,14 @@ pub async fn fetch_nami_token_internal(
     }
 
     // 解析 JSON 响应
-    let response: SidecarResponse<NamiDynamicHeaders> = serde_json::from_str(&output)
-        .map_err(|e| AppError::external(format!("解析响应失败: {}. 原始输出: {}", e, output)))?;
+    let response: SidecarResponse<NamiDynamicHeaders> =
+        serde_json::from_str(&output).map_err(|e| {
+            AppError::external(format!(
+                "解析响应失败: {}. 输出摘要: {}",
+                e,
+                summarize_text(&output)
+            ))
+        })?;
 
     if response.success {
         if let Some(headers) = response.data {
