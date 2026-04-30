@@ -25,6 +25,8 @@ function createStatus(overrides: Partial<MigrateItemStatus> = {}): MigrateItemSt
     convertedFormat: overrides.convertedFormat,
     serviceResults: overrides.serviceResults ?? { r2: 'pending', github: 'pending' },
     existingServiceIds: overrides.existingServiceIds ?? ['source'],
+    sourceServiceId: overrides.sourceServiceId,
+    problemServiceIds: overrides.problemServiceIds,
   };
 }
 
@@ -42,8 +44,18 @@ function createItem(overrides: Partial<HistoryItem> = {}): HistoryItem {
       { serviceId: 'source', status: 'success', result: uploadResult('source', 'https://img.example.com/a.png') },
     ],
     generatedLink: overrides.generatedLink ?? '',
+    linkCheckStatus: overrides.linkCheckStatus,
     linkCheckSummary: overrides.linkCheckSummary,
   } as HistoryItem;
+}
+
+function checkStatus(isValid: boolean, responseTime = 100): NonNullable<HistoryItem['linkCheckStatus']>[string] {
+  return {
+    isValid,
+    lastCheckTime: 1,
+    errorType: isValid ? 'success' : 'http_4xx',
+    responseTime,
+  };
 }
 
 function createUploader(outcomes: Record<string, 'success' | Error>) {
@@ -272,6 +284,113 @@ describe('migrateOneItem', () => {
 
     expect(status.sourceUrl).toBe('https://pic1.zhimg.com/v2-a.jpg');
     expect(getInvokeMock()).toHaveBeenCalledWith('download_url_image', { url: 'https://pic1.zhimg.com/v2-a.jpg' });
+  });
+
+  it('可恢复图片模式优先使用已检测有效的下载源', async () => {
+    getInvokeMock().mockResolvedValue({ file_path: '/tmp/a.png', content_type: 'image/png', file_size: 512 });
+    const status = createStatus({
+      serviceResults: { github: 'pending' },
+      sourceServiceId: 'r2',
+      problemServiceIds: ['source'],
+    });
+
+    await migrateOneItem(
+      createItem({
+        results: [
+          { serviceId: 'source', status: 'success', result: uploadResult('source', 'https://dead/a.png') },
+          { serviceId: 'r2', status: 'success', result: uploadResult('r2', 'https://r2/a.png') },
+        ],
+        linkCheckStatus: {
+          source: checkStatus(false),
+          r2: checkStatus(true),
+        },
+      }),
+      status,
+      ['github'],
+      {} as UserConfig,
+      createUploader({ github: 'success' }) as any,
+      ref(false),
+      ref(false),
+      createStats(),
+    );
+
+    expect(status.status).toBe('success');
+    expect(status.sourceServiceId).toBe('r2');
+    expect(getInvokeMock()).toHaveBeenCalledWith('download_url_image', { url: 'https://r2/a.png' });
+  });
+
+  it('可恢复图片模式当前有效源下载失败时尝试下一个有效源', async () => {
+    getInvokeMock().mockImplementation(async (_command, args) => {
+      const url = typeof args === 'object' && args !== null ? (args as { url?: string }).url : undefined;
+      if (url === 'https://r2/a.png') throw new Error('r2 timeout');
+      return { file_path: '/tmp/a.png', content_type: 'image/png', file_size: 512 };
+    });
+    const status = createStatus({
+      serviceResults: { smms: 'pending' },
+      sourceServiceId: 'r2',
+      problemServiceIds: ['source'],
+    });
+
+    await migrateOneItem(
+      createItem({
+        results: [
+          { serviceId: 'source', status: 'success', result: uploadResult('source', 'https://dead/a.png') },
+          { serviceId: 'r2', status: 'success', result: uploadResult('r2', 'https://r2/a.png') },
+          { serviceId: 'github', status: 'success', result: uploadResult('github', 'https://github/a.png') },
+        ],
+        linkCheckStatus: {
+          source: checkStatus(false),
+          r2: checkStatus(true, 10),
+          github: checkStatus(true, 20),
+        },
+      }),
+      status,
+      ['smms'],
+      {} as UserConfig,
+      createUploader({ smms: 'success' }) as any,
+      ref(false),
+      ref(false),
+      createStats(),
+    );
+
+    expect(status.status).toBe('success');
+    expect(status.sourceServiceId).toBe('github');
+    expect(getInvokeMock()).toHaveBeenCalledWith('download_url_image', { url: 'https://r2/a.png' });
+    expect(getInvokeMock()).toHaveBeenCalledWith('download_url_image', { url: 'https://github/a.png' });
+  });
+
+  it('可恢复图片模式最新检测结果不再满足时跳过', async () => {
+    const status = createStatus({
+      serviceResults: { github: 'pending' },
+      sourceServiceId: 'r2',
+      problemServiceIds: ['source'],
+    });
+
+    await migrateOneItem(
+      createItem({
+        results: [
+          { serviceId: 'source', status: 'success', result: uploadResult('source', 'https://dead/a.png') },
+          { serviceId: 'r2', status: 'success', result: uploadResult('r2', 'https://r2/a.png') },
+        ],
+        linkCheckStatus: {
+          source: checkStatus(false),
+          r2: checkStatus(false),
+        },
+      }),
+      status,
+      ['github'],
+      {} as UserConfig,
+      createUploader({ github: 'success' }) as any,
+      ref(false),
+      ref(false),
+      createStats(),
+    );
+
+    expect(status.status).toBe('skipped');
+    expect(status.error).toBe('检测结果已更新，不再满足可恢复图片条件');
+    expect(status.errorType).toBeUndefined();
+    expect(getInvokeMock()).not.toHaveBeenCalled();
+    expect(historyDB.update).not.toHaveBeenCalled();
   });
 });
 

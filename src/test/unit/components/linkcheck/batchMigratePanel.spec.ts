@@ -41,6 +41,7 @@ function createManager(services: MigrateTargetService[], phase = 'configuring'):
     isRefiltering: ref(false),
     maxSuccessCount: ref(999),
     sourceServiceFilter: ref(['source']),
+    migrateScope: ref('all-backups'),
     availableSourceServices: ref([{ id: 'source', displayName: 'Source', count: 1 }]),
     timestampAfterMs: ref(null),
     targetServices,
@@ -120,8 +121,8 @@ describe('BatchMigratePanel', () => {
 
   it('filters unhealthy checked targets before starting migration', async () => {
     const manager = createManager([
-      { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 1, checked: true },
-      { serviceId: 'smms', displayName: 'SM.MS', isConfigured: true, pendingCount: 1, checked: true },
+      { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 1, backedUpCount: 0, checked: true },
+      { serviceId: 'smms', displayName: 'SM.MS', isConfigured: true, pendingCount: 1, backedUpCount: 0, checked: true },
     ]);
     mockState.manager = manager;
     mockState.healthStatusMap.value = { github: 'verified', smms: 'error' };
@@ -136,7 +137,7 @@ describe('BatchMigratePanel', () => {
 
   it('does not start when all checked targets are filtered out as unhealthy', async () => {
     const manager = createManager([
-      { serviceId: 'smms', displayName: 'SM.MS', isConfigured: true, pendingCount: 1, checked: true },
+      { serviceId: 'smms', displayName: 'SM.MS', isConfigured: true, pendingCount: 1, backedUpCount: 0, checked: true },
     ]);
     mockState.manager = manager;
     mockState.healthStatusMap.value = { smms: 'error' };
@@ -150,8 +151,8 @@ describe('BatchMigratePanel', () => {
 
   it('filters unhealthy targets before retrying failed rows', async () => {
     const manager = createManager([
-      { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 1, checked: true },
-      { serviceId: 'smms', displayName: 'SM.MS', isConfigured: true, pendingCount: 1, checked: true },
+      { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 1, backedUpCount: 0, checked: true },
+      { serviceId: 'smms', displayName: 'SM.MS', isConfigured: true, pendingCount: 1, backedUpCount: 0, checked: true },
     ], 'done');
     mockState.manager = manager;
     mockState.healthStatusMap.value = { github: 'verified', smms: 'error' };
@@ -165,8 +166,8 @@ describe('BatchMigratePanel', () => {
 
   it('filters unhealthy targets before retrying a single failed row', async () => {
     const manager = createManager([
-      { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 1, checked: true },
-      { serviceId: 'smms', displayName: 'SM.MS', isConfigured: true, pendingCount: 1, checked: true },
+      { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 1, backedUpCount: 0, checked: true },
+      { serviceId: 'smms', displayName: 'SM.MS', isConfigured: true, pendingCount: 1, backedUpCount: 0, checked: true },
     ], 'done');
     mockState.manager = manager;
     mockState.healthStatusMap.value = { github: 'verified', smms: 'error' };

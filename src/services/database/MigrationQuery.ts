@@ -8,8 +8,85 @@ import type Database from '@tauri-apps/plugin-sql';
 import type { HistoryItem } from '../../config/types';
 import { type HistoryItemRow, COLUMNS_SQL, rowToItem } from './DataTransformer';
 import { createLogger } from '../../utils/logger';
+import type { MigrateScope } from '../../types/batchMigrate';
 
 const log = createLogger('MigrationQuery');
+
+export type ServiceDistributionMode = 'successful' | 'valid-source';
+
+function column(name: string, tableAlias?: string): string {
+  return tableAlias ? `${tableAlias}.${name}` : name;
+}
+
+function normalizeServiceIds(hasServiceId?: string | string[]): string[] {
+  if (Array.isArray(hasServiceId)) return hasServiceId;
+  if (hasServiceId && hasServiceId !== 'all') return [hasServiceId];
+  return [];
+}
+
+function pushSuccessfulServiceFilter(
+  conditions: string[],
+  params: (string | number)[],
+  ids: string[],
+  tableAlias?: string,
+): void {
+  if (ids.length === 0) return;
+  const placeholders = ids.map(id => { params.push(id); return `$${params.length}`; }).join(', ');
+  conditions.push(
+    `EXISTS (SELECT 1 FROM json_each(${column('successful_service_ids', tableAlias)}) AS _s WHERE _s.value IN (${placeholders}))`,
+  );
+}
+
+function pushValidSourceFilter(
+  conditions: string[],
+  params: (string | number)[],
+  ids: string[],
+  tableAlias?: string,
+): void {
+  if (ids.length === 0) return;
+  const placeholders = ids.map(id => { params.push(id); return `$${params.length}`; }).join(', ');
+  const linkStatus = column('link_check_status', tableAlias);
+  const successIds = column('successful_service_ids', tableAlias);
+  conditions.push(`
+    EXISTS (
+      SELECT 1 FROM json_each(${linkStatus}) AS _valid_src
+      WHERE _valid_src.key IN (${placeholders})
+        AND json_extract(_valid_src.value, '$.isValid') = 1
+        AND EXISTS (
+          SELECT 1 FROM json_each(${successIds}) AS _s_valid_src
+          WHERE _s_valid_src.value = _valid_src.key
+        )
+    )
+  `);
+}
+
+function pushRecoverableBrokenLinkFilter(conditions: string[], tableAlias?: string): void {
+  const linkStatus = column('link_check_status', tableAlias);
+  const successIds = column('successful_service_ids', tableAlias);
+  conditions.push(`${linkStatus} IS NOT NULL`);
+  conditions.push(`json_valid(${linkStatus}) = 1`);
+  conditions.push(`
+    EXISTS (
+      SELECT 1 FROM json_each(${linkStatus}) AS _invalid
+      WHERE json_extract(_invalid.value, '$.isValid') = 0
+        AND COALESCE(json_extract(_invalid.value, '$.errorType'), '') != 'pending'
+        AND EXISTS (
+          SELECT 1 FROM json_each(${successIds}) AS _s_invalid
+          WHERE _s_invalid.value = _invalid.key
+        )
+    )
+  `);
+  conditions.push(`
+    EXISTS (
+      SELECT 1 FROM json_each(${linkStatus}) AS _valid
+      WHERE json_extract(_valid.value, '$.isValid') = 1
+        AND EXISTS (
+          SELECT 1 FROM json_each(${successIds}) AS _s_valid
+          WHERE _s_valid.value = _valid.key
+        )
+    )
+  `);
+}
 
 /**
  * 按成功上传的图床数量查询历史记录（用于批量迁移筛选）
@@ -31,6 +108,7 @@ export async function getItemsByBackupCountQuery(
     cursorId?: string;
     limit?: number;
     offset?: number;
+    scope?: MigrateScope;
   },
 ): Promise<{ items: HistoryItem[]; total: number; hasMore: boolean }> {
   const {
@@ -42,6 +120,7 @@ export async function getItemsByBackupCountQuery(
     cursorId,
     limit = 500,
     offset = 0,
+    scope = 'all-backups',
   } = options;
 
   // 全部条件走索引 idx_success_count(success_count, timestamp DESC)
@@ -54,11 +133,16 @@ export async function getItemsByBackupCountQuery(
     conditions.push(`primary_service = $${params.length}`);
   }
 
-  // hasServiceId 支持字符串或字符串数组
-  const ids = Array.isArray(hasServiceId) ? hasServiceId : (hasServiceId && hasServiceId !== 'all' ? [hasServiceId] : []);
-  if (ids.length > 0) {
-    const placeholders = ids.map(id => { params.push(id); return `$${params.length}`; }).join(', ');
-    conditions.push(`EXISTS (SELECT 1 FROM json_each(successful_service_ids) AS _s WHERE _s.value IN (${placeholders}))`);
+  if (scope === 'broken-with-valid-source') {
+    pushRecoverableBrokenLinkFilter(conditions);
+  }
+
+  // hasServiceId 支持字符串或字符串数组。补救模式下它表示“可作为下载源的有效图床”。
+  const ids = normalizeServiceIds(hasServiceId);
+  if (scope === 'broken-with-valid-source') {
+    pushValidSourceFilter(conditions, params, ids);
+  } else {
+    pushSuccessfulServiceFilter(conditions, params, ids);
   }
 
   if (timestampAfter) {
@@ -125,9 +209,19 @@ export async function getServiceDistributionQuery(
     hasServiceId?: string | string[];
     /** 时间范围过滤（仅统计该时间戳之后的记录）— 与 getItemsByBackupCountQuery 保持一致 */
     timestampAfter?: number;
+    scope?: MigrateScope;
+    /** successful：统计已存在图床；valid-source：统计可作为补救下载源的有效图床 */
+    distribution?: ServiceDistributionMode;
   },
 ): Promise<Map<string, number>> {
-  const { maxSuccessCount, serviceFilter, hasServiceId, timestampAfter } = options;
+  const {
+    maxSuccessCount,
+    serviceFilter,
+    hasServiceId,
+    timestampAfter,
+    scope = 'all-backups',
+    distribution = 'successful',
+  } = options;
 
   const conditions: string[] = ['h.success_count > 0', 'h.migration_skip = 0', `h.success_count <= $1`];
   const params: (string | number)[] = [maxSuccessCount];
@@ -137,10 +231,15 @@ export async function getServiceDistributionQuery(
     conditions.push(`h.primary_service = $${params.length}`);
   }
 
-  const ids = Array.isArray(hasServiceId) ? hasServiceId : (hasServiceId && hasServiceId !== 'all' ? [hasServiceId] : []);
-  if (ids.length > 0) {
-    const placeholders = ids.map(id => { params.push(id); return `$${params.length}`; }).join(', ');
-    conditions.push(`EXISTS (SELECT 1 FROM json_each(h.successful_service_ids) AS _s WHERE _s.value IN (${placeholders}))`);
+  if (scope === 'broken-with-valid-source') {
+    pushRecoverableBrokenLinkFilter(conditions, 'h');
+  }
+
+  const ids = normalizeServiceIds(hasServiceId);
+  if (scope === 'broken-with-valid-source') {
+    pushValidSourceFilter(conditions, params, ids, 'h');
+  } else {
+    pushSuccessfulServiceFilter(conditions, params, ids, 'h');
   }
 
   if (timestampAfter) {
@@ -150,12 +249,26 @@ export async function getServiceDistributionQuery(
 
   const where = conditions.join(' AND ');
 
-  const rows = await db.select<{ service_id: string; cnt: number }[]>(`
-    SELECT je.value AS service_id, COUNT(*) AS cnt
-    FROM history_items h, json_each(h.successful_service_ids) AS je
-    WHERE ${where}
-    GROUP BY service_id
-  `, params);
+  const distributionSql = distribution === 'valid-source'
+    ? `
+      SELECT ls.key AS service_id, COUNT(*) AS cnt
+      FROM history_items h, json_each(h.link_check_status) AS ls
+      WHERE ${where}
+        AND json_extract(ls.value, '$.isValid') = 1
+        AND EXISTS (
+          SELECT 1 FROM json_each(h.successful_service_ids) AS _s_dist
+          WHERE _s_dist.value = ls.key
+        )
+      GROUP BY service_id
+    `
+    : `
+      SELECT je.value AS service_id, COUNT(*) AS cnt
+      FROM history_items h, json_each(h.successful_service_ids) AS je
+      WHERE ${where}
+      GROUP BY service_id
+    `;
+
+  const rows = await db.select<{ service_id: string; cnt: number }[]>(distributionSql, params);
 
   const map = new Map<string, number>();
   for (const r of rows) {

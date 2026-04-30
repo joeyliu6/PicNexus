@@ -8,6 +8,7 @@
 /* eslint-disable max-lines -- central database facade intentionally groups delegated query APIs */
 import Database from '@tauri-apps/plugin-sql';
 import type { HistoryItem, ServiceType } from '../../config/types';
+import type { MigrateScope } from '../../types/batchMigrate';
 import type { ImageMeta } from '../../types/image-meta';
 import { extractMirrorServices } from '../../types/image-meta';
 import { recomputeLinkCheckSummary } from '../../types/linkCheckSummary';
@@ -28,7 +29,14 @@ import {
   getLinkCheckContextByIdsQuery,
 } from './LinkCheckQuery';
 import { addSyncLogQuery, getSyncLogsQuery, clearSyncLogsQuery } from './SyncLogService';
-import { getItemsByBackupCountQuery, getBackupCountStatsQuery, getServiceDistributionQuery, getItemsByIdsQuery, setMigrationSkipQuery } from './MigrationQuery';
+import {
+  getItemsByBackupCountQuery,
+  getBackupCountStatsQuery,
+  getServiceDistributionQuery,
+  getItemsByIdsQuery,
+  setMigrationSkipQuery,
+  type ServiceDistributionMode,
+} from './MigrationQuery';
 import {
   getDayStatsQuery,
   getItemsByDayRangeQuery,
@@ -527,6 +535,7 @@ class HistoryDatabase {
     cursorId?: string;
     limit?: number;
     offset?: number;
+    scope?: MigrateScope;
   }): Promise<{ items: HistoryItem[]; total: number; hasMore: boolean }> {
     const db = await this.connection.getDb();
     return getItemsByBackupCountQuery(db, options);
@@ -542,6 +551,8 @@ class HistoryDatabase {
     serviceFilter?: string;
     hasServiceId?: string | string[];
     timestampAfter?: number;
+    scope?: MigrateScope;
+    distribution?: ServiceDistributionMode;
   }): Promise<Map<string, number>> {
     const db = await this.connection.getDb();
     return getServiceDistributionQuery(db, options);

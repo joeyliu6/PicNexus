@@ -5,6 +5,9 @@
 /** 迁移流程阶段：配置 → 执行 → 完成 */
 export type MigratePhase = 'configuring' | 'migrating' | 'done';
 
+/** 处理范围：所有缺失备份 / 仅处理仍有可用链接的可恢复图片 */
+export type MigrateScope = 'all-backups' | 'broken-with-valid-source';
+
 /** 筛选模式（高级筛选用） */
 export type FilterMode = 'all' | 'threshold';
 
@@ -15,6 +18,8 @@ export interface MigrateTargetService {
   isConfigured: boolean;
   /** 不在该图床上的图片数（待迁移） */
   pendingCount: number;
+  /** 已在该图床上的图片数（无需重复备份） */
+  backedUpCount: number;
   checked: boolean;
 }
 
@@ -56,6 +61,10 @@ export interface MigrateItemStatus {
    * UI 用它渲染「存在于」logo 带；与 serviceResults 里新成功的 target 组合出「新增」视觉。
    */
   existingServiceIds?: string[];
+  /** 本次迁移实际选用的下载源图床，用于可恢复图片模式的列表与报告解释 */
+  sourceServiceId?: string;
+  /** 可恢复图片模式下，该图片里已检测异常的图床 */
+  problemServiceIds?: string[];
 }
 
 /** 失败项记录（done 态跨条目汇总用） */

@@ -17,6 +17,7 @@ import { createLogger } from '../../utils/logger';
 import { cleanMigrateError, formatMigrateFailureSummary } from '../../utils/uploadFailureMessage';
 import type { HistoryItem, UserConfig } from '../../config/types';
 import type { MigrateItemStatus, MigrateStats, MigrateFailureDetail } from '../../types/batchMigrate';
+import { getSourceCandidatesForStatus } from './sourceSelection';
 
 const log = createLogger('migrateCore');
 
@@ -26,6 +27,7 @@ const log = createLogger('migrateCore');
  * 取 3 是「网络 I/O 为主 + compress_image CPU 峰值 + 多目标并行转换临时文件」的折中档位。
  */
 export const MAX_CONCURRENT = 3;
+const MAX_SOURCE_RETRY = 3;
 
 /** 从未知错误中提取可读消息（处理 Tauri invoke 的 { data: { message } } 结构） */
 export function extractErrorMessage(e: unknown): string {
@@ -112,40 +114,71 @@ export async function migrateOneItem(
     return;
   }
 
-  const sourceResult = item.results.find(r => r.status === 'success' && r.result?.url);
-  if (!sourceResult?.result?.url) {
+  const sourceCandidates = getSourceCandidatesForStatus(
+    item,
+    status.sourceServiceId,
+    status.problemServiceIds,
+  ).slice(0, MAX_SOURCE_RETRY);
+  if (sourceCandidates.length === 0) {
+    if (status.problemServiceIds && status.problemServiceIds.length > 0) {
+      status.status = 'skipped';
+      status.error = '检测结果已更新，不再满足可恢复图片条件';
+      status.errorType = undefined;
+      status.failureDetails = undefined;
+      return;
+    }
     markStatusFailed(status, [{ message: '无有效下载源' }], 'download');
     return;
   }
 
   // 下载
   status.status = 'downloading';
-  let tempFilePath: string;
-  try {
-    const anyNeedsConversion = needUploadTargets.some(sid => needsFormatConversion(sid, 'webp'));
-    const optimizedUrl = anyNeedsConversion
-      ? optimizeSourceUrl(sourceResult.result.url, needUploadTargets.find(sid => needsFormatConversion(sid, 'webp'))!)
-      : sourceResult.result.url;
-    status.sourceUrl = optimizedUrl;
-    const downloadResult = await invoke<{ file_path: string; content_type: string; file_size: number }>(
-      'download_url_image', { url: optimizedUrl },
-    );
-    tempFilePath = downloadResult.file_path;
-    stats.value = { ...stats.value, totalBytes: stats.value.totalBytes + downloadResult.file_size };
-  } catch (e: unknown) {
-    markStatusFailed(status, [{ message: cleanMigrateError(undefined, extractErrorMessage(e)) }], 'download');
-    return;
+  let tempFilePath: string | null = null;
+  let lastDownloadError: unknown = null;
+  const anyNeedsConversion = needUploadTargets.some(sid => needsFormatConversion(sid, 'webp'));
+  const conversionTarget = anyNeedsConversion
+    ? needUploadTargets.find(sid => needsFormatConversion(sid, 'webp')) ?? needUploadTargets[0]
+    : undefined;
+
+  for (const source of sourceCandidates) {
+    try {
+      const optimizedUrl = anyNeedsConversion && conversionTarget
+        ? optimizeSourceUrl(source.url, conversionTarget)
+        : source.url;
+      status.sourceUrl = optimizedUrl;
+      status.sourceServiceId = source.serviceId;
+      const downloadResult = await invoke<{ file_path: string; content_type: string; file_size: number }>(
+        'download_url_image', { url: optimizedUrl },
+      );
+      tempFilePath = downloadResult.file_path;
+      stats.value = { ...stats.value, totalBytes: stats.value.totalBytes + downloadResult.file_size };
+      lastDownloadError = null;
+      break;
+    } catch (e: unknown) {
+      lastDownloadError = e;
+      if (sourceCandidates.length > 1) {
+        log.warn(`下载源失败，尝试下一个有效源: ${source.serviceId}`, e);
+      }
+    }
   }
 
+  if (!tempFilePath) {
+    markStatusFailed(status, [{
+      message: cleanMigrateError(undefined, extractErrorMessage(lastDownloadError ?? '无有效下载源')),
+    }], 'download');
+    return;
+  }
+  const downloadedFilePath = tempFilePath;
+
   if (isCancelled.value) {
-    remove(tempFilePath).catch((e) => log.warn(`临时文件清理失败: ${tempFilePath}`, e));
+    remove(downloadedFilePath).catch((e) => log.warn(`临时文件清理失败: ${downloadedFilePath}`, e));
     status.status = 'skipped';
     return;
   }
 
   // 暂停（下载完成后）：清理临时文件 + 回退到 pending（保守策略，resume 时重新下载）
   if (isPaused.value) {
-    remove(tempFilePath).catch((e) => log.warn(`临时文件清理失败: ${tempFilePath}`, e));
+    remove(downloadedFilePath).catch((e) => log.warn(`临时文件清理失败: ${downloadedFilePath}`, e));
     status.status = 'pending';
     return;
   }
@@ -153,7 +186,7 @@ export async function migrateOneItem(
   // 上传：所有目标并行（Promise.allSettled），每个目标独立完成独立写 serviceResults，
   // Vue 响应式会逐个刷新对应 chip，一成功一显示。
   // 任一目标失败不影响其它；取消不打断已发起的上传，只是下一张图不再被取出处理。
-  const ext = tempFilePath.split('.').pop()?.toLowerCase() || '';
+  const ext = downloadedFilePath.split('.').pop()?.toLowerCase() || '';
   const anyNeedsConvert = needUploadTargets.some(t => needsFormatConversion(t, ext));
   status.status = anyNeedsConvert ? 'converting' : 'uploading';
   const tempFiles = new Set<string>();
@@ -161,13 +194,13 @@ export async function migrateOneItem(
   const newResults: SingleServiceResult[] = await Promise.all(needUploadTargets.map(async (targetId): Promise<SingleServiceResult> => {
     const willConvert = needsFormatConversion(targetId, ext);
     try {
-      const uploadPath = await convertIfNeeded(tempFilePath, targetId);
+      const uploadPath = await convertIfNeeded(downloadedFilePath, targetId);
       if (willConvert) {
         status.convertedFormat = 'jpeg';
         // 任一目标完成转换后把整体状态推进到 uploading
         if (status.status === 'converting') status.status = 'uploading';
       }
-      if (uploadPath !== tempFilePath) tempFiles.add(uploadPath);
+      if (uploadPath !== downloadedFilePath) tempFiles.add(uploadPath);
       const uploadResult = await multiUploader.retryUpload(uploadPath, targetId, config);
       status.serviceResults[targetId] = 'success';
       onTargetSettled?.();
@@ -189,7 +222,7 @@ export async function migrateOneItem(
     }));
 
   // 清理临时文件
-  for (const f of [tempFilePath, ...tempFiles]) {
+  for (const f of [downloadedFilePath, ...tempFiles]) {
     remove(f).catch((e) => log.warn(`临时文件清理失败: ${f}`, e));
   }
 

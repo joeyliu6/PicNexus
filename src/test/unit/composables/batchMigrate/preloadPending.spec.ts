@@ -27,6 +27,15 @@ function makeItem(index: number): HistoryItem {
   } as HistoryItem;
 }
 
+function checkStatus(isValid: boolean, responseTime = 100): NonNullable<HistoryItem['linkCheckStatus']>[string] {
+  return {
+    isValid,
+    lastCheckTime: 1,
+    errorType: isValid ? 'success' : 'http_4xx',
+    responseTime,
+  };
+}
+
 describe('preloadAllPending', () => {
   beforeEach(() => {
     vi.mocked(historyDB.getItemsByBackupCount).mockReset();
@@ -114,6 +123,45 @@ describe('preloadAllPending', () => {
       hasServiceId: undefined,
       timestampAfter: undefined,
     });
+  });
+
+  it('可恢复图片模式只预加载有问题链接且有有效源的图片', async () => {
+    const recoverable = makeItem(1);
+    recoverable.results.push(
+      { serviceId: 'r2', status: 'success', result: uploadResult('r2', 'https://r2/1.png') },
+    );
+    recoverable.linkCheckStatus = {
+      source: checkStatus(false),
+      r2: checkStatus(true, 20),
+    };
+    const unchecked = makeItem(2);
+    unchecked.results.push(
+      { serviceId: 'r2', status: 'success', result: uploadResult('r2', 'https://r2/2.png') },
+    );
+
+    vi.mocked(historyDB.getItemsByBackupCount)
+      .mockResolvedValueOnce({ items: [recoverable, unchecked], total: 2, hasMore: false });
+
+    const result = await preloadAllPending({
+      targets: ['github'],
+      maxSuccessCount: 2,
+      sourceServiceFilter: ['r2'],
+      timestampAfter: null,
+      scope: 'broken-with-valid-source',
+      allItemStatuses: shallowRef([]),
+      isCancelled: ref(false),
+      isPaused: ref(false),
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe(recoverable.id);
+    expect(result[0].status.sourceServiceId).toBe('r2');
+    expect(result[0].status.sourceUrl).toBe('https://r2/1.png');
+    expect(result[0].status.problemServiceIds).toEqual(['source']);
+    expect(historyDB.getItemsByBackupCount).toHaveBeenCalledWith(expect.objectContaining({
+      scope: 'broken-with-valid-source',
+      hasServiceId: ['r2'],
+    }));
   });
 
   it('stops streaming more pages after cancellation', async () => {

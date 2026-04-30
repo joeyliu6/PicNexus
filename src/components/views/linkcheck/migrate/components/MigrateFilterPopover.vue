@@ -12,10 +12,15 @@ import { computed, ref } from 'vue';
 import Popover from 'primevue/popover';
 import type PopoverType from 'primevue/popover';
 import { filterThresholds, timestampRangePresets } from '../utils';
+import type { MigrateScope } from '../../../../../types/batchMigrate';
 
 const DAY_MS = 86400_000;
 const CUSTOM_COUNT_MAX = 20;
 const CUSTOM_DAYS_MAX = 1095; // 3 年
+const ALL_SCOPE_LABEL = '所有缺失备份';
+const RECOVERY_SCOPE_LABEL = '可恢复图片';
+const ALL_SCOPE_TOOLTIP = '为符合条件、但目标图床还没有备份的图片补传一份。';
+const RECOVERY_SCOPE_TOOLTIP = '只处理检测到失效链接、且仍有其他可用链接的图片。迁移时会优先使用可用链接。依据最近一次已保存的链接检测结果。';
 
 // 弹层内只显示 4 个预设，为内嵌输入框腾空间。
 // 被砍的项（备份数 2、时间 90 天）仍保留在 filterThresholds/timestampRangePresets 里，
@@ -26,6 +31,7 @@ const displayedRangePresets = timestampRangePresets.filter(p => p.value !== 90 *
 interface Props {
   maxSuccessCount: number;
   timestampAfterMs: number | null;
+  migrateScope: MigrateScope;
 }
 
 const props = defineProps<Props>();
@@ -33,6 +39,7 @@ const props = defineProps<Props>();
 const emit = defineEmits<{
   'update:maxSuccessCount': [value: number];
   'update:timestampAfterMs': [value: number | null];
+  'update:migrateScope': [value: MigrateScope];
 }>();
 
 const popoverRef = ref<InstanceType<typeof PopoverType> | null>(null);
@@ -118,6 +125,7 @@ function onCustomDaysInput(event: Event) {
  */
 const badgeTokens = computed<string[]>(() => {
   const tokens: string[] = [];
+  if (props.migrateScope === 'broken-with-valid-source') tokens.push(RECOVERY_SCOPE_LABEL);
   if (props.maxSuccessCount !== 999) tokens.push(`<${props.maxSuccessCount}`);
   if (props.timestampAfterMs !== null) {
     if (selectedRangeMs.value !== null) {
@@ -132,6 +140,9 @@ const badgeTokens = computed<string[]>(() => {
 
 const hasActiveFilter = computed(() => badgeTokens.value.length > 0);
 const badgeText = computed(() => badgeTokens.value.join(' · '));
+const triggerTooltip = computed(() =>
+  hasActiveFilter.value ? `当前筛选：${badgeText.value}` : '设置处理范围、备份数量和上传时间',
+);
 </script>
 
 <template>
@@ -140,7 +151,7 @@ const badgeText = computed(() => badgeTokens.value.join(' · '));
     class="filter-trigger"
     :class="{ 'filter-trigger--active': hasActiveFilter }"
     :aria-label="hasActiveFilter ? `迁移筛选：${badgeText}` : '迁移筛选'"
-    v-tooltip.top="hasActiveFilter ? `当前筛选：${badgeText}` : '精细化筛选'"
+    v-tooltip.top="triggerTooltip"
     @click="toggle"
   >
     <i class="pi pi-sliders-h filter-trigger-icon" />
@@ -149,6 +160,34 @@ const badgeText = computed(() => badgeTokens.value.join(' · '));
 
   <Popover ref="popoverRef">
     <div class="filter-popover">
+      <section class="filter-section">
+        <label class="filter-label">处理范围</label>
+        <div class="filter-segment filter-segment--scope" role="radiogroup" aria-label="处理范围">
+          <button
+            type="button"
+            class="filter-segment-item"
+            :class="{ 'is-active': migrateScope === 'all-backups' }"
+            role="radio"
+            :aria-checked="migrateScope === 'all-backups'"
+            v-tooltip.top="ALL_SCOPE_TOOLTIP"
+            @click="emit('update:migrateScope', 'all-backups')"
+          >
+            {{ ALL_SCOPE_LABEL }}
+          </button>
+          <button
+            type="button"
+            class="filter-segment-item"
+            :class="{ 'is-active': migrateScope === 'broken-with-valid-source' }"
+            role="radio"
+            :aria-checked="migrateScope === 'broken-with-valid-source'"
+            v-tooltip.top="RECOVERY_SCOPE_TOOLTIP"
+            @click="emit('update:migrateScope', 'broken-with-valid-source')"
+          >
+            {{ RECOVERY_SCOPE_LABEL }}
+          </button>
+        </div>
+      </section>
+
       <section class="filter-section">
         <label class="filter-label">备份数少于</label>
         <div class="filter-row">

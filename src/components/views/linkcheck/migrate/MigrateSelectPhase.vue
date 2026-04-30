@@ -18,7 +18,7 @@ const {
   availableSourceServices, configuredServices,
   unconfiguredServices, checkedTargets, totalPending, isAllBackedUp,
   initError, initConfiguring, healthStatusMap, healthTooltipMap,
-  timestampAfterMs,
+  timestampAfterMs, migrateScope,
 } = ctx;
 
 const hasPublicTarget = computed(() =>
@@ -28,6 +28,9 @@ const hasPublicTarget = computed(() =>
 const noSourceSelected = computed(() =>
   availableSourceServices.value.length > 0 && sourceServiceFilter.value.length === 0
 );
+
+const isRecoveryScope = computed(() => migrateScope.value === 'broken-with-valid-source');
+const migrateActionText = computed(() => isRecoveryScope.value ? '恢复备份' : '补传备份');
 
 const emit = defineEmits<{ start: [] }>();
 
@@ -73,7 +76,7 @@ const displayedTargetShort = computed(() => {
 
 const bottomFullText = computed(() => {
   if (checkedTargets.value.length === 0) return '选择迁移目标，开始备份';
-  return `从 ${displayedSourceNames.value} 迁移 ${formatNumber(totalPending.value)} 张至 ${checkedTargets.value.map(s => s.displayName).join('、')}`;
+  return `从 ${displayedSourceNames.value} ${migrateActionText.value} ${formatNumber(totalPending.value)} 张至 ${checkedTargets.value.map(s => s.displayName).join('、')}`;
 });
 
 function getServiceHealthStatus(serviceId: string): 'verified' | 'pending' | 'error' {
@@ -130,6 +133,7 @@ function handleTargetToggle(serviceId: string) {
               <div class="sk-dot" />
             </div>
             <div class="sk-line sk-line--subtitle" />
+            <div class="sk-line sk-line--subtitle sk-line--subtitle-secondary" />
           </div>
           <div class="sk-target-card">
             <div class="sk-target-top">
@@ -165,8 +169,10 @@ function handleTargetToggle(serviceId: string) {
           <MigrateFilterPopover
             :maxSuccessCount="maxSuccessCount"
             :timestampAfterMs="timestampAfterMs"
+            :migrateScope="migrateScope"
             @update:maxSuccessCount="maxSuccessCount = $event"
             @update:timestampAfterMs="timestampAfterMs = $event"
+            @update:migrateScope="migrateScope = $event"
           />
         </template>
       </SourceList>
@@ -192,6 +198,7 @@ function handleTargetToggle(serviceId: string) {
             :serviceId="svc.serviceId"
             :displayName="svc.displayName"
             :pendingCount="svc.pendingCount"
+            :backedUpCount="svc.backedUpCount"
             :checked="svc.checked"
             :healthStatus="getServiceHealthStatus(svc.serviceId)"
             :healthTooltip="healthTooltipMap[svc.serviceId]"
@@ -240,7 +247,7 @@ function handleTargetToggle(serviceId: string) {
         <template v-else>
           <span class="bottom-dim">从</span>
           <strong class="bottom-hl" :title="displayedSourceNames">{{ displayedSourceShort }}</strong>
-          <span class="bottom-dim">迁移</span>
+          <span class="bottom-dim">{{ migrateActionText }}</span>
           <strong class="bottom-hl">{{ formatNumber(totalPending) }}</strong>
           <span class="bottom-dim">张至</span>
           <strong class="bottom-hl" :title="checkedNames()">{{ displayedTargetShort }}</strong>
@@ -312,6 +319,7 @@ function handleTargetToggle(serviceId: string) {
 .sk-line--count { width: 104px; height: var(--text-sm); margin-left: auto; }
 .sk-line--title { flex: 1; height: var(--text-base); max-width: 150px; }
 .sk-line--subtitle { width: 62%; height: var(--text-sm); }
+.sk-line--subtitle-secondary { width: 74%; opacity: 0.72; }
 
 .sk-target-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); }
 

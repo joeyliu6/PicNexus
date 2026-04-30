@@ -140,6 +140,8 @@ export function createRetry(deps: RetryDeps) {
           sourceUrl: status.sourceUrl ?? item.sourceUrl,
           convertedFormat: status.convertedFormat ?? item.convertedFormat,
           existingServiceIds: status.existingServiceIds ?? item.existingServiceIds,
+          sourceServiceId: status.sourceServiceId ?? item.sourceServiceId,
+          problemServiceIds: status.problemServiceIds ?? item.problemServiceIds,
           serviceResults,
           status: 'success',
           error: status.error ?? item.error,
@@ -168,13 +170,16 @@ export function createRetry(deps: RetryDeps) {
     try {
       const items = await historyDB.getItemsByIds([historyId]);
       if (items.length === 0) return;
+      const snapshot = initial.itemsSnapshot.find(item => item.historyId === historyId);
       const status: MigrateItemStatus = {
         historyId,
         fileName: items[0].localFileName,
-        sourceUrl: items[0].results.find(r => r.status === 'success' && r.result?.url)?.result?.url,
+        sourceUrl: snapshot?.sourceUrl ?? items[0].results.find(r => r.status === 'success' && r.result?.url)?.result?.url,
         status: 'pending',
         serviceResults: Object.fromEntries(targets.map(sid => [sid, 'pending' as const])),
-        existingServiceIds: items[0].results.filter(r => r.status === 'success').map(r => r.serviceId),
+        existingServiceIds: snapshot?.existingServiceIds ?? items[0].results.filter(r => r.status === 'success').map(r => r.serviceId),
+        sourceServiceId: snapshot?.sourceServiceId,
+        problemServiceIds: snapshot?.problemServiceIds,
       };
       const config = await getOrCacheConfig();
       const localCancelled = ref(false);

@@ -8,6 +8,7 @@ import type {
   MigrateItemStatus,
   MigrateResult,
   MigrateStats,
+  MigrateScope,
 } from '../../../../types/batchMigrate';
 
 export interface MigrateContext {
@@ -18,6 +19,7 @@ export interface MigrateContext {
   isRefiltering: Ref<boolean>;
   maxSuccessCount: Ref<number>;
   sourceServiceFilter: Ref<string[]>;
+  migrateScope: Ref<MigrateScope>;
   availableSourceServices: Ref<Array<{ id: string; displayName: string; count: number }>>;
   timestampAfterMs: Ref<number | null>;
   configuredServices: ComputedRef<MigrateTargetService[]>;

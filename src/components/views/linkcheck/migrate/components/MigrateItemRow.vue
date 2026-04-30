@@ -95,6 +95,10 @@ const failedTooltip = computed(() => {
   if (!isFailed.value) return '';
   return errorTooltipText(props.item);
 });
+const skippedTooltip = computed(() => {
+  if (props.item.status !== 'skipped') return undefined;
+  return props.item.error || '已在目标图床，已跳过';
+});
 
 /** 圆点颜色：沿用链接检测 statusDotColor 的 CSS 变量模式 */
 const dotColor = computed(() => {
@@ -130,7 +134,9 @@ function targetChipTooltip(chip: TargetChipState): string | undefined {
   if (!TERMINAL_STATUSES.has(props.item.status)) return undefined;
   // 终态下的 pending：这个目标没轮到尝试，保留告知（有行动指引：用户可知需要重试）
   const targetName = getServiceDisplayName(chip.serviceId) || chip.serviceId;
-  if (props.item.status === 'skipped') return `迁移已取消，未尝试 ${targetName}`;
+  if (props.item.status === 'skipped') {
+    return props.item.error ? `${targetName} 未尝试：${props.item.error}` : `迁移已取消，未尝试 ${targetName}`;
+  }
   if (props.item.status === 'failed')  return `未尝试 ${targetName}`;
   return undefined;
 }
@@ -160,7 +166,7 @@ function chipCopyKey(serviceId: string): string {
     <span
       class="mi-dot"
       :style="{ background: dotColor }"
-      v-tooltip.top="isFailed && failedTooltip ? { value: failedTooltip, autoHide: false } : (item.status === 'skipped' ? '已在目标图床，已跳过' : undefined)"
+      v-tooltip.top="isFailed && failedTooltip ? { value: failedTooltip, autoHide: false } : skippedTooltip"
     />
 
     <!-- 文件名 -->

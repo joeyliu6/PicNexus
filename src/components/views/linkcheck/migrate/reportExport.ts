@@ -78,8 +78,11 @@ export function buildTxtReport(r: MigrateResult): string {
     sections.push('');
   }
   if (skipped.length > 0) {
-    sections.push(`[跳过 ${skipped.length}] 已在目标图床中，无需迁移`);
-    for (const s of skipped) sections.push(`  • ${s.fileName}`);
+    sections.push(`[跳过 ${skipped.length}]`);
+    for (const s of skipped) {
+      sections.push(`  • ${s.fileName}`);
+      sections.push(`    ${s.error ?? '已在目标图床中，无需迁移'}`);
+    }
     sections.push('');
   }
   if (partial.length > 0) {

@@ -6,10 +6,11 @@ import SourceList from '../../../../../components/views/linkcheck/migrate/compon
 import TargetCard from '../../../../../components/views/linkcheck/migrate/components/TargetCard.vue';
 import MigrateFilterBar from '../../../../../components/views/linkcheck/migrate/components/MigrateFilterBar.vue';
 import MigrateBottomBar from '../../../../../components/views/linkcheck/migrate/components/MigrateBottomBar.vue';
+import MigrateFilterPopover from '../../../../../components/views/linkcheck/migrate/components/MigrateFilterPopover.vue';
 import MigrateSelectPhase from '../../../../../components/views/linkcheck/migrate/MigrateSelectPhase.vue';
 import MigrateProgressPhase from '../../../../../components/views/linkcheck/migrate/MigrateProgressPhase.vue';
 import { MIGRATE_KEY, type MigrateContext } from '../../../../../components/views/linkcheck/migrate/keys';
-import type { MigrateItemStatus, MigrateResult, MigrateTargetService } from '../../../../../types/batchMigrate';
+import type { MigrateItemStatus, MigrateResult, MigrateScope, MigrateTargetService } from '../../../../../types/batchMigrate';
 import { flushPromisesAndTicks } from '../../../../helpers/wait';
 
 vi.mock('../../../../../composables/useToast', () => ({
@@ -58,6 +59,13 @@ const MenuStub = {
   },
 };
 
+const PopoverStub = {
+  template: '<div class="popover-stub"><slot /></div>',
+  methods: {
+    toggle: vi.fn(),
+  },
+};
+
 function createStatus(overrides: Partial<MigrateItemStatus> = {}): MigrateItemStatus {
   const historyId = overrides.historyId ?? 'hist-1';
   return {
@@ -100,8 +108,8 @@ function createMigrateResult(itemsSnapshot: MigrateItemStatus[]): MigrateResult 
 
 function createMigrateContext(overrides: Partial<MigrateContext> = {}): MigrateContext {
   const targetServices = ref<MigrateTargetService[]>([
-    { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 2, checked: true },
-    { serviceId: 'smms', displayName: 'SM.MS', isConfigured: true, pendingCount: 1, checked: false },
+    { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 2, backedUpCount: 1, checked: true },
+    { serviceId: 'smms', displayName: 'SM.MS', isConfigured: true, pendingCount: 1, backedUpCount: 0, checked: false },
   ]);
 
   const ctx: MigrateContext = {
@@ -111,6 +119,7 @@ function createMigrateContext(overrides: Partial<MigrateContext> = {}): MigrateC
     isRefiltering: ref(false),
     maxSuccessCount: ref(999),
     sourceServiceFilter: ref(['jd']),
+    migrateScope: ref<MigrateScope>('all-backups'),
     availableSourceServices: ref([{ id: 'jd', displayName: 'JD', count: 3 }]),
     timestampAfterMs: ref(null),
     configuredServices: computed(() => targetServices.value.filter(service => service.isConfigured)),
@@ -207,6 +216,7 @@ describe('batch migrate P1 components', () => {
         serviceId: 'github',
         displayName: 'GitHub',
         pendingCount: 3,
+        backedUpCount: 0,
         checked: false,
         healthStatus: 'verified',
       },
@@ -216,6 +226,7 @@ describe('batch migrate P1 components', () => {
         serviceId: 'smms',
         displayName: 'SM.MS',
         pendingCount: 3,
+        backedUpCount: 2,
         checked: false,
         healthStatus: 'error',
       },
@@ -227,6 +238,36 @@ describe('batch migrate P1 components', () => {
     expect(healthy.emitted('toggle')).toHaveLength(1);
     expect(error.emitted('toggle')).toBeUndefined();
     expect(error.get('.target-card').attributes('aria-disabled')).toBe('true');
+    expect(healthy.get('.target-count-stack').text()).toBe('3张待迁移，0张已备份');
+    expect(healthy.text()).not.toContain('无需备份');
+  });
+
+  it('MigrateFilterPopover emits recovery scope and shows active badge', async () => {
+    const wrapper = mountWithDefaults(MigrateFilterPopover, {
+      props: {
+        maxSuccessCount: 999,
+        timestampAfterMs: null,
+        migrateScope: 'all-backups',
+      },
+      global: {
+        stubs: {
+          Popover: PopoverStub,
+        },
+      },
+    });
+
+    const allScopeButton = wrapper.findAll('button').find(button => button.text() === '所有缺失备份');
+    const recoveryButton = wrapper.findAll('button').find(button => button.text() === '可恢复图片');
+    expect(wrapper.text()).toContain('处理范围');
+    expect(allScopeButton?.attributes('data-tooltip')).toBe('为符合条件、但目标图床还没有备份的图片补传一份。');
+    expect(recoveryButton).toBeTruthy();
+    expect(recoveryButton?.attributes('data-tooltip')).toContain('依据最近一次已保存的链接检测结果');
+    await recoveryButton!.trigger('click');
+
+    expect(wrapper.emitted('update:migrateScope')?.[0]).toEqual(['broken-with-valid-source']);
+    await wrapper.setProps({ migrateScope: 'broken-with-valid-source' });
+    expect(wrapper.find('.filter-trigger-badge').text()).toContain('可恢复图片');
+    expect(wrapper.get('.filter-trigger').attributes('data-tooltip')).toContain('当前筛选：可恢复图片');
   });
 
   it('MigrateFilterBar updates status, source service, and search models', async () => {
@@ -259,7 +300,7 @@ describe('batch migrate P1 components', () => {
   it('MigrateSelectPhase blocks start until a source is selected', async () => {
     const sourceServiceFilter = ref<string[]>([]);
     const targetServices = ref<MigrateTargetService[]>([
-      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 3, checked: true },
+      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 3, backedUpCount: 0, checked: true },
     ]);
     const ctx = createMigrateContext({
       phase: ref('configuring'),
@@ -293,6 +334,41 @@ describe('batch migrate P1 components', () => {
 
     await startButton.trigger('click');
     expect(wrapper.emitted('start')).toHaveLength(1);
+  });
+
+  it('MigrateSelectPhase uses scope-specific bottom action copy', async () => {
+    const migrateScope = ref<MigrateScope>('broken-with-valid-source');
+    const targetServices = ref<MigrateTargetService[]>([
+      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 3, backedUpCount: 0, checked: true },
+    ]);
+    const ctx = createMigrateContext({
+      phase: ref('configuring'),
+      migrateScope,
+      sourceServiceFilter: ref(['jd']),
+      availableSourceServices: ref([{ id: 'jd', displayName: 'JD', count: 3 }]),
+      configuredServices: computed(() => targetServices.value),
+      unconfiguredServices: computed(() => []),
+      checkedTargets: computed(() => targetServices.value.filter(service => service.checked)),
+      totalPending: computed(() => 3),
+      isAllBackedUp: computed(() => false),
+      healthStatusMap: ref({ r2: 'verified' }),
+      healthTooltipMap: ref({ r2: 'ready' }),
+    });
+
+    const wrapper = mountWithMigrateContext(MigrateSelectPhase, ctx, {
+      global: {
+        stubs: {
+          MigrateFilterPopover: { template: '<button class="filter-popover-stub" />' },
+        },
+      },
+    });
+
+    expect(wrapper.get('.bottom-stat').text()).toContain('恢复备份');
+
+    migrateScope.value = 'all-backups';
+    await flushPromisesAndTicks();
+
+    expect(wrapper.get('.bottom-stat').text()).toContain('补传备份');
   });
 
   it('MigrateProgressPhase filters terminal results and retries failed rows', async () => {

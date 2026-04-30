@@ -15,8 +15,9 @@
 import { triggerRef } from 'vue';
 import type { Ref, ShallowRef } from 'vue';
 import type { HistoryItem } from '../../config/types';
-import type { MigrateItemStatus } from '../../types/batchMigrate';
+import type { MigrateItemStatus, MigrateScope } from '../../types/batchMigrate';
 import { historyDB } from '../../services/HistoryDatabase';
+import { getDefaultMigrateSource, getRecoverableLinkInfo } from './sourceSelection';
 
 /** 预加载的单条：只保留 id + MigrateItemStatus，HistoryItem 处理阶段再拉 */
 export interface PreloadedItem {
@@ -38,6 +39,7 @@ export interface PreloadArgs {
   maxSuccessCount: number;
   sourceServiceFilter: string[];
   timestampAfter: number | null;
+  scope?: MigrateScope;
   allItemStatuses: ShallowRef<MigrateItemStatus[]>;
   isCancelled: Ref<boolean>;
   isPaused: Ref<boolean>;
@@ -53,6 +55,7 @@ export async function preloadAllPending(args: PreloadArgs): Promise<PreloadedIte
     maxSuccessCount: args.maxSuccessCount,
     hasServiceId: args.sourceServiceFilter.length > 0 ? args.sourceServiceFilter : undefined,
     timestampAfter: args.timestampAfter ?? undefined,
+    scope: args.scope ?? 'all-backups',
   };
 
   function makePreloaded(item: HistoryItem): PreloadedItem | null {
@@ -61,17 +64,26 @@ export async function preloadAllPending(args: PreloadArgs): Promise<PreloadedIte
     );
     // 所有勾选目标都已存在 → 该项无需迁移，提前剔除
     if (!targets.some(t => !existingIds.has(t))) return null;
+
+    const recoverableInfo = args.scope === 'broken-with-valid-source'
+      ? getRecoverableLinkInfo(item, args.sourceServiceFilter)
+      : null;
+    if (args.scope === 'broken-with-valid-source' && !recoverableInfo) return null;
+
+    const source = recoverableInfo?.preferredSource ?? getDefaultMigrateSource(item);
     const status: MigrateItemStatus = {
       historyId: item.id,
       fileName: item.localFileName,
       // 预填源 URL：供 pending 阶段 UI 展示 tooltip
-      sourceUrl: item.results.find(r => r.status === 'success' && r.result?.url)?.result?.url,
+      sourceUrl: source?.url,
       status: 'pending',
       // 只对缺失目标建条目，已有的不重复建
       serviceResults: Object.fromEntries(
         targets.filter(t => !existingIds.has(t)).map(sid => [sid, 'pending' as const]),
       ),
       existingServiceIds: [...existingIds],
+      sourceServiceId: source?.serviceId,
+      problemServiceIds: recoverableInfo?.problemServiceIds,
     };
     return { id: item.id, status };
   }

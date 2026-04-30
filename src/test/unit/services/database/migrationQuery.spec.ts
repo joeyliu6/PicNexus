@@ -98,6 +98,25 @@ describe('getItemsByBackupCountQuery', () => {
     expect(params).toContain(123456);
   });
 
+  it('可恢复图片范围只返回同时有问题链接和有效源的记录', async () => {
+    db.select
+      .mockResolvedValueOnce([{ cnt: 0 }])
+      .mockResolvedValueOnce([]);
+
+    await getItemsByBackupCountQuery(db, {
+      maxSuccessCount: 3,
+      scope: 'broken-with-valid-source',
+      hasServiceId: ['r2'],
+    });
+
+    const sql = db.select.mock.calls[0][0];
+    const params = db.select.mock.calls[0][1];
+    expect(sql).toContain('link_check_status');
+    expect(sql).toContain("$.isValid");
+    expect(sql).toContain("$.errorType");
+    expect(params).toEqual([3, 'r2']);
+  });
+
   it('hasMore = false 当 offset+len >= total', async () => {
     db.select
       .mockResolvedValueOnce([{ cnt: 2 }])
@@ -164,6 +183,26 @@ describe('getServiceDistributionQuery', () => {
     await getServiceDistributionQuery(db, { maxSuccessCount: 1, hasServiceId: 'all' });
     const params = db.select.mock.calls[0][1];
     expect(params).toEqual([1]);
+  });
+
+  it('可恢复图片来源分布统计有效下载源，而不是全部已存在图床', async () => {
+    db.select.mockResolvedValue([
+      { service_id: 'r2', cnt: 2 },
+      { service_id: 'github', cnt: 1 },
+    ]);
+
+    const map = await getServiceDistributionQuery(db, {
+      maxSuccessCount: 999,
+      scope: 'broken-with-valid-source',
+      distribution: 'valid-source',
+    });
+
+    const sql = db.select.mock.calls[0][0];
+    expect(sql).toContain('json_each(h.link_check_status) AS ls');
+    expect(sql).toContain('ls.key AS service_id');
+    expect(sql).toContain("$.isValid");
+    expect(map.get('r2')).toBe(2);
+    expect(map.get('github')).toBe(1);
   });
 });
 

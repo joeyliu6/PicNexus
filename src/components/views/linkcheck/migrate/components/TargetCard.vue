@@ -10,6 +10,7 @@ const props = defineProps<{
   serviceId: string;
   displayName: string;
   pendingCount: number;
+  backedUpCount: number;
   checked: boolean;
   healthStatus: 'verified' | 'pending' | 'error';
   healthTooltip?: string;
@@ -23,9 +24,9 @@ const badgeText = computed(() => healthLabels[props.healthStatus] ?? '已配置'
 const isDisabled = computed(() => props.healthStatus === 'error');
 const errorTooltip = computed(() => isDisabled.value ? '图床异常，请先检查配置' : undefined);
 const countClass = computed((): string | undefined => {
-  if (props.noSourceSelected) return 'target-count--no-source';
-  if (props.isRefiltering) return 'target-count--stale';
-  if (props.checked) return 'target-count--active';
+  if (props.noSourceSelected) return 'target-count-stack--no-source';
+  if (props.isRefiltering) return 'target-count-stack--stale';
+  if (props.checked) return 'target-count-stack--active';
   return undefined;
 });
 
@@ -59,16 +60,27 @@ function handleClick() {
         v-tooltip.top="healthTooltip ?? badgeText"
       />
     </div>
-    <span class="target-count" :class="countClass">
+    <div class="target-count-stack" :class="countClass">
       <template v-if="noSourceSelected">
-        <span class="target-count-num">—</span>
-        <span class="target-count-unit">请先选择来源</span>
+        <span class="target-count">
+          <span class="target-count-num">—</span>
+          <span class="target-count-unit">请先选择来源</span>
+        </span>
       </template>
       <template v-else>
-        <span class="target-count-num">{{ formatNumber(pendingCount) }}</span>
-        <span class="target-count-unit">张待迁移</span>
+        <span class="target-count target-count--summary">
+          <span class="target-count-part target-count--pending">
+            <span class="target-count-num">{{ formatNumber(pendingCount) }}</span>
+            <span class="target-count-unit">张待迁移</span>
+          </span>
+          <span class="target-count-separator">，</span>
+          <span class="target-count-part target-count--backed-up">
+            <span class="target-count-num">{{ formatNumber(backedUpCount) }}</span>
+            <span class="target-count-unit">张已备份</span>
+          </span>
+        </span>
       </template>
-    </span>
+    </div>
   </div>
 </template>
 
@@ -129,12 +141,22 @@ function handleClick() {
 .dot--pending  { background: var(--warning); }
 .dot--error    { background: var(--error);   }
 
-.target-count { display: inline-flex; align-items: baseline; gap: var(--space-2xs); }
+.target-count-stack { display: flex; align-items: baseline; min-width: 0; }
+.target-count { display: inline-flex; align-items: baseline; gap: var(--space-2xs); min-width: 0; }
+.target-count--summary { gap: 0; white-space: nowrap; }
+.target-count-part { display: inline-flex; align-items: baseline; gap: var(--space-2xs); }
+.target-count-separator { font-size: var(--text-xs); color: var(--text-muted); }
 .target-count-num { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .target-count-unit { font-size: var(--text-xs); color: var(--text-muted); }
-.target-count--active .target-count-num { color: var(--primary); font-weight: var(--weight-semibold); }
-.target-count--active .target-count-unit { color: var(--primary); opacity: 0.7; }
-.target-count--no-source .target-count-num { color: var(--text-tertiary); font-style: italic; font-variant-numeric: normal; }
-.target-count--no-source .target-count-unit { color: var(--text-tertiary); font-style: italic; }
-.target-count--stale { opacity: 0.35; transition: opacity var(--duration-normal) var(--ease-decelerate); }
+
+.target-count--summary .target-count-num,
+.target-count--summary .target-count-unit,
+.target-count--summary .target-count-separator { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-secondary); }
+
+.target-count-stack--active .target-count--summary .target-count-num,
+.target-count-stack--active .target-count--summary .target-count-unit,
+.target-count-stack--active .target-count--summary .target-count-separator { color: var(--primary); font-weight: var(--weight-semibold); }
+.target-count-stack--no-source .target-count-num { color: var(--text-tertiary); font-style: italic; font-variant-numeric: normal; }
+.target-count-stack--no-source .target-count-unit { color: var(--text-tertiary); font-style: italic; }
+.target-count-stack--stale { opacity: 0.35; transition: opacity var(--duration-normal) var(--ease-decelerate); }
 </style>

@@ -23,13 +23,14 @@ import type {
   MigrateResult,
   MigrateStats,
   MigrateFailureDetail,
+  MigrateScope,
 } from '../types/batchMigrate';
 import { processBatch } from './batchMigrate/migrateCore';
 import { preloadAllPending, type PreloadedItem } from './batchMigrate/preloadPending';
 import { createRetry } from './batchMigrate/retryFailed';
 import { createRafThrottle } from './batchMigrate/rafThrottle';
 
-export type { MigratePhase, MigrateTargetService, MigrateItemStatus, MigrateResult, MigrateStats, MigrateFailureDetail };
+export type { MigratePhase, MigrateTargetService, MigrateItemStatus, MigrateResult, MigrateStats, MigrateFailureDetail, MigrateScope };
 
 const log = createLogger('useBatchMigrate');
 
@@ -72,6 +73,7 @@ export function useBatchMigrateManager() {
   const sourceServiceFilter = ref<string[]>([]); // 来源图床筛选，空数组 = 全部
   const availableSourceServices = ref<Array<{ id: string; displayName: string; count: number }>>([]);
   const timestampAfterMs = ref<number | null>(null); // 上传时间起点（ms 时间戳），null = 不限
+  const migrateScope = ref<MigrateScope>('all-backups');
 
   // 图床配置
   const targetServices = ref<MigrateTargetService[]>([]);
@@ -201,6 +203,7 @@ export function useBatchMigrateManager() {
       );
       // 保留旧 pendingCount，避免热刷新期间数字被瞬间清零闪烁
       const prevPending = new Map(targetServices.value.map(s => [s.serviceId, s.pendingCount] as const));
+      const prevBackedUp = new Map(targetServices.value.map(s => [s.serviceId, s.backedUpCount] as const));
 
       const allServices = config.availableServices || [];
       const configured = cachedUploader.filterConfiguredServices(allServices, config);
@@ -210,6 +213,7 @@ export function useBatchMigrateManager() {
         displayName: getServiceDisplayName(sid),
         isConfigured: configured.includes(sid),
         pendingCount: prevPending.get(sid) ?? 0,
+        backedUpCount: prevBackedUp.get(sid) ?? 0,
         checked: prevChecked.has(sid) && configured.includes(sid),
       }));
 
@@ -248,35 +252,57 @@ export function useBatchMigrateManager() {
    * 利用 getServiceDistribution 获取"已在该图床上的图片数"，然后 total - existing = pending
    */
   async function applyFilter() {
-    // 来源全未选中（区别于初始化前的空数组）→ pendingCount 全置 0，不发查询
-    const hasAvailableSources = availableSourceServices.value.length > 0;
-    if (hasAvailableSources && sourceServiceFilter.value.length === 0) {
-      for (const svc of targetServices.value) {
-        if (svc.isConfigured) svc.pendingCount = 0;
-      }
-      // initConfiguring 在调用前可能已把 isRefiltering 拉起来，这里兜底归位
-      isRefiltering.value = false;
-      return;
-    }
-
     // 标记正在异步刷新（必须在首个 await 之前同步赋值，保证组件渲染时已读到 true）
     isRefiltering.value = true;
 
     try {
-      const hasServiceId = sourceServiceFilter.value.length > 0 ? sourceServiceFilter.value : undefined;
       const timestampAfter = timestampAfterMs.value ?? undefined;
+      const treatEmptySourceAsAll = sourceServiceFilter.value.length === 0 && availableSourceServices.value.length === 0;
+      const allDistribution = await historyDB.getServiceDistribution({
+        maxSuccessCount: maxSuccessCount.value,
+        timestampAfter,
+        scope: migrateScope.value,
+        distribution: migrateScope.value === 'broken-with-valid-source' ? 'valid-source' : 'successful',
+      });
+
+      // 构建来源图床列表（所有在当前范围内有记录/有效源的图床）
+      availableSourceServices.value = Array.from(allDistribution.entries())
+        .map(([id, count]) => ({ id, displayName: getServiceDisplayName(id), count }))
+        .sort((a, b) => b.count - a.count);
+
+      const availableSourceIds = new Set(availableSourceServices.value.map(s => s.id));
+      let effectiveSourceFilter = sourceServiceFilter.value.filter(id => availableSourceIds.has(id));
+      if (sourceServiceFilter.value.length > 0 && effectiveSourceFilter.length === 0 && availableSourceServices.value.length > 0) {
+        effectiveSourceFilter = availableSourceServices.value.map(s => s.id);
+      }
+      if (effectiveSourceFilter.length !== sourceServiceFilter.value.length
+        || effectiveSourceFilter.some((id, index) => id !== sourceServiceFilter.value[index])) {
+        sourceServiceFilter.value = effectiveSourceFilter;
+      }
+
+      // 来源全未选中（区别于初始化前的空数组）→ pendingCount 全置 0
+      if (!treatEmptySourceAsAll && availableSourceServices.value.length > 0 && effectiveSourceFilter.length === 0) {
+        for (const svc of targetServices.value) {
+          if (svc.isConfigured) {
+            svc.pendingCount = 0;
+            svc.backedUpCount = 0;
+          }
+        }
+        return;
+      }
+
+      const hasServiceId = effectiveSourceFilter.length > 0 ? effectiveSourceFilter : undefined;
       const params = {
         maxSuccessCount: maxSuccessCount.value,
         hasServiceId,
         timestampAfter,
+        scope: migrateScope.value,
       };
 
-      // 获取总数 + 各图床分布（同时获取不带来源筛选的分布，用于构建来源下拉列表）
-      const [{ total }, existingMap, allDistribution] = await Promise.all([
+      // 获取总数 + 各图床分布
+      const [{ total }, existingMap] = await Promise.all([
         historyDB.getItemsByBackupCount({ ...params, limit: 1, offset: 0 }),
-        historyDB.getServiceDistribution(params),
-        // 不带 hasServiceId 的分布——用于构建来源图床列表（时间范围仍生效，避免列表中出现无记录项）
-        historyDB.getServiceDistribution({ maxSuccessCount: maxSuccessCount.value, timestampAfter }),
+        historyDB.getServiceDistribution({ ...params, distribution: 'successful' }),
       ]);
 
       // 更新目标图床的待迁移数
@@ -284,13 +310,10 @@ export function useBatchMigrateManager() {
         if (svc.isConfigured) {
           const existing = existingMap.get(svc.serviceId) || 0;
           svc.pendingCount = total - existing;
+          svc.backedUpCount = existing;
         }
       }
 
-      // 构建来源图床列表（所有在 DB 中有记录的图床）
-      availableSourceServices.value = Array.from(allDistribution.entries())
-        .map(([id, count]) => ({ id, displayName: getServiceDisplayName(id), count }))
-        .sort((a, b) => b.count - a.count);
     } catch (e) {
       log.error('筛选失败', e);
       initError.value = '数据查询失败，请重试';
@@ -346,6 +369,7 @@ export function useBatchMigrateManager() {
         maxSuccessCount: maxSuccessCount.value,
         sourceServiceFilter: sourceServiceFilter.value,
         timestampAfter: timestampAfterMs.value,
+        scope: migrateScope.value,
         allItemStatuses,
         isCancelled,
         isPaused,
@@ -548,6 +572,7 @@ export function useBatchMigrateManager() {
     // 同步清空，避免 applyFilter 命中"来源未选"短路把 pendingCount 全置 0 误判"已备份"
     availableSourceServices.value = [];
     timestampAfterMs.value = null;
+    migrateScope.value = 'all-backups';
     isFilterApplied.value = false;
     cachedConfig = null;
     await initConfiguring();
@@ -617,6 +642,7 @@ export function useBatchMigrateManager() {
   return {
     phase, isInitialized, isFilterApplied, isRefiltering, initError,
     maxSuccessCount, sourceServiceFilter, availableSourceServices,
+    migrateScope,
     timestampAfterMs,
     targetServices, configuredServices, unconfiguredServices,
     checkedTargets, totalPending, isAllBackedUp,

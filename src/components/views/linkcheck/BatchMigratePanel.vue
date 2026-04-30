@@ -67,7 +67,7 @@ function scheduleRefilter() {
 }
 
 watch(manager.maxSuccessCount, () => { if (manager.phase.value === 'configuring') scheduleRefilter(); });
-watch([manager.sourceServiceFilter, manager.timestampAfterMs], () => {
+watch([manager.sourceServiceFilter, manager.timestampAfterMs, manager.migrateScope], () => {
   if (manager.phase.value === 'configuring' && manager.isFilterApplied.value) scheduleRefilter();
 });
 

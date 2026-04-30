@@ -87,8 +87,8 @@ function createPreloaded(ids: string[]): PreloadedItem[] {
 function mockFilterQueries(total: number, existing: Map<string, number>, distribution: Map<string, number>) {
   mocks.getItemsByBackupCount.mockResolvedValueOnce({ items: [], total, hasMore: false });
   mocks.getServiceDistribution
-    .mockResolvedValueOnce(existing)
-    .mockResolvedValueOnce(distribution);
+    .mockResolvedValueOnce(distribution)
+    .mockResolvedValueOnce(existing);
 }
 
 async function finishColdInit(promise: Promise<void>) {
@@ -151,9 +151,9 @@ describe('useBatchMigrateManager', () => {
 
     expect(configStore.get).toHaveBeenCalledWith('config', expect.anything());
     expect(manager.targetServices.value).toEqual([
-      expect.objectContaining({ serviceId: 'r2', isConfigured: true, pendingCount: 3, checked: false }),
-      expect.objectContaining({ serviceId: 'github', isConfigured: true, pendingCount: 1, checked: false }),
-      expect.objectContaining({ serviceId: 'smms', isConfigured: false, pendingCount: 0, checked: false }),
+      expect.objectContaining({ serviceId: 'r2', isConfigured: true, pendingCount: 3, backedUpCount: 2, checked: false }),
+      expect.objectContaining({ serviceId: 'github', isConfigured: true, pendingCount: 1, backedUpCount: 4, checked: false }),
+      expect.objectContaining({ serviceId: 'smms', isConfigured: false, pendingCount: 0, backedUpCount: 0, checked: false }),
     ]);
     expect(manager.availableSourceServices.value.map(s => s.id)).toEqual(['source', 'github']);
     expect(manager.sourceServiceFilter.value).toEqual(['source', 'github']);
@@ -171,13 +171,15 @@ describe('useBatchMigrateManager', () => {
     await finishColdInit(manager.initConfiguring());
     mocks.getItemsByBackupCount.mockClear();
     mocks.getServiceDistribution.mockClear();
+    mocks.getServiceDistribution.mockResolvedValueOnce(new Map([['source', 5]]));
 
     manager.sourceServiceFilter.value = [];
     await manager.applyFilter();
 
     expect(manager.targetServices.value.filter(s => s.isConfigured).every(s => s.pendingCount === 0)).toBe(true);
+    expect(manager.targetServices.value.filter(s => s.isConfigured).every(s => s.backedUpCount === 0)).toBe(true);
     expect(historyDB.getItemsByBackupCount).not.toHaveBeenCalled();
-    expect(historyDB.getServiceDistribution).not.toHaveBeenCalled();
+    expect(historyDB.getServiceDistribution).toHaveBeenCalledTimes(1);
   });
 
   it('applies source, threshold, and timestamp filters to history queries', async () => {
@@ -206,16 +208,54 @@ describe('useBatchMigrateManager', () => {
       maxSuccessCount: 1,
       hasServiceId: ['source'],
       timestampAfter: 1_700_000,
+      scope: 'all-backups',
       limit: 1,
       offset: 0,
     }));
     expect(manager.targetServices.value.find(s => s.serviceId === 'r2')?.pendingCount).toBe(2);
+    expect(manager.targetServices.value.find(s => s.serviceId === 'r2')?.backedUpCount).toBe(1);
+  });
+
+  it('可恢复图片范围使用有效源分布构建来源列表', async () => {
+    vi.useFakeTimers();
+    mockFilterQueries(
+      5,
+      new Map([['r2', 2], ['github', 4]]),
+      new Map([['source', 5]]),
+    );
+    const manager = useBatchMigrateManager();
+    await finishColdInit(manager.initConfiguring());
+    mocks.getItemsByBackupCount.mockClear();
+    mocks.getServiceDistribution.mockClear();
+    mockFilterQueries(
+      2,
+      new Map([['github', 1]]),
+      new Map([['r2', 2]]),
+    );
+
+    manager.migrateScope.value = 'broken-with-valid-source';
+    manager.sourceServiceFilter.value = ['r2'];
+    await manager.applyFilter();
+
+    expect(historyDB.getItemsByBackupCount).toHaveBeenCalledWith(expect.objectContaining({
+      scope: 'broken-with-valid-source',
+      hasServiceId: ['r2'],
+    }));
+    expect(historyDB.getServiceDistribution).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      scope: 'broken-with-valid-source',
+      distribution: 'valid-source',
+    }));
+    expect(historyDB.getServiceDistribution).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      scope: 'broken-with-valid-source',
+      distribution: 'successful',
+    }));
+    expect(manager.availableSourceServices.value.map(s => s.id)).toEqual(['r2']);
   });
 
   it('does not start migration without a checked configured target', async () => {
     const manager = useBatchMigrateManager();
     manager.targetServices.value = [
-      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 2, checked: false },
+      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 2, backedUpCount: 0, checked: false },
     ];
 
     await manager.startMigrate();
@@ -261,8 +301,8 @@ describe('useBatchMigrateManager', () => {
     });
     const manager = useBatchMigrateManager();
     manager.targetServices.value = [
-      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 2, checked: true },
-      { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 1, checked: true },
+      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 2, backedUpCount: 0, checked: true },
+      { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 1, backedUpCount: 0, checked: true },
     ];
     manager.maxSuccessCount.value = 2;
     manager.sourceServiceFilter.value = ['source'];
@@ -275,6 +315,7 @@ describe('useBatchMigrateManager', () => {
       maxSuccessCount: 2,
       sourceServiceFilter: ['source'],
       timestampAfter: 1234,
+      scope: 'all-backups',
     }));
     expect(manager.phase.value).toBe('done');
     expect(manager.migrateResult.value).toEqual(expect.objectContaining({
@@ -302,7 +343,7 @@ describe('useBatchMigrateManager', () => {
     mocks.preloadAllPending.mockRejectedValue(new Error('db failed'));
     const manager = useBatchMigrateManager();
     manager.targetServices.value = [
-      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 1, checked: true },
+      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 1, backedUpCount: 0, checked: true },
     ];
 
     await manager.startMigrate();
@@ -322,7 +363,7 @@ describe('useBatchMigrateManager', () => {
     mocks.getItemsByIds.mockRejectedValueOnce(new Error('database is locked'));
     const manager = useBatchMigrateManager();
     manager.targetServices.value = [
-      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 1, checked: true },
+      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 1, backedUpCount: 0, checked: true },
     ];
 
     await manager.startMigrate();
@@ -359,7 +400,7 @@ describe('useBatchMigrateManager', () => {
     });
     const manager = useBatchMigrateManager();
     manager.targetServices.value = [
-      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 1, checked: true },
+      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 1, backedUpCount: 0, checked: true },
     ];
 
     const startPromise = manager.startMigrate();

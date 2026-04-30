@@ -145,6 +145,40 @@ describe('createRetry', () => {
     expect(vi.mocked(migrateOneItem).mock.calls[0][2]).toEqual(['r2']);
   });
 
+  it('preserves recovery source context when retrying a failed item', async () => {
+    vi.mocked(historyDB.getItemsByIds).mockResolvedValue([{
+      ...makeHistoryItem(),
+      results: [
+        { serviceId: 'source', status: 'success', result: { url: 'https://dead.example.com/h1.png' } },
+        { serviceId: 'r2', status: 'success', result: { url: 'https://r2.example.com/h1.png' } },
+      ],
+    } as any]);
+    const result = makeResult();
+    result.itemsSnapshot[0] = {
+      ...result.itemsSnapshot[0],
+      sourceUrl: 'https://r2.example.com/h1.png',
+      sourceServiceId: 'r2',
+      problemServiceIds: ['source'],
+      existingServiceIds: ['source', 'r2'],
+    };
+    const retry = createRetry({
+      migrateResult: ref(result),
+      retryingIds: ref(new Set<string>()),
+      getOrCacheConfig: async () => ({} as any),
+      getMultiUploader: () => ({} as any),
+    });
+
+    await retry.retrySingleFailed('h1');
+
+    const status = vi.mocked(migrateOneItem).mock.calls[0][1];
+    expect(status).toEqual(expect.objectContaining({
+      sourceUrl: 'https://r2.example.com/h1.png',
+      sourceServiceId: 'r2',
+      problemServiceIds: ['source'],
+      existingServiceIds: ['source', 'r2'],
+    }));
+  });
+
   it('removes a failed row and updates counts after a successful retry', async () => {
     vi.mocked(historyDB.getItemsByIds).mockResolvedValue([makeHistoryItem() as any]);
     const migrateResult = ref(makeResult());

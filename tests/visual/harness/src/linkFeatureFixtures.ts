@@ -6,6 +6,7 @@ import type {
   MigrateItemStatus,
   MigratePhase,
   MigrateResult,
+  MigrateScope,
   MigrateStats,
   MigrateTargetService,
 } from '@/types/batchMigrate';
@@ -61,11 +62,11 @@ type MarkdownRepairVisualState =
 function migrateTargets(state: string): MigrateTargetService[] {
   const targetSelected = state !== 'source-selection';
   return [
-    { serviceId: 'r2', displayName: 'Cloudflare R2', isConfigured: true, pendingCount: 286, checked: targetSelected },
-    { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 184, checked: state === 'target-selection' || state === 'migrating' || state === 'paused' },
-    { serviceId: 'smms', displayName: 'SM.MS', isConfigured: true, pendingCount: 91, checked: false },
-    { serviceId: 'qiniu', displayName: 'Qiniu', isConfigured: true, pendingCount: 58, checked: false },
-    { serviceId: 'upyun', displayName: 'Upyun', isConfigured: false, pendingCount: 0, checked: false },
+    { serviceId: 'r2', displayName: 'Cloudflare R2', isConfigured: true, pendingCount: 286, backedUpCount: 42, checked: targetSelected },
+    { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 184, backedUpCount: 144, checked: state === 'target-selection' || state === 'migrating' || state === 'paused' },
+    { serviceId: 'smms', displayName: 'SM.MS', isConfigured: true, pendingCount: 91, backedUpCount: 237, checked: false },
+    { serviceId: 'qiniu', displayName: 'Qiniu', isConfigured: true, pendingCount: 58, backedUpCount: 270, checked: false },
+    { serviceId: 'upyun', displayName: 'Upyun', isConfigured: false, pendingCount: 0, backedUpCount: 0, checked: false },
   ];
 }
 
@@ -232,6 +233,7 @@ export function createMigrateContext(rawState: string): MigrateContext {
     isRefiltering: ref(false),
     maxSuccessCount: ref(1),
     sourceServiceFilter,
+    migrateScope: ref<MigrateScope>('all-backups'),
     availableSourceServices: ref([
       { id: 'jd', displayName: 'JD', count: 286 },
       { id: 'weibo', displayName: 'Weibo', count: 184 },
