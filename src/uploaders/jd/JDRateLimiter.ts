@@ -5,6 +5,10 @@
  * 1. 动态熔断：遇到 500 错误时，触发短时冷却
  * 2. 严格串行排队：确保请求之间有最小间隔，防止并发苏醒导致的瞬间 Burst
  */
+import { createLogger } from '../../utils/logger';
+
+const log = createLogger('JDRateLimiter');
+
 export class JDRateLimiter {
     private static instance: JDRateLimiter;
 
@@ -83,7 +87,10 @@ export class JDRateLimiter {
 
                 // 限制最大等待时间
                 if (waitTime > this.MAX_WAIT_TIME) {
-                    console.warn(`[JDRateLimiter] 等待时间 ${waitTime}ms 超过上限，限制为 ${this.MAX_WAIT_TIME}ms`);
+                    log.warn('等待时间超过上限，限制为最大等待时间', {
+                        waitTime,
+                        maxWaitTime: this.MAX_WAIT_TIME
+                    });
                     waitTime = this.MAX_WAIT_TIME;
                 }
 
@@ -99,12 +106,15 @@ export class JDRateLimiter {
                 // 熔断时间在等待期间更新了，重新计算
                 retryCount++;
                 if (retryCount < MAX_RETRIES) {
-                    console.log(`[JDRateLimiter] 等待期间触发了新熔断，重新计算等待时间 (${retryCount}/${MAX_RETRIES})`);
+                    log.info('等待期间触发了新熔断，重新计算等待时间', {
+                        retryCount,
+                        maxRetries: MAX_RETRIES
+                    });
                 }
             }
 
             if (retryCount >= MAX_RETRIES) {
-                console.warn(`[JDRateLimiter] 达到最大重试次数，强制执行请求`);
+                log.warn('达到最大重试次数，强制执行请求');
             }
 
             // 取出队首请求并执行
@@ -128,7 +138,7 @@ export class JDRateLimiter {
 
         // 只有当新的熔断结束时间比当前的更晚时才更新
         if (endTime > this.circuitBreakerEndTime) {
-            console.log(`[JDRateLimiter] 触发熔断冷却，暂停 ${durationMs}ms`);
+            log.info('触发熔断冷却', { durationMs });
             this.circuitBreakerEndTime = endTime;
             // 不需要做其他操作，processQueue 下一轮循环会自动感知 circuitBreakerEndTime 变化并计算新的 waitTime
         }

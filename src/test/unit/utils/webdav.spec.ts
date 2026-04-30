@@ -2,6 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { WebDAVClient } from '../../../utils/webdav';
 import { getHttpFetchMock } from '../../helpers/tauriMock';
 
+const loggerMock = vi.hoisted(() => ({
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+}));
+
 // ─── Mock 外部依赖 ────────────────────────────────────────
 // webdav.ts 依赖 ../crypto 的 secureStorage 做密码加解密
 vi.mock('../../../crypto', () => ({
@@ -9,6 +16,10 @@ vi.mock('../../../crypto', () => ({
     encrypt: vi.fn(),
     decrypt: vi.fn(),
   },
+}));
+
+vi.mock('../../../utils/logger', () => ({
+  createLogger: () => loggerMock,
 }));
 
 // 动态 import secureStorage 以便在测试里控制 mock 行为
@@ -46,9 +57,10 @@ beforeEach(() => {
   mockedFetch.mockReset();
   mockedEncrypt.mockReset();
   mockedDecrypt.mockReset();
-  // 静音 webdav.ts 里的 console.error / console.warn 调用，避免污染测试输出
-  vi.spyOn(console, 'error').mockImplementation(() => {});
-  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  loggerMock.debug.mockClear();
+  loggerMock.info.mockClear();
+  loggerMock.warn.mockClear();
+  loggerMock.error.mockClear();
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -86,7 +98,7 @@ describe('WebDAVClient.fromEncryptedConfig', () => {
       password: 'plain',
     });
     expect(client).toBeInstanceOf(WebDAVClient);
-    expect(console.warn).toHaveBeenCalled();
+    expect(loggerMock.warn).toHaveBeenCalled();
   });
 
   it('password 和 passwordEncrypted 都没有 → 抛 "WebDAV 密码未配置"', async () => {
@@ -555,6 +567,6 @@ describe('WebDAVClient.ensureDir', () => {
     await client.ensureDir('/a/b/c');
     // 即使第一层失败，总共还是调用了 3 次 MKCOL
     expect(mockedFetch).toHaveBeenCalledTimes(3);
-    expect(console.warn).toHaveBeenCalled();
+    expect(loggerMock.warn).toHaveBeenCalled();
   });
 });

@@ -101,7 +101,12 @@ export function useToast() {
    */
   const silent = (level: 'log' | 'error', summary: string, detail?: string) => {
     const icon = level === 'log' ? '✓' : '✗';
-    console[level](`[Toast][静默] ${icon} ${summary}${detail ? `: ${detail}` : ''}`);
+    const message = `[静默] ${icon} ${summary}`;
+    if (level === 'error') {
+      log.error(message, { detail });
+    } else {
+      log.info(message, { detail });
+    }
   };
 
   return {

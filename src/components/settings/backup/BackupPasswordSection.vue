@@ -8,6 +8,7 @@ import { secureStorage } from '../../../crypto';
 import { configStore, syncStatusStore } from '../../../store/instances';
 import type { UserConfig } from '../../../config/types';
 import BackupPasswordDialog from '../../dialogs/BackupPasswordDialog.vue';
+import { createLogger } from '../../../utils/logger';
 
 const emit = defineEmits<{
   'restore-confirm': [password: string];
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 
 const toast = useToast();
 const confirm = useConfirm();
+const log = createLogger('BackupPasswordSection');
 
 // 迁移密码状态
 const hasBackupPassword = ref(false);
@@ -54,7 +56,7 @@ async function swapKeyAndReencrypt(swapFn: () => Promise<void>): Promise<void> {
     try {
       await configStore.setDirect({ config });
     } catch (e) {
-      console.error('[迁移密码] 重新加密写回失败，回滚密钥:', e);
+      log.error('迁移密码重新加密写回失败，回滚密钥', e);
       await invoke('set_secure_key', { key: oldKeyB64 });
       await secureStorage.forceReinit();
       throw e;
@@ -63,7 +65,7 @@ async function swapKeyAndReencrypt(swapFn: () => Promise<void>): Promise<void> {
 
   if (syncStatusRaw && Object.keys(syncStatusRaw).length > 0) {
     await syncStatusStore.setDirect(syncStatusRaw).catch(e =>
-      console.warn('[迁移密码] syncStatusStore 重新加密失败（非致命）:', e)
+      log.warn('syncStatusStore 重新加密失败（非致命）', e)
     );
   }
 }
@@ -85,7 +87,7 @@ async function handlePasswordConfirm(password: string) {
     toast.showConfig('success', { summary: '备份密码设置成功', detail: '配置文件已使用新密码重新加密' });
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error('[备份密码] 设置失败:', errorMsg);
+    log.error('设置备份密码失败', errorMsg);
     toast.showConfig('error', { summary: '设置备份密码失败', detail: errorMsg });
     passwordDialogRef.value?.resetLoading();
   } finally {
@@ -114,7 +116,7 @@ function handleClearPassword() {
         toast.showConfig('success', { summary: '备份密码已停用', detail: '已切换为本机专属加密，换电脑后需重新配置' });
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
-        console.error('[备份密码] 停用失败:', errorMsg);
+        log.error('停用备份密码失败', errorMsg);
         toast.showConfig('error', { summary: '停用备份密码失败', detail: errorMsg });
       } finally {
         passwordLoading.value = false;

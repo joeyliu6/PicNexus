@@ -2,6 +2,9 @@
 
 import { fetch } from '@tauri-apps/plugin-http';
 import { secureStorage } from '../crypto';
+import { createLogger } from './logger';
+
+const log = createLogger('WebDAV');
 
 /**
  * WebDAV 客户端配置（内部使用，密码已解密）
@@ -44,12 +47,12 @@ export class WebDAVClient {
       try {
         decryptedPassword = await secureStorage.decrypt(encryptedConfig.passwordEncrypted);
       } catch (error) {
-        console.error('[WebDAV] 密码解密失败:', error);
+        log.error('密码解密失败', error);
         throw new Error('WebDAV 密码解密失败，请重新配置');
       }
     } else if (encryptedConfig.password) {
       // 向后兼容：使用明文密码（旧版本配置）
-      console.warn('[WebDAV] 使用明文密码（建议重新保存配置以启用加密）');
+      log.warn('使用明文密码（建议重新保存配置以启用加密）');
       decryptedPassword = encryptedConfig.password;
     } else {
       throw new Error('WebDAV 密码未配置');
@@ -82,7 +85,7 @@ export class WebDAVClient {
     try {
       return await secureStorage.decrypt(encryptedPassword);
     } catch (error) {
-      console.error('[WebDAV] 密码解密失败:', error);
+      log.error('密码解密失败', error);
       return '';
     }
   }
@@ -151,7 +154,7 @@ export class WebDAVClient {
       // 200, 207 (Multi-Status) 或 404 (文件不存在但连接成功) 都算成功
       return response.ok || response.status === 404;
     } catch (error) {
-      console.error('[WebDAV] 连接测试失败:', error);
+      log.error('连接测试失败', error);
       return false;
     }
   }
@@ -192,7 +195,7 @@ export class WebDAVClient {
       clearTimeout(timeoutId);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[WebDAV] 上传文件失败:', errorMsg);
+      log.error('上传文件失败', errorMsg);
       throw new Error(`WebDAV 上传失败: ${errorMsg}`);
     }
 
@@ -236,7 +239,7 @@ export class WebDAVClient {
       clearTimeout(timeoutId);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[WebDAV] 下载文件失败:', errorMsg);
+      log.error('下载文件失败', errorMsg);
       throw new Error(`WebDAV 下载失败: ${errorMsg}`);
     }
 
@@ -280,7 +283,7 @@ export class WebDAVClient {
       clearTimeout(timeoutId);
       return response.ok;
     } catch (error) {
-      console.error('[WebDAV] 检查文件存在性失败:', error);
+      log.error('检查文件存在性失败', error);
       return false;
     }
   }
@@ -321,15 +324,15 @@ export class WebDAVClient {
 
       // 409: 父目录不存在，需要先创建父目录
       if (status === 409) {
-        console.warn('[WebDAV] 创建目录失败: 父目录不存在', dirPath);
+        log.warn('创建目录失败: 父目录不存在', { dirPath });
         return false;
       }
 
       // 其他错误
-      console.error('[WebDAV] 创建目录失败:', status, dirPath);
+      log.error('创建目录失败', { status, dirPath });
       return false;
     } catch (error) {
-      console.error('[WebDAV] 创建目录异常:', error);
+      log.error('创建目录异常', error);
       return false;
     }
   }
@@ -359,7 +362,7 @@ export class WebDAVClient {
       if (!success) {
         // 如果创建失败（可能是 409），继续尝试创建
         // 因为我们是从根目录开始创建，所以父目录应该已经存在
-        console.warn('[WebDAV] 创建目录可能失败，继续尝试:', currentPath);
+        log.warn('创建目录可能失败，继续尝试', { currentPath });
       }
     }
   }

@@ -7,8 +7,10 @@ import { COOKIE_PROVIDERS, type CookieProvider } from './config/cookieProviders'
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { initLoginTheme } from './composables/useLoginTheme';
+import { createLogger } from './utils/logger';
 
 const appWindow = getCurrentWindow();
+const log = createLogger('LoginWebview');
 
 // 引入样式（顺序重要）
 import 'primeicons/primeicons.css';
@@ -22,7 +24,7 @@ const urlParams = new URLSearchParams(window.location.search);
 const serviceId = urlParams.get('service') || 'weibo';
 const provider: CookieProvider = COOKIE_PROVIDERS[serviceId] || COOKIE_PROVIDERS['weibo'];
 
-console.log(`[LoginWebview] Service: ${serviceId}, Provider:`, provider);
+log.info('初始化登录窗口', { serviceId, provider });
 
 /**
  * 开始登录处理
@@ -48,7 +50,7 @@ async function handleStartLogin() {
   };
 
   try {
-    console.log(`[LoginWebview] Starting login for ${provider.name}`);
+    log.info('开始登录', { serviceId, providerName: provider.name });
 
     // 先注册 ready 监听，避免错过 Rust 端瞬时发出的 ready 事件
     const { listen } = await import('@tauri-apps/api/event');
@@ -61,7 +63,7 @@ async function handleStartLogin() {
     });
 
     readyTimer = setTimeout(() => {
-      console.warn('[LoginWebview] cookie-monitoring-ready timeout, proceeding anyway');
+      log.warn('cookie-monitoring-ready 超时，继续执行');
       finishReady();
     }, 3000);
 
@@ -75,7 +77,7 @@ async function handleStartLogin() {
       timeoutMs: provider.cookieValidation?.timeoutMs,
     });
 
-    console.log(`[LoginWebview] Cookie event monitoring started`);
+    log.info('Cookie 事件监控已启动', { serviceId });
 
     // 等待 Rust 端 NavigationCompleted handler 注册完成后再跳转
     await readyPromise;
@@ -91,7 +93,7 @@ async function handleStartLogin() {
       unlistenReady();
       unlistenReady = null;
     }
-    console.error('[LoginWebview] Start login failed:', error);
+    log.error('启动登录失败', error);
     alert(`启动 Cookie 监控失败\n${error}\n请重新打开登录窗口`);
   }
 }
@@ -101,7 +103,7 @@ async function handleStartLogin() {
  */
 async function handleGetCookie() {
   try {
-    console.log(`[LoginWebview] Manual cookie retrieval`);
+    log.info('手动获取 Cookie', { serviceId });
 
     let cookie: string | null = null;
 
@@ -114,13 +116,13 @@ async function handleGetCookie() {
         anyOfFields: provider.cookieValidation?.anyOfFields || []
       });
     } catch (err) {
-      console.warn('[LoginWebview] Request header cookie failed:', err);
+      log.warn('请求头 Cookie 获取失败', err);
     }
 
     // 备用：从 document.cookie 获取
     if (!cookie || cookie.trim().length === 0) {
       cookie = document.cookie.trim();
-      console.log('[LoginWebview] Using document.cookie');
+      log.info('使用 document.cookie 兜底');
     }
 
     if (!cookie || cookie.trim().length === 0) {
@@ -136,12 +138,12 @@ async function handleGetCookie() {
       anyOfFields: provider.cookieValidation?.anyOfFields || []
     });
 
-    console.log(`[LoginWebview] Cookie saved successfully`);
+    log.info('Cookie 保存成功', { serviceId });
 
     // 2秒后关闭窗口
     setTimeout(() => appWindow.close(), 2000);
   } catch (error) {
-    console.error('[LoginWebview] Get cookie failed:', error);
+    log.error('获取 Cookie 失败', error);
     alert(`获取 Cookie 失败\n${error}\n请确认已登录后重试`);
   }
 }
@@ -153,7 +155,7 @@ async function handleClose() {
   try {
     await appWindow.close();
   } catch (error) {
-    console.error('[LoginWebview] Close window failed:', error);
+    log.error('关闭窗口失败', error);
   }
 }
 
@@ -192,11 +194,11 @@ async function bootstrap() {
 
   // CSS 和 Vue 已就绪，通知 Rust 端显示窗口（避免白屏闪烁）
   await invoke('show_login_window');
-  console.log('[LoginWebview] Vue app mounted, window shown');
+  log.info('Vue app 已挂载，窗口已显示');
 }
 
 // 启动应用
 bootstrap().catch(error => {
-  console.error('[LoginWebview] Bootstrap failed:', error);
+  log.error('Bootstrap 失败', error);
   invoke('show_login_window').catch(() => {});
 });
