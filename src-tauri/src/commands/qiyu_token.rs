@@ -1,15 +1,8 @@
-// src-tauri/src/commands/qiyu_token.rs
-// 七鱼图床 Token 自动获取模块
-// 使用 Sidecar (Node.js + Puppeteer) 从七鱼页面获取上传凭证
-// v2.10: 迁移到 AppError 统一错误类型
-
 use serde::{Deserialize, Serialize};
-use tauri_plugin_shell::process::CommandEvent;
-use tauri_plugin_shell::ShellExt;
-use tokio::time::{timeout, Duration};
 
-use crate::error::{AppError, IntoAppError};
+use crate::error::AppError;
 use crate::log_utils::{safe_path, sanitize_text, summarize_text};
+use crate::portable;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct QiyuToken {
@@ -40,7 +33,7 @@ fn sanitize_sidecar_log_line(line: &str) -> String {
 
     if has_sensitive_marker {
         format!(
-            "[QiyuToken] sidecar 敏感日志已脱敏 ({})",
+            "[QiyuToken] sidecar sensitive log redacted ({})",
             summarize_text(line)
         )
     } else {
@@ -48,59 +41,19 @@ fn sanitize_sidecar_log_line(line: &str) -> String {
     }
 }
 
-/// 检测系统是否安装了 Chrome 浏览器
 #[tauri::command]
-pub async fn check_chrome_installed(app: tauri::AppHandle) -> Result<bool, AppError> {
-    log::debug!("[QiyuToken] 检测 Chrome 安装状态");
+pub async fn check_chrome_installed(_app: tauri::AppHandle) -> Result<bool, AppError> {
+    log::debug!("[QiyuToken] checking Chrome installation");
 
-    let sidecar = app
-        .shell()
-        .sidecar("qiyu-token-fetcher")
-        .into_external_err_with("创建 sidecar 失败")?;
+    let (output, stderr_output) =
+        portable::run_sidecar("qiyu-token-fetcher", &["check-chrome"], 45).await?;
 
-    let (mut rx, _child) = sidecar
-        .args(["check-chrome"])
-        .spawn()
-        .into_external_err_with("启动 sidecar 失败")?;
-
-    let mut output = String::new();
-    let mut stderr_output = String::new();
-
-    // 添加 45 秒超时控制
-    let result = timeout(Duration::from_secs(45), async {
-        while let Some(event) = rx.recv().await {
-            match event {
-                CommandEvent::Stdout(line) => {
-                    output.push_str(&String::from_utf8_lossy(&line));
-                }
-                CommandEvent::Stderr(line) => {
-                    stderr_output.push_str(&String::from_utf8_lossy(&line));
-                    stderr_output.push('\n');
-                }
-                CommandEvent::Terminated(status) => {
-                    log::debug!("[QiyuToken] Sidecar 退出，状态: {:?}", status);
-                }
-                _ => {}
-            }
-        }
-    })
-    .await;
-
-    // 检查是否超时
-    if result.is_err() {
-        return Err(AppError::network(
-            "检测 Chrome 超时（45秒），请检查网络连接",
-        ));
-    }
-
-    // 输出 stderr 日志
     if !stderr_output.is_empty() {
         for line in stderr_output.lines() {
             log::debug!("{}", sanitize_sidecar_log_line(line));
         }
     }
 
-    // 解析 JSON 响应
     let response: SidecarResponse<CheckChromeData> =
         serde_json::from_str(&output).map_err(|e| {
             AppError::external(format!(
@@ -114,12 +67,12 @@ pub async fn check_chrome_installed(app: tauri::AppHandle) -> Result<bool, AppEr
         if let Some(data) = response.data {
             if data.installed {
                 if let (Some(name), Some(path)) = (&data.name, &data.path) {
-                    log::debug!("[QiyuToken] 检测到 {}: {}", name, safe_path(path));
+                    log::debug!("[QiyuToken] detected {}: {}", name, safe_path(path));
                 }
                 return Ok(true);
             }
         }
-        log::warn!("[QiyuToken] 未检测到 Chrome 或 Edge");
+        log::warn!("[QiyuToken] Chrome or Edge not detected");
         Ok(false)
     } else {
         Err(AppError::external(
@@ -128,86 +81,39 @@ pub async fn check_chrome_installed(app: tauri::AppHandle) -> Result<bool, AppEr
     }
 }
 
-/// 检查七鱼图床是否可用（完整检测）
-/// 通过实际获取 Token 来验证上传能力
 #[tauri::command]
 pub async fn check_qiyu_available(app: tauri::AppHandle) -> bool {
     let start_time = std::time::Instant::now();
 
     match fetch_qiyu_token_internal(&app).await {
         Ok(_) => {
-            log::info!("[Qiyu] 可用性检测通过，耗时: {:?}", start_time.elapsed());
+            log::info!("[Qiyu] available, elapsed: {:?}", start_time.elapsed());
             true
         }
         Err(e) => {
-            log::error!(
-                "[Qiyu] 可用性检测失败: {}，耗时: {:?}",
-                e,
-                start_time.elapsed()
-            );
+            log::error!("[Qiyu] unavailable: {}, elapsed: {:?}", e, start_time.elapsed());
             false
         }
     }
 }
 
-/// 从七鱼页面获取新的上传 Token
 #[tauri::command]
 pub async fn fetch_qiyu_token(app: tauri::AppHandle) -> Result<QiyuToken, AppError> {
     fetch_qiyu_token_internal(&app).await
 }
 
-/// 内部函数：从七鱼页面获取新的上传 Token
-pub async fn fetch_qiyu_token_internal(app: &tauri::AppHandle) -> Result<QiyuToken, AppError> {
-    log::debug!("[QiyuToken] 启动 Sidecar 获取 Token");
+pub async fn fetch_qiyu_token_internal(_app: &tauri::AppHandle) -> Result<QiyuToken, AppError> {
+    log::debug!("[QiyuToken] starting sidecar");
 
-    let sidecar = app
-        .shell()
-        .sidecar("qiyu-token-fetcher")
-        .into_external_err_with("创建 sidecar 失败")?;
+    let (output, stderr_output) =
+        portable::run_sidecar("qiyu-token-fetcher", &["fetch-token"], 45).await?;
 
-    let (mut rx, _child) = sidecar
-        .args(["fetch-token"])
-        .spawn()
-        .into_external_err_with("启动 sidecar 失败")?;
-
-    let mut output = String::new();
-    let mut stderr_output = String::new();
-
-    // 添加 45 秒超时控制
-    let result = timeout(Duration::from_secs(45), async {
-        while let Some(event) = rx.recv().await {
-            match event {
-                CommandEvent::Stdout(line) => {
-                    output.push_str(&String::from_utf8_lossy(&line));
-                }
-                CommandEvent::Stderr(line) => {
-                    stderr_output.push_str(&String::from_utf8_lossy(&line));
-                    stderr_output.push('\n');
-                }
-                CommandEvent::Terminated(status) => {
-                    log::debug!("[QiyuToken] Sidecar 退出，状态: {:?}", status);
-                }
-                _ => {}
-            }
-        }
-    })
-    .await;
-
-    // 检查是否超时
-    if result.is_err() {
-        return Err(AppError::network(
-            "获取 Token 超时（45秒），请检查网络连接或稍后重试",
-        ));
-    }
-
-    // 输出 stderr 日志（包含进度信息）
     if !stderr_output.is_empty() {
         for line in stderr_output.lines() {
             log::debug!("{}", sanitize_sidecar_log_line(line));
         }
     }
 
-    // 解析 JSON 响应
     let response: SidecarResponse<QiyuToken> = serde_json::from_str(&output).map_err(|e| {
         AppError::external(format!(
             "解析响应失败: {}. 输出摘要: {}",

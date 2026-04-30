@@ -12,6 +12,7 @@ import type { MigrateScope } from '../../types/batchMigrate';
 import type { ImageMeta } from '../../types/image-meta';
 import { extractMirrorServices } from '../../types/image-meta';
 import { recomputeLinkCheckSummary } from '../../types/linkCheckSummary';
+import { getHistoryDbPath } from '../../utils/appPaths';
 import { createLogger } from '../../utils/logger';
 
 // 子模块导入
@@ -79,7 +80,7 @@ export type {
 const log = createLogger('HistoryDB');
 
 /** 数据库文件名 */
-const DB_PATH = 'sqlite:history.db';
+const DB_PATH = () => getHistoryDbPath();
 
 /** 每页加载数量 */
 const PAGE_SIZE = 500;

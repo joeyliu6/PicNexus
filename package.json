@@ -19,6 +19,7 @@
     "test:tauri:e2e": "node scripts/check-tauri-e2e-prereqs.cjs && wdio run wdio.tauri.e2e.conf.cjs",
     "lint": "node scripts/check-logging-guards.mjs && eslint . && stylelint \"src/**/*.{css,vue}\"",
     "lint:fix": "eslint . --fix && stylelint \"src/**/*.{css,vue}\" --fix",
+    "package:portable:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-portable-windows.ps1",
     "prepare": "husky"
   },
   "dependencies": {

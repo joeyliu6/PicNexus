@@ -78,6 +78,13 @@
     "fs:scope-document-recursive",
     "fs:scope-download-recursive",
     "fs:scope-picture-recursive",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        "$EXE/../data",
+        "$EXE/../data/**/*"
+      ]
+    },
     "clipboard-manager:default",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-read-image",

@@ -102,15 +102,37 @@ async function columnExists(db: Database, columnName: string): Promise<boolean> 
   return rows.some((r) => r.name === columnName);
 }
 
+function isDuplicateColumnError(error: unknown, columnName: string): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+  return normalized.includes('duplicate column name') && normalized.includes(columnName.toLowerCase());
+}
+
+async function addColumnIfMissing(db: Database, columnName: string, sql: string): Promise<boolean> {
+  if (await columnExists(db, columnName)) return false;
+
+  try {
+    await db.execute(sql);
+    return true;
+  } catch (error) {
+    if (isDuplicateColumnError(error, columnName)) {
+      log.warn(`迁移跳过：${columnName} 列已存在`);
+      return false;
+    }
+    throw error;
+  }
+}
+
 /**
  * 迁移：添加 is_favorited 列（幂等）
  */
 async function migrateAddFavoriteColumn(db: Database): Promise<void> {
   try {
-    if (!(await columnExists(db, 'is_favorited'))) {
-      await db.execute(
-        `ALTER TABLE history_items ADD COLUMN is_favorited INTEGER NOT NULL DEFAULT 0`
-      );
+    if (await addColumnIfMissing(
+      db,
+      'is_favorited',
+      `ALTER TABLE history_items ADD COLUMN is_favorited INTEGER NOT NULL DEFAULT 0`
+    )) {
       log.info('迁移完成：添加 is_favorited 列');
     }
     // 索引创建与列添加解耦：若上次迁移半途失败（列已加但索引未建），本次仍可补建
@@ -129,10 +151,11 @@ async function migrateAddFavoriteColumn(db: Database): Promise<void> {
  */
 async function migrateAddSuccessCountColumn(db: Database): Promise<void> {
   try {
-    if (!(await columnExists(db, 'success_count'))) {
-      await db.execute(
-        `ALTER TABLE history_items ADD COLUMN success_count INTEGER NOT NULL DEFAULT 0`
-      );
+    if (await addColumnIfMissing(
+      db,
+      'success_count',
+      `ALTER TABLE history_items ADD COLUMN success_count INTEGER NOT NULL DEFAULT 0`
+    )) {
 
       // 回填：用 SQLite 原生 json_each 在 DB 层完成，不经过 JS
       // WHERE json_valid 防御：若某行 results 被第三方工具污染成非法 JSON，
@@ -162,11 +185,12 @@ async function migrateAddSuccessCountColumn(db: Database): Promise<void> {
  */
 async function migrateAddSuccessfulServiceIdsColumn(db: Database): Promise<void> {
   try {
-    if (await columnExists(db, 'successful_service_ids')) return;
-
-    await db.execute(
+    const added = await addColumnIfMissing(
+      db,
+      'successful_service_ids',
       `ALTER TABLE history_items ADD COLUMN successful_service_ids TEXT NOT NULL DEFAULT '[]'`
     );
+    if (!added) return;
 
     // 回填：用 SQLite 原生 json_group_array 在 DB 层完成
     // WHERE json_valid 防御非法 JSON 行（详见 migrateAddSuccessCountColumn 注释）
@@ -191,10 +215,11 @@ async function migrateAddSuccessfulServiceIdsColumn(db: Database): Promise<void>
  */
 async function migrateAddMigrationSkipColumn(db: Database): Promise<void> {
   try {
-    if (!(await columnExists(db, 'migration_skip'))) {
-      await db.execute(
-        `ALTER TABLE history_items ADD COLUMN migration_skip INTEGER NOT NULL DEFAULT 0`
-      );
+    if (await addColumnIfMissing(
+      db,
+      'migration_skip',
+      `ALTER TABLE history_items ADD COLUMN migration_skip INTEGER NOT NULL DEFAULT 0`
+    )) {
       log.info('迁移完成：添加 migration_skip 列');
     }
     // 复合索引：覆盖 WHERE migration_skip = 0 AND ... ORDER BY timestamp DESC
@@ -209,10 +234,11 @@ async function migrateAddMigrationSkipColumn(db: Database): Promise<void> {
 
 async function migrateAddLinkCheckSkipColumn(db: Database): Promise<void> {
   try {
-    if (!(await columnExists(db, 'link_check_skip'))) {
-      await db.execute(
-        `ALTER TABLE history_items ADD COLUMN link_check_skip INTEGER NOT NULL DEFAULT 0`
-      );
+    if (await addColumnIfMissing(
+      db,
+      'link_check_skip',
+      `ALTER TABLE history_items ADD COLUMN link_check_skip INTEGER NOT NULL DEFAULT 0`
+    )) {
       log.info('迁移完成：添加 link_check_skip 列');
     }
     await db.execute(

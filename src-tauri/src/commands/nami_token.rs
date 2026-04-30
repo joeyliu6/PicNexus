@@ -1,14 +1,8 @@
-// src-tauri/src/commands/nami_token.rs
-// 纳米图床 Token 自动获取模块
-// 使用 Sidecar (Node.js + Puppeteer) 从纳米页面获取动态 Headers
-// v2.10: 迁移到 AppError 统一错误类型
-
 use serde::{Deserialize, Serialize};
-use tauri_plugin_shell::process::CommandEvent;
-use tauri_plugin_shell::ShellExt;
 
-use crate::error::{AppError, IntoAppError};
+use crate::error::AppError;
 use crate::log_utils::{sanitize_text, summarize_text};
+use crate::portable;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NamiDynamicHeaders {
@@ -52,7 +46,7 @@ fn sanitize_sidecar_log_line(line: &str) -> String {
 
     if has_sensitive_marker {
         format!(
-            "[NamiToken] sidecar 敏感日志已脱敏 ({})",
+            "[NamiToken] sidecar sensitive log redacted ({})",
             summarize_text(line)
         )
     } else {
@@ -60,7 +54,6 @@ fn sanitize_sidecar_log_line(line: &str) -> String {
     }
 }
 
-/// 从纳米页面获取动态 Headers (Tauri command)
 #[tauri::command]
 pub async fn fetch_nami_token(
     app: tauri::AppHandle,
@@ -70,57 +63,28 @@ pub async fn fetch_nami_token(
     fetch_nami_token_internal(&app, cookie, auth_token).await
 }
 
-/// 从纳米页面获取动态 Headers (内部函数)
 pub async fn fetch_nami_token_internal(
-    app: &tauri::AppHandle,
+    _app: &tauri::AppHandle,
     cookie: String,
     auth_token: String,
 ) -> Result<NamiDynamicHeaders, AppError> {
-    log::info!("[NamiToken] 开始获取动态 Headers (Sidecar)");
+    log::info!("[NamiToken] starting sidecar");
 
-    let sidecar = app
-        .shell()
-        .sidecar("nami-token-fetcher")
-        .into_external_err_with("创建 sidecar 失败")?;
+    let args = [
+        "fetch-token",
+        "--cookie",
+        &cookie,
+        "--auth-token",
+        &auth_token,
+    ];
+    let (output, stderr_output) = portable::run_sidecar("nami-token-fetcher", &args, 45).await?;
 
-    let (mut rx, _child) = sidecar
-        .args([
-            "fetch-token",
-            "--cookie",
-            &cookie,
-            "--auth-token",
-            &auth_token,
-        ])
-        .spawn()
-        .into_external_err_with("启动 sidecar 失败")?;
-
-    let mut output = String::new();
-    let mut stderr_output = String::new();
-
-    while let Some(event) = rx.recv().await {
-        match event {
-            CommandEvent::Stdout(line) => {
-                output.push_str(&String::from_utf8_lossy(&line));
-            }
-            CommandEvent::Stderr(line) => {
-                stderr_output.push_str(&String::from_utf8_lossy(&line));
-                stderr_output.push('\n');
-            }
-            CommandEvent::Terminated(status) => {
-                log::debug!("[NamiToken] Sidecar 退出，状态: {:?}", status);
-            }
-            _ => {}
-        }
-    }
-
-    // 输出 stderr 日志（包含进度信息）
     if !stderr_output.is_empty() {
         for line in stderr_output.lines() {
             log::debug!("{}", sanitize_sidecar_log_line(line));
         }
     }
 
-    // 解析 JSON 响应
     let response: SidecarResponse<NamiDynamicHeaders> =
         serde_json::from_str(&output).map_err(|e| {
             AppError::external(format!(
@@ -132,7 +96,7 @@ pub async fn fetch_nami_token_internal(
 
     if response.success {
         if let Some(headers) = response.data {
-            log::info!("[NamiToken] Headers 获取成功");
+            log::info!("[NamiToken] headers fetched");
             return Ok(headers);
         }
         Err(AppError::external("响应中没有 Headers 数据"))

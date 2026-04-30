@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const serviceAvailabilityMock = vi.hoisted(() => ({
+  checkQiyuAvailability: vi.fn(),
+  checkJdAvailable: vi.fn(),
+}));
+
 vi.mock('../../../store/instances', () => ({
   configStore: {
     get: vi.fn(),
@@ -15,8 +20,8 @@ vi.mock('../../../composables/useServiceAvailability', () => ({
     jdAvailable: { value: true },
     isCheckingQiyu: { value: false },
     isCheckingJd: { value: false },
-    checkQiyuAvailability: vi.fn().mockResolvedValue(undefined),
-    checkJdAvailable: vi.fn().mockResolvedValue(undefined),
+    checkQiyuAvailability: serviceAvailabilityMock.checkQiyuAvailability,
+    checkJdAvailable: serviceAvailabilityMock.checkJdAvailable,
   }),
 }));
 
@@ -37,6 +42,8 @@ describe('useServiceSelector - updateServiceConfigStatus', () => {
   beforeEach(() => {
     const api = useServiceSelector();
     api.selectedServices.value = [];
+    serviceAvailabilityMock.checkQiyuAvailability.mockReset();
+    serviceAvailabilityMock.checkJdAvailable.mockReset();
   });
 
   it('JD 始终为 true', async () => {
@@ -44,6 +51,16 @@ describe('useServiceSelector - updateServiceConfigStatus', () => {
     const api = useServiceSelector();
     await api.updateServiceConfigStatus(cfg);
     expect(api.serviceConfigStatus.value.jd).toBe(true);
+  });
+
+  it('builtin no-config services do not trigger network checks while computing config status', async () => {
+    const cfg = cloneDefault();
+    const api = useServiceSelector();
+    await api.updateServiceConfigStatus(cfg);
+    expect(api.serviceConfigStatus.value.jd).toBe(true);
+    expect(api.serviceConfigStatus.value.qiyu).toBe(true);
+    expect(serviceAvailabilityMock.checkJdAvailable).not.toHaveBeenCalled();
+    expect(serviceAvailabilityMock.checkQiyuAvailability).not.toHaveBeenCalled();
   });
 
   it('weibo - cookie 存在 → true', async () => {

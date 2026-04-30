@@ -59,6 +59,26 @@ describe('ConnectionManager', () => {
     expect(manager.isInitialized()).toBe(true);
   });
 
+  it('deduplicates concurrent direct open calls while initialization is still in flight', async () => {
+    const db = makeDb('shared');
+    const initializerGate = createDeferred<void>();
+    const initializer = vi.fn().mockReturnValue(initializerGate.promise);
+    loadMock.mockResolvedValue(db);
+    const manager = new ConnectionManager('sqlite:test.db', initializer);
+
+    const first = manager.open();
+    const second = manager.open();
+
+    expect(loadMock).toHaveBeenCalledTimes(1);
+    await Promise.resolve();
+    expect(initializer).toHaveBeenCalledTimes(1);
+
+    initializerGate.resolve(undefined);
+    await Promise.all([first, second]);
+
+    expect(manager.isInitialized()).toBe(true);
+  });
+
   it('deduplicates concurrent getDb calls while the first open is still in flight', async () => {
     const deferred = createDeferred<ReturnType<typeof makeDb>>();
     const initializer = vi.fn().mockResolvedValue(undefined);

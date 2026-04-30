@@ -5,7 +5,7 @@
 - [ ] 手动触发 `CI` workflow，勾选 `run_visual=true`，确认 visual regression 通过并保留 `playwright-visual-report`
 - [ ] 手动触发 `CI` workflow，勾选 `run_e2e=true`，确认 mocked Playwright E2E 通过并保留 `playwright-e2e-report`
 - [ ] 如平台支持，手动触发 `CI` workflow 勾选 `run_tauri_e2e=true`，或本地运行 `npm run test:tauri:e2e` 真实桌面冒烟
-- [ ] tag 触发的 `Release` workflow 中 web smoke E2E、Windows Tauri E2E、安装包 / AppImage 冒烟通过
+- [ ] tag 触发的 `Release` workflow 中 web smoke E2E、Windows Tauri E2E、安装包 / AppImage 冒烟、Windows 便携版 ZIP 冒烟通过
 
 ## 上传流程
 - [ ] 拖入一张图 → 历史页出现
@@ -39,6 +39,7 @@
 - [ ] 启动 → 主窗口可见 → 关闭正常
 
 ## 跨平台（至少抽检一个）
-- [ ] Windows .msi 安装 + 启动
-- [ ] macOS .dmg 安装 + 启动（arm64 或 Intel 之一）
+- [ ] Windows `.msi` 安装 + 启动
+- [ ] Windows 便携版 ZIP 解压后 `PicNexus.exe --version` 正常，`data/portable.json` 存在
+- [ ] macOS `.dmg` 安装 + 启动（arm64 或 Intel 之一）
 - [ ] Linux AppImage 启动

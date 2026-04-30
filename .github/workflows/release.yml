@@ -156,6 +156,120 @@ jobs:
           includeUpdaterJson: true
           args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
 
+      - name: Package Windows portable ZIP
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: npm run package:portable:win
+
+      - name: Smoke test portable ZIP (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem -Path "src-tauri/target/release/portable" -Filter "*_portable.zip" | Select-Object -First 1
+          if (-not $zip) { throw "Portable ZIP not found" }
+
+          $extractRoot = Join-Path $env:RUNNER_TEMP "picnexus-portable-smoke"
+          if (Test-Path -LiteralPath $extractRoot) {
+            $resolvedTemp = (Resolve-Path -LiteralPath $env:RUNNER_TEMP).Path
+            $resolvedExtractRoot = (Resolve-Path -LiteralPath $extractRoot).Path
+            if (-not $resolvedExtractRoot.StartsWith($resolvedTemp, [StringComparison]::OrdinalIgnoreCase)) {
+              throw "Refusing to remove path outside RUNNER_TEMP: $resolvedExtractRoot"
+            }
+            Remove-Item -LiteralPath $resolvedExtractRoot -Recurse -Force
+          }
+
+          Expand-Archive -LiteralPath $zip.FullName -DestinationPath $extractRoot -Force
+
+          $portableDir = Join-Path $extractRoot "PicNexus"
+          $required = @(
+            "PicNexus.exe",
+            "bin/qiyu-token-fetcher.exe",
+            "bin/nami-token-fetcher.exe",
+            "icons/icon.png",
+            "data/portable.json"
+          )
+          foreach ($item in $required) {
+            $path = Join-Path $portableDir $item
+            if (-not (Test-Path -LiteralPath $path)) {
+              throw "Portable ZIP missing required file: $item"
+            }
+          }
+
+          & (Join-Path $portableDir "PicNexus.exe") --version
+
+      - name: Upload Windows portable ZIP to draft release
+        if: matrix.platform == 'windows-latest'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = context.ref.replace('refs/tags/', '');
+            const portableDir = 'src-tauri/target/release/portable';
+            const assetName = fs.readdirSync(portableDir).find(name => name.endsWith('_portable.zip'));
+
+            if (!assetName) {
+              throw new Error(`No portable ZIP found in ${portableDir}`);
+            }
+
+            const assetPath = path.join(portableDir, assetName);
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner,
+              repo,
+              per_page: 100,
+            });
+
+            let release = releases.find(r => r.tag_name === tag);
+            if (!release) {
+              release = releases.find(r => r.draft && r.tag_name.startsWith('untagged-'));
+              if (release) {
+                await github.rest.repos.updateRelease({
+                  owner,
+                  repo,
+                  release_id: release.id,
+                  tag_name: tag,
+                });
+              }
+            }
+
+            if (!release) {
+              throw new Error(`No draft release found for tag ${tag}`);
+            }
+
+            const { data: assets } = await github.rest.repos.listReleaseAssets({
+              owner,
+              repo,
+              release_id: release.id,
+              per_page: 100,
+            });
+            const existing = assets.find(asset => asset.name === assetName);
+            if (existing) {
+              await github.rest.repos.deleteReleaseAsset({
+                owner,
+                repo,
+                asset_id: existing.id,
+              });
+            }
+
+            const data = fs.readFileSync(assetPath);
+            await github.rest.repos.uploadReleaseAsset({
+              owner,
+              repo,
+              release_id: release.id,
+              name: assetName,
+              data,
+              headers: {
+                'content-type': 'application/zip',
+                'content-length': data.length,
+              },
+            });
+
+            console.log(`Uploaded portable asset: ${assetName}`);
+
       # Tier 3 B: 安装包冒烟 — 静默装 MSI + 启动 15 秒探活，macOS 跳过
       - name: Smoke test installer (Windows)
         if: matrix.platform == 'windows-latest'

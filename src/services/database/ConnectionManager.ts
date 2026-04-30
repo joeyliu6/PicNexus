@@ -13,6 +13,7 @@ import { createLogger } from '../../utils/logger';
 const log = createLogger('DBConnection');
 
 export type DbInitializer = (db: Database) => Promise<void>;
+export type DbPathProvider = string | (() => Promise<string>);
 
 export class ConnectionManager {
   private db: Database | null = null;
@@ -23,7 +24,7 @@ export class ConnectionManager {
   private static readonly HEALTH_CHECK_INTERVAL = 30_000;
 
   constructor(
-    private readonly dbPath: string,
+    private readonly dbPath: DbPathProvider,
     private readonly initializer: DbInitializer,
   ) {}
 
@@ -32,9 +33,26 @@ export class ConnectionManager {
       return;
     }
 
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+
+    const openTask = this.openInternal();
+    const trackedTask = openTask.finally(() => {
+      if (this.initPromise === trackedTask) {
+        this.initPromise = null;
+      }
+    });
+    this.initPromise = trackedTask;
+
+    return trackedTask;
+  }
+
+  private async openInternal(): Promise<void> {
     try {
       log.debug('Opening database connection...');
-      this.db = await Database.load(this.dbPath);
+      const dbPath = typeof this.dbPath === 'function' ? await this.dbPath() : this.dbPath;
+      this.db = await Database.load(dbPath);
       await this.initializer(this.db);
       this.initialized = true;
       log.debug('Database connection is ready');
@@ -88,17 +106,7 @@ export class ConnectionManager {
     }
 
     if (!this.initialized || !this.db) {
-      if (!this.initPromise) {
-        const openTask = this.open();
-        const trackedTask = openTask.finally(() => {
-          if (this.initPromise === trackedTask) {
-            this.initPromise = null;
-          }
-        });
-        this.initPromise = trackedTask;
-      }
-
-      await this.initPromise;
+      await this.open();
       this.lastHealthCheck = Date.now();
     }
 

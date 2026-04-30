@@ -8,6 +8,7 @@ mod cli;
 mod commands;
 mod error;
 mod log_utils;
+mod portable;
 mod server;
 
 use error::AppError;
@@ -36,6 +37,21 @@ pub struct ServerState {
     pub upload_config: Arc<TokioMutex<Option<server::ServerUploadConfig>>>,
     pub auth_token: Arc<TokioMutex<Option<String>>>,
     pub abort_handle: std::sync::Mutex<Option<tokio::task::AbortHandle>>,
+}
+
+#[tauri::command]
+fn is_portable_mode() -> bool {
+    portable::is_portable()
+}
+
+#[tauri::command]
+fn get_user_data_dir(app: tauri::AppHandle) -> Result<String, AppError> {
+    Ok(portable::user_data_dir(&app)?.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn get_history_db_path() -> String {
+    portable::history_db_url()
 }
 
 // 用于 R2 和 WebDAV 测试
@@ -106,14 +122,28 @@ fn main() {
             reqwest::Client::new()
         });
 
-    let mut log_targets = vec![
-        Target::new(TargetKind::Stdout),
-        Target::new(TargetKind::LogDir { file_name: None }),
-    ];
+    let mut log_targets = vec![Target::new(TargetKind::Stdout)];
+    if let Some(log_dir) = portable::portable_data_dir().map(|dir| dir.join("logs")) {
+        log_targets.push(Target::new(TargetKind::Folder {
+            path: log_dir,
+            file_name: None,
+        }));
+    } else {
+        log_targets.push(Target::new(TargetKind::LogDir { file_name: None }));
+    }
     #[cfg(debug_assertions)]
     log_targets.push(Target::new(TargetKind::Webview));
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(
+            |app, _args, _cwd| {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.unminimize();
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            },
+        ))
         // 注册 Tauri 2.0 插件
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_autostart::init(
@@ -165,6 +195,9 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             set_close_to_tray,
+            is_portable_mode,
+            get_user_data_dir,
+            get_history_db_path,
             open_login_window,
             show_login_window,
             save_cookie_from_login,
@@ -475,7 +508,7 @@ fn main() {
             }
 
             // 启动时清理过期日志（保留最近 7 天）
-            if let Ok(log_dir) = app.path().app_log_dir() {
+            if let Ok(log_dir) = portable::log_dir(app.handle()) {
                 let max_age = std::time::Duration::from_secs(7 * 24 * 3600);
                 let now = std::time::SystemTime::now();
                 for entry in std::fs::read_dir(&log_dir).into_iter().flatten().flatten() {
@@ -2032,6 +2065,32 @@ async fn test_webdav_connection(
 
 #[tauri::command]
 fn get_or_create_secure_key() -> Result<String, AppError> {
+    if let Some(key_path) = portable::secure_key_path() {
+        if let Some(parent) = key_path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| AppError::file_io(format!("无法创建便携数据目录: {}", e)))?;
+        }
+
+        if key_path.exists() {
+            let key = std::fs::read_to_string(&key_path)
+                .map_err(|e| AppError::file_io(format!("无法读取便携密钥: {}", e)))?
+                .trim()
+                .to_string();
+            if !key.is_empty() {
+                log::debug!("[密钥管理] 从便携数据目录读取现有密钥");
+                return Ok(key);
+            }
+        }
+
+        log::debug!("[密钥管理] 生成新的便携密钥");
+        let mut key_bytes = [0u8; 32];
+        rand::thread_rng().fill(&mut key_bytes);
+        let new_key = STANDARD.encode(key_bytes);
+        std::fs::write(&key_path, &new_key)
+            .map_err(|e| AppError::file_io(format!("无法保存便携密钥: {}", e)))?;
+        return Ok(new_key);
+    }
+
     let entry = Entry::new(SERVICE_NAME, KEY_NAME)
         .map_err(|e| AppError::external(format!("无法访问系统钥匙串: {}", e)))?;
 
@@ -2069,6 +2128,17 @@ fn set_secure_key(key: String) -> Result<(), AppError> {
         )));
     }
 
+    if let Some(key_path) = portable::secure_key_path() {
+        if let Some(parent) = key_path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| AppError::file_io(format!("无法创建便携数据目录: {}", e)))?;
+        }
+        std::fs::write(&key_path, key)
+            .map_err(|e| AppError::file_io(format!("无法更新便携密钥: {}", e)))?;
+        log::debug!("[密钥管理] ✓ 密钥已更新到便携数据目录");
+        return Ok(());
+    }
+
     let entry = Entry::new(SERVICE_NAME, KEY_NAME)
         .map_err(|e| AppError::external(format!("无法访问系统钥匙串: {}", e)))?;
 
@@ -2083,10 +2153,7 @@ fn set_secure_key(key: String) -> Result<(), AppError> {
 /// 打开日志目录
 #[tauri::command]
 fn open_log_dir(app: tauri::AppHandle) -> Result<(), AppError> {
-    let log_dir = app
-        .path()
-        .app_log_dir()
-        .map_err(|e| AppError::file_io(format!("无法获取日志目录: {}", e)))?;
+    let log_dir = portable::log_dir(&app)?;
     std::fs::create_dir_all(&log_dir)
         .map_err(|e| AppError::file_io(format!("无法创建日志目录: {}", e)))?;
     opener::open(&log_dir).map_err(|e| AppError::file_io(format!("无法打开日志目录: {}", e)))?;
@@ -2282,10 +2349,7 @@ async fn save_cli_config(
     app: tauri::AppHandle,
     service_config_json: Option<String>,
 ) -> Result<(), AppError> {
-    let config_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::file_io(format!("无法获取应用数据目录: {}", e)))?;
+    let config_dir = portable::user_data_dir(&app)?;
 
     std::fs::create_dir_all(&config_dir)
         .map_err(|e| AppError::file_io(format!("无法创建配置目录: {}", e)))?;

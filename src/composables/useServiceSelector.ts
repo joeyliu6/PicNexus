@@ -6,7 +6,6 @@ import { configStore } from '../store/instances';
 import type { UserConfig } from '../config/types';
 import { DEFAULT_CONFIG, makeCustomS3Id } from '../config/types';
 import { useToast } from './useToast';
-import { useServiceAvailability } from './useServiceAvailability';
 import { TOAST_MESSAGES } from '../constants';
 import { debounceWithError } from '../utils/debounce';
 import { createLogger } from '../utils/logger';
@@ -40,7 +39,7 @@ const serviceConfigStatus = ref<Record<string, boolean>>({
   r2: false,
   jd: true,
   nowcoder: false,
-  qiyu: false,
+  qiyu: true,
   zhihu: false,
   nami: false,
   bilibili: false,
@@ -83,7 +82,6 @@ function getActivePrefixFromConfig(config: UserConfig): string | null {
  */
 export function useServiceSelector(): UseServiceSelectorReturn {
   const toast = useToast();
-  const { qiyuAvailable, checkQiyuAvailability } = useServiceAvailability();
 
   /**
    * 保存启用的服务到配置（防抖版本）
@@ -155,14 +153,8 @@ export function useServiceSelector(): UseServiceSelectorReturn {
     const zhihuConfig = config.services.zhihu;
     serviceConfigStatus.value.zhihu = !!zhihuConfig?.cookie && zhihuConfig.cookie.trim().length > 0;
 
-    // 七鱼：复用 useServiceAvailability 的检测结果
-    try {
-      await checkQiyuAvailability(false);
-      serviceConfigStatus.value.qiyu = qiyuAvailable.value;
-    } catch (error) {
-      log.error('七鱼检测失败:', error);
-      serviceConfigStatus.value.qiyu = false;
-    }
+    // 七鱼开箱即用。可用性检测由 App.vue 启动时统一调度，避免首屏加载时的单项检测占用全局 runner。
+    serviceConfigStatus.value.qiyu = true;
 
     // 纳米
     const namiConfig = config.services.nami;
@@ -355,7 +347,7 @@ export function resetServiceSelectorState(): void {
     r2: false,
     jd: true,
     nowcoder: false,
-    qiyu: false,
+    qiyu: true,
     zhihu: false,
     nami: false,
     bilibili: false,

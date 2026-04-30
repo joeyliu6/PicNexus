@@ -20,11 +20,12 @@ import { configStore } from './store/instances';
 import { BackupPasswordRequiredError, secureStorage } from './crypto';
 import { startupFlags } from './store/startupFlags';
 import { readTextFile } from '@tauri-apps/plugin-fs';
-import { appDataDir, join } from '@tauri-apps/api/path';
+import { join } from '@tauri-apps/api/path';
 import type { UserConfig } from './config/types';
 import { historyDB } from './services/HistoryDatabase';
 import { attachConsole } from '@tauri-apps/plugin-log';
 import { createLogger } from './utils/logger';
+import { getUserDataDir } from './utils/appPaths';
 
 const log = createLogger('App');
 
@@ -188,7 +189,7 @@ onMounted(async () => {
       try { await getCurrentWindow().show(); } catch { /* ignore */ }
 
       try {
-        const appDir = await appDataDir();
+        const appDir = await getUserDataDir();
         const configPath = await join(appDir, '.settings.dat');
         pendingEncryptedContent = await readTextFile(configPath);
       } catch (readErr) {

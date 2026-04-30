@@ -7,6 +7,7 @@
 //
 // Typora 自定义命令模式：偏好设置 → 图像 → 上传服务 → 自定义命令 → 填入 PicNexus 可执行文件路径
 
+use crate::portable;
 use crate::server::upload_handler::{upload_single_file, ServerUploadConfig};
 
 /// Tauri 的 bundle identifier（与 tauri.conf.json 中的 identifier 一致）
@@ -14,6 +15,10 @@ const APP_IDENTIFIER: &str = "us.picnex.app";
 
 /// 获取应用数据目录（与 Tauri 使用的路径一致）
 fn get_app_data_dir() -> Option<std::path::PathBuf> {
+    if let Some(dir) = portable::portable_data_dir() {
+        return Some(dir);
+    }
+
     #[cfg(target_os = "windows")]
     {
         std::env::var("APPDATA")

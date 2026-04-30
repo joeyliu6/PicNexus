@@ -1,5 +1,6 @@
 import { readDir, remove } from '@tauri-apps/plugin-fs';
-import { appDataDir, join } from '@tauri-apps/api/path';
+import { join } from '@tauri-apps/api/path';
+import { getUserDataDir } from './appPaths';
 import { createLogger } from './logger';
 
 const log = createLogger('StoreCleanup');
@@ -63,7 +64,7 @@ async function cleanupForBasename(appDir: string, basename: string): Promise<voi
 
 export async function cleanupStoreBackups(): Promise<void> {
   try {
-    const appDir = await appDataDir();
+    const appDir = await getUserDataDir();
     await Promise.all(STORE_BASENAMES.map(b => cleanupForBasename(appDir, b)));
   } catch (err) {
     log.warn('备份清理失败（非致命）', err);

@@ -13,8 +13,9 @@
  */
 
 import { readTextFile, writeTextFile, exists, mkdir, remove } from '@tauri-apps/plugin-fs';
-import { appDataDir, join } from '@tauri-apps/api/path';
+import { join } from '@tauri-apps/api/path';
 import { secureStorage, isAnyEncryptedData, BackupPasswordRequiredError } from '../crypto';
+import { getUserDataDir } from '../utils/appPaths';
 import { createLogger } from '../utils/logger';
 import { StoreError } from '../utils/storeErrors';
 import { type StoreData, toErrorMessage } from './types';
@@ -48,7 +49,7 @@ export class EncryptedStore {
    */
   private async getPaths(): Promise<{ dataPath: string; appDir: string }> {
     try {
-      const appDir = await appDataDir();
+      const appDir = await getUserDataDir();
       if (!appDir) {
         throw new StoreError('无法获取应用数据目录', 'init', undefined, new Error('appDataDir returned null or undefined'));
       }
