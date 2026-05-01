@@ -159,7 +159,7 @@ function handleToggle(serviceId: string) {
 /* 悬停效果（排除选中状态） */
 .service-tag:hover:not(:disabled, .is-selected, .add-service-tag) {
   background-color: var(--hover-overlay-subtle);
-  border-color: var(--text-muted);
+  border-color: var(--primary);
   color: var(--text-primary);
 }
 

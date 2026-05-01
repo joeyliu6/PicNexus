@@ -201,6 +201,36 @@
   border-color: var(--border-subtle);
 }
 
+/* ===== Paginator 组件 ===== */
+.p-paginator .p-paginator-first.p-disabled,
+.p-paginator .p-paginator-first:disabled,
+.p-paginator .p-paginator-prev.p-disabled,
+.p-paginator .p-paginator-prev:disabled,
+.p-paginator .p-paginator-next.p-disabled,
+.p-paginator .p-paginator-next:disabled,
+.p-paginator .p-paginator-last.p-disabled,
+.p-paginator .p-paginator-last:disabled {
+  color: var(--text-disabled);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  cursor: default;
+  opacity: 1;
+}
+
+.p-paginator .p-paginator-first.p-disabled:hover,
+.p-paginator .p-paginator-first:disabled:hover,
+.p-paginator .p-paginator-prev.p-disabled:hover,
+.p-paginator .p-paginator-prev:disabled:hover,
+.p-paginator .p-paginator-next.p-disabled:hover,
+.p-paginator .p-paginator-next:disabled:hover,
+.p-paginator .p-paginator-last.p-disabled:hover,
+.p-paginator .p-paginator-last:disabled:hover {
+  color: var(--text-disabled);
+  background: transparent;
+  border-color: transparent;
+}
+
 /* ===== Dialog 组件 ===== */
 .p-dialog {
   background-color: var(--bg-card);
