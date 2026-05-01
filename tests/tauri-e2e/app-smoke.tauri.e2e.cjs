@@ -52,6 +52,57 @@ async function waitForMainLayout() {
   await waitForVisible('.titlebar .app-title');
 }
 
+async function clickElement(element, label) {
+  try {
+    await element.waitForClickable({ timeout: 5_000 });
+    await element.click();
+    return;
+  } catch {
+    // GitHub's Windows WebView2 runner can report visible sidebar buttons as
+    // non-clickable even though the app is ready. Fall back to a DOM click
+    // after checking the element is genuinely interactable.
+  }
+
+  const clicked = await browser.execute((target, targetLabel) => {
+    if (!target) {
+      return { ok: false, reason: `${targetLabel} was not found` };
+    }
+
+    const style = window.getComputedStyle(target);
+    const rect = target.getBoundingClientRect();
+    if (
+      style.display === 'none'
+      || style.visibility === 'hidden'
+      || style.pointerEvents === 'none'
+      || rect.width <= 0
+      || rect.height <= 0
+      || target.disabled
+      || target.getAttribute('aria-disabled') === 'true'
+    ) {
+      return {
+        ok: false,
+        reason: `${targetLabel} is not interactable: ${JSON.stringify({
+          display: style.display,
+          visibility: style.visibility,
+          pointerEvents: style.pointerEvents,
+          width: rect.width,
+          height: rect.height,
+          disabled: Boolean(target.disabled),
+          ariaDisabled: target.getAttribute('aria-disabled'),
+        })}`,
+      };
+    }
+
+    target.scrollIntoView({ block: 'center', inline: 'center' });
+    target.click();
+    return { ok: true };
+  }, element, label);
+
+  if (!clicked.ok) {
+    throw new Error(clicked.reason);
+  }
+}
+
 async function expectNavCount(count) {
   await browser.waitUntil(async () => {
     const navButtons = await $$('.sidebar .nav-btn');
@@ -65,8 +116,8 @@ async function expectNavCount(count) {
 async function openNav(index, expectedSelector) {
   await expectNavCount(4);
   const navButtons = await $$('.sidebar .nav-btn');
-  await navButtons[index].waitForClickable({ timeout: 30_000 });
-  await navButtons[index].click();
+  await waitForVisible(`.sidebar .nav-btn:nth-child(${index + 1})`);
+  await clickElement(navButtons[index], `.sidebar .nav-btn[${index}]`);
   await waitForVisible(expectedSelector);
 }
 
@@ -76,8 +127,7 @@ async function clickIndexed(selector, index) {
     throw new Error(`Expected ${selector} to have an element at index ${index}, found ${elements.length}`);
   }
 
-  await elements[index].waitForClickable({ timeout: 30_000 });
-  await elements[index].click();
+  await clickElement(elements[index], `${selector}[${index}]`);
 }
 
 async function expectRenderable(selector, minVisibleDescendants = 1) {
