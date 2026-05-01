@@ -752,12 +752,11 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
             @item-hover="() => {}"
             @image-load="() => {}"
             @image-error="() => {}"
-          >
-            <template #footer>共 {{ timelineTotalCount }} 张照片</template>
-          </TimelinePhotoGrid>
+          />
           <div v-if="state === 'scroll-restored'" class="visual-timeline-restore-chip">
             <i class="pi pi-history"></i><span>Restored to the middle of the timeline</span>
           </div>
+          <div class="visual-timeline-end-spacer"></div>
           <div v-if="state === 'fast-scroll'" class="visual-timeline-restore-chip">
             <i class="pi pi-bolt"></i><span>Fast scroll mode is showing placeholders</span>
           </div>

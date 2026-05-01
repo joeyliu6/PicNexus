@@ -520,6 +520,10 @@ body,
   min-width: 320px;
 }
 
+.visual-timeline-end-spacer {
+  height: 100px;
+}
+
 .visual-timeline-restore-chip {
   position: sticky;
   left: var(--space-lg-xl);

@@ -314,9 +314,7 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
         @item-hover="handleImageHover"
         @image-load="onImageLoad"
         @image-error="onImageError"
-      >
-        <template #footer>共 {{ dayTotalCount }} 张照片</template>
-      </TimelinePhotoGrid>
+      />
 
         <Transition name="t-fade-out">
           <TimelineSkeleton

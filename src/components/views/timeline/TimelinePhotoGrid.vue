@@ -153,11 +153,6 @@ function getGroupYear(groupId: string): string {
     />
 
   </div>
-
-  <!-- Footer slot - 位于虚拟容器外，避免绝对定位叠图 -->
-  <div v-if="groups.length > 0" class="all-loaded">
-    <slot name="footer"></slot>
-  </div>
 </template>
 
 <style scoped>
@@ -214,16 +209,6 @@ function getGroupYear(groupId: string): string {
   letter-spacing: 0.04em;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
-}
-
-.all-loaded {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-sm);
-  padding: var(--space-lg-xl);
-  color: var(--text-secondary);
-  font-size: var(--text-base);
 }
 
 /* 响应式适配 */
