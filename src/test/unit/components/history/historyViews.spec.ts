@@ -29,6 +29,16 @@ const mockState = vi.hoisted(() => ({
   visibleServiceCount: 4,
 }));
 
+function createDeferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 vi.mock('../../../../composables/useToast', () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn(), warn: vi.fn(), silent: vi.fn() }),
 }));
@@ -338,6 +348,29 @@ beforeEach(() => {
 });
 
 describe('HistoryView page shell', () => {
+  it('mounts the table view while stats bootstrap is still pending', async () => {
+    const statsLoad = createDeferred();
+    mockState.historyManager.isStatsLoaded.value = false;
+    mockState.loadStats.mockReturnValueOnce(statsLoad.promise);
+
+    const wrapper = mountWithDefaults(HistoryView, {
+      global: {
+        stubs: {
+          DashboardStrip: DashboardStripStub,
+          HistoryTableView: HistoryTableViewStub,
+          TimelineView: TimelineViewStub,
+          FavoritesView: FavoritesViewStub,
+        },
+      },
+    });
+
+    expect(wrapper.get('[data-testid="table-view"]').attributes('data-visible')).toBe('true');
+    expect(mockState.loadStats).toHaveBeenCalledTimes(1);
+
+    statsLoad.resolve();
+    await flushPromisesAndTicks(1);
+  });
+
   it('wires search, service filter, view mode switching, and total count updates', async () => {
     const wrapper = mountWithDefaults(HistoryView, {
       global: {

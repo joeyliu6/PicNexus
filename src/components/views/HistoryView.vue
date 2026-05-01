@@ -20,8 +20,6 @@ const currentFilter = ref<ServiceType | 'all'>('all');
 const debouncedSearchTerm = ref('');
 
 const totalCount = ref(0);
-const hasBootstrappedStats = ref(historyManager.isStatsLoaded.value);
-
 const activationTrigger = ref(0);
 
 const historyContainerRef = ref<HTMLElement | null>(null);
@@ -35,9 +33,7 @@ async function ensureStatsLoaded(): Promise<void> {
         await historyManager.loadStats();
         totalCount.value = historyManager.totalCount.value;
       } catch {
-        // loadStats already owns user-facing error reporting; mount the view anyway.
-      } finally {
-        hasBootstrappedStats.value = true;
+        // loadStats already owns user-facing error reporting.
       }
     })().finally(() => {
       statsLoadPromise = null;
@@ -115,7 +111,6 @@ const handleTotalCountUpdate = (count: number) => {
     <div ref="historyContainerRef" class="history-container" :class="{ 'no-padding': currentViewMode !== 'table' }">
       <!-- 表格视图 -->
       <HistoryTableView
-        v-if="hasBootstrappedStats"
         v-show="currentViewMode === 'table'"
         :visible="currentViewMode === 'table'"
         :filter="currentFilter"

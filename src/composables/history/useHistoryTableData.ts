@@ -17,6 +17,7 @@ interface SkeletonItem {
 }
 
 const DEFAULT_SKELETON_COUNT = 20;
+const MIN_SKELETON_DISPLAY_MS = 300;
 
 function generateSkeletonData(count: number): SkeletonItem[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -27,6 +28,15 @@ function generateSkeletonData(count: number): SkeletonItem[] {
 
 export function isSkeleton(data: HistoryItem | SkeletonItem): data is SkeletonItem {
   return '_skeleton' in data && data._skeleton === true;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function waitForMinimumSkeletonDisplay(startedAt: number): Promise<void> {
+  const remaining = MIN_SKELETON_DISPLAY_MS - (Date.now() - startedAt);
+  if (remaining > 0) await delay(remaining);
 }
 
 interface UseHistoryTableDataOptions {
@@ -139,6 +149,8 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
     }
 
     const version = ++loadVersion;
+    const shouldHoldSkeleton = currentPageData.value.length === 0;
+    const skeletonStartedAt = shouldHoldSkeleton ? Date.now() : 0;
     try {
       isLoadingPage.value = true;
       let result = await peekPage(currentPage.value);
@@ -151,9 +163,16 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
         result = await peekPage(maxPage);
         if (version !== loadVersion) return;
       }
+      if (shouldHoldSkeleton) {
+        await waitForMinimumSkeletonDisplay(skeletonStartedAt);
+        if (version !== loadVersion) return;
+      }
       currentPageData.value = result.items;
       totalRecords.value = result.total;
     } catch (error) {
+      if (version === loadVersion && shouldHoldSkeleton) {
+        await waitForMinimumSkeletonDisplay(skeletonStartedAt);
+      }
       if (version !== loadVersion) return;
       log.error('加载失败', error);
       toast.error('加载失败', String(error));

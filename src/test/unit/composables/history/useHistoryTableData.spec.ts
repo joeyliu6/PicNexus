@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, nextTick, ref, shallowRef } from 'vue';
 import { flushPromises, mount } from '@vue/test-utils';
 
@@ -72,6 +72,7 @@ vi.mock('../../../../utils/logger', () => ({
 }));
 
 const { useHistoryTableData } = await import('../../../../composables/history/useHistoryTableData');
+const MIN_SKELETON_DISPLAY_MS = 300;
 
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -125,8 +126,15 @@ function mountHarness(options: Parameters<typeof useHistoryTableData>[0]) {
   };
 }
 
+async function flushTableLoading() {
+  await flushPromises();
+  await vi.advanceTimersByTimeAsync(MIN_SKELETON_DISPLAY_MS);
+  await flushPromises();
+}
+
 describe('useHistoryTableData', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     vi.clearAllMocks();
     Object.keys(eventHandlers).forEach(key => delete eventHandlers[key]);
     getSuccessfulServicesMock.mockImplementation((item: { services?: string[] }) => item.services ?? []);
@@ -148,6 +156,10 @@ describe('useHistoryTableData', () => {
     });
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('loads the first page on mount and exposes the returned data', async () => {
     loadPageByNumberMock.mockResolvedValueOnce({
       items: [{ id: 'a', services: ['weibo'] }],
@@ -161,13 +173,42 @@ describe('useHistoryTableData', () => {
       onPageLoaded,
       viewState: makeViewState(),
     });
-    await flushPromises();
+    await flushTableLoading();
 
     expect(loadPageByNumberMock).toHaveBeenCalledWith(1, 50, 'all');
     expect(harness.api().currentPageData.value).toEqual([{ id: 'a', services: ['weibo'] }]);
     expect(harness.api().totalRecords.value).toBe(1);
     expect(harness.api().isLoadingPage.value).toBe(false);
     expect(onPageLoaded).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the initial skeleton visible for the minimum display time', async () => {
+    loadPageByNumberMock.mockResolvedValueOnce({
+      items: [{ id: 'a', services: ['weibo'] }],
+      total: 1,
+    });
+
+    const harness = mountHarness({
+      filter: ref('all'),
+      searchTerm: ref(''),
+      viewState: makeViewState(),
+    });
+    await flushPromises();
+
+    expect(harness.api().currentPageData.value).toEqual([]);
+    expect(harness.api().isLoadingPage.value).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(MIN_SKELETON_DISPLAY_MS - 1);
+    await flushPromises();
+
+    expect(harness.api().currentPageData.value).toEqual([]);
+    expect(harness.api().isLoadingPage.value).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await flushPromises();
+
+    expect(harness.api().currentPageData.value).toEqual([{ id: 'a', services: ['weibo'] }]);
+    expect(harness.api().isLoadingPage.value).toBe(false);
   });
 
   it('enters the empty state directly when stats already confirm there are no records', async () => {
@@ -205,6 +246,10 @@ describe('useHistoryTableData', () => {
     firstLoad.resolve({ items: [], total: 0 });
     await flushPromises();
 
+    expect(harness.api().isLoadingPage.value).toBe(true);
+
+    await flushTableLoading();
+
     expect(harness.api().currentPageData.value).toEqual([]);
     expect(harness.api().totalRecords.value).toBe(0);
     expect(harness.api().isLoadingPage.value).toBe(false);
@@ -226,7 +271,7 @@ describe('useHistoryTableData', () => {
     expect(harness.api().isLoadingPage.value).toBe(true);
 
     firstLoad.resolve({ items: [], total: 0 });
-    await flushPromises();
+    await flushTableLoading();
 
     expect(harness.api().isLoadingPage.value).toBe(false);
   });
@@ -241,7 +286,7 @@ describe('useHistoryTableData', () => {
       searchTerm,
       viewState,
     });
-    await flushPromises();
+    await flushTableLoading();
 
     harness.api().currentPage.value = 3;
     harness.api().first.value = 100;
@@ -257,6 +302,8 @@ describe('useHistoryTableData', () => {
       limit: 50,
       offset: 0,
     });
+
+    await flushTableLoading();
   });
 
   it('ignores stale page results when a newer load finishes later', async () => {
@@ -277,7 +324,7 @@ describe('useHistoryTableData', () => {
 
     filter.value = 'weibo';
     await nextTick();
-    await flushPromises();
+    await flushTableLoading();
 
     firstLoad.resolve({
       items: [{ id: 'old' }],
@@ -301,7 +348,7 @@ describe('useHistoryTableData', () => {
       searchTerm: ref(''),
       viewState,
     });
-    await flushPromises();
+    await flushTableLoading();
 
     harness.api().handleHeaderCheckboxChange(true);
     await nextTick();
@@ -332,7 +379,7 @@ describe('useHistoryTableData', () => {
       searchTerm: ref(''),
       viewState: makeViewState(['a', 'b']),
     });
-    await flushPromises();
+    await flushTableLoading();
 
     expect(harness.api().selectedAvailableServices.value).toEqual([
       { serviceId: 'weibo', count: 2 },
@@ -351,7 +398,7 @@ describe('useHistoryTableData', () => {
       searchTerm: ref(''),
       viewState: makeViewState(),
     });
-    await flushPromises();
+    await flushTableLoading();
 
     harness.api().currentPage.value = 4;
     harness.api().first.value = 150;
@@ -389,7 +436,7 @@ describe('useHistoryTableData', () => {
       searchTerm: ref(''),
       viewState: makeViewState(),
     });
-    await flushPromises();
+    await flushTableLoading();
 
     harness.api().currentPage.value = 2;
     harness.api().first.value = 50;
