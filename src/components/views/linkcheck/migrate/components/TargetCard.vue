@@ -23,22 +23,23 @@ const emit = defineEmits<{ toggle: [] }>();
 const badgeText = computed(() => healthLabels[props.healthStatus] ?? '已配置');
 const isDisabled = computed(() => props.healthStatus === 'error');
 const errorTooltip = computed(() => isDisabled.value ? '图床异常，请先检查配置' : undefined);
-const backupTooltip = computed(() => {
-  const backedUpLine = `${formatNumber(props.backedUpCount)} 张已在该图床，无需迁移`;
-  if (props.noSourceSelected) {
-    return `请先选择来源\n${backedUpLine}`;
-  }
-  return backedUpLine;
-});
-const cardTooltip = computed(() =>
-  errorTooltip.value ? `${errorTooltip.value}\n${backupTooltip.value}` : backupTooltip.value,
+const backedUpLine = computed(() =>
+  props.backedUpCount > 0 ? `${formatNumber(props.backedUpCount)} 张已在该图床，无需迁移` : undefined,
 );
+const cardTooltip = computed(() => {
+  const lines = [
+    errorTooltip.value,
+    props.noSourceSelected ? '请先选择来源' : undefined,
+    backedUpLine.value,
+  ].filter((line): line is string => Boolean(line));
+  return lines.length > 0 ? lines.join('\n') : undefined;
+});
 const cardAriaLabel = computed(() => {
   const parts = [
     props.displayName,
     props.noSourceSelected ? '请先选择来源' : `${formatNumber(props.pendingCount)} 张待迁移`,
-    `${formatNumber(props.backedUpCount)} 张已在该图床，无需迁移`,
-  ];
+    backedUpLine.value,
+  ].filter((part): part is string => Boolean(part));
   if (errorTooltip.value) parts.splice(1, 0, errorTooltip.value);
   return parts.join('，');
 });

@@ -51,9 +51,6 @@ function mountList(options: {
     },
     global: {
       stubs: {
-        HeroEmptyState: {
-          template: '<section class="hero-empty-stub"><slot /></section>',
-        },
         EmptyState: {
           props: ['title', 'description'],
           template: '<section class="empty-state-stub">{{ title }}{{ description }}</section>',
@@ -64,15 +61,14 @@ function mountList(options: {
 }
 
 describe('CheckLinkList', () => {
-  it('未检测数据首次进入时展示主空态并触发 check-all', async () => {
+  it('未检测数据首次进入时展示时间轴同款空态', () => {
     const wrapper = mountList({
       stats: { ...emptyStats, total: 4, unchecked: 4 },
     });
 
-    await wrapper.get('.hero-cta').trigger('click');
-
-    expect(wrapper.text()).toContain('开始全面检测');
-    expect(wrapper.emitted('check-all')).toHaveLength(1);
+    expect(wrapper.find('.empty-state-stub').exists()).toBe(true);
+    expect(wrapper.text()).toContain('检查你的图片链接');
+    expect(wrapper.find('.hero-cta').exists()).toBe(false);
   });
 
   it('空筛选和无数据分别展示对应 empty 状态', () => {

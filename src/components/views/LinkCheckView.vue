@@ -209,6 +209,10 @@ onDeactivated(onViewDeactivated);
   height: 100%;
   overflow: hidden;
   background: var(--bg-app);
+
+  /* 侧边栏 80px + 顶部标签栏 48px，会把面板中心推到窗口中心的右下方约 40px。 */
+  --link-check-empty-center-shift-x: 40px;
+  --link-check-empty-center-shift-y: 40px;
 }
 
 .lc-tab-bar {

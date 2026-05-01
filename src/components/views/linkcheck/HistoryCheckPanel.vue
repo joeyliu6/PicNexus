@@ -378,7 +378,6 @@ function handleMoreAction(kind: MoreMenuKind): void {
       :recheck-label="recheckLabel"
       :copied-key="copiedLinkKey"
       @toggle-select="handleToggleSelect"
-      @check-all="emit('check-all')"
       @copy-url="handleCopyUrl"
       @recheck-single="handleRecheck"
       @delete-row="(row: LinkCheckRow) => emit('delete-row', row)"

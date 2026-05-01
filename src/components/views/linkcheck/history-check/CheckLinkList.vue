@@ -5,7 +5,6 @@ import type { CheckLinkResult, LinkCheckRow, StatusFilter } from '../../../../ty
 import { getServiceDisplayName } from '../../../../constants/serviceNames';
 import { getServiceIcon } from '../../../../utils/icons';
 import EmptyState from '../../../common/EmptyState.vue';
-import HeroEmptyState from '../../../common/HeroEmptyState.vue';
 
 defineProps<{
   visibleRows: LinkCheckRow[];
@@ -27,7 +26,6 @@ defineProps<{
 
 const emit = defineEmits<{
   (e: 'toggle-select', key: string, event: MouseEvent): void;
-  (e: 'check-all'): void;
   (e: 'copy-url', row: LinkCheckRow): void;
   (e: 'recheck-single', row: LinkCheckRow): void;
   (e: 'delete-row', row: LinkCheckRow): void;
@@ -36,32 +34,32 @@ const emit = defineEmits<{
 
 <template>
   <div class="link-list-wrap">
-    <HeroEmptyState
-      v-if="stats.total > 0 && stats.checked === 0 && !isChecking"
-      icon="pi pi-shield"
-      title="检查你的图片链接"
-      description="扫描全部上传历史，发现失效和异常链接"
-      :metaText="`共 ${stats.total.toLocaleString()} 个链接待检测`"
-    >
-      <button class="hero-cta" @click="emit('check-all')">
-        <i class="pi pi-play"></i>
-        开始全面检测
-      </button>
-    </HeroEmptyState>
+    <div v-if="stats.total > 0 && stats.checked === 0 && !isChecking" class="empty-state-wrapper">
+      <EmptyState
+        icon="pi pi-shield"
+        title="检查你的图片链接"
+        description="扫描全部上传历史，发现失效和异常链接"
+      />
+    </div>
 
-    <EmptyState
+    <div
       v-else-if="filteredRows.length === 0 && (stats.checked > 0 || isChecking || stats.total > 0)"
-      icon="pi pi-check-circle"
-      title="当前筛选暂无结果"
-      description="试试切换状态或图床筛选。"
-    />
+      class="empty-state-wrapper"
+    >
+      <EmptyState
+        icon="pi pi-check-circle"
+        title="当前筛选暂无结果"
+        description="试试切换状态或图床筛选。"
+      />
+    </div>
 
-    <EmptyState
-      v-else-if="stats.total === 0 && !isLoading"
-      icon="pi pi-inbox"
-      title="暂无数据"
-      description="尚无上传历史记录。"
-    />
+    <div v-else-if="stats.total === 0 && !isLoading" class="empty-state-wrapper">
+      <EmptyState
+        icon="pi pi-inbox"
+        title="暂无数据"
+        description="尚无上传历史记录。"
+      />
+    </div>
 
     <TransitionGroup
       v-else
@@ -162,6 +160,18 @@ const emit = defineEmits<{
 .link-list {
   flex: 1;
   overflow-y: auto;
+}
+
+.empty-state-wrapper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(
+    calc(var(--link-check-empty-center-shift-x, 40px) * -1),
+    calc(var(--link-check-empty-center-shift-y, 40px) * -1)
+  );
 }
 
 .link-row {
@@ -463,30 +473,6 @@ const emit = defineEmits<{
 .recheck-result-badge.badge-suspicious {
   background: var(--pending-alpha-8);
   color: var(--pending);
-}
-
-.hero-cta {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs-sm);
-  padding: var(--space-sm-md) var(--space-xl);
-  margin-top: var(--space-sm);
-  background: var(--primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-base);
-  font-weight: var(--weight-semibold);
-  cursor: pointer;
-  transition: opacity var(--duration-fast), transform var(--duration-micro);
-}
-
-.hero-cta:hover {
-  opacity: 0.9;
-}
-
-.hero-cta:active {
-  transform: scale(0.97);
 }
 
 /* TransitionGroup 行进出动画
