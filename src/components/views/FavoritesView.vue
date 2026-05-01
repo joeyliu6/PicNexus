@@ -48,6 +48,7 @@ const {
   filter: localFilter,
   searchTerm: localSearchTerm,
   favoriteSet: historyManager.favoriteSet,
+  statsLoaded: historyManager.isStatsLoaded,
   scrollContainerRef,
   config: configManager.config,
 });
@@ -111,17 +112,26 @@ onUnmounted(() => {
 
 const isLeaving = ref(false);
 const isLastLeave = ref(false);
+const hasKnownNoFavorites = computed(() =>
+  historyManager.isStatsLoaded.value && historyManager.favoriteSet.value.size === 0
+);
 // gate 在 hasLoadedOnce 上避免首次切到收藏时 v-show 切 block 的一帧露出空状态
 const showEmptyState = computed(() =>
-  hasLoadedOnce.value
+  (hasLoadedOnce.value || hasKnownNoFavorites.value)
   && totalCount.value === 0
-  && !isLoading.value
+  && (!isLoading.value || hasKnownNoFavorites.value)
   && !isLeaving.value
 );
-const onAfterLeave = () => {
+const showInitialSkeleton = computed(() =>
+  !hasKnownNoFavorites.value
+  && (!hasLoadedOnce.value || isLoading.value)
+  && loadedMetas.value.length === 0
+);
+const resetLeavingState = () => {
   isLeaving.value = false;
   isLastLeave.value = false;
 };
+const onAfterLeave = resetLeavingState;
 
 // TransitionGroup @before-leave：冻结退场元素尺寸，使 position:absolute 不丢失 Grid 尺寸
 const onBeforeLeave = (el: Element) => {
@@ -131,7 +141,19 @@ const onBeforeLeave = (el: Element) => {
   htmlEl.style.height = `${height}px`;
 };
 
+watch(isLoading, (loading) => {
+  if (loading) resetLeavingState();
+});
+
 watch(() => loadedMetas.value.length, (newLen, oldLen) => {
+  if (isLoading.value) {
+    resetLeavingState();
+    return;
+  }
+  if (newLen === 0 && totalCount.value === 0 && historyManager.favoriteSet.value.size === 0) {
+    resetLeavingState();
+    return;
+  }
   if (newLen === 0 && oldLen > 0) {
     isLeaving.value = true;
     isLastLeave.value = true;
@@ -161,7 +183,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
     <div ref="scrollContainerRef" class="favorites-scroll" @scroll="onFavoritesScroll">
 
       <!-- 首次未加载时也走骨架屏分支，避免 v-show 切 block 时的空状态闪烁 -->
-      <template v-if="(!hasLoadedOnce || isLoading) && loadedMetas.length === 0">
+      <template v-if="showInitialSkeleton">
         <div class="favorites-grid">
           <div v-for="i in 16" :key="i" class="skeleton-cell">
             <Skeleton width="100%" height="100%" border-radius="8px" class="skeleton-fill" />

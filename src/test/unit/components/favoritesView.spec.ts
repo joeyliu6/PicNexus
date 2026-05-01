@@ -53,6 +53,7 @@ const mockRefs = vi.hoisted(() => ({
   },
   history: null as null | {
     favoriteSet: { value: Set<string> };
+    isStatsLoaded: { value: boolean };
   },
   lightbox: null as null | {
     visible: { value: boolean };
@@ -141,10 +142,12 @@ vi.mock('../../../composables/useHistory', async () => {
   const { ref } = await import('vue');
   mockRefs.history = {
     favoriteSet: ref(new Set<string>()),
+    isStatsLoaded: ref(true),
   };
 
   return {
     useHistoryManager: () => ({
+      isStatsLoaded: mockRefs.history!.isStatsLoaded,
       favoriteSet: mockRefs.history!.favoriteSet,
       toggleFavorite: historyManagerMock.toggleFavorite,
       batchSetFavorite: historyManagerMock.batchSetFavorite,
@@ -238,6 +241,7 @@ describe('FavoritesView P1 coverage', () => {
     mockRefs.viewState!.selectedIdList.value = [];
     mockRefs.viewState!.hasSelection.value = false;
     mockRefs.history!.favoriteSet.value = new Set();
+    mockRefs.history!.isStatsLoaded.value = true;
     mockRefs.lightbox!.visible.value = false;
     mockRefs.lightbox!.item.value = null;
     historyViewStateMock.getDetail.mockResolvedValue(createHistoryItem({ id: 'fav-1' }));
@@ -256,6 +260,7 @@ describe('FavoritesView P1 coverage', () => {
   it('shows initial loading skeletons and the load-more indicator for paged lists', async () => {
     mockRefs.data!.hasLoadedOnce.value = false;
     mockRefs.data!.isLoading.value = true;
+    mockRefs.history!.favoriteSet.value = new Set(['fav-1']);
 
     const wrapper = mountFavoritesView();
 
@@ -276,6 +281,39 @@ describe('FavoritesView P1 coverage', () => {
     await wrapper.get('.favorites-scroll').trigger('scroll');
 
     expect(favoritesDataMock.onFavoritesScroll).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows empty state directly when stats confirm there are no favorites', () => {
+    mockRefs.data!.hasLoadedOnce.value = false;
+    mockRefs.data!.isLoading.value = true;
+    mockRefs.history!.isStatsLoaded.value = true;
+    mockRefs.history!.favoriteSet.value = new Set();
+
+    const wrapper = mountFavoritesView();
+
+    expect(wrapper.findAll('.skeleton-cell')).toHaveLength(0);
+    expect(wrapper.find('.empty-state-stub').exists()).toBe(true);
+  });
+
+  it('shows empty state directly after history clear removes the last favorite', async () => {
+    mockRefs.data!.loadedMetas.value = [meta({ id: 'fav-1' })];
+    mockRefs.data!.totalCount.value = 1;
+    mockRefs.data!.imageStates['fav-1'] = 'loaded';
+
+    const wrapper = mountFavoritesView();
+
+    expect(wrapper.findAll('.photo-item')).toHaveLength(1);
+
+    mockRefs.history!.favoriteSet.value = new Set();
+    mockRefs.data!.loadedMetas.value = [];
+    mockRefs.data!.totalCount.value = 0;
+    mockRefs.data!.isLoading.value = false;
+    mockRefs.data!.hasMore.value = false;
+    await nextTick();
+
+    expect(wrapper.findAll('.skeleton-cell')).toHaveLength(0);
+    expect(wrapper.find('.empty-state-stub').exists()).toBe(true);
+    expect(wrapper.find('.photo-item').exists()).toBe(false);
   });
 
   it('renders favorites, opens lightbox, toggles selection, and unfavorites items', async () => {

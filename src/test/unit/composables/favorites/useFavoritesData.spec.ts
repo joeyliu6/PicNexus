@@ -61,6 +61,7 @@ function mountHarness() {
   const filter = ref<'all' | 'weibo'>('all');
   const searchTerm = ref('');
   const favoriteSet = ref(new Set<string>());
+  const statsLoaded = ref(true);
   const scrollContainerRef = ref<HTMLElement | null>(null);
   const config = ref({ theme: 'light' } as unknown as UserConfig);
 
@@ -71,6 +72,7 @@ function mountHarness() {
         filter,
         searchTerm,
         favoriteSet,
+        statsLoaded,
         scrollContainerRef,
         config,
       });
@@ -85,12 +87,14 @@ function mountHarness() {
     filter,
     searchTerm,
     favoriteSet,
+    statsLoaded,
     scrollContainerRef,
     config,
   };
 }
 
 async function settleFirstPage(loadPromise?: Promise<void>) {
+  await flushPromises();
   await vi.advanceTimersByTimeAsync(150);
   if (loadPromise) await loadPromise;
   await flushPromises();
@@ -155,6 +159,21 @@ describe('useFavoritesData', () => {
     expect(harness.api().getThumbnailUrl(alpha as never)).toBe('thumb:alpha');
     expect(getMetaThumbnailUrlMock).toHaveBeenCalledWith(alpha, harness.config.value);
     expect(harness.api().getItemService('beta')).toBe('r2');
+  });
+
+  it('shows the loaded empty state without querying when stats already have no favorites', async () => {
+    const harness = mountHarness();
+    harness.statsLoaded.value = true;
+    harness.favoriteSet.value = new Set();
+
+    await harness.api().loadFirstPage();
+    await nextTick();
+
+    expect(getFavoritesMetaPageMock).not.toHaveBeenCalled();
+    expect(harness.api().loadedMetas.value).toEqual([]);
+    expect(harness.api().totalCount.value).toBe(0);
+    expect(harness.api().isLoading.value).toBe(false);
+    expect(harness.api().hasLoadedOnce.value).toBe(true);
   });
 
   it('loads the next page when scrolling near the end of the container', async () => {
@@ -244,6 +263,28 @@ describe('useFavoritesData', () => {
     expect(harness.api().hasMore.value).toBe(false);
   });
 
+  it('clears to the empty state immediately when all favorites are removed', async () => {
+    getFavoritesMetaPageMock.mockResolvedValueOnce({
+      items: [makeMeta('alpha'), makeMeta('beta')],
+      total: 2,
+      hasMore: false,
+    });
+
+    const harness = mountHarness();
+    harness.favoriteSet.value = new Set(['alpha', 'beta']);
+    await settleFirstPage(harness.api().loadFirstPage());
+
+    harness.favoriteSet.value = new Set();
+    await nextTick();
+
+    expect(getFavoritesMetaPageMock).toHaveBeenCalledTimes(1);
+    expect(harness.api().loadedMetas.value).toEqual([]);
+    expect(harness.api().totalCount.value).toBe(0);
+    expect(harness.api().hasMore.value).toBe(false);
+    expect(harness.api().isLoading.value).toBe(false);
+    expect(harness.api().hasLoadedOnce.value).toBe(true);
+  });
+
   it('reloads from the server when too many favorites are removed at once', async () => {
     getFavoritesMetaPageMock
       .mockResolvedValueOnce({
@@ -258,16 +299,37 @@ describe('useFavoritesData', () => {
       });
 
     const harness = mountHarness();
-    harness.favoriteSet.value = new Set(['a', 'b', 'c', 'd', 'e', 'f']);
+    harness.favoriteSet.value = new Set(['a', 'b', 'c', 'd', 'e', 'f', 'survivor']);
     await settleFirstPage(harness.api().loadFirstPage());
 
-    harness.favoriteSet.value = new Set();
+    harness.favoriteSet.value = new Set(['survivor']);
     await nextTick();
     await settleFirstPage();
 
     expect(getFavoritesMetaPageMock).toHaveBeenCalledTimes(2);
     expect(harness.api().loadedMetas.value.map(meta => meta.id)).toEqual(['survivor']);
     expect(harness.api().totalCount.value).toBe(1);
+  });
+
+  it('clears to the empty state immediately on history-cleared events', async () => {
+    getFavoritesMetaPageMock.mockResolvedValueOnce({
+      items: [makeMeta('alpha')],
+      total: 1,
+      hasMore: false,
+    });
+
+    const harness = mountHarness();
+    harness.favoriteSet.value = new Set(['alpha']);
+    await settleFirstPage(harness.api().loadFirstPage());
+
+    eventHandlers['history-cleared']();
+    await nextTick();
+
+    expect(getFavoritesMetaPageMock).toHaveBeenCalledTimes(1);
+    expect(harness.api().loadedMetas.value).toEqual([]);
+    expect(harness.api().totalCount.value).toBe(0);
+    expect(harness.api().isLoading.value).toBe(false);
+    expect(harness.api().hasLoadedOnce.value).toBe(true);
   });
 
   it('reloads on history events and cleans up listeners when unmounted', async () => {

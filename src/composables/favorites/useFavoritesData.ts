@@ -36,6 +36,7 @@ interface UseFavoritesDataParams {
   filter: Ref<ServiceType | 'all'>;
   searchTerm: Ref<string>;
   favoriteSet: Ref<Set<string>>;
+  statsLoaded?: Ref<boolean>;
   scrollContainerRef: Ref<HTMLElement | null>;
   config: Ref<UserConfig>;
 }
@@ -56,7 +57,7 @@ export interface UseFavoritesDataReturn {
 }
 
 export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDataReturn {
-  const { filter, searchTerm, favoriteSet, scrollContainerRef, config } = params;
+  const { filter, searchTerm, favoriteSet, statsLoaded, scrollContainerRef, config } = params;
 
   const loadedMetas = shallowRef<ImageMeta[]>([]);
   const totalCount = ref(0);
@@ -75,11 +76,41 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
   let loadVersion = 0;
   let firstPageLoaded = false;
   let skeletonTimer: ReturnType<typeof setTimeout> | null = null;
+  let resolveSkeletonTimer: (() => void) | null = null;
+
+  function clearSkeletonTimer(): void {
+    if (skeletonTimer) {
+      clearTimeout(skeletonTimer);
+      skeletonTimer = null;
+    }
+    if (resolveSkeletonTimer) {
+      const resolve = resolveSkeletonTimer;
+      resolveSkeletonTimer = null;
+      resolve();
+    }
+  }
 
   function cacheServices(metas: readonly ImageMeta[]): void {
     for (const meta of metas) {
       itemServiceCache.set(meta.id, meta.primaryService);
     }
+  }
+
+  function resetToEmptyLoadedState(): void {
+    loadVersion++;
+    clearSkeletonTimer();
+    loadedMetas.value = [];
+    totalCount.value = 0;
+    hasMore.value = false;
+    isLoading.value = false;
+    hasLoadedOnce.value = true;
+    nextOffset = 0;
+    itemServiceCache.clear();
+    for (const key of Object.keys(imageStates)) delete imageStates[key];
+  }
+
+  function hasKnownNoFavorites(): boolean {
+    return statsLoaded?.value === true && favoriteSet.value.size === 0;
   }
 
   async function fetchPage(offset: number): Promise<FavoritesMetaPageResult | null> {
@@ -101,6 +132,10 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
   async function loadFirstPage(): Promise<void> {
     if (firstPageLoaded) return;
     firstPageLoaded = true;
+    if (hasKnownNoFavorites()) {
+      resetToEmptyLoadedState();
+      return;
+    }
     await reloadFromStart();
   }
 
@@ -108,6 +143,7 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
     const version = loadVersion + 1;
     const startTime = Date.now();
 
+    clearSkeletonTimer();
     isLoading.value = true;
     // 保留旧 totalCount，避免 header 徽章瞬间跳 0 造成闪烁；loadedMetas 清空以触发骨架屏
     loadedMetas.value = [];
@@ -120,7 +156,12 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
     const elapsed = Date.now() - startTime;
     if (elapsed < MIN_SKELETON_MS) {
       await new Promise<void>((resolve) => {
-        skeletonTimer = setTimeout(() => { skeletonTimer = null; resolve(); }, MIN_SKELETON_MS - elapsed);
+        resolveSkeletonTimer = resolve;
+        skeletonTimer = setTimeout(() => {
+          skeletonTimer = null;
+          resolveSkeletonTimer = null;
+          resolve();
+        }, MIN_SKELETON_MS - elapsed);
       });
       if (version !== loadVersion) return;
     }
@@ -185,12 +226,40 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
 
   watch([filter, searchTerm], () => {
     if (!firstPageLoaded) return;
+    if (hasKnownNoFavorites()) {
+      resetToEmptyLoadedState();
+      return;
+    }
     void reloadFromStart();
   });
 
+  if (statsLoaded) {
+    watch(statsLoaded, (loaded) => {
+      if (!loaded || !firstPageLoaded || favoriteSet.value.size > 0) return;
+      resetToEmptyLoadedState();
+    });
+  }
+
   // 单/少量取消：就地过滤保留 leave 动画；批量 or 跨视图删除：reload 避免 offset 漂移
   watch(favoriteSet, (newSet, oldSet) => {
-    if (!firstPageLoaded || loadedMetas.value.length === 0) return;
+    if (!firstPageLoaded) return;
+
+    if (
+      newSet.size > 0
+      && (oldSet?.size ?? 0) === 0
+      && loadedMetas.value.length === 0
+      && hasLoadedOnce.value
+    ) {
+      void reloadFromStart();
+      return;
+    }
+
+    if (newSet.size === 0 && (oldSet?.size ?? 0) > 0) {
+      resetToEmptyLoadedState();
+      return;
+    }
+
+    if (loadedMetas.value.length === 0) return;
 
     const filtered = loadedMetas.value.filter(m => newSet.has(m.id));
     const removedCount = loadedMetas.value.length - filtered.length;
@@ -211,7 +280,12 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
   const unlistens: Array<() => void> = [];
   Promise.all(
     HISTORY_CHANGE_EVENTS.map(type => onCacheEventType(type, () => {
-      if (firstPageLoaded) void reloadFromStart();
+      if (!firstPageLoaded) return;
+      if (type === 'history-cleared') {
+        resetToEmptyLoadedState();
+        return;
+      }
+      void reloadFromStart();
     })),
   )
     .then(fns => unlistens.push(...fns))
@@ -219,7 +293,7 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
 
   onUnmounted(() => {
     cancelAnimationFrame(scrollRafId);
-    if (skeletonTimer) { clearTimeout(skeletonTimer); skeletonTimer = null; }
+    clearSkeletonTimer();
     for (const fn of unlistens) fn();
     unlistens.length = 0;
     itemServiceCache.clear();
