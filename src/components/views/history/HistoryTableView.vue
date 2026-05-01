@@ -51,6 +51,7 @@ const {
 
 const {
   currentPageData, currentPage, pageSize, totalRecords, totalPages, isLoadingPage, first,
+  hasLoadedPage,
   selectAll, skeletonData, formatTime,
   onPageChange, goToPage, peekPage, handleHeaderCheckboxChange, selectedAvailableServices,
 } = useHistoryTableData({
@@ -65,8 +66,16 @@ const {
 //  - isPaginating：已有旧数据，翻页/筛选中 → 保持旧数据可读，仅 tbody 变暗
 // 这样每次翻页只会触发一次 DataTable row diff（旧数据 → 新数据），
 // 而不是 "旧数据 → skeleton(全删全插) → 新数据(全删全插)" 的三次渲染
-const showSkeleton = computed(() => isLoadingPage.value && currentPageData.value.length === 0);
+const hasKnownNoRecords = computed(() =>
+  historyManager.isStatsLoaded.value && historyManager.totalCount.value === 0
+);
+const showSkeleton = computed(() =>
+  isLoadingPage.value && currentPageData.value.length === 0 && !hasKnownNoRecords.value
+);
 const isPaginating = computed(() => isLoadingPage.value && currentPageData.value.length > 0);
+const showEmptyState = computed(() =>
+  (hasLoadedPage.value || hasKnownNoRecords.value) && totalRecords.value === 0 && !showSkeleton.value
+);
 
 const {
   lightboxVisible, lightboxItem, lightboxHasPrev, lightboxHasNext,
@@ -102,9 +111,11 @@ const favoriteStateOfSelected = computed((): 'all' | 'partial' | 'none' => {
 
 // ---- emit 联动 ----
 watch(
-  [() => totalRecords.value, () => props.visible],
-  ([count, isVisible]) => {
-    if (isVisible !== false) emit('update:totalCount', count);
+  [() => totalRecords.value, () => props.visible, hasLoadedPage, hasKnownNoRecords],
+  ([count, isVisible, loaded, knownEmpty]) => {
+    if (isVisible === false) return;
+    if (!loaded && !knownEmpty && count === 0) return;
+    emit('update:totalCount', count);
   },
   { immediate: true },
 );
@@ -139,7 +150,7 @@ function handleCheckboxToggle(id: string) {
 <template>
   <div ref="tableViewRef" class="table-view-container" :class="{ 'is-paginating': isPaginating }">
     <!-- 空状态：无数据时直接居中显示，不显示表格和表头 -->
-    <div v-if="totalRecords === 0 && !isLoadingPage" class="empty-state-wrapper">
+    <div v-if="showEmptyState" class="empty-state-wrapper">
       <EmptyState
         :icon="isFilterActive ? 'pi pi-search' : 'pi pi-table'"
         :title="isFilterActive ? '没有找到匹配的记录' : '暂无上传记录'"
@@ -400,7 +411,10 @@ function handleCheckboxToggle(id: string) {
   border-radius: var(--radius-lg);
   overflow: hidden;
   width: 100%;
-  flex: 1;
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 </style>
 

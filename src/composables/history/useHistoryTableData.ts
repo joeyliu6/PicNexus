@@ -48,13 +48,17 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
   const historyManager = useHistoryManager();
   const viewState = externalViewState ?? useHistoryViewState();
 
+  function hasKnownNoRecords(): boolean {
+    return historyManager.isStatsLoaded.value && historyManager.totalCount.value === 0;
+  }
+
   const currentPageData = shallowRef<HistoryItem[]>([]);
   const currentPage = ref(1);
   // 50 是性能/UX 折中点：一屏可见 ~15 行，Chromium native lazy 边距覆盖剩余 35 行
   // flushJobs / SVG 解析 / 图像解码全部线性减半（详见性能调优记录）
   const pageSize = ref(50);
   const totalRecords = ref(0);
-  const isLoadingPage = ref(true);
+  const isLoadingPage = ref(!hasKnownNoRecords());
   const first = ref(0);
   const selectAll = ref(false);
 
@@ -67,7 +71,13 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
   });
 
   let loadVersion = 0;
+  // 标记首个分页请求是否已完成，供视图层在首刷收敛后再同步总数。
+  const hasLoadedPage = ref(hasKnownNoRecords());
   const pageCache = new Map<string, TablePageResult>();
+
+  function canUseKnownEmptyShortcut(): boolean {
+    return hasKnownNoRecords() && currentPageData.value.length === 0 && totalRecords.value === 0;
+  }
 
   function getPageCacheKey(pageNumber: number): string {
     return [
@@ -80,6 +90,19 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
 
   function clearPageCache(): void {
     pageCache.clear();
+  }
+
+  function resetToEmptyLoadedState(): void {
+    loadVersion++;
+    clearPageCache();
+    currentPage.value = 1;
+    first.value = 0;
+    currentPageData.value = [];
+    totalRecords.value = 0;
+    selectAll.value = false;
+    hasLoadedPage.value = true;
+    isLoadingPage.value = false;
+    nextTick(() => onPageLoaded?.());
   }
 
   async function fetchPage(pageNumber: number): Promise<TablePageResult> {
@@ -109,7 +132,12 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
     return result;
   }
 
-  async function loadCurrentPage() {
+  async function loadCurrentPage(options: { allowKnownEmptyShortCircuit?: boolean } = {}) {
+    if (options.allowKnownEmptyShortCircuit !== false && canUseKnownEmptyShortcut()) {
+      resetToEmptyLoadedState();
+      return;
+    }
+
     const version = ++loadVersion;
     try {
       isLoadingPage.value = true;
@@ -133,6 +161,7 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
       totalRecords.value = 0;
     } finally {
       if (version === loadVersion) {
+        hasLoadedPage.value = true;
         isLoadingPage.value = false;
         nextTick(() => onPageLoaded?.());
       }
@@ -175,17 +204,14 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
         clearPageCache();
         currentPage.value = 1;
         first.value = 0;
-        loadCurrentPage();
+        loadCurrentPage({ allowKnownEmptyShortCircuit: false });
       }),
       onCacheEventType('history-deleted', () => {
         clearPageCache();
-        loadCurrentPage();
+        loadCurrentPage({ allowKnownEmptyShortCircuit: false });
       }),
       onCacheEventType('history-cleared', () => {
-        clearPageCache();
-        currentPage.value = 1;
-        first.value = 0;
-        loadCurrentPage();
+        resetToEmptyLoadedState();
       }),
     ]);
     await loadCurrentPage();
@@ -196,6 +222,13 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
     unlistenDeleted?.();
     unlistenCleared?.();
   });
+
+  watch(
+    [() => historyManager.isStatsLoaded.value, () => historyManager.totalCount.value],
+    () => {
+      if (canUseKnownEmptyShortcut()) resetToEmptyLoadedState();
+    },
+  );
 
   watch([filter, searchTerm], () => {
     clearPageCache();
@@ -257,6 +290,7 @@ export function useHistoryTableData({ filter, searchTerm, onPageLoaded, viewStat
     totalRecords,
     totalPages,
     isLoadingPage,
+    hasLoadedPage,
     first,
     selectAll,
     skeletonData,

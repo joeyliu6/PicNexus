@@ -17,7 +17,13 @@
 }
 
 :deep(.history-table .p-datatable-table-container) {
+  flex: 1 0 auto;
+  min-height: 0;
   overflow: visible !important;
+}
+
+:deep(.history-table .p-datatable-paginator-bottom) {
+  flex: 0 0 auto;
 }
 
 /* ---- 表头 ---- */

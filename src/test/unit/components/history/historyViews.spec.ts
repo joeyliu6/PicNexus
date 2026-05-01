@@ -223,6 +223,7 @@ function makeTableState(rows = historyRows) {
   const currentPageData = ref(rows);
   const totalRecords = ref(rows.length);
   const isLoadingPage = ref(false);
+  const hasLoadedPage = ref(true);
   const selectAll = ref(false);
 
   return {
@@ -232,6 +233,7 @@ function makeTableState(rows = historyRows) {
     totalRecords,
     totalPages: computed(() => Math.max(1, Math.ceil(totalRecords.value / 50))),
     isLoadingPage,
+    hasLoadedPage,
     first: ref(0),
     selectAll,
     skeletonData: computed(() => Array.from({ length: 3 }, (_, index) => ({ id: `skeleton-${index}`, _skeleton: true }))),
@@ -322,6 +324,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 
   mockState.historyManager = {
+    totalCount: ref(historyRows.length),
     serviceCounts: ref({ jd: 2, r2: 1 }),
     favoriteSet: ref(new Set<string>()),
     isStatsLoaded: ref(true),
@@ -389,6 +392,20 @@ describe('HistoryTableView page interactions', () => {
 
     const emptyWrapper = mountHistoryTable({ searchTerm: 'missing' });
     expect(emptyWrapper.get('[data-testid="empty-state"]').attributes('data-icon')).toBe('pi pi-search');
+  });
+
+  it('shows the empty table state directly when stats confirm there are no records', async () => {
+    mockState.historyManager.totalCount.value = 0;
+    mockState.historyManager.isStatsLoaded.value = true;
+    mockState.tableState = makeTableState([]);
+    mockState.tableState.hasLoadedPage.value = false;
+    mockState.tableState.isLoadingPage.value = true;
+    mockState.tableState.totalRecords.value = 0;
+
+    const wrapper = mountHistoryTable();
+
+    expect(wrapper.get('[data-testid="empty-state"]').attributes('data-icon')).toBe('pi pi-table');
+    expect(wrapper.find('.skeleton-stub').exists()).toBe(false);
   });
 
   it('selects rows, exposes selected actions, copies, deletes, and clears the batch selection', async () => {

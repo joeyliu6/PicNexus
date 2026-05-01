@@ -12,6 +12,8 @@ const {
   unlistenUpdatedMock,
   unlistenDeletedMock,
   unlistenClearedMock,
+  historyStatsLoaded,
+  historyTotalCount,
 } = vi.hoisted(() => ({
   loadPageByNumberMock: vi.fn(),
   searchHistoryMock: vi.fn(),
@@ -22,12 +24,16 @@ const {
   unlistenUpdatedMock: vi.fn(),
   unlistenDeletedMock: vi.fn(),
   unlistenClearedMock: vi.fn(),
+  historyStatsLoaded: { value: false },
+  historyTotalCount: { value: 0 },
 }));
 
 vi.mock('../../../../composables/useHistory', () => ({
   useHistoryManager: () => ({
     loadPageByNumber: loadPageByNumberMock,
     searchHistory: searchHistoryMock,
+    isStatsLoaded: historyStatsLoaded,
+    totalCount: historyTotalCount,
   }),
 }));
 
@@ -128,6 +134,8 @@ describe('useHistoryTableData', () => {
       items: [],
       total: 0,
     });
+    historyStatsLoaded.value = false;
+    historyTotalCount.value = 0;
     searchHistoryMock.mockResolvedValue({
       items: [],
       total: 0,
@@ -160,6 +168,67 @@ describe('useHistoryTableData', () => {
     expect(harness.api().totalRecords.value).toBe(1);
     expect(harness.api().isLoadingPage.value).toBe(false);
     expect(onPageLoaded).toHaveBeenCalledTimes(1);
+  });
+
+  it('enters the empty state directly when stats already confirm there are no records', async () => {
+    historyStatsLoaded.value = true;
+    historyTotalCount.value = 0;
+
+    const harness = mountHarness({
+      filter: ref('all'),
+      searchTerm: ref(''),
+      viewState: makeViewState(),
+    });
+    await flushPromises();
+
+    expect(loadPageByNumberMock).not.toHaveBeenCalled();
+    expect(harness.api().currentPageData.value).toEqual([]);
+    expect(harness.api().totalRecords.value).toBe(0);
+    expect(harness.api().isLoadingPage.value).toBe(false);
+    expect(harness.api().hasLoadedPage.value).toBe(true);
+  });
+
+  it('keeps the initial unfiltered probe loading until the first response settles', async () => {
+    const firstLoad = createDeferred<{ items: Array<{ id: string }>; total: number }>();
+    loadPageByNumberMock.mockReturnValueOnce(firstLoad.promise);
+
+    const harness = mountHarness({
+      filter: ref('all'),
+      searchTerm: ref(''),
+      viewState: makeViewState(),
+    });
+    await flushPromises();
+
+    expect(harness.api().isLoadingPage.value).toBe(true);
+    expect(harness.api().hasLoadedPage.value).toBe(false);
+
+    firstLoad.resolve({ items: [], total: 0 });
+    await flushPromises();
+
+    expect(harness.api().currentPageData.value).toEqual([]);
+    expect(harness.api().totalRecords.value).toBe(0);
+    expect(harness.api().isLoadingPage.value).toBe(false);
+    expect(harness.api().hasLoadedPage.value).toBe(true);
+  });
+
+  it('still exposes loading for an initial filtered page load', async () => {
+    const firstLoad = createDeferred<{ items: Array<{ id: string }>; total: number }>();
+    loadPageByNumberMock.mockReturnValueOnce(firstLoad.promise);
+
+    const harness = mountHarness({
+      filter: ref('weibo'),
+      searchTerm: ref(''),
+      viewState: makeViewState(),
+    });
+    await nextTick();
+    await flushPromises();
+
+    expect(harness.api().isLoadingPage.value).toBe(true);
+
+    firstLoad.resolve({ items: [], total: 0 });
+    await flushPromises();
+
+    expect(harness.api().isLoadingPage.value).toBe(false);
   });
 
   it('switches to search mode, resets paging and clears selection when the search term changes', async () => {

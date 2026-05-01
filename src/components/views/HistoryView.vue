@@ -3,7 +3,7 @@
  * 历史记录视图入口组件
  * 负责 Dashboard Strip 和视图切换
  */
-import { ref, onActivated, onDeactivated, watch, nextTick } from 'vue';
+import { ref, onMounted, onActivated, onDeactivated, watch, nextTick } from 'vue';
 import type { ServiceType } from '../../config/types';
 import { useHistoryManager } from '../../composables/useHistory';
 import HistoryTableView from './history/HistoryTableView.vue';
@@ -20,18 +20,42 @@ const currentFilter = ref<ServiceType | 'all'>('all');
 const debouncedSearchTerm = ref('');
 
 const totalCount = ref(0);
+const hasBootstrappedStats = ref(historyManager.isStatsLoaded.value);
 
 const activationTrigger = ref(0);
 
 const historyContainerRef = ref<HTMLElement | null>(null);
 let savedTableScrollTop = 0;
+let statsLoadPromise: Promise<void> | null = null;
+
+async function ensureStatsLoaded(): Promise<void> {
+  if (!statsLoadPromise) {
+    statsLoadPromise = (async () => {
+      try {
+        await historyManager.loadStats();
+        totalCount.value = historyManager.totalCount.value;
+      } catch {
+        // loadStats already owns user-facing error reporting; mount the view anyway.
+      } finally {
+        hasBootstrappedStats.value = true;
+      }
+    })().finally(() => {
+      statsLoadPromise = null;
+    });
+  }
+  await statsLoadPromise;
+}
 
 // KeepAlive 激活时刷新数据（解决上传后切换回来不更新的问题）
 // 注意：此处只加载统计数字（totalCount/favoriteSet），全量 metas 由时间轴/收藏视图自行按需加载
+onMounted(() => {
+  void ensureStatsLoaded();
+});
+
 onActivated(async () => {
   // 通知子视图激活状态变化
   activationTrigger.value++;
-  await historyManager.loadStats();
+  await ensureStatsLoaded();
   // 恢复表格滚动位置（数据加载后等 DOM flush 再设置）
   if (currentViewMode.value === 'table' && savedTableScrollTop > 0) {
     await nextTick();
@@ -91,6 +115,7 @@ const handleTotalCountUpdate = (count: number) => {
     <div ref="historyContainerRef" class="history-container" :class="{ 'no-padding': currentViewMode !== 'table' }">
       <!-- 表格视图 -->
       <HistoryTableView
+        v-if="hasBootstrappedStats"
         v-show="currentViewMode === 'table'"
         :visible="currentViewMode === 'table'"
         :filter="currentFilter"
