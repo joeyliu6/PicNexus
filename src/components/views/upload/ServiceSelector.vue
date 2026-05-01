@@ -26,6 +26,8 @@ const emit = defineEmits<{
 }>();
 
 const hasServices = computed(() => props.publicServices.length > 0 || props.privateServices.length > 0);
+const showAddEntryInPublic = computed(() => props.publicServices.length > 0);
+const showAddEntryInPrivate = computed(() => props.publicServices.length === 0 && props.privateServices.length > 0);
 
 // ==================== Methods ====================
 
@@ -52,6 +54,17 @@ function handleToggle(serviceId: string) {
             <span class="health-dot" :class="serviceHealthMap?.[serviceId] || 'unconfigured'" v-tooltip.top="serviceHealthTooltipMap?.[serviceId] || null"></span>
             <span class="tag-text">{{ serviceLabels[serviceId] }}</span>
           </button>
+          <button
+            v-if="showAddEntryInPublic"
+            type="button"
+            class="service-tag add-service-tag"
+            aria-label="新增图床"
+            v-tooltip.top="'新增图床'"
+            @click="emit('go-settings')"
+            v-ripple
+          >
+            <i class="pi pi-plus" aria-hidden="true"></i>
+          </button>
         </div>
       </div>
 
@@ -69,6 +82,17 @@ function handleToggle(serviceId: string) {
           >
             <span class="health-dot" :class="serviceHealthMap?.[serviceId] || 'unconfigured'" v-tooltip.top="serviceHealthTooltipMap?.[serviceId] || null"></span>
             <span class="tag-text">{{ serviceLabels[serviceId] }}</span>
+          </button>
+          <button
+            v-if="showAddEntryInPrivate"
+            type="button"
+            class="service-tag add-service-tag"
+            aria-label="新增图床"
+            v-tooltip.top="'新增图床'"
+            @click="emit('go-settings')"
+            v-ripple
+          >
+            <i class="pi pi-plus" aria-hidden="true"></i>
           </button>
         </div>
       </div>
@@ -123,7 +147,7 @@ function handleToggle(serviceId: string) {
   background-color: var(--bg-input);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm-md);
-  color: var(--text-primary);
+  color: var(--text-secondary);
   font-size: var(--text-base);
   font-weight: var(--weight-medium);
   font-family: var(--font-sans);
@@ -133,9 +157,10 @@ function handleToggle(serviceId: string) {
 }
 
 /* 悬停效果（排除选中状态） */
-.service-tag:hover:not(:disabled, .is-selected) {
+.service-tag:hover:not(:disabled, .is-selected, .add-service-tag) {
   background-color: var(--hover-overlay-subtle);
   border-color: var(--text-muted);
+  color: var(--text-primary);
 }
 
 /* 选中状态（固定样式，悬浮时不变） */
@@ -144,6 +169,28 @@ function handleToggle(serviceId: string) {
   border-color: var(--primary);
   color: var(--primary);
   font-weight: var(--weight-semibold);
+}
+
+.add-service-tag {
+  width: 36px;
+  padding: 0;
+  justify-content: center;
+  border-style: dashed;
+  color: var(--text-muted);
+  background-color: transparent;
+  opacity: 0.62;
+}
+
+.add-service-tag .pi {
+  font-size: var(--text-base);
+  line-height: 1;
+}
+
+.add-service-tag:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background-color: var(--primary-alpha-8);
+  opacity: 1;
 }
 
 /* 图床健康状态圆点 */
