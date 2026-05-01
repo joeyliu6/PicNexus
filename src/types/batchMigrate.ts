@@ -18,7 +18,7 @@ export interface MigrateTargetService {
   isConfigured: boolean;
   /** 不在该图床上的图片数（待迁移） */
   pendingCount: number;
-  /** 已在该图床上的图片数（无需重复备份） */
+  /** 已在该图床上的图片数（无需迁移） */
   backedUpCount: number;
   checked: boolean;
 }
