@@ -3,7 +3,7 @@
  * 包含：灯箱、服务 Popover、悬浮预览、复制链接
  * 从 HistoryTableView.vue 提取
  */
-import { ref, shallowRef, computed, watch, nextTick, onUnmounted, type Ref } from 'vue';
+import { ref, shallowRef, computed, watch, nextTick, onUnmounted, onDeactivated, type Ref } from 'vue';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type PopoverType from 'primevue/popover';
 import type { HistoryItem } from '../../config/types';
@@ -35,6 +35,7 @@ const OPENING_DURATION = SHOW_ANIMATION_DURATION + 100;
  * 280ms 给眼睛足够时间追踪大图到表格位置，额外 20ms 吃掉动画尾帧。
  */
 const CLOSING_DURATION = HIDE_ANIMATION_DURATION + 20;
+const HOVER_HANDOFF_POINTER_EVENTS = ['mousemove', 'pointermove', 'pointerdown'] as const;
 
 interface UseTableInteractionsOptions {
   /** 当前页数据（灯箱导航用） */
@@ -86,12 +87,62 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   let closingTimer: ReturnType<typeof setTimeout> | null = null;
   const isLightboxOpening = ref(false);
   const isLightboxClosing = ref(false);
+  let keepHoverPreviewAfterClose = false;
+  let hoverHandoffSourceId: string | null = null;
 
   // 鼠标位置追踪：仅在灯箱会话期间挂载，用于关闭时判断鼠标是否仍在源缩略图上
   // -1 为哨兵值，表示本次会话由键盘触发、无鼠标坐标，跳过 hit-test
   let lastMouseX = -1;
   let lastMouseY = -1;
   function trackMouse(e: MouseEvent): void { lastMouseX = e.clientX; lastMouseY = e.clientY; }
+
+  function stopHoverHandoffTracking(): void {
+    if (!hoverHandoffSourceId) return;
+    hoverHandoffSourceId = null;
+    HOVER_HANDOFF_POINTER_EVENTS.forEach((eventName) => document.removeEventListener(eventName, handleHoverHandoffPointerEvent, true));
+    document.removeEventListener('scroll', handleHoverHandoffGeometryEvent, true);
+    window.removeEventListener('resize', handleHoverHandoffGeometryEvent);
+    window.removeEventListener('blur', clearHoverPreview);
+    document.removeEventListener('visibilitychange', handleHoverHandoffVisibilityChange);
+  }
+
+  function clearHoverPreview(): void {
+    keepHoverPreviewAfterClose = false;
+    stopHoverHandoffTracking();
+    hoverPreview.value.closing = false;
+    hoverPreview.value.visible = false;
+  }
+
+  function requestHoverPreviewDismissAfterClose(): void {
+    keepHoverPreviewAfterClose = false;
+    stopHoverHandoffTracking();
+    hoverPreview.value.closing = true;
+    if (!isLightboxClosing.value || !closingTimer) clearHoverPreview();
+  }
+
+  function handleHoverHandoffPointerEvent(event: Event): void {
+    if (event instanceof MouseEvent) {
+      lastMouseX = event.clientX;
+      lastMouseY = event.clientY;
+    }
+    handleHoverHandoffGeometryEvent();
+  }
+
+  function handleHoverHandoffGeometryEvent(): void {
+    if (hoverHandoffSourceId && !isMouseOnSourceThumb(hoverHandoffSourceId)) requestHoverPreviewDismissAfterClose();
+  }
+
+  function handleHoverHandoffVisibilityChange(): void { if (document.visibilityState !== 'visible') clearHoverPreview(); }
+
+  function startHoverHandoffTracking(sourceId: string): void {
+    stopHoverHandoffTracking();
+    hoverHandoffSourceId = sourceId;
+    HOVER_HANDOFF_POINTER_EVENTS.forEach((eventName) => document.addEventListener(eventName, handleHoverHandoffPointerEvent, true));
+    document.addEventListener('scroll', handleHoverHandoffGeometryEvent, true);
+    window.addEventListener('resize', handleHoverHandoffGeometryEvent);
+    window.addEventListener('blur', clearHoverPreview);
+    document.addEventListener('visibilitychange', handleHoverHandoffVisibilityChange);
+  }
 
   function isMouseOnSourceThumb(sourceId: string): boolean {
     if (lastMouseX < 0) return false;
@@ -132,6 +183,8 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     // 在新 FLIP 开场途中把刚弹起的预览弄没（快速连开场景的 race bug）
     if (closingTimer) { clearTimeout(closingTimer); closingTimer = null; }
     isLightboxClosing.value = false;
+    keepHoverPreviewAfterClose = false;
+    stopHoverHandoffTracking();
     hoverPreview.value.closing = false;
 
     // 鼠标追踪仅在灯箱会话期间挂载，用完即拆，避免全生命周期的 60Hz 监听
@@ -472,8 +525,11 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   function handlePreviewLeave(): void {
     // Lightbox 打开动画期间保持预览可见，供 PhotoSwipe FLIP 使用
     if (isLightboxOpening.value) return;
-    hoverPreview.value.closing = false;
-    hoverPreview.value.visible = false;
+    if (isLightboxClosing.value) {
+      requestHoverPreviewDismissAfterClose();
+      return;
+    }
+    clearHoverPreview();
   }
 
   //
@@ -502,19 +558,25 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
       // lastMouseX < 0 表示键盘开场，无有效坐标，跳过 hit-test
       const sourceId = hoverPreview.value.itemId;
       const mouseIsOnSourceThumb = sourceId ? isMouseOnSourceThumb(sourceId) : false;
+      keepHoverPreviewAfterClose = mouseIsOnSourceThumb;
 
       // 坐标读完即可卸载追踪器，本次会话用完
       document.removeEventListener('mousemove', trackMouse);
 
       if (!mouseIsOnSourceThumb) {
         hoverPreview.value.closing = true;
+        stopHoverHandoffTracking();
+      } else if (sourceId) {
+        startHoverHandoffTracking(sourceId);
       }
       // 若鼠标仍在缩略图上，保持 visible = true，FLIP 落地后预览无缝衔接，
       // 用户移开鼠标时 handlePreviewLeave 会自然隐藏。
 
       closingTimer = setTimeout(() => {
-        if (!mouseIsOnSourceThumb) {
-          hoverPreview.value.visible = false;
+        if (!keepHoverPreviewAfterClose) {
+          clearHoverPreview();
+        } else {
+          hoverPreview.value.closing = false;
         }
         isLightboxClosing.value = false;
         closingTimer = null;
@@ -531,11 +593,17 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     }
   });
 
-  onUnmounted(() => {
+  function cleanupTransientPreviewState(): void {
     if (openingTimer) { clearTimeout(openingTimer); openingTimer = null; }
     if (closingTimer) { clearTimeout(closingTimer); closingTimer = null; }
+    isLightboxOpening.value = false;
+    isLightboxClosing.value = false;
+    clearHoverPreview();
     document.removeEventListener('mousemove', trackMouse);
-  });
+  }
+
+  onDeactivated(cleanupTransientPreviewState);
+  onUnmounted(cleanupTransientPreviewState);
 
   return {
     // 灯箱
@@ -560,5 +628,6 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     hoverPreview,
     handlePreviewEnter,
     handlePreviewLeave,
+    clearHoverPreview,
   };
 }

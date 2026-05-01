@@ -241,6 +241,30 @@ describe('useTableInteractions lightbox close preview motion', () => {
     harness.api().handlePreviewLeave();
     expect(harness.api().hoverPreview.value.visible).toBe(false);
   });
+
+  it('dismisses the retained preview when the pointer leaves during the close handoff', async () => {
+    const item = makeItem();
+    const source = appendSourceThumb(item.id);
+    const harness = mountHarness(item);
+
+    harness.api().handlePreviewEnter({ currentTarget: source } as unknown as MouseEvent, item);
+    harness.api().openLightbox(item, { clientX: 12, clientY: 12 } as MouseEvent);
+    await nextTick();
+    expect(harness.api().resolveLightboxCloseTargetMode()).toBe('preview');
+
+    harness.api().lightboxVisible.value = false;
+    await nextTick();
+    expect(harness.api().hoverPreview.value.visible).toBe(true);
+    expect(harness.api().hoverPreview.value.closing).toBe(false);
+
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 200, clientY: 200 }));
+
+    expect(harness.api().hoverPreview.value.visible).toBe(true);
+    expect(harness.api().hoverPreview.value.closing).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(300);
+    expect(harness.api().hoverPreview.value.visible).toBe(false);
+  });
 });
 
 describe('useTableInteractions lightbox cross-page tracking', () => {

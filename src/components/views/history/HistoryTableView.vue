@@ -74,7 +74,7 @@ const {
   resolveLightboxCloseTargetMode,
   popoverServices, openServicePopover, handlePopoverCopyLink, handleCopyServiceLink,
   copiedServiceKey, getServiceCopyKey, isPopoverServiceCopied,
-  hoverPreview, handlePreviewEnter, handlePreviewLeave,
+  hoverPreview, handlePreviewEnter, handlePreviewLeave, clearHoverPreview,
 } = useTableInteractions({
   currentPageData, currentPage, totalPages, goToPage,
   peekPage,
@@ -107,6 +107,13 @@ watch(
     if (isVisible !== false) emit('update:totalCount', count);
   },
   { immediate: true },
+);
+
+watch(
+  () => props.visible,
+  (isVisible) => {
+    if (isVisible === false) clearHoverPreview();
+  },
 );
 
 onUnmounted(() => {
