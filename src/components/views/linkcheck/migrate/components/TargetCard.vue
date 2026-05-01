@@ -23,6 +23,25 @@ const emit = defineEmits<{ toggle: [] }>();
 const badgeText = computed(() => healthLabels[props.healthStatus] ?? '已配置');
 const isDisabled = computed(() => props.healthStatus === 'error');
 const errorTooltip = computed(() => isDisabled.value ? '图床异常，请先检查配置' : undefined);
+const backupTooltip = computed(() => {
+  const backedUpLine = `${formatNumber(props.backedUpCount)} 张已备份`;
+  if (props.noSourceSelected) {
+    return `请先选择来源\n${backedUpLine}`;
+  }
+  return backedUpLine;
+});
+const cardTooltip = computed(() =>
+  errorTooltip.value ? `${errorTooltip.value}\n${backupTooltip.value}` : backupTooltip.value,
+);
+const cardAriaLabel = computed(() => {
+  const parts = [
+    props.displayName,
+    props.noSourceSelected ? '请先选择来源' : `${formatNumber(props.pendingCount)} 张待迁移`,
+    `${formatNumber(props.backedUpCount)} 张已备份`,
+  ];
+  if (errorTooltip.value) parts.splice(1, 0, errorTooltip.value);
+  return parts.join('，');
+});
 const countClass = computed((): string | undefined => {
   if (props.noSourceSelected) return 'target-count-stack--no-source';
   if (props.isRefiltering) return 'target-count-stack--stale';
@@ -46,7 +65,8 @@ function handleClick() {
     role="checkbox"
     :aria-checked="checked"
     :aria-disabled="isDisabled"
-    v-tooltip.top="errorTooltip"
+    :aria-label="cardAriaLabel"
+    v-tooltip.top="cardTooltip"
     @click="handleClick"
     @keydown.enter.prevent="handleClick"
     @keydown.space.prevent="handleClick"
@@ -69,15 +89,8 @@ function handleClick() {
       </template>
       <template v-else>
         <span class="target-count target-count--summary">
-          <span class="target-count-part target-count--pending">
-            <span class="target-count-num">{{ formatNumber(pendingCount) }}</span>
-            <span class="target-count-unit">张待迁移</span>
-          </span>
-          <span class="target-count-separator">，</span>
-          <span class="target-count-part target-count--backed-up">
-            <span class="target-count-num">{{ formatNumber(backedUpCount) }}</span>
-            <span class="target-count-unit">张已备份</span>
-          </span>
+          <span class="target-count-num">{{ formatNumber(pendingCount) }}</span>
+          <span class="target-count-unit">张待迁移</span>
         </span>
       </template>
     </div>
@@ -91,6 +104,7 @@ function handleClick() {
   background: transparent; border-radius: var(--radius-md);
   cursor: pointer;
   border: 1px solid var(--border-subtle);
+  min-width: 0;
   transition:
     background var(--duration-normal) var(--ease-decelerate),
     border-color var(--duration-normal) var(--ease-decelerate),
@@ -120,13 +134,22 @@ function handleClick() {
 .target-card--disabled { opacity: 0.5; cursor: not-allowed; }
 .target-card--disabled:hover { background: transparent; border-color: var(--border-subtle); }
 
-.target-card-top { display: flex; align-items: center; gap: var(--space-sm); }
+.target-card-top { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
 
 .target-icon { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-secondary); }
 .target-icon :deep(svg) { width: 16px; height: 16px; }
 .target-card--checked .target-icon { color: var(--primary); }
 
-.target-name { font-size: var(--text-base); font-weight: var(--weight-semibold); color: var(--text-primary); letter-spacing: -0.01em; }
+.target-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
 
 .target-status-dot {
   width: 8px; height: 8px;
@@ -141,21 +164,25 @@ function handleClick() {
 .dot--pending  { background: var(--warning); }
 .dot--error    { background: var(--error);   }
 
-.target-count-stack { display: flex; align-items: baseline; min-width: 0; }
-.target-count { display: inline-flex; align-items: baseline; gap: var(--space-2xs); min-width: 0; }
-.target-count--summary { gap: 0; white-space: nowrap; }
-.target-count-part { display: inline-flex; align-items: baseline; gap: var(--space-2xs); }
-.target-count-separator { font-size: var(--text-xs); color: var(--text-muted); }
+.target-count-stack { display: flex; align-items: baseline; min-width: 0; max-width: 100%; }
+
+.target-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.target-count--summary { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .target-count-num { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-.target-count-unit { font-size: var(--text-xs); color: var(--text-muted); }
+.target-count-unit { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-xs); color: var(--text-muted); }
 
 .target-count--summary .target-count-num,
-.target-count--summary .target-count-unit,
-.target-count--summary .target-count-separator { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-secondary); }
+.target-count--summary .target-count-unit { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-secondary); }
 
 .target-count-stack--active .target-count--summary .target-count-num,
-.target-count-stack--active .target-count--summary .target-count-unit,
-.target-count-stack--active .target-count--summary .target-count-separator { color: var(--primary); font-weight: var(--weight-semibold); }
+.target-count-stack--active .target-count--summary .target-count-unit { color: var(--primary); font-weight: var(--weight-semibold); }
 .target-count-stack--no-source .target-count-num { color: var(--text-tertiary); font-style: italic; font-variant-numeric: normal; }
 .target-count-stack--no-source .target-count-unit { color: var(--text-tertiary); font-style: italic; }
 .target-count-stack--stale { opacity: 0.35; transition: opacity var(--duration-normal) var(--ease-decelerate); }

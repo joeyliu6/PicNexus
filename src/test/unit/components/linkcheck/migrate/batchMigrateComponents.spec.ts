@@ -238,7 +238,14 @@ describe('batch migrate P1 components', () => {
     expect(healthy.emitted('toggle')).toHaveLength(1);
     expect(error.emitted('toggle')).toBeUndefined();
     expect(error.get('.target-card').attributes('aria-disabled')).toBe('true');
-    expect(healthy.get('.target-count-stack').text()).toBe('3张待迁移，0张已备份');
+    expect(healthy.get('.target-count-stack').text()).toBe('3张待迁移');
+    expect(healthy.text()).not.toContain('0张已备份');
+    expect(healthy.get('.target-card').attributes('data-tooltip')).toBe('0 张已备份');
+    expect(healthy.get('.target-card').attributes('data-tooltip')).not.toContain('GitHub');
+    expect(healthy.get('.target-card').attributes('data-tooltip')).not.toContain('3 张待迁移');
+    expect(error.get('.target-card').attributes('data-tooltip')).toBe('图床异常，请先检查配置\n2 张已备份');
+    expect(error.get('.target-card').attributes('data-tooltip')).not.toContain('SM.MS');
+    expect(error.get('.target-card').attributes('data-tooltip')).not.toContain('3 张待迁移');
     expect(healthy.text()).not.toContain('无需备份');
   });
 

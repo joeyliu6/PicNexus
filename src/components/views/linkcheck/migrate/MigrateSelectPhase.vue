@@ -273,8 +273,9 @@ function handleTargetToggle(serviceId: string) {
 @import url('./migrate-shared.css');
 
 .panel-body {
-  flex: 1; overflow-y: auto; padding: 0 var(--space-lg-xl) 0 0;
+  flex: 1; overflow: hidden auto; padding: 0 var(--space-lg-xl) 0 0;
   display: flex; flex-direction: column;
+  min-width: 0;
 }
 
 /* 冷启动骨架屏：镜像真实布局的几何结构，避免加载完成后 UI 跳跃 */
@@ -317,11 +318,15 @@ function handleTargetToggle(serviceId: string) {
 
 .sk-line--name { flex: 1; height: var(--text-sm); max-width: 150px; }
 .sk-line--count { width: 104px; height: var(--text-sm); margin-left: auto; }
-.sk-line--title { flex: 1; height: var(--text-base); max-width: 150px; }
+.sk-line--title { flex: 1; min-width: 0; height: var(--text-base); max-width: 150px; }
 .sk-line--subtitle { width: 62%; height: var(--text-sm); }
 .sk-line--subtitle-secondary { width: 74%; opacity: 0.72; }
 
-.sk-target-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); }
+.sk-target-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+}
 
 /* 底栏骨架：文字条 + 按钮块 */
 .sk-bottom-text { flex: 1; max-width: 180px; height: var(--text-sm); }
@@ -335,11 +340,12 @@ function handleTargetToggle(serviceId: string) {
   border: 1px dashed var(--border-subtle);
   background: transparent;
   min-height: 68px;
+  min-width: 0;
 }
-.sk-target-top { display: flex; align-items: center; gap: var(--space-sm); }
+.sk-target-top { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
 
 /* 分栏布局 */
-.split-layout { display: flex; flex: 1; min-height: 0; gap: var(--space-md); }
+.split-layout { display: flex; flex: 1; min-height: 0; gap: var(--space-md); overflow: hidden; }
 
 /* 两栏之间的方向引导 */
 .split-divider {
@@ -367,7 +373,7 @@ function handleTargetToggle(serviceId: string) {
 /* 右栏 */
 .split-right {
   flex: 1; min-width: 0;
-  display: flex; flex-direction: column; overflow-y: auto;
+  display: flex; flex-direction: column; overflow: hidden auto;
 }
 
 .backed-up-banner {
@@ -381,7 +387,11 @@ function handleTargetToggle(serviceId: string) {
 }
 .backed-up-banner i { font-size: var(--text-base); color: var(--success); flex-shrink: 0; }
 
-.target-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); }
+.target-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+}
 
 /* 未配置添加卡片（结构与 TargetCard 对齐，保持高度一致） */
 .target-card-add {
@@ -391,6 +401,7 @@ function handleTargetToggle(serviceId: string) {
   border: 1px dashed var(--border-subtle);
   background: transparent;
   cursor: pointer; color: var(--text-tertiary);
+  min-width: 0;
   transition:
     border-color var(--duration-normal) var(--ease-decelerate),
     color var(--duration-normal) var(--ease-decelerate),
@@ -403,15 +414,32 @@ function handleTargetToggle(serviceId: string) {
   color: var(--primary);
   background: var(--hover-overlay-subtle);
 }
-.target-card-add-top { display: flex; align-items: center; gap: var(--space-sm); }
+.target-card-add-top { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
 
 .target-card-add-icon {
   width: 18px; height: 18px;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   font-size: var(--text-lg); line-height: 1; font-weight: var(--weight-regular);
 }
-.target-card-add-label { font-size: var(--text-base); font-weight: var(--weight-semibold); letter-spacing: -0.01em; }
-.target-card-add-hint { font-size: var(--text-xs); color: var(--text-tertiary); }
+
+.target-card-add-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+}
+
+.target-card-add-hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
 
 /* 底栏公共图床风险图标（按钮左侧 tooltip 触发） */
 .bottom-warn-icon {

@@ -165,7 +165,16 @@ function handleToggleAll() {
 
 .source-icon { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-secondary); }
 .source-icon :deep(svg) { width: 14px; height: 14px; }
-.source-name { font-weight: var(--weight-medium); color: var(--text-primary); }
+
+.source-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+}
+
 .source-count { display: inline-flex; align-items: baseline; gap: var(--space-2xs); margin-left: auto; flex-shrink: 0; }
 .source-count-num { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .source-count-unit { font-size: var(--text-xs); color: var(--text-muted); }
