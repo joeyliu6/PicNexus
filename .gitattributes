@@ -12,3 +12,4 @@
 *.vue text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+.husky/* text eol=lf

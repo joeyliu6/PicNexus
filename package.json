@@ -13,6 +13,8 @@
     "test:unit": "vitest run",
     "test:run": "npm run test:unit",
     "test:coverage": "vitest run --coverage && node scripts/check-critical-coverage.mjs",
+    "ci:prepush": "npm run typecheck && npm run lint && npm run build && npm run test:coverage",
+    "ci:full": "npm run ci:prepush && cd src-tauri && cargo check && cargo test --quiet",
     "test:visual": "playwright test -c playwright.config.ts",
     "test:visual:update": "playwright test -c playwright.config.ts --update-snapshots=all",
     "test:e2e": "playwright test -c playwright.e2e.config.ts",

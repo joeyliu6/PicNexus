@@ -1,25 +1,21 @@
 #!/usr/bin/env sh
-# Pre-push 质检：
-#   1. 全量前端测试（覆盖最近修改可能间接影响的模块）
-#   2. 全量 Rust 测试（commands/error 纯函数）
+# Local CI gate before pushing.
 #
-# 不跑 test:coverage——门槛由 CI 保障；本地只做快速自检（约 25-35s）。
-# 如需跳过（紧急热修、CI 已验过）：git push --no-verify
+# This intentionally mirrors the failure-prone parts of GitHub Actions:
+# typecheck, lint, build, coverage thresholds, and Rust tests.
+# To bypass in an emergency: git push --no-verify
 
 set -e
 
-# GitHub Desktop 自带的 mingw bash 调用无后缀 `npm`（shell 脚本）会报
-# "No such file or directory"，而其 `command -v` 又不认 .cmd 后缀导致探测失效。
-# 所以在 Windows（MINGW/MSYS/CYGWIN）直接硬编码 npm.cmd，其他平台用 npm。
 case "$(uname -s)" in
   MINGW*|MSYS*|CYGWIN*) NPM=npm.cmd ;;
   *) NPM=npm ;;
 esac
 
-echo "→ [pre-push] 跑前端测试..."
-"$NPM" run test:run
+echo "[pre-push] Running frontend CI gate..."
+"$NPM" run ci:prepush
 
-echo "→ [pre-push] 跑 Rust 测试..."
+echo "[pre-push] Running Rust tests..."
 (cd src-tauri && cargo test --quiet)
 
-echo "✓ [pre-push] 全部通过，开始推送"
+echo "[pre-push] All checks passed. Pushing..."
