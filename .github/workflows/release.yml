@@ -142,6 +142,39 @@ jobs:
           config: cliff.toml
           args: --latest --strip header
 
+      - name: Prepare release body
+        id: release_body
+        shell: bash
+        env:
+          CHANGELOG: ${{ steps.changelog.outputs.content }}
+        run: |
+          {
+            cat <<'PICNEXUS_DOWNLOAD_GUIDE'
+          ## 推荐下载
+
+          | 使用场景 | 推荐文件 |
+          | --- | --- |
+          | Windows 普通用户 | `PicNexus_*_x64-setup.exe` |
+          | Windows 企业部署 / 批量安装 | `PicNexus_*_x64_*.msi` |
+          | Windows 免安装便携版 | `PicNexus_*_windows_x64_portable.zip` |
+          | macOS Apple Silicon | `PicNexus_*_aarch64.dmg` |
+          | macOS Intel | `PicNexus_*_x64.dmg` |
+          | Linux 通用运行 | `PicNexus_*_amd64.AppImage` |
+          | Debian / Ubuntu | `PicNexus_*_amd64.deb` |
+          | Fedora / RHEL / openSUSE | `PicNexus-*-1.x86_64.rpm` |
+
+          `.sig` 和 `latest.json` 是签名校验 / 自动更新文件，普通手动安装通常不需要下载。
+
+          PICNEXUS_DOWNLOAD_GUIDE
+            printf '\n'
+            printf '%s\n' "$CHANGELOG"
+          } > release-body.md
+          {
+            echo 'content<<PICNEXUS_RELEASE_BODY'
+            cat release-body.md
+            echo 'PICNEXUS_RELEASE_BODY'
+          } >> "$GITHUB_OUTPUT"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -150,7 +183,7 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: 'PicNexus v__VERSION__'
-          releaseBody: ${{ steps.changelog.outputs.content }}
+          releaseBody: ${{ steps.release_body.outputs.content }}
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true

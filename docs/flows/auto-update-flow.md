@@ -10,7 +10,7 @@ PicNexus 采用 **Tauri 官方 `tauri-plugin-updater` + GitHub Releases + minisi
 - **签名**:minisign 公钥内嵌在 `tauri.conf.json`,私钥由 CI 的 GitHub Secrets 管理
 - **安装模式**:Windows 使用 `passive`(静默安装,用户可见进度但无需交互)
 - **触发方式**:启动时自动检查(由 `autoUpdateEnabled` 配置开关控制) + 手动点击
-- **状态机**:`idle → checking → (available | up-to-date | error) → downloading → ready → 重启`
+- **状态机**:`idle → checking → (available | up-to-date | error) → downloading → install-pending → 用户点击重启`
 - **发布流程**:`git tag v*` → GitHub Actions `release.yml` → `tauri-action` 自动签名 + 上传 `latest.json`
 
 ---
@@ -116,11 +116,14 @@ sequenceDiagram
         R->>R: 写入临时目录<br/>调用系统安装程序 passive 模式
         R-->>P: Event: Finished
         P->>H: callback Finished event
-        H->>H: status = 'ready'<br/>downloadProgress = 100
+        H->>H: status = 'install-pending'<br/>downloadProgress = 100
+        H-->>V: 显示"重启完成更新"
     end
 
     deactivate H
 
+    U->>V: 点击"重启完成更新"
+    V->>H: retryRelaunch
     H->>PR: relaunch
     PR->>PR: std::process::exit 0<br/>+ 重新启动进程
     Note over PR: 用户看到应用重启<br/>新版本加载
@@ -144,10 +147,10 @@ stateDiagram-v2
     available --> downloading: 用户点下载
     available --> idle: 用户关闭面板<br/>下次再检查
 
-    downloading --> ready: 下载+签名验证成功
+    downloading --> install_pending: 下载+签名验证成功
     downloading --> error: 下载中断/签名失败
 
-    ready --> [*]: relaunch<br/>进程退出
+    install_pending --> [*]: 用户点击重启<br/>relaunch 进程退出
 
     up_to_date --> checking: 手动再次检查
     error --> checking: 重试按钮
@@ -157,6 +160,7 @@ stateDiagram-v2
       error 状态下
       AboutUpdatePanel 显示
       错误消息 + 重试按钮
+      检查失败时提供手动下载入口
     end note
 
     note right of downloading
@@ -223,7 +227,7 @@ flowchart TD
 | `checking` 卡住不动 | 网络无法访问 github.com / endpoints 失效 | 图1 F |
 | "检查更新"返回 `error` 无详情 | 签名验证失败(公钥不匹配) | 图1 J1 |
 | 下载进度条不动 | Rust 侧事件发送失败或前端 callback 丢失 | 图2 loop |
-| 下载完成后无反应 | `relaunch` 调用失败,或 `process:allow-restart` 权限未配置 | 图2 PR |
+| 下载完成后无反应 | `install-pending` 状态未渲染,或 `process:allow-restart` 权限未配置导致点击重启失败 | 图2 PR |
 | 用户反馈"签名无效" | CI 换了私钥但没同步更新 `pubkey` | 图4 CV1 |
 | Windows 上安装需要手动确认 | `installMode` 配成 `basicUi` 而非 `passive` | `tauri.conf.json` |
 | 老版本用户收不到更新 | `latest.json` 未正确上传或 Release 是 draft 状态 | 图4 L3 |

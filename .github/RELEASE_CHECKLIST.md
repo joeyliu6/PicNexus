@@ -38,7 +38,16 @@
 - [ ] 批量迁移工具走一次
 - [ ] 启动 → 主窗口可见 → 关闭正常
 
+## 安装与更新
+- [ ] Release body 顶部已包含「推荐下载」表，Windows 普通用户指向 `x64-setup.exe`
+- [ ] `.sig` / `latest.json` 已标注为签名校验 / 自动更新文件，避免普通用户误下载
+- [ ] 应用内检查更新失败时，「手动下载」能打开最新 Release 页面
+- [ ] 更新下载完成后停留在「重启完成更新」，不会自动重启应用
+- [ ] 如已接入 Windows Authenticode 证书，确认安装包签名与时间戳有效；未接入时在发布说明中接受 SmartScreen 风险
+- [ ] 如启用备用镜像，确认镜像资产、`latest.json` 与 minisign 签名和 GitHub Release 完全一致；未启用时保持 GitHub 官方下载入口
+
 ## 跨平台（至少抽检一个）
+- [ ] Windows `x64-setup.exe` 安装 + 启动
 - [ ] Windows `.msi` 安装 + 启动
 - [ ] Windows 便携版 ZIP 解压后 `PicNexus.exe --version` 正常，`data/portable.json` 存在
 - [ ] macOS `.dmg` 安装 + 启动（arm64 或 Intel 之一）

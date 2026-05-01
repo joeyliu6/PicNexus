@@ -130,7 +130,7 @@ describe('useAutoUpdate - downloadAndInstall', () => {
     expect(api.status.value).toBe('idle');
   });
 
-  it('下载成功 + relaunch 成功 → ready', async () => {
+  it('下载成功后进入 install-pending，等待用户手动重启', async () => {
     const update = makeUpdate();
     update.downloadAndInstall = vi.fn(async (cb: any) => {
       cb({ event: 'Started', data: { contentLength: 1000 } });
@@ -143,12 +143,28 @@ describe('useAutoUpdate - downloadAndInstall', () => {
     const api = useAutoUpdate();
     await api.checkForUpdate();
     await api.downloadAndInstall();
-    expect(api.status.value).toBe('ready');
+    expect(api.status.value).toBe('install-pending');
     expect(api.downloadProgress.value).toBe(100);
-    expect(mockRelaunch).toHaveBeenCalled();
+    expect(mockRelaunch).not.toHaveBeenCalled();
   });
 
-  it('relaunch 失败 → status=install-pending（不再卡在 ready 静默死掉）', async () => {
+  it('下载过程中按 contentLength 计算中途进度', async () => {
+    const update = makeUpdate();
+    const api = useAutoUpdate();
+    update.downloadAndInstall = vi.fn(async (cb: any) => {
+      cb({ event: 'Started', data: { contentLength: 1000 } });
+      cb({ event: 'Progress', data: { chunkLength: 400 } });
+      expect(api.downloadProgress.value).toBe(40);
+      cb({ event: 'Finished' });
+    });
+    mockCheck.mockResolvedValue(update);
+    mockRelaunch.mockResolvedValue(undefined as any);
+    await api.checkForUpdate();
+    await api.downloadAndInstall();
+    expect(api.downloadProgress.value).toBe(100);
+  });
+
+  it('安装完成后不会自动 relaunch，也不会写入错误提示', async () => {
     const update = makeUpdate();
     update.downloadAndInstall = vi.fn(async (cb: any) => {
       cb({ event: 'Started', data: { contentLength: 100 } });
@@ -160,7 +176,8 @@ describe('useAutoUpdate - downloadAndInstall', () => {
     await api.checkForUpdate();
     await api.downloadAndInstall();
     expect(api.status.value).toBe('install-pending');
-    expect(api.errorMessage.value).toBe('更新已安装，请手动重启应用');
+    expect(api.errorMessage.value).toBe('');
+    expect(mockRelaunch).not.toHaveBeenCalled();
   });
 
   it('install-pending 时再次点下载按钮不会触发二次 downloadAndInstall', async () => {
@@ -208,7 +225,7 @@ describe('useAutoUpdate - downloadAndInstall', () => {
     await api.retryDownload();
     expect(update.downloadAndInstall).toHaveBeenCalledTimes(2);
     expect(mockCheck).toHaveBeenCalledTimes(1); // 没有再次 check
-    expect(api.status.value).toBe('ready');
+    expect(api.status.value).toBe('install-pending');
   });
 
   it('下载失败 → status=error', async () => {

@@ -47,7 +47,12 @@
       "binaries/qiyu-token-fetcher",
       "binaries/nami-token-fetcher"
     ],
-    "resources": ["icons/icon.png"]
+    "resources": ["icons/icon.png"],
+    "windows": {
+      "nsis": {
+        "languages": ["SimpChinese", "English"]
+      }
+    }
   },
   "plugins": {
     "shell": {

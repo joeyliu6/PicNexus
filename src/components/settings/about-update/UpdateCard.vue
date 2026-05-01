@@ -2,8 +2,11 @@
 import { computed, ref, watch, onUnmounted } from 'vue';
 import Button from 'primevue/button';
 import ToggleSwitch from 'primevue/toggleswitch';
+import { open } from '@tauri-apps/plugin-shell';
 import { useAutoUpdate } from '../../../composables/useAutoUpdate';
 import { useToast } from '../../../composables/useToast';
+
+const RELEASES_URL = 'https://github.com/joeyliu6/PicNexus/releases/latest';
 
 const autoUpdateEnabled = defineModel<boolean>('autoUpdateEnabled', { required: true });
 
@@ -16,6 +19,7 @@ const toast = useToast();
 const {
   status,
   updateInfo,
+  downloadProgress,
   errorMessage,
   lastCheckTime,
   pendingUpdateAvailable,
@@ -41,6 +45,12 @@ const lastCheckText = computed(() => {
 
 // 检查返回（成功或失败）后完成态显示 1.5s 再回落到常态
 const COMPLETED_DISPLAY_MS = 1500;
+const downloadPercentText = computed(() => {
+  const percent = Number(downloadProgress.value);
+  if (!Number.isFinite(percent)) return '0%';
+  return `${Math.min(Math.max(Math.round(percent), 0), 100)}%`;
+});
+
 const postCheckResult = ref<'success' | 'error' | null>(null);
 let completedTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -111,6 +121,14 @@ const errorTitle = computed(() => pendingUpdateAvailable.value ? '下载更新�
 function onToggleAutoUpdate(v: boolean) {
   autoUpdateEnabled.value = v;
   emit('save');
+}
+
+async function openManualDownload() {
+  try {
+    await open(RELEASES_URL);
+  } catch {
+    toast.error('打开下载页失败', `请手动访问：${RELEASES_URL}`);
+  }
 }
 </script>
 
@@ -185,30 +203,24 @@ function onToggleAutoUpdate(v: boolean) {
     </div>
 
     <!-- downloading -->
-    <div v-else-if="status === 'downloading'" class="update-status">
+    <div v-else-if="status === 'downloading'" class="update-status update-status-downloading">
       <div class="update-status-text">
-        <i class="pi pi-spin pi-spinner update-icon checking" />
+        <span class="download-spinner-ring" aria-hidden="true"></span>
         <span>正在下载更新...</span>
       </div>
+      <span class="download-progress-percent" aria-live="polite">{{ downloadPercentText }}</span>
     </div>
 
-    <!-- ready -->
-    <div v-else-if="status === 'ready'" class="update-status">
-      <div class="update-status-text">
-        <span>下载完成，正在重启应用...</span>
-      </div>
-    </div>
-
-    <!-- install-pending: 下载完成但自动重启失败 -->
+    <!-- install-pending: 更新已安装，等待用户重启 -->
     <div v-else-if="status === 'install-pending'" class="update-status">
       <div class="update-status-text">
         <div class="update-status-info">
-          <span>更新已下载，需要重启应用以完成安装</span>
+          <span>更新已安装，重启后生效</span>
           <span v-if="errorMessage" class="last-check error-hint">{{ errorMessage }}</span>
         </div>
       </div>
       <Button
-        label="立即重启"
+        label="重启完成更新"
         icon="pi pi-replay"
         size="small"
         @click="retryRelaunch"
@@ -240,6 +252,14 @@ function onToggleAutoUpdate(v: boolean) {
           size="small"
           outlined
           @click="checkForUpdate"
+        />
+        <Button
+          v-if="!pendingUpdateAvailable"
+          label="手动下载"
+          icon="pi pi-external-link"
+          size="small"
+          outlined
+          @click="openManualDownload"
         />
       </div>
     </div>
@@ -299,6 +319,30 @@ function onToggleAutoUpdate(v: boolean) {
 
 .update-icon.checking {
   color: var(--primary);
+}
+
+.download-spinner-ring {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border: 2px solid var(--primary-alpha-15);
+  border-top-color: var(--primary);
+  border-radius: var(--radius-full);
+  transform-origin: center center;
+  animation: k-spin var(--duration-spinner) linear infinite;
+}
+
+.download-progress-percent {
+  min-width: 4ch;
+  flex-shrink: 0;
+  color: var(--primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: right;
 }
 
 /* checking 态骨架条：与图床健康 pill shimmer 同一配方 */

@@ -120,17 +120,8 @@ async function downloadAndInstall(): Promise<void> {
       }
     });
 
-    status.value = 'ready';
-
-    try {
-      await relaunch();
-    } catch (relaunchErr) {
-      // Why: relaunch 失败不能让 status 卡在 'ready'（UI 显示"正在重启..."但其实没重启），
-      // 切到 'install-pending' 让 UI 显示"立即重启"按钮。
-      status.value = 'install-pending';
-      errorMessage.value = '更新已安装，请手动重启应用';
-      log.warn('自动重启失败，请手动重启:', relaunchErr);
-    }
+    // Why: 下载安装完成后不自动重启。让用户看到明确的完成态，再主动点击重启，避免应用突然退出。
+    status.value = 'install-pending';
   } catch (e) {
     // Why: 下载失败保留 pendingUpdate 供 retryDownload() 直接重试，避免强制走完整 check。
     status.value = 'error';
