@@ -107,6 +107,7 @@ const compressionSyncUnlisten = ref<UnlistenFn | null>(null);
 const appVersion = ref('');
 const executablePath = ref('');
 const isClearingCache = ref(false);
+const webdavTesting = ref(false);
 
 const navGroups = [{
   items: [
@@ -180,6 +181,52 @@ async function handleClearAppCache() {
   } catch (error) {
     toast.showConfig('error', TOAST_MESSAGES.cache.clearFailed(String(error)));
   } finally { isClearingCache.value = false; }
+}
+
+async function handleWebDAVTest() {
+  const webdav = formData.value.webdav;
+  const profile = webdav.profiles.find(p => p.id === webdav.activeId);
+  if (!profile) return;
+
+  if (!profile.url || !profile.username || !profile.password) {
+    toast.showConfig('error', TOAST_MESSAGES.auth.failed('WebDAV', '请先补全服务器 URL、用户名和密码'));
+    return;
+  }
+
+  cancelDebouncedSave();
+  webdavTesting.value = true;
+  try {
+    const result = await configManager.testWebDAVConnection({
+      url: profile.url,
+      username: profile.username,
+      password: profile.password,
+      remotePath: profile.remotePath || '/PicNexus/',
+    });
+
+    const currentWebDAV = formData.value.webdav;
+    formData.value.webdav = {
+      ...currentWebDAV,
+      profiles: currentWebDAV.profiles.map(p => p.id === profile.id
+        ? {
+            ...p,
+            connectionStatus: result.success ? 'success' : 'failed',
+            lastTestedAt: Date.now(),
+            lastError: result.success ? undefined : result.message,
+          }
+        : p),
+    };
+
+    toast.showConfig(
+      result.success ? 'success' : 'error',
+      result.success
+        ? TOAST_MESSAGES.auth.success('WebDAV')
+        : TOAST_MESSAGES.auth.failed('WebDAV', result.message)
+    );
+
+    await saveSettings();
+  } finally {
+    webdavTesting.value = false;
+  }
 }
 
 // ---- 生命周期 ----
@@ -334,8 +381,10 @@ onUnmounted(() => {
       <div v-if="activeTab === 'backup'" class="settings-section">
         <BackupSyncPanel
           :webdav-config="formData.webdav"
+          :webdav-testing="webdavTesting"
           @update:webdav-config="(v) => { formData.webdav = v; debouncedSaveSettings(); }"
           @save="debouncedSaveSettings"
+          @test-web-d-a-v="handleWebDAVTest"
           @add-web-d-a-v-profile="addWebDAVProfile"
           @delete-web-d-a-v-profile="deleteWebDAVProfile"
           @switch-web-d-a-v-profile="switchWebDAVProfile"

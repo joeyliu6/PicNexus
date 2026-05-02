@@ -33,6 +33,7 @@ const mockState = vi.hoisted(() => ({
   clearEditorTimer: vi.fn(),
   setupCookieListener: vi.fn(),
   openCookieWebView: vi.fn(),
+  testWebDAVConnection: vi.fn(),
   clearHistory: vi.fn(),
   analyticsEnable: vi.fn(),
   analyticsDisable: vi.fn(),
@@ -59,6 +60,7 @@ vi.mock('../../../composables/useConfig', () => ({
   useConfigManager: () => ({
     setupCookieListener: mockState.setupCookieListener,
     openCookieWebView: mockState.openCookieWebView,
+    testWebDAVConnection: mockState.testWebDAVConnection,
   }),
 }));
 
@@ -209,7 +211,17 @@ const HostingSettingsPanelStub = defineComponent({
 
 const BackupSyncPanelStub = defineComponent({
   name: 'BackupSyncPanel',
-  template: '<section data-testid="backup-panel" />',
+  props: ['webdavConfig', 'webdavTesting'],
+  emits: ['testWebDAV'],
+  template: `
+    <section
+      data-testid="backup-panel"
+      :data-testing="String(webdavTesting)"
+      :data-status="webdavConfig.profiles[0]?.connectionStatus || ''"
+    >
+      <button class="test-webdav" @click="$emit('testWebDAV')">test webdav</button>
+    </section>
+  `,
 });
 
 const AboutUpdatePanelStub = defineComponent({
@@ -323,6 +335,7 @@ beforeEach(() => {
   mockState.saveSettings.mockResolvedValue(true);
   mockState.applyEditorServer.mockResolvedValue(undefined);
   mockState.setupCookieListener.mockResolvedValue(mockState.cookieUnlisten);
+  mockState.testWebDAVConnection.mockResolvedValue({ success: true, message: '连接成功' });
   mockState.configStoreGet.mockResolvedValue(config);
   setupInvokeResponses({
     get_executable_path: 'C:/Program Files/PicNexus/PicNexus.exe',
@@ -403,6 +416,35 @@ describe('SettingsView page interactions', () => {
     expect(mockState.handleServiceTest).toHaveBeenCalledWith('weibo');
     expect(mockState.handleBuiltinCheck).toHaveBeenCalledWith('jd');
     expect(mockState.testAllConfiguredServices).toHaveBeenCalled();
+  });
+
+  it('tests WebDAV from backup settings and persists the connection status', async () => {
+    mockState.formData.value.webdav = {
+      activeId: 'nas',
+      profiles: [{
+        id: 'nas',
+        name: 'NAS',
+        url: 'https://dav.example.com',
+        username: 'user',
+        password: 'secret',
+        remotePath: '/PicNexus/',
+      }],
+    };
+    const wrapper = await mountSettings();
+
+    await wrapper.findAll('.nav-item')[3].trigger('click');
+    await wrapper.get('.test-webdav').trigger('click');
+    await flushPromisesAndTicks();
+
+    expect(mockState.testWebDAVConnection).toHaveBeenCalledWith({
+      url: 'https://dav.example.com',
+      username: 'user',
+      password: 'secret',
+      remotePath: '/PicNexus/',
+    });
+    expect(mockState.formData.value.webdav.profiles[0].connectionStatus).toBe('success');
+    expect(mockState.saveSettings).toHaveBeenCalledTimes(1);
+    expect(mockState.toastShowConfig).toHaveBeenCalledWith('success', expect.objectContaining({ summary: '验证成功' }));
   });
 
   it('shows an error and rolls back when auto-start toggle fails', async () => {
