@@ -26,9 +26,16 @@ const emit = defineEmits<{
 const currentSrcIndex = ref(0);
 const currentSrc = computed(() => props.thumbnailUrls[currentSrcIndex.value] ?? '');
 
+function hasUrlListChanged(next: string[], prev?: string[]): boolean {
+  if (!prev || next.length !== prev.length) return true;
+  return next.some((url, index) => url !== prev[index]);
+}
+
 watch(
   () => props.thumbnailUrls,
-  () => { currentSrcIndex.value = 0; },
+  (next, prev) => {
+    if (hasUrlListChanged(next, prev)) currentSrcIndex.value = 0;
+  },
 );
 
 function handleImgError(): void {

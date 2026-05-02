@@ -143,6 +143,15 @@ const {
 const loadedImagesSet = computed(() => new Set(loadedImages.value));
 const failedImagesSet = computed(() => new Set(failedImages.value));
 const selectedIdsSet = computed(() => new Set(viewState.selectedIdList.value));
+const favoriteStateOfSelected = computed((): 'all' | 'partial' | 'none' => {
+  const ids = viewState.selectedIdList.value;
+  if (ids.length === 0) return 'none';
+  const favSet = historyManager.favoriteSet.value;
+  const favoritedCount = ids.filter(id => favSet.has(id)).length;
+  if (favoritedCount === 0) return 'none';
+  if (favoritedCount === ids.length) return 'all';
+  return 'partial';
+});
 
 const { trackScrollPosition, setLastStableProgress } = useScrollRestore({
   scrollContainer,
@@ -245,6 +254,15 @@ const handleScroll = () => {
 
 // 激活时加载时间段统计（侧边栏指示器需要）；loadTimePeriodStats 内部幂等，可重复触发
 watch(() => props.visible, (v) => { if (v) void historyManager.loadTimePeriodStats(); }, { immediate: true });
+
+watch(() => props.filter, (val) => {
+  if (val === undefined) return;
+  viewState.setFilter(val);
+}, { immediate: true });
+watch(() => props.searchTerm, (val) => {
+  if (val === undefined) return;
+  viewState.setSearchTerm(val);
+}, { immediate: true });
 
 // 视口可见天 → ±5 天缓冲 → 按需加载
 const { cleanup: cleanupVisibleDayBuffer } = useVisibleDayBuffer({ visibleDayKeys, dayStats, ensureDaysLoaded });
@@ -363,6 +381,7 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
       :selected-count="viewState.selectedIdList.value.length"
       :visible="viewState.hasSelection.value"
       :available-services="selectedAvailableServices"
+      :favorite-state="favoriteStateOfSelected"
       @copy="viewState.bulkCopyFormatted"
       @export="viewState.bulkExport"
       @delete="viewState.bulkDelete"

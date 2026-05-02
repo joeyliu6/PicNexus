@@ -67,6 +67,15 @@ const {
 });
 
 const selectedIdsSet = computed(() => new Set(viewState.selectedIdList.value));
+const favoriteStateOfSelected = computed((): 'all' | 'partial' | 'none' => {
+  const ids = viewState.selectedIdList.value;
+  if (ids.length === 0) return 'none';
+  const favSet = historyManager.favoriteSet.value;
+  const favoritedCount = ids.filter(id => favSet.has(id)).length;
+  if (favoritedCount === 0) return 'none';
+  if (favoritedCount === ids.length) return 'all';
+  return 'partial';
+});
 const selectedAvailableServices = computed<{ serviceId: ServiceType; count: number }[]>(() => {
   const ids = viewState.selectedIdList.value;
   if (ids.length === 0) return [];
@@ -105,6 +114,14 @@ watch(
   { immediate: true }
 );
 watch(() => viewState.selectedIdList.value.length, (c) => emit('update:selectedCount', c), { immediate: true });
+watch(
+  () => historyManager.favoriteSet.value,
+  (favSet) => {
+    for (const id of viewState.selectedIdList.value) {
+      if (!favSet.has(id)) viewState.deselect(id);
+    }
+  },
+);
 
 onUnmounted(() => {
   viewState.reset();
@@ -252,6 +269,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
       :selected-count="viewState.selectedIdList.value.length"
       :visible="viewState.hasSelection.value"
       :available-services="selectedAvailableServices"
+      :favorite-state="favoriteStateOfSelected"
       @copy="viewState.bulkCopyFormatted"
       @export="viewState.bulkExport"
       @delete="viewState.bulkDelete"

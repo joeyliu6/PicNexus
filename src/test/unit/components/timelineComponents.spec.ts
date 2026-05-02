@@ -12,6 +12,9 @@ const timelineFns = vi.hoisted(() => ({
   jumpToMonth: vi.fn(),
   handleSelectClick: vi.fn(),
   resetViewState: vi.fn(),
+  clearSelection: vi.fn(),
+  setFilter: vi.fn(),
+  setSearchTerm: vi.fn(),
   bulkCopyFormatted: vi.fn(),
   bulkExport: vi.fn(),
   bulkDelete: vi.fn(),
@@ -230,6 +233,9 @@ vi.mock('../../../composables/useHistoryViewState', async () => {
       selectedIdList: computed(() => timelineRefs.viewState!.selectedIdList.value),
       hasSelection: computed(() => timelineRefs.viewState!.hasSelection.value),
       handleSelectClick: timelineFns.handleSelectClick,
+      clearSelection: timelineFns.clearSelection,
+      setFilter: timelineFns.setFilter,
+      setSearchTerm: timelineFns.setSearchTerm,
       reset: timelineFns.resetViewState,
       bulkCopyFormatted: timelineFns.bulkCopyFormatted,
       bulkExport: timelineFns.bulkExport,
@@ -338,7 +344,19 @@ function mountTimelineView(props = {}) {
             </section>
           `,
         },
-        FloatingActionBar: { template: '<section class="floating-action-stub" />' },
+        FloatingActionBar: {
+          props: ['selectedCount', 'favoriteState'],
+          emits: ['batch-favorite'],
+          template: `
+            <section
+              class="floating-action-stub"
+              :data-selected-count="selectedCount"
+              :data-favorite-state="favoriteState"
+            >
+              <button class="fab-favorite" @click="$emit('batch-favorite', favoriteState === 'all' ? false : true)">favorite</button>
+            </section>
+          `,
+        },
         TimelineIndicator: { template: '<section class="timeline-indicator-stub" />' },
       },
     },
@@ -436,6 +454,25 @@ describe('TimelineView P1 coverage', () => {
     expect(timelineFns.handleLightboxNavigate).toHaveBeenCalledWith('next');
     expect(timelineFns.handleLightboxDelete).toHaveBeenCalledWith(lightboxItem);
   });
+
+  it('clears timeline selection on filter/search changes and passes favorite state to batch actions', async () => {
+    const item = meta({ id: 'time-1' });
+    timelineRefs.pagination!.groups.value = [group([item])];
+    timelineRefs.viewState!.selectedIdList.value = ['time-1'];
+    timelineRefs.viewState!.hasSelection.value = true;
+    timelineRefs.history!.favoriteSet.value = new Set(['time-1']);
+
+    const wrapper = mountTimelineView();
+
+    expect(wrapper.get('.floating-action-stub').attributes('data-favorite-state')).toBe('all');
+
+    await wrapper.get('.fab-favorite').trigger('click');
+    expect(timelineFns.batchSetFavorite).toHaveBeenCalledWith(['time-1'], false);
+
+    await wrapper.setProps({ filter: 'r2', searchTerm: 'cat' });
+    expect(timelineFns.setFilter).toHaveBeenCalledWith('r2');
+    expect(timelineFns.setSearchTerm).toHaveBeenCalledWith('cat');
+  });
 });
 
 describe('TimelinePhotoItem fallback and interaction states', () => {
@@ -470,6 +507,36 @@ describe('TimelinePhotoItem fallback and interaction states', () => {
     await wrapper.get('img').trigger('error');
 
     expect(wrapper.emitted('image-error')).toHaveLength(1);
+  });
+
+  it('does not restart fallback when parent re-renders with equal thumbnail URLs', async () => {
+    const wrapper = mountWithDefaults(TimelinePhotoItem, {
+      props: {
+        meta: item,
+        x: 1,
+        y: 2,
+        width: 120,
+        height: 90,
+        isSelected: false,
+        isFavorited: false,
+        isLoaded: false,
+        isFailed: false,
+        hasSelection: false,
+        displayMode: 'normal',
+        thumbnailUrls: ['https://primary.example.com/a.jpg', 'https://mirror.example.com/a.jpg'],
+      },
+    });
+
+    await wrapper.get('img').trigger('error');
+    await nextTick();
+    expect(wrapper.get('img').attributes('src')).toBe('https://mirror.example.com/a.jpg');
+
+    await wrapper.setProps({
+      thumbnailUrls: ['https://primary.example.com/a.jpg', 'https://mirror.example.com/a.jpg'],
+      isLoaded: true,
+    });
+
+    expect(wrapper.get('img').attributes('src')).toBe('https://mirror.example.com/a.jpg');
   });
 
   it('uses selection mode clicks and exposes the magnifier lightbox path', async () => {

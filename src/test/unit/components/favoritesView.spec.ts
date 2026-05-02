@@ -20,6 +20,7 @@ const historyViewStateMock = vi.hoisted(() => ({
   bulkExport: vi.fn(),
   bulkDelete: vi.fn(),
   clearSelection: vi.fn(),
+  deselect: vi.fn(),
   setFilter: vi.fn(),
   setSearchTerm: vi.fn(),
   reset: vi.fn(),
@@ -129,6 +130,7 @@ vi.mock('../../../composables/useHistoryViewState', async () => {
       bulkExport: historyViewStateMock.bulkExport,
       bulkDelete: historyViewStateMock.bulkDelete,
       clearSelection: historyViewStateMock.clearSelection,
+      deselect: historyViewStateMock.deselect,
       setFilter: historyViewStateMock.setFilter,
       setSearchTerm: historyViewStateMock.setSearchTerm,
       reset: historyViewStateMock.reset,
@@ -206,7 +208,7 @@ function mountFavoritesView() {
           template: '<section class="lightbox-stub" />',
         },
         FloatingActionBar: {
-          props: ['selectedCount', 'visible', 'availableServices'],
+          props: ['selectedCount', 'visible', 'availableServices', 'favoriteState'],
           emits: ['copy', 'export', 'delete', 'clear-selection', 'batch-favorite'],
           template: `
             <section
@@ -214,13 +216,14 @@ function mountFavoritesView() {
               class="floating-action-stub"
               :data-selected-count="selectedCount"
               :data-services="availableServices.map(s => \`\${s.serviceId}:\${s.count}\`).join('|')"
+              :data-favorite-state="favoriteState"
             >
               <button class="fab-copy" @click="$emit('copy', 'markdown')">copy</button>
               <button class="fab-copy-r2" @click="$emit('copy', 'url', 'r2')">copy r2</button>
               <button class="fab-export" @click="$emit('export')">export</button>
               <button class="fab-delete" @click="$emit('delete')">delete</button>
               <button class="fab-clear" @click="$emit('clear-selection')">clear</button>
-              <button class="fab-favorite" @click="$emit('batch-favorite', false)">favorite</button>
+              <button class="fab-favorite" @click="$emit('batch-favorite', favoriteState === 'all' ? false : true)">favorite</button>
             </section>
           `,
         },
@@ -361,8 +364,10 @@ describe('FavoritesView P1 coverage', () => {
     mockRefs.data!.imageStates['fav-1'] = 'loaded';
     mockRefs.viewState!.selectedIdList.value = ['fav-1'];
     mockRefs.viewState!.hasSelection.value = true;
+    mockRefs.history!.favoriteSet.value = new Set(['fav-1']);
 
     const wrapper = mountFavoritesView();
+    expect(wrapper.get('.floating-action-stub').attributes('data-favorite-state')).toBe('all');
 
     await wrapper.get('.fab-copy').trigger('click');
     await wrapper.get('.fab-export').trigger('click');
@@ -376,6 +381,22 @@ describe('FavoritesView P1 coverage', () => {
     expect(historyViewStateMock.clearSelection).toHaveBeenCalled();
     expect(historyManagerMock.batchSetFavorite).toHaveBeenCalledWith(['fav-1'], false);
     expect(wrapper.emitted('update:selectedCount')).toEqual([[1]]);
+  });
+
+  it('removes hidden selections when selected favorites are unfavorited', async () => {
+    mockRefs.data!.loadedMetas.value = [meta({ id: 'fav-1' }), meta({ id: 'fav-2' })];
+    mockRefs.viewState!.selectedIdList.value = ['fav-1', 'fav-2'];
+    mockRefs.viewState!.hasSelection.value = true;
+    mockRefs.history!.favoriteSet.value = new Set(['fav-1', 'fav-2']);
+
+    mountFavoritesView();
+    historyViewStateMock.deselect.mockClear();
+
+    mockRefs.history!.favoriteSet.value = new Set(['fav-2']);
+    await nextTick();
+
+    expect(historyViewStateMock.deselect).toHaveBeenCalledWith('fav-1');
+    expect(historyViewStateMock.deselect).not.toHaveBeenCalledWith('fav-2');
   });
 
   it('exposes selected service counts and forwards service-specific copy requests', async () => {
@@ -428,6 +449,28 @@ describe('FavoritePhotoItem fallback and interactions', () => {
     await wrapper.get('img').trigger('error');
 
     expect(wrapper.emitted('image-state-change')).toEqual([['failed']]);
+  });
+
+  it('does not restart fallback when parent re-renders with equal thumbnail URLs', async () => {
+    const wrapper = mountWithDefaults(FavoritePhotoItem, {
+      props: {
+        meta: item,
+        thumbnailUrls: ['https://primary.example.com/a.jpg', 'https://mirror.example.com/a.jpg'],
+        imageState: undefined,
+        selected: false,
+      },
+    });
+
+    await wrapper.get('img').trigger('error');
+    await nextTick();
+    expect(wrapper.get('img').attributes('src')).toBe('https://mirror.example.com/a.jpg');
+
+    await wrapper.setProps({
+      thumbnailUrls: ['https://primary.example.com/a.jpg', 'https://mirror.example.com/a.jpg'],
+      imageState: 'loaded',
+    });
+
+    expect(wrapper.get('img').attributes('src')).toBe('https://mirror.example.com/a.jpg');
   });
 
   it('emits item, selection, favorite, and loaded events', async () => {
