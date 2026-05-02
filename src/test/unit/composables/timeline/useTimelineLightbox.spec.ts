@@ -195,4 +195,16 @@ describe('useTimelineLightbox', () => {
     expect(api.lightboxVisible.value).toBe(false);
     expect(toast.success).toHaveBeenCalled();
   });
+
+  it('keeps the lightbox open when the shared delete handler reports cancellation', async () => {
+    const deleteHistoryItem = vi.fn().mockResolvedValue(false);
+    const { api, dayOneItems, toast } = mountLightbox({ deleteHistoryItem });
+    await api.openLightbox(dayOneItems[0]);
+
+    await api.handleLightboxDelete(makeDetail('day-one-new'));
+
+    expect(deleteHistoryItem).toHaveBeenCalledWith('day-one-new');
+    expect(api.lightboxVisible.value).toBe(true);
+    expect(toast.success).not.toHaveBeenCalled();
+  });
 });

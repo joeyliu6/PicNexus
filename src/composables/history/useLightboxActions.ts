@@ -2,7 +2,6 @@ import { ref, watch, onUnmounted, type Ref } from 'vue';
 import type { HistoryItem, ServiceType } from '../../config/types';
 import { useToast } from '../useToast';
 import { useCopyLink } from '../useCopyLink';
-import { useConfirm } from '../useConfirm';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('LightboxActions');
@@ -17,7 +16,6 @@ interface LightboxActionsOptions {
 export function useLightboxActions({ item, resetZoom, onDelete }: LightboxActionsOptions) {
   const toast = useToast();
   const { copyLink: copyLinkAction, applyConfiguredUrl } = useCopyLink();
-  const { confirmDelete } = useConfirm();
   const copySuccess = ref(false);
   let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -97,9 +95,7 @@ export function useLightboxActions({ item, resetZoom, onDelete }: LightboxAction
     if (!item.value) return;
     resetZoom();
     const current = item.value;
-    confirmDelete('确定要删除这条历史记录吗？此操作不可撤销。', () => {
-      onDelete(current);
-    });
+    onDelete(current);
   }
 
   onUnmounted(() => {

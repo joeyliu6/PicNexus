@@ -8,13 +8,11 @@ const {
   toastErrorMock,
   copyLinkActionMock,
   applyConfiguredUrlMock,
-  confirmDeleteMock,
 } = vi.hoisted(() => ({
   toastWarnMock: vi.fn(),
   toastErrorMock: vi.fn(),
   copyLinkActionMock: vi.fn(),
   applyConfiguredUrlMock: vi.fn((url: string, serviceId?: string) => `prefixed:${serviceId}:${url}`),
-  confirmDeleteMock: vi.fn(),
 }));
 const shellOpenMock = getShellOpenMock();
 
@@ -29,12 +27,6 @@ vi.mock('../../../../composables/useCopyLink', () => ({
   useCopyLink: () => ({
     copyLink: copyLinkActionMock,
     applyConfiguredUrl: applyConfiguredUrlMock,
-  }),
-}));
-
-vi.mock('../../../../composables/useConfirm', () => ({
-  useConfirm: () => ({
-    confirmDelete: confirmDeleteMock,
   }),
 }));
 
@@ -201,18 +193,12 @@ describe('useLightboxActions', () => {
     expect(toastErrorMock).toHaveBeenCalledTimes(1);
   });
 
-  it('resets zoom before confirming deletion and deletes the originally selected item after confirmation', async () => {
+  it('resets zoom and delegates deletion for the current item without a second confirmation', () => {
     const harness = mountHarness();
 
     harness.api().handleDelete();
 
     expect(harness.resetZoom).toHaveBeenCalledTimes(1);
-    expect(confirmDeleteMock).toHaveBeenCalledTimes(1);
-
-    const [, confirmCallback] = confirmDeleteMock.mock.calls[0];
-    harness.item.value = makeHistoryItem({ id: 'item-2' });
-    (confirmCallback as () => void)();
-
     expect(harness.onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 'item-1' }));
   });
 });

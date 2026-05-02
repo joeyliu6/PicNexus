@@ -40,7 +40,7 @@ export interface LightboxCoreApi {
   showItem: (loader: () => Promise<HistoryItem>) => Promise<void>;
   /** 仅加载详情、保持灯箱打开（用于翻页等场景） */
   loadItem: (loader: () => Promise<HistoryItem>) => Promise<void>;
-  /** 标准删除流程：执行 → 关灯箱 → 成功 toast；失败 toast 不关 */
+  /** 标准删除流程：执行 → 关灯箱 → 成功 toast；取消/失败不关 */
   deleteCurrent: (item: HistoryItem, deleteFn: (id: string) => Promise<unknown>) => Promise<void>;
 }
 
@@ -77,7 +77,8 @@ export function useLightboxCore(options: UseLightboxCoreOptions = {}): LightboxC
     deleteFn: (id: string) => Promise<unknown>,
   ): Promise<void> {
     try {
-      await deleteFn(item.id);
+      const deleted = await deleteFn(item.id);
+      if (deleted === false) return;
       lightboxVisible.value = false;
       toast.success('已删除');
     } catch (e) {

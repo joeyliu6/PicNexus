@@ -157,4 +157,21 @@ describe('useFavoritesLightbox', () => {
     expect(lightbox.lightboxVisible.value).toBe(false);
     expect(toastSuccessMock).toHaveBeenCalledWith('已删除');
   });
+
+  it('keeps the lightbox open and skips success feedback when deletion is cancelled', async () => {
+    const favoriteMetas = ref([makeMeta('alpha')]);
+    const deleteHistoryItem = vi.fn().mockResolvedValue(false);
+    const lightbox = useFavoritesLightbox({
+      favoriteMetas,
+      getDetail: vi.fn().mockResolvedValue(makeDetail('alpha')),
+      deleteHistoryItem,
+    });
+
+    await lightbox.openLightbox(favoriteMetas.value[0] as never);
+    await lightbox.handleLightboxDelete(lightbox.lightboxItem.value! as never);
+
+    expect(deleteHistoryItem).toHaveBeenCalledWith('alpha');
+    expect(lightbox.lightboxVisible.value).toBe(true);
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+  });
 });
