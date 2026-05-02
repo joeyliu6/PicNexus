@@ -14,6 +14,7 @@ import { syncCustomS3Uploaders } from '../../uploaders';
 import { useConfirm } from '../useConfirm';
 import { createLogger } from '../../utils/logger';
 import { extractNamiAuthToken } from '../../utils/namiAuthToken';
+import { extractErrorMessage } from '../../utils/serviceHealthMessage';
 import type {
   UserConfig,
   ServiceType,
@@ -225,11 +226,9 @@ export function useSettingsForm() {
   // ---- 工具函数 ----
 
   function errorToString(error: unknown): string {
-    if (error instanceof Error) return error.message;
-    if (typeof error === 'string') return error;
+    const message = extractErrorMessage(error, '');
+    if (message) return message;
     if (error && typeof error === 'object') {
-      const obj = error as Record<string, unknown>;
-      if (typeof obj.message === 'string') return obj.message;
       try { return JSON.stringify(error); } catch { /* fallthrough */ }
     }
     return String(error);

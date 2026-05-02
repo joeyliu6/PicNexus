@@ -329,6 +329,15 @@ describe('useSettingsForm', () => {
     });
   });
 
+  it('extracts message from structured Tauri errors without stringifying JSON', () => {
+    const api = useSettingsForm();
+
+    expect(api.errorToString({
+      type: 'AUTH',
+      data: { message: 'Cookie 无效或已过期' },
+    })).toBe('Cookie 无效或已过期');
+  });
+
   it('loads legacy custom S3 settings, WebDAV passwords, link defaults, and autostart state', async () => {
     const api = useSettingsForm();
     const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_710_000_000_000);

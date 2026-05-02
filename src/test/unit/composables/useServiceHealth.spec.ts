@@ -55,10 +55,43 @@ describe('useServiceHealth', () => {
     expect(healthTooltipMap.value.weibo).toMatch(/^可用/);
   });
 
-  it('healthTooltipMap - error 显示"异常 · <msg>"', () => {
+  it('healthTooltipMap - pending 显示"待检测"', () => {
+    const cfg = cloneDefault();
+    cfg.services.weibo = { cookie: 'SUB=x' } as any;
+    const { evaluateConfig, healthTooltipMap } = useServiceHealth();
+    evaluateConfig(cfg);
+    expect(healthTooltipMap.value.weibo).toBe('待检测');
+  });
+
+  it('healthTooltipMap - error 显示友好摘要而不是原始错误', () => {
     const { markTestFailed, healthTooltipMap } = useServiceHealth();
     markTestFailed('weibo', 'boom');
-    expect(healthTooltipMap.value.weibo).toBe('异常 · boom');
+    expect(healthTooltipMap.value.weibo).toBe('检测失败，请检查配置');
+  });
+
+  it('healthTooltipMap - 兼容历史持久化的 AppError JSON 字符串', () => {
+    const { markTestFailed, healthTooltipMap } = useServiceHealth();
+    markTestFailed('weibo', '{"type":"AUTH","data":{"message":"Cookie 无效或已过期"}}');
+
+    const tooltip = healthTooltipMap.value.weibo;
+    expect(tooltip).toBe('Cookie 无效或已过期');
+    expect(tooltip).not.toContain('{');
+    expect(tooltip).not.toContain('data');
+    expect(tooltip).not.toContain('AUTH');
+  });
+
+  it('healthTooltipMap - AUTH / VALIDATION / NETWORK / UNKNOWN 错误映射友好文案', () => {
+    const { markTestFailed, healthTooltipMap } = useServiceHealth();
+
+    markTestFailed('weibo', '{"type":"AUTH","data":{"message":"Cookie 已失效"}}');
+    markTestFailed('r2', '{"type":"VALIDATION","data":{"message":"Cookie 不能为空"}}');
+    markTestFailed('smms', '{"type":"NETWORK","data":{"message":"请求超时"}}');
+    markTestFailed('github', 'unexpected backend shape');
+
+    expect(healthTooltipMap.value.weibo).toBe('Cookie 无效或已过期');
+    expect(healthTooltipMap.value.r2).toBe('配置不完整，请检查必填项');
+    expect(healthTooltipMap.value.smms).toBe('网络连接异常，请稍后重试');
+    expect(healthTooltipMap.value.github).toBe('检测失败，请检查配置');
   });
 
   it('markVerified → 状态为 verified，lastError 清空', () => {
@@ -92,8 +125,17 @@ describe('useServiceHealth', () => {
     markUploadError('weibo', { code: 'COOKIE_EXPIRED', message: 'expired' } as any);
     const r = getHealth('weibo');
     expect(r.status).toBe('error');
-    expect(r.lastError).toBe('expired');
+    expect(r.lastError).toBe('Cookie 无效或已过期');
     expect(r.errorSource).toBe('upload');
+  });
+
+  it('markUploadError - Cookie/Token 鉴权错误显示友好摘要', () => {
+    const { markUploadError, healthTooltipMap } = useServiceHealth();
+    markUploadError('weibo', { code: 'COOKIE_EXPIRED', message: 'expired' } as any);
+    markUploadError('smms', { code: 'TOKEN_INVALID', message: 'expired' } as any);
+
+    expect(healthTooltipMap.value.weibo).toBe('Cookie 无效或已过期');
+    expect(healthTooltipMap.value.smms).toBe('Token 无效或已过期');
   });
 
   it('evaluateConfig - 空配置所有图床状态为 unconfigured', () => {

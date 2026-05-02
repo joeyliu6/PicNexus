@@ -2,10 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { mountWithDefaults } from '../../helpers/vueMount';
 import ServiceChipGrid from '../../../components/settings/ServiceChipGrid.vue';
 
-const tooltipDirective = {
-  mounted: () => {},
-};
-
 describe('ServiceChipGrid', () => {
   it('keeps the real chip DOM while refreshing and removes stale health classes', () => {
     const wrapper = mountWithDefaults(ServiceChipGrid, {
@@ -31,11 +27,6 @@ describe('ServiceChipGrid', () => {
         batchDoneServices: new Set<string>(),
         activeFilter: null,
       },
-      global: {
-        directives: {
-          tooltip: tooltipDirective,
-        },
-      },
     });
 
     const chips = wrapper.findAll('.toggle-chip');
@@ -49,5 +40,31 @@ describe('ServiceChipGrid', () => {
     expect(chips[1].classes()).not.toContain('is-refreshing');
     expect(chips[1].classes()).toContain('error');
     expect(chips[1].text()).toContain('JD');
+  });
+
+  it('uses the sanitized health tooltip on error chips', () => {
+    const wrapper = mountWithDefaults(ServiceChipGrid, {
+      props: {
+        services: ['weibo'],
+        groupTitle: 'Public Services',
+        healthStatusMap: {
+          weibo: 'error',
+        },
+        healthTooltipMap: {
+          weibo: 'Cookie 无效或已过期',
+        },
+        availableServices: ['weibo'],
+        serviceNames: {
+          weibo: 'Weibo',
+        },
+        isBatchTesting: false,
+        refreshingServiceIds: new Set<string>(),
+        batchTestedServices: new Set<string>(),
+        batchDoneServices: new Set<string>(),
+        activeFilter: null,
+      },
+    });
+
+    expect(wrapper.get('.toggle-chip').attributes('data-tooltip')).toBe('Cookie 无效或已过期');
   });
 });

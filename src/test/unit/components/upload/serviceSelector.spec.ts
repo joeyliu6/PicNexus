@@ -91,6 +91,29 @@ describe('ServiceSelector', () => {
     expect(wrapper.emitted('toggle')).toBeUndefined();
   });
 
+  it('异常健康圆点追加前往设置提示且不泄露原始错误', async () => {
+    const wrapper = mountSelector({
+      serviceHealthMap: {
+        jd: 'verified',
+        weibo: 'error',
+        r2: 'verified',
+      },
+      serviceHealthTooltipMap: {
+        jd: '连接正常',
+        weibo: 'Cookie 无效或已过期',
+        r2: '连接正常',
+      },
+    });
+
+    const dot = wrapper.get('.health-dot.error');
+    expect(dot.attributes('data-tooltip')).toBe('Cookie 无效或已过期，点击前往设置');
+
+    await dot.trigger('click');
+
+    expect(wrapper.emitted('go-service-settings')).toEqual([['weibo']]);
+    expect(wrapper.emitted('toggle')).toBeUndefined();
+  });
+
   it('正常健康圆点不跳转，点击仍按原逻辑切换图床', async () => {
     const wrapper = mountSelector();
 

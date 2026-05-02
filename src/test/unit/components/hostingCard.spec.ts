@@ -7,10 +7,6 @@ const ButtonStub = {
   template: '<button class="button-stub" :disabled="disabled">{{ label }}</button>',
 };
 
-const tooltipDirective = {
-  mounted: () => {},
-};
-
 describe('HostingCard', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -42,9 +38,6 @@ describe('HostingCard', () => {
         stubs: {
           Button: ButtonStub,
         },
-        directives: {
-          tooltip: tooltipDirective,
-        },
       },
     });
 
@@ -74,12 +67,32 @@ describe('HostingCard', () => {
         stubs: {
           Button: ButtonStub,
         },
-        directives: {
-          tooltip: tooltipDirective,
-        },
       },
     });
 
     expect(wrapper.get('.hosting-card').classes()).toContain('expanded');
+  });
+
+  it('uses the sanitized health tooltip on status dot', () => {
+    const wrapper = mountWithDefaults(HostingCard, {
+      props: {
+        id: 'weibo',
+        name: '微博',
+        description: 'Cookie 图床',
+        isConfigured: true,
+        healthStatus: 'error',
+        healthTooltip: 'Cookie 无效或已过期',
+      },
+      slots: {
+        default: '<div class="slot-content">body</div>',
+      },
+      global: {
+        stubs: {
+          Button: ButtonStub,
+        },
+      },
+    });
+
+    expect(wrapper.get('.status-dot.error').attributes('data-tooltip')).toBe('Cookie 无效或已过期');
   });
 });

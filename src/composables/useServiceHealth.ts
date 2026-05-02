@@ -16,6 +16,7 @@ import { SERVICE_REQUIRED_FIELDS, NO_CONFIG_SERVICES, CUSTOM_S3_REQUIRED_FIELDS 
 import { syncStatusStore } from '../store/instances';
 import type { StructuredError } from '../uploaders/base/ErrorTypes';
 import { formatRelativeTime } from '../utils/formatters';
+import { formatServiceHealthErrorMessage } from '../utils/serviceHealthMessage';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('ServiceHealth');
@@ -88,13 +89,12 @@ function buildTooltipText(record: ServiceHealthRecord): string {
     case 'unconfigured':
       return '未配置';
     case 'pending':
-      return '待验证';
+      return '待检测';
     case 'verified':
       if (record.lastVerifiedAt) return `可用 · ${formatRelativeTime(record.lastVerifiedAt)}`;
       return '可用';
     case 'error':
-      if (record.lastError) return `异常 · ${record.lastError}`;
-      return '异常';
+      return formatServiceHealthErrorMessage(record.lastError);
   }
 }
 
@@ -328,7 +328,11 @@ export function useServiceHealth(): UseServiceHealthReturn {
 
   function markUploadError(serviceId: string, structuredError: StructuredError): void {
     if (!(AUTH_CONFIG_ERROR_CODES as readonly string[]).includes(structuredError.code)) return;
-    updateRecord(serviceId, { status: 'error', lastError: structuredError.message, errorSource: 'upload' });
+    updateRecord(serviceId, {
+      status: 'error',
+      lastError: formatServiceHealthErrorMessage(structuredError),
+      errorSource: 'upload',
+    });
   }
 
   return {
