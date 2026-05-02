@@ -151,6 +151,10 @@ const navigateToSettings = () => {
   tauriEmit('navigate-to', { view: 'settings', tab: 'hosting' });
 };
 
+const navigateToServiceSettings = (serviceId: string) => {
+  tauriEmit('navigate-to', { view: 'settings', tab: 'hosting', section: serviceId });
+};
+
 const navigateToCompressionSettings = () => {
   tauriEmit('navigate-to', { view: 'settings', tab: 'compression', section: 'imageCompression' });
 };
@@ -440,6 +444,7 @@ onUnmounted(() => {
         :service-health-tooltip-map="healthTooltipMap"
         @toggle="uploadManager.toggleServiceSelection"
         @go-settings="navigateToSettings"
+        @go-service-settings="navigateToServiceSettings"
       />
 
       <!-- 上传队列 -->

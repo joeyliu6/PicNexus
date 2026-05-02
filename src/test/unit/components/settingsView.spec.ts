@@ -181,7 +181,7 @@ const AdvancedSettingsPanelStub = defineComponent({
 
 const HostingSettingsPanelStub = defineComponent({
   name: 'HostingSettingsPanel',
-  props: ['availableServices', 'serviceConfigStatus', 'testingConnections'],
+  props: ['availableServices', 'serviceConfigStatus', 'testingConnections', 'targetCardId'],
   emits: [
     'update:available-services',
     'test-private',
@@ -190,9 +190,11 @@ const HostingSettingsPanelStub = defineComponent({
     'check-builtin',
     'test-all',
     'save',
+    'card-navigated',
+    'scroll-to-service',
   ],
   template: `
-    <section data-testid="hosting-panel" :data-services="availableServices.join(',')">
+    <section data-testid="hosting-panel" :data-services="availableServices.join(',')" :data-target-card="targetCardId || ''">
       <button class="disable-r2" @click="$emit('update:available-services', ['jd'])">disable r2</button>
       <button class="enable-r2" @click="$emit('update:available-services', ['jd', 'r2'])">enable r2</button>
       <button class="test-r2" @click="$emit('test-private', 'r2')">test r2</button>
@@ -286,6 +288,7 @@ async function mountSettings(provide: Record<string, unknown> = {}) {
     global: {
       provide: {
         settingsTargetTab: ref<string | null>(null),
+        settingsTargetSection: ref<string | null>(null),
         ...provide,
       },
       stubs: {
@@ -330,13 +333,26 @@ beforeEach(() => {
 describe('SettingsView page interactions', () => {
   it('switches from compression target to hosting tab', async () => {
     const settingsTargetTab = ref<string | null>('compression');
-    const wrapper = await mountSettings({ settingsTargetTab });
+    const settingsTargetSection = ref<string | null>('imageCompression');
+    const wrapper = await mountSettings({ settingsTargetTab, settingsTargetSection });
 
     expect(wrapper.find('[data-testid="advanced-panel"]').exists()).toBe(true);
     expect(settingsTargetTab.value).toBeNull();
+    expect(settingsTargetSection.value).toBe('imageCompression');
 
     await wrapper.get('.advanced-go-hosting').trigger('click');
     expect(wrapper.find('[data-testid="hosting-panel"]').exists()).toBe(true);
+  });
+
+  it('opens hosting tab with a target service card from navigation section', async () => {
+    const settingsTargetTab = ref<string | null>('hosting');
+    const settingsTargetSection = ref<string | null>('r2');
+    const wrapper = await mountSettings({ settingsTargetTab, settingsTargetSection });
+
+    const hostingPanel = wrapper.get('[data-testid="hosting-panel"]');
+    expect(hostingPanel.attributes('data-target-card')).toBe('r2');
+    expect(settingsTargetTab.value).toBeNull();
+    expect(settingsTargetSection.value).toBeNull();
   });
 
   it('enables and disables hosting services and saves through the page handler', async () => {

@@ -81,4 +81,22 @@ describe('ServiceSelector', () => {
     await wrapper.get('.empty-state-link').trigger('click');
     expect(wrapper.emitted('go-settings')).toHaveLength(1);
   });
+
+  it('非正常健康圆点点击跳转具体图床设置且不切换图床', async () => {
+    const wrapper = mountSelector();
+
+    await wrapper.get('.health-dot.pending').trigger('click');
+
+    expect(wrapper.emitted('go-service-settings')).toEqual([['weibo']]);
+    expect(wrapper.emitted('toggle')).toBeUndefined();
+  });
+
+  it('正常健康圆点不跳转，点击仍按原逻辑切换图床', async () => {
+    const wrapper = mountSelector();
+
+    await wrapper.get('.health-dot.verified').trigger('click');
+
+    expect(wrapper.emitted('go-service-settings')).toBeUndefined();
+    expect(wrapper.emitted('toggle')).toEqual([['jd']]);
+  });
 });

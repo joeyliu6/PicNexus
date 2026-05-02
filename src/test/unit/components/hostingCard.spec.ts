@@ -57,4 +57,29 @@ describe('HostingCard', () => {
     expect(wrapper.find('.builtin-status-skeleton-line').exists()).toBe(false);
     expect(wrapper.get('.button-stub').attributes('disabled')).toBeDefined();
   });
+
+  it('forceExpand opens the card on mount', () => {
+    const wrapper = mountWithDefaults(HostingCard, {
+      props: {
+        id: 'r2',
+        name: 'R2',
+        description: 'Cloudflare R2',
+        isConfigured: true,
+        forceExpand: true,
+      },
+      slots: {
+        default: '<div class="slot-content">body</div>',
+      },
+      global: {
+        stubs: {
+          Button: ButtonStub,
+        },
+        directives: {
+          tooltip: tooltipDirective,
+        },
+      },
+    });
+
+    expect(wrapper.get('.hosting-card').classes()).toContain('expanded');
+  });
 });

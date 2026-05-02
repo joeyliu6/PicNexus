@@ -104,11 +104,12 @@ const DropZoneStub = defineComponent({
 const ServiceSelectorStub = defineComponent({
   name: 'ServiceSelector',
   props: ['publicServices', 'privateServices', 'serviceLabels'],
-  emits: ['toggle', 'go-settings'],
+  emits: ['toggle', 'go-settings', 'go-service-settings'],
   template: `
     <section data-testid="service-selector">
       <button class="toggle-smms" @click="$emit('toggle', 'smms')">toggle smms</button>
       <button class="go-hosting" @click="$emit('go-settings')">settings</button>
+      <button class="go-weibo-settings" @click="$emit('go-service-settings', 'weibo')">weibo settings</button>
     </section>
   `,
 });
@@ -305,6 +306,13 @@ describe('UploadView page interactions', () => {
 
     await wrapper.find('.go-hosting').trigger('click');
     expect(getEmitMock()).toHaveBeenCalledWith('navigate-to', { view: 'settings', tab: 'hosting' });
+
+    await wrapper.find('.go-weibo-settings').trigger('click');
+    expect(getEmitMock()).toHaveBeenCalledWith('navigate-to', {
+      view: 'settings',
+      tab: 'hosting',
+      section: 'weibo',
+    });
 
     await wrapper.find('.clear-completed').trigger('click');
     expect(mockState.clearCompletedItems).toHaveBeenCalled();

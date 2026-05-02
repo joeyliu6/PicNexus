@@ -64,19 +64,41 @@ const { applyEditorServer, clearTimer: clearEditorTimer } = useEditorIntegration
 type SettingsTab = 'general' | 'hosting' | 'advanced' | 'backup' | 'about';
 const activeTab = ref<SettingsTab>('general');
 const settingsTargetTab = inject<import('vue').Ref<string | null>>('settingsTargetTab');
+const settingsTargetSection = inject<import('vue').Ref<string | null>>('settingsTargetSection');
+const targetCardId = ref<string | null>(null);
+
+const applyHostingTargetSection = () => {
+  const section = settingsTargetSection?.value;
+  if (!section) return;
+
+  const pendingTab = settingsTargetTab?.value;
+  if (pendingTab && pendingTab !== 'hosting') return;
+  if (!pendingTab && activeTab.value !== 'hosting') return;
+
+  settingsTargetSection.value = null;
+  targetCardId.value = section;
+};
 
 const applyTargetTab = () => {
-  if (!settingsTargetTab?.value) return;
+  if (!settingsTargetTab?.value) {
+    applyHostingTargetSection();
+    return;
+  }
   const val = settingsTargetTab.value;
   settingsTargetTab.value = null;
   if (val === 'compression' || val === 'editor') { activeTab.value = 'advanced'; return; }
   const validTabs: SettingsTab[] = ['general', 'hosting', 'advanced', 'backup', 'about'];
   if (validTabs.includes(val as SettingsTab)) activeTab.value = val as SettingsTab;
+  applyHostingTargetSection();
 };
 
-onActivated(applyTargetTab);
+onActivated(() => {
+  applyTargetTab();
+  applyHostingTargetSection();
+});
 onDeactivated(() => { clearFormTimers(); clearEditorTimer(); });
 if (settingsTargetTab) { watch(settingsTargetTab, (val) => { if (val) applyTargetTab(); }); }
+if (settingsTargetSection) { watch(settingsTargetSection, (val) => { if (val) applyHostingTargetSection(); }); }
 
 // ---- UI 状态 ----
 
@@ -85,7 +107,6 @@ const compressionSyncUnlisten = ref<UnlistenFn | null>(null);
 const appVersion = ref('');
 const executablePath = ref('');
 const isClearingCache = ref(false);
-const targetCardId = ref<string | null>(null);
 
 const navGroups = [{
   items: [

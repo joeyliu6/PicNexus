@@ -96,7 +96,7 @@ watch(() => props.targetCardId, (val) => {
   if (val) {
     nextTick(() => emit('cardNavigated'));
   }
-});
+}, { immediate: true });
 </script>
 
 <template>

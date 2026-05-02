@@ -23,6 +23,7 @@ const props = defineProps<Props>();
 const emit = defineEmits<{
   toggle: [serviceId: string];
   'go-settings': [];
+  'go-service-settings': [serviceId: string];
 }>();
 
 const hasServices = computed(() => props.publicServices.length > 0 || props.privateServices.length > 0);
@@ -33,6 +34,32 @@ const showAddEntryInPrivate = computed(() => props.publicServices.length === 0 &
 
 function handleToggle(serviceId: string) {
   emit('toggle', serviceId);
+}
+
+function getServiceHealthStatus(serviceId: string): ServiceHealthStatus {
+  return props.serviceHealthMap?.[serviceId] || 'unconfigured';
+}
+
+function canOpenServiceSettings(serviceId: string): boolean {
+  return getServiceHealthStatus(serviceId) !== 'verified';
+}
+
+function getHealthTooltip(serviceId: string): string | null {
+  const tooltip = props.serviceHealthTooltipMap?.[serviceId] || null;
+  if (!canOpenServiceSettings(serviceId)) return tooltip;
+  return tooltip ? `${tooltip}，点击前往设置` : '点击前往设置';
+}
+
+function getHealthAriaLabel(serviceId: string): string | undefined {
+  if (!canOpenServiceSettings(serviceId)) return undefined;
+  return `打开 ${props.serviceLabels[serviceId] || serviceId} 图床设置`;
+}
+
+function handleHealthDotClick(event: MouseEvent, serviceId: string) {
+  if (!canOpenServiceSettings(serviceId)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  emit('go-service-settings', serviceId);
 }
 </script>
 
@@ -51,7 +78,13 @@ function handleToggle(serviceId: string) {
             @click="handleToggle(serviceId)"
             v-ripple
           >
-            <span class="health-dot" :class="serviceHealthMap?.[serviceId] || 'unconfigured'" v-tooltip.top="serviceHealthTooltipMap?.[serviceId] || null"></span>
+            <span
+              class="health-dot"
+              :class="[getServiceHealthStatus(serviceId), { 'can-open-settings': canOpenServiceSettings(serviceId) }]"
+              :aria-label="getHealthAriaLabel(serviceId)"
+              v-tooltip.top="getHealthTooltip(serviceId)"
+              @click="handleHealthDotClick($event, serviceId)"
+            ></span>
             <span class="tag-text">{{ serviceLabels[serviceId] }}</span>
           </button>
           <button
@@ -80,7 +113,13 @@ function handleToggle(serviceId: string) {
             @click="handleToggle(serviceId)"
             v-ripple
           >
-            <span class="health-dot" :class="serviceHealthMap?.[serviceId] || 'unconfigured'" v-tooltip.top="serviceHealthTooltipMap?.[serviceId] || null"></span>
+            <span
+              class="health-dot"
+              :class="[getServiceHealthStatus(serviceId), { 'can-open-settings': canOpenServiceSettings(serviceId) }]"
+              :aria-label="getHealthAriaLabel(serviceId)"
+              v-tooltip.top="getHealthTooltip(serviceId)"
+              @click="handleHealthDotClick($event, serviceId)"
+            ></span>
             <span class="tag-text">{{ serviceLabels[serviceId] }}</span>
           </button>
           <button
@@ -201,6 +240,16 @@ function handleToggle(serviceId: string) {
   flex-shrink: 0;
   background: var(--text-muted);
   box-shadow: 0 0 0 1px var(--border-subtle);
+  transition: transform var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+}
+
+.health-dot.can-open-settings {
+  cursor: pointer;
+}
+
+.health-dot.can-open-settings:hover {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 3px var(--primary-alpha-15);
 }
 
 .health-dot.pending {
