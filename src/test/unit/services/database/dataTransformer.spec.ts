@@ -78,6 +78,8 @@ describe('DataTransformer', () => {
     // link_check_skip 列保留但功能已废弃，始终写入 0
     expect(row.link_check_skip).toBe(0);
     expect(row.is_favorited).toBe(1);
+    expect(row.favorite_updated_at).toBe(1000);
+    expect(row.favorite_updated_by).toBe('legacy');
     expect(row.migration_skip).toBe(1);
     expect(row.success_count).toBe(1);
     expect(JSON.parse(row.successful_service_ids)).toEqual(['weibo']);
@@ -104,6 +106,8 @@ describe('DataTransformer', () => {
       color_type: 'unknown',
       has_alpha: 0,
       is_favorited: 1,
+      favorite_updated_at: 3000,
+      favorite_updated_by: 'device-a',
       success_count: 1,
       successful_service_ids: JSON.stringify(['weibo']),
       migration_skip: 1,
@@ -116,6 +120,8 @@ describe('DataTransformer', () => {
     expect(item.linkCheckStatus).toEqual({ weibo: { isValid: true, lastCheckTime: 2000, errorType: 'success' } });
     expect(item.linkCheckSummary).toEqual({ totalLinks: 1 });
     expect(item.isFavorited).toBe(true);
+    expect(item.favoriteUpdatedAt).toBe(3000);
+    expect(item.favoriteUpdatedBy).toBe('device-a');
     expect(item.migrationSkip).toBe(true);
   });
 
@@ -140,6 +146,8 @@ describe('DataTransformer', () => {
       color_type: 'unknown',
       has_alpha: 0,
       is_favorited: 0,
+      favorite_updated_at: 0,
+      favorite_updated_by: null,
       success_count: 0,
       successful_service_ids: '[]',
       migration_skip: 0,

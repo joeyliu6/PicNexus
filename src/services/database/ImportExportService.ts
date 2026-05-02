@@ -16,8 +16,11 @@ import {
   COLUMNS_SQL,
   columnPlaceholders,
   itemToRow,
+  rowToItem,
   rowValues,
+  type HistoryItemRow,
 } from './DataTransformer';
+import { hasHistoryItemChanged, mergeHistoryItem } from './HistoryMerge';
 
 const log = createLogger('ImportExport');
 
@@ -108,12 +111,15 @@ export async function importHistoryFromJson(
   if (mergeStrategy === 'merge') {
     // merge 策略：一次性查询所有已存在的记录（消除 N+1 查询）
     const allIds = items.map((item) => item.id);
-    const existingMap = await getExistingRecords(db, allIds);
+    const existingMap = await getExistingRecordsById(db, allIds);
 
-    // 过滤出需要导入的记录（不存在或时间戳更新）
-    itemsToImport = items.filter((item) => {
-      const existingTimestamp = existingMap.get(item.id);
-      return !existingTimestamp || item.timestamp > existingTimestamp;
+    // 过滤出需要导入的记录。历史内容按 timestamp 合并，收藏状态按独立版本合并。
+    itemsToImport = items.flatMap((item) => {
+      const existing = existingMap.get(item.id);
+      if (!existing) return [item];
+
+      const merged = mergeHistoryItem(existing, item);
+      return hasHistoryItemChanged(existing, merged) ? [merged] : [];
     });
 
     log.info(`merge 策略: ${items.length} 条中有 ${itemsToImport.length} 条需要导入`);
@@ -177,23 +183,23 @@ async function deleteByIds(db: Database, ids: string[]): Promise<void> {
  * 批量查询已存在的记录（用于 merge 策略优化）
  * 一次性查询所有指定 ID 的记录，避免 N+1 查询问题
  */
-async function getExistingRecords(db: Database, ids: string[]): Promise<Map<string, number>> {
+async function getExistingRecordsById(db: Database, ids: string[]): Promise<Map<string, HistoryItem>> {
   if (ids.length === 0) {
     return new Map();
   }
 
-  const result = new Map<string, number>();
+  const result = new Map<string, HistoryItem>();
 
   // 分批查询，每批 500 个 ID，避免 SQL 语句过长
   for (let i = 0; i < ids.length; i += BATCH_SIZE) {
     const batchIds = ids.slice(i, i + BATCH_SIZE);
     const placeholders = batchIds.map((_, idx) => `$${idx + 1}`).join(',');
-    const rows = await db.select<{ id: string; timestamp: number }[]>(
-      `SELECT id, timestamp FROM history_items WHERE id IN (${placeholders})`,
+    const rows = await db.select<HistoryItemRow[]>(
+      `SELECT * FROM history_items WHERE id IN (${placeholders})`,
       batchIds
     );
     for (const row of rows) {
-      result.set(row.id, row.timestamp);
+      result.set(row.id, rowToItem(row));
     }
   }
 

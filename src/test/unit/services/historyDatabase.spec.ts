@@ -46,6 +46,7 @@ class MockDatabase {
         'primary_service', 'results', 'generated_link', 'link_check_status',
         'link_check_summary', 'link_check_skip', 'width', 'height', 'aspect_ratio',
         'file_size', 'format', 'color_type', 'has_alpha', 'is_favorited',
+        'favorite_updated_at', 'favorite_updated_by',
         'success_count', 'successful_service_ids', 'migration_skip',
       ];
       const next: Row = { ...this.rows[index] };
@@ -138,9 +139,11 @@ class MockDatabase {
       color_type: params[16],
       has_alpha: params[17],
       is_favorited: params[18],
-      success_count: params[19],
-      successful_service_ids: params[20],
-      migration_skip: params[21],
+      favorite_updated_at: params[19],
+      favorite_updated_by: params[20],
+      success_count: params[21],
+      successful_service_ids: params[22],
+      migration_skip: params[23],
     });
     return { rowsAffected: 1 };
   }

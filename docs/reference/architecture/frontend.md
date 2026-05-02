@@ -124,6 +124,7 @@ const {
 ```
 
 > 视图各自走服务端分页取 metas（表格：`loadPageByNumber`；时间轴：`useTimelineDayPagination`；收藏：`useFavoritesData`），模块不再维护全量 `imageMetas`。
+> 收藏操作的对外 API 不变；写入数据库时会同步维护 `favoriteUpdatedAt` / `favoriteUpdatedBy`，供多设备合并时独立裁决收藏状态。
 
 #### useUpload
 

@@ -87,6 +87,18 @@ export interface HistoryItem {
   isFavorited?: boolean;
 
   /**
+   * 收藏状态最后一次变更时间。
+   * 与上传记录 timestamp 分离，用于多设备同步时只合并收藏状态。
+   */
+  favoriteUpdatedAt?: number;
+
+  /**
+   * 收藏状态最后一次变更设备。
+   * 用于同毫秒冲突的稳定裁决，保证多设备最终收敛。
+   */
+  favoriteUpdatedBy?: string;
+
+  /**
    * 是否在批量迁移中永久跳过
    * - true 时 getItemsByBackupCountQuery / getServiceDistributionQuery 不再返回该条
    * - 用户在失败项手动点「跳过」写入；可在设置页一键清空

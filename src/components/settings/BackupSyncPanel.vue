@@ -287,7 +287,7 @@ function handleRestoreCancel() {
       <div class="data-section">
         <div class="data-section-header">
           <span class="data-section-title">上传记录</span>
-          <span class="data-section-desc">所有已上传的图片链接</span>
+          <span class="data-section-desc">所有已上传的图片链接、收藏状态</span>
         </div>
         <DataItemCard
           type="history"

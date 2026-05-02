@@ -23,6 +23,8 @@ export interface HistoryItemRow {
   color_type: string;
   has_alpha: number;
   is_favorited: number;
+  favorite_updated_at: number;
+  favorite_updated_by: string | null;
   success_count: number;
   successful_service_ids: string;
   migration_skip: number;
@@ -48,6 +50,8 @@ export const ALL_COLUMNS = [
   'color_type',
   'has_alpha',
   'is_favorited',
+  'favorite_updated_at',
+  'favorite_updated_by',
   'success_count',
   'successful_service_ids',
   'migration_skip',
@@ -75,7 +79,24 @@ export function safeJsonParse<T>(json: string | null, fallback: T, field: string
   }
 }
 
+function normalizeFavoriteUpdatedAt(item: HistoryItem): number {
+  if (typeof item.favoriteUpdatedAt === 'number' && Number.isFinite(item.favoriteUpdatedAt) && item.favoriteUpdatedAt > 0) {
+    return item.favoriteUpdatedAt;
+  }
+  return item.isFavorited ? item.timestamp : 0;
+}
+
+function normalizeFavoriteUpdatedBy(item: HistoryItem, favoriteUpdatedAt: number): string | null {
+  if (favoriteUpdatedAt <= 0) return null;
+  if (typeof item.favoriteUpdatedBy === 'string' && item.favoriteUpdatedBy.trim()) {
+    return item.favoriteUpdatedBy.trim();
+  }
+  return 'legacy';
+}
+
 export function itemToRow(item: HistoryItem): HistoryItemRow {
+  const favoriteUpdatedAt = normalizeFavoriteUpdatedAt(item);
+
   return {
     id: item.id,
     timestamp: item.timestamp,
@@ -97,6 +118,8 @@ export function itemToRow(item: HistoryItem): HistoryItemRow {
     color_type: 'unknown',
     has_alpha: 0,
     is_favorited: item.isFavorited ? 1 : 0,
+    favorite_updated_at: favoriteUpdatedAt,
+    favorite_updated_by: normalizeFavoriteUpdatedBy(item, favoriteUpdatedAt),
     success_count: item.results.filter((result) => result.status === 'success').length,
     successful_service_ids: JSON.stringify(
       item.results.filter((result) => result.status === 'success').map((result) => result.serviceId),
@@ -122,6 +145,8 @@ export function rowToItem(row: HistoryItemRow): HistoryItem {
     fileSize: row.file_size,
     format: row.format,
     isFavorited: row.is_favorited === 1,
+    favoriteUpdatedAt: row.favorite_updated_at > 0 ? row.favorite_updated_at : undefined,
+    favoriteUpdatedBy: row.favorite_updated_by || undefined,
     migrationSkip: row.migration_skip === 1,
   };
 }

@@ -15,6 +15,7 @@ function makeDb(): any {
 
 describe('FavoriteService', () => {
   let db: ReturnType<typeof makeDb>;
+  const meta = { updatedAt: 1234, updatedBy: 'device-a' };
 
   beforeEach(() => {
     db = makeDb();
@@ -22,35 +23,36 @@ describe('FavoriteService', () => {
 
   describe('setFavoriteQuery', () => {
     it('收藏 → is_favorited=1', async () => {
-      await setFavoriteQuery(db, 'id1', true);
+      await setFavoriteQuery(db, 'id1', true, meta);
       expect(db.execute).toHaveBeenCalledWith(
         expect.stringContaining('is_favorited = $1'),
-        [1, 'id1'],
+        [1, 1234, 'device-a', 'id1'],
       );
     });
 
     it('取消收藏 → is_favorited=0', async () => {
-      await setFavoriteQuery(db, 'id1', false);
-      expect(db.execute).toHaveBeenCalledWith(expect.any(String), [0, 'id1']);
+      await setFavoriteQuery(db, 'id1', false, meta);
+      expect(db.execute).toHaveBeenCalledWith(expect.any(String), [0, 1234, 'device-a', 'id1']);
     });
   });
 
   describe('batchSetFavoriteQuery', () => {
     it('空数组直接返回', async () => {
-      await batchSetFavoriteQuery(db, [], true);
+      await batchSetFavoriteQuery(db, [], true, meta);
       expect(db.execute).not.toHaveBeenCalled();
     });
 
     it('小批量一次 UPDATE', async () => {
-      await batchSetFavoriteQuery(db, ['a', 'b', 'c'], true);
+      await batchSetFavoriteQuery(db, ['a', 'b', 'c'], true, meta);
       expect(db.execute).toHaveBeenCalledTimes(1);
       const call = db.execute.mock.calls[0];
-      expect(call[1]).toEqual([1, 'a', 'b', 'c']);
+      expect(call[1]).toEqual([1, 1234, 'device-a', 'a', 'b', 'c']);
+      expect(call[0]).toContain('is_favorited != $1');
     });
 
     it('超过 500 条时分批', async () => {
       const ids = Array.from({ length: 1200 }, (_, i) => `id${i}`);
-      await batchSetFavoriteQuery(db, ids, false);
+      await batchSetFavoriteQuery(db, ids, false, meta);
       // 1200 / 500 = 3 批
       expect(db.execute).toHaveBeenCalledTimes(3);
     });

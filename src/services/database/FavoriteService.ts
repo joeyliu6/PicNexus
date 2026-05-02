@@ -9,13 +9,25 @@ import { createLogger } from '../../utils/logger';
 
 const log = createLogger('FavoriteService');
 
+export interface FavoriteChangeMeta {
+  updatedAt: number;
+  updatedBy: string;
+}
+
 /**
  * 设置收藏状态（单次 IPC，无需回读）
  */
-export async function setFavoriteQuery(db: Database, id: string, favorited: boolean): Promise<void> {
+export async function setFavoriteQuery(
+  db: Database,
+  id: string,
+  favorited: boolean,
+  meta: FavoriteChangeMeta,
+): Promise<void> {
   await db.execute(
-    `UPDATE history_items SET is_favorited = $1 WHERE id = $2`,
-    [favorited ? 1 : 0, id]
+    `UPDATE history_items
+     SET is_favorited = $1, favorite_updated_at = $2, favorite_updated_by = $3
+     WHERE id = $4 AND is_favorited != $1`,
+    [favorited ? 1 : 0, meta.updatedAt, meta.updatedBy, id]
   );
   log.debug(`设置收藏: ${id} → ${favorited}`);
 }
@@ -23,16 +35,23 @@ export async function setFavoriteQuery(db: Database, id: string, favorited: bool
 /**
  * 批量设置收藏状态
  */
-export async function batchSetFavoriteQuery(db: Database, ids: string[], favorited: boolean): Promise<void> {
+export async function batchSetFavoriteQuery(
+  db: Database,
+  ids: string[],
+  favorited: boolean,
+  meta: FavoriteChangeMeta,
+): Promise<void> {
   if (ids.length === 0) return;
   const BATCH_SIZE = 500;
 
   for (let i = 0; i < ids.length; i += BATCH_SIZE) {
     const batch = ids.slice(i, i + BATCH_SIZE);
-    const placeholders = batch.map((_, j) => `$${j + 2}`).join(',');
+    const placeholders = batch.map((_, j) => `$${j + 4}`).join(',');
     await db.execute(
-      `UPDATE history_items SET is_favorited = $1 WHERE id IN (${placeholders})`,
-      [favorited ? 1 : 0, ...batch]
+      `UPDATE history_items
+       SET is_favorited = $1, favorite_updated_at = $2, favorite_updated_by = $3
+       WHERE id IN (${placeholders}) AND is_favorited != $1`,
+      [favorited ? 1 : 0, meta.updatedAt, meta.updatedBy, ...batch]
     );
   }
   log.info(`批量${favorited ? '收藏' : '取消收藏'} ${ids.length} 条记录`);

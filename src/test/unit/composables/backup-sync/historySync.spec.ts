@@ -151,7 +151,7 @@ describe('createHistorySyncOps', () => {
     const [, uploadedJson] = clientPutFileMock.mock.calls[0];
     expect(JSON.parse(uploadedJson as string)).toEqual([
       { id: 'c', timestamp: 300 },
-      { id: 'a', timestamp: 200 },
+      { id: 'a', timestamp: 200, isFavorited: false },
       { id: 'b', timestamp: 100 },
     ]);
     expect(updateHistorySyncStatusMock).toHaveBeenCalledWith(profile, 'success');
@@ -202,10 +202,10 @@ describe('createHistorySyncOps', () => {
 
   it('skips incremental upload when the cloud already has every local history id', async () => {
     historyExportToJSONMock.mockResolvedValueOnce(JSON.stringify([
-      { id: 'a', timestamp: 200 },
+      { id: 'a', timestamp: 200, isFavorited: false },
     ]));
     clientGetFileMock.mockResolvedValueOnce(JSON.stringify([
-      { id: 'a', timestamp: 100 },
+      { id: 'a', timestamp: 200, isFavorited: false },
     ]));
 
     const deps = makeDeps();
@@ -216,6 +216,26 @@ describe('createHistorySyncOps', () => {
     expect(clientPutFileMock).not.toHaveBeenCalled();
     expect(updateHistorySyncStatusMock).toHaveBeenCalledWith(profile, 'success');
     expect(toastInfoMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('incremental upload includes records whose only change is newer favorite metadata', async () => {
+    historyExportToJSONMock.mockResolvedValueOnce(JSON.stringify([
+      { id: 'a', timestamp: 200, isFavorited: true, favoriteUpdatedAt: 500, favoriteUpdatedBy: 'local' },
+    ]));
+    clientGetFileMock.mockResolvedValueOnce(JSON.stringify([
+      { id: 'a', timestamp: 200, isFavorited: false, favoriteUpdatedAt: 100, favoriteUpdatedBy: 'cloud' },
+    ]));
+
+    const deps = makeDeps();
+    const ops = createHistorySyncOps(deps);
+
+    await ops.uploadHistoryIncremental(profile);
+
+    const [, uploadedJson] = clientPutFileMock.mock.calls[0];
+    expect(JSON.parse(uploadedJson as string)).toEqual([
+      { id: 'a', timestamp: 200, isFavorited: true, favoriteUpdatedAt: 500, favoriteUpdatedBy: 'local' },
+    ]);
+    expect(updateHistorySyncStatusMock).toHaveBeenCalledWith(profile, 'success');
   });
 
   it('marks downloadHistoryOverwrite as failed when cloud data is not an array', async () => {

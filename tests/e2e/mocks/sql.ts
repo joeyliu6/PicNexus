@@ -17,6 +17,8 @@ const HISTORY_COLUMNS = [
   'color_type',
   'has_alpha',
   'is_favorited',
+  'favorite_updated_at',
+  'favorite_updated_by',
   'success_count',
   'successful_service_ids',
   'migration_skip',

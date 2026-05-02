@@ -75,6 +75,8 @@ export function createHistoryItem(overrides: Partial<HistoryItem> = {}): History
     fileSize: overrides.fileSize ?? 2048,
     format: overrides.format ?? 'jpg',
     isFavorited: overrides.isFavorited,
+    favoriteUpdatedAt: overrides.favoriteUpdatedAt,
+    favoriteUpdatedBy: overrides.favoriteUpdatedBy,
     linkCheckStatus: overrides.linkCheckStatus,
     linkCheckSummary: overrides.linkCheckSummary,
     migrationSkip: overrides.migrationSkip,

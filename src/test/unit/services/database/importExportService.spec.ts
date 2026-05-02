@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { HistoryItem } from '../../../../config/types';
 import { exportHistoryToJson, importHistoryFromJson } from '../../../../services/database/ImportExportService';
+import { itemToRow } from '../../../../services/database/DataTransformer';
 
 vi.mock('../../../../utils/logger', () => ({
   createLogger: () => ({
@@ -10,7 +12,7 @@ vi.mock('../../../../utils/logger', () => ({
   }),
 }));
 
-function makeHistoryItem(id: string, timestamp = 1000) {
+function makeHistoryItem(id: string, timestamp = 1000): HistoryItem {
   return {
     id,
     timestamp,
@@ -79,18 +81,12 @@ describe('ImportExportService', () => {
 
   it('imports only newer records during merge and reports progress by batch', async () => {
     const items = Array.from({ length: 600 }, (_, index) => makeHistoryItem(`item-${index}`, index + 1));
-    db.select.mockResolvedValueOnce([
-      { id: 'item-0', timestamp: 9999 },
-      { id: 'item-1', timestamp: 1 },
-    ]);
     const onProgress = vi.fn();
+    db.select
+      .mockResolvedValueOnce([itemToRow(makeHistoryItem('item-0', 9999)), itemToRow(makeHistoryItem('item-1', 1))])
+      .mockResolvedValueOnce([]);
 
-    const importedCount = await importHistoryFromJson(
-      db as never,
-      JSON.stringify(items),
-      'merge',
-      onProgress,
-    );
+    const importedCount = await importHistoryFromJson(db as never, JSON.stringify(items), 'merge', onProgress);
 
     expect(importedCount).toBe(599);
     expect(db.select).toHaveBeenCalledTimes(2);
@@ -131,6 +127,72 @@ describe('ImportExportService', () => {
     expect(deleteParams).not.toContain('alpha');
     // 不再使用 BEGIN/COMMIT/ROLLBACK（连接池不支持）
     expect(sqlCalls.some((sql) => sql.includes('BEGIN') || sql.includes('COMMIT') || sql.includes('ROLLBACK'))).toBe(false);
+  });
+
+  it('imports same-timestamp records when only favorite metadata is newer', async () => {
+    const existing = makeHistoryItem('fav-sync', 1000);
+    existing.isFavorited = false;
+    existing.favoriteUpdatedAt = 1000;
+    existing.favoriteUpdatedBy = 'device-a';
+
+    const incoming = makeHistoryItem('fav-sync', 1000);
+    incoming.isFavorited = true;
+    incoming.favoriteUpdatedAt = 2000;
+    incoming.favoriteUpdatedBy = 'device-b';
+
+    db.select.mockResolvedValueOnce([itemToRow(existing)]);
+
+    const importedCount = await importHistoryFromJson(db as never, JSON.stringify([incoming]), 'merge');
+
+    expect(importedCount).toBe(1);
+    const insertParams = db.execute.mock.calls[0][1] as unknown[];
+    expect(insertParams[18]).toBe(1);
+    expect(insertParams[19]).toBe(2000);
+    expect(insertParams[20]).toBe('device-b');
+  });
+
+  it('keeps local favorite metadata when cloud history content is newer but favorite is older', async () => {
+    const existing = makeHistoryItem('mixed-sync', 1000);
+    existing.isFavorited = true;
+    existing.favoriteUpdatedAt = 3000;
+    existing.favoriteUpdatedBy = 'device-local';
+
+    const incoming = makeHistoryItem('mixed-sync', 2000);
+    incoming.isFavorited = false;
+    incoming.favoriteUpdatedAt = 1000;
+    incoming.favoriteUpdatedBy = 'device-cloud';
+    incoming.generatedLink = 'https://img.example.com/newer.png';
+
+    db.select.mockResolvedValueOnce([itemToRow(existing)]);
+
+    const importedCount = await importHistoryFromJson(db as never, JSON.stringify([incoming]), 'merge');
+
+    expect(importedCount).toBe(1);
+    const insertParams = db.execute.mock.calls[0][1] as unknown[];
+    expect(insertParams[1]).toBe(2000);
+    expect(insertParams[7]).toBe('https://img.example.com/newer.png');
+    expect(insertParams[18]).toBe(1);
+    expect(insertParams[19]).toBe(3000);
+    expect(insertParams[20]).toBe('device-local');
+  });
+
+  it('does not let legacy cloud records without favorite metadata clear local favorites', async () => {
+    const existing = makeHistoryItem('legacy-cloud', 2000);
+    existing.isFavorited = true;
+    existing.favoriteUpdatedAt = 2500;
+    existing.favoriteUpdatedBy = 'device-local';
+
+    const incoming = makeHistoryItem('legacy-cloud', 2000);
+    incoming.isFavorited = false;
+    delete incoming.favoriteUpdatedAt;
+    delete incoming.favoriteUpdatedBy;
+
+    db.select.mockResolvedValueOnce([itemToRow(existing)]);
+
+    const importedCount = await importHistoryFromJson(db as never, JSON.stringify([incoming]), 'merge');
+
+    expect(importedCount).toBe(0);
+    expect(db.execute).not.toHaveBeenCalled();
   });
 
   it('replace mode preserves existing rows when insert fails mid-way', async () => {

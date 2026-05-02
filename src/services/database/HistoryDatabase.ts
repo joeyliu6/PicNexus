@@ -14,6 +14,7 @@ import { extractMirrorServices } from '../../types/image-meta';
 import { recomputeLinkCheckSummary } from '../../types/linkCheckSummary';
 import { getHistoryDbPath } from '../../utils/appPaths';
 import { createLogger } from '../../utils/logger';
+import { getSyncDeviceId } from '../../utils/syncDeviceId';
 
 // 子模块导入
 import {
@@ -151,12 +152,18 @@ class HistoryDatabase {
 
   async setFavorite(id: string, favorited: boolean): Promise<void> {
     const db = await this.connection.getDb();
-    await setFavoriteQuery(db, id, favorited);
+    await setFavoriteQuery(db, id, favorited, {
+      updatedAt: Date.now(),
+      updatedBy: await getSyncDeviceId(),
+    });
   }
 
   async batchSetFavorite(ids: string[], favorited: boolean): Promise<void> {
     const db = await this.connection.getDb();
-    await batchSetFavoriteQuery(db, ids, favorited);
+    await batchSetFavoriteQuery(db, ids, favorited, {
+      updatedAt: Date.now(),
+      updatedBy: await getSyncDeviceId(),
+    });
   }
 
   async getFavoriteCount(): Promise<number> {

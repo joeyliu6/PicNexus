@@ -503,12 +503,15 @@ export function useHistoryManager() {
     if (ids.length === 0) return;
 
     try {
-      await historyDB.batchSetFavorite(ids, favorited);
+      const idsToUpdate = ids.filter(id => sharedFavoriteSet.value.has(id) !== favorited);
+      if (idsToUpdate.length === 0) return;
+
+      await historyDB.batchSetFavorite(idsToUpdate, favorited);
 
       // 更新 favoriteSet（O(ids.length)）
       const newSet = new Set(sharedFavoriteSet.value);
       let deltaCount = 0;
-      for (const id of ids) {
+      for (const id of idsToUpdate) {
         const wasFavorited = newSet.has(id);
         if (wasFavorited === favorited) continue;
         deltaCount += favorited ? 1 : -1;
@@ -517,7 +520,7 @@ export function useHistoryManager() {
       sharedFavoriteSet.value = newSet;
       favoriteCount.value = Math.max(0, favoriteCount.value + deltaCount);
 
-      ids.forEach(id => detailCache.removeDetail(id));
+      idsToUpdate.forEach(id => detailCache.removeDetail(id));
 
     } catch (error) {
       log.error('[历史记录] 批量收藏操作失败:', error);

@@ -211,6 +211,14 @@ export function isValidHistoryItem(obj: unknown): obj is HistoryItem {
 
   // 可选字段类型检查
   if (item.filePath !== undefined && typeof item.filePath !== 'string') return false;
+  if (item.isFavorited !== undefined && typeof item.isFavorited !== 'boolean') return false;
+  if (
+    item.favoriteUpdatedAt !== undefined
+    && (typeof item.favoriteUpdatedAt !== 'number' || !Number.isFinite(item.favoriteUpdatedAt))
+  ) {
+    return false;
+  }
+  if (item.favoriteUpdatedBy !== undefined && typeof item.favoriteUpdatedBy !== 'string') return false;
 
   return true;
 }

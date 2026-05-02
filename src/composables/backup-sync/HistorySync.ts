@@ -2,6 +2,7 @@
 // 云端历史记录同步：强制/合并/增量上传 + 覆盖/合并下载 + 双向同步
 
 import { historyDB } from '../../services/HistoryDatabase';
+import { mergeHistoryCollections } from '../../services/database/HistoryMerge';
 import { invalidateCache } from '../useHistory';
 import { emitHistoryUpdated } from '../../events/cacheEvents';
 import type { WebDAVProfile, HistoryItem } from '../../config/types';
@@ -92,45 +93,20 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
         log.info('云端文件不存在或无法解析，将进行全量上传');
       }
 
-      const itemMap = new Map<string, HistoryItem>();
+      for (const item of localItems) {
+        if (!item.id) item.id = crypto.randomUUID();
+      }
 
-      cloudItems.forEach(item => {
-        if (item.id) {
-          itemMap.set(item.id, item);
-        }
-      });
-
-      localItems.forEach(item => {
-        if (item.id) {
-          const existing = itemMap.get(item.id);
-          if (!existing || (item.timestamp && item.timestamp > (existing.timestamp || 0))) {
-            itemMap.set(item.id, item);
-          }
-        } else {
-          item.id = crypto.randomUUID();
-          itemMap.set(item.id, item);
-        }
-      });
-
-      const mergedItems = Array.from(itemMap.values());
-      mergedItems.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      const { items: mergedItems, addedCount, updatedCount } = mergeHistoryCollections(cloudItems, localItems);
 
       const jsonContent = JSON.stringify(mergedItems, null, 2);
       await webdav.client.putFile(webdav.remotePath, jsonContent);
 
-      // 真正的"新增"应为本地独有的记录数（云端 id 集合的差集），
-      // 而不是 mergedItems.length - cloudItems.length —— 后者在时间戳更新、
-      // 或云端文件不存在（cloudItems=[]）等场景下会严重高估，误导用户
-      const cloudIds = new Set(cloudItems.map(i => i.id).filter(Boolean));
-      const newCount = localItems.reduce(
-        (acc, item) => acc + (item.id && !cloudIds.has(item.id) ? 1 : 0),
-        0,
-      );
       updateHistorySyncStatus(profile, 'success');
       await writeSyncLog('upload_history_cloud', 'success', `共 ${mergedItems.length} 条`, profile);
       toast.success(
         '已合并上传',
-        `共 ${mergedItems.length} 条记录，${newCount > 0 ? `新增 ${newCount} 条到云端` : '云端数据已是最新'}`
+        `共 ${mergedItems.length} 条记录，新增 ${addedCount} 条，更新 ${updatedCount} 条`
       );
     } catch (error) {
       const errorCode = extractErrorCode(error);
@@ -164,7 +140,6 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
       const localItems = JSON.parse(localJsonContent) as HistoryItem[];
 
       let cloudItems: HistoryItem[] = [];
-      const cloudIdSet = new Set<string>();
 
       try {
         const content = await webdav.client.getFile(webdav.remotePath);
@@ -172,34 +147,37 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
           const parsed = JSON.parse(content);
           if (Array.isArray(parsed)) {
             cloudItems = parsed;
-            cloudItems.forEach(item => {
-              if (item.id) cloudIdSet.add(item.id);
-            });
           }
         }
       } catch {
         log.info('云端文件不存在，将进行全量上传');
       }
 
-      const newItems = localItems.filter(item => item.id && !cloudIdSet.has(item.id));
-
-      if (newItems.length === 0) {
-        updateHistorySyncStatus(profile, 'success');
-        toast.info('无需上传', '本地没有新增的记录');
-        return;
+      for (const item of localItems) {
+        if (!item.id) item.id = crypto.randomUUID();
       }
 
-      const mergedItems = [...cloudItems, ...newItems];
-      mergedItems.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      const { items: mergedItems, addedCount, updatedCount } = mergeHistoryCollections(cloudItems, localItems);
+
+      if (addedCount === 0 && updatedCount === 0) {
+        updateHistorySyncStatus(profile, 'success');
+        toast.info('无需上传', '本地没有新增或更新的记录');
+        return;
+      }
 
       const jsonContent = JSON.stringify(mergedItems, null, 2);
       await webdav.client.putFile(webdav.remotePath, jsonContent);
 
       updateHistorySyncStatus(profile, 'success');
-      await writeSyncLog('upload_history_cloud', 'success', `新增 ${newItems.length} 条`, profile);
+      await writeSyncLog(
+        'upload_history_cloud',
+        'success',
+        `新增 ${addedCount} 条，更新 ${updatedCount} 条`,
+        profile,
+      );
       toast.success(
         '已增量上传',
-        `新增 ${newItems.length} 条记录到云端，共 ${mergedItems.length} 条`
+        `新增 ${addedCount} 条、更新 ${updatedCount} 条记录到云端，共 ${mergedItems.length} 条`
       );
     } catch (error) {
       const errorCode = extractErrorCode(error);
@@ -367,24 +345,11 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
       const localJsonContent = await historyDB.exportToJSON();
       const localItems = JSON.parse(localJsonContent) as HistoryItem[];
 
-      const itemMap = new Map<string, HistoryItem>();
-      cloudItems.forEach(item => {
-        if (item.id) itemMap.set(item.id, item);
-      });
-      localItems.forEach(item => {
-        if (item.id) {
-          const existing = itemMap.get(item.id);
-          if (!existing || (item.timestamp && item.timestamp > (existing.timestamp || 0))) {
-            itemMap.set(item.id, item);
-          }
-        } else {
-          item.id = crypto.randomUUID();
-          itemMap.set(item.id, item);
-        }
-      });
+      for (const item of localItems) {
+        if (!item.id) item.id = crypto.randomUUID();
+      }
 
-      const mergedItems = Array.from(itemMap.values());
-      mergedItems.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      const { items: mergedItems } = mergeHistoryCollections(cloudItems, localItems);
 
       const jsonContent = JSON.stringify(mergedItems, null, 2);
       await webdav.client.putFile(webdav.remotePath, jsonContent);

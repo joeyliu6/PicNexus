@@ -62,7 +62,7 @@ flowchart TD
 
 展示历史记录的三种上传模式和两种下载模式。重点关注**增量同步**和**合并去重**逻辑。
 
-> **关键源文件**：`src/composables/backup-sync/useBackupCloud.ts`、`src/services/database/HistoryDatabase.ts`
+> **关键源文件**：`src/composables/backup-sync/HistorySync.ts`、`src/composables/useWebDAVSync.ts`、`src/services/database/HistoryMerge.ts`
 
 ```mermaid
 flowchart TD
@@ -77,13 +77,13 @@ flowchart TD
     D2 --> D3[webdav.putFile 上传]
 
     C -- 合并 --> E[导出本地 + 下载云端]
-    E --> E1["按 ID 合并，timestamp 大的优先"]
+    E --> E1["按 ID 合并<br/>内容看 timestamp<br/>收藏看 favoriteUpdatedAt/By"]
     E1 --> E2[排序后上传]
 
     C -- 增量 --> F[导出本地 + 下载云端]
-    F --> F1["cloudIdSet = Set(云端IDs)"]
-    F1 --> F2["过滤：本地有但云端没有的"]
-    F2 --> F3["[...云端, ...新增] 合并上传"]
+    F --> F1["逐 ID 合并云端与本地"]
+    F1 --> F2["上传新增记录<br/>或仅收藏状态更新的记录"]
+    F2 --> F3["合并结果上传"]
 
     %% 下载历史
     B -- 下载 --> G{下载模式?}
@@ -100,7 +100,7 @@ flowchart TD
     G -- 合并 --> I[webdav.getFile 下载]
     I --> I1[校验云端数据]
     I1 --> I2["按 ID 查询本地已有记录"]
-    I2 --> I3{"云端 timestamp > 本地?"}
+    I2 --> I3{"内容或收藏版本有更新?"}
     I3 -- 是 --> I4[INSERT OR REPLACE]
     I3 -- 否 --> I5[跳过]
     I4 & I5 --> I6["批量处理（500条/批）"]
@@ -144,8 +144,8 @@ flowchart TD
     D1C -- 确认 --> D1E[直接下载替换本地]
 
     %% 合并类操作：无确认直接执行
-    D2 --> D2E["合并策略<br/>配置: 保留本地 WebDAV<br/>历史: id+timestamp 去重"]
-    U2 --> U2E["增量策略<br/>仅上传云端没有的 id"]
+    D2 --> D2E["合并策略<br/>配置: 保留本地 WebDAV<br/>历史: 内容与收藏分开合并"]
+    U2 --> U2E["增量策略<br/>上传新增 id<br/>或收藏版本更新"]
 
     %% 双向同步：先拉取合并 → 再上传合并
     S1 --> S1A[步骤1: 拉取云端<br/>合并到本地]
@@ -163,6 +163,7 @@ flowchart TD
 > - 代码中**没有** JSON 内容比对和三路冲突对话框，用户通过菜单选项预先声明意图
 > - 覆盖类操作（`downloadSettingsOverwrite` / `downloadHistoryOverwrite` / `uploadHistoryForce`）统一用 `confirmDialog` 做破坏性确认
 > - 合并类操作（`downloadSettingsMerge` / `downloadHistoryMerge` / `uploadHistoryMerge`）直接执行，合并策略见图 2 说明
+> - 历史记录内容与收藏状态分开裁决：上传内容仍按 `timestamp`，收藏状态按 `favoriteUpdatedAt`，同毫秒再用 `favoriteUpdatedBy` 稳定裁决
 > - 双向同步（`syncConfig` / `syncHistory`）本质是"拉取合并 → 推送合并"的自动化组合
 
 ---
@@ -193,7 +194,7 @@ flowchart TD
 | 存储空间不足 (507) | 云端空间满 | 图2 上传路径 |
 | 连接超时 | 网络问题或 WebDAV 服务器不可达 | 图1 节点 D |
 | 解密失败 | 备份密码不正确 | 图1 节点 M1 / 图2 节点 H3 |
-| 合并后数据比预期少 | 增量模式只上传新增，不更新已有记录 | 图2 增量分支 F1 → F2 |
+| 合并后数据比预期少 | 远端文件缺少对应 ID，或旧备份没有收藏版本字段导致只能按已有版本合并 | 图2 合并分支 E1 / I3 |
 | 下载后配置未生效 | 需要刷新页面应用新配置 | 图1 节点 O → P |
 | 历史记录下载后列表空 | `history-updated` 事件未触发视图刷新 | 图2 节点 J → K |
 | SSL 证书错误 | 自签名证书未被信任 | 图1 节点 D |

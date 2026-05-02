@@ -36,7 +36,14 @@ export async function createTablesAndIndexes(db: Database): Promise<void> {
       file_size INTEGER NOT NULL,
       format TEXT NOT NULL,
       color_type TEXT NOT NULL,
-      has_alpha INTEGER NOT NULL
+      has_alpha INTEGER NOT NULL,
+      is_favorited INTEGER NOT NULL DEFAULT 0,
+      favorite_updated_at INTEGER NOT NULL DEFAULT 0,
+      favorite_updated_by TEXT,
+      success_count INTEGER NOT NULL DEFAULT 0,
+      successful_service_ids TEXT NOT NULL DEFAULT '[]',
+      migration_skip INTEGER NOT NULL DEFAULT 0,
+      link_check_skip INTEGER NOT NULL DEFAULT 0
     )
   `);
 
@@ -88,6 +95,7 @@ export async function createTablesAndIndexes(db: Database): Promise<void> {
  */
 export async function runMigrations(db: Database): Promise<void> {
   await migrateAddFavoriteColumn(db);
+  await migrateAddFavoriteSyncColumns(db);
   await migrateAddSuccessCountColumn(db);
   await migrateAddSuccessfulServiceIdsColumn(db);
   await migrateAddMigrationSkipColumn(db);
@@ -141,6 +149,39 @@ async function migrateAddFavoriteColumn(db: Database): Promise<void> {
     );
   } catch (error) {
     log.error('迁移 is_favorited 列失败:', error);
+    throw error;
+  }
+}
+
+async function migrateAddFavoriteSyncColumns(db: Database): Promise<void> {
+  try {
+    await addColumnIfMissing(
+      db,
+      'favorite_updated_at',
+      `ALTER TABLE history_items ADD COLUMN favorite_updated_at INTEGER NOT NULL DEFAULT 0`
+    );
+    await addColumnIfMissing(
+      db,
+      'favorite_updated_by',
+      `ALTER TABLE history_items ADD COLUMN favorite_updated_by TEXT`
+    );
+
+    // 只给已有收藏记录建立 legacy 版本。未收藏旧记录保持 0，避免压制其他设备的旧收藏。
+    await db.execute(`
+      UPDATE history_items
+      SET
+        favorite_updated_at = CASE
+          WHEN favorite_updated_at IS NULL OR favorite_updated_at <= 0 THEN timestamp
+          ELSE favorite_updated_at
+        END,
+        favorite_updated_by = CASE
+          WHEN favorite_updated_by IS NULL OR favorite_updated_by = '' THEN 'legacy'
+          ELSE favorite_updated_by
+        END
+      WHERE is_favorited = 1
+    `);
+  } catch (error) {
+    log.error('迁移收藏同步字段失败:', error);
     throw error;
   }
 }

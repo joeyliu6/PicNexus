@@ -5,6 +5,7 @@ import { ref, computed, type Ref } from 'vue';
 import { configStore, syncStatusStore } from '../store/instances';
 import { WebDAVClient } from '../utils/webdav';
 import { historyDB } from '../services/HistoryDatabase';
+import { mergeHistoryCollections } from '../services/database/HistoryMerge';
 import { useToast } from './useToast';
 import type {
   UserConfig,
@@ -414,24 +415,7 @@ export function useWebDAVSync() {
 
         if (remoteContent) {
           const cloudItems = validateHistoryItems(JSON.parse(remoteContent));
-
-          if (mode === 'incremental') {
-            // 增量模式：只上传云端不存在的记录
-            const cloudIds = new Set(cloudItems.map(item => item.id));
-            const newItems = localItems.filter(item => !cloudIds.has(item.id));
-            uploadItems = [...cloudItems, ...newItems];
-          } else {
-            // 合并模式：本地优先（基于时间戳）
-            const itemMap = new Map<string, HistoryItem>();
-            cloudItems.forEach(item => itemMap.set(item.id, item));
-            localItems.forEach(item => {
-              const existing = itemMap.get(item.id);
-              if (!existing || (item.timestamp > (existing.timestamp || 0))) {
-                itemMap.set(item.id, item);
-              }
-            });
-            uploadItems = Array.from(itemMap.values());
-          }
+          uploadItems = mergeHistoryCollections(cloudItems, localItems).items;
         }
       }
 
