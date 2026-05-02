@@ -7,7 +7,7 @@ import { configStore } from '../../store/instances';
 import { secureStorage, isPasswordEncryptedData } from '../../crypto';
 import { TOAST_MESSAGES } from '../../constants';
 import { createLogger } from '../../utils/logger';
-import { writeSyncLog, extractErrorCode, getWebDAVClientAndPath } from './backupSyncUtils';
+import { writeSyncLog, extractErrorCode, getWebDAVClientAndPath, isWebDAVNotFoundError } from './backupSyncUtils';
 import type { BackupCloudDeps } from './useBackupCloud';
 
 const log = createLogger('ConfigSync');
@@ -193,33 +193,39 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
             contentStr = await tryDecryptContent(rawContent.trim());
           }
           const importedConfig = JSON.parse(contentStr) as unknown;
-          if (isValidUserConfig(importedConfig)) {
-            hasCloudData = true;
+          if (!isValidUserConfig(importedConfig)) {
+            throw new Error('云端配置文件内容格式无效');
+          }
 
-            // Why: 首次使用/配置缺失场景下 currentConfig 为 null，若仅在 currentConfig 存在时保存，
-            // 云端合法配置会被静默丢弃，随后 step 2 读不到本地配置抛"无法读取本地配置"
-            if (currentConfig) {
-              const mergedConfig: UserConfig = {
-                ...importedConfig,
-                webdav: currentConfig.webdav,
-              };
-              await configStore.set('config', mergedConfig);
-              await configStore.save();
-            } else {
-              await configStore.set('config', importedConfig);
-              await configStore.save();
-            }
+          hasCloudData = true;
+
+          // Why: 首次使用/配置缺失场景下 currentConfig 为 null，若仅在 currentConfig 存在时保存，
+          // 云端合法配置会被静默丢弃，随后 step 2 读不到本地配置抛"无法读取本地配置"
+          if (currentConfig) {
+            const mergedConfig: UserConfig = {
+              ...importedConfig,
+              webdav: currentConfig.webdav,
+            };
+            await configStore.set('config', mergedConfig);
+            await configStore.save();
+          } else {
+            await configStore.set('config', importedConfig);
+            await configStore.save();
           }
         }
       } catch (downloadError) {
         // Why: 原实现 catch {} 会连 user_cancelled（用户取消输密码）和网络/解密/JSON 错误
         // 一起吞掉，直接进入上传步骤有覆盖云端合法数据的风险。
         // - user_cancelled 必须向外抛，让上层 return 掉整个同步流程；
-        // - 其他错误至少落一条 warn 日志便于排障，流程仍容忍（因为也可能只是云端文件不存在）。
+        // - 只有远端文件不存在可以容忍；认证、网络、JSON/格式错误必须中止，避免覆盖云端。
         if (downloadError instanceof Error && downloadError.message === 'user_cancelled') {
           throw downloadError;
         }
-        log.warn('拉取云端配置失败（将按云端无数据处理）:', downloadError);
+        if (!isWebDAVNotFoundError(downloadError)) {
+          log.error('拉取云端配置失败，已中止以避免覆盖云端数据:', downloadError);
+          throw downloadError;
+        }
+        log.warn('云端配置文件不存在，将按首次同步处理');
       }
 
       // 步骤 2：将本地配置上传到云端

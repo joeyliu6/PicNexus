@@ -69,6 +69,10 @@ vi.mock('../../../../composables/backup-sync/backupSyncUtils', () => ({
   writeSyncLog: writeSyncLogMock,
   extractErrorCode: extractErrorCodeMock,
   getWebDAVClientAndPath: getWebDAVClientAndPathMock,
+  isWebDAVNotFoundError: (error: unknown) => {
+    const msg = error instanceof Error ? error.message : String(error);
+    return /\b404\b/.test(msg) || /not\s*found/i.test(msg) || msg.includes('文件不存在');
+  },
 }));
 
 vi.mock('../../../../utils/logger', () => ({
@@ -289,5 +293,38 @@ describe('createConfigSyncOps', () => {
     expect(toastErrorMock).not.toHaveBeenCalled();
     expect(deps.releaseCloudSync).toHaveBeenCalledTimes(1);
     expect(deps.syncConfigLoading.value).toBe(false);
+  });
+
+  it('stops syncConfig before upload when cloud settings download fails with a non-404 WebDAV error', async () => {
+    clientGetFileMock.mockRejectedValueOnce(new Error('401 Unauthorized'));
+    extractErrorCodeMock.mockReturnValueOnce('AUTH_FAILED');
+
+    const deps = makeDeps();
+    const ops = createConfigSyncOps(deps);
+
+    await ops.syncConfig(profile);
+
+    expect(clientPutFileMock).not.toHaveBeenCalled();
+    expect(configStoreSetMock).not.toHaveBeenCalled();
+    expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'failed', 'AUTH_FAILED');
+    expect(writeSyncLogMock).toHaveBeenCalledWith('sync_settings', 'failed', 'AUTH_FAILED', profile);
+    expect(toastErrorMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops syncConfig before upload when cloud settings are not a valid config', async () => {
+    clientGetFileMock.mockResolvedValueOnce(JSON.stringify({ results: [] }));
+    isValidUserConfigMock.mockReturnValueOnce(false);
+    extractErrorCodeMock.mockReturnValueOnce('INVALID_CLOUD_CONFIG');
+
+    const deps = makeDeps();
+    const ops = createConfigSyncOps(deps);
+
+    await ops.syncConfig(profile);
+
+    expect(clientPutFileMock).not.toHaveBeenCalled();
+    expect(configStoreSetMock).not.toHaveBeenCalled();
+    expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'failed', 'INVALID_CLOUD_CONFIG');
+    expect(writeSyncLogMock).toHaveBeenCalledWith('sync_settings', 'failed', 'INVALID_CLOUD_CONFIG', profile);
+    expect(toastErrorMock).toHaveBeenCalledTimes(1);
   });
 });

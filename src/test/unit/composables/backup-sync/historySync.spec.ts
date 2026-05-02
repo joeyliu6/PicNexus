@@ -57,6 +57,10 @@ vi.mock('../../../../composables/backup-sync/backupSyncUtils', () => ({
   writeSyncLog: writeSyncLogMock,
   extractErrorCode: extractErrorCodeMock,
   getWebDAVClientAndPath: getWebDAVClientAndPathMock,
+  isWebDAVNotFoundError: (error: unknown) => {
+    const msg = error instanceof Error ? error.message : String(error);
+    return /\b404\b/.test(msg) || /not\s*found/i.test(msg) || msg.includes('文件不存在');
+  },
 }));
 
 vi.mock('../../../../utils/logger', () => ({
@@ -236,6 +240,42 @@ describe('createHistorySyncOps', () => {
       { id: 'a', timestamp: 200, isFavorited: true, favoriteUpdatedAt: 500, favoriteUpdatedBy: 'local' },
     ]);
     expect(updateHistorySyncStatusMock).toHaveBeenCalledWith(profile, 'success');
+  });
+
+  it('stops merge upload when cloud history download fails with a non-404 WebDAV error', async () => {
+    historyExportToJSONMock.mockResolvedValueOnce(JSON.stringify([
+      { id: 'local', timestamp: 200 },
+    ]));
+    clientGetFileMock.mockRejectedValueOnce(new Error('401 Unauthorized'));
+    extractErrorCodeMock.mockReturnValueOnce('AUTH_FAILED');
+
+    const deps = makeDeps();
+    const ops = createHistorySyncOps(deps);
+
+    await ops.uploadHistoryMerge(profile);
+
+    expect(clientPutFileMock).not.toHaveBeenCalled();
+    expect(updateHistorySyncStatusMock).toHaveBeenCalledWith(profile, 'failed', 'AUTH_FAILED');
+    expect(writeSyncLogMock).toHaveBeenCalledWith('upload_history_cloud', 'failed', 'AUTH_FAILED', profile);
+    expect(toastErrorMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops incremental upload when cloud history download fails with a non-404 WebDAV error', async () => {
+    historyExportToJSONMock.mockResolvedValueOnce(JSON.stringify([
+      { id: 'local', timestamp: 200 },
+    ]));
+    clientGetFileMock.mockRejectedValueOnce(new Error('500 Server Error'));
+    extractErrorCodeMock.mockReturnValueOnce('SERVER_FAILED');
+
+    const deps = makeDeps();
+    const ops = createHistorySyncOps(deps);
+
+    await ops.uploadHistoryIncremental(profile);
+
+    expect(clientPutFileMock).not.toHaveBeenCalled();
+    expect(updateHistorySyncStatusMock).toHaveBeenCalledWith(profile, 'failed', 'SERVER_FAILED');
+    expect(writeSyncLogMock).toHaveBeenCalledWith('upload_history_cloud', 'failed', 'SERVER_FAILED', profile);
+    expect(toastErrorMock).toHaveBeenCalledTimes(1);
   });
 
   it('marks downloadHistoryOverwrite as failed when cloud data is not an array', async () => {

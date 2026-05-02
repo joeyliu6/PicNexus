@@ -97,6 +97,22 @@ export function extractErrorCode(error: unknown): string {
 }
 
 /**
+ * 判断 WebDAV 拉取失败是否等价于"远端文件不存在"。
+ *
+ * getFile 对标准 404 会返回 null；这里兜住少数服务/插件把不存在包装成异常的情况。
+ * 非 404 错误必须向外抛，避免把认证失败、网络错误、JSON 损坏误当作空云端后覆盖上传。
+ */
+export function isWebDAVNotFoundError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return (
+    /\b404\b/.test(msg) ||
+    /not\s*found/i.test(msg) ||
+    /file.*not.*exist/i.test(msg) ||
+    msg.includes('文件不存在')
+  );
+}
+
+/**
  * 获取 WebDAV 客户端和远程路径
  */
 export async function getWebDAVClientAndPath(

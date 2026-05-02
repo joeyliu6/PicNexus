@@ -7,7 +7,7 @@ import { invalidateCache } from '../useHistory';
 import { emitHistoryUpdated } from '../../events/cacheEvents';
 import type { WebDAVProfile, HistoryItem } from '../../config/types';
 import { createLogger } from '../../utils/logger';
-import { writeSyncLog, extractErrorCode, getWebDAVClientAndPath } from './backupSyncUtils';
+import { writeSyncLog, extractErrorCode, getWebDAVClientAndPath, isWebDAVNotFoundError } from './backupSyncUtils';
 import type { BackupCloudDeps } from './useBackupCloud';
 
 const log = createLogger('HistorySync');
@@ -89,8 +89,15 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
             cloudItems = parsed;
           }
         }
-      } catch {
-        log.info('云端文件不存在或无法解析，将进行全量上传');
+      } catch (downloadError) {
+        if (downloadError instanceof Error && downloadError.message === 'user_cancelled') {
+          throw downloadError;
+        }
+        if (!isWebDAVNotFoundError(downloadError)) {
+          log.error('拉取云端历史失败，已中止以避免覆盖云端数据:', downloadError);
+          throw downloadError;
+        }
+        log.info('云端历史文件不存在，将进行全量上传');
       }
 
       for (const item of localItems) {
@@ -149,8 +156,15 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
             cloudItems = parsed;
           }
         }
-      } catch {
-        log.info('云端文件不存在，将进行全量上传');
+      } catch (downloadError) {
+        if (downloadError instanceof Error && downloadError.message === 'user_cancelled') {
+          throw downloadError;
+        }
+        if (!isWebDAVNotFoundError(downloadError)) {
+          log.error('拉取云端历史失败，已中止以避免覆盖云端数据:', downloadError);
+          throw downloadError;
+        }
+        log.info('云端历史文件不存在，将进行全量上传');
       }
 
       for (const item of localItems) {
@@ -321,13 +335,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
         if (downloadError instanceof Error && downloadError.message === 'user_cancelled') {
           throw downloadError;
         }
-        const msg = downloadError instanceof Error ? downloadError.message : String(downloadError);
-        const isNotFound =
-          /\b404\b/.test(msg) ||
-          /not\s*found/i.test(msg) ||
-          /file.*not.*exist/i.test(msg) ||
-          msg.includes('文件不存在');
-        if (!isNotFound) {
+        if (!isWebDAVNotFoundError(downloadError)) {
           log.error('拉取云端历史失败，已中止以避免覆盖云端数据:', downloadError);
           throw downloadError;
         }
