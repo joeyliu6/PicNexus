@@ -21,7 +21,7 @@ const InputTextStub = defineComponent({
   name: 'InputText',
   props: ['modelValue'],
   emits: ['update:modelValue'],
-  template: '<input :value="modelValue" />',
+  template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 });
 
 const DividerStub = defineComponent({
@@ -67,6 +67,27 @@ function mountPanel(overrides: Record<string, unknown> = {}) {
 }
 
 describe('GeneralSettingsPanel', () => {
+  it('emits theme changes from the theme cards', async () => {
+    const wrapper = mountPanel();
+
+    await wrapper.findAll('.theme-card')[1].trigger('click');
+
+    expect(wrapper.emitted('update:currentTheme')).toEqual([['dark']]);
+  });
+
+  it('emits link output changes and saves them', async () => {
+    const wrapper = mountPanel({ linkDefaultFormat: 'custom' });
+
+    await wrapper.findAll('.format-card')[1].trigger('click');
+    await wrapper.findAll('.toggle-stub')[4].trigger('click');
+    await wrapper.get('.template-input').setValue('');
+
+    expect(wrapper.emitted('update:linkDefaultFormat')).toEqual([['markdown']]);
+    expect(wrapper.emitted('update:linkAutoCopy')).toEqual([[false]]);
+    expect(wrapper.emitted('update:linkCustomTemplate')).toEqual([['{url}']]);
+    expect(wrapper.emitted('save')).toHaveLength(3);
+  });
+
   it('renders and emits the restore-defaults action', async () => {
     const wrapper = mountPanel();
 
