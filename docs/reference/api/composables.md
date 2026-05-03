@@ -14,6 +14,8 @@
 | useThumbCache | 缩略图缓存管理 | `src/composables/useThumbCache.ts` |
 | useToast | Toast 通知 | `src/composables/useToast.ts` |
 | useTheme | 主题切换 | `src/composables/useTheme.ts` |
+| useSettingsForm | 设置页表单读写、保存防抖、恢复默认设置 | `src/composables/settings/useSettingsForm.ts` |
+| useSettingsReset | 设置页恢复默认设置编排 | `src/composables/settings/useSettingsReset.ts` |
 | useWebDAVSync | WebDAV 同步 | `src/composables/useWebDAVSync.ts` |
 | useClipboardImage | 剪贴板图片处理 | `src/composables/useClipboardImage.ts` |
 | useConfirm | 确认对话框 | `src/composables/useConfirm.ts` |
