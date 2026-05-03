@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
 import { useSettingsForm } from '../../../../composables/settings/useSettingsForm';
-import { makeCustomS3Id, type UserConfig } from '../../../../config/types';
+import { DEFAULT_CONFIG, makeCustomS3Id, type UserConfig } from '../../../../config/types';
 import { createConfig } from '../../../factories/configFactory';
 import { resetTauriMocks, setupInvokeResponses } from '../../../helpers/tauriMock';
 
@@ -195,6 +195,51 @@ describe('useSettingsForm', () => {
     expect(api.advancedSaveState.value.message).toContain('Disk full');
     expect(api.formData.value.weiboCookie).toBe('SUB=on-disk');
     expect(api.availableServices.value).toEqual(['jd']);
+  });
+
+  it('restores DEFAULT_CONFIG without clearing history or cache state', async () => {
+    const api = useSettingsForm();
+    const customProfile = {
+      id: 'profile-1',
+      name: 'Private S3',
+      endpoint: 'https://s3.example.com',
+      accessKeyId: 'custom-ak',
+      secretAccessKey: 'custom-sk',
+      region: 'auto',
+      bucket: 'private-bucket',
+      path: 'uploads/',
+      publicDomain: 'https://assets.example.com',
+    };
+
+    api.formData.value.weiboCookie = 'SUB=abc';
+    api.formData.value.smms.token = 'smms-token';
+    api.formData.value.custom_s3_profiles = [customProfile];
+    api.formData.value.webdav.profiles = [{
+      id: 'dav-1',
+      name: 'Main WebDAV',
+      url: 'https://dav.example.com',
+      username: 'me',
+      password: 'secret',
+      remotePath: '/PicNexus/',
+    }];
+    api.availableServices.value = ['smms', makeCustomS3Id(customProfile.id)];
+
+    await expect(api.resetToDefaultSettings()).resolves.toBe(true);
+
+    expect(mockState.saveConfig).toHaveBeenCalledTimes(1);
+    const savedConfig = mockState.saveConfig.mock.calls[0][0];
+    expect(savedConfig).toMatchObject({
+      ...DEFAULT_CONFIG,
+      onboardingCompleted: false,
+    });
+    expect(api.formData.value.weiboCookie).toBe('');
+    expect(api.formData.value.smms.token).toBe('');
+    expect(api.formData.value.custom_s3_profiles).toEqual([]);
+    expect(api.formData.value.webdav).toEqual({ profiles: [], activeId: null });
+    expect(api.formData.value.globalShortcut).toEqual(DEFAULT_CONFIG.globalShortcut);
+    expect(api.availableServices.value).toEqual(DEFAULT_CONFIG.availableServices);
+    expect(mockState.syncCustomS3Uploaders).toHaveBeenLastCalledWith([]);
+    expect(mockState.evaluateConfig).toHaveBeenLastCalledWith(savedConfig);
   });
 
   it('does not delete the last enabled custom S3 host before another host is enabled', async () => {

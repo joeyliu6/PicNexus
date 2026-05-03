@@ -17,6 +17,7 @@ import { useOnboarding } from '../../composables/useOnboarding';
 import { useSettingsForm } from '../../composables/settings/useSettingsForm';
 import { useConnectionTest } from '../../composables/settings/useConnectionTest';
 import { useEditorIntegration } from '../../composables/settings/useEditorIntegration';
+import { useSettingsReset } from '../../composables/settings/useSettingsReset';
 
 import HostingSettingsPanel from '../settings/HostingSettingsPanel.vue';
 import GeneralSettingsPanel from '../settings/GeneralSettingsPanel.vue';
@@ -40,6 +41,7 @@ const {
   formData, isSettingsReady, availableServices, serviceNames, serviceConfigStatus,
   loadSettings, saveSettings, debouncedSaveSettings, debouncedSaveSettingsWithStatus,
   cancelDebouncedSave, errorToString, validateS3Config, clearTimers: clearFormTimers,
+  resetToDefaultSettings,
   addPrefix, updatePrefix, removePrefix, resetToDefaultPrefixes,
   addCustomS3Profile, deleteCustomS3Profile, updateCustomS3Profile,
   addWebDAVProfile, deleteWebDAVProfile, switchWebDAVProfile,
@@ -57,6 +59,15 @@ const {
 
 const { applyEditorServer, clearTimer: clearEditorTimer } = useEditorIntegration({
   formData, isSettingsReady, errorToString,
+});
+
+const { isResettingDefaults, handleResetDefaults } = useSettingsReset({
+  formData,
+  cancelDebouncedSave,
+  resetToDefaultSettings,
+  loadSettings,
+  errorToString,
+  applyEditorServer,
 });
 
 // ---- 导航 ----
@@ -301,6 +312,7 @@ onUnmounted(() => {
           :close-to-tray="formData.appBehavior.closeToTray"
           :analytics-enabled="formData.analyticsEnabled"
           :is-clearing-cache="isClearingCache"
+          :is-resetting-defaults="isResettingDefaults"
           :link-default-format="formData.linkOutput.defaultFormat"
           :link-custom-template="formData.linkOutput.customTemplate"
           :link-auto-copy="formData.linkOutput.autoCopy"
@@ -320,6 +332,7 @@ onUnmounted(() => {
           @update:shortcut-upload-from-file="(v: string) => { formData.globalShortcut.uploadFromFile = v; }"
           @clear-history="historyManager.clearHistory()"
           @clear-cache="handleClearAppCache"
+          @reset-defaults="handleResetDefaults"
           @save="debouncedSaveSettings"
         />
       </div>

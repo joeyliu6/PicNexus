@@ -58,7 +58,10 @@ export function useThemeManager() {
   };
 
   const updateConfig = (config: UserConfig): void => {
-    themeManager?.updateConfig(config);
+    if (!themeManager) return;
+    themeManager.updateConfig(config);
+    themeMode.value = themeManager.getCurrentTheme();
+    effectiveTheme.value = themeManager.getEffectiveTheme();
   };
 
   return {

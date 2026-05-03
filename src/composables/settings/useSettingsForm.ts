@@ -26,6 +26,8 @@ import type {
   LinkPrefixItem,
 } from '../../config/types';
 import { DEFAULT_CONFIG, cloneDefaultPrefixes, makeCustomS3Id } from '../../config/types';
+import { applyConfigToForm } from './settingsFormSnapshot';
+import type { SettingsFormData } from './settingsFormTypes';
 
 // ---- 类型定义 ----
 
@@ -35,29 +37,6 @@ export interface SaveFeedbackState {
   status: SaveFeedbackStatus;
   message?: string;
   updatedAt?: number;
-}
-
-/**
- * 设置页 formData 中 useConnectionTest / 其他子 composable 会读取的字段的最小子集。
- * 只列出跨模块消费的字段，其他字段是 SettingsView 自己内部使用。
- */
-export interface SettingsFormShape {
-  weiboCookie: string;
-  r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; path: string; publicDomain: string };
-  tencent: { secretId: string; secretKey: string; region: string; bucket: string; path: string; publicDomain: string };
-  aliyun: { accessKeyId: string; accessKeySecret: string; region: string; bucket: string; path: string; publicDomain: string };
-  qiniu: { accessKey: string; secretKey: string; region: string; bucket: string; publicDomain: string; path: string };
-  upyun: { operator: string; password: string; bucket: string; publicDomain: string; path: string };
-  custom_s3_profiles: CustomS3Profile[];
-  nowcoder: { cookie: string };
-  zhihu: { cookie: string; sourceParamEnabled?: boolean; sourceParamValue?: string };
-  nami: { cookie: string; authToken: string };
-  bilibili: { cookie: string };
-  chaoxing: { cookie: string };
-  smms: { token: string };
-  github: import('../../config/types').GithubServiceConfig;
-  imgur: { clientId: string; clientSecret?: string };
-  editorServer: EditorServerConfig;
 }
 
 // ---- composable ----
@@ -72,7 +51,7 @@ export function useSettingsForm() {
 
   // ---- 表单数据 ----
 
-  const formData = ref({
+  const formData = ref<SettingsFormData>({
     weiboCookie: '',
     r2: { accountId: '', accessKeyId: '', secretAccessKey: '', bucketName: '', path: '', publicDomain: '' },
     tencent: { secretId: '', secretKey: '', region: '', bucket: '', path: '', publicDomain: '' },
@@ -173,6 +152,7 @@ export function useSettingsForm() {
 
   let _debouncedSaveTimer: ReturnType<typeof setTimeout> | null = null;
   let _pendingSaveTrackStatus = false;
+  let isApplyingConfigSnapshot = false;
 
   function scheduleSave(trackAdvancedStatus = false) {
     _pendingSaveTrackStatus = _pendingSaveTrackStatus || trackAdvancedStatus;
@@ -206,6 +186,7 @@ export function useSettingsForm() {
   // Why: 只保留"配置变空 → 自动移除"，不再"自动添加"。旧实现会在用户主动取消勾选后
   //   又重新填了 cookie 时把服务悄悄加回 availableServices，违反禁用意图；要重新启用请去芯片手动勾。
   watch(serviceConfigStatus, (newStatus, oldStatus) => {
+    if (isApplyingConfigSnapshot) return;
     if (!oldStatus) return;
     const toRemove: ServiceType[] = [];
     for (const [svc, configured] of Object.entries(newStatus)) {
@@ -362,9 +343,7 @@ export function useSettingsForm() {
 
   async function saveSettings(options: { trackAdvancedStatus?: boolean } = {}): Promise<boolean> {
     const { trackAdvancedStatus = false } = options;
-    if (trackAdvancedStatus) {
-      setAdvancedSaveState('saving', '保存中…');
-    }
+    if (trackAdvancedStatus) setAdvancedSaveState('saving', '保存中…');
 
     try {
       const config = await configStore.get<UserConfig>('config') || { ...DEFAULT_CONFIG };
@@ -433,9 +412,7 @@ export function useSettingsForm() {
       syncCustomS3Uploaders(formData.value.custom_s3_profiles);
       serviceHealth.evaluateConfig(config);
 
-      if (trackAdvancedStatus) {
-        setAdvancedSaveState('saved', '已保存');
-      }
+      if (trackAdvancedStatus) setAdvancedSaveState('saved', '已保存');
       return true;
     } catch (e) {
       log.error('保存失败', e);
@@ -447,6 +424,25 @@ export function useSettingsForm() {
       if (trackAdvancedStatus) setAdvancedSaveState('error', `保存失败：${msg}`);
       // 失败时把 in-memory 表单回滚到磁盘真值，避免 UI 与磁盘脱节（例如删最后一个 profile 被拒后让它重新出现）
       try { await loadSettings(); } catch (reloadErr) { log.error('回滚加载失败', reloadErr); }
+      return false;
+    }
+  }
+
+  async function resetToDefaultSettings(config: UserConfig = structuredClone(DEFAULT_CONFIG)): Promise<boolean> {
+    const resetConfig = structuredClone(config);
+    resetConfig.onboardingCompleted = false;
+
+    try {
+      await configManager.saveConfig(resetConfig, true);
+      await applyConfigToForm(resetConfig, { formData, availableServices, setApplyingConfigSnapshot: (value) => { isApplyingConfigSnapshot = value; } });
+      serviceHealth.evaluateConfig(resetConfig);
+      setAdvancedSaveState('saved', '已恢复默认设置');
+      return true;
+    } catch (e) {
+      log.error('恢复默认设置失败', e);
+      const msg = errorToString(e);
+      toast.showConfig('error', { summary: '恢复默认设置失败', detail: msg });
+      try { await loadSettings(); } catch (reloadErr) { log.error('恢复默认失败后重新加载配置失败', reloadErr); }
       return false;
     }
   }
@@ -591,6 +587,7 @@ export function useSettingsForm() {
     advancedSaveState,
     loadSettings,
     saveSettings,
+    resetToDefaultSettings,
     debouncedSaveSettings,
     debouncedSaveSettingsWithStatus,
     cancelDebouncedSave,

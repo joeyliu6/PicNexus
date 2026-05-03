@@ -11,7 +11,7 @@ import { TOAST_MESSAGES } from '../../constants';
 import type { ServiceType, CustomS3Profile } from '../../config/types';
 import { isCustomS3Id, getCustomS3ProfileId } from '../../config/types';
 import { extractNamiAuthToken } from '../../utils/namiAuthToken';
-import type { SettingsFormShape } from './useSettingsForm';
+import type { SettingsFormShape } from './settingsFormTypes';
 import type { ServiceHealthStatus } from '../../types/serviceHealth';
 
 interface UseConnectionTestOptions {

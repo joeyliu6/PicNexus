@@ -80,6 +80,12 @@ export class ThemeManager {
 
   updateConfig(config: UserConfig): void {
     this.config = config;
+    const mode = this.config.theme?.mode || 'auto';
+    this.stopSystemListener();
+    if (mode === 'auto') {
+      this.startSystemListener();
+    }
+    this.applyThemeClass(this.resolveEffectiveTheme(mode));
   }
 
   destroy(): void {

@@ -17,6 +17,7 @@ interface Props {
   closeToTray: boolean;
   analyticsEnabled: boolean;
   isClearingCache: boolean;
+  isResettingDefaults?: boolean;
   linkDefaultFormat: LinkFormat;
   linkCustomTemplate: string;
   linkAutoCopy: boolean;
@@ -43,6 +44,7 @@ const emit = defineEmits<{
   'update:shortcutUploadFromFile': [shortcut: string];
   'clearHistory': [];
   'clearCache': [];
+  'resetDefaults': [];
 
   'save': [];
 }>();
@@ -259,7 +261,7 @@ function handleTemplateChange(template: string | undefined) {
           </div>
         </div>
       </div>
-      <div class="flex gap-2 flex-wrap" style="margin-top: var(--space-lg-xl);">
+      <div class="data-actions">
         <Button
           label="清空历史记录"
           icon="pi pi-trash"
@@ -274,6 +276,14 @@ function handleTemplateChange(template: string | undefined) {
           outlined
           :loading="isClearingCache"
           @click="emit('clearCache')"
+        />
+        <Button
+          label="恢复默认设置"
+          icon="pi pi-undo"
+          severity="warn"
+          outlined
+          :loading="isResettingDefaults"
+          @click="emit('resetDefaults')"
         />
       </div>
     </div>
@@ -417,6 +427,13 @@ function handleTemplateChange(template: string | undefined) {
   background: var(--bg-app);
   border-radius: var(--radius-xs-sm);
   color: var(--primary);
+}
+
+.data-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg-xl);
 }
 
 </style>

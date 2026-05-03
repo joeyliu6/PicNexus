@@ -2,15 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import { shallowMountWithDefaults } from '../../helpers/vueMount';
 import { flushPromisesAndTicks } from '../../helpers/wait';
-import { resetTauriMocks, setupInvokeResponses } from '../../helpers/tauriMock';
+import { getInvokeMock, resetTauriMocks, setupInvokeResponses } from '../../helpers/tauriMock';
 import { createConfig } from '../../factories/configFactory';
+import { DEFAULT_CONFIG } from '../../../config/types';
 import SettingsView from '../../../components/views/SettingsView.vue';
 
 const mockState = vi.hoisted(() => ({
   toastShowConfig: vi.fn(),
   setTheme: vi.fn(),
+  updateThemeConfig: vi.fn(),
+  confirm: vi.fn(),
   loadSettings: vi.fn(),
   saveSettings: vi.fn(),
+  resetToDefaultSettings: vi.fn(),
   debouncedSaveSettings: vi.fn(),
   debouncedSaveSettingsWithStatus: vi.fn(),
   cancelDebouncedSave: vi.fn(),
@@ -53,6 +57,13 @@ vi.mock('../../../composables/useTheme', () => ({
   useThemeManager: () => ({
     currentTheme: ref('system'),
     setTheme: mockState.setTheme,
+    updateConfig: mockState.updateThemeConfig,
+  }),
+}));
+
+vi.mock('../../../composables/useConfirm', () => ({
+  useConfirm: () => ({
+    confirm: mockState.confirm,
   }),
 }));
 
@@ -104,6 +115,7 @@ vi.mock('../../../composables/settings/useSettingsForm', () => ({
     serviceConfigStatus: mockState.serviceConfigStatus,
     loadSettings: mockState.loadSettings,
     saveSettings: mockState.saveSettings,
+    resetToDefaultSettings: mockState.resetToDefaultSettings,
     debouncedSaveSettings: mockState.debouncedSaveSettings,
     debouncedSaveSettingsWithStatus: mockState.debouncedSaveSettingsWithStatus,
     cancelDebouncedSave: mockState.cancelDebouncedSave,
@@ -151,18 +163,20 @@ vi.mock('../../../composables/settings/useEditorIntegration', () => ({
 
 const GeneralSettingsPanelStub = defineComponent({
   name: 'GeneralSettingsPanel',
-  props: ['autoStart', 'analyticsEnabled'],
+  props: ['autoStart', 'analyticsEnabled', 'isResettingDefaults'],
   emits: [
     'update:auto-start',
     'update:analytics-enabled',
     'save',
     'clear-history',
     'clear-cache',
+    'reset-defaults',
   ],
   template: `
     <section data-testid="general-panel" :data-auto-start="String(autoStart)" :data-analytics="String(analyticsEnabled)">
       <button class="toggle-auto-start" @click="$emit('update:auto-start', true)">auto start</button>
       <button class="disable-analytics" @click="$emit('update:analytics-enabled', false)">analytics</button>
+      <button class="reset-defaults" @click="$emit('reset-defaults')">reset</button>
       <button class="general-save" @click="$emit('save')">save</button>
     </section>
   `,
@@ -333,8 +347,10 @@ beforeEach(() => {
 
   mockState.loadSettings.mockResolvedValue(undefined);
   mockState.saveSettings.mockResolvedValue(true);
+  mockState.resetToDefaultSettings.mockResolvedValue(true);
   mockState.applyEditorServer.mockResolvedValue(undefined);
   mockState.setupCookieListener.mockResolvedValue(mockState.cookieUnlisten);
+  mockState.confirm.mockResolvedValue(true);
   mockState.testWebDAVConnection.mockResolvedValue({ success: true, message: '连接成功' });
   mockState.configStoreGet.mockResolvedValue(config);
   setupInvokeResponses({
@@ -462,5 +478,112 @@ describe('SettingsView page interactions', () => {
     );
     expect(mockState.formData.value.appBehavior.autoStart).toBe(false);
     expect(mockState.saveSettings).not.toHaveBeenCalled();
+  });
+
+  it('cancels restoring defaults when the confirm dialog is rejected', async () => {
+    mockState.confirm.mockResolvedValueOnce(false);
+    const wrapper = await mountSettings();
+    getInvokeMock().mockClear();
+
+    await wrapper.get('.reset-defaults').trigger('click');
+    await flushPromisesAndTicks();
+
+    expect(mockState.confirm).toHaveBeenCalledWith(
+      expect.stringContaining('上传历史记录和应用缓存会保留'),
+      expect.objectContaining({ header: '恢复默认设置' }),
+    );
+    expect(mockState.cancelDebouncedSave).not.toHaveBeenCalled();
+    expect(mockState.resetToDefaultSettings).not.toHaveBeenCalled();
+    expect(getInvokeMock()).not.toHaveBeenCalledWith('plugin:autostart|disable');
+  });
+
+  it('restores default settings after confirmation and keeps history/cache untouched', async () => {
+    const wrapper = await mountSettings();
+    getInvokeMock().mockClear();
+    mockState.formData.value.appBehavior = {
+      autoStart: true,
+      minimizeToTrayOnStart: false,
+      closeToTray: false,
+    };
+
+    await wrapper.get('.reset-defaults').trigger('click');
+    await flushPromisesAndTicks(3);
+
+    expect(mockState.cancelDebouncedSave).toHaveBeenCalled();
+    expect(getInvokeMock()).toHaveBeenCalledWith('plugin:autostart|disable');
+    expect(getInvokeMock()).toHaveBeenCalledWith('set_close_to_tray', { enabled: true });
+    expect(mockState.resetToDefaultSettings).toHaveBeenCalledTimes(1);
+
+    const resetConfig = mockState.resetToDefaultSettings.mock.calls[0][0];
+    expect(resetConfig).toMatchObject({
+      ...DEFAULT_CONFIG,
+      onboardingCompleted: false,
+    });
+    expect(mockState.updateThemeConfig).toHaveBeenCalledWith(resetConfig);
+    expect(mockState.analyticsEnable).toHaveBeenCalled();
+    expect(mockState.applyEditorServer).toHaveBeenCalledWith(DEFAULT_CONFIG.editorServer, { force: true });
+    expect(mockState.clearHistory).not.toHaveBeenCalled();
+    expect(mockState.toastShowConfig).toHaveBeenCalledWith(
+      'success',
+      expect.objectContaining({ summary: '已恢复默认设置' }),
+    );
+  });
+
+  it('does not fail reset when autostart is already disabled and the startup entry is missing', async () => {
+    const wrapper = await mountSettings();
+    getInvokeMock().mockClear();
+    mockState.formData.value.appBehavior = {
+      autoStart: false,
+      minimizeToTrayOnStart: false,
+      closeToTray: false,
+    };
+    getInvokeMock().mockImplementation(async (command, args) => {
+      if (command === 'plugin:autostart|disable') throw new Error('系统找不到指定的文件。 (os error 2)');
+      return args;
+    });
+
+    await wrapper.get('.reset-defaults').trigger('click');
+    await flushPromisesAndTicks(3);
+
+    expect(getInvokeMock()).not.toHaveBeenCalledWith('plugin:autostart|disable');
+    expect(getInvokeMock()).toHaveBeenCalledWith('set_close_to_tray', { enabled: true });
+    expect(mockState.resetToDefaultSettings).toHaveBeenCalledTimes(1);
+    expect(mockState.toastShowConfig).toHaveBeenCalledWith(
+      'success',
+      expect.objectContaining({ summary: '已恢复默认设置' }),
+    );
+  });
+
+  it('does not write default config and rolls back when external reset side effects fail', async () => {
+    const wrapper = await mountSettings();
+    getInvokeMock().mockClear();
+    mockState.formData.value.appBehavior = {
+      autoStart: true,
+      minimizeToTrayOnStart: false,
+      closeToTray: false,
+    };
+
+    let closeToTrayCalls = 0;
+    getInvokeMock().mockImplementation(async (command, args) => {
+      if (command === 'set_close_to_tray') {
+        closeToTrayCalls += 1;
+        if (closeToTrayCalls === 1) throw new Error('close-to-tray denied');
+      }
+      return args;
+    });
+
+    await wrapper.get('.reset-defaults').trigger('click');
+    await flushPromisesAndTicks();
+
+    expect(getInvokeMock()).toHaveBeenCalledWith('plugin:autostart|disable');
+    expect(getInvokeMock()).toHaveBeenCalledWith('set_close_to_tray', { enabled: true });
+    expect(getInvokeMock()).toHaveBeenCalledWith('plugin:autostart|enable');
+    expect(getInvokeMock()).toHaveBeenCalledWith('set_close_to_tray', { enabled: false });
+    expect(mockState.resetToDefaultSettings).not.toHaveBeenCalled();
+    expect(mockState.updateThemeConfig).not.toHaveBeenCalled();
+    expect(mockState.toastShowConfig).toHaveBeenCalledWith(
+      'error',
+      expect.objectContaining({ summary: '恢复默认设置失败' }),
+    );
   });
 });

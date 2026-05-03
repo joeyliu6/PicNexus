@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref, nextTick } from 'vue';
 import { useConnectionTest } from '../../../../composables/settings/useConnectionTest';
 import { __resetServiceCheckRunnerForTests } from '../../../../composables/useServiceCheckRunner';
-import type { SettingsFormShape } from '../../../../composables/settings/useSettingsForm';
+import type { SettingsFormShape } from '../../../../composables/settings/settingsFormTypes';
 import type { ServiceType } from '../../../../config/types';
 import { resetTauriMocks, setupInvokeHandler } from '../../../helpers/tauriMock';
 import { flushPromisesAndTicks } from '../../../helpers/wait';

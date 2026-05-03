@@ -9,7 +9,7 @@ import { isCustomS3Id, getCustomS3ProfileId } from '../../config/types';
 import { createLogger } from '../../utils/logger';
 import { extractNamiAuthToken } from '../../utils/namiAuthToken';
 import { generateEditorServerAuthToken } from '../../utils/editorServerAuth';
-import type { SettingsFormShape } from './useSettingsForm';
+import type { SettingsFormShape } from './settingsFormTypes';
 
 interface UseEditorIntegrationOptions {
   formData: Ref<SettingsFormShape>;
