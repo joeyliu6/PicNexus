@@ -189,6 +189,11 @@
   transition: opacity var(--duration-normal), transform var(--duration-fast), color var(--duration-fast);
 }
 
+.row-favorite-btn:not(.favorited) {
+  color: var(--text-tertiary);
+  opacity: 0.38;
+}
+
 /* 表头收藏列星标（装饰性，不可点击） */
 .header-fav-icon {
   font-size: var(--text-base); /* 14px，略小于 body 16px */
@@ -210,6 +215,15 @@
 /* 行悬停时完全显示 outline 星 */
 :deep(.p-datatable-tbody > tr:hover) .row-favorite-btn {
   opacity: 1;
+}
+
+:deep(.p-datatable-tbody > tr:hover) .row-favorite-btn:not(.favorited) {
+  opacity: 0.58;
+}
+
+.row-favorite-btn:not(.favorited):hover {
+  color: var(--text-muted);
+  opacity: 0.78;
 }
 
 /* ---- 复选框淡显（未选中 + 非悬停状态）---- */
