@@ -9,6 +9,9 @@
 
 ## [Unreleased]
 
+### Removed
+- 从版本控制中移除 `CLAUDE.md`，本地继续通过 `.gitignore` 忽略，避免个人 Claude Code 配置进入仓库。
+
 ---
 
 ## [1.0.4] - 2026-04-26
