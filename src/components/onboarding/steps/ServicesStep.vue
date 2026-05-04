@@ -2,7 +2,7 @@
   <div class="onboarding-step services-step">
     <h2 class="step-title">支持的图床</h2>
     <p class="step-desc">
-      在设置中按需开启，支持并行上传到多个图床。
+      京东、七鱼默认开启，其他图床按需配置。
     </p>
     <div class="service-groups">
       <div class="service-group">
@@ -62,20 +62,29 @@
 .service-group {
   display: flex;
   align-items: center;
-  gap: var(--space-md);
+  gap: var(--space-sm-md);
   padding: var(--space-sm-md) var(--space-md-lg);
   border-radius: var(--radius-md);
   background: var(--bg-input);
   border: none;
 }
 
+.group-header {
+  flex: 0 0 88px;
+  display: flex;
+  justify-content: flex-start;
+}
+
 .group-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   padding: var(--space-2xs) var(--space-sm);
   border-radius: var(--radius-sm-md);
   white-space: nowrap;
-  min-width: 72px;
+  width: 88px;
   text-align: center;
 }
 
@@ -100,7 +109,9 @@
 }
 
 .group-items {
+  flex: 1;
   font-size: var(--text-sm);
   color: var(--text-main);
+  text-align: left;
 }
 </style>

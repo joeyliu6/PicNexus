@@ -123,11 +123,14 @@ function handleNext() {
 }
 
 .onboarding-body {
+  width: 100%;
   padding: var(--space-sm) 0 var(--space-lg);
   min-height: 340px;
+  max-height: min(520px, calc(100vh - 180px));
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden auto;
 }
 
 .onboarding-footer {
@@ -193,6 +196,7 @@ function handleNext() {
 .onboarding-dialog .p-dialog-content {
   padding: 0 var(--space-xl) !important;
   background: transparent !important;
+  overflow: hidden !important;
 }
 
 .onboarding-dialog .p-dialog-footer {

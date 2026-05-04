@@ -2,7 +2,7 @@
   <div class="onboarding-step upload-step">
     <h2 class="step-title">上传图片</h2>
     <p class="step-desc">
-      支持三种上传方式，京东图床已默认启用。上传后自动生成 URL、Markdown、HTML 等格式链接。
+      支持四种上传方式。
     </p>
     <div class="upload-methods">
       <div class="method-card">
@@ -19,6 +19,11 @@
         <i class="pi pi-clipboard" />
         <span class="method-label">粘贴上传</span>
         <span class="method-hint">Ctrl + V</span>
+      </div>
+      <div class="method-card">
+        <i class="pi pi-link" />
+        <span class="method-label">URL 下载</span>
+        <span class="method-hint">粘贴图片链接</span>
       </div>
     </div>
   </div>
@@ -44,21 +49,25 @@
 }
 
 .upload-methods {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(110px, 1fr));
   gap: var(--space-md);
-  justify-content: center;
+  width: min(100%, 460px);
+  margin: 0 auto;
 }
 
 .method-card {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   align-items: center;
   gap: var(--space-xs-sm);
-  padding: var(--space-lg) var(--space-lg-xl);
+  height: 100px;
+  padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-md);
   background: var(--bg-input);
   border: none;
-  min-width: 110px;
+  min-width: 0;
 }
 
 .method-card .pi {
@@ -75,5 +84,11 @@
 .method-hint {
   font-size: var(--text-xs);
   color: var(--text-muted);
+}
+
+@media (width <= 520px) {
+  .upload-methods {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
