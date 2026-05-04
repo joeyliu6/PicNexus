@@ -381,6 +381,7 @@ async function openManualDownload() {
   font-weight: var(--weight-medium);
   cursor: pointer;
   padding: var(--space-xs-sm) var(--space-md);
+  margin-right: calc(-1 * var(--space-md));
   border-radius: var(--radius-md);
   transition: background-color var(--duration-fast) ease, color var(--duration-fast) ease;
   white-space: nowrap;
