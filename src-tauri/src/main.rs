@@ -21,7 +21,7 @@ use tauri::image::Image;
 #[cfg(target_os = "macos")]
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 #[cfg(not(target_os = "macos"))]
-use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager};
 use tauri_plugin_log::{Target, TargetKind};
@@ -37,6 +37,14 @@ pub struct ServerState {
     pub upload_config: Arc<TokioMutex<Option<server::ServerUploadConfig>>>,
     pub auth_token: Arc<TokioMutex<Option<String>>>,
     pub abort_handle: std::sync::Mutex<Option<tokio::task::AbortHandle>>,
+}
+
+fn reveal_main_window(app: &tauri::AppHandle) -> Option<tauri::WebviewWindow> {
+    let window = app.get_webview_window("main")?;
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
+    Some(window)
 }
 
 #[tauri::command]
@@ -319,16 +327,32 @@ fn main() {
             // macOS 使用上面的应用级菜单栏（L206-262）作为入口，不创建系统托盘
             #[cfg(not(target_os = "macos"))]
             {
-                let menu_settings = MenuItemBuilder::new("打开设置")
-                    .id("open_settings")
+                let menu_upload_clipboard = MenuItemBuilder::new("上传剪贴板")
+                    .id("upload_clipboard")
                     .build(app)?;
-                let menu_history = MenuItemBuilder::new("上传历史")
+                let menu_select_upload_files = MenuItemBuilder::new("选择图片…")
+                    .id("select_upload_files")
+                    .build(app)?;
+                let menu_copy_latest_link = MenuItemBuilder::new("复制最近链接")
+                    .id("copy_latest_link")
+                    .build(app)?;
+                let menu_history = MenuItemBuilder::new("历史记录")
                     .id("open_history")
                     .build(app)?;
-                let menu_quit = MenuItemBuilder::new("退出").id("quit").build(app)?;
+                let menu_upload_separator = PredefinedMenuItem::separator(app)?;
+                let menu_exit_separator = PredefinedMenuItem::separator(app)?;
+                let menu_quit = MenuItemBuilder::new("退出 PicNexus").id("quit").build(app)?;
 
                 let tray_menu = MenuBuilder::new(app)
-                    .items(&[&menu_settings, &menu_history, &menu_quit])
+                    .items(&[
+                        &menu_upload_clipboard,
+                        &menu_select_upload_files,
+                        &menu_upload_separator,
+                        &menu_copy_latest_link,
+                        &menu_history,
+                        &menu_exit_separator,
+                        &menu_quit,
+                    ])
                     .build()?;
 
                 // 4. 创建系统托盘（原生菜单，右键显示）
@@ -343,19 +367,25 @@ fn main() {
                     .on_menu_event(|app, event| {
                         // 处理原生菜单点击事件
                         match event.id().as_ref() {
-                            "open_settings" => {
-                                if let Some(window) = app.get_webview_window("main") {
-                                    let _ = window.unminimize();
-                                    let _ = window.show();
-                                    let _ = window.set_focus();
-                                    let _ = window.emit("navigate-to", "settings");
+                            "upload_clipboard" => {
+                                if let Some(window) = reveal_main_window(app) {
+                                    let _ = window.emit("navigate-to", "upload");
+                                    let _ = window.emit("tray-action", "upload_clipboard");
+                                }
+                            }
+                            "select_upload_files" => {
+                                if let Some(window) = reveal_main_window(app) {
+                                    let _ = window.emit("navigate-to", "upload");
+                                    let _ = window.emit("tray-action", "select_upload_files");
+                                }
+                            }
+                            "copy_latest_link" => {
+                                if let Some(window) = reveal_main_window(app) {
+                                    let _ = window.emit("tray-action", "copy_latest_link");
                                 }
                             }
                             "open_history" => {
-                                if let Some(window) = app.get_webview_window("main") {
-                                    let _ = window.unminimize();
-                                    let _ = window.show();
-                                    let _ = window.set_focus();
+                                if let Some(window) = reveal_main_window(app) {
                                     let _ = window.emit("navigate-to", "history");
                                 }
                             }
@@ -377,11 +407,7 @@ fn main() {
                         } = event
                         {
                             let app = tray.app_handle();
-                            if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.unminimize();
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
+                            let _ = reveal_main_window(app);
                         }
                     })
                     .build(app)?;

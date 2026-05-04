@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, onActivated, onDeactivated, computed, nextTick } from 'vue';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { emit as tauriEmit, type UnlistenFn } from '@tauri-apps/api/event';
+import { emit as tauriEmit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { useConfirm } from '../../composables/useConfirm';
 import type { UserConfig, CustomS3Profile } from '../../config/types';
 import { PRIVATE_SERVICES, PUBLIC_SERVICES, DEFAULT_CONFIG, makeCustomS3Id } from '../../config/types';
@@ -21,6 +21,7 @@ import { DEFAULT_COMPRESSION_PRESET } from '../../config/types';
 import { createLogger } from '../../utils/logger';
 
 const log = createLogger('UploadView');
+type TrayAction = 'upload_clipboard' | 'select_upload_files' | 'copy_latest_link';
 
 import UploadDropZone from './upload/UploadDropZone.vue';
 import ServiceSelector from './upload/ServiceSelector.vue';
@@ -57,6 +58,7 @@ const fileDropUnlisteners = ref<UnlistenFn[]>([]);
 
 // 配置更新监听器清理函数
 const configUnlisten = ref<UnlistenFn | null>(null);
+const trayActionUnlisten = ref<UnlistenFn | null>(null);
 
 // 压缩配置（与全局 configStore 双向同步）
 const compressionConfig = ref<ImageCompressionConfig>(DEFAULT_CONFIG.imageCompression!);
@@ -170,6 +172,18 @@ const openFileDialog = async () => {
 // 从剪贴板粘贴图片
 const handlePasteFromClipboard = async () => {
   await pasteAndUpload(uploadManager.handleFilesUpload);
+};
+
+const handleTrayUploadAction = async (action: TrayAction) => {
+  try {
+    if (action === 'upload_clipboard') {
+      await handlePasteFromClipboard();
+    } else if (action === 'select_upload_files') {
+      await openFileDialog();
+    }
+  } catch (error) {
+    log.error('托盘上传动作失败:', error);
+  }
 };
 
 // URL 下载相关
@@ -347,7 +361,6 @@ onMounted(async () => {
   configUnlisten.value = await uploadManager.setupConfigListener();
 
   // 监听配置变更，同步压缩配置（设置页改动后上传页自动更新）
-  const { listen } = await import('@tauri-apps/api/event');
   const compressionUnlisten = await listen('config-updated', async () => {
     const updated = await configStore.get<UserConfig>('config');
     if (updated?.imageCompression) {
@@ -362,6 +375,13 @@ onMounted(async () => {
   };
 
   log.info('配置更新监听器已设置');
+
+  trayActionUnlisten.value = await listen<TrayAction>('tray-action', (event) => {
+    if (event.payload === 'upload_clipboard' || event.payload === 'select_upload_files') {
+      void handleTrayUploadAction(event.payload);
+    }
+  });
+  log.info('托盘上传动作监听器已设置');
 
   // 设置文件拖拽监听
   await setupTauriFileDropListener();
@@ -397,6 +417,10 @@ onUnmounted(() => {
   if (configUnlisten.value) {
     configUnlisten.value();
     configUnlisten.value = null;
+  }
+  if (trayActionUnlisten.value) {
+    trayActionUnlisten.value();
+    trayActionUnlisten.value = null;
   }
 
   // 清理所有文件拖拽监听器

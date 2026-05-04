@@ -8,7 +8,7 @@ PicNexus 是**单窗口 + 系统托盘** 架构:
 
 - **窗口**:无标题栏(`decorations: false`,使用自定义装饰条),启动时隐藏(`visible: false`),根据屏幕分辨率自适应初始大小
 - **关闭行为**:默认 `closeToTray = true`,点 × 只隐藏到托盘,不退出进程;可通过 `set_close_to_tray` 命令切换
-- **系统托盘**:三项菜单(打开设置/上传历史/退出),左键点击图标直接唤起主窗口
+- **系统托盘**:五项菜单(上传剪贴板/选择图片…/复制最近链接/历史记录/退出 PicNexus),左键点击图标直接唤起主窗口
 - **全局快捷键**:插件已加载,**但当前未注册任何快捷键**(预留扩展点)
 - **文件关联**:`tauri.conf.json` 未配置 `fileAssociations`,但通过 CLI 参数支持 Typora/Obsidian 调用(`picnexus.exe /path/to/img.jpg`)
 
@@ -70,17 +70,20 @@ stateDiagram-v2
 
 展示托盘图标的创建过程和菜单项事件如何路由到前端。
 
-> **关键源文件**:`src-tauri/src/main.rs`(L275~L331)
+> **关键源文件**:`src-tauri/src/main.rs`(托盘菜单构建与 `tray-action` / `navigate-to` 事件分发)
 
 ```mermaid
 flowchart TD
     A[setup 回调] --> B[MenuBuilder::new]
-    B --> B1[MenuItem: open_settings<br/>文本: 打开设置]
-    B --> B2[MenuItem: open_history<br/>文本: 上传历史]
+    B --> B1[MenuItem: upload_clipboard<br/>文本: 上传剪贴板]
+    B --> B2[MenuItem: select_upload_files<br/>文本: 选择图片…]
     B --> B3[PredefinedMenuItem: separator]
-    B --> B4[MenuItem: quit<br/>文本: 退出]
+    B --> B4[MenuItem: copy_latest_link<br/>文本: 复制最近链接]
+    B --> B5[MenuItem: open_history<br/>文本: 历史记录]
+    B --> B6[PredefinedMenuItem: separator]
+    B --> B7[MenuItem: quit<br/>文本: 退出 PicNexus]
 
-    B1 & B2 & B3 & B4 --> M[menu.build]
+    B1 & B2 & B3 & B4 & B5 & B6 & B7 --> M[menu.build]
 
     M --> T[TrayIconBuilder]
     T --> T1[.icon<br/>128×128@2x PNG]
@@ -92,22 +95,25 @@ flowchart TD
 
     %% 菜单事件分发
     T4 --> E1{event.id.as_ref}
-    E1 -- open_settings --> ES1[window.show +<br/>emit navigate-to settings]
-    E1 -- open_history --> ES2[window.show +<br/>emit navigate-to history]
-    E1 -- quit --> ES3[std::process::exit 0]
+    E1 -- upload_clipboard --> ES1[window.show +<br/>emit navigate-to upload<br/>emit tray-action upload_clipboard]
+    E1 -- select_upload_files --> ES2[window.show +<br/>emit navigate-to upload<br/>emit tray-action select_upload_files]
+    E1 -- copy_latest_link --> ES3[window.show +<br/>emit tray-action copy_latest_link]
+    E1 -- open_history --> ES4[window.show +<br/>emit navigate-to history]
+    E1 -- quit --> ES5[std::process::exit 0]
 
     %% 左键事件
     T5 --> L1{MouseButton + State}
     L1 -- Left + Up --> L2[window.show<br/>+ unminimize<br/>+ set_focus]
 
     %% 前端接收
-    ES1 & ES2 --> F[前端 App.vue]
-    F --> F1[listen navigate-to]
-    F1 --> F2[router.push<br/>切换 View]
+    ES1 & ES2 & ES3 & ES4 --> F[前端 MainLayout / UploadView]
+    F --> F1[listen navigate-to<br/>切换 View]
+    F --> F2[listen tray-action<br/>上传或复制最近链接]
 
     style A fill:#e3f2fd,stroke:#1976d2
+    style F1 fill:#e8f5e9,stroke:#2e7d32
     style F2 fill:#e8f5e9,stroke:#2e7d32
-    style ES3 fill:#ffebee,stroke:#c62828
+    style ES5 fill:#ffebee,stroke:#c62828
 ```
 
 ---
@@ -228,7 +234,7 @@ flowchart LR
 | 现象 | 可能原因 | 对照图表位置 |
 |------|---------|-------------|
 | 点 × 直接退出而不是隐藏 | `CloseToTrayState` 被设为 `false` | 图1 CheckCloseToTray |
-| 托盘菜单点击无反应 | `on_menu_event` 分支没匹配到 id,或前端没 listen `navigate-to` | 图2 F1 |
+| 托盘菜单点击无反应 | `on_menu_event` 分支没匹配到 id,或前端没 listen `navigate-to` / `tray-action` | 图2 F1/F2 |
 | 启动时窗口一闪而过 | `visible:true` 配置下 `show()` 时机错乱,应保持 `visible:false` + 代码控制显示 | 图1 Visible |
 | Windows 任务栏图标模糊 | 没加载 128×128@2x 大图标 | 图1 note |
 | Typora 调用 `picnexus.exe` 报错 | `cli-config.json` 缺失或图床未配置 | 图3 F1 |

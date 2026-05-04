@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { mountWithDefaults } from '../../../helpers/vueMount';
 import { flushPromisesAndTicks } from '../../../helpers/wait';
-import { getEmitMock, resetTauriMocks } from '../../../helpers/tauriMock';
+import { getEmitMock, getListenMock, resetTauriMocks } from '../../../helpers/tauriMock';
 import UploadView from '../../../../components/views/UploadView.vue';
 
 const mockState = vi.hoisted(() => ({
@@ -31,6 +31,9 @@ const mockState = vi.hoisted(() => ({
   urlDownload: undefined as any,
   config: undefined as any,
 }));
+
+type EventHandler = (event: { payload: unknown }) => void;
+let eventHandlers: Record<string, EventHandler[]> = {};
 
 vi.mock('../../../../composables/useToast', () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
@@ -181,6 +184,13 @@ async function mountView() {
 beforeEach(() => {
   resetTauriMocks();
   vi.clearAllMocks();
+  eventHandlers = {};
+  getListenMock().mockImplementation(async (event, handler) => {
+    const key = String(event);
+    eventHandlers[key] = eventHandlers[key] || [];
+    eventHandlers[key].push(handler as EventHandler);
+    return vi.fn();
+  });
 
   mockState.config = makeConfig();
   mockState.configGet.mockResolvedValue(mockState.config);
@@ -267,6 +277,23 @@ describe('UploadView page interactions', () => {
       mockState.handleFilesUpload,
     );
     expect(mockState.handleFilesUpload).toHaveBeenCalledWith(['https://example.com/image.png']);
+  });
+
+  it('handles tray upload actions through the existing upload handlers', async () => {
+    await mountView();
+
+    eventHandlers['tray-action']?.[0]?.({ payload: 'select_upload_files' });
+    await flushPromisesAndTicks();
+    expect(mockState.selectFiles).toHaveBeenCalled();
+    expect(mockState.handleFilesUpload).toHaveBeenCalledWith(['C:/tmp/a.png']);
+
+    mockState.selectFiles.mockClear();
+    mockState.handleFilesUpload.mockClear();
+
+    eventHandlers['tray-action']?.[0]?.({ payload: 'upload_clipboard' });
+    await flushPromisesAndTicks();
+    expect(mockState.pasteAndUpload).toHaveBeenCalledWith(mockState.handleFilesUpload);
+    expect(mockState.handleFilesUpload).toHaveBeenCalledWith(['clipboard.png']);
   });
 
   it('persists compression changes and navigates to compression settings', async () => {
