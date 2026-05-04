@@ -107,6 +107,8 @@ describe('useConfigManager', () => {
       expect(configStoreGetMock).toHaveBeenCalledWith('config', expect.any(Object));
       expect(result).toEqual(mockConfig);
       expect(config.value).toEqual(mockConfig);
+      expect(result.enabledServices).toEqual(['weibo']);
+      expect(result.enabledServices).not.toContain('qiyu');
     });
 
     it('加载失败时降级为默认配置', async () => {

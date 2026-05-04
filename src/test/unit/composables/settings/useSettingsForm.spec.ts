@@ -228,6 +228,7 @@ describe('useSettingsForm', () => {
 
     expect(mockState.saveConfig).toHaveBeenCalledTimes(1);
     const savedConfig = mockState.saveConfig.mock.calls[0][0];
+    expect(savedConfig.enabledServices).toEqual(['jd', 'qiyu']);
     expect(savedConfig).toMatchObject({
       ...DEFAULT_CONFIG,
       onboardingCompleted: false,
