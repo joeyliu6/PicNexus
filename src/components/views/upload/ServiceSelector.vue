@@ -138,7 +138,12 @@ function handleHealthDotClick(event: MouseEvent, serviceId: string) {
     </template>
 
     <!-- 空状态引导 -->
-    <EmptyState v-else icon="pi pi-cog" title="暂无可用图床">
+    <EmptyState
+      v-else
+      icon="pi pi-cog"
+      title="暂无可用图床"
+      description="可在设置中重新启用京东、七鱼，或配置其他图床。"
+    >
       <button class="empty-state-link" @click="emit('go-settings')">前往设置配置</button>
     </EmptyState>
   </div>

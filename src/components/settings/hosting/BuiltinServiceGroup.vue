@@ -24,7 +24,7 @@ const emit = defineEmits<{
       id="jd"
       :force-expand="targetCardId === 'jd'"
       name="京东"
-      description="京东云存储，开箱即用"
+      description="默认启用，京东云存储"
       :isBuiltin="true"
       :isConfigured="jdAvailable"
       :isAvailable="jdAvailable"
@@ -35,7 +35,7 @@ const emit = defineEmits<{
       @check="emit('checkBuiltin', $event)"
     >
       <div class="builtin-info">
-        <p>京东图床无需任何配置，可以直接使用。</p>
+        <p>京东图床默认启用，无需手动配置，可以直接使用。</p>
       </div>
     </HostingCard>
 
@@ -44,7 +44,7 @@ const emit = defineEmits<{
       id="qiyu"
       :force-expand="targetCardId === 'qiyu'"
       name="七鱼"
-      description="网易七鱼客服系统存储"
+      description="默认启用，Token 自动获取"
       :isBuiltin="true"
       :isConfigured="qiyuAvailable"
       :isAvailable="qiyuAvailable"
@@ -55,7 +55,7 @@ const emit = defineEmits<{
       @check="emit('checkBuiltin', $event)"
     >
       <div class="builtin-info">
-        <p>七鱼图床 Token 已自动获取，可以直接使用。</p>
+        <p>七鱼图床默认启用，Token 会自动获取，无需手动配置。</p>
       </div>
     </HostingCard>
   </div>
