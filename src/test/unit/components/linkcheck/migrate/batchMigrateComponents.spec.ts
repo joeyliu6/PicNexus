@@ -241,14 +241,37 @@ describe('batch migrate P1 components', () => {
     expect(healthy.get('.target-count-stack').text()).toBe('3张待迁移');
     expect(healthy.text()).not.toContain('0张已备份');
     expect(healthy.get('.target-card').attributes('data-tooltip')).toBeUndefined();
+    expect(healthy.get('.target-card-tooltip-hitbox').attributes('data-tooltip')).toBeUndefined();
     expect(healthy.get('.target-card').attributes('aria-label')).not.toContain('0 张已在该图床，无需迁移');
-    expect(healthy.get('.target-card').attributes('data-tooltip') ?? '').not.toContain('GitHub');
-    expect(healthy.get('.target-card').attributes('data-tooltip') ?? '').not.toContain('3 张待迁移');
-    expect(error.get('.target-card').attributes('data-tooltip')).toBe('图床异常，请先检查配置\n2 张已在该图床，无需迁移');
+    expect(healthy.get('.target-card-tooltip-hitbox').attributes('data-tooltip') ?? '').not.toContain('GitHub');
+    expect(healthy.get('.target-card-tooltip-hitbox').attributes('data-tooltip') ?? '').not.toContain('3 张待迁移');
+    expect(error.get('.target-card').attributes('data-tooltip')).toBeUndefined();
+    expect(error.get('.target-card-tooltip-hitbox').attributes('data-tooltip')).toBe('图床异常，请先检查配置\n2 张已在该图床，无需迁移');
     expect(error.get('.target-card').attributes('aria-label')).toContain('2 张已在该图床，无需迁移');
-    expect(error.get('.target-card').attributes('data-tooltip')).not.toContain('SM.MS');
-    expect(error.get('.target-card').attributes('data-tooltip')).not.toContain('3 张待迁移');
+    expect(error.get('.target-card-tooltip-hitbox').attributes('data-tooltip')).not.toContain('SM.MS');
+    expect(error.get('.target-card-tooltip-hitbox').attributes('data-tooltip')).not.toContain('3 张待迁移');
     expect(healthy.text()).not.toContain('无需备份');
+  });
+
+  it('TargetCard separates card tooltip hitbox from the status dot tooltip', async () => {
+    const wrapper = mountWithDefaults(TargetCard, {
+      props: {
+        serviceId: 'github',
+        displayName: 'GitHub',
+        pendingCount: 3,
+        backedUpCount: 2,
+        checked: false,
+        healthStatus: 'verified',
+        healthTooltip: '可用 · 4分钟前',
+      },
+    });
+
+    const hitbox = wrapper.get('.target-card-tooltip-hitbox');
+    const dot = wrapper.get('.target-status-dot');
+
+    expect(wrapper.get('.target-card').attributes('data-tooltip')).toBeUndefined();
+    expect(hitbox.attributes('data-tooltip')).toBe('2 张已在该图床，无需迁移');
+    expect(dot.attributes('data-tooltip')).toBe('可用 · 4分钟前');
   });
 
   it('MigrateFilterPopover emits recovery scope and shows active badge', async () => {

@@ -53,6 +53,7 @@ const countClass = computed((): string | undefined => {
 function handleClick() {
   if (!isDisabled.value) emit('toggle');
 }
+
 </script>
 
 <template>
@@ -67,11 +68,11 @@ function handleClick() {
     :aria-checked="checked"
     :aria-disabled="isDisabled"
     :aria-label="cardAriaLabel"
-    v-tooltip.top="cardTooltip"
     @click="handleClick"
     @keydown.enter.prevent="handleClick"
     @keydown.space.prevent="handleClick"
   >
+    <span class="target-card-tooltip-hitbox" v-tooltip.top="cardTooltip" aria-hidden="true" />
     <div class="target-card-top">
       <span class="target-icon" v-html="getServiceIcon(serviceId)" />
       <span class="target-name">{{ displayName }}</span>
@@ -100,6 +101,7 @@ function handleClick() {
 
 <style scoped>
 .target-card {
+  position: relative;
   display: flex; flex-direction: column; gap: var(--space-sm);
   padding: var(--space-md-lg) var(--space-lg);
   background: transparent; border-radius: var(--radius-md);
@@ -111,6 +113,14 @@ function handleClick() {
     border-color var(--duration-normal) var(--ease-decelerate),
     transform var(--duration-fast) var(--ease-decelerate);
   user-select: none;
+}
+
+.target-card-tooltip-hitbox {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  cursor: inherit;
 }
 
 .target-card:hover {
@@ -153,13 +163,15 @@ function handleClick() {
 }
 
 .target-status-dot {
+  position: relative;
+  z-index: 2;
   width: 8px; height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
   margin-left: auto;
   background: var(--text-muted);
   box-shadow: 0 0 0 1px var(--border-subtle);
-  cursor: help;
+  cursor: default;
 }
 .dot--verified { background: var(--success); }
 .dot--pending  { background: var(--warning); }
