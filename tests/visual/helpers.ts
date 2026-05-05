@@ -77,7 +77,10 @@ async function openStatefulUi(page: Page, visualPage: string, state: string): Pr
   if (visualPage === 'backup-sync' && state === 'overwrite-confirm-dialog') {
     await expect(page.locator('.p-confirmdialog')).toBeVisible();
   }
-  if (visualPage === 'backup-sync' && ['password-dialog', 'password-set-dialog', 'restore-password-error'].includes(state)) {
+  if (
+    visualPage === 'backup-sync'
+    && ['password-dialog', 'password-set-dialog', 'password-change-dialog', 'password-disable-dialog', 'restore-password-error'].includes(state)
+  ) {
     await expect(page.locator('.p-dialog')).toBeVisible();
   }
   if (visualPage === 'backup-sync' && state === 'restore-password-error') {
@@ -98,7 +101,14 @@ export async function captureVisualState(page: Page, visualPage: string, state: 
   await openStatefulUi(page, visualPage, state);
   await waitForVisualAssets(page);
   const screenshotTarget = (visualPage === 'markdown-repair' && state === 'repair-confirm-dialog')
-    || (visualPage === 'backup-sync' && ['password-dialog', 'password-set-dialog', 'restore-password-error', 'overwrite-confirm-dialog'].includes(state))
+    || (visualPage === 'backup-sync' && [
+      'password-dialog',
+      'password-set-dialog',
+      'password-change-dialog',
+      'password-disable-dialog',
+      'restore-password-error',
+      'overwrite-confirm-dialog',
+    ].includes(state))
     ? page
     : root;
   await expect(screenshotTarget).toHaveScreenshot(`${visualPage}-${state}.png`, {

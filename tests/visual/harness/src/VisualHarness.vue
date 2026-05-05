@@ -450,9 +450,21 @@ const timelineLightboxItem: HistoryItem = {
   isFavorited: true,
 };
 
-const showBackupPasswordDialog = ref(['password-dialog', 'password-set-dialog', 'restore-password-error'].includes(state));
+const passwordDialogStates = [
+  'password-dialog',
+  'password-set-dialog',
+  'password-change-dialog',
+  'password-disable-dialog',
+  'restore-password-error',
+];
+const showBackupPasswordDialog = ref(passwordDialogStates.includes(state));
 const backupPasswordDialogRef = ref<InstanceType<typeof BackupPasswordDialog>>();
-const backupPasswordDialogMode = computed<'set' | 'restore'>(() => state === 'password-set-dialog' ? 'set' : 'restore');
+const backupPasswordDialogMode = computed<'set' | 'change' | 'disable' | 'restore'>(() => {
+  if (state === 'password-set-dialog') return 'set';
+  if (state === 'password-change-dialog') return 'change';
+  if (state === 'password-disable-dialog') return 'disable';
+  return 'restore';
+});
 const connectedWebDAVProfile = {
   id: 'visual-nas',
   name: 'Studio NAS',
@@ -903,7 +915,7 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
               <div class="form-group">
                 <label class="group-label">备份密码</label>
                 <div class="visual-password-card">
-                  <span class="security-status-inactive"><i class="pi pi-exclamation-circle"></i> 未设置</span>
+                  <span class="visual-security-status-inactive"><span>●</span>未设置</span>
                   <button class="visual-outline-button"><i class="pi pi-lock"></i><span>设置密码</span></button>
                 </div>
               </div>

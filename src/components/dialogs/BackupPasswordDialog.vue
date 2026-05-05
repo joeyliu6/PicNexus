@@ -10,14 +10,33 @@
     @hide="handleCancel"
   >
     <div class="backup-password-dialog">
-      <!-- 恢复模式：检测到加密配置 -->
       <div v-if="mode === 'restore'" class="dialog-description">
         <i class="pi pi-lock" />
         <p>你的配置文件已用备份密码加密。输入当时设置的密码，就能还原配置。</p>
       </div>
 
-      <!-- 密码输入 -->
-      <div class="field">
+      <div v-if="mode === 'disable'" class="dialog-description dialog-description-danger">
+        <i class="pi pi-lock-open" />
+        <p>关闭后，后续导出的配置不再使用备份密码加密。已有备份仍需原密码打开。</p>
+      </div>
+
+      <div v-if="requiresCurrentPassword" class="field">
+        <label for="backup-current-password">当前密码</label>
+        <Password
+          id="backup-current-password"
+          v-model="currentPassword"
+          :feedback="false"
+          toggleMask
+          :inputStyle="{ width: '100%' }"
+          :inputProps="{ autocomplete: 'current-password' }"
+          :class="{ 'p-invalid': currentPasswordError }"
+          placeholder="输入当前备份密码"
+          @keydown.enter="handleSubmit"
+        />
+        <small v-if="currentPasswordError" class="p-error">{{ currentPasswordError }}</small>
+      </div>
+
+      <div v-if="mode === 'set' || mode === 'restore'" class="field">
         <label for="backup-password">{{ mode === 'restore' ? '备份密码' : '密码' }}</label>
         <Password
           id="backup-password"
@@ -25,16 +44,14 @@
           :feedback="false"
           toggleMask
           :inputStyle="{ width: '100%' }"
-          :inputProps="{ autocomplete: 'new-password' }"
+          :inputProps="{ autocomplete: mode === 'restore' ? 'current-password' : 'new-password' }"
           :class="{ 'p-invalid': passwordError }"
           :placeholder="mode === 'restore' ? '输入你之前设置的备份密码' : '至少 8 位，包含数字'"
           @keydown.enter="handleSubmit"
         />
         <small v-if="passwordError" class="p-error">{{ passwordError }}</small>
 
-        <!-- 强度提示（设置/修改模式始终显示） -->
         <div v-if="showStrengthHints" class="strength-hints">
-          <!-- 必须满足 -->
           <span
             v-for="check in strengthChecks"
             :key="check.label"
@@ -44,7 +61,6 @@
             <i :class="check.passed ? 'pi pi-check-circle' : 'pi pi-circle'" />
             {{ check.label }}
           </span>
-          <!-- 建议满足 -->
           <span
             v-for="suggestion in strengthSuggestions"
             :key="suggestion.label"
@@ -57,7 +73,43 @@
         </div>
       </div>
 
-      <!-- 确认密码（仅设置/修改模式） -->
+      <div v-if="mode === 'change'" class="field">
+        <label for="backup-new-password">新密码</label>
+        <Password
+          id="backup-new-password"
+          v-model="newPassword"
+          :feedback="false"
+          toggleMask
+          :inputStyle="{ width: '100%' }"
+          :inputProps="{ autocomplete: 'new-password' }"
+          :class="{ 'p-invalid': newPasswordError }"
+          placeholder="至少 8 位，包含数字"
+          @keydown.enter="handleSubmit"
+        />
+        <small v-if="newPasswordError" class="p-error">{{ newPasswordError }}</small>
+
+        <div class="strength-hints">
+          <span
+            v-for="check in strengthChecks"
+            :key="check.label"
+            class="strength-check"
+            :class="{ passed: check.passed }"
+          >
+            <i :class="check.passed ? 'pi pi-check-circle' : 'pi pi-circle'" />
+            {{ check.label }}
+          </span>
+          <span
+            v-for="suggestion in strengthSuggestions"
+            :key="suggestion.label"
+            class="strength-suggestion"
+            :class="{ passed: suggestion.passed }"
+          >
+            <i :class="suggestion.passed ? 'pi pi-check-circle' : 'pi pi-circle'" />
+            {{ suggestion.label }}
+          </span>
+        </div>
+      </div>
+
       <div v-if="mode === 'set' || mode === 'change'" class="field">
         <label for="backup-password-confirm">确认密码</label>
         <Password
@@ -74,7 +126,6 @@
         <small v-if="confirmError" class="p-error">{{ confirmError }}</small>
       </div>
 
-      <!-- 警告提示（仅设置/修改模式） -->
       <div v-if="mode === 'set' || mode === 'change'" class="dialog-note-warn">
         <i class="pi pi-info-circle" />
         <span>
@@ -85,7 +136,6 @@
         </span>
       </div>
 
-      <!-- 错误次数提示（恢复模式） -->
       <div v-if="mode === 'restore' && failedAttempts > 0" class="error-box">
         <i class="pi pi-times-circle" />
         <span>密码不正确，剩余尝试次数：{{ MAX_ATTEMPTS - failedAttempts }}</span>
@@ -111,6 +161,7 @@
       />
       <Button
         :label="submitLabel"
+        :severity="mode === 'disable' ? 'danger' : undefined"
         :loading="loading"
         class="dialog-btn-accept"
         @click="handleSubmit"
@@ -125,47 +176,49 @@ import Dialog from 'primevue/dialog';
 import Password from 'primevue/password';
 import Button from 'primevue/button';
 import { validateBackupPassword } from '../../crypto';
-
-type DialogMode = 'set' | 'change' | 'restore';
+import type { BackupPasswordConfirmPayload, BackupPasswordDialogMode } from './backupPasswordDialogTypes';
 
 interface Props {
   modelValue: boolean;
-  mode: DialogMode;
+  mode: BackupPasswordDialogMode;
 }
 
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean];
-  'confirm': [password: string];
+  'confirm': [payload: BackupPasswordConfirmPayload];
   'skip': [];
   'cancel': [];
 }>();
 
 const MAX_ATTEMPTS = 5;
 
+const currentPassword = ref('');
 const password = ref('');
+const newPassword = ref('');
 const confirmPassword = ref('');
+const currentPasswordError = ref('');
 const passwordError = ref('');
+const newPasswordError = ref('');
 const confirmError = ref('');
 const loading = ref(false);
 const failedAttempts = ref(0);
 
-const isSetMode = computed(() => props.mode === 'set' || props.mode === 'change');
-const showStrengthHints = computed(() => isSetMode.value);
+const requiresCurrentPassword = computed(() => props.mode === 'change' || props.mode === 'disable');
+const showStrengthHints = computed(() => props.mode === 'set');
+const passwordForStrength = computed(() => props.mode === 'change' ? newPassword.value : password.value);
 
-// 必须满足的条件
 const strengthChecks = computed(() => {
-  const p = password.value;
+  const p = passwordForStrength.value;
   return [
     { label: '至少 8 位', passed: p.length >= 8 },
     { label: '包含数字', passed: /\d/.test(p) },
   ];
 });
 
-// 建议满足的条件（不影响验证通过，仅引导）
 const strengthSuggestions = computed(() => {
-  const p = password.value;
+  const p = passwordForStrength.value;
   return [
     { label: '大小写字母', passed: /[a-z]/.test(p) && /[A-Z]/.test(p) },
     { label: '特殊符号', passed: /[^a-zA-Z0-9]/.test(p) },
@@ -181,6 +234,7 @@ const dialogTitle = computed(() => {
   switch (props.mode) {
     case 'restore': return '还原备份配置';
     case 'change': return '修改备份密码';
+    case 'disable': return '关闭备份密码';
     default: return '设置备份密码';
   }
 });
@@ -189,48 +243,105 @@ const submitLabel = computed(() => {
   switch (props.mode) {
     case 'restore': return '确认恢复';
     case 'change': return '确认修改';
+    case 'disable': return '确认关闭';
     default: return '确认设置';
   }
 });
 
 function resetForm() {
+  currentPassword.value = '';
   password.value = '';
+  newPassword.value = '';
   confirmPassword.value = '';
+  currentPasswordError.value = '';
   passwordError.value = '';
+  newPasswordError.value = '';
   confirmError.value = '';
   loading.value = false;
 }
 
+function validateNewPassword(value: string): string {
+  const result = validateBackupPassword(value);
+  return result.valid ? '' : result.message;
+}
+
 function validate(): boolean {
+  currentPasswordError.value = '';
   passwordError.value = '';
+  newPasswordError.value = '';
   confirmError.value = '';
 
-  if (!password.value) {
-    passwordError.value = '请输入密码';
+  if (props.mode === 'restore') {
+    if (!password.value) {
+      passwordError.value = '请输入密码';
+      return false;
+    }
+    return true;
+  }
+
+  if (requiresCurrentPassword.value && !currentPassword.value) {
+    currentPasswordError.value = '请输入当前密码';
     return false;
   }
 
-  if (props.mode !== 'restore') {
-    const result = validateBackupPassword(password.value);
-    if (!result.valid) {
-      passwordError.value = result.message;
-      return false;
-    }
+  if (props.mode === 'disable') {
+    return true;
+  }
 
-    if (password.value !== confirmPassword.value) {
-      confirmError.value = '两次输入的密码不一致';
-      return false;
-    }
+  const targetPassword = props.mode === 'change' ? newPassword.value : password.value;
+  if (!targetPassword) {
+    if (props.mode === 'change') newPasswordError.value = '请输入新密码';
+    else passwordError.value = '请输入密码';
+    return false;
+  }
+
+  const validationError = validateNewPassword(targetPassword);
+  if (validationError) {
+    if (props.mode === 'change') newPasswordError.value = validationError;
+    else passwordError.value = validationError;
+    return false;
+  }
+
+  if (targetPassword !== confirmPassword.value) {
+    confirmError.value = '两次输入的密码不一致';
+    return false;
   }
 
   return true;
+}
+
+function buildPayload(): BackupPasswordConfirmPayload {
+  switch (props.mode) {
+    case 'change':
+      return {
+        mode: 'change',
+        currentPassword: currentPassword.value,
+        newPassword: newPassword.value,
+        confirmPassword: confirmPassword.value,
+      };
+    case 'disable':
+      return {
+        mode: 'disable',
+        currentPassword: currentPassword.value,
+      };
+    case 'restore':
+      return {
+        mode: 'restore',
+        password: password.value,
+      };
+    default:
+      return {
+        mode: 'set',
+        password: password.value,
+      };
+  }
 }
 
 async function handleSubmit() {
   if (!validate()) return;
 
   loading.value = true;
-  emit('confirm', password.value);
+  emit('confirm', buildPayload());
 }
 
 function handleSkip() {
@@ -245,9 +356,15 @@ function handleCancel() {
   visible.value = false;
 }
 
-/** 外部调用：密码验证失败时增加计数 */
 function onPasswordFailed() {
   loading.value = false;
+
+  if (requiresCurrentPassword.value) {
+    currentPasswordError.value = '密码不正确';
+    currentPassword.value = '';
+    return;
+  }
+
   failedAttempts.value++;
   passwordError.value = '密码不正确';
   password.value = '';
@@ -257,12 +374,10 @@ function onPasswordFailed() {
   }
 }
 
-/** 外部调用：仅重置 loading 状态（用于非密码错误的系统失败场景） */
 function resetLoading() {
   loading.value = false;
 }
 
-/** 外部调用：密码验证成功后关闭 */
 function onPasswordSuccess() {
   loading.value = false;
   resetForm();
@@ -297,10 +412,15 @@ defineExpose({
   line-height: 1.5;
 }
 
+.dialog-description-danger {
+  background: var(--error-alpha-8);
+  color: var(--error);
+}
+
 .dialog-description i {
   font-size: var(--text-xl);
   flex-shrink: 0;
-  color: var(--primary);
+  color: currentcolor;
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1px 微调对齐，无对应 spacing token */
   margin-top: 1px;
 }
@@ -379,7 +499,6 @@ defineExpose({
   color: var(--success);
 }
 
-/* 建议项：默认更浅，通过后变绿 */
 .strength-suggestion {
   display: inline-flex;
   align-items: center;

@@ -24,6 +24,20 @@ function makeTestKeyB64(): string {
 
 const TEST_KEY_B64 = makeTestKeyB64();
 
+function useLastStoredSecureKeyForReads(): string {
+  const setKeyCall = [...invokeMock.mock.calls]
+    .reverse()
+    .find(([cmd]) => cmd === 'set_secure_key');
+  const key = (setKeyCall?.[1] as { key?: string } | undefined)?.key;
+  if (!key) throw new Error('set_secure_key was not called before secure key read remock');
+
+  invokeMock.mockImplementation((cmd: string) => {
+    if (cmd === 'get_or_create_secure_key') return Promise.resolve(key);
+    return Promise.resolve(undefined);
+  });
+  return key;
+}
+
 // ─── 纯函数 ─────────────────────────────────────────────────────────────────
 
 describe('isEncryptedData', () => {
@@ -218,11 +232,34 @@ describe('SecureStorage', () => {
       const decrypted = await storage.decrypt(encrypted);
       expect(decrypted).toBe(plaintext);
     });
+
+    it('verifyBackupPassword 正确密码返回 true，且不写入钥匙串', async () => {
+      await storage.setBackupPassword('Password123');
+      const storedKey = useLastStoredSecureKeyForReads();
+      invokeMock.mockClear();
+
+      await expect(storage.verifyBackupPassword('Password123')).resolves.toBe(true);
+
+      expect(invokeMock).toHaveBeenCalledTimes(1);
+      expect(invokeMock).toHaveBeenCalledWith('get_or_create_secure_key');
+      expect(invokeMock).not.toHaveBeenCalledWith('set_secure_key', { key: storedKey });
+    });
+
+    it('verifyBackupPassword 错误密码返回 false', async () => {
+      await storage.setBackupPassword('Password123');
+      useLastStoredSecureKeyForReads();
+
+      await expect(storage.verifyBackupPassword('WrongPass1')).resolves.toBe(false);
+    });
   });
 
   // --- clearBackupPassword ---
 
   describe('clearBackupPassword()', () => {
+    it('随机密钥模式下 verifyBackupPassword 返回 false', async () => {
+      await expect(storage.verifyBackupPassword('Password123')).resolves.toBe(false);
+    });
+
     it('清除后 isPasswordMode() 变为 false', async () => {
       await storage.setBackupPassword('Password123');
       await storage.clearBackupPassword();
@@ -234,6 +271,13 @@ describe('SecureStorage', () => {
       await storage.clearBackupPassword();
       const encrypted = await storage.encrypt('back to random');
       expect(encrypted).toMatch(/^PNXENC:/);
+    });
+
+    it('清除后 verifyBackupPassword 返回 false', async () => {
+      await storage.setBackupPassword('Password123');
+      await storage.clearBackupPassword();
+
+      await expect(storage.verifyBackupPassword('Password123')).resolves.toBe(false);
     });
   });
 

@@ -6,6 +6,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import MainLayout from './components/layout/MainLayout.vue';
 import OnboardingDialog from './components/onboarding/OnboardingDialog.vue';
 import BackupPasswordDialog from './components/dialogs/BackupPasswordDialog.vue';
+import type { BackupPasswordConfirmPayload } from './components/dialogs/backupPasswordDialogTypes';
 import Toast from 'primevue/toast';
 import Button from 'primevue/button';
 import ConfirmDialog from 'primevue/confirmdialog';
@@ -108,9 +109,11 @@ async function safeContinueStartup() {
 /**
  * 处理用户输入备份密码后的恢复流程
  */
-async function handlePasswordConfirm(password: string) {
+async function handlePasswordConfirm(payload: BackupPasswordConfirmPayload) {
+  if (payload.mode !== 'restore') return;
+
   try {
-    await secureStorage.initWithPassword(pendingEncryptedContent, password);
+    await secureStorage.initWithPassword(pendingEncryptedContent, payload.password);
   } catch (err) {
     if (err instanceof Error && err.message === '迁移密码不正确') {
       passwordDialogRef.value?.onPasswordFailed();

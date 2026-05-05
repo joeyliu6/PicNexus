@@ -122,6 +122,16 @@ async function deriveRawKeyFromPassword(password: string, salt: Uint8Array): Pro
   return bytesToBase64(new Uint8Array(rawKey));
 }
 
+function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a[i] ^ b[i];
+  }
+  return diff === 0;
+}
+
 /**
  * 解析 PNXPWD 格式的加密数据，拆出 salt / iv / ciphertext
  */
@@ -303,6 +313,20 @@ export class SecureStorage {
     await this.applyKey(keyB64, 'random', null);
 
     log.info('✓ 已切回随机密钥模式');
+  }
+
+  /**
+   * 验证当前备份密码是否匹配内存中的密码模式 salt 与钥匙串密钥。
+   * 只读校验，不修改密钥、不切换模式、不写配置文件。
+   */
+  async verifyBackupPassword(password: string): Promise<boolean> {
+    if (this.mode !== 'password' || !this.passwordSalt) {
+      return false;
+    }
+
+    const derivedKeyB64 = await deriveRawKeyFromPassword(password, this.passwordSalt);
+    const currentKeyB64 = await invoke<string>('get_or_create_secure_key');
+    return constantTimeEqual(base64ToBytes(derivedKeyB64), base64ToBytes(currentKeyB64));
   }
 
   /**

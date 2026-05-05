@@ -15,6 +15,8 @@ const states = [
   'overwrite-confirm-dialog',
   'download-needs-refresh',
   'password-set-dialog',
+  'password-change-dialog',
+  'password-disable-dialog',
   'restore-password-error',
   'operation-history-empty',
 ];
