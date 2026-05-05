@@ -2,6 +2,8 @@
   "name": "picnexus",
   "version": "1.0.7",
   "description": "PicNexus - 多图床上传工具",
+  "private": true,
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "dev": "vite",

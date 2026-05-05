@@ -2,6 +2,8 @@
   "name": "obsidian-picnexus",
   "version": "0.1.0",
   "description": "PicNexus image upload plugin for Obsidian",
+  "private": true,
+  "license": "UNLICENSED",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",

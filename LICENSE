@@ -1,155 +1,74 @@
-# PolyForm Shield License 1.0.0
+# PicNexus Source-Available Personal Use License
 
-<https://polyformproject.org/licenses/shield/1.0.0>
+Copyright (c) 2026 PicNexus author. All rights reserved.
 
-## Acceptance
+This is not an open source license. The source code is made visible only so that
+people can inspect, learn from, and audit the project.
 
-In order to get any license under these terms, you must agree
-to them as both strict obligations and conditions to all
-your licenses.
+## Permission
 
-## Copyright License
+You may download and run an official, unmodified PicNexus release for personal
+use.
 
-The licensor grants you a copyright license for the
-software to do everything you might do with the software
-that would otherwise infringe the licensor's copyright
-in it for any permitted purpose.  However, you may
-only distribute the software according to [Distribution
-License](#distribution-license) and make changes or new works
-based on the software according to [Changes and New Works
-License](#changes-and-new-works-license).
+You may view the source code for learning, review, and security auditing.
 
-## Distribution License
+## Restrictions
 
-The licensor grants you an additional copyright license
-to distribute copies of the software.  Your license
-to distribute covers distributing the software with
-changes and new works permitted by [Changes and New Works
-License](#changes-and-new-works-license).
+Unless you have separate written permission from the author, you may not:
 
-## Notices
+- copy, mirror, redistribute, publish, or sublicense the source code;
+- modify, repackage, rename, or publish derived versions of PicNexus;
+- use PicNexus or any part of its source code for commercial purposes;
+- provide PicNexus, a modified PicNexus build, or any derivative as a product,
+  hosted service, plugin, SDK, script, or automation service;
+- extract, reuse, rewrite, migrate, or adapt any public image hosting,
+  third-party platform, hidden API, authentication, token-fetching, request
+  signing, anti-hotlinking, or upload logic from this project in any other
+  project;
+- use this project to bypass, evade, or violate the rules, access controls,
+  rate limits, technical restrictions, or terms of any third-party platform.
 
-You must ensure that anyone who gets a copy of any part of
-the software from you also gets a copy of these terms or the
-URL for them above, as well as copies of any plain-text lines
-beginning with `Required Notice:` that the licensor provided
-with the software.  For example:
+## Third-Party Services
 
-> Required Notice: Copyright Youri Licensor (https://example.com)
+PicNexus is an unofficial personal project. It does not operate, own, endorse,
+or provide any third-party image hosting platform, storage platform, public
+image host, API, account, token, cookie, or network service.
 
-## Changes and New Works License
+All third-party integrations are provided as-is. Availability, behavior, access
+rules, and terms may change at any time.
 
-The licensor grants you an additional copyright license to
-make changes and new works based on the software for any
-permitted purpose.
+You are solely responsible for making sure that your use of PicNexus, any
+third-party service, and any account, cookie, token, or API complies with
+applicable laws and the terms of the relevant platform.
 
-## Patent License
+## No Responsibility for Use or Reuse
 
-The licensor grants you a patent license for the software that
-covers patent claims the licensor can license, or becomes able
-to license, that you would infringe by using the software.
+Any consequences caused by using PicNexus, including upload failures, account
+restrictions, account bans, data loss, service interruption, legal disputes,
+platform complaints, or violation of third-party terms, are the sole
+responsibility of the user.
 
-## Noncompete
+Any consequences caused by copying, extracting, reimplementing, modifying,
+redistributing, repackaging, or otherwise using any source code or API logic
+from this project are the sole responsibility of the person or entity doing so.
+The author is not responsible for third-party misuse, derived projects,
+reimplementations, redistributed builds, or API reuse.
 
-Any purpose is a permitted purpose, except for providing any
-product that competes with the software or any product the
-licensor or any of its affiliates provides using the software.
+## No Warranty
 
-## Competition
+PicNexus and its source code are provided "as is", without warranty of any kind,
+express or implied, including but not limited to warranties of merchantability,
+fitness for a particular purpose, non-infringement, availability, correctness,
+or continued compatibility with any third-party service.
 
-Goods and services compete even when they provide functionality
-through different kinds of interfaces or for different technical
-platforms.  Applications can compete with services, libraries
-with plugins, frameworks with development tools, and so on,
-even if they're written in different programming languages
-or for different computer architectures.  Goods and services
-compete even when provided free of charge.  If you market a
-product as a practical substitute for the software or another
-product, it definitely competes.
+To the maximum extent permitted by law, the author shall not be liable for any
+claim, damage, loss, liability, or other consequence arising from PicNexus, its
+source code, third-party integrations, user uploads, user accounts, user data,
+or any reuse of the project's code or API logic.
 
-## New Products
+## Termination
 
-If you are using the software to provide a product that does
-not compete, but the licensor or any of its affiliates brings
-your product into competition by providing a new version of
-the software or a new product using the software, you may
-continue using versions of the software available under these
-terms beforehand to provide your competing product, but not
-any later versions.
-
-## Discontinued Products
-
-You may begin using the software to compete with a product
-or service that the licensor or any of its affiliates has
-stopped providing, unless the licensor includes a plain-text
-line beginning with `Revived Product:` with the software that
-names the product.  For example:
-
-> Revived Product: Example Product
-
-## Sales of Business
-
-If the licensor or any of its affiliates sells a line of
-business developing the software or using the software
-to provide a product, the buyer can also enforce
-[Noncompete](#noncompete) for that product.
-
-## Fair Use
-
-You may have "fair use" rights for the software under the
-law. These terms do not limit them.
-
-## No Other Rights
-
-These terms do not allow you to sublicense or transfer any of
-your licenses to anyone else, or prevent the licensor from
-granting licenses to anyone else.  These terms do not imply
-any other licenses.
-
-## Patent Defense
-
-If you make any written claim that the software infringes or
-contributes to infringement of any patent, your patent license
-for the software granted under these terms ends immediately. If
-your company makes such a claim, your patent license ends
-immediately for work on behalf of your company.
-
-## Violations
-
-The first time you are notified in writing that you have
-violated any of these terms, or done anything with the software
-not covered by your licenses, your licenses can nonetheless
-continue if you come into full compliance with these terms,
-and take practical steps to correct past violations, within
-32 days of receiving notice.  Otherwise, all your licenses
-end immediately.
-
-## No Liability
-
-***As far as the law allows, the software comes as is, without
-any warranty or condition, and the licensor will not be liable
-to you for any damages arising out of these terms or the use
-or nature of the software, under any kind of legal claim.***
-
-## Definitions
-
-The **licensor** is the individual or entity offering these
-terms, and the **software** is the software the licensor makes
-available under these terms.
-
-**You** refers to the individual or entity agreeing to these
-terms.
-
-**Your company** is any legal entity, sole proprietorship,
-or other kind of organization that you work for, plus all
-organizations that have control over, are under the control of,
-or are under common control with that organization.  **Control**
-means ownership of substantially all the assets of an entity,
-or the power to direct its management and policies by vote,
-contract, or otherwise.  Control can be direct or indirect.
-
-**Your licenses** are all the licenses granted to you for the
-software under these terms.
-
-**Use** means anything you do with the software requiring one
-of your licenses.
+Any permission granted by this license terminates automatically if you violate
+any restriction above. After termination, you must stop using the software and
+delete any copies, derivatives, extracted logic, redistributed builds, or
+reimplementations based on this project.
