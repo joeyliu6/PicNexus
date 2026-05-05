@@ -14,6 +14,7 @@ import {
 import { CUSTOM_S3_REQUIRED_FIELDS, NO_CONFIG_SERVICES, SERVICE_REQUIRED_FIELDS } from '../constants/serviceRequiredFields';
 import { getServiceDisplayName } from '../constants/serviceNames';
 import { configStore } from '../store/instances';
+import type { ServiceHealthStatus } from '../types/serviceHealth';
 import { createLogger } from '../utils/logger';
 
 export const MAIN_TRAY_ID = 'main-tray';
@@ -29,6 +30,7 @@ export interface TrayMenuCommand {
   checked?: boolean;
   enabled?: boolean;
   serviceId?: string;
+  healthStatus?: ServiceHealthStatus;
   action?: () => void;
 }
 
@@ -188,6 +190,7 @@ function appendServiceGroupItems(
   services: TrayServiceEntry[],
   selected: Set<string>,
   actions: TrayMenuActions,
+  healthStatusMap?: Record<string, ServiceHealthStatus>,
 ): void {
   for (const service of services) {
     items.push({
@@ -195,12 +198,13 @@ function appendServiceGroupItems(
       text: service.label,
       serviceId: service.id,
       checked: selected.has(service.id),
+      healthStatus: healthStatusMap?.[service.id],
       action: () => actions.toggleService(service.id),
     });
   }
 }
 
-function buildCurrentServiceItems(config: UserConfig, actions: TrayMenuActions): TrayMenuItem[] {
+function buildCurrentServiceItems(config: UserConfig, actions: TrayMenuActions, healthStatusMap?: Record<string, ServiceHealthStatus>): TrayMenuItem[] {
   const groups = getTrayServiceGroups(config);
   const groupList = [
     groups.publicServices,
@@ -216,7 +220,7 @@ function buildCurrentServiceItems(config: UserConfig, actions: TrayMenuActions):
   const items: TrayMenuItem[] = [];
 
   groupList.forEach((group, index) => {
-    appendServiceGroupItems(items, group, selected, actions);
+    appendServiceGroupItems(items, group, selected, actions, healthStatusMap);
     if (index < groupList.length - 1) {
       items.push(separator());
     }
@@ -225,7 +229,7 @@ function buildCurrentServiceItems(config: UserConfig, actions: TrayMenuActions):
   return items;
 }
 
-export function buildTrayMenuItems(config: UserConfig, actions: TrayMenuActions): TrayMenuItem[] {
+export function buildTrayMenuItems(config: UserConfig, actions: TrayMenuActions, healthStatusMap?: Record<string, ServiceHealthStatus>): TrayMenuItem[] {
   return [
     { id: 'open_window', text: '打开界面', action: actions.openWindow },
     separator(),
@@ -234,7 +238,7 @@ export function buildTrayMenuItems(config: UserConfig, actions: TrayMenuActions)
     {
       id: 'current_service',
       text: formatCurrentServicesLabel(config),
-      items: buildCurrentServiceItems(config, actions),
+      items: buildCurrentServiceItems(config, actions, healthStatusMap),
     },
     separator(),
     { id: 'open_history', text: '历史记录', action: actions.openHistory },

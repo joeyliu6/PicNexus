@@ -17,6 +17,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   command: [id: string];
   openFlyout: [];
+  toggleFlyout: [];
+  closeFlyout: [];
 }>();
 
 const COMMAND_ICONS: Record<string, string> = {
@@ -53,9 +55,19 @@ function handleClick(item: TrayMenuItem): void {
   if (isSeparator(item)) return;
   const cmd = asCommand(item);
   if (cmd.id === 'current_service') {
-    emit('openFlyout');
+    emit('toggleFlyout');
   } else {
     emit('command', cmd.id);
+  }
+}
+
+function handleMouseEnter(item: TrayMenuItem): void {
+  if (isSeparator(item)) return;
+  const cmd = asCommand(item);
+  if (cmd.id === 'current_service') {
+    emit('openFlyout');
+  } else {
+    emit('closeFlyout');
   }
 }
 </script>
@@ -75,6 +87,7 @@ function handleClick(item: TrayMenuItem): void {
         :disabled="asCommand(item).enabled === false"
         role="menuitem"
         @click="handleClick(item)"
+        @mouseenter="handleMouseEnter(item)"
       >
         <i
           class="pi menu-icon"

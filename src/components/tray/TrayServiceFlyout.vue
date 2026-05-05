@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TrayMenuItem } from '../../services/trayMenu';
-import { getServiceIcon } from '../../utils/icons';
+import type { ServiceHealthStatus } from '../../types/serviceHealth';
 
 interface ServiceEntry {
   id: string;
@@ -8,6 +8,7 @@ interface ServiceEntry {
   serviceId: string;
   checked?: boolean;
   enabled?: boolean;
+  healthStatus?: ServiceHealthStatus;
 }
 
 const props = defineProps<{
@@ -24,10 +25,6 @@ function isSeparator(item: TrayMenuItem): item is { item: 'Separator' } {
 
 function isServiceItem(item: TrayMenuItem): item is ServiceEntry {
   return !isSeparator(item) && typeof (item as ServiceEntry).serviceId === 'string';
-}
-
-function serviceIconFor(item: TrayMenuItem): string | undefined {
-  return isServiceItem(item) ? getServiceIcon(item.serviceId) : undefined;
 }
 
 function handleClick(item: TrayMenuItem): void {
@@ -52,8 +49,10 @@ function handleClick(item: TrayMenuItem): void {
         @click="handleClick(item)"
       >
         <span class="flyout-icon" aria-hidden="true">
-          <span v-if="serviceIconFor(item)" class="icon-svg" v-html="serviceIconFor(item)" />
-          <i v-else class="pi pi-cloud" />
+          <span
+            class="status-dot"
+            :class="isServiceItem(item) && (item as ServiceEntry).healthStatus ? (item as ServiceEntry).healthStatus : 'unconfigured'"
+          />
         </span>
         <span class="flyout-label">{{ (item as ServiceEntry).text }}</span>
         <span class="check-slot" aria-hidden="true">
@@ -67,7 +66,7 @@ function handleClick(item: TrayMenuItem): void {
 <style scoped>
 .service-flyout {
   box-sizing: border-box;
-  width: 180px;
+  width: 160px;
   padding: var(--space-xs) 0;
 }
 
@@ -111,20 +110,28 @@ function handleClick(item: TrayMenuItem): void {
   width: 16px;
   height: 16px;
   flex: 0 0 16px;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
 }
 
-.icon-svg {
-  display: inline-flex;
-  width: 15px;
-  height: 15px;
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 
-:deep(.icon-svg svg) {
-  display: block;
-  width: 15px;
-  height: 15px;
+.status-dot.verified {
+  background: var(--success);
+}
+
+.status-dot.error {
+  background: var(--error);
+}
+
+.status-dot.pending {
+  background: var(--warning);
+}
+
+.status-dot.unconfigured {
+  background: var(--text-muted);
 }
 
 .flyout-label {

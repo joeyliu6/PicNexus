@@ -73,7 +73,7 @@ fn reveal_main_window(app: &tauri::AppHandle) -> Option<tauri::WebviewWindow> {
 }
 
 const TRAY_MENU_WINDOW_LABEL: &str = "tray-menu";
-const TRAY_MENU_WIDTH: f64 = 240.0;
+const TRAY_MENU_WIDTH: f64 = 185.0;
 /// 菜单布局常量：必须与 Vue TrayMenuWindow.vue 保持同步
 const TRAY_MENU_ITEM_HEIGHT: f64 = 26.0;
 const TRAY_MENU_SEPARATOR_HEIGHT: f64 = 5.0;

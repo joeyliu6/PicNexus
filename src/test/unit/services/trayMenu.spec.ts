@@ -544,8 +544,8 @@ describe('trayMenu', () => {
     const lastPosition = currentWindow.setPosition.mock.calls.at(-1)?.[0] as { x: number; y: number };
     expect(lastPosition.x).toBe(0);
     expect(lastPosition.y).toBe(0);
-    expect((wrapper.find('.main-menu').element as HTMLElement).style.left).toBe('1680px');
-    expect((wrapper.find('.service-menu').element as HTMLElement).style.left).toBe('1500px');
+    expect((wrapper.find('.main-menu').element as HTMLElement).style.left).toBe('1700px');
+    expect((wrapper.find('.service-menu').element as HTMLElement).style.left).toBe('1540px');
     expect(wrapper.find('.service-menu').exists()).toBe(true);
 
     wrapper.unmount();

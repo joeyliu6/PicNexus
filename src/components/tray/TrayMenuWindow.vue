@@ -4,6 +4,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow, LogicalSize, monitorFromPoint, PhysicalPosition } from '@tauri-apps/api/window';
 import { DEFAULT_CONFIG, isPublicRiskService, type UserConfig } from '../../config/types';
 import { configStore } from '../../store/instances';
+import { useServiceHealth } from '../../composables/useServiceHealth';
 import {
   applyTrayTheme,
   buildTrayMenuItems,
@@ -17,8 +18,8 @@ import TrayServiceFlyout from './TrayServiceFlyout.vue';
 
 type MenuEntry = ReturnType<typeof buildTrayMenuItems>[number];
 
-const MENU_WIDTH = 240;
-const FLYOUT_WIDTH = 180;
+const MENU_WIDTH = 185;
+const FLYOUT_WIDTH = 160;
 const ITEM_HEIGHT = 26;
 const LIST_PADDING = 8;
 const SEPARATOR_BLOCK_HEIGHT = 5;
@@ -47,7 +48,8 @@ let unlistenOpened: UnlistenFn | null = null;
 let unlistenHideRequested: UnlistenFn | null = null;
 
 const actions = createTrayMenuActions();
-const menuItems = computed(() => buildTrayMenuItems(config.value, actions));
+const { healthStatusMap, loadHealthStatus, evaluateConfig } = useServiceHealth();
+const menuItems = computed(() => buildTrayMenuItems(config.value, actions, healthStatusMap.value));
 
 const serviceItems = computed(() => {
   const found = menuItems.value.find(
@@ -259,6 +261,12 @@ function handleDocumentPointerDown(event: PointerEvent): void {
 }
 
 async function handleOpenFlyout(): Promise<void> {
+  if (flyoutOpen.value) return;
+  flyoutOpen.value = true;
+  await syncWindowLayout();
+}
+
+async function handleToggleFlyout(): Promise<void> {
   flyoutOpen.value = !flyoutOpen.value;
   await syncWindowLayout();
 }
@@ -297,6 +305,8 @@ async function handleToggleService(serviceId: string): Promise<void> {
 
 onMounted(async () => {
   await loadConfig();
+  await loadHealthStatus();
+  evaluateConfig(config.value);
   await syncWindowLayout();
   await nextTick();
   shellRef.value?.focus();
@@ -358,6 +368,8 @@ onUnmounted(() => {
           :flyout-open="flyoutOpen"
           @command="handleCommand"
           @open-flyout="handleOpenFlyout"
+          @toggle-flyout="handleToggleFlyout"
+          @close-flyout="closeFlyout"
         />
       </div>
 
