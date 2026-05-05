@@ -4,6 +4,7 @@ import { listen, emit } from '@tauri-apps/api/event';
 import { getVersion } from '@tauri-apps/api/app';
 import { appDataDir, basename, dirname, join, resolveResource } from '@tauri-apps/api/path';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
+import { getCurrentWindow, monitorFromPoint, Window as TauriWindow } from '@tauri-apps/api/window';
 import { open as dialogOpen, save as dialogSave } from '@tauri-apps/plugin-dialog';
 import { register, unregisterAll, isRegistered, unregister } from '@tauri-apps/plugin-global-shortcut';
 import {
@@ -30,7 +31,29 @@ import {
   sendNotification,
 } from '@tauri-apps/plugin-notification';
 import { check as updaterCheck } from '@tauri-apps/plugin-updater';
-import { relaunch } from '@tauri-apps/plugin-process';
+import { exit, relaunch } from '@tauri-apps/plugin-process';
+
+const tauriWindowMockState = vi.hoisted(() => {
+  const makeWindow = (label: string) => ({
+    label,
+    hide: vi.fn().mockResolvedValue(undefined),
+    show: vi.fn().mockResolvedValue(undefined),
+    unminimize: vi.fn().mockResolvedValue(undefined),
+    setFocus: vi.fn().mockResolvedValue(undefined),
+    setSize: vi.fn().mockResolvedValue(undefined),
+    setMinSize: vi.fn().mockResolvedValue(undefined),
+    setMaxSize: vi.fn().mockResolvedValue(undefined),
+    setPosition: vi.fn().mockResolvedValue(undefined),
+    outerPosition: vi.fn().mockResolvedValue({ x: 1200, y: 600 }),
+    scaleFactor: vi.fn().mockResolvedValue(1),
+    onFocusChanged: vi.fn().mockResolvedValue(vi.fn()),
+  });
+
+  return {
+    currentWindow: makeWindow('tray-menu'),
+    labeledWindow: makeWindow('main'),
+  };
+});
 
 vi.mock('@tauri-apps/plugin-log', () => ({
   debug: vi.fn(),
@@ -62,6 +85,46 @@ vi.mock('@tauri-apps/api/webview', () => ({
     clearAllBrowsingData: vi.fn().mockResolvedValue(undefined),
     onDragDropEvent: vi.fn().mockResolvedValue(vi.fn()),
   })),
+}));
+
+vi.mock('@tauri-apps/api/window', () => ({
+  LogicalSize: class LogicalSize {
+    width: number;
+    height: number;
+
+    constructor(width: number, height: number) {
+      this.width = width;
+      this.height = height;
+    }
+  },
+  PhysicalPosition: class PhysicalPosition {
+    x: number;
+    y: number;
+
+    constructor(x: number | { x: number; y: number }, y?: number) {
+      if (typeof x === 'object') {
+        this.x = x.x;
+        this.y = x.y;
+        return;
+      }
+      this.x = x;
+      this.y = y ?? 0;
+    }
+  },
+  getCurrentWindow: vi.fn(() => tauriWindowMockState.currentWindow),
+  monitorFromPoint: vi.fn().mockResolvedValue({
+    name: 'Mock Monitor',
+    scaleFactor: 1,
+    position: { x: 0, y: 0 },
+    size: { width: 1920, height: 1080 },
+    workArea: {
+      position: { x: 0, y: 0 },
+      size: { width: 1920, height: 1040 },
+    },
+  }),
+  Window: {
+    getByLabel: vi.fn().mockResolvedValue(tauriWindowMockState.labeledWindow),
+  },
 }));
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
@@ -123,6 +186,7 @@ vi.mock('@tauri-apps/plugin-updater', () => ({
 }));
 
 vi.mock('@tauri-apps/plugin-process', () => ({
+  exit: vi.fn(),
   relaunch: vi.fn(),
 }));
 
@@ -221,6 +285,46 @@ export function resetTauriMocks(): void {
     clearAllBrowsingData: vi.fn().mockResolvedValue(undefined),
     onDragDropEvent: vi.fn().mockResolvedValue(vi.fn()),
   } as never);
+  const window = getTauriWindowMocks();
+  window.getCurrentWindow.mockReset();
+  window.getCurrentWindow.mockReturnValue(window.currentWindow as never);
+  window.getByLabel.mockReset();
+  window.getByLabel.mockResolvedValue(window.labeledWindow as never);
+  for (const apiWindow of [window.currentWindow, window.labeledWindow]) {
+    apiWindow.hide.mockReset();
+    apiWindow.hide.mockResolvedValue(undefined);
+    apiWindow.show.mockReset();
+    apiWindow.show.mockResolvedValue(undefined);
+    apiWindow.unminimize.mockReset();
+    apiWindow.unminimize.mockResolvedValue(undefined);
+    apiWindow.setFocus.mockReset();
+    apiWindow.setFocus.mockResolvedValue(undefined);
+    apiWindow.setSize.mockReset();
+    apiWindow.setSize.mockResolvedValue(undefined);
+    apiWindow.setMinSize.mockReset();
+    apiWindow.setMinSize.mockResolvedValue(undefined);
+    apiWindow.setMaxSize.mockReset();
+    apiWindow.setMaxSize.mockResolvedValue(undefined);
+    apiWindow.setPosition.mockReset();
+    apiWindow.setPosition.mockResolvedValue(undefined);
+    apiWindow.outerPosition.mockReset();
+    apiWindow.outerPosition.mockResolvedValue({ x: 1200, y: 600 });
+    apiWindow.scaleFactor.mockReset();
+    apiWindow.scaleFactor.mockResolvedValue(1);
+    apiWindow.onFocusChanged.mockReset();
+    apiWindow.onFocusChanged.mockResolvedValue(vi.fn());
+  }
+  vi.mocked(monitorFromPoint).mockReset();
+  vi.mocked(monitorFromPoint).mockResolvedValue({
+    name: 'Mock Monitor',
+    scaleFactor: 1,
+    position: { x: 0, y: 0 },
+    size: { width: 1920, height: 1080 },
+    workArea: {
+      position: { x: 0, y: 0 },
+      size: { width: 1920, height: 1040 },
+    },
+  } as never);
 
   const fs = getFsMocks();
   fs.readTextFile.mockReset();
@@ -260,6 +364,8 @@ export function resetTauriMocks(): void {
 
   getRelaunchMock().mockReset();
   getRelaunchMock().mockResolvedValue(undefined as never);
+  getExitMock().mockReset();
+  getExitMock().mockResolvedValue(undefined as never);
 }
 
 export function getInvokeMock() {
@@ -309,6 +415,16 @@ export function getCurrentWebviewMock() {
   return vi.mocked(getCurrentWebview);
 }
 
+export function getTauriWindowMocks() {
+  return {
+    getCurrentWindow: vi.mocked(getCurrentWindow),
+    monitorFromPoint: vi.mocked(monitorFromPoint),
+    getByLabel: vi.mocked(TauriWindow.getByLabel),
+    currentWindow: tauriWindowMockState.currentWindow,
+    labeledWindow: tauriWindowMockState.labeledWindow,
+  };
+}
+
 export function getFsMocks() {
   return {
     readTextFile: vi.mocked(readTextFile),
@@ -353,6 +469,10 @@ export function getUpdaterCheckMock() {
 
 export function getRelaunchMock() {
   return vi.mocked(relaunch);
+}
+
+export function getExitMock() {
+  return vi.mocked(exit);
 }
 
 export function emitProgressEvent(

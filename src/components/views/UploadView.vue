@@ -18,10 +18,11 @@ import { useConfigManager } from '../../composables/useConfig';
 import type { MultiUploadResult } from '../../core/MultiServiceUploader';
 import type { ImageCompressionConfig, CompressionPreset } from '../../config/types';
 import { DEFAULT_COMPRESSION_PRESET } from '../../config/types';
+import type { TrayUploadAction } from '../../services/trayMenu';
 import { createLogger } from '../../utils/logger';
 
 const log = createLogger('UploadView');
-type TrayAction = 'upload_clipboard' | 'select_upload_files' | 'copy_latest_link';
+type TrayAction = TrayUploadAction;
 
 import UploadDropZone from './upload/UploadDropZone.vue';
 import ServiceSelector from './upload/ServiceSelector.vue';

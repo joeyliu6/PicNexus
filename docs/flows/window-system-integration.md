@@ -8,7 +8,7 @@ PicNexus 是**单窗口 + 系统托盘** 架构:
 
 - **窗口**:无标题栏(`decorations: false`,使用自定义装饰条),启动时隐藏(`visible: false`),根据屏幕分辨率自适应初始大小
 - **关闭行为**:默认 `closeToTray = true`,点 × 只隐藏到托盘,不退出进程;可通过 `set_close_to_tray` 命令切换
-- **系统托盘**:五项菜单(上传剪贴板/选择图片…/复制最近链接/历史记录/退出 PicNexus),左键点击图标直接唤起主窗口
+- **系统托盘**:菜单包含打开界面、上传剪贴板、选择图片…、当前图床二级菜单、历史记录、退出;左键点击图标直接唤起主窗口
 - **全局快捷键**:插件已加载,**但当前未注册任何快捷键**(预留扩展点)
 - **文件关联**:`tauri.conf.json` 未配置 `fileAssociations`,但通过 CLI 参数支持 Typora/Obsidian 调用(`picnexus.exe /path/to/img.jpg`)
 
@@ -48,7 +48,7 @@ stateDiagram-v2
     CheckCloseToTray --> Quit: closeToTray = false
 
     HiddenToTray --> Focused: 托盘左键 / 菜单项<br/>window.show + unminimize + focus
-    HiddenToTray --> Quit: 托盘菜单 → 退出<br/>std::process::exit(0)
+    HiddenToTray --> Quit: 托盘菜单 → 退出<br/>plugin-process exit(0)
 
     Quit --> [*]
 
@@ -66,55 +66,47 @@ stateDiagram-v2
 
 ---
 
-## 图 2:系统托盘构建与事件分发
+## 图 2:自定义托盘菜单构建与事件分发
 
-展示托盘图标的创建过程和菜单项事件如何路由到前端。
+展示托盘图标、自定义 `tray-menu` Webview 窗口、以及菜单项事件如何路由到主窗口。
 
-> **关键源文件**:`src-tauri/src/main.rs`(托盘菜单构建与 `tray-action` / `navigate-to` 事件分发)
+> **关键源文件**:`src-tauri/src/main.rs`(托盘图标和 `tray-menu` 窗口创建)、`src/components/tray/TrayMenuWindow.vue`(菜单 UI / 定位 / 服务切换)、`src/services/trayMenu.ts`(菜单数据与动作分发)
 
 ```mermaid
 flowchart TD
-    A[setup 回调] --> B[MenuBuilder::new]
-    B --> B1[MenuItem: upload_clipboard<br/>文本: 上传剪贴板]
-    B --> B2[MenuItem: select_upload_files<br/>文本: 选择图片…]
-    B --> B3[PredefinedMenuItem: separator]
-    B --> B4[MenuItem: copy_latest_link<br/>文本: 复制最近链接]
-    B --> B5[MenuItem: open_history<br/>文本: 历史记录]
-    B --> B6[PredefinedMenuItem: separator]
-    B --> B7[MenuItem: quit<br/>文本: 退出 PicNexus]
-
-    B1 & B2 & B3 & B4 & B5 & B6 & B7 --> M[menu.build]
-
-    M --> T[TrayIconBuilder]
+    A[setup 回调] --> W[WebviewWindowBuilder<br/>label: tray-menu<br/>url: tray-menu.html<br/>hidden / transparent / always_on_top]
+    A --> T[TrayIconBuilder::with_id main-tray]
     T --> T1[.icon<br/>128×128@2x PNG]
-    T --> T2[.menu menu]
-    T --> T3[.show_menu_on_left_click false]
-    T --> T4[.on_menu_event<br/>分发]
-    T --> T5[.on_tray_icon_event<br/>左键处理]
-    T --> T6[tauri-plugin-positioner<br/>托盘弹窗定位]
+    T --> T2[.show_menu_on_left_click false]
+    T --> T3[.on_tray_icon_event]
+    T3 --> C{MouseButton + State}
+    C -- Left + Up --> L[hide tray-menu<br/>show main + unminimize + focus]
+    C -- Right + Up --> R[show_tray_menu_window<br/>clamp position<br/>set size / position<br/>show + focus<br/>emit tray-menu-opened]
 
-    %% 菜单事件分发
-    T4 --> E1{event.id.as_ref}
-    E1 -- upload_clipboard --> ES1[window.show +<br/>emit navigate-to upload<br/>emit tray-action upload_clipboard]
-    E1 -- select_upload_files --> ES2[window.show +<br/>emit navigate-to upload<br/>emit tray-action select_upload_files]
-    E1 -- copy_latest_link --> ES3[window.show +<br/>emit tray-action copy_latest_link]
-    E1 -- open_history --> ES4[window.show +<br/>emit navigate-to history]
-    E1 -- quit --> ES5[std::process::exit 0]
+    W --> V[TrayMenuWindow.vue]
+    R --> V
+    V --> M[buildTrayMenuItems<br/>打开界面 / 上传剪贴板 / 选择图片…<br/>当前图床二级菜单 / 历史记录 / 退出]
+    M --> E{用户点击菜单项}
+    E -- open_window --> A0[show main + unminimize + focus]
+    E -- upload_clipboard --> A1[show main<br/>emit navigate-to upload<br/>emit tray-action upload_clipboard]
+    E -- select_upload_files --> A2[show main<br/>emit navigate-to upload<br/>emit tray-action select_upload_files]
+    E -- current_service item --> A3[toggleTrayService<br/>保存 enabledServices<br/>emit config-updated]
+    E -- open_history --> A4[show main<br/>emit navigate-to history]
+    E -- quit --> A5[plugin-process exit 0]
 
-    %% 左键事件
-    T5 --> L1{MouseButton + State}
-    L1 -- Left + Up --> L2[window.show<br/>+ unminimize<br/>+ set_focus]
-
-    %% 前端接收
-    ES1 & ES2 & ES3 & ES4 --> F[前端 MainLayout / UploadView]
+    A1 & A2 & A4 --> F[MainLayout / UploadView]
     F --> F1[listen navigate-to<br/>切换 View]
-    F --> F2[listen tray-action<br/>上传或复制最近链接]
+    F --> F2[listen tray-action<br/>上传动作]
 
     style A fill:#e3f2fd,stroke:#1976d2
+    style W fill:#e3f2fd,stroke:#1976d2
+    style V fill:#fff3e0,stroke:#ef6c00
     style F1 fill:#e8f5e9,stroke:#2e7d32
     style F2 fill:#e8f5e9,stroke:#2e7d32
-    style ES5 fill:#ffebee,stroke:#c62828
+    style A5 fill:#ffebee,stroke:#c62828
 ```
+
+`tray-menu` 是独立的 Vite 入口(`tray-menu.html` + `src/tray-menu.ts`)。它直接读取配置生成菜单,根据 `enabledServices` / `availableServices` / 图床配置状态展示 `当前图床：…` 二级勾选菜单；服务切换后保存配置并广播 `config-updated`。
 
 ---
 
@@ -234,7 +226,7 @@ flowchart LR
 | 现象 | 可能原因 | 对照图表位置 |
 |------|---------|-------------|
 | 点 × 直接退出而不是隐藏 | `CloseToTrayState` 被设为 `false` | 图1 CheckCloseToTray |
-| 托盘菜单点击无反应 | `on_menu_event` 分支没匹配到 id,或前端没 listen `navigate-to` / `tray-action` | 图2 F1/F2 |
+| 托盘菜单点击无反应 | `tray-menu` Webview 未创建/未显示,或前端没 listen `navigate-to` / `tray-action` | 图2 W/V/F1/F2 |
 | 启动时窗口一闪而过 | `visible:true` 配置下 `show()` 时机错乱,应保持 `visible:false` + 代码控制显示 | 图1 Visible |
 | Windows 任务栏图标模糊 | 没加载 128×128@2x 大图标 | 图1 note |
 | Typora 调用 `picnexus.exe` 报错 | `cli-config.json` 缺失或图床未配置 | 图3 F1 |
