@@ -26,12 +26,14 @@ vi.mock('../../../store/instances', () => ({
 
 import {
   buildTrayMenuItems,
+  formatThemeToggleLabel,
   formatCurrentServicesLabel,
   getTrayServiceGroups,
   requiresPublicServiceRiskAcknowledgement,
   revealMainWindow,
   setupTrayMenu,
   toggleTrayService,
+  toggleTrayTheme,
   type TrayMenuActions,
   type TrayMenuItem,
 } from '../../../services/trayMenu';
@@ -43,6 +45,7 @@ const noopActions: TrayMenuActions = {
   uploadClipboard: vi.fn(),
   selectUploadFiles: vi.fn(),
   toggleService: vi.fn(),
+  toggleTheme: vi.fn(),
   openHistory: vi.fn(),
   quit: vi.fn(),
 };
@@ -111,10 +114,24 @@ function findButton(wrapper: VueWrapper, text: string) {
   return button!;
 }
 
+function mockMatchMedia(matches: boolean): void {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: vi.fn().mockReturnValue({
+      matches,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }),
+  });
+}
+
 describe('trayMenu', () => {
   beforeEach(() => {
     resetTauriMocks();
     vi.clearAllMocks();
+    mockMatchMedia(true);
+    document.documentElement.classList.remove('dark-theme', 'light-theme');
     mockState.configGet.mockReset();
     mockState.configSet.mockReset();
     mockState.configSave.mockReset();
@@ -133,6 +150,7 @@ describe('trayMenu', () => {
       '当前图床：京东、七鱼',
       'Separator',
       '历史记录',
+      '切换到浅色',
       'Separator',
       '退出',
     ]);
@@ -168,6 +186,20 @@ describe('trayMenu', () => {
     expect(formatCurrentServicesLabel(makeConfig({
       enabledServices: ['jd', 'qiyu', 'weibo', 'r2', makeCustomS3Id('archive')],
     }))).toBe('当前图床：京东等 5 个');
+  });
+
+  it('formats tray theme toggle labels from the effective theme', () => {
+    expect(formatThemeToggleLabel(makeConfig({
+      theme: { mode: 'dark', enableTransitions: true, transitionDuration: 300 },
+    }))).toBe('切换到浅色');
+    expect(formatThemeToggleLabel(makeConfig({
+      theme: { mode: 'light', enableTransitions: true, transitionDuration: 300 },
+    }))).toBe('切换到深色');
+
+    mockMatchMedia(false);
+    expect(formatThemeToggleLabel(makeConfig({
+      theme: { mode: 'auto', enableTransitions: true, transitionDuration: 300 },
+    }))).toBe('切换到深色');
   });
 
   it('returns visible configured service groups only', () => {
@@ -241,6 +273,74 @@ describe('trayMenu', () => {
     }));
   });
 
+  it('toggles tray theme from dark to light and persists the explicit mode', async () => {
+    mockState.configGet.mockResolvedValue(makeConfig({
+      theme: { mode: 'dark', enableTransitions: true, transitionDuration: 180 },
+    }));
+
+    await expect(toggleTrayTheme()).resolves.toBe('light');
+
+    expect(mockState.configSet).toHaveBeenCalledWith('config', expect.objectContaining({
+      theme: { mode: 'light', enableTransitions: false, transitionDuration: 180 },
+    }));
+    expect(mockState.configSave).toHaveBeenCalled();
+    expect(getEmitMock()).toHaveBeenCalledWith('config-updated', expect.objectContaining({ source: 'tray-menu' }));
+  });
+
+  it('toggles tray theme from light to dark and resolves auto from the system theme', async () => {
+    mockState.configGet.mockResolvedValue(makeConfig({
+      theme: { mode: 'light', enableTransitions: false, transitionDuration: 240 },
+    }));
+
+    await expect(toggleTrayTheme()).resolves.toBe('dark');
+    expect(mockState.configSet).toHaveBeenLastCalledWith('config', expect.objectContaining({
+      theme: { mode: 'dark', enableTransitions: false, transitionDuration: 240 },
+    }));
+
+    mockState.configSet.mockClear();
+    mockMatchMedia(false);
+    mockState.configGet.mockResolvedValue(makeConfig({
+      theme: { mode: 'auto', enableTransitions: true, transitionDuration: 300 },
+    }));
+
+    await expect(toggleTrayTheme()).resolves.toBe('dark');
+    expect(mockState.configSet).toHaveBeenLastCalledWith('config', expect.objectContaining({
+      theme: { mode: 'dark', enableTransitions: false, transitionDuration: 300 },
+    }));
+  });
+
+  it('toggles tray theme in place without hiding the menu', async () => {
+    let storedConfig = makeConfig({
+      theme: { mode: 'dark', enableTransitions: true, transitionDuration: 300 },
+    });
+    mockState.configGet.mockImplementation(async () => storedConfig);
+    mockState.configSet.mockImplementation(async (_key, value: UserConfig) => {
+      storedConfig = value;
+    });
+
+    const wrapper = mount(TrayMenuWindow);
+    await flushPromises();
+
+    const { currentWindow } = getTauriWindowMocks();
+    currentWindow.setSize.mockClear();
+    currentWindow.setPosition.mockClear();
+
+    await findButton(wrapper, '切换到浅色').trigger('click');
+    await flushPromises();
+
+    expect(mockState.configSet).toHaveBeenCalledWith('config', expect.objectContaining({
+      theme: expect.objectContaining({ mode: 'light' }),
+    }));
+    expect(getTauriWindowMocks().currentWindow.hide).not.toHaveBeenCalled();
+    expect(document.documentElement.classList.contains('light-theme')).toBe(true);
+    expect(document.documentElement.classList.contains('theme-transitioning')).toBe(false);
+    expect(currentWindow.setSize).not.toHaveBeenCalled();
+    expect(currentWindow.setPosition).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain('切换到深色');
+
+    wrapper.unmount();
+  });
+
   it('keeps the custom tray menu and service submenu visible after toggling a service', async () => {
     let storedConfig = makeConfig({ enabledServices: ['jd', 'qiyu'] });
     mockState.configGet.mockImplementation(async () => storedConfig);
@@ -253,6 +353,11 @@ describe('trayMenu', () => {
 
     await findButton(wrapper, '当前图床').trigger('click');
     await flushPromises();
+
+    const { currentWindow } = getTauriWindowMocks();
+    currentWindow.setSize.mockClear();
+    currentWindow.setPosition.mockClear();
+
     await findButton(wrapper, '微博').trigger('click');
 
     await vi.waitFor(() => {
@@ -264,7 +369,11 @@ describe('trayMenu', () => {
 
     expect(wrapper.find('.main-menu').exists()).toBe(true);
     expect(wrapper.find('.service-menu').exists()).toBe(true);
-    expect(findButton(wrapper, '微博').attributes('aria-checked')).toBe('true');
+    const weiboButton = findButton(wrapper, '微博');
+    expect(weiboButton.attributes('aria-checked')).toBe('true');
+    expect(weiboButton.attributes('disabled')).toBeUndefined();
+    expect(currentWindow.setSize).not.toHaveBeenCalled();
+    expect(currentWindow.setPosition).not.toHaveBeenCalled();
     expect(getTauriWindowMocks().currentWindow.hide).not.toHaveBeenCalled();
 
     wrapper.unmount();
@@ -296,6 +405,76 @@ describe('trayMenu', () => {
     wrapper.unmount();
   });
 
+  it('hides the custom tray menu when clicking transparent space outside the panels', async () => {
+    mockState.configGet.mockResolvedValue(makeConfig());
+    const handlers: Record<string, Array<(event: { payload?: unknown }) => void | Promise<void>>> = {};
+    getListenMock().mockImplementation(async (event, handler) => {
+      handlers[event] ??= [];
+      handlers[event].push(handler as (event: { payload?: unknown }) => void | Promise<void>);
+      return vi.fn();
+    });
+
+    const wrapper = mount(TrayMenuWindow, {
+      attachTo: document.body,
+    });
+    await flushPromises();
+
+    await handlers['tray-menu-opened'][0]?.({});
+    await flushPromises();
+    expect((wrapper.find('.tray-content').element as HTMLElement).style.display).not.toBe('none');
+
+    await findButton(wrapper, '当前图床').trigger('click');
+    await flushPromises();
+
+    wrapper.find('.menu-panel').element.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    wrapper.find('.service-menu').element.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    await flushPromises();
+
+    expect(getTauriWindowMocks().currentWindow.hide).not.toHaveBeenCalled();
+
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    await flushPromises();
+
+    expect((wrapper.find('.tray-content').element as HTMLElement).style.display).toBe('none');
+    expect(getTauriWindowMocks().currentWindow.hide).toHaveBeenCalled();
+
+    wrapper.unmount();
+  });
+
+  it('closes the service flyout when the pointer leaves the flyout panel', async () => {
+    mockState.configGet.mockResolvedValue(makeConfig());
+
+    const wrapper = mount(TrayMenuWindow, {
+      attachTo: document.body,
+    });
+    await flushPromises();
+
+    await findButton(wrapper, '当前图床').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('.service-menu').exists()).toBe(true);
+
+    await wrapper.find('.service-flyout').trigger('mouseleave');
+    await flushPromises();
+
+    expect(wrapper.find('.service-menu').exists()).toBe(false);
+    expect(getTauriWindowMocks().currentWindow.hide).not.toHaveBeenCalled();
+
+    wrapper.unmount();
+  });
+
+  it('does not draw visible divider lines in the main tray menu', () => {
+    const menuListVue = readFileSync(resolve(process.cwd(), 'src/components/tray/TrayMenuList.vue'), 'utf8');
+
+    expect(menuListVue).toContain('background: transparent;');
+  });
+
+  it('does not add panel transition animations to the tray popup chrome', () => {
+    const trayWindowVue = readFileSync(resolve(process.cwd(), 'src/components/tray/TrayMenuWindow.vue'), 'utf8');
+
+    expect(trayWindowVue).not.toMatch(/\.menu-panel\s*\{[\s\S]*?transition:/);
+    expect(trayWindowVue).not.toMatch(/\.flyout-panel\s*\{[\s\S]*?transition:/);
+  });
+
   it('grants the tray menu window APIs needed to show the service flyout', () => {
     const capability = JSON.parse(
       readFileSync(resolve(process.cwd(), 'src-tauri/capabilities/default.json'), 'utf8'),
@@ -316,7 +495,7 @@ describe('trayMenu', () => {
     expect(mainRs).toMatch(/WebviewWindowBuilder::new\([\s\S]*TRAY_MENU_WINDOW_LABEL[\s\S]*\)\s*[\s\S]*\.transparent\(true\)/);
   });
 
-  it('sizes the tray window to its real content height instead of keeping extra blank space', async () => {
+  it('sizes the tray window to the current work area so outside clicks can dismiss the main menu', async () => {
     mockState.configGet.mockResolvedValue(makeConfig());
 
     const wrapper = mount(TrayMenuWindow, {
@@ -327,14 +506,13 @@ describe('trayMenu', () => {
     const setSizeCalls = getTauriWindowMocks().currentWindow.setSize.mock.calls;
     expect(setSizeCalls.length).toBeGreaterThan(0);
     const lastSize = setSizeCalls.at(-1)?.[0] as { width: number; height: number };
-    expect(lastSize.width).toBe(240);
-    expect(lastSize.height).toBeLessThan(300);
-    expect(lastSize.height).toBeGreaterThan(180);
+    expect(lastSize.width).toBe(1920);
+    expect(lastSize.height).toBe(1040);
 
     wrapper.unmount();
   });
 
-  it('repositions the tray window leftward when the service flyout would overflow the right edge', async () => {
+  it('opens the service flyout leftward when it would overflow the right edge', async () => {
     mockState.configGet.mockResolvedValue(makeConfig());
 
     const { currentWindow, monitorFromPoint } = getTauriWindowMocks();
@@ -364,14 +542,16 @@ describe('trayMenu', () => {
     });
 
     const lastPosition = currentWindow.setPosition.mock.calls.at(-1)?.[0] as { x: number; y: number };
-    expect(lastPosition.x).toBe(1500);
-    expect(lastPosition.y).toBe(500);
+    expect(lastPosition.x).toBe(0);
+    expect(lastPosition.y).toBe(0);
+    expect((wrapper.find('.main-menu').element as HTMLElement).style.left).toBe('1680px');
+    expect((wrapper.find('.service-menu').element as HTMLElement).style.left).toBe('1500px');
     expect(wrapper.find('.service-menu').exists()).toBe(true);
 
     wrapper.unmount();
   });
 
-  it('repositions the tray window upward when the service flyout would overflow the bottom edge', async () => {
+  it('clamps the menu panel upward when the service flyout would overflow the bottom edge', async () => {
     mockState.configGet.mockResolvedValue(makeConfig());
 
     const { currentWindow, monitorFromPoint } = getTauriWindowMocks();
@@ -401,9 +581,10 @@ describe('trayMenu', () => {
     });
 
     const lastPosition = currentWindow.setPosition.mock.calls.at(-1)?.[0] as { x: number; y: number };
-    expect(lastPosition.x).toBe(1200);
-    expect(lastPosition.y).toBeLessThan(900);
-    expect(lastPosition.y).toBeGreaterThanOrEqual(0);
+    expect(lastPosition.x).toBe(0);
+    expect(lastPosition.y).toBe(0);
+    expect(Number.parseInt((wrapper.find('.main-menu').element as HTMLElement).style.top, 10)).toBeLessThan(900);
+    expect(Number.parseInt((wrapper.find('.main-menu').element as HTMLElement).style.top, 10)).toBeGreaterThanOrEqual(0);
     expect(wrapper.find('.service-menu').exists()).toBe(true);
 
     wrapper.unmount();
@@ -467,5 +648,12 @@ describe('trayMenu', () => {
 
     expect(cleanup).toEqual(expect.any(Function));
     expect(getListenMock()).not.toHaveBeenCalled();
+  });
+
+  it('keeps the main app subscribed to config updates so tray theme changes sync immediately', () => {
+    const appVue = readFileSync(resolve(process.cwd(), 'src/App.vue'), 'utf8');
+
+    expect(appVue).toContain("listen('config-updated'");
+    expect(appVue).toContain('updateConfig(latestConfig)');
   });
 });
