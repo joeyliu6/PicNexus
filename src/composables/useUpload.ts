@@ -9,6 +9,7 @@ import {
   UserConfig,
   DEFAULT_CONFIG,
   DEFAULT_COMPRESSION_PRESET,
+  isPublicRiskService,
 } from '../config/types';
 import { UploadQueueManager } from '../uploadQueue';
 import { useToast } from './useToast';
@@ -146,10 +147,25 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
       }
 
       // 上传必须使用当前界面选择快照，避免防抖保存尚未落盘时读到旧配置。
-      const enabledServices = [...selectedServices.value];
+      const selectedServicesSnapshot = [...selectedServices.value];
+      const blockedRiskServices = config.publicServiceRiskAccepted
+        ? []
+        : selectedServicesSnapshot.filter(isPublicRiskService);
+      const enabledServices = config.publicServiceRiskAccepted
+        ? selectedServicesSnapshot
+        : selectedServicesSnapshot.filter(serviceId => !isPublicRiskService(serviceId));
 
       // 验证是否选中了图床服务
       if (enabledServices.length === 0) {
+        if (blockedRiskServices.length > 0) {
+          toast.showConfig('warn', {
+            summary: '需要确认公共图床风险',
+            detail: '京东、七鱼等非官方公共图床需先在设置中确认风险后才能上传。',
+            life: 6000,
+          });
+          return;
+        }
+
         log.warn('没有选择任何图床');
 
         // 检查是否有可用的图床可供选择
@@ -163,6 +179,14 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
           toast.showConfig('error', TOAST_MESSAGES.upload.notConfigured('任何'));
         }
         return;
+      }
+
+      if (blockedRiskServices.length > 0) {
+        toast.showConfig('warn', {
+          summary: '已跳过未确认风险的图床',
+          detail: '部分公共图床需先在设置中确认风险，本次仅上传到已允许的图床。',
+          life: 6000,
+        });
       }
 
       const sortedEnabled = [...enabledServices].sort();

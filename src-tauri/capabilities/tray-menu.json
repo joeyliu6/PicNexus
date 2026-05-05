@@ -1,0 +1,35 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "tray-menu",
+  "description": "PicNexus 托盘菜单窗口的最小权限配置",
+  "windows": ["tray-menu"],
+  "permissions": [
+    "core:event:default",
+    "core:window:default",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-unminimize",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-min-size",
+    "core:window:allow-set-max-size",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:app:default",
+    "core:path:default",
+    "fs:allow-exists",
+    "fs:allow-mkdir",
+    "fs:allow-read-text-file",
+    "fs:allow-remove",
+    "fs:allow-write-text-file",
+    "fs:scope-appdata-recursive",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        "$EXE/../data",
+        "$EXE/../data/**/*"
+      ]
+    },
+    "process:allow-exit",
+    "log:default"
+  ]
+}

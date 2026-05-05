@@ -29,6 +29,7 @@ export function getState(): E2EState {
           enabledServices: ['jd'],
           availableServices: ['jd', 'qiyu'],
           onboardingCompleted: true,
+          publicServiceRiskAccepted: true,
           appBehavior: {
             autoStart: false,
             minimizeToTrayOnStart: false,

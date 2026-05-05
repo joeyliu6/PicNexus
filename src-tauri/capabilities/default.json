@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "PicNexus 默认权限配置",
-  "windows": ["main", "login-window", "login-titlebar", "login-content", "tray-menu"],
+  "windows": ["main", "login-window", "login-titlebar", "login-content"],
   "permissions": [
     "core:default",
     "core:event:default",

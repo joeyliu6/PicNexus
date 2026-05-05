@@ -475,18 +475,39 @@ describe('trayMenu', () => {
     expect(trayWindowVue).not.toMatch(/\.flyout-panel\s*\{[\s\S]*?transition:/);
   });
 
-  it('grants the tray menu window APIs needed to show the service flyout', () => {
-    const capability = JSON.parse(
+  it('grants the tray menu only the APIs needed to show the service flyout', () => {
+    const defaultCapability = JSON.parse(
       readFileSync(resolve(process.cwd(), 'src-tauri/capabilities/default.json'), 'utf8'),
     ) as { windows: string[]; permissions: Array<string | object> };
+    const trayCapability = JSON.parse(
+      readFileSync(resolve(process.cwd(), 'src-tauri/capabilities/tray-menu.json'), 'utf8'),
+    ) as { windows: string[]; permissions: Array<string | object> };
 
-    expect(capability.windows).toContain('tray-menu');
-    expect(capability.permissions).toEqual(expect.arrayContaining([
+    expect(defaultCapability.windows).not.toContain('tray-menu');
+    expect(trayCapability.windows).toEqual(['tray-menu']);
+    expect(trayCapability.permissions).toEqual(expect.arrayContaining([
+      'core:event:default',
+      'core:window:default',
       'core:window:allow-set-min-size',
       'core:window:allow-set-max-size',
       'core:window:allow-set-size',
       'core:window:allow-set-position',
+      'core:path:default',
+      'fs:allow-read-text-file',
+      'fs:allow-write-text-file',
+      expect.objectContaining({
+        identifier: 'fs:scope',
+        allow: expect.arrayContaining([
+          '$EXE/../data',
+          '$EXE/../data/**/*',
+        ]),
+      }),
+      'process:allow-exit',
     ]));
+    expect(trayCapability.permissions).not.toContain('shell:default');
+    expect(trayCapability.permissions).not.toContain('http:default');
+    expect(trayCapability.permissions).not.toContain('sql:default');
+    expect(trayCapability.permissions).not.toContain('clipboard-manager:default');
   });
 
   it('creates the custom tray menu window with a transparent background', () => {

@@ -183,6 +183,7 @@ describe('useUploadManager', () => {
     configStoreGetMock.mockReset().mockResolvedValue({
       ...DEFAULT_CONFIG,
       enabledServices: ['jd', 'upyun'],
+      publicServiceRiskAccepted: true,
       linkOutput: {
         ...DEFAULT_CONFIG.linkOutput!,
         autoCopy: false,
@@ -259,6 +260,7 @@ describe('useUploadManager', () => {
     configStoreGetMock.mockResolvedValue({
       ...DEFAULT_CONFIG,
       enabledServices: ['upyun'],
+      publicServiceRiskAccepted: true,
       linkOutput: {
         ...DEFAULT_CONFIG.linkOutput!,
         autoCopy: false,
@@ -308,11 +310,96 @@ describe('useUploadManager', () => {
     expect(selectedServicesRef.value).toEqual(['jd']);
   });
 
+  it('blocks default public-risk services until the risk acknowledgement is saved', async () => {
+    selectedServicesRef.value = ['jd', 'qiyu'];
+    availableServicesRef.value = ['jd', 'qiyu'];
+    configStoreGetMock.mockResolvedValue({
+      ...DEFAULT_CONFIG,
+      enabledServices: ['jd', 'qiyu'],
+      publicServiceRiskAccepted: false,
+      linkOutput: {
+        ...DEFAULT_CONFIG.linkOutput!,
+        autoCopy: false,
+      },
+    });
+
+    const queueManager = createMultiQueueManager();
+    const { useUploadManager } = await import('../../../composables/useUpload');
+    const { handleFilesUpload } = useUploadManager(queueManager as never);
+
+    await handleFilesUpload(['C:/tmp/test.jpg']);
+
+    expect(queueManager.addFile).not.toHaveBeenCalled();
+    expect(uploadToMultipleServicesMock).not.toHaveBeenCalled();
+    expect(toastShowConfigMock).toHaveBeenCalledWith('warn', expect.objectContaining({
+      summary: '需要确认公共图床风险',
+    }));
+  });
+
+  it('skips unacknowledged public-risk services but uploads to remaining selected services', async () => {
+    selectedServicesRef.value = ['jd', 'upyun'];
+    availableServicesRef.value = ['jd', 'upyun'];
+    configStoreGetMock.mockResolvedValue({
+      ...DEFAULT_CONFIG,
+      enabledServices: ['jd', 'upyun'],
+      publicServiceRiskAccepted: false,
+      linkOutput: {
+        ...DEFAULT_CONFIG.linkOutput!,
+        autoCopy: false,
+      },
+    });
+    uploadToMultipleServicesMock.mockImplementationOnce(
+      async (
+        _filePath: string,
+        enabledServices: string[],
+        _config: unknown,
+        _onProgress?: unknown,
+        onServiceResult?: (result: any) => void | Promise<void>
+      ) => {
+        const serviceId = enabledServices[0];
+        const success = {
+          serviceId,
+          status: 'success' as const,
+          result: {
+            serviceId,
+            fileKey: `${serviceId}-key`,
+            url: `https://example.com/${serviceId}.jpg`,
+          },
+        };
+        await onServiceResult?.(success);
+        return {
+          primaryService: serviceId,
+          primaryUrl: success.result.url,
+          results: [success],
+        };
+      }
+    );
+
+    const queueManager = createMultiQueueManager();
+    const { useUploadManager } = await import('../../../composables/useUpload');
+    const { handleFilesUpload } = useUploadManager(queueManager as never);
+
+    await handleFilesUpload(['C:/tmp/test.jpg']);
+
+    expect(queueManager.addFile).toHaveBeenCalledWith('C:/tmp/test.jpg', 'test.jpg', ['upyun']);
+    expect(uploadToMultipleServicesMock).toHaveBeenCalledWith(
+      'C:/tmp/test.jpg',
+      ['upyun'],
+      expect.objectContaining({ enabledServices: ['upyun'] }),
+      expect.any(Function),
+      expect.any(Function),
+    );
+    expect(toastShowConfigMock).toHaveBeenCalledWith('warn', expect.objectContaining({
+      summary: '已跳过未确认风险的图床',
+    }));
+  });
+
   it('超过 200 张时不会对全部路径调用 get_image_metadata', async () => {
     selectedServicesRef.value = ['jd'];
     configStoreGetMock.mockResolvedValue({
       ...DEFAULT_CONFIG,
       enabledServices: ['jd'],
+      publicServiceRiskAccepted: true,
       linkOutput: {
         ...DEFAULT_CONFIG.linkOutput!,
         autoCopy: false,
