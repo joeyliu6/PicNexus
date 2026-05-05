@@ -235,7 +235,7 @@ describe('BackupSyncPanel P1 orchestration', () => {
     backupRefs.needsReload!.value = false;
     backupFns.getProfileSyncRecord.mockReturnValue(null);
     backupFns.getAllSyncRecords.mockReturnValue({});
-    confirmRequireMock.mockImplementation((options: { accept?: () => void }) => {
+    confirmRequireMock.mockImplementation((options: { accept?: () => void; reject?: () => void }) => {
       options.accept?.();
     });
   });
@@ -251,6 +251,8 @@ describe('BackupSyncPanel P1 orchestration', () => {
     await wrapper.get('.sync-config').trigger('click');
     await wrapper.get('.sync-history').trigger('click');
     await wrapper.get('.upload-config').trigger('click');
+    await wrapper.get('.download-config').trigger('click');
+    await wrapper.get('.upload-history').trigger('click');
     await wrapper.get('.download-history').trigger('click');
 
     expect(confirmRequireMock).toHaveBeenCalled();
@@ -261,7 +263,24 @@ describe('BackupSyncPanel P1 orchestration', () => {
     expect(backupFns.syncConfig).toHaveBeenCalledWith(connectedWebdav().profiles[0]);
     expect(backupFns.syncHistory).toHaveBeenCalledWith(connectedWebdav().profiles[0]);
     expect(backupFns.uploadSettingsCloud).toHaveBeenCalledWith(connectedWebdav().profiles[0]);
+    expect(backupFns.downloadSettingsOverwrite).toHaveBeenCalledWith(connectedWebdav().profiles[0]);
+    expect(backupFns.uploadHistoryForce).toHaveBeenCalledWith(connectedWebdav().profiles[0]);
     expect(backupFns.downloadHistoryOverwrite).toHaveBeenCalledWith(connectedWebdav().profiles[0]);
+  });
+
+  it('opens the password setup dialog when the export guide is rejected', async () => {
+    confirmRequireMock.mockImplementationOnce((options: { reject?: () => void }) => {
+      options.reject?.();
+    });
+
+    const wrapper = mountPanel();
+    await nextTick();
+
+    await wrapper.get('.export-config').trigger('click');
+
+    expect(confirmRequireMock).toHaveBeenCalledTimes(1);
+    expect(passwordSectionApi.openSetPasswordDialog).toHaveBeenCalledTimes(1);
+    expect(backupFns.exportSettingsLocal).not.toHaveBeenCalled();
   });
 
   it('opens restore password dialog, handles verify success, and cancels failed restore flows', async () => {
