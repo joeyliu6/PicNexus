@@ -39,6 +39,31 @@ pub struct ServerState {
     pub abort_handle: std::sync::Mutex<Option<tokio::task::AbortHandle>>,
 }
 
+#[cfg(windows)]
+#[link(name = "dwmapi")]
+extern "system" {
+    fn DwmSetWindowAttribute(
+        hwnd: isize,
+        dw_attribute: u32,
+        pv_attribute: *const std::ffi::c_void,
+        cb_attribute: u32,
+    ) -> i32;
+}
+
+#[cfg(windows)]
+fn disable_window_transitions(hwnd: isize) {
+    const DWMWA_TRANSITIONS_FORCEDISABLED: u32 = 3;
+    let disable: i32 = 1;
+    unsafe {
+        DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_TRANSITIONS_FORCEDISABLED,
+            &disable as *const i32 as *const std::ffi::c_void,
+            std::mem::size_of::<i32>() as u32,
+        );
+    }
+}
+
 fn reveal_main_window(app: &tauri::AppHandle) -> Option<tauri::WebviewWindow> {
     let window = app.get_webview_window("main")?;
     let _ = window.unminimize();
@@ -53,16 +78,16 @@ const TRAY_MENU_WIDTH: f64 = 240.0;
 const TRAY_MENU_ITEM_HEIGHT: f64 = 26.0;
 const TRAY_MENU_SEPARATOR_HEIGHT: f64 = 5.0;
 const TRAY_MENU_PANEL_EXTRA: f64 = 18.0;
-const TRAY_MENU_ITEM_COUNT: f64 = 6.0;
+const TRAY_MENU_ITEM_COUNT: f64 = 7.0;
 const TRAY_MENU_SEPARATOR_COUNT: f64 = 3.0;
-/// 计算结果: 6*26 + 3*5 + 18 = 189.0
+/// 计算结果: 7*26 + 3*5 + 18 = 215.0
 const TRAY_MENU_HEIGHT: f64 = TRAY_MENU_ITEM_COUNT * TRAY_MENU_ITEM_HEIGHT
     + TRAY_MENU_SEPARATOR_COUNT * TRAY_MENU_SEPARATOR_HEIGHT
     + TRAY_MENU_PANEL_EXTRA;
 
 fn hide_tray_menu_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window(TRAY_MENU_WINDOW_LABEL) {
-        let _ = window.hide();
+        let _ = window.emit("tray-menu-hide-requested", ());
     }
 }
 
@@ -428,11 +453,16 @@ fn main() {
                 .shadow(false)
                 .build()?;
 
+                #[cfg(windows)]
+                if let Ok(hwnd) = tray_menu_window.hwnd() {
+                    disable_window_transitions(hwnd.0 as isize);
+                }
+
                 let tray_menu_for_focus = tray_menu_window.clone();
                 tray_menu_window.on_window_event(move |event| {
                     if let tauri::WindowEvent::Focused(focused) = event {
                         if !*focused {
-                            let _ = tray_menu_for_focus.hide();
+                            let _ = tray_menu_for_focus.emit("tray-menu-hide-requested", ());
                         }
                     }
                 });
