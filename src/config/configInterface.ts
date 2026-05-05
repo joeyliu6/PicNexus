@@ -250,6 +250,9 @@ export interface UserConfig {
   /** 是否已完成首次使用引导 */
   onboardingCompleted?: boolean;
 
+  /** 是否已确认公共图床/第三方平台非官方适配风险 */
+  publicServiceRiskAccepted?: boolean;
+
   /** 图片压缩配置 */
   imageCompression?: ImageCompressionConfig;
 

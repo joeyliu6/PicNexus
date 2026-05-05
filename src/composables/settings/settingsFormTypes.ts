@@ -39,5 +39,6 @@ export interface SettingsFormData extends SettingsFormShape {
   linkOutput: NonNullable<UserConfig['linkOutput']>;
   globalShortcut: NonNullable<UserConfig['globalShortcut']>;
   autoUpdateEnabled: boolean;
+  publicServiceRiskAccepted: boolean;
   imageCompression: ImageCompressionConfig;
 }

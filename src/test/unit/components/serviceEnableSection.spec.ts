@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountWithDefaults } from '../../helpers/vueMount';
 
-const { showConfigMock } = vi.hoisted(() => ({
+const { showConfigMock, confirmMock } = vi.hoisted(() => ({
   showConfigMock: vi.fn(),
+  confirmMock: vi.fn(),
 }));
 
 // 组件内用 useToast 做"至少保留一个图床"拦截提示；单测无 PrimeVue ToastService 上下文，
@@ -12,6 +13,12 @@ vi.mock('../../../composables/useToast', () => ({
     success: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn(),
     show: vi.fn(), clear: vi.fn(),
     showConfig: showConfigMock,
+  }),
+}));
+
+vi.mock('../../../composables/useConfirm', () => ({
+  useConfirm: () => ({
+    confirm: confirmMock,
   }),
 }));
 
@@ -45,6 +52,7 @@ const baseProps = {
   isCheckingJd: false,
   isCheckingQiyu: false,
   availableServices: ['jd', 'weibo'],
+  publicServiceRiskAccepted: true,
   serviceNames: {
     weibo: '微博',
     qiyu: '七鱼',
@@ -71,6 +79,8 @@ function mountSection(props = {}) {
 describe('ServiceEnableSection', () => {
   beforeEach(() => {
     showConfigMock.mockClear();
+    confirmMock.mockClear();
+    confirmMock.mockResolvedValue(true);
   });
 
   it('活跃 session 期间顶部统计统一进入骨架态（包含 unconfigured）', () => {
@@ -105,6 +115,7 @@ describe('ServiceEnableSection', () => {
         },
         refreshingServiceIds: new Set(['qiyu']),
         availableServices: ['weibo', 'qiyu', 'jd', 'smms'],
+        publicServiceRiskAccepted: true,
       },
       global: {
         directives: {
@@ -136,6 +147,38 @@ describe('ServiceEnableSection', () => {
       [['jd']],
     ]);
     expect(wrapper.emitted('save')).toHaveLength(2);
+    expect(confirmMock).not.toHaveBeenCalled();
+  });
+
+  it('首次启用非官方公共图床前需要确认风险', async () => {
+    const wrapper = mountSection({
+      availableServices: ['r2'],
+      publicServiceRiskAccepted: false,
+    });
+
+    await wrapper.get('[aria-label="启用 京东"]').trigger('click');
+
+    expect(confirmMock).toHaveBeenCalledWith(
+      expect.stringContaining('非官方公共图床'),
+      expect.objectContaining({ header: '公共图床风险确认' }),
+    );
+    expect(wrapper.emitted('accept-public-service-risk')).toHaveLength(1);
+    expect(wrapper.emitted('update:availableServices')).toEqual([[['r2', 'jd']]]);
+    expect(wrapper.emitted('save')).toHaveLength(1);
+  });
+
+  it('取消风险确认时不会启用非官方公共图床', async () => {
+    confirmMock.mockResolvedValueOnce(false);
+    const wrapper = mountSection({
+      availableServices: ['r2'],
+      publicServiceRiskAccepted: false,
+    });
+
+    await wrapper.get('[aria-label="启用 京东"]').trigger('click');
+
+    expect(wrapper.emitted('accept-public-service-risk')).toBeUndefined();
+    expect(wrapper.emitted('update:availableServices')).toBeUndefined();
+    expect(wrapper.emitted('save')).toBeUndefined();
   });
 
   it('禁止关闭最后一个已启用图床并展示错误提示', async () => {

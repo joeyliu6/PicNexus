@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watch, nextTick } from 'vue';
 import Divider from 'primevue/divider';
-import type { GithubCdnConfig, ServiceType, CustomS3Profile, LinkPrefixItem } from '../../config/types';
+import { PUBLIC_SERVICE_RISK_TOOLTIP, type GithubCdnConfig, type ServiceType, type CustomS3Profile, type LinkPrefixItem } from '../../config/types';
 import PrivateStorageGroup from './hosting/PrivateStorageGroup.vue';
 import CookieServiceGroup from './hosting/CookieServiceGroup.vue';
 import TokenServiceGroup from './hosting/TokenServiceGroup.vue';
@@ -66,11 +66,13 @@ const props = defineProps<{
   serviceNames: Record<string, string>;
   availableServices: string[];
   serviceConfigStatus: Record<ServiceType, boolean>;
+  publicServiceRiskAccepted: boolean;
 }>();
 
 const emit = defineEmits<{
   save: [];
   'update:availableServices': [services: string[]];
+  'accept-public-service-risk': [];
   testPrivate: [providerId: string];
   testToken: [providerId: string];
   testCookie: [providerId: string];
@@ -120,7 +122,9 @@ watch(() => props.targetCardId, (val) => {
       :is-checking-qiyu="isCheckingQiyu"
       :available-services="availableServices"
       :service-names="serviceNames"
+      :public-service-risk-accepted="publicServiceRiskAccepted"
       @update:available-services="emit('update:availableServices', $event)"
+      @accept-public-service-risk="emit('accept-public-service-risk')"
       @save="emit('save')"
       @test-all="emit('testAll')"
       @cancel-batch-test="emit('cancelBatchTest')"
@@ -156,7 +160,18 @@ watch(() => props.targetCardId, (val) => {
     <Divider />
 
     <div class="form-group">
-      <label class="group-label">公共图床 · 免配置</label>
+      <div class="group-header-row">
+        <label class="group-label">公共图床 · 免配置</label>
+        <span
+          class="group-info-icon"
+          v-tooltip.top="PUBLIC_SERVICE_RISK_TOOLTIP"
+          role="img"
+          aria-label="公共图床风险说明"
+          tabindex="0"
+        >
+          <i class="pi pi-info-circle" aria-hidden="true"></i>
+        </span>
+      </div>
       <BuiltinServiceGroup
         :jd-available="jdAvailable"
         :qiyu-available="qiyuAvailable"
@@ -172,7 +187,18 @@ watch(() => props.targetCardId, (val) => {
     <Divider />
 
     <div class="form-group">
-      <label class="group-label">公共图床 · Cookie 登录</label>
+      <div class="group-header-row">
+        <label class="group-label">公共图床 · Cookie 登录</label>
+        <span
+          class="group-info-icon"
+          v-tooltip.top="PUBLIC_SERVICE_RISK_TOOLTIP"
+          role="img"
+          aria-label="公共图床风险说明"
+          tabindex="0"
+        >
+          <i class="pi pi-info-circle" aria-hidden="true"></i>
+        </span>
+      </div>
       <CookieServiceGroup
         :cookie-form-data="cookieFormData"
         :testing-connections="testingConnections"
@@ -198,7 +224,18 @@ watch(() => props.targetCardId, (val) => {
     <Divider />
 
     <div class="form-group">
-      <label class="group-label">公共图床 · Token 授权</label>
+      <div class="group-header-row">
+        <label class="group-label">公共图床 · Token 授权</label>
+        <span
+          class="group-info-icon"
+          v-tooltip.top="PUBLIC_SERVICE_RISK_TOOLTIP"
+          role="img"
+          aria-label="公共图床风险说明"
+          tabindex="0"
+        >
+          <i class="pi pi-info-circle" aria-hidden="true"></i>
+        </span>
+      </div>
       <TokenServiceGroup
         :token-form-data="tokenFormData"
         :testing-connections="testingConnections"
@@ -251,6 +288,28 @@ watch(() => props.targetCardId, (val) => {
   border-color: var(--primary);
   color: var(--primary);
   background: var(--primary-alpha-8);
+}
+
+.group-info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
+  cursor: help;
+  transition: color var(--duration-fast) ease, background-color var(--duration-fast) ease;
+}
+
+.group-info-icon:hover,
+.group-info-icon:focus-visible {
+  color: var(--warning);
+  background: var(--warning-alpha-8);
+}
+
+.group-info-icon .pi {
+  font-size: var(--text-sm);
 }
 
 .category-icon {

@@ -84,6 +84,7 @@ export function useSettingsForm() {
       uploadFromFile: 'CommandOrControl+Shift+O',
     },
     autoUpdateEnabled: true,
+    publicServiceRiskAccepted: false,
     imageCompression: { ...DEFAULT_CONFIG.imageCompression! } as ImageCompressionConfig,
     editorServer: { ...DEFAULT_CONFIG.editorServer! } as EditorServerConfig,
   });
@@ -315,6 +316,7 @@ export function useSettingsForm() {
         formData.value.appBehavior.closeToTray = true;
       }
       formData.value.autoUpdateEnabled = config.autoUpdate?.enabled ?? true;
+      formData.value.publicServiceRiskAccepted = config.publicServiceRiskAccepted ?? false;
       formData.value.imageCompression = config.imageCompression ?? { ...DEFAULT_CONFIG.imageCompression! };
       formData.value.editorServer = { ...DEFAULT_CONFIG.editorServer!, ...(config.editorServer ?? {}) };
       formData.value.globalShortcut = config.globalShortcut ?? {
@@ -404,6 +406,7 @@ export function useSettingsForm() {
       config.appBehavior = { ...formData.value.appBehavior };
       config.globalShortcut = { ...formData.value.globalShortcut };
       config.autoUpdate = { enabled: formData.value.autoUpdateEnabled };
+      config.publicServiceRiskAccepted = formData.value.publicServiceRiskAccepted;
       config.imageCompression = { ...formData.value.imageCompression };
       config.editorServer = { ...formData.value.editorServer };
       config.availableServices = [...availableServices.value];

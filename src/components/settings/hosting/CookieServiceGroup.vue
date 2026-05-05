@@ -86,7 +86,7 @@ const namiAuthToken = computed(() => extractNamiAuthToken(props.cookieFormData.n
         <div class="form-item span-full">
           <label>Cookie</label>
           <Textarea v-model="cookieFormData[svc.id].cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
-          <small class="form-hint">点击「自动获取」登录即可自动填入 Cookie，无需手动操作<br>如需手动填写，可在浏览器中登录后通过开发者工具（F12 → Network）复制 Cookie</small>
+          <small class="form-hint">点击「自动获取」登录即可自动填入 Cookie，无需手动操作<br>这些服务均为非官方适配，请自行确认平台规则并承担账号与数据风险</small>
         </div>
         <div v-if="svc.id === 'nami' && namiAuthToken" class="form-item span-full">
           <label>Auth-Token（自动提取）</label>

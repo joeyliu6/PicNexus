@@ -200,6 +200,7 @@ const HostingSettingsPanelStub = defineComponent({
   props: ['availableServices', 'serviceConfigStatus', 'testingConnections', 'targetCardId'],
   emits: [
     'update:available-services',
+    'accept-public-service-risk',
     'test-private',
     'test-token',
     'test-cookie',
@@ -213,6 +214,7 @@ const HostingSettingsPanelStub = defineComponent({
     <section data-testid="hosting-panel" :data-services="availableServices.join(',')" :data-target-card="targetCardId || ''">
       <button class="disable-r2" @click="$emit('update:available-services', ['jd'])">disable r2</button>
       <button class="enable-r2" @click="$emit('update:available-services', ['jd', 'r2'])">enable r2</button>
+      <button class="accept-public-risk" @click="$emit('accept-public-service-risk')">accept risk</button>
       <button class="test-r2" @click="$emit('test-private', 'r2')">test r2</button>
       <button class="test-smms" @click="$emit('test-token', 'smms')">test smms</button>
       <button class="test-weibo" @click="$emit('test-cookie', 'weibo')">test weibo</button>
@@ -304,6 +306,7 @@ function makeFormData() {
       uploadFromFile: 'CommandOrControl+Shift+O',
     },
     autoUpdateEnabled: true,
+    publicServiceRiskAccepted: false,
     imageCompression: config.imageCompression!,
     editorServer: config.editorServer!,
   });
@@ -401,6 +404,16 @@ describe('SettingsView page interactions', () => {
 
     await wrapper.get('.hosting-save').trigger('click');
     expect(mockState.debouncedSaveSettings).toHaveBeenCalledTimes(3);
+  });
+
+  it('records public service risk acknowledgement from hosting settings', async () => {
+    const wrapper = await mountSettings();
+
+    await wrapper.findAll('.nav-item')[1].trigger('click');
+    await wrapper.get('.accept-public-risk').trigger('click');
+
+    expect(mockState.formData.value.publicServiceRiskAccepted).toBe(true);
+    expect(mockState.debouncedSaveSettings).not.toHaveBeenCalled();
   });
 
   it('saves compression changes from the advanced tab', async () => {

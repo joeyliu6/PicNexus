@@ -35,7 +35,7 @@ const emit = defineEmits<{
       @check="emit('checkBuiltin', $event)"
     >
       <div class="builtin-info">
-        <p>京东图床默认启用，无需手动配置，可以直接使用。</p>
+        <p>京东图床默认启用，无需手动配置；该适配为非官方实现，使用前请自行确认平台规则。</p>
       </div>
     </HostingCard>
 
@@ -55,7 +55,7 @@ const emit = defineEmits<{
       @check="emit('checkBuiltin', $event)"
     >
       <div class="builtin-info">
-        <p>七鱼图床默认启用，Token 会自动获取，无需手动配置。</p>
+        <p>七鱼图床默认启用，Token 会自动获取；该适配为非官方实现，接口可能随时失效。</p>
       </div>
     </HostingCard>
   </div>

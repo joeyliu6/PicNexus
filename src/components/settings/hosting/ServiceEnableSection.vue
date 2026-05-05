@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import type { ServiceType } from '../../../config/types';
-import { PRIVATE_SERVICES, PUBLIC_SERVICES } from '../../../config/types';
+import { PRIVATE_SERVICES, PUBLIC_SERVICES, PUBLIC_SERVICE_RISK_TOOLTIP, isPublicRiskService } from '../../../config/types';
 import ServiceChipGrid from '../ServiceChipGrid.vue';
 import type { BatchTestProgress } from '../../../types/batchTest';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
 import { useHealthCheck } from '../../../composables/settings/useHealthCheck';
 import type { ServiceCheckSession } from '../../../types/serviceCheck';
 import { useToast } from '../../../composables/useToast';
+import { useConfirm } from '../../../composables/useConfirm';
 
 const props = defineProps<{
   healthStatusMap: Record<string, ServiceHealthStatus>;
@@ -22,10 +23,12 @@ const props = defineProps<{
   isCheckingQiyu: boolean;
   availableServices: string[];
   serviceNames: Record<string, string>;
+  publicServiceRiskAccepted: boolean;
 }>();
 
 const emit = defineEmits<{
   'update:availableServices': [services: string[]];
+  'accept-public-service-risk': [];
   save: [];
   testAll: [];
   cancelBatchTest: [];
@@ -115,8 +118,9 @@ const localAvailableServices = computed({
 });
 
 const toast = useToast();
+const { confirm: confirmDialog } = useConfirm();
 
-function toggleService(service: ServiceType) {
+async function toggleService(service: ServiceType) {
   const current = localAvailableServices.value;
   const isRemoving = current.includes(service);
   // Why: useConfig.saveConfig 会在 availableServices 为空时拒绝保存并 toast,
@@ -129,6 +133,22 @@ function toggleService(service: ServiceType) {
     });
     return;
   }
+
+  if (!isRemoving && isPublicRiskService(service) && !props.publicServiceRiskAccepted) {
+    const serviceName = props.serviceNames[service] ?? service;
+    const confirmed = await confirmDialog(
+      `「${serviceName}」属于非官方公共图床/第三方平台适配，可能违反平台规则、随时失效，账号或数据风险由你自行承担。确认已了解并继续启用？`,
+      {
+        header: '公共图床风险确认',
+        acceptLabel: '我已了解并继续',
+        rejectLabel: '取消',
+        acceptClass: 'p-button-warning',
+      },
+    );
+    if (!confirmed) return;
+    emit('accept-public-service-risk');
+  }
+
   localAvailableServices.value = isRemoving
     ? current.filter(s => s !== service)
     : [...current, service];
@@ -228,6 +248,7 @@ const skeletonStatuses = computed<ServiceHealthStatus[]>(() => {
       <ServiceChipGrid
         :services="PUBLIC_SERVICES"
         group-title="公共图床"
+        :group-tooltip="PUBLIC_SERVICE_RISK_TOOLTIP"
         :health-status-map="healthStatusMap"
         :health-tooltip-map="healthTooltipMap"
         :available-services="localAvailableServices"

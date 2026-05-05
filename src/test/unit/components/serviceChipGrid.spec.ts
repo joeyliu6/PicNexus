@@ -67,4 +67,35 @@ describe('ServiceChipGrid', () => {
 
     expect(wrapper.get('.toggle-chip').attributes('data-tooltip')).toBe('Cookie 无效或已过期');
   });
+
+  it('renders an info tooltip in the group header when provided', () => {
+    const groupTooltip = '公共图床为非官方适配，使用风险由用户承担。';
+    const wrapper = mountWithDefaults(ServiceChipGrid, {
+      props: {
+        services: ['jd'],
+        groupTitle: '公共图床',
+        groupTooltip,
+        healthStatusMap: {
+          jd: 'verified',
+        },
+        healthTooltipMap: {
+          jd: '可用',
+        },
+        availableServices: ['jd'],
+        serviceNames: {
+          jd: '京东',
+        },
+        isBatchTesting: false,
+        refreshingServiceIds: new Set<string>(),
+        batchTestedServices: new Set<string>(),
+        batchDoneServices: new Set<string>(),
+        activeFilter: null,
+      },
+    });
+
+    const icon = wrapper.get('.service-group-info');
+    expect(icon.attributes('aria-label')).toBe('公共图床风险说明');
+    expect(icon.attributes('data-tooltip')).toBe(groupTooltip);
+    expect(icon.find('.pi-info-circle').exists()).toBe(true);
+  });
 });

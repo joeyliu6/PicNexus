@@ -152,6 +152,7 @@ export const DEFAULT_CONFIG: UserConfig = {
     enabled: true,
   },
   onboardingCompleted: false,
+  publicServiceRiskAccepted: false,
   editorServer: {
     enabled: false,
     typoraEnabled: false,

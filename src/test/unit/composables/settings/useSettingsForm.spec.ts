@@ -143,6 +143,7 @@ describe('useSettingsForm', () => {
       remotePath: '/PicNexus/',
     }];
     api.formData.value.webdav.activeId = 'dav-1';
+    api.formData.value.publicServiceRiskAccepted = true;
 
     await expect(api.saveSettings({ trackAdvancedStatus: true })).resolves.toBe(true);
 
@@ -153,6 +154,7 @@ describe('useSettingsForm', () => {
     expect(savedConfig.services.r2.accountId).toBe('a'.repeat(32));
     expect(savedConfig.services.smms.token).toBe('smms-token');
     expect(savedConfig.services.nami.authToken).toBe('NAMI123');
+    expect(savedConfig.publicServiceRiskAccepted).toBe(true);
     expect(savedConfig.custom_s3_profiles).toEqual([customProfile]);
     expect(savedConfig.webdav.profiles[0]).toMatchObject({
       id: 'dav-1',
@@ -453,6 +455,7 @@ describe('useSettingsForm', () => {
         customTemplate: '![image]({url})',
         autoCopy: false,
       },
+      publicServiceRiskAccepted: true,
     });
     mockState.configStoreGet.mockResolvedValue(config);
 
@@ -474,6 +477,7 @@ describe('useSettingsForm', () => {
     expect(api.formData.value.linkPrefixEnabled).toBe(false);
     expect(api.formData.value.linkPrefixList.length).toBeGreaterThan(0);
     expect(api.formData.value.linkOutput.defaultFormat).toBe('markdown');
+    expect(api.formData.value.publicServiceRiskAccepted).toBe(true);
     expect(api.formData.value.appBehavior.autoStart).toBe(true);
     expect(api.formData.value.appBehavior.closeToTray).toBe(true);
     expect(mockState.syncCustomS3Uploaders).toHaveBeenCalledWith([migratedProfile]);

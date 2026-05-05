@@ -72,6 +72,7 @@ export async function applyConfigToForm(
     };
     if (formData.value.appBehavior.closeToTray === undefined) formData.value.appBehavior.closeToTray = true;
     formData.value.autoUpdateEnabled = config.autoUpdate?.enabled ?? DEFAULT_CONFIG.autoUpdate?.enabled ?? true;
+    formData.value.publicServiceRiskAccepted = config.publicServiceRiskAccepted ?? DEFAULT_CONFIG.publicServiceRiskAccepted ?? false;
     formData.value.imageCompression = structuredClone(config.imageCompression ?? DEFAULT_CONFIG.imageCompression!);
     formData.value.editorServer = {
       ...structuredClone(DEFAULT_CONFIG.editorServer!),

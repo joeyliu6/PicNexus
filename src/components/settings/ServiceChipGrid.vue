@@ -11,6 +11,8 @@ const props = defineProps<{
   services: ServiceType[];
   /** 分组标题 */
   groupTitle: string;
+  /** 分组标题右侧提示 */
+  groupTooltip?: string;
   /** 各服务的健康状态映射 */
   healthStatusMap: Record<string, ServiceHealthStatus>;
   /** 各服务的 tooltip 映射 */
@@ -73,7 +75,19 @@ const serviceList = computed(() => props.services);
 
 <template>
   <div class="service-group-section">
-    <div class="service-group-title">{{ groupTitle }}</div>
+    <div class="service-group-header">
+      <div class="service-group-title">{{ groupTitle }}</div>
+      <span
+        v-if="groupTooltip"
+        class="service-group-info"
+        v-tooltip.top="groupTooltip"
+        role="img"
+        aria-label="公共图床风险说明"
+        tabindex="0"
+      >
+        <i class="pi pi-info-circle" aria-hidden="true"></i>
+      </span>
+    </div>
     <div class="service-toggles-grid">
       <div
         v-for="svc in serviceList"
@@ -109,13 +123,42 @@ const serviceList = computed(() => props.services);
   margin-bottom: 0;
 }
 
+.service-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
 .service-group-title {
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: var(--space-sm);
+}
+
+.service-group-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
+  cursor: help;
+  transition: color var(--duration-fast) ease, background-color var(--duration-fast) ease;
+}
+
+.service-group-info:hover,
+.service-group-info:focus-visible {
+  color: var(--warning);
+  background: var(--warning-alpha-8);
+}
+
+.service-group-info .pi {
+  font-size: var(--text-sm);
 }
 
 .service-toggles-grid {
