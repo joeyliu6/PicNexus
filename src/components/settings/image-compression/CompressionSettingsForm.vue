@@ -32,7 +32,7 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
   <div class="settings-row">
     <div class="settings-row-info">
       <span class="settings-row-label">输出格式</span>
-      <span class="settings-row-desc">不同格式在体积、画质和兼容性上各有取舍</span>
+      <span class="settings-row-desc" v-tooltip.top="'不同格式在体积、画质和兼容性上各有取舍'">不同格式在体积、画质和兼容性上各有取舍</span>
     </div>
     <div class="format-tabs">
       <button
@@ -51,7 +51,7 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
   <div class="settings-row">
     <div class="settings-row-info">
       <span class="settings-row-label">压缩质量</span>
-      <span class="settings-row-desc">1-100，数值越大画质越高</span>
+      <span class="settings-row-desc" v-tooltip.top="'1-100，数值越大画质越高'">1-100，数值越大画质越高</span>
     </div>
     <div class="quality-input-group">
       <span class="quality-badge" :class="qualityLevel.cls">{{ qualityLevel.label }}</span>
@@ -71,7 +71,7 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
   <div class="settings-row">
     <div class="settings-row-info">
       <span class="settings-row-label">图片缩放</span>
-      <span class="settings-row-desc">等比缩放，100% 为原始尺寸</span>
+      <span class="settings-row-desc" v-tooltip.top="'等比缩放，100% 为原始尺寸'">等比缩放，100% 为原始尺寸</span>
     </div>
     <div class="scale-input-group">
       <span class="quality-badge" :class="scaleLevel.cls">{{ scaleLevel.label }}</span>
@@ -92,7 +92,7 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
   <div class="settings-row">
     <div class="settings-row-info">
       <span class="settings-row-label">跳过小文件</span>
-      <span class="settings-row-desc">低于阈值的文件不做压缩处理，避免越压越大</span>
+      <span class="settings-row-desc" v-tooltip.top="'低于阈值的文件不做压缩处理，避免越压越大'">低于阈值的文件不做压缩处理，避免越压越大</span>
     </div>
     <div class="skip-input-group">
       <InputNumber
@@ -114,7 +114,7 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
   <div class="settings-row">
     <div class="settings-row-info">
       <span class="settings-row-label">去除 EXIF 元数据</span>
-      <span class="settings-row-desc">上传到公共图床时，EXIF 通常会被自动去除；私有存储建议开启以保护隐私</span>
+      <span class="settings-row-desc" v-tooltip.top="'上传到公共图床时，EXIF 通常会被自动去除；私有存储建议开启以保护隐私'">上传到公共图床时，EXIF 通常会被自动去除；私有存储建议开启以保护隐私</span>
     </div>
     <ToggleSwitch
       :modelValue="activePreset.stripExif"
@@ -128,6 +128,20 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
 
 .settings-row {
   border-bottom: 1px solid var(--border-subtle);
+  min-width: 0;
+}
+
+.settings-row-info {
+  overflow: hidden;
+}
+
+.settings-row-label,
+.settings-row-desc {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* --- Format Tabs --- */
@@ -135,11 +149,12 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
 .format-tabs {
   display: flex;
   gap: var(--space-xs-sm);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   flex-shrink: 0;
 }
 
 .format-tab {
+  flex: 0 0 auto;
   padding: var(--space-xs-sm) var(--space-md);
   border: 1px solid var(--border-subtle);
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 999px 为药丸形圆角 */
@@ -150,6 +165,7 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
   font-weight: var(--weight-medium);
   cursor: pointer;
   transition: all var(--duration-fast);
+  white-space: nowrap;
 }
 
 .format-tab:hover {
@@ -314,21 +330,4 @@ const outputFormatOptions = OUTPUT_FORMAT_OPTIONS;
   opacity: 0.6;
 }
 
-/* --- Responsive --- */
-
-@media (width <= 900px) {
-  .settings-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .narrow-input,
-  .skip-input-group {
-    width: 100%;
-  }
-
-  .format-tabs {
-    justify-content: flex-start;
-  }
-}
 </style>

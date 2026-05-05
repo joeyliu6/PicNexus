@@ -37,7 +37,7 @@ export const PUBLIC_SERVICES: ServiceType[] = ['weibo', 'zhihu', 'nami', 'qiyu',
  */
 export const PUBLIC_RISK_SERVICES: ServiceType[] = ['jd', 'qiyu', 'weibo', 'zhihu', 'nowcoder', 'nami', 'bilibili', 'chaoxing'];
 
-export const PUBLIC_SERVICE_RISK_TOOLTIP = '京东、七鱼、微博、知乎、牛客、纳米、B站、超星等公共图床为非官方适配，可能违反平台规则或随时失效，使用风险由用户承担。';
+export const PUBLIC_SERVICE_RISK_TOOLTIP = '公共图床为非官方适配，稳定性与可用性不作保证，可能因平台规则或接口变化而失效。请自行评估风险后启用。';
 
 export function isPublicRiskService(serviceId: string): serviceId is ServiceType {
   return (PUBLIC_RISK_SERVICES as string[]).includes(serviceId);

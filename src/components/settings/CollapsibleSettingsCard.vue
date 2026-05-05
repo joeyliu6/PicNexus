@@ -36,7 +36,7 @@ const emit = defineEmits<{
         />
         <div class="header-info">
           <span class="card-title">{{ title }}</span>
-          <span class="card-description">{{ description }}</span>
+          <span class="card-description" v-tooltip.top="description">{{ description }}</span>
         </div>
       </div>
       <div class="header-right">

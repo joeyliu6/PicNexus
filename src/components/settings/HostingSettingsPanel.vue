@@ -226,15 +226,6 @@ watch(() => props.targetCardId, (val) => {
     <div class="form-group">
       <div class="group-header-row">
         <label class="group-label">公共图床 · Token 授权</label>
-        <span
-          class="group-info-icon"
-          v-tooltip.top="PUBLIC_SERVICE_RISK_TOOLTIP"
-          role="img"
-          aria-label="公共图床风险说明"
-          tabindex="0"
-        >
-          <i class="pi pi-info-circle" aria-hidden="true"></i>
-        </span>
       </div>
       <TokenServiceGroup
         :token-form-data="tokenFormData"
