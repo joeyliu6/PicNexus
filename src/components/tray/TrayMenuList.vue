@@ -4,6 +4,7 @@ import type { TrayMenuItem } from '../../services/trayMenu';
 interface CommandEntry {
   id: string;
   text: string;
+  icon?: string;
   enabled?: boolean;
   items?: TrayMenuItem[];
 }
@@ -24,6 +25,7 @@ const COMMAND_ICONS: Record<string, string> = {
   select_upload_files: 'pi-images',
   current_service: 'pi-cloud',
   open_history: 'pi-history',
+  toggle_theme: 'pi-sun',
   quit: 'pi-power-off',
 };
 
@@ -76,7 +78,7 @@ function handleClick(item: TrayMenuItem): void {
       >
         <i
           class="pi menu-icon"
-          :class="[COMMAND_ICONS[asCommand(item).id] ?? 'pi-circle', { 'menu-icon--danger': isDanger(item) }]"
+          :class="[asCommand(item).icon ?? COMMAND_ICONS[asCommand(item).id] ?? 'pi-circle', { 'menu-icon--danger': isDanger(item) }]"
           aria-hidden="true"
         />
         <span class="menu-label">{{ asCommand(item).text }}</span>
@@ -94,9 +96,9 @@ function handleClick(item: TrayMenuItem): void {
 }
 
 .menu-separator {
-  height: 1px;
-  margin: var(--space-2xs) var(--space-sm);
-  background: var(--border-subtle);
+  height: 0;
+  margin: var(--space-2xs) 0;
+  background: transparent;
 }
 
 .menu-row {

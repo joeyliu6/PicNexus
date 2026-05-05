@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import MainLayout from './components/layout/MainLayout.vue';
 import OnboardingDialog from './components/onboarding/OnboardingDialog.vue';
 import BackupPasswordDialog from './components/dialogs/BackupPasswordDialog.vue';
@@ -36,7 +37,7 @@ if (import.meta.env.DEV) {
 
 const { state: undoState, cancel: cancelUndo } = useUndoToast();
 
-const { effectiveTheme, initializeTheme } = useThemeManager();
+const { effectiveTheme, initializeTheme, updateConfig } = useThemeManager();
 const toast = useToast();
 const { checkAndShow: checkOnboarding } = useOnboarding();
 const { initGlobalShortcuts, cleanup: cleanupGlobalShortcuts } = useGlobalShortcut();
@@ -74,6 +75,7 @@ function handleOnline() {
 
 // 窗口恢复处理：休眠/后台回到前台时验证数据库连接
 let unlistenFocus: (() => void) | null = null;
+let unlistenConfigUpdate: UnlistenFn | null = null;
 
 async function handleAppResume() {
   if (document.visibilityState !== 'visible') return;
@@ -167,6 +169,15 @@ onMounted(async () => {
   await initializeTheme();
   log.debug('主题初始化完成:', effectiveTheme.value);
 
+  unlistenConfigUpdate = await listen('config-updated', async () => {
+    try {
+      const latestConfig = await configStore.get<UserConfig>('config');
+      if (latestConfig) updateConfig(latestConfig);
+    } catch (error) {
+      log.warn('刷新主题配置失败:', error);
+    }
+  });
+
   window.addEventListener('offline', handleOffline);
   window.addEventListener('online', handleOnline);
   document.addEventListener('visibilitychange', handleAppResume);
@@ -210,6 +221,7 @@ onUnmounted(() => {
   window.removeEventListener('offline', handleOffline);
   window.removeEventListener('online', handleOnline);
   document.removeEventListener('visibilitychange', handleAppResume);
+  unlistenConfigUpdate?.();
   if (unlistenFocus) unlistenFocus();
   cleanupGlobalShortcuts().catch((e) => log.warn('快捷键清理失败:', e));
   if (periodicCheckIntervalId !== null) clearInterval(periodicCheckIntervalId);

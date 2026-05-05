@@ -8,6 +8,7 @@ import {
   isPublicRiskService,
   makeCustomS3Id,
   type ServiceType,
+  type ThemeMode,
   type UserConfig,
 } from '../config/types';
 import { CUSTOM_S3_REQUIRED_FIELDS, NO_CONFIG_SERVICES, SERVICE_REQUIRED_FIELDS } from '../constants/serviceRequiredFields';
@@ -24,6 +25,7 @@ export type TrayMenuItem = { item: 'Separator' } | TrayMenuCommand | TrayMenuSer
 export interface TrayMenuCommand {
   id: string;
   text: string;
+  icon?: string;
   checked?: boolean;
   enabled?: boolean;
   serviceId?: string;
@@ -50,6 +52,7 @@ export interface TrayMenuActions {
   uploadClipboard(): void;
   selectUploadFiles(): void;
   toggleService(serviceId: string): void;
+  toggleTheme(): void;
   openHistory(): void;
   quit(): void;
 }
@@ -59,6 +62,34 @@ export interface ToggleTrayServiceOptions {
 }
 
 const log = createLogger('TrayMenu');
+type EffectiveTheme = 'light' | 'dark';
+
+function getSystemTheme(): EffectiveTheme {
+  if (typeof window.matchMedia !== 'function') return 'dark';
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+export function resolveTrayEffectiveTheme(config: UserConfig): EffectiveTheme {
+  const mode = config.theme?.mode ?? DEFAULT_CONFIG.theme?.mode ?? 'auto';
+  if (mode === 'auto') return getSystemTheme();
+  return mode;
+}
+
+export function applyTrayTheme(config: UserConfig): EffectiveTheme {
+  const effectiveTheme = resolveTrayEffectiveTheme(config);
+
+  document.documentElement.classList.remove('dark-theme', 'light-theme');
+  document.documentElement.classList.add(`${effectiveTheme}-theme`);
+  return effectiveTheme;
+}
+
+export function formatThemeToggleLabel(config: UserConfig): string {
+  return resolveTrayEffectiveTheme(config) === 'dark' ? '切换到浅色' : '切换到深色';
+}
+
+function getThemeToggleIcon(config: UserConfig): string {
+  return resolveTrayEffectiveTheme(config) === 'dark' ? 'pi-sun' : 'pi-moon';
+}
 
 function getAvailableServiceSet(config: UserConfig): Set<string> {
   return new Set(config.availableServices ?? DEFAULT_CONFIG.availableServices ?? []);
@@ -207,6 +238,12 @@ export function buildTrayMenuItems(config: UserConfig, actions: TrayMenuActions)
     },
     separator(),
     { id: 'open_history', text: '历史记录', action: actions.openHistory },
+    {
+      id: 'toggle_theme',
+      text: formatThemeToggleLabel(config),
+      icon: getThemeToggleIcon(config),
+      action: actions.toggleTheme,
+    },
     separator(),
     { id: 'quit', text: '退出', action: actions.quit },
   ];
@@ -258,6 +295,9 @@ export function createTrayMenuActions(): TrayMenuActions {
     toggleService: (serviceId: string) => runTrayTask(async () => {
       await toggleTrayService(serviceId);
     }),
+    toggleTheme: () => runTrayTask(async () => {
+      await toggleTrayTheme();
+    }),
     openHistory: () => runTrayTask(openHistory),
     quit: () => runTrayTask(() => exitApp(0)),
   };
@@ -307,6 +347,24 @@ export async function toggleTrayService(
   await tauriEmit('config-updated', { timestamp: Date.now(), source: 'tray-menu' });
 
   return nextServices;
+}
+
+export async function toggleTrayTheme(): Promise<ThemeMode> {
+  const config = await loadTrayConfig();
+  const nextMode: ThemeMode = resolveTrayEffectiveTheme(config) === 'dark' ? 'light' : 'dark';
+  const configToSave = JSON.parse(JSON.stringify(config)) as UserConfig;
+
+  configToSave.theme = {
+    mode: nextMode,
+    enableTransitions: false,
+    transitionDuration: config.theme?.transitionDuration ?? DEFAULT_CONFIG.theme?.transitionDuration ?? 300,
+  };
+
+  await configStore.set('config', configToSave);
+  await configStore.save();
+  await tauriEmit('config-updated', { timestamp: Date.now(), source: 'tray-menu' });
+
+  return nextMode;
 }
 
 export async function setupTrayMenu(): Promise<UnlistenFn> {

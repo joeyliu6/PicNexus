@@ -12,7 +12,6 @@ interface ServiceEntry {
 
 const props = defineProps<{
   items: TrayMenuItem[];
-  pendingServiceId: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -47,7 +46,7 @@ function handleClick(item: TrayMenuItem): void {
         type="button"
         class="flyout-row"
         :class="{ checked: isServiceItem(item) && item.checked }"
-        :disabled="(item as ServiceEntry).enabled === false || props.pendingServiceId !== null"
+        :disabled="(item as ServiceEntry).enabled === false"
         :role="isServiceItem(item) ? 'menuitemcheckbox' : 'menuitem'"
         :aria-checked="isServiceItem(item) && item.checked ? 'true' : 'false'"
         @click="handleClick(item)"

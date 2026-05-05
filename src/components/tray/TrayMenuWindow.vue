@@ -5,11 +5,12 @@ import { getCurrentWindow, LogicalSize, monitorFromPoint, PhysicalPosition } fro
 import { DEFAULT_CONFIG, isPublicRiskService, type UserConfig } from '../../config/types';
 import { configStore } from '../../store/instances';
 import {
+  applyTrayTheme,
   buildTrayMenuItems,
   createTrayMenuActions,
-  hideTrayMenuWindow,
   openPublicServiceRiskSettings,
   toggleTrayService,
+  toggleTrayTheme,
 } from '../../services/trayMenu';
 import TrayMenuList from './TrayMenuList.vue';
 import TrayServiceFlyout from './TrayServiceFlyout.vue';
@@ -24,15 +25,26 @@ const SEPARATOR_BLOCK_HEIGHT = 5;
 const MENU_PANEL_EXTRA_HEIGHT = 18;
 const FLYOUT_PANEL_EXTRA_HEIGHT = 10;
 
+interface WindowFrame {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  scaleFactor: number;
+}
+
 const config = ref<UserConfig>(structuredClone(DEFAULT_CONFIG));
+const menuVisible = ref(false);
 const flyoutOpen = ref(false);
 const flyoutOpensLeft = ref(false);
 const pendingServiceId = ref<string | null>(null);
 const shellRef = ref<HTMLElement | null>(null);
 const baseWindowPosition = ref<{ x: number; y: number } | null>(null);
+const windowFrame = ref<WindowFrame | null>(null);
 let unlistenConfig: UnlistenFn | null = null;
 let unlistenFocus: UnlistenFn | null = null;
 let unlistenOpened: UnlistenFn | null = null;
+let unlistenHideRequested: UnlistenFn | null = null;
 
 const actions = createTrayMenuActions();
 const menuItems = computed(() => buildTrayMenuItems(config.value, actions));
@@ -59,14 +71,29 @@ const flyoutTopPx = computed(() => {
   return top;
 });
 
+const menuLeftPx = computed(() => {
+  const base = baseWindowPosition.value;
+  const frame = windowFrame.value;
+  if (!base || !frame) return 0;
+  return Math.max(0, Math.round((base.x - frame.left) / frame.scaleFactor));
+});
+
+const menuTopPx = computed(() => {
+  const base = baseWindowPosition.value;
+  const frame = windowFrame.value;
+  if (!base || !frame) return 0;
+  return Math.max(0, Math.round((base.y - frame.top) / frame.scaleFactor));
+});
+
 const menuPanelStyle = computed(() => ({
   width: `${MENU_WIDTH}px`,
-  transform: flyoutOpensLeft.value ? `translateX(${FLYOUT_WIDTH}px)` : 'translateX(0)',
+  top: `${menuTopPx.value}px`,
+  left: `${menuLeftPx.value}px`,
 }));
 
 const flyoutPanelStyle = computed(() => ({
-  top: `${flyoutTopPx.value}px`,
-  left: flyoutOpensLeft.value ? '0px' : `${MENU_WIDTH}px`,
+  top: `${menuTopPx.value + flyoutTopPx.value}px`,
+  left: `${flyoutOpensLeft.value ? menuLeftPx.value - FLYOUT_WIDTH : menuLeftPx.value + MENU_WIDTH}px`,
   width: `${FLYOUT_WIDTH}px`,
 }));
 
@@ -89,9 +116,13 @@ const flyoutPanelHeight = computed(() =>
     : 0,
 );
 
-const windowWidth = computed(() => MENU_WIDTH + (flyoutOpen.value ? FLYOUT_WIDTH : 0));
+const windowWidth = computed(() =>
+  windowFrame.value ? Math.ceil(windowFrame.value.width / windowFrame.value.scaleFactor) : MENU_WIDTH,
+);
 const windowHeight = computed(() =>
-  Math.max(menuPanelHeight.value, flyoutTopPx.value + flyoutPanelHeight.value),
+  windowFrame.value
+    ? Math.ceil(windowFrame.value.height / windowFrame.value.scaleFactor)
+    : Math.max(menuPanelHeight.value, flyoutTopPx.value + flyoutPanelHeight.value),
 );
 
 async function cacheBaseWindowPosition(force = false): Promise<void> {
@@ -101,17 +132,14 @@ async function cacheBaseWindowPosition(force = false): Promise<void> {
   baseWindowPosition.value = { x: position.x, y: position.y };
 }
 
-async function resolveFlyoutDirection(): Promise<boolean> {
+async function resolveFlyoutDirection(monitor: Awaited<ReturnType<typeof monitorFromPoint>>): Promise<boolean> {
   if (!flyoutOpen.value || serviceItems.value.length === 0) return false;
 
-  await cacheBaseWindowPosition();
   const base = baseWindowPosition.value;
-  if (!base) return false;
+  if (!base || !monitor) return false;
 
   const win = getCurrentWindow();
   const scaleFactor = await win.scaleFactor();
-  const monitor = await monitorFromPoint(base.x + 1, base.y + 1);
-  if (!monitor) return false;
 
   const workAreaLeft = monitor.workArea.position.x;
   const workAreaRight = workAreaLeft + monitor.workArea.size.width;
@@ -124,25 +152,32 @@ async function resolveFlyoutDirection(): Promise<boolean> {
   return !canOpenRight && canOpenLeft;
 }
 
-async function clampWindowPosition(
-  base: { x: number; y: number },
-  width: number,
-  height: number,
-  scaleFactor: number,
-): Promise<{ x: number; y: number }> {
+async function resolveWindowFrame(base: { x: number; y: number }): Promise<[WindowFrame, Awaited<ReturnType<typeof monitorFromPoint>>] | null> {
   const monitor = await monitorFromPoint(base.x + 1, base.y + 1);
-  if (!monitor) return base;
+  if (!monitor) return null;
 
-  const workAreaLeft = monitor.workArea.position.x;
-  const workAreaTop = monitor.workArea.position.y;
-  const workAreaRight = workAreaLeft + monitor.workArea.size.width;
-  const workAreaBottom = workAreaTop + monitor.workArea.size.height;
-  const physicalWidth = Math.round(width * scaleFactor);
-  const physicalHeight = Math.round(height * scaleFactor);
+  const frame: WindowFrame = {
+    left: monitor.workArea.position.x,
+    top: monitor.workArea.position.y,
+    width: monitor.workArea.size.width,
+    height: monitor.workArea.size.height,
+    scaleFactor: monitor.scaleFactor || await getCurrentWindow().scaleFactor(),
+  };
+  return [frame, monitor];
+}
+
+function clampBaseToFrame(base: { x: number; y: number }, frame: WindowFrame): { x: number; y: number } {
+  const scaleFactor = frame.scaleFactor;
+  const contentWidth = MENU_WIDTH + (flyoutOpen.value && !flyoutOpensLeft.value ? FLYOUT_WIDTH : 0);
+  const leftPadding = flyoutOpen.value && flyoutOpensLeft.value ? FLYOUT_WIDTH * scaleFactor : 0;
+  const minX = frame.left + leftPadding;
+  const maxX = Math.max(minX, frame.left + frame.width - Math.round(contentWidth * scaleFactor));
+  const contentHeight = Math.max(menuPanelHeight.value, flyoutTopPx.value + flyoutPanelHeight.value);
+  const maxY = Math.max(frame.top, frame.top + frame.height - Math.round(contentHeight * scaleFactor));
 
   return {
-    x: Math.min(Math.max(base.x, workAreaLeft), Math.max(workAreaLeft, workAreaRight - physicalWidth)),
-    y: Math.min(Math.max(base.y, workAreaTop), Math.max(workAreaTop, workAreaBottom - physicalHeight)),
+    x: Math.min(Math.max(base.x, minX), maxX),
+    y: Math.min(Math.max(base.y, frame.top), maxY),
   };
 }
 
@@ -150,8 +185,21 @@ async function syncWindowLayout(): Promise<void> {
   await nextTick();
   await cacheBaseWindowPosition();
 
-  flyoutOpensLeft.value = await resolveFlyoutDirection();
+  const base = baseWindowPosition.value;
+  let monitor: Awaited<ReturnType<typeof monitorFromPoint>> = null;
+  if (base) {
+    const result = await resolveWindowFrame(base);
+    if (result) {
+      [windowFrame.value, monitor] = result;
+    }
+  }
+
+  flyoutOpensLeft.value = await resolveFlyoutDirection(monitor);
   await nextTick();
+
+  if (baseWindowPosition.value && windowFrame.value) {
+    baseWindowPosition.value = clampBaseToFrame(baseWindowPosition.value, windowFrame.value);
+  }
 
   const win = getCurrentWindow();
   // resizable(false) 可能隐式 min_size = max_size = inner_size，block setSize
@@ -159,27 +207,34 @@ async function syncWindowLayout(): Promise<void> {
   await win.setMaxSize(null);
   await win.setSize(new LogicalSize(windowWidth.value, windowHeight.value));
 
-  const base = baseWindowPosition.value;
-  if (!base) return;
-
-  const scaleFactor = await win.scaleFactor();
-  const targetBase = flyoutOpen.value && flyoutOpensLeft.value
-    ? { x: base.x - Math.round(FLYOUT_WIDTH * scaleFactor), y: base.y }
-    : base;
-  const target = await clampWindowPosition(targetBase, windowWidth.value, windowHeight.value, scaleFactor);
-  await win.setPosition(new PhysicalPosition(target.x, target.y));
+  const frame = windowFrame.value;
+  if (frame) {
+    await win.setPosition(new PhysicalPosition(frame.left, frame.top));
+  }
 }
 
 async function loadConfig(): Promise<void> {
-  config.value = await configStore.get<UserConfig>('config') ?? structuredClone(DEFAULT_CONFIG);
+  const nextConfig = await configStore.get<UserConfig>('config') ?? structuredClone(DEFAULT_CONFIG);
+  config.value = nextConfig;
+  applyTrayTheme(nextConfig);
 }
 
 async function hideSelf(): Promise<void> {
+  menuVisible.value = false;
   flyoutOpen.value = false;
+  await nextTick();
   await getCurrentWindow().hide();
 }
 
 async function handleCommand(id: string): Promise<void> {
+  if (id === 'toggle_theme') {
+    await toggleTrayTheme();
+    await loadConfig();
+    await nextTick();
+    shellRef.value?.focus();
+    return;
+  }
+
   await hideSelf();
   switch (id) {
     case 'open_window': actions.openWindow(); break;
@@ -190,8 +245,27 @@ async function handleCommand(id: string): Promise<void> {
   }
 }
 
+function handleDocumentPointerDown(event: PointerEvent): void {
+  if (!(event.target instanceof Node)) return;
+
+  const menuPanel = shellRef.value?.querySelector('.menu-panel');
+  const flyoutPanel = shellRef.value?.querySelector('.flyout-panel');
+  const clickedMenu = menuPanel?.contains(event.target) ?? false;
+  const clickedFlyout = flyoutPanel?.contains(event.target) ?? false;
+
+  if (!clickedMenu && !clickedFlyout) {
+    void hideSelf();
+  }
+}
+
 async function handleOpenFlyout(): Promise<void> {
   flyoutOpen.value = !flyoutOpen.value;
+  await syncWindowLayout();
+}
+
+async function closeFlyout(): Promise<void> {
+  if (!flyoutOpen.value) return;
+  flyoutOpen.value = false;
   await syncWindowLayout();
 }
 
@@ -209,9 +283,12 @@ async function handleToggleService(serviceId: string): Promise<void> {
       return;
     }
 
-    await toggleTrayService(serviceId);
-    await loadConfig();
-    await syncWindowLayout();
+    const nextEnabledServices = await toggleTrayService(serviceId);
+    config.value = {
+      ...config.value,
+      enabledServices: nextEnabledServices,
+    };
+    await nextTick();
     shellRef.value?.focus();
   } finally {
     pendingServiceId.value = null;
@@ -223,28 +300,44 @@ onMounted(async () => {
   await syncWindowLayout();
   await nextTick();
   shellRef.value?.focus();
+  document.addEventListener('pointerdown', handleDocumentPointerDown, true);
 
-  unlistenConfig = await listen('config-updated', async () => {
+  unlistenConfig = await listen('config-updated', async ({ payload }) => {
+    if (
+      typeof payload === 'object'
+      && payload !== null
+      && (payload as { source?: unknown }).source === 'tray-menu'
+    ) {
+      return;
+    }
     await loadConfig();
     await syncWindowLayout();
   });
   unlistenOpened = await listen('tray-menu-opened', async () => {
+    menuVisible.value = false;
     flyoutOpen.value = false;
     await loadConfig();
     await cacheBaseWindowPosition(true);
     await syncWindowLayout();
     await nextTick();
+    menuVisible.value = true;
+    await nextTick();
     shellRef.value?.focus();
   });
+  unlistenHideRequested = await listen('tray-menu-hide-requested', async () => {
+    await hideSelf();
+  });
   unlistenFocus = await getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-    if (!focused) void hideTrayMenuWindow();
+    if (!focused) void hideSelf();
   });
 });
 
 onUnmounted(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown, true);
   unlistenConfig?.();
   unlistenFocus?.();
   unlistenOpened?.();
+  unlistenHideRequested?.();
 });
 </script>
 
@@ -255,25 +348,30 @@ onUnmounted(() => {
     tabindex="-1"
     @keydown.escape.stop.prevent="void hideSelf()"
   >
-    <div class="menu-panel main-menu" :style="menuPanelStyle">
-      <TrayMenuList
-        :items="menuItems"
-        :flyout-open="flyoutOpen"
-        @command="handleCommand"
-        @open-flyout="handleOpenFlyout"
-      />
-    </div>
-
     <div
-      v-if="flyoutOpen && serviceItems.length > 0"
-      class="flyout-panel service-menu"
-      :style="flyoutPanelStyle"
+      v-show="menuVisible"
+      class="tray-content"
     >
-      <TrayServiceFlyout
-        :items="serviceItems"
-        :pending-service-id="pendingServiceId"
-        @toggle="handleToggleService"
-      />
+      <div class="menu-panel main-menu" :style="menuPanelStyle">
+        <TrayMenuList
+          :items="menuItems"
+          :flyout-open="flyoutOpen"
+          @command="handleCommand"
+          @open-flyout="handleOpenFlyout"
+        />
+      </div>
+
+      <div
+        v-if="flyoutOpen && serviceItems.length > 0"
+        class="flyout-panel service-menu"
+        :style="flyoutPanelStyle"
+      >
+        <TrayServiceFlyout
+          :items="serviceItems"
+          @mouseleave="void closeFlyout()"
+          @toggle="handleToggleService"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -282,7 +380,8 @@ onUnmounted(() => {
 .tray-shell {
   position: relative;
   box-sizing: border-box;
-  width: max-content;
+  width: 100vw;
+  height: 100vh;
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
@@ -291,14 +390,21 @@ onUnmounted(() => {
   outline: none;
 }
 
+.tray-content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
 .menu-panel {
+  position: absolute;
   box-sizing: border-box;
   border: none;
   border-radius: var(--radius-md);
   background: var(--bg-card);
   overflow: hidden;
   padding: var(--space-xs) 0;
-  transform-origin: top left;
+  box-shadow: var(--shadow-float);
 }
 
 .flyout-panel {
@@ -308,5 +414,6 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   background: var(--bg-card);
   overflow: hidden;
+  box-shadow: var(--shadow-float);
 }
 </style>

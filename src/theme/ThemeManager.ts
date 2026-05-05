@@ -120,6 +120,7 @@ export class ThemeManager {
 
   private applyThemeClass(effective: EffectiveTheme): void {
     const root = document.documentElement;
+
     root.classList.toggle('dark-theme', effective === 'dark');
     root.classList.toggle('light-theme', effective === 'light');
 
