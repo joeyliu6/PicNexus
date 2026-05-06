@@ -21,6 +21,7 @@ import { MIGRATE_KEY } from '@/components/views/linkcheck/migrate/keys';
 import CheckFilterBar from '@/components/views/linkcheck/history-check/CheckFilterBar.vue';
 import CheckLinkList from '@/components/views/linkcheck/history-check/CheckLinkList.vue';
 import CheckBottomBar from '@/components/views/linkcheck/history-check/CheckBottomBar.vue';
+import LinkCheckSkeleton from '@/components/views/linkcheck/history-check/LinkCheckSkeleton.vue';
 import GeneralSettingsPanel from '@/components/settings/GeneralSettingsPanel.vue';
 import ServiceEnableSection from '@/components/settings/hosting/ServiceEnableSection.vue';
 import DataItemCard from '@/components/settings/backup/DataItemCard.vue';
@@ -824,10 +825,7 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
           />
           <MigrateProgressPhase v-else />
         </div>
-        <div v-else-if="state === 'skeleton'" class="monitor-panel monitor-panel--skeleton">
-          <div class="sk-filterbar"><div class="sk-chip"></div><div class="sk-chip wide"></div><div class="sk-chip"></div><div class="sk-searchbox"></div></div>
-          <div class="sk-link-list"><div v-for="i in 12" :key="i" class="sk-link-row"><div class="sk-dot"></div><div class="sk-line"></div><div class="sk-line small"></div><div class="sk-circle"></div></div></div>
-        </div>
+        <LinkCheckSkeleton v-else-if="state === 'skeleton'" embedded />
         <template v-else>
           <CheckFilterBar
             v-model:status-filter="statusFilter"

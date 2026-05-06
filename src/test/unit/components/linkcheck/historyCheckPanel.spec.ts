@@ -80,8 +80,8 @@ describe('HistoryCheckPanel', () => {
   it('首次加载时展示完整骨架屏', () => {
     const wrapper = mountPanel({ isLoading: true });
 
-    expect(wrapper.find('.monitor-panel--skeleton').exists()).toBe(true);
-    expect(wrapper.findAll('.sk-link-row')).toHaveLength(12);
+    expect(wrapper.find('.lc-skeleton-panel').exists()).toBe(true);
+    expect(wrapper.findAll('.lc-sk-link-row')).toHaveLength(12);
   });
 
   it('筛选 chip 和搜索框会改变可见行', async () => {

@@ -42,6 +42,7 @@ import {
 } from '@/composables/md-rescue/shared';
 
 type BatchMigrateVisualState =
+  | 'skeleton'
   | 'source-selection'
   | 'target-selection'
   | 'migrating'
@@ -60,7 +61,7 @@ type MarkdownRepairVisualState =
   | 'partial-failed';
 
 function migrateTargets(state: string): MigrateTargetService[] {
-  const targetSelected = state !== 'source-selection';
+  const targetSelected = state !== 'source-selection' && state !== 'skeleton';
   return [
     { serviceId: 'r2', displayName: 'Cloudflare R2', isConfigured: true, pendingCount: 286, backedUpCount: 42, checked: targetSelected },
     { serviceId: 'github', displayName: 'GitHub', isConfigured: true, pendingCount: 184, backedUpCount: 144, checked: state === 'target-selection' || state === 'migrating' || state === 'paused' },
@@ -204,9 +205,9 @@ function makeMigrateResult(state: string, items: MigrateItemStatus[]): MigrateRe
 
 export function createMigrateContext(rawState: string): MigrateContext {
   const state = rawState as BatchMigrateVisualState;
-  const phase = ref<MigratePhase>(state === 'source-selection' || state === 'target-selection' ? 'configuring' : state === 'migrating' || state === 'paused' ? 'migrating' : 'done');
+  const phase = ref<MigratePhase>(state === 'skeleton' || state === 'source-selection' || state === 'target-selection' ? 'configuring' : state === 'migrating' || state === 'paused' ? 'migrating' : 'done');
   const targetServices = ref(migrateTargets(state));
-  const sourceServiceFilter = ref<string[]>(state === 'source-selection' ? [] : ['jd', 'weibo']);
+  const sourceServiceFilter = ref<string[]>(state === 'skeleton' || state === 'source-selection' ? [] : ['jd', 'weibo']);
   const allItemStatuses = ref<MigrateItemStatus[]>(state === 'migrating' || state === 'paused' ? runningMigrateItems(state === 'paused') : doneMigrateItems(state));
   const migrateResult = ref<MigrateResult | null>(makeMigrateResult(state, allItemStatuses.value));
   const processed = allItemStatuses.value.filter((item) => ['success', 'failed', 'skipped'].includes(item.status)).length;
@@ -228,8 +229,8 @@ export function createMigrateContext(rawState: string): MigrateContext {
 
   return {
     phase,
-    isInitialized: ref(true),
-    isFilterApplied: ref(true),
+    isInitialized: ref(state !== 'skeleton'),
+    isFilterApplied: ref(state !== 'skeleton'),
     isRefiltering: ref(false),
     maxSuccessCount: ref(1),
     sourceServiceFilter,

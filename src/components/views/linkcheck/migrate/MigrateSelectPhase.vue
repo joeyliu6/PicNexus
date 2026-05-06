@@ -119,28 +119,37 @@ function handleTargetToggle(serviceId: string) {
           <div class="sk-checkbox" />
           <div class="sk-icon" />
           <div class="sk-line sk-line--name" />
-          <div class="sk-line sk-line--count" />
+          <div class="sk-count">
+            <div class="sk-line sk-line--count-num" />
+            <div class="sk-line sk-line--count-unit" />
+          </div>
         </div>
       </div>
       <div class="sk-divider" aria-hidden="true" />
       <div class="sk-right">
-        <div class="sk-column-label" />
+        <div class="sk-column-label-slot">
+          <div class="sk-column-label" />
+        </div>
         <div class="sk-target-grid">
           <div v-for="i in 4" :key="i" class="sk-target-card">
             <div class="sk-target-top">
-              <div class="sk-icon" />
+              <div class="sk-target-icon" />
               <div class="sk-line sk-line--title" />
               <div class="sk-dot" />
             </div>
-            <div class="sk-line sk-line--subtitle" />
-            <div class="sk-line sk-line--subtitle sk-line--subtitle-secondary" />
+            <div class="sk-target-count">
+              <div class="sk-line sk-line--target-num" />
+              <div class="sk-line sk-line--target-unit" />
+            </div>
           </div>
           <div class="sk-target-card">
             <div class="sk-target-top">
-              <div class="sk-icon sk-icon--ghost" />
+              <div class="sk-target-icon sk-icon--ghost" />
               <div class="sk-line sk-line--title" />
             </div>
-            <div class="sk-line sk-line--subtitle" />
+            <div class="sk-target-count">
+              <div class="sk-line sk-line--target-unit sk-line--target-unit-add" />
+            </div>
           </div>
         </div>
       </div>
@@ -285,12 +294,12 @@ function handleTargetToggle(serviceId: string) {
 .sk-right { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 
 /* 共用 shimmer：用 border-subtle-light 作底（比 bg-surface-low 色深更多，更明显） */
-.sk-column-label, .sk-filter-trigger, .sk-toggle-all, .sk-checkbox, .sk-icon, .sk-dot, .sk-line, .sk-bottom-text, .sk-bottom-btn {
+.sk-column-label, .sk-filter-trigger, .sk-toggle-all, .sk-checkbox, .sk-icon, .sk-target-icon, .sk-dot, .sk-line, .sk-bottom-text, .sk-bottom-btn {
   background: linear-gradient(90deg, var(--border-subtle-light) 25%, var(--bg-card) 50%, var(--border-subtle-light) 75%);
   background-size: 200% 100%;
   animation: k-shimmer var(--duration-shimmer) ease-in-out infinite;
 }
-.sk-column-label, .sk-filter-trigger, .sk-checkbox, .sk-icon, .sk-line, .sk-bottom-text { border-radius: var(--radius-sm); }
+.sk-column-label, .sk-filter-trigger, .sk-checkbox, .sk-icon, .sk-target-icon, .sk-line, .sk-bottom-text { border-radius: var(--radius-sm); }
 
 .sk-column-head {
   display: flex;
@@ -299,28 +308,41 @@ function handleTargetToggle(serviceId: string) {
   margin-bottom: var(--space-sm);
 }
 
-.sk-column-label { width: 64px; height: var(--text-xs); }
-.sk-toggle-all { width: 32px; height: var(--text-xs); margin-left: auto; border-radius: var(--radius-sm); }
+.sk-column-label { width: 44px; height: 9px; }
+.sk-toggle-all { width: 28px; height: 9px; margin-left: auto; border-radius: var(--radius-sm); }
 .sk-filter-trigger { width: 24px; height: 24px; border-radius: var(--radius-sm-md); }
+
+.sk-column-label-slot {
+  display: flex;
+  align-items: center;
+  height: 19px;
+  margin-bottom: var(--space-sm);
+  flex-shrink: 0;
+}
 
 .sk-source-row {
   display: flex; align-items: center; gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-sm-md);
-  min-height: 34px;
+  min-height: 37px;
 }
 .sk-source-row + .sk-source-row { margin-top: var(--space-2xs); }
 
 .sk-checkbox { width: 16px; height: 16px; flex-shrink: 0; }
 .sk-icon { width: 16px; height: 16px; flex-shrink: 0; }
+.sk-target-icon { width: 18px; height: 18px; flex-shrink: 0; }
 .sk-icon--ghost { opacity: 0.5; }
 .sk-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-left: auto; }
 
-.sk-line--name { flex: 1; height: var(--text-sm); max-width: 150px; }
-.sk-line--count { width: 104px; height: var(--text-sm); margin-left: auto; }
-.sk-line--title { flex: 1; min-width: 0; height: var(--text-base); max-width: 150px; }
-.sk-line--subtitle { width: 62%; height: var(--text-sm); }
-.sk-line--subtitle-secondary { width: 74%; opacity: 0.72; }
+.sk-line--name { flex: 1; height: 10px; max-width: 150px; }
+.sk-count { display: inline-flex; align-items: baseline; gap: var(--space-2xs); margin-left: auto; flex-shrink: 0; }
+.sk-line--count-num { width: 46px; height: 10px; }
+.sk-line--count-unit { width: 12px; height: 8px; opacity: 0.72; }
+.sk-line--title { flex: 1; min-width: 0; height: 11px; max-width: 132px; }
+.sk-target-count { display: inline-flex; align-items: center; gap: var(--space-2xs); min-width: 0; min-height: 21px; }
+.sk-line--target-num { width: 34px; height: 10px; }
+.sk-line--target-unit { width: 68px; height: 10px; opacity: 0.72; }
+.sk-line--target-unit-add { width: 92px; }
 
 .sk-target-grid {
   display: grid;
@@ -329,8 +351,8 @@ function handleTargetToggle(serviceId: string) {
 }
 
 /* 底栏骨架：文字条 + 按钮块 */
-.sk-bottom-text { flex: 1; max-width: 180px; height: var(--text-sm); }
-.sk-bottom-btn { width: 76px; height: 28px; border-radius: var(--radius-sm-md); flex-shrink: 0; }
+.sk-bottom-text { flex: 1; max-width: 172px; height: 10px; }
+.sk-bottom-btn { width: 87px; height: 28px; border-radius: var(--radius-sm-md); flex-shrink: 0; }
 
 /* 骨架卡片用虚线弱化边框，避免看起来像"已加载的空卡" */
 .sk-target-card {
@@ -339,10 +361,10 @@ function handleTargetToggle(serviceId: string) {
   border-radius: var(--radius-md);
   border: 1px dashed var(--border-subtle);
   background: transparent;
-  min-height: 68px;
+  min-height: 81px;
   min-width: 0;
 }
-.sk-target-top { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
+.sk-target-top { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; min-height: 22px; }
 
 /* 分栏布局 */
 .split-layout { display: flex; flex: 1; min-height: 0; gap: var(--space-md); overflow: hidden; }

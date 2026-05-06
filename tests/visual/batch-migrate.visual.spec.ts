@@ -2,6 +2,7 @@ import { test } from '@playwright/test';
 import { captureVisualState } from './helpers';
 
 const states = [
+  'skeleton',
   'source-selection',
   'target-selection',
   'migrating',
