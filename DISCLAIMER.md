@@ -26,12 +26,12 @@ By using PicNexus, you are solely responsible for:
 - account restrictions, account bans, rate limits, data loss, service
   interruption, platform complaints, legal disputes, or other consequences.
 
-By viewing or obtaining the source code, you are solely responsible for any
-copying, extraction, reuse, modification, redistribution, repackaging,
-reimplementation, or secondary development you perform. The author is not
-responsible for any third-party developer, fork, redistributed build, copied API
-logic, derived project, plugin, script, service, SDK, or reimplementation based
-on this project.
+If you modify, redistribute, repackage, integrate, or build services on top of
+PicNexus, you are responsible for complying with the Apache License 2.0,
+applicable laws, and the terms and technical restrictions of any third-party
+platforms you use. The author is not responsible for third-party forks,
+redistributed builds, integrations, services, scripts, SDKs, plugins, or other
+derived works.
 
 PicNexus is provided as-is, without warranty of any kind. Use it at your own
 risk.

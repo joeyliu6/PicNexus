@@ -3,7 +3,7 @@
   "version": "1.0.8",
   "description": "Qiyu image hosting token fetcher sidecar",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",

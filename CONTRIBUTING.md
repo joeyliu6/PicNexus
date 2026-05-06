@@ -8,7 +8,7 @@
 
 如果您发现了 Bug 或有功能建议，请：
 
-1. 先在 [Issues](https://github.com/your-username/PicNexus/issues) 中搜索是否已有相关问题
+1. 先在 [Issues](https://github.com/joeyliu6/PicNexus/issues) 中搜索是否已有相关问题
 2. 如果没有，创建一个新的 Issue
 3. 使用清晰的标题和详细的描述
 4. 如果是 Bug，请提供：
@@ -29,7 +29,7 @@
 
 2. **克隆到本地**
    ```bash
-   git clone https://github.com/your-username/PicNexus.git
+   git clone https://github.com/joeyliu6/PicNexus.git
    cd PicNexus
    ```
 
@@ -305,8 +305,8 @@ println!("[Rust] Debug info: {:?}", variable);
 如果您在贡献过程中遇到问题：
 
 1. 查看 [README](README.md) 和 [文档](docs/README.md)
-2. 搜索已有的 [Issues](https://github.com/your-username/PicNexus/issues)
-3. 在 [Discussions](https://github.com/your-username/PicNexus/discussions) 中提问
+2. 搜索已有的 [Issues](https://github.com/joeyliu6/PicNexus/issues)
+3. 在 [Discussions](https://github.com/joeyliu6/PicNexus/discussions) 中提问
 4. 联系维护者
 
 ## 📜 行为准则
@@ -318,10 +318,11 @@ println!("[Rust] Debug info: {:?}", variable);
 - 接受建设性批评
 - 关注项目的最佳利益
 - 对社区成员表现出同理心
+- 涉及公共图床或第三方平台适配的贡献，不得加入绕过限流、反盗链、认证校验、访问控制或其他平台限制的滥用逻辑
 
 ## 📄 许可证
 
-通过贡献代码，您同意您的贡献将在 [MIT License](LICENSE) 下发布。
+通过贡献代码，您同意您的贡献将在 [Apache License 2.0](LICENSE) 下发布。
 
 ---
 

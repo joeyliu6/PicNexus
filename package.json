@@ -3,7 +3,7 @@
   "version": "1.0.8",
   "description": "PicNexus - 多图床上传工具",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
