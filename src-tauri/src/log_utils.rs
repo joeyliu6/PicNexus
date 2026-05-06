@@ -29,8 +29,20 @@ pub fn summarize_text(text: &str) -> String {
 }
 
 pub fn sanitize_text(text: &str) -> String {
-    let with_redacted_assignments = sensitive_assignment_regex()
+    let with_redacted_auth_headers = authorization_header_regex()
         .replace_all(text, |captures: &regex::Captures<'_>| {
+            format!("{}=[REDACTED]", &captures[1])
+        })
+        .to_string();
+    let with_redacted_headers = cookie_header_regex()
+        .replace_all(
+            &with_redacted_auth_headers,
+            |captures: &regex::Captures<'_>| format!("{}=[REDACTED]", &captures[1]),
+        )
+        .to_string();
+
+    let with_redacted_assignments = sensitive_assignment_regex()
+        .replace_all(&with_redacted_headers, |captures: &regex::Captures<'_>| {
             format!("{}=[REDACTED]", &captures[1])
         })
         .to_string();
@@ -82,6 +94,18 @@ fn sensitive_assignment_regex() -> Regex {
         r#"(?i)["']?\b(cookie|token|auth|password|secret|credential|session|authorization|apiKey|accessKey|secretKey|privateKey)\b["']?\s*[:=]\s*("[^"]*"|'[^']*'|[^;,\s}\]]+)"#,
     )
     .expect("valid sensitive assignment regex")
+}
+
+fn authorization_header_regex() -> Regex {
+    Regex::new(
+        r#"(?i)\b(authorization)\b\s*[:=]\s*("[^"]*"|'[^']*'|(?:Bearer|Basic|token|Client-ID)\s+[A-Za-z0-9._~+/=-]+|[^;,\s}\]]+)"#,
+    )
+    .expect("valid authorization header regex")
+}
+
+fn cookie_header_regex() -> Regex {
+    Regex::new(r#"(?i)\b(cookie)\b\s*[:=]\s*("[^"]*"|'[^']*'|[^,\r\n}\]]+)"#)
+        .expect("valid cookie header regex")
 }
 
 fn url_regex() -> Regex {
@@ -145,6 +169,17 @@ mod tests {
         assert!(result.contains("len="));
         assert!(result.contains("hash="));
         assert!(!result.contains("super-secret"));
+        assert!(!result.contains("SUB=abc"));
+    }
+
+    #[test]
+    fn sanitize_text_redacts_auth_and_cookie_headers() {
+        let raw = "Authorization: Bearer secret-token Cookie: SUB=abc; uid=42";
+        let result = sanitize_text(raw);
+
+        assert!(result.contains("Authorization=[REDACTED]"));
+        assert!(result.contains("Cookie=[REDACTED]"));
+        assert!(!result.contains("secret-token"));
         assert!(!result.contains("SUB=abc"));
     }
 }

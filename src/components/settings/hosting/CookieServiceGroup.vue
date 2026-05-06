@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import Textarea from 'primevue/textarea';
-import InputText from 'primevue/inputtext';
 import HostingCard from '../HostingCard.vue';
+import SensitiveField from '../../common/SensitiveField.vue';
 import WeiboLinkPrefixSection from './WeiboLinkPrefixSection.vue';
 import ZhihuSourceSection from './ZhihuSourceSection.vue';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
@@ -92,12 +91,19 @@ function helperHint(serviceId: CookieProviderId): string {
       <form class="form-grid" @submit.prevent>
         <div class="form-item span-full">
           <label>Cookie</label>
-          <Textarea v-model="cookieFormData[svc.id].cookie" @blur="emit('save')" rows="4" class="w-full cookie-field" placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串" />
+          <SensitiveField
+            v-model="cookieFormData[svc.id].cookie"
+            multiline
+            :rows="4"
+            input-class="cookie-field"
+            placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串"
+            @blur="emit('save')"
+          />
           <small class="form-hint">{{ helperHint(svc.id) }}<br>这些服务均为非官方适配，请自行确认平台规则并承担账号与数据风险</small>
         </div>
         <div v-if="svc.id === 'nami' && namiAuthToken" class="form-item span-full">
           <label>Auth-Token（自动提取）</label>
-          <InputText :modelValue="namiAuthToken" readonly class="w-full" disabled />
+          <SensitiveField :modelValue="namiAuthToken" readonly autocomplete="off" />
         </div>
       </form>
       <template #extra>

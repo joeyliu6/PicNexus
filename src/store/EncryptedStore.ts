@@ -236,7 +236,7 @@ export class EncryptedStore {
     } catch (parseError) {
       const errorMsg = toErrorMessage(parseError);
       log.error(`JSON 解析失败 (${this.filePath}):`, errorMsg);
-      log.error(`文件内容预览 (前200字符):`, content.substring(0, 200));
+      log.error('文件内容解析失败，已跳过内容预览', { contentLength: content.length });
 
       // 如果提供了 recovery，尝试用默认值写回恢复。
       // 这里必须先走 loadForWrite（等同原 _performWrite → _loadFromDisk 链路），

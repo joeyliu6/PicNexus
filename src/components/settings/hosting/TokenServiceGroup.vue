@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import InputText from 'primevue/inputtext';
-import Password from 'primevue/password';
 import HostingCard from '../HostingCard.vue';
 import GithubProxySection from './GithubProxySection.vue';
+import SensitiveField from '../../common/SensitiveField.vue';
 import type { GithubCdnConfig } from '../../../config/types';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
 import { hasNonEmptyFields } from '../../../utils/validators';
@@ -73,7 +73,7 @@ function isTokenConfigured(providerId: keyof TokenFormData): boolean {
       <form class="form-grid" @submit.prevent>
         <div class="form-item span-full">
           <label>API Token</label>
-          <Password v-model="tokenFormData.smms.token" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="从 SM.MS 官网获取 API Token" :inputProps="{ autocomplete: 'new-password' }" />
+          <SensitiveField v-model="tokenFormData.smms.token" @blur="emit('save')" placeholder="从 SM.MS 官网获取 API Token" />
           <small class="form-hint">访问 <a href="https://sm.ms/home/apitoken" target="_blank">https://sm.ms/home/apitoken</a> 获取 API Token</small>
         </div>
       </form>
@@ -95,7 +95,7 @@ function isTokenConfigured(providerId: keyof TokenFormData): boolean {
       <form class="form-grid" @submit.prevent>
         <div class="form-item">
           <label>Personal Access Token</label>
-          <Password v-model="tokenFormData.github.token" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="ghp_xxxxxxxxxxxx" :inputProps="{ autocomplete: 'new-password' }" />
+          <SensitiveField v-model="tokenFormData.github.token" @blur="emit('save')" placeholder="ghp_xxxxxxxxxxxx" />
         </div>
         <div class="form-item">
           <label>Repository Owner</label>
@@ -143,11 +143,11 @@ function isTokenConfigured(providerId: keyof TokenFormData): boolean {
       <form class="form-grid" @submit.prevent>
         <div class="form-item">
           <label>Client ID</label>
-          <Password v-model="tokenFormData.imgur.clientId" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="从 Imgur API 获取" :inputProps="{ autocomplete: 'new-password' }" />
+          <SensitiveField v-model="tokenFormData.imgur.clientId" @blur="emit('save')" placeholder="从 Imgur API 获取" />
         </div>
         <div class="form-item">
           <label>Client Secret（可选）</label>
-          <Password v-model="tokenFormData.imgur.clientSecret" @blur="emit('save')" :feedback="false" toggleMask fluid placeholder="可选配置" :inputProps="{ autocomplete: 'new-password' }" />
+          <SensitiveField v-model="tokenFormData.imgur.clientSecret" @blur="emit('save')" placeholder="可选配置" />
         </div>
         <div class="form-item span-full">
           <small class="form-hint">访问 <a href="https://api.imgur.com/oauth2/addclient" target="_blank">Imgur API</a> 注册应用获取 Client ID</small>

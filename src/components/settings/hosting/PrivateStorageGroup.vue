@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import InputText from 'primevue/inputtext';
-import Password from 'primevue/password';
 import HostingCard from '../HostingCard.vue';
+import SensitiveField from '../../common/SensitiveField.vue';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
 import type { CustomS3Profile } from '../../../config/types';
 import { makeCustomS3Id } from '../../../config/types';
@@ -182,16 +182,12 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
           :class="{ 'span-full': field.spanFull }"
         >
           <label>{{ field.label }}</label>
-          <Password
+          <SensitiveField
             v-if="field.type === 'password'"
             :modelValue="getFieldModel(svc.id, field.key)"
             @update:modelValue="setFieldModel(svc.id, field.key, $event)"
             @blur="emit('save')"
-            :feedback="false"
-            toggleMask
-            fluid
             :placeholder="field.placeholder"
-            :inputProps="{ autocomplete: 'new-password' }"
           />
           <InputText
             v-else
@@ -229,16 +225,12 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
           :class="{ 'span-full': field.spanFull }"
         >
           <label>{{ field.label }}</label>
-          <Password
+          <SensitiveField
             v-if="field.type === 'password'"
             :modelValue="getCustomS3Field(profile, field.key)"
             @update:modelValue="setCustomS3Field(profile.id, field.key, $event)"
             @blur="emit('save')"
-            :feedback="false"
-            toggleMask
-            fluid
             :placeholder="field.placeholder"
-            :inputProps="{ autocomplete: 'new-password' }"
           />
           <InputText
             v-else

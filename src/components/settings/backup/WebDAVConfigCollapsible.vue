@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
 import InputText from 'primevue/inputtext';
-import Password from 'primevue/password';
 import Button from 'primevue/button';
 import type { WebDAVConfig, WebDAVProfile } from '../../../config/types';
 import { useConfirm } from '../../../composables/useConfirm';
+import SensitiveField from '../../common/SensitiveField.vue';
 
 interface Props {
   modelValue: WebDAVConfig;
@@ -229,13 +229,10 @@ function handleTest() {
             </div>
             <div class="form-field">
               <label>密码</label>
-              <Password
+              <SensitiveField
                 :modelValue="activeProfile.password"
                 @update:modelValue="(v) => updateActiveProfileField('password', v as string)"
                 @blur="handleSave"
-                :feedback="false"
-                toggleMask
-                :inputProps="{ autocomplete: 'new-password' }"
               />
             </div>
           </div>
@@ -452,14 +449,4 @@ function handleTest() {
   margin-bottom: var(--space-lg);
 }
 
-/* Password 组件样式 */
-:deep(.p-password) {
-  position: relative;
-  display: flex;
-  width: 100%;
-}
-
-:deep(.p-password-input) {
-  width: 100%;
-}
 </style>

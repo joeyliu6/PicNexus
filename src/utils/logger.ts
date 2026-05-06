@@ -16,6 +16,10 @@ const WINDOWS_PATH_PATTERN = /\b[A-Za-z]:[\\/][^\s"'<>|]+/g;
 const UNIX_PATH_PATTERN = /(^|[\s"'`=([{,])\/(?:Users|home|tmp|var|private|Volumes)[^\s"'<>)]*/g;
 const SECRET_ASSIGNMENT_PATTERN =
   /["']?\b(cookie|token|auth|password|secret|credential|session|authorization|apiKey|accessKey|secretKey|privateKey)\b["']?\s*[:=]\s*("[^"]*"|'[^']*'|[^;,\s}\]]+)/gi;
+const AUTHORIZATION_HEADER_PATTERN =
+  /\b(authorization)\b\s*[:=]\s*("[^"]*"|'[^']*'|(?:Bearer|Basic|token|Client-ID)\s+[A-Za-z0-9._~+/=-]+|[^;,\s}\]]+)/gi;
+const COOKIE_HEADER_PATTERN =
+  /\b(cookie)\b\s*[:=]\s*("[^"]*"|'[^']*'|[^,\r\n}\]]+)/gi;
 
 class Logger {
   constructor(private readonly module: string) {}
@@ -128,6 +132,8 @@ function redactText(text: string): string {
     return token;
   });
 
+  output = output.replace(AUTHORIZATION_HEADER_PATTERN, (_match, key: string) => `${key}=${REDACTED}`);
+  output = output.replace(COOKIE_HEADER_PATTERN, (_match, key: string) => `${key}=${REDACTED}`);
   output = output.replace(SECRET_ASSIGNMENT_PATTERN, (_match, key: string) => `${key}=${REDACTED}`);
   output = output.replace(WINDOWS_PATH_PATTERN, path => redactPath(path));
   output = output.replace(UNIX_PATH_PATTERN, (match, prefix: string) => {

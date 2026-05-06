@@ -80,4 +80,13 @@ describe('logger redaction', () => {
     expect(message).toContain('request failed token=[REDACTED]');
     expect(message).not.toContain('secret-token');
   });
+
+  it('redacts Authorization and Cookie header values with spaces', () => {
+    const result = safeStringify('Authorization: Bearer secret-token Cookie: SUB=abc; uid=42');
+
+    expect(result).toContain('Authorization=[REDACTED]');
+    expect(result).toContain('Cookie=[REDACTED]');
+    expect(result).not.toContain('secret-token');
+    expect(result).not.toContain('SUB=abc');
+  });
 });
