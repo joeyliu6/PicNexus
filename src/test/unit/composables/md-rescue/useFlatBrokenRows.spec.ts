@@ -68,6 +68,17 @@ describe('useFlatBrokenRows', () => {
     expect(rescuableChipLabel.value).toBe('已修复');
   });
 
+  it('isRepaired 但文件未 healed 时不把 selectedBackup 误标为 replaced', () => {
+    const links = shallowRef<MdImageLinkWithFile[]>([
+      makeLink('a.md', 'u1', {
+        backups: [{ url: 'b1', valid: true }],
+        selectedBackup: 'b1',
+      }),
+    ]);
+    const { flatBrokenLinks } = useFlatBrokenRows(links, ref(true), ref(new Set<string>()));
+    expect(flatBrokenLinks.value[0].status).toBe('rescuable');
+  });
+
   it('rescuableChipLabel 默认"可修复"', () => {
     const { rescuableChipLabel } = useFlatBrokenRows(shallowRef([]), ref(false));
     expect(rescuableChipLabel.value).toBe('可修复');

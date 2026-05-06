@@ -376,6 +376,9 @@ export function applyMarkdownRepairFixture(rawState: string): void {
           { original: 'C:/visual/docs/launch-notes.md', backup: 'C:/visual/docs/.picnexus-backup/launch-notes.md' },
           { original: 'C:/visual/docs/api-reference.md', backup: 'C:/visual/docs/.picnexus-backup/api-reference.md' },
         ],
+        failedFiles: state === 'partial-failed'
+          ? [{ file: 'C:/visual/docs/weekly-report.md', links: 2, error: 'EACCES' }]
+          : [],
       }
     : null;
   rescueHealedFiles.value = healed;

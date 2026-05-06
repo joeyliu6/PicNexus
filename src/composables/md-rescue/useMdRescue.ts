@@ -39,6 +39,7 @@ import {
   getCheckStartTime,
   setCheckStartTime,
   setUrlIndex,
+  getCollectCancelled,
   setCollectCancelled,
 } from './shared';
 import { runLinkCheck } from './LinkChecker';
@@ -287,6 +288,7 @@ export function useMdRescueManager() {
           setCollectCancelled(false);
           isCollecting.value = true;
           collectProgress.value = { scannedFiles: mdPaths.length, processedFiles: 0, foundLinks: 0 };
+          const failedFiles: string[] = [];
           try {
             imageLinks.value = await collectLinksFromFiles(mdPaths, (processed, found) => {
               collectProgress.value = {
@@ -294,8 +296,27 @@ export function useMdRescueManager() {
                 processedFiles: processed,
                 foundLinks: found,
               };
+            }, {
+              onFileError: (file) => failedFiles.push(file),
             });
-            ok = imageLinks.value.length > 0;
+            if (!getCollectCancelled()) {
+              if (imageLinks.value.length === 0) {
+                if (failedFiles.length > 0) {
+                  const readableCount = mdPaths.length - failedFiles.length;
+                  toast.warn(
+                    failedFiles.length === mdPaths.length ? 'Markdown 文件读取失败' : '未找到可修复链接',
+                    readableCount > 0
+                      ? `${readableCount} 个文件无图片链接，${failedFiles.length} 个文件读取失败`
+                      : `${failedFiles.length} 个 Markdown 文件都读取失败`,
+                  );
+                } else {
+                  toast.info('未找到图片链接', `${mdPaths.length} 个文件中均无图片链接`);
+                }
+              } else if (failedFiles.length > 0) {
+                toast.warn('部分文件读取失败', `${failedFiles.length} 个文件因权限或编码问题被跳过`);
+              }
+            }
+            ok = !getCollectCancelled() && imageLinks.value.length > 0;
           } finally {
             isCollecting.value = false;
             collectProgress.value = null;

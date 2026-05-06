@@ -274,6 +274,49 @@ describe('useMdFileLoader - loader state and failures', () => {
     expect(isCollecting.value).toBe(false);
   });
 
+  it('loadFolderPath 找到 MD 但全部读取失败时给出读取失败提示', async () => {
+    getInvokeMock().mockResolvedValue({
+      files: [],
+      totalFiles: 2,
+      totalLinks: 0,
+      elapsedMs: 2,
+      cancelled: false,
+      skippedDirs: [],
+      readFailedFiles: ['C:/vault/a.md', 'C:/vault/b.md'],
+    });
+    const { loadFolderPath } = useMdFileLoader();
+
+    const ok = await loadFolderPath('C:/vault');
+
+    expect(ok).toBe(false);
+    expect(toastMocks.warn).toHaveBeenCalledWith(
+      'Markdown 文件读取失败',
+      '找到 2 个 Markdown 文件，但都读取失败',
+    );
+    expect(toastMocks.info).not.toHaveBeenCalledWith('未找到 MD 文件', expect.any(String));
+  });
+
+  it('loadFolderPath 部分文件读取失败且无图片链接时说明混合原因', async () => {
+    getInvokeMock().mockResolvedValue({
+      files: [{ filePath: 'C:/vault/a.md', fileName: 'a.md', links: [] }],
+      totalFiles: 2,
+      totalLinks: 0,
+      elapsedMs: 2,
+      cancelled: false,
+      skippedDirs: [],
+      readFailedFiles: ['C:/vault/b.md'],
+    });
+    const { loadFolderPath } = useMdFileLoader();
+
+    const ok = await loadFolderPath('C:/vault');
+
+    expect(ok).toBe(true);
+    expect(toastMocks.warn).toHaveBeenCalledWith(
+      '未找到可修复链接',
+      '1 个文件无图片链接，1 个文件读取失败',
+    );
+  });
+
   it('loadFolderPath 扫描中再次调用会拒绝防重入', async () => {
     isCollecting.value = true;
     const { loadFolderPath } = useMdFileLoader();

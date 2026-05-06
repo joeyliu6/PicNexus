@@ -113,6 +113,7 @@ describe('useFileBackup', () => {
       unrescuableCount: 1,
       backupPath: '',
       fileBackupMap: [],
+      failedFiles: [],
     });
     expect(getFsMocks().mkdir).not.toHaveBeenCalled();
   });
@@ -176,6 +177,9 @@ describe('useFileBackup', () => {
     expect(fs.writeTextFile).not.toHaveBeenCalled();
     expect(phase.value).toBe('done');
     expect(repairReceipt.value?.fileBackupMap).toEqual([]);
+    expect(repairReceipt.value?.failedFiles).toEqual([
+      { file: 'C:/docs/a.md', links: 1, error: 'EACCES' },
+    ]);
     expect(lastRepairMocks.saveLastRepair).not.toHaveBeenCalled();
   });
 
@@ -210,6 +214,7 @@ describe('useFileBackup', () => {
       linksFixed: 2,
       unrescuableCount: 0,
       backupPath: 'C:/docs/.picnexus-backup/20260428_120000',
+      failedFiles: [],
       fileBackupMap: [
         { original: 'C:/docs/a.md', backup: 'C:/backup/a.md' },
         { original: 'C:/docs/b.md', backup: 'C:/backup/b.md' },
@@ -233,6 +238,7 @@ describe('useFileBackup', () => {
       linksFixed: 2,
       unrescuableCount: 0,
       backupPath: 'C:/docs/.picnexus-backup/20260428_120000',
+      failedFiles: [],
       fileBackupMap: [
         { original: 'C:/docs/a.md', backup: 'C:/backup/a.md' },
         { original: 'C:/docs/b.md', backup: 'C:/backup/b.md' },

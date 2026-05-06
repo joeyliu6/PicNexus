@@ -199,6 +199,7 @@ describe('Markdown rescue P1 components', () => {
         phase: 'scanning',
         scanStage: 'checking',
         isCollecting: false,
+        healedFiles: new Set(),
         emptyIcon: 'pi pi-search',
         emptyTitle: 'empty',
         emptyDesc: 'empty desc',

@@ -44,7 +44,7 @@ const RescueIdleZoneStub = {
 };
 
 const RescueBrokenGroupsStub = {
-  props: ['imageLinks', 'isRepaired', 'phase', 'scanStage', 'isCollecting', 'emptyTitle', 'emptyDesc'],
+  props: ['imageLinks', 'isRepaired', 'phase', 'scanStage', 'isCollecting', 'healedFiles', 'emptyTitle', 'emptyDesc'],
   template: `
     <section class="broken-groups-stub">
       <span class="stub-phase">{{ phase }}</span>
@@ -140,6 +140,7 @@ function makeManager(overrides: Record<string, unknown> = {}) {
     availableBackupServices: ref<string[]>([]),
     fixingProgress,
     repairReceipt: ref(null),
+    healedFiles: ref(new Set<string>()),
     hostPreference: ref<string[]>([]),
     includeSubfolders: ref(true),
     includeCodeBlocks: ref(false),
@@ -244,6 +245,7 @@ describe('MdRescueInline state rendering', () => {
         unrescuableCount: 0,
         backupPath: 'C:/docs/.picnexus-backup/20260428_120000',
         fileBackupMap: [{ original: 'C:/docs/a.md', backup: 'C:/backup/a.md' }],
+        failedFiles: [],
       }),
     });
     manager.imageLinks.value = [{ ...makeLink(), selectedBackup: 'https://cdn.example/a.png' }];
@@ -270,6 +272,7 @@ describe('MdRescueInline state rendering', () => {
         unrescuableCount: 0,
         backupPath: '',
         fileBackupMap: [],
+        failedFiles: [],
       }),
     });
     rescueMocks.manager = manager;
@@ -277,5 +280,27 @@ describe('MdRescueInline state rendering', () => {
     const wrapper = mountInline();
 
     expect(wrapper.get('.wk-actions .button-stub').attributes('disabled')).toBeDefined();
+  });
+
+  it('done 部分失败时显示部分完成且统计未完成链接', () => {
+    const manager = makeManager({
+      phase: ref('done'),
+      repairReceipt: ref({
+        filesFixed: 1,
+        linksFixed: 1,
+        unrescuableCount: 0,
+        backupPath: 'C:/docs/.picnexus-backup/20260428_120000',
+        fileBackupMap: [{ original: 'C:/docs/a.md', backup: 'C:/backup/a.md' }],
+        failedFiles: [{ file: 'C:/docs/b.md', links: 2, error: 'EACCES' }],
+      }),
+    });
+    manager.imageLinks.value = [{ ...makeLink(), selectedBackup: 'https://cdn.example/a.png' }];
+    rescueMocks.manager = manager;
+
+    const wrapper = mountInline();
+
+    expect(wrapper.text()).toContain('修复部分完成');
+    expect(wrapper.text()).toContain('1 个文件失败');
+    expect(wrapper.text()).toContain('2 未完成');
   });
 });

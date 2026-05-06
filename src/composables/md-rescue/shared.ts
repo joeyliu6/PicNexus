@@ -52,6 +52,8 @@ export interface RepairReceipt {
   backupPath: string;
   /** 用于撤销：original → backup 的映射 */
   fileBackupMap: Array<{ original: string; backup: string }>;
+  /** 本轮替换失败的文件，供 UI 准确提示“部分完成” */
+  failedFiles: Array<{ file: string; links: number; error: string }>;
 }
 
 // ============================================
@@ -80,6 +82,8 @@ export interface RustScanResult {
   cancelled: boolean;
   /** 因权限不足等原因跳过的目录列表 */
   skippedDirs: string[];
+  /** 已发现但读取失败的 Markdown 文件 */
+  readFailedFiles?: string[];
 }
 export interface RustScanProgress {
   phase: 'scanning' | 'reading';

@@ -25,6 +25,7 @@ const props = defineProps<{
   phase: string;
   scanStage: string;
   isCollecting: boolean;
+  healedFiles: Set<string>;
   emptyIcon: string;
   emptyTitle: string;
   emptyDesc: string;
@@ -47,7 +48,7 @@ const {
   toggleGroupCollapse,
   selectFilter,
   loadMoreRows,
-} = useFlatBrokenRows(toRef(props, 'imageLinks'), toRef(props, 'isRepaired'));
+} = useFlatBrokenRows(toRef(props, 'imageLinks'), toRef(props, 'isRepaired'), toRef(props, 'healedFiles'));
 
 // ---- 扫描状态指示器：收集 / 主检测 / 验证备用 / 取消中时显示，扫完即消失 ----
 const scanInProgress = computed(() =>

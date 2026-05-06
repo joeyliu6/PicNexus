@@ -28,6 +28,7 @@ function getFileDirectory(fullPath: string): string {
 export function useFlatBrokenRows(
   imageLinks: Ref<MdImageLinkWithFile[]>,
   isRepaired: Ref<boolean>,
+  healedFiles?: Ref<Set<string>>,
 ) {
   const activeFilter = ref<'all' | 'rescuable' | 'manual'>('all');
   const displayRowLimit = ref(ROW_DISPLAY_LIMIT);
@@ -38,8 +39,11 @@ export function useFlatBrokenRows(
     for (const l of imageLinks.value) {
       if (!l.checkResult || l.checkResult.is_valid) continue;
       const hasValidBackup = l.backupLinks?.some((b) => b.checkResult?.is_valid) ?? false;
+      const isActuallyReplaced = isRepaired.value
+        && Boolean(l.selectedBackup)
+        && (healedFiles?.value.has(l.sourceFile) ?? true);
       let status: FlatRow['status'];
-      if (isRepaired.value && l.selectedBackup) status = 'replaced';
+      if (isActuallyReplaced) status = 'replaced';
       else if (hasValidBackup) status = 'rescuable';
       else status = 'manual';
       if (status === 'manual') manual++;

@@ -18,7 +18,7 @@ import { exists } from '@tauri-apps/plugin-fs';
 const {
   phase, imageLinks, isAnalyzing, isCollecting, collectProgress,
   isChecking, fileHealthList, availableBackupServices,
-  fixingProgress, repairReceipt, hostPreference, includeSubfolders, includeCodeBlocks,
+  fixingProgress, repairReceipt, healedFiles, hostPreference, includeSubfolders, includeCodeBlocks,
   bottomStats, selectMdFile, selectFolder, handleDropPaths,
   loadFilePath, loadFolderPath,
   analyzeFile, applyRepairStrategy, loadHostPreference, saveHostPreference,
@@ -43,6 +43,10 @@ const fixingPercent = computed(() => {
 });
 
 const isRepaired = computed(() => phase.value === 'done');
+const failedRepairFileCount = computed(() => repairReceipt.value?.failedFiles.length ?? 0);
+const failedRepairLinkCount = computed(() =>
+  repairReceipt.value?.failedFiles.reduce((sum, item) => sum + item.links, 0) ?? 0,
+);
 
 // ---- 扫描取消能力 / 百分比 / 空态文案 / 完成停留（详见 useRescueScanHeader）----
 
@@ -134,6 +138,12 @@ function truncatePath(path: string): string {
   return parts.length <= 2 ? path : '.../' + parts.slice(-2).join('/');
 }
 
+const failedRepairTooltip = computed(() =>
+  repairReceipt.value?.failedFiles
+    .map((item) => `${truncatePath(item.file)}：${item.error}`)
+    .join('\n') ?? '',
+);
+
 // ---- 修复策略 ----
 
 const showRepairDialog = ref(false);
@@ -183,8 +193,11 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
         <div v-if="phase === 'done'" class="wk-header">
           <div class="wk-title-group">
             <i class="pi pi-check-circle wk-done-icon" />
-            <span class="wk-title">修复完成</span>
-            <span v-if="repairReceipt" class="wk-subtitle">共修复 {{ repairReceipt.linksFixed }} 张图片链接</span>
+            <span class="wk-title">{{ failedRepairFileCount > 0 ? '修复部分完成' : '修复完成' }}</span>
+            <span v-if="repairReceipt" class="wk-subtitle">
+              共修复 {{ repairReceipt.linksFixed }} 张图片链接
+              <template v-if="failedRepairFileCount > 0"> · {{ failedRepairFileCount }} 个文件失败</template>
+            </span>
           </div>
           <div class="wk-actions">
             <Button label="撤销" severity="secondary" size="small" icon="pi pi-undo" outlined :disabled="!repairReceipt?.fileBackupMap.length" @click="undoReplace" />
@@ -200,6 +213,7 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
           <RescueBrokenGroups
             :image-links="imageLinks" :is-repaired="isRepaired" :phase="phase" :scan-stage="scanStage"
             :is-collecting="isCollecting"
+            :healed-files="healedFiles"
             :empty-icon="emptyIcon" :empty-title="emptyTitle" :empty-desc="emptyDesc"
           />
 
@@ -246,6 +260,10 @@ async function handleRepairConfirm(strategy: RepairStrategy, preference: string[
             <template v-if="bottomStats.manualCount > 0">
               <span class="rescue-stat-sep" />
               <span class="rescue-stat rescue-stat--warning"><i class="pi pi-exclamation-triangle rescue-stat-icon" />{{ bottomStats.manualCount }} 需手动</span>
+            </template>
+            <template v-if="failedRepairLinkCount > 0">
+              <span class="rescue-stat-sep" />
+              <span class="rescue-stat rescue-stat--warning" v-tooltip.top="failedRepairTooltip"><i class="pi pi-exclamation-triangle rescue-stat-icon" />{{ failedRepairLinkCount }} 未完成</span>
             </template>
           </template>
           <template v-else-if="scanStage === 'complete' || scanStage === 'cancelled'">

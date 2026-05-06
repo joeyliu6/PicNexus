@@ -81,6 +81,8 @@ pub struct ScanResult {
     pub cancelled: bool,
     /// 因权限不足等原因跳过的目录列表
     pub skipped_dirs: Vec<String>,
+    /// 已发现但读取失败的 Markdown 文件
+    pub read_failed_files: Vec<String>,
 }
 
 /// 取消标志
@@ -534,6 +536,7 @@ pub async fn scan_md_folder(
             elapsed_ms: start.elapsed().as_millis() as u64,
             cancelled: cancel.load(Ordering::SeqCst),
             skipped_dirs,
+            read_failed_files: vec![],
         });
     }
 
@@ -545,6 +548,7 @@ pub async fn scan_md_folder(
     let files = tokio::task::spawn_blocking(move || {
         let mut results: Vec<MdFileResult> = Vec::new();
         let mut total_links = 0usize;
+        let mut read_failed_files = Vec::new();
 
         for (idx, path_str) in md_paths.iter().enumerate() {
             if cancel_clone.load(Ordering::Relaxed) {
@@ -569,6 +573,7 @@ pub async fn scan_md_folder(
                 }
                 Err(e) => {
                     log::warn!("[MdScanner] 读取文件失败: {} - {}", safe_path(path_str), e);
+                    read_failed_files.push(path_str.clone());
                 }
             }
 
@@ -588,29 +593,31 @@ pub async fn scan_md_folder(
             }
         }
 
-        (results, total_links)
+        (results, total_links, read_failed_files)
     })
     .await
     .map_err(|e| AppError::file_io(format!("读取线程异常: {}", e)))?;
 
+    let (read_files, total_links, read_failed_files) = files;
     let cancelled = cancel.load(Ordering::SeqCst);
     let elapsed_ms = start.elapsed().as_millis() as u64;
 
     log::info!(
         "[MdScanner] 完成: {} 文件, {} 链接, {}ms, 取消={}",
-        files.0.len(),
-        files.1,
+        read_files.len(),
+        total_links,
         elapsed_ms,
         cancelled,
     );
 
     Ok(ScanResult {
-        total_files: files.0.len(),
-        total_links: files.1,
-        files: files.0,
+        total_files,
+        total_links,
+        files: read_files,
         elapsed_ms,
         cancelled,
         skipped_dirs,
+        read_failed_files,
     })
 }
 

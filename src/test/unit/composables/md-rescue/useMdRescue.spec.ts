@@ -276,6 +276,39 @@ describe('useMdRescueManager', () => {
     expect(imageLinks.value).toEqual([]);
   });
 
+  it('handleDropPaths 多个 Markdown 均无图片链接时提示空结果且不启动扫描', async () => {
+    const fs = getFsMocks();
+    fs.stat.mockResolvedValue({ isFile: true, isDirectory: false } as never);
+    fs.readTextFile
+      .mockResolvedValueOnce('plain text')
+      .mockResolvedValueOnce('# title');
+    const manager = useMdRescueManager();
+
+    await manager.handleDropPaths(['C:/docs/a.md', 'C:/docs/b.md']);
+
+    expect(deps.toast.info).toHaveBeenCalledWith('未找到图片链接', '2 个文件中均无图片链接');
+    expect(phase.value).toBe('idle');
+    expect(deps.runLinkCheck).not.toHaveBeenCalled();
+  });
+
+  it('handleDropPaths 多个 Markdown 全部读取失败时提示读取失败', async () => {
+    const fs = getFsMocks();
+    fs.stat.mockResolvedValue({ isFile: true, isDirectory: false } as never);
+    fs.readTextFile
+      .mockRejectedValueOnce(new Error('EACCES'))
+      .mockRejectedValueOnce(new Error('invalid utf-8'));
+    const manager = useMdRescueManager();
+
+    await manager.handleDropPaths(['C:/docs/a.md', 'C:/docs/b.md']);
+
+    expect(deps.toast.warn).toHaveBeenCalledWith(
+      'Markdown 文件读取失败',
+      '2 个 Markdown 文件都读取失败',
+    );
+    expect(phase.value).toBe('idle');
+    expect(deps.runLinkCheck).not.toHaveBeenCalled();
+  });
+
   it('cancelCollect 取消收集、清理进度并通知 Rust 侧', () => {
     isCollecting.value = true;
     collectProgress.value = { scannedFiles: 10, processedFiles: 3, foundLinks: 2 };

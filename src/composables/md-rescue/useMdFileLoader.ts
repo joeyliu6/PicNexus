@@ -55,6 +55,7 @@ export function wrapLinksWithFile(links: MdImageLink[], file: string): MdImageLi
 export async function collectLinksFromFiles(
   files: string[],
   onProgress?: (processed: number, found: number) => void,
+  options?: { onFileError?: (file: string, error: unknown) => void },
 ): Promise<MdImageLinkWithFile[]> {
   const allLinks: MdImageLinkWithFile[] = [];
   const sem = new Semaphore(COLLECT_CONCURRENCY);
@@ -69,6 +70,7 @@ export async function collectLinksFromFiles(
         allLinks.push(...wrapLinksWithFile(extractImageLinks(content, { includeCodeBlocks: includeCodeBlocks.value }), file));
       } catch (err) {
         log.warn(`读取文件失败: ${file}`, err);
+        options?.onFileError?.(file, err);
       }
       processed++;
       onProgress?.(processed, allLinks.length);
@@ -153,6 +155,7 @@ export function useMdFileLoader() {
 
       // 保存跳过的目录信息
       skippedDirs.value = result.skippedDirs ?? [];
+      const readFailedFiles = result.readFailedFiles ?? [];
 
       // 转换 Rust 结果为前端类型
       const allLinks: MdImageLinkWithFile[] = [];
@@ -177,13 +180,29 @@ export function useMdFileLoader() {
       imageLinks.value = allLinks;
 
       if (filePaths.length === 0) {
-        toast.info('未找到 MD 文件', '该文件夹中没有 Markdown 文件');
+        if (readFailedFiles.length > 0 || result.totalFiles > 0) {
+          toast.warn(
+            'Markdown 文件读取失败',
+            `找到 ${result.totalFiles || readFailedFiles.length} 个 Markdown 文件，但都读取失败`,
+          );
+        } else {
+          toast.info('未找到 MD 文件', '该文件夹中没有 Markdown 文件');
+        }
         return false;
       }
 
       recordMruEntry(dir, 'folder');
       if (allLinks.length === 0) {
-        toast.info('未找到图片链接', `${filePaths.length} 个文件中均无图片链接`);
+        if (readFailedFiles.length > 0) {
+          toast.warn(
+            '未找到可修复链接',
+            `${filePaths.length} 个文件无图片链接，${readFailedFiles.length} 个文件读取失败`,
+          );
+        } else {
+          toast.info('未找到图片链接', `${filePaths.length} 个文件中均无图片链接`);
+        }
+      } else if (readFailedFiles.length > 0) {
+        toast.warn('部分文件读取失败', `${readFailedFiles.length} 个文件因权限或编码问题被跳过`);
       }
 
       log.info(`Rust 扫描完成: ${result.totalFiles} 文件, ${result.totalLinks} 链接, ${result.elapsedMs}ms`);

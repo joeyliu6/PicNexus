@@ -36,6 +36,10 @@ const log = createLogger('MdRescue:Backup');
  */
 const UNDO_COPY_CONCURRENCY = 8;
 
+function formatFailureReason(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 /**
  * 计算文件相对于文件夹的路径。
  * Windows 上 selectFolder 与 Rust canonicalize 可能返回不同大小写（如 `C:\Users\Foo`
@@ -107,6 +111,7 @@ export async function executeReplace(unrescuableCount: number): Promise<{
       unrescuableCount,
       backupPath: '',
       fileBackupMap: [],
+      failedFiles: [],
     };
     return { success: 0, skipped: imageLinks.value.length, failed: 0 };
   }
@@ -117,6 +122,7 @@ export async function executeReplace(unrescuableCount: number): Promise<{
     let totalSuccess = 0;
     let totalFailed = 0;
     const fileBackupMap: RepairReceipt['fileBackupMap'] = [];
+    const failedFiles: RepairReceipt['failedFiles'] = [];
 
     const ts = formatTimestampCompact();
 
@@ -182,6 +188,11 @@ export async function executeReplace(unrescuableCount: number): Promise<{
       } catch (err) {
         log.error(`替换失败: ${file}`, err);
         totalFailed += replacements.size;
+        failedFiles.push({
+          file,
+          links: replacements.size,
+          error: formatFailureReason(err),
+        });
         fixingProgress.value = { ...fixingProgress.value, current: fixingProgress.value.current + 1 };
       }
     }
@@ -194,6 +205,7 @@ export async function executeReplace(unrescuableCount: number): Promise<{
       unrescuableCount,
       backupPath: backupDir,
       fileBackupMap,
+      failedFiles,
     };
 
     if (totalSuccess > 0 && fileBackupMap.length > 0) {
