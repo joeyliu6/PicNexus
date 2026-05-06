@@ -396,7 +396,7 @@ class HistoryDatabase {
   async getByFilePath(filePath: string): Promise<HistoryItem | null> {
     const db = await this.connection.getDb();
     const rows = await db.select<HistoryItemRow[]>(
-      'SELECT * FROM history_items WHERE file_path = $1 LIMIT 1',
+      'SELECT * FROM history_items WHERE file_path = $1 ORDER BY timestamp DESC LIMIT 1',
       [filePath]
     );
     return rows.length > 0 ? rowToItem(rows[0]) : null;

@@ -56,6 +56,7 @@ export interface QueueItem {
   id: string;
   fileName: string;
   filePath: string;
+  historyId?: string;  // 对应的历史记录 ID，用于重试时精准更新
   enabledServices: string[];  // 启用的图床列表
   serviceProgress: Partial<Record<string, ServiceProgress>>;  // 各图床独立进度
   status: 'pending' | 'uploading' | 'success' | 'error';

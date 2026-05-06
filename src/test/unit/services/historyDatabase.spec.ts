@@ -108,7 +108,12 @@ class MockDatabase {
 
     if (statement.includes('WHERE FILE_PATH =')) {
       const filePath = params[0] as string;
-      return this.rows.filter((row) => row.file_path === filePath) as unknown as T;
+      const rows = this.rows.filter((row) => row.file_path === filePath);
+      if (statement.includes('ORDER BY TIMESTAMP DESC')) {
+        return rows
+          .toSorted((a, b) => (b.timestamp as number) - (a.timestamp as number)) as unknown as T;
+      }
+      return rows as unknown as T;
     }
 
     return [...this.rows] as unknown as T;
@@ -216,6 +221,26 @@ describe('HistoryDatabase', () => {
 
     expect(first).toBe(true);
     expect(second).toBe(false);
+  });
+
+  it('getByFilePath() returns the newest matching row deterministically', async () => {
+    const { historyDB } = await import('../../../services/HistoryDatabase');
+    await historyDB.insert(makeHistoryItem({
+      id: 'same-path-old',
+      filePath: '/tmp/same.png',
+      timestamp: 100,
+      generatedLink: 'https://example.com/old.jpg',
+    }));
+    await historyDB.insert(makeHistoryItem({
+      id: 'same-path-new',
+      filePath: '/tmp/same.png',
+      timestamp: 200,
+      generatedLink: 'https://example.com/new.jpg',
+    }));
+
+    const found = await historyDB.getByFilePath('/tmp/same.png');
+
+    expect(found?.id).toBe('same-path-new');
   });
 
   it('deleteMany() removes multiple rows', async () => {

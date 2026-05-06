@@ -8,6 +8,7 @@ const {
   checkNetworkConnectivityMock,
   retryUploadMock,
   uploadToMultipleServicesMock,
+  historyGetByIdMock,
   historyGetByFilePathMock,
   historyUpdateMock,
   invalidateCacheMock,
@@ -18,6 +19,7 @@ const {
   checkNetworkConnectivityMock: vi.fn(),
   retryUploadMock: vi.fn(),
   uploadToMultipleServicesMock: vi.fn(),
+  historyGetByIdMock: vi.fn(),
   historyGetByFilePathMock: vi.fn(),
   historyUpdateMock: vi.fn(),
   invalidateCacheMock: vi.fn(),
@@ -43,6 +45,7 @@ vi.mock('../../../core/MultiServiceUploader', () => ({
 
 vi.mock('../../../services/HistoryDatabase', () => ({
   historyDB: {
+    getById: historyGetByIdMock,
     getByFilePath: historyGetByFilePathMock,
     update: historyUpdateMock,
   },
@@ -260,6 +263,7 @@ describe('RetryService', () => {
       id: 'history-1',
       results: [],
     });
+    historyGetByIdMock.mockResolvedValue(null);
     historyUpdateMock.mockResolvedValue(undefined);
     emitHistoryUpdatedMock.mockResolvedValue(undefined);
     invokeMock.mockResolvedValue(true);
@@ -342,6 +346,56 @@ describe('RetryService', () => {
     expect(invalidateCacheMock).toHaveBeenCalled();
     expect(emitHistoryUpdatedMock).toHaveBeenCalledWith(['history-1']);
     expect(toast.success).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates history by queue historyId instead of ambiguous filePath', async () => {
+    const queueManager = createQueueManager([
+      createItem({
+        historyId: 'history-current',
+      }),
+    ]);
+    historyGetByIdMock.mockResolvedValueOnce({
+      id: 'history-current',
+      results: [],
+    });
+
+    const service = new RetryService(makeOptions({ queueManager }));
+
+    await service.retrySingleService('item-1', 'weibo', DEFAULT_CONFIG);
+
+    expect(historyGetByIdMock).toHaveBeenCalledWith('history-current');
+    expect(historyGetByFilePathMock).not.toHaveBeenCalled();
+    expect(historyUpdateMock).toHaveBeenCalledWith('history-current', expect.objectContaining({
+      results: [
+        expect.objectContaining({
+          serviceId: 'weibo',
+          status: 'success',
+        }),
+      ],
+    }));
+  });
+
+  it('falls back to filePath lookup when a legacy queue item has no usable historyId', async () => {
+    const queueManager = createQueueManager([
+      createItem({
+        historyId: 'missing-history',
+      }),
+    ]);
+    historyGetByIdMock.mockResolvedValueOnce(null);
+    historyGetByFilePathMock.mockResolvedValueOnce({
+      id: 'history-latest',
+      results: [],
+    });
+
+    const service = new RetryService(makeOptions({ queueManager }));
+
+    await service.retrySingleService('item-1', 'weibo', DEFAULT_CONFIG);
+
+    expect(historyGetByIdMock).toHaveBeenCalledWith('missing-history');
+    expect(historyGetByFilePathMock).toHaveBeenCalledWith('/tmp/demo.png');
+    expect(historyUpdateMock).toHaveBeenCalledWith('history-latest', expect.objectContaining({
+      results: expect.any(Array),
+    }));
   });
 
   it('keeps the whole item in error after one failed service is fixed but another failed service remains', async () => {

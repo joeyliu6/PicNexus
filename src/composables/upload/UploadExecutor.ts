@@ -97,6 +97,7 @@ export async function processUploadQueue(
       try {
         // 使用 UUID 生成唯一 ID，避免高并发时的 ID 碰撞
         const historyId = crypto.randomUUID();
+        queueManager.updateItem(itemId, { historyId });
 
         // 方案 B：标志位跟踪历史记录是否已创建
         let historyCreated = false;

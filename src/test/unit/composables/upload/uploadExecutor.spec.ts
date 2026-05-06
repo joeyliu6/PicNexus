@@ -125,6 +125,39 @@ describe('processUploadQueue', () => {
     ]);
   });
 
+  it('stores the generated historyId on the queue item and reuses it for history saves', async () => {
+    const queueManager = createQueueManager();
+    queueManager.seed('q-history', 'history.jpg');
+    const saveHistoryItemImmediate = vi.fn(async () => undefined);
+
+    await processUploadQueue(
+      [
+        {
+          itemId: 'q-history',
+          filePath: 'C:/tmp/history.jpg',
+          uploadFilePath: 'C:/tmp/history.jpg',
+          fileName: 'history.jpg',
+        },
+      ],
+      { services: { jd: {} } } as any,
+      ['jd'],
+      1,
+      {
+        queueManager: queueManager as any,
+        saveHistoryItemImmediate,
+        addResultToHistoryItem: vi.fn(async () => true),
+        saveHistoryItem: vi.fn(async () => undefined),
+        toast: { showConfig: vi.fn() } as any,
+      },
+    );
+
+    const historyId = saveHistoryItemImmediate.mock.calls[0]?.[2];
+    expect(historyId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    expect(queueManager.updateItem).toHaveBeenCalledWith('q-history', { historyId });
+  });
+
   it('keeps weibo queue links raw and lets copy/thumb helpers apply the default template once', async () => {
     const queueManager = createQueueManager();
     queueManager.seed('q-weibo', 'weibo.jpg', ['weibo']);

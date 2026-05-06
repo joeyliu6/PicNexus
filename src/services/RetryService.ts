@@ -304,7 +304,7 @@ export class RetryService {
     }
 
     // 更新历史记录
-    await this.updateHistoryRecord(currentItem.filePath, serviceId, result, link);
+    await this.updateHistoryRecord(currentItem.filePath, currentItem.historyId, serviceId, result, link);
     await this.cleanupClipboardTempFileIfComplete(itemId);
   }
 
@@ -315,6 +315,7 @@ export class RetryService {
    */
   private async updateHistoryRecord(
     filePath: string,
+    historyId: string | undefined,
     serviceId: string,
     result: UploadResult,
     link: string
@@ -322,8 +323,14 @@ export class RetryService {
     // 使用链式 Promise 实现互斥锁，确保更新操作按顺序执行
     const updateOperation = async () => {
       try {
-        // 使用 SQLite 按 filePath 直接查询单条记录，避免加载大量数据到内存
-        const historyItem = await historyDB.getByFilePath(filePath);
+        let historyItem = historyId ? await historyDB.getById(historyId) : null;
+        if (historyId && !historyItem) {
+          log.warn(`未找到 historyId 对应的历史记录，回退到 filePath 查询: ${historyId}`);
+        }
+        if (!historyItem) {
+          // 兼容旧队列项：没有 historyId 时按 filePath 查询最新的一条记录
+          historyItem = await historyDB.getByFilePath(filePath);
+        }
 
         if (!historyItem) {
           log.warn(`未找到对应的历史记录: ${filePath}`);
