@@ -89,6 +89,14 @@ describe('stripPrefixTemplate', () => {
     expect(stripPrefixTemplate(final, template)).toBe(URL);
   });
 
+  it('keeps URL content when the trailing literal also appears inside the URL', () => {
+    const original = 'https://cdn.example.com/a-suffix.png';
+    const template = 'p-{url}-suffix';
+    const final = applyPrefixTemplate(template, original);
+
+    expect(stripPrefixTemplate(final, template)).toBe(original);
+  });
+
   it('{url_no_scheme} 模板还原时补回 https://', () => {
     const template = 'https://cache/{url_no_scheme}';
     const final = applyPrefixTemplate(template, URL);

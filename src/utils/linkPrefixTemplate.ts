@@ -122,8 +122,8 @@ export function stripPrefixTemplate(finalUrl: string, template: string): string 
       const next = parts[i + 1];
       let slot: string;
       if (next && next.kind === 'literal') {
-        const nextIdx = finalUrl.indexOf(next.value, cursor);
-        if (nextIdx < 0) return null;
+        const nextIdx = finalUrl.lastIndexOf(next.value);
+        if (nextIdx < cursor) return null;
         slot = finalUrl.slice(cursor, nextIdx);
         cursor = nextIdx;
       } else {
