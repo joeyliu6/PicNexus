@@ -1,4 +1,4 @@
-import { ref, type Ref } from 'vue';
+import { computed, ref, type ComputedRef, type Ref } from 'vue';
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { createLogger } from '../utils/logger';
@@ -32,6 +32,7 @@ export interface UseAutoUpdateReturn {
   errorMessage: Ref<string>;
   lastCheckTime: Ref<number | null>;
   pendingUpdateAvailable: Ref<boolean>;
+  hasAvailableUpdate: ComputedRef<boolean>;
   checkForUpdate: () => Promise<void>;
   downloadAndInstall: () => Promise<void>;
   retryRelaunch: () => Promise<void>;
@@ -44,6 +45,9 @@ const downloadProgress = ref(0);
 const errorMessage = ref('');
 const lastCheckTime = ref<number | null>(null);
 const pendingUpdateAvailable = ref(false);
+const hasAvailableUpdate = computed(() =>
+  status.value === 'available' || status.value === 'install-pending'
+);
 
 let pendingUpdate: Update | null = null;
 
@@ -157,6 +161,7 @@ export function useAutoUpdate(): UseAutoUpdateReturn {
     errorMessage,
     lastCheckTime,
     pendingUpdateAvailable,
+    hasAvailableUpdate,
     checkForUpdate,
     downloadAndInstall,
     retryRelaunch,

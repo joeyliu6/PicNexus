@@ -18,6 +18,7 @@ import { useSettingsForm } from '../../composables/settings/useSettingsForm';
 import { useConnectionTest } from '../../composables/settings/useConnectionTest';
 import { useEditorIntegration } from '../../composables/settings/useEditorIntegration';
 import { useSettingsReset } from '../../composables/settings/useSettingsReset';
+import { useAutoUpdate } from '../../composables/useAutoUpdate';
 
 import HostingSettingsPanel from '../settings/HostingSettingsPanel.vue';
 import GeneralSettingsPanel from '../settings/GeneralSettingsPanel.vue';
@@ -34,6 +35,7 @@ const configManager = useConfigManager();
 const historyManager = useHistoryManager();
 const analytics = useAnalytics();
 const { reopen: reopenOnboarding } = useOnboarding();
+const { hasAvailableUpdate } = useAutoUpdate();
 
 // ---- Composables ----
 
@@ -290,7 +292,10 @@ onUnmounted(() => {
         <div v-for="(group, idx) in navGroups" :key="idx" class="nav-group">
           <button
             v-for="item in group.items" :key="item.id"
-            class="nav-item" :class="{ active: activeTab === item.id }"
+            class="nav-item" :class="{
+              active: activeTab === item.id,
+              'has-update-badge': item.id === 'about' && hasAvailableUpdate,
+            }"
             @click="activeTab = item.id"
           >
             <i :class="item.icon" class="nav-icon"></i>
@@ -462,6 +467,7 @@ onUnmounted(() => {
 }
 
 .nav-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-sm-md);
@@ -476,6 +482,19 @@ onUnmounted(() => {
   transition: background-color var(--duration-fast), color var(--duration-fast);
   text-align: left;
   width: 100%;
+}
+
+.nav-item.has-update-badge::after {
+  content: '';
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm-md);
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--primary);
+  box-shadow: 0 0 0 2px var(--bg-sidebar-settings);
+  pointer-events: none;
 }
 
 .nav-item .nav-icon {

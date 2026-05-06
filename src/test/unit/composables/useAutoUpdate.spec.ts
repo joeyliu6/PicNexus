@@ -64,6 +64,7 @@ describe('useAutoUpdate - checkForUpdate', () => {
     const api = useAutoUpdate();
     await api.checkForUpdate();
     expect(api.status.value).toBe('available');
+    expect(api.hasAvailableUpdate.value).toBe(true);
     expect(api.updateInfo.value).toEqual({ version: '1.2.3', date: '2026-04-01', body: 'release notes' });
     expect(api.lastCheckTime.value).not.toBeNull();
   });
@@ -73,6 +74,7 @@ describe('useAutoUpdate - checkForUpdate', () => {
     const api = useAutoUpdate();
     await api.checkForUpdate();
     expect(api.status.value).toBe('up-to-date');
+    expect(api.hasAvailableUpdate.value).toBe(false);
     expect(api.updateInfo.value).toBeNull();
   });
 
@@ -88,6 +90,7 @@ describe('useAutoUpdate - checkForUpdate', () => {
     const api = useAutoUpdate();
     await api.checkForUpdate();
     expect(api.status.value).toBe('error');
+    expect(api.hasAvailableUpdate.value).toBe(false);
     expect(api.errorMessage.value).toBe('network');
   });
 
@@ -144,6 +147,7 @@ describe('useAutoUpdate - downloadAndInstall', () => {
     await api.checkForUpdate();
     await api.downloadAndInstall();
     expect(api.status.value).toBe('install-pending');
+    expect(api.hasAvailableUpdate.value).toBe(true);
     expect(api.downloadProgress.value).toBe(100);
     expect(mockRelaunch).not.toHaveBeenCalled();
   });

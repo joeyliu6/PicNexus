@@ -44,6 +44,7 @@ const mockState = vi.hoisted(() => ({
   reopenOnboarding: vi.fn(),
   configStoreGet: vi.fn(),
   cookieUnlisten: vi.fn(),
+  hasAvailableUpdate: undefined as any,
   formData: undefined as any,
   availableServices: undefined as any,
   serviceConfigStatus: undefined as any,
@@ -91,6 +92,12 @@ vi.mock('../../../composables/useAnalytics', () => ({
 vi.mock('../../../composables/useOnboarding', () => ({
   useOnboarding: () => ({
     reopen: mockState.reopenOnboarding,
+  }),
+}));
+
+vi.mock('../../../composables/useAutoUpdate', () => ({
+  useAutoUpdate: () => ({
+    hasAvailableUpdate: mockState.hasAvailableUpdate,
   }),
 }));
 
@@ -341,6 +348,7 @@ beforeEach(() => {
   const config = createConfig({ availableServices: ['jd', 'r2'] });
   mockState.formData = makeFormData();
   mockState.availableServices = ref(['jd', 'r2']);
+  mockState.hasAvailableUpdate = ref(false);
   mockState.serviceConfigStatus = computed(() => ({
     jd: true,
     r2: true,
@@ -363,6 +371,21 @@ beforeEach(() => {
 });
 
 describe('SettingsView page interactions', () => {
+  it('shows the update badge only on the about update tab when an update is available', async () => {
+    mockState.hasAvailableUpdate = ref(true);
+    const wrapper = await mountSettings();
+    const navItems = wrapper.findAll('.nav-item');
+
+    expect(navItems[4].classes()).toContain('has-update-badge');
+    expect(navItems.slice(0, 4).every(item => !item.classes().includes('has-update-badge'))).toBe(true);
+  });
+
+  it('does not show the about update badge when no update is available', async () => {
+    const wrapper = await mountSettings();
+
+    expect(wrapper.findAll('.nav-item')[4].classes()).not.toContain('has-update-badge');
+  });
+
   it('switches from compression target to hosting tab', async () => {
     const settingsTargetTab = ref<string | null>('compression');
     const settingsTargetSection = ref<string | null>('imageCompression');

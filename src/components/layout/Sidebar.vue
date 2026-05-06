@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import Button from 'primevue/button';
+import { useAutoUpdate } from '../../composables/useAutoUpdate';
 
 type ViewType = 'upload' | 'history' | 'link-check' | 'settings';
 
@@ -11,6 +12,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   navigate: [view: ViewType]
 }>();
+
+const { hasAvailableUpdate } = useAutoUpdate();
 
 const activeView = ref<ViewType>(props.currentView ?? 'upload');
 
@@ -39,7 +42,10 @@ const handleNavigate = (view: ViewType) => {
       :label="item.label"
       :icon="`pi ${item.icon}`"
       @click="handleNavigate(item.id)"
-      :class="{ 'nav-btn-active': activeView === item.id }"
+      :class="{
+        'nav-btn-active': activeView === item.id,
+        'has-update-badge': item.id === 'settings' && hasAvailableUpdate,
+      }"
       text
       class="nav-btn"
     />
@@ -59,6 +65,7 @@ const handleNavigate = (view: ViewType) => {
 }
 
 .nav-btn {
+  position: relative;
   width: 100%;
   height: 70px;
   display: flex;
@@ -73,6 +80,19 @@ const handleNavigate = (view: ViewType) => {
     background-color var(--duration-fast) var(--ease-standard),
     color var(--duration-fast) var(--ease-standard);
   font-size: var(--text-sm);
+}
+
+.nav-btn.has-update-badge::after {
+  content: '';
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-md);
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--primary);
+  box-shadow: 0 0 0 2px var(--bg-sidebar);
+  pointer-events: none;
 }
 
 .nav-btn :deep(.p-button-icon) {
