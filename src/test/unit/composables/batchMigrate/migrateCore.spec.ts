@@ -26,6 +26,7 @@ function createStatus(overrides: Partial<MigrateItemStatus> = {}): MigrateItemSt
     serviceResults: overrides.serviceResults ?? { r2: 'pending', github: 'pending' },
     existingServiceIds: overrides.existingServiceIds ?? ['source'],
     sourceServiceId: overrides.sourceServiceId,
+    preferredSourceServiceIds: overrides.preferredSourceServiceIds,
     problemServiceIds: overrides.problemServiceIds,
   };
 }
@@ -304,6 +305,35 @@ describe('migrateOneItem', () => {
           source: checkStatus(false),
           r2: checkStatus(true),
         },
+      }),
+      status,
+      ['github'],
+      {} as UserConfig,
+      createUploader({ github: 'success' }) as any,
+      ref(false),
+      ref(false),
+      createStats(),
+    );
+
+    expect(status.status).toBe('success');
+    expect(status.sourceServiceId).toBe('r2');
+    expect(getInvokeMock()).toHaveBeenCalledWith('download_url_image', { url: 'https://r2/a.png' });
+  });
+
+  it('普通补传模式按用户选择的来源图床下载', async () => {
+    getInvokeMock().mockResolvedValue({ file_path: '/tmp/a.png', content_type: 'image/png', file_size: 512 });
+    const status = createStatus({
+      serviceResults: { github: 'pending' },
+      sourceServiceId: 'r2',
+      preferredSourceServiceIds: ['r2'],
+    });
+
+    await migrateOneItem(
+      createItem({
+        results: [
+          { serviceId: 'source', status: 'success', result: uploadResult('source', 'https://dead/a.png') },
+          { serviceId: 'r2', status: 'success', result: uploadResult('r2', 'https://r2/a.png') },
+        ],
       }),
       status,
       ['github'],

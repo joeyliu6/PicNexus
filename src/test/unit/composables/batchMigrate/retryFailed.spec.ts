@@ -145,6 +145,37 @@ describe('createRetry', () => {
     expect(vi.mocked(migrateOneItem).mock.calls[0][2]).toEqual(['r2']);
   });
 
+  it('retains unattempted targets when retry filters a full failure', async () => {
+    vi.mocked(historyDB.getItemsByIds).mockResolvedValue([makeHistoryItem() as any]);
+    const migrateResult = ref(makeResult());
+    const retry = createRetry({
+      migrateResult,
+      retryingIds: ref(new Set<string>()),
+      getOrCacheConfig: async () => ({} as any),
+      getMultiUploader: () => ({} as any),
+      getRetryTargets: () => ['r2'],
+    });
+
+    await retry.retrySingleFailed('h1');
+
+    expect(migrateResult.value?.successCount).toBe(1);
+    expect(migrateResult.value?.failedCount).toBe(0);
+    expect(migrateResult.value?.failures).toEqual([
+      expect.objectContaining({
+        historyId: 'h1',
+        isPartial: true,
+        failedTargets: ['github'],
+      }),
+    ]);
+    expect(migrateResult.value?.partialFailures).toEqual([
+      { historyId: 'h1', fileName: 'h1.png', failedTargets: ['github'] },
+    ]);
+    expect(migrateResult.value?.itemsSnapshot[0]).toEqual(expect.objectContaining({
+      status: 'success',
+      serviceResults: { r2: 'success', github: 'failed' },
+    }));
+  });
+
   it('preserves recovery source context when retrying a failed item', async () => {
     vi.mocked(historyDB.getItemsByIds).mockResolvedValue([{
       ...makeHistoryItem(),
@@ -243,7 +274,14 @@ describe('createRetry', () => {
     expect(migrateResult.value?.failures[0]).toEqual(expect.objectContaining({
       historyId: 'h1',
       error: 'GitHub | still bad',
-      details: [{ serviceId: 'github', message: 'still bad' }],
+      details: [
+        { serviceId: 'r2', message: 'GitHub | still bad' },
+        { serviceId: 'github', message: 'still bad' },
+      ],
+    }));
+    expect(migrateResult.value?.itemsSnapshot[0]).toEqual(expect.objectContaining({
+      status: 'failed',
+      serviceResults: { r2: 'failed', github: 'failed' },
     }));
   });
 

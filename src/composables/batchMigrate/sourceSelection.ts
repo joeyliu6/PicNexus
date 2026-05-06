@@ -42,14 +42,31 @@ function sortSources(
   });
 }
 
-export function getDefaultMigrateSource(item: HistoryItem): MigrateSourceCandidate | null {
-  const first = successfulResults(item)[0];
-  if (!first?.result.result?.url) return null;
-  return {
-    serviceId: first.result.serviceId,
-    url: first.result.result.url,
-    order: first.order,
-  };
+function defaultMigrateSources(
+  item: HistoryItem,
+  preferredServiceIds: string[] = [],
+): MigrateSourceCandidate[] {
+  const sources = successfulResults(item)
+    .map(({ result, order }) => ({
+      serviceId: result.serviceId,
+      url: result.result?.url ?? '',
+      order,
+    }))
+    .filter(source => Boolean(source.url));
+
+  const preferred = new Set(preferredServiceIds);
+  const allowed = preferred.size > 0
+    ? sources.filter(source => preferred.has(source.serviceId))
+    : sources;
+
+  return sortSources(allowed, item, preferredServiceIds);
+}
+
+export function getDefaultMigrateSource(
+  item: HistoryItem,
+  preferredServiceIds: string[] = [],
+): MigrateSourceCandidate | null {
+  return defaultMigrateSources(item, preferredServiceIds)[0] ?? null;
 }
 
 export function getRecoverableLinkInfo(
@@ -94,12 +111,15 @@ export function getSourceCandidatesForStatus(
   item: HistoryItem,
   sourceServiceId?: string,
   problemServiceIds?: string[],
+  preferredSourceServiceIds: string[] = [],
 ): MigrateSourceCandidate[] {
   if (problemServiceIds && problemServiceIds.length > 0) {
     const preferred = sourceServiceId ? [sourceServiceId] : [];
     return getRecoverableLinkInfo(item, preferred)?.validSources ?? [];
   }
 
-  const fallback = getDefaultMigrateSource(item);
-  return fallback ? [fallback] : [];
+  const preferred = sourceServiceId
+    ? [sourceServiceId, ...preferredSourceServiceIds.filter(id => id !== sourceServiceId)]
+    : preferredSourceServiceIds;
+  return defaultMigrateSources(item, preferred);
 }

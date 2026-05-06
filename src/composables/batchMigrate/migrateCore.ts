@@ -118,6 +118,7 @@ export async function migrateOneItem(
     item,
     status.sourceServiceId,
     status.problemServiceIds,
+    status.preferredSourceServiceIds,
   ).slice(0, MAX_SOURCE_RETRY);
   if (sourceCandidates.length === 0) {
     if (status.problemServiceIds && status.problemServiceIds.length > 0) {

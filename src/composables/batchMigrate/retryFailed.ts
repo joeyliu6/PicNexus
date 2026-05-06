@@ -33,18 +33,26 @@ export interface RetryDeps {
 export function createRetry(deps: RetryDeps) {
   const { migrateResult, retryingIds, getOrCacheConfig, getMultiUploader, getRetryTargets } = deps;
 
-  function targetsForFailure(failure: FailureRecord, baseTargets: string[]): string[] {
-    if (!failure.isPartial) return baseTargets;
-    const failedTargets = failure.failedTargets?.length
-      ? failure.failedTargets
-      : failure.details.map(detail => detail.serviceId).filter((sid): sid is string => !!sid);
-    return failedTargets.filter(sid => baseTargets.includes(sid));
+  function uniqueTargets(targets: string[]): string[] {
+    return Array.from(new Set(targets));
   }
 
-  function failedTargetsForPartial(failure: FailureRecord | undefined): string[] {
-    if (!failure?.isPartial) return [];
-    if (failure.failedTargets?.length) return failure.failedTargets;
-    return failure.details.map(detail => detail.serviceId).filter((sid): sid is string => !!sid);
+  function detailTargets(failure: FailureRecord | undefined): string[] {
+    return failure?.details.map(detail => detail.serviceId).filter((sid): sid is string => !!sid) ?? [];
+  }
+
+  function unresolvedTargetsForFailure(failure: FailureRecord | undefined, fallbackTargets: string[]): string[] {
+    if (!failure) return [];
+    if (failure.isPartial) {
+      const failedTargets = failure.failedTargets?.length ? failure.failedTargets : detailTargets(failure);
+      return failedTargets.length > 0 ? uniqueTargets(failedTargets) : uniqueTargets(fallbackTargets);
+    }
+    return uniqueTargets([...fallbackTargets, ...detailTargets(failure)]);
+  }
+
+  function targetsForFailure(failure: FailureRecord, baseTargets: string[], fallbackTargets: string[]): string[] {
+    const baseSet = new Set(baseTargets);
+    return unresolvedTargetsForFailure(failure, fallbackTargets).filter(sid => baseSet.has(sid));
   }
 
   function failedTargetsFromStatus(status: MigrateItemStatus): string[] {
@@ -53,12 +61,17 @@ export function createRetry(deps: RetryDeps) {
       .map(([sid]) => sid);
   }
 
+  function snapshotFailedTargets(status: MigrateItemStatus | undefined): string[] {
+    return status ? failedTargetsFromStatus(status) : [];
+  }
+
   function remainingPartialTargets(
     status: MigrateItemStatus,
     currentFailure: FailureRecord | undefined,
     targets: string[],
+    fallbackTargets: string[],
   ): string[] {
-    const previous = failedTargetsForPartial(currentFailure);
+    const previous = unresolvedTargetsForFailure(currentFailure, fallbackTargets);
     const attempted = new Set(targets);
     const remaining = new Set<string>();
 
@@ -72,7 +85,7 @@ export function createRetry(deps: RetryDeps) {
     // Download/metadata failures happen before per-target upload state changes,
     // so keep the attempted partial targets marked unresolved instead of
     // overwriting their failed chips with "pending".
-    if (currentFailure?.isPartial && status.status === 'failed' && failedTargetsFromStatus(status).length === 0) {
+    if (currentFailure && status.status === 'failed' && failedTargetsFromStatus(status).length === 0) {
       for (const sid of previous) {
         if (attempted.has(sid)) remaining.add(sid);
       }
@@ -127,6 +140,7 @@ export function createRetry(deps: RetryDeps) {
     historyId: string,
     status: MigrateItemStatus,
     failedTargets: string[],
+    snapshotStatus: MigrateItemStatus['status'] = 'success',
   ): MigrateItemStatus[] {
     return current.itemsSnapshot.map(item => {
       if (item.historyId !== historyId) return item;
@@ -141,9 +155,10 @@ export function createRetry(deps: RetryDeps) {
           convertedFormat: status.convertedFormat ?? item.convertedFormat,
           existingServiceIds: status.existingServiceIds ?? item.existingServiceIds,
           sourceServiceId: status.sourceServiceId ?? item.sourceServiceId,
+          preferredSourceServiceIds: status.preferredSourceServiceIds ?? item.preferredSourceServiceIds,
           problemServiceIds: status.problemServiceIds ?? item.problemServiceIds,
           serviceResults,
-          status: 'success',
+          status: snapshotStatus,
           error: status.error ?? item.error,
           errorType: status.errorType ?? item.errorType,
           failureDetails: status.failureDetails ?? item.failureDetails,
@@ -162,15 +177,21 @@ export function createRetry(deps: RetryDeps) {
     if (retryingIds.value.has(historyId)) return;
     const failure = initial.failures.find(f => f.historyId === historyId);
     if (!failure) return;
+    const initialSnapshot = initial.itemsSnapshot.find(item => item.historyId === historyId);
+    const initialFallbackTargets = snapshotFailedTargets(initialSnapshot);
     const baseTargets = getRetryTargets?.() ?? initial.targetServiceIds;
-    const targets = targetsForFailure(failure, baseTargets);
+    const targets = targetsForFailure(
+      failure,
+      baseTargets,
+      initialFallbackTargets.length > 0 ? initialFallbackTargets : initial.targetServiceIds,
+    );
     if (targets.length === 0) return;
 
     retryingIds.value = new Set([...retryingIds.value, historyId]);
     try {
       const items = await historyDB.getItemsByIds([historyId]);
       if (items.length === 0) return;
-      const snapshot = initial.itemsSnapshot.find(item => item.historyId === historyId);
+      const snapshot = initialSnapshot;
       const status: MigrateItemStatus = {
         historyId,
         fileName: items[0].localFileName,
@@ -179,6 +200,7 @@ export function createRetry(deps: RetryDeps) {
         serviceResults: Object.fromEntries(targets.map(sid => [sid, 'pending' as const])),
         existingServiceIds: snapshot?.existingServiceIds ?? items[0].results.filter(r => r.status === 'success').map(r => r.serviceId),
         sourceServiceId: snapshot?.sourceServiceId,
+        preferredSourceServiceIds: snapshot?.preferredSourceServiceIds,
         problemServiceIds: snapshot?.problemServiceIds,
       };
       const config = await getOrCacheConfig();
@@ -197,8 +219,11 @@ export function createRetry(deps: RetryDeps) {
       const nextFailures = [...current.failures];
       const idx = nextFailures.findIndex(f => f.historyId === historyId);
       const currentFailure = idx >= 0 ? nextFailures[idx] : failure;
+      const currentSnapshot = current.itemsSnapshot.find(item => item.historyId === historyId);
+      const currentFallbackTargets = snapshotFailedTargets(currentSnapshot);
+      const fallbackTargets = currentFallbackTargets.length > 0 ? currentFallbackTargets : current.targetServiceIds;
       const wasPartial = currentFailure?.isPartial === true;
-      const remainingTargets = remainingPartialTargets(status, currentFailure, targets);
+      const remainingTargets = remainingPartialTargets(status, currentFailure, targets, fallbackTargets);
       let nextSnapshot = [...current.itemsSnapshot];
       let nextPartialFailures = current.partialFailures.filter(f => f.historyId !== historyId);
       let successDelta = 0, failedDelta = 0, skippedDelta = 0;
@@ -232,12 +257,15 @@ export function createRetry(deps: RetryDeps) {
           if (!wasPartial) skippedDelta = 1;
         }
       } else if (status.status === 'failed') {
+        const unresolvedDetails = remainingTargets.length > 0
+          ? detailsForTargets(status, currentFailure, remainingTargets)
+          : (status.failureDetails ?? [{ message: status.error ?? '' }]);
         const nextFailure = wasPartial
           ? makePartialFailure(historyId, status, currentFailure, remainingTargets)
           : {
               historyId, fileName: status.fileName,
               error: status.error ?? '', errorType: status.errorType,
-              details: status.failureDetails ?? [{ message: status.error ?? '' }],
+              details: unresolvedDetails,
             };
         if (idx >= 0) nextFailures[idx] = nextFailure;
         if (wasPartial) {
@@ -247,8 +275,12 @@ export function createRetry(deps: RetryDeps) {
           ];
         }
       }
+      const unresolvedSnapshotStatus: MigrateItemStatus['status'] =
+        wasPartial || status.status === 'success' || status.status === 'skipped'
+          ? 'success'
+          : status.status;
       nextSnapshot = (wasPartial || remainingTargets.length > 0)
-        ? mergePartialSnapshot(current, historyId, status, remainingTargets)
+        ? mergePartialSnapshot(current, historyId, status, remainingTargets, unresolvedSnapshotStatus)
         : nextSnapshot.map(item => item.historyId === historyId ? { ...status } : item);
 
       migrateResult.value = {

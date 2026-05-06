@@ -125,6 +125,30 @@ describe('preloadAllPending', () => {
     });
   });
 
+  it('普通补传模式把已选择来源写入待迁移状态', async () => {
+    const item = makeItem(1);
+    item.results.push(
+      { serviceId: 'r2', status: 'success', result: uploadResult('r2', 'https://r2/1.png') },
+    );
+    vi.mocked(historyDB.getItemsByBackupCount)
+      .mockResolvedValueOnce({ items: [item], total: 1, hasMore: false });
+
+    const result = await preloadAllPending({
+      targets: ['github'],
+      maxSuccessCount: 999,
+      sourceServiceFilter: ['r2'],
+      timestampAfter: null,
+      allItemStatuses: shallowRef([]),
+      isCancelled: ref(false),
+      isPaused: ref(false),
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].status.sourceServiceId).toBe('r2');
+    expect(result[0].status.sourceUrl).toBe('https://r2/1.png');
+    expect(result[0].status.preferredSourceServiceIds).toEqual(['r2']);
+  });
+
   it('可恢复图片模式只预加载有问题链接且有有效源的图片', async () => {
     const recoverable = makeItem(1);
     recoverable.results.push(

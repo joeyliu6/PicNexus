@@ -70,7 +70,10 @@ export async function preloadAllPending(args: PreloadArgs): Promise<PreloadedIte
       : null;
     if (args.scope === 'broken-with-valid-source' && !recoverableInfo) return null;
 
-    const source = recoverableInfo?.preferredSource ?? getDefaultMigrateSource(item);
+    const preferredSourceServiceIds = args.scope === 'broken-with-valid-source'
+      ? undefined
+      : [...args.sourceServiceFilter];
+    const source = recoverableInfo?.preferredSource ?? getDefaultMigrateSource(item, preferredSourceServiceIds);
     const status: MigrateItemStatus = {
       historyId: item.id,
       fileName: item.localFileName,
@@ -83,6 +86,7 @@ export async function preloadAllPending(args: PreloadArgs): Promise<PreloadedIte
       ),
       existingServiceIds: [...existingIds],
       sourceServiceId: source?.serviceId,
+      preferredSourceServiceIds,
       problemServiceIds: recoverableInfo?.problemServiceIds,
     };
     return { id: item.id, status };

@@ -63,6 +63,8 @@ export interface MigrateItemStatus {
   existingServiceIds?: string[];
   /** 本次迁移实际选用的下载源图床，用于可恢复图片模式的列表与报告解释 */
   sourceServiceId?: string;
+  /** 普通补传模式下由左栏来源筛选得到的候选下载源；为空表示不限来源 */
+  preferredSourceServiceIds?: string[];
   /** 可恢复图片模式下，该图片里已检测异常的图床 */
   problemServiceIds?: string[];
 }
