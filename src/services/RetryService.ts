@@ -16,6 +16,7 @@ import { createLogger } from '../utils/logger';
 import { cleanupClipboardTempFile } from '../utils/clipboardTempFile';
 import {
   areAllEnabledServicesSuccessful,
+  getFailedServices,
   mergeSuccessMetadata,
   resolveQueueStatus,
 } from './retryStatus';
@@ -487,21 +488,6 @@ export class RetryService {
   }
 
   /**
-   * 获取队列项中失败的服务列表
-   */
-  private getFailedServices(item: QueueItem): string[] {
-    const failed: string[] = [];
-    if (item.serviceProgress) {
-      for (const [serviceId, progress] of Object.entries(item.serviceProgress)) {
-        if (progress?.status?.includes('失败') || progress?.status?.includes('✗')) {
-          failed.push(serviceId);
-        }
-      }
-    }
-    return failed;
-  }
-
-  /**
    * 批量重试所有失败的队列项（只重试失败的服务，不重传已成功的）
    * @param failedItemIds 包含失败服务的队列项 ID 列表
    * @param config 用户配置
@@ -520,7 +506,7 @@ export class RetryService {
     for (const itemId of failedItemIds) {
       const item = this.options.queueManager.getItem(itemId);
       if (item) {
-        const failedServices = this.getFailedServices(item);
+        const failedServices = getFailedServices(item);
         for (const serviceId of failedServices) {
           retryTasks.push({ itemId, serviceId });
         }

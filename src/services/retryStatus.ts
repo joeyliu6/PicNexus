@@ -11,6 +11,16 @@ function isServiceFailed(progress: ServiceProgress | undefined): boolean {
   return status.includes('失败') || status.includes('✗');
 }
 
+export function getFailedServices(item: QueueItem): string[] {
+  const failed: string[] = [];
+  for (const [serviceId, progress] of Object.entries(item.serviceProgress ?? {})) {
+    if (isServiceFailed(progress)) {
+      failed.push(serviceId);
+    }
+  }
+  return failed;
+}
+
 function isServiceSkipped(progress: ServiceProgress | undefined): boolean {
   const status = progress?.status || '';
   return status.includes('跳过');

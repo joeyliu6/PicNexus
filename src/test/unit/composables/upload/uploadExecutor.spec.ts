@@ -128,7 +128,11 @@ describe('processUploadQueue', () => {
   it('stores the generated historyId on the queue item and reuses it for history saves', async () => {
     const queueManager = createQueueManager();
     queueManager.seed('q-history', 'history.jpg');
-    const saveHistoryItemImmediate = vi.fn(async (
+    const saveHistoryItemImmediate = vi.fn<(
+      filePath: string,
+      firstResult: unknown,
+      historyId: string
+    ) => Promise<void>>(async (
       _filePath: string,
       _firstResult: unknown,
       _historyId: string
