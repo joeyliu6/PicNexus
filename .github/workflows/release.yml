@@ -165,6 +165,7 @@ jobs:
 
           `.sig` 和 `latest.json` 是签名校验 / 自动更新文件，普通手动安装通常不需要下载。
 
+          `SHA256SUMS.txt` contains SHA-256 checksums for installers, portable archives, and updater JSON. Windows portable builds also include a same-name `.sha256` file.
           PICNEXUS_DOWNLOAD_GUIDE
             printf '\n'
             printf '%s\n' "$CHANGELOG"
@@ -243,13 +244,15 @@ jobs:
             const repo = context.repo.repo;
             const tag = context.ref.replace('refs/tags/', '');
             const portableDir = 'src-tauri/target/release/portable';
-            const assetName = fs.readdirSync(portableDir).find(name => name.endsWith('_portable.zip'));
+            const portableAssets = fs.readdirSync(portableDir)
+              .filter(name => name.endsWith('_portable.zip') || name.endsWith('_portable.zip.sha256'))
+              .sort((a, b) => Number(a.endsWith('.sha256')) - Number(b.endsWith('.sha256')));
+            const assetName = portableAssets.find(name => name.endsWith('_portable.zip'));
 
             if (!assetName) {
               throw new Error(`No portable ZIP found in ${portableDir}`);
             }
 
-            const assetPath = path.join(portableDir, assetName);
             const { data: releases } = await github.rest.repos.listReleases({
               owner,
               repo,
@@ -279,29 +282,32 @@ jobs:
               release_id: release.id,
               per_page: 100,
             });
-            const existing = assets.find(asset => asset.name === assetName);
-            if (existing) {
-              await github.rest.repos.deleteReleaseAsset({
+            for (const portableAssetName of portableAssets) {
+              const existing = assets.find(asset => asset.name === portableAssetName);
+              if (existing) {
+                await github.rest.repos.deleteReleaseAsset({
+                  owner,
+                  repo,
+                  asset_id: existing.id,
+                });
+              }
+
+              const assetPath = path.join(portableDir, portableAssetName);
+              const data = fs.readFileSync(assetPath);
+              await github.rest.repos.uploadReleaseAsset({
                 owner,
                 repo,
-                asset_id: existing.id,
+                release_id: release.id,
+                name: portableAssetName,
+                data,
+                headers: {
+                  'content-type': portableAssetName.endsWith('.sha256') ? 'text/plain' : 'application/zip',
+                  'content-length': data.length,
+                },
               });
+
+              console.log(`Uploaded portable asset: ${portableAssetName}`);
             }
-
-            const data = fs.readFileSync(assetPath);
-            await github.rest.repos.uploadReleaseAsset({
-              owner,
-              repo,
-              release_id: release.id,
-              name: assetName,
-              data,
-              headers: {
-                'content-type': 'application/zip',
-                'content-length': data.length,
-              },
-            });
-
-            console.log(`Uploaded portable asset: ${assetName}`);
 
       # Tier 3 B: 安装包冒烟 — 静默装 MSI + 启动 15 秒探活，macOS 跳过
       - name: Smoke test installer (Windows)
@@ -353,6 +359,97 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Generate SHA256SUMS for draft release
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const crypto = require('crypto');
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = context.ref.replace('refs/tags/', '');
+            const checksumAssetName = 'SHA256SUMS.txt';
+            const checksumTargetPattern = /\.(msi|exe|dmg|appimage|deb|rpm|zip|json)$/i;
+
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner,
+              repo,
+              per_page: 100,
+            });
+
+            let release = releases.find(r => r.tag_name === tag);
+            if (!release) {
+              release = releases.find(r => r.draft && r.tag_name.startsWith('untagged-'));
+              if (release) {
+                await github.rest.repos.updateRelease({
+                  owner,
+                  repo,
+                  release_id: release.id,
+                  tag_name: tag,
+                });
+              }
+            }
+
+            if (!release) {
+              throw new Error(`No draft release found for tag ${tag}`);
+            }
+
+            const assets = await github.paginate(github.rest.repos.listReleaseAssets, {
+              owner,
+              repo,
+              release_id: release.id,
+              per_page: 100,
+            });
+            const checksumTargets = assets
+              .filter(asset => asset.name !== checksumAssetName)
+              .filter(asset => !asset.name.endsWith('.sha256'))
+              .filter(asset => checksumTargetPattern.test(asset.name))
+              .sort((a, b) => a.name.localeCompare(b.name));
+
+            if (checksumTargets.length === 0) {
+              throw new Error('No release assets found for SHA256SUMS.txt');
+            }
+
+            const lines = [];
+            for (const asset of checksumTargets) {
+              const response = await github.request('GET /repos/{owner}/{repo}/releases/assets/{asset_id}', {
+                owner,
+                repo,
+                asset_id: asset.id,
+                headers: { accept: 'application/octet-stream' },
+              });
+              const buffer = Buffer.isBuffer(response.data)
+                ? response.data
+                : Buffer.from(response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data);
+              const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+              lines.push(`${hash}  ${asset.name}`);
+            }
+
+            const existingChecksum = assets.find(asset => asset.name === checksumAssetName);
+            if (existingChecksum) {
+              await github.rest.repos.deleteReleaseAsset({
+                owner,
+                repo,
+                asset_id: existingChecksum.id,
+              });
+            }
+
+            const data = Buffer.from(`${lines.join('\n')}\n`, 'utf8');
+            await github.rest.repos.uploadReleaseAsset({
+              owner,
+              repo,
+              release_id: release.id,
+              name: checksumAssetName,
+              data,
+              headers: {
+                'content-type': 'text/plain',
+                'content-length': data.length,
+              },
+            });
+
+            console.log(`Uploaded ${checksumAssetName} for ${checksumTargets.length} assets`);
 
       - name: Fix draft release tag and append checklist
         uses: actions/github-script@v7

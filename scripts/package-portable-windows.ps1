@@ -87,6 +87,10 @@ if (Test-Path -LiteralPath $stagingDir) {
 if (Test-Path -LiteralPath $zipPath) {
   try {
     Remove-Item -LiteralPath $zipPath -Force
+    $oldShaPath = "$zipPath.sha256"
+    if (Test-Path -LiteralPath $oldShaPath) {
+      Remove-Item -LiteralPath $oldShaPath -Force
+    }
   } catch {
     $timestamp = Get-Date -Format 'yyyyMMddHHmmss'
     $zipPath = Join-Path $portableRoot "PicNexus_${version}_windows_x64_${timestamp}_portable.zip"
@@ -125,4 +129,9 @@ Copy-Item -LiteralPath $icon -Destination (Join-Path $iconsDir 'icon.png')
 
 Compress-Archive -Path $stagingDir -DestinationPath $zipPath -Force
 
+$hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$shaPath = "$zipPath.sha256"
+"$hash  $(Split-Path -Leaf $zipPath)" | Set-Content -LiteralPath $shaPath -Encoding ascii
+
 Write-Host "Portable ZIP created: $zipPath"
+Write-Host "Portable SHA256 created: $shaPath"
