@@ -47,6 +47,17 @@ function mockConfigStoreGet(data: Record<string, unknown>): void {
   configStoreGetMock.mockImplementation(async (key: string) => data[key]);
 }
 
+function mockNavigatorPlatform(platform: string): void {
+  Object.defineProperty(navigator, 'platform', {
+    configurable: true,
+    value: platform,
+  });
+  Object.defineProperty(navigator, 'userAgentData', {
+    configurable: true,
+    value: undefined,
+  });
+}
+
 function getAnalyticsFetchCall(index = 0) {
   const call = httpFetchMock.mock.calls[index];
 
@@ -82,6 +93,7 @@ describe('useAnalytics', () => {
     configStoreSaveMock.mockResolvedValue(undefined);
     httpFetchMock.mockResolvedValue({ status: 204 } as never);
     appVersionMock.mockResolvedValue('1.2.3');
+    mockNavigatorPlatform('Win32');
   });
 
   it('skips initialization when analytics is disabled in config', async () => {
@@ -101,7 +113,7 @@ describe('useAnalytics', () => {
     expect(httpFetchMock).not.toHaveBeenCalled();
   });
 
-  it('initializes a new client/session and sends the launch event', async () => {
+  it('initializes a new client/session and sends first_run plus app_start events', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1700000000000);
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
     mockConfigStoreGet({
@@ -123,20 +135,67 @@ describe('useAnalytics', () => {
     });
     expect(configStoreSaveMock).toHaveBeenCalled();
     expect(appVersionMock).toHaveBeenCalledTimes(1);
-    expect(httpFetchMock).toHaveBeenCalledTimes(1);
+    expect(httpFetchMock).toHaveBeenCalledTimes(2);
 
-    const { payload, request, url } = getAnalyticsFetchCall();
+    const { payload: firstRunPayload, request, url } = getAnalyticsFetchCall();
     expect(url).toContain('https://www.google-analytics.com/mp/collect');
     expect(request.method).toBe('POST');
-    expect(payload.client_id).toBe('88888888-8888-4888-8888-888888888888');
-    expect(payload.events[0]).toMatchObject({
-      name: GA_EVENTS.APP_LAUNCH,
+    expect(firstRunPayload.client_id).toBe('88888888-8888-4888-8888-888888888888');
+    expect(firstRunPayload.events[0]).toMatchObject({
+      name: GA_EVENTS.FIRST_RUN,
       params: {
         session_id: '1700000000000',
         app_version: '1.2.3',
-        platform: 'tauri_desktop',
+        os_info: 'Windows',
         app_platform: 'tauri_desktop',
       },
+    });
+
+    const { payload: appStartPayload } = getAnalyticsFetchCall(1);
+    expect(appStartPayload.client_id).toBe('88888888-8888-4888-8888-888888888888');
+    expect(appStartPayload.events[0]).toMatchObject({
+      name: GA_EVENTS.APP_START,
+      params: {
+        session_id: '1700000000000',
+        app_version: '1.2.3',
+        os_info: 'Windows',
+        app_platform: 'tauri_desktop',
+      },
+    });
+  });
+
+  it('reuses stored identity on startup and only sends app_start', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1700000010000);
+    mockConfigStoreGet({
+      config: { analytics: { enabled: true } },
+      analytics_data: {
+        clientId: 'client-1',
+        sessionId: 'session-1',
+        lastActiveTime: 1700000000000,
+      },
+    });
+
+    const { GA_EVENTS, useAnalytics } = await importFreshAnalytics();
+    const analytics = useAnalytics();
+
+    await expect(analytics.initialize()).resolves.toBe(true);
+
+    expect(configStoreSetMock).toHaveBeenCalledWith('analytics_data', {
+      clientId: 'client-1',
+      sessionId: 'session-1',
+      lastActiveTime: 1700000010000,
+    });
+    expect(httpFetchMock).toHaveBeenCalledTimes(1);
+    expect(getAnalyticsFetchCall().payload).toMatchObject({
+      client_id: 'client-1',
+      events: [{
+        name: GA_EVENTS.APP_START,
+        params: {
+          session_id: 'session-1',
+          app_version: '1.2.3',
+          os_info: 'Windows',
+        },
+      }],
     });
   });
 
@@ -203,6 +262,11 @@ describe('useAnalytics', () => {
   it('persists enable/disable while preserving the analytics config object', async () => {
     mockConfigStoreGet({
       config: { analytics: { enabled: false, channel: 'stable' } },
+      analytics_data: {
+        clientId: 'client-1',
+        sessionId: 'session-1',
+        lastActiveTime: 1700000000000,
+      },
     });
 
     const { useAnalytics } = await importFreshAnalytics();
@@ -228,7 +292,19 @@ describe('useAnalytics', () => {
     expect(configStoreSetMock).toHaveBeenCalledWith('config', {
       analytics: { enabled: false, channel: 'stable' },
     });
+    expect(configStoreSetMock).not.toHaveBeenCalledWith('analytics_data', expect.anything());
     expect(configStoreSaveMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('normalizes OS names for analytics context', async () => {
+    const { normalizeOsInfo } = await importFreshAnalytics();
+
+    expect(normalizeOsInfo('Win32')).toBe('Windows');
+    expect(normalizeOsInfo('MacIntel')).toBe('macOS');
+    expect(normalizeOsInfo('darwin')).toBe('macOS');
+    expect(normalizeOsInfo('Linux x86_64')).toBe('Linux');
+    expect(normalizeOsInfo('FreeBSD')).toBe('Unknown');
+    expect(normalizeOsInfo(undefined)).toBe('Unknown');
   });
 
   it('falls back when app version or storage access fails', async () => {
@@ -248,6 +324,7 @@ describe('useAnalytics', () => {
     const { payload } = getAnalyticsFetchCall();
     expect(payload.client_id).toBe('44444444-4444-4444-8444-444444444444');
     expect(payload.events[0].params.app_version).toBe('3.0.0');
+    expect(payload.events[0].name).toBe('app_start');
     expect(loggerMock.error).toHaveBeenCalled();
     expect(loggerMock.warn).toHaveBeenCalled();
   });

@@ -35,13 +35,22 @@ interface AnalyticsData {
   lastActiveTime: number;
 }
 
+interface AnalyticsIdentity {
+  clientId: string;
+  isFirstRun: boolean;
+}
+
+type OsInfo = 'Windows' | 'macOS' | 'Linux' | 'Unknown';
+
 /**
  * GA4 事件名称常量
  * 修复 #5：仅保留实际使用的事件
  */
 export const GA_EVENTS = {
+  /** 首次创建统计身份 */
+  FIRST_RUN: 'first_run',
   /** 应用启动 */
-  APP_LAUNCH: 'app_launch'
+  APP_START: 'app_start'
 } as const;
 
 /**
@@ -53,6 +62,45 @@ function generateUUID(): string {
     const v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
   });
+}
+
+export function normalizeOsInfo(platform: string | null | undefined): OsInfo {
+  const value = (platform || '').toLowerCase();
+
+  if (value.includes('mac') || value.includes('darwin')) {
+    return 'macOS';
+  }
+
+  if (value.includes('win')) {
+    return 'Windows';
+  }
+
+  if (value.includes('linux')) {
+    return 'Linux';
+  }
+
+  return 'Unknown';
+}
+
+function getOsInfo(): OsInfo {
+  if (typeof navigator === 'undefined') {
+    return 'Unknown';
+  }
+
+  const nav = navigator as Navigator & {
+    userAgentData?: {
+      platform?: string;
+    };
+  };
+
+  return normalizeOsInfo(nav.userAgentData?.platform || nav.platform || nav.userAgent);
+}
+
+async function getAppContext(): Promise<Record<string, string>> {
+  return {
+    app_version: await getAppVersion(),
+    os_info: getOsInfo()
+  };
 }
 
 /**
@@ -78,10 +126,13 @@ async function getAppVersion(): Promise<string> {
  * 获取或创建 Client ID
  * Client ID 是用户的唯一标识，首次生成后永久保存
  */
-async function getOrCreateClientId(): Promise<string> {
+async function getOrCreateClientId(): Promise<AnalyticsIdentity> {
   // 优先使用缓存
   if (cachedClientId) {
-    return cachedClientId;
+    return {
+      clientId: cachedClientId,
+      isFirstRun: false
+    };
   }
 
   try {
@@ -89,7 +140,10 @@ async function getOrCreateClientId(): Promise<string> {
     if (data?.clientId) {
       cachedClientId = data.clientId;
       cachedLastActiveTime = data.lastActiveTime || 0;
-      return data.clientId;
+      return {
+        clientId: data.clientId,
+        isFirstRun: false
+      };
     }
 
     // 首次使用，生成新的 Client ID
@@ -109,13 +163,19 @@ async function getOrCreateClientId(): Promise<string> {
 
     // 修复 #6：移除 Client ID 的详细日志
     log.debug('新用户，已生成标识');
-    return clientId;
+    return {
+      clientId,
+      isFirstRun: true
+    };
   } catch (error) {
     log.error('获取 Client ID 失败:', error);
     // 返回临时 ID，不影响功能
     const tempId = generateUUID();
     cachedClientId = tempId;
-    return tempId;
+    return {
+      clientId: tempId,
+      isFirstRun: false
+    };
   }
 }
 
@@ -257,20 +317,22 @@ export function useAnalytics() {
       isEnabled.value = true;
 
       // 获取或创建 Client ID 和 Session ID
-      cachedClientId = await getOrCreateClientId();
+      const identity = await getOrCreateClientId();
+      cachedClientId = identity.clientId;
       cachedSessionId = await getOrRefreshSessionId();
 
       isInitialized.value = true;
       log.debug('✓ Measurement Protocol 初始化成功');
 
       // 修复 #3：动态获取版本号
-      const appVersion = await getAppVersion();
+      const appContext = await getAppContext();
 
       // 发送应用启动事件
-      await trackEvent(GA_EVENTS.APP_LAUNCH, {
-        app_version: appVersion,
-        platform: 'tauri_desktop'
-      });
+      if (identity.isFirstRun) {
+        await trackEvent(GA_EVENTS.FIRST_RUN, appContext);
+      }
+
+      await trackEvent(GA_EVENTS.APP_START, appContext);
 
       return true;
     } catch (error) {
@@ -292,7 +354,8 @@ export function useAnalytics() {
     try {
       // 确保有 Client ID（使用全局缓存）
       if (!cachedClientId) {
-        cachedClientId = await getOrCreateClientId();
+        const identity = await getOrCreateClientId();
+        cachedClientId = identity.clientId;
       }
 
       // 刷新 Session ID（已优化，大多数情况只更新内存）
