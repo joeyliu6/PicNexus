@@ -54,6 +54,13 @@ describe('smartCheckLabel', () => {
     const { smartCheckLabel } = useCheckStrategy({ stats, statusFilter });
     expect(smartCheckLabel.value).toBe('开始检测');
   });
+
+  it('筛选器为 problems 时显示"重检问题"', () => {
+    const stats = computed(() => makeStats({ problems: 7 }));
+    const statusFilter = ref<StatusFilter>('problems');
+    const { smartCheckLabel } = useCheckStrategy({ stats, statusFilter });
+    expect(smartCheckLabel.value).toBe('重检问题');
+  });
 });
 
 // ─── resolveSmartCheck ────────────────────────────────────────────────────────
@@ -84,6 +91,13 @@ describe('resolveSmartCheck', () => {
     const statusFilter = ref<StatusFilter>('invalid');
     const { resolveSmartCheck } = useCheckStrategy({ stats, statusFilter });
     expect(resolveSmartCheck()).toEqual({ action: 'check-subset', filter: 'invalid' });
+  });
+
+  it('筛选器为 problems 时返回 check-subset + problems', () => {
+    const stats = computed(() => makeStats({ problems: 4 }));
+    const statusFilter = ref<StatusFilter>('problems');
+    const { resolveSmartCheck } = useCheckStrategy({ stats, statusFilter });
+    expect(resolveSmartCheck()).toEqual({ action: 'check-subset', filter: 'problems' });
   });
 });
 

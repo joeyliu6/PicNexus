@@ -47,12 +47,19 @@ describe('CheckFilterBar', () => {
     const wrapper = mountFilterBar();
 
     await wrapper.get('.chip--error').trigger('click');
+    expect(wrapper.emitted('update:statusFilter')).toBeUndefined();
+
     await wrapper.get('.chip--valid').trigger('click');
 
-    expect(wrapper.emitted('update:statusFilter')).toEqual([
-      [null],
-      ['valid'],
-    ]);
+    expect(wrapper.emitted('update:statusFilter')).toEqual([['valid']]);
+  });
+
+  it('问题 chip 明确选择问题链接聚合筛选', async () => {
+    const wrapper = mountFilterBar({ statusFilter: 'invalid' });
+
+    await wrapper.get('.chip--problems').trigger('click');
+
+    expect(wrapper.emitted('update:statusFilter')).toEqual([['problems']]);
   });
 
   it('支持图床下拉筛选与清空筛选', async () => {

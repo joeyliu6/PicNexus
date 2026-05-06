@@ -3,7 +3,7 @@ import type { CheckLinkResult, LinkCheckRow, StatusFilter } from '../../types/li
 import { statusTooltip as baseStatusTooltip } from '../useLinkStatusDisplay';
 import type { CheckStatsResult } from './useCheckStats';
 
-const CONTEXT_AWARE_FILTERS = new Set<StatusFilter>(['invalid', 'suspicious', 'timeout', 'unchecked']);
+const CONTEXT_AWARE_FILTERS = new Set<StatusFilter>(['problems', 'invalid', 'suspicious', 'timeout', 'unchecked']);
 
 export type MoreMenuKind = 'export' | 'recheck' | 'copy' | 'delete';
 
@@ -16,6 +16,7 @@ export interface MoreMenuItem {
 }
 
 const FILTER_LABEL: Record<string, string> = {
+  problems: '重检问题',
   invalid: '重检失效',
   suspicious: '重检可疑',
   timeout: '重检超时',
@@ -23,6 +24,7 @@ const FILTER_LABEL: Record<string, string> = {
 };
 
 const FILTER_TOOLTIP: Record<string, (count: string) => string> = {
+  problems: (c) => `重新检测这 ${c} 条问题链接`,
   invalid: (c) => `重新检测这 ${c} 条失效链接`,
   suspicious: (c) => `重新检测这 ${c} 条可疑链接`,
   timeout: (c) => `重新检测这 ${c} 条超时链接`,
@@ -30,6 +32,7 @@ const FILTER_TOOLTIP: Record<string, (count: string) => string> = {
 };
 
 const SCOPE_FILTER_LABEL: Record<string, string> = {
+  problems: '问题',
   invalid: '失效',
   suspicious: '可疑',
   timeout: '超时',
@@ -44,7 +47,7 @@ interface UseCheckStrategyOptions {
 
 export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOptions) {
   function contextAwareCount(filter: StatusFilter): number {
-    return stats.value[filter as 'invalid' | 'suspicious' | 'timeout' | 'unchecked'];
+    return stats.value[filter as 'problems' | 'invalid' | 'suspicious' | 'timeout' | 'unchecked'];
   }
 
   const smartCheckLabel = computed(() => {

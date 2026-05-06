@@ -5,7 +5,7 @@ import { useHistoryManager } from '../../composables/useHistory';
 import { useLinkCheckBulkActions } from '../../composables/link-check/useLinkCheckBulkActions';
 import { useLinkCheckManager } from '../../composables/useLinkCheck';
 import { useToast } from '../../composables/useToast';
-import type { LinkCheckRow } from '../../types/linkCheck';
+import type { LinkCheckRow, StatusFilter } from '../../types/linkCheck';
 import BatchMigratePanel from './linkcheck/BatchMigratePanel.vue';
 import HistoryCheckPanel from './linkcheck/HistoryCheckPanel.vue';
 import MdRescueInline from './linkcheck/MdRescueInline.vue';
@@ -84,7 +84,7 @@ async function handleExportCsvSelected(rows: LinkCheckRow[]): Promise<void> {
 
 async function handleRecheckSingle(
   row: LinkCheckRow,
-  filter?: 'unchecked' | 'invalid' | 'timeout' | 'suspicious' | 'valid' | 'all' | null,
+  filter?: StatusFilter,
 ): Promise<void> {
   await recheckSingle(row, filter ?? undefined);
 }

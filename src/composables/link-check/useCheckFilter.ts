@@ -21,6 +21,8 @@ function matchesStatusFilter(row: LinkCheckRow, filter: StatusFilter): boolean {
   const result = row.checkResult;
   switch (filter) {
     case null:
+      return true;
+    case 'problems':
       return result != null && !result.is_valid;
     case 'invalid':
       return result != null

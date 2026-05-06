@@ -845,8 +845,9 @@ export function useLinkCheckManager() {
   /** 判断检测结果是否会导致行离开当前筛选（Case B） */
   function wouldLeaveFilter(result: CheckLinkResult, filter: StatusFilter | undefined): boolean {
     if (filter === 'all') return false;
-    if (filter === null) return result.is_valid;
+    if (filter == null) return false;
     switch (filter) {
+      case 'problems': return result.is_valid;
       case 'unchecked': return true;
       case 'valid': return !result.is_valid;
       case 'invalid': return result.is_valid || result.error_type === 'timeout' || result.error_type === 'suspicious' || result.browser_might_work;

@@ -3,6 +3,7 @@ export type StatusFilter =
   | 'suspicious'
   | 'timeout'
   | 'unchecked'
+  | 'problems'
   | 'valid'
   | 'all'
   | null;

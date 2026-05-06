@@ -63,6 +63,11 @@ const searchQuery = defineModel<string>('searchQuery', { required: true });
 const searchFocused = defineModel<boolean>('searchFocused', { required: true });
 
 const serviceTotal = () => props.stats.total;
+
+function selectStatusFilter(filter: StatusFilter): void {
+  if (statusFilter.value === filter) return;
+  statusFilter.value = filter;
+}
 </script>
 
 <template>
@@ -78,10 +83,22 @@ const serviceTotal = () => props.stats.total;
 
       <template v-else>
         <button
+          v-if="stats.problems > 0"
+          class="filter-chip chip--problems"
+          :class="{ active: statusFilter === 'problems' }"
+          :aria-pressed="statusFilter === 'problems'"
+          @click="selectStatusFilter('problems')"
+        >
+          <span class="chip-dot problem-dot"></span>
+          问题
+          {{ stats.problems }}
+        </button>
+
+        <button
           class="filter-chip chip--error"
           :class="{ active: statusFilter === 'invalid' }"
           :aria-pressed="statusFilter === 'invalid'"
-          @click="statusFilter = statusFilter === 'invalid' ? null : 'invalid'"
+          @click="selectStatusFilter('invalid')"
         >
           <span class="chip-dot" style="background: var(--error)"></span>
           失效
@@ -93,7 +110,7 @@ const serviceTotal = () => props.stats.total;
           class="filter-chip chip--suspicious"
           :class="{ active: statusFilter === 'suspicious' }"
           :aria-pressed="statusFilter === 'suspicious'"
-          @click="statusFilter = statusFilter === 'suspicious' ? null : 'suspicious'"
+          @click="selectStatusFilter('suspicious')"
         >
           <span class="chip-dot" style="background: var(--pending)"></span>
           可疑
@@ -105,7 +122,7 @@ const serviceTotal = () => props.stats.total;
           class="filter-chip chip--timeout"
           :class="{ active: statusFilter === 'timeout' }"
           :aria-pressed="statusFilter === 'timeout'"
-          @click="statusFilter = statusFilter === 'timeout' ? null : 'timeout'"
+          @click="selectStatusFilter('timeout')"
         >
           <span class="chip-dot" style="background: var(--warning)"></span>
           超时
@@ -118,7 +135,7 @@ const serviceTotal = () => props.stats.total;
           :class="{ active: statusFilter === 'unchecked', 'chip--phase2': isPhase2Loading }"
           :aria-pressed="statusFilter === 'unchecked'"
           :disabled="isPhase2Loading"
-          @click="statusFilter = statusFilter === 'unchecked' ? null : 'unchecked'"
+          @click="selectStatusFilter('unchecked')"
         >
           <span class="chip-dot" style="background: var(--text-tertiary)"></span>
           未检测
@@ -131,7 +148,7 @@ const serviceTotal = () => props.stats.total;
           :class="{ active: statusFilter === 'valid', 'chip--phase2': isPhase2Loading }"
           :aria-pressed="statusFilter === 'valid'"
           :disabled="isPhase2Loading"
-          @click="statusFilter = statusFilter === 'valid' ? null : 'valid'"
+          @click="selectStatusFilter('valid')"
         >
           <span class="chip-dot" style="background: var(--success)"></span>
           正常
@@ -144,7 +161,7 @@ const serviceTotal = () => props.stats.total;
           :class="{ active: statusFilter === 'all', 'chip--phase2': isPhase2Loading }"
           :aria-pressed="statusFilter === 'all'"
           :disabled="isPhase2Loading"
-          @click="statusFilter = statusFilter === 'all' ? null : 'all'"
+          @click="selectStatusFilter('all')"
         >
           全部
           <span v-if="isPhase2Loading" class="chip-loading-placeholder"></span>
@@ -259,6 +276,16 @@ const serviceTotal = () => props.stats.total;
 .filter-chip:hover {
   background: var(--hover-overlay);
   border-color: var(--border-subtle);
+}
+
+.filter-chip.chip--problems.active {
+  background: var(--error-alpha-10);
+  color: var(--error);
+  border-color: var(--error-alpha-15);
+}
+
+.problem-dot {
+  background: linear-gradient(135deg, var(--error) 0%, var(--warning) 100%);
 }
 
 .filter-chip.chip--error.active {

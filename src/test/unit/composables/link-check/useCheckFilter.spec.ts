@@ -126,6 +126,26 @@ describe('filteredRows — statusFilter', () => {
     expect(filteredRows.value).toHaveLength(3);
   });
 
+  it('problems：返回所有已检测的问题行', () => {
+    const checkRows = ref([
+      makeInvalidRow({ historyId: 'h1' }),
+      makeRow({ historyId: 'h2', checkResult: { link: '', is_valid: false, error_type: 'timeout', browser_might_work: false } }),
+      makeRow({ historyId: 'h3', checkResult: { link: '', is_valid: false, error_type: 'http_4xx', browser_might_work: true } }),
+      makeValidRow({ historyId: 'h4' }),
+      makeRow({ historyId: 'h5' }),
+    ]);
+    const { filteredRows, statusFilter } = useCheckFilter({ checkRows });
+    statusFilter.value = 'problems';
+    expect(filteredRows.value.map(row => row.historyId)).toEqual(['h1', 'h3', 'h2']);
+  });
+
+  it('null：作为无状态筛选兜底返回全部行', () => {
+    const checkRows = ref([makeRow(), makeValidRow(), makeInvalidRow()]);
+    const { filteredRows, statusFilter } = useCheckFilter({ checkRows });
+    statusFilter.value = null;
+    expect(filteredRows.value).toHaveLength(3);
+  });
+
   it('suspicious：返回 browser_might_work 为 true 的行', () => {
     const checkRows = ref([
       makeRow({ historyId: 'h1', checkResult: { link: '', is_valid: false, error_type: 'http_4xx', browser_might_work: true } }),
