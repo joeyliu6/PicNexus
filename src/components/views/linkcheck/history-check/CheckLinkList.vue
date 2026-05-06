@@ -12,6 +12,7 @@ defineProps<{
   stats: CheckStatsResult;
   statusFilter: StatusFilter;
   isLoading: boolean;
+  loadError?: string | null;
   isChecking: boolean;
   isActionLocked: boolean;
   suppressListMotion: boolean;
@@ -34,7 +35,15 @@ const emit = defineEmits<{
 
 <template>
   <div class="link-list-wrap">
-    <div v-if="stats.total > 0 && stats.checked === 0 && !isChecking" class="empty-state-wrapper">
+    <div v-if="loadError && stats.total === 0" class="empty-state-wrapper">
+      <EmptyState
+        icon="pi pi-exclamation-triangle"
+        title="加载失败"
+        :description="loadError"
+      />
+    </div>
+
+    <div v-else-if="stats.total > 0 && stats.checked === 0 && !isChecking" class="empty-state-wrapper">
       <EmptyState
         icon="pi pi-shield"
         title="检查你的图片链接"

@@ -24,6 +24,7 @@ function mountList(options: {
   isChecking?: boolean;
   isActionLocked?: boolean;
   copiedKey?: string | null;
+  loadError?: string | null;
 } = {}) {
   const rows = options.rows ?? [];
 
@@ -38,6 +39,7 @@ function mountList(options: {
       },
       statusFilter: 'invalid',
       isLoading: false,
+      loadError: options.loadError ?? null,
       isChecking: options.isChecking ?? false,
       isActionLocked: options.isActionLocked ?? false,
       suppressListMotion: false,
@@ -80,6 +82,17 @@ describe('CheckLinkList', () => {
 
     expect(filteredEmpty.text()).toContain('当前筛选暂无结果');
     expect(noData.text()).toContain('暂无数据');
+  });
+
+  it('加载失败时优先展示错误空态', () => {
+    const wrapper = mountList({
+      loadError: 'database unavailable',
+      stats: emptyStats,
+    });
+
+    expect(wrapper.text()).toContain('加载失败');
+    expect(wrapper.text()).toContain('database unavailable');
+    expect(wrapper.text()).not.toContain('暂无数据');
   });
 
   it('行级选择、复制、重检、删除都会 emit', async () => {

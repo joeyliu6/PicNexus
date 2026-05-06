@@ -136,31 +136,28 @@ fn get_service_config(service_id: &str) -> Option<&'static ServiceConfig> {
 
 /// 从 URL 域名识别图床服务
 fn detect_service_from_url(url: &str) -> Option<&'static str> {
-    let host = url
-        .strip_prefix("https://")
-        .or_else(|| url.strip_prefix("http://"))
-        .and_then(|s| s.split('/').next())
-        .unwrap_or("");
+    let parsed = reqwest::Url::parse(url).ok()?;
+    let host = parsed.host_str()?.to_ascii_lowercase();
 
-    if host.ends_with(".sinaimg.cn") || host == "sinaimg.cn" {
+    if host_matches_domain(&host, "sinaimg.cn") {
         return Some("weibo");
     }
-    if host.contains("image.baidu.com") {
+    if host_matches_domain(&host, "image.baidu.com") {
         return Some("baidu");
     }
-    if host.ends_with(".hdslb.com") || host == "hdslb.com" {
+    if host_matches_domain(&host, "hdslb.com") {
         return Some("bilibili");
     }
-    if host.ends_with(".360buyimg.com") || host == "360buyimg.com" {
+    if host_matches_domain(&host, "360buyimg.com") {
         return Some("jd");
     }
-    if host.ends_with(".zhimg.com") || host == "zhimg.com" {
+    if host_matches_domain(&host, "zhimg.com") {
         return Some("zhihu");
     }
-    if host.contains("chaoxing.com") {
+    if host_matches_domain(&host, "chaoxing.com") {
         return Some("chaoxing");
     }
-    if host.contains("nowcoder.com") {
+    if host_matches_domain(&host, "nowcoder.com") {
         return Some("nowcoder");
     }
     if host == "raw.githubusercontent.com" || host == "github.com" || host.ends_with(".github.io") {
@@ -186,6 +183,32 @@ fn detect_service_from_url(url: &str) -> Option<&'static str> {
         return Some("nami");
     }
     None
+}
+
+fn host_matches_domain(host: &str, domain: &str) -> bool {
+    host == domain
+        || host
+            .strip_suffix(domain)
+            .is_some_and(|prefix| prefix.ends_with('.'))
+}
+
+fn is_empty_success_response(status_code: u16, content_length: Option<u64>) -> bool {
+    matches!(status_code, 204 | 205) || content_length == Some(0)
+}
+
+fn is_suspicious_image_response(
+    status_code: u16,
+    content_type: Option<&str>,
+    content_length: Option<u64>,
+) -> bool {
+    if status_code == 206 {
+        return false;
+    }
+
+    let is_svg = content_type.is_some_and(|t| t.starts_with("image/svg"));
+    is_empty_success_response(status_code, content_length)
+        || content_type.is_some_and(|t| !t.starts_with("image/") && !t.is_empty())
+        || (!is_svg && content_length.is_some_and(|len| len > 0 && len < 1024))
 }
 
 // ==================== 单元测试（放在使用点之前，便于在 tests 模块中访问） ====================
@@ -283,7 +306,7 @@ mod tests {
     }
 
     #[test]
-    fn detect_chaoxing_by_substring_match() {
+    fn detect_chaoxing_by_registered_domain() {
         assert_eq!(
             detect_service_from_url("https://p.ananas.chaoxing.com/x.jpg"),
             Some("chaoxing")
@@ -297,13 +320,33 @@ mod tests {
             detect_service_from_url("https://p.cldisk.com/x.jpg?from=chaoxing.com"),
             None
         );
+        assert_eq!(
+            detect_service_from_url("https://chaoxing.com.evil.test/x.jpg"),
+            None
+        );
     }
 
     #[test]
-    fn detect_nowcoder_by_substring_match() {
+    fn detect_nowcoder_by_registered_domain() {
         assert_eq!(
             detect_service_from_url("https://uploadfiles.nowcoder.com/files/x.jpg"),
             Some("nowcoder")
+        );
+        assert_eq!(
+            detect_service_from_url("https://nowcoder.com.evil.test/files/x.jpg"),
+            None
+        );
+    }
+
+    #[test]
+    fn detect_service_rejects_lookalike_hosts() {
+        assert_eq!(
+            detect_service_from_url("https://image.baidu.com.evil.test/a.jpg"),
+            None
+        );
+        assert_eq!(
+            detect_service_from_url("https://fake.sinaimg.cn.evil.test/a.jpg"),
+            None
         );
     }
 
@@ -398,6 +441,44 @@ mod tests {
             detect_service_from_url("http://tvax1.sinaimg.cn/x.jpg"),
             Some("weibo")
         );
+    }
+
+    #[test]
+    fn suspicious_image_response_rejects_empty_success() {
+        assert!(is_suspicious_image_response(204, None, None));
+        assert!(is_suspicious_image_response(
+            200,
+            Some("image/png"),
+            Some(0)
+        ));
+    }
+
+    #[test]
+    fn suspicious_image_response_rejects_non_image_and_small_body() {
+        assert!(is_suspicious_image_response(
+            200,
+            Some("text/html; charset=utf-8"),
+            Some(4096)
+        ));
+        assert!(is_suspicious_image_response(
+            200,
+            Some("image/png"),
+            Some(128)
+        ));
+    }
+
+    #[test]
+    fn suspicious_image_response_allows_svg_and_range_response() {
+        assert!(!is_suspicious_image_response(
+            200,
+            Some("image/svg+xml"),
+            Some(128)
+        ));
+        assert!(!is_suspicious_image_response(
+            206,
+            Some("text/html"),
+            Some(1)
+        ));
     }
 
     // ---------- image extension detection ----------
@@ -595,16 +676,11 @@ async fn check_single_link(
 
             let is_2xx = status.is_success();
 
-            // 疑似异常判定：200 但内容不是图片或体积过小
+            // 疑似异常判定：2xx 但没有图片正文、内容不是图片或体积过小
             // 206 是 Range 请求的正常响应，其 Content-Length/Content-Type 反映部分内容，不参与 suspicious 判定
             // SVG 图片天然体积小（badge 通常 < 1KB），豁免 content_length 检查
-            let is_svg = ct.as_deref().is_some_and(|t| t.starts_with("image/svg"));
-            let is_suspicious = is_2xx
-                && status_code != 206
-                && (ct
-                    .as_deref()
-                    .is_some_and(|t| !t.starts_with("image/") && !t.is_empty())
-                    || (!is_svg && cl.is_some_and(|len| len > 0 && len < 1024)));
+            let is_suspicious =
+                is_2xx && is_suspicious_image_response(status_code, ct.as_deref(), cl);
 
             let (mut error_type, mut suggestion) = classify_error(Some(status_code), None);
 

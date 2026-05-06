@@ -45,6 +45,7 @@ const {
   isLoading,
   isPhase2Loading,
   phase2Duration,
+  loadError,
   progress: monitorProgress,
   progressSource,
   checkRows,
@@ -177,6 +178,7 @@ onDeactivated(onViewDeactivated);
         :is-checking="monitorIsChecking"
         :is-paused="monitorPaused"
         :is-loading="isLoading"
+        :load-error="loadError"
         :is-phase2-loading="isPhase2Loading"
         :phase2-duration="phase2Duration"
         :progress="monitorProgress"

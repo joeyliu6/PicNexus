@@ -50,6 +50,7 @@ function mountPanel(props = {}) {
       isChecking: false,
       isPaused: false,
       isLoading: false,
+      loadError: null,
       isPhase2Loading: false,
       phase2Duration: 0,
       progress: null,

@@ -44,6 +44,7 @@ const log = createLogger('LinkCheck');
 const isChecking = ref(false);
 const isPaused = ref(false);
 const isLoading = ref(false);
+const loadError = ref<string | null>(null);
 /** Phase 2 后台加载中标志：Phase 1 结束后为 true，Phase 2 全部到达后为 false */
 const isPhase2Loading = ref(false);
 /** Phase 2 耗时（ms）：用于 UI 侧判断是否跳过动画（<300ms 则跳过） */
@@ -62,6 +63,28 @@ let latestStartedBatchSession = 0;
 let activeRecheckCount = 0; // 防 onViewDeactivated 在单条复检动画期间误触发空闲释放
 let loadHistoryRowsPromise: Promise<void> | null = null;
 let nextClientBatchSeq = 0;
+
+class LinkCheckPersistenceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LinkCheckPersistenceError';
+  }
+}
+
+interface RowStateSnapshot {
+  checkResult?: CheckLinkResult;
+  recheckResult?: CheckLinkResult;
+  recheckLoading?: boolean;
+  recheckBadgeFading?: boolean;
+  fadingOut?: boolean;
+  pinnedSortWeight?: number;
+  recentlyCompletedAt?: number;
+  uncheckedLeavingAt?: number;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 /** 清理进度监听器，防止累积泄漏 */
 function clearProgressListener(): void {
@@ -108,6 +131,7 @@ const RECHECK_MS = { SPIN_MIN: 400, RESULT_SHOW: 1000, ROW_FADE: 350, BADGE_FADE
 onCacheEvent((p) => {
   if (p.type === 'history-cleared') {
     checkRows.value = [];
+    loadError.value = null;
     lastBatchResult.value = null;
     lastLoadTime = 0;
     // 历史被清空时，必须丢弃正在跑的批量结果——否则 finally 里的 applyResultsToRows
@@ -133,6 +157,58 @@ export function useLinkCheckManager() {
     progress.value = null;
     progressSource.value = null;
     lastBatchResult.value = null;
+  }
+
+  function cloneResult(result: CheckLinkResult | undefined): CheckLinkResult | undefined {
+    return result ? { ...result } : undefined;
+  }
+
+  function createRowsSnapshot(rows: LinkCheckRow[]): Map<string, RowStateSnapshot> {
+    return new Map(rows.map((row) => [
+      linkCheckRowKey(row),
+      {
+        checkResult: cloneResult(row.checkResult),
+        recheckResult: cloneResult(row.recheckResult),
+        recheckLoading: row.recheckLoading,
+        recheckBadgeFading: row.recheckBadgeFading,
+        fadingOut: row.fadingOut,
+        pinnedSortWeight: row.pinnedSortWeight,
+        recentlyCompletedAt: row.recentlyCompletedAt,
+        uncheckedLeavingAt: row.uncheckedLeavingAt,
+      },
+    ]));
+  }
+
+  function restoreRowsSnapshot(snapshot: Map<string, RowStateSnapshot>): void {
+    if (snapshot.size === 0) return;
+    clearAllHolds();
+    checkRows.value = checkRows.value.map((row) => {
+      const saved = snapshot.get(linkCheckRowKey(row));
+      if (!saved) return row;
+
+      row.checkResult = cloneResult(saved.checkResult);
+      row.recheckResult = cloneResult(saved.recheckResult);
+      row.recheckLoading = saved.recheckLoading;
+      row.recheckBadgeFading = saved.recheckBadgeFading;
+      row.fadingOut = saved.fadingOut;
+      row.pinnedSortWeight = saved.pinnedSortWeight;
+      row.recentlyCompletedAt = saved.recentlyCompletedAt;
+      row.uncheckedLeavingAt = saved.uncheckedLeavingAt;
+      return row;
+    });
+    rebuildRowIndex();
+  }
+
+  async function persistResultOrRollback(
+    result: BatchCheckResult,
+    snapshot: Map<string, RowStateSnapshot>,
+  ): Promise<void> {
+    try {
+      await updateHistoryCheckStatus(result);
+    } catch (err) {
+      restoreRowsSnapshot(snapshot);
+      throw new LinkCheckPersistenceError(errorMessage(err));
+    }
   }
 
   /** 检测结束时的清理（带 session 守卫，防止旧 finally 杀死新检测） */
@@ -187,6 +263,7 @@ export function useLinkCheckManager() {
     const isFirstLoad = checkRows.value.length === 0;
     const skeletonStart = isFirstLoad ? Date.now() : 0;
     isLoading.value = true;
+    loadError.value = null;
 
     try {
       await historyDB.open();
@@ -232,6 +309,8 @@ export function useLinkCheckManager() {
       lastLoadTime = Date.now();
     } catch (err) {
       log.error('加载历史检测数据失败', err);
+      loadError.value = errorMessage(err);
+      toast.error('加载历史检测数据失败', loadError.value);
     } finally {
       isLoading.value = false;
       isPhase2Loading.value = false;
@@ -260,6 +339,7 @@ export function useLinkCheckManager() {
       await loadHistoryRows({ allowDuringCheck: true });
 
       const rows = checkRows.value;
+      const rowSnapshot = createRowsSnapshot(rows);
       if (rows.length === 0) {
         toast.info('无可检测的链接', '历史记录为空');
         return null;
@@ -314,7 +394,7 @@ export function useLinkCheckManager() {
       rebuildRowIndex();
 
       // 写回 DB
-      await updateHistoryCheckStatus(result);
+      await persistResultOrRollback(result, rowSnapshot);
       lastLoadTime = 0; // 检测完成后清除缓存，下次进入重新加载最新状态
 
       // session 守卫移到结果入库之后：只控制 toast 显示和返回值
@@ -335,7 +415,10 @@ export function useLinkCheckManager() {
       return result;
     } catch (err) {
       log.error('批量检测失败', err);
-      toast.error('检测失败', String(err));
+      toast.error(
+        err instanceof LinkCheckPersistenceError ? '保存检测结果失败' : '检测失败',
+        errorMessage(err),
+      );
       return null;
     } finally {
       finalizeCheck(mySession);
@@ -413,6 +496,7 @@ export function useLinkCheckManager() {
       log.info('已发送取消请求');
     } catch (err) {
       log.error('取消失败', err);
+      toast.error('取消失败', errorMessage(err));
     }
   }
 
@@ -425,6 +509,7 @@ export function useLinkCheckManager() {
       log.info('已发送暂停请求');
     } catch (err) {
       log.error('暂停失败', err);
+      toast.error('暂停失败', errorMessage(err));
     }
   }
 
@@ -437,6 +522,7 @@ export function useLinkCheckManager() {
       log.info('已发送恢复请求');
     } catch (err) {
       log.error('恢复失败', err);
+      toast.error('恢复失败', errorMessage(err));
     }
   }
 
@@ -533,6 +619,7 @@ export function useLinkCheckManager() {
       toast.info('无可检测的链接', '筛选结果为空');
       return null;
     }
+    const rowSnapshot = createRowsSnapshot(filtered);
 
     const mySession = ++checkSessionId;
     const myBatchSession = ++latestStartedBatchSession;
@@ -588,7 +675,7 @@ export function useLinkCheckManager() {
       checkRows.value = allRows;
 
       // 更新 DB
-      await updateHistoryCheckStatus(result);
+      await persistResultOrRollback(result, rowSnapshot);
       lastLoadTime = 0; // 检测完成后清除缓存
 
       // session 守卫移到结果入库之后：只控制 toast 显示和返回值
@@ -606,7 +693,10 @@ export function useLinkCheckManager() {
       return result;
     } catch (err) {
       log.error('子集检测失败', err);
-      toast.error('检测失败', String(err));
+      toast.error(
+        err instanceof LinkCheckPersistenceError ? '保存检测结果失败' : '检测失败',
+        errorMessage(err),
+      );
       return null;
     } finally {
       finalizeCheck(mySession);
@@ -829,15 +919,15 @@ export function useLinkCheckManager() {
     try {
       if (!updateRow(row, (t) => { t.recheckLoading = true; })) return;
       const result = await performRecheckRequest(row);
-      await animateRecheckResult(row, result, currentFilter);
       await persistRecheckResult(row, result);
+      await animateRecheckResult(row, result, currentFilter);
     } catch (err) {
       updateRow(row, (t) => {
         t.recheckLoading = false; t.recheckResult = undefined; t.recheckBadgeFading = false;
         t.fadingOut = false; t.pinnedSortWeight = undefined;
       });
       log.error('单条检测失败', err);
-      toast.error('检测失败', String(err));
+      toast.error('检测失败', errorMessage(err));
     } finally {
       activeRecheckCount--;
     }
@@ -921,6 +1011,7 @@ export function useLinkCheckManager() {
     serviceStats,
     // 方法
     loadHistoryRows,
+    loadError,
     checkAllHistoryLinks,
     checkSubset,
     recheckSingle,

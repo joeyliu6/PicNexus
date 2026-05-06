@@ -20,6 +20,7 @@ const props = defineProps<{
   isChecking: boolean;
   isPaused: boolean;
   isLoading: boolean;
+  loadError?: string | null;
   isPhase2Loading: boolean;
   phase2Duration: number;
   progress: BatchCheckProgress | null;
@@ -311,7 +312,7 @@ function handleMoreAction(kind: MoreMenuKind): void {
 <template>
   <!-- 首次加载整屏骨架：覆盖 FilterBar/List/BottomBar，避免混显真实搜索框/分页/按钮 -->
   <LinkCheckSkeleton
-    v-if="isLoading && stats.total === 0"
+    v-if="isLoading && stats.total === 0 && !loadError"
   />
 
   <div v-else class="monitor-panel" @click="showServiceMenu = false; showOverflowMenu = false">
@@ -336,6 +337,7 @@ function handleMoreAction(kind: MoreMenuKind): void {
       :stats="displayStats"
       :status-filter="statusFilter"
       :is-loading="isLoading"
+      :load-error="loadError"
       :is-checking="isChecking"
       :is-action-locked="isActionLocked"
       :suppress-list-motion="suppressListMotion"

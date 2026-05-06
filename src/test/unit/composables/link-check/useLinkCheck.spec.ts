@@ -297,6 +297,17 @@ describe('useLinkCheckManager.checkAllHistoryLinks', () => {
     expect(result).toBeNull();
     expect(toastWarnMock).toHaveBeenCalled();
   });
+
+  it('历史数据加载失败时暴露 loadError 并提示用户', async () => {
+    const m = await freshManager();
+    historyDBOpenMock.mockRejectedValueOnce(new Error('database unavailable'));
+
+    await m.loadHistoryRows();
+
+    expect(m.loadError.value).toBe('database unavailable');
+    expect(toastErrorMock).toHaveBeenCalledWith('加载历史检测数据失败', 'database unavailable');
+    expect(m.isLoading.value).toBe(false);
+  });
 });
 
 describe('useLinkCheckManager.checkSubset', () => {
@@ -426,5 +437,44 @@ describe('useLinkCheckManager.checkSubset', () => {
     expect(result).toBeNull();
     expect(m.checkRows.value[0].checkResult).toBeUndefined();
     expect(historyDBBatchUpdateLinkCheckStatusMock).not.toHaveBeenCalled();
+  });
+
+  it('[BUG 回归] 检测结果保存失败时回滚 UI 状态，避免和 DB 不一致', async () => {
+    const m = await freshManager();
+    const oldResult = {
+      link: 'https://cdn.example.com/a.jpg',
+      is_valid: false,
+      error_type: 'http_4xx' as const,
+      status_code: 404,
+      browser_might_work: false,
+    };
+    m.checkRows.value = [
+      makeRow({
+        historyId: 'h1',
+        serviceId: 'r2',
+        url: 'https://cdn.example.com/a.jpg',
+        checkResult: oldResult,
+      }),
+    ];
+    invokeMock.mockResolvedValueOnce({
+      results: [
+        {
+          link: 'https://cdn.example.com/a.jpg',
+          history_id: 'h1',
+          service_id: 'r2',
+          is_valid: true,
+          error_type: 'success',
+          browser_might_work: false,
+        },
+      ],
+      total: 1, valid: 1, invalid: 0, timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: false,
+    });
+    historyDBBatchUpdateLinkCheckStatusMock.mockRejectedValueOnce(new Error('database locked'));
+
+    const result = await m.checkSubset({ targets: [{ historyId: 'h1', serviceId: 'r2' }] });
+
+    expect(result).toBeNull();
+    expect(m.checkRows.value[0].checkResult).toEqual(oldResult);
+    expect(toastErrorMock).toHaveBeenCalledWith('保存检测结果失败', 'database locked');
   });
 });

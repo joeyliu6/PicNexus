@@ -78,6 +78,9 @@ describe('batchUpdateLinkCheckStatusQuery', () => {
       { id: 'b', linkCheckStatus: 'valid', linkCheckSummary: '{}' },
     ]);
     expect(db.execute).toHaveBeenCalledTimes(1);
+    expect(db.execute.mock.calls[0][0]).toContain('UPDATE history_items');
+    expect(db.execute.mock.calls[0][0]).not.toContain('BEGIN');
+    expect(db.execute.mock.calls[0][0]).not.toContain('COMMIT');
   });
 
   it('大批量（> 200）分批', async () => {
@@ -86,5 +89,16 @@ describe('batchUpdateLinkCheckStatusQuery', () => {
     }));
     await batchUpdateLinkCheckStatusQuery(db, updates);
     expect(db.execute).toHaveBeenCalledTimes(3);
+  });
+
+  it('任一批更新失败时抛出错误', async () => {
+    const err = new Error('database locked');
+    db.execute.mockRejectedValueOnce(err);
+
+    await expect(batchUpdateLinkCheckStatusQuery(db, [
+      { id: 'a', linkCheckStatus: 'invalid', linkCheckSummary: '{}' },
+    ])).rejects.toThrow('database locked');
+
+    expect(db.execute).toHaveBeenCalledTimes(1);
   });
 });
