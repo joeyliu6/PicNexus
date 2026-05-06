@@ -82,7 +82,7 @@ Rust 后端（Tauri Commands）
 ## 开发
 
 ```bash
-npm install
+npm ci
 npm run tauri dev
 ```
 

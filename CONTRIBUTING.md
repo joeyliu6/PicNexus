@@ -42,7 +42,7 @@
 
 4. **安装依赖**
    ```bash
-   npm install
+   npm ci
    ```
 
 5. **开发和测试**
