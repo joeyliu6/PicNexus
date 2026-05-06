@@ -1,6 +1,6 @@
 {
   "name": "nami-token-fetcher",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Nami image hosting token fetcher sidecar",
   "private": true,
   "license": "Apache-2.0",

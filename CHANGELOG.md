@@ -9,14 +9,29 @@
 
 ## [Unreleased]
 
+---
+
+## [1.0.9] - 2026-05-06
+
+### Added
+- Release workflow 新增 `SHA256SUMS.txt` 汇总校验文件，并随 Windows 便携版一起上传同名 `.sha256`，方便下载后核对安装包、便携包和自动更新 JSON。
+- 新增敏感字段组件与日志守卫覆盖，设置页里的凭据展示、测试与保存路径更一致地走脱敏与校验流程。
+
 ### Changed
 - 修复遗留过宽的 Tauri 默认权限：`@tauri-apps/plugin-http` 仅保留外部 HTTPS 与本机回环 HTTP scope，本机回环 HTTP 继续用于编辑器/WebDAV 等本地集成；前端不再拥有直接 spawn `qiyu-token-fetcher` / `nami-token-fetcher` 的权限。
 - 收缩前端文件系统 scope，移除桌面、文档、下载、图片目录的递归全局授权；JSON/CSV 导入导出改由 Rust 命令打开原生文件对话框并只读写用户刚选择的文件。
 - 设置页补充七鱼、纳米 token-fetcher 的用途说明：本机辅助程序仅用于获取上传所需动态 token/headers，不持久化账号凭据，日志按脱敏规则记录。
 
+### Fixed
+- 修复保留网络与 IPv4-mapped IPv6 地址未被完整拦截的问题，避免自定义 CDN、WebDAV、URL 下载和系统打开链接绕过外部地址策略。
+- 修复超长本地路径截断可能超过最大字符数的问题，历史、日志和错误提示中的路径展示更稳定。
+- 修复带前缀 URL 清理时重复 suffix literal 的处理问题，减少链接格式化和迁移场景里的异常输出。
+
 ### Security
 - CSP 移除外部 `http://*` 和 Google Tag Manager 脚本白名单，脚本改为 `script-src 'self'`；`style-src 'unsafe-inline'` 因 PrimeVue/Tauri nonce 兼容问题暂时保留。
 - 外部网络 HTTP 作为旧版本遗留风险在当前版本加固：WebDAV、自定义 S3 Endpoint 和 URL 图片下载保持 HTTPS-only 校验，外部 `http://` 配置会得到明确错误提示，本机 `localhost` / `127.0.0.1` 例外继续保留。
+- 外部打开链接统一走白名单和 HTTPS/回环 HTTP 校验，`mailto:`、`tel:`、脚本协议、凭据 URL、内网/链路本地/保留地址不再进入系统打开路径。
+- 前端、Rust 与 sidecar 日志继续扩大脱敏范围，Authorization、Cookie、token、access key、密码和本地路径在输出前会被清理。
 
 ---
 

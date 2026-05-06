@@ -8,7 +8,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)]()
-[![Version](https://img.shields.io/badge/Version-1.0.7-green)]()
+[![Version](https://img.shields.io/badge/Version-1.0.9-green)]()
 
 </div>
 

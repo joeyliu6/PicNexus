@@ -21,12 +21,14 @@ conventional_commits = true
 filter_unconventional = true
 commit_parsers = [
   { message = "^feat", group = "✨ 新功能" },
+  { message = "^security", group = "🔒 安全" },
   { message = "^fix", group = "🐛 Bug 修复" },
   { message = "^perf", group = "⚡ 性能优化" },
   { message = "^refactor", group = "♻️ 重构" },
   { message = "^style", group = "💄 样式" },
   { message = "^docs", group = "📝 文档" },
   { message = "^test", group = "✅ 测试" },
+  { message = "^ci", group = "👷 CI" },
   { message = "^chore\\(ci\\)", group = "👷 CI" },
   { message = "^chore\\(release\\)", skip = true },
   { message = "^chore", group = "🔧 杂项" },
