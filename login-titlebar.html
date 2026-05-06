@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录授权 - PicNexus</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      letter-spacing: 0;
+      user-select: none;
+    }
+
+    body {
+      background: #111827;
+      color: #f9fafb;
+    }
+
+    html.light body {
+      background: #f8fafc;
+      color: #111827;
+    }
+
+    .titlebar {
+      width: 100%;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px 0 14px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+    }
+
+    html.light .titlebar {
+      border-bottom-color: rgba(15, 23, 42, 0.12);
+    }
+
+    .titlebar-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      height: 100%;
+    }
+
+    .lock-icon {
+      width: 15px;
+      height: 15px;
+      flex: 0 0 auto;
+      color: #60a5fa;
+    }
+
+    .service-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .auth-label {
+      flex: 0 0 auto;
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    html.light .auth-label {
+      color: #64748b;
+    }
+
+    .close-btn {
+      width: 28px;
+      height: 28px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: inherit;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .close-btn:hover {
+      background: rgba(239, 68, 68, 0.16);
+      color: #fca5a5;
+    }
+
+    html.light .close-btn:hover {
+      background: rgba(239, 68, 68, 0.12);
+      color: #dc2626;
+    }
+
+    .close-btn svg {
+      width: 15px;
+      height: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="titlebar" data-tauri-drag-region>
+    <div class="titlebar-left" data-tauri-drag-region>
+      <svg class="lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="5" y="11" width="14" height="10" rx="2"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>
+      <span class="service-name" id="serviceName"></span>
+      <span class="auth-label">登录授权</span>
+    </div>
+    <button class="close-btn" id="closeBtn" title="关闭" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="18" y1="6" x2="6" y2="18"/>
+        <line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+  </div>
+  <script type="module" src="/src/login-titlebar.ts"></script>
+</body>
+</html>

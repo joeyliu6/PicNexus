@@ -1249,6 +1249,22 @@ async fn start_cookie_monitoring(
         .unwrap_or(DEFAULT_POLLING_INTERVAL_MS)
         .clamp(MIN_POLLING_INTERVAL_MS, MAX_POLLING_INTERVAL_MS);
 
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (
+            &app,
+            &service,
+            &domains,
+            &fields,
+            &any_fields,
+            initial_delay,
+            polling_interval,
+        );
+        return Err(AppError::external(
+            "当前操作系统暂不支持安全的自动 Cookie 提取，请在 Windows WebView2 环境使用登录授权",
+        ));
+    }
+
     log::debug!(
         "[Cookie监控] 开始监控 {} 的Cookie (域名列表: {:?}, 必要字段: {:?}, 任意字段: {:?}, 初始延迟: {}ms, 轮询间隔: {}ms)",
         service, domains, fields, any_fields, initial_delay, polling_interval
@@ -1299,65 +1315,11 @@ async fn start_cookie_monitoring(
 
                 #[cfg(not(target_os = "windows"))]
                 {
-                    let required_checks: Vec<String> = fields
-                        .iter()
-                        .map(|f| format!("cookie.includes('{}=')", f))
-                        .collect();
-
-                    let any_checks: Vec<String> = any_fields
-                        .iter()
-                        .map(|f| format!("cookie.includes('{}=')", f))
-                        .collect();
-
-                    let condition = if required_checks.is_empty() && any_checks.is_empty() {
-                        "cookie.length > 0".to_string()
-                    } else if any_checks.is_empty() {
-                        required_checks.join(" && ")
-                    } else if required_checks.is_empty() {
-                        format!("({})", any_checks.join(" || "))
-                    } else {
-                        format!(
-                            "({}) && ({})",
-                            required_checks.join(" && "),
-                            any_checks.join(" || ")
-                        )
-                    };
-
-                    let fields_json =
-                        serde_json::to_string(&fields).unwrap_or_else(|_| "[]".to_string());
-                    let any_fields_json =
-                        serde_json::to_string(&any_fields).unwrap_or_else(|_| "[]".to_string());
-
-                    let check_js = format!(
-                        r#"
-                        (async function() {{
-                            try {{
-                                const cookie = document.cookie || '';
-                                if ({condition}) {{
-                                    await window.__TAURI__.core.invoke('save_cookie_from_login', {{
-                                        cookie: cookie,
-                                        serviceId: '{service}',
-                                        requiredFields: {fields_json},
-                                        anyOfFields: {any_fields_json}
-                                    }});
-                                    return true;
-                                }}
-                                return false;
-                            }} catch (e) {{
-                                console.error('[自动监控] JS执行错误:', e);
-                                return false;
-                            }}
-                        }})()
-                    "#,
-                        condition = condition,
-                        service = service,
-                        fields_json = fields_json,
-                        any_fields_json = any_fields_json
+                    drop(login_webview);
+                    log::warn!(
+                        "[Cookie监控] 非 Windows 平台已禁用远程页面 IPC 注入；请使用支持请求头 Cookie 提取的平台"
                     );
-
-                    if let Err(e) = login_webview.eval(&check_js) {
-                        log::warn!("[Cookie监控] 执行JS脚本失败: {:?}", e);
-                    }
+                    break;
                 }
             } else {
                 log::debug!("[Cookie监控] 登录窗口已关闭，自动停止监控");
@@ -1686,18 +1648,18 @@ async fn setup_cookie_event_monitoring(
 
     #[cfg(not(target_os = "windows"))]
     {
-        log::debug!("[事件监控] 非 Windows 平台，降级到轮询模式");
-        return start_cookie_monitoring(
+        let _ = (
             app,
-            Some(service),
-            None,
-            Some(domains),
-            Some(fields),
-            Some(any_fields),
-            None,
-            None,
-        )
-        .await;
+            service,
+            domains,
+            fields,
+            any_fields,
+            field_value_checks,
+            timeout,
+        );
+        return Err(AppError::external(
+            "当前操作系统暂不支持安全的自动 Cookie 提取，请在 Windows WebView2 环境使用登录授权",
+        ));
     }
 
     Ok(())

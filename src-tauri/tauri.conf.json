@@ -9,7 +9,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "withGlobalTauri": true,
+    "withGlobalTauri": false,
     "security": {
       "csp": "default-src 'self'; img-src 'self' data: blob: https: http://127.0.0.1:* http://localhost:*; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://www.google-analytics.com https://api.github.com https://github.com https://sm.ms https://api.imgur.com https://www.baidu.com https://www.qq.com https://www.cloudflare.com http://127.0.0.1:* http://localhost:*; font-src 'self' data:",
       "capabilities": ["main", "login-window", "login-titlebar", "login-content", "tray-menu"],

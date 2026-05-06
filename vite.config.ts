@@ -26,6 +26,7 @@ export default defineConfig({
       input: {
         main: resolve(fileURLToPath(new URL(".", import.meta.url)), "index.html"),
         'login-webview': resolve(fileURLToPath(new URL(".", import.meta.url)), "login-webview.html"),
+        'login-titlebar': resolve(fileURLToPath(new URL(".", import.meta.url)), "login-titlebar.html"),
         'tray-menu': resolve(fileURLToPath(new URL(".", import.meta.url)), "tray-menu.html")
       },
       output: {
