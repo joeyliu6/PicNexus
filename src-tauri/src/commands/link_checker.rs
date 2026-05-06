@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -192,16 +193,126 @@ fn host_matches_domain(host: &str, domain: &str) -> bool {
             .is_some_and(|prefix| prefix.ends_with('.'))
 }
 
-fn is_loopback_host(host: &str) -> bool {
-    matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]")
+fn normalize_host(host: &str) -> String {
+    host.trim()
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .trim_end_matches('.')
+        .to_ascii_lowercase()
 }
 
-fn validate_external_url_policy(raw_url: &str) -> Result<(), AppError> {
+fn ipv4_mapped_from_ipv6(ip: Ipv6Addr) -> Option<Ipv4Addr> {
+    let segments = ip.segments();
+    if segments[0] == 0
+        && segments[1] == 0
+        && segments[2] == 0
+        && segments[3] == 0
+        && segments[4] == 0
+        && segments[5] == 0xffff
+    {
+        let high = segments[6];
+        let low = segments[7];
+        return Some(Ipv4Addr::new(
+            (high >> 8) as u8,
+            high as u8,
+            (low >> 8) as u8,
+            low as u8,
+        ));
+    }
+
+    None
+}
+
+fn is_loopback_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ip) => ip.is_loopback(),
+        IpAddr::V6(ip) => {
+            ip.is_loopback()
+                || ipv4_mapped_from_ipv6(ip)
+                    .map(|mapped| mapped.is_loopback())
+                    .unwrap_or(false)
+        }
+    }
+}
+
+fn is_loopback_host(host: &str) -> bool {
+    let normalized = normalize_host(host);
+    if normalized == "localhost" {
+        return true;
+    }
+
+    normalized
+        .parse::<IpAddr>()
+        .map(is_loopback_ip)
+        .unwrap_or(false)
+}
+
+fn is_private_or_reserved_ipv4(ip: Ipv4Addr) -> bool {
+    if ip.is_loopback() {
+        return false;
+    }
+
+    let octets = ip.octets();
+    ip.is_private()
+        || ip.is_link_local()
+        || ip.is_broadcast()
+        || ip.is_multicast()
+        || ip.is_documentation()
+        || octets[0] == 0
+        || (octets[0] == 100 && (64..=127).contains(&octets[1]))
+        || (octets[0] == 192 && octets[1] == 0 && octets[2] == 0)
+        || (octets[0] == 198 && (18..=19).contains(&octets[1]))
+        || octets[0] >= 240
+}
+
+fn is_private_or_reserved_ip(ip: IpAddr) -> bool {
+    if is_loopback_ip(ip) {
+        return false;
+    }
+
+    match ip {
+        IpAddr::V4(ip) => is_private_or_reserved_ipv4(ip),
+        IpAddr::V6(ip) => {
+            if let Some(mapped) = ipv4_mapped_from_ipv6(ip) {
+                return is_private_or_reserved_ipv4(mapped);
+            }
+
+            ip.is_unspecified()
+                || ip.is_multicast()
+                || ip.segments()[0] & 0xffc0 == 0xfe80
+                || ip.segments()[0] & 0xfe00 == 0xfc00
+                || (ip.segments()[0] == 0x2001 && ip.segments()[1] == 0x0db8)
+        }
+    }
+}
+
+fn is_private_or_reserved_host(host: &str) -> bool {
+    match normalize_host(host).parse::<IpAddr>() {
+        Ok(ip) => is_private_or_reserved_ip(ip),
+        Err(_) => false,
+    }
+}
+
+fn validate_external_url_policy(raw_url: &str) -> Result<reqwest::Url, AppError> {
     let parsed = reqwest::Url::parse(raw_url)
         .map_err(|_| AppError::validation("请输入有效的 URL（以 https:// 开头，本机服务可用 http://localhost 或 http://127.0.0.1）"))?;
+
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(AppError::validation("地址不能包含用户名或密码"));
+    }
+
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| AppError::validation("地址缺少主机名"))?;
+
     match parsed.scheme() {
-        "https" => Ok(()),
-        "http" if parsed.host_str().is_some_and(is_loopback_host) => Ok(()),
+        "https" => {
+            if is_private_or_reserved_host(host) {
+                return Err(AppError::validation("地址不能指向内网、链路本地或保留地址"));
+            }
+            Ok(parsed)
+        }
+        "http" if is_loopback_host(host) => Ok(parsed),
         "http" => Err(AppError::validation(
             "外部 HTTP 图片地址已禁用，请改用 HTTPS；HTTP 仅保留给本机回环服务。",
         )),
@@ -209,6 +320,40 @@ fn validate_external_url_policy(raw_url: &str) -> Result<(), AppError> {
             "请输入有效的 URL（以 https:// 开头，本机服务可用 http://localhost 或 http://127.0.0.1）",
         )),
     }
+}
+
+async fn validate_external_url_for_request(raw_url: &str) -> Result<reqwest::Url, AppError> {
+    let parsed = validate_external_url_policy(raw_url)?;
+    if parsed.scheme() == "https" {
+        let host = parsed
+            .host_str()
+            .ok_or_else(|| AppError::validation("地址缺少主机名"))?;
+        let port = parsed.port_or_known_default().unwrap_or(443);
+        let resolved = tokio::net::lookup_host((host, port))
+            .await
+            .map_err(|e| AppError::network(format!("域名解析失败: {}", e)))?;
+
+        let mut saw_addr = false;
+        for addr in resolved {
+            saw_addr = true;
+            if is_private_or_reserved_ip(addr.ip()) {
+                return Err(AppError::validation(
+                    "地址不能解析到内网、链路本地或保留地址",
+                ));
+            }
+        }
+        if !saw_addr {
+            return Err(AppError::network("域名解析未返回可连接地址"));
+        }
+    }
+    Ok(parsed)
+}
+
+fn safe_no_redirect_client() -> Result<reqwest::Client, AppError> {
+    reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| AppError::network(format!("初始化安全 HTTP 客户端失败: {}", e)))
 }
 
 fn is_empty_success_response(status_code: u16, content_length: Option<u64>) -> bool {
@@ -467,6 +612,7 @@ mod tests {
         assert!(validate_external_url_policy("https://example.com/a.png").is_ok());
         assert!(validate_external_url_policy("http://localhost:1420/status").is_ok());
         assert!(validate_external_url_policy("http://127.0.0.1:27123/status").is_ok());
+        assert!(validate_external_url_policy("http://[::1]:1420/status").is_ok());
     }
 
     #[test]
@@ -475,6 +621,32 @@ mod tests {
             .expect_err("external http should be rejected");
 
         assert!(err.to_string().contains("外部 HTTP 图片地址已禁用"));
+    }
+
+    #[test]
+    fn external_url_policy_rejects_credentials() {
+        let err = validate_external_url_policy("https://user:pass@example.com/a.png")
+            .expect_err("credential URLs should be rejected");
+
+        assert!(err.to_string().contains("不能包含用户名或密码"));
+    }
+
+    #[test]
+    fn external_url_policy_rejects_private_and_reserved_https_literals() {
+        for url in [
+            "https://192.168.1.10/a.png",
+            "https://169.254.1.10/a.png",
+            "https://100.64.1.10/a.png",
+            "https://[::ffff:192.168.1.10]/a.png",
+            "https://[fe80::1]/a.png",
+            "https://[fc00::1]/a.png",
+        ] {
+            assert!(
+                validate_external_url_policy(url).is_err(),
+                "{} should be rejected",
+                url
+            );
+        }
     }
 
     #[test]
@@ -641,7 +813,8 @@ async fn check_single_link(
     http_client: &reqwest::Client,
     timeout_secs: u64,
 ) -> CheckLinkResult {
-    if link.trim().is_empty() {
+    let trimmed = link.trim();
+    if trimmed.is_empty() {
         return CheckLinkResult {
             link: link.to_string(),
             is_valid: false,
@@ -657,7 +830,27 @@ async fn check_single_link(
         };
     }
 
-    let service = detect_service_from_url(link);
+    let parsed_url = match validate_external_url_for_request(trimmed).await {
+        Ok(parsed) => parsed,
+        Err(err) => {
+            let message = err.to_string();
+            return CheckLinkResult {
+                link: link.to_string(),
+                is_valid: false,
+                status_code: None,
+                error: Some(message.clone()),
+                error_type: "network".to_string(),
+                suggestion: Some(message),
+                response_time: None,
+                detected_service: None,
+                browser_might_work: false,
+                content_type: None,
+                content_length: None,
+            };
+        }
+    };
+    let request_url = parsed_url.as_str();
+    let service = detect_service_from_url(request_url);
     let timeout = std::time::Duration::from_secs(timeout_secs);
     let start_time = Instant::now();
 
@@ -668,19 +861,19 @@ async fn check_single_link(
 
     let response_result = if skip_head {
         let builder = http_client
-            .get(link)
+            .get(request_url)
             .header("Range", "bytes=0-0")
             .timeout(timeout);
         apply_service_headers(builder, service).send().await
     } else {
         let head_result = {
-            let builder = http_client.head(link).timeout(timeout);
+            let builder = http_client.head(request_url).timeout(timeout);
             apply_service_headers(builder, service).send().await
         };
         match &head_result {
             Ok(resp) if resp.status().as_u16() == 405 => {
                 let builder = http_client
-                    .get(link)
+                    .get(request_url)
                     .header("Range", "bytes=0-0")
                     .timeout(timeout);
                 apply_service_headers(builder, service).send().await
@@ -818,10 +1011,11 @@ async fn check_link_with_fallback(
 pub async fn check_image_link(
     link: String,
     fallback_url: Option<String>,
-    http_client: tauri::State<'_, crate::HttpClient>,
+    _http_client: tauri::State<'_, crate::HttpClient>,
 ) -> Result<CheckLinkResult, AppError> {
     log::debug!("[链接检测] 检测链接: {}", link);
-    let result = check_link_with_fallback(&link, fallback_url.as_deref(), &http_client.0, 10).await;
+    let http_client = safe_no_redirect_client()?;
+    let result = check_link_with_fallback(&link, fallback_url.as_deref(), &http_client, 10).await;
     log::debug!(
         "[链接检测] {} - {:?} ({}ms)",
         if result.is_valid { "ok" } else { "fail" },
@@ -896,17 +1090,19 @@ fn cleanup_old_temp_files() {
 #[tauri::command]
 pub async fn download_image_from_url(
     url: String,
-    http_client: tauri::State<'_, crate::HttpClient>,
+    _http_client: tauri::State<'_, crate::HttpClient>,
 ) -> Result<String, AppError> {
     log::info!("[下载图片] 开始下载: {}", safe_url(&url));
 
     // 首先清理过期的临时文件，防止磁盘空间耗尽
     cleanup_old_temp_files();
 
+    let validated_url = validate_external_url_for_request(url.trim()).await?;
+    let http_client = safe_no_redirect_client()?;
+
     // 发送 GET 请求下载图片
     let response = http_client
-        .0
-        .get(&url)
+        .get(validated_url.as_str())
         .timeout(std::time::Duration::from_secs(30)) // 30秒超时
         .send()
         .await
@@ -980,7 +1176,7 @@ pub async fn download_image_from_url(
     }
 
     log::debug!("[下载图片] 下载成功，大小: {} bytes", bytes.len());
-    let ext = infer_downloaded_image_extension(&bytes, &content_type, &url)?;
+    let ext = infer_downloaded_image_extension(&bytes, &content_type, validated_url.as_str())?;
     validate_downloaded_image_payload(&bytes, ext)?;
 
     // 创建临时文件
@@ -1206,7 +1402,7 @@ fn infer_downloaded_image_extension<'a>(
 #[tauri::command]
 pub async fn download_url_image(
     url: String,
-    http_client: tauri::State<'_, crate::HttpClient>,
+    _http_client: tauri::State<'_, crate::HttpClient>,
 ) -> Result<UrlDownloadResult, AppError> {
     log::info!("[URL下载] 开始下载: {}", safe_url(&url));
 
@@ -1215,15 +1411,15 @@ pub async fn download_url_image(
     if trimmed.is_empty() {
         return Err(AppError::validation("URL 不能为空"));
     }
-    validate_external_url_policy(trimmed)?;
+    let validated_url = validate_external_url_for_request(trimmed).await?;
+    let http_client = safe_no_redirect_client()?;
 
     // 清理过期临时文件
     cleanup_old_temp_files();
 
     // 发送 GET 请求
     let response = http_client
-        .0
-        .get(trimmed)
+        .get(validated_url.as_str())
         .timeout(std::time::Duration::from_secs(30))
         .send()
         .await
@@ -1291,7 +1487,7 @@ pub async fn download_url_image(
     }
 
     // 推断扩展名：优先真实字节，其次 Content-Type / URL 路径
-    let ext = infer_downloaded_image_extension(&bytes, &content_type, trimmed)?;
+    let ext = infer_downloaded_image_extension(&bytes, &content_type, validated_url.as_str())?;
 
     validate_downloaded_image_payload(&bytes, ext)?;
 
@@ -1466,7 +1662,7 @@ pub struct BatchCheckItemResult {
 pub async fn batch_check_links(
     window: tauri::Window,
     request: BatchCheckRequest,
-    http_client: tauri::State<'_, crate::HttpClient>,
+    _http_client: tauri::State<'_, crate::HttpClient>,
     cancel_flag: tauri::State<'_, BatchCheckCancelFlag>,
     pause_flag: tauri::State<'_, BatchCheckPauseFlag>,
 ) -> Result<BatchCheckResult, AppError> {
@@ -1501,7 +1697,7 @@ pub async fn batch_check_links(
     let global_semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
     let cancel_generation = cancel_flag.cancelled_generation.clone();
     let pause = pause_flag.0.clone();
-    let client = http_client.0.clone();
+    let client = safe_no_redirect_client()?;
 
     // 构建按域名分组的限速信号量
     let host_semaphores: Arc<tokio::sync::Mutex<HashMap<String, Arc<tokio::sync::Semaphore>>>> =
