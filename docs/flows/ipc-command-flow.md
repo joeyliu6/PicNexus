@@ -54,9 +54,9 @@ flowchart TD
     %% 权限校验
     R -.读取.-> CAP[capabilities/default.json<br/>定义允许的权限范围]
     CAP --> CAP1[core:window:* / event:*]
-    CAP --> CAP2[shell:allow-spawn<br/>仅 qiyu-token/nami-token 两个 sidecar]
-    CAP --> CAP3[fs:allow-* + 作用域<br/>appdata/appcache/appconfig]
-    CAP --> CAP4[http:allow-* + URL<br/>https://** / http://**]
+    CAP --> CAP2[sidecar 由 Rust portable::run_sidecar 启动<br/>前端不暴露 shell spawn]
+    CAP --> CAP3[fs:allow-* + 作用域<br/>appdata/appcache/applog/temp + 用户对话框临时授权]
+    CAP --> CAP4[http:allow-* + URL<br/>https://** + localhost/127.0.0.1 HTTP]
 
     style A fill:#e3f2fd,stroke:#1976d2
     style H fill:#fff3e0,stroke:#ef6c00
@@ -270,7 +270,7 @@ flowchart TD
 | 错误 Toast 显示 `[object Object]` | 前端直接打印了 `err`,没解析 JSON | 图3 F 节点 |
 | `State<HttpClient>` 获取失败 | `main.rs` 里 `.manage(HttpClient(...))` 调用缺失 | 图1 M1 节点 |
 | 命令返回值前端收到 `undefined` | Rust 侧返回了 `()` 或字段没加 `#[serde]` | 图2 返回阶段 |
-| Sidecar 命令报权限错误 | `shell:allow-spawn` 没配置该 sidecar 名 | 图1 CAP2 节点 |
+| Sidecar 启动失败 | Rust 侧找不到 bundled/portable sidecar，或 sidecar 执行超时 | 图1 CAP2 节点 |
 
 ---
 

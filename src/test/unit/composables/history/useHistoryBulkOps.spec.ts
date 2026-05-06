@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
-import { getDialogSaveMock, getFsMocks } from '../../../helpers/tauriMock';
+import { getInvokeMock } from '../../../helpers/tauriMock';
 
 const {
   historyDeleteManyMock,
@@ -14,8 +14,7 @@ const {
   emitHistoryDeletedMock: vi.fn(),
 }));
 
-const saveDialogMock = getDialogSaveMock();
-const writeTextFileMock = getFsMocks().writeTextFile;
+const invokeMock = getInvokeMock();
 
 vi.mock('../../../../services/HistoryDatabase', () => ({
   historyDB: {
@@ -81,8 +80,7 @@ describe('createBulkOps', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     confirmMock.mockResolvedValue(true);
-    saveDialogMock.mockResolvedValue('/tmp/history.json');
-    writeTextFileMock.mockResolvedValue(undefined);
+    invokeMock.mockResolvedValue('/tmp/history.json');
     historyDeleteManyMock.mockResolvedValue(undefined);
     emitHistoryDeletedMock.mockResolvedValue(undefined);
   });
@@ -151,10 +149,13 @@ describe('createBulkOps', () => {
     const { bulkExportJSON } = createBulkOps(ctx);
     await bulkExportJSON(['a', 'b', 'c']);
 
-    expect(saveDialogMock).toHaveBeenCalledTimes(1);
-    expect(writeTextFileMock).toHaveBeenCalledTimes(1);
-    const [, jsonText] = writeTextFileMock.mock.calls[0];
-    const parsed = JSON.parse(jsonText as string) as Array<{ id: string }>;
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(invokeMock).toHaveBeenCalledWith('export_text_file', expect.objectContaining({
+      defaultPath: expect.stringMatching(/^picnexus-history-\d+\.json$/),
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    }));
+    const [, payload] = invokeMock.mock.calls[0];
+    const parsed = JSON.parse((payload as { content: string }).content) as Array<{ id: string }>;
     expect(parsed.map(item => item.id)).toEqual(['a', 'c']);
     expect(toastShowConfigMock).toHaveBeenCalledWith('success', expect.any(Object));
   });
@@ -166,7 +167,7 @@ describe('createBulkOps', () => {
     const { bulkExportJSON } = createBulkOps(ctx);
     await bulkExportJSON(['a']);
 
-    expect(writeTextFileMock).not.toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalled();
     expect(toastShowConfigMock).toHaveBeenCalledWith('warn', expect.any(Object));
   });
 });

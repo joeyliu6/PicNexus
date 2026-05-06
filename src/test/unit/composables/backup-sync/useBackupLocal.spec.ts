@@ -3,9 +3,7 @@ import { ref } from 'vue';
 import { createConfig } from '../../../factories/configFactory';
 import { createHistoryItem } from '../../../factories/historyFactory';
 import {
-  getDialogOpenMock,
-  getDialogSaveMock,
-  getFsMocks,
+  getInvokeMock,
   resetTauriMocks,
 } from '../../../helpers/tauriMock';
 
@@ -104,9 +102,7 @@ vi.mock('../../../../composables/backup-sync/backupSyncUtils', () => ({
 }));
 
 const { createBackupLocalOps } = await import('../../../../composables/backup-sync/useBackupLocal');
-const dialogSaveMock = getDialogSaveMock();
-const dialogOpenMock = getDialogOpenMock();
-const { writeTextFile: writeTextFileMock, readTextFile: readTextFileMock } = getFsMocks();
+const invokeMock = getInvokeMock();
 
 function makeDeps() {
   return {
@@ -138,10 +134,11 @@ describe('createBackupLocalOps', () => {
     resetTauriMocks();
     vi.clearAllMocks();
     vi.useRealTimers();
-    dialogSaveMock.mockResolvedValue('C:/backup.json');
-    dialogOpenMock.mockResolvedValue('C:/backup.json');
-    writeTextFileMock.mockResolvedValue(undefined);
-    readTextFileMock.mockResolvedValue(JSON.stringify(createConfig()));
+    invokeMock.mockImplementation(async (command) => {
+      if (command === 'export_text_file') return 'C:/backup.json';
+      if (command === 'import_text_file') return JSON.stringify(createConfig());
+      return undefined;
+    });
     historyGetCountMock.mockResolvedValue(2);
     historyExportToJSONMock.mockResolvedValue(JSON.stringify([createHistoryItem()]));
     historyImportFromJSONMock.mockResolvedValue(1);
@@ -175,7 +172,11 @@ describe('createBackupLocalOps', () => {
       expect.objectContaining({ enabledServices: expect.any(Array) }),
     );
     expect(configStoreSaveMock).toHaveBeenCalledTimes(1);
-    expect(writeTextFileMock).toHaveBeenCalledWith('C:/backup.json', 'ciphertext');
+    expect(invokeMock).toHaveBeenCalledWith('export_text_file', {
+      defaultPath: 'picnexus_settings.json',
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+      content: 'ciphertext',
+    });
     expect(writeSyncLogMock).toHaveBeenCalledWith('export_settings_local', 'success');
     expect(toastShowConfigMock).toHaveBeenCalledWith('warn', expect.any(Object));
     expect(toastShowConfigMock).toHaveBeenCalledWith('success', expect.any(Object));
@@ -211,7 +212,11 @@ describe('createBackupLocalOps', () => {
         }],
       },
     });
-    readTextFileMock.mockResolvedValueOnce('encrypted-payload');
+    invokeMock.mockImplementation(async (command) => {
+      if (command === 'import_text_file') return 'encrypted-payload';
+      if (command === 'export_text_file') return 'C:/backup.json';
+      return undefined;
+    });
     isPasswordEncryptedDataMock.mockReturnValueOnce(true);
     tryDecryptContentMock.mockResolvedValueOnce(JSON.stringify(importedConfig));
     configStoreGetMock.mockResolvedValueOnce(localConfig);
@@ -235,7 +240,11 @@ describe('createBackupLocalOps', () => {
   });
 
   it('does not show an error toast when encrypted settings import is cancelled from the password dialog', async () => {
-    readTextFileMock.mockResolvedValueOnce('encrypted-payload');
+    invokeMock.mockImplementation(async (command) => {
+      if (command === 'import_text_file') return 'encrypted-payload';
+      if (command === 'export_text_file') return 'C:/backup.json';
+      return undefined;
+    });
     isPasswordEncryptedDataMock.mockReturnValueOnce(true);
     tryDecryptContentMock.mockRejectedValueOnce(new Error('user_cancelled'));
 
@@ -250,6 +259,27 @@ describe('createBackupLocalOps', () => {
     expect(deps.importSettingsLoading.value).toBe(false);
   });
 
+  it('treats empty imported settings files as invalid JSON instead of cancel', async () => {
+    invokeMock.mockImplementation(async (command) => {
+      if (command === 'import_text_file') return '';
+      if (command === 'export_text_file') return 'C:/backup.json';
+      return undefined;
+    });
+
+    const deps = makeDeps();
+    const ops = createBackupLocalOps(deps);
+
+    await ops.importSettingsLocal();
+
+    expect(writeSyncLogMock).toHaveBeenCalledWith(
+      'import_settings_local',
+      'failed',
+      expect.stringContaining('JSON'),
+    );
+    expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.any(Object));
+    expect(toastShowConfigMock.mock.calls.some(([severity]) => severity === 'warn')).toBe(false);
+  });
+
   it('warns and skips history export when there is no local history', async () => {
     historyGetCountMock.mockResolvedValueOnce(0);
 
@@ -258,15 +288,18 @@ describe('createBackupLocalOps', () => {
 
     await ops.exportHistoryLocal();
 
-    expect(dialogSaveMock).not.toHaveBeenCalled();
-    expect(writeTextFileMock).not.toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalledWith('export_text_file', expect.anything());
     expect(writeSyncLogMock).not.toHaveBeenCalled();
     expect(toastShowConfigMock).toHaveBeenCalledWith('warn', expect.any(Object));
     expect(deps.exportHistoryLoading.value).toBe(false);
   });
 
   it('rejects invalid history imports before touching the database or cache', async () => {
-    readTextFileMock.mockResolvedValueOnce(JSON.stringify([{ id: '' }]));
+    invokeMock.mockImplementation(async (command) => {
+      if (command === 'import_text_file') return JSON.stringify([{ id: '' }]);
+      if (command === 'export_text_file') return 'C:/backup.json';
+      return undefined;
+    });
     isValidHistoryItemMock.mockReturnValueOnce(false);
 
     const deps = makeDeps();
@@ -283,12 +316,38 @@ describe('createBackupLocalOps', () => {
     expect(deps.importHistoryProgress.value).toBe(0);
   });
 
+  it('treats empty imported history files as invalid JSON instead of cancel', async () => {
+    invokeMock.mockImplementation(async (command) => {
+      if (command === 'import_text_file') return '';
+      if (command === 'export_text_file') return 'C:/backup.json';
+      return undefined;
+    });
+
+    const deps = makeDeps();
+    const ops = createBackupLocalOps(deps);
+
+    await ops.importHistoryLocal();
+
+    expect(historyImportFromJSONMock).not.toHaveBeenCalled();
+    expect(writeSyncLogMock).toHaveBeenCalledWith(
+      'import_history_local',
+      'failed',
+      expect.stringContaining('JSON'),
+    );
+    expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.any(Object));
+    expect(toastShowConfigMock.mock.calls.some(([severity]) => severity === 'warn')).toBe(false);
+  });
+
   it('imports valid history in merge mode, updates progress, and refreshes history views', async () => {
     const items = [createHistoryItem({ id: 'remote-new' })];
     const content = JSON.stringify(items);
     const deps = makeDeps();
     const progressSnapshots: number[] = [];
-    readTextFileMock.mockResolvedValueOnce(content);
+    invokeMock.mockImplementation(async (command) => {
+      if (command === 'import_text_file') return content;
+      if (command === 'export_text_file') return 'C:/backup.json';
+      return undefined;
+    });
     historyGetCountMock
       .mockResolvedValueOnce(1)
       .mockResolvedValueOnce(2);

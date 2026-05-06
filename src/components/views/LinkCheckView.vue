@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { writeTextFile } from '@tauri-apps/plugin-fs';
-import { save } from '@tauri-apps/plugin-dialog';
 import { computed, inject, onActivated, onDeactivated, onMounted, ref, watch } from 'vue';
 import type { Ref } from 'vue';
 import { useHistoryManager } from '../../composables/useHistory';
@@ -11,6 +9,7 @@ import type { LinkCheckRow } from '../../types/linkCheck';
 import BatchMigratePanel from './linkcheck/BatchMigratePanel.vue';
 import HistoryCheckPanel from './linkcheck/HistoryCheckPanel.vue';
 import MdRescueInline from './linkcheck/MdRescueInline.vue';
+import { exportTextFile } from '../../utils/userFiles';
 
 const toast = useToast();
 
@@ -71,27 +70,15 @@ const monitorIsChecking = computed(
 
 async function handleExportCsv(rows: LinkCheckRow[] = checkRows.value): Promise<void> {
   const csv = exportCsv(rows);
-  const path = await save({
-    defaultPath: `link-check-${Date.now()}.csv`,
-    filters: [{ name: 'CSV', extensions: ['csv'] }],
-  });
-
+  const path = await exportTextFile(`link-check-${Date.now()}.csv`, [{ name: 'CSV', extensions: ['csv'] }], csv);
   if (!path) return;
-
-  await writeTextFile(path, csv);
   toast.success('导出成功', `已保存至 ${path}`);
 }
 
 async function handleExportCsvSelected(rows: LinkCheckRow[]): Promise<void> {
   const csv = exportCsv(rows);
-  const path = await save({
-    defaultPath: `link-check-selected-${Date.now()}.csv`,
-    filters: [{ name: 'CSV', extensions: ['csv'] }],
-  });
-
+  const path = await exportTextFile(`link-check-selected-${Date.now()}.csv`, [{ name: 'CSV', extensions: ['csv'] }], csv);
   if (!path) return;
-
-  await writeTextFile(path, csv);
   toast.success('导出成功', `已保存至 ${path}`);
 }
 

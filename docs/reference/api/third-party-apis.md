@@ -53,7 +53,7 @@
 ### 安全要点
 
 - `capabilities` 限制 API 访问权限和文件/命令范围
-- CSP 配置需允许 `asset:` 和 `http://asset.localhost`
+- CSP 默认只允许外部 HTTPS；HTTP 仅保留 `localhost` / `127.0.0.1` 回环地址。样式内联因 PrimeVue/Tauri nonce 兼容问题暂时保留，脚本内联不再允许。
 - CSP nonce 会阻断 PrimeVue 动态样式 — 见 `troubleshooting/tauri-csp-nonce-blocks-primevue-styles.md`
 
 ---

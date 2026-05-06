@@ -1,8 +1,6 @@
 // 备份与同步 - 本地导入导出操作
 
 import type { Ref } from 'vue';
-import { save, open } from '@tauri-apps/plugin-dialog';
-import { writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
 import { historyDB } from '../../services/HistoryDatabase';
 import { invalidateCache } from '../useHistory';
 import { emitHistoryUpdated } from '../../events/cacheEvents';
@@ -14,6 +12,7 @@ import { DEFAULT_CONFIG, isValidUserConfig, isValidHistoryItem } from '../../con
 import { configStore } from '../../store/instances';
 import { secureStorage, isPasswordEncryptedData } from '../../crypto';
 import { createLogger } from '../../utils/logger';
+import { exportTextFile, importTextFile } from '../../utils/userFiles';
 import { writeSyncLog } from './backupSyncUtils';
 
 const log = createLogger('BackupSync');
@@ -58,17 +57,17 @@ export function createBackupLocalOps(deps: BackupLocalDeps) {
         outputContent = await secureStorage.encrypt(jsonContent);
       }
 
-      const filePath = await save({
-        defaultPath: 'picnexus_settings.json',
-        filters: [{ name: 'JSON', extensions: ['json'] }]
-      });
+      const filePath = await exportTextFile(
+        'picnexus_settings.json',
+        [{ name: 'JSON', extensions: ['json'] }],
+        outputContent,
+      );
 
       if (!filePath) {
         toast.showConfig('warn', TOAST_MESSAGES.common.cancelled);
         return;
       }
 
-      await writeTextFile(filePath, outputContent);
       await writeSyncLog('export_settings_local', 'success');
       toast.showConfig('success', TOAST_MESSAGES.common.exportSuccess(1));
     } catch (error) {
@@ -85,17 +84,12 @@ export function createBackupLocalOps(deps: BackupLocalDeps) {
     try {
       importSettingsLoading.value = true;
 
-      const filePath = await open({
-        filters: [{ name: 'JSON', extensions: ['json'] }],
-        multiple: false
-      });
+      const content = await importTextFile([{ name: 'JSON', extensions: ['json'] }]);
 
-      if (!filePath || Array.isArray(filePath)) {
+      if (content === null) {
         toast.showConfig('warn', TOAST_MESSAGES.common.cancelled);
         return;
       }
-
-      const content = await readTextFile(filePath);
 
       let jsonContent = content;
       if (isPasswordEncryptedData(content.trim())) {
@@ -168,17 +162,17 @@ export function createBackupLocalOps(deps: BackupLocalDeps) {
 
       const jsonContent = await historyDB.exportToJSON();
 
-      const filePath = await save({
-        defaultPath: 'picnexus_history.json',
-        filters: [{ name: 'JSON', extensions: ['json'] }]
-      });
+      const filePath = await exportTextFile(
+        'picnexus_history.json',
+        [{ name: 'JSON', extensions: ['json'] }],
+        jsonContent,
+      );
 
       if (!filePath) {
         toast.showConfig('warn', TOAST_MESSAGES.common.cancelled);
         return;
       }
 
-      await writeTextFile(filePath, jsonContent);
       await writeSyncLog('export_history_local', 'success', `${count} 条记录`);
       toast.showConfig('success', TOAST_MESSAGES.common.exportSuccess(count));
     } catch (error) {
@@ -196,12 +190,9 @@ export function createBackupLocalOps(deps: BackupLocalDeps) {
       importHistoryLoading.value = true;
       importHistoryProgress.value = 0;
 
-      const filePath = await open({
-        filters: [{ name: 'JSON', extensions: ['json'] }],
-        multiple: false
-      });
+      const content = await importTextFile([{ name: 'JSON', extensions: ['json'] }]);
 
-      if (!filePath || Array.isArray(filePath)) {
+      if (content === null) {
         toast.showConfig('warn', TOAST_MESSAGES.common.cancelled);
         return;
       }
@@ -212,7 +203,6 @@ export function createBackupLocalOps(deps: BackupLocalDeps) {
       );
       if (!confirmed) return;
 
-      const content = await readTextFile(filePath);
       const parsed = JSON.parse(content);
 
       if (!Array.isArray(parsed)) {

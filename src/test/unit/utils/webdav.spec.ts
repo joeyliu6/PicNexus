@@ -184,6 +184,29 @@ describe('WebDAVClient URL 路径拼接', () => {
     const calledUrl = mockedFetch.mock.calls[0][0] as string;
     expect(calledUrl).toBe('https://dav.example.com/sync');
   });
+
+  it('外部 http 地址 → 拒绝发起请求', async () => {
+    const client = makeClient({ url: 'http://dav.example.com', remotePath: '/sync' });
+    expect(await client.testConnection()).toBe(false);
+    expect(mockedFetch).not.toHaveBeenCalled();
+    expect(loggerMock.error.mock.calls[0][1]).toEqual(expect.any(Error));
+  });
+
+  it('localhost http 地址 → 允许用于本机服务', async () => {
+    const client = makeClient({ url: 'http://localhost:8080', remotePath: '/sync' });
+    mockedFetch.mockResolvedValueOnce(makeResponse(200));
+    await client.testConnection();
+    const calledUrl = mockedFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toBe('http://localhost:8080/sync');
+  });
+
+  it('127.0.0.1 http 地址 → 允许用于本机服务', async () => {
+    const client = makeClient({ url: 'http://127.0.0.1:8080', remotePath: '/sync' });
+    mockedFetch.mockResolvedValueOnce(makeResponse(200));
+    await client.testConnection();
+    const calledUrl = mockedFetch.mock.calls[0][0] as string;
+    expect(calledUrl).toBe('http://127.0.0.1:8080/sync');
+  });
 });
 
 describe('WebDAVClient Basic Auth', () => {

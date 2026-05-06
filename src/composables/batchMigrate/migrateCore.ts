@@ -8,13 +8,13 @@
 
 import type { Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { remove } from '@tauri-apps/plugin-fs';
 import type { MultiServiceUploader, SingleServiceResult } from '../../core/MultiServiceUploader';
 import { historyDB } from '../../services/HistoryDatabase';
 import { needsFormatConversion } from '../../constants/serviceFormats';
 import { Semaphore } from '../../utils/semaphore';
 import { createLogger } from '../../utils/logger';
 import { cleanMigrateError, formatMigrateFailureSummary } from '../../utils/uploadFailureMessage';
+import { cleanupOwnedTempFile } from '../../utils/userFiles';
 import type { HistoryItem, UserConfig } from '../../config/types';
 import type { MigrateItemStatus, MigrateStats, MigrateFailureDetail } from '../../types/batchMigrate';
 import { getSourceCandidatesForStatus } from './sourceSelection';
@@ -28,6 +28,16 @@ const log = createLogger('migrateCore');
  */
 export const MAX_CONCURRENT = 3;
 const MAX_SOURCE_RETRY = 3;
+
+function cleanupMigrateTempFile(path: string): void {
+  cleanupOwnedTempFile(path).catch((e) => log.warn(`临时文件清理失败: ${path}`, e));
+}
+
+function cleanupCompressedTempFiles(paths: string[]): void {
+  if (paths.length === 0) return;
+  invoke('cleanup_compressed_files', { filePaths: paths })
+    .catch((e) => log.warn('压缩临时文件清理失败', e));
+}
 
 /** 从未知错误中提取可读消息（处理 Tauri invoke 的 { data: { message } } 结构） */
 export function extractErrorMessage(e: unknown): string {
@@ -172,14 +182,14 @@ export async function migrateOneItem(
   const downloadedFilePath = tempFilePath;
 
   if (isCancelled.value) {
-    remove(downloadedFilePath).catch((e) => log.warn(`临时文件清理失败: ${downloadedFilePath}`, e));
+    cleanupMigrateTempFile(downloadedFilePath);
     status.status = 'skipped';
     return;
   }
 
   // 暂停（下载完成后）：清理临时文件 + 回退到 pending（保守策略，resume 时重新下载）
   if (isPaused.value) {
-    remove(downloadedFilePath).catch((e) => log.warn(`临时文件清理失败: ${downloadedFilePath}`, e));
+    cleanupMigrateTempFile(downloadedFilePath);
     status.status = 'pending';
     return;
   }
@@ -223,9 +233,8 @@ export async function migrateOneItem(
     }));
 
   // 清理临时文件
-  for (const f of [downloadedFilePath, ...tempFiles]) {
-    remove(f).catch((e) => log.warn(`临时文件清理失败: ${f}`, e));
-  }
+  cleanupMigrateTempFile(downloadedFilePath);
+  cleanupCompressedTempFiles([...tempFiles]);
 
   if (hasSuccess) {
     if (failedDetails.length > 0) {

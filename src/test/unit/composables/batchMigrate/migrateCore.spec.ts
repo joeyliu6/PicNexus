@@ -1,6 +1,5 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { ref } from 'vue';
-import { remove } from '@tauri-apps/plugin-fs';
 import { extractErrorMessage, markStatusFailed, MAX_CONCURRENT, migrateOneItem, processBatch } from '../../../../composables/batchMigrate/migrateCore';
 import { historyDB } from '../../../../services/HistoryDatabase';
 import type { MigrateItemStatus } from '../../../../types/batchMigrate';
@@ -76,7 +75,6 @@ function createStats() {
 describe('migrateOneItem', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(remove).mockResolvedValue(undefined);
     getInvokeMock().mockReset();
   });
 
@@ -206,7 +204,7 @@ describe('migrateOneItem', () => {
     );
 
     expect(status.status).toBe('pending');
-    expect(remove).toHaveBeenCalledWith('/tmp/a.png');
+    expect(getInvokeMock()).toHaveBeenCalledWith('cleanup_owned_temp_file', { path: '/tmp/a.png' });
     expect(uploader.retryUpload).not.toHaveBeenCalled();
   });
 
@@ -230,7 +228,7 @@ describe('migrateOneItem', () => {
     );
 
     expect(status.status).toBe('skipped');
-    expect(remove).toHaveBeenCalledWith('/tmp/a.png');
+    expect(getInvokeMock()).toHaveBeenCalledWith('cleanup_owned_temp_file', { path: '/tmp/a.png' });
   });
 
   it('converts unsupported target format before upload', async () => {
@@ -260,8 +258,8 @@ describe('migrateOneItem', () => {
     expect(status.status).toBe('success');
     expect(status.convertedFormat).toBe('jpeg');
     expect(uploader.retryUpload).toHaveBeenCalledWith('/tmp/a.jpeg', 'jd', {});
-    expect(remove).toHaveBeenCalledWith('/tmp/a.webp');
-    expect(remove).toHaveBeenCalledWith('/tmp/a.jpeg');
+    expect(getInvokeMock()).toHaveBeenCalledWith('cleanup_owned_temp_file', { path: '/tmp/a.webp' });
+    expect(getInvokeMock()).toHaveBeenCalledWith('cleanup_compressed_files', { filePaths: ['/tmp/a.jpeg'] });
   });
 
   it('optimizes zhihu webp source URL for targets that do not support webp', async () => {

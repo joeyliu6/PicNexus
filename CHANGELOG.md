@@ -9,6 +9,15 @@
 
 ## [Unreleased]
 
+### Changed
+- 收紧 Tauri 默认权限：外部网络默认仅允许 HTTPS，本机回环 HTTP 保留给编辑器/WebDAV 等本地集成；前端不再拥有直接 spawn `qiyu-token-fetcher` / `nami-token-fetcher` 的权限。
+- 收缩前端文件系统 scope，移除桌面、文档、下载、图片目录的递归全局授权；JSON/CSV 导入导出改由 Rust 命令打开原生文件对话框并只读写用户刚选择的文件。
+- 设置页补充七鱼、纳米 token-fetcher 的用途说明：本机辅助程序仅用于获取上传所需动态 token/headers，不持久化账号凭据，日志按脱敏规则记录。
+
+### Security
+- CSP 移除外部 `http://*` 和 Google Tag Manager 脚本白名单，脚本改为 `script-src 'self'`；`style-src 'unsafe-inline'` 因 PrimeVue/Tauri nonce 兼容问题暂时保留。
+- WebDAV、自定义 S3 Endpoint 和 URL 图片下载增加 HTTPS-only 校验；外部 `http://` 配置会得到明确错误提示，本机 `localhost` / `127.0.0.1` 例外继续保留。
+
 ---
 
 ## [1.0.8] - 2026-05-06

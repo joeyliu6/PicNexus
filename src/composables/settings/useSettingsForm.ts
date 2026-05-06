@@ -463,8 +463,8 @@ export function useSettingsForm() {
     if (serviceId === 'r2' && config.accountId && !/^[a-f0-9]{32}$/.test(String(config.accountId))) {
       return 'Account ID 格式不正确（应为 32 位十六进制字符串）';
     }
-    if (config.publicDomain && !/^https?:\/\/.+/.test(String(config.publicDomain))) {
-      return '公开访问域名应以 http:// 或 https:// 开头';
+    if (config.publicDomain && !/^https:\/\/.+/.test(String(config.publicDomain).trim())) {
+      return '公开访问域名应以 https:// 开头';
     }
     return null;
   }

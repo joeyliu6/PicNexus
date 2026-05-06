@@ -55,7 +55,7 @@ const emit = defineEmits<{
       @check="emit('checkBuiltin', $event)"
     >
       <div class="builtin-info">
-        <p>七鱼图床默认启用，Token 会自动获取；该适配为非官方实现，接口可能随时失效。</p>
+        <p>七鱼图床默认启用。上传时会由 Rust 后端启动本机辅助程序 qiyu-token-fetcher 获取动态上传 Token，不持久化账号凭据，相关日志会脱敏；该适配为非官方实现，接口可能随时失效。</p>
       </div>
     </HostingCard>
   </div>

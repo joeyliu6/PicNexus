@@ -7,8 +7,6 @@
  * 搜索和来源图床筛选逻辑由 useFilterBar composable 管理。
  */
 import { inject, computed, ref, watch, nextTick } from 'vue';
-import { save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { useToast } from '../../../../composables/useToast';
 import { useConfigManager } from '../../../../composables/useConfig';
 import { makeCopyBadgeKey, useCopyBadgeFeedback } from '../../../../composables/useCopyBadgeFeedback';
@@ -27,6 +25,7 @@ import type { StatePill } from '../common/StatePill.vue';
 import MigratePagination from './components/MigratePagination.vue';
 import MigrateFilterBar from './components/MigrateFilterBar.vue';
 import { type MigrateStatusFilter } from './components/chips/MigrateStatusFilterChips.vue';
+import { exportTextFile } from '../../../../utils/userFiles';
 
 const PAGE_SIZE = 100;
 
@@ -302,13 +301,12 @@ async function handleExport(format: 'csv' | 'txt') {
   const r = migrateResult.value;
   if (!r) return;
   try {
-    const filePath = await saveDialog({
-      defaultPath: `picnexus-migrate-${Date.now()}.${format}`,
-      filters: [{ name: format.toUpperCase(), extensions: [format] }],
-    });
-    if (!filePath) return;
     const content = format === 'csv' ? buildCsvReport(r) : buildTxtReport(r);
-    await writeTextFile(filePath, content);
+    await exportTextFile(
+      `picnexus-migrate-${Date.now()}.${format}`,
+      [{ name: format.toUpperCase(), extensions: [format] }],
+      content,
+    );
   } catch (e) {
     log.error('导出失败', e);
   }

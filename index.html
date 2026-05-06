@@ -4,44 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="referrer" content="no-referrer" />
-    <!-- 内联样式：基础布局 + 主题背景色 -->
-    <style>
-      html, body {
-        margin: 0;
-        padding: 0;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-      }
-      html.dark-theme, html.dark-theme body {
-        background-color: #0f172a;
-        color: #f8fafc;
-      }
-      html.light-theme, html.light-theme body {
-        background-color: #f1f5f9;
-        color: #0f172a;
-      }
-      #app {
-        width: 100%;
-        height: 100%;
-      }
-    </style>
-    <!-- 同步读取 localStorage 主题偏好，避免启动闪烁 -->
-    <script>
-      (function() {
-        var saved = localStorage.getItem('picnexus-theme');
-        var cls;
-        if (saved === 'light-theme') {
-          cls = 'light-theme';
-        } else if (saved === 'dark-theme') {
-          cls = 'dark-theme';
-        } else {
-          cls = window.matchMedia('(prefers-color-scheme: dark)').matches
-            ? 'dark-theme' : 'light-theme';
-        }
-        document.documentElement.classList.add(cls);
-      })();
-    </script>
+    <script src="/preload-theme.js"></script>
+    <link rel="stylesheet" href="/preload.css" />
     <link rel="stylesheet" href="/src/style.css" />
     <title>PicNexus</title>
   </head>
@@ -51,53 +15,7 @@
          WebView2 在系统休眠恢复后会整页 reload，此时网络栈尚未就绪，
          Vite 的 ESM 模块 HTTP 请求会抛 ERR_NETWORK_CHANGED 导致白屏。
          策略：首次失败延迟 1.5s reload，再失败则显示降级错误页面。 -->
-    <script>
-      (function () {
-        var KEY = 'pn_reload_guard';
-        var LIMIT_MS = 10000;
-
-        function showFallback() {
-          var isDark = document.documentElement.classList.contains('dark-theme');
-          var bg = isDark ? '#0f172a' : '#f1f5f9';
-          var fg = isDark ? '#f8fafc' : '#0f172a';
-          var muted = isDark ? '#94a3b8' : '#64748b';
-          var btnBg = isDark ? '#1e293b' : '#ffffff';
-          document.body.innerHTML =
-            '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;' +
-            'background:' + bg + ';color:' + fg + ';font-family:system-ui,-apple-system,sans-serif;">' +
-            '<div style="text-align:center;max-width:420px;padding:24px;">' +
-            '<div style="font-size:48px;margin-bottom:16px;">🌐</div>' +
-            '<h2 style="margin:0 0 8px;font-size:18px;font-weight:600;">网络连接异常</h2>' +
-            '<p style="margin:0 0 24px;font-size:14px;color:' + muted + ';line-height:1.6;">' +
-            '无法加载应用资源，这通常发生在系统休眠刚恢复或网络切换时。<br>请检查网络后重试。</p>' +
-            '<button id="pn-retry-btn" style="padding:8px 20px;border:1px solid ' + muted + ';' +
-            'background:' + btnBg + ';color:' + fg + ';border-radius:6px;cursor:pointer;font-size:14px;">' +
-            '重试</button></div></div>';
-          document.getElementById('pn-retry-btn').addEventListener('click', function () {
-            sessionStorage.removeItem(KEY);
-            window.location.reload();
-          });
-        }
-
-        window.addEventListener('error', function (e) {
-          var t = e.target;
-          if (!t || t === window) return;
-          var isResource =
-            (t.tagName === 'SCRIPT' && t.src) ||
-            (t.tagName === 'LINK' && t.href);
-          if (!isResource) return;
-
-          var last = Number(sessionStorage.getItem(KEY) || 0);
-          if (Date.now() - last < LIMIT_MS) {
-            showFallback();
-            return;
-          }
-
-          sessionStorage.setItem(KEY, String(Date.now()));
-          setTimeout(function () { window.location.reload(); }, 1500);
-        }, true);
-      })();
-    </script>
+    <script src="/reload-guard.js"></script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

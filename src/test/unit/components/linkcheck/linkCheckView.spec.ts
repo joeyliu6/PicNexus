@@ -3,8 +3,7 @@ import { defineComponent, ref } from 'vue';
 import { mountWithDefaults } from '../../../helpers/vueMount';
 import { flushPromisesAndTicks, useFakeTimers } from '../../../helpers/wait';
 import {
-  getDialogSaveMock,
-  getFsMocks,
+  getInvokeMock,
   resetTauriMocks,
 } from '../../../helpers/tauriMock';
 import { linkCheckRows, selectedLinkCheckRows } from '../../../fixtures/linkCheckRows';
@@ -165,8 +164,7 @@ beforeEach(() => {
   mockState.bulkRecheck.mockResolvedValue(undefined);
   mockState.bulkCopyUrls.mockResolvedValue(undefined);
   mockState.bulkDelete.mockResolvedValue(undefined);
-  getDialogSaveMock().mockResolvedValue('C:/tmp/link-check.csv');
-  getFsMocks().writeTextFile.mockResolvedValue(undefined);
+  getInvokeMock().mockResolvedValue('C:/tmp/link-check.csv');
 });
 
 describe('LinkCheckView page interactions', () => {
@@ -218,20 +216,19 @@ describe('LinkCheckView page interactions', () => {
     await wrapper.get('.export-all').trigger('click');
     await flushPromisesAndTicks();
 
-    expect(getDialogSaveMock()).toHaveBeenCalledWith(expect.objectContaining({
+    expect(getInvokeMock()).toHaveBeenCalledWith('export_text_file', expect.objectContaining({
       defaultPath: expect.stringMatching(/^link-check-\d+\.csv$/),
+      filters: [{ name: 'CSV', extensions: ['csv'] }],
     }));
-    expect(getFsMocks().writeTextFile).toHaveBeenCalledWith(
-      'C:/tmp/link-check.csv',
-      expect.stringContaining('valid-jd.jpg'),
-    );
+    expect((getInvokeMock().mock.calls[0][1] as { content: string }).content).toContain('valid-jd.jpg');
     expect(mockState.toastSuccess).toHaveBeenCalledWith('导出成功', '已保存至 C:/tmp/link-check.csv');
 
     await wrapper.get('.export-selected').trigger('click');
     await flushPromisesAndTicks();
 
-    expect(getDialogSaveMock()).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(getInvokeMock()).toHaveBeenLastCalledWith('export_text_file', expect.objectContaining({
       defaultPath: expect.stringMatching(/^link-check-selected-\d+\.csv$/),
+      filters: [{ name: 'CSV', extensions: ['csv'] }],
     }));
     expect(mockState.exportCsv).toHaveBeenLastCalledWith(selectedLinkCheckRows);
   });

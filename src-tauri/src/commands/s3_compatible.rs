@@ -39,6 +39,31 @@ fn create_s3_client(endpoint: &str, access_key: &str, secret_key: &str, region: 
     Client::from_conf(config)
 }
 
+fn validate_https_endpoint(endpoint: &str) -> Result<(), AppError> {
+    let parsed = url::Url::parse(endpoint)
+        .map_err(|_| AppError::config("Endpoint 不是合法的 URL，请输入完整的 https://... 地址"))?;
+    if parsed.scheme() != "https" {
+        return Err(AppError::config(
+            "外部 S3 Endpoint 仅支持 HTTPS，请改用 https:// 地址",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_https_public_domain(public_domain: &str) -> Result<(), AppError> {
+    let public_domain = public_domain.trim();
+    if public_domain.is_empty() {
+        return Ok(());
+    }
+
+    let parsed = url::Url::parse(public_domain)
+        .map_err(|_| AppError::config("公开访问域名不是合法的 URL，请输入完整的 https://... 地址"))?;
+    if parsed.scheme() != "https" {
+        return Err(AppError::config("公开访问域名仅支持 HTTPS，请改用 https:// 地址"));
+    }
+    Ok(())
+}
+
 /// 上传文件到 S3 兼容存储
 #[tauri::command]
 #[allow(clippy::too_many_arguments)] // Tauri IPC 参数与 S3 兼容配置字段一致，避免大改前端调用。
@@ -55,6 +80,8 @@ pub async fn upload_to_s3_compatible(
     public_domain: String,
 ) -> Result<S3UploadResult, AppError> {
     log::info!("[S3兼容] 开始上传文件: {}", safe_path(&file_path));
+    validate_https_endpoint(&endpoint)?;
+    validate_https_public_domain(&public_domain)?;
 
     // 发送进度: 0% - 读取文件
     let _ = window.emit(
@@ -131,7 +158,7 @@ pub async fn upload_to_s3_compatible(
         format!("{}/{}/{}", endpoint, bucket, key)
     } else {
         // 移除 public_domain 末尾的斜杠
-        let domain = public_domain.trim_end_matches('/');
+        let domain = public_domain.trim().trim_end_matches('/');
         format!("{}/{}", domain, key)
     };
 
@@ -334,8 +361,13 @@ fn build_s3_endpoint(
                 AppError::config("Endpoint 不是合法的 URL，请输入完整的 https://... 地址")
             })?;
             match parsed.scheme() {
-                "http" | "https" => {}
-                _ => return Err(AppError::config("Endpoint 仅支持 http 或 https 协议")),
+                "https" => {}
+                "http" => {
+                    return Err(AppError::config(
+                        "外部 S3 Endpoint 仅支持 HTTPS，请改用 https:// 地址",
+                    ))
+                }
+                _ => return Err(AppError::config("Endpoint 仅支持 https 协议")),
             }
             // 拒绝内网 / 元数据地址（RFC 1918 + link-local + loopback + 云元数据）
             if let Some(host) = parsed.host_str() {
@@ -423,5 +455,75 @@ fn get_service_name(service_id: &str) -> &str {
         "upyun" => "又拍云",
         s if s == "custom_s3" || s.starts_with("custom_s3:") => "自定义 S3 存储",
         _ => service_id,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn custom_s3_config(endpoint: &str) -> S3TestConfig {
+        S3TestConfig {
+            account_id: None,
+            access_key_id: Some("ak".to_string()),
+            secret_id: None,
+            access_key: None,
+            operator: None,
+            secret_access_key: Some("sk".to_string()),
+            secret_key: None,
+            access_key_secret: None,
+            password: None,
+            bucket_name: None,
+            bucket: Some("bucket".to_string()),
+            region: Some("us-east-1".to_string()),
+            endpoint: Some(endpoint.to_string()),
+        }
+    }
+
+    #[test]
+    fn validate_https_endpoint_rejects_http() {
+        let err = validate_https_endpoint("http://s3.example.com")
+            .expect_err("external HTTP endpoint should be rejected");
+
+        assert!(err.to_string().contains("仅支持 HTTPS"));
+    }
+
+    #[test]
+    fn validate_https_public_domain_rejects_http() {
+        let err = validate_https_public_domain("http://cdn.example.com")
+            .expect_err("external HTTP public domain should be rejected");
+
+        assert!(err.to_string().contains("仅支持 HTTPS"));
+    }
+
+    #[test]
+    fn validate_https_public_domain_allows_empty_and_https() {
+        assert!(validate_https_public_domain("").is_ok());
+        assert!(validate_https_public_domain(" https://cdn.example.com ").is_ok());
+    }
+
+    #[test]
+    fn build_custom_s3_endpoint_rejects_http() {
+        let err = build_s3_endpoint(
+            "custom_s3:local",
+            &custom_s3_config("http://s3.example.com"),
+            "bucket",
+        )
+        .expect_err("custom S3 endpoint should require HTTPS");
+
+        assert!(err.to_string().contains("仅支持 HTTPS"));
+    }
+
+    #[test]
+    fn build_custom_s3_endpoint_allows_public_https() {
+        let (endpoint, region) = build_s3_endpoint(
+            "custom_s3:prod",
+            &custom_s3_config("https://s3.example.com"),
+            "bucket",
+        )
+        .expect("public HTTPS custom S3 endpoint should be accepted");
+
+        assert_eq!(endpoint, "https://s3.example.com");
+        assert_eq!(region, "us-east-1");
     }
 }

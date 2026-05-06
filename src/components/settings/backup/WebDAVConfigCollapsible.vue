@@ -58,6 +58,14 @@ const statusClass = computed(() => {
   return 'status-warning';
 });
 
+const securityHint = computed(() => {
+  const url = activeProfile.value?.url?.trim() || '';
+  if (url.startsWith('http://') && !/^http:\/\/(localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/.test(url)) {
+    return '外部 WebDAV 请使用 HTTPS；HTTP 仅保留给本机回环服务。';
+  }
+  return '外部 WebDAV 请使用 HTTPS；本机服务可使用 localhost / 127.0.0.1。';
+});
+
 onMounted(() => {
   if (shouldAutoExpand.value) {
     expanded.value = true;
@@ -206,6 +214,7 @@ function handleTest() {
               @blur="handleSave"
               placeholder="https://dav.example.com"
             />
+            <small class="field-hint">{{ securityHint }}</small>
           </div>
 
           <!-- 用户名/密码（并排） -->

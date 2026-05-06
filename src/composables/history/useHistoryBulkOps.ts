@@ -1,8 +1,6 @@
 // 批量操作（导出/删除）从 useHistory.ts 抽离，降低主文件体积
 
 import type { Ref } from 'vue';
-import { save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
 import type { HistoryItem } from '../../config/types';
 import { historyDB } from '../../services/HistoryDatabase';
 import { useToast } from '../useToast';
@@ -10,6 +8,7 @@ import { useConfirm } from '../useConfirm';
 import { TOAST_MESSAGES } from '../../constants';
 import { emitHistoryDeleted } from '../../events/cacheEvents';
 import { createLogger } from '../../utils/logger';
+import { exportTextFile } from '../../utils/userFiles';
 import type { useImageDetailCache } from '../useImageDetailCache';
 
 const log = createLogger('History');
@@ -46,12 +45,12 @@ export function createBulkOps(ctx: BulkOpsContext) {
         return;
       }
       const jsonContent = JSON.stringify(selectedItems, null, 2);
-      const filePath = await saveDialog({
-        defaultPath: `picnexus-history-${Date.now()}.json`,
-        filters: [{ name: 'JSON', extensions: ['json'] }],
-      });
+      const filePath = await exportTextFile(
+        `picnexus-history-${Date.now()}.json`,
+        [{ name: 'JSON', extensions: ['json'] }],
+        jsonContent,
+      );
       if (!filePath) return;
-      await writeTextFile(filePath, jsonContent);
       toast.showConfig('success', TOAST_MESSAGES.common.exportSuccess(selectedItems.length));
     } catch (error) {
       log.error('[批量操作] 导出失败:', error);

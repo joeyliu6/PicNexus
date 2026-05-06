@@ -508,7 +508,14 @@ describe('useSettingsForm', () => {
       secretAccessKey: 'sk',
       bucketName: 'bucket',
       publicDomain: 'cdn.example.com',
-    })).toContain('http://');
+    })).toContain('https://');
+    expect(api.validateS3Config('r2', {
+      accountId: 'a'.repeat(32),
+      accessKeyId: 'ak',
+      secretAccessKey: 'sk',
+      bucketName: 'bucket',
+      publicDomain: 'http://cdn.example.com',
+    })).toContain('https://');
     expect(api.validateS3Config('r2', r2Config())).toBeNull();
     expect(api.validateS3Config('jd', {})).toBeNull();
   });

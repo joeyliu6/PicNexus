@@ -11,7 +11,7 @@
   "app": {
     "withGlobalTauri": true,
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: blob: https://* http://*; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://* http://*; font-src 'self' data:",
+      "csp": "default-src 'self'; img-src 'self' data: blob: https://* http://127.0.0.1:* http://localhost:*; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://* http://127.0.0.1:* http://localhost:*; font-src 'self' data:",
       "dangerousDisableAssetCspModification": ["style-src"]
     },
     "windows": [

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref, type Component } from 'vue';
 import { mountWithDefaults } from '../../../../helpers/vueMount';
-import { getDialogSaveMock, getFsMocks } from '../../../../helpers/tauriMock';
+import { getInvokeMock } from '../../../../helpers/tauriMock';
 import SourceList from '../../../../../components/views/linkcheck/migrate/components/SourceList.vue';
 import TargetCard from '../../../../../components/views/linkcheck/migrate/components/TargetCard.vue';
 import MigrateFilterBar from '../../../../../components/views/linkcheck/migrate/components/MigrateFilterBar.vue';
@@ -484,8 +484,7 @@ describe('batch migrate P1 components', () => {
   });
 
   it('MigrateProgressPhase exports the final report through Tauri file APIs', async () => {
-    getDialogSaveMock().mockResolvedValue('C:/tmp/migrate.csv');
-    getFsMocks().writeTextFile.mockResolvedValue(undefined);
+    getInvokeMock().mockResolvedValue('C:/tmp/migrate.csv');
     const items = [
       createStatus({ historyId: 'h-success', fileName: 'success-alpha.jpg', status: 'success', existingServiceIds: ['jd'] }),
     ];
@@ -509,13 +508,10 @@ describe('batch migrate P1 components', () => {
     await wrapper.get('.export-csv').trigger('click');
     await flushPromisesAndTicks();
 
-    expect(getDialogSaveMock()).toHaveBeenCalledWith(expect.objectContaining({
+    expect(getInvokeMock()).toHaveBeenCalledWith('export_text_file', expect.objectContaining({
       filters: [{ name: 'CSV', extensions: ['csv'] }],
     }));
-    expect(getFsMocks().writeTextFile).toHaveBeenCalledWith(
-      'C:/tmp/migrate.csv',
-      expect.stringContaining('success-alpha.jpg'),
-    );
+    expect((getInvokeMock().mock.calls[0][1] as { content: string }).content).toContain('success-alpha.jpg');
   });
 
   it('MigrateBottomBar covers pause, resume, cancel, retrying, and export states', async () => {

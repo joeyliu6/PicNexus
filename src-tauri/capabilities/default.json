@@ -31,32 +31,6 @@
     "core:menu:default",
     "core:tray:default",
     "shell:default",
-    {
-      "identifier": "shell:allow-spawn",
-      "allow": [
-        {
-          "name": "binaries/qiyu-token-fetcher",
-          "sidecar": true,
-          "args": ["check-chrome"]
-        },
-        {
-          "name": "binaries/qiyu-token-fetcher",
-          "sidecar": true,
-          "args": ["fetch-token"]
-        },
-        {
-          "name": "binaries/nami-token-fetcher",
-          "sidecar": true,
-          "args": [
-            "fetch-token",
-            "--cookie",
-            { "validator": "[^\\r\\n]{1,8192}" },
-            "--auth-token",
-            { "validator": "[^\\r\\n]{1,4096}" }
-          ]
-        }
-      ]
-    },
     "dialog:default",
     "dialog:allow-open",
     "dialog:allow-save",
@@ -79,10 +53,6 @@
     "fs:scope-applocaldata-recursive",
     "fs:scope-applog-recursive",
     "fs:scope-temp-recursive",
-    "fs:scope-desktop-recursive",
-    "fs:scope-document-recursive",
-    "fs:scope-download-recursive",
-    "fs:scope-picture-recursive",
     {
       "identifier": "fs:scope",
       "allow": [
@@ -109,7 +79,8 @@
       "identifier": "http:default",
       "allow": [
         { "url": "https://**" },
-        { "url": "http://**" }
+        { "url": "http://127.0.0.1:*" },
+        { "url": "http://localhost:*" }
       ]
     },
     "positioner:default",

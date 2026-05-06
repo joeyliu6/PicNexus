@@ -1,5 +1,6 @@
 pub mod r2;
 pub mod upload;
+pub mod user_files;
 
 pub mod bilibili;
 pub mod chaoxing;

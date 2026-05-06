@@ -263,27 +263,24 @@ let response = client
 
 ## Sidecar 辅助程序
 
-某些功能需要使用 Chrome 自动化，通过 sidecar 实现：
+七鱼和纳米需要通过本机辅助程序获取上传所需的动态 token/headers：
 
 ```
-sidecar/
-├── nami-token.js     # 获取纳米动态 Token
-└── qiyu-token.js     # 获取七鱼上传 Token
+binaries/
+├── nami-token-fetcher     # 获取纳米动态 headers
+└── qiyu-token-fetcher     # 获取七鱼上传 Token
 ```
 
 ### 调用方式
 
 ```rust
-use tauri::api::process::Command;
-
-let output = Command::new_sidecar("nami-token")
-    .expect("failed to create sidecar command")
-    .args([&cookie, &auth_token])
-    .output()
-    .expect("failed to run sidecar");
-
-let result: NamiToken = serde_json::from_str(&output.stdout)?;
+let (stdout, stderr) =
+    crate::portable::run_sidecar("nami-token-fetcher", &[cookie, auth_token], 45).await?;
 ```
+
+- sidecar 只从 Rust command 启动，不暴露给前端 `shell:spawn` capability。
+- 用途仅限获取当次上传所需的动态 token/headers，不持久化账号凭据。
+- sidecar 参数做白名单/长度/换行限制，stderr/stdout 日志按脱敏规则记录。
 
 ---
 

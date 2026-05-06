@@ -5,6 +5,24 @@ import { secureStorage } from '../crypto';
 import { createLogger } from './logger';
 
 const log = createLogger('WebDAV');
+const EXTERNAL_HTTP_DISABLED_MESSAGE = '外部 HTTP WebDAV 地址已禁用，请改用 HTTPS。本机服务仅支持 http://localhost 或 http://127.0.0.1。';
+
+function assertAllowedWebDAVUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error('WebDAV 地址格式不正确，请输入完整的 https:// 地址');
+  }
+
+  if (parsed.protocol === 'https:') return;
+  if (parsed.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(parsed.hostname)) return;
+
+  if (parsed.protocol === 'http:') {
+    throw new Error(EXTERNAL_HTTP_DISABLED_MESSAGE);
+  }
+  throw new Error('WebDAV 地址仅支持 HTTPS，或本机回环 HTTP。');
+}
 
 /**
  * WebDAV 客户端配置（内部使用，密码已解密）
@@ -105,6 +123,7 @@ export class WebDAVClient {
    */
   private buildUrl(remotePath: string): string {
     const baseUrl = this.config.url.trim();
+    assertAllowedWebDAVUrl(baseUrl);
     const path = remotePath.trim();
 
     // 处理路径拼接

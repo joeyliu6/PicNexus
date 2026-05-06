@@ -192,6 +192,25 @@ fn host_matches_domain(host: &str, domain: &str) -> bool {
             .is_some_and(|prefix| prefix.ends_with('.'))
 }
 
+fn is_loopback_host(host: &str) -> bool {
+    matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]")
+}
+
+fn validate_external_url_policy(raw_url: &str) -> Result<(), AppError> {
+    let parsed = reqwest::Url::parse(raw_url)
+        .map_err(|_| AppError::validation("请输入有效的 URL（以 https:// 开头，本机服务可用 http://localhost 或 http://127.0.0.1）"))?;
+    match parsed.scheme() {
+        "https" => Ok(()),
+        "http" if parsed.host_str().is_some_and(is_loopback_host) => Ok(()),
+        "http" => Err(AppError::validation(
+            "外部 HTTP 图片地址已禁用，请改用 HTTPS；HTTP 仅保留给本机回环服务。",
+        )),
+        _ => Err(AppError::validation(
+            "请输入有效的 URL（以 https:// 开头，本机服务可用 http://localhost 或 http://127.0.0.1）",
+        )),
+    }
+}
+
 fn is_empty_success_response(status_code: u16, content_length: Option<u64>) -> bool {
     matches!(status_code, 204 | 205) || content_length == Some(0)
 }
@@ -441,6 +460,21 @@ mod tests {
             detect_service_from_url("http://tvax1.sinaimg.cn/x.jpg"),
             Some("weibo")
         );
+    }
+
+    #[test]
+    fn external_url_policy_allows_https_and_loopback_http() {
+        assert!(validate_external_url_policy("https://example.com/a.png").is_ok());
+        assert!(validate_external_url_policy("http://localhost:1420/status").is_ok());
+        assert!(validate_external_url_policy("http://127.0.0.1:27123/status").is_ok());
+    }
+
+    #[test]
+    fn external_url_policy_rejects_external_http() {
+        let err = validate_external_url_policy("http://example.com/a.png")
+            .expect_err("external http should be rejected");
+
+        assert!(err.to_string().contains("外部 HTTP 图片地址已禁用"));
     }
 
     #[test]
@@ -1176,16 +1210,12 @@ pub async fn download_url_image(
 ) -> Result<UrlDownloadResult, AppError> {
     log::info!("[URL下载] 开始下载: {}", safe_url(&url));
 
-    // 验证 URL 格式
+    // 验证 URL 格式与外部网络策略
     let trimmed = url.trim();
     if trimmed.is_empty() {
         return Err(AppError::validation("URL 不能为空"));
     }
-    if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
-        return Err(AppError::validation(
-            "请输入有效的 URL（以 http:// 或 https:// 开头）",
-        ));
-    }
+    validate_external_url_policy(trimmed)?;
 
     // 清理过期临时文件
     cleanup_old_temp_files();

@@ -44,7 +44,7 @@ const PRIVATE_SERVICES: ServiceConfig[] = [
       { key: 'accessKeyId', label: 'Access Key ID', type: 'password', placeholder: '输入 Access Key ID' },
       { key: 'secretAccessKey', label: 'Secret Access Key', type: 'password', placeholder: '输入 Secret Access Key' },
       { key: 'path', label: '自定义路径 (Optional)', type: 'text', placeholder: 'e.g. blog/images/', spanFull: true },
-      { key: 'publicDomain', label: '公开访问域名 (Public Domain)', type: 'text', placeholder: 'https://images.example.com', spanFull: true },
+      { key: 'publicDomain', label: '公开访问域名 (Public Domain)', type: 'text', placeholder: 'https://images.example.com', spanFull: true, hint: '公开图片链接仅支持 HTTPS' },
     ],
   },
   {
@@ -56,7 +56,7 @@ const PRIVATE_SERVICES: ServiceConfig[] = [
       { key: 'region', label: '地域 (Region)', type: 'text', placeholder: 'ap-guangzhou' },
       { key: 'bucket', label: '存储桶 (Bucket)', type: 'text' },
       { key: 'path', label: '自定义路径 (Optional)', type: 'text', placeholder: 'e.g. blog/images/', spanFull: true },
-      { key: 'publicDomain', label: '公开访问域名 (Public Domain)', type: 'text', placeholder: 'https://images.example.com', spanFull: true },
+      { key: 'publicDomain', label: '公开访问域名 (Public Domain)', type: 'text', placeholder: 'https://images.example.com', spanFull: true, hint: '公开图片链接仅支持 HTTPS' },
     ],
   },
   {
@@ -68,7 +68,7 @@ const PRIVATE_SERVICES: ServiceConfig[] = [
       { key: 'region', label: '地域 (Region)', type: 'text', placeholder: 'oss-cn-hangzhou' },
       { key: 'bucket', label: '存储桶 (Bucket)', type: 'text' },
       { key: 'path', label: '自定义路径 (Optional)', type: 'text', placeholder: 'e.g. blog/images/', spanFull: true },
-      { key: 'publicDomain', label: '公开访问域名 (Public Domain)', type: 'text', placeholder: 'https://images.example.com', spanFull: true },
+      { key: 'publicDomain', label: '公开访问域名 (Public Domain)', type: 'text', placeholder: 'https://images.example.com', spanFull: true, hint: '公开图片链接仅支持 HTTPS' },
     ],
   },
   {
@@ -79,7 +79,7 @@ const PRIVATE_SERVICES: ServiceConfig[] = [
       { key: 'secretKey', label: 'Secret Key (SK)', type: 'password', placeholder: '输入 Secret Key' },
       { key: 'region', label: '地域 (Region)', type: 'text', placeholder: 'cn-east-1', hint: '七牛云区域代码，如 cn-east-1、cn-south-1 等' },
       { key: 'bucket', label: '存储桶 (Bucket)', type: 'text' },
-      { key: 'publicDomain', label: '公开访问域名 (Public Domain)', type: 'text', placeholder: 'https://images.example.com', spanFull: true },
+      { key: 'publicDomain', label: '公开访问域名 (Public Domain)', type: 'text', placeholder: 'https://images.example.com', spanFull: true, hint: '公开图片链接仅支持 HTTPS' },
       { key: 'path', label: '自定义路径 (Optional)', type: 'text', placeholder: 'e.g. blog/images/', spanFull: true },
     ],
   },
@@ -90,7 +90,7 @@ const PRIVATE_SERVICES: ServiceConfig[] = [
       { key: 'operator', label: 'Operator', type: 'password', placeholder: '操作员账号' },
       { key: 'password', label: 'Password', type: 'password', placeholder: '操作员密码' },
       { key: 'bucket', label: '存储桶 (Bucket)', type: 'text', spanFull: true },
-      { key: 'publicDomain', label: '公开访问域名 (Public Domain)', type: 'text', placeholder: 'https://images.example.com', spanFull: true },
+      { key: 'publicDomain', label: '公开访问域名 (Public Domain)', type: 'text', placeholder: 'https://images.example.com', spanFull: true, hint: '公开图片链接仅支持 HTTPS' },
       { key: 'path', label: '自定义路径 (Optional)', type: 'text', placeholder: 'e.g. blog/images/', spanFull: true },
     ],
   },
@@ -98,13 +98,13 @@ const PRIVATE_SERVICES: ServiceConfig[] = [
 
 const CUSTOM_S3_FIELDS: FieldConfig[] = [
   { key: 'name', label: '显示名称', type: 'text', placeholder: '如：我的 MinIO', spanFull: true },
-  { key: 'endpoint', label: 'Endpoint (端点地址)', type: 'text', placeholder: 'https://s3.amazonaws.com', spanFull: true, hint: '完整的 S3 兼容端点 URL，包含协议前缀' },
+  { key: 'endpoint', label: 'Endpoint (端点地址)', type: 'text', placeholder: 'https://s3.amazonaws.com', spanFull: true, hint: '完整的 S3 兼容端点 URL；外部服务仅支持 HTTPS' },
   { key: 'accessKeyId', label: 'Access Key ID', type: 'password', placeholder: '输入 Access Key ID' },
   { key: 'secretAccessKey', label: 'Secret Access Key', type: 'password', placeholder: '输入 Secret Access Key' },
   { key: 'region', label: '地域 (Region)', type: 'text', placeholder: 'us-east-1' },
   { key: 'bucket', label: '存储桶 (Bucket)', type: 'text' },
   { key: 'path', label: '自定义路径 (Optional)', type: 'text', placeholder: 'e.g. blog/images/', spanFull: true },
-  { key: 'publicDomain', label: '公开访问域名 (Optional)', type: 'text', placeholder: 'https://cdn.example.com', spanFull: true, hint: '留空则使用 Endpoint 构建访问链接' },
+  { key: 'publicDomain', label: '公开访问域名 (Optional)', type: 'text', placeholder: 'https://cdn.example.com', spanFull: true, hint: '留空则使用 Endpoint 构建访问链接；填写时仅支持 HTTPS' },
 ];
 const CUSTOM_S3_REQUIRED_KEYS = ['endpoint', 'accessKeyId', 'secretAccessKey', 'region', 'bucket'];
 
