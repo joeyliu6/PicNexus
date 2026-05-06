@@ -10,8 +10,8 @@ import { ZHIHU_SOURCE_DEFAULT_VALUE } from '../utils/zhihuSource';
  * 默认配置
  */
 export const DEFAULT_CONFIG: UserConfig = {
-  enabledServices: ['jd', 'qiyu'],  // 默认启用京东、七鱼图床（开箱即用）
-  availableServices: ['weibo', 'r2', 'jd', 'nowcoder', 'qiyu', 'zhihu', 'nami', 'bilibili', 'chaoxing', 'smms', 'github', 'imgur', 'tencent', 'aliyun', 'qiniu', 'upyun'],  // 默认所有图床都可用
+  enabledServices: [],  // 默认不选中任何图床，公共风险服务需用户确认后启用
+  availableServices: ['r2', 'smms', 'github', 'imgur', 'tencent', 'aliyun', 'qiniu', 'upyun'],  // 默认不启用需要风险确认的公共图床
   services: {
     weibo: {
       enabled: true,
@@ -28,14 +28,14 @@ export const DEFAULT_CONFIG: UserConfig = {
     },
 
     jd: {
-      enabled: true  // 京东图床默认启用，无需额外配置
+      enabled: true  // 京东图床无需额外配置，但默认不加入启用列表
     },
     nowcoder: {
       enabled: false,  // 牛客图床需要 Cookie，默认不启用
       cookie: ''
     },
     qiyu: {
-      enabled: true  // 七鱼图床默认启用，无需手动配置
+      enabled: true  // 七鱼图床无需手动配置，但默认不加入启用列表
     },
     zhihu: {
       enabled: false,  // 知乎图床需要 Cookie，默认不启用

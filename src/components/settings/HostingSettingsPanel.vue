@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watch, nextTick } from 'vue';
 import Divider from 'primevue/divider';
-import { PUBLIC_SERVICE_RISK_TOOLTIP, type GithubCdnConfig, type ServiceType, type CustomS3Profile, type LinkPrefixItem } from '../../config/types';
+import { PUBLIC_SERVICE_RISK_TOOLTIP, type GithubCdnConfig, type CustomS3Profile, type LinkPrefixItem } from '../../config/types';
 import PrivateStorageGroup from './hosting/PrivateStorageGroup.vue';
 import CookieServiceGroup from './hosting/CookieServiceGroup.vue';
 import TokenServiceGroup from './hosting/TokenServiceGroup.vue';
@@ -65,7 +65,7 @@ const props = defineProps<{
   refreshingServiceIds: Set<string>;
   serviceNames: Record<string, string>;
   availableServices: string[];
-  serviceConfigStatus: Record<ServiceType, boolean>;
+  serviceConfigStatus: Record<string, boolean>;
   publicServiceRiskAccepted: boolean;
 }>();
 
@@ -122,6 +122,7 @@ watch(() => props.targetCardId, (val) => {
       :is-checking-qiyu="isCheckingQiyu"
       :available-services="availableServices"
       :service-names="serviceNames"
+      :custom-s3-profiles="customS3Profiles"
       :public-service-risk-accepted="publicServiceRiskAccepted"
       @update:available-services="emit('update:availableServices', $event)"
       @accept-public-service-risk="emit('accept-public-service-risk')"

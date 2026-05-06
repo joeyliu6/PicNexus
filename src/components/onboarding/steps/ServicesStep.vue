@@ -2,7 +2,7 @@
   <div class="onboarding-step services-step">
     <h2 class="step-title">支持的图床</h2>
     <p class="step-desc">
-      京东、七鱼默认开启，其他图床按需配置。
+      京东、七鱼可开箱使用，但需先确认公共图床风险；其他图床按需配置。
     </p>
     <div class="service-groups">
       <div class="service-group">

@@ -150,6 +150,18 @@ async function saveCompressionConfig() {
   }
 }
 
+function syncLocalConfigState(config: UserConfig | null | undefined) {
+  if (!config) {
+    customS3Profiles.value = [];
+    return;
+  }
+  evaluateConfig(config);
+  if (config.imageCompression) {
+    compressionConfig.value = config.imageCompression;
+  }
+  customS3Profiles.value = [...(config.custom_s3_profiles ?? [])];
+}
+
 const navigateToSettings = () => {
   tauriEmit('navigate-to', { view: 'settings', tab: 'hosting' });
 };
@@ -292,6 +304,10 @@ const hasQueueItems = computed(() => {
   return queueItems.value.length > 0;
 });
 
+const hasActiveItems = computed(() => {
+  return queueItems.value.some(item => item.status === 'pending' || item.status === 'uploading');
+});
+
 // 队列统计：总数和已完成数（用于进度指示）
 const queueTotal = computed(() => queueItems.value.length);
 const queueDone = computed(() =>
@@ -324,6 +340,15 @@ const handleBatchRetry = async () => {
 
 // 清空队列（带确认）
 const handleClearQueue = () => {
+  if (hasActiveItems.value) {
+    toast.showConfig('warn', {
+      summary: '上传进行中',
+      detail: '请等待上传完成后再清空列表。',
+      life: 3000,
+    });
+    return;
+  }
+
   showConfirm({
     header: '确认清空',
     message: '确定要清空上传队列吗？此操作不可撤销。',
@@ -351,28 +376,21 @@ onMounted(async () => {
   // 初始化图床健康状态（与设置页同步）
   await loadHealthStatus();
   const config = await configStore.get<UserConfig>('config');
-  if (config) {
-    evaluateConfig(config);
-    if (config.imageCompression) {
-      compressionConfig.value = config.imageCompression;
-    }
-  }
+  syncLocalConfigState(config);
 
   // 设置配置更新监听器（设置页面修改配置后自动刷新）
   configUnlisten.value = await uploadManager.setupConfigListener();
 
-  // 监听配置变更，同步压缩配置（设置页改动后上传页自动更新）
-  const compressionUnlisten = await listen('config-updated', async () => {
+  // 监听配置变更，同步压缩配置与自定义 S3 profile（设置页改动后上传页自动更新）
+  const configStateUnlisten = await listen('config-updated', async () => {
     const updated = await configStore.get<UserConfig>('config');
-    if (updated?.imageCompression) {
-      compressionConfig.value = updated.imageCompression;
-    }
+    syncLocalConfigState(updated);
   });
   // 将清理函数挂到已有的 configUnlisten 上
   const originalUnlisten = configUnlisten.value;
   configUnlisten.value = () => {
     originalUnlisten?.();
-    compressionUnlisten();
+    configStateUnlisten();
   };
 
   log.info('配置更新监听器已设置');
@@ -478,6 +496,7 @@ onUnmounted(() => {
         :has-failed-items="hasFailedItems"
         :has-completed-items="hasCompletedItems"
         :has-queue-items="hasQueueItems"
+        :has-active-items="hasActiveItems"
         :is-batch-retrying="isBatchRetrying"
         :queue-total="queueTotal"
         :queue-done="queueDone"

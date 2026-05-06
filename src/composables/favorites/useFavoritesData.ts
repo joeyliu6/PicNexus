@@ -51,6 +51,7 @@ export interface UseFavoritesDataReturn {
   getThumbnailUrl: (meta: ImageMeta) => string;
   getThumbnailUrls: (meta: ImageMeta) => string[];
   getItemService: (id: string) => ServiceType | undefined;
+  getItemServices: (id: string) => string[];
   onFavoritesScroll: () => void;
   loadFirstPage: () => Promise<void>;
   loadNextPage: () => Promise<void>;
@@ -67,8 +68,8 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
 
   const imageStates = reactive<Record<string, 'loading' | 'loaded' | 'failed'>>({});
 
-  // 跨页服务缓存：记录每条已加载条目的 primaryService，筛选/翻页后仍能解析跨页选中项
-  const itemServiceCache = new Map<string, ServiceType>();
+  // 跨页服务缓存：记录每条已加载条目的全部成功服务，筛选/翻页后仍能解析跨页选中项
+  const itemServiceCache = new Map<string, string[]>();
 
   let nextOffset = 0;
   let scrollRafId = 0;
@@ -92,7 +93,11 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
 
   function cacheServices(metas: readonly ImageMeta[]): void {
     for (const meta of metas) {
-      itemServiceCache.set(meta.id, meta.primaryService);
+      const services = [
+        meta.primaryService,
+        ...(meta.mirrorServices?.map(mirror => mirror.serviceId) ?? []),
+      ].filter(Boolean);
+      itemServiceCache.set(meta.id, Array.from(new Set(services)));
     }
   }
 
@@ -221,7 +226,11 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
   }
 
   function getItemService(id: string): ServiceType | undefined {
-    return itemServiceCache.get(id);
+    return itemServiceCache.get(id)?.[0] as ServiceType | undefined;
+  }
+
+  function getItemServices(id: string): string[] {
+    return itemServiceCache.get(id) ?? [];
   }
 
   watch([filter, searchTerm], () => {
@@ -309,6 +318,7 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
     getThumbnailUrl,
     getThumbnailUrls,
     getItemService,
+    getItemServices,
     onFavoritesScroll,
     loadFirstPage,
     loadNextPage,

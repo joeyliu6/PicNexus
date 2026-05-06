@@ -8,6 +8,7 @@ function mountPanel(props = {}) {
       hasFailedItems: false,
       hasCompletedItems: false,
       hasQueueItems: false,
+      hasActiveItems: false,
       isBatchRetrying: false,
       queueTotal: 0,
       queueDone: 0,
@@ -56,6 +57,21 @@ describe('UploadQueuePanel', () => {
 
     expect(wrapper.get('.retry-btn').attributes('disabled')).toBeDefined();
     expect(wrapper.text()).toContain('重传中...');
+  });
+
+  it('上传进行中禁用清空列表', async () => {
+    const wrapper = mountPanel({
+      hasQueueItems: true,
+      hasActiveItems: true,
+      queueTotal: 1,
+    });
+
+    const button = wrapper.get('.clear-btn');
+    expect(button.attributes('disabled')).toBeDefined();
+
+    await button.trigger('click');
+
+    expect(wrapper.emitted('clear-queue')).toBeUndefined();
   });
 
   it('无队列动作时只保留上传队列容器', () => {

@@ -131,7 +131,13 @@ describe('useFavoritesData', () => {
 
   it('loads the first page once and caches thumbnail/service metadata', async () => {
     const alpha = makeMeta('alpha', 'weibo');
-    const beta = makeMeta('beta', 'r2');
+    const beta = {
+      ...makeMeta('beta', 'r2'),
+      mirrorServices: [
+        { serviceId: 'r2', url: 'https://img.example.com/beta.png' },
+        { serviceId: 'github', url: 'https://cdn.example.com/beta.png' },
+      ],
+    };
     getFavoritesMetaPageMock.mockResolvedValueOnce({
       items: [alpha, beta],
       total: 2,
@@ -159,6 +165,7 @@ describe('useFavoritesData', () => {
     expect(harness.api().getThumbnailUrl(alpha as never)).toBe('thumb:alpha');
     expect(getMetaThumbnailUrlMock).toHaveBeenCalledWith(alpha, harness.config.value);
     expect(harness.api().getItemService('beta')).toBe('r2');
+    expect(harness.api().getItemServices('beta')).toEqual(['r2', 'github']);
   });
 
   it('shows the loaded empty state without querying when stats already have no favorites', async () => {
@@ -211,6 +218,7 @@ describe('useFavoritesData', () => {
     expect(harness.api().loadedMetas.value.map(meta => meta.id)).toEqual(['alpha', 'beta']);
     expect(harness.api().hasMore.value).toBe(false);
     expect(harness.api().getItemService('beta')).toBe('r2');
+    expect(harness.api().getItemServices('beta')).toEqual(['r2']);
   });
 
   it('reloads from the first page when the search term changes after the first load', async () => {

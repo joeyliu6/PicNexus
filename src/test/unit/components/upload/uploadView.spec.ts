@@ -36,7 +36,7 @@ type EventHandler = (event: { payload: unknown }) => void;
 let eventHandlers: Record<string, EventHandler[]> = {};
 
 vi.mock('../../../../composables/useToast', () => ({
-  useToast: () => ({ success: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
+  useToast: () => ({ success: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn(), showConfig: vi.fn() }),
 }));
 
 vi.mock('../../../../composables/useConfirm', () => ({
@@ -123,6 +123,7 @@ const QueuePanelStub = defineComponent({
     'hasFailedItems',
     'hasCompletedItems',
     'hasQueueItems',
+    'hasActiveItems',
     'isBatchRetrying',
     'queueTotal',
     'queueDone',

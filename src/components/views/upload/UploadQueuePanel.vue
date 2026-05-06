@@ -10,6 +10,7 @@ interface Props {
   hasFailedItems: boolean;
   hasCompletedItems: boolean;
   hasQueueItems: boolean;
+  hasActiveItems: boolean;
   isBatchRetrying: boolean;
   queueTotal: number;
   queueDone: number;
@@ -72,6 +73,8 @@ defineExpose({
         <button
           v-if="hasQueueItems"
           class="queue-action-btn clear-btn"
+          :disabled="hasActiveItems"
+          :title="hasActiveItems ? '上传进行中，完成后再清空列表' : undefined"
           @click="emit('clear-queue')"
         >
           <i class="pi pi-trash"></i>
@@ -174,6 +177,16 @@ defineExpose({
 .queue-action-btn.clear-btn:hover {
   color: var(--error);
   background: var(--error-alpha-10);
+}
+
+.queue-action-btn.clear-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.queue-action-btn.clear-btn:hover:disabled {
+  color: var(--text-muted);
+  background: transparent;
 }
 
 /* 清空已完成按钮 */

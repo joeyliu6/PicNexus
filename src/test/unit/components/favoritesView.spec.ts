@@ -85,6 +85,14 @@ vi.mock('../../../composables/favorites/useFavoritesData', async () => {
       imageStates: mockRefs.data!.imageStates,
       getThumbnailUrls: (meta: ImageMeta) => meta.mirrorServices?.map(service => service.url) ?? [meta.primaryUrl],
       getItemService: (id: string) => mockRefs.data!.loadedMetas.value.find(meta => meta.id === id)?.primaryService,
+      getItemServices: (id: string) => {
+        const meta = mockRefs.data!.loadedMetas.value.find(item => item.id === id);
+        if (!meta) return [];
+        return Array.from(new Set([
+          meta.primaryService,
+          ...(meta.mirrorServices?.map(service => service.serviceId) ?? []),
+        ]));
+      },
       onFavoritesScroll: favoritesDataMock.onFavoritesScroll,
       loadFirstPage: favoritesDataMock.loadFirstPage,
       loadNextPage: favoritesDataMock.loadNextPage,
@@ -401,7 +409,14 @@ describe('FavoritesView P1 coverage', () => {
 
   it('exposes selected service counts and forwards service-specific copy requests', async () => {
     mockRefs.data!.loadedMetas.value = [
-      meta({ id: 'fav-jd', primaryService: 'jd' }),
+      meta({
+        id: 'fav-jd',
+        primaryService: 'jd',
+        mirrorServices: [
+          { serviceId: 'jd', url: 'https://img.example.com/fav-jd.jpg' },
+          { serviceId: 'r2', url: 'https://r2.example.com/fav-jd.jpg' },
+        ],
+      }),
       meta({ id: 'fav-r2-a', primaryService: 'r2' }),
       meta({ id: 'fav-r2-b', primaryService: 'r2' }),
       meta({ id: 'fav-unselected', primaryService: 'github' }),
@@ -417,7 +432,7 @@ describe('FavoritesView P1 coverage', () => {
     const actions = wrapper.get('.floating-action-stub');
 
     expect(actions.attributes('data-selected-count')).toBe('3');
-    expect(actions.attributes('data-services')).toBe('r2:2|jd:1');
+    expect(actions.attributes('data-services')).toBe('r2:3|jd:1');
 
     await wrapper.get('.fab-copy-r2').trigger('click');
 

@@ -4,7 +4,7 @@ import { ref, computed, type Ref, type ComputedRef } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { configStore } from '../store/instances';
 import type { UserConfig } from '../config/types';
-import { DEFAULT_CONFIG, makeCustomS3Id } from '../config/types';
+import { DEFAULT_CONFIG, isCustomS3Id, makeCustomS3Id } from '../config/types';
 import { useToast } from './useToast';
 import { TOAST_MESSAGES } from '../constants';
 import { debounceWithError } from '../utils/debounce';
@@ -220,6 +220,10 @@ export function useServiceSelector(): UseServiceSelectorReturn {
       upyunConfig.publicDomain
     );
 
+    for (const serviceId of Object.keys(serviceConfigStatus.value)) {
+      if (isCustomS3Id(serviceId)) delete serviceConfigStatus.value[serviceId];
+    }
+
     // 自定义 S3 profiles
     for (const profile of config.custom_s3_profiles ?? []) {
       const compositeId = makeCustomS3Id(profile.id);
@@ -247,7 +251,9 @@ export function useServiceSelector(): UseServiceSelectorReturn {
         service => availableServices.value.includes(service)
       );
 
-      if (selectedServices.value.length > 0) {
+      const selectedServicesChanged = savedEnabledServices.length !== selectedServices.value.length
+        || savedEnabledServices.some((service, index) => service !== selectedServices.value[index]);
+      if (selectedServicesChanged) {
         try {
           await saveEnabledServicesToConfigDebounced.immediate([...selectedServices.value]);
         } catch (error) {

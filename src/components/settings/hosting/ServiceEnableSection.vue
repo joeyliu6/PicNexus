@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import type { ServiceType } from '../../../config/types';
-import { PRIVATE_SERVICES, PUBLIC_SERVICES, PUBLIC_SERVICE_RISK_TOOLTIP, isPublicRiskService } from '../../../config/types';
+import type { CustomS3Profile } from '../../../config/types';
+import { PRIVATE_SERVICES, PUBLIC_SERVICES, PUBLIC_SERVICE_RISK_TOOLTIP, isPublicRiskService, makeCustomS3Id } from '../../../config/types';
 import ServiceChipGrid from '../ServiceChipGrid.vue';
 import type { BatchTestProgress } from '../../../types/batchTest';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
@@ -23,6 +23,7 @@ const props = defineProps<{
   isCheckingQiyu: boolean;
   availableServices: string[];
   serviceNames: Record<string, string>;
+  customS3Profiles?: CustomS3Profile[];
   publicServiceRiskAccepted: boolean;
 }>();
 
@@ -120,7 +121,17 @@ const localAvailableServices = computed({
 const toast = useToast();
 const { confirm: confirmDialog } = useConfirm();
 
-async function toggleService(service: ServiceType) {
+const customS3ServiceIds = computed(() => (props.customS3Profiles ?? []).map(profile => makeCustomS3Id(profile.id)));
+
+const serviceNamesWithCustom = computed<Record<string, string>>(() => {
+  const names: Record<string, string> = { ...props.serviceNames };
+  for (const profile of props.customS3Profiles ?? []) {
+    names[makeCustomS3Id(profile.id)] = profile.name || '自定义 S3';
+  }
+  return names;
+});
+
+async function toggleService(service: string) {
   const current = localAvailableServices.value;
   const isRemoving = current.includes(service);
   // Why: useConfig.saveConfig 会在 availableServices 为空时拒绝保存并 toast,
@@ -135,7 +146,7 @@ async function toggleService(service: ServiceType) {
   }
 
   if (!isRemoving && isPublicRiskService(service) && !props.publicServiceRiskAccepted) {
-    const serviceName = props.serviceNames[service] ?? service;
+    const serviceName = serviceNamesWithCustom.value[service] ?? service;
     const confirmed = await confirmDialog(
       `「${serviceName}」属于非官方公共图床/第三方平台适配，可能违反平台规则、随时失效，账号或数据风险由你自行承担。确认已了解并继续启用？`,
       {
@@ -155,7 +166,7 @@ async function toggleService(service: ServiceType) {
   emit('save');
 }
 
-function handleChipClick(svc: ServiceType) {
+function handleChipClick(svc: string) {
   emit('scrollToService', svc);
 }
 
@@ -235,7 +246,24 @@ const skeletonStatuses = computed<ServiceHealthStatus[]>(() => {
         :health-status-map="healthStatusMap"
         :health-tooltip-map="healthTooltipMap"
         :available-services="localAvailableServices"
-        :service-names="serviceNames"
+        :service-names="serviceNamesWithCustom"
+        :is-batch-testing="!!isBatchTesting"
+        :refreshing-service-ids="refreshingServiceIds"
+        :batch-tested-services="batchTestedServices"
+        :batch-done-services="batchDoneServices"
+        :active-filter="activeFilter"
+        @toggle-service="toggleService"
+        @chip-click="handleChipClick"
+      />
+
+      <ServiceChipGrid
+        v-if="customS3ServiceIds.length > 0"
+        :services="customS3ServiceIds"
+        group-title="自定义 S3"
+        :health-status-map="healthStatusMap"
+        :health-tooltip-map="healthTooltipMap"
+        :available-services="localAvailableServices"
+        :service-names="serviceNamesWithCustom"
         :is-batch-testing="!!isBatchTesting"
         :refreshing-service-ids="refreshingServiceIds"
         :batch-tested-services="batchTestedServices"
@@ -252,7 +280,7 @@ const skeletonStatuses = computed<ServiceHealthStatus[]>(() => {
         :health-status-map="healthStatusMap"
         :health-tooltip-map="healthTooltipMap"
         :available-services="localAvailableServices"
-        :service-names="serviceNames"
+        :service-names="serviceNamesWithCustom"
         :is-batch-testing="!!isBatchTesting"
         :refreshing-service-ids="refreshingServiceIds"
         :batch-tested-services="batchTestedServices"

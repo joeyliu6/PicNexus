@@ -3,12 +3,11 @@
 // 展示服务列表的芯片 UI，支持启用/禁用切换、健康状态着色、批量检测动画、筛选
 
 import { computed } from 'vue';
-import type { ServiceType } from '../../config/types';
 import type { ServiceHealthStatus } from '../../types/serviceHealth';
 
 const props = defineProps<{
   /** 服务 ID 列表 */
-  services: ServiceType[];
+  services: string[];
   /** 分组标题 */
   groupTitle: string;
   /** 分组标题右侧提示 */
@@ -35,13 +34,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   /** 切换服务启用/禁用 */
-  toggleService: [service: ServiceType];
+  toggleService: [service: string];
   /** 点击芯片跳转到配置 */
-  chipClick: [service: ServiceType];
+  chipClick: [service: string];
 }>();
 
 /** 生成芯片 tooltip */
-function getChipTooltip(svc: ServiceType): string | null {
+function getChipTooltip(svc: string): string | null {
   if (props.refreshingServiceIds.has(svc)) return '正在检测...';
   const status = props.healthStatusMap[svc];
   if (status === 'unconfigured') return '未配置，点击跳转到配置';
@@ -49,12 +48,12 @@ function getChipTooltip(svc: ServiceType): string | null {
 }
 
 /** 判断服务是否已启用 */
-function isEnabled(svc: ServiceType): boolean {
+function isEnabled(svc: string): boolean {
   return props.availableServices.includes(svc);
 }
 
 /** 生成芯片的 CSS class 数组 */
-function chipClasses(svc: ServiceType): Record<string, boolean> {
+function chipClasses(svc: string): Record<string, boolean> {
   return {
     'is-refreshing': props.refreshingServiceIds.has(svc),
     'is-batch-done': props.batchDoneServices.has(svc) && !props.refreshingServiceIds.has(svc),
@@ -65,7 +64,7 @@ function chipClasses(svc: ServiceType): Record<string, boolean> {
 }
 
 /** 检测中不沿用旧健康状态色，统一交给中性骨架样式 */
-function chipStatusClass(svc: ServiceType): ServiceHealthStatus | '' {
+function chipStatusClass(svc: string): ServiceHealthStatus | '' {
   return props.refreshingServiceIds.has(svc) ? '' : props.healthStatusMap[svc];
 }
 
@@ -103,12 +102,12 @@ const serviceList = computed(() => props.services);
           class="toggle-indicator"
           :class="{ checked: isEnabled(svc) }"
           :aria-pressed="isEnabled(svc)"
-          :aria-label="`${isEnabled(svc) ? '禁用' : '启用'} ${serviceNames[svc]}`"
+          :aria-label="`${isEnabled(svc) ? '禁用' : '启用'} ${serviceNames[svc] ?? svc}`"
           @click.stop="emit('toggleService', svc)"
         >
           <i v-if="isEnabled(svc)" class="pi pi-check"></i>
         </button>
-        <span class="toggle-label">{{ serviceNames[svc] }}</span>
+        <span class="toggle-label">{{ serviceNames[svc] ?? svc }}</span>
       </div>
     </div>
   </div>

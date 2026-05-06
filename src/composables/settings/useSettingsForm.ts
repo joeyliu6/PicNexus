@@ -24,7 +24,7 @@ import type {
   CustomS3Profile,
   LinkPrefixItem,
 } from '../../config/types';
-import { DEFAULT_CONFIG, cloneDefaultPrefixes, makeCustomS3Id } from '../../config/types';
+import { DEFAULT_CONFIG, cloneDefaultPrefixes, isCustomS3Id, makeCustomS3Id } from '../../config/types';
 import { applyConfigToForm } from './settingsFormSnapshot';
 import type { SettingsFormData } from './settingsFormTypes';
 import { validateS3Config } from './s3ConfigValidation';
@@ -189,19 +189,19 @@ export function useSettingsForm() {
   watch(serviceConfigStatus, (newStatus, oldStatus) => {
     if (isApplyingConfigSnapshot) return;
     if (!oldStatus) return;
-    const toRemove: ServiceType[] = [];
+    const toRemove: string[] = [];
     for (const [svc, configured] of Object.entries(newStatus)) {
-      const sid = svc as ServiceType;
+      const sid = svc;
       if (!configured && oldStatus[sid] && availableServices.value.includes(sid)) toRemove.push(sid);
     }
     if (!toRemove.length) return;
     // Why: 防止变空被 saveConfig 的"至少一个图床"校验拒绝；但 stale 服务会让芯片显示启用、上传时却凭证缺失——必须显式告知用户原因，否则就是静默 UX 陷阱。
     if (availableServices.value.length - toRemove.length <= 0) {
-      const names = toRemove.map((sid) => SERVICE_DISPLAY_NAMES[sid] ?? sid).join('、');
+      const names = toRemove.map((sid) => SERVICE_DISPLAY_NAMES[sid as ServiceType] ?? sid).join('、');
       toast.showConfig('warn', { summary: '保留最后一个图床', detail: `「${names}」凭证已清空但仍处于启用状态。请补全凭证或先启用其他图床后再禁用。`, life: 4000 });
       return;
     }
-    availableServices.value = availableServices.value.filter(s => !toRemove.includes(s as ServiceType));
+    availableServices.value = availableServices.value.filter(s => !toRemove.includes(s));
     debouncedSaveSettings();
   });
 
@@ -324,7 +324,12 @@ export function useSettingsForm() {
         uploadClipboard: 'CommandOrControl+Shift+C',
         uploadFromFile: 'CommandOrControl+Shift+O',
       };
-      availableServices.value = config.availableServices || ['jd', 'qiyu'];
+      const customS3ServiceIds = new Set(
+        (formData.value.custom_s3_profiles || []).map((profile: CustomS3Profile) => makeCustomS3Id(profile.id)),
+      );
+      availableServices.value = (config.availableServices || DEFAULT_CONFIG.availableServices || []).filter(
+        serviceId => !isCustomS3Id(serviceId) || customS3ServiceIds.has(serviceId),
+      );
 
       // 从 OS 同步自启动真实状态
       try {
@@ -409,7 +414,17 @@ export function useSettingsForm() {
       config.publicServiceRiskAccepted = formData.value.publicServiceRiskAccepted;
       config.imageCompression = { ...formData.value.imageCompression };
       config.editorServer = { ...formData.value.editorServer };
-      config.availableServices = [...availableServices.value];
+      const customS3ServiceIds = new Set(
+        formData.value.custom_s3_profiles.map((profile: CustomS3Profile) => makeCustomS3Id(profile.id)),
+      );
+      const syncedAvailableServices = availableServices.value.filter(
+        serviceId => !isCustomS3Id(serviceId) || customS3ServiceIds.has(serviceId),
+      );
+      config.availableServices = syncedAvailableServices;
+      availableServices.value = [...syncedAvailableServices];
+      config.enabledServices = (config.enabledServices ?? []).filter(
+        serviceId => syncedAvailableServices.includes(serviceId),
+      );
 
       await configManager.saveConfig(config, true);
       syncCustomS3Uploaders(formData.value.custom_s3_profiles);

@@ -42,7 +42,7 @@ const localSearchTerm = ref<string>(props.searchTerm ?? '');
 
 const {
   loadedMetas, totalCount, hasMore, isLoading, hasLoadedOnce,
-  imageStates, getThumbnailUrls, getItemService, onFavoritesScroll,
+  imageStates, getThumbnailUrls, getItemServices, onFavoritesScroll,
   loadFirstPage, loadNextPage,
 } = useFavoritesData({
   filter: localFilter,
@@ -81,9 +81,9 @@ const selectedAvailableServices = computed<{ serviceId: ServiceType; count: numb
   if (ids.length === 0) return [];
   const serviceCountMap = new Map<ServiceType, number>();
   for (const id of ids) {
-    const service = getItemService(id);
-    if (service) {
-      serviceCountMap.set(service, (serviceCountMap.get(service) ?? 0) + 1);
+    for (const service of getItemServices(id)) {
+      const serviceId = service as ServiceType;
+      serviceCountMap.set(serviceId, (serviceCountMap.get(serviceId) ?? 0) + 1);
     }
   }
   return Array.from(serviceCountMap.entries()).map(([serviceId, count]) => ({ serviceId, count }));
