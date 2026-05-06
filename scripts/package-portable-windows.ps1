@@ -17,6 +17,24 @@ function Assert-File {
   }
 }
 
+function Get-Sha256Hex {
+  param([Parameter(Mandatory = $true)][string]$Path)
+
+  $resolvedPath = (Resolve-Path -LiteralPath $Path).Path
+  $stream = [System.IO.File]::OpenRead($resolvedPath)
+  try {
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+      $hashBytes = $sha256.ComputeHash($stream)
+      return -join ($hashBytes | ForEach-Object { $_.ToString('x2') })
+    } finally {
+      $sha256.Dispose()
+    }
+  } finally {
+    $stream.Dispose()
+  }
+}
+
 function Assert-NewerThanSource {
   param(
     [Parameter(Mandatory = $true)][string]$BinaryPath,
@@ -129,7 +147,7 @@ Copy-Item -LiteralPath $icon -Destination (Join-Path $iconsDir 'icon.png')
 
 Compress-Archive -Path $stagingDir -DestinationPath $zipPath -Force
 
-$hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$hash = Get-Sha256Hex -Path $zipPath
 $shaPath = "$zipPath.sha256"
 "$hash  $(Split-Path -Leaf $zipPath)" | Set-Content -LiteralPath $shaPath -Encoding ascii
 
