@@ -1,7 +1,7 @@
 {
   "id": "obsidian-picnexus",
   "name": "PicNexus",
-  "version": "0.1.0",
+  "version": "1.0.8",
   "minAppVersion": "1.4.0",
   "description": "PicNexus 专属图片上传插件 — 粘贴/拖拽自动上传到图床",
   "author": "PicNexus",

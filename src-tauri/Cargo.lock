@@ -4705,7 +4705,7 @@ dependencies = [
 
 [[package]]
 name = "picnexus"
-version = "1.0.7"
+version = "1.0.8"
 dependencies = [
  "arboard",
  "aws-sdk-s3",
