@@ -3,6 +3,7 @@ import type { HistoryItem, ServiceType } from '../../config/types';
 import { useToast } from '../useToast';
 import { useCopyLink } from '../useCopyLink';
 import { createLogger } from '../../utils/logger';
+import { openUserExternalUrl } from '../../security/shellOpen';
 
 const logger = createLogger('LightboxActions');
 const COPY_FEEDBACK_DURATION = 2000;
@@ -82,9 +83,8 @@ export function useLightboxActions({ item, resetZoom, onDelete }: LightboxAction
     const ctx = requireLink();
     if (!ctx) return;
     try {
-      const { open } = await import('@tauri-apps/plugin-shell');
       const finalUrl = applyConfiguredUrl(ctx.link, ctx.record.primaryService as ServiceType);
-      await open(finalUrl);
+      await openUserExternalUrl(finalUrl);
     } catch (err) {
       logger.error('打开链接失败:', err);
       toast.error('打开失败', String(err));

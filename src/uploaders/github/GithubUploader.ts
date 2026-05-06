@@ -1,7 +1,8 @@
 import { BaseUploader } from '../base/BaseUploader';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
-import type { GithubServiceConfig } from '../../config/types';
+import type { GithubCdnProvider, GithubServiceConfig } from '../../config/types';
 import { getErrorMessage } from '../../types/errors';
+import { assertAllowedExternalUrl } from '../../security/networkPolicy';
 
 interface GithubRustResult {
   url: string;
@@ -38,6 +39,9 @@ export class GithubUploader extends BaseUploader<GithubServiceConfig> {
       errors.push('分支名称不能为空');
     }
 
+    const cdnError = this.validateCdnConfig(config);
+    if (cdnError) errors.push(cdnError);
+
     if (errors.length > 0) {
       return { valid: false, missingFields, errors };
     }
@@ -53,6 +57,8 @@ export class GithubUploader extends BaseUploader<GithubServiceConfig> {
     this.log('info', '开始上传到 GitHub', { filePath });
 
     const config = options.config as GithubServiceConfig;
+    const cdnError = this.validateCdnConfig(config);
+    if (cdnError) throw new Error(cdnError);
 
     const rustResult = await this.uploadViaRust(
       filePath,
@@ -86,8 +92,7 @@ export class GithubUploader extends BaseUploader<GithubServiceConfig> {
   private applyUrlTransform(rawUrl: string, config: GithubServiceConfig): string {
     if (!config.cdnConfig?.enabled) return rawUrl;
 
-    const { cdnList, selectedIndex } = config.cdnConfig;
-    const cdn = cdnList[selectedIndex] || cdnList[0];
+    const cdn = this.getSelectedCdn(config);
     if (!cdn?.url || !cdn?.template) return rawUrl;
 
     // 用配置中的 owner/repo/branch 构造已知前缀，再切出剩余 path
@@ -103,7 +108,7 @@ export class GithubUploader extends BaseUploader<GithubServiceConfig> {
     const path = rawUrl.slice(expectedPrefix.length);
     if (!path) return rawUrl;
 
-    const domain = cdn.url.replace(/\/$/, '');
+    const domain = assertAllowedExternalUrl(cdn.url, { label: 'GitHub CDN' }).toString().replace(/\/$/, '');
 
     return cdn.template
       .replace(/\{domain\}/g, domain)
@@ -114,6 +119,24 @@ export class GithubUploader extends BaseUploader<GithubServiceConfig> {
       .replace(/\{branch\}/g, encodedBranch)
       .replace(/\{path\}/g, path)
       .replace(/\{rawUrl\}/g, rawUrl);
+  }
+
+  private getSelectedCdn(config: GithubServiceConfig): GithubCdnProvider | undefined {
+    const { cdnList = [], selectedIndex = 0 } = config.cdnConfig ?? {};
+    return cdnList[selectedIndex] || cdnList[0];
+  }
+
+  private validateCdnConfig(config: GithubServiceConfig): string | null {
+    if (!config.cdnConfig?.enabled) return null;
+    const cdn = this.getSelectedCdn(config);
+    if (!cdn?.url) return null;
+
+    try {
+      assertAllowedExternalUrl(cdn.url, { label: 'GitHub CDN' });
+      return null;
+    } catch (error) {
+      return getErrorMessage(error) || 'GitHub CDN 地址无效';
+    }
   }
 
   getPublicUrl(result: UploadResult): string {

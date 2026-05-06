@@ -357,7 +357,7 @@ export function useConfigManager() {
         width: loginSize.width,
         height: loginSize.height,
         titlebarUrl: `login-titlebar.html?name=${encodeURIComponent(provider.name)}&theme=${theme}`,
-        contentUrl: `login-webview.html?service=${serviceId}`,
+        contentUrl: `login-webview.html?service=${serviceId}&theme=${theme}`,
       });
 
       log.info(`✓ ${provider.name} 窗口创建成功`);

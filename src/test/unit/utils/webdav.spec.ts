@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { WebDAVClient } from '../../../utils/webdav';
-import { getHttpFetchMock } from '../../helpers/tauriMock';
+import { getHttpFetchMock, resetTauriMocks } from '../../helpers/tauriMock';
 
 const loggerMock = vi.hoisted(() => ({
   debug: vi.fn(),
@@ -54,6 +54,7 @@ function mockAllMkDirOk() {
 }
 
 beforeEach(() => {
+  resetTauriMocks();
   mockedFetch.mockReset();
   mockedEncrypt.mockReset();
   mockedDecrypt.mockReset();

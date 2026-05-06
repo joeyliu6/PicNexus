@@ -113,10 +113,10 @@ const serviceNames = {
 } satisfies Record<ServiceType, string>;
 
 function createHarness(options: {
-  validateS3Config?: (serviceId: ServiceType, config: Record<string, unknown>) => string | null;
+  validateS3Config?: (serviceId: string, config: Record<string, unknown>) => string | null;
 } = {}) {
   const formData = ref(makeFormData());
-  const validateS3Config = vi.fn<(serviceId: ServiceType, config: Record<string, unknown>) => string | null>(
+  const validateS3Config = vi.fn<(serviceId: string, config: Record<string, unknown>) => string | null>(
     options.validateS3Config ?? (() => null),
   );
   const errorToString = vi.fn((error: unknown) => error instanceof Error ? error.message : String(error));

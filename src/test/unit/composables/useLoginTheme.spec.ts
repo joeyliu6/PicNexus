@@ -1,14 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-vi.mock('../../../store/instances', () => ({
-  configStore: { get: vi.fn() },
-  syncStatusStore: { get: vi.fn(), set: vi.fn(), save: vi.fn() },
-}));
-
-import { configStore } from '../../../store/instances';
 import { initLoginTheme } from '../../../composables/useLoginTheme';
-
-const configStoreMock = vi.mocked(configStore);
 
 function mockMatchMedia(matches: boolean) {
   Object.defineProperty(window, 'matchMedia', {
@@ -22,54 +13,50 @@ function mockMatchMedia(matches: boolean) {
   });
 }
 
+function setSearch(search: string) {
+  window.history.replaceState(null, '', search ? `/${search}` : '/');
+}
+
 describe('initLoginTheme', () => {
   beforeEach(() => {
-    (configStoreMock.get as any).mockReset();
+    setSearch('');
     document.documentElement.classList.remove('dark-theme', 'light-theme');
   });
 
-  it('mode=auto + 系统深色 → dark', async () => {
-    (configStoreMock.get as any).mockResolvedValue({ theme: { mode: 'auto' } });
+  it('无 theme 参数 + 系统深色 → dark', async () => {
     mockMatchMedia(true);
     expect(await initLoginTheme()).toBe('dark');
     expect(document.documentElement.classList.contains('dark-theme')).toBe(true);
   });
 
-  it('mode=auto + 系统浅色 → light', async () => {
-    (configStoreMock.get as any).mockResolvedValue({ theme: { mode: 'auto' } });
+  it('无 theme 参数 + 系统浅色 → light', async () => {
     mockMatchMedia(false);
     expect(await initLoginTheme()).toBe('light');
     expect(document.documentElement.classList.contains('light-theme')).toBe(true);
   });
 
-  it('mode=light 固定 light', async () => {
-    (configStoreMock.get as any).mockResolvedValue({ theme: { mode: 'light' } });
+  it('theme=light 固定 light', async () => {
+    setSearch('?theme=light');
     mockMatchMedia(true);
     expect(await initLoginTheme()).toBe('light');
   });
 
-  it('mode=dark 固定 dark', async () => {
-    (configStoreMock.get as any).mockResolvedValue({ theme: { mode: 'dark' } });
+  it('theme=dark 固定 dark', async () => {
+    setSearch('?theme=dark');
     mockMatchMedia(false);
     expect(await initLoginTheme()).toBe('dark');
   });
 
-  it('configStore 读取失败 → 回退 matchMedia', async () => {
-    (configStoreMock.get as any).mockRejectedValue(new Error('store gone'));
+  it('非法 theme 参数 → 回退 matchMedia', async () => {
+    setSearch('?theme=../../dark');
     mockMatchMedia(true);
     expect(await initLoginTheme()).toBe('dark');
     expect(document.documentElement.classList.contains('dark-theme')).toBe(true);
   });
 
-  it('config 无 theme 字段 → 按 auto 处理', async () => {
-    (configStoreMock.get as any).mockResolvedValue({});
+  it('theme=auto → 按系统主题处理', async () => {
+    setSearch('?theme=auto');
     mockMatchMedia(false);
     expect(await initLoginTheme()).toBe('light');
-  });
-
-  it('config 为空 → 按 auto 处理', async () => {
-    (configStoreMock.get as any).mockResolvedValue(null);
-    mockMatchMedia(true);
-    expect(await initLoginTheme()).toBe('dark');
   });
 });

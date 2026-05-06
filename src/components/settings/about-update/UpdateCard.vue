@@ -2,9 +2,9 @@
 import { computed, ref, watch, onUnmounted } from 'vue';
 import Button from 'primevue/button';
 import ToggleSwitch from 'primevue/toggleswitch';
-import { open } from '@tauri-apps/plugin-shell';
 import { useAutoUpdate } from '../../../composables/useAutoUpdate';
 import { useToast } from '../../../composables/useToast';
+import { openTrustedExternalUrl } from '../../../security/shellOpen';
 
 const RELEASES_URL = 'https://github.com/joeyliu6/PicNexus/releases/latest';
 
@@ -125,7 +125,7 @@ function onToggleAutoUpdate(v: boolean) {
 
 async function openManualDownload() {
   try {
-    await open(RELEASES_URL);
+    await openTrustedExternalUrl(RELEASES_URL);
   } catch {
     toast.error('打开下载页失败', `请手动访问：${RELEASES_URL}`);
   }

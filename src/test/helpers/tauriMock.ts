@@ -351,6 +351,29 @@ export function resetTauriMocks(): void {
   getShellOpenMock().mockReset();
 
   getHttpFetchMock().mockReset();
+  getInvokeMock().mockImplementation(async (cmd, args) => {
+    if (cmd === 'webdav_request') {
+      const request = (args as {
+        request?: {
+          method?: string;
+          url?: string;
+          headers?: Record<string, string>;
+          body?: string | null;
+        };
+      } | undefined)?.request;
+      if (!request?.url) throw new Error('webdav_request mock missing url');
+      const response = await getHttpFetchMock()(request.url, {
+        method: request?.method,
+        headers: request?.headers,
+        body: request?.body ?? undefined,
+      });
+      return {
+        status: response.status,
+        body: request?.method === 'GET' ? await response.text() : null,
+      };
+    }
+    return undefined;
+  });
 
   const notification = getNotificationMocks();
   notification.isPermissionGranted.mockReset();

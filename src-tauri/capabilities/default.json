@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "default",
-  "description": "PicNexus 默认权限配置",
-  "windows": ["main", "login-window", "login-titlebar", "login-content"],
+  "identifier": "main",
+  "description": "PicNexus main window capability",
+  "windows": ["main"],
   "permissions": [
     "core:default",
     "core:event:default",
@@ -30,7 +30,7 @@
     "core:resources:default",
     "core:menu:default",
     "core:tray:default",
-    "shell:default",
+    "shell:allow-open",
     "dialog:default",
     "dialog:allow-open",
     "dialog:allow-save",
@@ -77,7 +77,13 @@
     {
       "identifier": "http:default",
       "allow": [
-        { "url": "https://**" },
+        { "url": "https://www.google-analytics.com/*" },
+        { "url": "https://api.github.com/*" },
+        { "url": "https://sm.ms/*" },
+        { "url": "https://api.imgur.com/*" },
+        { "url": "https://www.baidu.com/*" },
+        { "url": "https://www.qq.com/*" },
+        { "url": "https://www.cloudflare.com/*" },
         { "url": "http://127.0.0.1:*" },
         { "url": "http://localhost:*" }
       ]

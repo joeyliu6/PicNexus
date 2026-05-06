@@ -4,7 +4,6 @@
 
 import { computed, toRef } from 'vue';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-import { open as shellOpen } from '@tauri-apps/plugin-shell';
 import { dirname } from '@tauri-apps/api/path';
 import { invoke } from '@tauri-apps/api/core';
 import EmptyState from '../../../common/EmptyState.vue';
@@ -18,6 +17,7 @@ import {
   getStatusDisplay, statusBadgeLabel, statusDotColor, statusTooltip,
   extractHost, isDefunctHost, extractFilenameFromUrl,
 } from '../../../../composables/useLinkStatusDisplay';
+import { openUserExternalUrl } from '../../../../security/shellOpen';
 
 const props = defineProps<{
   imageLinks: MdImageLinkWithFile[];
@@ -81,7 +81,7 @@ async function openMdFile(filePath: string): Promise<void> {
 }
 
 async function openInBrowser(url: string): Promise<void> {
-  await withErrorToast(() => shellOpen(resolveConfiguredUrl(url)), '无法打开链接');
+  await withErrorToast(() => openUserExternalUrl(resolveConfiguredUrl(url)), '无法打开链接');
 }
 
 async function copyRowUrl(url: string): Promise<void> {

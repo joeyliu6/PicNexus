@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
+import { safeImageUrl } from '../../security/networkPolicy';
 
 const props = defineProps<{
   srcs: string[];
@@ -15,8 +16,13 @@ const isLoading = ref(true);
 const loadImage = () => {
   isLoading.value = true;
   if (props.srcs && props.srcs.length > 0 && currentSrcIndex.value < props.srcs.length) {
-    currentSrc.value = props.srcs[currentSrcIndex.value];
-    isError.value = false;
+    const nextSrc = safeImageUrl(props.srcs[currentSrcIndex.value]);
+    if (nextSrc) {
+      currentSrc.value = nextSrc;
+      isError.value = false;
+    } else {
+      handleError();
+    }
   } else {
     isError.value = true;
     currentSrc.value = '';

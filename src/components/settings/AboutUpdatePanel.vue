@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import Divider from 'primevue/divider';
-import { open } from '@tauri-apps/plugin-shell';
 import { invoke } from '@tauri-apps/api/core';
 import { useToast } from '../../composables/useToast';
 import AppInfoCard from './about-update/AppInfoCard.vue';
 import UpdateCard from './about-update/UpdateCard.vue';
 import WechatQrDialog from './about-update/WechatQrDialog.vue';
+import { openTrustedExternalUrl } from '../../security/shellOpen';
 
 interface Props {
   appVersion: string;
@@ -31,7 +31,9 @@ const autoUpdateEnabledModel = computed({
 const showWechatQR = ref(false);
 
 function openExternal(url: string) {
-  open(url);
+  openTrustedExternalUrl(url).catch((error) => {
+    toast.error('打开失败', String(error));
+  });
 }
 
 async function openLogDir() {

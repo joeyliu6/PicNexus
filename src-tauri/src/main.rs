@@ -13,6 +13,8 @@ mod server;
 
 use error::AppError;
 use log::LevelFilter;
+use std::collections::HashMap;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -26,6 +28,7 @@ use tauri::{
 };
 use tauri_plugin_log::{Target, TargetKind};
 use tokio::sync::Mutex as TokioMutex;
+use url::Url;
 
 /// 关闭按钮行为状态：true = 最小化到托盘，false = 直接退出
 pub struct CloseToTrayState(pub AtomicBool);
@@ -128,7 +131,11 @@ fn clamp_tray_menu_position(
     PhysicalPosition::new(x.round() as i32, y.round() as i32)
 }
 
-fn show_tray_menu_window(app: &tauri::AppHandle, event_position: PhysicalPosition<f64>, rect: Rect) {
+fn show_tray_menu_window(
+    app: &tauri::AppHandle,
+    event_position: PhysicalPosition<f64>,
+    rect: Rect,
+) {
     let Some(window) = app.get_webview_window(TRAY_MENU_WINDOW_LABEL) else {
         log::warn!("[Tray] tray-menu 窗口不存在，无法显示自定义托盘菜单");
         return;
@@ -208,6 +215,119 @@ fn is_safe_service_id(service: &str) -> bool {
 
 /// 全局 HTTP 客户端状态
 /// 使用单例模式复用 HTTP 客户端，提升性能
+fn is_loopback_host(host: &str) -> bool {
+    let normalized = normalize_host(host);
+    if normalized.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+
+    normalized
+        .parse::<IpAddr>()
+        .map(|ip| match ip {
+            IpAddr::V4(ip) => ip.is_loopback(),
+            IpAddr::V6(ip) => {
+                ip.is_loopback()
+                    || ipv4_mapped_from_ipv6(ip)
+                        .map(|mapped| mapped.is_loopback())
+                        .unwrap_or(false)
+            }
+        })
+        .unwrap_or(false)
+}
+
+fn is_private_or_reserved_host(host: &str) -> bool {
+    if is_loopback_host(host) {
+        return false;
+    }
+
+    match normalize_host(host).parse::<IpAddr>() {
+        Ok(IpAddr::V4(ip)) => is_private_or_reserved_ipv4(ip),
+        Ok(IpAddr::V6(ip)) => {
+            if let Some(mapped) = ipv4_mapped_from_ipv6(ip) {
+                return is_private_or_reserved_ipv4(mapped);
+            }
+
+            ip.is_unspecified()
+                || ip.is_multicast()
+                || ip.segments()[0] & 0xffc0 == 0xfe80
+                || ip.segments()[0] & 0xfe00 == 0xfc00
+        }
+        Err(_) => false,
+    }
+}
+
+fn normalize_host(host: &str) -> String {
+    host.trim()
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .trim_end_matches('.')
+        .to_ascii_lowercase()
+}
+
+fn is_private_or_reserved_ipv4(ip: Ipv4Addr) -> bool {
+    let octets = ip.octets();
+    ip.is_private()
+        || ip.is_link_local()
+        || ip.is_broadcast()
+        || ip.is_multicast()
+        || ip.is_documentation()
+        || octets[0] == 0
+        || (octets[0] == 100 && (64..=127).contains(&octets[1]))
+}
+
+fn ipv4_mapped_from_ipv6(ip: Ipv6Addr) -> Option<Ipv4Addr> {
+    let segments = ip.segments();
+    if segments[0] == 0
+        && segments[1] == 0
+        && segments[2] == 0
+        && segments[3] == 0
+        && segments[4] == 0
+        && segments[5] == 0xffff
+    {
+        let high = segments[6];
+        let low = segments[7];
+        return Some(Ipv4Addr::new(
+            (high >> 8) as u8,
+            high as u8,
+            (low >> 8) as u8,
+            low as u8,
+        ));
+    }
+
+    None
+}
+
+fn validate_external_url(raw_url: &str) -> Result<Url, AppError> {
+    let parsed = Url::parse(raw_url)
+        .map_err(|_| AppError::validation("地址格式不正确，请输入完整的 https:// 地址"))?;
+
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(AppError::validation("地址不能包含用户名或密码"));
+    }
+
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| AppError::validation("地址缺少主机名"))?;
+
+    match parsed.scheme() {
+        "https" => {
+            if is_private_or_reserved_host(host) {
+                return Err(AppError::validation("地址不能指向内网、链路本地或保留地址"));
+            }
+            Ok(parsed)
+        }
+        "http" if is_loopback_host(host) => Ok(parsed),
+        "http" => Err(AppError::validation(
+            "外部 HTTP 地址已禁用，请改用 HTTPS。本机服务仅支持 http://localhost 或 http://127.0.0.1。",
+        )),
+        _ => Err(AppError::validation("地址仅支持 HTTPS，或本机回环 HTTP。")),
+    }
+}
+
+fn validate_webdav_url(raw_url: &str) -> Result<Url, AppError> {
+    validate_external_url(raw_url).map_err(|err| AppError::webdav(err.to_string()))
+}
+
 pub struct HttpClient(pub reqwest::Client);
 
 fn main() {
@@ -253,15 +373,13 @@ fn main() {
     log_targets.push(Target::new(TargetKind::Webview));
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(
-            |app, _args, _cwd| {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.unminimize();
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
-            },
-        ))
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         // 注册 Tauri 2.0 插件
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_autostart::init(
@@ -372,6 +490,7 @@ fn main() {
             get_or_create_secure_key,
             set_secure_key,
             open_log_dir,
+            webdav_request,
             open_path,
             check_port_free,
             update_server_config,
@@ -2021,6 +2140,22 @@ struct WebDAVConfig {
     remote_path: String,
 }
 
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WebDAVRequest {
+    method: String,
+    url: String,
+    headers: Option<HashMap<String, String>>,
+    body: Option<String>,
+    timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct WebDAVResponse {
+    status: u16,
+    body: Option<String>,
+}
+
 #[tauri::command]
 async fn test_r2_connection(
     config: R2Config,
@@ -2183,6 +2318,68 @@ async fn test_webdav_connection(
 }
 
 #[tauri::command]
+async fn webdav_request(
+    request: WebDAVRequest,
+    http_client: tauri::State<'_, HttpClient>,
+) -> Result<WebDAVResponse, AppError> {
+    let url = validate_webdav_url(&request.url)?;
+    let method = reqwest::Method::from_bytes(request.method.as_bytes())
+        .map_err(|_| AppError::webdav("WebDAV 请求方法无效"))?;
+    let propfind = reqwest::Method::from_bytes(b"PROPFIND").unwrap();
+    let mkcol = reqwest::Method::from_bytes(b"MKCOL").unwrap();
+
+    if !matches!(method, reqwest::Method::GET | reqwest::Method::PUT)
+        && method != propfind
+        && method != mkcol
+    {
+        return Err(AppError::webdav("WebDAV 请求方法不在允许列表中"));
+    }
+
+    let timeout = Duration::from_millis(request.timeout_ms.unwrap_or(30_000).clamp(1_000, 60_000));
+    let mut builder = http_client.0.request(method, url).timeout(timeout);
+
+    if let Some(headers) = request.headers {
+        for (name, value) in headers {
+            let normalized = name.to_ascii_lowercase();
+            if matches!(
+                normalized.as_str(),
+                "authorization" | "depth" | "overwrite" | "content-type"
+            ) {
+                builder = builder.header(name, value);
+            }
+        }
+    }
+
+    if let Some(body) = request.body {
+        builder = builder.body(body);
+    }
+
+    let response = builder.send().await.map_err(|err| {
+        if err.is_connect() {
+            AppError::webdav("无法连接到 WebDAV 服务器，请检查 URL 或网络")
+        } else if err.is_timeout() {
+            AppError::webdav("WebDAV 请求超时")
+        } else {
+            AppError::webdav(format!("WebDAV 请求失败: {}", err))
+        }
+    })?;
+
+    let status = response.status().as_u16();
+    let body = if request.method.eq_ignore_ascii_case("GET") {
+        Some(
+            response
+                .text()
+                .await
+                .map_err(|err| AppError::webdav(format!("读取 WebDAV 响应失败: {}", err)))?,
+        )
+    } else {
+        None
+    };
+
+    Ok(WebDAVResponse { status, body })
+}
+
+#[tauri::command]
 fn get_or_create_secure_key() -> Result<String, AppError> {
     if let Some(key_path) = portable::secure_key_path() {
         if let Some(parent) = key_path.parent() {
@@ -2286,7 +2483,7 @@ enum OpenTarget {
     Path(PathBuf),
 }
 
-const ALLOWED_OPEN_URL_SCHEMES: &[&str] = &["http", "https", "mailto", "tel"];
+const ALLOWED_OPEN_URL_SCHEMES: &[&str] = &["http", "https"];
 const DANGEROUS_OPEN_EXTENSIONS: &[&str] = &[
     "app", "appimage", "bat", "cmd", "com", "cpl", "dll", "exe", "hta", "jar", "js", "jse", "lnk",
     "msi", "msp", "pif", "ps1", "reg", "scr", "sh", "url", "vb", "vbe", "vbs", "wsf",
@@ -2333,7 +2530,8 @@ fn validate_open_url(input: &str) -> Result<Option<OpenTarget>, AppError> {
         return Err(AppError::validation("链接不能包含用户凭据"));
     }
 
-    Ok(Some(OpenTarget::Url(parsed.to_string())))
+    let validated = validate_external_url(parsed.as_str())?;
+    Ok(Some(OpenTarget::Url(validated.to_string())))
 }
 
 fn validate_open_file_path(input: &str) -> Result<OpenTarget, AppError> {
@@ -2394,6 +2592,19 @@ mod open_target_tests {
             validate_open_target("https://github.com/joeyliu6/PicNexus"),
             Ok(OpenTarget::Url(_))
         ));
+    }
+
+    #[test]
+    fn open_target_allows_loopback_http_with_mapped_ipv6() {
+        assert!(matches!(
+            validate_open_target("http://[::ffff:127.0.0.1]:8080/image.png"),
+            Ok(OpenTarget::Url(_))
+        ));
+    }
+
+    #[test]
+    fn open_target_rejects_private_mapped_ipv6_url() {
+        assert!(validate_open_target("https://[::ffff:192.168.1.10]/image.png").is_err());
     }
 
     #[test]

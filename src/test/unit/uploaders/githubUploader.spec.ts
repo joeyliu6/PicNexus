@@ -66,6 +66,22 @@ describe('GithubUploader.validateConfig', () => {
     expect(r.valid).toBe(false);
     expect(r.missingFields).toContain('token');
   });
+
+  it('启用自定义 CDN 时复用外部 URL 安全策略', async () => {
+    const r = await uploader.validateConfig(makeConfig({
+      cdnConfig: {
+        enabled: true,
+        selectedIndex: 0,
+        cdnList: [{
+          name: 'unsafe',
+          url: 'http://cdn.example.com',
+          template: '{domain}/{path}',
+        }],
+      },
+    }));
+    expect(r.valid).toBe(false);
+    expect(r.errors?.join('\n')).toContain('外部 HTTP 地址已禁用');
+  });
 });
 
 describe('GithubUploader.upload - 不带 CDN', () => {
@@ -217,6 +233,22 @@ describe('GithubUploader.upload - CDN 转换', () => {
       },
     }));
     expect(r.url).toBe(`https://proxy.example.com/cache?u=${RAW_URL}`);
+  });
+
+  it('CDN 地址指向内网或凭据型 URL 时在上传前拒绝', async () => {
+    await expect(new GithubUploader().upload('/tmp/x.jpg', makeOptions({
+      cdnConfig: {
+        enabled: true,
+        selectedIndex: 0,
+        cdnList: [{
+          name: 'private',
+          url: 'https://192.168.1.10',
+          template: '{domain}/{path}',
+        }],
+      },
+    }))).rejects.toThrow('内网');
+
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 });
 

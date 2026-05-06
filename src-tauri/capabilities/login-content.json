@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "login-content",
+  "description": "Login content webview capability",
+  "webviews": ["login-content"],
+  "permissions": [
+    "core:event:default",
+    "core:window:allow-close",
+    "core:window:allow-show",
+    "log:allow-log"
+  ]
+}

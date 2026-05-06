@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick, ref } from 'vue';
 import { mount } from '@vue/test-utils';
-import { getShellOpenMock } from '../../../helpers/tauriMock';
+import { getInvokeMock } from '../../../helpers/tauriMock';
 
 const {
   toastWarnMock,
@@ -12,9 +12,8 @@ const {
   toastWarnMock: vi.fn(),
   toastErrorMock: vi.fn(),
   copyLinkActionMock: vi.fn(),
-  applyConfiguredUrlMock: vi.fn((url: string, serviceId?: string) => `prefixed:${serviceId}:${url}`),
+  applyConfiguredUrlMock: vi.fn((url: string, serviceId?: string) => `https://proxy.example.com/${serviceId}?url=${encodeURIComponent(url)}`),
 }));
-const shellOpenMock = getShellOpenMock();
 
 vi.mock('../../../../composables/useToast', () => ({
   useToast: () => ({
@@ -97,7 +96,6 @@ describe('useLightboxActions', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     copyLinkActionMock.mockResolvedValue({ ok: true });
-    shellOpenMock.mockResolvedValue(undefined);
   });
 
   it('warns instead of copying when the current item has no generated link', async () => {
@@ -185,9 +183,11 @@ describe('useLightboxActions', () => {
     await harness.api().openInBrowser();
 
     expect(applyConfiguredUrlMock).toHaveBeenCalledWith('https://img.example.com/demo.png', 'weibo');
-    expect(shellOpenMock).toHaveBeenCalledWith('prefixed:weibo:https://img.example.com/demo.png');
+    expect(getInvokeMock()).toHaveBeenCalledWith('open_path', {
+      path: 'https://proxy.example.com/weibo?url=https%3A%2F%2Fimg.example.com%2Fdemo.png',
+    });
 
-    shellOpenMock.mockRejectedValueOnce(new Error('denied'));
+    getInvokeMock().mockRejectedValueOnce(new Error('denied'));
     await harness.api().openInBrowser();
 
     expect(toastErrorMock).toHaveBeenCalledTimes(1);

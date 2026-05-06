@@ -9,7 +9,6 @@ import { useConfigManager } from '../useConfig';
 import { useServiceHealth } from '../useServiceHealth';
 import { TOAST_MESSAGES } from '../../constants';
 import { SERVICE_DISPLAY_NAMES } from '../../constants/serviceNames';
-import { SERVICE_REQUIRED_FIELDS } from '../../constants/serviceRequiredFields';
 import { syncCustomS3Uploaders } from '../../uploaders';
 import { useConfirm } from '../useConfirm';
 import { createLogger } from '../../utils/logger';
@@ -28,6 +27,7 @@ import type {
 import { DEFAULT_CONFIG, cloneDefaultPrefixes, makeCustomS3Id } from '../../config/types';
 import { applyConfigToForm } from './settingsFormSnapshot';
 import type { SettingsFormData } from './settingsFormTypes';
+import { validateS3Config } from './s3ConfigValidation';
 
 // ---- 类型定义 ----
 
@@ -448,25 +448,6 @@ export function useSettingsForm() {
       try { await loadSettings(); } catch (reloadErr) { log.error('恢复默认失败后重新加载配置失败', reloadErr); }
       return false;
     }
-  }
-
-  // ---- S3 配置验证 ----
-
-  function validateS3Config(serviceId: ServiceType, config: Record<string, unknown>): string | null {
-    const fields = SERVICE_REQUIRED_FIELDS[serviceId] || [];
-    for (const field of fields) {
-      const val = config[field];
-      if (!val || String(val).trim().length < 2) {
-        return `${field} 格式无效（至少 2 个字符）`;
-      }
-    }
-    if (serviceId === 'r2' && config.accountId && !/^[a-f0-9]{32}$/.test(String(config.accountId))) {
-      return 'Account ID 格式不正确（应为 32 位十六进制字符串）';
-    }
-    if (config.publicDomain && !/^https:\/\/.+/.test(String(config.publicDomain).trim())) {
-      return '公开访问域名应以 https:// 开头';
-    }
-    return null;
   }
 
   // ---- 链接前缀管理 ----

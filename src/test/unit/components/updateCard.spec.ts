@@ -17,8 +17,8 @@ vi.mock('../../../composables/useToast', () => ({
   useToast: () => ({ error: mocks.toastError }),
 }));
 
-vi.mock('@tauri-apps/plugin-shell', () => ({
-  open: mocks.openExternal,
+vi.mock('../../../security/shellOpen', () => ({
+  openTrustedExternalUrl: mocks.openExternal,
 }));
 
 const ButtonStub = defineComponent({

@@ -53,4 +53,18 @@ describe('ThumbnailImage fallback chain', () => {
 
     expect(wrapper.get('img').attributes('src')).toBe('https://cdn.example.com/new-primary.jpg');
   });
+
+  it('skips unsafe image URLs before trying the next candidate', async () => {
+    const wrapper = mountWithDefaults(ThumbnailImage, {
+      props: {
+        srcs: [
+          'javascript:alert(1)',
+          'file:///tmp/local.png',
+          'https://cdn.example.com/safe.jpg',
+        ],
+      },
+    });
+
+    expect(wrapper.get('img').attributes('src')).toBe('https://cdn.example.com/safe.jpg');
+  });
 });

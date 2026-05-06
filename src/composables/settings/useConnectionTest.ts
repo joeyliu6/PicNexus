@@ -18,7 +18,7 @@ interface UseConnectionTestOptions {
   formData: Ref<SettingsFormShape>;
   serviceNames: Record<ServiceType, string>;
   errorToString: (error: unknown) => string;
-  validateS3Config: (serviceId: ServiceType, config: Record<string, unknown>) => string | null;
+  validateS3Config: (serviceId: string, config: Record<string, unknown>) => string | null;
 }
 
 export function useConnectionTest(options: UseConnectionTestOptions) {
@@ -96,7 +96,7 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
       displayName = serviceNames[serviceId as ServiceType];
     }
 
-    const validationError = validateS3Config(serviceId as ServiceType, config);
+    const validationError = validateS3Config(serviceId, config);
     if (validationError) {
       toast.showConfig('error', TOAST_MESSAGES.auth.connectionFailed(displayName, validationError));
       throw new Error(validationError);
@@ -156,12 +156,12 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
       const profileId = getCustomS3ProfileId(serviceId);
       const profile = formData.value.custom_s3_profiles.find((item: CustomS3Profile) => item.id === profileId);
       if (!profile) return '找不到该自定义 S3 配置';
-      return validateS3Config(serviceId as ServiceType, profile as unknown as Record<string, unknown>);
+      return validateS3Config(serviceId, profile as unknown as Record<string, unknown>);
     }
 
     if (S3_SERVICE_IDS.includes(serviceId as ServiceType)) {
       const config = formData.value[serviceId as 'r2' | 'tencent' | 'aliyun' | 'qiniu' | 'upyun'] as unknown as Record<string, unknown>;
-      return validateS3Config(serviceId as ServiceType, config);
+      return validateS3Config(serviceId, config);
     }
 
     return null;

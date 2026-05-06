@@ -1,32 +1,10 @@
-// 通用 WebDAV 客户端模块
-
-import { fetch } from '@tauri-apps/plugin-http';
+import { invoke } from '@tauri-apps/api/core';
 import { secureStorage } from '../crypto';
+import { assertAllowedWebDAVUrl } from '../security/networkPolicy';
 import { createLogger } from './logger';
 
 const log = createLogger('WebDAV');
-const EXTERNAL_HTTP_DISABLED_MESSAGE = '外部 HTTP WebDAV 地址已禁用，请改用 HTTPS。本机服务仅支持 http://localhost 或 http://127.0.0.1。';
 
-function assertAllowedWebDAVUrl(url: string): void {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error('WebDAV 地址格式不正确，请输入完整的 https:// 地址');
-  }
-
-  if (parsed.protocol === 'https:') return;
-  if (parsed.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(parsed.hostname)) return;
-
-  if (parsed.protocol === 'http:') {
-    throw new Error(EXTERNAL_HTTP_DISABLED_MESSAGE);
-  }
-  throw new Error('WebDAV 地址仅支持 HTTPS，或本机回环 HTTP。');
-}
-
-/**
- * WebDAV 客户端配置（内部使用，密码已解密）
- */
 interface WebDAVClientConfig {
   url: string;
   username: string;
@@ -34,11 +12,36 @@ interface WebDAVClientConfig {
   remotePath?: string;
 }
 
-/**
- * WebDAV 客户端类
- * 提供基础的文件读写接口
- * 注意：密码应使用加密存储，此类在使用时自动解密
- */
+interface WebDAVRequestOptions {
+  method: string;
+  url: string;
+  headers?: Record<string, string>;
+  body?: string;
+  timeoutMs?: number;
+}
+
+interface WebDAVResponse {
+  status: number;
+  body?: string | null;
+}
+
+async function webdavRequest(options: WebDAVRequestOptions): Promise<WebDAVResponse> {
+  assertAllowedWebDAVUrl(options.url);
+  return await invoke<WebDAVResponse>('webdav_request', {
+    request: {
+      method: options.method,
+      url: options.url,
+      headers: options.headers ?? {},
+      body: options.body ?? null,
+      timeoutMs: options.timeoutMs ?? null,
+    },
+  });
+}
+
+function isOkStatus(status: number): boolean {
+  return status >= 200 && status <= 299;
+}
+
 export class WebDAVClient {
   private config: WebDAVClientConfig;
 
@@ -46,11 +49,6 @@ export class WebDAVClient {
     this.config = { ...config };
   }
 
-  /**
-   * 从加密配置创建 WebDAV 客户端
-   * @param encryptedConfig 包含加密密码的配置
-   * @returns Promise<WebDAVClient> 解密后的客户端实例
-   */
   static async fromEncryptedConfig(encryptedConfig: {
     url: string;
     username: string;
@@ -60,7 +58,6 @@ export class WebDAVClient {
   }): Promise<WebDAVClient> {
     let decryptedPassword = '';
 
-    // 优先使用加密密码
     if (encryptedConfig.passwordEncrypted) {
       try {
         decryptedPassword = await secureStorage.decrypt(encryptedConfig.passwordEncrypted);
@@ -69,7 +66,6 @@ export class WebDAVClient {
         throw new Error('WebDAV 密码解密失败，请重新配置');
       }
     } else if (encryptedConfig.password) {
-      // 向后兼容：使用明文密码（旧版本配置）
       log.warn('使用明文密码（建议重新保存配置以启用加密）');
       decryptedPassword = encryptedConfig.password;
     } else {
@@ -84,20 +80,10 @@ export class WebDAVClient {
     });
   }
 
-  /**
-   * 加密密码（用于保存配置时）
-   * @param password 明文密码
-   * @returns Promise<string> 加密后的密码
-   */
   static async encryptPassword(password: string): Promise<string> {
     return await secureStorage.encrypt(password);
   }
 
-  /**
-   * 解密密码（用于加载配置时回显）
-   * @param encryptedPassword 加密的密码
-   * @returns Promise<string> 解密后的密码，解密失败返回空字符串
-   */
   static async decryptPassword(encryptedPassword: string): Promise<string> {
     if (!encryptedPassword) return '';
     try {
@@ -108,38 +94,20 @@ export class WebDAVClient {
     }
   }
 
-  /**
-   * 更新配置
-   * @param config 新的 WebDAV 配置（密码应已解密）
-   */
   updateConfig(config: WebDAVClientConfig): void {
     this.config = { ...config };
   }
 
-  /**
-   * 构建完整的 WebDAV URL
-   * @param remotePath 远程路径
-   * @returns 完整的 URL
-   */
   private buildUrl(remotePath: string): string {
     const baseUrl = this.config.url.trim();
     assertAllowedWebDAVUrl(baseUrl);
     const path = remotePath.trim();
 
-    // 处理路径拼接
-    if (baseUrl.endsWith('/') && path.startsWith('/')) {
-      return baseUrl + path.substring(1);
-    } else if (baseUrl.endsWith('/') || path.startsWith('/')) {
-      return baseUrl + path;
-    } else {
-      return baseUrl + '/' + path;
-    }
+    if (baseUrl.endsWith('/') && path.startsWith('/')) return baseUrl + path.substring(1);
+    if (baseUrl.endsWith('/') || path.startsWith('/')) return baseUrl + path;
+    return `${baseUrl}/${path}`;
   }
 
-  /**
-   * 生成 Basic Auth 认证头（支持 UTF-8 用户名和密码）
-   * @returns Base64 编码的认证字符串
-   */
   private getAuthHeader(): string {
     const credentials = `${this.config.username.trim()}:${this.config.password.trim()}`;
     const bytes = new TextEncoder().encode(credentials);
@@ -147,207 +115,128 @@ export class WebDAVClient {
     return `Basic ${base64}`;
   }
 
-  /**
-   * 验证 WebDAV 连接
-   * @returns 连接是否成功
-   */
   async testConnection(): Promise<boolean> {
     try {
-      const testUrl = this.buildUrl(this.config.remotePath || '/');
-
-      // 使用 PROPFIND 方法测试连接（WebDAV 标准方法）
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-      const response = await fetch(testUrl, {
+      const response = await webdavRequest({
         method: 'PROPFIND',
+        url: this.buildUrl(this.config.remotePath || '/'),
         headers: {
-          'Authorization': this.getAuthHeader(),
-          'Depth': '0',
+          Authorization: this.getAuthHeader(),
+          Depth: '0',
         },
-        signal: controller.signal
+        timeoutMs: 10000,
       });
 
-      clearTimeout(timeoutId);
-
-      // 200, 207 (Multi-Status) 或 404 (文件不存在但连接成功) 都算成功
-      return response.ok || response.status === 404;
+      return isOkStatus(response.status) || response.status === 404;
     } catch (error) {
       log.error('连接测试失败', error);
       return false;
     }
   }
 
-  /**
-   * 上传文件到 WebDAV (覆盖模式)
-   * @param remotePath 远程路径
-   * @param content 文件内容（字符串）
-   * @returns 是否成功
-   * @throws {Error} 上传失败时抛出错误
-   */
   async putFile(remotePath: string, content: string): Promise<void> {
-    // 提取父目录路径并确保其存在
     const lastSlashIndex = remotePath.lastIndexOf('/');
     if (lastSlashIndex > 0) {
-      const parentDir = remotePath.substring(0, lastSlashIndex + 1);
-      await this.ensureDir(parentDir);
+      await this.ensureDir(remotePath.substring(0, lastSlashIndex + 1));
     }
 
     const url = this.buildUrl(remotePath);
-
-    let response: Response;
+    let response: WebDAVResponse;
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-      response = await fetch(url, {
+      response = await webdavRequest({
         method: 'PUT',
+        url,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': this.getAuthHeader(),
-          'Overwrite': 'T',
+          Authorization: this.getAuthHeader(),
+          Overwrite: 'T',
         },
         body: content,
-        signal: controller.signal
+        timeoutMs: 30000,
       });
-
-      clearTimeout(timeoutId);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       log.error('上传文件失败', errorMsg);
       throw new Error(`WebDAV 上传失败: ${errorMsg}`);
     }
 
-    if (!response.ok) {
+    if (!isOkStatus(response.status)) {
       const status = response.status;
-      if (status === 401 || status === 403) {
-        throw new Error('认证失败，请检查用户名和密码');
-      } else if (status === 404) {
-        throw new Error('路径不存在，请检查远程路径配置');
-      } else if (status === 507) {
-        throw new Error('存储空间不足，WebDAV 服务器空间已满');
-      } else if (status >= 500) {
-        throw new Error(`服务器错误 (HTTP ${status})，WebDAV 服务器可能暂时不可用`);
-      }
+      if (status === 401 || status === 403) throw new Error('认证失败，请检查用户名和密码');
+      if (status === 404) throw new Error('路径不存在，请检查远程路径配置');
+      if (status === 507) throw new Error('存储空间不足，WebDAV 服务器空间已满');
+      if (status >= 500) throw new Error(`服务器错误 (HTTP ${status})，WebDAV 服务器可能暂时不可用`);
       throw new Error(`上传失败: HTTP ${status}`);
     }
   }
 
-  /**
-   * 从 WebDAV 下载文件
-   * @param remotePath 远程路径
-   * @returns 文件内容（字符串），如果文件不存在返回 null
-   * @throws {Error} 下载失败时抛出错误
-   */
   async getFile(remotePath: string): Promise<string | null> {
     const url = this.buildUrl(remotePath);
-
-    let response: Response;
+    let response: WebDAVResponse;
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-      response = await fetch(url, {
+      response = await webdavRequest({
         method: 'GET',
+        url,
         headers: {
-          'Authorization': this.getAuthHeader(),
+          Authorization: this.getAuthHeader(),
         },
-        signal: controller.signal
+        timeoutMs: 30000,
       });
-
-      clearTimeout(timeoutId);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       log.error('下载文件失败', errorMsg);
       throw new Error(`WebDAV 下载失败: ${errorMsg}`);
     }
 
-    if (response.status === 404) {
-      return null;
-    }
+    if (response.status === 404) return null;
 
-    if (!response.ok) {
+    if (!isOkStatus(response.status)) {
       const status = response.status;
-      if (status === 401 || status === 403) {
-        throw new Error('认证失败，请检查用户名和密码');
-      } else if (status >= 500) {
-        throw new Error(`服务器错误 (HTTP ${status})，WebDAV 服务器可能暂时不可用`);
-      }
+      if (status === 401 || status === 403) throw new Error('认证失败，请检查用户名和密码');
+      if (status >= 500) throw new Error(`服务器错误 (HTTP ${status})，WebDAV 服务器可能暂时不可用`);
       throw new Error(`下载失败: HTTP ${status}`);
     }
 
-    return await response.text();
+    return response.body ?? '';
   }
 
-  /**
-   * 检查文件是否存在（使用 PROPFIND 轻量检查，不下载文件内容）
-   * @param remotePath 远程路径
-   * @returns 文件是否存在
-   */
   async exists(remotePath: string): Promise<boolean> {
     try {
-      const url = this.buildUrl(remotePath);
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-      const response = await fetch(url, {
+      const response = await webdavRequest({
         method: 'PROPFIND',
+        url: this.buildUrl(remotePath),
         headers: {
-          'Authorization': this.getAuthHeader(),
-          'Depth': '0',
+          Authorization: this.getAuthHeader(),
+          Depth: '0',
         },
-        signal: controller.signal,
+        timeoutMs: 10000,
       });
-
-      clearTimeout(timeoutId);
-      return response.ok;
+      return isOkStatus(response.status);
     } catch (error) {
       log.error('检查文件存在性失败', error);
       return false;
     }
   }
 
-  /**
-   * 创建目录
-   * @param remotePath 远程目录路径（需以 / 结尾）
-   * @returns 是否成功（如果目录已存在也返回 true）
-   */
   async mkDir(remotePath: string): Promise<boolean> {
     try {
-      // 确保路径以 / 结尾
-      const dirPath = remotePath.endsWith('/') ? remotePath : remotePath + '/';
-      const url = this.buildUrl(dirPath);
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-      // 使用 MKCOL 方法创建目录
-      const response = await fetch(url, {
+      const dirPath = remotePath.endsWith('/') ? remotePath : `${remotePath}/`;
+      const response = await webdavRequest({
         method: 'MKCOL',
+        url: this.buildUrl(dirPath),
         headers: {
-          'Authorization': this.getAuthHeader(),
+          Authorization: this.getAuthHeader(),
         },
-        signal: controller.signal
+        timeoutMs: 10000,
       });
 
-      clearTimeout(timeoutId);
-
       const status = response.status;
-
-      // 201: 创建成功
-      // 405: 目录已存在（Method Not Allowed）
-      // 301/302: 目录已存在（某些服务器返回重定向）
-      if (status === 201 || status === 405 || status === 301 || status === 302) {
-        return true;
-      }
-
-      // 409: 父目录不存在，需要先创建父目录
+      if (status === 201 || status === 405 || status === 301 || status === 302) return true;
       if (status === 409) {
         log.warn('创建目录失败: 父目录不存在', { dirPath });
         return false;
       }
 
-      // 其他错误
       log.error('创建目录失败', { status, dirPath });
       return false;
     } catch (error) {
@@ -356,31 +245,17 @@ export class WebDAVClient {
     }
   }
 
-  /**
-   * 确保目录路径存在（递归创建）
-   * @param remotePath 远程目录路径
-   */
   async ensureDir(remotePath: string): Promise<void> {
-    // 规范化路径
     let path = remotePath.trim();
-    if (!path.startsWith('/')) {
-      path = '/' + path;
-    }
-    if (!path.endsWith('/')) {
-      path = path + '/';
-    }
+    if (!path.startsWith('/')) path = `/${path}`;
+    if (!path.endsWith('/')) path = `${path}/`;
 
-    // 拆分路径为各级目录
     const parts = path.split('/').filter(p => p.length > 0);
-
-    // 逐级创建目录
     let currentPath = '/';
     for (const part of parts) {
-      currentPath += part + '/';
+      currentPath += `${part}/`;
       const success = await this.mkDir(currentPath);
       if (!success) {
-        // 如果创建失败（可能是 409），继续尝试创建
-        // 因为我们是从根目录开始创建，所以父目录应该已经存在
         log.warn('创建目录可能失败，继续尝试', { currentPath });
       }
     }

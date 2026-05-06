@@ -515,9 +515,52 @@ describe('useSettingsForm', () => {
       secretAccessKey: 'sk',
       bucketName: 'bucket',
       publicDomain: 'http://cdn.example.com',
-    })).toContain('https://');
+    })).toContain('外部 HTTP 地址已禁用');
+    expect(api.validateS3Config('r2', {
+      accountId: 'a'.repeat(32),
+      accessKeyId: 'ak',
+      secretAccessKey: 'sk',
+      bucketName: 'bucket',
+      publicDomain: 'https://user:pass@cdn.example.com',
+    })).toContain('用户名或密码');
     expect(api.validateS3Config('r2', r2Config())).toBeNull();
     expect(api.validateS3Config('jd', {})).toBeNull();
+  });
+
+  it('validates custom S3 endpoint and public domain with the shared network policy', () => {
+    const api = useSettingsForm();
+    const serviceId = makeCustomS3Id('private-s3');
+    const baseProfile = {
+      endpoint: 'https://s3.example.com',
+      accessKeyId: 'ak',
+      secretAccessKey: 'sk',
+      region: 'auto',
+      bucket: 'bucket',
+      path: '',
+      publicDomain: '',
+    };
+
+    expect(api.validateS3Config(serviceId, baseProfile)).toBeNull();
+    expect(api.validateS3Config(serviceId, {
+      ...baseProfile,
+      endpoint: 'http://127.0.0.1:9000',
+    })).toBeNull();
+    expect(api.validateS3Config(serviceId, {
+      ...baseProfile,
+      endpoint: 'http://s3.example.com',
+    })).toContain('外部 HTTP 地址已禁用');
+    expect(api.validateS3Config(serviceId, {
+      ...baseProfile,
+      endpoint: 'file:///tmp/bucket',
+    })).toContain('HTTPS');
+    expect(api.validateS3Config(serviceId, {
+      ...baseProfile,
+      endpoint: 'https://192.168.1.10',
+    })).toContain('内网');
+    expect(api.validateS3Config(serviceId, {
+      ...baseProfile,
+      publicDomain: 'https://user:pass@cdn.example.com',
+    })).toContain('用户名或密码');
   });
 
   it('debounces saves with advanced status and can cancel pending work', async () => {
