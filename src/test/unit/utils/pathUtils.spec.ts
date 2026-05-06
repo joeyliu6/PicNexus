@@ -17,7 +17,7 @@ describe('middleTruncate', () => {
     expect(result).toContain('C:\\Users');
     expect(result).toContain('file.txt');
     expect(result).toContain('\u2026'); // 省略号
-    expect(result.length).toBeLessThanOrEqual(40); // 合理长度
+    expect(result.length).toBeLessThanOrEqual(30); // 合理长度
   });
 
   it('Unix 长路径中间截断', () => {
@@ -33,7 +33,7 @@ describe('middleTruncate', () => {
     const path = 'ab/cd';
     const result = middleTruncate(path, 3);
 
-    expect(result.length).toBeLessThanOrEqual(5);
+    expect(result.length).toBeLessThanOrEqual(3);
     expect(result).toContain('\u2026');
   });
 
@@ -41,7 +41,13 @@ describe('middleTruncate', () => {
     const path = 'C:\\Users\\test\\deep\\file.txt';
     const result = middleTruncate(path, 15);
 
-    expect(result).toContain('C:\\Users');
-    expect(result).toContain('file.txt');
+    expect(result.length).toBeLessThanOrEqual(15);
+    expect(result).toContain('\u2026');
+  });
+
+  it('maxChars 极小时不会因为 slice(-0) 返回超长内容', () => {
+    expect(middleTruncate('abcdef', 1)).toBe('\u2026');
+    expect(middleTruncate('abcdef', 0)).toBe('');
+    expect(middleTruncate('', 2)).toBe('..');
   });
 });
