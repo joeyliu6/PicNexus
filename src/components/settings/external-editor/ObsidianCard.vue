@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { EditorServerConfig, ServerServiceType } from '../../../config/types';
-import { useToast } from '../../../composables/useToast';
-import { generateEditorServerAuthToken } from '../../../utils/editorServerAuth';
 import EditorServiceCard from './EditorServiceCard.vue';
 
 interface Props {
@@ -22,44 +20,16 @@ const emit = defineEmits<{
   navigateHosting: [];
 }>();
 
-const toast = useToast();
 const portDraft = ref(String(editorServer.value.port));
 const portError = ref('');
-const authTokenCopied = ref(false);
 
 const connectionTest = ref<{
   status: 'idle' | 'testing' | 'success' | 'warning' | 'error';
   message?: string;
 }>({ status: 'idle' });
 
-const serverAuthToken = computed(() => editorServer.value.authToken?.trim() || '');
-const displayServerAuthToken = computed(() => {
-  const token = serverAuthToken.value;
-  if (!token) return '未生成';
-  return `${token.slice(0, 8)}...${token.slice(-6)}`;
-});
-
 function updateEditorServer(patch: Partial<EditorServerConfig>) {
   editorServer.value = { ...editorServer.value, ...patch };
-}
-
-async function copyAuthToken() {
-  const token = serverAuthToken.value;
-  if (!token) return;
-
-  try {
-    await navigator.clipboard.writeText(token);
-    authTokenCopied.value = true;
-    setTimeout(() => { authTokenCopied.value = false; }, 2000);
-  } catch (_e) {
-    toast.error('复制失败', '请手动选中 Token 复制');
-  }
-}
-
-function regenerateAuthToken() {
-  authTokenCopied.value = false;
-  connectionTest.value = { status: 'idle' };
-  updateEditorServer({ authToken: generateEditorServerAuthToken() });
 }
 
 async function testObsidianConnection() {
@@ -187,27 +157,6 @@ watch(
             @click.stop
           />
           ，保存后即可生效
-          <div class="server-auth-inline">
-            <span class="auth-label">Token</span>
-            <code class="auth-token-text" v-tooltip.top="serverAuthToken">{{ displayServerAuthToken }}</code>
-            <button
-              type="button"
-              class="auth-icon-btn"
-              v-tooltip.top="authTokenCopied ? '已复制' : '复制 Token'"
-              :disabled="!serverAuthToken"
-              @click.stop="copyAuthToken"
-            >
-              <i :class="authTokenCopied ? 'pi pi-check' : 'pi pi-copy'" />
-            </button>
-            <button
-              type="button"
-              class="auth-icon-btn"
-              v-tooltip.top="'重新生成 Token'"
-              @click.stop="regenerateAuthToken"
-            >
-              <i class="pi pi-refresh" />
-            </button>
-          </div>
         </span>
       </div>
     </div>
@@ -280,57 +229,6 @@ watch(
 .port-input:focus {
   outline: none;
   border-color: var(--primary);
-}
-
-.server-auth-inline {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  margin-left: var(--space-xs-sm);
-  vertical-align: middle;
-}
-
-.auth-label {
-  color: var(--text-muted);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-semibold);
-}
-
-.auth-token-text {
-  max-width: calc(var(--space-5xl) * 2 + var(--space-2xl));
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--primary);
-  background: var(--primary-alpha-8);
-  border-radius: var(--radius-xs-sm);
-  padding: var(--space-2xs) var(--space-xs);
-}
-
-.auth-icon-btn {
-  width: var(--space-xl);
-  height: var(--space-xl);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.auth-icon-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.auth-icon-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 
 .test-connection-row {

@@ -169,6 +169,44 @@ describe('ExternalEditorPanel', () => {
     expect(validUpdates).toBe(true);
   });
 
+  it('hides Obsidian server token controls from the setup guide', async () => {
+    const wrapper = mountWithDefaults(ExternalEditorPanel, {
+      props: {
+        editorServer: {
+          enabled: true,
+          typoraEnabled: false,
+          port: 36799,
+          typoraService: 'jd',
+          obsidianService: 'jd',
+          authToken: 'secret-token',
+        },
+      },
+      global: {
+        stubs: {
+          ToggleSwitch: ToggleSwitchStub,
+          Button: ButtonStub,
+          ServiceSelectorDropdown: { template: '<div />' },
+        },
+        directives: {
+          tooltip: tooltipDirective,
+        },
+      },
+    });
+
+    // 展开 Obsidian 卡片
+    await wrapper.findAll('.card-header')[1].trigger('click');
+    await flush();
+
+    const text = wrapper.text();
+    expect(text).toContain('在插件设置中填写端口');
+    expect(text).toContain('保存后即可生效');
+    expect(text).not.toContain('Token');
+    expect(wrapper.find('.auth-token-text').exists()).toBe(false);
+    expect(wrapper.find('.auth-icon-btn').exists()).toBe(false);
+    expect(wrapper.find('.pi-copy').exists()).toBe(false);
+    expect(wrapper.find('.pi-refresh').exists()).toBe(false);
+  });
+
   it('connection test shows warning/success based on /status response', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({

@@ -67,6 +67,8 @@ const timelineRefs = vi.hoisted(() => ({
   },
   history: null as null | {
     favoriteSet: { value: Set<string> };
+    isStatsLoaded: { value: boolean };
+    totalCount: { value: number };
   },
   lightbox: null as null | {
     visible: { value: boolean };
@@ -250,10 +252,14 @@ vi.mock('../../../composables/useHistory', async () => {
   const { ref } = await import('vue');
   timelineRefs.history = {
     favoriteSet: ref(new Set<string>()),
+    isStatsLoaded: ref(false),
+    totalCount: ref(0),
   };
   return {
     useHistoryManager: () => ({
       favoriteSet: timelineRefs.history!.favoriteSet,
+      isStatsLoaded: timelineRefs.history!.isStatsLoaded,
+      totalCount: timelineRefs.history!.totalCount,
       loadTimePeriodStats: timelineFns.loadTimePeriodStats,
       jumpToMonth: timelineFns.jumpToMonth,
       batchSetFavorite: timelineFns.batchSetFavorite,
@@ -381,6 +387,8 @@ describe('TimelineView P1 coverage', () => {
     timelineRefs.viewState!.selectedIdList.value = [];
     timelineRefs.viewState!.hasSelection.value = false;
     timelineRefs.history!.favoriteSet.value = new Set();
+    timelineRefs.history!.isStatsLoaded.value = false;
+    timelineRefs.history!.totalCount.value = 0;
     timelineRefs.lightbox!.visible.value = false;
     timelineRefs.lightbox!.item.value = null;
     timelineRefs.lightbox!.hasPrev.value = false;
@@ -423,6 +431,8 @@ describe('TimelineView P1 coverage', () => {
   });
 
   it('shows skeleton instead of empty state while initial data is loading', () => {
+    timelineRefs.history!.isStatsLoaded.value = true;
+    timelineRefs.history!.totalCount.value = 1;
     timelineRefs.pagination!.isLoadingStats.value = true;
     timelineRefs.virtual!.visibleSkeletonSlots.value = [
       { key: 'slot-1', x: 0, y: 36, width: 120, height: 90 },
@@ -433,6 +443,17 @@ describe('TimelineView P1 coverage', () => {
     expect(wrapper.find('.empty-state-stub').exists()).toBe(false);
     expect(wrapper.find('.timeline-skeleton-overlay').exists()).toBe(true);
     expect(wrapper.find('.photo-slot-skeleton').exists()).toBe(true);
+  });
+
+  it('renders empty state instead of skeleton when global stats confirm no history', () => {
+    timelineRefs.history!.isStatsLoaded.value = true;
+    timelineRefs.history!.totalCount.value = 0;
+    timelineRefs.pagination!.isLoadingStats.value = true;
+
+    const wrapper = mountTimelineView();
+
+    expect(wrapper.find('.empty-state-stub').exists()).toBe(true);
+    expect(wrapper.find('.timeline-skeleton-overlay').exists()).toBe(false);
   });
 
   it('passes lightbox state through and wires navigate/delete events', async () => {

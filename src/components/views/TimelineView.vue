@@ -64,6 +64,18 @@ const timelinePagination = useTimelineDayPagination({
 });
 const { groups, dayStats, ensureDaysLoaded, prefetchDayAspectRatios, loadedDayKeys, totalCount: dayTotalCount, isLoadingStats, hasLoadedStats, isFullyPreloaded } = timelinePagination;
 
+const hasKnownNoTimelineItems = computed(() => {
+  if (!historyManager.isStatsLoaded.value) return false;
+  if (props.favoritesOnly) return historyManager.favoriteSet.value.size === 0;
+  return historyManager.totalCount.value === 0;
+});
+const showEmptyState = computed(() =>
+  groups.value.length === 0 && (!isLoadingStats.value || hasKnownNoTimelineItems.value)
+);
+const showInitialSkeleton = computed(() =>
+  isLoadingStats.value && groups.value.length === 0 && !hasKnownNoTimelineItems.value
+);
+
 const filteredTimePeriodStats = computed(() => {
   const periods = new Map<string, { year: number; month: number; count: number; minTimestamp: number; maxTimestamp: number }>();
   for (const day of dayStats.value) {
@@ -299,7 +311,7 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
 <template>
   <div class="timeline-view" :class="{ 'is-jumping': isJumping || isFirstLoadSkeleton }">
     <!-- Empty State -->
-    <div v-if="groups.length === 0 && !isLoadingStats" class="empty-state-wrapper">
+    <div v-if="showEmptyState" class="empty-state-wrapper">
       <EmptyState
         :icon="favoritesOnly ? 'pi pi-star' : 'pi pi-images'"
         :title="favoritesOnly ? '暂无收藏' : '暂无上传记录'"
@@ -336,7 +348,7 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
 
         <Transition name="t-fade-out">
           <TimelineSkeleton
-            v-show="isLoadingStats && groups.length === 0"
+            v-show="showInitialSkeleton"
             class="timeline-skeleton-overlay"
             :layout="skeletonLayout"
           />

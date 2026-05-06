@@ -43,6 +43,7 @@ function handleToggleAll() {
     <!-- 空状态 -->
     <InlineEmptyState
       v-if="sources.length === 0"
+      class="source-empty-state"
       icon="pi pi-inbox"
       title="暂无可迁移的图片"
       hint="历史记录中没有符合条件的图片"
@@ -144,6 +145,15 @@ function handleToggleAll() {
 }
 
 .source-list { display: flex; flex-direction: column; gap: var(--space-2xs); flex: 1; }
+
+.source-empty-state {
+  flex: 1 1 auto;
+  min-height: 0;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  padding: var(--space-xl) var(--space-lg);
+}
 
 .source-row {
   display: flex; align-items: center; gap: var(--space-sm);

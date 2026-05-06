@@ -210,6 +210,23 @@ describe('batch migrate P1 components', () => {
     expect(wrapper.emitted('toggleAll')).toEqual([[true]]);
   });
 
+  it('SourceList marks the empty state for centered source-column layout', () => {
+    const wrapper = mountWithDefaults(SourceList, {
+      props: {
+        sources: [],
+        selectedIds: [],
+      },
+      global: {
+        stubs: {
+          InlineEmptyState: { template: '<div class="inline-empty-stub" />' },
+        },
+      },
+    });
+
+    expect(wrapper.find('.source-empty-state').exists()).toBe(true);
+    expect(wrapper.find('.source-row').exists()).toBe(false);
+  });
+
   it('TargetCard toggles healthy targets and blocks error targets', async () => {
     const healthy = mountWithDefaults(TargetCard, {
       props: {

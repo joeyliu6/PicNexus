@@ -348,9 +348,10 @@ beforeEach(() => {
 });
 
 describe('HistoryView page shell', () => {
-  it('mounts the table view while stats bootstrap is still pending', async () => {
+  it('does not mount child views while stats bootstrap is still pending', async () => {
     const statsLoad = createDeferred();
     mockState.historyManager.isStatsLoaded.value = false;
+    mockState.historyManager.totalCount.value = 0;
     mockState.loadStats.mockReturnValueOnce(statsLoad.promise);
 
     const wrapper = mountWithDefaults(HistoryView, {
@@ -360,15 +361,106 @@ describe('HistoryView page shell', () => {
           HistoryTableView: HistoryTableViewStub,
           TimelineView: TimelineViewStub,
           FavoritesView: FavoritesViewStub,
+          EmptyState: EmptyStateStub,
         },
       },
     });
 
-    expect(wrapper.get('[data-testid="table-view"]').attributes('data-visible')).toBe('true');
+    expect(wrapper.find('[data-testid="table-view"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="timeline-view"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="favorites-view"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="empty-state"]').exists()).toBe(false);
     expect(mockState.loadStats).toHaveBeenCalledTimes(1);
 
+    mockState.historyManager.isStatsLoaded.value = true;
+    mockState.historyManager.totalCount.value = historyRows.length;
     statsLoad.resolve();
     await flushPromisesAndTicks(1);
+
+    expect(wrapper.get('[data-testid="table-view"]').attributes('data-visible')).toBe('true');
+  });
+
+  it('renders the parent empty state and skips child views when stats confirm no history', async () => {
+    const statsLoad = createDeferred();
+    mockState.historyManager.isStatsLoaded.value = false;
+    mockState.historyManager.totalCount.value = 0;
+    mockState.loadStats.mockReturnValueOnce(statsLoad.promise);
+
+    const wrapper = mountWithDefaults(HistoryView, {
+      global: {
+        stubs: {
+          DashboardStrip: DashboardStripStub,
+          HistoryTableView: HistoryTableViewStub,
+          TimelineView: TimelineViewStub,
+          FavoritesView: FavoritesViewStub,
+          EmptyState: EmptyStateStub,
+        },
+      },
+    });
+
+    mockState.historyManager.isStatsLoaded.value = true;
+    mockState.historyManager.totalCount.value = 0;
+    statsLoad.resolve();
+    await flushPromisesAndTicks(1);
+
+    expect(wrapper.get('[data-testid="empty-state"]').attributes('data-title')).toBe('暂无上传记录');
+    expect(wrapper.find('[data-testid="table-view"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="timeline-view"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="favorites-view"]').exists()).toBe(false);
+
+    await wrapper.get('.show-favorites').trigger('click');
+    expect(wrapper.get('[data-testid="empty-state"]').attributes('data-title')).toBe('暂无收藏');
+    expect(wrapper.find('[data-testid="favorites-view"]').exists()).toBe(false);
+  });
+
+  it('mounts the active child view when stats confirm existing history', async () => {
+    const statsLoad = createDeferred();
+    mockState.historyManager.isStatsLoaded.value = false;
+    mockState.historyManager.totalCount.value = 0;
+    mockState.loadStats.mockReturnValueOnce(statsLoad.promise);
+
+    const wrapper = mountWithDefaults(HistoryView, {
+      global: {
+        stubs: {
+          DashboardStrip: DashboardStripStub,
+          HistoryTableView: HistoryTableViewStub,
+          TimelineView: TimelineViewStub,
+          FavoritesView: FavoritesViewStub,
+          EmptyState: EmptyStateStub,
+        },
+      },
+    });
+
+    mockState.historyManager.isStatsLoaded.value = true;
+    mockState.historyManager.totalCount.value = historyRows.length;
+    statsLoad.resolve();
+    await flushPromisesAndTicks(1);
+
+    expect(wrapper.get('[data-testid="table-view"]').attributes('data-visible')).toBe('true');
+    expect(wrapper.find('[data-testid="empty-state"]').exists()).toBe(false);
+  });
+
+  it('falls back to mounting child views when stats bootstrap fails', async () => {
+    mockState.historyManager.isStatsLoaded.value = false;
+    mockState.historyManager.totalCount.value = 0;
+    mockState.loadStats.mockRejectedValueOnce(new Error('stats failed'));
+
+    const wrapper = mountWithDefaults(HistoryView, {
+      global: {
+        stubs: {
+          DashboardStrip: DashboardStripStub,
+          HistoryTableView: HistoryTableViewStub,
+          TimelineView: TimelineViewStub,
+          FavoritesView: FavoritesViewStub,
+          EmptyState: EmptyStateStub,
+        },
+      },
+    });
+
+    await flushPromisesAndTicks(1);
+
+    expect(wrapper.get('[data-testid="table-view"]').attributes('data-visible')).toBe('true');
+    expect(wrapper.find('[data-testid="empty-state"]').exists()).toBe(false);
   });
 
   it('wires search, service filter, view mode switching, and total count updates', async () => {
@@ -379,6 +471,7 @@ describe('HistoryView page shell', () => {
           HistoryTableView: HistoryTableViewStub,
           TimelineView: TimelineViewStub,
           FavoritesView: FavoritesViewStub,
+          EmptyState: EmptyStateStub,
         },
       },
     });

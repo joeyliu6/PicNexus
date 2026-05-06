@@ -3,13 +3,14 @@
  * 历史记录视图入口组件
  * 负责 Dashboard Strip 和视图切换
  */
-import { ref, onMounted, onActivated, onDeactivated, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, onActivated, onDeactivated, watch, nextTick } from 'vue';
 import type { ServiceType } from '../../config/types';
 import { useHistoryManager } from '../../composables/useHistory';
 import HistoryTableView from './history/HistoryTableView.vue';
 import TimelineView from './TimelineView.vue';
 import FavoritesView from './FavoritesView.vue';
 import DashboardStrip, { type ViewMode } from './history/DashboardStrip.vue';
+import EmptyState from '../common/EmptyState.vue';
 import 'primeicons/primeicons.css';
 
 const historyManager = useHistoryManager();
@@ -25,6 +26,31 @@ const activationTrigger = ref(0);
 const historyContainerRef = ref<HTMLElement | null>(null);
 let savedTableScrollTop = 0;
 let statsLoadPromise: Promise<void> | null = null;
+const hasStatsBootstrapSettled = ref(historyManager.isStatsLoaded.value);
+
+const hasKnownNoHistory = computed(() =>
+  historyManager.isStatsLoaded.value && historyManager.totalCount.value === 0
+);
+const showParentEmptyState = computed(() =>
+  hasStatsBootstrapSettled.value && hasKnownNoHistory.value
+);
+const shouldMountChildViews = computed(() =>
+  hasStatsBootstrapSettled.value && !showParentEmptyState.value
+);
+const emptyStateIcon = computed(() =>
+  currentViewMode.value === 'favorites' ? 'pi pi-star' : 'pi pi-images'
+);
+const emptyStateTitle = computed(() =>
+  currentViewMode.value === 'favorites' ? '暂无收藏' : '暂无上传记录'
+);
+const emptyStateDescription = computed(() =>
+  currentViewMode.value === 'favorites'
+    ? '点击图片右上角的 ★ 开始收藏'
+    : '上传图片后，历史记录将在这里显示'
+);
+const useNoPaddingContainer = computed(() =>
+  currentViewMode.value !== 'table' && !showParentEmptyState.value
+);
 
 async function ensureStatsLoaded(): Promise<void> {
   if (!statsLoadPromise) {
@@ -34,6 +60,8 @@ async function ensureStatsLoaded(): Promise<void> {
         totalCount.value = historyManager.totalCount.value;
       } catch {
         // loadStats already owns user-facing error reporting.
+      } finally {
+        hasStatsBootstrapSettled.value = true;
       }
     })().finally(() => {
       statsLoadPromise = null;
@@ -94,6 +122,13 @@ watch([currentFilter, debouncedSearchTerm], () => {
 const handleTotalCountUpdate = (count: number) => {
   totalCount.value = count;
 };
+
+watch(
+  () => historyManager.totalCount.value,
+  (count) => {
+    if (historyManager.isStatsLoaded.value) totalCount.value = count;
+  },
+);
 </script>
 
 <template>
@@ -108,9 +143,18 @@ const handleTotalCountUpdate = (count: number) => {
     />
 
     <!-- 视图容器（可滚动） -->
-    <div ref="historyContainerRef" class="history-container" :class="{ 'no-padding': currentViewMode !== 'table' }">
+    <div ref="historyContainerRef" class="history-container" :class="{ 'no-padding': useNoPaddingContainer }">
+      <div v-if="showParentEmptyState" class="history-empty-state-wrapper">
+        <EmptyState
+          :icon="emptyStateIcon"
+          :title="emptyStateTitle"
+          :description="emptyStateDescription"
+        />
+      </div>
+
       <!-- 表格视图 -->
       <HistoryTableView
+        v-if="shouldMountChildViews"
         v-show="currentViewMode === 'table'"
         :visible="currentViewMode === 'table'"
         :filter="currentFilter"
@@ -120,6 +164,7 @@ const handleTotalCountUpdate = (count: number) => {
 
       <!-- 时间轴视图 -->
       <TimelineView
+        v-if="shouldMountChildViews"
         v-show="currentViewMode === 'timeline'"
         :visible="currentViewMode === 'timeline'"
         :activation-trigger="activationTrigger"
@@ -130,6 +175,7 @@ const handleTotalCountUpdate = (count: number) => {
 
       <!-- 收藏视图 -->
       <FavoritesView
+        v-if="shouldMountChildViews"
         v-show="currentViewMode === 'favorites'"
         :visible="currentViewMode === 'favorites'"
         :filter="currentFilter"
@@ -157,6 +203,13 @@ const handleTotalCountUpdate = (count: number) => {
 
 .history-container.no-padding {
   padding: 0;
+}
+
+.history-empty-state-wrapper {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* history-container 滚动条样式 */
