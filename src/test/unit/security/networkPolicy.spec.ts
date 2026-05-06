@@ -20,6 +20,9 @@ describe('networkPolicy', () => {
     expect(() => assertAllowedExternalUrl('https://192.168.1.10/a')).toThrow('内网');
     expect(() => assertAllowedExternalUrl('https://[fe80::1]/a')).toThrow('内网');
     expect(() => assertAllowedExternalUrl('https://[::ffff:192.168.1.10]/a')).toThrow('内网');
+    expect(() => assertAllowedExternalUrl('https://240.0.0.1/a')).toThrow('内网');
+    expect(() => assertAllowedExternalUrl('https://255.255.255.255/a')).toThrow('内网');
+    expect(() => assertAllowedExternalUrl('https://[::ffff:240.0.0.1]/a')).toThrow('内网');
   });
 
   it('uses the shared policy for WebDAV URLs', () => {

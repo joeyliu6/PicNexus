@@ -138,7 +138,8 @@ function isPrivateOrReservedIpv4(host: string): boolean {
     || isIpv4InCidr(host, '198.18.0.0', 15)
     || isIpv4InCidr(host, '198.51.100.0', 24)
     || isIpv4InCidr(host, '203.0.113.0', 24)
-    || isIpv4InCidr(host, '224.0.0.0', 4);
+    || isIpv4InCidr(host, '224.0.0.0', 4)
+    || isIpv4InCidr(host, '240.0.0.0', 4);
 }
 
 function ipv4MappedFromIpv6(host: string): string | null {
