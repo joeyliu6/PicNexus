@@ -78,13 +78,13 @@ export function useUrlDownload() {
   async function downloadAndUpload(
     input: string,
     uploadHandler: (filePaths: string[]) => Promise<void>
-  ): Promise<void> {
-    if (isDownloading.value) return;
+  ): Promise<boolean> {
+    if (isDownloading.value) return false;
 
     const { urls, truncatedCount } = parseUrlInput(input);
     if (urls.length === 0) {
       toast.showConfig('warn', TOAST_MESSAGES.urlDownload.invalidUrl);
-      return;
+      return false;
     }
 
     if (truncatedCount > 0) {
@@ -137,7 +137,7 @@ export function useUrlDownload() {
           ? errors[0]
           : `${errors.length} 个 URL 全部下载失败`;
         toast.showConfig('error', TOAST_MESSAGES.urlDownload.downloadFailed(detail));
-        return;
+        return false;
       }
 
       if (errors.length > 0) {
@@ -146,10 +146,12 @@ export function useUrlDownload() {
 
       // 触发上传
       await uploadHandler(filePaths);
+      return true;
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       log.error('URL 下载流程异常:', error);
       toast.showConfig('error', TOAST_MESSAGES.urlDownload.downloadFailed(msg));
+      return false;
     } finally {
       isDownloading.value = false;
     }

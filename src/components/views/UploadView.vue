@@ -205,8 +205,10 @@ const handleUrlDownloadClick = () => {
 };
 
 const handleUrlConfirm = async (input: string) => {
-  showUrlDialog.value = false;
-  await downloadAndUpload(input, uploadManager.handleFilesUpload);
+  const success = await downloadAndUpload(input, uploadManager.handleFilesUpload);
+  if (success) {
+    showUrlDialog.value = false;
+  }
 };
 
 // 拖拽相关

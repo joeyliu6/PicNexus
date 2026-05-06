@@ -41,11 +41,12 @@ describe('useUrlDownload', () => {
     const uploadHandler = vi.fn(async () => undefined);
     const { downloadAndUpload } = useUrlDownload();
 
-    await downloadAndUpload(
+    const success = await downloadAndUpload(
       'https://example.com/a.png\nhttps://example.com/b.png',
       uploadHandler,
     );
 
+    expect(success).toBe(true);
     expect(uploadHandler).toHaveBeenCalledWith(['C:/tmp/a.png', 'C:/tmp/b.png']);
   });
 
@@ -67,11 +68,12 @@ describe('useUrlDownload', () => {
     const uploadHandler = vi.fn(async () => undefined);
     const { downloadAndUpload } = useUrlDownload();
 
-    await downloadAndUpload(
+    const success = await downloadAndUpload(
       'https://example.com/a.png\nhttps://example.com/b.png\nhttps://example.com/c.png',
       uploadHandler,
     );
 
+    expect(success).toBe(true);
     expect(uploadHandler).toHaveBeenCalledWith(['C:/tmp/a.png', 'C:/tmp/c.png']);
     expect(toastShowConfigMock).toHaveBeenCalledWith('warn', expect.anything());
   });
@@ -90,8 +92,9 @@ describe('useUrlDownload', () => {
     const { downloadAndUpload } = useUrlDownload();
     const urls = Array.from({ length: 23 }, (_, index) => `https://example.com/${index + 1}.png`);
 
-    await downloadAndUpload(urls.join('\n'), uploadHandler);
+    const success = await downloadAndUpload(urls.join('\n'), uploadHandler);
 
+    expect(success).toBe(true);
     expect(invokeMock).toHaveBeenCalledTimes(20);
     expect(uploadHandler).toHaveBeenCalledWith(
       Array.from({ length: 20 }, (_, index) => `C:/tmp/${index + 1}.png`),
@@ -100,5 +103,29 @@ describe('useUrlDownload', () => {
       summary: 'URL 数量超限',
       detail: expect.stringContaining('3'),
     }));
+  });
+
+  it('returns false without downloading when input has no valid URL', async () => {
+    const uploadHandler = vi.fn(async () => undefined);
+    const { downloadAndUpload } = useUrlDownload();
+
+    const success = await downloadAndUpload('not-a-url', uploadHandler);
+
+    expect(success).toBe(false);
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(uploadHandler).not.toHaveBeenCalled();
+    expect(toastShowConfigMock).toHaveBeenCalledWith('warn', expect.anything());
+  });
+
+  it('returns false and skips upload when every download fails', async () => {
+    invokeMock.mockRejectedValue(new Error('network down'));
+    const uploadHandler = vi.fn(async () => undefined);
+    const { downloadAndUpload } = useUrlDownload();
+
+    const success = await downloadAndUpload('https://example.com/a.png', uploadHandler);
+
+    expect(success).toBe(false);
+    expect(uploadHandler).not.toHaveBeenCalled();
+    expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.anything());
   });
 });

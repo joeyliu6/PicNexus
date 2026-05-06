@@ -207,6 +207,7 @@ beforeEach(() => {
     upload: (files: string[]) => Promise<void>,
   ) => {
     await upload([input]);
+    return true;
   });
   mockState.retryAllFailed.mockResolvedValue(undefined);
 
@@ -278,6 +279,23 @@ describe('UploadView page interactions', () => {
       mockState.handleFilesUpload,
     );
     expect(mockState.handleFilesUpload).toHaveBeenCalledWith(['https://example.com/image.png']);
+    expect(wrapper.find('[data-testid="url-dialog"]').exists()).toBe(false);
+  });
+
+  it('keeps URL dialog open when URL download is rejected before upload', async () => {
+    mockState.downloadAndUpload.mockResolvedValueOnce(false);
+    const wrapper = await mountView();
+
+    await wrapper.find('.url').trigger('click');
+    await flushPromisesAndTicks();
+    await wrapper.find('.confirm-url').trigger('click');
+    await flushPromisesAndTicks();
+
+    expect(mockState.downloadAndUpload).toHaveBeenCalledWith(
+      'https://example.com/image.png',
+      mockState.handleFilesUpload,
+    );
+    expect(wrapper.find('[data-testid="url-dialog"]').exists()).toBe(true);
   });
 
   it('handles tray upload actions through the existing upload handlers', async () => {
