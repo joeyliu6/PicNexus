@@ -348,6 +348,98 @@ describe('RetryService', () => {
     expect(toast.success).toHaveBeenCalledTimes(1);
   });
 
+  it('syncs history primary fields when a single-service retry promotes the queue primary link', async () => {
+    const queueManager = createQueueManager([
+      createItem({
+        historyId: 'history-promote',
+        primaryUrl: 'https://img.example.com/r2-old.png',
+        enabledServices: ['weibo', 'r2'],
+        serviceProgress: {
+          weibo: {
+            serviceId: 'weibo',
+            progress: 0,
+            status: '\u5931\u8d25',
+          },
+          r2: {
+            serviceId: 'r2',
+            progress: 100,
+            status: '\u5b8c\u6210',
+            link: 'https://img.example.com/r2-old.png',
+          },
+        },
+      }),
+    ]);
+    historyGetByIdMock.mockResolvedValueOnce({
+      id: 'history-promote',
+      primaryService: 'r2',
+      generatedLink: 'https://img.example.com/r2-old.png',
+      results: [],
+    });
+
+    const service = new RetryService(makeOptions({ queueManager }));
+
+    await service.retrySingleService('item-1', 'weibo', DEFAULT_CONFIG);
+
+    expect(queueManager.items.get('item-1')?.primaryUrl).toBe('https://img.example.com/demo.png');
+    expect(historyUpdateMock).toHaveBeenCalledWith('history-promote', expect.objectContaining({
+      primaryService: 'weibo',
+      generatedLink: 'https://img.example.com/demo.png',
+      results: expect.any(Array),
+    }));
+  });
+
+  it('does not change history primary fields when a single-service retry only adds a mirror', async () => {
+    const queueManager = createQueueManager([
+      createItem({
+        historyId: 'history-mirror',
+        primaryUrl: 'https://img.example.com/weibo.png',
+        enabledServices: ['weibo', 'r2'],
+        serviceProgress: {
+          weibo: {
+            serviceId: 'weibo',
+            progress: 100,
+            status: '\u5b8c\u6210',
+            link: 'https://img.example.com/weibo.png',
+          },
+          r2: {
+            serviceId: 'r2',
+            progress: 0,
+            status: '\u5931\u8d25',
+          },
+        },
+      }),
+    ]);
+    historyGetByIdMock.mockResolvedValueOnce({
+      id: 'history-mirror',
+      primaryService: 'weibo',
+      generatedLink: 'https://img.example.com/weibo.png',
+      results: [],
+    });
+    retryUploadMock.mockResolvedValueOnce({
+      ...makeUploadResult('https://img.example.com/r2.png'),
+      serviceId: 'r2',
+      fileKey: 'r2-key',
+    });
+
+    const service = new RetryService(makeOptions({ queueManager }));
+
+    await service.retrySingleService('item-1', 'r2', DEFAULT_CONFIG);
+
+    expect(queueManager.items.get('item-1')?.primaryUrl).toBe('https://img.example.com/weibo.png');
+    expect(historyUpdateMock).toHaveBeenCalledWith('history-mirror', expect.not.objectContaining({
+      primaryService: expect.anything(),
+      generatedLink: expect.anything(),
+    }));
+    expect(historyUpdateMock).toHaveBeenCalledWith('history-mirror', expect.objectContaining({
+      results: [
+        expect.objectContaining({
+          serviceId: 'r2',
+          status: 'success',
+        }),
+      ],
+    }));
+  });
+
   it('updates history by queue historyId instead of ambiguous filePath', async () => {
     const queueManager = createQueueManager([
       createItem({

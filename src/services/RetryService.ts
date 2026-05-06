@@ -296,15 +296,14 @@ export class RetryService {
     });
 
     // 如果这是主力图床或尚无主力图床，设置它
-    if (!currentItem.primaryUrl || serviceId === currentItem.enabledServices[0]) {
-      this.options.queueManager.updateItem(itemId, {
-        primaryUrl: link,
-        thumbUrl: link
-      });
+    const shouldPromotePrimary = !currentItem.primaryUrl || serviceId === currentItem.enabledServices[0];
+    if (shouldPromotePrimary) {
+      this.options.queueManager.updateItem(itemId, { primaryUrl: link, thumbUrl: link });
     }
 
     // 更新历史记录
-    await this.updateHistoryRecord(currentItem.filePath, currentItem.historyId, serviceId, result, link);
+    await this.updateHistoryRecord(currentItem.filePath, currentItem.historyId, serviceId, result, link,
+      shouldPromotePrimary);
     await this.cleanupClipboardTempFileIfComplete(itemId);
   }
 
@@ -318,7 +317,8 @@ export class RetryService {
     historyId: string | undefined,
     serviceId: string,
     result: UploadResult,
-    link: string
+    link: string,
+    shouldPromotePrimary: boolean
   ): Promise<void> {
     // 使用链式 Promise 实现互斥锁，确保更新操作按顺序执行
     const updateOperation = async () => {
@@ -367,7 +367,10 @@ export class RetryService {
         }
 
         // 使用 SQLite 更新记录
-        await historyDB.update(historyItem.id, { results: updatedResults });
+        await historyDB.update(historyItem.id, {
+          results: updatedResults,
+          ...(shouldPromotePrimary ? { primaryService: serviceId, generatedLink: link } : {})
+        });
 
         // 使缓存失效并通知其他视图刷新
         invalidateCache();
