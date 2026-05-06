@@ -7,6 +7,7 @@ import type { UserConfig } from '../config/types';
 import { DEFAULT_CONFIG, isCustomS3Id, makeCustomS3Id } from '../config/types';
 import { useToast } from './useToast';
 import { TOAST_MESSAGES } from '../constants';
+import { CUSTOM_S3_REQUIRED_FIELDS, getRequiredFields, NO_CONFIG_SERVICES } from '../constants/serviceRequiredFields';
 import { debounceWithError } from '../utils/debounce';
 import { createLogger } from '../utils/logger';
 
@@ -73,6 +74,15 @@ function getActivePrefixFromConfig(config: UserConfig): string | null {
   return list[0]?.template ?? null;
 }
 
+function hasAllRequiredFields(config: Record<string, unknown> | undefined, fields: string[]): boolean {
+  if (fields.length === 0) return true;
+  if (!config) return false;
+  return fields.every(field => {
+    const value = config[field];
+    return typeof value === 'string' ? value.trim().length > 0 : !!value;
+  });
+}
+
 // ==================== 主 Composable ====================
 
 /**
@@ -129,96 +139,14 @@ export function useServiceSelector(): UseServiceSelectorReturn {
       config.services = {};
     }
 
-    // JD 开箱即用
-    serviceConfigStatus.value.jd = true;
-
-    // 微博
-    const weiboConfig = config.services.weibo;
-    serviceConfigStatus.value.weibo = !!weiboConfig?.cookie && weiboConfig.cookie.trim().length > 0;
-
-    // R2
-    const r2Config = config.services.r2;
-    serviceConfigStatus.value.r2 = !!(
-      r2Config?.accountId &&
-      r2Config.accessKeyId &&
-      r2Config.secretAccessKey &&
-      r2Config.bucketName
-    );
-
-    // 牛客
-    const nowcoderConfig = config.services.nowcoder;
-    serviceConfigStatus.value.nowcoder = !!nowcoderConfig?.cookie && nowcoderConfig.cookie.trim().length > 0;
-
-    // 知乎
-    const zhihuConfig = config.services.zhihu;
-    serviceConfigStatus.value.zhihu = !!zhihuConfig?.cookie && zhihuConfig.cookie.trim().length > 0;
-
-    // 七鱼开箱即用。可用性检测由 App.vue 启动时统一调度，避免首屏加载时的单项检测占用全局 runner。
-    serviceConfigStatus.value.qiyu = true;
-
-    // 纳米
-    const namiConfig = config.services.nami;
-    serviceConfigStatus.value.nami = !!namiConfig?.cookie && namiConfig.cookie.trim().length > 0;
-
-    // 哔哩哔哩
-    const bilibiliConfig = config.services.bilibili;
-    serviceConfigStatus.value.bilibili = !!bilibiliConfig?.cookie && bilibiliConfig.cookie.trim().length > 0;
-
-    // 超星
-    const chaoxingConfig = config.services.chaoxing;
-    serviceConfigStatus.value.chaoxing = !!chaoxingConfig?.cookie && chaoxingConfig.cookie.trim().length > 0;
-
-    // SM.MS
-    const smmsConfig = config.services.smms;
-    serviceConfigStatus.value.smms = !!smmsConfig?.token && smmsConfig.token.trim().length > 0;
-
-    // GitHub
-    const githubConfig = config.services.github;
-    serviceConfigStatus.value.github = !!(
-      githubConfig?.token &&
-      githubConfig.owner &&
-      githubConfig.repo
-    );
-
-    // Imgur
-    const imgurConfig = config.services.imgur;
-    serviceConfigStatus.value.imgur = !!imgurConfig?.clientId && imgurConfig.clientId.trim().length > 0;
-
-    // 腾讯云 COS
-    const tencentConfig = config.services.tencent;
-    serviceConfigStatus.value.tencent = !!(
-      tencentConfig?.secretId &&
-      tencentConfig.secretKey &&
-      tencentConfig.bucket &&
-      tencentConfig.region
-    );
-
-    // 阿里云 OSS
-    const aliyunConfig = config.services.aliyun;
-    serviceConfigStatus.value.aliyun = !!(
-      aliyunConfig?.accessKeyId &&
-      aliyunConfig.accessKeySecret &&
-      aliyunConfig.bucket &&
-      aliyunConfig.region
-    );
-
-    // 七牛云
-    const qiniuConfig = config.services.qiniu;
-    serviceConfigStatus.value.qiniu = !!(
-      qiniuConfig?.accessKey &&
-      qiniuConfig.secretKey &&
-      qiniuConfig.bucket &&
-      qiniuConfig.publicDomain
-    );
-
-    // 又拍云
-    const upyunConfig = config.services.upyun;
-    serviceConfigStatus.value.upyun = !!(
-      upyunConfig?.operator &&
-      upyunConfig.password &&
-      upyunConfig.bucket &&
-      upyunConfig.publicDomain
-    );
+    for (const serviceId of Object.keys(serviceConfigStatus.value)) {
+      if (isCustomS3Id(serviceId)) continue;
+      serviceConfigStatus.value[serviceId] = (NO_CONFIG_SERVICES as readonly string[]).includes(serviceId)
+        || hasAllRequiredFields(
+          config.services[serviceId as keyof UserConfig['services']] as Record<string, unknown> | undefined,
+          getRequiredFields(serviceId)
+        );
+    }
 
     for (const serviceId of Object.keys(serviceConfigStatus.value)) {
       if (isCustomS3Id(serviceId)) delete serviceConfigStatus.value[serviceId];
@@ -227,12 +155,9 @@ export function useServiceSelector(): UseServiceSelectorReturn {
     // 自定义 S3 profiles
     for (const profile of config.custom_s3_profiles ?? []) {
       const compositeId = makeCustomS3Id(profile.id);
-      serviceConfigStatus.value[compositeId] = !!(
-        profile.endpoint &&
-        profile.accessKeyId &&
-        profile.secretAccessKey &&
-        profile.region &&
-        profile.bucket
+      serviceConfigStatus.value[compositeId] = hasAllRequiredFields(
+        profile as unknown as Record<string, unknown>,
+        CUSTOM_S3_REQUIRED_FIELDS
       );
     }
   }

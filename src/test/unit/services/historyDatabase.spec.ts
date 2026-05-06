@@ -110,8 +110,8 @@ class MockDatabase {
       const filePath = params[0] as string;
       const rows = this.rows.filter((row) => row.file_path === filePath);
       if (statement.includes('ORDER BY TIMESTAMP DESC')) {
-        return rows
-          .toSorted((a, b) => (b.timestamp as number) - (a.timestamp as number)) as unknown as T;
+        return [...rows]
+          .sort((a: Row, b: Row) => (b.timestamp as number) - (a.timestamp as number)) as unknown as T;
       }
       return rows as unknown as T;
     }

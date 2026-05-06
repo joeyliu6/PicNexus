@@ -82,11 +82,21 @@ describe('useServiceSelector - updateServiceConfigStatus', () => {
   it('r2 - 必填字段齐全 → true', async () => {
     const cfg = cloneDefault();
     cfg.services.r2 = {
-      accountId: 'a', accessKeyId: 'b', secretAccessKey: 'c', bucketName: 'd',
+      accountId: 'a', accessKeyId: 'b', secretAccessKey: 'c', bucketName: 'd', publicDomain: 'https://cdn.example.com',
     } as any;
     const api = useServiceSelector();
     await api.updateServiceConfigStatus(cfg);
     expect(api.serviceConfigStatus.value.r2).toBe(true);
+  });
+
+  it('r2 - 缺 publicDomain → false', async () => {
+    const cfg = cloneDefault();
+    cfg.services.r2 = {
+      accountId: 'a', accessKeyId: 'b', secretAccessKey: 'c', bucketName: 'd',
+    } as any;
+    const api = useServiceSelector();
+    await api.updateServiceConfigStatus(cfg);
+    expect(api.serviceConfigStatus.value.r2).toBe(false);
   });
 
   it('r2 - 缺 bucketName → false', async () => {
@@ -118,21 +128,41 @@ describe('useServiceSelector - updateServiceConfigStatus', () => {
   it('tencent - 四字段齐全 → true', async () => {
     const cfg = cloneDefault();
     cfg.services.tencent = {
-      secretId: 's', secretKey: 'k', bucket: 'b', region: 'r',
+      secretId: 's', secretKey: 'k', bucket: 'b', region: 'r', publicDomain: 'https://cos.example.com',
     } as any;
     const api = useServiceSelector();
     await api.updateServiceConfigStatus(cfg);
     expect(api.serviceConfigStatus.value.tencent).toBe(true);
   });
 
+  it('tencent - 缺 publicDomain → false', async () => {
+    const cfg = cloneDefault();
+    cfg.services.tencent = {
+      secretId: 's', secretKey: 'k', bucket: 'b', region: 'r',
+    } as any;
+    const api = useServiceSelector();
+    await api.updateServiceConfigStatus(cfg);
+    expect(api.serviceConfigStatus.value.tencent).toBe(false);
+  });
+
   it('aliyun - 四字段齐全 → true', async () => {
+    const cfg = cloneDefault();
+    cfg.services.aliyun = {
+      accessKeyId: 'a', accessKeySecret: 'b', bucket: 'c', region: 'd', publicDomain: 'https://oss.example.com',
+    } as any;
+    const api = useServiceSelector();
+    await api.updateServiceConfigStatus(cfg);
+    expect(api.serviceConfigStatus.value.aliyun).toBe(true);
+  });
+
+  it('aliyun - 缺 publicDomain → false', async () => {
     const cfg = cloneDefault();
     cfg.services.aliyun = {
       accessKeyId: 'a', accessKeySecret: 'b', bucket: 'c', region: 'd',
     } as any;
     const api = useServiceSelector();
     await api.updateServiceConfigStatus(cfg);
-    expect(api.serviceConfigStatus.value.aliyun).toBe(true);
+    expect(api.serviceConfigStatus.value.aliyun).toBe(false);
   });
 
   it('qiniu - publicDomain 必填', async () => {
