@@ -4,6 +4,7 @@ pub mod user_files;
 
 pub mod bilibili;
 pub mod chaoxing;
+pub mod cli_path;
 pub mod clipboard;
 pub mod github;
 pub mod image_compress;

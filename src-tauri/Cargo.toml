@@ -67,6 +67,8 @@ tower-http = { version = "0.5", features = ["cors"] }
 # 使用与 Tauri/wry 相同的版本以避免依赖冲突
 webview2-com = "0.38"
 windows-core = "0.61"
+windows-registry = "0.6"
+windows-sys = { version = "0.60", features = ["Win32_UI_WindowsAndMessaging"] }
 
 [features]
 # This feature is used for production builds or when `devPath` points to the filesystem
