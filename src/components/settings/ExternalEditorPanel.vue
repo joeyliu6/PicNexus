@@ -2,8 +2,10 @@
 import { computed } from 'vue';
 import type { EditorServerConfig, ServerServiceType, ServiceType } from '../../config/types';
 import { useServiceHealth } from '../../composables/useServiceHealth';
+import { EDITOR_UNSUPPORTED_SERVICES } from '../../composables/settings/editorServiceConfig';
 import TyporaCard from './external-editor/TyporaCard.vue';
 import ObsidianCard from './external-editor/ObsidianCard.vue';
+import CliCard from './external-editor/CliCard.vue';
 
 interface Props {
   editorServer: EditorServerConfig;
@@ -44,7 +46,7 @@ const SERVICE_LABEL_MAP: Record<ServerServiceType, string> = {
   custom_s3: '自定义 S3',
 };
 
-const CLI_UNSUPPORTED_SERVICES: Set<ServerServiceType> = new Set(['qiyu', 'nami']);
+const CLI_UNSUPPORTED_SERVICES = EDITOR_UNSUPPORTED_SERVICES;
 
 const ALL_SERVICES: Array<{ value: ServerServiceType; label: string }> = [
   { value: 'jd', label: '京东图床' },
@@ -119,6 +121,8 @@ const summaryText = computed(() => {
       :serviceLabelMap="SERVICE_LABEL_MAP"
       @navigateHosting="emit('navigateHosting')"
     />
+
+    <CliCard :executablePath="executablePath" />
 
     <ObsidianCard
       v-model:editorServer="editorServerModel"

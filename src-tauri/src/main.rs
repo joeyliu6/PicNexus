@@ -341,9 +341,19 @@ fn main() {
             cli::print_version();
             return;
         }
-        cli::CliAction::Upload { files, json_output } => {
-            cli::run_cli_upload(files, json_output);
+        cli::CliAction::Upload {
+            files,
+            json_output,
+            service_id,
+            profile,
+        } => {
+            cli::run_cli_upload(files, json_output, service_id, profile);
             return;
+        }
+        cli::CliAction::Error(message) => {
+            eprintln!("[PicNexus] {}", message);
+            eprintln!("[PicNexus] 使用 --help 查看命令行用法");
+            std::process::exit(1);
         }
         cli::CliAction::None => {}
     }
@@ -2623,8 +2633,6 @@ fn open_path(path: String) -> Result<(), AppError> {
     Ok(())
 }
 
-/// 保存 CLI 配置文件（供 Typora 自定义命令模式使用）
-///
 /// 返回当前可执行文件的绝对路径（用于 Typora 自定义命令配置提示）
 #[tauri::command]
 fn get_executable_path() -> Result<String, AppError> {
@@ -2633,13 +2641,13 @@ fn get_executable_path() -> Result<String, AppError> {
         .map_err(|e| AppError::file_io(format!("无法获取可执行文件路径: {}", e)))
 }
 
-/// 将 Server 图床配置写入 {app_data_dir}/cli-config.json，
+/// 将 Typora profile 与显式 CLI services 表写入 {app_data_dir}/cli-config.json。
 /// CLI 模式启动时直接读取此文件，无需启动 GUI。
-/// 传 None 时删除配置文件（禁用 CLI 模式）。
 #[tauri::command]
 async fn save_cli_config(
     app: tauri::AppHandle,
     service_config_json: Option<String>,
+    services_config_json: Option<String>,
 ) -> Result<(), AppError> {
     let config_dir = portable::user_data_dir(&app)?;
 
@@ -2648,28 +2656,44 @@ async fn save_cli_config(
 
     let config_path = config_dir.join("cli-config.json");
 
-    match service_config_json {
-        Some(json) => {
-            // 先验证 JSON 格式，避免写入损坏的配置
-            let _: server::ServerUploadConfig = serde_json::from_str(&json)
-                .map_err(|e| AppError::config(format!("CLI 配置格式无效: {}", e)))?;
+    let services: HashMap<String, server::ServerUploadConfig> =
+        if let Some(json) = services_config_json {
+            serde_json::from_str(&json)
+                .map_err(|e| AppError::config(format!("CLI 图床配置格式无效: {}", e)))?
+        } else {
+            HashMap::new()
+        };
 
-            std::fs::write(&config_path, &json)
-                .map_err(|e| AppError::file_io(format!("写入 cli-config.json 失败: {}", e)))?;
-
-            log::info!(
-                "[CLI Config] ✓ cli-config.json 已更新: {}",
-                config_path.display()
-            );
-        }
-        None => {
-            if config_path.exists() {
-                std::fs::remove_file(&config_path)
-                    .map_err(|e| AppError::file_io(format!("删除 cli-config.json 失败: {}", e)))?;
-            }
-            log::info!("[CLI Config] cli-config.json 已删除");
-        }
+    let mut profiles: HashMap<String, server::ServerUploadConfig> = HashMap::new();
+    if let Some(json) = service_config_json {
+        let typora_config: server::ServerUploadConfig = serde_json::from_str(&json)
+            .map_err(|e| AppError::config(format!("Typora 配置格式无效: {}", e)))?;
+        profiles.insert("typora".to_string(), typora_config);
     }
+
+    if services.is_empty() && profiles.is_empty() {
+        if config_path.exists() {
+            std::fs::remove_file(&config_path)
+                .map_err(|e| AppError::file_io(format!("删除 cli-config.json 失败: {}", e)))?;
+        }
+        log::info!("[CLI Config] cli-config.json 已删除");
+        return Ok(());
+    }
+
+    let payload = serde_json::json!({
+        "services": services,
+        "profiles": profiles,
+    });
+    let json = serde_json::to_string_pretty(&payload)
+        .map_err(|e| AppError::config(format!("CLI 配置序列化失败: {}", e)))?;
+
+    std::fs::write(&config_path, &json)
+        .map_err(|e| AppError::file_io(format!("写入 cli-config.json 失败: {}", e)))?;
+
+    log::info!(
+        "[CLI Config] ✓ cli-config.json 已更新: {}",
+        config_path.display()
+    );
 
     Ok(())
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { useResizeObserver } from '@vueuse/core';
 import Button from 'primevue/button';
 import type { EditorServerConfig, ServerServiceType } from '../../../config/types';
@@ -26,39 +26,43 @@ const emit = defineEmits<{
 
 const toast = useToast();
 
-const execPathCopied = ref(false);
-const execPathRef = ref<HTMLElement | null>(null);
-const displayPath = ref(props.executablePath || '...');
+const commandCopied = ref(false);
+const commandRef = ref<HTMLElement | null>(null);
+const typoraCommand = computed(() => {
+  const executable = props.executablePath || 'picnexus';
+  const quoted = /\s/.test(executable) ? `"${executable}"` : executable;
+  return `${quoted} --profile typora`;
+});
+const displayCommand = ref(typoraCommand.value);
 
 function updateEditorServer(patch: Partial<EditorServerConfig>) {
   editorServer.value = { ...editorServer.value, ...patch };
 }
 
 function recalcDisplayPath() {
-  const el = execPathRef.value;
-  const path = props.executablePath;
-  if (!el || !path) {
-    displayPath.value = path || '...';
+  const el = commandRef.value;
+  const command = typoraCommand.value;
+  if (!el || !command) {
+    displayCommand.value = command || '...';
     return;
   }
   const containerWidth = el.clientWidth;
   const charWidth = 7.2;
   const maxChars = Math.max(20, Math.floor(containerWidth / charWidth));
-  displayPath.value = middleTruncate(path, maxChars);
+  displayCommand.value = middleTruncate(command, maxChars);
 }
 
-useResizeObserver(execPathRef, () => recalcDisplayPath());
-watch(() => props.executablePath, () => nextTick(recalcDisplayPath));
+useResizeObserver(commandRef, () => recalcDisplayPath());
+watch(typoraCommand, () => nextTick(recalcDisplayPath));
 
-async function copyExecutablePath() {
-  if (!props.executablePath) return;
+async function copyTyporaCommand() {
   try {
-    await navigator.clipboard.writeText(props.executablePath);
-    execPathCopied.value = true;
-    setTimeout(() => { execPathCopied.value = false; }, 2000);
+    await navigator.clipboard.writeText(typoraCommand.value);
+    commandCopied.value = true;
+    setTimeout(() => { commandCopied.value = false; }, 2000);
   } catch (_e) {
     // 剪贴板权限被拒或 webview 不支持时，按钮不会变绿勾，必须显式提示
-    toast.error('复制失败', '请手动选中路径复制');
+    toast.error('复制失败', '请手动选中命令复制');
   }
 }
 </script>
@@ -91,16 +95,16 @@ async function copyExecutablePath() {
       <div class="guide-step">
         <span class="step-badge">3</span>
         <span class="step-text">
-          「命令」栏填入以下路径：
+          「命令」栏填入以下命令：
           <div class="guide-path-inline">
             <div class="exec-path-row">
-              <code ref="execPathRef" class="exec-path-text" v-tooltip.top="executablePath || ''">{{ displayPath }}</code>
+              <code ref="commandRef" class="exec-path-text" v-tooltip.top="typoraCommand">{{ displayCommand }}</code>
               <Button
-                :icon="execPathCopied ? 'pi pi-check' : 'pi pi-copy'"
+                :icon="commandCopied ? 'pi pi-check' : 'pi pi-copy'"
                 text
                 size="small"
-                v-tooltip.top="execPathCopied ? '已复制！' : '复制路径'"
-                @click="copyExecutablePath"
+                v-tooltip.top="commandCopied ? '已复制！' : '复制命令'"
+                @click="copyTyporaCommand"
               />
             </div>
           </div>

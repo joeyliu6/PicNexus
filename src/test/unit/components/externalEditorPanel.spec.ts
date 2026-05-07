@@ -207,6 +207,39 @@ describe('ExternalEditorPanel', () => {
     expect(wrapper.find('.pi-refresh').exists()).toBe(false);
   });
 
+  it('shows explicit CLI service usage and Typora profile command', async () => {
+    const wrapper = mountWithDefaults(ExternalEditorPanel, {
+      props: {
+        editorServer: {
+          enabled: false,
+          typoraEnabled: true,
+          port: 36799,
+          typoraService: 'jd',
+          obsidianService: null,
+        },
+      },
+      global: {
+        stubs: {
+          ToggleSwitch: ToggleSwitchStub,
+          Button: ButtonStub,
+          ServiceSelectorDropdown: { template: '<div />' },
+        },
+        directives: {
+          tooltip: tooltipDirective,
+        },
+      },
+    });
+
+    // 展开 Typora 卡片
+    await wrapper.findAll('.card-header')[0].trigger('click');
+    await flush();
+
+    const text = wrapper.text();
+    expect(text).toContain('--profile typora');
+    expect(text).toContain('--service <图床名>');
+    expect(text).toContain('--service r2');
+  });
+
   it('connection test shows warning/success based on /status response', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({

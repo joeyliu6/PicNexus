@@ -10,7 +10,7 @@ PicNexus 是**单窗口 + 系统托盘** 架构:
 - **关闭行为**:默认 `closeToTray = true`,点 × 只隐藏到托盘,不退出进程;可通过 `set_close_to_tray` 命令切换
 - **系统托盘**:菜单包含打开界面、上传剪贴板、选择图片…、当前图床二级菜单、历史记录、退出;左键点击图标直接唤起主窗口
 - **全局快捷键**:插件已加载,**但当前未注册任何快捷键**(预留扩展点)
-- **文件关联**:`tauri.conf.json` 未配置 `fileAssociations`,但通过 CLI 参数支持 Typora/Obsidian 调用(`picnexus.exe /path/to/img.jpg`)
+- **文件关联**:`tauri.conf.json` 未配置 `fileAssociations`;命令行上传使用 `picnexus.exe --service <serviceId> /path/to/img.jpg`,Typora 使用 `--profile typora`,Obsidian 走 HTTP Server。
 
 ---
 
@@ -112,9 +112,9 @@ flowchart TD
 
 ## 图 3:CLI 模式与文件关联(当前实现)
 
-展示 `picnexus.exe /path/to/img.jpg` 从命令行启动的流程。这是当前支持 Typora 等外部编辑器集成的**唯一方式**。
+展示 `picnexus.exe --service r2 /path/to/img.jpg` 从命令行启动的流程。普通 CLI 上传必须显式传入图床名;Typora 保留独立配置档 `picnexus.exe --profile typora /path/to/img.jpg`;Obsidian 继续调用本地 HTTP Server。
 
-> **关键源文件**:`src-tauri/src/cli.rs`(L56~L83 参数解析、L124~L223 上传逻辑)、`%APPDATA%/us.picnex.app/cli-config.json`
+> **关键源文件**:`src-tauri/src/cli.rs`、`src-tauri/src/main.rs#save_cli_config`、`%APPDATA%/us.picnex.app/cli-config.json`
 
 ```mermaid
 flowchart TD
@@ -124,18 +124,24 @@ flowchart TD
     C --> D{ARGV 含什么?}
     D -- --help --> D1[打印帮助<br/>exit 0]
     D -- --version --> D2[打印版本<br/>exit 0]
-    D -- --json path --> D3[JSON 输出模式]
-    D -- path --> D4[普通上传模式]
+    D -- --service id path --> D3[普通 CLI 上传模式]
+    D -- --json --service id path --> D4[JSON 输出模式]
+    D -- --profile typora path --> D6[Typora 上传模式]
+    D -- path / 缺少 --service --> D7[打印可用图床和示例<br/>exit 1]
     D -- 无参数 --> D5[进入 GUI 模式<br/>启动 Tauri Builder]
 
     D3 --> E[读取 cli-config.json<br/>APPDATA/us.picnex.app]
     D4 --> E
+    D6 --> E
 
     E --> F{配置有效?}
     F -- 否 --> F1[stderr 输出错误<br/>exit 1]
-    F -- 是 --> G[根据 config 选图床上传]
+    F -- 是 --> S{模式}
+    S -- 普通 CLI --> G1[按 --service 从 services 表取图床]
+    S -- Typora --> G2[读取 profiles.typora]
 
-    G --> H[HTTP 请求 → 图床 API]
+    G1 --> H[HTTP 请求 → 图床 API]
+    G2 --> H
     H --> I{成功?}
     I -- 是 JSON 模式 --> I1[stdout:<br/>{url, width, height}]
     I -- 是 普通模式 --> I2[stdout: url]
@@ -148,7 +154,7 @@ flowchart TD
 
     %% 特点
     note1[⚠️ 每次 CLI 上传都是<br/>独立进程,无单实例守护<br/>与 GUI 实例不通信]:::noteStyle
-    D4 -.-> note1
+    D3 -.-> note1
 
     style A fill:#e3f2fd,stroke:#1976d2
     style GUI fill:#e8f5e9,stroke:#2e7d32
@@ -229,7 +235,9 @@ flowchart LR
 | 托盘菜单点击无反应 | `tray-menu` Webview 未创建/未显示,或前端没 listen `navigate-to` / `tray-action` | 图2 W/V/F1/F2 |
 | 启动时窗口一闪而过 | `visible:true` 配置下 `show()` 时机错乱,应保持 `visible:false` + 代码控制显示 | 图1 Visible |
 | Windows 任务栏图标模糊 | 没加载 128×128@2x 大图标 | 图1 note |
-| Typora 调用 `picnexus.exe` 报错 | `cli-config.json` 缺失或图床未配置 | 图3 F1 |
+| CLI 裸路径调用不上传 | 普通 CLI 必须传 `--service <serviceId>`;裸路径会打印可用图床和示例后退出 | 图3 D7 |
+| `picnexus --service r2` 报未知图床 | 设置页尚未保存对应图床配置,或该图床不支持 CLI 导出 | 图3 F1 |
+| Typora 调用 `picnexus.exe --profile typora` 报错 | `cli-config.json` 缺失或 Typora 图床未配置 | 图3 F1 |
 | CLI 上传成功但 GUI 历史没更新 | CLI 是独立进程,不与 GUI 实例共享 DB 连接 | 图3 note1 |
 | 配置全局快捷键不生效 | **当前未实现**,插件已加载但无 `register` 调用 | 图4 R1C |
 | 设置 `fileAssociations` 拖图标打开无反应 | **当前未实现**,需要同时加 `single_instance` | 图4 R2 |

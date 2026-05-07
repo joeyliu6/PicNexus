@@ -522,6 +522,16 @@ pub enum ServerUploadConfig {
         bucket: String,
         public_domain: String,
     },
+    /// 自定义 S3 兼容存储
+    CustomS3 {
+        endpoint: String,
+        access_key_id: String,
+        secret_access_key: String,
+        region: String,
+        bucket: String,
+        path: String,
+        public_domain: String,
+    },
 
     // ── 需要 Puppeteer（仅 GUI 模式） ─────────────
     /// Nami 图床（需要 Puppeteer sidecar，仅 GUI 模式可用）
@@ -658,6 +668,7 @@ fn get_service_info(config: &ServerUploadConfig) -> (&str, &str) {
         ServerUploadConfig::Aliyun { .. } => ("aliyun", "阿里云 OSS"),
         ServerUploadConfig::Qiniu { .. } => ("qiniu", "七牛云"),
         ServerUploadConfig::Upyun { .. } => ("upyun", "又拍云"),
+        ServerUploadConfig::CustomS3 { .. } => ("custom_s3", "自定义 S3"),
         ServerUploadConfig::Nami { .. } => ("nami", "纳米图床"),
         ServerUploadConfig::Qiyu => ("qiyu", "七鱼图床"),
     }
@@ -835,6 +846,9 @@ pub async fn upload_single_file(
         ServerUploadConfig::Upyun { operator, password, bucket, public_domain } => {
             server_upload_upyun(&canonical, operator, password, bucket, public_domain).await
         }
+        ServerUploadConfig::CustomS3 { endpoint, access_key_id, secret_access_key, region, bucket, path, public_domain } => {
+            server_upload_custom_s3(&canonical, endpoint, access_key_id, secret_access_key, region, bucket, path, public_domain).await
+        }
         ServerUploadConfig::Nami { .. } => {
             Err("Nami 图床不支持外部编辑器模式（需要浏览器自动化获取凭证）。请在 PicNexus 设置中切换为京东、SM.MS 等支持该模式的图床".to_string())
         }
@@ -905,6 +919,29 @@ async fn s3_put_object(
     .await
     .map_err(|_| "上传超时（120秒）".to_string())?
     .map_err(|e| format!("S3 上传失败: {}", e))?;
+    Ok(())
+}
+
+fn validate_https_url(value: &str, label: &str, allow_empty: bool) -> Result<(), String> {
+    let value = value.trim();
+    if value.is_empty() {
+        return if allow_empty {
+            Ok(())
+        } else {
+            Err(format!("{} 不能为空", label))
+        };
+    }
+
+    let parsed = Url::parse(value).map_err(|_| format!("{} 不是合法的 URL", label))?;
+    if parsed.scheme() != "https" {
+        return Err(format!("{} 仅支持 HTTPS", label));
+    }
+    if parsed.host_str().is_none() {
+        return Err(format!("{} 缺少主机名", label));
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(format!("{} 不能包含用户名或密码", label));
+    }
     Ok(())
 }
 
@@ -1691,6 +1728,41 @@ async fn server_upload_zhihu(
     Err("知乎图片处理超时（30秒）".to_string())
 }
 
+// ── 自定义 S3 ─────────────────────────────────────────
+
+async fn server_upload_custom_s3(
+    path: &std::path::Path,
+    endpoint: &str,
+    access_key_id: &str,
+    secret_access_key: &str,
+    region: &str,
+    bucket: &str,
+    upload_path: &str,
+    public_domain: &str,
+) -> Result<String, String> {
+    validate_https_url(endpoint, "自定义 S3 Endpoint", false)?;
+    validate_https_url(public_domain, "自定义 S3 公开域名", true)?;
+
+    let file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or("无法获取文件名")?;
+    let key = build_upload_key(upload_path, file_name);
+    let buffer = tokio::fs::read(path)
+        .await
+        .map_err(|e| format!("读取文件失败: {}", e))?;
+
+    let client = create_s3_client(endpoint, access_key_id, secret_access_key, region);
+    s3_put_object(&client, bucket, &key, buffer).await?;
+
+    let url = if public_domain.trim().is_empty() {
+        format!("{}/{}/{}", endpoint.trim_end_matches('/'), bucket, key)
+    } else {
+        format!("{}/{}", public_domain.trim_end_matches('/'), key)
+    };
+    Ok(url)
+}
+
 // ── Cloudflare R2 ─────────────────────────────────────
 
 async fn server_upload_r2(
@@ -1874,7 +1946,8 @@ async fn server_upload_upyun(
 mod tests {
     use super::{
         request_has_browser_origin, request_has_valid_server_token, unique_upload_temp_dir,
-        validate_image_bytes, DetectedImageKind, MAX_SERVER_UPLOAD_SIZE, SERVER_AUTH_TOKEN_HEADER,
+        validate_https_url, validate_image_bytes, DetectedImageKind, ServerUploadConfig,
+        MAX_SERVER_UPLOAD_SIZE, SERVER_AUTH_TOKEN_HEADER,
     };
     use axum::http::HeaderMap;
     use std::io::Cursor;
@@ -1989,5 +2062,51 @@ mod tests {
             .expect_err("oversized body should be rejected");
 
         assert!(err.contains("图片过大"));
+    }
+
+    #[test]
+    fn custom_s3_config_deserializes_from_cli_schema() {
+        let config: ServerUploadConfig = serde_json::from_value(serde_json::json!({
+            "type": "customS3",
+            "endpoint": "https://s3.example.com",
+            "access_key_id": "ak",
+            "secret_access_key": "sk",
+            "region": "auto",
+            "bucket": "bucket",
+            "path": "notes",
+            "public_domain": "https://cdn.example.com"
+        }))
+        .expect("custom S3 config should deserialize");
+
+        match config {
+            ServerUploadConfig::CustomS3 {
+                endpoint,
+                bucket,
+                path,
+                public_domain,
+                ..
+            } => {
+                assert_eq!(endpoint, "https://s3.example.com");
+                assert_eq!(bucket, "bucket");
+                assert_eq!(path, "notes");
+                assert_eq!(public_domain, "https://cdn.example.com");
+            }
+            other => panic!("expected custom S3 config, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn validate_https_url_rejects_insecure_or_credentialed_urls() {
+        assert!(validate_https_url("https://s3.example.com", "Endpoint", false).is_ok());
+        assert!(validate_https_url("", "Public domain", true).is_ok());
+
+        let insecure = validate_https_url("http://s3.example.com", "Endpoint", false)
+            .expect_err("http URL should be rejected");
+        assert!(insecure.contains("HTTPS"));
+
+        let credentialed =
+            validate_https_url("https://user:pass@s3.example.com", "Endpoint", false)
+                .expect_err("credentialed URL should be rejected");
+        assert!(credentialed.contains("用户名或密码"));
     }
 }
