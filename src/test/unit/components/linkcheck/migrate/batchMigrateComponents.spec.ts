@@ -432,8 +432,8 @@ describe('batch migrate P1 components', () => {
 
     const wrapper = mountWithMigrateContext(MigrateSelectPhase, ctx);
 
-    expect(wrapper.text()).toContain('暂无已配置的图床');
-    expect(wrapper.text()).toContain('请先在设置中配置至少一个图床');
+    expect(wrapper.text()).toContain('暂无可用图床');
+    expect(wrapper.text()).toContain('请在设置中配置图床');
     expect(wrapper.find('.migrate-empty-link').exists()).toBe(true);
     expect(wrapper.find('.btn-primary').exists()).toBe(false);
 

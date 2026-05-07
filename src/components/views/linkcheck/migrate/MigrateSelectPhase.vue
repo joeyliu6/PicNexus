@@ -159,10 +159,10 @@ function handleTargetToggle(serviceId: string) {
     <EmptyState
       v-else-if="configuredServices.length === 0"
       icon="pi pi-cog"
-      title="暂无已配置的图床"
+      title="暂无可用图床"
     >
       <p class="migrate-empty-desc">
-        请先在设置中<button class="migrate-empty-link" @click="navigateToSettings">配置至少一个图床</button>
+        请在设置中<button class="migrate-empty-link" @click="navigateToSettings">配置图床</button>
       </p>
     </EmptyState>
 
