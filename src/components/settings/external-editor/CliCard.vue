@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 import Button from 'primevue/button';
 import { useToast } from '../../../composables/useToast';
 
@@ -7,25 +8,109 @@ interface Props {
   executablePath?: string;
 }
 
+interface CliPathStatus {
+  supported: boolean;
+  inPath: boolean;
+  executableDir: string;
+  commandName: 'picnexus';
+  needsTerminalRestart: boolean;
+  message?: string;
+}
+
 const props = defineProps<Props>();
 const toast = useToast();
-const commandCopied = ref(false);
+const copiedCommand = ref<'path' | 'full' | null>(null);
+const pathStatus = ref<CliPathStatus | null>(null);
+const pathLoading = ref(false);
+const pathApplying = ref(false);
+const pathError = ref('');
 
-const cliCommand = computed(() => {
+const pathCommand = computed(() => 'picnexus --service r2 image.png');
+
+const fullPathCommand = computed(() => {
   const executable = props.executablePath || 'picnexus';
   const quoted = /\s/.test(executable) ? `"${executable}"` : executable;
   return `${quoted} --service r2 image.png`;
 });
 
-async function copyCliCommand() {
+const pathStatusText = computed(() => {
+  const status = pathStatus.value;
+  if (pathLoading.value) return '正在检测 PATH 状态...';
+  if (pathError.value) return pathError.value;
+  if (!status) return '可使用完整路径命令，或加入 PATH 后直接使用 picnexus。';
+  if (!status.supported) return status.message || '当前平台暂不支持一键加入 PATH，请使用完整路径命令。';
+  if (status.inPath) return '已加入 PATH，新终端可直接使用 picnexus 命令。';
+  return '未加入 PATH，加入后新终端可直接使用 picnexus 命令。';
+});
+
+const pathActionLabel = computed(() => {
+  if (pathLoading.value) return '检测中...';
+  if (pathApplying.value) return '处理中...';
+  if (!pathStatus.value?.supported) return '暂不支持';
+  return pathStatus.value.inPath ? '移除 PATH' : '加入 PATH';
+});
+
+function errorToMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String((error as { message?: unknown }).message);
+  }
+  return '操作失败，请稍后重试';
+}
+
+async function refreshPathStatus() {
+  pathLoading.value = true;
+  pathError.value = '';
   try {
-    await navigator.clipboard.writeText(cliCommand.value);
-    commandCopied.value = true;
-    setTimeout(() => { commandCopied.value = false; }, 2000);
+    const status = await invoke<CliPathStatus>('get_cli_path_status');
+    if (status && typeof status.supported === 'boolean') {
+      pathStatus.value = status;
+    }
+  } catch (error) {
+    pathError.value = errorToMessage(error);
+  } finally {
+    pathLoading.value = false;
+  }
+}
+
+async function togglePathStatus() {
+  const status = pathStatus.value;
+  if (!status?.supported || pathApplying.value) return;
+
+  pathApplying.value = true;
+  pathError.value = '';
+  const command = status.inPath ? 'remove_cli_from_path' : 'add_cli_to_path';
+  try {
+    pathStatus.value = await invoke<CliPathStatus>(command);
+    toast.success(
+      status.inPath ? '已移除 PATH' : '已加入 PATH',
+      '请重新打开终端后使用 picnexus',
+    );
+  } catch (error) {
+    const message = errorToMessage(error);
+    pathError.value = message;
+    toast.error('PATH 更新失败', message);
+  } finally {
+    pathApplying.value = false;
+  }
+}
+
+async function copyCommand(kind: 'path' | 'full', command: string) {
+  try {
+    await navigator.clipboard.writeText(command);
+    copiedCommand.value = kind;
+    setTimeout(() => {
+      if (copiedCommand.value === kind) copiedCommand.value = null;
+    }, 2000);
   } catch (_e) {
     toast.error('复制失败', '请手动选中命令复制');
   }
 }
+
+onMounted(() => {
+  void refreshPathStatus();
+});
 </script>
 
 <template>
@@ -41,6 +126,24 @@ async function copyCliCommand() {
     </div>
 
     <div class="guide-card">
+      <div class="path-manager">
+        <div class="path-manager-info">
+          <span class="path-manager-title">终端快捷命令</span>
+          <span class="path-manager-desc">{{ pathStatusText }}</span>
+          <span v-if="pathStatus?.needsTerminalRestart" class="restart-hint">
+            请重新打开终端后使用 <code class="inline-code">picnexus</code>
+          </span>
+        </div>
+        <Button
+          :label="pathActionLabel"
+          :icon="pathStatus?.inPath ? 'pi pi-times' : 'pi pi-plus'"
+          size="small"
+          outlined
+          :disabled="pathLoading || pathApplying || !pathStatus?.supported"
+          @click="togglePathStatus"
+        />
+      </div>
+
       <div class="guide-step">
         <span class="step-badge">1</span>
         <span class="step-text">在设置页配置图床并保存，PicNexus 会自动导出所有 CLI 可用图床。</span>
@@ -52,16 +155,34 @@ async function copyCliCommand() {
       <div class="guide-step">
         <span class="step-badge">3</span>
         <span class="step-text">
-          示例命令：
+          PATH 命令：
           <div class="guide-path-inline">
             <div class="exec-path-row">
-              <code class="exec-path-text" v-tooltip.top="cliCommand">{{ cliCommand }}</code>
+              <code class="exec-path-text" v-tooltip.top="pathCommand">{{ pathCommand }}</code>
               <Button
-                :icon="commandCopied ? 'pi pi-check' : 'pi pi-copy'"
+                :icon="copiedCommand === 'path' ? 'pi pi-check' : 'pi pi-copy'"
                 text
                 size="small"
-                v-tooltip.top="commandCopied ? '已复制！' : '复制命令'"
-                @click="copyCliCommand"
+                v-tooltip.top="copiedCommand === 'path' ? '已复制！' : '复制 PATH 命令'"
+                @click="copyCommand('path', pathCommand)"
+              />
+            </div>
+          </div>
+        </span>
+      </div>
+      <div class="guide-step">
+        <span class="step-badge">4</span>
+        <span class="step-text">
+          完整路径命令：
+          <div class="guide-path-inline">
+            <div class="exec-path-row">
+              <code class="exec-path-text" v-tooltip.top="fullPathCommand">{{ fullPathCommand }}</code>
+              <Button
+                :icon="copiedCommand === 'full' ? 'pi pi-check' : 'pi pi-copy'"
+                text
+                size="small"
+                v-tooltip.top="copiedCommand === 'full' ? '已复制！' : '复制完整路径命令'"
+                @click="copyCommand('full', fullPathCommand)"
               />
             </div>
           </div>
@@ -97,6 +218,41 @@ async function copyCliCommand() {
   padding: var(--space-md) var(--space-lg);
 }
 
+.path-manager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-sm-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm-md);
+  background: var(--bg-input);
+}
+
+.path-manager-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+.path-manager-title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.path-manager-desc,
+.restart-hint {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.restart-hint {
+  color: var(--warning);
+}
+
 .guide-path-inline {
   margin-top: var(--space-xs-sm);
 }
@@ -119,5 +275,12 @@ async function copyCliCommand() {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--primary);
+}
+
+@media (width <= 760px) {
+  .path-manager {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 </style>
