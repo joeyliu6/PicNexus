@@ -144,7 +144,7 @@ function handleHealthDotClick(event: MouseEvent, serviceId: string) {
       title="暂无可用图床"
     >
       <p class="empty-state-desc">
-        请在设置中<button class="empty-state-link" @click="emit('go-settings')">配置图床</button>。
+        请在设置中<button class="empty-state-link" @click="emit('go-settings')">配置图床</button>
       </p>
     </EmptyState>
   </div>

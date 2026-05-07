@@ -160,9 +160,10 @@ function handleTargetToggle(serviceId: string) {
       v-else-if="configuredServices.length === 0"
       icon="pi pi-cog"
       title="暂无已配置的图床"
-      description="请先在设置中配置至少一个图床"
     >
-      <button class="btn-primary" @click="navigateToSettings">去设置 →</button>
+      <p class="migrate-empty-desc">
+        请先在设置中<button class="migrate-empty-link" @click="navigateToSettings">配置至少一个图床</button>
+      </p>
     </EmptyState>
 
     <!-- 分栏布局 -->
@@ -244,7 +245,7 @@ function handleTargetToggle(serviceId: string) {
   </div>
 
   <!-- 底栏 -->
-  <div v-else class="bottom">
+  <div v-else-if="configuredServices.length > 0" class="bottom">
     <div class="bottom-main">
       <span class="bottom-stat" :title="bottomFullText">
         <template v-if="noSourceSelected">
@@ -408,6 +409,29 @@ function handleTargetToggle(serviceId: string) {
   color: var(--text-secondary);
 }
 .backed-up-banner i { font-size: var(--text-base); color: var(--success); flex-shrink: 0; }
+
+.migrate-empty-desc {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  margin: 0;
+  text-align: center;
+}
+
+.migrate-empty-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: inherit;
+  color: var(--primary);
+  cursor: pointer;
+  transition: color var(--duration-normal) ease;
+}
+
+.migrate-empty-link:hover {
+  color: var(--primary-hover, #3b82f6);
+  text-decoration: underline;
+}
 
 .target-grid {
   display: grid;

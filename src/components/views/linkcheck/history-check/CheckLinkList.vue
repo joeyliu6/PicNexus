@@ -66,7 +66,7 @@ const emit = defineEmits<{
       <EmptyState
         icon="pi pi-inbox"
         title="暂无数据"
-        description="尚无上传历史记录。"
+        description="尚无上传历史记录"
       />
     </div>
 
