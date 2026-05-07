@@ -40,6 +40,11 @@
 | | `fetch_qiyu_token` | 获取七鱼 Token |
 | | `check_chrome_installed` | 检查 Chrome |
 | **编辑器 Server** | `update_server_config` | 启动/停止/更新 HTTP Server |
+| **CLI PATH** | `get_cli_path_status` | 读取 PicNexus CLI 是否已加入用户 PATH |
+| | `add_cli_to_path` | 将当前 PicNexus 可执行文件目录加入用户 PATH |
+| | `remove_cli_from_path` | 从用户 PATH 移除当前 PicNexus 可执行文件目录 |
+
+> CLI PATH 命令 v1 仅自动管理 Windows 用户级 PATH；其他平台返回 `supported: false`。
 
 ---
 
