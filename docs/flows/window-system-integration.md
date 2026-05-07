@@ -11,7 +11,7 @@ PicNexus 是**单窗口 + 系统托盘** 架构:
 - **系统托盘**:菜单包含打开界面、上传剪贴板、选择图片…、当前图床二级菜单、历史记录、退出;左键点击图标直接唤起主窗口
 - **全局快捷键**:插件已加载,**但当前未注册任何快捷键**(预留扩展点)
 - **文件关联**:`tauri.conf.json` 未配置 `fileAssociations`;命令行上传使用 `picnexus --service <serviceId> /path/to/img.jpg`,Typora 使用 `--profile typora`,Obsidian 走 HTTP Server。
-- **CLI PATH**:设置页可一键加入 PATH。Windows 写入用户级注册表;macOS / Linux 创建 `~/.local/bin/picnexus` 符号链接,AppImage 优先链接到 `$APPIMAGE`。
+- **CLI PATH**:设置页的 CLI 开关会同步管理命令入口。Windows 写入用户级注册表;macOS / Linux 创建 `~/.local/bin/picnexus` 符号链接,AppImage 优先链接到 `$APPIMAGE`。
 
 ---
 
@@ -165,7 +165,7 @@ flowchart TD
 
 ### CLI PATH 管理
 
-设置页 `CliCard.vue` 调用 `get_cli_path_status` / `add_cli_to_path` / `remove_cli_from_path` 管理快捷命令。
+设置页 `CliCard.vue` 调用 `get_cli_path_status` / `add_cli_to_path` / `remove_cli_from_path` 管理快捷命令。CLI 开关打开时会尝试启用命令入口并导出 `services` 配置;关闭时会移除命令入口并停止导出普通 CLI 配置。
 
 - Windows:读写 `HKEY_CURRENT_USER\Environment\Path`,加入或移除当前可执行文件目录,变更后广播 `WM_SETTINGCHANGE`。
 - macOS / Linux:创建或删除 `~/.local/bin/picnexus` 符号链接。普通包链接到 `current_exe()`;AppImage 运行时若存在 `$APPIMAGE`,优先链接到该真实 AppImage 路径。
@@ -249,8 +249,8 @@ flowchart LR
 | `picnexus --service r2` 报未知图床 | 设置页尚未保存对应图床配置,或该图床不支持 CLI 导出 | 图3 F1 |
 | Typora 调用 `picnexus --profile typora` 报错 | `cli-config.json` 缺失或 Typora 图床未配置 | 图3 F1 |
 | CLI 上传成功但 GUI 历史没更新 | CLI 是独立进程,不与 GUI 实例共享 DB 连接 | 图3 note1 |
-| macOS 点击加入 PATH 后仍提示未加入 | `~/.local/bin` 不在当前 shell PATH;按设置页 message 把 export 行加入 `~/.zshrc` 后新开终端 | CLI PATH 管理 |
-| AppImage 加入 PATH 后命令失效 | 符号链接可能指向旧的 `/tmp/.mount_*` 临时挂载;应确认当前运行时存在 `$APPIMAGE`,再手动移走旧链接后重新加入 PATH | CLI PATH 管理 |
+| macOS 打开 CLI 后仍提示 PATH 未生效 | `~/.local/bin` 不在当前 shell PATH;按设置页 message 把 export 行加入 `~/.zshrc` 后新开终端 | CLI PATH 管理 |
+| AppImage 打开 CLI 后命令失效 | 符号链接可能指向旧的 `/tmp/.mount_*` 临时挂载;应确认当前运行时存在 `$APPIMAGE`,再手动移走旧链接后重新打开 CLI | CLI PATH 管理 |
 | 配置全局快捷键不生效 | **当前未实现**,插件已加载但无 `register` 调用 | 图4 R1C |
 | 设置 `fileAssociations` 拖图标打开无反应 | **当前未实现**,需要同时加 `single_instance` | 图4 R2 |
 

@@ -17,6 +17,7 @@ vi.mock('../../../composables/useToast', () => ({
 }));
 
 import CliCard from '../../../components/settings/external-editor/CliCard.vue';
+import type { EditorServerConfig } from '../../../config/types';
 
 interface CliPathStatus {
   supported: boolean;
@@ -33,6 +34,12 @@ const ButtonStub = {
   template: '<button class="button-stub" :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
 };
 
+const ToggleSwitchStub = {
+  props: ['modelValue', 'disabled'],
+  emits: ['update:modelValue'],
+  template: '<button class="toggle-switch-stub" :disabled="disabled" @click="$emit(\'update:modelValue\', !modelValue)" />',
+};
+
 function status(overrides: Partial<CliPathStatus> = {}): CliPathStatus {
   return {
     supported: true,
@@ -44,12 +51,28 @@ function status(overrides: Partial<CliPathStatus> = {}): CliPathStatus {
   };
 }
 
-function mountCliCard(executablePath = 'C:\\Program Files\\PicNexus\\PicNexus.exe') {
+function editorServer(overrides: Partial<EditorServerConfig> = {}): EditorServerConfig {
+  return {
+    enabled: false,
+    typoraEnabled: false,
+    cliEnabled: false,
+    port: 36799,
+    typoraService: null,
+    obsidianService: null,
+    ...overrides,
+  };
+}
+
+function mountCliCard(
+  executablePath = 'C:\\Program Files\\PicNexus\\PicNexus.exe',
+  editorOverrides: Partial<EditorServerConfig> = {},
+) {
   return mountWithDefaults(CliCard, {
-    props: { executablePath },
+    props: { executablePath, editorServer: editorServer(editorOverrides) },
     global: {
       stubs: {
         Button: ButtonStub,
+        ToggleSwitch: ToggleSwitchStub,
       },
     },
   });
@@ -60,16 +83,12 @@ async function flush() {
   await nextTick();
 }
 
-function findButtonByText(wrapper: ReturnType<typeof mountCliCard>, text: string) {
-  return wrapper.findAll('button').find((button) => button.text() === text);
-}
-
 describe('CliCard', () => {
   beforeEach(() => {
     resetTauriMocks();
   });
 
-  it('shows add PATH action and both command forms when CLI dir is not in PATH', async () => {
+  it('shows disabled state and both command forms before CLI is enabled', async () => {
     setupInvokeResponses({
       get_cli_path_status: status({ inPath: false }),
     });
@@ -77,13 +96,14 @@ describe('CliCard', () => {
     const wrapper = mountCliCard();
     await flush();
 
-    expect(wrapper.text()).toContain('未加入 PATH');
-    expect(wrapper.text()).toContain('加入 PATH');
+    expect(wrapper.text()).toContain('打开开关后会启用 CLI 图床配置');
+    expect(wrapper.text()).toContain('打开 CLI 后，PicNexus 会导出已配置且支持 CLI 的图床命令');
+    expect(wrapper.text()).toContain('加入 PATH 后，可直接使用短命令');
     expect(wrapper.text()).toContain('picnexus --service r2 image.png');
     expect(wrapper.text()).toContain('"C:\\Program Files\\PicNexus\\PicNexus.exe" --service r2 image.png');
   });
 
-  it('shows joined PATH state and terminal restart hint after add succeeds', async () => {
+  it('adds CLI to PATH and emits enabled state when the switch is turned on', async () => {
     setupInvokeResponses({
       get_cli_path_status: status({ inPath: false }),
       add_cli_to_path: status({ inPath: true, needsTerminalRestart: true }),
@@ -92,65 +112,75 @@ describe('CliCard', () => {
     const wrapper = mountCliCard();
     await flush();
 
-    const addButton = findButtonByText(wrapper, '加入 PATH');
-    expect(addButton).toBeDefined();
-    if (!addButton) throw new Error('add PATH button not found');
-    await addButton.trigger('click');
+    await wrapper.get('.toggle-switch-stub').trigger('click');
     await flush();
 
     expect(getInvokeMock()).toHaveBeenCalledWith('add_cli_to_path');
-    expect(wrapper.text()).toContain('已加入 PATH');
-    expect(wrapper.text()).toContain('请重新打开终端后使用');
+    const updates = wrapper.emitted('update:editorServer') as Array<[EditorServerConfig]>;
+    expect(updates.at(-1)?.[0]).toMatchObject({ cliEnabled: true });
+    expect(wrapper.text()).toContain('已加入 PATH，直接使用短命令');
   });
 
-  it('returns to not-in-PATH state after remove succeeds', async () => {
+  it('removes CLI from PATH and emits disabled state when the switch is turned off', async () => {
     setupInvokeResponses({
       get_cli_path_status: status({ inPath: true }),
       remove_cli_from_path: status({ inPath: false, needsTerminalRestart: true }),
     });
 
-    const wrapper = mountCliCard();
+    const wrapper = mountCliCard('C:\\Program Files\\PicNexus\\PicNexus.exe', { cliEnabled: true });
     await flush();
 
-    expect(wrapper.text()).toContain('移除 PATH');
-    const removeButton = findButtonByText(wrapper, '移除 PATH');
-    expect(removeButton).toBeDefined();
-    if (!removeButton) throw new Error('remove PATH button not found');
-    await removeButton.trigger('click');
+    await wrapper.get('.toggle-switch-stub').trigger('click');
     await flush();
 
     expect(getInvokeMock()).toHaveBeenCalledWith('remove_cli_from_path');
-    expect(wrapper.text()).toContain('未加入 PATH');
+    const updates = wrapper.emitted('update:editorServer') as Array<[EditorServerConfig]>;
+    expect(updates.at(-1)?.[0]).toMatchObject({ cliEnabled: false });
+    expect(wrapper.text()).toContain('打开开关后会启用 CLI 图床配置');
   });
 
-  it('offers to remove the created link when shell PATH still needs setup', async () => {
+  it('shows the PATH-free hint when CLI is enabled but not in PATH', async () => {
     setupInvokeResponses({
-      get_cli_path_status: status({
+      get_cli_path_status: status({ inPath: false }),
+      add_cli_to_path: status({ inPath: false }),
+    });
+
+    const wrapper = mountCliCard();
+    await flush();
+
+    await wrapper.get('.toggle-switch-stub').trigger('click');
+    await flush();
+
+    expect(wrapper.text()).toContain('加入 PATH 后，可直接使用短命令');
+  });
+
+  it('keeps CLI enabled and shows warning when a Unix shell PATH still needs setup', async () => {
+    setupInvokeResponses({
+      get_cli_path_status: status({ inPath: false }),
+      add_cli_to_path: status({
         inPath: false,
         message: '已创建链接，但 /Users/u/.local/bin 不在 PATH 中。',
       }),
-      remove_cli_from_path: status({ inPath: false }),
     });
 
     const wrapper = mountCliCard('/Applications/PicNexus.app/Contents/MacOS/PicNexus');
     await flush();
 
-    expect(wrapper.text()).toContain('已创建链接');
-    const removeLinkButton = findButtonByText(wrapper, '移除链接');
-    expect(removeLinkButton).toBeDefined();
-    if (!removeLinkButton) throw new Error('remove link button not found');
-    await removeLinkButton.trigger('click');
+    await wrapper.get('.toggle-switch-stub').trigger('click');
     await flush();
 
-    expect(getInvokeMock()).toHaveBeenCalledWith('remove_cli_from_path');
-    expect(wrapper.text()).toContain('未加入 PATH');
+    const updates = wrapper.emitted('update:editorServer') as Array<[EditorServerConfig]>;
+    expect(updates.at(-1)?.[0]).toMatchObject({ cliEnabled: true });
+    expect(wrapper.text()).toContain('已创建链接');
+    expect(wrapper.find('.path-status-note.warning').exists()).toBe(true);
   });
 
-  it('disables one-click PATH action on unsupported platforms and keeps full-path command visible', async () => {
+  it('does not enable CLI on unsupported platforms and keeps full-path command visible', async () => {
     setupInvokeResponses({
       get_cli_path_status: status({
         supported: false,
         executableDir: '/Applications/PicNexus.app/Contents/MacOS',
+        inPath: false,
         message: '当前平台暂不支持一键加入 PATH，请使用完整路径命令。',
       }),
     });
@@ -158,9 +188,30 @@ describe('CliCard', () => {
     const wrapper = mountCliCard('/Applications/PicNexus.app/Contents/MacOS/PicNexus');
     await flush();
 
+    await wrapper.get('.toggle-switch-stub').trigger('click');
+    await flush();
+
+    expect(getInvokeMock()).not.toHaveBeenCalledWith('add_cli_to_path');
+    expect(wrapper.emitted('update:editorServer')).toBeUndefined();
     expect(wrapper.text()).toContain('当前平台暂不支持一键加入 PATH');
-    expect(wrapper.text()).toContain('完整路径命令');
-    const action = findButtonByText(wrapper, '暂不支持');
-    expect(action?.attributes('disabled')).toBeDefined();
+    expect(wrapper.text()).toContain('加入 PATH 后，可直接使用短命令');
+  });
+
+  it('disables CLI export even when removing PATH fails', async () => {
+    setupInvokeResponses({
+      get_cli_path_status: status({ inPath: true }),
+      remove_cli_from_path: new Error('无法删除符号链接'),
+    });
+
+    const wrapper = mountCliCard('C:\\Program Files\\PicNexus\\PicNexus.exe', { cliEnabled: true });
+    await flush();
+
+    await wrapper.get('.toggle-switch-stub').trigger('click');
+    await flush();
+
+    expect(getInvokeMock()).toHaveBeenCalledWith('remove_cli_from_path');
+    const updates = wrapper.emitted('update:editorServer') as Array<[EditorServerConfig]>;
+    expect(updates.at(-1)?.[0]).toMatchObject({ cliEnabled: false });
+    expect(wrapper.find('.path-status-note.error').exists()).toBe(true);
   });
 });

@@ -168,6 +168,8 @@ export interface EditorServerConfig {
   enabled: boolean;
   /** 是否启用 Typora 集成 */
   typoraEnabled: boolean;
+  /** 是否启用普通 CLI 命令入口与图床配置导出（picnexus --service <图床名>） */
+  cliEnabled?: boolean;
   /** 监听端口（默认 36799，避免与 PicGo/PicList 36677 冲突） */
   port: number;
   /** Typora 专用图床（null = 未配置） */

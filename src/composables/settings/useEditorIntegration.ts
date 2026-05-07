@@ -59,7 +59,7 @@ export function useEditorIntegration(options: UseEditorIntegrationOptions) {
     const obsidianSig = cfg.obsidianService
       ? `obsidian:${cfg.obsidianService}:${buildEditorCredentialSignature(cfg.obsidianService, fd)}`
       : 'obsidian:none';
-    const cliSig = `cli:${buildCliServicesConfigJson(fd)}`;
+    const cliSig = fd.editorServer.cliEnabled === true ? `cli:${buildCliServicesConfigJson(fd)}` : 'cli:disabled';
     return `${typoraSig}|${obsidianSig}|${cliSig}`;
   });
 
@@ -84,7 +84,7 @@ export function useEditorIntegration(options: UseEditorIntegrationOptions) {
     const activeCfg = formData.value.editorServer;
     const obsidianPayload = buildObsidianApplyPayload(activeCfg, authToken);
     const typoraConfigJson = buildServiceConfigJson(cfg.typoraService, formData.value);
-    const cliServicesConfigJson = buildCliServicesConfigJson(formData.value);
+    const cliServicesConfigJson = cfg.cliEnabled === true ? buildCliServicesConfigJson(formData.value) : null;
     const payloadKey = JSON.stringify({ obsidian: obsidianPayload, typora: typoraConfigJson, cli: cliServicesConfigJson });
 
     if (!force && payloadKey === lastAppliedEditorPayloadKey.value) {

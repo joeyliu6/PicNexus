@@ -156,6 +156,7 @@ export const DEFAULT_CONFIG: UserConfig = {
   editorServer: {
     enabled: false,
     typoraEnabled: false,
+    cliEnabled: false,
     port: 36799,
     typoraService: null,
     obsidianService: null,

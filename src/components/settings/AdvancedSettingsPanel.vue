@@ -2,6 +2,7 @@
 import Divider from 'primevue/divider';
 import ImageCompressionPanel from './ImageCompressionPanel.vue';
 import ExternalEditorPanel from './ExternalEditorPanel.vue';
+import CliCard from './external-editor/CliCard.vue';
 import type { ImageCompressionConfig, EditorServerConfig } from '../../config/types';
 
 interface Props {
@@ -24,10 +25,12 @@ const emit = defineEmits<{
   <div class="advanced-settings-panel">
     <div class="section-header">
       <h2>高级设置</h2>
-      <p class="section-desc">配置图片处理与编辑器集成环境，定制你的工作流。</p>
+      <p class="section-desc">配置上传处理、命令行调用与编辑器自动上传。</p>
     </div>
 
     <div class="form-group">
+      <label class="group-label">上传处理</label>
+      <p class="helper-text">控制图片进入图床前的处理方式。</p>
       <ImageCompressionPanel
         :image-compression="props.imageCompression"
         @update:image-compression="(v: ImageCompressionConfig) => emit('update:imageCompression', v)"
@@ -37,16 +40,23 @@ const emit = defineEmits<{
     <Divider />
 
     <div class="form-group">
-      <label class="group-label">外部编辑器</label>
-      <p class="helper-text">在常用编辑器中粘贴图片时，自动上传到图床。</p>
-      <ExternalEditorPanel
-        embedded
-        :editor-server="props.editorServer"
-        :executable-path="props.executablePath"
-        @update:editor-server="(v: EditorServerConfig) => emit('update:editorServer', v)"
-        @navigate-hosting="emit('navigateHosting')"
-        @save="emit('save')"
-      />
+      <label class="group-label">外部集成</label>
+      <p class="helper-text">让 PicNexus 从终端、脚本或编辑器中触发上传。</p>
+      <div class="advanced-card-stack">
+        <CliCard
+          :editor-server="props.editorServer"
+          :executable-path="props.executablePath"
+          @update:editor-server="(v: EditorServerConfig) => emit('update:editorServer', v)"
+        />
+        <ExternalEditorPanel
+          embedded
+          :editor-server="props.editorServer"
+          :executable-path="props.executablePath"
+          @update:editor-server="(v: EditorServerConfig) => emit('update:editorServer', v)"
+          @navigate-hosting="emit('navigateHosting')"
+          @save="emit('save')"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -58,7 +68,9 @@ const emit = defineEmits<{
   width: 100%;
 }
 
-.advanced-settings-panel .section-desc {
-  max-width: 680px;
+.advanced-card-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
 }
 </style>

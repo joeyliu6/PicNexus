@@ -40,6 +40,7 @@ function makeForm(overrides: Partial<SettingsFormShape> = {}): SettingsFormShape
 describe('editorServiceConfig', () => {
   it('exports all configured CLI-compatible services and excludes unsupported services', () => {
     const form = makeForm({
+      editorServer: { ...DEFAULT_CONFIG.editorServer!, cliEnabled: true },
       smms: { token: 'smms-token' },
       r2: {
         accountId: 'account',
@@ -64,6 +65,7 @@ describe('editorServiceConfig', () => {
 
   it('exports custom S3 profiles under their composite service id', () => {
     const form = makeForm({
+      editorServer: { ...DEFAULT_CONFIG.editorServer!, cliEnabled: true },
       custom_s3_profiles: [{
         id: 'profile-1',
         name: 'Prod S3',
@@ -85,6 +87,28 @@ describe('editorServiceConfig', () => {
       access_key_id: 'key',
       bucket: 'bucket',
     });
+  });
+
+  it('returns an empty CLI services export when CLI is disabled', () => {
+    const form = makeForm({
+      editorServer: { ...DEFAULT_CONFIG.editorServer!, cliEnabled: false },
+      smms: { token: 'smms-token' },
+    });
+
+    const services = buildCliServicesConfig(form);
+
+    expect(services).toEqual({});
+  });
+
+  it('returns an empty CLI services export when CLI is missing from old config', () => {
+    const form = makeForm({
+      editorServer: { ...DEFAULT_CONFIG.editorServer!, cliEnabled: undefined },
+      smms: { token: 'smms-token' },
+    });
+
+    const services = buildCliServicesConfig(form);
+
+    expect(services).toEqual({});
   });
 
   it('uses customS3 as the Rust config type while keeping the external service id stable', () => {

@@ -161,6 +161,8 @@ export function buildServiceConfigJson(service: ServerServiceType | null, fd: Se
 }
 
 export function buildCliServicesConfig(fd: SettingsFormShape): Record<string, ServiceConfigObject> {
+  if (fd.editorServer.cliEnabled !== true) return {};
+
   const services: Record<string, ServiceConfigObject> = {};
 
   for (const service of BUILTIN_EDITOR_SERVICE_IDS) {

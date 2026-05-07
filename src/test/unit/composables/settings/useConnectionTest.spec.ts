@@ -89,7 +89,14 @@ function makeFormData(): SettingsFormShape {
     smms: { token: 'smms-token' },
     github: { enabled: true, token: 'ghp_test', owner: 'owner', repo: 'repo', branch: 'main', path: 'images/' },
     imgur: { clientId: 'imgur-client', clientSecret: '' },
-    editorServer: { enabled: false, port: 0, typoraEnabled: false, typoraService: null, obsidianService: null },
+    editorServer: {
+      enabled: false,
+      port: 0,
+      typoraEnabled: false,
+      cliEnabled: true,
+      typoraService: null,
+      obsidianService: null,
+    },
   };
 }
 

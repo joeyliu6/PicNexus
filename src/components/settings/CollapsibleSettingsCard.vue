@@ -12,6 +12,8 @@ interface Props {
   needsAttention?: boolean;
   /** needsAttention 激活时，状态点 tooltip 的提示文案 */
   attentionTooltip?: string;
+  /** 禁用头部开关，但仍允许折叠/展开 */
+  toggleDisabled?: boolean;
 }
 
 defineProps<Props>();
@@ -42,6 +44,7 @@ const emit = defineEmits<{
       <div class="header-right">
         <ToggleSwitch
           :modelValue="enabled"
+          :disabled="toggleDisabled"
           @update:modelValue="(v: boolean) => emit('update:enabled', v)"
           @click.stop
         />

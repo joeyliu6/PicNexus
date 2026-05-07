@@ -92,6 +92,7 @@ describe('ExternalEditorPanel', () => {
         editorServer: {
           enabled: false,
           typoraEnabled: false,
+          cliEnabled: true,
           port: 36799,
           typoraService: null,
           obsidianService: null,
@@ -127,6 +128,7 @@ describe('ExternalEditorPanel', () => {
         editorServer: {
           enabled: true,
           typoraEnabled: false,
+          cliEnabled: true,
           port: 36799,
           typoraService: 'jd',
           obsidianService: 'jd',
@@ -175,6 +177,7 @@ describe('ExternalEditorPanel', () => {
         editorServer: {
           enabled: true,
           typoraEnabled: false,
+          cliEnabled: true,
           port: 36799,
           typoraService: 'jd',
           obsidianService: 'jd',
@@ -207,12 +210,13 @@ describe('ExternalEditorPanel', () => {
     expect(wrapper.find('.pi-refresh').exists()).toBe(false);
   });
 
-  it('shows explicit CLI service usage and Typora profile command', async () => {
+  it('shows Typora profile command without CLI summary text', async () => {
     const wrapper = mountWithDefaults(ExternalEditorPanel, {
       props: {
         editorServer: {
           enabled: false,
           typoraEnabled: true,
+          cliEnabled: true,
           port: 36799,
           typoraService: 'jd',
           obsidianService: null,
@@ -236,8 +240,9 @@ describe('ExternalEditorPanel', () => {
 
     const text = wrapper.text();
     expect(text).toContain('--profile typora');
-    expect(text).toContain('--service <图床名>');
-    expect(text).toContain('--service r2');
+    expect(text).not.toContain('CLI 开启');
+    expect(text).not.toContain('CLI 关闭');
+    expect(text).not.toContain('--service <图床名>');
   });
 
   it('connection test shows warning/success based on /status response', async () => {
@@ -257,6 +262,7 @@ describe('ExternalEditorPanel', () => {
         editorServer: {
           enabled: true,
           typoraEnabled: false,
+          cliEnabled: true,
           port: 36799,
           typoraService: 'jd',
           obsidianService: 'jd',

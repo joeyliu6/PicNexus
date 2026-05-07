@@ -5,7 +5,6 @@ import { useServiceHealth } from '../../composables/useServiceHealth';
 import { EDITOR_UNSUPPORTED_SERVICES } from '../../composables/settings/editorServiceConfig';
 import TyporaCard from './external-editor/TyporaCard.vue';
 import ObsidianCard from './external-editor/ObsidianCard.vue';
-import CliCard from './external-editor/CliCard.vue';
 
 interface Props {
   editorServer: EditorServerConfig;
@@ -121,8 +120,6 @@ const summaryText = computed(() => {
       :serviceLabelMap="SERVICE_LABEL_MAP"
       @navigateHosting="emit('navigateHosting')"
     />
-
-    <CliCard :executablePath="executablePath" />
 
     <ObsidianCard
       v-model:editorServer="editorServerModel"
