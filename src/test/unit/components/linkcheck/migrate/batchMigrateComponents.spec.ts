@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref, type Component } from 'vue';
 import { mountWithDefaults } from '../../../../helpers/vueMount';
-import { getInvokeMock } from '../../../../helpers/tauriMock';
+import { getEmitMock, getInvokeMock } from '../../../../helpers/tauriMock';
 import SourceList from '../../../../../components/views/linkcheck/migrate/components/SourceList.vue';
 import TargetCard from '../../../../../components/views/linkcheck/migrate/components/TargetCard.vue';
 import MigrateFilterBar from '../../../../../components/views/linkcheck/migrate/components/MigrateFilterBar.vue';
@@ -418,6 +418,28 @@ describe('batch migrate P1 components', () => {
     await flushPromisesAndTicks();
 
     expect(wrapper.get('.bottom-stat').text()).toContain('补传备份');
+  });
+
+  it('MigrateSelectPhase uses inline settings link for unconfigured empty state', async () => {
+    const ctx = createMigrateContext({
+      phase: ref('configuring'),
+      configuredServices: computed(() => []),
+      unconfiguredServices: computed(() => []),
+      checkedTargets: computed(() => []),
+      totalPending: computed(() => 0),
+      isAllBackedUp: computed(() => false),
+    });
+
+    const wrapper = mountWithMigrateContext(MigrateSelectPhase, ctx);
+
+    expect(wrapper.text()).toContain('暂无已配置的图床');
+    expect(wrapper.text()).toContain('请先在设置中配置至少一个图床');
+    expect(wrapper.find('.migrate-empty-link').exists()).toBe(true);
+    expect(wrapper.find('.btn-primary').exists()).toBe(false);
+
+    await wrapper.get('.migrate-empty-link').trigger('click');
+
+    expect(getEmitMock()).toHaveBeenCalledWith('navigate-to', { view: 'settings', tab: 'hosting' });
   });
 
   it('MigrateProgressPhase filters terminal results and retries failed rows', async () => {

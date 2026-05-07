@@ -82,6 +82,8 @@ describe('CheckLinkList', () => {
 
     expect(filteredEmpty.text()).toContain('当前筛选暂无结果');
     expect(noData.text()).toContain('暂无数据');
+    expect(noData.text()).toContain('尚无上传历史记录');
+    expect(noData.text()).not.toContain('尚无上传历史记录。');
   });
 
   it('加载失败时优先展示错误空态', () => {
