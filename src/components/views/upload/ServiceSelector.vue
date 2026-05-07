@@ -64,7 +64,7 @@ function handleHealthDotClick(event: MouseEvent, serviceId: string) {
 </script>
 
 <template>
-  <div class="upload-controls">
+  <div class="upload-controls" :class="{ 'is-empty': !hasServices }">
     <template v-if="hasServices">
       <!-- 公共图床 -->
       <div v-if="publicServices.length > 0" class="service-group">
@@ -140,6 +140,7 @@ function handleHealthDotClick(event: MouseEvent, serviceId: string) {
     <!-- 空状态引导 -->
     <EmptyState
       v-else
+      class="service-selector-empty"
       icon="pi pi-cog"
       title="暂无可用图床"
     >
@@ -160,6 +161,20 @@ function handleHealthDotClick(event: MouseEvent, serviceId: string) {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+}
+
+.upload-controls.is-empty {
+  padding: var(--space-md-lg) var(--space-xl);
+}
+
+.service-selector-empty {
+  min-height: 120px;
+  padding: var(--space-md) var(--space-lg);
+}
+
+.service-selector-empty :deep(.empty-state__icon) {
+  font-size: var(--text-3xl);
+  margin-bottom: 0;
 }
 
 .service-group {

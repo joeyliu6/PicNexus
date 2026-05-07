@@ -158,6 +158,7 @@ function handleTargetToggle(serviceId: string) {
     <!-- 空状态 -->
     <EmptyState
       v-else-if="configuredServices.length === 0"
+      class="migrate-empty-state"
       icon="pi pi-cog"
       title="暂无可用图床"
     >
@@ -415,6 +416,17 @@ function handleTargetToggle(serviceId: string) {
   color: var(--text-tertiary);
   margin: 0;
   text-align: center;
+}
+
+.migrate-empty-state {
+  flex: 0 0 auto;
+  min-height: 148px;
+  padding: var(--space-lg) var(--space-xl);
+}
+
+.migrate-empty-state :deep(.empty-state__icon) {
+  font-size: var(--text-3xl);
+  margin-bottom: 0;
 }
 
 .migrate-empty-link {
