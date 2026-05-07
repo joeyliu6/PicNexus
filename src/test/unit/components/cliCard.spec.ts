@@ -123,6 +123,29 @@ describe('CliCard', () => {
     expect(wrapper.text()).toContain('未加入 PATH');
   });
 
+  it('offers to remove the created link when shell PATH still needs setup', async () => {
+    setupInvokeResponses({
+      get_cli_path_status: status({
+        inPath: false,
+        message: '已创建链接，但 /Users/u/.local/bin 不在 PATH 中。',
+      }),
+      remove_cli_from_path: status({ inPath: false }),
+    });
+
+    const wrapper = mountCliCard('/Applications/PicNexus.app/Contents/MacOS/PicNexus');
+    await flush();
+
+    expect(wrapper.text()).toContain('已创建链接');
+    const removeLinkButton = findButtonByText(wrapper, '移除链接');
+    expect(removeLinkButton).toBeDefined();
+    if (!removeLinkButton) throw new Error('remove link button not found');
+    await removeLinkButton.trigger('click');
+    await flush();
+
+    expect(getInvokeMock()).toHaveBeenCalledWith('remove_cli_from_path');
+    expect(wrapper.text()).toContain('未加入 PATH');
+  });
+
   it('disables one-click PATH action on unsupported platforms and keeps full-path command visible', async () => {
     setupInvokeResponses({
       get_cli_path_status: status({

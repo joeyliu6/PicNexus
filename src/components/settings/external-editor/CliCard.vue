@@ -40,15 +40,26 @@ const pathStatusText = computed(() => {
   if (!status) return '可使用完整路径命令，或加入 PATH 后直接使用 picnexus。';
   if (!status.supported) return status.message || '当前平台暂不支持一键加入 PATH，请使用完整路径命令。';
   if (status.inPath) return '已加入 PATH，新终端可直接使用 picnexus 命令。';
+  if (status.message) return status.message;
   return '未加入 PATH，加入后新终端可直接使用 picnexus 命令。';
+});
+
+const pathLinkNeedsShellSetup = computed(() => {
+  const status = pathStatus.value;
+  return Boolean(status?.supported && !status.inPath && status.message);
 });
 
 const pathActionLabel = computed(() => {
   if (pathLoading.value) return '检测中...';
   if (pathApplying.value) return '处理中...';
   if (!pathStatus.value?.supported) return '暂不支持';
+  if (pathLinkNeedsShellSetup.value) return '移除链接';
   return pathStatus.value.inPath ? '移除 PATH' : '加入 PATH';
 });
+
+const pathActionIcon = computed(() => (
+  pathStatus.value?.inPath || pathLinkNeedsShellSetup.value ? 'pi pi-times' : 'pi pi-plus'
+));
 
 function errorToMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -80,12 +91,18 @@ async function togglePathStatus() {
 
   pathApplying.value = true;
   pathError.value = '';
-  const command = status.inPath ? 'remove_cli_from_path' : 'add_cli_to_path';
+  const removingCreatedLink = pathLinkNeedsShellSetup.value;
+  const shouldRemove = status.inPath || removingCreatedLink;
+  const command = shouldRemove ? 'remove_cli_from_path' : 'add_cli_to_path';
   try {
-    pathStatus.value = await invoke<CliPathStatus>(command);
+    const nextStatus = await invoke<CliPathStatus>(command);
+    pathStatus.value = nextStatus;
+    const addNeedsShellSetup = !shouldRemove && !nextStatus.inPath && nextStatus.message;
     toast.success(
-      status.inPath ? '已移除 PATH' : '已加入 PATH',
-      '请重新打开终端后使用 picnexus',
+      shouldRemove
+        ? (removingCreatedLink ? '已移除链接' : '已移除 PATH')
+        : (addNeedsShellSetup ? '已创建链接' : '已加入 PATH'),
+      addNeedsShellSetup ? '请按页面提示配置 PATH' : '请重新打开终端后使用 picnexus',
     );
   } catch (error) {
     const message = errorToMessage(error);
@@ -136,7 +153,7 @@ onMounted(() => {
         </div>
         <Button
           :label="pathActionLabel"
-          :icon="pathStatus?.inPath ? 'pi pi-times' : 'pi pi-plus'"
+          :icon="pathActionIcon"
           size="small"
           outlined
           :disabled="pathLoading || pathApplying || !pathStatus?.supported"
@@ -247,6 +264,10 @@ onMounted(() => {
   font-size: var(--text-xs);
   color: var(--text-secondary);
   line-height: 1.5;
+}
+
+.path-manager-desc {
+  white-space: pre-line;
 }
 
 .restart-hint {

@@ -10,7 +10,8 @@ PicNexus 是**单窗口 + 系统托盘** 架构:
 - **关闭行为**:默认 `closeToTray = true`,点 × 只隐藏到托盘,不退出进程;可通过 `set_close_to_tray` 命令切换
 - **系统托盘**:菜单包含打开界面、上传剪贴板、选择图片…、当前图床二级菜单、历史记录、退出;左键点击图标直接唤起主窗口
 - **全局快捷键**:插件已加载,**但当前未注册任何快捷键**(预留扩展点)
-- **文件关联**:`tauri.conf.json` 未配置 `fileAssociations`;命令行上传使用 `picnexus.exe --service <serviceId> /path/to/img.jpg`,Typora 使用 `--profile typora`,Obsidian 走 HTTP Server。
+- **文件关联**:`tauri.conf.json` 未配置 `fileAssociations`;命令行上传使用 `picnexus --service <serviceId> /path/to/img.jpg`,Typora 使用 `--profile typora`,Obsidian 走 HTTP Server。
+- **CLI PATH**:设置页可一键加入 PATH。Windows 写入用户级注册表;macOS / Linux 创建 `~/.local/bin/picnexus` 符号链接,AppImage 优先链接到 `$APPIMAGE`。
 
 ---
 
@@ -112,13 +113,13 @@ flowchart TD
 
 ## 图 3:CLI 模式与文件关联(当前实现)
 
-展示 `picnexus.exe --service r2 /path/to/img.jpg` 从命令行启动的流程。普通 CLI 上传必须显式传入图床名;Typora 保留独立配置档 `picnexus.exe --profile typora /path/to/img.jpg`;Obsidian 继续调用本地 HTTP Server。
+展示 `picnexus --service r2 /path/to/img.jpg` 从命令行启动的流程。普通 CLI 上传必须显式传入图床名;Typora 保留独立配置档 `picnexus --profile typora /path/to/img.jpg`;Obsidian 继续调用本地 HTTP Server。
 
 > **关键源文件**:`src-tauri/src/cli.rs`、`src-tauri/src/main.rs#save_cli_config`、`%APPDATA%/us.picnex.app/cli-config.json`
 
 ```mermaid
 flowchart TD
-    A[外部调用<br/>picnexus.exe arg] --> B[main.rs 启动前]
+    A[外部调用<br/>picnexus arg] --> B[main.rs 启动前]
     B --> C[cli::parse_args]
 
     C --> D{ARGV 含什么?}
@@ -161,6 +162,15 @@ flowchart TD
     style Z fill:#e8f5e9,stroke:#2e7d32
     classDef noteStyle fill:#fff3e0,stroke:#ef6c00
 ```
+
+### CLI PATH 管理
+
+设置页 `CliCard.vue` 调用 `get_cli_path_status` / `add_cli_to_path` / `remove_cli_from_path` 管理快捷命令。
+
+- Windows:读写 `HKEY_CURRENT_USER\Environment\Path`,加入或移除当前可执行文件目录,变更后广播 `WM_SETTINGCHANGE`。
+- macOS / Linux:创建或删除 `~/.local/bin/picnexus` 符号链接。普通包链接到 `current_exe()`;AppImage 运行时若存在 `$APPIMAGE`,优先链接到该真实 AppImage 路径。
+- 若 `~/.local/bin/picnexus` 已存在但不是符号链接,或符号链接指向非当前 PicNexus 可执行文件,后端会拒绝覆盖/删除并提示用户手动处理。
+- macOS 默认 PATH 通常没有 `~/.local/bin`;此时后端仍返回 `supported: true`,但 `in_path: false`,并在 `message` 中给出一次性 shell 配置命令。
 
 ---
 
@@ -237,8 +247,10 @@ flowchart LR
 | Windows 任务栏图标模糊 | 没加载 128×128@2x 大图标 | 图1 note |
 | CLI 裸路径调用不上传 | 普通 CLI 必须传 `--service <serviceId>`;裸路径会打印可用图床和示例后退出 | 图3 D7 |
 | `picnexus --service r2` 报未知图床 | 设置页尚未保存对应图床配置,或该图床不支持 CLI 导出 | 图3 F1 |
-| Typora 调用 `picnexus.exe --profile typora` 报错 | `cli-config.json` 缺失或 Typora 图床未配置 | 图3 F1 |
+| Typora 调用 `picnexus --profile typora` 报错 | `cli-config.json` 缺失或 Typora 图床未配置 | 图3 F1 |
 | CLI 上传成功但 GUI 历史没更新 | CLI 是独立进程,不与 GUI 实例共享 DB 连接 | 图3 note1 |
+| macOS 点击加入 PATH 后仍提示未加入 | `~/.local/bin` 不在当前 shell PATH;按设置页 message 把 export 行加入 `~/.zshrc` 后新开终端 | CLI PATH 管理 |
+| AppImage 加入 PATH 后命令失效 | 符号链接可能指向旧的 `/tmp/.mount_*` 临时挂载;应确认当前运行时存在 `$APPIMAGE`,再手动移走旧链接后重新加入 PATH | CLI PATH 管理 |
 | 配置全局快捷键不生效 | **当前未实现**,插件已加载但无 `register` 调用 | 图4 R1C |
 | 设置 `fileAssociations` 拖图标打开无反应 | **当前未实现**,需要同时加 `single_instance` | 图4 R2 |
 
