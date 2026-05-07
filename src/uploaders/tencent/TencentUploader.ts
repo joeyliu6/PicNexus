@@ -32,6 +32,11 @@ export class TencentUploader extends BaseS3Uploader<TencentServiceConfig> {
   }
 
   protected getPublicDomain(config: TencentServiceConfig): string {
-    return config.publicDomain || '';
+    const publicDomain = config.publicDomain?.trim();
+    if (publicDomain) return publicDomain;
+    const bucket = config.bucket?.trim();
+    const region = config.region?.trim();
+    if (!bucket || !region) return '';
+    return `https://${bucket}.cos.${region}.myqcloud.com`;
   }
 }

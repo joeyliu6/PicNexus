@@ -122,6 +122,7 @@ const toast = useToast();
 const { confirm: confirmDialog } = useConfirm();
 
 const customS3ServiceIds = computed(() => (props.customS3Profiles ?? []).map(profile => makeCustomS3Id(profile.id)));
+const privateServiceIds = computed<string[]>(() => [...PRIVATE_SERVICES, ...customS3ServiceIds.value]);
 
 const serviceNamesWithCustom = computed<Record<string, string>>(() => {
   const names: Record<string, string> = { ...props.serviceNames };
@@ -241,25 +242,8 @@ const skeletonStatuses = computed<ServiceHealthStatus[]>(() => {
       </div>
 
       <ServiceChipGrid
-        :services="PRIVATE_SERVICES"
+        :services="privateServiceIds"
         group-title="私有存储"
-        :health-status-map="healthStatusMap"
-        :health-tooltip-map="healthTooltipMap"
-        :available-services="localAvailableServices"
-        :service-names="serviceNamesWithCustom"
-        :is-batch-testing="!!isBatchTesting"
-        :refreshing-service-ids="refreshingServiceIds"
-        :batch-tested-services="batchTestedServices"
-        :batch-done-services="batchDoneServices"
-        :active-filter="activeFilter"
-        @toggle-service="toggleService"
-        @chip-click="handleChipClick"
-      />
-
-      <ServiceChipGrid
-        v-if="customS3ServiceIds.length > 0"
-        :services="customS3ServiceIds"
-        group-title="自定义 S3"
         :health-status-map="healthStatusMap"
         :health-tooltip-map="healthTooltipMap"
         :available-services="localAvailableServices"

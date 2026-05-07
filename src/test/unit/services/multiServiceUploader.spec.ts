@@ -69,7 +69,7 @@ vi.mock('../../../constants/serviceRequiredFields', () => ({
     nami: ['cookie'],
     bilibili: ['cookie'],
     chaoxing: ['cookie'],
-    tencent: ['secretId', 'secretKey', 'bucket', 'region', 'publicDomain'],
+    tencent: ['secretId', 'secretKey', 'bucket', 'region'],
     aliyun: ['accessKeyId', 'accessKeySecret', 'bucket', 'region', 'publicDomain'],
     qiniu: ['accessKey', 'secretKey', 'bucket', 'publicDomain'],
     upyun: ['operator', 'password', 'bucket', 'publicDomain'],

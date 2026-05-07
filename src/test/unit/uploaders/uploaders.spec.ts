@@ -319,6 +319,29 @@ describe('QiyuUploader', () => {
   });
 });
 
+describe('TencentUploader', () => {
+  const getPublicDomain = (config: Record<string, unknown>) =>
+    (new TencentUploader() as unknown as { getPublicDomain: (config: Record<string, unknown>) => string }).getPublicDomain(config);
+
+  it('uses the default COS domain when publicDomain is empty', () => {
+    expect(getPublicDomain({
+      secretId: 'sid',
+      secretKey: 'sk',
+      region: 'ap-guangzhou',
+      bucket: 'mybucket-1250000000',
+      publicDomain: '',
+    })).toBe('https://mybucket-1250000000.cos.ap-guangzhou.myqcloud.com');
+  });
+
+  it('keeps a custom publicDomain when provided', () => {
+    expect(getPublicDomain({
+      region: 'ap-guangzhou',
+      bucket: 'mybucket-1250000000',
+      publicDomain: ' https://img.example.com/ ',
+    })).toBe('https://img.example.com/');
+  });
+});
+
 // ═══════════════════════════════════════════════════════════
 // S3 兼容上传器
 // ═══════════════════════════════════════════════════════════

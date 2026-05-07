@@ -134,6 +134,10 @@ const navGroups = [{
 
 // ---- 事件处理 ----
 
+function handleAddCustomS3Profile() {
+  targetCardId.value = addCustomS3Profile();
+}
+
 async function handleThemeChange(mode: ThemeMode) {
   try { await setTheme(mode); }
   catch (e) { toast.showConfig('error', TOAST_MESSAGES.config.saveFailed(String(e))); }
@@ -394,7 +398,7 @@ onUnmounted(() => {
           @update-prefix="({ index, item }) => updatePrefix(index, item)"
           @remove-prefix="removePrefix"
           @reset-to-default="resetToDefaultPrefixes"
-          @add-custom-s3="addCustomS3Profile" @delete-custom-s3="deleteCustomS3Profile" @update-custom-s3="updateCustomS3Profile"
+          @add-custom-s3="handleAddCustomS3Profile" @delete-custom-s3="deleteCustomS3Profile" @update-custom-s3="updateCustomS3Profile"
         />
       </div>
 

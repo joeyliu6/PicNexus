@@ -49,14 +49,14 @@ const PRIVATE_SERVICES: ServiceConfig[] = [
   },
   {
     id: 'tencent', name: '腾讯云', description: '腾讯云对象存储',
-    requiredKeys: ['secretId', 'secretKey', 'region', 'bucket', 'publicDomain'],
+    requiredKeys: ['secretId', 'secretKey', 'region', 'bucket'],
     fields: [
       { key: 'secretId', label: 'Secret ID', type: 'password', placeholder: '输入 SecretId' },
       { key: 'secretKey', label: 'Secret Key', type: 'password', placeholder: '输入 SecretKey' },
       { key: 'region', label: '地域 (Region)', type: 'text', placeholder: 'ap-guangzhou' },
       { key: 'bucket', label: '存储桶 (Bucket)', type: 'text' },
       { key: 'path', label: '自定义路径 (Optional)', type: 'text', placeholder: 'e.g. blog/images/', spanFull: true },
-      { key: 'publicDomain', label: '公开访问域名 (Public Domain)', type: 'text', placeholder: 'https://images.example.com', spanFull: true, hint: '公开图片链接仅支持 HTTPS' },
+      { key: 'publicDomain', label: '公开访问域名 (Optional)', type: 'text', placeholder: 'https://images.example.com', spanFull: true, hint: '留空时使用腾讯云 COS 默认访问域名；自定义域名仅支持 HTTPS' },
     ],
   },
   {

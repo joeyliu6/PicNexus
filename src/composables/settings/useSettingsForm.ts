@@ -106,7 +106,7 @@ export function useSettingsForm() {
     const fd = formData.value;
     const result: Record<string, boolean> = {
       r2: !!(fd.r2.accountId && fd.r2.accessKeyId && fd.r2.secretAccessKey && fd.r2.bucketName && fd.r2.publicDomain),
-      tencent: !!(fd.tencent.secretId && fd.tencent.secretKey && fd.tencent.region && fd.tencent.bucket && fd.tencent.publicDomain),
+      tencent: !!(fd.tencent.secretId && fd.tencent.secretKey && fd.tencent.region && fd.tencent.bucket),
       aliyun: !!(fd.aliyun.accessKeyId && fd.aliyun.accessKeySecret && fd.aliyun.region && fd.aliyun.bucket && fd.aliyun.publicDomain),
       qiniu: !!(fd.qiniu.accessKey && fd.qiniu.secretKey && fd.qiniu.region && fd.qiniu.bucket && fd.qiniu.publicDomain),
       upyun: !!(fd.upyun.operator && fd.upyun.password && fd.upyun.bucket && fd.upyun.publicDomain),
@@ -500,18 +500,19 @@ export function useSettingsForm() {
   // ---- 自定义 S3 管理 ----
 
   // Why: 用"现存最大序号 + 1"命名，避免旧 length+1 在删中间项后撞名
-  function addCustomS3Profile() {
+  function addCustomS3Profile(): string {
     const usedIndices = formData.value.custom_s3_profiles
       .map((p: CustomS3Profile) => parseInt(p.name?.match(/^自定义 S3 (\d+)$/)?.[1] ?? '', 10))
       .filter((n) => Number.isFinite(n));
     const nextIndex = usedIndices.length ? Math.max(...usedIndices) + 1 : 1;
+    const profileId = generateId();
     formData.value.custom_s3_profiles.push({
-      id: generateId(),
+      id: profileId,
       name: `自定义 S3 ${nextIndex}`,
-      endpoint: '', accessKeyId: '', secretAccessKey: '',
-      region: '', bucket: '', path: '', publicDomain: ''
+      endpoint: '', accessKeyId: '', secretAccessKey: '', region: '', bucket: '', path: '', publicDomain: ''
     });
     saveSettings();
+    return makeCustomS3Id(profileId);
   }
 
   async function deleteCustomS3Profile(profileId: string) {

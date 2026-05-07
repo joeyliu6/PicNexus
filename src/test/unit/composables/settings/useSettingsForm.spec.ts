@@ -292,7 +292,7 @@ describe('useSettingsForm', () => {
       region: 'ap-shanghai',
       bucket: 'bucket',
       path: 'images/',
-      publicDomain: 'https://cos.example.com',
+      publicDomain: '',
     };
     api.formData.value.aliyun = {
       accessKeyId: 'ak',
@@ -681,10 +681,11 @@ describe('useSettingsForm', () => {
     });
     expect(api.formData.value.custom_s3_profiles).toEqual([]);
 
-    api.addCustomS3Profile();
+    const addedServiceId = api.addCustomS3Profile();
     expect(api.formData.value.custom_s3_profiles).toHaveLength(1);
 
     const addedProfile = api.formData.value.custom_s3_profiles[0];
+    expect(addedServiceId).toBe(makeCustomS3Id(addedProfile.id));
     api.updateCustomS3Profile({ ...addedProfile, name: 'Renamed S3' });
     expect(api.formData.value.custom_s3_profiles[0].name).toBe('Renamed S3');
 

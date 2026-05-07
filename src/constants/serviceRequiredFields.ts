@@ -20,7 +20,7 @@ export const SERVICE_REQUIRED_FIELDS: Record<ServiceType, string[]> = {
   bilibili: ['cookie'],
   chaoxing: ['cookie'],
   r2: ['accountId', 'accessKeyId', 'secretAccessKey', 'bucketName', 'publicDomain'],
-  tencent: ['secretId', 'secretKey', 'bucket', 'region', 'publicDomain'],
+  tencent: ['secretId', 'secretKey', 'bucket', 'region'],
   aliyun: ['accessKeyId', 'accessKeySecret', 'bucket', 'region', 'publicDomain'],
   qiniu: ['accessKey', 'secretKey', 'bucket', 'publicDomain'],
   upyun: ['operator', 'password', 'bucket', 'publicDomain'],

@@ -125,20 +125,20 @@ describe('useServiceSelector - updateServiceConfigStatus', () => {
     expect(api.serviceConfigStatus.value.imgur).toBe(true);
   });
 
-  it('tencent - 四字段齐全 → true', async () => {
+  it('tencent - 核心字段齐全 → true', async () => {
     const cfg = cloneDefault();
     cfg.services.tencent = {
-      secretId: 's', secretKey: 'k', bucket: 'b', region: 'r', publicDomain: 'https://cos.example.com',
+      secretId: 's', secretKey: 'k', bucket: 'b', region: 'r',
     } as any;
     const api = useServiceSelector();
     await api.updateServiceConfigStatus(cfg);
     expect(api.serviceConfigStatus.value.tencent).toBe(true);
   });
 
-  it('tencent - 缺 publicDomain → false', async () => {
+  it('tencent - 缺 region → false', async () => {
     const cfg = cloneDefault();
     cfg.services.tencent = {
-      secretId: 's', secretKey: 'k', bucket: 'b', region: 'r',
+      secretId: 's', secretKey: 'k', bucket: 'b',
     } as any;
     const api = useServiceSelector();
     await api.updateServiceConfigStatus(cfg);

@@ -216,6 +216,7 @@ const HostingSettingsPanelStub = defineComponent({
     'save',
     'card-navigated',
     'scroll-to-service',
+    'add-custom-s3',
   ],
   template: `
     <section data-testid="hosting-panel" :data-services="availableServices.join(',')" :data-target-card="targetCardId || ''">
@@ -227,6 +228,7 @@ const HostingSettingsPanelStub = defineComponent({
       <button class="test-weibo" @click="$emit('test-cookie', 'weibo')">test weibo</button>
       <button class="check-jd" @click="$emit('check-builtin', 'jd')">check jd</button>
       <button class="test-all" @click="$emit('test-all')">test all</button>
+      <button class="add-custom-s3" @click="$emit('add-custom-s3')">add custom s3</button>
       <button class="hosting-save" @click="$emit('save')">save</button>
     </section>
   `,
@@ -358,6 +360,7 @@ beforeEach(() => {
 
   mockState.loadSettings.mockResolvedValue(undefined);
   mockState.saveSettings.mockResolvedValue(true);
+  mockState.addCustomS3Profile.mockReturnValue('custom_s3:new-profile');
   mockState.resetToDefaultSettings.mockResolvedValue(true);
   mockState.applyEditorServer.mockResolvedValue(undefined);
   mockState.setupCookieListener.mockResolvedValue(mockState.cookieUnlisten);
@@ -468,6 +471,17 @@ describe('SettingsView page interactions', () => {
     expect(mockState.handleServiceTest).toHaveBeenCalledWith('weibo');
     expect(mockState.handleBuiltinCheck).toHaveBeenCalledWith('jd');
     expect(mockState.testAllConfiguredServices).toHaveBeenCalled();
+  });
+
+  it('targets the newly created custom S3 card after adding a profile', async () => {
+    const wrapper = await mountSettings();
+
+    await wrapper.findAll('.nav-item')[1].trigger('click');
+    await wrapper.get('.add-custom-s3').trigger('click');
+    await flushPromisesAndTicks();
+
+    expect(mockState.addCustomS3Profile).toHaveBeenCalledTimes(1);
+    expect(wrapper.get('[data-testid="hosting-panel"]').attributes('data-target-card')).toBe('custom_s3:new-profile');
   });
 
   it('tests WebDAV from backup settings and persists the connection status', async () => {

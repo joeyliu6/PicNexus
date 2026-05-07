@@ -23,6 +23,7 @@ vi.mock('../../../composables/useConfirm', () => ({
 }));
 
 import ServiceEnableSection from '../../../components/settings/hosting/ServiceEnableSection.vue';
+import ServiceChipGrid from '../../../components/settings/ServiceChipGrid.vue';
 
 const tooltipDirective = {
   mounted: () => {},
@@ -204,5 +205,55 @@ describe('ServiceEnableSection', () => {
     expect(wrapper.find('.health-pill.error').classes()).toContain('active');
     expect(wrapper.emitted('testAll')).toHaveLength(1);
     expect(wrapper.emitted('cancelBatchTest')).toHaveLength(1);
+  });
+
+  it('renders custom S3 profiles inside the private storage group', () => {
+    const customServiceId = 'custom_s3:archive';
+    const wrapper = mountSection({
+      customS3Profiles: [{
+        id: 'archive',
+        name: 'Archive S3',
+        endpoint: '',
+        accessKeyId: '',
+        secretAccessKey: '',
+        region: '',
+        bucket: '',
+        path: '',
+        publicDomain: '',
+      }],
+      healthStatusMap: {
+        ...baseProps.healthStatusMap,
+        r2: 'pending',
+        tencent: 'unconfigured',
+        aliyun: 'unconfigured',
+        qiniu: 'unconfigured',
+        upyun: 'unconfigured',
+        [customServiceId]: 'unconfigured',
+      },
+      healthTooltipMap: {
+        ...baseProps.healthTooltipMap,
+        r2: 'pending',
+        tencent: null,
+        aliyun: null,
+        qiniu: null,
+        upyun: null,
+        [customServiceId]: null,
+      },
+      serviceNames: {
+        ...baseProps.serviceNames,
+        r2: 'Cloudflare R2',
+        tencent: 'Tencent',
+        aliyun: 'Aliyun',
+        qiniu: 'Qiniu',
+        upyun: 'Upyun',
+      },
+    });
+
+    const grids = wrapper.findAllComponents(ServiceChipGrid);
+    expect(grids).toHaveLength(2);
+    expect(grids[0].props('groupTitle')).toBe('私有存储');
+    expect(grids[0].props('services')).toEqual(['r2', 'tencent', 'aliyun', 'qiniu', 'upyun', customServiceId]);
+    expect(grids[0].text()).toContain('Archive S3');
+    expect(grids[1].props('groupTitle')).toBe('公共图床');
   });
 });
