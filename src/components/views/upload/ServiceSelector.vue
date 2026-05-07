@@ -142,9 +142,10 @@ function handleHealthDotClick(event: MouseEvent, serviceId: string) {
       v-else
       icon="pi pi-cog"
       title="暂无可用图床"
-      description="可在设置中重新启用京东、七鱼，或配置其他图床。"
     >
-      <button class="empty-state-link" @click="emit('go-settings')">前往设置配置</button>
+      <p class="empty-state-desc">
+        请在设置中<button class="empty-state-link" @click="emit('go-settings')">配置图床</button>。
+      </p>
     </EmptyState>
   </div>
 </template>
@@ -270,6 +271,13 @@ function handleHealthDotClick(event: MouseEvent, serviceId: string) {
 }
 
 /* 空状态引导 */
+.empty-state-desc {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  margin: 0;
+  text-align: center;
+}
+
 .empty-state-link {
   background: none;
   border: none;

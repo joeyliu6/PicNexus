@@ -95,4 +95,14 @@ describe('SensitiveField', () => {
     await wrapper.get('textarea').setValue('SUB=next');
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['SUB=next']);
   });
+
+  it('renders a single custom reveal control', () => {
+    const wrapper = mountSensitiveField({
+      props: {
+        modelValue: 'secret-token',
+      },
+    });
+
+    expect(wrapper.findAll('.sensitive-toggle')).toHaveLength(1);
+  });
 });

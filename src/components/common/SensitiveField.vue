@@ -133,6 +133,11 @@ defineExpose({
   padding-right: var(--space-3xl);
 }
 
+.sensitive-control::-ms-reveal,
+.sensitive-control::-ms-clear {
+  display: none;
+}
+
 .is-multiline .sensitive-control {
   min-height: 92px;
   resize: vertical;
@@ -144,8 +149,9 @@ defineExpose({
 
 .sensitive-toggle {
   position: absolute;
-  top: var(--space-xs-sm);
+  top: 50%;
   right: var(--space-xs-sm);
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -156,6 +162,11 @@ defineExpose({
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
+}
+
+.is-multiline .sensitive-toggle {
+  top: var(--space-xs-sm);
+  transform: none;
 }
 
 .sensitive-toggle:hover:not(:disabled),

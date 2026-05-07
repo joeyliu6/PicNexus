@@ -76,8 +76,9 @@ describe('ServiceSelector', () => {
 
     expect(wrapper.find('.add-service-tag').exists()).toBe(false);
     expect(wrapper.text()).toContain('暂无可用图床');
-    expect(wrapper.text()).toContain('可在设置中重新启用京东、七鱼，或配置其他图床。');
-    expect(wrapper.text()).toContain('前往设置配置');
+    expect(wrapper.text()).toContain('请在设置中配置图床。');
+    expect(wrapper.text()).not.toContain('可在设置中重新启用京东、七鱼，或配置其他图床。');
+    expect(wrapper.text()).toContain('配置图床');
 
     await wrapper.get('.empty-state-link').trigger('click');
     expect(wrapper.emitted('go-settings')).toHaveLength(1);

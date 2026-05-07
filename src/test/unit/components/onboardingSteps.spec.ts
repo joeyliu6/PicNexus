@@ -20,7 +20,8 @@ describe('Onboarding steps', () => {
   it('ServicesStep 使用精简图床说明', () => {
     const wrapper = mountWithDefaults(ServicesStep);
 
-    expect(wrapper.text()).toContain('京东、七鱼可开箱使用，但需先确认公共图床风险；其他图床按需配置。');
+    expect(wrapper.text()).toContain('京东、七鱼可开箱使用，其他图床按需配置。');
+    expect(wrapper.text()).not.toContain('但需先确认公共图床风险');
     expect(wrapper.text()).not.toContain('京东、七鱼已默认开启；其他图床可按需配置，支持多图床并行上传。');
   });
 });
