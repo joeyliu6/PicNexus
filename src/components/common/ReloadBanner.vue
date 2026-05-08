@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { UI_COPY } from '../../constants/uiCopy';
+
 defineProps<{
   visible: boolean;
   message?: string;
@@ -16,10 +18,10 @@ function handleReload(): void {
 <template>
   <div v-if="visible" class="reload-banner" role="status">
     <i class="pi pi-info-circle reload-banner-icon"></i>
-    <span class="reload-banner-text">{{ message || '配置已更新，请刷新页面以使其生效' }}</span>
+    <span class="reload-banner-text">{{ message || UI_COPY.banner.reload.defaultMessage }}</span>
     <button type="button" class="reload-banner-btn" @click="handleReload">
       <i class="pi pi-refresh"></i>
-      <span>刷新</span>
+      <span>{{ UI_COPY.banner.reload.action }}</span>
     </button>
   </div>
 </template>

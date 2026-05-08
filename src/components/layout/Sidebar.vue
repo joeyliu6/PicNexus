@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue';
 import Button from 'primevue/button';
 import { useAutoUpdate } from '../../composables/useAutoUpdate';
+import { UI_COPY } from '../../constants/uiCopy';
 
 type ViewType = 'upload' | 'history' | 'link-check' | 'settings';
 
@@ -22,10 +23,10 @@ watch(() => props.currentView, (v) => {
 });
 
 const navItems = [
-  { id: 'upload' as ViewType, label: '上传', icon: 'pi-cloud-upload', title: '上传' },
-  { id: 'history' as ViewType, label: '浏览', icon: 'pi-images', title: '浏览记录' },
-  { id: 'link-check' as ViewType, label: '维护', icon: 'pi-wrench', title: '链接维护' },
-  { id: 'settings' as ViewType, label: '设置', icon: 'pi-cog', title: '设置' }
+  { id: 'upload' as ViewType, label: UI_COPY.navigation.main.upload, icon: 'pi-cloud-upload', title: UI_COPY.navigation.mainTitle.upload },
+  { id: 'history' as ViewType, label: UI_COPY.navigation.main.browse, icon: 'pi-images', title: UI_COPY.navigation.mainTitle.browse },
+  { id: 'link-check' as ViewType, label: UI_COPY.navigation.main.maintenance, icon: 'pi-wrench', title: UI_COPY.navigation.mainTitle.maintenance },
+  { id: 'settings' as ViewType, label: UI_COPY.navigation.main.settings, icon: 'pi-cog', title: UI_COPY.navigation.mainTitle.settings }
 ];
 
 const handleNavigate = (view: ViewType) => {

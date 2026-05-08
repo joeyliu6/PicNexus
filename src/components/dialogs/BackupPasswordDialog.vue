@@ -12,16 +12,16 @@
     <div class="backup-password-dialog">
       <div v-if="mode === 'restore'" class="dialog-description">
         <i class="pi pi-lock" />
-        <p>你的配置文件已用备份密码加密。输入当时设置的密码，就能还原配置。</p>
+        <p>{{ UI_COPY.dialogs.backupPassword.description.restore }}</p>
       </div>
 
       <div v-if="mode === 'disable'" class="dialog-description dialog-description-danger">
         <i class="pi pi-lock-open" />
-        <p>关闭后，后续导出的配置不再使用备份密码加密。已有备份仍需原密码打开。</p>
+        <p>{{ UI_COPY.dialogs.backupPassword.description.disable }}</p>
       </div>
 
       <div v-if="requiresCurrentPassword" class="field">
-        <label for="backup-current-password">当前密码</label>
+        <label for="backup-current-password">{{ UI_COPY.dialogs.backupPassword.field.currentPassword }}</label>
         <Password
           id="backup-current-password"
           v-model="currentPassword"
@@ -30,14 +30,14 @@
           :inputStyle="{ width: '100%' }"
           :inputProps="{ autocomplete: 'current-password' }"
           :class="{ 'p-invalid': currentPasswordError }"
-          placeholder="输入当前备份密码"
+          :placeholder="UI_COPY.dialogs.backupPassword.placeholder.currentPassword"
           @keydown.enter="handleSubmit"
         />
         <small v-if="currentPasswordError" class="p-error">{{ currentPasswordError }}</small>
       </div>
 
       <div v-if="mode === 'set' || mode === 'restore'" class="field">
-        <label for="backup-password">{{ mode === 'restore' ? '备份密码' : '密码' }}</label>
+        <label for="backup-password">{{ mode === 'restore' ? UI_COPY.dialogs.backupPassword.field.backupPassword : UI_COPY.dialogs.backupPassword.field.password }}</label>
         <Password
           id="backup-password"
           v-model="password"
@@ -46,7 +46,7 @@
           :inputStyle="{ width: '100%' }"
           :inputProps="{ autocomplete: mode === 'restore' ? 'current-password' : 'new-password' }"
           :class="{ 'p-invalid': passwordError }"
-          :placeholder="mode === 'restore' ? '输入你之前设置的备份密码' : '至少 8 位，包含数字'"
+          :placeholder="mode === 'restore' ? UI_COPY.dialogs.backupPassword.placeholder.restorePassword : UI_COPY.dialogs.backupPassword.placeholder.newPassword"
           @keydown.enter="handleSubmit"
         />
         <small v-if="passwordError" class="p-error">{{ passwordError }}</small>
@@ -74,7 +74,7 @@
       </div>
 
       <div v-if="mode === 'change'" class="field">
-        <label for="backup-new-password">新密码</label>
+        <label for="backup-new-password">{{ UI_COPY.dialogs.backupPassword.field.newPassword }}</label>
         <Password
           id="backup-new-password"
           v-model="newPassword"
@@ -83,7 +83,7 @@
           :inputStyle="{ width: '100%' }"
           :inputProps="{ autocomplete: 'new-password' }"
           :class="{ 'p-invalid': newPasswordError }"
-          placeholder="至少 8 位，包含数字"
+          :placeholder="UI_COPY.dialogs.backupPassword.placeholder.newPassword"
           @keydown.enter="handleSubmit"
         />
         <small v-if="newPasswordError" class="p-error">{{ newPasswordError }}</small>
@@ -111,7 +111,7 @@
       </div>
 
       <div v-if="mode === 'set' || mode === 'change'" class="field">
-        <label for="backup-password-confirm">确认密码</label>
+        <label for="backup-password-confirm">{{ UI_COPY.dialogs.backupPassword.field.confirmPassword }}</label>
         <Password
           id="backup-password-confirm"
           v-model="confirmPassword"
@@ -120,7 +120,7 @@
           :inputStyle="{ width: '100%' }"
           :inputProps="{ autocomplete: 'new-password' }"
           :class="{ 'p-invalid': confirmError }"
-          placeholder="再次输入密码"
+          :placeholder="UI_COPY.dialogs.backupPassword.placeholder.confirmPassword"
           @keydown.enter="handleSubmit"
         />
         <small v-if="confirmError" class="p-error">{{ confirmError }}</small>
@@ -130,22 +130,22 @@
         <i class="pi pi-info-circle" />
         <span>
           {{ mode === 'change'
-            ? '修改后旧备份仍需旧密码打开。请妥善保管密码，忘记后将无法还原。'
-            : '请妥善保管密码，忘记后将无法还原。'
+            ? UI_COPY.dialogs.backupPassword.note.change
+            : UI_COPY.dialogs.backupPassword.note.set
           }}
         </span>
       </div>
 
       <div v-if="mode === 'restore' && failedAttempts > 0" class="error-box">
         <i class="pi pi-times-circle" />
-        <span>密码不正确，剩余尝试次数：{{ MAX_ATTEMPTS - failedAttempts }}</span>
+        <span>{{ UI_COPY.dialogs.backupPassword.error.remainingAttempts(MAX_ATTEMPTS - failedAttempts) }}</span>
       </div>
     </div>
 
     <template #footer>
       <Button
         v-if="mode === 'restore'"
-        label="跳过，使用默认配置"
+        :label="UI_COPY.dialogs.backupPassword.action.skipRestore"
         severity="secondary"
         text
         class="dialog-btn-secondary"
@@ -153,7 +153,7 @@
       />
       <Button
         v-else
-        label="取消"
+        :label="UI_COPY.actions.cancel"
         severity="secondary"
         outlined
         class="dialog-btn-reject"
@@ -176,6 +176,7 @@ import Dialog from 'primevue/dialog';
 import Password from 'primevue/password';
 import Button from 'primevue/button';
 import { validateBackupPassword } from '../../crypto';
+import { UI_COPY } from '../../constants/uiCopy';
 import type { BackupPasswordConfirmPayload, BackupPasswordDialogMode } from './backupPasswordDialogTypes';
 
 interface Props {
@@ -212,16 +213,16 @@ const passwordForStrength = computed(() => props.mode === 'change' ? newPassword
 const strengthChecks = computed(() => {
   const p = passwordForStrength.value;
   return [
-    { label: '至少 8 位', passed: p.length >= 8 },
-    { label: '包含数字', passed: /\d/.test(p) },
+    { label: UI_COPY.dialogs.backupPassword.strength.minLength, passed: p.length >= 8 },
+    { label: UI_COPY.dialogs.backupPassword.strength.number, passed: /\d/.test(p) },
   ];
 });
 
 const strengthSuggestions = computed(() => {
   const p = passwordForStrength.value;
   return [
-    { label: '大小写字母', passed: /[a-z]/.test(p) && /[A-Z]/.test(p) },
-    { label: '特殊符号', passed: /[^a-zA-Z0-9]/.test(p) },
+    { label: UI_COPY.dialogs.backupPassword.strength.letterCase, passed: /[a-z]/.test(p) && /[A-Z]/.test(p) },
+    { label: UI_COPY.dialogs.backupPassword.strength.symbol, passed: /[^a-zA-Z0-9]/.test(p) },
   ];
 });
 
@@ -232,19 +233,19 @@ const visible = computed({
 
 const dialogTitle = computed(() => {
   switch (props.mode) {
-    case 'restore': return '还原备份配置';
-    case 'change': return '修改备份密码';
-    case 'disable': return '关闭备份密码';
-    default: return '设置备份密码';
+    case 'restore': return UI_COPY.dialogs.backupPassword.title.restore;
+    case 'change': return UI_COPY.dialogs.backupPassword.title.change;
+    case 'disable': return UI_COPY.dialogs.backupPassword.title.disable;
+    default: return UI_COPY.dialogs.backupPassword.title.set;
   }
 });
 
 const submitLabel = computed(() => {
   switch (props.mode) {
-    case 'restore': return '确认恢复';
-    case 'change': return '确认修改';
-    case 'disable': return '确认关闭';
-    default: return '确认设置';
+    case 'restore': return UI_COPY.dialogs.backupPassword.action.submit.restore;
+    case 'change': return UI_COPY.dialogs.backupPassword.action.submit.change;
+    case 'disable': return UI_COPY.dialogs.backupPassword.action.submit.disable;
+    default: return UI_COPY.dialogs.backupPassword.action.submit.set;
   }
 });
 
@@ -273,14 +274,14 @@ function validate(): boolean {
 
   if (props.mode === 'restore') {
     if (!password.value) {
-      passwordError.value = '请输入密码';
+      passwordError.value = UI_COPY.dialogs.backupPassword.error.requiredPassword;
       return false;
     }
     return true;
   }
 
   if (requiresCurrentPassword.value && !currentPassword.value) {
-    currentPasswordError.value = '请输入当前密码';
+    currentPasswordError.value = UI_COPY.dialogs.backupPassword.error.requiredCurrentPassword;
     return false;
   }
 
@@ -290,8 +291,8 @@ function validate(): boolean {
 
   const targetPassword = props.mode === 'change' ? newPassword.value : password.value;
   if (!targetPassword) {
-    if (props.mode === 'change') newPasswordError.value = '请输入新密码';
-    else passwordError.value = '请输入密码';
+    if (props.mode === 'change') newPasswordError.value = UI_COPY.dialogs.backupPassword.error.requiredNewPassword;
+    else passwordError.value = UI_COPY.dialogs.backupPassword.error.requiredPassword;
     return false;
   }
 
@@ -303,7 +304,7 @@ function validate(): boolean {
   }
 
   if (targetPassword !== confirmPassword.value) {
-    confirmError.value = '两次输入的密码不一致';
+    confirmError.value = UI_COPY.dialogs.backupPassword.error.mismatch;
     return false;
   }
 
@@ -360,13 +361,13 @@ function onPasswordFailed() {
   loading.value = false;
 
   if (requiresCurrentPassword.value) {
-    currentPasswordError.value = '密码不正确';
+    currentPasswordError.value = UI_COPY.dialogs.backupPassword.error.wrongPassword;
     currentPassword.value = '';
     return;
   }
 
   failedAttempts.value++;
-  passwordError.value = '密码不正确';
+  passwordError.value = UI_COPY.dialogs.backupPassword.error.wrongPassword;
   password.value = '';
 
   if (failedAttempts.value >= MAX_ATTEMPTS) {

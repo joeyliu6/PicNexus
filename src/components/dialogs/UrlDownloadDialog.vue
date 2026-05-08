@@ -2,7 +2,7 @@
   <Dialog
     :visible="visible"
     :modal="true"
-    header="从 URL 下载图片"
+    :header="UI_COPY.dialogs.urlDownload.title"
     :style="{ width: 'var(--dialog-width-md)' }"
     :draggable="false"
     :pt="{ root: { class: 'app-dialog' }, closeButton: { class: 'app-dialog-close-btn' } }"
@@ -10,11 +10,11 @@
   >
     <div class="url-download-dialog">
       <div class="field">
-        <label for="url-download-input">图片 URL（每行一个）</label>
+        <label for="url-download-input">{{ UI_COPY.dialogs.urlDownload.inputLabel }}</label>
         <Textarea
           id="url-download-input"
           v-model="urlInput"
-          placeholder="https://example.com/image.jpg"
+          :placeholder="UI_COPY.dialogs.urlDownload.placeholder"
           :rows="5"
           class="url-textarea"
           :disabled="isDownloading"
@@ -24,13 +24,13 @@
 
       <div class="dialog-note">
         <i class="pi pi-info-circle" />
-        <span>支持 JPG、PNG、GIF、WEBP、BMP 格式，Ctrl+Enter 快捷提交</span>
+        <span>{{ UI_COPY.dialogs.urlDownload.note }}</span>
       </div>
     </div>
 
     <template #footer>
       <Button
-        label="取消"
+        :label="UI_COPY.actions.cancel"
         severity="secondary"
         outlined
         class="dialog-btn-reject"
@@ -38,7 +38,7 @@
         @click="handleClose"
       />
       <Button
-        :label="isDownloading ? '正在下载...' : '下载并上传'"
+        :label="isDownloading ? UI_COPY.dialogs.urlDownload.downloading : UI_COPY.dialogs.urlDownload.confirm"
         :icon="isDownloading ? 'pi pi-spin pi-spinner' : 'pi pi-download'"
         class="dialog-btn-accept"
         :disabled="!urlInput.trim() || isDownloading"
@@ -53,6 +53,7 @@ import { ref, nextTick, watch } from 'vue';
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
 import Textarea from 'primevue/textarea';
+import { UI_COPY } from '../../constants/uiCopy';
 
 interface Props {
   visible: boolean;

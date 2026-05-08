@@ -9,6 +9,7 @@ import type { UnlistenFn } from '@tauri-apps/api/event';
 import { getVersion } from '@tauri-apps/api/app';
 import { useToast } from '../../composables/useToast';
 import { TOAST_MESSAGES } from '../../constants';
+import { UI_COPY } from '../../constants/uiCopy';
 import { useThemeManager } from '../../composables/useTheme';
 import { useConfigManager } from '../../composables/useConfig';
 import { useHistoryManager } from '../../composables/useHistory';
@@ -124,11 +125,11 @@ const webdavTesting = ref(false);
 
 const navGroups = [{
   items: [
-    { id: 'general' as SettingsTab, label: '常规设置', icon: 'pi pi-cog' },
-    { id: 'hosting' as SettingsTab, label: '图床设置', icon: 'pi pi-images' },
-    { id: 'advanced' as SettingsTab, label: '高级设置', icon: 'pi pi-sliders-h' },
-    { id: 'backup' as SettingsTab, label: '备份与同步', icon: 'pi pi-database' },
-    { id: 'about' as SettingsTab, label: '关于与更新', icon: 'pi pi-info-circle' },
+    { id: 'general' as SettingsTab, label: UI_COPY.navigation.settings.general, icon: 'pi pi-cog' },
+    { id: 'hosting' as SettingsTab, label: UI_COPY.navigation.settings.hosting, icon: 'pi pi-images' },
+    { id: 'advanced' as SettingsTab, label: UI_COPY.navigation.settings.advanced, icon: 'pi pi-sliders-h' },
+    { id: 'backup' as SettingsTab, label: UI_COPY.navigation.settings.backup, icon: 'pi pi-database' },
+    { id: 'about' as SettingsTab, label: UI_COPY.navigation.settings.about, icon: 'pi pi-info-circle' },
   ]
 }];
 
@@ -291,7 +292,7 @@ onUnmounted(() => {
 <template>
   <div class="settings-layout">
     <div class="settings-sidebar">
-      <div class="sidebar-title">设置</div>
+      <div class="sidebar-title">{{ UI_COPY.navigation.settings.title }}</div>
       <nav class="nav-list">
         <div v-for="(group, idx) in navGroups" :key="idx" class="nav-group">
           <button
