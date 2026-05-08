@@ -15,6 +15,7 @@ import { UploadQueueManager } from '../../uploadQueue';
 import { RetryService } from '../../services/RetryService';
 import { configStore } from '../../store/instances';
 import { useConfigManager } from '../../composables/useConfig';
+import { UI_COPY } from '../../constants/uiCopy';
 import type { MultiUploadResult } from '../../core/MultiServiceUploader';
 import type { ImageCompressionConfig, CompressionPreset } from '../../config/types';
 import { DEFAULT_COMPRESSION_PRESET } from '../../config/types';
@@ -343,21 +344,12 @@ const handleBatchRetry = async () => {
 // 清空队列（带确认）
 const handleClearQueue = () => {
   if (hasActiveItems.value) {
-    toast.showConfig('warn', {
-      summary: '上传进行中',
-      detail: '请等待上传完成后再清空列表。',
-      life: 3000,
-    });
+    toast.showConfig('warn', UI_COPY.toast.upload.inProgress);
     return;
   }
 
   showConfirm({
-    header: '确认清空',
-    message: '确定要清空上传队列吗？此操作不可撤销。',
-    icon: 'pi pi-exclamation-triangle',
-    acceptLabel: '清空',
-    rejectLabel: '取消',
-    acceptClass: 'p-button-danger',
+    ...UI_COPY.confirm.upload.clearQueue,
     accept: () => {
       clearQueue();
     }

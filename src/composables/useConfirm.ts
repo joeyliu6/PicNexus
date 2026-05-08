@@ -1,6 +1,7 @@
 // 确认对话框 Composable
 
 import { useConfirm as usePrimeConfirm } from 'primevue/useconfirm';
+import { UI_COPY } from '../constants/uiCopy';
 
 export interface ConfirmOptions {
   /** 对话框标题 */
@@ -59,6 +60,9 @@ export interface ConfirmThreeWayOptions {
  */
 export function useConfirm() {
   const confirm = usePrimeConfirm();
+  const confirmDefaults = UI_COPY.confirm.defaults;
+  const deleteDefaults = UI_COPY.confirm.delete;
+  const warnDefaults = UI_COPY.confirm.warn;
 
   /**
    * 显示确认对话框
@@ -66,11 +70,11 @@ export function useConfirm() {
    */
   const showConfirm = (options: ConfirmOptions) => {
     confirm.require({
-      header: options.header || '确认',
+      header: options.header || confirmDefaults.header,
       message: options.message,
-      icon: options.icon || 'pi pi-exclamation-triangle',
-      acceptLabel: options.acceptLabel || '确认',
-      rejectLabel: options.rejectLabel || '取消',
+      icon: options.icon || confirmDefaults.icon,
+      acceptLabel: options.acceptLabel || confirmDefaults.acceptLabel,
+      rejectLabel: options.rejectLabel || confirmDefaults.rejectLabel,
       acceptClass: options.acceptClass,
       accept: options.accept,
       reject: options.reject
@@ -84,12 +88,12 @@ export function useConfirm() {
    */
   const confirmDelete = (message: string, onConfirm: () => void) => {
     confirm.require({
-      header: '确认删除',
+      header: deleteDefaults.header,
       message,
-      icon: 'pi pi-trash',
-      acceptLabel: '删除',
-      rejectLabel: '取消',
-      acceptClass: 'p-button-danger',
+      icon: deleteDefaults.icon,
+      acceptLabel: deleteDefaults.acceptLabel,
+      rejectLabel: deleteDefaults.rejectLabel,
+      acceptClass: deleteDefaults.acceptClass,
       accept: onConfirm
     });
   };
@@ -101,12 +105,12 @@ export function useConfirm() {
    */
   const confirmWarn = (message: string, onConfirm: () => void) => {
     confirm.require({
-      header: '警告',
+      header: warnDefaults.header,
       message,
-      icon: 'pi pi-exclamation-triangle',
-      acceptLabel: '继续',
-      rejectLabel: '取消',
-      acceptClass: 'p-button-warning',
+      icon: warnDefaults.icon,
+      acceptLabel: warnDefaults.acceptLabel,
+      rejectLabel: warnDefaults.rejectLabel,
+      acceptClass: warnDefaults.acceptClass,
       accept: onConfirm
     });
   };
@@ -134,11 +138,11 @@ export function useConfirm() {
 
     return new Promise((resolve) => {
       confirm.require({
-        header: opts.header || '确认',
+        header: opts.header || confirmDefaults.header,
         message,
-        icon: 'pi pi-exclamation-triangle',
-        acceptLabel: opts.acceptLabel || '确认',
-        rejectLabel: opts.rejectLabel || '取消',
+        icon: confirmDefaults.icon,
+        acceptLabel: opts.acceptLabel || confirmDefaults.acceptLabel,
+        rejectLabel: opts.rejectLabel || confirmDefaults.rejectLabel,
         acceptClass: opts.acceptClass,
         accept: () => resolve(true),
         reject: () => resolve(false)
@@ -157,11 +161,11 @@ export function useConfirm() {
       let resolved = false;
 
       confirm.require({
-        header: options.header || '确认',
+        header: options.header || confirmDefaults.header,
         message: options.message,
-        icon: options.icon || 'pi pi-exclamation-triangle',
-        acceptLabel: options.acceptLabel || '确认',
-        rejectLabel: options.rejectLabel || '取消',
+        icon: options.icon || confirmDefaults.icon,
+        acceptLabel: options.acceptLabel || confirmDefaults.acceptLabel,
+        rejectLabel: options.rejectLabel || confirmDefaults.rejectLabel,
         accept: () => {
           resolved = true;
           resolve('accept');

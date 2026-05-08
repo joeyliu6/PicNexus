@@ -8,6 +8,7 @@ import { deepClone, deepMerge } from '../utils/deepClone';
 import { useConfigManager } from '../composables/useConfig';
 import { useCopyLink } from '../composables/useCopyLink';
 import type { LinkFormat } from '../utils/linkFormatter';
+import { UI_COPY } from '../constants/uiCopy';
 import InlineEmptyState from './common/InlineEmptyState.vue';
 import QueueCard from './upload/QueueCard.vue';
 
@@ -101,7 +102,11 @@ defineExpose({
 
 <template>
   <div class="upload-queue">
-    <InlineEmptyState v-if="queueItems.length === 0" icon="pi pi-inbox" title="暂无上传队列" />
+    <InlineEmptyState
+      v-if="queueItems.length === 0"
+      :icon="UI_COPY.emptyState.uploadQueue.icon"
+      :title="UI_COPY.emptyState.uploadQueue.title"
+    />
 
     <VirtualScroller
       v-else-if="useVirtualScroll"
