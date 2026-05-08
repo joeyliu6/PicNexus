@@ -108,7 +108,7 @@ export function useHistoryViewState() {
           `${skippedCount} 张图片无该图床链接`
         );
       } else {
-        toast.success(`已复制 ${items.length} 张`, '链接已复制到剪贴板');
+        toast.silent('log', `已复制 ${items.length} 张`, '链接已复制到剪贴板');
       }
     } else {
       items = metas
@@ -135,7 +135,7 @@ export function useHistoryViewState() {
           `${skippedCount} 张图片无可用链接`
         );
       } else {
-        toast.success(`已复制 ${items.length} 张`, '链接已复制到剪贴板');
+        toast.silent('log', `已复制 ${items.length} 张`, '链接已复制到剪贴板');
       }
     }
   }

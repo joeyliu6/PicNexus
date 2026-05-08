@@ -8,6 +8,7 @@ const {
   copyLinksMock,
   toastSuccessMock,
   toastWarnMock,
+  toastSilentMock,
   bulkDeleteRecordsMock,
   bulkExportJSONMock,
   deleteHistoryItemMock,
@@ -18,6 +19,7 @@ const {
   copyLinksMock: vi.fn(),
   toastSuccessMock: vi.fn(),
   toastWarnMock: vi.fn(),
+  toastSilentMock: vi.fn(),
   bulkDeleteRecordsMock: vi.fn(),
   bulkExportJSONMock: vi.fn(),
   deleteHistoryItemMock: vi.fn(),
@@ -41,6 +43,7 @@ vi.mock('../../../composables/useToast', () => ({
   useToast: () => ({
     success: toastSuccessMock,
     warn: toastWarnMock,
+    silent: toastSilentMock,
   }),
 }));
 
@@ -133,6 +136,31 @@ describe('useHistoryViewState history page bulk actions', () => {
     expect(toastWarnMock).not.toHaveBeenCalled();
   });
 
+  it('keeps pure bulk primary copy success silent because the FAB button owns feedback', async () => {
+    getMetasByIdsMock.mockResolvedValue([
+      makeMeta({ id: 'a', primaryUrl: 'https://cdn.example.com/a.jpg', primaryService: 'jd' }),
+      makeMeta({ id: 'b', primaryUrl: 'https://cdn.example.com/b.jpg', primaryService: 'r2' }),
+    ]);
+    copyLinksMock.mockResolvedValue({ ok: true, copiedCount: 2, format: 'url' });
+
+    const state = useHistoryViewState();
+    state.select('a');
+    state.select('b');
+
+    await state.bulkCopyFormatted('url');
+
+    expect(copyLinksMock).toHaveBeenCalledWith(
+      [
+        { url: 'https://cdn.example.com/a.jpg', fileName: 'a.jpg', serviceId: 'jd' },
+        { url: 'https://cdn.example.com/b.jpg', fileName: 'b.jpg', serviceId: 'r2' },
+      ],
+      { format: 'url', showSuccessToast: false },
+    );
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+    expect(toastWarnMock).not.toHaveBeenCalled();
+    expect(toastSilentMock).toHaveBeenCalledWith('log', '已复制 2 张', '链接已复制到剪贴板');
+  });
+
   it('copies a requested service by loading selected details and skips rows without that service', async () => {
     getMetasByIdsMock.mockResolvedValue([
       makeMeta({ id: 'a' }),
@@ -168,6 +196,44 @@ describe('useHistoryViewState history page bulk actions', () => {
       { format: 'url', showSuccessToast: false },
     );
     expect(toastWarnMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps pure service-specific bulk copy success silent because the service row owns feedback', async () => {
+    getMetasByIdsMock.mockResolvedValue([
+      makeMeta({ id: 'a' }),
+      makeMeta({ id: 'b' }),
+    ]);
+    detailCacheGetDetailMock
+      .mockResolvedValueOnce(makeDetail('a', [
+        createHistoryResult({
+          serviceId: 'r2',
+          result: { serviceId: 'r2', fileKey: 'r2-a', url: 'https://r2.example.com/a.jpg' },
+        }),
+      ]))
+      .mockResolvedValueOnce(makeDetail('b', [
+        createHistoryResult({
+          serviceId: 'r2',
+          result: { serviceId: 'r2', fileKey: 'r2-b', url: 'https://r2.example.com/b.jpg' },
+        }),
+      ]));
+    copyLinksMock.mockResolvedValue({ ok: true, copiedCount: 2, format: 'url' });
+
+    const state = useHistoryViewState();
+    state.select('a');
+    state.select('b');
+
+    await state.bulkCopyFormatted('url', 'r2');
+
+    expect(copyLinksMock).toHaveBeenCalledWith(
+      [
+        { url: 'https://r2.example.com/a.jpg', fileName: 'a.jpg', serviceId: 'r2' },
+        { url: 'https://r2.example.com/b.jpg', fileName: 'b.jpg', serviceId: 'r2' },
+      ],
+      { format: 'url', showSuccessToast: false },
+    );
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+    expect(toastWarnMock).not.toHaveBeenCalled();
+    expect(toastSilentMock).toHaveBeenCalledWith('log', '已复制 2 张', '链接已复制到剪贴板');
   });
 
   it('keeps selection after a failed bulk delete and clears it only after success', async () => {
