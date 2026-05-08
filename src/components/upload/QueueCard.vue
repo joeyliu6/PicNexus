@@ -26,14 +26,18 @@ interface QueueCopyPayload {
   serviceId: string;
   fileName: string;
   format?: LinkFormat;
+  itemId?: string;
 }
 
 interface Props {
   item: QueueItem;
   config: UserConfig;
+  copiedServiceKey?: string | null;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  copiedServiceKey: null,
+});
 
 const emit = defineEmits<{
   copy: [payload: QueueCopyPayload];
@@ -76,12 +80,19 @@ const statusText = computed(() => {
 
 const thumbnailSrcs = computed(() => getThumbnailCandidates(props.item, props.config));
 
+function getServiceCopyKey(serviceId: string): string {
+  return `upload-queue:${props.item.id}:${serviceId}`;
+}
+
 function handleRetry(serviceId: string) {
   emit('retry', props.item.id, serviceId);
 }
 
 function handleCopy(payload: QueueCopyPayload) {
-  emit('copy', payload);
+  emit('copy', {
+    ...payload,
+    itemId: props.item.id,
+  });
 }
 </script>
 
@@ -138,6 +149,7 @@ function handleCopy(payload: QueueCopyPayload) {
         :error="item.serviceProgress[service]?.error"
         :link="item.serviceProgress[service]?.link"
         :file-name="item.fileName"
+        :copied="copiedServiceKey === getServiceCopyKey(service)"
         @copy="handleCopy"
         @retry="handleRetry(service)"
       />

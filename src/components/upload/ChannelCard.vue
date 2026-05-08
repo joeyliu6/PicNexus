@@ -21,9 +21,12 @@ interface Props {
   link?: string;
   error?: string;
   fileName: string;
+  copied?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  copied: false,
+});
 
 const emit = defineEmits<{
   copy: [payload: ChannelCopyPayload];
@@ -44,6 +47,7 @@ const errorTooltip = computed(() => {
 const cardClass = computed(() => ({
   error: isStatusError(props.status),
   success: isStatusSuccess(props.status),
+  'channel-card--copied': props.copied,
 }));
 
 const menuVisible = ref(false);
@@ -136,10 +140,11 @@ function handleRetry() {
     >
       <button
         class="copy-btn"
-        v-tooltip.top="'复制链接'"
+        :class="{ 'copy-btn--copied': copied }"
+        v-tooltip.top="copied ? '已复制' : '复制链接'"
         @click="handleCopy"
       >
-        <i class="pi pi-copy"></i>
+        <i class="pi" :class="copied ? 'pi-check' : 'pi-copy'"></i>
       </button>
       <button
         class="copy-menu-btn"
@@ -212,6 +217,12 @@ function handleRetry() {
 .channel-card.success {
   background: var(--success-alpha-8);
   border-color: var(--success-border);
+}
+
+.channel-card--copied,
+.channel-card.success.channel-card--copied {
+  background: var(--state-success-bg);
+  border-color: var(--success);
 }
 
 .channel-icon {
@@ -308,6 +319,12 @@ function handleRetry() {
   opacity: 0.7;
 }
 
+.copy-btn--copied {
+  color: var(--state-success-text);
+  opacity: 1;
+  background: var(--success-alpha-15);
+}
+
 .copy-menu-btn {
   color: var(--success);
   opacity: 0.75;
@@ -327,6 +344,10 @@ function handleRetry() {
 .copy-menu-btn:hover {
   background: var(--success-soft);
   opacity: 1;
+}
+
+.copy-btn--copied:hover {
+  background: var(--success-alpha-15);
 }
 
 .retry-btn:hover {

@@ -66,15 +66,21 @@ const QueueCardStub = defineComponent({
       type: Object,
       required: true,
     },
+    copiedServiceKey: {
+      type: String,
+      default: null,
+    },
   },
   emits: ['copy', 'retry'],
   setup(props, { emit }) {
+    const uploadQueueCopyKey = `upload-queue:${props.item.id}:weibo`;
     return () => h('article', {
       class: 'queue-card-stub',
       'data-id': props.item.id,
       'data-config-services': Array.isArray((props.config as typeof configMock).availableServices)
         ? (props.config as typeof configMock).availableServices.join(',')
         : '',
+      'data-copied': props.copiedServiceKey === uploadQueueCopyKey ? 'true' : 'false',
     }, [
       h('button', {
         class: 'copy-button',
@@ -83,6 +89,7 @@ const QueueCardStub = defineComponent({
           serviceId: 'weibo',
           fileName: props.item.fileName,
           format: 'markdown',
+          itemId: props.item.id,
         }),
       }, 'copy'),
       h('button', {
@@ -219,6 +226,31 @@ describe('UploadQueue', () => {
         format: 'markdown',
       },
     );
+  });
+
+  it('marks the copied channel only after a successful copy', async () => {
+    useQueueState().queueItems.value = [makeItem(1)];
+    const wrapper = mountQueue();
+
+    expect(wrapper.get('.queue-card-stub').attributes('data-copied')).toBe('false');
+
+    await wrapper.get('.copy-button').trigger('click');
+    await flushPromises();
+    await nextTick();
+
+    expect(wrapper.get('.queue-card-stub').attributes('data-copied')).toBe('true');
+  });
+
+  it('does not mark a channel copied when copyLink reports failure', async () => {
+    copyLinkMock.mockResolvedValueOnce({ ok: false, copiedCount: 0, format: 'markdown', error: 'denied' });
+    useQueueState().queueItems.value = [makeItem(1)];
+    const wrapper = mountQueue();
+
+    await wrapper.get('.copy-button').trigger('click');
+    await flushPromises();
+    await nextTick();
+
+    expect(wrapper.get('.queue-card-stub').attributes('data-copied')).toBe('false');
   });
 
   it('passes retry events to the registered callback from virtual cards', async () => {

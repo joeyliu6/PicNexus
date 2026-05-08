@@ -90,4 +90,65 @@ describe('ChannelCard tooltip', () => {
     expect(wrapper.attributes('title')).toBeUndefined();
     expect(wrapper.attributes('data-tooltip')).toBeUndefined();
   });
+
+  it('复制成功态切换按钮图标、tooltip 和卡片 class', () => {
+    const wrapper = mountWithDefaults(ChannelCard, {
+      props: {
+        service: 'weibo',
+        status: '✓ 完成',
+        link: 'https://example.com/a.jpg',
+        fileName: 'a.jpg',
+        copied: true,
+      },
+      global: {
+        directives: {
+          tooltip: tooltipDirective,
+        },
+      },
+    });
+
+    expect(wrapper.classes()).toContain('channel-card--copied');
+    expect(wrapper.get('.copy-btn').classes()).toContain('copy-btn--copied');
+    expect(wrapper.get('.copy-btn').attributes('data-tooltip')).toBe('已复制');
+    expect(wrapper.get('.copy-btn i').classes()).toContain('pi-check');
+  });
+
+  it('点击普通复制和格式菜单会透传复制 payload', async () => {
+    const wrapper = mountWithDefaults(ChannelCard, {
+      props: {
+        service: 'weibo',
+        status: '✓ 完成',
+        link: 'https://example.com/a.jpg',
+        fileName: 'a.jpg',
+      },
+    });
+
+    await wrapper.get('.copy-btn').trigger('click');
+    expect(wrapper.emitted('copy')).toEqual([[
+      {
+        url: 'https://example.com/a.jpg',
+        serviceId: 'weibo',
+        fileName: 'a.jpg',
+        format: undefined,
+      },
+    ]]);
+
+    await wrapper.get('.copy-menu-btn').trigger('click');
+    await wrapper.get('.format-item:nth-child(3)').trigger('click');
+
+    expect(wrapper.emitted('copy')).toEqual([
+      [{
+        url: 'https://example.com/a.jpg',
+        serviceId: 'weibo',
+        fileName: 'a.jpg',
+        format: undefined,
+      }],
+      [{
+        url: 'https://example.com/a.jpg',
+        serviceId: 'weibo',
+        fileName: 'a.jpg',
+        format: 'html',
+      }],
+    ]);
+  });
 });

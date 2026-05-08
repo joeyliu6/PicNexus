@@ -7,6 +7,7 @@ import type { QueueItem } from '../uploadQueue';
 import { deepClone, deepMerge } from '../utils/deepClone';
 import { useConfigManager } from '../composables/useConfig';
 import { useCopyLink } from '../composables/useCopyLink';
+import { makeCopyBadgeKey, useCopyBadgeFeedback } from '../composables/useCopyBadgeFeedback';
 import type { LinkFormat } from '../utils/linkFormatter';
 import { UI_COPY } from '../constants/uiCopy';
 import InlineEmptyState from './common/InlineEmptyState.vue';
@@ -29,6 +30,10 @@ const { width: scrollerWidth } = useElementSize(scrollerRef);
 const { queueItems } = useQueueState();
 const { config } = useConfigManager();
 const { copyLink } = useCopyLink();
+const {
+  copiedKey: copiedServiceKey,
+  markCopied,
+} = useCopyBadgeFeedback();
 
 const useVirtualScroll = computed(() => queueItems.value.length > VIRTUAL_SCROLL_THRESHOLD);
 
@@ -57,6 +62,7 @@ interface QueueCopyPayload {
   serviceId: string;
   fileName: string;
   format?: LinkFormat;
+  itemId?: string;
 }
 
 let retryCallback: ((itemId: string, serviceId?: string) => void) | null = null;
@@ -66,7 +72,7 @@ function handleRetry(itemId: string, serviceId: string) {
 }
 
 async function handleCopy(payload: QueueCopyPayload) {
-  await copyLink(
+  const result = await copyLink(
     {
       url: payload.url,
       serviceId: payload.serviceId,
@@ -76,6 +82,13 @@ async function handleCopy(payload: QueueCopyPayload) {
       format: payload.format
     }
   );
+  if (result.ok && payload.itemId) {
+    markCopied(getServiceCopyKey(payload.itemId, payload.serviceId));
+  }
+}
+
+function getServiceCopyKey(itemId: string, serviceId: string): string {
+  return makeCopyBadgeKey('upload-queue', itemId, serviceId);
 }
 
 defineExpose({
@@ -119,6 +132,7 @@ defineExpose({
         <QueueCard
           :item="(item as QueueItem)"
           :config="config"
+          :copied-service-key="copiedServiceKey"
           class="virtual-card"
 
           @copy="handleCopy"
@@ -133,6 +147,7 @@ defineExpose({
       :key="item.id"
       :item="item"
       :config="config"
+      :copied-service-key="copiedServiceKey"
       @copy="handleCopy"
       @retry="handleRetry"
     />
