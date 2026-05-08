@@ -1,4 +1,5 @@
 // 集中管理所有通知文案，便于维护和国际化
+import { UI_COPY } from './uiCopy';
 
 // 类型定义
 export interface ToastMessageConfig {
@@ -100,18 +101,12 @@ export const TOAST_MESSAGES = {
 
   // === 上传相关 ===
   upload: {
-    success: (count: number): ToastMessageConfig => ({
-      summary: '上传完成',
-      detail: `成功上传 ${count} 个文件`
-    }),
+    success: UI_COPY.toast.upload.success,
     partialSuccess: (success: number, fail: number): ToastMessageConfig => ({
       summary: '部分上传失败',
       detail: `成功 ${success} 个，失败 ${fail} 个`
     }),
-    failed: (error: string): ToastMessageConfig => ({
-      summary: '上传错误',
-      detail: error
-    }),
+    failed: UI_COPY.toast.upload.failed,
     retrying: (fileName: string, current: number, max: number): ToastMessageConfig => ({
       summary: '正在重试',
       detail: `${fileName} (${current}/${max})`
