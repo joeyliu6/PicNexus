@@ -178,11 +178,9 @@
 
   /* --- Typography System --- */
 
-  /* 1. 字体族：精心设计的跨平台字体栈 */
-  /* "Segoe UI" 用于 Windows 英文，"Microsoft YaHei" 确保 Windows 中文不显示为宋体 */
-  /* -apple-system 等用于 macOS */
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", 
-               "Helvetica Neue", "Microsoft YaHei", "PingFang SC", sans-serif;
+  /* 1. 字体族：中文 UI 优先的跨平台字体栈 */
+  --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei UI",
+               "Microsoft YaHei", "Segoe UI", "Inter", "Helvetica Neue", sans-serif;
                
   --font-mono: "JetBrains Mono", "Fira Code", "Consolas", "Courier New", monospace;
 
@@ -190,7 +188,7 @@
   --weight-regular: 400;
   --weight-medium: 500;  /* 按钮、导航、活跃标签 */
   --weight-semibold: 600; /* 分组标题、区块标题 */
-  --weight-bold: 700;    /* 页面大标题、核心焦点数据 */
+  --weight-bold: 600;    /* 页面大标题、核心焦点数据 */
 
   /* 3. 字号：10 级梯度，相邻主级 ≥1.14 比率 */
   --text-2xs: 10px;   /* 角标、极小标注 */
@@ -285,8 +283,8 @@ body, html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   
-  /* 优化字间距 */
-  letter-spacing: -0.015em; 
+  /* 中文界面避免全局压缩字距 */
+  letter-spacing: 0;
 }
 
 /* 针对 Windows 的特定优化 */
@@ -494,7 +492,6 @@ button:focus-visible {
 
 ::placeholder {
   font-family: var(--font-sans);
-  font-style: italic;
   opacity: 0.5;
 }
 

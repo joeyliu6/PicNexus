@@ -30,6 +30,8 @@ describe('exportCsv', () => {
     const lines = csv.split('\n');
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain('序号');
+    expect(lines[0]).toContain('HTTP 状态码');
+    expect(lines[0]).toContain('响应时间（ms）');
   });
 
   it('有效链接状态为"有效"', () => {

@@ -89,7 +89,7 @@ function handleLoadError() {
   const serviceId = currentItem.value?.primaryService ?? null;
   currentLoadFailedServiceId.value = serviceId;
   const serviceName = serviceId ? getServiceDisplayName(serviceId, configManager.config.value) : '当前图床';
-  toast.warn(`${serviceName}图片加载失败`, '当前主图床访问失败。可在底栏链接菜单手动切换图床，或在浏览器打开确认');
+  toast.warn(`${serviceName} 图片加载失败`, '当前主图床访问失败。可在底栏链接菜单手动切换图床，或在浏览器打开确认');
 }
 
 function handleLoadSuccess() {

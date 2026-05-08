@@ -103,7 +103,7 @@ const chipSuffixText = computed(() => {
           class="paste-link"
           :disabled="isPasting"
           @click="handlePaste"
-          v-tooltip.top="'快捷键: Ctrl+V'"
+          v-tooltip.top="'快捷键：Ctrl+V'"
         >{{ isPasting ? '正在粘贴...' : '从剪贴板粘贴' }}</button>，或<button
           class="paste-link"
           :disabled="isDownloading"

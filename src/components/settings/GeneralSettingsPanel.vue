@@ -411,7 +411,7 @@ function handleTemplateChange(template: string | undefined) {
 
 .template-input {
   width: 100%;
-  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-family: var(--font-mono);
   font-size: var(--text-sm);
 }
 
@@ -420,7 +420,7 @@ function handleTemplateChange(template: string | undefined) {
 }
 
 .template-hint code {
-  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
   /* stylelint-disable-next-line declaration-property-value-disallowed-list -- 1px 垂直内边距微调，无对应 spacing token */
   padding: 1px var(--space-xs);

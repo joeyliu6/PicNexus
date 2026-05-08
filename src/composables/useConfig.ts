@@ -298,7 +298,7 @@ export function useConfigManager() {
     return testCookieConnectionGeneric('纳米', cookie, 'test_nami_connection', { cookie, authToken }, () => {
       const provider = getCookieProvider('nami');
       if (provider && !validateCookie(cookie, provider.cookieValidation)) {
-        return { success: false, message: 'Cookie 中缺少 Auth-Token 字段（请点击"自动获取Cookie"按钮）' };
+        return { success: false, message: 'Cookie 中缺少 Auth-Token 字段（请点击“自动获取 Cookie”按钮）' };
       }
       if (!authToken) {
         return { success: false, message: 'Cookie 中未找到 Auth-Token，请重新获取' };
@@ -325,7 +325,7 @@ export function useConfigManager() {
   async function testChaoxingConnection(cookie: string): Promise<TestConnectionResult> {
     return testCookieConnectionGeneric('超星', cookie, 'test_chaoxing_connection', { chaoxingCookie: cookie }, () => {
       if (!cookie.includes('_uid=')) {
-        return { success: false, message: 'Cookie 中缺少 _uid 字段（请点击"自动获取Cookie"按钮）' };
+        return { success: false, message: 'Cookie 中缺少 _uid 字段（请点击“自动获取 Cookie”按钮）' };
       }
       return null;
     });

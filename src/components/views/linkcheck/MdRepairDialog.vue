@@ -178,7 +178,7 @@ function confirm() {
     <template #footer>
       <div class="repair-dialog-footer">
         <Button label="取消" severity="secondary" outlined @click="emit('update:visible', false)" />
-        <Button :label="`开始修复 (${rescuableCount} 张)`" icon="pi pi-wrench" @click="confirm" />
+        <Button :label="`开始修复（${rescuableCount} 张）`" icon="pi pi-wrench" @click="confirm" />
       </div>
     </template>
   </Dialog>

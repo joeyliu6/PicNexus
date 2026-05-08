@@ -487,7 +487,6 @@ function handleTargetToggle(serviceId: string) {
   white-space: nowrap;
   font-size: var(--text-base);
   font-weight: var(--weight-semibold);
-  letter-spacing: -0.01em;
 }
 
 .target-card-add-hint {

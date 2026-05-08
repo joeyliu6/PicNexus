@@ -126,7 +126,7 @@ async function handleGetCookie() {
     }
 
     if (!cookie || cookie.trim().length === 0) {
-      alert(`未检测到Cookie，请确保已登录${provider.name}`);
+      alert(`未检测到 Cookie，请确保已登录 ${provider.name}`);
       return;
     }
 

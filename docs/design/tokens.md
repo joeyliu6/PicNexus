@@ -161,7 +161,7 @@ transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 | `--weight-regular` | 400 | 正文、默认文本 |
 | `--weight-medium` | 500 | 按钮、导航标签、活跃选项卡 |
 | `--weight-semibold` | 600 | 分组标题、区块标题、重要数据 |
-| `--weight-bold` | 700 | 页面大标题、核心焦点数据 |
+| `--weight-bold` | 600 | 页面大标题、核心焦点数据 |
 
 ### 行高
 

@@ -171,7 +171,7 @@ function statusLabel(row: LinkCheckRow): string {
  * - 检测时间字段：取本条 checkResult 上的实际时间（如有），否则置空，不再用导出当下时间
  */
 export function exportCsv(rows: LinkCheckRow[]): string {
-  const headerCols = ['序号', '文件名', '图床', 'URL', '状态', 'HTTP状态码', '响应时间(ms)', '检测时间'];
+  const headerCols = ['序号', '文件名', '图床', 'URL', '状态', 'HTTP 状态码', '响应时间（ms）', '检测时间'];
   const header = headerCols.map(csvEscape).join(',');
 
   const csvRows = rows.map((row, i) => {

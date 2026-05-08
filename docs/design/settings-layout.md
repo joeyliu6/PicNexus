@@ -8,7 +8,7 @@
 
 | 层级 | Class | 字号 | 粗细 | 颜色 | 用途 |
 |------|-------|------|------|------|------|
-| 页面标题 | `.section-header h2` | 24px (`--text-2xl`) | 700 (`--weight-bold`) | `--text-primary` | 每个设置 Tab 的顶部标题 |
+| 页面标题 | `.section-header h2` | 24px (`--text-2xl`) | 600 (`--weight-bold`) | `--text-primary` | 每个设置 Tab 的顶部标题 |
 | 卡片标题 | `.card-title` | 14px (`--text-base`) | 600 (`--weight-semibold`) | `--text-primary` | 可折叠卡片标题（如"图片压缩""Typora""Obsidian""Cloudflare R2"） |
 | 区块标签 | `.group-label` | 16px (`--text-lg`) | 600 (`--weight-semibold`) | `--text-primary` | 功能分区标题（如"外观主题""应用行为"） |
 | 行标题 | `.toggle-row-label` | 14px (`--text-base`) | 500 (`--weight-medium`) | `--text-primary` | 设置项名称（如"开机自启动"） |

@@ -251,7 +251,7 @@ describe('HistoryLightbox', () => {
     await wrapper.vm.$nextTick();
 
     expect(toastWarnMock).toHaveBeenCalledWith(
-      '微博图片加载失败',
+      '微博 图片加载失败',
       expect.stringContaining('手动切换图床'),
     );
     expect(findInTeleport('.action-btn-dot')).not.toBeNull();

@@ -50,7 +50,7 @@ function showRejectHint() {
 /** 将 Tauri 格式快捷键转为人类可读格式 */
 const displayValue = computed(() => {
   if (isRecording.value) {
-    return rejectHint.value ? '按键不支持，请用字母/数字/F 键等' : '请按下快捷键...';
+    return rejectHint.value ? '按键不支持，请用字母/数字/F 键等' : '请按下快捷键…';
   }
   if (!props.modelValue) return '';
   return props.modelValue
@@ -179,14 +179,13 @@ onUnmounted(() => {
 .shortcut-text {
   color: var(--text-primary);
   font-weight: var(--weight-medium);
-  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
   letter-spacing: 0.02em;
 }
 
 .shortcut-input.recording .shortcut-text {
   color: var(--primary);
-  font-style: italic;
   font-weight: var(--weight-regular);
   font-family: inherit;
 }
