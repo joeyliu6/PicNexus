@@ -447,8 +447,10 @@ function handleCheckboxToggle(id: string) {
 }
 
 .global-thumb-hover-preview img {
-  max-width: 300px;
-  max-height: 300px;
+  width: 100%;
+  height: 100%;
+  display: block;
+  box-sizing: border-box;
   border-radius: var(--radius-md);
   box-shadow: 0 8px 32px var(--photo-shadow-light);
   background: var(--bg-card);
@@ -467,5 +469,6 @@ function handleCheckboxToggle(id: string) {
 
 .global-thumb-hover-preview.is-closing img {
   opacity: 0;
+  transition: none;
 }
 </style>

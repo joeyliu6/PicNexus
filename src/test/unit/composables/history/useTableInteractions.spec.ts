@@ -219,7 +219,7 @@ describe('useTableInteractions lightbox close preview motion', () => {
     expect(harness.api().hoverPreview.value.visible).toBe(false);
   });
 
-  it('keeps the preview visible when the mouse is still over the source thumb', async () => {
+  it('keeps the preview DOM for close bounds but hides it when the mouse is still over the source thumb', async () => {
     const item = makeItem();
     const source = appendSourceThumb(item.id);
     const harness = mountHarness(item);
@@ -228,15 +228,17 @@ describe('useTableInteractions lightbox close preview motion', () => {
     harness.api().openLightbox(item, { clientX: 12, clientY: 12 } as MouseEvent);
     await nextTick();
     expect(harness.api().resolveLightboxCloseTargetMode()).toBe('preview');
+    expect(harness.api().hoverPreview.value.closing).toBe(true);
 
     harness.api().lightboxVisible.value = false;
     await nextTick();
 
-    expect(harness.api().hoverPreview.value.closing).toBe(false);
+    expect(harness.api().hoverPreview.value.closing).toBe(true);
     expect(harness.api().hoverPreview.value.visible).toBe(true);
 
     await vi.advanceTimersByTimeAsync(300);
     expect(harness.api().hoverPreview.value.visible).toBe(true);
+    expect(harness.api().hoverPreview.value.closing).toBe(false);
 
     harness.api().handlePreviewLeave();
     expect(harness.api().hoverPreview.value.visible).toBe(false);
@@ -255,7 +257,7 @@ describe('useTableInteractions lightbox close preview motion', () => {
     harness.api().lightboxVisible.value = false;
     await nextTick();
     expect(harness.api().hoverPreview.value.visible).toBe(true);
-    expect(harness.api().hoverPreview.value.closing).toBe(false);
+    expect(harness.api().hoverPreview.value.closing).toBe(true);
 
     document.dispatchEvent(new MouseEvent('mousemove', { clientX: 200, clientY: 200 }));
 
@@ -685,6 +687,36 @@ describe('useTableInteractions hover preview positioning', () => {
     expect(harness.api().hoverPreview.value.style).toEqual({
       top: '174px',
       left: '364px',
+      width: '240px',
+      height: '48px',
+    });
+  });
+
+  it('keeps small square previews at their original metadata size', () => {
+    const item = {
+      ...makeItem('small-square'),
+      width: 240,
+      height: 240,
+      aspectRatio: 1,
+    };
+    const source = document.createElement('div');
+    mockRect(source, {
+      left: 320,
+      right: 356,
+      top: 180,
+      bottom: 216,
+      width: 36,
+      height: 36,
+    });
+    const harness = mountHarness(item);
+
+    harness.api().handlePreviewEnter({ currentTarget: source } as unknown as MouseEvent, item);
+
+    expect(harness.api().hoverPreview.value.style).toEqual({
+      top: '78px',
+      left: '364px',
+      width: '240px',
+      height: '240px',
     });
   });
 
@@ -716,12 +748,16 @@ describe('useTableInteractions hover preview positioning', () => {
     expect(harness.api().hoverPreview.value.style).toEqual({
       top: '8px',
       left: '60px',
+      width: '150px',
+      height: '300px',
     });
 
     harness.api().handlePreviewEnter({ currentTarget: source } as unknown as MouseEvent, unknown);
     expect(harness.api().hoverPreview.value.style).toEqual({
       top: '8px',
       left: '60px',
+      width: '300px',
+      height: '300px',
     });
   });
 });

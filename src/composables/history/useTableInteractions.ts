@@ -90,8 +90,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   let keepHoverPreviewAfterClose = false;
   let hoverHandoffSourceId: string | null = null;
 
-  // 鼠标位置追踪：仅在灯箱会话期间挂载，用于关闭时判断鼠标是否仍在源缩略图上
-  // -1 为哨兵值，表示本次会话由键盘触发、无鼠标坐标，跳过 hit-test
+  // -1 表示键盘开场，无鼠标坐标，跳过 hit-test。
   let lastMouseX = -1;
   let lastMouseY = -1;
   function trackMouse(e: MouseEvent): void { lastMouseX = e.clientX; lastMouseY = e.clientY; }
@@ -146,9 +145,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
 
   function isMouseOnSourceThumb(sourceId: string): boolean {
     if (lastMouseX < 0) return false;
-    const thumbBox = document.querySelector<HTMLElement>(
-      `.thumb-box[data-lightbox-id="${CSS.escape(sourceId)}"]`,
-    );
+    const thumbBox = document.querySelector<HTMLElement>(`.thumb-box[data-lightbox-id="${CSS.escape(sourceId)}"]`);
     const checkEl = thumbBox?.closest<HTMLElement>('.thumb-preview-wrapper');
     if (!checkEl) return false;
     const rect = checkEl.getBoundingClientRect();
@@ -159,8 +156,8 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   function resolveLightboxCloseTargetMode(): PhotoSwipeCloseTargetMode {
     const sourceId = hoverPreview.value.itemId;
     if (!sourceId || !hoverPreview.value.url) return 'fade';
-    if (isMouseOnSourceThumb(sourceId)) return 'preview';
     hoverPreview.value.closing = true;
+    if (isMouseOnSourceThumb(sourceId)) return 'preview';
     return 'thumb';
   }
 
@@ -168,10 +165,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     if (!lightboxItem.value) return -1;
     return lightboxPageData.value.findIndex((item) => item.id === lightboxItem.value!.id);
   });
-  // 跨页能力：到当前页边界时，只要还有相邻页就允许继续翻（handleLightboxNavigate 内部触发加载）
-  const lightboxHasPrev = computed(() =>
-    lightboxIndex.value > 0 || lightboxPage.value > 1,
-  );
+  const lightboxHasPrev = computed(() => lightboxIndex.value > 0 || lightboxPage.value > 1);
   const lightboxHasNext = computed(() => {
     const idx = lightboxIndex.value;
     if (idx < 0) return false;
@@ -222,9 +216,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
       const targetPage = direction === 'prev' ? lightboxPage.value - 1 : lightboxPage.value + 1;
       if (targetPage < 1 || targetPage > totalPages.value) return null;
       const result = await peekPage(targetPage);
-      const adjacent = direction === 'prev'
-        ? result.items[result.items.length - 1]
-        : result.items[0];
+      const adjacent = direction === 'prev' ? result.items[result.items.length - 1] : result.items[0];
       return adjacent ? getItemImageUrl(adjacent) : null;
     },
   });
@@ -264,9 +256,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   }
 
   function findThumbWrapper(itemId: string): HTMLElement | null {
-    const thumbBox = document.querySelector<HTMLElement>(
-      `.thumb-box[data-lightbox-id="${CSS.escape(itemId)}"]`,
-    );
+    const thumbBox = document.querySelector<HTMLElement>(`.thumb-box[data-lightbox-id="${CSS.escape(itemId)}"]`);
     return thumbBox?.closest<HTMLElement>('.thumb-preview-wrapper') ?? null;
   }
 
@@ -313,9 +303,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
 
     const scrollContainer = findScrollContainer(wrapper);
     if (scrollContainer) {
-      if (isFullyVisibleInContainer(wrapper, scrollContainer)) {
-        return { found: true, scrolled: false };
-      }
+      if (isFullyVisibleInContainer(wrapper, scrollContainer)) return { found: true, scrolled: false };
       centerElementInContainer(wrapper, scrollContainer);
       return { found: true, scrolled: true };
     }
@@ -351,12 +339,11 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     try {
       const targetPage = direction === 'next' ? lightboxPage.value + 1 : lightboxPage.value - 1;
       const result = await peekPage(targetPage);
-      // 等 DataTable 把新页渲染到 DOM：syncHoverPreviewToItem 要查
-      // .thumb-box[data-lightbox-id="..."]，不等 tick 新页行还没挂上
+      // 等 DataTable 把新页行挂上，syncHoverPreviewToItem 才能查到缩略图。
       await nextTick();
       const newData = result.items;
       if (newData.length === 0) return;
-      // next → 新页第 0 张；prev → 新页末张（保持"越切越老/越切越新"的时间方向连续）
+      // next 取新页第 0 张，prev 取新页末张，保持时间方向连续。
       const landIndex = direction === 'next' ? 0 : newData.length - 1;
       const targetItem = newData[landIndex];
       lightboxPage.value = targetPage;
@@ -384,9 +371,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
 
     const aspectRatio = Number(item.aspectRatio);
     if (Number.isFinite(aspectRatio) && aspectRatio > 0) {
-      if (aspectRatio >= 1) {
-        return { width: PREVIEW_MAX_SIZE, height: PREVIEW_MAX_SIZE / aspectRatio };
-      }
+      if (aspectRatio >= 1) return { width: PREVIEW_MAX_SIZE, height: PREVIEW_MAX_SIZE / aspectRatio };
       return { width: PREVIEW_MAX_SIZE * aspectRatio, height: PREVIEW_MAX_SIZE };
     }
 
@@ -408,13 +393,20 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     return { top, left };
   }
 
+  function buildPreviewStyle(position: { top: number; left: number }, previewSize: PreviewSize): Record<string, string> {
+    return {
+      top: `${position.top}px`,
+      left: `${position.left}px`,
+      width: `${previewSize.width}px`,
+      height: `${previewSize.height}px`,
+    };
+  }
+
   /**
    * 把悬浮预览同步到指定图：查该图对应行的 wrapper rect，重算预览位置和内容
    * 找不到行或无 medium url 时收起预览（关闭动画走 fade 兜底）
    */
   function syncHoverPreviewToItem(item: HistoryItem): void {
-    // CSS.escape 防御：即便 HistoryItem.id 当前由 Rust 侧生成 UUID 不含特殊字符，
-    // 未来若 id 规则变动（例如混入文件名派生）拼接特殊字符会让选择器构造失败
     const wrapper = findThumbWrapper(item.id);
     const url = thumbCache.getMediumImageUrl(item);
     if (!wrapper || !url) {
@@ -422,14 +414,15 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
       hoverPreview.value.closing = false;
       return;
     }
-    const { top, left } = computePreviewPosition(wrapper.getBoundingClientRect(), computePreviewSize(item));
+    const previewSize = computePreviewSize(item);
+    const position = computePreviewPosition(wrapper.getBoundingClientRect(), previewSize);
     hoverPreview.value = {
       visible: true,
       closing: false,
       url,
       alt: item.localFileName,
       itemId: item.id,
-      style: { top: `${top}px`, left: `${left}px` },
+      style: buildPreviewStyle(position, previewSize),
     };
   }
 
@@ -518,8 +511,16 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     if (!url) return;
     warmImages([url, getItemImageUrl(item)]);
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    const { top, left } = computePreviewPosition(rect, computePreviewSize(item));
-    hoverPreview.value = { visible: true, closing: false, url, alt: item.localFileName, itemId: item.id, style: { top: `${top}px`, left: `${left}px` } };
+    const previewSize = computePreviewSize(item);
+    const position = computePreviewPosition(rect, previewSize);
+    hoverPreview.value = {
+      visible: true,
+      closing: false,
+      url,
+      alt: item.localFileName,
+      itemId: item.id,
+      style: buildPreviewStyle(position, previewSize),
+    };
   }
 
   function handlePreviewLeave(): void {
@@ -532,46 +533,27 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     clearHoverPreview();
   }
 
-  //
-  // 关闭时序（鼠标不在缩略图上，以 T=0 标记 Esc/点关按钮的瞬间）：
-  //
-  //   T=0ms          PhotoSwipe close 事件同步调用 resolveLightboxCloseTargetMode：
-  //                  鼠标不在源缩略图上 → thumb；仍在源缩略图上 → preview
-  //   T=0ms          本 watch 触发，isLightboxClosing = true，拆除 mousemove 监听
-  //   T=180ms        预览已透明，主图仍在收回到小缩略图
-  //   T=300ms        PhotoSwipe 收回基本结束，移除预览 DOM，恢复 hover 交互
-  //
-  // 关键不变量：关闭目标必须在 PhotoSwipe opener.close() 计算 thumb bounds 前同步决定。
-  //
-  // 若鼠标仍在缩略图上：跳过 closing 态，让预览保持可见，等用户移开时 handlePreviewLeave
-  // 自然接管；此路径下 closingTimer 仍按 300ms 走完，防止 FLIP 刚落地时的合成 mouseenter 乱跳。
-  //
+  // 关闭目标必须在 PhotoSwipe 计算 thumb bounds 前同步决定；closingTimer 覆盖收回动画窗口。
   watch(lightboxVisible, (visible) => {
     if (!visible) {
       if (openingTimer) { clearTimeout(openingTimer); openingTimer = null; }
       if (closingTimer) { clearTimeout(closingTimer); closingTimer = null; }
       isLightboxOpening.value = false;
       isLightboxClosing.value = true;
-      hoverPreview.value.closing = false;
 
-      // 用几何坐标直接比对 wrapper rect，不用 elementFromPoint（避免 overlay 销毁时序干扰）
-      // lastMouseX < 0 表示键盘开场，无有效坐标，跳过 hit-test
+      // 用几何坐标比对 wrapper rect，避开 overlay 销毁时序干扰。
       const sourceId = hoverPreview.value.itemId;
       const mouseIsOnSourceThumb = sourceId ? isMouseOnSourceThumb(sourceId) : false;
       keepHoverPreviewAfterClose = mouseIsOnSourceThumb;
+      if (hoverPreview.value.visible) hoverPreview.value.closing = true;
 
-      // 坐标读完即可卸载追踪器，本次会话用完
       document.removeEventListener('mousemove', trackMouse);
 
       if (!mouseIsOnSourceThumb) {
-        hoverPreview.value.closing = true;
         stopHoverHandoffTracking();
       } else if (sourceId) {
         startHoverHandoffTracking(sourceId);
       }
-      // 若鼠标仍在缩略图上，保持 visible = true，FLIP 落地后预览无缝衔接，
-      // 用户移开鼠标时 handlePreviewLeave 会自然隐藏。
-
       closingTimer = setTimeout(() => {
         if (!keepHoverPreviewAfterClose) {
           clearHoverPreview();
