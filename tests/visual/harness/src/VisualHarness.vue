@@ -660,7 +660,8 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
           </article>
         </div>
         <div v-if="state === 'bulk-select'" class="visual-floating-bar">
-          <span>3 selected</span><button>Copy</button><button>Export</button><button class="danger">Delete</button>
+          <i class="pi pi-check-circle"></i>
+          <span>3</span>
         </div>
         <div v-if="state === 'lightbox'" class="visual-lightbox">
           <img :src="image('Lightbox')" alt="" />
@@ -720,7 +721,8 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
           </div>
         </div>
         <div v-if="state === 'bulk-select'" class="visual-floating-bar">
-          <span>4 selected</span><button>Copy</button><button>Export</button><button class="danger">Delete</button>
+          <i class="pi pi-check-circle"></i>
+          <span>4</span>
         </div>
         <div v-if="state === 'lightbox'" class="visual-lightbox">
           <img :src="image('Favorite lightbox')" alt="" />
@@ -794,7 +796,8 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
           </div>
         </div>
         <div v-if="state === 'bulk-select'" class="visual-floating-bar">
-          <span>4 selected</span><button>Copy</button><button>Export</button><button class="danger">Delete</button>
+          <i class="pi pi-check-circle"></i>
+          <span>4</span>
         </div>
         <div v-if="state === 'lightbox'" class="visual-lightbox">
           <img :src="timelineLightboxItem.generatedLink" alt="" />

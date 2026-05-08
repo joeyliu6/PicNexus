@@ -266,30 +266,36 @@ function handleClear(): void {
   display: flex;
   align-items: center;
   gap: var(--space-xs-sm);
-  padding: var(--space-sm) var(--space-md);
   min-height: 40px;
-  background: var(--primary);
-  color: var(--text-on-primary);
-  border: 1px solid transparent;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--primary-alpha-10);
+  color: var(--primary);
+  border: 1px solid var(--primary-alpha-30);
   border-radius: var(--radius-full);
+  box-shadow:
+    var(--shadow-float),
+    0 0 0 3px var(--primary-alpha-5);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
-  box-shadow: var(--shadow-float);
   cursor: pointer;
+  backdrop-filter: blur(12px);
   transition:
     background var(--duration-fast) var(--ease-standard),
     color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
     transform var(--duration-fast) var(--ease-standard);
 }
 
 .fab-bubble:hover {
+  background: var(--primary-alpha-15);
+  border-color: var(--primary-alpha-40);
   transform: translateY(-1px);
 }
 
 .fab-bubble.active {
   background: var(--primary-alpha-15);
+  border-color: var(--primary-alpha-40);
   color: var(--primary);
-  border-color: var(--primary);
 }
 
 .fab-bubble i {
@@ -298,6 +304,7 @@ function handleClear(): void {
 
 .fab-bubble-count {
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- 操作面板 ---- */
@@ -309,7 +316,7 @@ function handleClear(): void {
   padding: 0 0 var(--space-xs-sm) 0;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-float);
   display: flex;
   flex-direction: column;
@@ -490,7 +497,9 @@ function handleClear(): void {
   }
 
   .fab-panel {
-    min-width: 240px;
+    min-width: 0;
+    width: min(280px, calc(100vw - 32px));
+    box-sizing: border-box;
   }
 }
 </style>

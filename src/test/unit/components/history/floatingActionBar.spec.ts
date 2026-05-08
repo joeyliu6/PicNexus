@@ -75,7 +75,7 @@ describe('FloatingActionBar', () => {
     vi.useRealTimers();
   });
 
-  it('气泡点击打开面板并转发复制与按图床复制', async () => {
+  it('气泡面板转发格式复制与按图床复制', async () => {
     const wrapper = mountFab();
 
     await wrapper.get('.fab-bubble').trigger('click');
@@ -83,6 +83,7 @@ describe('FloatingActionBar', () => {
     await wrapper.get('.format-html-stub').trigger('click');
     await wrapper.get('.service-copy-stub').trigger('click');
 
+    expect(wrapper.find('.fab-bubble').exists()).toBe(true);
     expect(wrapper.find('.fab-panel').exists()).toBe(true);
     expect(wrapper.emitted('copy')).toEqual([
       ['url', undefined],
@@ -116,6 +117,9 @@ describe('FloatingActionBar', () => {
     await wrapper.get('.fab-bubble').trigger('click');
     const favoriteButton = wrapper.findAll('.panel-item')
       .find(button => button.text().includes('取消收藏'))!;
+
+    expect(favoriteButton.classes()).toContain('panel-item-warn');
+
     await favoriteButton.trigger('click');
 
     expect(wrapper.emitted('batch-favorite')).toEqual([[false]]);
@@ -132,6 +136,15 @@ describe('FloatingActionBar', () => {
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     await wrapper.vm.$nextTick();
+
+    expect(wrapper.emitted('clear-selection')).toHaveLength(1);
+  });
+
+  it('状态栏关闭按钮直接清空选择', async () => {
+    const wrapper = mountFab();
+
+    await wrapper.get('.fab-bubble').trigger('click');
+    await wrapper.get('.status-close-stub').trigger('click');
 
     expect(wrapper.emitted('clear-selection')).toHaveLength(1);
   });
