@@ -43,7 +43,7 @@ const emit = defineEmits<{
       />
     </div>
 
-    <div v-else-if="stats.total > 0 && stats.checked === 0 && !isChecking" class="empty-state-wrapper">
+    <div v-else-if="stats.total > 0 && stats.checked === 0 && filteredRows.length === 0 && !isChecking" class="empty-state-wrapper">
       <EmptyState
         icon="pi pi-shield"
         title="检查你的图片链接"

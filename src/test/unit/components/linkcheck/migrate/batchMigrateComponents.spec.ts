@@ -210,11 +210,14 @@ describe('batch migrate P1 components', () => {
     expect(wrapper.emitted('toggleAll')).toEqual([[true]]);
   });
 
-  it('SourceList marks the empty state for centered source-column layout', () => {
+  it('SourceList keeps the filter entry visible in empty state', () => {
     const wrapper = mountWithDefaults(SourceList, {
       props: {
         sources: [],
         selectedIds: [],
+      },
+      slots: {
+        'filter-trigger': '<button class="filter-trigger-stub">filter</button>',
       },
       global: {
         stubs: {
@@ -223,6 +226,9 @@ describe('batch migrate P1 components', () => {
       },
     });
 
+    expect(wrapper.find('.column-label').exists()).toBe(true);
+    expect(wrapper.find('.filter-trigger-stub').exists()).toBe(true);
+    expect(wrapper.find('.toggle-all-btn').exists()).toBe(false);
     expect(wrapper.find('.source-empty-state').exists()).toBe(true);
     expect(wrapper.find('.source-row').exists()).toBe(false);
   });
@@ -418,6 +424,40 @@ describe('batch migrate P1 components', () => {
     await flushPromisesAndTicks();
 
     expect(wrapper.get('.bottom-stat').text()).toContain('补传备份');
+  });
+
+  it('MigrateSelectPhase keeps source filters reachable when current filters return no sources', () => {
+    const targetServices = ref<MigrateTargetService[]>([
+      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 0, backedUpCount: 0, checked: true },
+    ]);
+    const ctx = createMigrateContext({
+      phase: ref('configuring'),
+      sourceServiceFilter: ref([]),
+      availableSourceServices: ref([]),
+      configuredServices: computed(() => targetServices.value),
+      unconfiguredServices: computed(() => []),
+      checkedTargets: computed(() => targetServices.value.filter(service => service.checked)),
+      totalPending: computed(() => 0),
+      isAllBackedUp: computed(() => true),
+      healthStatusMap: ref({ r2: 'verified' }),
+      healthTooltipMap: ref({ r2: 'ready' }),
+    });
+
+    const wrapper = mountWithMigrateContext(MigrateSelectPhase, ctx, {
+      global: {
+        stubs: {
+          MigrateFilterPopover: { template: '<button class="filter-popover-stub" />' },
+        },
+      },
+    });
+
+    expect(wrapper.find('.column-label').exists()).toBe(true);
+    expect(wrapper.find('.filter-popover-stub').exists()).toBe(true);
+    expect(wrapper.find('.source-empty-state').exists()).toBe(true);
+    expect(wrapper.find('.source-row').exists()).toBe(false);
+    expect(wrapper.find('.target-card').exists()).toBe(true);
+    expect(wrapper.find('.backed-up-banner').exists()).toBe(true);
+    expect(wrapper.get('.bottom-actions .btn-primary').attributes('disabled')).toBeDefined();
   });
 
   it('MigrateSelectPhase uses inline settings link for unconfigured empty state', async () => {

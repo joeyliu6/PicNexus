@@ -73,6 +73,23 @@ describe('CheckLinkList', () => {
     expect(wrapper.find('.hero-cta').exists()).toBe(false);
   });
 
+  it('renders unchecked rows instead of the first-run empty state when the filter has matches', () => {
+    const row = createLinkCheckRow({
+      historyId: 'hist-unchecked',
+      serviceId: 'smms',
+      fileName: 'pending-smms.jpg',
+    });
+    const wrapper = mountList({
+      rows: [row],
+      filteredRows: [row],
+      stats: { ...emptyStats, total: 1, unchecked: 1 },
+    });
+
+    expect(wrapper.find('.empty-state-stub').exists()).toBe(false);
+    expect(wrapper.find('.link-row').exists()).toBe(true);
+    expect(wrapper.text()).toContain('pending-smms.jpg');
+  });
+
   it('空筛选和无数据分别展示对应 empty 状态', () => {
     const filteredEmpty = mountList({
       stats: { ...emptyStats, total: 2, checked: 2, valid: 2 },

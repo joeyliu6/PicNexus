@@ -40,6 +40,23 @@ function handleToggleAll() {
 
 <template>
   <div class="split-left">
+    <!-- 栏目标签 + 来源列表（与右栏「到这里」呼应，暗示从左到右迁移方向） -->
+    <div class="column-label">
+      <span class="column-label-text">从这里</span>
+      <span class="column-label-actions">
+        <button
+          v-if="sources.length > 0"
+          type="button"
+          class="toggle-all-btn"
+          @click="handleToggleAll"
+        >
+          {{ toggleAllLabel }}
+        </button>
+        <span class="column-label-trigger">
+          <slot name="filter-trigger" />
+        </span>
+      </span>
+    </div>
     <!-- 空状态 -->
     <InlineEmptyState
       v-if="sources.length === 0"
@@ -48,21 +65,6 @@ function handleToggleAll() {
       title="暂无可迁移的图片"
       hint="历史记录中没有符合条件的图片"
     />
-
-    <!-- 栏目标签 + 来源列表（与右栏「到这里」呼应，暗示从左到右迁移方向） -->
-    <div v-else class="column-label">
-      <span class="column-label-text">从这里</span>
-      <button
-        type="button"
-        class="toggle-all-btn"
-        @click="handleToggleAll"
-      >
-        {{ toggleAllLabel }}
-      </button>
-      <span class="column-label-trigger">
-        <slot name="filter-trigger" />
-      </span>
-    </div>
     <div v-if="sources.length > 0" class="source-list">
       <div
         v-for="src in sources"
@@ -113,8 +115,15 @@ function handleToggleAll() {
 
 .column-label-text { flex-shrink: 0; }
 
-.toggle-all-btn {
+.column-label-actions {
   margin-left: auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.toggle-all-btn {
   padding: var(--space-2xs) var(--space-xs);
   background: transparent;
   border: none;
