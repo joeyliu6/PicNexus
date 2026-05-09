@@ -25,6 +25,9 @@ export default defineConfigWithVueTs(
       'src/test/**',
       'tests/**',
       'coverage/**',
+      '.ci-artifacts/**',
+      'playwright-report/**',
+      'test-results/**',
       // Obsidian 插件子项目：有独立的构建与 lint 体系，不归主应用 ESLint 管控。
       'plugins/**',
       '*.config.mjs',
