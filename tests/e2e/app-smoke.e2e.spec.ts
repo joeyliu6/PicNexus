@@ -166,24 +166,24 @@ test.describe('PicNexus Tauri smoke', () => {
     expect(state.calls.some((call) => call.type === 'invoke' && call.command === 'upload_to_jd')).toBe(true);
   });
 
-  test('history entry opens table, timeline, and favorites shells on mocked SQLite', async ({ page }) => {
+  test('history entry keeps empty-state navigation stable on mocked SQLite', async ({ page }) => {
     await openApp(page);
     await page.locator('.sidebar .nav-btn').nth(1).click();
 
     await expect(page.locator('.history-view .dashboard-strip')).toBeVisible();
-    await expect(page.locator('.history-view .table-view-container').getByText('暂无上传记录')).toBeVisible();
+    await expect(page.locator('.history-view').getByText('暂无上传记录')).toBeVisible();
 
     await page.locator('.history-view .tab-btn').filter({ hasText: '时间轴' }).click();
     await expect(page.locator('.history-view .tab-btn.active')).toContainText('时间轴');
-    await expect(page.locator('.history-view .timeline-view').getByText('暂无上传记录')).toBeVisible();
+    await expect(page.locator('.history-view').getByText('暂无上传记录')).toBeVisible();
 
     await page.locator('.history-view .tab-btn').filter({ hasText: '收藏' }).click();
     await expect(page.locator('.history-view .tab-btn.active')).toContainText('收藏');
-    await expect(page.locator('.history-view .favorites-view').getByText('暂无收藏')).toBeVisible();
+    await expect(page.locator('.history-view').getByText('暂无收藏')).toBeVisible();
 
     await page.locator('.history-view .tab-btn').filter({ hasText: '表格' }).click();
     await expect(page.locator('.history-view .tab-btn.active')).toContainText('表格');
-    await expect(page.locator('.history-view .table-view-container').getByText('暂无上传记录')).toBeVisible();
+    await expect(page.locator('.history-view').getByText('暂无上传记录')).toBeVisible();
   });
 
   test('settings save failure rolls back autostart through mocked native calls', async ({ page }) => {

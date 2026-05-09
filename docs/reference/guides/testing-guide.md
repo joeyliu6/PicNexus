@@ -182,7 +182,7 @@ npm run test:visual
 更新后必须人工确认：
 
 - 查看 Playwright HTML report 或 `test-results/` 中的 diff。
-- 检查深色 / 浅色、desktop / mobile 四个 project 的变化是否都合理。
+- 检查 desktop light / desktop dark 两个 project 的变化是否都合理。
 - 确认没有因为真实 bug、元素重叠、空白页、图片加载失败、文字溢出而直接更新基线。
 - PR 描述里说明哪些截图是预期变化。
 

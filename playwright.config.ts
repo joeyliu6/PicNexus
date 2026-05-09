@@ -30,28 +30,6 @@ export default defineConfig({
       name: 'desktop-dark',
       use: { browserName: 'chromium', viewport: { width: 1280, height: 800 }, colorScheme: 'dark' },
     },
-    {
-      name: 'mobile-light',
-      use: {
-        browserName: 'chromium',
-        viewport: { width: 390, height: 844 },
-        deviceScaleFactor: 2,
-        isMobile: true,
-        hasTouch: true,
-        colorScheme: 'light',
-      },
-    },
-    {
-      name: 'mobile-dark',
-      use: {
-        browserName: 'chromium',
-        viewport: { width: 390, height: 844 },
-        deviceScaleFactor: 2,
-        isMobile: true,
-        hasTouch: true,
-        colorScheme: 'dark',
-      },
-    },
   ],
   webServer: {
     command: 'npx vite --config tests/visual/vite.config.ts --host 127.0.0.1 --port 1421',

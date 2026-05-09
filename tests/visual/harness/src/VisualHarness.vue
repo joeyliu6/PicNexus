@@ -262,7 +262,6 @@ const historyRows = Array.from({ length: 7 }, (_, index) => ({
   thumb: image(`H${index + 1}`),
 }));
 
-const isCompactViewport = window.innerWidth <= 700;
 const serviceOrder: ServiceType[] = ['jd', 'weibo', 'r2', 'github'];
 
 function visualMeta(prefix: string, index: number, overrides: Partial<ImageMeta> = {}): ImageMeta {
@@ -350,12 +349,12 @@ const timelineGroups = computed<PhotoGroup[]>(() => [
     items: timelineMetas.slice(8),
   },
 ]);
-const timelineItemWidth = isCompactViewport ? 100 : 176;
+const timelineItemWidth = 176;
 const timelineGap = 4;
-const timelineColumns = isCompactViewport ? 3 : 5;
+const timelineColumns = 5;
 const timelineHeaderHeight = 36;
-const timelineRowHeight = isCompactViewport ? 118 : 156;
-const timelineGroupGap = isCompactViewport ? 22 : 28;
+const timelineRowHeight = 156;
+const timelineGroupGap = 28;
 const timelineSecondGroupY = timelineHeaderHeight + timelineRowHeight * 2 + timelineGap * 2 + timelineGroupGap;
 const timelineTotalHeight = timelineSecondGroupY + timelineHeaderHeight + timelineRowHeight * 2 + timelineGroupGap + 120;
 const timelineVisibleHeaders = computed(() => [
@@ -379,13 +378,13 @@ const timelineVisibleItems = computed(() => timelineGroups.value.flatMap((group,
   });
 }));
 const timelineSkeletonLayout = computed<SkeletonLayoutResult>(() => ({
-  totalHeight: isCompactViewport ? 620 : 560,
+  totalHeight: 560,
   groups: [
     { id: 'skeleton-april', headerY: 0 },
-    { id: 'skeleton-march', headerY: isCompactViewport ? 310 : 280 },
+    { id: 'skeleton-march', headerY: 280 },
   ],
   items: Array.from({ length: 14 }, (_, index) => {
-    const groupOffset = index < 7 ? timelineHeaderHeight : (isCompactViewport ? 310 : 280) + timelineHeaderHeight;
+    const groupOffset = index < 7 ? timelineHeaderHeight : 280 + timelineHeaderHeight;
     const localIndex = index < 7 ? index : index - 7;
     const column = localIndex % timelineColumns;
     const rowIndex = Math.floor(localIndex / timelineColumns);
