@@ -53,10 +53,14 @@ async function getFileName(filePath: string): Promise<string> {
 /**
  * 同一条历史记录的追加更新队列
  * 解决并发 addResultToHistoryItem 的读改写覆盖问题
+ *
+ * 导出 withHistoryUpdateQueue 给 RetryService 共用：让 retry 路径的
+ * updateHistoryRecord 与初始上传的 addResultToHistoryItem 走同一把按 ID 锁，
+ * 防止两个 read-modify-write 互相覆盖（详见 [[project_rebuild_layer_done]]）。
  */
 const historyUpdateQueue = new Map<string, Promise<void>>();
 
-async function withHistoryUpdateQueue<T>(
+export async function withHistoryUpdateQueue<T>(
   historyId: string,
   task: () => Promise<T>
 ): Promise<T> {
@@ -93,7 +97,15 @@ async function withHistoryUpdateQueue<T>(
 export function useHistorySaver(): UseHistorySaverReturn {
   /**
    * 保存历史记录（多图床结果）
-   * 直接插入 SQLite，无需读取全部数据
+   *
+   * 行为：
+   * - 传入 customId 且对应记录已存在 → 走 update，只更新 results / primaryService /
+   *   generatedLink，保留 isFavorited / linkCheckStatus / linkCheckSummary 等 retry
+   *   不应覆盖的字段。
+   * - 否则按 customId（或新生成的 UUID）走 insertOrIgnore 建新记录。
+   *
+   * Why：全量重试场景下，队列项的 historyId 必须被复用，否则会插出一条与原记录指向
+   * 同一文件的孤儿记录，用户会在历史里看到重复条目（[[project_rebuild_layer_done]]）。
    */
   async function saveHistoryItem(
     filePath: string,
@@ -101,43 +113,58 @@ export function useHistorySaver(): UseHistorySaverReturn {
     customId?: string,
     liveResults?: SingleServiceResult[]
   ): Promise<string | undefined> {
-    try {
-      const fileName = await getFileName(filePath);
+    const targetId = customId || crypto.randomUUID();
 
-      // 使用 liveResults 或回退到 uploadResult.results
-      const resultsSource = liveResults || uploadResult.results;
+    // 共享 per-id 串行锁：避免与 addResultToHistoryItem 并发对同一 historyId 读改写互相覆盖
+    return withHistoryUpdateQueue(targetId, async () => {
+      try {
+        const fileName = await getFileName(filePath);
 
-      const newItemId = customId || crypto.randomUUID();
-      const metadata = await getImageMetadata(filePath);
+        // 使用 liveResults 或回退到 uploadResult.results
+        const resultsSource = liveResults || uploadResult.results;
 
-      const newItem: HistoryItem = {
-        id: newItemId,
-        localFileName: fileName,
-        timestamp: Date.now(),
-        filePath: filePath,
-        results: resultsSource,
-        primaryService: uploadResult.primaryService,
-        generatedLink: uploadResult.primaryUrl || '',
-        width: metadata.width,
-        height: metadata.height,
-        aspectRatio: metadata.aspect_ratio,
-        fileSize: metadata.file_size,
-        format: metadata.format
-      };
+        // customId 存在时先探测：DB 已有记录则走 update（仅刷新 retry 关心的字段）
+        const existing = customId ? await historyDB.getById(customId) : null;
+        if (existing) {
+          await historyDB.update(customId!, {
+            results: resultsSource,
+            primaryService: uploadResult.primaryService,
+            generatedLink: uploadResult.primaryUrl || '',
+          });
+          log.info('[历史记录] 已更新:', existing.localFileName, '(retry 复用 historyId)');
+        } else {
+          const metadata = await getImageMetadata(filePath);
 
-      await historyDB.insertOrIgnore(newItem);
-      log.info('[历史记录] 已保存:', newItem.localFileName, '(尺寸:', metadata.width, 'x', metadata.height, ')');
+          const newItem: HistoryItem = {
+            id: targetId,
+            localFileName: fileName,
+            timestamp: Date.now(),
+            filePath: filePath,
+            results: resultsSource,
+            primaryService: uploadResult.primaryService,
+            generatedLink: uploadResult.primaryUrl || '',
+            width: metadata.width,
+            height: metadata.height,
+            aspectRatio: metadata.aspect_ratio,
+            fileSize: metadata.file_size,
+            format: metadata.format
+          };
 
-      invalidateCache();
-      emitHistoryUpdated([newItem.id]);
-      clearImageMetadataCache(filePath);
+          await historyDB.insertOrIgnore(newItem);
+          log.info('[历史记录] 已保存:', newItem.localFileName, '(尺寸:', metadata.width, 'x', metadata.height, ')');
+        }
 
-      return newItem.id;
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      log.error('[历史记录] 保存失败:', error);
-      throw new Error(`保存历史记录失败: ${errorMsg}`);
-    }
+        invalidateCache();
+        await emitHistoryUpdated([targetId]);
+        clearImageMetadataCache(filePath);
+
+        return targetId;
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        log.error('[历史记录] 保存失败:', error);
+        throw new Error(`保存历史记录失败: ${errorMsg}`);
+      }
+    });
   }
 
   /**

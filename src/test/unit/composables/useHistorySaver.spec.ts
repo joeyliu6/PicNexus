@@ -95,6 +95,69 @@ describe('useHistorySaver', () => {
     expect(insertedItem.results).toEqual([success, failed]);
   });
 
+  it('saveHistoryItem updates existing record when customId points to one in DB (retry reuse path)', async () => {
+    const { useHistorySaver } = await import('../../../composables/useHistorySaver');
+    const { saveHistoryItem } = useHistorySaver();
+
+    const existing: HistoryItem = {
+      id: 'reuse-id',
+      timestamp: 1710000000000,
+      localFileName: 'test.jpg',
+      filePath: '/tmp/test.jpg',
+      primaryService: 'jd',
+      generatedLink: 'https://example.com/old-jd.jpg',
+      results: [makeSuccess('jd')],
+      width: 1200,
+      height: 800,
+      aspectRatio: 1.5,
+      fileSize: 4096,
+      format: 'jpg',
+      isFavorited: true,
+    };
+    getByIdMock.mockResolvedValueOnce(existing);
+
+    const newResults = [makeSuccess('jd'), makeSuccess('upyun')];
+    const returnedId = await saveHistoryItem(
+      '/tmp/test.jpg',
+      {
+        primaryService: 'jd',
+        primaryUrl: 'https://example.com/new-jd.jpg',
+        results: newResults,
+      },
+      'reuse-id',
+    );
+
+    // 关键断言：走 update 路径而非 insertOrIgnore，避免重复历史并保留 isFavorited 等字段
+    expect(returnedId).toBe('reuse-id');
+    expect(insertOrIgnoreMock).not.toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalledWith('reuse-id', {
+      results: newResults,
+      primaryService: 'jd',
+      generatedLink: 'https://example.com/new-jd.jpg',
+    });
+  });
+
+  it('saveHistoryItem still inserts when customId has no matching DB record', async () => {
+    const { useHistorySaver } = await import('../../../composables/useHistorySaver');
+    const { saveHistoryItem } = useHistorySaver();
+
+    getByIdMock.mockResolvedValueOnce(null);
+
+    await saveHistoryItem(
+      '/tmp/test.jpg',
+      {
+        primaryService: 'jd',
+        primaryUrl: 'https://example.com/jd.jpg',
+        results: [makeSuccess('jd')],
+      },
+      'orphan-id',
+    );
+
+    expect(insertOrIgnoreMock).toHaveBeenCalledTimes(1);
+    const inserted = insertOrIgnoreMock.mock.calls[0][0] as HistoryItem;
+    expect(inserted.id).toBe('orphan-id');
+  });
+
   it('addResultToHistoryItem appends failed results and upserts retries by serviceId', async () => {
     const { useHistorySaver } = await import('../../../composables/useHistorySaver');
     const { addResultToHistoryItem } = useHistorySaver();

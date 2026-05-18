@@ -702,10 +702,47 @@ describe('RetryService', () => {
     expect(item.retryCount).toBe(2);
     expect(item.isRetrying).toBe(false);
     expect(queueManager.markItemComplete).toHaveBeenCalledWith('item-1', 'https://img.example.com/demo.png');
-    expect(saveHistoryItem).toHaveBeenCalledWith('/tmp/demo.png', expect.objectContaining({
-      isPartialSuccess: true,
-    }));
+    expect(saveHistoryItem).toHaveBeenCalledWith(
+      '/tmp/demo.png',
+      expect.objectContaining({ isPartialSuccess: true }),
+      undefined,
+    );
     expect(toast.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes existing historyId to saveHistoryItem so retryAll updates the original record instead of inserting a duplicate', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    const queueManager = createQueueManager([
+      createItem({
+        historyId: 'existing-history-uuid',
+        retryCount: 0,
+        maxRetries: 3,
+        enabledServices: ['weibo'],
+      }),
+    ]);
+    uploadToMultipleServicesMock.mockResolvedValueOnce({
+      primaryService: 'weibo',
+      primaryUrl: 'https://img.example.com/demo.png',
+      results: [
+        { serviceId: 'weibo', status: 'success', result: makeUploadResult() },
+      ],
+    });
+
+    const saveHistoryItem = vi.fn().mockResolvedValue(undefined);
+    const service = new RetryService(makeOptions({ queueManager, saveHistoryItem }));
+
+    const promise = service.retryAll('item-1', DEFAULT_CONFIG);
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(1000);
+    await promise;
+
+    expect(saveHistoryItem).toHaveBeenCalledWith(
+      '/tmp/demo.png',
+      expect.any(Object),
+      'existing-history-uuid',
+    );
   });
 
   it('cleans a retained clipboard temp file after full retry succeeds completely', async () => {

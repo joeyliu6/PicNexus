@@ -70,8 +70,8 @@ const retryService = new RetryService({
   configStore,
   queueManager,
   toast: toast,
-  saveHistoryItem: async (filePath: string, result: MultiUploadResult) => {
-    await uploadManager.saveHistoryItem(filePath, result);
+  saveHistoryItem: async (filePath: string, result: MultiUploadResult, customId?: string) => {
+    await uploadManager.saveHistoryItem(filePath, result, customId);
   }
 });
 

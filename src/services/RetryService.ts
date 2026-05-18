@@ -35,8 +35,13 @@ export interface RetryOptions {
     warn: (title: string, message: string, duration?: number) => void;
     info: (title: string, message: string) => void;
   };
-  /** 历史记录保存函数 */
-  saveHistoryItem: (filePath: string, result: MultiUploadResult) => Promise<void>;
+  /**
+   * 历史记录保存函数
+   *
+   * customId 用于全量重试场景：传入队列项原有的 historyId，避免 saveHistoryItem
+   * 生成新 UUID 后插出与原记录指向同一文件的孤儿记录。
+   */
+  saveHistoryItem: (filePath: string, result: MultiUploadResult, customId?: string) => Promise<void>;
 }
 
 interface RetrySingleServiceOptions {
@@ -483,7 +488,10 @@ export class RetryService {
     this.options.queueManager.markItemComplete(itemId, result.primaryUrl);
 
     // 保存历史记录
-    await this.options.saveHistoryItem(item.filePath, result);
+    // Why: 必须传 item.historyId，否则 saveHistoryItem 内部 fallback 到
+    // crypto.randomUUID() 会插出新记录，造成同一文件在历史里出现两条孤儿条目。
+    // resetItemForRetry 不会清掉 historyId，所以这里始终能拿到原始 ID。
+    await this.options.saveHistoryItem(item.filePath, result, item.historyId);
     await this.cleanupClipboardTempFileIfComplete(itemId);
   }
 
