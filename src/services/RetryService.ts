@@ -9,6 +9,7 @@ import type { Store } from '../store';
 import { UploadResult } from '../uploaders/base/types';
 import { checkNetworkConnectivity } from '../utils/network';
 import { invalidateCache } from '../composables/useHistory';
+import { withHistoryUpdateQueue } from '../composables/useHistorySaver';
 import { emitHistoryUpdated } from '../events/cacheEvents';
 import { historyDB } from './HistoryDatabase';
 import { getServiceDisplayName } from '../constants/serviceNames';
@@ -55,9 +56,6 @@ interface RetrySingleServiceOptions {
 export class RetryService {
   private retryingItems = new Set<string>();
   private uploader = new MultiServiceUploader();
-
-  /** 历史记录更新锁，确保并发更新时不会互相覆盖 */
-  private static historyUpdateLock: Promise<void> = Promise.resolve();
 
   constructor(private options: RetryOptions) { }
 
@@ -315,8 +313,11 @@ export class RetryService {
 
   /**
    * 更新历史记录中的单个服务结果
-   * 使用互斥锁确保并发更新时不会互相覆盖
-   * 使用 SQLite 数据库存储（已从 JSON 迁移）
+   *
+   * 共用 useHistorySaver 的 per-id 串行锁（withHistoryUpdateQueue），与初始上传的
+   * addResultToHistoryItem 走同一把锁；避免两边对同一 historyId 各自 getById →
+   * 改 results → update 互相覆盖。锁 key 优先用 historyId，旧队列项缺 historyId
+   * 时回退到 `path:${filePath}` 保持串行。
    */
   private async updateHistoryRecord(
     filePath: string,
@@ -326,8 +327,9 @@ export class RetryService {
     link: string,
     shouldPromotePrimary: boolean
   ): Promise<void> {
-    // 使用链式 Promise 实现互斥锁，确保更新操作按顺序执行
-    const updateOperation = async () => {
+    const lockKey = historyId || `path:${filePath}`;
+
+    await withHistoryUpdateQueue(lockKey, async () => {
       try {
         let historyItem = historyId ? await historyDB.getById(historyId) : null;
         if (historyId && !historyItem) {
@@ -387,11 +389,7 @@ export class RetryService {
         log.error('更新历史记录失败:', error);
         // 不阻塞主流程
       }
-    };
-
-    // 将当前操作加入队列，等待前面的操作完成后再执行
-    RetryService.historyUpdateLock = RetryService.historyUpdateLock.then(updateOperation);
-    await RetryService.historyUpdateLock;
+    });
   }
 
   /**
