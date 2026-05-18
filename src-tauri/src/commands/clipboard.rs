@@ -6,12 +6,18 @@ use arboard::Clipboard;
 use image::ImageFormat;
 use std::io::Cursor;
 use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::error::AppError;
 use crate::log_utils::safe_path;
 
 const CLIPBOARD_TEMP_PREFIX: &str = "clipboard_image_";
 const CLIPBOARD_TEMP_EXTENSION: &str = "png";
+
+/// 剪贴板临时文件序号计数器
+/// Why: 毫秒级时间戳在用户高频粘贴/脚本驱动场景可能撞名（同毫秒生成同名文件后
+/// 写者覆盖前写者），与 image_compress.rs / link_checker.rs 的处理方式对齐。
+static CLIPBOARD_TEMP_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 fn is_clipboard_temp_path(path: &Path) -> bool {
     let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
@@ -120,12 +126,14 @@ pub fn read_clipboard_image() -> Result<String, AppError> {
     let png_bytes = png_data.into_inner();
     log::debug!("[剪贴板] PNG 编码完成，大小: {} bytes", png_bytes.len());
 
-    // 创建临时文件路径
+    // 创建临时文件路径（拼接原子序号消除同毫秒撞名）
     let temp_dir = std::env::temp_dir();
+    let seq = CLIPBOARD_TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let file_name = format!(
-        "{}{}.{}",
+        "{}{}_{}.{}",
         CLIPBOARD_TEMP_PREFIX,
         chrono::Local::now().format("%Y%m%d_%H%M%S_%3f"),
+        seq,
         CLIPBOARD_TEMP_EXTENSION
     );
     let temp_path = temp_dir.join(&file_name);
