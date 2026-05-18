@@ -96,6 +96,13 @@ pub async fn compress_image(
             AppError::file_io(format!("无法解析文件路径: {}", e))
         })?;
 
+        // 输入像素预检：image::open 用默认 limits 会把整张图加载到内存（u32::MAX 像素，
+        // 数 GB 分配），针对 50000x50000 这种恶意/异常文件会先 OOM。先用 imagesize 只读
+        // header 拿到原始尺寸，超过 check_pixel_limit 上限直接拒绝，避免落到 decoder。
+        if let Ok(size) = imagesize::size(&canonical) {
+            check_pixel_limit(size.width as u32, size.height as u32)?;
+        }
+
         let img = image::open(&canonical).map_err(|e| {
             AppError::file_io(format!("无法打开图片: {}", e))
         })?;
@@ -525,6 +532,12 @@ pub async fn strip_exif_only(
             .canonicalize()
             .map_err(|e| AppError::file_io(format!("无法解析文件路径: {}", e)))?;
 
+        // 同 compress_image：image::open 前先用 imagesize header 校验原始像素数，
+        // 避免超大图直接 OOM
+        if let Ok(size) = imagesize::size(&canonical) {
+            check_pixel_limit(size.width as u32, size.height as u32)?;
+        }
+
         let img = image::open(&canonical)
             .map_err(|e| AppError::file_io(format!("无法打开图片: {}", e)))?;
 
@@ -629,6 +642,12 @@ pub async fn read_image_as_base64(
     let file_path_clone = file_path.clone();
 
     tokio::task::spawn_blocking(move || {
+        // 预览路径同样要前置像素上限检查：避免给压缩面板预览传来一张 50000x50000 时
+        // 在 image::open 阶段就把进程拖崩
+        if let Ok(size) = imagesize::size(&file_path_clone) {
+            check_pixel_limit(size.width as u32, size.height as u32)?;
+        }
+
         let img = image::open(&file_path_clone)
             .map_err(|e| AppError::file_io(format!("无法打开图片: {}", e)))?;
 
