@@ -115,6 +115,8 @@ flowchart TD
 
 展示 `picnexus --service r2 /path/to/img.jpg` 从命令行启动的流程。普通 CLI 上传必须显式传入图床名;Typora 保留独立配置档 `picnexus --profile typora /path/to/img.jpg`;Obsidian 继续调用本地 HTTP Server。
 
+Obsidian 插件 ID 为 `picnexus`，手动安装目录为 `<vault>/.obsidian/plugins/picnexus/`。插件只连接 `http://127.0.0.1:<port>`，端口必须和桌面端设置一致；发布与上架流程见 [Obsidian 插件发布指南](../reference/guides/obsidian-plugin-release.md)。
+
 > **关键源文件**:`src-tauri/src/cli.rs`、`src-tauri/src/main.rs#save_cli_config`、`%APPDATA%/us.picnex.app/cli-config.json`
 
 ```mermaid

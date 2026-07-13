@@ -6,6 +6,7 @@
 - [ ] 手动触发 `CI` workflow，勾选 `run_e2e=true`，确认 mocked Playwright E2E 通过并保留 `playwright-e2e-report`
 - [ ] 如平台支持，手动触发 `CI` workflow 勾选 `run_tauri_e2e=true`，或本地运行 `npm run test:tauri:e2e` 真实桌面冒烟
 - [ ] tag 触发的 `Release` workflow 中 web smoke E2E、Windows Tauri E2E、安装包 / AppImage 冒烟、Windows 便携版 ZIP 冒烟通过
+- [ ] `Obsidian plugin` CI 已通过 typecheck、build、发布清单校验，且生成的 `main.js` 已提交
 
 ## 上传流程
 - [ ] 拖入一张图 → 历史页出现
@@ -45,6 +46,14 @@
 - [ ] 更新下载完成后停留在「重启完成更新」，不会自动重启应用
 - [ ] 如已接入 Windows Authenticode 证书，确认安装包签名与时间戳有效；未接入时在发布说明中接受 SmartScreen 风险
 - [ ] 如启用备用镜像，确认镜像资产、`latest.json` 与 minisign 签名和 GitHub Release 完全一致；未启用时保持 GitHub 官方下载入口
+
+## Obsidian 插件
+- [ ] `manifest.json`、`package.json`、`package-lock.json`、`versions.json` 的插件版本一致
+- [ ] `Release Obsidian plugin` 成功，独立仓库 Release 标签与插件版本完全一致且不带 `v`
+- [ ] 独立插件 Release 直接包含 `main.js`、`manifest.json`、`styles.css`
+- [ ] 桌面端 Release 包含 `picnexus-obsidian-*.zip`，ZIP 根目录只有上述三个文件
+- [ ] 使用全新测试仓库通过 BRAT 或 ZIP 安装，测试连接、粘贴上传、拖拽上传和禁用/重载插件
+- [ ] `SHA256SUMS.txt` 包含 Obsidian 插件 ZIP
 
 ## 跨平台（至少抽检一个）
 - [ ] Windows `x64-setup.exe` 安装 + 启动

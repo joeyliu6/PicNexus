@@ -117,6 +117,7 @@ PR / push 到 `main` 当前必跑 `.github/workflows/ci.yml` 的 `test` job：
 - 三平台安装依赖并构建 sidecar。
 - Rust：`cargo check`、`cargo test`。
 - 前端：`npm run typecheck`、`npm run lint`、`npm run build`、`npm run test:unit`。
+- Obsidian 插件：独立 `obsidian-plugin` job 执行依赖安装、`npm run ci:obsidian`，并确认构建后的 `plugins/picnexus/main.js` 已提交。
 - 覆盖率：只在 `ubuntu-latest` 跑 `npm run test:coverage`，并上传 `coverage-report` artifact。
 
 视觉测试当前手动触发：

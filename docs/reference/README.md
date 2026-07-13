@@ -84,3 +84,4 @@
 |------|------|
 | [add-new-uploader.md](./guides/add-new-uploader.md) | 新增图床完整步骤 |
 | [testing-guide.md](./guides/testing-guide.md) | 测试规范与 Mock 策略 |
+| [obsidian-plugin-release.md](./guides/obsidian-plugin-release.md) | Obsidian 插件构建、发布、BRAT 测试与官方提交 |

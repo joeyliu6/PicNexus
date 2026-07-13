@@ -162,6 +162,7 @@ jobs:
           | Linux 通用运行 | `PicNexus_*_amd64.AppImage` |
           | Debian / Ubuntu | `PicNexus_*_amd64.deb` |
           | Fedora / RHEL / openSUSE | `PicNexus-*-1.x86_64.rpm` |
+          | Obsidian 手动安装 | `picnexus-obsidian-*.zip` |
 
           `.sig` 和 `latest.json` 是签名校验 / 自动更新文件，普通手动安装通常不需要下载。
 
@@ -353,9 +354,20 @@ jobs:
           echo "App running OK, killing..."
           kill $APP_PID
 
-  # Tier 3 D: matrix 全绿后把手动回归清单追加到 draft release body
-  release-checklist:
+  obsidian-plugin:
     needs: release
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release-obsidian-plugin.yml
+    with:
+      desktop_tag: ${{ github.ref_name }}
+      target_repo: ${{ vars.OBSIDIAN_PLUGIN_REPOSITORY || 'joeyliu6/picnexus-obsidian' }}
+    secrets:
+      release_token: ${{ secrets.OBSIDIAN_PLUGIN_RELEASE_TOKEN }}
+
+  # Tier 3 D: desktop and plugin assets are ready before final checksums and checklist
+  release-checklist:
+    needs: [release, obsidian-plugin]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

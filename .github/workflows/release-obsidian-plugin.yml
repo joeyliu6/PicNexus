@@ -1,0 +1,246 @@
+name: Release Obsidian plugin
+
+on:
+  workflow_call:
+    inputs:
+      desktop_tag:
+        description: Desktop release tag that receives the plugin ZIP
+        required: true
+        type: string
+      target_repo:
+        description: Public repository used by BRAT and the Obsidian directory
+        required: true
+        type: string
+      plugin_dir:
+        description: Plugin subtree in this repository
+        required: false
+        default: plugins/picnexus
+        type: string
+    secrets:
+      release_token:
+        description: Fine-grained token with Contents write access to target_repo
+        required: true
+    outputs:
+      plugin_version:
+        description: Version read from the plugin manifest
+        value: ${{ jobs.publish.outputs.plugin_version }}
+      release_status:
+        description: published, repaired, or reused
+        value: ${{ jobs.publish.outputs.release_status }}
+      zip_name:
+        description: Plugin ZIP uploaded to the desktop release
+        value: ${{ jobs.publish.outputs.zip_name }}
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: obsidian-plugin-${{ inputs.target_repo }}
+      cancel-in-progress: false
+    outputs:
+      plugin_version: ${{ steps.metadata.outputs.version }}
+      release_status: ${{ steps.publish.outputs.status }}
+      zip_name: ${{ steps.metadata.outputs.zip_name }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ${{ inputs.plugin_dir }}/package-lock.json
+
+      - name: Validate workflow inputs
+        shell: bash
+        env:
+          DESKTOP_TAG: ${{ inputs.desktop_tag }}
+          TARGET_REPO: ${{ inputs.target_repo }}
+          PLUGIN_DIR: ${{ inputs.plugin_dir }}
+          PLUGIN_TOKEN: ${{ secrets.release_token }}
+        run: |
+          set -euo pipefail
+          [[ "$DESKTOP_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid desktop tag: $DESKTOP_TAG"; exit 1; }
+          [[ "$TARGET_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "Invalid target repository: $TARGET_REPO"; exit 1; }
+          [[ "$PLUGIN_DIR" =~ ^plugins/[A-Za-z0-9_.-]+$ ]] || { echo "Invalid plugin directory: $PLUGIN_DIR"; exit 1; }
+          [[ -n "$PLUGIN_TOKEN" ]] || { echo "OBSIDIAN_PLUGIN_RELEASE_TOKEN is not configured."; exit 1; }
+
+      - name: Preflight target repository access
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.release_token }}
+          TARGET_REPO: ${{ inputs.target_repo }}
+        run: |
+          set -euo pipefail
+          can_push="$(gh api "repos/$TARGET_REPO" --jq '.permissions.push // false')"
+          [[ "$can_push" == "true" ]] || { echo "The release token cannot push to $TARGET_REPO."; exit 1; }
+
+      - name: Install, typecheck, and build plugin
+        shell: bash
+        env:
+          PLUGIN_DIR: ${{ inputs.plugin_dir }}
+        run: |
+          set -euo pipefail
+          npm --prefix "$PLUGIN_DIR" ci
+          npm --prefix "$PLUGIN_DIR" run typecheck
+          npm --prefix "$PLUGIN_DIR" run build
+          node --test scripts/test/validate-obsidian-release.test.mjs
+          node scripts/validate-obsidian-release.mjs "$PLUGIN_DIR"
+
+          if ! git diff --quiet -- "$PLUGIN_DIR/main.js"; then
+            echo "Plugin build changed main.js. Build and commit the generated file before tagging."
+            git diff -- "$PLUGIN_DIR/main.js"
+            exit 1
+          fi
+
+      - name: Read plugin metadata
+        id: metadata
+        shell: bash
+        env:
+          PLUGIN_DIR: ${{ inputs.plugin_dir }}
+        run: |
+          set -euo pipefail
+          version="$(node scripts/validate-obsidian-release.mjs "$PLUGIN_DIR" --print-version)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "zip_name=picnexus-obsidian-$version.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Package and smoke test plugin ZIP
+        shell: bash
+        env:
+          PLUGIN_DIR: ${{ inputs.plugin_dir }}
+          ZIP_NAME: ${{ steps.metadata.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+          package_dir="dist/picnexus"
+          mkdir -p "$package_dir"
+          cp "$PLUGIN_DIR/main.js" "$PLUGIN_DIR/manifest.json" "$PLUGIN_DIR/styles.css" "$package_dir/"
+
+          source_date_epoch="$(git log -1 --format=%ct -- "$PLUGIN_DIR")"
+          touch --date="@$source_date_epoch" "$package_dir"/*
+          (
+            cd "$package_dir"
+            zip -X -q "../$ZIP_NAME" main.js manifest.json styles.css
+          )
+
+          mapfile -t entries < <(unzip -Z1 "dist/$ZIP_NAME" | LC_ALL=C sort)
+          expected=(main.js manifest.json styles.css)
+          [[ "${entries[*]}" == "${expected[*]}" ]] || {
+            echo "Unexpected plugin ZIP contents: ${entries[*]}"
+            exit 1
+          }
+
+      - name: Sync and publish plugin repository
+        id: publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.release_token }}
+          TARGET_REPO: ${{ inputs.target_repo }}
+          PLUGIN_DIR: ${{ inputs.plugin_dir }}
+          PLUGIN_VERSION: ${{ steps.metadata.outputs.version }}
+        run: |
+          set -euo pipefail
+          runtime_assets=(main.js manifest.json styles.css)
+          existing_dir="$RUNNER_TEMP/picnexus-existing-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$existing_dir"
+          release_exists=false
+          missing_assets=()
+
+          if gh release view "$PLUGIN_VERSION" --repo "$TARGET_REPO" >/dev/null 2>&1; then
+            release_exists=true
+            for asset in "${runtime_assets[@]}"; do
+              if gh release download "$PLUGIN_VERSION" --repo "$TARGET_REPO" --pattern "$asset" --dir "$existing_dir" >/dev/null 2>&1; then
+                if ! cmp -s "$PLUGIN_DIR/$asset" "$existing_dir/$asset"; then
+                  echo "Release $PLUGIN_VERSION already contains different $asset content. Bump the plugin version."
+                  exit 1
+                fi
+              else
+                missing_assets+=("$asset")
+              fi
+            done
+          fi
+
+          split_commit="$(git subtree split --prefix="$PLUGIN_DIR" HEAD)"
+          gh auth setup-git
+          remote_url="https://github.com/$TARGET_REPO.git"
+          remote_main="$(git ls-remote --heads "$remote_url" refs/heads/main | awk '{print $1}')"
+
+          if [[ -z "$remote_main" ]]; then
+            git push "$remote_url" "$split_commit:refs/heads/main"
+          else
+            git fetch --no-tags "$remote_url" refs/heads/main
+            remote_main="$(git rev-parse FETCH_HEAD)"
+            if [[ "$remote_main" == "$split_commit" ]]; then
+              echo "Plugin repository main is already synchronized."
+            elif git merge-base --is-ancestor "$remote_main" "$split_commit"; then
+              git push "$remote_url" "$split_commit:refs/heads/main"
+            elif git merge-base --is-ancestor "$split_commit" "$remote_main"; then
+              echo "Plugin repository main is ahead; preserving the newer generated state."
+            else
+              echo "Plugin repository main has diverged from the generated subtree. Reconcile it manually."
+              exit 1
+            fi
+          fi
+
+          if [[ "$release_exists" == "true" ]]; then
+            if (( ${#missing_assets[@]} > 0 )); then
+              for asset in "${missing_assets[@]}"; do
+                gh release upload "$PLUGIN_VERSION" "$PLUGIN_DIR/$asset" --repo "$TARGET_REPO"
+              done
+              status=repaired
+            else
+              status=reused
+            fi
+          else
+            remote_tag_commit="$(gh api "repos/$TARGET_REPO/commits/$PLUGIN_VERSION" --jq '.sha' 2>/dev/null || true)"
+            if [[ -n "$remote_tag_commit" ]]; then
+              [[ "$remote_tag_commit" == "$split_commit" ]] || {
+                echo "Tag $PLUGIN_VERSION already points to a different commit in $TARGET_REPO."
+                exit 1
+              }
+            else
+              git push "$remote_url" "$split_commit:refs/tags/$PLUGIN_VERSION"
+            fi
+
+            gh release create "$PLUGIN_VERSION" \
+              "$PLUGIN_DIR/main.js" \
+              "$PLUGIN_DIR/manifest.json" \
+              "$PLUGIN_DIR/styles.css" \
+              --repo "$TARGET_REPO" \
+              --verify-tag \
+              --title "PicNexus $PLUGIN_VERSION" \
+              --notes "PicNexus plugin release $PLUGIN_VERSION. See README.md for installation and setup."
+            status=published
+          fi
+
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Upload plugin ZIP to desktop draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DESKTOP_TAG: ${{ inputs.desktop_tag }}
+          ZIP_NAME: ${{ steps.metadata.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+          gh release upload "$DESKTOP_TAG" "dist/$ZIP_NAME" --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Summarize plugin release
+        shell: bash
+        env:
+          PLUGIN_VERSION: ${{ steps.metadata.outputs.version }}
+          RELEASE_STATUS: ${{ steps.publish.outputs.status }}
+          TARGET_REPO: ${{ inputs.target_repo }}
+          ZIP_NAME: ${{ steps.metadata.outputs.zip_name }}
+        run: |
+          {
+            echo "## Obsidian plugin"
+            echo "- Version: $PLUGIN_VERSION"
+            echo "- Status: $RELEASE_STATUS"
+            echo "- Repository: $TARGET_REPO"
+            echo "- Desktop asset: $ZIP_NAME"
+          } >> "$GITHUB_STEP_SUMMARY"
