@@ -75,7 +75,6 @@ var PicNexusSettingTab = class extends import_obsidian2.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "PicNexus \u56FE\u7247\u4E0A\u4F20" });
     new import_obsidian2.Setting(containerEl).setName("\u7AEF\u53E3").setDesc("PicNexus HTTP Server \u7684\u76D1\u542C\u7AEF\u53E3\uFF08\u9ED8\u8BA4 36799\uFF09").addText(
       (text) => text.setPlaceholder("36799").setValue(String(this.plugin.settings.port)).onChange(async (value) => {
         const port = parseInt(value, 10);
@@ -100,7 +99,7 @@ var PicNexusSettingTab = class extends import_obsidian2.PluginSettingTab {
         }
       })
     );
-    containerEl.createEl("h3", { text: "\u4E0A\u4F20\u884C\u4E3A" });
+    new import_obsidian2.Setting(containerEl).setName("\u4E0A\u4F20\u884C\u4E3A").setHeading();
     new import_obsidian2.Setting(containerEl).setName("\u7C98\u8D34\u65F6\u81EA\u52A8\u4E0A\u4F20").setDesc("\u7C98\u8D34\u56FE\u7247\u65F6\u81EA\u52A8\u4E0A\u4F20\u5230\u56FE\u5E8A").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.autoUploadOnPaste).onChange(async (value) => {
         this.plugin.settings.autoUploadOnPaste = value;

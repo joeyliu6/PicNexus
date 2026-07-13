@@ -138,7 +138,7 @@ watch(
     <div class="guide-card">
       <div class="guide-step">
         <span class="step-badge">1</span>
-        <span class="step-text">在 Obsidian 插件市场安装 <code class="inline-code">obsidian-picnexus</code> 插件</span>
+        <span class="step-text">通过 PicNexus Release 或 BRAT 安装 <code class="inline-code">picnexus</code> 插件</span>
       </div>
       <div class="guide-step">
         <span class="step-badge">2</span>

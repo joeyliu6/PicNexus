@@ -13,8 +13,6 @@ export class PicNexusSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl('h2', { text: 'PicNexus 图片上传' });
-
     // 连接配置
     new Setting(containerEl)
       .setName('端口')
@@ -55,7 +53,9 @@ export class PicNexusSettingTab extends PluginSettingTab {
           })
       );
 
-    containerEl.createEl('h3', { text: '上传行为' });
+    new Setting(containerEl)
+      .setName('上传行为')
+      .setHeading();
 
     new Setting(containerEl)
       .setName('粘贴时自动上传')

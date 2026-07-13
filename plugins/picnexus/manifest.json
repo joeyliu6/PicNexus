@@ -1,10 +1,10 @@
 {
-  "id": "obsidian-picnexus",
+  "id": "picnexus",
   "name": "PicNexus",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "minAppVersion": "1.4.0",
-  "description": "PicNexus 专属图片上传插件 — 粘贴/拖拽自动上传到图床",
-  "author": "PicNexus",
-  "authorUrl": "https://github.com/nichuanfang/PicNexus",
+  "description": "Upload pasted and dropped images through the PicNexus desktop app.",
+  "author": "joeyliu6",
+  "authorUrl": "https://github.com/joeyliu6",
   "isDesktopOnly": true
 }
