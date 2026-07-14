@@ -32,9 +32,10 @@
     "lint:fix": "eslint . --fix && stylelint \"src/**/*.{css,vue}\" --fix",
     "audit:copy": "node scripts/audit-copy.mjs",
     "build:obsidian": "npm --prefix plugins/picnexus run build",
+    "lint:obsidian": "npm --prefix plugins/picnexus run lint",
     "typecheck:obsidian": "npm --prefix plugins/picnexus run typecheck",
     "validate:obsidian-release": "node scripts/validate-obsidian-release.mjs",
-    "ci:obsidian": "npm run typecheck:obsidian && npm run build:obsidian && npm run validate:obsidian-release && npm run test:obsidian-release && npm run test:obsidian-plugin",
+    "ci:obsidian": "npm run lint:obsidian && npm run typecheck:obsidian && npm run build:obsidian && npm run validate:obsidian-release && npm run test:obsidian-release && npm run test:obsidian-plugin",
     "package:portable:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-portable-windows.ps1",
     "prepare": "husky"
   },

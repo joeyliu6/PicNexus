@@ -16,7 +16,7 @@ export class PicNexusSettingTab extends PluginSettingTab {
     // 连接配置
     new Setting(containerEl)
       .setName('端口')
-      .setDesc('PicNexus HTTP Server 的监听端口（默认 36799）')
+      .setDesc('PicNexus HTTP 服务的监听端口（默认 36799）')
       .addText(text =>
         text
           .setPlaceholder('36799')

@@ -9,18 +9,30 @@ import test from 'node:test';
 const pluginRequire = createRequire(resolve('plugins/picnexus/package.json'));
 const esbuild = pluginRequire('esbuild');
 const outputDir = mkdtempSync(join(tmpdir(), 'picnexus-plugin-behavior-'));
-const outputPath = join(outputDir, 'markdown.mjs');
+const markdownOutputPath = join(outputDir, 'markdown.mjs');
+const settingsOutputPath = join(outputDir, 'settings.mjs');
 
-await esbuild.build({
-  entryPoints: [resolve('plugins/picnexus/src/markdown.ts')],
-  bundle: true,
-  format: 'esm',
-  outfile: outputPath,
-  platform: 'node',
-  logLevel: 'silent',
-});
+await Promise.all([
+  esbuild.build({
+    entryPoints: [resolve('plugins/picnexus/src/markdown.ts')],
+    bundle: true,
+    format: 'esm',
+    outfile: markdownOutputPath,
+    platform: 'node',
+    logLevel: 'silent',
+  }),
+  esbuild.build({
+    entryPoints: [resolve('plugins/picnexus/src/types.ts')],
+    bundle: true,
+    format: 'esm',
+    outfile: settingsOutputPath,
+    platform: 'node',
+    logLevel: 'silent',
+  }),
+]);
 
-const markdown = await import(pathToFileURL(outputPath).href);
+const markdown = await import(pathToFileURL(markdownOutputPath).href);
+const settings = await import(pathToFileURL(settingsOutputPath).href);
 
 test.after(() => {
   rmSync(outputDir, { recursive: true, force: true });
@@ -75,4 +87,39 @@ test('keeps batch placeholders isolated while upload results arrive', () => {
     content,
     'before ![one.png](https://cdn.example.com/one.png) middle ![two.png](https://cdn.example.com/two.png) after',
   );
+});
+
+test('uses defaults when persisted plugin settings are missing or invalid', () => {
+  assert.deepEqual(settings.normalizeSettings(null), settings.DEFAULT_SETTINGS);
+  assert.deepEqual(settings.normalizeSettings([]), settings.DEFAULT_SETTINGS);
+  assert.deepEqual(settings.normalizeSettings({
+    port: 80,
+    autoUploadOnPaste: 'true',
+    autoUploadOnDrop: null,
+    showNotifications: 1,
+  }), settings.DEFAULT_SETTINGS);
+});
+
+test('keeps valid settings and falls back field by field', () => {
+  assert.deepEqual(settings.normalizeSettings({
+    port: 65535,
+    autoUploadOnPaste: false,
+    autoUploadOnDrop: true,
+    showNotifications: false,
+  }), {
+    port: 65535,
+    autoUploadOnPaste: false,
+    autoUploadOnDrop: true,
+    showNotifications: false,
+  });
+
+  assert.deepEqual(settings.normalizeSettings({
+    port: 36799.5,
+    autoUploadOnPaste: false,
+  }), {
+    port: settings.DEFAULT_SETTINGS.port,
+    autoUploadOnPaste: false,
+    autoUploadOnDrop: settings.DEFAULT_SETTINGS.autoUploadOnDrop,
+    showNotifications: settings.DEFAULT_SETTINGS.showNotifications,
+  });
 });

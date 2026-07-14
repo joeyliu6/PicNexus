@@ -1,6 +1,6 @@
 {
   "name": "picnexus-obsidian",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "PicNexus image upload plugin for Obsidian",
   "private": true,
   "license": "Apache-2.0",
@@ -8,12 +8,16 @@
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
+    "lint": "eslint src --max-warnings 0",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "esbuild": "0.28.1",
+    "eslint": "10.2.0",
+    "eslint-plugin-obsidianmd": "0.4.1",
     "obsidian": "latest",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "typescript-eslint": "8.58.1"
   }
 }

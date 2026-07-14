@@ -1,7 +1,7 @@
 import { Plugin, Notice, Editor, MarkdownView, TFile } from 'obsidian';
 import { PicNexusUploader } from './uploader';
 import { PicNexusSettingTab } from './settings';
-import { DEFAULT_SETTINGS, type PicNexusSettings } from './types';
+import { DEFAULT_SETTINGS, normalizeSettings, type PicNexusSettings } from './types';
 import {
   createUploadPlaceholder,
   findPlaceholderRange,
@@ -33,7 +33,6 @@ export default class PicNexusPlugin extends Plugin {
   settings: PicNexusSettings = { ...DEFAULT_SETTINGS };
   uploader: PicNexusUploader = new PicNexusUploader(DEFAULT_SETTINGS.port);
   private statusBarEl: HTMLElement | null = null;
-  private statusCheckInterval: ReturnType<typeof setInterval> | null = null;
   private uploadPlaceholderCounter = 0;
 
   async onload(): Promise<void> {
@@ -46,34 +45,40 @@ export default class PicNexusPlugin extends Plugin {
     this.statusBarEl = this.addStatusBarItem();
     this.statusBarEl.setText('PicNexus: ...');
     this.statusBarEl.addClass('picnexus-status');
-    this.checkConnection();
-    this.statusCheckInterval = setInterval(() => this.checkConnection(), 30_000);
+    void this.checkConnection();
+    this.registerInterval(window.setInterval(() => {
+      void this.checkConnection();
+    }, 30_000));
 
     // 粘贴事件
     this.registerEvent(
       this.app.workspace.on('editor-paste', (evt: ClipboardEvent, editor: Editor) => {
-        if (!this.settings.autoUploadOnPaste) return;
+        if (evt.defaultPrevented || !this.settings.autoUploadOnPaste) return;
         const files = evt.clipboardData?.files;
         if (!files || files.length === 0) return;
         const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
         if (imageFiles.length === 0) return;
 
         evt.preventDefault();
-        this.handleImageUpload(imageFiles, editor);
+        void this.handleImageUpload(imageFiles, editor).catch(() => {
+          new Notice('上传图片失败');
+        });
       })
     );
 
     // 拖拽事件
     this.registerEvent(
       this.app.workspace.on('editor-drop', (evt: DragEvent, editor: Editor) => {
-        if (!this.settings.autoUploadOnDrop) return;
+        if (evt.defaultPrevented || !this.settings.autoUploadOnDrop) return;
         const files = evt.dataTransfer?.files;
         if (!files || files.length === 0) return;
         const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
         if (imageFiles.length === 0) return;
 
         evt.preventDefault();
-        this.handleImageUpload(imageFiles, editor);
+        void this.handleImageUpload(imageFiles, editor).catch(() => {
+          new Notice('上传图片失败');
+        });
       })
     );
 
@@ -82,14 +87,16 @@ export default class PicNexusPlugin extends Plugin {
       id: 'upload-all-local-images',
       name: '上传当前笔记中的所有本地图片',
       editorCallback: (editor: Editor, view: MarkdownView) => {
-        this.uploadAllLocalImages(editor, view);
+        void this.uploadAllLocalImages(editor, view).catch(() => {
+          new Notice('上传当前笔记中的本地图片失败');
+        });
       },
     });
 
     // 命令：测试连接
     this.addCommand({
       id: 'test-connection',
-      name: '测试 PicNexus 连接',
+      name: '测试连接',
       callback: async () => {
         try {
           const status = await this.uploader.checkStatus();
@@ -103,14 +110,9 @@ export default class PicNexusPlugin extends Plugin {
     });
   }
 
-  onunload(): void {
-    if (this.statusCheckInterval) {
-      clearInterval(this.statusCheckInterval);
-    }
-  }
-
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const savedData: unknown = await this.loadData();
+    this.settings = normalizeSettings(savedData);
   }
 
   async saveSettings(): Promise<void> {

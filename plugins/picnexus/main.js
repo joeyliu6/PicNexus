@@ -75,7 +75,7 @@ var PicNexusSettingTab = class extends import_obsidian2.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    new import_obsidian2.Setting(containerEl).setName("\u7AEF\u53E3").setDesc("PicNexus HTTP Server \u7684\u76D1\u542C\u7AEF\u53E3\uFF08\u9ED8\u8BA4 36799\uFF09").addText(
+    new import_obsidian2.Setting(containerEl).setName("\u7AEF\u53E3").setDesc("PicNexus HTTP \u670D\u52A1\u7684\u76D1\u542C\u7AEF\u53E3\uFF08\u9ED8\u8BA4 36799\uFF09").addText(
       (text) => text.setPlaceholder("36799").setValue(String(this.plugin.settings.port)).onChange(async (value) => {
         const port = parseInt(value, 10);
         if (!isNaN(port) && port >= 1024 && port <= 65535) {
@@ -128,6 +128,23 @@ var DEFAULT_SETTINGS = {
   autoUploadOnDrop: true,
   showNotifications: true
 };
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function readBoolean(settings, key) {
+  const value = settings[key];
+  return typeof value === "boolean" ? value : DEFAULT_SETTINGS[key];
+}
+function normalizeSettings(value) {
+  if (!isRecord(value)) return { ...DEFAULT_SETTINGS };
+  const port = typeof value.port === "number" && Number.isInteger(value.port) && value.port >= 1024 && value.port <= 65535 ? value.port : DEFAULT_SETTINGS.port;
+  return {
+    port,
+    autoUploadOnPaste: readBoolean(value, "autoUploadOnPaste"),
+    autoUploadOnDrop: readBoolean(value, "autoUploadOnDrop"),
+    showNotifications: readBoolean(value, "showNotifications")
+  };
+}
 
 // src/markdown.ts
 function escapeMarkdownText(value) {
@@ -170,7 +187,6 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
   settings = { ...DEFAULT_SETTINGS };
   uploader = new PicNexusUploader(DEFAULT_SETTINGS.port);
   statusBarEl = null;
-  statusCheckInterval = null;
   uploadPlaceholderCounter = 0;
   async onload() {
     await this.loadSettings();
@@ -179,40 +195,48 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
     this.statusBarEl = this.addStatusBarItem();
     this.statusBarEl.setText("PicNexus: ...");
     this.statusBarEl.addClass("picnexus-status");
-    this.checkConnection();
-    this.statusCheckInterval = setInterval(() => this.checkConnection(), 3e4);
+    void this.checkConnection();
+    this.registerInterval(window.setInterval(() => {
+      void this.checkConnection();
+    }, 3e4));
     this.registerEvent(
       this.app.workspace.on("editor-paste", (evt, editor) => {
-        if (!this.settings.autoUploadOnPaste) return;
+        if (evt.defaultPrevented || !this.settings.autoUploadOnPaste) return;
         const files = evt.clipboardData?.files;
         if (!files || files.length === 0) return;
         const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
         if (imageFiles.length === 0) return;
         evt.preventDefault();
-        this.handleImageUpload(imageFiles, editor);
+        void this.handleImageUpload(imageFiles, editor).catch(() => {
+          new import_obsidian3.Notice("\u4E0A\u4F20\u56FE\u7247\u5931\u8D25");
+        });
       })
     );
     this.registerEvent(
       this.app.workspace.on("editor-drop", (evt, editor) => {
-        if (!this.settings.autoUploadOnDrop) return;
+        if (evt.defaultPrevented || !this.settings.autoUploadOnDrop) return;
         const files = evt.dataTransfer?.files;
         if (!files || files.length === 0) return;
         const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
         if (imageFiles.length === 0) return;
         evt.preventDefault();
-        this.handleImageUpload(imageFiles, editor);
+        void this.handleImageUpload(imageFiles, editor).catch(() => {
+          new import_obsidian3.Notice("\u4E0A\u4F20\u56FE\u7247\u5931\u8D25");
+        });
       })
     );
     this.addCommand({
       id: "upload-all-local-images",
       name: "\u4E0A\u4F20\u5F53\u524D\u7B14\u8BB0\u4E2D\u7684\u6240\u6709\u672C\u5730\u56FE\u7247",
       editorCallback: (editor, view) => {
-        this.uploadAllLocalImages(editor, view);
+        void this.uploadAllLocalImages(editor, view).catch(() => {
+          new import_obsidian3.Notice("\u4E0A\u4F20\u5F53\u524D\u7B14\u8BB0\u4E2D\u7684\u672C\u5730\u56FE\u7247\u5931\u8D25");
+        });
       }
     });
     this.addCommand({
       id: "test-connection",
-      name: "\u6D4B\u8BD5 PicNexus \u8FDE\u63A5",
+      name: "\u6D4B\u8BD5\u8FDE\u63A5",
       callback: async () => {
         try {
           const status = await this.uploader.checkStatus();
@@ -223,13 +247,9 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
       }
     });
   }
-  onunload() {
-    if (this.statusCheckInterval) {
-      clearInterval(this.statusCheckInterval);
-    }
-  }
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const savedData = await this.loadData();
+    this.settings = normalizeSettings(savedData);
   }
   async saveSettings() {
     await this.saveData(this.settings);
