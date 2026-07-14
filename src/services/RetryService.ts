@@ -316,8 +316,8 @@ export class RetryService {
    *
    * 共用 useHistorySaver 的 per-id 串行锁（withHistoryUpdateQueue），与初始上传的
    * addResultToHistoryItem 走同一把锁；避免两边对同一 historyId 各自 getById →
-   * 改 results → update 互相覆盖。锁 key 优先用 historyId，旧队列项缺 historyId
-   * 时回退到 `path:${filePath}` 保持串行。
+   * 改 results → update 互相覆盖。路径回退只用于定位记录，命中后必须改用实际 ID
+   * 上锁并在锁内重读，避免和该记录的其他写入使用不同锁键。
    */
   private async updateHistoryRecord(
     filePath: string,
@@ -327,21 +327,24 @@ export class RetryService {
     link: string,
     shouldPromotePrimary: boolean
   ): Promise<void> {
-    const lockKey = historyId || `path:${filePath}`;
+    let resolvedItem = historyId ? await historyDB.getById(historyId) : null;
+    if (historyId && !resolvedItem) {
+      log.warn(`未找到 historyId 对应的历史记录，回退到 filePath 查询: ${historyId}`);
+    }
+    if (!resolvedItem) {
+      resolvedItem = await historyDB.getByFilePath(filePath);
+    }
+    if (!resolvedItem) {
+      log.warn(`未找到对应的历史记录: ${filePath}`);
+      return;
+    }
 
-    await withHistoryUpdateQueue(lockKey, async () => {
+    const actualHistoryId = resolvedItem.id;
+    await withHistoryUpdateQueue(actualHistoryId, async () => {
       try {
-        let historyItem = historyId ? await historyDB.getById(historyId) : null;
-        if (historyId && !historyItem) {
-          log.warn(`未找到 historyId 对应的历史记录，回退到 filePath 查询: ${historyId}`);
-        }
+        const historyItem = await historyDB.getById(actualHistoryId);
         if (!historyItem) {
-          // 兼容旧队列项：没有 historyId 时按 filePath 查询最新的一条记录
-          historyItem = await historyDB.getByFilePath(filePath);
-        }
-
-        if (!historyItem) {
-          log.warn(`未找到对应的历史记录: ${filePath}`);
+          log.warn(`历史记录在重试更新前已被删除: ${actualHistoryId}`);
           return;
         }
 
@@ -375,14 +378,14 @@ export class RetryService {
         }
 
         // 使用 SQLite 更新记录
-        await historyDB.update(historyItem.id, {
+        await historyDB.update(actualHistoryId, {
           results: updatedResults,
           ...(shouldPromotePrimary ? { primaryService: serviceId, generatedLink: link } : {})
         });
 
         // 使缓存失效并通知其他视图刷新
         invalidateCache();
-        emitHistoryUpdated([historyItem.id]);
+        emitHistoryUpdated([actualHistoryId]);
 
         log.info(`历史记录已更新: ${filePath} -> ${serviceId}`);
       } catch (error) {

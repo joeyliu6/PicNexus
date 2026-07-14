@@ -191,4 +191,40 @@ describe('useHistorySaver', () => {
     expect(item.results).toEqual([makeSuccess('jd'), repaired]);
     expect(updateMock).toHaveBeenCalledTimes(2);
   });
+
+  it('reconcileHistoryPrimary aligns an immediately-created record with the final primary service', async () => {
+    const { useHistorySaver } = await import('../../../composables/useHistorySaver');
+    const { reconcileHistoryPrimary } = useHistorySaver();
+    getByIdMock.mockResolvedValueOnce({
+      id: 'history-primary',
+      timestamp: 1710000000000,
+      localFileName: 'test.jpg',
+      filePath: '/tmp/test.jpg',
+      primaryService: 'upyun',
+      generatedLink: 'https://example.com/upyun.jpg',
+      results: [makeSuccess('upyun'), makeSuccess('jd')],
+    } satisfies HistoryItem);
+
+    await expect(reconcileHistoryPrimary(
+      'history-primary',
+      'jd',
+      'https://example.com/jd.jpg',
+    )).resolves.toBe(true);
+
+    expect(updateMock).toHaveBeenCalledWith('history-primary', {
+      primaryService: 'jd',
+      generatedLink: 'https://example.com/jd.jpg',
+    });
+    expect(emitHistoryUpdatedMock).toHaveBeenCalledWith(['history-primary']);
+  });
+
+  it('reconcileHistoryPrimary returns false when the live history row is missing', async () => {
+    const { useHistorySaver } = await import('../../../composables/useHistorySaver');
+    const { reconcileHistoryPrimary } = useHistorySaver();
+    getByIdMock.mockResolvedValueOnce(null);
+
+    await expect(reconcileHistoryPrimary('missing', 'jd', 'https://example.com/jd.jpg'))
+      .resolves.toBe(false);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
 });

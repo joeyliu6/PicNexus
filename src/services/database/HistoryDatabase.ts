@@ -19,7 +19,7 @@ import { getSyncDeviceId } from '../../utils/syncDeviceId';
 // 子模块导入
 import {
   type HistoryItemRow,
-  ALL_COLUMNS, COLUMNS_SQL,
+  COLUMNS_SQL,
   rowValues, columnPlaceholders,
   itemToRow, rowToItem,
 } from './DataTransformer';
@@ -234,12 +234,34 @@ class HistoryDatabase {
       throw new Error(`记录不存在: ${id}`);
     }
 
-    // 合并更新
+    // 用合并后的完整模型复用 DataTransformer 的归一化规则，但只写入调用方明确传入的列。
     const updated: HistoryItem = { ...existing, ...updates };
     const row = itemToRow(updated);
 
-    // UPDATE: 跳过 id 列（第 0 个），用剩余列生成 SET 子句
-    const updateCols = ALL_COLUMNS.slice(1);
+    const fieldColumns: Array<[keyof HistoryItem, Array<keyof HistoryItemRow>]> = [
+      ['timestamp', ['timestamp']],
+      ['localFileName', ['local_file_name', 'local_file_name_lower']],
+      ['filePath', ['file_path']],
+      ['primaryService', ['primary_service']],
+      ['results', ['results', 'success_count', 'successful_service_ids']],
+      ['generatedLink', ['generated_link']],
+      ['linkCheckStatus', ['link_check_status']],
+      ['linkCheckSummary', ['link_check_summary']],
+      ['width', ['width']],
+      ['height', ['height']],
+      ['aspectRatio', ['aspect_ratio']],
+      ['fileSize', ['file_size']],
+      ['format', ['format']],
+      ['isFavorited', ['is_favorited']],
+      ['favoriteUpdatedAt', ['favorite_updated_at']],
+      ['favoriteUpdatedBy', ['favorite_updated_by']],
+      ['migrationSkip', ['migration_skip']],
+    ];
+    const updateCols = fieldColumns.flatMap(([field, columns]) => (
+      Object.prototype.hasOwnProperty.call(updates, field) ? columns : []
+    ));
+    if (updateCols.length === 0) return;
+
     const setClause = updateCols.map((col, i) => `${col} = $${i + 1}`).join(', ');
     const updateValues = updateCols.map(col => row[col]);
 
@@ -396,7 +418,7 @@ class HistoryDatabase {
   async getByFilePath(filePath: string): Promise<HistoryItem | null> {
     const db = await this.connection.getDb();
     const rows = await db.select<HistoryItemRow[]>(
-      'SELECT * FROM history_items WHERE file_path = $1 ORDER BY timestamp DESC LIMIT 1',
+      'SELECT * FROM history_items WHERE file_path = $1 ORDER BY timestamp DESC, id DESC LIMIT 1',
       [filePath]
     );
     return rows.length > 0 ? rowToItem(rows[0]) : null;
@@ -430,7 +452,7 @@ class HistoryDatabase {
     params.push(offset);
 
     const rows = await db.select<(HistoryItemRow & { _total: number })[]>(
-      `SELECT *, COUNT(*) OVER() as _total FROM history_items ${whereClause} ORDER BY timestamp DESC ${limitOffset} ${offsetClause}`,
+      `SELECT *, COUNT(*) OVER() as _total FROM history_items ${whereClause} ORDER BY timestamp DESC, id DESC ${limitOffset} ${offsetClause}`,
       params
     );
 
@@ -661,7 +683,7 @@ class HistoryDatabase {
         results,
         is_favorited
       FROM history_items
-      ORDER BY timestamp DESC
+      ORDER BY timestamp DESC, id DESC
     `);
 
     return rows.map(row => this.rowToImageMeta(row));
@@ -672,7 +694,7 @@ class HistoryDatabase {
    *
    * 用于表格视图批量复制：选中条目可能跨页，不能从内存列表过滤取得。
    * 与 deleteMany 保持同样的 IN 占位符模式。
-   * ORDER BY timestamp DESC 保持与 getMetaList 一致的顺序，避免批量复制
+   * ORDER BY timestamp DESC, id DESC 保持与 getMetaList 一致的顺序，避免批量复制
    * 粘贴后的链接顺序因 DB 自然顺序而不可预测。
    */
   async getMetasByIds(ids: string[]): Promise<ImageMeta[]> {
@@ -683,7 +705,7 @@ class HistoryDatabase {
       `SELECT id, timestamp, local_file_name, aspect_ratio,
               primary_service, generated_link, results, is_favorited
        FROM history_items WHERE id IN (${placeholders})
-       ORDER BY timestamp DESC`,
+       ORDER BY timestamp DESC, id DESC`,
       ids,
     );
     return rows.map(row => this.rowToImageMeta(row));
@@ -721,7 +743,7 @@ class HistoryDatabase {
         COUNT(*) OVER() as _total
       FROM history_items
       ${whereClause}
-      ORDER BY timestamp DESC
+      ORDER BY timestamp DESC, id DESC
       LIMIT ${limitPh} OFFSET ${offsetPh}`,
       params,
     );
@@ -787,7 +809,7 @@ class HistoryDatabase {
     const rows = await db.select<HistoryItemRow[]>(
       `SELECT * FROM history_items
        WHERE timestamp <= $1
-       ORDER BY timestamp DESC
+       ORDER BY timestamp DESC, id DESC
        LIMIT $2`,
       [fromTimestamp, pageSize]
     );
@@ -811,7 +833,7 @@ class HistoryDatabase {
 
     while (true) {
       const rows = await db.select<HistoryItemRow[]>(
-        'SELECT * FROM history_items ORDER BY timestamp DESC LIMIT $1 OFFSET $2',
+        'SELECT * FROM history_items ORDER BY timestamp DESC, id DESC LIMIT $1 OFFSET $2',
         [batchSize, offset]
       );
 

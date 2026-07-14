@@ -13,7 +13,7 @@ export async function getLinkCheckInvalidQuery(
     WHERE link_check_summary IS NULL
       OR json_extract(link_check_summary, '$.invalidLinks') > 0
       OR json_extract(link_check_summary, '$.uncheckedLinks') > 0
-    ORDER BY timestamp DESC
+    ORDER BY timestamp DESC, id DESC
   `);
 }
 
@@ -28,7 +28,7 @@ export async function* getLinkCheckRestStreamQuery(
     const rows = await db.select<LinkCheckLiteRow[]>(
       `SELECT id, local_file_name, primary_service, results, link_check_status
        FROM history_items
-       ORDER BY timestamp DESC
+       ORDER BY timestamp DESC, id DESC
        LIMIT $1 OFFSET $2`,
       [batchSize, offset],
     );

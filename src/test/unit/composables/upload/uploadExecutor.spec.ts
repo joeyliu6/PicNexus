@@ -112,6 +112,7 @@ describe('processUploadQueue', () => {
         queueManager: queueManager as any,
         saveHistoryItemImmediate: vi.fn(async () => undefined),
         addResultToHistoryItem: vi.fn(async () => true),
+        reconcileHistoryPrimary: vi.fn(async () => true),
         saveHistoryItem: vi.fn(async () => undefined),
         toast: { showConfig: vi.fn() } as any,
       },
@@ -154,6 +155,7 @@ describe('processUploadQueue', () => {
         queueManager: queueManager as any,
         saveHistoryItemImmediate,
         addResultToHistoryItem: vi.fn(async () => true),
+        reconcileHistoryPrimary: vi.fn(async () => true),
         saveHistoryItem: vi.fn(async () => undefined),
         toast: { showConfig: vi.fn() } as any,
       },
@@ -164,6 +166,58 @@ describe('processUploadQueue', () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
     expect(queueManager.updateItem).toHaveBeenCalledWith('q-history', { historyId });
+  });
+
+  it('reconciles history before completing the queue when a later callback created the live record', async () => {
+    const queueManager = createQueueManager();
+    queueManager.seed('q-primary', 'primary.jpg', ['jd', 'upyun']);
+    const reconcileHistoryPrimary = vi.fn(async () => true);
+
+    uploadToMultipleServicesMock.mockImplementationOnce(async (
+      _filePath: string,
+      _services: string[],
+      _config: unknown,
+      _onProgress?: unknown,
+      onServiceResult?: (result: unknown) => Promise<void> | void,
+    ) => {
+      await onServiceResult?.({
+        serviceId: 'upyun',
+        status: 'success',
+        result: { serviceId: 'upyun', fileKey: 'upyun-key', url: 'https://img.example/upyun.jpg' },
+      });
+      await onServiceResult?.({
+        serviceId: 'jd',
+        status: 'success',
+        result: { serviceId: 'jd', fileKey: 'jd-key', url: 'https://img.example/jd.jpg' },
+      });
+      return {
+        primaryService: 'jd',
+        primaryUrl: 'https://img.example/jd.jpg',
+        results: [],
+      };
+    });
+
+    await processUploadQueue(
+      [{ itemId: 'q-primary', filePath: 'C:/tmp/primary.jpg', uploadFilePath: 'C:/tmp/primary.jpg', fileName: 'primary.jpg' }],
+      { services: { jd: {}, upyun: {} } } as any,
+      ['jd', 'upyun'],
+      1,
+      {
+        queueManager: queueManager as any,
+        saveHistoryItemImmediate: vi.fn(async () => undefined),
+        addResultToHistoryItem: vi.fn(async () => true),
+        reconcileHistoryPrimary,
+        saveHistoryItem: vi.fn(async () => undefined),
+        toast: { showConfig: vi.fn() } as any,
+      },
+    );
+
+    const historyId = queueManager.updateItem.mock.calls.find(([, update]) => update.historyId)?.[1].historyId;
+    expect(reconcileHistoryPrimary).toHaveBeenCalledWith(historyId, 'jd', 'https://img.example/jd.jpg');
+    const reconcileOrder = reconcileHistoryPrimary.mock.invocationCallOrder[0];
+    const completeOrder = queueManager.markItemComplete.mock.invocationCallOrder[0];
+    expect(reconcileOrder).toBeLessThan(completeOrder);
+    expect(queueManager.markItemComplete).toHaveBeenCalledWith('q-primary', 'https://img.example/jd.jpg');
   });
 
   it('keeps weibo queue links raw and lets copy/thumb helpers apply the default template once', async () => {
@@ -223,6 +277,7 @@ describe('processUploadQueue', () => {
         queueManager: queueManager as any,
         saveHistoryItemImmediate: vi.fn(async () => undefined),
         addResultToHistoryItem: vi.fn(async () => true),
+        reconcileHistoryPrimary: vi.fn(async () => true),
         saveHistoryItem: vi.fn(async () => undefined),
         toast: { showConfig: vi.fn() } as any,
       },
@@ -296,6 +351,7 @@ describe('processUploadQueue', () => {
         queueManager: queueManager as any,
         saveHistoryItemImmediate: vi.fn(async () => undefined),
         addResultToHistoryItem: vi.fn(async () => true),
+        reconcileHistoryPrimary: vi.fn(async () => true),
         saveHistoryItem: vi.fn(async () => undefined),
         toast: { showConfig: vi.fn() } as any,
       },
@@ -336,6 +392,7 @@ describe('processUploadQueue', () => {
         queueManager: queueManager as any,
         saveHistoryItemImmediate: vi.fn(async () => undefined),
         addResultToHistoryItem: vi.fn(async () => true),
+        reconcileHistoryPrimary: vi.fn(async () => true),
         saveHistoryItem: vi.fn(async () => undefined),
         toast: { showConfig: vi.fn() } as any,
       },

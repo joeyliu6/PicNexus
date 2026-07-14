@@ -10,6 +10,7 @@ const {
   saveHistoryItemMock,
   saveHistoryItemImmediateMock,
   addResultToHistoryItemMock,
+  reconcileHistoryPrimaryMock,
   copyLinksMock,
   checkNetworkConnectivityMock,
   uploadToMultipleServicesMock,
@@ -24,6 +25,7 @@ const {
   saveHistoryItemMock: vi.fn(),
   saveHistoryItemImmediateMock: vi.fn(),
   addResultToHistoryItemMock: vi.fn(),
+  reconcileHistoryPrimaryMock: vi.fn(),
   copyLinksMock: vi.fn(),
   checkNetworkConnectivityMock: vi.fn(),
   uploadToMultipleServicesMock: vi.fn(),
@@ -87,6 +89,7 @@ vi.mock('../../../composables/useHistorySaver', () => ({
     saveHistoryItem: saveHistoryItemMock,
     saveHistoryItemImmediate: saveHistoryItemImmediateMock,
     addResultToHistoryItem: addResultToHistoryItemMock,
+    reconcileHistoryPrimary: reconcileHistoryPrimaryMock,
   }),
 }));
 

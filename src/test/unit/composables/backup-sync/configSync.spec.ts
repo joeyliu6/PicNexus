@@ -145,7 +145,7 @@ describe('createConfigSyncOps', () => {
     clientPutFileMock.mockResolvedValue(undefined);
     clientGetFileMock.mockResolvedValue(JSON.stringify({ cloud: true }));
     isValidUserConfigMock.mockReturnValue(true);
-    isPasswordModeMock.mockReturnValue(false);
+    isPasswordModeMock.mockReturnValue(true);
     encryptMock.mockResolvedValue('encrypted');
     isPasswordEncryptedDataMock.mockReturnValue(false);
     writeSyncLogMock.mockResolvedValue(undefined);
@@ -168,6 +168,32 @@ describe('createConfigSyncOps', () => {
     expect(writeSyncLogMock).toHaveBeenCalledWith('upload_settings_cloud', 'success', undefined, profile);
     expect(deps.uploadSettingsLoading.value).toBe(false);
     expect(toastShowConfigMock).toHaveBeenCalledWith('success', expect.any(Object));
+  });
+
+  it('blocks config upload before WebDAV setup or locking when no backup password exists', async () => {
+    isPasswordModeMock.mockReturnValue(false);
+    const deps = makeDeps();
+    const ops = createConfigSyncOps(deps);
+
+    await ops.uploadSettingsCloud(profile);
+
+    expect(getWebDAVClientAndPathMock).not.toHaveBeenCalled();
+    expect(deps.acquireCloudSync).not.toHaveBeenCalled();
+    expect(clientPutFileMock).not.toHaveBeenCalled();
+    expect(toastErrorMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks bidirectional config sync before network access when no backup password exists', async () => {
+    isPasswordModeMock.mockReturnValue(false);
+    const deps = makeDeps();
+    const ops = createConfigSyncOps(deps);
+
+    await ops.syncConfig(profile);
+
+    expect(getWebDAVClientAndPathMock).not.toHaveBeenCalled();
+    expect(deps.acquireCloudSync).not.toHaveBeenCalled();
+    expect(clientGetFileMock).not.toHaveBeenCalled();
+    expect(clientPutFileMock).not.toHaveBeenCalled();
   });
 
   it('downloads encrypted settings, decrypts them and saves the imported config', async () => {

@@ -73,7 +73,7 @@ export async function getFavoriteCountQuery(db: Database): Promise<number> {
  */
 export async function getFavoriteIdListQuery(db: Database): Promise<string[]> {
   const result = await db.select<{ id: string }[]>(
-    `SELECT id FROM history_items WHERE is_favorited = 1 ORDER BY timestamp DESC`
+    `SELECT id FROM history_items WHERE is_favorited = 1 ORDER BY timestamp DESC, id DESC`
   );
   return result.map(r => r.id);
 }

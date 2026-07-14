@@ -31,6 +31,12 @@ export interface UseHistorySaverReturn {
     historyId: string,
     result: SingleServiceResult
   ): Promise<boolean>;
+
+  reconcileHistoryPrimary(
+    historyId: string,
+    primaryService: string,
+    primaryUrl: string
+  ): Promise<boolean>;
 }
 
 // ==================== 内部辅助函数 ====================
@@ -265,9 +271,34 @@ export function useHistorySaver(): UseHistorySaverReturn {
     });
   }
 
+  /** 所有图床完成后，以配置顺序选出的最终主服务修正实时创建的历史记录。 */
+  async function reconcileHistoryPrimary(
+    historyId: string,
+    primaryService: string,
+    primaryUrl: string
+  ): Promise<boolean> {
+    return withHistoryUpdateQueue(historyId, async () => {
+      const item = await historyDB.getById(historyId);
+      if (!item) {
+        log.warn(`[历史记录] 记录 ${historyId} 不存在，无法收口主图床`);
+        return false;
+      }
+      if (item.primaryService === primaryService && item.generatedLink === primaryUrl) {
+        return true;
+      }
+
+      await historyDB.update(historyId, { primaryService, generatedLink: primaryUrl });
+      invalidateCache();
+      await emitHistoryUpdated([historyId]);
+      log.info(`[历史记录] 主图床已收口: ${primaryService}`);
+      return true;
+    });
+  }
+
   return {
     saveHistoryItem,
     saveHistoryItemImmediate,
-    addResultToHistoryItem
+    addResultToHistoryItem,
+    reconcileHistoryPrimary
   };
 }

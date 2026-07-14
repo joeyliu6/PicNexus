@@ -23,6 +23,7 @@ describe('getLinkCheckInvalidQuery', () => {
     expect(sql).toContain('link_check_summary IS NULL');
     expect(sql).toContain('invalidLinks');
     expect(sql).toContain('uncheckedLinks');
+    expect(sql).toContain('ORDER BY timestamp DESC, id DESC');
   });
 });
 
@@ -36,6 +37,7 @@ describe('getLinkCheckRestStreamQuery', () => {
     const gen = getLinkCheckRestStreamQuery(db, new Set());
     const result = await gen.next();
     expect(result.done).toBe(true);
+    expect(db.select.mock.calls[0][0]).toContain('ORDER BY timestamp DESC, id DESC');
   });
 
   it('过滤已加载 id 后 yield 剩余', async () => {

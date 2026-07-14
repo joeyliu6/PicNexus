@@ -23,6 +23,12 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
   } = deps;
 
   async function uploadSettingsCloud(profile: WebDAVProfile | null): Promise<void> {
+    if (!secureStorage.isPasswordMode()) {
+      log.warn('未设置备份密码，已阻止云端配置上传');
+      toast.error('请先设置备份密码', '云端配置包含图床凭据，设置密码后才能上传');
+      return;
+    }
+
     const webdav = await getWebDAVClientAndPath(profile, 'settings', toast);
     if (!webdav) return;
     if (!acquireCloudSync(toast)) return;
@@ -36,10 +42,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
       }
 
       const jsonContent = JSON.stringify(config, null, 2);
-      let uploadContent = jsonContent;
-      if (secureStorage.isPasswordMode()) {
-        uploadContent = await secureStorage.encrypt(jsonContent);
-      }
+      const uploadContent = await secureStorage.encrypt(jsonContent);
       await webdav.client.putFile(webdav.remotePath, uploadContent);
 
       updateConfigSyncStatus(profile, 'success');
@@ -171,6 +174,11 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
 
   async function syncConfig(profile: WebDAVProfile | null): Promise<void> {
     if (!profile) return;
+    if (!secureStorage.isPasswordMode()) {
+      log.warn('未设置备份密码，已阻止云端配置双向同步');
+      toast.error('请先设置备份密码', '云端配置包含图床凭据，设置密码后才能同步');
+      return;
+    }
     const webdav = await getWebDAVClientAndPath(profile, 'settings', toast);
     if (!webdav) return;
     if (!acquireCloudSync(toast)) return;
@@ -234,10 +242,7 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
       if (!finalConfig) throw new Error('无法读取本地配置');
 
       const jsonContent = JSON.stringify(finalConfig, null, 2);
-      let uploadContent = jsonContent;
-      if (secureStorage.isPasswordMode()) {
-        uploadContent = await secureStorage.encrypt(jsonContent);
-      }
+      const uploadContent = await secureStorage.encrypt(jsonContent);
       await webdav.client.putFile(webdav.remotePath, uploadContent);
 
       updateConfigSyncStatus(profile, 'success');

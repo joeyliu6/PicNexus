@@ -35,6 +35,11 @@ export interface UploadExecutorContext {
     historyId: string,
     result: SingleServiceResult
   ) => Promise<boolean>;
+  reconcileHistoryPrimary: (
+    historyId: string,
+    primaryService: string,
+    primaryUrl: string
+  ) => Promise<boolean>;
   /** 兜底保存：saveHistoryItemImmediate 全程失败（DB 锁/磁盘满）时的最后一次完整写入尝试 */
   saveHistoryItem: (
     filePath: string,
@@ -72,7 +77,14 @@ export async function processUploadQueue(
   collectedLinks?: CopyLinkItem[],
   uploadSummary?: UploadSessionSummary
 ): Promise<Array<CopyLinkItem | undefined>> {
-  const { queueManager, saveHistoryItemImmediate, addResultToHistoryItem, saveHistoryItem, toast } = ctx;
+  const {
+    queueManager,
+    saveHistoryItemImmediate,
+    addResultToHistoryItem,
+    reconcileHistoryPrimary,
+    saveHistoryItem,
+    toast,
+  } = ctx;
 
   if (!queueManager) {
     log.error('上传队列管理器未初始化');
@@ -261,6 +273,14 @@ export async function processUploadQueue(
             historyCreated = true;
           } catch (fallbackError) {
             log.error(`[历史记录] ${fileName} 兜底保存仍失败，本次上传无历史记录:`, fallbackError);
+          }
+        }
+
+        if (historyCreated && result.primaryUrl) {
+          try {
+            await reconcileHistoryPrimary(historyId, result.primaryService, result.primaryUrl);
+          } catch (reconcileError) {
+            log.error(`[历史记录] ${fileName} 主图床收口失败，但不影响上传:`, reconcileError);
           }
         }
 

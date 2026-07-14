@@ -6,6 +6,13 @@ type Row = Record<string, unknown>;
 class MockDatabase {
   private rows: Row[] = [];
 
+  private sortedRows(rows: Row[] = this.rows): Row[] {
+    return [...rows].sort((a, b) => (
+      (b.timestamp as number) - (a.timestamp as number)
+      || String(b.id).localeCompare(String(a.id))
+    ));
+  }
+
   async execute(sql: string, params: unknown[] = []): Promise<{ rowsAffected: number }> {
     const statement = sql.trim().toUpperCase();
 
@@ -40,15 +47,11 @@ class MockDatabase {
       const id = params[params.length - 1] as string;
       const index = this.rows.findIndex((row) => row.id === id);
       if (index === -1) return { rowsAffected: 0 };
-      // 通用 UPDATE：HistoryDatabase.update() 按 ALL_COLUMNS.slice(1) 顺序传参（去掉 id 列），末尾追加 id
-      const updateColumns = [
-        'timestamp', 'local_file_name', 'local_file_name_lower', 'file_path',
-        'primary_service', 'results', 'generated_link', 'link_check_status',
-        'link_check_summary', 'link_check_skip', 'width', 'height', 'aspect_ratio',
-        'file_size', 'format', 'color_type', 'has_alpha', 'is_favorited',
-        'favorite_updated_at', 'favorite_updated_by',
-        'success_count', 'successful_service_ids', 'migration_skip',
-      ];
+      const setClause = sql.match(/\bSET\s+([\s\S]+?)\s+WHERE\s+id\s*=/i)?.[1] ?? '';
+      const updateColumns = setClause
+        .split(',')
+        .map(assignment => assignment.match(/^\s*([a-z_]+)\s*=/i)?.[1])
+        .filter((column): column is string => Boolean(column));
       const next: Row = { ...this.rows[index] };
       for (let i = 0; i < updateColumns.length && i < params.length - 1; i++) {
         next[updateColumns[i]] = params[i];
@@ -81,6 +84,23 @@ class MockDatabase {
   async select<T>(sql: string, params: unknown[] = []): Promise<T> {
     const statement = sql.trim().toUpperCase();
 
+    if (statement.includes('COUNT(*) OVER()')) {
+      const filtered = statement.includes('IS_FAVORITED = 1')
+        ? this.rows.filter(row => row.is_favorited === 1)
+        : this.rows;
+      const limit = params[params.length - 2] as number;
+      const offset = params[params.length - 1] as number;
+      const total = filtered.length;
+      return this.sortedRows(filtered)
+        .slice(offset, offset + limit)
+        .map(row => ({ ...row, _total: total })) as unknown as T;
+    }
+
+    if (statement.startsWith('SELECT ID FROM HISTORY_ITEMS WHERE IS_FAVORITED = 1')) {
+      return this.sortedRows(this.rows.filter(row => row.is_favorited === 1))
+        .map(row => ({ id: row.id })) as unknown as T;
+    }
+
     if (statement.includes('COUNT(*)') && statement.includes('WHERE ID IN')) {
       const result: Row[] = params
         .map((id) => ({
@@ -110,10 +130,15 @@ class MockDatabase {
       const filePath = params[0] as string;
       const rows = this.rows.filter((row) => row.file_path === filePath);
       if (statement.includes('ORDER BY TIMESTAMP DESC')) {
-        return [...rows]
-          .sort((a: Row, b: Row) => (b.timestamp as number) - (a.timestamp as number)) as unknown as T;
+        return this.sortedRows(rows) as unknown as T;
       }
       return rows as unknown as T;
+    }
+
+    if (statement.startsWith('SELECT * FROM HISTORY_ITEMS ORDER BY TIMESTAMP DESC')) {
+      const limit = params[0] as number;
+      const offset = params[1] as number;
+      return this.sortedRows().slice(offset, offset + limit) as unknown as T;
     }
 
     return [...this.rows] as unknown as T;
@@ -223,6 +248,33 @@ describe('HistoryDatabase', () => {
     expect(second).toBe(false);
   });
 
+  it('update() only writes requested columns and keeps concurrent favorite metadata intact', async () => {
+    const { historyDB } = await import('../../../services/HistoryDatabase');
+    const item = makeHistoryItem({
+      id: 'partial-update',
+      isFavorited: true,
+      favoriteUpdatedAt: 900,
+      favoriteUpdatedBy: 'device-new',
+    });
+    await historyDB.insert(item);
+
+    const replacementResults: HistoryItem['results'] = [
+      ...item.results,
+      {
+        serviceId: 'r2',
+        status: 'success',
+        result: { serviceId: 'r2', fileKey: 'r2-key', url: 'https://example.com/r2.jpg' },
+      },
+    ];
+    await historyDB.update(item.id, { results: replacementResults });
+
+    const found = await historyDB.getById(item.id);
+    expect(found?.results).toEqual(replacementResults);
+    expect(found?.isFavorited).toBe(true);
+    expect(found?.favoriteUpdatedAt).toBe(900);
+    expect(found?.favoriteUpdatedBy).toBe('device-new');
+  });
+
   it('getByFilePath() returns the newest matching row deterministically', async () => {
     const { historyDB } = await import('../../../services/HistoryDatabase');
     await historyDB.insert(makeHistoryItem({
@@ -241,6 +293,45 @@ describe('HistoryDatabase', () => {
     const found = await historyDB.getByFilePath('/tmp/same.png');
 
     expect(found?.id).toBe('same-path-new');
+  });
+
+  it('getByFilePath() uses id DESC as the tie-breaker for identical timestamps', async () => {
+    const { historyDB } = await import('../../../services/HistoryDatabase');
+    await historyDB.insert(makeHistoryItem({ id: 'tie-a', filePath: '/tmp/tie.png', timestamp: 100 }));
+    await historyDB.insert(makeHistoryItem({ id: 'tie-b', filePath: '/tmp/tie.png', timestamp: 100 }));
+
+    expect((await historyDB.getByFilePath('/tmp/tie.png'))?.id).toBe('tie-b');
+  });
+
+  it('keeps identical timestamps stable across main-list pages', async () => {
+    const { historyDB } = await import('../../../services/HistoryDatabase');
+    await historyDB.clear();
+    for (const id of ['tie-a', 'tie-c', 'tie-b']) {
+      await historyDB.insert(makeHistoryItem({ id, timestamp: 100 }));
+    }
+
+    const first = await historyDB.getPage({ page: 1, pageSize: 2 });
+    const second = await historyDB.getPage({ page: 2, pageSize: 2 });
+
+    expect(first.items.map(item => item.id)).toEqual(['tie-c', 'tie-b']);
+    expect(second.items.map(item => item.id)).toEqual(['tie-a']);
+  });
+
+  it('uses the same stable order for favorite pages and full streams', async () => {
+    const { historyDB } = await import('../../../services/HistoryDatabase');
+    await historyDB.clear();
+    await historyDB.insert(makeHistoryItem({ id: 'tie-a', timestamp: 100, isFavorited: true }));
+    await historyDB.insert(makeHistoryItem({ id: 'tie-c', timestamp: 100, isFavorited: true }));
+    await historyDB.insert(makeHistoryItem({ id: 'tie-b', timestamp: 100, isFavorited: false }));
+
+    const favorites = await historyDB.getFavoritesMetaPage({ offset: 0, limit: 10 });
+    expect(favorites.items.map(item => item.id)).toEqual(['tie-c', 'tie-a']);
+
+    const streamed: string[] = [];
+    for await (const batch of historyDB.getAllStream(2)) {
+      streamed.push(...batch.map(item => item.id));
+    }
+    expect(streamed).toEqual(['tie-c', 'tie-b', 'tie-a']);
   });
 
   it('deleteMany() removes multiple rows', async () => {

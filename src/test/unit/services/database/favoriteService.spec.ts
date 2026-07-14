@@ -80,5 +80,10 @@ describe('FavoriteService', () => {
       db.select.mockResolvedValue([{ id: 'a' }, { id: 'b' }]);
       expect(await getFavoriteIdListQuery(db)).toEqual(['a', 'b']);
     });
+
+    it('uses id DESC to stabilize identical timestamps', async () => {
+      await getFavoriteIdListQuery(db);
+      expect(db.select.mock.calls[0][0]).toContain('ORDER BY timestamp DESC, id DESC');
+    });
   });
 });

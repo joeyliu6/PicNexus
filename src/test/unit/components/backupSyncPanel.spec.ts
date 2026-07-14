@@ -230,7 +230,7 @@ describe('BackupSyncPanel P1 orchestration', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    passwordSectionApi.isPasswordMode.mockReturnValue(false);
+    passwordSectionApi.isPasswordMode.mockReturnValue(true);
     backupRefs.passwordRequest!.value = null;
     backupRefs.needsReload!.value = false;
     backupFns.getProfileSyncRecord.mockReturnValue(null);
@@ -241,10 +241,12 @@ describe('BackupSyncPanel P1 orchestration', () => {
   });
 
   it('runs local backup/import and cloud sync handlers, including the no-password export guide', async () => {
+    passwordSectionApi.isPasswordMode.mockReturnValue(false);
     const wrapper = mountPanel();
     await nextTick();
 
     await wrapper.get('.export-config').trigger('click');
+    passwordSectionApi.isPasswordMode.mockReturnValue(true);
     await wrapper.get('.import-config').trigger('click');
     await wrapper.get('.export-history').trigger('click');
     await wrapper.get('.import-history').trigger('click');
@@ -268,7 +270,21 @@ describe('BackupSyncPanel P1 orchestration', () => {
     expect(backupFns.downloadHistoryOverwrite).toHaveBeenCalledWith(connectedWebdav().profiles[0]);
   });
 
+  it('opens password setup instead of uploading or syncing config without a password', async () => {
+    passwordSectionApi.isPasswordMode.mockReturnValue(false);
+    const wrapper = mountPanel();
+    await nextTick();
+
+    await wrapper.get('.sync-config').trigger('click');
+    await wrapper.get('.upload-config').trigger('click');
+
+    expect(passwordSectionApi.openSetPasswordDialog).toHaveBeenCalledTimes(2);
+    expect(backupFns.syncConfig).not.toHaveBeenCalled();
+    expect(backupFns.uploadSettingsCloud).not.toHaveBeenCalled();
+  });
+
   it('opens the password setup dialog when the export guide is rejected', async () => {
+    passwordSectionApi.isPasswordMode.mockReturnValue(false);
     confirmRequireMock.mockImplementationOnce((options: { reject?: () => void }) => {
       options.reject?.();
     });

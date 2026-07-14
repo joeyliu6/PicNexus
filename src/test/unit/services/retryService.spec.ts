@@ -263,7 +263,9 @@ describe('RetryService', () => {
       id: 'history-1',
       results: [],
     });
-    historyGetByIdMock.mockResolvedValue(null);
+    historyGetByIdMock.mockImplementation(async (id: string) => (
+      id === 'history-1' ? { id: 'history-1', results: [] } : null
+    ));
     historyUpdateMock.mockResolvedValue(undefined);
     emitHistoryUpdatedMock.mockResolvedValue(undefined);
     invokeMock.mockResolvedValue(true);
@@ -369,7 +371,7 @@ describe('RetryService', () => {
         },
       }),
     ]);
-    historyGetByIdMock.mockResolvedValueOnce({
+    historyGetByIdMock.mockResolvedValue({
       id: 'history-promote',
       primaryService: 'r2',
       generatedLink: 'https://img.example.com/r2-old.png',
@@ -409,7 +411,7 @@ describe('RetryService', () => {
         },
       }),
     ]);
-    historyGetByIdMock.mockResolvedValueOnce({
+    historyGetByIdMock.mockResolvedValue({
       id: 'history-mirror',
       primaryService: 'weibo',
       generatedLink: 'https://img.example.com/weibo.png',
@@ -446,7 +448,7 @@ describe('RetryService', () => {
         historyId: 'history-current',
       }),
     ]);
-    historyGetByIdMock.mockResolvedValueOnce({
+    historyGetByIdMock.mockResolvedValue({
       id: 'history-current',
       results: [],
     });
@@ -473,7 +475,9 @@ describe('RetryService', () => {
         historyId: 'missing-history',
       }),
     ]);
-    historyGetByIdMock.mockResolvedValueOnce(null);
+    historyGetByIdMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'history-latest', results: [] });
     historyGetByFilePathMock.mockResolvedValueOnce({
       id: 'history-latest',
       results: [],
@@ -487,6 +491,33 @@ describe('RetryService', () => {
     expect(historyGetByFilePathMock).toHaveBeenCalledWith('/tmp/demo.png');
     expect(historyUpdateMock).toHaveBeenCalledWith('history-latest', expect.objectContaining({
       results: expect.any(Array),
+    }));
+  });
+
+  it('re-reads the path fallback row by its actual id before merging retry results', async () => {
+    const queueManager = createQueueManager([createItem({ historyId: undefined })]);
+    historyGetByFilePathMock.mockResolvedValueOnce({
+      id: 'history-shared',
+      results: [],
+    });
+    historyGetByIdMock.mockResolvedValueOnce({
+      id: 'history-shared',
+      results: [{
+        serviceId: 'r2',
+        status: 'success',
+        result: { serviceId: 'r2', fileKey: 'concurrent', url: 'https://img.example.com/r2.png' },
+      }],
+    });
+
+    const service = new RetryService(makeOptions({ queueManager }));
+    await service.retrySingleService('item-1', 'weibo', DEFAULT_CONFIG);
+
+    expect(historyGetByIdMock).toHaveBeenCalledWith('history-shared');
+    expect(historyUpdateMock).toHaveBeenCalledWith('history-shared', expect.objectContaining({
+      results: expect.arrayContaining([
+        expect.objectContaining({ serviceId: 'r2' }),
+        expect.objectContaining({ serviceId: 'weibo' }),
+      ]),
     }));
   });
 

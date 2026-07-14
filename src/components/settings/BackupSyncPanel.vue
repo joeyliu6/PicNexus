@@ -128,6 +128,10 @@ onMounted(async () => {
 });
 
 async function handleConfigSync() {
+  if (!(backupPasswordSectionRef.value?.isPasswordMode() ?? false)) {
+    backupPasswordSectionRef.value?.openSetPasswordDialog();
+    return;
+  }
   if (activeWebDAVProfile.value) {
     await syncConfig(activeWebDAVProfile.value);
     syncHistoryLogRef.value?.refresh();
@@ -142,6 +146,10 @@ async function handleHistorySync() {
 }
 
 async function handleConfigForceUpload() {
+  if (!(backupPasswordSectionRef.value?.isPasswordMode() ?? false)) {
+    backupPasswordSectionRef.value?.openSetPasswordDialog();
+    return;
+  }
   if (activeWebDAVProfile.value) {
     await uploadSettingsCloud(activeWebDAVProfile.value);
     syncHistoryLogRef.value?.refresh();

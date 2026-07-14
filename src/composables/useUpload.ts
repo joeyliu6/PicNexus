@@ -53,7 +53,8 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
   const {
     saveHistoryItem,
     saveHistoryItemImmediate,
-    addResultToHistoryItem
+    addResultToHistoryItem,
+    reconcileHistoryPrimary
   } = useHistorySaver();
 
 
@@ -306,6 +307,7 @@ export function useUploadManager(queueManager?: UploadQueueManager) {
             queueManager: queueManager!,
             saveHistoryItemImmediate,
             addResultToHistoryItem,
+            reconcileHistoryPrimary,
             saveHistoryItem,
             toast,
           },
