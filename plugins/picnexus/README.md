@@ -33,7 +33,7 @@ If you tested an older build with the `obsidian-picnexus` ID, remove that plugin
 1. Open PicNexus and enable the Obsidian integration.
 2. Select the image hosting service to use.
 3. Keep the port in PicNexus and the Obsidian plugin settings identical. The default is `36799`.
-4. Use **Test connection** in the plugin settings.
+4. No Obsidian or PicNexus token is required. Use **Test connection** in the plugin settings.
 
 ## Network and privacy disclosure
 

@@ -11,6 +11,7 @@ const REQUIRED_REPOSITORY_FILES = [
   'versions.json',
   'package.json',
   'package-lock.json',
+  '.gitignore',
 ];
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 const PLUGIN_ID_PATTERN = /^[a-z][a-z-]*[a-z]$/;
@@ -78,6 +79,14 @@ function validateRepositoryFiles(pluginDir, errors) {
     const filePath = resolve(pluginDir, name);
     if (!existsSync(filePath) || !statSync(filePath).isFile()) {
       errors.push(`Required repository file is missing: ${name}`);
+    }
+  }
+
+  const gitignorePath = resolve(pluginDir, '.gitignore');
+  if (existsSync(gitignorePath)) {
+    const gitignore = readFileSync(gitignorePath, 'utf8');
+    if (!/^node_modules\/?$/m.test(gitignore)) {
+      errors.push('.gitignore must exclude node_modules/.');
     }
   }
 

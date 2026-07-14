@@ -93,18 +93,5 @@ export class PicNexusSettingTab extends PluginSettingTab {
           })
       );
 
-    new Setting(containerEl)
-      .setName('图片链接格式')
-      .setDesc('插入图片时使用的格式')
-      .addDropdown(dropdown =>
-        dropdown
-          .addOption('markdown', 'Markdown: ![](url)')
-          .addOption('wiki', 'Wiki: ![[url]]')
-          .setValue(this.plugin.settings.imageFormat)
-          .onChange(async (value) => {
-            this.plugin.settings.imageFormat = value as 'markdown' | 'wiki';
-            await this.plugin.saveSettings();
-          })
-      );
   }
 }

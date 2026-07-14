@@ -205,10 +205,19 @@ jobs:
           if [[ "$preserve_remote" == "true" ]]; then
             sync_commit="$remote_main"
           else
-            rsync -a --delete --exclude='.git/' "$PLUGIN_DIR/" "$sync_dir/"
+            rsync -a --delete --delete-excluded --exclude='.git/' --exclude='node_modules/' "$PLUGIN_DIR/" "$sync_dir/"
+            [[ ! -e "$sync_dir/node_modules" ]] || {
+              echo "Refusing to publish a plugin snapshot that contains node_modules. Clean the target repository first."
+              exit 1
+            }
             git -C "$sync_dir" config user.name github-actions[bot]
             git -C "$sync_dir" config user.email 41898282+github-actions[bot]@users.noreply.github.com
             git -C "$sync_dir" add -A
+
+            if git -C "$sync_dir" ls-files | grep -q '^node_modules/'; then
+              echo "Refusing to publish tracked node_modules files."
+              exit 1
+            fi
 
             if git -C "$sync_dir" diff --cached --quiet; then
               sync_commit="$(git -C "$sync_dir" rev-parse HEAD)"

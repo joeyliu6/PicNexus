@@ -138,12 +138,12 @@ watch(
     <div class="guide-card">
       <div class="guide-step">
         <span class="step-badge">1</span>
-        <span class="step-text">通过 PicNexus Release 或 BRAT 安装 <code class="inline-code">picnexus</code> 插件</span>
+        <span class="step-text">插件上架前，安装 BRAT 后添加 <code class="inline-code">joeyliu6/picnexus-obsidian</code>；上架后直接搜索 PicNexus 安装</span>
       </div>
       <div class="guide-step">
         <span class="step-badge">2</span>
         <span class="step-text">
-          在插件设置中填写端口
+          无需填写 Token；在插件设置中填写端口
           <input
             type="number"
             class="port-input inline-port"

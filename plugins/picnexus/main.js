@@ -118,12 +118,6 @@ var PicNexusSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("\u56FE\u7247\u94FE\u63A5\u683C\u5F0F").setDesc("\u63D2\u5165\u56FE\u7247\u65F6\u4F7F\u7528\u7684\u683C\u5F0F").addDropdown(
-      (dropdown) => dropdown.addOption("markdown", "Markdown: ![](url)").addOption("wiki", "Wiki: ![[url]]").setValue(this.plugin.settings.imageFormat).onChange(async (value) => {
-        this.plugin.settings.imageFormat = value;
-        await this.plugin.saveSettings();
-      })
-    );
   }
 };
 
@@ -132,9 +126,26 @@ var DEFAULT_SETTINGS = {
   port: 36799,
   autoUploadOnPaste: true,
   autoUploadOnDrop: true,
-  showNotifications: true,
-  imageFormat: "markdown"
+  showNotifications: true
 };
+
+// src/markdown.ts
+function escapeMarkdownText(value) {
+  return value.replace(/([\\[\]])/g, "\\$1");
+}
+function escapeMarkdownUrl(value) {
+  return value.replace(/([\\()])/g, "\\$1");
+}
+function formatMarkdownImage(name, url) {
+  return `![${escapeMarkdownText(name)}](${escapeMarkdownUrl(url)})`;
+}
+function createUploadPlaceholder(fileName, uploadId) {
+  return `![Uploading ${escapeMarkdownText(fileName)}...](#picnexus-upload-${uploadId})`;
+}
+function findPlaceholderRange(content, placeholder) {
+  const start = content.indexOf(placeholder);
+  return start === -1 ? null : { start, end: start + placeholder.length };
+}
 
 // src/main.ts
 var IMAGE_CONTENT_TYPES = {
@@ -160,6 +171,7 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
   uploader = new PicNexusUploader(DEFAULT_SETTINGS.port);
   statusBarEl = null;
   statusCheckInterval = null;
+  uploadPlaceholderCounter = 0;
   async onload() {
     await this.loadSettings();
     this.uploader = new PicNexusUploader(this.settings.port);
@@ -237,8 +249,8 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
   }
   async handleImageUpload(files, editor) {
     for (const file of files) {
-      const placeholder = `![Uploading ${file.name}...]()`;
-      editor.replaceSelection(placeholder);
+      const placeholder = this.createUploadPlaceholder(file.name);
+      this.replaceSelection(editor, placeholder);
       try {
         const buffer = await file.arrayBuffer();
         const resp = await this.uploader.uploadByContent(
@@ -249,29 +261,39 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
         if (resp.success && resp.result && resp.result.length > 0) {
           const url = resp.result[0];
           const imageLink = this.formatImageLink(file.name, url);
-          const content = editor.getValue();
-          const newContent = content.replace(placeholder, imageLink);
-          editor.setValue(newContent);
+          this.replacePlaceholder(editor, placeholder, imageLink);
           if (this.settings.showNotifications) {
             new import_obsidian3.Notice(`\u4E0A\u4F20\u6210\u529F: ${file.name}`);
           }
         } else {
-          const content = editor.getValue();
-          editor.setValue(content.replace(placeholder, `![${file.name}]()`));
+          this.replacePlaceholder(editor, placeholder, formatMarkdownImage(file.name, ""));
           new import_obsidian3.Notice(`\u4E0A\u4F20\u5931\u8D25: ${resp.message || "\u672A\u77E5\u9519\u8BEF"}`);
         }
       } catch (err) {
-        const content = editor.getValue();
-        editor.setValue(content.replace(placeholder, `![${file.name}]()`));
+        this.replacePlaceholder(editor, placeholder, formatMarkdownImage(file.name, ""));
         new import_obsidian3.Notice(`\u4E0A\u4F20\u5931\u8D25: ${err instanceof Error ? err.message : "\u8FDE\u63A5 PicNexus \u5931\u8D25"}`);
       }
     }
   }
   formatImageLink(name, url) {
-    if (this.settings.imageFormat === "wiki") {
-      return `![[${url}]]`;
-    }
-    return `![${name}](${url})`;
+    return formatMarkdownImage(name, url);
+  }
+  createUploadPlaceholder(fileName) {
+    const id = `${Date.now()}-${++this.uploadPlaceholderCounter}`;
+    return createUploadPlaceholder(fileName, id);
+  }
+  replaceSelection(editor, replacement) {
+    editor.replaceRange(replacement, editor.getCursor("from"), editor.getCursor("to"));
+  }
+  replacePlaceholder(editor, placeholder, replacement) {
+    const range = findPlaceholderRange(editor.getValue(), placeholder);
+    if (!range) return false;
+    editor.replaceRange(
+      replacement,
+      editor.offsetToPos(range.start),
+      editor.offsetToPos(range.end)
+    );
+    return true;
   }
   async uploadAllLocalImages(editor, view) {
     const file = view.file;
@@ -287,34 +309,50 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
       return;
     }
     new import_obsidian3.Notice(`\u627E\u5230 ${matches.length} \u5F20\u672C\u5730\u56FE\u7247\uFF0C\u5F00\u59CB\u4E0A\u4F20...`);
-    let newContent = content;
-    let uploadedCount = 0;
+    const uploadTasks = [];
     for (const match of matches) {
-      const [fullMatch, alt, localPath] = match;
+      const [original, alt, localPath] = match;
       const resolvedPath = this.resolveImagePath(localPath, file);
       if (!resolvedPath) continue;
       const imgFile = this.app.vault.getAbstractFileByPath(resolvedPath);
-      if (!(imgFile instanceof import_obsidian3.TFile)) continue;
-      const ext = imgFile.extension.toLowerCase();
-      if (!IMAGE_EXTS.includes(ext)) continue;
+      if (!(imgFile instanceof import_obsidian3.TFile) || !IMAGE_EXTS.includes(imgFile.extension.toLowerCase())) continue;
+      uploadTasks.push({
+        alt,
+        file: imgFile,
+        original,
+        placeholder: this.createUploadPlaceholder(alt || imgFile.name),
+        startOffset: match.index ?? 0
+      });
+    }
+    for (const task of [...uploadTasks].reverse()) {
+      editor.replaceRange(
+        task.placeholder,
+        editor.offsetToPos(task.startOffset),
+        editor.offsetToPos(task.startOffset + task.original.length)
+      );
+    }
+    let uploadedCount = 0;
+    for (const task of uploadTasks) {
       try {
-        const buffer = await this.app.vault.readBinary(imgFile);
+        const buffer = await this.app.vault.readBinary(task.file);
         const resp = await this.uploader.uploadByContent(
           buffer,
-          imgFile.name,
-          getImageContentType(imgFile.name)
+          task.file.name,
+          getImageContentType(task.file.name)
         );
         if (resp.success && resp.result && resp.result.length > 0) {
           const url = resp.result[0];
-          const imageLink = this.formatImageLink(alt || imgFile.name, url);
-          newContent = newContent.replace(fullMatch, imageLink);
+          const imageLink = this.formatImageLink(task.alt || task.file.name, url);
+          this.replacePlaceholder(editor, task.placeholder, imageLink);
           uploadedCount++;
+        } else {
+          this.replacePlaceholder(editor, task.placeholder, task.original);
         }
       } catch {
+        this.replacePlaceholder(editor, task.placeholder, task.original);
       }
     }
     if (uploadedCount > 0) {
-      editor.setValue(newContent);
       new import_obsidian3.Notice(`\u6210\u529F\u4E0A\u4F20 ${uploadedCount}/${matches.length} \u5F20\u56FE\u7247`);
     } else {
       new import_obsidian3.Notice("\u6CA1\u6709\u6210\u529F\u4E0A\u4F20\u4EFB\u4F55\u56FE\u7247");

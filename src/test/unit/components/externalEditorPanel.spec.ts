@@ -171,7 +171,7 @@ describe('ExternalEditorPanel', () => {
     expect(validUpdates).toBe(true);
   });
 
-  it('hides Obsidian server token controls from the setup guide', async () => {
+  it('explains BRAT, official installation, and automatic token handling', async () => {
     const wrapper = mountWithDefaults(ExternalEditorPanel, {
       props: {
         editorServer: {
@@ -201,9 +201,12 @@ describe('ExternalEditorPanel', () => {
     await flush();
 
     const text = wrapper.text();
+    expect(text).toContain('BRAT');
+    expect(text).toContain('joeyliu6/picnexus-obsidian');
+    expect(text).toContain('上架后直接搜索 PicNexus 安装');
+    expect(text).toContain('无需填写 Token');
     expect(text).toContain('在插件设置中填写端口');
     expect(text).toContain('保存后即可生效');
-    expect(text).not.toContain('Token');
     expect(wrapper.find('.auth-token-text').exists()).toBe(false);
     expect(wrapper.find('.auth-icon-btn').exists()).toBe(false);
     expect(wrapper.find('.pi-copy').exists()).toBe(false);

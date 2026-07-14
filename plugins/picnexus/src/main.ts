@@ -2,6 +2,11 @@ import { Plugin, Notice, Editor, MarkdownView, TFile } from 'obsidian';
 import { PicNexusUploader } from './uploader';
 import { PicNexusSettingTab } from './settings';
 import { DEFAULT_SETTINGS, type PicNexusSettings } from './types';
+import {
+  createUploadPlaceholder,
+  findPlaceholderRange,
+  formatMarkdownImage,
+} from './markdown';
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = {
   png: 'image/png',
@@ -29,6 +34,7 @@ export default class PicNexusPlugin extends Plugin {
   uploader: PicNexusUploader = new PicNexusUploader(DEFAULT_SETTINGS.port);
   private statusBarEl: HTMLElement | null = null;
   private statusCheckInterval: ReturnType<typeof setInterval> | null = null;
+  private uploadPlaceholderCounter = 0;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -129,8 +135,8 @@ export default class PicNexusPlugin extends Plugin {
 
   private async handleImageUpload(files: File[], editor: Editor): Promise<void> {
     for (const file of files) {
-      const placeholder = `![Uploading ${file.name}...]()`;
-      editor.replaceSelection(placeholder);
+      const placeholder = this.createUploadPlaceholder(file.name);
+      this.replaceSelection(editor, placeholder);
 
       try {
         const buffer = await file.arrayBuffer();
@@ -144,31 +150,45 @@ export default class PicNexusPlugin extends Plugin {
           const url = resp.result[0];
           const imageLink = this.formatImageLink(file.name, url);
 
-          const content = editor.getValue();
-          const newContent = content.replace(placeholder, imageLink);
-          editor.setValue(newContent);
+          this.replacePlaceholder(editor, placeholder, imageLink);
 
           if (this.settings.showNotifications) {
             new Notice(`上传成功: ${file.name}`);
           }
         } else {
-          const content = editor.getValue();
-          editor.setValue(content.replace(placeholder, `![${file.name}]()`));
+          this.replacePlaceholder(editor, placeholder, formatMarkdownImage(file.name, ''));
           new Notice(`上传失败: ${resp.message || '未知错误'}`);
         }
       } catch (err) {
-        const content = editor.getValue();
-        editor.setValue(content.replace(placeholder, `![${file.name}]()`));
+        this.replacePlaceholder(editor, placeholder, formatMarkdownImage(file.name, ''));
         new Notice(`上传失败: ${err instanceof Error ? err.message : '连接 PicNexus 失败'}`);
       }
     }
   }
 
   private formatImageLink(name: string, url: string): string {
-    if (this.settings.imageFormat === 'wiki') {
-      return `![[${url}]]`;
-    }
-    return `![${name}](${url})`;
+    return formatMarkdownImage(name, url);
+  }
+
+  private createUploadPlaceholder(fileName: string): string {
+    const id = `${Date.now()}-${++this.uploadPlaceholderCounter}`;
+    return createUploadPlaceholder(fileName, id);
+  }
+
+  private replaceSelection(editor: Editor, replacement: string): void {
+    editor.replaceRange(replacement, editor.getCursor('from'), editor.getCursor('to'));
+  }
+
+  private replacePlaceholder(editor: Editor, placeholder: string, replacement: string): boolean {
+    const range = findPlaceholderRange(editor.getValue(), placeholder);
+    if (!range) return false;
+
+    editor.replaceRange(
+      replacement,
+      editor.offsetToPos(range.start),
+      editor.offsetToPos(range.end),
+    );
+    return true;
   }
 
   private async uploadAllLocalImages(editor: Editor, view: MarkdownView): Promise<void> {
@@ -190,41 +210,64 @@ export default class PicNexusPlugin extends Plugin {
 
     new Notice(`找到 ${matches.length} 张本地图片，开始上传...`);
 
-    let newContent = content;
-    let uploadedCount = 0;
+    const uploadTasks: Array<{
+      alt: string;
+      file: TFile;
+      original: string;
+      placeholder: string;
+      startOffset: number;
+    }> = [];
 
     for (const match of matches) {
-      const [fullMatch, alt, localPath] = match;
+      const [original, alt, localPath] = match;
       const resolvedPath = this.resolveImagePath(localPath, file);
       if (!resolvedPath) continue;
 
       const imgFile = this.app.vault.getAbstractFileByPath(resolvedPath);
-      if (!(imgFile instanceof TFile)) continue;
+      if (!(imgFile instanceof TFile) || !IMAGE_EXTS.includes(imgFile.extension.toLowerCase())) continue;
 
-      const ext = imgFile.extension.toLowerCase();
-      if (!IMAGE_EXTS.includes(ext)) continue;
+      uploadTasks.push({
+        alt,
+        file: imgFile,
+        original,
+        placeholder: this.createUploadPlaceholder(alt || imgFile.name),
+        startOffset: match.index ?? 0,
+      });
+    }
 
+    for (const task of [...uploadTasks].reverse()) {
+      editor.replaceRange(
+        task.placeholder,
+        editor.offsetToPos(task.startOffset),
+        editor.offsetToPos(task.startOffset + task.original.length),
+      );
+    }
+
+    let uploadedCount = 0;
+
+    for (const task of uploadTasks) {
       try {
-        const buffer = await this.app.vault.readBinary(imgFile);
+        const buffer = await this.app.vault.readBinary(task.file);
         const resp = await this.uploader.uploadByContent(
           buffer,
-          imgFile.name,
-          getImageContentType(imgFile.name)
+          task.file.name,
+          getImageContentType(task.file.name)
         );
 
         if (resp.success && resp.result && resp.result.length > 0) {
           const url = resp.result[0];
-          const imageLink = this.formatImageLink(alt || imgFile.name, url);
-          newContent = newContent.replace(fullMatch, imageLink);
+          const imageLink = this.formatImageLink(task.alt || task.file.name, url);
+          this.replacePlaceholder(editor, task.placeholder, imageLink);
           uploadedCount++;
+        } else {
+          this.replacePlaceholder(editor, task.placeholder, task.original);
         }
       } catch {
-        // 跳过失败的，继续处理其他
+        this.replacePlaceholder(editor, task.placeholder, task.original);
       }
     }
 
     if (uploadedCount > 0) {
-      editor.setValue(newContent);
       new Notice(`成功上传 ${uploadedCount}/${matches.length} 张图片`);
     } else {
       new Notice('没有成功上传任何图片');

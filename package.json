@@ -20,6 +20,7 @@
     "test:unit": "vitest run",
     "test:run": "npm run test:unit",
     "test:obsidian-release": "node --test scripts/test/validate-obsidian-release.test.mjs",
+    "test:obsidian-plugin": "node --test scripts/test/obsidian-plugin-behavior.test.mjs",
     "test:coverage": "vitest run --coverage && node scripts/check-critical-coverage.mjs",
     "ci:prepush": "npm run typecheck && npm run lint && npm run build && npm run test:coverage",
     "ci:full": "npm run ci:prepush && cd src-tauri && cargo check && cargo test --quiet",
@@ -33,7 +34,7 @@
     "build:obsidian": "npm --prefix plugins/picnexus run build",
     "typecheck:obsidian": "npm --prefix plugins/picnexus run typecheck",
     "validate:obsidian-release": "node scripts/validate-obsidian-release.mjs",
-    "ci:obsidian": "npm run typecheck:obsidian && npm run build:obsidian && npm run validate:obsidian-release && npm run test:obsidian-release",
+    "ci:obsidian": "npm run typecheck:obsidian && npm run build:obsidian && npm run validate:obsidian-release && npm run test:obsidian-release && npm run test:obsidian-plugin",
     "package:portable:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-portable-windows.ps1",
     "prepare": "husky"
   },

@@ -3,7 +3,6 @@ export interface PicNexusSettings {
   autoUploadOnPaste: boolean;
   autoUploadOnDrop: boolean;
   showNotifications: boolean;
-  imageFormat: 'markdown' | 'wiki';
 }
 
 export const DEFAULT_SETTINGS: PicNexusSettings = {
@@ -11,7 +10,6 @@ export const DEFAULT_SETTINGS: PicNexusSettings = {
   autoUploadOnPaste: true,
   autoUploadOnDrop: true,
   showNotifications: true,
-  imageFormat: 'markdown',
 };
 
 export interface UploadResponse {

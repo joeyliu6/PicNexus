@@ -10,7 +10,7 @@ function createFixture(overrides = {}) {
   const manifest = {
     id: 'picnexus',
     name: 'PicNexus',
-    version: '1.0.10',
+    version: '1.0.0',
     minAppVersion: '1.4.0',
     description: 'Upload images through the PicNexus desktop app.',
     author: 'joeyliu6',
@@ -32,6 +32,7 @@ function createFixture(overrides = {}) {
   writeFileSync(join(root, 'package.json'), JSON.stringify(packageJson));
   writeFileSync(join(root, 'package-lock.json'), JSON.stringify(packageLock));
   writeFileSync(join(root, 'versions.json'), JSON.stringify(versions));
+  writeFileSync(join(root, '.gitignore'), 'node_modules/\n');
   writeFileSync(join(root, 'README.md'), 'Connects to http://127.0.0.1:<port>.');
   writeFileSync(join(root, 'LICENSE'), 'Apache-2.0');
   writeFileSync(join(root, 'main.js'), 'module.exports = class PicNexusPlugin {};');
@@ -56,7 +57,7 @@ test('accepts a complete official release layout', () => {
   withFixture({}, root => {
     const result = validateObsidianRelease(root);
     assert.equal(result.id, 'picnexus');
-    assert.equal(result.version, '1.0.10');
+    assert.equal(result.version, '1.0.0');
     assert.deepEqual(result.assets, ['main.js', 'manifest.json', 'styles.css']);
   });
 });
@@ -80,8 +81,15 @@ test('rejects missing runtime assets', () => {
 });
 
 test('rejects an outdated versions mapping', () => {
-  withFixture({ versions: { '1.0.10': '1.5.0' } }, root => {
+  withFixture({ versions: { '1.0.0': '1.5.0' } }, root => {
     assert.throws(() => validateObsidianRelease(root), /versions\.json must map/);
+  });
+});
+
+test('rejects a repository that does not ignore node_modules', () => {
+  withFixture({}, root => {
+    writeFileSync(join(root, '.gitignore'), 'dist/\n');
+    assert.throws(() => validateObsidianRelease(root), /\.gitignore must exclude node_modules/);
   });
 });
 

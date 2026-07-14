@@ -8,14 +8,16 @@
 - `plugins/picnexus/` 以带来源提交标记的快照同步到独立公开仓库根目录。
 - 独立仓库只服务 GitHub Release、BRAT 和 Obsidian 官方目录，不直接编辑。
 - 插件版本由 `plugins/picnexus/manifest.json` 决定，不强制等于桌面端版本。
+- 插件从 `1.0.0` 开始独立递增；已发布版本不能覆盖修改。
+- `plugins/picnexus/.gitignore` 必须忽略 `node_modules/`，发布快照和公开仓库历史均不应包含依赖目录。
 
 ## 首次配置
 
-1. 创建空的公开仓库 `joeyliu6/picnexus-obsidian`，不要初始化 README、LICENSE 或 `.gitignore`。
+1. 创建空的公开仓库 `joeyliu6/picnexus-obsidian`，不要在其中手动维护插件文件。
 2. 在 GitHub 创建 fine-grained personal access token，只授权该仓库的 `Contents: Read and write`。
 3. 在 PicNexus 仓库的 Actions secret 中添加 `OBSIDIAN_PLUGIN_RELEASE_TOKEN`。
 4. 如使用其他目标仓库，在 Repository variable 中设置 `OBSIDIAN_PLUGIN_REPOSITORY=owner/repo`；未设置时默认使用 `joeyliu6/picnexus-obsidian`。
-5. 目标仓库默认分支使用 `main`，不要直接提交修改。
+5. 目标仓库默认分支使用 `main`，发布工作流会同步源码中的 `.gitignore` 并拒绝包含 `node_modules/` 的快照。
 
 ## 本地验证
 
@@ -54,7 +56,7 @@ CI 会拒绝同一版本下发生变化的 `main.js`、`manifest.json` 或 `styl
 
 ## 测试安装
 
-BRAT：安装 BRAT 后添加 `https://github.com/joeyliu6/picnexus-obsidian`，再启用 PicNexus。
+BRAT：插件尚未上架时，安装 BRAT 后添加 `https://github.com/joeyliu6/picnexus-obsidian`，再启用 PicNexus。插件上架后，直接在 **Settings -> Community plugins** 搜索 `PicNexus` 安装。
 
 手动安装：将桌面端 Release 中的插件 ZIP 解压到 `<vault>/.obsidian/plugins/picnexus/`。旧测试目录 `.obsidian/plugins/obsidian-picnexus/` 必须删除，避免同时加载两个插件实例。
 
