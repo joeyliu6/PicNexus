@@ -6,6 +6,7 @@
 
 ```
 docs/
+├── TODO.md             # 开发待办
 ├── flows/              # 📊 流程图（Mermaid 格式）
 │   ├── system-overview.md        # 系统总览
 │   ├── app-lifecycle.md          # 启动/白屏/Cookie 登录
@@ -45,6 +46,7 @@ docs/
 
 | 我要做什么 | 去哪里 |
 |-----------|--------|
+| 查看开发待办 | [TODO.md](./TODO.md) |
 | 了解项目架构 | [reference/architecture/overview.md](./reference/architecture/overview.md) |
 | 开发新功能 | 先读 [flows/](./flows/) 对应流程图 |
 | 查 CSS 变量 | [design/tokens.md](./design/tokens.md) |
