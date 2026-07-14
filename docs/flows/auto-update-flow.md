@@ -202,7 +202,7 @@ flowchart TD
     L --> L3[latest.json]
 
     L --> OP[构建并校验 Obsidian 插件]
-    OP --> OP1[同步 plugins/picnexus subtree]
+    OP --> OP1[同步 plugins/picnexus 快照]
     OP1 --> OP2[独立仓库 Release<br/>标签不带 v]
     OP2 --> OP3[桌面端 Release<br/>picnexus-obsidian-*.zip]
     L1 & L2 & L3 & OP3 --> SUM[生成最终 SHA256SUMS.txt]

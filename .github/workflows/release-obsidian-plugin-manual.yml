@@ -1,0 +1,33 @@
+name: Release Obsidian plugin manually
+
+on:
+  workflow_dispatch:
+    inputs:
+      desktop_tag:
+        description: Optional existing desktop draft tag that receives the plugin ZIP
+        required: false
+        default: ''
+        type: string
+      target_repo:
+        description: Public repository used by BRAT and the Obsidian directory
+        required: true
+        default: joeyliu6/picnexus-obsidian
+        type: string
+      plugin_dir:
+        description: Plugin source directory in this repository
+        required: true
+        default: plugins/picnexus
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    uses: ./.github/workflows/release-obsidian-plugin.yml
+    with:
+      desktop_tag: ${{ inputs.desktop_tag }}
+      target_repo: ${{ inputs.target_repo }}
+      plugin_dir: ${{ inputs.plugin_dir }}
+    secrets:
+      release_token: ${{ secrets.OBSIDIAN_PLUGIN_RELEASE_TOKEN }}

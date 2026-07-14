@@ -5,7 +5,7 @@
 ## 仓库职责
 
 - PicNexus 主仓库是插件源码的唯一来源。
-- `plugins/picnexus/` 通过 `git subtree split` 同步到独立公开仓库根目录。
+- `plugins/picnexus/` 以带来源提交标记的快照同步到独立公开仓库根目录。
 - 独立仓库只服务 GitHub Release、BRAT 和 Obsidian 官方目录，不直接编辑。
 - 插件版本由 `plugins/picnexus/manifest.json` 决定，不强制等于桌面端版本。
 
@@ -43,12 +43,14 @@ CI 会拒绝同一版本下发生变化的 `main.js`、`manifest.json` 或 `styl
 2. `release-obsidian-plugin.yml` 检查目标仓库和 Token 权限。
 3. 插件完成 typecheck、build 和清单校验。
 4. 工作流比较独立仓库中同版本资产：一致则复用，缺失则补传，不同则要求提升版本。
-5. 插件 subtree 快进同步到独立仓库；目标已包含更新版本时不回退，真正分叉时停止。
+5. 插件快照同步到独立仓库；每次同步记录主仓库来源提交，目标已包含更新版本时不回退，人工提交或来源历史分叉时停止。
 6. 新版本使用不带 `v` 的标签，并直接上传 `main.js`、`manifest.json`、`styles.css`。
 7. 同一批运行文件打包为 `picnexus-obsidian-<version>.zip`，上传到桌面端 Draft Release。
 8. 最终任务生成包含插件 ZIP 的 `SHA256SUMS.txt` 并附加手动回归清单。
 
 插件任务失败时桌面端 Release 保持 Draft。修复原因后重新运行失败任务即可，工作流按远端实际状态恢复。
+
+首次发布或需要单独重试插件发布时，在 GitHub Actions 手动运行 `Release Obsidian plugin manually`。首次运行时将 `desktop_tag` 留空，只会同步独立仓库并创建插件 Release；填写已有桌面端 Draft 标签时才会同时上传插件 ZIP。
 
 ## 测试安装
 
