@@ -232,7 +232,7 @@ jobs:
               status=reused
             fi
           else
-            remote_tag_commit="$(gh api "repos/$TARGET_REPO/commits/$PLUGIN_VERSION" --jq '.sha' 2>/dev/null || true)"
+            remote_tag_commit="$(git ls-remote --tags "$remote_url" "refs/tags/$PLUGIN_VERSION" | awk '{print $1}')"
             if [[ -n "$remote_tag_commit" ]]; then
               [[ "$remote_tag_commit" == "$sync_commit" ]] || {
                 echo "Tag $PLUGIN_VERSION already points to a different commit in $TARGET_REPO."
