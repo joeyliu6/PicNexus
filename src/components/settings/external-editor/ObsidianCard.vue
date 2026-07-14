@@ -138,17 +138,34 @@ watch(
     <div class="guide-card">
       <div class="guide-step">
         <span class="step-badge">1</span>
-        <span class="step-text">插件上架前，安装 BRAT 后添加 <code class="inline-code">joeyliu6/picnexus-obsidian</code>；上架后直接搜索 PicNexus 安装</span>
+        <span class="step-text">插件尚未上架时，在 Obsidian 打开「设置」→「第三方插件」，关闭「受限模式」</span>
       </div>
       <div class="guide-step">
         <span class="step-badge">2</span>
+        <span class="step-text">点击「浏览」，搜索并安装 <code class="inline-code">BRAT</code>，然后启用它</span>
+      </div>
+      <div class="guide-step">
+        <span class="step-badge">3</span>
+        <span class="step-text">回到「第三方插件」，打开 BRAT 设置，选择 <code class="inline-code">Add beta plugin</code></span>
+      </div>
+      <div class="guide-step">
+        <span class="step-badge">4</span>
+        <span class="step-text">填入 <code class="inline-code">joeyliu6/picnexus-obsidian</code>，确认安装</span>
+      </div>
+      <div class="guide-step">
+        <span class="step-badge">5</span>
+        <span class="step-text">回到「第三方插件」列表，启用 PicNexus；上架后可直接搜索 PicNexus 安装</span>
+      </div>
+      <div class="guide-step">
+        <span class="step-badge">6</span>
         <span class="step-text">
-          无需填写 Token；在插件设置中填写端口
+          在 PicNexus 和 Obsidian 插件设置中保持端口
           <input
             type="number"
             class="port-input inline-port"
             :class="{ invalid: !!portError }"
             :value="portDraft"
+            aria-label="Obsidian 插件端口"
             min="1024"
             max="65535"
             @input="handlePortInput"
@@ -156,7 +173,13 @@ watch(
             @keyup.enter="commitPortInput"
             @click.stop
           />
-          ，保存后即可生效
+          一致，保存后点击「测试连接」。
+          <a
+            class="guide-link"
+            href="https://github.com/joeyliu6/PicNexus/blob/main/docs/reference/guides/obsidian-plugin-installation.md"
+            target="_blank"
+            rel="noreferrer"
+          >查看完整安装指南</a>
         </span>
       </div>
     </div>
@@ -229,6 +252,15 @@ watch(
 .port-input:focus {
   outline: none;
   border-color: var(--primary);
+}
+
+.guide-link {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.guide-link:hover {
+  text-decoration: underline;
 }
 
 .test-connection-row {

@@ -171,7 +171,7 @@ describe('ExternalEditorPanel', () => {
     expect(validUpdates).toBe(true);
   });
 
-  it('explains BRAT, official installation, and automatic token handling', async () => {
+  it('explains the complete BRAT and official installation flow without exposing internal auth', async () => {
     const wrapper = mountWithDefaults(ExternalEditorPanel, {
       props: {
         editorServer: {
@@ -201,12 +201,18 @@ describe('ExternalEditorPanel', () => {
     await flush();
 
     const text = wrapper.text();
+    expect(text).toContain('关闭「受限模式」');
     expect(text).toContain('BRAT');
+    expect(text).toContain('Add beta plugin');
     expect(text).toContain('joeyliu6/picnexus-obsidian');
-    expect(text).toContain('上架后直接搜索 PicNexus 安装');
-    expect(text).toContain('无需填写 Token');
-    expect(text).toContain('在插件设置中填写端口');
-    expect(text).toContain('保存后即可生效');
+    expect(text).toContain('启用 PicNexus');
+    expect(text).toContain('上架后可直接搜索 PicNexus 安装');
+    expect(text).toContain('保持端口');
+    expect(text).toContain('测试连接');
+    expect(text).not.toContain('Token');
+    expect(wrapper.find('.guide-link').attributes('href')).toBe(
+      'https://github.com/joeyliu6/PicNexus/blob/main/docs/reference/guides/obsidian-plugin-installation.md',
+    );
     expect(wrapper.find('.auth-token-text').exists()).toBe(false);
     expect(wrapper.find('.auth-icon-btn').exists()).toBe(false);
     expect(wrapper.find('.pi-copy').exists()).toBe(false);
