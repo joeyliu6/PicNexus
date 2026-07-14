@@ -130,6 +130,41 @@ async function clickIndexed(selector, index) {
   await clickElement(elements[index], `${selector}[${index}]`);
 }
 
+async function waitForHistoryTabActive(index, timeout = 30_000) {
+  const selector = '.history-view .dashboard-strip .tab-btn';
+
+  await browser.waitUntil(async () => {
+    const tabs = await $$(selector);
+    if (tabs.length <= index) return false;
+
+    let activeCount = 0;
+    let targetIsActive = false;
+    for (let tabIndex = 0; tabIndex < tabs.length; tabIndex += 1) {
+      const classNames = (await tabs[tabIndex].getAttribute('class')).split(/\s+/);
+      if (classNames.includes('active')) {
+        activeCount += 1;
+        targetIsActive = tabIndex === index || targetIsActive;
+      }
+    }
+    return targetIsActive && activeCount === 1;
+  }, {
+    timeout,
+    timeoutMsg: `Expected ${selector}[${index}] to become active`,
+  });
+}
+
+async function waitForText(selector, expectedText, timeout = 30_000) {
+  await browser.waitUntil(async () => {
+    const element = await $(selector);
+    return await element.isExisting()
+      && await element.isDisplayed()
+      && await element.getText() === expectedText;
+  }, {
+    timeout,
+    timeoutMsg: `Expected ${selector} to display ${JSON.stringify(expectedText)}`,
+  });
+}
+
 async function expectRenderable(selector, minVisibleDescendants = 1) {
   await waitForVisible(selector);
 
@@ -168,6 +203,19 @@ async function expectRenderable(selector, minVisibleDescendants = 1) {
   }
 }
 
+async function expectHistorySurface(viewSelector, emptyStateTitle) {
+  const emptyStateSelector = '.history-view .history-empty-state-wrapper';
+  const matchedSelector = await waitForAnyVisible([
+    viewSelector,
+    emptyStateSelector,
+  ]);
+
+  await expectRenderable(matchedSelector);
+  if (matchedSelector === emptyStateSelector) {
+    await waitForText(`${emptyStateSelector} .empty-state__title`, emptyStateTitle);
+  }
+}
+
 describe('PicNexus real Tauri desktop smoke', () => {
   beforeEach(async () => {
     await browser.setWindowSize(1280, 900);
@@ -199,7 +247,7 @@ describe('PicNexus real Tauri desktop smoke', () => {
     await expectRenderable('.settings-layout', 20);
   });
 
-  it('opens history and switches local view shells without relying on saved rows', async () => {
+  it('opens history and keeps local view switching stable with or without saved rows', async () => {
     await openNav(1, '.history-view');
 
     await waitForVisible('.history-view .dashboard-strip');
@@ -209,16 +257,20 @@ describe('PicNexus real Tauri desktop smoke', () => {
     await waitForVisible('.history-view .stat-badge');
     await expectRenderable('.history-view', 10);
 
+    await waitForHistoryTabActive(0);
+    await expectHistorySurface('.history-view .table-view-container', '暂无上传记录');
+
     await clickIndexed('.history-view .dashboard-strip .tab-btn', 1);
-    await waitForVisible('.history-view .timeline-view');
-    await expectRenderable('.history-view .timeline-view');
+    await waitForHistoryTabActive(1);
+    await expectHistorySurface('.history-view .timeline-view', '暂无上传记录');
 
     await clickIndexed('.history-view .dashboard-strip .tab-btn', 2);
-    await waitForVisible('.history-view .favorites-view');
-    await expectRenderable('.history-view .favorites-view');
+    await waitForHistoryTabActive(2);
+    await expectHistorySurface('.history-view .favorites-view', '暂无收藏');
 
     await clickIndexed('.history-view .dashboard-strip .tab-btn', 0);
-    await waitForVisible('.history-view .table-view-container');
+    await waitForHistoryTabActive(0);
+    await expectHistorySurface('.history-view .table-view-container', '暂无上传记录');
   });
 
   it('opens link maintenance tabs without starting file or network workflows', async () => {
