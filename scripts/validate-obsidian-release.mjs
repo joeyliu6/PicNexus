@@ -16,6 +16,7 @@ const REQUIRED_REPOSITORY_FILES = [
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 const PLUGIN_ID_PATTERN = /^[a-z][a-z-]*[a-z]$/;
 const MAX_RUNTIME_BYTES = 10 * 1024 * 1024;
+const INSTALL_GUIDE_URL = 'https://github.com/joeyliu6/PicNexus/blob/main/docs/reference/guides/obsidian-plugin-installation.md';
 
 function readJson(filePath, label, errors) {
   try {
@@ -128,6 +129,9 @@ function validateVersionFiles(pluginDir, manifest, errors) {
     const readme = readFileSync(readmePath, 'utf8');
     if (!readme.includes('127.0.0.1')) {
       errors.push('README.md must disclose the localhost network connection.');
+    }
+    if (!readme.includes(INSTALL_GUIDE_URL)) {
+      errors.push('README.md must link to the canonical Obsidian installation guide.');
     }
   }
 }

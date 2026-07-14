@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { validateObsidianRelease } from '../validate-obsidian-release.mjs';
 
+const INSTALL_GUIDE_URL = 'https://github.com/joeyliu6/PicNexus/blob/main/docs/reference/guides/obsidian-plugin-installation.md';
+
 function createFixture(overrides = {}) {
   const root = mkdtempSync(join(tmpdir(), 'picnexus-release-test-'));
   const manifest = {
@@ -33,7 +35,10 @@ function createFixture(overrides = {}) {
   writeFileSync(join(root, 'package-lock.json'), JSON.stringify(packageLock));
   writeFileSync(join(root, 'versions.json'), JSON.stringify(versions));
   writeFileSync(join(root, '.gitignore'), 'node_modules/\n');
-  writeFileSync(join(root, 'README.md'), 'Connects to http://127.0.0.1:<port>.');
+  writeFileSync(
+    join(root, 'README.md'),
+    overrides.readme ?? `Connects to http://127.0.0.1:<port>. See ${INSTALL_GUIDE_URL}.`,
+  );
   writeFileSync(join(root, 'LICENSE'), 'Apache-2.0');
   writeFileSync(join(root, 'main.js'), 'module.exports = class PicNexusPlugin {};');
   writeFileSync(join(root, 'styles.css'), '.picnexus-status { color: var(--text-muted); }');
@@ -90,6 +95,12 @@ test('rejects a repository that does not ignore node_modules', () => {
   withFixture({}, root => {
     writeFileSync(join(root, '.gitignore'), 'dist/\n');
     assert.throws(() => validateObsidianRelease(root), /\.gitignore must exclude node_modules/);
+  });
+});
+
+test('rejects a README that does not link to the canonical installation guide', () => {
+  withFixture({ readme: 'Connects to http://127.0.0.1:<port>.' }, root => {
+    assert.throws(() => validateObsidianRelease(root), /must link to the canonical Obsidian installation guide/);
   });
 });
 
