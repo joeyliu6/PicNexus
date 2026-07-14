@@ -207,7 +207,8 @@ jobs:
           if [[ "$preserve_remote" == "true" ]]; then
             sync_commit="$remote_main"
           else
-            rsync -a --delete --delete-excluded --exclude='.git/' --exclude='node_modules/' "$PLUGIN_DIR/" "$sync_dir/"
+            rsync -a --delete --exclude='.git/' --exclude='node_modules/' "$PLUGIN_DIR/" "$sync_dir/"
+            rm -rf "$sync_dir/node_modules"
             [[ ! -e "$sync_dir/node_modules" ]] || {
               echo "Refusing to publish a plugin snapshot that contains node_modules. Clean the target repository first."
               exit 1
