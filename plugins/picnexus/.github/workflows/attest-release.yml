@@ -1,0 +1,73 @@
+name: Attest release assets
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing plugin release tag to attest
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+jobs:
+  attest:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+
+    steps:
+      - name: Validate release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "Invalid plugin release tag: $RELEASE_TAG"
+            exit 1
+          }
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Download and verify release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=(main.js manifest.json styles.css)
+          mapfile -t actual < <(
+            gh release view "$RELEASE_TAG" \
+              --json assets \
+              --jq '.assets[].name' \
+              | LC_ALL=C sort
+          )
+          [[ "${actual[*]}" == "${expected[*]}" ]] || {
+            echo "Unexpected release assets: ${actual[*]}"
+            exit 1
+          }
+
+          mkdir release-assets
+          for asset in "${expected[@]}"; do
+            gh release download "$RELEASE_TAG" --pattern "$asset" --dir release-assets
+            cmp -s "$asset" "release-assets/$asset" || {
+              echo "Release asset does not match tag contents: $asset"
+              exit 1
+            }
+          done
+
+          (
+            cd release-assets
+            sha256sum main.js manifest.json styles.css > ../release-assets.sha256
+          )
+
+      - name: Attest release assets
+        uses: actions/attest@v4
+        with:
+          subject-checksums: release-assets.sha256

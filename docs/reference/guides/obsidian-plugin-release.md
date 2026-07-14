@@ -10,11 +10,12 @@
 - 插件版本由 `plugins/picnexus/manifest.json` 决定，不强制等于桌面端版本。
 - 插件从 `1.0.0` 开始独立递增；已发布版本不能覆盖修改。
 - `plugins/picnexus/.gitignore` 必须忽略 `node_modules/`，发布快照和公开仓库历史均不应包含依赖目录。
+- 独立仓库的 `.github/workflows/attest-release.yml` 由插件源码同步生成，用于证明 Release 资产与对应标签中的运行文件一致。
 
 ## 首次配置
 
 1. 创建空的公开仓库 `joeyliu6/picnexus-obsidian`，不要在其中手动维护插件文件。
-2. 在 GitHub 创建 fine-grained personal access token，只授权该仓库的 `Contents: Read and write`。
+2. 在 GitHub 创建 fine-grained personal access token，只授权该仓库，并授予 `Contents: Read and write` 与 `Workflows: Read and write`。后者用于同步生成 artifact attestation 的工作流文件。
 3. 在 PicNexus 仓库的 Actions secret 中添加 `OBSIDIAN_PLUGIN_RELEASE_TOKEN`。
 4. 如使用其他目标仓库，在 Repository variable 中设置 `OBSIDIAN_PLUGIN_REPOSITORY=owner/repo`；未设置时默认使用 `joeyliu6/picnexus-obsidian`。
 5. 目标仓库默认分支使用 `main`，发布工作流会同步源码中的 `.gitignore` 并拒绝包含 `node_modules/` 的快照。
@@ -47,8 +48,9 @@ CI 会拒绝同一版本下发生变化的 `main.js`、`manifest.json` 或 `styl
 4. 工作流比较独立仓库中同版本资产：一致则复用，缺失则补传，不同则要求提升版本。
 5. 插件快照同步到独立仓库；每次同步记录主仓库来源提交，目标已包含更新版本时不回退，人工提交或来源历史分叉时停止。
 6. 新版本使用不带 `v` 的标签，并直接上传 `main.js`、`manifest.json`、`styles.css`。
-7. 同一批运行文件打包为 `picnexus-obsidian-<version>.zip`，上传到桌面端 Draft Release。
-8. 最终任务生成包含插件 ZIP 的 `SHA256SUMS.txt` 并附加手动回归清单。
+7. 独立仓库的 Release 事件下载三个运行资产，与标签内容逐一比较，并通过 GitHub artifact attestations 记录资产摘要和来源。
+8. 同一批运行文件打包为 `picnexus-obsidian-<version>.zip`，上传到桌面端 Draft Release。
+9. 最终任务生成包含插件 ZIP 的 `SHA256SUMS.txt` 并附加手动回归清单。
 
 插件任务失败时桌面端 Release 保持 Draft。修复原因后重新运行失败任务即可，工作流按远端实际状态恢复。
 
@@ -70,7 +72,9 @@ CI 会拒绝同一版本下发生变化的 `main.js`、`manifest.json` 或 `styl
 - GitHub Release 标签严格等于 `manifest.json.version`，且有三个独立运行资产。
 - BRAT 已完成真实仓库测试。
 
-然后登录 [Obsidian Community](https://community.obsidian.md)，关联 GitHub，进入 **Plugins -> New plugin**，填写独立仓库 URL，接受开发者政策并提交。自动审核通过后人工点击发布。
+然后登录 [Obsidian Community](https://community.obsidian.md)，关联 GitHub，进入 **Plugins -> New plugin**，填写独立仓库 URL，接受开发者政策并提交。自动审核显示通过或 `Satisfactory` 后，还必须在插件管理页面点击 **Publish**。
+
+网页详情页出现不等于客户端目录已经同步。发布后继续检查 [`community-plugins.json`](https://github.com/obsidianmd/obsidian-releases/blob/master/community-plugins.json)：只有其中出现 `"id": "picnexus"`，Obsidian 应用内才能搜索到插件。清单同步后完全退出并重新打开 Obsidian，完成一次官方目录安装回归；同步前继续保留 BRAT 和手动安装说明，不要重复提交插件。
 
 首次上架后不再重复提交。后续只需更新默认分支的 `manifest.json` 并创建匹配版本的 GitHub Release。
 

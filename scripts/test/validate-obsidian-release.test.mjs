@@ -30,6 +30,7 @@ function createFixture(overrides = {}) {
   const versions = { [manifest.version]: manifest.minAppVersion, ...overrides.versions };
 
   mkdirSync(root, { recursive: true });
+  mkdirSync(join(root, '.github', 'workflows'), { recursive: true });
   writeFileSync(join(root, 'manifest.json'), JSON.stringify(manifest));
   writeFileSync(join(root, 'package.json'), JSON.stringify(packageJson));
   writeFileSync(join(root, 'package-lock.json'), JSON.stringify(packageLock));
@@ -40,6 +41,12 @@ function createFixture(overrides = {}) {
     overrides.readme ?? `Connects to http://127.0.0.1:<port>. See ${INSTALL_GUIDE_URL}.`,
   );
   writeFileSync(join(root, 'LICENSE'), 'Apache-2.0');
+  writeFileSync(join(root, 'CONTRIBUTING.md'), '# Contributing');
+  writeFileSync(join(root, 'eslint.config.mjs'), 'export default [];');
+  writeFileSync(
+    join(root, '.github', 'workflows', 'attest-release.yml'),
+    'release:\nworkflow_dispatch:\nid-token: write\nattestations: write\nartifact-metadata: write\nuses: actions/attest@v4\n',
+  );
   writeFileSync(join(root, 'main.js'), 'module.exports = class PicNexusPlugin {};');
   writeFileSync(join(root, 'styles.css'), '.picnexus-status { color: var(--text-muted); }');
 
@@ -126,5 +133,14 @@ test('rejects a root lockfile version mismatch', () => {
 test('rejects descriptions that violate directory requirements', () => {
   withFixture({ manifest: { description: '上传图片' } }, root => {
     assert.throws(() => validateObsidianRelease(root), /must end with a period[\s\S]*basic printable Latin/);
+  });
+});
+
+test('rejects a repository without an attestation workflow', () => {
+  withFixture({ remove: [join('.github', 'workflows', 'attest-release.yml')] }, root => {
+    assert.throws(
+      () => validateObsidianRelease(root),
+      /Required repository file is missing: \.github\/workflows\/attest-release\.yml/,
+    );
   });
 });

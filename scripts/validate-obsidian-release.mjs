@@ -8,10 +8,13 @@ const REQUIRED_REPOSITORY_FILES = [
   ...RUNTIME_ASSETS,
   'README.md',
   'LICENSE',
+  'CONTRIBUTING.md',
   'versions.json',
   'package.json',
   'package-lock.json',
   '.gitignore',
+  'eslint.config.mjs',
+  '.github/workflows/attest-release.yml',
 ];
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 const PLUGIN_ID_PATTERN = /^[a-z][a-z-]*[a-z]$/;
@@ -88,6 +91,23 @@ function validateRepositoryFiles(pluginDir, errors) {
     const gitignore = readFileSync(gitignorePath, 'utf8');
     if (!/^node_modules\/?$/m.test(gitignore)) {
       errors.push('.gitignore must exclude node_modules/.');
+    }
+  }
+
+  const attestationWorkflowPath = resolve(pluginDir, '.github/workflows/attest-release.yml');
+  if (existsSync(attestationWorkflowPath)) {
+    const workflow = readFileSync(attestationWorkflowPath, 'utf8');
+    for (const requiredText of [
+      'release:',
+      'workflow_dispatch:',
+      'id-token: write',
+      'attestations: write',
+      'artifact-metadata: write',
+      'uses: actions/attest@v4',
+    ]) {
+      if (!workflow.includes(requiredText)) {
+        errors.push(`Attestation workflow is missing: ${requiredText}`);
+      }
     }
   }
 

@@ -19,7 +19,7 @@ on:
         type: string
     secrets:
       release_token:
-        description: Fine-grained token with Contents write access to target_repo
+        description: Fine-grained token with Contents and Workflows write access to target_repo
         required: true
     outputs:
       plugin_version:
@@ -84,13 +84,14 @@ jobs:
           can_push="$(gh api "repos/$TARGET_REPO" --jq '.permissions.push // false')"
           [[ "$can_push" == "true" ]] || { echo "The release token cannot push to $TARGET_REPO."; exit 1; }
 
-      - name: Install, typecheck, and build plugin
+      - name: Install, lint, typecheck, and build plugin
         shell: bash
         env:
           PLUGIN_DIR: ${{ inputs.plugin_dir }}
         run: |
           set -euo pipefail
           npm --prefix "$PLUGIN_DIR" ci
+          npm --prefix "$PLUGIN_DIR" run lint
           npm --prefix "$PLUGIN_DIR" run typecheck
           npm --prefix "$PLUGIN_DIR" run build
           node --test scripts/test/validate-obsidian-release.test.mjs
