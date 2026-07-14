@@ -7,6 +7,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
+    "test": "npm run build && node --test dist/index.test.js",
     "pkg:win:x64": "pkg dist/index.js -t node18-win-x64 -o ../../src-tauri/binaries/nami-token-fetcher-x86_64-pc-windows-msvc.exe",
     "pkg:mac": "pkg dist/index.js -t node18-macos-x64 -o ../../src-tauri/binaries/nami-token-fetcher-x86_64-apple-darwin",
     "pkg:mac-arm": "pkg dist/index.js -t node18-macos-arm64 -o ../../src-tauri/binaries/nami-token-fetcher-aarch64-apple-darwin",

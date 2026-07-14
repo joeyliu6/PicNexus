@@ -26,25 +26,7 @@ pub struct ServerRuntimeState {
     pub auth_token: Arc<Mutex<Option<String>>>,
 }
 
-/// 绑定端口，返回 TcpListener
-/// 失败表示端口被占用或无权限
-pub async fn bind_server(port: u16) -> Result<TcpListener, String> {
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    TcpListener::bind(addr)
-        .await
-        .map_err(|e| format!("无法绑定端口 {}（可能已被占用）: {}", port, e))
-}
-
-/// 在已绑定的 listener 上运行 HTTP Server
-pub async fn run_server(
-    listener: TcpListener,
-    upload_config: Arc<Mutex<Option<ServerUploadConfig>>>,
-    auth_token: Arc<Mutex<Option<String>>>,
-) -> Result<(), String> {
-    let state = ServerRuntimeState {
-        upload_config,
-        auth_token,
-    };
+fn build_router(state: ServerRuntimeState) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods([Method::GET, Method::POST])
@@ -66,12 +48,35 @@ pub async fn run_server(
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             upload_handler::require_upload_auth,
-        ));
-
-    let app = protected_routes
-        .route("/status", get(upload_handler::handle_status))
-        .with_state(state)
+        ))
         .layer(cors);
+
+    Router::new()
+        .route("/status", get(upload_handler::handle_status))
+        .merge(protected_routes)
+        .with_state(state)
+}
+
+/// 绑定端口，返回 TcpListener
+/// 失败表示端口被占用或无权限
+pub async fn bind_server(port: u16) -> Result<TcpListener, String> {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    TcpListener::bind(addr)
+        .await
+        .map_err(|e| format!("无法绑定端口 {}（可能已被占用）: {}", port, e))
+}
+
+/// 在已绑定的 listener 上运行 HTTP Server
+pub async fn run_server(
+    listener: TcpListener,
+    upload_config: Arc<Mutex<Option<ServerUploadConfig>>>,
+    auth_token: Arc<Mutex<Option<String>>>,
+) -> Result<(), String> {
+    let state = ServerRuntimeState {
+        upload_config,
+        auth_token,
+    };
+    let app = build_router(state);
 
     log::info!("[Server] ✓ 编辑器兼容 Server 已启动");
 
@@ -86,4 +91,63 @@ pub async fn run_server(
 pub async fn is_port_free(port: u16) -> bool {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     TcpListener::bind(addr).await.is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        http::{header::ACCESS_CONTROL_ALLOW_ORIGIN, Request, StatusCode},
+    };
+    use tower::ServiceExt;
+
+    fn test_state() -> ServerRuntimeState {
+        ServerRuntimeState {
+            upload_config: Arc::new(Mutex::new(None)),
+            auth_token: Arc::new(Mutex::new(Some("test-token".to_string()))),
+        }
+    }
+
+    #[tokio::test]
+    async fn public_status_does_not_emit_cors_headers() {
+        let response = build_router(test_state())
+            .oneshot(
+                Request::builder()
+                    .uri("/status")
+                    .header(header::ORIGIN, "https://example.com")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response
+            .headers()
+            .get(ACCESS_CONTROL_ALLOW_ORIGIN)
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn protected_upload_preflight_keeps_cors_support() {
+        let response = build_router(test_state())
+            .oneshot(
+                Request::builder()
+                    .method(Method::OPTIONS)
+                    .uri("/upload")
+                    .header(header::ORIGIN, "https://example.com")
+                    .header(header::ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response
+            .headers()
+            .get(ACCESS_CONTROL_ALLOW_ORIGIN)
+            .is_some());
+    }
 }

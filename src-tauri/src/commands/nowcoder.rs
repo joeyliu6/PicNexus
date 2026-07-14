@@ -107,7 +107,7 @@ pub async fn upload_to_nowcoder(
     log::info!("[Nowcoder] 开始上传文件: {}", safe_path(&file_path));
 
     // 1. 读取文件
-    let (buffer, file_size) = read_file_bytes(&file_path).await?;
+    let (buffer, file_size) = read_file_bytes(&file_path, 50 * 1024 * 1024).await?;
 
     // 2. 验证文件类型（只允许图片）
     let file_name = std::path::Path::new(&file_path)

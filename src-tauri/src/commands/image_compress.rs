@@ -99,9 +99,8 @@ pub async fn compress_image(
         // 输入像素预检：image::open 用默认 limits 会把整张图加载到内存（u32::MAX 像素，
         // 数 GB 分配），针对 50000x50000 这种恶意/异常文件会先 OOM。先用 imagesize 只读
         // header 拿到原始尺寸，超过 check_pixel_limit 上限直接拒绝，避免落到 decoder。
-        if let Ok(size) = imagesize::size(&canonical) {
-            check_pixel_limit(size.width as u32, size.height as u32)?;
-        }
+        let (header_w, header_h) = read_header_dimensions(&canonical)?;
+        check_pixel_limit(header_w, header_h)?;
 
         let img = image::open(&canonical).map_err(|e| {
             AppError::file_io(format!("无法打开图片: {}", e))
@@ -135,6 +134,7 @@ pub async fn compress_image(
                 }
             }
         };
+        check_webp_dimensions(out_ext, final_w, final_h)?;
 
         // 生成临时输出路径
         let temp_dir = app_handle.path().temp_dir().map_err(|e| {
@@ -197,7 +197,9 @@ pub async fn compress_image(
             "webp" => {
                 let rgba = processed.to_rgba8();
                 let encoder = webp::Encoder::from_rgba(rgba.as_raw(), final_w, final_h);
-                let encoded = encoder.encode(quality as f32);
+                let encoded = encoder
+                    .encode_simple(false, quality as f32)
+                    .map_err(|e| AppError::file_io(format!("WebP 编码失败: {:?}", e)))?;
                 fs::write(&output_path, &*encoded).map_err(|e| {
                     AppError::file_io(format!("写入 WebP 文件失败: {}", e))
                 })?;
@@ -377,6 +379,27 @@ fn check_pixel_limit(width: u32, height: u32) -> Result<(), AppError> {
     Ok(())
 }
 
+fn read_header_dimensions(path: &Path) -> Result<(u32, u32), AppError> {
+    let size = imagesize::size(path)
+        .map_err(|e| AppError::validation(format!("无法解析图片头，已拒绝处理: {}", e)))?;
+    let width =
+        u32::try_from(size.width).map_err(|_| AppError::validation("图片宽度超出支持范围"))?;
+    let height =
+        u32::try_from(size.height).map_err(|_| AppError::validation("图片高度超出支持范围"))?;
+    Ok((width, height))
+}
+
+fn check_webp_dimensions(output_ext: &str, width: u32, height: u32) -> Result<(), AppError> {
+    const WEBP_MAX_DIMENSION: u32 = 16_383;
+    if output_ext == "webp" && (width > WEBP_MAX_DIMENSION || height > WEBP_MAX_DIMENSION) {
+        return Err(AppError::validation(format!(
+            "WebP 单边尺寸不能超过 {} 像素，当前为 {}x{}",
+            WEBP_MAX_DIMENSION, width, height
+        )));
+    }
+    Ok(())
+}
+
 /// 使用 MozJPEG 编码 JPEG（压缩率比标准 libjpeg 好 10-15%）
 fn encode_jpeg_mozjpeg(
     img: &image::DynamicImage,
@@ -534,9 +557,8 @@ pub async fn strip_exif_only(
 
         // 同 compress_image：image::open 前先用 imagesize header 校验原始像素数，
         // 避免超大图直接 OOM
-        if let Ok(size) = imagesize::size(&canonical) {
-            check_pixel_limit(size.width as u32, size.height as u32)?;
-        }
+        let (header_w, header_h) = read_header_dimensions(&canonical)?;
+        check_pixel_limit(header_w, header_h)?;
 
         let img = image::open(&canonical)
             .map_err(|e| AppError::file_io(format!("无法打开图片: {}", e)))?;
@@ -550,6 +572,7 @@ pub async fn strip_exif_only(
             "bmp" => "jpg",
             _ => "jpg",
         };
+        check_webp_dimensions(out_ext, w, h)?;
 
         let temp_dir = app_handle
             .path()
@@ -644,9 +667,8 @@ pub async fn read_image_as_base64(
     tokio::task::spawn_blocking(move || {
         // 预览路径同样要前置像素上限检查：避免给压缩面板预览传来一张 50000x50000 时
         // 在 image::open 阶段就把进程拖崩
-        if let Ok(size) = imagesize::size(&file_path_clone) {
-            check_pixel_limit(size.width as u32, size.height as u32)?;
-        }
+        let (header_w, header_h) = read_header_dimensions(Path::new(&file_path_clone))?;
+        check_pixel_limit(header_w, header_h)?;
 
         let img = image::open(&file_path_clone)
             .map_err(|e| AppError::file_io(format!("无法打开图片: {}", e)))?;
@@ -737,6 +759,27 @@ mod tests {
     fn pixel_limit_overflow_returns_err() {
         // u32::MAX * u32::MAX 用 u64 不会溢出，但远超阈值
         assert!(check_pixel_limit(u32::MAX, u32::MAX).is_err());
+    }
+
+    #[test]
+    fn webp_dimension_limit_accepts_16383_and_rejects_16384() {
+        assert!(check_webp_dimensions("webp", 16_383, 1).is_ok());
+        assert!(check_webp_dimensions("webp", 16_384, 1).is_err());
+        assert!(check_webp_dimensions("jpg", 16_384, 1).is_ok());
+    }
+
+    #[test]
+    fn malformed_image_header_is_rejected() {
+        let path = std::env::temp_dir().join(format!(
+            "picnexus_bad_header_{}_{}",
+            std::process::id(),
+            TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed),
+        ));
+        fs::write(&path, b"not an image").expect("fixture should be written");
+        let result = read_header_dimensions(&path);
+        let _ = fs::remove_file(&path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("无法解析图片头"));
     }
 
     // -------- extract_jpeg_exif_segment --------

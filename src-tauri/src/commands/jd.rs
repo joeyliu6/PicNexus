@@ -126,7 +126,7 @@ pub async fn upload_to_jd(
     );
 
     // 1. 读取文件
-    let (buffer, file_size) = read_file_bytes(&file_path).await?;
+    let (buffer, file_size) = read_file_bytes(&file_path, MAX_FILE_SIZE).await?;
 
     // 2. 验证文件大小（限制 15MB）
     if file_size > MAX_FILE_SIZE {

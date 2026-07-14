@@ -75,13 +75,13 @@ describe('useCompressionTask', () => {
     setupInvokeHandler(async (cmd, args) => {
       if (cmd === 'get_image_metadata') return { width: 4000, height: 2600 };
       if (cmd === 'compress_image') {
-        expect(args).toEqual(expect.objectContaining({
+        expect(args).toEqual({
           filePath: 'C:/photos/original.jpg',
           quality: 82,
           maxLongSide: 2000,
           outputFormat: 'webp',
           stripExif: true,
-        }));
+        });
         return compressResult;
       }
       if (cmd === 'read_image_as_base64') {

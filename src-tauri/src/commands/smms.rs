@@ -4,6 +4,7 @@
 use reqwest::multipart;
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Window};
+use url::Url;
 
 use super::utils::read_file_bytes;
 use crate::error::{AppError, IntoAppError};
@@ -37,6 +38,65 @@ struct SmmsData {
     hash: Option<String>,
 }
 
+fn repeated_image_url(message: &str) -> Option<String> {
+    let url_pattern = regex::Regex::new(r#"https?://[^\s\"'<>]+"#).ok()?;
+    let result = url_pattern.find_iter(message).find_map(|matched| {
+        let candidate = matched
+            .as_str()
+            .trim_end_matches(
+                &[
+                    '.', ',', ';', ':', '!', '?', ')', ']', '}', '。', '，', '；', '：', '！',
+                    '？',
+                ][..],
+            );
+        let parsed = Url::parse(candidate).ok()?;
+        if matches!(parsed.scheme(), "http" | "https") && parsed.host_str().is_some() {
+            Some(parsed.to_string())
+        } else {
+            None
+        }
+    });
+    result
+}
+
+pub(crate) fn parse_smms_upload_response(
+    response_text: &str,
+) -> Result<SmmsUploadResult, AppError> {
+    let response: SmmsResponse = serde_json::from_str(response_text)
+        .map_err(|e| AppError::upload("SM.MS", format!("JSON 解析失败: {}", e)))?;
+
+    if response.code == "image_repeated" {
+        let url = repeated_image_url(&response.message)
+            .ok_or_else(|| AppError::upload("SM.MS", "重复图片响应中缺少有效 URL"))?;
+        return Ok(SmmsUploadResult {
+            url,
+            delete: None,
+            hash: None,
+        });
+    }
+
+    if !response.success {
+        return Err(AppError::upload(
+            "SM.MS",
+            format!("{}: {}", response.code, response.message),
+        ));
+    }
+
+    let data = response
+        .data
+        .ok_or_else(|| AppError::upload("SM.MS", "API 未返回数据"))?;
+    Url::parse(&data.url)
+        .ok()
+        .filter(|url| matches!(url.scheme(), "http" | "https") && url.host_str().is_some())
+        .ok_or_else(|| AppError::upload("SM.MS", "API 返回了无效 URL"))?;
+
+    Ok(SmmsUploadResult {
+        url: data.url,
+        delete: data.delete,
+        hash: data.hash,
+    })
+}
+
 /// 文件大小限制：5MB（SM.MS 免费用户限制）
 const MAX_FILE_SIZE: u64 = 5 * 1024 * 1024;
 
@@ -64,7 +124,7 @@ pub async fn upload_to_smms(
     );
 
     // 1. 读取文件
-    let (buffer, file_size) = read_file_bytes(&file_path).await?;
+    let (buffer, file_size) = read_file_bytes(&file_path, MAX_FILE_SIZE).await?;
 
     // 2. 验证文件大小（限制 5MB）
     if file_size > MAX_FILE_SIZE {
@@ -169,24 +229,41 @@ pub async fn upload_to_smms(
 
     log::debug!("[SM.MS] API 响应: {}", summarize_text(&response_text));
 
-    let smms_response: SmmsResponse = serde_json::from_str(&response_text)
-        .map_err(|e| AppError::upload("SM.MS", format!("JSON 解析失败: {}", e)))?;
+    let result = parse_smms_upload_response(&response_text)?;
+    log::info!("[SM.MS] 上传成功 - URL: {}", safe_url(&result.url));
+    Ok(result)
+}
 
-    // 7. 检查上传结果
-    if !smms_response.success {
-        let error_msg = format!("{}: {}", smms_response.code, smms_response.message);
-        return Err(AppError::upload("SM.MS", error_msg));
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_normal_success_response() {
+        let result = parse_smms_upload_response(
+            r#"{"success":true,"code":"success","message":"ok","data":{"url":"https://s3.sm.ms/a.png","delete":"https://sm.ms/delete/a","hash":"abc"}}"#,
+        )
+        .expect("normal success should parse");
+        assert_eq!(result.url, "https://s3.sm.ms/a.png");
+        assert_eq!(result.hash.as_deref(), Some("abc"));
     }
 
-    let data = smms_response
-        .data
-        .ok_or_else(|| AppError::upload("SM.MS", "API 未返回数据"))?;
+    #[test]
+    fn parses_repeated_image_url_from_message() {
+        let result = parse_smms_upload_response(
+            r#"{"success":false,"code":"image_repeated","message":"Image upload repeated limit, this image exists at https://s3.sm.ms/a.png.","data":null}"#,
+        )
+        .expect("repeated image should be reusable");
+        assert_eq!(result.url, "https://s3.sm.ms/a.png");
+        assert!(result.delete.is_none());
+    }
 
-    log::info!("[SM.MS] 上传成功 - URL: {}", safe_url(&data.url));
-
-    Ok(SmmsUploadResult {
-        url: data.url,
-        delete: data.delete,
-        hash: data.hash,
-    })
+    #[test]
+    fn rejects_repeated_image_without_valid_url() {
+        let error = parse_smms_upload_response(
+            r#"{"success":false,"code":"image_repeated","message":"already exists","data":null}"#,
+        )
+        .expect_err("missing URL must remain an error");
+        assert!(error.to_string().contains("有效 URL"));
+    }
 }

@@ -10,12 +10,13 @@ use crate::error::AppError;
 ///
 /// # 参数
 /// - `path`: 文件路径
+/// - `max_bytes`: 允许读取的最大文件大小
 ///
 /// # 返回
 /// - `Ok((Vec<u8>, u64))`: 文件内容和文件大小
 /// - `Err(AppError)`: 文件 IO 错误
-pub async fn read_file_bytes(path: &str) -> Result<(Vec<u8>, u64), AppError> {
-    let mut file = File::open(path)
+pub async fn read_file_bytes(path: &str, max_bytes: u64) -> Result<(Vec<u8>, u64), AppError> {
+    let file = File::open(path)
         .await
         .map_err(|e| AppError::file_io(format!("无法打开文件: {}", e)))?;
 
@@ -25,12 +26,28 @@ pub async fn read_file_bytes(path: &str) -> Result<(Vec<u8>, u64), AppError> {
         .map_err(|e| AppError::file_io(format!("无法获取文件元数据: {}", e)))?
         .len();
 
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)
+    if file_size > max_bytes {
+        return Err(AppError::validation(format!(
+            "文件大小 ({:.2}MB) 超过读取上限 ({:.2}MB)",
+            file_size as f64 / 1024.0 / 1024.0,
+            max_bytes as f64 / 1024.0 / 1024.0,
+        )));
+    }
+
+    let capacity = usize::try_from(file_size)
+        .map_err(|_| AppError::file_io("文件过大，无法分配读取缓冲区"))?;
+    let mut buffer = Vec::with_capacity(capacity);
+    file.take(max_bytes.saturating_add(1))
+        .read_to_end(&mut buffer)
         .await
         .map_err(|e| AppError::file_io(format!("无法读取文件: {}", e)))?;
 
-    Ok((buffer, file_size))
+    let actual_size = buffer.len() as u64;
+    if actual_size > max_bytes {
+        return Err(AppError::validation("文件在读取期间增长并超过大小上限"));
+    }
+
+    Ok((buffer, actual_size))
 }
 
 #[cfg(test)]
@@ -75,7 +92,7 @@ mod tests {
         let content = b"hello picnexus";
         let tmp = TempFile::new(content);
 
-        let (bytes, size) = read_file_bytes(tmp.path.to_str().unwrap())
+        let (bytes, size) = read_file_bytes(tmp.path.to_str().unwrap(), 1024)
             .await
             .expect("应能读取存在的文件");
 
@@ -87,7 +104,7 @@ mod tests {
     async fn read_empty_file_returns_zero_length() {
         let tmp = TempFile::new(&[]);
 
-        let (bytes, size) = read_file_bytes(tmp.path.to_str().unwrap())
+        let (bytes, size) = read_file_bytes(tmp.path.to_str().unwrap(), 1024)
             .await
             .expect("空文件也应能读取");
 
@@ -101,7 +118,7 @@ mod tests {
         let content: Vec<u8> = (0u8..=255).collect();
         let tmp = TempFile::new(&content);
 
-        let (bytes, size) = read_file_bytes(tmp.path.to_str().unwrap())
+        let (bytes, size) = read_file_bytes(tmp.path.to_str().unwrap(), 1024)
             .await
             .expect("二进制文件应能读取");
 
@@ -115,7 +132,7 @@ mod tests {
         // 万一存在（极小概率），先删掉
         let _ = std::fs::remove_file(&bogus);
 
-        let result = read_file_bytes(bogus.to_str().unwrap()).await;
+        let result = read_file_bytes(bogus.to_str().unwrap(), 1024).await;
 
         match result {
             Err(AppError::FileIo { message }) => {
@@ -128,5 +145,22 @@ mod tests {
             Err(e) => panic!("应为 FileIo 错误，实际: {:?}", e),
             Ok(_) => panic!("不存在的文件不应成功读取"),
         }
+    }
+
+    #[tokio::test]
+    async fn rejects_sparse_file_from_metadata_before_reading() {
+        let path = std::env::temp_dir().join(format!(
+            "picnexus_sparse_{}_{}",
+            std::process::id(),
+            TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed),
+        ));
+        let file = std::fs::File::create(&path).expect("创建稀疏文件失败");
+        file.set_len(64 * 1024 * 1024)
+            .expect("设置稀疏文件大小失败");
+
+        let result = read_file_bytes(path.to_str().unwrap(), 1024).await;
+        let _ = std::fs::remove_file(&path);
+
+        assert!(matches!(result, Err(AppError::Validation { .. })));
     }
 }

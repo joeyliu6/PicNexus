@@ -61,6 +61,7 @@ log = "0.4"
 opener = "0.7"
 axum = "0.7"
 tower-http = { version = "0.5", features = ["cors"] }
+tower = { version = "0.5", features = ["util"] }
 
 [target.'cfg(windows)'.dependencies]
 # WebView2 COM 接口 - 用于内存优化

@@ -59,10 +59,7 @@ pub async fn upload_to_imgur(
         }),
     );
 
-    // 1. 读取文件
-    let (buffer, file_size) = read_file_bytes(&file_path).await?;
-
-    // 2. 获取文件名并验证文件类型
+    // 1. 先读取扩展名，以便在分配缓冲区前选择图片/GIF 对应上限。
     let file_name = std::path::Path::new(&file_path)
         .file_name()
         .and_then(|n| n.to_str())
@@ -74,13 +71,14 @@ pub async fn upload_to_imgur(
         .ok_or_else(|| AppError::validation("无法获取文件扩展名"))?
         .to_lowercase();
 
-    // 3. 验证文件类型
+    // 2. 验证文件类型并按类型限制读取大小。
     let is_gif = ext == "gif";
     let max_size = if is_gif {
         MAX_FILE_SIZE_GIF
     } else {
         MAX_FILE_SIZE_IMAGE
     };
+    let (buffer, file_size) = read_file_bytes(&file_path, max_size).await?;
 
     if file_size > max_size {
         return Err(AppError::validation(format!(

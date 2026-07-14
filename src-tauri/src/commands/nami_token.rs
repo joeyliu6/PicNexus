@@ -28,6 +28,15 @@ struct SidecarResponse<T> {
     error: Option<String>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NamiSidecarInput<'a> {
+    cookie: &'a str,
+    auth_token: &'a str,
+}
+
+const NAMI_FETCH_ARGS: &[&str] = &["fetch-token"];
+
 fn sanitize_sidecar_log_line(line: &str) -> String {
     let lower = line.to_ascii_lowercase();
     let has_sensitive_marker = [
@@ -38,7 +47,6 @@ fn sanitize_sidecar_log_line(line: &str) -> String {
         "zmtoken",
         "auth-token",
         "authtoken",
-        "--cookie",
         "cookie:",
     ]
     .iter()
@@ -70,14 +78,13 @@ pub async fn fetch_nami_token_internal(
 ) -> Result<NamiDynamicHeaders, AppError> {
     log::info!("[NamiToken] starting sidecar");
 
-    let args = [
-        "fetch-token",
-        "--cookie",
-        &cookie,
-        "--auth-token",
-        &auth_token,
-    ];
-    let (output, stderr_output) = portable::run_sidecar("nami-token-fetcher", &args, 45).await?;
+    let input = serde_json::to_string(&NamiSidecarInput {
+        cookie: &cookie,
+        auth_token: &auth_token,
+    })
+    .map_err(|e| AppError::external(format!("构造 sidecar 请求失败: {}", e)))?;
+    let (output, stderr_output) =
+        portable::run_sidecar_with_stdin("nami-token-fetcher", NAMI_FETCH_ARGS, &input, 45).await?;
 
     if !stderr_output.is_empty() {
         for line in stderr_output.lines() {
@@ -104,5 +111,26 @@ pub async fn fetch_nami_token_internal(
         Err(AppError::external(
             response.error.unwrap_or_else(|| "未知错误".to_string()),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nami_secrets_are_serialized_to_stdin_not_arguments() {
+        let input = serde_json::to_string(&NamiSidecarInput {
+            cookie: "cookie-secret",
+            auth_token: "token-secret",
+        })
+        .unwrap();
+
+        assert_eq!(NAMI_FETCH_ARGS, &["fetch-token"]);
+        assert!(!NAMI_FETCH_ARGS.join(" ").contains("secret"));
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&input).unwrap(),
+            serde_json::json!({"cookie":"cookie-secret","authToken":"token-secret"}),
+        );
     }
 }

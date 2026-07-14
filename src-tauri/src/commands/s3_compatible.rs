@@ -97,7 +97,7 @@ pub async fn upload_to_s3_compatible(
     );
 
     // 1. 读取文件
-    let (buffer, file_size) = read_file_bytes(&file_path).await?;
+    let (buffer, file_size) = read_file_bytes(&file_path, 50 * 1024 * 1024).await?;
 
     log::debug!("[S3兼容] 文件大小: {} bytes", file_size);
 

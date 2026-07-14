@@ -113,10 +113,10 @@ pub async fn upload_to_chaoxing(
     }
 
     // 2. 读取文件
-    let (buffer, file_size) = read_file_bytes(&file_path).await?;
+    const MAX_SIZE: u64 = 200 * 1024 * 1024; // 200MB
+    let (buffer, file_size) = read_file_bytes(&file_path, MAX_SIZE).await?;
 
     // 3. 检查文件大小（超星限制 200MB）
-    const MAX_SIZE: u64 = 200 * 1024 * 1024; // 200MB
     if file_size > MAX_SIZE {
         return Err(AppError::validation(format!(
             "文件大小 ({:.2}MB) 超过超星限制 (200MB)",

@@ -134,10 +134,10 @@ pub async fn upload_to_bilibili(
     let (sessdata, csrf) = extract_bilibili_cookies(&bilibili_cookie)?;
 
     // 2. 读取文件
-    let (buffer, file_size) = read_file_bytes(&file_path).await?;
+    const MAX_SIZE: u64 = 10 * 1024 * 1024; // 10MB
+    let (buffer, file_size) = read_file_bytes(&file_path, MAX_SIZE).await?;
 
     // 3. 检查文件大小（哔哩哔哩限制 10MB）
-    const MAX_SIZE: u64 = 10 * 1024 * 1024; // 10MB
     if file_size > MAX_SIZE {
         return Err(AppError::validation(format!(
             "文件大小 ({:.2}MB) 超过哔哩哔哩限制 (10MB)",

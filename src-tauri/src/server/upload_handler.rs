@@ -1198,21 +1198,9 @@ async fn server_upload_smms(path: &std::path::Path, token: &str) -> Result<Strin
         };
     }
 
-    let json: serde_json::Value =
-        serde_json::from_str(&text).map_err(|e| format!("JSON 解析失败: {}", e))?;
-
-    if !json["success"].as_bool().unwrap_or(false) {
-        return Err(format!(
-            "SM.MS 上传失败: {}: {}",
-            json["code"].as_str().unwrap_or(""),
-            json["message"].as_str().unwrap_or("未知错误")
-        ));
-    }
-
-    Ok(json["data"]["url"]
-        .as_str()
-        .ok_or("响应缺少 url 字段")?
-        .to_string())
+    crate::commands::smms::parse_smms_upload_response(&text)
+        .map(|result| result.url)
+        .map_err(|error| error.to_string())
 }
 
 // ── Imgur 图床 ────────────────────────────────────────

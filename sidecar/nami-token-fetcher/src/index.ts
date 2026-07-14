@@ -20,6 +20,11 @@ interface CheckChromeData {
 
 type Response<T> = SuccessResponse<T> | ErrorResponse;
 
+export interface FetchTokenInput {
+  cookie: string;
+  authToken: string;
+}
+
 function success<T>(data: T): Response<T> {
   return { success: true, data };
 }
@@ -52,28 +57,38 @@ async function handleFetchToken(cookie: string, authToken: string): Promise<Resp
   }
 }
 
-function parseArgs(args: string[]): { [key: string]: string } {
-  const result: { [key: string]: string } = {};
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg.startsWith('--')) {
-      const key = arg.substring(2);
-      const value = args[i + 1] || '';
-      if (!value.startsWith('--')) {
-        result[key] = value;
-        i++;
-      } else {
-        result[key] = '';
-      }
-    }
+export function parseFetchTokenInput(raw: string): FetchTokenInput {
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    throw new Error('Invalid stdin JSON');
   }
-  return result;
+  if (!value || typeof value !== 'object') {
+    throw new Error('stdin JSON must be an object');
+  }
+
+  const input = value as Record<string, unknown>;
+  if (typeof input.cookie !== 'string' || input.cookie.trim().length === 0) {
+    throw new Error('Missing required stdin field: cookie');
+  }
+  if (typeof input.authToken !== 'string' || input.authToken.trim().length === 0) {
+    throw new Error('Missing required stdin field: authToken');
+  }
+  return { cookie: input.cookie, authToken: input.authToken };
+}
+
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
-  const parsedArgs = parseArgs(args.slice(1));
 
   let result: Response<any>;
 
@@ -82,24 +97,16 @@ async function main() {
       result = await handleCheckChrome();
       break;
 
-    case 'fetch-token':
-      const cookie = parsedArgs['cookie'] || '';
-      const authToken = parsedArgs['auth-token'] || '';
-
-      if (!cookie) {
-        result = error('Missing required argument: --cookie');
+    case 'fetch-token': {
+      try {
+        const { cookie, authToken } = parseFetchTokenInput(await readStdin());
+        result = await handleFetchToken(cookie, authToken);
+      } catch (err) {
+        result = error(err instanceof Error ? err.message : 'Invalid stdin input');
         process.exitCode = 1;
-        break;
       }
-
-      if (!authToken) {
-        result = error('Missing required argument: --auth-token');
-        process.exitCode = 1;
-        break;
-      }
-
-      result = await handleFetchToken(cookie, authToken);
       break;
+    }
 
     default:
       result = error(`Unknown command: ${command}. Available commands: check-chrome, fetch-token`);
@@ -110,7 +117,9 @@ async function main() {
   writeJsonResult(result);
 }
 
-main().catch((err) => {
-  writeJsonResult(error(err.message || 'Unexpected error'));
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((err) => {
+    writeJsonResult(error(err.message || 'Unexpected error'));
+    process.exitCode = 1;
+  });
+}

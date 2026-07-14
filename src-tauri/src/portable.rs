@@ -3,6 +3,7 @@ use std::process::Stdio;
 
 use crate::error::AppError;
 use tauri::Manager;
+use tokio::io::AsyncWriteExt;
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -84,12 +85,35 @@ pub async fn run_sidecar(
     args: &[&str],
     timeout_secs: u64,
 ) -> Result<(String, String), AppError> {
+    run_sidecar_process(base_name, args, None, timeout_secs).await
+}
+
+pub async fn run_sidecar_with_stdin(
+    base_name: &str,
+    args: &[&str],
+    stdin_json: &str,
+    timeout_secs: u64,
+) -> Result<(String, String), AppError> {
+    run_sidecar_process(base_name, args, Some(stdin_json.as_bytes()), timeout_secs).await
+}
+
+async fn run_sidecar_process(
+    base_name: &str,
+    args: &[&str],
+    stdin_data: Option<&[u8]>,
+    timeout_secs: u64,
+) -> Result<(String, String), AppError> {
     let path = sidecar_path(base_name)
         .ok_or_else(|| AppError::external(format!("未找到 sidecar: {}", base_name)))?;
 
     let mut command = tokio::process::Command::new(&path);
     command
         .args(args)
+        .stdin(if stdin_data.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
@@ -97,13 +121,30 @@ pub async fn run_sidecar(
     #[cfg(windows)]
     command.creation_flags(CREATE_NO_WINDOW);
 
+    let mut child = command
+        .spawn()
+        .map_err(|e| AppError::external(format!("启动 sidecar 失败: {} ({})", base_name, e)))?;
+
+    if let Some(data) = stdin_data {
+        let mut stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| AppError::external(format!("无法打开 sidecar stdin: {}", base_name)))?;
+        stdin.write_all(data).await.map_err(|e| {
+            AppError::external(format!("写入 sidecar stdin 失败: {} ({})", base_name, e))
+        })?;
+        stdin.shutdown().await.map_err(|e| {
+            AppError::external(format!("关闭 sidecar stdin 失败: {} ({})", base_name, e))
+        })?;
+    }
+
     let output = tokio::time::timeout(
         std::time::Duration::from_secs(timeout_secs),
-        command.output(),
+        child.wait_with_output(),
     )
     .await
     .map_err(|_| AppError::network(format!("sidecar 超时: {}", base_name)))?
-    .map_err(|e| AppError::external(format!("启动 sidecar 失败: {} ({})", base_name, e)))?;
+    .map_err(|e| AppError::external(format!("等待 sidecar 失败: {} ({})", base_name, e)))?;
 
     log::debug!("[Sidecar] {} exited: {:?}", base_name, output.status.code());
 

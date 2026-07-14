@@ -50,7 +50,7 @@ pub async fn upload_to_qiyu(
     let object_path = &token_info.object_path;
 
     // 3. 读取文件
-    let (buffer, file_size) = read_file_bytes(&file_path).await?;
+    let (buffer, file_size) = read_file_bytes(&file_path, 50 * 1024 * 1024).await?;
 
     // 4. 验证文件类型（只允许图片）
     let file_name = std::path::Path::new(&file_path)

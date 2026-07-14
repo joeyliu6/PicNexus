@@ -539,7 +539,7 @@ pub async fn upload_to_nami(
     log::info!("[Nami] 开始上传文件: {}", safe_path(&file_path));
 
     // 1. 读取文件
-    let (buffer, file_size) = read_file_bytes(&file_path).await?;
+    let (buffer, file_size) = read_file_bytes(&file_path, 50 * 1024 * 1024).await?;
 
     // 2. 获取文件扩展名
     let file_name = std::path::Path::new(&file_path)
@@ -728,8 +728,10 @@ pub async fn test_nami_connection(
                     {
                         Err(AppError::auth("Cookie 或 Auth-Token 已失效，请重新获取"))
                     } else {
-                        // STS 请求失败但不一定是认证问题
-                        Ok("纳米 Cookie 可能有效，但 STS 请求异常".to_string())
+                        Err(AppError::upload(
+                            "纳米",
+                            format!("STS 凭证请求失败: {}", error_str),
+                        ))
                     }
                 }
             }
