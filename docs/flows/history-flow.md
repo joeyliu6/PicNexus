@@ -70,7 +70,7 @@ flowchart TD
     F -- 否 --> G{有服务筛选?}
     G -- 是 --> G1["WHERE primary_service = ?"]
     G -- 否 --> G2[无额外条件]
-    G1 & G2 --> H["SELECT *, COUNT(*) OVER()\nORDER BY timestamp DESC\nLIMIT/OFFSET"]
+    G1 & G2 --> H["SELECT *, COUNT(*) OVER()\nORDER BY timestamp DESC, id DESC\nLIMIT/OFFSET"]
 
     D --> I["WHERE local_file_name_lower LIKE ?\nESCAPE '\\'\nLIMIT/OFFSET"]
 
@@ -127,7 +127,7 @@ flowchart TD
 
 ## 收藏视图（独立服务端分页）
 
-收藏视图独立调用 `historyDB.getFavoritesMetaPage({offset, limit, serviceFilter, searchTerm})`，SQL 直接 `WHERE is_favorited=1 ORDER BY timestamp DESC LIMIT ? OFFSET ?`。
+收藏视图独立调用 `historyDB.getFavoritesMetaPage({offset, limit, serviceFilter, searchTerm})`，SQL 直接 `WHERE is_favorited=1 ORDER BY timestamp DESC, id DESC LIMIT ? OFFSET ?`。主列表、搜索、收藏和流式读取使用相同的 `id DESC` 次级排序，保证同毫秒记录跨页顺序稳定。
 
 - 首页由视图可见性触发（`useLazyLoadOnVisible`），默认每批 80 条
 - 滚动至底部 300px 时累积加载下一批

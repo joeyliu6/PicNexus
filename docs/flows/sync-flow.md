@@ -160,6 +160,8 @@ flowchart TD
 ```
 
 > **关键点**：
+> - 配置上传与配置双向同步必须先设置备份密码；UI 会打开密码设置对话框，`ConfigSync` 底层也会在联网和加锁前拒绝无密码调用
+> - 云端配置下载仍可独立使用；本地明文导出保留风险确认流程
 > - 代码中**没有** JSON 内容比对和三路冲突对话框，用户通过菜单选项预先声明意图
 > - 覆盖类操作（`downloadSettingsOverwrite` / `downloadHistoryOverwrite` / `uploadHistoryForce`）统一用 `confirmDialog` 做破坏性确认
 > - 合并类操作（`downloadSettingsMerge` / `downloadHistoryMerge` / `uploadHistoryMerge`）直接执行，合并策略见图 2 说明

@@ -87,9 +87,13 @@ flowchart TD
     AE & AF --> AG[queueManager.updateItem 更新 UI]
 
     %% 收尾
-    AG --> AH{所有批次完成?}
-    AH -- 否 --> O
-    AH -- 是 --> AI[copyLinks 复制链接到剪贴板]
+    AG --> AH{当前文件所有图床完成?}
+    AH -- 否 --> U
+    AH -- 是 --> AH1[reconcileHistoryPrimary<br/>按配置顺序收口主图床]
+    AH1 --> AH2[markItemComplete<br/>统一缩略图主链接]
+    AH2 --> AH3{所有批次完成?}
+    AH3 -- 否 --> O
+    AH3 -- 是 --> AI[copyLinks 复制最终主链接到剪贴板]
     AI --> AJ[showUploadSessionSummary Toast 通知]
     AJ --> AK[解锁 isUploading = false]
 
@@ -179,6 +183,9 @@ sequenceDiagram
             UU->>UU: addResultToHistoryItem（SQLite UPDATE）
         end
 
+        UU->>UU: reconcileHistoryPrimary（最终 primaryService/primaryUrl）
+        UU->>UV: markItemComplete（最终缩略图链接）
+
         UU->>UV: queueManager.updateItem → UI 更新
     end
 
@@ -199,6 +206,7 @@ sequenceDiagram
 | 进度条卡在 0% | Rust 后端未发送 progress 事件 | 图2 进度循环 |
 | 部分图床失败 | 单个服务 StructuredError | 图1 节点 AA → AC |
 | 历史记录缺少某图床 URL | `addResultToHistoryItem` 未触发 | 图1 节点 AD → AF |
+| 历史主图床与复制链接不一致 | `reconcileHistoryPrimary` 未完成 | 图1 节点 AH1 |
 
 ---
 
