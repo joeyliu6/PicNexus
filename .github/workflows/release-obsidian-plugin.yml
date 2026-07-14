@@ -187,9 +187,11 @@ jobs:
               exit 1
             }
 
-            if git merge-base --is-ancestor "$previous_source" "$GITHUB_SHA"; then
+            if [[ "$previous_source" == "$GITHUB_SHA" ]]; then
+              : # A clean snapshot was rebuilt directly from this source commit.
+            elif git -C "$GITHUB_WORKSPACE" merge-base --is-ancestor "$previous_source" "$GITHUB_SHA"; then
               : # Current source is equal to or newer than the generated snapshot.
-            elif git merge-base --is-ancestor "$GITHUB_SHA" "$previous_source"; then
+            elif git -C "$GITHUB_WORKSPACE" merge-base --is-ancestor "$GITHUB_SHA" "$previous_source"; then
               [[ "$release_exists" == "true" ]] || {
                 echo "Plugin repository main is newer, but release $PLUGIN_VERSION does not exist."
                 exit 1
