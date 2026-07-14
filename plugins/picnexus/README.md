@@ -10,30 +10,14 @@ PicNexus uploads images pasted or dropped into Obsidian through the PicNexus des
 
 ## Installation
 
-### Community plugins
-
-After the plugin is accepted into the Obsidian community directory, search for `PicNexus` under **Settings -> Community plugins**.
-
-### BRAT
-
-1. Install the BRAT community plugin.
-2. Add `https://github.com/joeyliu6/picnexus-obsidian` as a beta plugin.
-3. Enable PicNexus under **Settings -> Community plugins**.
-
-### Manual installation
-
-1. Download `picnexus-obsidian-<version>.zip` from a PicNexus release.
-2. Extract `main.js`, `manifest.json`, and `styles.css` into `<vault>/.obsidian/plugins/picnexus/`.
-3. Restart Obsidian and enable PicNexus under **Settings -> Community plugins**.
-
-If you tested an older build with the `obsidian-picnexus` ID, remove that plugin directory before installing this version.
+Follow the [PicNexus Obsidian installation and setup guide](https://github.com/joeyliu6/PicNexus/blob/main/docs/reference/guides/obsidian-plugin-installation.md) for BRAT, community directory, and manual installation instructions.
 
 ## Setup
 
 1. Open PicNexus and enable the Obsidian integration.
 2. Select the image hosting service to use.
 3. Keep the port in PicNexus and the Obsidian plugin settings identical. The default is `36799`.
-4. No Obsidian or PicNexus token is required. Use **Test connection** in the plugin settings.
+4. Use **Test connection** in the plugin settings.
 
 ## Network and privacy disclosure
 

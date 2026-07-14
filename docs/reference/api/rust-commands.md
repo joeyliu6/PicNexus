@@ -48,12 +48,13 @@
 
 ---
 
-## Editor Server auth
+## 编辑器 Server 访问控制
 
-`update_server_config` accepts optional `authToken`. Browser-originated `POST /upload` and
-`POST /upload/file` requests must include the token in `X-PicNexus-Token`,
-`Authorization: Bearer <token>`, or the query string (`?token=...` / `?authToken=...`).
-`GET /status` remains unauthenticated for connection checks.
+`update_server_config` 接收内部使用的可选 `authToken`。桌面端启用编辑器 Server 时会自动生成该值，并随加密配置保存；它不是 Obsidian 插件的用户配置项。
+
+带浏览器 `Origin` 的 `POST /upload` 和 `POST /upload/file` 请求必须通过 `X-PicNexus-Token`、`Authorization: Bearer <token>` 或查询参数（`?token=...` / `?authToken=...`）携带匹配值。这样可以阻止普通网页在用户不知情时调用本机上传接口。
+
+不带浏览器 `Origin` 的本机原生客户端请求继续兼容，其中包括 Obsidian 的 `requestUrl`。`GET /status` 不要求认证，仅用于连接检测。该边界用于防范浏览器跨源调用，不用于隔离当前系统用户权限下的其他本机进程。
 
 ---
 

@@ -56,9 +56,7 @@ CI 会拒绝同一版本下发生变化的 `main.js`、`manifest.json` 或 `styl
 
 ## 测试安装
 
-BRAT：插件尚未上架时，安装 BRAT 后添加 `https://github.com/joeyliu6/picnexus-obsidian`，再启用 PicNexus。插件上架后，直接在 **Settings -> Community plugins** 搜索 `PicNexus` 安装。
-
-手动安装：将桌面端 Release 中的插件 ZIP 解压到 `<vault>/.obsidian/plugins/picnexus/`。旧测试目录 `.obsidian/plugins/obsidian-picnexus/` 必须删除，避免同时加载两个插件实例。
+用户侧的 BRAT、官方目录、手动安装和端口配置步骤统一维护在 [Obsidian 插件安装与配置](./obsidian-plugin-installation.md)。发布回归必须从目标公开仓库安装，不使用本地源码目录代替。
 
 至少验证测试连接、粘贴上传、拖拽上传、禁用/启用和 Obsidian 重启加载。
 

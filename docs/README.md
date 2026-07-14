@@ -52,6 +52,7 @@ docs/
 | 遇到 bug | [reference/troubleshooting/](./reference/troubleshooting/) |
 | 查 API 接口 | [reference/api/](./reference/api/) |
 | 新增图床 | [reference/guides/add-new-uploader.md](./reference/guides/add-new-uploader.md) |
+| 安装 Obsidian 插件 | [reference/guides/obsidian-plugin-installation.md](./reference/guides/obsidian-plugin-installation.md) |
 
 > **flows/ vs reference/guides/ 的区别**：
 > - `flows/` = 系统流程（"系统是怎么运转的"，Mermaid 图为主，运行时视角）
