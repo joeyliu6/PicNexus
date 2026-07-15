@@ -74,3 +74,21 @@ windows-sys = { version = "0.60", features = ["Win32_UI_WindowsAndMessaging"] }
 [features]
 # This feature is used for production builds or when `devPath` points to the filesystem
 custom-protocol = ["tauri/custom-protocol"]
+
+[profile.dev]
+debug = 1
+
+[profile.dev.package."*"]
+debug = 0
+
+[profile.dev.build-override]
+debug = 0
+
+[profile.test]
+debug = 1
+
+[profile.test.package."*"]
+debug = 0
+
+[profile.test.build-override]
+debug = 0
