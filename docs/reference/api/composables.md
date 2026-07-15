@@ -26,11 +26,13 @@
 
 ## useAnalytics
 
-`useAnalytics` 仅通过 GA4 Measurement Protocol 收集 `first_run` 和 `app_start`。事件附带应用版本、操作系统和固定桌面平台标识，不提供通用事件追踪接口。
+`useAnalytics` 通过一次性的本机 HTTP 隔离 WebView 加载 Google tag，仅定义 `first_run` 和 `app_start` 两个生命周期事件。事件附带应用版本、操作系统和固定桌面平台标识，不提供通用事件追踪接口，也不在桌面客户端中保存 GA4 API secret。
 
-公开方法为 `initialize()`、`enable()`、`disable()`。发送失败的事件会在本地保留最多 72 小时，并在后续应用启动时补发；该流程不阻塞应用挂载。
+公开方法为 `initialize()`、`enable()`、`disable()`。`first_run` 在 Google tag 未完成处理时保留到下次启动重试；`app_start` 不跨启动补发，避免把旧启动错误记到新的时间。该流程不阻塞应用挂载。
 
-GA4 后台需要创建事件范围的自定义维度：`app_version`、`os_info`、`app_platform`。成功日志中的“GA4 请求已接受”仅代表 HTTP 请求收到 `2xx`，不代表报表已经完成处理。
+GA4 后台需要创建事件范围的自定义维度：`app_version`、`os_info`、`app_platform`。成功日志只代表 Google tag 已完成事件命令处理，最终入库仍应通过 DebugView 或报表确认。
+
+验收生产构建时可在启动进程前临时设置 `PICNEXUS_ANALYTICS_DEBUG=1`，使本次进程的两个生命周期事件进入 DebugView。正常启动不带该变量，也不会发送 `debug_mode`；这不是持久化用户设置。
 
 ## 通用模式
 
