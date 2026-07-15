@@ -8,7 +8,7 @@
 
 展示 AES-GCM 加密配置的读写流程，重点关注**异常分支**（解密失败、备份密码）。
 
-> **关键源文件**：`src/composables/useConfig.ts`、`src/store/instances.ts`、`src/crypto.ts`
+> **关键源文件**：`src/composables/useConfig.ts`、`src/store/instances.ts`、`src/security/crypto.ts`
 
 ### 配置加载
 

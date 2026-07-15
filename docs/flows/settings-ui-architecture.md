@@ -20,7 +20,7 @@ PicNexus 的配置系统绕开了 `tauri-plugin-store`,采用**自写 SimpleStor
 
 展示从组件挂载读配置到用户修改后落盘的完整链路,核心关注 `toPlainConfig` 和 `emit('config-updated')` 两个关键节点。
 
-> **关键源文件**:`src/composables/useConfig.ts`、`src/store/instances.ts`、`src/store.ts` (SimpleStore)、`src/components/settings/GeneralSettingsPanel.vue`
+> **关键源文件**:`src/composables/useConfig.ts`、`src/store/index.ts` (Store 门面)、`src/store/instances.ts`、`src/components/settings/GeneralSettingsPanel.vue`
 
 ```mermaid
 flowchart TD

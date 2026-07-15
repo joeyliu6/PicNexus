@@ -108,7 +108,8 @@ PicNexus/
 │   │
 │   ├── core/                     # 核心业务逻辑
 │   │   ├── MultiServiceUploader.ts  # 多服务并行上传
-│   │   └── LinkGenerator.ts         # 链接生成器
+│   │   ├── LinkGenerator.ts         # 链接生成器
+│   │   └── UploadQueue.ts           # 上传队列状态管理
 │   │
 │   ├── uploaders/                # 图床上传器
 │   │   ├── base/                # 基类和接口
@@ -131,12 +132,15 @@ PicNexus/
 │   │   └── types.ts             # TypeScript 类型定义
 │   │
 │   ├── theme/                    # 主题系统
+│   │   ├── preset.ts             # PrimeVue 主题预设
 │   │   ├── dark-theme.css       # 深色主题变量
 │   │   ├── light-theme.css      # 浅色主题变量
 │   │   └── primevue-overrides.css # PrimeVue 覆盖
 │   │
+│   ├── security/                 # 加密和网络安全策略
+│   ├── store/                    # 加密配置存储及单例
+│   ├── styles/                   # 全局样式
 │   ├── utils/                    # 工具函数
-│   ├── store.ts                  # 加密配置存储
 │   ├── main.ts                   # 应用入口
 │   └── App.vue                   # 根组件
 │
@@ -144,14 +148,15 @@ PicNexus/
 │   ├── src/
 │   │   ├── main.rs              # Tauri 入口
 │   │   ├── commands/            # Tauri 命令模块
-│   │   ├── error.rs             # 统一错误处理
-│   │   └── lib.rs               # 库入口
+│   │   └── error.rs             # 统一错误处理
 │   ├── Cargo.toml               # Rust 依赖
 │   └── tauri.conf.json          # Tauri 配置
 │
+├── plugins/obsidian/             # Obsidian 插件独立包
+├── sidecars/                     # Token 获取辅助程序源码
+├── tests/                        # unit / e2e / visual / tauri-e2e
 ├── docs/                         # 开发文档
-├── scripts/                      # 构建脚本
-└── sidecar/                      # 辅助程序 (Chrome 自动化)
+└── scripts/                      # 构建、检查和清理脚本
 ```
 
 ---
@@ -166,7 +171,7 @@ PicNexus/
 | **LinkGenerator** | `core/LinkGenerator.ts` | 根据上传结果生成各格式链接 |
 | **UploaderFactory** | `uploaders/base/UploaderFactory.ts` | 注册和创建上传器实例 |
 | **HistoryDatabase** | `services/HistoryDatabase.ts` | SQLite 数据库操作，历史记录 CRUD |
-| **Store** | `store.ts` | AES-GCM 加密的配置文件存储 |
+| **Store** | `store/index.ts` | AES-GCM 加密配置存储门面 |
 
 ### Rust 后端模块
 

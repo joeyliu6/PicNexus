@@ -43,6 +43,7 @@
 4. **安装依赖**
    ```bash
    npm ci
+   npm run setup:sidecars
    ```
 
 5. **开发和测试**

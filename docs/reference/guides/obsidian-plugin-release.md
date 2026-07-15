@@ -1,15 +1,15 @@
 # Obsidian 插件发布指南
 
-> 用于维护 `plugins/picnexus/`、桌面端随附 ZIP、独立插件仓库、BRAT 测试和 Obsidian 官方目录。
+> 用于维护 `plugins/obsidian/`、桌面端随附 ZIP、独立插件仓库、BRAT 测试和 Obsidian 官方目录。
 
 ## 仓库职责
 
 - PicNexus 主仓库是插件源码的唯一来源。
-- `plugins/picnexus/` 以带来源提交标记的快照同步到独立公开仓库根目录。
+- `plugins/obsidian/` 以带来源提交标记的快照同步到独立公开仓库根目录。
 - 独立仓库只服务 GitHub Release、BRAT 和 Obsidian 官方目录，不直接编辑。
-- 插件版本由 `plugins/picnexus/manifest.json` 决定，不强制等于桌面端版本。
+- 插件版本由 `plugins/obsidian/manifest.json` 决定，不强制等于桌面端版本。
 - 插件从 `1.0.0` 开始独立递增；已发布版本不能覆盖修改。
-- `plugins/picnexus/.gitignore` 必须忽略 `node_modules/`，发布快照和公开仓库历史均不应包含依赖目录。
+- `plugins/obsidian/.gitignore` 必须忽略 `node_modules/`，发布快照和公开仓库历史均不应包含依赖目录。
 - 独立仓库的 `.github/workflows/attest-release.yml` 由插件源码同步生成，用于证明 Release 资产与对应标签中的运行文件一致。
 
 ## 首次配置
@@ -23,11 +23,11 @@
 ## 本地验证
 
 ```bash
-npm --prefix plugins/picnexus ci
+npm --prefix plugins/obsidian ci
 npm run ci:obsidian
 ```
 
-`ci:obsidian` 会执行插件类型检查、构建、发布结构校验和发布脚本测试。构建后必须确认 `plugins/picnexus/main.js` 已提交。
+`ci:obsidian` 会执行插件类型检查、构建、发布结构校验和发布脚本测试。构建后必须确认 `plugins/obsidian/main.js` 已提交。
 
 每次修改插件运行代码时同步更新：
 

@@ -17,7 +17,7 @@ flowchart TD
     C --> D{密钥匹配?}
     D -- 不匹配 --> D1["startupFlags.configResetDueToKeyMismatch = true<br/>重置为默认配置"]
     D1 --> E
-    D -- 匹配 --> E[useAnalytics.initialize 非阻塞]
+    D -- 匹配 --> E["useAnalytics.initialize 非阻塞<br/>生命周期事件先入队，再直连 GA4"]
     E --> F[cleanupStoreBackups 清理过期备份]
     F --> G["createApp(App).mount('#app')"]
 
@@ -148,6 +148,7 @@ flowchart TD
 | 启动时 Toast 警告"密钥不匹配" | 之前密钥失效，已重置为默认 | 图8 节点 K → K1 |
 | 主题未生效 | initializeTheme 在事件监听之前，检查 effectiveTheme | 图8 节点 I |
 | 自动更新未触发 | config.autoUpdate.enabled = false | 图8 节点 O |
+| GA4 日志显示发送失败 | 事件保留在 `analytics_data.pendingBatches`，下次启动补发，不影响应用挂载 | 图8 节点 E |
 | 登录窗口打开但 Cookie 获取不到 | 域名不在 domains 列表 / 平台降级轮询延迟 | 图9 节点 G → H |
 | Cookie 获取后提示失败 | requiredFields 缺失或 fieldValueChecks 不通过 | 图9 节点 N → O |
 | 登录超时 | 用户未完成登录 / Cookie 事件未触发 | 图9 TIMEOUT 分支 |

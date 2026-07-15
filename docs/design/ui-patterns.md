@@ -46,40 +46,7 @@
 </EmptyState>
 ```
 
-### 2. Hero 空状态（Hero Empty State）
-
-**使用场景**：首次使用引导、需要强调行动号召的空状态
-
-**组件**：`HeroEmptyState.vue`
-
-**样式规范**：
-- 图标容器：56px × 56px，圆角 `--radius-xl`（16px）
-- 图标容器背景：`--primary-alpha-10`
-- 图标大小：24px（`--text-2xl`）
-- 图标颜色：`--primary`
-- 标题字号：18px（`--text-lg-xl`），字重 700
-- 标题颜色：`--text-main`
-- 描述字号：13px（`--text-sm`）
-- 描述颜色：`--text-muted`
-- 垂直间距：`--space-sm-md`（10px）
-- 元信息字号：12px（`--text-xs`），颜色 `--text-tertiary`
-
-**用法示例**：
-
-```vue
-<HeroEmptyState
-  icon="pi pi-shield"
-  title="检查你的图片链接"
-  description="扫描全部上传历史，发现失效和异常链接"
-  metaText="共 1,234 个链接待检测"
->
-  <button class="hero-cta" @click="handleStart">
-    <i class="pi pi-play"></i> 开始全面检测
-  </button>
-</HeroEmptyState>
-```
-
-### 3. 内联空状态（Inline Empty State）
+### 2. 内联空状态（Inline Empty State）
 
 **使用场景**：侧边栏、小型列表、日志面板等紧凑区域
 
@@ -110,7 +77,7 @@
 />
 ```
 
-### 4. 交互空状态（Interactive Empty State）
+### 3. 交互空状态（Interactive Empty State）
 
 **使用场景**：拖放区域、文件选择等需要用户交互的空状态
 
@@ -141,7 +108,7 @@
 
 ### 滚动条
 
-全局滚动条样式在 `style.css` 中定义，使用 CSS 变量：
+全局滚动条样式在 `styles/app.css` 中定义，使用 CSS 变量：
 
 ```css
 ::-webkit-scrollbar {

@@ -89,6 +89,7 @@ Rust 后端（Tauri Commands）
 
 ```bash
 npm ci
+npm run setup:sidecars
 npm run tauri dev
 ```
 
@@ -98,7 +99,7 @@ npm run tauri dev
 npm run tauri build
 ```
 
-需要 Node.js 18+ 和 Rust 环境。
+需要 Node.js 20+、npm 10+ 和 Rust 环境。Sidecar 二进制由源码生成，不提交到 Git；清理后可再次运行 `npm run setup:sidecars` 恢复。
 
 ## 免责声明
 

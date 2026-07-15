@@ -90,7 +90,7 @@ function flushPendingUpdates() {
 ## 修改文件
 
 - `src/composables/useQueueState.ts` - 添加 `clearPendingUpdatesForItem` 函数
-- `src/uploadQueue.ts` - 在 `markItemFailed` 和 `markItemComplete` 中调用清除函数
+- `src/core/UploadQueue.ts` - 在 `markItemFailed` 和 `markItemComplete` 中调用清除函数
 - `src/services/RetryService.ts` - 重试失败后检查并恢复 error 状态
 
 ## 效果

@@ -55,7 +55,7 @@
 | 变量类型 | 定义位置 | 说明 |
 |---------|---------|------|
 | 主题相关变量 | `dark-theme.css` / `light-theme.css` | 颜色、阴影等随主题变化的值 |
-| 尺寸、间距 | `style.css` 的 `:root` | 不随主题变化的布局值 |
+| 尺寸、间距 | `styles/app.css` 的 `:root` | 不随主题变化的布局值 |
 | 动效变量 | `styles/motion.css` | duration、easing、transform 预设 |
 
 ---
@@ -136,7 +136,7 @@ transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
 ## Typography Scale
 
-字号统一走变量体系，**禁止 `font-size` 硬编码**。所有档位定义在 [src/style.css](../../src/style.css) 的 `:root` 里。
+字号统一走变量体系，**禁止 `font-size` 硬编码**。所有档位定义在 [src/styles/app.css](../../src/styles/app.css) 的 `:root` 里。
 
 | 变量 | 值 | 与上级比率 | 适用场景 |
 |------|-----|----------|---------|

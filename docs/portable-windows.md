@@ -36,6 +36,7 @@ PicNexus/
 Windows release 构建完成后，可在本地生成 ZIP：
 
 ```powershell
+npm run setup:sidecars
 npm run tauri build
 npm run package:portable:win
 ```

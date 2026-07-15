@@ -202,7 +202,7 @@ flowchart TD
     L --> L3[latest.json]
 
     L --> OP[构建并校验 Obsidian 插件]
-    OP --> OP1[同步 plugins/picnexus 快照]
+    OP --> OP1[同步 plugins/obsidian 快照]
     OP1 --> OP2[独立仓库 Release<br/>标签不带 v]
     OP2 --> OP3[桌面端 Release<br/>picnexus-obsidian-*.zip]
     L1 & L2 & L3 & OP3 --> SUM[生成最终 SHA256SUMS.txt]
@@ -222,7 +222,7 @@ flowchart TD
 - **私钥管理**:`TAURI_SIGNING_PRIVATE_KEY` 存在 GitHub Secrets,**不能提交到仓库**
 - **公钥嵌入**:`tauri.conf.json` 的 `pubkey` 是 base64 编码的 minisign 公钥,修改私钥后必须同步更新公钥,否则所有存量用户无法验证新版
 - **密钥轮换的代价**:换私钥等于让所有旧版本用户"脱离"自动更新 → 必须手动下载新版
-- **插件版本独立**:`plugins/picnexus/manifest.json` 决定插件标签；代码未变化时可以复用已有插件 Release
+- **插件版本独立**:`plugins/obsidian/manifest.json` 决定插件标签；代码未变化时可以复用已有插件 Release
 - **跨仓库凭证**:`OBSIDIAN_PLUGIN_RELEASE_TOKEN` 只授予独立插件仓库 Contents 读写权限；目标仓库可由 `OBSIDIAN_PLUGIN_REPOSITORY` Repository Variable 覆盖
 - **发布顺序**:`release-checklist` 等待 Obsidian 插件 ZIP 上传完成后再生成 `SHA256SUMS.txt`
 
@@ -241,7 +241,7 @@ flowchart TD
 | Windows 上安装需要手动确认 | `installMode` 配成 `basicUi` 而非 `passive` | `tauri.conf.json` |
 | 老版本用户收不到更新 | `latest.json` 未正确上传或 Release 是 draft 状态 | 图4 L3 |
 | 新版本号冲突 | `package.json` 和 `tauri.conf.json` 版本不一致 | 图4 F |
-| 插件发布提示版本冲突 | 同一插件版本的运行文件发生变化 | 提升 `plugins/picnexus/manifest.json` 及关联版本文件 |
+| 插件发布提示版本冲突 | 同一插件版本的运行文件发生变化 | 提升 `plugins/obsidian/manifest.json` 及关联版本文件 |
 | 插件仓库同步失败 | Token 无写权限或目标仓库存在人工分叉 | 检查细粒度 Token；按主仓库源码人工协调分叉 |
 | 桌面端 Draft 缺少最终校验和 | Obsidian 插件任务失败，最终任务被阻断 | 修复插件任务并重新运行工作流 |
 

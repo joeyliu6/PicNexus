@@ -23,7 +23,6 @@
 src-tauri/
 ├── src/
 │   ├── main.rs              # Tauri 入口，命令注册
-│   ├── lib.rs               # 库入口
 │   ├── error.rs             # 统一错误处理
 │   └── commands/            # Tauri 命令模块
 │       ├── mod.rs           # 模块导出
@@ -42,10 +41,12 @@ src-tauri/
 │       └── nami_token.rs    # 纳米 Token 获取
 │
 ├── icons/                    # 应用图标
-├── sidecar/                  # 辅助程序
+├── binaries/                 # CI / 本地生成的 sidecar 二进制
 ├── Cargo.toml               # Rust 依赖
 └── tauri.conf.json          # Tauri 配置
 ```
+
+两个 sidecar 的 TypeScript 源码位于仓库根目录 `sidecars/`，通过 `npm run setup:sidecars` 生成当前平台二进制。
 
 ---
 

@@ -43,7 +43,7 @@
 |------|------|------|
 | 变量层 | `dark-theme.css`, `light-theme.css` | 定义主题变量，不包含选择器样式 |
 | 组件层 | `primevue-overrides.css` | PrimeVue 组件的主题覆盖 |
-| 全局层 | `style.css` | 全局基础样式、布局、通用组件 |
+| 全局层 | `styles/app.css` | 全局基础样式、布局、通用组件 |
 | 动画层 | `transitions.css` | 主题切换过渡动画 |
 
 ### 3. 一处定义，多处复用
@@ -56,9 +56,10 @@
 
 ```
 src/
-├── style.css                    # 全局基础样式
+├── styles/
+│   └── app.css                  # 全局基础样式
 └── theme/
-    ├── index.ts                 # PrimeVue 预设配置
+    ├── preset.ts                # PrimeVue 预设配置
     ├── ThemeManager.ts          # 主题切换逻辑
     ├── dark-theme.css           # 深色主题变量
     ├── light-theme.css          # 浅色主题变量
@@ -85,7 +86,7 @@ import './theme/primevue-overrides.css';
 import './theme/transitions.css';
 ```
 
-> **注意**：`style.css` 在 `index.html` 中通过 `<link>` 引入，在 main.ts 之前加载。
+> **注意**：`styles/app.css` 在 `index.html` 中通过 `<link>` 引入，在 main.ts 之前加载。
 
 ---
 
