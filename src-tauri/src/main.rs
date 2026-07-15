@@ -4,6 +4,7 @@
     windows_subsystem = "windows"
 )]
 
+mod analytics;
 mod cli;
 mod commands;
 mod error;
@@ -427,6 +428,7 @@ fn main() {
         )
         .manage(HttpClient(http_client)) // 注册全局 HTTP 客户端
         .manage(CloseToTrayState(AtomicBool::new(true)))
+        .manage(analytics::AnalyticsRuntimeState::new())
         .manage(commands::link_checker::BatchCheckCancelFlag::new())
         .manage(commands::link_checker::BatchCheckPauseFlag(Arc::new(
             AtomicBool::new(false),
@@ -444,6 +446,8 @@ fn main() {
             is_portable_mode,
             get_user_data_dir,
             get_history_db_path,
+            analytics::analytics_send_batch,
+            analytics::analytics_shutdown,
             open_login_window,
             show_login_window,
             save_cookie_from_login,

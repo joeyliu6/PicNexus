@@ -74,7 +74,6 @@
     {
       "identifier": "http:default",
       "allow": [
-        { "url": "https://www.google-analytics.com/*" },
         { "url": "https://api.github.com/*" },
         { "url": "https://sm.ms/*" },
         { "url": "https://api.imgur.com/*" },

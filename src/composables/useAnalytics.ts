@@ -1,26 +1,17 @@
-// Google Analytics 4 Measurement Protocol 实现
 // 仅收集桌面应用的首次运行与启动趋势。
 
 import { computed, ref } from 'vue';
 import { getVersion } from '@tauri-apps/api/app';
-import { fetch } from '@tauri-apps/plugin-http';
+import { invoke } from '@tauri-apps/api/core';
 import type { UserConfig } from '../config/types';
 import { configStore } from '../store/instances';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('Analytics');
 
-const GA_MEASUREMENT_ID = 'G-E8LW7TS55J';
-const GA_API_SECRET = 'RBX8PUEPRKyUpUA6IWp4Bg';
-const GA_ENDPOINT = 'https://www.google-analytics.com/mp/collect';
-
-const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
-const REQUEST_TIMEOUT_MS = 5_000;
-const MAX_EVENT_AGE_MS = 72 * 60 * 60 * 1000;
-const MAX_PENDING_EVENTS = 50;
-const MAX_EVENTS_PER_REQUEST = 25;
+const ANALYTICS_SCHEMA_VERSION = 2;
 const MAX_CLIENT_ID_RANDOM_PART = 2_147_483_647;
-const GA_CLIENT_ID_PATTERN = /^\d+\.\d+$/;
+const GA_CLIENT_ID_PATTERN = /^\d{1,16}\.\d{1,16}$/;
 
 export const GA_EVENTS = {
   FIRST_RUN: 'first_run',
@@ -30,52 +21,36 @@ export const GA_EVENTS = {
 type LifecycleEventName = typeof GA_EVENTS[keyof typeof GA_EVENTS];
 type OsInfo = 'Windows' | 'macOS' | 'Linux' | 'Unknown';
 
-interface LifecycleEventParams {
-  session_id: string;
-  engagement_time_msec: 100;
-  app_version: string;
-  os_info: OsInfo;
-  app_platform: 'tauri_desktop';
+interface AnalyticsEventParams {
+  appVersion: string;
+  osInfo: OsInfo;
+  appPlatform: 'tauri_desktop';
 }
 
-interface PendingAnalyticsEvent {
+interface AnalyticsEvent {
   name: LifecycleEventName;
-  params: LifecycleEventParams;
+  params: AnalyticsEventParams;
 }
 
-interface PendingAnalyticsBatch {
-  timestampMicros: number;
-  events: PendingAnalyticsEvent[];
-}
-
-interface AnalyticsData {
+interface AnalyticsBatch {
   clientId: string;
-  sessionId: string;
-  lastActiveTime: number;
-  pendingBatches: PendingAnalyticsBatch[];
+  events: AnalyticsEvent[];
 }
 
-interface LoadedAnalyticsData {
-  data: AnalyticsData;
-  isFirstRun: boolean;
+interface AnalyticsDataV2 {
+  schemaVersion: 2;
+  clientId: string;
+  firstRunPending: boolean;
 }
-
-interface AppContext {
-  app_version: string;
-  os_info: OsInfo;
-}
-
-type SendResult = 'accepted' | 'deferred' | 'cancelled';
 
 const isInitialized = ref(false);
 const isEnabled = ref(true);
 
 let cachedAppVersion: string | null = null;
 let initializationPromise: Promise<boolean> | null = null;
-let flushChain: Promise<void> = Promise.resolve();
-let activeAbortController: AbortController | null = null;
+let preferenceWriteChain: Promise<void> = Promise.resolve();
 let operationGeneration = 0;
-let hasQueuedAppStartThisProcess = false;
+let hasAttemptedAppStartThisProcess = false;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -90,15 +65,59 @@ function isValidClientId(value: unknown): value is string {
   return typeof value === 'string' && GA_CLIENT_ID_PATTERN.test(value);
 }
 
-function isLifecycleEventName(value: unknown): value is LifecycleEventName {
-  return value === GA_EVENTS.FIRST_RUN || value === GA_EVENTS.APP_START;
-}
-
-function isOsInfo(value: unknown): value is OsInfo {
+function isLegacyOsInfo(value: unknown): value is OsInfo {
   return value === 'Windows'
     || value === 'macOS'
     || value === 'Linux'
     || value === 'Unknown';
+}
+
+function isLegacyPendingFirstRun(value: unknown): boolean {
+  if (!isRecord(value) || value.name !== GA_EVENTS.FIRST_RUN || !isRecord(value.params)) {
+    return false;
+  }
+
+  const params = value.params;
+  return typeof params.session_id === 'string'
+    && params.session_id.length > 0
+    && params.engagement_time_msec === 100
+    && typeof params.app_version === 'string'
+    && params.app_version.length > 0
+    && isLegacyOsInfo(params.os_info)
+    && params.app_platform === 'tauri_desktop';
+}
+
+function legacyHasPendingFirstRun(record: Record<string, unknown>): boolean {
+  if (!Array.isArray(record.pendingBatches)) return false;
+
+  return record.pendingBatches.some((batch) => (
+    isRecord(batch)
+    && Array.isArray(batch.events)
+    && batch.events.some(isLegacyPendingFirstRun)
+  ));
+}
+
+function normalizeAnalyticsData(stored: unknown, now: number): AnalyticsDataV2 {
+  const isNewInstall = stored === null || stored === undefined;
+  const record = isRecord(stored) ? stored : {};
+  const clientId = isValidClientId(record.clientId)
+    ? record.clientId
+    : generateClientId(now);
+
+  if (record.clientId !== undefined && !isValidClientId(record.clientId)) {
+    log.debug('已迁移旧版 Analytics 标识');
+  }
+
+  const isCurrentSchema = record.schemaVersion === ANALYTICS_SCHEMA_VERSION
+    && typeof record.firstRunPending === 'boolean';
+  const firstRunPending = isNewInstall
+    || (isCurrentSchema ? record.firstRunPending as boolean : legacyHasPendingFirstRun(record));
+
+  return {
+    schemaVersion: ANALYTICS_SCHEMA_VERSION,
+    clientId,
+    firstRunPending,
+  };
 }
 
 export function normalizeOsInfo(platform: string | null | undefined): OsInfo {
@@ -118,7 +137,6 @@ function getOsInfo(): OsInfo {
       platform?: string;
     };
   };
-
   return normalizeOsInfo(nav.userAgentData?.platform || nav.platform || nav.userAgent);
 }
 
@@ -139,321 +157,69 @@ async function getAppVersion(): Promise<string> {
   }
 }
 
-async function getAppContext(): Promise<AppContext> {
-  return {
-    app_version: await getAppVersion(),
-    os_info: getOsInfo(),
+function createBatch(data: AnalyticsDataV2, appVersion: string): AnalyticsBatch {
+  const params: AnalyticsEventParams = {
+    appVersion,
+    osInfo: getOsInfo(),
+    appPlatform: 'tauri_desktop',
   };
+  const events: AnalyticsEvent[] = [];
+  if (data.firstRunPending) events.push({ name: GA_EVENTS.FIRST_RUN, params });
+  events.push({ name: GA_EVENTS.APP_START, params });
+
+  return { clientId: data.clientId, events };
 }
 
-function normalizePendingEvent(value: unknown): PendingAnalyticsEvent | null {
-  if (!isRecord(value) || !isLifecycleEventName(value.name) || !isRecord(value.params)) {
-    return null;
-  }
-
-  const params = value.params;
-  if (
-    typeof params.session_id !== 'string'
-    || params.session_id.length === 0
-    || params.engagement_time_msec !== 100
-    || typeof params.app_version !== 'string'
-    || params.app_version.length === 0
-    || !isOsInfo(params.os_info)
-    || params.app_platform !== 'tauri_desktop'
-  ) {
-    return null;
-  }
-
-  return {
-    name: value.name,
-    params: {
-      session_id: params.session_id,
-      engagement_time_msec: 100,
-      app_version: params.app_version,
-      os_info: params.os_info,
-      app_platform: 'tauri_desktop',
-    },
-  };
-}
-
-function normalizePendingBatch(value: unknown, now: number): PendingAnalyticsBatch | null {
-  if (!isRecord(value) || !Number.isSafeInteger(value.timestampMicros)) return null;
-
-  const timestampMicros = value.timestampMicros as number;
-  const eventTime = timestampMicros / 1000;
-  if (timestampMicros <= 0 || now - eventTime > MAX_EVENT_AGE_MS || !Array.isArray(value.events)) {
-    return null;
-  }
-
-  const events = value.events.map(normalizePendingEvent);
-  if (
-    events.length === 0
-    || events.length > MAX_EVENTS_PER_REQUEST
-    || events.some(event => event === null)
-  ) {
-    return null;
-  }
-
-  const normalizedEvents = events as PendingAnalyticsEvent[];
-  const appStartCount = normalizedEvents.filter(event => event.name === GA_EVENTS.APP_START).length;
-  const firstRunCount = normalizedEvents.filter(event => event.name === GA_EVENTS.FIRST_RUN).length;
-  if (appStartCount !== 1 || firstRunCount > 1 || normalizedEvents.length > 2) return null;
-
-  return {
-    timestampMicros,
-    events: normalizedEvents,
-  };
-}
-
-function countPendingEvents(batches: PendingAnalyticsBatch[]): number {
-  return batches.reduce((count, batch) => count + batch.events.length, 0);
-}
-
-function limitPendingBatches(batches: PendingAnalyticsBatch[]): PendingAnalyticsBatch[] {
-  const originalEventCount = countPendingEvents(batches);
-  if (originalEventCount <= MAX_PENDING_EVENTS) return batches;
-
-  const firstRunBatch = batches.find(batch => (
-    batch.events.some(event => event.name === GA_EVENTS.FIRST_RUN)
-  ));
-  const selected: PendingAnalyticsBatch[] = firstRunBatch ? [firstRunBatch] : [];
-  let remaining = MAX_PENDING_EVENTS - countPendingEvents(selected);
-
-  for (let index = batches.length - 1; index >= 0 && remaining > 0; index -= 1) {
-    const batch = batches[index];
-    if (batch === firstRunBatch || batch.events.length > remaining) continue;
-    selected.push(batch);
-    remaining -= batch.events.length;
-  }
-
-  const limited = selected.sort((left, right) => left.timestampMicros - right.timestampMicros);
-  log.warn(
-    `Analytics 待发送队列超过 ${MAX_PENDING_EVENTS} 个事件，已丢弃 ${originalEventCount - countPendingEvents(limited)} 个旧事件`,
-  );
-  return limited;
-}
-
-function normalizePendingBatches(value: unknown, now: number): PendingAnalyticsBatch[] {
-  if (!Array.isArray(value)) return [];
-
-  const normalized = value
-    .map(batch => normalizePendingBatch(batch, now))
-    .filter((batch): batch is PendingAnalyticsBatch => batch !== null)
-    .sort((left, right) => left.timestampMicros - right.timestampMicros);
-
-  const invalidOrExpiredCount = value.length - normalized.length;
-  if (invalidOrExpiredCount > 0) {
-    log.warn(`已丢弃 ${invalidOrExpiredCount} 个无效或超过 72 小时的 Analytics 批次`);
-  }
-
-  let hasFirstRun = false;
-  const deduplicated = normalized.flatMap((batch) => {
-    const events = batch.events.filter((event) => {
-      if (event.name !== GA_EVENTS.FIRST_RUN) return true;
-      if (hasFirstRun) return false;
-      hasFirstRun = true;
-      return true;
-    });
-    return events.length > 0 ? [{ ...batch, events }] : [];
-  });
-
-  const duplicateCount = countPendingEvents(normalized) - countPendingEvents(deduplicated);
-  if (duplicateCount > 0) {
-    log.warn(`已丢弃 ${duplicateCount} 个重复的 first_run 事件`);
-  }
-
-  return limitPendingBatches(deduplicated);
-}
-
-function normalizeAnalyticsData(
-  stored: unknown,
-  now: number,
-  createIfMissing: boolean,
-): LoadedAnalyticsData | null {
-  if ((stored === null || stored === undefined) && !createIfMissing) return null;
-
-  const record = isRecord(stored) ? stored : {};
-  if (record.clientId !== undefined && !isValidClientId(record.clientId)) {
-    log.debug('已迁移旧版 Analytics 标识');
-  }
-  const clientId = isValidClientId(record.clientId)
-    ? record.clientId
-    : generateClientId(now);
-  const sessionId = typeof record.sessionId === 'string' && record.sessionId.length > 0
-    ? record.sessionId
-    : now.toString();
-  const lastActiveTime = typeof record.lastActiveTime === 'number'
-    && Number.isFinite(record.lastActiveTime)
-    && record.lastActiveTime >= 0
-    ? record.lastActiveTime
-    : 0;
-
-  return {
-    data: {
-      clientId,
-      sessionId,
-      lastActiveTime,
-      pendingBatches: normalizePendingBatches(record.pendingBatches, now),
-    },
-    isFirstRun: stored === null || stored === undefined,
-  };
-}
-
-function refreshSession(data: AnalyticsData, now: number): void {
-  const elapsed = now - data.lastActiveTime;
-  if (data.lastActiveTime <= 0 || elapsed < 0 || elapsed >= SESSION_TIMEOUT_MS) {
-    data.sessionId = now.toString();
-  }
-  data.lastActiveTime = now;
-}
-
-function createLifecycleEvent(
-  name: LifecycleEventName,
-  sessionId: string,
-  context: AppContext,
-): PendingAnalyticsEvent {
-  return {
-    name,
-    params: {
-      session_id: sessionId,
-      engagement_time_msec: 100,
-      app_version: context.app_version,
-      os_info: context.os_info,
-      app_platform: 'tauri_desktop',
-    },
-  };
-}
-
-function createStartupBatch(
-  timestamp: number,
-  sessionId: string,
-  context: AppContext,
-  isFirstRun: boolean,
-): PendingAnalyticsBatch {
-  const events: PendingAnalyticsEvent[] = [];
-  if (isFirstRun) {
-    events.push(createLifecycleEvent(GA_EVENTS.FIRST_RUN, sessionId, context));
-  }
-  events.push(createLifecycleEvent(GA_EVENTS.APP_START, sessionId, context));
-
-  return {
-    timestampMicros: timestamp * 1000,
-    events,
-  };
-}
-
-async function persistAnalyticsData(data: AnalyticsData): Promise<void> {
+async function persistAnalyticsData(data: AnalyticsDataV2): Promise<void> {
   await configStore.set('analytics_data', data);
   await configStore.save();
 }
 
-async function clearPendingBatches(): Promise<void> {
+async function clearFirstRunPending(): Promise<void> {
   const stored = await configStore.get<unknown>('analytics_data');
-  if (!isRecord(stored)) return;
+  if (stored === null || stored === undefined) return;
 
-  await configStore.set('analytics_data', {
-    ...stored,
-    pendingBatches: [],
-  });
-  await configStore.save();
+  const data = normalizeAnalyticsData(stored, Date.now());
+  data.firstRunPending = false;
+  await persistAnalyticsData(data);
 }
 
 function isCurrentOperation(generation: number): boolean {
   return generation === operationGeneration && isEnabled.value;
 }
 
-async function sendBatch(
-  clientId: string,
-  batch: PendingAnalyticsBatch,
-  generation: number,
-): Promise<SendResult> {
-  if (!isCurrentOperation(generation)) return 'cancelled';
-
-  const controller = new AbortController();
-  activeAbortController = controller;
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  const eventNames = batch.events.map(event => event.name).join(',');
-
+async function stopTransport(): Promise<void> {
   try {
-    const response = await fetch(
-      `${GA_ENDPOINT}?measurement_id=${GA_MEASUREMENT_ID}&api_secret=${GA_API_SECRET}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          client_id: clientId,
-          timestamp_micros: batch.timestampMicros,
-          events: batch.events,
-        }),
-        signal: controller.signal,
-        connectTimeout: REQUEST_TIMEOUT_MS,
-      },
-    );
-
-    if (!isCurrentOperation(generation)) return 'cancelled';
-
-    if (response.status >= 200 && response.status < 300) {
-      log.info(`GA4 请求已接受: events=${eventNames}, status=${response.status}`);
-      return 'accepted';
-    }
-
-    log.warn(
-      `GA4 请求未接受: events=${eventNames}, status=${response.status}；事件保留待下次启动补发`,
-    );
-    return 'deferred';
+    await invoke('analytics_shutdown');
   } catch (error) {
-    if (!isCurrentOperation(generation)) {
-      log.debug('GA4 请求已取消');
-      return 'cancelled';
-    }
-
-    if (controller.signal.aborted) {
-      log.warn(`GA4 请求超时: events=${eventNames}；事件保留待下次启动补发`);
-    } else {
-      log.error(`GA4 请求失败: events=${eventNames}；事件保留待下次启动补发`, error);
-    }
-    return 'deferred';
-  } finally {
-    clearTimeout(timeoutId);
-    if (activeAbortController === controller) activeAbortController = null;
+    log.warn('关闭 Analytics 隔离传输失败', error);
   }
 }
 
-async function flushPendingBatches(generation: number): Promise<void> {
+async function sendStartupBatch(
+  data: AnalyticsDataV2,
+  generation: number,
+): Promise<void> {
+  const batch = createBatch(data, await getAppVersion());
   if (!isCurrentOperation(generation)) return;
 
+  hasAttemptedAppStartThisProcess = true;
   try {
-    const stored = await configStore.get<unknown>('analytics_data');
-    const loaded = normalizeAnalyticsData(stored, Date.now(), false);
-    if (!loaded || !isCurrentOperation(generation)) return;
+    await invoke<'processed'>('analytics_send_batch', { batch });
+    if (!isCurrentOperation(generation)) return;
 
-    const data = loaded.data;
-    await persistAnalyticsData(data);
-
-    while (data.pendingBatches.length > 0 && isCurrentOperation(generation)) {
-      const batch = data.pendingBatches[0];
-      const result = await sendBatch(data.clientId, batch, generation);
-      if (result !== 'accepted' || !isCurrentOperation(generation)) return;
-
-      data.pendingBatches.shift();
-      try {
-        await persistAnalyticsData(data);
-      } catch (error) {
-        log.warn('GA4 请求已接受，但待发送队列清理失败；下次启动可能重复补发', error);
-        return;
-      }
+    if (data.firstRunPending) {
+      data.firstRunPending = false;
+      await persistAnalyticsData(data);
     }
+    log.info(`GA4 生命周期事件已交给隔离 Google tag: events=${batch.events.map(event => event.name).join(',')}`);
   } catch (error) {
-    log.error('处理 Analytics 待发送队列失败', error);
+    if (!isCurrentOperation(generation)) {
+      log.debug('Analytics 发送已取消');
+      return;
+    }
+    log.warn('Analytics 本次启动发送失败；app_start 不补发，first_run 将在下次启动重试', error);
   }
-}
-
-function scheduleFlush(generation: number): void {
-  flushChain = flushChain
-    .catch(() => undefined)
-    .then(() => flushPendingBatches(generation));
 }
 
 async function prepareAnalytics(generation: number): Promise<boolean> {
@@ -464,44 +230,26 @@ async function prepareAnalytics(generation: number): Promise<boolean> {
     if (config?.analytics?.enabled === false) {
       isEnabled.value = false;
       isInitialized.value = false;
-      activeAbortController?.abort();
-      try {
-        await clearPendingBatches();
-      } catch (error) {
-        log.error('禁用状态下清理 Analytics 待发送队列失败', error);
-      }
+      await stopTransport();
+      await clearFirstRunPending();
       return false;
     }
 
     isEnabled.value = true;
-    const now = Date.now();
     const stored = await configStore.get<unknown>('analytics_data');
     if (!isCurrentOperation(generation)) return false;
 
-    const loaded = normalizeAnalyticsData(stored, now, true);
-    if (!loaded) return false;
-
-    const data = loaded.data;
-    refreshSession(data, now);
-    const context = await getAppContext();
-    if (!isCurrentOperation(generation)) return false;
-
-    if (!hasQueuedAppStartThisProcess) {
-      data.pendingBatches.push(
-        createStartupBatch(now, data.sessionId, context, loaded.isFirstRun),
-      );
-      data.pendingBatches = limitPendingBatches(data.pendingBatches);
-    }
-
+    const data = normalizeAnalyticsData(stored, Date.now());
     await persistAnalyticsData(data);
     if (!isCurrentOperation(generation)) return false;
 
-    hasQueuedAppStartThisProcess = true;
     isInitialized.value = true;
-    log.debug('Measurement Protocol 本地初始化成功');
+    log.debug('Analytics 本地状态初始化成功');
 
-    scheduleFlush(generation);
-    return true;
+    if (!hasAttemptedAppStartThisProcess) {
+      await sendStartupBatch(data, generation);
+    }
+    return isCurrentOperation(generation);
   } catch (error) {
     if (generation === operationGeneration) isInitialized.value = false;
     log.error('Analytics 初始化失败，本次启动跳过统计', error);
@@ -517,7 +265,6 @@ async function initializeForGeneration(generation: number): Promise<boolean> {
   }
 
   if (generation !== operationGeneration) return false;
-
   const task = prepareAnalytics(generation);
   initializationPromise = task;
   try {
@@ -528,13 +275,22 @@ async function initializeForGeneration(generation: number): Promise<boolean> {
 }
 
 async function persistPreference(enabled: boolean, generation: number): Promise<boolean> {
-  const config = await configStore.get<UserConfig>('config');
-  if (!config || generation !== operationGeneration) return false;
+  let persisted = false;
+  const task = preferenceWriteChain
+    .catch(() => undefined)
+    .then(async () => {
+      if (generation !== operationGeneration) return;
+      const config = await configStore.get<UserConfig>('config');
+      if (!config || generation !== operationGeneration) return;
 
-  config.analytics = { ...config.analytics, enabled };
-  await configStore.set('config', config);
-  await configStore.save();
-  return generation === operationGeneration;
+      config.analytics = { ...config.analytics, enabled };
+      await configStore.set('config', config);
+      await configStore.save();
+      persisted = generation === operationGeneration;
+    });
+  preferenceWriteChain = task.catch(() => undefined);
+  await task;
+  return persisted;
 }
 
 /**
@@ -552,9 +308,7 @@ export function useAnalytics() {
     isInitialized.value = false;
 
     try {
-      const persisted = await persistPreference(true, generation);
-      if (!persisted) return;
-
+      if (!await persistPreference(true, generation)) return;
       await initializeForGeneration(generation);
       if (isCurrentOperation(generation)) log.debug('已启用');
     } catch (error) {
@@ -567,21 +321,15 @@ export function useAnalytics() {
     const generation = ++operationGeneration;
     isEnabled.value = false;
     isInitialized.value = false;
-    activeAbortController?.abort();
 
+    await stopTransport();
     try {
       await persistPreference(false, generation);
+      if (generation !== operationGeneration) return;
+      await clearFirstRunPending();
+      if (generation === operationGeneration) log.debug('已禁用并清理待发送事件');
     } catch (error) {
       log.error('保存 Analytics 禁用设置失败', error);
-    }
-
-    if (generation !== operationGeneration) return;
-
-    try {
-      await clearPendingBatches();
-      if (generation === operationGeneration) log.debug('已禁用并清空待发送事件');
-    } catch (error) {
-      log.error('清空 Analytics 待发送队列失败', error);
     }
   }
 
