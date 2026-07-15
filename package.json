@@ -41,6 +41,7 @@
     "build:sidecars": "node scripts/manage-sidecars.mjs build",
     "verify:sidecars": "node scripts/manage-sidecars.mjs verify",
     "clean": "node scripts/clean-workspace.mjs",
+    "clean:rust": "node scripts/clean-workspace.mjs --rust",
     "clean:deep": "node scripts/clean-workspace.mjs --deep",
     "package:portable:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-portable-windows.ps1",
     "prepare": "husky"

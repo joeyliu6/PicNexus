@@ -19,6 +19,10 @@ export const CLEAN_TARGETS = Object.freeze([
   'src-tauri/gen',
 ]);
 
+export const RUST_CLEAN_TARGETS = Object.freeze([
+  'src-tauri/target',
+]);
+
 export const DEEP_CLEAN_TARGETS = Object.freeze([
   '.ci-artifacts',
   '.husky/_',
@@ -26,7 +30,7 @@ export const DEEP_CLEAN_TARGETS = Object.freeze([
   'plugins/obsidian/node_modules',
   'sidecars/nami-token-fetcher/node_modules',
   'sidecars/qiyu-token-fetcher/node_modules',
-  'src-tauri/target',
+  ...RUST_CLEAN_TARGETS,
 ]);
 
 export function resolveRepositoryPath(root, repositoryRelativePath) {
@@ -73,9 +77,22 @@ async function removeGeneratedSidecars(root, output) {
   }
 }
 
-export async function cleanWorkspace({ root = repositoryRoot, deep = false, output = console.log } = {}) {
+export async function cleanWorkspace({
+  root = repositoryRoot,
+  deep = false,
+  rustOnly = false,
+  output = console.log,
+} = {}) {
+  if (deep && rustOnly) {
+    throw new Error('Cannot combine --deep and --rust cleanup modes.');
+  }
+
   const failures = [];
-  const targets = deep ? [...CLEAN_TARGETS, ...DEEP_CLEAN_TARGETS] : CLEAN_TARGETS;
+  const targets = rustOnly
+    ? RUST_CLEAN_TARGETS
+    : deep
+      ? [...CLEAN_TARGETS, ...DEEP_CLEAN_TARGETS]
+      : CLEAN_TARGETS;
   for (const target of targets) {
     try {
       await removeTarget(root, target, output);
@@ -83,11 +100,13 @@ export async function cleanWorkspace({ root = repositoryRoot, deep = false, outp
       failures.push(`${target}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  try {
-    await removeRootLogs(root, output);
-    if (deep) await removeGeneratedSidecars(root, output);
-  } catch (error) {
-    failures.push(error instanceof Error ? error.message : String(error));
+  if (!rustOnly) {
+    try {
+      await removeRootLogs(root, output);
+      if (deep) await removeGeneratedSidecars(root, output);
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error));
+    }
   }
   if (failures.length) {
     throw new Error(`Cleanup incomplete:\n${failures.map((failure) => `- ${failure}`).join('\n')}`);
@@ -95,7 +114,10 @@ export async function cleanWorkspace({ root = repositoryRoot, deep = false, outp
 }
 
 async function main() {
-  await cleanWorkspace({ deep: process.argv.includes('--deep') });
+  await cleanWorkspace({
+    deep: process.argv.includes('--deep'),
+    rustOnly: process.argv.includes('--rust'),
+  });
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

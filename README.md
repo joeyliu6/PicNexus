@@ -101,6 +101,16 @@ npm run tauri build
 
 需要 Node.js 20+、npm 10+ 和 Rust 环境。Sidecar 二进制由源码生成，不提交到 Git；清理后可再次运行 `npm run setup:sidecars` 恢复。
 
+清理生成物：
+
+```bash
+npm run clean       # 清理前端构建和测试产物
+npm run clean:rust  # 仅清理 Rust target，保留 npm 依赖和 Sidecar 二进制
+npm run clean:deep  # 额外清理依赖、Rust target 和生成的 Sidecar 二进制
+```
+
+`clean:rust` 适合在 Rust 构建缓存占用较大时使用；下次运行 Cargo 或 Tauri 命令时会重新编译。`clean:deep` 后需要重新执行 `npm ci` 和 `npm run setup:sidecars`。
+
 ## 免责声明
 
 PicNexus 不提供任何存储服务，也不拥有、运营或代表任何第三方图床/平台。用户使用本软件、配置第三方账号/Cookie/Token/API、上传内容、修改或分发本项目时，应自行确认符合适用法律、Apache-2.0 许可证和相关平台条款，并自行承担对应行为产生的后果。

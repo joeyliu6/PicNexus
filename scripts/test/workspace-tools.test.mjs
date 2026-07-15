@@ -71,9 +71,11 @@ test('deep cleanup removes generated paths and preserves tool configuration', as
     await mkdir(join(root, 'node_modules'), { recursive: true });
     await mkdir(join(root, '.codex'), { recursive: true });
     await mkdir(join(root, 'src-tauri', 'binaries'), { recursive: true });
+    await mkdir(join(root, 'src-tauri', 'target'), { recursive: true });
     await writeFile(join(root, 'dist', 'bundle.js'), 'generated');
     await writeFile(join(root, 'node_modules', 'package.txt'), 'generated');
     await writeFile(join(root, '.codex', 'settings.json'), '{}');
+    await writeFile(join(root, 'src-tauri', 'target', 'artifact.rlib'), 'generated');
     await writeFile(join(root, 'src-tauri', 'binaries', 'README.md'), 'keep');
     await writeFile(join(root, 'src-tauri', 'binaries', 'custom-helper.exe'), 'keep');
     await writeFile(
@@ -85,6 +87,7 @@ test('deep cleanup removes generated paths and preserves tool configuration', as
 
     assert.equal(existsSync(join(root, 'dist')), false);
     assert.equal(existsSync(join(root, 'node_modules')), false);
+    assert.equal(existsSync(join(root, 'src-tauri', 'target')), false);
     assert.equal(existsSync(join(root, 'src-tauri', 'binaries', 'qiyu-token-fetcher-x86_64-pc-windows-msvc.exe')), false);
     assert.equal(existsSync(join(root, '.codex', 'settings.json')), true);
     assert.equal(existsSync(join(root, 'src-tauri', 'binaries', 'README.md')), true);
@@ -92,4 +95,48 @@ test('deep cleanup removes generated paths and preserves tool configuration', as
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('rust-only cleanup removes target and preserves other generated paths', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'picnexus-clean-rust-'));
+  const sidecarNames = ['nami-token-fetcher', 'qiyu-token-fetcher'];
+  try {
+    await mkdir(join(root, 'src-tauri', 'target'), { recursive: true });
+    await mkdir(join(root, 'src-tauri', 'binaries'), { recursive: true });
+    await mkdir(join(root, 'node_modules'), { recursive: true });
+    await mkdir(join(root, 'dist'), { recursive: true });
+    await mkdir(join(root, '.codex'), { recursive: true });
+    for (const sidecarName of sidecarNames) {
+      await mkdir(join(root, 'sidecars', sidecarName, 'node_modules'), { recursive: true });
+      await writeFile(join(root, 'sidecars', sidecarName, 'node_modules', 'package.txt'), 'generated');
+      await writeFile(
+        join(root, 'src-tauri', 'binaries', `${sidecarName}-x86_64-pc-windows-msvc.exe`),
+        'generated',
+      );
+    }
+    await writeFile(join(root, 'src-tauri', 'target', 'artifact.rlib'), 'generated');
+    await writeFile(join(root, 'node_modules', 'package.txt'), 'generated');
+    await writeFile(join(root, 'dist', 'bundle.js'), 'generated');
+    await writeFile(join(root, '.codex', 'settings.json'), '{}');
+
+    await cleanWorkspace({ root, rustOnly: true, output: () => {} });
+
+    assert.equal(existsSync(join(root, 'src-tauri', 'target')), false);
+    for (const sidecarName of sidecarNames) {
+      assert.equal(existsSync(join(root, 'sidecars', sidecarName, 'node_modules', 'package.txt')), true);
+      assert.equal(existsSync(join(root, 'src-tauri', 'binaries', `${sidecarName}-x86_64-pc-windows-msvc.exe`)), true);
+    }
+    assert.equal(existsSync(join(root, 'node_modules', 'package.txt')), true);
+    assert.equal(existsSync(join(root, 'dist', 'bundle.js')), true);
+    assert.equal(existsSync(join(root, '.codex', 'settings.json')), true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('cleanup rejects deep and rust-only modes together', async () => {
+  await assert.rejects(
+    cleanWorkspace({ deep: true, rustOnly: true, output: () => {} }),
+    /Cannot combine --deep and --rust cleanup modes/,
+  );
 });
