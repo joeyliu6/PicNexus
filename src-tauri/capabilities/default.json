@@ -53,8 +53,8 @@
     {
       "identifier": "fs:scope",
       "allow": [
-        "$EXE/../data",
-        "$EXE/../data/**/*"
+        "$RESOURCE/data",
+        "$RESOURCE/data/**"
       ]
     },
     "clipboard-manager:default",
