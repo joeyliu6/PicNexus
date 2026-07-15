@@ -15,7 +15,7 @@ on:
       plugin_dir:
         description: Plugin subtree in this repository
         required: false
-        default: plugins/picnexus
+        default: plugins/obsidian
         type: string
     secrets:
       release_token:

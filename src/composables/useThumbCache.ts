@@ -5,7 +5,7 @@
 import { watch, effectScope } from 'vue';
 import type { HistoryItem, UserConfig } from '../config/types';
 import type { ImageMeta } from '../types/image-meta';
-import type { QueueItem } from '../uploadQueue';
+import type { QueueItem } from '../core/UploadQueue';
 import { getActivePrefix } from '../config/types';
 import { applyPrefixTemplate } from '../utils/linkPrefixTemplate';
 import { applyZhihuSourceFromConfig } from '../utils/zhihuSource';

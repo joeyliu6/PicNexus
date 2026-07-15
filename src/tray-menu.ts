@@ -1,5 +1,5 @@
 import { createApp } from 'vue';
-import './style.css';
+import './styles/app.css';
 import './theme/dark-theme.css';
 import './theme/light-theme.css';
 import './styles/motion.css';

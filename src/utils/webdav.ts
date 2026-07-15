@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { secureStorage } from '../crypto';
+import { secureStorage } from '../security/crypto';
 import { assertAllowedWebDAVUrl } from '../security/networkPolicy';
 import { createLogger } from './logger';
 

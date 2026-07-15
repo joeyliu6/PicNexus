@@ -81,37 +81,7 @@ jobs:
         run: npm ci
 
       - name: Build sidecar binaries for current target
-        shell: bash
-        env:
-          MATRIX_TARGET: ${{ matrix.target }}
-        run: |
-          set -e
-          build_sidecar() {
-            local dir=$1
-            local win_script=$2
-            pushd "sidecar/$dir" > /dev/null
-            npm ci
-            npm run build
-            case "$RUNNER_OS" in
-              Windows)
-                npm run "$win_script"
-                ;;
-              macOS)
-                if [[ "$MATRIX_TARGET" == "aarch64-apple-darwin" ]]; then
-                  npm run pkg:mac-arm
-                else
-                  npm run pkg:mac
-                fi
-                ;;
-              Linux)
-                npm run pkg:linux
-                ;;
-            esac
-            popd > /dev/null
-          }
-          build_sidecar qiyu-token-fetcher pkg:win
-          build_sidecar nami-token-fetcher pkg:win:x64
-          ls -la src-tauri/binaries/
+        run: npm run setup:sidecars ${{ matrix.target && format('-- --target {0}', matrix.target) || '' }}
 
       - name: Lint before release
         run: npm run lint

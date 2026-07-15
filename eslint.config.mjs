@@ -16,13 +16,12 @@ export default defineConfigWithVueTs(
       'dist/**',
       'node_modules/**',
       'src-tauri/**',
-      'sidecar/**',
+      'sidecars/**',
       'scripts/**',
       '.husky/**',
       'docs/**',
       // 测试文件：vitest mock 里大量 `as any` / `expect.any(Object)` 是常规做法，
       // 强行套主应用的 any/unused 规则收益极低。运行时由 vitest 自身 + tsc 兜底。
-      'src/test/**',
       'tests/**',
       'coverage/**',
       '.ci-artifacts/**',

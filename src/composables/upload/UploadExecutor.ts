@@ -3,7 +3,7 @@
 
 import type { UserConfig, ServiceType } from '../../config/types';
 import { MultiServiceUploader, SingleServiceResult, MultiUploadResult } from '../../core/MultiServiceUploader';
-import { UploadQueueManager, type ServiceProgress } from '../../uploadQueue';
+import { UploadQueueManager, type ServiceProgress } from '../../core/UploadQueue';
 import type { CopyLinkItem } from '../useCopyLink';
 import type { UploadSessionSummary } from '../../utils/uploadSummary';
 import { useServiceHealth } from '../useServiceHealth';

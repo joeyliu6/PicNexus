@@ -3,7 +3,7 @@
  */
 
 import { MultiServiceUploader, MultiUploadResult } from '../core/MultiServiceUploader';
-import { UploadQueueManager, QueueItem } from '../uploadQueue';
+import { UploadQueueManager, QueueItem } from '../core/UploadQueue';
 import { UserConfig } from '../config/types';
 import type { Store } from '../store';
 import { UploadResult } from '../uploaders/base/types';

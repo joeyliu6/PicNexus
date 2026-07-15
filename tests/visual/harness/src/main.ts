@@ -4,7 +4,7 @@ import ToastService from 'primevue/toastservice';
 import ConfirmationService from 'primevue/confirmationservice';
 import Tooltip from 'primevue/tooltip';
 import Ripple from 'primevue/ripple';
-import { PicNexusPreset } from '@/theme';
+import { PicNexusPreset } from '@/theme/preset';
 import VisualHarness from './VisualHarness.vue';
 
 import 'primeicons/primeicons.css';
@@ -14,7 +14,7 @@ import '@/theme/primevue-overrides.css';
 import '@/theme/transitions.css';
 import '@/styles/motion.css';
 import '@/styles/bottom-bar-buttons.css';
-import '@/style.css';
+import '@/styles/app.css';
 import './visual.css';
 
 const app = createApp(VisualHarness);

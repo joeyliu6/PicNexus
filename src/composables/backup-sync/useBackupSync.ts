@@ -3,7 +3,7 @@
 
 import { useToast } from '../useToast';
 import { useConfirm } from '../useConfirm';
-import { decryptWithPassword } from '../../crypto';
+import { decryptWithPassword } from '../../security/crypto';
 import { extractErrorCode, getFullTimestamp } from './backupSyncUtils';
 import { useBackupSyncState } from './useBackupSyncState';
 import { createBackupLocalOps } from './useBackupLocal';

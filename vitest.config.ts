@@ -7,8 +7,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'happy-dom',
-    setupFiles: ['./src/test/setup.ts'],
-    include: ['src/test/**/*.spec.ts'],
+    setupFiles: ['./tests/unit/setup.ts'],
+    include: ['tests/unit/**/*.spec.ts'],
     exclude: ['node_modules/**'],
     testTimeout: 10000,
     coverage: {
@@ -33,7 +33,7 @@ export default defineConfig({
         'src/components/views/linkcheck/**',
       ],
       exclude: [
-        'src/test/**',
+        'tests/unit/**',
         '**/*.d.ts',
         '**/types.ts',
       ],

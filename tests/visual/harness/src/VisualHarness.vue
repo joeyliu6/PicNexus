@@ -28,7 +28,7 @@ import DataItemCard from '@/components/settings/backup/DataItemCard.vue';
 import WebDAVConfigCollapsible from '@/components/settings/backup/WebDAVConfigCollapsible.vue';
 import BackupPasswordDialog from '@/components/dialogs/BackupPasswordDialog.vue';
 import { applyMarkdownRepairFixture, createMigrateContext } from './linkFeatureFixtures';
-import type { QueueItem, ServiceProgress } from '@/uploadQueue';
+import type { QueueItem, ServiceProgress } from '@/core/UploadQueue';
 import type { CheckLinkResult, LinkCheckRow, StatusFilter, BatchCheckProgress } from '@/types/linkCheck';
 import type { CheckStatsResult } from '@/composables/link-check/useCheckStats';
 import type { MoreMenuItem } from '@/composables/link-check/useCheckStrategy';

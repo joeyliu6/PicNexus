@@ -28,7 +28,7 @@ export default {
     'dist/**',
     'node_modules/**',
     'src-tauri/**',
-    'sidecar/**',
+    'sidecars/**',
   ],
   defaultSeverity: 'error',
   rules: {

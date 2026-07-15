@@ -1,7 +1,7 @@
 // 全局上传队列状态管理
 
 import { ref, computed, type Ref } from 'vue';
-import type { QueueItem, ServiceProgress } from '../uploadQueue';
+import type { QueueItem, ServiceProgress } from '../core/UploadQueue';
 import { isStatusError } from '../utils/uploadStatus';
 import { cleanupClipboardTempFile } from '../utils/clipboardTempFile';
 

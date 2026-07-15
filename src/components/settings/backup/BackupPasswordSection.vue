@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue';
 import Button from 'primevue/button';
 import { invoke } from '@tauri-apps/api/core';
 import { useToast } from '../../../composables/useToast';
-import { secureStorage } from '../../../crypto';
+import { secureStorage } from '../../../security/crypto';
 import { configStore, syncStatusStore } from '../../../store/instances';
 import type { UserConfig } from '../../../config/types';
 import type { StoreData } from '../../../store/types';

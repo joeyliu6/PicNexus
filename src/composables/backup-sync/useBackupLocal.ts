@@ -10,7 +10,7 @@ import { useConfirm } from '../useConfirm';
 import type { UserConfig } from '../../config/types';
 import { DEFAULT_CONFIG, isValidUserConfig, isValidHistoryItem } from '../../config/types';
 import { configStore } from '../../store/instances';
-import { secureStorage, isPasswordEncryptedData } from '../../crypto';
+import { secureStorage, isPasswordEncryptedData } from '../../security/crypto';
 import { createLogger } from '../../utils/logger';
 import { exportTextFile, importTextFile } from '../../utils/userFiles';
 import { writeSyncLog } from './backupSyncUtils';

@@ -5,7 +5,7 @@ import App from './App.vue';
 
 // PrimeVue 相关导入
 import PrimeVue from 'primevue/config';
-import { PicNexusPreset } from './theme';
+import { PicNexusPreset } from './theme/preset';
 import ToastService from 'primevue/toastservice';
 import ConfirmationService from 'primevue/confirmationservice';
 import Tooltip from 'primevue/tooltip';

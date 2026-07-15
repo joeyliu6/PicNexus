@@ -26,6 +26,8 @@ dist-ssr
 # Tauri
 src-tauri/target
 src-tauri/gen/
+src-tauri/binaries/*
+!src-tauri/binaries/README.md
 *.dat
 
 # 测试覆盖率报告

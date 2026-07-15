@@ -1,7 +1,7 @@
 // 登录窗口 Vue 应用入口
 import { createApp } from 'vue';
 import PrimeVue from 'primevue/config';
-import { PicNexusPreset } from './theme';
+import { PicNexusPreset } from './theme/preset';
 import LoginPanel from './components/login/LoginPanel.vue';
 import { COOKIE_PROVIDERS, type CookieProvider } from './config/cookieProviders';
 import { invoke } from '@tauri-apps/api/core';
@@ -14,7 +14,7 @@ const log = createLogger('LoginWebview');
 
 // 引入样式（顺序重要）
 import 'primeicons/primeicons.css';
-import './style.css';
+import './styles/app.css';
 import './theme/dark-theme.css';
 import './theme/light-theme.css';
 import './theme/transitions.css';

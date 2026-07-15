@@ -64,25 +64,7 @@ jobs:
         run: npm ci
 
       - name: Build sidecar binaries for current platform
-        shell: bash
-        run: |
-          set -e
-          build_sidecar() {
-            local dir=$1
-            local win_script=$2
-            pushd "sidecar/$dir" > /dev/null
-            npm ci
-            npm run build
-            case "$RUNNER_OS" in
-              Windows) npm run "$win_script" ;;
-              macOS)   npm run pkg:mac-arm ;;
-              Linux)   npm run pkg:linux ;;
-            esac
-            popd > /dev/null
-          }
-          build_sidecar qiyu-token-fetcher pkg:win
-          build_sidecar nami-token-fetcher pkg:win:x64
-          ls -la src-tauri/binaries/
+        run: npm run setup:sidecars
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -138,16 +120,16 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: plugins/picnexus/package-lock.json
+          cache-dependency-path: plugins/obsidian/package-lock.json
 
       - name: Install plugin dependencies
-        run: npm --prefix plugins/picnexus ci
+        run: npm --prefix plugins/obsidian ci
 
       - name: Validate plugin release
         run: npm run ci:obsidian
 
       - name: Verify generated plugin bundle is committed
-        run: git diff --exit-code -- plugins/picnexus/main.js
+        run: git diff --exit-code -- plugins/obsidian/main.js
 
   visual-impact:
     name: Detect visual impact
@@ -178,11 +160,11 @@ jobs:
               - 'src/config/**'
               - 'src/constants/**'
               - 'src/main.ts'
-              - 'src/style.css'
+              - 'src/styles/app.css'
               - 'src/styles/**'
               - 'src/theme/**'
               - 'src/types/**'
-              - 'src/uploadQueue.ts'
+              - 'src/core/UploadQueue.ts'
               - 'src/utils/**'
 
       - name: Mark non-PR events for explicit full visual runs
@@ -284,21 +266,7 @@ jobs:
         run: npm ci
 
       - name: Build sidecar binaries for Windows
-        shell: bash
-        run: |
-          set -e
-          build_sidecar() {
-            local dir=$1
-            local win_script=$2
-            pushd "sidecar/$dir" > /dev/null
-            npm ci
-            npm run build
-            npm run "$win_script"
-            popd > /dev/null
-          }
-          build_sidecar qiyu-token-fetcher pkg:win
-          build_sidecar nami-token-fetcher pkg:win:x64
-          ls -la src-tauri/binaries/
+        run: npm run setup:sidecars
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

@@ -156,7 +156,7 @@ function validateVersionFiles(pluginDir, manifest, errors) {
   }
 }
 
-export function validateObsidianRelease(pluginDirectory = 'plugins/picnexus') {
+export function validateObsidianRelease(pluginDirectory = 'plugins/obsidian') {
   const pluginDir = resolve(pluginDirectory);
   const errors = [];
 
@@ -185,7 +185,7 @@ export function validateObsidianRelease(pluginDirectory = 'plugins/picnexus') {
 function runCli() {
   const args = process.argv.slice(2);
   const printVersion = args.includes('--print-version');
-  const pluginDir = args.find(arg => !arg.startsWith('--')) ?? 'plugins/picnexus';
+  const pluginDir = args.find(arg => !arg.startsWith('--')) ?? 'plugins/obsidian';
 
   try {
     const result = validateObsidianRelease(pluginDir);

@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import test from 'node:test';
 
-const pluginRequire = createRequire(resolve('plugins/picnexus/package.json'));
+const pluginRequire = createRequire(resolve('plugins/obsidian/package.json'));
 const esbuild = pluginRequire('esbuild');
 const outputDir = mkdtempSync(join(tmpdir(), 'picnexus-plugin-behavior-'));
 const markdownOutputPath = join(outputDir, 'markdown.mjs');
@@ -14,7 +14,7 @@ const settingsOutputPath = join(outputDir, 'settings.mjs');
 
 await Promise.all([
   esbuild.build({
-    entryPoints: [resolve('plugins/picnexus/src/markdown.ts')],
+    entryPoints: [resolve('plugins/obsidian/src/markdown.ts')],
     bundle: true,
     format: 'esm',
     outfile: markdownOutputPath,
@@ -22,7 +22,7 @@ await Promise.all([
     logLevel: 'silent',
   }),
   esbuild.build({
-    entryPoints: [resolve('plugins/picnexus/src/types.ts')],
+    entryPoints: [resolve('plugins/obsidian/src/types.ts')],
     bundle: true,
     format: 'esm',
     outfile: settingsOutputPath,

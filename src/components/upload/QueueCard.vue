@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { UserConfig } from '../../config/types';
-import type { QueueItem } from '../../uploadQueue';
+import type { QueueItem } from '../../core/UploadQueue';
 import type { LinkFormat } from '../../utils/linkFormatter';
 import { getThumbnailCandidates } from '../../composables/useThumbCache';
 import { isStatusSuccess, isStatusError, isStatusUploading } from '../../utils/uploadStatus';

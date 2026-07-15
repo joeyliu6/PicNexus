@@ -4,7 +4,7 @@
 import type { WebDAVProfile, UserConfig } from '../../config/types';
 import { isValidUserConfig } from '../../config/types';
 import { configStore } from '../../store/instances';
-import { secureStorage, isPasswordEncryptedData } from '../../crypto';
+import { secureStorage, isPasswordEncryptedData } from '../../security/crypto';
 import { TOAST_MESSAGES } from '../../constants';
 import { createLogger } from '../../utils/logger';
 import { writeSyncLog, extractErrorCode, getWebDAVClientAndPath, isWebDAVNotFoundError } from './backupSyncUtils';

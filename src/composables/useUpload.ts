@@ -11,7 +11,7 @@ import {
   DEFAULT_COMPRESSION_PRESET,
   isPublicRiskService,
 } from '../config/types';
-import { UploadQueueManager } from '../uploadQueue';
+import { UploadQueueManager } from '../core/UploadQueue';
 import { useToast } from './useToast';
 import { useCopyLink, type CopyLinkItem, type CopyLinkResult } from './useCopyLink';
 import { TOAST_MESSAGES } from '../constants';

@@ -182,13 +182,18 @@ async function handleCloseToTrayChange(enabled: boolean) {
   saveSettings();
 }
 
-function handleAnalyticsToggle() {
-  if (formData.value.analyticsEnabled) {
-    analytics.enable();
+async function handleAnalyticsToggle() {
+  const enabled = formData.value.analyticsEnabled;
+  if (enabled) {
+    await analytics.enable();
   } else {
-    analytics.disable();
+    await analytics.disable();
   }
-  saveSettings();
+
+  // 快速连续切换时，旧操作不得用过期状态覆盖最后一次选择。
+  if (formData.value.analyticsEnabled === enabled) {
+    await saveSettings();
+  }
 }
 
 async function handleClearAppCache() {

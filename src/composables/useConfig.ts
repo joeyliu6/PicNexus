@@ -6,7 +6,7 @@ import { listen, UnlistenFn, emit } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { configStore } from '../store/instances';
 import type { Store } from '../store';
-import { BackupPasswordRequiredError } from '../crypto';
+import { BackupPasswordRequiredError } from '../security/crypto';
 import {
   UserConfig,
   DEFAULT_CONFIG,

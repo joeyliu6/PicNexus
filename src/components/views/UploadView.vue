@@ -11,7 +11,7 @@ import { useUploadManager } from '../../composables/useUpload';
 import { useClipboardImage } from '../../composables/useClipboardImage';
 import { useUrlDownload } from '../../composables/useUrlDownload';
 import { useQueueState } from '../../composables/useQueueState';
-import { UploadQueueManager } from '../../uploadQueue';
+import { UploadQueueManager } from '../../core/UploadQueue';
 import { RetryService } from '../../services/RetryService';
 import { configStore } from '../../store/instances';
 import { useConfigManager } from '../../composables/useConfig';

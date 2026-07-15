@@ -19,7 +19,7 @@ import { useAutoUpdate } from './composables/useAutoUpdate';
 import { useServiceAvailability } from './composables/useServiceAvailability';
 import { TOAST_MESSAGES } from './constants';
 import { configStore } from './store/instances';
-import { BackupPasswordRequiredError, secureStorage } from './crypto';
+import { BackupPasswordRequiredError, secureStorage } from './security/crypto';
 import { startupFlags } from './store/startupFlags';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';

@@ -1,4 +1,4 @@
-import type { QueueItem, ServiceProgress } from '../uploadQueue';
+import type { QueueItem, ServiceProgress } from '../core/UploadQueue';
 import type { UploadResult } from '../uploaders/base/types';
 
 function isServiceSuccess(progress: ServiceProgress | undefined): boolean {

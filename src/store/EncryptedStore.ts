@@ -14,7 +14,7 @@
 
 import { readTextFile, writeTextFile, exists, mkdir, remove } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
-import { secureStorage, isAnyEncryptedData, BackupPasswordRequiredError } from '../crypto';
+import { secureStorage, isAnyEncryptedData, BackupPasswordRequiredError } from '../security/crypto';
 import { getUserDataDir } from '../utils/appPaths';
 import { createLogger } from '../utils/logger';
 import { StoreError } from '../utils/storeErrors';

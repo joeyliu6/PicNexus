@@ -16,7 +16,7 @@
 import { Mutex } from '../utils/mutex';
 import { createLogger } from '../utils/logger';
 import { StoreError } from '../utils/storeErrors';
-import { BackupPasswordRequiredError } from '../crypto';
+import { BackupPasswordRequiredError } from '../security/crypto';
 import { CacheStore } from './CacheStore';
 import { EncryptedStore } from './EncryptedStore';
 import { type StoreData, type StoreOptions, toErrorMessage } from './types';

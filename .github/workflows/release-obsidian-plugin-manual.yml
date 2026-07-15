@@ -16,7 +16,7 @@ on:
       plugin_dir:
         description: Plugin source directory in this repository
         required: true
-        default: plugins/picnexus
+        default: plugins/obsidian
         type: string
 
 permissions:
