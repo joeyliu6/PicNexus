@@ -11,7 +11,7 @@
 
 **Tauri 2.x 的 CSP nonce 注入机制与 PrimeVue 4.x 的运行时样式注入冲突。**
 
-PrimeVue 4.x（使用 `@primevue/themes` 的 styled mode）通过 JavaScript 在运行时动态创建 `<style>` 元素来注入组件样式。这些样式**不是**预编译的静态 CSS，而是由主题预设在组件渲染时动态生成的。
+PrimeVue 4.x（使用 `@primeuix/themes` 的 styled mode）通过 JavaScript 在运行时动态创建 `<style>` 元素来注入组件样式。这些样式**不是**预编译的静态 CSS，而是由主题预设在组件渲染时动态生成的。
 
 Tauri 2.x 的 CSP 处理流程：
 1. 即使你在 `tauri.conf.json` 中声明了 `style-src 'self' 'unsafe-inline'`
