@@ -152,6 +152,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # GA4 在线心跳密钥：编译期注入，缺失时心跳自动禁用（不影响构建）
+          PICNEXUS_GA_API_SECRET: ${{ secrets.PICNEXUS_GA_API_SECRET }}
         with:
           tagName: v__VERSION__
           releaseName: 'PicNexus v__VERSION__'
