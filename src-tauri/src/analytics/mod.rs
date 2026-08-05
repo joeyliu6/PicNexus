@@ -1,4 +1,9 @@
+// 必须是 pub：generate_handler! 要按路径找到 #[tauri::command] 生成的 __cmd__ 宏，
+// 重导出函数本身带不走那个宏
+pub mod heartbeat;
 mod server;
+
+pub use heartbeat::HeartbeatState;
 
 use crate::error::AppError;
 use rand::RngCore;
@@ -50,8 +55,9 @@ struct AnalyticsEventParams {
     app_platform: AppPlatform,
 }
 
+/// 心跳命令的公开签名会用到它，故对 crate 内可见
 #[derive(Debug, Deserialize, Serialize)]
-enum OsInfo {
+pub(crate) enum OsInfo {
     Windows,
     #[serde(rename = "macOS")]
     MacOs,
