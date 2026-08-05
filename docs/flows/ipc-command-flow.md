@@ -4,7 +4,7 @@
 
 ## 概览
 
-PicNexus 后端目前注册了 **71 个 `#[tauri::command]`**(上传器、Token 获取、链接检测、MD 扫描、剪贴板、图片压缩、配置、Analytics 隔离传输、日志路径等),前端通过 `invoke<T>(name, args)` 调用,长耗时任务用 `window.emit("xxx://progress")` 推送进度,前端 `listen<T>(name, handler)` 订阅。
+PicNexus 后端目前注册了 **73 个 `#[tauri::command]`**(上传器、Token 获取、链接检测、MD 扫描、剪贴板、图片压缩、配置、Analytics 隔离传输与在线心跳、日志路径等),前端通过 `invoke<T>(name, args)` 调用,长耗时任务用 `window.emit("xxx://progress")` 推送进度,前端 `listen<T>(name, handler)` 订阅。
 
 错误统一走 `AppError` 枚举,序列化为 `{ type, data }` 结构,前端 `try/catch` 捕获后按 `type` 分支处理。
 
@@ -33,18 +33,18 @@ flowchart TD
     %% 全局状态
     P8 --> M1[.manage HttpClient<br/>60s timeout]
     M1 --> M2[.manage CloseToTrayState]
-    M2 --> M3[.manage AnalyticsRuntimeState]
+    M2 --> M3[.manage AnalyticsRuntimeState<br/>+ HeartbeatState]
     M3 --> M4[.manage BatchCheckCancelFlag]
     M4 --> M5[.manage MdScanCancelFlag]
 
     %% 命令注册
-    M5 --> H[.invoke_handler<br/>generate_handler! 71 个命令]
+    M5 --> H[.invoke_handler<br/>generate_handler! 73 个命令]
     H --> H1[上传系列<br/>upload_to_weibo/r2/jd/github/...]
     H --> H2[Token 获取<br/>fetch_qiyu_token/fetch_nami_token]
     H --> H3[检测类<br/>check_image_link/batch_check_links]
     H --> H4[工具类<br/>compress_image/scan_md_folder/clipboard_has_image]
     H --> H5[系统类<br/>open_log_dir/open_path/get_or_create_secure_key]
-    H --> H6[Analytics<br/>analytics_send_batch/analytics_shutdown]
+    H --> H6[Analytics<br/>analytics_send_batch/analytics_shutdown<br/>analytics_start_heartbeat/analytics_stop_heartbeat]
 
     %% Setup 回调
     H --> S[.setup app handler]
@@ -273,6 +273,8 @@ flowchart TD
 | 错误 Toast 显示 `[object Object]` | 前端直接打印了 `err`,没解析 JSON | 图3 F 节点 |
 | `State<HttpClient>` 获取失败 | `main.rs` 里 `.manage(HttpClient(...))` 调用缺失 | 图1 M1 节点 |
 | Analytics 隐藏窗口未关闭 | 检查 `analytics_shutdown`、回调超时和 `AnalyticsRuntimeState` generation | 图1 M3 / H6 节点 |
+| GA4 实时面板始终没有在线用户 | 构建未注入 `PICNEXUS_GA_API_SECRET`,`analytics_start_heartbeat` 返回 `disabled`(启动日志有 warn) | 图1 H6 节点 |
+| 心跳日志显示已发送但报表无数据 | MP 端点对密钥错误也返回 204,只能靠实时面板判定;核对 GitHub secret 值 | 图1 H6 节点 |
 | 命令返回值前端收到 `undefined` | Rust 侧返回了 `()` 或字段没加 `#[serde]` | 图2 返回阶段 |
 | Sidecar 启动失败 | Rust 侧找不到 bundled/portable sidecar，或 sidecar 执行超时 | 图1 CAP2 节点 |
 
