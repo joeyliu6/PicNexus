@@ -6,6 +6,21 @@
   let isReady = false;
   let hasSentBatch = false;
 
+  // 用 URL 里的 client_id 种 GA cookie，让 gtag 识别为"老用户"：
+  //  - _ga：client_id（区分用户）
+  //  - _ga_<container>：会话状态，种一个"过去的会话"，让 gtag 认为有过历史、
+  //    非首次来访，从而不再打 _fv=1，避免 GA 每次启动重复记 first_visit
+  // 注意：gtag.js 内部的 GS1 格式解析器（反编译得到的函数名 Gq）要求前缀之后
+  // 至少有 5 个用 "." 分隔的字段（s=会话开始时间, o=会话序号, g=是否活跃,
+  // t=最后活跃时间, j=join 计时器），字段数不够会被判定为"格式不认识"从而
+  // 当成没有会话历史，强制标记 is_first_visit，导致 _fv 每次都是 1。
+  const cidFromUrl = new URLSearchParams(window.location.search).get('cid');
+  if (cidFromUrl) {
+    document.cookie = `_ga=GA1.1.${cidFromUrl}; path=/; max-age=63072000; samesite=lax`;
+  }
+  const pastSessionEpoch = Math.floor(Date.now() / 1000) - 86400;
+  document.cookie = `_ga_E8LW7TS55J=GS1.1.${pastSessionEpoch}.1.0.${pastSessionEpoch}.0; path=/; max-age=63072000; samesite=lax`;
+
   window.dataLayer = window.dataLayer || [];
   window.gtag = function gtag() {
     window.dataLayer.push(arguments);

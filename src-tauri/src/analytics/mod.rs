@@ -258,11 +258,15 @@ pub async fn analytics_send_batch(
         return Err(AppError::external("Analytics 操作已取消"));
     }
 
-    let allowed_url = running_server.page_url.clone();
+    // 把 client_id 附加到页面 URL，bootstrap 在 gtag 加载前种 _ga cookie，
+    // 避免 gtag 因 cookie 为空而把每次启动都判定为"首次来访"（_fv=1）
+    let mut page_url = running_server.page_url.clone();
+    page_url.set_query(Some(&format!("cid={}", batch.client_id)));
+    let allowed_url = page_url.clone();
     let window_result = WebviewWindowBuilder::new(
         &app,
         ANALYTICS_WINDOW_LABEL,
-        WebviewUrl::External(running_server.page_url.clone()),
+        WebviewUrl::External(page_url),
     )
     .title("PicNexus Analytics")
     .inner_size(1.0, 1.0)
@@ -468,13 +472,11 @@ mod tests {
                 .is_ok()
         );
 
-        assert!(wait_for_ack_with_timeout(
-            &mut receiver,
-            "never-arrives",
-            Duration::from_millis(1)
-        )
-        .await
-        .is_err());
+        assert!(
+            wait_for_ack_with_timeout(&mut receiver, "never-arrives", Duration::from_millis(1))
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]
