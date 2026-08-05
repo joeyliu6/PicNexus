@@ -40,6 +40,12 @@ interface SentBatch {
   }>;
 }
 
+interface HeartbeatStart {
+  clientId: string;
+  appVersion: string;
+  osInfo: 'Windows' | 'macOS' | 'Linux' | 'Unknown';
+}
+
 let storeState: Record<string, unknown>;
 
 vi.mock('@/store/instances', () => ({
@@ -77,6 +83,12 @@ function getSentBatches(): SentBatch[] {
   return getInvokeMock().mock.calls
     .filter(([command]) => command === 'analytics_send_batch')
     .map(([, args]) => (args as { batch: SentBatch }).batch);
+}
+
+function getHeartbeatStarts(): HeartbeatStart[] {
+  return getInvokeMock().mock.calls
+    .filter(([command]) => command === 'analytics_start_heartbeat')
+    .map(([, args]) => args as HeartbeatStart);
 }
 
 function mockNavigatorPlatform(platform: string): void {
@@ -316,6 +328,67 @@ describe('useAnalytics', () => {
     expect(analytics.isEnabled.value).toBe(false);
     expect(getStoredAnalyticsData().firstRunPending).toBe(false);
     expect(getInvokeMock()).toHaveBeenCalledWith('analytics_shutdown');
+  });
+
+  it('starts the online heartbeat with the stored identity', async () => {
+    setStoreState({
+      config: { analytics: { enabled: true } },
+      analytics_data: {
+        schemaVersion: 2,
+        clientId: '123456789.1699999999',
+        firstRunPending: false,
+      },
+    });
+
+    const { useAnalytics } = await importFreshAnalytics();
+    await expect(useAnalytics().initialize()).resolves.toBe(true);
+
+    expect(getHeartbeatStarts()).toEqual([{
+      clientId: '123456789.1699999999',
+      appVersion: '1.2.3',
+      osInfo: 'Windows',
+    }]);
+  });
+
+  it('stops the online heartbeat when analytics is disabled', async () => {
+    const { useAnalytics } = await importFreshAnalytics();
+    const analytics = useAnalytics();
+    await analytics.initialize();
+
+    await analytics.disable();
+
+    expect(getInvokeMock()).toHaveBeenCalledWith('analytics_stop_heartbeat');
+  });
+
+  it('stops the online heartbeat when the stored preference is already disabled', async () => {
+    setStoreState({ config: { analytics: { enabled: false } } });
+
+    const { useAnalytics } = await importFreshAnalytics();
+    await expect(useAnalytics().initialize()).resolves.toBe(false);
+
+    expect(getInvokeMock()).toHaveBeenCalledWith('analytics_stop_heartbeat');
+    expect(getHeartbeatStarts()).toEqual([]);
+  });
+
+  it('keeps lifecycle events working when the heartbeat fails to start', async () => {
+    setStoreState({
+      config: { analytics: { enabled: true } },
+      analytics_data: {
+        schemaVersion: 2,
+        clientId: '123456789.1699999999',
+        firstRunPending: false,
+      },
+    });
+    getInvokeMock().mockImplementation(async (command) => {
+      if (command === 'analytics_start_heartbeat') throw new Error('heartbeat unavailable');
+      return command === 'analytics_send_batch' ? 'processed' : undefined;
+    });
+
+    const { useAnalytics } = await importFreshAnalytics();
+    await expect(useAnalytics().initialize()).resolves.toBe(true);
+
+    expect(getSentBatches()[0].events.map(event => event.name)).toEqual(['app_start']);
+    expect(loggerMock.warn).toHaveBeenCalled();
   });
 
   it('attempts the startup batch only once per process under concurrent initialization', async () => {

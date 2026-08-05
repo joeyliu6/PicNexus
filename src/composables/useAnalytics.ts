@@ -1,4 +1,4 @@
-// 仅收集桌面应用的首次运行与启动趋势。
+// 仅收集桌面应用的首次运行、启动趋势与在线心跳。
 
 import { computed, ref } from 'vue';
 import { getVersion } from '@tauri-apps/api/app';
@@ -196,6 +196,45 @@ async function stopTransport(): Promise<void> {
   }
 }
 
+async function stopHeartbeat(): Promise<void> {
+  try {
+    await invoke('analytics_stop_heartbeat');
+  } catch (error) {
+    log.warn('停止 GA4 在线心跳失败', error);
+  }
+}
+
+/**
+ * 启动在线心跳（Rust 侧定时器）。
+ * 定时器放在后端而非这里：应用关窗后缩托盘继续运行，此时本 WebView 隐藏，
+ * JS 定时器会被节流甚至冻结，恰好漏掉「正在运行」最典型的场景。
+ */
+async function startHeartbeat(data: AnalyticsDataV2, generation: number): Promise<void> {
+  try {
+    const appVersion = await getAppVersion();
+    if (!isCurrentOperation(generation)) return;
+
+    const result = await invoke<'started' | 'disabled'>('analytics_start_heartbeat', {
+      clientId: data.clientId,
+      appVersion,
+      osInfo: getOsInfo(),
+    });
+
+    // 等待期间用户可能已关闭统计，此时要把刚起来的心跳收掉
+    if (!isCurrentOperation(generation)) {
+      await stopHeartbeat();
+      return;
+    }
+    if (result === 'disabled') {
+      log.debug('在线心跳未启用：当前构建未注入 GA API secret');
+      return;
+    }
+    log.debug('GA4 在线心跳已启动');
+  } catch (error) {
+    log.warn('启动 GA4 在线心跳失败（不影响启动事件统计）', error);
+  }
+}
+
 async function sendStartupBatch(
   data: AnalyticsDataV2,
   generation: number,
@@ -231,6 +270,7 @@ async function prepareAnalytics(generation: number): Promise<boolean> {
       isEnabled.value = false;
       isInitialized.value = false;
       await stopTransport();
+      await stopHeartbeat();
       await clearFirstRunPending();
       return false;
     }
@@ -248,6 +288,10 @@ async function prepareAnalytics(generation: number): Promise<boolean> {
 
     if (!hasAttemptedAppStartThisProcess) {
       await sendStartupBatch(data, generation);
+    }
+    // 心跳独立于启动事件：即使隔离通道失败，在线数仍应正常上报
+    if (isCurrentOperation(generation)) {
+      await startHeartbeat(data, generation);
     }
     return isCurrentOperation(generation);
   } catch (error) {
@@ -323,6 +367,7 @@ export function useAnalytics() {
     isInitialized.value = false;
 
     await stopTransport();
+    await stopHeartbeat();
     try {
       await persistPreference(false, generation);
       if (generation !== operationGeneration) return;
