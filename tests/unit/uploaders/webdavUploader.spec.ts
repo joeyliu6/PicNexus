@@ -79,10 +79,13 @@ describe('WebDAVUploader.validateConfig', () => {
     expect(r).toEqual({ valid: true });
   });
 
-  it('拒绝公网 HTTP 与链路本地地址', async () => {
-    const publicHttp = await uploader.validateConfig(makeProfile({ url: 'http://dav.example.com' }));
-    expect(publicHttp.valid).toBe(false);
-    expect(publicHttp.errors?.join()).toContain('WebDAV 地址无效');
+  it('字面公网 IP 与链路本地地址被拒，主机名 HTTP 交给后端裁决', async () => {
+    const publicHttpIp = await uploader.validateConfig(makeProfile({ url: 'http://8.8.8.8' }));
+    expect(publicHttpIp.valid).toBe(false);
+    expect(publicHttpIp.errors?.join()).toContain('WebDAV 地址无效');
+
+    const lanHostname = await uploader.validateConfig(makeProfile({ url: 'http://nas.local:5005/dav' }));
+    expect(lanHostname).toEqual({ valid: true });
 
     const linkLocal = await uploader.validateConfig(makeProfile({ url: 'http://169.254.169.254/' }));
     expect(linkLocal.valid).toBe(false);

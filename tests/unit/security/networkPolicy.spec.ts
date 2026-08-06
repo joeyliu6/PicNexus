@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertAllowedExternalUrl,
   assertAllowedWebDAVUrl,
+  assertAllowedWebDAVStorageUrl,
   isLoopbackHost,
   safeImageUrl,
 } from '@/security/networkPolicy';
@@ -37,6 +38,12 @@ describe('networkPolicy', () => {
 
     // 公网 HTTP 依旧禁止（明文凭证会在公网裸奔）
     expect(() => assertAllowedWebDAVUrl('http://dav.example.com/sync')).toThrow('公网 HTTP');
+    expect(() => assertAllowedWebDAVUrl('http://8.8.8.8/sync')).toThrow('公网 HTTP');
+
+    // 图床上传链路：主机名 HTTP 前端无法解析，先放行给 Rust 做 DNS 级最终裁决
+    expect(assertAllowedWebDAVStorageUrl('http://dav.example.com/sync').hostname).toBe('dav.example.com');
+    expect(assertAllowedWebDAVStorageUrl('http://nas.local:5005/dav').hostname).toBe('nas.local');
+    expect(() => assertAllowedWebDAVStorageUrl('http://8.8.8.8/sync')).toThrow('公网 HTTP');
 
     // 链路本地 / 云元数据地址：放行策略下也必须拒绝
     expect(() => assertAllowedWebDAVUrl('http://169.254.169.254/latest')).toThrow('链路本地');

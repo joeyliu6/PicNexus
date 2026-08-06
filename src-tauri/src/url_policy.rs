@@ -40,6 +40,9 @@ fn is_private_or_reserved_ipv4(ip: Ipv4Addr) -> bool {
         || ip.is_documentation()
         || octets[0] == 0
         || (octets[0] == 100 && (64..=127).contains(&octets[1]))
+        || (octets[0] == 192 && octets[1] == 0 && octets[2] == 0)
+        || (octets[0] == 198 && (18..=19).contains(&octets[1]))
+        || octets[0] >= 240
 }
 
 fn ipv4_mapped_from_ipv6(ip: Ipv6Addr) -> Option<Ipv4Addr> {
@@ -110,7 +113,11 @@ pub fn is_always_blocked_host(host: &str) -> bool {
     match normalize_host(host).parse::<IpAddr>() {
         Ok(IpAddr::V4(ip)) => {
             let octets = ip.octets();
-            ip.is_link_local() || ip.is_multicast() || ip.is_broadcast() || octets[0] == 0
+            ip.is_link_local()
+                || ip.is_multicast()
+                || ip.is_broadcast()
+                || octets[0] == 0
+                || octets[0] >= 240
         }
         Ok(IpAddr::V6(ip)) => {
             if let Some(mapped) = ipv4_mapped_from_ipv6(ip) {
@@ -118,7 +125,8 @@ pub fn is_always_blocked_host(host: &str) -> bool {
                 return mapped.is_link_local()
                     || mapped.is_multicast()
                     || mapped.is_broadcast()
-                    || octets[0] == 0;
+                    || octets[0] == 0
+                    || octets[0] >= 240;
             }
             ip.is_unspecified() || ip.is_multicast() || ip.segments()[0] & 0xffc0 == 0xfe80
         }
@@ -172,6 +180,62 @@ pub fn validate_webdav_url(raw_url: &str) -> Result<Url, AppError> {
         .map_err(|err| AppError::webdav(err.to_string()))
 }
 
+/// WebDAV 请求前的最终校验：HTTP 主机名无法在前端/同步校验阶段判定内网，
+/// 这里按 DNS 解析结果裁决，局域网主机名放行、公网主机名拒绝。
+pub async fn validate_webdav_url_for_request(raw_url: &str) -> Result<Url, AppError> {
+    let parsed = Url::parse(raw_url)
+        .map_err(|_| AppError::webdav("地址格式不正确，请输入完整的 https:// 地址"))?;
+
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(AppError::webdav("地址不能包含用户名或密码"));
+    }
+
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| AppError::webdav("地址缺少主机名"))?;
+
+    if is_always_blocked_host(host) {
+        return Err(AppError::webdav("地址不能指向链路本地或保留地址"));
+    }
+
+    match parsed.scheme() {
+        "https" => Ok(parsed),
+        "http" if is_loopback_host(host) => Ok(parsed),
+        "http" if is_private_or_reserved_host(host) => Ok(parsed),
+        "http" => {
+            if normalize_host(host).parse::<IpAddr>().is_ok() {
+                return Err(AppError::webdav(
+                    "公网 HTTP 地址已禁用，请改用 HTTPS。局域网地址可使用 HTTP。",
+                ));
+            }
+
+            let port = parsed.port_or_known_default().unwrap_or(80);
+            let normalized = normalize_host(host);
+            let resolved = tokio::net::lookup_host((normalized.as_str(), port))
+                .await
+                .map_err(|e| AppError::webdav(format!("局域网主机名解析失败: {}", e)))?;
+
+            let mut saw_addr = false;
+            for addr in resolved {
+                saw_addr = true;
+                let ip = addr.ip().to_string();
+                if !is_loopback_host(&ip) && !is_private_or_reserved_host(&ip) {
+                    return Err(AppError::webdav(
+                        "公网 HTTP 地址已禁用，请改用 HTTPS。局域网地址可使用 HTTP。",
+                    ));
+                }
+            }
+
+            if !saw_addr {
+                return Err(AppError::webdav("局域网主机名未解析到可用地址"));
+            }
+
+            Ok(parsed)
+        }
+        _ => Err(AppError::webdav("地址仅支持 HTTPS，或本机回环 HTTP。")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -209,6 +273,17 @@ mod tests {
         assert!(validate_webdav_url("http://u:p@192.168.1.10/dav").is_err());
         // 非 HTTP 协议
         assert!(validate_webdav_url("file:///tmp/a").is_err());
+    }
+
+    #[test]
+    fn reserved_ranges_match_frontend_and_link_checker() {
+        assert!(validate_external_url("https://240.0.0.1/a").is_err());
+        assert!(validate_external_url("https://198.18.1.1/a").is_err());
+        assert!(validate_external_url("https://192.0.0.1/a").is_err());
+
+        assert!(validate_webdav_url("https://240.0.0.1/a").is_err());
+        assert!(validate_webdav_url("http://198.18.1.1/a").is_ok());
+        assert!(validate_webdav_url("https://198.18.1.1/a").is_ok());
     }
 
     #[test]

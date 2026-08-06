@@ -13,7 +13,7 @@ use tokio::time::Duration;
 use super::utils::read_file_bytes;
 use crate::error::AppError;
 use crate::log_utils::safe_path;
-use crate::url_policy::validate_webdav_url;
+use crate::url_policy::validate_webdav_url_for_request;
 
 /// 文件大小限制：50MB
 const MAX_FILE_SIZE: u64 = 50 * 1024 * 1024;
@@ -47,8 +47,6 @@ pub struct WebDAVUploadResult {
 pub struct WebDAVTestResult {
     pub success: bool,
     pub message: String,
-    /// 探针图片的公开 URL，便于用户自查
-    pub probe_url: Option<String>,
 }
 
 // ==================== 路径与 URL 处理 ====================
@@ -153,10 +151,7 @@ fn map_request_error(err: reqwest::Error) -> AppError {
 }
 
 fn basic_auth(username: &str, password: &str) -> String {
-    format!(
-        "Basic {}",
-        STANDARD.encode(format!("{}:{}", username.trim(), password.trim()))
-    )
+    format!("Basic {}", STANDARD.encode(format!("{}:{}", username, password)))
 }
 
 fn is_ok_status(status: u16) -> bool {
@@ -274,13 +269,13 @@ pub async fn upload_to_webdav(
     log::info!("[WebDAV] 开始上传文件: {}", safe_path(&file_path));
 
     // 1. 校验地址（WebDAV 策略：允许局域网，拒绝链路本地与公网明文 HTTP）
-    validate_webdav_url(&url)?;
+    validate_webdav_url_for_request(&url).await?;
     if public_domain.trim().is_empty() {
         return Err(AppError::config(
             "公开访问域名不能为空——WebDAV 端点通常需要认证，无法直接作为图片链接",
         ));
     }
-    validate_webdav_url(&public_domain)?;
+    validate_webdav_url_for_request(&public_domain).await?;
 
     emit_progress(&window, &id, 0, "读取文件...", 1, 3);
 
@@ -355,11 +350,11 @@ pub async fn test_webdav_storage(
     public_domain: String,
     public_url_template: String,
 ) -> Result<WebDAVTestResult, AppError> {
-    validate_webdav_url(&url)?;
+    validate_webdav_url_for_request(&url).await?;
     if public_domain.trim().is_empty() {
         return Err(AppError::config("公开访问域名不能为空"));
     }
-    validate_webdav_url(&public_domain)?;
+    validate_webdav_url_for_request(&public_domain).await?;
 
     let client = reqwest::Client::new();
     let auth = basic_auth(&username, &password);
@@ -452,7 +447,6 @@ pub async fn test_webdav_storage(
                         "图片已上传，但公开链接打不开 (HTTP {})——请检查「公开访问域名」和 URL 模板",
                         status
                     ),
-                    probe_url: Some(probe_url),
                 });
             }
 
@@ -463,14 +457,12 @@ pub async fn test_webdav_storage(
                         "公开链接返回的不是图片 (Content-Type: {})——多半是模板指向了登录页或分享页",
                         if content_type.is_empty() { "未知" } else { &content_type }
                     ),
-                    probe_url: Some(probe_url),
                 });
             }
 
             Ok(WebDAVTestResult {
                 success: true,
                 message: "连接成功，公开链接可正常访问".to_string(),
-                probe_url: Some(probe_url),
             })
         }
         Err(err) => Ok(WebDAVTestResult {
@@ -485,7 +477,6 @@ pub async fn test_webdav_storage(
                     err.to_string()
                 }
             ),
-            probe_url: Some(probe_url),
         }),
     }
 }
@@ -582,5 +573,17 @@ mod tests {
         assert!(describe_status(404).contains("路径不存在"));
         assert!(describe_status(507).contains("空间"));
         assert!(describe_status(502).contains("服务器错误"));
+    }
+
+    #[test]
+    fn basic_auth_preserves_credentials() {
+        let auth = basic_auth("user ", " pass ");
+        let decoded = String::from_utf8(
+            STANDARD
+                .decode(auth.strip_prefix("Basic ").unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(decoded, "user : pass ");
     }
 }

@@ -3,7 +3,7 @@ import { UploadResult, ValidationResult, UploadOptions, ProgressCallback, Connec
 import type { WebDAVStorageProfile } from '../../config/types';
 import { DEFAULT_WEBDAV_URL_TEMPLATE } from '../../config/types';
 import { secureStorage } from '../../security/crypto';
-import { assertAllowedWebDAVUrl } from '../../security/networkPolicy';
+import { assertAllowedWebDAVStorageUrl } from '../../security/networkPolicy';
 import { getErrorMessage } from '../../types/errors';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -16,7 +16,6 @@ interface WebDAVRustResult {
 interface WebDAVTestRustResult {
   success: boolean;
   message: string;
-  probeUrl?: string;
 }
 
 /**
@@ -166,7 +165,7 @@ export class WebDAVUploader extends BaseUploader<WebDAVStorageProfile> {
 
   private checkUrl(rawUrl: string, label: string): string | null {
     try {
-      assertAllowedWebDAVUrl(rawUrl);
+      assertAllowedWebDAVStorageUrl(rawUrl);
       return null;
     } catch (error) {
       return `${label}无效：${getErrorMessage(error)}`;

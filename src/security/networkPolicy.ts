@@ -20,6 +20,12 @@ export interface NetworkPolicyOptions {
    * 169.254.169.254）仍然拒绝——没有人的 NAS 挂在那个地址上。
    */
   allowPrivateHttp?: boolean;
+  /**
+   * 允许 HTTP 主机名先通过前端校验，由 Rust 侧解析 DNS 后做最终裁决。
+   *
+   * 仅供 WebDAV 图床使用；备份 WebDAV 继续在前端拒绝主机名 HTTP。
+   */
+  allowHostnameHttp?: boolean;
 }
 
 export function parseHttpUrl(rawUrl: string, label = '地址'): URL {
@@ -44,7 +50,12 @@ export function assertAllowedExternalUrl(rawUrl: string, options: NetworkPolicyO
 
   if (parsed.protocol === 'http:') {
     if (isLoopbackHost(parsed.hostname)) return parsed;
-    if (allowPrivate && isPrivateOrReservedHost(parsed.hostname)) return parsed;
+    if (allowPrivate) {
+      // 前端无法解析 DNS，主机名 HTTP 先放行，由 Rust 侧解析后做最终裁决。
+      const host = normalizeHost(parsed.hostname);
+      const isLiteralIp = isIpv4Address(host) || host.includes(':');
+      if ((!isLiteralIp && options.allowHostnameHttp) || isPrivateOrReservedHost(parsed.hostname)) return parsed;
+    }
     throw new Error(allowPrivate ? PUBLIC_HTTP_DISABLED_MESSAGE : EXTERNAL_HTTP_DISABLED_MESSAGE);
   }
 
@@ -59,6 +70,14 @@ export function assertAllowedExternalUrl(rawUrl: string, options: NetworkPolicyO
 
 export function assertAllowedWebDAVUrl(rawUrl: string): URL {
   return assertAllowedExternalUrl(rawUrl, { label: 'WebDAV 地址', allowPrivateHttp: true });
+}
+
+export function assertAllowedWebDAVStorageUrl(rawUrl: string): URL {
+  return assertAllowedExternalUrl(rawUrl, {
+    label: 'WebDAV 地址',
+    allowPrivateHttp: true,
+    allowHostnameHttp: true,
+  });
 }
 
 export function safeImageUrl(rawUrl: string | null | undefined): string | undefined {
