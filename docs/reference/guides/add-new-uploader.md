@@ -321,7 +321,26 @@ export interface UserConfig {
 > - `src/components/settings/hosting/TokenServiceGroup.vue` — Token/API Key 类图床组
 > - `src/components/settings/hosting/PrivateStorageGroup.vue` — 私有存储图床组
 >
-> 根据新图床的认证方式，将配置项添加到对应的分组组件中。参考已有图床的写法即可。
+> 分组组件是数据驱动的：新增图床通常只是往 `FieldConfig[]` 数组里加几行字段描述，
+> 而不是写新的模板。参考已有图床的写法即可。
+
+---
+
+## 多实例图床（同一种图床配多个实例）
+
+如果新图床需要让用户配多份（像自定义 S3、WebDAV 那样），走的是另一条路：
+
+| 环节 | 做法 | 参考 |
+|------|------|------|
+| serviceId | 复合 ID `<前缀>:<profileId>`，配 `isXxxId` / `getXxxProfileId` / `makeXxxId` 三件套 | `src/config/serviceTypes.ts` |
+| 配置存放 | `UserConfig` 顶层的 profiles 数组，不放进 `config.services` | `custom_s3_profiles` / `webdav_profiles` |
+| 上传器注册 | 不在 `initializeUploaders()` 静态注册，由 `syncXxxUploaders(profiles)` 按 profile 列表重建 | `src/uploaders/index.ts` |
+| 注册时机 | 应用启动流程 + 设置页保存/加载，两处都要 | `src/main.ts`、`profileServiceSync.ts` |
+| 增删改 | 加进 `useStorageProfiles`，复用默认命名、删除前置校验、编辑器绑定清理 | `src/composables/settings/useStorageProfiles.ts` |
+| 必填字段 | `getRequiredFields()` 里加分支，上传过滤/健康状态/托盘都从这里取 | `src/constants/serviceRequiredFields.ts` |
+
+> 凡是代码里出现 `isCustomS3Id` 的地方，多实例图床基本都要并排加一条分支。
+> 漏掉任何一处的表现通常是：图床在某个界面里查得到、在另一个界面里查不到。
 
 ---
 
@@ -405,3 +424,4 @@ getPublicUrl(result: UploadResult): string {
 | 日期 | 变更 |
 |------|------|
 | 2025-01-13 | 初始版本 |
+| 2026-08-06 | 补充多实例图床（复合 ID）接入指引，随 WebDAV 图床落地 |

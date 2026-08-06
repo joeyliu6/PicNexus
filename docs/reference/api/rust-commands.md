@@ -17,11 +17,13 @@
 | | `upload_to_smms` | SM.MS 上传 |
 | | `upload_to_github` | GitHub 上传 |
 | | `upload_to_s3_compatible` | S3 兼容存储上传 |
+| | `upload_to_webdav` | WebDAV 图床上传（二进制 PUT + 递归建目录） |
 | **测试** | `test_weibo_connection` | 测试微博连接 |
 | | `test_zhihu_connection` | 测试知乎连接 |
 | | `test_nowcoder_connection` | 测试牛客连接 |
 | | `test_bilibili_connection` | 测试B站连接 |
 | | `test_nami_connection` | 测试纳米连接 |
+| | `test_webdav_storage` | 测试 WebDAV 图床（传探针图 + 匿名访问公开链接，区分「传不上去」与「链接打不开」） |
 | **剪贴板** | `clipboard_has_image` | 检测剪贴板图片 |
 | | `read_clipboard_image` | 读取剪贴板图片 |
 | | `cleanup_clipboard_temp_file` | 安全清理本次剪贴板图片临时文件（仅允许系统临时目录下 `clipboard_image_*.png`） |
