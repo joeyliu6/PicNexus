@@ -43,6 +43,12 @@
 | **CLI PATH** | `get_cli_path_status` | 读取 PicNexus CLI 是否已加入用户 PATH |
 | | `add_cli_to_path` | 将 PicNexus CLI 加入用户 PATH |
 | | `remove_cli_from_path` | 从用户 PATH 移除 PicNexus CLI |
+| **Analytics** | `analytics_send_batch` | 经隔离 WebView 上报 `first_run` / `app_start` |
+| | `analytics_shutdown` | 销毁隔离 WebView 与本地回环服务 |
+| | `analytics_start_heartbeat` | 启动在线心跳（Rust 定时器 + Measurement Protocol，25 分钟一次）；返回 `started` 或 `disabled` |
+| | `analytics_stop_heartbeat` | 停止在线心跳，幂等 |
+
+> Analytics 心跳：密钥经编译期环境变量 `PICNEXUS_GA_API_SECRET` 注入，未注入时 `analytics_start_heartbeat` 返回 `disabled`。设计取舍见 [composables.md](./composables.md#在线心跳)。
 
 > CLI PATH 命令：Windows 写入用户级注册表；macOS / Linux 创建 `~/.local/bin/picnexus` 符号链接（AppImage 下符号链接指向 `$APPIMAGE`）。macOS 若检测到 `~/.local/bin` 不在 PATH，返回的 `message` 会引导用户把 export 行加入 `~/.zshrc`。
 
