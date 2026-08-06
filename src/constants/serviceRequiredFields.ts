@@ -2,7 +2,7 @@
 // 供 useServiceHealth 和 MultiServiceUploader 共用
 
 import type { ServiceType } from '../config/types';
-import { isCustomS3Id } from '../config/types';
+import { isCustomS3Id, isWebDAVId } from '../config/types';
 
 /**
  * 各图床的必填字段列表
@@ -33,11 +33,20 @@ export const SERVICE_REQUIRED_FIELDS: Record<ServiceType, string[]> = {
 export const CUSTOM_S3_REQUIRED_FIELDS = ['endpoint', 'accessKeyId', 'secretAccessKey', 'region', 'bucket'];
 
 /**
+ * WebDAV 图床的必填字段
+ *
+ * publicDomain 必填：WebDAV 端点通常需要认证，直接拿它当图片链接的话，
+ * 别人打开会被要求输账号密码，粘进 Markdown 就是一张裂图。
+ */
+export const WEBDAV_REQUIRED_FIELDS = ['url', 'username', 'passwordEncrypted', 'publicDomain'];
+
+/**
  * 获取指定服务的必填字段列表
- * 支持内置服务和 custom_s3:profileId 复合 ID
+ * 支持内置服务、custom_s3:profileId 和 webdav:profileId 复合 ID
  */
 export function getRequiredFields(serviceId: string): string[] {
   if (isCustomS3Id(serviceId)) return CUSTOM_S3_REQUIRED_FIELDS;
+  if (isWebDAVId(serviceId)) return WEBDAV_REQUIRED_FIELDS;
   return SERVICE_REQUIRED_FIELDS[serviceId as ServiceType] ?? [];
 }
 

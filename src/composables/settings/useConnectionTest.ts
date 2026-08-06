@@ -8,8 +8,9 @@ import { useServiceAvailability, probeBuiltinServiceAvailability } from '../useS
 import { useServiceHealth } from '../useServiceHealth';
 import { buildServiceCheckSummarySnapshot, useServiceCheckRunner } from '../useServiceCheckRunner';
 import { TOAST_MESSAGES } from '../../constants';
-import type { ServiceType, CustomS3Profile } from '../../config/types';
-import { isCustomS3Id, getCustomS3ProfileId } from '../../config/types';
+import type { ServiceType, CustomS3Profile, WebDAVStorageProfile } from '../../config/types';
+import { isCustomS3Id, getCustomS3ProfileId, isWebDAVId, getWebDAVProfileId } from '../../config/types';
+import { WebDAVUploader } from '../../uploaders/webdav/WebDAVUploader';
 import { extractNamiAuthToken } from '../../utils/namiAuthToken';
 import type { SettingsFormShape } from './settingsFormTypes';
 import type { ServiceHealthStatus } from '../../types/serviceHealth';
@@ -112,6 +113,31 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
     }
   }
 
+  /**
+   * WebDAV 图床测试
+   *
+   * 走 WebDAVUploader.testConnection，它除了测连通性，还会传一张探针图再匿名
+   * 访问公开链接——"传上去了但链接打不开"是这个图床最容易配错、也最难自查的
+   * 一环，失败文案会明确指出是上传问题还是链接问题。
+   */
+  async function testWebDAVConnection(serviceId: string) {
+    const profileId = getWebDAVProfileId(serviceId);
+    const profile = formData.value.webdav_profiles.find((item: WebDAVStorageProfile) => item.id === profileId);
+    if (!profile) throw new Error('找不到该 WebDAV 配置');
+
+    const displayName = profile.name || 'WebDAV';
+    try {
+      const uploader = new WebDAVUploader();
+      const result = await uploader.testConnection(profile);
+      if (!result.success) throw new Error(result.error || '连接测试失败');
+      toast.showConfig('success', TOAST_MESSAGES.auth.configValid(displayName));
+    } catch (error) {
+      const msg = errorToString(error);
+      toast.showConfig('error', TOAST_MESSAGES.auth.connectionFailed(displayName, msg));
+      throw error;
+    }
+  }
+
   async function testCookieConnection(command: string, params: Record<string, string>, serviceId: ServiceType) {
     try {
       await invoke(command, params);
@@ -159,6 +185,14 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
       return validateS3Config(serviceId, profile as unknown as Record<string, unknown>);
     }
 
+    if (isWebDAVId(serviceId)) {
+      const profileId = getWebDAVProfileId(serviceId);
+      const profile = formData.value.webdav_profiles.find((item: WebDAVStorageProfile) => item.id === profileId);
+      if (!profile) return '找不到该 WebDAV 配置';
+      // 字段完整性由 WebDAVUploader.validateConfig 统一判定，避免两处规则走样
+      return null;
+    }
+
     if (S3_SERVICE_IDS.includes(serviceId as ServiceType)) {
       const config = formData.value[serviceId as 'r2' | 'tencent' | 'aliyun' | 'qiniu' | 'upyun'] as unknown as Record<string, unknown>;
       return validateS3Config(serviceId, config);
@@ -172,6 +206,12 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
       const profileId = getCustomS3ProfileId(serviceId);
       const profile = formData.value.custom_s3_profiles.find((item: CustomS3Profile) => item.id === profileId);
       return profile?.name || '自定义 S3';
+    }
+
+    if (isWebDAVId(serviceId)) {
+      const profileId = getWebDAVProfileId(serviceId);
+      const profile = formData.value.webdav_profiles.find((item: WebDAVStorageProfile) => item.id === profileId);
+      return profile?.name || 'WebDAV';
     }
 
     return serviceNames[serviceId as ServiceType] || serviceId;
@@ -189,7 +229,9 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
   const BUILTIN_LABELS: Record<string, string> = { jd: '京东图床', qiyu: '七鱼图床' };
 
   function resolveServiceTask(serviceId: string): (() => Promise<void>) | undefined {
-    return isCustomS3Id(serviceId) ? () => testS3Connection(serviceId) : actions[serviceId];
+    if (isCustomS3Id(serviceId)) return () => testS3Connection(serviceId);
+    if (isWebDAVId(serviceId)) return () => testWebDAVConnection(serviceId);
+    return actions[serviceId];
   }
 
   async function executeServiceTask(serviceId: string, task: () => Promise<void>) {
@@ -259,7 +301,7 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
     const serviceIds = Object.entries(serviceHealth.healthStatusMap.value)
       .filter(([serviceId, status]) => {
         if (status === 'unconfigured') return false;
-        return isCustomS3Id(serviceId) || !!actions[serviceId];
+        return isCustomS3Id(serviceId) || isWebDAVId(serviceId) || !!actions[serviceId];
       })
       .map(([serviceId]) => serviceId);
 

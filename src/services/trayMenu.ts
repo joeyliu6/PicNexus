@@ -7,11 +7,16 @@ import {
   PUBLIC_SERVICES,
   isPublicRiskService,
   makeCustomS3Id,
+  makeWebDAVId,
+  isCustomS3Id,
+  isWebDAVId,
+  getCustomS3ProfileId,
+  getWebDAVProfileId,
   type ServiceType,
   type ThemeMode,
   type UserConfig,
 } from '../config/types';
-import { CUSTOM_S3_REQUIRED_FIELDS, NO_CONFIG_SERVICES, SERVICE_REQUIRED_FIELDS } from '../constants/serviceRequiredFields';
+import { NO_CONFIG_SERVICES, SERVICE_REQUIRED_FIELDS, getRequiredFields } from '../constants/serviceRequiredFields';
 import { getServiceDisplayName } from '../constants/serviceNames';
 import { configStore } from '../store/instances';
 import type { ServiceHealthStatus } from '../types/serviceHealth';
@@ -46,7 +51,8 @@ interface TrayServiceEntry {
 export interface TrayServiceGroups {
   publicServices: TrayServiceEntry[];
   privateServices: TrayServiceEntry[];
-  customS3Services: TrayServiceEntry[];
+  /** 多实例私有存储（custom_s3:xxx / webdav:xxx），由用户 profile 动态生成 */
+  profileServices: TrayServiceEntry[];
 }
 
 export interface TrayMenuActions {
@@ -116,15 +122,19 @@ function isConfiguredBuiltinService(serviceId: string, config: UserConfig): bool
   return hasFilledRequiredFields(serviceConfig, requiredFields);
 }
 
-function isConfiguredCustomS3Service(serviceId: string, config: UserConfig): boolean {
-  const profileId = serviceId.slice('custom_s3:'.length);
-  const profile = config.custom_s3_profiles?.find((item) => item.id === profileId);
-  return hasFilledRequiredFields(profile as Record<string, unknown> | undefined, CUSTOM_S3_REQUIRED_FIELDS);
+function isConfiguredProfileService(serviceId: string, config: UserConfig): boolean {
+  const profile = isCustomS3Id(serviceId)
+    ? config.custom_s3_profiles?.find((item) => item.id === getCustomS3ProfileId(serviceId))
+    : config.webdav_profiles?.find((item) => item.id === getWebDAVProfileId(serviceId));
+  return hasFilledRequiredFields(
+    profile as Record<string, unknown> | undefined,
+    getRequiredFields(serviceId),
+  );
 }
 
 function isConfiguredService(serviceId: string, config: UserConfig): boolean {
-  if (serviceId.startsWith('custom_s3:')) {
-    return isConfiguredCustomS3Service(serviceId, config);
+  if (isCustomS3Id(serviceId) || isWebDAVId(serviceId)) {
+    return isConfiguredProfileService(serviceId, config);
   }
   return isConfiguredBuiltinService(serviceId, config);
 }
@@ -144,12 +154,15 @@ function filterConfiguredServices(serviceIds: string[], config: UserConfig): Tra
 }
 
 export function getTrayServiceGroups(config: UserConfig): TrayServiceGroups {
-  const customS3Ids = (config.custom_s3_profiles ?? []).map((profile) => makeCustomS3Id(profile.id));
+  const profileIds = [
+    ...(config.custom_s3_profiles ?? []).map((profile) => makeCustomS3Id(profile.id)),
+    ...(config.webdav_profiles ?? []).map((profile) => makeWebDAVId(profile.id)),
+  ];
 
   return {
     publicServices: filterConfiguredServices(PUBLIC_SERVICES, config),
     privateServices: filterConfiguredServices(PRIVATE_SERVICES, config),
-    customS3Services: filterConfiguredServices(customS3Ids, config),
+    profileServices: filterConfiguredServices(profileIds, config),
   };
 }
 
@@ -158,7 +171,7 @@ export function getSelectableTrayServiceIds(config: UserConfig): string[] {
   return [
     ...groups.publicServices,
     ...groups.privateServices,
-    ...groups.customS3Services,
+    ...groups.profileServices,
   ].map((service) => service.id);
 }
 
@@ -209,7 +222,7 @@ function buildCurrentServiceItems(config: UserConfig, actions: TrayMenuActions, 
   const groupList = [
     groups.publicServices,
     groups.privateServices,
-    groups.customS3Services,
+    groups.profileServices,
   ].filter((group) => group.length > 0);
 
   if (groupList.length === 0) {

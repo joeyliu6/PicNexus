@@ -4,10 +4,10 @@ import { ref, computed, type Ref, type ComputedRef } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { configStore } from '../store/instances';
 import type { UserConfig } from '../config/types';
-import { DEFAULT_CONFIG, isCustomS3Id, makeCustomS3Id } from '../config/types';
+import { DEFAULT_CONFIG, isCustomS3Id, makeCustomS3Id, isWebDAVId, makeWebDAVId } from '../config/types';
 import { useToast } from './useToast';
 import { TOAST_MESSAGES } from '../constants';
-import { CUSTOM_S3_REQUIRED_FIELDS, getRequiredFields, NO_CONFIG_SERVICES } from '../constants/serviceRequiredFields';
+import { getRequiredFields, NO_CONFIG_SERVICES } from '../constants/serviceRequiredFields';
 import { debounceWithError } from '../utils/debounce';
 import { createLogger } from '../utils/logger';
 
@@ -140,7 +140,7 @@ export function useServiceSelector(): UseServiceSelectorReturn {
     }
 
     for (const serviceId of Object.keys(serviceConfigStatus.value)) {
-      if (isCustomS3Id(serviceId)) continue;
+      if (isCustomS3Id(serviceId) || isWebDAVId(serviceId)) continue;
       serviceConfigStatus.value[serviceId] = (NO_CONFIG_SERVICES as readonly string[]).includes(serviceId)
         || hasAllRequiredFields(
           config.services[serviceId as keyof UserConfig['services']] as Record<string, unknown> | undefined,
@@ -148,16 +148,24 @@ export function useServiceSelector(): UseServiceSelectorReturn {
         );
     }
 
+    // 多实例条目整体重建：profile 可能已被删除，留着就是指向空配置的幽灵图床
     for (const serviceId of Object.keys(serviceConfigStatus.value)) {
-      if (isCustomS3Id(serviceId)) delete serviceConfigStatus.value[serviceId];
+      if (isCustomS3Id(serviceId) || isWebDAVId(serviceId)) delete serviceConfigStatus.value[serviceId];
     }
 
-    // 自定义 S3 profiles
     for (const profile of config.custom_s3_profiles ?? []) {
       const compositeId = makeCustomS3Id(profile.id);
       serviceConfigStatus.value[compositeId] = hasAllRequiredFields(
         profile as unknown as Record<string, unknown>,
-        CUSTOM_S3_REQUIRED_FIELDS
+        getRequiredFields(compositeId)
+      );
+    }
+
+    for (const profile of config.webdav_profiles ?? []) {
+      const compositeId = makeWebDAVId(profile.id);
+      serviceConfigStatus.value[compositeId] = hasAllRequiredFields(
+        profile as unknown as Record<string, unknown>,
+        getRequiredFields(compositeId)
       );
     }
   }

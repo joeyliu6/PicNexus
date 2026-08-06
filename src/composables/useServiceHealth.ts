@@ -4,7 +4,14 @@
 
 import { ref, computed, triggerRef, type Ref, type ComputedRef } from 'vue';
 import type { ServiceType, UserConfig } from '../config/types';
-import { isCustomS3Id, getCustomS3ProfileId, makeCustomS3Id } from '../config/types';
+import {
+  isCustomS3Id,
+  getCustomS3ProfileId,
+  makeCustomS3Id,
+  isWebDAVId,
+  getWebDAVProfileId,
+  makeWebDAVId,
+} from '../config/types';
 import type {
   ServiceHealthStatus,
   ServiceHealthRecord,
@@ -12,7 +19,13 @@ import type {
   PersistedHealthData,
 } from '../types/serviceHealth';
 import { AUTH_CONFIG_ERROR_CODES } from '../types/serviceHealth';
-import { SERVICE_REQUIRED_FIELDS, NO_CONFIG_SERVICES, CUSTOM_S3_REQUIRED_FIELDS } from '../constants/serviceRequiredFields';
+import {
+  SERVICE_REQUIRED_FIELDS,
+  NO_CONFIG_SERVICES,
+  CUSTOM_S3_REQUIRED_FIELDS,
+  WEBDAV_REQUIRED_FIELDS,
+  getRequiredFields,
+} from '../constants/serviceRequiredFields';
 import { syncStatusStore } from '../store/instances';
 import type { StructuredError } from '../uploaders/base/ErrorTypes';
 import { formatRelativeTime } from '../utils/formatters';
@@ -135,14 +148,15 @@ function getServiceFieldValues(
   serviceId: string,
   config: UserConfig
 ): Record<string, string> {
-  // 自定义 S3 复合 ID：从 custom_s3_profiles 中查找
-  if (isCustomS3Id(serviceId)) {
-    const profileId = getCustomS3ProfileId(serviceId);
-    const profile = config.custom_s3_profiles?.find(p => p.id === profileId);
+  // 多实例复合 ID：从对应的 profiles 列表中查找
+  if (isCustomS3Id(serviceId) || isWebDAVId(serviceId)) {
+    const profile = isCustomS3Id(serviceId)
+      ? config.custom_s3_profiles?.find(p => p.id === getCustomS3ProfileId(serviceId))
+      : config.webdav_profiles?.find(p => p.id === getWebDAVProfileId(serviceId));
     if (!profile) return {};
 
     const values: Record<string, string> = {};
-    for (const field of CUSTOM_S3_REQUIRED_FIELDS) {
+    for (const field of getRequiredFields(serviceId)) {
       const val = (profile as unknown as Record<string, unknown>)[field];
       values[field] = typeof val === 'string' ? val.trim() : '';
     }
@@ -172,9 +186,14 @@ function buildConfigSnapshot(config: UserConfig): Record<string, string> {
     const values = getServiceFieldValues(serviceId, config);
     snapshot[serviceId] = Object.values(values).join('|');
   }
-  // 包含自定义 S3 profiles
+  // 包含多实例 profiles（自定义 S3 / WebDAV）
   for (const profile of config.custom_s3_profiles ?? []) {
     const compositeId = makeCustomS3Id(profile.id);
+    const values = getServiceFieldValues(compositeId, config);
+    snapshot[compositeId] = Object.values(values).join('|');
+  }
+  for (const profile of config.webdav_profiles ?? []) {
+    const compositeId = makeWebDAVId(profile.id);
     const values = getServiceFieldValues(compositeId, config);
     snapshot[compositeId] = Object.values(values).join('|');
   }
@@ -278,15 +297,18 @@ function evaluateConfigInternal(config: UserConfig): void {
   for (const profile of config.custom_s3_profiles ?? []) {
     evaluateService(makeCustomS3Id(profile.id), CUSTOM_S3_REQUIRED_FIELDS.length);
   }
+  for (const profile of config.webdav_profiles ?? []) {
+    evaluateService(makeWebDAVId(profile.id), WEBDAV_REQUIRED_FIELDS.length);
+  }
 
-  // 清理已删除的 custom_s3 profiles
+  // 清理已删除的多实例 profiles，避免健康面板残留幽灵条目
   for (const key of Object.keys(healthMap.value)) {
     if (isCustomS3Id(key)) {
-      const profileId = getCustomS3ProfileId(key);
-      const exists = config.custom_s3_profiles?.some(p => p.id === profileId);
-      if (!exists) {
-        delete healthMap.value[key];
-      }
+      const exists = config.custom_s3_profiles?.some(p => p.id === getCustomS3ProfileId(key));
+      if (!exists) delete healthMap.value[key];
+    } else if (isWebDAVId(key)) {
+      const exists = config.webdav_profiles?.some(p => p.id === getWebDAVProfileId(key));
+      if (!exists) delete healthMap.value[key];
     }
   }
 

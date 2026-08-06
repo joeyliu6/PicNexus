@@ -3,7 +3,7 @@
  */
 
 import type { ServiceType, UserConfig } from '../config/types';
-import { isCustomS3Id, getCustomS3ProfileId } from '../config/types';
+import { isCustomS3Id, getCustomS3ProfileId, isWebDAVId, getWebDAVProfileId } from '../config/types';
 
 export const SERVICE_DISPLAY_NAMES: Record<ServiceType, string> = {
   weibo: '微博',
@@ -48,6 +48,11 @@ export function getServiceDisplayName(serviceId: string, config?: UserConfig): s
     const profile = config?.custom_s3_profiles?.find(p => p.id === profileId);
     return profile?.name || `自定义 S3 (${profileId})`;
   }
+  if (isWebDAVId(serviceId)) {
+    const profileId = getWebDAVProfileId(serviceId);
+    const profile = config?.webdav_profiles?.find(p => p.id === profileId);
+    return profile?.name || `WebDAV (${profileId})`;
+  }
   return SERVICE_DISPLAY_NAMES[serviceId as ServiceType] || serviceId;
 }
 
@@ -57,5 +62,6 @@ export function getServiceDisplayName(serviceId: string, config?: UserConfig): s
  */
 export function getServiceAliases(serviceId: string): string[] {
   if (isCustomS3Id(serviceId)) return ['自定义 S3', 'S3'];
+  if (isWebDAVId(serviceId)) return ['WebDAV', 'webdav'];
   return SERVICE_NAME_ALIASES[serviceId as ServiceType] ?? [];
 }

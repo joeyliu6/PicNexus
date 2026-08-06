@@ -2,7 +2,7 @@
 
 import { UploaderFactory } from '../uploaders/base/UploaderFactory';
 import { UploadResult } from '../uploaders/base/types';
-import { UserConfig, ServiceType, isCustomS3Id, getCustomS3ProfileId } from '../config/types';
+import { UserConfig, ServiceType, isCustomS3Id, getCustomS3ProfileId, isWebDAVId, getWebDAVProfileId } from '../config/types';
 import { StructuredError, UploadErrorCode, createStructuredError } from '../uploaders/base/ErrorTypes';
 import { convertToStructuredWeiboError } from '../uploaders/weibo/WeiboError';
 import { convertToStructuredR2Error } from '../uploaders/r2/R2Error';
@@ -14,7 +14,7 @@ import {
   SERVICE_REQUIRED_FIELDS,
   COOKIE_BASED_SERVICES,
   NO_CONFIG_SERVICES,
-  CUSTOM_S3_REQUIRED_FIELDS,
+  getRequiredFields,
 } from '../constants/serviceRequiredFields';
 import { createLogger } from '../utils/logger';
 
@@ -23,10 +23,13 @@ const log = createLogger('MultiUploader');
 /** 每个图床的最大并发数 */
 const SERVICE_MAX_CONCURRENT = 2;
 
-/** 根据 serviceId 查找对应的配置对象（支持内置服务和 custom_s3:xxx） */
+/** 根据 serviceId 查找对应的配置对象（支持内置服务、custom_s3:xxx 和 webdav:xxx） */
 function getServiceConfig(serviceId: string, config: UserConfig): Record<string, unknown> | undefined {
   if (isCustomS3Id(serviceId)) {
     return config.custom_s3_profiles?.find(p => p.id === getCustomS3ProfileId(serviceId)) as Record<string, unknown> | undefined;
+  }
+  if (isWebDAVId(serviceId)) {
+    return config.webdav_profiles?.find(p => p.id === getWebDAVProfileId(serviceId)) as Record<string, unknown> | undefined;
   }
   return config.services[serviceId as ServiceType] as Record<string, unknown> | undefined;
 }
@@ -332,16 +335,15 @@ export class MultiServiceUploader {
     config: UserConfig
   ): string[] {
     return enabledServices.filter(serviceId => {
-      // 自定义 S3 复合 ID：从 custom_s3_profiles 中检查
-      if (isCustomS3Id(serviceId)) {
+      // 多实例复合 ID（custom_s3:xxx / webdav:xxx）：从对应 profiles 列表中检查
+      if (isCustomS3Id(serviceId) || isWebDAVId(serviceId)) {
         const profile = getServiceConfig(serviceId, config);
         if (!profile) {
           log.warn(`${serviceId} 未找到对应 profile，跳过`);
           return false;
         }
-        const cfg = profile as Record<string, unknown>;
-        const hasAll = CUSTOM_S3_REQUIRED_FIELDS.every(field => {
-          const val = cfg[field];
+        const hasAll = getRequiredFields(serviceId).every(field => {
+          const val = profile[field];
           return typeof val === 'string' ? val.trim() : val;
         });
         if (!hasAll) {

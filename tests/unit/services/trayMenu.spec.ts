@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getEmitMock, getListenMock, getTauriWindowMocks, resetTauriMocks } from '../helpers/tauriMock';
-import { DEFAULT_CONFIG, makeCustomS3Id, type UserConfig } from '@/config/types';
+import { DEFAULT_CONFIG, makeCustomS3Id, makeWebDAVId, type UserConfig } from '@/config/types';
 import TrayMenuWindow from '@/components/tray/TrayMenuWindow.vue';
 
 const mockState = vi.hoisted(() => ({
@@ -209,7 +209,38 @@ describe('trayMenu', () => {
 
     expect(groups.publicServices.map((service) => service.id)).toEqual(['jd']);
     expect(groups.privateServices).toEqual([]);
-    expect(groups.customS3Services.map((service) => service.label)).toEqual(['Archive S3']);
+    expect(groups.profileServices.map((service) => service.label)).toEqual(['Archive S3']);
+  });
+
+  it('includes configured WebDAV profiles in the profile group', () => {
+    const groups = getTrayServiceGroups(makeConfig({
+      availableServices: [makeCustomS3Id('archive'), makeWebDAVId('nas'), makeWebDAVId('incomplete')],
+      webdav_profiles: [
+        {
+          id: 'nas',
+          name: '家里的 NAS',
+          url: 'http://192.168.1.10:5005/dav',
+          username: 'me',
+          passwordEncrypted: 'cipher',
+          remotePath: '/images/',
+          publicDomain: 'http://192.168.1.10:5244',
+          publicUrlTemplate: '{domain}/d/pic/{path}',
+        },
+        {
+          // 缺 publicDomain：链接生成不出来，不该出现在托盘里
+          id: 'incomplete',
+          name: '没配公开域名',
+          url: 'https://dav.example.com',
+          username: 'me',
+          passwordEncrypted: 'cipher',
+          remotePath: '/images/',
+          publicDomain: '',
+          publicUrlTemplate: '{domain}/{path}',
+        },
+      ],
+    }));
+
+    expect(groups.profileServices.map((service) => service.label)).toEqual(['Archive S3', '家里的 NAS']);
   });
 
   it('updates enabledServices when selecting or unselecting tray service items', async () => {
