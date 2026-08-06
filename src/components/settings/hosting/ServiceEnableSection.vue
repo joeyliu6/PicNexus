@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import type { CustomS3Profile } from '../../../config/types';
-import { PRIVATE_SERVICES, PUBLIC_SERVICES, PUBLIC_SERVICE_RISK_TOOLTIP, isPublicRiskService, makeCustomS3Id } from '../../../config/types';
+import type { CustomS3Profile, WebDAVStorageProfile } from '../../../config/types';
+import { PRIVATE_SERVICES, PUBLIC_SERVICES, PUBLIC_SERVICE_RISK_TOOLTIP, isPublicRiskService, makeCustomS3Id, makeWebDAVId } from '../../../config/types';
 import ServiceChipGrid from '../ServiceChipGrid.vue';
 import type { BatchTestProgress } from '../../../types/batchTest';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
@@ -24,6 +24,7 @@ const props = defineProps<{
   availableServices: string[];
   serviceNames: Record<string, string>;
   customS3Profiles?: CustomS3Profile[];
+  webdavProfiles?: WebDAVStorageProfile[];
   publicServiceRiskAccepted: boolean;
 }>();
 
@@ -122,12 +123,20 @@ const toast = useToast();
 const { confirm: confirmDialog } = useConfirm();
 
 const customS3ServiceIds = computed(() => (props.customS3Profiles ?? []).map(profile => makeCustomS3Id(profile.id)));
-const privateServiceIds = computed<string[]>(() => [...PRIVATE_SERVICES, ...customS3ServiceIds.value]);
+const webdavServiceIds = computed(() => (props.webdavProfiles ?? []).map(profile => makeWebDAVId(profile.id)));
+const privateServiceIds = computed<string[]>(() => [
+  ...PRIVATE_SERVICES,
+  ...customS3ServiceIds.value,
+  ...webdavServiceIds.value,
+]);
 
 const serviceNamesWithCustom = computed<Record<string, string>>(() => {
   const names: Record<string, string> = { ...props.serviceNames };
   for (const profile of props.customS3Profiles ?? []) {
     names[makeCustomS3Id(profile.id)] = profile.name || '自定义 S3';
+  }
+  for (const profile of props.webdavProfiles ?? []) {
+    names[makeWebDAVId(profile.id)] = profile.name || 'WebDAV';
   }
   return names;
 });

@@ -11,6 +11,7 @@ import { TOAST_MESSAGES } from '../../constants';
 import { SERVICE_DISPLAY_NAMES } from '../../constants/serviceNames';
 import { filterOrphanProfileServices, syncProfileUploaders } from './profileServiceSync';
 import { decryptBackupProfiles, encryptBackupProfiles } from './webdavBackupSecrets';
+import { useStorageProfiles } from './useStorageProfiles';
 import { useConfirm } from '../useConfirm';
 import { createLogger } from '../../utils/logger';
 import { extractNamiAuthToken } from '../../utils/namiAuthToken';
@@ -21,7 +22,6 @@ import type {
   WebDAVProfile,
   ImageCompressionConfig,
   EditorServerConfig,
-  ServerServiceType,
   CustomS3Profile,
   WebDAVStorageProfile,
   LinkPrefixItem,
@@ -476,53 +476,25 @@ export function useSettingsForm() {
     saveSettings();
   }
 
-  // ---- 自定义 S3 管理 ----
+  // ---- 多实例图床 profile 管理（自定义 S3 / WebDAV 图床）----
 
-  // Why: 用"现存最大序号 + 1"命名，避免旧 length+1 在删中间项后撞名
-  function addCustomS3Profile(): string {
-    const usedIndices = formData.value.custom_s3_profiles
-      .map((p: CustomS3Profile) => parseInt(p.name?.match(/^自定义 S3 (\d+)$/)?.[1] ?? '', 10))
-      .filter((n) => Number.isFinite(n));
-    const nextIndex = usedIndices.length ? Math.max(...usedIndices) + 1 : 1;
-    const profileId = generateId();
-    formData.value.custom_s3_profiles.push({
-      id: profileId,
-      name: `自定义 S3 ${nextIndex}`,
-      endpoint: '', accessKeyId: '', secretAccessKey: '', region: '', bucket: '', path: '', publicDomain: ''
-    });
-    saveSettings();
-    return makeCustomS3Id(profileId);
-  }
+  const {
+    addCustomS3Profile,
+    deleteCustomS3Profile,
+    updateCustomS3Profile,
+    addWebdavProfile,
+    deleteWebdavProfile,
+    updateWebdavProfile,
+  } = useStorageProfiles({
+    formData,
+    availableServices,
+    saveSettings,
+    toast,
+    confirmDialog,
+    generateId,
+  });
 
-  async function deleteCustomS3Profile(profileId: string) {
-    const profile = formData.value.custom_s3_profiles.find((p: CustomS3Profile) => p.id === profileId);
-    const profileName = profile?.name || '自定义 S3';
-    const compositeId = makeCustomS3Id(profileId);
-
-    // 预校验：删后 availableServices 不能空，否则 saveConfig 会拒绝→走回滚，体验奇怪
-    if (availableServices.value.filter(s => s !== compositeId).length === 0) {
-      toast.showConfig('warn', { summary: '至少保留一个图床', detail: `「${profileName}」是当前唯一启用的图床，请先启用其他图床后再删除。`, life: 3500 });
-      return;
-    }
-    const confirmed = await confirmDialog(`确定要删除「${profileName}」配置吗？删除后相关的编辑器服务绑定也会一并清除。`, '删除配置');
-    if (!confirmed) return;
-    formData.value.custom_s3_profiles = formData.value.custom_s3_profiles.filter((p: CustomS3Profile) => p.id !== profileId);
-    availableServices.value = availableServices.value.filter(s => s !== compositeId);
-    const editor = formData.value.editorServer;
-    if (editor.typoraService === compositeId) editor.typoraService = '' as ServerServiceType;
-    if (editor.obsidianService === compositeId) editor.obsidianService = '' as ServerServiceType;
-    saveSettings();
-  }
-
-  function updateCustomS3Profile(profile: CustomS3Profile) {
-    const idx = formData.value.custom_s3_profiles.findIndex((p: CustomS3Profile) => p.id === profile.id);
-    if (idx !== -1) {
-      formData.value.custom_s3_profiles[idx] = { ...profile };
-    }
-    saveSettings();
-  }
-
-  // ---- WebDAV 管理 ----
+  // ---- WebDAV 备份配置管理 ----
 
   function addWebDAVProfile() {
     const newProfile: WebDAVProfile = {
@@ -580,11 +552,14 @@ export function useSettingsForm() {
     updatePrefix,
     removePrefix,
     resetToDefaultPrefixes,
-    // 自定义 S3
+    // 多实例图床 profile
     addCustomS3Profile,
     deleteCustomS3Profile,
     updateCustomS3Profile,
-    // WebDAV
+    addWebdavProfile,
+    deleteWebdavProfile,
+    updateWebdavProfile,
+    // WebDAV 备份
     addWebDAVProfile,
     deleteWebDAVProfile,
     switchWebDAVProfile,

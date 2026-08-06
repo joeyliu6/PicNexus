@@ -1,11 +1,16 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import InputText from 'primevue/inputtext';
 import HostingCard from '../HostingCard.vue';
 import SensitiveField from '../../common/SensitiveField.vue';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
-import type { CustomS3Profile } from '../../../config/types';
-import { makeCustomS3Id } from '../../../config/types';
+import type { CustomS3Profile, WebDAVStorageProfile } from '../../../config/types';
+import { makeCustomS3Id, makeWebDAVId, DEFAULT_WEBDAV_URL_TEMPLATE } from '../../../config/types';
 import { hasNonEmptyFields } from '../../../utils/validators';
+import { secureStorage } from '../../../security/crypto';
+import { createLogger } from '../../../utils/logger';
+
+const log = createLogger('PrivateStorage');
 
 interface PrivateFormData {
   r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; path: string; publicDomain: string };
@@ -108,11 +113,23 @@ const CUSTOM_S3_FIELDS: FieldConfig[] = [
 ];
 const CUSTOM_S3_REQUIRED_KEYS = ['endpoint', 'accessKeyId', 'secretAccessKey', 'region', 'bucket'];
 
+const WEBDAV_FIELDS: FieldConfig[] = [
+  { key: 'name', label: '显示名称', type: 'text', placeholder: '如：家里的 NAS', spanFull: true },
+  { key: 'url', label: 'WebDAV 地址', type: 'text', placeholder: 'https://dav.example.com/dav', spanFull: true, hint: '局域网地址可用 HTTP（如 http://192.168.1.10:5005），公网地址仅支持 HTTPS' },
+  { key: 'username', label: '用户名', type: 'text' },
+  { key: 'password', label: '密码', type: 'password' },
+  { key: 'remotePath', label: '图片目录', type: 'text', placeholder: 'images/', spanFull: true, hint: '建议与备份目录分开，避免图片和配置混在一起' },
+  { key: 'publicDomain', label: '公开访问域名', type: 'text', placeholder: 'https://cdn.example.com', spanFull: true, hint: '必填。WebDAV 地址本身通常需要登录，不能直接当图片链接用' },
+  { key: 'publicUrlTemplate', label: '链接模板', type: 'text', placeholder: DEFAULT_WEBDAV_URL_TEMPLATE, spanFull: true, hint: '可用变量：{domain} {path} {filename}。OpenList / Alist 一般填 {domain}/d/挂载点/{path}' },
+];
+const WEBDAV_REQUIRED_KEYS = ['url', 'username', 'passwordEncrypted', 'publicDomain'];
+
 // NOTE: privateFormData 通过引用传递，子组件直接修改嵌套属性是有意为之的设计
 // 父组件（HostingSettingsPanel）负责监听 save 事件触发持久化
 const props = defineProps<{
   privateFormData: PrivateFormData;
   customS3Profiles: CustomS3Profile[];
+  webdavProfiles: WebDAVStorageProfile[];
   testingConnections: Record<string, boolean>;
   healthStatusMap: Record<string, ServiceHealthStatus>;
   healthTooltipMap: Record<string, string>;
@@ -125,6 +142,8 @@ const emit = defineEmits<{
   testPrivate: [providerId: string];
   deleteCustomS3: [profileId: string];
   updateCustomS3: [profile: CustomS3Profile];
+  deleteWebdav: [profileId: string];
+  updateWebdav: [profile: WebDAVStorageProfile];
 }>();
 
 function isConfigured(svc: ServiceConfig): boolean {
@@ -155,6 +174,54 @@ function getFieldModel(svcId: PrivateProviderId, fieldKey: string) {
 
 function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string) {
   (props.privateFormData[svcId] as Record<string, string>)[fieldKey] = value;
+}
+
+// ---- WebDAV ----
+
+function isWebDAVConfigured(profile: WebDAVStorageProfile): boolean {
+  return hasNonEmptyFields(profile as unknown as Record<string, unknown>, WEBDAV_REQUIRED_KEYS);
+}
+
+function getWebDAVField(profile: WebDAVStorageProfile, key: string): string {
+  return (profile[key as keyof WebDAVStorageProfile] as string) || '';
+}
+
+function setWebDAVField(profileId: string, key: string, value: string) {
+  const profile = props.webdavProfiles.find(p => p.id === profileId);
+  if (profile) {
+    emit('updateWebdav', { ...profile, [key]: value });
+  }
+}
+
+/**
+ * 明文密码只在输入框里活一瞬：失焦即加密写入 passwordEncrypted，随后清空草稿。
+ * 这样明文既不进 formData 也不落盘。留空表示"不修改已保存的密码"。
+ */
+const webdavPasswordDrafts = ref<Record<string, string>>({});
+
+function setWebDAVPasswordDraft(profileId: string, value: string) {
+  webdavPasswordDrafts.value[profileId] = value;
+}
+
+async function commitWebDAVPassword(profileId: string) {
+  const draft = webdavPasswordDrafts.value[profileId];
+  if (!draft) return;
+
+  const profile = props.webdavProfiles.find(p => p.id === profileId);
+  if (!profile) return;
+
+  try {
+    const passwordEncrypted = await secureStorage.encrypt(draft);
+    emit('updateWebdav', { ...profile, passwordEncrypted });
+    webdavPasswordDrafts.value[profileId] = '';
+    emit('save');
+  } catch (error) {
+    log.error('WebDAV 密码加密失败', error);
+  }
+}
+
+function webdavPasswordPlaceholder(profile: WebDAVStorageProfile): string {
+  return profile.passwordEncrypted ? '已保存，留空则不修改' : '输入 WebDAV 密码';
 }
 </script>
 
@@ -245,6 +312,55 @@ function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string
       </form>
       <template #actions-right>
         <button class="delete-profile-btn" @click.stop="emit('deleteCustomS3', profile.id)">
+          <i class="pi pi-trash"></i>
+          <span>删除此配置</span>
+        </button>
+      </template>
+    </HostingCard>
+
+    <!-- WebDAV 图床多实例 -->
+    <HostingCard
+      v-for="profile in webdavProfiles"
+      :key="makeWebDAVId(profile.id)"
+      :id="makeWebDAVId(profile.id)"
+      :force-expand="targetCardId === makeWebDAVId(profile.id)"
+      :name="profile.name || 'WebDAV'"
+      description="把图片存到自己的 WebDAV 网盘或 NAS"
+      :isConfigured="isWebDAVConfigured(profile)"
+      :health-status="healthStatusMap[makeWebDAVId(profile.id)]"
+      :health-tooltip="healthTooltipMap[makeWebDAVId(profile.id)]"
+      :isTesting="testingConnections[makeWebDAVId(profile.id)]"
+      :is-refreshing="refreshingServiceIds.has(makeWebDAVId(profile.id))"
+      @test="emit('testPrivate', $event)"
+    >
+      <form class="form-grid" @submit.prevent>
+        <div
+          v-for="field in WEBDAV_FIELDS"
+          :key="field.key"
+          class="form-item"
+          :class="{ 'span-full': field.spanFull }"
+        >
+          <label>{{ field.label }}</label>
+          <SensitiveField
+            v-if="field.key === 'password'"
+            :modelValue="webdavPasswordDrafts[profile.id] ?? ''"
+            @update:modelValue="setWebDAVPasswordDraft(profile.id, $event)"
+            @blur="commitWebDAVPassword(profile.id)"
+            :placeholder="webdavPasswordPlaceholder(profile)"
+          />
+          <InputText
+            v-else
+            :modelValue="getWebDAVField(profile, field.key)"
+            @update:modelValue="setWebDAVField(profile.id, field.key, $event ?? '')"
+            @blur="emit('save')"
+            :placeholder="field.placeholder"
+            class="w-full"
+          />
+          <small v-if="field.hint" class="field-hint">{{ field.hint }}</small>
+        </div>
+      </form>
+      <template #actions-right>
+        <button class="delete-profile-btn" @click.stop="emit('deleteWebdav', profile.id)">
           <i class="pi pi-trash"></i>
           <span>删除此配置</span>
         </button>

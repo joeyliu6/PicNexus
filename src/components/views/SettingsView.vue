@@ -47,6 +47,7 @@ const {
   resetToDefaultSettings,
   addPrefix, updatePrefix, removePrefix, resetToDefaultPrefixes,
   addCustomS3Profile, deleteCustomS3Profile, updateCustomS3Profile,
+  addWebdavProfile, deleteWebdavProfile, updateWebdavProfile,
   addWebDAVProfile, deleteWebDAVProfile, switchWebDAVProfile,
 } = useSettingsForm();
 
@@ -137,6 +138,10 @@ const navGroups = [{
 
 function handleAddCustomS3Profile() {
   targetCardId.value = addCustomS3Profile();
+}
+
+function handleAddWebdavProfile() {
+  targetCardId.value = addWebdavProfile();
 }
 
 async function handleThemeChange(mode: ThemeMode) {
@@ -368,6 +373,7 @@ onUnmounted(() => {
         <HostingSettingsPanel
           :private-form-data="{ r2: formData.r2, tencent: formData.tencent, aliyun: formData.aliyun, qiniu: formData.qiniu, upyun: formData.upyun }"
           :custom-s3-profiles="formData.custom_s3_profiles"
+          :webdav-profiles="formData.webdav_profiles"
           :cookie-form-data="{ weibo: { cookie: formData.weiboCookie }, zhihu: formData.zhihu, nowcoder: formData.nowcoder, nami: formData.nami, bilibili: formData.bilibili, chaoxing: formData.chaoxing }"
           :token-form-data="{ smms: formData.smms, github: formData.github, imgur: formData.imgur }"
           :testing-connections="testingConnections"
@@ -405,6 +411,7 @@ onUnmounted(() => {
           @remove-prefix="removePrefix"
           @reset-to-default="resetToDefaultPrefixes"
           @add-custom-s3="handleAddCustomS3Profile" @delete-custom-s3="deleteCustomS3Profile" @update-custom-s3="updateCustomS3Profile"
+          @add-webdav="handleAddWebdavProfile" @delete-webdav="deleteWebdavProfile" @update-webdav="updateWebdavProfile"
         />
       </div>
 

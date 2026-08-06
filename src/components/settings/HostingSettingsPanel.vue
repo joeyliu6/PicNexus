@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { watch, nextTick } from 'vue';
 import Divider from 'primevue/divider';
-import { PUBLIC_SERVICE_RISK_TOOLTIP, type GithubCdnConfig, type CustomS3Profile, type LinkPrefixItem } from '../../config/types';
+import { PUBLIC_SERVICE_RISK_TOOLTIP, type GithubCdnConfig, type CustomS3Profile, type WebDAVStorageProfile, type LinkPrefixItem } from '../../config/types';
 import PrivateStorageGroup from './hosting/PrivateStorageGroup.vue';
 import CookieServiceGroup from './hosting/CookieServiceGroup.vue';
 import TokenServiceGroup from './hosting/TokenServiceGroup.vue';
@@ -46,6 +46,7 @@ interface TokenFormData {
 const props = defineProps<{
   privateFormData: PrivateFormData;
   customS3Profiles: CustomS3Profile[];
+  webdavProfiles: WebDAVStorageProfile[];
   cookieFormData: CookieFormData;
   tokenFormData: TokenFormData;
   testingConnections: Record<string, boolean>;
@@ -92,6 +93,9 @@ const emit = defineEmits<{
   addCustomS3: [];
   deleteCustomS3: [profileId: string];
   updateCustomS3: [profile: CustomS3Profile];
+  addWebdav: [];
+  deleteWebdav: [profileId: string];
+  updateWebdav: [profile: WebDAVStorageProfile];
 }>();
 
 watch(() => props.targetCardId, (val) => {
@@ -123,6 +127,7 @@ watch(() => props.targetCardId, (val) => {
       :available-services="availableServices"
       :service-names="serviceNames"
       :custom-s3-profiles="customS3Profiles"
+      :webdav-profiles="webdavProfiles"
       :public-service-risk-accepted="publicServiceRiskAccepted"
       @update:available-services="emit('update:availableServices', $event)"
       @accept-public-service-risk="emit('accept-public-service-risk')"
@@ -137,15 +142,22 @@ watch(() => props.targetCardId, (val) => {
     <div class="form-group">
       <div class="group-header-row">
         <label class="group-label">私有存储</label>
-        <button class="add-custom-s3-btn" @click="emit('addCustomS3')">
-          <i class="pi pi-plus" style="font-size: var(--text-xs)"></i>
-          <span>添加自定义 S3</span>
-        </button>
+        <div class="group-header-actions">
+          <button class="add-custom-s3-btn" @click="emit('addCustomS3')">
+            <i class="pi pi-plus" style="font-size: var(--text-xs)"></i>
+            <span>添加自定义 S3</span>
+          </button>
+          <button class="add-custom-s3-btn" @click="emit('addWebdav')">
+            <i class="pi pi-plus" style="font-size: var(--text-xs)"></i>
+            <span>添加 WebDAV</span>
+          </button>
+        </div>
       </div>
 
       <PrivateStorageGroup
         :private-form-data="privateFormData"
         :custom-s3-profiles="customS3Profiles"
+        :webdav-profiles="webdavProfiles"
         :testing-connections="testingConnections"
         :health-status-map="healthStatusMap"
         :health-tooltip-map="healthTooltipMap"
@@ -155,6 +167,8 @@ watch(() => props.targetCardId, (val) => {
         @test-private="emit('testPrivate', $event)"
         @delete-custom-s3="emit('deleteCustomS3', $event)"
         @update-custom-s3="emit('updateCustomS3', $event)"
+        @delete-webdav="emit('deleteWebdav', $event)"
+        @update-webdav="emit('updateWebdav', $event)"
       />
     </div>
 
@@ -260,6 +274,12 @@ watch(() => props.targetCardId, (val) => {
 
 .group-header-row .group-label {
   margin-bottom: 0;
+}
+
+.group-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
 }
 
 .add-custom-s3-btn {
