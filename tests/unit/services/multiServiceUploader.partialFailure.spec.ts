@@ -68,6 +68,12 @@ vi.mock('@/constants/serviceRequiredFields', () => ({
   COOKIE_BASED_SERVICES: ['weibo', 'zhihu'],
   NO_CONFIG_SERVICES: ['jd', 'qiyu'],
   CUSTOM_S3_REQUIRED_FIELDS: ['endpoint', 'accessKeyId', 'secretAccessKey', 'bucketName'],
+  WEBDAV_REQUIRED_FIELDS: ['url', 'username', 'passwordEncrypted', 'publicDomain'],
+  getRequiredFields: (serviceId: string) => {
+    if (serviceId.startsWith('custom_s3:')) return ['endpoint', 'accessKeyId', 'secretAccessKey', 'bucketName'];
+    if (serviceId.startsWith('webdav:')) return ['url', 'username', 'passwordEncrypted', 'publicDomain'];
+    return [];
+  },
 }));
 
 import { UploaderFactory } from '@/uploaders/base/UploaderFactory';
@@ -275,5 +281,50 @@ describe('MultiServiceUploader.filterConfiguredServices 分支', () => {
       { services: {} } as unknown as UserConfig,
     );
     expect(r).toEqual(['jd']);
+  });
+
+  it('WebDAV profile 配置完整 → 通过', () => {
+    const r = uploader.filterConfiguredServices(
+      ['webdav:nas'],
+      {
+        services: {},
+        webdav_profiles: [{
+          id: 'nas',
+          name: 'NAS',
+          url: 'http://192.168.1.10:5005/dav',
+          username: 'me',
+          passwordEncrypted: 'cipher',
+          remotePath: 'images/',
+          publicDomain: 'http://192.168.1.10:5244',
+          publicUrlTemplate: '{domain}/{path}',
+        }],
+      } as unknown as UserConfig,
+    );
+    expect(r).toEqual(['webdav:nas']);
+  });
+
+  it('WebDAV 缺公开域名 → 过滤掉（链接生成不出来，传了也没用）', () => {
+    const r = uploader.filterConfiguredServices(
+      ['webdav:nas'],
+      {
+        services: {},
+        webdav_profiles: [{
+          id: 'nas',
+          url: 'https://dav.example.com',
+          username: 'me',
+          passwordEncrypted: 'cipher',
+          publicDomain: '',
+        }],
+      } as unknown as UserConfig,
+    );
+    expect(r).toEqual([]);
+  });
+
+  it('WebDAV 找不到对应 profile → 过滤掉', () => {
+    const r = uploader.filterConfiguredServices(
+      ['webdav:ghost'],
+      { services: {}, webdav_profiles: [] } as unknown as UserConfig,
+    );
+    expect(r).toEqual([]);
   });
 });
