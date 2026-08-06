@@ -115,6 +115,7 @@ export const DEFAULT_CONFIG: UserConfig = {
     }
   },
   custom_s3_profiles: [],
+  webdav_profiles: [],
   weiboProxyMode: 'baidu-proxy',
   linkOutput: {
     defaultFormat: 'url',

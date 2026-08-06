@@ -86,6 +86,10 @@ export function sanitizeConfig(config: UserConfig): UserConfig {
       accessKeyId: sanitizeString(profile.accessKeyId, 4, 4),
       secretAccessKey: sanitizeString(profile.secretAccessKey, 0, 0)
     })),
+    webdav_profiles: config.webdav_profiles?.map(profile => ({
+      ...profile,
+      passwordEncrypted: sanitizeString(profile.passwordEncrypted, 0, 0)
+    })),
     webdav: config.webdav ? {
       profiles: config.webdav.profiles.map(profile => ({
         ...profile,

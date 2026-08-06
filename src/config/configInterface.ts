@@ -19,6 +19,7 @@ import type {
   UpyunServiceConfig,
   CustomS3Profile,
   WebDAVConfig,
+  WebDAVStorageProfile,
 } from './serviceTypes';
 import type { ImageCompressionConfig } from './compressionTypes';
 
@@ -215,6 +216,12 @@ export interface UserConfig {
   /** 自定义 S3 存储 profiles（多实例） */
   custom_s3_profiles?: CustomS3Profile[];
 
+  /**
+   * WebDAV 图床 profiles（多实例）
+   * ⚠️ 与下方备份用的 `webdav` 字段相互独立，不要混用
+   */
+  webdav_profiles?: WebDAVStorageProfile[];
+
   /** 微博代理模式 */
   weiboProxyMode: WeiboProxyMode;
 
@@ -224,7 +231,7 @@ export interface UserConfig {
   /** 链接前缀配置（用于微博图床代理） */
   linkPrefixConfig?: LinkPrefixConfig;
 
-  /** WebDAV 配置（用于历史记录同步） */
+  /** WebDAV 配置（用于历史记录同步；图床请用 `webdav_profiles`） */
   webdav?: WebDAVConfig;
 
   /** 浏览视图偏好设置 */

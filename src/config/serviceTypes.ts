@@ -25,6 +25,20 @@ export function makeCustomS3Id(profileId: string): string {
   return `custom_s3:${profileId}`;
 }
 
+// ==================== WebDAV 图床复合 ID 工具函数 ====================
+
+export function isWebDAVId(id: string): boolean {
+  return id.startsWith('webdav:');
+}
+
+export function getWebDAVProfileId(compositeId: string): string {
+  return compositeId.slice('webdav:'.length);
+}
+
+export function makeWebDAVId(profileId: string): string {
+  return `webdav:${profileId}`;
+}
+
 /**
  * 公共图床服务列表
  * 使用公共平台的存储服务
@@ -329,7 +343,55 @@ export interface CustomS3Profile {
 }
 
 /**
+ * WebDAV 图床公开链接默认模板
+ * 覆盖 nginx / NextCloud 这类「公开域名根路径 = WebDAV 根路径」的场景。
+ * OpenList / Alist 用户需改成 `{domain}/d/挂载点/{path}`。
+ */
+export const DEFAULT_WEBDAV_URL_TEMPLATE = '{domain}/{path}';
+
+/**
+ * WebDAV 图床 Profile（多实例）
+ *
+ * ⚠️ 与下方备份用的 `WebDAVProfile` 是两套独立配置，不要混用：
+ * - 本接口挂在 `UserConfig.webdav_profiles`，用于把图片传到 WebDAV 并生成公开链接
+ * - `WebDAVProfile` 挂在 `UserConfig.webdav`，用于同步 settings.json / history.json
+ *
+ * Why 独立：图床需要 publicDomain / publicUrlTemplate，备份用不上；
+ *          且用户的备份服务（如坚果云）和图床服务（如 OpenList）往往不是同一个。
+ */
+export interface WebDAVStorageProfile {
+  /** 唯一标识符，用于构建复合 ID（webdav:xxx） */
+  id: string;
+
+  /** 用户自定义显示名称（如"我的 OpenList"） */
+  name: string;
+
+  /** WebDAV 端点地址（如 https://dav.example.com/dav） */
+  url: string;
+
+  /** WebDAV 用户名 */
+  username: string;
+
+  /** WebDAV 密码（加密存储，禁止明文落盘） */
+  passwordEncrypted: string;
+
+  /** 图片上传目录（如 /images/），须与备份目录隔离 */
+  remotePath: string;
+
+  /**
+   * 公开访问域名（如 https://cdn.example.com）
+   * 必填：WebDAV 端点本身通常需要认证，不能作为图片直链
+   */
+  publicDomain: string;
+
+  /** 公开链接模板，支持变量：{domain} {path} {filename} */
+  publicUrlTemplate: string;
+}
+
+/**
  * WebDAV 配置项（单个配置）
+ *
+ * ⚠️ 备份/同步专用。图床请用上方的 `WebDAVStorageProfile`。
  */
 export interface WebDAVProfile {
   /** 唯一标识符 */
