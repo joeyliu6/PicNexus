@@ -21,4 +21,5 @@ pub mod qiyu_token;
 pub mod s3_compatible;
 pub mod smms;
 pub mod utils;
+pub mod webdav_upload;
 pub mod zhihu;
