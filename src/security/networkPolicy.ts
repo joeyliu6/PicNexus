@@ -5,9 +5,21 @@ const CREDENTIAL_URL_MESSAGE = '地址不能包含用户名或密码。';
 const INVALID_URL_MESSAGE = '地址格式不正确，请输入完整的 https:// 地址。';
 const PRIVATE_HOST_MESSAGE = '地址不能指向内网、链路本地或保留地址。';
 
+const PUBLIC_HTTP_DISABLED_MESSAGE =
+  '公网 HTTP 地址已禁用，请改用 HTTPS。局域网地址可使用 HTTP。';
+const BLOCKED_HOST_MESSAGE = '地址不能指向链路本地或保留地址。';
+
 export interface NetworkPolicyOptions {
   label?: string;
   allowPrivateHttps?: boolean;
+  /**
+   * 允许局域网地址 + 局域网 HTTP（如 http://192.168.1.10:5005）
+   *
+   * 仅供 WebDAV 使用：群晖 / 自建 NAS 正是这个形态，默认策略会把它们拦死，
+   * 而这是 WebDAV 图床最主要的用户群。即便放行，链路本地段（含云元数据
+   * 169.254.169.254）仍然拒绝——没有人的 NAS 挂在那个地址上。
+   */
+  allowPrivateHttp?: boolean;
 }
 
 export function parseHttpUrl(rawUrl: string, label = '地址'): URL {
@@ -24,14 +36,21 @@ export function assertAllowedExternalUrl(rawUrl: string, options: NetworkPolicyO
 
   if (parsed.username || parsed.password) throw new Error(CREDENTIAL_URL_MESSAGE);
 
+  const allowPrivate = options.allowPrivateHttp === true;
+
+  if (allowPrivate && isAlwaysBlockedHost(parsed.hostname)) {
+    throw new Error(BLOCKED_HOST_MESSAGE);
+  }
+
   if (parsed.protocol === 'http:') {
     if (isLoopbackHost(parsed.hostname)) return parsed;
-    throw new Error(EXTERNAL_HTTP_DISABLED_MESSAGE);
+    if (allowPrivate && isPrivateOrReservedHost(parsed.hostname)) return parsed;
+    throw new Error(allowPrivate ? PUBLIC_HTTP_DISABLED_MESSAGE : EXTERNAL_HTTP_DISABLED_MESSAGE);
   }
 
   if (parsed.protocol !== 'https:') throw new Error(HTTPS_ONLY_MESSAGE);
 
-  if (!options.allowPrivateHttps && isPrivateOrReservedHost(parsed.hostname)) {
+  if (!options.allowPrivateHttps && !allowPrivate && isPrivateOrReservedHost(parsed.hostname)) {
     throw new Error(PRIVATE_HOST_MESSAGE);
   }
 
@@ -39,7 +58,7 @@ export function assertAllowedExternalUrl(rawUrl: string, options: NetworkPolicyO
 }
 
 export function assertAllowedWebDAVUrl(rawUrl: string): URL {
-  return assertAllowedExternalUrl(rawUrl, { label: 'WebDAV 地址' });
+  return assertAllowedExternalUrl(rawUrl, { label: 'WebDAV 地址', allowPrivateHttp: true });
 }
 
 export function safeImageUrl(rawUrl: string | null | undefined): string | undefined {
@@ -59,9 +78,43 @@ export function safeImageUrl(rawUrl: string | null | undefined): string | undefi
 
   if (parsed.username || parsed.password) return undefined;
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return undefined;
-  if (parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname)) return undefined;
+  if (isAlwaysBlockedHost(parsed.hostname)) return undefined;
+
+  // Why 放行局域网 HTTP：WebDAV 图床（群晖 / 自建 NAS）的公开域名就是
+  // http://192.168.1.10:5244 这种形态。不放行的话图片能上传成功、链接也对，
+  // 但历史记录里的缩略图全是裂的，体感等同于功能坏掉。
+  if (
+    parsed.protocol === 'http:'
+    && !isLoopbackHost(parsed.hostname)
+    && !isPrivateOrReservedHost(parsed.hostname)
+  ) {
+    return undefined;
+  }
 
   return parsed.toString();
+}
+
+/**
+ * 链路本地 / 组播 / 未指定地址：任何放行策略下都拒绝
+ * 含云元数据地址 169.254.169.254 —— 放行它只会平白扩大 SSRF 面
+ */
+export function isAlwaysBlockedHost(hostname: string): boolean {
+  const host = normalizeHost(hostname);
+  if (!host) return true;
+
+  const target = isIpv4Address(host) ? host : ipv4MappedFromIpv6(host);
+  if (target !== null) {
+    return isIpv4InCidr(target, '169.254.0.0', 16)
+      || isIpv4InCidr(target, '224.0.0.0', 4)
+      || isIpv4InCidr(target, '240.0.0.0', 4)
+      || isIpv4InCidr(target, '0.0.0.0', 8);
+  }
+
+  if (host.includes(':')) {
+    return host === '::' || host.startsWith('fe80:');
+  }
+
+  return false;
 }
 
 export function isLoopbackHost(hostname: string): boolean {
