@@ -5,6 +5,7 @@ import type {
   LinkPrefixItem,
   UserConfig,
   WebDAVProfile,
+  WebDAVStorageProfile,
 } from '../../config/types';
 
 /**
@@ -18,6 +19,7 @@ export interface SettingsFormShape {
   qiniu: { accessKey: string; secretKey: string; region: string; bucket: string; publicDomain: string; path: string };
   upyun: { operator: string; password: string; bucket: string; publicDomain: string; path: string };
   custom_s3_profiles: CustomS3Profile[];
+  webdav_profiles: WebDAVStorageProfile[];
   nowcoder: { cookie: string };
   zhihu: { cookie: string; sourceParamEnabled?: boolean; sourceParamValue?: string };
   nami: { cookie: string; authToken: string };

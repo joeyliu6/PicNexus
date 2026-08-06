@@ -13,6 +13,7 @@ const mockState = vi.hoisted(() => ({
   loadHealthStatus: vi.fn(),
   evaluateConfig: vi.fn(),
   syncCustomS3Uploaders: vi.fn(),
+  syncWebDAVUploaders: vi.fn(),
 }));
 
 vi.mock('@/store/instances', () => ({
@@ -48,6 +49,7 @@ vi.mock('@/composables/useServiceHealth', () => ({
 
 vi.mock('@/uploaders', () => ({
   syncCustomS3Uploaders: mockState.syncCustomS3Uploaders,
+  syncWebDAVUploaders: mockState.syncWebDAVUploaders,
 }));
 
 vi.mock('@/utils/logger', () => ({

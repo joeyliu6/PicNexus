@@ -1,6 +1,6 @@
 import { nextTick, type Ref } from 'vue';
 import { DEFAULT_CONFIG, cloneDefaultPrefixes } from '../../config/types';
-import { syncCustomS3Uploaders } from '../../uploaders';
+import { syncCustomS3Uploaders, syncWebDAVUploaders } from '../../uploaders';
 import type { SettingsFormData } from './settingsFormTypes';
 import type { UserConfig } from '../../config/types';
 
@@ -52,6 +52,9 @@ export async function applyConfigToForm(
 
     formData.value.custom_s3_profiles = structuredClone(config.custom_s3_profiles || []);
     syncCustomS3Uploaders(formData.value.custom_s3_profiles);
+
+    formData.value.webdav_profiles = structuredClone(config.webdav_profiles || []);
+    syncWebDAVUploaders(formData.value.webdav_profiles);
 
     formData.value.webdav = structuredClone(config.webdav || { profiles: [], activeId: null });
 

@@ -9,7 +9,8 @@ import { useConfigManager } from '../useConfig';
 import { useServiceHealth } from '../useServiceHealth';
 import { TOAST_MESSAGES } from '../../constants';
 import { SERVICE_DISPLAY_NAMES } from '../../constants/serviceNames';
-import { syncCustomS3Uploaders } from '../../uploaders';
+import { filterOrphanProfileServices, syncProfileUploaders } from './profileServiceSync';
+import { decryptBackupProfiles, encryptBackupProfiles } from './webdavBackupSecrets';
 import { useConfirm } from '../useConfirm';
 import { createLogger } from '../../utils/logger';
 import { extractNamiAuthToken } from '../../utils/namiAuthToken';
@@ -22,9 +23,10 @@ import type {
   EditorServerConfig,
   ServerServiceType,
   CustomS3Profile,
+  WebDAVStorageProfile,
   LinkPrefixItem,
 } from '../../config/types';
-import { DEFAULT_CONFIG, cloneDefaultPrefixes, isCustomS3Id, makeCustomS3Id } from '../../config/types';
+import { DEFAULT_CONFIG, cloneDefaultPrefixes, makeCustomS3Id, makeWebDAVId } from '../../config/types';
 import { applyConfigToForm } from './settingsFormSnapshot';
 import type { SettingsFormData } from './settingsFormTypes';
 import { validateS3Config } from './s3ConfigValidation';
@@ -59,6 +61,7 @@ export function useSettingsForm() {
     qiniu: { accessKey: '', secretKey: '', region: '', bucket: '', publicDomain: '', path: '' },
     upyun: { operator: '', password: '', bucket: '', publicDomain: '', path: '' },
     custom_s3_profiles: [] as CustomS3Profile[],
+    webdav_profiles: [] as WebDAVStorageProfile[],
     nowcoder: { cookie: '' },
     zhihu: { cookie: '', sourceParamEnabled: true, sourceParamValue: '172ae18b' },
     nami: { cookie: '', authToken: '' },
@@ -124,6 +127,11 @@ export function useSettingsForm() {
     };
     for (const profile of fd.custom_s3_profiles || []) {
       result[makeCustomS3Id(profile.id)] = !!(profile.endpoint && profile.accessKeyId && profile.secretAccessKey && profile.region && profile.bucket);
+    }
+    for (const profile of fd.webdav_profiles || []) {
+      result[makeWebDAVId(profile.id)] = !!(
+        profile.url && profile.username && profile.passwordEncrypted && profile.publicDomain
+      );
     }
     return result;
   });
@@ -277,23 +285,13 @@ export function useSettingsForm() {
       }
 
       formData.value.custom_s3_profiles = config.custom_s3_profiles || [];
-      syncCustomS3Uploaders(formData.value.custom_s3_profiles);
+      // WebDAV 图床 profiles：密码保持密文，解密只在上传/测试时按需进行
+      formData.value.webdav_profiles = config.webdav_profiles || [];
+      syncProfileUploaders(formData.value);
 
-      // WebDAV 配置（密码解密）
+      // WebDAV 备份配置（密码解密）
       if (config.webdav) {
-        const profiles = await Promise.all(
-          (config.webdav.profiles || []).map(async (p: WebDAVProfile) => {
-            if (p.passwordEncrypted && !p.password) {
-              try {
-                p.password = await invoke<string>('decrypt_webdav_password', { encrypted: p.passwordEncrypted });
-              } catch (e) {
-                log.error('WebDAV 解密失败', e);
-                p.password = '';
-              }
-            }
-            return p;
-          })
-        );
+        const profiles = await decryptBackupProfiles(config.webdav.profiles || []);
         formData.value.webdav = { profiles, activeId: config.webdav.activeId || null };
       }
 
@@ -324,11 +322,9 @@ export function useSettingsForm() {
         uploadClipboard: 'CommandOrControl+Shift+C',
         uploadFromFile: 'CommandOrControl+Shift+O',
       };
-      const customS3ServiceIds = new Set(
-        (formData.value.custom_s3_profiles || []).map((profile: CustomS3Profile) => makeCustomS3Id(profile.id)),
-      );
-      availableServices.value = (config.availableServices || DEFAULT_CONFIG.availableServices || []).filter(
-        serviceId => !isCustomS3Id(serviceId) || customS3ServiceIds.has(serviceId),
+      availableServices.value = filterOrphanProfileServices(
+        config.availableServices || DEFAULT_CONFIG.availableServices || [],
+        formData.value,
       );
 
       // 从 OS 同步自启动真实状态
@@ -373,6 +369,7 @@ export function useSettingsForm() {
       };
 
       config.custom_s3_profiles = formData.value.custom_s3_profiles;
+      config.webdav_profiles = formData.value.webdav_profiles;
 
       // Nami Token 提取（统一走 extractNamiAuthToken，避免大小写错位的旧正则误命中其他 *_token= 字段）
       const namiCookie = formData.value.nami.cookie;
@@ -380,24 +377,8 @@ export function useSettingsForm() {
       const namiAuthToken = extractedToken || formData.value.nami.authToken || '';
       config.services.nami = { enabled: true, cookie: namiCookie, authToken: namiAuthToken };
 
-      // WebDAV 密码加密
-      // Why: 旧条件 `p.password && !passwordEncrypted` 在"已加载过的 profile 用户改密码"时永远为 false——
-      //   loadSettings 解密后 password / passwordEncrypted 都填了，UI 改 password 时也没清 passwordEncrypted，
-      //   导致跳过加密、旧密文被回写。改成"只要 password 非空就重新加密"，密文每次都按当前明文重算，
-      //   多算一次 IPC 但避免静默丢失改动。空 password 视作"保持已加密值不变"。
-      const encryptedProfiles = await Promise.all(
-        formData.value.webdav.profiles.map(async (p) => {
-          let passwordEncrypted = p.passwordEncrypted;
-          if (p.password) {
-            try {
-              passwordEncrypted = await invoke<string>('encrypt_webdav_password', { password: p.password });
-            } catch (e) {
-              log.error('WebDAV 加密失败', e);
-            }
-          }
-          return { ...p, password: '', passwordEncrypted };
-        })
-      );
+      // WebDAV 备份密码加密（图床 profile 的密码全程密文，不走这条）
+      const encryptedProfiles = await encryptBackupProfiles(formData.value.webdav.profiles);
       config.webdav = { profiles: encryptedProfiles, activeId: formData.value.webdav.activeId };
 
       config.linkPrefixConfig = {
@@ -414,11 +395,9 @@ export function useSettingsForm() {
       config.publicServiceRiskAccepted = formData.value.publicServiceRiskAccepted;
       config.imageCompression = { ...formData.value.imageCompression };
       config.editorServer = { ...formData.value.editorServer };
-      const customS3ServiceIds = new Set(
-        formData.value.custom_s3_profiles.map((profile: CustomS3Profile) => makeCustomS3Id(profile.id)),
-      );
-      const syncedAvailableServices = availableServices.value.filter(
-        serviceId => !isCustomS3Id(serviceId) || customS3ServiceIds.has(serviceId),
+      const syncedAvailableServices = filterOrphanProfileServices(
+        availableServices.value,
+        formData.value,
       );
       config.availableServices = syncedAvailableServices;
       availableServices.value = [...syncedAvailableServices];
@@ -427,7 +406,7 @@ export function useSettingsForm() {
       );
 
       await configManager.saveConfig(config, true);
-      syncCustomS3Uploaders(formData.value.custom_s3_profiles);
+      syncProfileUploaders(formData.value);
       serviceHealth.evaluateConfig(config);
 
       if (trackAdvancedStatus) setAdvancedSaveState('saved', '已保存');

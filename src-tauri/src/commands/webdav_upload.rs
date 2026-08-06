@@ -29,6 +29,7 @@ const PROBE_PNG_BASE64: &str =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WebDAVUploadResult {
     /// 上传后的公开访问 URL（已按模板渲染）
     pub url: String,
@@ -42,6 +43,7 @@ pub struct WebDAVUploadResult {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WebDAVTestResult {
     pub success: bool,
     pub message: String,

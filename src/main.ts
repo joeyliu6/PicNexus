@@ -12,7 +12,7 @@ import Tooltip from 'primevue/tooltip';
 import Ripple from 'primevue/ripple';
 
 // 上传器初始化
-import { initializeUploaders } from './uploaders';
+import { initializeUploaders, syncCustomS3Uploaders, syncWebDAVUploaders } from './uploaders';
 
 // 配置和 Store 导入
 import { configStore } from './store/instances';
@@ -105,6 +105,23 @@ async function ensureConfigSync() {
 }
 
 /**
+ * 注册依赖用户配置的多实例上传器（custom_s3:xxx / webdav:xxx）
+ *
+ * Why 放在启动流程：这两类上传器的 serviceId 由用户 profile 动态生成，此前只在
+ * 设置页打开时才同步。冷启动后直接用托盘菜单或全局快捷键上传，UploaderFactory
+ * 里还没有对应注册，会直接报「未知的图床服务」。
+ */
+async function syncDynamicUploaders() {
+  try {
+    const config = await configStore.get<UserConfig>('config');
+    syncCustomS3Uploaders(config?.custom_s3_profiles ?? []);
+    syncWebDAVUploaders(config?.webdav_profiles ?? []);
+  } catch (error) {
+    log.warn('多实例上传器注册失败（可在设置页保存配置后恢复）:', error);
+  }
+}
+
+/**
  * 应用启动入口
  * 确保配置加载完成后再挂载应用，避免竞态条件
  */
@@ -114,6 +131,9 @@ async function startApp() {
 
   // 2. 确保配置同步完成（等待异步操作）
   await ensureConfigSync();
+
+  // 2.1 注册多实例上传器（依赖上一步的配置）
+  await syncDynamicUploaders();
 
   // 3. 初始化 Analytics（非阻塞，失败不影响应用）
   const { initialize } = useAnalytics();

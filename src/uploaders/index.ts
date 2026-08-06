@@ -19,7 +19,8 @@ import { AliyunUploader } from './aliyun/AliyunUploader';
 import { QiniuUploader } from './qiniu/QiniuUploader';
 import { UpyunUploader } from './upyun/UpyunUploader';
 import { CustomS3Uploader } from './custom-s3/CustomS3Uploader';
-import type { CustomS3Profile } from '../config/types';
+import { WebDAVUploader } from './webdav/WebDAVUploader';
+import type { CustomS3Profile, WebDAVStorageProfile } from '../config/types';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('Uploaders');
@@ -102,6 +103,23 @@ export function syncCustomS3Uploaders(profiles: CustomS3Profile[]): void {
   }
 }
 
+/**
+ * 同步 WebDAV 图床上传器注册
+ * 根据 profiles 列表注册/注销对应的上传器实例
+ */
+export function syncWebDAVUploaders(profiles: WebDAVStorageProfile[]): void {
+  // 先清理旧的 webdav:xxx 注册
+  for (const id of UploaderFactory.getAvailableServices()) {
+    if (id.startsWith('webdav:')) {
+      UploaderFactory.unregister(id);
+    }
+  }
+  // 为每个 profile 注册上传器
+  for (const profile of profiles) {
+    UploaderFactory.register(`webdav:${profile.id}`, () => new WebDAVUploader());
+  }
+}
+
 // 导出所有上传器
 export { WeiboUploader } from './weibo';
 export { R2Uploader } from './r2';
@@ -121,5 +139,6 @@ export { AliyunUploader } from './aliyun';
 export { QiniuUploader } from './qiniu';
 export { UpyunUploader } from './upyun';
 export { CustomS3Uploader } from './custom-s3';
+export { WebDAVUploader } from './webdav';
 export { UploaderFactory } from './base/UploaderFactory';
 
