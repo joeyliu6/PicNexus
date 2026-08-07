@@ -30,13 +30,18 @@
 
 #### 调研时漏掉、实现时补上的一项
 
-网络策略会把局域网地址拦死，而群晖 / 自建 NAS（`http://192.168.1.10:5005`）正是 WebDAV 图床最主要的用户群。已为 WebDAV 单独放开，共三层：
+网络策略会把局域网地址拦死，而群晖 / 自建 NAS（`http://192.168.1.10:5005`）正是 WebDAV 图床最主要的用户群。已为 WebDAV 单独放开，共三层——注意**备份链路与图床链路走的是两套函数**，改一边不会自动影响另一边：
 
-1. `assertAllowedWebDAVUrl`（前端请求校验）
-2. `validate_webdav_url`（Rust 请求校验）
-3. `safeImageUrl`（应用内图片显示）—— 漏掉这层会导致上传成功但历史记录缩略图全裂
+| 层 | 备份 WebDAV | 图床 WebDAV |
+|----|-------------|-------------|
+| 1. 前端请求校验 | `assertAllowedWebDAVUrl` | `assertAllowedWebDAVStorageUrl` |
+| 2. Rust 请求校验 | `validate_webdav_url`（同步） | `validate_webdav_url_for_request`（异步，带 DNS 裁决） |
+| 3. 应用内图片显示 | 共用 `safeImageUrl` —— 漏掉这层会导致上传成功但历史记录缩略图全裂 | |
 
-放开仅作用于 WebDAV 链路，其他图床仍是 HTTPS-only；链路本地段（含云元数据 `169.254.169.254`）与公网明文 HTTP 依旧拒绝。
+两条链路的差别只在 HTTP **主机名**上：备份链路在前端就拒绝 `http://主机名`（只认 IP 字面量），
+图床链路放行到 Rust 侧、按 DNS 解析结果裁决，好让 `http://nas.local:5005` 这类地址能用。
+
+放开仅作用于 WebDAV 链路，其他图床仍是 HTTPS-only；链路本地段（含云元数据 `169.254.169.254`）与公网明文 HTTP 依旧拒绝。DNS 裁决同样先拒绝链路本地/组播/保留段，再判断是否局域网——判据是 `is_allowed_lan_addr`，不能直接用 `is_private_or_reserved_host`（它的语义是"非公网"，会把云元数据地址一起放进来）。
 
 #### 建议测试环境
 
