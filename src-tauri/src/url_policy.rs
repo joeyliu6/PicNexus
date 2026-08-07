@@ -150,6 +150,30 @@ fn is_allowed_lan_addr(ip: &str) -> bool {
     is_loopback_host(ip) || is_private_or_reserved_host(ip)
 }
 
+/// DNS 解析结果集合的放行判定：**每一个**地址都必须符合局域网判据。
+///
+/// 只检查首个地址会漏掉"前几个是内网、后面混着公网"的多地址记录——
+/// reqwest 建连时可能选中集合里的任意一个，所以集合里出现一个公网地址
+/// 就必须整体拒绝。
+#[derive(Debug, PartialEq, Eq)]
+enum DnsDecisionError {
+    Blocked,
+    Public,
+}
+
+fn all_dns_results_allowed(ips: &[String]) -> Result<(), DnsDecisionError> {
+    for ip in ips {
+        let ip = ip.as_str();
+        if is_always_blocked_host(ip) {
+            return Err(DnsDecisionError::Blocked);
+        }
+        if !is_allowed_lan_addr(ip) {
+            return Err(DnsDecisionError::Public);
+        }
+    }
+    Ok(())
+}
+
 pub fn validate_url_with_policy(raw_url: &str, policy: PrivateHostPolicy) -> Result<Url, AppError> {
     let parsed = Url::parse(raw_url)
         .map_err(|_| AppError::validation("地址格式不正确，请输入完整的 https:// 地址"))?;
@@ -237,30 +261,25 @@ pub async fn validate_webdav_url_for_request(raw_url: &str) -> Result<Url, AppEr
                 .await
                 .map_err(|e| AppError::webdav(format!("局域网主机名解析失败: {}", e)))?;
 
-            let mut saw_addr = false;
-            for addr in resolved {
-                saw_addr = true;
-                let ip = addr.ip().to_string();
+            let ips = resolved
+                .map(|addr| addr.ip().to_string())
+                .collect::<Vec<_>>();
+            if ips.is_empty() {
+                return Err(AppError::webdav("局域网主机名未解析到可用地址"));
+            }
 
-                // 先单独判一次 always-blocked，只为把报错分成两类：
-                // "解析到保留段"和"解析到公网"对用户是两件完全不同的事，
-                // 混成一条消息会让 hosts 被改过的用户完全摸不着头脑。
-                // 放行判据本身以 is_allowed_lan_addr 为准。
-                if is_always_blocked_host(&ip) {
+            match all_dns_results_allowed(&ips) {
+                Ok(()) => {}
+                Err(DnsDecisionError::Blocked) => {
                     return Err(AppError::webdav(
                         "主机名解析到链路本地或保留地址，已拒绝连接",
                     ));
                 }
-
-                if !is_allowed_lan_addr(&ip) {
+                Err(DnsDecisionError::Public) => {
                     return Err(AppError::webdav(
                         "公网 HTTP 地址已禁用，请改用 HTTPS。局域网地址可使用 HTTP。",
                     ));
                 }
-            }
-
-            if !saw_addr {
-                return Err(AppError::webdav("局域网主机名未解析到可用地址"));
             }
 
             Ok(parsed)
@@ -355,6 +374,29 @@ mod tests {
         // 公网地址：明文 HTTP 下凭证会裸奔
         assert!(!is_allowed_lan_addr("8.8.8.8"));
         assert!(!is_allowed_lan_addr("2001:4860:4860::8888"));
+    }
+
+    /// DNS 结果集合必须整体放行：混进一个公网地址就要拒绝，
+    /// 不能因为集合里先出现内网地址就当没看见。
+    #[test]
+    fn dns_result_set_requires_all_addrs_lan() {
+        assert_eq!(
+            all_dns_results_allowed(&["192.168.1.10".to_string(), "10.0.0.5".to_string()]),
+            Ok(())
+        );
+        assert_eq!(
+            all_dns_results_allowed(&["192.168.1.10".to_string(), "8.8.8.8".to_string()]),
+            Err(DnsDecisionError::Public)
+        );
+        assert_eq!(
+            all_dns_results_allowed(&["8.8.8.8".to_string(), "192.168.1.10".to_string()]),
+            Err(DnsDecisionError::Public)
+        );
+        assert_eq!(
+            all_dns_results_allowed(&["192.168.1.10".to_string(), "169.254.169.254".to_string()]),
+            Err(DnsDecisionError::Blocked)
+        );
+        assert_eq!(all_dns_results_allowed(&[]), Ok(()));
     }
 
     /// 请求前校验的非 DNS 分支
