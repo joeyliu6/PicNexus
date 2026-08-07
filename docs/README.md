@@ -1,6 +1,6 @@
 # PicNexus 开发文档
 
-> 四件套：CLAUDE.md（指挥中心）、flows/（流程图）、design/（设计规范）、reference/（知识库）
+> 四件套：AGENTS.md（指挥中心，CLAUDE.md 只是它的引用）、flows/（流程图）、design/（设计规范）、reference/（知识库）
 
 ## 目录结构
 

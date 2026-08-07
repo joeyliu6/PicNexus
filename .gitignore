@@ -45,6 +45,7 @@ playwright-report/
 
 .claude/
 CLAUDE.md
+AGENTS.md
 
 # Kiro
 .kiro/
