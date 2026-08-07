@@ -134,6 +134,22 @@ pub fn is_always_blocked_host(host: &str) -> bool {
     }
 }
 
+/// DNS 解析出的地址能否作为 WebDAV 局域网 HTTP 的连接目标
+///
+/// Why 不直接用 `is_private_or_reserved_host` 当放行判据：它回答的是"这不是公网地址"，
+/// 而那个筐里除了局域网，还装着链路本地（含云元数据 169.254.169.254）、组播、
+/// `0.0.0.0/8`、`240/4`。拿它当"可以连"用，等于把 `is_always_blocked_host`
+/// 想拦的段又原样放了回来。
+///
+/// 顺序不能颠倒：必须先查黑名单再查白名单——反过来正是本函数要修掉的那个缺陷。
+fn is_allowed_lan_addr(ip: &str) -> bool {
+    if is_always_blocked_host(ip) {
+        return false;
+    }
+
+    is_loopback_host(ip) || is_private_or_reserved_host(ip)
+}
+
 pub fn validate_url_with_policy(raw_url: &str, policy: PrivateHostPolicy) -> Result<Url, AppError> {
     let parsed = Url::parse(raw_url)
         .map_err(|_| AppError::validation("地址格式不正确，请输入完整的 https:// 地址"))?;
@@ -182,6 +198,12 @@ pub fn validate_webdav_url(raw_url: &str) -> Result<Url, AppError> {
 
 /// WebDAV 请求前的最终校验：HTTP 主机名无法在前端/同步校验阶段判定内网，
 /// 这里按 DNS 解析结果裁决，局域网主机名放行、公网主机名拒绝。
+///
+/// 注意这是**尽力而为**的裁决，不是最终裁决：校验阶段解析出的地址并没有绑定到
+/// 后续连接，reqwest 发请求时会自己再解析一次。校验时解析到局域网、请求时解析到
+/// 别处（DNS rebinding 或轮询 DNS）的场景拦不住。要真正堵住需要用
+/// `ClientBuilder::resolve` 把地址钉死，但那是 client 级设置，
+/// 而 `HttpClient` 是全局单例——每次请求新建 client 会丢掉连接池复用。
 pub async fn validate_webdav_url_for_request(raw_url: &str) -> Result<Url, AppError> {
     let parsed = Url::parse(raw_url)
         .map_err(|_| AppError::webdav("地址格式不正确，请输入完整的 https:// 地址"))?;
@@ -219,7 +241,18 @@ pub async fn validate_webdav_url_for_request(raw_url: &str) -> Result<Url, AppEr
             for addr in resolved {
                 saw_addr = true;
                 let ip = addr.ip().to_string();
-                if !is_loopback_host(&ip) && !is_private_or_reserved_host(&ip) {
+
+                // 先单独判一次 always-blocked，只为把报错分成两类：
+                // "解析到保留段"和"解析到公网"对用户是两件完全不同的事，
+                // 混成一条消息会让 hosts 被改过的用户完全摸不着头脑。
+                // 放行判据本身以 is_allowed_lan_addr 为准。
+                if is_always_blocked_host(&ip) {
+                    return Err(AppError::webdav(
+                        "主机名解析到链路本地或保留地址，已拒绝连接",
+                    ));
+                }
+
+                if !is_allowed_lan_addr(&ip) {
                     return Err(AppError::webdav(
                         "公网 HTTP 地址已禁用，请改用 HTTPS。局域网地址可使用 HTTP。",
                     ));
@@ -298,4 +331,71 @@ mod tests {
         assert!(is_always_blocked_host("169.254.169.254"));
         assert!(!is_always_blocked_host("192.168.1.1"));
     }
+
+    /// DNS 解析结果的放行判据不能等同于"非公网"
+    ///
+    /// 这条盯着的正是曾经的缺陷：`is_private_or_reserved_host` 对下面这批地址
+    /// 全部返回 true，拿它当放行判据就会把云元数据地址放进来。
+    #[test]
+    fn lan_addr_gate_rejects_always_blocked_ranges() {
+        // 真正的局域网 / 本机目标：必须放行，否则群晖、自建 NAS 全部误伤
+        assert!(is_allowed_lan_addr("127.0.0.1"));
+        assert!(is_allowed_lan_addr("192.168.1.10"));
+        assert!(is_allowed_lan_addr("10.0.0.5"));
+        assert!(is_allowed_lan_addr("172.16.3.4"));
+        assert!(is_allowed_lan_addr("198.18.1.1"));
+
+        // 以下每一个 is_private_or_reserved_host 都返回 true，但绝不能连
+        assert!(!is_allowed_lan_addr("169.254.169.254"));
+        assert!(!is_allowed_lan_addr("fe80::1"));
+        assert!(!is_allowed_lan_addr("224.0.0.1"));
+        assert!(!is_allowed_lan_addr("240.0.0.1"));
+        assert!(!is_allowed_lan_addr("0.0.0.0"));
+
+        // 公网地址：明文 HTTP 下凭证会裸奔
+        assert!(!is_allowed_lan_addr("8.8.8.8"));
+        assert!(!is_allowed_lan_addr("2001:4860:4860::8888"));
+    }
+
+    /// 请求前校验的非 DNS 分支
+    ///
+    /// 这些用例全部在 `lookup_host` 之前就返回，所以不出网、结果确定。
+    #[tokio::test]
+    async fn request_validation_covers_non_dns_branches() {
+        // 局域网字面量与回环：放行
+        assert!(validate_webdav_url_for_request("http://192.168.1.10:5005/dav")
+            .await
+            .is_ok());
+        assert!(validate_webdav_url_for_request("http://localhost:5244/dav")
+            .await
+            .is_ok());
+        assert!(validate_webdav_url_for_request("https://dav.example.com/dav")
+            .await
+            .is_ok());
+
+        // 链路本地字面量：任何策略下都拒绝
+        assert!(validate_webdav_url_for_request("http://169.254.169.254/latest")
+            .await
+            .is_err());
+        assert!(validate_webdav_url_for_request("http://[fe80::1]/dav")
+            .await
+            .is_err());
+
+        // 公网 HTTP 字面量：不该退化成"解析不出来就放行"
+        assert!(validate_webdav_url_for_request("http://8.8.8.8/dav")
+            .await
+            .is_err());
+
+        // 凭证内嵌与非 HTTP 协议
+        assert!(validate_webdav_url_for_request("http://u:p@192.168.1.10/dav")
+            .await
+            .is_err());
+        assert!(validate_webdav_url_for_request("file:///tmp/a").await.is_err());
+    }
+
+    // Why DNS 分支本身没有实网单测：解析结果由运行环境说了算，断言不了。
+    // 实测过一版拿 `.invalid`（RFC 2606 保留 TLD）当"必然解析失败"的冒烟，
+    // 在开了 TUN fake-ip 的机器上直接翻车——fake-ip 把任意主机名都映射进
+    // 198.18.0.0/15，于是"解析失败"和"解析到公网"两条预期路径一条都没走到。
+    // DNS 循环真正的判据是 `is_allowed_lan_addr`，已由上面那条纯函数测试覆盖。
 }
