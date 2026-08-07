@@ -154,13 +154,19 @@ describe('useCompressionTask', () => {
       .mockResolvedValueOnce('C:/photos/old.jpg')
       .mockResolvedValueOnce('C:/photos/new.jpg');
     const oldCompress = deferred<CompressResult>();
+    // 预览和压缩是串行的：必须等旧任务真正进到压缩阶段再启动新任务，
+    // 否则旧任务会在读完预览时就发现自己过期而提前退出，压根不产生临时文件。
+    const oldCompressStarted = deferred<void>();
     const cleanupPaths: string[][] = [];
     const newResult = makeResult({ outputPath: 'C:/tmp/new.webp', ratio: 1.1 });
 
     setupInvokeHandler(async (cmd, args) => {
       if (cmd === 'compress_image') {
         const filePath = (args as { filePath: string }).filePath;
-        if (filePath.endsWith('old.jpg')) return oldCompress.promise;
+        if (filePath.endsWith('old.jpg')) {
+          oldCompressStarted.resolve();
+          return oldCompress.promise;
+        }
         return newResult;
       }
       if (cmd === 'read_image_as_base64') {
@@ -177,7 +183,7 @@ describe('useCompressionTask', () => {
 
     const api = useCompressionTask(ref(makePreset()));
     const first = api.selectAndCompress();
-    await Promise.resolve();
+    await oldCompressStarted.promise;
     const second = api.selectAndCompress();
 
     await expect(second).resolves.toBe(true);

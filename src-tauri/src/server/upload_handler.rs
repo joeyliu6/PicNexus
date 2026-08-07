@@ -24,6 +24,7 @@ use hmac::{Hmac, Mac};
 use md5::{Digest, Md5};
 use sha1::Sha1;
 
+use crate::commands::image_compress::MAX_IMAGE_PIXELS;
 use crate::log_utils::{safe_path, safe_url, summarize_text};
 
 type HmacSha1 = Hmac<Sha1>;
@@ -31,6 +32,9 @@ type HmacSha1 = Hmac<Sha1>;
 const ZHIHU_SOURCE_DEFAULT_VALUE: &str = "172ae18b";
 pub(crate) const MAX_SERVER_UPLOAD_SIZE: usize = 50 * 1024 * 1024;
 pub(crate) const SERVER_AUTH_TOKEN_HEADER: &str = "x-picnexus-token";
+/// 校验图片时的文件头探针窗口：magic bytes 与扩展名判断落在该范围内。
+/// 尺寸读取不依赖这个窗口——文件路径走 `imagesize::size` 按需 seek，body 路径已有完整数据。
+const IMAGE_HEAD_PROBE_BYTES: usize = 64 * 1024;
 static UPLOAD_TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,17 +108,6 @@ impl DetectedImageKind {
                 | (Self::Ico, "image/x-icon" | "image/vnd.microsoft.icon")
                 | (Self::Avif, "image/avif")
         )
-    }
-
-    fn image_format(self) -> Option<image::ImageFormat> {
-        match self {
-            Self::Jpeg => Some(image::ImageFormat::Jpeg),
-            Self::Png => Some(image::ImageFormat::Png),
-            Self::Gif => Some(image::ImageFormat::Gif),
-            Self::Webp => Some(image::ImageFormat::WebP),
-            Self::Bmp => Some(image::ImageFormat::Bmp),
-            Self::Svg | Self::Tiff | Self::Ico | Self::Avif => None,
-        }
     }
 }
 
@@ -226,23 +219,49 @@ fn validate_svg_dimensions(bytes: &[u8]) -> Result<(), String> {
     Err("SVG 内容损坏：无法读取有效尺寸".to_string())
 }
 
+fn check_image_size(size: imagesize::ImageSize, kind: DetectedImageKind) -> Result<(), String> {
+    if size.width == 0 || size.height == 0 {
+        return Err(format!("图片内容损坏：{} 尺寸无效", kind.display_name()));
+    }
+
+    let pixels = (size.width as u64)
+        .checked_mul(size.height as u64)
+        .ok_or_else(|| format!("{} 尺寸溢出", kind.display_name()))?;
+    if pixels > MAX_IMAGE_PIXELS {
+        return Err(format!(
+            "图片像素数 ({}) 超过上限 (5000万)，请先缩小图片",
+            pixels
+        ));
+    }
+    Ok(())
+}
+
 fn validate_detected_image_payload(bytes: &[u8], kind: DetectedImageKind) -> Result<(), String> {
     if kind == DetectedImageKind::Svg {
         return validate_svg_dimensions(bytes);
     }
 
-    if let Some(format) = kind.image_format() {
-        image::load_from_memory_with_format(bytes, format)
-            .map_err(|_| format!("图片内容损坏：无法解析为 {}", kind.display_name()))?;
-        return Ok(());
-    }
-
+    // Why: 这里只读图片头，不做完整解码。
+    // 原实现对 JPEG/PNG/GIF/WebP/BMP 走 image::load_from_memory_with_format()，
+    // 既要付出整图解码的 CPU/内存代价，又没有像素上限——本身就是 decompression bomb
+    // 攻击面（一张 200KB 的 PNG 可以解出几 GB 像素缓冲）。
+    // magic bytes 已由 detect_image_kind 校验，头部尺寸 + 像素上限足以拦掉伪造与超大图；
+    // "头部完好但数据截断"的坏图会被目标图床自己拒绝，不值得在本地付出全量解码代价。
     let size = imagesize::blob_size(bytes)
         .map_err(|_| format!("图片内容损坏：无法读取 {} 尺寸", kind.display_name()))?;
-    if size.width == 0 || size.height == 0 {
-        return Err(format!("图片内容损坏：{} 尺寸无效", kind.display_name()));
-    }
-    Ok(())
+    check_image_size(size, kind)
+}
+
+fn validate_file_image_payload(
+    path: &std::path::Path,
+    kind: DetectedImageKind,
+) -> Result<(), String> {
+    // Why: 文件路径的尺寸可能落在探针窗口之外（大 EXIF/XMP/ICC 的 JPEG、
+    // 后置 IFD 的 TIFF、meta 靠后的 AVIF 等），blob_size 只能读给定字节。
+    // imagesize::size 基于可 seek 的文件流按需读取，不会把整份文件读进内存。
+    let size = imagesize::size(path)
+        .map_err(|_| format!("图片内容损坏：无法读取 {} 尺寸", kind.display_name()))?;
+    check_image_size(size, kind)
 }
 
 fn validate_image_bytes(
@@ -286,6 +305,18 @@ fn validate_image_bytes(
     Ok(kind)
 }
 
+/// 读取文件前 `limit` 字节。文件小于 limit 时返回整份内容。
+fn read_file_head(path: &std::path::Path, limit: usize) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+
+    let file = std::fs::File::open(path).map_err(|e| format!("读取文件失败: {}", e))?;
+    let mut head = Vec::with_capacity(limit.min(64 * 1024));
+    file.take(limit as u64)
+        .read_to_end(&mut head)
+        .map_err(|e| format!("读取文件失败: {}", e))?;
+    Ok(head)
+}
+
 fn validate_image_file(path: &std::path::Path) -> Result<DetectedImageKind, String> {
     let metadata = std::fs::metadata(path).map_err(|e| format!("无法读取文件信息: {}", e))?;
     if !metadata.is_file() {
@@ -303,8 +334,29 @@ fn validate_image_file(path: &std::path::Path) -> Result<DetectedImageKind, Stri
     }
 
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-    let bytes = std::fs::read(path).map_err(|e| format!("读取文件失败: {}", e))?;
-    let kind = validate_image_bytes(&bytes, None)?;
+
+    // Why: 只读文件头做 magic/扩展名判断，尺寸交给 imagesize::size 从真实文件按需读取。
+    // SVG 例外：尺寸写在文本属性里（width/height 或 viewBox），可能落在探针窗口之外，
+    // 这种情况才退回整份读取（SVG 是文本，且已有 50MB 上限兜底）。
+    let head = read_file_head(path, IMAGE_HEAD_PROBE_BYTES)?;
+    let needs_full_read = metadata.len() as usize > head.len()
+        && detect_image_kind(&head) == Some(DetectedImageKind::Svg);
+    let bytes = if needs_full_read {
+        std::fs::read(path).map_err(|e| format!("读取文件失败: {}", e))?
+    } else {
+        head
+    };
+
+    let Some(kind) = detect_image_kind(&bytes) else {
+        return Err("图片内容校验失败：文件不是支持的真实图片格式".to_string());
+    };
+
+    if kind == DetectedImageKind::Svg {
+        validate_svg_dimensions(&bytes)?;
+    } else {
+        validate_file_image_payload(path, kind)?;
+    }
+
     if !kind.matches_extension(ext) {
         return Err(format!(
             "文件扩展名 .{} 与实际图片类型 {} 不一致",
@@ -588,7 +640,20 @@ pub async fn handle_upload(
 
     let mut urls = Vec::new();
     for path in &file_paths {
-        if let Err(e) = validate_image_file(std::path::Path::new(path)) {
+        // Why: 先 canonicalize 再校验，然后把同一个 canonical 路径交给 upload_validated_file。
+        // 校验和上传作用在同一路径上，才能安全地跳过下游的重复校验。
+        let canonical = match std::fs::canonicalize(path) {
+            Ok(canonical) => canonical,
+            Err(e) => {
+                return Json(UploadResponse {
+                    success: false,
+                    result: None,
+                    message: Some(format!("无法解析文件路径 '{}': {}", path, e)),
+                });
+            }
+        };
+
+        if let Err(e) = validate_image_file(&canonical) {
             return Json(UploadResponse {
                 success: false,
                 result: None,
@@ -596,7 +661,7 @@ pub async fn handle_upload(
             });
         }
 
-        match upload_single_file(path, config).await {
+        match upload_validated_file(canonical.to_str().unwrap_or(path), config).await {
             Ok(url) => {
                 log::info!("[Server] ✓ 上传成功: {}", safe_url(&url));
                 urls.push(url);
@@ -772,7 +837,9 @@ pub async fn handle_file_upload(
         );
     }
 
-    let result = upload_single_file(temp_path.to_str().unwrap_or(""), cfg).await;
+    // Why: body 已经过 validate_image_bytes，且临时文件扩展名是按检测结果生成的，
+    // 无需再让下游把刚写下去的文件重新读一遍做同样的校验。
+    let result = upload_validated_file(temp_path.to_str().unwrap_or(""), cfg).await;
     let _ = std::fs::remove_file(&temp_path);
     let _ = std::fs::remove_dir(&request_temp_dir);
 
@@ -804,10 +871,29 @@ pub async fn handle_file_upload(
 
 // ==================== 分发器 ====================
 
-/// 统一上传入口（Server 和 CLI 模式共用）
+/// 统一上传入口（Server 和 CLI 模式共用），内部会先做图片校验
 pub async fn upload_single_file(
     file_path: &str,
     config: &ServerUploadConfig,
+) -> Result<String, String> {
+    dispatch_upload(file_path, config, true).await
+}
+
+/// 调用方已经对同一路径调用过 `validate_image_file` 时使用。
+///
+/// Why: `/upload` 和 `/upload/file` 都在进入这里之前就校验过内容了，再校验一次意味着
+/// 同一个文件在一次上传里被完整读 2-3 遍（校验一遍、图床上传函数再读一遍）。
+pub async fn upload_validated_file(
+    file_path: &str,
+    config: &ServerUploadConfig,
+) -> Result<String, String> {
+    dispatch_upload(file_path, config, false).await
+}
+
+async fn dispatch_upload(
+    file_path: &str,
+    config: &ServerUploadConfig,
+    validate: bool,
 ) -> Result<String, String> {
     let canonical = std::fs::canonicalize(file_path)
         .map_err(|e| format!("无法解析文件路径 '{}': {}", file_path, e))?;
@@ -815,7 +901,9 @@ pub async fn upload_single_file(
     if !canonical.is_file() {
         return Err(format!("'{}' 不是有效的文件", file_path));
     }
-    validate_image_file(&canonical).map_err(|e| format!("图片校验失败: {}", e))?;
+    if validate {
+        validate_image_file(&canonical).map_err(|e| format!("图片校验失败: {}", e))?;
+    }
 
     match config {
         ServerUploadConfig::Jd => server_upload_jd(&canonical).await,
@@ -945,6 +1033,28 @@ fn validate_https_url(value: &str, label: &str, allow_empty: bool) -> Result<(),
     Ok(())
 }
 
+/// Server / CLI 模式共享的 HTTP 客户端
+///
+/// Why 不用 main.rs 里的 `HttpClient` 状态：这条路径也跑在没有 Tauri app 的 CLI 模式下，
+/// 拿不到 `tauri::State`。进程级 OnceLock 同样能让连接池与 TLS 上下文跨请求复用。
+///
+/// Why 不设客户端级 timeout：下面每个上传函数都有自己的请求级 timeout（30~120 秒不等），
+/// 客户端级留空才能与原来的 `Client::new()` 行为完全一致，不会给某个请求意外加上限。
+fn shared_client() -> &'static reqwest::Client {
+    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .pool_idle_timeout(std::time::Duration::from_secs(90))
+            .pool_max_idle_per_host(10)
+            .build()
+            .unwrap_or_else(|e| {
+                log::warn!("[Server] HTTP 客户端创建失败: {:?}，退回默认配置", e);
+                reqwest::Client::new()
+            })
+    })
+}
+
 // ==================== 各图床上传实现 ====================
 
 // ── 京东图床 ──────────────────────────────────────────
@@ -997,7 +1107,7 @@ async fn server_upload_jd(path: &std::path::Path) -> Result<String, String> {
         .text("clientType", "comet")
         .text("pin", aid_info.1);
 
-    let client = reqwest::Client::new();
+    let client = shared_client();
     let resp = client
         .post("https://file-dd.jd.com/file/uploadImg.action")
         .header("Accept", "application/json, text/plain, */*")
@@ -1029,7 +1139,7 @@ async fn server_upload_jd(path: &std::path::Path) -> Result<String, String> {
 async fn jd_get_aid() -> Result<(String, String), String> {
     let url = "https://api.m.jd.com/client.action?functionId=getAidInfo&body=%7B%22aidClientType%22%3A%22comet%22%2C%22aidClientVersion%22%3A%22comet%20-v1.0.0%22%2C%22appId%22%3A%22im.customer%22%2C%22os%22%3A%22comet%22%2C%22entry%22%3A%22jd_web_EnterpriseZC%22%2C%22reqSrc%22%3A%22s_comet%22%2C%22siteId%22%3A-1%2C%22customerAppId%22%3A%22im.customer%22%7D&appid=wh5&client=wh5&clientVersion=1.0.0&loginType=3&callback=jsonp1";
 
-    let text = reqwest::Client::new()
+    let text = shared_client()
         .get(url)
         .header("Accept", "*/*")
         .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
@@ -1101,7 +1211,7 @@ async fn server_upload_github(
         "branch": branch,
     });
 
-    let resp = reqwest::Client::new()
+    let resp = shared_client()
         .put(&url)
         .header("Authorization", format!("token {}", token))
         .header("User-Agent", "PicNexus")
@@ -1174,7 +1284,7 @@ async fn server_upload_smms(path: &std::path::Path, token: &str) -> Result<Strin
         .mime_str("image/*")
         .map_err(|e| format!("MIME 设置失败: {}", e))?;
 
-    let resp = reqwest::Client::new()
+    let resp = shared_client()
         .post("https://sm.ms/api/v2/upload")
         .header("Authorization", token)
         .multipart(multipart::Form::new().part("smfile", part))
@@ -1212,7 +1322,7 @@ async fn server_upload_imgur(path: &std::path::Path, client_id: &str) -> Result<
 
     let encoded = STANDARD.encode(&buffer);
 
-    let resp = reqwest::Client::new()
+    let resp = shared_client()
         .post("https://api.imgur.com/3/image")
         .header("Authorization", format!("Client-ID {}", client_id))
         .form(&[("image", encoded.as_str()), ("type", "base64")])
@@ -1263,7 +1373,7 @@ async fn server_upload_weibo(path: &std::path::Path, cookie: &str) -> Result<Str
     let total_len = buffer.len() as u64;
     let url = "https://picupload.weibo.com/interface/pic_upload.php?s=xml&ori=1&data=1&rotate=0&wm=&app=miniblog&mime=image/jpeg";
 
-    let resp = reqwest::Client::new()
+    let resp = shared_client()
         .post(url)
         .header("Cookie", cookie)
         .header("Content-Length", total_len)
@@ -1341,7 +1451,7 @@ async fn server_upload_bilibili(path: &std::path::Path, cookie: &str) -> Result<
 
     let form = multipart::Form::new().part("file", part).text("csrf", csrf);
 
-    let resp = reqwest::Client::new()
+    let resp = shared_client()
         .post("https://mall.bilibili.com/mall-up-c/common/image")
         .header("Cookie", format!("SESSDATA={}", sessdata))
         .header("Referer", "https://mall.bilibili.com/")
@@ -1407,7 +1517,7 @@ async fn server_upload_nowcoder(path: &std::path::Path, cookie: &str) -> Result<
         .mime_str("image/*")
         .map_err(|e| format!("MIME 设置失败: {}", e))?;
 
-    let resp = reqwest::Client::new()
+    let resp = shared_client()
         .post(&url)
         .header("Cookie", cookie)
         .header("Referer", "https://www.nowcoder.com/creation/write/article")
@@ -1486,7 +1596,7 @@ async fn server_upload_chaoxing(path: &std::path::Path, cookie: &str) -> Result<
         .mime_str(mime_type)
         .map_err(|e| format!("MIME 设置失败: {}", e))?;
 
-    let resp = reqwest::Client::new()
+    let resp = shared_client()
         .post("https://notice.chaoxing.com/pc/files/uploadNoticeFile")
         .header("Cookie", cookie)
         .header("Referer", "https://notice.chaoxing.com/")
@@ -1898,7 +2008,7 @@ async fn server_upload_upyun(
     let remote_path = format!("/{}/{}", bucket, file_name);
     let upload_url = format!("https://v0.api.upyun.com{}", remote_path);
 
-    let resp = reqwest::Client::new()
+    let resp = shared_client()
         .put(&upload_url)
         .header("Authorization", format!("Basic {}", auth))
         .header("Content-Length", buffer.len())
@@ -1934,8 +2044,8 @@ async fn server_upload_upyun(
 mod tests {
     use super::{
         request_has_browser_origin, request_has_valid_server_token, unique_upload_temp_dir,
-        validate_https_url, validate_image_bytes, DetectedImageKind, ServerUploadConfig,
-        MAX_SERVER_UPLOAD_SIZE, SERVER_AUTH_TOKEN_HEADER,
+        validate_https_url, validate_image_bytes, validate_image_file, DetectedImageKind,
+        ServerUploadConfig, MAX_SERVER_UPLOAD_SIZE, SERVER_AUTH_TOKEN_HEADER,
     };
     use axum::http::HeaderMap;
     use std::io::Cursor;
@@ -1947,6 +2057,82 @@ mod tests {
             .write_to(&mut cursor, image::ImageFormat::Png)
             .expect("tiny PNG should encode");
         cursor.into_inner()
+    }
+
+    /// 只造 PNG 签名 + IHDR，用来验证"只读头部"的校验路径
+    fn png_header_with_dimensions(width: u32, height: u32) -> Vec<u8> {
+        let mut bytes = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+        bytes.extend_from_slice(&13u32.to_be_bytes());
+        bytes.extend_from_slice(b"IHDR");
+        bytes.extend_from_slice(&width.to_be_bytes());
+        bytes.extend_from_slice(&height.to_be_bytes());
+        bytes.extend_from_slice(&[8, 6, 0, 0, 0]);
+        bytes.extend_from_slice(&0u32.to_be_bytes());
+        bytes
+    }
+
+    #[test]
+    fn validate_image_bytes_rejects_dimensions_over_pixel_limit() {
+        // 16 亿像素：头部很小，完整解码才会爆内存——正是要在读头阶段拦住的场景
+        let bytes = png_header_with_dimensions(40_000, 40_000);
+
+        let err = validate_image_bytes(&bytes, Some("image/png"))
+            .expect_err("超过像素上限的图片应被拒绝");
+
+        assert!(err.contains("像素数"), "错误应指明像素上限: {}", err);
+    }
+
+    #[test]
+    fn validate_image_bytes_accepts_dimensions_under_pixel_limit() {
+        let bytes = png_header_with_dimensions(7_000, 7_000); // 4900 万，上限内
+
+        let kind =
+            validate_image_bytes(&bytes, Some("image/png")).expect("上限内的尺寸应通过校验");
+
+        assert_eq!(kind, DetectedImageKind::Png);
+    }
+
+    #[test]
+    fn validate_image_file_only_needs_header_bytes() {
+        // 合法 PNG 头 + 128KB 填充：校验不应依赖探针窗口以外的内容
+        let mut bytes = png_header_with_dimensions(64, 64);
+        bytes.resize(bytes.len() + 128 * 1024, 0);
+
+        let path = std::env::temp_dir()
+            .join(format!("picnexus_head_probe_{}.png", std::process::id()));
+        std::fs::write(&path, &bytes).expect("写入临时 PNG 失败");
+
+        let result = validate_image_file(&path);
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(result.expect("头部合法的 PNG 应通过校验"), DetectedImageKind::Png);
+    }
+
+    #[test]
+    fn validate_image_file_reads_past_64kb_for_jpeg() {
+        // APP1 段接近 64KB 上限，SOF0 落在探针窗口之后：
+        // 只读 64KB 会误判损坏，imagesize::size 需要能从真实文件继续 seek。
+        let mut bytes = vec![0xFF, 0xD8];
+        bytes.extend_from_slice(&[0xFF, 0xE1]);
+        let segment_len: u16 = 65_533; // 包含 2 字节长度字段
+        bytes.extend_from_slice(&segment_len.to_be_bytes());
+        bytes.extend(vec![0u8; (segment_len - 2) as usize]);
+        bytes.extend_from_slice(&[
+            0xFF, 0xC0, 0x00, 0x11, 8, 0, 100, 0, 100, 3, 1, 0x11, 0, 2, 0x11, 0, 3, 0x11, 0,
+        ]);
+        bytes.extend_from_slice(&[0xFF, 0xD9]);
+
+        let path = std::env::temp_dir()
+            .join(format!("picnexus_jpeg_64k_{}.jpg", std::process::id()));
+        std::fs::write(&path, &bytes).expect("写入临时 JPEG 失败");
+
+        let result = validate_image_file(&path);
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(
+            result.expect("SOF 位于 64KB 之后的合法 JPEG 应通过校验"),
+            DetectedImageKind::Jpeg
+        );
     }
 
     #[test]

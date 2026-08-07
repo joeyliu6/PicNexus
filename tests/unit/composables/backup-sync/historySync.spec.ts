@@ -4,6 +4,7 @@ import { ref } from 'vue';
 const {
   historyGetCountMock,
   historyExportToJSONMock,
+  historyGetAllItemsMock,
   historyImportFromJSONMock,
   invalidateCacheMock,
   emitHistoryUpdatedMock,
@@ -21,6 +22,7 @@ const {
 } = vi.hoisted(() => ({
   historyGetCountMock: vi.fn(),
   historyExportToJSONMock: vi.fn(),
+  historyGetAllItemsMock: vi.fn(),
   historyImportFromJSONMock: vi.fn(),
   invalidateCacheMock: vi.fn(),
   emitHistoryUpdatedMock: vi.fn(),
@@ -41,6 +43,7 @@ vi.mock('@/services/HistoryDatabase', () => ({
   historyDB: {
     getCount: historyGetCountMock,
     exportToJSON: historyExportToJSONMock,
+    getAllItems: historyGetAllItemsMock,
     importFromJSON: historyImportFromJSONMock,
   },
 }));
@@ -128,6 +131,7 @@ describe('createHistorySyncOps', () => {
     });
     historyGetCountMock.mockResolvedValue(2);
     historyExportToJSONMock.mockResolvedValue('[]');
+    historyGetAllItemsMock.mockResolvedValue([]);
     historyImportFromJSONMock.mockResolvedValue(undefined);
     clientGetFileMock.mockResolvedValue('[]');
     clientPutFileMock.mockResolvedValue(undefined);
@@ -138,10 +142,10 @@ describe('createHistorySyncOps', () => {
   });
 
   it('merges local and cloud history by id and timestamp before uploading', async () => {
-    historyExportToJSONMock.mockResolvedValueOnce(JSON.stringify([
+    historyGetAllItemsMock.mockResolvedValueOnce([
       { id: 'a', timestamp: 200 },
       { id: 'b', timestamp: 100 },
-    ]));
+    ]);
     clientGetFileMock.mockResolvedValueOnce(JSON.stringify([
       { id: 'a', timestamp: 100 },
       { id: 'c', timestamp: 300 },
@@ -205,9 +209,9 @@ describe('createHistorySyncOps', () => {
   });
 
   it('skips incremental upload when the cloud already has every local history id', async () => {
-    historyExportToJSONMock.mockResolvedValueOnce(JSON.stringify([
+    historyGetAllItemsMock.mockResolvedValueOnce([
       { id: 'a', timestamp: 200, isFavorited: false },
-    ]));
+    ]);
     clientGetFileMock.mockResolvedValueOnce(JSON.stringify([
       { id: 'a', timestamp: 200, isFavorited: false },
     ]));
@@ -223,9 +227,9 @@ describe('createHistorySyncOps', () => {
   });
 
   it('incremental upload includes records whose only change is newer favorite metadata', async () => {
-    historyExportToJSONMock.mockResolvedValueOnce(JSON.stringify([
+    historyGetAllItemsMock.mockResolvedValueOnce([
       { id: 'a', timestamp: 200, isFavorited: true, favoriteUpdatedAt: 500, favoriteUpdatedBy: 'local' },
-    ]));
+    ]);
     clientGetFileMock.mockResolvedValueOnce(JSON.stringify([
       { id: 'a', timestamp: 200, isFavorited: false, favoriteUpdatedAt: 100, favoriteUpdatedBy: 'cloud' },
     ]));
@@ -243,9 +247,9 @@ describe('createHistorySyncOps', () => {
   });
 
   it('stops merge upload when cloud history download fails with a non-404 WebDAV error', async () => {
-    historyExportToJSONMock.mockResolvedValueOnce(JSON.stringify([
+    historyGetAllItemsMock.mockResolvedValueOnce([
       { id: 'local', timestamp: 200 },
-    ]));
+    ]);
     clientGetFileMock.mockRejectedValueOnce(new Error('401 Unauthorized'));
     extractErrorCodeMock.mockReturnValueOnce('AUTH_FAILED');
 
@@ -261,9 +265,9 @@ describe('createHistorySyncOps', () => {
   });
 
   it('stops incremental upload when cloud history download fails with a non-404 WebDAV error', async () => {
-    historyExportToJSONMock.mockResolvedValueOnce(JSON.stringify([
+    historyGetAllItemsMock.mockResolvedValueOnce([
       { id: 'local', timestamp: 200 },
-    ]));
+    ]);
     clientGetFileMock.mockRejectedValueOnce(new Error('500 Server Error'));
     extractErrorCodeMock.mockReturnValueOnce('SERVER_FAILED');
 
@@ -317,10 +321,10 @@ describe('createHistorySyncOps', () => {
       { id: 'cloud', timestamp: 100 },
     ]));
     historyGetCountMock.mockResolvedValueOnce(2);
-    historyExportToJSONMock.mockResolvedValueOnce(JSON.stringify([
+    historyGetAllItemsMock.mockResolvedValueOnce([
       { id: 'cloud', timestamp: 100 },
       { id: 'local', timestamp: 200 },
-    ]));
+    ]);
     clientPutFileMock.mockRejectedValueOnce(new Error('upload failed'));
     extractErrorCodeMock.mockReturnValueOnce('UPLOAD_FAILED');
 
@@ -350,7 +354,7 @@ describe('createHistorySyncOps', () => {
     await ops.syncHistory(profile);
 
     expect(historyImportFromJSONMock).not.toHaveBeenCalled();
-    expect(historyExportToJSONMock).not.toHaveBeenCalled();
+    expect(historyGetAllItemsMock).not.toHaveBeenCalled();
     expect(clientPutFileMock).not.toHaveBeenCalled();
     expect(updateHistorySyncStatusMock).toHaveBeenCalledWith(profile, 'failed', 'AUTH_FAILED');
     expect(writeSyncLogMock).toHaveBeenCalledWith('sync_history', 'failed', 'AUTH_FAILED', profile);

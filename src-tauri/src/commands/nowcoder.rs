@@ -10,10 +10,14 @@ use tauri::Window;
 use super::utils::read_file_bytes;
 use crate::error::{AppError, IntoAppError};
 use crate::log_utils::{safe_path, safe_url, summarize_text};
+use crate::HttpClient;
 
 /// 测试牛客 Cookie 是否有效
 #[tauri::command]
-pub async fn test_nowcoder_cookie(nowcoder_cookie: String) -> Result<String, AppError> {
+pub async fn test_nowcoder_cookie(
+    nowcoder_cookie: String,
+    http_client: tauri::State<'_, HttpClient>,
+) -> Result<String, AppError> {
     log::info!("[Nowcoder] 测试 Cookie 有效性...");
 
     // 检查 Cookie 是否包含必要字段
@@ -49,8 +53,8 @@ pub async fn test_nowcoder_cookie(nowcoder_cookie: String) -> Result<String, App
 
     let form = multipart::Form::new().part("file", part);
 
-    // 发送请求
-    let client = reqwest::Client::new();
+    // 发送请求（探针图很小，15 秒足够）
+    let client = &http_client.0;
     let response = client
         .post(&url)
         .header("Cookie", &nowcoder_cookie)
@@ -58,6 +62,7 @@ pub async fn test_nowcoder_cookie(nowcoder_cookie: String) -> Result<String, App
         .header("Origin", "https://www.nowcoder.com")
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36")
         .multipart(form)
+        .timeout(std::time::Duration::from_secs(15))
         .send()
         .await
         .into_network_err_with("请求失败")?;
@@ -103,6 +108,7 @@ pub async fn upload_to_nowcoder(
     _id: String,
     file_path: String,
     nowcoder_cookie: String,
+    http_client: tauri::State<'_, HttpClient>,
 ) -> Result<NowcoderUploadResult, AppError> {
     log::info!("[Nowcoder] 开始上传文件: {}", safe_path(&file_path));
 
@@ -152,7 +158,10 @@ pub async fn upload_to_nowcoder(
     let form = multipart::Form::new().part("file", part);
 
     // 5. 发送请求到牛客 API（带必须的 Headers）
-    let client = reqwest::Client::new();
+    //
+    // Why 显式 timeout：这里原本用 `Client::new()`（无超时上限），换成共享客户端后会继承
+    // 它的 60 秒默认值——对 50MB 大图偏紧。显式给 120 秒，与超星/GitHub/Imgur 保持一致。
+    let client = &http_client.0;
     let response = client
         .post(&url)
         .header("Cookie", &nowcoder_cookie)
@@ -160,6 +169,7 @@ pub async fn upload_to_nowcoder(
         .header("Origin", "https://www.nowcoder.com")
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36")
         .multipart(form)
+        .timeout(std::time::Duration::from_secs(120))
         .send()
         .await
         .into_network_err_with("请求失败")?;

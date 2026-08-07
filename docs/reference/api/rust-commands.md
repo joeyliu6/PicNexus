@@ -17,7 +17,7 @@
 | | `upload_to_smms` | SM.MS 上传 |
 | | `upload_to_github` | GitHub 上传 |
 | | `upload_to_s3_compatible` | S3 兼容存储上传 |
-| | `upload_to_webdav` | WebDAV 图床上传（二进制 PUT + 递归建目录） |
+| | `upload_to_webdav` | WebDAV 图床上传（流式 PUT + 递归建目录）<br/>流式 body 必须显式带 `Content-Length`，否则退回 chunked，部分服务端不接受 |
 | **测试** | `test_weibo_connection` | 测试微博连接 |
 | | `test_zhihu_connection` | 测试知乎连接 |
 | | `test_nowcoder_connection` | 测试牛客连接 |

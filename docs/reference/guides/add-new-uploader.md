@@ -28,9 +28,14 @@
 ```rust
 // src-tauri/src/commands/myservice.rs
 
+use super::utils::read_file_bytes;
 use crate::error::AppError;
+use crate::HttpClient;
 use serde::Serialize;
 use tauri::Window;
+
+/// 文件大小上限，按目标服务的实际限制来定
+const MAX_FILE_SIZE: u64 = 50 * 1024 * 1024;
 
 #[derive(Serialize)]
 pub struct MyServiceUploadResult {
@@ -44,6 +49,9 @@ pub async fn upload_to_myservice(
     id: String,
     file_path: String,
     api_key: String,  // 根据服务需要的认证参数
+    // 注入全局 HTTP 客户端，别在命令里 new 一个：
+    // 共享客户端才能复用连接池和 TLS 上下文（定义见 main.rs 的 HttpClient）
+    http_client: tauri::State<'_, HttpClient>,
 ) -> Result<MyServiceUploadResult, AppError> {
     // 1. 验证参数
     if file_path.is_empty() {
@@ -51,8 +59,10 @@ pub async fn upload_to_myservice(
     }
 
     // 2. 读取文件
-    let file_data = std::fs::read(&file_path)
-        .map_err(|e| AppError::File(e.to_string()))?;
+    //    用 read_file_bytes 而不是 std::fs::read：它带大小上限，能挡住超大文件。
+    //    如果目标服务支持流式上传（S3 类 / 裸 PUT），优先改用 probe_upload_file_size
+    //    + 流式 body，避免整份文件驻留内存——多图床并发时这是内存峰值的主要来源。
+    let (file_data, _file_size) = read_file_bytes(&file_path, MAX_FILE_SIZE).await?;
 
     // 3. 报告进度
     let _ = window.emit(&format!("upload-progress-{}", id), serde_json::json!({
@@ -61,16 +71,19 @@ pub async fn upload_to_myservice(
     }));
 
     // 4. 构造请求
-    let client = reqwest::Client::new();
+    let client = &http_client.0;
     let form = reqwest::multipart::Form::new()
         .part("file", reqwest::multipart::Part::bytes(file_data)
             .file_name("image.png"));
 
     // 5. 发送请求
+    //    务必显式设置 timeout：共享客户端有 60 秒默认上限，对大图偏紧，
+    //    请求级 timeout 会覆盖它（其他图床用的是 120 秒）。
     let response = client
         .post("https://api.myservice.com/upload")
         .header("Authorization", format!("Bearer {}", api_key))
         .multipart(form)
+        .timeout(std::time::Duration::from_secs(120))
         .send()
         .await
         .map_err(|e| AppError::Network(e.to_string()))?;
@@ -102,12 +115,14 @@ pub async fn upload_to_myservice(
 #[tauri::command]
 pub async fn test_myservice_connection(
     api_key: String,
+    http_client: tauri::State<'_, HttpClient>,
 ) -> Result<String, AppError> {
     // 测试 API Key 有效性
-    let client = reqwest::Client::new();
+    let client = &http_client.0;
     let response = client
         .get("https://api.myservice.com/profile")
         .header("Authorization", format!("Bearer {}", api_key))
+        .timeout(std::time::Duration::from_secs(15))
         .send()
         .await
         .map_err(|e| AppError::Network(e.to_string()))?;

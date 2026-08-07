@@ -9,6 +9,7 @@ use url::Url;
 use super::utils::read_file_bytes;
 use crate::error::{AppError, IntoAppError};
 use crate::log_utils::{safe_path, safe_url, summarize_text};
+use crate::HttpClient;
 
 /// SM.MS 上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -107,6 +108,7 @@ pub async fn upload_to_smms(
     id: String,
     file_path: String,
     smms_token: String,
+    http_client: tauri::State<'_, HttpClient>,
 ) -> Result<SmmsUploadResult, AppError> {
     log::info!("[SM.MS] 开始上传文件: {}", safe_path(&file_path));
 
@@ -187,7 +189,7 @@ pub async fn upload_to_smms(
     );
 
     // 5. 发送请求到 SM.MS API
-    let client = reqwest::Client::new();
+    let client = &http_client.0;
     let response = client
         .post("https://sm.ms/api/v2/upload")
         .header("Authorization", smms_token)

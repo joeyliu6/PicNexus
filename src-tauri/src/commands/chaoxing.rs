@@ -8,6 +8,7 @@ use tauri::Window;
 use super::utils::read_file_bytes;
 use crate::error::{AppError, IntoAppError};
 use crate::log_utils::{safe_path, safe_url, summarize_text};
+use crate::HttpClient;
 
 /// 超星上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -26,7 +27,10 @@ struct ChaoxingApiResponse {
 
 /// 测试超星 Cookie 是否有效
 #[tauri::command]
-pub async fn test_chaoxing_connection(chaoxing_cookie: String) -> Result<String, AppError> {
+pub async fn test_chaoxing_connection(
+    chaoxing_cookie: String,
+    http_client: tauri::State<'_, HttpClient>,
+) -> Result<String, AppError> {
     log::info!("[Chaoxing] 测试 Cookie 有效性...");
 
     // 检查 Cookie 非空
@@ -59,7 +63,7 @@ pub async fn test_chaoxing_connection(chaoxing_cookie: String) -> Result<String,
     let form = multipart::Form::new().part("attrFile", part);
 
     // 发送请求
-    let client = reqwest::Client::new();
+    let client = &http_client.0;
     let response = client
         .post("https://notice.chaoxing.com/pc/files/uploadNoticeFile")
         .header("Cookie", &chaoxing_cookie)
@@ -104,6 +108,7 @@ pub async fn upload_to_chaoxing(
     _id: String,
     file_path: String,
     chaoxing_cookie: String,
+    http_client: tauri::State<'_, HttpClient>,
 ) -> Result<ChaoxingUploadResult, AppError> {
     log::info!("[Chaoxing] 开始上传文件: {}", safe_path(&file_path));
 
@@ -162,7 +167,7 @@ pub async fn upload_to_chaoxing(
     let form = multipart::Form::new().part("attrFile", part);
 
     // 8. 发送请求（超星支持大文件，超时设为 120 秒）
-    let client = reqwest::Client::new();
+    let client = &http_client.0;
     let response = client
         .post("https://notice.chaoxing.com/pc/files/uploadNoticeFile")
         .header("Cookie", &chaoxing_cookie)

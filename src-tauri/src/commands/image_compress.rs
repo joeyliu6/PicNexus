@@ -365,12 +365,15 @@ fn inject_jpeg_exif_segment(jpeg: &[u8], exif_segment: &[u8]) -> Option<Vec<u8>>
     Some(out)
 }
 
+/// 像素数上限：超过即拒绝解码，防止 decompression bomb 打爆内存
+pub(crate) const MAX_IMAGE_PIXELS: u64 = 50_000_000;
+
 /// 像素数预检：防止超大图片导致内存耗尽（上限 5000 万像素）
 fn check_pixel_limit(width: u32, height: u32) -> Result<(), AppError> {
     let pixel_count = (width as u64)
         .checked_mul(height as u64)
         .ok_or_else(|| AppError::file_io("图片尺寸溢出"))?;
-    if pixel_count > 50_000_000 {
+    if pixel_count > MAX_IMAGE_PIXELS {
         return Err(AppError::file_io(format!(
             "图片像素数 ({}) 超过上限 (5000万)，请先缩小图片",
             pixel_count

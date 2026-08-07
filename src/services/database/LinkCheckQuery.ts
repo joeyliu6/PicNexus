@@ -17,30 +17,53 @@ export async function getLinkCheckInvalidQuery(
   `);
 }
 
+/** 游标行：比 LinkCheckLiteRow 多带排序键，用于 keyset 翻页 */
+type LinkCheckCursorRow = LinkCheckLiteRow & { timestamp: number };
+
+/**
+ * 流式读取剩余记录（排除已加载的 id）
+ *
+ * 用 keyset 分页而非 OFFSET：`LIMIT n OFFSET m` 每翻一页都要让 SQLite 从头重扫并丢弃
+ * 前 m 行，翻到第 k 页的总代价是 O(k²)。5 万条以上时这部分开销会明显放大。
+ * 游标写成展开形式而不是 `(timestamp, id) < ($1, $2)`：行值比较要 SQLite 3.15+，
+ * 展开形式在任何版本都能跑，且同样能吃到 idx_timestamp 的 timestamp 前缀。
+ */
 export async function* getLinkCheckRestStreamQuery(
   db: Database,
   loadedIds: Set<string>,
   batchSize = 2000,
 ): AsyncGenerator<LinkCheckLiteRow[]> {
-  let offset = 0;
+  const COLUMNS = 'id, timestamp, local_file_name, primary_service, results, link_check_status';
+  let cursor: { timestamp: number; id: string } | null = null;
 
   while (true) {
-    const rows = await db.select<LinkCheckLiteRow[]>(
-      `SELECT id, local_file_name, primary_service, results, link_check_status
-       FROM history_items
-       ORDER BY timestamp DESC, id DESC
-       LIMIT $1 OFFSET $2`,
-      [batchSize, offset],
-    );
+    const rows: LinkCheckCursorRow[] = cursor
+      ? await db.select<LinkCheckCursorRow[]>(
+          `SELECT ${COLUMNS}
+           FROM history_items
+           WHERE timestamp < $1 OR (timestamp = $1 AND id < $2)
+           ORDER BY timestamp DESC, id DESC
+           LIMIT $3`,
+          [cursor.timestamp, cursor.id, batchSize],
+        )
+      : await db.select<LinkCheckCursorRow[]>(
+          `SELECT ${COLUMNS}
+           FROM history_items
+           ORDER BY timestamp DESC, id DESC
+           LIMIT $1`,
+          [batchSize],
+        );
 
     if (rows.length === 0) break;
+
+    const last = rows[rows.length - 1];
+    cursor = { timestamp: last.timestamp, id: last.id };
 
     const filteredRows = rows.filter((row) => !loadedIds.has(row.id));
     if (filteredRows.length > 0) {
       yield filteredRows;
     }
 
-    offset += batchSize;
     if (rows.length < batchSize) break;
   }
 }

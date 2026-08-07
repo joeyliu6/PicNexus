@@ -21,7 +21,7 @@ import {
   type HistoryItemRow,
   COLUMNS_SQL,
   rowValues, columnPlaceholders,
-  itemToRow, rowToItem,
+  itemToRow, rowToItem, deriveResultColumns,
 } from './DataTransformer';
 import { setFavoriteQuery, batchSetFavoriteQuery, getFavoriteCountQuery, getFavoriteIdListQuery } from './FavoriteService';
 import {
@@ -30,6 +30,7 @@ import {
   batchUpdateLinkCheckStatusQuery,
   getLinkCheckContextByIdsQuery,
 } from './LinkCheckQuery';
+import { batchUpdateDimensionsQuery, type DimensionUpdate } from './MetadataQuery';
 import { addSyncLogQuery, getSyncLogsQuery, clearSyncLogsQuery } from './SyncLogService';
 import {
   getItemsByBackupCountQuery,
@@ -270,6 +271,32 @@ class HistoryDatabase {
       [...updateValues, id]
     );
     log.debug(`更新记录: ${id}`);
+  }
+
+  /**
+   * 定向更新 results（连带派生的 success_count / successful_service_ids）
+   *
+   * 与 `update(id, { results })` 写入结果一致，但省掉那条路径里的整行回查：
+   * 这三列完全由 results 推导，调用方手上已经是最终数组，没必要再读一遍再合并。
+   * 上传时每个成功的图床都会走一次这里，回查省下的是整行 JSON 的解析开销。
+   *
+   * @throws 记录不存在时抛错，与 update() 行为一致
+   */
+  async updateResults(id: string, results: HistoryItem['results']): Promise<void> {
+    const db = await this.connection.getDb();
+    const columns = deriveResultColumns(results);
+
+    const result = await db.execute(
+      `UPDATE history_items
+       SET results = $1, success_count = $2, successful_service_ids = $3
+       WHERE id = $4`,
+      [columns.results, columns.success_count, columns.successful_service_ids, id]
+    );
+
+    if (result.rowsAffected === 0) {
+      throw new Error(`记录不存在: ${id}`);
+    }
+    log.debug(`更新结果列: ${id}`);
   }
 
   /**
@@ -829,20 +856,31 @@ class HistoryDatabase {
    */
   async *getAllStream(batchSize = 1000): AsyncGenerator<HistoryItem[]> {
     const db = await this.connection.getDb();
-    let offset = 0;
+    // keyset 分页：OFFSET 每翻一页都要从头重扫并丢弃前面所有行，导出 20 万条时
+    // 总代价是 O(页数²)。游标按 (timestamp, id) 递减推进，每页都是一次索引定位。
+    let cursor: { timestamp: number; id: string } | null = null;
 
     while (true) {
-      const rows = await db.select<HistoryItemRow[]>(
-        'SELECT * FROM history_items ORDER BY timestamp DESC, id DESC LIMIT $1 OFFSET $2',
-        [batchSize, offset]
-      );
+      const rows: HistoryItemRow[] = cursor
+        ? await db.select<HistoryItemRow[]>(
+            `SELECT * FROM history_items
+             WHERE timestamp < $1 OR (timestamp = $1 AND id < $2)
+             ORDER BY timestamp DESC, id DESC LIMIT $3`,
+            [cursor.timestamp, cursor.id, batchSize]
+          )
+        : await db.select<HistoryItemRow[]>(
+            'SELECT * FROM history_items ORDER BY timestamp DESC, id DESC LIMIT $1',
+            [batchSize]
+          );
 
       if (rows.length === 0) {
         break;
       }
 
+      const last = rows[rows.length - 1];
+      cursor = { timestamp: last.timestamp, id: last.id };
+
       yield rows.map((row) => rowToItem(row));
-      offset += batchSize;
 
       // 如果返回的数量小于批大小，说明已经到末尾
       if (rows.length < batchSize) {
@@ -866,6 +904,19 @@ class HistoryDatabase {
   ): AsyncGenerator<LinkCheckLiteRow[]> {
     const db = await this.connection.getDb();
     yield* getLinkCheckRestStreamQuery(db, loadedIds, batchSize);
+  }
+
+  /**
+   * 批量写回图片尺寸（宽/高/宽高比）
+   *
+   * 定向更新这三列，不走 update() 的"先读全行再合并"路径——尺寸修复动辄几千条，
+   * 逐条读改写会产生同等数量的 IPC 往返和整行 JSON 解析。
+   *
+   * @returns 实际提交的记录数
+   */
+  async batchUpdateDimensions(updates: DimensionUpdate[]): Promise<number> {
+    const db = await this.connection.getDb();
+    return batchUpdateDimensionsQuery(db, updates);
   }
 
   async batchUpdateLinkCheckStatus(
@@ -900,6 +951,21 @@ class HistoryDatabase {
    */
   async exportToJSON(): Promise<string> {
     return exportHistoryToJson((batchSize) => this.getAllStream(batchSize));
+  }
+
+  /**
+   * 读出全部记录为数组
+   *
+   * 给"要在内存里对记录做处理"的调用方用（云端合并等）。
+   * 不要写成 `JSON.parse(await exportToJSON())`——那条路径会先把整份历史序列化成
+   * 一个巨大字符串再解析回对象，字符串和数组两份完整副本会同时驻留在内存里。
+   */
+  async getAllItems(): Promise<HistoryItem[]> {
+    const items: HistoryItem[] = [];
+    for await (const batch of this.getAllStream(1000)) {
+      items.push(...batch);
+    }
+    return items;
   }
 
   /**

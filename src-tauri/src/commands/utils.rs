@@ -50,6 +50,38 @@ pub async fn read_file_bytes(path: &str, max_bytes: u64) -> Result<(Vec<u8>, u64
     Ok((buffer, actual_size))
 }
 
+/// 只读元数据做大小校验，不把文件内容读进内存
+///
+/// 用于流式上传路径（S3/R2/WebDAV）：请求体直接从磁盘读，但仍要在发请求前拦掉超限文件。
+///
+/// # 参数
+/// - `path`: 文件路径
+/// - `max_bytes`: 允许上传的最大文件大小
+///
+/// # 返回
+/// - `Ok(u64)`: 文件大小
+/// - `Err(AppError)`: 文件不存在、不是普通文件，或超过大小上限
+pub async fn probe_upload_file_size(path: &str, max_bytes: u64) -> Result<u64, AppError> {
+    let metadata = tokio::fs::metadata(path)
+        .await
+        .map_err(|e| AppError::file_io(format!("无法获取文件元数据: {}", e)))?;
+
+    if !metadata.is_file() {
+        return Err(AppError::validation("路径不是有效的文件"));
+    }
+
+    let file_size = metadata.len();
+    if file_size > max_bytes {
+        return Err(AppError::validation(format!(
+            "文件大小 ({:.2}MB) 超过读取上限 ({:.2}MB)",
+            file_size as f64 / 1024.0 / 1024.0,
+            max_bytes as f64 / 1024.0 / 1024.0,
+        )));
+    }
+
+    Ok(file_size)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,6 +177,46 @@ mod tests {
             Err(e) => panic!("应为 FileIo 错误，实际: {:?}", e),
             Ok(_) => panic!("不存在的文件不应成功读取"),
         }
+    }
+
+    #[tokio::test]
+    async fn probe_upload_file_size_returns_size_without_reading() {
+        let content = b"hello picnexus";
+        let tmp = TempFile::new(content);
+
+        let size = probe_upload_file_size(tmp.path.to_str().unwrap(), 1024)
+            .await
+            .expect("应能读取文件大小");
+
+        assert_eq!(size, content.len() as u64);
+    }
+
+    #[tokio::test]
+    async fn probe_upload_file_size_rejects_oversized_file() {
+        // 稀疏文件：元数据声明 64MB，但不占实际磁盘——正好验证"不读内容也能拦下"
+        let path = std::env::temp_dir().join(format!(
+            "picnexus_probe_{}_{}",
+            std::process::id(),
+            TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed),
+        ));
+        let file = std::fs::File::create(&path).expect("创建稀疏文件失败");
+        file.set_len(64 * 1024 * 1024)
+            .expect("设置稀疏文件大小失败");
+
+        let result = probe_upload_file_size(path.to_str().unwrap(), 1024).await;
+        let _ = std::fs::remove_file(&path);
+
+        assert!(matches!(result, Err(AppError::Validation { .. })));
+    }
+
+    #[tokio::test]
+    async fn probe_upload_file_size_rejects_missing_file() {
+        let bogus = std::env::temp_dir().join("picnexus_probe_does_not_exist_12345.bin");
+        let _ = std::fs::remove_file(&bogus);
+
+        let result = probe_upload_file_size(bogus.to_str().unwrap(), 1024).await;
+
+        assert!(matches!(result, Err(AppError::FileIo { .. })));
     }
 
     #[tokio::test]

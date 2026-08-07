@@ -100,16 +100,24 @@ export function useCompressionTask(
         );
       }
 
-      const [compressResult, origB64] = await Promise.all([
-        invoke<CompressResult>('compress_image', {
-          filePath,
-          quality: p.quality,
-          maxLongSide,
-          outputFormat: p.outputFormat,
-          stripExif: p.stripExif,
-        }),
-        invoke<string>('read_image_as_base64', { filePath, maxSide: 1200 }),
-      ]);
+      // Why 串行而不是 Promise.all：这两个命令都要解码同一张原图，并行跑会让峰值内存
+      // 接近两份解码缓冲，大图尤其明显。先读预览还顺带改善了观感——原图能立刻显示出来，
+      // 不必等压缩跑完才有画面。
+      const origB64 = await invoke<string>('read_image_as_base64', {
+        filePath,
+        maxSide: 1200,
+      });
+
+      if (mySeq !== activeSeq) return true;
+      originalSrc.value = origB64;
+
+      const compressResult = await invoke<CompressResult>('compress_image', {
+        filePath,
+        quality: p.quality,
+        maxLongSide,
+        outputFormat: p.outputFormat,
+        stripExif: p.stripExif,
+      });
 
       if (mySeq !== activeSeq) {
         // 已被新任务取代——这次产出的临时压缩文件还得清掉，避免泄漏
@@ -118,7 +126,6 @@ export function useCompressionTask(
       }
 
       result.value = compressResult;
-      originalSrc.value = origB64;
 
       const compB64 = await invoke<string>('read_image_as_base64', {
         filePath: compressResult.outputPath,

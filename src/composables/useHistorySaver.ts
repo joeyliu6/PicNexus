@@ -252,7 +252,9 @@ export function useHistorySaver(): UseHistorySaverReturn {
           } else {
             updatedResults.push(result);
           }
-          await historyDB.update(historyId, { results: updatedResults });
+          // 用定向写入而非 update()：后者内部还会再 getById 一次，
+          // 这里刚读过的整行会被白读第二遍（results 字段本身就是大字段）。
+          await historyDB.updateResults(historyId, updatedResults);
           log.info(`[历史记录] 更新结果: ${result.serviceId}`);
 
           invalidateCache();

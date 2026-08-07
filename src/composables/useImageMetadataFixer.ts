@@ -7,6 +7,7 @@
 import { ref, shallowRef } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { HistoryItem, ImageMetadata } from '../config/types';
+import { DimensionBatchUpdateError } from '../services/database/MetadataQuery';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('MetadataFixer');
@@ -189,18 +190,29 @@ export function useImageMetadataFixer() {
       // 动态导入数据库模块，避免循环依赖
       const { historyDB } = await import('../services/HistoryDatabase');
 
-      // 批量更新数据库
+      // 一次 CASE/WHEN 提交一批：逐条 update() 会对每条记录额外做一次全行回查，
+      // 几千条修复下这部分 IPC 往返和 JSON 解析是主要开销。
       let successCount = 0;
-      for (const update of updates) {
-        try {
-          await historyDB.update(update.id, {
+      try {
+        successCount = await historyDB.batchUpdateDimensions(
+          updates.map((update) => ({
+            id: update.id,
             width: update.width,
             height: update.height,
             aspectRatio: update.aspectRatio,
-          });
-          successCount++;
-        } catch (e) {
-          log.error(`更新失败: ${update.id}`, e);
+          })),
+        );
+      } catch (e) {
+        // 每条 UPDATE 是原子的；跨批失败时只回退未处理批次，
+        // 已提交批次不重复回退，successCount 保留已落库行数。
+        const committedRows = e instanceof DimensionBatchUpdateError ? e.committedRows : 0;
+        const processedEntries = e instanceof DimensionBatchUpdateError ? e.processedEntries : 0;
+        successCount = committedRows;
+        log.error(`批量更新失败，${updates.length - processedEntries} 条已退回队列`, e);
+        for (const update of updates.slice(processedEntries)) {
+          if (!pendingUpdates.value.has(update.id)) {
+            pendingUpdates.value.set(update.id, update);
+          }
         }
       }
 

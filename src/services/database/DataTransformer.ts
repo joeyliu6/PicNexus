@@ -94,8 +94,27 @@ function normalizeFavoriteUpdatedBy(item: HistoryItem, favoriteUpdatedAt: number
   return 'legacy';
 }
 
+/**
+ * 从 results 推导出它的三个存储列
+ *
+ * 单独抽出来是为了让"整行写入"（itemToRow）和"只更新 results"（updateResults）
+ * 共用同一份派生规则——这三列完全由 results 决定，两边各写一遍迟早会漂移。
+ */
+export function deriveResultColumns(
+  results: HistoryItem['results'],
+): Pick<HistoryItemRow, 'results' | 'success_count' | 'successful_service_ids'> {
+  const successful = results.filter((result) => result.status === 'success');
+
+  return {
+    results: JSON.stringify(results),
+    success_count: successful.length,
+    successful_service_ids: JSON.stringify(successful.map((result) => result.serviceId)),
+  };
+}
+
 export function itemToRow(item: HistoryItem): HistoryItemRow {
   const favoriteUpdatedAt = normalizeFavoriteUpdatedAt(item);
+  const resultColumns = deriveResultColumns(item.results);
 
   return {
     id: item.id,
@@ -104,7 +123,7 @@ export function itemToRow(item: HistoryItem): HistoryItemRow {
     local_file_name_lower: item.localFileName.toLowerCase(),
     file_path: item.filePath || null,
     primary_service: item.primaryService,
-    results: JSON.stringify(item.results),
+    results: resultColumns.results,
     generated_link: item.generatedLink,
     link_check_status: item.linkCheckStatus ? JSON.stringify(item.linkCheckStatus) : null,
     link_check_summary: item.linkCheckSummary ? JSON.stringify(item.linkCheckSummary) : null,
@@ -120,10 +139,8 @@ export function itemToRow(item: HistoryItem): HistoryItemRow {
     is_favorited: item.isFavorited ? 1 : 0,
     favorite_updated_at: favoriteUpdatedAt,
     favorite_updated_by: normalizeFavoriteUpdatedBy(item, favoriteUpdatedAt),
-    success_count: item.results.filter((result) => result.status === 'success').length,
-    successful_service_ids: JSON.stringify(
-      item.results.filter((result) => result.status === 'success').map((result) => result.serviceId),
-    ),
+    success_count: resultColumns.success_count,
+    successful_service_ids: resultColumns.successful_service_ids,
     migration_skip: item.migrationSkip ? 1 : 0,
   };
 }

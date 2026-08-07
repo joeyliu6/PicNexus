@@ -77,8 +77,8 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
         return;
       }
 
-      const localJsonContent = await historyDB.exportToJSON();
-      const localItems = JSON.parse(localJsonContent) as HistoryItem[];
+      // 直接取数组：exportToJSON() 再 JSON.parse 回来等于把整份历史多序列化+解析一轮
+      const localItems = await historyDB.getAllItems();
 
       let cloudItems: HistoryItem[] = [];
       try {
@@ -143,8 +143,8 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
         return;
       }
 
-      const localJsonContent = await historyDB.exportToJSON();
-      const localItems = JSON.parse(localJsonContent) as HistoryItem[];
+      // 直接取数组：exportToJSON() 再 JSON.parse 回来等于把整份历史多序列化+解析一轮
+      const localItems = await historyDB.getAllItems();
 
       let cloudItems: HistoryItem[] = [];
 
@@ -350,8 +350,8 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
         return;
       }
 
-      const localJsonContent = await historyDB.exportToJSON();
-      const localItems = JSON.parse(localJsonContent) as HistoryItem[];
+      // 直接取数组：exportToJSON() 再 JSON.parse 回来等于把整份历史多序列化+解析一轮
+      const localItems = await historyDB.getAllItems();
 
       for (const item of localItems) {
         if (!item.id) item.id = crypto.randomUUID();

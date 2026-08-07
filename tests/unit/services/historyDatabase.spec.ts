@@ -135,10 +135,24 @@ class MockDatabase {
       return rows as unknown as T;
     }
 
+    // getAllStream 的 keyset 翻页：WHERE timestamp < $1 OR (timestamp = $1 AND id < $2) LIMIT $3
+    // 排序键的比较必须跟 sortedRows 用同一套规则，否则游标会跳行或重复。
+    if (statement.includes('WHERE TIMESTAMP < $1 OR')) {
+      const cursorTimestamp = params[0] as number;
+      const cursorId = String(params[1]);
+      const limit = params[2] as number;
+      const remaining = this.sortedRows().filter((row) => {
+        const timestamp = row.timestamp as number;
+        if (timestamp !== cursorTimestamp) return timestamp < cursorTimestamp;
+        return String(row.id).localeCompare(cursorId) < 0;
+      });
+      return remaining.slice(0, limit) as unknown as T;
+    }
+
+    // getAllStream 首页：只有 LIMIT，没有游标
     if (statement.startsWith('SELECT * FROM HISTORY_ITEMS ORDER BY TIMESTAMP DESC')) {
       const limit = params[0] as number;
-      const offset = params[1] as number;
-      return this.sortedRows().slice(offset, offset + limit) as unknown as T;
+      return this.sortedRows().slice(0, limit) as unknown as T;
     }
 
     return [...this.rows] as unknown as T;
@@ -273,6 +287,54 @@ describe('HistoryDatabase', () => {
     expect(found?.isFavorited).toBe(true);
     expect(found?.favoriteUpdatedAt).toBe(900);
     expect(found?.favoriteUpdatedBy).toBe('device-new');
+  });
+
+  it('updateResults() 写出与 update({ results }) 一致的行状态，且不碰其他列', async () => {
+    const { historyDB } = await import('@/services/HistoryDatabase');
+    const item = makeHistoryItem({
+      id: 'direct-results',
+      isFavorited: true,
+      favoriteUpdatedAt: 900,
+      favoriteUpdatedBy: 'device-new',
+    });
+    await historyDB.insert(item);
+
+    const replacementResults: HistoryItem['results'] = [
+      ...item.results,
+      {
+        serviceId: 'r2',
+        status: 'success',
+        result: { serviceId: 'r2', fileKey: 'r2-key', url: 'https://example.com/r2.jpg' },
+      },
+    ];
+    await historyDB.updateResults(item.id, replacementResults);
+
+    const found = await historyDB.getById(item.id);
+    expect(found?.results).toEqual(replacementResults);
+    // 定向写入省掉了整行回查，但绝不能因此弄丢或覆盖其他列
+    expect(found?.isFavorited).toBe(true);
+    expect(found?.favoriteUpdatedAt).toBe(900);
+    expect(found?.favoriteUpdatedBy).toBe('device-new');
+    expect(found?.primaryService).toBe(item.primaryService);
+    expect(found?.generatedLink).toBe(item.generatedLink);
+  });
+
+  it('updateResults() 记录不存在时抛错，与 update() 行为一致', async () => {
+    const { historyDB } = await import('@/services/HistoryDatabase');
+
+    await expect(historyDB.updateResults('missing-id', [])).rejects.toThrow('记录不存在');
+  });
+
+  it('getAllItems() 返回与流式读取同序的完整数组', async () => {
+    const { historyDB } = await import('@/services/HistoryDatabase');
+    await historyDB.clear();
+    for (const [id, timestamp] of [['x', 300], ['y', 200], ['z', 100]] as const) {
+      await historyDB.insert(makeHistoryItem({ id, timestamp }));
+    }
+
+    const items = await historyDB.getAllItems();
+
+    expect(items.map(item => item.id)).toEqual(['x', 'y', 'z']);
   });
 
   it('getByFilePath() returns the newest matching row deterministically', async () => {

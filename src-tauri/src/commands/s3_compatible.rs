@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Window};
 use tokio::time::{timeout, Duration};
 
-use super::utils::read_file_bytes;
+use super::utils::probe_upload_file_size;
 use crate::error::AppError;
 use crate::log_utils::safe_path;
 
@@ -96,8 +96,8 @@ pub async fn upload_to_s3_compatible(
         }),
     );
 
-    // 1. 读取文件
-    let (buffer, file_size) = read_file_bytes(&file_path, 50 * 1024 * 1024).await?;
+    // 1. 检查文件大小（不读内容）
+    let file_size = probe_upload_file_size(&file_path, 50 * 1024 * 1024).await?;
 
     log::debug!("[S3兼容] 文件大小: {} bytes", file_size);
 
@@ -131,7 +131,12 @@ pub async fn upload_to_s3_compatible(
     );
 
     // 3. 上传文件（带超时保护）
-    let body = ByteStream::from(buffer);
+    //
+    // Why: 用 ByteStream::from_path 而非把整份文件读进 Vec<u8>——SDK 会按需从磁盘读取
+    // 并自动带上 Content-Length，避免多图床并发时每个服务各持有一份完整文件副本。
+    let body = ByteStream::from_path(&file_path)
+        .await
+        .map_err(|e| AppError::file_io(format!("读取文件失败: {}", e)))?;
 
     timeout(
         Duration::from_secs(S3_OPERATION_TIMEOUT_SECS * 2), // 上传操作给予更长超时

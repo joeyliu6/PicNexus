@@ -9,6 +9,7 @@ use tauri::{Emitter, Window};
 use super::utils::read_file_bytes;
 use crate::error::{AppError, IntoAppError};
 use crate::log_utils::{safe_path, safe_url, summarize_text};
+use crate::HttpClient;
 
 /// 京东上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -35,10 +36,9 @@ struct JDUploadResponse {
 const MAX_FILE_SIZE: u64 = 15 * 1024 * 1024;
 
 /// 获取京东 aid 和 pin
-async fn get_aid_info() -> Result<AidInfo, AppError> {
+async fn get_aid_info(client: &reqwest::Client) -> Result<AidInfo, AppError> {
     let url = "https://api.m.jd.com/client.action?functionId=getAidInfo&body=%7B%22aidClientType%22%3A%22comet%22%2C%22aidClientVersion%22%3A%22comet%20-v1.0.0%22%2C%22appId%22%3A%22im.customer%22%2C%22os%22%3A%22comet%22%2C%22entry%22%3A%22jd_web_EnterpriseZC%22%2C%22reqSrc%22%3A%22s_comet%22%2C%22siteId%22%3A-1%2C%22customerAppId%22%3A%22im.customer%22%7D&appid=wh5&client=wh5&clientVersion=1.0.0&loginType=3&callback=jsonp1";
 
-    let client = reqwest::Client::new();
     let response = client
         .get(url)
         .header("Accept", "*/*")
@@ -86,7 +86,11 @@ pub async fn check_jd_available() -> bool {
     log::info!("[JD] 开始可用性检测...");
     let start_time = std::time::Instant::now();
 
-    match get_aid_info().await {
+    // Why 不注入共享客户端：Tauri 的 async command 一旦带 `State<'_, _>` 参数就必须返回
+    // Result，会改动前端 IPC 契约。可用性探测是低频单次请求，复用连接池的收益不值这个代价。
+    let client = reqwest::Client::new();
+
+    match get_aid_info(&client).await {
         Ok(aid_info) => {
             let elapsed = start_time.elapsed();
             log::info!(
@@ -109,6 +113,7 @@ pub async fn upload_to_jd(
     window: Window,
     id: String,
     file_path: String,
+    http_client: tauri::State<'_, HttpClient>,
 ) -> Result<JDUploadResult, AppError> {
     log::info!("[JD] 开始上传文件: {}", safe_path(&file_path));
 
@@ -167,7 +172,8 @@ pub async fn upload_to_jd(
 
     // 4. 获取 aid 和 pin
     log::debug!("[JD] 正在获取 aid 和 pin...");
-    let aid_info = get_aid_info().await?;
+    let client = &http_client.0;
+    let aid_info = get_aid_info(client).await?;
     log::debug!("[JD] 获取成功 - aid: {}", aid_info.aid);
 
     // 5. 构建 multipart form
@@ -204,7 +210,6 @@ pub async fn upload_to_jd(
     );
 
     // 6. 发送请求到京东上传 API
-    let client = reqwest::Client::new();
     let response = client
         .post("https://file-dd.jd.com/file/uploadImg.action")
         .header("Accept", "application/json, text/plain, */*")

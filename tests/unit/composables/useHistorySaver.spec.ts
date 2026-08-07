@@ -6,6 +6,7 @@ const {
   insertOrIgnoreMock,
   getByIdMock,
   updateMock,
+  updateResultsMock,
   getImageMetadataMock,
   clearImageMetadataCacheMock,
   invalidateCacheMock,
@@ -14,6 +15,7 @@ const {
   insertOrIgnoreMock: vi.fn(),
   getByIdMock: vi.fn(),
   updateMock: vi.fn(),
+  updateResultsMock: vi.fn(),
   getImageMetadataMock: vi.fn(),
   clearImageMetadataCacheMock: vi.fn(),
   invalidateCacheMock: vi.fn(),
@@ -26,6 +28,7 @@ vi.mock('@/services/HistoryDatabase', () => ({
     insertOrIgnore: insertOrIgnoreMock,
     getById: getByIdMock,
     update: updateMock,
+    updateResults: updateResultsMock,
   },
 }));
 
@@ -67,6 +70,7 @@ describe('useHistorySaver', () => {
     insertOrIgnoreMock.mockReset().mockResolvedValue(true);
     getByIdMock.mockReset();
     updateMock.mockReset().mockResolvedValue(undefined);
+    updateResultsMock.mockReset().mockResolvedValue(undefined);
     getImageMetadataMock.mockReset().mockResolvedValue({
       width: 1200,
       height: 800,
@@ -178,9 +182,11 @@ describe('useHistorySaver', () => {
     };
 
     getByIdMock.mockImplementation(async () => item);
-    updateMock.mockImplementation(async (_historyId: string, updates: Partial<HistoryItem>) => {
-      item.results = updates.results ?? item.results;
-    });
+    updateResultsMock.mockImplementation(
+      async (_historyId: string, results: HistoryItem['results']) => {
+        item.results = results;
+      },
+    );
 
     const failed = makeFailed('upyun');
     const repaired = makeSuccess('upyun');
@@ -189,7 +195,7 @@ describe('useHistorySaver', () => {
     await addResultToHistoryItem('history-1', repaired);
 
     expect(item.results).toEqual([makeSuccess('jd'), repaired]);
-    expect(updateMock).toHaveBeenCalledTimes(2);
+    expect(updateResultsMock).toHaveBeenCalledTimes(2);
   });
 
   it('reconcileHistoryPrimary aligns an immediately-created record with the final primary service', async () => {

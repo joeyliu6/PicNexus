@@ -8,6 +8,7 @@ use tauri::{Emitter, Window};
 use super::utils::read_file_bytes;
 use crate::error::{AppError, IntoAppError};
 use crate::log_utils::{safe_path, safe_url, summarize_text};
+use crate::HttpClient;
 
 /// Imgur 上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -43,6 +44,7 @@ pub async fn upload_to_imgur(
     file_path: String,
     imgur_client_id: String,
     imgur_client_secret: Option<String>,
+    http_client: tauri::State<'_, HttpClient>,
 ) -> Result<ImgurUploadResult, AppError> {
     log::info!("[Imgur] 开始上传文件: {}", safe_path(&file_path));
 
@@ -134,7 +136,7 @@ pub async fn upload_to_imgur(
     );
 
     // 5. 发送请求到 Imgur API
-    let client = reqwest::Client::new();
+    let client = &http_client.0;
     let response = client
         .post("https://api.imgur.com/3/image")
         .header("Authorization", format!("Client-ID {}", imgur_client_id))

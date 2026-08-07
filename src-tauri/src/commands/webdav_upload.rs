@@ -10,10 +10,11 @@ use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Window};
 use tokio::time::Duration;
 
-use super::utils::read_file_bytes;
+use super::utils::probe_upload_file_size;
 use crate::error::AppError;
 use crate::log_utils::safe_path;
 use crate::url_policy::validate_webdav_url_for_request;
+use crate::HttpClient;
 
 /// 文件大小限制：50MB
 const MAX_FILE_SIZE: u64 = 50 * 1024 * 1024;
@@ -236,6 +237,44 @@ async fn put_binary(
     Ok(())
 }
 
+/// 以文件流 PUT 上传，不把整份文件读进内存
+///
+/// Why 显式带 Content-Length：`reqwest::Body::from(File)` 内部是 `wrap_stream`，
+/// 长度未知，hyper 会退回 `Transfer-Encoding: chunked`。部分 WebDAV 服务端对
+/// chunked PUT 支持不佳（会 411 或直接截断），所以这里手动补上长度让它走定长编码。
+/// `put_file_stream_sends_content_length_not_chunked` 测试就是盯着这条不变量的。
+async fn put_file_stream(
+    client: &reqwest::Client,
+    url: &str,
+    auth: &str,
+    file_path: &str,
+    file_size: u64,
+    content_type: &str,
+) -> Result<(), AppError> {
+    let file = tokio::fs::File::open(file_path)
+        .await
+        .map_err(|e| AppError::file_io(format!("打开文件失败: {}", e)))?;
+
+    let response = client
+        .put(url)
+        .header("Authorization", auth)
+        .header("Content-Type", content_type)
+        .header(reqwest::header::CONTENT_LENGTH, file_size)
+        .header("Overwrite", "T")
+        .timeout(REQUEST_TIMEOUT)
+        .body(reqwest::Body::from(file))
+        .send()
+        .await
+        .map_err(map_request_error)?;
+
+    let status = response.status().as_u16();
+    if !is_ok_status(status) {
+        return Err(AppError::webdav(describe_status(status)));
+    }
+
+    Ok(())
+}
+
 fn emit_progress(window: &Window, id: &str, progress: u32, step: &str, index: u32, total: u32) {
     let _ = window.emit(
         "upload://progress",
@@ -265,6 +304,7 @@ pub async fn upload_to_webdav(
     remote_path: String,
     public_domain: String,
     public_url_template: String,
+    http_client: tauri::State<'_, HttpClient>,
 ) -> Result<WebDAVUploadResult, AppError> {
     log::info!("[WebDAV] 开始上传文件: {}", safe_path(&file_path));
 
@@ -279,8 +319,8 @@ pub async fn upload_to_webdav(
 
     emit_progress(&window, &id, 0, "读取文件...", 1, 3);
 
-    // 2. 读取文件
-    let (buffer, file_size) = read_file_bytes(&file_path, MAX_FILE_SIZE).await?;
+    // 2. 只探文件大小，内容留给流式 PUT 按需从磁盘读
+    let file_size = probe_upload_file_size(&file_path, MAX_FILE_SIZE).await?;
     let file_name = std::path::Path::new(&file_path)
         .file_name()
         .and_then(|n| n.to_str())
@@ -289,14 +329,14 @@ pub async fn upload_to_webdav(
 
     log::debug!("[WebDAV] 文件大小: {} bytes", file_size);
 
-    let client = reqwest::Client::new();
+    let client = &http_client.0;
     let auth = basic_auth(&username, &password);
     let dir = normalize_dir(&remote_path);
 
     emit_progress(&window, &id, 30, "创建远程目录...", 2, 3);
 
     // 3. 建目录
-    ensure_remote_dir(&client, &url, &dir, &auth).await?;
+    ensure_remote_dir(client, &url, &dir, &auth).await?;
 
     emit_progress(&window, &id, 60, "正在上传...", 3, 3);
 
@@ -309,11 +349,12 @@ pub async fn upload_to_webdav(
     };
     let target_url = join_url(&url, &encoded_path);
 
-    put_binary(
-        &client,
+    put_file_stream(
+        client,
         &target_url,
         &auth,
-        buffer,
+        &file_path,
+        file_size,
         guess_content_type(&file_name),
     )
     .await?;
@@ -349,6 +390,7 @@ pub async fn test_webdav_storage(
     remote_path: String,
     public_domain: String,
     public_url_template: String,
+    http_client: tauri::State<'_, HttpClient>,
 ) -> Result<WebDAVTestResult, AppError> {
     validate_webdav_url_for_request(&url).await?;
     if public_domain.trim().is_empty() {
@@ -356,7 +398,7 @@ pub async fn test_webdav_storage(
     }
     validate_webdav_url_for_request(&public_domain).await?;
 
-    let client = reqwest::Client::new();
+    let client = &http_client.0;
     let auth = basic_auth(&username, &password);
     let dir = normalize_dir(&remote_path);
 
@@ -388,14 +430,14 @@ pub async fn test_webdav_storage(
         format!("{}/{}", encode_path_segments(&dir), encoded_probe_name)
     };
 
-    ensure_remote_dir(&client, &url, &dir, &auth).await?;
+    ensure_remote_dir(client, &url, &dir, &auth).await?;
 
     let probe_bytes = STANDARD
         .decode(PROBE_PNG_BASE64)
         .map_err(|_| AppError::webdav("探针图片解码失败"))?;
 
     put_binary(
-        &client,
+        client,
         &join_url(&url, &encoded_path),
         &auth,
         probe_bytes,
@@ -484,6 +526,89 @@ pub async fn test_webdav_storage(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 流式 PUT 必须走定长编码，不能退回 chunked
+    ///
+    /// 光看 reqwest 文档判断不了这件事：`Body::from(File)` 内部是 wrap_stream，
+    /// 长度未知，只有显式补 Content-Length 才会让 hyper 走定长。这里起一个真实的
+    /// 本地 HTTP 服务端，直接检查线上发出去的 header——不是推断，是实测。
+    #[tokio::test]
+    async fn put_file_stream_sends_content_length_not_chunked() {
+        use axum::{routing::any, Router};
+        use std::sync::{Arc, Mutex};
+
+        #[derive(Default)]
+        struct Captured {
+            content_length: Option<String>,
+            transfer_encoding: Option<String>,
+            body_len: usize,
+        }
+
+        let captured: Arc<Mutex<Captured>> = Arc::new(Mutex::new(Captured::default()));
+        let sink = captured.clone();
+
+        let app = Router::new().route(
+            "/upload.png",
+            any(move |headers: axum::http::HeaderMap, body: axum::body::Bytes| {
+                let sink = sink.clone();
+                async move {
+                    let header = |name: &str| {
+                        headers
+                            .get(name)
+                            .and_then(|v| v.to_str().ok())
+                            .map(str::to_string)
+                    };
+                    *sink.lock().expect("捕获锁") = Captured {
+                        content_length: header("content-length"),
+                        transfer_encoding: header("transfer-encoding"),
+                        body_len: body.len(),
+                    };
+                    axum::http::StatusCode::CREATED
+                }
+            }),
+        );
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("绑定本地端口失败");
+        let addr = listener.local_addr().expect("获取本地地址失败");
+        let server = tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        // 造一个跨越多个读取块的文件，确保确实走了流式路径
+        let payload = vec![7u8; 256 * 1024];
+        let path = std::env::temp_dir()
+            .join(format!("picnexus_webdav_stream_{}.png", std::process::id()));
+        std::fs::write(&path, &payload).expect("写入临时文件失败");
+
+        let result = put_file_stream(
+            &reqwest::Client::new(),
+            &format!("http://{}/upload.png", addr),
+            "Basic dGVzdDp0ZXN0",
+            path.to_str().expect("临时路径应为合法 UTF-8"),
+            payload.len() as u64,
+            "image/png",
+        )
+        .await;
+
+        let _ = std::fs::remove_file(&path);
+        server.abort();
+
+        result.expect("流式 PUT 应成功");
+
+        let captured = captured.lock().expect("捕获锁");
+        assert_eq!(
+            captured.content_length.as_deref(),
+            Some(payload.len().to_string().as_str()),
+            "必须带上准确的 Content-Length",
+        );
+        assert_eq!(
+            captured.transfer_encoding, None,
+            "不能退回 chunked——部分 WebDAV 服务端不接受 chunked PUT",
+        );
+        assert_eq!(captured.body_len, payload.len(), "服务端应收到完整内容");
+    }
 
     #[test]
     fn encode_path_segments_keeps_slashes() {

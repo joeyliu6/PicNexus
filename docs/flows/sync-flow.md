@@ -76,7 +76,7 @@ flowchart TD
     D1 --> D2["getAllStream 流式导出（1000条/批）"]
     D2 --> D3[webdav.putFile 上传]
 
-    C -- 合并 --> E[导出本地 + 下载云端]
+    C -- 合并 --> E["historyDB.getAllItems 读本地 + 下载云端<br/>（合并路径要的是数组，不走 exportToJSON 再 parse）"]
     E --> E1["按 ID 合并<br/>内容看 timestamp<br/>收藏看 favoriteUpdatedAt/By"]
     E1 --> E2[排序后上传]
 

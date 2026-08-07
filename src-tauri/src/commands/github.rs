@@ -8,6 +8,7 @@ use tauri::{Emitter, Window};
 use super::utils::read_file_bytes;
 use crate::error::{AppError, IntoAppError};
 use crate::log_utils::{safe_path, safe_url, summarize_text};
+use crate::HttpClient;
 
 /// GitHub 上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -56,6 +57,7 @@ pub async fn upload_to_github(
     repo: String,
     branch: String,
     path: String,
+    http_client: tauri::State<'_, HttpClient>,
 ) -> Result<GithubUploadResult, AppError> {
     log::info!("[GitHub] 开始上传文件: {}", safe_path(&file_path));
 
@@ -140,7 +142,7 @@ pub async fn upload_to_github(
     );
 
     // 6. 发送请求到 GitHub API
-    let client = reqwest::Client::new();
+    let client = &http_client.0;
     let response = client
         .put(&url)
         .header("Authorization", format!("token {}", github_token))

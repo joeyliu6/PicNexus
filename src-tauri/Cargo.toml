@@ -75,6 +75,13 @@ windows-sys = { version = "0.60", features = ["Win32_UI_WindowsAndMessaging"] }
 # This feature is used for production builds or when `devPath` points to the filesystem
 custom-protocol = ["tauri/custom-protocol"]
 
+[profile.release]
+# 跨 crate 内联 + 单编译单元：换取更快的运行时和更小的体积，代价是发布构建变慢。
+# 只影响 release，日常 dev/test 构建速度不受影响。
+lto = "thin"
+codegen-units = 1
+# 不加 strip：release 崩溃日志要留住符号，诊断链路（docs/flows/logger-diagnostics-flow.md）依赖它。
+
 [profile.dev]
 debug = 1
 

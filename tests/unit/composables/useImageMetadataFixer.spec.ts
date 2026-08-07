@@ -1,11 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
+import { DimensionBatchUpdateError } from '@/services/database/MetadataQuery';
 import { useImageMetadataFixer } from '@/composables/useImageMetadataFixer';
+
+const {
+  updateMock,
+  batchUpdateDimensionsMock,
+} = vi.hoisted(() => ({
+  updateMock: vi.fn(),
+  batchUpdateDimensionsMock: vi.fn(),
+}));
 
 // Mock historyDB 动态导入
 vi.mock('@/services/HistoryDatabase', () => ({
   historyDB: {
-    update: vi.fn().mockResolvedValue(undefined),
+    update: updateMock,
+    batchUpdateDimensions: batchUpdateDimensionsMock,
   },
 }));
 
@@ -139,6 +149,8 @@ describe('useImageMetadataFixer - batchFixMissingMetadata', () => {
 describe('useImageMetadataFixer - 队列管理', () => {
   beforeEach(() => {
     mockInvoke.mockReset();
+    updateMock.mockReset().mockResolvedValue(undefined);
+    batchUpdateDimensionsMock.mockReset();
     const fixer = useImageMetadataFixer();
     fixer.clearPending();
   });
@@ -168,6 +180,24 @@ describe('useImageMetadataFixer - 队列管理', () => {
   it('flushNow 空队列 → 返回 0', async () => {
     const fixer = useImageMetadataFixer();
     expect(await fixer.flushNow()).toBe(0);
+  });
+
+  it('flushNow 跨批失败只回退未处理批次', async () => {
+    mockInvoke.mockResolvedValue({ width: 10, height: 10, aspect_ratio: 1 } as any);
+    const fixer = useImageMetadataFixer();
+    await fixer.batchFixMissingMetadata([
+      { id: 'a', filePath: '/a.png' },
+      { id: 'b', filePath: '/b.png' },
+      { id: 'c', filePath: '/c.png' },
+    ]);
+    expect(fixer.getPendingCount()).toBe(3);
+
+    batchUpdateDimensionsMock.mockRejectedValueOnce(
+      new DimensionBatchUpdateError(1, 1, new Error('database locked')),
+    );
+
+    await expect(fixer.flushNow()).resolves.toBe(1);
+    expect(fixer.getPendingCount()).toBe(2);
   });
 });
 

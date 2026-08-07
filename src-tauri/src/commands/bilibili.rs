@@ -9,6 +9,7 @@ use tauri::Window;
 use super::utils::read_file_bytes;
 use crate::error::{AppError, IntoAppError};
 use crate::log_utils::{safe_path, safe_url, summarize_text};
+use crate::HttpClient;
 
 /// 哔哩哔哩上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -63,7 +64,10 @@ fn extract_bilibili_cookies(cookie: &str) -> Result<(String, String), AppError> 
 
 /// 测试哔哩哔哩 Cookie 是否有效（使用用户导航 API，无需上传图片）
 #[tauri::command]
-pub async fn test_bilibili_connection(bilibili_cookie: String) -> Result<String, AppError> {
+pub async fn test_bilibili_connection(
+    bilibili_cookie: String,
+    http_client: tauri::State<'_, HttpClient>,
+) -> Result<String, AppError> {
     log::info!("[Bilibili] 测试 Cookie 有效性...");
 
     // 检查 Cookie 非空
@@ -76,7 +80,7 @@ pub async fn test_bilibili_connection(bilibili_cookie: String) -> Result<String,
     log::info!("[Bilibili] Cookie 包含必要字段 SESSDATA 和 bili_jct");
 
     // 使用用户导航 API 验证登录状态（不需要上传图片）
-    let client = reqwest::Client::new();
+    let client = &http_client.0;
     let response = client
         .get("https://api.bilibili.com/x/web-interface/nav")
         .header("Cookie", format!("SESSDATA={}", sessdata))
@@ -127,6 +131,7 @@ pub async fn upload_to_bilibili(
     _id: String,
     file_path: String,
     bilibili_cookie: String,
+    http_client: tauri::State<'_, HttpClient>,
 ) -> Result<BilibiliUploadResult, AppError> {
     log::info!("[Bilibili] 开始上传文件: {}", safe_path(&file_path));
 
@@ -182,7 +187,7 @@ pub async fn upload_to_bilibili(
     let form = multipart::Form::new().part("file", part).text("csrf", csrf);
 
     // 8. 发送请求
-    let client = reqwest::Client::new();
+    let client = &http_client.0;
     let response = client
         .post("https://mall.bilibili.com/mall-up-c/common/image")
         .header("Cookie", format!("SESSDATA={}", sessdata))

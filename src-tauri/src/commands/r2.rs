@@ -7,12 +7,14 @@ use aws_sdk_s3::{primitives::ByteStream, Client, Config};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tauri::{Emitter, Window};
-use tokio::fs::File;
-use tokio::io::AsyncReadExt;
 use tokio::time::{timeout, Duration};
 
-use crate::error::{AppError, IntoAppError};
+use super::utils::probe_upload_file_size;
+use crate::error::AppError;
 use crate::log_utils::safe_path;
+
+/// 文件大小限制：50MB
+const MAX_FILE_SIZE: u64 = 50 * 1024 * 1024;
 
 #[derive(Serialize, Deserialize)]
 pub struct R2UploadResult {
@@ -58,11 +60,8 @@ pub async fn upload_to_r2(
         return Err(AppError::file_io(format!("文件不存在: {}", file_path)));
     }
 
-    // 2. 获取文件大小
-    let file_size = tokio::fs::metadata(&path)
-        .await
-        .into_file_io_err_with("读取文件元数据失败")?
-        .len();
+    // 2. 只探文件大小，内容留给流式 PUT 按需从磁盘读
+    let file_size = probe_upload_file_size(&file_path, MAX_FILE_SIZE).await?;
 
     log::debug!("[R2] 文件大小: {} bytes", file_size);
 
@@ -90,21 +89,17 @@ pub async fn upload_to_r2(
 
     log::debug!("[R2] Content-Type: {}", content_type);
 
-    // 6. 读取文件
-    let mut file = File::open(&path)
+    // 6. 以文件流作为请求体
+    //
+    // Why: 原实现 read_to_end 把整份文件驻留在内存里（且没有大小上限）。
+    // 多图床并发上传时，每个服务各持有一份完整副本，是内存峰值的主要来源。
+    // ByteStream::from_path 让 SDK 按需从磁盘读取，并自动带上正确的 Content-Length。
+    let body = ByteStream::from_path(path)
         .await
-        .into_file_io_err_with("打开文件失败")?;
+        .map_err(|e| AppError::file_io(format!("读取文件失败: {}", e)))?;
 
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)
-        .await
-        .into_file_io_err_with("读取文件失败")?;
-
-    // 发送 50% 进度（文件已读取）
+    // 发送 50% 进度（文件已就绪，即将发出请求）
     emit_progress(&window, &id, file_size / 2, file_size);
-
-    // 7. 创建 ByteStream
-    let body = ByteStream::from(buffer);
 
     // 8. 上传到 R2（设置 2 分钟超时）
     log::debug!("[R2] 开始上传到存储桶: {}", bucket_name);
