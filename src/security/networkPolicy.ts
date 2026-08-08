@@ -9,6 +9,15 @@ const PUBLIC_HTTP_DISABLED_MESSAGE =
   '公网 HTTP 地址已禁用，请改用 HTTPS。局域网地址可使用 HTTP。';
 const BLOCKED_HOST_MESSAGE = '地址不能指向链路本地或保留地址。';
 
+/**
+ * fake-ip 地址被当成局域网时的统一文案
+ *
+ * 与 Rust 侧 `src-tauri/src/url_policy.rs` 的 `FAKE_IP_HOST_MESSAGE` 保持逐字一致：
+ * 同一件事在设置页和上传时说两种话，用户会以为是两个不同的问题。
+ */
+const FAKE_IP_HOST_MESSAGE =
+  '该地址属于代理软件的 fake-ip 地址池（198.18.x.x），无法确认它是局域网。请改填 NAS 的实际内网 IP（如 http://192.168.1.10:5005），或改用 HTTPS。';
+
 export interface NetworkPolicyOptions {
   label?: string;
   allowPrivateHttps?: boolean;
@@ -46,6 +55,13 @@ export function assertAllowedExternalUrl(rawUrl: string, options: NetworkPolicyO
 
   if (allowPrivate && isAlwaysBlockedHost(parsed.hostname)) {
     throw new Error(BLOCKED_HOST_MESSAGE);
+  }
+
+  // fake-ip 字面量：allowPrivate 下 198.18/15 本会被 isPrivateOrReservedHost 当局域网
+  // 放行，但没有人的 NAS 挂在 RFC 2544 基准测试段上。默认策略不需要这条——
+  // 那边保留段本来就全拒。
+  if (allowPrivate && isFakeIpPoolHost(parsed.hostname)) {
+    throw new Error(FAKE_IP_HOST_MESSAGE);
   }
 
   if (parsed.protocol === 'http:') {
@@ -134,6 +150,73 @@ export function isAlwaysBlockedHost(hostname: string): boolean {
   }
 
   return false;
+}
+
+/**
+ * 代理软件的 fake-ip 默认池（198.18.0.0/15）
+ *
+ * 严格说这是 RFC 2544 的基准测试段：公网 BGP 不路由、企业内网也不用。现实里
+ * 198.18.x.x 只有一个来源——本机代理（Clash / sing-box / Surge）把域名映射进来的
+ * 虚拟地址。它对目标的真实网络位置**零信息量**，所以不能当「这是局域网」的证据。
+ *
+ * v4 取 /15 是为了同时覆盖 mihomo 的默认 `198.18.0.1/16` 与 sing-box 的
+ * `198.18.0.0/15`；v6 覆盖 mihomo 的 `fake-ip-range6` 默认 `fdfe:dcba:9876::1/64`
+ * （前 64 位是固定魔数，真实 ULA 内网撞上的概率可忽略）。
+ * 判据与 `src-tauri/src/url_policy.rs` 的 `is_fake_ip_pool_ip` 必须一致。
+ *
+ * 注意 `isPrivateOrReservedIpv4` 里的 198.18/15 **不能删**——三份实现
+ * （本文件 / url_policy.rs / link_checker.rs）的保留段一致性靠它，
+ * 而 fake-ip 的额外处置发生在策略层。
+ */
+export function isFakeIpPoolHost(hostname: string): boolean {
+  const host = normalizeHost(hostname);
+  const target = isIpv4Address(host) ? host : ipv4MappedFromIpv6(host);
+  if (target !== null) return isIpv4InCidr(target, '198.18.0.0', 15);
+
+  const segments = ipv6Segments(host);
+  if (segments === null) return false;
+  return segments[0] === 0xfdfe
+    && segments[1] === 0xdcba
+    && segments[2] === 0x9876
+    && segments[3] === 0x0000;
+}
+
+/**
+ * 把 IPv6 字面量展开成完整的 8 段，非法输入返回 null
+ *
+ * Why 不直接比对字符串前缀：`::` 压缩的位置不固定、前导零可省
+ * （`fdfe:dcba:9876::126` 与 `fdfe:dcba:9876:0:0:0:0:126` 是同一个地址），
+ * 按字符串比会漏判。内嵌 IPv4 的形式由 `ipv4MappedFromIpv6` 单独处理，
+ * 这里返回 null 即可。
+ */
+function ipv6Segments(host: string): number[] | null {
+  if (!host.includes(':')) return null;
+
+  const [head, tail, ...rest] = host.split('::');
+  if (rest.length > 0) return null; // '::' 只允许出现一次
+
+  const parseGroups = (part: string): number[] | null => {
+    if (part === '') return [];
+    const groups = part.split(':');
+    const parsed: number[] = [];
+    for (const group of groups) {
+      if (!/^[0-9a-f]{1,4}$/.test(group)) return null;
+      parsed.push(Number.parseInt(group, 16));
+    }
+    return parsed;
+  };
+
+  const left = parseGroups(head);
+  if (left === null) return null;
+  if (tail === undefined) return left.length === 8 ? left : null;
+
+  const right = parseGroups(tail);
+  if (right === null) return null;
+
+  const zeros = 8 - left.length - right.length;
+  if (zeros < 1) return null;
+
+  return [...left, ...Array<number>(zeros).fill(0), ...right];
 }
 
 export function isLoopbackHost(hostname: string): boolean {

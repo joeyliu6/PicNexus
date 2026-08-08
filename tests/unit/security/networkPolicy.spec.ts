@@ -3,6 +3,7 @@ import {
   assertAllowedExternalUrl,
   assertAllowedWebDAVUrl,
   assertAllowedWebDAVStorageUrl,
+  isFakeIpPoolHost,
   isLoopbackHost,
   safeImageUrl,
 } from '@/security/networkPolicy';
@@ -52,6 +53,50 @@ describe('networkPolicy', () => {
 
     // 凭证内嵌仍然拒绝
     expect(() => assertAllowedWebDAVUrl('http://u:p@192.168.1.10/dav')).toThrow('用户名或密码');
+  });
+
+  it('identifies the proxy fake-ip pool', () => {
+    // 判据必须与 src-tauri/src/url_policy.rs 的 is_fake_ip_pool_ip 对齐
+    expect(isFakeIpPoolHost('198.18.0.0')).toBe(true);
+    expect(isFakeIpPoolHost('198.18.1.172')).toBe(true);
+    expect(isFakeIpPoolHost('198.19.255.255')).toBe(true);
+    // v4-mapped 形式不能绕过识别
+    expect(isFakeIpPoolHost('[::ffff:198.18.1.1]')).toBe(true);
+
+    // 边界外侧是普通公网，不能被判据"顺手"多吃一格
+    expect(isFakeIpPoolHost('198.17.255.255')).toBe(false);
+    expect(isFakeIpPoolHost('198.20.0.0')).toBe(false);
+    expect(isFakeIpPoolHost('192.168.1.10')).toBe(false);
+    expect(isFakeIpPoolHost('dav.example.com')).toBe(false);
+
+    // v6 池：mihomo 的 fake-ip-range6 默认 fdfe:dcba:9876::1/64
+    // 压缩写法与完整写法必须判成同一个地址
+    expect(isFakeIpPoolHost('[fdfe:dcba:9876::126]')).toBe(true);
+    expect(isFakeIpPoolHost('[fdfe:dcba:9876:0:0:0:0:126]')).toBe(true);
+    expect(isFakeIpPoolHost('[FDFE:DCBA:9876::1]')).toBe(true);
+
+    // 相邻但不同的 ULA 前缀是别人家的真实内网
+    expect(isFakeIpPoolHost('[fdfe:dcba:9876:1::1]')).toBe(false);
+    expect(isFakeIpPoolHost('[fdfe:dcba:9875::1]')).toBe(false);
+    expect(isFakeIpPoolHost('[fd00::1]')).toBe(false);
+    expect(isFakeIpPoolHost('[fc00::1]')).toBe(false);
+    expect(isFakeIpPoolHost('[2001:4860:4860::8888]')).toBe(false);
+  });
+
+  it('refuses to treat fake-ip literals as LAN for WebDAV', () => {
+    // 开了 TUN + fake-ip 的机器上任意域名都会被编进 198.18.0.0/15。
+    // 旧实现把它当局域网放行，公网 WebDAV 的明文凭证防线随之失效。
+    // 前端只拦得住字面量，主机名交给 Rust 侧按 DNS 结果裁决。
+    expect(() => assertAllowedWebDAVUrl('http://198.18.1.1/dav')).toThrow('fake-ip');
+    expect(() => assertAllowedWebDAVUrl('https://198.18.1.1/dav')).toThrow('fake-ip');
+    expect(() => assertAllowedWebDAVStorageUrl('http://198.18.1.172/dav')).toThrow('fake-ip');
+    expect(() => assertAllowedWebDAVStorageUrl('http://[::ffff:198.18.1.1]/dav')).toThrow('fake-ip');
+    // v6 fake-ip 落在 ULA 里，isPrivateOrReservedHost 本会把它当内网放行
+    expect(() => assertAllowedWebDAVUrl('http://[fdfe:dcba:9876::126]/dav')).toThrow('fake-ip');
+
+    // 防过修：真实局域网段一个都不能误伤
+    expect(() => assertAllowedWebDAVUrl('http://192.168.1.10:5005/dav')).not.toThrow();
+    expect(() => assertAllowedWebDAVStorageUrl('http://10.0.0.5/dav')).not.toThrow();
   });
 
   it('keeps other callers on the strict policy', () => {
