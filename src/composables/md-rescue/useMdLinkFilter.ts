@@ -4,6 +4,7 @@
 import { ref, computed, watch, type Ref } from 'vue';
 import { watchDebounced } from '@vueuse/core';
 import { replaceImageLinks } from '../../utils/mdParser';
+import { SEVERITY } from '../../types/linkCheck';
 import {
   type MdImageLinkWithFile,
   imageLinks,
@@ -99,9 +100,9 @@ export function useMdLinkFilter() {
         default: return true;
       }
     });
-    const severity: Record<string, number> = { http_4xx: 0, http_5xx: 1, network: 2, timeout: 3, suspicious: 4, success: 5 };
     links = [...links].sort((a, b) =>
-      (severity[a.checkResult?.error_type ?? 'success'] ?? 5) - (severity[b.checkResult?.error_type ?? 'success'] ?? 5),
+      (SEVERITY[a.checkResult?.error_type ?? 'success'] ?? SEVERITY.success)
+        - (SEVERITY[b.checkResult?.error_type ?? 'success'] ?? SEVERITY.success),
     );
     return links;
   });

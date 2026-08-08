@@ -169,11 +169,12 @@ describe('useMdLinkFilter - filteredLinks 状态分支', () => {
       makeLink('u1', { valid: false, errorType: 'suspicious' }),
       makeLink('u2', { valid: false, errorType: 'http_4xx' }),
       makeLink('u3', { valid: false, errorType: 'network' }),
-      makeLink('u4', { valid: true, errorType: 'success' }),
+      makeLink('u4', { valid: false, errorType: 'blocked' }),
+      makeLink('u5', { valid: true, errorType: 'success' }),
     ];
     const { filteredLinks, statusFilter } = useMdLinkFilter();
     statusFilter.value = 'all';
-    expect(filteredLinks.value.map(l => l.url)).toEqual(['u2', 'u3', 'u1', 'u4']);
+    expect(filteredLinks.value.map(l => l.url)).toEqual(['u2', 'u3', 'u4', 'u1', 'u5']);
   });
 });
 
