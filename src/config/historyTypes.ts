@@ -46,7 +46,7 @@ export interface HistoryItem {
       isValid: boolean;
       lastCheckTime: number;
       statusCode?: number;
-      errorType: 'success' | 'http_4xx' | 'http_5xx' | 'timeout' | 'network' | 'suspicious' | 'pending';
+      errorType: 'success' | 'http_4xx' | 'http_5xx' | 'timeout' | 'network' | 'suspicious' | 'blocked' | 'pending';
       responseTime?: number;
       error?: string;
       /**

@@ -19,7 +19,7 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
-import { exportCsv, updateHistoryCheckStatus } from '@/composables/link-check/linkCheckPersistence';
+import { exportCsv, normalizeErrorType, updateHistoryCheckStatus } from '@/composables/link-check/linkCheckPersistence';
 import type { LinkCheckRow, BatchCheckResult } from '@/types/linkCheck';
 
 // ─── exportCsv ────────────────────────────────────────────────────────────────
@@ -153,6 +153,18 @@ describe('exportCsv', () => {
   });
 });
 
+// ─── normalizeErrorType ───────────────────────────────────────────────────────
+
+describe('normalizeErrorType', () => {
+  it('保留所有合法的 error_type，未知值收敛到 network', () => {
+    for (const type of ['success', 'http_4xx', 'http_5xx', 'timeout', 'network', 'suspicious', 'blocked', 'pending']) {
+      expect(normalizeErrorType(type)).toBe(type);
+    }
+    expect(normalizeErrorType('garbage')).toBe('network');
+    expect(normalizeErrorType('')).toBe('network');
+  });
+});
+
 // ─── updateHistoryCheckStatus ─────────────────────────────────────────────────
 
 describe('updateHistoryCheckStatus', () => {
@@ -226,6 +238,28 @@ describe('updateHistoryCheckStatus', () => {
     expect(summary.validLinks).toBe(1);
     expect(summary.invalidLinks).toBe(1);
     expect(summary.uncheckedLinks).toBe(0);
+  });
+
+  it('blocked 状态原样落库，重启后不会退化成 network', async () => {
+    const result: BatchCheckResult = {
+      results: [
+        {
+          link: 'http://old.example.com/a.jpg',
+          history_id: 'h1', service_id: 'r2',
+          is_valid: false, error_type: 'blocked',
+          error: '外部 HTTP 图片地址已禁用，请改用 HTTPS；HTTP 仅保留给本机回环服务。',
+          browser_might_work: false,
+        },
+      ],
+      total: 1, valid: 0, invalid: 1, timeout: 0, suspicious: 0, elapsed_ms: 0, cancelled: false,
+    };
+
+    await updateHistoryCheckStatus(result);
+
+    const [updates] = batchUpdateMock.mock.calls[0];
+    const status = JSON.parse(updates[0].linkCheckStatus);
+    expect(status.r2.errorType).toBe('blocked');
+    expect(status.r2.error).toContain('已禁用');
   });
 
   it('results 无 history_id 时跳过', async () => {

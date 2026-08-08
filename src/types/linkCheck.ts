@@ -12,6 +12,9 @@ export const SEVERITY: Record<string, number> = {
   http_4xx: 0,
   http_5xx: 1,
   network: 2,
+  // 被本机出站策略拦下，与 network 同权重（漏了这条会被 ?? SEVERITY.success 兜底，
+  // 把被拦链接按"成功"权重排到列表最底）
+  blocked: 2,
   timeout: 3,
   suspicious: 4,
   success: 5,
@@ -22,7 +25,8 @@ export interface CheckLinkResult {
   is_valid: boolean;
   status_code?: number;
   error?: string;
-  error_type: 'success' | 'http_4xx' | 'http_5xx' | 'timeout' | 'network' | 'suspicious';
+  /** `blocked` = 请求没发出去，被本机出站策略拦下；真实原因在 `error` 字段 */
+  error_type: 'success' | 'http_4xx' | 'http_5xx' | 'timeout' | 'network' | 'suspicious' | 'blocked';
   suggestion?: string;
   response_time?: number;
   detected_service?: string;

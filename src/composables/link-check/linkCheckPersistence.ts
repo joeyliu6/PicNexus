@@ -15,7 +15,7 @@ type LinkCheckStatusEntry = LinkCheckStatusMap[string];
 export type ErrorTypeUnion = LinkCheckStatusEntry['errorType'];
 
 const VALID_ERROR_TYPES: readonly ErrorTypeUnion[] = [
-  'success', 'http_4xx', 'http_5xx', 'timeout', 'network', 'suspicious', 'pending',
+  'success', 'http_4xx', 'http_5xx', 'timeout', 'network', 'suspicious', 'blocked', 'pending',
 ];
 
 /** 把 Rust 端的 error_type 收敛到合法的持久化 union（未知值落到 'network'） */
