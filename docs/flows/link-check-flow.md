@@ -89,9 +89,26 @@ flowchart TD
 | 只读探测 | `check_image_link` / `batch_check_links` | `validate_probe_url`（同步） | ❌ 不做 | 预解析结果并不绑定 reqwest 的实际连接（它会自己再解析一次），所以拦不住 DNS rebinding，只能拦「手滑粘了内网 URL」——而字面量 IP 判据已覆盖。批量上限 10 万条，每条还要多付一次 DNS 查询 |
 | 下载重传 | `download_image_from_url` / `download_url_image` | `validate_fetch_url`（async） | ✅ 做，但豁免 fake-ip 池 | 取回的字节会被重新上传到公网图床，误操作必须拦 |
 
-**fake-ip 豁免**（`dns_answer_is_forbidden`）：`198.18.0.0/15` 是 RFC 2544 基准测试段，公网 BGP 不路由、企业内网不使用；现实中它只作为 Clash / sing-box / Surge 的**默认 fake-ip 池**出现。开了 TUN 的机器上任意域名都会解析进该段，把它当内网证据会让功能全废。
+**fake-ip 豁免**（`dns_answer_is_forbidden`）：`198.18.0.0/15` 是 RFC 2544 基准测试段，公网 BGP 不路由、企业内网不使用；现实中它只作为 Clash / sing-box / Surge 的**默认 fake-ip 池**出现（范围取 /15 是为了同时覆盖 mihomo 的 `198.18.0.1/16` 与 sing-box 的 `198.18.0.0/15`）。开了 TUN 的机器上任意域名都会解析进该段，把它当内网证据会让功能全废。
+
+**v6 池同样豁免** `fdfe:dcba:9876::/64`（mihomo `fake-ip-range6` 默认值）：`lookup_host` 返回的是 A + AAAA 的**并集**，`validate_fetch_url` 逐条判定、任意一条被拒就整体失败。而 `fdfe:…` 落在 ULA（`fc00::/7`）里会被 `is_private_or_reserved_ip` 判成内网——只豁免 v4 的话，双栈 + TUN 的机器上「从 URL 下载图片」依然全量失败。判据都在 `is_fake_ip_pool_ip`。
 
 > ⚠️ 豁免只发生在 **DNS 答案**判定点。字面量 `https://198.18.1.1/x.jpg` 仍然拒绝，`is_private_or_reserved_ipv4` 里的 198.18/15 一字未改——`src-tauri/src/url_policy.rs` 的跨模块一致性测试 `reserved_ranges_match_frontend_and_link_checker` 依赖它。
+
+#### 同一判据的另一面：WebDAV 是**拒绝** fake-ip
+
+判据 `is_fake_ip_pool_ip` 住在 `src-tauri/src/url_policy.rs`，由两个模块共用，但**默认值相反**：
+
+| 模块 | 判定点 | 猜错的代价 | 对 fake-ip 的处置 |
+|------|--------|-----------|------------------|
+| 本模块（只读探测 / 下载重传） | `dns_answer_is_forbidden` | 多看一眼图片 | **豁免**（不拒绝） |
+| `url_policy.rs`（WebDAV 明文 HTTP） | `is_allowed_lan_addr` | 账号密码明文出公网 | **拒绝**（不放行） |
+
+共同前提是同一句话：`198.18.x.x` 出现在 DNS 答案里，对目标的真实网络位置**零信息量**——代理只是随手编了个号。分歧只在「零信息量时默认怎么办」，而那取决于赌注。
+
+> 这也是为什么本模块「探测路径干脆不查 DNS」的结论**不能照搬**到 WebDAV：WebDAV 恰恰要靠 DNS 结果决定能不能走明文 HTTP，不查 DNS 这条路走不通。
+>
+> ⚠️ 改动 `is_fake_ip_pool_ip` 会同时影响两个方向——放宽会让 WebDAV 凭证泄露，收紧会让链接检测全量误判。修改前先看两侧的护栏测试：本模块的 `dns_answer_gate_allows_fake_ip_but_blocks_real_private` 与 url_policy 的 `fake_ip_pool_is_not_lan_evidence` / `real_lan_ranges_survive_the_fake_ip_gate`。
 
 ### error_type 取值表
 
@@ -410,7 +427,8 @@ flowchart TD
 |------|---------|---------|
 | **所有链接都显示「网络不通」，浏览器却能正常打开** | 本机 TUN + fake-ip 把域名解析进 `198.18.0.0/15`，旧版 DNS 预检误判为内网。已由 `validate_probe_url` 去掉预检修复；若复现说明改动被回退 | 图 1 策略校验节点 + 出站策略校验小节 |
 | `http://` 开头的老链接一律失效 | 策略只允许 https 与回环 http，`error_type = blocked`，tooltip 会写明具体原因——这是设计行为，不是网络故障 | error_type 取值表 |
-| 「从 URL 下载图片」开代理时全失败 | `validate_fetch_url` 的 DNS 裁决未豁免 fake-ip 池 | `dns_answer_is_forbidden` |
+| 「从 URL 下载图片」开代理时全失败 | `validate_fetch_url` 的 DNS 裁决未豁免 fake-ip 池。**注意 v4 和 v6 两个池都要豁免**——只盖 v4 时，双栈机器上 AAAA 记录仍是 `fdfe:dcba:9876::/64`，循环里照样被拒 | `dns_answer_is_forbidden` / `is_fake_ip_pool_ip` |
+| WebDAV 报「该地址属于代理软件的 fake-ip 地址池」 | 设计行为，不是故障：本机 TUN 让域名解析失真，程序无法确认它是不是局域网。改填 NAS 内网 IP 或改用 HTTPS | `url_policy.rs` / docs/TODO.md |
 | 微博/B站图片显示失效但浏览器能看 | 防盗链 403 + `hotlink_protected=true` → `browser_might_work` | 图 1 防盗链判定分支 |
 | 知乎/百度图片 HEAD 405 | 这些图床 `skip_head=true`，应直接走 GET+Range | 图 1 `skip_head` 决策 |
 | 200 但标记为「疑似」 | Content-Type 非 `image/*` 或 Content-Length < 1KB（非 SVG） | 图 1 疑似异常判定 |
