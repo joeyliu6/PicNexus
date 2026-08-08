@@ -116,6 +116,7 @@ const emit = defineEmits<{
           <div class="recheck-slot">
             <span
               v-if="row.recheckResult"
+              v-tooltip.top="errorTooltip(row)"
               class="recheck-result-badge"
               :class="{
                 'badge-fading': row.recheckBadgeFading,

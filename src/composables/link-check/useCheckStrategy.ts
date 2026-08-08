@@ -169,7 +169,7 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
   }
 
   function errorTooltip(row: LinkCheckRow): string {
-    return baseStatusTooltip(row.checkResult ?? null);
+    return baseStatusTooltip(row.recheckResult ?? row.checkResult ?? null);
   }
 
   return {

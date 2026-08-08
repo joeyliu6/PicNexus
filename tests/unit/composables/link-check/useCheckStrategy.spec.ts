@@ -197,3 +197,22 @@ describe('recheckLabel', () => {
     expect(recheckLabel({ link: '', is_valid: false, error_type: 'http_4xx', browser_might_work: false })).toBe('失效');
   });
 });
+
+describe('errorTooltip', () => {
+  const { errorTooltip } = makeStrategy();
+
+  it('recheckResult 优先于 checkResult，展示最新拦截原因', () => {
+    const row: LinkCheckRow = {
+      historyId: 'h1', serviceId: 'r2', url: '', rawUrl: '', fileName: '',
+      checkResult: { link: '', is_valid: false, error_type: 'network', browser_might_work: false },
+      recheckResult: {
+        link: '', is_valid: false, error_type: 'blocked',
+        error: '外部 HTTP 图片地址已禁用，请改用 HTTPS',
+        browser_might_work: false,
+      },
+    };
+
+    expect(errorTooltip(row)).toContain('策略拦截');
+    expect(errorTooltip(row)).toContain('已禁用');
+  });
+});
