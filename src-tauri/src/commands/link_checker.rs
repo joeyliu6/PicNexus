@@ -45,7 +45,12 @@ pub struct CheckLinkResult {
     pub is_valid: bool,
     pub status_code: Option<u16>,
     pub error: Option<String>,
-    pub error_type: String, // "success" | "http_4xx" | "http_5xx" | "timeout" | "network" | "suspicious"
+    /// "success" | "http_4xx" | "http_5xx" | "timeout" | "network" | "suspicious" | "blocked"
+    ///
+    /// `blocked` = 请求根本没发出去，被本机出站策略拦下（空链接 / 非 https / 内网
+    /// 字面量 IP / 带凭证的 URL 等）。与 `network`（真的连不上对端）语义不同，
+    /// 具体原因在 `error` 字段里，前端负责展示出来。
+    pub error_type: String,
     pub suggestion: Option<String>,
     pub response_time: Option<u64>,
     // v3.0 新增
@@ -293,7 +298,47 @@ fn is_private_or_reserved_host(host: &str) -> bool {
     }
 }
 
-fn validate_external_url_policy(raw_url: &str) -> Result<reqwest::Url, AppError> {
+/// 代理软件的 fake-ip 默认池（198.18.0.0/15）
+///
+/// 严格说这是 RFC 2544 的基准测试段（RFC 6890 scope = Benchmarking）：公网 BGP
+/// 不路由它，企业内网也不会用它。现实里 198.18.x.x 只有一个来源——本机代理
+/// （Clash / sing-box / Surge 等）把域名映射进来的虚拟地址。连它等于连回代理
+/// 隧道再出公网，不是连内网服务。
+fn is_fake_ip_pool(ip: IpAddr) -> bool {
+    let v4 = match ip {
+        IpAddr::V4(ip) => ip,
+        IpAddr::V6(ip) => match ipv4_mapped_from_ipv6(ip) {
+            Some(mapped) => mapped,
+            None => return false,
+        },
+    };
+
+    let octets = v4.octets();
+    octets[0] == 198 && (18..=19).contains(&octets[1])
+}
+
+/// DNS 解析结果的拒绝判据（区别于字面量 IP 判据）
+///
+/// 字面量 `https://198.18.1.1/x.jpg` 仍然由 [`is_private_or_reserved_host`] 拒绝：
+/// 没有正常图床会把域名指到基准测试段，拒它零成本。但"域名解析到 198.18.x.x"
+/// 是 fake-ip 的必然产物，拿它当内网证据等于在所有 TUN 用户机器上把功能废掉。
+fn dns_answer_is_forbidden(ip: IpAddr) -> bool {
+    is_private_or_reserved_ip(ip) && !is_fake_ip_pool(ip)
+}
+
+/// 只读探测用的出站校验：scheme + 字面量 IP + 凭证，**不做 DNS 层裁决**
+///
+/// Why 这里不查 DNS：`tokio::net::lookup_host` 的解析结果并不绑定 reqwest 后续
+/// 的实际连接（reqwest 会自己再解析一次），所以这道预检拦不住 DNS rebinding，
+/// 只能拦"手滑粘了个内网 URL"——而这一点字面量 IP 判据已经覆盖了。
+///
+/// 代价却是确定的：开了 TUN + fake-ip 的机器上（Clash / sing-box / Surge 的
+/// 默认 fake-ip 池就是 198.18.0.0/15），**每一个**域名都会被解析进保留段，
+/// 导致链接检测全量误判为"网络不通"。批量检测最多 10 万条，每条还要多付一次
+/// DNS 查询。收益不足以抵这个误伤率，故探测路径只保留同步判据。
+///
+/// 需要把响应内容取回并重新上传的路径请改用 [`validate_fetch_url`]。
+fn validate_probe_url(raw_url: &str) -> Result<reqwest::Url, AppError> {
     let parsed = reqwest::Url::parse(raw_url)
         .map_err(|_| AppError::validation("请输入有效的 URL（以 https:// 开头，本机服务可用 http://localhost 或 http://127.0.0.1）"))?;
 
@@ -322,8 +367,15 @@ fn validate_external_url_policy(raw_url: &str) -> Result<reqwest::Url, AppError>
     }
 }
 
-async fn validate_external_url_for_request(raw_url: &str) -> Result<reqwest::Url, AppError> {
-    let parsed = validate_external_url_policy(raw_url)?;
+/// 取回内容用的出站校验：在 [`validate_probe_url`] 之上追加 DNS 解析结果裁决
+///
+/// 与只读探测的区别：这里拿到的字节会被重新上传到公网图床，所以"粘了内网 URL"
+/// 这类事故必须拦——即便预检拦不住 rebinding，拦住误操作本身也是有价值的。
+///
+/// 注意 DNS 答案走的是 [`dns_answer_is_forbidden`] 而非 [`is_private_or_reserved_ip`]：
+/// 前者豁免了 fake-ip 池，否则开代理的用户"从 URL 下载图片"会全军覆没。
+async fn validate_fetch_url(raw_url: &str) -> Result<reqwest::Url, AppError> {
+    let parsed = validate_probe_url(raw_url)?;
     if parsed.scheme() == "https" {
         let host = parsed
             .host_str()
@@ -336,7 +388,7 @@ async fn validate_external_url_for_request(raw_url: &str) -> Result<reqwest::Url
         let mut saw_addr = false;
         for addr in resolved {
             saw_addr = true;
-            if is_private_or_reserved_ip(addr.ip()) {
+            if dns_answer_is_forbidden(addr.ip()) {
                 return Err(AppError::validation(
                     "地址不能解析到内网、链路本地或保留地址",
                 ));
@@ -608,31 +660,49 @@ mod tests {
     }
 
     #[test]
-    fn external_url_policy_allows_https_and_loopback_http() {
-        assert!(validate_external_url_policy("https://example.com/a.png").is_ok());
-        assert!(validate_external_url_policy("http://localhost:1420/status").is_ok());
-        assert!(validate_external_url_policy("http://127.0.0.1:27123/status").is_ok());
-        assert!(validate_external_url_policy("http://[::1]:1420/status").is_ok());
+    fn probe_url_allows_loopback_http() {
+        assert!(validate_probe_url("http://localhost:1420/status").is_ok());
+        assert!(validate_probe_url("http://127.0.0.1:27123/status").is_ok());
+        assert!(validate_probe_url("http://[::1]:1420/status").is_ok());
+    }
+
+    /// 回归护栏：这三个域名在开了 TUN + fake-ip 的机器上都会解析进 198.18.0.0/15，
+    /// 旧实现会把它们全判成"网络不通"。`validate_probe_url` 是同步函数，编译器
+    /// 保证它没法查 DNS，所以 fake-ip 永远影响不到探测路径。
+    #[test]
+    fn probe_url_accepts_public_https_without_dns() {
+        for url in [
+            "https://example.com/a.png",
+            "https://img30.360buyimg.com/imgzone/jfs/t20270817/479103/5/5602/a.jpg",
+            "https://sm.ms/image/abc.png",
+            "https://raw.githubusercontent.com/user/repo/main/a.png",
+        ] {
+            assert!(
+                validate_probe_url(url).is_ok(),
+                "{} should be accepted without DNS lookup",
+                url
+            );
+        }
     }
 
     #[test]
-    fn external_url_policy_rejects_external_http() {
-        let err = validate_external_url_policy("http://example.com/a.png")
+    fn probe_url_rejects_external_http() {
+        let err = validate_probe_url("http://example.com/a.png")
             .expect_err("external http should be rejected");
 
         assert!(err.to_string().contains("外部 HTTP 图片地址已禁用"));
     }
 
     #[test]
-    fn external_url_policy_rejects_credentials() {
-        let err = validate_external_url_policy("https://user:pass@example.com/a.png")
+    fn probe_url_rejects_credentials() {
+        let err = validate_probe_url("https://user:pass@example.com/a.png")
             .expect_err("credential URLs should be rejected");
 
         assert!(err.to_string().contains("不能包含用户名或密码"));
     }
 
     #[test]
-    fn external_url_policy_rejects_private_and_reserved_https_literals() {
+    fn probe_url_rejects_private_and_reserved_https_literals() {
         for url in [
             "https://192.168.1.10/a.png",
             "https://169.254.1.10/a.png",
@@ -640,13 +710,127 @@ mod tests {
             "https://[::ffff:192.168.1.10]/a.png",
             "https://[fe80::1]/a.png",
             "https://[fc00::1]/a.png",
+            // fake-ip 池的字面量仍然拒绝：没有正常图床把域名指到基准测试段
+            "https://198.18.1.1/a.png",
+            "file:///tmp/a.png",
         ] {
             assert!(
-                validate_external_url_policy(url).is_err(),
+                validate_probe_url(url).is_err(),
                 "{} should be rejected",
                 url
             );
         }
+    }
+
+    #[test]
+    fn fake_ip_pool_matches_proxy_default_range() {
+        for ip in ["198.18.0.0", "198.18.1.172", "198.19.255.255"] {
+            assert!(
+                is_fake_ip_pool(ip.parse().unwrap()),
+                "{} should be inside the fake-ip pool",
+                ip
+            );
+        }
+        for ip in ["198.17.255.255", "198.20.0.0", "8.8.8.8", "192.168.1.1"] {
+            assert!(
+                !is_fake_ip_pool(ip.parse().unwrap()),
+                "{} should be outside the fake-ip pool",
+                ip
+            );
+        }
+        // v4-mapped 形式不能绕过识别
+        assert!(is_fake_ip_pool("::ffff:198.18.1.1".parse().unwrap()));
+        assert!(!is_fake_ip_pool("fe80::1".parse().unwrap()));
+    }
+
+    #[test]
+    fn dns_answer_gate_allows_fake_ip_but_blocks_real_private() {
+        // 实测到的三个 fake-ip：修复前它们让链接检测全量误判
+        for ip in ["198.18.1.172", "198.18.1.15", "198.18.1.230"] {
+            assert!(
+                !dns_answer_is_forbidden(ip.parse().unwrap()),
+                "{} is a fake-ip answer and must be allowed",
+                ip
+            );
+        }
+        for ip in [
+            "192.168.1.1",
+            "10.0.0.5",
+            "172.16.3.4",
+            "169.254.169.254",
+            "100.64.1.1",
+            "240.0.0.1",
+            "0.0.0.0",
+            "fe80::1",
+            "fc00::1",
+            // v4-mapped 的内网地址同样不能绕过
+            "::ffff:192.168.1.1",
+        ] {
+            assert!(
+                dns_answer_is_forbidden(ip.parse().unwrap()),
+                "{} must stay forbidden",
+                ip
+            );
+        }
+        for ip in ["8.8.8.8", "2001:4860:4860::8888"] {
+            assert!(
+                !dns_answer_is_forbidden(ip.parse().unwrap()),
+                "{} is public and must be allowed",
+                ip
+            );
+        }
+    }
+
+    /// 防退化：fake-ip 的豁免只发生在 DNS 判定点。若有人图省事直接从共享判据里
+    /// 删掉 198.18.0.0/15，这条会红——同时也让 url_policy.rs 的跨模块一致性测试
+    /// `reserved_ranges_match_frontend_and_link_checker` 继续有意义。
+    #[test]
+    fn literal_ip_gate_still_treats_fake_ip_pool_as_reserved() {
+        assert!(is_private_or_reserved_host("198.18.1.1"));
+        assert!(is_private_or_reserved_host("198.19.255.255"));
+    }
+
+    /// Why DNS 分支没有实网单测：解析结果由运行环境说了算。本次修复的 bug 本身就
+    /// 来自这里——开了 TUN fake-ip 的机器上任意域名都被映射进 198.18.0.0/15，
+    /// 实网 DNS 断言必然失真。真正的判据是 `dns_answer_is_forbidden`，已由上面的
+    /// 纯函数测试覆盖；这里只走在 `lookup_host` 之前就返回的分支。
+    #[tokio::test]
+    async fn fetch_url_covers_non_dns_branches() {
+        assert!(validate_fetch_url("http://127.0.0.1:8080/a.png").await.is_ok());
+
+        for url in [
+            "https://192.168.1.10/a.png",
+            "http://example.com/a.png",
+            "https://user:pass@example.com/a.png",
+            "file:///tmp/a.png",
+        ] {
+            assert!(
+                validate_fetch_url(url).await.is_err(),
+                "{} should be rejected before DNS",
+                url
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn check_single_link_marks_policy_rejection_as_blocked() {
+        let client = safe_no_redirect_client().expect("client");
+        let result = check_single_link("http://example.com/a.png", &client, 5).await;
+
+        assert_eq!(result.error_type, "blocked");
+        assert!(result.status_code.is_none());
+        assert!(!result.is_valid);
+        assert!(result.error.unwrap().contains("已禁用"));
+    }
+
+    #[tokio::test]
+    async fn check_single_link_marks_empty_link_as_blocked() {
+        let client = safe_no_redirect_client().expect("client");
+        let result = check_single_link("   ", &client, 5).await;
+
+        assert_eq!(result.error_type, "blocked");
+        assert!(result.status_code.is_none());
+        assert_eq!(result.error.as_deref(), Some("链接为空"));
     }
 
     #[test]
@@ -820,7 +1004,7 @@ async fn check_single_link(
             is_valid: false,
             status_code: None,
             error: Some("链接为空".to_string()),
-            error_type: "network".to_string(),
+            error_type: "blocked".to_string(),
             suggestion: Some("链接为空".to_string()),
             response_time: None,
             detected_service: None,
@@ -830,7 +1014,7 @@ async fn check_single_link(
         };
     }
 
-    let parsed_url = match validate_external_url_for_request(trimmed).await {
+    let parsed_url = match validate_probe_url(trimmed) {
         Ok(parsed) => parsed,
         Err(err) => {
             let message = err.to_string();
@@ -839,7 +1023,7 @@ async fn check_single_link(
                 is_valid: false,
                 status_code: None,
                 error: Some(message.clone()),
-                error_type: "network".to_string(),
+                error_type: "blocked".to_string(),
                 suggestion: Some(message),
                 response_time: None,
                 detected_service: None,
@@ -1097,7 +1281,7 @@ pub async fn download_image_from_url(
     // 首先清理过期的临时文件，防止磁盘空间耗尽
     cleanup_old_temp_files();
 
-    let validated_url = validate_external_url_for_request(url.trim()).await?;
+    let validated_url = validate_fetch_url(url.trim()).await?;
     let http_client = safe_no_redirect_client()?;
 
     // 发送 GET 请求下载图片
@@ -1411,7 +1595,7 @@ pub async fn download_url_image(
     if trimmed.is_empty() {
         return Err(AppError::validation("URL 不能为空"));
     }
-    let validated_url = validate_external_url_for_request(trimmed).await?;
+    let validated_url = validate_fetch_url(trimmed).await?;
     let http_client = safe_no_redirect_client()?;
 
     // 清理过期临时文件
