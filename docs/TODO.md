@@ -67,3 +67,20 @@
 - [ ] 内网 HTTP（NAS）场景下历史记录缩略图正常显示。
 - [ ] 现有 WebDAV 备份功能及旧配置无需手动迁移即可继续使用。
 - [ ] OpenList 本地端到端测试和 InfiniCLOUD 公网兼容测试通过。
+
+---
+
+## 待处理
+
+### [ ] fake-ip 环境下 WebDAV 局域网判据失真
+
+- **发现于**：修复链接检测「网络不通」误判时（同源问题，不同路径）
+- **位置**：`src-tauri/src/url_policy.rs` 的 `is_allowed_lan_addr`
+
+`198.18.0.0/15` 被当作**局域网地址放行**（测试 `lan_addr_gate_rejects_always_blocked_ranges` 附近有明确断言）。在开了 TUN + fake-ip 的机器上，任意公网域名都会解析进该段——包括用户填的公网 WebDAV 地址。
+
+后果：`http://dav.example.com` 这类**公网明文 HTTP** 地址会被判成局域网而放行，明文凭证防线失效。这与链接检测那个 bug 同根（fake-ip 让 DNS 解析结果不再代表真实目标），但走的是另一套函数，本次未一并修改。
+
+**为什么单独拆出来**：改 `is_allowed_lan_addr` 会同时打破 `lan_addr_gate_rejects_always_blocked_ranges` 和 `reserved_ranges_match_frontend_and_link_checker` 两条测试，属于独立的一次改动，需要单独设计"fake-ip 环境下如何判定局域网"的策略。
+
+> 对照：链接检测侧的处理见 [link-check-flow.md 出站策略校验小节](./flows/link-check-flow.md#出站策略校验只读探测-vs-下载重传)。那里的结论是"探测路径干脆不查 DNS"，但 WebDAV 是**要靠 DNS 结果决定能不能走明文 HTTP**，不能照搬。

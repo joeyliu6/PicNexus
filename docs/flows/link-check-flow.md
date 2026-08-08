@@ -9,11 +9,13 @@
 
 展示 Rust 后端 `check_single_link` 中从 URL 到最终判定的完整决策路径。排查「微博返回 403 但浏览器能看」「200 却标记为疑似」等问题时查看。
 
-> **关键源文件**：`src-tauri/src/commands/link_checker.rs`（`detect_service_from_url`、`get_service_config`、`apply_service_headers`、`check_single_link`、`check_link_with_fallback`）
+> **关键源文件**：`src-tauri/src/commands/link_checker.rs`（`detect_service_from_url`、`get_service_config`、`apply_service_headers`、`check_single_link`、`check_link_with_fallback`、`validate_probe_url`、`validate_fetch_url`、`dns_answer_is_forbidden`）
 
 ```mermaid
 flowchart TD
-    A["接收待检测 URL"] --> B["detect_service_from_url<br/>从域名识别图床"]
+    A["接收待检测 URL"] --> V{"validate_probe_url<br/>scheme + 字面量 IP + 凭证校验<br/>（同步，不查 DNS）"}
+    V -- 拒绝 --> VB["error_type = blocked<br/>status_code = None<br/>error = 具体策略原因"]
+    V -- 通过 --> B["detect_service_from_url<br/>从域名识别图床"]
     B --> C{识别到已知服务?}
     C -- 是 --> D["get_service_config<br/>查询统一配置表"]
     C -- 否 --> E["默认配置<br/>UA=CHROME_UA, 无 Referer"]
@@ -58,6 +60,7 @@ flowchart TD
     L1 --> T
     L2 --> T
     L3 --> T
+    VB --> T
 
     T --> U{主链接失败<br/>且有 fallback_url?}
     U -- 是 --> V["check_single_link(fallback_url)<br/>GitHub CDN 备用链接"]
@@ -74,7 +77,34 @@ flowchart TD
     style P2 fill:#ffebee,stroke:#c62828
     style L1 fill:#ffebee,stroke:#c62828
     style L2 fill:#ffebee,stroke:#c62828
+    style VB fill:#fff3e0,stroke:#ef6c00
 ```
+
+### 出站策略校验：只读探测 vs 下载重传
+
+两条路径用不同的校验函数，差别只在**要不要用 DNS 解析结果做裁决**。
+
+| 路径 | 命令 | 校验函数 | DNS 层裁决 | 理由 |
+|------|------|----------|-----------|------|
+| 只读探测 | `check_image_link` / `batch_check_links` | `validate_probe_url`（同步） | ❌ 不做 | 预解析结果并不绑定 reqwest 的实际连接（它会自己再解析一次），所以拦不住 DNS rebinding，只能拦「手滑粘了内网 URL」——而字面量 IP 判据已覆盖。批量上限 10 万条，每条还要多付一次 DNS 查询 |
+| 下载重传 | `download_image_from_url` / `download_url_image` | `validate_fetch_url`（async） | ✅ 做，但豁免 fake-ip 池 | 取回的字节会被重新上传到公网图床，误操作必须拦 |
+
+**fake-ip 豁免**（`dns_answer_is_forbidden`）：`198.18.0.0/15` 是 RFC 2544 基准测试段，公网 BGP 不路由、企业内网不使用；现实中它只作为 Clash / sing-box / Surge 的**默认 fake-ip 池**出现。开了 TUN 的机器上任意域名都会解析进该段，把它当内网证据会让功能全废。
+
+> ⚠️ 豁免只发生在 **DNS 答案**判定点。字面量 `https://198.18.1.1/x.jpg` 仍然拒绝，`is_private_or_reserved_ipv4` 里的 198.18/15 一字未改——`src-tauri/src/url_policy.rs` 的跨模块一致性测试 `reserved_ranges_match_frontend_and_link_checker` 依赖它。
+
+### error_type 取值表
+
+| 取值 | 产生位置 | 前端呈现 |
+|------|----------|----------|
+| `success` | 2xx 且未命中疑似判定 | 绿点 / 状态码 |
+| `http_4xx` / `http_5xx` | `classify_error` 按状态码分类 | 走 `STATUS_DESC` 文案表 |
+| `timeout` | `err.is_timeout()` | 「超时」· 检测超时 · 网络延迟或图床响应过慢 |
+| `network` | `err.is_connect()` 或兜底分支 | 「网络」· 网络不通 · 无法连接到图床服务器 |
+| `suspicious` | `is_suspicious_image_response` 命中 | 「疑似」 |
+| `blocked` | `validate_probe_url` 拒绝 / 空链接 | 「拦截」· 策略拦截 + Rust 给出的**具体原因**；筛选与计数上等同 `network`（归入「失效」），不新增 tab |
+
+> `blocked` 与 `network` 分家的意义：前者是**请求根本没发出去**（被本机策略拦下），后者是**发出去了但连不上对端**。合并会让"被自己程序拦了"伪装成"网络故障"，排查时误导性极强。
 
 ### 图床服务配置表
 
@@ -378,6 +408,9 @@ flowchart TD
 
 | 现象 | 可能原因 | 对照位置 |
 |------|---------|---------|
+| **所有链接都显示「网络不通」，浏览器却能正常打开** | 本机 TUN + fake-ip 把域名解析进 `198.18.0.0/15`，旧版 DNS 预检误判为内网。已由 `validate_probe_url` 去掉预检修复；若复现说明改动被回退 | 图 1 策略校验节点 + 出站策略校验小节 |
+| `http://` 开头的老链接一律失效 | 策略只允许 https 与回环 http，`error_type = blocked`，tooltip 会写明具体原因——这是设计行为，不是网络故障 | error_type 取值表 |
+| 「从 URL 下载图片」开代理时全失败 | `validate_fetch_url` 的 DNS 裁决未豁免 fake-ip 池 | `dns_answer_is_forbidden` |
 | 微博/B站图片显示失效但浏览器能看 | 防盗链 403 + `hotlink_protected=true` → `browser_might_work` | 图 1 防盗链判定分支 |
 | 知乎/百度图片 HEAD 405 | 这些图床 `skip_head=true`，应直接走 GET+Range | 图 1 `skip_head` 决策 |
 | 200 但标记为「疑似」 | Content-Type 非 `image/*` 或 Content-Length < 1KB（非 SVG） | 图 1 疑似异常判定 |
