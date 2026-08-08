@@ -12,6 +12,7 @@ const STATUS_DISPLAY_MAP: Record<string, StatusDisplay> = {
   timeout: { color: 'amber', label: '超时' },
   suspicious: { color: 'purple', label: '疑似' },
   network: { color: 'red', label: '网络' },
+  blocked: { color: 'red', label: '拦截' },
   http_4xx: { color: 'red', label: '404' },
   http_5xx: { color: 'red', label: '500' },
 };
@@ -29,6 +30,7 @@ export function statusBadgeLabel(cr: CheckLinkResult | null | undefined): string
   if (cr.status_code) return String(cr.status_code);
   if (cr.error_type === 'timeout') return '超时';
   if (cr.error_type === 'network') return '网络';
+  if (cr.error_type === 'blocked') return '拦截';
   if (cr.error_type === 'suspicious' || cr.browser_might_work) return '疑似';
   return '失效';
 }
@@ -75,8 +77,12 @@ export function statusTooltip(cr: CheckLinkResult | null | undefined): string {
       timeout: '检测超时 · 网络延迟或图床响应过慢',
       network: '网络不通 · 无法连接到图床服务器',
       suspicious: '疑似异常 · 返回了内容但不像是图片（类型或体积异常）',
+      blocked: cr.error ? `策略拦截 · ${cr.error}` : '策略拦截 · 请求未发出',
     };
-    parts.push(fallback[cr.error_type] || '链接失效');
+    // 兜底顺序不能反：只在 fallback 表命中不到时才用后端的 error。
+    // 后端给 timeout / network 的 error 是裸的「请求超时」「连接失败」，
+    // 甚至可能是 reqwest 的 Debug 串，比上面这几条文案差。
+    parts.push(fallback[cr.error_type] || cr.error || '链接失效');
   }
   if (cr.response_time) parts.push(`${cr.response_time}ms`);
   return parts.join(' · ');

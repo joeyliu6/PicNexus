@@ -154,6 +154,7 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
     if (result.status_code) return String(result.status_code);
     if (result.error_type === 'timeout') return '超时';
     if (result.error_type === 'network') return '网络';
+    if (result.error_type === 'blocked') return '拦截';
     if (result.error_type === 'suspicious' || result.browser_might_work) return '可疑';
     return '失效';
   }
@@ -162,6 +163,7 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
     if (result.is_valid) return '可用';
     if (result.error_type === 'timeout') return '超时';
     if (result.error_type === 'network') return '断连';
+    if (result.error_type === 'blocked') return '拦截';
     if (result.error_type === 'suspicious' || result.browser_might_work) return '可疑';
     return '失效';
   }

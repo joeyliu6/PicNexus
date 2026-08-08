@@ -13,6 +13,7 @@ import { computed, ref, watch, type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { HistoryItem } from '../../config/types';
 import type { CheckLinkResult } from '../../types/linkCheck';
+import { normalizeErrorType } from '../link-check/linkCheckPersistence';
 import { historyDB } from '../../services/HistoryDatabase';
 import { recomputeLinkCheckSummary } from '../../types/linkCheckSummary';
 import { emitHistoryUpdated } from '../../events/cacheEvents';
@@ -345,8 +346,8 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
         isValid: result.is_valid,
         lastCheckTime: Date.now(),
         statusCode: result.status_code,
-        errorType: result.error_type as
-          | 'success' | 'http_4xx' | 'http_5xx' | 'timeout' | 'network' | 'pending',
+        // 复用统一收敛函数，避免这里再手写一份会漂移的 union（此前漏了 'suspicious'）
+        errorType: normalizeErrorType(result.error_type),
         responseTime: result.response_time,
         error: result.error || undefined,
       };

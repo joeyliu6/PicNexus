@@ -65,6 +65,42 @@ describe('useLinkStatusDisplay', () => {
     expect(statusTooltip(makeResult({ error_type: 'success' }))).toBeTruthy();
   });
 
+  it('surfaces the real reason for policy-blocked links instead of a network error', () => {
+    const blocked = makeResult({
+      error_type: 'blocked',
+      error: '外部 HTTP 图片地址已禁用，请改用 HTTPS；HTTP 仅保留给本机回环服务。',
+    });
+
+    expect(statusTooltip(blocked)).toContain('已禁用');
+    expect(statusTooltip(blocked)).not.toContain('网络不通');
+    expect(statusBadgeLabel(blocked)).toBe('拦截');
+    expect(getStatusDisplay(blocked).label).toBe('拦截');
+    // 没有 error 时也要给一句人话，不能落回「链接失效」
+    expect(statusTooltip(makeResult({ error_type: 'blocked' }))).toContain('策略拦截');
+  });
+
+  // 守门：Rust 给 timeout / network 的 error 是裸的「请求超时」「连接失败」，
+  // 比 fallback 表里的文案差。兜底顺序写反就会踩这条。
+  it('keeps the curated wording for timeout and network even when error is present', () => {
+    expect(statusTooltip(makeResult({ error_type: 'network', error: '连接失败' })))
+      .toContain('网络不通 · 无法连接到图床服务器');
+    expect(statusTooltip(makeResult({ error_type: 'timeout', error: '请求超时' })))
+      .toContain('检测超时 · 网络延迟或图床响应过慢');
+    expect(statusTooltip(makeResult({ error_type: 'suspicious', error: 'x' })))
+      .toContain('疑似异常');
+  });
+
+  it('falls back to the backend error for error types the frontend does not know yet', () => {
+    const unknown = makeResult({
+      error_type: 'brand_new_type' as CheckLinkResult['error_type'],
+      error: '后端新增的原因',
+    });
+
+    expect(statusTooltip(unknown)).toContain('后端新增的原因');
+    expect(statusTooltip(makeResult({ error_type: 'brand_new_type' as CheckLinkResult['error_type'] })))
+      .toContain('链接失效');
+  });
+
   it('extracts hosts and filenames from normal and malformed URLs', () => {
     expect(extractHost('https://wx1.sinaimg.cn/large/a%20b.png?x=1')).toBe('wx1.sinaimg.cn');
     expect(extractHost('not a url')).toBe('');
