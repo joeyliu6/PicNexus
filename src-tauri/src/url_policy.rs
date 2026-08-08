@@ -9,6 +9,15 @@ use url::Url;
 
 use crate::error::AppError;
 
+/// fake-ip 地址被当成局域网时的统一文案
+///
+/// 与前端 `src/security/networkPolicy.ts` 的 `FAKE_IP_HOST_MESSAGE` 保持逐字一致：
+/// 同一件事在设置页和上传时说两种话，用户会以为是两个不同的问题。
+///
+/// 文案要给出路而不只是拒绝——被拦的用户有两条现成的路：填内网 IP，或改 HTTPS。
+pub(crate) const FAKE_IP_HOST_MESSAGE: &str =
+    "该地址属于代理软件的 fake-ip 地址池（198.18.x.x），无法确认它是局域网。请改填 NAS 的实际内网 IP（如 http://192.168.1.10:5005），或改用 HTTPS。";
+
 /// 私有地址放行策略
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PrivateHostPolicy {
@@ -134,6 +143,59 @@ pub fn is_always_blocked_host(host: &str) -> bool {
     }
 }
 
+/// 代理软件的 fake-ip 默认池（198.18.0.0/15）
+///
+/// 严格说这是 RFC 2544 的基准测试段（RFC 6890 scope = Benchmarking）：公网 BGP
+/// 不路由它，企业内网也不会用它。现实里 198.18.x.x 只有一个来源——本机代理
+/// （Clash / sing-box / Surge 等）把域名映射进来的虚拟地址。连它等于连回代理
+/// 隧道再出公网，不是连内网服务。
+///
+/// v4 范围取 /15 是为了同时覆盖 mihomo 的默认 `198.18.0.1/16` 与 sing-box 的
+/// 默认 `198.18.0.0/15`；v6 覆盖 mihomo 的默认 `fake-ip-range6`
+/// `fdfe:dcba:9876::1/64`。
+///
+/// **v6 池不能省**：`lookup_host` 返回的是 A + AAAA 的并集，调用方逐条判定，
+/// 任意一条被误判就整体失真。而 `fdfe:…` 落在 ULA（`fc00::/7`）里，
+/// [`is_private_or_reserved_host`] 会把它当内网——只盖 v4 等于没盖。
+///
+/// 已知未覆盖：sing-box 的 v6 默认 `fc00::/18`。没纳入是因为那是一整块 ULA
+/// 空间，而 `fc00::1` 这类地址在 link_checker 侧有明确的"必须拒绝"断言；
+/// 为一个未实测到的池放宽一个 /18 的内网守卫，代价大于收益。见 docs/TODO.md。
+///
+/// 放在本模块而不是各自复制一份：判据走样的后果是**双向**的——链接检测那边
+/// 靠它豁免（漏判 = 功能全废），WebDAV 这边靠它拒绝（漏判 = 凭证明文出公网）。
+pub fn is_fake_ip_pool_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ip) => is_fake_ip_pool_ipv4(ip),
+        IpAddr::V6(ip) => match ipv4_mapped_from_ipv6(ip) {
+            Some(mapped) => is_fake_ip_pool_ipv4(mapped),
+            None => is_fake_ip_pool_ipv6(ip),
+        },
+    }
+}
+
+fn is_fake_ip_pool_ipv4(ip: Ipv4Addr) -> bool {
+    let octets = ip.octets();
+    octets[0] == 198 && (18..=19).contains(&octets[1])
+}
+
+/// mihomo `fake-ip-range6` 默认值 `fdfe:dcba:9876::1/64`
+///
+/// 前 64 位是固定魔数。ULA 的 40 位 global ID 本应随机生成，真实局域网撞上
+/// `fdfe:dcba:9876` 的概率可以忽略，所以按这个前缀识别不会误伤自建 IPv6 内网。
+fn is_fake_ip_pool_ipv6(ip: Ipv6Addr) -> bool {
+    let segments = ip.segments();
+    segments[0] == 0xfdfe && segments[1] == 0xdcba && segments[2] == 0x9876 && segments[3] == 0
+}
+
+/// [`is_fake_ip_pool_ip`] 的主机名版本：解析不出 IP 的主机名一律返回 false
+pub fn is_fake_ip_pool_host(host: &str) -> bool {
+    normalize_host(host)
+        .parse::<IpAddr>()
+        .map(is_fake_ip_pool_ip)
+        .unwrap_or(false)
+}
+
 /// DNS 解析出的地址能否作为 WebDAV 局域网 HTTP 的连接目标
 ///
 /// Why 不直接用 `is_private_or_reserved_host` 当放行判据：它回答的是"这不是公网地址"，
@@ -142,8 +204,21 @@ pub fn is_always_blocked_host(host: &str) -> bool {
 /// 想拦的段又原样放了回来。
 ///
 /// 顺序不能颠倒：必须先查黑名单再查白名单——反过来正是本函数要修掉的那个缺陷。
+///
+/// fake-ip 池同理但理由不同：`198.18.x.x` 出现在 DNS 答案里，对目标的真实网络位置
+/// **零信息量**——代理只是随手编了个号，等真去连的时候再在内核层换成真地址。
+/// 拿它当"这是局域网"的证据，等于在每一台开了 TUN 的机器上把明文凭证防线整个拆掉：
+/// 用户填的 `http://dav.example.com` 也会被编进这个段。
+///
+/// 链接检测（commands/link_checker.rs）对同一个池的处置**相反**——那边豁免它。
+/// 判据一致，默认值相反，因为赌注相反：只读探测猜错顶多多看一眼图片，
+/// WebDAV 猜错则是账号密码明文出公网。
 fn is_allowed_lan_addr(ip: &str) -> bool {
     if is_always_blocked_host(ip) {
+        return false;
+    }
+
+    if is_fake_ip_pool_host(ip) {
         return false;
     }
 
@@ -158,6 +233,11 @@ fn is_allowed_lan_addr(ip: &str) -> bool {
 #[derive(Debug, PartialEq, Eq)]
 enum DnsDecisionError {
     Blocked,
+    /// 解析进了代理的 fake-ip 池：不是"这是公网"，而是"看不见"
+    ///
+    /// 单独分一个变体是为了给用户不同的出路：`Public` 的解法是改 HTTPS，
+    /// `FakeIp` 的解法是改填内网 IP。混成一句会把用户引到错误的方向。
+    FakeIp,
     Public,
 }
 
@@ -166,6 +246,9 @@ fn all_dns_results_allowed(ips: &[String]) -> Result<(), DnsDecisionError> {
         let ip = ip.as_str();
         if is_always_blocked_host(ip) {
             return Err(DnsDecisionError::Blocked);
+        }
+        if is_fake_ip_pool_host(ip) {
+            return Err(DnsDecisionError::FakeIp);
         }
         if !is_allowed_lan_addr(ip) {
             return Err(DnsDecisionError::Public);
@@ -190,6 +273,13 @@ pub fn validate_url_with_policy(raw_url: &str, policy: PrivateHostPolicy) -> Res
 
     if allow_private && is_always_blocked_host(host) {
         return Err(AppError::validation("地址不能指向链路本地或保留地址"));
+    }
+
+    // fake-ip 字面量：`AllowPrivate` 下 198.18/15 本会被 `is_private_or_reserved_host`
+    // 当局域网放行，但没有人的 NAS 挂在 RFC 2544 基准测试段上。
+    // `Deny` 策略不需要这条——那边保留段本来就全拒。
+    if allow_private && is_fake_ip_pool_host(host) {
+        return Err(AppError::validation(FAKE_IP_HOST_MESSAGE));
     }
 
     match parsed.scheme() {
@@ -244,6 +334,10 @@ pub async fn validate_webdav_url_for_request(raw_url: &str) -> Result<Url, AppEr
         return Err(AppError::webdav("地址不能指向链路本地或保留地址"));
     }
 
+    if is_fake_ip_pool_host(host) {
+        return Err(AppError::webdav(FAKE_IP_HOST_MESSAGE));
+    }
+
     match parsed.scheme() {
         "https" => Ok(parsed),
         "http" if is_loopback_host(host) => Ok(parsed),
@@ -274,6 +368,9 @@ pub async fn validate_webdav_url_for_request(raw_url: &str) -> Result<Url, AppEr
                     return Err(AppError::webdav(
                         "主机名解析到链路本地或保留地址，已拒绝连接",
                     ));
+                }
+                Err(DnsDecisionError::FakeIp) => {
+                    return Err(AppError::webdav(FAKE_IP_HOST_MESSAGE));
                 }
                 Err(DnsDecisionError::Public) => {
                     return Err(AppError::webdav(
@@ -327,6 +424,14 @@ mod tests {
         assert!(validate_webdav_url("file:///tmp/a").is_err());
     }
 
+    /// 跨模块一致性：三份 IP 判据（本模块 / commands/link_checker.rs /
+    /// src/security/networkPolicy.ts）对保留段的认定必须对齐。
+    ///
+    /// 注意 `is_private_or_reserved_ipv4` 里的 198.18/15 **一字未改**——WebDAV 对
+    /// fake-ip 的额外拒绝发生在策略层，不是从共享判据里挖掉一块。挖掉的话
+    /// link_checker 的 `literal_ip_gate_still_treats_fake_ip_pool_as_reserved`
+    /// 会同时变红，那才是真正打破一致性。策略层的态度归
+    /// [`fake_ip_pool_is_not_lan_evidence`] 管。
     #[test]
     fn reserved_ranges_match_frontend_and_link_checker() {
         assert!(validate_external_url("https://240.0.0.1/a").is_err());
@@ -334,8 +439,6 @@ mod tests {
         assert!(validate_external_url("https://192.0.0.1/a").is_err());
 
         assert!(validate_webdav_url("https://240.0.0.1/a").is_err());
-        assert!(validate_webdav_url("http://198.18.1.1/a").is_ok());
-        assert!(validate_webdav_url("https://198.18.1.1/a").is_ok());
     }
 
     #[test]
@@ -351,6 +454,54 @@ mod tests {
         assert!(!is_always_blocked_host("192.168.1.1"));
     }
 
+    /// fake-ip 池的边界判据（从 commands/link_checker.rs 搬来）
+    ///
+    /// 判据现在由两个模块共用，方向相反：链接检测靠它豁免、WebDAV 靠它拒绝。
+    /// 边界一旦走样，两边同时出事，所以护栏留在判据所在的模块。
+    #[test]
+    fn fake_ip_pool_matches_proxy_default_range() {
+        for ip in ["198.18.0.0", "198.18.1.172", "198.19.255.255"] {
+            assert!(
+                is_fake_ip_pool_ip(ip.parse().unwrap()),
+                "{} should be inside the fake-ip pool",
+                ip
+            );
+        }
+        for ip in ["198.17.255.255", "198.20.0.0", "8.8.8.8", "192.168.1.1"] {
+            assert!(
+                !is_fake_ip_pool_ip(ip.parse().unwrap()),
+                "{} should be outside the fake-ip pool",
+                ip
+            );
+        }
+        // v4-mapped 形式不能绕过识别
+        assert!(is_fake_ip_pool_ip("::ffff:198.18.1.1".parse().unwrap()));
+        assert!(!is_fake_ip_pool_ip("fe80::1".parse().unwrap()));
+
+        // v6 池：mihomo 的 fake-ip-range6 默认 fdfe:dcba:9876::1/64
+        for ip in ["fdfe:dcba:9876::1", "fdfe:dcba:9876::126", "fdfe:dcba:9876::ffff"] {
+            assert!(
+                is_fake_ip_pool_ip(ip.parse().unwrap()),
+                "{} should be inside the v6 fake-ip pool",
+                ip
+            );
+        }
+        // 相邻但不同的 ULA 前缀是别人家的真实内网，不能顺手多吃
+        for ip in [
+            "fdfe:dcba:9876:1::1",
+            "fdfe:dcba:9875::1",
+            "fd00::1",
+            "fc00::1",
+            "2001:4860:4860::8888",
+        ] {
+            assert!(
+                !is_fake_ip_pool_ip(ip.parse().unwrap()),
+                "{} should be outside the v6 fake-ip pool",
+                ip
+            );
+        }
+    }
+
     /// DNS 解析结果的放行判据不能等同于"非公网"
     ///
     /// 这条盯着的正是曾经的缺陷：`is_private_or_reserved_host` 对下面这批地址
@@ -362,7 +513,6 @@ mod tests {
         assert!(is_allowed_lan_addr("192.168.1.10"));
         assert!(is_allowed_lan_addr("10.0.0.5"));
         assert!(is_allowed_lan_addr("172.16.3.4"));
-        assert!(is_allowed_lan_addr("198.18.1.1"));
 
         // 以下每一个 is_private_or_reserved_host 都返回 true，但绝不能连
         assert!(!is_allowed_lan_addr("169.254.169.254"));
@@ -374,6 +524,69 @@ mod tests {
         // 公网地址：明文 HTTP 下凭证会裸奔
         assert!(!is_allowed_lan_addr("8.8.8.8"));
         assert!(!is_allowed_lan_addr("2001:4860:4860::8888"));
+    }
+
+    /// fake-ip 池不构成「这是局域网」的证据
+    ///
+    /// 开了 TUN + fake-ip 的机器上，**任意**域名都会被代理编进 198.18.0.0/15
+    /// （实测 `img30.360buyimg.com` → 198.18.1.172、`sm.ms` → 198.18.1.15）。
+    /// 旧实现把这个段当局域网放行，于是用户填的公网 `http://dav.example.com`
+    /// 也被判成 NAS，明文凭证防线在这类机器上整个失效。
+    ///
+    /// 与 link_checker 的 `dns_answer_gate_allows_fake_ip_but_blocks_real_private`
+    /// 是同一判据的相反用法：那边猜错只是多看一眼图片，这边猜错是密码裸奔。
+    #[test]
+    fn fake_ip_pool_is_not_lan_evidence() {
+        // 实测到的三个 fake-ip 地址
+        for ip in ["198.18.1.172", "198.18.1.15", "198.18.1.230"] {
+            assert!(
+                !is_allowed_lan_addr(ip),
+                "{} is a fake-ip answer and proves nothing about the target",
+                ip
+            );
+        }
+        // v4-mapped 形式不能绕过
+        assert!(!is_allowed_lan_addr("::ffff:198.18.1.1"));
+
+        // v6 fake-ip 同样不算局域网证据：它落在 ULA 里，
+        // is_private_or_reserved_host 本会把它当内网放行
+        assert!(is_private_or_reserved_host("fdfe:dcba:9876::126"));
+        assert!(!is_allowed_lan_addr("fdfe:dcba:9876::126"));
+        assert!(validate_webdav_url("http://[fdfe:dcba:9876::126]/dav").is_err());
+
+        // DNS 集合裁决要能把 fake-ip 与「确实是公网」区分开——两者出路不同
+        assert_eq!(
+            all_dns_results_allowed(&["198.18.1.172".to_string()]),
+            Err(DnsDecisionError::FakeIp)
+        );
+        assert_eq!(
+            all_dns_results_allowed(&["192.168.1.10".to_string(), "198.18.1.172".to_string()]),
+            Err(DnsDecisionError::FakeIp)
+        );
+
+        // 字面量路径同样拒绝（从 reserved_ranges_match_frontend_and_link_checker 挪来，
+        // 期望值随策略翻转）：没有人的 NAS 挂在 RFC 2544 基准测试段上
+        assert!(validate_webdav_url("http://198.18.1.1/a").is_err());
+        assert!(validate_webdav_url("https://198.18.1.1/a").is_err());
+    }
+
+    /// 防过修护栏：修 fake-ip 不能顺手把真实局域网一起拒了
+    ///
+    /// 群晖 / 自建 NAS 是 WebDAV 图床最主要的用户群，这几个段一旦误伤，
+    /// 功能对他们等同于不存在。
+    #[test]
+    fn real_lan_ranges_survive_the_fake_ip_gate() {
+        for ip in ["127.0.0.1", "192.168.1.10", "10.0.0.5", "172.16.3.4"] {
+            assert!(is_allowed_lan_addr(ip), "{} must stay allowed", ip);
+        }
+
+        assert!(validate_webdav_url("http://192.168.1.10:5005/dav").is_ok());
+        assert!(validate_webdav_url("http://10.0.0.5/dav").is_ok());
+        assert!(validate_webdav_url("http://localhost:5244/dav").is_ok());
+
+        // fake-ip 池的边界外侧是普通公网，不能被判据"顺手"多吃一格
+        assert!(!is_fake_ip_pool_host("198.17.255.255"));
+        assert!(!is_fake_ip_pool_host("198.20.0.0"));
     }
 
     /// DNS 结果集合必须整体放行：混进一个公网地址就要拒绝，
@@ -425,6 +638,14 @@ mod tests {
 
         // 公网 HTTP 字面量：不该退化成"解析不出来就放行"
         assert!(validate_webdav_url_for_request("http://8.8.8.8/dav")
+            .await
+            .is_err());
+
+        // fake-ip 字面量：在 lookup_host 之前就被拦下，两种 scheme 都拒
+        assert!(validate_webdav_url_for_request("http://198.18.1.1/dav")
+            .await
+            .is_err());
+        assert!(validate_webdav_url_for_request("https://198.18.1.1/dav")
             .await
             .is_err());
 

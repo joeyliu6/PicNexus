@@ -13,6 +13,7 @@ use tauri::Emitter;
 
 use crate::error::AppError;
 use crate::log_utils::{safe_path, safe_url};
+use crate::url_policy::is_fake_ip_pool_ip;
 
 /// 最大允许下载的文件大小（50MB）
 const MAX_DOWNLOAD_SIZE: usize = 50 * 1024 * 1024;
@@ -298,32 +299,17 @@ fn is_private_or_reserved_host(host: &str) -> bool {
     }
 }
 
-/// 代理软件的 fake-ip 默认池（198.18.0.0/15）
-///
-/// 严格说这是 RFC 2544 的基准测试段（RFC 6890 scope = Benchmarking）：公网 BGP
-/// 不路由它，企业内网也不会用它。现实里 198.18.x.x 只有一个来源——本机代理
-/// （Clash / sing-box / Surge 等）把域名映射进来的虚拟地址。连它等于连回代理
-/// 隧道再出公网，不是连内网服务。
-fn is_fake_ip_pool(ip: IpAddr) -> bool {
-    let v4 = match ip {
-        IpAddr::V4(ip) => ip,
-        IpAddr::V6(ip) => match ipv4_mapped_from_ipv6(ip) {
-            Some(mapped) => mapped,
-            None => return false,
-        },
-    };
-
-    let octets = v4.octets();
-    octets[0] == 198 && (18..=19).contains(&octets[1])
-}
-
 /// DNS 解析结果的拒绝判据（区别于字面量 IP 判据）
 ///
 /// 字面量 `https://198.18.1.1/x.jpg` 仍然由 [`is_private_or_reserved_host`] 拒绝：
 /// 没有正常图床会把域名指到基准测试段，拒它零成本。但"域名解析到 198.18.x.x"
 /// 是 fake-ip 的必然产物，拿它当内网证据等于在所有 TUN 用户机器上把功能废掉。
+///
+/// fake-ip 池判据本身住在 `crate::url_policy`：同一个池，WebDAV 那边用它做
+/// **拒绝**（明文凭证不能赌），这里用它做**豁免**（只读探测猜错代价极低）。
+/// 默认值相反，判据必须是同一份。
 fn dns_answer_is_forbidden(ip: IpAddr) -> bool {
-    is_private_or_reserved_ip(ip) && !is_fake_ip_pool(ip)
+    is_private_or_reserved_ip(ip) && !is_fake_ip_pool_ip(ip)
 }
 
 /// 只读探测用的出站校验：scheme + 字面量 IP + 凭证，**不做 DNS 层裁决**
@@ -722,31 +708,25 @@ mod tests {
         }
     }
 
-    #[test]
-    fn fake_ip_pool_matches_proxy_default_range() {
-        for ip in ["198.18.0.0", "198.18.1.172", "198.19.255.255"] {
-            assert!(
-                is_fake_ip_pool(ip.parse().unwrap()),
-                "{} should be inside the fake-ip pool",
-                ip
-            );
-        }
-        for ip in ["198.17.255.255", "198.20.0.0", "8.8.8.8", "192.168.1.1"] {
-            assert!(
-                !is_fake_ip_pool(ip.parse().unwrap()),
-                "{} should be outside the fake-ip pool",
-                ip
-            );
-        }
-        // v4-mapped 形式不能绕过识别
-        assert!(is_fake_ip_pool("::ffff:198.18.1.1".parse().unwrap()));
-        assert!(!is_fake_ip_pool("fe80::1".parse().unwrap()));
-    }
+    // Why 这里没有 fake-ip 池的边界测试：判据已搬到 `crate::url_policy`，
+    // 边界用例由那边的 `fake_ip_pool_matches_proxy_default_range` 覆盖。
+    // 下面这条盯的是本模块的用法——豁免方向对不对。
 
     #[test]
     fn dns_answer_gate_allows_fake_ip_but_blocks_real_private() {
         // 实测到的三个 fake-ip：修复前它们让链接检测全量误判
-        for ip in ["198.18.1.172", "198.18.1.15", "198.18.1.230"] {
+        //
+        // v6 池同样要豁免：mihomo 的 fake-ip-range6 默认 fdfe:dcba:9876::1/64，
+        // 落在 ULA（fc00::/7）里会被 is_private_or_reserved_ip 判成内网。
+        // 而 lookup_host 返回的是 A + AAAA 的**并集**，循环里任意一条被拒就整体失败——
+        // 只豁免 v4 的话，双栈机器上「从 URL 下载图片」依然全军覆没。
+        for ip in [
+            "198.18.1.172",
+            "198.18.1.15",
+            "198.18.1.230",
+            "fdfe:dcba:9876::126",
+            "fdfe:dcba:9876::1a6",
+        ] {
             assert!(
                 !dns_answer_is_forbidden(ip.parse().unwrap()),
                 "{} is a fake-ip answer and must be allowed",
