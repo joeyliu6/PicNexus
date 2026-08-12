@@ -14,6 +14,9 @@ const BLOCKED_HOST_MESSAGE = '地址不能指向链路本地或保留地址。';
  *
  * 与 Rust 侧 `src-tauri/src/url_policy.rs` 的 `FAKE_IP_HOST_MESSAGE` 保持逐字一致：
  * 同一件事在设置页和上传时说两种话，用户会以为是两个不同的问题。
+ *
+ * 这条一致性由 `scripts/check-cross-language-constants.mjs` 在 `npm run lint` 阶段守着，
+ * 不再只是口头约定；改名或挪窝时同步更新那里的 `PAIRS`。
  */
 const FAKE_IP_HOST_MESSAGE =
   '该地址属于代理软件的 fake-ip 地址池（198.18.x.x），无法确认它是局域网。请改填 NAS 的实际内网 IP（如 http://192.168.1.10:5005），或改用 HTTPS。';
