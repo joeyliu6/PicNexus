@@ -154,11 +154,22 @@ function csvAlwaysQuoted(value: string): string {
   return wrapQuoted(guardFormulaInjection(value));
 }
 
+/**
+ * CSV 的状态列
+ *
+ * Why `blocked` 必须单独列一条：筛选 / 计数 / 汇总那几处都是按**排除法**写的
+ * （不是 timeout、不是 suspicious 的都归 invalid），新增 error_type 会自动归位；
+ * 这里是**逐个点名**，漏点名就悄悄退回「失效」。
+ *
+ * 而这一字之差会把结论引反：导出的表是拿去排查、发给别人看的，「失效」读作
+ * 「图床挂了，这图没救了」，真相却是「被本机出站策略拦下，改成 https 就能用」。
+ */
 function statusLabel(row: LinkCheckRow): string {
   const r = row.checkResult;
   if (!r) return '未检测';
   if (r.is_valid) return '有效';
   if (r.error_type === 'timeout') return '超时';
+  if (r.error_type === 'blocked') return '拦截';
   if (r.error_type === 'suspicious' || r.browser_might_work) return '疑似异常';
   return '失效';
 }

@@ -86,6 +86,24 @@ describe('exportCsv', () => {
     expect(csv).toContain('疑似异常');
   });
 
+  it('被策略拦截的链接状态为"拦截"，不退回"失效"', () => {
+    // 界面显示「拦截」、导出写「失效」，会把读表的人引向「图床挂了」，
+    // 而真相是本机出站策略拦的，改成 https 就能用。
+    const row: LinkCheckRow = {
+      historyId: 'h1', serviceId: 'r2', fileName: 'img.jpg',
+      url: 'http://old.example.com/img.jpg', rawUrl: 'http://old.example.com/img.jpg',
+      checkResult: {
+        link: 'http://old.example.com/img.jpg',
+        is_valid: false, error_type: 'blocked',
+        error: '外部 HTTP 图片地址已禁用，请改用 HTTPS；HTTP 仅保留给本机回环服务。',
+        browser_might_work: false,
+      },
+    };
+    const csv = exportCsv([row]);
+    expect(csv).toContain('拦截');
+    expect(csv).not.toContain('失效');
+  });
+
   it('未检测时状态为"未检测"', () => {
     const row: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: 'img.jpg',
