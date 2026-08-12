@@ -179,3 +179,35 @@
 ## 执行完成后
 
 每批完成时如实报告：改了哪些文件、门禁输出（含失败）、有哪些条目跳过及原因。全部三批完成后，在本文件底部追加执行记录（日期、批次、提交 hash）。
+
+---
+
+## 执行记录
+
+### 2026-08-13 · 第一批（Rust 后端）· 已完成
+
+9 条全部落地，无跳过项。门禁：`cargo check --all-targets` 通过，`cargo test` **264 passed / 0 failed**。
+
+| 提交 | 覆盖条目 | 主要文件 |
+|------|---------|---------|
+| `cd25352` | 1-1、1-2 | `server/upload_handler.rs`、`commands/nami.rs` |
+| `f266019` | 1-3、1-4 | `commands/user_files.rs`、`error.rs` |
+| `d5f956c` | 1-5 | `url_policy.rs`、`commands/link_checker.rs`、`docs/flows/link-check-flow.md` |
+| `5c84f3b` | 1-6~1-9 | `log_utils.rs`、`commands/link_checker.rs`、`analytics/{mod,heartbeat}.rs`、`server/upload_handler.rs` |
+
+**与原计划的三处偏离**（执行前已与用户确认）：
+
+1. **1-2 超时值**：不是计划写的 60s，改为 `connect_timeout(15s)` + `timeout(300s)`。原因：该 client 同时承载小 JSON 请求与 `upload_part` 的一次性 50MB PUT，且 `upload_part` 没有单请求超时。60s 会在慢网络下打断大文件上传——等于把「永久 hang」换成「上传失败」。
+2. **1-5 多改一处**：`2001:db8::/32` 除了并进 `is_private_or_reserved_ip`，**同时**加进 `is_always_blocked_host`。原因：`is_allowed_lan_addr` 拿 `is_private_or_reserved_host` 当白名单条件，只做前者会让 WebDAV 反过来把 `http://[2001:db8::1]/dav` 当局域网 NAS 放行明文凭证——合并判据却放宽了另一侧边界，方向反了。
+3. **1-4 多删一个 impl**：`From<&str> for AppError` 与 `From<String>` 缺陷完全相同（都无条件映射 Network），一并删除。`cargo check` 确认两者在业务代码中均为死代码，无编译连锁。
+
+**执行中发现、计划文档未记的两点**：
+
+- 1-7 的 `cleanup_old_temp_files` 调用点有**两处**（`link_checker.rs` 的 `download_image_from_url` 与 `download_url_image`），计划只列了前者。两处已统一走新的 `schedule_temp_cleanup()`。
+- 1-9 所在函数里有一个局部变量 `let safe_path = ...`，会遮蔽 `log_utils::safe_path`。加日志时必须先把它改名（已改为 `requested_path`）。
+
+**顺手做了、属同类问题**：`user_files.rs` 两个 async command 里的 `std::fs::{write,read_to_string,metadata}` 一并改 `tokio::fs`（导入路径最大读 50MB）。
+
+**明确未做**（留待另立条目）：`upload_handler.rs:645` 的 `std::fs::canonicalize` 与 `:656` 的 `validate_image_file` 同样是 async 里的同步 IO，但计划未列，且后者会牵出一串 `Result<_, String>` 改造。
+
+**未验**：1-1 的并发冒烟（一边 `POST /upload/file` 大文件、一边 `curl /status`）需要跑起 GUI，本次只做了静态核对——三个 handler 的锁 guard 作用域内均无 `.await`。
