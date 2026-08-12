@@ -618,8 +618,15 @@ pub async fn handle_upload(
     State(state): State<ServerRuntimeState>,
     Json(req): Json<UploadRequest>,
 ) -> Json<UploadResponse> {
-    let config_guard = state.upload_config.lock().await;
-    let Some(config) = config_guard.as_ref() else {
+    // Why 先克隆再放锁：guard 一路持到上传结束，就等于把整把锁按住整段网络 IO
+    // （单次可达 60s+）。后果有两层——并发上传被完全串行化，而 /status 抢的是同一把锁，
+    // 于是 Typora / Obsidian 的探活请求在别人上传期间会直接挂死。
+    // 配置对象只有若干短字符串，clone 的成本相对一次上传可以忽略。
+    let config = {
+        let guard = state.upload_config.lock().await;
+        guard.as_ref().cloned()
+    };
+    let Some(config) = config else {
         return Json(UploadResponse {
             success: false,
             result: None,
@@ -661,7 +668,7 @@ pub async fn handle_upload(
             });
         }
 
-        match upload_validated_file(canonical.to_str().unwrap_or(path), config).await {
+        match upload_validated_file(canonical.to_str().unwrap_or(path), &config).await {
             Ok(url) => {
                 log::info!("[Server] ✓ 上传成功: {}", safe_url(&url));
                 urls.push(url);
@@ -699,13 +706,17 @@ pub struct StatusResponse {
 
 /// GET /status 处理器
 pub async fn handle_status(State(state): State<ServerRuntimeState>) -> Json<StatusResponse> {
-    let config_guard = state.upload_config.lock().await;
-    let (service, service_name, ready) = match config_guard.as_ref() {
-        Some(cfg) => {
-            let (id, name) = get_service_info(cfg);
-            (Some(id.to_string()), Some(name.to_string()), true)
+    // 探活端点必须秒回：guard 收进独立作用域，确保它在构造响应之前就归还。
+    // 本端点自身没有 .await，真正会堵住它的是上传 handler 的持锁时长——那边已改为克隆后放锁。
+    let (service, service_name, ready) = {
+        let config_guard = state.upload_config.lock().await;
+        match config_guard.as_ref() {
+            Some(cfg) => {
+                let (id, name) = get_service_info(cfg);
+                (Some(id.to_string()), Some(name.to_string()), true)
+            }
+            None => (None, None, false),
         }
-        None => (None, None, false),
     };
 
     Json(StatusResponse {
@@ -749,8 +760,12 @@ pub async fn handle_file_upload(
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
-    let config_guard = state.upload_config.lock().await;
-    let Some(cfg) = config_guard.as_ref() else {
+    // 同 handle_upload：克隆后立刻放锁，不让上传的网络 IO 压着 /status 和其他上传。
+    let cfg = {
+        let guard = state.upload_config.lock().await;
+        guard.as_ref().cloned()
+    };
+    let Some(cfg) = cfg else {
         return (
             StatusCode::OK,
             Json(UploadResponse {
@@ -839,7 +854,7 @@ pub async fn handle_file_upload(
 
     // Why: body 已经过 validate_image_bytes，且临时文件扩展名是按检测结果生成的，
     // 无需再让下游把刚写下去的文件重新读一遍做同样的校验。
-    let result = upload_validated_file(temp_path.to_str().unwrap_or(""), cfg).await;
+    let result = upload_validated_file(temp_path.to_str().unwrap_or(""), &cfg).await;
     let _ = std::fs::remove_file(&temp_path);
     let _ = std::fs::remove_dir(&request_temp_dir);
 

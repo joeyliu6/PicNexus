@@ -560,7 +560,16 @@ pub async fn upload_to_nami(
 
     // 4. 创建 HTTP 客户端
     // 注意：使用标准 TLS 验证，确保通信安全
+    //
+    // Why 两级超时而不是单一值：这个 client 同时承载两类差异极大的请求——
+    // STS / 初始化 / 完成上传是小 JSON 往返，而 upload_part 会一次 PUT 最多 50MB 的 body，
+    // 且这几个函数都没有各自的 `.timeout()`（唯一有的是 check_file_exists 的 5s HEAD）。
+    // 定成 60s 会在慢网络下把大文件上传打断，等于把「永久 hang」换成「上传失败」；
+    // 所以拆成「连不上就快失败」+「连上了给足传输时间」：
+    // connect_timeout 15s 覆盖服务端不响应握手的情况，总超时 300s 对应约 170KB/s 的下限。
     let client = Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(300))
         .build()
         .into_network_err_with("创建 HTTP 客户端失败")?;
 
