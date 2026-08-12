@@ -95,6 +95,13 @@ flowchart TD
 
 **v6 池同样豁免** `fdfe:dcba:9876::/64`（mihomo `fake-ip-range6` 默认值）：`lookup_host` 返回的是 A + AAAA 的**并集**，`validate_fetch_url` 逐条判定、任意一条被拒就整体失败。而 `fdfe:…` 落在 ULA（`fc00::/7`）里会被 `is_private_or_reserved_ip` 判成内网——只豁免 v4 的话，双栈 + TUN 的机器上「从 URL 下载图片」依然全量失败。判据都在 `is_fake_ip_pool_ip`。
 
+> 📍 **基础判据的位置**：`normalize_host` / `is_loopback_host` / `is_loopback_ip` /
+> `is_private_or_reserved_host` / `is_private_or_reserved_ip` 全部住在 `src-tauri/src/url_policy.rs`，
+> `commands/link_checker.rs` 只 `use` 不实现。曾经两边各写一份，然后漂移了——link_checker
+> 那份多拒 IPv6 文档段 `2001:db8::/32`，url_policy 那份没有，同一个地址两边结论相反。
+> 合并时把漂移的那一半**吸收**进 url_policy（同时进 `is_always_blocked_host`，否则 WebDAV 会
+> 反过来把文档段当局域网放行明文凭证）。本模块保留的只有策略层差异：fake-ip 的豁免方向。
+
 > ⚠️ 豁免只发生在 **DNS 答案**判定点。字面量 `https://198.18.1.1/x.jpg` 仍然拒绝，`is_private_or_reserved_ipv4` 里的 198.18/15 一字未改——`src-tauri/src/url_policy.rs` 的跨模块一致性测试 `reserved_ranges_match_frontend_and_link_checker` 依赖它。
 
 #### 同一判据的另一面：WebDAV 是**拒绝** fake-ip

@@ -79,6 +79,18 @@ fn ipv4_mapped_from_ipv6(ip: Ipv6Addr) -> Option<Ipv4Addr> {
     None
 }
 
+pub fn is_loopback_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ip) => ip.is_loopback(),
+        IpAddr::V6(ip) => {
+            ip.is_loopback()
+                || ipv4_mapped_from_ipv6(ip)
+                    .map(|mapped| mapped.is_loopback())
+                    .unwrap_or(false)
+        }
+    }
+}
+
 pub fn is_loopback_host(host: &str) -> bool {
     let normalized = normalize_host(host);
     if normalized.eq_ignore_ascii_case("localhost") {
@@ -87,26 +99,24 @@ pub fn is_loopback_host(host: &str) -> bool {
 
     normalized
         .parse::<IpAddr>()
-        .map(|ip| match ip {
-            IpAddr::V4(ip) => ip.is_loopback(),
-            IpAddr::V6(ip) => {
-                ip.is_loopback()
-                    || ipv4_mapped_from_ipv6(ip)
-                        .map(|mapped| mapped.is_loopback())
-                        .unwrap_or(false)
-            }
-        })
+        .map(is_loopback_ip)
         .unwrap_or(false)
 }
 
-pub fn is_private_or_reserved_host(host: &str) -> bool {
-    if is_loopback_host(host) {
+/// 「这不是公网地址」的统一判据
+///
+/// 需要 IP 形态（而不是主机名）的调用方走这里：链接检测拿 `lookup_host` 的解析结果
+/// 逐条判定，没有字符串可用。判据本身与 [`is_private_or_reserved_host`] 完全一致——
+/// 曾经 commands/link_checker.rs 里有一份逐字复制的副本，然后就漂移了
+/// （那边多拒 `2001:db8::/32`，这边没有，同一个地址两边结论相反）。
+pub fn is_private_or_reserved_ip(ip: IpAddr) -> bool {
+    if is_loopback_ip(ip) {
         return false;
     }
 
-    match normalize_host(host).parse::<IpAddr>() {
-        Ok(IpAddr::V4(ip)) => is_private_or_reserved_ipv4(ip),
-        Ok(IpAddr::V6(ip)) => {
+    match ip {
+        IpAddr::V4(ip) => is_private_or_reserved_ipv4(ip),
+        IpAddr::V6(ip) => {
             if let Some(mapped) = ipv4_mapped_from_ipv6(ip) {
                 return is_private_or_reserved_ipv4(mapped);
             }
@@ -115,12 +125,25 @@ pub fn is_private_or_reserved_host(host: &str) -> bool {
                 || ip.is_multicast()
                 || ip.segments()[0] & 0xffc0 == 0xfe80
                 || ip.segments()[0] & 0xfe00 == 0xfc00
+                // RFC 3849 文档示例段，v4 侧 `is_documentation()` 的 v6 对应物。
+                // 合并自 link_checker 的副本：漂移的那一半应该被吸收，不是被删掉。
+                || (ip.segments()[0] == 0x2001 && ip.segments()[1] == 0x0db8)
         }
+    }
+}
+
+pub fn is_private_or_reserved_host(host: &str) -> bool {
+    if is_loopback_host(host) {
+        return false;
+    }
+
+    match normalize_host(host).parse::<IpAddr>() {
+        Ok(ip) => is_private_or_reserved_ip(ip),
         Err(_) => false,
     }
 }
 
-/// 链路本地 / 组播 / 未指定地址：任何策略下都拒绝
+/// 链路本地 / 组播 / 未指定 / 文档示例地址：任何策略下都拒绝
 pub fn is_always_blocked_host(host: &str) -> bool {
     match normalize_host(host).parse::<IpAddr>() {
         Ok(IpAddr::V4(ip)) => {
@@ -140,7 +163,17 @@ pub fn is_always_blocked_host(host: &str) -> bool {
                     || octets[0] == 0
                     || octets[0] >= 240;
             }
-            ip.is_unspecified() || ip.is_multicast() || ip.segments()[0] & 0xffc0 == 0xfe80
+            ip.is_unspecified()
+                || ip.is_multicast()
+                || ip.segments()[0] & 0xffc0 == 0xfe80
+                // 与 is_private_or_reserved_ip 里的 2001:db8::/32 是一次改动的两半。
+                //
+                // Why 必须同时加这里：`is_allowed_lan_addr` 的白名单条件之一就是
+                // `is_private_or_reserved_host`。光把文档段并进「非公网」，
+                // 结果是 WebDAV 反而把 http://[2001:db8::1]/dav 当成局域网 NAS 放行明文凭证——
+                // 合并一份判据却顺手放宽了另一侧的安全边界，方向正好反了。
+                // 文档示例段现实网络里不该出现，任何策略下拒绝它的代价是零。
+                || (ip.segments()[0] == 0x2001 && ip.segments()[1] == 0x0db8)
         }
         Err(_) => false,
     }
@@ -440,8 +473,87 @@ mod tests {
         assert!(validate_external_url("https://240.0.0.1/a").is_err());
         assert!(validate_external_url("https://198.18.1.1/a").is_err());
         assert!(validate_external_url("https://192.0.0.1/a").is_err());
+        assert!(validate_external_url("https://[2001:db8::1]/a").is_err());
 
         assert!(validate_webdav_url("https://240.0.0.1/a").is_err());
+    }
+
+    /// IPv6 文档段 `2001:db8::/32`：从 commands/link_checker.rs 的副本合并而来
+    ///
+    /// 合并前只有 link_checker 拒它，本模块放行——同一个地址两边结论相反，正是
+    /// 判据双份实现必然走样的样本。合并后两个方向都必须拒：
+    ///
+    /// - 「非公网」判据认它（否则 link_checker 的探测路径会退化，放行文档段字面量）；
+    /// - 「任何策略都拒」名单也认它。第二条不是可选的——`is_allowed_lan_addr` 拿
+    ///   `is_private_or_reserved_host` 当白名单条件，只加第一条的话，WebDAV 会把
+    ///   `http://[2001:db8::1]/dav` 当成局域网 NAS 放行明文凭证，合并判据反而放宽了边界。
+    #[test]
+    fn ipv6_documentation_range_is_rejected_by_both_gates() {
+        for ip in ["2001:db8::1", "2001:db8:ffff:ffff::1", "2001:0db8::"] {
+            assert!(
+                is_private_or_reserved_host(ip),
+                "{} should count as non-public",
+                ip
+            );
+            assert!(
+                is_always_blocked_host(ip),
+                "{} must stay blocked under every policy",
+                ip
+            );
+            assert!(
+                !is_allowed_lan_addr(ip),
+                "{} is not evidence of a LAN target",
+                ip
+            );
+        }
+
+        // 相邻前缀是正常公网，不能被判据顺手多吃
+        for ip in ["2001:db9::1", "2001:dba::1", "2001:4860:4860::8888"] {
+            assert!(
+                !is_private_or_reserved_host(ip),
+                "{} should stay public",
+                ip
+            );
+            assert!(!is_always_blocked_host(ip), "{} should stay allowed", ip);
+        }
+
+        assert!(validate_webdav_url("http://[2001:db8::1]/dav").is_err());
+        assert!(validate_webdav_url("https://[2001:db8::1]/dav").is_err());
+    }
+
+    /// IP 版与主机名版判据必须给出同一个答案
+    ///
+    /// 两个模块分别用其中一个（link_checker 拿 DNS 解析结果走 IP 版，
+    /// WebDAV 拿 URL 主机名走主机名版），一旦分叉就又回到「双份实现」的老问题。
+    #[test]
+    fn ip_and_host_predicates_stay_in_sync() {
+        for ip in [
+            "192.168.1.1",
+            "10.0.0.5",
+            "169.254.169.254",
+            "198.18.1.1",
+            "2001:db8::1",
+            "fc00::1",
+            "fe80::1",
+            "127.0.0.1",
+            "::1",
+            "8.8.8.8",
+            "2001:4860:4860::8888",
+        ] {
+            let parsed: IpAddr = ip.parse().expect("test IP should parse");
+            assert_eq!(
+                is_private_or_reserved_ip(parsed),
+                is_private_or_reserved_host(ip),
+                "{} 的 IP 版与主机名版判据结论不一致",
+                ip
+            );
+            assert_eq!(
+                is_loopback_ip(parsed),
+                is_loopback_host(ip),
+                "{} 的回环判据结论不一致",
+                ip
+            );
+        }
     }
 
     #[test]

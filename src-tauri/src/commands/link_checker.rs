@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::IpAddr;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -13,7 +13,9 @@ use tauri::Emitter;
 
 use crate::error::AppError;
 use crate::log_utils::{safe_path, safe_url};
-use crate::url_policy::is_fake_ip_pool_ip;
+use crate::url_policy::{
+    is_fake_ip_pool_ip, is_loopback_host, is_private_or_reserved_host, is_private_or_reserved_ip,
+};
 
 /// 最大允许下载的文件大小（50MB）
 const MAX_DOWNLOAD_SIZE: usize = 50 * 1024 * 1024;
@@ -199,105 +201,13 @@ fn host_matches_domain(host: &str, domain: &str) -> bool {
             .is_some_and(|prefix| prefix.ends_with('.'))
 }
 
-fn normalize_host(host: &str) -> String {
-    host.trim()
-        .trim_start_matches('[')
-        .trim_end_matches(']')
-        .trim_end_matches('.')
-        .to_ascii_lowercase()
-}
-
-fn ipv4_mapped_from_ipv6(ip: Ipv6Addr) -> Option<Ipv4Addr> {
-    let segments = ip.segments();
-    if segments[0] == 0
-        && segments[1] == 0
-        && segments[2] == 0
-        && segments[3] == 0
-        && segments[4] == 0
-        && segments[5] == 0xffff
-    {
-        let high = segments[6];
-        let low = segments[7];
-        return Some(Ipv4Addr::new(
-            (high >> 8) as u8,
-            high as u8,
-            (low >> 8) as u8,
-            low as u8,
-        ));
-    }
-
-    None
-}
-
-fn is_loopback_ip(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(ip) => ip.is_loopback(),
-        IpAddr::V6(ip) => {
-            ip.is_loopback()
-                || ipv4_mapped_from_ipv6(ip)
-                    .map(|mapped| mapped.is_loopback())
-                    .unwrap_or(false)
-        }
-    }
-}
-
-fn is_loopback_host(host: &str) -> bool {
-    let normalized = normalize_host(host);
-    if normalized == "localhost" {
-        return true;
-    }
-
-    normalized
-        .parse::<IpAddr>()
-        .map(is_loopback_ip)
-        .unwrap_or(false)
-}
-
-fn is_private_or_reserved_ipv4(ip: Ipv4Addr) -> bool {
-    if ip.is_loopback() {
-        return false;
-    }
-
-    let octets = ip.octets();
-    ip.is_private()
-        || ip.is_link_local()
-        || ip.is_broadcast()
-        || ip.is_multicast()
-        || ip.is_documentation()
-        || octets[0] == 0
-        || (octets[0] == 100 && (64..=127).contains(&octets[1]))
-        || (octets[0] == 192 && octets[1] == 0 && octets[2] == 0)
-        || (octets[0] == 198 && (18..=19).contains(&octets[1]))
-        || octets[0] >= 240
-}
-
-fn is_private_or_reserved_ip(ip: IpAddr) -> bool {
-    if is_loopback_ip(ip) {
-        return false;
-    }
-
-    match ip {
-        IpAddr::V4(ip) => is_private_or_reserved_ipv4(ip),
-        IpAddr::V6(ip) => {
-            if let Some(mapped) = ipv4_mapped_from_ipv6(ip) {
-                return is_private_or_reserved_ipv4(mapped);
-            }
-
-            ip.is_unspecified()
-                || ip.is_multicast()
-                || ip.segments()[0] & 0xffc0 == 0xfe80
-                || ip.segments()[0] & 0xfe00 == 0xfc00
-                || (ip.segments()[0] == 0x2001 && ip.segments()[1] == 0x0db8)
-        }
-    }
-}
-
-fn is_private_or_reserved_host(host: &str) -> bool {
-    match normalize_host(host).parse::<IpAddr>() {
-        Ok(ip) => is_private_or_reserved_ip(ip),
-        Err(_) => false,
-    }
-}
+// Why 这里不再有 normalize_host / is_loopback_* / is_private_or_reserved_* 的本地实现：
+// 它们曾经是 `crate::url_policy` 的逐字副本，然后不出意外地漂移了——这边多拒了 IPv6
+// 文档段 `2001:db8::/32`，那边没有，同一个地址在两个模块得到相反的结论。
+// 安全判据重复实现一份就多一处走样的机会，现已全部并回 url_policy（文档段判据一并带过去）。
+//
+// 本模块保留的只有**策略层**差异：fake-ip 池在这里豁免、在 url_policy 那里拒绝。
+// 那不是重复代码，是刻意相反的默认值，见下面 `dns_answer_is_forbidden`。
 
 /// DNS 解析结果的拒绝判据（区别于字面量 IP 判据）
 ///
@@ -696,6 +606,8 @@ mod tests {
             "https://[::ffff:192.168.1.10]/a.png",
             "https://[fe80::1]/a.png",
             "https://[fc00::1]/a.png",
+            // IPv6 文档段：判据合并进 url_policy 后本模块的结论必须原样保留
+            "https://[2001:db8::1]/a.png",
             // fake-ip 池的字面量仍然拒绝：没有正常图床把域名指到基准测试段
             "https://198.18.1.1/a.png",
             "file:///tmp/a.png",
