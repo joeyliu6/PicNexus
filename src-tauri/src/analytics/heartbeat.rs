@@ -46,11 +46,14 @@ impl HeartbeatState {
     }
 
     /// 装入新的心跳任务并终止旧的，保证同一时刻只有一条心跳在跑
+    ///
+    /// 锁中毒时恢复而不是 panic：心跳只是「此刻有多少人在运行」的统计信号，
+    /// 没有任何理由让它把整个 app 拖下水。同 analytics/mod.rs 的 lock_active。
     fn replace(&self, handle: Option<tokio::task::AbortHandle>) {
-        let mut active = self
-            .active
-            .lock()
-            .expect("analytics heartbeat state poisoned");
+        let mut active = self.active.lock().unwrap_or_else(|poisoned| {
+            log::warn!("[Analytics] 心跳状态锁被污染，已恢复继续使用");
+            poisoned.into_inner()
+        });
         if let Some(previous) = active.take() {
             previous.abort();
         }

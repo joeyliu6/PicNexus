@@ -35,6 +35,15 @@ static URL_DOWNLOAD_COUNTER: AtomicU32 = AtomicU32::new(0);
 /// 临时文件过期时间（1小时 = 3600秒）
 const TEMP_FILE_MAX_AGE_SECS: u64 = 3600;
 
+/// 两次临时文件清理之间的最小间隔（10 分钟）
+///
+/// 清理要遍历整个系统临时目录，Windows 上常有上万条目。而过期阈值本身是 1 小时，
+/// 每次下载都扫一遍除了烧 IO 什么也不会多清出来。
+const TEMP_CLEANUP_MIN_INTERVAL_SECS: u64 = 600;
+
+/// 上次执行清理的 UNIX 秒（0 = 从未执行）
+static LAST_TEMP_CLEANUP_SECS: AtomicU64 = AtomicU64::new(0);
+
 /// 批量检测进度事件节流：每 N 条 emit 一次（首末强制 emit 保证准确性）
 /// 避免 5w+ 条批量检测下每毫秒数千事件打爆前端事件队列
 const PROGRESS_EMIT_EVERY_N: usize = 10;
@@ -1101,6 +1110,38 @@ pub async fn check_image_link(
     Ok(result)
 }
 
+/// 按节流间隔派发一次临时文件清理，从不阻塞调用方
+///
+/// 两件事在这里一起解决：
+///
+/// 1. **节流**：`compare_exchange` 抢执行权，抢到的那个协程才真去扫盘。多个下载并发
+///    触发时只有一个会跑，其余直接返回。
+/// 2. **挪出 async 上下文**：清理是同步遍历整个 `%TEMP%`，直接在 async 里跑会把
+///    一条 tokio worker 按住整段遍历时间。丢给 `spawn_blocking` 且**不 await**——
+///    清理结果不影响下载，没有理由让下载等它。
+fn schedule_temp_cleanup() {
+    let now = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        Ok(elapsed) => elapsed.as_secs(),
+        // 系统时钟早于 1970：拿不到可比较的时间戳，这次就跳过，不冒重复扫盘的险
+        Err(_) => return,
+    };
+
+    let last = LAST_TEMP_CLEANUP_SECS.load(Ordering::Relaxed);
+    if last != 0 && now.saturating_sub(last) < TEMP_CLEANUP_MIN_INTERVAL_SECS {
+        return;
+    }
+
+    // 抢到执行权才动手；输的那个说明已经有人在扫了
+    if LAST_TEMP_CLEANUP_SECS
+        .compare_exchange(last, now, Ordering::AcqRel, Ordering::Relaxed)
+        .is_err()
+    {
+        return;
+    }
+
+    tokio::task::spawn_blocking(cleanup_old_temp_files);
+}
+
 /// 清理过期的临时文件
 /// 删除超过 TEMP_FILE_MAX_AGE_SECS 秒的旧临时文件，防止磁盘空间被耗尽
 fn cleanup_old_temp_files() {
@@ -1170,8 +1211,8 @@ pub async fn download_image_from_url(
 ) -> Result<String, AppError> {
     log::info!("[下载图片] 开始下载: {}", safe_url(&url));
 
-    // 首先清理过期的临时文件，防止磁盘空间耗尽
-    cleanup_old_temp_files();
+    // 派发一次过期临时文件清理（带节流，后台执行），防止磁盘空间耗尽
+    schedule_temp_cleanup();
 
     let validated_url = validate_fetch_url(url.trim()).await?;
     let http_client = safe_no_redirect_client()?;
@@ -1490,8 +1531,8 @@ pub async fn download_url_image(
     let validated_url = validate_fetch_url(trimmed).await?;
     let http_client = safe_no_redirect_client()?;
 
-    // 清理过期临时文件
-    cleanup_old_temp_files();
+    // 派发一次过期临时文件清理（带节流，后台执行）
+    schedule_temp_cleanup();
 
     // 发送 GET 请求
     let response = http_client

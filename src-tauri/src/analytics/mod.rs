@@ -99,12 +99,25 @@ impl AnalyticsRuntimeState {
         self.generation.load(Ordering::SeqCst) == generation
     }
 
+    /// 取 active 锁，中毒时恢复而不是 panic
+    ///
+    /// Why 不用 `.expect()`：遥测是纯旁路功能，用户开不开它，图床都照常上传。
+    /// 而 `expect` 在锁中毒时会 panic——某个持锁线程崩过一次，就要连累整个 app 一起死。
+    /// 这里保护的只是一个 AbortHandle，最坏情况是多留一个已失效的句柄，
+    /// 拿它换整个进程的存活显然不划算。范式同 commands/upload.rs 的进度计数器。
+    fn lock_active(&self) -> std::sync::MutexGuard<'_, Option<ActiveRuntime>> {
+        self.active.lock().unwrap_or_else(|poisoned| {
+            log::warn!("[Analytics] 状态锁被污染，已恢复继续使用");
+            poisoned.into_inner()
+        })
+    }
+
     fn set_active(&self, active: ActiveRuntime) {
-        *self.active.lock().expect("analytics state poisoned") = Some(active);
+        *self.lock_active() = Some(active);
     }
 
     fn take_active(&self, generation: Option<u64>) -> Option<ActiveRuntime> {
-        let mut active = self.active.lock().expect("analytics state poisoned");
+        let mut active = self.lock_active();
         if generation.is_some_and(|expected| {
             active
                 .as_ref()

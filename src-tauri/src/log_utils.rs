@@ -1,4 +1,5 @@
 use regex::Regex;
+use std::sync::LazyLock;
 use url::Url;
 
 const MAX_PREVIEW_CHARS: usize = 160;
@@ -28,44 +29,45 @@ pub fn summarize_text(text: &str) -> String {
     )
 }
 
+/// 日志脱敏：抹掉凭证、把 URL 与文件路径换成不可还原的摘要
+///
+/// Why 每一步都保持 `Cow` 而不是 `.to_string()`：这里是 sidecar 逐行日志的热路径
+/// （`commands/nami_token.rs`、`commands/qiyu_token.rs` 对每一行输出都调一次），
+/// 绝大多数行一个正则都命不中。`replace_all` 无匹配时返回 `Cow::Borrowed`，
+/// 链式借用下来最后只在结尾分配一次；旧写法每步无条件 `to_string`，
+/// 一行日志固定付 6 次分配。
 pub fn sanitize_text(text: &str) -> String {
-    let with_redacted_auth_headers = authorization_header_regex()
-        .replace_all(text, |captures: &regex::Captures<'_>| {
+    let with_redacted_auth_headers =
+        AUTHORIZATION_HEADER_RE.replace_all(text, |captures: &regex::Captures<'_>| {
             format!("{}=[REDACTED]", &captures[1])
-        })
-        .to_string();
-    let with_redacted_headers = cookie_header_regex()
-        .replace_all(
-            &with_redacted_auth_headers,
-            |captures: &regex::Captures<'_>| format!("{}=[REDACTED]", &captures[1]),
-        )
-        .to_string();
+        });
 
-    let with_redacted_assignments = sensitive_assignment_regex()
-        .replace_all(&with_redacted_headers, |captures: &regex::Captures<'_>| {
-            format!("{}=[REDACTED]", &captures[1])
-        })
-        .to_string();
+    let with_redacted_headers = COOKIE_HEADER_RE.replace_all(
+        &with_redacted_auth_headers,
+        |captures: &regex::Captures<'_>| format!("{}=[REDACTED]", &captures[1]),
+    );
 
-    let with_safe_urls = url_regex()
-        .replace_all(
-            &with_redacted_assignments,
-            |captures: &regex::Captures<'_>| safe_url(&captures[0]),
-        )
-        .to_string();
+    let with_redacted_assignments = SENSITIVE_ASSIGNMENT_RE.replace_all(
+        &with_redacted_headers,
+        |captures: &regex::Captures<'_>| format!("{}=[REDACTED]", &captures[1]),
+    );
 
-    let with_safe_windows_paths = windows_path_regex()
-        .replace_all(&with_safe_urls, |captures: &regex::Captures<'_>| {
+    let with_safe_urls = URL_RE.replace_all(
+        &with_redacted_assignments,
+        |captures: &regex::Captures<'_>| safe_url(&captures[0]),
+    );
+
+    let with_safe_windows_paths =
+        WINDOWS_PATH_RE.replace_all(&with_safe_urls, |captures: &regex::Captures<'_>| {
             safe_path(&captures[0])
-        })
-        .to_string();
+        });
 
-    unix_path_regex()
+    UNIX_PATH_RE
         .replace_all(
             &with_safe_windows_paths,
             |captures: &regex::Captures<'_>| format!("{}{}", &captures[1], safe_path(&captures[2])),
         )
-        .to_string()
+        .into_owned()
 }
 
 fn truncate_chars(value: &str, max_chars: usize) -> String {
@@ -89,37 +91,39 @@ fn basename_from_any_platform_path(path: &str) -> Option<&str> {
     path.split(['/', '\\']).rev().find(|part| !part.is_empty())
 }
 
-fn sensitive_assignment_regex() -> Regex {
+// 正则一次编译、全程复用（范式同 commands/md_scanner.rs）。
+// 旧写法是 6 个工厂函数，`sanitize_text` 每调用一次就重新编译 6 个正则——
+// 而它被 sidecar 的每一行日志调用。正则编译比匹配本身贵好几个数量级。
+
+static SENSITIVE_ASSIGNMENT_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r#"(?i)["']?\b(cookie|token|auth|password|secret|credential|session|authorization|apiKey|accessKey|secretKey|privateKey)\b["']?\s*[:=]\s*("[^"]*"|'[^']*'|[^;,\s}\]]+)"#,
     )
     .expect("valid sensitive assignment regex")
-}
+});
 
-fn authorization_header_regex() -> Regex {
+static AUTHORIZATION_HEADER_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r#"(?i)\b(authorization)\b\s*[:=]\s*("[^"]*"|'[^']*'|(?:Bearer|Basic|token|Client-ID)\s+[A-Za-z0-9._~+/=-]+|[^;,\s}\]]+)"#,
     )
     .expect("valid authorization header regex")
-}
+});
 
-fn cookie_header_regex() -> Regex {
+static COOKIE_HEADER_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?i)\b(cookie)\b\s*[:=]\s*("[^"]*"|'[^']*'|[^,\r\n}\]]+)"#)
         .expect("valid cookie header regex")
-}
+});
 
-fn url_regex() -> Regex {
-    Regex::new(r#"https?://[^\s"'<>]+"#).expect("valid URL regex")
-}
+static URL_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"https?://[^\s"'<>]+"#).expect("valid URL regex"));
 
-fn windows_path_regex() -> Regex {
-    Regex::new(r#"\b[A-Za-z]:[\\/][^\s"'<>|]+"#).expect("valid Windows path regex")
-}
+static WINDOWS_PATH_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"\b[A-Za-z]:[\\/][^\s"'<>|]+"#).expect("valid Windows path regex"));
 
-fn unix_path_regex() -> Regex {
+static UNIX_PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(^|[\s"'`=({,])(/(?:Users|home|tmp|var|private|Volumes)[^\s"'<>)]*)"#)
         .expect("valid Unix path regex")
-}
+});
 
 #[cfg(test)]
 mod tests {

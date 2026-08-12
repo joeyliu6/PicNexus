@@ -802,7 +802,7 @@ pub async fn handle_file_upload(
         });
 
     let temp_dir = std::env::temp_dir().join("picnexus_uploads");
-    if let Err(e) = std::fs::create_dir_all(&temp_dir) {
+    if let Err(e) = tokio::fs::create_dir_all(&temp_dir).await {
         return (
             StatusCode::OK,
             Json(UploadResponse {
@@ -814,13 +814,17 @@ pub async fn handle_file_upload(
     }
 
     // 安全：只取纯文件名，防止路径穿越攻击（如 ../../etc/passwd）
-    let safe_path = std::path::Path::new(&filename);
-    let safe_stem = safe_path
+    // 变量名不叫 safe_path：那是 log_utils 里的脱敏函数名，同名会把它遮蔽掉。
+    let requested_path = std::path::Path::new(&filename);
+    let safe_stem = requested_path
         .file_stem()
         .and_then(|n| n.to_str())
         .filter(|s| !s.trim().is_empty())
         .unwrap_or("upload");
-    let requested_ext = safe_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    let requested_ext = requested_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
     let safe_ext = if detected_kind.matches_extension(requested_ext) {
         requested_ext
     } else {
@@ -828,7 +832,7 @@ pub async fn handle_file_upload(
     };
     let safe_filename = format!("{}.{}", safe_stem, safe_ext);
     let request_temp_dir = unique_upload_temp_dir(&temp_dir);
-    if let Err(e) = std::fs::create_dir_all(&request_temp_dir) {
+    if let Err(e) = tokio::fs::create_dir_all(&request_temp_dir).await {
         return (
             StatusCode::OK,
             Json(UploadResponse {
@@ -840,8 +844,14 @@ pub async fn handle_file_upload(
     }
 
     let temp_path = request_temp_dir.join(&safe_filename);
-    if let Err(e) = std::fs::write(&temp_path, &body) {
-        let _ = std::fs::remove_dir_all(&request_temp_dir);
+    if let Err(e) = tokio::fs::write(&temp_path, &body).await {
+        if let Err(cleanup_err) = tokio::fs::remove_dir_all(&request_temp_dir).await {
+            log::warn!(
+                "[Server] 清理请求临时目录失败 {}: {}",
+                safe_path(&request_temp_dir.to_string_lossy()),
+                cleanup_err
+            );
+        }
         return (
             StatusCode::OK,
             Json(UploadResponse {
@@ -855,8 +865,23 @@ pub async fn handle_file_upload(
     // Why: body 已经过 validate_image_bytes，且临时文件扩展名是按检测结果生成的，
     // 无需再让下游把刚写下去的文件重新读一遍做同样的校验。
     let result = upload_validated_file(temp_path.to_str().unwrap_or(""), &cfg).await;
-    let _ = std::fs::remove_file(&temp_path);
-    let _ = std::fs::remove_dir(&request_temp_dir);
+
+    // 清理失败不影响上传结果，但也不该静默——临时目录漏了会一直堆在 %TEMP% 里，
+    // 没有日志的话下次排查磁盘占用完全没有线索。
+    if let Err(e) = tokio::fs::remove_file(&temp_path).await {
+        log::warn!(
+            "[Server] 清理临时文件失败 {}: {}",
+            safe_path(&temp_path.to_string_lossy()),
+            e
+        );
+    }
+    if let Err(e) = tokio::fs::remove_dir(&request_temp_dir).await {
+        log::warn!(
+            "[Server] 清理请求临时目录失败 {}: {}",
+            safe_path(&request_temp_dir.to_string_lossy()),
+            e
+        );
+    }
 
     match result {
         Ok(url) => {
