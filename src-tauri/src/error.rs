@@ -92,19 +92,16 @@ impl From<serde_json::Error> for AppError {
     }
 }
 
-impl From<String> for AppError {
-    fn from(message: String) -> Self {
-        AppError::Network { message }
-    }
-}
-
-impl From<&str> for AppError {
-    fn from(message: &str) -> Self {
-        AppError::Network {
-            message: message.to_string(),
-        }
-    }
-}
+// Why 这里没有 `From<String>` / `From<&str>`：
+//
+// 曾经有过，两个都无条件映射到 `AppError::Network`。于是任何 `Result<_, String>` 一经
+// `?` 就被贴上「网络错误」标签——文件读写失败、参数校验失败、sidecar 挂了，前端拿到的
+// `type` 全是 `NETWORK`，只能引导用户去检查网络。错误分类的意义正在于让前端能分流，
+// 一个把所有错误压成同一类的 From 实现，等于把这套分类悄悄作废。
+//
+// 需要从字符串构造时，显式选一个语义正确的构造器（`AppError::file_io` /
+// `AppError::validation` / `AppError::external` …），或用下面的 `IntoAppError` 扩展。
+// 多写几个字符，换的是前端能按类型分支处理。
 
 // ==================== Display trait 实现 ====================
 
@@ -453,23 +450,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn from_string_maps_to_network() {
-        let app_err: AppError = String::from("断网了").into();
-        match app_err {
-            AppError::Network { message } => assert_eq!(message, "断网了"),
-            _ => panic!("String 应映射到 Network"),
-        }
-    }
-
-    #[test]
-    fn from_str_maps_to_network() {
-        let app_err: AppError = "静态字面量".into();
-        match app_err {
-            AppError::Network { message } => assert_eq!(message, "静态字面量"),
-            _ => panic!("&str 应映射到 Network"),
-        }
-    }
+    // Why 没有 `String` / `&str` 的 From 测试：那两个 impl 已被删除。
+    // 见本文件 From 实现区的注释——它们把所有错误压成 Network，让错误分类失去意义。
 
     // ---------- Display ----------
 

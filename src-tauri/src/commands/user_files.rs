@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use std::path::Path;
 use tauri::{AppHandle, Runtime};
-use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_dialog::{DialogExt, FilePath};
 
 const MAX_TEXT_FILE_BYTES: u64 = 50 * 1024 * 1024;
 const OWNED_TEMP_PREFIXES: &[&str] = &["picnexus_url_"];
@@ -45,13 +45,38 @@ fn apply_filters<R: Runtime>(
     Ok(builder)
 }
 
-fn selected_path(path: tauri_plugin_dialog::FilePath) -> Result<std::path::PathBuf, AppError> {
+fn selected_path(path: FilePath) -> Result<std::path::PathBuf, AppError> {
     path.into_path()
         .map_err(|e| AppError::file_io(format!("无法解析所选文件路径: {}", e)))
 }
 
-fn ensure_text_file_size(path: &Path) -> Result<(), AppError> {
-    let metadata = std::fs::metadata(path)
+/// 把 dialog 插件的回调式 API 桥接成 async
+///
+/// Why 不用 `blocking_pick_file` / `blocking_save_file`：那两个内部是
+/// `sync_channel(0)` + `recv()`，会把当前线程按住直到用户点确定——在 async command 里
+/// 就等于对话框敞开多久，就占死一条 tokio worker 线程多久（用户去泡杯茶就是几分钟）。
+///
+/// 非阻塞版本在 desktop 侧走的是 `run_on_main_thread` + 插件自己 spawn 的独立线程
+/// （tauri-plugin-dialog 2.6.0 `src/desktop.rs:142,202`），全程不占用 tokio 线程池。
+///
+/// ⚠️ `run_on_main_thread` 内部是 `let _ = ...`：派发失败时回调永远不会触发，
+/// sender 随之析构，这里的 `rx.await` 会拿到 `Err`。所以必须给出错误，不能 `unwrap`。
+async fn wait_for_dialog<F>(show: F) -> Result<Option<FilePath>, AppError>
+where
+    F: FnOnce(Box<dyn FnOnce(Option<FilePath>) + Send + 'static>),
+{
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    show(Box::new(move |selected| {
+        let _ = tx.send(selected);
+    }));
+
+    rx.await
+        .map_err(|_| AppError::external("文件对话框未返回结果"))
+}
+
+async fn ensure_text_file_size(path: &Path) -> Result<(), AppError> {
+    let metadata = tokio::fs::metadata(path)
+        .await
         .map_err(|e| AppError::file_io(format!("无法访问所选文件: {}", e)))?;
     if !metadata.is_file() {
         return Err(AppError::validation("只能读取文件"));
@@ -76,12 +101,13 @@ pub async fn export_text_file(
 
     let builder = app.dialog().file().set_file_name(default_path);
     let builder = apply_filters(builder, filters)?;
-    let Some(path) = builder.blocking_save_file() else {
+    let Some(path) = wait_for_dialog(|callback| builder.save_file(callback)).await? else {
         return Ok(None);
     };
     let path = selected_path(path)?;
 
-    std::fs::write(&path, content)
+    tokio::fs::write(&path, content)
+        .await
         .map_err(|e| AppError::file_io(format!("写入所选文件失败: {}", e)))?;
 
     Ok(Some(path.to_string_lossy().to_string()))
@@ -93,13 +119,14 @@ pub async fn import_text_file(
     filters: Vec<FileDialogFilter>,
 ) -> Result<Option<String>, AppError> {
     let builder = apply_filters(app.dialog().file(), filters)?;
-    let Some(path) = builder.blocking_pick_file() else {
+    let Some(path) = wait_for_dialog(|callback| builder.pick_file(callback)).await? else {
         return Ok(None);
     };
     let path = selected_path(path)?;
-    ensure_text_file_size(&path)?;
+    ensure_text_file_size(&path).await?;
 
-    std::fs::read_to_string(&path)
+    tokio::fs::read_to_string(&path)
+        .await
         .map(Some)
         .map_err(|e| AppError::file_io(format!("读取所选文件失败: {}", e)))
 }
