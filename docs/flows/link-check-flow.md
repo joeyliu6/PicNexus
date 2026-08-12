@@ -89,6 +89,8 @@ flowchart TD
 | 只读探测 | `check_image_link` / `batch_check_links` | `validate_probe_url`（同步） | ❌ 不做 | 预解析结果并不绑定 reqwest 的实际连接（它会自己再解析一次），所以拦不住 DNS rebinding，只能拦「手滑粘了内网 URL」——而字面量 IP 判据已覆盖。批量上限 10 万条，每条还要多付一次 DNS 查询 |
 | 下载重传 | `download_image_from_url` / `download_url_image` | `validate_fetch_url`（async） | ✅ 做，但豁免 fake-ip 池 | 取回的字节会被重新上传到公网图床，误操作必须拦 |
 
+> 📌 「探测路径不查 DNS」换来的口子（内网主机名会被真的探测一次）、为什么接受、以及真要收紧该怎么做，记在 [docs/TODO.md 已知取舍](../TODO.md#只读探测路径不做-dns-裁决)。**不要**用「把 DNS 预检加回来」来收紧——那正是被 a83ca54 删掉的东西。
+
 **fake-ip 豁免**（`dns_answer_is_forbidden`）：`198.18.0.0/15` 是 RFC 2544 基准测试段，公网 BGP 不路由、企业内网不使用；现实中它只作为 Clash / sing-box / Surge 的**默认 fake-ip 池**出现（范围取 /15 是为了同时覆盖 mihomo 的 `198.18.0.1/16` 与 sing-box 的 `198.18.0.0/15`）。开了 TUN 的机器上任意域名都会解析进该段，把它当内网证据会让功能全废。
 
 **v6 池同样豁免** `fdfe:dcba:9876::/64`（mihomo `fake-ip-range6` 默认值）：`lookup_host` 返回的是 A + AAAA 的**并集**，`validate_fetch_url` 逐条判定、任意一条被拒就整体失败。而 `fdfe:…` 落在 ULA（`fc00::/7`）里会被 `is_private_or_reserved_ip` 判成内网——只豁免 v4 的话，双栈 + TUN 的机器上「从 URL 下载图片」依然全量失败。判据都在 `is_fake_ip_pool_ip`。

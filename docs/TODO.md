@@ -1,6 +1,8 @@
 # 开发待办
 
 > 本文件是仓库内未完成开发需求的详细记录来源。其他文档只链接到对应条目，不重复维护需求内容。
+>
+> 「已知取舍」小节记的是**故意不做**的决定：看着像缺陷、但改了会更糟的地方。写在这里是为了拦住下一个人"顺手修好"。
 
 ## 待验收
 
@@ -102,6 +104,35 @@ nas.local           -> 198.18.1.48,  fdfe:dcba:9876::128
 4. 只放开 `DnsDecisionError::FakeIp` 一档；`Blocked`（链路本地/云元数据）与 `Public`（确证公网）保持硬拒绝
 
 **为什么当初没一起做**：改动面会从 1 个 Rust 文件扩到 Rust + config schema + 设置页 UI 三层，而 WebDAV 图床本身还在「待验收」状态，此时动配置 schema 时机不好。
+
+---
+
+## 已知取舍
+
+### 只读探测路径不做 DNS 裁决
+
+- **状态**：故意如此，**不打算改**——看到这条之前请不要"顺手修好"
+- **位置**：`src-tauri/src/commands/link_checker.rs` 的 `validate_probe_url`（同步函数，编译器保证它查不了 DNS）
+- **决定于**：a83ca54，修「fake-ip 让链接检测全量误判」时
+
+只读探测（`check_image_link` / `batch_check_links`）只做同步判据：scheme、字面量 IP、URL 内嵌凭证。
+下载重传（`validate_fetch_url`）**仍然**做 DNS 裁决，两条路径的分工见
+[link-check-flow.md 出站策略校验小节](./flows/link-check-flow.md#出站策略校验只读探测-vs-下载重传)。
+
+**为什么去掉这道预检**：它从来就不是一道安全边界。`tokio::net::lookup_host` 的解析结果并不绑定 reqwest 后续的实际连接（reqwest 会自己再解析一次），所以它拦不住 DNS rebinding，只拦得住「手滑粘了个内网 URL」——而字面量 IP 判据已经覆盖了这一点。
+代价却是确定的：TUN + fake-ip 的机器上**每一个**域名都解析进保留段，链接检测全量误判为「网络不通」；批量上限 10 万条，每条还要多付一次 DNS 查询。
+
+**换来的口子（要知情）**：`https://内网主机名/x.jpg` 现在会被真的探测一次。构造场景是——别人给你一份 markdown，里面塞满内网地址，你点一下「检测链接」，等于替对方把内网扫了一遍。
+
+**为什么接受**：结果只显示在本地、不回传给构造者，响应体也不返回给前端，泄露的信息止于「这个地址存在 / 状态码 / 耗时」，而且需要用户主动点检测。相对「所有开代理的用户功能全废」，这个赌注划算。
+
+**真要收紧，正确的做法是在连接层做，不是把预检加回来**：
+
+1. 给 reqwest 挂自定义 DNS resolver（`ClientBuilder::dns_resolver` / `resolve`），在解析回调里拒绝内网地址——那才是 rebinding-proof 的，因为连接用的就是这个答案
+2. 同样要豁免 fake-ip 池（`is_fake_ip_pool_ip`），否则绕一圈回到原点
+3. ⚠️ **不要**在 `validate_probe_url` 里加回 `lookup_host`：那正是 a83ca54 删掉的东西，加回去等于原样重新引入全量误判。回归护栏是 `probe_url_accepts_public_https_without_dns`
+
+**重新考虑的触发条件**：收到「链接检测被拿去扫内网」的实际报障；或者 link_checker 开始把响应内容回传给前端（那时泄露的就不止存在性了）。
 
 ---
 
