@@ -113,6 +113,50 @@ describe('exportCsv', () => {
     expect(csv).toContain('未检测');
   });
 
+  it('重检过的行导出最新结果，状态/状态码/响应时间取自同一个 result', () => {
+    // 界面上 statusDotColor / errorLabel / errorTooltip 都是 recheckResult 优先，
+    // 导出若只读 checkResult，用户会以为导出坏了。
+    const row: LinkCheckRow = {
+      historyId: 'h1', serviceId: 'r2', fileName: 'img.jpg',
+      url: 'http://old.example.com/img.jpg', rawUrl: 'http://old.example.com/img.jpg',
+      checkResult: {
+        link: 'http://old.example.com/img.jpg',
+        is_valid: true, status_code: 200, response_time: 30,
+        error_type: 'success', browser_might_work: false,
+      },
+      recheckResult: {
+        link: 'http://old.example.com/img.jpg',
+        is_valid: false, error_type: 'blocked',
+        error: '外部 HTTP 图片地址已禁用，请改用 HTTPS',
+        browser_might_work: false,
+      },
+    };
+    const dataLine = exportCsv([row]).split('\n')[1];
+
+    expect(dataLine).toContain('拦截');
+    expect(dataLine).not.toContain('有效');
+    // 状态码/响应时间必须跟着状态一起来自 recheckResult，否则拼出「拦截 + 200 + 30ms」
+    expect(dataLine).not.toContain('200');
+    expect(dataLine).not.toContain('30');
+  });
+
+  it('未重检的行仍导出 checkResult', () => {
+    const row: LinkCheckRow = {
+      historyId: 'h1', serviceId: 'r2', fileName: 'img.jpg',
+      url: 'https://r2.example.com/img.jpg', rawUrl: 'https://r2.example.com/img.jpg',
+      checkResult: {
+        link: 'https://r2.example.com/img.jpg',
+        is_valid: true, status_code: 200, response_time: 30,
+        error_type: 'success', browser_might_work: false,
+      },
+    };
+    const dataLine = exportCsv([row]).split('\n')[1];
+
+    expect(dataLine).toContain('有效');
+    expect(dataLine).toContain('200');
+    expect(dataLine).toContain('30');
+  });
+
   it('文件名和 URL 被双引号包裹', () => {
     const row: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: 'my photo.jpg',

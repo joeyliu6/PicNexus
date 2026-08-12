@@ -5,6 +5,7 @@ import { historyDB } from '../../services/HistoryDatabase';
 import { createLogger } from '../../utils/logger';
 import type {
   BatchCheckResult,
+  CheckLinkResult,
   LinkCheckRow,
 } from '../../types/linkCheck';
 
@@ -164,8 +165,7 @@ function csvAlwaysQuoted(value: string): string {
  * 而这一字之差会把结论引反：导出的表是拿去排查、发给别人看的，「失效」读作
  * 「图床挂了，这图没救了」，真相却是「被本机出站策略拦下，改成 https 就能用」。
  */
-function statusLabel(row: LinkCheckRow): string {
-  const r = row.checkResult;
+function statusLabel(r: CheckLinkResult | undefined): string {
   if (!r) return '未检测';
   if (r.is_valid) return '有效';
   if (r.error_type === 'timeout') return '超时';
@@ -180,19 +180,25 @@ function statusLabel(row: LinkCheckRow): string {
  * - UTF-8 BOM 前缀：Windows Excel 不会乱码（项目中文优先，必须加）
  * - 字段全部走 csvEscape：防止文件名/URL 里的引号、逗号、换行打乱列
  * - 检测时间字段：取本条 checkResult 上的实际时间（如有），否则置空，不再用导出当下时间
+ * - 单行重检过就导出重检结果：与界面口径一致（`statusDotColor` / `errorLabel` /
+ *   `errorTooltip` 都是 `recheckResult ?? checkResult`）。否则用户点了重检、看到
+ *   状态变了，导出的却还是旧状态，会以为导出坏了。
+ *
+ * 状态、状态码、响应时间必须取**同一个** result：混着取会拼出「拦截 + 200 + 30ms」
+ * 这种自相矛盾的行，比单纯导出旧状态更难排查。
  */
 export function exportCsv(rows: LinkCheckRow[]): string {
   const headerCols = ['序号', '文件名', '图床', 'URL', '状态', 'HTTP 状态码', '响应时间（ms）', '检测时间'];
   const header = headerCols.map(csvEscape).join(',');
 
   const csvRows = rows.map((row, i) => {
-    const r = row.checkResult;
+    const r = row.recheckResult ?? row.checkResult;
     return [
       String(i + 1),
       csvAlwaysQuoted(row.fileName ?? ''),
       csvEscape(row.serviceId ?? ''),
       csvAlwaysQuoted(row.url ?? ''),
-      csvEscape(statusLabel(row)),
+      csvEscape(statusLabel(r)),
       r?.status_code != null ? String(r.status_code) : '',
       r?.response_time != null ? String(r.response_time) : '',
       '', // 检测时间：当前 row 数据结构未携带 lastCheckTime，留空避免与导出当下时间混淆
