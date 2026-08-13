@@ -54,6 +54,50 @@ export function createServiceProgress(
   };
 }
 
+/**
+ * 队列服务状态文案。
+ *
+ * UploadQueueManager 是按状态**文本**做判定的（例如 `status === '等待中...'` 判定
+ * 服务从未启动、`status.includes('失败')` 判定不要收口成完成），所以构造前置状态时
+ * 必须用与生产代码逐字一致的文案，不能用 createServiceProgress 默认的英文 'waiting'。
+ */
+export const QUEUE_SERVICE_STATUS = {
+  waiting: '等待中...',
+  /** 进度已到 100 但尚未被 markItemComplete 收口时的百分比文案 */
+  uploaded: '100%',
+  done: '✓ 完成',
+  failed: '✗ 失败',
+  skipped: '已跳过',
+  skippedUnconfigured: '已跳过（未配置）',
+} as const;
+
+/** 已传完但未收口的服务进度：progress=100，状态文案仍是百分比 */
+export function createUploadedServiceProgress(
+  serviceId: string,
+  overrides: Partial<ServiceProgress> = {},
+): ServiceProgress {
+  return createServiceProgress({
+    serviceId,
+    progress: 100,
+    status: QUEUE_SERVICE_STATUS.uploaded,
+    ...overrides,
+  });
+}
+
+/** 失败的服务进度：progress=0，状态文案为 '✗ 失败' */
+export function createFailedServiceProgress(
+  serviceId: string,
+  overrides: Partial<ServiceProgress> = {},
+): ServiceProgress {
+  return createServiceProgress({
+    serviceId,
+    progress: 0,
+    status: QUEUE_SERVICE_STATUS.failed,
+    error: 'upload failed',
+    ...overrides,
+  });
+}
+
 export function createQueueItem(overrides: Partial<QueueItem> = {}): QueueItem {
   uploadSequence += 1;
 
@@ -86,6 +130,16 @@ export function createQueueItem(overrides: Partial<QueueItem> = {}): QueueItem {
     baiduLink: overrides.baiduLink,
     r2Link: overrides.r2Link,
   };
+}
+
+/**
+ * 老版本持久化数据里可能缺 `enabledServices` 字段。
+ * `UploadQueueManager.resetItemForRetry` 为此保留了兜底分支，这里显式构造这种残缺项，
+ * 避免把类型断言散落到各个 spec 里。
+ */
+export function createLegacyQueueItem(overrides: Partial<QueueItem> = {}): QueueItem {
+  const { enabledServices: _dropped, ...rest } = createQueueItem(overrides);
+  return rest as QueueItem;
 }
 
 export function createQueueItems(
