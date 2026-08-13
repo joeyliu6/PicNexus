@@ -268,6 +268,54 @@ describe('选择逻辑', () => {
     toggleSelectAll();
     expect(isAllSelected.value).toBe(false);
   });
+
+  // [].every() 返回 true，所以空列表必须靠 length 守卫挡住，否则会显示成"已全选"
+  it('筛选结果为空时 isAllSelected 为 false', () => {
+    const checkRows = ref([makeInvalidRow({ historyId: 'h1' })]);
+    const { isAllSelected, filteredRows, statusFilter } = useCheckFilter({ checkRows });
+    statusFilter.value = 'valid';
+
+    expect(filteredRows.value).toHaveLength(0);
+    expect(isAllSelected.value).toBe(false);
+  });
+
+  // selectedIds 里残留"幽灵 key"（筛选变化后已选行退出 filtered）时，
+  // 计数可能与 filteredRows.length 相等，但不该判为全选
+  it('选中数与筛选行数相等但集合不同时不算全选', () => {
+    const checkRows = ref([
+      makeValidRow({ historyId: 'h1', serviceId: 'r2' }),
+      makeValidRow({ historyId: 'h2', serviceId: 'r2' }),
+    ]);
+    const { handleToggleSelect, selectedIds, isAllSelected, selectedCount, filteredRows, statusFilter }
+      = useCheckFilter({ checkRows });
+    statusFilter.value = 'valid';
+
+    handleToggleSelect(rowKey({ historyId: 'h1', serviceId: 'r2' }), clickEvent());
+    // 手动塞一个已不在 filteredRows 里的 key，模拟检测完成后行离场的残留
+    selectedIds.value = new Set([...selectedIds.value, rowKey({ historyId: 'gone', serviceId: 'r2' })]);
+
+    expect(selectedCount.value).toBe(filteredRows.value.length);
+    expect(isAllSelected.value).toBe(false);
+  });
+
+  it('shift+click 按当前筛选顺序范围选中', () => {
+    const checkRows = ref([
+      makeValidRow({ historyId: 'h1', serviceId: 'r2' }),
+      makeValidRow({ historyId: 'h2', serviceId: 'r2' }),
+      makeValidRow({ historyId: 'h3', serviceId: 'r2' }),
+    ]);
+    const { handleToggleSelect, selectedIds, statusFilter } = useCheckFilter({ checkRows });
+    statusFilter.value = 'valid';
+
+    handleToggleSelect(rowKey({ historyId: 'h1', serviceId: 'r2' }), clickEvent());
+    handleToggleSelect(rowKey({ historyId: 'h3', serviceId: 'r2' }), clickEvent(true));
+
+    expect([...selectedIds.value].sort()).toEqual([
+      rowKey({ historyId: 'h1', serviceId: 'r2' }),
+      rowKey({ historyId: 'h2', serviceId: 'r2' }),
+      rowKey({ historyId: 'h3', serviceId: 'r2' }),
+    ].sort());
+  });
 });
 
 describe('held rows in unchecked filter', () => {

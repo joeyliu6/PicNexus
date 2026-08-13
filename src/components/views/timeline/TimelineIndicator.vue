@@ -6,6 +6,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import type { TimePeriodStats } from '../../../composables/useHistory';
 import { filterMonthPoints, type FilteredPoint } from '../../../utils/timelineFilter';
+import { createRafScheduler } from '../../../utils/rafScheduler';
 import TimelineYearLabels from './timeline-indicator/TimelineYearLabels.vue';
 import TimelineTrack from './timeline-indicator/TimelineTrack.vue';
 import TimelineScrubber from './timeline-indicator/TimelineScrubber.vue';
@@ -327,8 +328,33 @@ function handleMouseLeave() {
   }
 }
 
+// hover 与拖拽各用一个调度器：schedule() 只保留最后一个回调，共用一个实例会互相顶掉。
+// createRafScheduler 没有 cancel/dispose，卸载时无法取消已排队的那一帧——这是安全的：
+// positionToProgress 开头有 containerRef 判空，回调最坏只是写一个没人再读的 ref。
+// 也别在 onUnmounted 里 flush()，那是"立即执行"而不是"取消"，反而多做一次 DOM 读。
+const hoverScheduler = createRafScheduler();
+const dragScheduler = createRafScheduler();
+
+let pendingHoverY = 0;
+let pendingDragY = 0;
+
+function applyHoverPosition(): void {
+  hoverPosition.value = positionToProgress(pendingHoverY);
+}
+
+function applyDragScroll(): void {
+  if (!isDragging.value) return;
+  const progress = positionToProgress(pendingDragY);
+  hoverPosition.value = progress;
+  emit('drag-scroll', progress, 'drag');
+}
+
 function handleMouseMove(e: MouseEvent) {
-  hoverPosition.value = positionToProgress(e.clientY);
+  // 每次 mousemove 原本要跑一次 getBoundingClientRect（强制同步布局）
+  // 加一次 monthSegments 线性扫描，再刷四个 prop 让 TimelineScrubber 重渲染。
+  // 传具名函数而非新建闭包，配合 schedule 的覆盖语义天然幂等。
+  pendingHoverY = e.clientY;
+  hoverScheduler.schedule(applyHoverPosition);
 }
 
 function handleClick() {
@@ -358,12 +384,14 @@ function startDrag(e: MouseEvent) {
 function onDrag(e: MouseEvent) {
   if (!isDragging.value || !containerRef.value) return;
 
-  const progress = positionToProgress(e.clientY);
-  hoverPosition.value = progress;
-  emit('drag-scroll', progress, 'drag');
+  pendingDragY = e.clientY;
+  dragScheduler.schedule(applyDragScroll);
 }
 
 function stopDrag() {
+  // 先 flush 再落 isDragging：最后一帧的 drag-scroll 可能还在 rAF 队列里，
+  // 丢掉它会让松手位置和最终滚动位置差一截（applyDragScroll 也会被 isDragging 挡掉）
+  dragScheduler.flush();
   isDragging.value = false;
   document.removeEventListener('mousemove', onDrag);
   document.removeEventListener('mouseup', stopDrag);

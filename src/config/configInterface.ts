@@ -57,9 +57,6 @@ export interface AnalyticsConfig {
  */
 export type WeiboProxyMode = 'direct' | 'baidu-proxy';
 
-/** @deprecated 使用 WeiboProxyMode 代替 */
-export type OutputFormat = WeiboProxyMode;
-
 /**
  * 链接前缀单项
  * name 为 UI 显示名称，template 为 URL 模板（可含占位符）。

@@ -377,18 +377,39 @@ export function useCheckFilter({ checkRows, isChecking, isHighThroughput }: UseC
   }
 
   const hasSelection = computed(() => selectedIds.value.size > 0);
-  const filteredRowKeys = computed(() => filteredRows.value.map(rowKey));
-  const isAllSelected = computed(() =>
-    filteredRowKeys.value.length > 0
-    && filteredRowKeys.value.every((key) => selectedIds.value.has(key)),
-  );
+
+  /**
+   * 全量 rowKey 列表——只有全选与 shift 范围多选需要，两者都是点击触发的冷路径。
+   * 不能做成 computed：链接检测可达数万行，每次 displayedRows 提交后底栏一读就重建一次数组。
+   */
+  function buildFilteredRowKeys(): string[] {
+    return filteredRows.value.map(rowKey);
+  }
+
+  /** shift 未按下时 shiftSelect 不读 orderedIds，用共享空数组避免无谓分配 */
+  const EMPTY_ROW_KEYS: string[] = [];
+
+  const isAllSelected = computed(() => {
+    const rows = filteredRows.value;
+    const selected = selectedIds.value;
+    // length === 0 守卫必须保留：[].every() 返回 true，空列表不该显示为"已全选"。
+    // size < length 是 O(1) 必要条件（filteredRows 的 historyId|serviceId 唯一，
+    // 全选意味着 selected 至少有这么多条），绝大多数时间在这里就短路了。
+    //
+    // 注意不能反过来用 size === length 直接判定：selectedIds 里可能残留"幽灵 key"
+    // ——检测完成后 hold 行离场、applyCurrentFilter、单行删除都会让已选行退出 filtered，
+    // 而选择集不会跟着剪枝。此时"1 个幽灵 + 漏选 1 行"的计数恰好相等，
+    // 误判为全选会让用户点"取消全选"时反而清空整个选择。
+    if (rows.length === 0 || selected.size < rows.length) return false;
+    return rows.every((row) => selected.has(rowKey(row)));
+  });
   const selectedCount = computed(() => selectedIds.value.size);
 
   function handleToggleSelect(key: string, event: MouseEvent): void {
     const result = shiftSelect(
       key,
       event.shiftKey,
-      filteredRowKeys.value,
+      event.shiftKey ? buildFilteredRowKeys() : EMPTY_ROW_KEYS,
       selectedIds.value,
       selectAnchor.value,
     );
@@ -399,7 +420,7 @@ export function useCheckFilter({ checkRows, isChecking, isHighThroughput }: UseC
   function toggleSelectAll(): void {
     selectedIds.value = isAllSelected.value
       ? new Set()
-      : new Set(filteredRowKeys.value);
+      : new Set(buildFilteredRowKeys());
   }
 
   function clearSelection(): void {
