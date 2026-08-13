@@ -24,10 +24,10 @@ const thresholds = {
   'src/uploaders/nami/NamiUploader.ts': { lines: 92, statements: 92, functions: 95, branches: 83 },
   'src/uploaders/imgur/ImgurUploader.ts': { lines: 95, statements: 95, functions: 95, branches: 89 },
   // 2026-08-13 补完 UploadQueueManager 单测后从下面的「低覆盖」组毕业：
-  // 8.44/8.44/10/100(分母 2) → 100/100/100/97.22(分母 108)。
-  // branches 分母从 2 涨到 108，旧的 100% 是假象，这里按实测新值重新定线。
-  // 剩余 3 个未覆盖分支是取不到的防御性兜底（UploadQueue.ts:311 的 latestItem 三元、
-  // :395-397 的 weiboProgress/r2Progress `?? 0`），不为凑数造畸形数据。
+  // 8.44/8.44/10/100(分母 2) → 100/100/100/97.27(分母 110)。
+  // branches 分母从 2 涨到 110，旧的 100% 是假象，这里按实测新值重新定线。
+  // 剩余 3 个未覆盖分支是取不到的防御性兜底（UploadQueue.ts:332 的 latestItem 三元、
+  // :416-418 的 weiboProgress/r2Progress `?? 0`），不为凑数造畸形数据。
   'src/core/UploadQueue.ts': { lines: 95, statements: 95, functions: 95, branches: 92 },
 
   // 低覆盖核心文件：阈值略低于当前值，只防继续下滑，补测试是独立任务。
