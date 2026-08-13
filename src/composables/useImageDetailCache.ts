@@ -91,32 +91,64 @@ class ImageDetailCache {
   }
 
   /**
+   * 批量获取详情（缓存命中的直接复用，未命中的一次性取回）
+   *
+   * 相比逐个 `get()`，未命中项只走一次 IPC + 一条 `IN (...)` 查询。
+   *
+   * @param ids 图片 ID 列表（可含重复）
+   * @returns 与入参 ids **等长且同序**的数组；查不到的位置为 null
+   */
+  async getMany(ids: string[]): Promise<Array<HistoryItem | null>> {
+    const resolved = new Map<string, HistoryItem>();
+    const seen = new Set<string>();
+    const missing: string[] = [];
+
+    for (const id of ids) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+
+      const node = this.cache.get(id);
+      if (node) {
+        this.hitCount++;
+        node.timestamp = Date.now();
+        this.moveToEnd(id, node);
+        resolved.set(id, node.detail);
+      } else {
+        this.missCount++;
+        missing.push(id);
+      }
+    }
+
+    if (missing.length > 0) {
+      // getItemsByIds 保输入顺序、内部按 500 分批、查不到的 id 静默跳过
+      const fetched = await historyDB.getItemsByIds(missing);
+      for (const item of fetched) {
+        resolved.set(item.id, item);
+        this.set(item.id, item);
+      }
+    }
+
+    // 必须从 resolved 取，不能回读 this.cache：
+    // 一次请求超过 DETAIL_CACHE_SIZE 条时（批量导出常见），先写入的会被 LRU 挤掉
+    return ids.map(id => resolved.get(id) ?? null);
+  }
+
+  /**
    * 批量预加载详情
    *
-   * 用于可见区域预加载，提升悬停响应速度
+   * 用于可见区域预加载，提升悬停响应速度。属于 fire-and-forget 路径，
+   * 取回失败只告警不抛出——预加载失败时后续 `get()` 会正常回源。
    *
    * @param ids 图片 ID 列表
    */
   async prefetch(ids: string[]): Promise<void> {
-    // 过滤已缓存的 ID
-    const uncachedIds = ids.filter(id => !this.cache.has(id));
+    if (ids.length === 0) return;
 
-    if (uncachedIds.length === 0) return;
-
-    // 逐个加载（historyDB 目前没有批量查询接口）
-    // TODO: 优化为批量查询
-    const loadPromises = uncachedIds.map(async id => {
-      try {
-        const detail = await historyDB.getById(id);
-        if (detail) {
-          this.set(id, detail);
-        }
-      } catch (e) {
-        logger.warn(`预加载失败: ${id}`, e);
-      }
-    });
-
-    await Promise.all(loadPromises);
+    try {
+      await this.getMany(ids);
+    } catch (e) {
+      logger.warn(`预加载失败: ${ids.length} 条`, e);
+    }
   }
 
   /**
@@ -251,6 +283,18 @@ export function useImageDetailCache() {
   }
 
   /**
+   * 批量获取详情（与入参 ids 等长同序，查不到为 null）
+   *
+   * DB 出错时向上抛，由调用方决定降级方式——批量导出需要显式报错，
+   * 静默返回半份数据会让用户拿到不完整的 JSON 却毫无察觉。
+   */
+  async function getDetails(ids: string[]): Promise<Array<HistoryItem | null>> {
+    const result = await detailCache.getMany(ids);
+    updateStats();
+    return result;
+  }
+
+  /**
    * 批量预加载详情
    */
   async function prefetchDetails(ids: string[]): Promise<void> {
@@ -279,6 +323,7 @@ export function useImageDetailCache() {
 
   return {
     getDetail,
+    getDetails,
     prefetchDetails,
     removeDetail,
     clearCache,

@@ -31,14 +31,13 @@ export function createBulkOps(ctx: BulkOpsContext) {
         toast.showConfig('warn', TOAST_MESSAGES.common.noSelection);
         return;
       }
-      const details = await Promise.all(
-        selectedIds.map(id =>
-          ctx.detailCache.getDetail(id).catch(e => {
-            log.warn(`[批量操作] 跳过无效记录: ${id}`, e);
-            return null;
-          }),
-        ),
-      );
+      // 一次批量取回：未命中缓存的部分合并成一条 IN 查询，不再逐条 IPC 往返。
+      // DB 出错时直接抛给外层 catch 走「导出失败」toast——半份 JSON 比报错更坑。
+      const details = await ctx.detailCache.getDetails(selectedIds);
+      const missingCount = details.filter(d => d === null).length;
+      if (missingCount > 0) {
+        log.warn(`[批量操作] 跳过 ${missingCount} 条查不到的记录`);
+      }
       const selectedItems = details.filter((d): d is HistoryItem => d !== null);
       if (selectedItems.length === 0) {
         toast.showConfig('warn', TOAST_MESSAGES.history.noLoadableData);

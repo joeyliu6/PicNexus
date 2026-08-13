@@ -53,6 +53,7 @@ function makeCtx() {
   const removedFavoriteBatches: string[][] = [];
   const detailCache = {
     getDetail: vi.fn(),
+    getDetails: vi.fn(),
     removeDetail: vi.fn(),
     prefetchDetails: vi.fn(),
     clearCache: vi.fn(),
@@ -141,13 +142,18 @@ describe('createBulkOps', () => {
 
   it('exports only the loadable selected items to JSON', async () => {
     const { ctx, detailCache } = makeCtx();
-    detailCache.getDetail
-      .mockResolvedValueOnce({ id: 'a', localFileName: 'a.png' })
-      .mockRejectedValueOnce(new Error('missing'))
-      .mockResolvedValueOnce({ id: 'c', localFileName: 'c.png' });
+    // 一次批量取回：查不到的记录以 null 占位，保持与入参 ids 等长同序
+    detailCache.getDetails.mockResolvedValue([
+      { id: 'a', localFileName: 'a.png' },
+      null,
+      { id: 'c', localFileName: 'c.png' },
+    ]);
 
     const { bulkExportJSON } = createBulkOps(ctx);
     await bulkExportJSON(['a', 'b', 'c']);
+
+    expect(detailCache.getDetails).toHaveBeenCalledTimes(1);
+    expect(detailCache.getDetails).toHaveBeenCalledWith(['a', 'b', 'c']);
 
     expect(invokeMock).toHaveBeenCalledTimes(1);
     expect(invokeMock).toHaveBeenCalledWith('export_text_file', expect.objectContaining({
@@ -162,12 +168,25 @@ describe('createBulkOps', () => {
 
   it('warns instead of exporting when no selected record can be loaded', async () => {
     const { ctx, detailCache } = makeCtx();
-    detailCache.getDetail.mockRejectedValue(new Error('missing'));
+    detailCache.getDetails.mockResolvedValue([null]);
 
     const { bulkExportJSON } = createBulkOps(ctx);
     await bulkExportJSON(['a']);
 
     expect(invokeMock).not.toHaveBeenCalled();
     expect(toastShowConfigMock).toHaveBeenCalledWith('warn', expect.any(Object));
+  });
+
+  // 批量取回整体失败与「记录查不到」是两回事：前者必须报错，
+  // 否则用户会拿到一份缺条目的 JSON 而毫无察觉
+  it('reports an export failure when the batch detail load throws', async () => {
+    const { ctx, detailCache } = makeCtx();
+    detailCache.getDetails.mockRejectedValue(new Error('db down'));
+
+    const { bulkExportJSON } = createBulkOps(ctx);
+    await bulkExportJSON(['a', 'b']);
+
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.any(Object));
   });
 });

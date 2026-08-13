@@ -1,11 +1,14 @@
 import { ref, shallowRef, computed, triggerRef } from 'vue';
-import type { ServiceType } from '../config/types';
+import type { HistoryItem, ServiceType } from '../config/types';
 import { useHistoryManager } from './useHistory';
 import { useToast } from './useToast';
 import { useCopyLink, type CopyLinkItem } from './useCopyLink';
 import { shiftSelect, type ShiftSelectAnchor } from '../utils/shiftSelect';
 import { historyDB } from '../services/HistoryDatabase';
+import { createLogger } from '../utils/logger';
 export type { LinkFormat } from '../utils/linkFormatter';
+
+const log = createLogger('HistoryViewState');
 
 export function useHistoryViewState() {
   const historyManager = useHistoryManager();
@@ -75,9 +78,16 @@ export function useHistoryViewState() {
     let items: CopyLinkItem[];
 
     if (serviceId) {
-      const details = await Promise.all(
-        metas.map(meta => historyManager.detailCache.getDetail(meta.id).catch(() => null))
-      );
+      // 一次批量取回替代逐条 getDetail：未命中缓存的部分合并成一条 IN 查询。
+      // 取回失败时退回空数组，落到下面「无可用链接」的 toast 分支——
+      // 这是本函数原有的失败表现（原实现逐条 catch 成 null 也走同一条路）。
+      let details: Array<HistoryItem | null>;
+      try {
+        details = await historyManager.detailCache.getDetails(metas.map(m => m.id));
+      } catch (e) {
+        log.warn('[批量复制] 详情取回失败', e);
+        details = [];
+      }
       items = [];
       for (const detail of details) {
         if (!detail) continue;

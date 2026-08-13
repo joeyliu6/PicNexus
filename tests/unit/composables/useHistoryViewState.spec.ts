@@ -13,6 +13,7 @@ const {
   bulkExportJSONMock,
   deleteHistoryItemMock,
   detailCacheGetDetailMock,
+  detailCacheGetDetailsMock,
   detailCacheRemoveDetailMock,
 } = vi.hoisted(() => ({
   getMetasByIdsMock: vi.fn(),
@@ -24,6 +25,7 @@ const {
   bulkExportJSONMock: vi.fn(),
   deleteHistoryItemMock: vi.fn(),
   detailCacheGetDetailMock: vi.fn(),
+  detailCacheGetDetailsMock: vi.fn(),
   detailCacheRemoveDetailMock: vi.fn(),
 }));
 
@@ -52,6 +54,7 @@ vi.mock('@/composables/useHistory', () => ({
     totalCount: ref(0),
     detailCache: {
       getDetail: detailCacheGetDetailMock,
+      getDetails: detailCacheGetDetailsMock,
       removeDetail: detailCacheRemoveDetailMock,
     },
     bulkExportJSON: bulkExportJSONMock,
@@ -96,6 +99,7 @@ describe('useHistoryViewState history page bulk actions', () => {
     bulkExportJSONMock.mockResolvedValue(undefined);
     deleteHistoryItemMock.mockResolvedValue(true);
     detailCacheGetDetailMock.mockResolvedValue(null);
+    detailCacheGetDetailsMock.mockResolvedValue([]);
   });
 
   it('copies only selected primary links that are available and reports skipped rows once', async () => {
@@ -167,20 +171,22 @@ describe('useHistoryViewState history page bulk actions', () => {
       makeMeta({ id: 'b' }),
       makeMeta({ id: 'c' }),
     ]);
-    detailCacheGetDetailMock
-      .mockResolvedValueOnce(makeDetail('a', [
+    // 一次批量取回：查不到的记录以 null 占位，保持与入参 ids 等长同序
+    detailCacheGetDetailsMock.mockResolvedValue([
+      makeDetail('a', [
         createHistoryResult({
           serviceId: 'r2',
           result: { serviceId: 'r2', fileKey: 'r2-a', url: 'https://r2.example.com/a.jpg' },
         }),
-      ]))
-      .mockResolvedValueOnce(makeDetail('b', [
+      ]),
+      makeDetail('b', [
         createHistoryResult({
           serviceId: 'jd',
           result: { serviceId: 'jd', fileKey: 'jd-b', url: 'https://jd.example.com/b.jpg' },
         }),
-      ]))
-      .mockRejectedValueOnce(new Error('missing detail'));
+      ]),
+      null,
+    ]);
     copyLinksMock.mockResolvedValue({ ok: true, copiedCount: 1, format: 'url' });
 
     const state = useHistoryViewState();
@@ -190,7 +196,8 @@ describe('useHistoryViewState history page bulk actions', () => {
 
     await state.bulkCopyFormatted('url', 'r2');
 
-    expect(detailCacheGetDetailMock).toHaveBeenCalledTimes(3);
+    expect(detailCacheGetDetailsMock).toHaveBeenCalledTimes(1);
+    expect(detailCacheGetDetailsMock).toHaveBeenCalledWith(['a', 'b', 'c']);
     expect(copyLinksMock).toHaveBeenCalledWith(
       [{ url: 'https://r2.example.com/a.jpg', fileName: 'a.jpg', serviceId: 'r2' }],
       { format: 'url', showSuccessToast: false },
@@ -203,19 +210,20 @@ describe('useHistoryViewState history page bulk actions', () => {
       makeMeta({ id: 'a' }),
       makeMeta({ id: 'b' }),
     ]);
-    detailCacheGetDetailMock
-      .mockResolvedValueOnce(makeDetail('a', [
+    detailCacheGetDetailsMock.mockResolvedValue([
+      makeDetail('a', [
         createHistoryResult({
           serviceId: 'r2',
           result: { serviceId: 'r2', fileKey: 'r2-a', url: 'https://r2.example.com/a.jpg' },
         }),
-      ]))
-      .mockResolvedValueOnce(makeDetail('b', [
+      ]),
+      makeDetail('b', [
         createHistoryResult({
           serviceId: 'r2',
           result: { serviceId: 'r2', fileKey: 'r2-b', url: 'https://r2.example.com/b.jpg' },
         }),
-      ]));
+      ]),
+    ]);
     copyLinksMock.mockResolvedValue({ ok: true, copiedCount: 2, format: 'url' });
 
     const state = useHistoryViewState();
@@ -251,6 +259,20 @@ describe('useHistoryViewState history page bulk actions', () => {
     await state.bulkDelete();
 
     expect(state.selectedIdList.value).toEqual([]);
+  });
+
+  it('falls back to the no-usable-link warning when the batch detail load fails', async () => {
+    getMetasByIdsMock.mockResolvedValue([makeMeta({ id: 'a' }), makeMeta({ id: 'b' })]);
+    detailCacheGetDetailsMock.mockRejectedValue(new Error('db down'));
+
+    const state = useHistoryViewState();
+    state.select('a');
+    state.select('b');
+
+    await state.bulkCopyFormatted('url', 'r2');
+
+    expect(copyLinksMock).not.toHaveBeenCalled();
+    expect(toastWarnMock).toHaveBeenCalledTimes(1);
   });
 
   it('clears selection when the filter or search term changes', () => {
