@@ -211,3 +211,45 @@
 **明确未做**（留待另立条目）：`upload_handler.rs:645` 的 `std::fs::canonicalize` 与 `:656` 的 `validate_image_file` 同样是 async 里的同步 IO，但计划未列，且后者会牵出一串 `Result<_, String>` 改造。
 
 **未验**：1-1 的并发冒烟（一边 `POST /upload/file` 大文件、一边 `curl /status`）需要跑起 GUI，本次只做了静态核对——三个 handler 的锁 guard 作用域内均无 `.await`。
+
+---
+
+### 2026-08-13 · 第二批（前端性能与死代码）· 已完成
+
+6 条全部落地，无跳过项。门禁：`npm run lint` 通过、`npm run typecheck` 通过、`npm run test:unit` **193 文件 / 2326 passed / 0 failed**（改动前基线 2315，新增 11 条测试）。
+
+| 提交 | 覆盖条目 | 主要文件 |
+|------|---------|---------|
+| `0252577` | 2-1 | `useImageDetailCache.ts`、`useHistoryViewState.ts`、`history/useHistoryBulkOps.ts` |
+| `dea5d82` | 2-2、2-3 | `useThumbCache.ts`、`favorites/useFavoritesData.ts` |
+| `a4435db` | 2-4、2-5、2-6 | `link-check/useCheckFilter.ts`、`timeline/TimelineIndicator.vue`、`config/configInterface.ts` |
+
+**与原计划的四处偏离**（执行前已与用户确认）：
+
+1. **2-1 收益判断被推翻，改动范围扩大**：`prefetchDetails`（含那句 "TODO: 优化为批量查询"）**全库零生产调用点**——唯一引用是测试 mock。按计划字面改它，运行时收益为 0。真正在跑 N+1 的是 `useHistoryViewState.ts:78`（按图床批量复制链接）与 `history/useHistoryBulkOps.ts:34`（批量导出 JSON），两处都在用户选中集上 `selectedIds.map(id => getDetail(id))`。最终在 `ImageDetailCache` 上新增 `getMany(ids)`，三处一并接入。
+2. **2-2 不照抄现有失效策略**：计划让"参考 `:223` 现有实现"，但那套 watch 挂在 `initModuleWatchers` 上，**只在 `useThumbCache()` 首次调用时注册**，而全库唯一调用点是 `useTableInteractions.ts:75`（历史表格视图）。时间轴/收藏页走的是 `getMetaThumbnailCandidates` 且从不调用 `useThumbCache()`——照抄会得到一个改配置、切主图床都不失效的脏缓存。改为 **WeakMap 以 meta 对象为键 + 条目内 config 指纹**：镜像变化必然经 DB 重查产生新 `ImageMeta` 对象，天然未命中；配置维度由指纹兜底，与 watcher 是否注册无关。
+3. **2-4 前提不成立，改用保语义的等价优化**：计划要求的"选中项必属于 filtered"不变式被四条路径打破——检测完成后 hold 行离场、`applyCurrentFilter` 丢弃 held 行、单行删除（不走 `clearAfterBulk`）、`searchQuery` 被 `CheckFilterBar` 直写而重置守卫挂在 debounced 的 `searchInput` 上。改成计数比较后，"1 个幽灵 key + 漏选 1 行"会让 size 恰好相等而误判为全选，用户点"取消全选"反而清空整个选择。最终保留 `filtered ⊆ selected` 语义，只加 `size < length` 的 O(1) 必要条件短路，并把 `filteredRowKeys` 从 computed 降级为按需调用的普通函数。
+4. **2-5 多改一处**：同文件 `onDrag:358` 同样未节流且更重（每次 mousemove 一次 `getBoundingClientRect` + 一个 `emit` 触发父组件滚动），一并接入 rAF。
+
+**执行中发现、计划文档未记的四点**：
+
+- **2-4 的 `filteredRowKeys` 有三个消费点，不是两个**。计划说"只在 shift-range 多选场景按需构建"，但 `toggleSelectAll:402` 也需要全量 keys。另外 `handleToggleSelect` 原本无条件求值它（不管 `shiftKey`），而 `shiftSelect` 的非 shift 分支根本不读 `orderedIds`——普通点击白建一次数万条数组。
+- **2-3 需要多改一行**：`useFavoritesData.ts:177` 的 `loadedMetas.value = result.items` 把 DB 查询结果数组直接别名给 ref。改成原地 push 之后，`:198` 会反过来改写 `fetchPage` 返回的数组。已改为 `.slice()` 切断别名。
+- **`getMany` 的返回值不能回读缓存**：`DETAIL_CACHE_SIZE = 200`，批量导出选中数超过 200 时先写进去的条目会被 LRU 挤掉。必须从本地 `resolved` Map 构造结果。
+- **2-2 顺带补上一个既有缺口**：现有 config watch 只盯 `linkPrefixConfig.enabled` 与 `selectedIndex`，用户编辑当前选中前缀的 URL 模板时那两项都不变 → 微博缩略图 URL 永久陈旧。新的指纹取 `getActivePrefix(config)?.template` 本身，ImageMeta 路径不再有这个问题（HistoryItem 路径的旧缓存未动，缺口仍在，留待单独立项）。
+
+**计划文档勘误**：2-3 写"项目在 `useLinkCheck.ts:290` 已踩过同一坑并留了注释"——`src/composables/useLinkCheck.ts` 只有 3 行 re-export shim，真实注释在 `src/composables/link-check/useLinkCheck.ts:720-727`，且那是**反例**（因跨组件 prop 传递被迫放弃 `triggerRef` 改用引用替换）。正面范式是 `batchMigrate/preloadPending.ts:95-105`。其余条目的行号（2-1 / 2-4 / 2-5 / 2-6）与 `lastJdCheck` 的 ⚠️ 均核实属实。
+
+**补的测试**（原本三处都是零覆盖）：
+
+- `getMetaThumbnailCandidates` 7 条，含引用稳定性契约三条（同 meta+同配置返回同一引用、配置指纹变化重算、换新 meta 对象重算）——**暂缓项 G 的 `useMirrorSrcFallback` 会依赖这个契约**；
+- `useCheckFilter` 3 条：空筛选结果时 `isAllSelected` 为 false（`[].every()` 返回 true 的守卫）、计数相等但集合不同时不算全选、shift+click 范围多选；
+- 批量取回整体失败与"记录查不到"的分野各 1 条。
+
+**明确未做**（留待另立条目）：
+
+- 历史表格视图那条 `thumbnailCandidatesCache`（`id` 键 + watch 失效）未动。`ThumbnailImage.vue:49` 的 watch 是**按引用**比较的，那个缓存的引用稳定性是它的隐性正确性依赖，动它需要连带验证表格视图；上面提到的"改前缀模板不失效"缺口也还在那条路径上。
+- `initModuleWatchers` 只在 `useThumbCache()` 被调用时注册这件事本身没改——本批用不依赖它的方案绕开了，但它对旧缓存仍是隐患。
+- `selectedIds` 的幽灵 key 没有剪枝（剪枝本身是 O(n)，且会改变"选择跨提交保留"的现有行为）。本批只保证 `isAllSelected` 不因此误判。
+
+**未验**（需跑起 GUI）：2-2 在真实滚动下的帧率收益、2-5 的拖拽手感与 hover 气泡 1 帧延迟、2-4 在数万行链接检测数据下的实际表现。

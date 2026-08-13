@@ -147,6 +147,8 @@ flowchart TD
 | 模块级 stats（useHistory） | totalCount + favoriteSet + timePeriodStats | 5 分钟 | `isStatsCacheValid()` 失败 / `history-updated` 事件 / `invalidateCache()` |
 | 详情缓存（useImageDetailCache） | 按条目 LRU | 无限制 | 收藏切换 / 删除 / 清空 |
 | 缩略图缓存（useThumbCache） | Blob URL | 会话级 | 组件卸载 |
+| 候选列表缓存 · HistoryItem 版（`thumbnailCandidatesCache`） | 按 `item.id` 的 Map，上限 500 | 会话级 | `history-updated/deleted/cleared` 事件 + 前缀/知乎配置 watch（**注册于 `useThumbCache()` 首次调用，目前只有历史表格视图会触发**） |
+| 候选列表缓存 · ImageMeta 版（`metaCandidatesCache`） | 以 meta 对象为键的 WeakMap | 随 meta 对象被 GC | 换新 meta 对象（即镜像变化后重查 DB）或配置指纹变化；**不接事件、不受上一行的 watch 影响** |
 | 视图分页缓存 | 当前页 + 相邻缓冲 | 临时 | 筛选/搜索条件变化、跨窗口事件 |
 
 ---
