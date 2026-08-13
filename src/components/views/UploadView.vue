@@ -3,8 +3,8 @@ import { ref, onMounted, onUnmounted, onActivated, onDeactivated, computed, next
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { emit as tauriEmit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { useConfirm } from '../../composables/useConfirm';
-import type { UserConfig, CustomS3Profile } from '../../config/types';
-import { PRIVATE_SERVICES, PUBLIC_SERVICES, DEFAULT_CONFIG, makeCustomS3Id } from '../../config/types';
+import type { UserConfig, CustomS3Profile, WebDAVStorageProfile } from '../../config/types';
+import { PRIVATE_SERVICES, PUBLIC_SERVICES, DEFAULT_CONFIG, makeCustomS3Id, makeWebDAVId } from '../../config/types';
 import { useToast } from '../../composables/useToast';
 import { useServiceHealth } from '../../composables/useServiceHealth';
 import { useUploadManager } from '../../composables/useUpload';
@@ -75,10 +75,15 @@ const retryService = new RetryService({
   }
 });
 
-// 自定义 S3 profiles（从 configStore 同步）
+// 多实例图床 profiles（从 configStore 同步）
+//
+// ⚠️ 新增多实例图床类型时，本文件有四处必须同步：这两个 ref、serviceLabels、
+// visiblePrivateServices、syncLocalConfigState。漏掉任意一处的表现都是
+// 「设置页能配、首页看不见」——WebDAV 刚上线时就漏过一次。
 const customS3Profiles = ref<CustomS3Profile[]>([]);
+const webdavProfiles = ref<WebDAVStorageProfile[]>([]);
 
-// 服务配置映射（动态合并自定义 S3 profiles 名称）
+// 服务配置映射（动态合并多实例 profiles 名称）
 const serviceLabels = computed<Record<string, string>>(() => {
   const base: Record<string, string> = {
     weibo: '微博',
@@ -101,6 +106,9 @@ const serviceLabels = computed<Record<string, string>>(() => {
   for (const profile of customS3Profiles.value) {
     base[makeCustomS3Id(profile.id)] = profile.name || '自定义 S3';
   }
+  for (const profile of webdavProfiles.value) {
+    base[makeWebDAVId(profile.id)] = profile.name || 'WebDAV';
+  }
   return base;
 });
 
@@ -111,10 +119,14 @@ const filterVisibleServices = (services: string[]) =>
     healthStatusMap.value[s] !== 'unconfigured'
   );
 
-// 可见的私有存储（含自定义 S3）
+// 可见的私有存储（含自定义 S3 与 WebDAV）
+//
+// PRIVATE_SERVICES 只含内建图床，多实例图床的 ID 由 profile 动态生成
+// （custom_s3:xxx / webdav:xxx），不在常量里，必须逐类展开后再过滤。
 const visiblePrivateServices = computed(() => {
   const customIds = customS3Profiles.value.map(p => makeCustomS3Id(p.id));
-  return filterVisibleServices([...PRIVATE_SERVICES, ...customIds]);
+  const webdavIds = webdavProfiles.value.map(p => makeWebDAVId(p.id));
+  return filterVisibleServices([...PRIVATE_SERVICES, ...customIds, ...webdavIds]);
 });
 
 // 可见的公共图床
@@ -154,6 +166,7 @@ async function saveCompressionConfig() {
 function syncLocalConfigState(config: UserConfig | null | undefined) {
   if (!config) {
     customS3Profiles.value = [];
+    webdavProfiles.value = [];
     return;
   }
   evaluateConfig(config);
@@ -161,6 +174,7 @@ function syncLocalConfigState(config: UserConfig | null | undefined) {
     compressionConfig.value = config.imageCompression;
   }
   customS3Profiles.value = [...(config.custom_s3_profiles ?? [])];
+  webdavProfiles.value = [...(config.webdav_profiles ?? [])];
 }
 
 const navigateToSettings = () => {

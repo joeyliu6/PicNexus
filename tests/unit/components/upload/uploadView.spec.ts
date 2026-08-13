@@ -373,6 +373,66 @@ describe('UploadView page interactions', () => {
     expect(mockState.retryAllFailed).toHaveBeenCalledWith(['failed-1'], mockState.config);
   });
 
+  // 回归护栏：WebDAV 图床刚上线时，设置页能配、首页却看不见。
+  // 病因是 visiblePrivateServices 只展开了 custom_s3 profiles，
+  // 而多实例图床的 ID（custom_s3:xxx / webdav:xxx）不在 PRIVATE_SERVICES 常量里。
+  // 两类必须同时断言：只测 WebDAV 的话，有人用「替换」而不是「新增」来修就照样过。
+  it('lists both custom S3 and WebDAV profiles under private storage', async () => {
+    mockState.config = {
+      ...makeConfig(),
+      custom_s3_profiles: [{ id: 's3a', name: '我的 MinIO' }],
+      webdav_profiles: [
+        { id: 'davA', name: '家里的 NAS' },
+        { id: 'davB', name: '' },
+      ],
+    };
+    mockState.configGet.mockResolvedValue(mockState.config);
+    mockState.uploadManager.availableServices = ref([
+      'r2', 'custom_s3:s3a', 'webdav:davA', 'webdav:davB',
+    ]);
+    mockState.serviceHealth.healthStatusMap = ref({
+      r2: 'verified',
+      'custom_s3:s3a': 'verified',
+      'webdav:davA': 'verified',
+      'webdav:davB': 'verified',
+    });
+
+    const wrapper = await mountView();
+    const selector = wrapper.findComponent(ServiceSelectorStub);
+    const privateServices = selector.props('privateServices') as string[];
+    const labels = selector.props('serviceLabels') as Record<string, string>;
+
+    expect(privateServices).toContain('webdav:davA');
+    expect(privateServices).toContain('custom_s3:s3a');
+    expect(labels['webdav:davA']).toBe('家里的 NAS');
+    expect(labels['custom_s3:s3a']).toBe('我的 MinIO');
+    // 未命名 profile 要有兜底标签，否则首页是个没有文字的空芯片
+    expect(labels['webdav:davB']).toBe('WebDAV');
+  });
+
+  it('drops WebDAV entries that are unconfigured or absent from availableServices', async () => {
+    mockState.config = {
+      ...makeConfig(),
+      webdav_profiles: [
+        { id: 'davOk', name: '已配置' },
+        { id: 'davBad', name: '缺字段' },
+        { id: 'davGone', name: '已删除' },
+      ],
+    };
+    mockState.configGet.mockResolvedValue(mockState.config);
+    // davGone 不在 availableServices 里（profile 刚删、配置还没刷新）
+    mockState.uploadManager.availableServices = ref(['webdav:davOk', 'webdav:davBad']);
+    mockState.serviceHealth.healthStatusMap = ref({
+      'webdav:davOk': 'verified',
+      'webdav:davBad': 'unconfigured',
+    });
+
+    const wrapper = await mountView();
+    const privateServices = wrapper.findComponent(ServiceSelectorStub).props('privateServices') as string[];
+
+    expect(privateServices).toEqual(['webdav:davOk']);
+  });
+
   it('registers retry callback and cleans listeners on unmount', async () => {
     const wrapper = await mountView();
 
