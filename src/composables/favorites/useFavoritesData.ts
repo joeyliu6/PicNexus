@@ -5,7 +5,7 @@
  * 不依赖 sharedImageMetas 全量数组。
  */
 import {
-  ref, shallowRef, reactive, watch, onUnmounted,
+  ref, shallowRef, reactive, watch, onUnmounted, triggerRef,
   type Ref,
 } from 'vue';
 import { historyDB, type FavoritesMetaPageResult } from '../../services/HistoryDatabase';
@@ -174,7 +174,9 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
     // state 更新和 isLoading=false 必须在同一个同步块内，避免 Vue flush 到中间帧触发 showEmptyState=true 的闪烁
     try {
       if (!result) return;
-      loadedMetas.value = result.items;
+      // 必须 slice：下面 loadNextPage 走原地 push，直接持有 fetchPage 返回的数组
+      // 会让翻页反过来改写查询结果本身
+      loadedMetas.value = result.items.slice();
       totalCount.value = result.total;
       hasMore.value = result.hasMore;
       nextOffset = result.items.length;
@@ -195,7 +197,12 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
     const result = await fetchPage(nextOffset);
     try {
       if (!result) return;
-      loadedMetas.value = [...loadedMetas.value, ...result.items];
+      // 原地 push + triggerRef 是真 O(batch)：拼接式赋值每页都全量复制，页数一多就退化成 O(N²)。
+      // 范式同 batchMigrate/preloadPending.ts。这里能用 triggerRef 是因为 loadedMetas 从不作为
+      // prop 传给子组件（FavoritePhotoItem 收的是单个 meta），消费方都直接读 ref。
+      const arr = loadedMetas.value;
+      for (const item of result.items) arr.push(item);
+      triggerRef(loadedMetas);
       totalCount.value = result.total;
       hasMore.value = result.hasMore;
       nextOffset += result.items.length;

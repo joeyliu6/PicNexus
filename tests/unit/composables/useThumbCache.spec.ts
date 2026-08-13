@@ -20,9 +20,11 @@ import {
   generateThumbnailUrl,
   generateMediumThumbnailUrl,
   getMetaThumbnailUrl,
+  getMetaThumbnailCandidates,
   getThumbnailCandidates,
   useThumbCache,
 } from '@/composables/useThumbCache';
+import type { UserConfig } from '@/config/types';
 import type { ImageMeta } from '@/types/image-meta';
 
 beforeEach(() => {
@@ -141,6 +143,104 @@ describe('getMetaThumbnailUrl', () => {
       primaryUrl: 'https://zhihu/a.jpg',
     } as ImageMeta;
     expect(getMetaThumbnailUrl(meta, null)).toBe('https://zhihu/a_qhd.jpg');
+  });
+});
+
+describe('getMetaThumbnailCandidates', () => {
+  function makeMeta(overrides: Partial<ImageMeta> = {}): ImageMeta {
+    return {
+      id: 'm1',
+      timestamp: 0,
+      localFileName: 'a.png',
+      aspectRatio: 1,
+      primaryService: 'zhihu',
+      primaryUrl: 'https://pic.zhimg.com/a.jpg',
+      mirrorServices: [
+        { serviceId: 'zhihu', url: 'https://pic.zhimg.com/a.jpg' },
+        { serviceId: 'jd', url: 'https://img.jd.com/jfs/b.jpg' },
+      ],
+      ...overrides,
+    } as ImageMeta;
+  }
+
+  function makeConfig(overrides: Record<string, unknown> = {}): UserConfig {
+    return {
+      services: { zhihu: { sourceParamEnabled: true, sourceParamValue: 'aaa111' } },
+      ...overrides,
+    } as unknown as UserConfig;
+  }
+
+  it('按镜像顺序生成中等尺寸候选并去重', () => {
+    const meta = makeMeta({
+      mirrorServices: [
+        { serviceId: 'jd', url: 'https://img.jd.com/jfs/b.jpg' },
+        { serviceId: 'jd', url: 'https://img.jd.com/jfs/b.jpg' },
+      ],
+    } as Partial<ImageMeta>);
+    expect(getMetaThumbnailCandidates(meta, null)).toEqual([
+      'https://img.jd.com/s500x0_jfs/b.jpg',
+    ]);
+  });
+
+  it('无 mirrorServices 时降级到主图单条', () => {
+    const meta = makeMeta({ mirrorServices: undefined });
+    expect(getMetaThumbnailCandidates(meta, null)).toEqual([
+      'https://pic.zhimg.com/a_qhd.jpg?source=172ae18b',
+    ]);
+  });
+
+  // 以下三条固化「引用稳定性契约」：模板逐行调用本函数，引用抖动会让子组件全量 re-render，
+  // 后续抽 useMirrorSrcFallback 时也要依赖这个契约来判断 fallback 索引该不该重置
+  it('同一个 meta + 同一份配置返回同一个数组引用', () => {
+    const meta = makeMeta();
+    const config = makeConfig();
+    const first = getMetaThumbnailCandidates(meta, config);
+    const second = getMetaThumbnailCandidates(meta, config);
+    expect(second).toBe(first);
+  });
+
+  it('配置指纹变化后重算（改知乎 source 值）', () => {
+    const meta = makeMeta();
+    const first = getMetaThumbnailCandidates(meta, makeConfig());
+    const second = getMetaThumbnailCandidates(
+      meta,
+      makeConfig({ services: { zhihu: { sourceParamEnabled: true, sourceParamValue: 'bbb222' } } }),
+    );
+    expect(second).not.toBe(first);
+    expect(first[0]).toContain('source=aaa111');
+    expect(second[0]).toContain('source=bbb222');
+  });
+
+  // 现有 watch 只盯 linkPrefixConfig 的 enabled / selectedIndex，
+  // 改模板内容那两项都不变——指纹取 template 本身才能兜住
+  it('配置指纹变化后重算（只改选中前缀的模板内容）', () => {
+    const meta = makeMeta({
+      mirrorServices: [{ serviceId: 'weibo', url: 'https://ignored', fileKey: 'abc123' }],
+    } as Partial<ImageMeta>);
+    const withPrefix = (template: string) => makeConfig({
+      linkPrefixConfig: { enabled: true, selectedIndex: 0, prefixList: [{ name: 'p', template }] },
+    });
+
+    const first = getMetaThumbnailCandidates(meta, withPrefix('https://p1.example.com/{url}'));
+    const second = getMetaThumbnailCandidates(meta, withPrefix('https://p2.example.com/{url}'));
+
+    expect(second).not.toBe(first);
+    expect(first[0]).toContain('p1.example.com');
+    expect(second[0]).toContain('p2.example.com');
+  });
+
+  // 切主图床 / 移除链接都会写 DB 并让视图重查，rowToImageMeta 产出新对象，
+  // 所以「新 meta 对象」就是镜像变化的失效信号，不需要额外接事件
+  it('换新的 meta 对象（模拟镜像变化后重查 DB）重算', () => {
+    const config = makeConfig();
+    const before = getMetaThumbnailCandidates(makeMeta(), config);
+    const after = getMetaThumbnailCandidates(
+      makeMeta({ mirrorServices: [{ serviceId: 'jd', url: 'https://img.jd.com/jfs/b.jpg' }] } as Partial<ImageMeta>),
+      config,
+    );
+    expect(after).not.toBe(before);
+    expect(before).toHaveLength(2);
+    expect(after).toHaveLength(1);
   });
 });
 
