@@ -76,8 +76,10 @@ flowchart TD
 
     %% 单文件路径
     B -- "单文件" --> C["loadFileImpl(path)"]
-    C --> C1["readTextFile(path)<br/>读取文件内容"]
-    C1 --> C2["extractImageLinks(content)<br/>JS 正则提取"]
+    C --> C1["readUtf8TextFile(path)<br/>raw bytes + fatal UTF-8 解码"]
+    C1 --> C1a{解码成功?}
+    C1a -- 否 --> C1b["提示「编码不受支持（非 UTF-8）」<br/>不加载，避免乱码进入修复链路"]
+    C1a -- 是 --> C2["extractImageLinks(content)<br/>JS 正则提取"]
     C2 --> C3["跳过代码块<br/>``` 围栏 + 行内 backtick"]
     C3 --> C4["匹配 ![](url) + &lt;img src&gt;"]
     C4 --> C5["返回 MdImageLinkWithFile[]"]
@@ -88,7 +90,7 @@ flowchart TD
     D1 -- 否 --> D2["提示：未找到 MD 文件"]
     D1 -- 是 --> D3["collectLinksFromFiles(mdPaths)"]
     D3 --> D4["Semaphore(8) 并发控制"]
-    D4 --> D5["逐文件：readTextFile → extractImageLinks"]
+    D4 --> D5["逐文件：readUtf8TextFile → extractImageLinks<br/>非 UTF-8 文件计入读取失败并跳过"]
     D5 --> D6{getCollectCancelled()?}
     D6 -- 是 --> D7["中断收集"]
     D6 -- 否 --> D8["累积到 allLinks[]"]
@@ -97,8 +99,9 @@ flowchart TD
     %% 文件夹路径
     B -- "文件夹" --> E["loadFolderImpl(dir)"]
     E --> E1["invoke('scan_md_folder')<br/>单次 IPC"]
-    E1 --> E2["Rust 侧：递归目录遍历<br/>收集 .md 文件列表"]
-    E2 --> E3["Rust 侧：批量 read + 正则提取"]
+    E1 --> E2["Rust 侧：递归目录遍历<br/>收集 .md 文件列表<br/>跳过 .picnexus-backup 备份目录"]
+    E2 --> E2a["Rust 侧：strip_verbatim_prefix<br/>剥掉 canonicalize 产生的 \\\\?\\ 前缀"]
+    E2a --> E3["Rust 侧：批量 read + 正则提取"]
     E3 --> E4["实时推送 md-scan://progress<br/>scannedFiles / processedFiles / foundLinks"]
     E4 --> E5{cancelled?}
     E5 -- 是 --> E6["return false"]
@@ -235,7 +238,7 @@ flowchart TD
 
 展示文件备份、文本替换、撤销的完整机制。
 
-> **关键源文件**：`src/composables/md-rescue/useFileBackup.ts`（`executeReplace`、`undoReplace`、`cleanupOldBackups`）
+> **关键源文件**：`src/composables/md-rescue/useFileBackup.ts`（`executeReplace`、`undoReplace`、`cleanupOldBackups`、`computeRelativePath`）、`src/composables/md-rescue/mdTextIo.ts`（`readUtf8TextFile`、`writeUtf8TextFile`）
 
 ```mermaid
 flowchart TD
@@ -249,10 +252,16 @@ flowchart TD
     F --> G["逐文件处理循环"]
     G --> G1{isCancelled?}
     G1 -- 是 --> G2["中断循环<br/>已完成的文件保留"]
-    G1 -- 否 --> H["readTextFile 读取原文件"]
-    H --> I["copyFile 备份到 .picnexus-backup/<br/>文件夹模式保持相对路径"]
-    I --> J["replaceImageLinks(content, replacements)<br/>执行文本替换"]
-    J --> K["writeTextFile 写入新内容"]
+    G1 -- 否 --> H["readUtf8TextFile 读取原文件<br/>raw bytes + fatal UTF-8 解码，记录 BOM"]
+    H --> H1{解码成功?}
+    H1 -- 否 --> H2["计入 failedFiles<br/>「编码不受支持（非 UTF-8）」<br/>先于备份/写回，不留残次备份"]
+    H2 --> M
+    H1 -- 是 --> I0["computeRelativePath(folder, file)<br/>剥 verbatim 前缀 + 大小写不敏感比对"]
+    I0 --> I1{算得出相对路径?}
+    I1 -- 是 --> I["copyFile 备份到 .picnexus-backup/<br/>保持子目录结构"]
+    I1 -- 否 --> I2["copyFile 备份为 hash_basename<br/>防同名互相覆盖"]
+    I & I2 --> J["replaceImageLinks(content, replacements)<br/>执行文本替换"]
+    J --> K["writeUtf8TextFile 写入新内容<br/>原文件有 BOM 则补回"]
     K --> L["healedFiles.add(file)<br/>触发 UI 动画"]
     L --> M["fixingProgress.current++"]
     M --> G
@@ -271,8 +280,25 @@ flowchart TD
     style A fill:#e3f2fd,stroke:#1976d2
     style P fill:#e8f5e9,stroke:#2e7d32
     style G2 fill:#fff3e0,stroke:#ef6c00
+    style H2 fill:#fff3e0,stroke:#ef6c00
     style R3 fill:#e0e0e0,stroke:#616161
 ```
+
+### 备份路径不变量
+
+备份路径必须**一文件一路径**，否则撤销时会把同一份备份写进两个原始文件，其中一个的原始内容永久丢失。三条防线：
+
+1. **Rust 侧剥 verbatim 前缀**（根因）：`std::fs::canonicalize` 在 Windows 上返回 `\\?\C:\docs`，而文件选择对话框返回 `C:\docs`。两者拼不到一起，前端前缀比对必然落空。`scan_md_folder` 在返回前统一剥离（`strip_verbatim_prefix`），非盘符 verbatim 路径（`\\?\Volume{GUID}\`）与超过 MAX_PATH 的路径保留原样。
+2. **前端 `computeRelativePath` 防御**：比对前再剥一次 verbatim 前缀、统一分隔符、大小写不敏感。
+3. **兜底不退化为裸 basename**：相对路径算不出来时用 `hash_basename`（FNV-1a 32bit，8 字符），不同目录的同名文件天然分开。
+
+### 备份目录排除
+
+备份目录 `.picnexus-backup` 建在被扫描文件夹内部，Rust 递归扫描时按目录名跳过——否则下一轮扫描会把"修复前的原件"当正常文档再修一遍：失效数虚高、备份被改写、还会产生嵌套备份。目录名在 Rust（`md_scanner.rs` 的 `BACKUP_DIR_NAME`）与前端（`useFileBackup.ts` 的 `BACKUP_DIR_NAME`）各写一份，由 `scripts/check-cross-language-constants.mjs` 守着防漂移。
+
+### 编码约束
+
+修复链路只处理 UTF-8。plugin-fs 的 `readTextFile` 用非 fatal 的 `TextDecoder`，GBK 等非 UTF-8 字节会被静默替换成 `�` 并写回原文件——这是会永久损坏用户数据的静默失败。`mdTextIo.ts` 改为读原始字节 + `new TextDecoder('utf-8', { fatal: true })`：解码失败即拒绝该文件（单文件模式提示"编码不受支持"，批量模式计入 `failedFiles` / 读取失败）。原文件的 UTF-8 BOM 会被记录并在写回时补回，不静默改变文件字节。
 
 ---
 
@@ -330,7 +356,11 @@ flowchart TD
 | 部分文件卡片一直不出现 | 该文件有 URL 共享于其他文件且那些 URL 尚未检测完 | 图 3 `checkFileCompletion` |
 | 备用链接全部显示「不可用」 | urlIndex 未建立（DB 为空或 `buildUrlIndex` 失败） | 图 4 `buildUrlIndex` |
 | 备用链接显示「待验证」不更新 | Phase 2 的 `checkUrls` 被取消或尚未开始 | 图 4 `scanStage=backups` |
-| 替换后文件内容乱码 | 原文件编码非 UTF-8（`readTextFile` 默认 UTF-8） | 图 5 `readTextFile` |
+| 提示「编码不受支持（非 UTF-8）」 | 已拦截：原文件不是 UTF-8（如记事本 ANSI/GBK）。`readUtf8TextFile` 用 fatal 解码，宁可拒绝也不写回乱码——把文件转成 UTF-8 后重试 | 图 5 `readUtf8TextFile`、[编码约束](#编码约束) |
+| 替换后文件内容乱码 | 不应再出现。若仍发生，检查是否有旁路仍在用 plugin-fs 的 `readTextFile`（非 fatal 解码）读用户 md 文件 | 图 5 [编码约束](#编码约束) |
+| 备份目录被平铺、子目录结构丢失 | 相对路径算不出来（路径形态对不上），已退回 `hash_basename` 防撞命名，不会互相覆盖。若整体平铺，先看 Rust 返回的路径是否仍带 `\\?\` 前缀 | 图 5 [备份路径不变量](#备份路径不变量) |
+| 撤销后两个同名文件内容互串 | 不应再出现。历史成因是 verbatim 前缀让相对路径退化为裸 basename，同名备份互相顶掉 | 图 5 [备份路径不变量](#备份路径不变量) |
+| 修复过的文件夹再扫一次，失效数虚高 | 检查 `.picnexus-backup` 是否被扫进来（Rust 递归按 `BACKUP_DIR_NAME` 跳过）；目录名两侧漂移会被 `npm run lint` 拦下 | 图 2 Rust 扫描、[备份目录排除](#备份目录排除) |
 | 撤销恢复失败 | `.picnexus-backup` 目录被手动删除 | 图 5 `undoReplace` |
 | 「无法修复」数量比预期多 | 该图片未上传到其他图床（DB 中无备用记录） | 图 4 `findBackupLinksRaw` |
 | 图床偏好设置不生效 | `hostPreference` 为空数组（未设置偏好则不排序） | 图 6 `priority` 策略 |
