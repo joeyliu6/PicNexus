@@ -89,10 +89,12 @@ jobs:
       - name: Lint (ESLint + Stylelint)
         run: npm run lint
 
-      - name: Build (tsc + vite)
+      - name: Build (vite)
         run: npm run build
 
+      # ubuntu 由下面的 test:coverage 跑同一套 suite，这里只补 windows / macOS
       - name: Run unit tests
+        if: matrix.os != 'ubuntu-latest'
         run: npm run test:unit
 
       - name: Run tests with coverage

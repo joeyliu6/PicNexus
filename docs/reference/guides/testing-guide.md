@@ -116,7 +116,8 @@ PR / push 到 `main` 当前必跑 `.github/workflows/ci.yml` 的 `test` job：
 
 - 三平台安装依赖并构建 sidecar。
 - Rust：`cargo check`、`cargo test`。
-- 前端：`npm run typecheck`、`npm run lint`、`npm run build`、`npm run test:unit`。
+- 前端：`npm run typecheck`、`npm run lint`、`npm run build`。
+- 单元测试：`npm run test:unit` 只在 `windows-latest` / `macos-latest` 跑；`ubuntu-latest` 由下面的 `npm run test:coverage` 跑同一套 suite，不重复执行。
 - Obsidian 插件：独立 `obsidian-plugin` job 执行依赖安装、`npm run ci:obsidian`，并确认构建后的 `plugins/obsidian/main.js` 已提交。
 - 覆盖率：只在 `ubuntu-latest` 跑 `npm run test:coverage`，并上传 `coverage-report` artifact。
 
@@ -147,7 +148,7 @@ CI artifact：
 release 当前还会跑：
 
 - tag 触发时先在 Ubuntu 跑 `npm run test:e2e` 的 web smoke。
-- release matrix 中跑 `npm run lint`、`npm run test:unit`。
+- release matrix 中跑 `npm run typecheck`、`npm run lint`、`npm run test:unit`。`typecheck` 是发版路径唯一的类型闸门（`npm run build` 不再内联 `tsc`）。
 - Windows release runner 安装 Tauri E2E drivers 后跑 `npm run test:tauri:e2e`。
 - 打包后 Windows / Linux 还有安装包或 AppImage 启动冒烟。
 

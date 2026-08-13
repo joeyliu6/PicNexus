@@ -84,6 +84,10 @@ jobs:
       - name: Build sidecar binaries for current target
         run: npm run setup:sidecars ${{ matrix.target && format('-- --target {0}', matrix.target) || '' }}
 
+      # build 不再内联 tsc，发版路径的类型闸门改由这一步承担（vue-tsc 覆盖 .ts 与 .vue）
+      - name: Type check before release
+        run: npm run typecheck
+
       - name: Lint before release
         run: npm run lint
 
