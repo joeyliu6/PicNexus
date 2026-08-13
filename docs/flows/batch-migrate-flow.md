@@ -1,7 +1,7 @@
 # 批量迁移流程
 
-> 将图片从一个图床批量迁移到另一个图床。选择目标 → 筛选范围 → 下载 + 上传 → 更新历史记录。
-> 排查「迁移速度慢」「格式转换失败」「重复迁移」时查看此文档。
+> 将图片从一个图床批量迁移到另一个图床。选择目标 → 筛选范围 → 下载 + 上传 → 更新历史记录 → 广播刷新。
+> 排查「迁移速度慢」「格式转换失败」「重复迁移」「迁移完其它视图不刷新」「被删的镜像又出现」时查看此文档。
 
 ---
 
@@ -35,7 +35,7 @@ flowchart TD
     G -- 否 --> H["用户点击「开始迁移」"]
 
     H --> I["migrating 阶段<br/>startMigrate()"]
-    I --> J["分页执行<br/>（见图 4）"]
+    I --> J["预加载流水线 + chunk 处理<br/>（见图 4）"]
     J --> K["done 阶段<br/>显示结果统计"]
 
     K --> L{用户操作}
@@ -138,6 +138,10 @@ flowchart TD
 > - 若至少一个目标成功、另有目标失败，条目保持 `success`，同时写入 `partialFailures` 和一条 `isPartial` 的 `failures` 记录；结果页「失败」筛选和重试按钮会只针对失败目标重试，不会重复上传已成功目标
 > - 取消（`isCancelled=true`）不会打断已发起的并行上传；只影响主循环下一张图不被取出
 > - 信号量 `MAX_CONCURRENT=3` 控制图片级并发。由于每张图只向每个图床发 1 次上传，**每图床的峰值并发数 = MAX_CONCURRENT（= 3），与目标数无关**
+>
+> **落库不变量（2026-08-13）**：`historyDB.update` 前必须 `historyDB.getById` 重读一次，用最新记录当合并 base。传进来的 `item` 是 chunk 开头（大批量下可能几分钟前）取的快照——直接拿它当 base 会把这期间用户在灯箱删掉的镜像整个写回去、"复活"。重读把读-改-写窗口从**分钟级缩到毫秒级**；`linkCheckSummary` 的累加同样以重读值为准。记录已被删除（`getById` 返回 `null`）时退回旧快照，由 `historyDB.update` 抛「记录不存在」走失败分支。
+>
+> 彻底消除竞态需要 DB 层原子合并 `results`，成本不成比例，已列入 `docs/audits/fix-plan-2026-08-13.md` 的暂缓清单。
 
 ```mermaid
 flowchart TD
@@ -179,9 +183,10 @@ flowchart TD
 
     O --> V["清理临时文件<br/>下载的 + 所有格式转换的"]
     V --> W{hasSuccess?<br/>至少一个目标成功}
-    W -- 是 --> X["historyDB.update<br/>追加 results"]
+    W -- 是 --> X0["historyDB.getById(item.id)<br/>重读最新记录作合并 base"]
+    X0 --> X["historyDB.update<br/>base.results + 本次新结果"]
     X --> X1{DB 更新成功?}
-    X1 -- 是 --> X2["status = success"]
+    X1 -- 是 --> X2["status = success<br/>（= 已落库，可广播刷新）"]
     X1 -- 否 --> X3["status = failed<br/>errorType = upload"]
     W -- 否 --> Y["status = failed<br/>errorType = upload<br/>收集各目标错误信息"]
 
@@ -209,62 +214,101 @@ flowchart TD
 
 ---
 
-## 图 4：分页执行与 offset 策略
+## 图 4：预加载流水线与 chunk 处理
 
-展示 `startMigrate` 中分页查询、去重、offset 重置的循环逻辑。排查「重复迁移」或「漏处理」。
+展示 `startMigrate` 的执行循环：预加载与处理**并发**跑，首批 100 条加载完就开始迁移。排查「漏处理」「进度卡住」「迁移完视图不刷新」。
 
-> **关键源文件**：`src/composables/useBatchMigrate.ts`（`startMigrate`）
+> **关键源文件**：`src/composables/useBatchMigrate.ts`（`startMigrate`）、`src/composables/batchMigrate/preloadPending.ts`（`preloadAllPending`）、`src/composables/batchMigrate/historyRefresh.ts`
+>
+> ⚠️ **已废弃的旧机制**：`skipOffset` 翻页 + `processedIds` 去重（本图 2026-08-13 前的画法）早已被 **keyset 游标预加载 + processQueue 流水线**替换。去重责任前移到预加载：`makePreloaded` 直接剔除"所有勾选目标都已存在"的项，主循环只按 `cursor` 单向推进，天然不会重复处理同一条。
 
 ```mermaid
 flowchart TD
-    A["startMigrate() 入口"] --> B["初始化<br/>totalToProcess = totalPending<br/>processedIds = new Set<br/>skipOffset = 0"]
+    A["startMigrate() 入口"] --> B["初始化统计<br/>totalCount = 各目标 pending 之和（上界）<br/>cursor = 0, processQueue = []"]
+    B --> PL["preloadAllPending()<br/>不 await，与主循环并发"]
+
+    subgraph PRE["预加载 · keyset 游标"]
+        direction TB
+        PL1["首屏 100 条<br/>getItemsByBackupCount(limit=100)"] --> PL2["剩余按 2000/块流式加载<br/>cursorTimestamp + cursorId 游标翻页"]
+        PL2 --> PL3["makePreloaded 过滤<br/>剔除全目标已备份 / 不满足可恢复条件的项"]
+        PL3 --> PL4["onBatch → processQueue.push<br/>每块之间 yieldToMain"]
+        PL4 --> PL5["全部加载完<br/>totalCount = 真实并集大小<br/>preloadDone = true"]
+    end
+
+    PL --> PL1
+    PL4 -.推入.-> D
+    PL5 -.置位.-> E
+
     B --> C{isCancelled?}
-    C -- 是 --> Z["构建 migrateResult<br/>phase = done"]
+    C -- 是 --> Z["finalizeResult()<br/>historyRefresh.flush() 兜底<br/>phase = done"]
     C -- 否 --> CP{isPaused?}
     CP -- 是 --> CP1["while-pause 阻塞轮询<br/>200ms/次，直至 resume 或取消"]
     CP1 --> C
-    CP -- 否 --> D["historyDB.getItemsByBackupCount<br/>limit=100, offset=skipOffset"]
+    CP -- 否 --> D{"cursor >= processQueue.length?<br/>（队列已追平）"}
 
-    D --> E{items 为空?}
+    D -- 是 --> E{preloadDone?}
     E -- 是 --> Z
-    E -- 否 --> F["processedIds 过滤<br/>+ 对所有勾选目标都已存在的项直接剔除<br/>→ newItems"]
+    E -- 否 --> E1["setTimeout(0) 让出主线程<br/>等 onBatch 推入新条目"]
+    E1 --> C
 
-    F --> G{newItems 为空?}
-    G -- 是 --> H["skipOffset += PAGE_SIZE<br/>当前页全是已处理或全目标已备份的项"]
-    H --> I{skipOffset > 0<br/>且 >= queryTotal?}
-    I -- 是 --> Z
-    I -- 否 --> C
+    D -- 否 --> F["chunk = processQueue.slice(cursor, cursor+100)<br/>pendingChunk = 仍为 pending 的项"]
+    F --> G{pendingChunk 为空?}
+    G -- 是 --> G1["cursor = end<br/>（上一轮已全部落定）"]
+    G1 --> C
 
-    G -- 否 --> J["创建 batchStatuses"]
-    J --> K["processBatch<br/>Semaphore(MAX_CONCURRENT=3)<br/>图片级并发；图内多目标改 Promise.all 并行"]
-    K --> L["每个 item 完成 → onItemDone<br/>更新 counts + scheduleStatusUpdate"]
+    G -- 否 --> H["historyDB.getItemsByIds(pendingChunk ids)<br/>按需拉完整 HistoryItem"]
+    H --> H1{有 id 查不到?}
+    H1 -- 是 --> H2["预加载到处理间隙被删<br/>status = skipped，不进 processBatch"]
+    H1 -- 否 --> K
+    H2 --> K["processBatch<br/>Semaphore(MAX_CONCURRENT=3) 图片级并发<br/>图内多目标 Promise.all 并行"]
+
+    K --> L["每条完成 → onItemDone<br/>累计 counts + scheduleStatusUpdate<br/>success → historyRefresh.add(historyId)"]
     L --> M["flushStatusUpdate()"]
+    M --> M2["historyRefresh.flush()<br/>invalidateCache + emitHistoryUpdated(本批成功 ids)"]
 
-    M --> N["记录所有 historyId<br/>到 processedIds"]
-    N --> O{本批次有成功项?}
-    O -- "是" --> P["skipOffset = 0<br/>成功项 success_count 变了<br/>从头重查"]
-    O -- "否" --> Q["skipOffset += PAGE_SIZE<br/>翻页继续"]
-
-    P --> R{skipOffset > 0<br/>且 >= queryTotal?}
-    Q --> R
-    R -- 是 --> Z
-    R -- 否 --> C
+    M2 --> N{本 chunk 全部落定?<br/>（无 pending 残留）}
+    N -- 是 --> N1["cursor = end 推进"]
+    N -- 否 --> N2["cursor 不动<br/>重试本 chunk（暂停回退场景）"]
+    N1 --> C
+    N2 --> C
 
     style A fill:#e3f2fd,stroke:#1976d2
     style Z fill:#e8f5e9,stroke:#2e7d32
     style K fill:#e3f2fd,stroke:#1976d2
+    style M2 fill:#e8f5e9,stroke:#2e7d32
 ```
 
-### offset 重置策略说明
+### cursor 推进与去重策略
 
-| 场景 | skipOffset 变化 | 原因 |
-|------|----------------|------|
-| 本批次有成功项 | 重置为 0 | 成功项 `success_count` 变化影响排序，需从头重查 |
-| 本批次无成功项 | +PAGE_SIZE | 这些项暂时无法迁移，翻页查找后续项 |
-| 当前页全是已处理项 | +PAGE_SIZE | 通过 `processedIds` 过滤后 newItems 为空 |
-| 当前页全是"所有勾选目标已备份"的项 | +PAGE_SIZE | 预过滤后 newItems 为空——不计入 skipped 统计，也不显示在结果列表 |
-| 暂停期间被"持有"的 pending 条目 | 不入 processedIds | resume 后可以被下一批查询重新拾取；主循环的 while-pause 轮询在 resume 后解除阻塞 |
-| `skipOffset > 0 且 >= queryTotal` | 终止循环 | 防无限翻页（`> 0` 守卫确保 offset=0 时不误终止） |
+| 场景 | cursor 变化 | 原因 |
+|------|------------|------|
+| chunk 全部落定（无 pending 残留） | `cursor = end` | 单向推进，不回头——重复处理由此天然规避 |
+| chunk 有 pending 残留（暂停回退） | 不动 | 下一轮重试同一段；`pendingChunk` 会把已落定的项过滤掉，不会重跑 |
+| `pendingChunk` 为空 | `cursor = end` | 整段都在上一轮落定了，直接跳过 |
+| `getItemsByIds` 查不到某 id | 该项 `status = skipped` | 预加载到处理之间被别处删掉，计入 skipped 统计 |
+| `cursor >= processQueue.length` 且 `preloadDone` | 退出循环 | 队列追平且不会再有新条目 |
+| `cursor >= processQueue.length` 且预加载未完 | `setTimeout(0)` 后重试 | 处理比加载快，让出主线程等 `onBatch` |
+| 「所有勾选目标已备份」的项 | 根本不入队 | `preloadPending.makePreloaded` 返回 `null` 提前剔除——不计入 skipped，也不显示在结果列表 |
+
+### 进度上界说明
+
+`totalCount` 有两个阶段的值，因为选多个目标时真实待迁移集合是各目标 pending 的**并集**（满足 `max ≤ union ≤ sum`）：
+
+| 阶段 | totalCount | 作用 |
+|------|-----------|------|
+| 启动时 | `totalPendingUpperBound`（各目标 pending 之**和**） | 上界估计，保证 percent 永远不溢 100% |
+| 预加载完成后 | `all.length`（真实并集大小） | 覆盖上界，进度条收敛到准确值 |
+
+### 落库后的视图刷新
+
+**不变量（见 `docs/flows/mirror-fallback-flow.md`）：先写 DB，再经 `emitHistoryUpdated` 让视图重查。** 迁移链路 2026-08-13 前只写库不广播——迁移完 100 张图，历史表格「备份数」、灯箱链接菜单、时间轴候选全要等重启才看得到。
+
+| 项 | 做法 | 为什么 |
+|----|------|--------|
+| 触发条件 | `status.status === 'success'` 才 `historyRefresh.add(historyId)` | `migrateOneItem` 只在 `historyDB.update` 成功后才置 `success`，等价于「已落库」；failed / skipped 没写库，广播了会让视图白重查 |
+| 广播粒度 | 按 chunk（≤100 条）攒一次，不按条 | `useTimelineDayPagination` 收到 `history-updated` 会**无条件 `reloadAll()`（无防抖）**，逐条广播等于把整棵时间轴重刷 N 次 |
+| 收尾兜底 | `finalizeResult` 再 `flush()` 一次 | 主循环抛异常时会跳过该 chunk 的 flush，已落库的成功项不能丢广播 |
+| 重试路径 | `retryFailed.ts` 的 `runRetry` 返回「是否落库」，单条重试发 1 次、批量重试攒成 1 次 | 同一套粒度理由；`retrySingleFailed` / `retryFailed` 共用内部 `runRetry` |
 
 ### 暂停的保守策略说明
 
@@ -374,7 +418,7 @@ chip 分桶映射（`displayList` 内部）：
 | 目标图床 pendingCount 显示 0 | 所有图片已存在于该图床 | 图 2 `pendingCount = total - existing` |
 | 迁移速度很慢 | `MAX_CONCURRENT=3` 图片级 + 图内多目标并行；进一步提高要同步评估 CPU（`compress_image` 峰值）和上行带宽 | 图 3 并行管线 / 图 4 循环 |
 | webp 图片上传失败 | 目标图床不支持 webp 且格式转换失败 | 图 3 `convertIfNeeded` |
-| 同一图片被重复迁移 | `processedIds` 未正确过滤或 offset 重置逻辑异常 | 图 4 去重 + offset 策略 |
+| 同一图片被重复迁移 | `cursor` 未推进（chunk 里有 pending 残留会重试本段）；或预加载 `makePreloaded` 的"全目标已备份"剔除失效 | 图 4 cursor 推进与去重策略 |
 | 进度条到 100% 但 phase 未变 done | 最后一批的 `flushStatusUpdate` 延迟 | 图 5 `flushStatusUpdate` |
 | 统计卡一直显示「计算中」 | `processedCount` 始终为 0（可能全部 skipped 也算 processed） | 图 5 统计卡计算 |
 | 知乎图片迁移后变模糊 | webp→jpg URL 优化生效但原图质量已低 | 图 3 知乎 URL 优化 |
@@ -385,7 +429,11 @@ chip 分桶映射（`displayList` 内部）：
 | 底栏状态 pill 一直是"正在暂停…" | `isPausing = isPaused && concurrentCount > 0`；concurrentCount 归零不及 → 检查下载是否卡在 HTTP 层（`download_url_image` 无 abort） | 图 1 暂停分支 |
 | 终态 chip 显示「已完成」但期望「已转 JPEG」 | `convertedFormat` 未写入 → 检查 `migrateCore` 里 `willConvert` 探测与 `status='converting'` 赋值顺序；chip 映射见 `useStatusChip.getStatusChipMeta` | 图 3 converting 分支 |
 | 暂停后按钮一直卡在"正在暂停..." | `isPausing` 依赖 `concurrentCount` 归零，若有条目卡在 downloading 下载本身无法中断必须等 HTTP 超时或完成 | 图 1 暂停分支 |
-| 恢复后已暂停的条目没重新迁移 | 检查 `processedIds` 是否误收了 `status='pending'` 的持有条目 | 图 4 offset 策略表 |
+| 恢复后已暂停的条目没重新迁移 | 暂停回退的条目靠 `status==='pending'` 被下一轮 `pendingChunk` 重新捡起——检查 `cursor` 是否被误推进（`allSettled` 判定） | 图 4 cursor 推进与去重策略 |
+| 迁移完成后历史表格「备份数」不变、灯箱看不到新链接 | 落库后没广播 `history-updated`——检查 `onItemDone` 里 `historyRefresh.add` 与 chunk 末尾的 `historyRefresh.flush()` | 图 4 落库后的视图刷新 |
+| 迁移完成后被删的镜像又出现 | 落库前没重读最新记录，用了 chunk 开头的陈旧快照当合并 base | 图 3 落库不变量 |
+| 迁移中时间轴/历史表格频繁重刷、界面卡顿 | 广播粒度退化成按条——`useTimelineDayPagination` 收到 `history-updated` 无防抖直接 `reloadAll()` | 图 4 落库后的视图刷新（广播粒度行） |
+| 单条重试成功但其它视图不刷新 | `runRetry` 的返回值被吞掉，或 `retrySingleFailed` 没调 `notifyMigrationPersisted` | `batchMigrate/retryFailed.ts` |
 | 失败项显示的错误信息是英文 | 原始错误未命中 `categorizeMigrateError` 的映射规则，fallback 到"未知错误"，悬停 ⓘ 看 tooltip 原文 | `src/utils/uploadFailureMessage.ts` 的 `MIGRATE_ERROR_PATTERNS` |
 | 取消迁移后底栏仍显示「全部重试」| `canRetryAll = phase==='done' && failures.length>0`；取消只把在途条目转 skipped，取消前已落定的失败条目保留，按钮就挂出来——语义正确 | `MigrateProgressPhase.vue` `canRetryAll` / `MigrateBottomBar.vue` done 态按钮组 |
 | 目标 chip 只显示尝试过的那几个 | 旧行为；现改为始终按 `targetServiceIds` 渲染，`serviceResults` 只决定颜色。未写入的目标 = pending chip（取消前没轮到） | `MigrateItemRow.vue` `targetChips` computed |
