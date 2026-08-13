@@ -29,13 +29,17 @@ const thresholds = {
   // 剩余 3 个未覆盖分支是取不到的防御性兜底（UploadQueue.ts:332 的 latestItem 三元、
   // :416-418 的 weiboProgress/r2Progress `?? 0`），不为凑数造畸形数据。
   'src/core/UploadQueue.ts': { lines: 95, statements: 95, functions: 95, branches: 92 },
+  // 2026-08-13 补完 createResultOps 单测后从下面的「低覆盖」组毕业：
+  // 8.42/8.42/20/100(分母 1) → 100/100/100/100(分母 83)。
+  // branches 分母从 1 涨到 83，旧的 100% 正是注释预告的假象；这次真分支全覆盖，
+  // 阈值按实测新值重新定线，没有沿用旧数字。
+  'src/composables/history/useHistoryResultOps.ts': { lines: 95, statements: 95, functions: 95, branches: 95 },
 
   // 低覆盖核心文件：阈值略低于当前值，只防继续下滑，补测试是独立任务。
   //
-  // ⚠️ branches 一律设 0：这两个文件的 branches 现值都是 100%，但分母分别只有
-  // 1 / 0——那是「几乎没有分支被 v8 记录到」的假象，不是真覆盖。一旦真补了
-  // 测试、分母变大，branches 百分比反而会掉，任何接近 100 的阈值都会立刻误报。
-  'src/composables/history/useHistoryResultOps.ts': { lines: 7, statements: 7, functions: 15, branches: 0 },
+  // ⚠️ branches 设 0：该文件的 branches 现值是 100%，但分母只有 0——那是
+  // 「几乎没有分支被 v8 记录到」的假象，不是真覆盖。一旦真补了测试、分母变大，
+  // branches 百分比反而会掉，任何接近 100 的阈值都会立刻误报。
   'src/composables/timeline/useTimelineDragAndSkeleton.ts': { lines: 3, statements: 3, functions: 0, branches: 0 },
 };
 
