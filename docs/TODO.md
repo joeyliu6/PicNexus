@@ -60,7 +60,9 @@
 ### [~] WebDAV 图床支持
 
 - **来源**：[GitHub Issue #1：支持 WebDAV 图床](https://github.com/joeyliu6/PicNexus/issues/1)
-- **状态**：已实现，待真实 WebDAV 服务端到端验收
+- **状态**：已实现。真机验收 **4/6 通过**（2026-08-13，dufs + 坚果云），
+  剩「连接测试的两条反例」与「OpenList / InfiniCLOUD」——执行说明见本节末尾，可独立开新会话执行。
+  验收过程顺带修掉 3 个缺陷，其中 `a322dba` 是备份密码静默丢失的数据安全问题。
 
 #### 目标
 
@@ -114,14 +116,107 @@
 - [x] WebDAV 图床可以参与多图床上传、重试和主链接选择流程。
 - [x] 配置文件中密码为密文，明文不进 formData 也不落盘。
 
-需真实服务器验证（尚未执行）：
+需真实服务器验证：
 
-- [ ] 自动创建远程目录并以二进制 PUT 上传图片。
-- [ ] 上传成功后按配置模板生成公开 URL，并写入上传历史。
-- [ ] 连接测试能区分「传不上去」和「传上去了但链接打不开」。
-- [ ] 内网 HTTP（NAS）场景下历史记录缩略图正常显示。
-- [ ] 现有 WebDAV 备份功能及旧配置无需手动迁移即可继续使用。
+- [x] 自动创建远程目录并以二进制 PUT 上传图片。（2026-08-13，dufs 真机）
+- [x] 上传成功后按配置模板生成公开 URL，并写入上传历史。（2026-08-13，dufs 真机）
+- [ ] 连接测试能区分「传不上去」和「传上去了但链接打不开」。**正例已过，两条反例待测**
+- [x] 内网 HTTP（NAS）场景下历史记录缩略图正常显示。（2026-08-13，`192.168.80.1` 私有 IP）
+- [x] 现有 WebDAV 备份功能及旧配置无需手动迁移即可继续使用。（2026-08-13，坚果云真机；见下方「顺带修掉的缺陷」）
 - [ ] OpenList 本地端到端测试和 InfiniCLOUD 公网兼容测试通过。
+
+#### 验收顺带修掉的 3 个缺陷（均已合入 main）
+
+| 提交 | 缺陷 | 一句话 |
+|------|------|--------|
+| `2923ee1` | 首页不显示 WebDAV 图床 | `UploadView.vue` 只展开了 custom_s3 profile，`webdav_profiles` 一次都没读 |
+| `f0ec7df` | 上传队列显示 `WebDAV (msrlkrjz3...)` | `getServiceDisplayName` 的 config 是可选参数，38 个调用点里 31 个没传 |
+| `a322dba` | **备份 WebDAV 密码每次保存被静默清空** | 调了两个 Rust 侧从未存在的命令；单测把它们 mock 成存在的，所以测试全绿、生产全挂 |
+
+---
+
+### 剩余两条的执行说明（可独立开新会话执行）
+
+#### 环境重建（约 5 分钟）
+
+`dufs` 是单二进制静态文件服务器，**WebDAV 写入与匿名 HTTP 读取共用同一端口同一目录**，
+天然满足「公开域名根路径 = WebDAV 根路径」，正好对上默认模板 `{domain}/{path}`。
+
+```powershell
+cargo install dufs --locked          # 本机已装过则跳过
+mkdir C:\Users\Jiawei\webdav-root
+dufs C:\Users\Jiawei\webdav-root -b 192.168.80.1 -p 5001 -A -a "admin:admin123@/:rw" -a "@/"
+```
+
+`-a admin:admin123@/:rw` = 管理员可读写，`-a @/` = 匿名只读——这正是图床要的形态。
+
+> ⚠️ **绑定地址不要用 `0.0.0.0`**：那会把一个带写权限的服务暴露给整个局域网。
+> `192.168.80.1` 是 VMware host-only 网卡，既是私有 IP（能命中 `is_private_or_reserved_host` 分支），
+> 又不桥接物理网络。用 `127.0.0.1` 则只会走回环分支（`url_policy.rs` 里回环与私有 IP 是两条独立分支），
+> 测不到 NAS 场景。本机 IP 可能变化，先 `Get-NetIPAddress -AddressFamily IPv4` 确认。
+
+> ⚠️ **必须填 IP 字面量，不能填主机名**：本机开着 TUN（`Meta` 网卡挂 `198.18.0.1`），
+> 任何主机名都会解析进 fake-ip 池被 `validate_webdav_url_for_request` 拒绝，连 `nas.local` 也不例外。
+> 详见上方「WebDAV 明文 HTTP 的『显式确认』逃生舱」。
+
+PicNexus 侧配置（设置 → 图床 → 私有存储 → WebDAV）：
+
+| 字段 | 值 |
+|------|-----|
+| WebDAV 地址 | `http://192.168.80.1:5001` |
+| 用户名 / 密码 | `admin` / `admin123` |
+| 图片目录 | `picnexus/新目录`（故意填不存在的多级中文目录，顺带验证自动建目录） |
+| 公开访问域名 | `http://192.168.80.1:5001` |
+| 链接模板 | 留空（默认 `{domain}/{path}`） |
+
+#### 待测 1：连接测试的两条反例
+
+这两条走的是 `test_webdav_storage` 里**两条不同分支**，必须分开测。
+真实用户最容易踩的是 B——填了 OpenList 分享页而不是直链，图传上去了、链接也能打开，
+但打开的是网页不是图；只判状态码的话 B 会被误报成「成功」。
+
+**A. 状态码分支**（`webdav_upload.rs` 的 `!is_ok_status(status)`）
+公开访问域名改成 `http://192.168.80.1:5001/wrong-prefix` → 点测试连接。
+
+> 判据：`图片已上传，但公开链接打不开 (HTTP 404)——请检查「公开访问域名」和 URL 模板`
+
+**B. Content-Type 分支**（`!content_type.starts_with("image/")`）
+域名改回，链接模板改成 `{domain}/`（指向 dufs 目录列表，返回 HTML）→ 点测试连接。
+
+> 判据：`公开链接返回的不是图片 (Content-Type: text/html; charset=utf-8)——多半是模板指向了登录页或分享页`
+
+两条都**不能**退化成笼统的「连接失败」或「上传失败」——那说明分支没区分开。
+测完把域名和模板改回原值。
+
+（服务端响应形态已用 curl 实测确认：A 返回 404 无 Content-Type；B 返回 200 + `text/html`；
+正确链接返回 200 + `image/png`。所以失败只可能出在 PicNexus 的判定或文案上。）
+
+#### 待测 2：OpenList 与 InfiniCLOUD
+
+- **OpenList**（Docker 本地）：WebDAV 端点是 `/dav/`，需在用户权限里同时开启
+  「WebDAV 读」与「WebDAV 管理」，后者还要配合具体的文件系统权限（上传/新建目录）。
+  ⚠️ 直链格式**不要照抄** `{domain}/d/挂载点/{path}`——官方 WebDAV 文档未说明 `/d/` 前缀，
+  部署后先在界面点一次「复制直链」看实际格式再填模板。
+- **InfiniCLOUD**（公网，免费 20GB）：用于协议兼容性。它不提供匿名直链，
+  所以连接测试**预期会落在「传上去了但链接打不开」分支**——这不是失败，
+  它本身就是上面反例 A 的一个真实用例。
+
+#### 测试素材
+
+需要同名不同色的图来验证覆盖行为，PowerShell 生成：
+
+```powershell
+Add-Type -AssemblyName System.Drawing
+function New-SolidPng($path, $color) {
+  $bmp = New-Object System.Drawing.Bitmap 240,240
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $g.Clear([System.Drawing.Color]::FromName($color)); $g.Dispose()
+  $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+}
+New-SolidPng "$env:TEMP\red\test.png" Red      # 目录需先建
+New-SolidPng "$env:TEMP\blue\test.png" Blue
+New-SolidPng "$env:TEMP\中文 图片.png" Green   # 验证 percent-encode
+```
 
 ---
 
