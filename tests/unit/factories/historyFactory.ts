@@ -5,6 +5,7 @@ let historySequence = 0;
 
 export type HistoryResult = HistoryItem['results'][number];
 export type LinkCheckStatusEntry = NonNullable<HistoryItem['linkCheckStatus']>[string];
+export type LinkCheckSummary = NonNullable<HistoryItem['linkCheckSummary']>;
 
 export function resetHistoryFactorySequence(): void {
   historySequence = 0;
@@ -49,6 +50,25 @@ export function createLinkCheckStatusEntry(
     responseTime: overrides.responseTime ?? 120,
     error: overrides.error,
     browserMightWork: overrides.browserMightWork,
+  };
+}
+
+/**
+ * linkCheckSummary 工厂。
+ *
+ * 之所以需要它：`recomputeLinkCheckSummary` 在 previousSummary 为 undefined 时
+ * 直接返回 undefined（「从未检测就不凭空造 summary」），所以任何想验证 summary
+ * 重算的用例都必须先有一份初始 summary 才跑得到重算逻辑。
+ */
+export function createLinkCheckSummary(
+  overrides: Partial<LinkCheckSummary> = {},
+): LinkCheckSummary {
+  return {
+    totalLinks: overrides.totalLinks ?? 3,
+    validLinks: overrides.validLinks ?? 2,
+    invalidLinks: overrides.invalidLinks ?? 1,
+    uncheckedLinks: overrides.uncheckedLinks ?? 0,
+    lastCheckTime: overrides.lastCheckTime ?? 1_700_000_000_000,
   };
 }
 
