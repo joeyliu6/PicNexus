@@ -9,6 +9,7 @@ import { getInvokeMock } from '../../helpers/tauriMock';
 vi.mock('@/services/HistoryDatabase', () => ({
   historyDB: {
     update: vi.fn(),
+    getById: vi.fn(),
   },
 }));
 
@@ -35,7 +36,7 @@ function uploadResult(serviceId: string, url: string) {
 }
 
 function createItem(overrides: Partial<HistoryItem> = {}): HistoryItem {
-  return {
+  const item = {
     id: overrides.id ?? 'h1',
     timestamp: overrides.timestamp ?? 123,
     localFileName: overrides.localFileName ?? 'a.png',
@@ -47,6 +48,9 @@ function createItem(overrides: Partial<HistoryItem> = {}): HistoryItem {
     linkCheckStatus: overrides.linkCheckStatus,
     linkCheckSummary: overrides.linkCheckSummary,
   } as HistoryItem;
+  // 默认「落库前重读」拿到的就是同一份快照（无并发写）；要模拟并发改动的用例自行 mockResolvedValue 覆盖
+  vi.mocked(historyDB.getById).mockResolvedValue(item);
+  return item;
 }
 
 function checkStatus(isValid: boolean, responseTime = 100): NonNullable<HistoryItem['linkCheckStatus']>[string] {
@@ -419,6 +423,88 @@ describe('migrateOneItem', () => {
     expect(status.errorType).toBeUndefined();
     expect(getInvokeMock()).not.toHaveBeenCalled();
     expect(historyDB.update).not.toHaveBeenCalled();
+  });
+
+  it('落库前重读最新记录：并发删除的镜像不会被旧快照复活', async () => {
+    getInvokeMock().mockResolvedValue({ file_path: '/tmp/a.png', content_type: 'image/png', file_size: 512 });
+    // chunk 开头取到的陈旧快照：source + r2
+    const stale = createItem({
+      results: [
+        { serviceId: 'source', status: 'success', result: uploadResult('source', 'https://img/a.png') },
+        { serviceId: 'r2', status: 'success', result: uploadResult('r2', 'https://r2/a.png') },
+      ],
+    });
+    // 迁移在途期间用户在灯箱删掉了 r2 镜像
+    vi.mocked(historyDB.getById).mockResolvedValue(createItem({
+      results: [{ serviceId: 'source', status: 'success', result: uploadResult('source', 'https://img/a.png') }],
+    }));
+    const status = createStatus({ serviceResults: { github: 'pending' } });
+
+    await migrateOneItem(
+      stale,
+      status,
+      ['github'],
+      {} as UserConfig,
+      createUploader({ github: 'success' }) as any,
+      ref(false),
+      ref(false),
+      createStats(),
+    );
+
+    expect(status.status).toBe('success');
+    const written = vi.mocked(historyDB.update).mock.calls[0][1].results!;
+    expect(written.map(r => r.serviceId)).toEqual(['source', 'github']);
+  });
+
+  it('落库前重读最新记录：linkCheckSummary 以重读值为基准累加', async () => {
+    getInvokeMock().mockResolvedValue({ file_path: '/tmp/a.png', content_type: 'image/png', file_size: 512 });
+    const stale = createItem({
+      linkCheckSummary: { totalLinks: 3, validLinks: 3, invalidLinks: 0, uncheckedLinks: 0 },
+    });
+    vi.mocked(historyDB.getById).mockResolvedValue(createItem({
+      linkCheckSummary: { totalLinks: 1, validLinks: 1, invalidLinks: 0, uncheckedLinks: 0 },
+    }));
+    const status = createStatus({ serviceResults: { github: 'pending' } });
+
+    await migrateOneItem(
+      stale,
+      status,
+      ['github'],
+      {} as UserConfig,
+      createUploader({ github: 'success' }) as any,
+      ref(false),
+      ref(false),
+      createStats(),
+    );
+
+    expect(historyDB.update).toHaveBeenCalledWith('h1', expect.objectContaining({
+      linkCheckSummary: expect.objectContaining({ totalLinks: 2, uncheckedLinks: 1 }),
+    }));
+  });
+
+  it('重读返回 null（记录已删）时退回旧快照，交给 update 抛错走失败分支', async () => {
+    getInvokeMock().mockResolvedValue({ file_path: '/tmp/a.png', content_type: 'image/png', file_size: 512 });
+    const item = createItem();
+    vi.mocked(historyDB.getById).mockResolvedValue(null);
+    vi.mocked(historyDB.update).mockRejectedValueOnce(new Error('记录不存在: h1'));
+    const status = createStatus({ serviceResults: { github: 'pending' } });
+
+    await migrateOneItem(
+      item,
+      status,
+      ['github'],
+      {} as UserConfig,
+      createUploader({ github: 'success' }) as any,
+      ref(false),
+      ref(false),
+      createStats(),
+    );
+
+    expect(historyDB.update).toHaveBeenCalledWith('h1', expect.objectContaining({
+      results: expect.arrayContaining([expect.objectContaining({ serviceId: 'source' })]),
+    }));
+    expect(status.status).toBe('failed');
+    expect(status.error).toContain('历史记录更新失败');
   });
 });
 

@@ -243,19 +243,24 @@ export async function migrateOneItem(
       status.error = formatMigrateFailureSummary(failedDetails);
     }
     try {
+      // 落库前重读最新记录：`item` 是 chunk 开头（大批量下可能几分钟前）取的快照，
+      // 拿它当合并 base 会把这期间用户在灯箱删掉的镜像整个写回去、"复活"。
+      // 重读把读-改-写窗口从分钟级缩到毫秒级（彻底消除需 DB 层原子合并，见暂缓清单）。
+      // 记录已被删除时退回旧快照，交给 historyDB.update 抛「记录不存在」走下面的失败分支。
+      const base = (await historyDB.getById(item.id)) ?? item;
       const updatedResults = [
-        ...item.results,
+        ...base.results,
         ...newResults.map(r => ({ serviceId: r.serviceId, result: r.result, status: r.status, error: r.error })),
       ];
 
       // 同步 linkCheckSummary：新追加的成功图床尚未检测，计入 total 和 unchecked
       const appendedSuccess = newResults.filter(r => r.status === 'success').length;
       const updates: Partial<HistoryItem> = { results: updatedResults };
-      if (appendedSuccess > 0 && item.linkCheckSummary) {
+      if (appendedSuccess > 0 && base.linkCheckSummary) {
         updates.linkCheckSummary = {
-          ...item.linkCheckSummary,
-          totalLinks: item.linkCheckSummary.totalLinks + appendedSuccess,
-          uncheckedLinks: item.linkCheckSummary.uncheckedLinks + appendedSuccess,
+          ...base.linkCheckSummary,
+          totalLinks: base.linkCheckSummary.totalLinks + appendedSuccess,
+          uncheckedLinks: base.linkCheckSummary.uncheckedLinks + appendedSuccess,
         };
       }
 
