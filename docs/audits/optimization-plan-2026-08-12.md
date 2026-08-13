@@ -356,13 +356,13 @@
 
 | 文件 | 补测前 lines/stmts/funcs/branches | 补测后 | 棘轮阈值 旧 → 新 |
 |------|------|------|------|
-| `src/core/UploadQueue.ts` | 8.44 / 8.44 / 10 / 100(2÷2) | 100 / 100 / 100 / 97.22(105÷108) | 7/7/5/**0** → 95/95/95/**92** |
+| `src/core/UploadQueue.ts` | 8.44 / 8.44 / 10 / 100(2÷2) | 100 / 100 / 100 / 97.27(107÷110) | 7/7/5/**0** → 95/95/95/**92** |
 
-`branches` 分母从 2 涨到 108——正是上一批注释里预告的「假 100%」现形：补完测试后百分比反而从 100 掉到 97.22。所以阈值按实测新值重新定线，没有沿用旧数字。取值沿用本文件既有约定（当前值 − 5pp 向下取整），`UploadQueue.ts` 同时从「低覆盖核心文件」组移入「存量高覆盖文件」组。
+`branches` 分母从 2 涨到 110——正是上一批注释里预告的「假 100%」现形：补完测试后百分比反而从 100 掉到 97.27。所以阈值按实测新值重新定线，没有沿用旧数字。取值沿用本文件既有约定（当前值 − 5pp 向下取整），`UploadQueue.ts` 同时从「低覆盖核心文件」组移入「存量高覆盖文件」组。
 
-剩下 3 个未覆盖分支是取不到的防御性兜底：`UploadQueue.ts:311` 的 `latestItem ? ... : {}`（几行前刚 `getItem` 成功，中间没有删除时机）、`:395-397` 的 `weiboProgress ?? 0` 与 `r2Progress ?? 0`（`addFile` 必定把这两个字段初始化为 0）。为把百分比凑到 100 而伪造畸形队列项，只会让用例看起来像在测不存在的场景，故不做。
+剩下 3 个未覆盖分支是取不到的防御性兜底：`UploadQueue.ts:332` 的 `latestItem ? ... : {}`（几行前刚 `getItem` 成功，中间没有删除时机）、`:416-418` 的 `weiboProgress ?? 0` 与 `r2Progress ?? 0`（`addFile` 必定把这两个字段初始化为 0）。为把百分比凑到 100 而伪造畸形队列项，只会让用例看起来像在测不存在的场景，故不做。
 
-**新增** `tests/unit/core/uploadQueueManager.spec.ts`（75 条用例，按 `addFile` / `updateServiceProgress` / `markItemComplete` / `markItemFailed` / `createProgressCallback` / `resetItemForRetry` / `resetServiceForRetry` / `trimQueue` / 队列基础操作 / 多项并发隔离 十组拆分）。
+**新增** `tests/unit/core/uploadQueueManager.spec.ts`（76 条用例，按 `addFile` / `updateServiceProgress` / `markItemComplete` / `markItemFailed` / `createProgressCallback` / `resetItemForRetry` / `resetServiceForRetry` / `trimQueue` / 队列基础操作 / 多项并发隔离 十组拆分）。
 
 覆盖率能从 8.44 一步到 100，是因为此前**全库没有任何 spec 实例化过 `UploadQueueManager`**——相关的 4 个 spec 只 import 了 `QueueItem` / `ServiceProgress` 类型。也没有任何 spec 用 `vi.mock` 遮挡该模块，所以本次直连真实实现，未引入替身。
 
@@ -372,12 +372,45 @@
 
 **测试写法上的一处取舍**：`updateServiceProgress` 对 error/success 项请求改写整体状态的那两个分支，无法从最终状态观察到——`useQueueState.flushPendingUpdates` 对 error/success 项会整体丢弃节流队列（见 `docs/reference/troubleshooting/upload-queue-status-race-condition.md`）。这两条改为 spy `updateItemThrottled` 断言提交给节流层的 payload，并额外断言「守卫确实把它丢了」，等于把这层竞态保护也钉住了。
 
-**顺带发现的现状（未修，仅记录）**：`resetItemForRetry` 清得掉顶层的 `weiboLink` / `r2Link`（显式传 `undefined`），却清不掉 `serviceProgress[x].link` 与 `.error`。原因是 `useQueueState.updateItem` 对 `serviceProgress` 做深度合并（`{...currentProgress, ...value}`），而重置用的新等待态对象里根本没有 `link` / `error` 键，合并后旧值原样留存。后果：全量重试若在某个图床上再次失败，该图床的进度表里仍挂着上一轮的成功链接，与顶层字段行为不一致。已用一条明确标注「现状记录、非期望行为」的用例钉住当前行为，修复留待另立条目。
+**顺带发现的重试重置泄漏（已在下一节修掉）**：`resetItemForRetry` 清得掉顶层的 `weiboLink` / `r2Link`（显式传 `undefined`），却清不掉 `serviceProgress[x].link` / `.error` / `.isRetrying`。原因是 `useQueueState.updateItem` 对 `serviceProgress` 做深度合并（`{...currentProgress, ...value}`），而重置用的新等待态对象里根本没有这几个键，合并后旧值原样留存。当时先用一条明确标注「现状记录、非期望行为」的用例钉住当前行为，修复见下一节。
 
-**门禁**：`npm run lint`、`npm run typecheck`、`npm run test:coverage`（194 文件 / 2401 用例全绿，关键文件覆盖率检查通过）、`npm run ci:prepush` 均 exit 0。
+**门禁**：`npm run lint`、`npm run typecheck`、`npm run test:coverage`（194 文件 / 2402 用例全绿，关键文件覆盖率检查通过）、`npm run ci:prepush` 均 exit 0。
 
 **未做**：
 
 - 上一批记录里与 A 并列提到的另两个文件（`useHistoryResultOps.ts`、`useTimelineDragAndSkeleton.ts`）不在本次范围，棘轮仍是 7/7/15/0 与 3/3/0/0。
 - `vitest.config.ts` 的 glob 聚合阈值未动（逐文件断言归 `check-critical-coverage.mjs` 管，且该文件是已知的覆盖率偶发误报来源）。
-- 上面那条 `resetItemForRetry` 的链接残留未修——本次是补测试任务，改生产代码超出范围。
+
+---
+
+### 2026-08-13 · 修掉重试重置的服务级残留
+
+承上节「顺带发现」。补测试时先记录、后修，这里是修复本身。
+
+**危害的准确范围**（初判偏重，复核后收窄）：初判说「用户会复制到上一轮的旧链接」——**不成立**。`ChannelCard.vue:137` 的复制按钮是 `v-if="isStatusSuccess(status) && link"` 双重条件，重试失败时状态是 `✗ 失败`，按钮根本不渲染。实际后果只有三条：
+
+| 后果 | 用户可见 | 说明 |
+|------|------|------|
+| 重试期间悬停卡片弹出**上一轮的错误提示** | ✅ | `ChannelCard.vue:124` 的 `v-tooltip` 挂在卡片根节点，不受 status 约束 |
+| `weiboLink` / `weiboPid` 被旧值回填 | ❌ | `buildLinkFields` 不看 status、只看 link；但这几个「向后兼容字段」全库 grep **无任何消费方** |
+| `isRetrying: true` 残留使 `isServiceActive` 误判为上传中 | ❌ | 只影响 `resolveQueueStatus`，而全量重试路径不走它 |
+
+即：性质是清理欠债，不是正在坑用户的缺陷。
+
+**改法选型**：
+
+| 方案 | 影响面 | 结论 |
+|------|------|------|
+| A 在 `resetItemForRetry` 显式传 `link/error/isRetrying` | 只动 `UploadQueue.ts` 一个函数 | **采用** |
+| B 给 `useQueueState` 加「整体替换某服务进度」的新方法 | 动 composable 公开接口，须同步 `docs/reference/api/` | 为单个调用点加 API，不划算 |
+| C 改 `updateItem` 的合并语义让显式 `undefined` 生效 | 18 个调用点（RetryService 9 / UploadExecutor 4 / UploadQueue 5） | 治本但会连锁，那些调用点都依赖「部分字段合并」，风险最高 |
+
+新增模块级 `createRetryServiceProgress`，与 `createServiceProgress`（服务于 `addFile`，语义是「全新初始态」）分开，避免让后者背清理职责；文案仍单一来源，前者基于后者再补清除键。
+
+**`metadata` 有意不清**：里面是 `step` / `fileKey` / `pid`，下次进度更新即覆盖；而脏 `pid` 的回填前提是 `link` 存在——`link` 已清，`buildLinkFields` 不会去读它。少改一处少一分风险。
+
+**测试**：把原先标「现状记录、非期望行为」的用例反转为正向断言，并补一条端到端回归——重置后只有 jd 成功地收口，断言 `weiboLink` / `weiboPid` 不被上一轮的值回填。
+
+**覆盖率**：`UploadQueue.ts` 100 / 100 / 100 / 97.27（107÷110，分母因新增函数从 108 涨到 110）。阈值 95/95/95/92 **无需再动**（97.27 − 5pp 仍落在 92）；仅同步守卫脚本注释里的数字与位移后的行号。
+
+**门禁**：`npm run lint`、`npm run typecheck`、`npm run test:coverage`（194 文件 / 2402 用例全绿）、`npm run ci:prepush` 均 exit 0。
