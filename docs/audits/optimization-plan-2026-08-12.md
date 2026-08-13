@@ -457,3 +457,40 @@
 **门禁**：`npm run lint`、`npm run typecheck`、`npm run test:coverage`、`npm run ci:prepush` 均 exit 0。
 
 **未做**：`useTimelineDragAndSkeleton.ts` 不在本次范围，棘轮仍是 3/3/0/0。
+
+---
+
+### 2026-08-13 · useTimelineDragAndSkeleton 单测 · 低覆盖组清零
+
+第三批挂的三个「低覆盖核心文件」占位条目里的最后一个。补完后该组清空。
+
+**覆盖率变化**（`npm run test:coverage` 逐文件实测）：
+
+| 文件 | 补测前 lines/stmts/funcs/branches | 补测后 | 棘轮阈值 旧 → 新 |
+|------|------|------|------|
+| `src/composables/timeline/useTimelineDragAndSkeleton.ts` | 3.8 / 3.8 / 0 / 100(0÷0) | 100 / 100 / 100 / 99.13(114÷115) | 3/3/0/**0** → 95/95/95/**94** |
+
+`branches` 分母从 **0** 涨到 115——三个文件里假象最极端的一个：补测前 v8 一个分支都没记录到，`functions` 更是 0/1，真实函数体一次都没执行过。原因与前两个同源：`tests/unit/components/timelineComponents.spec.ts:194` 把整个模块 `vi.mock` 掉了，3.8% 的 10/263 行只是 mock factory 求值的残留。本次同样**新开 spec 直连真实实现**，未改动那个 spec。
+
+唯一未覆盖的分支是 `useTimelineDragAndSkeleton.ts:113` 的 `(oldLen ?? 0)`——非 immediate 的 `watch` 在任何一次触发时都会给出已定义的 `oldValue`，`?? 0` 取不到。为凑 100% 去伪造 watch 回调只会让用例测一个不存在的场景，故不做。
+
+**新增** `tests/unit/composables/timeline/useTimelineDragAndSkeleton.spec.ts`（54 条用例，按「首屏骨架触发 / `loadedMonthsSet` / `monthLayoutPositions` / `visibleRatio` / `skeletonLayout` / `handleJumpToPeriod` / `handleJumpToYear` / 拖拽滚动与清理」八组拆分）。
+
+**时间控制**：跳转路径里埋了四个定时器窗口（骨架最小显示 400ms、首屏骨架 700ms、`ensureDaysLoaded` 超时 2000ms、layout settled 超时 500ms），全程用 fake timers + `advanceTimersByTimeAsync` 驱动。真等的话单个用例起步就 400ms，54 条要多花二十几秒。
+
+**两处需要主动模拟浏览器行为才测得到的分支**：
+
+| 分支 | 为什么 happy-dom 测不到 | 怎么模拟 |
+|------|------|------|
+| 跳转落点的「写完再写一次」兜底（`:311-314`） | happy-dom 原样接受任何 `scrollTop` 赋值；而真实浏览器在内容尚未撑够高度时会把它截断，这段兜底正是为截断准备的 | `makeClampingScrollContainer` 用 getter/setter 把 `scrollTop` 夹到上限 |
+| `skeletonLayout` 的容器宽度计算 | happy-dom 下 `clientWidth` 恒为 0、`getComputedStyle` 读不到未内联的 padding | 容器上 `defineProperty` 定死 `clientWidth`，padding 写成内联样式 |
+
+这两处都是照着真实浏览器语义建模，不是为提高数字造畸形数据。
+
+**新增** `tests/unit/factories/timelineFactory.ts`（`createImageMeta` / `createPhotoGroup` / `createPhotoGroups` / `resetTimelineFactorySequence`），并在 `factories/index.ts` 挂上。
+
+> 建这个工厂的原因：`tests/unit/composables/timeline/` 下已有 7 个 spec 各自复制了一份本地 `makeMeta`，3 个复制了 `makeGroup`，`PhotoGroup` 的 `id` 口径（`${year}-${month}-${day}`，月份 0-11）散落在各处。工厂把这个口径收敛到一处——它就是时间轴的 dayKey，跳转与预取全按它匹配，写错了用例会静默走不到目标分支。**既有 7 个 spec 本次未改**（属无关改动），只在新 spec 使用。
+
+**门禁**：`npm run lint`、`npm run typecheck`、`npm run test:coverage`（**196 文件 / 2496 用例全绿**，关键文件覆盖率检查通过）、`npm run ci:prepush` 均 exit 0。相对上一节的 194 / 2402，两批新 spec 共 +2 文件 / +94 用例（`useHistoryResultOps` 40 条 + `useTimelineDragAndSkeleton` 54 条）。
+
+**未做**：既有 timeline spec 的本地 `makeMeta` / `makeGroup` 未收敛到新工厂——那是 7 个文件的无关改动，应另立条目。
