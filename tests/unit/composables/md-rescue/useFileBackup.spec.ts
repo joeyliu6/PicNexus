@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getFsMocks, resetTauriMocks } from '../../helpers/tauriMock';
+import { getFsMocks, resetTauriMocks, utf8Bytes } from '../../helpers/tauriMock';
+import { NON_UTF8_ERROR_MESSAGE } from '@/composables/md-rescue/mdTextIo';
 import type { CheckLinkResult } from '@/types/linkCheck';
 
 const toastMocks = vi.hoisted(() => ({
@@ -140,7 +141,7 @@ describe('useFileBackup', () => {
     imageLinks.value = [
       makeLink('https://dead.example/a.png', 'C:/docs/a.md', 'https://cdn.example/a.png'),
     ];
-    fs.readTextFile.mockResolvedValue('before ![](https://dead.example/a.png) after');
+    fs.readFile.mockResolvedValue(utf8Bytes('before ![](https://dead.example/a.png) after'));
 
     const result = await executeReplace(0);
 
@@ -168,7 +169,7 @@ describe('useFileBackup', () => {
     imageLinks.value = [
       makeLink('https://dead.example/a.png', 'C:/docs/a.md', 'https://cdn.example/a.png'),
     ];
-    fs.readTextFile.mockRejectedValue(new Error('EACCES'));
+    fs.readFile.mockRejectedValue(new Error('EACCES'));
 
     const result = await executeReplace(0);
 
@@ -192,7 +193,9 @@ describe('useFileBackup', () => {
       makeLink('https://dead.example/a.png', 'C:/docs/a.md', 'https://cdn.example/a.png'),
       makeLink('https://dead.example/b.png', 'C:/docs/b.md', 'https://cdn.example/b.png'),
     ];
-    fs.readTextFile.mockResolvedValue('![](https://dead.example/a.png)\n![](https://dead.example/b.png)');
+    fs.readFile.mockResolvedValue(
+      utf8Bytes('![](https://dead.example/a.png)\n![](https://dead.example/b.png)'),
+    );
     fs.writeTextFile.mockImplementation(async () => {
       isCancelled.value = true;
     });
@@ -216,7 +219,7 @@ describe('useFileBackup', () => {
       makeLink('https://dead.example/a.png', '\\\\?\\C:\\docs\\a\\README.md', 'https://cdn.example/a.png'),
       makeLink('https://dead.example/b.png', '\\\\?\\C:\\docs\\b\\README.md', 'https://cdn.example/b.png'),
     ];
-    fs.readTextFile.mockResolvedValue('![](https://dead.example/a.png)');
+    fs.readFile.mockResolvedValue(utf8Bytes('![](https://dead.example/a.png)'));
 
     const result = await executeReplace(0);
 
@@ -238,7 +241,7 @@ describe('useFileBackup', () => {
       makeLink('https://dead.example/a.png', 'C:/docs/a/README.md', 'https://cdn.example/a.png'),
       makeLink('https://dead.example/b.png', 'C:/docs/b/README.md', 'https://cdn.example/b.png'),
     ];
-    fs.readTextFile.mockResolvedValue('![](https://dead.example/a.png)');
+    fs.readFile.mockResolvedValue(utf8Bytes('![](https://dead.example/a.png)'));
 
     const result = await executeReplace(0);
 
@@ -249,6 +252,46 @@ describe('useFileBackup', () => {
     for (const backup of backups) {
       expect(backup).toMatch(/\/[0-9a-f]{8}_README\.md$/);
     }
+  });
+
+  it('非 UTF-8 文件拒绝修复：不备份、不写回，计入 failedFiles', async () => {
+    const fs = getFsMocks();
+    mode.value = 'file';
+    filePath.value = 'C:/docs/gbk.md';
+    imageLinks.value = [
+      makeLink('https://dead.example/a.png', 'C:/docs/gbk.md', 'https://cdn.example/a.png'),
+    ];
+    // GBK 编码的“中文”，在 UTF-8 下是非法字节序列
+    fs.readFile.mockResolvedValue(new Uint8Array([0xd6, 0xd0, 0xce, 0xc4]));
+
+    const result = await executeReplace(0);
+
+    expect(result).toEqual({ success: 0, skipped: 0, failed: 1 });
+    expect(fs.copyFile).not.toHaveBeenCalled();
+    expect(fs.writeTextFile).not.toHaveBeenCalled();
+    expect(repairReceipt.value?.failedFiles).toEqual([
+      { file: 'C:/docs/gbk.md', links: 1, error: NON_UTF8_ERROR_MESSAGE },
+    ]);
+  });
+
+  it('原文件带 UTF-8 BOM 时写回补回 BOM，不静默改变文件字节', async () => {
+    const fs = getFsMocks();
+    mode.value = 'file';
+    filePath.value = 'C:/docs/bom.md';
+    imageLinks.value = [
+      makeLink('https://dead.example/a.png', 'C:/docs/bom.md', 'https://cdn.example/a.png'),
+    ];
+    fs.readFile.mockResolvedValue(utf8Bytes('![](https://dead.example/a.png)', true));
+
+    const result = await executeReplace(0);
+
+    expect(result.success).toBe(1);
+    expect(fs.writeTextFile).toHaveBeenCalledWith(
+      'C:/docs/bom.md',
+      '\uFEFF![](https://cdn.example/a.png)',
+    );
+    // 内存里的内容不带 BOM，避免 BOM 混进后续文本处理
+    expect(fileContent.value).toBe('![](https://cdn.example/a.png)');
   });
 
   it('undoReplace 全部恢复成功时清除 receipt 并执行 reset', async () => {

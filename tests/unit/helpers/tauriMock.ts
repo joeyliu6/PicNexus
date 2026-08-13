@@ -12,6 +12,7 @@ import {
   exists,
   mkdir,
   readDir,
+  readFile,
   readTextFile,
   remove,
   stat,
@@ -132,6 +133,7 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
     AppData: 'AppData',
     AppConfig: 'AppConfig',
   },
+  readFile: vi.fn(),
   readTextFile: vi.fn(),
   writeTextFile: vi.fn(),
   exists: vi.fn().mockResolvedValue(false),
@@ -327,6 +329,8 @@ export function resetTauriMocks(): void {
   } as never);
 
   const fs = getFsMocks();
+  fs.readFile.mockReset();
+  fs.readFile.mockResolvedValue(new Uint8Array());
   fs.readTextFile.mockReset();
   fs.writeTextFile.mockReset();
   fs.exists.mockReset();
@@ -450,6 +454,7 @@ export function getTauriWindowMocks() {
 
 export function getFsMocks() {
   return {
+    readFile: vi.mocked(readFile),
     readTextFile: vi.mocked(readTextFile),
     writeTextFile: vi.mocked(writeTextFile),
     exists: vi.mocked(exists),
@@ -459,6 +464,16 @@ export function getFsMocks() {
     copyFile: vi.mocked(copyFile),
     stat: vi.mocked(stat),
   };
+}
+
+/** 把字符串编码成 `readFile` 返回的 UTF-8 字节；withBom=true 时前置 EF BB BF */
+export function utf8Bytes(text: string, withBom = false): Uint8Array {
+  const body = new TextEncoder().encode(text);
+  if (!withBom) return body;
+  const withPrefix = new Uint8Array(body.length + 3);
+  withPrefix.set([0xef, 0xbb, 0xbf], 0);
+  withPrefix.set(body, 3);
+  return withPrefix;
 }
 
 export function getClipboardMocks() {

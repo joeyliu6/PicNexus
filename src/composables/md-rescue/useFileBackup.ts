@@ -1,13 +1,14 @@
 // MD 文档救援 — 文件备份与替换
 // 负责：执行链接替换、撤销替换、清理旧备份
 
-import { readTextFile, writeTextFile, copyFile, readDir, mkdir, remove } from '@tauri-apps/plugin-fs';
+import { copyFile, readDir, mkdir, remove } from '@tauri-apps/plugin-fs';
 import { join, dirname, basename } from '@tauri-apps/api/path';
 import pLimit from 'p-limit';
 import { useToast } from '../useToast';
 import { createLogger } from '../../utils/logger';
 import { formatTimestampCompact } from '../../utils/formatters';
 import { replaceImageLinks } from '../../utils/mdParser';
+import { readUtf8TextFile, writeUtf8TextFile } from './mdTextIo';
 import { saveLastRepair, clearLastRepair, readLastRepair } from './useMdRescueLastRepair';
 import {
   type RepairReceipt,
@@ -166,7 +167,9 @@ export async function executeReplace(unrescuableCount: number): Promise<{
         break;
       }
       try {
-        const content = await readTextFile(file);
+        // 严格 UTF-8 读取：非 UTF-8 文件在这里抛错，先于 copyFile / writeTextFile，
+        // 既不会留下多余备份，也不会把乱码写回用户原文件
+        const { content, hasBom } = await readUtf8TextFile(file);
 
         const relativePath = mode.value === 'folder' && folderPath.value
           ? computeRelativePath(folderPath.value, file)
@@ -195,7 +198,7 @@ export async function executeReplace(unrescuableCount: number): Promise<{
         const newContent = replaceImageLinks(content, replacements, {
           includeCodeBlocks: includeCodeBlocks.value,
         });
-        await writeTextFile(file, newContent);
+        await writeUtf8TextFile(file, newContent, hasBom);
 
         if (mode.value === 'file' && file === filePath.value) {
           fileContent.value = newContent;

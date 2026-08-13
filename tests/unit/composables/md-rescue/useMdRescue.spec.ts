@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
-import { getFsMocks, getInvokeMock, resetTauriMocks } from '../../helpers/tauriMock';
+import { getFsMocks, getInvokeMock, resetTauriMocks, utf8Bytes } from '../../helpers/tauriMock';
 import type { CheckLinkResult } from '@/types/linkCheck';
 
 const deps = vi.hoisted(() => ({
@@ -242,9 +242,9 @@ describe('useMdRescueManager', () => {
   it('handleDropPaths 多文件拖入时只收集 Markdown 并自动进入扫描', async () => {
     const fs = getFsMocks();
     fs.stat.mockResolvedValue({ isFile: true, isDirectory: false } as never);
-    fs.readTextFile
-      .mockResolvedValueOnce('![](https://dead.example/a.png)')
-      .mockResolvedValueOnce('![](https://dead.example/b.png)');
+    fs.readFile
+      .mockResolvedValueOnce(utf8Bytes('![](https://dead.example/a.png)'))
+      .mockResolvedValueOnce(utf8Bytes('![](https://dead.example/b.png)'));
     deps.runLinkCheck.mockImplementation(async () => {
       scanStage.value = 'complete';
     });
@@ -279,9 +279,9 @@ describe('useMdRescueManager', () => {
   it('handleDropPaths 多个 Markdown 均无图片链接时提示空结果且不启动扫描', async () => {
     const fs = getFsMocks();
     fs.stat.mockResolvedValue({ isFile: true, isDirectory: false } as never);
-    fs.readTextFile
-      .mockResolvedValueOnce('plain text')
-      .mockResolvedValueOnce('# title');
+    fs.readFile
+      .mockResolvedValueOnce(utf8Bytes('plain text'))
+      .mockResolvedValueOnce(utf8Bytes('# title'));
     const manager = useMdRescueManager();
 
     await manager.handleDropPaths(['C:/docs/a.md', 'C:/docs/b.md']);
@@ -294,7 +294,7 @@ describe('useMdRescueManager', () => {
   it('handleDropPaths 多个 Markdown 全部读取失败时提示读取失败', async () => {
     const fs = getFsMocks();
     fs.stat.mockResolvedValue({ isFile: true, isDirectory: false } as never);
-    fs.readTextFile
+    fs.readFile
       .mockRejectedValueOnce(new Error('EACCES'))
       .mockRejectedValueOnce(new Error('invalid utf-8'));
     const manager = useMdRescueManager();

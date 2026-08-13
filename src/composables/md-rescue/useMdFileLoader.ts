@@ -2,13 +2,13 @@
 // 负责：单文件/文件夹加载、拖放处理、链接收集
 
 import { open as dialogOpen } from '@tauri-apps/plugin-dialog';
-import { readTextFile } from '@tauri-apps/plugin-fs';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { Semaphore } from '../../utils/semaphore';
 import { useToast } from '../useToast';
 import { createLogger } from '../../utils/logger';
 import { extractImageLinks } from '../../utils/mdParser';
+import { readUtf8TextFile, describeReadError } from './mdTextIo';
 import { recordMruEntry } from './useMdRescueMru';
 import type { MdImageLink } from '../../types/linkCheck';
 import {
@@ -65,7 +65,9 @@ export async function collectLinksFromFiles(
     sem.withPermit(async () => {
       if (getCollectCancelled()) return;
       try {
-        const content = await readTextFile(file);
+        // 严格 UTF-8：非 UTF-8 文件在这里就被判为读取失败，与 Rust 文件夹路径
+        // read_to_string 的行为对齐，避免用乱码内容参与后续修复
+        const { content } = await readUtf8TextFile(file);
         if (getCollectCancelled()) return;
         allLinks.push(...wrapLinksWithFile(extractImageLinks(content, { includeCodeBlocks: includeCodeBlocks.value }), file));
       } catch (err) {
@@ -86,7 +88,7 @@ export async function loadFileImpl(path: string): Promise<void> {
   filePath.value = path;
   folderPath.value = null;
   mdFiles.value = [];
-  const content = await readTextFile(path);
+  const { content } = await readUtf8TextFile(path);
   fileContent.value = content;
   imageLinks.value = wrapLinksWithFile(extractImageLinks(content, { includeCodeBlocks: includeCodeBlocks.value }), path);
   recordMruEntry(path, 'file');
@@ -231,7 +233,7 @@ export function useMdFileLoader() {
       return true;
     } catch (err) {
       log.error('选择文件失败', err);
-      toast.error('文件打开失败', String(err));
+      toast.error('文件打开失败', describeReadError(err));
       return false;
     }
   }
@@ -267,7 +269,7 @@ export function useMdFileLoader() {
       return true;
     } catch (err) {
       log.error('加载文件失败', err);
-      toast.error('文件加载失败', String(err));
+      toast.error('文件加载失败', describeReadError(err));
       return false;
     }
   }

@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { readTextFile } from '@tauri-apps/plugin-fs';
+import { readFile } from '@tauri-apps/plugin-fs';
 import {
   getInvokeMock,
   getListenMock,
   resetTauriMocks,
+  utf8Bytes,
 } from '../../helpers/tauriMock';
+import { NON_UTF8_ERROR_MESSAGE } from '@/composables/md-rescue/mdTextIo';
 
 const toastMocks = vi.hoisted(() => ({
   info: vi.fn(),
@@ -51,7 +53,10 @@ import {
 } from '@/composables/md-rescue/shared';
 import type { MdImageLink } from '@/types/linkCheck';
 
-const mockReadTextFile = vi.mocked(readTextFile);
+const mockReadFile = vi.mocked(readFile);
+
+/** GBK 编码的“中文”，在 UTF-8 下是非法字节序列 */
+const GBK_BYTES = new Uint8Array([0xd6, 0xd0, 0xce, 0xc4]);
 
 describe('getFileName', () => {
   it('从 POSIX 路径取文件名', () => {
@@ -119,9 +124,9 @@ describe('collectLinksFromFiles', () => {
   });
 
   it('读取每个文件并提取 image link', async () => {
-    mockReadTextFile
-      .mockResolvedValueOnce('![alt](https://x.com/a.png)')
-      .mockResolvedValueOnce('![](https://y.com/b.jpg)');
+    mockReadFile
+      .mockResolvedValueOnce(utf8Bytes('![alt](https://x.com/a.png)'))
+      .mockResolvedValueOnce(utf8Bytes('![](https://y.com/b.jpg)'));
 
     const onProgress = vi.fn();
     const result = await collectLinksFromFiles(['/a.md', '/b.md'], onProgress);
@@ -134,18 +139,33 @@ describe('collectLinksFromFiles', () => {
   });
 
   it('读取失败时记录并继续', async () => {
-    mockReadTextFile
+    mockReadFile
       .mockRejectedValueOnce(new Error('EACCES'))
-      .mockResolvedValueOnce('![](https://ok.com/a.png)');
+      .mockResolvedValueOnce(utf8Bytes('![](https://ok.com/a.png)'));
 
     const result = await collectLinksFromFiles(['/bad.md', '/ok.md']);
     expect(result).toHaveLength(1);
     expect(result[0].url).toBe('https://ok.com/a.png');
   });
 
+  it('非 UTF-8 文件计入读取失败，不把乱码内容带进后续修复', async () => {
+    mockReadFile
+      .mockResolvedValueOnce(GBK_BYTES)
+      .mockResolvedValueOnce(utf8Bytes('![](https://ok.com/a.png)'));
+    const onFileError = vi.fn();
+
+    const result = await collectLinksFromFiles(['/gbk.md', '/ok.md'], undefined, { onFileError });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].url).toBe('https://ok.com/a.png');
+    expect(onFileError).toHaveBeenCalledWith('/gbk.md', expect.objectContaining({
+      message: NON_UTF8_ERROR_MESSAGE,
+    }));
+  });
+
   it('已取消 → 跳过文件读取', async () => {
     setCollectCancelled(true);
-    mockReadTextFile.mockResolvedValue('![](https://x.com/a.png)');
+    mockReadFile.mockResolvedValue(utf8Bytes('![](https://x.com/a.png)'));
 
     const result = await collectLinksFromFiles(['/a.md', '/b.md']);
     expect(result).toEqual([]);
@@ -154,10 +174,10 @@ describe('collectLinksFromFiles', () => {
 
   it('读取后取消 → 不收集该文件结果', async () => {
     let readCount = 0;
-    mockReadTextFile.mockImplementation(async () => {
+    mockReadFile.mockImplementation(async () => {
       readCount++;
       if (readCount === 2) setCollectCancelled(true);
-      return '![](https://x.com/a.png)';
+      return utf8Bytes('![](https://x.com/a.png)');
     });
 
     const result = await collectLinksFromFiles(['/a.md', '/b.md', '/c.md']);
@@ -200,11 +220,11 @@ describe('useMdFileLoader - loader state and failures', () => {
 
     expect(ok).toBe(false);
     expect(toastMocks.info).toHaveBeenCalledWith('不支持的文件类型', '请拖放 Markdown 文件（.md / .markdown）');
-    expect(mockReadTextFile).not.toHaveBeenCalled();
+    expect(mockReadFile).not.toHaveBeenCalled();
   });
 
   it('loadFilePath 读取成功但无图片链接时保留文件状态并提示空状态', async () => {
-    mockReadTextFile.mockResolvedValue('plain markdown without image');
+    mockReadFile.mockResolvedValue(utf8Bytes('plain markdown without image'));
     const { loadFilePath } = useMdFileLoader();
 
     const ok = await loadFilePath('C:/docs/a.md');
@@ -219,13 +239,34 @@ describe('useMdFileLoader - loader state and failures', () => {
   });
 
   it('loadFilePath 读取失败时返回 false 并提示读取失败', async () => {
-    mockReadTextFile.mockRejectedValue(new Error('EACCES'));
+    mockReadFile.mockRejectedValue(new Error('EACCES'));
     const { loadFilePath } = useMdFileLoader();
 
     const ok = await loadFilePath('C:/docs/a.md');
 
     expect(ok).toBe(false);
     expect(toastMocks.error).toHaveBeenCalledWith('文件加载失败', 'Error: EACCES');
+  });
+
+  it('loadFilePath 遇到非 UTF-8 文件时直接报编码不受支持', async () => {
+    mockReadFile.mockResolvedValue(GBK_BYTES);
+    const { loadFilePath } = useMdFileLoader();
+
+    const ok = await loadFilePath('C:/docs/gbk.md');
+
+    expect(ok).toBe(false);
+    expect(toastMocks.error).toHaveBeenCalledWith('文件加载失败', NON_UTF8_ERROR_MESSAGE);
+    expect(fileContent.value).toBeNull();
+  });
+
+  it('loadFilePath 保留原文件的 UTF-8 BOM 语义：内存内容不带 BOM', async () => {
+    mockReadFile.mockResolvedValue(utf8Bytes('![](https://x.com/a.png)', true));
+    const { loadFilePath } = useMdFileLoader();
+
+    const ok = await loadFilePath('C:/docs/bom.md');
+
+    expect(ok).toBe(true);
+    expect(fileContent.value).toBe('![](https://x.com/a.png)');
   });
 
   it('loadFolderPath 扫描被 Rust 侧取消时清理收集状态和监听器', async () => {
