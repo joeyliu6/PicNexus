@@ -158,6 +158,35 @@ nas.local           -> 198.18.1.48,  fdfe:dcba:9876::128
 
 ---
 
+### [ ] 编辑器插件（Typora / Obsidian / CLI）支持 WebDAV 图床
+
+- **来源**：2026-08-13 WebDAV 手动验收时发现
+- **优先级**：中——主界面已可用，缺的是编辑器链路
+
+主界面的 WebDAV 图床能用，但 Typora / Obsidian / CLI 走的是**另一条链路**，那条链路上 WebDAV 根本没接：
+`ServerUploadConfig`（`src-tauri/src/server/upload_handler.rs`）的枚举里没有 WebDAV 变体。
+所以这不是"前端漏传一个字段"，是整条链路缺一环。
+
+**需要动的 5 处**：
+
+1. Rust：`ServerUploadConfig` 加 WebDAV 变体 + `upload_handler` 里的上传分发
+2. Rust 重构：`upload_to_webdav` 当前耦合了 `Window`（要 emit 进度事件），
+   核心上传逻辑得抽成不依赖 `Window` 的函数，才能被 server handler 复用
+3. 前端 `src/composables/settings/editorServiceConfig.ts`：
+   `isCliCompatibleServiceConfigured` / `buildServiceConfig` / `buildCliServicesConfig`
+   三个函数都要加 webdav 分支，最后一个还要展开 `webdav_profiles`
+4. 设置页「编辑器专用图床」选择器要能列出 WebDAV profiles
+5. `src-tauri/src/cli.rs`：`--service webdav:profile-1` 的解析与 service_id 映射
+
+**⚠️ 附带的知情项（不是本任务引入的）**：`cli-config.json` 全程明文落盘
+（`save_cli_config` 直接 `to_string_pretty` + `fs::write`，无加密），
+`ServerUploadConfig` 里 `secret_access_key` / `password` 都是裸 `String`。
+接入 WebDAV 后，NAS 账号密码会以明文进入该文件——比作用域受限的 S3 key 泄露面大。
+最低限度应在启用编辑器图床时把这件事写在 UI 上；真要加密得先解决 CLI 独立进程的密钥分发，
+那是独立课题。
+
+---
+
 ## 已知取舍
 
 ### 只读探测路径不做 DNS 裁决
