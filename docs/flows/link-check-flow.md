@@ -41,7 +41,9 @@ flowchart TD
 
     K -- 成功 --> M["提取 Content-Type / Content-Length"]
     M --> N{HTTP 2xx?}
-    N -- 否 --> O{status = 403?}
+    N -- 否 --> N3{HTTP 3xx?}
+    N3 -- 是 --> N4["error_type = redirect<br/>browser_might_work = true<br/>不跟随跳转是 SSRF 防护，<br/>浏览器会跟随"]
+    N3 -- 否 --> O{status = 403?}
     O -- 是 --> P{hotlink_protected?<br/>查配置表}
     P -- 是 --> P1["browser_might_work = true<br/>防盗链：浏览器可能能看"]
     P -- 否 --> P2["is_valid = false"]
@@ -55,6 +57,7 @@ flowchart TD
     %% Fallback 分支
     S --> T["返回 CheckLinkResult"]
     R --> T
+    N4 --> T
     P1 --> T
     P2 --> T
     L1 --> T
@@ -73,6 +76,7 @@ flowchart TD
 
     style S fill:#e8f5e9,stroke:#2e7d32
     style R fill:#fff3e0,stroke:#ef6c00
+    style N4 fill:#fff3e0,stroke:#ef6c00
     style P1 fill:#fff3e0,stroke:#ef6c00
     style P2 fill:#ffebee,stroke:#c62828
     style L1 fill:#ffebee,stroke:#c62828
@@ -129,8 +133,26 @@ flowchart TD
 | `network` | `err.is_connect()` 或兜底分支 | 「网络」· 网络不通 · 无法连接到图床服务器 |
 | `suspicious` | `is_suspicious_image_response` 命中 | 「疑似」 |
 | `blocked` | `validate_probe_url` 拒绝 / 空链接 | 「拦截」· 策略拦截 + Rust 给出的**具体原因**；筛选与计数上等同 `network`（归入「失效」），不新增 tab |
+| `redirect` | 状态码落在 300–399 | 「跳转」· 同时置 `browser_might_work = true`，筛选/计数/CSV 上归入「疑似」而**不是**「失效」；不新增 tab |
 
 > `blocked` 与 `network` 分家的意义：前者是**请求根本没发出去**（被本机策略拦下），后者是**发出去了但连不上对端**。合并会让"被自己程序拦了"伪装成"网络故障"，排查时误导性极强。
+
+#### 3xx 为什么必须单独归类
+
+检测器用 `redirect::Policy::none()` **刻意不跟随跳转**——这是防 SSRF 的设计，不会改。但浏览器会跟随，所以图床返回 301/302 时用户打开链接能正常看图。
+
+3xx 以前落进 `classify_error` 的兜底 `network`，界面标红成「失效」。这条误判的代价不是"看着别扭"：链接检测页支持按失效批量删除，用户照着这个结论删下去，删掉的是**活链接**。
+
+归类靠两个字段协同，缺一不可：
+
+| 字段 | 值 | 作用 |
+|------|----|------|
+| `error_type` | `"redirect"` | 界面显示「跳转」、tooltip 解释「浏览器会自动跟随」、CSV 导出写「跳转」 |
+| `browser_might_work` | `true` | 让**所有按排除法写的**筛选/计数（`!is_valid && ≠timeout && ≠suspicious && !browser_might_work` 才算失效）自动把它排除出「失效」 |
+
+> ⚠️ 新增按 `error_type` **逐个点名**的分支时（CSV `statusLabel`、`recheckLabel` 这类没有 status_code 快捷出口的函数），漏点名 `redirect` 就会悄悄退回「失效」。按排除法写的地方（`useCheckFilter` / `useCheckStats` / Rust 汇总统计）靠 `browser_might_work` 自动归位，不用改。
+>
+> tooltip 里 `redirect` 必须判在 `browser_might_work` **之前**：两者都为 true，落到通用分支会输出「防盗链限制 (301)」，把用户引去查根本不存在的防盗链设置。
 
 ### 图床服务配置表
 
@@ -201,15 +223,20 @@ flowchart TD
 
 ### wouldLeaveFilter 判定规则
 
+> 「疑似」列同时覆盖 `error_type = suspicious` 和 `browser_might_work = true`（防盗链 403 / 3xx 跳转）。
+
 | 当前筛选 | 结果为有效 | 结果为失效 | 结果为超时 | 结果为疑似 |
 |---------|-----------|-----------|-----------|-----------|
 | `all` | 留 | 留 | 留 | 留 |
-| `null`（默认=问题链接） | **离开** | 留 | 留 | 留 |
+| `null` | 留 | 留 | 留 | 留 |
+| `problems` | **离开** | 留 | 留 | 留 |
 | `unchecked` | **离开** | **离开** | **离开** | **离开** |
 | `valid` | 留 | **离开** | **离开** | **离开** |
 | `invalid` | **离开** | 留 | **离开** | **离开** |
 | `timeout` | **离开** | **离开** | 留 | **离开** |
 | `suspicious` | **离开** | **离开** | **离开** | 留 |
+
+> 📌 **默认筛选是 `'invalid'`，不是 `null`**（`useCheckFilter.ts` 的 `ref<StatusFilter>('invalid')`）。`null` 在 `wouldLeaveFilter` 里走的是「什么都不离开」的早退分支，实际界面上进不到这个状态；本表旧版把 `null` 写成"默认=问题链接"并标了离开，两处都与实现不符，已按代码修正。
 
 ---
 
@@ -332,6 +359,46 @@ flowchart TD
 
 **何时清零**：检测结束/取消时 `progress.value = null`（[useLinkCheck.ts](../../src/composables/link-check/useLinkCheck.ts)），watcher 重置所有派生状态；下次开检从首次 progress 事件重新建立基线。
 
+### 批次归属：三个守卫，三种处置
+
+`batch_check_links` 返回时，结果未必还属于"当前这一轮"。三个守卫**按顺序**判，处置各不相同——合并任意两个都会造成数据事故。
+
+> **关键源文件**：[useLinkCheck.ts](../../src/composables/link-check/useLinkCheck.ts)（`isResultForBatch`、`historyClearedGeneration`、`latestStartedBatchSession`、`latestStartedBatchKeys`、`persistSupersededResult`）
+
+| 顺序 | 守卫 | 触发场景 | 回填 UI | 写 DB |
+|------|------|---------|--------|------|
+| 1 | `batch_id` 对不上 | Rust 侧返回了别的批次的结果（防御性检查） | ❌ | ❌ |
+| 2 | `historyClearedGeneration` 变了 | 检测途中历史被清空 | ❌ | ❌ **整批作废** |
+| 3 | `latestStartedBatchSession` 变了 | 取消后又开了新批次 | ❌ | ✅ **仍然落库** |
+
+**为什么第 3 条要落库**（这是修掉的 bug）：用户在几万条的全量检测中途点「取消」，toast 引导他"可通过「仅未检测」继续剩余部分"；他照做，新批次开跑、会话号变了。而旧批次的**在途 HTTP 请求几十秒后才陆续返回**（reqwest 不可中断，见图 3 说明）。旧实现在这里把结果连同落库一起跳过——旧批次已经完成的几千条真实检测结果全部丢弃，重启后回退成「未检测」，用户白等一轮。
+
+这些结果早就通过 `applyRecentResults` 就地 patch 进 UI 了，所以补写入库不是制造分叉，反而是把 UI 与 DB 拉回一致。
+
+**为什么第 2 条反过来不能落库**：历史清空后，结果指向的 `historyId` 已经不存在，写进去就是写幽灵数据，回填 UI 会造出幽灵行。这两条语义相反，所以用两个独立的计数器（`historyClearedGeneration` / `latestStartedBatchSession`）表达，不能共用一个。
+
+**新旧批次重叠的行怎么办**：批次启动时把自己的行键存进 `latestStartedBatchKeys`；旧批次落库前按这个集合过滤，属于新批次的行直接跳过——那些行由新批次自己写，旧结果更陈旧，盖上去就是回退。
+
+### 跨窗口事件同步
+
+模块级 `onCacheEvent` 监听三类历史事件（[useLinkCheck.ts](../../src/composables/link-check/useLinkCheck.ts) 顶部）。不响应就会让检测视图持有**幽灵行**：别处已经删掉的图，检测页还显示、还计入统计、检测时还白发一次请求。
+
+| 事件 | 处置 |
+|------|------|
+| `history-cleared` | 清空 `checkRows` + 重建索引 + 递增 `historyClearedGeneration` 让在途批次结果整批作废 + `cancel_batch_check` |
+| `history-deleted` | 按 `data.ids` 调 `removeRowsByHistoryIds` 精准摘行；`lastLoadTime = 0` 让 TTL 缓存失效 |
+| `history-updated` | 只置 `lastLoadTime = 0`（内容变了但行还在，下次进入重查即可） |
+
+**三个容易写错的点**：
+
+1. **ids 在 `payload.data.ids`，不在 payload 顶层**——`CacheEventPayload` 是 `{ type, timestamp, data }`，`data` 才是 `HistoryEventData`。放错位置读到 `undefined`，行为退化成"什么都不做"且不报错。
+2. **不能按 `source === WINDOW_SESSION_ID` 过滤自发事件**。`useHistory.ts` 那样过滤是对的（它在本地删除时已经自己更新过状态），但历史页和检测页**同处一个窗口**——过滤掉就等于收不到"在历史页删图"这个最主要的场景。
+3. **正在播放删除动画（`fadingOut`）的行要跳过**。那是检测页自己发起的删除，`setFadingOutRows` → 380ms 淡出 → `removeRowsByKeys` 收尾（图 5）；事件抢先摘掉会让过渡直接跳帧。
+
+> 📌 `rowIndexMap` / `rebuildRowIndex` 挂在**模块级**而不是 composable 内：`checkRows` 本身是模块级单例，索引必须是同一份。否则模块级事件监听摘掉行之后，composable 实例里的索引还是旧的，`applyRecentResults` / `updateRow` 会按错位下标 patch 到别人的行上。
+>
+> 同理，`checkAllHistoryLinks` 回填结果前必须**重新读** `checkRows`，不能拿启动时的 `rows` 快照重新赋值——检测期间 `history-deleted` 摘掉的行会被"复活"。
+
 ---
 
 ## 图 4：智能检测策略决策
@@ -439,6 +506,8 @@ flowchart TD
 | 「从 URL 下载图片」开代理时全失败 | `validate_fetch_url` 的 DNS 裁决未豁免 fake-ip 池。**注意 v4 和 v6 两个池都要豁免**——只盖 v4 时，双栈机器上 AAAA 记录仍是 `fdfe:dcba:9876::/64`，循环里照样被拒 | `dns_answer_is_forbidden` / `is_fake_ip_pool_ip` |
 | WebDAV 报「该地址属于代理软件的 fake-ip 地址池」 | 设计行为，不是故障：本机 TUN 让域名解析失真，程序无法确认它是不是局域网。改填 NAS 内网 IP 或改用 HTTPS | `url_policy.rs` / docs/TODO.md |
 | 微博/B站图片显示失效但浏览器能看 | 防盗链 403 + `hotlink_protected=true` → `browser_might_work` | 图 1 防盗链判定分支 |
+| 301/302 跳转的链接被标成「失效」 | 不应出现——3xx 归 `redirect` + `browser_might_work=true`，应显示「跳转」并落在「疑似」。若复现，检查是不是新加了按 `error_type` 逐个点名却漏了 `redirect` 的分支 | 3xx 为什么必须单独归类 |
+| 跳转链接的 tooltip 写「防盗链限制」 | `redirect` 判在了 `browser_might_work` 之后——两者都为 true，通用分支会抢先 | `statusTooltip` / 3xx 归类小节 |
 | 知乎/百度图片 HEAD 405 | 这些图床 `skip_head=true`，应直接走 GET+Range | 图 1 `skip_head` 决策 |
 | 200 但标记为「疑似」 | Content-Type 非 `image/*` 或 Content-Length < 1KB（非 SVG） | 图 1 疑似异常判定 |
 | GitHub CDN 链接误报失效 | 前端未传 `fallback_url`（rawUrl 缺失） | 图 1 Fallback 分支 |
@@ -453,6 +522,10 @@ flowchart TD
 | 删除一条链接后同图其他行也消失了 | 逻辑退化成按 `historyId` 删整条——检查是否调的 `deleteHistoryResult` 而不是 `deleteHistoryItem` | 图 5 / useHistoryResultOps.ts |
 | 删主力图床后 Timeline 卡片缩略图没换 | `primaryService` 未切换或 `emitHistoryUpdated` 未发 | 图 5 补选主力 + 事件分流 |
 | 删完所有图床后历史里还有空壳 | `results[]` 归零兜底未触发，检查 `stripServiceFromItem` 返回值 | 图 5 结果归零分支 |
+| 别的页面删了图，检测页还显示（最多 5 分钟） | `history-deleted` 分支没接上，或 ids 读成了 `payload.ids`（正确是 `payload.data.ids`） | 跨窗口事件同步 |
+| 检测页删行时淡出动画跳帧 | `history-deleted` 分支没跳过 `fadingOut` 的行，抢在 380ms 动画前摘掉了 | 跨窗口事件同步 第 3 点 |
+| 取消后立刻续检，重启发现前一批全回退「未检测」 | 旧批次结果被整批丢弃了——第 3 个守卫应当**只拦 UI 回填、不拦落库** | 批次归属：三个守卫 |
+| 检测中在别处删了图，检测结束后被删的行又冒出来 | `checkAllHistoryLinks` 拿启动时的 `rows` 快照重新赋值，把已删行复活 | 跨窗口事件同步 末尾提示 |
 
 ---
 
