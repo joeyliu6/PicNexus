@@ -39,6 +39,17 @@ fn create_s3_client(endpoint: &str, access_key: &str, secret_key: &str, region: 
     Client::from_conf(config)
 }
 
+/// 按扩展名推断对象的 Content-Type，未知扩展名回退 `application/octet-stream`
+///
+/// Why: 不带 Content-Type 时对象会以 `binary/octet-stream` 落桶，浏览器直开链接
+/// 会触发下载而不是显图。这里复用 `r2.rs` 已在用的 `mime_guess`，避免两处各维护一张
+/// 扩展名映射表。
+fn guess_object_content_type(file_path: &str) -> String {
+    mime_guess::from_path(file_path)
+        .first_or_octet_stream()
+        .to_string()
+}
+
 fn validate_https_endpoint(endpoint: &str) -> Result<(), AppError> {
     let parsed = url::Url::parse(endpoint)
         .map_err(|_| AppError::config("Endpoint 不是合法的 URL，请输入完整的 https://... 地址"))?;
@@ -138,6 +149,9 @@ pub async fn upload_to_s3_compatible(
         .await
         .map_err(|e| AppError::file_io(format!("读取文件失败: {}", e)))?;
 
+    let content_type = guess_object_content_type(&file_path);
+    log::debug!("[S3兼容] Content-Type: {}", content_type);
+
     timeout(
         Duration::from_secs(S3_OPERATION_TIMEOUT_SECS * 2), // 上传操作给予更长超时
         client
@@ -145,6 +159,7 @@ pub async fn upload_to_s3_compatible(
             .bucket(&bucket)
             .key(&key)
             .body(body)
+            .content_type(&content_type)
             .send(),
     )
     .await
@@ -483,6 +498,37 @@ mod tests {
             region: Some("us-east-1".to_string()),
             endpoint: Some(endpoint.to_string()),
         }
+    }
+
+    #[test]
+    fn guess_object_content_type_covers_common_images() {
+        assert_eq!(guess_object_content_type("a.png"), "image/png");
+        assert_eq!(guess_object_content_type("a.jpg"), "image/jpeg");
+        assert_eq!(guess_object_content_type("a.jpeg"), "image/jpeg");
+        assert_eq!(guess_object_content_type("a.webp"), "image/webp");
+        assert_eq!(guess_object_content_type("a.gif"), "image/gif");
+        assert_eq!(guess_object_content_type("a.svg"), "image/svg+xml");
+        assert_eq!(guess_object_content_type("a.avif"), "image/avif");
+        assert_eq!(guess_object_content_type("a.bmp"), "image/bmp");
+        assert_eq!(guess_object_content_type("a.ico"), "image/x-icon");
+    }
+
+    #[test]
+    fn guess_object_content_type_is_case_insensitive() {
+        assert_eq!(guess_object_content_type("A.PNG"), "image/png");
+        assert_eq!(guess_object_content_type("C:\\图片\\截图.JPG"), "image/jpeg");
+    }
+
+    #[test]
+    fn guess_object_content_type_falls_back_to_octet_stream() {
+        assert_eq!(
+            guess_object_content_type("a.unknown-ext"),
+            "application/octet-stream"
+        );
+        assert_eq!(
+            guess_object_content_type("no-extension"),
+            "application/octet-stream"
+        );
     }
 
     #[test]
