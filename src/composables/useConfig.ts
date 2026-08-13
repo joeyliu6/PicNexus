@@ -19,6 +19,7 @@ import {
 import { getCookieProvider, validateCookie, DEFAULT_LOGIN_WINDOW_SIZE } from '../config/cookieProviders';
 import { useToast } from './useToast';
 import { TOAST_MESSAGES } from '../constants';
+import { registerProfileNameSource } from '../constants/serviceNames';
 import { createLogger } from '../utils/logger';
 import { extractNamiAuthToken } from '../utils/namiAuthToken';
 
@@ -29,6 +30,10 @@ const log = createLogger('useConfig');
 const config: Ref<UserConfig> = ref<UserConfig>(structuredClone(DEFAULT_CONFIG));
 const isLoading = ref(false);
 const isSaving = ref(false);
+
+// 让 getServiceDisplayName 在调用点没传 config 时也能查到多实例图床的 profile 名。
+// 读的是 config.value，所以在 computed 里调用会被正常追踪——改名后界面即时更新。
+registerProfileNameSource(() => config.value);
 
 /**
  * Cookie 更新事件的 payload 类型

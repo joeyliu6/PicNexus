@@ -111,6 +111,24 @@ describe('useConfigManager', () => {
       expect(result.enabledServices).not.toContain('qiyu');
     });
 
+    // 接线护栏：useConfig 必须把自己注册成 getServiceDisplayName 的 profile 名来源。
+    // 少了这行，全仓 31 个不传 config 的调用点会全部退回显示原始 profile ID
+    // （上传队列里就是 `WebDAV (msrlkrjz3...`），而 serviceNames 自己的单测照样全绿。
+    it('把配置注册为服务显示名的来源', async () => {
+      const { getServiceDisplayName } = await import('@/constants/serviceNames');
+      configStoreGetMock.mockResolvedValue({
+        webdav_profiles: [{ id: 'davA', name: 'dufs 本地' }],
+        custom_s3_profiles: [{ id: 's3a', name: '我的 MinIO' }],
+      });
+
+      const { loadConfig } = useConfigManager();
+      await loadConfig();
+
+      // 注意：故意不传第二个参数——这正是 31 个调用点的形态
+      expect(getServiceDisplayName('webdav:davA')).toBe('dufs 本地');
+      expect(getServiceDisplayName('custom_s3:s3a')).toBe('我的 MinIO');
+    });
+
     it('加载失败时降级为默认配置', async () => {
       configStoreGetMock.mockRejectedValue(new Error('读取失败'));
 
