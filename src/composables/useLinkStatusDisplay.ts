@@ -11,6 +11,7 @@ export interface StatusDisplay {
 const STATUS_DISPLAY_MAP: Record<string, StatusDisplay> = {
   timeout: { color: 'amber', label: '超时' },
   suspicious: { color: 'purple', label: '疑似' },
+  redirect: { color: 'purple', label: '跳转' },
   network: { color: 'red', label: '网络' },
   blocked: { color: 'red', label: '拦截' },
   http_4xx: { color: 'red', label: '404' },
@@ -20,6 +21,9 @@ const STATUS_DISPLAY_MAP: Record<string, StatusDisplay> = {
 export function getStatusDisplay(cr: CheckLinkResult | null | undefined): StatusDisplay {
   if (!cr) return { color: 'red', label: '失败' };
   if (cr.is_valid) return { color: 'green', label: '正常' };
+  // redirect 要抢在 browser_might_work 前面：3xx 两个标志都置了，
+  // 落到通用的「疑似」上会丢掉「这只是个跳转」这条最有用的信息
+  if (cr.error_type === 'redirect') return STATUS_DISPLAY_MAP.redirect;
   if (cr.browser_might_work) return { color: 'purple', label: '疑似' };
   return STATUS_DISPLAY_MAP[cr.error_type] ?? { color: 'red', label: '失效' };
 }
@@ -31,6 +35,7 @@ export function statusBadgeLabel(cr: CheckLinkResult | null | undefined): string
   if (cr.error_type === 'timeout') return '超时';
   if (cr.error_type === 'network') return '网络';
   if (cr.error_type === 'blocked') return '拦截';
+  if (cr.error_type === 'redirect') return '跳转';
   if (cr.error_type === 'suspicious' || cr.browser_might_work) return '疑似';
   return '失效';
 }
@@ -62,7 +67,11 @@ export function statusTooltip(cr: CheckLinkResult | null | undefined): string {
   if (!cr || cr.is_valid) return '';
   const parts: string[] = [];
   if (cr.status_code) {
-    if (cr.browser_might_work) {
+    // redirect 必须先判：3xx 也置了 browser_might_work，
+    // 落到下面的防盗链分支会给出「防盗链限制 (301)」这种指错方向的解释
+    if (cr.error_type === 'redirect') {
+      parts.push(`跳转链接 (${cr.status_code}) · 浏览器会自动跟随，通常可正常显示；检测器出于安全不跟随`);
+    } else if (cr.browser_might_work) {
       parts.push(`防盗链限制 (${cr.status_code}) · 浏览器直接打开可正常显示`);
     } else {
       const desc = STATUS_DESC[cr.status_code];

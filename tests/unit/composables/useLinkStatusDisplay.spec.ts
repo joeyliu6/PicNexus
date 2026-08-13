@@ -79,6 +79,24 @@ describe('useLinkStatusDisplay', () => {
     expect(statusTooltip(makeResult({ error_type: 'blocked' }))).toContain('策略拦截');
   });
 
+  // 3xx 与防盗链 403 都置 browser_might_work，共用一个分支会把「跳转」解释成「防盗链」——
+  // 用户照着 tooltip 去查防盗链设置，方向从一开始就是错的。
+  it('explains 3xx as a redirect rather than a hotlink block or a dead link', () => {
+    const redirect = makeResult({
+      status_code: 301,
+      error_type: 'redirect',
+      error: 'HTTP 301',
+      browser_might_work: true,
+    });
+
+    expect(statusTooltip(redirect)).toContain('跳转链接 (301)');
+    expect(statusTooltip(redirect)).not.toContain('防盗链');
+    expect(getStatusDisplay(redirect)).toEqual({ color: 'purple', label: '跳转' });
+    expect(statusDotColor(redirect)).toBe('var(--pending)');
+    // 有状态码时徽章直接显示状态码，比「跳转」两个字信息量更大
+    expect(statusBadgeLabel(redirect)).toBe('301');
+  });
+
   // 守门：Rust 给 timeout / network 的 error 是裸的「请求超时」「连接失败」，
   // 比 fallback 表里的文案差。兜底顺序写反就会踩这条。
   it('keeps the curated wording for timeout and network even when error is present', () => {

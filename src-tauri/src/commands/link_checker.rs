@@ -57,11 +57,15 @@ pub struct CheckLinkResult {
     pub is_valid: bool,
     pub status_code: Option<u16>,
     pub error: Option<String>,
-    /// "success" | "http_4xx" | "http_5xx" | "timeout" | "network" | "suspicious" | "blocked"
+    /// "success" | "http_4xx" | "http_5xx" | "redirect" | "timeout" | "network" | "suspicious" | "blocked"
     ///
     /// `blocked` = 请求根本没发出去，被本机出站策略拦下（空链接 / 非 https / 内网
     /// 字面量 IP / 带凭证的 URL 等）。与 `network`（真的连不上对端）语义不同，
     /// 具体原因在 `error` 字段里，前端负责展示出来。
+    ///
+    /// `redirect` = 对端返回 3xx。检测器出于 SSRF 防护刻意不跟随跳转（见
+    /// `safe_no_redirect_client`），但浏览器会跟随——所以这**不是**「图挂了」。
+    /// 同时置 `browser_might_work = true`，让前端各处按「疑似」而不是「失效」归类。
     pub error_type: String,
     pub suggestion: Option<String>,
     pub response_time: Option<u64>,
@@ -88,6 +92,14 @@ fn classify_error(
             return (
                 "http_5xx".to_string(),
                 Some("图床服务器暂时不可用，建议稍后重试".to_string()),
+            );
+        } else if (300..400).contains(&code) {
+            // 3xx 必须单独归类：检测器不跟随跳转是 SSRF 防护的刻意设计，但浏览器会跟随。
+            // 落进兜底 network 会让「能正常看图的跳转链接」在界面上标红成失效，
+            // 用户据此批量删除就是误删活链接。
+            return (
+                "redirect".to_string(),
+                Some("链接是跳转（3xx），浏览器通常能正常打开；检测器出于安全不跟随跳转".to_string()),
             );
         } else if (200..300).contains(&code) {
             return ("success".to_string(), None);
@@ -378,10 +390,22 @@ mod tests {
     }
 
     #[test]
-    fn classify_error_3xx_falls_through_to_default() {
-        // 3xx 未被显式处理，会走到默认分支
-        let (kind, _) = classify_error(Some(302), None);
-        assert_eq!(kind, "network");
+    fn classify_error_3xx_returns_redirect_not_network() {
+        // 回归护栏：3xx 曾经落进兜底 network，界面标红成「失效」，
+        // 而浏览器跟随跳转后能正常显示——用户据此批量删除会误删活链接
+        for code in [300, 301, 302, 307, 308, 399] {
+            let (kind, hint) = classify_error(Some(code), None);
+            assert_eq!(kind, "redirect", "HTTP {} 应归类为 redirect", code);
+            assert!(hint.unwrap().contains("跳转"));
+        }
+    }
+
+    #[test]
+    fn classify_error_boundary_between_5xx_and_redirect() {
+        assert_eq!(classify_error(Some(299), None).0, "success");
+        assert_eq!(classify_error(Some(300), None).0, "redirect");
+        assert_eq!(classify_error(Some(399), None).0, "redirect");
+        assert_eq!(classify_error(Some(400), None).0, "http_4xx");
     }
 
     // ---------- detect_service_from_url ----------
@@ -1001,11 +1025,16 @@ async fn check_single_link(
                 suggestion = Some("返回 200 但内容类型或大小异常，可能不是有效图片".to_string());
             }
 
-            // 防盗链判定：403 + 已知防盗链服务（从统一配置表查询）
-            let browser_might_work = status_code == 403
-                && service
-                    .and_then(get_service_config)
-                    .is_some_and(|c| c.hotlink_protected);
+            // 「浏览器可能仍能看」的两个出口：
+            // 1. 3xx——检测器不跟随跳转，浏览器跟随
+            // 2. 403 + 已知防盗链服务（从统一配置表查询）
+            // 前端的筛选 / 计数 / CSV 全部按「不是 timeout、不是 suspicious、
+            // browser_might_work 也为 false 的才算失效」写，置了这个标志就自动归入「疑似」
+            let browser_might_work = status.is_redirection()
+                || (status_code == 403
+                    && service
+                        .and_then(get_service_config)
+                        .is_some_and(|c| c.hotlink_protected));
 
             let is_valid = is_2xx && !is_suspicious;
 

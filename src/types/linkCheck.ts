@@ -17,6 +17,9 @@ export const SEVERITY: Record<string, number> = {
   blocked: 2,
   timeout: 3,
   suspicious: 4,
+  // 3xx 跳转与 suspicious 同权重：都是「大概率还能看，但值得看一眼」
+  // （同样漏了会被 ?? SEVERITY.success 兜底，排到列表最底）
+  redirect: 4,
   success: 5,
 };
 
@@ -25,8 +28,11 @@ export interface CheckLinkResult {
   is_valid: boolean;
   status_code?: number;
   error?: string;
-  /** `blocked` = 请求没发出去，被本机出站策略拦下；真实原因在 `error` 字段 */
-  error_type: 'success' | 'http_4xx' | 'http_5xx' | 'timeout' | 'network' | 'suspicious' | 'blocked';
+  /**
+   * `blocked` = 请求没发出去，被本机出站策略拦下；真实原因在 `error` 字段
+   * `redirect` = 对端返回 3xx；检测器不跟随跳转是 SSRF 防护，浏览器会跟随，所以不算失效
+   */
+  error_type: 'success' | 'http_4xx' | 'http_5xx' | 'redirect' | 'timeout' | 'network' | 'suspicious' | 'blocked';
   suggestion?: string;
   response_time?: number;
   detected_service?: string;

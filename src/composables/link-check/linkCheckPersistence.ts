@@ -16,7 +16,7 @@ type LinkCheckStatusEntry = LinkCheckStatusMap[string];
 export type ErrorTypeUnion = LinkCheckStatusEntry['errorType'];
 
 const VALID_ERROR_TYPES: readonly ErrorTypeUnion[] = [
-  'success', 'http_4xx', 'http_5xx', 'timeout', 'network', 'suspicious', 'blocked', 'pending',
+  'success', 'http_4xx', 'http_5xx', 'redirect', 'timeout', 'network', 'suspicious', 'blocked', 'pending',
 ];
 
 /** 把 Rust 端的 error_type 收敛到合法的持久化 union（未知值落到 'network'） */
@@ -158,18 +158,20 @@ function csvAlwaysQuoted(value: string): string {
 /**
  * CSV 的状态列
  *
- * Why `blocked` 必须单独列一条：筛选 / 计数 / 汇总那几处都是按**排除法**写的
- * （不是 timeout、不是 suspicious 的都归 invalid），新增 error_type 会自动归位；
+ * Why `blocked` / `redirect` 必须各自单独列一条：筛选 / 计数 / 汇总那几处都是按**排除法**
+ * 写的（不是 timeout、不是 suspicious 的都归 invalid），新增 error_type 会自动归位；
  * 这里是**逐个点名**，漏点名就悄悄退回「失效」。
  *
  * 而这一字之差会把结论引反：导出的表是拿去排查、发给别人看的，「失效」读作
- * 「图床挂了，这图没救了」，真相却是「被本机出站策略拦下，改成 https 就能用」。
+ * 「图床挂了，这图没救了」，真相却是「被本机出站策略拦下，改成 https 就能用」
+ * 或「只是个 301 跳转，浏览器打开好好的」。
  */
 function statusLabel(r: CheckLinkResult | undefined): string {
   if (!r) return '未检测';
   if (r.is_valid) return '有效';
   if (r.error_type === 'timeout') return '超时';
   if (r.error_type === 'blocked') return '拦截';
+  if (r.error_type === 'redirect') return '跳转';
   if (r.error_type === 'suspicious' || r.browser_might_work) return '疑似异常';
   return '失效';
 }

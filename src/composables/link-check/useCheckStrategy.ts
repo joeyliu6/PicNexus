@@ -164,6 +164,8 @@ export function useCheckStrategy({ stats, statusFilter }: UseCheckStrategyOption
     if (result.error_type === 'timeout') return '超时';
     if (result.error_type === 'network') return '断连';
     if (result.error_type === 'blocked') return '拦截';
+    // 这里没有 status_code 快捷分支，不点名就会被下面的 browser_might_work 吞成「可疑」
+    if (result.error_type === 'redirect') return '跳转';
     if (result.error_type === 'suspicious' || result.browser_might_work) return '可疑';
     return '失效';
   }

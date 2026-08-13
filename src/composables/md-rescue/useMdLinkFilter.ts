@@ -65,7 +65,9 @@ export function useMdLinkFilter() {
       if (!cr) { unchecked++; continue; }
       if (cr.is_valid) { valid++; continue; }
       if (cr.error_type === 'timeout') { timeout++; }
-      else if (cr.error_type === 'suspicious') { suspicious++; }
+      // browser_might_work（3xx 跳转 / 防盗链 403）归「疑似」而非「失效」，
+      // 与链接检测页同口径——否则同一条链接在两个页面得到相反的结论
+      else if (cr.error_type === 'suspicious' || cr.browser_might_work) { suspicious++; }
       else { invalid++; }
       if (l.backupLinks && l.backupLinks.length > 0) rescuable++;
     }
@@ -91,8 +93,8 @@ export function useMdLinkFilter() {
       const r = l.checkResult;
       switch (statusFilter.value) {
         case null: return true;
-        case 'invalid': return r && !r.is_valid && r.error_type !== 'timeout' && r.error_type !== 'suspicious';
-        case 'suspicious': return r?.error_type === 'suspicious';
+        case 'invalid': return r && !r.is_valid && r.error_type !== 'timeout' && r.error_type !== 'suspicious' && !r.browser_might_work;
+        case 'suspicious': return r?.error_type === 'suspicious' || r?.browser_might_work === true;
         case 'timeout': return r?.error_type === 'timeout';
         case 'unchecked': return !r;
         case 'valid': return r?.is_valid;

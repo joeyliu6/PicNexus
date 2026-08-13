@@ -104,6 +104,24 @@ describe('exportCsv', () => {
     expect(csv).not.toContain('失效');
   });
 
+  it('3xx 跳转链接状态为"跳转"，不退回"失效"', () => {
+    // 检测器不跟随跳转是 SSRF 防护的刻意设计，浏览器会跟随——
+    // 导出写「失效」会让读表的人把能正常看的图当死链批量删掉。
+    const row: LinkCheckRow = {
+      historyId: 'h1', serviceId: 'r2', fileName: 'img.jpg',
+      url: 'https://cdn.example.com/img.jpg', rawUrl: 'https://cdn.example.com/img.jpg',
+      checkResult: {
+        link: 'https://cdn.example.com/img.jpg',
+        is_valid: false, status_code: 301, error_type: 'redirect',
+        error: 'HTTP 301',
+        browser_might_work: true,
+      },
+    };
+    const csv = exportCsv([row]);
+    expect(csv).toContain('跳转');
+    expect(csv).not.toContain('失效');
+  });
+
   it('未检测时状态为"未检测"', () => {
     const row: LinkCheckRow = {
       historyId: 'h1', serviceId: 'r2', fileName: 'img.jpg',
@@ -219,7 +237,7 @@ describe('exportCsv', () => {
 
 describe('normalizeErrorType', () => {
   it('保留所有合法的 error_type，未知值收敛到 network', () => {
-    for (const type of ['success', 'http_4xx', 'http_5xx', 'timeout', 'network', 'suspicious', 'blocked', 'pending']) {
+    for (const type of ['success', 'http_4xx', 'http_5xx', 'redirect', 'timeout', 'network', 'suspicious', 'blocked', 'pending']) {
       expect(normalizeErrorType(type)).toBe(type);
     }
     expect(normalizeErrorType('garbage')).toBe('network');
@@ -322,6 +340,29 @@ describe('updateHistoryCheckStatus', () => {
     const status = JSON.parse(updates[0].linkCheckStatus);
     expect(status.r2.errorType).toBe('blocked');
     expect(status.r2.error).toContain('已禁用');
+  });
+
+  it('redirect 状态与 browserMightWork 一起落库，重启后不会退化成 network/失效', async () => {
+    const result: BatchCheckResult = {
+      results: [
+        {
+          link: 'https://cdn.example.com/a.jpg',
+          history_id: 'h1', service_id: 'r2',
+          is_valid: false, status_code: 301, error_type: 'redirect',
+          error: 'HTTP 301',
+          browser_might_work: true,
+        },
+      ],
+      total: 1, valid: 0, invalid: 0, timeout: 0, suspicious: 1, elapsed_ms: 0, cancelled: false,
+    };
+
+    await updateHistoryCheckStatus(result);
+
+    const [updates] = batchUpdateMock.mock.calls[0];
+    const status = JSON.parse(updates[0].linkCheckStatus);
+    expect(status.r2.errorType).toBe('redirect');
+    // browserMightWork 丢了，重启后 redirect 依然会被各处的排除法归成「失效」
+    expect(status.r2.browserMightWork).toBe(true);
   });
 
   it('results 无 history_id 时跳过', async () => {
