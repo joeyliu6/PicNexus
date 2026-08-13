@@ -63,6 +63,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 20
+          cache: 'npm'
 
       - name: Install Ubuntu system deps
         if: matrix.platform == 'ubuntu-latest'
