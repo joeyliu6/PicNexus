@@ -321,3 +321,27 @@
 - 守卫脚本 `endsWith` 匹配的唯一性校验未加（当前无歧义，但 `src/components/UploadQueue.vue` 与 `src/core/UploadQueue.ts` 同名不同扩展，将来若出现同名 `.ts` 会静默取错文件）。
 - `vitest.config.ts` 的 glob 聚合阈值未改（见勘误第 4 条）。
 - `vite.config.ts` 的 `server` 段有一段 3 空格缩进的历史异常（与文件其余 2 空格不一致），属无关改动未动。
+
+---
+
+### 2026-08-13 · 第三批补遗 · 本地打包路径的类型闸门
+
+第三批 3-2 把 `npm run build` 从 `tsc && vite build` 削成 `vite build`，并给 `release.yml` 补了显式的 `Type check before release` 步骤兜底。但 `src-tauri/tauri.conf.json:7` 的 `beforeBuildCommand` **同样指向 `npm run build`**——该路径当时未被识别，结果是：开发者在本地直接 `npm run tauri build` 出包时，**一次类型检查都不做**。
+
+`pre-push` 钩子里的 `ci:prepush` 确实跑 `typecheck`，正常提交流程绕不过去；缺口只在「不 push、本地打包直接分发」这一种用法上。已把 `beforeBuildCommand` 改为 `npm run typecheck && npm run build`。
+
+**为什么不顺手删掉 `release.yml` 的显式步骤**（即：有意保留这一处重复）：
+
+改完之后发版路径确实有了双重闸门（显式 step + `tauri-action` 内的 `beforeBuildCommand`）。之所以不合并成一处，是风险不对称——`release.yml` 只有真打 tag 才会执行到，改错了要等到下次发版才暴露；而纯加法的 `beforeBuildCommand` 改动本地就能验完。重复的代价实测只有约 8 秒（见下），远小于把已验证的发版闸门推倒重来的风险。**后续若有人想消重，请删 `beforeBuildCommand` 里的 `typecheck` 而不是删 `release.yml` 的步骤**，因为前者失败位置在 `tauri-action` 内部、日志更深。
+
+**验证**（`beforeBuildCommand` 在 Windows 上由 `cmd /C` 执行，故直接按该字符串原样测，不用 bash 近似）：
+
+| 场景 | 结果 |
+|------|------|
+| 正常链式执行 `cmd /C "npm run typecheck && npm run build"` | exit 0，4 个入口产物正常，总耗时 12.97s（typecheck 约 8s） |
+| 注入类型错误（临时 `src/__typecheck_probe.ts`，`const x: number = 'str'`） | 报 `TS2322` 后 exit 非 0，且输出中**无任何 vite 行**——`&&` 正确短路，`vite build` 完全未执行 |
+| `npm run lint` | exit 0（确认 `check-cross-language-constants.mjs` 不涉及该配置项） |
+
+探针文件测完即删，`git status` 已确认工作区只剩 `tauri.conf.json` 一处改动。
+
+**未验**：`npm run tauri build` 全流程未实跑（Rust 编译耗时长），但 `beforeBuildCommand` 的语义就是「在 cargo 构建前执行该 shell 命令」，上表已按 Tauri 实际使用的 shell 验过该字符串的两种行为，剩余风险仅在 Tauri 是否调用该字段本身——而这未被本次改动触及。
