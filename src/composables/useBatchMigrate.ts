@@ -29,6 +29,7 @@ import { processBatch } from './batchMigrate/migrateCore';
 import { preloadAllPending, type PreloadedItem } from './batchMigrate/preloadPending';
 import { createRetry } from './batchMigrate/retryFailed';
 import { createRafThrottle } from './batchMigrate/rafThrottle';
+import { createMigrationRefreshBuffer } from './batchMigrate/historyRefresh';
 
 export type { MigratePhase, MigrateTargetService, MigrateItemStatus, MigrateResult, MigrateStats, MigrateFailureDetail, MigrateScope };
 
@@ -164,6 +165,9 @@ export function useBatchMigrateManager() {
   const { scheduleStatusUpdate, flushStatusUpdate } = createRafThrottle({
     itemStatuses, allItemStatuses, globalProgress,
   });
+
+  // 落库后广播 history-updated，让历史表格/灯箱/时间轴不重启就能看到新备份（见 batchMigrate/historyRefresh.ts）
+  const historyRefresh = createMigrationRefreshBuffer();
 
   // ============================================
   // 初始化 + 筛选
@@ -451,6 +455,8 @@ export function useBatchMigrateManager() {
           if (status.status === 'success') {
             successCount++;
             consecutiveFailures = 0;
+            // migrateOneItem 只在 historyDB.update 成功后才置 success → 这里等价于「已落库」
+            historyRefresh.add(status.historyId);
             const failedTargets = getFailedTargets(status);
             if (failedTargets.length > 0) {
               const details = getFailureDetails(status, failedTargets);
@@ -496,6 +502,7 @@ export function useBatchMigrateManager() {
         }, () => scheduleStatusUpdate(batchStatuses, processed, totalToProcess));
 
         flushStatusUpdate();
+        historyRefresh.flush();
 
         // 当前 chunk 所有项都落定 → 推进 cursor；否则重试本 chunk（暂停场景回退为 pending 时）
         const allSettled = batchStatuses.every(s => s.status !== 'pending');
@@ -529,6 +536,8 @@ export function useBatchMigrateManager() {
     partialFailures: MigrateResult['partialFailures'],
     pauseReason?: MigrateResult['pauseReason'],
   ) {
+    // 兜底：主循环抛异常跳过 chunk flush、或最后一个 chunk 结束后仍有残留时补发
+    historyRefresh.flush();
     const finalElapsed = Date.now() - startTime;
     migrateResult.value = {
       successCount, failedCount, skippedCount, failures, partialFailures, pauseReason,

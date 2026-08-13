@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   getItemsByBackupCount: vi.fn(),
   getServiceDistribution: vi.fn(),
   getItemsByIds: vi.fn(),
+  invalidateCache: vi.fn(),
+  emitHistoryUpdated: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/core/MultiServiceUploader', () => ({
@@ -46,6 +48,15 @@ vi.mock('@/store/instances', () => ({
   configStore: {
     get: mocks.configGet,
   },
+}));
+
+// historyRefresh 本体保持真实（要验它的攒批逻辑），只挡住两个副作用出口
+vi.mock('@/composables/useHistory', () => ({
+  invalidateCache: mocks.invalidateCache,
+}));
+
+vi.mock('@/events/cacheEvents', () => ({
+  emitHistoryUpdated: mocks.emitHistoryUpdated,
 }));
 
 function createConfig(): UserConfig {
@@ -337,6 +348,44 @@ describe('useBatchMigrateManager', () => {
     ]);
     expect(manager.globalProgress.value).toEqual({ current: 3, total: 3, percent: 100 });
     expect(manager.cumulativeCounts.value).toEqual({ success: 1, failed: 1, skipped: 1 });
+    // 落库后广播刷新：只带成功（= 已写库）的 id，失败/跳过项不入；chunk + 收尾两次 flush 只发一次
+    expect(mocks.invalidateCache).toHaveBeenCalledTimes(1);
+    expect(mocks.emitHistoryUpdated).toHaveBeenCalledTimes(1);
+    expect(mocks.emitHistoryUpdated).toHaveBeenCalledWith(['success-one']);
+  });
+
+  it('整批无成功项时不发 history-updated 空事件', async () => {
+    const preloaded = createPreloaded(['failed-one']);
+    mocks.preloadAllPending.mockImplementation(async (args) => {
+      args.allItemStatuses.value = preloaded.map(item => item.status);
+      args.onBatch?.(preloaded);
+      return preloaded;
+    });
+    mocks.processBatch.mockImplementation(async (
+      _items: HistoryItem[],
+      batchStatuses: MigrateItemStatus[],
+      _targets: string[],
+      _config: UserConfig,
+      _multiUploader: unknown,
+      _isCancelled: { value: boolean },
+      _isPaused: { value: boolean },
+      _stats: unknown,
+      onItemDone: (status: MigrateItemStatus) => void,
+    ) => {
+      batchStatuses[0].status = 'failed';
+      batchStatuses[0].error = 'upload failed';
+      onItemDone(batchStatuses[0]);
+    });
+    const manager = useBatchMigrateManager();
+    manager.targetServices.value = [
+      { serviceId: 'r2', displayName: 'R2', isConfigured: true, pendingCount: 1, backedUpCount: 0, checked: true },
+    ];
+
+    await manager.startMigrate();
+
+    expect(manager.migrateResult.value?.failedCount).toBe(1);
+    expect(mocks.emitHistoryUpdated).not.toHaveBeenCalled();
+    expect(mocks.invalidateCache).not.toHaveBeenCalled();
   });
 
   it('surfaces preload failure as a done result with preload-error pause reason', async () => {

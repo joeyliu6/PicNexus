@@ -15,6 +15,9 @@ vi.mock('@/composables/batchMigrate/migrateCore', () => ({
   migrateOneItem: vi.fn(),
 }));
 
+const notifyMigrationPersisted = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('@/composables/batchMigrate/historyRefresh', () => ({ notifyMigrationPersisted }));
+
 function makeResult(ids = ['h1']): MigrateResult {
   return {
     successCount: 0,
@@ -120,6 +123,7 @@ function makeMultiPartialResult(): MigrateResult {
 
 describe('createRetry', () => {
   beforeEach(() => {
+    notifyMigrationPersisted.mockClear();
     vi.mocked(historyDB.getItemsByIds).mockReset();
     vi.mocked(migrateOneItem).mockReset();
     vi.mocked(migrateOneItem).mockImplementation(async (_item, status) => {
@@ -505,5 +509,60 @@ describe('createRetry', () => {
     }));
     expect(migrateResult.value?.successCount).toBe(1);
     expect(migrateResult.value?.failedCount).toBe(0);
+  });
+
+  it('单条重试成功后广播 history-updated', async () => {
+    vi.mocked(historyDB.getItemsByIds).mockResolvedValue([makeHistoryItem() as any]);
+    const retry = createRetry({
+      migrateResult: ref(makeResult()),
+      retryingIds: ref(new Set<string>()),
+      getOrCacheConfig: async () => ({} as any),
+      getMultiUploader: () => ({} as any),
+    });
+
+    await retry.retrySingleFailed('h1');
+
+    expect(notifyMigrationPersisted).toHaveBeenCalledTimes(1);
+    expect(notifyMigrationPersisted).toHaveBeenCalledWith(['h1']);
+  });
+
+  it('重试仍失败（未落库）时不广播', async () => {
+    vi.mocked(historyDB.getItemsByIds).mockResolvedValue([makeHistoryItem() as any]);
+    vi.mocked(migrateOneItem).mockImplementation(async (_item, status) => {
+      status.status = 'failed';
+      status.error = '下载失败';
+    });
+    const retry = createRetry({
+      migrateResult: ref(makeResult()),
+      retryingIds: ref(new Set<string>()),
+      getOrCacheConfig: async () => ({} as any),
+      getMultiUploader: () => ({} as any),
+    });
+
+    await retry.retrySingleFailed('h1');
+
+    expect(notifyMigrationPersisted).not.toHaveBeenCalled();
+  });
+
+  it('批量重试攒成一次广播，只带真正落库的 id', async () => {
+    vi.mocked(historyDB.getItemsByIds).mockImplementation(async (ids: string[]) =>
+      [makeHistoryItem(ids[0])] as any,
+    );
+    vi.mocked(migrateOneItem).mockImplementation(async (item, status) => {
+      status.status = item.id === 'h1' ? 'success' : 'failed';
+      if (status.status === 'failed') status.error = '上传失败';
+    });
+    const retry = createRetry({
+      migrateResult: ref(makeResult(['h1', 'h2'])),
+      retryingIds: ref(new Set<string>()),
+      getOrCacheConfig: async () => ({} as any),
+      getMultiUploader: () => ({} as any),
+    });
+
+    await retry.retryFailed(['h1', 'h2']);
+
+    expect(migrateOneItem).toHaveBeenCalledTimes(2);
+    expect(notifyMigrationPersisted).toHaveBeenCalledTimes(1);
+    expect(notifyMigrationPersisted).toHaveBeenCalledWith(['h1']);
   });
 });

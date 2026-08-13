@@ -17,6 +17,7 @@ import { historyDB } from '../../services/HistoryDatabase';
 import { createLogger } from '../../utils/logger';
 import { Semaphore } from '../../utils/semaphore';
 import { migrateOneItem } from './migrateCore';
+import { notifyMigrationPersisted } from './historyRefresh';
 
 const log = createLogger('retryFailed');
 
@@ -171,12 +172,19 @@ export function createRetry(deps: RetryDeps) {
     });
   }
 
-  async function retrySingleFailed(historyId: string): Promise<void> {
+  /**
+   * 重试一条并就地更新 migrateResult
+   *
+   * @returns 是否真的写了 DB——`migrateOneItem` 只在 `historyDB.update` 成功后才置
+   *   `success`，所以这个布尔值等价于「本条需要广播 history-updated」。
+   *   广播由调用方发起，`retryFailed` 才能把一批攒成一次事件。
+   */
+  async function runRetry(historyId: string): Promise<boolean> {
     const initial = migrateResult.value;
-    if (!initial) return;
-    if (retryingIds.value.has(historyId)) return;
+    if (!initial) return false;
+    if (retryingIds.value.has(historyId)) return false;
     const failure = initial.failures.find(f => f.historyId === historyId);
-    if (!failure) return;
+    if (!failure) return false;
     const initialSnapshot = initial.itemsSnapshot.find(item => item.historyId === historyId);
     const initialFallbackTargets = snapshotFailedTargets(initialSnapshot);
     const baseTargets = getRetryTargets?.() ?? initial.targetServiceIds;
@@ -185,12 +193,13 @@ export function createRetry(deps: RetryDeps) {
       baseTargets,
       initialFallbackTargets.length > 0 ? initialFallbackTargets : initial.targetServiceIds,
     );
-    if (targets.length === 0) return;
+    if (targets.length === 0) return false;
 
     retryingIds.value = new Set([...retryingIds.value, historyId]);
+    let persisted = false;
     try {
       const items = await historyDB.getItemsByIds([historyId]);
-      if (items.length === 0) return;
+      if (items.length === 0) return false;
       const snapshot = initialSnapshot;
       const status: MigrateItemStatus = {
         historyId,
@@ -212,10 +221,11 @@ export function createRetry(deps: RetryDeps) {
         startTime: Date.now(), elapsedMs: 0, processedCount: 0, totalCount: 0, totalBytes: 0,
       });
       await migrateOneItem(items[0], status, targets, config, getMultiUploader(), localCancelled, localPaused, localStats);
+      persisted = status.status === 'success';
 
       // 现读最新 migrateResult（而非 await 前的闭包快照）——并发重试不会互相覆盖
       const current = migrateResult.value;
-      if (!current) return;
+      if (!current) return persisted;
       const nextFailures = [...current.failures];
       const idx = nextFailures.findIndex(f => f.historyId === historyId);
       const currentFailure = idx >= 0 ? nextFailures[idx] : failure;
@@ -299,12 +309,19 @@ export function createRetry(deps: RetryDeps) {
       next.delete(historyId);
       retryingIds.value = next;
     }
+    return persisted;
+  }
+
+  async function retrySingleFailed(historyId: string): Promise<void> {
+    if (await runRetry(historyId)) await notifyMigrationPersisted([historyId]);
   }
 
   async function retryFailed(historyIds: string[]): Promise<void> {
     if (historyIds.length === 0) return;
     const sem = new Semaphore(4);
-    await Promise.all(historyIds.map(id => sem.withPermit(() => retrySingleFailed(id))));
+    // 攒成一次广播：逐条发会让时间轴 reloadAll 跑 N 次（见 historyRefresh.ts 的粒度说明）
+    const persisted = await Promise.all(historyIds.map(id => sem.withPermit(() => runRetry(id))));
+    await notifyMigrationPersisted(historyIds.filter((_, i) => persisted[i]));
   }
 
   return { retrySingleFailed, retryFailed };
