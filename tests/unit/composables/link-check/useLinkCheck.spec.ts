@@ -1,4 +1,4 @@
-// useLinkCheckManager 关键流程测试：
+﻿// useLinkCheckManager 关键流程测试：
 // 单例 store 用 vi.resetModules + 动态 import 隔离每个 case
 // 覆盖：serviceStats 派生计算 / 行操作（删除/淡出）/ 并发守护
 
@@ -79,6 +79,18 @@ async function freshManager() {
   const mod = await import('@/composables/link-check/useLinkCheck');
   return mod.useLinkCheckManager();
 }
+
+/** 额外拿到模块级 onCacheEvent 注册的那个 handler，用来手动派发跨窗口事件 */
+async function freshManagerWithCacheEvents() {
+  const manager = await freshManager();
+  const handler = onCacheEventMock.mock.calls.at(-1)?.[0] as (payload: {
+    type: string;
+    timestamp: number;
+    data?: unknown;
+  }) => void;
+  return { manager, emitCacheEvent: handler };
+}
+
 
 function makeRow(overrides: Partial<LinkCheckRow> = {}): LinkCheckRow {
   return {
@@ -176,6 +188,65 @@ describe('useLinkCheckManager.removeRowsByHistoryIds', () => {
     m.checkRows.value = initial;
     m.removeRowsByHistoryIds(['nonexistent']);
     expect(m.checkRows.value).toHaveLength(1);
+  });
+});
+
+// ─── 跨窗口事件：history-deleted ────────────────────────────────
+
+describe('useLinkCheckManager 响应 history-deleted', () => {
+  it('[BUG 回归] 收到 history-deleted 后立即摘掉对应行，不再留幽灵行', async () => {
+    // 以前只处理 cleared/updated，别处删了图，检测页 5 分钟内还显示它、还计入统计、还白发请求
+    const { manager, emitCacheEvent } = await freshManagerWithCacheEvents();
+    manager.checkRows.value = [
+      makeRow({ historyId: 'h1', serviceId: 'r2' }),
+      makeRow({ historyId: 'h1', serviceId: 'smms' }),
+      makeRow({ historyId: 'h2', serviceId: 'r2' }),
+    ];
+
+    emitCacheEvent({ type: 'history-deleted', timestamp: 1, data: { ids: ['h1'] } });
+
+    expect(manager.checkRows.value).toHaveLength(1);
+    expect(manager.checkRows.value[0].historyId).toBe('h2');
+    // 统计随 checkRows 响应式派生，行没了统计自然跟着掉
+    expect(manager.serviceStats.value.every((s) => s.serviceId === 'r2')).toBe(true);
+  });
+
+  it('ids 在 data 里而不是 payload 顶层——放错位置会静默失效', async () => {
+    const { manager, emitCacheEvent } = await freshManagerWithCacheEvents();
+    manager.checkRows.value = [makeRow({ historyId: 'h1' })];
+
+    emitCacheEvent({ type: 'history-deleted', timestamp: 1, data: { ids: ['h1'], source: 'w1' } });
+
+    expect(manager.checkRows.value).toHaveLength(0);
+  });
+
+  it('缺少 ids 时不动 checkRows（只让 TTL 缓存失效）', async () => {
+    const { manager, emitCacheEvent } = await freshManagerWithCacheEvents();
+    manager.checkRows.value = [makeRow({ historyId: 'h1' })];
+
+    emitCacheEvent({ type: 'history-deleted', timestamp: 1, data: {} });
+    emitCacheEvent({ type: 'history-deleted', timestamp: 2 });
+
+    expect(manager.checkRows.value).toHaveLength(1);
+  });
+
+  it('正在播放删除动画的行保留，交给 removeRowsByKeys 收尾', async () => {
+    // 本视图自己删的行会先 setFadingOutRows(380ms) 再 removeRowsByKeys；
+    // 事件抢先摘掉会让淡出动画直接跳帧
+    const { manager, emitCacheEvent } = await freshManagerWithCacheEvents();
+    manager.checkRows.value = [
+      makeRow({ historyId: 'h1', serviceId: 'r2' }),
+      makeRow({ historyId: 'h2', serviceId: 'r2' }),
+    ];
+    manager.setFadingOutRows([{ historyId: 'h1', serviceId: 'r2' }], true);
+
+    emitCacheEvent({ type: 'history-deleted', timestamp: 1, data: { ids: ['h1', 'h2'] } });
+
+    expect(manager.checkRows.value).toHaveLength(1);
+    expect(manager.checkRows.value[0].historyId).toBe('h1');
+
+    manager.removeRowsByKeys([{ historyId: 'h1', serviceId: 'r2' }]);
+    expect(manager.checkRows.value).toHaveLength(0);
   });
 });
 

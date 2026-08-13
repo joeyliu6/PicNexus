@@ -33,7 +33,7 @@ import {
   updateHistoryCheckStatus,
   exportCsv,
 } from './linkCheckPersistence';
-import { onCacheEvent } from '../../events/cacheEvents';
+import { onCacheEvent, type HistoryEventData } from '../../events/cacheEvents';
 
 const log = createLogger('LinkCheck');
 
@@ -63,6 +63,37 @@ let latestStartedBatchSession = 0;
 let activeRecheckCount = 0; // 防 onViewDeactivated 在单条复检动画期间误触发空闲释放
 let loadHistoryRowsPromise: Promise<void> | null = null;
 let nextClientBatchSeq = 0;
+
+/**
+ * 行索引 Map：key = `${historyId}::${serviceId}` → 数组下标，O(1) 查找。
+ *
+ * 挂在模块级而不是 composable 内：`checkRows` 本身是模块级单例，索引必须是同一份。
+ * 否则模块级的事件监听摘掉行之后，composable 实例里的索引还是旧的，
+ * `applyRecentResults` / `updateRow` 会按错位下标 patch 到别人的行上。
+ */
+let rowIndexMap = new Map<string, number>();
+
+/** 重建行索引（checkRows 被重新赋值时调用） */
+function rebuildRowIndex(): void {
+  rowIndexMap = new Map(
+    checkRows.value.map((r, i) => [linkCheckRowKey(r), i])
+  );
+}
+
+/**
+ * 按 historyId 移除 checkRows 中的行（整条历史记录被删后调用）
+ *
+ * 正在播放删除动画（`fadingOut`）的行会被保留：那是本视图自己发起的删除，
+ * 380ms 淡出结束后由 `removeRowsByKeys` 收尾。这里抢先摘掉会让过渡直接跳帧。
+ */
+function removeRowsByHistoryIds(ids: string[]): void {
+  if (ids.length === 0) return;
+  const idSet = new Set(ids);
+  const next = checkRows.value.filter((r) => !idSet.has(r.historyId) || r.fadingOut === true);
+  if (next.length === checkRows.value.length) return;
+  checkRows.value = next;
+  rebuildRowIndex();
+}
 
 class LinkCheckPersistenceError extends Error {
   constructor(message: string) {
@@ -127,10 +158,11 @@ const MIN_SKELETON_MS = 400;
 /** recheckSingle 各阶段动画时长（ms）：转圈最短/结果展示/行淡出/徽章淡出 */
 const RECHECK_MS = { SPIN_MIN: 400, RESULT_SHOW: 1000, ROW_FADE: 350, BADGE_FADE: 300 } as const;
 
-// 与历史事件同步——不响应会导致检测视图持有"幽灵行"（历史已清空/更新但检测页仍显示旧状态）
+// 与历史事件同步——不响应会导致检测视图持有"幽灵行"（历史已清空/删除/更新但检测页仍显示旧状态）
 onCacheEvent((p) => {
   if (p.type === 'history-cleared') {
     checkRows.value = [];
+    rebuildRowIndex();
     loadError.value = null;
     lastBatchResult.value = null;
     lastLoadTime = 0;
@@ -140,6 +172,13 @@ onCacheEvent((p) => {
       ++latestStartedBatchSession; // 触发 useLinkCheckManager 内部「被新批次替代」守卫
       void invoke('cancel_batch_check').catch(() => undefined);
     }
+  } else if (p.type === 'history-deleted') {
+    // 载荷形状：{ type, timestamp, data: { ids, source } }——ids 在 data 里，不在顶层。
+    // 不按 source 过滤本窗口自发事件：历史页与检测页同处一个窗口，
+    // 过滤掉就等于收不到「在历史页删图」这个最主要的场景。
+    const ids = (p.data as HistoryEventData | undefined)?.ids;
+    if (ids && ids.length > 0) removeRowsByHistoryIds(ids);
+    lastLoadTime = 0;
   } else if (p.type === 'history-updated') {
     lastLoadTime = 0;
   }
@@ -387,10 +426,13 @@ export function useLinkCheckManager() {
 
       // 即使被取消，也要处理已完成的结果并入库
       lastBatchResult.value = result;
-      applyResultsToRows(rows, result.results);
+      // 必须重新读 checkRows：检测期间 history-deleted 可能摘掉过行，
+      // 拿启动时的 rows 快照重新赋值会把已删的行「复活」
+      const currentRows = [...checkRows.value];
+      applyResultsToRows(currentRows, result.results);
       // 全量批量后清除单条重检遗留的排序锁定（否则旧 pinnedSortWeight 会锁死位置）
-      for (const row of rows) row.pinnedSortWeight = undefined;
-      checkRows.value = [...rows];
+      for (const row of currentRows) row.pinnedSortWeight = undefined;
+      checkRows.value = currentRows;
       rebuildRowIndex();
 
       // 写回 DB
@@ -707,16 +749,6 @@ export function useLinkCheckManager() {
    * 重新检测单条链接（入口 + 三个辅助函数）
    */
 
-  /** 行索引 Map：key = `${url}::${historyId}` → 数组下标，O(1) 查找 */
-  let rowIndexMap = new Map<string, number>();
-
-  /** 重建行索引（checkRows 被重新赋值时调用） */
-  function rebuildRowIndex(): void {
-    rowIndexMap = new Map(
-      checkRows.value.map((r, i) => [linkCheckRowKey(r), i])
-    );
-  }
-
   /** rAF 节流刷新（同帧内多次 mutate 合并为一次数组引用替换，对齐批量迁移的实现） */
   const checkRowsRefreshScheduler = createRafScheduler();
   function refreshCheckRowsRef(): void {
@@ -932,15 +964,6 @@ export function useLinkCheckManager() {
     } finally {
       activeRecheckCount--;
     }
-  }
-
-  /**
-   * 按 historyId 移除 checkRows 中的行（删除历史记录后调用）
-   */
-  function removeRowsByHistoryIds(ids: string[]): void {
-    const idSet = new Set(ids);
-    checkRows.value = checkRows.value.filter((r) => !idSet.has(r.historyId));
-    rebuildRowIndex();
   }
 
   /**
