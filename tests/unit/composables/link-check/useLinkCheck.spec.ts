@@ -1,4 +1,4 @@
-﻿// useLinkCheckManager 关键流程测试：
+// useLinkCheckManager 关键流程测试：
 // 单例 store 用 vi.resetModules + 动态 import 隔离每个 case
 // 覆盖：serviceStats 派生计算 / 行操作（删除/淡出）/ 并发守护
 
@@ -91,6 +91,17 @@ async function freshManagerWithCacheEvents() {
   return { manager, emitCacheEvent: handler };
 }
 
+/** 让 invoke 在被调用时挂住，返回「已开始」信号与手动放行函数 */
+function deferInvoke<T>(value: T) {
+  let started!: () => void;
+  let release!: () => void;
+  const startedPromise = new Promise<void>((resolve) => { started = resolve; });
+  const impl = () => new Promise<T>((resolve) => {
+    release = () => resolve(value);
+    started();
+  });
+  return { impl, startedPromise, release: () => release() };
+}
 
 function makeRow(overrides: Partial<LinkCheckRow> = {}): LinkCheckRow {
   return {
@@ -507,6 +518,89 @@ describe('useLinkCheckManager.checkSubset', () => {
 
     expect(result).toBeNull();
     expect(m.checkRows.value[0].checkResult).toBeUndefined();
+    expect(historyDBBatchUpdateLinkCheckStatusMock).not.toHaveBeenCalled();
+  });
+
+  it('[BUG 回归] 取消后续检：旧批次迟到的结果仍然落库，不再整批丢弃', async () => {
+    // 大批量检测中途点取消 → toast 引导「仅未检测」续检 → 旧批次的在途请求几十秒后才返回。
+    // 以前会因为「会话号变了」把旧批次已完成的几千条结果连同落库一起跳过，
+    // 重启后这批全部回退成「未检测」。
+    const m = await freshManager();
+    m.checkRows.value = [
+      makeRow({ historyId: 'h-old', serviceId: 'r2', url: 'https://cdn.example.com/old.jpg' }),
+      makeRow({ historyId: 'h-new', serviceId: 'r2', url: 'https://cdn.example.com/new.jpg' }),
+    ];
+
+    const oldBatch = deferInvoke({
+      results: [
+        {
+          link: 'https://cdn.example.com/old.jpg',
+          history_id: 'h-old', service_id: 'r2',
+          is_valid: true, error_type: 'success', browser_might_work: false,
+        },
+        // 这一条同时也在新批次里——新批次的结果更新，旧结果不该盖上去
+        {
+          link: 'https://cdn.example.com/new.jpg',
+          history_id: 'h-new', service_id: 'r2',
+          is_valid: false, error_type: 'http_4xx', browser_might_work: false,
+        },
+      ],
+      total: 2, valid: 1, invalid: 1, timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: true,
+    });
+
+    invokeMock
+      .mockImplementationOnce(oldBatch.impl)   // 旧批次：挂住不返回
+      .mockResolvedValueOnce(undefined)        // cancel_batch_check
+      .mockResolvedValueOnce({                 // 新批次：立刻返回
+        results: [], total: 0, valid: 0, invalid: 0,
+        timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: false,
+      });
+
+    const oldPromise = m.checkSubset({ targets: [{ historyId: 'h-old', serviceId: 'r2' }] });
+    await oldBatch.startedPromise;
+    await m.cancelCheck();
+    await m.checkSubset({ targets: [{ historyId: 'h-new', serviceId: 'r2' }] });
+
+    oldBatch.release();
+    expect(await oldPromise).toBeNull();
+
+    const persistedIds = historyDBBatchUpdateLinkCheckStatusMock.mock.calls
+      .flatMap(([updates]: [Array<{ id: string }>]) => updates.map((u) => u.id));
+    expect(persistedIds).toContain('h-old');
+    // 新批次已经接管了 h-new，旧批次更陈旧的结果必须避让
+    expect(persistedIds).not.toContain('h-new');
+  });
+
+  it('[BUG 回归] 检测途中历史被清空：结果整批作废，不写到已删记录上', async () => {
+    // 与「被新批次替代」相反——清空后结果指向的记录已经不存在，写库就是写幽灵数据
+    const { manager: m, emitCacheEvent } = await freshManagerWithCacheEvents();
+    m.checkRows.value = [
+      makeRow({ historyId: 'h1', serviceId: 'r2', url: 'https://cdn.example.com/a.jpg' }),
+    ];
+
+    const batch = deferInvoke({
+      results: [
+        {
+          link: 'https://cdn.example.com/a.jpg',
+          history_id: 'h1', service_id: 'r2',
+          is_valid: true, error_type: 'success', browser_might_work: false,
+        },
+      ],
+      total: 1, valid: 1, invalid: 0, timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: false,
+    });
+
+    invokeMock
+      .mockImplementationOnce(batch.impl)
+      .mockResolvedValueOnce(undefined); // history-cleared 分支里的 cancel_batch_check
+
+    const promise = m.checkSubset({ targets: [{ historyId: 'h1', serviceId: 'r2' }] });
+    await batch.startedPromise;
+
+    emitCacheEvent({ type: 'history-cleared', timestamp: 1 });
+    batch.release();
+
+    expect(await promise).toBeNull();
+    expect(m.checkRows.value).toHaveLength(0);
     expect(historyDBBatchUpdateLinkCheckStatusMock).not.toHaveBeenCalled();
   });
 

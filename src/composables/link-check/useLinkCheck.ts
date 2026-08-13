@@ -60,6 +60,17 @@ let checkSessionId = 0; // 防竞态：每次检测分配唯一 session，旧 fi
 // 仅在批量检测「启动」时递增（取消不改），用于判定旧批次结果是否已被新批次替代
 // checkSessionId 会被 cancel 递增，无法区分「只是取消」与「取消后又开新批次」两种场景
 let latestStartedBatchSession = 0;
+/**
+ * 最新启动批次覆盖的行键集合。
+ * 旧批次结果迟到落库时据此避让：属于新批次的行由新批次自己写，旧结果不去盖。
+ */
+let latestStartedBatchKeys = new Set<string>();
+/**
+ * 历史被清空的代数。与「被新批次替代」是两码事：清空后旧结果指向的记录已经不存在，
+ * 必须**整体作废**（写库会写到已删 historyId，回填 UI 会造出幽灵行）；
+ * 而「被新批次替代」的旧结果仍是真实数据，只是不该再动 UI。
+ */
+let historyClearedGeneration = 0;
 let activeRecheckCount = 0; // 防 onViewDeactivated 在单条复检动画期间误触发空闲释放
 let loadHistoryRowsPromise: Promise<void> | null = null;
 let nextClientBatchSeq = 0;
@@ -169,7 +180,7 @@ onCacheEvent((p) => {
     // 历史被清空时，必须丢弃正在跑的批量结果——否则 finally 里的 applyResultsToRows
     // 会把这一批 result 重新塞回空的 checkRows，造成「幽灵行」与对已删 historyId 的写库
     if (progressUnlisten) {
-      ++latestStartedBatchSession; // 触发 useLinkCheckManager 内部「被新批次替代」守卫
+      ++historyClearedGeneration; // 触发 useLinkCheckManager 内部「结果整体作废」守卫
       void invoke('cancel_batch_check').catch(() => undefined);
     }
   } else if (p.type === 'history-deleted') {
@@ -247,6 +258,32 @@ export function useLinkCheckManager() {
     } catch (err) {
       restoreRowsSnapshot(snapshot);
       throw new LinkCheckPersistenceError(errorMessage(err));
+    }
+  }
+
+  /**
+   * 旧批次（已被新批次替代）的收尾：结果照常落库，但不回填 UI。
+   *
+   * 为什么不能像以前那样整批丢弃：用户在大批量检测中途点「取消」，Rust 侧的在途请求
+   * 几十秒后才陆续返回；此时用户已按 toast 的引导点了「仅未检测」续检、会话号已经变了。
+   * 旧批次里**已经完成的那几千条**是真实检测结果，丢掉等于重启后全部回退成「未检测」。
+   *
+   * 为什么仍然不碰 UI：新批次正在跑，行状态归它管。而这些结果早就由 applyRecentResults
+   * 就地 patch 进 UI 了——所以这里写库反而是把 UI 与 DB 拉回一致，不是制造分叉。
+   *
+   * 属于新批次的行会被跳过：那些行由新批次自己写，旧结果更陈旧，不该盖上去。
+   */
+  async function persistSupersededResult(result: BatchCheckResult): Promise<void> {
+    const staleResults = result.results.filter(
+      (r) => !latestStartedBatchKeys.has(`${r.history_id}::${r.service_id}`),
+    );
+    if (staleResults.length === 0) return;
+    try {
+      await updateHistoryCheckStatus({ ...result, results: staleResults });
+      log.info(`[LinkCheck] 旧批次 ${staleResults.length} 条结果已补写入库`);
+    } catch (err) {
+      // 用户此刻正在看新批次的进度，旧批次落库失败不该弹 toast 打断他
+      log.error('旧批次结果落库失败', err);
     }
   }
 
@@ -367,6 +404,7 @@ export function useLinkCheckManager() {
 
     const mySession = ++checkSessionId;
     const myBatchSession = ++latestStartedBatchSession;
+    const myClearedGeneration = historyClearedGeneration;
     const myBatchId = createClientBatchId('monitor');
     isChecking.value = true;
     isPaused.value = false;
@@ -397,6 +435,8 @@ export function useLinkCheckManager() {
         return null;
       }
 
+      latestStartedBatchKeys = new Set(rows.map(linkCheckRowKey));
+
       // 监听进度事件（带 session 校验，防止旧会话数据污染新会话）
       clearProgressListener();
       progressUnlisten = await listen<BatchCheckProgress>(
@@ -418,9 +458,22 @@ export function useLinkCheckManager() {
         },
       });
 
-      // 被新批次替代：老批次返回的结果不再写入 UI/DB，避免与正在运行的新批次竞争
-      if (latestStartedBatchSession !== myBatchSession || !isResultForBatch(result, myBatchId)) {
-        log.info('[LinkCheck] 全量批量结果被新批次替代，已丢弃');
+      // 不是本批次的结果：数据归别的调用方处理，这里既不落库也不回填
+      if (!isResultForBatch(result, myBatchId)) {
+        log.info('[LinkCheck] 收到非本批次的全量结果，已丢弃');
+        return null;
+      }
+
+      // 历史已被清空：结果指向的记录都不存在了，整批作废
+      if (historyClearedGeneration !== myClearedGeneration) {
+        log.info('[LinkCheck] 历史已清空，全量批量结果整批作废');
+        return null;
+      }
+
+      // 被新批次替代：结果仍是真实检测数据，补写入库但不回填 UI（详见 persistSupersededResult）
+      if (latestStartedBatchSession !== myBatchSession) {
+        log.info('[LinkCheck] 全量批量结果被新批次替代，仅落库不回填 UI');
+        await persistSupersededResult(result);
         return null;
       }
 
@@ -665,11 +718,13 @@ export function useLinkCheckManager() {
 
     const mySession = ++checkSessionId;
     const myBatchSession = ++latestStartedBatchSession;
+    const myClearedGeneration = historyClearedGeneration;
     const myBatchId = createClientBatchId('monitor');
     isChecking.value = true;
     isPaused.value = false;
     progressSource.value = 'monitor';
     progress.value = null;
+    latestStartedBatchKeys = new Set(filtered.map(linkCheckRowKey));
 
     try {
       const requestItems: BatchCheckRequestItem[] = filtered.map((row) => ({
@@ -698,9 +753,22 @@ export function useLinkCheckManager() {
         },
       });
 
-      // 被新批次替代：老批次结果不再写入，避免污染新批次状态
-      if (latestStartedBatchSession !== myBatchSession || !isResultForBatch(result, myBatchId)) {
-        log.info('[LinkCheck] 子集批量结果被新批次替代，已丢弃');
+      // 不是本批次的结果：数据归别的调用方处理，这里既不落库也不回填
+      if (!isResultForBatch(result, myBatchId)) {
+        log.info('[LinkCheck] 收到非本批次的子集结果，已丢弃');
+        return null;
+      }
+
+      // 历史已被清空：结果指向的记录都不存在了，整批作废
+      if (historyClearedGeneration !== myClearedGeneration) {
+        log.info('[LinkCheck] 历史已清空，子集批量结果整批作废');
+        return null;
+      }
+
+      // 被新批次替代：结果仍是真实检测数据，补写入库但不回填 UI（详见 persistSupersededResult）
+      if (latestStartedBatchSession !== myBatchSession) {
+        log.info('[LinkCheck] 子集批量结果被新批次替代，仅落库不回填 UI');
+        await persistSupersededResult(result);
         return null;
       }
 
