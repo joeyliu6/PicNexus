@@ -16,6 +16,11 @@ use tauri::Emitter;
 /// 递归深度上限。Windows MAX_PATH 260 字符，深度超过这个量级基本是循环或恶意构造。
 const MAX_SCAN_DEPTH: usize = 64;
 
+/// 修复前原件的备份目录名。
+/// 必须与 JS 侧 `src/composables/md-rescue/useFileBackup.ts` 的 `BACKUP_DIR_NAME` 保持一致
+/// （由 `scripts/check-cross-language-constants.mjs` 守着）。
+const BACKUP_DIR_NAME: &str = ".picnexus-backup";
+
 /// Windows MAX_PATH。超过这个长度的路径必须保留 `\\?\` 前缀，否则 Win32 API 打不开。
 const WINDOWS_MAX_PATH: usize = 260;
 
@@ -178,6 +183,12 @@ fn scan_md_files(
         }
         let path = entry.path();
         if path.is_dir() && include_subfolders {
+            // 跳过自己建的备份目录：否则下一轮扫描会把"修复前的原件"当正常文档再修一遍，
+            // 失效数虚高、备份被改写、还会产生嵌套备份
+            if path.file_name().and_then(|n| n.to_str()) == Some(BACKUP_DIR_NAME) {
+                log::debug!("[MdScanner] 跳过备份目录: {:?}", path);
+                continue;
+            }
             sub_dirs.push(path);
         } else if path.is_file() {
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
@@ -817,6 +828,34 @@ mod tests {
         );
         results.sort();
         results
+    }
+
+    #[test]
+    fn scan_skips_backup_directory() {
+        let temp = TempDirGuard::new("skip-backup");
+        temp.write("README.md", "# root");
+        temp.write("sub/nested.md", "# nested");
+        temp.write(
+            &format!("{BACKUP_DIR_NAME}/20260813_120000/README.md"),
+            "# stale backup",
+        );
+
+        let found = collect_scan(&temp.path, true);
+
+        assert_eq!(found.len(), 2, "备份目录里的文件不应被扫到: {found:?}");
+        assert!(found.iter().all(|p| !p.contains(BACKUP_DIR_NAME)));
+    }
+
+    #[test]
+    fn scan_skips_backup_directory_nested_in_subfolder() {
+        let temp = TempDirGuard::new("skip-nested-backup");
+        temp.write("sub/keep.md", "# keep");
+        temp.write(&format!("sub/{BACKUP_DIR_NAME}/old.md"), "# stale");
+
+        let found = collect_scan(&temp.path, true);
+
+        assert_eq!(found.len(), 1);
+        assert!(found[0].ends_with("keep.md"));
     }
 
     #[cfg(windows)]

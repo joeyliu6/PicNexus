@@ -36,6 +36,13 @@ const log = createLogger('MdRescue:Backup');
  */
 const UNDO_COPY_CONCURRENCY = 8;
 
+/**
+ * 修复前原件的备份目录名。
+ * 必须与 Rust 侧 `src-tauri/src/commands/md_scanner.rs` 的 `BACKUP_DIR_NAME` 保持一致
+ * （由 `scripts/check-cross-language-constants.mjs` 守着）：Rust 扫描要靠它跳过备份目录。
+ */
+const BACKUP_DIR_NAME = '.picnexus-backup';
+
 function formatFailureReason(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -149,7 +156,7 @@ export async function executeReplace(unrescuableCount: number): Promise<{
       return { success: 0, skipped: 0, failed: 1 };
     }
 
-    const backupDir = await join(backupRoot, '.picnexus-backup', ts);
+    const backupDir = await join(backupRoot, BACKUP_DIR_NAME, ts);
     await mkdir(backupDir, { recursive: true });
 
     let filesProcessed = 0;
@@ -316,7 +323,7 @@ export async function undoReplace(resetFn: () => void): Promise<void> {
  */
 export async function cleanupOldBackups(rootDir: string, keepCount: number): Promise<void> {
   try {
-    const backupBase = await join(rootDir, '.picnexus-backup');
+    const backupBase = await join(rootDir, BACKUP_DIR_NAME);
     const entries = await readDir(backupBase);
     const dirs = entries
       .filter((e) => e.isDirectory && /^\d{8}_\d{6}$/.test(e.name))
