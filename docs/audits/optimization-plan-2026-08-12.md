@@ -253,3 +253,71 @@
 - `selectedIds` 的幽灵 key 没有剪枝（剪枝本身是 O(n)，且会改变"选择跨提交保留"的现有行为）。本批只保证 `isAllSelected` 不因此误判。
 
 **未验**（需跑起 GUI）：2-2 在真实滚动下的帧率收益、2-5 的拖拽手感与 hover 气泡 1 帧延迟、2-4 在数万行链接检测数据下的实际表现。
+
+---
+
+### 2026-08-13 · 第三批（CI / 构建 / 测试守卫）· 已完成
+
+4 条全部落地，无跳过项（3-1 的 Rust 缓存半边按下述理由**有意不做**）。门禁：`npm run lint` 通过、`npm run typecheck` 通过、`npm run test:unit` **193 文件 / 2326 passed / 0 failed**、`npm run ci:prepush` **首次运行即通过**（未触发已知的覆盖率偶发误报）。
+
+| 提交 | 覆盖条目 | 主要文件 |
+|------|---------|---------|
+| `c326ece` | 3-1 | `.github/workflows/release.yml` |
+| `f768ac7` | 3-2 | `package.json`、`.github/workflows/{ci,release}.yml`、`docs/reference/guides/testing-guide.md` |
+| `9ee9879` | 3-3 | `scripts/check-critical-coverage.mjs` |
+| `6ddb0e6` | 3-4 | `package.json`、`package-lock.json`、`vite.config.ts` |
+
+计划建议 3 个提交（缓存 / 去重 / 覆盖率），但未给 3-4 安排位置，故拆为 4 个。
+
+**与原计划的三处偏离**（执行前已与用户确认）：
+
+1. **3-2 第 1 条：删 `tsc` 的同时必须给 release 补类型闸门**。计划的 ⚠️ 写「CI 和 prepush 都先跑 typecheck，纯重复」——对 `ci.yml`（typecheck 在 build 之前）和 `ci:prepush` 成立，但 **`release.yml` 全文没有任何 typecheck 步骤**，发版路径唯一的类型检查就是 `tauri.conf.json` 的 `beforeBuildCommand: npm run build` 里那个 `tsc`。字面删除会让发版构建彻底不做类型检查。已在 release job 的 `npm ci` 之后、lint 之前插入 `Type check before release`。副作用是好的：发版路径的类型检查从 `tsc` 升级为 `vue-tsc`，多覆盖 `.vue` 的 props/emits/模板。
+2. **3-2 第 2 条：不整步删 `test:unit`，改为加 `if` 条件**。`ci.yml` 的 `test:unit` 无 `if:`、三平台都跑，而 `test:coverage` 带 `if: matrix.os == 'ubuntu-latest'`——**重复只发生在 ubuntu**。引入两者的提交 `2f1b608`（"ci: strengthen test gates"）是同时加的、故意不对称。整步删会让 Windows / macOS 不再跑任何单元测试（对以 Windows 为主要目标的桌面应用尤其糟）。已改为 `if: matrix.os != 'ubuntu-latest'`，每平台恰好跑一遍。
+3. **3-1 的 Rust 缓存有意不做**。`release.yml` 只由 `on.push.tags: v*` 触发。GitHub 官方文档明确：「为 tag `release-a` 创建的缓存不能被 tag `release-b` 的运行读取」；而 `Swatinem/rust-cache` 默认 `add-job-id-key: true` 把 job id 编进 key，`release` job 的 key ≠ `ci.yml` 中 `test` job 的 key，所以也读不到 main 上已有的缓存。照抄一份过去 = 永远 0 命中，还会往仓库 10GB 缓存配额里塞 tag 作用域的死缓存，按 LRU 挤掉 main 上有用的那些。npm 缓存半边无此问题（`setup-node` 的 cache key 只含平台 + 架构 + lockfile 哈希，不含 job），能命中 `ci.yml` 在 main 上存下的缓存，收益是实的——故只补 npm 缓存。
+
+**计划文档勘误**（执行中核实，共 5 处）：
+
+- **3-3 的覆盖率数字并未过期**。`coverage/coverage-summary.json` 的 LastWriteTime 是 `2026-08-13 10:32:39`，晚于当时的 HEAD `e01a4f1`（10:26:28）且工作区干净，已包含第二批新增的 11 条测试。重跑 `test:coverage` 后确认：8.44% / 8.42% / 3.8% 三个数字与文档完全一致（新测试没碰这三个文件），total 为 lines 83.44 / functions 76.18 / branches 81.36。
+- **守卫脚本有两个静默通过的洞**。`check-critical-coverage.mjs` 原第 45-46 行：某指标 key 缺失时 `实际值 < undefined` 恒为 `false` → 该指标**完全不检查且无任何提示**。新增条目若漏写一项，棘轮等于没装。已加名单自检（缺项直接报错退出，超出计划字面的加固）。另一个洞是 `:35` 的 `endsWith` + `.find()` 取首个匹配、无唯一性校验；已实测当前 9 个目标各命中恰好 1 条 coverage 条目，暂无歧义，未改。
+- **三个新条目的 `branches` 现值 100% 是假象**，分母分别只有 2 / 1 / 0。设成接近 100 的阈值会在真补测试、分母变大时立刻误报，故一律设 0，并在脚本注释里写明原因。
+- **`vitest.config.ts` 拦不住这三个洼地**。它已有全局阈值 + 6 组 glob 阈值，其中 `src/{utils,services,core,composables,uploaders}/**` 要求 lines 70——但 vitest 的 glob 阈值是**聚合**比较，靠组内高覆盖文件把均值拉过线。这正是逐文件的 `check-critical-coverage.mjs` 存在的意义。本批**未动** `vitest.config.ts`（它是已知覆盖率偶发误报的来源，无必要不碰）。
+- **`useTimelineDragAndSkeleton` 被 `vi.mock` 挡着**。`tests/unit/components/timelineComponents.spec.ts:194` mock 掉了整个模块，3.8% 的 10/263 行只是 mock factory 求值的残留，functions 0/1 意味着真实函数体一次都没跑过。**将来补测试必须写在别的 spec 文件里直连真实实现**，否则覆盖率不会动。
+
+**顺手做了、属同类问题**：`ci.yml` 的步骤名 `Build (tsc + vite)` 改为 `Build (vite)`（否则名字与实际命令不符）；`docs/reference/guides/testing-guide.md:119`、`:150` 同步 CI 步骤清单（原文写「前端：typecheck、lint、build、test:unit」已不准确）。
+
+**3-3 阈值明细**（存量 6 个 = 当前值 − 5pp 向下取整；新增 3 个 = 略低于当前值，留 1~3pp 余量以免文件长大时因分母变化误报）：
+
+| 文件 | 当前 lines/stmts/funcs/branches | 新阈值 |
+|------|------|------|
+| `useGlobalShortcut.ts` | 86.73 / 86.73 / 100 / 61.03 | 81 / 81 / 95 / 56 |
+| `useClipboardImage.ts` | 97.84 / 97.84 / 100 / 82.14 | 92 / 92 / 95 / 77 |
+| `useCompressionTask.ts` | 100 / 100 / 100 / 67.64 | 95 / 95 / 95 / 62 |
+| `useImageLoadManager.ts` | 96.24 / 96.24 / 100 / 88.23 | 91 / 91 / 95 / 83 |
+| `NamiUploader.ts` | 97.87 / 97.87 / 100 / 88.23 | 92 / 92 / 95 / 83 |
+| `ImgurUploader.ts` | 100 / 100 / 100 / 94.11 | 95 / 95 / 95 / 89 |
+| `UploadQueue.ts`（新） | 8.44 / 8.44 / 10 / 100(2÷2) | 7 / 7 / 5 / **0** |
+| `useHistoryResultOps.ts`（新） | 8.42 / 8.42 / 20 / 100(1÷1) | 7 / 7 / 15 / **0** |
+| `useTimelineDragAndSkeleton.ts`（新） | 3.8 / 3.8 / 0 / 100(0÷0) | 3 / 3 / 0 / **0** |
+
+> ⚠️ 本批把这 6 个文件的阈值从统一的 35 提到 81~95，覆盖率偶发误报时的敏感面比以前大。补救方式不变：**先原地重跑一次**，不改代码、不 `--no-verify`。
+
+**已在本地验证的部分**：
+
+- `npm run build` 去掉 `tsc` 后单独跑通，4 个入口（`index` / `login-webview` / `login-titlebar` / `tray-menu`）的 HTML 与 JS 均正常产出，耗时 4.62s。
+- 守卫脚本三种行为实测：正常通过（exit 0）、阈值超过实际值时拦住并打印差值（exit 1）、漏写指标时报「阈值配置不完整」（exit 1）。
+- 4 个 workflow YAML 用本地 `yaml` 包解析通过；`ci.yml` 的 `test` job 步骤序列确认 `test:unit`（`if: matrix.os != 'ubuntu-latest'`）与 `test:coverage`（`if: matrix.os == 'ubuntu-latest'`）互斥；`release.yml` 的 `Type check before release` 落在 `npm ci`（step 4）之后、`tauri-action`（step 13）之前。
+- `package-lock.json` 的 diff 经逐行核对：158 行新增 `dev` 标记 + 17 行 `devOptional` → `dev` + 1 处 `@vitejs/plugin-vue` 归类移动，**零** version / resolved / integrity 变更，无包新增或删除。
+
+**未验 —— 需下次 push 后看 Actions 才能确认**（本批改的是 CI 配置，本地门禁验不出真效果）：
+
+- 3-1 的 npm 缓存是否真命中（依赖 main 上 `ci.yml` 已为对应平台存下 `setup-node` 缓存）。
+- 3-2 的 `if: matrix.os != 'ubuntu-latest'` 在真实矩阵里是否按预期只在 win/mac 跑、ubuntu 只跑 coverage。
+- 3-2 给 `release.yml` 新增的 `Type check before release` **要真打一个 tag 才会执行到**，本地只能靠 `npm run typecheck` 等价验证（已通过）。
+- 本地无 `actionlint`，YAML 检查只到语法层，不校验 Actions 语义（表达式求值、step 依赖）。
+
+**明确未做**（留待另立条目）：
+
+- 给 `UploadQueue.ts` / `useHistoryResultOps.ts` / `useTimelineDragAndSkeleton.ts` 补真实单测——即暂缓项 A，本批只装防回退棘轮。
+- 守卫脚本 `endsWith` 匹配的唯一性校验未加（当前无歧义，但 `src/components/UploadQueue.vue` 与 `src/core/UploadQueue.ts` 同名不同扩展，将来若出现同名 `.ts` 会静默取错文件）。
+- `vitest.config.ts` 的 glob 聚合阈值未改（见勘误第 4 条）。
+- `vite.config.ts` 的 `server` 段有一段 3 空格缩进的历史异常（与文件其余 2 空格不一致），属无关改动未动。
