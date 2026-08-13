@@ -23,13 +23,18 @@ const thresholds = {
   'src/composables/useImageLoadManager.ts': { lines: 91, statements: 91, functions: 95, branches: 83 },
   'src/uploaders/nami/NamiUploader.ts': { lines: 92, statements: 92, functions: 95, branches: 83 },
   'src/uploaders/imgur/ImgurUploader.ts': { lines: 95, statements: 95, functions: 95, branches: 89 },
+  // 2026-08-13 补完 UploadQueueManager 单测后从下面的「低覆盖」组毕业：
+  // 8.44/8.44/10/100(分母 2) → 100/100/100/97.22(分母 108)。
+  // branches 分母从 2 涨到 108，旧的 100% 是假象，这里按实测新值重新定线。
+  // 剩余 3 个未覆盖分支是取不到的防御性兜底（UploadQueue.ts:311 的 latestItem 三元、
+  // :395-397 的 weiboProgress/r2Progress `?? 0`），不为凑数造畸形数据。
+  'src/core/UploadQueue.ts': { lines: 95, statements: 95, functions: 95, branches: 92 },
 
   // 低覆盖核心文件：阈值略低于当前值，只防继续下滑，补测试是独立任务。
   //
-  // ⚠️ branches 一律设 0：这三个文件的 branches 现值都是 100%，但分母分别只有
-  // 2 / 1 / 0——那是「几乎没有分支被 v8 记录到」的假象，不是真覆盖。一旦真补了
+  // ⚠️ branches 一律设 0：这两个文件的 branches 现值都是 100%，但分母分别只有
+  // 1 / 0——那是「几乎没有分支被 v8 记录到」的假象，不是真覆盖。一旦真补了
   // 测试、分母变大，branches 百分比反而会掉，任何接近 100 的阈值都会立刻误报。
-  'src/core/UploadQueue.ts': { lines: 7, statements: 7, functions: 5, branches: 0 },
   'src/composables/history/useHistoryResultOps.ts': { lines: 7, statements: 7, functions: 15, branches: 0 },
   'src/composables/timeline/useTimelineDragAndSkeleton.ts': { lines: 3, statements: 3, functions: 0, branches: 0 },
 };
