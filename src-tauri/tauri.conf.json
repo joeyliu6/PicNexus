@@ -4,7 +4,7 @@
   "identifier": "us.picnex.app",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run typecheck && npm run build",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
