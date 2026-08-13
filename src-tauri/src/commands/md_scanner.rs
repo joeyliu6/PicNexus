@@ -16,6 +16,9 @@ use tauri::Emitter;
 /// 递归深度上限。Windows MAX_PATH 260 字符，深度超过这个量级基本是循环或恶意构造。
 const MAX_SCAN_DEPTH: usize = 64;
 
+/// Windows MAX_PATH。超过这个长度的路径必须保留 `\\?\` 前缀，否则 Win32 API 打不开。
+const WINDOWS_MAX_PATH: usize = 260;
+
 // 预编译正则（全局只编译一次）
 static HTML_IMG_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"<img[^>]+src=["']([^"']+)["'][^>]*/?\s*>"#).unwrap());
@@ -94,6 +97,44 @@ const MD_EXTENSIONS: &[&str] = &[".md", ".markdown"];
 fn is_markdown_file(name: &str) -> bool {
     let lower = name.to_lowercase();
     MD_EXTENSIONS.iter().any(|ext| lower.ends_with(ext))
+}
+
+/// `rest` 是否形如 `C:` / `C:\...`（verbatim 前缀后的盘符路径）
+fn is_drive_rooted(rest: &str) -> bool {
+    let bytes = rest.as_bytes();
+    if bytes.len() < 2 || !bytes[0].is_ascii_alphabetic() || bytes[1] != b':' {
+        return false;
+    }
+    bytes.len() == 2 || bytes[2] == b'\\'
+}
+
+/// 剥掉 Windows verbatim 路径前缀（`\\?\C:\x` → `C:\x`，`\\?\UNC\srv\share` → `\\srv\share`）。
+///
+/// Why：`std::fs::canonicalize` 在 Windows 上返回 verbatim 路径，而文件选择对话框返回的是普通路径。
+/// 两者拼不到一起时，前端 `computeRelativePath` 前缀比对必然落空，备份会平铺进同一层目录，
+/// 不同子目录下的同名文件互相覆盖，撤销时造成永久数据丢失。
+/// 一处剥离，所有消费端受益。
+///
+/// 保守起见，下列情况原样返回（剥掉反而会让路径不可用）：
+/// - `\\?\Volume{GUID}\...` 之类非盘符 verbatim 路径
+/// - 剥离后长度触及 MAX_PATH
+fn strip_verbatim_prefix(path: &Path) -> PathBuf {
+    let raw = path.to_string_lossy();
+    let stripped = if let Some(rest) = raw.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{}", rest)
+    } else if let Some(rest) = raw.strip_prefix(r"\\?\") {
+        if !is_drive_rooted(rest) {
+            return path.to_path_buf();
+        }
+        rest.to_string()
+    } else {
+        return path.to_path_buf();
+    };
+
+    if stripped.len() >= WINDOWS_MAX_PATH {
+        return path.to_path_buf();
+    }
+    PathBuf::from(stripped)
 }
 
 /// 递归扫描目录，收集所有 MD 文件路径
@@ -489,15 +530,18 @@ pub async fn scan_md_folder(
     }
 
     // 阶段 1：目录扫描（同步 I/O，在 blocking 线程中执行）
-    let dir_clone = canonical.to_string_lossy().to_string();
+    // 走查用剥掉 verbatim 前缀的根：子文件路径都由这个根拼出来，
+    // 一处剥离即可让所有返回给前端的路径与文件选择对话框的形态一致
+    let dir_clone = strip_verbatim_prefix(&canonical).to_string_lossy().to_string();
     let cancel_clone = cancel.clone();
     let window_clone = window.clone();
     let scan_result = tokio::task::spawn_blocking(move || {
         let mut paths = Vec::new();
         let mut skipped = Vec::new();
         let mut visited: HashSet<PathBuf> = HashSet::new();
-        // 入口目录已在外层 canonicalize 过，先塞入 visited 防自环
-        visited.insert(PathBuf::from(&dir_clone));
+        // 入口目录先塞入 visited 防自环。这里必须放 canonicalize 的原始形态，
+        // 因为子目录查重比对的也是 canonicalize 结果（同为 verbatim），放剥离形态会比不上
+        visited.insert(canonical);
         scan_md_files(
             Path::new(&dir_clone),
             include_subfolders,
@@ -663,6 +707,140 @@ mod tests {
     fn is_markdown_file_rejects_similar_but_wrong_extensions() {
         assert!(!is_markdown_file("file.mdx"));
         assert!(!is_markdown_file("file.md.bak"));
+    }
+
+    // ---------- strip_verbatim_prefix ----------
+
+    #[test]
+    fn strip_verbatim_prefix_removes_drive_prefix() {
+        assert_eq!(
+            strip_verbatim_prefix(Path::new(r"\\?\C:\docs\a\README.md")),
+            PathBuf::from(r"C:\docs\a\README.md")
+        );
+        assert_eq!(
+            strip_verbatim_prefix(Path::new(r"\\?\C:\")),
+            PathBuf::from(r"C:\")
+        );
+    }
+
+    #[test]
+    fn strip_verbatim_prefix_rewrites_unc_prefix() {
+        assert_eq!(
+            strip_verbatim_prefix(Path::new(r"\\?\UNC\server\share\notes.md")),
+            PathBuf::from(r"\\server\share\notes.md")
+        );
+    }
+
+    #[test]
+    fn strip_verbatim_prefix_leaves_plain_paths_untouched() {
+        assert_eq!(
+            strip_verbatim_prefix(Path::new(r"C:\docs\a.md")),
+            PathBuf::from(r"C:\docs\a.md")
+        );
+        assert_eq!(
+            strip_verbatim_prefix(Path::new("/home/user/a.md")),
+            PathBuf::from("/home/user/a.md")
+        );
+    }
+
+    #[test]
+    fn strip_verbatim_prefix_keeps_non_drive_verbatim_paths() {
+        // \\?\Volume{GUID}\ 剥掉前缀就不再是合法路径，必须原样返回
+        let volume = r"\\?\Volume{2eca078d-5cbc-43d3-aff8-7e8511f60d0e}\docs\a.md";
+        assert_eq!(strip_verbatim_prefix(Path::new(volume)), PathBuf::from(volume));
+    }
+
+    #[test]
+    fn strip_verbatim_prefix_keeps_prefix_when_over_max_path() {
+        // 超长路径剥掉前缀后 Win32 API 打不开，宁可保留 verbatim（前端有 hash 兜底）
+        let long = format!(r"\\?\C:\{}\a.md", "x".repeat(WINDOWS_MAX_PATH));
+        assert_eq!(strip_verbatim_prefix(Path::new(&long)), PathBuf::from(&long));
+    }
+
+    #[test]
+    fn is_drive_rooted_accepts_only_drive_letter_forms() {
+        assert!(is_drive_rooted(r"C:\docs"));
+        assert!(is_drive_rooted("C:"));
+        assert!(!is_drive_rooted("C:docs")); // 盘符相对路径
+        assert!(!is_drive_rooted(r"Volume{abc}\docs"));
+        assert!(!is_drive_rooted(""));
+    }
+
+    // ---------- scan_md_files ----------
+
+    struct TempDirGuard {
+        path: PathBuf,
+    }
+
+    impl TempDirGuard {
+        fn new(name: &str) -> Self {
+            let unique = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock should be after epoch")
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "picnexus-md-scanner-{name}-{}-{unique}",
+                std::process::id()
+            ));
+            std::fs::create_dir_all(&path).expect("temp dir should be writable");
+            Self { path }
+        }
+
+        fn write(&self, relative: &str, content: &str) {
+            let target = self.path.join(relative);
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent).expect("parent dir should be writable");
+            }
+            std::fs::write(target, content).expect("file should be writable");
+        }
+    }
+
+    impl Drop for TempDirGuard {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn collect_scan(dir: &Path, include_subfolders: bool) -> Vec<String> {
+        let cancel = AtomicBool::new(false);
+        let mut results = Vec::new();
+        let mut skipped = Vec::new();
+        let mut visited: HashSet<PathBuf> = HashSet::new();
+        scan_md_files(
+            dir,
+            include_subfolders,
+            &cancel,
+            &mut results,
+            &mut skipped,
+            &mut visited,
+            0,
+        );
+        results.sort();
+        results
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn scan_root_from_canonicalize_has_no_verbatim_prefix() {
+        let temp = TempDirGuard::new("verbatim-root");
+        temp.write("a.md", "# a");
+        temp.write("nested/b.md", "# b");
+
+        let canonical = std::fs::canonicalize(&temp.path).expect("temp dir should canonicalize");
+        assert!(
+            canonical.to_string_lossy().starts_with(r"\\?\"),
+            "前提校验：Windows canonicalize 应返回 verbatim 路径"
+        );
+
+        let root = strip_verbatim_prefix(&canonical);
+        assert!(!root.to_string_lossy().starts_with(r"\\?\"));
+
+        let found = collect_scan(&root, true);
+        assert_eq!(found.len(), 2);
+        assert!(
+            found.iter().all(|p| !p.starts_with(r"\\?\")),
+            "返回前端的文件路径不应含 verbatim 前缀: {found:?}"
+        );
     }
 
     // ---------- detect_context ----------

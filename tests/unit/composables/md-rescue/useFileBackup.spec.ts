@@ -206,6 +206,51 @@ describe('useFileBackup', () => {
     expect(phase.value).toBe('done');
   });
 
+  it('文件夹模式下 Windows verbatim 路径仍能算出相对路径，同名文件备份互不覆盖', async () => {
+    const fs = getFsMocks();
+    mode.value = 'folder';
+    // Rust 保留 verbatim 前缀的极端情况（超长路径），前端第二道防线要顶住
+    folderPath.value = '\\\\?\\C:\\docs';
+    mdFiles.value = ['\\\\?\\C:\\docs\\a\\README.md', '\\\\?\\C:\\docs\\b\\README.md'];
+    imageLinks.value = [
+      makeLink('https://dead.example/a.png', '\\\\?\\C:\\docs\\a\\README.md', 'https://cdn.example/a.png'),
+      makeLink('https://dead.example/b.png', '\\\\?\\C:\\docs\\b\\README.md', 'https://cdn.example/b.png'),
+    ];
+    fs.readTextFile.mockResolvedValue('![](https://dead.example/a.png)');
+
+    const result = await executeReplace(0);
+
+    expect(result.failed).toBe(0);
+    const backups = fs.copyFile.mock.calls.map((call) => call[1] as string);
+    expect(backups).toHaveLength(2);
+    expect(new Set(backups).size).toBe(2);
+    expect(backups[0]).toMatch(/\/a\/README\.md$/);
+    expect(backups[1]).toMatch(/\/b\/README\.md$/);
+  });
+
+  it('相对路径算不出来时退回 hash 前缀而非裸 basename，避免同名互相覆盖', async () => {
+    const fs = getFsMocks();
+    mode.value = 'folder';
+    // folderPath 与文件路径前缀对不上（如用户中途换盘符 / 路径形态异常）
+    folderPath.value = 'D:/other-root';
+    mdFiles.value = ['C:/docs/a/README.md', 'C:/docs/b/README.md'];
+    imageLinks.value = [
+      makeLink('https://dead.example/a.png', 'C:/docs/a/README.md', 'https://cdn.example/a.png'),
+      makeLink('https://dead.example/b.png', 'C:/docs/b/README.md', 'https://cdn.example/b.png'),
+    ];
+    fs.readTextFile.mockResolvedValue('![](https://dead.example/a.png)');
+
+    const result = await executeReplace(0);
+
+    expect(result.failed).toBe(0);
+    const backups = fs.copyFile.mock.calls.map((call) => call[1] as string);
+    expect(backups).toHaveLength(2);
+    expect(new Set(backups).size).toBe(2);
+    for (const backup of backups) {
+      expect(backup).toMatch(/\/[0-9a-f]{8}_README\.md$/);
+    }
+  });
+
   it('undoReplace 全部恢复成功时清除 receipt 并执行 reset', async () => {
     const fs = getFsMocks();
     const resetFn = vi.fn();

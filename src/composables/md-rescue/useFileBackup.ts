@@ -41,7 +41,19 @@ function formatFailureReason(err: unknown): string {
 }
 
 /**
- * 计算文件相对于文件夹的路径。
+ * 剥掉 Windows verbatim 路径前缀（`\\?\C:\x` → `C:\x`，`\\?\UNC\srv\share` → `\\srv\share`）。
+ * Rust 侧已在 `scan_md_folder` 统一剥离，这里是第二道防线：超过 MAX_PATH 的路径 Rust 会
+ * 保留前缀，且旧版本/其它入口仍可能带进来。
+ */
+function stripVerbatimPrefix(path: string): string {
+  if (path.startsWith('\\\\?\\UNC\\')) return '\\\\' + path.slice(8);
+  if (path.startsWith('\\\\?\\')) return path.slice(4);
+  return path;
+}
+
+/**
+ * 计算文件相对于文件夹的路径，算不出时返回 null 交给调用方走防撞兜底。
+ *
  * Windows 上 selectFolder 与 Rust canonicalize 可能返回不同大小写（如 `C:\Users\Foo`
  * vs `c:\users\foo`），直接 string.replace 会匹配失败导致 relativePath = 完整绝对路径，
  * 进而 backup 拼出含驱动器盘符的非法目录名。这里做大小写不敏感前缀比对。
@@ -49,15 +61,15 @@ function formatFailureReason(err: unknown): string {
  * Linux 大小写敏感 FS 上不会出现伪命中：file 路径全部来自扫描同一 folder 子树，
  * 与 folder 的大小写天然一致。
  */
-function computeRelativePath(folder: string, file: string): string {
-  const normFolder = folder.replace(/\\/g, '/').replace(/\/+$/, '');
-  const normFile = file.replace(/\\/g, '/');
+function computeRelativePath(folder: string, file: string): string | null {
+  const normFolder = stripVerbatimPrefix(folder).replace(/\\/g, '/').replace(/\/+$/, '');
+  const normFile = stripVerbatimPrefix(file).replace(/\\/g, '/');
+  if (!normFolder) return null;
   const folderPrefix = normFolder.toLowerCase() + '/';
   if (normFile.toLowerCase().startsWith(folderPrefix)) {
     return normFile.slice(normFolder.length + 1);
   }
-  // 兜底：file 不在 folder 下时退化为 basename，避免备份目录构造异常
-  return normFile.split('/').pop() || normFile;
+  return null;
 }
 
 /** 对路径计算短 hash（8 字符），用于多文件拖入时做备份文件名防撞前缀 */
@@ -149,18 +161,24 @@ export async function executeReplace(unrescuableCount: number): Promise<{
       try {
         const content = await readTextFile(file);
 
+        const relativePath = mode.value === 'folder' && folderPath.value
+          ? computeRelativePath(folderPath.value, file)
+          : null;
+
         let bakPath: string;
-        if (mode.value === 'folder' && folderPath.value) {
-          const relativePath = computeRelativePath(folderPath.value, file);
+        if (relativePath) {
           bakPath = await join(backupDir, relativePath);
           const bakParent = await dirname(bakPath);
           await mkdir(bakParent, { recursive: true });
-        } else if (mdFiles.value.length > 1) {
-          // 多文件拖入：不同目录下的同名文件不能共用 basename，否则 undo 会互相覆盖
-          // 用 path hash 前缀 + basename 保留可读性
+        } else if (mode.value === 'folder' || mdFiles.value.length > 1) {
+          // 多文件拖入，或文件夹模式下相对路径算不出来（路径形态对不上）：
+          // 不同目录下的同名文件不能共用 basename，否则备份互相顶掉、
+          // undo 会把同一份内容写进两个文件，其中一个的原始内容永久丢失。
+          // 用 path hash 前缀 + basename，既防撞又保留可读性
           const fileName = await basename(file);
           bakPath = await join(backupDir, `${hashPath(file)}_${fileName}`);
         } else {
+          // 单文件模式：只有一个文件，basename 不可能撞
           const fileName = await basename(file);
           bakPath = await join(backupDir, fileName);
         }
