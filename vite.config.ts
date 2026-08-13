@@ -10,7 +10,9 @@ export default defineConfig({
    // Tauri 期望固定端口
    server: {
      port: 1420,
-     strictPort: false,
+     // 必须固定 1420：tauri.conf.json 的 devUrl 硬编码了该端口。
+     // 端口被占时宁可直接报错，也不要让 vite 换端口导致 tauri dev 白屏。
+     strictPort: true,
      watch: {
        // 告诉 vite 忽略 `src-tauri` 目录的变化
        ignored: ["**/src-tauri/**"],
