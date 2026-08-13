@@ -16,6 +16,22 @@ const mockState = vi.hoisted(() => ({
   syncWebDAVUploaders: vi.fn(),
 }));
 
+// WebDAV 备份密码的加解密。
+//
+// ⚠️ 这里 mock 的必须是**真实存在**的模块导出。此前 spec 用 setupInvokeResponses
+// 伪造了 `encrypt_webdav_password` / `decrypt_webdav_password` 两个 Tauri 命令，
+// 而它们在 Rust 侧从未实现——测试自己发明了一个后端，于是单测全绿、生产每次
+// 保存都把备份密码静默清空。mock 只能替换真实依赖，不能凭空发明一个。
+vi.mock('@/utils/webdav', () => ({
+  WebDAVClient: {
+    encryptPassword: vi.fn(async (password: string) => `encrypted:${password}`),
+    decryptPassword: vi.fn(async (encrypted: string) => {
+      if (encrypted === 'bad-cipher') throw new Error('decrypt failed');
+      return `plain:${encrypted}`;
+    }),
+  },
+}));
+
 vi.mock('@/store/instances', () => ({
   configStore: {
     get: mockState.configStoreGet,
@@ -80,10 +96,6 @@ describe('useSettingsForm', () => {
     vi.clearAllMocks();
     setupInvokeResponses({
       'plugin:autostart|is_enabled': false,
-      encrypt_webdav_password: (args: unknown) => {
-        const { password } = args as { password?: string };
-        return `encrypted:${String(password ?? '')}`;
-      },
     });
     mockState.saveConfig.mockResolvedValue(undefined);
     mockState.confirm.mockResolvedValue(true);
@@ -394,15 +406,6 @@ describe('useSettingsForm', () => {
     const mathRandomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
     setupInvokeResponses({
       'plugin:autostart|is_enabled': true,
-      decrypt_webdav_password: (args: unknown) => {
-        const { encrypted } = args as { encrypted?: string };
-        if (encrypted === 'bad-cipher') throw new Error('decrypt failed');
-        return `plain:${String(encrypted)}`;
-      },
-      encrypt_webdav_password: (args: unknown) => {
-        const { password } = args as { password?: string };
-        return `encrypted:${String(password ?? '')}`;
-      },
     });
     const config = createConfig({
       enabledServices: ['custom_s3'],
@@ -585,13 +588,21 @@ describe('useSettingsForm', () => {
     expect(api.advancedSaveState.value.status).toBe('idle');
   });
 
-  it('keeps existing WebDAV encrypted password when encryption fails during save', async () => {
+  // 加密失败时**保留明文**，不能清空。
+  //
+  // 这条断言原本写的是 `password: ''` + 保留旧密文——只有"已有旧密文"时才成立。
+  // 首次配置没有旧密文，清空明文就等于把密码彻底弄丢，而保存仍然返回 true、
+  // 界面提示"保存成功"。用户实际踩的就是这个：填完坚果云密码、测试通过、
+  // 保存成功，重启后密码没了。
+  //
+  // 退化成明文是可控的：fromEncryptedConfig 有明文兜底分支，且 .settings.dat
+  // 整体 PNXENC 加密。「明文躺在加密文件里」远好过「密码没了」。
+  it('keeps the plaintext password when encryption fails during save', async () => {
+    const { WebDAVClient } = await import('@/utils/webdav');
+    vi.mocked(WebDAVClient.encryptPassword).mockRejectedValueOnce(new Error('encrypt failed'));
+
     const api = useSettingsForm();
     mockState.configStoreGet.mockResolvedValue(createConfig({ availableServices: ['jd'] }));
-    setupInvokeResponses({
-      'plugin:autostart|is_enabled': false,
-      encrypt_webdav_password: new Error('encrypt failed'),
-    });
     api.formData.value.webdav.profiles = [{
       id: 'dav-1',
       name: 'Main WebDAV',
@@ -606,8 +617,52 @@ describe('useSettingsForm', () => {
 
     const savedConfig = mockState.saveConfig.mock.calls[0][0];
     expect(savedConfig.webdav.profiles[0]).toMatchObject({
-      password: '',
+      password: 'new-secret',
       passwordEncrypted: 'old-cipher',
+    });
+  });
+
+  // 首次配置（没有任何旧密文）时加密失败——这正是丢数据的场景
+  it('does not lose a first-time password when encryption fails', async () => {
+    const { WebDAVClient } = await import('@/utils/webdav');
+    vi.mocked(WebDAVClient.encryptPassword).mockRejectedValueOnce(new Error('encrypt failed'));
+
+    const api = useSettingsForm();
+    mockState.configStoreGet.mockResolvedValue(createConfig({ availableServices: ['jd'] }));
+    api.formData.value.webdav.profiles = [{
+      id: 'dav-1',
+      name: '坚果云',
+      url: 'https://dav.jianguoyun.com/dav/',
+      username: 'me',
+      password: 'first-secret',
+      remotePath: '/PicNexus/',
+    }];
+
+    await expect(api.saveSettings()).resolves.toBe(true);
+
+    const saved = mockState.saveConfig.mock.calls[0][0].webdav.profiles[0];
+    // 明文与密文不能同时为空——那就是密码彻底没了
+    expect(saved.password || saved.passwordEncrypted).toBeTruthy();
+    expect(saved.password).toBe('first-secret');
+  });
+
+  it('encrypts the password and clears the plaintext on a normal save', async () => {
+    const api = useSettingsForm();
+    mockState.configStoreGet.mockResolvedValue(createConfig({ availableServices: ['jd'] }));
+    api.formData.value.webdav.profiles = [{
+      id: 'dav-1',
+      name: '坚果云',
+      url: 'https://dav.jianguoyun.com/dav/',
+      username: 'me',
+      password: 'first-secret',
+      remotePath: '/PicNexus/',
+    }];
+
+    await expect(api.saveSettings()).resolves.toBe(true);
+
+    expect(mockState.saveConfig.mock.calls[0][0].webdav.profiles[0]).toMatchObject({
+      password: '',
+      passwordEncrypted: 'encrypted:first-secret',
     });
   });
 
