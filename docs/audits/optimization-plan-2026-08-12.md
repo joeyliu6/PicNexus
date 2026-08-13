@@ -414,3 +414,46 @@
 **覆盖率**：`UploadQueue.ts` 100 / 100 / 100 / 97.27（107÷110，分母因新增函数从 108 涨到 110）。阈值 95/95/95/92 **无需再动**（97.27 − 5pp 仍落在 92）；仅同步守卫脚本注释里的数字与位移后的行号。
 
 **门禁**：`npm run lint`、`npm run typecheck`、`npm run test:coverage`（194 文件 / 2402 用例全绿）、`npm run ci:prepush` 均 exit 0。
+
+---
+
+### 2026-08-13 · useHistoryResultOps 单测
+
+上一节「未做」里与暂缓项 A 并列的两个文件之一。棘轮防跌不催涨，本次补齐单测并按实测新值抬线。
+
+**覆盖率变化**（`npm run test:coverage` 逐文件实测）：
+
+| 文件 | 补测前 lines/stmts/funcs/branches | 补测后 | 棘轮阈值 旧 → 新 |
+|------|------|------|------|
+| `src/composables/history/useHistoryResultOps.ts` | 8.42 / 8.42 / 20 / 100(1÷1) | 100 / 100 / 100 / 100(83÷83) | 7/7/15/**0** → 95/95/95/**95** |
+
+`branches` 分母从 1 涨到 83——上一批注释里预告的「假 100%」现形。这次 83 个分支全部覆盖，但阈值仍按既有约定取「当前值 − 5pp 向下取整」而非钉死 100，给后续文件长大留余量。该条目同时从「低覆盖核心文件」组移入「存量高覆盖文件」组。
+
+**为什么原来只有 8.42%**：不是没人测，而是唯一碰过它的 `tests/unit/components/linkcheck/linkCheckView.spec.ts:26-27` 把整个 `useHistoryManager` 用 `vi.fn()` mock 掉了，`deleteHistoryResult` / `bulkDeleteHistoryResults` 的真实实现一行都没跑过——8.42% 只是模块顶层求值的残留。属于第三批记录里 `useTimelineDragAndSkeleton` 那一类（「被 `vi.mock` 挡着」），所以本次**新开 spec 直连 `createResultOps`**，没有改动既有 spec。
+
+**新增** `tests/unit/composables/history/useHistoryResultOps.spec.ts`（40 条用例，按「`deleteHistoryResult` 前置校验 / `deleteHistoryResult` 剥离与降级 / `bulkDeleteHistoryResults` / `applyChanges` 副作用 / 跨文件约定：`linkCheckSummary` 重算」五组拆分）。
+
+`createResultOps` 实际只返回 2 个方法，`applyChanges` 是闭包内私有 helper，只能经那两个出口间接验证——第四组用例即为此设。ctx 与 `createBulkOps` 的 `BulkOpsContext` 逐字段相同，`makeCtx()` 直接沿用 `useHistoryBulkOps.spec.ts` 的姿势。
+
+**两个刻意不 mock 的依赖**（与该目录既有 spec 的唯一偏离，已在文件头注释说明）：`@/constants`（只 re-export `toastMessages` + `uiCopy`，纯净无副作用，用真实 `TOAST_MESSAGES` 才能断言到具体文案对象）、`@/types/linkCheckSummary`（必须跑真实 `recomputeLinkCheckSummary`，否则第五组用例是空的）。
+
+`tests/unit/factories/historyFactory.ts` 只做加法：新增 `LinkCheckSummary` 类型与 `createLinkCheckSummary`。原因是 `recomputeLinkCheckSummary` 在 `previousSummary` 为 `undefined` 时直接返回 `undefined`（「从未检测就不凭空造 summary」），不先造一份初始 summary 就跑不到重算逻辑。既有导出零改动。
+
+**跨文件约定核对结果**（`HistoryDatabase.ts:367` 声明「与 `useHistoryResultOps.stripServiceFromItem` 保持一致」）：
+
+- ✅ 注释声明的那一点**成立**——`HistoryDatabase.ts:370` 与 `useHistoryResultOps.ts:51` 调的是同一个 `recomputeLinkCheckSummary`，入参口径都是「剥离后的 results + 剥离后的 status + 原 summary」。第五组用例把这一点钉住了。
+- ✅ 「删主力自动补选 vs 直接抛错」的差异是**故意设计**，`docs/flows/link-check-flow.md` 图 5 与「为什么不共用 `deleteHistoryItem`」已写明，不是缺陷。
+
+**本次固化但未修的三处现状**（用例里都有行内注释标注，列为待另立条目）：
+
+| # | 现状 | 位置 |
+|---|------|------|
+| 1 | 「可用镜像」谓词两边不一致：`removeMirror` 用 `status === 'success'`，`stripServiceFromItem` 用 `status === 'success' && r.result?.url`。剥完只剩一条「success 但无 url」的镜像时，DB 侧保留记录、composable 侧整条删库 | `HistoryDatabase.ts:354` vs `useHistoryResultOps.ts:56` |
+| 2 | `bulkDeleteHistoryResults` 成功 toast 报的是入参 `targets.length` 而非实际生效条数，有非法/不存在/未匹配 target 时会虚报 | `useHistoryResultOps.ts:232` |
+| 3 | 批量删除非原子：循环中途抛错时已落库的删除不会回滚，而 `applyChanges` 在循环之后才执行，内存态（`totalCount` / `dataVersion` / 事件广播）完全不跟进 | `useHistoryResultOps.ts:199-231` |
+
+第 1 条另有一个牵连项：`DataTransformer.deriveResultColumns` 算 `success_count` 时同样只看 `status === 'success'`，所以缺 url 时 `success_count` 会与 `linkCheckSummary.totalLinks` 对不上。三条都属于「补测试任务不改生产代码」的边界之外，本次只登记。
+
+**门禁**：`npm run lint`、`npm run typecheck`、`npm run test:coverage`、`npm run ci:prepush` 均 exit 0。
+
+**未做**：`useTimelineDragAndSkeleton.ts` 不在本次范围，棘轮仍是 3/3/0/0。
