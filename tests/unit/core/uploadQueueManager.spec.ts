@@ -651,19 +651,21 @@ describe('UploadQueueManager', () => {
       });
     });
 
-    // ⚠️ 现状记录（非期望行为）：resetItemForRetry 传给 updateItem 的是一份「全新的等待态」，
-    // 但 useQueueState.updateItem 对 serviceProgress 做的是深度合并（`{...currentProgress, ...value}`），
-    // 新对象里没有 link/error 键，于是上一轮的 link 和 error 原样留在进度表里。
-    // 顶层的 weiboLink / r2Link 因为显式传了 undefined 所以确实被清掉了，两边并不一致。
-    // 若将来修掉这个泄漏，请一并更新本用例。
-    it('重置后服务级 link / error 仍会残留（深度合并导致，与顶层链接字段行为不一致）', () => {
+    // 回归护栏：queueState.updateItem 对 serviceProgress 是深度合并，新对象里没有的键会
+    // 保留旧值。所以重置必须显式传 link / error / isRetrying，否则上一轮的结果会漏进下一
+    // 轮——重试期间 ChannelCard 会拿旧 error 弹 tooltip（那个 v-tooltip 挂在卡片根节点上，
+    // 不受 status 约束），旧 link 还会被 buildLinkFields 回填进 weiboLink / weiboPid。
+    it('重置后服务级 link / error / isRetrying 与顶层链接字段一起被清干净', () => {
       const id = manager.addFile('/img/a.png', 'a.png', ['weibo', 'r2'])!;
       manager.updateItem(id, {
         weiboLink: WEIBO_LINK,
         r2Link: R2_LINK,
         serviceProgress: {
-          weibo: createUploadedServiceProgress('weibo', { link: WEIBO_LINK }),
-          r2: createFailedServiceProgress('r2', { error: '连接超时' }),
+          weibo: createUploadedServiceProgress('weibo', {
+            link: WEIBO_LINK,
+            metadata: { pid: 'PID-1' },
+          }),
+          r2: createFailedServiceProgress('r2', { error: '连接超时', isRetrying: true }),
         },
       });
 
@@ -672,8 +674,40 @@ describe('UploadQueueManager', () => {
       const item = manager.getItem(id)!;
       expect(item.weiboLink).toBeUndefined();
       expect(item.r2Link).toBeUndefined();
-      expect(item.serviceProgress.weibo!.link).toBe(WEIBO_LINK);
-      expect(item.serviceProgress.r2!.error).toBe('连接超时');
+      expect(item.serviceProgress.weibo!.link).toBeUndefined();
+      expect(item.serviceProgress.weibo!.isRetrying).toBe(false);
+      expect(item.serviceProgress.r2!.error).toBeUndefined();
+      expect(item.serviceProgress.r2!.isRetrying).toBe(false);
+      // metadata 有意保留（见 createRetryServiceProgress 的注释）：
+      // 里面是 step / fileKey / pid，下次进度更新会覆盖；而脏 pid 的回填前提是
+      // link 存在，link 既已清掉，buildLinkFields 就不会去读它。
+      expect(item.serviceProgress.weibo!.metadata).toEqual({ pid: 'PID-1' });
+    });
+
+    it('重置后再收口，不会把上一轮的链接回填进 weiboLink / weiboPid', () => {
+      const id = manager.addFile('/img/a.png', 'a.png', ['weibo', 'jd'])!;
+      manager.updateItem(id, {
+        serviceProgress: {
+          weibo: createUploadedServiceProgress('weibo', {
+            link: WEIBO_LINK,
+            metadata: { pid: 'PID-1' },
+          }),
+        },
+      });
+
+      manager.resetItemForRetry(id);
+      // 重试里只有 jd 成功，weibo 仍是重置后的等待态
+      manager.updateItem(id, {
+        serviceProgress: {
+          jd: createUploadedServiceProgress('jd', { link: 'https://jd.example/a.jpg' }),
+        },
+      });
+      manager.markItemComplete(id, 'https://jd.example/a.jpg');
+
+      const item = manager.getItem(id)!;
+      expect(item.weiboLink).toBeUndefined();
+      expect(item.weiboPid).toBeUndefined();
+      expect(item.primaryUrl).toBe('https://jd.example/a.jpg');
     });
 
     it('未启用 r2 的项重置后 r2Status 仍是已跳过', () => {

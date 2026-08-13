@@ -100,6 +100,27 @@ function createServiceProgress(enabledServices: string[]): Record<string, Servic
 }
 
 /**
+ * 为重试创建「擦干净」的初始进度状态。
+ *
+ * ⚠️ 不能直接复用 createServiceProgress 的结果：queueState.updateItem 对 serviceProgress
+ * 做的是深度合并（`{ ...currentProgress, ...value }`），新对象里**没有的键会保留旧值**。
+ * 所以上一轮的 link / error / isRetrying 必须显式传 undefined / false 才擦得掉。
+ * 否则重试期间 ChannelCard 会拿上一轮的 error 弹 tooltip，旧 link 还会被
+ * buildLinkFields 回填进 weiboLink / weiboPid。
+ *
+ * metadata 有意不清：里面是 step / fileKey / pid，下一次进度更新就会覆盖；
+ * 而 pid 的回填前提是 link 存在——link 已清，脏 pid 不会被读到。
+ */
+function createRetryServiceProgress(enabledServices: string[]): Record<string, ServiceProgress> {
+  return Object.fromEntries(
+    Object.entries(createServiceProgress(enabledServices)).map(([serviceId, progress]) => [
+      serviceId,
+      { ...progress, link: undefined, error: undefined, isRetrying: false },
+    ])
+  );
+}
+
+/**
  * 从队列项的 serviceProgress 中提取各服务的链接字段（向后兼容）
  */
 function buildLinkFields(item: QueueItem): Record<string, string> {
@@ -459,7 +480,7 @@ export class UploadQueueManager {
 
     // 重置所有字段，包括新架构的 serviceProgress
     const resetServiceProgress = item.enabledServices
-      ? createServiceProgress(item.enabledServices)
+      ? createRetryServiceProgress(item.enabledServices)
       : {};
 
     // 重置状态
