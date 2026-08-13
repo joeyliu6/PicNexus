@@ -164,7 +164,7 @@
 
 | 项 | 内容 | 为什么暂缓 |
 |---|---|---|
-| A | `src/core/UploadQueue.ts` 补齐 `UploadQueueManager` 单测（当前 8.44%） | 上传主链路核心，需要认真设计用例，不是顺手活 |
+| A | ~~`src/core/UploadQueue.ts` 补齐 `UploadQueueManager` 单测（当前 8.44%）~~ **已于 2026-08-13 完成**，见本文件底部记录 | 上传主链路核心，需要认真设计用例，不是顺手活 |
 | B | `FavoritesView.vue` 接入虚拟滚动（复用 `useVirtualTimeline`） | 涉及布局与滚动行为，需人工视觉验收 |
 | C | Rust `reqwest` 0.11 → 0.12 升级（`src-tauri/Cargo.toml:26`），连带消除 hyper 0.14 / h2 0.3 / EOL 的 rustls 0.21 | API 有破坏性变更，需全量回归所有网络功能 |
 | D | .vue 500 行口径统一：`AGENTS.md` 与 `eslint.config.mjs:42`（`skipBlankLines/skipComments`）二选一对齐；6 个超标文件 style 块外置（照 `timeline-jumping.css` 先例）；`UploadView.vue` 449 行 script 拆 composable | 涉及制度决策（口径选哪个）需用户拍板 |
@@ -345,3 +345,39 @@
 探针文件测完即删，`git status` 已确认工作区只剩 `tauri.conf.json` 一处改动。
 
 **未验**：`npm run tauri build` 全流程未实跑（Rust 编译耗时长），但 `beforeBuildCommand` 的语义就是「在 cargo 构建前执行该 shell 命令」，上表已按 Tauri 实际使用的 shell 验过该字符串的两种行为，剩余风险仅在 Tauri 是否调用该字段本身——而这未被本次改动触及。
+
+---
+
+### 2026-08-13 · 暂缓项 A 落地 · UploadQueueManager 单测
+
+第三批只给 `src/core/UploadQueue.ts` 装了防回退棘轮（7/7/5/0），棘轮防跌不催涨，洞还在。本次补齐单测并把棘轮抬到实测新值。
+
+**覆盖率变化**（`npm run test:coverage` 逐文件实测）：
+
+| 文件 | 补测前 lines/stmts/funcs/branches | 补测后 | 棘轮阈值 旧 → 新 |
+|------|------|------|------|
+| `src/core/UploadQueue.ts` | 8.44 / 8.44 / 10 / 100(2÷2) | 100 / 100 / 100 / 97.22(105÷108) | 7/7/5/**0** → 95/95/95/**92** |
+
+`branches` 分母从 2 涨到 108——正是上一批注释里预告的「假 100%」现形：补完测试后百分比反而从 100 掉到 97.22。所以阈值按实测新值重新定线，没有沿用旧数字。取值沿用本文件既有约定（当前值 − 5pp 向下取整），`UploadQueue.ts` 同时从「低覆盖核心文件」组移入「存量高覆盖文件」组。
+
+剩下 3 个未覆盖分支是取不到的防御性兜底：`UploadQueue.ts:311` 的 `latestItem ? ... : {}`（几行前刚 `getItem` 成功，中间没有删除时机）、`:395-397` 的 `weiboProgress ?? 0` 与 `r2Progress ?? 0`（`addFile` 必定把这两个字段初始化为 0）。为把百分比凑到 100 而伪造畸形队列项，只会让用例看起来像在测不存在的场景，故不做。
+
+**新增** `tests/unit/core/uploadQueueManager.spec.ts`（75 条用例，按 `addFile` / `updateServiceProgress` / `markItemComplete` / `markItemFailed` / `createProgressCallback` / `resetItemForRetry` / `resetServiceForRetry` / `trimQueue` / 队列基础操作 / 多项并发隔离 十组拆分）。
+
+覆盖率能从 8.44 一步到 100，是因为此前**全库没有任何 spec 实例化过 `UploadQueueManager`**——相关的 4 个 spec 只 import 了 `QueueItem` / `ServiceProgress` 类型。也没有任何 spec 用 `vi.mock` 遮挡该模块，所以本次直连真实实现，未引入替身。
+
+`tests/unit/factories/uploadFactory.ts` 只做加法：`QUEUE_SERVICE_STATUS`（状态文案常量）、`createUploadedServiceProgress`、`createFailedServiceProgress`、`createLegacyQueueItem`。既有导出零改动，引用该工厂的其余 spec 不受影响。
+
+> 加状态文案常量的原因：`UploadQueueManager` 是按状态**文本**判定的（`status === '等待中...'` 判定服务从未启动、`status.includes('失败')` 判定不要收口成完成），而工厂原有的 `createServiceProgress` 默认状态是英文 `'waiting'`，直接拿来构造前置状态会静默走不到目标分支。
+
+**测试写法上的一处取舍**：`updateServiceProgress` 对 error/success 项请求改写整体状态的那两个分支，无法从最终状态观察到——`useQueueState.flushPendingUpdates` 对 error/success 项会整体丢弃节流队列（见 `docs/reference/troubleshooting/upload-queue-status-race-condition.md`）。这两条改为 spy `updateItemThrottled` 断言提交给节流层的 payload，并额外断言「守卫确实把它丢了」，等于把这层竞态保护也钉住了。
+
+**顺带发现的现状（未修，仅记录）**：`resetItemForRetry` 清得掉顶层的 `weiboLink` / `r2Link`（显式传 `undefined`），却清不掉 `serviceProgress[x].link` 与 `.error`。原因是 `useQueueState.updateItem` 对 `serviceProgress` 做深度合并（`{...currentProgress, ...value}`），而重置用的新等待态对象里根本没有 `link` / `error` 键，合并后旧值原样留存。后果：全量重试若在某个图床上再次失败，该图床的进度表里仍挂着上一轮的成功链接，与顶层字段行为不一致。已用一条明确标注「现状记录、非期望行为」的用例钉住当前行为，修复留待另立条目。
+
+**门禁**：`npm run lint`、`npm run typecheck`、`npm run test:coverage`（194 文件 / 2401 用例全绿，关键文件覆盖率检查通过）、`npm run ci:prepush` 均 exit 0。
+
+**未做**：
+
+- 上一批记录里与 A 并列提到的另两个文件（`useHistoryResultOps.ts`、`useTimelineDragAndSkeleton.ts`）不在本次范围，棘轮仍是 7/7/15/0 与 3/3/0/0。
+- `vitest.config.ts` 的 glob 聚合阈值未动（逐文件断言归 `check-critical-coverage.mjs` 管，且该文件是已知的覆盖率偶发误报来源）。
+- 上面那条 `resetItemForRetry` 的链接残留未修——本次是补测试任务，改生产代码超出范围。
