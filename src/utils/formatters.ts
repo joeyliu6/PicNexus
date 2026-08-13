@@ -80,8 +80,13 @@ export function formatTimestampFull(date: Date = new Date()): string {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
 }
 
+/** 紧凑日期 "YYYYMMDD"，可用于安全文件名 / 对象名前缀 */
+export function formatDateCompact(date: Date = new Date()): string {
+  return `${date.getFullYear()}${pad2(date.getMonth() + 1)}${pad2(date.getDate())}`;
+}
+
 /** 紧凑时间戳 "YYYYMMDD_HHmmss"，可用于安全文件名 */
 export function formatTimestampCompact(date: Date = new Date()): string {
-  return `${date.getFullYear()}${pad2(date.getMonth() + 1)}${pad2(date.getDate())}_${pad2(date.getHours())}${pad2(date.getMinutes())}${pad2(date.getSeconds())}`;
+  return `${formatDateCompact(date)}_${pad2(date.getHours())}${pad2(date.getMinutes())}${pad2(date.getSeconds())}`;
 }
 

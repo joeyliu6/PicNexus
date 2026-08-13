@@ -4,6 +4,7 @@
 import { BaseUploader } from '../base/BaseUploader';
 import { IUploader } from '../base/IUploader';
 import { S3BaseConfig } from './types';
+import { buildObjectKey } from './objectKey';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
 
 interface S3RustResult {
@@ -76,10 +77,8 @@ export abstract class BaseS3Uploader<TConfig extends S3BaseConfig>
     // 让读者明确：此处接收到的是具体派生类对应的 config 类型
     const config = options.config as TConfig;
     const fileName = filePath.split(/[/\\]/).pop() || '';
-    const path = this.getPath(config);
-    // 确保 path 以 / 结尾（如果非空）
-    const normalizedPath = path ? (path.endsWith('/') ? path : path + '/') : '';
-    const key = normalizedPath + fileName;
+    // key 带日期 + 随机段前缀：同名文件重复上传不再互相覆盖，详见 objectKey.ts
+    const key = buildObjectKey(this.getPath(config), fileName);
 
     const rustResult = await this.uploadViaRust(
       filePath,

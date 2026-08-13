@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { formatFileSize, formatRelativeTime } from '@/utils/formatters';
+import {
+  formatDateCompact,
+  formatFileSize,
+  formatRelativeTime,
+  formatTimestampCompact,
+} from '@/utils/formatters';
 
 describe('formatFileSize', () => {
   it('0 字节返回 0 B', () => {
@@ -32,6 +37,28 @@ describe('formatFileSize', () => {
 
   it('1GB 返回 1.0 GB', () => {
     expect(formatFileSize(1024 * 1024 * 1024)).toBe('1.0 GB');
+  });
+});
+
+describe('formatDateCompact / formatTimestampCompact', () => {
+  it('月/日/时/分/秒都补零', () => {
+    const date = new Date(2026, 0, 5, 9, 8, 7);
+
+    expect(formatDateCompact(date)).toBe('20260105');
+    expect(formatTimestampCompact(date)).toBe('20260105_090807');
+  });
+
+  it('两位数月日时分秒原样输出', () => {
+    const date = new Date(2026, 10, 25, 23, 59, 59);
+
+    expect(formatDateCompact(date)).toBe('20261125');
+    expect(formatTimestampCompact(date)).toBe('20261125_235959');
+  });
+
+  it('紧凑时间戳的日期部分与 formatDateCompact 一致（md-rescue 备份名依赖此格式）', () => {
+    const date = new Date(2026, 7, 13, 14, 30, 22);
+
+    expect(formatTimestampCompact(date)).toBe(`${formatDateCompact(date)}_143022`);
   });
 });
 
