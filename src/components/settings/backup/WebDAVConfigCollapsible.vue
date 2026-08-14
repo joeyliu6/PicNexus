@@ -179,7 +179,7 @@ function handleTest() {
               <label>
                 密码
                 <span v-if="passwordSecret.hasStored(PASSWORD_KEY)" class="saved-chip">
-                  <i class="pi pi-check" aria-hidden="true"></i>已保存
+                  <i class="pi pi-check" aria-hidden="true"></i>{{ passwordSecret.chipLabel(PASSWORD_KEY) }}
                 </span>
               </label>
               <SensitiveField

@@ -104,7 +104,7 @@ const secrets = useSensitiveDraft({
           <label>
             API Token
             <span v-if="secrets.hasStored('smms.token')" class="saved-chip">
-              <i class="pi pi-check" aria-hidden="true"></i>已保存
+              <i class="pi pi-check" aria-hidden="true"></i>{{ secrets.chipLabel('smms.token') }}
             </span>
           </label>
           <SensitiveField v-bind="secrets.bindingsFor('smms.token', '从 SM.MS 官网获取 API Token')" />
@@ -131,7 +131,7 @@ const secrets = useSensitiveDraft({
           <label>
             Personal Access Token
             <span v-if="secrets.hasStored('github.token')" class="saved-chip">
-              <i class="pi pi-check" aria-hidden="true"></i>已保存
+              <i class="pi pi-check" aria-hidden="true"></i>{{ secrets.chipLabel('github.token') }}
             </span>
           </label>
           <SensitiveField v-bind="secrets.bindingsFor('github.token', 'ghp_xxxxxxxxxxxx')" />
@@ -184,7 +184,7 @@ const secrets = useSensitiveDraft({
           <label>
             Client ID
             <span v-if="secrets.hasStored('imgur.clientId')" class="saved-chip">
-              <i class="pi pi-check" aria-hidden="true"></i>已保存
+              <i class="pi pi-check" aria-hidden="true"></i>{{ secrets.chipLabel('imgur.clientId') }}
             </span>
           </label>
           <SensitiveField v-bind="secrets.bindingsFor('imgur.clientId', '从 Imgur API 获取')" />
@@ -193,7 +193,7 @@ const secrets = useSensitiveDraft({
           <label>
             Client Secret（可选）
             <span v-if="secrets.hasStored('imgur.clientSecret')" class="saved-chip">
-              <i class="pi pi-check" aria-hidden="true"></i>已保存
+              <i class="pi pi-check" aria-hidden="true"></i>{{ secrets.chipLabel('imgur.clientSecret') }}
             </span>
           </label>
           <SensitiveField v-bind="secrets.bindingsFor('imgur.clientSecret', '可选配置')" />

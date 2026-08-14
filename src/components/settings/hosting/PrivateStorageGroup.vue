@@ -309,7 +309,7 @@ const secrets = useSensitiveDraft({
               v-if="field.type === 'password' && secrets.hasStored(builtinKey(svc.id, field.key))"
               class="saved-chip"
             >
-              <i class="pi pi-check" aria-hidden="true"></i>已保存
+              <i class="pi pi-check" aria-hidden="true"></i>{{ secrets.chipLabel(builtinKey(svc.id, field.key)) }}
             </span>
           </label>
           <SensitiveField
@@ -357,7 +357,7 @@ const secrets = useSensitiveDraft({
               v-if="field.type === 'password' && secrets.hasStored(customS3Key(profile.id, field.key))"
               class="saved-chip"
             >
-              <i class="pi pi-check" aria-hidden="true"></i>已保存
+              <i class="pi pi-check" aria-hidden="true"></i>{{ secrets.chipLabel(customS3Key(profile.id, field.key)) }}
             </span>
           </label>
           <SensitiveField
@@ -411,7 +411,7 @@ const secrets = useSensitiveDraft({
               v-if="field.key === 'password' && secrets.hasStored(webdavKey(profile.id))"
               class="saved-chip"
             >
-              <i class="pi pi-check" aria-hidden="true"></i>已保存
+              <i class="pi pi-check" aria-hidden="true"></i>{{ secrets.chipLabel(webdavKey(profile.id)) }}
             </span>
           </label>
           <SensitiveField
