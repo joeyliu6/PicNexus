@@ -6,6 +6,7 @@ import SensitiveField from '../../common/SensitiveField.vue';
 import type { GithubCdnConfig } from '../../../config/types';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
 import { hasNonEmptyFields } from '../../../utils/validators';
+import { useSensitiveDraft } from '../../../composables/settings/useSensitiveDraft';
 
 interface TokenFormData {
   smms: { token: string };
@@ -52,6 +53,34 @@ function isTokenConfigured(providerId: keyof TokenFormData): boolean {
   );
 }
 
+/**
+ * 敏感字段的读写口子
+ *
+ * 这些 token 是明文存在 formData 里的（整份 .settings.dat 由 EncryptedStore 统一
+ * 加密，字段级再加一层用的是同一把钥匙，没有增量收益），所以"按需揭示"就是直接
+ * 读回来，不涉及解密。
+ */
+const SECRET_FIELDS: Record<
+  string,
+  { get: (fd: TokenFormData) => string; set: (fd: TokenFormData, value: string) => void }
+> = {
+  'smms.token': { get: fd => fd.smms.token, set: (fd, v) => { fd.smms.token = v; } },
+  'github.token': { get: fd => fd.github.token, set: (fd, v) => { fd.github.token = v; } },
+  'imgur.clientId': { get: fd => fd.imgur.clientId, set: (fd, v) => { fd.imgur.clientId = v; } },
+  'imgur.clientSecret': {
+    get: fd => fd.imgur.clientSecret ?? '',
+    set: (fd, v) => { fd.imgur.clientSecret = v; },
+  },
+};
+
+const secrets = useSensitiveDraft({
+  hasStored: key => !!SECRET_FIELDS[key]?.get(props.tokenFormData),
+  reveal: key => Promise.resolve(SECRET_FIELDS[key]?.get(props.tokenFormData) ?? ''),
+  commit: (key, draft) => {
+    SECRET_FIELDS[key]?.set(props.tokenFormData, draft);
+    emit('save');
+  },
+});
 </script>
 
 <template>
@@ -72,8 +101,13 @@ function isTokenConfigured(providerId: keyof TokenFormData): boolean {
     >
       <form class="form-grid" @submit.prevent>
         <div class="form-item span-full">
-          <label>API Token</label>
-          <SensitiveField v-model="tokenFormData.smms.token" @blur="emit('save')" placeholder="从 SM.MS 官网获取 API Token" />
+          <label>
+            API Token
+            <span v-if="secrets.hasStored('smms.token')" class="saved-chip">
+              <i class="pi pi-check" aria-hidden="true"></i>已保存
+            </span>
+          </label>
+          <SensitiveField v-bind="secrets.bindingsFor('smms.token', '从 SM.MS 官网获取 API Token')" />
           <small class="form-hint">访问 <a href="https://sm.ms/home/apitoken" target="_blank">https://sm.ms/home/apitoken</a> 获取 API Token</small>
         </div>
       </form>
@@ -94,8 +128,13 @@ function isTokenConfigured(providerId: keyof TokenFormData): boolean {
     >
       <form class="form-grid" @submit.prevent>
         <div class="form-item">
-          <label>Personal Access Token</label>
-          <SensitiveField v-model="tokenFormData.github.token" @blur="emit('save')" placeholder="ghp_xxxxxxxxxxxx" />
+          <label>
+            Personal Access Token
+            <span v-if="secrets.hasStored('github.token')" class="saved-chip">
+              <i class="pi pi-check" aria-hidden="true"></i>已保存
+            </span>
+          </label>
+          <SensitiveField v-bind="secrets.bindingsFor('github.token', 'ghp_xxxxxxxxxxxx')" />
         </div>
         <div class="form-item">
           <label>Repository Owner</label>
@@ -142,12 +181,22 @@ function isTokenConfigured(providerId: keyof TokenFormData): boolean {
     >
       <form class="form-grid" @submit.prevent>
         <div class="form-item">
-          <label>Client ID</label>
-          <SensitiveField v-model="tokenFormData.imgur.clientId" @blur="emit('save')" placeholder="从 Imgur API 获取" />
+          <label>
+            Client ID
+            <span v-if="secrets.hasStored('imgur.clientId')" class="saved-chip">
+              <i class="pi pi-check" aria-hidden="true"></i>已保存
+            </span>
+          </label>
+          <SensitiveField v-bind="secrets.bindingsFor('imgur.clientId', '从 Imgur API 获取')" />
         </div>
         <div class="form-item">
-          <label>Client Secret（可选）</label>
-          <SensitiveField v-model="tokenFormData.imgur.clientSecret" @blur="emit('save')" placeholder="可选配置" />
+          <label>
+            Client Secret（可选）
+            <span v-if="secrets.hasStored('imgur.clientSecret')" class="saved-chip">
+              <i class="pi pi-check" aria-hidden="true"></i>已保存
+            </span>
+          </label>
+          <SensitiveField v-bind="secrets.bindingsFor('imgur.clientSecret', '可选配置')" />
         </div>
         <div class="form-item span-full">
           <small class="form-hint">访问 <a href="https://api.imgur.com/oauth2/addclient" target="_blank">Imgur API</a> 注册应用获取 Client ID</small>

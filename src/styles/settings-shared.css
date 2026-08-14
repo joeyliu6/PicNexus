@@ -188,6 +188,30 @@
   color: var(--text-secondary);
 }
 
+/*
+ * 「已保存」标记
+ *
+ * Why 不用灰 placeholder 传达：输入框是空的这个视觉信号，分量远大于框内一行灰字。
+ * 而「密钥存着呢」和「密钥丢了」长得一模一样时，用户没法判断——a322dba 修的
+ * 正是"保存后密码被静默清空"，这两种状态必须一眼可分。
+ */
+.saved-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin-left: var(--space-xs-sm);
+  padding: 0 var(--space-xs-sm);
+  border-radius: var(--radius-sm-md);
+  background: var(--success-alpha-12);
+  color: var(--success);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+}
+
+.saved-chip i {
+  font-size: var(--text-2xs);
+}
+
 /* ==================== 子章节 ==================== */
 
 .sub-section {

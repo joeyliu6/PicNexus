@@ -30,6 +30,16 @@ export interface SensitiveDraftOptions {
   onCommitError?: (error: unknown, key: string) => void;
 }
 
+/** 一次性喂给 SensitiveField 的 props + 监听器，配合 v-bind 使用 */
+export interface SensitiveFieldBindings {
+  modelValue: string;
+  'onUpdate:modelValue': (value: string) => void;
+  onBlur: () => void;
+  placeholder: string;
+  hasStoredValue: boolean;
+  revealStored: (() => Promise<string>) | null;
+}
+
 export interface SensitiveDraft {
   /** 当前草稿内容；未输入过则为空串 */
   draftOf: (key: string) => string;
@@ -40,6 +50,13 @@ export interface SensitiveDraft {
   makeRevealer: (key: string) => (() => Promise<string>) | null;
   hasStored: (key: string) => boolean;
   placeholder: (key: string, emptyHint: string) => string;
+  /**
+   * 模板里 `<SensitiveField v-bind="secrets.bindingsFor(key, hint)" />` 一行接完
+   *
+   * Why 不让各组件自己拼这六个 prop：同一个 key 要在模板里重复五遍，
+   * 抄错任意一处都会让草稿、提交、揭示三者对不上号——而且四个组件要各抄一遍。
+   */
+  bindingsFor: (key: string, emptyHint: string) => SensitiveFieldBindings;
 }
 
 export function useSensitiveDraft(options: SensitiveDraftOptions): SensitiveDraft {
@@ -107,6 +124,17 @@ export function useSensitiveDraft(options: SensitiveDraftOptions): SensitiveDraf
     return options.hasStored(key) ? KEEP_STORED_PLACEHOLDER : emptyHint;
   }
 
+  function bindingsFor(key: string, emptyHint: string): SensitiveFieldBindings {
+    return {
+      modelValue: draftOf(key),
+      'onUpdate:modelValue': (value: string) => setDraft(key, value),
+      onBlur: () => { void commitDraft(key); },
+      placeholder: placeholder(key, emptyHint),
+      hasStoredValue: options.hasStored(key),
+      revealStored: makeRevealer(key),
+    };
+  }
+
   return {
     draftOf,
     setDraft,
@@ -114,5 +142,6 @@ export function useSensitiveDraft(options: SensitiveDraftOptions): SensitiveDraf
     makeRevealer,
     hasStored: (key: string) => options.hasStored(key),
     placeholder,
+    bindingsFor,
   };
 }

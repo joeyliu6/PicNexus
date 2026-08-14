@@ -151,6 +151,42 @@ describe('useSensitiveDraft', () => {
     expect(draft.placeholder('smms.token', '从 SM.MS 官网获取')).toBe(KEEP_STORED_PLACEHOLDER);
   });
 
+  describe('bindingsFor', () => {
+    it('一次给齐 SensitiveField 需要的六个 prop', () => {
+      const { draft, stored } = setup();
+      stored['smms.token'] = 'tok-123';
+
+      const bound = draft.bindingsFor('smms.token', '从 SM.MS 官网获取');
+
+      expect(bound.modelValue).toBe('');
+      expect(bound.hasStoredValue).toBe(true);
+      expect(bound.revealStored).toBeTypeOf('function');
+      expect(bound.placeholder).toBe(KEEP_STORED_PLACEHOLDER);
+    });
+
+    it('绑定的监听器改的是同一份草稿', async () => {
+      const { draft, stored, commit } = setup();
+
+      draft.bindingsFor('smms.token', 'hint')['onUpdate:modelValue']('typed');
+      expect(draft.draftOf('smms.token')).toBe('typed');
+      // 重新取一次 bindings，modelValue 要反映最新草稿
+      expect(draft.bindingsFor('smms.token', 'hint').modelValue).toBe('typed');
+
+      draft.bindingsFor('smms.token', 'hint').onBlur();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(commit).toHaveBeenCalledWith('smms.token', 'typed');
+      expect(stored['smms.token']).toBe('typed');
+    });
+
+    it('未存过值时 revealStored 为 null', () => {
+      const { draft } = setup();
+      expect(draft.bindingsFor('smms.token', 'hint').revealStored).toBeNull();
+      expect(draft.bindingsFor('smms.token', 'hint').placeholder).toBe('hint');
+    });
+  });
+
   it('多个 key 的草稿互不干扰', async () => {
     const { draft, stored } = setup();
 
