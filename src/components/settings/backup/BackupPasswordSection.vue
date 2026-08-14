@@ -152,9 +152,11 @@ defineExpose({
 <template>
   <div class="security-card">
     <div class="security-card-row">
-      <span v-if="hasBackupPassword" class="security-status">● 已加密</span>
+      <span v-if="hasBackupPassword" class="security-status">
+        <span aria-hidden="true">●</span> 已加密
+      </span>
       <span v-else class="security-status-inactive">
-        <span class="security-status-dot">●</span>
+        <span class="security-status-dot" aria-hidden="true">●</span>
         <span>未设置</span>
       </span>
       <div class="security-card-actions">
