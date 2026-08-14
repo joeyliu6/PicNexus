@@ -129,8 +129,18 @@ defineExpose({
 
 <template>
   <div class="sensitive-field" :class="{ 'is-multiline': multiline }">
+    <!-- 已保存明文的只读展示态（多行）：不绑 v-model，明文只进 DOM 不进数据流 -->
     <Textarea
-      v-if="multiline"
+      v-if="multiline && showingStored"
+      :modelValue="storedPlaintext ?? ''"
+      :rows="rows"
+      readonly
+      :disabled="disabled"
+      :class="['sensitive-control', inputClass]"
+      @keydown.esc="conceal"
+    />
+    <Textarea
+      v-else-if="multiline"
       v-model="value"
       :rows="rows"
       :placeholder="placeholder"
@@ -140,7 +150,7 @@ defineExpose({
       @blur="handleBlur"
       @keydown.esc="conceal"
     />
-    <!-- 已保存明文的只读展示态：不绑 v-model，明文只进 DOM 不进数据流 -->
+    <!-- 已保存明文的只读展示态（单行）：同样不绑 v-model、不挂 blur -->
     <InputText
       v-else-if="showingStored"
       :modelValue="storedPlaintext ?? ''"

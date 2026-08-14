@@ -192,5 +192,52 @@ describe('SensitiveField', () => {
       expect(wrapper.get('input').element.value).toBe('');
       expect(wrapper.emitted('revealError')?.at(-1)).toEqual([failure]);
     });
+
+    // multiline 曾经走不到展示态：模板里 `v-if="multiline"` 抢在 `showingStored` 前面命中，
+    // Cookie 那种多行密文点了眼睛只会看到一个空 textarea。
+    it('multiline 下点眼睛能看到已保存明文，且明文不进 modelValue', async () => {
+      const wrapper = mountSensitiveField({
+        props: {
+          modelValue: '',
+          multiline: true,
+          hasStoredValue: true,
+          revealStored: () => Promise.resolve('SUB=stored-cookie'),
+        },
+      });
+
+      expect(wrapper.get('textarea').element.value).toBe('');
+
+      await wrapper.get('button').trigger('click');
+      await nextTick();
+
+      expect(wrapper.get('textarea').element.value).toBe('SUB=stored-cookie');
+      expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+    });
+
+    it('multiline 展示态只读、不遮挡，15 秒后自动收回', async () => {
+      vi.useFakeTimers();
+      const wrapper = mountSensitiveField({
+        props: {
+          modelValue: '',
+          multiline: true,
+          hasStoredValue: true,
+          revealStored: () => Promise.resolve('SUB=stored-cookie'),
+        },
+      });
+
+      await wrapper.get('button').trigger('click');
+      await nextTick();
+
+      const textarea = wrapper.get('textarea');
+      expect(textarea.attributes('readonly')).toBeDefined();
+      // 展示态是给人看的，不该再套 -webkit-text-security
+      expect(textarea.classes()).not.toContain('is-concealed');
+
+      vi.advanceTimersByTime(15_000);
+      await nextTick();
+
+      expect(wrapper.get('textarea').element.value).toBe('');
+      expect(wrapper.get('textarea').attributes('readonly')).toBeUndefined();
+    });
   });
 });
