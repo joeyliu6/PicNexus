@@ -56,6 +56,15 @@ flowchart TD
 
 > **注意**：合并模式会**保留本地 WebDAV 凭证**，防止下载后凭证被远程配置覆盖。
 
+> **关于 C1「密码已加密?」这个分支**：备份密码现在**全程保持密文**，加载设置页时不再解密，
+> 所以正常情况下走的都是 C2。C3「直接使用」只剩下兼容老配置的作用——那些还没被重新保存过、
+> 密码仍是明文的 profile，会在下一次保存时由 `encryptBackupProfiles` 加密掉。
+> 明文只在两个地方短暂出现：用户正在输入时，以及点眼睛查看的那 15 秒。
+> 契约见 [sensitive-field-contract.md](../reference/patterns/sensitive-field-contract.md)。
+>
+> ⚠️ `handleWebDAVTest`（`SettingsView.vue`）**绕开了** `fromEncryptedConfig`，自己解密后调
+> `testWebDAVConnection`。改这条链路时两处都要顾到。
+
 ---
 
 ## 图 2：历史记录同步流程
