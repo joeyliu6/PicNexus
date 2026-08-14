@@ -15,25 +15,15 @@ import { createLogger } from '../../utils/logger';
 
 const log = createLogger('WebDAVSecrets');
 
-/**
- * 读取时解密：把磁盘上的密文还原成 UI 可编辑的明文
- * 解密失败时置空而非抛错，避免一条坏记录卡死整个设置页加载
- */
-export async function decryptBackupProfiles(profiles: WebDAVProfile[]): Promise<WebDAVProfile[]> {
-  return Promise.all(
-    (profiles || []).map(async (p: WebDAVProfile) => {
-      if (p.passwordEncrypted && !p.password) {
-        try {
-          p.password = await WebDAVClient.decryptPassword(p.passwordEncrypted);
-        } catch (e) {
-          log.error('WebDAV 解密失败', e);
-          p.password = '';
-        }
-      }
-      return p;
-    })
-  );
-}
+// 加载时不再解密
+//
+// 曾经有一个 decryptBackupProfiles，把密文还原成明文塞进 `p.password` 供输入框回填。
+// 现在改成「密文常驻、明文按需」：密文原样进 formData，明文只在用户点眼睛查看的
+// 那 15 秒里存在（见 WebDAVConfigCollapsible.vue）。少了一份常驻内存的明文，
+// 也少了一条"渲染即解密"的路径。
+//
+// 老配置里遗留的明文 password 仍然读得进来，由下面的 encryptBackupProfiles
+// 在下一次保存时顺手加密掉。
 
 /**
  * 保存时加密：明文重新加密后落盘，formData 里的明文字段清空

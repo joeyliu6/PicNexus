@@ -93,7 +93,9 @@ export function sanitizeConfig(config: UserConfig): UserConfig {
     webdav: config.webdav ? {
       profiles: config.webdav.profiles.map(profile => ({
         ...profile,
-        password: sanitizeString(profile.password, 0, 0)
+        // 备份密码现在常驻密文，两个字段都要脱敏：只留 password 会让密文原样进日志
+        password: sanitizeString(profile.password, 0, 0),
+        passwordEncrypted: sanitizeString(profile.passwordEncrypted, 0, 0)
       })),
       activeId: config.webdav.activeId
     } : undefined,

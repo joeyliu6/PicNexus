@@ -20,6 +20,7 @@ import { useConnectionTest } from '../../composables/settings/useConnectionTest'
 import { useEditorIntegration } from '../../composables/settings/useEditorIntegration';
 import { useSettingsReset } from '../../composables/settings/useSettingsReset';
 import { useAutoUpdate } from '../../composables/useAutoUpdate';
+import { WebDAVClient } from '../../utils/webdav';
 
 import HostingSettingsPanel from '../settings/HostingSettingsPanel.vue';
 import GeneralSettingsPanel from '../settings/GeneralSettingsPanel.vue';
@@ -236,9 +237,20 @@ async function handleWebDAVTest() {
   const profile = webdav.profiles.find(p => p.id === webdav.activeId);
   if (!profile) return;
 
-  if (!profile.url || !profile.username || !profile.password) {
+  // 备份密码在 formData 里是密文（老配置可能还留着明文），两者有其一就算填过了
+  if (!profile.url || !profile.username || !(profile.password || profile.passwordEncrypted)) {
     toast.showConfig('error', TOAST_MESSAGES.auth.failed('WebDAV', '请先补全服务器 URL、用户名和密码'));
     return;
+  }
+
+  // 这里绕开了 fromEncryptedConfig，得自己把密文解开——testWebDAVConnection 要的是明文
+  let password = profile.password || '';
+  if (profile.passwordEncrypted) {
+    password = await WebDAVClient.decryptPassword(profile.passwordEncrypted);
+    if (!password) {
+      toast.showConfig('error', TOAST_MESSAGES.auth.failed('WebDAV', '密码解密失败，请重新输入密码后再测试'));
+      return;
+    }
   }
 
   cancelDebouncedSave();
@@ -247,7 +259,7 @@ async function handleWebDAVTest() {
     const result = await configManager.testWebDAVConnection({
       url: profile.url,
       username: profile.username,
-      password: profile.password,
+      password,
       remotePath: profile.remotePath || '/PicNexus/',
     });
 

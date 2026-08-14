@@ -180,6 +180,49 @@ describe('useWebDAVProfileEditor · 编辑动作', () => {
     expect(config.value).toBe(before);
   });
 
+  it('setActivePassword 写密文的同时清掉残留明文', () => {
+    const { editor, config } = setup({
+      profiles: [makeProfile({ password: '老明文', passwordEncrypted: 'cipher(老明文)' })],
+    });
+
+    editor.setActivePassword('cipher(新密码)');
+
+    expect(config.value.profiles[0].passwordEncrypted).toBe('cipher(新密码)');
+    // 不清的话，保存时 encryptBackupProfiles 会拿残留明文重新加密，把新密文顶掉
+    expect(config.value.profiles[0].password).toBe('');
+  });
+
+  it('setActivePassword 作废「已连接」状态', () => {
+    const { editor, config } = setup({
+      profiles: [makeProfile({ connectionStatus: 'success' })],
+    });
+
+    editor.setActivePassword('cipher(新密码)');
+
+    expect(config.value.profiles[0].connectionStatus).toBeUndefined();
+  });
+
+  it('setActivePassword 只动当前 profile', () => {
+    const { editor, config } = setup({
+      profiles: [makeProfile(), makeProfile({ id: 'dav-2', password: '别人的' })],
+      activeId: 'dav-1',
+    });
+
+    editor.setActivePassword('cipher(新密码)');
+
+    expect(config.value.profiles[1].password).toBe('别人的');
+    expect(config.value.profiles[1].passwordEncrypted).toBeUndefined();
+  });
+
+  it('没有当前 profile 时 setActivePassword 是空操作', () => {
+    const { editor, config } = setup({ profiles: [], activeId: null });
+    const before = config.value;
+
+    editor.setActivePassword('cipher(x)');
+
+    expect(config.value).toBe(before);
+  });
+
   it('switchProfile 切 activeId 并触发保存', () => {
     const { editor, config, onSave } = setup({
       profiles: [makeProfile(), makeProfile({ id: 'dav-2' })],

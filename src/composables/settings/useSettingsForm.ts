@@ -10,7 +10,7 @@ import { useServiceHealth } from '../useServiceHealth';
 import { TOAST_MESSAGES } from '../../constants';
 import { SERVICE_DISPLAY_NAMES } from '../../constants/serviceNames';
 import { filterOrphanProfileServices, syncProfileUploaders } from './profileServiceSync';
-import { decryptBackupProfiles, encryptBackupProfiles } from './webdavBackupSecrets';
+import { encryptBackupProfiles } from './webdavBackupSecrets';
 import { useStorageProfiles } from './useStorageProfiles';
 import { useConfirm } from '../useConfirm';
 import { createLogger } from '../../utils/logger';
@@ -289,10 +289,16 @@ export function useSettingsForm() {
       formData.value.webdav_profiles = config.webdav_profiles || [];
       syncProfileUploaders(formData.value);
 
-      // WebDAV 备份配置（密码解密）
+      // WebDAV 备份配置：密码保持密文，解密只在查看/同步/测试时按需进行
+      //
+      // 必须拷一份再进 formData。以前这份拷贝是 decryptBackupProfiles 顺手做掉的
+      // （它返回 map 出来的新数组），去掉那一步后如果直接引用 config 的数组，
+      // 表单里的编辑会就地改到 store 读出来的配置对象上，绕开保存路径。
       if (config.webdav) {
-        const profiles = await decryptBackupProfiles(config.webdav.profiles || []);
-        formData.value.webdav = { profiles, activeId: config.webdav.activeId || null };
+        formData.value.webdav = {
+          profiles: (config.webdav.profiles || []).map(p => ({ ...p })),
+          activeId: config.webdav.activeId || null,
+        };
       }
 
       // 链接前缀

@@ -68,6 +68,17 @@ vi.mock('@/composables/useConfirm', () => ({
   }),
 }));
 
+// 备份密码在 formData 里是密文，测试连接前要自己解开——mock 的是真实存在的导出
+vi.mock('@/utils/webdav', () => ({
+  WebDAVClient: {
+    encryptPassword: vi.fn(async (password: string) => `cipher(${password})`),
+    decryptPassword: vi.fn(async (encrypted: string) => {
+      if (encrypted === 'bad-cipher') return ''; // 真实实现吞掉错误返回空串
+      return encrypted.replace(/^cipher\((.*)\)$/, '$1');
+    }),
+  },
+}));
+
 vi.mock('@/composables/useConfig', () => ({
   useConfigManager: () => ({
     setupCookieListener: mockState.setupCookieListener,
@@ -532,6 +543,60 @@ describe('SettingsView page interactions', () => {
     expect(mockState.formData.value.webdav.profiles[0].connectionStatus).toBe('success');
     expect(mockState.saveSettings).toHaveBeenCalledTimes(1);
     expect(mockState.toastShowConfig).toHaveBeenCalledWith('success', expect.objectContaining({ summary: '验证成功' }));
+  });
+
+  // 备份密码改成密文常驻后，handleWebDAVTest 是唯一真正会坏的地方：
+  // 它绕开了 fromEncryptedConfig，得自己解密。守卫也不能再硬要求明文。
+  it('decrypts the stored backup password before testing WebDAV', async () => {
+    mockState.formData.value.webdav = {
+      activeId: 'nas',
+      profiles: [{
+        id: 'nas',
+        name: 'NAS',
+        url: 'https://dav.example.com',
+        username: 'user',
+        password: '',
+        passwordEncrypted: 'cipher(nas-pw)',
+        remotePath: '/PicNexus/',
+      }],
+    };
+    const wrapper = await mountSettings();
+
+    await wrapper.findAll('.nav-item')[3].trigger('click');
+    await wrapper.get('.test-webdav').trigger('click');
+    await flushPromisesAndTicks();
+
+    expect(mockState.testWebDAVConnection).toHaveBeenCalledWith({
+      url: 'https://dav.example.com',
+      username: 'user',
+      password: 'nas-pw',
+      remotePath: '/PicNexus/',
+    });
+    expect(mockState.formData.value.webdav.profiles[0].connectionStatus).toBe('success');
+  });
+
+  it('refuses to test when the stored backup password cannot be decrypted', async () => {
+    mockState.formData.value.webdav = {
+      activeId: 'nas',
+      profiles: [{
+        id: 'nas',
+        name: 'NAS',
+        url: 'https://dav.example.com',
+        username: 'user',
+        password: '',
+        passwordEncrypted: 'bad-cipher',
+        remotePath: '/PicNexus/',
+      }],
+    };
+    const wrapper = await mountSettings();
+
+    await wrapper.findAll('.nav-item')[3].trigger('click');
+    await wrapper.get('.test-webdav').trigger('click');
+    await flushPromisesAndTicks();
+
+    // 解不开就别拿空密码去撞服务端，那只会得到一句误导人的「认证失败」
+    expect(mockState.testWebDAVConnection).not.toHaveBeenCalled();
+    expect(mockState.toastShowConfig).toHaveBeenCalledWith('error', expect.any(Object));
   });
 
   it('shows an error and rolls back when auto-start toggle fails', async () => {

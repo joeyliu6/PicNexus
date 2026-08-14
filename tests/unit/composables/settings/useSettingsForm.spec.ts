@@ -474,11 +474,18 @@ describe('useSettingsForm', () => {
       bucket: 'legacy-bucket',
     });
     expect(api.availableServices.value).toEqual([makeCustomS3Id(migratedProfile.id)]);
+    // 加载不再解密：密文原样进 formData，明文只在用户点眼睛查看时才出现。
+    // 连带好处是一条解不开的坏记录再也影响不到加载。
+    const { WebDAVClient } = await import('@/utils/webdav');
     expect(api.formData.value.webdav.profiles).toMatchObject([
-      { id: 'dav-ok', password: 'plain:cipher' },
-      { id: 'dav-bad', password: '' },
+      { id: 'dav-ok', password: '', passwordEncrypted: 'cipher' },
+      { id: 'dav-bad', password: '', passwordEncrypted: 'bad-cipher' },
     ]);
+    expect(WebDAVClient.decryptPassword).not.toHaveBeenCalled();
     expect(api.formData.value.webdav.activeId).toBe('dav-ok');
+
+    // 表单持有的是副本，编辑不得就地改到 store 读出来的配置对象上
+    expect(api.formData.value.webdav.profiles[0]).not.toBe(config.webdav!.profiles[0]);
     expect(api.formData.value.linkPrefixEnabled).toBe(false);
     expect(api.formData.value.linkPrefixList.length).toBeGreaterThan(0);
     expect(api.formData.value.linkOutput.defaultFormat).toBe('markdown');

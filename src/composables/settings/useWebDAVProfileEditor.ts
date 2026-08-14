@@ -34,6 +34,8 @@ export interface WebDAVProfileEditor {
   statusClass: ComputedRef<string>;
   securityHint: ComputedRef<string>;
   updateActiveProfileField: (field: keyof WebDAVProfile, value: string) => void;
+  /** 写密文并清掉残留明文，两件事必须在同一次更新里完成 */
+  setActivePassword: (passwordEncrypted: string) => void;
   switchProfile: (id: string) => void;
   addProfile: () => void;
   deleteProfile: (id: string) => void;
@@ -105,6 +107,34 @@ export function useWebDAVProfileEditor(
     options.onUpdate({ ...config, profiles: updatedProfiles });
   }
 
+  /**
+   * 写入当前 profile 的密码密文，同时清掉可能残留的明文
+   *
+   * Why 必须一起清：`encryptBackupProfiles` 保存时只要看到 `password` 非空就会拿它
+   * 重新加密。老配置里遗留的明文如果不清掉，就会在保存时把刚写进去的新密文顶掉——
+   * 用户改了密码，存下来的还是旧的。
+   *
+   * Why 不复用 updateActiveProfileField：那个一次只能改一个字段，分两次调用要依赖
+   * 父组件同步回流 props，不可靠。
+   */
+  function setActivePassword(passwordEncrypted: string): void {
+    if (!activeProfile.value) return;
+    const config = options.config();
+
+    const updatedProfiles = config.profiles.map(p => {
+      if (p.id !== config.activeId) return p;
+
+      const updated: WebDAVProfile = { ...p, password: '', passwordEncrypted };
+      // 密码属于连接参数，改了就作废上次的验证结果
+      if (p.connectionStatus === 'success') {
+        updated.connectionStatus = undefined;
+      }
+      return updated;
+    });
+
+    options.onUpdate({ ...config, profiles: updatedProfiles });
+  }
+
   function switchProfile(id: string): void {
     options.onUpdate({ ...options.config(), activeId: id });
     options.onSave();
@@ -153,6 +183,7 @@ export function useWebDAVProfileEditor(
     statusClass,
     securityHint,
     updateActiveProfileField,
+    setActivePassword,
     switchProfile,
     addProfile,
     deleteProfile,

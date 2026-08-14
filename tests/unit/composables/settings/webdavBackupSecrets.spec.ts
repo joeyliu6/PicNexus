@@ -1,9 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { WebDAVProfile } from '@/config/types';
-import {
-  decryptBackupProfiles,
-  encryptBackupProfiles,
-} from '@/composables/settings/webdavBackupSecrets';
+import { encryptBackupProfiles } from '@/composables/settings/webdavBackupSecrets';
 
 // mock 的是**真实存在**的模块导出。此前 useSettingsForm.spec 伪造了两个
 // Rust 侧从未实现的 Tauri 命令（encrypt_webdav_password / decrypt_webdav_password），
@@ -92,32 +89,37 @@ describe('encryptBackupProfiles', () => {
   });
 });
 
-describe('decryptBackupProfiles', () => {
-  it('restores the plaintext for editing in the settings form', async () => {
-    const [loaded] = await decryptBackupProfiles([
-      makeProfile({ passwordEncrypted: 'cipher(secret)' }),
-    ]);
+// decryptBackupProfiles 已经删掉：加载时不再把密文还原成明文塞进 p.password。
+// 「加载不解密」这条现在由 useSettingsForm.spec 的 loadSettings 用例守着。
 
-    expect(loaded.password).toBe('secret');
+describe('保存往返', () => {
+  // 这一条是整个改动的底线判据：存进去的密码，下次还能原样解出来。
+  // a322dba 之前挂掉的正是这条链路——加密没成功、明文又被清掉，密码彻底消失。
+  it('密文存下来之后仍能解回原值', async () => {
+    const [saved] = await encryptBackupProfiles([makeProfile({ password: '坚果云密码' })]);
+
+    expect(saved.password).toBe('');
+    expect(saved.passwordEncrypted).toBeTruthy();
+
+    const roundTripped = await WebDAVClient.decryptPassword(saved.passwordEncrypted!);
+    expect(roundTripped).toBe('坚果云密码');
   });
 
-  it('does not overwrite a plaintext the user is already editing', async () => {
-    const [loaded] = await decryptBackupProfiles([
-      makeProfile({ password: 'being-typed', passwordEncrypted: 'cipher(secret)' }),
-    ]);
+  it('反复保存不会把已存的密文弄丢', async () => {
+    const [first] = await encryptBackupProfiles([makeProfile({ password: 'secret' })]);
+    const [second] = await encryptBackupProfiles([first]);
+    const [third] = await encryptBackupProfiles([second]);
 
-    expect(loaded.password).toBe('being-typed');
-    expect(WebDAVClient.decryptPassword).not.toHaveBeenCalled();
+    expect(third.passwordEncrypted).toBe(first.passwordEncrypted);
+    expect(await WebDAVClient.decryptPassword(third.passwordEncrypted!)).toBe('secret');
   });
 
-  // 一条坏记录不能卡死整个设置页加载
-  it('blanks the password and keeps going when one record fails to decrypt', async () => {
-    const loaded = await decryptBackupProfiles([
-      makeProfile({ id: 'bad', passwordEncrypted: 'bad-cipher' }),
-      makeProfile({ id: 'good', passwordEncrypted: 'cipher(ok)' }),
-    ]);
+  it('老配置里遗留的明文会在下一次保存时被加密掉', async () => {
+    const legacy = makeProfile({ password: '明文老密码', passwordEncrypted: undefined });
 
-    expect(loaded[0].password).toBe('');
-    expect(loaded[1].password).toBe('ok');
+    const [migrated] = await encryptBackupProfiles([legacy]);
+
+    expect(migrated.password).toBe('');
+    expect(await WebDAVClient.decryptPassword(migrated.passwordEncrypted!)).toBe('明文老密码');
   });
 });
