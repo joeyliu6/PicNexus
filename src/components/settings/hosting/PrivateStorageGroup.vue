@@ -221,7 +221,23 @@ async function commitWebDAVPassword(profileId: string) {
 }
 
 function webdavPasswordPlaceholder(profile: WebDAVStorageProfile): string {
-  return profile.passwordEncrypted ? '已保存，留空则不修改' : '输入 WebDAV 密码';
+  return profile.passwordEncrypted ? '留空则不修改' : '输入 WebDAV 密码';
+}
+
+/**
+ * 点眼睛时才解密，明文只在 SensitiveField 的只读展示态里活 15 秒
+ *
+ * Why 不在渲染时就解密好放着：那等于把明文常驻内存，和「密文常驻、明文按需」
+ * 的设计背道而驰。空输入框 + 「已保存」标记负责回答"有没有"，
+ * 想知道"是什么"必须是一次显式的用户动作。
+ */
+function makeWebDAVPasswordRevealer(profile: WebDAVStorageProfile): (() => Promise<string>) | null {
+  if (!profile.passwordEncrypted) return null;
+  return () => secureStorage.decrypt(profile.passwordEncrypted as string);
+}
+
+function handleWebDAVRevealError(error: unknown): void {
+  log.error('WebDAV 密码解密失败，无法查看', error);
 }
 </script>
 
@@ -340,13 +356,21 @@ function webdavPasswordPlaceholder(profile: WebDAVStorageProfile): string {
           class="form-item"
           :class="{ 'span-full': field.spanFull }"
         >
-          <label>{{ field.label }}</label>
+          <label>
+            {{ field.label }}
+            <span v-if="field.key === 'password' && profile.passwordEncrypted" class="saved-chip">
+              <i class="pi pi-check" aria-hidden="true"></i>已保存
+            </span>
+          </label>
           <SensitiveField
             v-if="field.key === 'password'"
             :modelValue="webdavPasswordDrafts[profile.id] ?? ''"
             @update:modelValue="setWebDAVPasswordDraft(profile.id, $event)"
             @blur="commitWebDAVPassword(profile.id)"
             :placeholder="webdavPasswordPlaceholder(profile)"
+            :has-stored-value="!!profile.passwordEncrypted"
+            :reveal-stored="makeWebDAVPasswordRevealer(profile)"
+            @reveal-error="handleWebDAVRevealError"
           />
           <InputText
             v-else
@@ -389,5 +413,29 @@ function webdavPasswordPlaceholder(profile: WebDAVStorageProfile): string {
 
 .delete-profile-btn:hover {
   background: var(--error-alpha-8);
+}
+
+/*
+ * 「已保存」标记
+ *
+ * Why 不用灰 placeholder 传达：输入框是空的这个视觉信号，分量远大于框内一行灰字。
+ * 而「密码存着呢」和「密码丢了」长得一模一样时，用户没法判断——a322dba 修的
+ * 正是"保存后密码被静默清空"，这两种状态必须一眼可分。
+ */
+.saved-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin-left: var(--space-xs-sm);
+  padding: 0 var(--space-xs-sm);
+  border-radius: var(--radius-sm-md);
+  background: var(--success-alpha-12);
+  color: var(--success);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+}
+
+.saved-chip i {
+  font-size: var(--text-2xs);
 }
 </style>

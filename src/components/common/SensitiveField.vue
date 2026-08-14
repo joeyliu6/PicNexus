@@ -14,6 +14,16 @@ const props = withDefaults(defineProps<{
   readonly?: boolean;
   disabled?: boolean;
   inputClass?: string;
+  /**
+   * 输入框为空、但后台存着密文时置 true
+   *
+   * Why 需要这个标记：图床 WebDAV 这类"密文常驻、明文按需"的字段，`modelValue`
+   * 永远是空的（明文不进 formData），单看值分不清「存着呢」还是「没填过」。
+   * 少了它，眼睛按钮会因为 `!value` 一直禁用，用户连确认一下的路都没有。
+   */
+  hasStoredValue?: boolean;
+  /** 点眼睛时按需取明文；不提供则 `hasStoredValue` 只用于展示，不可查看 */
+  revealStored?: (() => Promise<string>) | null;
 }>(), {
   modelValue: '',
   multiline: false,
@@ -23,14 +33,24 @@ const props = withDefaults(defineProps<{
   readonly: false,
   disabled: false,
   inputClass: '',
+  hasStoredValue: false,
+  revealStored: null,
 });
 
 const emit = defineEmits<{
   'update:modelValue': [value: string];
   blur: [event: FocusEvent];
+  revealError: [error: unknown];
 }>();
 
 const revealed = ref(false);
+/**
+ * 临时揭示的已保存明文
+ *
+ * Why 不塞进 modelValue：那会让"查看"变成"输入"——父组件失焦时会把它当成用户
+ * 新填的密码重新加密写回。这里单独存，且展示态是只读的，明文只进 DOM 不进数据流。
+ */
+const storedPlaintext = ref<string | null>(null);
 let revealTimer: ReturnType<typeof setTimeout> | null = null;
 
 const value = computed({
@@ -38,8 +58,15 @@ const value = computed({
   set: (next: string) => emit('update:modelValue', next),
 });
 
-const toggleLabel = computed(() => revealed.value ? '隐藏敏感内容' : '显示敏感内容');
-const toggleIcon = computed(() => revealed.value ? 'pi pi-eye-slash' : 'pi pi-eye');
+/** 展示已保存明文的只读态：此时输入框不可编辑，再点一次眼睛回到可编辑空态 */
+const showingStored = computed(() => storedPlaintext.value !== null);
+const isRevealed = computed(() => revealed.value || showingStored.value);
+const canToggle = computed(() =>
+  !props.disabled && (!!value.value || (props.hasStoredValue && !!props.revealStored))
+);
+
+const toggleLabel = computed(() => isRevealed.value ? '隐藏敏感内容' : '显示敏感内容');
+const toggleIcon = computed(() => isRevealed.value ? 'pi pi-eye-slash' : 'pi pi-eye');
 
 function clearRevealTimer(): void {
   if (revealTimer) {
@@ -51,23 +78,41 @@ function clearRevealTimer(): void {
 function conceal(): void {
   clearRevealTimer();
   revealed.value = false;
+  storedPlaintext.value = null;
+}
+
+function startConcealTimer(): void {
+  clearRevealTimer();
+  revealTimer = setTimeout(conceal, REVEAL_DURATION_MS);
 }
 
 function revealTemporarily(): void {
   revealed.value = true;
-  clearRevealTimer();
-  revealTimer = setTimeout(() => {
-    revealed.value = false;
-    revealTimer = null;
-  }, REVEAL_DURATION_MS);
+  startConcealTimer();
+}
+
+async function revealStoredTemporarily(): Promise<void> {
+  if (!props.revealStored) return;
+  try {
+    storedPlaintext.value = await props.revealStored();
+    startConcealTimer();
+  } catch (error) {
+    storedPlaintext.value = null;
+    emit('revealError', error);
+  }
 }
 
 function toggleReveal(): void {
-  if (revealed.value) {
+  if (isRevealed.value) {
     conceal();
     return;
   }
-  revealTemporarily();
+  // 框里有用户正在输入的内容 → 切明文；框是空的但存着密文 → 按需解密
+  if (value.value) {
+    revealTemporarily();
+    return;
+  }
+  void revealStoredTemporarily();
 }
 
 function handleBlur(event: FocusEvent): void {
@@ -95,6 +140,16 @@ defineExpose({
       @blur="handleBlur"
       @keydown.esc="conceal"
     />
+    <!-- 已保存明文的只读展示态：不绑 v-model，明文只进 DOM 不进数据流 -->
+    <InputText
+      v-else-if="showingStored"
+      :modelValue="storedPlaintext ?? ''"
+      type="text"
+      readonly
+      :disabled="disabled"
+      :class="['sensitive-control', inputClass]"
+      @keydown.esc="conceal"
+    />
     <InputText
       v-else
       v-model="value"
@@ -111,9 +166,9 @@ defineExpose({
       type="button"
       class="sensitive-toggle"
       :aria-label="toggleLabel"
-      :aria-pressed="revealed"
+      :aria-pressed="isRevealed"
       :title="toggleLabel"
-      :disabled="disabled || !value"
+      :disabled="!canToggle"
       @mousedown.prevent
       @click="toggleReveal"
     >
