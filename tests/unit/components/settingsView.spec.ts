@@ -204,7 +204,7 @@ const AdvancedSettingsPanelStub = defineComponent({
 
 const HostingSettingsPanelStub = defineComponent({
   name: 'HostingSettingsPanel',
-  props: ['availableServices', 'serviceConfigStatus', 'testingConnections', 'targetCardId'],
+  props: ['availableServices', 'serviceConfigStatus', 'testingConnections', 'targetCardId', 'cookieFormData'],
   emits: [
     'update:available-services',
     'accept-public-service-risk',
@@ -400,6 +400,27 @@ describe('SettingsView page interactions', () => {
 
     await wrapper.get('.advanced-go-hosting').trigger('click');
     expect(wrapper.find('[data-testid="hosting-panel"]').exists()).toBe(true);
+  });
+
+  // 其他 cookie 服务在 formData 里是 `{ cookie }` 对象，只有微博是扁平字符串 weiboCookie。
+  // 曾经就地拼 `{ cookie: formData.weiboCookie }` 传下去——子组件按引用改的是那个临时对象里
+  // 的字符串副本，formData 纹丝不动，保存时读回旧值，手动编辑的微博 Cookie 被静默丢弃。
+  it('routes Weibo cookie edits back into formData', async () => {
+    const settingsTargetTab = ref<string | null>('hosting');
+    const wrapper = await mountSettings({ settingsTargetTab });
+
+    const panel = wrapper.findComponent(HostingSettingsPanelStub);
+    const cookieFormData = panel.props('cookieFormData') as { weibo: { cookie: string } };
+
+    expect(cookieFormData.weibo.cookie).toBe('');
+
+    cookieFormData.weibo.cookie = 'SUB=edited-by-hand';
+
+    expect(mockState.formData.value.weiboCookie).toBe('SUB=edited-by-hand');
+    // 反向判据：读回来也得是新值，否则重渲染时输入框会跳回旧内容
+    expect(
+      (panel.props('cookieFormData') as { weibo: { cookie: string } }).weibo.cookie,
+    ).toBe('SUB=edited-by-hand');
   });
 
   it('opens hosting tab with a target service card from navigation section', async () => {

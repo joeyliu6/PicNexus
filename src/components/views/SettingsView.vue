@@ -51,6 +51,26 @@ const {
   addWebDAVProfile, deleteWebDAVProfile, switchWebDAVProfile,
 } = useSettingsForm();
 
+/**
+ * 微博 Cookie 的读写通道
+ *
+ * Why 需要这么一个东西：其他 cookie 服务在 formData 里都是 `{ cookie: string }` 对象，
+ * 只有微博是一个扁平字符串 `weiboCookie`。给 CookieServiceGroup 传参时曾就地拼一个
+ * `{ cookie: formData.weiboCookie }` 字面量——每次渲染都新建，而且里面装的是字符串的
+ * **副本**。子组件按引用改 `cookieFormData.weibo.cookie`，改的是这个临时对象，
+ * `formData.weiboCookie` 纹丝不动，保存时读到的还是旧值：手动编辑的微博 Cookie 会被静默丢弃。
+ *
+ * 换成一个身份稳定、带 getter/setter 的通道，读写就都落到 formData 上了。
+ */
+const weiboCookieField = {
+  get cookie(): string {
+    return formData.value.weiboCookie;
+  },
+  set cookie(value: string) {
+    formData.value.weiboCookie = value;
+  },
+};
+
 const {
   qiyuAvailable, jdAvailable, isCheckingQiyu, isCheckingJd,
   testingConnections, activeSession, visibleRefreshingServiceIds,
@@ -374,7 +394,7 @@ onUnmounted(() => {
           :private-form-data="{ r2: formData.r2, tencent: formData.tencent, aliyun: formData.aliyun, qiniu: formData.qiniu, upyun: formData.upyun }"
           :custom-s3-profiles="formData.custom_s3_profiles"
           :webdav-profiles="formData.webdav_profiles"
-          :cookie-form-data="{ weibo: { cookie: formData.weiboCookie }, zhihu: formData.zhihu, nowcoder: formData.nowcoder, nami: formData.nami, bilibili: formData.bilibili, chaoxing: formData.chaoxing }"
+          :cookie-form-data="{ weibo: weiboCookieField, zhihu: formData.zhihu, nowcoder: formData.nowcoder, nami: formData.nami, bilibili: formData.bilibili, chaoxing: formData.chaoxing }"
           :token-form-data="{ smms: formData.smms, github: formData.github, imgur: formData.imgur }"
           :testing-connections="testingConnections"
           :jd-available="jdAvailable" :qiyu-available="qiyuAvailable"
