@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref } from 'vue';
 import InputText from 'primevue/inputtext';
 import HostingCard from '../HostingCard.vue';
 import SensitiveField from '../../common/SensitiveField.vue';
@@ -9,6 +8,7 @@ import { makeCustomS3Id, makeWebDAVId, DEFAULT_WEBDAV_URL_TEMPLATE } from '../..
 import { hasNonEmptyFields } from '../../../utils/validators';
 import { secureStorage } from '../../../security/crypto';
 import { createLogger } from '../../../utils/logger';
+import { useSensitiveDraft } from '../../../composables/settings/useSensitiveDraft';
 
 const log = createLogger('PrivateStorage');
 
@@ -193,52 +193,91 @@ function setWebDAVField(profileId: string, key: string, value: string) {
   }
 }
 
-/**
- * 明文密码只在输入框里活一瞬：失焦即加密写入 passwordEncrypted，随后清空草稿。
- * 这样明文既不进 formData 也不落盘。留空表示"不修改已保存的密码"。
- */
-const webdavPasswordDrafts = ref<Record<string, string>>({});
-
-function setWebDAVPasswordDraft(profileId: string, value: string) {
-  webdavPasswordDrafts.value[profileId] = value;
-}
-
-async function commitWebDAVPassword(profileId: string) {
-  const draft = webdavPasswordDrafts.value[profileId];
-  if (!draft) return;
-
-  const profile = props.webdavProfiles.find(p => p.id === profileId);
-  if (!profile) return;
-
-  try {
-    const passwordEncrypted = await secureStorage.encrypt(draft);
-    emit('updateWebdav', { ...profile, passwordEncrypted });
-    webdavPasswordDrafts.value[profileId] = '';
-    emit('save');
-  } catch (error) {
-    log.error('WebDAV 密码加密失败', error);
-  }
-}
-
-function webdavPasswordPlaceholder(profile: WebDAVStorageProfile): string {
-  return profile.passwordEncrypted ? '留空则不修改' : '输入 WebDAV 密码';
-}
+// ---- 敏感字段：密文常驻、明文按需 ----
 
 /**
- * 点眼睛时才解密，明文只在 SensitiveField 的只读展示态里活 15 秒
+ * 三组密钥共用一张草稿表，用 key 前缀分流：
  *
- * Why 不在渲染时就解密好放着：那等于把明文常驻内存，和「密文常驻、明文按需」
- * 的设计背道而驰。空输入框 + 「已保存」标记负责回答"有没有"，
- * 想知道"是什么"必须是一次显式的用户动作。
+ *   builtin:<服务>:<字段>    内置 S3 —— 明文存在 formData 里
+ *   customS3:<配置>:<字段>   自定义 S3 —— 明文存在 profile 里
+ *   webdav:<配置>            WebDAV 图床密码 —— 密文存在 passwordEncrypted
+ *
+ * 三者只有"取值"和"存值"两步不同，收在下面三个回调里；模板侧看到的是同一套接口。
+ *
+ * Why 明文那两类也要走这套：统一规则管的是界面契约——存过之后只显示「有没有」，
+ * 不显示「是什么」。跟底下存的是密文还是明文无关。
  */
-function makeWebDAVPasswordRevealer(profile: WebDAVStorageProfile): (() => Promise<string>) | null {
-  if (!profile.passwordEncrypted) return null;
-  return () => secureStorage.decrypt(profile.passwordEncrypted as string);
+const builtinKey = (svcId: PrivateProviderId, field: string) => `builtin:${svcId}:${field}`;
+const customS3Key = (profileId: string, field: string) => `customS3:${profileId}:${field}`;
+const webdavKey = (profileId: string) => `webdav:${profileId}`;
+
+type SecretRef =
+  | { kind: 'builtin'; svcId: PrivateProviderId; field: string }
+  | { kind: 'customS3'; profileId: string; field: string }
+  | { kind: 'webdav'; profileId: string };
+
+function parseSecretKey(key: string): SecretRef | null {
+  const [kind, first, second] = key.split(':');
+  if (kind === 'builtin' && first && second) {
+    return { kind, svcId: first as PrivateProviderId, field: second };
+  }
+  if (kind === 'customS3' && first && second) {
+    return { kind, profileId: first, field: second };
+  }
+  if (kind === 'webdav' && first) {
+    return { kind, profileId: first };
+  }
+  return null;
 }
 
-function handleWebDAVRevealError(error: unknown): void {
-  log.error('WebDAV 密码解密失败，无法查看', error);
+/** WebDAV 返回的是密文，另外两类返回的就是明文本身 */
+function storedValueOf(target: SecretRef): string {
+  if (target.kind === 'builtin') {
+    return getFieldModel(target.svcId, target.field) || '';
+  }
+  if (target.kind === 'customS3') {
+    const profile = props.customS3Profiles.find(p => p.id === target.profileId);
+    return profile ? getCustomS3Field(profile, target.field) : '';
+  }
+  const profile = props.webdavProfiles.find(p => p.id === target.profileId);
+  return profile?.passwordEncrypted || '';
 }
+
+const secrets = useSensitiveDraft({
+  hasStored: key => {
+    const target = parseSecretKey(key);
+    return !!target && !!storedValueOf(target);
+  },
+
+  reveal: async key => {
+    const target = parseSecretKey(key);
+    if (!target) return '';
+    const stored = storedValueOf(target);
+    return target.kind === 'webdav' ? await secureStorage.decrypt(stored) : stored;
+  },
+
+  commit: async (key, draft) => {
+    const target = parseSecretKey(key);
+    if (!target) return;
+
+    if (target.kind === 'builtin') {
+      setFieldModel(target.svcId, target.field, draft);
+    } else if (target.kind === 'customS3') {
+      setCustomS3Field(target.profileId, target.field, draft);
+    } else {
+      const profile = props.webdavProfiles.find(p => p.id === target.profileId);
+      if (!profile) return;
+      // 明文只在输入框里活一瞬：加密后写 passwordEncrypted，明文不进 profile 也不落盘
+      const passwordEncrypted = await secureStorage.encrypt(draft);
+      emit('updateWebdav', { ...profile, passwordEncrypted });
+    }
+
+    emit('save');
+  },
+
+  onRevealError: error => log.error('敏感字段解密失败，无法查看', error),
+  onCommitError: error => log.error('敏感字段保存失败', error),
+});
 </script>
 
 <template>
@@ -264,13 +303,18 @@ function handleWebDAVRevealError(error: unknown): void {
           class="form-item"
           :class="{ 'span-full': field.spanFull }"
         >
-          <label>{{ field.label }}</label>
+          <label>
+            {{ field.label }}
+            <span
+              v-if="field.type === 'password' && secrets.hasStored(builtinKey(svc.id, field.key))"
+              class="saved-chip"
+            >
+              <i class="pi pi-check" aria-hidden="true"></i>已保存
+            </span>
+          </label>
           <SensitiveField
             v-if="field.type === 'password'"
-            :modelValue="getFieldModel(svc.id, field.key)"
-            @update:modelValue="setFieldModel(svc.id, field.key, $event)"
-            @blur="emit('save')"
-            :placeholder="field.placeholder"
+            v-bind="secrets.bindingsFor(builtinKey(svc.id, field.key), field.placeholder ?? '')"
           />
           <InputText
             v-else
@@ -307,13 +351,18 @@ function handleWebDAVRevealError(error: unknown): void {
           class="form-item"
           :class="{ 'span-full': field.spanFull }"
         >
-          <label>{{ field.label }}</label>
+          <label>
+            {{ field.label }}
+            <span
+              v-if="field.type === 'password' && secrets.hasStored(customS3Key(profile.id, field.key))"
+              class="saved-chip"
+            >
+              <i class="pi pi-check" aria-hidden="true"></i>已保存
+            </span>
+          </label>
           <SensitiveField
             v-if="field.type === 'password'"
-            :modelValue="getCustomS3Field(profile, field.key)"
-            @update:modelValue="setCustomS3Field(profile.id, field.key, $event)"
-            @blur="emit('save')"
-            :placeholder="field.placeholder"
+            v-bind="secrets.bindingsFor(customS3Key(profile.id, field.key), field.placeholder ?? '')"
           />
           <InputText
             v-else
@@ -358,19 +407,16 @@ function handleWebDAVRevealError(error: unknown): void {
         >
           <label>
             {{ field.label }}
-            <span v-if="field.key === 'password' && profile.passwordEncrypted" class="saved-chip">
+            <span
+              v-if="field.key === 'password' && secrets.hasStored(webdavKey(profile.id))"
+              class="saved-chip"
+            >
               <i class="pi pi-check" aria-hidden="true"></i>已保存
             </span>
           </label>
           <SensitiveField
             v-if="field.key === 'password'"
-            :modelValue="webdavPasswordDrafts[profile.id] ?? ''"
-            @update:modelValue="setWebDAVPasswordDraft(profile.id, $event)"
-            @blur="commitWebDAVPassword(profile.id)"
-            :placeholder="webdavPasswordPlaceholder(profile)"
-            :has-stored-value="!!profile.passwordEncrypted"
-            :reveal-stored="makeWebDAVPasswordRevealer(profile)"
-            @reveal-error="handleWebDAVRevealError"
+            v-bind="secrets.bindingsFor(webdavKey(profile.id), '输入 WebDAV 密码')"
           />
           <InputText
             v-else
@@ -415,27 +461,4 @@ function handleWebDAVRevealError(error: unknown): void {
   background: var(--error-alpha-8);
 }
 
-/*
- * 「已保存」标记
- *
- * Why 不用灰 placeholder 传达：输入框是空的这个视觉信号，分量远大于框内一行灰字。
- * 而「密码存着呢」和「密码丢了」长得一模一样时，用户没法判断——a322dba 修的
- * 正是"保存后密码被静默清空"，这两种状态必须一眼可分。
- */
-.saved-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2xs);
-  margin-left: var(--space-xs-sm);
-  padding: 0 var(--space-xs-sm);
-  border-radius: var(--radius-sm-md);
-  background: var(--success-alpha-12);
-  color: var(--success);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-medium);
-}
-
-.saved-chip i {
-  font-size: var(--text-2xs);
-}
 </style>
