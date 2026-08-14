@@ -1,8 +1,34 @@
 # 开发待办
 
-> 本文件是仓库内未完成开发需求的详细记录来源。其他文档只链接到对应条目，不重复维护需求内容。
+> 本文件是仓库内**未完成**开发需求的详细记录来源。其他文档只链接到对应条目，不重复维护需求内容。
 >
 > 「已知取舍」小节记的是**故意不做**的决定：看着像缺陷、但改了会更糟的地方。写在这里是为了拦住下一个人"顺手修好"。
+
+## 归档规则（由 `scripts/check-todo-hygiene.mjs` 强制）
+
+本文件是**待办索引**，不是档案馆。条目做完后正文必须搬走，否则完成的记录只进不出，
+文件会无限膨胀（曾经一条已完成条目占到全文件 58%）。
+
+| 小节 | 允许的详细程度 |
+|------|---------------|
+| 待验收 / 待处理 | 可以写详细——正在做的事需要上下文 |
+| 已知取舍 | 可以写详细——决定的理由就是它的价值 |
+| **已完成** | **每条正文不超过 3 行**：一句话结论 + 指向归档文档的链接 |
+
+完成时按内容性质分流，别一股脑塞进同一个地方：
+
+| 内容性质 | 去处 |
+|---------|------|
+| 验收过程与结果、设计决策记录 | `docs/audits/` |
+| 环境搭建、操作步骤 | `docs/reference/guides/` |
+| 症状 → 根因 → 修法 | `docs/reference/troubleshooting/` |
+| 可复用的做法 | `docs/reference/patterns/` |
+| 链路流程与排查表 | `docs/flows/` |
+
+两条机械规则由 `npm run lint` 拦截：**待验收 / 待处理下不得出现 `### [x]`**；
+**已完成下单条正文不得超过 3 行**。
+
+---
 
 ## 待验收
 
@@ -57,170 +83,31 @@
 
 ---
 
-### [~] WebDAV 图床支持
-
-- **来源**：[GitHub Issue #1：支持 WebDAV 图床](https://github.com/joeyliu6/PicNexus/issues/1)
-- **状态**：已实现。真机验收 **4/6 通过**（2026-08-13，dufs + 坚果云），
-  剩「连接测试的两条反例」与「OpenList / InfiniCLOUD」——执行说明见本节末尾，可独立开新会话执行。
-  验收过程顺带修掉 3 个缺陷，其中 `a322dba` 是备份密码静默丢失的数据安全问题。
-
-#### 目标
-
-把图片上传到用户自己的 WebDAV 网盘或 NAS，通过二进制 PUT 写入，并按配置的公开 URL 模板返回可引用的图片链接。
-
-#### 关键约束
-
-- 图片上传目录与配置、历史记录的 WebDAV 备份目录相互隔离。
-- 公开链接由用户配置的 URL 模板生成，不假设 WebDAV 地址可以匿名访问。
-- 不承诺所有 WebDAV 网盘都支持图片直链；分享页或临时下载地址不能作为稳定直链。
-- 保持现有 WebDAV 备份配置和旧版本配置兼容。
-
-#### 与原调研方案的偏离
-
-原方案计划**复用现有 WebDAV profile**（`config.webdav`）作为图床配置，实现时改为**独立配置**（`config.webdav_profiles`）：
-
-- 图床需要 `publicDomain` / `publicUrlTemplate`，备份用不上，混在一起会让备份配置长出无用字段
-- 用户的备份服务（如坚果云）与图床服务（如 OpenList）往往不是同一个，强行共用一份凭证反而别扭
-- 代价是同一台服务器要填两次账号密码；换来两套配置互不干扰，备份功能零改动
-
-#### 调研时漏掉、实现时补上的一项
-
-网络策略会把局域网地址拦死，而群晖 / 自建 NAS（`http://192.168.1.10:5005`）正是 WebDAV 图床最主要的用户群。已为 WebDAV 单独放开，共三层——注意**备份链路与图床链路走的是两套函数**，改一边不会自动影响另一边：
-
-| 层 | 备份 WebDAV | 图床 WebDAV |
-|----|-------------|-------------|
-| 1. 前端请求校验 | `assertAllowedWebDAVUrl` | `assertAllowedWebDAVStorageUrl` |
-| 2. Rust 请求校验 | `validate_webdav_url`（同步） | `validate_webdav_url_for_request`（异步，带 DNS 裁决） |
-| 3. 应用内图片显示 | 共用 `safeImageUrl` —— 漏掉这层会导致上传成功但历史记录缩略图全裂 | |
-
-两条链路的差别只在 HTTP **主机名**上：备份链路在前端就拒绝 `http://主机名`（只认 IP 字面量），
-图床链路放行到 Rust 侧、按 DNS 解析结果裁决，好让 `http://nas.local:5005` 这类地址能用。
-
-放开仅作用于 WebDAV 链路，其他图床仍是 HTTPS-only；链路本地段（含云元数据 `169.254.169.254`）与公网明文 HTTP 依旧拒绝。DNS 裁决同样先拒绝链路本地/组播/保留段，再判断是否局域网——判据是 `is_allowed_lan_addr`，不能直接用 `is_private_or_reserved_host`（它的语义是"非公网"，会把云元数据地址一起放进来）。
-
-`is_allowed_lan_addr` 还会拒绝**代理的 fake-ip 池** `198.18.0.0/15`：那个段出现在 DNS 答案里只说明本机开着 TUN，对目标的真实位置零信息量，当局域网证据会让公网明文 HTTP 全线放行。详见下方「已完成」小节。
-
-#### 建议测试环境
-
-- [OpenList](https://doc.oplist.org/guide/advanced/webdav)：本地端到端测试，覆盖 WebDAV 上传和固定公开直链。
-- [InfiniCLOUD](https://infini-cloud.net/en/developer_webdav.html)：公网 WebDAV 协议兼容测试，不依赖其分享地址作为图片直链。
-
-#### 验收清单
-
-已由单元测试覆盖：
-
-- [x] 多个 WebDAV profile 可以独立启用、选择和上传。
-- [x] 图片目录与 `settings.json`、`history.json` 的备份目录隔离（两套独立配置）。
-- [x] 中文、空格及需要 URL 编码的文件名可以正确上传和访问（编码逻辑单测）。
-- [x] 认证失败、无写入权限、路径错误和存储空间不足时返回明确错误。
-- [x] WebDAV 图床可以参与多图床上传、重试和主链接选择流程。
-- [x] 配置文件中密码为密文，明文不进 formData 也不落盘。
-
-需真实服务器验证：
-
-- [x] 自动创建远程目录并以二进制 PUT 上传图片。（2026-08-13，dufs 真机）
-- [x] 上传成功后按配置模板生成公开 URL，并写入上传历史。（2026-08-13，dufs 真机）
-- [ ] 连接测试能区分「传不上去」和「传上去了但链接打不开」。**正例已过，两条反例待测**
-- [x] 内网 HTTP（NAS）场景下历史记录缩略图正常显示。（2026-08-13，`192.168.80.1` 私有 IP）
-- [x] 现有 WebDAV 备份功能及旧配置无需手动迁移即可继续使用。（2026-08-13，坚果云真机；见下方「顺带修掉的缺陷」）
-- [ ] OpenList 本地端到端测试和 InfiniCLOUD 公网兼容测试通过。
-
-#### 验收顺带修掉的 3 个缺陷（均已合入 main）
-
-| 提交 | 缺陷 | 一句话 |
-|------|------|--------|
-| `2923ee1` | 首页不显示 WebDAV 图床 | `UploadView.vue` 只展开了 custom_s3 profile，`webdav_profiles` 一次都没读 |
-| `f0ec7df` | 上传队列显示 `WebDAV (msrlkrjz3...)` | `getServiceDisplayName` 的 config 是可选参数，38 个调用点里 31 个没传 |
-| `a322dba` | **备份 WebDAV 密码每次保存被静默清空** | 调了两个 Rust 侧从未存在的命令；单测把它们 mock 成存在的，所以测试全绿、生产全挂 |
-
----
-
-### 剩余两条的执行说明（可独立开新会话执行）
-
-#### 环境重建（约 5 分钟）
-
-`dufs` 是单二进制静态文件服务器，**WebDAV 写入与匿名 HTTP 读取共用同一端口同一目录**，
-天然满足「公开域名根路径 = WebDAV 根路径」，正好对上默认模板 `{domain}/{path}`。
-
-```powershell
-cargo install dufs --locked          # 本机已装过则跳过
-mkdir C:\Users\Jiawei\webdav-root
-dufs C:\Users\Jiawei\webdav-root -b 192.168.80.1 -p 5001 -A -a "admin:admin123@/:rw" -a "@/"
-```
-
-`-a admin:admin123@/:rw` = 管理员可读写，`-a @/` = 匿名只读——这正是图床要的形态。
-
-> ⚠️ **绑定地址不要用 `0.0.0.0`**：那会把一个带写权限的服务暴露给整个局域网。
-> `192.168.80.1` 是 VMware host-only 网卡，既是私有 IP（能命中 `is_private_or_reserved_host` 分支），
-> 又不桥接物理网络。用 `127.0.0.1` 则只会走回环分支（`url_policy.rs` 里回环与私有 IP 是两条独立分支），
-> 测不到 NAS 场景。本机 IP 可能变化，先 `Get-NetIPAddress -AddressFamily IPv4` 确认。
-
-> ⚠️ **必须填 IP 字面量，不能填主机名**：本机开着 TUN（`Meta` 网卡挂 `198.18.0.1`），
-> 任何主机名都会解析进 fake-ip 池被 `validate_webdav_url_for_request` 拒绝，连 `nas.local` 也不例外。
-> 详见上方「WebDAV 明文 HTTP 的『显式确认』逃生舱」。
-
-PicNexus 侧配置（设置 → 图床 → 私有存储 → WebDAV）：
-
-| 字段 | 值 |
-|------|-----|
-| WebDAV 地址 | `http://192.168.80.1:5001` |
-| 用户名 / 密码 | `admin` / `admin123` |
-| 图片目录 | `picnexus/新目录`（故意填不存在的多级中文目录，顺带验证自动建目录） |
-| 公开访问域名 | `http://192.168.80.1:5001` |
-| 链接模板 | 留空（默认 `{domain}/{path}`） |
-
-#### 待测 1：连接测试的两条反例
-
-这两条走的是 `test_webdav_storage` 里**两条不同分支**，必须分开测。
-真实用户最容易踩的是 B——填了 OpenList 分享页而不是直链，图传上去了、链接也能打开，
-但打开的是网页不是图；只判状态码的话 B 会被误报成「成功」。
-
-**A. 状态码分支**（`webdav_upload.rs` 的 `!is_ok_status(status)`）
-公开访问域名改成 `http://192.168.80.1:5001/wrong-prefix` → 点测试连接。
-
-> 判据：`图片已上传，但公开链接打不开 (HTTP 404)——请检查「公开访问域名」和 URL 模板`
-
-**B. Content-Type 分支**（`!content_type.starts_with("image/")`）
-域名改回，链接模板改成 `{domain}/`（指向 dufs 目录列表，返回 HTML）→ 点测试连接。
-
-> 判据：`公开链接返回的不是图片 (Content-Type: text/html; charset=utf-8)——多半是模板指向了登录页或分享页`
-
-两条都**不能**退化成笼统的「连接失败」或「上传失败」——那说明分支没区分开。
-测完把域名和模板改回原值。
-
-（服务端响应形态已用 curl 实测确认：A 返回 404 无 Content-Type；B 返回 200 + `text/html`；
-正确链接返回 200 + `image/png`。所以失败只可能出在 PicNexus 的判定或文案上。）
-
-#### 待测 2：OpenList 与 InfiniCLOUD
-
-- **OpenList**（Docker 本地）：WebDAV 端点是 `/dav/`，需在用户权限里同时开启
-  「WebDAV 读」与「WebDAV 管理」，后者还要配合具体的文件系统权限（上传/新建目录）。
-  ⚠️ 直链格式**不要照抄** `{domain}/d/挂载点/{path}`——官方 WebDAV 文档未说明 `/d/` 前缀，
-  部署后先在界面点一次「复制直链」看实际格式再填模板。
-- **InfiniCLOUD**（公网，免费 20GB）：用于协议兼容性。它不提供匿名直链，
-  所以连接测试**预期会落在「传上去了但链接打不开」分支**——这不是失败，
-  它本身就是上面反例 A 的一个真实用例。
-
-#### 测试素材
-
-需要同名不同色的图来验证覆盖行为，PowerShell 生成：
-
-```powershell
-Add-Type -AssemblyName System.Drawing
-function New-SolidPng($path, $color) {
-  $bmp = New-Object System.Drawing.Bitmap 240,240
-  $g = [System.Drawing.Graphics]::FromImage($bmp)
-  $g.Clear([System.Drawing.Color]::FromName($color)); $g.Dispose()
-  $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
-}
-New-SolidPng "$env:TEMP\red\test.png" Red      # 目录需先建
-New-SolidPng "$env:TEMP\blue\test.png" Blue
-New-SolidPng "$env:TEMP\中文 图片.png" Green   # 验证 percent-encode
-```
-
----
-
 ## 待处理
+
+### [ ] WebDAV 只支持 Basic 认证，不支持 Digest
+
+- **来源**：2026-08-14 WebDAV 图床验收后的边界梳理
+- **优先级**：中——不是所有人会撞上，但撞上的人会被错误文案带向完全错误的排查方向
+
+[`basic_auth`](../src-tauri/src/commands/webdav_upload.rs#L155) 只拼 `Basic <base64>`，
+整个 `webdav_upload.rs` 没有任何 Digest 相关代码。服务端若只接受 Digest 会返回 401，
+而 `describe_status` 把 401 翻译成「认证失败，请检查用户名和密码」。
+
+**危害不在于少支持一种认证，在于提示把用户引向反复核对密码——而密码根本没错。**
+常见于部分群晖 / 威联通的 WebDAV 配置、Apache `mod_dav` 默认配置。
+
+**两个方向，成本差很多**：
+
+1. **只改文案（低成本）**：401 时补一句「若确认密码无误，可能是服务端要求 Digest 认证，PicNexus 暂不支持」。
+   不解决问题但止住错误排查。
+2. **真正支持 Digest（高成本）**：需要处理 401 challenge、nonce、qop、nc 递增，
+   且 `reqwest` 无内置支持，要么引依赖要么自己实现。上传链路每个请求都要过一遍。
+
+建议先做 1，收到实际报障再评估 2。排查方法见
+[webdav-image-host-issues.md](./reference/troubleshooting/webdav-image-host-issues.md#认证失败但用户名密码反复核对都是对的)。
+
+---
 
 ### [ ] WebDAV 明文 HTTP 的「显式确认」逃生舱
 
@@ -231,16 +118,13 @@ New-SolidPng "$env:TEMP\中文 图片.png" Green   # 验证 percent-encode
 
 > 开着 TUN + fake-ip **且**用主机名（而非 IP）访问 NAS **且**该主机名没被代理的 `fake-ip-filter` 排除。
 
-**实测（2026-08-08，本机 TUN + fake-ip）**：
+**实测（2026-08-08，本机 TUN + fake-ip）**：`dav.example.com` 与 `nas.local` 都被解析进 fake-ip 池，
+连 `*.local` 也不例外——[mihomo DNS 文档](https://wiki.metacubex.one/en/config/dns/) 确认内核
+**没有**任何内置的 `fake-ip-filter` 默认列表。完整实测数据见
+[fake-ip-dns-policy-distortion.md](./reference/troubleshooting/fake-ip-dns-policy-distortion.md#遗留的误伤面)。
 
-```
-dav.example.com     -> 198.18.1.47,  fdfe:dcba:9876::126
-nas.local           -> 198.18.1.48,  fdfe:dcba:9876::128
-```
-
-⚠️ **`nas.local` 也被 fake-ip 了**。原本以为 `*.lan` / `*.local` 会被代理默认排除，实测不成立——[mihomo DNS 文档](https://wiki.metacubex.one/en/config/dns/) 确认内核**没有**任何内置的 `fake-ip-filter` 默认列表，`*.lan` 只是配置模板里的惯例条目，本机配置就没带。所以 `http://nas.local:5005` 这类地址在这类机器上同样会被拒。
-
-**目前的出路**（已写进错误文案）：改填 NAS 的实际内网 IP，或改用 HTTPS。IP 字面量始终不受影响，而群晖等 NAS 引导用户填的默认就是 IP，所以这不是死路——但比原先估计的更容易撞上。
+**目前的出路**（已写进错误文案）：改填 NAS 的实际内网 IP，或改用 HTTPS。IP 字面量始终不受影响，
+而群晖等 NAS 引导用户填的默认就是 IP，所以这不是死路——但比原先估计的更容易撞上。
 
 **若要做逃生舱**，方案轮廓：
 
@@ -282,6 +166,23 @@ nas.local           -> 198.18.1.48,  fdfe:dcba:9876::128
 
 ---
 
+### [ ] 敏感字段密码框统一「密文常驻、明文按需」
+
+- **来源**：2026-08-14 WebDAV 验收时用户反馈「已保存的密码再打开是空的，体验和别处不一样」
+- **优先级**：中——第一步已落地，剩余九处待迁移
+
+统一规则：**存起来之后界面只显示「有没有」，不显示「是什么」；想看内容主动点眼睛，
+点开临时解密、15 秒自动收回。**
+
+第一步（图床 WebDAV）已完成。剩余九处 `SensitiveField` 调用点待迁移，两个拦路的：
+
+1. [`WebDAVConfigCollapsible.vue`](../src/components/settings/backup/WebDAVConfigCollapsible.vue) 已 452 行，
+   离 500 行硬指标只剩 48 行，**得先拆文件**
+2. 它正是 `a322dba` 刚修完的路径（备份密码静默清空）。备份密码现在是加载时解密到 `p.password`
+   常驻内存，改成密文常驻等于重写这块语义，**必须配坚果云真机回归**
+
+---
+
 ## 已知取舍
 
 ### 只读探测路径不做 DNS 裁决
@@ -313,37 +214,14 @@ nas.local           -> 198.18.1.48,  fdfe:dcba:9876::128
 
 ## 已完成
 
+### [x] WebDAV 图床支持
+
+真机验收 6/6 通过（2026-08-14），覆盖 dufs / OpenList / 坚果云三个互相独立的服务端实现。
+验收记录见 [webdav-acceptance-2026-08-14.md](./audits/webdav-acceptance-2026-08-14.md)，
+环境重建见 [webdav-testing-environments.md](./reference/guides/webdav-testing-environments.md)。
+
 ### [x] fake-ip 环境下 WebDAV 局域网判据失真
 
-- **发现于**：修复链接检测「网络不通」误判时（同源问题，不同路径）
-- **位置**：`src-tauri/src/url_policy.rs` 的 `is_allowed_lan_addr`
-
-`198.18.0.0/15` 曾被当作**局域网地址放行**。在开了 TUN + fake-ip 的机器上，任意公网域名都会解析进该段——包括用户填的公网 WebDAV 地址，导致 `http://dav.example.com` 被判成局域网，明文凭证防线失效。
-
-**修法**：把 fake-ip 池当成「看不见」而不是「内网」——`198.18.x.x` 出现在 DNS 答案里，对目标的真实网络位置零信息量。看不见时的默认值按赌注决定：
-
-| 模块 | 猜错的代价 | 对 fake-ip 的处置 |
-|------|-----------|------------------|
-| `commands/link_checker.rs`（只读探测/下载） | 多看一眼图片 | **豁免**（`dns_answer_is_forbidden`） |
-| `url_policy.rs`（WebDAV 明文凭证） | 账号密码明文出公网 | **拒绝**（`is_allowed_lan_addr`） |
-
-判据本身（`is_fake_ip_pool_ip`）已提到 `url_policy.rs` 由两个模块共用——走样的后果是双向的。`is_private_or_reserved_ipv4` 里的 198.18/15 **一字未改**，三份实现的保留段一致性完好；额外拒绝发生在策略层。
-
-字面量 `http://198.18.1.1/dav` 同样拒绝（备份链路与图床链路都改了）。前端 `isFakeIpPoolHost` 只拦字面量，主机名继续交给 Rust 按 DNS 结果裁决。
-
-#### 覆盖的 fake-ip 池
-
-| 协议 | 范围 | 来源 |
-|------|------|------|
-| IPv4 | `198.18.0.0/15` | mihomo 默认 `198.18.0.1/16` + sing-box 默认 `198.18.0.0/15` |
-| IPv6 | `fdfe:dcba:9876::/64` | mihomo `fake-ip-range6` 默认值 |
-
-**v6 池不是可选项**：`lookup_host` 返回的是 A + AAAA 的**并集**，调用方逐条判定，任意一条误判就整体失真。而 `fdfe:…` 落在 ULA（`fc00::/7`）里，`is_private_or_reserved_ip` 会把它当内网。
-
-> 🐛 顺带修掉一个 link_checker 的存量 bug：`validate_fetch_url` 的循环里，v6 fake-ip 因为没被豁免而触发「地址不能解析到内网」——双栈 + TUN 的机器上「从 URL 下载图片」实际是全量失败的，a83ca54 只修好了 v4 那一半。回归护栏见 `dns_answer_gate_allows_fake_ip_but_blocks_real_private`。
-
-**已知未覆盖**：sing-box 的 v6 默认 `inet6_range = fc00::/18`。没纳入的理由——那是一整块 ULA 空间，而 link_checker 侧有 `fc00::1` 必须拒绝的明确断言；为一个本机未实测到的池放宽一个 `/18` 的内网守卫，代价大于收益。若将来收到 sing-box 用户的相关报障再补。
-
-遗留的误伤面见上方「WebDAV 明文 HTTP 的『显式确认』逃生舱」。
-
-> 对照：链接检测侧的处理见 [link-check-flow.md 出站策略校验小节](./flows/link-check-flow.md#出站策略校验只读探测-vs-下载重传)。
+`198.18.0.0/15` 曾被当作局域网放行，导致 TUN 环境下公网 WebDAV 地址被判成内网、明文凭证防线失效。
+修法是把 fake-ip 当「看不见」而非「内网」，两个模块按猜错的代价选不同默认值。
+详见 [fake-ip-dns-policy-distortion.md](./reference/troubleshooting/fake-ip-dns-policy-distortion.md)。

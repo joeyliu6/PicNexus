@@ -39,6 +39,13 @@
 | [tauri-async-runtime-spawn-no-abort-handle.md](./troubleshooting/tauri-async-runtime-spawn-no-abort-handle.md) | Tauri async_runtime::spawn 无 abort_handle（改用 tokio） |
 | [tauri-csp-nonce-blocks-primevue-styles.md](./troubleshooting/tauri-csp-nonce-blocks-primevue-styles.md) | Tauri CSP nonce 阻断 PrimeVue 运行时样式 |
 
+### 网络 / 图床
+
+| 文件 | 内容 |
+|------|------|
+| [webdav-image-host-issues.md](./troubleshooting/webdav-image-host-issues.md) | WebDAV 图床按症状排查（Digest 不支持、模板拼不出 token 链接、匿名直链被拒） |
+| [fake-ip-dns-policy-distortion.md](./troubleshooting/fake-ip-dns-policy-distortion.md) | TUN 代理 fake-ip 池让局域网 / 内网判据双向失真 |
+
 ## patterns/ — 设计模式 + 最佳实践
 
 ### 设计系统
@@ -84,5 +91,6 @@
 |------|------|
 | [add-new-uploader.md](./guides/add-new-uploader.md) | 新增图床完整步骤 |
 | [testing-guide.md](./guides/testing-guide.md) | 测试规范与 Mock 策略 |
+| [webdav-testing-environments.md](./guides/webdav-testing-environments.md) | WebDAV 图床三套真机测试环境（dufs / OpenList / 坚果云）搭建与判据 |
 | [obsidian-plugin-installation.md](./guides/obsidian-plugin-installation.md) | Obsidian 插件的 BRAT、官方目录、手动安装与连接配置 |
 | [obsidian-plugin-release.md](./guides/obsidian-plugin-release.md) | Obsidian 插件构建、发布、BRAT 测试与官方提交 |
