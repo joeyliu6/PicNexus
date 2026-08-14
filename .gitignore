@@ -36,6 +36,7 @@ coverage/
 # Playwright runtime artifacts
 test-results/
 playwright-report/
+.playwright-mcp/
 .ci-artifacts/
 
 .cursorrules
