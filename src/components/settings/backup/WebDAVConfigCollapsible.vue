@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, watch, onMounted } from 'vue';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
-import type { WebDAVConfig, WebDAVProfile } from '../../../config/types';
+import type { WebDAVConfig } from '../../../config/types';
 import { useConfirm } from '../../../composables/useConfirm';
+import { useWebDAVProfileEditor } from '../../../composables/settings/useWebDAVProfileEditor';
 import SensitiveField from '../../common/SensitiveField.vue';
 
 interface Props {
@@ -22,48 +23,23 @@ const emit = defineEmits<{
 const expanded = ref(false);
 const { confirmDelete } = useConfirm();
 
-const activeProfile = computed(() => {
-  return props.modelValue.profiles.find(p => p.id === props.modelValue.activeId) || null;
-});
-
-const hasValidConfig = computed(() => {
-  if (!activeProfile.value) return false;
-  const p = activeProfile.value;
-  return !!(p.url && p.username && (p.password || p.passwordEncrypted));
-});
-
-const shouldAutoExpand = computed(() => {
-  if (props.modelValue.profiles.length === 0) return true;
-  if (!props.modelValue.activeId) return true;
-  if (activeProfile.value && !hasValidConfig.value) return true;
-  return false;
-});
-
-// 状态文字
-const statusLabel = computed(() => {
-  if (props.testing) return '验证中...';
-  if (!activeProfile.value) return '未启用';
-  if (!hasValidConfig.value) return '需配置';
-  if (activeProfile.value.connectionStatus === 'success') return '已连接';
-  if (activeProfile.value.connectionStatus === 'failed') return '连接失败';
-  return '待验证';
-});
-
-const statusClass = computed(() => {
-  if (props.testing) return 'status-testing';
-  if (!activeProfile.value) return 'status-disabled';
-  if (!hasValidConfig.value) return 'status-warning';
-  if (activeProfile.value.connectionStatus === 'success') return 'status-success';
-  if (activeProfile.value.connectionStatus === 'failed') return 'status-error';
-  return 'status-warning';
-});
-
-const securityHint = computed(() => {
-  const url = activeProfile.value?.url?.trim() || '';
-  if (url.startsWith('http://') && !/^http:\/\/(localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/.test(url)) {
-    return '外部 WebDAV 请使用 HTTPS；HTTP 仅保留给本机回环服务。';
-  }
-  return '外部 WebDAV 请使用 HTTPS；本机服务可使用 localhost / 127.0.0.1。';
+const {
+  activeProfile,
+  hasValidConfig,
+  shouldAutoExpand,
+  statusLabel,
+  statusClass,
+  securityHint,
+  updateActiveProfileField,
+  switchProfile: handleSwitchProfile,
+  addProfile: handleAddProfile,
+  deleteProfile: handleDeleteProfile,
+} = useWebDAVProfileEditor({
+  config: () => props.modelValue,
+  testing: () => !!props.testing,
+  onUpdate: config => emit('update:modelValue', config),
+  onSave: () => emit('save'),
+  confirmDelete,
 });
 
 onMounted(() => {
@@ -80,75 +56,6 @@ watch(shouldAutoExpand, (needExpand) => {
 
 function toggleExpand() {
   expanded.value = !expanded.value;
-}
-
-function updateActiveProfileField(field: keyof WebDAVProfile, value: string) {
-  if (!activeProfile.value) return;
-
-  const connectionFields: (keyof WebDAVProfile)[] = ['url', 'username', 'password', 'remotePath'];
-
-  const updatedProfiles = props.modelValue.profiles.map(p => {
-    if (p.id === props.modelValue.activeId) {
-      const updated = { ...p, [field]: value };
-      if (connectionFields.includes(field) && p.connectionStatus === 'success') {
-        updated.connectionStatus = undefined;
-      }
-      return updated;
-    }
-    return p;
-  });
-
-  emit('update:modelValue', {
-    ...props.modelValue,
-    profiles: updatedProfiles
-  });
-}
-
-function handleSwitchProfile(id: string) {
-  emit('update:modelValue', {
-    ...props.modelValue,
-    activeId: id
-  });
-  emit('save');
-}
-
-function handleAddProfile() {
-  const newProfile: WebDAVProfile = {
-    id: crypto.randomUUID(),
-    name: `新配置 ${props.modelValue.profiles.length + 1}`,
-    url: '',
-    username: '',
-    password: '',
-    remotePath: '/PicNexus/'
-  };
-
-  emit('update:modelValue', {
-    ...props.modelValue,
-    profiles: [...props.modelValue.profiles, newProfile],
-    activeId: newProfile.id
-  });
-  emit('save');
-}
-
-function handleDeleteProfile(id: string) {
-  const profile = props.modelValue.profiles.find(p => p.id === id);
-  const profileName = profile?.name || '此配置';
-
-  confirmDelete(`确定要删除「${profileName}」吗？此操作不可撤销。`, () => {
-    const newProfiles = props.modelValue.profiles.filter(p => p.id !== id);
-    let newActiveId = props.modelValue.activeId;
-
-    if (props.modelValue.activeId === id) {
-      newActiveId = newProfiles.length > 0 ? newProfiles[0].id : '';
-    }
-
-    emit('update:modelValue', {
-      ...props.modelValue,
-      profiles: newProfiles,
-      activeId: newActiveId
-    });
-    emit('save');
-  });
 }
 
 function handleSave() {
