@@ -37,7 +37,11 @@ const InputTextStub = defineComponent({
   template: '<input :value="modelValue" @input="onInput" @blur="$emit(\'blur\', $event)" />',
 });
 
-const ButtonStub = defineComponent({ name: 'Button', template: '<button><slot /></button>' });
+const ButtonStub = defineComponent({
+  name: 'Button',
+  props: { label: { type: String, default: '' } },
+  template: '<button :data-label="label"><slot />{{ label }}</button>',
+});
 
 function makeProfile(over: Partial<WebDAVProfile> = {}): WebDAVProfile {
   return {
@@ -206,5 +210,126 @@ describe('WebDAVConfigCollapsible 备份密码（密文常驻、明文按需）'
     expect(field.get('input').element.value).toBe('');
     // 展示态是 readonly 的；没进去就还是可编辑的空输入框
     expect(field.get('input').attributes('readonly')).toBeUndefined();
+  });
+
+  it('加密失败时不写入 profile，也不丢掉用户输入的草稿', async () => {
+    vi.mocked(WebDAVClient.encryptPassword).mockRejectedValueOnce(new Error('加密失败'));
+    const { wrapper, config } = mountConfig();
+
+    const field = passwordField(wrapper);
+    await field.get('input').setValue('nas-pw');
+    await field.get('input').trigger('blur');
+    await nextTick();
+    await nextTick();
+
+    expect(config.value.profiles[0].passwordEncrypted).toBeUndefined();
+    // 抹掉刚输入的内容是二次伤害——草稿要留着让用户能重试
+    expect(passwordField(wrapper).props('modelValue')).toBe('nas-pw');
+  });
+});
+
+// 表单其余部分：跟着密码一起被 useWebDAVProfileEditor 重写过，一并钉住
+describe('WebDAVConfigCollapsible 表单与配置管理', () => {
+  /** InputText 在 DOM 里的顺序：名称、URL、用户名、密码、远程路径 */
+  const NAME = 0, URL = 1, USERNAME = 2, REMOTE_PATH = 4;
+
+  function inputAt(wrapper: ReturnType<typeof mountConfig>['wrapper'], index: number) {
+    return wrapper.findAllComponents(InputTextStub)[index];
+  }
+
+  it('折叠头部可以展开收起', async () => {
+    const { wrapper } = mountConfig({
+      profiles: [makeProfile({ passwordEncrypted: 'cipher(x)' })],
+    });
+
+    const root = wrapper.get('.webdav-collapsible');
+    const before = root.classes().includes('expanded');
+    await wrapper.get('.card-header').trigger('click');
+    expect(root.classes().includes('expanded')).toBe(!before);
+  });
+
+  it('改名称/URL/用户名/远程路径都会回写并触发保存', async () => {
+    const { wrapper, config } = mountConfig();
+
+    await inputAt(wrapper, NAME).get('input').setValue('群晖 NAS');
+    await inputAt(wrapper, URL).get('input').setValue('https://nas.local/dav');
+    await inputAt(wrapper, USERNAME).get('input').setValue('admin');
+    await inputAt(wrapper, REMOTE_PATH).get('input').setValue('/backup/');
+    await inputAt(wrapper, REMOTE_PATH).get('input').trigger('blur');
+    await nextTick();
+
+    expect(config.value.profiles[0]).toMatchObject({
+      name: '群晖 NAS',
+      url: 'https://nas.local/dav',
+      username: 'admin',
+      remotePath: '/backup/',
+    });
+    expect(wrapper.emitted('save')).toBeTruthy();
+  });
+
+  it('非回环的 HTTP 地址会给出 HTTPS 提示', async () => {
+    const { wrapper } = mountConfig({
+      profiles: [makeProfile({ url: 'http://dav.example.com/dav' })],
+    });
+
+    expect(wrapper.get('.field-hint').text()).toContain('HTTP 仅保留给本机回环服务');
+  });
+
+  it('点测试连接同时触发保存和测试', async () => {
+    const { wrapper } = mountConfig({
+      profiles: [makeProfile({ passwordEncrypted: 'cipher(x)' })],
+    });
+
+    await wrapper.get('[data-label="测试连接"]').trigger('click');
+
+    expect(wrapper.emitted('save')).toBeTruthy();
+    expect(wrapper.emitted('test')).toHaveLength(1);
+  });
+
+  it('配置没填全时测试连接按钮不可用', () => {
+    const { wrapper } = mountConfig({ profiles: [makeProfile({ username: '' })] });
+
+    expect(wrapper.getComponent(ButtonStub).props('label')).toBe('测试连接');
+    expect(wrapper.findComponent(ButtonStub).attributes('disabled')).toBeDefined();
+  });
+
+  it('切换 tab 会换 activeId', async () => {
+    const { wrapper, config } = mountConfig({
+      profiles: [makeProfile(), makeProfile({ id: 'dav-2', name: '公司' })],
+      activeId: 'dav-1',
+    });
+
+    await wrapper.findAll('.tab-btn')[1].trigger('click');
+
+    expect(config.value.activeId).toBe('dav-2');
+  });
+
+  it('加号新建一份空配置并切过去', async () => {
+    const { wrapper, config } = mountConfig();
+
+    await wrapper.get('.add-btn').trigger('click');
+
+    expect(config.value.profiles).toHaveLength(2);
+    expect(config.value.activeId).toBe(config.value.profiles[1].id);
+  });
+
+  it('删除配置走确认后生效', async () => {
+    const { wrapper, config } = mountConfig({
+      profiles: [makeProfile(), makeProfile({ id: 'dav-2' })],
+    });
+
+    await wrapper.get('[data-label="删除配置"]').trigger('click');
+
+    expect(config.value.profiles).toHaveLength(1);
+    expect(config.value.profiles[0].id).toBe('dav-2');
+  });
+
+  it('一个配置都没有时显示空状态，可从这里新建', async () => {
+    const { wrapper, config } = mountConfig({ profiles: [], activeId: null });
+
+    expect(wrapper.get('.empty-webdav').text()).toContain('尚未配置 WebDAV 连接');
+
+    await wrapper.get('[data-label="添加配置"]').trigger('click');
+    expect(config.value.profiles).toHaveLength(1);
   });
 });
