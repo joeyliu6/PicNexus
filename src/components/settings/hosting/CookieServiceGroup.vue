@@ -8,6 +8,7 @@ import type { LinkPrefixItem } from '../../../config/types';
 import { computed } from 'vue';
 import { hasNonEmptyFields } from '../../../utils/validators';
 import { extractNamiAuthToken } from '../../../utils/namiAuthToken';
+import { useSensitiveDraft } from '../../../composables/settings/useSensitiveDraft';
 
 interface CookieFormData {
   weibo: { cookie: string };
@@ -61,6 +62,31 @@ function isCookieConfigured(providerId: CookieProviderId): boolean {
 
 const namiAuthToken = computed(() => extractNamiAuthToken(props.cookieFormData.nami.cookie));
 
+/**
+ * Cookie 的按需揭示
+ *
+ * Cookie 是明文存在 formData 里的（整份 .settings.dat 由 EncryptedStore 统一加密），
+ * 所以"揭示"就是读回来，不涉及解密。这里要的是界面契约：存过之后框里是空的、
+ * 只挂一个「已保存」芯片，想看内容才点眼睛。
+ *
+ * 顺带解决一个体感问题：Cookie 动辄上千字符，铺在框里除了占地方没别的用处。
+ */
+function writeCookie(data: CookieFormData, id: CookieProviderId, value: string): void {
+  data[id].cookie = value;
+}
+
+const secrets = useSensitiveDraft({
+  hasStored: id => !!props.cookieFormData[id as CookieProviderId]?.cookie,
+  reveal: id => Promise.resolve(props.cookieFormData[id as CookieProviderId]?.cookie ?? ''),
+  commit: (id, draft) => {
+    writeCookie(props.cookieFormData, id as CookieProviderId, draft);
+    emit('save');
+  },
+});
+
+/** 纳米的 Auth-Token 是从 Cookie 现算出来的展示值，不落库、也没有草稿可提交 */
+const revealNamiAuthToken = () => Promise.resolve(namiAuthToken.value);
+
 function helperHint(serviceId: CookieProviderId): string {
   if (serviceId === 'nami') {
     return '纳米上传时会由 Rust 后端启动本机辅助程序 nami-token-fetcher，根据 Cookie/Auth-Token 获取动态上传 headers；不会持久化账号凭据，相关日志会脱敏。';
@@ -90,20 +116,29 @@ function helperHint(serviceId: CookieProviderId): string {
     >
       <form class="form-grid" @submit.prevent>
         <div class="form-item span-full">
-          <label>Cookie</label>
+          <label>
+            Cookie
+            <span v-if="secrets.hasStored(svc.id)" class="saved-chip">
+              <i class="pi pi-check" aria-hidden="true"></i>已保存
+            </span>
+          </label>
           <SensitiveField
-            v-model="cookieFormData[svc.id].cookie"
+            v-bind="secrets.bindingsFor(svc.id, '从浏览器开发者工具中复制完整的 Cookie 字符串')"
             multiline
             :rows="4"
             input-class="cookie-field"
-            placeholder="从浏览器开发者工具中复制完整的 Cookie 字符串"
-            @blur="emit('save')"
           />
           <small class="form-hint">{{ helperHint(svc.id) }}<br>这些服务均为非官方适配，请自行确认平台规则并承担账号与数据风险</small>
         </div>
         <div v-if="svc.id === 'nami' && namiAuthToken" class="form-item span-full">
           <label>Auth-Token（自动提取）</label>
-          <SensitiveField :modelValue="namiAuthToken" readonly autocomplete="off" />
+          <SensitiveField
+            modelValue=""
+            readonly
+            autocomplete="off"
+            :has-stored-value="true"
+            :reveal-stored="revealNamiAuthToken"
+          />
         </div>
       </form>
       <template #extra>
