@@ -265,6 +265,50 @@ describe('useMdRescueManager', () => {
     expect(deps.runLinkCheck).toHaveBeenCalled();
   });
 
+  /**
+   * 拖放路径必须先授权再碰文件系统
+   *
+   * 静态 fs scope 只覆盖 app 自己的目录，用户目录一概不在内。文件选择对话框会自动
+   * 授权，拖放不会——2026-08-15 真机实测：同一个文件点按钮能读，拖进来是
+   * `forbidden path ... allow-stat`。授权必须发生在第一个 stat 之前，否则拖放入口整个不可用。
+   */
+  it('handleDropPaths 先为每个拖入路径申请授权，再访问文件系统', async () => {
+    const calls: string[] = [];
+    const fs = getFsMocks();
+    getInvokeMock().mockImplementation(async (cmd, args) => {
+      if (cmd === 'allow_user_path') calls.push(`grant:${(args as { path: string }).path}`);
+      return undefined;
+    });
+    fs.stat.mockImplementation(async () => {
+      calls.push('stat');
+      return { isFile: true, isDirectory: false } as never;
+    });
+    fs.readFile.mockResolvedValue(utf8Bytes('# 无图片链接'));
+    const manager = useMdRescueManager();
+
+    await manager.handleDropPaths(['C:/docs/a.md', 'C:/docs/b.md']);
+
+    // 顺序判据：把授权挪到 stat 之后，这条立刻红
+    expect(calls).toEqual(['grant:C:/docs/a.md', 'grant:C:/docs/b.md', 'stat']);
+  });
+
+  it('handleDropPaths 授权失败时不中断，让后续 fs 报出真正的原因', async () => {
+    const fs = getFsMocks();
+    getInvokeMock().mockImplementation(async (cmd) => {
+      if (cmd === 'allow_user_path') throw new Error('scope 写入失败');
+      return undefined;
+    });
+    fs.stat.mockResolvedValue({ isFile: true, isDirectory: false } as never);
+    fs.readFile.mockResolvedValue(utf8Bytes('# 无图片链接'));
+    const manager = useMdRescueManager();
+
+    await manager.handleDropPaths(['C:/docs/a.md']);
+
+    // 授权失败被吞掉，流程继续走到 stat；静态 scope 已覆盖的路径本来就不需要授权
+    expect(fs.stat).toHaveBeenCalled();
+    expect(deps.toast.error).not.toHaveBeenCalledWith('拖放处理失败', expect.anything());
+  });
+
   it('handleDropPaths 多文件中没有 Markdown 时提示并停留 idle', async () => {
     getFsMocks().stat.mockResolvedValue({ isFile: true, isDirectory: false } as never);
     const manager = useMdRescueManager();

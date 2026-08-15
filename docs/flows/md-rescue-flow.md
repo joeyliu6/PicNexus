@@ -300,6 +300,22 @@ flowchart TD
 
 修复链路只处理 UTF-8。plugin-fs 的 `readTextFile` 用非 fatal 的 `TextDecoder`，GBK 等非 UTF-8 字节会被静默替换成 `�` 并写回原文件——这是会永久损坏用户数据的静默失败。`mdTextIo.ts` 改为读原始字节 + `new TextDecoder('utf-8', { fatal: true })`：解码失败即拒绝该文件（单文件模式提示"编码不受支持"，批量模式计入 `failedFiles` / 读取失败）。原文件的 UTF-8 BOM 会被记录并在写回时补回，不静默改变文件字节。
 
+### 文件访问白名单
+
+`capabilities/default.json` 的静态 fs scope 只覆盖 app 自己的目录（appdata / temp / `$RESOURCE/data`），
+**用户目录一概不在内**。文件选择对话框会自动把选中路径加进运行时白名单，
+**拖放不会**——2026-08-15 实测：同一个文件点「选择单个文件」能读，拖进来是
+`forbidden path ... allow-stat permission`，而拖放是本页最显眼的主入口。
+
+补法是 [`allowUserPaths`](../../src/security/fsScope.ts) → Rust 的 `allow_user_path`
+（[user_files.rs](../../src-tauri/src/commands/user_files.rs)），由它看过 metadata 后决定
+目录递归授权还是单文件授权。**必须在第一个 `stat` 之前调**，否则第一步就被拦。
+
+两个调用点：`handleDropPaths`（拖放）与 `handlePickRecent`（最近打开）。
+
+> ⚠️ 授权只活在本次进程内——项目**未装** `persisted-scope`。所以「最近打开」每次点都要
+> 重新授权一次，不能因为上次成功过就跳过。
+
 ### setup 上下文约束
 
 `useToast()` / `useConfigManager()` 内部走 Vue 的 `inject()`，**只在 setup 栈期间可用**。
@@ -381,6 +397,7 @@ flowchart TD
 | 修复过的文件夹再扫一次，失效数虚高 | 检查 `.picnexus-backup` 是否被扫进来（Rust 递归按 `BACKUP_DIR_NAME` 跳过）；目录名两侧漂移会被 `npm run lint` 拦下 | 图 2 Rust 扫描、[备份目录排除](#备份目录排除) |
 | 撤销恢复失败 | `.picnexus-backup` 目录被手动删除 | 图 5 `undoReplace` |
 | 控制台报 `No PrimeVue Toast provided!` / 图床偏好不生效 / 点「修复链接」「撤销」没反应 | 模块级函数自己调了 inject 类 composable，见 [setup 上下文约束](#setup-上下文约束) | 图 5、图 6 |
+| 拖放文件报 `forbidden path ... allow-stat` | 路径没进 fs 运行时白名单，见 [文件访问白名单](#文件访问白名单)。按钮选文件能用而拖放不能，就是这条 | 图 2 加载入口 |
 | 「无法修复」数量比预期多 | 该图片未上传到其他图床（DB 中无备用记录） | 图 4 `findBackupLinksRaw` |
 | 图床偏好设置不生效 | `hostPreference` 为空数组（未设置偏好则不排序） | 图 6 `priority` 策略 |
 | 徽章/代理服务 URL 里的 `.js`/`.css` 被当图片扫 | `isValidImageUrl` / `is_valid_image_url` 按 URL path 末尾扩展名做黑名单过滤（`js/css/html/pdf/zip/mp4/...`），query/fragment 不参与 | `src/utils/mdParser.ts` `NON_IMAGE_EXTENSIONS`、`src-tauri/src/commands/md_scanner.rs` 同名常量（两侧必须保持一致） |
