@@ -58,6 +58,15 @@ function isDuplicate(severity: string, summary: string, detail?: string): boolea
 }
 
 /**
+ * `useToast()` 的返回值类型
+ *
+ * 给那些**不能自己调 `useToast()`** 的模块用：`useToast` 内部走 Vue 的 `inject()`，
+ * 只在 setup 栈期间有效。模块级函数（会在 watcher / click 回调里被调到）必须由
+ * 调用方在 setup 时取好、当参数传进来。
+ */
+export type ToastApi = ReturnType<typeof useToast>;
+
+/**
  * Toast 通知 Composable
  * 封装 PrimeVue Toast 服务，提供简化的 API
  */

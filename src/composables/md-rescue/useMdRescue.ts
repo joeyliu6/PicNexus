@@ -54,8 +54,8 @@ import { useMdLinkFilter, generateDiff } from './useMdLinkFilter';
 import { executeReplace as executeReplaceImpl, undoReplace as undoReplaceImpl } from './useFileBackup';
 import {
   applyHostPreference,
-  loadHostPreference,
-  saveHostPreference,
+  loadHostPreference as loadHostPreferenceImpl,
+  saveHostPreference as saveHostPreferenceImpl,
   applyRepairStrategy,
   autoSelectAndGetSummary,
   toggleExclude,
@@ -68,7 +68,11 @@ const log = createLogger('MdRescue');
 
 export function useMdRescueManager() {
   const toast = useToast();
-  const { loadConfig } = useConfigManager();
+  // 整份留着而不是只解构 loadConfig：下面四个模块级函数要靠它读写配置。
+  // 它们**不能**自己调 useConfigManager()/useToast()——那是 inject，
+  // 在 watcher / click 回调里会抛「No PrimeVue Toast provided!」
+  const configManager = useConfigManager();
+  const { loadConfig } = configManager;
   const { checkUrls, isChecking, progress, progressSource, cancelCheck } = useLinkCheckManager();
   // 必须在 setup 栈期间调用 useMdFileLoader，内部会 useToast() → inject()，
   // 返回的 5 个函数通过闭包持有 toast，之后可在 click / 拖放回调里安全调用。
@@ -373,14 +377,27 @@ export function useMdRescueManager() {
     // hostPreference 保留（用户偏好跨任务持久）
   }
 
-  /** executeReplace 包装：传入 unrescuableCount */
+  // 下面四个包装的共同职责：把 setup 期间取好的 toast / configManager 传给模块级函数。
+  // 这些函数的调用点是 click 与 watcher 回调，那时 inject 已经不可用。
+
+  /** executeReplace 包装：传入 unrescuableCount 与 toast */
   async function executeReplace() {
-    return executeReplaceImpl(unrescuableLinks.value.length);
+    return executeReplaceImpl(unrescuableLinks.value.length, toast);
   }
 
-  /** undoReplace 包装：传入 reset */
+  /** undoReplace 包装：传入 reset 与 toast */
   async function undoReplace() {
-    return undoReplaceImpl(reset);
+    return undoReplaceImpl(reset, toast);
+  }
+
+  /** loadHostPreference 包装：传入 configManager */
+  async function loadHostPreference() {
+    return loadHostPreferenceImpl(configManager);
+  }
+
+  /** saveHostPreference 包装：传入 configManager */
+  async function saveHostPreference() {
+    return saveHostPreferenceImpl(configManager);
   }
 
   return {

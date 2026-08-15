@@ -71,6 +71,9 @@ class ConfigValidationError extends Error {
  */
 export function useConfigManager() {
   const toast = useToast();
+  // 注意：这里的 useToast() 是 inject，只在 setup 栈期间有效。
+  // 因此 useConfigManager() 本身也只能在 setup 期间调用——模块级函数需要它时，
+  // 由调用方在 setup 时取好、当参数传进来（类型见下方 ConfigManagerApi）。
 
   /**
    * 加载配置
@@ -538,3 +541,11 @@ export function useConfigManager() {
     getActivePrefix
   };
 }
+
+/**
+ * `useConfigManager()` 的返回值类型
+ *
+ * 模块级函数需要读写配置时接这个类型的参数，而不是自己调 `useConfigManager()`——
+ * 后者内部是 `inject()`，在 watcher / click 回调里调会抛「No PrimeVue Toast provided!」。
+ */
+export type ConfigManagerApi = ReturnType<typeof useConfigManager>;

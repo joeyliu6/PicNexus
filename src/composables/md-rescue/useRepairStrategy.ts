@@ -2,7 +2,7 @@
 // 负责：图床偏好管理、修复策略应用、排除管理、底栏统计
 
 import { computed, type ComputedRef } from 'vue';
-import { useConfigManager } from '../useConfig';
+import type { ConfigManagerApi } from '../useConfig';
 import {
   type MdImageLinkWithFile,
   type RepairStrategy,
@@ -35,20 +35,25 @@ export function applyHostPreference(links: MdImageLinkWithFile[], preference: st
 
 /**
  * 从配置加载图床偏好
+ *
+ * ⚠️ `configManager` 必须由调用方在 setup 栈期间取好传进来，**不要在这里
+ * 自己调 `useConfigManager()`**：它内部是 `inject()`，而本函数的调用点是
+ * 「扫描完成」的 watcher 回调，那时 Vue 已经没有组件上下文，会直接抛
+ * 「No PrimeVue Toast provided!」——整个回调中断，偏好静默加载不上。
  */
-export async function loadHostPreference(): Promise<void> {
-  const { loadConfig } = useConfigManager();
-  const config = await loadConfig();
+export async function loadHostPreference(configManager: ConfigManagerApi): Promise<void> {
+  const config = await configManager.loadConfig();
   hostPreference.value = config.mdRescueHostPreference ?? [];
 }
 
 /**
  * 将当前图床偏好保存到配置
+ *
+ * ⚠️ 同上：`configManager` 由调用方在 setup 期间取好传入（调用点是 click 回调）。
  */
-export async function saveHostPreference(): Promise<void> {
-  const { loadConfig, saveConfig } = useConfigManager();
-  const config = await loadConfig();
-  await saveConfig({ ...config, mdRescueHostPreference: hostPreference.value }, true);
+export async function saveHostPreference(configManager: ConfigManagerApi): Promise<void> {
+  const config = await configManager.loadConfig();
+  await configManager.saveConfig({ ...config, mdRescueHostPreference: hostPreference.value }, true);
 }
 
 /**

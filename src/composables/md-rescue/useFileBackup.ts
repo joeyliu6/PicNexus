@@ -4,7 +4,7 @@
 import { copyFile, readDir, mkdir, remove } from '@tauri-apps/plugin-fs';
 import { join, dirname, basename } from '@tauri-apps/api/path';
 import pLimit from 'p-limit';
-import { useToast } from '../useToast';
+import type { ToastApi } from '../useToast';
 import { createLogger } from '../../utils/logger';
 import { formatTimestampCompact } from '../../utils/formatters';
 import { replaceImageLinks } from '../../utils/mdParser';
@@ -95,14 +95,17 @@ function hashPath(path: string): string {
 /**
  * 执行链接替换（支持多文件），推进 fixing → done 阶段
  * @param unrescuableCount 无法自动修复的链接数（由调用方传入）
+ * @param toast 由调用方在 setup 栈期间取好传入
+ *
+ * ⚠️ **不要在这里自己调 `useToast()`**：它是 `inject()`，而本函数从「修复链接」
+ * 按钮的 click 回调进来，那时没有组件上下文，会直接抛「No PrimeVue Toast provided!」，
+ * 一次修复都做不成。拆分成模块级函数时漏掉这条，就是这个缺陷的来历。
  */
-export async function executeReplace(unrescuableCount: number): Promise<{
+export async function executeReplace(unrescuableCount: number, toast: ToastApi): Promise<{
   success: number;
   skipped: number;
   failed: number;
 }> {
-  const toast = useToast();
-
   isReplacing.value = true;
   isCancelled.value = false;
   phase.value = 'fixing';
@@ -261,10 +264,9 @@ export async function executeReplace(unrescuableCount: number): Promise<{
 /**
  * 撤销所有替换，从备份恢复原始文件
  * @param resetFn 重置函数（由主模块传入）
+ * @param toast 由调用方在 setup 栈期间取好传入（原因同 `executeReplace`）
  */
-export async function undoReplace(resetFn: () => void): Promise<void> {
-  const toast = useToast();
-
+export async function undoReplace(resetFn: () => void, toast: ToastApi): Promise<void> {
   const receipt = repairReceipt.value;
   if (!receipt?.fileBackupMap.length) return;
 
