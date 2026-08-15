@@ -330,11 +330,15 @@ defineExpose({
  *
  * 圆点个数固定，不随真实长度变化：迁移前绑真值 + type=password 时，
  * 圆点个数就等于密码长度，等于把长度泄露在界面上。
+ *
+ * ⚠️ **这里不要再加 letter-spacing。** 曾经有过 `0.12em`，只作用在 placeholder 上，
+ * 而聚焦后框里是真值被 `type="password"` 原生遮蔽的圆点、拿不到这个字距——
+ * 于是点进去的一瞬圆点会"挤"一下。两边用的都是 U+2022、同一套字体，
+ * 不额外设字距就自动对齐。字距是这里唯一能造成差异的东西。
  */
 .has-fake-dots .sensitive-control::placeholder {
   color: var(--text-main);
   opacity: 1;
-  letter-spacing: 0.12em;
 }
 
 .sensitive-toggle {
