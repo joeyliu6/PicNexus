@@ -195,6 +195,12 @@ onMounted(async () => {
     toast.showConfig('warn', TOAST_MESSAGES.config.keyMismatchReset);
   }
 
+  if (startupFlags.orphanSecretLabels.length > 0) {
+    const labels = startupFlags.orphanSecretLabels;
+    startupFlags.orphanSecretLabels = [];
+    toast.showConfig('warn', TOAST_MESSAGES.config.orphanSecretsCleared(labels));
+  }
+
   try {
     await continueStartup();
   } catch (err) {

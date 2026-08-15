@@ -19,6 +19,7 @@ import { configStore } from './store/instances';
 import { StoreError } from './store';
 import { DEFAULT_CONFIG, UserConfig } from './config/types';
 import { startupFlags } from './store/startupFlags';
+import { purgeOrphanFieldSecrets } from './security/fieldSecrets';
 import { createLogger } from './utils/logger';
 
 // Analytics 服务
@@ -105,6 +106,33 @@ async function ensureConfigSync() {
 }
 
 /**
+ * 清理存量孤儿密文：解不开的字段级密文就地清空，名字交给 App.vue 提示用户重填
+ *
+ * 来源是历史上的缺陷——设备份密码只换了外层信封的钥匙，内层 `passwordEncrypted`
+ * 变成谁也开不了的孤儿（根因已由 `rekeyFieldSecrets` 修掉，这里只处理存量）。
+ * 不清的话界面会一直显示「✓ 已保存」，用户直到上传失败才知道密码是死的。
+ *
+ * ⚠️ 必须跑在 `ensureConfigSync()` **之后**：配置读得出来才说明外层信封开得了、
+ * 钥匙是对的，此时内层还解不开才能判定为孤儿。顺序反了会把整份配置误清空。
+ */
+async function purgeOrphanSecrets() {
+  try {
+    const config = await configStore.get<UserConfig>('config');
+    if (!config) return;
+
+    // 在副本上改，不动 configStore 缓存里的那个对象
+    const draft = structuredClone(config);
+    const cleared = await purgeOrphanFieldSecrets(draft);
+    if (cleared.length === 0) return;   // 没有孤儿就不写盘，别每次启动都白写一次
+
+    await configStore.set('config', draft);
+    startupFlags.orphanSecretLabels = cleared;
+  } catch (error) {
+    log.warn('孤儿密文探测失败（跳过，不影响启动）:', error);
+  }
+}
+
+/**
  * 注册依赖用户配置的多实例上传器（custom_s3:xxx / webdav:xxx）
  *
  * Why 放在启动流程：这两类上传器的 serviceId 由用户 profile 动态生成，此前只在
@@ -132,7 +160,10 @@ async function startApp() {
   // 2. 确保配置同步完成（等待异步操作）
   await ensureConfigSync();
 
-  // 2.1 注册多实例上传器（依赖上一步的配置）
+  // 2.1 清理存量孤儿密文（必须在配置读取成功之后、上传器注册之前）
+  await purgeOrphanSecrets();
+
+  // 2.2 注册多实例上传器（依赖上一步的配置）
   await syncDynamicUploaders();
 
   // 3. 初始化 Analytics（非阻塞，失败不影响应用）

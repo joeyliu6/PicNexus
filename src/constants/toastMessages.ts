@@ -96,7 +96,17 @@ export const TOAST_MESSAGES = {
       summary: '配置已重置为默认值',
       detail: '检测到加密密钥不匹配，所有配置（包含图床密钥）已重置，请重新进行配置。',
       life: 0
-    } as StaticMessage
+    } as StaticMessage,
+    /**
+     * 存量孤儿密文清理告知
+     *
+     * `life: 0`（不自动消失）：用户必须去设置里手动重填，一闪而过的提示等于没提示。
+     */
+    orphanSecretsCleared: (labels: string[]): ToastMessageConfig => ({
+      summary: '部分密码已失效，需要重新填写',
+      detail: `${labels.join('、')} 的密码因早前设置备份密码而无法解密，已清空。请到设置里重新填写。`,
+      life: 0
+    })
   },
 
   // === 上传相关 ===
