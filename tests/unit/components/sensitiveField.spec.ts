@@ -228,7 +228,7 @@ describe('SensitiveField', () => {
             revealStored: () => Promise.resolve('secret'),
           },
         });
-        expect(dots(stored)).toBe('•'.repeat(12));
+        expect(dots(stored)).toBe('•'.repeat(32));
         expect(stored.get('.sensitive-field').classes()).toContain('has-fake-dots');
 
         const empty = mountSensitiveField({
@@ -273,13 +273,13 @@ describe('SensitiveField', () => {
           },
         });
 
-        expect(dots(wrapper)).toBe('•'.repeat(12));
+        expect(dots(wrapper)).toBe('•'.repeat(32));
 
         await wrapper.get('input').trigger('focus');
         expect(dots(wrapper)).toBe('留空则不修改');
 
         await wrapper.get('input').trigger('blur');
-        expect(dots(wrapper)).toBe('•'.repeat(12));
+        expect(dots(wrapper)).toBe('•'.repeat(32));
       });
 
       it('用户输入内容后圆点消失', async () => {
@@ -418,12 +418,12 @@ describe('SensitiveField', () => {
         });
 
         const placeholder = dots(wrapper, 'textarea');
-        expect(placeholder).toBe('•'.repeat(256));
+        expect(placeholder).toBe('•'.repeat(512));
         expect(placeholder).not.toContain('SUB=');
       });
 
       // 曾经拼的是「3 行 × 32 个」，三行一样长，一看就是生成的。
-      // 交给浏览器自然折行后宽度跟着框走、末行参差，观感自然得多。
+      // 交给浏览器自然折行后宽度跟着框走，框宽变了也不用重算。
       it('multiline 的圆点不写死换行，交给浏览器自然折行', () => {
         const wrapper = mountSensitiveField({
           props: {

@@ -16,11 +16,20 @@ const REVEAL_DURATION_MS = 15_000;
  * 用户会以为数据丢了。
  *
  * Why 多行**不写死换行**：曾经拼的是「3 行 × 32 个」，三行一样长，一看就是生成的。
- * 交给浏览器自然折行后，宽度跟着框走、末行是参差的，观感自然得多。
- * placeholder 不是内容、不驱动滚动条，超出可视区的部分直接裁掉，不会冒出滚动条。
+ * 交给浏览器自然折行后，宽度跟着框走，观感自然得多。
+ *
+ * Why 个数取到明显溢出（单行 32、多行 512）：这两个数是「铺满并有富余」，不是精确
+ * 排版。框宽随窗口和 grid 列数变，多行还能被用户拖高（resize: vertical），算得再准
+ * 也会在某个宽度上露出空白——而空白正是本设计要消灭的那个信号。
+ * placeholder 不是内容、不驱动滚动条，超出可视区的部分直接裁掉，不会冒出滚动条，
+ * 所以富余的代价是零。
+ *
+ * ⚠️ 多行铺满依赖调用方给 `input-class` 带 `word-break: break-all`（见
+ * CookieServiceGroup 的 .cookie-field）。`•` 的断行属性是 AL，整串圆点在浏览器眼里
+ * 是一个不可断的长单词——没有 break-all 就不折行，512 个会摊成横向溢出的一行。
  */
-const FAKE_DOTS_SINGLE = '•'.repeat(12);
-const FAKE_DOTS_MULTILINE = '•'.repeat(256);
+const FAKE_DOTS_SINGLE = '•'.repeat(32);
+const FAKE_DOTS_MULTILINE = '•'.repeat(512);
 
 const props = withDefaults(defineProps<{
   modelValue?: string | null;
