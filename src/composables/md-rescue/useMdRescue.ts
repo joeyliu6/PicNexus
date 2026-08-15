@@ -8,6 +8,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useConfigManager } from '../useConfig';
 import { useLinkCheckManager } from '../useLinkCheck';
 import { useToast } from '../useToast';
+import { allowUserPaths } from '../../security/fsScope';
 import { createLogger } from '../../utils/logger';
 
 // 共享状态
@@ -267,6 +268,11 @@ export function useMdRescueManager() {
 
     const first = paths[0];
     try {
+      // 拖放的路径不在静态 fs scope 里，先申请授权再碰文件系统。
+      // 少了这一步，下面第一个 stat 就会 `forbidden path`——拖放整个入口不可用。
+      // 全部授权而不只是 paths[0]：多文件拖放时后面那些也要被读。
+      await allowUserPaths(paths);
+
       const info = await stat(first);
       let ok = false;
 

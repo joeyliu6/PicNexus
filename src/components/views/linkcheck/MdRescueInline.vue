@@ -13,6 +13,7 @@ import type { RepairStrategy } from '../../../composables/useMdRescue';
 import { useRescueScanHeader } from '../../../composables/md-rescue/useRescueScanHeader';
 import { removeMruEntry, type MruEntry } from '../../../composables/md-rescue/useMdRescueMru';
 import { useToast } from '../../../composables/useToast';
+import { allowUserPaths } from '../../../security/fsScope';
 import { exists } from '@tauri-apps/plugin-fs';
 
 const {
@@ -109,6 +110,11 @@ async function handleSelectAny() {
 const toast = useToast();
 
 async function handlePickRecent(entry: MruEntry) {
+  // 运行时授权不跨进程存活（未装 persisted-scope），所以每次从「最近打开」进来都要
+  // 重新申请一次。少了这一步，重启后点历史条目会在下面 exists 处 `forbidden path`，
+  // 而 catch 把它当成"存在"，接着 load* 再失败一次——用户看到两条不相干的报错
+  await allowUserPaths([entry.path]);
+
   // 先判定路径是否还存在：不存在才从 MRU 剔除，其他错误交给 load* 内部 toast，避免误删 + 双 toast
   let pathExists = true;
   try {
