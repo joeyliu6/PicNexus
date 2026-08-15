@@ -169,6 +169,25 @@ Cookie 2 处 / S3 2 处（展开 12 个输入框）→ 抽 `useWebDAVProfileEdit
 
 ## 待处理
 
+### [ ] SettingsView.vue 顶到 500 行硬指标，下一次改必撞
+
+- **来源**：2026-08-15 给它加一行事件监听（`@secrets-rekeyed`）直接报
+  `File has too many lines (501). Maximum allowed is 500`
+- **优先级**：中——不阻塞功能，但**任何**对设置页的改动都会先被 lint 拦下
+
+现状（`max-lines` 数的是**去掉空行与注释后**的有效行，不是物理行）：
+
+| 文件 | 物理行 | 门禁口径 |
+|------|--------|---------|
+| [SettingsView.vue](../src/components/views/SettingsView.vue) | 579 | **正好 500，一行不剩** |
+| [BackupPasswordDialog.vue](../src/components/dialogs/BackupPasswordDialog.vue) | 568 | 逼近上限 |
+
+2026-08-15 那次是把两个属性挤到同一行才过的关——**这种腾挪只剩这一次机会了**。
+
+自然切线（别做机械拆分）：`SettingsView` 按 tab 拆面板，`BackupPasswordDialog` 按 mode 拆子组件。
+两个文件都已经有单测覆盖（`settingsView.spec.ts` / `backupPasswordDialog.spec.ts`），
+拆分属于纯重构，靠现有单测兜住即可。
+
 ### [ ] WebDAV 只支持 Basic 认证，不支持 Digest
 
 - **来源**：2026-08-14 WebDAV 图床验收后的边界梳理
