@@ -109,6 +109,23 @@ flowchart TD
 
 `tray-menu` 是独立的 Vite 入口(`tray-menu.html` + `src/tray-menu.ts`)。它直接读取配置生成菜单,根据 `enabledServices` / `availableServices` / 图床配置状态展示 `当前图床：…` 二级勾选菜单；服务切换后保存配置并广播 `config-updated`。
 
+### 面板定位契约
+
+托盘菜单不是系统原生菜单,定位全靠自己算。几何计算集中在 [`src/services/trayMenuLayout.ts`](../../src/services/trayMenuLayout.ts)(纯函数,单测见 `tests/unit/services/trayMenuLayout.spec.ts`),`TrayMenuWindow.vue` 只负责取数据和贴样式。
+
+两段式定位:
+
+1. **Rust 首次定位** —— `show_tray_menu_window` 按 `TRAY_MENU_WIDTH/HEIGHT` 把窗口摆到托盘图标正上方,这是**锚点**的来源。
+2. **前端接管** —— `syncWindowLayout` 把窗口撑满整个工作区并移到工作区原点,主菜单/二级面板改用窗口内绝对定位。撑满是为了让点击面板外的透明区域也能关闭菜单。
+
+> ⚠️ **核心不变式:主菜单锚点只由主菜单自身高度决定,绝不能把二级面板算进去。**
+>
+> `clampAnchor(rawAnchor, frame, menuPanelHeight)` 只吃 `menuPanelHeight`。历史缺陷:曾用 `max(主菜单高, 行偏移 + 二级面板高)` 夹紧锚点,导致展开「当前图床」时一级菜单被向上顶一行(实测 26px);又因为夹紧结果被回写进锚点、而夹紧是单向的 `Math.min`,收起后菜单还回不到原位。
+>
+> 空间不足时该让位的是二级面板:`resolveFlyoutTop` 让它整体上移直到底边贴住工作区底部,`resolveFlyoutOpensLeft` / `resolveFlyoutLeft` 处理左右翻转与兜底夹取。
+
+另注:`rawAnchor` 只允许 `cacheAnchor` 写入。任何把夹紧后坐标回写进去的改法都会让菜单每次同步都往上漂。
+
 ---
 
 ## 图 3:CLI 模式与文件关联(当前实现)
@@ -245,6 +262,8 @@ flowchart LR
 |------|---------|-------------|
 | 点 × 直接退出而不是隐藏 | `CloseToTrayState` 被设为 `false` | 图1 CheckCloseToTray |
 | 托盘菜单点击无反应 | `tray-menu` Webview 未创建/未显示,或前端没 listen `navigate-to` / `tray-action` | 图2 W/V/F1/F2 |
+| 展开「当前图床」把一级菜单顶上去 / 收起后回不到原位 | 二级面板高度被算进了 `clampAnchor`,或夹紧结果被回写进 `rawAnchor` | 图2 面板定位契约 |
+| 二级面板底部被任务栏截断 | `resolveFlyoutTop` 未按 `windowHeight` 上移,或 `.flyout-panel` 少了 `overflow: hidden auto` | 图2 面板定位契约 |
 | 启动时窗口一闪而过 | `visible:true` 配置下 `show()` 时机错乱,应保持 `visible:false` + 代码控制显示 | 图1 Visible |
 | Windows 任务栏图标模糊 | 没加载 128×128@2x 大图标 | 图1 note |
 | CLI 裸路径调用不上传 | 普通 CLI 必须传 `--service <serviceId>`;裸路径会打印可用图床和示例后退出 | 图3 D7 |
