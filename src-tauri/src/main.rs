@@ -389,6 +389,7 @@ fn main() {
             commands::user_files::export_text_file,
             commands::user_files::import_text_file,
             commands::user_files::cleanup_owned_temp_file,
+            commands::user_files::allow_user_path,
             commands::image_meta::get_image_metadata,
             commands::image_compress::compress_image,
             commands::image_compress::cleanup_compressed_files,

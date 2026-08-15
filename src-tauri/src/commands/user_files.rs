@@ -170,9 +170,98 @@ pub fn cleanup_owned_temp_file(path: String) -> Result<bool, AppError> {
         .map_err(|e| AppError::file_io(format!("删除临时文件失败: {}", e)))
 }
 
+/// 把用户主动交出来的路径加进 fs 插件的运行时白名单
+///
+/// Why 需要这条命令：`capabilities/default.json` 的静态 scope 只覆盖 app 自己的目录，
+/// 用户目录一概不在内。文件选择对话框会**自动**把选中的路径加进白名单，
+/// 但**拖放不会**——同一个文件，点按钮选能读，拖进来就是
+/// `forbidden path ... allow-stat`，而拖放恰恰是文档修复最显眼的主入口。
+///
+/// 安全边界：只对**用户已经主动交出来**的路径授权（拖放、最近打开列表里他自己存的），
+/// 与对话框插件的既有行为一致，不扩大攻击面。目录按递归授权——文档修复要读子目录里的
+/// `.md`、还要在里面建 `.picnexus-backup` 写备份。
+///
+/// ⚠️ 授权只活在本次进程内（项目未装 `persisted-scope`）。重启后要再次访问同一路径，
+/// 必须重新走一次本命令——「最近打开」列表就是这么处理的。
+#[tauri::command]
+pub fn allow_user_path<R: Runtime>(app: AppHandle<R>, path: String) -> Result<(), AppError> {
+    use tauri_plugin_fs::FsExt;
+
+    let path = path.trim();
+    let scope = app.fs_scope();
+
+    match resolve_grant(path)? {
+        // 目录必须递归：文档修复要读子目录里的 .md，还要在里面建 .picnexus-backup 写备份
+        PathGrant::Directory => scope
+            .allow_directory(Path::new(path), true)
+            .map_err(|e| AppError::file_io(format!("目录授权失败: {}", e))),
+        PathGrant::File => scope
+            .allow_file(Path::new(path))
+            .map_err(|e| AppError::file_io(format!("文件授权失败: {}", e))),
+    }
+}
+
+/// 授权粒度：目录递归 vs 单个文件
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum PathGrant {
+    Directory,
+    File,
+}
+
+/// 判定该按哪种粒度授权
+///
+/// 单独抽出来是为了能测：`allow_user_path` 本体要 `AppHandle`，
+/// 而本项目没开 `tauri` 的 `test` feature，构造不出来。判定逻辑才是会出错的部分。
+pub(crate) fn resolve_grant(path: &str) -> Result<PathGrant, AppError> {
+    if path.is_empty() {
+        return Err(AppError::validation("路径不能为空"));
+    }
+
+    // 看清是文件还是目录再授权：猜错的话目录里的文件仍然读不到
+    let metadata = std::fs::metadata(path)
+        .map_err(|e| AppError::file_io(format!("无法读取路径信息: {}", e)))?;
+
+    Ok(if metadata.is_dir() {
+        PathGrant::Directory
+    } else {
+        PathGrant::File
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn grant_for_directory_is_recursive_kind() {
+        let dir = std::env::temp_dir().join("picnexus_grant_dir_test");
+        std::fs::create_dir_all(&dir).expect("create dir");
+
+        let grant = resolve_grant(&dir.to_string_lossy()).expect("resolve dir");
+
+        assert_eq!(grant, PathGrant::Directory);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn grant_for_file_is_single_file_kind() {
+        let file = std::env::temp_dir().join("picnexus_grant_file_test.md");
+        std::fs::write(&file, b"# t").expect("write file");
+
+        let grant = resolve_grant(&file.to_string_lossy()).expect("resolve file");
+
+        assert_eq!(grant, PathGrant::File);
+        let _ = std::fs::remove_file(file);
+    }
+
+    #[test]
+    fn grant_rejects_empty_and_missing_paths() {
+        assert!(resolve_grant("").is_err());
+
+        let missing = std::env::temp_dir().join("picnexus_grant_missing_test.md");
+        let _ = std::fs::remove_file(&missing);
+        assert!(resolve_grant(&missing.to_string_lossy()).is_err());
+    }
 
     #[test]
     fn owned_temp_cleanup_rejects_unowned_path() {
