@@ -114,6 +114,28 @@ function findButton(wrapper: VueWrapper, text: string) {
   return button!;
 }
 
+function menuTop(wrapper: VueWrapper): string {
+  return (wrapper.find('.main-menu').element as HTMLElement).style.top;
+}
+
+/** 托盘停在屏幕右下角：1920×1080 屏幕 + 40px 底部任务栏，锚点贴着任务栏上沿 */
+function mockBottomEdgeMonitor(): void {
+  const { currentWindow, monitorFromPoint } = getTauriWindowMocks();
+
+  currentWindow.outerPosition.mockResolvedValue({ x: 1200, y: 900 });
+  currentWindow.scaleFactor.mockResolvedValue(1);
+  monitorFromPoint.mockResolvedValue({
+    name: 'Bottom Monitor',
+    scaleFactor: 1,
+    position: { x: 0, y: 0 },
+    size: { width: 1920, height: 1080 },
+    workArea: {
+      position: { x: 0, y: 0 },
+      size: { width: 1920, height: 1040 },
+    },
+  } as never);
+}
+
 function mockMatchMedia(matches: boolean): void {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
@@ -603,22 +625,42 @@ describe('trayMenu', () => {
     wrapper.unmount();
   });
 
-  it('clamps the menu panel upward when the service flyout would overflow the bottom edge', async () => {
+  it('keeps the main menu anchored while the service flyout opens and closes', async () => {
     mockState.configGet.mockResolvedValue(makeConfig());
+    mockBottomEdgeMonitor();
 
-    const { currentWindow, monitorFromPoint } = getTauriWindowMocks();
-    currentWindow.outerPosition.mockResolvedValue({ x: 1200, y: 900 });
-    currentWindow.scaleFactor.mockResolvedValue(1);
-    monitorFromPoint.mockResolvedValue({
-      name: 'Bottom Monitor',
-      scaleFactor: 1,
-      position: { x: 0, y: 0 },
-      size: { width: 1920, height: 1080 },
-      workArea: {
-        position: { x: 0, y: 0 },
-        size: { width: 1920, height: 1040 },
-      },
-    } as never);
+    const wrapper = mount(TrayMenuWindow, {
+      attachTo: document.body,
+    });
+    await flushPromises();
+
+    // 主菜单只按自身高度让位：1040 - 215 = 825
+    const anchoredTop = menuTop(wrapper);
+    expect(anchoredTop).toBe('825px');
+
+    await findButton(wrapper, '当前图床').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('.service-menu').exists()).toBe(true);
+    // 回归点：展开二级面板不得把一级菜单向上顶
+    expect(menuTop(wrapper)).toBe(anchoredTop);
+
+    await findButton(wrapper, '当前图床').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('.service-menu').exists()).toBe(false);
+    // 回归点：收起后也不得残留位移
+    expect(menuTop(wrapper)).toBe(anchoredTop);
+
+    await findButton(wrapper, '当前图床').trigger('click');
+    await flushPromises();
+    expect(menuTop(wrapper)).toBe(anchoredTop);
+
+    wrapper.unmount();
+  });
+
+  it('slides the service flyout up so it never overflows the bottom edge', async () => {
+    mockState.configGet.mockResolvedValue(makeConfig());
+    const { currentWindow } = getTauriWindowMocks();
+    mockBottomEdgeMonitor();
 
     const wrapper = mount(TrayMenuWindow, {
       attachTo: document.body,
@@ -635,9 +677,14 @@ describe('trayMenu', () => {
     const lastPosition = currentWindow.setPosition.mock.calls.at(-1)?.[0] as { x: number; y: number };
     expect(lastPosition.x).toBe(0);
     expect(lastPosition.y).toBe(0);
-    expect(Number.parseInt((wrapper.find('.main-menu').element as HTMLElement).style.top, 10)).toBeLessThan(900);
-    expect(Number.parseInt((wrapper.find('.main-menu').element as HTMLElement).style.top, 10)).toBeGreaterThanOrEqual(0);
-    expect(wrapper.find('.service-menu').exists()).toBe(true);
+
+    // 面板高 150(5 项 + 2 分隔线)，与「当前图床」行对齐会到 825 + 91 = 916 越界，
+    // 改为 890 让底边正好落在工作区底部 1040
+    const flyout = wrapper.find('.service-menu').element as HTMLElement;
+    expect(flyout.style.top).toBe('890px');
+    expect(Number.parseInt(flyout.style.top, 10) + 150).toBe(1040);
+    // 右侧放得下就照常向右展开
+    expect(flyout.style.left).toBe('1385px');
 
     wrapper.unmount();
   });
