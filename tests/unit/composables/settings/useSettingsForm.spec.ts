@@ -497,6 +497,45 @@ describe('useSettingsForm', () => {
     mathRandomSpy.mockRestore();
   });
 
+  /**
+   * 换钥匙之后 formData 里的密文必须换新
+   *
+   * 缺了这一步，磁盘上是新密文、内存里是旧密文：点眼睛解不开，
+   * 而且下一次保存会把旧密文写回去，把搬运成果覆盖掉——比解不开更严重。
+   */
+  it('refreshes the ciphertext copies in formData after a key swap', async () => {
+    const api = useSettingsForm();
+
+    mockState.configStoreGet.mockResolvedValue(createConfig({
+      webdav_profiles: [
+        { id: 'dav-1', name: 'NAS', url: 'https://dav.example.com', username: 'me', passwordEncrypted: 'old-cipher', remotePath: '/pics/', publicDomain: 'https://cdn.example.com', publicUrlTemplate: '{domain}/{path}' },
+      ],
+      webdav: {
+        profiles: [{ id: 'bak-1', name: '坚果云', url: 'https://dav.example.com', username: 'me', password: '', passwordEncrypted: 'old-cipher', remotePath: '/PicNexus/' }],
+        activeId: 'bak-1',
+      },
+    }));
+    await api.loadSettings();
+    expect(api.formData.value.webdav.profiles[0].passwordEncrypted).toBe('old-cipher');
+
+    // 换钥匙：swapKeyAndReencrypt 已经把新密文写进 store，formData 还没跟上
+    mockState.configStoreGet.mockResolvedValue(createConfig({
+      webdav_profiles: [
+        { id: 'dav-1', name: 'NAS', url: 'https://dav.example.com', username: 'me', passwordEncrypted: 'new-cipher', remotePath: '/pics/', publicDomain: 'https://cdn.example.com', publicUrlTemplate: '{domain}/{path}' },
+      ],
+      webdav: {
+        profiles: [{ id: 'bak-1', name: '坚果云', url: 'https://dav.example.com', username: 'me', password: '', passwordEncrypted: 'new-cipher', remotePath: '/PicNexus/' }],
+        activeId: 'bak-1',
+      },
+    }));
+
+    await api.reloadFieldSecrets();
+
+    expect(api.formData.value.webdav.profiles[0].passwordEncrypted).toBe('new-cipher');
+    expect(api.formData.value.webdav_profiles[0].passwordEncrypted).toBe('new-cipher');
+    expect(api.formData.value.webdav.activeId).toBe('bak-1');
+  });
+
   it('validates S3 field length, R2 account id, public domain, and valid configs', () => {
     const api = useSettingsForm();
 

@@ -348,6 +348,33 @@ export function useSettingsForm() {
     }
   }
 
+  /**
+   * 换钥匙之后把 formData 里的字段级密文换成新的
+   *
+   * `swapKeyAndReencrypt` 把新密文写进了磁盘和 store 缓存，但 formData 里那份是
+   * `loadSettings` 时拷贝的**旧**密文。不换掉的话有两处后果，第二处更严重：
+   *
+   * 1. 点眼睛拿 formData 里的旧密文去解，用新钥匙解不开 → 「解密失败」
+   * 2. 下一次保存把 formData 原样写回磁盘，**刚搬好的新密文被旧的覆盖** → 前功尽弃
+   *
+   * Why 不直接 `loadSettings()`：那会把用户还没保存的编辑一起冲掉。
+   * 这里只补密文那两个字段，取值逻辑与 `loadSettings` 里对应的两段保持一致。
+   */
+  async function reloadFieldSecrets(): Promise<void> {
+    try {
+      const config = await configStore.get<UserConfig>('config');
+      if (!config) return;
+
+      formData.value.webdav_profiles = config.webdav_profiles || [];
+      formData.value.webdav = {
+        profiles: (config.webdav?.profiles || []).map(p => ({ ...p })),
+        activeId: config.webdav?.activeId || null,
+      };
+    } catch (e) {
+      log.error('换钥匙后刷新字段级密文失败', e);
+    }
+  }
+
   // ---- 保存设置 ----
 
   async function saveSettings(options: { trackAdvancedStatus?: boolean } = {}): Promise<boolean> {
@@ -543,6 +570,7 @@ export function useSettingsForm() {
     serviceConfigStatus,
     advancedSaveState,
     loadSettings,
+    reloadFieldSecrets,
     saveSettings,
     resetToDefaultSettings,
     debouncedSaveSettings,

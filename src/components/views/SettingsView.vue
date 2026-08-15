@@ -43,7 +43,7 @@ const { hasAvailableUpdate } = useAutoUpdate();
 
 const {
   formData, isSettingsReady, availableServices, serviceNames, serviceConfigStatus,
-  loadSettings, saveSettings, debouncedSaveSettings, debouncedSaveSettingsWithStatus,
+  loadSettings, reloadFieldSecrets, saveSettings, debouncedSaveSettings, debouncedSaveSettingsWithStatus,
   cancelDebouncedSave, errorToString, validateS3Config, clearTimers: clearFormTimers,
   resetToDefaultSettings,
   addPrefix, updatePrefix, removePrefix, resetToDefaultPrefixes,
@@ -456,7 +456,7 @@ onUnmounted(() => {
           @test-web-d-a-v="handleWebDAVTest"
           @add-web-d-a-v-profile="addWebDAVProfile"
           @delete-web-d-a-v-profile="deleteWebDAVProfile"
-          @switch-web-d-a-v-profile="switchWebDAVProfile"
+          @switch-web-d-a-v-profile="switchWebDAVProfile" @secrets-rekeyed="reloadFieldSecrets"
         />
       </div>
 

@@ -22,6 +22,8 @@ const emit = defineEmits<{
   'update:webdavConfig': [config: WebDAVConfig];
   'save': [];
   'testWebDAV': [];
+  /** 换钥匙完成，父级手里的密文副本已过期，需要重新读一遍 */
+  'secretsRekeyed': [];
 }>();
 
 const confirm = useConfirm();
@@ -248,6 +250,7 @@ function handleRestoreCancel() {
         ref="backupPasswordSectionRef"
         @restore-confirm="handleRestoreConfirm"
         @restore-cancel="handleRestoreCancel"
+        @secrets-rekeyed="emit('secretsRekeyed')"
       />
     </div>
 
