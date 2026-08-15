@@ -4,6 +4,7 @@ import Button from 'primevue/button';
 import { invoke } from '@tauri-apps/api/core';
 import { useToast } from '../../../composables/useToast';
 import { secureStorage } from '../../../security/crypto';
+import { rekeyFieldSecrets } from '../../../security/fieldSecrets';
 import { configStore, syncStatusStore } from '../../../store/instances';
 import type { UserConfig } from '../../../config/types';
 import type { StoreData } from '../../../store/types';
@@ -17,6 +18,13 @@ import { createLogger } from '../../../utils/logger';
 const emit = defineEmits<{
   'restore-confirm': [password: string];
   'restore-cancel': [];
+  /**
+   * 换钥匙成功、内层密文已搬到新钥匙上
+   *
+   * 父级必须据此刷新自己手里的密文副本——磁盘已经是新密文了，内存里那份还是旧的，
+   * 不刷新的话下一次保存会把旧密文写回去，把搬运成果覆盖掉。
+   */
+  'secrets-rekeyed': [];
 }>();
 
 const toast = useToast();
@@ -49,9 +57,15 @@ function openDisablePasswordDialog() {
   showPasswordDialog.value = true;
 }
 
+/** 回滚到旧密钥，防止配置永久无法解密 */
+async function rollbackKey(oldKeyB64: string): Promise<void> {
+  await invoke('set_secure_key', { key: oldKeyB64 });
+  await secureStorage.forceReinit();
+}
+
 /**
- * 读取配置 → 备份旧密钥 → 替换密钥 → 用新密钥重新加密写回
- * 如果写回失败，回滚到旧密钥，防止配置永久无法解密
+ * 读取配置 → 备份旧密钥 → 换密钥（含内层密文搬运）→ 用新密钥重新加密写回
+ * 任一步失败都回滚到旧密钥，防止配置永久无法解密
  */
 async function swapKeyAndReencrypt(swapFn: () => Promise<void>): Promise<void> {
   const configRaw = await configStore.readRawAll();
@@ -59,7 +73,19 @@ async function swapKeyAndReencrypt(swapFn: () => Promise<void>): Promise<void> {
   const syncStatusRaw = await syncStatusStore.readRawAll().catch(() => null);
   const oldKeyB64 = await invoke<string>('get_or_create_secure_key');
 
-  await swapFn();
+  // 换密钥的动作交给 rekeyFieldSecrets：内层的 passwordEncrypted 只能用旧密钥解开，
+  // 顺序（解开 → 换 → 用新密钥锁上）由它从结构上保证，写不反。
+  // 只重写外层信封会让内层密文变成孤儿——那正是本函数曾经的缺陷。
+  const snapshots = [configRaw, syncStatusRaw].filter((s): s is StoreData => !!s);
+  try {
+    await rekeyFieldSecrets(snapshots, swapFn);
+  } catch (e) {
+    // swapFn 抛在写钥匙串**之前**时，回滚是同值重写、无副作用；
+    // 抛在**之后**时回滚才是必须的。分不清就一律回滚，代价小于赌一把。
+    log.error('换密钥或内层密文搬运失败，回滚密钥', e);
+    await rollbackKey(oldKeyB64);
+    throw e;
+  }
 
   if (config) {
     try {
@@ -67,8 +93,7 @@ async function swapKeyAndReencrypt(swapFn: () => Promise<void>): Promise<void> {
       await configStore.setDirect(nextConfigRaw);
     } catch (e) {
       log.error('迁移密码重新加密写回失败，回滚密钥', e);
-      await invoke('set_secure_key', { key: oldKeyB64 });
-      await secureStorage.forceReinit();
+      await rollbackKey(oldKeyB64);
       throw e;
     }
   }
@@ -113,6 +138,9 @@ async function handlePasswordConfirm(payload: BackupPasswordConfirmPayload) {
       hasBackupPassword.value = false;
       toast.showConfig('success', { summary: '备份密码已停用', detail: '已切换为本机专属加密，换电脑后需重新配置' });
     }
+    // 三条分支都换过钥匙了（验证失败的那两条已提前 return）。
+    // 磁盘上是新密文，父级内存里还是旧的，必须让它去刷一遍
+    emit('secrets-rekeyed');
     passwordDialogRef.value?.onPasswordSuccess();
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);

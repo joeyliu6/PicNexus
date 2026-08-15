@@ -13,7 +13,12 @@ const secureStorageMock = vi.hoisted(() => ({
   setBackupPassword: vi.fn(),
   clearBackupPassword: vi.fn(),
   forceReinit: vi.fn(),
+  encrypt: vi.fn(),
+  decrypt: vi.fn(),
 }));
+
+/** 假密码机的当前钥匙 + 调用顺序流水，供「解密必须发生在换钥匙之前」那条判据用 */
+const cipher = vi.hoisted(() => ({ key: 'old-key', calls: [] as string[] }));
 const configStoreMock = vi.hoisted(() => ({
   get: vi.fn(),
   readRawAll: vi.fn(),
@@ -32,9 +37,12 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ showConfig: toastShowConfigMock }),
 }));
 
-vi.mock('@/security/crypto', () => ({
-  secureStorage: secureStorageMock,
-}));
+// isAnyEncryptedData 保留真实实现：fieldSecrets 靠它认魔数前缀，
+// 换成假的等于把遍历逻辑一起绕过去了
+vi.mock('@/security/crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/security/crypto')>();
+  return { ...actual, secureStorage: secureStorageMock };
+});
 
 vi.mock('@/store/instances', () => ({
   configStore: configStoreMock,
@@ -118,7 +126,36 @@ beforeEach(() => {
   syncStatusStoreMock.readRawAll.mockResolvedValue(null);
   syncStatusStoreMock.setDirect.mockResolvedValue(undefined);
   invokeMock.mockResolvedValue('old-key-b64');
+
+  cipher.key = 'old-key';
+  cipher.calls = [];
+  secureStorageMock.encrypt.mockImplementation(async (text: string) => `PNXENC:${cipher.key}|${text}`);
+  secureStorageMock.decrypt.mockImplementation(async (data: string) => {
+    cipher.calls.push('decrypt');
+    const body = data.slice('PNXENC:'.length);
+    const separator = body.indexOf('|');
+    if (separator < 0 || body.slice(0, separator) !== cipher.key) {
+      throw new Error('数据损坏或密钥不匹配');
+    }
+    return body.slice(separator + 1);
+  });
 });
+
+/** 一份带字段级密文的配置快照，密文用 `oldKey` 加密 */
+function rawConfigWithSecrets(oldKey = 'old-key') {
+  return {
+    config: {
+      id: 'config',
+      webdav_profiles: [
+        { id: 'p1', name: '我的 OpenList', passwordEncrypted: `PNXENC:${oldKey}|hosting-pw` },
+      ],
+      webdav: {
+        profiles: [{ id: 'b1', name: '坚果云', passwordEncrypted: `PNXENC:${oldKey}|backup-pw` }],
+      },
+    },
+    analytics_data: { clientId: 'client-1' },
+  };
+}
 
 describe('BackupPasswordSection', () => {
   it('opens the change dialog from the encrypted state', async () => {
@@ -212,5 +249,137 @@ describe('BackupPasswordSection', () => {
     expect(secureStorageMock.verifyBackupPassword).not.toHaveBeenCalled();
     expect(secureStorageMock.setBackupPassword).toHaveBeenCalledWith('NewPassword123');
     expect(wrapper.text()).toContain('已加密');
+  });
+});
+
+/**
+ * 换钥匙时内层密文的搬运
+ *
+ * 这里钉的是历史缺陷：`swapKeyAndReencrypt` 曾经只重写外层信封，
+ * config 里的 `passwordEncrypted` 一起变成谁也开不了的孤儿。
+ */
+describe('BackupPasswordSection 内层密文搬运', () => {
+  interface WrittenConfig {
+    config: {
+      webdav_profiles: Array<{ passwordEncrypted: string }>;
+      webdav: { profiles: Array<{ passwordEncrypted: string }> };
+    };
+  }
+
+  function lastWrittenConfig(): WrittenConfig {
+    return configStoreMock.setDirect.mock.calls[0][0] as WrittenConfig;
+  }
+
+  function swapToNewKey(): void {
+    cipher.calls.push('swap');
+    cipher.key = 'new-key';
+  }
+
+  it('decrypts before swapping the key, then re-encrypts with the new one', async () => {
+    secureStorageMock.isPasswordMode.mockReturnValue(false);
+    configStoreMock.readRawAll.mockResolvedValue(rawConfigWithSecrets());
+    secureStorageMock.setBackupPassword.mockImplementation(async () => swapToNewKey());
+
+    const wrapper = mountSection();
+    await nextTick();
+    await wrapper.find('[data-label="设置密码"]').trigger('click');
+    await wrapper.get('.confirm-set').trigger('click');
+    await flushPromisesAndTicks(3);
+
+    // 顺序判据：内层密文只能用旧钥匙解开，解密必须发生在换钥匙之前。
+    // 把 swap 挪到解密之前，这条立刻红——本次修复就是这个顺序
+    expect(cipher.calls).toEqual(['decrypt', 'decrypt', 'swap']);
+
+    const written = lastWrittenConfig();
+    expect(written.config.webdav_profiles[0].passwordEncrypted).toBe('PNXENC:new-key|hosting-pw');
+    expect(written.config.webdav.profiles[0].passwordEncrypted).toBe('PNXENC:new-key|backup-pw');
+  });
+
+  it('carries the ciphertext across when encryption is disabled too', async () => {
+    configStoreMock.readRawAll.mockResolvedValue(rawConfigWithSecrets());
+    secureStorageMock.clearBackupPassword.mockImplementation(async () => swapToNewKey());
+
+    const wrapper = mountSection();
+    await nextTick();
+    await wrapper.find('[data-label="关闭加密"]').trigger('click');
+    await wrapper.get('.confirm-disable').trigger('click');
+    await flushPromisesAndTicks(3);
+
+    expect(cipher.calls).toEqual(['decrypt', 'decrypt', 'swap']);
+    expect(lastWrittenConfig().config.webdav.profiles[0].passwordEncrypted)
+      .toBe('PNXENC:new-key|backup-pw');
+  });
+
+  it('keeps ciphertext the old key cannot open instead of clearing it', async () => {
+    const raw = rawConfigWithSecrets();
+    raw.config.webdav_profiles[0].passwordEncrypted = 'PNXENC:a-key-nobody-has|lost-forever';
+    secureStorageMock.isPasswordMode.mockReturnValue(false);
+    configStoreMock.readRawAll.mockResolvedValue(raw);
+    secureStorageMock.setBackupPassword.mockImplementation(async () => swapToNewKey());
+
+    const wrapper = mountSection();
+    await nextTick();
+    await wrapper.find('[data-label="设置密码"]').trigger('click');
+    await wrapper.get('.confirm-set').trigger('click');
+    await flushPromisesAndTicks(3);
+
+    const written = lastWrittenConfig();
+    expect(written.config.webdav_profiles[0].passwordEncrypted).toBe('PNXENC:a-key-nobody-has|lost-forever');
+    expect(written.config.webdav.profiles[0].passwordEncrypted).toBe('PNXENC:new-key|backup-pw');
+  });
+
+  /**
+   * 换完钥匙必须通知父级重读密文
+   *
+   * 磁盘上已是新密文，设置页 formData 里还是旧的。不通知的话点眼睛解不开，
+   * 而且下一次保存会把旧密文写回磁盘，把搬运成果覆盖掉。
+   */
+  it('tells the parent to refresh its ciphertext copies after every successful swap', async () => {
+    secureStorageMock.isPasswordMode.mockReturnValue(false);
+    configStoreMock.readRawAll.mockResolvedValue(rawConfigWithSecrets());
+    secureStorageMock.setBackupPassword.mockImplementation(async () => swapToNewKey());
+
+    const wrapper = mountSection();
+    await nextTick();
+    await wrapper.find('[data-label="设置密码"]').trigger('click');
+    await wrapper.get('.confirm-set').trigger('click');
+    await flushPromisesAndTicks(3);
+
+    expect(wrapper.emitted('secrets-rekeyed')).toHaveLength(1);
+  });
+
+  it('stays silent when the current password check fails, since no key was swapped', async () => {
+    secureStorageMock.verifyBackupPassword.mockResolvedValueOnce(false);
+    configStoreMock.readRawAll.mockResolvedValue(rawConfigWithSecrets());
+
+    const wrapper = mountSection();
+    await nextTick();
+    await wrapper.find('[data-label="修改密码"]').trigger('click');
+    await wrapper.get('.confirm-change').trigger('click');
+    await flushPromisesAndTicks(3);
+
+    expect(wrapper.emitted('secrets-rekeyed')).toBeUndefined();
+  });
+
+  it('rolls back to the old key and writes nothing when re-encryption fails', async () => {
+    secureStorageMock.isPasswordMode.mockReturnValue(false);
+    configStoreMock.readRawAll.mockResolvedValue(rawConfigWithSecrets());
+    secureStorageMock.setBackupPassword.mockImplementation(async () => swapToNewKey());
+    secureStorageMock.encrypt.mockRejectedValue(new Error('加密失败'));
+
+    const wrapper = mountSection();
+    await nextTick();
+    await wrapper.find('[data-label="设置密码"]').trigger('click');
+    await wrapper.get('.confirm-set').trigger('click');
+    await flushPromisesAndTicks(3);
+
+    expect(invokeMock).toHaveBeenCalledWith('set_secure_key', { key: 'old-key-b64' });
+    expect(secureStorageMock.forceReinit).toHaveBeenCalledTimes(1);
+    expect(configStoreMock.setDirect).not.toHaveBeenCalled();
+    expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.objectContaining({
+      summary: '备份密码操作失败',
+    }));
+    // 失败路径不能通知父级刷新——磁盘没变，刷了也只是白读一遍旧值
+    expect(wrapper.emitted('secrets-rekeyed')).toBeUndefined();
   });
 });
