@@ -171,10 +171,15 @@ const secrets = useSensitiveDraft({
 不是小，是零。真正的明文风险在 `cli-config.json`（`save_cli_config` 直接 `fs::write`，无任何加密），
 那条线记在 `docs/TODO.md`。
 
-> ⚠️ 已有字段级密文的地方要注意：设置备份密码会换掉 `secureStorage` 的密钥，而
-> `swapKeyAndReencrypt` 只重写外层信封、不会钻进 JSON 重新加密内层密文。
-> 详见 TODO 的「设置备份密码会静默作废已保存的 WebDAV 密码」条目。
-> **新增字段级密文之前先确认这条修没修。**
+> 📌 **换钥匙时内层密文会自动搬运，新增字段级密文不需要登记。**
+> 设置备份密码会换掉 `secureStorage` 的密钥，
+> [`rekeyFieldSecrets`](../../../src/security/fieldSecrets.ts) 在换之前按加密魔数前缀
+> （`PNXENC:` / `PNXPWD:`）深度遍历配置、把内层密文一并搬到新钥匙上。
+> 只要你的密文走 `secureStorage.encrypt` 生成，就自动被覆盖——**不建登记表正是因为
+> 登记表迟早会漏一个，而漏了是静默的**。
+>
+> 这里曾经有过一个只重写外层信封的缺陷，内层密文全变孤儿。
+> 症状与修法见 [orphan-field-ciphertext.md](../troubleshooting/orphan-field-ciphertext.md)。
 
 ## 加了密文字段记得脱敏
 

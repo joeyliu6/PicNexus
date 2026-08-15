@@ -174,6 +174,8 @@ flowchart TD
 |------|---------|-------------|
 | 配置丢失/恢复默认 | .settings.dat 解密失败，降级为 DEFAULT_CONFIG | 图3 加载流节点 M |
 | 弹出密码输入框 | 更换设备或密钥丢失，触发 BackupPasswordRequired | 图3 加载流节点 L |
+| 设完备份密码后某个 WebDAV 密码解不开 | 内层字段密文没跟着换钥匙 → 孤儿密文，见 [排查](../reference/troubleshooting/orphan-field-ciphertext.md) | `rekeyFieldSecrets` |
+| 启动时提示「部分密码已失效」 | 存量孤儿被 `purgeOrphanFieldSecrets` 清空，按提示重填即可 | `main.ts` 启动流程 2.1 |
 | 配置保存后其他组件未更新 | `config-updated` 事件未触发或监听未注册 | 图3 保存流节点 N → O |
 | 历史记录不显示 | TTL 缓存过期但 reloadSharedData 失败 | 图4 读取路径 R4 → R5 |
 | 删除后列表未更新 | cacheEvents 监听未初始化 | 图4 删除路径 D3 → D4 |

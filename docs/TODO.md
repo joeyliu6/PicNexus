@@ -96,18 +96,21 @@ Cookie 2 处 / S3 2 处（展开 12 个输入框）→ 抽 `useWebDAVProfileEdit
       **全程不点密码框**，只改别的字段（如远程路径）触发保存 → 重启 → 测试连接。
       **判据**：仍然连接成功，已存密码没被清掉。
 
-**第二轮 · 同步链路**
+**第二轮 · 同步链路 + 真实上传**
 
-配置同步**必须先有备份密码**（见 [sync-flow.md](./flows/sync-flow.md) 图 1 下方要点），
-而设备份密码会触发上面那条孤儿密文缺陷。**所以顺序不能反：**
+配置同步**必须先有备份密码**（见 [sync-flow.md](./flows/sync-flow.md) 图 1 下方要点）。
 
-- [ ] 先在「备份密码」区设好密码 → **再**回 WebDAV 那栏重新填一遍密码 → 保存 → 重启 → 测试连接 → 触发配置同步。
+- [ ] 设好备份密码 → 保存 → 重启 → 测试连接 → 触发配置同步。
       **判据**：同步成功。这条验证 `backupSyncUtils` / `useWebDAVSync` 走密文确实通——
       代码上它们本来就传 `passwordEncrypted`，但没真机跑过。
+- [ ] 换过备份密码之后，用**真实可达**的 WebDAV 图床（坚果云或起一个本地 OpenList）
+      传一张图。**判据**：上传成功。
+      2026-08-15 那次只跑到「解密成功、连不上服务器」（本地 OpenList 没起），
+      解密那一环已证明，认证与上传那一环没跑到。
 
-> 📌 顺序反了（先填 WebDAV 密码、后设备份密码）会重现孤儿密文缺陷，
-> 表现为「密码解密失败，请重新输入密码后再测试」。那是**已知缺陷**，不是本次改动的回归。
-> 想专门复现它，见上面「设置备份密码会静默作废已保存的 WebDAV 密码」条目。
+> 📌 **顺序限制已经没了。** 孤儿密文缺陷已于 2026-08-15 修复（`rekeyFieldSecrets`
+> 换钥匙时会把内层密文一并搬运），先填 WebDAV 密码、后设备份密码不再作废密码。
+> 背景见 [orphan-field-ciphertext.md](./reference/troubleshooting/orphan-field-ciphertext.md)。
 
 ### [~] 2026-08-13 修复计划批次 1 / 2 / 4 的手动验收
 
@@ -243,74 +246,6 @@ Cookie 2 处 / S3 2 处（展开 12 个输入框）→ 抽 `useWebDAVProfileEdit
 
 ---
 
-### [ ] 设置备份密码会静默作废已保存的 WebDAV 密码
-
-- **来源**：2026-08-14 做敏感字段统一时顺带发现
-- **优先级**：高——静默丢数据，和 `a322dba` 同形状
-- **状态**：✅ **2026-08-15 真机复现，源码推导全部命中**（坚果云回归第二轮撞上的）
-
-现场日志，三行正好是一条完整的因果链：
-
-```
-[SecureStorage] 解密失败:
-[WebDAV] 密码解密失败 {"message":"数据损坏或密钥不匹配"}
-[WebDAVBackupConfig] WebDAV 备份密码解密失败，无法查看
-```
-
-同一份日志里 `07:23:21 [useConfig] WebDAV ✓ 测试成功` → `07:24:07 ✓ 备份密码已设置`
-→ `07:24:22 解密失败`，61 秒内密码没被碰过。因果是对照出来的，不是推的。
-
-换钥匙全程**只有两次写盘**（`[Store] ✓ 直接写入成功` 的 `.settings.dat` 和
-`.sync-status.dat`），没有任何字段级重新加密——「只重写外层信封」由此坐实。
-
-比原推导更糟的三点：
-
-- **爆炸半径是所有字段级密文，不止备份密码**。同一份日志里
-  `[ServiceSelector] 可用: [..., "webdav:msrlkrjz39xp49fzy", "webdav:msscp97juekqjioao"]`
-  在换钥匙前后**完全一样**——两个 WebDAV 图床 profile 的 `passwordEncrypted` 一起变孤儿，
-  但 [`useSettingsForm.ts`](../src/composables/settings/useSettingsForm.ts) 判"可用"
-  只看 `passwordEncrypted` 非空，于是服务选择器照常列出它们，上传时才会失败。
-- **不用重启就复现**。`setBackupPassword` 里的 `applyKey` 当场换掉内存里的密钥，
-  下一次点眼睛就解不开了，不需要等重新加载配置。
-- **界面在撒谎**。密码框照样显示圆点 + 绿色「✓ 已保存」——`hasStored` 同样只看
-  `passwordEncrypted` 是否非空，不看解不解得开。用户没有任何线索。
-
-`[WebDAVBackupConfig]` 那行是 `2547d3b` 补的显式报错才有的。在那之前 `decryptPassword`
-吞掉错误返回空串，「解不开」和「存的就是空密码」在界面上完全一样，连日志都不会响。
-
-**兜底确实守住了，没有二次伤害**：`handleWebDAVTest` 在解密失败处提前 `return`，
-其后的保存把原密文原样写回（`encryptBackupProfiles` 见明文为空就不动密文）。
-孤儿密文被保留而不是被清空——用户至少还有"重新输一遍"这条路。
-
-**用户侧的绕行办法**：点进密码框把密码重新输一遍（新密文用新密钥加密，此后自洽）。
-备份那一个和 `config.webdav_profiles` 里每一个都要重填。
-
-**修复时可利用**：`swapKeyAndReencrypt` 第 60 行已经把旧密钥读进 `oldKeyB64`（回滚用），
-所以不需要另建密钥备份机制——把"解开内层密文"插在 `swapFn()` 之前即可，那时旧钥匙还在手上。
-另外这条修完还得处理**存量**：已经变成孤儿的密文不会因为代码修好而复活，
-界面仍会显示「✓ 已保存」，需要一个"解不开就别声称已保存"的判断兜住。
-
-`secureStorage` 是单例、单把钥匙。字段级密文（`passwordEncrypted`）和整份 `.settings.dat`
-的外层加密用的是**同一个 `this.key`**。而设置备份密码会换掉这把钥匙：
-
-1. [`setBackupPassword`](../src/security/crypto.ts) 用 `invoke('set_secure_key')` 覆盖钥匙串里的旧钥匙，**无备份**
-2. [`swapKeyAndReencrypt`](../src/components/settings/backup/BackupPasswordSection.vue) 换完只用新钥匙
-   重写**外层信封**（`readRawAll` → 换钥匙 → `setDirect`），不会钻进 JSON 重新加密内层密文
-3. → 内层密文成了「孤儿」：能解开它的钥匙已经不存在了
-4. [`WebDAVClient.decryptPassword`](../src/utils/webdav.ts) 的 `catch` 吞掉错误返回 `''`
-
-**用户看到的是密码莫名其妙没了，一句报错都没有**，而且归因不到「几天前设过备份密码」。
-
-**复现步骤**：配好 WebDAV 图床或备份密码 → 保存 → 设置备份密码 → 重启 → 看密码还在不在。
-
-**正确修法**：`swapKeyAndReencrypt` 换钥匙**之前**先把内层密文解开，换完再用新钥匙重新加密。
-影响面是 `config.webdav_profiles[].passwordEncrypted` 与 `config.webdav.profiles[].passwordEncrypted`。
-
-⚠️ 这条没修之前，**不要再新增字段级加密的字段**——每加一个都是在放大这个缺陷的爆炸半径。
-背景见 [sensitive-field-contract.md](./reference/patterns/sensitive-field-contract.md#底下存的是明文还是密文)。
-
----
-
 ## 已知取舍
 
 ### 只读探测路径不做 DNS 裁决
@@ -341,6 +276,12 @@ Cookie 2 处 / S3 2 处（展开 12 个输入框）→ 抽 `useWebDAVProfileEdit
 ---
 
 ## 已完成
+
+### [x] 设置备份密码会静默作废已保存的 WebDAV 密码
+
+换钥匙只重写外层信封，内层 `passwordEncrypted` 成孤儿（2026-08-15 真机复现并修复）。
+修法是 `rekeyFieldSecrets` 把「解开 → 换钥匙 → 用新钥匙锁上」收进一个函数，存量孤儿启动时清空并提示重填。
+详见 [orphan-field-ciphertext.md](./reference/troubleshooting/orphan-field-ciphertext.md)。
 
 ### [x] WebDAV 图床支持
 
