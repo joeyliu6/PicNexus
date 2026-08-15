@@ -300,6 +300,24 @@ flowchart TD
 
 修复链路只处理 UTF-8。plugin-fs 的 `readTextFile` 用非 fatal 的 `TextDecoder`，GBK 等非 UTF-8 字节会被静默替换成 `�` 并写回原文件——这是会永久损坏用户数据的静默失败。`mdTextIo.ts` 改为读原始字节 + `new TextDecoder('utf-8', { fatal: true })`：解码失败即拒绝该文件（单文件模式提示"编码不受支持"，批量模式计入 `failedFiles` / 读取失败）。原文件的 UTF-8 BOM 会被记录并在写回时补回，不静默改变文件字节。
 
+### setup 上下文约束
+
+`useToast()` / `useConfigManager()` 内部走 Vue 的 `inject()`，**只在 setup 栈期间可用**。
+本链路有四个模块级函数的调用点全在 setup 之外——`executeReplace`（「修复链接」click）、
+`undoReplace`（「撤销」click）、`saveHostPreference`（保存偏好 click）、
+`loadHostPreference`（「扫描完成」的 watcher 回调）——所以依赖一律**由调用方在
+setup 期间取好、当参数传进来**，由 `useMdRescueManager()` 里的四个包装完成注入。
+
+> ⚠️ `e2a2137` 把大 composable 拆成子模块时，这四个函数被搬出 `useMdRescueManager()`，
+> 各自在函数体里重新调了一次 `useToast()` / `useConfigManager()`——位置一变，inject 就失效。
+> 表现：每次扫描完成控制台报 `No PrimeVue Toast provided!`，图床偏好静默不生效；
+> 「修复链接」和「撤销」按钮一点就抛。
+>
+> **单测没抓到，是因为两个 spec 都 mock 了 `@/composables/useToast`**——mock 之后
+> inject 永远成功，真实失败被盖住。护栏改由
+> [`setupContextGuard.spec.ts`](../../tests/unit/composables/md-rescue/setupContextGuard.spec.ts)
+> 钉着，**那个文件不得 mock 这两个模块**。
+
 ---
 
 ## 图 6：修复策略决策
@@ -362,6 +380,7 @@ flowchart TD
 | 撤销后两个同名文件内容互串 | 不应再出现。历史成因是 verbatim 前缀让相对路径退化为裸 basename，同名备份互相顶掉 | 图 5 [备份路径不变量](#备份路径不变量) |
 | 修复过的文件夹再扫一次，失效数虚高 | 检查 `.picnexus-backup` 是否被扫进来（Rust 递归按 `BACKUP_DIR_NAME` 跳过）；目录名两侧漂移会被 `npm run lint` 拦下 | 图 2 Rust 扫描、[备份目录排除](#备份目录排除) |
 | 撤销恢复失败 | `.picnexus-backup` 目录被手动删除 | 图 5 `undoReplace` |
+| 控制台报 `No PrimeVue Toast provided!` / 图床偏好不生效 / 点「修复链接」「撤销」没反应 | 模块级函数自己调了 inject 类 composable，见 [setup 上下文约束](#setup-上下文约束) | 图 5、图 6 |
 | 「无法修复」数量比预期多 | 该图片未上传到其他图床（DB 中无备用记录） | 图 4 `findBackupLinksRaw` |
 | 图床偏好设置不生效 | `hostPreference` 为空数组（未设置偏好则不排序） | 图 6 `priority` 策略 |
 | 徽章/代理服务 URL 里的 `.js`/`.css` 被当图片扫 | `isValidImageUrl` / `is_valid_image_url` 按 URL path 末尾扩展名做黑名单过滤（`js/css/html/pdf/zip/mp4/...`），query/fragment 不参与 | `src/utils/mdParser.ts` `NON_IMAGE_EXTENSIONS`、`src-tauri/src/commands/md_scanner.rs` 同名常量（两侧必须保持一致） |

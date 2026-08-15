@@ -1,16 +1,19 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { computed } from 'vue';
 
-// Mock useConfig：返回可控的 loadConfig/saveConfig
+// 可控的 loadConfig/saveConfig，作为参数传给被测函数
+//
+// 不再 mock '@/composables/useConfig'：这两个函数已改成由调用方在 setup 期间取好
+// configManager 传进来，模块运行时不再 import 它。「setup 之外不得自己 inject」
+// 那条不变量由 setupContextGuard.spec.ts 钉着。
 const loadConfigMock = vi.fn();
 const saveConfigMock = vi.fn();
-vi.mock('@/composables/useConfig', () => ({
-  useConfigManager: () => ({
-    loadConfig: loadConfigMock,
-    saveConfig: saveConfigMock,
-  }),
-}));
+const configManager = {
+  loadConfig: loadConfigMock,
+  saveConfig: saveConfigMock,
+} as unknown as ConfigManagerApi;
 
+import type { ConfigManagerApi } from '@/composables/useConfig';
 import {
   applyHostPreference,
   applyRepairStrategy,
@@ -224,20 +227,20 @@ describe('loadHostPreference / saveHostPreference', () => {
 
   it('loadHostPreference 从配置读取偏好', async () => {
     loadConfigMock.mockResolvedValue({ mdRescueHostPreference: ['r2', 'weibo'] });
-    await loadHostPreference();
+    await loadHostPreference(configManager);
     expect(hostPreference.value).toEqual(['r2', 'weibo']);
   });
 
   it('配置缺字段时回退空数组', async () => {
     loadConfigMock.mockResolvedValue({});
-    await loadHostPreference();
+    await loadHostPreference(configManager);
     expect(hostPreference.value).toEqual([]);
   });
 
   it('saveHostPreference 写回配置', async () => {
     loadConfigMock.mockResolvedValue({ foo: 'bar' });
     hostPreference.value = ['r2'];
-    await saveHostPreference();
+    await saveHostPreference(configManager);
     expect(saveConfigMock).toHaveBeenCalledWith({ foo: 'bar', mdRescueHostPreference: ['r2'] }, true);
   });
 });

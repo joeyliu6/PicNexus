@@ -16,9 +16,9 @@ const lastRepairMocks = vi.hoisted(() => ({
   clearLastRepair: vi.fn(),
 }));
 
-vi.mock('@/composables/useToast', () => ({
-  useToast: () => toastMocks,
-}));
+// 不再 mock '@/composables/useToast'：toast 已改成由调用方传入，模块运行时不再 import 它。
+// 「setup 之外调 useToast 会抛」这条不变量由 setupContextGuard.spec.ts 单独钉着——
+// 那里必须保留真实实现，因为正是这里的 mock 曾把该缺陷盖了过去。
 
 vi.mock('@/composables/md-rescue/useMdRescueLastRepair', () => ({
   readLastRepair: lastRepairMocks.readLastRepair,
@@ -27,6 +27,7 @@ vi.mock('@/composables/md-rescue/useMdRescueLastRepair', () => ({
 }));
 
 import { executeReplace, undoReplace } from '@/composables/md-rescue/useFileBackup';
+import type { ToastApi } from '@/composables/useToast';
 import {
   fileContent,
   filePath,
@@ -43,6 +44,9 @@ import {
   repairReceipt,
   type MdImageLinkWithFile,
 } from '@/composables/md-rescue/shared';
+
+/** 传给被测函数的 toast，断言仍然打在 toastMocks 上 */
+const toastApi = toastMocks as unknown as ToastApi;
 
 function checkResult(valid = false): CheckLinkResult {
   return {
@@ -104,7 +108,7 @@ describe('useFileBackup', () => {
       makeLink('https://dead.example/a.png', 'C:/docs/a.md'),
     ];
 
-    const result = await executeReplace(1);
+    const result = await executeReplace(1, toastApi);
 
     expect(result).toEqual({ success: 0, skipped: 2, failed: 0 });
     expect(phase.value).toBe('done');
@@ -124,7 +128,7 @@ describe('useFileBackup', () => {
       makeLink('https://dead.example/a.png', 'C:/docs/a.md', 'https://cdn.example/a.png'),
     ];
 
-    const result = await executeReplace(0);
+    const result = await executeReplace(0, toastApi);
 
     expect(result).toEqual({ success: 0, skipped: 0, failed: 1 });
     expect(phase.value).toBe('scanning');
@@ -143,7 +147,7 @@ describe('useFileBackup', () => {
     ];
     fs.readFile.mockResolvedValue(utf8Bytes('before ![](https://dead.example/a.png) after'));
 
-    const result = await executeReplace(0);
+    const result = await executeReplace(0, toastApi);
 
     expect(result).toEqual({ success: 1, skipped: 0, failed: 0 });
     expect(fs.mkdir).toHaveBeenCalledWith(expect.stringContaining('C:/docs/.picnexus-backup/'), { recursive: true });
@@ -171,7 +175,7 @@ describe('useFileBackup', () => {
     ];
     fs.readFile.mockRejectedValue(new Error('EACCES'));
 
-    const result = await executeReplace(0);
+    const result = await executeReplace(0, toastApi);
 
     expect(result).toEqual({ success: 0, skipped: 0, failed: 1 });
     expect(fs.copyFile).not.toHaveBeenCalled();
@@ -200,7 +204,7 @@ describe('useFileBackup', () => {
       isCancelled.value = true;
     });
 
-    const result = await executeReplace(0);
+    const result = await executeReplace(0, toastApi);
 
     expect(result).toEqual({ success: 1, skipped: 0, failed: 0 });
     expect(fs.writeTextFile).toHaveBeenCalledTimes(1);
@@ -221,7 +225,7 @@ describe('useFileBackup', () => {
     ];
     fs.readFile.mockResolvedValue(utf8Bytes('![](https://dead.example/a.png)'));
 
-    const result = await executeReplace(0);
+    const result = await executeReplace(0, toastApi);
 
     expect(result.failed).toBe(0);
     const backups = fs.copyFile.mock.calls.map((call) => call[1] as string);
@@ -243,7 +247,7 @@ describe('useFileBackup', () => {
     ];
     fs.readFile.mockResolvedValue(utf8Bytes('![](https://dead.example/a.png)'));
 
-    const result = await executeReplace(0);
+    const result = await executeReplace(0, toastApi);
 
     expect(result.failed).toBe(0);
     const backups = fs.copyFile.mock.calls.map((call) => call[1] as string);
@@ -264,7 +268,7 @@ describe('useFileBackup', () => {
     // GBK 编码的“中文”，在 UTF-8 下是非法字节序列
     fs.readFile.mockResolvedValue(new Uint8Array([0xd6, 0xd0, 0xce, 0xc4]));
 
-    const result = await executeReplace(0);
+    const result = await executeReplace(0, toastApi);
 
     expect(result).toEqual({ success: 0, skipped: 0, failed: 1 });
     expect(fs.copyFile).not.toHaveBeenCalled();
@@ -283,7 +287,7 @@ describe('useFileBackup', () => {
     ];
     fs.readFile.mockResolvedValue(utf8Bytes('![](https://dead.example/a.png)', true));
 
-    const result = await executeReplace(0);
+    const result = await executeReplace(0, toastApi);
 
     expect(result.success).toBe(1);
     expect(fs.writeTextFile).toHaveBeenCalledWith(
@@ -309,7 +313,7 @@ describe('useFileBackup', () => {
       ],
     };
 
-    await undoReplace(resetFn);
+    await undoReplace(resetFn, toastApi);
 
     expect(fs.copyFile).toHaveBeenCalledWith('C:/backup/a.md', 'C:/docs/a.md');
     expect(fs.copyFile).toHaveBeenCalledWith('C:/backup/b.md', 'C:/docs/b.md');
@@ -346,7 +350,7 @@ describe('useFileBackup', () => {
       if (backup === 'C:/backup/b.md') throw new Error('locked');
     });
 
-    await undoReplace(resetFn);
+    await undoReplace(resetFn, toastApi);
 
     expect(resetFn).not.toHaveBeenCalled();
     expect(lastRepairMocks.clearLastRepair).not.toHaveBeenCalled();
