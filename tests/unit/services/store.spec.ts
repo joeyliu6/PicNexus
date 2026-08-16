@@ -139,6 +139,60 @@ describe('Store（非加密模式）', () => {
       expect(result).toBe(42);
       expect(mockReadTextFile).not.toHaveBeenCalled();
     });
+
+    it('invalidateCache 后重新读盘', async () => {
+      mockExists.mockResolvedValue(true);
+      mockReadTextFile.mockResolvedValue('{"a":1}');
+
+      await store.get('a');
+      mockReadTextFile.mockClear();
+
+      await store.invalidateCache();
+
+      mockReadTextFile.mockResolvedValue('{"a":99}');
+      expect(await store.get('a')).toBe(99);
+      expect(mockReadTextFile).toHaveBeenCalledTimes(1);
+    });
+
+    it('invalidateCache 不碰磁盘文件（与 clear 的区别）', async () => {
+      mockExists.mockResolvedValue(true);
+      mockReadTextFile.mockResolvedValue('{"a":1}');
+
+      await store.get('a');
+      mockWriteTextFile.mockClear();
+
+      await store.invalidateCache();
+
+      // clear() 会 writeTextFile 空对象，invalidateCache() 必须一次都不写
+      expect(mockWriteTextFile).not.toHaveBeenCalled();
+    });
+
+    it('跨实例：托盘那份缓存不作废就读不到主窗口的写入', async () => {
+      // 模拟两个 webview 各自持有的 Store 单例，共用同一个磁盘文件
+      const mainWindow = new Store('shared.dat', { encrypted: false });
+      const trayWindow = new Store('shared.dat', { encrypted: false });
+
+      let diskContent = '{"config":{"enabledServices":["jd"]}}';
+      mockExists.mockResolvedValue(true);
+      mockReadTextFile.mockImplementation(async () => diskContent);
+      mockWriteTextFile.mockImplementation(async (_path, content) => {
+        diskContent = content as string;
+      });
+
+      // 托盘启动时读一次 → 缓存定格
+      expect(await trayWindow.get('config')).toEqual({ enabledServices: ['jd'] });
+
+      // 主窗口改配置并落盘
+      await mainWindow.set('config', { enabledServices: ['jd', 'webdav:nas'] });
+      expect(JSON.parse(diskContent).config.enabledServices).toEqual(['jd', 'webdav:nas']);
+
+      // 不作废 → 托盘仍读到启动时的旧快照（这正是缺陷本身）
+      expect(await trayWindow.get('config')).toEqual({ enabledServices: ['jd'] });
+
+      // 作废后 → 读到主窗口写入的新值
+      await trayWindow.invalidateCache();
+      expect(await trayWindow.get('config')).toEqual({ enabledServices: ['jd', 'webdav:nas'] });
+    });
   });
 
   // ─── set ───────────────────────────────────────────────────
