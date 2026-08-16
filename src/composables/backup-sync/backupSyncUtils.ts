@@ -1,6 +1,6 @@
 // 备份与同步 - 纯工具函数（无状态依赖）
 
-import { WebDAVClient } from '../../utils/webdav';
+import { WebDAVClient, WEBDAV_AUTH_FAILED_MESSAGE } from '../../utils/webdav';
 import { historyDB, type SyncLogOperation } from '../../services/HistoryDatabase';
 import { useToast } from '../useToast';
 import { TOAST_MESSAGES } from '../../constants';
@@ -58,7 +58,7 @@ export function extractErrorCode(error: unknown): string {
   if (httpMatch) {
     const code = httpMatch[1];
     const statusTexts: Record<string, string> = {
-      '401': '认证失败，请检查用户名和密码',
+      '401': WEBDAV_AUTH_FAILED_MESSAGE,
       '403': '访问被拒绝，权限不足',
       '404': '远程路径不存在，请检查路径设置',
       '405': '服务器不支持此操作，请确认 WebDAV 地址',

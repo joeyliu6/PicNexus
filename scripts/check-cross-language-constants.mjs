@@ -41,6 +41,20 @@ const PAIRS = [
     ],
   },
   {
+    name: 'WEBDAV_AUTH_FAILED_MESSAGE',
+    why: 'WebDAV 认证失败的提示。图床链路由 Rust 在上传/测试时报，备份链路由前端在解析响应码时报，是同一件事的两个报点；措辞分叉会让用户以为撞上了两个不同的故障',
+    sources: [
+      {
+        file: 'src-tauri/src/commands/webdav_upload.rs',
+        pattern: /const\s+WEBDAV_AUTH_FAILED_MESSAGE\s*:\s*&str\s*=\s*"((?:\\.|[^"\\])*)"/,
+      },
+      {
+        file: 'src/utils/webdav.ts',
+        pattern: /const\s+WEBDAV_AUTH_FAILED_MESSAGE\s*=\s*'((?:\\.|[^'\\])*)'/,
+      },
+    ],
+  },
+  {
     name: 'BACKUP_DIR_NAME',
     why: 'MD 修复的备份目录名。前端用它建备份目录，Rust 扫描用它跳过备份目录；一旦漂移，扫描会把"修复前的原件"当正常文档再修一遍，备份被改写、还会产生嵌套备份',
     sources: [

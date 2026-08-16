@@ -5,6 +5,21 @@ import { createLogger } from './logger';
 
 const log = createLogger('WebDAV');
 
+/**
+ * 认证失败的统一文案
+ *
+ * 与 Rust 侧 `src-tauri/src/commands/webdav_upload.rs` 的 `WEBDAV_AUTH_FAILED_MESSAGE`
+ * 保持逐字一致：备份链路在这里拦、图床链路在 Rust 拦，是同一件事的两个拦截点，
+ * 措辞一旦分叉，用户会以为自己撞上了两个不同的故障。
+ *
+ * 这条一致性由 `scripts/check-cross-language-constants.mjs` 在 `npm run lint` 阶段守着，
+ * 不再只是口头约定；改名或挪窝时同步更新那里的 `PAIRS`。
+ *
+ * 📌 Rust 侧在 401 时还会读 `WWW-Authenticate` 头，服务端只给 Digest 时换用另一句提示。
+ * 这里做不到——`webdav_request` 的返回值只有 `{status, body}`，拿不到响应头。
+ */
+export const WEBDAV_AUTH_FAILED_MESSAGE = '认证失败，请检查用户名和密码';
+
 interface WebDAVClientConfig {
   url: string;
   username: string;
@@ -162,7 +177,7 @@ export class WebDAVClient {
 
     if (!isOkStatus(response.status)) {
       const status = response.status;
-      if (status === 401 || status === 403) throw new Error('认证失败，请检查用户名和密码');
+      if (status === 401 || status === 403) throw new Error(WEBDAV_AUTH_FAILED_MESSAGE);
       if (status === 404) throw new Error('路径不存在，请检查远程路径配置');
       if (status === 507) throw new Error('存储空间不足，WebDAV 服务器空间已满');
       if (status >= 500) throw new Error(`服务器错误 (HTTP ${status})，WebDAV 服务器可能暂时不可用`);
@@ -192,7 +207,7 @@ export class WebDAVClient {
 
     if (!isOkStatus(response.status)) {
       const status = response.status;
-      if (status === 401 || status === 403) throw new Error('认证失败，请检查用户名和密码');
+      if (status === 401 || status === 403) throw new Error(WEBDAV_AUTH_FAILED_MESSAGE);
       if (status >= 500) throw new Error(`服务器错误 (HTTP ${status})，WebDAV 服务器可能暂时不可用`);
       throw new Error(`下载失败: HTTP ${status}`);
     }
