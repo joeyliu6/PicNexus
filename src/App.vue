@@ -18,7 +18,7 @@ import { useGlobalShortcut } from './composables/useGlobalShortcut';
 import { useAutoUpdate } from './composables/useAutoUpdate';
 import { useServiceAvailability } from './composables/useServiceAvailability';
 import { TOAST_MESSAGES } from './constants';
-import { configStore } from './store/instances';
+import { configStore, readFreshConfig } from './store/instances';
 import { BackupPasswordRequiredError, secureStorage } from './security/crypto';
 import { startupFlags } from './store/startupFlags';
 import { readTextFile } from '@tauri-apps/plugin-fs';
@@ -174,7 +174,8 @@ onMounted(async () => {
 
   unlistenConfigUpdate = await listen('config-updated', async () => {
     try {
-      const latestConfig = await configStore.get<UserConfig>('config');
+      // 事件可能来自托盘窗口（它也能切主题），必须绕开本窗口的陈旧缓存
+      const latestConfig = await readFreshConfig();
       if (latestConfig) updateConfig(latestConfig);
     } catch (error) {
       log.warn('刷新主题配置失败:', error);

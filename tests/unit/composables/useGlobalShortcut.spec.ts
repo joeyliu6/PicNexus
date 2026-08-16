@@ -35,7 +35,11 @@ const {
 vi.mock('@/store/instances', () => ({
   configStore: {
     get: configGetMock,
+    invalidateCache: vi.fn().mockResolvedValue(undefined),
   },
+  // 真实实现 = 作废缓存 + get('config', defaultValue)，这里转发到同一个 mock，
+  // 让既有用例对 configGetMock 的断言继续成立
+  readFreshConfig: (defaultValue?: unknown) => configGetMock('config', defaultValue),
 }));
 
 vi.mock('@/core/MultiServiceUploader', () => ({

@@ -2,7 +2,7 @@
 
 import { ref, computed, type Ref, type ComputedRef } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { configStore } from '../store/instances';
+import { configStore, readFreshConfig } from '../store/instances';
 import type { UserConfig } from '../config/types';
 import { DEFAULT_CONFIG, isCustomS3Id, makeCustomS3Id, isWebDAVId, makeWebDAVId } from '../config/types';
 import { useToast } from './useToast';
@@ -175,7 +175,10 @@ export function useServiceSelector(): UseServiceSelectorReturn {
    */
   async function loadServiceButtonStates(): Promise<void> {
     try {
-      const config = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
+      // 这个函数的主要触发源是 config-updated，而事件可能来自托盘窗口
+      //（托盘也能改 enabledServices）。走 readFreshConfig 绕开本窗口的陈旧缓存，
+      // 否则「从托盘点勾选，主界面纹丝不动」。
+      const config = await readFreshConfig() || DEFAULT_CONFIG;
 
       availableServices.value = config.availableServices || DEFAULT_CONFIG.availableServices || [];
 

@@ -5,13 +5,20 @@ const serviceAvailabilityMock = vi.hoisted(() => ({
   checkJdAvailable: vi.fn(),
 }));
 
+const storeMock = vi.hoisted(() => ({
+  configGet: vi.fn(),
+  readFreshConfig: vi.fn(),
+}));
+
 vi.mock('@/store/instances', () => ({
   configStore: {
-    get: vi.fn(),
+    get: storeMock.configGet,
     set: vi.fn().mockResolvedValue(undefined),
     save: vi.fn().mockResolvedValue(undefined),
+    invalidateCache: vi.fn().mockResolvedValue(undefined),
   },
   syncStatusStore: { get: vi.fn(), set: vi.fn(), save: vi.fn() },
+  readFreshConfig: storeMock.readFreshConfig,
 }));
 
 vi.mock('@/composables/useServiceAvailability', () => ({
@@ -223,5 +230,31 @@ describe('useServiceSelector - toggleServiceSelection', () => {
     api.toggleServiceSelection('weibo');
     api.toggleServiceSelection('weibo');
     expect(api.selectedServices.value).not.toContain('weibo');
+  });
+});
+
+// 主窗口和托盘是两个 webview，各有一份 Store 缓存。托盘写配置只刷新托盘那份，
+// 主窗口必须走 readFreshConfig 回盘读，否则「从托盘点勾选，主界面纹丝不动」。
+describe('useServiceSelector - 跨窗口配置同步', () => {
+  beforeEach(() => {
+    storeMock.configGet.mockReset();
+    storeMock.readFreshConfig.mockReset();
+    const api = useServiceSelector();
+    api.selectedServices.value = [];
+  });
+
+  it('loadServiceButtonStates 走 readFreshConfig，而不是可能陈旧的 configStore.get', async () => {
+    const cfg = cloneDefault();
+    cfg.availableServices = ['jd', 'qiyu'];
+    cfg.enabledServices = ['jd', 'qiyu'];
+    storeMock.readFreshConfig.mockResolvedValue(cfg);
+    // 陈旧缓存里只有 jd：一旦代码退回 configStore.get，下面的断言就会掉到 ['jd']
+    storeMock.configGet.mockResolvedValue({ ...cloneDefault(), availableServices: ['jd'], enabledServices: ['jd'] });
+
+    const api = useServiceSelector();
+    await api.loadServiceButtonStates();
+
+    expect(storeMock.readFreshConfig).toHaveBeenCalled();
+    expect(api.selectedServices.value).toEqual(['jd', 'qiyu']);
   });
 });

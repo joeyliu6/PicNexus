@@ -13,7 +13,7 @@ import {
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { basename, resolveResource } from '@tauri-apps/api/path';
 
-import { configStore } from '../store/instances';
+import { readFreshConfig } from '../store/instances';
 import {
   UserConfig,
   DEFAULT_CONFIG,
@@ -68,8 +68,12 @@ function isShortcutConfigEqual(a: GlobalShortcutConfig | null, b: GlobalShortcut
          a.uploadFromFile === b.uploadFromFile;
 }
 
+/**
+ * 快捷键的每个触发点都要用当前配置（启用的图床、链接格式），
+ * 而配置可能刚被托盘窗口改过——走 readFreshConfig 绕开本窗口的陈旧缓存。
+ */
 async function loadConfig(): Promise<UserConfig> {
-  const loaded = await configStore.get<UserConfig>('config', DEFAULT_CONFIG);
+  const loaded = await readFreshConfig(DEFAULT_CONFIG);
   return loaded || DEFAULT_CONFIG;
 }
 

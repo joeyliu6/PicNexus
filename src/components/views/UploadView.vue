@@ -13,7 +13,7 @@ import { useUrlDownload } from '../../composables/useUrlDownload';
 import { useQueueState } from '../../composables/useQueueState';
 import { UploadQueueManager } from '../../core/UploadQueue';
 import { RetryService } from '../../services/RetryService';
-import { configStore } from '../../store/instances';
+import { configStore, readFreshConfig } from '../../store/instances';
 import { useConfigManager } from '../../composables/useConfig';
 import { UI_COPY } from '../../constants/uiCopy';
 import type { MultiUploadResult } from '../../core/MultiServiceUploader';
@@ -391,7 +391,8 @@ onMounted(async () => {
 
   // 监听配置变更，同步压缩配置与自定义 S3 profile（设置页改动后上传页自动更新）
   const configStateUnlisten = await listen('config-updated', async () => {
-    const updated = await configStore.get<UserConfig>('config');
+    // 配置可能是别的窗口（托盘）改的，必须绕开本窗口的陈旧缓存
+    const updated = await readFreshConfig();
     syncLocalConfigState(updated);
   });
   // 将清理函数挂到已有的 configUnlisten 上
