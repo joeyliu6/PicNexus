@@ -258,13 +258,31 @@ describe('useWebDAVProfileEditor · 编辑动作', () => {
 
     expect(config.value.profiles).toHaveLength(2);
     const added = config.value.profiles[1];
-    expect(added.name).toBe('新配置 2');
+    // 现存的「坚果云」不匹配自动命名格式，所以自动名从 1 开始
+    expect(added.name).toBe('新配置 1');
     expect(added.url).toBe('');
     expect(added.username).toBe('');
     expect(added.password).toBe('');
     expect(added.remotePath).toBe('/PicNexus/');
     expect(config.value.activeId).toBe(added.id);
     expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * 旧的 `profiles.length + 1` 在这里会又生成一个「新配置 2」：tab 上只显示名字，
+   * 两个同名 tab 用户没有任何办法分辨自己在改哪一个。
+   */
+  it('addProfile 按现存最大序号递增，删掉中间项后不撞名', () => {
+    const { editor, config } = setup({
+      profiles: [
+        makeProfile({ id: 'dav-1', name: '新配置 1' }),
+        makeProfile({ id: 'dav-3', name: '新配置 3' }),
+      ],
+    });
+
+    editor.addProfile();
+
+    expect(config.value.profiles[2].name).toBe('新配置 4');
   });
 
   it('deleteProfile 先确认再删', () => {

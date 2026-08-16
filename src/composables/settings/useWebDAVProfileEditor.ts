@@ -11,6 +11,7 @@
 
 import { computed, type ComputedRef } from 'vue';
 import type { WebDAVConfig, WebDAVProfile } from '../../config/types';
+import { nextProfileName } from './profileNaming';
 
 /** 改动后需要作废「已连接」状态的字段——连接参数变了，上次的验证结果就不算数了 */
 const CONNECTION_FIELDS: (keyof WebDAVProfile)[] = ['url', 'username', 'password', 'remotePath'];
@@ -152,7 +153,7 @@ export function useWebDAVProfileEditor(
     const config = options.config();
     const newProfile: WebDAVProfile = {
       id: crypto.randomUUID(),
-      name: `新配置 ${config.profiles.length + 1}`,
+      name: nextProfileName(config.profiles.map(p => p.name), '新配置'),
       url: '',
       username: '',
       password: '',

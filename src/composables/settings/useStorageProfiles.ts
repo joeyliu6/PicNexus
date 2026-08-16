@@ -8,6 +8,7 @@ import type { CustomS3Profile, WebDAVStorageProfile, ServerServiceType } from '.
 import { makeCustomS3Id, makeWebDAVId, DEFAULT_WEBDAV_URL_TEMPLATE } from '../../config/types';
 import type { SettingsFormData } from './settingsFormTypes';
 import type { ToastMessageConfig } from '../../constants/toastMessages';
+import { nextProfileName } from './profileNaming';
 
 interface ToastLike {
   showConfig: (severity: 'success' | 'info' | 'warn' | 'error', config: ToastMessageConfig) => void;
@@ -20,18 +21,6 @@ export interface UseStorageProfilesDeps {
   toast: ToastLike;
   confirmDialog: (message: string, header?: string) => Promise<boolean>;
   generateId: () => string;
-}
-
-/**
- * 用"现存最大序号 + 1"生成默认名
- * Why: 旧的 length + 1 在删掉中间项后会撞名（删了「配置 2」再新建又叫「配置 2」）
- */
-function nextProfileName(names: (string | undefined)[], prefix: string): string {
-  const pattern = new RegExp(`^${prefix} (\\d+)$`);
-  const usedIndices = names
-    .map(name => parseInt(name?.match(pattern)?.[1] ?? '', 10))
-    .filter(n => Number.isFinite(n));
-  return `${prefix} ${usedIndices.length ? Math.max(...usedIndices) + 1 : 1}`;
 }
 
 export function useStorageProfiles(deps: UseStorageProfilesDeps) {
