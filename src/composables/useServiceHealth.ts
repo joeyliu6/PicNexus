@@ -239,7 +239,7 @@ export interface UseServiceHealthReturn {
   getStatusClass: (serviceId: string) => string;
   healthStatusMap: ComputedRef<Record<string, ServiceHealthStatus>>;
   healthTooltipMap: ComputedRef<Record<string, string>>;
-  loadHealthStatus: () => Promise<void>;
+  loadHealthStatus: (options?: { force?: boolean }) => Promise<void>;
   evaluateConfig: (config: UserConfig) => void;
   markVerified: (serviceId: string) => void;
   markTestFailed: (serviceId: string, error: string) => void;
@@ -328,7 +328,17 @@ export function useServiceHealth(): UseServiceHealthReturn {
     return `status-dot ${healthMap.value[serviceId]?.status || 'unconfigured'}`;
   }
 
-  async function loadHealthStatus(): Promise<void> {
+  /**
+   * @param options.force 强制回磁盘重读。
+   *   `autoLoadFromDisk` 用 `autoLoadPromise` 永久 memoize，`syncStatusStore` 又有自己的
+   *   内存缓存，两层叠加会让常驻的托盘 webview 的健康状态定格在启动时刻。
+   *   托盘每次弹出都要拿最新检测结果，走这个逃生口。
+   */
+  async function loadHealthStatus(options?: { force?: boolean }): Promise<void> {
+    if (options?.force) {
+      await syncStatusStore.invalidateCache();
+      autoLoadPromise = null;
+    }
     await autoLoadFromDisk();
   }
 

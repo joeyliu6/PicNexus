@@ -10,6 +10,7 @@ const mockState = vi.hoisted(() => ({
   configGet: vi.fn(),
   configSet: vi.fn(),
   configSave: vi.fn(),
+  configInvalidateCache: vi.fn(),
 }));
 
 vi.mock('@/store/instances', () => ({
@@ -17,10 +18,18 @@ vi.mock('@/store/instances', () => ({
     get: mockState.configGet,
     set: mockState.configSet,
     save: mockState.configSave,
+    invalidateCache: mockState.configInvalidateCache,
   },
   syncStatusStore: {
     get: vi.fn(),
     set: vi.fn(),
+    invalidateCache: vi.fn(),
+  },
+  // 真实实现 = invalidateCache() + get('config')。两步都保留，
+  // 这样「托盘刷新前必须作废缓存」这个契约仍然可被断言
+  readFreshConfig: async () => {
+    await mockState.configInvalidateCache();
+    return mockState.configGet('config');
   },
 }));
 
@@ -734,10 +743,65 @@ describe('trayMenu', () => {
     expect(wrapper.text()).toContain('当前图床：京东');
 
     storedConfig = makeConfig({ enabledServices: ['jd', 'qiyu', 'weibo'] });
+    mockState.configInvalidateCache.mockClear();
     handlers['config-updated'][0]?.({ payload: { source: 'settings' } });
     await flushPromises();
 
     expect(wrapper.text()).toContain('当前图床：京东等 3 个');
+
+    // 契约：托盘是常驻 webview，读配置前必须作废自己那份 Store 缓存。
+    // 这里的 configGet 是 mock（每次都回最新值），掩盖了真实缓存行为，
+    // 所以缺了这条断言，删掉 invalidateCache 也不会让测试变红。
+    expect(mockState.configInvalidateCache).toHaveBeenCalled();
+
+    wrapper.unmount();
+  });
+
+  // 用户实际报的场景：主界面新建图床后，不重启应用，右键托盘必须能看到它。
+  // 托盘是启动时创建、常驻不销毁的 webview，它那份 Store 缓存不作废就永远是开机快照。
+  it('picks up a profile added by the main window on the next tray-menu-opened', async () => {
+    const handlers: Record<string, Array<(event: { payload?: unknown }) => void | Promise<void>>> = {};
+    getListenMock().mockImplementation(async (event, handler) => {
+      handlers[event] ??= [];
+      handlers[event].push(handler as (event: { payload?: unknown }) => void | Promise<void>);
+      return vi.fn();
+    });
+
+    let storedConfig = makeConfig();
+    mockState.configGet.mockImplementation(async () => storedConfig);
+
+    const wrapper = mount(TrayMenuWindow);
+    await flushPromises();
+
+    // 图床名单在二级面板里，得先展开才看得到
+    async function openServiceFlyout(): Promise<string> {
+      await handlers['tray-menu-opened'][0]?.({});
+      await flushPromises();
+      await findButton(wrapper, '当前图床').trigger('click');
+      await flushPromises();
+      return wrapper.find('.service-menu').text();
+    }
+
+    expect(await openServiceFlyout()).not.toContain('群晖 NAS');
+
+    // 主窗口新建了一个 WebDAV 图床并落盘，托盘对此一无所知
+    storedConfig = makeConfig({
+      availableServices: [...(makeConfig().availableServices ?? []), makeWebDAVId('nas')],
+      webdav_profiles: [{
+        id: 'nas',
+        name: '群晖 NAS',
+        url: 'https://nas.example.com/dav',
+        username: 'admin',
+        passwordEncrypted: 'enc:pwd',
+        remotePath: '/images/',
+        publicDomain: 'https://img.example.com',
+        publicUrlTemplate: '{domain}/{path}',
+      }],
+    });
+    mockState.configInvalidateCache.mockClear();
+
+    expect(await openServiceFlyout()).toContain('群晖 NAS');
+    expect(mockState.configInvalidateCache).toHaveBeenCalled();
 
     wrapper.unmount();
   });

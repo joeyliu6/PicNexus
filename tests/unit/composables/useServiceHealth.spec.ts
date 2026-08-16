@@ -6,6 +6,7 @@ vi.mock('@/store/instances', () => ({
     get: vi.fn().mockResolvedValue(null),
     set: vi.fn().mockResolvedValue(undefined),
     save: vi.fn().mockResolvedValue(undefined),
+    invalidateCache: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -204,5 +205,25 @@ describe('useServiceHealth', () => {
     cfg.custom_s3_profiles = [];
     evaluateConfig(cfg);
     expect(healthMap.value['custom_s3:p1']).toBeUndefined();
+  });
+
+  // 托盘是常驻不销毁的 webview：autoLoadPromise 的永久 memoize 叠加 Store 内存缓存，
+  // 会让它的状态圆点定格在启动时刻。force 是唯一的逃生口。
+  it('loadHealthStatus - force 时作废 store 缓存并重新读盘', async () => {
+    const { loadHealthStatus } = useServiceHealth();
+    const { syncStatusStore } = await import('@/store/instances');
+    const store = vi.mocked(syncStatusStore);
+
+    // 不带 force：模块加载时已 memoize 过，不会再碰磁盘
+    store.get.mockClear();
+    store.invalidateCache.mockClear();
+    await loadHealthStatus();
+    expect(store.invalidateCache).not.toHaveBeenCalled();
+    expect(store.get).not.toHaveBeenCalled();
+
+    // 带 force：先作废 Store 缓存，再重置 memoize，真正回盘读一次
+    await loadHealthStatus({ force: true });
+    expect(store.invalidateCache).toHaveBeenCalledTimes(1);
+    expect(store.get).toHaveBeenCalledTimes(1);
   });
 });

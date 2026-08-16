@@ -3,7 +3,8 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow, LogicalSize, monitorFromPoint, PhysicalPosition } from '@tauri-apps/api/window';
 import { DEFAULT_CONFIG, isPublicRiskService, type UserConfig } from '../../config/types';
-import { configStore } from '../../store/instances';
+import { readFreshConfig } from '../../store/instances';
+import { createLogger } from '../../utils/logger';
 import { useServiceHealth } from '../../composables/useServiceHealth';
 import {
   applyTrayTheme,
@@ -48,6 +49,7 @@ let unlistenFocus: UnlistenFn | null = null;
 let unlistenOpened: UnlistenFn | null = null;
 let unlistenHideRequested: UnlistenFn | null = null;
 
+const log = createLogger('TrayMenuWindow');
 const actions = createTrayMenuActions();
 const { healthStatusMap, loadHealthStatus, evaluateConfig } = useServiceHealth();
 const menuItems = computed(() => buildTrayMenuItems(config.value, actions, healthStatusMap.value));
@@ -166,10 +168,30 @@ async function syncWindowLayout(): Promise<void> {
   }
 }
 
+/**
+ * 重新读配置。
+ *
+ * ⚠️ 必须走 `readFreshConfig()` 而不是 `configStore.get()`：托盘是常驻不销毁的独立 webview，
+ * 有自己一份 Store 缓存，主窗口写配置刷新不到它。直接 `get` 会命中启动时的快照、整个刷新
+ * 变成空转（表现为托盘里的图床名单/名称/勾选永远停在开机那一刻）。
+ */
 async function loadConfig(): Promise<void> {
-  const nextConfig = await configStore.get<UserConfig>('config') ?? structuredClone(DEFAULT_CONFIG);
-  config.value = nextConfig;
-  applyTrayTheme(nextConfig);
+  try {
+    const nextConfig = await readFreshConfig();
+    if (nextConfig) config.value = nextConfig;
+  } catch (error) {
+    // 作废缓存后每次都要真读盘，失败概率不再是零。
+    // 此时沿用上一次的配置，别让菜单突然塌成「暂无可用图床」。
+    log.warn('读取配置失败，沿用上一次快照:', error);
+  }
+  applyTrayTheme(config.value);
+}
+
+/** 配置 + 健康状态一起刷新，三个刷新时机共用 */
+async function refreshTrayState(): Promise<void> {
+  await loadConfig();
+  await loadHealthStatus({ force: true });
+  evaluateConfig(config.value);
 }
 
 async function hideSelf(): Promise<void> {
@@ -250,9 +272,7 @@ async function handleToggleService(serviceId: string): Promise<void> {
 }
 
 onMounted(async () => {
-  await loadConfig();
-  await loadHealthStatus();
-  evaluateConfig(config.value);
+  await refreshTrayState();
   await syncWindowLayout();
   await nextTick();
   shellRef.value?.focus();
@@ -266,13 +286,13 @@ onMounted(async () => {
     ) {
       return;
     }
-    await loadConfig();
+    await refreshTrayState();
     await syncWindowLayout();
   });
   unlistenOpened = await listen('tray-menu-opened', async () => {
     menuVisible.value = false;
     flyoutOpen.value = false;
-    await loadConfig();
+    await refreshTrayState();
     await cacheAnchor(true);
     await syncWindowLayout();
     await nextTick();
