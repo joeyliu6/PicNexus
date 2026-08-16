@@ -175,6 +175,29 @@ impl AuthChallenge {
     }
 }
 
+/// 按逗号切分 challenge 列表，但跳过引号内的逗号
+///
+/// Why 需要这个：`realm` 是 quoted-string，允许包含逗号（如 `realm="NAS, 2F"`）。
+/// 直接按 `,` 切会把这类 realm 从中间切断，断出来的后半截（如 `2F"`）如果恰好
+/// 以 "Basic"/"Digest" 开头，会被后面的首 token 判定误当成方案名。
+fn split_challenge_list(raw: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut start = 0;
+    let mut in_quotes = false;
+    for (i, ch) in raw.char_indices() {
+        match ch {
+            '"' => in_quotes = !in_quotes,
+            ',' if !in_quotes => {
+                parts.push(&raw[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(&raw[start..]);
+    parts
+}
+
 fn parse_auth_challenge(headers: &reqwest::header::HeaderMap) -> AuthChallenge {
     let mut challenge = AuthChallenge::default();
 
@@ -182,7 +205,7 @@ fn parse_auth_challenge(headers: &reqwest::header::HeaderMap) -> AuthChallenge {
         let Ok(raw) = value.to_str() else { continue };
         // 一条 header 里可以逗号分隔多个 challenge：`Basic realm="x", Digest realm="y"`。
         // 每段取首个空白前的 token 作为方案名，避免把 realm 内容（如 realm="Basic Zone"）当成方案。
-        for part in raw.split(',') {
+        for part in split_challenge_list(raw) {
             let scheme = part.trim().split_whitespace().next().unwrap_or("");
             if scheme.eq_ignore_ascii_case("basic") {
                 challenge.has_basic = true;
@@ -853,6 +876,20 @@ mod tests {
         // realm 内容里出现 "Basic" 不代表服务端支持 Basic——只取每段首个 token
         let headers = challenge_headers(&["Digest realm=\"Basic Zone\", qop=\"auth\""]);
         assert!(describe_status(401, Some(&headers)).contains("Digest"));
+    }
+
+    #[test]
+    fn comma_inside_quoted_realm_does_not_split_the_challenge() {
+        // realm 是 quoted-string，允许包含逗号；按 , 切分时不能把它从引号内部切断，
+        // 否则断出来的后半截「Basic Zone"」会被误判成 Basic 方案
+        let headers = challenge_headers(&["Digest realm=\"NAS, Basic Zone\", qop=\"auth\""]);
+        let msg = describe_status(401, Some(&headers));
+        assert!(msg.contains("Digest"), "应指向 Digest，实际: {}", msg);
+        assert!(
+            !msg.contains("检查用户名和密码"),
+            "不该被引号内的逗号带偏成通用密码错误文案: {}",
+            msg
+        );
     }
 
     #[test]
