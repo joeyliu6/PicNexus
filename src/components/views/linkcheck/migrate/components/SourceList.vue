@@ -8,8 +8,9 @@
 import { computed } from 'vue';
 import Checkbox from 'primevue/checkbox';
 import InlineEmptyState from '../../../../common/InlineEmptyState.vue';
-import { getServiceIcon } from '../../../../../utils/icons';
 import { formatNumber } from '../utils';
+import { serviceNameTooltip } from '../../../../../utils/serviceNameFit';
+import ServiceLogo from '../../../../common/ServiceLogo.vue';
 
 interface SourceItem {
   id: string;
@@ -85,8 +86,8 @@ function handleToggleAll() {
           @update:modelValue="emit('toggle', src.id)"
           class="source-checkbox"
         />
-        <span class="source-icon" v-html="getServiceIcon(src.id)" />
-        <span class="source-name">{{ src.displayName }}</span>
+        <ServiceLogo :service-id="src.id" class="source-icon" />
+        <span class="source-name" v-tooltip.top="serviceNameTooltip(src.displayName)">{{ src.displayName }}</span>
         <span class="source-count">
           <span class="source-count-num">{{ formatNumber(src.count) }}</span>
           <span class="source-count-unit">张</span>
@@ -182,8 +183,7 @@ function handleToggleAll() {
 .source-checkbox { flex-shrink: 0; }
 :deep(.source-checkbox .p-checkbox-box) { width: 16px; height: 16px; border-radius: var(--radius-sm); }
 
-.source-icon { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-secondary); }
-.source-icon :deep(svg) { width: 14px; height: 14px; }
+.source-icon { width: 14px; height: 14px; font-size: var(--text-xs); color: var(--text-secondary); }
 
 .source-name {
   min-width: 0;

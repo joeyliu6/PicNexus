@@ -3,7 +3,8 @@ import { rowKey } from '../../../../composables/link-check/useCheckFilter';
 import type { CheckStatsResult } from '../../../../composables/link-check/useCheckStats';
 import type { CheckLinkResult, LinkCheckRow, StatusFilter } from '../../../../types/linkCheck';
 import { getServiceDisplayName } from '../../../../constants/serviceNames';
-import { getServiceIcon } from '../../../../utils/icons';
+import { serviceNameTooltip } from '../../../../utils/serviceNameFit';
+import ServiceLogo from '../../../common/ServiceLogo.vue';
 import EmptyState from '../../../common/EmptyState.vue';
 
 defineProps<{
@@ -94,7 +95,7 @@ const emit = defineEmits<{
         <span class="link-spacer"></span>
 
         <span
-          v-tooltip.top="copiedKey === `link-check:${rowKey(row)}` ? '已复制' : '点击复制链接'"
+          v-tooltip.top="copiedKey === `link-check:${rowKey(row)}` ? '已复制' : serviceNameTooltip(getServiceDisplayName(row.serviceId), '点击复制链接')"
           class="service-badge"
           :class="{ 'is-copied': copiedKey === `link-check:${rowKey(row)}` }"
           @click.stop="emit('copy-url', row)"
@@ -104,7 +105,7 @@ const emit = defineEmits<{
             class="pi pi-check badge-icon copied-check"
             aria-hidden="true"
           ></i>
-          <span v-else class="badge-icon" v-html="getServiceIcon(row.serviceId)"></span>
+          <ServiceLogo v-else :service-id="row.serviceId" class="badge-icon" />
           <span class="badge-label">{{ getServiceDisplayName(row.serviceId) }}</span>
         </span>
 
@@ -250,10 +251,7 @@ const emit = defineEmits<{
 .badge-icon {
   width: 14px;
   height: 14px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -266,12 +264,12 @@ const emit = defineEmits<{
   font-size: var(--text-xs);
 }
 
-.badge-icon :deep(svg) {
-  width: 100%;
-  height: 100%;
-}
-
+/* 96px 见 docs/design/tokens.md#service-name-truncation */
 .badge-label {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
   color: var(--text-muted);

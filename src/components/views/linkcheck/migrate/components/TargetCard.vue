@@ -3,8 +3,9 @@
  * 单个迁移目标卡片
  */
 import { computed } from 'vue';
-import { getServiceIcon } from '../../../../../utils/icons';
 import { formatNumber, healthLabels } from '../utils';
+import { mayTruncateServiceName } from '../../../../../utils/serviceNameFit';
+import ServiceLogo from '../../../../common/ServiceLogo.vue';
 
 const props = defineProps<{
   serviceId: string;
@@ -28,6 +29,9 @@ const backedUpLine = computed(() =>
 );
 const cardTooltip = computed(() => {
   const lines = [
+    // 名字只在放不下时放第一行：.target-name 截断后，整卡被 .target-card-tooltip-hitbox
+    // 盖住，这里是看完整 profile 名的唯一入口；放得下时卡片本身已经显示了，不重复。
+    mayTruncateServiceName(props.displayName) ? props.displayName : undefined,
     errorTooltip.value,
     props.noSourceSelected ? '请先选择来源' : undefined,
     backedUpLine.value,
@@ -74,7 +78,7 @@ function handleClick() {
   >
     <span class="target-card-tooltip-hitbox" v-tooltip.top="cardTooltip" aria-hidden="true" />
     <div class="target-card-top">
-      <span class="target-icon" v-html="getServiceIcon(serviceId)" />
+      <ServiceLogo :service-id="serviceId" class="target-icon" />
       <span class="target-name">{{ displayName }}</span>
       <span
         class="target-status-dot"
@@ -147,8 +151,7 @@ function handleClick() {
 
 .target-card-top { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
 
-.target-icon { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-secondary); }
-.target-icon :deep(svg) { width: 16px; height: 16px; }
+.target-icon { width: 16px; height: 16px; font-size: var(--text-lg); color: var(--text-secondary); }
 .target-card--checked .target-icon { color: var(--primary); }
 
 .target-name {

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { getServiceDisplayName } from '../../../../../constants/serviceNames';
-import { getServiceIcon } from '../../../../../utils/icons';
+import { serviceNameTooltip } from '../../../../../utils/serviceNameFit';
+import ServiceLogo from '../../../../common/ServiceLogo.vue';
 import MigrateStatusFilterChips, {
   type MigrateStatusFilter,
   type MigrateStatusCounts,
@@ -28,11 +29,6 @@ const selectedServiceLabel = computed(() => {
   return getServiceDisplayName(selectedSourceServiceId.value) || selectedSourceServiceId.value;
 });
 
-const selectedServiceIcon = computed(() => {
-  if (!selectedSourceServiceId.value) return null;
-  return getServiceIcon(selectedSourceServiceId.value);
-});
-
 function selectService(id: string | null) {
   selectedSourceServiceId.value = id;
   showServiceMenu.value = false;
@@ -54,11 +50,12 @@ function selectService(id: string | null) {
         class="mf-filter-chip"
         :class="{ 'mf-filter-chip--active': !!selectedSourceServiceId }"
         type="button"
+        v-tooltip.top="selectedServiceLabel ? serviceNameTooltip(selectedServiceLabel) : null"
         @click="showServiceMenu = !showServiceMenu"
       >
         <template v-if="selectedSourceServiceId">
-          <span class="mf-badge-icon" v-html="selectedServiceIcon" />
-          {{ selectedServiceLabel }}
+          <ServiceLogo :service-id="selectedSourceServiceId" class="mf-badge-icon" />
+          <span class="mf-chip-label">{{ selectedServiceLabel }}</span>
         </template>
         <template v-else>
           <i class="pi pi-images" style="font-size: var(--text-2xs)" aria-hidden="true" />
@@ -84,11 +81,12 @@ function selectService(id: string | null) {
             :key="opt.serviceId"
             class="mf-sdi"
             :class="{ 'mf-sdi--active': selectedSourceServiceId === opt.serviceId }"
+            v-tooltip.top="serviceNameTooltip(opt.label, null, 160)"
             @click="selectService(opt.serviceId)"
           >
             <span class="mf-sdi-label">
-              <span class="mf-badge-icon" v-html="getServiceIcon(opt.serviceId)" />
-              {{ opt.label }}
+              <ServiceLogo :service-id="opt.serviceId" class="mf-badge-icon" />
+              <span class="mf-sdi-name">{{ opt.label }}</span>
             </span>
             <span class="mf-sdi-count">{{ opt.count.toLocaleString() }}</span>
           </div>
@@ -174,13 +172,17 @@ function selectService(id: string | null) {
 .mf-badge-icon {
   width: 12px;
   height: 12px;
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
+  font-size: var(--text-2xs);
   color: currentcolor;
 }
 
-.mf-badge-icon :deep(svg) { width: 100%; height: 100%; }
+/* 96px 见 docs/design/tokens.md#service-name-truncation */
+.mf-chip-label {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .mf-chevron {
   font-size: var(--text-2xs);
@@ -194,6 +196,9 @@ function selectService(id: string | null) {
   top: calc(100% + 6px);
   right: 0;
   min-width: 180px;
+
+  /* 长 profile 名会把下拉撑出屏幕，封顶后由 .mf-sdi-name 截断 */
+  max-width: 280px;
   background: var(--bg-card);
   border-radius: var(--radius-lg);
   padding: var(--space-xs) 0;
@@ -220,14 +225,23 @@ function selectService(id: string | null) {
   display: flex;
   align-items: center;
   gap: var(--space-xs-sm);
+  min-width: 0;
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   color: var(--text-main);
 }
 
+.mf-sdi-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .mf-sdi-label .mf-badge-icon {
   width: 14px;
   height: 14px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 

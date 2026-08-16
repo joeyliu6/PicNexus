@@ -11,11 +11,12 @@
  * - pending: 正在添加的目标图床，primary 虚线边
  * - failed: 本次迁移失败的目标图床，error 色
  *
- * 图标用 getServiceIcon；未命中时 fallback pi-cloud + 原 id。
+ * 图标交给 ServiceLogo（内置 SVG → 私有存储通用图标 → pi-cloud 兜底）。
  */
 import { computed } from 'vue';
-import { getServiceIcon } from '../../../../../../utils/icons';
 import { getServiceDisplayName } from '../../../../../../constants/serviceNames';
+import { serviceNameTooltip } from '../../../../../../utils/serviceNameFit';
+import ServiceLogo from '../../../../../common/ServiceLogo.vue';
 
 interface Props {
   serviceId: string;
@@ -39,18 +40,24 @@ const props = withDefaults(defineProps<Props>(), { variant: 'target', clickable:
 
 const emit = defineEmits<{ copy: [] }>();
 
-const svg = computed(() => getServiceIcon(props.serviceId));
 const displayName = computed(() => getServiceDisplayName(props.serviceId) || props.serviceId);
 
-/** 角标态的 existing：tooltip 里拼上"已存在，本次跳过"说明 */
+/**
+ * 角标态的 existing：tooltip 里拼上"已存在，本次跳过"说明
+ *
+ * 名字只在**放不下**时才前置（`serviceNameTooltip`）：短名字标签已经完整显示，
+ * 再重复一遍是双重反馈；长名字被 96px 截断后这里才是看全名的唯一入口。
+ * iconOnly 变体没有标签可看，名字始终要给。
+ */
 const tooltipText = computed<string | undefined>(() => {
   if (props.copied) return '已复制';
   if (props.alsoTarget && props.iconOnly) {
     const prefix = `${displayName.value} · 已存在，本次跳过`;
     return props.clickable ? `${prefix} · 点击复制链接` : prefix;
   }
-  if (props.clickable) return '点击复制链接';
-  return props.tooltip ?? (props.iconOnly ? displayName.value : undefined);
+  if (props.iconOnly) return props.clickable ? `${displayName.value} · 点击复制链接` : displayName.value;
+  if (props.clickable) return serviceNameTooltip(displayName.value, '点击复制链接');
+  return props.tooltip ?? serviceNameTooltip(displayName.value);
 });
 
 function onClick() {
@@ -66,8 +73,7 @@ function onClick() {
     @click.stop="onClick"
   >
     <i v-if="copied" class="pi pi-check m-svc-chip-ic m-svc-chip-ic--copied" aria-hidden="true" />
-    <span v-else-if="svg" class="m-svc-chip-ic" v-html="svg" />
-    <i v-else class="pi pi-cloud m-svc-chip-ic m-svc-chip-ic--fallback" aria-hidden="true" />
+    <ServiceLogo v-else :service-id="serviceId" class="m-svc-chip-ic" />
     <span v-if="!iconOnly" class="m-svc-chip-label">{{ displayName }}</span>
     <!-- 角标：该 existing 同时被选为本次迁移目标，视觉告知"已在 · 已跳过" -->
     <span v-if="alsoTarget && iconOnly" class="m-svc-chip-dot" aria-hidden="true" />
@@ -95,9 +101,8 @@ function onClick() {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  font-size: var(--text-xs);
 }
-.m-svc-chip-ic :deep(svg) { width: 100%; height: 100%; }
-.m-svc-chip-ic--fallback { font-size: var(--text-xs); }
 .m-svc-chip-ic--copied { font-size: var(--text-xs); }
 
 .m-svc-chip-label {

@@ -4,7 +4,8 @@ import Skeleton from 'primevue/skeleton';
 import { getServiceDisplayName } from '../../../../constants/serviceNames';
 import type { CheckStatsResult } from '../../../../composables/link-check/useCheckStats';
 import type { StatusFilter } from '../../../../types/linkCheck';
-import { getServiceIcon } from '../../../../utils/icons';
+import { serviceNameTooltip } from '../../../../utils/serviceNameFit';
+import ServiceLogo from '../../../common/ServiceLogo.vue';
 
 const props = defineProps<{
   stats: CheckStatsResult;
@@ -173,10 +174,15 @@ function selectStatusFilter(filter: StatusFilter): void {
     <div class="chip-spacer"></div>
 
     <div v-if="serviceList.length > 1" class="service-filter" @click.stop>
-      <button class="filter-chip" :class="{ active: !!selectedServiceId }" @click="showServiceMenu = !showServiceMenu">
+      <button
+        class="filter-chip"
+        :class="{ active: !!selectedServiceId }"
+        v-tooltip.top="selectedServiceId ? serviceNameTooltip(getServiceDisplayName(selectedServiceId)) : null"
+        @click="showServiceMenu = !showServiceMenu"
+      >
         <template v-if="selectedServiceId">
-          <span class="badge-icon" v-html="getServiceIcon(selectedServiceId)"></span>
-          {{ getServiceDisplayName(selectedServiceId) }}
+          <ServiceLogo :service-id="selectedServiceId" class="badge-icon" />
+          <span class="chip-label">{{ getServiceDisplayName(selectedServiceId) }}</span>
         </template>
         <template v-else>
           <i class="pi pi-images" style="font-size: var(--text-2xs)"></i>
@@ -201,11 +207,12 @@ function selectStatusFilter(filter: StatusFilter): void {
             :key="service.id"
             class="service-dropdown-item"
             :class="{ active: selectedServiceId === service.id }"
+            v-tooltip.top="serviceNameTooltip(getServiceDisplayName(service.id), null, 160)"
             @click="selectedServiceId = service.id; showServiceMenu = false"
           >
             <span class="sdi-label">
-              <span class="badge-icon" v-html="getServiceIcon(service.id)"></span>
-              {{ getServiceDisplayName(service.id) }}
+              <ServiceLogo :service-id="service.id" class="badge-icon" />
+              <span class="sdi-name">{{ getServiceDisplayName(service.id) }}</span>
             </span>
             <span class="sdi-count">{{ service.count.toLocaleString() }}</span>
           </div>
@@ -365,7 +372,14 @@ function selectStatusFilter(filter: StatusFilter): void {
 .service-filter .badge-icon {
   width: 12px;
   height: 12px;
-  display: inline-flex;
+  font-size: var(--text-2xs);
+}
+
+.service-filter .chip-label {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .service-dropdown {
@@ -373,6 +387,9 @@ function selectStatusFilter(filter: StatusFilter): void {
   top: calc(100% + 6px);
   right: 0;
   min-width: 180px;
+
+  /* 长 profile 名会把下拉撑出屏幕，封顶后由 .sdi-name 截断 */
+  max-width: 280px;
   background: var(--bg-card);
   border-radius: var(--radius-lg);
   padding: var(--space-xs) 0;
@@ -404,15 +421,24 @@ function selectStatusFilter(filter: StatusFilter): void {
   display: flex;
   align-items: center;
   gap: var(--space-xs-sm);
+  min-width: 0;
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   color: var(--text-main);
   white-space: nowrap;
 }
 
+/* 160px 见 docs/design/tokens.md#service-name-truncation */
+.sdi-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .sdi-label .badge-icon {
   width: 14px;
   height: 14px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -426,11 +452,6 @@ function selectStatusFilter(filter: StatusFilter): void {
   display: inline-flex;
   flex-shrink: 0;
   color: var(--text-muted);
-}
-
-.badge-icon :deep(svg) {
-  width: 100%;
-  height: 100%;
 }
 
 .search-field {

@@ -4,6 +4,7 @@ import Button from 'primevue/button';
 import RadioButton from 'primevue/radiobutton';
 import Dialog from 'primevue/dialog';
 import { getServiceDisplayName } from '../../../constants/serviceNames';
+import { serviceNameTooltip } from '../../../utils/serviceNameFit';
 import { smartTruncateUrl } from '../../../utils/mdParser';
 import type { MdImageLinkWithFile, RepairStrategy } from '../../../composables/useMdRescue';
 
@@ -112,6 +113,7 @@ function confirm() {
               <button
                 class="pill-pref-item"
                 :class="{ 'pill-pref-item--first': i === 0 }"
+                v-tooltip.top="serviceNameTooltip(getServiceDisplayName(serviceId), null, 120)"
                 @click.stop="moveServiceUp(i)"
               >{{ i + 1 }} · {{ getServiceDisplayName(serviceId) }}</button>
             </template>
@@ -159,7 +161,7 @@ function confirm() {
                   :checked="manualSelections.get(link.url) === b.url"
                   @change="manualSelections.set(link.url, b.url)"
                 />
-                <span class="backup-chip">{{ getServiceDisplayName(b.serviceId) }}</span>
+                <span class="backup-chip" v-tooltip.top="serviceNameTooltip(getServiceDisplayName(b.serviceId))">{{ getServiceDisplayName(b.serviceId) }}</span>
                 <span v-if="b.checkResult?.response_time" class="repair-manual-latency">{{ b.checkResult.response_time }}ms</span>
               </label>
             </div>
@@ -222,8 +224,10 @@ function confirm() {
   display: flex; flex-wrap: wrap; gap: var(--space-xs-sm); margin-top: var(--space-sm);
 }
 
+/* 120px 见 docs/design/tokens.md#service-name-truncation（药丸含序号前缀，比徽章宽一档） */
 .pill-pref-item {
   display: inline-flex; align-items: center; height: 28px; padding: 0 var(--space-sm-md);
+  max-width: 120px; overflow: hidden; text-overflow: ellipsis;
   border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: var(--weight-medium); white-space: nowrap;
   cursor: pointer; border: 1px solid var(--border-subtle);
   background: var(--bg-input); color: var(--text-muted); font-family: inherit;
@@ -288,6 +292,16 @@ function confirm() {
   display: inline-flex; align-items: center; gap: var(--space-xs); cursor: pointer;
 }
 .repair-manual-radio input { display: none; }
+
+/* 96px 见 docs/design/tokens.md#service-name-truncation */
+.backup-chip {
+  display: inline-block;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
 
 .repair-manual-radio.selected .backup-chip {
   background: var(--primary-alpha-10); color: var(--primary);
