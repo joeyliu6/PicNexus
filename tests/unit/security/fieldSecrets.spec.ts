@@ -111,7 +111,8 @@ describe('rekeyFieldSecrets', () => {
     });
 
     expect(report.migrated).toBe(1);
-    expect(report.orphans).toEqual(['config.webdav_profiles[0].passwordEncrypted']);
+    // 名字而不是 JSON 路径：这个数组会直接进 toast 让用户去重填
+    expect(report.orphans).toEqual(['WebDAV 图床「我的 OpenList」']);
     // 原样保留，不制造二次伤害
     expect(snapshot.config.webdav_profiles[0].passwordEncrypted).toBe(stranger);
   });

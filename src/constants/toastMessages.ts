@@ -106,6 +106,20 @@ export const TOAST_MESSAGES = {
       summary: '部分密码已失效，需要重新填写',
       detail: `${labels.join('、')} 的密码因早前设置备份密码而无法解密，已清空。请到设置里重新填写。`,
       life: 0
+    }),
+    /**
+     * 换钥匙搬运时遇到的存量孤儿密文
+     *
+     * Why 把成功文案并进这一条、而不是再弹一个 success：一条自动消失、一条常驻地叠在
+     * 一起，等于对同一次操作给两种色调的回执。有孤儿时用户只需要读一条、只有一个待办。
+     *
+     * `action` 传成功态的 summary（如「备份密码设置成功」）：换钥匙本身确实成功了，
+     * 这条信息不能因为附带一个待办就丢掉。
+     */
+    orphanSecretsKept: (action: string, labels: string[]): ToastMessageConfig => ({
+      summary: `${action}，但部分密码需要重新填写`,
+      detail: `${labels.join('、')} 的密码在此之前就已无法解密，没能迁移到新密钥。请到设置里重新填写。`,
+      life: 0
     })
   },
 

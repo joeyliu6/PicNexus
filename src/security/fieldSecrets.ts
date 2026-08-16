@@ -35,7 +35,13 @@ interface SecretSlot {
 export interface RekeyReport {
   /** 成功用新钥匙重新加密的条数 */
   migrated: number;
-  /** 旧钥匙也解不开的条数（存量孤儿），原样保留未改写。元素是 slot 路径 */
+  /**
+   * 旧钥匙也解不开的（存量孤儿），原样保留未改写
+   *
+   * 元素是**给用户看的名字**（如 `WebDAV 图床「我的 OpenList」`），不是 JSON 路径：
+   * 调用方要拿它直接进 toast 让用户去重填，路径对用户没有意义。
+   * 排查用的精确路径写在 `log.warn` 里。
+   */
   orphans: string[];
 }
 
@@ -104,13 +110,13 @@ export async function rekeyFieldSecrets(
   // 1. 换钥匙**之前**用旧钥匙解开。解不开的原样留着——它已经是孤儿了，
   //    清掉只会让用户连"这里配过东西"都看不出来
   const carried: Array<{ slot: SecretSlot; plaintext: string }> = [];
-  const orphans: string[] = [];
+  const orphanSlots: SecretSlot[] = [];
 
   for (const slot of slots) {
     try {
       carried.push({ slot, plaintext: await secureStorage.decrypt(slot.ciphertext) });
     } catch {
-      orphans.push(slot.path);
+      orphanSlots.push(slot);
     }
   }
 
@@ -128,14 +134,15 @@ export async function rekeyFieldSecrets(
     (slot.owner as Record<string | number, unknown>)[slot.key] = ciphertext;
   }
 
-  if (orphans.length > 0) {
-    log.warn(`${orphans.length} 处字段级密文旧钥匙也解不开，已原样保留：${orphans.join('、')}`);
+  if (orphanSlots.length > 0) {
+    // 日志留精确路径（排查用），返回值给用户看的名字（重填用），两边各取所需
+    log.warn(`${orphanSlots.length} 处字段级密文旧钥匙也解不开，已原样保留：${orphanSlots.map(s => s.path).join('、')}`);
   }
   // 带上"共发现几处"：只报搬运数的话，「压根没找到这个字段」和
   // 「找到了但解不开」在日志里长得一样，排查时分不出来
   log.info(`✓ 字段级密文搬运完成：共发现 ${slots.length} 处，${reencrypted.length} 条已换新钥匙`);
 
-  return { migrated: reencrypted.length, orphans };
+  return { migrated: reencrypted.length, orphans: orphanSlots.map(describeSlot) };
 }
 
 /**

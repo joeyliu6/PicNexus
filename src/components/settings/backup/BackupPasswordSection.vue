@@ -3,8 +3,10 @@ import { ref, onMounted } from 'vue';
 import Button from 'primevue/button';
 import { invoke } from '@tauri-apps/api/core';
 import { useToast } from '../../../composables/useToast';
+import { TOAST_MESSAGES } from '../../../constants';
+import type { ToastMessageConfig } from '../../../constants/toastMessages';
 import { secureStorage } from '../../../security/crypto';
-import { rekeyFieldSecrets } from '../../../security/fieldSecrets';
+import { rekeyFieldSecrets, type RekeyReport } from '../../../security/fieldSecrets';
 import { configStore, syncStatusStore } from '../../../store/instances';
 import type { UserConfig } from '../../../config/types';
 import type { StoreData } from '../../../store/types';
@@ -67,7 +69,7 @@ async function rollbackKey(oldKeyB64: string): Promise<void> {
  * 读取配置 → 备份旧密钥 → 换密钥（含内层密文搬运）→ 用新密钥重新加密写回
  * 任一步失败都回滚到旧密钥，防止配置永久无法解密
  */
-async function swapKeyAndReencrypt(swapFn: () => Promise<void>): Promise<void> {
+async function swapKeyAndReencrypt(swapFn: () => Promise<void>): Promise<RekeyReport> {
   const configRaw = await configStore.readRawAll();
   const config = configRaw?.config as UserConfig | undefined;
   const syncStatusRaw = await syncStatusStore.readRawAll().catch(() => null);
@@ -77,8 +79,9 @@ async function swapKeyAndReencrypt(swapFn: () => Promise<void>): Promise<void> {
   // 顺序（解开 → 换 → 用新密钥锁上）由它从结构上保证，写不反。
   // 只重写外层信封会让内层密文变成孤儿——那正是本函数曾经的缺陷。
   const snapshots = [configRaw, syncStatusRaw].filter((s): s is StoreData => !!s);
+  let report: RekeyReport;
   try {
-    await rekeyFieldSecrets(snapshots, swapFn);
+    report = await rekeyFieldSecrets(snapshots, swapFn);
   } catch (e) {
     // swapFn 抛在写钥匙串**之前**时，回滚是同值重写、无副作用；
     // 抛在**之后**时回滚才是必须的。分不清就一律回滚，代价小于赌一把。
@@ -103,6 +106,24 @@ async function swapKeyAndReencrypt(swapFn: () => Promise<void>): Promise<void> {
       log.warn('syncStatusStore 重新加密失败（非致命）', e)
     );
   }
+
+  return report;
+}
+
+/**
+ * 换钥匙的收尾反馈
+ *
+ * `orphans` 里的密文**用旧钥匙就已经解不开**了，不是这次换钥匙弄坏的。但只发成功 toast
+ * 的话，密码框还挂着「已保存」芯片，用户以为一切正常，直到某次上传失败才发现；
+ * 而真正的告知要等下一次启动的 `purgeOrphanFieldSecrets`——隔了整整一个使用周期。
+ * 搬运当场就知道哪几处解不开，当场说清楚。
+ */
+function reportRekeyOutcome(report: RekeyReport, success: ToastMessageConfig): void {
+  if (report.orphans.length === 0) {
+    toast.showConfig('success', success);
+    return;
+  }
+  toast.showConfig('warn', TOAST_MESSAGES.config.orphanSecretsKept(success.summary, report.orphans));
 }
 
 async function handlePasswordConfirm(payload: BackupPasswordConfirmPayload) {
@@ -116,27 +137,27 @@ async function handlePasswordConfirm(payload: BackupPasswordConfirmPayload) {
   passwordLoading.value = true;
   try {
     if (payload.mode === 'set') {
-      await swapKeyAndReencrypt(() => secureStorage.setBackupPassword(payload.password));
+      const report = await swapKeyAndReencrypt(() => secureStorage.setBackupPassword(payload.password));
       hasBackupPassword.value = true;
-      toast.showConfig('success', { summary: '备份密码设置成功', detail: '配置文件已使用新密码重新加密' });
+      reportRekeyOutcome(report, { summary: '备份密码设置成功', detail: '配置文件已使用新密码重新加密' });
     } else if (payload.mode === 'change') {
       const isVerified = await secureStorage.verifyBackupPassword(payload.currentPassword);
       if (!isVerified) {
         passwordDialogRef.value?.onPasswordFailed();
         return;
       }
-      await swapKeyAndReencrypt(() => secureStorage.setBackupPassword(payload.newPassword));
+      const report = await swapKeyAndReencrypt(() => secureStorage.setBackupPassword(payload.newPassword));
       hasBackupPassword.value = true;
-      toast.showConfig('success', { summary: '备份密码修改成功', detail: '配置文件已使用新密码重新加密' });
+      reportRekeyOutcome(report, { summary: '备份密码修改成功', detail: '配置文件已使用新密码重新加密' });
     } else if (payload.mode === 'disable') {
       const isVerified = await secureStorage.verifyBackupPassword(payload.currentPassword);
       if (!isVerified) {
         passwordDialogRef.value?.onPasswordFailed();
         return;
       }
-      await swapKeyAndReencrypt(() => secureStorage.clearBackupPassword());
+      const report = await swapKeyAndReencrypt(() => secureStorage.clearBackupPassword());
       hasBackupPassword.value = false;
-      toast.showConfig('success', { summary: '备份密码已停用', detail: '已切换为本机专属加密，换电脑后需重新配置' });
+      reportRekeyOutcome(report, { summary: '备份密码已停用', detail: '已切换为本机专属加密，换电脑后需重新配置' });
     }
     // 三条分支都换过钥匙了（验证失败的那两条已提前 return）。
     // 磁盘上是新密文，父级内存里还是旧的，必须让它去刷一遍

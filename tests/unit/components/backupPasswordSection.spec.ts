@@ -329,6 +329,49 @@ describe('BackupPasswordSection 内层密文搬运', () => {
   });
 
   /**
+   * 孤儿密文用旧钥匙就已经解不开了，不是这次换钥匙弄坏的——但只弹「设置成功」的话，
+   * 密码框还挂着「已保存」，用户要到某次上传失败、或下次启动的清理提示才知道。
+   */
+  it('names the passwords that could not be carried over instead of just saying it succeeded', async () => {
+    const raw = rawConfigWithSecrets();
+    raw.config.webdav_profiles[0].passwordEncrypted = 'PNXENC:a-key-nobody-has|lost-forever';
+    secureStorageMock.isPasswordMode.mockReturnValue(false);
+    configStoreMock.readRawAll.mockResolvedValue(raw);
+    secureStorageMock.setBackupPassword.mockImplementation(async () => swapToNewKey());
+
+    const wrapper = mountSection();
+    await nextTick();
+    await wrapper.find('[data-label="设置密码"]').trigger('click');
+    await wrapper.get('.confirm-set').trigger('click');
+    await flushPromisesAndTicks(3);
+
+    expect(toastShowConfigMock).toHaveBeenCalledWith('warn', expect.objectContaining({
+      summary: '备份密码设置成功，但部分密码需要重新填写',
+      detail: expect.stringContaining('WebDAV 图床「我的 OpenList」'),
+      life: 0,   // 用户得去重填，一闪而过的提示等于没提示
+    }));
+    // 一条常驻警告 + 一条自动消失的成功 = 同一次操作两种色调的回执，是噪音
+    expect(toastShowConfigMock).not.toHaveBeenCalledWith('success', expect.anything());
+  });
+
+  it('still reports plain success when every ciphertext made it across', async () => {
+    secureStorageMock.isPasswordMode.mockReturnValue(false);
+    configStoreMock.readRawAll.mockResolvedValue(rawConfigWithSecrets());
+    secureStorageMock.setBackupPassword.mockImplementation(async () => swapToNewKey());
+
+    const wrapper = mountSection();
+    await nextTick();
+    await wrapper.find('[data-label="设置密码"]').trigger('click');
+    await wrapper.get('.confirm-set').trigger('click');
+    await flushPromisesAndTicks(3);
+
+    expect(toastShowConfigMock).toHaveBeenCalledWith('success', expect.objectContaining({
+      summary: '备份密码设置成功',
+    }));
+    expect(toastShowConfigMock).not.toHaveBeenCalledWith('warn', expect.anything());
+  });
+
+  /**
    * 换完钥匙必须通知父级重读密文
    *
    * 磁盘上已是新密文，设置页 formData 里还是旧的。不通知的话点眼睛解不开，
