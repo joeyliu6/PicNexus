@@ -7,6 +7,7 @@
 | [dufs](#dufs局域网-http--基础协议) | 局域网 HTTP、自动建目录、连接测试两条反例 | ~2 分钟 |
 | [OpenList](#openlist端到端正例) | 端到端正例（匿名固定直链） | ~30 分钟 |
 | [坚果云](#坚果云公网商业-webdav) | 公网 HTTPS、真实商业服务端 | ~10 分钟 |
+| [pinggy 隧道](#pinggy-隧道fake-ip-逃生舱) | fake-ip 逃生舱（明文 HTTP 确认弹窗） | ~3 分钟 |
 
 协议层可用 [`scripts/test-webdav-compat.ps1`](../../../scripts/test-webdav-compat.ps1) 先扫一遍，
 不必开着 app 手点。
@@ -142,6 +143,45 @@ WebDAV 根（`/dav`）与直链根（`/d`）指向同一位置，所以同一个
 
 **别只信提示**：回坚果云网页端确认根目录下多出了 `picnexus-test` 文件夹。
 探针图传完即删，所以只会看到空文件夹——这是正常的，同时也证明清理逻辑有效。
+
+---
+
+## pinggy 隧道（fake-ip 逃生舱）
+
+专测「明文 HTTP 逃生舱」（[fake-ip-dns-policy-distortion.md#逃生舱已实现](../troubleshooting/fake-ip-dns-policy-distortion.md#逃生舱已实现)）。
+前三套环境全用 IP 字面量，天生绕开 fake-ip；这个功能恰恰要**测主机名**，
+所以反过来要故意造一个「本机判不清、但真连得通」的地址——理想情况下用真实 NAS 的公网主机名最直接，
+但不是每个人手头都有（2026-08-16 那次群晖在 DSM 7.2+ 已下架 WebDAV Server 套件），下面是等价替代。
+
+**本机开着 TUN + fake-ip 时，任意主机名都会被解析进 `198.18.0.0/15`**
+（见 [fake-ip-dns-policy-distortion.md](../troubleshooting/fake-ip-dns-policy-distortion.md)）。
+借这个特性：只要有一个**真实公网可达**的主机名，本机看它就是「看不见」，正好触发逃生舱；
+连接本身由 TUN 底层按真实 DNS 路由，照样能连通。
+
+```powershell
+# 1. 本机起 dufs（复用 Digest 夹具同款工具，见上文 dufs 小节），密码随机生成，不用默认弱密码
+New-Item -ItemType Directory -Force C:\Users\<你>\webdav-escape-test\pics
+dufs C:\Users\<你>\webdav-escape-test -b 127.0.0.1 -p 5021 -A -a "admin:<随机密码>@/:rw" -a "@/"
+```
+
+```bash
+# 2. 借 pinggy.io 的免费 TCP 隧道把它发布成公网真实域名，无需注册账号
+ssh -p 443 -R0:localhost:5021 tcp@free.pinggy.io
+# 输出形如 tcp://xxxx-x-x-x-x.run.pinggy-free.link:端口 —— 把 tcp:// 换成 http:// 就是要填的地址
+```
+
+PicNexus 侧配置：WebDAV 地址与公开访问域名都填上面那个地址（协议换成 `http://`），
+图片目录填 `pics`。
+
+> ⚠️ **免费额度 60 分钟到期自动断开**，逃生舱那 6 条判据尽量一口气跑完；断了重开地址会变，需重填。
+> ⚠️ **`serveo.net` 的匿名 TCP 转发已失效**（`ssh -R 0:localhost:端口 serveo.net` 报
+> `remote port forwarding failed for listen port 0`），只剩 HTTPS 终结的 HTTP 隧道模式——
+> 那种模式在网络边缘就把明文变成密文了，测不出「明文 HTTP」这条分支，踩过这个坑不用再试。
+> ⚠️ 用前先 `curl -X PROPFIND -u admin:密码 -H "Depth: 1" http://隧道地址/` 确认能拿到 `207`，
+> 免得把「隧道没搭好」误判成「逃生舱代码有问题」。
+
+判据表与本次验收结果见
+[webdav-digest-and-lan-http-escape-hatch-acceptance.md](../../audits/webdav-digest-and-lan-http-escape-hatch-acceptance.md)。
 
 ---
 
