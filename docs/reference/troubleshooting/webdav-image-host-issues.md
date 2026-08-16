@@ -16,37 +16,47 @@ WebDAV 图床实际是两半，出问题的性质完全不同，**先分清在�
 
 ## 认证失败，但用户名密码反复核对都是对的
 
-### 现象
+### 先看提示说的是哪一句
 
-连接测试报 `认证失败，请检查用户名和密码`。用户确认凭证正确，同一套账号在其他 WebDAV
-客户端（如 Windows 映射网络驱动器、RaiDrive）能正常连上。
+图床链路的 401 提示会**自己区分**这两种情况，照着念即可：
+
+| 提示 | 含义 | 怎么办 |
+|------|------|--------|
+| 「服务端要求 Digest 认证，PicNexus 暂不支持」 | 密码没错，是认证方式不匹配 | 在服务端启用 Basic（多数 NAS 可切换），或换用支持 Basic 的服务 |
+| 「认证失败，请检查用户名和密码」 | 服务端提供了 Basic，凭证确实对不上 | 真的去核对密码 |
 
 ### 根因
 
 **PicNexus 只支持 Basic 认证，不支持 Digest。**
-
-[`basic_auth`](../../../src-tauri/src/commands/webdav_upload.rs#L155) 只拼 `Basic <base64>`，
-整个 `webdav_upload.rs` 没有任何 Digest 相关代码。服务端若只接受 Digest，
-会直接返回 401，而 `describe_status` 把 401 翻译成「认证失败，请检查用户名和密码」。
-
-**这条提示的杀伤力不在于少支持一种认证，而在于它把用户引向反复核对密码——而密码根本没错。**
+[`basic_auth`](../../../src-tauri/src/commands/webdav_upload.rs) 只拼 `Basic <base64>`，
+整个 `webdav_upload.rs` 没有任何 Digest 相关代码（nonce / qop / nc 递增一概没有）。
 
 常见于：部分群晖 / 威联通的 WebDAV 配置、Apache `mod_dav` 默认配置。
 
-### 怎么确认
+### 判据是怎么来的
 
-用 curl 看服务端要哪种认证：
+`describe_status` 在 401 时读响应的 `WWW-Authenticate` 头，**只有「提供 Digest 且不提供 Basic」
+才换用 Digest 文案**。三个细节值得知道，改这段代码前先看一眼：
+
+- 用 `get_all()` 遍历**所有**同名 header，不是 `get()`。RFC 7235 允许服务端把 Basic 和 Digest
+  拆成两条 header 发；只看第一条会在「Digest 排前面」时误判成不支持 Basic。
+- 每段只取首个空白前的 token 当方案名，所以 `Digest realm="Basic Zone"` 不会被误当成支持 Basic。
+- `!has_basic` 这个守卫让判据**朝安全方向失败**：拿不准就退回通用文案，
+  而不是把一个密码填错的用户支去折腾服务端配置。
+- 403 **不读**这个头——那是「认过了但没权限」，不带方案协商。
+
+### 想自己确认
 
 ```bash
 curl -sI https://你的服务器/dav/ | grep -i "www-authenticate"
 ```
 
-返回 `WWW-Authenticate: Digest ...` 就是撞上这条。返回 `Basic` 则是真的密码错了。
+### ⚠️ 备份链路没有这个区分
 
-### 现状
-
-已作为待办登记在 [TODO.md](../../TODO.md)。当前只能建议用户在服务端启用 Basic
-（多数 NAS 可切换），或换用支持 Basic 的服务。
+只有**图床**链路（`upload_to_webdav` / `test_webdav_storage`）能区分。
+备份链路走 `webdav_request`，它的返回值只有 `{status, body}`，**拿不到响应头**，
+所以备份 WebDAV 撞上 Digest 时仍然只会说「认证失败，请检查用户名和密码」。
+两条链路的其它差异见文末对照表。
 
 ---
 
@@ -152,7 +162,33 @@ WebDAV 是唯一被放开明文 HTTP 的链路，但有三条硬拒绝：
 所以 `http://nas.local:5005` 会被拒。该段出现在 DNS 答案里只说明本机开着 TUN，
 对目标的真实位置零信息量，当局域网证据会让公网明文 HTTP 全线放行。
 
-**绕法**：填 IP 字面量而不是主机名。
+**两条出路**：
+
+1. **填 IP 字面量**而不是主机名（最稳妥，IP 字面量始终不受 fake-ip 影响）。
+2. **点「测试连接」按提示确认**——撞上 fake-ip 这一档时会弹出「明文传输风险确认」，
+   确认后该 profile 记住 `lanHttpConfirmed`，之后不再拦。
+
+### 逃生舱放开了什么、没放开什么
+
+确认**只**放开「所有不合格地址都是 fake-ip」这一种情况，也就是「真的看不见」。以下在确认后**依然硬拒绝**：
+
+| 情况 | 确认后 |
+|------|--------|
+| 解析结果里混有确证公网地址（如 `[198.18.1.1, 8.8.8.8]`）| ❌ 仍拒绝 |
+| 链路本地 / 云元数据（`169.254.169.254`、`fe80::/10`）| ❌ 仍拒绝 |
+| 字面量 fake-ip（`http://198.18.1.1/dav`）| ❌ 仍拒绝——没有人的 NAS 挂在 RFC 2544 基准测试段上 |
+| URL 内嵌 `user:pass@` / 非 HTTP 协议 | ❌ 仍拒绝 |
+
+> 🐛 混合地址集那条是实现时补上的一个**真实漏洞**。`all_dns_results_allowed` 原本
+> 一遇到 fake-ip 就早退，`[198.18.1.1, 8.8.8.8]` 会返回 `FakeIp`——**那个公网地址根本没被看到**。
+> 早退版本在逃生舱上线前无害（`FakeIp` 与 `Public` 都是硬拒），但一旦 `FakeIp` 可被确认放行，
+> 它就等于「用户确认了一个我们以为看不见、实际确证含公网地址的目标」，明文凭证直接出公网。
+> 现在改成扫完全集、`Blocked`/`Public` 优先胜出，`FakeIp` 是最弱的裁决。
+> 回归护栏：`fake_ip_never_masks_a_stricter_verdict`。
+
+**确认会在改地址时自动作废**：授权是针对某个具体地址给的。改了 `url` 或 `publicDomain`，
+`lanHttpConfirmed` 归零、下次测试重新弹框——这也是它唯一的撤销路径
+（见 `useStorageProfiles.updateWebdavProfile`）。
 
 另注意备份链路与图床链路走的是**两套函数**，判据不同：
 
@@ -160,6 +196,8 @@ WebDAV 是唯一被放开明文 HTTP 的链路，但有三条硬拒绝：
 |----|-------------|-------------|
 | 前端 | `assertAllowedWebDAVUrl`（只认 IP 字面量） | `assertAllowedWebDAVStorageUrl`（主机名放行到 Rust） |
 | Rust | `validate_webdav_url`（同步） | `validate_webdav_url_for_request`（异步，带 DNS 裁决） |
+| 明文 HTTP 逃生舱 | ❌ 无（前端就把主机名拦了，走不到这一档） | ✅ 有，见上 |
+| Digest 提示 | ❌ 无（`webdav_request` 拿不到响应头） | ✅ 有 |
 
 ---
 

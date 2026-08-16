@@ -32,6 +32,41 @@
 
 ## 待验收
 
+### [~] WebDAV Digest 提示 + 明文 HTTP 逃生舱
+
+- **状态**：代码与门禁全部完成；**A 半场真机 3/3 通过（2026-08-16）**，B 半场待跑
+- **背景**：两条改动都已归档，见
+  [webdav-image-host-issues.md](./reference/troubleshooting/webdav-image-host-issues.md)
+  与 [fake-ip-dns-policy-distortion.md](./reference/troubleshooting/fake-ip-dns-policy-distortion.md#逃生舱已实现)
+
+#### A. Digest 提示 — ✅ 3/3 通过（2026-08-16）
+
+```bash
+node scripts/webdav-auth-fixture.mjs   # 起三个端口，Ctrl+C 停
+```
+
+三个地址都填同一套配置：用户名密码随便填，**公开访问域名与 WebDAV 地址填同一个**。
+逐个点「测试连接」：
+
+- [x] `http://127.0.0.1:5011`（只给 Digest）→ 提示「服务端要求 Digest 认证，PicNexus 暂不支持…」✅
+- [x] `http://127.0.0.1:5012`（只给 Basic）→ 提示「认证失败，请检查用户名和密码」，无 Digest 字样 ✅
+- [x] `http://127.0.0.1:5013`（两条同名 header，Digest 在前）→ 同 5012 ✅
+      这条最关键——只看第一条 header 的实现会在这里把「两种都支持」误判成「只支持 Digest」
+
+> 5011/5013 用的是 `127.0.0.1`，走回环分支，不受 fake-ip 影响，所以两项验收互不干扰。
+> 后两条是**防改过头**的反向判据：密码真填错的人不该看到无关的 Digest 噪音。
+
+#### B. 明文 HTTP 逃生舱（需要 TUN + fake-ip 开着）
+
+- [ ] WebDAV 图床填 `http://<NAS 主机名>:端口` → 测试连接 →
+      **判据**：弹出「明文传输风险确认」，而不是只报一句错
+- [ ] 点「我已了解并继续」→ **判据**：自动重试并连接成功
+- [ ] 重启应用 → 再测 → **判据**：不再弹窗，直接成功（标记已持久化）
+- [ ] 把地址改成别的主机 → 再测 → **判据**：**又弹一次**（确认随地址作废，这也是唯一的撤销路径）
+- [ ] 反向判据：地址填 `http://example.com/dav`（确证公网）→ **判据**：依然被拒，
+      确认过的标记不能让公网明文放行
+- [ ] 顶部「全部测试」批量跑 → **判据**：撞上 fake-ip 时**不弹框**（批量下逐个弹＝连环阻塞）
+
 ### [~] 敏感字段密码框统一「密文常驻、明文按需」
 
 - **来源**：2026-08-14 WebDAV 验收时用户反馈「已保存的密码再打开是空的，体验和别处不一样」
@@ -224,58 +259,6 @@ Cookie 2 处 / S3 2 处（展开 12 个输入框）→ 抽 `useWebDAVProfileEdit
 两个文件都已经有单测覆盖（`settingsView.spec.ts` / `backupPasswordDialog.spec.ts`），
 拆分属于纯重构，靠现有单测兜住即可。
 
-### [ ] WebDAV 只支持 Basic 认证，不支持 Digest
-
-- **来源**：2026-08-14 WebDAV 图床验收后的边界梳理
-- **优先级**：中——不是所有人会撞上，但撞上的人会被错误文案带向完全错误的排查方向
-
-[`basic_auth`](../src-tauri/src/commands/webdav_upload.rs#L155) 只拼 `Basic <base64>`，
-整个 `webdav_upload.rs` 没有任何 Digest 相关代码。服务端若只接受 Digest 会返回 401，
-而 `describe_status` 把 401 翻译成「认证失败，请检查用户名和密码」。
-
-**危害不在于少支持一种认证，在于提示把用户引向反复核对密码——而密码根本没错。**
-常见于部分群晖 / 威联通的 WebDAV 配置、Apache `mod_dav` 默认配置。
-
-**两个方向，成本差很多**：
-
-1. **只改文案（低成本）**：401 时补一句「若确认密码无误，可能是服务端要求 Digest 认证，PicNexus 暂不支持」。
-   不解决问题但止住错误排查。
-2. **真正支持 Digest（高成本）**：需要处理 401 challenge、nonce、qop、nc 递增，
-   且 `reqwest` 无内置支持，要么引依赖要么自己实现。上传链路每个请求都要过一遍。
-
-建议先做 1，收到实际报障再评估 2。排查方法见
-[webdav-image-host-issues.md](./reference/troubleshooting/webdav-image-host-issues.md#认证失败但用户名密码反复核对都是对的)。
-
----
-
-### [ ] WebDAV 明文 HTTP 的「显式确认」逃生舱
-
-- **来源**：修复「fake-ip 环境下 WebDAV 局域网判据失真」时刻意留下的缺口
-- **优先级**：中——比原先估计的高，见下方实测
-
-修复后，代理 fake-ip 池不再算局域网证据。副作用是这样一类用户会被误伤：
-
-> 开着 TUN + fake-ip **且**用主机名（而非 IP）访问 NAS **且**该主机名没被代理的 `fake-ip-filter` 排除。
-
-**实测（2026-08-08，本机 TUN + fake-ip）**：`dav.example.com` 与 `nas.local` 都被解析进 fake-ip 池，
-连 `*.local` 也不例外——[mihomo DNS 文档](https://wiki.metacubex.one/en/config/dns/) 确认内核
-**没有**任何内置的 `fake-ip-filter` 默认列表。完整实测数据见
-[fake-ip-dns-policy-distortion.md](./reference/troubleshooting/fake-ip-dns-policy-distortion.md#遗留的误伤面)。
-
-**目前的出路**（已写进错误文案）：改填 NAS 的实际内网 IP，或改用 HTTPS。IP 字面量始终不受影响，
-而群晖等 NAS 引导用户填的默认就是 IP，所以这不是死路——但比原先估计的更容易撞上。
-
-**若要做逃生舱**，方案轮廓：
-
-1. `WebDAVStorageProfile`（`src/config/serviceTypes.ts`）加确认字段，如 `lanHttpConfirmed: boolean`
-2. `upload_to_webdav` / `test_webdav_storage` 两个 Tauri 命令各加一个参数，透传给 `validate_webdav_url_for_request`
-3. `PrivateStorageGroup.vue` 加一行勾选，文案要讲明「勾了就是明文传账号密码」
-4. 只放开 `DnsDecisionError::FakeIp` 一档；`Blocked`（链路本地/云元数据）与 `Public`（确证公网）保持硬拒绝
-
-**为什么当初没一起做**：改动面会从 1 个 Rust 文件扩到 Rust + config schema + 设置页 UI 三层，而 WebDAV 图床本身还在「待验收」状态，此时动配置 schema 时机不好。
-
----
-
 ### [ ] 编辑器插件（Typora / Obsidian / CLI）支持 WebDAV 图床
 
 - **来源**：2026-08-13 WebDAV 手动验收时发现
@@ -295,6 +278,28 @@ Cookie 2 处 / S3 2 处（展开 12 个输入框）→ 抽 `useWebDAVProfileEdit
    三个函数都要加 webdav 分支，最后一个还要展开 `webdav_profiles`
 4. 设置页「编辑器专用图床」选择器要能列出 WebDAV profiles
 5. `src-tauri/src/cli.rs`：`--service webdav:profile-1` 的解析与 service_id 映射
+
+#### 📌 范围修正（2026-08-16 做前两条时顺带核实，动手前先看这段）
+
+上面那份「5 处」写于 2026-08-13，有三处不准，一处偏悲观：
+
+- **漏了第 4 个函数**。同文件的 `buildEditorCredentialSignature` 也要加 webdav 分支。
+  不加的话它会落到 `default` 分支（只找 custom_s3）返回空串，于是**改了 WebDAV 配置不会触发
+  `useEditorIntegration` 的重新下发**——CLI 那份配置永远停在旧凭证上，且是静默的。
+- **最硬的是同步/异步撞墙，不在原清单里**。WebDAV 密码是**唯一**以密文存储的凭证
+  （`passwordEncrypted`，见 [sensitive-field-contract.md](./reference/patterns/sensitive-field-contract.md)），
+  写进 `cli-config.json` 前必须 `secureStorage.decrypt`，而它是 **async**。
+  但 `editorServiceConfig.ts` 整条链路是同步的，且签名检测跑在 Vue `computed` 里（`computed` 不能 await）。
+  可行的切法：**签名用密文**（只需检测"变没变"，密文足够），
+  **解密放 `applyEditorServer`**（它本来就是 async），把解好的明文传给 build 函数。
+- **`service_id_for_config` 的返回类型要改**。现在是 `&'static str`，而 WebDAV 的 id 是
+  `webdav:<profileId>` 这种动态串，得换成 `String` / `Cow<'static, str>`。这是个连锁改动。
+- **插件本身一行都不用改**（比原估计小）。Obsidian 插件只认 `http://127.0.0.1:<port>` 的 PicGo 协议，
+  Typora 走 CLI 子进程，**两者对用哪个图床完全无感知**——图床由桌面端通过
+  `update_server_config` / `save_cli_config` 单独下发。所以「编辑器插件支持」实际全是桌面端的活。
+
+另：`WEBDAV_REQUIRED_FIELDS` 与 `getRequiredFields()` 已支持 `webdav:` 复合 ID
+（`src/constants/serviceRequiredFields.ts`），第 3 处可直接复用，不用新写校验。
 
 **⚠️ 附带的知情项（不是本任务引入的）**：`cli-config.json` 全程明文落盘
 （`save_cli_config` 直接 `to_string_pretty` + `fs::write`，无加密），
@@ -335,6 +340,18 @@ Cookie 2 处 / S3 2 处（展开 12 个输入框）→ 抽 `useWebDAVProfileEdit
 ---
 
 ## 已完成
+
+### [x] WebDAV 401 提示区分 Digest 与密码错
+
+401 时读 `WWW-Authenticate`，只有「给 Digest 且不给 Basic」才换文案，密码真错的用户看不到 Digest 噪音。
+顺带把「认证失败，请检查用户名和密码」抽成常量并登记进跨语言门禁（此前在 4 处内联重复、无人守）。
+详见 [webdav-image-host-issues.md](./reference/troubleshooting/webdav-image-host-issues.md#认证失败但用户名密码反复核对都是对的)。
+
+### [x] WebDAV 明文 HTTP 的「显式确认」逃生舱
+
+fake-ip 那一档改回专属错误类型，前端按类型（非文案）弹确认框，确认写 `lanHttpConfirmed`、改地址即作废。
+实现时补掉一个真漏洞：`all_dns_results_allowed` 早退会让 `FakeIp` 掩盖同一集合里的公网地址。
+详见 [fake-ip-dns-policy-distortion.md](./reference/troubleshooting/fake-ip-dns-policy-distortion.md#逃生舱已实现)。
 
 ### [x] 设置备份密码会静默作废已保存的 WebDAV 密码
 

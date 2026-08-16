@@ -61,6 +61,9 @@ WebDAV 是网盘协议而非图床协议，上传成功不等于拿到可用的�
 - percent-encode **只在 Rust 侧做一次**（`webdav_upload.rs`），编码后的路径返回给前端填模板，两边各编码一次会让 `%20` 变成 `%2520`
 - 连接测试（`test_webdav_storage`）会上传探针图并**匿名** GET 公开链接，用于区分「传不上去」和「传上去了但链接打不开」
 - 网络策略为 WebDAV 单独放开局域网地址（群晖 / 自建 NAS），详见 `src/security/networkPolicy.ts` 与 `src-tauri/src/url_policy.rs`
+- 只支持 **Basic** 认证。401 时会读 `WWW-Authenticate`，服务端只给 Digest 时换用专属文案，避免把用户引去反复核对没错的密码
+- `lanHttpConfirmed` 是明文 HTTP 逃生舱的开关：TUN + fake-ip 环境下判不出目标是否在局域网时，用户可显式确认。
+  **只放开 fake-ip 一档**，确证公网 / 链路本地在确认后仍硬拒绝；改地址自动作废（`LanHttpConsent` 的 doc 是这条的真相源）
 
 ---
 

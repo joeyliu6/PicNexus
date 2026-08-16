@@ -71,10 +71,26 @@ nas.local           -> 198.18.1.48,  fdfe:dcba:9876::128
 [mihomo DNS 文档](https://wiki.metacubex.one/en/config/dns/) 确认内核**没有**任何内置的
 `fake-ip-filter` 默认列表，`*.lan` 只是配置模板里的惯例条目。
 
-**出路**（已写进错误文案）：改填 NAS 的实际内网 IP，或改用 HTTPS。IP 字面量始终不受影响，
-而群晖等 NAS 引导用户填的默认就是 IP，所以这不是死路——但比原先估计的更容易撞上。
+**出路**：改填 NAS 的实际内网 IP、改用 HTTPS，或**点「测试连接」按提示显式确认**。
+IP 字面量始终不受影响，而群晖等 NAS 引导用户填的默认就是 IP。
 
-逃生舱方案见 [TODO.md](../../TODO.md) 的「WebDAV 明文 HTTP 的『显式确认』逃生舱」。
+### 逃生舱（已实现）
+
+撞上这一档时 Rust 返回专属错误类型 `WEBDAV_LAN_HTTP_UNCONFIRMED`（不是让前端去匹配文案——
+文案一改分支就静默失效），前端据此弹「明文传输风险确认」，确认后写 `lanHttpConfirmed` 到该 profile。
+
+三条约束刻在 `url_policy::LanHttpConsent` 的 doc 上：
+
+1. **只放开 `DnsDecisionError::FakeIp` 一档**。`Blocked` 与 `Public` 在任何 consent 下硬拒绝——
+   那两档不是「看不见」，是「看见了且确实不该连」。字面量 fake-ip 同样不放开。
+2. **`FakeIp` 必须是最弱的裁决**。`all_dns_results_allowed` 原本一遇 fake-ip 就早退，
+   于是 `[198.18.1.1, 8.8.8.8]` 返回 `FakeIp` 而那个公网地址**根本没被看到**。
+   逃生舱上线前这无害（两档都是硬拒），上线后就等于放行一个确证含公网地址的目标。
+   现已改成扫完全集、`Blocked`/`Public` 优先胜出。护栏：`fake_ip_never_masks_a_stricter_verdict`。
+3. **改地址即作废**。授权是针对某个具体地址给的；`url` / `publicDomain` 一变就归零，
+   这同时是它唯一的撤销路径。
+
+详细排查见 [webdav-image-host-issues.md](./webdav-image-host-issues.md#局域网地址被拒绝)。
 
 ## 相关文档
 
