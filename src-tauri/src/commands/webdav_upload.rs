@@ -29,6 +29,20 @@ const SHORT_TIMEOUT: Duration = Duration::from_secs(15);
 const PROBE_PNG_BASE64: &str =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
+/// 认证失败的统一文案
+///
+/// 与前端 `src/utils/webdav.ts` 的同名常量保持逐字一致：备份链路在前端拦、
+/// 图床链路在 Rust 拦，是同一件事的两个拦截点，说两种话用户会以为撞上了两个故障。
+/// 这条一致性由 `scripts/check-cross-language-constants.mjs` 在 lint 阶段守着。
+const WEBDAV_AUTH_FAILED_MESSAGE: &str = "认证失败，请检查用户名和密码";
+
+/// 服务端只接受 Digest 时的专属文案
+///
+/// Why 单独一条而不是并进上面那句：前端的 `webdav_request` 只回 `{status, body}`，
+/// 拿不到响应头，判不了认证方案。所以这句是 Rust 独有的，不进跨语言配对。
+const WEBDAV_DIGEST_ONLY_MESSAGE: &str =
+    "服务端要求 Digest 认证，PicNexus 暂不支持。请在服务端启用 Basic 认证（多数 NAS 可切换），或改用支持 Basic 的服务。";
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebDAVUploadResult {
@@ -127,10 +141,60 @@ pub fn render_public_url(
         .replace("{filename}", encoded_file_name)
 }
 
+/// 服务端在 401 里声明的认证方案
+///
+/// Why 用 `get_all` 而不是 `get`：RFC 7235 允许 `WWW-Authenticate` 以**多个同名 header**
+/// 出现（Basic 一条、Digest 一条），`get` 只返回第一条。若服务端把 Digest 排在前面，
+/// 只看第一条就会把「两种都支持」误判成「只支持 Digest」——于是密码真填错的用户
+/// 被告知去改服务端认证方式，正好是本次要消灭的那种错误引导。
+#[derive(Debug, Default, PartialEq, Eq)]
+struct AuthChallenge {
+    has_basic: bool,
+    has_digest: bool,
+}
+
+impl AuthChallenge {
+    /// 只有「提供 Digest 且不提供 Basic」才判定为撞上 Digest
+    ///
+    /// `!has_basic` 这个守卫让判据朝安全方向失败：拿不准时退回通用文案，
+    /// 而不是把一个密码填错的用户支去折腾服务端配置。
+    fn is_digest_only(&self) -> bool {
+        self.has_digest && !self.has_basic
+    }
+}
+
+fn parse_auth_challenge(headers: &reqwest::header::HeaderMap) -> AuthChallenge {
+    let mut challenge = AuthChallenge::default();
+
+    for value in headers.get_all(reqwest::header::WWW_AUTHENTICATE) {
+        let Ok(raw) = value.to_str() else { continue };
+        // 一条 header 里可以逗号分隔多个 challenge：`Basic realm="x", Digest realm="y"`。
+        // 每段取首个空白前的 token 作为方案名，避免把 realm 内容（如 realm="Basic Zone"）当成方案。
+        for part in raw.split(',') {
+            let scheme = part.trim().split_whitespace().next().unwrap_or("");
+            if scheme.eq_ignore_ascii_case("basic") {
+                challenge.has_basic = true;
+            } else if scheme.eq_ignore_ascii_case("digest") {
+                challenge.has_digest = true;
+            }
+        }
+    }
+
+    challenge
+}
+
 /// 把 HTTP 状态码翻译成用户看得懂的失败原因
-fn describe_status(status: u16) -> String {
+///
+/// `headers` 传响应头（拿得到就传），用于在 401 时区分「密码错」与「服务端要 Digest」。
+/// 传 `None` 或服务端没声明方案时，一律退回通用文案。
+fn describe_status(status: u16, headers: Option<&reqwest::header::HeaderMap>) -> String {
     match status {
-        401 | 403 => "认证失败，请检查用户名和密码".to_string(),
+        // Why 只有 401 读 challenge：403 是「认过了但没权限」，不带认证方案协商，
+        // 对它读 WWW-Authenticate 只会误报。
+        401 if headers.is_some_and(|h| parse_auth_challenge(h).is_digest_only()) => {
+            WEBDAV_DIGEST_ONLY_MESSAGE.to_string()
+        }
+        401 | 403 => WEBDAV_AUTH_FAILED_MESSAGE.to_string(),
         404 => "路径不存在，请检查远程路径配置".to_string(),
         405 => "服务器不允许该操作，请检查路径是否为目录".to_string(),
         409 => "父目录不存在，无法创建".to_string(),
@@ -201,7 +265,10 @@ async fn ensure_remote_dir(
 
         // 401/403 是确定性失败，早退比让 PUT 再撞一次墙更有信息量
         if matches!(status, 401 | 403) {
-            return Err(AppError::webdav(describe_status(status)));
+            return Err(AppError::webdav(describe_status(
+                status,
+                Some(response.headers()),
+            )));
         }
 
         log::warn!("[WebDAV] 创建目录返回 HTTP {}，继续尝试上传: {}", status, url);
@@ -231,7 +298,10 @@ async fn put_binary(
 
     let status = response.status().as_u16();
     if !is_ok_status(status) {
-        return Err(AppError::webdav(describe_status(status)));
+        return Err(AppError::webdav(describe_status(
+            status,
+            Some(response.headers()),
+        )));
     }
 
     Ok(())
@@ -269,7 +339,10 @@ async fn put_file_stream(
 
     let status = response.status().as_u16();
     if !is_ok_status(status) {
-        return Err(AppError::webdav(describe_status(status)));
+        return Err(AppError::webdav(describe_status(
+            status,
+            Some(response.headers()),
+        )));
     }
 
     Ok(())
@@ -418,7 +491,10 @@ pub async fn test_webdav_storage(
     let status = response.status().as_u16();
     // 404 说明目录还没建，后面 MKCOL 会补上，不算失败
     if !is_ok_status(status) && status != 207 && status != 404 {
-        return Err(AppError::webdav(describe_status(status)));
+        return Err(AppError::webdav(describe_status(
+            status,
+            Some(response.headers()),
+        )));
     }
 
     // 2. 上传探针图
@@ -693,11 +769,150 @@ mod tests {
 
     #[test]
     fn describe_status_maps_documented_failures() {
-        assert!(describe_status(401).contains("认证失败"));
-        assert!(describe_status(403).contains("认证失败"));
-        assert!(describe_status(404).contains("路径不存在"));
-        assert!(describe_status(507).contains("空间"));
-        assert!(describe_status(502).contains("服务器错误"));
+        assert!(describe_status(401, None).contains("认证失败"));
+        assert!(describe_status(403, None).contains("认证失败"));
+        assert!(describe_status(404, None).contains("路径不存在"));
+        assert!(describe_status(507, None).contains("空间"));
+        assert!(describe_status(502, None).contains("服务器错误"));
+    }
+
+    /// 按给定的若干条 `WWW-Authenticate` 头造一个 HeaderMap
+    ///
+    /// 用 `append` 而非 `insert`：要造出「多个同名 header」这个正是本判据要处理的形态。
+    fn challenge_headers(values: &[&str]) -> reqwest::header::HeaderMap {
+        let mut headers = reqwest::header::HeaderMap::new();
+        for value in values {
+            headers.append(
+                reqwest::header::WWW_AUTHENTICATE,
+                reqwest::header::HeaderValue::from_str(value).unwrap(),
+            );
+        }
+        headers
+    }
+
+    #[test]
+    fn digest_only_401_points_at_digest_instead_of_password() {
+        let headers = challenge_headers(&["Digest realm=\"nas\", qop=\"auth\", nonce=\"abc\""]);
+        let msg = describe_status(401, Some(&headers));
+        assert!(msg.contains("Digest"), "应指向 Digest，实际: {}", msg);
+        assert!(
+            !msg.contains("检查用户名和密码"),
+            "不该再引导用户核对密码: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn basic_offered_keeps_password_wording() {
+        // 服务端只要提供了 Basic，401 就是真的密码错——不能扯 Digest
+        for values in [
+            vec!["Basic realm=\"nas\""],
+            // 同一条 header 里逗号分隔两种方案
+            vec!["Basic realm=\"nas\", Digest realm=\"nas\", qop=\"auth\""],
+            // 两条同名 header，Digest 排在前面：`get()` 只看第一条会在这里误判
+            vec!["Digest realm=\"nas\", qop=\"auth\"", "Basic realm=\"nas\""],
+        ] {
+            let headers = challenge_headers(&values);
+            let msg = describe_status(401, Some(&headers));
+            assert_eq!(msg, WEBDAV_AUTH_FAILED_MESSAGE, "误判于: {:?}", values);
+        }
+    }
+
+    #[test]
+    fn digest_detection_is_case_insensitive() {
+        for value in ["digest realm=\"x\"", "DIGEST realm=\"x\"", "DiGeSt realm=\"x\""] {
+            let headers = challenge_headers(&[value]);
+            assert!(
+                describe_status(401, Some(&headers)).contains("Digest"),
+                "大小写变体未识别: {}",
+                value
+            );
+        }
+    }
+
+    #[test]
+    fn realm_text_is_not_mistaken_for_a_scheme() {
+        // realm 内容里出现 "Basic" 不代表服务端支持 Basic——只取每段首个 token
+        let headers = challenge_headers(&["Digest realm=\"Basic Zone\", qop=\"auth\""]);
+        assert!(describe_status(401, Some(&headers)).contains("Digest"));
+    }
+
+    #[test]
+    fn status_403_never_reads_the_challenge() {
+        // 403 是「认过了但没权限」，不带方案协商；对它读 WWW-Authenticate 只会误报
+        let headers = challenge_headers(&["Digest realm=\"nas\""]);
+        assert_eq!(
+            describe_status(403, Some(&headers)),
+            WEBDAV_AUTH_FAILED_MESSAGE
+        );
+    }
+
+    #[test]
+    fn missing_or_unknown_challenge_falls_back_to_password_wording() {
+        let empty = reqwest::header::HeaderMap::new();
+        assert_eq!(
+            describe_status(401, Some(&empty)),
+            WEBDAV_AUTH_FAILED_MESSAGE
+        );
+
+        // 未知方案（如 Negotiate）不该被当成 Digest
+        let negotiate = challenge_headers(&["Negotiate"]);
+        assert_eq!(
+            describe_status(401, Some(&negotiate)),
+            WEBDAV_AUTH_FAILED_MESSAGE
+        );
+    }
+
+    /// 真机 HTTP 栈下，两条同名 `WWW-Authenticate` 必须都能被看到
+    ///
+    /// Why 光有 HeaderMap 单测不够：那是我们自己 `append` 出来的形态。这条要证明的是
+    /// **reqwest / hyper 不会把重复的同名 header 合并或只保留一条**——如果它合并了，
+    /// `get_all()` 拿到的就和 `get()` 一样，多 header 的判据在真机上静默失效，
+    /// 而单测依然全绿。服务端把 Basic 和 Digest 拆两条发是 RFC 7235 允许的形态。
+    #[tokio::test]
+    async fn duplicate_challenge_headers_survive_the_http_stack() {
+        use axum::{routing::any, Router};
+
+        let app = Router::new().route(
+            "/dav",
+            any(|| async {
+                axum::response::Response::builder()
+                    .status(axum::http::StatusCode::UNAUTHORIZED)
+                    // Digest 在前、Basic 在后：只看第一条的实现会在这里误判
+                    .header("WWW-Authenticate", "Digest realm=\"nas\", qop=\"auth\"")
+                    .header("WWW-Authenticate", "Basic realm=\"nas\"")
+                    .body(axum::body::Body::empty())
+                    .expect("构造响应失败")
+            }),
+        );
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("绑定本地端口失败");
+        let addr = listener.local_addr().expect("获取本地地址失败");
+        let server = tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let response = reqwest::Client::new()
+            .get(format!("http://{}/dav", addr))
+            .send()
+            .await
+            .expect("请求失败");
+
+        let challenge = parse_auth_challenge(response.headers());
+        server.abort();
+
+        assert!(challenge.has_digest, "应看到 Digest");
+        assert!(
+            challenge.has_basic,
+            "第二条 header 里的 Basic 被吞了——多 header 判据在真机上会失效"
+        );
+        assert!(!challenge.is_digest_only());
+        assert_eq!(
+            describe_status(401, Some(response.headers())),
+            WEBDAV_AUTH_FAILED_MESSAGE
+        );
     }
 
     #[test]
