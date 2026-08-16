@@ -15,7 +15,7 @@ flowchart TD
     %% 用户输入
     A1[拖拽图片] --> B
     A2[点击选择文件] --> B
-    A3[粘贴剪贴板] --> B
+    A3["粘贴剪贴板<br/>Ctrl+V 仅上传视图激活时响应"] --> B
 
     B[UploadView 接收文件路径列表]
     B --> C{isUploading?}
@@ -249,6 +249,9 @@ key = {配置里的 path}/{yyyyMMdd}_{4位base36随机}_{原文件名}
 | 想按固定文件名覆盖桶里的旧对象 | 已刻意不支持——覆盖会让旧历史记录的链接指向新图 | S3 系图床 → 对象名唯一化 |
 | S3 桶里有对象但历史里查不到 | 上传失败重试留下的孤儿对象（重试用新 key，不覆盖） | S3 系图床 → 对象名唯一化「代价」 |
 | 未知扩展名的文件上传后类型是 `application/octet-stream` | `mime_guess` 无法识别该扩展名，按设计回退 | S3 系图床 → Content-Type |
+| 在历史/链接检测/设置页按 Ctrl+V 也触发了上传 | `UploadView` 的 keydown 监听挂在 `window` 上，且 `MainLayout` 的 `KeepAlive` 上限等于视图数、本组件永不卸载，必须靠 `isViewActive` 早退收敛 | 图1 节点 A3 |
+| 在上传页按 Ctrl+V 没反应 | 切走再切回后 `onActivated` 未触发（`isViewActive` 卡在 false）；或焦点在 `INPUT`/`TEXTAREA` 内被有意跳过 | 图1 节点 A3 |
+| 设置里的全局快捷键在其他视图仍能上传剪贴板 | 预期行为，那是 `useGlobalShortcut` 注册的 OS 级热键，与视图无关 | `src/composables/useGlobalShortcut.ts` |
 
 ---
 

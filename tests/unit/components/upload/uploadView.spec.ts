@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import { enableAutoUnmount } from '@vue/test-utils';
 import { mountWithDefaults } from '../../helpers/vueMount';
 import { flushPromisesAndTicks } from '../../helpers/wait';
 import { getEmitMock, getListenMock, resetTauriMocks } from '../../helpers/tauriMock';
@@ -166,21 +167,66 @@ function makeConfig() {
   };
 }
 
+const VIEW_STUBS = {
+  UploadDropZone: DropZoneStub,
+  ServiceSelector: ServiceSelectorStub,
+  UploadQueuePanel: QueuePanelStub,
+  UrlDownloadDialog: UrlDialogStub,
+};
+
 async function mountView() {
   const wrapper = mountWithDefaults(UploadView, {
-    global: {
-      stubs: {
-        UploadDropZone: DropZoneStub,
-        ServiceSelector: ServiceSelectorStub,
-        UploadQueuePanel: QueuePanelStub,
-        UrlDownloadDialog: UrlDialogStub,
-      },
-    },
+    global: { stubs: VIEW_STUBS },
   });
 
   await flushPromisesAndTicks(2);
   return wrapper;
 }
+
+const OtherViewStub = defineComponent({
+  name: 'OtherViewStub',
+  template: '<section data-testid="other-view">other</section>',
+});
+
+/**
+ * 复刻 MainLayout 的 KeepAlive 视图切换
+ *
+ * onActivated / onDeactivated 只有在 KeepAlive 内才会触发，直接 mount 测不出
+ * "切走后 Ctrl+V 不应响应"——那正是本组件唯一的视图感知手段。
+ */
+async function mountViewInKeepAlive() {
+  const Host = defineComponent({
+    components: { UploadView, OtherViewStub },
+    setup() {
+      const activeView = ref('UploadView');
+      const switchView = () => {
+        activeView.value = activeView.value === 'UploadView' ? 'OtherViewStub' : 'UploadView';
+      };
+      return { activeView, switchView };
+    },
+    template: `
+      <button class="switch-view" @click="switchView">switch</button>
+      <KeepAlive><component :is="activeView" /></KeepAlive>
+    `,
+  });
+
+  const wrapper = mountWithDefaults(Host, {
+    global: { stubs: VIEW_STUBS },
+  });
+
+  await flushPromisesAndTicks(2);
+  return wrapper;
+}
+
+function pressCtrlV(target: EventTarget = window) {
+  target.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true, cancelable: true }),
+  );
+}
+
+// Why: Ctrl+V 监听挂在 window 上，组件不卸载就会残留到下一个用例，
+//   让"视图未激活时不响应"的断言被上一个用例遗留的 handler 误触发。
+enableAutoUnmount(afterEach);
 
 beforeEach(() => {
   resetTauriMocks();
@@ -439,5 +485,60 @@ describe('UploadView page interactions', () => {
     expect(mockState.setRetryCallback).toHaveBeenCalledWith(expect.any(Function));
     wrapper.unmount();
     expect(mockState.configUnlisten).toHaveBeenCalled();
+  });
+});
+
+describe('UploadView paste shortcut scope', () => {
+  it('uploads on Ctrl+V while the upload view is active', async () => {
+    await mountViewInKeepAlive();
+
+    pressCtrlV();
+    await flushPromisesAndTicks();
+
+    expect(mockState.pasteAndUpload).toHaveBeenCalledWith(mockState.handleFilesUpload);
+    expect(mockState.handleFilesUpload).toHaveBeenCalledWith(['clipboard.png']);
+  });
+
+  // Why: 监听挂在 window 上，而 MainLayout 的 KeepAlive 上限正好等于视图数，UploadView
+  //   永不卸载。没有 isViewActive 早退，在历史/链接检测/设置页按 Ctrl+V 都会误触发上传。
+  it('ignores Ctrl+V once the upload view is deactivated', async () => {
+    const wrapper = await mountViewInKeepAlive();
+
+    await wrapper.find('.switch-view').trigger('click');
+    await flushPromisesAndTicks();
+    expect(wrapper.find('[data-testid="other-view"]').exists()).toBe(true);
+
+    pressCtrlV();
+    await flushPromisesAndTicks();
+
+    expect(mockState.pasteAndUpload).not.toHaveBeenCalled();
+    expect(mockState.handleFilesUpload).not.toHaveBeenCalled();
+  });
+
+  it('resumes handling Ctrl+V after returning to the upload view', async () => {
+    const wrapper = await mountViewInKeepAlive();
+
+    await wrapper.find('.switch-view').trigger('click');
+    await flushPromisesAndTicks();
+    await wrapper.find('.switch-view').trigger('click');
+    await flushPromisesAndTicks();
+    expect(wrapper.find('[data-testid="drop-zone"]').exists()).toBe(true);
+
+    pressCtrlV();
+    await flushPromisesAndTicks();
+
+    expect(mockState.pasteAndUpload).toHaveBeenCalledWith(mockState.handleFilesUpload);
+  });
+
+  it('leaves Ctrl+V to the browser inside text inputs', async () => {
+    await mountViewInKeepAlive();
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+
+    pressCtrlV(input);
+    await flushPromisesAndTicks();
+
+    expect(mockState.pasteAndUpload).not.toHaveBeenCalled();
+    input.remove();
   });
 });

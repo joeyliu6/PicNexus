@@ -420,6 +420,11 @@ onMounted(async () => {
 
   // 设置 Ctrl+V / Cmd+V 快捷键监听
   keydownHandler = async (e: KeyboardEvent) => {
+    // KeepAlive 缓存时跳过，与上方拖拽监听保持一致：
+    // 监听挂在 window 上，且视图数正好等于 KeepAlive 上限，本组件永不卸载，
+    // 没有这道早退就会在历史/链接检测/设置页吞掉普通粘贴并误触发上传。
+    if (!isViewActive.value) return;
+
     // 检测 Ctrl+V (Windows/Linux) 或 Cmd+V (Mac)
     if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
       // 排除输入框，避免干扰正常的文本粘贴
