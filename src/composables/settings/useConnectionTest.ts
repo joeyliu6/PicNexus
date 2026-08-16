@@ -33,7 +33,7 @@ interface UseConnectionTestOptions {
  */
 const LAN_HTTP_CONSENT_MESSAGE =
   '该地址解析到了代理软件的 fake-ip 地址池，PicNexus 无法确认它到底在不在局域网。'
-  + '如果继续，WebDAV 的用户名和密码将以**明文**发送——万一这个地址其实在公网，'
+  + '如果继续，WebDAV 的用户名和密码将以“明文”发送——万一这个地址其实在公网，'
   + '凭证就会在链路上裸奔。\n\n'
   + '确认这是你自己的内网设备再继续；更稳妥的做法是改填内网 IP（如 http://192.168.1.10:5005）或改用 HTTPS。';
 
