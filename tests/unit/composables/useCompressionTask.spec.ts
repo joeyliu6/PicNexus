@@ -99,6 +99,13 @@ describe('useCompressionTask', () => {
 
     await expect(api.selectAndCompress()).resolves.toBe(true);
 
+    // 断言写在调用之后而不是 mock 内部：mock 里抛出的断言会被 selectAndCompress 的
+    // try/catch 吞掉，变成静默的 error 状态。参数名必须与 Rust 侧
+    // get_image_metadata(file_path) 的 camelCase 形态一致——只对命令名分支、
+    // 不校验参数的 mock 曾让 `{ path }` 笔误一路绿灯到线上。
+    expect(invokeMock).toHaveBeenCalledWith('get_image_metadata', {
+      filePath: 'C:/photos/original.jpg',
+    });
     expect(api.fileName.value).toBe('original.jpg');
     expect(api.result.value).toEqual(compressResult);
     expect(api.originalSrc.value).toBe('original-b64');
@@ -113,21 +120,24 @@ describe('useCompressionTask', () => {
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
-  it('scalePercent 为 100 时不读取元数据，并使用 maxLongSide=0', async () => {
+  it('scalePercent 为 100 时不读取元数据，直接透传 preset.maxLongSide', async () => {
     dialogOpenMock.mockResolvedValue('C:/photos/a.png');
-    setupInvokeHandler(async (cmd, args) => {
-      if (cmd === 'compress_image') {
-        expect(args).toEqual(expect.objectContaining({ maxLongSide: 0 }));
-        return makeResult({ outputPath: 'C:/tmp/a.webp' });
-      }
+    setupInvokeHandler(async (cmd) => {
+      if (cmd === 'compress_image') return makeResult({ outputPath: 'C:/tmp/a.webp' });
       if (cmd === 'read_image_as_base64') return 'b64';
       if (cmd === 'cleanup_compressed_files') return undefined;
       throw new Error(`unexpected command: ${cmd}`);
     });
 
-    await useCompressionTask(ref(makePreset({ scalePercent: 100 }))).selectAndCompress();
+    await useCompressionTask(
+      ref(makePreset({ scalePercent: 100, maxLongSide: 1600 })),
+    ).selectAndCompress();
 
     expect(invokeMock).not.toHaveBeenCalledWith('get_image_metadata', expect.anything());
+    expect(invokeMock).toHaveBeenCalledWith(
+      'compress_image',
+      expect.objectContaining({ maxLongSide: 1600 }),
+    );
   });
 
   it('压缩失败时进入 error 状态，保存错误消息并触发 onError', async () => {

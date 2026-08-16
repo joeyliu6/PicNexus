@@ -87,12 +87,12 @@ export function useCompressionTask(
 
     try {
       const p = preset.value;
-      let maxLongSide = 0;
+      let maxLongSide = p.maxLongSide ?? 0;
       const scalePercent = p.scalePercent ?? 100;
       if (scalePercent > 0 && scalePercent < 100) {
         const meta = await invoke<{ width: number; height: number }>(
           'get_image_metadata',
-          { path: filePath },
+          { filePath },
         );
         if (mySeq !== activeSeq) return true;
         maxLongSide = Math.round(
