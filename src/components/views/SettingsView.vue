@@ -28,8 +28,8 @@ import AdvancedSettingsPanel from '../settings/AdvancedSettingsPanel.vue';
 import BackupSyncPanel from '../settings/BackupSyncPanel.vue';
 import AboutUpdatePanel from '../settings/AboutUpdatePanel.vue';
 
-import { configStore } from '../../store/instances';
-import type { ThemeMode, UserConfig, ServiceType, ImageCompressionConfig, EditorServerConfig } from '../../config/types';
+import { readFreshConfig } from '../../store/instances';
+import type { ThemeMode, ServiceType, ImageCompressionConfig, EditorServerConfig } from '../../config/types';
 
 const toast = useToast();
 const { currentTheme, setTheme } = useThemeManager();
@@ -305,7 +305,10 @@ onMounted(async () => {
     // Why: 跳过自身保存触发的 echo，避免在防抖窗口期间把用户连续拖动的滑块值
     //   被磁盘旧值覆盖（emit→listen 同窗口仍走 IPC，期间用户可能已输入新值）
     if (event.payload?.source === myLabel) return;
-    const updated = await configStore.get<UserConfig>('config');
+    // 走 readFreshConfig：事件来自别的 webview（托盘也写配置），本窗口缓存此刻是陈旧的。
+    // 眼下 App.vue 的同名监听会顺手作废共享缓存，直接 get 也碰巧读得到新值——
+    // 但那是别人的副作用，不是这里的保证。按缓存契约各自读盘，别赌监听顺序。
+    const updated = await readFreshConfig();
     if (updated?.imageCompression) formData.value.imageCompression = { ...updated.imageCompression };
   });
 
