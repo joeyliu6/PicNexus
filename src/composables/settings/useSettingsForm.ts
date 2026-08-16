@@ -14,6 +14,7 @@ import { encryptBackupProfiles } from './webdavBackupSecrets';
 import { useStorageProfiles } from './useStorageProfiles';
 import { useConfirm } from '../useConfirm';
 import { createLogger } from '../../utils/logger';
+import { isAnyEncryptedData } from '../../security/crypto';
 import { extractNamiAuthToken } from '../../utils/namiAuthToken';
 import { extractErrorMessage } from '../../utils/serviceHealthMessage';
 import type {
@@ -44,6 +45,28 @@ export interface SaveFeedbackState {
 // ---- composable ----
 
 const log = createLogger('Settings');
+
+/**
+ * 按 id 对齐，把磁盘上带加密魔数前缀的字段搬进表单里的同一条 profile，其余字段一律不动
+ *
+ * Why 认"魔数前缀"而不是列一张字段名清单：跟 `security/fieldSecrets` 用同一套判定。
+ * 新增一个字段级密文时不用回来这里登记——漏登记是静默的，用户看到的只是密码莫名其妙没了。
+ */
+function mergeRekeyedSecrets<T extends { id: string }>(target: T[], fresh: T[] | undefined): void {
+  if (!fresh?.length) return;
+  const freshById = new Map(fresh.map(profile => [profile.id, profile]));
+
+  for (const profile of target) {
+    const source = freshById.get(profile.id);
+    if (!source) continue;   // 表单里刚新建、还没落盘的 profile，磁盘上没有对应项
+
+    for (const [key, value] of Object.entries(source)) {
+      if (typeof value === 'string' && isAnyEncryptedData(value)) {
+        (profile as Record<string, unknown>)[key] = value;
+      }
+    }
+  }
+}
 
 export function useSettingsForm() {
   const toast = useToast();
@@ -358,18 +381,19 @@ export function useSettingsForm() {
    * 2. 下一次保存把 formData 原样写回磁盘，**刚搬好的新密文被旧的覆盖** → 前功尽弃
    *
    * Why 不直接 `loadSettings()`：那会把用户还没保存的编辑一起冲掉。
-   * 这里只补密文那两个字段，取值逻辑与 `loadSettings` 里对应的两段保持一致。
+   *
+   * ⚠️ 同理，这里也**不能整数组替换**。躲开 loadSettings 却把 `webdav_profiles` /
+   * `webdav.profiles` 整个换成磁盘那份，等于在自己这儿犯同一个错：用户正在填的 URL、
+   * 用户名、刚改的配置名全被旧值冲回去（换备份密码时设置页是开着的，边上就是这些框）。
+   * 按 profile id 对齐、只搬密文字段。
    */
   async function reloadFieldSecrets(): Promise<void> {
     try {
       const config = await configStore.get<UserConfig>('config');
       if (!config) return;
 
-      formData.value.webdav_profiles = config.webdav_profiles || [];
-      formData.value.webdav = {
-        profiles: (config.webdav?.profiles || []).map(p => ({ ...p })),
-        activeId: config.webdav?.activeId || null,
-      };
+      mergeRekeyedSecrets(formData.value.webdav_profiles, config.webdav_profiles);
+      mergeRekeyedSecrets(formData.value.webdav.profiles, config.webdav?.profiles);
     } catch (e) {
       log.error('换钥匙后刷新字段级密文失败', e);
     }

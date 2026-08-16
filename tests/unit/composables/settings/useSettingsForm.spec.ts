@@ -506,34 +506,88 @@ describe('useSettingsForm', () => {
   it('refreshes the ciphertext copies in formData after a key swap', async () => {
     const api = useSettingsForm();
 
+    // 带真前缀：合并判定走的是 isAnyEncryptedData，跟 fieldSecrets 决定"搬哪些"是同一套。
+    // 换个随便的字符串就等于绕开了这套判定，测不到真实行为
+    const OLD = 'PNXENC:old-cipher';
+    const NEW = 'PNXENC:new-cipher';
+
     mockState.configStoreGet.mockResolvedValue(createConfig({
       webdav_profiles: [
-        { id: 'dav-1', name: 'NAS', url: 'https://dav.example.com', username: 'me', passwordEncrypted: 'old-cipher', remotePath: '/pics/', publicDomain: 'https://cdn.example.com', publicUrlTemplate: '{domain}/{path}' },
+        { id: 'dav-1', name: 'NAS', url: 'https://dav.example.com', username: 'me', passwordEncrypted: OLD, remotePath: '/pics/', publicDomain: 'https://cdn.example.com', publicUrlTemplate: '{domain}/{path}' },
       ],
       webdav: {
-        profiles: [{ id: 'bak-1', name: '坚果云', url: 'https://dav.example.com', username: 'me', password: '', passwordEncrypted: 'old-cipher', remotePath: '/PicNexus/' }],
+        profiles: [{ id: 'bak-1', name: '坚果云', url: 'https://dav.example.com', username: 'me', password: '', passwordEncrypted: OLD, remotePath: '/PicNexus/' }],
         activeId: 'bak-1',
       },
     }));
     await api.loadSettings();
-    expect(api.formData.value.webdav.profiles[0].passwordEncrypted).toBe('old-cipher');
+    expect(api.formData.value.webdav.profiles[0].passwordEncrypted).toBe(OLD);
 
     // 换钥匙：swapKeyAndReencrypt 已经把新密文写进 store，formData 还没跟上
     mockState.configStoreGet.mockResolvedValue(createConfig({
       webdav_profiles: [
-        { id: 'dav-1', name: 'NAS', url: 'https://dav.example.com', username: 'me', passwordEncrypted: 'new-cipher', remotePath: '/pics/', publicDomain: 'https://cdn.example.com', publicUrlTemplate: '{domain}/{path}' },
+        { id: 'dav-1', name: 'NAS', url: 'https://dav.example.com', username: 'me', passwordEncrypted: NEW, remotePath: '/pics/', publicDomain: 'https://cdn.example.com', publicUrlTemplate: '{domain}/{path}' },
       ],
       webdav: {
-        profiles: [{ id: 'bak-1', name: '坚果云', url: 'https://dav.example.com', username: 'me', password: '', passwordEncrypted: 'new-cipher', remotePath: '/PicNexus/' }],
+        profiles: [{ id: 'bak-1', name: '坚果云', url: 'https://dav.example.com', username: 'me', password: '', passwordEncrypted: NEW, remotePath: '/PicNexus/' }],
         activeId: 'bak-1',
       },
     }));
 
     await api.reloadFieldSecrets();
 
-    expect(api.formData.value.webdav.profiles[0].passwordEncrypted).toBe('new-cipher');
-    expect(api.formData.value.webdav_profiles[0].passwordEncrypted).toBe('new-cipher');
+    expect(api.formData.value.webdav.profiles[0].passwordEncrypted).toBe(NEW);
+    expect(api.formData.value.webdav_profiles[0].passwordEncrypted).toBe(NEW);
     expect(api.formData.value.webdav.activeId).toBe('bak-1');
+  });
+
+  /**
+   * 换备份密码时设置页是开着的，旁边就是这些输入框。整数组替换会把用户
+   * 正在填的内容冲回磁盘旧值——躲开了 loadSettings，却在这儿犯同一个错。
+   */
+  it('keeps unsaved profile edits when merging the rekeyed ciphertext', async () => {
+    const api = useSettingsForm();
+
+    mockState.configStoreGet.mockResolvedValue(createConfig({
+      webdav_profiles: [
+        { id: 'dav-1', name: 'NAS', url: 'https://dav.example.com', username: 'me', passwordEncrypted: 'PNXENC:old', remotePath: '/pics/', publicDomain: 'https://cdn.example.com', publicUrlTemplate: '{domain}/{path}' },
+      ],
+      webdav: {
+        profiles: [{ id: 'bak-1', name: '坚果云', url: 'https://dav.example.com', username: 'me', password: '', passwordEncrypted: 'PNXENC:old', remotePath: '/PicNexus/' }],
+        activeId: 'bak-1',
+      },
+    }));
+    await api.loadSettings();
+
+    // 用户正在改，还没保存
+    api.formData.value.webdav_profiles[0].publicDomain = 'https://new-cdn.example.com';
+    api.formData.value.webdav.profiles[0].name = '公司 NAS';
+    api.formData.value.webdav.profiles[0].url = 'https://nas.local/dav';
+    // 而且新建了一份磁盘上还没有的配置
+    api.formData.value.webdav.profiles.push({
+      id: 'bak-new', name: '新配置 1', url: '', username: '', password: '', remotePath: '/PicNexus/',
+    });
+
+    mockState.configStoreGet.mockResolvedValue(createConfig({
+      webdav_profiles: [
+        { id: 'dav-1', name: 'NAS', url: 'https://dav.example.com', username: 'me', passwordEncrypted: 'PNXENC:new', remotePath: '/pics/', publicDomain: 'https://cdn.example.com', publicUrlTemplate: '{domain}/{path}' },
+      ],
+      webdav: {
+        profiles: [{ id: 'bak-1', name: '坚果云', url: 'https://dav.example.com', username: 'me', password: '', passwordEncrypted: 'PNXENC:new', remotePath: '/PicNexus/' }],
+        activeId: 'bak-1',
+      },
+    }));
+
+    await api.reloadFieldSecrets();
+
+    // 密文换新了
+    expect(api.formData.value.webdav_profiles[0].passwordEncrypted).toBe('PNXENC:new');
+    expect(api.formData.value.webdav.profiles[0].passwordEncrypted).toBe('PNXENC:new');
+    // 没保存的编辑一个都不能丢
+    expect(api.formData.value.webdav_profiles[0].publicDomain).toBe('https://new-cdn.example.com');
+    expect(api.formData.value.webdav.profiles[0].name).toBe('公司 NAS');
+    expect(api.formData.value.webdav.profiles[0].url).toBe('https://nas.local/dav');
+    expect(api.formData.value.webdav.profiles).toHaveLength(2);
   });
 
   it('validates S3 field length, R2 account id, public domain, and valid configs', () => {
