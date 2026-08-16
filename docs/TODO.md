@@ -32,41 +32,6 @@
 
 ## 待验收
 
-### [~] WebDAV Digest 提示 + 明文 HTTP 逃生舱
-
-- **状态**：代码与门禁全部完成；**A 半场真机 3/3 通过（2026-08-16）**，B 半场待跑
-- **背景**：两条改动都已归档，见
-  [webdav-image-host-issues.md](./reference/troubleshooting/webdav-image-host-issues.md)
-  与 [fake-ip-dns-policy-distortion.md](./reference/troubleshooting/fake-ip-dns-policy-distortion.md#逃生舱已实现)
-
-#### A. Digest 提示 — ✅ 3/3 通过（2026-08-16）
-
-```bash
-node scripts/webdav-auth-fixture.mjs   # 起三个端口，Ctrl+C 停
-```
-
-三个地址都填同一套配置：用户名密码随便填，**公开访问域名与 WebDAV 地址填同一个**。
-逐个点「测试连接」：
-
-- [x] `http://127.0.0.1:5011`（只给 Digest）→ 提示「服务端要求 Digest 认证，PicNexus 暂不支持…」✅
-- [x] `http://127.0.0.1:5012`（只给 Basic）→ 提示「认证失败，请检查用户名和密码」，无 Digest 字样 ✅
-- [x] `http://127.0.0.1:5013`（两条同名 header，Digest 在前）→ 同 5012 ✅
-      这条最关键——只看第一条 header 的实现会在这里把「两种都支持」误判成「只支持 Digest」
-
-> 5011/5013 用的是 `127.0.0.1`，走回环分支，不受 fake-ip 影响，所以两项验收互不干扰。
-> 后两条是**防改过头**的反向判据：密码真填错的人不该看到无关的 Digest 噪音。
-
-#### B. 明文 HTTP 逃生舱（需要 TUN + fake-ip 开着）
-
-- [ ] WebDAV 图床填 `http://<NAS 主机名>:端口` → 测试连接 →
-      **判据**：弹出「明文传输风险确认」，而不是只报一句错
-- [ ] 点「我已了解并继续」→ **判据**：自动重试并连接成功
-- [ ] 重启应用 → 再测 → **判据**：不再弹窗，直接成功（标记已持久化）
-- [ ] 把地址改成别的主机 → 再测 → **判据**：**又弹一次**（确认随地址作废，这也是唯一的撤销路径）
-- [ ] 反向判据：地址填 `http://example.com/dav`（确证公网）→ **判据**：依然被拒，
-      确认过的标记不能让公网明文放行
-- [ ] 顶部「全部测试」批量跑 → **判据**：撞上 fake-ip 时**不弹框**（批量下逐个弹＝连环阻塞）
-
 ### [~] 敏感字段密码框统一「密文常驻、明文按需」
 
 - **来源**：2026-08-14 WebDAV 验收时用户反馈「已保存的密码再打开是空的，体验和别处不一样」
@@ -340,6 +305,11 @@ Cookie 2 处 / S3 2 处（展开 12 个输入框）→ 抽 `useWebDAVProfileEdit
 ---
 
 ## 已完成
+
+### [x] WebDAV Digest 提示 + 明文 HTTP 逃生舱
+
+真机验收 A 半场 3/3、B 半场 6/6 全部通过（2026-08-16）。B 半场借 `pinggy.io` 隧道模拟「填主机名连得通」场景。
+详见 [webdav-digest-and-lan-http-escape-hatch-acceptance.md](./audits/webdav-digest-and-lan-http-escape-hatch-acceptance.md)。
 
 ### [x] WebDAV 401 提示区分 Digest 与密码错
 

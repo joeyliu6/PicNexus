@@ -92,7 +92,12 @@ IP 字面量始终不受影响，而群晖等 NAS 引导用户填的默认就是
 
 详细排查见 [webdav-image-host-issues.md](./webdav-image-host-issues.md#局域网地址被拒绝)。
 
+> ✅ **真机验收通过（2026-08-16）**：弹窗触发、确认后连接成功、重启后持久化、改地址即作废、
+> 公网地址反向判据、批量测试不弹模态框——6 条判据全过。环境与结果见
+> [webdav-digest-and-lan-http-escape-hatch-acceptance.md](../../audits/webdav-digest-and-lan-http-escape-hatch-acceptance.md)。
+
 ## 相关文档
 
 - 链接检测侧的对应处理：[link-check-flow.md 出站策略校验小节](../../flows/link-check-flow.md#出站策略校验只读探测-vs-下载重传)
 - WebDAV 图床排查：[webdav-image-host-issues.md](./webdav-image-host-issues.md)
+- 真机验收记录：[webdav-digest-and-lan-http-escape-hatch-acceptance.md](../../audits/webdav-digest-and-lan-http-escape-hatch-acceptance.md)
