@@ -228,6 +228,75 @@ describe('WebDAVConfigCollapsible 备份密码（密文常驻、明文按需）'
   });
 });
 
+/**
+ * 密码框在切 tab 时不重建（外层 v-if 一直为真），所以「属于某个 profile 的状态」
+ * 全都得自己按 id 隔离：揭示出的明文、编辑中的草稿、异步提交的目标，一个都不能漏。
+ */
+describe('WebDAVConfigCollapsible 备份密码不跨 profile', () => {
+  function twoProfiles() {
+    return mountConfig({
+      profiles: [
+        makeProfile({ passwordEncrypted: 'cipher(A 的密码)' }),
+        makeProfile({ id: 'dav-2', name: '公司', passwordEncrypted: 'cipher(B 的密码)' }),
+      ],
+      activeId: 'dav-1',
+    });
+  }
+
+  it('看过 A 的明文再切到 B，明文不会留在 B 的框里', async () => {
+    const { wrapper } = twoProfiles();
+
+    await passwordField(wrapper).get('button').trigger('click');
+    await nextTick();
+    expect(passwordField(wrapper).get('input').element.value).toBe('A 的密码');
+
+    await wrapper.findAll('.tab-btn')[1].trigger('click');
+    await nextTick();
+
+    const field = passwordField(wrapper);
+    expect(field.get('input').element.value).toBe('');
+    // 展示态是 readonly 的；回到可编辑空框才说明 conceal 真的做掉了
+    expect(field.get('input').attributes('readonly')).toBeUndefined();
+  });
+
+  it('在 A 敲了一半的草稿不会跟着切到 B', async () => {
+    const { wrapper } = twoProfiles();
+
+    await passwordField(wrapper).get('input').setValue('还没敲完');
+    await wrapper.findAll('.tab-btn')[1].trigger('click');
+    await nextTick();
+
+    expect(passwordField(wrapper).props('modelValue')).toBe('');
+  });
+
+  /**
+   * 真机上的触发顺序：blur 早于 click。加密走 IPC，密文算完时 activeId 已经指向 B——
+   * 按 activeId 写的旧实现会把 A 的新密码存进 B，而 A 的改动凭空消失。
+   */
+  it('A 改完密码立刻切到 B，密文仍然落在 A 头上', async () => {
+    let finishEncrypt!: (cipher: string) => void;
+    vi.mocked(WebDAVClient.encryptPassword).mockImplementationOnce(
+      () => new Promise<string>(resolve => { finishEncrypt = resolve; })
+    );
+
+    const { wrapper, config } = twoProfiles();
+
+    await passwordField(wrapper).get('input').setValue('A 的新密码');
+    await passwordField(wrapper).get('input').trigger('blur');
+
+    // 加密还没回来，用户已经切走了
+    await wrapper.findAll('.tab-btn')[1].trigger('click');
+    expect(config.value.activeId).toBe('dav-2');
+
+    finishEncrypt('cipher(A 的新密码)');
+    await nextTick();
+    await nextTick();
+
+    expect(config.value.profiles[0].passwordEncrypted).toBe('cipher(A 的新密码)');
+    expect(config.value.profiles[1].passwordEncrypted).toBe('cipher(B 的密码)');
+  });
+});
+
 // 表单其余部分：跟着密码一起被 useWebDAVProfileEditor 重写过，一并钉住
 describe('WebDAVConfigCollapsible 表单与配置管理', () => {
   /** InputText 在 DOM 里的顺序：名称、URL、用户名、密码、远程路径 */

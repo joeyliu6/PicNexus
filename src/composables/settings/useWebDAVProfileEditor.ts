@@ -34,8 +34,8 @@ export interface WebDAVProfileEditor {
   statusClass: ComputedRef<string>;
   securityHint: ComputedRef<string>;
   updateActiveProfileField: (field: keyof WebDAVProfile, value: string) => void;
-  /** 写密文并清掉残留明文，两件事必须在同一次更新里完成 */
-  setActivePassword: (passwordEncrypted: string) => void;
+  /** 写密文并清掉残留明文，两件事必须在同一次更新里完成。返回目标 profile 还在不在 */
+  setProfilePassword: (profileId: string, passwordEncrypted: string) => boolean;
   switchProfile: (id: string) => void;
   addProfile: () => void;
   deleteProfile: (id: string) => void;
@@ -108,21 +108,28 @@ export function useWebDAVProfileEditor(
   }
 
   /**
-   * 写入当前 profile 的密码密文，同时清掉可能残留的明文
+   * 写入**指定** profile 的密码密文，同时清掉可能残留的明文
    *
-   * Why 必须一起清：`encryptBackupProfiles` 保存时只要看到 `password` 非空就会拿它
+   * ⚠️ Why 收 `profileId` 而不是直接用 `activeProfile`：加密走 IPC，是异步的；
+   * 而 blur 早于 click 触发。「在配置 A 改完密码，顺手点到配置 B 的 tab」这个再自然
+   * 不过的动作里，密文算完时 activeId 已经指向 B——写给谁全看谁先跑完。
+   * 目标由调用方在**开始编辑的那一刻**定死，这条竞态就从结构上不存在了。
+   *
+   * Why 必须一起清明文：`encryptBackupProfiles` 保存时只要看到 `password` 非空就会拿它
    * 重新加密。老配置里遗留的明文如果不清掉，就会在保存时把刚写进去的新密文顶掉——
    * 用户改了密码，存下来的还是旧的。
    *
    * Why 不复用 updateActiveProfileField：那个一次只能改一个字段，分两次调用要依赖
    * 父组件同步回流 props，不可靠。
+   *
+   * @returns 目标 profile 还在不在——加密期间被删掉的话什么也不写
    */
-  function setActivePassword(passwordEncrypted: string): void {
-    if (!activeProfile.value) return;
+  function setProfilePassword(profileId: string, passwordEncrypted: string): boolean {
     const config = options.config();
+    if (!config.profiles.some(p => p.id === profileId)) return false;
 
     const updatedProfiles = config.profiles.map(p => {
-      if (p.id !== config.activeId) return p;
+      if (p.id !== profileId) return p;
 
       const updated: WebDAVProfile = { ...p, password: '', passwordEncrypted };
       // 密码属于连接参数，改了就作废上次的验证结果
@@ -133,6 +140,7 @@ export function useWebDAVProfileEditor(
     });
 
     options.onUpdate({ ...config, profiles: updatedProfiles });
+    return true;
   }
 
   function switchProfile(id: string): void {
@@ -183,7 +191,7 @@ export function useWebDAVProfileEditor(
     statusClass,
     securityHint,
     updateActiveProfileField,
-    setActivePassword,
+    setProfilePassword,
     switchProfile,
     addProfile,
     deleteProfile,

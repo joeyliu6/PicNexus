@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
+import { computed, ref, watch, onMounted } from 'vue';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
-import type { WebDAVConfig } from '../../../config/types';
+import type { WebDAVConfig, WebDAVProfile } from '../../../config/types';
 import { useConfirm } from '../../../composables/useConfirm';
 import { useWebDAVProfileEditor } from '../../../composables/settings/useWebDAVProfileEditor';
 import { useSensitiveDraft } from '../../../composables/settings/useSensitiveDraft';
@@ -36,7 +36,7 @@ const {
   statusClass,
   securityHint,
   updateActiveProfileField,
-  setActivePassword,
+  setProfilePassword,
   switchProfile: handleSwitchProfile,
   addProfile: handleAddProfile,
   deleteProfile: handleDeleteProfile,
@@ -57,13 +57,38 @@ const {
  * 老配置里遗留的明文（还没被重新保存过的）仍然认作"已保存"，揭示时直接返回，
  * 用户下次改密码时由 setActivePassword 一并清掉。
  */
-const PASSWORD_KEY = 'backup-webdav-password';
+/**
+ * ⚠️ 草稿 key 必须带 profile id，不能是一个全局常量
+ *
+ * 这个密码框在切 tab 时**不重建**（外层 `v-if="activeProfile"` 一直为真），
+ * key 固定的话草稿和「取出来的原值」都会原样跟着切过去。两条后果：
+ *
+ * 1. 在配置 A 敲了一半的密码，切到 B 就显示在 B 的框里，改一个字符失焦就存进 B
+ * 2. 更隐蔽的是提交本身是异步的（加密走 IPC），而 blur 早于 click 触发——
+ *    「A 改完密码顺手点 B 的 tab」时，密文算完 activeId 已经是 B 了
+ *
+ * key 里带上 id，草稿天然按 profile 隔离，提交目标也钉死在「当初开始编辑的那个」上。
+ */
+const PASSWORD_KEY_PREFIX = 'backup-webdav-password:';
+
+const passwordKey = computed(() => `${PASSWORD_KEY_PREFIX}${activeProfile.value?.id ?? ''}`);
+
+function profileIdOfKey(key: string): string {
+  return key.slice(PASSWORD_KEY_PREFIX.length);
+}
+
+function profileOfKey(key: string): WebDAVProfile | null {
+  return props.modelValue.profiles.find(p => p.id === profileIdOfKey(key)) ?? null;
+}
 
 const passwordSecret = useSensitiveDraft({
-  hasStored: () => !!(activeProfile.value?.passwordEncrypted || activeProfile.value?.password),
+  hasStored: (key) => {
+    const profile = profileOfKey(key);
+    return !!(profile?.passwordEncrypted || profile?.password);
+  },
 
-  reveal: async () => {
-    const profile = activeProfile.value;
+  reveal: async (key) => {
+    const profile = profileOfKey(key);
     if (!profile) return '';
     if (!profile.passwordEncrypted) return profile.password || '';
 
@@ -74,8 +99,11 @@ const passwordSecret = useSensitiveDraft({
     return plaintext;
   },
 
-  commit: async (_key, draft) => {
-    setActivePassword(await WebDAVClient.encryptPassword(draft));
+  commit: async (key, draft) => {
+    // 先记下目标再 await：加密期间 activeId 可能已经被切走
+    const profileId = profileIdOfKey(key);
+    const passwordEncrypted = await WebDAVClient.encryptPassword(draft);
+    if (!setProfilePassword(profileId, passwordEncrypted)) return;
     emit('save');
   },
 
@@ -178,12 +206,19 @@ function handleTest() {
             <div class="form-field">
               <label>
                 密码
-                <span v-if="passwordSecret.hasStored(PASSWORD_KEY)" class="saved-chip">
-                  <i class="pi pi-check" aria-hidden="true"></i>{{ passwordSecret.chipLabel(PASSWORD_KEY) }}
+                <span v-if="passwordSecret.hasStored(passwordKey)" class="saved-chip">
+                  <i class="pi pi-check" aria-hidden="true"></i>{{ passwordSecret.chipLabel(passwordKey) }}
                 </span>
               </label>
+              <!--
+                :key 是必须的。点过眼睛之后明文存在 SensitiveField 自己的 storedPlaintext 里，
+                那是组件内部状态，父组件换 profile 冲不掉它；而只读展示态那个框没绑 blur，
+                切 tab 也不会触发 conceal()。不换 key 的话，配置 A 的明文会原样显示在配置 B 的
+                密码框里，15 秒后才消失。换 key 即重建，onBeforeUnmount 的 conceal 顺带做掉清理。
+              -->
               <SensitiveField
-                v-bind="passwordSecret.bindingsFor(PASSWORD_KEY, '输入 WebDAV 密码')"
+                :key="activeProfile.id"
+                v-bind="passwordSecret.bindingsFor(passwordKey, '输入 WebDAV 密码')"
               />
             </div>
           </div>

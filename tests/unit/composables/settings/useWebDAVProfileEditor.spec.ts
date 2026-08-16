@@ -180,46 +180,63 @@ describe('useWebDAVProfileEditor · 编辑动作', () => {
     expect(config.value).toBe(before);
   });
 
-  it('setActivePassword 写密文的同时清掉残留明文', () => {
+  it('setProfilePassword 写密文的同时清掉残留明文', () => {
     const { editor, config } = setup({
       profiles: [makeProfile({ password: '老明文', passwordEncrypted: 'cipher(老明文)' })],
     });
 
-    editor.setActivePassword('cipher(新密码)');
+    editor.setProfilePassword('dav-1', 'cipher(新密码)');
 
     expect(config.value.profiles[0].passwordEncrypted).toBe('cipher(新密码)');
     // 不清的话，保存时 encryptBackupProfiles 会拿残留明文重新加密，把新密文顶掉
     expect(config.value.profiles[0].password).toBe('');
   });
 
-  it('setActivePassword 作废「已连接」状态', () => {
+  it('setProfilePassword 作废「已连接」状态', () => {
     const { editor, config } = setup({
       profiles: [makeProfile({ connectionStatus: 'success' })],
     });
 
-    editor.setActivePassword('cipher(新密码)');
+    editor.setProfilePassword('dav-1', 'cipher(新密码)');
 
     expect(config.value.profiles[0].connectionStatus).toBeUndefined();
   });
 
-  it('setActivePassword 只动当前 profile', () => {
+  it('setProfilePassword 只动指定的那一个 profile', () => {
     const { editor, config } = setup({
       profiles: [makeProfile(), makeProfile({ id: 'dav-2', password: '别人的' })],
       activeId: 'dav-1',
     });
 
-    editor.setActivePassword('cipher(新密码)');
+    editor.setProfilePassword('dav-1', 'cipher(新密码)');
 
     expect(config.value.profiles[1].password).toBe('别人的');
     expect(config.value.profiles[1].passwordEncrypted).toBeUndefined();
   });
 
-  it('没有当前 profile 时 setActivePassword 是空操作', () => {
+  /**
+   * 这条是本函数改收 profileId 的全部理由：加密走 IPC 是异步的，而 blur 早于 click，
+   * 「A 改完密码顺手点 B 的 tab」时密文算完 activeId 已经指向 B。
+   * 按 activeId 写的旧实现会把 A 的新密码存进 B。
+   */
+  it('setProfilePassword 认参数不认 activeId —— activeId 已切走也照样写给原目标', () => {
+    const { editor, config } = setup({
+      profiles: [makeProfile(), makeProfile({ id: 'dav-2', password: '别人的' })],
+      activeId: 'dav-2',   // 用户已经切到 dav-2 了
+    });
+
+    editor.setProfilePassword('dav-1', 'cipher(A 的新密码)');
+
+    expect(config.value.profiles[0].passwordEncrypted).toBe('cipher(A 的新密码)');
+    expect(config.value.profiles[1].passwordEncrypted).toBeUndefined();
+    expect(config.value.profiles[1].password).toBe('别人的');
+  });
+
+  it('目标 profile 不存在时 setProfilePassword 是空操作并返回 false', () => {
     const { editor, config } = setup({ profiles: [], activeId: null });
     const before = config.value;
 
-    editor.setActivePassword('cipher(x)');
-
+    expect(editor.setProfilePassword('dav-1', 'cipher(x)')).toBe(false);
     expect(config.value).toBe(before);
   });
 
