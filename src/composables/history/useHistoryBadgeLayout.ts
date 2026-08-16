@@ -8,19 +8,23 @@ import { ref, onUnmounted, type Ref } from 'vue';
 import type { HistoryItem } from '../../config/types';
 import { getServiceDisplayName } from '../../constants/serviceNames';
 import { getSuccessfulServices } from '../../utils/formatters';
+import { COMPACT_LABEL_WIDTH, estimateServiceNameWidth } from '../../utils/serviceNameFit';
 
 const MORE_BTN_WIDTH = 26;
 const BADGE_GAP = 4;
 const BADGE_PADDING = 16;
 const BADGE_ICON_WITH_GAP = 18; // icon(14) + gap(4)
-const CHAR_WIDTH_ASCII = 6;
-const CHAR_WIDTH_CJK = 11;
 
+/**
+ * 文字区封顶到 `COMPACT_LABEL_WIDTH`，与 history-table.css 的
+ * `.badge-label { max-width: 96px }` 同源，不再各写一个数字。
+ *
+ * Why 必须封顶：用户自定义的私有存储 profile 名没有长度限制，一个 24 字的中文名
+ * 会被逐字估成 264px。CSS 截断后徽章实际最宽只有 96px 的文字区，估算不封顶就会
+ * 把一个徽章当成三个宽，导致整行只显示 1 个徽章 + 一个虚高的 +N。
+ */
 function estimateBadgeWidth(name: string): number {
-  let textWidth = 0;
-  for (const char of name) {
-    textWidth += char.charCodeAt(0) > 0x7F ? CHAR_WIDTH_CJK : CHAR_WIDTH_ASCII;
-  }
+  const textWidth = Math.min(estimateServiceNameWidth(name), COMPACT_LABEL_WIDTH);
   return BADGE_PADDING + BADGE_ICON_WITH_GAP + textWidth;
 }
 
