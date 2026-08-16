@@ -109,6 +109,29 @@ flowchart TD
 
 `tray-menu` 是独立的 Vite 入口(`tray-menu.html` + `src/tray-menu.ts`)。它直接读取配置生成菜单,根据 `enabledServices` / `availableServices` / 图床配置状态展示 `当前图床：…` 二级勾选菜单；服务切换后保存配置并广播 `config-updated`。
 
+### 缓存契约(跨窗口读配置前必看)
+
+主窗口和 `tray-menu` 是**两个独立 webview**,各有一份 `configStore` / `syncStatusStore` 单例和各自的 `CacheStore`。而且**两边都会写配置**(托盘能改 `enabledServices` 和主题)。任何一方写入只刷新自己那份缓存,**对方的缓存就此陈旧**。
+
+所以这是个**双向**问题,两个方向的症状不同:
+
+| 方向 | 症状 |
+|------|------|
+| 主窗口改 → 托盘不知道 | 托盘图床名单/名称/勾选停在**开机快照**(托盘常驻不销毁,缓存能活一整个进程) |
+| 托盘改 → 主窗口不知道 | 从托盘点勾选/切主题,**主界面纹丝不动** |
+
+统一规则:**凡是「因为配置可能被别的窗口改了而重新读」,一律走 [`readFreshConfig()`](../../src/store/instances.ts),不要直接 `configStore.get()`。** 它先 `invalidateCache()` 再读盘。组件自己写完再读不需要它——写入路径已经同步刷新过本窗口缓存。
+
+现有调用点:`TrayMenuWindow.loadConfig` / `App.vue`(主题) / `UploadView`(压缩配置与 profile) / `useServiceSelector.loadServiceButtonStates`(图床勾选) / `useGlobalShortcut.loadConfig`。
+
+健康状态另有一层:`useServiceHealth` 的 `autoLoadPromise` 是永久 memoize,托盘要拿最新检测结果必须 `loadHealthStatus({ force: true })`(它会一并作废 `syncStatusStore` 缓存)。托盘侧配置 + 健康状态由 `refreshTrayState()` 串起来,`onMounted` / `config-updated` / `tray-menu-opened` 三个时机共用。
+
+⚠️ 别拿 `Store.clear()` 当刷新用——它会**连磁盘文件一起清空**。只作废内存副本的是 `invalidateCache()`([`src/store/MutexStore.ts`](../../src/store/MutexStore.ts))。
+
+⚠️ `readFreshConfig(defaultValue)` 的参数不只是兜底返回值:传了它,Store 才会在文件损坏时走恢复路径重建配置(`useGlobalShortcut` 依赖这个行为)。
+
+单测注意:`trayMenu.spec.ts` / `useGlobalShortcut.spec.ts` 把 store 整个 mock 掉了(`get` 每次都回最新值),天然测不出缓存陈旧,所以那里断言的是「有没有走 `invalidateCache` / `readFreshConfig`」这个契约;真实缓存行为由 `tests/unit/services/store.spec.ts` 的跨实例用例覆盖。
+
 ### 面板定位契约
 
 托盘菜单不是系统原生菜单,定位全靠自己算。几何计算集中在 [`src/services/trayMenuLayout.ts`](../../src/services/trayMenuLayout.ts)(纯函数,单测见 `tests/unit/services/trayMenuLayout.spec.ts`),`TrayMenuWindow.vue` 只负责取数据和贴样式。
@@ -262,6 +285,9 @@ flowchart LR
 |------|---------|-------------|
 | 点 × 直接退出而不是隐藏 | `CloseToTrayState` 被设为 `false` | 图1 CheckCloseToTray |
 | 托盘菜单点击无反应 | `tray-menu` Webview 未创建/未显示,或前端没 listen `navigate-to` / `tray-action` | 图2 W/V/F1/F2 |
+| 托盘图床名单/名称/勾选与主界面对不上,重启才同步 | 托盘 webview 那份 Store 内存缓存没作废,`loadConfig` 空转读到启动快照 | 图2 缓存契约 |
+| 从托盘点勾选/切主题,主界面没反应 | 反方向的同一个坑:托盘写盘只刷新托盘自己的缓存,主窗口的消费点没走 `readFreshConfig` | 图2 缓存契约 |
+| 托盘图床状态圆点不跟随可用性检测结果 | 同上,外加 `useServiceHealth` 的 `autoLoadPromise` 永久 memoize;需要 `loadHealthStatus({ force: true })` | 图2 缓存契约 |
 | 展开「当前图床」把一级菜单顶上去 / 收起后回不到原位 | 二级面板高度被算进了 `clampAnchor`,或夹紧结果被回写进 `rawAnchor` | 图2 面板定位契约 |
 | 二级面板底部被任务栏截断 | `resolveFlyoutTop` 未按 `windowHeight` 上移,或 `.flyout-panel` 少了 `overflow: hidden auto` | 图2 面板定位契约 |
 | 启动时窗口一闪而过 | `visible:true` 配置下 `show()` 时机错乱,应保持 `visible:false` + 代码控制显示 | 图1 Visible |
