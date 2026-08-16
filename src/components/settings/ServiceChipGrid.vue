@@ -4,6 +4,10 @@
 
 import { computed } from 'vue';
 import type { ServiceHealthStatus } from '../../types/serviceHealth';
+import { serviceNameTooltip } from '../../utils/serviceNameFit';
+
+/** 与下方 `.toggle-label { max-width: 120px }` 保持一致 */
+const CHIP_LABEL_WIDTH = 120;
 
 const props = defineProps<{
   /** 服务 ID 列表 */
@@ -39,12 +43,20 @@ const emit = defineEmits<{
   chipClick: [service: string];
 }>();
 
-/** 生成芯片 tooltip */
+/**
+ * 生成芯片 tooltip
+ *
+ * 名字只在**放不下** 120px 标签时才前置：短名字芯片上已经完整显示，
+ * 再重复一遍是双重反馈。不另挂第二个 tooltip，避免父子气泡同时弹出。
+ */
 function getChipTooltip(svc: string): string | null {
-  if (props.refreshingServiceIds.has(svc)) return '正在检测...';
-  const status = props.healthStatusMap[svc];
-  if (status === 'unconfigured') return '未配置，点击跳转到配置';
-  return props.healthTooltipMap[svc] ?? null;
+  const name = props.serviceNames[svc] ?? svc;
+  const detail = props.refreshingServiceIds.has(svc)
+    ? '正在检测...'
+    : props.healthStatusMap[svc] === 'unconfigured'
+      ? '未配置，点击跳转到配置'
+      : props.healthTooltipMap[svc] ?? null;
+  return serviceNameTooltip(name, detail, CHIP_LABEL_WIDTH) ?? null;
 }
 
 /** 判断服务是否已启用 */
@@ -178,8 +190,13 @@ const serviceList = computed(() => props.services);
   transition: all var(--duration-normal);
 }
 
+/* 120px 见 docs/design/tokens.md#service-name-truncation。
+   position: relative 供刷新态 shimmer 的 ::before 定位，不能删。 */
 .toggle-chip .toggle-label {
   display: inline-block;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: var(--text-xs);
   color: var(--text-primary);
   position: relative;

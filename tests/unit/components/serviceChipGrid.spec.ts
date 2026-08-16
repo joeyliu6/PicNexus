@@ -42,6 +42,7 @@ describe('ServiceChipGrid', () => {
     expect(chips[1].text()).toContain('JD');
   });
 
+  // 短名字芯片上已经完整显示，tooltip 不重复它
   it('uses the sanitized health tooltip on error chips', () => {
     const wrapper = mountWithDefaults(ServiceChipGrid, {
       props: {
@@ -66,6 +67,38 @@ describe('ServiceChipGrid', () => {
     });
 
     expect(wrapper.get('.toggle-chip').attributes('data-tooltip')).toBe('Cookie 无效或已过期');
+  });
+
+  // 标签有 120px 上限，放不下的长 profile 名必须能从 tooltip 里读到全名
+  function mountLongNameChip(healthTooltipMap: Record<string, string>) {
+    return mountWithDefaults(ServiceChipGrid, {
+      props: {
+        services: ['webdav:abc123'],
+        groupTitle: 'Private Storage',
+        healthStatusMap: { 'webdav:abc123': 'verified' },
+        healthTooltipMap,
+        availableServices: ['webdav:abc123'],
+        serviceNames: { 'webdav:abc123': '我家里那台群晖 NAS 上的 WebDAV 图床' },
+        isBatchTesting: false,
+        refreshingServiceIds: new Set<string>(),
+        batchTestedServices: new Set<string>(),
+        batchDoneServices: new Set<string>(),
+        activeFilter: null,
+      },
+    });
+  }
+
+  it('prefixes the full name when it is too long for the chip label', () => {
+    const wrapper = mountLongNameChip({ 'webdav:abc123': '可用 · 4分钟前' });
+
+    expect(wrapper.get('.toggle-chip').attributes('data-tooltip'))
+      .toBe('我家里那台群晖 NAS 上的 WebDAV 图床 · 可用 · 4分钟前');
+  });
+
+  it('falls back to the bare long name when there is no health detail', () => {
+    const wrapper = mountLongNameChip({});
+
+    expect(wrapper.get('.toggle-chip').attributes('data-tooltip')).toBe('我家里那台群晖 NAS 上的 WebDAV 图床');
   });
 
   it('renders an info tooltip in the group header when provided', () => {
