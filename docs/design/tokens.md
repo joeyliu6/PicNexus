@@ -230,6 +230,46 @@ transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
 ---
 
+## Service Name Truncation
+
+图床显示名里，多实例私有存储（`custom_s3:` / `webdav:`）的名字是**用户自填、无长度限制**的，`WebDAV (原始ID)` 这类兜底串也很长。所有展示图床名的地方必须截断，`max-width` 按容器分三档：
+
+| 档位 | 值 | 适用场景 | 典型 class |
+|------|-----|---------|-----------|
+| 紧凑 | 96px | 徽章、筛选 chip、迁移 chip、备份芯片 | `.badge-label`、`.chip-label`、`.m-svc-chip-label`、`.backup-chip` |
+| 中等 | 120px | 设置页服务芯片、带序号前缀的药丸 | `.toggle-label`、`.pill-pref-item` |
+| 宽松 | 160px | 下拉菜单项、popover 列表项 | `.sdi-name`、`.mf-sdi-name`、`.service-popover-label` |
+
+配套约定：
+
+- 截断四件套：`max-width` + `overflow: hidden` + `text-overflow: ellipsis` + `white-space: nowrap`
+- **flex 容器上的 ellipsis 对匿名文本节点不生效** —— 名字必须包在自己的 `<span>` 里，父级 flex 容器加 `min-width: 0`
+- 下拉菜单容器统一 `max-width: 280px`，否则长名字会把菜单撑出屏幕
+- 宽度用裸 px 是允许的（见下方 Spacing Scale 的破例说明，`max-*` 不受 token 约束）；每处写一行注释指回本节
+
+### tooltip 怎么给
+
+统一走 [`src/utils/serviceNameFit.ts`](../../src/utils/serviceNameFit.ts) 的 `serviceNameTooltip(name, detail?, maxWidth?)`，**不要自己拼**：
+
+| 情况 | 结果 |
+|------|------|
+| 名字放得下 + 有原文案 | 只给原文案（`点击复制链接`）——标签已完整显示，重复一遍是双重反馈 |
+| 名字放得下 + 无原文案 | `undefined`，不显示 tooltip |
+| 名字放不下 + 有原文案 | `全名 · 原文案` |
+| 名字放不下 + 无原文案 | 就是全名 |
+
+「放不放得下」按字符宽度估算（CJK 11px / ASCII 6px），不做 DOM 测量 —— 这些标签大量存在于 VirtualScroller / DataTable 的复用节点里，`ResizeObserver` 会随节点回收疯狂 churn，而 PrimeVue tooltip 在 `mouseenter` 当场就要拿到最终文案，等不到异步测量。所有内置图床名都落在 96px 以内，越线的只有用户自定义的 profile 名 —— 正好就是需要带全名的那一类。
+
+其余约束：
+
+- **不要**父子各挂一个 tooltip（PrimeVue 绑 `mouseenter`，父子会同时弹两个气泡），把文案合并进同一个
+- 传 `maxWidth` 要与该处 CSS 的 `max-width` 一致（设置页芯片 120、下拉项 160）
+- 历史表格额外注意：`.badge-label` 的 96px 与 `COMPACT_LABEL_WIDTH` 同源，`useHistoryBadgeLayout` 用它给 `+N` 的宽度估算封顶，走散了溢出计数会按未截断宽度算
+
+图标侧对应的兜底见 `src/components/common/ServiceLogo.vue`（内置 SVG → 私有存储按类型退到 PrimeIcons → `pi-cloud`）。
+
+---
+
 ## Z-index Scale
 
 Z-index 分两类管理：**全局层级必须用变量**；**同一堆叠上下文内的相对整数**（≤ 20）作为 stylelint 例外，可直接硬编码。

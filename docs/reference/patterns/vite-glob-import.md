@@ -28,57 +28,63 @@ src/
 │           ├── bilibili.svg
 │           └── ...
 └── utils/
-    └── serviceIcons.ts
+    └── icons.ts
 ```
 
 ### 实现代码
 
 ```typescript
-// src/utils/serviceIcons.ts
-import type { ServiceType } from '../config/types';
-
+// src/utils/icons.ts
 /**
  * 使用 Vite 的 import.meta.glob 导入所有服务图标 SVG
  * eager: true 表示同步加载，query: '?raw' 获取原始字符串内容
  */
-const iconModules = import.meta.glob<string>(
+const serviceModules = import.meta.glob<string>(
   '../assets/icons/services/*.svg',
   { eager: true, query: '?raw', import: 'default' }
 );
 
-// 构建映射表
-const serviceIconMap: Partial<Record<ServiceType, string>> = {};
+// 构建映射表：key = 文件名（不含扩展名）
+const serviceIconMap = createIconLoader(serviceModules);
 
-for (const [path, content] of Object.entries(iconModules)) {
-  // 从路径中提取文件名（不含扩展名）
-  const match = path.match(/\/([^/]+)\.svg$/);
-  if (match) {
-    const name = match[1] as ServiceType;
-    serviceIconMap[name] = content;
-  }
-}
-
-// 导出查询函数
-export function getServiceIcon(service: ServiceType): string | undefined {
-  return serviceIconMap[service];
-}
-
-export function hasServiceIcon(service: ServiceType): boolean {
-  return service in serviceIconMap;
+export function getServiceIcon(service: string): string | undefined {
+  return serviceIconMap.get(service);
 }
 ```
 
+### 命中不到时的兜底
+
+glob 的 key 就是文件名，所以**只有内置服务能命中**。多实例私有存储用的是 `custom_s3:<profileId>` / `webdav:<profileId>` 复合 ID，每个 profile 不可能各自带 logo，因此按类型退到 PrimeIcons 字体图标：
+
+```typescript
+export type ServiceLogoSource =
+  | { kind: 'svg'; svg: string }
+  | { kind: 'icon'; className: string };
+
+export function resolveServiceLogo(serviceId: string): ServiceLogoSource {
+  const svg = serviceIconMap.get(serviceId);
+  if (svg) return { kind: 'svg', svg };
+  if (isCustomS3Id(serviceId)) return { kind: 'icon', className: 'pi pi-database' };
+  if (isWebDAVId(serviceId)) return { kind: 'icon', className: 'pi pi-server' };
+  return { kind: 'icon', className: 'pi pi-cloud' };
+}
+```
+
+日后若补了 `custom_s3.svg` / `webdav.svg`，SVG 分支会自动优先命中，消费方不用改。
+
 ### 使用方式
+
+不要在页面里直接 `v-html="getServiceIcon(x)"` —— 查不到时会渲染成一个空占位方块。统一走共享组件 [src/components/common/ServiceLogo.vue](../../../src/components/common/ServiceLogo.vue)，尺寸与颜色交给父级 class（单根组件，class 会 fallthrough 到根元素）：
 
 ```vue
 <template>
-  <div class="icon" v-if="getServiceIcon(service)" v-html="getServiceIcon(service)"></div>
-  <div class="icon fallback" v-else>{{ serviceName[0] }}</div>
+  <ServiceLogo :service-id="serviceId" class="badge-icon" />
 </template>
 
-<script setup lang="ts">
-import { getServiceIcon } from '../utils/serviceIcons';
-</script>
+<style scoped>
+/* 字体图标靠 font-size 撑，SVG 靠 width/height，两者都写上才能对齐 */
+.badge-icon { width: 14px; height: 14px; font-size: var(--text-xs); color: var(--text-muted); }
+</style>
 ```
 
 ## 参数说明
@@ -100,5 +106,7 @@ import { getServiceIcon } from '../utils/serviceIcons';
 
 ## 相关文件
 
-- [src/utils/serviceIcons.ts](../../src/utils/serviceIcons.ts) - 实际实现
-- [src/assets/icons/services/](../../src/assets/icons/services/) - SVG 图标目录
+- [src/utils/icons.ts](../../../src/utils/icons.ts) - 实际实现
+- [src/components/common/ServiceLogo.vue](../../../src/components/common/ServiceLogo.vue) - 统一渲染入口（含兜底）
+- [src/assets/icons/services/](../../../src/assets/icons/services/) - SVG 图标目录
+- [docs/design/tokens.md](../../design/tokens.md#service-name-truncation) - 图床名截断宽度约定
