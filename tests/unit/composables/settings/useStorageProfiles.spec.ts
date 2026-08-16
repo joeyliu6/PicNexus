@@ -1,5 +1,6 @@
 // useStorageProfiles 测试
-// 覆盖：默认命名不撞名、删除前置校验（至少保留一个图床）、编辑器绑定清理、按 id 就地更新
+// 覆盖：默认命名不撞名、新建即写入可用列表、删除前置校验（至少保留一个图床）、
+//      编辑器绑定清理、按 id 就地更新
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ref } from 'vue';
@@ -70,6 +71,42 @@ describe('新建 profile', () => {
     api.addWebdavProfile();
 
     expect(formData.value.webdav_profiles[1].name).toBe('WebDAV 1');
+  });
+
+  // Why: 新建路径以前只 push profile 不写 availableServices，用户建好并填全凭证后
+  //   上传界面依然看不到这个图床，必须回设置页手动点亮芯片。
+  it('WebDAV 新建即写入可用列表，删除时再对称摘掉', async () => {
+    const { api, availableServices } = setup();
+
+    const compositeId = api.addWebdavProfile();
+
+    expect(compositeId).toBe('webdav:id-1');
+    expect(availableServices.value).toEqual(['jd', 'weibo', 'webdav:id-1']);
+
+    await api.deleteWebdavProfile('id-1');
+
+    expect(availableServices.value).toEqual(['jd', 'weibo']);
+  });
+
+  it('自定义 S3 新建即写入可用列表，删除时再对称摘掉', async () => {
+    const { api, availableServices } = setup();
+
+    const compositeId = api.addCustomS3Profile();
+
+    expect(compositeId).toBe('custom_s3:id-1');
+    expect(availableServices.value).toEqual(['jd', 'weibo', 'custom_s3:id-1']);
+
+    await api.deleteCustomS3Profile('id-1');
+
+    expect(availableServices.value).toEqual(['jd', 'weibo']);
+  });
+
+  it('复合 ID 已在可用列表时不重复写入', () => {
+    const { api, availableServices } = setup({}, ['jd', 'webdav:id-1']);
+
+    api.addWebdavProfile();
+
+    expect(availableServices.value).toEqual(['jd', 'webdav:id-1']);
   });
 });
 

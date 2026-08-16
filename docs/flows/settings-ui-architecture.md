@@ -220,6 +220,22 @@ flowchart TD
     style S fill:#e3f2fd,stroke:#1976d2
 ```
 
+### 图床「启用」的三个字段（别混淆）
+
+| 字段 | 语义 | 谁写入 |
+|------|------|--------|
+| `config.availableServices` | **真正的图床开关**：控制该图床出不出现在上传界面、托盘、批量迁移目标里 | `ServiceEnableSection.toggleService`（芯片点击）、`useStorageProfiles` 的新建/删除、`useSettingsForm` 的「凭证清空自动移除」 |
+| `config.enabledServices` | 上传界面「本次传到哪几个图床」的勾选快照，恒为 `availableServices` 的子集 | `useServiceSelector`、托盘菜单；`useSettingsForm.saveSettings` 只做收敛裁剪，从不新增 |
+| `config.services.*.enabled` | **已退化为死字段**：`saveSettings` 无条件写 `true`，唯一读取点 `MultiServiceUploader.filterConfiguredServices` 对任何已知服务都不可达。不要依赖它 | — |
+
+配套规则：
+
+- **「已配置」与「已启用」是两件事。** 未配置（`healthStatus === 'unconfigured'`）的图床即使在 `availableServices` 里也不会出现在上传界面——`UploadView.filterVisibleServices` 和 `MultiServiceUploader.filterConfiguredServices` 各挡一道。
+- **新建自定义 S3 / WebDAV profile 会自动写入 `availableServices`**（`useStorageProfiles.enableNewProfile`），与删除时的摘除对称。因此用户建好配置、填全凭证后无需再去芯片手动点亮。
+- **内建图床填完凭证不会自动加回 `availableServices`。** `useSettingsForm` 里那条 watch 只保留「配置变空 → 自动移除」，刻意不做「自动添加」，否则用户主动取消勾选后重填 cookie 会被悄悄加回，违反禁用意图。
+- **公共风险图床**（`PUBLIC_RISK_SERVICES`）的启用必须走 `ServiceEnableSection.toggleService`，那是 `publicServiceRiskAccepted` 唯一的置位入口。绕过它自动启用，会让上传时被静默过滤，用户看到「设置里明明启用了却不传」。
+- `availableServices` **不能为空**：`useConfig.saveConfig` 会拒绝保存并 toast，UI 层另有两处预拦截。
+
 ---
 
 ## 新增设置项的标准流程
@@ -292,6 +308,9 @@ interface LinkPrefixItem { name: string; template: string }
 | 新增字段迁移老配置报错 | 新字段没在 DEFAULT_CONFIG 加默认值,老 config 读到 undefined | 新增流程 C、D |
 | 样式被硬编码污染 | 违反 CLAUDE.md,用 `docs/design/tokens.md` 里的变量替换 | 图3 |
 | 新加的链接前缀没生效 / 搜狗风格 URL 不对 | template 占位符拼错,或调用方没过 `applyPrefixTemplate` 直接字符串拼接 | 链接前缀数据结构 |
+| 新建的自定义 S3 / WebDAV 在上传界面看不到 | 凭证还没填全（被 `unconfigured` 过滤挡住），填全即出现；若填全仍不显示，检查 `enableNewProfile` 是否写入了 `availableServices` | 图床「启用」的三个字段 |
+| 改了 `services.*.enabled` 却毫无效果 | 该字段已退化为死字段，真正的开关是 `availableServices` | 图床「启用」的三个字段 |
+| 设置页芯片已点亮，上传界面却没勾中该图床 | `availableServices` 与 `enabledServices` 是两层，后者需在上传界面单独勾选 | 图床「启用」的三个字段 |
 
 ---
 

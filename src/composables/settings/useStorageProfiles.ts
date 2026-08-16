@@ -58,6 +58,22 @@ export function useStorageProfiles(deps: UseStorageProfilesDeps) {
     );
   }
 
+  /**
+   * 新建 profile 后写入 availableServices
+   *
+   * Why: 删除路径会把复合 ID 从 availableServices 摘掉，新建路径必须对称写入，否则用户
+   * 建好配置、凭证也填全了，上传界面依然看不到这个图床，还得回设置页手动点亮芯片。
+   *
+   * 此刻凭证还是空的，但不会漏到上传页——UploadView 的 filterVisibleServices 和
+   * MultiServiceUploader.filterConfiguredServices 都会挡住 unconfigured 状态的服务；
+   * 而 useSettingsForm 里"配置变空就移除"的 watch 要求 oldStatus[id] 为真才摘，
+   * 这里是全新的键（oldStatus 为 undefined），所以不会被它反手摘掉。
+   */
+  function enableNewProfile(compositeId: string) {
+    if (availableServices.value.includes(compositeId)) return;
+    availableServices.value = [...availableServices.value, compositeId];
+  }
+
   /** 清理指向已删除 profile 的编辑器绑定，避免留下打不开的服务引用 */
   function detachEditorBindings(compositeId: string) {
     const editor = formData.value.editorServer;
@@ -69,13 +85,15 @@ export function useStorageProfiles(deps: UseStorageProfilesDeps) {
 
   function addCustomS3Profile(): string {
     const profileId = generateId();
+    const compositeId = makeCustomS3Id(profileId);
     formData.value.custom_s3_profiles.push({
       id: profileId,
       name: nextProfileName(formData.value.custom_s3_profiles.map(p => p.name), '自定义 S3'),
       endpoint: '', accessKeyId: '', secretAccessKey: '', region: '', bucket: '', path: '', publicDomain: '',
     });
+    enableNewProfile(compositeId);
     saveSettings();
-    return makeCustomS3Id(profileId);
+    return compositeId;
   }
 
   async function deleteCustomS3Profile(profileId: string) {
@@ -104,6 +122,7 @@ export function useStorageProfiles(deps: UseStorageProfilesDeps) {
 
   function addWebdavProfile(): string {
     const profileId = generateId();
+    const compositeId = makeWebDAVId(profileId);
     formData.value.webdav_profiles.push({
       id: profileId,
       name: nextProfileName(formData.value.webdav_profiles.map(p => p.name), 'WebDAV'),
@@ -114,8 +133,9 @@ export function useStorageProfiles(deps: UseStorageProfilesDeps) {
       publicDomain: '',
       publicUrlTemplate: DEFAULT_WEBDAV_URL_TEMPLATE,
     });
+    enableNewProfile(compositeId);
     saveSettings();
-    return makeWebDAVId(profileId);
+    return compositeId;
   }
 
   async function deleteWebdavProfile(profileId: string) {
