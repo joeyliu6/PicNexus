@@ -194,4 +194,62 @@ describe('更新 profile', () => {
 
     expect(formData.value.webdav_profiles).toHaveLength(1);
   });
+
+  /**
+   * 「明文 HTTP 已确认」是**针对某个具体地址**给的授权，不是对 profile 的永久豁免。
+   *
+   * 用户确认了 `http://nas.local:5005` 是自家 NAS，三个月后改成别的地址——
+   * 旧标记若还在，明文凭证会发往一个他从没确认过的目标，且全程无提示。
+   * 这也是这个标记唯一的撤销路径（确认弹窗不像勾选框那样能随手取消）。
+   */
+  describe('地址变更作废明文 HTTP 确认', () => {
+    const confirmed = {
+      id: 'a',
+      name: 'NAS',
+      url: 'http://nas.local:5005/dav',
+      publicDomain: 'http://nas.local:5005/dav',
+      lanHttpConfirmed: true,
+    };
+
+    it('改 url 时重置为 false', () => {
+      const { api, formData } = setup({
+        webdav_profiles: [{ ...confirmed }],
+      } as unknown as Partial<SettingsFormData>);
+
+      api.updateWebdavProfile({ ...confirmed, url: 'http://other.local:5005/dav' } as never);
+
+      expect(formData.value.webdav_profiles[0].lanHttpConfirmed).toBe(false);
+    });
+
+    it('改 publicDomain 时同样重置', () => {
+      const { api, formData } = setup({
+        webdav_profiles: [{ ...confirmed }],
+      } as unknown as Partial<SettingsFormData>);
+
+      api.updateWebdavProfile({ ...confirmed, publicDomain: 'http://elsewhere/dav' } as never);
+
+      expect(formData.value.webdav_profiles[0].lanHttpConfirmed).toBe(false);
+    });
+
+    it('地址没变时保留确认（否则改个用户名就要重新确认一次）', () => {
+      const { api, formData } = setup({
+        webdav_profiles: [{ ...confirmed }],
+      } as unknown as Partial<SettingsFormData>);
+
+      api.updateWebdavProfile({ ...confirmed, username: 'someone-else' } as never);
+
+      expect(formData.value.webdav_profiles[0].lanHttpConfirmed).toBe(true);
+    });
+
+    it('确认写回本身不会自我作废', () => {
+      const pending = { ...confirmed, lanHttpConfirmed: undefined };
+      const { api, formData } = setup({
+        webdav_profiles: [{ ...pending }],
+      } as unknown as Partial<SettingsFormData>);
+
+      api.updateWebdavProfile({ ...pending, lanHttpConfirmed: true } as never);
+
+      expect(formData.value.webdav_profiles[0].lanHttpConfirmed).toBe(true);
+    });
+  });
 });

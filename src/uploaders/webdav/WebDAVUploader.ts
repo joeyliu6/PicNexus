@@ -4,7 +4,7 @@ import type { WebDAVStorageProfile } from '../../config/types';
 import { DEFAULT_WEBDAV_URL_TEMPLATE } from '../../config/types';
 import { secureStorage } from '../../security/crypto';
 import { assertAllowedWebDAVStorageUrl } from '../../security/networkPolicy';
-import { getErrorMessage } from '../../types/errors';
+import { getErrorMessage, isLanHttpUnconfirmedError } from '../../types/errors';
 import { invoke } from '@tauri-apps/api/core';
 
 interface WebDAVRustResult {
@@ -105,7 +105,10 @@ export class WebDAVUploader extends BaseUploader<WebDAVStorageProfile> {
         password,
         remotePath: config.remotePath || '',
         publicDomain: config.publicDomain,
-        publicUrlTemplate: config.publicUrlTemplate || DEFAULT_WEBDAV_URL_TEMPLATE
+        publicUrlTemplate: config.publicUrlTemplate || DEFAULT_WEBDAV_URL_TEMPLATE,
+        // Why `=== true` 而不是原样传：Rust 侧参数是必填 bool，而 undefined 会被
+        // JSON 序列化直接丢键，命令会因反序列化失败而根本不执行。
+        lanHttpConfirmed: config.lanHttpConfirmed === true
       },
       onProgress
     ) as WebDAVRustResult;
@@ -147,7 +150,8 @@ export class WebDAVUploader extends BaseUploader<WebDAVStorageProfile> {
         password,
         remotePath: config.remotePath || '',
         publicDomain: config.publicDomain,
-        publicUrlTemplate: config.publicUrlTemplate || DEFAULT_WEBDAV_URL_TEMPLATE
+        publicUrlTemplate: config.publicUrlTemplate || DEFAULT_WEBDAV_URL_TEMPLATE,
+        lanHttpConfirmed: config.lanHttpConfirmed === true
       });
 
       const latency = Date.now() - startTime;
@@ -158,7 +162,9 @@ export class WebDAVUploader extends BaseUploader<WebDAVStorageProfile> {
       return {
         success: false,
         latency: Date.now() - startTime,
-        error: getErrorMessage(error) || '连接测试失败'
+        error: getErrorMessage(error) || '连接测试失败',
+        // 把「可以给逃生舱」这一档单独带出去——AppError 的类型在这里就被压成字符串了
+        lanHttpUnconfirmed: isLanHttpUnconfirmedError(error)
       };
     }
   }

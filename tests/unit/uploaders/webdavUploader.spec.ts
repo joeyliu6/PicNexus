@@ -119,6 +119,7 @@ describe('WebDAVUploader.upload', () => {
       remotePath: 'images/',
       publicDomain: 'https://cdn.example.com',
       publicUrlTemplate: '{domain}/{path}',
+      lanHttpConfirmed: false,
     });
 
     expect(result).toMatchObject({
@@ -148,6 +149,35 @@ describe('WebDAVUploader.upload', () => {
     await expect(
       uploader.upload('/tmp/a.png', makeOptions({ passwordEncrypted: 'not-a-cipher' })),
     ).rejects.toThrow('请在设置中重新填写密码');
+  });
+
+  /**
+   * ⚠️ 这几条是 `upload_to_webdav` 参数的**唯一门禁**
+   *
+   * `scripts/check-invoke-args.mjs` 静态核对不了这个命令——BaseUploader 里的
+   * `invoke(this.getRustCommand(), ...)` 命令名不是字面量，被列进跳过名单。
+   * 漏传参数会 CI 全绿、运行时全部 WebDAV 上传崩溃，只有这里能拦住。
+   */
+  describe('lanHttpConfirmed 透传', () => {
+    beforeEach(() => {
+      invokeMock.mockResolvedValue({ url: 'u', remotePath: 'p', fileName: 'f' });
+    });
+
+    it('未确认时传 false，且键必须存在', async () => {
+      await uploader.upload('/tmp/a.png', makeOptions());
+
+      const params = invokeMock.mock.calls[0][1] as Record<string, unknown>;
+      // 不能是 undefined：JSON 序列化会把这个键整个丢掉，
+      // Rust 侧必填 bool 反序列化失败 → 命令根本不执行
+      expect(Object.keys(params)).toContain('lanHttpConfirmed');
+      expect(params.lanHttpConfirmed).toBe(false);
+    });
+
+    it('已确认时传 true', async () => {
+      await uploader.upload('/tmp/a.png', makeOptions({ lanHttpConfirmed: true }));
+
+      expect(invokeMock.mock.calls[0][1]).toMatchObject({ lanHttpConfirmed: true });
+    });
   });
 });
 
@@ -191,5 +221,45 @@ describe('WebDAVUploader.testConnection', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('公开访问域名不能为空');
     expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it('lanHttpConfirmed 一并透传给后端', async () => {
+    invokeMock.mockResolvedValue({ success: true, message: 'ok' });
+
+    await uploader.testConnection(makeProfile());
+    expect(invokeMock.mock.calls[0][1]).toMatchObject({ lanHttpConfirmed: false });
+
+    invokeMock.mockClear();
+    await uploader.testConnection(makeProfile({ lanHttpConfirmed: true }));
+    expect(invokeMock.mock.calls[0][1]).toMatchObject({ lanHttpConfirmed: true });
+  });
+
+  /**
+   * 「明文 HTTP 待确认」这一档要能被调用方识别出来
+   *
+   * testConnection 会把后端的结构化 AppError 压成字符串，类型信息就此丢失。
+   * 调用方要据此决定能不能弹逃生舱确认框——判类型而不是判文案，
+   * 否则改一次文案这个分支就静默失效。
+   */
+  it('fake-ip 拒绝会被标成 lanHttpUnconfirmed，其余失败不会', async () => {
+    invokeMock.mockRejectedValue({
+      type: 'WEBDAV_LAN_HTTP_UNCONFIRMED',
+      data: { message: '该地址属于代理软件的 fake-ip 地址池（198.18.x.x）' },
+    });
+
+    const blocked = await uploader.testConnection(makeProfile());
+    expect(blocked.success).toBe(false);
+    expect(blocked.lanHttpUnconfirmed).toBe(true);
+    // 文案仍要原样带出，没接住这个标记的地方也不该退化
+    expect(blocked.error).toContain('fake-ip');
+
+    invokeMock.mockRejectedValue({
+      type: 'WEBDAV',
+      data: { message: '认证失败，请检查用户名和密码' },
+    });
+
+    const authFailed = await uploader.testConnection(makeProfile());
+    expect(authFailed.success).toBe(false);
+    expect(authFailed.lanHttpUnconfirmed).toBe(false);
   });
 });

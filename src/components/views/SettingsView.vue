@@ -79,7 +79,7 @@ const {
   handleServiceTest, handleBuiltinCheck, testAllConfiguredServices, cancelBatchTest,
 } = useConnectionTest({
   formData, serviceNames,
-  errorToString, validateS3Config,
+  errorToString, validateS3Config, updateWebdavProfile,
 });
 
 const { applyEditorServer, clearTimer: clearEditorTimer } = useEditorIntegration({

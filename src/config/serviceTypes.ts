@@ -386,6 +386,22 @@ export interface WebDAVStorageProfile {
 
   /** 公开链接模板，支持变量：{domain} {path} {filename} */
   publicUrlTemplate: string;
+
+  /**
+   * 用户已确认「这是我的内网 NAS，接受明文 HTTP 传账号密码」
+   *
+   * 只在一种情况下需要：开着 TUN + fake-ip 的机器上，任何主机名都会解析进
+   * `198.18.0.0/15`，Rust 侧因此判不出目标是不是局域网（详见
+   * `docs/reference/troubleshooting/fake-ip-dns-policy-distortion.md`）。
+   * 用户在设置页测试连接时会收到确认框，确认后这个标记才为 true。
+   *
+   * ⚠️ 三条约束：
+   * - **缺省即未确认**：`undefined` / `false` 一律当没确认，不存在第三态。
+   * - **只放开 fake-ip 一档**：确证公网、链路本地在确认后依然硬拒绝（Rust 侧 `LanHttpConsent`）。
+   * - **改地址即作废**：确认是针对某个具体地址给的，`url` 一变就重置回 false，
+   *   见 `useStorageProfiles.updateWebdavProfile`。
+   */
+  lanHttpConfirmed?: boolean;
 }
 
 /**

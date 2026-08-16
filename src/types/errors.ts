@@ -16,6 +16,7 @@ export type AppErrorType =
   | 'SERVICE_UNAVAILABLE'
   | 'VALIDATION'
   | 'WEBDAV'
+  | 'WEBDAV_LAN_HTTP_UNCONFIRMED'
   | 'STORAGE';
 
 /**
@@ -57,6 +58,13 @@ export type AppError =
   | { type: 'SERVICE_UNAVAILABLE'; data: ServiceUnavailableErrorData }
   | { type: 'VALIDATION'; data: SimpleErrorData }
   | { type: 'WEBDAV'; data: SimpleErrorData }
+  /**
+   * WebDAV 地址解析进代理 fake-ip 池，判不出是否局域网
+   *
+   * 唯一可由用户显式确认后放行的一档（Rust 侧 `LanHttpConsent`）。
+   * 前端据此决定能否弹逃生舱确认框——按类型分流，不匹配文案。
+   */
+  | { type: 'WEBDAV_LAN_HTTP_UNCONFIRMED'; data: SimpleErrorData }
   | { type: 'STORAGE'; data: SimpleErrorData };
 
 /**
@@ -83,10 +91,21 @@ export function isAppError(error: unknown): error is AppError {
     'SERVICE_UNAVAILABLE',
     'VALIDATION',
     'WEBDAV',
+    'WEBDAV_LAN_HTTP_UNCONFIRMED',
     'STORAGE',
   ];
 
   return validTypes.includes(obj.type as AppErrorType);
+}
+
+/**
+ * 是否为「明文 HTTP 待用户确认」这一档
+ *
+ * 只有这一档允许提供逃生舱（见 Rust 侧 `LanHttpConsent` 的 doc）。
+ * 判类型而不是判文案：文案改动不该让这个分支静默失效。
+ */
+export function isLanHttpUnconfirmedError(error: unknown): boolean {
+  return isAppError(error) && error.type === 'WEBDAV_LAN_HTTP_UNCONFIRMED';
 }
 
 /**

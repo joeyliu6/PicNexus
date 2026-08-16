@@ -4,6 +4,7 @@
 import { type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { useToast, suppressToasts } from '../useToast';
+import { useConfirm } from '../useConfirm';
 import { useServiceAvailability, probeBuiltinServiceAvailability } from '../useServiceAvailability';
 import { useServiceHealth } from '../useServiceHealth';
 import { buildServiceCheckSummarySnapshot, useServiceCheckRunner } from '../useServiceCheckRunner';
@@ -20,12 +21,27 @@ interface UseConnectionTestOptions {
   serviceNames: Record<ServiceType, string>;
   errorToString: (error: unknown) => string;
   validateS3Config: (serviceId: string, config: Record<string, unknown>) => string | null;
+  /** 写回 WebDAV profile（明文 HTTP 确认后需要持久化标记） */
+  updateWebdavProfile: (profile: WebDAVStorageProfile) => void;
 }
 
+/**
+ * 明文 HTTP 逃生舱的确认文案
+ *
+ * 要讲清三件事：为什么判不了、勾了会发生什么、以及还有别的出路。
+ * 不写"可能有风险"这种无信息量的措辞——用户要据此做决定。
+ */
+const LAN_HTTP_CONSENT_MESSAGE =
+  '该地址解析到了代理软件的 fake-ip 地址池，PicNexus 无法确认它到底在不在局域网。'
+  + '如果继续，WebDAV 的用户名和密码将以**明文**发送——万一这个地址其实在公网，'
+  + '凭证就会在链路上裸奔。\n\n'
+  + '确认这是你自己的内网设备再继续；更稳妥的做法是改填内网 IP（如 http://192.168.1.10:5005）或改用 HTTPS。';
+
 export function useConnectionTest(options: UseConnectionTestOptions) {
-  const { formData, serviceNames, errorToString, validateS3Config } = options;
+  const { formData, serviceNames, errorToString, validateS3Config, updateWebdavProfile } = options;
 
   const toast = useToast();
+  const { confirm: confirmDialog } = useConfirm();
   const serviceHealth = useServiceHealth();
   const {
     qiyuAvailable,
@@ -128,7 +144,32 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
     const displayName = profile.name || 'WebDAV';
     try {
       const uploader = new WebDAVUploader();
-      const result = await uploader.testConnection(profile);
+      let result = await uploader.testConnection(profile);
+
+      // 明文 HTTP 逃生舱：判不出是不是局域网时，让用户显式担责后重试一次
+      //
+      // Why 只在单项测试里弹：批量测试会遍历每个 profile，逐个弹模态框等于连环阻塞。
+      // Why 只重试一次（不循环）：确认后仍失败说明是别的原因，再弹就是骚扰。
+      if (
+        !result.success
+        && result.lanHttpUnconfirmed
+        && !profile.lanHttpConfirmed
+        && activeSession.value?.mode === 'single'
+      ) {
+        const confirmed = await confirmDialog(LAN_HTTP_CONSENT_MESSAGE, {
+          header: '明文传输风险确认',
+          acceptLabel: '我已了解并继续',
+          rejectLabel: '取消',
+          acceptClass: 'p-button-warning',
+        });
+
+        if (confirmed) {
+          const consented: WebDAVStorageProfile = { ...profile, lanHttpConfirmed: true };
+          updateWebdavProfile(consented);
+          result = await uploader.testConnection(consented);
+        }
+      }
+
       if (!result.success) throw new Error(result.error || '连接测试失败');
       toast.showConfig('success', TOAST_MESSAGES.auth.configValid(displayName));
     } catch (error) {

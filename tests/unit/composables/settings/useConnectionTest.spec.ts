@@ -3,7 +3,7 @@ import { ref, nextTick } from 'vue';
 import { useConnectionTest } from '@/composables/settings/useConnectionTest';
 import { __resetServiceCheckRunnerForTests } from '@/composables/useServiceCheckRunner';
 import type { SettingsFormShape } from '@/composables/settings/settingsFormTypes';
-import type { ServiceType } from '@/config/types';
+import type { ServiceType, WebDAVStorageProfile } from '@/config/types';
 import { resetTauriMocks, setupInvokeHandler } from '../../helpers/tauriMock';
 import { flushPromisesAndTicks } from '../../helpers/wait';
 
@@ -18,6 +18,20 @@ const mockState = vi.hoisted(() => ({
   isCheckingQiyu: { value: false },
   isCheckingJd: { value: false },
   probeBuiltinServiceAvailability: vi.fn(),
+  // 默认拒绝：逃生舱确认框必须是用户主动点的，不能因为夹具默认值就被静默放行
+  confirmDialog: vi.fn(async () => false),
+  webdavTestConnection: vi.fn(),
+}));
+
+// useConnectionTest 里直接调 useConfirm()，而 PrimeVue 的 inject 在组件上下文之外拿不到
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => ({ confirm: mockState.confirmDialog }),
+}));
+
+vi.mock('@/uploaders/webdav/WebDAVUploader', () => ({
+  WebDAVUploader: class {
+    testConnection = mockState.webdavTestConnection;
+  },
 }));
 
 vi.mock('@/composables/useToast', () => ({
@@ -89,6 +103,16 @@ function makeFormData(): SettingsFormShape {
     smms: { token: 'smms-token' },
     github: { enabled: true, token: 'ghp_test', owner: 'owner', repo: 'repo', branch: 'main', path: 'images/' },
     imgur: { clientId: 'imgur-client', clientSecret: '' },
+    webdav_profiles: [{
+      id: 'webdav-1',
+      name: '家里的 NAS',
+      url: 'http://nas.local:5005/dav',
+      username: 'admin',
+      passwordEncrypted: 'PNXENC:cipher',
+      remotePath: 'images/',
+      publicDomain: 'http://nas.local:5005/dav',
+      publicUrlTemplate: '{domain}/{path}',
+    }],
     editorServer: {
       enabled: false,
       port: 0,
@@ -127,14 +151,19 @@ function createHarness(options: {
     options.validateS3Config ?? (() => null),
   );
   const errorToString = vi.fn((error: unknown) => error instanceof Error ? error.message : String(error));
+  const updateWebdavProfile = vi.fn((profile: WebDAVStorageProfile) => {
+    const idx = formData.value.webdav_profiles.findIndex(p => p.id === profile.id);
+    if (idx !== -1) formData.value.webdav_profiles[idx] = { ...profile };
+  });
   const api = useConnectionTest({
     formData,
     serviceNames,
     errorToString,
     validateS3Config,
+    updateWebdavProfile,
   });
 
-  return { api, formData, validateS3Config, errorToString };
+  return { api, formData, validateS3Config, errorToString, updateWebdavProfile };
 }
 
 describe('useConnectionTest', () => {
@@ -429,5 +458,106 @@ describe('useConnectionTest', () => {
 
     expect(mockState.suppressToasts).not.toHaveBeenCalled();
     expect(api.activeSession.value).toBeNull();
+  });
+
+  /**
+   * 明文 HTTP 逃生舱
+   *
+   * 场景：开着 TUN + fake-ip 时任何主机名都解析进 198.18.0.0/15，Rust 判不出
+   * 目标是不是局域网，于是回一个专属错误类型让前端提供确认框。
+   */
+  describe('明文 HTTP 逃生舱', () => {
+    const lanHttpRejection = {
+      success: false,
+      error: '该地址属于代理软件的 fake-ip 地址池',
+      lanHttpUnconfirmed: true,
+    };
+
+    it('确认后写回标记并自动重试一次', async () => {
+      mockState.webdavTestConnection
+        .mockResolvedValueOnce(lanHttpRejection)
+        .mockResolvedValueOnce({ success: true, latency: 12 });
+      mockState.confirmDialog.mockResolvedValueOnce(true);
+
+      const { api, formData, updateWebdavProfile } = createHarness();
+      await api.handleServiceTest('webdav:webdav-1');
+
+      expect(mockState.confirmDialog).toHaveBeenCalledTimes(1);
+      // 标记要真的持久化，否则重启后又弹
+      expect(updateWebdavProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'webdav-1', lanHttpConfirmed: true }),
+      );
+      expect(formData.value.webdav_profiles[0].lanHttpConfirmed).toBe(true);
+      // 重试时必须带上已确认的 profile，否则重试注定再被拒
+      expect(mockState.webdavTestConnection).toHaveBeenCalledTimes(2);
+      expect(mockState.webdavTestConnection.mock.calls[1][0]).toMatchObject({
+        lanHttpConfirmed: true,
+      });
+      expect(mockState.markVerified).toHaveBeenCalledWith('webdav:webdav-1');
+    });
+
+    it('拒绝确认时不写标记、不重试', async () => {
+      mockState.webdavTestConnection.mockResolvedValue(lanHttpRejection);
+      mockState.confirmDialog.mockResolvedValueOnce(false);
+
+      const { api, formData, updateWebdavProfile } = createHarness();
+      await api.handleServiceTest('webdav:webdav-1');
+
+      expect(updateWebdavProfile).not.toHaveBeenCalled();
+      expect(formData.value.webdav_profiles[0].lanHttpConfirmed).toBeUndefined();
+      expect(mockState.webdavTestConnection).toHaveBeenCalledTimes(1);
+      expect(mockState.markTestFailed).toHaveBeenCalledWith('webdav:webdav-1', expect.any(String));
+    });
+
+    it('已确认过的 profile 不再弹框', async () => {
+      mockState.webdavTestConnection.mockResolvedValue(lanHttpRejection);
+
+      const { api, formData } = createHarness();
+      formData.value.webdav_profiles[0].lanHttpConfirmed = true;
+
+      await api.handleServiceTest('webdav:webdav-1');
+
+      expect(mockState.confirmDialog).not.toHaveBeenCalled();
+    });
+
+    it('确认后仍失败时只重试一次，不递归弹框', async () => {
+      mockState.webdavTestConnection.mockResolvedValue(lanHttpRejection);
+      mockState.confirmDialog.mockResolvedValue(true);
+
+      const { api } = createHarness();
+      await api.handleServiceTest('webdav:webdav-1');
+
+      expect(mockState.confirmDialog).toHaveBeenCalledTimes(1);
+      expect(mockState.webdavTestConnection).toHaveBeenCalledTimes(2);
+    });
+
+    it('非 fake-ip 的失败不弹框，诊断文案原样保留', async () => {
+      // 「传上去了但链接打不开」是 WebDAV 最难自查的一环，文案不能被逃生舱吞掉
+      mockState.webdavTestConnection.mockResolvedValue({
+        success: false,
+        error: '图片已上传，但公开链接打不开 (HTTP 401)',
+      });
+
+      const { api } = createHarness();
+      await api.handleServiceTest('webdav:webdav-1');
+
+      expect(mockState.confirmDialog).not.toHaveBeenCalled();
+      expect(mockState.markTestFailed).toHaveBeenCalledWith(
+        'webdav:webdav-1',
+        '图片已上传，但公开链接打不开 (HTTP 401)',
+      );
+    });
+
+    it('批量测试撞上 fake-ip 时不弹框', async () => {
+      // 批量下逐个弹模态框 = 连环阻塞，用户会以为卡死
+      mockState.healthStatusMap.value = { 'webdav:webdav-1': 'verified' };
+      mockState.webdavTestConnection.mockResolvedValue(lanHttpRejection);
+
+      const { api } = createHarness();
+      await api.testAllConfiguredServices();
+      await flushPromisesAndTicks();
+
+      expect(mockState.confirmDialog).not.toHaveBeenCalled();
+    });
   });
 });

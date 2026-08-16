@@ -71,6 +71,15 @@ export interface ConnectionTestResult {
 
   /** 错误信息 */
   error?: string;
+
+  /**
+   * 失败原因是「明文 HTTP 待用户确认」（WebDAV 专属）
+   *
+   * Why 单独一个布尔而不是让调用方去解析 `error` 文案：`testConnection` 会把
+   * 后端的结构化 AppError 压成字符串，类型信息就此丢失。调用方要据此决定
+   * 能否弹逃生舱确认框，判文案既脆弱又会随文案改动静默失效。
+   */
+  lanHttpUnconfirmed?: boolean;
 }
 
 /**

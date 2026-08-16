@@ -141,10 +141,24 @@ export function useStorageProfiles(deps: UseStorageProfilesDeps) {
     saveSettings();
   }
 
+  /**
+   * 更新 WebDAV 图床配置
+   *
+   * ⚠️ 地址一变就作废「明文 HTTP 已确认」标记。确认是针对**某个具体地址**给的：
+   * 用户确认了 `http://nas.local:5005` 是自家 NAS，三个月后把地址改成别处，
+   * 旧标记若还在，明文凭证会发往一个他从没确认过的目标，且全程无提示。
+   *
+   * 这里是所有 WebDAV profile 编辑的唯一漏斗（字段编辑、密码提交、确认写回都经过），
+   * 所以判一次就够。确认写回本身不改地址，不会自我作废。
+   */
   function updateWebdavProfile(profile: WebDAVStorageProfile) {
     const idx = formData.value.webdav_profiles.findIndex((p: WebDAVStorageProfile) => p.id === profile.id);
     if (idx !== -1) {
-      formData.value.webdav_profiles[idx] = { ...profile };
+      const prev = formData.value.webdav_profiles[idx];
+      const addressChanged = prev.url !== profile.url || prev.publicDomain !== profile.publicDomain;
+      formData.value.webdav_profiles[idx] = addressChanged
+        ? { ...profile, lanHttpConfirmed: false }
+        : { ...profile };
     }
     saveSettings();
   }
