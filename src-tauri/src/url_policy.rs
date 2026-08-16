@@ -266,6 +266,24 @@ fn is_allowed_lan_addr(ip: &str) -> bool {
 /// 只检查首个地址会漏掉"前几个是内网、后面混着公网"的多地址记录——
 /// reqwest 建连时可能选中集合里的任意一个，所以集合里出现一个公网地址
 /// 就必须整体拒绝。
+/// 用户是否已就「明文 HTTP 可能出局域网」显式担责
+///
+/// ⚠️ **只放开 `DnsDecisionError::FakeIp` 一档。** `Blocked`（链路本地 / 云元数据）与
+/// `Public`（确证公网）在任何 consent 下都保持硬拒绝——那两档不是「看不见」，
+/// 是「看见了，且确实不该连」。字面量 fake-ip 同样不放开：没有人的 NAS 挂在
+/// RFC 2544 基准测试段上。
+///
+/// Why 用 enum 而不是 `bool`：调用点（含测试）十余处，裸写 `false` 读不出含义；
+/// 且安全语义写在类型定义上，等于把「只放开一档」这条不变量钉在此处。
+/// 同文件的 `PrivateHostPolicy` 已是这个套路。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LanHttpConsent {
+    /// 默认：未确认，fake-ip 一律拒绝
+    Denied,
+    /// 用户在设置页显式确认过「这是我的内网 NAS，接受明文传账号密码」
+    ConfirmedByUser,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 enum DnsDecisionError {
     Blocked,
@@ -277,19 +295,37 @@ enum DnsDecisionError {
     Public,
 }
 
+/// ⚠️ `FakeIp` 必须是**最弱**的裁决：只有当集合里所有不合格地址都是 fake-ip 时才报它。
+///
+/// Why 不能一遇到 fake-ip 就早退：早退版本对 `["198.18.1.1", "8.8.8.8"]` 会返回 `FakeIp`，
+/// **那个公网地址根本没被看到**。今天无害（`FakeIp` 与 `Public` 都是硬拒），但
+/// `FakeIp` 是唯一允许用户显式确认后放行的一档——一旦逃生舱上线，早退就等于
+/// 「用户确认了一个我们以为看不见、实际确证含公网地址的目标」，明文凭证直接出公网。
+///
+/// 所以先把整个集合扫完，`Blocked` / `Public` 一经发现立即胜出，
+/// 最后才轮到 `FakeIp`。这样 "用户确认" 的语义才严格等于
+/// 「确认的是一个我们确实看不见、而非确实在公网的目标」。
 fn all_dns_results_allowed(ips: &[String]) -> Result<(), DnsDecisionError> {
+    let mut saw_fake_ip = false;
+
     for ip in ips {
         let ip = ip.as_str();
         if is_always_blocked_host(ip) {
             return Err(DnsDecisionError::Blocked);
         }
         if is_fake_ip_pool_host(ip) {
-            return Err(DnsDecisionError::FakeIp);
+            saw_fake_ip = true;
+            continue;
         }
         if !is_allowed_lan_addr(ip) {
             return Err(DnsDecisionError::Public);
         }
     }
+
+    if saw_fake_ip {
+        return Err(DnsDecisionError::FakeIp);
+    }
+
     Ok(())
 }
 
@@ -354,7 +390,10 @@ pub fn validate_webdav_url(raw_url: &str) -> Result<Url, AppError> {
 /// 别处（DNS rebinding 或轮询 DNS）的场景拦不住。要真正堵住需要用
 /// `ClientBuilder::resolve` 把地址钉死，但那是 client 级设置，
 /// 而 `HttpClient` 是全局单例——每次请求新建 client 会丢掉连接池复用。
-pub async fn validate_webdav_url_for_request(raw_url: &str) -> Result<Url, AppError> {
+pub async fn validate_webdav_url_for_request(
+    raw_url: &str,
+    consent: LanHttpConsent,
+) -> Result<Url, AppError> {
     let parsed = Url::parse(raw_url)
         .map_err(|_| AppError::webdav("地址格式不正确，请输入完整的 https:// 地址"))?;
 
@@ -405,9 +444,22 @@ pub async fn validate_webdav_url_for_request(raw_url: &str) -> Result<Url, AppEr
                         "主机名解析到链路本地或保留地址，已拒绝连接",
                     ));
                 }
-                Err(DnsDecisionError::FakeIp) => {
-                    return Err(AppError::webdav(FAKE_IP_HOST_MESSAGE));
-                }
+                // 全部不合格地址都是 fake-ip = 目标真实位置「看不见」。
+                // 用户显式确认过就按他说的算；否则返回专属错误类型，
+                // 让前端能识别出"这一档可以提供逃生舱"，而不是去匹配文案。
+                Err(DnsDecisionError::FakeIp) => match consent {
+                    LanHttpConsent::ConfirmedByUser => {
+                        log::warn!(
+                            "[WebDAV] 用户已确认明文 HTTP 风险，放行 fake-ip 解析的主机: {}",
+                            host
+                        );
+                    }
+                    LanHttpConsent::Denied => {
+                        return Err(AppError::WebDAVLanHttpUnconfirmed {
+                            message: FAKE_IP_HOST_MESSAGE.to_string(),
+                        });
+                    }
+                },
                 Err(DnsDecisionError::Public) => {
                     return Err(AppError::webdav(
                         "公网 HTTP 地址已禁用，请改用 HTTPS。局域网地址可使用 HTTP。",
@@ -727,48 +779,153 @@ mod tests {
         assert_eq!(all_dns_results_allowed(&[]), Ok(()));
     }
 
+    /// `FakeIp` 是最弱的裁决：只有当所有不合格地址都是 fake-ip 时才报它。
+    ///
+    /// 这是逃生舱的核心不变量——`FakeIp` 是唯一可被用户确认放行的一档，
+    /// 一旦它掩盖了集合里的公网/链路本地地址，"用户确认"就等于放行了一个
+    /// 确证不该连的目标。把早退版本换回来，这条会红。
+    #[test]
+    fn fake_ip_never_masks_a_stricter_verdict() {
+        // fake-ip 排在公网地址前面：早退版本会返回 FakeIp，那个公网地址根本没被看到
+        assert_eq!(
+            all_dns_results_allowed(&["198.18.1.1".to_string(), "8.8.8.8".to_string()]),
+            Err(DnsDecisionError::Public)
+        );
+        assert_eq!(
+            all_dns_results_allowed(&["8.8.8.8".to_string(), "198.18.1.1".to_string()]),
+            Err(DnsDecisionError::Public)
+        );
+
+        // 链路本地同理，且它优先级最高
+        assert_eq!(
+            all_dns_results_allowed(&["198.18.1.1".to_string(), "169.254.169.254".to_string()]),
+            Err(DnsDecisionError::Blocked)
+        );
+
+        // v6 fake-ip 也要参与同样的判定
+        assert_eq!(
+            all_dns_results_allowed(&["fdfe:dcba:9876::126".to_string(), "8.8.8.8".to_string()]),
+            Err(DnsDecisionError::Public)
+        );
+
+        // 只有"不合格的全是 fake-ip"才轮到 FakeIp——这一档才允许用户确认后放行
+        assert_eq!(
+            all_dns_results_allowed(&["192.168.1.10".to_string(), "198.18.1.172".to_string()]),
+            Err(DnsDecisionError::FakeIp)
+        );
+        assert_eq!(
+            all_dns_results_allowed(&["198.18.1.1".to_string(), "198.18.1.2".to_string()]),
+            Err(DnsDecisionError::FakeIp)
+        );
+    }
+
     /// 请求前校验的非 DNS 分支
     ///
     /// 这些用例全部在 `lookup_host` 之前就返回，所以不出网、结果确定。
     #[tokio::test]
     async fn request_validation_covers_non_dns_branches() {
+        use LanHttpConsent::Denied;
+
         // 局域网字面量与回环：放行
-        assert!(validate_webdav_url_for_request("http://192.168.1.10:5005/dav")
+        assert!(validate_webdav_url_for_request("http://192.168.1.10:5005/dav", Denied)
             .await
             .is_ok());
-        assert!(validate_webdav_url_for_request("http://localhost:5244/dav")
+        assert!(validate_webdav_url_for_request("http://localhost:5244/dav", Denied)
             .await
             .is_ok());
-        assert!(validate_webdav_url_for_request("https://dav.example.com/dav")
+        assert!(validate_webdav_url_for_request("https://dav.example.com/dav", Denied)
             .await
             .is_ok());
 
         // 链路本地字面量：任何策略下都拒绝
-        assert!(validate_webdav_url_for_request("http://169.254.169.254/latest")
+        assert!(validate_webdav_url_for_request("http://169.254.169.254/latest", Denied)
             .await
             .is_err());
-        assert!(validate_webdav_url_for_request("http://[fe80::1]/dav")
+        assert!(validate_webdav_url_for_request("http://[fe80::1]/dav", Denied)
             .await
             .is_err());
 
         // 公网 HTTP 字面量：不该退化成"解析不出来就放行"
-        assert!(validate_webdav_url_for_request("http://8.8.8.8/dav")
+        assert!(validate_webdav_url_for_request("http://8.8.8.8/dav", Denied)
             .await
             .is_err());
 
         // fake-ip 字面量：在 lookup_host 之前就被拦下，两种 scheme 都拒
-        assert!(validate_webdav_url_for_request("http://198.18.1.1/dav")
+        assert!(validate_webdav_url_for_request("http://198.18.1.1/dav", Denied)
             .await
             .is_err());
-        assert!(validate_webdav_url_for_request("https://198.18.1.1/dav")
+        assert!(validate_webdav_url_for_request("https://198.18.1.1/dav", Denied)
             .await
             .is_err());
 
         // 凭证内嵌与非 HTTP 协议
-        assert!(validate_webdav_url_for_request("http://u:p@192.168.1.10/dav")
+        assert!(validate_webdav_url_for_request("http://u:p@192.168.1.10/dav", Denied)
             .await
             .is_err());
-        assert!(validate_webdav_url_for_request("file:///tmp/a").await.is_err());
+        assert!(validate_webdav_url_for_request("file:///tmp/a", Denied)
+            .await
+            .is_err());
+    }
+
+    /// 逃生舱只放开一档：用户确认**不能**松动任何确证的拒绝理由
+    ///
+    /// 这些用例全部在 `lookup_host` 之前返回，不出网。
+    #[tokio::test]
+    async fn user_consent_does_not_relax_confirmed_denials() {
+        use LanHttpConsent::ConfirmedByUser;
+
+        // 字面量 fake-ip：不放开——没有人的 NAS 挂在 RFC 2544 基准测试段上
+        assert!(validate_webdav_url_for_request("http://198.18.1.1/dav", ConfirmedByUser)
+            .await
+            .is_err());
+        assert!(validate_webdav_url_for_request("https://198.18.1.1/dav", ConfirmedByUser)
+            .await
+            .is_err());
+
+        // 链路本地 / 云元数据：确认了也拒
+        assert!(
+            validate_webdav_url_for_request("http://169.254.169.254/latest", ConfirmedByUser)
+                .await
+                .is_err()
+        );
+        assert!(validate_webdav_url_for_request("http://[fe80::1]/dav", ConfirmedByUser)
+            .await
+            .is_err());
+
+        // 确证公网明文：确认了也拒——这正是这道防线要守的东西
+        assert!(validate_webdav_url_for_request("http://8.8.8.8/dav", ConfirmedByUser)
+            .await
+            .is_err());
+
+        // 凭证内嵌 / 非 HTTP 协议：与 consent 无关
+        assert!(
+            validate_webdav_url_for_request("http://u:p@192.168.1.10/dav", ConfirmedByUser)
+                .await
+                .is_err()
+        );
+        assert!(validate_webdav_url_for_request("file:///tmp/a", ConfirmedByUser)
+            .await
+            .is_err());
+
+        // 反向：正常路径不该因为 consent 而变化（防止改过头）
+        assert!(
+            validate_webdav_url_for_request("http://192.168.1.10:5005/dav", ConfirmedByUser)
+                .await
+                .is_ok()
+        );
+        assert!(validate_webdav_url_for_request("https://dav.example.com/dav", ConfirmedByUser)
+            .await
+            .is_ok());
+    }
+
+    /// fake-ip 那一档要返回**专属错误类型**，前端靠类型分流决定能否弹逃生舱
+    #[test]
+    fn fake_ip_dns_verdict_uses_its_own_error_type() {
+        let err = AppError::WebDAVLanHttpUnconfirmed {
+            message: FAKE_IP_HOST_MESSAGE.to_string(),
+        };
+        // 文案仍是被跨语言门禁锁死的那句：没接住这个类型的地方也不会退化
+        assert!(err.to_string().contains("fake-ip"));
     }
 
     // Why DNS 分支本身没有实网单测：解析结果由运行环境说了算，断言不了。

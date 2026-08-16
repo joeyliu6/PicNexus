@@ -13,8 +13,20 @@ use tokio::time::Duration;
 use super::utils::probe_upload_file_size;
 use crate::error::AppError;
 use crate::log_utils::safe_path;
-use crate::url_policy::validate_webdav_url_for_request;
+use crate::url_policy::{validate_webdav_url_for_request, LanHttpConsent};
 use crate::HttpClient;
+
+/// IPC 边界用 `bool`，进了函数体立刻换成具名类型
+///
+/// Why 边界不直接收 enum：`scripts/check-invoke-args.mjs` 只认得基础类型与 `Option<T>`，
+/// 参数写成 enum 会让那道静态门禁对这两个命令失效。
+fn lan_http_consent(confirmed: bool) -> LanHttpConsent {
+    if confirmed {
+        LanHttpConsent::ConfirmedByUser
+    } else {
+        LanHttpConsent::Denied
+    }
+}
 
 /// 文件大小限制：50MB
 const MAX_FILE_SIZE: u64 = 50 * 1024 * 1024;
@@ -377,18 +389,21 @@ pub async fn upload_to_webdav(
     remote_path: String,
     public_domain: String,
     public_url_template: String,
+    lan_http_confirmed: bool,
     http_client: tauri::State<'_, HttpClient>,
 ) -> Result<WebDAVUploadResult, AppError> {
     log::info!("[WebDAV] 开始上传文件: {}", safe_path(&file_path));
 
+    let consent = lan_http_consent(lan_http_confirmed);
+
     // 1. 校验地址（WebDAV 策略：允许局域网，拒绝链路本地与公网明文 HTTP）
-    validate_webdav_url_for_request(&url).await?;
+    validate_webdav_url_for_request(&url, consent).await?;
     if public_domain.trim().is_empty() {
         return Err(AppError::config(
             "公开访问域名不能为空——WebDAV 端点通常需要认证，无法直接作为图片链接",
         ));
     }
-    validate_webdav_url_for_request(&public_domain).await?;
+    validate_webdav_url_for_request(&public_domain, consent).await?;
 
     emit_progress(&window, &id, 0, "读取文件...", 1, 3);
 
@@ -463,13 +478,16 @@ pub async fn test_webdav_storage(
     remote_path: String,
     public_domain: String,
     public_url_template: String,
+    lan_http_confirmed: bool,
     http_client: tauri::State<'_, HttpClient>,
 ) -> Result<WebDAVTestResult, AppError> {
-    validate_webdav_url_for_request(&url).await?;
+    let consent = lan_http_consent(lan_http_confirmed);
+
+    validate_webdav_url_for_request(&url, consent).await?;
     if public_domain.trim().is_empty() {
         return Err(AppError::config("公开访问域名不能为空"));
     }
-    validate_webdav_url_for_request(&public_domain).await?;
+    validate_webdav_url_for_request(&public_domain, consent).await?;
 
     let client = &http_client.0;
     let auth = basic_auth(&username, &password);

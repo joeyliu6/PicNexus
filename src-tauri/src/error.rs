@@ -51,6 +51,17 @@ pub enum AppError {
     #[serde(rename = "WEBDAV")]
     WebDAV { message: String },
 
+    /// WebDAV 地址解析进了代理的 fake-ip 池，无法判定它是否在局域网
+    ///
+    /// Why 单独一个类型而不是复用 `WebDAV`：这是**唯一**可以由用户显式确认后放行的
+    /// 一档（详见 `url_policy::LanHttpConsent`）。前端要据此决定"能不能弹逃生舱确认框"，
+    /// 靠匹配文案做这个判断既脆弱又会随文案改动静默失效——按类型分流正是本枚举存在的意义。
+    ///
+    /// message 仍用 `FAKE_IP_HOST_MESSAGE`（被跨语言门禁锁死），
+    /// 这样没接住这个类型的地方文案也不退化。
+    #[serde(rename = "WEBDAV_LAN_HTTP_UNCONFIRMED")]
+    WebDAVLanHttpUnconfirmed { message: String },
+
     /// R2/S3 存储错误
     #[serde(rename = "STORAGE")]
     Storage { message: String },
@@ -119,6 +130,7 @@ impl std::fmt::Display for AppError {
             Self::External { message } => write!(f, "外部服务错误: {}", message),
             Self::Validation { message } => write!(f, "验证错误: {}", message),
             Self::WebDAV { message } => write!(f, "WebDAV 错误: {}", message),
+            Self::WebDAVLanHttpUnconfirmed { message } => write!(f, "WebDAV 错误: {}", message),
             Self::Storage { message } => write!(f, "存储错误: {}", message),
         }
     }
