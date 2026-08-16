@@ -14,6 +14,7 @@
  */
 import { computed } from 'vue';
 import { getServiceDisplayName } from '../../../constants/serviceNames';
+import { serviceNameTooltip } from '../../../utils/serviceNameFit';
 import type { MirrorInfo } from '../../../composables/history/useMirrorFallback';
 
 const props = defineProps<{
@@ -111,14 +112,14 @@ function stateTone(mirror: MirrorInfo): MirrorInfo['checkState'] | 'load-failed'
       >
         <span
           class="mirror-row-name"
-          v-tooltip.top="'点击复制链接'"
+          v-tooltip.top="serviceNameTooltip(getServiceDisplayName(mirror.serviceId), '点击复制链接')"
         >
           <span
             class="mirror-row-dot"
             :class="{ 'mirror-row-dot--placeholder': !mirror.isPrimary }"
             aria-hidden="true"
           ></span>
-          {{ getServiceDisplayName(mirror.serviceId) }}
+          <span class="mirror-row-label">{{ getServiceDisplayName(mirror.serviceId) }}</span>
         </span>
 
         <div class="mirror-row-actions">
@@ -258,6 +259,12 @@ function stateTone(mirror: MirrorInfo): MirrorInfo['checkState'] | 'load-failed'
   align-items: center;
   gap: var(--space-xs);
   white-space: nowrap;
+  overflow: hidden;
+}
+
+/* flex 容器上的 ellipsis 对匿名文本节点不生效，名字必须自己成为一个可截断的块 */
+.mirror-row-label {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }

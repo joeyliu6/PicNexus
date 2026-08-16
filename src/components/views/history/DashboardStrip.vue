@@ -3,8 +3,9 @@ import { ref, watch, onMounted, onUnmounted } from 'vue';
 import InputText from 'primevue/inputtext';
 import type { ServiceType } from '../../../config/types';
 import { getServiceDisplayName } from '../../../constants/serviceNames';
-import { getServiceIcon } from '../../../utils/icons';
 import { debounce } from '../../../utils/debounce';
+import { serviceNameTooltip } from '../../../utils/serviceNameFit';
+import ServiceLogo from '../../common/ServiceLogo.vue';
 
 export type ViewMode = 'table' | 'timeline' | 'favorites';
 
@@ -113,11 +114,12 @@ onUnmounted(() => {
           :class="{ active: filter !== 'all' }"
           aria-haspopup="listbox"
           :aria-expanded="showServiceMenu"
+          v-tooltip.top="filter !== 'all' ? serviceNameTooltip(getServiceDisplayName(filter)) : null"
           @click="showServiceMenu = !showServiceMenu"
         >
           <template v-if="filter !== 'all'">
-            <span class="badge-icon" v-html="getServiceIcon(filter)"></span>
-            {{ getServiceDisplayName(filter) }}
+            <ServiceLogo :service-id="filter" class="badge-icon" />
+            <span class="chip-label">{{ getServiceDisplayName(filter) }}</span>
           </template>
           <template v-else>
             <i class="pi pi-images" style="font-size: var(--text-2xs)"></i>
@@ -150,13 +152,14 @@ onUnmounted(() => {
               role="option"
               tabindex="0"
               :aria-selected="filter === service.id"
+              v-tooltip.top="serviceNameTooltip(getServiceDisplayName(service.id), null, 160)"
               @click="selectOption(service.id as ServiceType)"
               @keydown.enter.prevent="selectOption(service.id as ServiceType)"
               @keydown.space.prevent="selectOption(service.id as ServiceType)"
             >
               <span class="sdi-label">
-                <span class="badge-icon" v-html="getServiceIcon(service.id)"></span>
-                {{ getServiceDisplayName(service.id) }}
+                <ServiceLogo :service-id="service.id" class="badge-icon" />
+                <span class="sdi-name">{{ getServiceDisplayName(service.id) }}</span>
               </span>
               <span class="sdi-count">{{ service.count.toLocaleString() }}</span>
             </div>
@@ -301,12 +304,16 @@ onUnmounted(() => {
   flex-shrink: 0;
   width: 12px;
   height: 12px;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
 }
 
-.badge-icon :deep(svg) {
-  width: 100%;
-  height: 100%;
+/* 96px 见 docs/design/tokens.md#service-name-truncation */
+.chip-label {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .service-dropdown {
@@ -314,6 +321,9 @@ onUnmounted(() => {
   top: calc(100% + 6px);
   right: 0;
   min-width: 180px;
+
+  /* 长 profile 名会把下拉撑出屏幕，封顶后由 .sdi-name 截断 */
+  max-width: 280px;
   background: var(--bg-card);
   border-radius: var(--radius-lg);
   padding: var(--space-xs) 0;
@@ -351,15 +361,24 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: var(--space-xs-sm);
+  min-width: 0;
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   color: var(--text-main);
   white-space: nowrap;
 }
 
+/* 160px 见 docs/design/tokens.md#service-name-truncation */
+.sdi-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .sdi-label .badge-icon {
   width: 14px;
   height: 14px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 

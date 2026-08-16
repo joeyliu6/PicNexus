@@ -8,7 +8,8 @@ import type PopoverType from 'primevue/popover';
 import Skeleton from 'primevue/skeleton';
 import type { HistoryItem, ServiceType } from '../../../config/types';
 import { getServiceDisplayName } from '../../../constants/serviceNames';
-import { getServiceIcon } from '../../../utils/icons';
+import { serviceNameTooltip } from '../../../utils/serviceNameFit';
+import ServiceLogo from '../../common/ServiceLogo.vue';
 import { formatFileSize } from '../../../utils/formatters';
 import EmptyState from '../../common/EmptyState.vue';
 import { useHistoryViewState } from '../../../composables/useHistoryViewState';
@@ -295,7 +296,7 @@ function handleCheckboxToggle(id: string) {
               :key="serviceId"
               class="service-badge-icon"
               :class="{ 'is-copied': copiedServiceKey === getServiceCopyKey(data.id, serviceId) }"
-              v-tooltip.top="copiedServiceKey === getServiceCopyKey(data.id, serviceId) ? '已复制' : '点击复制链接'"
+              v-tooltip.top="copiedServiceKey === getServiceCopyKey(data.id, serviceId) ? '已复制' : serviceNameTooltip(getServiceDisplayName(serviceId), '点击复制链接')"
               @click.stop="handleCopyServiceLink(data, serviceId)"
             >
               <i
@@ -303,7 +304,7 @@ function handleCheckboxToggle(id: string) {
                 class="pi pi-check badge-icon copied-check"
                 aria-hidden="true"
               />
-              <span v-else class="badge-icon" v-html="getServiceIcon(serviceId)" />
+              <ServiceLogo v-else :service-id="serviceId" class="badge-icon" />
               <span class="badge-label">
                 {{ getServiceDisplayName(serviceId) }}
               </span>
@@ -336,8 +337,10 @@ function handleCheckboxToggle(id: string) {
             class="pi pi-check badge-icon copied-check"
             aria-hidden="true"
           />
-          <span v-else class="badge-icon" v-html="getServiceIcon(serviceId)" />
-          <span>{{ getServiceDisplayName(serviceId) }}</span>
+          <ServiceLogo v-else :service-id="serviceId" class="badge-icon" />
+          <span class="service-popover-label" v-tooltip.top="serviceNameTooltip(getServiceDisplayName(serviceId), null, 160)">
+            {{ getServiceDisplayName(serviceId) }}
+          </span>
           <i class="pi pi-copy" />
         </button>
       </div>

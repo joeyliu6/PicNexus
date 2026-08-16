@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue';
 import { getServiceDisplayName } from '../../../../constants/serviceNames';
-import { getServiceIcon } from '../../../../utils/icons';
+import { serviceNameTooltip } from '../../../../utils/serviceNameFit';
+import ServiceLogo from '../../../common/ServiceLogo.vue';
 
 defineProps<{
   services: { serviceId: string; count: number }[];
@@ -37,9 +38,10 @@ onUnmounted(() => {
         :key="svc.serviceId"
         class="svc-row"
         :class="{ 'svc-row--copied': copiedId === svc.serviceId }"
+        v-tooltip.top="serviceNameTooltip(getServiceDisplayName(svc.serviceId))"
         @click.stop="handleClick(svc.serviceId)"
       >
-        <span class="svc-icon" aria-hidden="true" v-html="getServiceIcon(svc.serviceId)" />
+        <ServiceLogo :service-id="svc.serviceId" class="svc-icon" />
         <span class="svc-name">{{ getServiceDisplayName(svc.serviceId) }}</span>
         <span class="svc-badge">{{ svc.count }}</span>
         <i
@@ -97,16 +99,8 @@ onUnmounted(() => {
 .svc-icon {
   width: 16px;
   height: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  font-size: var(--text-sm);
   color: var(--text-muted);
-}
-
-.svc-icon :deep(svg) {
-  width: 100%;
-  height: 100%;
 }
 
 .svc-name {
