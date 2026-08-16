@@ -3,10 +3,11 @@ import { computed, onUnmounted, ref, watch } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import { useConfigManager } from '../../composables/useConfig';
 import { LINK_FORMAT_OPTIONS, type LinkFormat } from '../../utils/linkFormatter';
-import { getServiceIcon } from '../../utils/icons';
 import { getServiceDisplayName } from '../../constants/serviceNames';
 import { isStatusSuccess, isStatusError, getStatusType, getStatusLabel } from '../../utils/uploadStatus';
 import { buildUploadFailureTooltip } from '../../utils/uploadFailureMessage';
+import { serviceNameTooltip } from '../../utils/serviceNameFit';
+import ServiceLogo from '../common/ServiceLogo.vue';
 
 export interface ChannelCopyPayload {
   url: string;
@@ -36,12 +37,23 @@ const emit = defineEmits<{
 const configManager = useConfigManager();
 
 const serviceName = computed(() => getServiceDisplayName(props.service));
-const serviceIcon = computed(() => getServiceIcon(props.service));
 const statusType = computed(() => getStatusType(props.status));
 const statusLabel = computed(() => getStatusLabel(props.status));
 const errorTooltip = computed(() => {
   if (!isStatusError(props.status)) return '';
   return buildUploadFailureTooltip(serviceName.value, props.error, [props.service]);
+});
+
+/**
+ * 名字被截断时看全名的入口。
+ *
+ * 只在名字放不下时才给：短名字卡片上已经完整显示，弹一个一模一样的气泡是噪音。
+ * 失败态返回 null 让位给根节点的 errorTooltip——那条文案本身就以服务名开头，
+ * 全名照样可见。两者互斥，避免父子 tooltip 同时弹出两个气泡。
+ */
+const nameTooltip = computed(() => {
+  if (isStatusError(props.status)) return null;
+  return serviceNameTooltip(serviceName.value) ?? null;
 });
 
 const cardClass = computed(() => ({
@@ -123,13 +135,10 @@ function handleRetry() {
     :class="cardClass"
     v-tooltip.top="errorTooltip || null"
   >
-    <div class="channel-icon" :class="{ 'has-svg': !!serviceIcon }">
-      <span v-if="serviceIcon" class="icon-svg" v-html="serviceIcon"></span>
-      <span v-else>{{ serviceName[0] }}</span>
-    </div>
+    <ServiceLogo :service-id="service" class="channel-icon" />
 
     <div class="channel-info">
-      <span class="channel-name">{{ serviceName }}</span>
+      <span class="channel-name" v-tooltip.top="nameTooltip">{{ serviceName }}</span>
       <span class="status-label" :class="statusType">{{ statusLabel }}</span>
     </div>
 
@@ -226,36 +235,11 @@ function handleRetry() {
 }
 
 .channel-icon {
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-sm-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  color: var(--text-muted);
-  font-weight: var(--weight-semibold);
-  font-size: var(--text-xs);
-  flex-shrink: 0;
-  transition: all var(--duration-normal) ease;
-}
-
-.channel-icon.has-svg {
-  background: transparent;
-  color: var(--text-primary);
-}
-
-.channel-icon .icon-svg {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-}
-
-.channel-icon .icon-svg :deep(svg) {
   width: 14px;
   height: 14px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  transition: color var(--duration-normal) ease;
 }
 
 .channel-info {
@@ -292,12 +276,16 @@ function handleRetry() {
   color: var(--primary);
 }
 
+/* 流内布局：绝对定位时 .channel-name 的 ellipsis 算不到按钮宽度，
+   长图床名会直接钻到复制/重试按钮下面重叠。改成 flex 项后
+   .channel-info(flex:1; min-width:0) 自动让位，省略号落在按钮左侧。
+   align-self 顶到首行，保持原来「贴右上角」的观感——卡片是 align-items:center，
+   不指定的话按钮会垂直居中到两行文字中间。 */
 .copy-actions {
-  position: absolute;
-  top: 6px;
-  right: 6px;
   display: inline-flex;
   align-items: center;
+  align-self: flex-start;
+  flex-shrink: 0;
 }
 
 .copy-btn,
@@ -334,9 +322,8 @@ function handleRetry() {
 }
 
 .retry-btn {
-  position: absolute;
-  top: 6px;
-  right: 6px;
+  align-self: flex-start;
+  flex-shrink: 0;
   color: var(--error);
 }
 
