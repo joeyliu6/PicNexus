@@ -67,4 +67,23 @@ describe('ThumbnailImage fallback chain', () => {
 
     expect(wrapper.get('img').attributes('src')).toBe('https://cdn.example.com/safe.jpg');
   });
+
+  it('allows an HTTP hostname listed in confirmedHttpHosts', async () => {
+    // fake-ip 逃生舱确认的是主机名，不是字面量私网 IP——不传这个 prop 就该按默认策略拒绝
+    const rejecting = mountWithDefaults(ThumbnailImage, {
+      props: { srcs: ['http://nas.local/img/a.jpg'] },
+      slots: { placeholder: '<span data-testid="thumb-fallback">fallback</span>' },
+    });
+    await nextTick();
+    expect(rejecting.find('img').exists()).toBe(false);
+    expect(rejecting.get('[data-testid="thumb-fallback"]').text()).toBe('fallback');
+
+    const allowing = mountWithDefaults(ThumbnailImage, {
+      props: {
+        srcs: ['http://nas.local/img/a.jpg'],
+        confirmedHttpHosts: new Set(['nas.local']),
+      },
+    });
+    expect(allowing.get('img').attributes('src')).toBe('http://nas.local/img/a.jpg');
+  });
 });

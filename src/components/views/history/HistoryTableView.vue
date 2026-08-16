@@ -19,6 +19,7 @@ import HistoryLightbox from './HistoryLightbox.vue';
 import FloatingActionBar from './FloatingActionBar.vue';
 import ThumbnailImage from '../../common/ThumbnailImage.vue';
 import { getThumbnailCandidates } from '../../../composables/useThumbCache';
+import { getConfirmedWebdavHttpHosts } from '../../../security/networkPolicy';
 import { useHistoryTableData, isSkeleton } from '../../../composables/history/useHistoryTableData';
 import { useHistoryBadgeLayout } from '../../../composables/history/useHistoryBadgeLayout';
 import { useTableInteractions } from '../../../composables/history/useTableInteractions';
@@ -38,6 +39,8 @@ const viewState = useHistoryViewState();
 const historyManager = useHistoryManager();
 
 const isFilterActive = computed(() => !!(props.searchTerm || props.filter !== 'all'));
+// 走过 fake-ip 逃生舱确认的 WebDAV 主机名，让缩略图不再把已确认的地址当危险链接挡掉
+const confirmedHttpHosts = computed(() => getConfirmedWebdavHttpHosts(configManager.config.value.webdav_profiles));
 const tableViewRef = ref<HTMLElement | null>(null);
 const servicePopoverRef = ref<InstanceType<typeof PopoverType> | null>(null);
 
@@ -251,6 +254,7 @@ function handleCheckboxToggle(id: string) {
                 :srcs="getThumbnailCandidates(slotProps.data, configManager.config.value)"
                 :alt="slotProps.data.localFileName"
                 imageClass="thumb-img"
+                :confirmed-http-hosts="confirmedHttpHosts"
               >
                 <template #placeholder>
                   <i class="pi pi-image thumb-placeholder"></i>

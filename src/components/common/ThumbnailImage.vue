@@ -6,6 +6,13 @@ const props = defineProps<{
   srcs: string[];
   alt?: string;
   imageClass?: string;
+  /**
+   * 已通过 fake-ip 逃生舱确认的 HTTP 主机名（需先用 normalizeHost 归一化）
+   *
+   * Why 这里只接 prop 不自己查配置：本组件是到处复用的通用缩略图，配置读取
+   * 交给调用方（如 HistoryTableView / QueueCard，见 getConfirmedWebdavHttpHosts）。
+   */
+  confirmedHttpHosts?: ReadonlySet<string>;
 }>();
 
 const currentSrcIndex = ref(0);
@@ -16,7 +23,7 @@ const isLoading = ref(true);
 const loadImage = () => {
   isLoading.value = true;
   if (props.srcs && props.srcs.length > 0 && currentSrcIndex.value < props.srcs.length) {
-    const nextSrc = safeImageUrl(props.srcs[currentSrcIndex.value]);
+    const nextSrc = safeImageUrl(props.srcs[currentSrcIndex.value], props.confirmedHttpHosts);
     if (nextSrc) {
       currentSrc.value = nextSrc;
       isError.value = false;
@@ -54,6 +61,14 @@ watch(
   },
   { immediate: true },
 );
+
+// 用户在设置页走完逃生舱确认后，同一个会话里已挂载的缩略图应该立刻能显示，不必等组件重新挂载
+watch(() => props.confirmedHttpHosts, () => {
+  if (isError.value) {
+    currentSrcIndex.value = 0;
+    loadImage();
+  }
+});
 
 </script>
 

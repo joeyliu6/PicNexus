@@ -3,10 +3,27 @@ import {
   assertAllowedExternalUrl,
   assertAllowedWebDAVUrl,
   assertAllowedWebDAVStorageUrl,
+  getConfirmedWebdavHttpHosts,
   isFakeIpPoolHost,
   isLoopbackHost,
+  normalizeHost,
   safeImageUrl,
 } from '@/security/networkPolicy';
+import type { WebDAVStorageProfile } from '@/config/types';
+
+function makeWebdavProfile(overrides: Partial<WebDAVStorageProfile> = {}): WebDAVStorageProfile {
+  return {
+    id: 'profile-1',
+    name: '我的 NAS',
+    url: 'http://nas.local:5005/dav',
+    username: 'user',
+    passwordEncrypted: 'enc',
+    remotePath: '/images',
+    publicDomain: 'http://nas.local:5005',
+    publicUrlTemplate: '{domain}/{path}/{filename}',
+    ...overrides,
+  };
+}
 
 describe('networkPolicy', () => {
   it('allows https public URLs and loopback http URLs', () => {
@@ -132,5 +149,42 @@ describe('networkPolicy', () => {
     // 链路本地 / 云元数据依旧拒绝
     expect(safeImageUrl('http://169.254.169.254/latest')).toBeUndefined();
     expect(safeImageUrl('https://169.254.169.254/latest')).toBeUndefined();
+  });
+
+  it('allows HTTP hostnames the user already confirmed via the lan-http escape hatch', () => {
+    // fake-ip 逃生舱确认的是主机名（如 nas.local），不是字面量私网 IP，
+    // 默认策略认不出来——必须显式传入已确认主机名集合才放行
+    const confirmed = new Set([normalizeHost('nas.local')]);
+
+    expect(safeImageUrl('http://nas.local/img/a.png', confirmed))
+      .toBe('http://nas.local/img/a.png');
+    // 大小写不敏感，与 normalizeHost 的归一化口径一致
+    expect(safeImageUrl('http://NAS.LOCAL/img/a.png', confirmed))
+      .toBe('http://nas.local/img/a.png');
+    // 没传集合、或主机名不在集合里，仍然按默认策略拒绝
+    expect(safeImageUrl('http://nas.local/img/a.png')).toBeUndefined();
+    expect(safeImageUrl('http://other.example.com/img/a.png', confirmed)).toBeUndefined();
+    // 确认名单不能给链路本地 / 云元数据地址开后门
+    const blocked = new Set([normalizeHost('169.254.169.254')]);
+    expect(safeImageUrl('http://169.254.169.254/latest', blocked)).toBeUndefined();
+  });
+
+  it('collects confirmed HTTP hostnames only from confirmed WebDAV profiles', () => {
+    const hosts = getConfirmedWebdavHttpHosts([
+      makeWebdavProfile({ lanHttpConfirmed: true, publicDomain: 'http://NAS.local:5005' }),
+      // 未确认：不该被收进去
+      makeWebdavProfile({ id: 'p2', lanHttpConfirmed: false, publicDomain: 'http://other.local' }),
+      // 已确认但是 HTTPS：不需要这份名单，也不该被收进去
+      makeWebdavProfile({ id: 'p3', lanHttpConfirmed: true, publicDomain: 'https://cdn.example.com' }),
+      // 已确认但域名格式不合法：跳过而不是抛错
+      makeWebdavProfile({ id: 'p4', lanHttpConfirmed: true, publicDomain: 'not a url' }),
+    ]);
+
+    // 大小写已归一化
+    expect(hosts.has(normalizeHost('nas.local'))).toBe(true);
+    expect(hosts.size).toBe(1);
+
+    expect(getConfirmedWebdavHttpHosts(undefined).size).toBe(0);
+    expect(getConfirmedWebdavHttpHosts([]).size).toBe(0);
   });
 });

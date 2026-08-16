@@ -1,3 +1,5 @@
+import type { WebDAVStorageProfile } from '../config/types';
+
 const EXTERNAL_HTTP_DISABLED_MESSAGE =
   '外部 HTTP 地址已禁用，请改用 HTTPS。本机服务仅支持 http://localhost 或 http://127.0.0.1。';
 const HTTPS_ONLY_MESSAGE = '地址仅支持 HTTPS，或本机回环 HTTP。';
@@ -99,7 +101,41 @@ export function assertAllowedWebDAVStorageUrl(rawUrl: string): URL {
   });
 }
 
-export function safeImageUrl(rawUrl: string | null | undefined): string | undefined {
+/**
+ * 收集已通过 fake-ip 逃生舱确认的 WebDAV 公开域名主机名
+ *
+ * 供 {@link safeImageUrl} 的 `confirmedHttpHosts` 参数使用：把"用户已经在设置页
+ * 显式确认过这个地址"（`profile.lanHttpConfirmed`）转换成主机名集合，让缩略图
+ * 之类的通用图片校验也能认得这个确认状态。只认 `publicDomain`——缩略图渲染的
+ * 就是这个域名，WebDAV 端点本身（`url`）不会被拿去当图片链接。
+ */
+export function getConfirmedWebdavHttpHosts(
+  profiles: readonly WebDAVStorageProfile[] | undefined,
+): Set<string> {
+  const hosts = new Set<string>();
+  for (const profile of profiles ?? []) {
+    if (!profile.lanHttpConfirmed || !profile.publicDomain) continue;
+    try {
+      const url = new URL(profile.publicDomain);
+      if (url.protocol === 'http:') hosts.add(normalizeHost(url.hostname));
+    } catch {
+      // 域名格式不合法：交给设置页的校验去报错，这里跳过即可
+    }
+  }
+  return hosts;
+}
+
+/**
+ * @param confirmedHttpHosts 已被用户显式确认过的明文 HTTP 主机名集合，见 {@link getConfirmedWebdavHttpHosts}
+ *
+ * Why 需要这个参数：fake-ip 逃生舱确认的是"这个 WebDAV 地址我信得过"，但那个
+ * 确认状态存在具体的 profile 上，这个函数本身是无状态的通用校验，看不到 profile。
+ * 调用方（缩略图组件）负责从已确认的 profile 里收集主机名传进来，这里只做匹配。
+ */
+export function safeImageUrl(
+  rawUrl: string | null | undefined,
+  confirmedHttpHosts?: ReadonlySet<string>,
+): string | undefined {
   if (!rawUrl) return undefined;
   const value = rawUrl.trim();
   if (!value) return undefined;
@@ -121,10 +157,15 @@ export function safeImageUrl(rawUrl: string | null | undefined): string | undefi
   // Why 放行局域网 HTTP：WebDAV 图床（群晖 / 自建 NAS）的公开域名就是
   // http://192.168.1.10:5244 这种形态。不放行的话图片能上传成功、链接也对，
   // 但历史记录里的缩略图全是裂的，体感等同于功能坏掉。
+  //
+  // Why 再加 confirmedHttpHosts 兜底：fake-ip 逃生舱确认的地址是主机名（如
+  // nas.local），不是字面量私网 IP，isPrivateOrReservedHost 认不出来。用户已经
+  // 在设置页显式担责过一次，这里不该再把它当危险链接挡掉。
   if (
     parsed.protocol === 'http:'
     && !isLoopbackHost(parsed.hostname)
     && !isPrivateOrReservedHost(parsed.hostname)
+    && !confirmedHttpHosts?.has(normalizeHost(parsed.hostname))
   ) {
     return undefined;
   }
@@ -261,7 +302,7 @@ function isSafeImageDataUrl(value: string): boolean {
   return /^data:image\/(?:png|jpe?g|gif|webp|bmp|avif|svg\+xml);base64,[a-z0-9+/=\s]+$/i.test(value);
 }
 
-function normalizeHost(hostname: string): string {
+export function normalizeHost(hostname: string): string {
   return hostname.trim().replace(/^\[/, '').replace(/\]$/, '').replace(/\.$/, '').toLowerCase();
 }
 
