@@ -268,8 +268,18 @@ export const TOAST_MESSAGES = {
       summary: '验证成功',
       detail: `${serviceName} Cookie 有效`
     }),
+    /**
+     * 连接测试没通过（目前只有备份 WebDAV 的「测试连接」用它）
+     *
+     * Why 标题不能说「验证失败」/「认证失败」：正文是后端给的具体原因，其中
+     * 403 那句明确说了「账号认过了，是权限不够」。标题若说验证失败，就在大字号
+     * 的位置先给了个相反的结论，把用户支回去改本来没错的密码——标题和正文自己打架。
+     *
+     * 「连接失败」= 这次测试没成功，至于为什么交给正文说，任何失败原因下都成立。
+     * 与图床侧的 `connectionFailed` 标题一致，同一个故障在两个入口不会说两种话。
+     */
     failed: (serviceName: string, error?: string): ToastMessageConfig => ({
-      summary: '验证失败',
+      summary: '连接失败',
       detail: error || `${serviceName} 连接失败`
     }),
     tokenFailed: (serviceName: string, error: string): ToastMessageConfig => ({
