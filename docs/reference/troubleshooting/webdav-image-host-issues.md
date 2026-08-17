@@ -18,7 +18,8 @@ WebDAV 图床实际是两半，出问题的性质完全不同，**先分清在�
 
 ### 先看提示说的是哪一句
 
-图床链路的 401 提示会**自己区分**这两种情况，照着念即可：
+401 提示会**自己区分**这两种情况，照着念即可（图床三条链路 + 备份的「测试连接」都有，
+唯一没有的是同步过程中的 PUT/GET，见下方 ⚠️）：
 
 | 提示 | 含义 | 怎么办 |
 |------|------|--------|
@@ -51,11 +52,25 @@ WebDAV 图床实际是两半，出问题的性质完全不同，**先分清在�
 curl -sI https://你的服务器/dav/ | grep -i "www-authenticate"
 ```
 
-### ⚠️ 备份链路没有这个区分
+### ⚠️ 备份链路只有「测试连接」有这个区分
 
-只有**图床**链路（`upload_to_webdav` / `test_webdav_storage`）能区分。
-备份链路走 `webdav_request`，它的返回值只有 `{status, body}`，**拿不到响应头**，
-所以备份 WebDAV 撞上 Digest 时仍然只会说「认证失败，请检查用户名和密码」。
+能不能说出 Digest 那句话，取决于**拿不拿得到响应头**：
+
+| 位置 | 有没有 Digest 提示 | 为什么 |
+|------|-------------------|--------|
+| 图床上传 / 图床连接测试 / 编辑器·CLI 上传 | ✅ 有 | `upload_to_webdav_core`、`test_webdav_storage`、`server_upload_webdav` 手里都有完整响应 |
+| 备份的「测试连接」按钮 | ✅ 有 | `main.rs::probe_webdav_connection` 与上面**共用同一个** `describe_status` |
+| 同步过程中的 PUT / GET | ❌ 无 | 走 `webdav_request`，它只回 `{status, body}`，响应头在 Rust 侧就丢了，前端判不了认证方案 |
+
+**为什么剩下那一档不补**：连接测试是同步的前置门槛，撞上 Digest 必然先在测试按钮上撞到，
+根本走不到同步的 PUT 那一步。而为一条实际到不了的路径改 `WebDAVResponse` 结构，
+要动 Rust 的组装、TS 的接口、5 处 401 判定、新增一对跨语言常量，还要跟着改三套测试 mock——
+成本与收益完全不成比例。
+
+> 📌 这里以前写的是「备份链路没有这个区分，因为 `webdav_request` 拿不到响应头」。
+> 那个理由对 `test_webdav_connection` **不成立**——它手里一直握着完整的 `res`，
+> 是能拿到但没读。现在读了。
+
 两条链路的其它差异见文末对照表。
 
 ---
@@ -197,7 +212,7 @@ WebDAV 是唯一被放开明文 HTTP 的链路，但有三条硬拒绝：
 | 前端 | `assertAllowedWebDAVUrl`（只认 IP 字面量） | `assertAllowedWebDAVStorageUrl`（主机名放行到 Rust） |
 | Rust | `validate_webdav_url`（同步） | `validate_webdav_url_for_request`（异步，带 DNS 裁决） |
 | 明文 HTTP 逃生舱 | ❌ 无（前端就把主机名拦了，走不到这一档） | ✅ 有，见上 |
-| Digest 提示 | ❌ 无（`webdav_request` 拿不到响应头） | ✅ 有 |
+| Digest 提示 | ✅ 连接测试有（`test_webdav_connection`）<br>❌ 同步 PUT/GET 无（`webdav_request` 只回 `{status, body}`） | ✅ 有（上传 / 连接测试 / 编辑器·CLI 三处共用 `describe_status`） |
 
 ---
 

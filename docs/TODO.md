@@ -100,13 +100,25 @@ Cookie 2 处 / S3 2 处（展开 12 个输入框）→ 抽 `useWebDAVProfileEdit
 
 配置同步**必须先有备份密码**（见 [sync-flow.md](./flows/sync-flow.md) 图 1 下方要点）。
 
-- [ ] 设好备份密码 → 保存 → 重启 → 测试连接 → 触发配置同步。
-      **判据**：同步成功。这条验证 `backupSyncUtils` / `useWebDAVSync` 走密文确实通——
-      代码上它们本来就传 `passwordEncrypted`，但没真机跑过。
-- [ ] 换过备份密码之后，用**真实可达**的 WebDAV 图床（坚果云或起一个本地 OpenList）
-      传一张图。**判据**：上传成功。
-      2026-08-15 那次只跑到「解密成功、连不上服务器」（本地 OpenList 没起），
+- [ ] 设好备份密码 → 保存 → **托盘退出后重启** → 测试连接 →
+      在「备份与同步」里点「上传配置到云端」。
+      **判据**：toast 显示「上传成功」；到服务端把 `/PicNexus/settings.json` 打开，
+      **开头是 `PNXPWD:`**（不是 `{`）。一条判据同时钉住两件事：密文密码解得开
+      （`backupSyncUtils.getWebDAVClientAndPath`），以及整份配置上传前确实被
+      `ConfigSync.uploadSettingsCloud` 加密过（`isPasswordMode` 门禁 + `secureStorage.encrypt`）。
+      ⚠️ 走的是 `useBackupSync` → `ConfigSync`，**不是** `useWebDAVSync`——后者从未接线，
+      已随本轮收尾删除（`b94a24f`）。**旧判据点错了模块，手点 UI 永远验不到它。**
+      密文那一环现已有单测钉住（`tests/unit/composables/backup-sync/backupSyncUtils.spec.ts`），
+      本条真机要验的是「真实服务端 + 真钥匙串 + 真重启」这三样单测造不出来的东西。
+- [ ] 换过备份密码之后，用**真实可达**的 WebDAV 图床（坚果云或起一个本地 dufs / OpenList）
+      传一张图。**判据**：上传成功，且历史记录里缩略图正常显示（不是裂图）。
+      ⚠️ 失败要分两档，别混：
+      · 「WebDAV 密码解密失败，请在设置中重新填写密码」= 换钥搬运挂了，**这是真回归**
+      · 「无法连接到 WebDAV 服务器，请检查 URL 或网络」= 服务端没起，**环境问题不是回归**
+      2026-08-15 那次停在后者（见 [orphan-field-ciphertext.md](./reference/troubleshooting/orphan-field-ciphertext.md)），
       解密那一环已证明，认证与上传那一环没跑到。
+      换钥搬运本身现已有真 AES-GCM 单测覆盖（`tests/unit/security/fieldSecretsRealCrypto.spec.ts`），
+      本条真机剩下要证的只有「密钥跨进程存活」这一半。
 
 > 📌 **顺序限制已经没了。** 孤儿密文缺陷已于 2026-08-15 修复（`rekeyFieldSecrets`
 > 换钥匙时会把内层密文一并搬运），先填 WebDAV 密码、后设备份密码不再作废密码。

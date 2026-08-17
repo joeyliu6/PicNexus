@@ -16,7 +16,11 @@ const log = createLogger('WebDAV');
  * 不再只是口头约定；改名或挪窝时同步更新那里的 `PAIRS`。
  *
  * 📌 Rust 侧在 401 时还会读 `WWW-Authenticate` 头，服务端只给 Digest 时换用另一句提示。
- * 这里做不到——`webdav_request` 的返回值只有 `{status, body}`，拿不到响应头。
+ * **这里做不到**——`webdav_request` 的返回值只有 `{status, body}`，拿不到响应头。
+ *
+ * 但缺口只剩同步过程中的 PUT/GET 这一档：备份的「测试连接」由 Rust 的
+ * `main.rs::probe_webdav_connection` 覆盖，它与图床链路共用同一个 `describe_status`。
+ * 而连接测试是同步的前置门槛，撞 Digest 必然先在那里撞到。
  */
 export const WEBDAV_AUTH_FAILED_MESSAGE = '认证失败，请检查用户名和密码';
 

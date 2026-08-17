@@ -118,14 +118,17 @@ InfiniCLOUD 注册时撞上**候补名单**：官方改成排队制，账号要�
 | `f0ec7df` | 上传队列显示 `WebDAV (msrlkrjz3...)` | `getServiceDisplayName` 的 config 是可选参数，38 个调用点里 31 个没传 |
 | `a322dba` | **备份 WebDAV 密码每次保存被静默清空** | 调了两个 Rust 侧从未存在的命令；单测把它们 mock 成存在的，所以测试全绿、生产全挂 |
 
-## 遗留观察
+## 遗留观察（已解决）
 
-**成功分支的 Rust 文案是死代码**：`test_webdav_storage` 成功时返回
+**成功分支的 Rust 文案曾经是死代码**：`test_webdav_storage` 成功时返回
 `"连接成功，公开链接可正常访问"`，但 `WebDAVUploader.testConnection` 成功路径只回
 `{ success, latency }`，把 message 丢掉了，UI 实际显示的是通用文案「验证成功 / 配置有效」。
 失败路径才透传 `result.message`。
 
-要么让成功文案也透传，要么把 Rust 那句删掉——现在这样容易让人按源码文案去对 UI，对不上。
+**已于 `04222ed` 改成透传**（而不是删掉 Rust 那句）：`ConnectionTestResult` 加了可选
+`message` 字段，`useConnectionTest` 在后端给了说明时用它、没给时退回通用文案，
+其余四个上传器一行未改。选透传是因为那句话说的是「匿名访问公开链接那一段也验过了」——
+正是本功能下半段（见下方「已知边界」）最容易配错的地方，通用文案会把它丢掉。
 
 ## 已知边界：6/6 通过 ≠ 所有 WebDAV 网盘都能用
 
@@ -140,4 +143,9 @@ InfiniCLOUD 注册时撞上**候补名单**：官方改成排队制，账号要�
 是本功能的核心价值而非锦上添花——它决定这些用户是去改配置，还是认定产品坏了。
 
 缺口与排查方式详见 [webdav-image-host-issues.md](../reference/troubleshooting/webdav-image-host-issues.md)。
-其中 **Digest 认证不支持**已作为待办登记在 [TODO.md](../TODO.md)。
+其中 **不支持 Digest 是既定取舍，不是待办**：只做方案识别与提示（401 时读
+`WWW-Authenticate`，服务端只给 Digest 就换专属文案），不实现协议本身
+（HA1/HA2/nonce/qop/nc 那一套一行都没有）。TODO.md 里那两条已勾选的条目勾的是
+「**提示**」而非「**支持**」，照旧文去 TODO 里找容易误读成「Digest 支持已完成」。
+覆盖范围与判据见
+[webdav-image-host-issues.md](../reference/troubleshooting/webdav-image-host-issues.md#认证失败但用户名密码反复核对都是对的)。
