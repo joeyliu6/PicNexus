@@ -84,7 +84,7 @@ const servers = SCENARIOS.map((scenario) => {
   return server;
 });
 
-console.log('\nWebDAV 认证夹具已启动。三个地址都填同一套配置即可：');
+console.log(`\nWebDAV 认证夹具已启动（${SCENARIOS.length} 个端口）。每个地址都填同一套配置即可：`);
 console.log('  用户名/密码：随便填（本夹具一律返回 401，这正是要测的）');
 console.log('  公开访问域名：与 WebDAV 地址填同一个');
 console.log('\n按 Ctrl+C 停止。\n');
