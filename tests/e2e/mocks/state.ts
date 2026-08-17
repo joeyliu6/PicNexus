@@ -4,6 +4,7 @@ type E2ECall =
   | { type: 'dialog.save'; options?: unknown }
   | { type: 'clipboard.readText' }
   | { type: 'clipboard.writeText'; text: string }
+  | { type: 'fs.readFile'; path: string }
   | { type: 'fs.readTextFile'; path: string }
   | { type: 'fs.writeTextFile'; path: string; contents: string }
   | { type: 'event.emit'; event: string; payload?: unknown };
