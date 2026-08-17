@@ -230,6 +230,24 @@ transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
 ---
 
+## Dialog Scale
+
+弹窗宽度走变量，**不要在组件里写死像素**。
+
+| 变量 | 值 | 场景 |
+|------|-----|------|
+| `--dialog-width-sm` | 336px | 纯展示型（二维码、单图） |
+| `--dialog-width-md` | 460px | 默认档：表单、确认、引导 |
+| `--dialog-width-lg` | 520px | 含列表/多选项的决策弹窗 |
+| `--dialog-width-xl` | 900px | 需要大画布（图片对比预览） |
+| `--dialog-height-xl` | 680px | 与 `--dialog-width-xl` 配套 |
+
+弹窗的**外壳与按钮规格**（圆角、内边距、标题字号、按钮尺寸）不是各写各的，
+而是由 `src/styles/app.css` 第 3 节的 `.app-dialog` 统一提供，
+接入方式与例外登记见 [ui-patterns.md 的「弹窗规格」](ui-patterns.md#弹窗规格)。
+
+---
+
 ## Service Name Truncation
 
 图床显示名里，多实例私有存储（`custom_s3:` / `webdav:`）的名字是**用户自填、无长度限制**的，`WebDAV (原始ID)` 这类兜底串也很长。所有展示图床名的地方必须截断，`max-width` 按容器分三档：

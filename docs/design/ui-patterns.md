@@ -104,6 +104,62 @@
 
 ---
 
+## 弹窗规格
+
+全项目弹窗共用**一套**外壳与按钮规格，定义在 [`src/styles/app.css`](../../src/styles/app.css) 第 3 节。
+改规格只改那一处，所有弹窗跟着变。
+
+### 接入方式
+
+```vue
+<Dialog
+  :style="{ width: 'var(--dialog-width-md)' }"
+  :pt="{ root: { class: 'app-dialog' }, closeButton: { class: 'app-dialog-close-btn' } }"
+>
+  <template #footer>
+    <Button label="取消" severity="secondary" outlined class="dialog-btn-reject" />
+    <Button label="确认" class="dialog-btn-accept" />
+  </template>
+</Dialog>
+```
+
+PrimeVue 的 `<ConfirmDialog>` 自带 `.p-confirmdialog` 类，自动命中同一套规格，无需接入。
+
+| 底栏按钮 class | 外观 | 位置 |
+|----------------|------|------|
+| `dialog-btn-accept` | 实心主色（加 `severity="danger"` 转红） | 最右 |
+| `dialog-btn-reject` | 描边次要 | 主按钮左侧 |
+| `dialog-btn-secondary` | 无边框文字态 | 顶到最左（自带 `margin-right: auto`） |
+
+### 标准值
+
+| 项 | 值 |
+|----|-----|
+| 外壳圆角 | `--radius-xl`（16px） |
+| 标题栏 | `--space-xl` 三面，**不画分割线** |
+| 内容区 | `--space-lg-xl` / `--space-xl` / `--space-xl` |
+| 底栏 | `--space-sm` / `--space-xl` / `--space-xl`，右对齐，间距 `--space-md` |
+| 按钮 | 高 40px · 圆角 `--radius-md` · `--text-base` · `--weight-semibold` |
+
+### ⚠️ 按钮样式不能写在组件的 `:deep()` 里
+
+PrimeVue Dialog 会 Teleport 到 `<body>`，其根节点 `.p-dialog` **不带 Vue scoped 属性**，
+`:deep(.x)` 编译出的 `[data-v-*] .x` 找不到祖先，规则永远不生效（不报错，静默失效）。
+同理，普通 `.css` 文件里的 `:deep()` 会被浏览器整条丢弃 —— 两种情况都由
+[`scripts/check-css-deep.mjs`](../../scripts/check-css-deep.mjs) 在 `npm run lint` 时拦截。
+
+组件内的元素（如 `.field :deep(.p-password input)`）不受影响，因为 scoped 属性落在 `.field` 上。
+
+### 例外怎么登记
+
+确有差异的弹窗（如引导弹窗的正文自带留白）**只写差异**，不复制外壳，
+并在 [`tests/visual/dialog-consistency.visual.spec.ts`](../../tests/visual/dialog-consistency.visual.spec.ts)
+的 `contentPaddingOverride` 里写明原因。未登记的差异会直接测试失败。
+
+> 该测试直接量计算样式而非比像素 —— 像素快照有 1% 容差，按钮从 34px 变 40px 只占整页 0.4%，会被放过。
+
+---
+
 ## 常见模式
 
 ### 滚动条
