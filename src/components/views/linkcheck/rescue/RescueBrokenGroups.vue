@@ -393,9 +393,19 @@ defineExpose({
 .mr-host-badge--defunct { background: var(--error-alpha-10); color: var(--error); border-color: var(--error-alpha-15); }
 .mr-row:hover .mr-host-badge--defunct { background: var(--error-alpha-15); }
 
+/* 备用链接列：可修复的行渲染下拉选择器，需手动的行渲染行号标记。
+   两者共用同一列宽（140px），否则缺少下拉框的行会让左侧的图床徽章整列错位。 */
+.mr-inline-select,
+.mr-no-backup {
+  /* min-width: 0 不能省：flex 项目默认 min-width:auto，<select> 会被最长选项文字
+     撑到 149px 而无视 140px 基准，导致左侧图床徽章整列错位 9px */
+  flex: 0 0 140px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
 /* 内联备用链接选择器 */
 .mr-inline-select {
-  flex-shrink: 0; max-width: 140px;
   height: 22px; padding: 0 var(--space-xs); border-radius: var(--radius-sm-md);
   font-size: var(--text-xs); font-family: inherit; color: var(--text-main);
   background: var(--primary-alpha-8); border: 1px solid var(--primary-alpha-15);
@@ -405,13 +415,16 @@ defineExpose({
 .mr-inline-select:focus { border-color: var(--primary); }
 
 .mr-no-backup {
-  flex-shrink: 0; font-size: var(--text-2xs); font-weight: var(--weight-semibold); color: var(--text-tertiary);
+  font-size: var(--text-2xs); font-weight: var(--weight-semibold); color: var(--text-tertiary);
   font-family: var(--font-mono, 'JetBrains Mono', monospace); font-variant-numeric: tabular-nums;
-  padding: 0 var(--space-xs-sm); cursor: default;
+  padding: 0 var(--space-xs-sm); cursor: default; text-align: right;
 }
 
+/* 操作列：需手动的行多一个"打开源文件"按钮（3 个 × 26px + 2 个间隙 = 82px）。
+   固定最小宽度并右对齐，保证 2 按钮与 3 按钮的行左边界一致。 */
 .mr-row-actions {
-  display: inline-flex; align-items: center; gap: var(--space-2xs); flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: flex-end;
+  gap: var(--space-2xs); flex-shrink: 0; min-width: 82px;
   opacity: 0; transition: opacity var(--duration-fast);
 }
 .mr-row:hover .mr-row-actions { opacity: 1; }
