@@ -8,7 +8,7 @@
 
 展示配置同步和历史记录同步的完整路径，重点关注**三种同步模式**和**冲突处理**。
 
-> **关键源文件**：`src/composables/useWebDAVSync.ts`
+> **关键源文件**：`src/composables/backup-sync/useBackupSync.ts`（入口）、`ConfigSync.ts`（配置同步）、`HistorySync.ts`（历史同步）、`backupSyncUtils.ts`（建连与远程路径推导）
 
 ### 配置同步
 
@@ -257,7 +257,7 @@ flowchart TD
 
 ## 相关文档
 
-- [Composables API](../reference/api/composables.md) — useWebDAVSync / useAutoSync 接口索引
+- [Composables API](../reference/api/composables.md) — useBackupSync / useAutoSync 接口索引
 - [链接检测性能优化](../reference/patterns/link-check-large-dataset.md) — 5 万条记录场景的优化方案
 - [同步流程](./sync-flow.md) — WebDAV 配置/历史同步的完整流程
 - [链接检测流程（深度展开）](./link-check-flow.md) — 服务感知请求、并发控制、动画状态机

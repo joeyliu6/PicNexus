@@ -71,7 +71,7 @@ flowchart TD
 
 展示历史记录的三种上传模式和两种下载模式。重点关注**增量同步**和**合并去重**逻辑。
 
-> **关键源文件**：`src/composables/backup-sync/HistorySync.ts`、`src/composables/useWebDAVSync.ts`、`src/services/database/HistoryMerge.ts`
+> **关键源文件**：`src/composables/backup-sync/HistorySync.ts`、`src/composables/backup-sync/backupSyncUtils.ts`、`src/services/database/HistoryMerge.ts`
 
 ```mermaid
 flowchart TD
@@ -217,5 +217,5 @@ flowchart TD
 - [辅助功能流程](./auxiliary-flows.md) — WebDAV 同步在辅助功能中的位置
 - [数据持久化流程](./data-persistence.md) — 配置存储和历史数据库的底层机制
 - [历史查询流程](./history-flow.md) — 同步的历史数据来源与查询机制
-- [Composables API](../reference/api/composables.md) — useWebDAVSync / useAutoSync 接口索引
+- [Composables API](../reference/api/composables.md) — useBackupSync / useAutoSync 接口索引
 - [休眠白屏修复](../reference/troubleshooting/sleep-resume-white-screen.md) — 休眠后 SQLite 连接丢失可能影响同步

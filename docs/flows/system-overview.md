@@ -31,7 +31,7 @@ flowchart TD
         C2[useHistory<br/>历史管理]
         C3[useConfig<br/>配置管理]
         C4[useThumbCache<br/>缩略图缓存]
-        C5[useWebDAVSync<br/>云同步]
+        C5[useBackupSync<br/>备份与同步]
         C6[useLinkCheck<br/>链接检测]
         C7[useServiceSelector<br/>服务选择]
     end
