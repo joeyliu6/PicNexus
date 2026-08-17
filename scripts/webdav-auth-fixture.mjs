@@ -5,16 +5,23 @@
  * 认证注定失败。所以服务端只需要如实声明自己要哪种认证即可，不需要真的实现 Digest 的
  * nonce/qop/nc 那一套。省掉一个 Docker 依赖，验收从「装环境」变成「跑一条命令」。
  *
- * 三个端口对应三种服务端形态，第三个最关键：
+ * 四个端口对应四种服务端形态，后两个是判据最容易失效的地方：
  *
- *   5011  只给 Digest                 → 应提示「服务端要求 Digest 认证」
- *   5012  只给 Basic                  → 应提示「认证失败，请检查用户名和密码」
- *   5013  两条同名 header，Digest 在前 → 应提示「认证失败，请检查用户名和密码」
+ *   5011  只给 Digest                  → 应提示「服务端要求 Digest 认证」
+ *   5012  只给 Basic                   → 应提示「认证失败，请检查用户名和密码」
+ *   5013  两条同名 header，Digest 在前  → 应提示「认证失败，请检查用户名和密码」
+ *   5014  Digest，realm 里带逗号        → 应提示「服务端要求 Digest 认证」
  *
  * 5013 是 `get_all()` vs `get()` 的真机判据：RFC 7235 允许服务端把 Basic 和 Digest
  * 拆成两条 `WWW-Authenticate` 发。只看第一条的实现会在这里把「两种都支持」误判成
  * 「只支持 Digest」，于是把一个密码填错的用户支去折腾服务端配置。单测里造得出这个
  * 形态，但只有真机能证明 reqwest 到 hyper 这一路没把它合并掉。
+ *
+ * 5014 补的是 `3eee955` 修掉的那个缺陷：`realm` 是 quoted-string，允许包含逗号。
+ * 按逗号裸切会把 `Digest realm="NAS, Basic Zone"` 从中间切断，后半截 `Basic Zone"`
+ * 让 `has_basic` 翻成 true，**反而遮掉 Digest 判定**，退回它本要消灭的那句通用提示。
+ * Why 现在才补：那次修复（08-17）提交在真机验收（08-16）**之后**，而当时三个场景的
+ * realm 都不带逗号，这个 case 从未在真机上跑过。
  *
  * 用法：node scripts/webdav-auth-fixture.mjs
  */
@@ -43,6 +50,12 @@ const SCENARIOS = [
       'Digest realm="picnexus-test", qop="auth", nonce="deadbeef"',
       'Basic realm="picnexus-test"',
     ],
+  },
+  {
+    port: 5014,
+    name: 'Digest，realm 里带逗号（3eee955 修的缺陷）',
+    expect: '服务端要求 Digest 认证',
+    headers: ['Digest realm="NAS, Basic Zone", qop="auth", nonce="deadbeef"'],
   },
 ];
 
