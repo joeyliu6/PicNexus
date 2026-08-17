@@ -147,6 +147,7 @@ function normalizeSettings(value) {
 }
 
 // src/markdown.ts
+var PLACEHOLDER_PREFIX = "\u23F3";
 function escapeMarkdownText(value) {
   return value.replace(/([\\[\]])/g, "\\$1");
 }
@@ -156,12 +157,18 @@ function escapeMarkdownUrl(value) {
 function formatMarkdownImage(name, url) {
   return `![${escapeMarkdownText(name)}](${escapeMarkdownUrl(url)})`;
 }
-function createUploadPlaceholder(fileName, uploadId) {
-  return `![Uploading ${escapeMarkdownText(fileName)}...](#picnexus-upload-${uploadId})`;
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-function findPlaceholderRange(content, placeholder) {
-  const start = content.indexOf(placeholder);
-  return start === -1 ? null : { start, end: start + placeholder.length };
+function createUploadPlaceholder(fileName, uploadId) {
+  const safeName = escapeMarkdownText(fileName).split(PLACEHOLDER_PREFIX).join("").replace(/[\r\n]+/g, " ");
+  return `${PLACEHOLDER_PREFIX} Uploading ${safeName}\u2026 (${uploadId})`;
+}
+function findPlaceholderRange(content, uploadId) {
+  const prefix = escapeRegExp(PLACEHOLDER_PREFIX);
+  const pattern = new RegExp(`${prefix}(?:(?!${prefix})[^\\n])*\\(${escapeRegExp(uploadId)}\\)`);
+  const match = pattern.exec(content);
+  return match ? { start: match.index, end: match.index + match[0].length } : null;
 }
 
 // src/main.ts
@@ -188,6 +195,15 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
   uploader = new PicNexusUploader(DEFAULT_SETTINGS.port);
   statusBarEl = null;
   uploadPlaceholderCounter = 0;
+  /**
+   * 每次加载插件随机生成的短标签，拼进占位符 ID
+   *
+   * 自增序号只能保证「本次会话内不重复」。若上一次 Obsidian 是在上传途中被关掉的，
+   * 笔记里会残留一个孤儿占位符；新会话序号从 1 重新开始，就可能把新图片的链接
+   * 替换到那个孤儿身上（它在文档里更靠前）。加个会话标签就避开了，代价是
+   * 占位符里多显示三个字符。
+   */
+  uploadSessionTag = Math.random().toString(36).slice(2, 5);
   async onload() {
     await this.loadSettings();
     this.uploader = new PicNexusUploader(this.settings.port);
@@ -270,7 +286,7 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
   async handleImageUpload(files, editor) {
     for (const file of files) {
       const placeholder = this.createUploadPlaceholder(file.name);
-      this.replaceSelection(editor, placeholder);
+      this.replaceSelection(editor, placeholder.text);
       try {
         const buffer = await file.arrayBuffer();
         const resp = await this.uploader.uploadByContent(
@@ -281,16 +297,16 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
         if (resp.success && resp.result && resp.result.length > 0) {
           const url = resp.result[0];
           const imageLink = this.formatImageLink(file.name, url);
-          this.replacePlaceholder(editor, placeholder, imageLink);
+          this.replacePlaceholder(editor, placeholder.id, imageLink);
           if (this.settings.showNotifications) {
             new import_obsidian3.Notice(`\u4E0A\u4F20\u6210\u529F: ${file.name}`);
           }
         } else {
-          this.replacePlaceholder(editor, placeholder, formatMarkdownImage(file.name, ""));
+          this.replacePlaceholder(editor, placeholder.id, formatMarkdownImage(file.name, ""));
           new import_obsidian3.Notice(`\u4E0A\u4F20\u5931\u8D25: ${resp.message || "\u672A\u77E5\u9519\u8BEF"}`);
         }
       } catch (err) {
-        this.replacePlaceholder(editor, placeholder, formatMarkdownImage(file.name, ""));
+        this.replacePlaceholder(editor, placeholder.id, formatMarkdownImage(file.name, ""));
         new import_obsidian3.Notice(`\u4E0A\u4F20\u5931\u8D25: ${err instanceof Error ? err.message : "\u8FDE\u63A5 PicNexus \u5931\u8D25"}`);
       }
     }
@@ -298,15 +314,16 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
   formatImageLink(name, url) {
     return formatMarkdownImage(name, url);
   }
+  /** 返回 `{ id, text }`：`text` 插进文档，`id` 留着替换时定位（可见文本可能被别的插件改写） */
   createUploadPlaceholder(fileName) {
-    const id = `${Date.now()}-${++this.uploadPlaceholderCounter}`;
-    return createUploadPlaceholder(fileName, id);
+    const id = `${this.uploadSessionTag}${++this.uploadPlaceholderCounter}`;
+    return { id, text: createUploadPlaceholder(fileName, id) };
   }
   replaceSelection(editor, replacement) {
     editor.replaceRange(replacement, editor.getCursor("from"), editor.getCursor("to"));
   }
-  replacePlaceholder(editor, placeholder, replacement) {
-    const range = findPlaceholderRange(editor.getValue(), placeholder);
+  replacePlaceholder(editor, uploadId, replacement) {
+    const range = findPlaceholderRange(editor.getValue(), uploadId);
     if (!range) return false;
     editor.replaceRange(
       replacement,
@@ -346,7 +363,7 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
     }
     for (const task of [...uploadTasks].reverse()) {
       editor.replaceRange(
-        task.placeholder,
+        task.placeholder.text,
         editor.offsetToPos(task.startOffset),
         editor.offsetToPos(task.startOffset + task.original.length)
       );
@@ -363,13 +380,13 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
         if (resp.success && resp.result && resp.result.length > 0) {
           const url = resp.result[0];
           const imageLink = this.formatImageLink(task.alt || task.file.name, url);
-          this.replacePlaceholder(editor, task.placeholder, imageLink);
+          this.replacePlaceholder(editor, task.placeholder.id, imageLink);
           uploadedCount++;
         } else {
-          this.replacePlaceholder(editor, task.placeholder, task.original);
+          this.replacePlaceholder(editor, task.placeholder.id, task.original);
         }
       } catch {
-        this.replacePlaceholder(editor, task.placeholder, task.original);
+        this.replacePlaceholder(editor, task.placeholder.id, task.original);
       }
     }
     if (uploadedCount > 0) {

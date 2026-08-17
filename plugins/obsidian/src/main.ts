@@ -34,6 +34,15 @@ export default class PicNexusPlugin extends Plugin {
   uploader: PicNexusUploader = new PicNexusUploader(DEFAULT_SETTINGS.port);
   private statusBarEl: HTMLElement | null = null;
   private uploadPlaceholderCounter = 0;
+  /**
+   * 每次加载插件随机生成的短标签，拼进占位符 ID
+   *
+   * 自增序号只能保证「本次会话内不重复」。若上一次 Obsidian 是在上传途中被关掉的，
+   * 笔记里会残留一个孤儿占位符；新会话序号从 1 重新开始，就可能把新图片的链接
+   * 替换到那个孤儿身上（它在文档里更靠前）。加个会话标签就避开了，代价是
+   * 占位符里多显示三个字符。
+   */
+  private readonly uploadSessionTag = Math.random().toString(36).slice(2, 5);
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -138,7 +147,7 @@ export default class PicNexusPlugin extends Plugin {
   private async handleImageUpload(files: File[], editor: Editor): Promise<void> {
     for (const file of files) {
       const placeholder = this.createUploadPlaceholder(file.name);
-      this.replaceSelection(editor, placeholder);
+      this.replaceSelection(editor, placeholder.text);
 
       try {
         const buffer = await file.arrayBuffer();
@@ -152,17 +161,17 @@ export default class PicNexusPlugin extends Plugin {
           const url = resp.result[0];
           const imageLink = this.formatImageLink(file.name, url);
 
-          this.replacePlaceholder(editor, placeholder, imageLink);
+          this.replacePlaceholder(editor, placeholder.id, imageLink);
 
           if (this.settings.showNotifications) {
             new Notice(`上传成功: ${file.name}`);
           }
         } else {
-          this.replacePlaceholder(editor, placeholder, formatMarkdownImage(file.name, ''));
+          this.replacePlaceholder(editor, placeholder.id, formatMarkdownImage(file.name, ''));
           new Notice(`上传失败: ${resp.message || '未知错误'}`);
         }
       } catch (err) {
-        this.replacePlaceholder(editor, placeholder, formatMarkdownImage(file.name, ''));
+        this.replacePlaceholder(editor, placeholder.id, formatMarkdownImage(file.name, ''));
         new Notice(`上传失败: ${err instanceof Error ? err.message : '连接 PicNexus 失败'}`);
       }
     }
@@ -172,17 +181,19 @@ export default class PicNexusPlugin extends Plugin {
     return formatMarkdownImage(name, url);
   }
 
-  private createUploadPlaceholder(fileName: string): string {
-    const id = `${Date.now()}-${++this.uploadPlaceholderCounter}`;
-    return createUploadPlaceholder(fileName, id);
+  /** 返回 `{ id, text }`：`text` 插进文档，`id` 留着替换时定位（可见文本可能被别的插件改写） */
+  private createUploadPlaceholder(fileName: string): { id: string; text: string } {
+    // 短 ID：它会直接显示在占位符里给用户看，不能是时间戳那种长串
+    const id = `${this.uploadSessionTag}${++this.uploadPlaceholderCounter}`;
+    return { id, text: createUploadPlaceholder(fileName, id) };
   }
 
   private replaceSelection(editor: Editor, replacement: string): void {
     editor.replaceRange(replacement, editor.getCursor('from'), editor.getCursor('to'));
   }
 
-  private replacePlaceholder(editor: Editor, placeholder: string, replacement: string): boolean {
-    const range = findPlaceholderRange(editor.getValue(), placeholder);
+  private replacePlaceholder(editor: Editor, uploadId: string, replacement: string): boolean {
+    const range = findPlaceholderRange(editor.getValue(), uploadId);
     if (!range) return false;
 
     editor.replaceRange(
@@ -216,7 +227,7 @@ export default class PicNexusPlugin extends Plugin {
       alt: string;
       file: TFile;
       original: string;
-      placeholder: string;
+      placeholder: { id: string; text: string };
       startOffset: number;
     }> = [];
 
@@ -239,7 +250,7 @@ export default class PicNexusPlugin extends Plugin {
 
     for (const task of [...uploadTasks].reverse()) {
       editor.replaceRange(
-        task.placeholder,
+        task.placeholder.text,
         editor.offsetToPos(task.startOffset),
         editor.offsetToPos(task.startOffset + task.original.length),
       );
@@ -259,13 +270,13 @@ export default class PicNexusPlugin extends Plugin {
         if (resp.success && resp.result && resp.result.length > 0) {
           const url = resp.result[0];
           const imageLink = this.formatImageLink(task.alt || task.file.name, url);
-          this.replacePlaceholder(editor, task.placeholder, imageLink);
+          this.replacePlaceholder(editor, task.placeholder.id, imageLink);
           uploadedCount++;
         } else {
-          this.replacePlaceholder(editor, task.placeholder, task.original);
+          this.replacePlaceholder(editor, task.placeholder.id, task.original);
         }
       } catch {
-        this.replacePlaceholder(editor, task.placeholder, task.original);
+        this.replacePlaceholder(editor, task.placeholder.id, task.original);
       }
     }
 
