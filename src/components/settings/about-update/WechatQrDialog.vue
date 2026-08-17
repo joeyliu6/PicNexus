@@ -25,7 +25,7 @@ function onQrError() {
     :style="{ width: 'var(--dialog-width-sm)' }"
     :draggable="false"
     :closable="true"
-    :pt="{ root: { class: 'wechat-qr-dialog' } }"
+    :pt="{ root: { class: 'app-dialog wechat-qr-dialog' }, closeButton: { class: 'app-dialog-close-btn' } }"
   >
     <template #header>
       <div class="wechat-dialog-header">
@@ -55,16 +55,8 @@ function onQrError() {
 </template>
 
 <style scoped>
-:global(.wechat-qr-dialog) {
-  border-radius: var(--radius-xl) !important;
-  overflow: hidden;
-}
-
-:global(.wechat-qr-dialog .p-dialog-header) {
-  border-bottom: none !important;
-  padding-bottom: var(--space-md) !important;
-}
-
+/* 外壳（圆角/背景/阴影/头尾内边距）由 .app-dialog 统一提供，这里只写本弹窗的差异：
+   自定义 header 已自带图标块，标题与二维码之间不需要默认的 20px 上留白。 */
 :global(.wechat-qr-dialog .p-dialog-content) {
   padding-top: var(--space-sm) !important;
 }

@@ -95,6 +95,7 @@ function confirm() {
     :style="{ width: 'var(--dialog-width-lg)' }"
     :draggable="false"
     :closable="true"
+    :pt="{ root: { class: 'app-dialog' }, closeButton: { class: 'app-dialog-close-btn' } }"
     @update:visible="emit('update:visible', $event)"
     @show="onShow"
   >
@@ -178,10 +179,19 @@ function confirm() {
     </div>
 
     <template #footer>
-      <div class="repair-dialog-footer">
-        <Button label="取消" severity="secondary" outlined @click="emit('update:visible', false)" />
-        <Button :label="`开始修复（${rescuableCount} 张）`" icon="pi pi-wrench" @click="confirm" />
-      </div>
+      <Button
+        label="取消"
+        severity="secondary"
+        outlined
+        class="dialog-btn-reject"
+        @click="emit('update:visible', false)"
+      />
+      <Button
+        :label="`开始修复（${rescuableCount} 张）`"
+        icon="pi pi-wrench"
+        class="dialog-btn-accept"
+        @click="confirm"
+      />
     </template>
   </Dialog>
 </template>
@@ -320,7 +330,5 @@ function confirm() {
 }
 .repair-manual-show-all:hover { background: var(--primary-alpha-5); border-color: var(--primary-alpha-30); }
 
-.repair-dialog-footer {
-  display: flex; justify-content: flex-end; gap: var(--space-sm);
-}
+/* 底栏布局与按钮规格由 .app-dialog 统一提供，见 src/styles/app.css 第 3 节 */
 </style>

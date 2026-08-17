@@ -36,7 +36,7 @@ function handleNext() {
     :draggable="false"
     :style="{ width: 'var(--dialog-width-md)' }"
     :pt="{
-      root: { class: 'onboarding-dialog' },
+      root: { class: 'app-dialog onboarding-dialog' },
       mask: { class: 'onboarding-mask' },
     }"
   >
@@ -62,30 +62,26 @@ function handleNext() {
     </div>
 
     <template #footer>
-      <div class="onboarding-footer">
-        <Button
-          label="跳过引导"
-          text
-          severity="secondary"
-          size="small"
-          @click="complete"
-        />
-        <div class="footer-actions">
-          <Button
-            v-if="!isFirstStep"
-            label="上一步"
-            outlined
-            severity="secondary"
-            size="small"
-            @click="prevStep"
-          />
-          <Button
-            :label="isLastStep ? '开始使用' : '下一步'"
-            size="small"
-            @click="handleNext"
-          />
-        </div>
-      </div>
+      <Button
+        label="跳过引导"
+        text
+        severity="secondary"
+        class="dialog-btn-secondary"
+        @click="complete"
+      />
+      <Button
+        v-if="!isFirstStep"
+        label="上一步"
+        outlined
+        severity="secondary"
+        class="dialog-btn-reject"
+        @click="prevStep"
+      />
+      <Button
+        :label="isLastStep ? '开始使用' : '下一步'"
+        class="dialog-btn-accept"
+        @click="handleNext"
+      />
     </template>
   </Dialog>
 </template>
@@ -133,34 +129,8 @@ function handleNext() {
   overflow: hidden auto;
 }
 
-.onboarding-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.footer-actions {
-  display: flex;
-  gap: var(--space-sm);
-}
-
-:deep(.footer-actions .p-button) {
-  border-radius: var(--radius-md) !important;
-  padding: var(--space-sm-md) var(--space-lg-xl) !important;
-  font-weight: var(--weight-semibold) !important;
-}
-
-:deep(.footer-actions .p-button-outlined) {
-  background: var(--bg-button-secondary) !important;
-  border: none !important;
-  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 按钮文字白色为固定设计值 */
-  color: white !important;
-}
-
-:deep(.footer-actions .p-button-outlined:hover) {
-  background: var(--bg-button-secondary-hover) !important;
-}
+/* 底栏布局与按钮规格由 .app-dialog 统一提供（"跳过引导"用 .dialog-btn-secondary，
+   自带 margin-right:auto 顶到左侧），见 src/styles/app.css 第 3 节 */
 
 .step-fade-enter-active,
 .step-fade-leave-active {
@@ -179,29 +149,10 @@ function handleNext() {
 </style>
 
 <style>
-.onboarding-dialog {
-  border-radius: var(--radius-xl) !important;
-  overflow: hidden;
-  background: var(--bg-card) !important;
-  border: none !important;
-  box-shadow: var(--shadow-dialog) !important;
-}
-
-.onboarding-dialog .p-dialog-header {
-  padding: var(--space-xl) var(--space-xl) 0 !important;
-  border-bottom: none !important;
-  background: transparent !important;
-}
-
+/* 外壳（圆角/背景/阴影/头尾内边距/按钮规格）由 .app-dialog 统一提供。
+   这里只写引导弹窗的差异：正文自带上下留白且需要自行滚动，故取消内容区默认内边距。 */
 .onboarding-dialog .p-dialog-content {
   padding: 0 var(--space-xl) !important;
-  background: transparent !important;
   overflow: hidden !important;
-}
-
-.onboarding-dialog .p-dialog-footer {
-  padding: 0 var(--space-xl) var(--space-xl) !important;
-  border-top: none !important;
-  background: transparent !important;
 }
 </style>

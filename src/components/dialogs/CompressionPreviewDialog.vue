@@ -239,9 +239,9 @@ onBeforeUnmount(() => {
 
 /* --- 弹窗主体 --- */
 .cpd-dialog {
-  width: 900px;
+  width: var(--dialog-width-xl);
   max-width: 94vw;
-  height: 680px;
+  height: var(--dialog-height-xl);
   max-height: 88vh;
   background: var(--bg-card);
   border-radius: var(--radius-xl);
@@ -387,7 +387,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-md) var(--space-xl) var(--space-lg-xl);
+  padding: var(--space-sm) var(--space-xl) var(--space-xl);
   flex-shrink: 0;
 }
 
@@ -410,30 +410,37 @@ onBeforeUnmount(() => {
   min-width: 40px;
 }
 
-/* --- 按钮 --- */
+/* --- 按钮 ---
+   本弹窗是手搓外壳（需要自定义头部/信息条/对比画布），无法套用 PrimeVue Dialog，
+   但按钮规格与 .app-dialog 底栏保持一致，见 src/styles/app.css 第 3.6 节 */
 .cpd-btn {
-  padding: var(--space-sm) var(--space-lg-xl);
+  padding: var(--space-sm-md) var(--space-xl);
   border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
-  transition: all var(--duration-fast);
-  border: none;
+  transition: all var(--duration-fast) ease;
+
+  /* 保留 1px 边框位（实心按钮设为透明），否则与描边按钮并排时高度差 2px */
+  border: 1px solid transparent;
+}
+
+.cpd-btn:active {
+  transform: scale(0.98);
 }
 
 .cpd-btn.primary {
   background: var(--primary);
-  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 主要按钮文字白色为固定设计值 */
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .cpd-btn.primary:hover {
-  filter: brightness(1.1);
+  opacity: 0.9;
 }
 
 .cpd-btn.outline {
   background: transparent;
-  border: 1px solid var(--border-subtle);
+  border-color: var(--border-subtle);
   color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
@@ -441,8 +448,8 @@ onBeforeUnmount(() => {
 }
 
 .cpd-btn.outline:hover {
-  border-color: var(--primary);
-  color: var(--primary);
+  background: var(--hover-overlay);
+  border-color: var(--text-muted);
 }
 
 .cpd-btn.outline .pi {

@@ -160,28 +160,7 @@ function handleKeydown(e: KeyboardEvent) {
   opacity: 0.7;
 }
 
-/* 按钮样式 - 对齐 BatchRenameDialog / BackupPasswordDialog */
-:deep(.dialog-btn-reject) {
-  flex: 1;
-  border-radius: var(--radius-md) !important;
-  padding: var(--space-md) var(--space-lg-xl) !important;
-  font-size: var(--text-base) !important;
-  font-weight: var(--weight-semibold) !important;
-  background: var(--bg-button-secondary) !important;
-  border: none !important;
-  /* stylelint-disable-next-line declaration-property-value-allowed-list -- 按钮文字白色为固定设计值 */
-  color: white !important;
-}
-
-:deep(.dialog-btn-reject:hover) {
-  background: var(--bg-button-secondary-hover) !important;
-}
-
-:deep(.dialog-btn-accept) {
-  flex: 1;
-  border-radius: var(--radius-md) !important;
-  padding: var(--space-md) var(--space-lg-xl) !important;
-  font-size: var(--text-base) !important;
-  font-weight: var(--weight-semibold) !important;
-}
+/* 底栏按钮规格由 .app-dialog 统一提供，见 src/styles/app.css 第 3 节。
+   注意：Dialog 会 Teleport 到 body，其根节点不带 scoped 属性，
+   按钮样式写在这里的 `:deep()` 里不会生效。 */
 </style>
