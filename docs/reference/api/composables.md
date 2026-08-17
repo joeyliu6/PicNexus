@@ -17,9 +17,9 @@
 | useSettingsForm | 设置页表单读写、保存防抖、恢复默认设置 | `src/composables/settings/useSettingsForm.ts` |
 | useSettingsReset | 设置页恢复默认设置编排 | `src/composables/settings/useSettingsReset.ts` |
 | useBackupSync | 备份与同步入口（本地/云端 × 配置/历史四条路径的编排） | `src/composables/backup-sync/useBackupSync.ts` |
-| ConfigSync | 配置同步实现；上传前强制 `isPasswordMode` 门禁 + 整份加密 | `src/composables/backup-sync/ConfigSync.ts` |
-| HistorySync | 历史记录同步实现（增量 + 合并去重） | `src/composables/backup-sync/HistorySync.ts` |
-| backupSyncUtils | WebDAV 建连与远程路径推导（解密密文密码就在这里） | `src/composables/backup-sync/backupSyncUtils.ts` |
+| createConfigSyncOps | 配置同步实现；上传前强制 `isPasswordMode` 门禁 + 整份加密 | `src/composables/backup-sync/ConfigSync.ts` |
+| createHistorySyncOps | 历史记录同步实现（增量 + 合并去重） | `src/composables/backup-sync/HistorySync.ts` |
+| `backupSyncUtils.ts`（模块） | WebDAV 建连与远程路径推导（解密密文密码就在这里）；导出 `getWebDAVClientAndPath` / `writeSyncLog` / `extractErrorCode` / `isWebDAVNotFoundError` | `src/composables/backup-sync/backupSyncUtils.ts` |
 | useClipboardImage | 剪贴板图片处理 | `src/composables/useClipboardImage.ts` |
 | useConfirm | 确认对话框 | `src/composables/useConfirm.ts` |
 | useQueueState | 上传队列状态 | `src/composables/useQueueState.ts` |
