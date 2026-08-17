@@ -2772,7 +2772,7 @@ async fn update_server_config(
 mod webdav_connection_tests {
     use super::*;
     use crate::commands::webdav_upload::{
-        WEBDAV_AUTH_FAILED_MESSAGE, WEBDAV_DIGEST_ONLY_MESSAGE,
+        WEBDAV_AUTH_FAILED_MESSAGE, WEBDAV_DIGEST_ONLY_MESSAGE, WEBDAV_FORBIDDEN_MESSAGE,
     };
     use axum::{routing::any, Router};
 
@@ -2885,16 +2885,17 @@ mod webdav_connection_tests {
         assert_eq!(message, WEBDAV_AUTH_FAILED_MESSAGE);
     }
 
-    /// 403 是「认过了但没权限」，不参与认证方案协商 —— 绝不读 challenge
+    /// 403 是「认过了但没权限」：既不读 challenge，也不说密码
     #[tokio::test]
-    async fn status_403_never_reads_the_challenge() {
+    async fn status_403_points_at_permissions_not_password() {
         let message = probe(403, &["Digest realm=\"nas\", qop=\"auth\""])
             .await
             .expect_err("403 应当报错");
 
         assert_eq!(
-            message, WEBDAV_AUTH_FAILED_MESSAGE,
-            "403 读了 WWW-Authenticate，会把没权限误报成认证方式不匹配"
+            message, WEBDAV_FORBIDDEN_MESSAGE,
+            "403 要么读了 WWW-Authenticate 误报成认证方式不匹配，\
+             要么并回了 401 的文案、把有权限问题的用户支去改密码"
         );
     }
 

@@ -24,6 +24,18 @@ const log = createLogger('WebDAV');
  */
 export const WEBDAV_AUTH_FAILED_MESSAGE = '认证失败，请检查用户名和密码';
 
+/**
+ * 认证过了但没权限（403）的统一文案
+ *
+ * 与 Rust 侧 `webdav_upload.rs` 的 `WEBDAV_FORBIDDEN_MESSAGE` 逐字一致，同样由
+ * `scripts/check-cross-language-constants.mjs` 守着。
+ *
+ * Why 不并进上面那句：403 的含义是「工牌验过了，只是这扇门你进不去」——只读共享、
+ * 目录权限没开、服务端按路径限制都会撞到它。混用 401 的文案会让用户一直去改
+ * 本来就没错的密码。
+ */
+export const WEBDAV_FORBIDDEN_MESSAGE = '访问被拒绝，请检查账号对该路径的读写权限';
+
 interface WebDAVClientConfig {
   url: string;
   username: string;
@@ -181,7 +193,8 @@ export class WebDAVClient {
 
     if (!isOkStatus(response.status)) {
       const status = response.status;
-      if (status === 401 || status === 403) throw new Error(WEBDAV_AUTH_FAILED_MESSAGE);
+      if (status === 401) throw new Error(WEBDAV_AUTH_FAILED_MESSAGE);
+      if (status === 403) throw new Error(WEBDAV_FORBIDDEN_MESSAGE);
       if (status === 404) throw new Error('路径不存在，请检查远程路径配置');
       if (status === 507) throw new Error('存储空间不足，WebDAV 服务器空间已满');
       if (status >= 500) throw new Error(`服务器错误 (HTTP ${status})，WebDAV 服务器可能暂时不可用`);
@@ -211,7 +224,8 @@ export class WebDAVClient {
 
     if (!isOkStatus(response.status)) {
       const status = response.status;
-      if (status === 401 || status === 403) throw new Error(WEBDAV_AUTH_FAILED_MESSAGE);
+      if (status === 401) throw new Error(WEBDAV_AUTH_FAILED_MESSAGE);
+      if (status === 403) throw new Error(WEBDAV_FORBIDDEN_MESSAGE);
       if (status >= 500) throw new Error(`服务器错误 (HTTP ${status})，WebDAV 服务器可能暂时不可用`);
       throw new Error(`下载失败: HTTP ${status}`);
     }

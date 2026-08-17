@@ -51,6 +51,16 @@ const PROBE_PNG_BASE64: &str =
 /// 再登记进门禁）——共用从结构上就不可能漂移，比 lint 时报警更强。
 pub(crate) const WEBDAV_AUTH_FAILED_MESSAGE: &str = "认证失败，请检查用户名和密码";
 
+/// 认证过了但没权限（403）的统一文案
+///
+/// Why 与 401 分开：403 的含义是「工牌验过了，只是这扇门你进不去」。把它并进
+/// `WEBDAV_AUTH_FAILED_MESSAGE` 会把用户支去反复核对本来就没错的密码——常见于
+/// 只读共享、目录权限没开、服务端按 IP/路径做了限制这几种场景。
+///
+/// 同样与前端 `src/utils/webdav.ts` 的同名常量逐字一致并进跨语言门禁：拦截点分布
+/// 与 401 完全一样（同步过程中的 PUT/GET 在前端拦，其余链路在 Rust 拦）。
+pub(crate) const WEBDAV_FORBIDDEN_MESSAGE: &str = "访问被拒绝，请检查账号对该路径的读写权限";
+
 /// 服务端只接受 Digest 时的专属文案
 ///
 /// Why 不进跨语言配对：能不能说这句话，取决于拿不拿得到响应头。
@@ -256,7 +266,9 @@ pub(crate) fn describe_status(status: u16, headers: Option<&reqwest::header::Hea
         401 if headers.is_some_and(|h| parse_auth_challenge(h).is_digest_only()) => {
             WEBDAV_DIGEST_ONLY_MESSAGE.to_string()
         }
-        401 | 403 => WEBDAV_AUTH_FAILED_MESSAGE.to_string(),
+        401 => WEBDAV_AUTH_FAILED_MESSAGE.to_string(),
+        // 403 与 401 分家：认证已通过，问题在权限。见 `WEBDAV_FORBIDDEN_MESSAGE` 的说明。
+        403 => WEBDAV_FORBIDDEN_MESSAGE.to_string(),
         404 => "路径不存在，请检查远程路径配置".to_string(),
         405 => "服务器不允许该操作，请检查路径是否为目录".to_string(),
         409 => "父目录不存在，无法创建".to_string(),
@@ -947,7 +959,9 @@ mod tests {
     #[test]
     fn describe_status_maps_documented_failures() {
         assert!(describe_status(401, None).contains("认证失败"));
-        assert!(describe_status(403, None).contains("认证失败"));
+        // 403 说的是权限，不能再引导用户去改密码
+        assert_eq!(describe_status(403, None), WEBDAV_FORBIDDEN_MESSAGE);
+        assert!(!describe_status(403, None).contains("用户名和密码"));
         assert!(describe_status(404, None).contains("路径不存在"));
         assert!(describe_status(507, None).contains("空间"));
         assert!(describe_status(502, None).contains("服务器错误"));
@@ -1034,7 +1048,7 @@ mod tests {
         let headers = challenge_headers(&["Digest realm=\"nas\""]);
         assert_eq!(
             describe_status(403, Some(&headers)),
-            WEBDAV_AUTH_FAILED_MESSAGE
+            WEBDAV_FORBIDDEN_MESSAGE
         );
     }
 

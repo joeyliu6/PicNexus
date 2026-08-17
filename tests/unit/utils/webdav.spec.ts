@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { WebDAVClient } from '@/utils/webdav';
+import { WebDAVClient, WEBDAV_FORBIDDEN_MESSAGE } from '@/utils/webdav';
 import { getHttpFetchMock, resetTauriMocks } from '../helpers/tauriMock';
 
 const loggerMock = vi.hoisted(() => ({
@@ -345,10 +345,13 @@ describe('WebDAVClient.putFile', () => {
     await expect(client.putFile('/file.json', 'x')).rejects.toThrow('认证失败');
   });
 
-  it('403 → 抛 "认证失败"', async () => {
+  // 403 是「认过了但没权限」，不能并回 401 的文案把用户支去改密码
+  it('403 → 抛权限文案，且不提密码', async () => {
     const client = makeClient();
     mockedFetch.mockResolvedValueOnce(makeResponse(403));
-    await expect(client.putFile('/file.json', 'x')).rejects.toThrow('认证失败');
+    const err = (await client.putFile('/file.json', 'x').catch((e: unknown) => e)) as Error;
+    expect(err.message).toBe(WEBDAV_FORBIDDEN_MESSAGE);
+    expect(err.message).not.toContain('用户名和密码');
   });
 
   it('404 → 抛 "路径不存在"', async () => {
@@ -405,6 +408,15 @@ describe('WebDAVClient.getFile', () => {
     const client = makeClient();
     mockedFetch.mockResolvedValueOnce(makeResponse(401));
     await expect(client.getFile('/file.json')).rejects.toThrow('认证失败');
+  });
+
+  // 与 putFile 同理：403 说权限，不说密码
+  it('403 → 抛权限文案，且不提密码', async () => {
+    const client = makeClient();
+    mockedFetch.mockResolvedValueOnce(makeResponse(403));
+    const err = (await client.getFile('/file.json').catch((e: unknown) => e)) as Error;
+    expect(err.message).toBe(WEBDAV_FORBIDDEN_MESSAGE);
+    expect(err.message).not.toContain('用户名和密码');
   });
 
   it('500 → 抛 "服务器错误"', async () => {

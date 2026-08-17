@@ -55,6 +55,20 @@ const PAIRS = [
     ],
   },
   {
+    name: 'WEBDAV_FORBIDDEN_MESSAGE',
+    why: 'WebDAV 权限不足（403）的提示。拦截点分布与 WEBDAV_AUTH_FAILED_MESSAGE 完全一样；这两句本身必须泾渭分明——403 是「认过了但没权限」，说成认证失败会把用户支去改本来就没错的密码',
+    sources: [
+      {
+        file: 'src-tauri/src/commands/webdav_upload.rs',
+        pattern: /const\s+WEBDAV_FORBIDDEN_MESSAGE\s*:\s*&str\s*=\s*"((?:\\.|[^"\\])*)"/,
+      },
+      {
+        file: 'src/utils/webdav.ts',
+        pattern: /const\s+WEBDAV_FORBIDDEN_MESSAGE\s*=\s*'((?:\\.|[^'\\])*)'/,
+      },
+    ],
+  },
+  {
     name: 'DEFAULT_WEBDAV_URL_TEMPLATE',
     why: 'WebDAV 公开链接的默认模板。主上传链路由前端 WebDAVUploader 兜底，编辑器/CLI 链路由 Rust render_public_url 兜底；两边漂移会让同一个 profile 在主界面和 Typora/CLI 里生成不同的链接',
     sources: [
