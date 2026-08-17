@@ -32,98 +32,6 @@
 
 ## 待验收
 
-### [~] 敏感字段密码框统一「密文常驻、明文按需」
-
-- **来源**：2026-08-14 WebDAV 验收时用户反馈「已保存的密码再打开是空的，体验和别处不一样」
-- **状态**：九处调用点全部迁移完毕，门禁与单测全通过；**备份密码那一步的真机回归还没跑**
-- **契约与做法**：[sensitive-field-contract.md](./reference/patterns/sensitive-field-contract.md)
-
-改动分布：`SensitiveField` 补多行揭示分支 → 新增 `useSensitiveDraft` → Token 4 处 /
-Cookie 2 处 / S3 2 处（展开 12 个输入框）→ 抽 `useWebDAVProfileEditor`（452 → 310 行）→
-备份密码改密文常驻。
-
-#### 坚果云真机回归（备份密码专属）
-
-用户已确认「先合入、真机事后补」。**这几条没过之前不要把本条目移进「已完成」。**
-
-操作细节（怎么完整退出、路径在哪、日志怎么看）见
-[backup-password-regression.md](./reference/guides/backup-password-regression.md)。
-
-> ⚠️ **两个会让测试假通过的坑**：
-> 1. 点窗口 X **不会退出进程**（`closeToTray` 默认 `true`）。必须托盘右键 →「退出」，
->    否则配置根本没重新从磁盘加载，"重启后仍然成功"是假的。
-> 2. dev 与正式版**共用同一份** `%APPDATA%\us.picnex.app\.settings.dat` 和同一个钥匙串
->    （`identifier` 只有一个，无 dev/release 区分），且有 single-instance 拦截。
->    测之前先把正式版从托盘退干净，并备份 `.settings.dat`。
-
-**第一轮 · 不要设备份密码**（下面五条测的是本次改动本身）
-
-> ✅ **2026-08-15 五条全过**（坚果云 + `npm run tauri dev`，每条都走托盘退出重启）。
-> 本次改动本身验收通过，剩下的只有第二轮同步链路。
-
-> 📌 **判据在 `7e61952`（就地编辑）之后改过一轮，别照旧版执行。**
-> 旧版写的是「密码框是**空的**」和「点眼睛显示明文期间点别处失焦」——
-> 现在框里是圆点，展示态那个元素也没挂 blur，照旧版测会一条被判成失败、
-> 一条什么都测不到。
-
-- [x] **存得下、活得过重启**（最关键的一条，`a322dba` 挂的就是这里）
-      填写坚果云 WebDAV 备份密码 → 保存 → **托盘退出后重启** → 点「测试连接」。
-      **判据**：连接成功。密码框里是**一排圆点**且挂着「✓ 已保存」芯片——
-      不是空框，也不是有内容但无标记。
-- [x] **点眼睛能看到原值**
-      重启后点密码框的眼睛。
-      **判据**：显示的是当初填的那个密码（不是空串、不是乱码），手不碰它 15 秒后自动收回。
-      ⚠️ 这期间**点一下那段明文会直接进入编辑态**，是 `7e61952` 有意加的，不是 bug。
-- [x] **就地改一个字符能存住**（`7e61952` 的核心功能，旧判据里没有）
-      分两步，**先把密码弄错、再就地改回来**。坚果云的应用密码是固定的，
-      随手改一个字符只会得到一个连不上的密码，"连接失败"证明不了任何事。
-      1. 在密码**末尾多打一个字符** → 点别处失焦（芯片应跳「✓ 已更新」约 2 秒）→
-         **托盘退出后重启** → 测试连接。**这一步应该失败**——顺带证明改动真写盘了
-      2. 点进密码框 → **只按一下退格**删掉那个多余字符 → 点别处失焦 →
-         **托盘退出后重启** → 测试连接
-      **判据**：第 2 步连接成功。聚焦没把原值取出来的话，框里是空的、
-      退格删了个寂寞、失焦时走「空草稿不提交」，错密码原样留着——仍然连不上。
-- [x] **看一眼不等于改一次**（核心不变量的人工验证，**两条路径都要走**）
-      旧的结构性保证（明文压根进不了 `modelValue`）已经不存在了，现在靠
-      [`commitDraft`](../src/composables/settings/useSensitiveDraft.ts) 里
-      「和取出来时相比没变就不写盘」来守。两条路径分别往草稿里填值，必须分开测：
-      1. **直接聚焦**：点进密码框（不点眼睛）→ 一个字符不改 → 点别处失焦
-      2. **看完再改**：点眼睛 → 点一下明文进入编辑态 → 一个字符不改 → 点别处失焦
-      每条走完都 **托盘退出后重启** → 测试连接。
-      **判据**：两条都仍然连接成功，且失焦时芯片**不该**跳成「已更新」——跳了就是写盘了。
-      路径 2 走的是 `knownPlaintext` 分支，它漏记原值的话正好被这条抓住。
-- [x] **不碰就不清空**（`a322dba` 的原始缺陷）
-      **全程不点密码框**，只改别的字段（如远程路径）触发保存 → 重启 → 测试连接。
-      **判据**：仍然连接成功，已存密码没被清掉。
-
-**第二轮 · 同步链路 + 真实上传**
-
-配置同步**必须先有备份密码**（见 [sync-flow.md](./flows/sync-flow.md) 图 1 下方要点）。
-
-- [ ] 设好备份密码 → 保存 → **托盘退出后重启** → 测试连接 →
-      在「备份与同步」里点「上传配置到云端」。
-      **判据**：toast 显示「上传成功」；到服务端把 `/PicNexus/settings.json` 打开，
-      **开头是 `PNXPWD:`**（不是 `{`）。一条判据同时钉住两件事：密文密码解得开
-      （`backupSyncUtils.getWebDAVClientAndPath`），以及整份配置上传前确实被
-      `ConfigSync.uploadSettingsCloud` 加密过（`isPasswordMode` 门禁 + `secureStorage.encrypt`）。
-      ⚠️ 走的是 `useBackupSync` → `ConfigSync`，**不是** `useWebDAVSync`——后者从未接线，
-      已随本轮收尾删除（`b94a24f`）。**旧判据点错了模块，手点 UI 永远验不到它。**
-      密文那一环现已有单测钉住（`tests/unit/composables/backup-sync/backupSyncUtils.spec.ts`），
-      本条真机要验的是「真实服务端 + 真钥匙串 + 真重启」这三样单测造不出来的东西。
-- [ ] 换过备份密码之后，用**真实可达**的 WebDAV 图床（坚果云或起一个本地 dufs / OpenList）
-      传一张图。**判据**：上传成功，且历史记录里缩略图正常显示（不是裂图）。
-      ⚠️ 失败要分两档，别混：
-      · 「WebDAV 密码解密失败，请在设置中重新填写密码」= 换钥搬运挂了，**这是真回归**
-      · 「无法连接到 WebDAV 服务器，请检查 URL 或网络」= 服务端没起，**环境问题不是回归**
-      2026-08-15 那次停在后者（见 [orphan-field-ciphertext.md](./reference/troubleshooting/orphan-field-ciphertext.md)），
-      解密那一环已证明，认证与上传那一环没跑到。
-      换钥搬运本身现已有真 AES-GCM 单测覆盖（`tests/unit/security/fieldSecretsRealCrypto.spec.ts`），
-      本条真机剩下要证的只有「密钥跨进程存活」这一半。
-
-> 📌 **顺序限制已经没了。** 孤儿密文缺陷已于 2026-08-15 修复（`rekeyFieldSecrets`
-> 换钥匙时会把内层密文一并搬运），先填 WebDAV 密码、后设备份密码不再作废密码。
-> 背景见 [orphan-field-ciphertext.md](./reference/troubleshooting/orphan-field-ciphertext.md)。
-
 ### [~] 2026-08-13 修复计划批次 1 / 2 / 4 的手动验收
 
 - **来源**：[docs/audits/fix-plan-2026-08-13.md](./audits/fix-plan-2026-08-13.md)（批次 1 = 文档修复数据安全，批次 2 = 链接检测正确性，批次 4 = S3 上传链路）
@@ -289,6 +197,18 @@ Cookie 2 处 / S3 2 处（展开 12 个输入框）→ 抽 `useWebDAVProfileEdit
 ---
 
 ## 已完成
+
+### [x] 敏感字段密码框统一「密文常驻、明文按需」
+
+七条真机回归全过：第一轮 5 条（2026-08-15，坚果云）验改动本身，第二轮 2 条（2026-08-17，dufs）验换钥后的同步与上传。
+契约见 [sensitive-field-contract.md](./reference/patterns/sensitive-field-contract.md)，回归步骤与两个「假通过」的坑（托盘退出、dev 与正式版共用数据）见 [backup-password-regression.md](./reference/guides/backup-password-regression.md)。
+第二轮结果见 [webdav-release-wrapup-acceptance.md](./audits/webdav-release-wrapup-acceptance.md)。
+
+### [x] WebDAV 发版前收尾（Digest 一致性 + 5 条自动化 + 死模块清理）
+
+真机 12/12 全过（2026-08-17）。顺带挖出既有缺陷：三条链路的连接测试一直显示 `[object Object]`，
+把后端区分出来的失败原因全吞掉了；并删除从未接线、且会明文上传全部图床凭据的 `useWebDAVSync`。
+详见 [webdav-release-wrapup-acceptance.md](./audits/webdav-release-wrapup-acceptance.md)。
 
 ### [x] 编辑器插件（Typora / Obsidian / CLI）支持 WebDAV 图床
 
