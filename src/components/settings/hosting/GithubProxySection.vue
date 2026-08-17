@@ -124,8 +124,8 @@ function renderTemplate(cdn: GithubCdnProvider): string {
 
 <template>
   <div class="card-subsection">
-    <div class="cdn-title-row">
-      <div>
+    <div class="subsection-title-row">
+      <div class="subsection-title-text">
         <label class="subsection-title">CDN 加速</label>
         <p class="subsection-hint">通过 jsDelivr 或其镜像加速 GitHub 图片访问。</p>
       </div>
@@ -240,17 +240,6 @@ function renderTemplate(cdn: GithubCdnProvider): string {
 
 <style scoped>
 @import url('../../../styles/settings-shared.css');
-
-.cdn-title-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-md);
-}
-
-.cdn-title-row .subsection-hint {
-  margin-bottom: 0;
-}
 
 .cdn-list {
   display: flex;

@@ -175,8 +175,8 @@ function renderPreview(prefix: LinkPrefixItem): string {
 
 <template>
   <div class="card-subsection">
-    <div class="prefix-title-row">
-      <div>
+    <div class="subsection-title-row">
+      <div class="subsection-title-text">
         <label class="subsection-title">链接前缀</label>
         <p class="subsection-hint">为微博图片添加代理前缀以绕过防盗链限制。</p>
       </div>
@@ -280,17 +280,6 @@ function renderPreview(prefix: LinkPrefixItem): string {
 
 <style scoped>
 @import url('../../../styles/settings-shared.css');
-
-.prefix-title-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-sm-md);
-}
-
-.prefix-title-row .subsection-hint {
-  margin-bottom: 0;
-}
 
 .prefix-list {
   display: flex;

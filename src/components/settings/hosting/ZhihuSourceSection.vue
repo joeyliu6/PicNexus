@@ -49,12 +49,12 @@ function handleResetDefault() {
 
 <template>
   <div class="card-subsection">
-    <div class="source-title-row">
-      <div class="source-title-text">
+    <div class="subsection-title-row">
+      <div class="subsection-title-text">
         <label class="subsection-title">让知乎图片正常显示</label>
-        <span class="source-title-desc">在链接后自动补一个参数，避免外链 403</span>
+        <span class="subsection-hint">在链接后自动补一个参数，避免外链 403</span>
       </div>
-      <ToggleSwitch v-model="localEnabled" class="source-toggle" />
+      <ToggleSwitch v-model="localEnabled" />
     </div>
 
     <div v-if="enabled" class="source-body">
@@ -100,31 +100,6 @@ function handleResetDefault() {
 
 <style scoped>
 @import url('../../../styles/settings-shared.css');
-
-.source-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-}
-
-.source-title-text {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2xs);
-  min-width: 0;
-  flex: 1;
-}
-
-.source-title-desc {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-
-.source-toggle {
-  flex-shrink: 0;
-}
 
 .source-body {
   margin-top: var(--space-md);
