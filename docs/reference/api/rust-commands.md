@@ -24,6 +24,8 @@
 | | `test_bilibili_connection` | 测试B站连接 |
 | | `test_nami_connection` | 测试纳米连接 |
 | | `test_webdav_storage` | 测试 WebDAV 图床（传探针图 + 匿名访问公开链接，区分「传不上去」与「链接打不开」）<br/>同样必传 `lanHttpConfirmed: bool`；撞上 fake-ip 时回 `WEBDAV_LAN_HTTP_UNCONFIRMED` 错误类型供前端弹逃生舱 |
+| | `test_webdav_connection` | 测试**备份** WebDAV 连接（PROPFIND `Depth: 0`），与图床那条是两套独立配置<br/>401/403 时与图床链路**共用** `webdav_upload::describe_status`：读 `WWW-Authenticate`，服务端只提供 Digest 就换专属提示<br/>207 Multi-Status 算成功（PROPFIND 的正常返回码，不是错误） |
+| **WebDAV 底层** | `webdav_request` | 备份链路的通用 WebDAV 请求，方法白名单 `GET / PUT / PROPFIND / MKCOL`，请求头白名单 `authorization / depth / overwrite / content-type`<br/>⚠️ 返回值只有 `{ status, body }`，**不带响应头** —— 所以同步过程中撞上 Digest 只能给通用的认证失败文案，判不了认证方案。缺口分析见 [webdav-image-host-issues.md](../troubleshooting/webdav-image-host-issues.md) |
 | **剪贴板** | `clipboard_has_image` | 检测剪贴板图片 |
 | | `read_clipboard_image` | 读取剪贴板图片 |
 | | `cleanup_clipboard_temp_file` | 安全清理本次剪贴板图片临时文件（仅允许系统临时目录下 `clipboard_image_*.png`） |

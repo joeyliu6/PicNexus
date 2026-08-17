@@ -43,16 +43,23 @@ const PROBE_PNG_BASE64: &str =
 
 /// 认证失败的统一文案
 ///
-/// 与前端 `src/utils/webdav.ts` 的同名常量保持逐字一致：备份链路在前端拦、
-/// 图床链路在 Rust 拦，是同一件事的两个拦截点，说两种话用户会以为撞上了两个故障。
-/// 这条一致性由 `scripts/check-cross-language-constants.mjs` 在 lint 阶段守着。
-const WEBDAV_AUTH_FAILED_MESSAGE: &str = "认证失败，请检查用户名和密码";
+/// 与前端 `src/utils/webdav.ts` 的同名常量保持逐字一致：同步过程中的 PUT/GET 在前端拦、
+/// 其余链路在 Rust 拦，是同一件事的多个拦截点，说几种话用户会以为撞上了几个故障。
+/// 这条跨语言一致性由 `scripts/check-cross-language-constants.mjs` 在 lint 阶段守着。
+///
+/// Rust 侧则由 `main.rs::probe_webdav_connection` 直接**共用这一份定义**（而不是各写一份
+/// 再登记进门禁）——共用从结构上就不可能漂移，比 lint 时报警更强。
+pub(crate) const WEBDAV_AUTH_FAILED_MESSAGE: &str = "认证失败，请检查用户名和密码";
 
 /// 服务端只接受 Digest 时的专属文案
 ///
-/// Why 单独一条而不是并进上面那句：前端的 `webdav_request` 只回 `{status, body}`，
-/// 拿不到响应头，判不了认证方案。所以这句是 Rust 独有的，不进跨语言配对。
-const WEBDAV_DIGEST_ONLY_MESSAGE: &str =
+/// Why 不进跨语言配对：能不能说这句话，取决于拿不拿得到响应头。
+/// - 拿得到 → 图床三条链路 + 备份的「测试连接」（`main.rs::probe_webdav_connection`），共用本常量
+/// - 拿不到 → 同步过程中的 PUT/GET 走 `main.rs::webdav_request`，它只回 `{status, body}`，
+///   前端判不了认证方案，只能说通用的那句
+///
+/// 缺口分析见 `docs/reference/troubleshooting/webdav-image-host-issues.md`。
+pub(crate) const WEBDAV_DIGEST_ONLY_MESSAGE: &str =
     "服务端要求 Digest 认证，PicNexus 暂不支持。请在服务端启用 Basic 认证（多数 NAS 可切换），或改用支持 Basic 的服务。";
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -239,7 +246,10 @@ fn parse_auth_challenge(headers: &reqwest::header::HeaderMap) -> AuthChallenge {
 ///
 /// `headers` 传响应头（拿得到就传），用于在 401 时区分「密码错」与「服务端要 Digest」。
 /// 传 `None` 或服务端没声明方案时，一律退回通用文案。
-fn describe_status(status: u16, headers: Option<&reqwest::header::HeaderMap>) -> String {
+///
+/// 图床三条链路与备份的「测试连接」（`main.rs::probe_webdav_connection`）共用这一个函数，
+/// 所以任何一方改文案，另一方自动跟随，不存在"改了一处忘了另一处"。
+pub(crate) fn describe_status(status: u16, headers: Option<&reqwest::header::HeaderMap>) -> String {
     match status {
         // Why 只有 401 读 challenge：403 是「认过了但没权限」，不带认证方案协商，
         // 对它读 WWW-Authenticate 只会误报。
