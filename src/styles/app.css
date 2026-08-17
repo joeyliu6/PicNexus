@@ -238,10 +238,12 @@
   --space-4xl: 48px;
   --space-5xl: 60px;
 
-  /* 对话框宽度 */
+  /* 对话框宽度（xl 供图片对比等需要大画布的弹窗使用） */
   --dialog-width-sm: 336px;
   --dialog-width-md: 460px;
   --dialog-width-lg: 520px;
+  --dialog-width-xl: 900px;
+  --dialog-height-xl: 680px;
 
   /* Z-index 层级 */
   --z-base: 1;
@@ -1483,150 +1485,12 @@ button:focus-visible {
   --p-border-radius: var(--radius-md);
 }
 
-/* 2. DataTable 样式优化 - 极简线条风 */
-:deep(.p-datatable) {
-  border-radius: var(--p-border-radius);
-  overflow: hidden;
-}
-
-/* 表头：有背景色 + 稍粗的分割线 */
-:deep(.p-datatable .p-datatable-thead > tr > th) {
-  background-color: var(--bg-secondary) !important;
-  color: var(--text-primary) !important;
-  font-weight: var(--weight-semibold);
-  font-size: var(--text-sm);
-  padding: var(--space-md) var(--space-lg) !important;
-  border-bottom: 2px solid var(--border-subtle) !important;
-}
-
-/* 表格行：基础背景 */
-:deep(.p-datatable .p-datatable-tbody > tr) {
-  background-color: var(--bg-card) !important;
-  transition: background-color var(--duration-normal) ease;
-}
-
-/* 斑马纹：让阅读更轻松 */
-:deep(.p-datatable .p-datatable-tbody > tr:nth-child(even)) {
-  background-color: var(--overlay-light) !important;
-}
-
-:root.dark-theme :deep(.p-datatable .p-datatable-tbody > tr:nth-child(even)) {
-  background-color: var(--overlay-light) !important;
-}
-
-/* hover 高亮 */
-:deep(.p-datatable .p-datatable-tbody > tr:hover) {
-  background-color: var(--hover-overlay-subtle) !important;
-}
-
-/* 单元格：细边框 */
-:deep(.p-datatable .p-datatable-tbody > tr > td) {
-  padding: var(--space-md) var(--space-lg) !important;
-  border-bottom: 1px solid var(--border-subtle) !important;
-  font-size: var(--text-sm);
-}
-
-/* 3. 输入框样式统一：扁平化 */
-:deep(.p-inputtext),
-:deep(.p-textarea),
-:deep(.p-password .p-password-input) {
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--p-border-radius);
-  color: var(--text-primary);
-  font-size: var(--text-lg);
-  padding: var(--space-sm-md) var(--space-md-lg);
-  transition: all var(--duration-normal) ease;
-  box-shadow: none;
-}
-
-:deep(.p-inputtext:hover),
-:deep(.p-textarea:hover),
-:deep(.p-password .p-password-input:hover) {
-  border-color: var(--primary);
-}
-
-:deep(.p-inputtext:focus),
-:deep(.p-textarea:focus),
-:deep(.p-password .p-password-input:focus) {
-  border-color: var(--border-focus);
-  box-shadow: none;
-  outline: none;
-}
-
-/* 4. 按钮样式微调 */
-:deep(.p-button) {
-  border-radius: var(--p-border-radius);
-  font-weight: var(--weight-medium);
-  transition: all var(--duration-normal) ease;
-}
-
-:deep(.p-button:hover) {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-hover);
-}
-
-:deep(.p-button:active) {
-  transform: translateY(0);
-}
-
-/* 5. 对话框 — Bold Contrast */
-:deep(.p-dialog) {
-  border-radius: var(--radius-xl);
-  overflow: hidden;
-  background: var(--bg-card);
-  border: none;
-  box-shadow: var(--shadow-dialog);
-}
-
-:root.light-theme :deep(.p-dialog) {
-  background: var(--bg-surface);
-  box-shadow: var(--shadow-dialog);
-}
-
-:deep(.p-dialog .p-dialog-header) {
-  background: transparent;
-  border-bottom: none;
-  padding: var(--space-xl) var(--space-xl) 0;
-}
-
-:deep(.p-dialog .p-dialog-header .p-dialog-title) {
-  font-size: var(--text-xl);
-  font-weight: var(--weight-bold);
-  color: var(--text-main);
-}
-
-:deep(.p-dialog .p-dialog-header-close) {
-  border-radius: var(--radius-md);
-  width: 32px;
-  height: 32px;
-  color: var(--text-muted);
-  transition: all var(--duration-fast) ease;
-}
-
-:deep(.p-dialog .p-dialog-header-close:hover) {
-  background: var(--hover-overlay);
-  color: var(--text-main);
-}
-
-:deep(.p-dialog .p-dialog-content) {
-  background: transparent;
-  padding: var(--space-lg) var(--space-xl) var(--space-xl);
-}
-
-:deep(.p-dialog .p-dialog-footer) {
-  background: transparent;
-  border-top: none;
-  padding: 0 var(--space-xl) var(--space-xl);
-  display: flex;
-  gap: var(--space-md);
-}
-
-/* 7. Toast 通知圆角统一 */
-:deep(.p-toast .p-toast-message) {
-  border-radius: var(--p-border-radius);
-  backdrop-filter: blur(8px);
-}
+/* 2. DataTable / 输入框 / 按钮 / Toast / Tag 的全局覆盖已移除
+   —— 原先这些规则写成 `:deep(...)`，而 `:deep()` 只是 Vue SFC scoped 样式的编译期
+   语法糖，普通 .css 文件里浏览器无法解析，整条规则会被直接丢弃，即它们从未生效过。
+   现状由各组件自行负责：DataTable 见 components/views/history/history-table.css，
+   输入框见各弹窗/设置面板的 scoped 样式。弹窗外壳统一见下方第 3 节。
+   护栏：scripts/check-css-deep.mjs 会拦截 .css 文件里新增的 :deep()。 */
 
 /* Toast 图标与文字垂直对齐 */
 .p-toast .p-toast-message-content {
@@ -1637,36 +1501,27 @@ button:focus-visible {
   margin-top: var(--space-2xs);
 }
 
-/* Toast 关闭按钮焦点样式 */
-:deep(.p-toast .p-toast-message .p-toast-icon-close-button) {
-  outline: none;
-  box-shadow: none;
-}
+/* ===== 3. 弹窗统一外壳（AppDialog）=====
 
-:deep(.p-toast .p-toast-message .p-toast-icon-close-button:focus-visible) {
-  outline: none !important;
-  box-shadow: none !important;
-  border-radius: var(--radius-sm);
-}
+   唯一真相源：全项目所有弹窗共用这一套外壳规格与按钮规格，改这里 = 全体跟着变。
 
-/* 8. Tag 标签样式微调 */
-:deep(.p-tag) {
-  border-radius: var(--radius-sm);
-  padding: var(--space-xs) var(--space-sm-md);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-}
+   接入方式（PrimeVue Dialog）：
+     :pt="{ root: { class: 'app-dialog' }, closeButton: { class: 'app-dialog-close-btn' } }"
+   ConfirmDialog 由 PrimeVue 自带 .p-confirmdialog 类，无需接入，自动命中。
+   需要局部差异时再叠加自己的类（如 .onboarding-dialog），只写差异、不复制外壳。
 
-/* ===== 9. ConfirmDialog 确认对话框样式优化 ===== */
+   ⚠️ 按钮样式必须写在这里（全局），不能写进弹窗组件的 scoped `:deep()`：
+   PrimeVue Dialog 会 Teleport 到 body，其根节点 .p-dialog 不带 data-v 作用域属性，
+   `:deep(.x)` 编译出的 `[data-v-*] .x` 找不到祖先，规则永远不生效。 */
 
 /* 确保确认对话框在 Lightbox 之上，仅针对 ConfirmDialog */
 .p-dialog-mask:has(.p-confirmdialog) {
   z-index: var(--z-titlebar) !important;
 }
 
-/* 对话框主体样式 */
+/* ---- 3.1 外壳：圆角 / 背景 / 阴影 ---- */
+.p-dialog.app-dialog,
 .p-confirmdialog {
-  width: 460px;
   max-width: 90vw;
   border-radius: var(--radius-xl);
   overflow: hidden;
@@ -1675,32 +1530,78 @@ button:focus-visible {
   box-shadow: var(--shadow-dialog);
 }
 
+/* ConfirmDialog 无法传 :style，宽度在这里兜底；其余弹窗用 --dialog-width-* 自行指定 */
+.p-confirmdialog {
+  width: var(--dialog-width-md);
+}
+
+:root.light-theme .p-dialog.app-dialog,
 :root.light-theme .p-confirmdialog {
   background: var(--bg-surface);
   box-shadow: var(--shadow-dialog);
 }
 
-/* 标题栏 */
+/* ---- 3.2 标题栏 ---- */
+.p-dialog.app-dialog .p-dialog-header,
 .p-dialog.p-confirmdialog .p-dialog-header {
   background: transparent;
   border-bottom: none;
   padding: var(--space-xl) var(--space-xl) 0;
 }
 
+.p-dialog.app-dialog .p-dialog-title,
 .p-dialog.p-confirmdialog .p-dialog-title {
   font-size: var(--text-lg-xl);
   font-weight: var(--weight-bold);
   color: var(--text-main);
 }
 
+:root.light-theme .p-dialog.app-dialog .p-dialog-title,
 :root.light-theme .p-dialog.p-confirmdialog .p-dialog-title {
   color: var(--text-on-surface);
 }
 
-/* 内容区域 */
+/* ---- 3.3 关闭按钮 ---- */
+.p-dialog.app-dialog .p-dialog-header-close,
+.p-dialog.p-confirmdialog .p-dialog-header-close {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  transition: all var(--duration-fast) ease;
+}
+
+.p-dialog.app-dialog .p-dialog-header-close:hover,
+.p-dialog.p-confirmdialog .p-dialog-header-close:hover {
+  background: var(--hover-overlay);
+  color: var(--text-main);
+}
+
+.p-dialog.app-dialog .p-dialog-header-close:focus,
+.p-dialog.app-dialog .p-dialog-header-close:focus-visible,
+.p-dialog.p-confirmdialog .p-dialog-header-close:focus,
+.p-dialog.p-confirmdialog .p-dialog-header-close:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* 通过 :pt closeButton 注入的 class，精准移除焦点环 */
+.app-dialog-close-btn:focus,
+.app-dialog-close-btn:focus-visible,
+.app-dialog-close-btn:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* ---- 3.4 内容区 ---- */
+.p-dialog.app-dialog .p-dialog-content,
 .p-dialog.p-confirmdialog .p-dialog-content {
   background: transparent;
   padding: var(--space-lg-xl) var(--space-xl) var(--space-xl);
+}
+
+.p-dialog.p-confirmdialog .p-dialog-content {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1724,7 +1625,8 @@ button:focus-visible {
   word-break: break-word;
 }
 
-/* 底部按钮区域 — 右对齐横排 */
+/* ---- 3.5 底栏：右对齐横排 ---- */
+.p-dialog.app-dialog .p-dialog-footer,
 .p-dialog.p-confirmdialog .p-dialog-footer {
   background: transparent;
   border-top: none;
@@ -1732,74 +1634,96 @@ button:focus-visible {
   display: flex;
   flex-direction: row;
   justify-content: flex-end;
+  align-items: center;
   gap: var(--space-md);
 }
 
-/* 确认按钮 — 实心主色 */
-.p-dialog.p-confirmdialog .p-confirmdialog-accept-button {
-  background: var(--primary);
-  border: none;
-  color: var(--text-on-primary);
-  padding: var(--space-sm-md) var(--space-xl);
-  border-radius: var(--radius-md);
-  font-size: var(--text-base);
-  font-weight: var(--weight-semibold);
-  transition: all var(--duration-fast) ease;
-  order: 1;
-}
-
-.p-dialog.p-confirmdialog .p-confirmdialog-accept-button:hover {
-  opacity: 0.9;
-}
-
-.p-dialog.p-confirmdialog .p-confirmdialog-accept-button:active {
-  transform: scale(0.98);
-}
-
-.p-dialog.p-confirmdialog .p-confirmdialog-accept-button:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
-}
-
-/* 取消按钮 — outlined 次要 */
+/* ---- 3.6 底栏按钮：全项目统一规格 ----
+   高 40px（10px 上下内边距 + 14px 行高）· 圆角 8px · 14px 字 · 600 字重。
+   .dialog-btn-* 由业务弹窗手动挂在 <Button class="..."> 上；
+   .p-confirmdialog-*-button 是 PrimeVue ConfirmDialog 自带类名。 */
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-accept,
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-reject,
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-secondary,
+.p-dialog.p-confirmdialog .p-confirmdialog-accept-button,
 .p-dialog.p-confirmdialog .p-confirmdialog-reject-button {
-  background: transparent;
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
   padding: var(--space-sm-md) var(--space-xl);
   border-radius: var(--radius-md);
   font-size: var(--text-base);
   font-weight: var(--weight-semibold);
   transition: all var(--duration-fast) ease;
-  order: 0;
+
+  /* 所有按钮都保留 1px 边框位（实心按钮设为透明），
+     否则实心/描边两种按钮会差 2px 高，并排时下沿对不齐 */
+  border: 1px solid transparent;
 }
 
-.p-dialog.p-confirmdialog .p-confirmdialog-reject-button:hover {
-  background: var(--hover-overlay);
-  border-color: var(--text-muted);
-}
-
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-accept:active,
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-reject:active,
+.p-dialog.p-confirmdialog .p-confirmdialog-accept-button:active,
 .p-dialog.p-confirmdialog .p-confirmdialog-reject-button:active {
   transform: scale(0.98);
 }
 
+.p-dialog.app-dialog .p-dialog-footer .p-button:focus-visible,
+.p-dialog.p-confirmdialog .p-confirmdialog-accept-button:focus-visible,
 .p-dialog.p-confirmdialog .p-confirmdialog-reject-button:focus-visible {
   outline: none !important;
   box-shadow: none !important;
 }
 
-/* danger 按钮（删除操作） */
-.p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-danger {
-  background: var(--error);
+/* 确认按钮 — 实心主色（右） */
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-accept,
+.p-dialog.p-confirmdialog .p-confirmdialog-accept-button {
+  background: var(--primary);
+  border-color: transparent;
+  color: var(--text-on-primary);
+  order: 1;
 }
 
-.p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-danger:hover {
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-accept:hover:not(:disabled),
+.p-dialog.p-confirmdialog .p-confirmdialog-accept-button:hover {
   opacity: 0.9;
 }
 
-.p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-danger:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
+/* 取消按钮 — outlined 次要（左） */
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-reject,
+.p-dialog.p-confirmdialog .p-confirmdialog-reject-button {
+  background: transparent;
+  border-color: var(--border-subtle);
+  color: var(--text-secondary);
+  order: 0;
+}
+
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-reject:hover,
+.p-dialog.p-confirmdialog .p-confirmdialog-reject-button:hover {
+  background: var(--hover-overlay);
+  border-color: var(--text-muted);
+}
+
+/* 弱化按钮 — 无边框文字态（左，如"跳过"） */
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-secondary {
+  background: transparent;
+  color: var(--text-muted);
+  order: 0;
+  margin-right: auto;
+}
+
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-secondary:hover {
+  background: var(--hover-overlay);
+  color: var(--text-main);
+}
+
+/* danger 按钮（删除/关闭保护类操作） */
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-accept.p-button-danger,
+.p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-danger {
+  background: var(--error);
+  color: var(--text-on-primary);
+}
+
+.p-dialog.app-dialog .p-dialog-footer .dialog-btn-accept.p-button-danger:hover:not(:disabled),
+.p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-danger:hover {
+  opacity: 0.9;
 }
 
 /* warning 按钮 */
@@ -1812,12 +1736,14 @@ button:focus-visible {
   opacity: 0.9;
 }
 
-.p-dialog.p-confirmdialog .p-confirmdialog-accept-button.p-button-warning:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
+/* 禁用态 */
+.p-dialog.app-dialog .p-dialog-footer .p-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
-/* 浅色主题按钮 */
+/* 浅色主题取消按钮 */
+:root.light-theme .p-dialog.app-dialog .p-dialog-footer .dialog-btn-reject,
 :root.light-theme .p-dialog.p-confirmdialog .p-confirmdialog-reject-button {
   background: transparent;
   border-color: var(--border-subtle);
@@ -1825,118 +1751,31 @@ button:focus-visible {
   color: #374151;
 }
 
+:root.light-theme .p-dialog.app-dialog .p-dialog-footer .dialog-btn-reject:hover,
 :root.light-theme .p-dialog.p-confirmdialog .p-confirmdialog-reject-button:hover {
   background-color: var(--bg-input);
   border-color: var(--text-tertiary);
 }
 
-/* 对话框动画 */
+/* ---- 3.7 进出场动画 ---- */
+.app-dialog.p-dialog-enter-active,
 .p-confirmdialog.p-dialog-enter-active {
   transition: all var(--duration-normal) var(--ease-overshoot);
 }
 
+.app-dialog.p-dialog-enter-from,
 .p-confirmdialog.p-dialog-enter-from {
   opacity: 0;
   transform: scale(0.92);
 }
 
+.app-dialog.p-dialog-leave-active,
 .p-confirmdialog.p-dialog-leave-active {
   transition: all var(--duration-fast) var(--ease-standard);
 }
 
+.app-dialog.p-dialog-leave-to,
 .p-confirmdialog.p-dialog-leave-to {
-  opacity: 0;
-  transform: scale(0.95);
-}
-
-/* ===== 10. AppDialog（通用弹窗外壳：BackupPasswordDialog、UrlDownloadDialog 等）===== */
-
-.app-dialog {
-  max-width: 90vw;
-  border-radius: var(--radius-xl);
-  overflow: hidden;
-  background: var(--bg-card);
-  border: none;
-  box-shadow: var(--shadow-dialog);
-}
-
-:root.light-theme .app-dialog {
-  background: var(--bg-surface);
-  box-shadow: var(--shadow-dialog);
-}
-
-.p-dialog.app-dialog .p-dialog-header {
-  background: transparent;
-  border-bottom: none;
-  padding: var(--space-xl) var(--space-xl) 0;
-}
-
-.p-dialog.app-dialog .p-dialog-title {
-  font-size: var(--text-lg-xl);
-  font-weight: var(--weight-bold);
-  color: var(--text-main);
-}
-
-:root.light-theme .p-dialog.app-dialog .p-dialog-title {
-  color: var(--text-on-surface);
-}
-
-.p-dialog.app-dialog .p-dialog-header-close {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-md);
-  color: var(--text-muted);
-  transition: all var(--duration-fast) ease;
-}
-
-.p-dialog.app-dialog .p-dialog-header-close:hover {
-  background: var(--hover-overlay);
-  color: var(--text-main);
-}
-
-.p-dialog.app-dialog .p-dialog-header-close:focus,
-.p-dialog.app-dialog .p-dialog-header-close:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
-}
-
-/* 通过 :pt closeButton 注入的 class，精准移除焦点环 */
-.app-dialog-close-btn:focus,
-.app-dialog-close-btn:focus-visible,
-.app-dialog-close-btn:focus-within {
-  outline: none !important;
-  box-shadow: none !important;
-  border: none !important;
-}
-
-.p-dialog.app-dialog .p-dialog-content {
-  background: transparent;
-  padding: var(--space-lg-xl) var(--space-xl) var(--space-xl);
-}
-
-.p-dialog.app-dialog .p-dialog-footer {
-  background: transparent;
-  border-top: none;
-  padding: var(--space-sm) var(--space-xl) var(--space-xl);
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-md);
-}
-
-.app-dialog.p-dialog-enter-active {
-  transition: all var(--duration-normal) var(--ease-overshoot);
-}
-
-.app-dialog.p-dialog-enter-from {
-  opacity: 0;
-  transform: scale(0.92);
-}
-
-.app-dialog.p-dialog-leave-active {
-  transition: all var(--duration-fast) var(--ease-standard);
-}
-
-.app-dialog.p-dialog-leave-to {
   opacity: 0;
   transform: scale(0.95);
 }
