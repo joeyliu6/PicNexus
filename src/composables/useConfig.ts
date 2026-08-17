@@ -17,6 +17,7 @@ import {
   cloneDefaultPrefixes,
 } from '../config/types';
 import { getCookieProvider, validateCookie, DEFAULT_LOGIN_WINDOW_SIZE } from '../config/cookieProviders';
+import { getErrorMessage } from '../types/errors';
 import { useToast } from './useToast';
 import { TOAST_MESSAGES } from '../constants';
 import { registerProfileNameSource } from '../constants/serviceNames';
@@ -191,8 +192,10 @@ export function useConfigManager() {
         const successMessage = await invoke<string>(invokeCommand, invokeParams);
         log.info(`[${serviceName}Cookie测试] ✓ 测试成功`);
         return { success: true, message: successMessage };
-      } catch (errorMessage) {
-        return { success: false, message: String(errorMessage) };
+      } catch (error) {
+        // Rust 抛的是 AppError，序列化后是 { type, data: { message } }。
+        // 直接 String() 会得到 "[object Object]"，把后端辛苦区分出来的原因全吞掉。
+        return { success: false, message: getErrorMessage(error) };
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -230,10 +233,10 @@ export function useConfigManager() {
           success: true,
           message: successMessage
         };
-      } catch (errorMessage) {
+      } catch (error) {
         return {
           success: false,
-          message: String(errorMessage)
+          message: getErrorMessage(error)
         };
       }
     } catch (error) {
@@ -266,10 +269,10 @@ export function useConfigManager() {
           success: true,
           message: successMessage
         };
-      } catch (errorMessage) {
+      } catch (error) {
         return {
           success: false,
-          message: String(errorMessage)
+          message: getErrorMessage(error)
         };
       }
     } catch (error) {

@@ -317,6 +317,58 @@ describe('useConfigManager', () => {
       expect(result.success).toBe(false);
       expect(result.message).toContain('SESSDATA');
     });
+
+    /**
+     * Rust 抛的是 AppError，`#[serde(tag="type", content="data")]` 序列化后
+     * 长成 `{ type, data: { message } }` —— **不是**字符串。
+     *
+     * ⚠️ 上面那条 `mockRejectedValue('Cookie 已过期')` 正是这个 bug 活了这么久的原因：
+     * 它 mock 的是字符串，`String()` 一下还是那个字符串，测试永远绿；
+     * 而生产环境里 `String({...})` 得到的是 `[object Object]`，
+     * 后端辛苦区分出来的失败原因被全部吞掉。
+     * 所以这三条**必须**用真实的 AppError 形态。
+     */
+    const appError = (type: string, message: string) => ({ type, data: { message } });
+
+    it('testWebDAVConnection 透传 AppError 的文案，不是 [object Object]', async () => {
+      mockedInvoke.mockRejectedValue(
+        appError('WEBDAV', '服务端要求 Digest 认证，PicNexus 暂不支持。'),
+      );
+
+      const { testWebDAVConnection } = useConfigManager();
+      const result = await testWebDAVConnection({
+        url: 'https://dav.example.com/', username: 'u', password: 'p', remotePath: '/PicNexus/',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('服务端要求 Digest 认证，PicNexus 暂不支持。');
+      expect(result.message).not.toContain('[object Object]');
+    });
+
+    it('testR2Connection 透传 AppError 的文案，不是 [object Object]', async () => {
+      mockedInvoke.mockRejectedValue(appError('STORAGE', 'Bucket 不存在'));
+
+      const { testR2Connection } = useConfigManager();
+      const result = await testR2Connection({
+        accountId: 'acc', accessKeyId: 'key',
+        secretAccessKey: 'secret', bucketName: 'bucket',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Bucket 不存在');
+      expect(result.message).not.toContain('[object Object]');
+    });
+
+    it('Cookie 类测试同样透传 AppError 的文案', async () => {
+      mockedInvoke.mockRejectedValue(appError('AUTH', 'Cookie 已失效，请重新登录'));
+
+      const { testWeiboConnection } = useConfigManager();
+      const result = await testWeiboConnection('SUB=xxx');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Cookie 已失效，请重新登录');
+      expect(result.message).not.toContain('[object Object]');
+    });
   });
 
   // ─── setupCookieListener ──────────────────────────
