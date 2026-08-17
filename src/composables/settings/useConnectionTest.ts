@@ -171,7 +171,10 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
       }
 
       if (!result.success) throw new Error(result.error || '连接测试失败');
-      toast.showConfig('success', TOAST_MESSAGES.auth.configValid(displayName));
+      // 后端给了更具体的成功说明就用它（目前只有 WebDAV 会给，见 ConnectionTestResult.message），
+      // 没给就退回通用文案——其余图床一个字都不变
+      const success = TOAST_MESSAGES.auth.configValid(displayName);
+      toast.showConfig('success', result.message ? { ...success, detail: result.message } : success);
     } catch (error) {
       const msg = errorToString(error);
       toast.showConfig('error', TOAST_MESSAGES.auth.connectionFailed(displayName, msg));

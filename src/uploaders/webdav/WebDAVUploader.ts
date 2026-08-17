@@ -159,7 +159,9 @@ export class WebDAVUploader extends BaseUploader<WebDAVStorageProfile> {
 
       const latency = Date.now() - startTime;
       return result.success
-        ? { success: true, latency }
+        // 成功文案也透传：Rust 侧那句「连接成功，公开链接可正常访问」说的是
+        // 匿名访问公开链接这一段也验过了，通用的「配置有效」会把它丢掉
+        ? { success: true, latency, message: result.message }
         : { success: false, latency, error: result.message };
     } catch (error) {
       return {

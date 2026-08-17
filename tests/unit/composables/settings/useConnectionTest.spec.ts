@@ -466,6 +466,44 @@ describe('useConnectionTest', () => {
    * 场景：开着 TUN + fake-ip 时任何主机名都解析进 198.18.0.0/15，Rust 判不出
    * 目标是不是局域网，于是回一个专属错误类型让前端提供确认框。
    */
+  describe('成功文案透传', () => {
+    /**
+     * WebDAV 的连接测试验了两段：探针图传得上去，且**匿名**访问公开链接拿回来的确实是图片。
+     * 后半段是用户最容易配错的地方（URL 模板各家自己发明），所以成功时要把它说出来。
+     */
+    it('后端给了成功说明时，toast 用它而不是通用文案', async () => {
+      mockState.webdavTestConnection.mockResolvedValue({
+        success: true,
+        latency: 12,
+        message: '连接成功，公开链接可正常访问',
+      });
+
+      const { api } = createHarness();
+      await api.handleServiceTest('webdav:webdav-1');
+
+      expect(mockState.toastShowConfig).toHaveBeenCalledWith(
+        'success',
+        expect.objectContaining({
+          summary: '验证成功',
+          detail: '连接成功，公开链接可正常访问',
+        }),
+      );
+    });
+
+    /** 没给说明就退回通用文案 —— 其余图床的 toast 一个字都不该变 */
+    it('后端没给成功说明时退回通用文案', async () => {
+      mockState.webdavTestConnection.mockResolvedValue({ success: true, latency: 12 });
+
+      const { api } = createHarness();
+      await api.handleServiceTest('webdav:webdav-1');
+
+      expect(mockState.toastShowConfig).toHaveBeenCalledWith(
+        'success',
+        expect.objectContaining({ summary: '验证成功', detail: expect.stringContaining('配置有效') }),
+      );
+    });
+  });
+
   describe('明文 HTTP 逃生舱', () => {
     const lanHttpRejection = {
       success: false,

@@ -188,13 +188,16 @@ describe('WebDAVUploader.testConnection', () => {
     invokeMock.mockReset();
   });
 
-  it('公开链接可达 → success', async () => {
+  it('公开链接可达 → success，且透传后端的成功说明', async () => {
     invokeMock.mockResolvedValue({ success: true, message: '连接成功，公开链接可正常访问' });
 
     const result = await uploader.testConnection(makeProfile());
 
     expect(result.success).toBe(true);
     expect(invokeMock.mock.calls[0][0]).toBe('test_webdav_storage');
+    // 这句说的是「匿名访问公开链接那一段也验过了」，是 WebDAV 连接测试独有的信息。
+    // 丢掉它，UI 就只剩通用的「配置有效」，用户看不出验没验公开链接。
+    expect(result.message).toBe('连接成功，公开链接可正常访问');
   });
 
   it('传得上去但公开链接打不开 → 失败并保留后端诊断文案', async () => {
