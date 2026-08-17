@@ -165,60 +165,6 @@ Cookie 2 处 / S3 2 处（展开 12 个输入框）→ 抽 `useWebDAVProfileEdit
       配置里填了存储路径（如 `images`）时上传。
       **判据**：对象落在 `images/` 下，不是桶根目录，也没有多出一层空目录（key 不以 `/` 开头）。
 
-### [~] 编辑器插件（Typora / Obsidian / CLI）支持 WebDAV 图床
-
-- **来源**：2026-08-13 WebDAV 手动验收时发现；2026-08-17 补齐全部 5 处代码 + 真机验收 + 两轮代码审查（第一轮揪出 3 个真实 bug，第二轮又揪出链接模板缺兜底 + 明文落盘）
-- **状态**：5/5 代码改动全部完成，单测（TS + Rust）全过，`cargo check` / `npm run typecheck` / `npm run lint` 全绿；CLI 与 Typora 路径已真机验证成功，Obsidian 只验证到 Server 正确加载配置，没走完整 HTTP 上传
-- **二次审查后追加**：链接模板空值兜底（前后端各一层 + 跨语言常量登记）、`cli-config.json` 凭证加密（见下方小节）、API 文档补齐、验收文档措辞更正
-
-原本缺的一环：Typora / Obsidian / CLI 走的是 `ServerUploadConfig`（`src-tauri/src/server/upload_handler.rs`）这条独立链路，枚举里没有 WebDAV 变体。现在已补上：
-
-1. Rust `ServerUploadConfig` 加 `Webdav` 变体 + `dispatch_upload`/`get_service_info` 分发（`upload_handler.rs`）
-2. `upload_to_webdav` 拆出不依赖 `Window` 的 `upload_to_webdav_core`，GUI 命令与新增的 `server_upload_webdav` 共用同一份核心逻辑（`commands/webdav_upload.rs`）
-3. 前端 `editorServiceConfig.ts` 四个函数的 webdav 分支 + 异步解密拆分（详见下方链接的验收记录）
-4. 设置页「编辑器专用图床」选择器（`ExternalEditorPanel.vue`）现在会把 `custom_s3_profiles` / `webdav_profiles` 一并列进下拉框，标签格式「WebDAV · <profile 名字>」；这个链路此前对 custom_s3 也是空的，顺带一起接上了
-5. `cli.rs`：`--service webdav:profile-1` 本来就是纯字符串解析，不需要改；只有 `service_id_for_config` 的 match 需要补一个穷尽分支（仿照 `CustomS3` 的做法返回静态标签 `"webdav"`，**不需要**改成 `String`/`Cow`——这点纠正了 2026-08-16 范围修正里的错误预判，那条路径只服务已经不再产出的旧版单图床配置文件）
-
-详见 [webdav-editor-integration-acceptance.md](./audits/webdav-editor-integration-acceptance.md)（含每一步的验证方法、真机验收记录、审查发现与修复）。
-
-#### 真机验收
-
-本地已起一个可复用的 WebDAV 测试服务器（dufs，`http://127.0.0.1:5001`，`admin`/`admin123`，目录 `pics`），配置到 PicNexus 时地址与公开域名都填这个地址即可，无需另找 NAS。
-
-- [x] **CLI 上传**：`picnexus.exe --service webdav:<profile-id> <图片路径>`。
-      文件真实落盘到 dufs（时间戳、字节数吻合），再用 HTTP GET 读回来确认非假成功。
-- [x] **Typora**：`picnexus.exe --profile typora <图片路径>`（模拟 Typora 的 Custom Command）。
-      同样验证文件真实落盘——这条路径读的是 `cli-config.json` 的 `profiles.typora`，和 CLI 直传是
-      `resolve_upload_config` 里不同的分支，两条都测了。
-- [x] **Obsidian**：2026-08-17 用户在真实 Obsidian 里把图床切成 WebDAV profile 后粘图跑通，
-      `/status` 返回 `"service":"webdav"`，文件真实落盘 dufs，笔记里三条链接全部正确替换，
-      匿名 GET 200 且内容逐字节一致——`dispatch_upload` 的 `Webdav` 分支经 `/upload` 这条路径**已闭环**。
-      这轮真机跑顺带暴露了两个真缺陷：插件占位符（见下方小节）与**同名文件静默覆盖**
-      （3 张图只落 1 个文件，已修，见验收记录「同名文件静默覆盖」）。
-- [x] **加密后的回归**（2026-08-17 已跑）：把真实 `cli-config.json` 用真实钥匙串密钥加密后，
-      debug 构建的 `picnexus.exe` 两条分支（`--service webdav:<id>` / `--profile typora`）都成功上传，
-      文件真实落盘 dufs（70 字节吻合）、带认证 GET 200 且内容逐字节一致。
-      同时验了密文格式（`PNXCLI1:` 开头、明文特征字全消失）、篡改密文的报错文案、旧版明文的向后兼容。
-      详见验收记录「跨进程端到端验证」一节。配置已还原成验证前的原样（SHA256 一致）。
-
-#### cli-config.json 凭证加密（2026-08-17 完成）
-
-原本这里挂着一条「明文落盘」的知情项，理由是「CLI 独立进程的密钥分发是独立课题」。**这个判断是错的**：
-系统钥匙串按**用户账号**授权，CLI 与 GUI 同账号运行，直接就能取到同一把密钥，不存在分发问题。
-而且 `keyring = "2"` 早就是依赖（`.settings.dat` 的主密钥就存那儿）。
-
-做法与 `gh` / Docker / VS Code 同构的**信封加密**：钥匙串存 32 字节主密钥，文件用它做 AES-256-GCM。
-新增 `src-tauri/src/secure_key.rs`。老版本的明文文件仍然读得动，升级不断链。
-
-完整方案、横向调研（PicGo / rclone / AWS CLI / Docker / gh / VS Code / Cyberduck 七家怎么做的）、
-刻意避开的两个 Electron `safeStorage` 实现坑、以及**诚实的边界**，见
-[webdav-editor-integration-acceptance.md](./audits/webdav-editor-integration-acceptance.md) 的
-「后续：cli-config.json 凭证加密」一节。
-
-一句话边界：**挡得住文件离开本机**（云盘同步 / 备份包 / 随日志外传 / 换机拷贝），
-**挡不住以当前用户身份运行的恶意程序**（所有本机凭证存储的共同上限），
-**便携版基本无效**（主密钥明文躺在 exe 旁边，与 `.settings.dat` 同一取舍）。
-
 ---
 
 ## 待处理
@@ -331,6 +277,12 @@ Cookie 2 处 / S3 2 处（展开 12 个输入框）→ 抽 `useWebDAVProfileEdit
 ---
 
 ## 已完成
+
+### [x] 编辑器插件（Typora / Obsidian / CLI）支持 WebDAV 图床
+
+三条链路全部真机验收通过（2026-08-17，dufs）。三轮审查 + 验收共揪出 8 个真实缺陷，全部修完：
+含 `cli-config.json` 凭证明文落盘（改为钥匙串信封加密）、四条上传路径里三条漏了文件名唯一化。
+详见 [webdav-editor-integration-acceptance.md](./audits/webdav-editor-integration-acceptance.md)。
 
 ### [x] WebDAV Digest 提示 + 明文 HTTP 逃生舱
 
