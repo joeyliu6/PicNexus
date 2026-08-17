@@ -254,7 +254,7 @@ S3 桶基本没人用文件管理器去翻，日期在前便于按时间扫读�
 
 #### WebDAV 可以关掉唯一化
 
-`WebDAVStorageProfile.uniqueFileName`（设置页「文件名加唯一后缀」开关），**缺省即开启**——
+`WebDAVStorageProfile.uniqueFileName`（设置页「防止图片互相覆盖」开关），**缺省即开启**——
 判据一律写 `!== false`，写成 `=== true` 会让升级前的老 profile 默认失去防护。
 Rust 侧 `ServerUploadConfig::Webdav.unique_file_name` 同理用 `#[serde(default = "default_true")]`，
 否则升级前写下的 `cli-config.json` 会因缺字段而整份反序列化失败，三条编辑器链路一起罢工。
@@ -286,7 +286,7 @@ Rust 侧 `ServerUploadConfig::Webdav.unique_file_name` 同理用 `#[serde(defaul
 | 历史主图床与复制链接不一致 | `reconcileHistoryPrimary` 未完成 | 图1 节点 AH1 |
 | S3 图床链接在浏览器里变成下载而不是显图 | 对象缺 Content-Type；确认 `curl -I` 返回的是否为 `application/octet-stream`。旧对象是改动前传的，需重传才会带上正确类型 | S3 系图床 → Content-Type |
 | S3 桶里出现 `20260813_a3f9_` 之类的前缀 | 预期行为，key 唯一化前缀 | S3 系图床 → 对象名唯一化 |
-| 想按固定文件名覆盖桶里的旧对象 | S3 系刻意不支持——覆盖会让旧历史记录的链接指向新图；WebDAV 可在 profile 里关掉「文件名加唯一后缀」 | S3 系图床 → 对象名唯一化 |
+| 想按固定文件名覆盖桶里的旧对象 | S3 系刻意不支持——覆盖会让旧历史记录的链接指向新图；WebDAV 可在 profile 里关掉「防止图片互相覆盖」 | S3 系图床 → 对象名唯一化 |
 | Typora/Obsidian 传的图把之前的顶掉了 | 2026-08-17 前编辑器/CLI 链路漏了唯一化（粘贴的图永远叫 `image.png`）；升级后已修 | 四条上传路径的唯一化现状 |
 | NAS 目录里文件名都带 `_20260817_a3f9` | 防覆盖的唯一段，故意放在原名之后好让你先看到文件名；不想要就关掉那个开关 | WebDAV 可以关掉唯一化 |
 | S3 桶里有对象但历史里查不到 | 上传失败重试留下的孤儿对象（重试用新 key，不覆盖） | S3 系图床 → 对象名唯一化「代价」 |

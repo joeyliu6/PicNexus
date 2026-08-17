@@ -443,17 +443,19 @@ const secrets = useSensitiveDraft({
           <small v-if="field.hint" class="field-hint">{{ field.hint }}</small>
         </div>
       </form>
-      <div class="toggle-row">
-        <div class="toggle-info">
-          <span class="toggle-row-label">文件名加唯一后缀</span>
-          <span class="toggle-row-desc">
-            存成 image_20260817_a3f9.png。关闭后同名图片会互相覆盖——编辑器粘贴的图都叫 image.png，旧笔记里的图会被顶掉且找不回来
-          </span>
+      <div class="card-subsection">
+        <div class="subsection-title-row">
+          <div class="subsection-title-text">
+            <label class="subsection-title">防止图片互相覆盖</label>
+            <span class="subsection-hint">
+              上传时自动重命名，image.png 会存成 image_20260818_a3f9.png。关掉后，同名图片会顶掉旧图且找不回来
+            </span>
+          </div>
+          <ToggleSwitch
+            :modelValue="isUniqueFileNameOn(profile)"
+            @update:modelValue="(v: boolean) => setUniqueFileName(profile.id, v)"
+          />
         </div>
-        <ToggleSwitch
-          :modelValue="isUniqueFileNameOn(profile)"
-          @update:modelValue="(v: boolean) => setUniqueFileName(profile.id, v)"
-        />
       </div>
       <template #actions-right>
         <button class="delete-profile-btn" @click.stop="emit('deleteWebdav', profile.id)">

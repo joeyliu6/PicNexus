@@ -439,7 +439,40 @@
 .subsection-hint {
   font-size: var(--text-xs);
   color: var(--text-muted);
+  line-height: 1.4;
   margin: 0 0 var(--space-md) 0;
+}
+
+/*
+ * 子章节标题行：左「标题+说明」，右控件（开关/按钮）
+ *
+ * Why 三件套 flex:1 + min-width:0 + flex-shrink:0 缺一不可：flex 默认让两侧
+ * 一起参与压缩，说明文字一长（尤其夹着 image_20260817_a3f9.png 这种断不开的
+ * 长串）就会把右侧固定尺寸控件挤扁——`.toggle-row` 正是这么踩的坑。
+ */
+.subsection-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.subsection-title-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  flex: 1;
+  min-width: 0;
+}
+
+/* 纵向间距交给上面的 gap，避免与基类的 margin-bottom 叠加 */
+.subsection-title-text .subsection-title,
+.subsection-title-text .subsection-hint {
+  margin-bottom: 0;
+}
+
+.subsection-title-row > .p-toggleswitch {
+  flex-shrink: 0;
 }
 
 /* ==================== 开关行（Toggle Row） ==================== */
@@ -467,6 +500,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-md);
   padding: var(--space-md) var(--space-md-lg);
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
@@ -477,6 +511,22 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2xs);
+}
+
+/*
+ * 防止长说明文字把右侧开关挤扁。
+ *
+ * ⚠️ 必须写成后代选择器而不是裸 `.toggle-info`：UpdateCard.vue 的
+ * `.toggle-card`（关于页那张独立的「自动更新」卡）也复用了 `.toggle-info`，
+ * 裸选择器会把这两条渗进去改掉它的等高布局。
+ */
+.toggle-row .toggle-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.toggle-row > .p-toggleswitch {
+  flex-shrink: 0;
 }
 
 .toggle-row-label {
