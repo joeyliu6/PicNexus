@@ -27,6 +27,10 @@ import ServiceEnableSection from '@/components/settings/hosting/ServiceEnableSec
 import DataItemCard from '@/components/settings/backup/DataItemCard.vue';
 import WebDAVConfigCollapsible from '@/components/settings/backup/WebDAVConfigCollapsible.vue';
 import BackupPasswordDialog from '@/components/dialogs/BackupPasswordDialog.vue';
+import UrlDownloadDialog from '@/components/dialogs/UrlDownloadDialog.vue';
+import WechatQrDialog from '@/components/settings/about-update/WechatQrDialog.vue';
+import OnboardingDialog from '@/components/onboarding/OnboardingDialog.vue';
+import { useOnboarding } from '@/composables/useOnboarding';
 import { applyMarkdownRepairFixture, createMigrateContext } from './linkFeatureFixtures';
 import type { QueueItem, ServiceProgress } from '@/core/UploadQueue';
 import type { CheckLinkResult, LinkCheckRow, StatusFilter, BatchCheckProgress } from '@/types/linkCheck';
@@ -41,7 +45,7 @@ import type { ImageMeta } from '@/types/image-meta';
 import type { PhotoGroup } from '@/composables/timeline/types';
 import type { SkeletonLayoutResult } from '@/utils/justifiedLayout';
 
-type VisualPage = 'upload' | 'history' | 'favorites' | 'timeline' | 'backup-sync' | 'link-check' | 'markdown-repair' | 'batch-migrate' | 'settings';
+type VisualPage = 'upload' | 'history' | 'favorites' | 'timeline' | 'backup-sync' | 'link-check' | 'markdown-repair' | 'batch-migrate' | 'settings' | 'dialogs';
 type VisualState = string;
 
 const params = new URLSearchParams(window.location.search);
@@ -62,6 +66,24 @@ const visualConfirm = usePrimeConfirm();
 
 if (page === 'markdown-repair') {
   applyMarkdownRepairFixture(state);
+}
+
+/* ---- dialogs 页：集中覆盖不隶属于任何业务页面的独立弹窗 ---- */
+const showUrlDownloadDialog = ref(page === 'dialogs' && state.startsWith('url-download'));
+const urlDownloadBusy = computed(() => state === 'url-download-downloading');
+const showWechatQrDialog = ref(page === 'dialogs' && state === 'wechat-qr');
+const isOnboardingState = computed(() => page === 'dialogs' && state.startsWith('onboarding'));
+
+/* OnboardingDialog 的显隐是 useOnboarding 的模块级状态，只能用它自己的 API 驱动 */
+const onboardingStepIndex: Record<string, number> = {
+  'onboarding-welcome': 0,
+  'onboarding-upload': 1,
+  'onboarding-services': 2,
+};
+if (page === 'dialogs' && state in onboardingStepIndex) {
+  const onboarding = useOnboarding();
+  onboarding.reopen();
+  for (let i = 0; i < onboardingStepIndex[state]; i++) onboarding.nextStep();
 }
 
 const image = (seed: string) => {
@@ -1063,6 +1085,19 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
             </div>
           </div>
         </div>
+      </section>
+
+      <!-- 独立弹窗集中覆盖页：守住"全项目弹窗外壳统一"这条线 -->
+      <section v-else-if="page === 'dialogs'" class="visual-page visual-dialogs">
+        <div class="visual-dialogs-backdrop">Dialog visual fixtures</div>
+
+        <UrlDownloadDialog
+          v-model:visible="showUrlDownloadDialog"
+          :is-downloading="urlDownloadBusy"
+          @confirm="() => {}"
+        />
+        <WechatQrDialog v-model:visible="showWechatQrDialog" />
+        <OnboardingDialog v-if="isOnboardingState" />
       </section>
     </main>
     <ConfirmDialog />

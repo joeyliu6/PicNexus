@@ -1,7 +1,9 @@
 import { expect, type Page, type Route } from '@playwright/test';
 
 const fixedNow = new Date('2026-04-28T10:00:00.000Z').getTime();
-const visualImageRoute = /https:\/\/(?:img\.example|wsrv\.nl)\//;
+// 后三个域名是 WechatQrDialog 的公众号二维码 CDN，必须拦截：
+// 真实请求失败会触发组件内的多源回退逻辑，导致快照不稳定
+const visualImageRoute = /https:\/\/(?:img\.example|wsrv\.nl|img30\.360buyimg\.com|p\.cldisk\.com|i0\.hdslb\.com)\//;
 
 function visualImageSvg(label: string): string {
   const safeLabel = label.replace(/[<>&]/g, '');
@@ -90,6 +92,9 @@ async function openStatefulUi(page: Page, visualPage: string, state: string): Pr
     await page.locator('.visual-native-body .bottom-actions .btn-primary').click();
     await expect(page.locator('.p-dialog')).toBeVisible();
   }
+  if (visualPage === 'dialogs') {
+    await expect(page.locator('.p-dialog')).toBeVisible();
+  }
 }
 
 export async function captureVisualState(page: Page, visualPage: string, state: string): Promise<void> {
@@ -100,7 +105,9 @@ export async function captureVisualState(page: Page, visualPage: string, state: 
   await expect(root).toHaveAttribute('data-visual-ready', 'true');
   await openStatefulUi(page, visualPage, state);
   await waitForVisualAssets(page);
+  // 弹窗被 Teleport 到 body，不在 [data-visual-root] 内，必须整页截图才能拍到
   const screenshotTarget = (visualPage === 'markdown-repair' && state === 'repair-confirm-dialog')
+    || visualPage === 'dialogs'
     || (visualPage === 'backup-sync' && [
       'password-dialog',
       'password-set-dialog',

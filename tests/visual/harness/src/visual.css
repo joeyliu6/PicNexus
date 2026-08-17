@@ -677,3 +677,17 @@ body,
 .visual-sync-log-empty i {
   font-size: var(--text-xl);
 }
+
+/* ---- dialogs 页：独立弹窗的拍照背板 ---- */
+.visual-dialogs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.visual-dialogs-backdrop {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
