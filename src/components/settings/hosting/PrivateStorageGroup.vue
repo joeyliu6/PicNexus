@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import InputText from 'primevue/inputtext';
+import ToggleSwitch from 'primevue/toggleswitch';
 import HostingCard from '../HostingCard.vue';
 import SensitiveField from '../../common/SensitiveField.vue';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
@@ -190,6 +191,19 @@ function setWebDAVField(profileId: string, key: string, value: string) {
   const profile = props.webdavProfiles.find(p => p.id === profileId);
   if (profile) {
     emit('updateWebdav', { ...profile, [key]: value });
+  }
+}
+
+/** `!== false`：老 profile 没这个字段，缺省要显示为「已开启」 */
+function isUniqueFileNameOn(profile: WebDAVStorageProfile): boolean {
+  return profile.uniqueFileName !== false;
+}
+
+function setUniqueFileName(profileId: string, value: boolean) {
+  const profile = props.webdavProfiles.find(p => p.id === profileId);
+  if (profile) {
+    emit('updateWebdav', { ...profile, uniqueFileName: value });
+    emit('save');
   }
 }
 
@@ -429,6 +443,18 @@ const secrets = useSensitiveDraft({
           <small v-if="field.hint" class="field-hint">{{ field.hint }}</small>
         </div>
       </form>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <span class="toggle-row-label">文件名加唯一后缀</span>
+          <span class="toggle-row-desc">
+            存成 image_20260817_a3f9.png。关闭后同名图片会互相覆盖——编辑器粘贴的图都叫 image.png，旧笔记里的图会被顶掉且找不回来
+          </span>
+        </div>
+        <ToggleSwitch
+          :modelValue="isUniqueFileNameOn(profile)"
+          @update:modelValue="(v: boolean) => setUniqueFileName(profile.id, v)"
+        />
+      </div>
       <template #actions-right>
         <button class="delete-profile-btn" @click.stop="emit('deleteWebdav', profile.id)">
           <i class="pi pi-trash"></i>

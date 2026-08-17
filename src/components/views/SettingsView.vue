@@ -394,9 +394,9 @@ onUnmounted(() => {
 
       <div v-if="activeTab === 'advanced'" class="settings-section">
         <AdvancedSettingsPanel
-          :image-compression="formData.imageCompression"
-          :editor-server="formData.editorServer"
+          :image-compression="formData.imageCompression" :editor-server="formData.editorServer"
           :executable-path="executablePath"
+          :custom-s3-profiles="formData.custom_s3_profiles" :webdav-profiles="formData.webdav_profiles"
           @update:image-compression="(v: ImageCompressionConfig) => { formData.imageCompression = v; debouncedSaveSettingsWithStatus(); }"
           @update:editor-server="async (v: EditorServerConfig) => { formData.editorServer = v; await applyEditorServer(v); debouncedSaveSettingsWithStatus(); }"
           @navigate-hosting="activeTab = 'hosting'"

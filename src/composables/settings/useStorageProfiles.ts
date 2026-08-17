@@ -121,6 +121,7 @@ export function useStorageProfiles(deps: UseStorageProfilesDeps) {
       remotePath: 'images/',
       publicDomain: '',
       publicUrlTemplate: DEFAULT_WEBDAV_URL_TEMPLATE,
+      uniqueFileName: true,
     });
     enableNewProfile(compositeId);
     saveSettings();

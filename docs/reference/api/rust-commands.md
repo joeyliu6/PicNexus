@@ -42,6 +42,12 @@
 | | `fetch_qiyu_token` | 获取七鱼 Token |
 | | `check_chrome_installed` | 检查 Chrome |
 | **编辑器 Server** | `update_server_config` | 启动/停止/更新 HTTP Server |
+| | `check_editor_server_status` | 从 Rust 侧探测 `http://127.0.0.1:<port>/status`，返回原始 JSON 文本<br/>`/status` 故意不带 CORS 许可（防任意网页探测本机是否在跑 PicNexus），设置页 webview 与该端口不同源，前端 `fetch` 必被浏览器拦截；Rust 发起的请求不受 CORS 约束 |
+| | `check_port_free` | 检测端口是否可用 |
+| | `save_cli_config` | 写入 `{app_data_dir}/cli-config.json`（Typora profile + CLI services 表），供无 GUI 的 CLI / Typora 子进程读取<br/>内容用系统钥匙串主密钥做 AES-256-GCM 加密（`PNXCLI1:` 前缀），钥匙串不可用时降级明文并告警<br/>返回 `{ encrypted: bool }`，`false` 表示本次是明文降级，前端须提示用户 |
+| | `get_executable_path` | 返回当前可执行文件绝对路径（Typora 自定义命令配置提示用） |
+| **密钥管理** | `get_or_create_secure_key` | 读取（或首次生成）配置加密主密钥，Base64 的 32 字节 AES-256 密钥<br/>非便携版存系统钥匙串，便携版存 exe 旁的 `secure-key` 文件 |
+| | `set_secure_key` | 覆盖主密钥（备份密码模式下前端用口令派生密钥轮转）<br/>轮转前会先用旧密钥解出 `cli-config.json` 并在换钥后重新加密，否则 CLI/Typora/Obsidian 三条链路会集体解不开配置 |
 | **CLI PATH** | `get_cli_path_status` | 读取 PicNexus CLI 是否已加入用户 PATH |
 | | `add_cli_to_path` | 将 PicNexus CLI 加入用户 PATH |
 | | `remove_cli_from_path` | 从用户 PATH 移除 PicNexus CLI |
@@ -59,6 +65,16 @@
 ## 编辑器 Server 访问控制
 
 `update_server_config` 接收内部使用的可选 `authToken`。桌面端启用编辑器 Server 时会自动生成该值，并随加密配置保存；它不是 Obsidian 插件的用户配置项。
+
+## cli-config.json 的凭证保护
+
+`cli-config.json` 装的是**解密后的**凭证明文（各家 OSS secret key、cookie、WebDAV 的 NAS 密码），因为 CLI / Typora 子进程没有 GUI 上下文，解不开 `.settings.dat`。
+
+保护方式是**信封加密**：系统钥匙串只存 32 字节主密钥（Windows 凭据管理器单条 blob 上限 2560 字节，塞不下整份配置），文件本身用它做 AES-256-GCM 加密。CLI 进程与 GUI 跑在同一用户账号下，钥匙串按账号授权，所以 CLI 直接取得到同一把密钥——不存在「密钥分发」问题。实现与完整边界说明见 `src-tauri/src/secure_key.rs` 头部注释。
+
+**能挡住**：文件被拷走 / 同步到云盘 / 混进备份包 / 随日志外传；同机器上的其他用户账号（Unix 0600 + Windows 默认 ACL）。
+**挡不住**：以当前用户身份运行的恶意程序——它同样能问钥匙串要到密钥。这是所有本机凭证存储的共同上限（VS Code 同款问题微软明确表示不修），不是本实现的缺陷。
+**便携版例外**：主密钥明文放在 exe 旁的 `secure-key` 文件里，这层加密基本等于没有——这是便携版「拔下 U 盘带走全部数据」前提的既有取舍，与 `.settings.dat` 一致。
 
 带浏览器 `Origin` 的 `POST /upload` 和 `POST /upload/file` 请求必须通过 `X-PicNexus-Token`、`Authorization: Bearer <token>` 或查询参数（`?token=...` / `?authToken=...`）携带匹配值。这样可以阻止普通网页在用户不知情时调用本机上传接口。
 

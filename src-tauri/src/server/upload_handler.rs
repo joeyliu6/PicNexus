@@ -585,6 +585,28 @@ pub enum ServerUploadConfig {
         public_domain: String,
     },
 
+    // ── WebDAV（多实例） ──────────────────────────
+    /// WebDAV 图床
+    ///
+    /// `password` 是前端解密后的明文——`WebDAVStorageProfile.passwordEncrypted` 只在
+    /// 浏览器端存在的 `secureStorage` 密钥能解，Rust 侧拿不到密文也解不了。
+    Webdav {
+        url: String,
+        username: String,
+        password: String,
+        remote_path: String,
+        public_domain: String,
+        public_url_template: String,
+        lan_http_confirmed: bool,
+        /// 是否给文件名加唯一段防覆盖；缺省视为开启
+        ///
+        /// `serde(default)` 是必须的：升级前写下的 `cli-config.json` 里没有这个字段，
+        /// 没有默认值会让整份配置反序列化失败，Typora/Obsidian/CLI 三条链路一起罢工。
+        /// 默认取 `true` 而不是 `false`——沉默覆盖会让用户丢图，出厂就该是安全的那一侧。
+        #[serde(default = "default_true")]
+        unique_file_name: bool,
+    },
+
     // ── 需要 Puppeteer（仅 GUI 模式） ─────────────
     /// Nami 图床（需要 Puppeteer sidecar，仅 GUI 模式可用）
     Nami { cookie: String, auth_token: String },
@@ -745,6 +767,7 @@ fn get_service_info(config: &ServerUploadConfig) -> (&str, &str) {
         ServerUploadConfig::Qiniu { .. } => ("qiniu", "七牛云"),
         ServerUploadConfig::Upyun { .. } => ("upyun", "又拍云"),
         ServerUploadConfig::CustomS3 { .. } => ("custom_s3", "自定义 S3"),
+        ServerUploadConfig::Webdav { .. } => ("webdav", "WebDAV"),
         ServerUploadConfig::Nami { .. } => ("nami", "纳米图床"),
         ServerUploadConfig::Qiyu => ("qiyu", "七鱼图床"),
     }
@@ -977,6 +1000,9 @@ async fn dispatch_upload(
         ServerUploadConfig::CustomS3 { endpoint, access_key_id, secret_access_key, region, bucket, path, public_domain } => {
             server_upload_custom_s3(&canonical, endpoint, access_key_id, secret_access_key, region, bucket, path, public_domain).await
         }
+        ServerUploadConfig::Webdav { url, username, password, remote_path, public_domain, public_url_template, lan_http_confirmed, unique_file_name } => {
+            server_upload_webdav(&canonical, url, username, password, remote_path, public_domain, public_url_template, *lan_http_confirmed, *unique_file_name).await
+        }
         ServerUploadConfig::Nami { .. } => {
             Err("Nami 图床不支持外部编辑器模式（需要浏览器自动化获取凭证）。请在 PicNexus 设置中切换为京东、SM.MS 等支持该模式的图床".to_string())
         }
@@ -988,13 +1014,26 @@ async fn dispatch_upload(
 
 // ==================== 辅助函数 ====================
 
-/// 构建对象存储 Key（路径 + 文件名）
+/// `serde(default)` 用：布尔字段缺省时取 `true`
+fn default_true() -> bool {
+    true
+}
+
+/// 构建对象存储 Key（路径 + 唯一化后的文件名）
+///
+/// Why 这里也要唯一化：前端 `src/uploaders/s3/objectKey.ts` 早就给 GUI 上传加了
+/// `{yyyyMMdd}_{随机}_` 前缀，理由是「同名对象第二次上传会顶掉第一次，旧历史记录的链接
+/// 从此指向新图，且不可恢复」（见 docs/flows/upload-flow.md 的「同一个对象名只对应一次上传」）。
+/// 但那份实现只在前端，**编辑器 / CLI 这条路径一直漏着**——而 Typora / Obsidian 粘贴出来的
+/// 图恰恰永远叫 `image.png`，是最容易撞名的入口。这里补上同一套格式，两条路径产出的对象名
+/// 长得一样，用户不会以为撞上了两种不同的东西。
 fn build_upload_key(upload_path: &str, file_name: &str) -> String {
     let path = upload_path.trim().trim_matches('/');
+    let unique = crate::commands::utils::prefix_unique_file_name(file_name);
     if path.is_empty() {
-        file_name.to_string()
+        unique
     } else {
-        format!("{}/{}", path, file_name)
+        format!("{}/{}", path, unique)
     }
 }
 
@@ -1901,6 +1940,41 @@ async fn server_upload_custom_s3(
     Ok(url)
 }
 
+// ── WebDAV ────────────────────────────────────────────
+
+/// 复用 `commands::webdav_upload::upload_to_webdav_core`，走进程级共享的
+/// `shared_client()` 而不是 Tauri `HttpClient` state——CLI 模式没有 Tauri app 上下文，
+/// 拿不到 `tauri::State`。`progress` 传 `None`：Server/CLI 上传没有 Window 可 emit。
+#[allow(clippy::too_many_arguments)]
+async fn server_upload_webdav(
+    path: &std::path::Path,
+    url: &str,
+    username: &str,
+    password: &str,
+    remote_path: &str,
+    public_domain: &str,
+    public_url_template: &str,
+    lan_http_confirmed: bool,
+    unique_file_name: bool,
+) -> Result<String, String> {
+    crate::commands::webdav_upload::upload_to_webdav_core(
+        path,
+        url,
+        username,
+        password,
+        remote_path,
+        public_domain,
+        public_url_template,
+        lan_http_confirmed,
+        unique_file_name,
+        shared_client(),
+        None,
+    )
+    .await
+    .map(|result| result.url)
+    .map_err(|e| e.to_string())
+}
+
 // ── Cloudflare R2 ─────────────────────────────────────
 
 async fn server_upload_r2(
@@ -2083,9 +2157,9 @@ async fn server_upload_upyun(
 #[cfg(test)]
 mod tests {
     use super::{
-        request_has_browser_origin, request_has_valid_server_token, unique_upload_temp_dir,
-        validate_https_url, validate_image_bytes, validate_image_file, DetectedImageKind,
-        ServerUploadConfig, MAX_SERVER_UPLOAD_SIZE, SERVER_AUTH_TOKEN_HEADER,
+        get_service_info, request_has_browser_origin, request_has_valid_server_token,
+        unique_upload_temp_dir, validate_https_url, validate_image_bytes, validate_image_file,
+        DetectedImageKind, ServerUploadConfig, MAX_SERVER_UPLOAD_SIZE, SERVER_AUTH_TOKEN_HEADER,
     };
     use axum::http::HeaderMap;
     use std::io::Cursor;
@@ -2307,6 +2381,66 @@ mod tests {
             }
             other => panic!("expected custom S3 config, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn webdav_config_deserializes_from_cli_schema() {
+        // 与前端 editorServiceConfig.ts 的 buildServiceConfig webdav 分支产出的字段一一对应
+        let config: ServerUploadConfig = serde_json::from_value(serde_json::json!({
+            "type": "webdav",
+            "url": "https://dav.example.com/dav",
+            "username": "user",
+            "password": "plaintext-pw",
+            "remote_path": "/images/",
+            "public_domain": "https://cdn.example.com",
+            "public_url_template": "{domain}/{path}",
+            "lan_http_confirmed": false
+        }))
+        .expect("webdav config should deserialize");
+
+        match config {
+            ServerUploadConfig::Webdav {
+                url,
+                username,
+                password,
+                remote_path,
+                public_domain,
+                public_url_template,
+                lan_http_confirmed,
+                unique_file_name,
+            } => {
+                assert_eq!(url, "https://dav.example.com/dav");
+                assert_eq!(username, "user");
+                assert_eq!(password, "plaintext-pw");
+                assert_eq!(remote_path, "/images/");
+                assert_eq!(public_domain, "https://cdn.example.com");
+                assert_eq!(public_url_template, "{domain}/{path}");
+                assert!(!lan_http_confirmed);
+                // 上面那份 JSON **故意没带** unique_file_name：升级前写下的 cli-config.json
+                // 就长这样。缺省必须落到 true（防覆盖），而不是 bool 的零值 false。
+                assert!(
+                    unique_file_name,
+                    "旧配置缺这个字段时要默认开启唯一化，否则升级后会静默覆盖同名图"
+                );
+            }
+            other => panic!("expected webdav config, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn webdav_service_info_uses_generic_label() {
+        let config = ServerUploadConfig::Webdav {
+            url: "https://dav.example.com/dav".to_string(),
+            username: "user".to_string(),
+            password: "pw".to_string(),
+            remote_path: "/images/".to_string(),
+            public_domain: "https://cdn.example.com".to_string(),
+            public_url_template: "{domain}/{path}".to_string(),
+            lan_http_confirmed: false,
+            unique_file_name: true,
+        };
+
+        assert_eq!(get_service_info(&config), ("webdav", "WebDAV"));
     }
 
     #[test]

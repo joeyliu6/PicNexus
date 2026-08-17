@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { EditorServerConfig, ServerServiceType, ServiceType } from '../../config/types';
+import type { CustomS3Profile, EditorServerConfig, ServerServiceType, WebDAVStorageProfile } from '../../config/types';
+import { makeCustomS3Id, makeWebDAVId } from '../../config/types';
 import { useServiceHealth } from '../../composables/useServiceHealth';
 import { EDITOR_UNSUPPORTED_SERVICES } from '../../composables/settings/editorServiceConfig';
 import TyporaCard from './external-editor/TyporaCard.vue';
@@ -10,6 +11,8 @@ interface Props {
   editorServer: EditorServerConfig;
   executablePath?: string;
   embedded?: boolean;
+  customS3Profiles?: CustomS3Profile[];
+  webdavProfiles?: WebDAVStorageProfile[];
 }
 
 const props = defineProps<Props>();
@@ -68,21 +71,42 @@ const ALL_SERVICES: Array<{ value: ServerServiceType; label: string }> = [
 
 const { healthStatusMap, healthTooltipMap } = useServiceHealth();
 
+// 自定义 S3 / WebDAV 是多实例 profile，没有固定的 ServerServiceType 字面量,
+// 复合 ID（custom_s3:xxx / webdav:xxx）与展示名都要从 profile 列表现算。
+const profileServiceEntries = computed(() => {
+  const entries: Array<{ value: ServerServiceType; label: string }> = [];
+  for (const profile of props.customS3Profiles ?? []) {
+    entries.push({ value: makeCustomS3Id(profile.id), label: `自定义 S3 · ${profile.name}` });
+  }
+  for (const profile of props.webdavProfiles ?? []) {
+    entries.push({ value: makeWebDAVId(profile.id), label: `WebDAV · ${profile.name}` });
+  }
+  return entries;
+});
+
+const resolvedServiceLabelMap = computed<Record<string, string>>(() => {
+  const map: Record<string, string> = { ...SERVICE_LABEL_MAP };
+  for (const entry of profileServiceEntries.value) {
+    map[entry.value] = entry.label;
+  }
+  return map;
+});
+
 const configuredServices = computed(() =>
-  ALL_SERVICES
+  [...ALL_SERVICES, ...profileServiceEntries.value]
     .filter((svc) => {
-      const status = healthStatusMap.value[svc.value as ServiceType];
+      const status = healthStatusMap.value[svc.value];
       return status && status !== 'unconfigured';
     })
     .sort((a, b) => {
-      const aVerified = healthStatusMap.value[a.value as ServiceType] === 'verified';
-      const bVerified = healthStatusMap.value[b.value as ServiceType] === 'verified';
+      const aVerified = healthStatusMap.value[a.value] === 'verified';
+      const bVerified = healthStatusMap.value[b.value] === 'verified';
       return aVerified === bVerified ? 0 : aVerified ? -1 : 1;
     }),
 );
 
 function getServiceLabel(service: ServerServiceType): string {
-  return SERVICE_LABEL_MAP[service] || service;
+  return resolvedServiceLabelMap.value[service] || service;
 }
 
 const summaryText = computed(() => {
@@ -117,7 +141,7 @@ const summaryText = computed(() => {
       :healthStatusMap="(healthStatusMap as Record<string, string>)"
       :healthTooltipMap="(healthTooltipMap as Record<string, string>)"
       :cliUnsupportedServices="CLI_UNSUPPORTED_SERVICES"
-      :serviceLabelMap="SERVICE_LABEL_MAP"
+      :serviceLabelMap="resolvedServiceLabelMap"
       @navigateHosting="emit('navigateHosting')"
     />
 
@@ -127,7 +151,7 @@ const summaryText = computed(() => {
       :healthStatusMap="(healthStatusMap as Record<string, string>)"
       :healthTooltipMap="(healthTooltipMap as Record<string, string>)"
       :cliUnsupportedServices="CLI_UNSUPPORTED_SERVICES"
-      :serviceLabelMap="SERVICE_LABEL_MAP"
+      :serviceLabelMap="resolvedServiceLabelMap"
       @navigateHosting="emit('navigateHosting')"
     />
   </div>

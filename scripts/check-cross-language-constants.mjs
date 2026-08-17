@@ -55,6 +55,20 @@ const PAIRS = [
     ],
   },
   {
+    name: 'DEFAULT_WEBDAV_URL_TEMPLATE',
+    why: 'WebDAV 公开链接的默认模板。主上传链路由前端 WebDAVUploader 兜底，编辑器/CLI 链路由 Rust render_public_url 兜底；两边漂移会让同一个 profile 在主界面和 Typora/CLI 里生成不同的链接',
+    sources: [
+      {
+        file: 'src-tauri/src/commands/webdav_upload.rs',
+        pattern: /const\s+DEFAULT_WEBDAV_URL_TEMPLATE\s*:\s*&str\s*=\s*"((?:\\.|[^"\\])*)"/,
+      },
+      {
+        file: 'src/config/serviceTypes.ts',
+        pattern: /const\s+DEFAULT_WEBDAV_URL_TEMPLATE\s*=\s*'((?:\\.|[^'\\])*)'/,
+      },
+    ],
+  },
+  {
     name: 'BACKUP_DIR_NAME',
     why: 'MD 修复的备份目录名。前端用它建备份目录，Rust 扫描用它跳过备份目录；一旦漂移，扫描会把"修复前的原件"当正常文档再修一遍，备份被改写、还会产生嵌套备份',
     sources: [

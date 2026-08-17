@@ -28,6 +28,12 @@ const pathLoading = ref(false);
 const pathApplying = ref(false);
 const pathError = ref('');
 const expanded = ref(false);
+/**
+ * 便携版的加密密钥就放在程序目录内（`data/secure-key`），跟配置文件是邻居——
+ * 整个目录被拷走后照样解得开。安装版才是「密钥在系统钥匙串、文件拷走即作废」。
+ * 两种情况的保护边界完全不同，文案必须分开写，否则会让便携版用户高估防护。
+ */
+const isPortable = ref(false);
 
 const cliEnabled = computed(() => editorServer.value.cliEnabled === true);
 
@@ -198,6 +204,11 @@ async function copyCommand(kind: 'path' | 'full', command: string) {
 
 onMounted(() => {
   void refreshPathStatus();
+  // 探测失败时按安装版处理：那份文案更保守（强调"以你身份运行的程序仍可读取"），
+  // 猜错方向也不会让用户高估防护
+  void invoke<boolean>('is_portable_mode')
+    .then((portable) => { isPortable.value = portable; })
+    .catch(() => { isPortable.value = false; });
 });
 </script>
 
@@ -278,6 +289,19 @@ onMounted(() => {
             </div>
           </span>
         </div>
+
+        <div class="storage-note">
+          <i class="pi pi-lock" />
+          <span v-if="isPortable">
+            凭证存放：启用后，所选图床的密钥会写入本机配置文件供 CLI 读取。便携版的加密密钥就放在程序目录内，
+            <strong>整个目录被拷走后仍能解开</strong>，请勿把程序目录放进云盘或共享位置。
+          </span>
+          <span v-else>
+            凭证存放：启用后，所选图床的密钥会写入本机配置文件供 CLI 读取。文件用系统钥匙串中的密钥加密，
+            被拷走或同步到云盘后无法解开；但以当前账号运行的程序仍可读取，请勿在共享账号的电脑上启用。
+            系统钥匙串不可用时会降级为明文存放，届时会有提示。
+          </span>
+        </div>
       </div>
     </div>
   </CollapsibleSettingsCard>
@@ -331,6 +355,24 @@ onMounted(() => {
   min-width: 0;
   flex: 1;
   white-space: pre-line;
+}
+
+.storage-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs-sm);
+  margin-top: var(--space-md);
+  padding-top: var(--space-sm-md);
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+.storage-note .pi {
+  flex-shrink: 0;
+  margin-top: var(--space-2xs);
+  font-size: var(--text-xs);
 }
 
 .path-status-note .pi {

@@ -402,6 +402,22 @@ export interface WebDAVStorageProfile {
    *   见 `useStorageProfiles.updateWebdavProfile`。
    */
   lanHttpConfirmed?: boolean;
+
+  /**
+   * 给上传的文件名加唯一段（`{原名}_{yyyyMMdd}_{4位随机}.{扩展名}`）防止覆盖
+   *
+   * **缺省即开启**（判据一律写 `!== false`，不能写 `=== true`）：升级前的 profile 里没有
+   * 这个字段，若按 falsy 处理就等于给老用户默认关掉防护，而沉默覆盖是会丢图的——
+   * 编辑器粘贴出来的图永远叫 `image.png`，笔记 A 的图会被笔记 B 的图顶掉且不可恢复。
+   *
+   * Why 原名在**前**（与 S3 系的 `{yyyyMMdd}_{随机}_{原名}` 相反）：按「最重要的参数放
+   * 最前面」这条命名规范推出来的。S3 桶基本没人用文件管理器翻，日期在前便于按时间扫读；
+   * WebDAV 通常指向用户自己的 NAS，那个目录**是人会去翻的**，此时最重要的是「这是哪张图」。
+   * 两套顺序不同是刻意的，见 `docs/flows/upload-flow.md`，**不要为了"统一"合并掉**。
+   *
+   * 关掉意味着用户自己接受覆盖风险（例如就想按固定文件名更新同一张图）。
+   */
+  uniqueFileName?: boolean;
 }
 
 /**

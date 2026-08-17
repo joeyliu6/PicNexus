@@ -221,6 +221,46 @@ key = {配置里的 path}/{yyyyMMdd}_{4位base36随机}_{原文件名}
 - **代价**：上传失败后重试会生成新 key。若前一次其实已经落桶只是响应丢了，桶里会留一个孤儿对象（旧行为是覆盖同名对象、不留孤儿）。用「多一个几十 KB 的孤儿文件」换「不再静默覆盖用户的图」，是划算的。
 - 文件名本身**不做净化**（空格、`#`、中文原样保留），与改动前一致。
 
+#### 四条上传路径的唯一化现状（2026-08-17 补齐）
+
+上面那套前缀最初**只做在前端**（`objectKey.ts` 走 GUI 主界面上传），Typora / Obsidian / CLI
+走的是 Rust 侧 `server/upload_handler.rs` 的独立链路，一直漏着——而编辑器粘贴出来的图
+**永远叫 `image.png`**，恰恰是最容易撞名的入口。已补齐：
+
+| 路径 | S3 系（R2 / 腾讯 / 阿里 / 七牛 / 自定义 S3） | WebDAV |
+|------|---------------------------------------------|--------|
+| GUI 主界面 | `objectKey.ts::buildObjectKey` | `webdav_upload.rs`（core 内统一处理） |
+| 编辑器 / CLI | `upload_handler.rs::build_upload_key` | 同上（共用 `upload_to_webdav_core`） |
+
+两条 Rust 侧实现都在 `commands/utils.rs`：`prefix_unique_file_name` / `suffix_unique_file_name`。
+
+**⚠️ 两套顺序不同，是刻意的，不要"顺手统一掉"**：
+
+```
+S3 系     20260817_a3f9_image.png     日期在前
+WebDAV    image_20260817_a3f9.png     原名在前
+```
+
+判据是命名规范里那条通用规则——**把最重要的参数放最前面**（[哈佛](https://guides.library.harvard.edu/c.php?g=1033502&p=7496710)、
+[哥大](https://photos.columbia.edu/content/file-naming-conventions-0) 等档案命名指南）。
+S3 桶基本没人用文件管理器去翻，日期在前便于按时间扫读；WebDAV 通常指向用户自己的 NAS，
+**那个目录是人会去翻的**，此时最重要的信息是「这是哪张图」，14 个字符的日期前缀正好挡住它。
+场景不同，答案就不同。
+
+另：AWS 自 2018 年起[已明确随机前缀不再影响 S3 性能](https://repost.aws/knowledge-center/s3-object-key-naming-pattern)，
+所以随机段现在的**唯一职责是防覆盖**，不要再用「打散分区提性能」当理由。
+日期段也不只是为了好看——它把碰撞的分母从「历史上所有同名文件」缩小到「同一天的同名文件」，
+正是 4 位随机（168 万种）够用的前提；去掉日期就得加到 8 位，反而更长。
+
+#### WebDAV 可以关掉唯一化
+
+`WebDAVStorageProfile.uniqueFileName`（设置页「文件名加唯一后缀」开关），**缺省即开启**——
+判据一律写 `!== false`，写成 `=== true` 会让升级前的老 profile 默认失去防护。
+Rust 侧 `ServerUploadConfig::Webdav.unique_file_name` 同理用 `#[serde(default = "default_true")]`，
+否则升级前写下的 `cli-config.json` 会因缺字段而整份反序列化失败，三条编辑器链路一起罢工。
+
+关掉的正当场景：用户就想按固定文件名更新同一张图（如 `logo.png`），自己接受覆盖风险。
+
 ### Content-Type
 
 > **关键源文件**：`src-tauri/src/commands/s3_compatible.rs`（`guess_object_content_type`）
@@ -246,7 +286,9 @@ key = {配置里的 path}/{yyyyMMdd}_{4位base36随机}_{原文件名}
 | 历史主图床与复制链接不一致 | `reconcileHistoryPrimary` 未完成 | 图1 节点 AH1 |
 | S3 图床链接在浏览器里变成下载而不是显图 | 对象缺 Content-Type；确认 `curl -I` 返回的是否为 `application/octet-stream`。旧对象是改动前传的，需重传才会带上正确类型 | S3 系图床 → Content-Type |
 | S3 桶里出现 `20260813_a3f9_` 之类的前缀 | 预期行为，key 唯一化前缀 | S3 系图床 → 对象名唯一化 |
-| 想按固定文件名覆盖桶里的旧对象 | 已刻意不支持——覆盖会让旧历史记录的链接指向新图 | S3 系图床 → 对象名唯一化 |
+| 想按固定文件名覆盖桶里的旧对象 | S3 系刻意不支持——覆盖会让旧历史记录的链接指向新图；WebDAV 可在 profile 里关掉「文件名加唯一后缀」 | S3 系图床 → 对象名唯一化 |
+| Typora/Obsidian 传的图把之前的顶掉了 | 2026-08-17 前编辑器/CLI 链路漏了唯一化（粘贴的图永远叫 `image.png`）；升级后已修 | 四条上传路径的唯一化现状 |
+| NAS 目录里文件名都带 `_20260817_a3f9` | 防覆盖的唯一段，故意放在原名之后好让你先看到文件名；不想要就关掉那个开关 | WebDAV 可以关掉唯一化 |
 | S3 桶里有对象但历史里查不到 | 上传失败重试留下的孤儿对象（重试用新 key，不覆盖） | S3 系图床 → 对象名唯一化「代价」 |
 | 未知扩展名的文件上传后类型是 `application/octet-stream` | `mime_guess` 无法识别该扩展名，按设计回退 | S3 系图床 → Content-Type |
 | 在历史/链接检测/设置页按 Ctrl+V 也触发了上传 | `UploadView` 的 keydown 监听挂在 `window` 上，且 `MainLayout` 的 `KeepAlive` 上限等于视图数、本组件永不卸载，必须靠 `isViewActive` 早退收敛 | 图1 节点 A3 |

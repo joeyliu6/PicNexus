@@ -3,12 +3,14 @@ import Divider from 'primevue/divider';
 import ImageCompressionPanel from './ImageCompressionPanel.vue';
 import ExternalEditorPanel from './ExternalEditorPanel.vue';
 import CliCard from './external-editor/CliCard.vue';
-import type { ImageCompressionConfig, EditorServerConfig } from '../../config/types';
+import type { CustomS3Profile, ImageCompressionConfig, EditorServerConfig, WebDAVStorageProfile } from '../../config/types';
 
 interface Props {
   imageCompression: ImageCompressionConfig;
   editorServer: EditorServerConfig;
   executablePath?: string;
+  customS3Profiles?: CustomS3Profile[];
+  webdavProfiles?: WebDAVStorageProfile[];
 }
 
 const props = defineProps<Props>();
@@ -52,6 +54,8 @@ const emit = defineEmits<{
           embedded
           :editor-server="props.editorServer"
           :executable-path="props.executablePath"
+          :custom-s3-profiles="props.customS3Profiles"
+          :webdav-profiles="props.webdavProfiles"
           @update:editor-server="(v: EditorServerConfig) => emit('update:editorServer', v)"
           @navigate-hosting="emit('navigateHosting')"
           @save="emit('save')"

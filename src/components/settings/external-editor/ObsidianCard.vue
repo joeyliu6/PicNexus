@@ -48,11 +48,11 @@ async function testObsidianConnection() {
   connectionTest.value = { status: 'testing' };
 
   try {
-    const res = await fetch(`http://127.0.0.1:${port}/status`, {
-      signal: AbortSignal.timeout(3000),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    // 走 Rust 侧发请求，不用浏览器 fetch：/status 故意不带 CORS 许可（防止任意网页
+    // 探测本机是否在跑 PicNexus），设置页 webview 跟这个端口不同源，直接 fetch 会被
+    // 浏览器当成跨域请求拦掉，误判成"端口被占用"。
+    const body = await invoke<string>('check_editor_server_status', { port });
+    const data = JSON.parse(body);
     if (data.app !== 'PicNexus') {
       connectionTest.value = { status: 'error', message: '该端口运行的不是 PicNexus 服务，请更换端口' };
       return;

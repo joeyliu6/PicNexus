@@ -133,17 +133,34 @@ fn guess_content_type(file_name: &str) -> &'static str {
     }
 }
 
+/// WebDAV 公开链接的默认模板
+///
+/// 必须与前端 `DEFAULT_WEBDAV_URL_TEMPLATE`（`src/config/serviceTypes.ts`）逐字一致，
+/// 已登记到 `scripts/check-cross-language-constants.mjs` 的 PAIRS。
+const DEFAULT_WEBDAV_URL_TEMPLATE: &str = "{domain}/{path}";
+
 /// 渲染公开链接模板
 ///
 /// 支持变量：`{domain}` `{path}` `{filename}`
 /// - `{path}` 是已编码的完整远程路径（含目录）
 /// - `{filename}` 是已编码的文件名
+///
+/// 空模板回落到 [`DEFAULT_WEBDAV_URL_TEMPLATE`]：主上传链路的 `WebDAVUploader.ts` 一直
+/// 有这层兜底，但编辑器/CLI 那条链路（`buildServiceConfig` → `cli-config.json`）没有。
+/// 用户把设置页的「链接模板」输入框清空后，输入框只显示 placeholder、看起来仍然有值，
+/// 而这里若不兜底就会渲染出**空链接**，且是静默的。兜底放在渲染处而不是各调用方，
+/// 顺带覆盖手改 `cli-config.json` 的情况。
 pub fn render_public_url(
     template: &str,
     public_domain: &str,
     encoded_path: &str,
     encoded_file_name: &str,
 ) -> String {
+    let template = if template.trim().is_empty() {
+        DEFAULT_WEBDAV_URL_TEMPLATE
+    } else {
+        template
+    };
     let domain = public_domain.trim().trim_end_matches('/');
     let path = encoded_path.trim_start_matches('/');
 
@@ -399,6 +416,117 @@ fn emit_progress(window: &Window, id: &str, progress: u32, step: &str, index: u3
 
 // ==================== Tauri 命令 ====================
 
+/// WebDAV 上传核心逻辑，不依赖 Tauri `Window`
+///
+/// 供 GUI 的 `upload_to_webdav` 命令（需要 emit 进度事件）与 Server/CLI 的
+/// `server_upload_webdav`（没有 Window，也没有 Tauri app 上下文）共用。
+/// `progress` 传 `Some((window, id))` 才会 emit 进度事件，传 `None` 静默执行。
+#[allow(clippy::too_many_arguments)]
+pub async fn upload_to_webdav_core(
+    path: &std::path::Path,
+    url: &str,
+    username: &str,
+    password: &str,
+    remote_path: &str,
+    public_domain: &str,
+    public_url_template: &str,
+    lan_http_confirmed: bool,
+    unique_file_name: bool,
+    client: &reqwest::Client,
+    progress: Option<(&Window, &str)>,
+) -> Result<WebDAVUploadResult, AppError> {
+    let consent = lan_http_consent(lan_http_confirmed);
+
+    // 1. 校验地址（WebDAV 策略：允许局域网，拒绝链路本地与公网明文 HTTP）
+    validate_webdav_url_for_request(url, consent).await?;
+    if public_domain.trim().is_empty() {
+        return Err(AppError::config(
+            "公开访问域名不能为空——WebDAV 端点通常需要认证，无法直接作为图片链接",
+        ));
+    }
+    validate_webdav_url_for_request(public_domain, consent).await?;
+
+    if let Some((window, id)) = progress {
+        emit_progress(window, id, 0, "读取文件...", 1, 3);
+    }
+
+    // 2. 只探文件大小，内容留给流式 PUT 按需从磁盘读
+    //
+    // Why 转 &str 放在这里而不是留给调用方各自转：GUI 命令传入的 `file_path: String`
+    // 来自前端（Tauri IPC 只能传合法 Unicode），转换必然成功；只有 Server/CLI 那条路径
+    // （`std::fs::canonicalize` 拿到的原始 OS 路径）才可能真的踩到非 UTF-8。两条路径共用
+    // 同一处转换、同一条错误文案，比各自转一遍更不容易漏。
+    let file_path = path
+        .to_str()
+        .ok_or_else(|| AppError::validation("文件路径包含无法解析的字符"))?;
+    let file_size = probe_upload_file_size(file_path, MAX_FILE_SIZE).await?;
+    let original_file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| AppError::validation("无法解析文件名"))?;
+
+    // 唯一化：远端已有同名文件时，WebDAV 的 PUT 是**直接覆盖**的。编辑器粘贴出来的图
+    // 永远叫 image.png，不加唯一段的话「昨天笔记里的图」会被「今天另一张图」静默顶掉，
+    // 且不可恢复。这与 S3 系早就立下的不变量一致（见 docs/flows/upload-flow.md）。
+    // 关掉这个开关意味着用户自己接受覆盖风险（比如就想按固定名字更新同一张图）。
+    let file_name = if unique_file_name {
+        super::utils::suffix_unique_file_name(original_file_name)
+    } else {
+        original_file_name.to_string()
+    };
+
+    log::debug!("[WebDAV] 文件大小: {} bytes", file_size);
+
+    let auth = basic_auth(username, password);
+    let dir = normalize_dir(remote_path);
+
+    if let Some((window, id)) = progress {
+        emit_progress(window, id, 30, "创建远程目录...", 2, 3);
+    }
+
+    // 3. 建目录
+    ensure_remote_dir(client, url, &dir, &auth).await?;
+
+    if let Some((window, id)) = progress {
+        emit_progress(window, id, 60, "正在上传...", 3, 3);
+    }
+
+    // 4. 二进制 PUT
+    let encoded_file_name = urlencoding::encode(&file_name).into_owned();
+    let encoded_path = if dir.is_empty() {
+        encoded_file_name.clone()
+    } else {
+        format!("{}/{}", encode_path_segments(&dir), encoded_file_name)
+    };
+    let target_url = join_url(url, &encoded_path);
+
+    put_file_stream(
+        client,
+        &target_url,
+        &auth,
+        file_path,
+        file_size,
+        guess_content_type(&file_name),
+    )
+    .await?;
+
+    log::info!("[WebDAV] 上传成功 - 路径: {}", encoded_path);
+
+    // 5. 按模板生成公开链接
+    let public_url = render_public_url(
+        public_url_template,
+        public_domain,
+        &encoded_path,
+        &encoded_file_name,
+    );
+
+    Ok(WebDAVUploadResult {
+        url: public_url,
+        remote_path: encoded_path,
+        file_name,
+    })
+}
+
 /// 上传图片到 WebDAV 图床
 #[tauri::command]
 #[allow(clippy::too_many_arguments)] // 与前端 WebDAVStorageProfile 字段一一对应
@@ -413,78 +541,25 @@ pub async fn upload_to_webdav(
     public_domain: String,
     public_url_template: String,
     lan_http_confirmed: bool,
+    unique_file_name: bool,
     http_client: tauri::State<'_, HttpClient>,
 ) -> Result<WebDAVUploadResult, AppError> {
     log::info!("[WebDAV] 开始上传文件: {}", safe_path(&file_path));
 
-    let consent = lan_http_consent(lan_http_confirmed);
-
-    // 1. 校验地址（WebDAV 策略：允许局域网，拒绝链路本地与公网明文 HTTP）
-    validate_webdav_url_for_request(&url, consent).await?;
-    if public_domain.trim().is_empty() {
-        return Err(AppError::config(
-            "公开访问域名不能为空——WebDAV 端点通常需要认证，无法直接作为图片链接",
-        ));
-    }
-    validate_webdav_url_for_request(&public_domain, consent).await?;
-
-    emit_progress(&window, &id, 0, "读取文件...", 1, 3);
-
-    // 2. 只探文件大小，内容留给流式 PUT 按需从磁盘读
-    let file_size = probe_upload_file_size(&file_path, MAX_FILE_SIZE).await?;
-    let file_name = std::path::Path::new(&file_path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| AppError::validation("无法解析文件名"))?
-        .to_string();
-
-    log::debug!("[WebDAV] 文件大小: {} bytes", file_size);
-
-    let client = &http_client.0;
-    let auth = basic_auth(&username, &password);
-    let dir = normalize_dir(&remote_path);
-
-    emit_progress(&window, &id, 30, "创建远程目录...", 2, 3);
-
-    // 3. 建目录
-    ensure_remote_dir(client, &url, &dir, &auth).await?;
-
-    emit_progress(&window, &id, 60, "正在上传...", 3, 3);
-
-    // 4. 二进制 PUT
-    let encoded_file_name = urlencoding::encode(&file_name).into_owned();
-    let encoded_path = if dir.is_empty() {
-        encoded_file_name.clone()
-    } else {
-        format!("{}/{}", encode_path_segments(&dir), encoded_file_name)
-    };
-    let target_url = join_url(&url, &encoded_path);
-
-    put_file_stream(
-        client,
-        &target_url,
-        &auth,
-        &file_path,
-        file_size,
-        guess_content_type(&file_name),
-    )
-    .await?;
-
-    log::info!("[WebDAV] 上传成功 - 路径: {}", encoded_path);
-
-    // 5. 按模板生成公开链接
-    let public_url = render_public_url(
-        &public_url_template,
+    upload_to_webdav_core(
+        std::path::Path::new(&file_path),
+        &url,
+        &username,
+        &password,
+        &remote_path,
         &public_domain,
-        &encoded_path,
-        &encoded_file_name,
-    );
-
-    Ok(WebDAVUploadResult {
-        url: public_url,
-        remote_path: encoded_path,
-        file_name,
-    })
+        &public_url_template,
+        lan_http_confirmed,
+        unique_file_name,
+        &http_client.0,
+        Some((&window, &id)),
+    )
+    .await
 }
 
 /// 测试 WebDAV 图床配置
@@ -727,6 +802,39 @@ mod tests {
         assert_eq!(captured.body_len, payload.len(), "服务端应收到完整内容");
     }
 
+    /// `upload_to_webdav_core` 接收 `&Path` 而不是预先转好的 `&str`，转换动作挪到函数内部。
+    /// 非 UTF-8 路径（Windows 上偶发于特殊文件系统/未配对代理项，Linux/macOS 上更常见）
+    /// 必须走清晰的 `AppError::validation`，不能 panic，也不能被吞掉变成别的错误。
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn upload_to_webdav_core_rejects_non_utf8_path_instead_of_panicking() {
+        use std::ffi::OsString;
+        use std::os::windows::ffi::OsStringExt;
+
+        // 0xD800 是未配对的 UTF-16 高位代理项，合法字符串里不会单独出现——
+        // 用它拼一个 Windows 允许作为路径、但 `Path::to_str()` 必然返回 None 的字节序列。
+        let invalid_utf16: Vec<u16> = vec![0x0043, 0x003A, 0x005C, 0xD800];
+        let path = std::path::PathBuf::from(OsString::from_wide(&invalid_utf16));
+
+        let err = upload_to_webdav_core(
+            &path,
+            "http://127.0.0.1:1/dav",
+            "user",
+            "pw",
+            "images",
+            "http://127.0.0.1:1",
+            "{domain}/{path}",
+            false,
+            true,
+            &reqwest::Client::new(),
+            None,
+        )
+        .await
+        .expect_err("非 UTF-8 路径应该被明确拒绝，不能 panic");
+
+        assert!(err.to_string().contains("无法解析"), "错误信息应指出路径解析失败: {err}");
+    }
+
     #[test]
     fn encode_path_segments_keeps_slashes() {
         assert_eq!(encode_path_segments("a/b/c"), "a/b/c");
@@ -783,6 +891,24 @@ mod tests {
             render_public_url("{domain}/{filename}", "https://cdn.example.com", "img/a.png", "a.png"),
             "https://cdn.example.com/a.png"
         );
+    }
+
+    /// 空模板必须回落到默认值，而不是渲染出空链接
+    ///
+    /// 触发路径：用户清空设置页的「链接模板」输入框（清空后只显示 placeholder，
+    /// 看上去仍然有值），或手改 cli-config.json 时漏掉这个字段。
+    #[test]
+    fn render_public_url_falls_back_on_empty_template() {
+        let expected = "https://cdn.example.com/img/a.png";
+
+        for template in ["", "   ", "\t\n"] {
+            assert_eq!(
+                render_public_url(template, "https://cdn.example.com", "img/a.png", "a.png"),
+                expected,
+                "空模板 {:?} 应回落到默认模板",
+                template
+            );
+        }
     }
 
     #[test]

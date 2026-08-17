@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick, ref } from 'vue';
 import { mountWithDefaults } from '../helpers/vueMount';
+import { getInvokeMock } from '../helpers/tauriMock';
 
 // TyporaCard 用 useToast 做剪贴板失败提示；单测无 PrimeVue ToastService 上下文，
 // 直接 mock 成 no-op 避免 mount 时抛 "No PrimeVue Toast provided"
@@ -120,6 +121,67 @@ describe('ExternalEditorPanel', () => {
     expect(selectorText).toContain('京东图床');
     expect(selectorText).toContain('SM.MS');
     expect(selectorText).not.toContain('GitHub');
+  });
+
+  it('lists WebDAV and custom S3 profiles by name once their composite id is configured', async () => {
+    healthStatusMap.value = {
+      ...healthStatusMap.value,
+      'webdav:profile-1': 'verified',
+      'custom_s3:profile-2': 'pending',
+    };
+
+    const wrapper = mountWithDefaults(ExternalEditorPanel, {
+      props: {
+        editorServer: {
+          enabled: false,
+          typoraEnabled: false,
+          cliEnabled: true,
+          port: 36799,
+          typoraService: null,
+          obsidianService: null,
+        },
+        webdavProfiles: [{
+          id: 'profile-1',
+          name: '我的 OpenList',
+          url: 'https://dav.example.com/dav',
+          username: 'user',
+          passwordEncrypted: 'cipher(secret)',
+          remotePath: '/images/',
+          publicDomain: 'https://cdn.example.com',
+          publicUrlTemplate: '{domain}/{path}',
+        }],
+        customS3Profiles: [{
+          id: 'profile-2',
+          name: 'Prod S3',
+          endpoint: 'https://s3.example.com',
+          accessKeyId: 'key',
+          secretAccessKey: 'secret',
+          region: 'auto',
+          bucket: 'bucket',
+          path: 'images/',
+          publicDomain: 'https://cdn.example.com',
+        }],
+      },
+      global: {
+        stubs: {
+          ToggleSwitch: ToggleSwitchStub,
+          Button: ButtonStub,
+          ServiceSelectorDropdown: {
+            props: ['configuredServices'],
+            template: '<div class="selector-stub">{{ configuredServices.map(s => s.label).join(",") }}</div>',
+          },
+        },
+        directives: {
+          tooltip: tooltipDirective,
+        },
+      },
+    });
+
+    await flush();
+
+    const selectorText = wrapper.findAll('.selector-stub').map((n) => n.text()).join(',');
+    expect(selectorText).toContain('WebDAV · 我的 OpenList');
+    expect(selectorText).toContain('自定义 S3 · Prod S3');
   });
 
   it('validates port range and only emits valid port updates', async () => {
@@ -255,16 +317,16 @@ describe('ExternalEditorPanel', () => {
   });
 
   it('connection test shows warning/success based on /status response', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ app: 'PicNexus', ready: false }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ app: 'PicNexus', ready: true, serviceName: '京东图床' }),
-      });
-    vi.stubGlobal('fetch', fetchMock);
+    // check_editor_server_status 在 Rust 侧发请求，前端只拿到 body 的原始 JSON 字符串
+    // （不能用浏览器 fetch：/status 故意不带 CORS 许可，设置页 webview 跟这个端口不同源会被拦）
+    let statusCallCount = 0;
+    getInvokeMock().mockImplementation(async (cmd) => {
+      if (cmd !== 'check_editor_server_status') return undefined;
+      statusCallCount += 1;
+      return statusCallCount === 1
+        ? JSON.stringify({ app: 'PicNexus', ready: false })
+        : JSON.stringify({ app: 'PicNexus', ready: true, serviceName: '京东图床' });
+    });
 
     const wrapper = mountWithDefaults(ExternalEditorPanel, {
       props: {

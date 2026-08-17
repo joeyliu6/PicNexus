@@ -236,3 +236,131 @@ mod tests {
         assert!(matches!(result, Err(AppError::Validation { .. })));
     }
 }
+
+// ──────────────────────────────────────────────
+// 上传文件名唯一化
+// ──────────────────────────────────────────────
+
+/// 随机段长度（base36）。36^4 ≈ 168 万种组合——碰撞只在
+/// 「同一天 + 同一个原文件名 + 同一个随机段」三者同时命中时才发生。
+///
+/// 与前端 `src/uploaders/s3/objectKey.ts` 的 `RANDOM_SEGMENT_LENGTH` 保持一致。
+const RANDOM_SEGMENT_LENGTH: u32 = 4;
+
+const BASE36_DIGITS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
+
+fn to_base36_padded(mut value: u64, width: usize) -> String {
+    let mut buf = Vec::with_capacity(width);
+    if value == 0 {
+        buf.push(b'0');
+    }
+    while value > 0 {
+        buf.push(BASE36_DIGITS[(value % 36) as usize]);
+        value /= 36;
+    }
+    while buf.len() < width {
+        buf.push(b'0');
+    }
+    buf.reverse();
+    String::from_utf8(buf).expect("base36 字符集全是 ASCII")
+}
+
+/// 生成「日期_随机」唯一标记，如 `20260817_a3f9`
+///
+/// 用**本地时间**而不是 UTC：前端 `formatDateCompact` 走的是 `Date.getFullYear()` 等本地方法，
+/// 两边错开时区会让同一次操作在 GUI 与 CLI 下落到不同日期段。
+fn unique_token() -> String {
+    use rand::Rng;
+    let date = chrono::Local::now().format("%Y%m%d").to_string();
+    let space = 36u64.pow(RANDOM_SEGMENT_LENGTH);
+    let value = rand::thread_rng().gen_range(0..space);
+    format!("{}_{}", date, to_base36_padded(value, RANDOM_SEGMENT_LENGTH as usize))
+}
+
+/// S3 系对象名唯一化：`{yyyyMMdd}_{随机}_{原文件名}`
+///
+/// 与前端 `objectKey.ts::buildObjectKey` 同格式——GUI 走前端那份、编辑器/CLI 走这份，
+/// 同一个桶里两条路径产出的对象名必须长得一样，否则用户会以为撞上了两种不同的东西。
+pub fn prefix_unique_file_name(file_name: &str) -> String {
+    format!("{}_{}", unique_token(), file_name)
+}
+
+/// WebDAV 文件名唯一化：`{原名主干}_{yyyyMMdd}_{随机}.{扩展名}`
+///
+/// Why 顺序与 S3 系相反（原名在**前**）：这是按「最重要的参数放最前面」这条命名规范
+/// 算出来的——S3 桶基本没人用文件管理器去翻，日期在前便于按时间扫读；而 WebDAV 通常
+/// 指向用户自己的 NAS，那个目录是**人会去翻的**，此时最重要的是「这是哪张图」。
+/// 两套顺序不同是刻意的，**不要为了"统一"把它们合并掉**。
+pub fn suffix_unique_file_name(file_name: &str) -> String {
+    let path = std::path::Path::new(file_name);
+    let stem = path.file_stem().and_then(|s| s.to_str());
+    let ext = path.extension().and_then(|e| e.to_str());
+
+    match (stem, ext) {
+        (Some(stem), Some(ext)) => format!("{}_{}.{}", stem, unique_token(), ext),
+        (Some(stem), None) => format!("{}_{}", stem, unique_token()),
+        // 文件名不是合法 UTF-8 或形如 ".gitignore"：整体附加，至少保证唯一
+        _ => format!("{}_{}", file_name, unique_token()),
+    }
+}
+
+#[cfg(test)]
+mod unique_name_tests {
+    use super::*;
+
+    fn today() -> String {
+        chrono::Local::now().format("%Y%m%d").to_string()
+    }
+
+    #[test]
+    fn prefix_style_matches_frontend_object_key_shape() {
+        let key = prefix_unique_file_name("image.png");
+        let re_prefix = format!("{}_", today());
+
+        assert!(key.starts_with(&re_prefix), "应以本地日期开头: {}", key);
+        assert!(key.ends_with("_image.png"), "原文件名应留在末尾: {}", key);
+        // {日期}_{4位随机}_{原名}
+        assert_eq!(key.len(), 8 + 1 + 4 + 1 + "image.png".len());
+    }
+
+    #[test]
+    fn suffix_style_keeps_original_name_in_front_and_extension_last() {
+        let name = suffix_unique_file_name("image.png");
+
+        assert!(name.starts_with("image_"), "原名应在最前: {}", name);
+        assert!(name.ends_with(".png"), "扩展名必须保住，Rust 侧靠它推断 Content-Type: {}", name);
+        assert!(name.contains(&today()));
+        assert_eq!(name.len(), "image".len() + 1 + 8 + 1 + 4 + ".png".len());
+    }
+
+    #[test]
+    fn suffix_style_handles_names_without_extension() {
+        let name = suffix_unique_file_name("screenshot");
+        assert!(name.starts_with("screenshot_"), "{}", name);
+        assert!(!name.contains('.'), "没有扩展名就不该凭空造一个: {}", name);
+    }
+
+    #[test]
+    fn suffix_style_keeps_only_the_last_extension() {
+        // 多点文件名：`archive.tar.gz` 的 stem 是 `archive.tar`
+        let name = suffix_unique_file_name("archive.tar.gz");
+        assert!(name.starts_with("archive.tar_"), "{}", name);
+        assert!(name.ends_with(".gz"), "{}", name);
+    }
+
+    #[test]
+    fn generated_names_differ_across_calls() {
+        // 随机段的意义就在这：同名文件连传两次不能落到同一个名字上
+        let names: std::collections::HashSet<String> =
+            (0..64).map(|_| suffix_unique_file_name("image.png")).collect();
+        assert!(names.len() > 60, "64 次调用应产出近乎全不重复的名字，实际 {}", names.len());
+    }
+
+    #[test]
+    fn base36_is_left_padded_to_fixed_width() {
+        assert_eq!(to_base36_padded(0, 4), "0000");
+        assert_eq!(to_base36_padded(35, 4), "000z");
+        assert_eq!(to_base36_padded(36, 4), "0010");
+        assert_eq!(to_base36_padded(36 * 36 * 36 * 36 - 1, 4), "zzzz");
+    }
+}

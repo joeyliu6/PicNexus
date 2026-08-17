@@ -10,6 +10,7 @@ mod commands;
 mod error;
 mod log_utils;
 mod portable;
+mod secure_key;
 mod server;
 mod url_policy;
 
@@ -185,14 +186,8 @@ use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 type HmacSha256 = Hmac<Sha256>;
 
-// 用于密钥管理
+// 用于校验前端传来的密钥格式；钥匙串读写与 cli-config.json 加密都在 `secure_key` 模块
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use keyring::Entry;
-use rand::Rng;
-
-// 定义服务名，防止与其他应用冲突
-const SERVICE_NAME: &str = "us.picnex.app.secure";
-const KEY_NAME: &str = "config_encryption_key";
 
 /// 验证字段名是否安全（防止 JavaScript 注入）
 /// 只允许字母、数字、下划线和连字符
@@ -403,6 +398,7 @@ fn main() {
             webdav_request,
             open_path,
             check_port_free,
+            check_editor_server_status,
             update_server_config,
             save_cli_config,
             get_executable_path
@@ -2253,58 +2249,11 @@ async fn webdav_request(
 
 #[tauri::command]
 fn get_or_create_secure_key() -> Result<String, AppError> {
-    if let Some(key_path) = portable::secure_key_path() {
-        if let Some(parent) = key_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| AppError::file_io(format!("无法创建便携数据目录: {}", e)))?;
-        }
-
-        if key_path.exists() {
-            let key = std::fs::read_to_string(&key_path)
-                .map_err(|e| AppError::file_io(format!("无法读取便携密钥: {}", e)))?
-                .trim()
-                .to_string();
-            if !key.is_empty() {
-                log::debug!("[密钥管理] 从便携数据目录读取现有密钥");
-                return Ok(key);
-            }
-        }
-
-        log::debug!("[密钥管理] 生成新的便携密钥");
-        let mut key_bytes = [0u8; 32];
-        rand::thread_rng().fill(&mut key_bytes);
-        let new_key = STANDARD.encode(key_bytes);
-        std::fs::write(&key_path, &new_key)
-            .map_err(|e| AppError::file_io(format!("无法保存便携密钥: {}", e)))?;
-        return Ok(new_key);
-    }
-
-    let entry = Entry::new(SERVICE_NAME, KEY_NAME)
-        .map_err(|e| AppError::external(format!("无法访问系统钥匙串: {}", e)))?;
-
-    match entry.get_password() {
-        Ok(key) => {
-            log::debug!("[密钥管理] 从钥匙串读取现有密钥");
-            Ok(key)
-        }
-        Err(_) => {
-            log::debug!("[密钥管理] 生成新的加密密钥");
-            let mut key_bytes = [0u8; 32];
-            rand::thread_rng().fill(&mut key_bytes);
-            let new_key = STANDARD.encode(key_bytes);
-
-            entry
-                .set_password(&new_key)
-                .map_err(|e| AppError::external(format!("无法保存密钥到系统钥匙串: {}", e)))?;
-
-            log::debug!("[密钥管理] ✓ 新密钥已保存到系统钥匙串");
-            Ok(new_key)
-        }
-    }
+    secure_key::load_or_create_key()
 }
 
 #[tauri::command]
-fn set_secure_key(key: String) -> Result<(), AppError> {
+fn set_secure_key(app: tauri::AppHandle, key: String) -> Result<(), AppError> {
     // 校验密钥格式：必须是合法 Base64 且解码后正好 32 字节（AES-256）
     let decoded = STANDARD
         .decode(&key)
@@ -2316,26 +2265,52 @@ fn set_secure_key(key: String) -> Result<(), AppError> {
         )));
     }
 
-    if let Some(key_path) = portable::secure_key_path() {
-        if let Some(parent) = key_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| AppError::file_io(format!("无法创建便携数据目录: {}", e)))?;
+    // 轮转前先用旧密钥把 cli-config.json 解出来暂存在内存里。
+    //
+    // Why 非做不可：设置备份密码会把主密钥换成口令派生的新密钥（前端 crypto.ts 有 3 处
+    // 调用点），而 cli-config.json 是用旧密钥加密的——不搬运的话，CLI / Typora /
+    // Obsidian 三条链路会在用户改完备份密码后集体解不开配置。这里在 Rust 侧做，
+    // 比让每个前端调用点各自记得重新下发一次可靠。
+    let rescued_config = rescue_cli_config_before_rotation(&app);
+
+    secure_key::store_key(&key)?;
+
+    if let Some((path, plain)) = rescued_config {
+        match secure_key::encrypt_config(&plain, &key) {
+            Ok(reencrypted) => {
+                if let Err(e) = std::fs::write(&path, &reencrypted) {
+                    log::warn!("[密钥管理] cli-config.json 换密钥后重写失败: {}", e);
+                } else {
+                    secure_key::restrict_file_permissions(&path);
+                    log::info!("[密钥管理] ✓ cli-config.json 已用新密钥重新加密");
+                }
+            }
+            Err(e) => log::warn!("[密钥管理] cli-config.json 换密钥后重新加密失败: {}", e),
         }
-        std::fs::write(&key_path, key)
-            .map_err(|e| AppError::file_io(format!("无法更新便携密钥: {}", e)))?;
-        log::debug!("[密钥管理] ✓ 密钥已更新到便携数据目录");
-        return Ok(());
     }
 
-    let entry = Entry::new(SERVICE_NAME, KEY_NAME)
-        .map_err(|e| AppError::external(format!("无法访问系统钥匙串: {}", e)))?;
-
-    entry
-        .set_password(&key)
-        .map_err(|e| AppError::external(format!("无法更新密钥到系统钥匙串: {}", e)))?;
-
-    log::debug!("[密钥管理] ✓ 密钥已更新到系统钥匙串");
     Ok(())
+}
+
+/// 主密钥轮转前，用**旧密钥**把 `cli-config.json` 解成明文暂存
+///
+/// 返回 `None` 的情况都是不需要搬运：文件不存在、本来就是明文（老版本格式，
+/// 换密钥不影响它）、或者旧密钥已经拿不到了（那也没救了，交给设置页下次重新下发）。
+fn rescue_cli_config_before_rotation(app: &tauri::AppHandle) -> Option<(PathBuf, String)> {
+    let path = portable::user_data_dir(app).ok()?.join("cli-config.json");
+    let raw = std::fs::read_to_string(&path).ok()?;
+    if !secure_key::is_encrypted(&raw) {
+        return None;
+    }
+
+    let old_key = secure_key::load_existing_key()?;
+    match secure_key::decrypt_config(&raw, &old_key) {
+        Ok(plain) => Some((path, plain)),
+        Err(e) => {
+            log::warn!("[密钥管理] 轮转前解密 cli-config.json 失败，跳过搬运: {}", e);
+            None
+        }
+    }
 }
 
 /// 打开日志目录
@@ -2541,14 +2516,25 @@ fn get_executable_path() -> Result<String, AppError> {
         .map_err(|e| AppError::file_io(format!("无法获取可执行文件路径: {}", e)))
 }
 
+/// `save_cli_config` 的结果，用于把「有没有降级成明文」回传给设置页
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveCliConfigOutcome {
+    /// `false` 表示钥匙串不可用、这次是明文落盘，前端需要显式提示用户
+    encrypted: bool,
+}
+
 /// 将 Typora profile 与显式 CLI services 表写入 {app_data_dir}/cli-config.json。
 /// CLI 模式启动时直接读取此文件，无需启动 GUI。
+///
+/// 文件内容用系统钥匙串里的主密钥做 AES-256-GCM 加密（拿不到钥匙串时降级明文并告警），
+/// 读取侧见 `cli.rs`；整体设计与边界见 `secure_key` 模块头部注释。
 #[tauri::command]
 async fn save_cli_config(
     app: tauri::AppHandle,
     service_config_json: Option<String>,
     services_config_json: Option<String>,
-) -> Result<(), AppError> {
+) -> Result<SaveCliConfigOutcome, AppError> {
     let config_dir = portable::user_data_dir(&app)?;
 
     std::fs::create_dir_all(&config_dir)
@@ -2577,7 +2563,8 @@ async fn save_cli_config(
                 .map_err(|e| AppError::file_io(format!("删除 cli-config.json 失败: {}", e)))?;
         }
         log::info!("[CLI Config] cli-config.json 已删除");
-        return Ok(());
+        // 文件都不存在了，没有明文暴露面，按「已加密」上报避免误报警告
+        return Ok(SaveCliConfigOutcome { encrypted: true });
     }
 
     let payload = serde_json::json!({
@@ -2587,20 +2574,80 @@ async fn save_cli_config(
     let json = serde_json::to_string_pretty(&payload)
         .map_err(|e| AppError::config(format!("CLI 配置序列化失败: {}", e)))?;
 
-    std::fs::write(&config_path, &json)
+    // 这份文件装的是**解密后的**凭证明文（各家 OSS secret key、cookie、WebDAV 密码），
+    // 所以落盘前用钥匙串里的主密钥再加密一层，详见 secure_key 模块头部注释。
+    let (contents, mode) = match secure_key::load_or_create_key()
+        .and_then(|key| secure_key::encrypt_config(&json, &key))
+    {
+        Ok(encrypted) => (encrypted, secure_key::ConfigWriteMode::Encrypted),
+        Err(e) => {
+            // 降级必须是响的：Electron safeStorage 在 Linux 上静默退回近乎无加密的模式，
+            // 让大量用户在毫不知情的状态下裸奔——这里反着来，日志 warn + 回传前端提示。
+            log::warn!(
+                "[CLI Config] ⚠ 无法访问系统钥匙串（{}），cli-config.json 将以明文写入；\
+                 该文件包含图床密钥与 WebDAV 密码，请注意不要外传",
+                e
+            );
+            (json, secure_key::ConfigWriteMode::Plaintext)
+        }
+    };
+
+    std::fs::write(&config_path, &contents)
         .map_err(|e| AppError::file_io(format!("写入 cli-config.json 失败: {}", e)))?;
+    secure_key::restrict_file_permissions(&config_path);
 
     log::info!(
-        "[CLI Config] ✓ cli-config.json 已更新: {}",
+        "[CLI Config] ✓ cli-config.json 已更新（{}）: {}",
+        if mode == secure_key::ConfigWriteMode::Encrypted {
+            "已加密"
+        } else {
+            "明文降级"
+        },
         config_path.display()
     );
 
-    Ok(())
+    Ok(SaveCliConfigOutcome {
+        encrypted: mode == secure_key::ConfigWriteMode::Encrypted,
+    })
 }
 
 #[tauri::command]
 async fn check_port_free(port: u16) -> bool {
     server::is_port_free(port).await
+}
+
+/// 从 Rust 侧探测编辑器兼容 Server 的 `/status`，返回原始 JSON 文本
+///
+/// Why 不让前端直接 `fetch('http://127.0.0.1:<port>/status')`：`/status` 故意不带
+/// `Access-Control-Allow-Origin`（防止任意网页探测本机是否在跑 PicNexus，见
+/// `server::tests::public_status_does_not_emit_cors_headers`），设置页 webview 与该端口
+/// 不同源，浏览器会把这次 fetch 当成跨域请求直接拦掉——`npm run tauri dev` 下前端跑在
+/// `localhost:1420`，打包后 webview 走自定义协议，两种情况都命中同一条 CORS 规则。
+/// Rust 侧发起的请求不经过浏览器，天然不受 CORS 约束。
+#[tauri::command]
+async fn check_editor_server_status(
+    port: u16,
+    http_client: tauri::State<'_, HttpClient>,
+) -> Result<String, AppError> {
+    let response = http_client
+        .0
+        .get(format!("http://127.0.0.1:{}/status", port))
+        .timeout(std::time::Duration::from_secs(3))
+        .send()
+        .await
+        .map_err(|e| AppError::network(format!("连接失败: {}", e)))?;
+
+    let status = response.status();
+    let body = response
+        .text()
+        .await
+        .map_err(|e| AppError::network(format!("读取响应失败: {}", e)))?;
+
+    if !status.is_success() {
+        return Err(AppError::network(format!("HTTP {}", status.as_u16())));
+    }
+
+    Ok(body)
 }
 
 /// 更新编辑器兼容 Server 配置（由前端调用）

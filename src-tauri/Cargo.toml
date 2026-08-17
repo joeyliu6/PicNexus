@@ -41,6 +41,8 @@ tokio-util = { version = "0.7.17", features = ["codec"] }
 futures = "0.3"
 keyring = "2"
 rand = "0.8"
+# cli-config.json 的信封加密（密钥存系统钥匙串，见 src/secure_key.rs）
+aes-gcm = "0.10"
 aws-sdk-s3 = { version = "1.0", features = ["behavior-version-latest"] }
 mime_guess = "2.0"
 arboard = "3"

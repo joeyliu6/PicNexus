@@ -1,7 +1,8 @@
-import type { CustomS3Profile, ServerServiceType } from '../../config/types';
-import { getCustomS3ProfileId, isCustomS3Id, makeCustomS3Id } from '../../config/types';
-import { CUSTOM_S3_REQUIRED_FIELDS, SERVICE_REQUIRED_FIELDS } from '../../constants/serviceRequiredFields';
+import type { CustomS3Profile, ServerServiceType, WebDAVStorageProfile } from '../../config/types';
+import { DEFAULT_WEBDAV_URL_TEMPLATE, getCustomS3ProfileId, getWebDAVProfileId, isCustomS3Id, isWebDAVId, makeCustomS3Id, makeWebDAVId } from '../../config/types';
+import { CUSTOM_S3_REQUIRED_FIELDS, SERVICE_REQUIRED_FIELDS, WEBDAV_REQUIRED_FIELDS } from '../../constants/serviceRequiredFields';
 import { extractNamiAuthToken } from '../../utils/namiAuthToken';
+import { secureStorage } from '../../security/crypto';
 import type { SettingsFormShape } from './settingsFormTypes';
 
 export const EDITOR_UNSUPPORTED_SERVICES: Set<ServerServiceType> = new Set(['qiyu', 'nami']);
@@ -40,12 +41,23 @@ function findCustomS3Profile(service: string, fd: SettingsFormShape): CustomS3Pr
   return fd.custom_s3_profiles.find((profile) => profile.id === profileId);
 }
 
+function findWebDAVProfile(service: string, fd: SettingsFormShape): WebDAVStorageProfile | undefined {
+  if (!isWebDAVId(service)) return undefined;
+  const profileId = getWebDAVProfileId(service);
+  return fd.webdav_profiles.find((profile) => profile.id === profileId);
+}
+
 export function isCliCompatibleServiceConfigured(service: ServerServiceType, fd: SettingsFormShape): boolean {
   if (EDITOR_UNSUPPORTED_SERVICES.has(service)) return false;
 
   if (isCustomS3Id(service)) {
     const profile = findCustomS3Profile(service, fd);
     return !!profile && hasFilledFields(profile as unknown as Record<string, unknown>, CUSTOM_S3_REQUIRED_FIELDS);
+  }
+
+  if (isWebDAVId(service)) {
+    const profile = findWebDAVProfile(service, fd);
+    return !!profile && hasFilledFields(profile as unknown as Record<string, unknown>, WEBDAV_REQUIRED_FIELDS);
   }
 
   const requiredFields = SERVICE_REQUIRED_FIELDS[service as keyof typeof SERVICE_REQUIRED_FIELDS];
@@ -94,8 +106,33 @@ function buildRawServiceRecord(service: ServerServiceType, fd: SettingsFormShape
   }
 }
 
-export function buildServiceConfig(service: ServerServiceType | null, fd: SettingsFormShape): ServiceConfigObject | null {
+export function buildServiceConfig(
+  service: ServerServiceType | null,
+  fd: SettingsFormShape,
+  webdavPassword?: string,
+): ServiceConfigObject | null {
   if (!service) return null;
+
+  if (isWebDAVId(service)) {
+    const profile = findWebDAVProfile(service, fd);
+    if (!profile) return null;
+    return {
+      type: 'webdav',
+      url: profile.url,
+      username: profile.username,
+      password: webdavPassword ?? '',
+      remote_path: profile.remotePath,
+      public_domain: profile.publicDomain,
+      // 模板被清空时回落到默认值。设置页那个输入框清空后只显示 placeholder，
+      // 用户看着像"还有值"，不兜底的话 Typora/CLI 会静默拿到一条空链接。
+      // trim 后判空是为了跟 Rust 侧 render_public_url 的兜底口径一致，
+      // 让导出的 cli-config.json 里就是最终生效的模板，而不是留个空串让下游再猜。
+      public_url_template: profile.publicUrlTemplate?.trim() || DEFAULT_WEBDAV_URL_TEMPLATE,
+      lan_http_confirmed: profile.lanHttpConfirmed === true,
+      // `!== false`：缺省落在"开启防覆盖"一侧，见 WebDAVStorageProfile.uniqueFileName
+      unique_file_name: profile.uniqueFileName !== false,
+    };
+  }
 
   switch (service) {
     case 'jd':
@@ -155,12 +192,15 @@ export function buildServiceConfig(service: ServerServiceType | null, fd: Settin
   }
 }
 
-export function buildServiceConfigJson(service: ServerServiceType | null, fd: SettingsFormShape): string | null {
-  const config = buildServiceConfig(service, fd);
+export function buildServiceConfigJson(service: ServerServiceType | null, fd: SettingsFormShape, webdavPassword?: string): string | null {
+  const config = buildServiceConfig(service, fd, webdavPassword);
   return config ? JSON.stringify(config) : null;
 }
 
-export function buildCliServicesConfig(fd: SettingsFormShape): Record<string, ServiceConfigObject> {
+export function buildCliServicesConfig(
+  fd: SettingsFormShape,
+  webdavPasswords?: Record<string, string>,
+): Record<string, ServiceConfigObject> {
   if (fd.editorServer.cliEnabled !== true) return {};
 
   const services: Record<string, ServiceConfigObject> = {};
@@ -178,14 +218,70 @@ export function buildCliServicesConfig(fd: SettingsFormShape): Record<string, Se
     if (config) services[serviceId] = config;
   }
 
+  for (const profile of fd.webdav_profiles) {
+    const serviceId = makeWebDAVId(profile.id);
+    if (!isCliCompatibleServiceConfigured(serviceId, fd)) continue;
+    const config = buildServiceConfig(serviceId, fd, webdavPasswords?.[serviceId]);
+    if (config) services[serviceId] = config;
+  }
+
   return services;
 }
 
-export function buildCliServicesConfigJson(fd: SettingsFormShape): string {
-  return JSON.stringify(buildCliServicesConfig(fd));
+export function buildCliServicesConfigJson(fd: SettingsFormShape, webdavPasswords?: Record<string, string>): string {
+  return JSON.stringify(buildCliServicesConfig(fd, webdavPasswords));
+}
+
+/**
+ * CLI 导出服务的变更签名，供 `useEditorIntegration` 的 `watch` 判断"要不要重新下发"
+ *
+ * 不能直接拿 `buildCliServicesConfigJson` 的结果当签名：那份 JSON 里 WebDAV 的
+ * `password` 字段固定是空串（真正的明文只在 `applyEditorServer` 里才解出来），
+ * 于是"只改了 WebDAV 密码"时这份 JSON 纹丝不动，`watch` 检测不到变化，
+ * `cli-config.json` 就会一直停在旧密码上。这里改用 `buildEditorCredentialSignature`
+ * （webdav 分支用的是密文 `passwordEncrypted`，密文变了签名就变，不用解密）。
+ */
+export function buildCliServicesSignature(fd: SettingsFormShape): string {
+  if (fd.editorServer.cliEnabled !== true) return '';
+
+  const parts: string[] = [];
+
+  for (const service of BUILTIN_EDITOR_SERVICE_IDS) {
+    if (!isCliCompatibleServiceConfigured(service, fd)) continue;
+    parts.push(`${service}:${buildEditorCredentialSignature(service, fd)}`);
+  }
+
+  for (const profile of fd.custom_s3_profiles) {
+    const serviceId = makeCustomS3Id(profile.id);
+    if (!isCliCompatibleServiceConfigured(serviceId, fd)) continue;
+    parts.push(`${serviceId}:${buildEditorCredentialSignature(serviceId, fd)}`);
+  }
+
+  for (const profile of fd.webdav_profiles) {
+    const serviceId = makeWebDAVId(profile.id);
+    if (!isCliCompatibleServiceConfigured(serviceId, fd)) continue;
+    parts.push(`${serviceId}:${buildEditorCredentialSignature(serviceId, fd)}`);
+  }
+
+  return parts.join('|');
 }
 
 export function buildEditorCredentialSignature(service: ServerServiceType, fd: SettingsFormShape): string {
+  if (isWebDAVId(service)) {
+    const profile = findWebDAVProfile(service, fd);
+    if (!profile) return '';
+    return [
+      profile.url,
+      profile.username,
+      profile.passwordEncrypted,
+      profile.remotePath,
+      profile.publicDomain,
+      profile.publicUrlTemplate,
+      profile.lanHttpConfirmed ?? false,
+      profile.uniqueFileName ?? true,
+    ].join('|');
+  }
+
   switch (service) {
     case 'jd':
     case 'qiyu':
@@ -228,4 +324,33 @@ export function buildEditorCredentialSignature(service: ServerServiceType, fd: S
       return '';
     }
   }
+}
+
+/**
+ * 解密单个 WebDAV 复合 ID 对应的密码
+ *
+ * 空密文是合法的中间态（profile 还没填密码），直接返回空串；
+ * 解密失败说明密钥不匹配，抛错交给调用方（`applyEditorServer`）已有的 toast 兜底。
+ */
+export async function resolveWebDAVServicePassword(service: ServerServiceType, fd: SettingsFormShape): Promise<string> {
+  const profile = findWebDAVProfile(service, fd);
+  if (!profile?.passwordEncrypted) return '';
+  try {
+    return await secureStorage.decrypt(profile.passwordEncrypted);
+  } catch {
+    throw new Error('WebDAV 密码解密失败，请在设置中重新填写密码');
+  }
+}
+
+/**
+ * 解密所有 CLI 会用到的 WebDAV profile 密码，供 `buildCliServicesConfig` 使用
+ */
+export async function resolveWebDAVPasswordsForCli(fd: SettingsFormShape): Promise<Record<string, string>> {
+  const passwords: Record<string, string> = {};
+  for (const profile of fd.webdav_profiles) {
+    const serviceId = makeWebDAVId(profile.id);
+    if (!isCliCompatibleServiceConfigured(serviceId, fd)) continue;
+    passwords[serviceId] = await resolveWebDAVServicePassword(serviceId, fd);
+  }
+  return passwords;
 }

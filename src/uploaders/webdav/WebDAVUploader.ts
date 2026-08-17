@@ -108,7 +108,10 @@ export class WebDAVUploader extends BaseUploader<WebDAVStorageProfile> {
         publicUrlTemplate: config.publicUrlTemplate || DEFAULT_WEBDAV_URL_TEMPLATE,
         // Why `=== true` 而不是原样传：Rust 侧参数是必填 bool，而 undefined 会被
         // JSON 序列化直接丢键，命令会因反序列化失败而根本不执行。
-        lanHttpConfirmed: config.lanHttpConfirmed === true
+        lanHttpConfirmed: config.lanHttpConfirmed === true,
+        // 这里反过来用 `!== false`：缺省要落在"开启防覆盖"这一侧。
+        // 老 profile 没有这个字段，按 falsy 处理等于给老用户默认关掉防护。
+        uniqueFileName: config.uniqueFileName !== false
       },
       onProgress
     ) as WebDAVRustResult;
