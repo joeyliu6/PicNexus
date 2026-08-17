@@ -1,16 +1,22 @@
 /**
- * WebDAV 认证方案夹具 —— 验收「401 提示区分 Digest 与密码错」用
+ * WebDAV 认证方案夹具 —— 验收「认证失败提示区分 Digest / 密码错 / 没权限」用
  *
  * Why 不起真的 Apache mod_dav：要验的是**提示文案**，而 PicNexus 本来就不支持 Digest、
  * 认证注定失败。所以服务端只需要如实声明自己要哪种认证即可，不需要真的实现 Digest 的
  * nonce/qop/nc 那一套。省掉一个 Docker 依赖，验收从「装环境」变成「跑一条命令」。
  *
- * 四个端口对应四种服务端形态，后两个是判据最容易失效的地方：
+ * 五个端口对应五种服务端形态，5013/5014 是判据最容易失效的地方：
  *
- *   5011  只给 Digest                  → 应提示「服务端要求 Digest 认证」
- *   5012  只给 Basic                   → 应提示「认证失败，请检查用户名和密码」
- *   5013  两条同名 header，Digest 在前  → 应提示「认证失败，请检查用户名和密码」
- *   5014  Digest，realm 里带逗号        → 应提示「服务端要求 Digest 认证」
+ *   5011  401，只给 Digest                  → 应提示「服务端要求 Digest 认证」
+ *   5012  401，只给 Basic                   → 应提示「认证失败，请检查用户名和密码」
+ *   5013  401，两条同名 header，Digest 在前  → 应提示「认证失败，请检查用户名和密码」
+ *   5014  401，Digest，realm 里带逗号        → 应提示「服务端要求 Digest 认证」
+ *   5015  403，且照样带 Digest challenge     → 应提示「访问被拒绝，请检查账号对该路径的读写权限」
+ *
+ * 5015 守的是 403 与 401 分家：它同时要挡住两种退化——读了 `WWW-Authenticate` 而误报
+ * 「服务端要求 Digest」，以及并回 401 的文案、把一个权限没开的用户支去改本来就没错的密码。
+ * 真实服务端在 403 上带 challenge 并不罕见（反代统一加、或 401 模板复用），所以这里
+ * 故意带上。
  *
  * 5013 是 `get_all()` vs `get()` 的真机判据：RFC 7235 允许服务端把 Basic 和 Digest
  * 拆成两条 `WWW-Authenticate` 发。只看第一条的实现会在这里把「两种都支持」误判成
@@ -57,17 +63,25 @@ const SCENARIOS = [
     expect: '服务端要求 Digest 认证',
     headers: ['Digest realm="NAS, Basic Zone", qop="auth", nonce="deadbeef"'],
   },
+  {
+    port: 5015,
+    name: '403 没权限（且带 Digest challenge 干扰）',
+    status: 403,
+    expect: '访问被拒绝，请检查账号对该路径的读写权限',
+    headers: ['Digest realm="picnexus-test", qop="auth", nonce="deadbeef"'],
+  },
 ];
 
 const servers = SCENARIOS.map((scenario) => {
+  const status = scenario.status ?? 401;
   const server = http.createServer((req, res) => {
-    // 一律 401 并声明认证方案——本夹具只关心 challenge 长什么样
-    res.writeHead(401, {
+    // 只声明认证方案、不实现认证——本夹具只关心 challenge 长什么样、配哪个状态码
+    res.writeHead(status, {
       'WWW-Authenticate': scenario.headers,
       'Content-Length': '0',
     });
     res.end();
-    console.log(`  [${scenario.port}] ${req.method} ${req.url} → 401`);
+    console.log(`  [${scenario.port}] ${req.method} ${req.url} → ${status}`);
   });
 
   server.listen(scenario.port, '127.0.0.1', () => {
@@ -85,7 +99,7 @@ const servers = SCENARIOS.map((scenario) => {
 });
 
 console.log(`\nWebDAV 认证夹具已启动（${SCENARIOS.length} 个端口）。每个地址都填同一套配置即可：`);
-console.log('  用户名/密码：随便填（本夹具一律返回 401，这正是要测的）');
+console.log('  用户名/密码：随便填（本夹具一律拒绝——5011~5014 回 401、5015 回 403，这正是要测的）');
 console.log('  公开访问域名：与 WebDAV 地址填同一个');
 console.log('\n按 Ctrl+C 停止。\n');
 
