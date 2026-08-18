@@ -329,6 +329,20 @@ fn is_empty_success_response(status_code: u16, content_length: Option<u64>) -> b
     matches!(status_code, 204 | 205) || content_length == Some(0)
 }
 
+/// 取 Content-Type 的裸 MIME：切掉 `; charset=...` 参数、去空白、转小写
+///
+/// Why 必须归一化：`Content-Type` 的类型/子类型按 RFC 9110 是大小写不敏感的，
+/// 参数段也是合法的。真实图床返回 `Image/JPEG` 或 `image/png; charset=binary`
+/// 都不算异常，直接拿原串 `starts_with("image/")` 会把正常图误判成「疑似」。
+fn content_type_mime(content_type: &str) -> String {
+    content_type
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase()
+}
+
 fn is_suspicious_image_response(
     status_code: u16,
     content_type: Option<&str>,
@@ -338,9 +352,14 @@ fn is_suspicious_image_response(
         return false;
     }
 
-    let is_svg = content_type.is_some_and(|t| t.starts_with("image/svg"));
+    let mime = content_type.map(|t| content_type_mime(t));
+    let is_svg = mime
+        .as_deref()
+        .is_some_and(|m| m.starts_with("image/svg"));
     is_empty_success_response(status_code, content_length)
-        || content_type.is_some_and(|t| !t.starts_with("image/") && !t.is_empty())
+        || mime
+            .as_deref()
+            .is_some_and(|m| !m.starts_with("image/") && !m.is_empty())
         || (!is_svg && content_length.is_some_and(|len| len > 0 && len < 1024))
 }
 
@@ -793,6 +812,57 @@ mod tests {
             206,
             Some("text/html"),
             Some(1)
+        ));
+    }
+
+    /// Content-Type 的大小写与参数段都是合法的，不能据此判「疑似」
+    ///
+    /// 归一化前 `Image/JPEG` 会被 `starts_with("image/")` 判否 → 正常图误标疑似。
+    #[test]
+    fn suspicious_image_response_normalizes_case_and_parameters() {
+        assert!(!is_suspicious_image_response(
+            200,
+            Some("Image/JPEG"),
+            Some(4096)
+        ));
+        assert!(!is_suspicious_image_response(
+            200,
+            Some("IMAGE/PNG; charset=binary"),
+            Some(4096)
+        ));
+        assert!(!is_suspicious_image_response(
+            200,
+            Some("  image/webp  "),
+            Some(4096)
+        ));
+        // SVG 的小体积豁免同样要认得出大小写变体
+        assert!(!is_suspicious_image_response(
+            200,
+            Some("Image/SVG+XML"),
+            Some(128)
+        ));
+        // 只有参数没有类型：等同于「服务器没说」，不据此判疑似
+        assert!(!is_suspicious_image_response(
+            200,
+            Some("; charset=utf-8"),
+            Some(4096)
+        ));
+    }
+
+    /// issue #4：S3 系图床漏传 Content-Type 时对象以 octet-stream 落桶
+    ///
+    /// 这是链接检测把 R2 链接标成「疑似」的原因，归一化改动**不能**把它放过。
+    #[test]
+    fn suspicious_image_response_still_flags_octet_stream() {
+        assert!(is_suspicious_image_response(
+            200,
+            Some("application/octet-stream"),
+            Some(4096)
+        ));
+        assert!(is_suspicious_image_response(
+            200,
+            Some("binary/octet-stream"),
+            Some(4096)
         ));
     }
 
@@ -1272,13 +1342,8 @@ pub async fn download_image_from_url(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_string();
-    let content_type_mime = content_type
-        .split(';')
-        .next()
-        .unwrap_or("")
-        .trim()
-        .to_ascii_lowercase();
-    if !content_type.is_empty() && !content_type_mime.starts_with("image/") {
+    let mime = content_type_mime(&content_type);
+    if !content_type.is_empty() && !mime.starts_with("image/") {
         return Err(AppError::validation(format!(
             "URL 指向的不是图片（Content-Type: {}）",
             content_type
@@ -1591,14 +1656,9 @@ pub async fn download_url_image(
         .unwrap_or("")
         .to_string();
 
-    // 校验是否为图片
-    let content_type_mime = content_type
-        .split(';')
-        .next()
-        .unwrap_or("")
-        .trim()
-        .to_ascii_lowercase();
-    let is_image = content_type_mime.starts_with("image/");
+    // 校验是否为图片：判据与 is_suspicious_image_response / download_image_from_url
+    // 共用 content_type_mime()，避免三处各写一份大小写与参数的处理规则后互相漂移
+    let is_image = content_type_mime(&content_type).starts_with("image/");
     if !content_type.is_empty() && !is_image {
         log::warn!("[URL下载] 非图片类型: {}", content_type);
         return Err(AppError::validation(format!(
