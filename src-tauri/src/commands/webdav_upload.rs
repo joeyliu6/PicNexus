@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Window};
 use tokio::time::Duration;
 
-use super::utils::probe_upload_file_size;
+use super::utils::{guess_object_content_type, probe_upload_file_size};
 use crate::error::AppError;
 use crate::log_utils::safe_path;
 use crate::url_policy::{validate_webdav_url_for_request, LanHttpConsent};
@@ -125,28 +125,6 @@ fn join_url(base: &str, relative: &str) -> String {
         base.to_string()
     } else {
         format!("{}/{}", base, relative)
-    }
-}
-
-/// 按扩展名推断 Content-Type
-fn guess_content_type(file_name: &str) -> &'static str {
-    let ext = file_name
-        .rsplit('.')
-        .next()
-        .unwrap_or("")
-        .to_ascii_lowercase();
-
-    match ext.as_str() {
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        "bmp" => "image/bmp",
-        "svg" => "image/svg+xml",
-        "avif" => "image/avif",
-        "ico" => "image/x-icon",
-        "tif" | "tiff" => "image/tiff",
-        _ => "application/octet-stream",
     }
 }
 
@@ -528,7 +506,7 @@ pub async fn upload_to_webdav_core(
         &auth,
         file_path,
         file_size,
-        guess_content_type(&file_name),
+        &guess_object_content_type(&file_name),
     )
     .await?;
 
@@ -946,14 +924,82 @@ mod tests {
         assert!(!rendered.contains("%2520"));
     }
 
-    #[test]
-    fn guess_content_type_covers_common_images() {
-        assert_eq!(guess_content_type("a.png"), "image/png");
-        assert_eq!(guess_content_type("a.JPG"), "image/jpeg");
-        assert_eq!(guess_content_type("a.jpeg"), "image/jpeg");
-        assert_eq!(guess_content_type("a.webp"), "image/webp");
-        assert_eq!(guess_content_type("a.unknown"), "application/octet-stream");
-        assert_eq!(guess_content_type("noext"), "application/octet-stream");
+    /// WebDAV 上传必须按扩展名贴 Content-Type，且用的是与 S3 系**同一张表**
+    ///
+    /// Why 拿 `.jfif` 当判据：这里原本自己手写了第三张扩展名表，与
+    /// `utils::guess_object_content_type` 已经漂了 5 个——heic/heif/jfif/apng/svgz
+    /// 在 WebDAV 落 `application/octet-stream`，在 S3 落正确类型。`.jfif` 恰好属于
+    /// 「手写表答不出、共用表答得出」的那一类，用它才能钉住两张表确实合并了；
+    /// 换成 `.png` 则两张表都答得对，测了等于没测。
+    ///
+    /// 顺带一并覆盖了「唯一化改名不能改扩展名」——`unique_file_name` 开着，
+    /// 推断走的是改名后的文件名。
+    #[tokio::test]
+    async fn webdav_put_sends_content_type_from_shared_table() {
+        use axum::Router;
+        use std::sync::{Arc, Mutex};
+
+        let seen: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+        let sink = seen.clone();
+
+        // 全方法兜底：MKCOL 建目录和 PUT 上传都打到这里，只记 PUT 的 Content-Type。
+        // `Bytes` 放在最后一个参数位把 body 读完——不消费 body 就返回，hyper 会 reset
+        // 连接，测试在并行跑时会随机挂在「连接被中止」上。
+        let app = Router::new().fallback(
+            move |method: axum::http::Method,
+                  headers: axum::http::HeaderMap,
+                  _body: axum::body::Bytes| {
+                let sink = sink.clone();
+                async move {
+                    if method == axum::http::Method::PUT {
+                        *sink.lock().expect("捕获锁") = headers
+                            .get("content-type")
+                            .and_then(|v| v.to_str().ok())
+                            .map(str::to_string);
+                    }
+                    axum::http::StatusCode::CREATED
+                }
+            },
+        );
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("绑定本地端口失败");
+        let addr = listener.local_addr().expect("获取本地地址失败");
+        let server = tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let path = std::env::temp_dir()
+            .join(format!("picnexus_webdav_ct_{}.jfif", std::process::id()));
+        std::fs::write(&path, vec![9u8; 32]).expect("写入临时文件失败");
+
+        let endpoint = format!("http://{}", addr);
+        let result = upload_to_webdav_core(
+            &path,
+            &endpoint,
+            "test",
+            "test",
+            "",
+            &endpoint,
+            "",
+            true, // 本地明文 HTTP 需要显式放行
+            true, // 开唯一化，顺带验证改名不影响扩展名推断
+            &reqwest::Client::new(),
+            None,
+        )
+        .await;
+
+        let _ = std::fs::remove_file(&path);
+        server.abort();
+
+        result.expect("上传应成功");
+
+        assert_eq!(
+            seen.lock().expect("捕获锁").as_deref(),
+            Some("image/jpeg"),
+            "「.jfif 是 JPEG」只有共用表知道；落成 octet-stream 说明手写表又回来了",
+        );
     }
 
     #[test]
