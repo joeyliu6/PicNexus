@@ -2141,7 +2141,11 @@ async fn server_upload_upyun(
         .put(&upload_url)
         .header("Authorization", format!("Basic {}", auth))
         .header("Content-Length", buffer.len())
-        .header("Content-Type", "image/*")
+        // Why 不是 "image/*"：星号形式只在请求的 Accept 里合法，作为**响应**的类型
+        // 是无效值，对象会带着一个浏览器解释不了的标签落桶。又拍云这条走独立 REST PUT、
+        // 不经过 s3_put_object，所以 issue #4 那轮「每条 S3 链路都补 Content-Type」漏了它，
+        // 同一个桶里 GUI 传的是 image/png、编辑器传的是 image/*。
+        .header("Content-Type", object_content_type(path))
         .body(buffer)
         .timeout(std::time::Duration::from_secs(60))
         .send()
@@ -2172,9 +2176,10 @@ async fn server_upload_upyun(
 #[cfg(test)]
 mod tests {
     use super::{
-        get_service_info, request_has_browser_origin, request_has_valid_server_token,
-        unique_upload_temp_dir, validate_https_url, validate_image_bytes, validate_image_file,
-        DetectedImageKind, ServerUploadConfig, MAX_SERVER_UPLOAD_SIZE, SERVER_AUTH_TOKEN_HEADER,
+        get_service_info, object_content_type, request_has_browser_origin,
+        request_has_valid_server_token, unique_upload_temp_dir, validate_https_url,
+        validate_image_bytes, validate_image_file, DetectedImageKind, ServerUploadConfig,
+        MAX_SERVER_UPLOAD_SIZE, SERVER_AUTH_TOKEN_HEADER,
     };
     use axum::http::HeaderMap;
     use std::io::Cursor;
@@ -2471,5 +2476,94 @@ mod tests {
             validate_https_url("https://user:pass@s3.example.com", "Endpoint", false)
                 .expect_err("credentialed URL should be rejected");
         assert!(credentialed.contains("用户名或密码"));
+    }
+    /// 编辑器/CLI 链路每种受支持的格式都要贴到自己的类型上
+    ///
+    /// 这张表是 GUI（`s3_compatible`）、编辑器/CLI（`s3_put_object`）、WebDAV
+    /// （`webdav_upload`）三条链路共用的唯一真相源，覆盖范围要与上传白名单
+    /// （`VALID_IMAGE_EXTENSIONS` / `DetectedImageKind`）对得上。
+    #[test]
+    fn object_content_type_covers_every_supported_format() {
+        let expected = [
+            ("a.jpg", "image/jpeg"),
+            ("a.jpeg", "image/jpeg"),
+            ("a.png", "image/png"),
+            ("a.gif", "image/gif"),
+            ("a.webp", "image/webp"),
+            ("a.bmp", "image/bmp"),
+            ("a.svg", "image/svg+xml"),
+            ("a.tif", "image/tiff"),
+            ("a.tiff", "image/tiff"),
+            ("a.ico", "image/x-icon"),
+            ("a.avif", "image/avif"),
+        ];
+        for (name, mime) in expected {
+            assert_eq!(
+                object_content_type(std::path::Path::new(name)),
+                mime,
+                "{} 应贴 {}——贴错标签浏览器就不预览了（issue #4）",
+                name,
+                mime
+            );
+        }
+    }
+
+    /// 在源码里找「把写死的 `image/...` 当成响应 Content-Type 发出」的写法
+    ///
+    /// Why 先把空白全压掉再搜：rustfmt 随时可能因为调用链变长把 `.header(...)` 折成多行，
+    /// 而按字面单行匹配的哨兵一折就瞎——更糟的是**瞎了不报警**，测试照样绿，等于白设。
+    /// 压平之后无论怎么折行都收敛成同一个形态。
+    ///
+    /// needle 拆成两段拼接，免得这行自己被当成违规样本（源码里的引号是转义的 \" 而不是
+    /// 真引号，本来也命不中，但拆开更不容易在将来改成 raw string 时踩坑）。
+    fn has_hardcoded_image_content_type(src: &str) -> bool {
+        let flat: String = src.chars().filter(|c| !c.is_whitespace()).collect();
+        flat.contains(concat!(".header(\"Content-Type\",\"", "image/"))
+    }
+
+    /// 上传路径不得把写死的类型当成响应的 Content-Type 发出去
+    ///
+    /// Why 用源码自省而不是端到端断言：`server_upload_*` 各自把第三方 API 地址写死在
+    /// 函数体里，注入不了本地测试服务端，端到端够不着。而这里要防的回归很具体——
+    /// 又拍云那条曾硬编码 `image/` 加星号（星号只在请求的 Accept 里合法，当响应类型是
+    /// 无效值），因为它走独立 REST PUT、不经过 `s3_put_object`，逃过了 issue #4 那轮统一修复。
+    ///
+    /// 扫描面覆盖三条会发图片 PUT 的链路；新增上传源文件时记得加进这张表。
+    #[test]
+    fn upload_paths_never_send_hardcoded_image_content_type() {
+        // 阳性对照：先证明哨兵自己没瞎，连折成多行的违规写法都得抓出来
+        assert!(
+            has_hardcoded_image_content_type(
+                "
+.header(
+    \"Content-Type\",
+    \"image/png\",
+)
+"
+            ),
+            "哨兵失灵：折行的违规写法没被抓出来，这条测试已经形同虚设",
+        );
+        // 阴性对照：按文件推断的正确写法不能误报
+        assert!(!has_hardcoded_image_content_type(
+            ".header(\"Content-Type\", object_content_type(path))"
+        ));
+
+        for (name, src) in [
+            ("server/upload_handler.rs", include_str!("upload_handler.rs")),
+            (
+                "commands/s3_compatible.rs",
+                include_str!("../commands/s3_compatible.rs"),
+            ),
+            (
+                "commands/webdav_upload.rs",
+                include_str!("../commands/webdav_upload.rs"),
+            ),
+        ] {
+            assert!(
+                !has_hardcoded_image_content_type(src),
+                "{} 把写死的类型当响应 Content-Type 发出——改用 object_content_type(path) 按文件推断",
+                name,
+            );
+        }
     }
 }
