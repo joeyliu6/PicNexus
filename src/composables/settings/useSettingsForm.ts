@@ -78,7 +78,10 @@ export function useSettingsForm() {
 
   const formData = ref<SettingsFormData>({
     weiboCookie: '',
-    r2: { accountId: '', accessKeyId: '', secretAccessKey: '', bucketName: '', path: '', publicDomain: '' },
+    // thumbnailProxyEnabled 初始值必须与 DEFAULT_CONFIG 一致（true）：loadSettings 是
+    // 「表单初始值 ← 展开旧配置」，老配置里没有这个字段时展开覆盖不到，会原样保留这里的初始值。
+    // 写 false 的话老用户打开设置页看到的是「关」，一保存就把代理真的关掉了——静默降级。
+    r2: { accountId: '', accessKeyId: '', secretAccessKey: '', bucketName: '', path: '', publicDomain: '', thumbnailProxyEnabled: true },
     tencent: { secretId: '', secretKey: '', region: '', bucket: '', path: '', publicDomain: '' },
     aliyun: { accessKeyId: '', accessKeySecret: '', region: '', bucket: '', path: '', publicDomain: '' },
     qiniu: { accessKey: '', secretKey: '', region: '', bucket: '', publicDomain: '', path: '' },
@@ -258,7 +261,14 @@ export function useSettingsForm() {
       const config = await configStore.get<UserConfig>('config') || DEFAULT_CONFIG;
 
       formData.value.weiboCookie = config.services?.weibo?.cookie || '';
-      formData.value.r2 = { ...formData.value.r2, ...(config.services?.r2 || {}) };
+      formData.value.r2 = {
+        ...formData.value.r2,
+        ...(config.services?.r2 || {}),
+        // 显式兜底而不是只靠上面的展开：这个缺省值在三处各有一份（DEFAULT_CONFIG、
+        // 本文件的表单初始值、useThumbCache 的 `!== false` 判据），任一处漂移都会让
+        // 「运行时按开跑、设置页显示关、用户一保存就真被关掉」重现。
+        thumbnailProxyEnabled: config.services?.r2?.thumbnailProxyEnabled ?? true,
+      };
       formData.value.tencent = { ...formData.value.tencent, ...(config.services?.tencent || {}) };
       formData.value.aliyun = { ...formData.value.aliyun, ...(config.services?.aliyun || {}) };
       formData.value.qiniu = { ...formData.value.qiniu, ...(config.services?.qiniu || {}) };

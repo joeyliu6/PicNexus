@@ -13,7 +13,7 @@ import type {
  */
 export interface SettingsFormShape {
   weiboCookie: string;
-  r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; path: string; publicDomain: string };
+  r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; path: string; publicDomain: string; thumbnailProxyEnabled?: boolean };
   tencent: { secretId: string; secretKey: string; region: string; bucket: string; path: string; publicDomain: string };
   aliyun: { accessKeyId: string; accessKeySecret: string; region: string; bucket: string; path: string; publicDomain: string };
   qiniu: { accessKey: string; secretKey: string; region: string; bucket: string; publicDomain: string; path: string };

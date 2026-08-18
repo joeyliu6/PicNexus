@@ -2,7 +2,7 @@
 // 基于 S3 兼容协议，继承 BaseS3Uploader
 
 import { BaseS3Uploader } from '../s3/BaseS3Uploader';
-import { UploadResult, ValidationResult } from '../base/types';
+import { ValidationResult } from '../base/types';
 import { R2ServiceConfig } from '../../config/types';
 
 /**
@@ -101,18 +101,7 @@ export class R2Uploader extends BaseS3Uploader<R2ServiceConfig> {
     return { valid: true };
   }
 
-  /**
-   * 生成 R2 缩略图 URL
-   * 使用 wsrv.nl 图片代理服务生成缩略图
-   * 覆盖基类方法，R2 没有原生缩略图 API
-   */
-  getThumbnailUrl(result: UploadResult, size: 'small' | 'medium' | 'large' = 'medium'): string {
-    const sizeMap = {
-      small: 200,
-      medium: 500,
-      large: 1000
-    };
-    const encodedUrl = encodeURIComponent(result.url);
-    return `https://wsrv.nl/?url=${encodedUrl}&w=${sizeMap[size]}&h=${sizeMap[size]}&fit=cover&a=center&q=75&output=webp`;
-  }
+  // Why 这里没有 getThumbnailUrl 覆写：R2 的缩略图 URL 由 useThumbCache 统一生成
+  // （它才读得到「是否走 wsrv.nl 代理」这个配置）。这里曾有一份写死代理地址的覆写，
+  // 但全库无任何调用方，留着只会让同一个第三方地址在两处各存一份、迟早对不上。
 }

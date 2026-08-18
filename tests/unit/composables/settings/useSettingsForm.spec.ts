@@ -869,4 +869,55 @@ describe('useSettingsForm', () => {
     await api.deleteWebDAVProfile(secondWebDAVId);
     expect(api.formData.value.webdav.activeId).toBeNull();
   });
+
+  // === R2 缩略图代理开关的缺省值 ===
+  //
+  // loadSettings 是「表单初始值 ← 展开磁盘配置」，老配置里没有的字段展开覆盖不到，
+  // 会原样保留表单初始值。这个缺省值在三处各有一份（DEFAULT_CONFIG、表单初始值、
+  // useThumbCache 的 `!== false` 判据），任一处漂移就会出现：运行时按「开」跑、
+  // 设置页显示「关」、用户一保存就把代理真的关掉——静默降级，用户毫无察觉。
+
+  it('老配置没有 thumbnailProxyEnabled 字段时，表单加载成「开」', async () => {
+    const api = useSettingsForm();
+    // 模拟升级用户：该字段引入前存下的配置，r2 里压根没有这个键
+    const legacy = createConfig({
+      services: {
+        r2: {
+          accountId: 'acc',
+          accessKeyId: 'ak',
+          secretAccessKey: 'sk',
+          bucketName: 'bucket',
+          path: '',
+          publicDomain: 'https://cdn.example.com',
+        },
+      },
+    } as unknown as Partial<UserConfig>);
+    expect('thumbnailProxyEnabled' in (legacy.services!.r2 as object)).toBe(false);
+    mockState.configStoreGet.mockResolvedValue(legacy);
+
+    await api.loadSettings();
+
+    expect(api.formData.value.r2.thumbnailProxyEnabled).toBe(true);
+  });
+
+  it('配置里显式关掉时，表单保持「关」（别让兜底把用户的选择覆盖掉）', async () => {
+    const api = useSettingsForm();
+    mockState.configStoreGet.mockResolvedValue(createConfig({
+      services: {
+        r2: {
+          accountId: 'acc',
+          accessKeyId: 'ak',
+          secretAccessKey: 'sk',
+          bucketName: 'bucket',
+          path: '',
+          publicDomain: 'https://cdn.example.com',
+          thumbnailProxyEnabled: false,
+        },
+      },
+    } as unknown as Partial<UserConfig>));
+
+    await api.loadSettings();
+
+    expect(api.formData.value.r2.thumbnailProxyEnabled).toBe(false);
+  });
 });

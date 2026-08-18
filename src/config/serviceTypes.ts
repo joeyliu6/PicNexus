@@ -94,6 +94,20 @@ export interface R2ServiceConfig extends BaseServiceConfig {
 
   /** 公开访问域名 (如 'https://cdn.example.com') */
   publicDomain: string;
+
+  /**
+   * 缩略图是否走第三方代理 wsrv.nl（缺省 true = 走代理）
+   *
+   * R2 自身不提供图片处理参数，关掉代理就得在 75px 的格子里加载整张原图；
+   * 时间轴那种一屏几十张的场景会明显拖慢，所以默认开着。
+   *
+   * 代价有两条：图片地址会交给第三方；那条链路不通时缩略图会裂（issue #4 症状②）。
+   * 后者已由候选链兜住——代理排第一、原图垫第二，加载失败或超时自动回退，
+   * 见 `useThumbCache.generateThumbnailUrls`。在意隐私的用户可以关掉，关掉就只用原图。
+   *
+   * 纯前端展示项：不下发 Rust，`ServerUploadConfig::R2` 无需同步。
+   */
+  thumbnailProxyEnabled?: boolean;
 }
 
 /**

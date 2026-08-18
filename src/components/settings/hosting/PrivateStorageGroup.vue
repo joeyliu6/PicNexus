@@ -3,6 +3,7 @@ import InputText from 'primevue/inputtext';
 import ToggleSwitch from 'primevue/toggleswitch';
 import HostingCard from '../HostingCard.vue';
 import SensitiveField from '../../common/SensitiveField.vue';
+import R2ThumbnailProxySection from './R2ThumbnailProxySection.vue';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
 import type { CustomS3Profile, WebDAVStorageProfile } from '../../../config/types';
 import { makeCustomS3Id, makeWebDAVId, DEFAULT_WEBDAV_URL_TEMPLATE } from '../../../config/types';
@@ -14,7 +15,7 @@ import { useSensitiveDraft } from '../../../composables/settings/useSensitiveDra
 const log = createLogger('PrivateStorage');
 
 interface PrivateFormData {
-  r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; path: string; publicDomain: string };
+  r2: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; path: string; publicDomain: string; thumbnailProxyEnabled?: boolean };
   tencent: { secretId: string; secretKey: string; region: string; bucket: string; path: string; publicDomain: string };
   aliyun: { accessKeyId: string; accessKeySecret: string; region: string; bucket: string; path: string; publicDomain: string };
   qiniu: { accessKey: string; secretKey: string; region: string; bucket: string; publicDomain: string; path: string };
@@ -175,6 +176,16 @@ function getFieldModel(svcId: PrivateProviderId, fieldKey: string) {
 
 function setFieldModel(svcId: PrivateProviderId, fieldKey: string, value: string) {
   (props.privateFormData[svcId] as Record<string, string>)[fieldKey] = value;
+}
+
+/**
+ * 与 setFieldModel 同样是就地改 props 上的表单对象（父组件传下来的是同一个响应式对象）
+ *
+ * 写法刻意与 setFieldModel 保持一致：经 `as` 断言再赋值，既表达"这里是有意的就地写入"，
+ * 也让 vue/no-mutating-props 不把它当成模板里的误写。
+ */
+function setR2ThumbnailProxy(value: boolean) {
+  (props.privateFormData.r2 as Record<string, unknown>).thumbnailProxyEnabled = value;
 }
 
 // ---- WebDAV ----
@@ -341,6 +352,12 @@ const secrets = useSensitiveDraft({
           <small v-if="field.hint" class="field-hint">{{ field.hint }}</small>
         </div>
       </form>
+      <R2ThumbnailProxySection
+        v-if="svc.id === 'r2'"
+        :enabled="privateFormData.r2.thumbnailProxyEnabled === true"
+        @update:enabled="setR2ThumbnailProxy"
+        @save="emit('save')"
+      />
     </HostingCard>
 
     <!-- 自定义 S3 多实例 -->

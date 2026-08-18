@@ -2,7 +2,7 @@
  * 缩略图缓存 composable
  * 用于两个视图（表格/瀑布流）共享缩略图 URL 缓存
  */
-import { watch, effectScope } from 'vue';
+import { watch, effectScope, shallowRef } from 'vue';
 import type { HistoryItem, UserConfig } from '../config/types';
 import type { ImageMeta } from '../types/image-meta';
 import type { QueueItem } from '../core/UploadQueue';
@@ -25,11 +25,85 @@ type HistoryResultEntry = HistoryItem['results'][number];
 /** 缩略图候选列表支持的两种 item 类型 */
 type HistoryOrQueueItem = HistoryItem | QueueItem;
 
+/**
+ * R2 缩略图是否走第三方代理（wsrv.nl）
+ *
+ * 默认开：R2 自身没有图片处理参数，不走代理就得在 75px 的格子里加载整张原图，
+ * 时间轴那种一屏几十张的场景会明显拖慢。开着能省下绝大部分流量。
+ *
+ * 代价是把图片地址交给第三方，且那条链路不通时（境内网络、服务故障）缩略图会裂
+ * ——issue #4 症状②。所以候选链里代理只排第一位，原图垫在后面兜底
+ * （见 {@link generateThumbnailUrls}），裂不了；在意隐私的用户可以关掉开关。
+ *
+ * 判据写 `!== false` 而非 `=== true`：老配置里没有这个字段，缺省要落到「开」，
+ * 与该字段引入前的历史行为保持一致。
+ */
+function isR2ThumbnailProxyOn(config: ThumbConfig): boolean {
+  return config?.services?.r2?.thumbnailProxyEnabled !== false;
+}
+
+/** 代理服务的域名，用于识别「失败的是不是代理那条候选」 */
+const THUMB_PROXY_HOST = 'wsrv.nl';
+
+/**
+ * 本次会话里代理是否可达（null = 还没试过）
+ *
+ * Why 必须记住：wsrv.nl 在境内直连不通。若每张缩略图都老实先试代理、再等满超时才降级，
+ * 滚动列表时每翻一屏都要空等 5 秒，比压根不用代理还难受。所以第一张图试出不通，
+ * 就把整个会话降级成原图直连，后续candidates 直接不再产出代理条目。
+ *
+ * 只记在内存、不落配置：网络环境随时会变（换网、开关代理），重启应用重新探一次即可。
+ * 误判的代价也小——最坏情况是本可用代理却退回原图，图照样看得见。
+ *
+ * ⚠️ **必须是 ref，不能写成普通 `let`**：候选列表是在渲染期算的（历史表格一页 50 行、
+ * 时间轴每行模板都会调 `getThumbnailCandidates` / `getMetaThumbnailCandidates`）。
+ * 用普通变量的话 Vue 收集不到依赖——第一张图探测失败后，**已经渲染出来的其余几十行
+ * 仍持有旧的「代理在前」候选**，滚下去每张照样空等一轮超时，等于这个优化白做。
+ * 用 shallowRef 才能让那些 computed / 渲染函数在降级时自动失效重算。
+ */
+const proxyReachable = shallowRef<boolean | null>(null);
+
+/** 该 URL 是否指向第三方缩略图代理 */
+function isProxyUrl(url: string): boolean {
+  return url.includes(THUMB_PROXY_HOST);
+}
+
+/**
+ * 组件报告某条候选加载失败（含超时）——由候选链消费方在翻页时调用
+ *
+ * 只处理一件事：失败的若是代理那条，把整个会话标记为「代理不可用」并清掉候选缓存，
+ * 让后续列表直接生成原图 URL，省掉每张图那 5 秒空等。
+ */
+export function reportThumbnailUrlFailed(url: string): void {
+  if (proxyReachable.value === false || !isProxyUrl(url)) return;
+  proxyReachable.value = false;
+  log.info('缩略图代理不可达，本次会话改用原图直连');
+  clearThumbCache();
+}
+
+/** 组件报告某条候选加载成功：代理确实通，维持现状 */
+export function reportThumbnailUrlLoaded(url: string): void {
+  if (proxyReachable.value === null && isProxyUrl(url)) proxyReachable.value = true;
+}
+
+/**
+ * 重置会话级探测结果，让下一张图重新试代理
+ *
+ * 用户手动把开关关掉再打开，语义就是「我想再试试代理」；不重置的话本会话会一直
+ * 停在降级状态，直到重启应用——开关看着是开的、实际一直走原图，很难自证。
+ */
+function resetProxyReachability(): void {
+  proxyReachable.value = null;
+  clearThumbCache();
+}
+
+/** 仅供测试：重置会话级代理可达性探测结果 */
+export function resetProxyReachabilityForTest(): void {
+  resetProxyReachability();
+}
+
 // 缓存上限
 const THUMB_CACHE_MAX_SIZE = 500;
-
-// 单例缩略图缓存（模块级别）
-const thumbUrlCache = new Map<string, string | undefined>();
 
 /**
  * 根据图床类型生成缩略图 URL
@@ -61,9 +135,11 @@ export function generateThumbnailUrl(
       break;
 
     case 'r2':
-      // R2：使用 wsrv.nl 图片代理
-      // 将原图 URL 编码后作为参数传递
-      thumbUrl = `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=75&h=75&fit=cover&a=center&q=75&output=webp`;
+      // R2 自身没有图片处理参数：缺省走 wsrv.nl 代理缩图，关掉开关才直连原图
+      // （代理不通时由候选链里垫底的原图兜住，见 generateThumbnailUrls）
+      thumbUrl = isR2ThumbnailProxyOn(config)
+        ? `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=75&h=75&fit=cover&a=center&q=75&output=webp`
+        : url;
       break;
 
     case 'jd':
@@ -117,9 +193,15 @@ export function generateThumbnailUrl(
   return applyZhihuSourceFromConfig(thumbUrl, config);
 }
 
-/** 从 ImageMeta 生成中等缩略图 URL（便捷方法） */
+/**
+ * 从 ImageMeta 生成中等缩略图 URL（便捷方法）
+ *
+ * 取的是**候选链首条**而不是直接调 generateMediumThumbnailUrl：后者不看会话降级状态，
+ * 探测到代理不通后仍会吐出代理地址。时间轴预加载器就走这里，拿到死链会把整条记录
+ * 标进 failedImages，组件随后走占位分支，候选链里垫底的原图永远没机会顶上。
+ */
 export function getMetaThumbnailUrl(meta: ImageMeta, config: ThumbConfig): string {
-  return generateMediumThumbnailUrl(meta.primaryService, meta.primaryUrl, meta.primaryFileKey, config);
+  return generateMediumThumbnailUrls(meta.primaryService, meta.primaryUrl, meta.primaryFileKey, config)[0] ?? '';
 }
 
 /**
@@ -144,31 +226,42 @@ const metaCandidatesCache = new WeakMap<ImageMeta, { fingerprint: string; urls: 
 /**
  * 影响候选 URL 内容的配置指纹
  *
- * 穷举了 generateMediumThumbnailUrl 读取的全部配置维度：链接前缀模板（仅微博分支用到）
- * 与知乎 source 参数（对所有 *.zhimg.com URL 生效）。
+ * 穷举了 generateMediumThumbnailUrl 读取的全部配置维度：链接前缀模板（仅微博分支用到）、
+ * 知乎 source 参数（对所有 *.zhimg.com URL 生效）与 R2 缩略图代理开关（仅 r2 分支用到）。
  * `enabledServices` 不在其中——它只决定下次上传投递哪些图床，对既有记录的候选无影响。
  *
  * 注意取的是前缀的 **template 本身**而非 enabled/selectedIndex：用户编辑当前选中前缀的
  * URL 模板时那两项都不变，只比对它们会让缩略图 URL 永久陈旧。
+ *
+ * ⚠️ 时间轴/收藏页只靠这个指纹失效（它们从不调用 useThumbCache()，拿不到下面那批 watch），
+ * 所以**新增任何被 generate*ThumbnailUrl 读到的配置项都必须同步加进来**，漏一个就是
+ * 「改了设置但那两个页面的缩略图永远不变」。这条对非配置来源的输入同样成立——
+ * 会话级的 `proxyReachable` 也在指纹里，原因见下方注释。
+ *
+ * 分隔符用 `\0`：它不可能出现在 URL 模板或参数值里，拼接时不会与内容混淆。
  */
 function candidatesConfigFingerprint(config: ThumbConfig): string {
   const template = config ? getActivePrefix(config)?.template ?? '' : '';
   const zhihu = config?.services?.zhihu;
   const zhihuEnabled = zhihu?.sourceParamEnabled ?? true;
   const zhihuValue = zhihu?.sourceParamValue?.trim() || ZHIHU_SOURCE_DEFAULT_VALUE;
-  return `${template}\0${zhihuEnabled ? '1' : '0'}\0${zhihuValue}`;
+  const r2Proxy = isR2ThumbnailProxyOn(config);
+  // 代理可达性也要进指纹：探测到不通时候选链会少掉代理那条，
+  // 时间轴/收藏页只认指纹，不带上它这两个页面会一直停在旧的「代理在前」候选上
+  return `${template}\0${zhihuEnabled ? '1' : '0'}\0${zhihuValue}\0${r2Proxy ? '1' : '0'}\0${proxyReachable.value === false ? '0' : '1'}`;
 }
 
 /** 实际生成候选列表（无缓存），仅供 getMetaThumbnailCandidates 内部调用 */
 function buildMetaThumbnailCandidates(meta: ImageMeta, config: ThumbConfig): string[] {
   if (meta.mirrorServices && meta.mirrorServices.length > 0) {
     const urls = meta.mirrorServices
-      .map(m => generateMediumThumbnailUrl(m.serviceId, m.url, m.fileKey, config))
+      .flatMap(m => generateMediumThumbnailUrls(m.serviceId, m.url, m.fileKey, config))
       .filter(u => !!u);
     return [...new Set(urls)];
   }
-  const single = generateMediumThumbnailUrl(meta.primaryService, meta.primaryUrl, meta.primaryFileKey, config);
-  return single ? [single] : [];
+  const single = generateMediumThumbnailUrls(meta.primaryService, meta.primaryUrl, meta.primaryFileKey, config)
+    .filter(u => !!u);
+  return [...new Set(single)];
 }
 
 /**
@@ -221,8 +314,10 @@ export function generateMediumThumbnailUrl(
       break;
 
     case 'r2':
-      // R2：wsrv.nl 代理，宽度 800px
-      mediumUrl = `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=800&q=80&output=webp`;
+      // 同 generateThumbnailUrl：缺省走 wsrv.nl 的 800px 版本，关掉开关才直连原图
+      mediumUrl = isR2ThumbnailProxyOn(config)
+        ? `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=800&q=80&output=webp`
+        : url;
       break;
 
     case 'jd':
@@ -272,6 +367,51 @@ export function generateMediumThumbnailUrl(
   return applyZhihuSourceFromConfig(mediumUrl, config);
 }
 
+/**
+ * 把一条上传结果展开成缩略图候选链：首选在前，兜底在后
+ *
+ * Why 只有 R2 走代理时才有第二条：其余图床的缩略图与原图同域同源
+ * （`?x-oss-process=` 之类的参数化 URL，或干脆就是原图），首选加载不出来时
+ * 原图多半也一样加载不出来，多塞一条只会让失败路径多等一轮超时。
+ *
+ * R2 开代理时不同——首选指向 **第三方** wsrv.nl，它不通不代表用户自己的桶不通。
+ * 把原图垫在第二位，组件的 onerror / 超时会自动落过去：代理通就享受小图省流量，
+ * 代理挂了退化成加载原图（慢一点但看得见），不会像 issue #4 那样整片裂开。
+ *
+ * @see ThumbnailImage.vue / TimelinePhotoItem.vue 中的候选链消费逻辑
+ */
+function generateThumbnailUrls(
+  serviceId: string,
+  url: string,
+  fileKey?: string,
+  config?: ThumbConfig
+): string[] {
+  // 已经探明代理不通就别再产出代理条目了，否则每张图都要白等一轮超时
+  if (proxyReachable.value === false && serviceId === 'r2') return [url];
+
+  const primary = generateThumbnailUrl(serviceId, url, fileKey, config);
+  if (serviceId === 'r2' && isR2ThumbnailProxyOn(config) && primary !== url) {
+    return [primary, url];
+  }
+  return [primary];
+}
+
+/** 同 {@link generateThumbnailUrls}，中等尺寸（时间轴/收藏页/悬浮预览）版本 */
+function generateMediumThumbnailUrls(
+  serviceId: string,
+  url: string,
+  fileKey?: string,
+  config?: ThumbConfig
+): string[] {
+  if (proxyReachable.value === false && serviceId === 'r2') return [url];
+
+  const primary = generateMediumThumbnailUrl(serviceId, url, fileKey, config);
+  if (serviceId === 'r2' && isR2ThumbnailProxyOn(config) && primary !== url) {
+    return [primary, url];
+  }
+  return [primary];
+}
+
 // 缩略图候选列表缓存
 const thumbnailCandidatesCache = new Map<string, string[]>();
 
@@ -312,14 +452,14 @@ export function getThumbnailCandidates(
         (r: HistoryResultEntry) => r.serviceId === historyItem.primaryService && r.status === 'success'
       );
       if (primary && primary.result?.url) {
-        candidates.push(generateThumbnailUrl(primary.serviceId, primary.result.url, primary.result.fileKey, config));
+        candidates.push(...generateThumbnailUrls(primary.serviceId, primary.result.url, primary.result.fileKey, config));
       }
     }
 
     // 添加其他成功上传的图床
     historyItem.results.forEach((r: HistoryResultEntry) => {
       if (r.status === 'success' && r.result?.url && r.serviceId !== historyItem.primaryService) {
-        candidates.push(generateThumbnailUrl(r.serviceId, r.result.url, r.result.fileKey, config));
+        candidates.push(...generateThumbnailUrls(r.serviceId, r.result.url, r.result.fileKey, config));
       }
     });
   }
@@ -348,7 +488,7 @@ export function getThumbnailCandidates(
             fileKey = queueItem.weiboPid;
           }
         }
-        candidates.push(generateThumbnailUrl(serviceId, progress.link, fileKey, config));
+        candidates.push(...generateThumbnailUrls(serviceId, progress.link, fileKey, config));
       }
     });
   }
@@ -371,71 +511,10 @@ export function getThumbnailCandidates(
 
 
 /**
- * 设置缩略图缓存（写入末尾；超限时淘汰头部最久未访问项，实现真 LRU）
- */
-function setThumbCache(id: string, url: string | undefined): void {
-  // 如果超过上限，删除最早的条目（Map 保持插入顺序）
-  if (thumbUrlCache.size >= THUMB_CACHE_MAX_SIZE && !thumbUrlCache.has(id)) {
-    const firstKey = thumbUrlCache.keys().next().value;
-    if (firstKey) thumbUrlCache.delete(firstKey);
-  }
-  thumbUrlCache.set(id, url);
-}
-
-/**
  * 清空缩略图缓存
  */
 function clearThumbCache(): void {
-  thumbUrlCache.clear();
-  thumbnailCandidatesCache.clear(); // 同时清空候选列表缓存
-}
-
-/**
- * 获取缩略图 URL
- * 微博图床：直接返回服务端缩略图 URL
- * 其他图床：直接返回原图 URL
- */
-function getThumbUrl(item: HistoryItem, config: ReturnType<typeof useConfigManager>['config']['value']): string | undefined {
-  // 检查缓存（命中时移到末尾，维持真 LRU 顺序）
-  if (thumbUrlCache.has(item.id)) {
-    const cached = thumbUrlCache.get(item.id);
-    thumbUrlCache.delete(item.id);
-    thumbUrlCache.set(item.id, cached);
-    return cached;
-  }
-
-  if (!item.results || item.results.length === 0) {
-    setThumbCache(item.id, undefined);
-    return undefined;
-  }
-
-  // 优先使用主力图床的结果
-  const primaryResult = item.results.find(r => r.serviceId === item.primaryService && r.status === 'success');
-  const targetResult = primaryResult || item.results.find(r => r.status === 'success' && r.result?.url);
-
-  if (!targetResult?.result?.url) {
-    setThumbCache(item.id, undefined);
-    return undefined;
-  }
-
-  // 微博图床：使用服务端缩略图
-  if (targetResult.serviceId === 'weibo' && targetResult.result.fileKey) {
-    let thumbUrl = `https://tvax1.sinaimg.cn/bmiddle/${targetResult.result.fileKey}.jpg`;
-
-    // 应用链接前缀（如果启用）
-    const activePrefix = getActivePrefix(config);
-    if (activePrefix) {
-      thumbUrl = applyPrefixTemplate(activePrefix.template, thumbUrl);
-    }
-
-    setThumbCache(item.id, thumbUrl);
-    return thumbUrl;
-  }
-
-  // 非微博图床：直接使用原图 URL（写入缓存避免重复查找）
-  const resultUrl = applyZhihuSourceFromConfig(targetResult.result.url, config);
-  setThumbCache(item.id, resultUrl);
-  return resultUrl;
+  thumbnailCandidatesCache.clear();
 }
 
 /**
@@ -450,13 +529,14 @@ function getMediumImageUrl(item: HistoryItem, config: ReturnType<typeof useConfi
 
   if (!result?.result?.url) return '';
 
-  // 使用中等尺寸缩略图生成函数
-  return generateMediumThumbnailUrl(
+  // 同 getMetaThumbnailUrl：取候选链首条，让悬浮预览/灯箱预热也跟随会话降级状态，
+  // 否则代理不通后悬停 R2 那几行仍会拿到代理地址，预览加载失败直接隐藏
+  return generateMediumThumbnailUrls(
     result.serviceId,
     result.result.url,
     result.result.fileKey,
     config
-  );
+  )[0] ?? '';
 }
 
 /**
@@ -508,24 +588,21 @@ function initModuleWatchers(
         return;
       }
       for (const id of ids) {
-        thumbUrlCache.delete(id);
         thumbnailCandidatesCache.delete(id);
       }
     }).catch(e => log.warn('history-updated listener registration failed; updated thumb cache entries will rely on LRU fallback:', e));
 
     // 事件驱动的增量清理：删除/清空事件定向移除缓存。
-    // 监听注册失败时，滞留条目靠 thumbUrlCache 的 LRU 上限（THUMB_CACHE_MAX_SIZE）自动淘汰兜底
+    // 监听注册失败时，滞留条目靠 thumbnailCandidatesCache 的 LRU 上限（THUMB_CACHE_MAX_SIZE）自动淘汰兜底
     onCacheEventType<HistoryEventData>('history-deleted', (data) => {
       const ids = data?.ids;
       if (!ids || ids.length === 0) return;
       for (const id of ids) {
-        thumbUrlCache.delete(id);
         thumbnailCandidatesCache.delete(id);
       }
     }).catch(e => log.warn('history-deleted 监听注册失败，已删除项将依赖 LRU 淘汰兜底:', e));
 
     onCacheEventType('history-cleared', () => {
-      thumbUrlCache.clear();
       thumbnailCandidatesCache.clear();
     }).catch(e => log.warn('history-cleared 监听注册失败，清空后旧缓存将依赖 LRU 淘汰兜底:', e));
 
@@ -550,6 +627,14 @@ function initModuleWatchers(
       ],
       clearThumbCache
     );
+
+    // R2 缩略图代理开关：直连原图 ↔ wsrv.nl 代理，两者 URL 完全不同，必须立即失效。
+    // 用 resetProxyReachability 而非 clearThumbCache：用户手动拨这个开关就是「我要重新试」，
+    // 只清缓存的话会话仍停在降级态，开关看着开着、实际一直走原图。
+    watch(
+      () => configManager.config.value?.services?.r2?.thumbnailProxyEnabled,
+      resetProxyReachability
+    );
   });
 }
 
@@ -562,11 +647,6 @@ export function useThumbCache() {
   initModuleWatchers(configManager);
 
   return {
-    /**
-     * 获取缩略图 URL
-     */
-    getThumbUrl: (item: HistoryItem) => getThumbUrl(item, configManager.config.value),
-
     /**
      * 获取中等尺寸图 URL（用于悬浮预览）
      */

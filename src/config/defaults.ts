@@ -24,7 +24,8 @@ export const DEFAULT_CONFIG: UserConfig = {
       secretAccessKey: '',
       bucketName: '',
       path: '',
-      publicDomain: ''
+      publicDomain: '',
+      thumbnailProxyEnabled: true
     },
 
     jd: {
