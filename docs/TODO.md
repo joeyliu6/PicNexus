@@ -73,10 +73,18 @@
 
 改动覆盖全部 6 个 S3 系图床（阿里云 / 腾讯 / 七牛 / 又拍云 / R2 / 自定义 S3），但它们走的是**同一条** `upload_to_s3_compatible` 代码路径，所以**真机测 2 个就够**（建议阿里云 OSS + 自定义 S3——一个是标准云厂商实现，一个是第三方 S3 实现，覆盖面最广）。
 
-- [ ] **Content-Type 正确**（4.1）
-      传一张 `.png` → 复制返回的链接，在浏览器地址栏直接打开；再 `curl -I <链接>` 看响应头。
+> ⚠️ **4.1 现在有两条链路要各测一次。** 2026-08-13 的修复只覆盖了桌面 GUI 走的 `upload_to_s3_compatible`；
+> 编辑器 / CLI / 本地 server 走的是另一个函数 `server/upload_handler.rs::s3_put_object`，它一直没带
+> Content-Type，直到 issue #4 才被发现并补上。**只测 GUI 会漏掉一半。**
+
+- [ ] **Content-Type 正确 · GUI 链路**（4.1a）
+      在应用里传一张 `.png` → 复制返回的链接，在浏览器地址栏直接打开；再 `curl -I <链接>` 看响应头。
       **判据**：浏览器**显图**而不是弹下载框；`Content-Type: image/png`（不是 `application/octet-stream` 或 `binary/octet-stream`）。
-      ⚠️ 用**新传**的图测。改动前上传的旧对象类型已经写进桶里了，不重传不会变。
+      ⚠️ 用**新传**的图测。改动前上传的旧对象类型已经写进桶里了，不重传不会变（补救见 [s3-legacy-content-type.md](./reference/troubleshooting/s3-legacy-content-type.md)）。
+- [ ] **Content-Type 正确 · 编辑器/CLI 链路**（4.1b，issue #4 新补，最值得测的一条）
+      用 Obsidian 插件或 CLI（`picnexus --service r2 <图片路径>`）传一张 `.png` 到同一个桶。
+      **判据**：同 4.1a。这条链路在 2026-08-18 之前**必然**返回 `application/octet-stream`，
+      所以它同时也是「修复是否真的生效」的判据——不是走过场。
 - [ ] **同名不覆盖**（4.2）
       准备两张**内容不同但都叫 `test.png`** 的图（比如一红一蓝），连着传两次。
       **判据**：历史里两条记录的链接各指各的图（点开第一条看到红的，第二条看到蓝的）；桶里能看到两个不同对象，名字形如 `20260813_a3f9_test.png`。

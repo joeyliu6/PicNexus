@@ -263,13 +263,24 @@ Rust 侧 `ServerUploadConfig::Webdav.unique_file_name` 同理用 `#[serde(defaul
 
 ### Content-Type
 
-> **关键源文件**：`src-tauri/src/commands/s3_compatible.rs`（`guess_object_content_type`）
+> **关键源文件**：`src-tauri/src/commands/utils.rs`（`guess_object_content_type`）
 
-`put_object` 按**文件扩展名**用 `mime_guess` 推断 Content-Type，未知扩展名回退 `application/octet-stream`。与 `r2.rs` 共用同一套 `mime_guess` 映射，不另维护扩展名表。
+`put_object` 按**文件扩展名**用 `mime_guess` 推断 Content-Type，未知扩展名回退 `application/octet-stream`。
 
 大白话：不带这个头的话，对象会以「二进制文件」的身份存进桶里，浏览器直接打开图片链接时不会显图，而是弹出下载框。
 
 已覆盖：`png / jpg / jpeg / webp / gif / svg / avif / bmp / ico`（大小写不敏感）。
+
+**两条链路共用同一个推断函数**，别再各写一份扩展名表：
+
+| 链路 | 调用点 | 传什么 |
+|---|---|---|
+| 桌面 GUI | `s3_compatible.rs::upload_to_s3_compatible` | `file_path`（前端传下来的绝对路径） |
+| 编辑器 / CLI / 本地 server | `server/upload_handler.rs::s3_put_object` | 由 `object_content_type(path)` 从 `&Path` 推断 |
+
+`s3_put_object` 的 `content_type` 是**显式形参**，不是函数内部推断出来的。这样新增调用方时编译器会强制它给出类型——issue #4 的成因正是这个参数当初不存在，2026-08-13 只修了 GUI 一侧，编辑器链路又漏了 5 天。
+
+> ⚠️ **改动只对新传的对象生效。** 类型是上传那一刻写进桶里的元数据，升级客户端不会回头改旧对象。旧对象的补救见 [s3-legacy-content-type.md](../reference/troubleshooting/s3-legacy-content-type.md)。
 
 ---
 
@@ -284,7 +295,8 @@ Rust 侧 `ServerUploadConfig::Webdav.unique_file_name` 同理用 `#[serde(defaul
 | 部分图床失败 | 单个服务 StructuredError | 图1 节点 AA → AC |
 | 历史记录缺少某图床 URL | `addResultToHistoryItem` 未触发 | 图1 节点 AD → AF |
 | 历史主图床与复制链接不一致 | `reconcileHistoryPrimary` 未完成 | 图1 节点 AH1 |
-| S3 图床链接在浏览器里变成下载而不是显图 | 对象缺 Content-Type；确认 `curl -I` 返回的是否为 `application/octet-stream`。旧对象是改动前传的，需重传才会带上正确类型 | S3 系图床 → Content-Type |
+| S3 图床链接在浏览器里变成下载而不是显图 | 对象缺 Content-Type；确认 `curl -I` 返回的是否为 `application/octet-stream`。**先看是什么时候传的**：改动前的旧对象不会因升级自愈，补救见 [s3-legacy-content-type.md](../reference/troubleshooting/s3-legacy-content-type.md) | S3 系图床 → Content-Type |
+| GUI 传的图正常，Typora / Obsidian / CLI 传的图仍变下载框 | 2026-08-18 前编辑器链路的 `s3_put_object` 漏传 Content-Type（GUI 侧 08-13 就修了，这条晚 5 天）；升级后已修，旧对象仍需按上一行处理 | S3 系图床 → Content-Type |
 | S3 桶里出现 `20260813_a3f9_` 之类的前缀 | 预期行为，key 唯一化前缀 | S3 系图床 → 对象名唯一化 |
 | 想按固定文件名覆盖桶里的旧对象 | S3 系刻意不支持——覆盖会让旧历史记录的链接指向新图；WebDAV 可在 profile 里关掉「防止图片互相覆盖」 | S3 系图床 → 对象名唯一化 |
 | Typora/Obsidian 传的图把之前的顶掉了 | 2026-08-17 前编辑器/CLI 链路漏了唯一化（粘贴的图永远叫 `image.png`）；升级后已修 | 四条上传路径的唯一化现状 |

@@ -78,7 +78,15 @@
 </div>
 ```
 
-参考实现：`PrivateStorageGroup.vue`（WebDAV 唯一后缀）、`ZhihuSourceSection.vue`、`GithubProxySection.vue`、`WeiboLinkPrefixSection.vue`。
+参考实现：`PrivateStorageGroup.vue`（WebDAV 唯一后缀）、`ZhihuSourceSection.vue`、`GithubProxySection.vue`、`WeiboLinkPrefixSection.vue`、`R2ThumbnailProxySection.vue`。
+
+最后一个是**最小骨架**——只有一个开关行、没有展开区，新增同类子章节可以直接照它抄。它单开成组件而不是就地写进 `PrivateStorageGroup.vue`，是因为那边 5 个 S3 图床共用一套数据驱动模板（循环 `PRIVATE_SERVICES`），只有 R2 需要这个开关；而且那个文件有效行已到 442/500，就地塞会顶到硬指标。
+
+> 📏 **口径提醒**：500 行硬指标算的是**有效行**（`eslint.config.mjs` 里 `max-lines` 配了
+> `skipBlankLines: true, skipComments: true`），不是原始行数。`PrivateStorageGroup.vue`
+> 原始 509 行、有效 442 行，**没有超标**——已有两轮代码审查拿原始行数误判成违规。
+> 要核实就跑 `npx eslint <file> --rule '{"max-lines":["error",{"max":1,"skipBlankLines":true,"skipComments":true}]}'`，
+> 它会直接报出有效行数。
 
 ⚠️ **不要在卡内裸用 `.toggle-row`** —— 它自带 `border` + `border-radius` + `background`，只有被 `.toggle-group` 包住时才会被抹掉。裸用就会变成"卡中卡"。`.toggle-row` 的定位是**页面级**设置项（见下方标准结构），不是卡内子项。
 

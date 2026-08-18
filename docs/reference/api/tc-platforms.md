@@ -24,7 +24,7 @@
 | **纳米** | `?x-tos-process=image/resize,l_75/quality,q_70/format,jpg` | `...l_500/quality,q_80...` | TOS 图片处理 |
 | **牛客** | `?x-oss-process=image/resize,w_75,h_75,m_mfit/format,png` | `...w_400,m_mfit...` | OSS 图片处理 |
 | **微博** | `/thumb150/{pid}.jpg` | `/mw690/{pid}.jpg` | URL 路径尺寸标识（还有 thumbnail/bmiddle/large） |
-| **R2** | `wsrv.nl/?url={url}&w=75&h=75&fit=cover&q=75&output=webp` | `...w=800&q=80...` | 无原生处理，走 wsrv.nl 代理 |
+| **R2** | `wsrv.nl/?url={url}&w=75&h=75&fit=cover&q=75&output=webp`（缺省）→ 原图 URL | `...w=800&q=80...`（缺省）→ 原图 URL | 无原生处理，靠第三方代理缩图。**缺省开启**（`services.r2.thumbnailProxyEnabled`，关掉则只用原图）。唯一产出**两条候选**的图床：代理属第三方、不通不代表桶不通，原图垫在后面兜底 |
 
 ---
 

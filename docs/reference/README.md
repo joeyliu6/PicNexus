@@ -45,6 +45,7 @@
 |------|------|
 | [webdav-image-host-issues.md](./troubleshooting/webdav-image-host-issues.md) | WebDAV 图床按症状排查（Digest 不支持、模板拼不出 token 链接、匿名直链被拒） |
 | [fake-ip-dns-policy-distortion.md](./troubleshooting/fake-ip-dns-policy-distortion.md) | TUN 代理 fake-ip 池让局域网 / 内网判据双向失真 |
+| [s3-legacy-content-type.md](./troubleshooting/s3-legacy-content-type.md) | S3 系旧对象缺 Content-Type，链接变下载框；升级不自愈，给原地改元数据的命令 |
 
 ## patterns/ — 设计模式 + 最佳实践
 

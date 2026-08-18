@@ -141,15 +141,17 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[组件请求缩略图 URL] --> B[useThumbCache.getThumb&lpar;item&rpar;]
+    A[组件请求缩略图 URL] --> B[getThumbnailCandidates&lpar;item, config&rpar;]
     B --> C{"内存缓存命中?<br/>(Map, max 500)"}
-    C -- 命中 --> D[直接返回缓存 URL]
+    C -- 命中 --> D[直接返回缓存候选列表]
     C -- 未命中 --> E[根据 serviceId 生成缩略图 URL]
 
     E --> F{serviceId 类型}
 
     F -- weibo --> G1["thumb150/{fileKey}.jpg<br/>+ 链接前缀"]
-    F -- r2 --> G2["wsrv.nl 代理<br/>75x75 WebP"]
+    F -- r2 --> G2{"thumbnailProxyEnabled?"}
+    G2 -- 开启（缺省） --> G2a["候选链两条：<br/>1. wsrv.nl 代理 75x75 WebP<br/>2. 原图 URL（兜底）"]
+    G2 -- 关闭 --> G2b["直接使用原图 URL"]
     F -- jd --> G3["s76x76_jfs/ 前缀替换"]
     F -- zhihu --> G4["_xs 后缀"]
     F -- qiyu --> G5["NOS ?imageView 参数"]
@@ -159,12 +161,67 @@ flowchart TD
     F -- chaoxing --> G9["替换域名 + 75_0cQ80.webp"]
     F -- 其他 --> G10[直接使用原图 URL]
 
-    G1 & G2 & G3 & G4 & G5 & G6 & G7 & G8 & G9 & G10 --> H[写入内存缓存]
+    G1 & G2a & G2b & G3 & G4 & G5 & G6 & G7 & G8 & G9 & G10 --> H[写入内存缓存]
     H --> D
 
     style D fill:#e8f5e9,stroke:#2e7d32
     style G10 fill:#fff3e0,stroke:#ef6c00
 ```
+
+> **默认开代理的依据**（2026-08-18 实测，同一张 37 KB 的 PNG，各 3 次取平均）：
+> 走代理 271 ms / 366 B，直连原图 377 ms / 37892 B——**流量差 103 倍**。一屏 20 张就是 7 KB 对 7.6 MB。
+> 别因为"少依赖一个第三方"就把默认值改回直连，那会让时间轴在图多时明显变卡；
+> 要退，正确的做法是关掉开关（用户自己按隐私偏好决定），而不是改默认值。
+
+> ⚠️ **R2 为什么是唯一带兜底条目的图床。** 其余图床的缩略图与原图同域同源（参数化 URL 或干脆就是原图），
+> 首选加载不出来时原图多半也一样，多塞一条只会让失败路径多等一轮超时。R2 不同——开着代理时首选指向
+> **第三方** wsrv.nl，它不通不代表用户自己的桶不通，所以把原图垫在第二位。判据集中在
+> `isR2ThumbnailProxyOn()`，候选链在 `generateThumbnailUrls()` / `generateMediumThumbnailUrls()`。
+
+> **代理不通只会拖慢第一张图。** wsrv.nl 在境内直连不可达，要是每张缩略图都老实先试代理、
+> 再等满 5 秒才降级，滚动列表时每翻一屏都空等一次，比压根不用代理还难受。所以组件在候选翻页时
+> 调 `reportThumbnailUrlFailed()` 回报：失败的若是代理那条，整个会话被标记为「代理不可用」，
+> 候选缓存清空，后续列表直接只产出原图 URL。这个判定只记在内存（网络环境随时会变，重启重探一次），
+> 并且进了 `candidatesConfigFingerprint`——否则时间轴/收藏页会一直停在旧的「代理在前」候选上。
+>
+> ⚠️ 这个标记**必须是 `shallowRef` 而不是普通模块级变量**。候选列表是在渲染期算的
+> （历史表格一页 50 行、时间轴每行模板都会调 `get*Candidates`），普通变量 Vue 收集不到依赖，
+> 第一张探测失败后**已渲染的其余几十行仍持有「代理在前」的旧候选**，滚下去每张照样空等一轮超时，
+> 优化等于白做。回归测试在 `useThumbCache.spec.ts` 的「降级是响应式的」两条——
+> 它们必须走 `computed` + `nextTick`，直接调函数测不出这个问题。
+>
+> 用户手动拨动开关时走的是 `resetProxyReachability()` 而非只清缓存：拨开关的语义是
+> 「我要重新试」，只清缓存的话会话仍停在降级态，开关看着开着、实际一直走原图。
+
+> ⚠️ **所有取「单条 URL」的入口都必须从候选链取首条**（`getMetaThumbnailUrl` /
+> `getMediumImageUrl` 内部走 `generateMediumThumbnailUrls(...)[0]`）。直接调
+> `generateMediumThumbnailUrl` 拿到的地址**不看降级状态**，代理不通后依然是代理地址。
+> 时间轴预加载器曾踩过这个坑：预热拿到死链 → 把整条记录写进 `failedImages` →
+> `TimelinePhotoItem` 走占位分支 → 候选链里垫底的原图永远没机会顶上，**正好复现 issue #4 症状②**。
+> 现在预加载失败**既不上报也不标记**，交给真实渲染时的候选链定性——它只试一条 URL，
+> 没有「下一条成功了」这个对照，无从判断是代理不通还是这张图本身没了（详见下方失败定性说明）。
+
+> **候选链的消费逻辑统一在 [useThumbnailFallbackChain.ts](../../src/composables/useThumbnailFallbackChain.ts)**
+> （时间轴、收藏页共用）。此前两个视图各写一份逐字相同的翻页逻辑，结果超时兜底只补进了时间轴，
+> 收藏页在代理卡死时会一直停在骨架屏。新增消费方请复用它，别再抄第三份。
+
+> ⚠️ **消费方带 `loading="lazy"` 就必须传 `elementRef`。** 懒加载的图在视口外浏览器压根不发请求，
+> 对它计时等于凭空判超时。收藏页一次渲染 80 格且**无虚拟化**，漏传会让视口外那 60 多张在 5 秒后
+> 集体「失败」，把明明通着的代理判死——省流量的初衷一分没落地。时间轴不用传：虚拟列表只渲染
+> 窗口内的项，`<img>` 也没有 lazy。
+
+> ⚠️ **失败不当场上报，要等下一条候选出结果才定性。** 单看一条失败分不清「代理不通」还是
+> 「代理背后那张图被删了」（删对象是常规操作，wsrv.nl 对失效上游同样返回错误），而上报会把
+> **整个会话**降级。判据是：前一条失败 + 后一条成功 → 确实是前一条那个服务的问题；
+> 候选全挂 → 这张图本身没了，与代理无关。同理，**离屏预热不上报任何失败**——它只试一条，
+> 没有「下一条成功了」这个对照，无从定性。
+
+> **候选链靠两条路往后翻**：`<img>` 的 `error` 事件，以及 5 秒超时
+> （[ThumbnailImage.vue](../../src/components/common/ThumbnailImage.vue) /
+> [TimelinePhotoItem.vue](../../src/components/views/timeline/TimelinePhotoItem.vue)）。
+> 只有 error 不够——代理被墙时是连接卡死而非报错，浏览器可能几十秒才放弃，那段时间格子里一直是骨架屏。
+> 超时只在**已进入视口**且**后面还有候选**时才计时：前者因为 `loading="lazy"` 的图在视口外压根没发请求，
+> 计时会把整屏候选误翻一遍；后者因为掐断最后一条只会把「慢但最终能成」变成「直接失败」。
 
 ---
 
@@ -181,6 +238,10 @@ flowchart TD
 | 删除后列表未更新 | cacheEvents 监听未初始化 | 图4 删除路径 D3 → D4 |
 | 缩略图显示原图（很大） | serviceId 未匹配到任何缩略图策略 | 图5 节点 G10 |
 | 微博缩略图 404 | fileKey 缺失，回退到原图 URL | 图5 weibo 分支 G1 |
+| R2 缩略图加载慢、约 5 秒后才出图 | 代理 wsrv.nl 连不上，走了超时兜底落到原图。**只有本次会话的第一张会等**，之后自动全走原图；长期连不上就在设置里关掉代理开关 | 图5 分支 G2a + 候选链说明 |
+| 明明能访问 wsrv.nl，却全程走原图 | 会话早期有张图恰好失败过，触发了整体降级（误判代价小，故意从宽）。重启应用即可重新探测 | `reportThumbnailUrlFailed` |
+| R2 缩略图全是占位图标 | 代理和原图两条都失败 → 桶或自定义域名本身不可达，先用浏览器直开原图 URL 验证 | 图5 分支 G2 |
+| 改了 R2 代理开关但时间轴/收藏页没变 | 那两页只靠 `candidatesConfigFingerprint` 失效，新配置项漏加进指纹 | `candidatesConfigFingerprint` 注释 |
 
 ---
 

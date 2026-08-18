@@ -119,6 +119,11 @@ setInterval(cleanupExpiredImages, 1000);
 />
 ```
 
+> 📌 **上面是当时的写法，`getThumbUrl` 已于 2026-08-18 删除**（全库无调用方，且它绕过了 R2 代理开关）。
+> 现在时间轴走候选链：`getMetaThumbnailCandidates()` 产出 `thumbnailUrls` 数组交给
+> [TimelinePhotoItem.vue](../../../src/components/views/timeline/TimelinePhotoItem.vue)，
+> 由它按 onerror / 超时逐条往后翻。节流逻辑本身（`displayMode !== 'fast'`）没变。
+
 #### 5. 图片加载失败重试
 
 最多重试 1 次，延迟 500ms：
