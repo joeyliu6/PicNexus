@@ -304,6 +304,70 @@ pub fn suffix_unique_file_name(file_name: &str) -> String {
     }
 }
 
+/// 按扩展名推断对象的 Content-Type，未知扩展名回退 `application/octet-stream`
+///
+/// Why 放在这里而不是各上传器内部：GUI 走 `s3_compatible::upload_to_s3_compatible`、
+/// 编辑器/CLI 走 `server::upload_handler::s3_put_object`，两条路径传的是同一个桶。
+/// 各自维护一张扩展名表迟早漂移——2026-08-13 那次只修了 GUI 一侧，编辑器链路
+/// 一直漏到 issue #4 才被发现，正是这种漂移的代价。
+///
+/// Why 不带 Content-Type 会出事：对象会以 `binary/octet-stream` 落桶，浏览器直开
+/// 图片链接时不显图而是弹下载框，链接检测也会把它判成「疑似」。
+pub fn guess_object_content_type(file_path: &str) -> String {
+    mime_guess::from_path(file_path)
+        .first_or_octet_stream()
+        .to_string()
+}
+
+#[cfg(test)]
+mod content_type_tests {
+    use super::*;
+
+    #[test]
+    fn guess_object_content_type_covers_common_images() {
+        assert_eq!(guess_object_content_type("a.png"), "image/png");
+        assert_eq!(guess_object_content_type("a.jpg"), "image/jpeg");
+        assert_eq!(guess_object_content_type("a.jpeg"), "image/jpeg");
+        assert_eq!(guess_object_content_type("a.webp"), "image/webp");
+        assert_eq!(guess_object_content_type("a.gif"), "image/gif");
+        assert_eq!(guess_object_content_type("a.svg"), "image/svg+xml");
+        assert_eq!(guess_object_content_type("a.avif"), "image/avif");
+        assert_eq!(guess_object_content_type("a.bmp"), "image/bmp");
+        assert_eq!(guess_object_content_type("a.ico"), "image/x-icon");
+    }
+
+    #[test]
+    fn guess_object_content_type_is_case_insensitive() {
+        assert_eq!(guess_object_content_type("A.PNG"), "image/png");
+        assert_eq!(guess_object_content_type("C:\\图片\\截图.JPG"), "image/jpeg");
+    }
+
+    #[test]
+    fn guess_object_content_type_falls_back_to_octet_stream() {
+        assert_eq!(
+            guess_object_content_type("a.unknown-ext"),
+            "application/octet-stream"
+        );
+        assert_eq!(
+            guess_object_content_type("no-extension"),
+            "application/octet-stream"
+        );
+    }
+
+    /// 编辑器/CLI 链路拿到的是 `&Path`，转字符串后必须仍然推断得出类型
+    ///
+    /// 钉住 issue #4：`server_upload_*` 全系列传的都是 `path.to_string_lossy()`，
+    /// 这条断言保证那层转换不会把扩展名信息丢掉。
+    #[test]
+    fn guess_object_content_type_accepts_path_derived_strings() {
+        let path = std::path::Path::new("C:\\Users\\me\\Pictures\\shot.PNG");
+        assert_eq!(
+            guess_object_content_type(&path.to_string_lossy()),
+            "image/png"
+        );
+    }
+}
+
 #[cfg(test)]
 mod unique_name_tests {
     use super::*;

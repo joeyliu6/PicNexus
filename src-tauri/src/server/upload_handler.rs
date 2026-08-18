@@ -1066,12 +1066,26 @@ fn create_s3_client(endpoint: &str, access_key: &str, secret_key: &str, region: 
     S3Client::from_conf(config)
 }
 
+/// 按磁盘路径推断对象 Content-Type，与 GUI 链路共用 `utils::guess_object_content_type`
+///
+/// Why 按 `path` 而不是 `key` 推断：两者扩展名同源，但 `path` 是内容真身；
+/// `key` 经过唯一化改写，将来若加上改扩展名的逻辑，按 key 推断就会失真。
+fn object_content_type(path: &std::path::Path) -> String {
+    crate::commands::utils::guess_object_content_type(&path.to_string_lossy())
+}
+
 /// 通用 S3 上传流程
+///
+/// Why `content_type` 是显式形参而不是在函数内推断：这里只拿得到 `buffer`，
+/// 文件路径在各 `server_upload_*` 里。做成形参后，新增调用方时编译器会强制
+/// 它给出类型——issue #4 的成因正是这个参数当初不存在，5 条 S3 链路一起把
+/// 对象写成了 `binary/octet-stream`。同 `webdav_upload::put_binary` 的写法。
 async fn s3_put_object(
     client: &S3Client,
     bucket: &str,
     key: &str,
     buffer: Vec<u8>,
+    content_type: &str,
 ) -> Result<(), String> {
     let body = ByteStream::from(buffer);
     tokio::time::timeout(
@@ -1081,6 +1095,7 @@ async fn s3_put_object(
             .bucket(bucket)
             .key(key)
             .body(body)
+            .content_type(content_type)
             .send(),
     )
     .await
@@ -1930,7 +1945,7 @@ async fn server_upload_custom_s3(
         .map_err(|e| format!("读取文件失败: {}", e))?;
 
     let client = create_s3_client(endpoint, access_key_id, secret_access_key, region);
-    s3_put_object(&client, bucket, &key, buffer).await?;
+    s3_put_object(&client, bucket, &key, buffer, &object_content_type(path)).await?;
 
     let url = if public_domain.trim().is_empty() {
         format!("{}/{}/{}", endpoint.trim_end_matches('/'), bucket, key)
@@ -1997,7 +2012,7 @@ async fn server_upload_r2(
 
     let endpoint = format!("https://{}.r2.cloudflarestorage.com", account_id);
     let client = create_s3_client(&endpoint, access_key_id, secret_access_key, "auto");
-    s3_put_object(&client, bucket_name, &key, buffer).await?;
+    s3_put_object(&client, bucket_name, &key, buffer, &object_content_type(path)).await?;
 
     let url = if public_domain.is_empty() {
         format!("{}/{}/{}", endpoint, bucket_name, key)
@@ -2029,7 +2044,7 @@ async fn server_upload_tencent(
 
     let endpoint = format!("https://cos.{}.myqcloud.com", region);
     let client = create_s3_client(&endpoint, secret_id, secret_key, region);
-    s3_put_object(&client, bucket, &key, buffer).await?;
+    s3_put_object(&client, bucket, &key, buffer, &object_content_type(path)).await?;
 
     let url = if public_domain.is_empty() {
         format!("https://{}.cos.{}.myqcloud.com/{}", bucket, region, key)
@@ -2061,7 +2076,7 @@ async fn server_upload_aliyun(
 
     let endpoint = format!("https://oss-{}.aliyuncs.com", region);
     let client = create_s3_client(&endpoint, access_key_id, access_key_secret, region);
-    s3_put_object(&client, bucket, &key, buffer).await?;
+    s3_put_object(&client, bucket, &key, buffer, &object_content_type(path)).await?;
 
     let url = if public_domain.is_empty() {
         format!("https://{}.oss-{}.aliyuncs.com/{}", bucket, region, key)
@@ -2093,7 +2108,7 @@ async fn server_upload_qiniu(
 
     let endpoint = format!("https://s3-{}.qiniucs.com", region);
     let client = create_s3_client(&endpoint, access_key, secret_key, region);
-    s3_put_object(&client, bucket, &key, buffer).await?;
+    s3_put_object(&client, bucket, &key, buffer, &object_content_type(path)).await?;
 
     if custom_domain.is_empty() {
         return Err("七牛云需要配置自定义域名才能获取访问 URL".to_string());
