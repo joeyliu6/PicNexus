@@ -10,9 +10,9 @@
  * 镜像 fallback：thumbnailUrls 按优先级排列（主服务在前），主图 onerror
  * 时自动试下一条，全部失效后才向父视图 emit image-error。
  */
-import { ref, computed, watch } from 'vue';
 import Skeleton from 'primevue/skeleton';
 import type { ImageMeta } from '../../../types/image-meta';
+import { useThumbnailFallbackChain } from '../../../composables/useThumbnailFallbackChain';
 
 const props = defineProps<{
   meta: ImageMeta;
@@ -38,28 +38,22 @@ const emit = defineEmits<{
   (e: 'image-error', event: Event): void;
 }>();
 
-const currentSrcIndex = ref(0);
-const currentSrc = computed(() => props.thumbnailUrls[currentSrcIndex.value] ?? '');
-
-function hasUrlListChanged(next: string[], prev?: string[]): boolean {
-  if (!prev || next.length !== prev.length) return true;
-  return next.some((url, index) => url !== prev[index]);
-}
-
-watch(
-  () => props.thumbnailUrls,
-  (next, prev) => {
-    if (hasUrlListChanged(next, prev)) currentSrcIndex.value = 0;
-  },
-);
+// 候选链的消费（按序试、失败翻页、超时兜底、回报降级）统一在 composable 里，
+// 与收藏页共用一份实现——此前两边各写一份，超时兜底只补进了这边。
+const { currentSrc, handleError, handleLoad } = useThumbnailFallbackChain({
+  urls: () => props.thumbnailUrls,
+  // fast 模式下未加载的图压根不渲染（见模板 v-if），对它计时会把整屏候选误翻一遍
+  isWaiting: () => !props.isFailed && !props.isLoaded && props.displayMode !== 'fast',
+  onExhausted: (e) => emit('image-error', e as Event),
+});
 
 function handleImgError(e: Event): void {
-  const next = currentSrcIndex.value + 1;
-  if (next < props.thumbnailUrls.length) {
-    currentSrcIndex.value = next;
-    return;
-  }
-  emit('image-error', e);
+  handleError(e);
+}
+
+function handleImgLoad(): void {
+  handleLoad();
+  emit('image-load');
 }
 </script>
 
@@ -99,7 +93,7 @@ function handleImgError(e: Event): void {
         :src="currentSrc"
         class="photo-img"
         :class="{ loaded: isLoaded }"
-        @load="emit('image-load')"
+        @load="handleImgLoad"
         @error="handleImgError"
       />
 

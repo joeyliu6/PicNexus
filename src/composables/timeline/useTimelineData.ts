@@ -73,10 +73,6 @@ export function useTimelineData(options: UseTimelineDataOptions) {
 
   // ==================== 工具函数 ====================
 
-  function getThumbnailUrl(meta: ImageMeta): string {
-    return getMetaThumbnailUrl(meta, config.value);
-  }
-
   /** 主图失效时供 <img> 自动 fallback 的候选列表（主服务排第 0 位） */
   function getThumbnailUrls(meta: ImageMeta): string[] {
     return getMetaThumbnailCandidates(meta, config.value);
@@ -143,7 +139,6 @@ export function useTimelineData(options: UseTimelineDataOptions) {
 
   return {
     groups,
-    getThumbnailUrl,
     getThumbnailUrls,
     selectedAvailableServices,
     handleToggleFavorite,

@@ -10,7 +10,7 @@ import {
 } from 'vue';
 import { historyDB, type FavoritesMetaPageResult } from '../../services/HistoryDatabase';
 import { onCacheEventType, type CacheEventType } from '../../events/cacheEvents';
-import { getMetaThumbnailUrl, getMetaThumbnailCandidates } from '../useThumbCache';
+import { getMetaThumbnailCandidates } from '../useThumbCache';
 import { createLogger } from '../../utils/logger';
 import type { ImageMeta } from '../../types/image-meta';
 import type { ServiceType, UserConfig } from '../../config/types';
@@ -48,7 +48,6 @@ export interface UseFavoritesDataReturn {
   isLoading: Readonly<Ref<boolean>>;
   hasLoadedOnce: Readonly<Ref<boolean>>;
   imageStates: Record<string, 'loading' | 'loaded' | 'failed'>;
-  getThumbnailUrl: (meta: ImageMeta) => string;
   getThumbnailUrls: (meta: ImageMeta) => string[];
   getItemService: (id: string) => ServiceType | undefined;
   getItemServices: (id: string) => string[];
@@ -223,10 +222,6 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
     });
   }
 
-  function getThumbnailUrl(meta: ImageMeta): string {
-    return getMetaThumbnailUrl(meta, config.value);
-  }
-
   /** 主图失效时供 <img> 自动 fallback 的候选列表（主服务排第 0 位） */
   function getThumbnailUrls(meta: ImageMeta): string[] {
     return getMetaThumbnailCandidates(meta, config.value);
@@ -322,7 +317,6 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
     isLoading,
     hasLoadedOnce,
     imageStates,
-    getThumbnailUrl,
     getThumbnailUrls,
     getItemService,
     getItemServices,

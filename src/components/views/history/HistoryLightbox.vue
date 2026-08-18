@@ -17,7 +17,7 @@ import { useLightboxInfo } from '../../../composables/history/useLightboxInfo';
 import { useMirrorFallback } from '../../../composables/history/useMirrorFallback';
 import { useToast } from '../../../composables/useToast';
 import { getPrimaryImageUrl } from '../../../utils/imageUrl';
-import { generateMediumThumbnailUrl } from '../../../composables/useThumbCache';
+import { useThumbCache } from '../../../composables/useThumbCache';
 import { getServiceDisplayName } from '../../../constants/serviceNames';
 import LightboxBottomBar from './LightboxBottomBar.vue';
 
@@ -41,6 +41,7 @@ const emit = defineEmits<{
 
 const configManager = useConfigManager();
 const historyManager = useHistoryManager();
+const thumbCache = useThumbCache();
 const currentItem = ref<HistoryItem | null>(props.item);
 watch(
   () => props.item,
@@ -61,19 +62,13 @@ const imageSrc = computed(() => {
  * LQIP 中图：400-800px 缩略图，比原图小一两个数量级、加载秒到
  * 用作模糊背景占位 + PhotoSwipe msrc，填充大图加载期间的空白
  */
+// 走 thumbCache.getMediumImageUrl 而不是直接调 generateMediumThumbnailUrl：
+// 后者不看会话降级状态，探测到代理不通后这里仍会请求代理死链，模糊占位和 PhotoSwipe 的
+// msrc 就白瞎了。所有取「单条 URL」的入口都必须从候选链取首条，见 data-persistence.md 图5。
 const mediumSrc = computed(() => {
   const item = currentItem.value;
   if (!item) return '';
-  const result = item.results.find(
-    r => r.serviceId === item.primaryService && r.status === 'success'
-  );
-  if (!result?.result?.url) return '';
-  return generateMediumThumbnailUrl(
-    result.serviceId,
-    result.result.url,
-    result.result.fileKey,
-    configManager.config.value
-  );
+  return thumbCache.getMediumImageUrl(item);
 });
 
 const itemId = computed(() => currentItem.value?.id);

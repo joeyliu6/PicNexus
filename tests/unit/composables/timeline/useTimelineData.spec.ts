@@ -164,12 +164,14 @@ describe('selectedAvailableServices', () => {
   });
 });
 
-// ─── getThumbnailUrl ──────────────────────────────────────────────────────────
+// ─── getThumbnailUrls ─────────────────────────────────────────────────────────
 
-describe('getThumbnailUrl', () => {
-  it('返回 getMetaThumbnailUrl 的结果', () => {
-    const { getThumbnailUrl } = useTimelineData(makeOptions([]));
-    expect(getThumbnailUrl(makeMeta())).toBe('https://thumb.example.com/img.jpg');
+// 只暴露候选链、不再暴露单条 URL：单条来自 generateMediumThumbnailUrl，不看会话降级
+// 状态，谁拿去用都会绕开「代理不通自动转原图」这层兜底。
+describe('getThumbnailUrls', () => {
+  it('返回 getMetaThumbnailCandidates 的结果', () => {
+    const { getThumbnailUrls } = useTimelineData(makeOptions([]));
+    expect(getThumbnailUrls(makeMeta())).toEqual(['https://thumb.example.com/img.jpg']);
   });
 });
 

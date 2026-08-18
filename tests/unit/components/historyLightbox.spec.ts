@@ -1,5 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ref } from 'vue';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ref, nextTick } from 'vue';
+import {
+  reportThumbnailUrlFailed,
+  resetProxyReachabilityForTest,
+} from '@/composables/useThumbCache';
 import { mountWithDefaults } from '../helpers/vueMount';
 import HistoryLightbox from '@/components/views/history/HistoryLightbox.vue';
 import type { HistoryItem } from '@/config/types';
@@ -9,6 +13,7 @@ const { bridgeState, toastWarnMock } = vi.hoisted(() => ({
     options: null as null | {
       onLoadError?: () => void;
       onLoadSuccess?: () => void;
+      mediumSrc?: { value: string };
     },
   },
   toastWarnMock: vi.fn(),
@@ -24,6 +29,7 @@ vi.mock('@/composables/history/usePhotoSwipeBridge', () => ({
   usePhotoSwipeBridge: (options: {
     onLoadError?: () => void;
     onLoadSuccess?: () => void;
+    mediumSrc?: { value: string };
   }) => {
     bridgeState.options = options;
     return {
@@ -267,5 +273,45 @@ describe('HistoryLightbox', () => {
     bridgeState.options?.onLoadSuccess?.();
     await wrapper.vm.$nextTick();
     expect(findInTeleport('.action-btn-dot')).toBeNull();
+  });
+
+  // ─── LQIP 中图跟随会话降级 ───────────────────────────────────────────────
+  //
+  // 回归：mediumSrc 曾直接调 generateMediumThumbnailUrl，那个函数不看会话降级状态。
+  // 结果时间轴/收藏页/表格预览都降级成原图后，唯独灯箱的模糊占位和 PhotoSwipe msrc
+  // 还在请求代理死链。所有取「单条 URL」的入口都必须从候选链取首条。
+  describe('R2 代理降级', () => {
+    afterEach(() => {
+      // proxyReachable 是模块级会话状态，不重置会污染同文件其他用例
+      resetProxyReachabilityForTest();
+    });
+
+    function makeR2Item(): HistoryItem {
+      const item = makeHistoryItem([
+        {
+          serviceId: 'r2',
+          status: 'success',
+          result: { url: 'https://cdn.example.com/a.png' },
+        } as HistoryItem['results'][number],
+      ]);
+      item.primaryService = 'r2';
+      return item;
+    }
+
+    it('默认走代理', () => {
+      mountLightbox(makeR2Item());
+      expect(bridgeState.options?.mediumSrc?.value).toContain('wsrv.nl');
+    });
+
+    it('会话降级后改用原图', async () => {
+      mountLightbox(makeR2Item());
+      const proxyUrl = bridgeState.options!.mediumSrc!.value;
+      expect(proxyUrl).toContain('wsrv.nl');
+
+      reportThumbnailUrlFailed(proxyUrl);
+      await nextTick();
+
+      expect(bridgeState.options?.mediumSrc?.value).toBe('https://cdn.example.com/a.png');
+    });
   });
 });

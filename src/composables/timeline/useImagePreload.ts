@@ -5,6 +5,7 @@
 import { watch, onUnmounted, type Ref } from 'vue';
 import type { ImageMeta } from '../../types/image-meta';
 import type { VisibleItem } from '../useVirtualTimeline';
+import { reportThumbnailUrlLoaded } from '../useThumbCache';
 
 /** 预加载配置 */
 const PRELOAD_CONFIG = {
@@ -14,8 +15,8 @@ const PRELOAD_CONFIG = {
   DELAY_MS: 300,
 } as const;
 
-/** 获取缩略图 URL 的函数签名 */
-type GetThumbnailUrlFn = (meta: ImageMeta) => string;
+/** 获取缩略图候选链的函数签名 */
+type GetThumbnailUrlsFn = (meta: ImageMeta) => string[];
 
 interface UseImagePreloadOptions {
   /** 当前可见项列表 */
@@ -26,14 +27,17 @@ interface UseImagePreloadOptions {
   displayMode: Ref<'fast' | 'normal'>;
   /** 滚动方向 */
   scrollDirection: Ref<'up' | 'down' | null>;
-  /** 获取缩略图 URL */
-  getThumbnailUrl: GetThumbnailUrlFn;
+  /**
+   * 获取缩略图候选链
+   *
+   * 要的是**候选链**而不是单条 URL：单条来自 generateMediumThumbnailUrl，不看会话降级
+   * 状态，代理不通时预热的还是死链。这里只用首条预热，但取自候选链才能跟随降级。
+   */
+  getThumbnailUrls: GetThumbnailUrlsFn;
   /** 判断图片是否已加载 */
   isImageLoaded: (id: string) => boolean;
   /** 图片加载成功回调 */
   onImageLoad: (id: string) => void;
-  /** 图片加载失败回调 */
-  onImageError: (e: Event, id: string) => void;
 }
 
 export function useImagePreload(options: UseImagePreloadOptions) {
@@ -42,10 +46,9 @@ export function useImagePreload(options: UseImagePreloadOptions) {
     allMetas,
     displayMode,
     scrollDirection,
-    getThumbnailUrl,
+    getThumbnailUrls,
     isImageLoaded,
     onImageLoad,
-    onImageError,
   } = options;
 
   /** 预加载定时器 */
@@ -94,13 +97,23 @@ export function useImagePreload(options: UseImagePreloadOptions) {
       const meta = metas[i];
       if (!meta || currentVisibleIds.has(meta.id) || isImageLoaded(meta.id)) continue;
 
-      const url = getThumbnailUrl(meta);
+      const url = getThumbnailUrls(meta)[0];
       if (!url) continue;
 
       const img = new Image();
       img.src = url;
-      img.onload = () => onImageLoad(meta.id);
-      img.onerror = (e) => onImageError(e as Event, meta.id);
+      img.onload = () => {
+        reportThumbnailUrlLoaded(url);
+        onImageLoad(meta.id);
+      };
+      // 预加载失败**既不标记这张图失败，也不上报**，直接放着不管：
+      // - 不标记：这只是离屏预热、试的还只是候选链第一条。标进 failedImages 会让
+      //   TimelinePhotoItem 直接走占位分支（见其模板 v-if），候选链里垫底的原图
+      //   永远没机会顶上——正好复现 issue #4 症状②。
+      // - 不上报：单条失败分不清「代理不通」还是「这张图被删了」，而上报会把整个会话
+      //   降级。预热只有一条 URL，没有「下一条成功了」这个对照，无从定性。
+      //   真实渲染时组件会按候选链逐条试，那里才有资格下结论。
+      img.onerror = () => { /* 交给真实渲染时的候选链判断 */ };
     }
   }
 

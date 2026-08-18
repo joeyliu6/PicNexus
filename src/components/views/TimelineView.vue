@@ -105,7 +105,7 @@ const allLoadedMetas = computed(() => groups.value.flatMap(g => g.items));
 
 // ==================== 工具函数 ====================
 
-const { getThumbnailUrl, getThumbnailUrls, selectedAvailableServices, handleToggleFavorite, hoverDetailsMap, handleImageHover } = useTimelineData({
+const { getThumbnailUrls, selectedAvailableServices, handleToggleFavorite, hoverDetailsMap, handleImageHover } = useTimelineData({
   filteredMetas: allLoadedMetas,
   favoriteSet: historyManager.favoriteSet,
   favoritesOnly: computed(() => props.favoritesOnly),
@@ -189,10 +189,10 @@ const { cleanup: cleanupPreload } = useImagePreload({
   allMetas: allLoadedMetas,
   displayMode,
   scrollDirection,
-  getThumbnailUrl,
+  // 传候选链而非单条：预热要跟随会话降级状态，否则代理不通时预热的还是死链
+  getThumbnailUrls,
   isImageLoaded,
   onImageLoad,
-  onImageError,
 });
 
 const {

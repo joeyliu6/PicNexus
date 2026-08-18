@@ -6,6 +6,16 @@ import { flushPromisesAndTicks } from '../../helpers/wait';
 import type { ImageMeta } from '@/types/image-meta';
 import type { VisibleItem } from '@/composables/useVirtualTimeline';
 
+const { reportFailedMock, reportLoadedMock } = vi.hoisted(() => ({
+  reportFailedMock: vi.fn(),
+  reportLoadedMock: vi.fn(),
+}));
+
+vi.mock('@/composables/useThumbCache', () => ({
+  reportThumbnailUrlFailed: reportFailedMock,
+  reportThumbnailUrlLoaded: reportLoadedMock,
+}));
+
 import { useImagePreload } from '@/composables/timeline/useImagePreload';
 
 function makeMeta(id: string): ImageMeta {
@@ -50,15 +60,14 @@ function createPreloadContext(overrides: Partial<Parameters<typeof useImagePrelo
   const allMetas = ref<ImageMeta[]>([]);
   const displayMode = ref<'fast' | 'normal'>('normal');
   const scrollDirection = ref<'up' | 'down' | null>(null);
-  const getThumbnailUrl = vi.fn().mockReturnValue('https://thumb.example.com/img.jpg');
+  const getThumbnailUrls = vi.fn().mockReturnValue(['https://thumb.example.com/img.jpg']);
   const isImageLoaded = vi.fn().mockReturnValue(false);
   const onImageLoad = vi.fn();
-  const onImageError = vi.fn();
 
   return {
     visibleItems, allMetas, displayMode, scrollDirection,
-    getThumbnailUrl, isImageLoaded, onImageLoad, onImageError,
-    ...useImagePreload({ visibleItems, allMetas, displayMode, scrollDirection, getThumbnailUrl, isImageLoaded, onImageLoad, onImageError, ...overrides }),
+    getThumbnailUrls, isImageLoaded, onImageLoad,
+    ...useImagePreload({ visibleItems, allMetas, displayMode, scrollDirection, getThumbnailUrls, isImageLoaded, onImageLoad, ...overrides }),
   };
 }
 
@@ -99,8 +108,8 @@ describe('preloadNextScreen — 跳过条件', () => {
     ctx.allMetas.value = [makeMeta('a'), makeMeta('b'), makeMeta('c')];
     ctx.visibleItems.value = [makeVisibleItem('a')];
     ctx.preloadNextScreen();
-    // 快速模式下不创建 Image，getThumbnailUrl 不应被调用
-    expect(ctx.getThumbnailUrl).not.toHaveBeenCalled();
+    // 快速模式下不创建 Image，getThumbnailUrls 不应被调用
+    expect(ctx.getThumbnailUrls).not.toHaveBeenCalled();
   });
 
   it('scrollDirection = null 时跳过预加载', () => {
@@ -109,7 +118,7 @@ describe('preloadNextScreen — 跳过条件', () => {
     ctx.allMetas.value = [makeMeta('a'), makeMeta('b')];
     ctx.visibleItems.value = [makeVisibleItem('a')];
     ctx.preloadNextScreen();
-    expect(ctx.getThumbnailUrl).not.toHaveBeenCalled();
+    expect(ctx.getThumbnailUrls).not.toHaveBeenCalled();
   });
 
   it('可见列表为空时跳过预加载（firstId 或 lastId 找不到）', () => {
@@ -118,7 +127,7 @@ describe('preloadNextScreen — 跳过条件', () => {
     ctx.allMetas.value = [makeMeta('a')];
     ctx.visibleItems.value = []; // 空
     ctx.preloadNextScreen();
-    expect(ctx.getThumbnailUrl).not.toHaveBeenCalled();
+    expect(ctx.getThumbnailUrls).not.toHaveBeenCalled();
   });
 });
 
@@ -133,7 +142,7 @@ describe('preloadNextScreen — 向下预加载', () => {
     ctx.scrollDirection.value = 'down';
     ctx.preloadNextScreen();
     // 应预加载 c, d（可见区域后面的图片）
-    expect(ctx.getThumbnailUrl).toHaveBeenCalled();
+    expect(ctx.getThumbnailUrls).toHaveBeenCalled();
   });
 
   it('已加载的图片不重复预加载', () => {
@@ -144,8 +153,8 @@ describe('preloadNextScreen — 向下预加载', () => {
     ctx.visibleItems.value = [makeVisibleItem('a'), makeVisibleItem('b')];
     ctx.scrollDirection.value = 'down';
     ctx.preloadNextScreen();
-    // c 已加载，不应调用 getThumbnailUrl('c')
-    const calledMetas = (ctx.getThumbnailUrl as ReturnType<typeof vi.fn>).mock.calls
+    // c 已加载，不应调用 getThumbnailUrls('c')
+    const calledMetas = (ctx.getThumbnailUrls as ReturnType<typeof vi.fn>).mock.calls
       .map((call: unknown[]) => (call[0] as ImageMeta).id);
     expect(calledMetas).not.toContain('c');
   });
@@ -167,7 +176,13 @@ describe('preloadNextScreen — 向下预加载', () => {
     expect(ctx.onImageLoad).toHaveBeenCalledWith('b');
   });
 
-  it('forwards background Image errors to the provided error handler', () => {
+  // 回归，两层：
+  // 1. 预加载失败曾直接调 onImageError → failedImages.add(id) → TimelinePhotoItem 走占位分支，
+  //    候选链里垫底的原图永远没机会顶上，正好复现 issue #4 症状②；
+  // 2. 后来改成「只上报这条 URL」仍不对——单条失败分不清「代理不通」还是「这张图被删了」，
+  //    而上报会把整个会话降级。预热没有「下一条成功了」这个对照，无从定性。
+  // 预热只是优化，它失败不该替真实渲染下任何结论。
+  it('预加载失败既不上报也不把整条记录标成失败', () => {
     const metas = [makeMeta('a'), makeMeta('b')];
     const ctx = makePreload();
     ctx.allMetas.value = metas;
@@ -175,10 +190,10 @@ describe('preloadNextScreen — 向下预加载', () => {
     ctx.scrollDirection.value = 'down';
 
     ctx.preloadNextScreen();
-    const errorEvent = new Event('error');
-    createdImages[0].onerror?.(errorEvent);
+    createdImages[0].onerror?.(new Event('error'));
 
-    expect(ctx.onImageError).toHaveBeenCalledWith(errorEvent, 'b');
+    expect(reportFailedMock).not.toHaveBeenCalled();
+    expect(ctx.onImageLoad).not.toHaveBeenCalled();
   });
 });
 
@@ -193,7 +208,7 @@ describe('preloadNextScreen — 向上预加载', () => {
     ctx.scrollDirection.value = 'up';
     ctx.preloadNextScreen();
     // 应预加载 a, b（可见区域前面的图片）
-    expect(ctx.getThumbnailUrl).toHaveBeenCalled();
+    expect(ctx.getThumbnailUrls).toHaveBeenCalled();
   });
 });
 
@@ -219,6 +234,6 @@ describe('cleanup', () => {
     ctx.cleanup();
     await vi.advanceTimersByTimeAsync(300);
 
-    expect(ctx.getThumbnailUrl).not.toHaveBeenCalled();
+    expect(ctx.getThumbnailUrls).not.toHaveBeenCalled();
   });
 });

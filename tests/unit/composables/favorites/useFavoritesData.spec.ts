@@ -6,7 +6,7 @@ import type { UserConfig } from '@/config/types';
 const {
   getFavoritesMetaPageMock,
   onCacheEventTypeMock,
-  getMetaThumbnailUrlMock,
+  getMetaCandidatesMock,
   eventHandlers,
   unlistenUpdatedMock,
   unlistenDeletedMock,
@@ -14,7 +14,7 @@ const {
 } = vi.hoisted(() => ({
   getFavoritesMetaPageMock: vi.fn(),
   onCacheEventTypeMock: vi.fn(),
-  getMetaThumbnailUrlMock: vi.fn(),
+  getMetaCandidatesMock: vi.fn(),
   eventHandlers: {} as Record<string, () => void>,
   unlistenUpdatedMock: vi.fn(),
   unlistenDeletedMock: vi.fn(),
@@ -32,7 +32,7 @@ vi.mock('@/events/cacheEvents', () => ({
 }));
 
 vi.mock('@/composables/useThumbCache', () => ({
-  getMetaThumbnailUrl: getMetaThumbnailUrlMock,
+  getMetaThumbnailCandidates: getMetaCandidatesMock,
 }));
 
 vi.mock('@/utils/logger', () => ({
@@ -105,7 +105,7 @@ describe('useFavoritesData', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     Object.keys(eventHandlers).forEach(key => delete eventHandlers[key]);
-    getMetaThumbnailUrlMock.mockImplementation((meta: { id: string }) => `thumb:${meta.id}`);
+    getMetaCandidatesMock.mockImplementation((meta: { id: string }) => [`thumb:${meta.id}`]);
     getFavoritesMetaPageMock.mockResolvedValue({
       items: [],
       total: 0,
@@ -162,8 +162,8 @@ describe('useFavoritesData', () => {
     expect(harness.api().totalCount.value).toBe(2);
     expect(harness.api().hasLoadedOnce.value).toBe(true);
     expect(harness.api().isLoading.value).toBe(false);
-    expect(harness.api().getThumbnailUrl(alpha as never)).toBe('thumb:alpha');
-    expect(getMetaThumbnailUrlMock).toHaveBeenCalledWith(alpha, harness.config.value);
+    expect(harness.api().getThumbnailUrls(alpha as never)).toEqual(['thumb:alpha']);
+    expect(getMetaCandidatesMock).toHaveBeenCalledWith(alpha, harness.config.value);
     expect(harness.api().getItemService('beta')).toBe('r2');
     expect(harness.api().getItemServices('beta')).toEqual(['r2', 'github']);
   });

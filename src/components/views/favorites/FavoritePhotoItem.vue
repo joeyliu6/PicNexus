@@ -3,9 +3,10 @@
  * 镜像 fallback：thumbnailUrls 按主服务优先排序，主图加载失败时内部先尝试
  * 下一条镜像，全部失效后才向父视图 emit 'failed' 最终状态。
  */
-import { ref, computed, watch } from 'vue';
+import { ref } from 'vue';
 import Skeleton from 'primevue/skeleton';
 import type { ImageMeta } from '../../../types/image-meta';
+import { useThumbnailFallbackChain } from '../../../composables/useThumbnailFallbackChain';
 
 type ImageState = 'loading' | 'loaded' | 'failed' | undefined;
 
@@ -23,28 +24,28 @@ const emit = defineEmits<{
   'image-state-change': [state: 'loaded' | 'failed'];
 }>();
 
-const currentSrcIndex = ref(0);
-const currentSrc = computed(() => props.thumbnailUrls[currentSrcIndex.value] ?? '');
+const rootRef = ref<HTMLElement | null>(null);
 
-function hasUrlListChanged(next: string[], prev?: string[]): boolean {
-  if (!prev || next.length !== prev.length) return true;
-  return next.some((url, index) => url !== prev[index]);
-}
-
-watch(
-  () => props.thumbnailUrls,
-  (next, prev) => {
-    if (hasUrlListChanged(next, prev)) currentSrcIndex.value = 0;
-  },
-);
+// 与时间轴共用一份候选链消费逻辑：按序试、失败翻页、超时兜底、回报会话降级。
+// 此前这里只有 onerror 翻页，代理连接卡死时会一直停在骨架屏，也不会触发降级。
+//
+// ⚠️ elementRef 必传：本页 `<img>` 带 loading="lazy"，且列表无虚拟化、一页 80 格全渲染。
+// 不传的话视口外那 60 多张（浏览器根本没发请求）会在 5 秒后集体判超时，
+// 把明明通着的代理判死，这次改动想省的流量一分都省不下来。
+const { currentSrc, handleError, handleLoad } = useThumbnailFallbackChain({
+  urls: () => props.thumbnailUrls,
+  isWaiting: () => props.imageState !== 'loaded' && props.imageState !== 'failed',
+  onExhausted: () => emit('image-state-change', 'failed'),
+  elementRef: rootRef,
+});
 
 function handleImgError(): void {
-  const next = currentSrcIndex.value + 1;
-  if (next < props.thumbnailUrls.length) {
-    currentSrcIndex.value = next;
-    return;
-  }
-  emit('image-state-change', 'failed');
+  handleError();
+}
+
+function handleImgLoad(): void {
+  handleLoad();
+  emit('image-state-change', 'loaded');
 }
 </script>
 
@@ -52,6 +53,7 @@ function handleImgError(): void {
   <div
     class="photo-item"
     :class="{ selected }"
+    ref="rootRef"
     :data-lightbox-id="meta.id"
     @click="emit('click')"
   >
@@ -76,7 +78,7 @@ function handleImgError(): void {
       class="photo-img"
       :class="{ loaded: imageState === 'loaded' }"
       loading="lazy"
-      @load="emit('image-state-change', 'loaded')"
+      @load="handleImgLoad"
       @error="handleImgError"
     />
 
