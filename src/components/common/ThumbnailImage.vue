@@ -2,6 +2,7 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue';
 import { safeImageUrl } from '../../security/networkPolicy';
 import { reportThumbnailUrlFailed, reportThumbnailUrlLoaded } from '../../composables/useThumbCache';
+import { hasUrlListChanged } from '../../composables/useThumbnailFallbackChain';
 
 /**
  * Why 这里没复用 useThumbnailFallbackChain（时间轴/收藏页共用的那个）：
@@ -73,15 +74,32 @@ const armLoadTimeout = () => {
 };
 
 const loadImage = () => {
-  isLoading.value = true;
   if (props.srcs && props.srcs.length > 0 && currentSrcIndex.value < props.srcs.length) {
     const nextSrc = safeImageUrl(props.srcs[currentSrcIndex.value], props.confirmedHttpHosts);
     if (nextSrc) {
+      // 要加载的就是**已经显示出来**的那张：`<img>` 的 src 不会变，浏览器也就不会再发
+      // load 事件，这时把 isLoading 打回 true 就再没人能把它放下来——骨架屏和图一起
+      // 挤在格子里，且不自愈。
+      //
+      // 走到这里的主路径是 R2 降级：原图加载成功 → handleLoad 上报代理不可达 →
+      // useThumbCache 清缓存重算 → 候选链从 [代理, 原图] 收成 [原图]。内容确实变了
+      // （所以 hasUrlListChanged 拦不住），但首条恰好就是当前这张。
+      //
+      // 仍在加载中（isLoading）时不能走这条捷径：候选表可能刚变长，需要重新计时。
+      if (nextSrc === currentSrc.value && !isError.value && !isLoading.value) return;
+      isLoading.value = true;
       currentSrc.value = nextSrc;
       isError.value = false;
       armLoadTimeout();
     } else {
-      handleError();
+      // 被安全过滤拦下的候选**压根没发出过请求**，不能当成失败证据——不传 failedUrl。
+      // 传了的话记进 pendingFailure 的会是「当前还显示着的那张旧图」（此刻 currentSrc
+      // 还没换），等下一条加载成功就把这个无辜的服务判死，整个会话降级成原图直连。
+      //
+      // 这里也不能顺手把 isLoading 打回 true：那会用骨架屏盖住已经显示好的图，还会让
+      // 上面「目标就是当前这张」的短路失效，白等一轮 5 秒超时。真正需要 loading 的那次
+      // 会由下一轮 loadImage 自己设。
+      advanceToNextCandidate();
     }
   } else {
     clearLoadTimeout();
@@ -91,15 +109,18 @@ const loadImage = () => {
   }
 };
 
-const handleError = () => {
+/**
+ * 翻到下一条候选；翻不动了就收尾成「这张图没了」
+ *
+ * @param failedUrl 确实发起过请求并失败的 URL。没发过请求就别传——见 loadImage 的安全过滤分支。
+ */
+const advanceToNextCandidate = (failedUrl?: string) => {
   clearLoadTimeout();
-  const failed = currentSrc.value;
-  // 尝试下一个 URL
   currentSrcIndex.value++;
   if (currentSrcIndex.value < props.srcs.length) {
     // 先不上报：单看一条失败分不清「代理不通」还是「代理背后那张图被删了」，
     // 而上报会把整个会话降级。等下一条出结果才能定性（同 useThumbnailFallbackChain）
-    if (failed) pendingFailure = failed;
+    if (failedUrl) pendingFailure = failedUrl;
     loadImage();
   } else {
     // 候选全试完了 = 这张图本身没了，不能赖到代理头上
@@ -107,6 +128,11 @@ const handleError = () => {
     isError.value = true;
     isLoading.value = false;
   }
+};
+
+/** `<img>` 的 error 事件 / 超时兜底：当前这条确实请求过，也确实失败了 */
+const handleError = () => {
+  advanceToNextCandidate(currentSrc.value);
 };
 
 const handleLoad = () => {
@@ -145,11 +171,15 @@ onUnmounted(() => {
   observer = null;
 });
 
-// 监听源列表变化（srcs 由上游 [...new Set()] / computed 产出，每次都是新数组引用，无需 deep）
+// 监听源列表变化（srcs 由上游 [...new Set()] / computed 产出，引用不稳定，只能按内容比）
 watch(
   () => props.srcs,
-  () => {
+  (next, prev) => {
+    if (!hasUrlListChanged(next, prev)) return;
     currentSrcIndex.value = 0;
+    // 待定的失败记录必须跟着候选链一起清：留着上一条链的 pendingFailure，会在新链的候选
+    // 加载成功时套用「前一条挂、这一条通」的判据，把不相干的服务判死（同 useThumbnailFallbackChain）
+    pendingFailure = null;
     loadImage();
   },
   { immediate: true },

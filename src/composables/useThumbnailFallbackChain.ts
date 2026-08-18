@@ -46,6 +46,22 @@ interface UseThumbnailFallbackChainOptions {
   elementRef?: Ref<HTMLElement | null>;
 }
 
+/**
+ * 候选列表是否真的换了内容
+ *
+ * Why 不能只比引用：QueueItem 的候选每次都是现算的新数组（状态会变，getThumbnailCandidates
+ * 明确不缓存），上传进度每 tick 一次就产出一份内容完全相同的新数组。只比引用会把这些 tick
+ * 全当成「换图了」，把已经加载好的图重新拽回候选 0。
+ *
+ * 提到模块顶层导出，供 ThumbnailImage.vue 复用：它因为多一层 safeImageUrl 安全过滤而没法
+ * 直接用整个 composable，但「候选算不算换了」这条判据必须是同一份——此前两边各写一遍，
+ * 文档只能靠一句「必须同步」维系，正是下次只改一边的隐患。
+ */
+export function hasUrlListChanged(next: string[], prev?: string[]): boolean {
+  if (!prev || next.length !== prev.length) return true;
+  return next.some((url, index) => url !== prev[index]);
+}
+
 export function useThumbnailFallbackChain(options: UseThumbnailFallbackChainOptions) {
   const currentSrcIndex = ref(0);
   const currentSrc = computed(() => options.urls()[currentSrcIndex.value] ?? '');
@@ -66,11 +82,6 @@ export function useThumbnailFallbackChain(options: UseThumbnailFallbackChainOpti
    * 服务上；如果后面全都失败，那就是这张图本身没了，与代理无关。
    */
   let pendingFailure: string | null = null;
-
-  function hasUrlListChanged(next: string[], prev?: string[]): boolean {
-    if (!prev || next.length !== prev.length) return true;
-    return next.some((url, index) => url !== prev[index]);
-  }
 
   // 候选列表换了内容才回到第 0 条：上游对同一份数据返回的是稳定引用，
   // 但降级重算后会产出新数组，这时必须从头试。
