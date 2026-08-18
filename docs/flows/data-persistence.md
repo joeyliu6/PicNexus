@@ -223,6 +223,40 @@ flowchart TD
 > 超时只在**已进入视口**且**后面还有候选**时才计时：前者因为 `loading="lazy"` 的图在视口外压根没发请求，
 > 计时会把整屏候选误翻一遍；后者因为掐断最后一条只会把「慢但最终能成」变成「直接失败」。
 
+> ⚠️ **候选列表换新要按内容比，不能只看引用；重置索引时必须一并清掉待定的失败记录。**
+> `getThumbnailCandidates` 对 QueueItem **明确不缓存**（状态会变），每次都返回一份内容相同的新数组，
+> 上传进度每 tick 一次就产出一份。只比引用会把这些 tick 全当成「换图了」：已经退到原图的图被拽回
+> 候选 0，而 `src` 根本没变 → 浏览器不再发 `load` 事件 → `isLoading` 永远停在 true，
+> 格子里骨架屏和图各占一半且不自愈。而待定的失败记录（`pendingFailure`）若不跟着候选链一起清，
+> 会在新链的候选加载成功时套用「前一条挂、这一条通」的判据，把上一张图的代理 URL 判死，
+> 整个会话误降级。判据实现是 [useThumbnailFallbackChain.ts](../../src/composables/useThumbnailFallbackChain.ts)
+> 顶层导出的 `hasUrlListChanged`，[ThumbnailImage.vue](../../src/components/common/ThumbnailImage.vue)
+> 直接 import 复用——它因为多一层 `safeImageUrl` 安全过滤没法用整个 composable，但这条判据
+> 只有一份，不再靠「必须同步」的口头约定维系。
+>
+> ⚠️ **「候选换新」要判两次，只判内容变化不够。** 除了上面的内容比对，还有一条更隐蔽的：
+> 内容**确实变了**，但解析后的首条 URL 恰好就是当前已经显示出来的那张——这时 `<img>` 的
+> `src` 依然不变，`load` 事件依然不会来，把 `isLoading` 打回 true 同样再也放不下来。
+> 这不是边角案例，正是 **R2 降级的主路径**：原图加载成功 → `handleLoad` 上报代理不可达 →
+> `clearThumbCache()` 重算 → 候选链从 `[代理, 原图]` 收成 `[原图]`。代理一挂，之后每张图都走这条。
+> `ThumbnailImage.vue` 的 `loadImage` 为此加了一道短路：目标 URL 与已渲染且**已加载完成**的
+> 那张相同时直接返回。「已加载完成」这个前提不能省——图还在加载中时列表可能刚变长，
+> 短路掉就不会重新计时，卡住的首条永远翻不到垫底的原图。
+>
+> 时间轴与收藏页**没有**这个问题，别照搬这段：它们的加载状态由父组件按图片 id 持有
+> （`useImageLoadManager.loadedImages` / `useFavoritesData.imageStates`），候选链换新不会把
+> 已加载的图打回 loading；而这些状态被清空时列表整体重建，`<img>` 是全新元素、必然重新发请求。
+> `ThumbnailImage` 的 `isLoading` 是组件**自己**的内部状态，组件不重建却自己打回 loading——
+> 差别就在这里。
+
+> ⚠️ **被 `safeImageUrl` 拦下的候选不算失败证据。** 它压根没发出过请求，翻页时**不能**把它
+> 当成「这条挂了」——`ThumbnailImage.vue` 的 `advanceToNextCandidate(failedUrl?)` 为此把失败 URL
+> 做成显式形参，安全过滤那条分支不传。此前它直接调 `handleError()`，而 `handleError` 取的是
+> `currentSrc`，那时还是**上一条链已经加载成功的旧图**，于是旧图被记进 `pendingFailure`，
+> 等新链的候选加载成功就把无辜的服务判死。真实触发路径：同一个 QueueItem 里 R2 先传完
+> （显示代理图），WebDAV 后传完，把未确认的局域网 http 地址插到候选链首位。
+> 同理，这条分支也不能顺手把 `isLoading` 打回 true——那会用骨架屏盖住已经显示好的图。
+
 ---
 
 ## 排查指南

@@ -269,14 +269,24 @@ Rust 侧 `ServerUploadConfig::Webdav.unique_file_name` 同理用 `#[serde(defaul
 
 大白话：不带这个头的话，对象会以「二进制文件」的身份存进桶里，浏览器直接打开图片链接时不会显图，而是弹出下载框。
 
-已覆盖：`png / jpg / jpeg / webp / gif / svg / avif / bmp / ico`（大小写不敏感）。
+已覆盖：`png / jpg / jpeg / webp / gif / svg / avif / bmp / ico / tif / tiff`（大小写不敏感），与上传白名单 `VALID_IMAGE_EXTENSIONS`（前端）和 `DetectedImageKind`（server）的 9 种格式一一对应。
 
-**两条链路共用同一个推断函数**，别再各写一份扩展名表：
+**四条链路共用同一个推断函数**，别再各写一份扩展名表：
 
 | 链路 | 调用点 | 传什么 |
 |---|---|---|
-| 桌面 GUI | `s3_compatible.rs::upload_to_s3_compatible` | `file_path`（前端传下来的绝对路径） |
-| 编辑器 / CLI / 本地 server | `server/upload_handler.rs::s3_put_object` | 由 `object_content_type(path)` 从 `&Path` 推断 |
+| 桌面 GUI（S3 系） | `s3_compatible.rs::upload_to_s3_compatible` | `file_path`（前端传下来的绝对路径） |
+| 编辑器 / CLI / 本地 server（S3 系） | `server/upload_handler.rs::s3_put_object` | 由 `object_content_type(path)` 从 `&Path` 推断 |
+| WebDAV 图床（两条链路共用同一函数体） | `webdav_upload.rs::upload_to_webdav_core` | 唯一化后的文件名（`suffix_unique_file_name` 不改扩展名） |
+| 又拍云（编辑器 / CLI，走独立 REST PUT） | `server/upload_handler.rs::server_upload_upyun` | 由 `object_content_type(path)` 从 `&Path` 推断 |
+
+> ⚠️ **后两条都是 2026-08-18 才并进来的，各自踩过一次同样的坑。**
+> WebDAV 曾自带第三张手写扩展名表，与共用表已漂了 5 个（`heic/heif/jfif/apng/svgz` 在
+> WebDAV 落 octet-stream、在 S3 落正确类型），靠上传白名单挡着才没爆。
+> 又拍云曾硬编码 `Content-Type: image/` 加星号——星号形式只在**请求**的 `Accept` 里合法，
+> 当成响应类型是无效值；它走独立 REST PUT 不经过 `s3_put_object`，所以逃过了 issue #4 那轮统一修复。
+> 两处都有回归测试钉住：`webdav_put_sends_content_type_from_shared_table`（拿 `.jfif` 当判据，
+> 因为它正是「手写表答不出、共用表答得出」的那一类）与 `upload_paths_never_send_hardcoded_image_content_type`。
 
 `s3_put_object` 的 `content_type` 是**显式形参**，不是函数内部推断出来的。这样新增调用方时编译器会强制它给出类型——issue #4 的成因正是这个参数当初不存在，2026-08-13 只修了 GUI 一侧，编辑器链路又漏了 5 天。
 
