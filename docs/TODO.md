@@ -111,10 +111,14 @@
 它们处于无校验状态——包括 `safeImageUrl` 本会拦掉的链路本地 / 云元数据地址
 （`169.254.169.254` 那一类）。
 
-难点在于不能简单加过滤：`useThumbCache.getMetaThumbnailCandidates` 有明确的
-**引用稳定性契约**（同一 meta + 同一配置指纹 → 必须返回同一个数组引用），
-过滤会产生新数组、破坏契约，触发的正是 `37886c36` 刚修过的"链更新导致假失败/骨架卡住"那类 bug。
-可行方向：按输入数组身份做 WeakMap 记忆化，保证同一输入返回同一输出数组。
+**⚠️ 先纠正一处初判失误**：本条最初写着"过滤会破坏引用稳定性契约、需要 WeakMap 记忆化"，
+**这是错的**。引用稳定性契约属于上游缓存 `useThumbCache.getMetaThumbnailCandidates`；
+而 `useThumbnailFallbackChain` 的 `watch` 用的是 `hasUrlListChanged`（**逐项比内容**，
+不比引用——因为队列项的候选本来就每次现算新数组）。所以过滤产生新数组**不会**触发重置。
+
+实际改动因此小得多：在 `useThumbnailFallbackChain` 里把 `options.urls()` 的结果过一遍
+`safeImageUrl` 即可。代价只是 `watch` 的 getter 每次返回新引用、回调多跑几次，
+真正的重置仍由 `hasUrlListChanged` 挡着，无正确性风险。
 
 ### [ ] 设置页编辑时的 `config-updated` 广播过于频繁，消费方全量重算
 

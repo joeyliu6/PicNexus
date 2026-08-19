@@ -98,11 +98,11 @@
 放开 CSP 之前，这两个视图的明文 HTTP 图片是被 CSP 顺带挡住的；放开之后，
 它们处于**无校验状态**——包括 `safeImageUrl` 本会拦掉的链路本地 / 云元数据地址。
 
-没有一并修的原因：统一这道闸要改缩略图候选链，而那里有明确的**引用稳定性契约**
-（`useThumbCache.getMetaThumbnailCandidates` 的注释：同一 meta + 同一配置指纹必须返回
-同一个数组引用），过滤会产生新数组、破坏契约，触发的正是
-`37886c36 fix(thumbnail): stop false failure reports and stuck skeletons on chain updates`
-刚修过的那类 bug。
+当时没一并修的理由是"过滤会破坏候选链的引用稳定性契约"——**这个理由后来查实是错的**。
+引用稳定性契约属于上游缓存 `useThumbCache.getMetaThumbnailCandidates`；
+`useThumbnailFallbackChain` 的 `watch` 用的是 `hasUrlListChanged`，**逐项比内容不比引用**
+（正因为队列项的候选每次都是现算的新数组）。所以加过滤不会触发重置，
+改动量远小于当时的判断。已在 `docs/TODO.md` 更正。
 
 **已记入 `docs/TODO.md`。** 不要因为 `getConfirmedHttpHosts` 存在就以为全应用都拦住了。
 
