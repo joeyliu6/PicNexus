@@ -3,7 +3,10 @@ import {
   assertAllowedExternalUrl,
   assertAllowedWebDAVUrl,
   assertAllowedWebDAVStorageUrl,
+  getConfirmedHttpHosts,
+  getConfirmedS3HttpHosts,
   getConfirmedWebdavHttpHosts,
+  isHttpDomainConfirmed,
   isFakeIpPoolHost,
   isLoopbackHost,
   normalizeHost,
@@ -186,5 +189,74 @@ describe('networkPolicy', () => {
 
     expect(getConfirmedWebdavHttpHosts(undefined).size).toBe(0);
     expect(getConfirmedWebdavHttpHosts([]).size).toBe(0);
+  });
+});
+
+// 明文 HTTP 公开域名的确认机制（2026-08-19）
+//
+// 与 WebDAV 的 lanHttpConfirmed 有个关键差别：这里存的是**主机名**而不是布尔值，
+// 所以"改了域名确认就失效"是判据本身保证的，不靠额外的作废逻辑。
+describe('networkPolicy · 明文 HTTP 公开域名确认', () => {
+  it('确认只对同一个主机名生效，换域名即失效', () => {
+    const cfg = { httpDomainConfirmedFor: 'cdn.example.com' };
+
+    expect(isHttpDomainConfirmed(cfg, 'http://cdn.example.com')).toBe(true);
+    // 大小写、端口、路径都不影响判据
+    expect(isHttpDomainConfirmed(cfg, 'http://CDN.Example.com:8080/img/')).toBe(true);
+
+    // 反向判据：确认了 A 不等于放行 B。存布尔值的实现会在这里放行
+    expect(isHttpDomainConfirmed(cfg, 'http://other.example.com')).toBe(false);
+    // 没确认过
+    expect(isHttpDomainConfirmed({}, 'http://cdn.example.com')).toBe(false);
+    // HTTPS 不需要确认，这里一律回 false（判的是"要不要放行明文"）
+    expect(isHttpDomainConfirmed(cfg, 'https://cdn.example.com')).toBe(false);
+    // 垃圾输入不抛错
+    expect(isHttpDomainConfirmed(cfg, 'not a url')).toBe(false);
+    expect(isHttpDomainConfirmed(cfg, '')).toBe(false);
+  });
+
+  it('未确认的明文 HTTP 公开域名仍然被拒，确认后才放行', () => {
+    expect(() => assertAllowedExternalUrl('http://cdn.example.com', { label: '公开访问域名' }))
+      .toThrow();
+
+    expect(() => assertAllowedExternalUrl('http://cdn.example.com', {
+      label: '公开访问域名',
+      allowConfirmedHttp: true,
+    })).not.toThrow();
+  });
+
+  it('确认过的域名不能给链路本地 / 云元数据地址开后门', () => {
+    // allowConfirmedHttp 是给公开域名用的；云元数据这类地址不该因为"用户点过确认"就放行
+    const hosts = getConfirmedS3HttpHosts([
+      { publicDomain: 'http://169.254.169.254', httpDomainConfirmedFor: '169.254.169.254' },
+    ]);
+    expect(safeImageUrl('http://169.254.169.254/latest', hosts)).toBeUndefined();
+  });
+
+  it('S3 系与 WebDAV 的已确认主机名会合并到同一份名单', () => {
+    const hosts = getConfirmedHttpHosts({
+      services: {
+        upyun: { publicDomain: 'http://IMG.upcdn.net', httpDomainConfirmedFor: 'img.upcdn.net' },
+        // 确认过但域名已改：失配，不该收进来
+        r2: { publicDomain: 'http://new.example.com', httpDomainConfirmedFor: 'old.example.com' },
+        // 没确认过
+        qiniu: { publicDomain: 'http://plain.example.com' },
+      },
+      custom_s3_profiles: [
+        { id: 'p1', publicDomain: 'http://minio.example.com', httpDomainConfirmedFor: 'minio.example.com' },
+      ],
+      webdav_profiles: [
+        makeWebdavProfile({ lanHttpConfirmed: true, publicDomain: 'http://nas.local:5005' }),
+      ],
+    } as never);
+
+    expect(hosts.has('img.upcdn.net')).toBe(true);
+    expect(hosts.has('minio.example.com')).toBe(true);
+    expect(hosts.has('nas.local')).toBe(true);
+    expect(hosts.has('new.example.com')).toBe(false);
+    expect(hosts.has('plain.example.com')).toBe(false);
+    expect(hosts.size).toBe(3);
+
+    expect(getConfirmedHttpHosts(null).size).toBe(0);
   });
 });

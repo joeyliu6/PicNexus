@@ -1,4 +1,7 @@
-import type { WebDAVStorageProfile } from '../config/types';
+import type { CustomS3Profile, HttpDomainConfirmable, WebDAVStorageProfile } from '../config/types';
+
+/** 内置的 S3 系图床（都有 publicDomain，都适用明文 HTTP 确认） */
+const S3_BUILTIN_SERVICE_IDS = ['r2', 'tencent', 'aliyun', 'qiniu', 'upyun'] as const;
 
 const EXTERNAL_HTTP_DISABLED_MESSAGE =
   '外部 HTTP 地址已禁用，请改用 HTTPS。本机服务仅支持 http://localhost 或 http://127.0.0.1。';
@@ -40,6 +43,18 @@ export interface NetworkPolicyOptions {
    * 仅供 WebDAV 图床使用；备份 WebDAV 继续在前端拒绝主机名 HTTP。
    */
   allowHostnameHttp?: boolean;
+  /**
+   * 用户已显式确认这个公开域名可以走明文 HTTP（见 {@link HttpDomainConfirmable}）
+   *
+   * 与 `allowPrivateHttp` 是两回事：那个放开的是"局域网地址"，本项放开的是
+   * **公网明文 HTTP**——正是 WebDAV 逃生舱当初明确拒绝的那一档
+   * （见 `docs/audits/webdav-digest-and-lan-http-escape-hatch-acceptance.md` 第 5 条）。
+   *
+   * 之所以现在开这一档：又拍云一类图床根本给不出 HTTPS（免费测试域名只有 HTTP，
+   * 要 HTTPS 得绑备案域名），一刀切拒绝等于这些图床整个不可用。
+   * 调用方必须先核对确认的主机名与当前域名一致，别无条件传 true。
+   */
+  allowConfirmedHttp?: boolean;
 }
 
 export function parseHttpUrl(rawUrl: string, label = '地址'): URL {
@@ -71,6 +86,10 @@ export function assertAllowedExternalUrl(rawUrl: string, options: NetworkPolicyO
 
   if (parsed.protocol === 'http:') {
     if (isLoopbackHost(parsed.hostname)) return parsed;
+    // 用户已对这个域名显式担责过。放在私网判断之前：确认的是具体域名，
+    // 跟它解析到公网还是内网无关——正因为解析结果不可信（TUN fake-ip 会把
+    // 任意域名塞进 198.18/15），才需要人来拍板。
+    if (options.allowConfirmedHttp) return parsed;
     if (allowPrivate) {
       // 前端无法解析 DNS，主机名 HTTP 先放行，由 Rust 侧解析后做最终裁决。
       const host = normalizeHost(parsed.hostname);
@@ -120,6 +139,74 @@ export function getConfirmedWebdavHttpHosts(
       if (url.protocol === 'http:') hosts.add(normalizeHost(url.hostname));
     } catch {
       // 域名格式不合法：交给设置页的校验去报错，这里跳过即可
+    }
+  }
+  return hosts;
+}
+
+/**
+ * 汇总全部已确认可走明文 HTTP 的公开域名主机名（WebDAV + S3 系）
+ *
+ * 供 {@link safeImageUrl} 的调用方一次拿全，省得每个视图各收集一遍、漏一类就少放行一批图。
+ *
+ * ⚠️ **这不是应用内唯一的图片闸门**：收藏页与时间轴走
+ * `useThumbnailFallbackChain`，不经过 `safeImageUrl`，因此本函数管不到它们。
+ * 2026-08-19 给 CSP 的 `img-src` 放开 `http:` 之后，那两个视图对明文 HTTP 图片
+ * 处于无校验状态。统一这道闸需要改缩略图候选链（有引用稳定性契约，见 useThumbCache），
+ * 已记入 `docs/TODO.md`，不要以为这里拦住了就万事大吉。
+ */
+export function getConfirmedHttpHosts(config: {
+  services?: Record<string, unknown> | undefined;
+  custom_s3_profiles?: readonly CustomS3Profile[] | undefined;
+  webdav_profiles?: readonly WebDAVStorageProfile[] | undefined;
+} | null | undefined): Set<string> {
+  const s3Entries = [
+    ...S3_BUILTIN_SERVICE_IDS.map((id) => config?.services?.[id]),
+    ...(config?.custom_s3_profiles ?? []),
+  ].filter(Boolean) as ({ publicDomain?: string } & HttpDomainConfirmable)[];
+
+  const hosts = getConfirmedS3HttpHosts(s3Entries);
+  for (const host of getConfirmedWebdavHttpHosts(config?.webdav_profiles)) hosts.add(host);
+  return hosts;
+}
+
+/**
+ * 判断某个配置对当前公开域名的明文 HTTP 确认是否仍然有效
+ *
+ * 确认存的是**主机名**而不是布尔值，所以域名一改就自然失配、确认自动失效，
+ * 不需要在每个能改域名的地方补作废逻辑。
+ */
+export function isHttpDomainConfirmed(
+  config: HttpDomainConfirmable | null | undefined,
+  publicDomain: string | null | undefined,
+): boolean {
+  const confirmed = config?.httpDomainConfirmedFor;
+  if (!confirmed || !publicDomain) return false;
+  try {
+    const url = new URL(publicDomain.trim());
+    if (url.protocol !== 'http:') return false;
+    return normalizeHost(url.hostname) === normalizeHost(confirmed);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 收集 S3 系图床里已确认可走明文 HTTP 的公开域名主机名
+ *
+ * 与 {@link getConfirmedWebdavHttpHosts} 同一用途、同一去处（{@link safeImageUrl}），
+ * 只是数据来源不同：这边是内置的 5 个私有存储 + 自定义 S3 profile。
+ */
+export function getConfirmedS3HttpHosts(
+  entries: readonly ({ publicDomain?: string } & HttpDomainConfirmable)[] | undefined,
+): Set<string> {
+  const hosts = new Set<string>();
+  for (const entry of entries ?? []) {
+    if (!isHttpDomainConfirmed(entry, entry?.publicDomain)) continue;
+    try {
+      hosts.add(normalizeHost(new URL(entry.publicDomain!.trim()).hostname));
+    } catch {
+      // isHttpDomainConfirmed 已经解析过一次，走到这里说明并发改了值，跳过即可
     }
   }
   return hosts;
