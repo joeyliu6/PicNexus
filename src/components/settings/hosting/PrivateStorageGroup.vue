@@ -29,7 +29,10 @@ interface FieldConfig {
   label: string;
   type: 'text' | 'password';
   placeholder?: string;
+  /** 字段下方常驻显示的说明。短句用它 */
   hint?: string;
+  /** 收进 label 右侧图标、hover 才展开的说明。三行以上的长说明用它，避免挤开后面的字段 */
+  hintTooltip?: string;
   spanFull?: boolean;
 }
 
@@ -96,7 +99,7 @@ const PRIVATE_SERVICES: ServiceConfig[] = [
     fields: [
       { key: 'operator', label: 'Operator', type: 'password', placeholder: '操作员账号' },
       { key: 'password', label: 'Password', type: 'password', placeholder: '操作员密码' },
-      { key: 's3AccessKey', label: 'S3 AccessKey', type: 'password', placeholder: '控制台单独生成，非操作员账号', hint: '又拍云的 S3 凭证与上面的操作员账号密码是两回事，需在控制台「操作员授权 → S3 访问凭证」单独获取。软件内上传用这一对，Typora / Obsidian 用上面那一对。' },
+      { key: 's3AccessKey', label: 'S3 AccessKey', type: 'password', placeholder: '控制台单独生成，非操作员账号', hintTooltip: '又拍云的 S3 凭证与上面的操作员账号密码是两回事，需在控制台「操作员授权 → S3 访问凭证」单独获取。软件内上传用这一对，Typora / Obsidian 用上面那一对。' },
       { key: 's3SecretKey', label: 'S3 SecretKey', type: 'password', placeholder: '控制台单独生成，非操作员密码' },
       { key: 'bucket', label: '存储桶 (Bucket)', type: 'text', spanFull: true },
       { key: 'publicDomain', label: '公开访问域名 (Public Domain)', type: 'text', placeholder: 'https://images.example.com', spanFull: true, hint: '公开图片链接仅支持 HTTPS' },
@@ -338,6 +341,13 @@ const secrets = useSensitiveDraft({
             >
               <i class="pi pi-check" aria-hidden="true"></i>{{ secrets.chipLabel(builtinKey(svc.id, field.key)) }}
             </span>
+            <i
+              v-if="field.hintTooltip"
+              class="pi pi-info-circle field-info-icon"
+              v-tooltip.top="field.hintTooltip"
+              :aria-label="field.hintTooltip"
+              tabindex="0"
+            ></i>
           </label>
           <SensitiveField
             v-if="field.type === 'password'"
@@ -392,6 +402,13 @@ const secrets = useSensitiveDraft({
             >
               <i class="pi pi-check" aria-hidden="true"></i>{{ secrets.chipLabel(customS3Key(profile.id, field.key)) }}
             </span>
+            <i
+              v-if="field.hintTooltip"
+              class="pi pi-info-circle field-info-icon"
+              v-tooltip.top="field.hintTooltip"
+              :aria-label="field.hintTooltip"
+              tabindex="0"
+            ></i>
           </label>
           <SensitiveField
             v-if="field.type === 'password'"
@@ -446,6 +463,13 @@ const secrets = useSensitiveDraft({
             >
               <i class="pi pi-check" aria-hidden="true"></i>{{ secrets.chipLabel(webdavKey(profile.id)) }}
             </span>
+            <i
+              v-if="field.hintTooltip"
+              class="pi pi-info-circle field-info-icon"
+              v-tooltip.top="field.hintTooltip"
+              :aria-label="field.hintTooltip"
+              tabindex="0"
+            ></i>
           </label>
           <SensitiveField
             v-if="field.key === 'password'"

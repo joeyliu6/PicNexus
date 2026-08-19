@@ -43,7 +43,7 @@ function makePrivateFormData() {
     tencent: { secretId: '', secretKey: '', region: '', bucket: '', path: '', publicDomain: '' },
     aliyun: { accessKeyId: '', accessKeySecret: '', region: '', bucket: '', path: '', publicDomain: '' },
     qiniu: { accessKey: '', secretKey: '', region: '', bucket: '', publicDomain: '', path: '' },
-    upyun: { operator: '', password: '', bucket: '', publicDomain: '', path: '' },
+    upyun: { operator: '', password: '', bucket: '', publicDomain: '', path: '', s3AccessKey: '', s3SecretKey: '' },
   };
 }
 
@@ -377,5 +377,39 @@ describe('PrivateStorageGroup · 自定义 S3 密钥', () => {
     await nextTick();
 
     expect(secondKey.props('modelValue')).toBe('');
+  });
+});
+
+// 又拍云的 S3 凭证说明有四行，摊在字段下方会把后面的字段挤开，
+// 且紧贴着下一个 label，容易被读成下一个字段的说明——所以收进 label 右侧的图标。
+describe('PrivateStorageGroup · 长说明收进 label 图标', () => {
+  function upyunCard() {
+    const { wrapper } = mountGroup();
+    const card = wrapper.findAll('.hosting-card').find(c => c.attributes('data-id') === 'upyun');
+    if (!card) throw new Error('没找到又拍云卡片');
+    return card;
+  }
+
+  it('S3 AccessKey 的长说明挂在图标的 tooltip 上', () => {
+    const icon = upyunCard().find('.field-info-icon');
+
+    expect(icon.exists()).toBe(true);
+    expect(icon.attributes('data-tooltip')).toContain('与上面的操作员账号密码是两回事');
+    // 说明同时进 aria-label，否则读屏用户拿不到这段信息
+    expect(icon.attributes('aria-label')).toContain('与上面的操作员账号密码是两回事');
+    // 可聚焦，键盘用户才触发得了 tooltip
+    expect(icon.attributes('tabindex')).toBe('0');
+  });
+
+  it('同一段说明不再留在字段下方', () => {
+    const texts = upyunCard().findAll('.field-hint').map(h => h.text());
+
+    expect(texts.some(t => t.includes('与上面的操作员账号密码是两回事'))).toBe(false);
+  });
+
+  it('短说明仍然常驻显示，没被一起藏起来', () => {
+    const texts = upyunCard().findAll('.field-hint').map(h => h.text());
+
+    expect(texts.some(t => t.includes('公开图片链接仅支持 HTTPS'))).toBe(true);
   });
 });
