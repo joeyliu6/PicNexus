@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
+import type { VueWrapper } from '@vue/test-utils';
 import { mountWithDefaults } from '../helpers/vueMount';
 import TimelineView from '@/components/views/TimelineView.vue';
 import TimelinePhotoItem from '@/components/views/timeline/TimelinePhotoItem.vue';
@@ -28,6 +29,7 @@ const timelineFns = vi.hoisted(() => ({
   handleImageHover: vi.fn(),
   onImageLoad: vi.fn(),
   onImageError: vi.fn(),
+  clearFailed: vi.fn(),
   handleLightboxNavigate: vi.fn(),
   handleLightboxDelete: vi.fn(),
 }));
@@ -76,6 +78,12 @@ const timelineRefs = vi.hoisted(() => ({
     hasPrev: { value: boolean };
     hasNext: { value: boolean };
   },
+  config: null as null | { value: Record<string, unknown> },
+}));
+
+/** 配置基线：不含任何「已确认的明文 HTTP 域名」，即缩略图闸门处于最严格状态 */
+const BASE_CONFIG = vi.hoisted(() => ({
+  linkOutput: { defaultFormat: 'url', customTemplate: '', autoCopy: false },
 }));
 
 vi.mock('@/composables/timeline/useTimelineDayPagination', async () => {
@@ -144,6 +152,7 @@ vi.mock('@/composables/useImageLoadManager', async () => {
       onImageLoad: timelineFns.onImageLoad,
       onImageError: timelineFns.onImageError,
       isImageLoaded: (id: string) => timelineRefs.imageLoad!.loadedImages.value.has(id),
+      clearFailed: timelineFns.clearFailed,
       clearAll: vi.fn(),
     }),
   };
@@ -269,12 +278,9 @@ vi.mock('@/composables/useHistory', async () => {
 
 vi.mock('@/composables/useConfig', async () => {
   const { ref } = await import('vue');
+  timelineRefs.config = ref<Record<string, unknown>>({ ...BASE_CONFIG });
   return {
-    useConfigManager: () => ({
-      config: ref({
-        linkOutput: { defaultFormat: 'url', customTemplate: '', autoCopy: false },
-      }),
-    }),
+    useConfigManager: () => ({ config: timelineRefs.config! }),
   };
 });
 
@@ -325,7 +331,7 @@ function group(items: ImageMeta[]): PhotoGroup {
 }
 
 function mountTimelineView(props = {}) {
-  return mountWithDefaults(TimelineView, {
+  return track(mountWithDefaults(TimelineView, {
     props: {
       filter: 'all',
       searchTerm: '',
@@ -366,34 +372,63 @@ function mountTimelineView(props = {}) {
         TimelineIndicator: { template: '<section class="timeline-indicator-stub" />' },
       },
     },
-  });
+  }));
 }
 
-describe('TimelineView P1 coverage', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    timelineRefs.pagination!.groups.value = [];
-    timelineRefs.pagination!.dayStats.value = [];
-    timelineRefs.pagination!.loadedDayKeys.value = new Set();
-    timelineRefs.pagination!.totalCount.value = 0;
-    timelineRefs.pagination!.isLoadingStats.value = false;
-    timelineRefs.virtual!.visibleItems.value = [];
-    timelineRefs.virtual!.visibleSkeletonSlots.value = [];
-    timelineRefs.virtual!.visibleHeaders.value = [];
-    timelineRefs.virtual!.fastModeItems.value = [];
-    timelineRefs.virtual!.displayMode.value = 'normal';
-    timelineRefs.imageLoad!.loadedImages.value = new Set();
+/**
+ * 把所有共享 mock 打回初始状态
+ *
+ * 提成函数供多个 describe 复用：这些 ref 是模块级的，一个 describe 里改过的
+ * visibleItems / config 会原样漏进下一个 describe，症状是"单跑绿、连跑红"。
+ */
+function resetMocks(): void {
+  vi.clearAllMocks();
+  timelineFns.clearFailed.mockImplementation(() => {
     timelineRefs.imageLoad!.failedImages.value = new Set();
-    timelineRefs.viewState!.selectedIdList.value = [];
-    timelineRefs.viewState!.hasSelection.value = false;
-    timelineRefs.history!.favoriteSet.value = new Set();
-    timelineRefs.history!.isStatsLoaded.value = false;
-    timelineRefs.history!.totalCount.value = 0;
-    timelineRefs.lightbox!.visible.value = false;
-    timelineRefs.lightbox!.item.value = null;
-    timelineRefs.lightbox!.hasPrev.value = false;
-    timelineRefs.lightbox!.hasNext.value = false;
   });
+  timelineRefs.pagination!.groups.value = [];
+  timelineRefs.pagination!.dayStats.value = [];
+  timelineRefs.pagination!.loadedDayKeys.value = new Set();
+  timelineRefs.pagination!.totalCount.value = 0;
+  timelineRefs.pagination!.isLoadingStats.value = false;
+  timelineRefs.virtual!.visibleItems.value = [];
+  timelineRefs.virtual!.visibleSkeletonSlots.value = [];
+  timelineRefs.virtual!.visibleHeaders.value = [];
+  timelineRefs.virtual!.fastModeItems.value = [];
+  timelineRefs.virtual!.displayMode.value = 'normal';
+  timelineRefs.imageLoad!.loadedImages.value = new Set();
+  timelineRefs.imageLoad!.failedImages.value = new Set();
+  timelineRefs.viewState!.selectedIdList.value = [];
+  timelineRefs.viewState!.hasSelection.value = false;
+  timelineRefs.history!.favoriteSet.value = new Set();
+  timelineRefs.history!.isStatsLoaded.value = false;
+  timelineRefs.history!.totalCount.value = 0;
+  timelineRefs.lightbox!.visible.value = false;
+  timelineRefs.lightbox!.item.value = null;
+  timelineRefs.lightbox!.hasPrev.value = false;
+  timelineRefs.lightbox!.hasNext.value = false;
+  timelineRefs.config!.value = { ...BASE_CONFIG };
+}
+
+const mountedWrappers: VueWrapper[] = [];
+
+/**
+ * 记下挂载出来的组件，供 afterEach 统一卸载
+ *
+ * VTU 不会自动卸载。留着的旧 wrapper 仍然订阅着模块级的 mock ref，下一个用例改这些 ref
+ * 时它会跟着重渲染并回调 mock，把断言算到别的用例头上。
+ */
+function track(wrapper: VueWrapper): VueWrapper {
+  mountedWrappers.push(wrapper);
+  return wrapper;
+}
+
+afterEach(() => {
+  for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount();
+});
+
+describe('TimelineView P1 coverage', () => {
+  beforeEach(resetMocks);
 
   it('loads time stats and renders the empty timeline state', () => {
     const wrapper = mountTimelineView({ favoritesOnly: true });
@@ -500,7 +535,7 @@ describe('TimelinePhotoItem fallback and interaction states', () => {
   const item = meta({ id: 'photo-item' });
 
   it('tries fallback thumbnails before emitting image-error', async () => {
-    const wrapper = mountWithDefaults(TimelinePhotoItem, {
+    const wrapper = track(mountWithDefaults(TimelinePhotoItem, {
       props: {
         meta: item,
         x: 1,
@@ -515,7 +550,7 @@ describe('TimelinePhotoItem fallback and interaction states', () => {
         displayMode: 'normal',
         thumbnailUrls: ['https://primary.example.com/a.jpg', 'https://mirror.example.com/a.jpg'],
       },
-    });
+    }));
 
     expect(wrapper.get('img').attributes('src')).toBe('https://primary.example.com/a.jpg');
 
@@ -531,7 +566,7 @@ describe('TimelinePhotoItem fallback and interaction states', () => {
   });
 
   it('does not restart fallback when parent re-renders with equal thumbnail URLs', async () => {
-    const wrapper = mountWithDefaults(TimelinePhotoItem, {
+    const wrapper = track(mountWithDefaults(TimelinePhotoItem, {
       props: {
         meta: item,
         x: 1,
@@ -546,7 +581,7 @@ describe('TimelinePhotoItem fallback and interaction states', () => {
         displayMode: 'normal',
         thumbnailUrls: ['https://primary.example.com/a.jpg', 'https://mirror.example.com/a.jpg'],
       },
-    });
+    }));
 
     await wrapper.get('img').trigger('error');
     await nextTick();
@@ -561,7 +596,7 @@ describe('TimelinePhotoItem fallback and interaction states', () => {
   });
 
   it('uses selection mode clicks and exposes the magnifier lightbox path', async () => {
-    const wrapper = mountWithDefaults(TimelinePhotoItem, {
+    const wrapper = track(mountWithDefaults(TimelinePhotoItem, {
       props: {
         meta: item,
         x: 0,
@@ -576,7 +611,7 @@ describe('TimelinePhotoItem fallback and interaction states', () => {
         displayMode: 'normal',
         thumbnailUrls: ['https://primary.example.com/a.jpg'],
       },
-    });
+    }));
 
     await wrapper.get('.photo-wrapper').trigger('click');
     await wrapper.get('.magnifier-btn').trigger('click');
@@ -588,5 +623,135 @@ describe('TimelinePhotoItem fallback and interaction states', () => {
     expect(wrapper.emitted('toggle-favorite')).toHaveLength(1);
     expect(wrapper.emitted('image-load')).toHaveLength(1);
     expect(wrapper.get('.photo-item').classes()).toContain('selected');
+  });
+});
+
+// 2026-08-19 CSP 的 `img-src` 放开 `http:` 之后，时间轴原本一道 URL 闸都没有。
+// 这组断言候选链的安全过滤确实生效，且配置里的「已确认域名」能一路传到格子里。
+describe('TimelinePhotoItem 缩略图安全闸门', () => {
+  const item = meta({ id: 'photo-gate' });
+
+  function itemProps(overrides: Record<string, unknown> = {}) {
+    return {
+      meta: item,
+      x: 0,
+      y: 0,
+      width: 120,
+      height: 90,
+      isSelected: false,
+      isFavorited: false,
+      isLoaded: false,
+      isFailed: false,
+      hasSelection: false,
+      displayMode: 'normal' as const,
+      thumbnailUrls: ['https://primary.example.com/a.jpg'],
+      ...overrides,
+    };
+  }
+
+  beforeEach(resetMocks);
+
+  it('云元数据地址被剔除，直接落到后面的安全候选', () => {
+    const wrapper = track(mountWithDefaults(TimelinePhotoItem, {
+      props: itemProps({
+        thumbnailUrls: ['http://169.254.169.254/latest/meta-data/a.jpg', 'https://mirror.example.com/a.jpg'],
+      }),
+    }));
+
+    expect(wrapper.get('img').attributes('src')).toBe('https://mirror.example.com/a.jpg');
+  });
+
+  // event 缺省是这条路径的常态（没有真实的 `<img>` error 事件）。
+  // 消费方 useImageLoadManager.onImageError 必须扛得住，否则整格卡在骨架屏上。
+  it('候选全被过滤 → 报 image-error（event 为空），不卡在骨架屏', () => {
+    const wrapper = track(mountWithDefaults(TimelinePhotoItem, {
+      props: itemProps({ thumbnailUrls: ['http://169.254.169.254/a.jpg'] }),
+    }));
+
+    expect(wrapper.find('img').exists()).toBe(false);
+    expect(wrapper.emitted('image-error')).toEqual([[undefined]]);
+  });
+
+  it('confirmedHttpHosts 里的明文 HTTP 域名照常显示', () => {
+    const wrapper = track(mountWithDefaults(TimelinePhotoItem, {
+      props: itemProps({
+        thumbnailUrls: ['http://img.example.test/a.jpg'],
+        confirmedHttpHosts: new Set(['img.example.test']),
+      }),
+    }));
+
+    expect(wrapper.get('img').attributes('src')).toBe('http://img.example.test/a.jpg');
+  });
+});
+
+// 光测组件不够：确认状态存在配置里，得由 TimelineView 取出来、经 TimelinePhotoGrid 传下去。
+// 这两条覆盖那段接线——断了的话已确认的 HTTP 图床在时间轴里会整片裂图。
+describe('TimelineView 把已确认的 HTTP 主机名传给格子', () => {
+  const httpMeta = meta({
+    id: 'time-http',
+    primaryUrl: 'http://img.example.test/time-http.jpg',
+    mirrorServices: [{ serviceId: 'jd', url: 'http://img.example.test/time-http.jpg' }],
+  });
+
+  beforeEach(() => {
+    resetMocks();
+    timelineRefs.pagination!.groups.value = [group([httpMeta])];
+    timelineRefs.pagination!.dayStats.value = [{ year: 2024, month: 0, count: 1, minTimestamp: 1, maxTimestamp: 2 }];
+    timelineRefs.pagination!.totalCount.value = 1;
+    timelineRefs.virtual!.visibleItems.value = [{ meta: httpMeta, x: 0, y: 36, width: 120, height: 90, groupId: '2024-0-2' }];
+    timelineRefs.virtual!.visibleHeaders.value = [{ groupId: '2024-0-2', label: '2024-01-02', y: 0, height: 36 }];
+  });
+
+  it('配置里没确认过 → 明文 HTTP 缩略图被拦下', () => {
+    const wrapper = mountTimelineView();
+
+    expect(wrapper.find('.photo-item').exists()).toBe(true);
+    expect(wrapper.find('.photo-item img').exists()).toBe(false);
+  });
+
+  it('配置里确认过 → 同一张图正常显示', () => {
+    timelineRefs.config!.value = {
+      ...BASE_CONFIG,
+      custom_s3_profiles: [
+        { publicDomain: 'http://img.example.test', httpDomainConfirmedFor: 'img.example.test' },
+      ],
+    };
+
+    const wrapper = mountTimelineView();
+
+    expect(wrapper.get('.photo-item img').attributes('src')).toBe('http://img.example.test/time-http.jpg');
+  });
+
+  // 用户先看图（被判失败）、后去设置页确认，回来就该自己恢复，不用重启。
+  // 失败态记在 useImageLoadManager 里，候选链够不着，只能由本视图撤销。
+  it('看过之后才确认 → 撤销失败态，图自己恢复', async () => {
+    timelineRefs.imageLoad!.failedImages.value = new Set(['time-http']);
+
+    const wrapper = mountTimelineView();
+    expect(wrapper.find('.photo-item img').exists()).toBe(false);
+
+    timelineRefs.config!.value = {
+      ...BASE_CONFIG,
+      custom_s3_profiles: [
+        { publicDomain: 'http://img.example.test', httpDomainConfirmedFor: 'img.example.test' },
+      ],
+    };
+    await nextTick();
+
+    expect(timelineFns.clearFailed).toHaveBeenCalledTimes(1);
+    expect(wrapper.get('.photo-item img').attributes('src')).toBe('http://img.example.test/time-http.jpg');
+  });
+
+  // 反向判据：配置存一次就重试一轮死图是纯浪费——设置页填一个 profile 能存 26 次。
+  it('配置变了但名单内容没变 → 不动失败态', async () => {
+    timelineRefs.imageLoad!.failedImages.value = new Set(['time-http']);
+
+    const wrapper = mountTimelineView();
+
+    timelineRefs.config!.value = { ...BASE_CONFIG, linkOutput: { defaultFormat: 'markdown' } };
+    await nextTick();
+
+    expect(timelineFns.clearFailed).not.toHaveBeenCalled();
+    expect(wrapper.find('.photo-item img').exists()).toBe(false);
   });
 });

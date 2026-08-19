@@ -6,10 +6,13 @@ import { hasUrlListChanged } from '../../composables/useThumbnailFallbackChain';
 
 /**
  * Why 这里没复用 useThumbnailFallbackChain（时间轴/收藏页共用的那个）：
- * 本组件的候选要先过 `safeImageUrl` 安全过滤，被拒时得立刻跳下一条——这是那个
- * composable 没有的一层；而且它带 `loading="lazy"`，"是否在等加载"必须靠
- * IntersectionObserver 判断，而非由父组件传状态。强行合并会把两套判据都拧变形。
- * 三处的候选链语义一致（按序试、失败翻页、超时兜底、回报降级），改动请同步。
+ * 本组件自持 loading/error 状态，且带 `loading="lazy"`，"是否在等加载"必须靠自己的
+ * IntersectionObserver 判断，而非由父组件传状态；还多一条「要加载的就是已经显示出来
+ * 的那张」的短路（见 loadImage）。强行合并会把两套判据都拧变形。
+ *
+ * 安全过滤这一层现在两边都有了（2026-08-19 补上收藏页/时间轴那道闸时统一的），
+ * 只是位置不同：那边在候选链入口一次性剔除，这边是翻到哪条过哪条。
+ * 三处的候选链语义一致（安全过滤、按序试、失败翻页、超时兜底、回报降级），改动请同步。
  */
 
 /**

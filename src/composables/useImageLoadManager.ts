@@ -90,12 +90,16 @@ export function useImageLoadManager(
 
   /**
    * 图片加载失败处理（带重试）
+   *
+   * `event` 可缺省：候选链的超时兜底、以及候选被安全过滤清空这两条路径都没有真实的
+   * `<img>` error 事件。这时**没有可重设 src 的元素**，重试无从谈起，直接判失败——
+   * 否则 `event.target` 会当场抛 TypeError，整格卡在骨架屏上。
    */
-  function onImageError(event: Event, id: string) {
-    const img = event.target as HTMLImageElement;
+  function onImageError(event: Event | undefined, id: string) {
+    const img = event?.target as HTMLImageElement | undefined;
     const currentRetry = imageRetryCount.get(id) || 0;
 
-    if (currentRetry < maxRetry) {
+    if (img && currentRetry < maxRetry) {
       imageRetryCount.set(id, currentRetry + 1);
       const originalSrc = img.src;
       // 离屏预加载的 Image 对象不在 DOM 中，重试始终安全
@@ -192,6 +196,21 @@ export function useImageLoadManager(
   }
 
   /**
+   * 只撤销「失败」状态，保留已加载缓存
+   *
+   * 供「判失败的前提变了」这类场景用：用户在设置页确认了某个明文 HTTP 域名之后，
+   * 之前因为没确认而被候选链过滤掉、进而判失败的图应该自己恢复，而不是等重启。
+   *
+   * 重试计数一并清掉——不清的话这些图的重试额度还停在上一轮用光的状态，
+   * 刚放回来又一次失败就直接判死，等于没给第二次机会。
+   * 已加载的缓存不动：那些图没出过问题，没必要跟着重来一遍。
+   */
+  function clearFailed() {
+    failedImages.value = new Set();
+    imageRetryCount.clear();
+  }
+
+  /**
    * 清空所有加载状态
    */
   function clearAll() {
@@ -217,6 +236,7 @@ export function useImageLoadManager(
     isImageLoaded,
     isImageFailed,
     cleanupExpiredImages,
+    clearFailed,
     clearAll,
   };
 }

@@ -18,6 +18,7 @@ import { useScrollAnchor } from '../../composables/timeline/useScrollAnchor';
 import { useDebouncedTrue } from '../../composables/useDebouncedTrue';
 import { useToast } from '../../composables/useToast';
 import { type ServiceType } from '../../config/types';
+import { confirmedHttpHostsKey, getConfirmedHttpHosts } from '../../security/networkPolicy';
 
 import EmptyState from '../common/EmptyState.vue';
 import TimelineSkeleton from './timeline/TimelineSkeleton.vue';
@@ -43,6 +44,9 @@ const toast = useToast();
 const viewState = useHistoryViewState();
 const historyManager = useHistoryManager();
 const configManager = useConfigManager();
+// 用户显式确认过可走明文 HTTP 的公开域名。整屏算一次往下传：候选链的安全过滤要用它，
+// 不传的话已确认的 HTTP 图床（如又拍云免费测试域名）在时间轴里会被当危险链接挡掉。
+const confirmedHttpHosts = computed(() => getConfirmedHttpHosts(configManager.config.value));
 
 const scrollContainer = ref<HTMLElement | null>(null);
 
@@ -149,8 +153,15 @@ const {
   onImageLoad,
   onImageError,
   isImageLoaded,
+  clearFailed: clearFailedImages,
   clearAll: clearImageLoadState,
 } = useImageLoadManager(visibleItems, { maxCache: 500, destroyDelay: 2500, maxRetry: 1 });
+
+// 用户在设置页刚确认完明文 HTTP 域名 → 之前因为没确认而被候选链过滤掉、进而判失败的
+// 缩略图应该自己恢复，不该等到重启。失败状态记在 useImageLoadManager 里，
+// useThumbnailFallbackChain 够不着（它只管选地址），只能由这里撤销。
+// 盯指纹而非 Set 本身的原因见 confirmedHttpHostsKey。
+watch(() => confirmedHttpHostsKey(confirmedHttpHosts.value), () => clearFailedImages());
 
 const loadedImagesSet = computed(() => new Set(loadedImages.value));
 const failedImagesSet = computed(() => new Set(failedImages.value));
@@ -338,6 +349,7 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
         :failed-images="failedImagesSet"
         :hover-details-map="hoverDetailsMap"
         :get-thumbnail-urls="getThumbnailUrls"
+        :confirmed-http-hosts="confirmedHttpHosts"
         @item-click="openLightbox"
         @item-toggle-select="handleItemToggleSelect"
         @item-toggle-favorite="handleToggleFavorite"

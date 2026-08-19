@@ -89,22 +89,42 @@
 放开前，CSP 是 `safeImageUrl` 之外的第二道网。放开后，明文 HTTP 图片的加载
 只剩 `safeImageUrl` 一道闸。影响面限于"加载一张图"，不涉及执行代码。
 
-### 2. ⚠️ 收藏页与时间轴**没有这道闸**
+### 2. ✅ 收藏页与时间轴的闸门（已补，2026-08-19 当日）
 
-`ThumbnailImage.vue`（历史表格、上传队列）走 `safeImageUrl`，但
-`FavoritePhotoItem.vue` / `TimelinePhotoItem.vue` 走
-`useThumbnailFallbackChain`，**不经过任何 URL 校验**，直接把候选 URL 塞给 `<img>`。
+放开 CSP 后曾有一段时间：`ThumbnailImage.vue`（历史表格、上传队列）走 `safeImageUrl`，但
+`FavoritePhotoItem.vue` / `TimelinePhotoItem.vue` 走 `useThumbnailFallbackChain`，
+**不经过任何 URL 校验**，直接把候选 URL 塞给 `<img>`——包括 `safeImageUrl` 本会拦掉的
+链路本地 / 云元数据地址。放开 CSP 之前这些是被 CSP 顺带挡住的，放开之后就一道闸都没有。
 
-放开 CSP 之前，这两个视图的明文 HTTP 图片是被 CSP 顺带挡住的；放开之后，
-它们处于**无校验状态**——包括 `safeImageUrl` 本会拦掉的链路本地 / 云元数据地址。
-
-当时没一并修的理由是"过滤会破坏候选链的引用稳定性契约"——**这个理由后来查实是错的**。
+当时没一并修的理由是"过滤会破坏候选链的引用稳定性契约"——**这个理由查实是错的**。
 引用稳定性契约属于上游缓存 `useThumbCache.getMetaThumbnailCandidates`；
 `useThumbnailFallbackChain` 的 `watch` 用的是 `hasUrlListChanged`，**逐项比内容不比引用**
 （正因为队列项的候选每次都是现算的新数组）。所以加过滤不会触发重置，
-改动量远小于当时的判断。已在 `docs/TODO.md` 更正。
+改动量远小于当时的判断，**不需要任何记忆化机制**。
 
-**已记入 `docs/TODO.md`。** 不要因为 `getConfirmedHttpHosts` 存在就以为全应用都拦住了。
+**修法**：`useThumbnailFallbackChain` 内部把候选列表过一遍 `safeImageUrl` 得到 `safeUrls`，
+后续的翻页 / 超时 / 长度判断一律以过滤后的列表为准。已确认的明文 HTTP 主机名由
+`FavoritesView` / `TimelineView` 用 `getConfirmedHttpHosts(config)` 算好，
+经 prop 传到格子里（和 `ThumbnailImage` 的 `confirmedHttpHosts` 是同一份数据）。
+
+三处配套细节，改动时别踩掉：
+
+| 细节 | 原因 |
+|------|------|
+| 被过滤的候选**直接从链上剔除**，不进 `pendingFailure` | 它压根没发过请求，当失败证据会把无辜服务判死、整个会话降级成原图直连 |
+| 候选被过滤光时走 `onExhausted`（原始候选非空才算） | 否则 `<img>` 因 `currentSrc` 为空不渲染，永远等不到 error 事件，格子卡在骨架屏 |
+| `useImageLoadManager.onImageError` 容忍 `event` 缺省 | 上一条那条路径没有真实 `<img>` error 事件，`event.target` 会当场抛 TypeError |
+
+**失败态的自愈**：用户「先看图、后确认域名」时，候选会被重新纳入，但两个视图各自记下的
+失败状态（`imageStates` / `failedImages`）候选链够不着，不撤销就要等重启。两个视图因此都
+watch `confirmedHttpHostsKey(...)`——**盯的是名单内容指纹，不是 Set 引用**：配置保存广播
+极其频繁（填一个 S3 profile 会存 26 次）而 `getConfirmedHttpHosts` 每次都产出新 Set，
+按引用比会让每次保存都白重试一轮死图。时间轴侧为此给 `useImageLoadManager` 加了
+`clearFailed()`（只清失败态与重试额度，不动已加载缓存）。
+
+**验证**：`useThumbnailFallbackChain.spec.ts` 12 条 + 两个视图各 7 条（组件 3 + 接线 2 + 自愈 2）
++ `clearFailed` 与名单指纹各 1 条。三轮阴性对照全部生效：撤掉过滤 → 15 条变红；
+撤掉视图的 prop 接线 → 「确认过 → 正常显示」变红；撤掉自愈 watch → 「看过之后才确认」变红。
 
 ## 代码审查补修（2026-08-19）
 

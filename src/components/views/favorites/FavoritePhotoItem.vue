@@ -15,6 +15,13 @@ const props = defineProps<{
   thumbnailUrls: string[];
   imageState: ImageState;
   selected: boolean;
+  /**
+   * 已确认可走明文 HTTP 的主机名（由 FavoritesView 用 getConfirmedHttpHosts 算好传下来）
+   *
+   * Why 不在本组件里自己查配置：一页渲染 80 格，每格各算一次等于每格造一个 Set，
+   * 白白重复 80 遍。同 ThumbnailImage 的同名 prop。
+   */
+  confirmedHttpHosts?: ReadonlySet<string>;
 }>();
 
 const emit = defineEmits<{
@@ -37,6 +44,7 @@ const { currentSrc, handleError, handleLoad } = useThumbnailFallbackChain({
   isWaiting: () => props.imageState !== 'loaded' && props.imageState !== 'failed',
   onExhausted: () => emit('image-state-change', 'failed'),
   elementRef: rootRef,
+  confirmedHttpHosts: () => props.confirmedHttpHosts,
 });
 
 function handleImgError(): void {

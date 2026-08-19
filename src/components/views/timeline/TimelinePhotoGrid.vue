@@ -54,6 +54,8 @@ const props = defineProps<{
   failedImages: Set<string>;
   hoverDetailsMap: Map<string, HistoryItem>;
   getThumbnailUrls: (meta: ImageMeta) => string[];
+  /** 已确认可走明文 HTTP 的主机名，由 TimelineView 算好后整屏共用（见 TimelinePhotoItem 同名 prop） */
+  confirmedHttpHosts?: ReadonlySet<string>;
 }>();
 
 const emit = defineEmits<{
@@ -62,7 +64,8 @@ const emit = defineEmits<{
   (e: 'item-toggle-favorite', id: string): void;
   (e: 'item-hover', meta: ImageMeta): void;
   (e: 'image-load', id: string): void;
-  (e: 'image-error', event: Event, id: string): void;
+  /** event 可缺省，见 TimelinePhotoItem 的同名事件 */
+  (e: 'image-error', event: Event | undefined, id: string): void;
 }>();
 
 const groupMetaMap = computed(() => {
@@ -144,6 +147,7 @@ function getGroupYear(groupId: string): string {
       :is-failed="failedImages.has(visible.meta.id)"
       :display-mode="displayMode"
       :thumbnail-urls="getThumbnailUrls(visible.meta)"
+      :confirmed-http-hosts="confirmedHttpHosts"
       @click="emit('item-click', visible.meta)"
       @toggle-select="(event: MouseEvent) => emit('item-toggle-select', visible.meta.id, event)"
       @toggle-favorite="emit('item-toggle-favorite', visible.meta.id)"

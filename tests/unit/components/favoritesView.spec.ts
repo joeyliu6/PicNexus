@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
-import { flushPromises } from '@vue/test-utils';
+import { flushPromises, type VueWrapper } from '@vue/test-utils';
 import { mountWithDefaults } from '../helpers/vueMount';
 import FavoritesView from '@/components/views/FavoritesView.vue';
 import FavoritePhotoItem from '@/components/views/favorites/FavoritePhotoItem.vue';
@@ -62,6 +62,12 @@ const mockRefs = vi.hoisted(() => ({
     hasPrev: { value: boolean };
     hasNext: { value: boolean };
   },
+  config: null as null | { value: Record<string, unknown> },
+}));
+
+/** 配置基线：不含任何「已确认的明文 HTTP 域名」，即缩略图闸门处于最严格状态 */
+const BASE_CONFIG = vi.hoisted(() => ({
+  linkOutput: { defaultFormat: 'url', customTemplate: '', autoCopy: false },
 }));
 
 vi.mock('@/composables/favorites/useFavoritesData', async () => {
@@ -167,12 +173,9 @@ vi.mock('@/composables/useHistory', async () => {
 
 vi.mock('@/composables/useConfig', async () => {
   const { ref } = await import('vue');
+  mockRefs.config = ref<Record<string, unknown>>({ ...BASE_CONFIG });
   return {
-    useConfigManager: () => ({
-      config: ref({
-        linkOutput: { defaultFormat: 'url', customTemplate: '', autoCopy: false },
-      }),
-    }),
+    useConfigManager: () => ({ config: mockRefs.config! }),
   };
 });
 
@@ -197,8 +200,26 @@ function meta(overrides: Partial<ImageMeta> = {}): ImageMeta {
   };
 }
 
+const mountedWrappers: VueWrapper[] = [];
+
+/**
+ * 记下挂载出来的组件，供 afterEach 统一卸载
+ *
+ * VTU 不会自动卸载。留着的旧 wrapper 仍然订阅着模块级的 mock ref，下一个用例改这些 ref
+ * 时它会跟着重渲染、把状态写回共享的 imageStates——症状是"单跑绿、连跑红"，
+ * 还会在控制台甩出一串 Vue patch 报错。
+ */
+function track(wrapper: VueWrapper): VueWrapper {
+  mountedWrappers.push(wrapper);
+  return wrapper;
+}
+
+afterEach(() => {
+  for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount();
+});
+
 function mountFavoritesView() {
-  return mountWithDefaults(FavoritesView, {
+  return track(mountWithDefaults(FavoritesView, {
     props: {
       filter: 'all',
       searchTerm: '',
@@ -237,27 +258,36 @@ function mountFavoritesView() {
         },
       },
     },
-  });
+  }));
+}
+
+/**
+ * 把所有共享 mock 打回初始状态
+ *
+ * 提成函数供多个 describe 复用：这些 ref 是模块级的，一个 describe 里挂上的
+ * imageStates / selectedIdList 会原样漏进下一个 describe，症状是"单跑绿、连跑红"。
+ */
+function resetMocks(): void {
+  vi.clearAllMocks();
+  mockRefs.data!.loadedMetas.value = [];
+  mockRefs.data!.totalCount.value = 0;
+  mockRefs.data!.hasMore.value = false;
+  mockRefs.data!.isLoading.value = false;
+  mockRefs.data!.hasLoadedOnce.value = true;
+  for (const key of Object.keys(mockRefs.data!.imageStates)) delete mockRefs.data!.imageStates[key];
+  mockRefs.viewState!.selectedIdList.value = [];
+  mockRefs.viewState!.hasSelection.value = false;
+  mockRefs.history!.favoriteSet.value = new Set();
+  mockRefs.history!.isStatsLoaded.value = true;
+  mockRefs.lightbox!.visible.value = false;
+  mockRefs.lightbox!.item.value = null;
+  mockRefs.config!.value = { ...BASE_CONFIG };
+  historyViewStateMock.getDetail.mockResolvedValue(createHistoryItem({ id: 'fav-1' }));
+  lightboxMock.openLightbox.mockResolvedValue(undefined);
 }
 
 describe('FavoritesView P1 coverage', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockRefs.data!.loadedMetas.value = [];
-    mockRefs.data!.totalCount.value = 0;
-    mockRefs.data!.hasMore.value = false;
-    mockRefs.data!.isLoading.value = false;
-    mockRefs.data!.hasLoadedOnce.value = true;
-    for (const key of Object.keys(mockRefs.data!.imageStates)) delete mockRefs.data!.imageStates[key];
-    mockRefs.viewState!.selectedIdList.value = [];
-    mockRefs.viewState!.hasSelection.value = false;
-    mockRefs.history!.favoriteSet.value = new Set();
-    mockRefs.history!.isStatsLoaded.value = true;
-    mockRefs.lightbox!.visible.value = false;
-    mockRefs.lightbox!.item.value = null;
-    historyViewStateMock.getDetail.mockResolvedValue(createHistoryItem({ id: 'fav-1' }));
-    lightboxMock.openLightbox.mockResolvedValue(undefined);
-  });
+  beforeEach(resetMocks);
 
   it('shows empty state after loading an empty favorites page', () => {
     const wrapper = mountFavoritesView();
@@ -444,14 +474,14 @@ describe('FavoritePhotoItem fallback and interactions', () => {
   const item = meta({ id: 'fav-item' });
 
   it('tries mirror URLs before reporting a failed thumbnail', async () => {
-    const wrapper = mountWithDefaults(FavoritePhotoItem, {
+    const wrapper = track(mountWithDefaults(FavoritePhotoItem, {
       props: {
         meta: item,
         thumbnailUrls: ['https://primary.example.com/a.jpg', 'https://mirror.example.com/a.jpg'],
         imageState: undefined,
         selected: false,
       },
-    });
+    }));
 
     expect(wrapper.get('img').attributes('src')).toBe('https://primary.example.com/a.jpg');
 
@@ -467,14 +497,14 @@ describe('FavoritePhotoItem fallback and interactions', () => {
   });
 
   it('does not restart fallback when parent re-renders with equal thumbnail URLs', async () => {
-    const wrapper = mountWithDefaults(FavoritePhotoItem, {
+    const wrapper = track(mountWithDefaults(FavoritePhotoItem, {
       props: {
         meta: item,
         thumbnailUrls: ['https://primary.example.com/a.jpg', 'https://mirror.example.com/a.jpg'],
         imageState: undefined,
         selected: false,
       },
-    });
+    }));
 
     await wrapper.get('img').trigger('error');
     await nextTick();
@@ -489,14 +519,14 @@ describe('FavoritePhotoItem fallback and interactions', () => {
   });
 
   it('emits item, selection, favorite, and loaded events', async () => {
-    const wrapper = mountWithDefaults(FavoritePhotoItem, {
+    const wrapper = track(mountWithDefaults(FavoritePhotoItem, {
       props: {
         meta: item,
         thumbnailUrls: ['https://primary.example.com/a.jpg'],
         imageState: 'loaded',
         selected: true,
       },
-    });
+    }));
 
     await wrapper.get('.photo-item').trigger('click');
     await wrapper.get('.checkbox').trigger('click');
@@ -508,5 +538,118 @@ describe('FavoritePhotoItem fallback and interactions', () => {
     expect(wrapper.emitted('toggle-favorite')).toHaveLength(1);
     expect(wrapper.emitted('image-state-change')).toContainEqual(['loaded']);
     expect(wrapper.get('.photo-item').classes()).toContain('selected');
+  });
+});
+
+// 2026-08-19 CSP 的 `img-src` 放开 `http:` 之后，收藏页原本一道 URL 闸都没有。
+// 这组断言候选链的安全过滤确实生效，且配置里的「已确认域名」能一路传到格子里。
+describe('FavoritePhotoItem 缩略图安全闸门', () => {
+  const item = meta({ id: 'fav-gate' });
+
+  beforeEach(resetMocks);
+
+  it('云元数据地址被剔除，直接落到后面的安全候选', () => {
+    const wrapper = track(mountWithDefaults(FavoritePhotoItem, {
+      props: {
+        meta: item,
+        thumbnailUrls: ['http://169.254.169.254/latest/meta-data/a.jpg', 'https://mirror.example.com/a.jpg'],
+        imageState: undefined,
+        selected: false,
+      },
+    }));
+
+    expect(wrapper.get('img').attributes('src')).toBe('https://mirror.example.com/a.jpg');
+  });
+
+  it('候选全被过滤 → 立刻报失败，不卡在骨架屏', () => {
+    const wrapper = track(mountWithDefaults(FavoritePhotoItem, {
+      props: {
+        meta: item,
+        thumbnailUrls: ['http://169.254.169.254/a.jpg'],
+        imageState: undefined,
+        selected: false,
+      },
+    }));
+
+    expect(wrapper.find('img').exists()).toBe(false);
+    expect(wrapper.emitted('image-state-change')).toEqual([['failed']]);
+  });
+
+  it('confirmedHttpHosts 里的明文 HTTP 域名照常显示', () => {
+    const wrapper = track(mountWithDefaults(FavoritePhotoItem, {
+      props: {
+        meta: item,
+        thumbnailUrls: ['http://img.example.test/a.jpg'],
+        imageState: undefined,
+        selected: false,
+        confirmedHttpHosts: new Set(['img.example.test']),
+      },
+    }));
+
+    expect(wrapper.get('img').attributes('src')).toBe('http://img.example.test/a.jpg');
+  });
+});
+
+// 光测组件不够：确认状态存在配置里，得由 FavoritesView 取出来传下去。
+// 这两条覆盖那段接线——断了的话已确认的 HTTP 图床在收藏页会整片裂图。
+describe('FavoritesView 把已确认的 HTTP 主机名传给格子', () => {
+  const httpMeta = meta({ id: 'fav-http', primaryUrl: 'http://img.example.test/fav-http.jpg' });
+
+  beforeEach(() => {
+    resetMocks();
+    mockRefs.data!.loadedMetas.value = [httpMeta];
+    mockRefs.data!.totalCount.value = 1;
+    mockRefs.history!.favoriteSet.value = new Set(['fav-http']);
+  });
+
+  it('配置里没确认过 → 明文 HTTP 缩略图被拦下', () => {
+    const wrapper = mountFavoritesView();
+
+    expect(wrapper.find('.photo-item').exists()).toBe(true);
+    expect(wrapper.find('.photo-item img').exists()).toBe(false);
+  });
+
+  it('配置里确认过 → 同一张图正常显示', () => {
+    mockRefs.config!.value = {
+      ...BASE_CONFIG,
+      custom_s3_profiles: [
+        { publicDomain: 'http://img.example.test', httpDomainConfirmedFor: 'img.example.test' },
+      ],
+    };
+
+    const wrapper = mountFavoritesView();
+
+    expect(wrapper.get('.photo-item img').attributes('src')).toBe('http://img.example.test/fav-http.jpg');
+  });
+
+  // 用户先看图（被判失败）、后去设置页确认，回来就该自己恢复，不用重启。
+  // 失败态记在 imageStates 里，候选链够不着，只能由本视图撤销。
+  it('看过之后才确认 → 撤销失败态，图自己恢复', async () => {
+    const wrapper = mountFavoritesView();
+    expect(wrapper.find('.photo-item img').exists()).toBe(false);
+    expect(mockRefs.data!.imageStates['fav-http']).toBe('failed');
+
+    mockRefs.config!.value = {
+      ...BASE_CONFIG,
+      custom_s3_profiles: [
+        { publicDomain: 'http://img.example.test', httpDomainConfirmedFor: 'img.example.test' },
+      ],
+    };
+    await nextTick();
+
+    expect(mockRefs.data!.imageStates['fav-http']).toBeUndefined();
+    expect(wrapper.get('.photo-item img').attributes('src')).toBe('http://img.example.test/fav-http.jpg');
+  });
+
+  // 反向判据：配置存一次就重试一轮死图是纯浪费——设置页填一个 profile 能存 26 次。
+  it('配置变了但名单内容没变 → 不动失败态', async () => {
+    const wrapper = mountFavoritesView();
+    expect(mockRefs.data!.imageStates['fav-http']).toBe('failed');
+
+    mockRefs.config!.value = { ...BASE_CONFIG, linkOutput: { defaultFormat: 'markdown' } };
+    await nextTick();
+
+    expect(mockRefs.data!.imageStates['fav-http']).toBe('failed');
+    expect(wrapper.find('.photo-item img').exists()).toBe(false);
   });
 });
