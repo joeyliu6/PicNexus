@@ -6,6 +6,7 @@ import { IUploader } from '../base/IUploader';
 import { S3BaseConfig } from './types';
 import { buildObjectKey } from './objectKey';
 import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
+import type { HttpDomainConfirmable } from '../../config/types';
 
 interface S3RustResult {
   url: string;
@@ -89,7 +90,10 @@ export abstract class BaseS3Uploader<TConfig extends S3BaseConfig>
         region: this.getRegion(config),
         bucket: this.getBucket(config),
         key,
-        publicDomain: this.getPublicDomain(config)
+        publicDomain: this.getPublicDomain(config),
+        // 明文 HTTP 公开域名的确认状态。Rust 侧会核对它与当前域名是否同一主机名，
+        // 不匹配就照拒——确认跟着域名走，换域名必须重新确认。
+        httpDomainConfirmedFor: (config as HttpDomainConfirmable).httpDomainConfirmedFor
       },
       onProgress
     ) as S3RustResult;
