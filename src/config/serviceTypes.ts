@@ -74,9 +74,30 @@ export interface WeiboServiceConfig extends BaseServiceConfig {
 }
 
 /**
+ * 公开域名允许使用明文 HTTP 的图床（用户显式确认后生效）
+ *
+ * 默认策略是公开域名仅支持 HTTPS。但有些图床根本给不出 HTTPS：又拍云的免费测试域名
+ * `*.test.upcdn.net` 只有 HTTP，要 HTTPS 必须绑自有域名，而绑域名要工信部备案。
+ * 一刀切拒绝的结果是这类图床整个不可用（2026-08-19 实测：上传被 Rust 侧直接拒）。
+ *
+ * Why 存主机名而不是布尔值：**域名一改，确认自动失效**，不需要在每个能改域名的地方
+ * 都补一段作废逻辑。对照 `WebDAVStorageProfile.lanHttpConfirmed`——那个布尔值就得靠
+ * `useStorageProfiles.ts` 里手写的"地址变了就置 false"兜着，漏一处就会留下过期的放行。
+ *
+ * 判据：`normalizeHost(new URL(publicDomain).hostname) === httpDomainConfirmedFor`。
+ */
+// Why 是 type 而不是 interface：接口不会获得隐式索引签名，交叉进表单形状后
+// 整个类型就不再能赋给 `Record<string, unknown>`，而 `buildRawServiceRecord`
+// 一类的通用配置搬运正是这么用的。类型别名没有这个限制。
+export type HttpDomainConfirmable = {
+  /** 用户确认过可以走明文 HTTP 的主机名（小写，不含端口）。与当前 publicDomain 不匹配即失效 */
+  httpDomainConfirmedFor?: string;
+};
+
+/**
  * Cloudflare R2 服务配置
  */
-export interface R2ServiceConfig extends BaseServiceConfig {
+export interface R2ServiceConfig extends BaseServiceConfig, HttpDomainConfirmable {
   /** 账户 ID */
   accountId: string;
 
@@ -261,7 +282,7 @@ export interface ImgurServiceConfig extends BaseServiceConfig {
  * 腾讯云图床服务配置
  * 私有存储，需要 SecretId 和 SecretKey
  */
-export interface TencentServiceConfig extends BaseServiceConfig {
+export interface TencentServiceConfig extends BaseServiceConfig, HttpDomainConfirmable {
   /** 腾讯云 SecretId */
   secretId: string;
   /** 腾讯云 SecretKey */
@@ -280,7 +301,7 @@ export interface TencentServiceConfig extends BaseServiceConfig {
  * 阿里云图床服务配置
  * 私有存储，需要 AccessKey ID 和 Secret
  */
-export interface AliyunServiceConfig extends BaseServiceConfig {
+export interface AliyunServiceConfig extends BaseServiceConfig, HttpDomainConfirmable {
   /** 阿里云 AccessKey ID */
   accessKeyId: string;
   /** 阿里云 AccessKey Secret */
@@ -299,7 +320,7 @@ export interface AliyunServiceConfig extends BaseServiceConfig {
  * 七牛云图床服务配置
  * 私有存储，需要 AK 和 SK
  */
-export interface QiniuServiceConfig extends BaseServiceConfig {
+export interface QiniuServiceConfig extends BaseServiceConfig, HttpDomainConfirmable {
   /** 七牛云 AccessKey */
   accessKey: string;
   /** 七牛云 SecretKey */
@@ -316,12 +337,20 @@ export interface QiniuServiceConfig extends BaseServiceConfig {
 
 /**
  * 又拍云图床服务配置
- * 私有存储，需要 Operator 和 Password
+ *
+ * ⚠️ **两套凭证，各管一条链路，不能互相顶替**：
+ * - `operator` / `password`：又拍云自家 REST API（Basic Auth）。走编辑器 / CLI 上传
+ *   与设置页「测试连接」。
+ * - `s3AccessKey` / `s3SecretKey`：S3 兼容端点（SigV4）。走 GUI 主界面上传。
+ *   要在控制台「操作员-编辑」或「操作员授权-S3访问凭证」里**单独生成**。
+ *
+ * 2026-08-19 实测：拿 operator/password 去签 S3 请求，又拍云回 `ErrInvalidAccessKeyID`；
+ * 换成控制台生成的那对则 200。详见 `docs/audits/upyun-audit-2026-08-19.md`。
  */
-export interface UpyunServiceConfig extends BaseServiceConfig {
-  /** 又拍云 Operator */
+export interface UpyunServiceConfig extends BaseServiceConfig, HttpDomainConfirmable {
+  /** 操作员账号（REST 链路：编辑器 / CLI / 测试连接） */
   operator: string;
-  /** 又提云 Password */
+  /** 操作员密码（REST 链路） */
   password: string;
   /** 存储桶名称 */
   bucket: string;
@@ -329,13 +358,17 @@ export interface UpyunServiceConfig extends BaseServiceConfig {
   publicDomain: string;
   /** 存储路径前缀（默认 images/） */
   path: string;
+  /** S3 访问凭证 AccessKey（S3 链路：GUI 上传）。与 operator 是两码事 */
+  s3AccessKey: string;
+  /** S3 访问凭证 SecretKey（S3 链路）。与 password 是两码事 */
+  s3SecretKey: string;
 }
 
 /**
  * 自定义 S3 兼容存储 Profile
  * 支持多实例，每个 profile 代表一个独立的 S3 兼容存储
  */
-export interface CustomS3Profile {
+export interface CustomS3Profile extends HttpDomainConfirmable {
   /** 唯一标识符，用于构建复合 ID（custom_s3:xxx） */
   id: string;
   /** 用户自定义显示名称（如"我的 MinIO"） */

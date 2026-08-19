@@ -1,6 +1,6 @@
 import type { CustomS3Profile, ServerServiceType, WebDAVStorageProfile } from '../../config/types';
 import { DEFAULT_WEBDAV_URL_TEMPLATE, getCustomS3ProfileId, getWebDAVProfileId, isCustomS3Id, isWebDAVId, makeCustomS3Id, makeWebDAVId } from '../../config/types';
-import { CUSTOM_S3_REQUIRED_FIELDS, SERVICE_REQUIRED_FIELDS, WEBDAV_REQUIRED_FIELDS } from '../../constants/serviceRequiredFields';
+import { CUSTOM_S3_REQUIRED_FIELDS, SERVICE_REQUIRED_FIELDS, WEBDAV_REQUIRED_FIELDS, getRestChainRequiredFields } from '../../constants/serviceRequiredFields';
 import { extractNamiAuthToken } from '../../utils/namiAuthToken';
 import { secureStorage } from '../../security/crypto';
 import type { SettingsFormShape } from './settingsFormTypes';
@@ -60,8 +60,10 @@ export function isCliCompatibleServiceConfigured(service: ServerServiceType, fd:
     return !!profile && hasFilledFields(profile as unknown as Record<string, unknown>, WEBDAV_REQUIRED_FIELDS);
   }
 
-  const requiredFields = SERVICE_REQUIRED_FIELDS[service as keyof typeof SERVICE_REQUIRED_FIELDS];
-  if (!requiredFields) return false;
+  // 编辑器 / CLI 走 REST 口径：又拍云这条链路用 operator/password，
+  // 不需要 GUI 上传那对 S3 凭证（见 REST_CHAIN_REQUIRED_FIELDS 的说明）
+  if (!(service in SERVICE_REQUIRED_FIELDS)) return false;
+  const requiredFields = getRestChainRequiredFields(service);
   if (requiredFields.length === 0) return true;
 
   const serviceConfig = buildRawServiceRecord(service, fd);
@@ -174,7 +176,7 @@ export function buildServiceConfig(
     case 'qiniu':
       return { type: 'qiniu', access_key: fd.qiniu.accessKey, secret_key: fd.qiniu.secretKey, region: fd.qiniu.region, bucket: fd.qiniu.bucket, custom_domain: fd.qiniu.publicDomain, path: fd.qiniu.path };
     case 'upyun':
-      return { type: 'upyun', operator: fd.upyun.operator, password: fd.upyun.password, bucket: fd.upyun.bucket, public_domain: fd.upyun.publicDomain };
+      return { type: 'upyun', operator: fd.upyun.operator, password: fd.upyun.password, bucket: fd.upyun.bucket, public_domain: fd.upyun.publicDomain, path: fd.upyun.path };
     default: {
       const profile = findCustomS3Profile(service, fd);
       if (!profile) return null;
@@ -317,7 +319,7 @@ export function buildEditorCredentialSignature(service: ServerServiceType, fd: S
     case 'qiniu':
       return [fd.qiniu.accessKey, fd.qiniu.secretKey, fd.qiniu.region, fd.qiniu.bucket, fd.qiniu.publicDomain, fd.qiniu.path].join('|');
     case 'upyun':
-      return [fd.upyun.operator, fd.upyun.password, fd.upyun.bucket, fd.upyun.publicDomain].join('|');
+      return [fd.upyun.operator, fd.upyun.password, fd.upyun.bucket, fd.upyun.publicDomain, fd.upyun.path].join('|');
     default: {
       const profile = findCustomS3Profile(service, fd);
       if (profile) return [profile.endpoint, profile.accessKeyId, profile.secretAccessKey, profile.region, profile.bucket, profile.path, profile.publicDomain].join('|');

@@ -112,7 +112,9 @@ export const DEFAULT_CONFIG: UserConfig = {
       password: '',
       bucket: '',
       publicDomain: '',
-      path: 'images/'
+      path: 'images/',
+      s3AccessKey: '',
+      s3SecretKey: ''
     }
   },
   custom_s3_profiles: [],

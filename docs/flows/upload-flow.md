@@ -221,18 +221,24 @@ key = {配置里的 path}/{yyyyMMdd}_{4位base36随机}_{原文件名}
 - **代价**：上传失败后重试会生成新 key。若前一次其实已经落桶只是响应丢了，桶里会留一个孤儿对象（旧行为是覆盖同名对象、不留孤儿）。用「多一个几十 KB 的孤儿文件」换「不再静默覆盖用户的图」，是划算的。
 - 文件名本身**不做净化**（空格、`#`、中文原样保留），与改动前一致。
 
-#### 四条上传路径的唯一化现状（2026-08-17 补齐）
+#### 四条上传路径的唯一化现状（2026-08-17 补齐，2026-08-19 补上又拍云）
 
 上面那套前缀最初**只做在前端**（`objectKey.ts` 走 GUI 主界面上传），Typora / Obsidian / CLI
 走的是 Rust 侧 `server/upload_handler.rs` 的独立链路，一直漏着——而编辑器粘贴出来的图
 **永远叫 `image.png`**，恰恰是最容易撞名的入口。已补齐：
 
-| 路径 | S3 系（R2 / 腾讯 / 阿里 / 七牛 / 自定义 S3） | WebDAV |
-|------|---------------------------------------------|--------|
-| GUI 主界面 | `objectKey.ts::buildObjectKey` | `webdav_upload.rs`（core 内统一处理） |
-| 编辑器 / CLI | `upload_handler.rs::build_upload_key` | 同上（共用 `upload_to_webdav_core`） |
+| 路径 | S3 系（R2 / 腾讯 / 阿里 / 七牛 / 自定义 S3） | 又拍云 | WebDAV |
+|------|---------------------------------------------|--------|--------|
+| GUI 主界面 | `objectKey.ts::buildObjectKey` | 同左（继承 `BaseS3Uploader`） | `webdav_upload.rs`（core 内统一处理） |
+| 编辑器 / CLI | `upload_handler.rs::build_upload_key` | 同左（2026-08-19 补） | 同上（共用 `upload_to_webdav_core`） |
 
 两条 Rust 侧实现都在 `commands/utils.rs`：`prefix_unique_file_name` / `suffix_unique_file_name`。
+
+**又拍云为什么单列一栏**：五个私有存储里只有它的编辑器链路不走 `s3_put_object`，
+而是自家 REST PUT（`v0.api.upyun.com` + Basic Auth）。2026-08-17 那轮补齐是顺着
+`s3_put_object` 的调用方做的，于是漏了它——它是唯一一条不在那条流水线上的。
+2026-08-19 实测坐实了后果：往同一个 key 先后传 67 字节和 126 字节的图，回读拿到 126 字节，
+第一张无声消失。**判断后续改动是否又漏了它，看 `docs/audits/upyun-audit-2026-08-19.md` 开头那张对比表。**
 
 **⚠️ 两套顺序不同，是刻意的，不要"顺手统一掉"**：
 

@@ -37,7 +37,18 @@
 | 腾讯云 COS | `TencentUploader` | `tencent/TencentUploader.ts` | SecretId/Key |
 | 阿里云 OSS | `AliyunUploader` | `aliyun/AliyunUploader.ts` | AccessKey |
 | 七牛云 | `QiniuUploader` | `qiniu/QiniuUploader.ts` | AK/SK |
-| 又拍云 | `UpyunUploader` | `upyun/UpyunUploader.ts` | 操作员/密码 |
+| 又拍云 | `UpyunUploader` | `upyun/UpyunUploader.ts` | **S3 访问凭证**（`s3AccessKey`/`s3SecretKey`，控制台单独生成）⚠️ 见下 |
+
+> ⚠️ **又拍云是唯一一个两条链路用两套凭证的图床**，改它之前先确认你动的是哪条：
+>
+> | 链路 | 凭证 | 入口 |
+> |------|------|------|
+> | GUI 上传（S3 端点，SigV4） | `s3AccessKey` / `s3SecretKey` | `UpyunUploader`（本表这一行） |
+> | 编辑器 / CLI / 测试连接（自家 REST，Basic Auth） | `operator` / `password` | `server_upload_upyun`、`test_upyun_connection` |
+>
+> 拿操作员账密去签 S3 请求会回 `ErrInvalidAccessKeyID`——GUI 上传曾因此长期完全不可用，
+> 而设置页「测试连接」走 REST 一直亮绿灯，把问题盖住了。
+> 详见 [upyun-audit-2026-08-19.md](../../audits/upyun-audit-2026-08-19.md)。
 
 ### 多实例（serviceId 由用户 profile 动态生成）
 

@@ -43,7 +43,7 @@ function makePrivateFormData() {
     tencent: { secretId: '', secretKey: '', region: '', bucket: '', path: '', publicDomain: '' },
     aliyun: { accessKeyId: '', accessKeySecret: '', region: '', bucket: '', path: '', publicDomain: '' },
     qiniu: { accessKey: '', secretKey: '', region: '', bucket: '', publicDomain: '', path: '' },
-    upyun: { operator: '', password: '', bucket: '', publicDomain: '', path: '' },
+    upyun: { operator: '', password: '', bucket: '', publicDomain: '', path: '', s3AccessKey: '', s3SecretKey: '' },
   };
 }
 
@@ -311,11 +311,12 @@ describe('PrivateStorageGroup · 内置 S3 密钥', () => {
   it('五个内置服务的密码字段全部接上草稿机', () => {
     const { wrapper } = mountGroup();
 
-    // r2/tencent/aliyun/qiniu 各 2 个，upyun 2 个 —— 共 10 个
+    // r2/tencent/aliyun/qiniu 各 2 个；upyun 4 个 —— 它有两套凭证：
+    // operator/password 走 REST（编辑器/CLI），s3AccessKey/s3SecretKey 走 S3（GUI 上传）
     const counts = ['r2', 'tencent', 'aliyun', 'qiniu', 'upyun'].map(
       id => fieldsInCard(wrapper, id).length,
     );
-    expect(counts).toEqual([2, 2, 2, 2, 2]);
+    expect(counts).toEqual([2, 2, 2, 2, 4]);
   });
 });
 
@@ -376,5 +377,53 @@ describe('PrivateStorageGroup · 自定义 S3 密钥', () => {
     await nextTick();
 
     expect(secondKey.props('modelValue')).toBe('');
+  });
+});
+
+// 又拍云的 S3 凭证说明有四行，摊在字段下方会把后面的字段挤开，
+// 且紧贴着下一个 label，容易被读成下一个字段的说明——所以收进 label 右侧的图标。
+describe('PrivateStorageGroup · 长说明收进 label 图标', () => {
+  function cardOf(id: string) {
+    const { wrapper } = mountGroup();
+    const card = wrapper.findAll('.hosting-card').find(c => c.attributes('data-id') === id);
+    if (!card) throw new Error(`没找到卡片 ${id}`);
+    return card;
+  }
+  const upyunCard = () => cardOf('upyun');
+
+  it('S3 AccessKey 的长说明挂在图标的 tooltip 上', () => {
+    const icon = upyunCard().find('.field-info-icon');
+
+    expect(icon.exists()).toBe(true);
+    expect(icon.attributes('data-tooltip')).toContain('与上面的操作员账号密码是两回事');
+    // 说明同时进 aria-label，否则读屏用户拿不到这段信息
+    expect(icon.attributes('aria-label')).toContain('与上面的操作员账号密码是两回事');
+    // 可聚焦，键盘用户才触发得了 tooltip
+    expect(icon.attributes('tabindex')).toBe('0');
+  });
+
+  it('同一段说明不再留在字段下方', () => {
+    const texts = upyunCard().findAll('.field-hint').map(h => h.text());
+
+    expect(texts.some(t => t.includes('与上面的操作员账号密码是两回事'))).toBe(false);
+  });
+
+  it('公开访问域名的长说明也收进了图标，六个图床一致', () => {
+    for (const id of ['r2', 'tencent', 'aliyun', 'qiniu', 'upyun']) {
+      const card = cardOf(id);
+      const tips = card.findAll('.field-info-icon').map(i => i.attributes('data-tooltip') ?? '');
+
+      expect(tips.some(t => t.includes('确认只对这一个域名生效')), `${id} 缺少域名说明图标`).toBe(true);
+      // 同一段话不能又留在字段下方，否则等于没收起来
+      const hints = card.findAll('.field-hint').map(h => h.text());
+      expect(hints.some(t => t.includes('确认只对这一个域名生效')), `${id} 说明仍留在字段下方`).toBe(false);
+    }
+  });
+
+  it('短说明仍然常驻显示，没被一起藏起来', () => {
+    // 七牛的「地域」说明只有一行，属于照着填就要看见的信息，不该藏进 hover
+    const texts = cardOf('qiniu').findAll('.field-hint').map(h => h.text());
+
+    expect(texts.some(t => t.includes('七牛云区域代码'))).toBe(true);
   });
 });

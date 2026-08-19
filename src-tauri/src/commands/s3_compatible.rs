@@ -50,7 +50,20 @@ fn validate_https_endpoint(endpoint: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-fn validate_https_public_domain(public_domain: &str) -> Result<(), AppError> {
+/// 校验公开访问域名；明文 HTTP 只在用户已对**该主机名**显式确认时放行
+///
+/// Why 收的是主机名而不是 bool：确认必须跟着域名走。存 bool 的话，用户确认了
+/// `http://a.example` 之后改成 `http://b.example`，那个 true 会原样留下，
+/// 等于给新域名发了一张没人审过的通行证。前端 `HttpDomainConfirmable` 存的也是主机名，
+/// 两侧用同一判据，任何一侧漏了另一侧都还拦得住。
+///
+/// Why 允许明文 HTTP：又拍云一类图床根本给不出 HTTPS——免费测试域名只有 HTTP，
+/// 要 HTTPS 必须绑自有域名而绑域名要备案。一刀切拒绝的结果是这些图床整个不可用。
+/// 详见 `docs/audits/upyun-http-domain-2026-08-19.md`。
+///
+/// Endpoint 不吃这条逃生舱（见 `validate_https_endpoint`）：那条请求带着 AK/SK 签名，
+/// 明文传输等于把凭证摊在链路上；公开域名只是取图，风险量级不同。
+fn validate_public_domain(public_domain: &str, confirmed_for: Option<&str>) -> Result<(), AppError> {
     let public_domain = public_domain.trim();
     if public_domain.is_empty() {
         return Ok(());
@@ -58,10 +71,22 @@ fn validate_https_public_domain(public_domain: &str) -> Result<(), AppError> {
 
     let parsed = url::Url::parse(public_domain)
         .map_err(|_| AppError::config("公开访问域名不是合法的 URL，请输入完整的 https://... 地址"))?;
-    if parsed.scheme() != "https" {
-        return Err(AppError::config("公开访问域名仅支持 HTTPS，请改用 https:// 地址"));
+    if parsed.scheme() == "https" {
+        return Ok(());
     }
-    Ok(())
+
+    if parsed.scheme() == "http" {
+        let host = parsed.host_str().unwrap_or_default().to_ascii_lowercase();
+        let confirmed = confirmed_for.unwrap_or_default().trim().to_ascii_lowercase();
+        if !host.is_empty() && host == confirmed {
+            return Ok(());
+        }
+        return Err(AppError::config(
+            "公开访问域名是明文 HTTP，需要先在设置页「测试连接」里确认一次才能使用",
+        ));
+    }
+
+    Err(AppError::config("公开访问域名仅支持 HTTPS，请改用 https:// 地址"))
 }
 
 /// 上传文件到 S3 兼容存储
@@ -78,10 +103,12 @@ pub async fn upload_to_s3_compatible(
     bucket: String,
     key: String,
     public_domain: String,
+    // 用户已确认可走明文 HTTP 的主机名；None = 未确认（fail-closed）
+    http_domain_confirmed_for: Option<String>,
 ) -> Result<S3UploadResult, AppError> {
     log::info!("[S3兼容] 开始上传文件: {}", safe_path(&file_path));
     validate_https_endpoint(&endpoint)?;
-    validate_https_public_domain(&public_domain)?;
+    validate_public_domain(&public_domain, http_domain_confirmed_for.as_deref())?;
 
     // 发送进度: 0% - 读取文件
     let _ = window.emit(
@@ -498,17 +525,32 @@ mod tests {
     }
 
     #[test]
-    fn validate_https_public_domain_rejects_http() {
-        let err = validate_https_public_domain("http://cdn.example.com")
-            .expect_err("external HTTP public domain should be rejected");
+    fn validate_public_domain_allows_confirmed_http_only_for_that_host() {
+        // 确认过的那个主机名放行
+        assert!(validate_public_domain("http://cdn.example.com", Some("cdn.example.com")).is_ok());
+        // 大小写与端口不影响判据（判的是主机名）
+        assert!(validate_public_domain("http://CDN.Example.com:8080/img", Some("cdn.example.com")).is_ok());
 
-        assert!(err.to_string().contains("仅支持 HTTPS"));
+        // 反向判据：确认了 A 不等于放行 B。存 bool 的实现会在这里放行，属于必须拦住的回归
+        let err = validate_public_domain("http://other.example.com", Some("cdn.example.com"))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("明文 HTTP"), "换个域名必须重新确认，实得: {}", err);
+
+        // 没确认过就拒
+        let err = validate_public_domain("http://cdn.example.com", None)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("明文 HTTP"), "未确认必须拒绝，实得: {}", err);
+
+        // 非 http/https 一律拒，确认过也不行
+        assert!(validate_public_domain("ftp://cdn.example.com", Some("cdn.example.com")).is_err());
     }
 
     #[test]
-    fn validate_https_public_domain_allows_empty_and_https() {
-        assert!(validate_https_public_domain("").is_ok());
-        assert!(validate_https_public_domain(" https://cdn.example.com ").is_ok());
+    fn validate_public_domain_allows_empty_and_https() {
+        assert!(validate_public_domain("", None).is_ok());
+        assert!(validate_public_domain(" https://cdn.example.com ", None).is_ok());
     }
 
     #[test]

@@ -85,7 +85,7 @@ export function useSettingsForm() {
     tencent: { secretId: '', secretKey: '', region: '', bucket: '', path: '', publicDomain: '' },
     aliyun: { accessKeyId: '', accessKeySecret: '', region: '', bucket: '', path: '', publicDomain: '' },
     qiniu: { accessKey: '', secretKey: '', region: '', bucket: '', publicDomain: '', path: '' },
-    upyun: { operator: '', password: '', bucket: '', publicDomain: '', path: '' },
+    upyun: { operator: '', password: '', bucket: '', publicDomain: '', path: '', s3AccessKey: '', s3SecretKey: '' },
     custom_s3_profiles: [] as CustomS3Profile[],
     webdav_profiles: [] as WebDAVStorageProfile[],
     nowcoder: { cookie: '' },

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref, nextTick } from 'vue';
 import { useConnectionTest } from '@/composables/settings/useConnectionTest';
+import { validateS3Config as realValidateS3Config } from '@/composables/settings/s3ConfigValidation';
 import { __resetServiceCheckRunnerForTests } from '@/composables/useServiceCheckRunner';
 import type { SettingsFormShape } from '@/composables/settings/settingsFormTypes';
 import type { ServiceType, WebDAVStorageProfile } from '@/config/types';
@@ -155,15 +156,17 @@ function createHarness(options: {
     const idx = formData.value.webdav_profiles.findIndex(p => p.id === profile.id);
     if (idx !== -1) formData.value.webdav_profiles[idx] = { ...profile };
   });
+  const saveSettings = vi.fn();
   const api = useConnectionTest({
     formData,
     serviceNames,
     errorToString,
     validateS3Config,
     updateWebdavProfile,
+    saveSettings,
   });
 
-  return { api, formData, validateS3Config, errorToString, updateWebdavProfile };
+  return { api, formData, validateS3Config, errorToString, updateWebdavProfile, saveSettings };
 }
 
 describe('useConnectionTest', () => {
@@ -594,6 +597,72 @@ describe('useConnectionTest', () => {
       const { api } = createHarness();
       await api.testAllConfiguredServices();
       await flushPromisesAndTicks();
+
+      expect(mockState.confirmDialog).not.toHaveBeenCalled();
+    });
+  });
+
+  // 明文 HTTP 公开域名逃生舱（2026-08-19）
+  //
+  // 与上面 WebDAV 那组的差别：这条在**校验阶段**就被拦下，压根走不到网络请求，
+  // 所以夹具用的是真实的 validateS3Config，而不是 mock。
+  describe('明文 HTTP 公开域名逃生舱', () => {
+    function harnessWithRealValidation() {
+      const h = createHarness({ validateS3Config: realValidateS3Config });
+      h.formData.value.r2.publicDomain = 'http://cdn.example.com';
+      return h;
+    }
+
+    it('确认后写回主机名、落盘并重试，测试得以继续', async () => {
+      mockState.confirmDialog.mockResolvedValueOnce(true);
+      const { api, formData, saveSettings } = harnessWithRealValidation();
+
+      await api.handleServiceTest('r2');
+
+      expect(mockState.confirmDialog).toHaveBeenCalledTimes(1);
+      // 存的是主机名而不是 true——换域名后自然失配，不需要额外的作废逻辑
+      expect(formData.value.r2.httpDomainConfirmedFor).toBe('cdn.example.com');
+      expect(saveSettings).toHaveBeenCalled();
+      expect(mockState.markVerified).toHaveBeenCalledWith('r2');
+    });
+
+    it('拒绝确认时不写标记、不发请求', async () => {
+      mockState.confirmDialog.mockResolvedValueOnce(false);
+      const { api, formData, saveSettings } = harnessWithRealValidation();
+
+      await api.handleServiceTest('r2');
+
+      expect(formData.value.r2.httpDomainConfirmedFor).toBeUndefined();
+      expect(saveSettings).not.toHaveBeenCalled();
+      expect(mockState.markTestFailed).toHaveBeenCalledWith('r2', expect.any(String));
+    });
+
+    it('已确认过的域名不再弹框', async () => {
+      const { api, formData } = harnessWithRealValidation();
+      formData.value.r2.httpDomainConfirmedFor = 'cdn.example.com';
+
+      await api.handleServiceTest('r2');
+
+      expect(mockState.confirmDialog).not.toHaveBeenCalled();
+      expect(mockState.markVerified).toHaveBeenCalledWith('r2');
+    });
+
+    it('换了域名后确认失效，重新弹框', async () => {
+      mockState.confirmDialog.mockResolvedValueOnce(false);
+      const { api, formData } = harnessWithRealValidation();
+      // 确认过的是另一个域名——这正是存布尔值会漏掉的场景
+      formData.value.r2.httpDomainConfirmedFor = 'old.example.com';
+
+      await api.handleServiceTest('r2');
+
+      expect(mockState.confirmDialog).toHaveBeenCalledTimes(1);
+    });
+
+
+    it('HTTPS 域名不会触发这个弹框', async () => {
+      const { api } = createHarness({ validateS3Config: realValidateS3Config });
+
+      await api.handleServiceTest('r2');
 
       expect(mockState.confirmDialog).not.toHaveBeenCalled();
     });

@@ -584,6 +584,26 @@
   text-decoration: underline;
 }
 
+/* 收进 label 右侧的说明图标，hover / 键盘聚焦才展开 tooltip
+ *
+ * 用途：说明长到三行以上时用它替代 .field-hint。长说明摊在字段下方有两个问题——
+ * 把后面的字段挤得很远，且视觉上紧贴着下一个 label，容易被读成下一个字段的说明。
+ * 短说明仍然用 .field-hint 直接显示，别为了整齐把所有提示都藏起来：
+ * 需要照着填的信息藏在 hover 后面，用户根本不会去找。
+ */
+.field-info-icon {
+  margin-left: var(--space-xs);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  cursor: help;
+  transition: color var(--duration-fast) ease;
+}
+
+.field-info-icon:hover,
+.field-info-icon:focus-visible {
+  color: var(--primary);
+}
+
 /* ==================== 通用设置行 ==================== */
 /* 适用于所有面板的 label + control 行布局 */
 
