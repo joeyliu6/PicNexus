@@ -205,6 +205,14 @@ flowchart TD
 > （时间轴、收藏页共用）。此前两个视图各写一份逐字相同的翻页逻辑，结果超时兜底只补进了时间轴，
 > 收藏页在代理卡死时会一直停在骨架屏。新增消费方请复用它，别再抄第三份。
 
+> ⚠️ **候选先过 `safeImageUrl` 这道安全闸，再进 `<img>`。** 2026-08-19 给 CSP 的 `img-src`
+> 放开 `http:`（又拍云一类图床只有明文 HTTP 域名）之后，CSP 不再兜底，这道闸是收藏页 / 时间轴
+> 仅有的一道。调用方要把 `getConfirmedHttpHosts(config)` 的结果传进 `confirmedHttpHosts`，
+> 否则用户已确认过的 HTTP 图床会被当危险链接整片挡掉。
+> 两条配套行为：被过滤的候选**直接从链上剔除**（没发过请求，不能当失败证据）；
+> 候选被过滤光时走 `onExhausted`，否则 `<img>` 不渲染、等不到 error 事件，格子卡在骨架屏。
+> 背景见 [http-image-host-2026-08-19.md](../audits/http-image-host-2026-08-19.md)。
+
 > ⚠️ **消费方带 `loading="lazy"` 就必须传 `elementRef`。** 懒加载的图在视口外浏览器压根不发请求，
 > 对它计时等于凭空判超时。收藏页一次渲染 80 格且**无虚拟化**，漏传会让视口外那 60 多张在 5 秒后
 > 集体「失败」，把明明通着的代理判死——省流量的初衷一分没落地。时间轴不用传：虚拟列表只渲染
@@ -231,8 +239,8 @@ flowchart TD
 > 会在新链的候选加载成功时套用「前一条挂、这一条通」的判据，把上一张图的代理 URL 判死，
 > 整个会话误降级。判据实现是 [useThumbnailFallbackChain.ts](../../src/composables/useThumbnailFallbackChain.ts)
 > 顶层导出的 `hasUrlListChanged`，[ThumbnailImage.vue](../../src/components/common/ThumbnailImage.vue)
-> 直接 import 复用——它因为多一层 `safeImageUrl` 安全过滤没法用整个 composable，但这条判据
-> 只有一份，不再靠「必须同步」的口头约定维系。
+> 直接 import 复用——它因为自持 loading/error 状态、视口判定也在自己手里，没法用整个 composable，
+> 但这条判据只有一份，不再靠「必须同步」的口头约定维系。
 >
 > ⚠️ **「候选换新」要判两次，只判内容变化不够。** 除了上面的内容比对，还有一条更隐蔽的：
 > 内容**确实变了**，但解析后的首条 URL 恰好就是当前已经显示出来的那张——这时 `<img>` 的

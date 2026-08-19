@@ -97,29 +97,6 @@
 
 ## 待处理
 
-### [ ] 收藏页与时间轴的图片没有 URL 校验（放开 HTTP 图床后暴露）
-
-- **来源**：2026-08-19 放开明文 HTTP 图床时发现，详见 [http-image-host-2026-08-19.md](./audits/http-image-host-2026-08-19.md)
-- **优先级**：**发布前必修**（2026-08-19 代码审查建议上调）——放开 CSP 的那个提交与它同批，
-  发出去就等于把这个缺口一起发出去了
-
-`ThumbnailImage.vue`（历史表格、上传队列）走 `safeImageUrl` 过滤；而
-`FavoritePhotoItem.vue` / `TimelinePhotoItem.vue` 走 `useThumbnailFallbackChain`，
-**不经过任何 URL 校验**，直接把候选 URL 塞进 `<img>`。
-
-放开 CSP 的 `img-src` 之前，这两个视图的明文 HTTP 图片被 CSP 顺带挡着；放开之后
-它们处于无校验状态——包括 `safeImageUrl` 本会拦掉的链路本地 / 云元数据地址
-（`169.254.169.254` 那一类）。
-
-**⚠️ 先纠正一处初判失误**：本条最初写着"过滤会破坏引用稳定性契约、需要 WeakMap 记忆化"，
-**这是错的**。引用稳定性契约属于上游缓存 `useThumbCache.getMetaThumbnailCandidates`；
-而 `useThumbnailFallbackChain` 的 `watch` 用的是 `hasUrlListChanged`（**逐项比内容**，
-不比引用——因为队列项的候选本来就每次现算新数组）。所以过滤产生新数组**不会**触发重置。
-
-实际改动因此小得多：在 `useThumbnailFallbackChain` 里把 `options.urls()` 的结果过一遍
-`safeImageUrl` 即可。代价只是 `watch` 的 getter 每次返回新引用、回调多跑几次，
-真正的重置仍由 `hasUrlListChanged` 挡着，无正确性风险。
-
 ### [ ] 设置页编辑时的 `config-updated` 广播过于频繁，消费方全量重算
 
 - **来源**：2026-08-16 修托盘缓存陈旧时，从 dev 日志里量出来的
@@ -228,6 +205,12 @@
 ---
 
 ## 已完成
+
+### [x] 收藏页与时间轴的图片 URL 校验
+
+`useThumbnailFallbackChain` 现在把候选过一遍 `safeImageUrl`，两个视图与 `ThumbnailImage` 共用同一道闸；
+已确认的明文 HTTP 域名由各视图用 `getConfirmedHttpHosts(config)` 传入。
+详见 [http-image-host-2026-08-19.md](./audits/http-image-host-2026-08-19.md)（残余风险第 2 条）。
 
 ### [x] 又拍云三条缺陷 + 明文 HTTP 图床支持
 
