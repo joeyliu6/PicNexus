@@ -13,6 +13,7 @@ import { useConfigManager } from '../../composables/useConfig';
 import { useFavoritesData } from '../../composables/favorites/useFavoritesData';
 import { useFavoritesLightbox } from '../../composables/favorites/useFavoritesLightbox';
 import type { HistoryItem, ServiceType } from '../../config/types';
+import { confirmedHttpHostsKey, getConfirmedHttpHosts } from '../../security/networkPolicy';
 import HistoryLightbox from './history/HistoryLightbox.vue';
 import FloatingActionBar from './history/FloatingActionBar.vue';
 import FavoritePhotoItem from './favorites/FavoritePhotoItem.vue';
@@ -31,6 +32,9 @@ const emit = defineEmits<{
 const viewState = useHistoryViewState();
 const historyManager = useHistoryManager();
 const configManager = useConfigManager();
+// 用户显式确认过可走明文 HTTP 的公开域名。一页 80 格共用这一份：候选链的安全过滤要用它，
+// 不传的话已确认的 HTTP 图床（如又拍云免费测试域名）在收藏页会被当危险链接挡掉。
+const confirmedHttpHosts = computed(() => getConfirmedHttpHosts(configManager.config.value));
 
 // 滚动容器（用于保存/恢复滚动位置）
 const scrollContainerRef = ref<HTMLElement | null>(null);
@@ -87,6 +91,16 @@ const selectedAvailableServices = computed<{ serviceId: ServiceType; count: numb
     }
   }
   return Array.from(serviceCountMap.entries()).map(([serviceId, count]) => ({ serviceId, count }));
+});
+
+// 用户在设置页刚确认完明文 HTTP 域名 → 之前因为没确认而被候选链过滤掉、进而判失败的
+// 缩略图应该自己恢复，不该等到重启或重新查库。失败状态记在 imageStates 里，
+// useThumbnailFallbackChain 够不着（它只管选地址），只能由状态的主人来撤销。
+// 盯指纹而非 Set 本身的原因见 confirmedHttpHostsKey。
+watch(() => confirmedHttpHostsKey(confirmedHttpHosts.value), () => {
+  for (const [id, state] of Object.entries(imageStates)) {
+    if (state === 'failed') delete imageStates[id];
+  }
 });
 
 const handleToggleFavorite = async (id: string) => {
@@ -235,6 +249,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
             :key="meta.id"
             :meta="meta"
             :thumbnail-urls="getThumbnailUrls(meta)"
+            :confirmed-http-hosts="confirmedHttpHosts"
             :image-state="imageStates[meta.id]"
             :selected="selectedIdsSet.has(meta.id)"
             @click="openLightbox(meta)"

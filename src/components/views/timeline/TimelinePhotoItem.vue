@@ -27,6 +27,13 @@ const props = defineProps<{
   hasSelection: boolean;
   displayMode: 'fast' | 'smooth' | 'normal';
   thumbnailUrls: string[];
+  /**
+   * 已确认可走明文 HTTP 的主机名（由 TimelineView 用 getConfirmedHttpHosts 算好传下来）
+   *
+   * Why 不在本组件里自己查配置：虚拟列表里每屏几十个实例，每个各算一次等于每个造一个 Set。
+   * 同 ThumbnailImage 的同名 prop。
+   */
+  confirmedHttpHosts?: ReadonlySet<string>;
 }>();
 
 const emit = defineEmits<{
@@ -35,7 +42,11 @@ const emit = defineEmits<{
   (e: 'toggle-favorite'): void;
   (e: 'hover'): void;
   (e: 'image-load'): void;
-  (e: 'image-error', event: Event): void;
+  /**
+   * event 可缺省：超时兜底、以及候选被安全过滤清空这两条路径都没有 `<img>` 的 error 事件。
+   * 消费方（useImageLoadManager.onImageError）据此跳过「重设 img.src」的重试。
+   */
+  (e: 'image-error', event?: Event): void;
 }>();
 
 // 候选链的消费（按序试、失败翻页、超时兜底、回报降级）统一在 composable 里，
@@ -44,7 +55,8 @@ const { currentSrc, handleError, handleLoad } = useThumbnailFallbackChain({
   urls: () => props.thumbnailUrls,
   // fast 模式下未加载的图压根不渲染（见模板 v-if），对它计时会把整屏候选误翻一遍
   isWaiting: () => !props.isFailed && !props.isLoaded && props.displayMode !== 'fast',
-  onExhausted: (e) => emit('image-error', e as Event),
+  onExhausted: (e) => emit('image-error', e),
+  confirmedHttpHosts: () => props.confirmedHttpHosts,
 });
 
 function handleImgError(e: Event): void {

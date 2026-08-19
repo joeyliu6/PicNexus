@@ -157,11 +157,13 @@ export function getConfirmedWebdavHttpHosts(
  *
  * 供 {@link safeImageUrl} 的调用方一次拿全，省得每个视图各收集一遍、漏一类就少放行一批图。
  *
- * ⚠️ **这不是应用内唯一的图片闸门**：收藏页与时间轴走
- * `useThumbnailFallbackChain`，不经过 `safeImageUrl`，因此本函数管不到它们。
- * 2026-08-19 给 CSP 的 `img-src` 放开 `http:` 之后，那两个视图对明文 HTTP 图片
- * 处于无校验状态。统一这道闸需要改缩略图候选链（有引用稳定性契约，见 useThumbCache），
- * 已记入 `docs/TODO.md`，不要以为这里拦住了就万事大吉。
+ * **调用方清单**（新增渲染图片的视图时请一并接上，否则那个视图等于不设防）：
+ * - `HistoryTableView` / `QueueCard` → `ThumbnailImage` 的 `confirmedHttpHosts` prop
+ * - `FavoritesView` / `TimelineView` → `useThumbnailFallbackChain` 的 `confirmedHttpHosts` 选项
+ *
+ * 后两个是 2026-08-19 补上的：给 CSP 的 `img-src` 放开 `http:` 之前，CSP 是收藏页 /
+ * 时间轴仅有的图片闸门，放开之后它们一度处于无校验状态。详见
+ * `docs/audits/http-image-host-2026-08-19.md`。
  */
 export function getConfirmedHttpHosts(config: {
   services?: Record<string, unknown> | undefined;
@@ -176,6 +178,20 @@ export function getConfirmedHttpHosts(config: {
   const hosts = getConfirmedS3HttpHosts(s3Entries);
   for (const host of getConfirmedWebdavHttpHosts(config?.webdav_profiles)) hosts.add(host);
   return hosts;
+}
+
+/**
+ * 把已确认主机名集合压成一个可直接比对的指纹字符串
+ *
+ * Why 需要它：{@link getConfirmedHttpHosts} 每调一次都产出**新 Set**，而配置保存广播
+ * 极其频繁（实测填一个 S3 profile 会存 26 次，见 `docs/flows/window-system-integration.md`）。
+ * 视图若按 Set 的引用去 watch「名单变了没」，每存一次都会误判成变了，
+ * 把那一屏判失败的死图全部重试一轮——白发几十个必然失败的请求。
+ *
+ * 指纹只在**名单内容真的变了**时才变，也就是用户确认 / 撤销了某个域名的那一刻。
+ */
+export function confirmedHttpHostsKey(hosts: ReadonlySet<string>): string {
+  return [...hosts].sort().join('|');
 }
 
 /**
