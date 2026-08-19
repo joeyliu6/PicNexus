@@ -100,7 +100,8 @@
 ### [ ] 收藏页与时间轴的图片没有 URL 校验（放开 HTTP 图床后暴露）
 
 - **来源**：2026-08-19 放开明文 HTTP 图床时发现，详见 [http-image-host-2026-08-19.md](./audits/http-image-host-2026-08-19.md)
-- **优先级**：中——不影响功能，但少了一道本该有的闸
+- **优先级**：**发布前必修**（2026-08-19 代码审查建议上调）——放开 CSP 的那个提交与它同批，
+  发出去就等于把这个缺口一起发出去了
 
 `ThumbnailImage.vue`（历史表格、上传队列）走 `safeImageUrl` 过滤；而
 `FavoritePhotoItem.vue` / `TimelinePhotoItem.vue` 走 `useThumbnailFallbackChain`，

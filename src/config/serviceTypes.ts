@@ -86,10 +86,13 @@ export interface WeiboServiceConfig extends BaseServiceConfig {
  *
  * 判据：`normalizeHost(new URL(publicDomain).hostname) === httpDomainConfirmedFor`。
  */
-export interface HttpDomainConfirmable {
+// Why 是 type 而不是 interface：接口不会获得隐式索引签名，交叉进表单形状后
+// 整个类型就不再能赋给 `Record<string, unknown>`，而 `buildRawServiceRecord`
+// 一类的通用配置搬运正是这么用的。类型别名没有这个限制。
+export type HttpDomainConfirmable = {
   /** 用户确认过可以走明文 HTTP 的主机名（小写，不含端口）。与当前 publicDomain 不匹配即失效 */
   httpDomainConfirmedFor?: string;
-}
+};
 
 /**
  * Cloudflare R2 服务配置

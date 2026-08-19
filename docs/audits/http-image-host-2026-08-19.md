@@ -106,6 +106,23 @@
 
 **已记入 `docs/TODO.md`。** 不要因为 `getConfirmedHttpHosts` 存在就以为全应用都拦住了。
 
+## 代码审查补修（2026-08-19）
+
+审查发现一处**真缺陷**：`allowConfirmedHttp` 原本无条件 `return parsed`，而上面两道
+`isAlwaysBlockedHost` / `isFakeIpPoolHost` 检查挂在 `allowPrivate` 下、这条路径走不到。
+后果是**已确认的 `http://169.254.169.254`（云元数据）能通过校验层**。
+
+实际暴露有限（`safeImageUrl` 渲染时仍拦、且要用户亲手确认过该地址），但当时新增的测试
+**只断言了 `safeImageUrl`**，反而造成"校验层也拦着"的错觉——这正是审查点出的问题。
+
+已修：`allowConfirmedHttp` 分支单独再查一次 always-blocked。普通私网地址仍放行
+（自建 MinIO 挂 192.168.x 是正当场景）。测试补了校验层的正反两条判据，并做过阴性对照
+（撤掉修复后测试确实变红）。
+
+顺带补掉两处欠账：`SettingsFormShape` 的五个 S3 系交叉上 `HttpDomainConfirmable`
+（原先靠运行时 cast 落盘，而 `typecheck` 只覆盖 `src/`、测试里的访问从没被类型检查过）；
+`docs/reference/api/uploaders.md` 的又拍云认证方式更新为 S3 凭证，并加了两条链路的对照表。
+
 ## 验证
 
 ### 已完成
