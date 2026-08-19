@@ -410,6 +410,6 @@ describe('PrivateStorageGroup · 长说明收进 label 图标', () => {
   it('短说明仍然常驻显示，没被一起藏起来', () => {
     const texts = upyunCard().findAll('.field-hint').map(h => h.text());
 
-    expect(texts.some(t => t.includes('公开图片链接仅支持 HTTPS'))).toBe(true);
+    expect(texts.some(t => t.includes('建议填 HTTPS'))).toBe(true);
   });
 });
