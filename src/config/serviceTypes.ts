@@ -316,12 +316,20 @@ export interface QiniuServiceConfig extends BaseServiceConfig {
 
 /**
  * 又拍云图床服务配置
- * 私有存储，需要 Operator 和 Password
+ *
+ * ⚠️ **两套凭证，各管一条链路，不能互相顶替**：
+ * - `operator` / `password`：又拍云自家 REST API（Basic Auth）。走编辑器 / CLI 上传
+ *   与设置页「测试连接」。
+ * - `s3AccessKey` / `s3SecretKey`：S3 兼容端点（SigV4）。走 GUI 主界面上传。
+ *   要在控制台「操作员-编辑」或「操作员授权-S3访问凭证」里**单独生成**。
+ *
+ * 2026-08-19 实测：拿 operator/password 去签 S3 请求，又拍云回 `ErrInvalidAccessKeyID`；
+ * 换成控制台生成的那对则 200。详见 `docs/audits/upyun-audit-2026-08-19.md`。
  */
 export interface UpyunServiceConfig extends BaseServiceConfig {
-  /** 又拍云 Operator */
+  /** 操作员账号（REST 链路：编辑器 / CLI / 测试连接） */
   operator: string;
-  /** 又提云 Password */
+  /** 操作员密码（REST 链路） */
   password: string;
   /** 存储桶名称 */
   bucket: string;
@@ -329,6 +337,10 @@ export interface UpyunServiceConfig extends BaseServiceConfig {
   publicDomain: string;
   /** 存储路径前缀（默认 images/） */
   path: string;
+  /** S3 访问凭证 AccessKey（S3 链路：GUI 上传）。与 operator 是两码事 */
+  s3AccessKey: string;
+  /** S3 访问凭证 SecretKey（S3 链路）。与 password 是两码事 */
+  s3SecretKey: string;
 }
 
 /**

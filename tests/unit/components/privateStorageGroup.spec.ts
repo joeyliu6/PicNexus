@@ -311,11 +311,12 @@ describe('PrivateStorageGroup · 内置 S3 密钥', () => {
   it('五个内置服务的密码字段全部接上草稿机', () => {
     const { wrapper } = mountGroup();
 
-    // r2/tencent/aliyun/qiniu 各 2 个，upyun 2 个 —— 共 10 个
+    // r2/tencent/aliyun/qiniu 各 2 个；upyun 4 个 —— 它有两套凭证：
+    // operator/password 走 REST（编辑器/CLI），s3AccessKey/s3SecretKey 走 S3（GUI 上传）
     const counts = ['r2', 'tencent', 'aliyun', 'qiniu', 'upyun'].map(
       id => fieldsInCard(wrapper, id).length,
     );
-    expect(counts).toEqual([2, 2, 2, 2, 2]);
+    expect(counts).toEqual([2, 2, 2, 2, 4]);
   });
 });
 

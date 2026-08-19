@@ -78,7 +78,10 @@ export function sanitizeConfig(config: UserConfig): UserConfig {
       } : undefined,
       upyun: config.services.upyun ? {
         ...config.services.upyun,
-        password: sanitizeString(config.services.upyun.password, 0, 0)
+        password: sanitizeString(config.services.upyun.password, 0, 0),
+        // 又拍云有两套凭证，S3 那对同样是密钥，漏脱敏会随日志/诊断导出泄露
+        s3AccessKey: sanitizeString(config.services.upyun.s3AccessKey, 4, 4),
+        s3SecretKey: sanitizeString(config.services.upyun.s3SecretKey, 0, 0)
       } : undefined
     },
     custom_s3_profiles: config.custom_s3_profiles?.map(profile => ({

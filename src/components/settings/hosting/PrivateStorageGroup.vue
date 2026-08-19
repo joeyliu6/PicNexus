@@ -19,7 +19,7 @@ interface PrivateFormData {
   tencent: { secretId: string; secretKey: string; region: string; bucket: string; path: string; publicDomain: string };
   aliyun: { accessKeyId: string; accessKeySecret: string; region: string; bucket: string; path: string; publicDomain: string };
   qiniu: { accessKey: string; secretKey: string; region: string; bucket: string; publicDomain: string; path: string };
-  upyun: { operator: string; password: string; bucket: string; publicDomain: string; path: string };
+  upyun: { operator: string; password: string; bucket: string; publicDomain: string; path: string; s3AccessKey: string; s3SecretKey: string };
 }
 
 type PrivateProviderId = keyof PrivateFormData;
@@ -92,10 +92,12 @@ const PRIVATE_SERVICES: ServiceConfig[] = [
   },
   {
     id: 'upyun', name: '又拍云', description: '又拍云对象存储',
-    requiredKeys: ['operator', 'password', 'bucket', 'publicDomain'],
+    requiredKeys: ['operator', 'password', 'bucket', 'publicDomain', 's3AccessKey', 's3SecretKey'],
     fields: [
       { key: 'operator', label: 'Operator', type: 'password', placeholder: '操作员账号' },
       { key: 'password', label: 'Password', type: 'password', placeholder: '操作员密码' },
+      { key: 's3AccessKey', label: 'S3 AccessKey', type: 'password', placeholder: '控制台单独生成，非操作员账号', hint: '又拍云的 S3 凭证与上面的操作员账号密码是两回事，需在控制台「操作员授权 → S3 访问凭证」单独获取。软件内上传用这一对，Typora / Obsidian 用上面那一对。' },
+      { key: 's3SecretKey', label: 'S3 SecretKey', type: 'password', placeholder: '控制台单独生成，非操作员密码' },
       { key: 'bucket', label: '存储桶 (Bucket)', type: 'text', spanFull: true },
       { key: 'publicDomain', label: '公开访问域名 (Public Domain)', type: 'text', placeholder: 'https://images.example.com', spanFull: true, hint: '公开图片链接仅支持 HTTPS' },
       { key: 'path', label: '自定义路径 (Optional)', type: 'text', placeholder: 'e.g. blog/images/', spanFull: true },

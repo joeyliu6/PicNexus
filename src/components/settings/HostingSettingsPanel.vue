@@ -18,7 +18,7 @@ interface PrivateFormData {
   tencent: { secretId: string; secretKey: string; region: string; bucket: string; path: string; publicDomain: string };
   aliyun: { accessKeyId: string; accessKeySecret: string; region: string; bucket: string; path: string; publicDomain: string };
   qiniu: { accessKey: string; secretKey: string; region: string; bucket: string; publicDomain: string; path: string };
-  upyun: { operator: string; password: string; bucket: string; publicDomain: string; path: string };
+  upyun: { operator: string; password: string; bucket: string; publicDomain: string; path: string; s3AccessKey: string; s3SecretKey: string };
 }
 
 interface CookieFormData {
