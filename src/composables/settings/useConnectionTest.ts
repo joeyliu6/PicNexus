@@ -13,6 +13,8 @@ import type { ServiceType, CustomS3Profile, WebDAVStorageProfile } from '../../c
 import { isCustomS3Id, getCustomS3ProfileId, isWebDAVId, getWebDAVProfileId } from '../../config/types';
 import { WebDAVUploader } from '../../uploaders/webdav/WebDAVUploader';
 import { extractNamiAuthToken } from '../../utils/namiAuthToken';
+import { normalizeHost } from '../../security/networkPolicy';
+import { needsHttpDomainConsent } from './s3ConfigValidation';
 import type { SettingsFormShape } from './settingsFormTypes';
 import type { ServiceHealthStatus } from '../../types/serviceHealth';
 
@@ -23,6 +25,8 @@ interface UseConnectionTestOptions {
   validateS3Config: (serviceId: string, config: Record<string, unknown>) => string | null;
   /** 写回 WebDAV profile（明文 HTTP 确认后需要持久化标记） */
   updateWebdavProfile: (profile: WebDAVStorageProfile) => void;
+  /** 持久化配置（S3 系明文 HTTP 确认后需要落盘） */
+  saveSettings: () => void;
 }
 
 /**
@@ -37,8 +41,22 @@ const LAN_HTTP_CONSENT_MESSAGE =
   + '凭证就会在链路上裸奔。\n\n'
   + '确认这是你自己的内网设备再继续；更稳妥的做法是改填内网 IP（如 http://192.168.1.10:5005）或改用 HTTPS。';
 
+/**
+ * 公开域名走明文 HTTP 的确认文案
+ *
+ * 与 LAN_HTTP_CONSENT_MESSAGE 是两回事：那条是"判不出在不在局域网"，这条是
+ * "确实在公网、就是明文"。所以代价要写全——尤其"贴进 HTTPS 网页会被浏览器拦掉"
+ * 这条，用户不知道的话会以为是图床坏了。
+ */
+const HTTP_DOMAIN_CONSENT_MESSAGE =
+  '这个公开访问域名是明文 HTTP。图片链接会以明文传输，中途可能被人看到或替换。\n\n'
+  + '还有一个更常见的麻烦：把 http:// 的图片链接贴进 HTTPS 网页（大多数博客都是），'
+  + '浏览器会按“混合内容”拦掉，图直接不显示——链接本身没错，是浏览器不让加载。\n\n'
+  + '确认后，PicNexus 只对这一个域名放行；换成别的域名要重新确认。'
+  + '如果图床支持绑定自有域名并开启 HTTPS，那才是更稳妥的做法。';
+
 export function useConnectionTest(options: UseConnectionTestOptions) {
-  const { formData, serviceNames, errorToString, validateS3Config, updateWebdavProfile } = options;
+  const { formData, serviceNames, errorToString, validateS3Config, updateWebdavProfile, saveSettings } = options;
 
   const toast = useToast();
   const { confirm: confirmDialog } = useConfirm();
@@ -96,6 +114,42 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
       toast.showConfig('error', TOAST_MESSAGES.auth.connectionFailed('GitHub', String(error)));
       throw error;
     }
+  }
+
+  /**
+   * 把「这个明文 HTTP 域名我认了」写进配置并落盘
+   *
+   * 存主机名而不是布尔值：用户一改域名就自然失配、确认自动作废，不需要在每个
+   * 能改域名的地方补作废逻辑（对照 WebDAV 的 `lanHttpConfirmed`——那个布尔值
+   * 得靠 `useStorageProfiles` 里手写的"地址变了就置 false"兜着，漏一处就留下过期放行）。
+   *
+   * ⚠️ 两条链路的 config 来源不同，必须分开写回：内置图床拿到的是 formData 里
+   * 那份对象的**引用**，改它即改配置；自定义 S3 拿到的是 `{ ...profile }` 的**拷贝**，
+   * 只改 config 的话确认压根不会落盘，下次测试又弹一遍。
+   */
+  function persistHttpDomainConsent(serviceId: string, config: Record<string, unknown>): boolean {
+    let host: string;
+    try {
+      host = normalizeHost(new URL(String(config.publicDomain).trim()).hostname);
+    } catch {
+      return false;
+    }
+    if (!host) return false;
+
+    config.httpDomainConfirmedFor = host;
+
+    if (isCustomS3Id(serviceId)) {
+      const profileId = getCustomS3ProfileId(serviceId);
+      const idx = formData.value.custom_s3_profiles.findIndex((item: CustomS3Profile) => item.id === profileId);
+      if (idx === -1) return false;
+      formData.value.custom_s3_profiles[idx] = {
+        ...formData.value.custom_s3_profiles[idx],
+        httpDomainConfirmedFor: host,
+      };
+    }
+
+    saveSettings();
+    return true;
   }
 
   async function testS3Connection(serviceId: string) {
@@ -221,6 +275,24 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
 
   const S3_SERVICE_IDS: ServiceType[] = ['r2', 'tencent', 'aliyun', 'qiniu', 'upyun'];
 
+  /**
+   * 取出 S3 系图床的配置对象（内置或自定义 profile），非 S3 系返回 null
+   *
+   * 抽出来是为了让预校验和明文 HTTP 逃生舱看的是**同一份对象**——
+   * 逃生舱要就地写确认标记，拿到不同实例就会写空。
+   */
+  function resolveS3Config(serviceId: string): Record<string, unknown> | null {
+    if (isCustomS3Id(serviceId)) {
+      const profileId = getCustomS3ProfileId(serviceId);
+      const profile = formData.value.custom_s3_profiles.find((item: CustomS3Profile) => item.id === profileId);
+      return (profile as unknown as Record<string, unknown>) ?? null;
+    }
+    if (S3_SERVICE_IDS.includes(serviceId as ServiceType)) {
+      return formData.value[serviceId as 'r2' | 'tencent' | 'aliyun' | 'qiniu' | 'upyun'] as unknown as Record<string, unknown>;
+    }
+    return null;
+  }
+
   function preValidateService(serviceId: string): string | null {
     if (isCustomS3Id(serviceId)) {
       const profileId = getCustomS3ProfileId(serviceId);
@@ -281,7 +353,33 @@ export function useConnectionTest(options: UseConnectionTestOptions) {
   async function executeServiceTask(serviceId: string, task: () => Promise<void>) {
     const isBuiltinProbe = BUILTIN_PROBE_IDS.has(serviceId);
     try {
-      const validationError = preValidateService(serviceId);
+      let validationError = preValidateService(serviceId);
+
+      // 明文 HTTP 公开域名逃生舱：让用户显式担责后重试一次
+      //
+      // Why 挂在这里而不是 testS3Connection 里：预校验失败会直接抛出，下游 task
+      // 根本不执行——写在 task 里就是死代码（2026-08-19 亲测踩过）。这里是
+      // 内置 S3 与自定义 S3 共用的唯一卡点。
+      //
+      // 与 WebDAV 那个逃生舱的差别：那条放行的是"判不清是不是局域网"，
+      // 这条放行的是**公网明文 HTTP**。相同的两条约束照搬：只在单项测试里弹
+      // （批量会连环阻塞），只重试一次（确认后仍失败说明是别的原因）。
+      if (validationError && activeSession.value?.mode === 'single') {
+        const s3Config = resolveS3Config(serviceId);
+        if (s3Config && needsHttpDomainConsent(s3Config)) {
+          const confirmed = await confirmDialog(HTTP_DOMAIN_CONSENT_MESSAGE, {
+            header: '明文 HTTP 域名确认',
+            acceptLabel: '我已了解并继续',
+            rejectLabel: '取消',
+            acceptClass: 'p-button-warning',
+          });
+
+          if (confirmed && persistHttpDomainConsent(serviceId, s3Config)) {
+            validationError = preValidateService(serviceId);
+          }
+        }
+      }
+
       if (validationError) {
         serviceHealth.markTestFailed(serviceId, validationError);
         // 预校验失败时，下游 task（testS3Connection）不会执行，需在此补一条错误 toast；

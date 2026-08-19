@@ -4,7 +4,7 @@ import type { UserConfig } from '../../config/types';
 import type { QueueItem } from '../../core/UploadQueue';
 import type { LinkFormat } from '../../utils/linkFormatter';
 import { getThumbnailCandidates } from '../../composables/useThumbCache';
-import { getConfirmedWebdavHttpHosts } from '../../security/networkPolicy';
+import { getConfirmedHttpHosts } from '../../security/networkPolicy';
 import { isStatusSuccess, isStatusError, isStatusUploading } from '../../utils/uploadStatus';
 import ThumbnailImage from '../common/ThumbnailImage.vue';
 import ChannelCard from './ChannelCard.vue';
@@ -81,7 +81,7 @@ const statusText = computed(() => {
 
 const thumbnailSrcs = computed(() => getThumbnailCandidates(props.item, props.config));
 // 走过 fake-ip 逃生舱确认的 WebDAV 主机名，让缩略图不再把已确认的地址当危险链接挡掉
-const confirmedHttpHosts = computed(() => getConfirmedWebdavHttpHosts(props.config.webdav_profiles));
+const confirmedHttpHosts = computed(() => getConfirmedHttpHosts(props.config));
 
 function getServiceCopyKey(serviceId: string): string {
   return `upload-queue:${props.item.id}:${serviceId}`;
