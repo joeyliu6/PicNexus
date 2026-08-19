@@ -226,7 +226,23 @@ describe('networkPolicy · 明文 HTTP 公开域名确认', () => {
   });
 
   it('确认过的域名不能给链路本地 / 云元数据地址开后门', () => {
-    // allowConfirmedHttp 是给公开域名用的；云元数据这类地址不该因为"用户点过确认"就放行
+    // 校验层：点过确认也不能让这类地址通过。上面那两道 always-blocked 检查挂在
+    // allowPrivate 下，allowConfirmedHttp 走不到，必须单独拦——漏了的话整个校验层
+    // 对已确认域名等于不设防（2026-08-19 代码审查发现，当时确实漏着）
+    for (const host of ['169.254.169.254', '169.254.1.1']) {
+      expect(() => assertAllowedExternalUrl(`http://${host}/latest`, {
+        label: '公开访问域名',
+        allowConfirmedHttp: true,
+      }), `${host} 不该被放行`).toThrow();
+    }
+
+    // 反向判据：普通私网地址仍要放行——自建 MinIO 挂在 192.168.x 是正当场景
+    expect(() => assertAllowedExternalUrl('http://192.168.1.10:9000', {
+      label: '公开访问域名',
+      allowConfirmedHttp: true,
+    })).not.toThrow();
+
+    // 渲染层：同一件事在 safeImageUrl 这边也拦着（两道闸各自独立）
     const hosts = getConfirmedS3HttpHosts([
       { publicDomain: 'http://169.254.169.254', httpDomainConfirmedFor: '169.254.169.254' },
     ]);

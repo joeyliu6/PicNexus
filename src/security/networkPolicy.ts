@@ -89,7 +89,15 @@ export function assertAllowedExternalUrl(rawUrl: string, options: NetworkPolicyO
     // 用户已对这个域名显式担责过。放在私网判断之前：确认的是具体域名，
     // 跟它解析到公网还是内网无关——正因为解析结果不可信（TUN fake-ip 会把
     // 任意域名塞进 198.18/15），才需要人来拍板。
-    if (options.allowConfirmedHttp) return parsed;
+    //
+    // 但链路本地 / 云元数据（169.254.169.254 那一类）不在可确认之列：
+    // 那不是"图床域名"，用户点确认也不该让它变成一个能被应用请求的地址。
+    // 上面那两道 always-blocked 检查挂在 allowPrivate 下，这条路径走不到，
+    // 所以必须在这里单独拦一次——否则整个校验层对已确认域名等于不设防。
+    if (options.allowConfirmedHttp) {
+      if (isAlwaysBlockedHost(parsed.hostname)) throw new Error(BLOCKED_HOST_MESSAGE);
+      return parsed;
+    }
     if (allowPrivate) {
       // 前端无法解析 DNS，主机名 HTTP 先放行，由 Rust 侧解析后做最终裁决。
       const host = normalizeHost(parsed.hostname);
