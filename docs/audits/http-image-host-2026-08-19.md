@@ -152,6 +152,17 @@
 后来用户看到一条 `https://` 的旧链接，一度以为改动没生效。
 **这类"为验证而填的假值"要当场说清会污染历史数据。**
 
-### 仍待验证
+### 未验证项（用户决定跳过，不是遗漏）
 
-- **WebDAV 局域网图床的缩略图**（顺带修好的那个）——需要一台能连的局域网 WebDAV，尚未回归
+- **WebDAV 局域网图床的缩略图**（顺带修好的那个）——**没有真机回归**，
+  用户 2026-08-19 判断风险可接受，跳过。
+
+  跳过的依据：它与又拍云走的是同一条判据（CSP `img-src` 拦明文 HTTP），
+  而又拍云那条已经真机验过能显示。所以**推断**局域网 WebDAV 也一并好了。
+
+  但这是推断不是实测，可能推翻它的差异有两处：局域网地址会额外经过
+  `isPrivateOrReservedHost` 分支；`lanHttpConfirmed` 与本次新增的
+  `httpDomainConfirmedFor` 是两套独立标记，合并发生在 `getConfirmedHttpHosts`。
+  哪天有人报"NAS 图床缩略图不显示"，**先查这里，别当新问题从头查起**。
+
+  复现环境搭法见 [webdav-testing-environments.md](../reference/guides/webdav-testing-environments.md)。
