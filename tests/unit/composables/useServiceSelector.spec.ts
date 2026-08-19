@@ -182,10 +182,23 @@ describe('useServiceSelector - updateServiceConfigStatus', () => {
     expect(api.serviceConfigStatus.value.qiniu).toBe(true);
   });
 
-  it('upyun - 四字段齐全 → true', async () => {
+  // 这里是 GUI 上传口径：又拍云的 GUI 链路走 S3 端点，只认 s3AccessKey/s3SecretKey。
+  // 光有 operator/password 传不了图（实测回 ErrInvalidAccessKeyID），不能算配置完成。
+  it('upyun - 只有 REST 凭证 → false（GUI 上传走 S3，缺 S3 凭证传不了）', async () => {
     const cfg = cloneDefault();
     cfg.services.upyun = {
       operator: 'o', password: 'p', bucket: 'b', publicDomain: 'd',
+    } as any;
+    const api = useServiceSelector();
+    await api.updateServiceConfigStatus(cfg);
+    expect(api.serviceConfigStatus.value.upyun).toBe(false);
+  });
+
+  it('upyun - 两套凭证齐全 → true', async () => {
+    const cfg = cloneDefault();
+    cfg.services.upyun = {
+      operator: 'o', password: 'p', bucket: 'b', publicDomain: 'd',
+      s3AccessKey: 'ak', s3SecretKey: 'sk',
     } as any;
     const api = useServiceSelector();
     await api.updateServiceConfigStatus(cfg);

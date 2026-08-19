@@ -392,8 +392,9 @@ const s3Uploaders: S3UploaderConfig[] = [
   {
     name: 'UpyunUploader',
     createUploader: () => new UpyunUploader(),
+    // GUI 上传走 S3 端点，凭证取的是 s3AccessKey/s3SecretKey 而非 operator/password
     validConfig: {
-      operator: 'op', password: 'pw', bucket: 'mybucket',
+      s3AccessKey: 'ak', s3SecretKey: 'sk', bucket: 'mybucket',
     },
     expectedServiceId: 'upyun',
   },

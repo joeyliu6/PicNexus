@@ -217,6 +217,26 @@ describe('editorServiceConfig', () => {
     expect(buildCliServicesConfig(form)['webdav:profile-1']).toBeUndefined();
   });
 
+  // 又拍云是唯一一个两条链路用不同凭证的图床：编辑器/CLI 走 REST（operator/password），
+  // GUI 上传走 S3（控制台单独生成的 s3AccessKey/s3SecretKey）。拿 GUI 那套卡编辑器，
+  // 会让一条本来就能用的链路因为缺一把它用不到的钥匙而停摆。
+  it('treats upyun as editor-ready with REST credentials alone, without the S3 pair', () => {
+    const form = makeForm({
+      upyun: { operator: 'op', password: 'pw', bucket: 'buk', publicDomain: 'https://cdn.example.com', path: 'images/', s3AccessKey: '', s3SecretKey: '' },
+    });
+
+    expect(isCliCompatibleServiceConfigured('upyun', form)).toBe(true);
+    expect(buildServiceConfig('upyun', form)).toMatchObject({ type: 'upyun', operator: 'op', path: 'images/' });
+  });
+
+  it('still requires upyun REST credentials for the editor chain', () => {
+    const form = makeForm({
+      upyun: { operator: '', password: '', bucket: 'buk', publicDomain: 'https://cdn.example.com', path: 'images/', s3AccessKey: 'ak', s3SecretKey: 'sk' },
+    });
+
+    expect(isCliCompatibleServiceConfigured('upyun', form)).toBe(false);
+  });
+
   it('builds a WebDAV service config using the plaintext password passed in, not the ciphertext', () => {
     const form = makeForm({ webdav_profiles: [makeWebDAVProfile()] });
 
