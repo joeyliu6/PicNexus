@@ -7,7 +7,7 @@
 #      （官方文档说 S3 凭证要去控制台「操作员-编辑」或「操作员授权-S3访问凭证」单独取）
 #   2. 编辑器链路加上 path 前缀后，父目录不存在时又拍云会自动建吗？
 #      （官方文档只说创建目录是独立的 POST folder=true 接口，没写 PUT 的行为）
-#   3. 编辑器链路不做文件名唯一化，同名再传是不是无声覆盖？
+#   3. 又拍云协议层面允不允许同名覆盖？（决定代码要不要做文件名唯一化——结论：要，已做）
 #
 # 又拍云在 PicNexus 里是**三条独立链路**，用不同的域名和认证方式，必须分开测：
 #
@@ -41,7 +41,7 @@ param(
   [string]$Bucket,
   [string]$PublicDomain,
 
-  # GUI 侧的存储路径前缀，对应设置页「存储路径」。编辑器链路目前**不认**这个值（缺陷 P2）。
+  # 存储路径前缀，对应设置页「存储路径」。两条链路都认（编辑器侧 2026-08-19 补齐）。
   [string]$UploadPath = "images/",
 
   # 控制台单独生成的 S3 访问凭证，用作对照组。留空则跳过 C2。
@@ -311,7 +311,7 @@ if ($okA) {
 # ── B. 编辑器链路现状 ─────────────────────────────────────────────────
 $okB = $false; $okB2 = $false; $overwritten = $false
 if ($okA) {
-  Section "B. 编辑器/CLI 上传（REST PUT）—— 现状：扔根目录、文件名不唯一化"
+  Section "B. 编辑器/CLI 上传（REST PUT）—— 裸协议形态：不贴前缀、不唯一化"
   Info "PUT $RestHost/$Bucket/$NameB"
   Info "Content-Type: image/png（工作区刚把写死的 image/* 换成按扩展名推断）"
   $rb = Invoke-RestPut $NameB
@@ -322,8 +322,8 @@ if ($okA) {
   # B3. 同名覆盖风险（不依赖 B2，先测）
   if ($okB) {
     Section "B3. 覆盖风险 —— 同一个文件名换一张图再传一次"
-    Info "server_upload_upyun 不调 build_upload_key，用的是原始文件名；"
-    Info "其余四家（R2/腾讯/阿里/七牛）都会加 {日期}_{随机}_ 前缀。"
+    Info "探的是裸协议：又拍云本身允不允许同名覆盖，答案决定代码该不该做唯一化。"
+    Info "这里**故意不走** build_upload_key——那是产品代码的防护（2026-08-19 已补），"; Info "要测的是防护之下的协议行为，所以报「确认存在」是预期结果，不是回归。"
 
     $sizeBefore = Get-RestObjectSize $NameB
     Info "第一发落桶后回读：$(if ($null -ne $sizeBefore) { "$sizeBefore 字节" } else { "读不到" })"
@@ -468,7 +468,7 @@ function Test-S3WithRegionFallback([string]$AccessKey, [string]$SecretKey, [stri
   return $false
 }
 
-$okC = Test-S3WithRegionFallback $Operator $Password $KeyC "用【操作员账号/密码】当 AK/SK（UpyunUploader.ts 现在就是这么干的）"
+$okC = Test-S3WithRegionFallback $Operator $Password $KeyC "用【操作员账号/密码】当 AK/SK（2026-08-19 前 UpyunUploader.ts 的做法，保留作阴性对照）"
 if ($okC) { $KeyC = $script:LastS3Key }
 
 $okC2 = $null
@@ -531,7 +531,7 @@ if ($okA -and -not $okC) {
     Say "     下一步：控制台拿一对 S3 访问凭证，加 -S3AccessKey/-S3SecretKey 重跑，" "Yellow"
     Say "     对照组若通过就石锤 UpyunUploader.ts 的 getAccessKey/getSecretKey 要改。" "Yellow"
   } elseif ($okC2) {
-    Say "     对照组通过 = 石锤。UpyunServiceConfig 要加 s3AccessKey/s3SecretKey 两个字段。" "Yellow"
+    Say "     对照组通过 = 石锤。UpyunServiceConfig 已于 2026-08-19 加上 s3AccessKey/s3SecretKey。" "Yellow"
   } else {
     Say "     对照组也失败，且候选 region 都试过了 = 问题不在凭证种类、也不在 region。" "Yellow"
     Say "     把上面 C/C2 两段的响应体贴给 AI，需要重新定位。" "Yellow"

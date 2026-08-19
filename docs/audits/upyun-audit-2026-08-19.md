@@ -6,8 +6,11 @@
 
 ## 一句话结论
 
-又拍云有 **3 个真缺陷**：D1（P0 同名无声覆盖）、D2（P2 存储路径失效）**已修并真机验证**；
-**Q1 已坐实且更严重——GUI 上传从来就没通过**，尚未修。Q2（region）实测排除，不用改。
+又拍云有 **3 个真缺陷，全部已修并真机验证**：D1（P0 同名无声覆盖）、D2（P2 存储路径失效）、
+**Q1（GUI 上传从来就没通过——拿 REST 凭证去签 S3 请求）**。Q2（region）实测排除，不用改。
+
+三个缺陷同一个根因：又拍云是五个私有存储里唯一不走 S3 SDK 的，公共流水线上的改进它都没吃到；
+而它偏偏又是唯一一个**两条链路用两套不同凭证**的图床，两件事叠在一起就没人察觉。
 
 实测脚本：[scripts/test-upyun-compat.ps1](../../scripts/test-upyun-compat.ps1)，
 原始结论：`scripts/.upyun-result.local`（gitignored）。
@@ -211,53 +214,67 @@ REST 凭证，而 S3 接口不认它。要修：`UpyunServiceConfig` 加 `s3Acce
 | ❌ | ❌ | 大概率是 Q2（region），加 `-Region us-east-1` 重跑 |
 | ✅ | — | Q1 不成立，GUI 链路无需改动 |
 
-## 剩下的活：Q1
+## Q1 已修（2026-08-19）
 
 | 缺陷 | 状态 |
 |------|------|
-| D1 + D2 | ✅ 已修 + 真机验证 + 回归哨兵（见「已修」） |
+| D1 + D2 | ✅ 已修 + 真机验证 + 回归哨兵 |
 | Q2 | ✅ 实测排除，不改 |
-| **Q1** | ⬜ **未修**，方案见下 |
+| Q1 | ✅ 已修（见下） |
 
-Q1 的改动点（六处，单独一个提交——涉及配置结构变更）：
+八处改动，拆两个提交（先让字段存在且可编辑，再真正启用并卡门槛）：
 
 | # | 位置 | 改动 |
 |---|------|------|
 | ① | `serviceTypes.ts::UpyunServiceConfig` | 加 `s3AccessKey` / `s3SecretKey` |
 | ② | `defaults.ts` | 两个新字段的空默认值 |
-| ③ | `validators.ts` | `s3SecretKey` 加进脱敏（现在只脱敏了 `password`），否则会随日志/诊断导出泄露 |
-| ④ | `UpyunUploader.ts::getAccessKey/getSecretKey` | 改读新字段 |
-| ⑤ | `PrivateStorageGroup.vue` 的 `upyun.fields` | 加两个 `type: 'password'` 字段配置（表单是数据驱动的，不动模板） |
-| ⑥ | `serviceRequiredFields.ts` | 见下面这个待定项 |
+| ③ | `validators.ts` | 两个新字段加进脱敏（原先只脱敏 `password`），否则随日志/诊断导出泄露 |
+| ④ | `settingsFormTypes.ts` / `useSettingsForm.ts` / `HostingSettingsPanel.vue` | 表单形状三处（`PrivateFormData` 有重名副本，改一处不够） |
+| ⑤ | `PrivateStorageGroup.vue` 的 `upyun.fields` | 两个 `type: 'password'` 字段 + 说明这与操作员账密是两回事 |
+| ⑥ | `UpyunUploader.ts::getAccessKey/getSecretKey` | 改读新字段 |
+| ⑦ | `serviceRequiredFields.ts` | `SERVICE_REQUIRED_FIELDS.upyun` 加两个新字段（卡 GUI 上传）；新增 `REST_CHAIN_REQUIRED_FIELDS` + `getRestChainRequiredFields`（编辑器/CLI/测试连接口径） |
+| ⑧ | `editorServiceConfig.ts` / `s3ConfigValidation.ts` | 改用 REST 口径 |
 
-**⑥ 待用户拍板**：又拍云修完后要两套互不相干的凭证——编辑器/CLI 走 REST 用
-operator/password，GUI 上传走 S3 用新加的这对。那么只填了前一套时算不算"配置完成"？
+### ⑦ 那个门槛为什么按链路分开
 
-- **按链路分别判断**（本文推荐）：GUI 上传要求 S3 凭证，编辑器/CLI 只要 operator/password。
-  各条链路按自己真正需要的东西卡。代价是要在必填表里开一个"编辑器专用"的例外（约 10 行）。
-- **两套都填齐才算完成**：改动最小（必填表加两个字段名），但只用 Typora + 又拍云、
-  手头没有 S3 凭证的老用户，升级后又拍云会变成"未配置"，**而编辑器那条路根本不需要它**。
+又拍云是**唯一**一个两条链路用不同凭证的图床。三种做法权衡过：
 
-> `SERVICE_REQUIRED_FIELDS` 被 6 个模块共用（`useServiceHealth` / `MultiServiceUploader` /
-> `useServiceSelector` / `trayMenu` / `editorServiceConfig` / `s3ConfigValidation`），
-> 动它之前先看这张消费方清单。
+| 做法 | 问题 |
+|------|------|
+| 两套都填齐才算配置完成 | 只用 Typora + 又拍云、手头没有 S3 凭证的老用户，升级后又拍云直接变「未配置」，编辑器上传跟着停摆——**而那条链路根本不需要 S3 凭证** |
+| 只加输入框、不进必填校验 | 退回原状：设置页看着正常，一传就报 `ErrInvalidAccessKeyID`。这正是缺陷潜伏至今的形态 |
+| **按链路分开（采用）** | GUI 上传卡 S3 凭证，编辑器/CLI/测试连接只卡 REST 凭证。各条链路按自己真正用得到的东西卡 |
+
+「测试连接」也归 REST 口径：`test_upyun_connection` 打的是 REST API，
+拿 S3 凭证卡它，会让一个明明能跑的检测因为缺一把用不到的钥匙而拒绝执行。
+
+`REST_CHAIN_REQUIRED_FIELDS` 没有覆盖项的图床一律回退 `getRequiredFields`，
+**新增图床不需要动这张表**——只有再出现「同一图床不同链路用不同凭证」时才加。
+
+回归测试钉住两个方向：只有 REST 凭证时编辑器链路仍可用；缺 REST 凭证时编辑器链路不可用
+（`editorServiceConfig.spec.ts`）。GUI 口径由 `useServiceSelector.spec.ts` 的两条钉住。
+
+### 升级影响
+
+老用户的又拍云在**主界面上传**里会变成「未配置」，直到补填 S3 凭证。
+这不是回退——实测证明 GUI 上传对每个照界面标签填写的用户**从来就没成功过**，
+现在只是把失败从"传到最后报天书"提前到"设置页当场说清楚"。
+Typora / Obsidian / CLI 三条链路不受影响。
 
 ## 下一次接手时怎么做（给 AI 的交接说明）
 
-**当前进度**：D1/D2/Q2 已收口；**只剩 Q1**，方案已列在上面，卡在⑥那个待拍板项。
+**当前进度**：D1 / D2 / Q1 / Q2 全部收口，代码与文档已同步。剩下的只有**真机 GUI 验收**：
+在设置页填上两套凭证，从主界面拖一张图上传，确认成功——这一步只能人工点。
 
-按顺序做：
+凭证已存在 `scripts/.upyun.local`（gitignored），回归直接跑 `.\scripts\test-upyun-compat.ps1`，
+不必再找用户要账号。
 
-1. **先问用户⑥怎么定**，再动手（用户明确要求：先规划后执行）。
-2. 凭证已存在 `scripts/.upyun.local`（gitignored），改完可直接跑
-   `.\scripts\test-upyun-compat.ps1` 回归，不必再找用户要账号。
-3. 改完跑 `npm run lint` + `npm run typecheck`；动了 Rust 就 `cd src-tauri && cargo check && cargo test`。
-
-四条容易踩的：
+五条容易踩的：
 
 - **改了源码哨兵就必须重做阴性对照**（把某条链路的 `build_upload_key` 去掉，确认测试会红）。
   它假绿过一次，根因是 CRLF，细节见「已修」里那段警告。
-
+- **又拍云有两套凭证，别当成一套**。改任何跟又拍云凭证有关的东西之前，先确认你改的是哪条链路：
+  REST（operator/password，编辑器/CLI/测试连接）还是 S3（s3AccessKey/s3SecretKey，GUI 上传）。
 - **别把 A 和 C 的结论混用**。「测试连接」走 REST（Basic Auth）、GUI 上传走 S3（SigV4），
   是两条独立链路，A 通过完全不能推出 C 通过。
 - **又拍云不走 S3 SDK**，凡是改编辑器/CLI 公共上传逻辑，先确认它吃不吃得到（见开头那张对比表）。
