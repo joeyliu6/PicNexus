@@ -129,6 +129,40 @@ describe('useImageLoadManager', () => {
     expect(h.api.isImageFailed('img-1')).toBe(true);
   });
 
+  // 回归：候选链的超时兜底、以及候选被安全过滤清空这两条路径都没有真实的 `<img>`
+  // error 事件。没做防护时 `event.target` 会当场抛 TypeError，整格卡在骨架屏上。
+  // 也没有可重设 src 的元素，所以重试无从谈起，必须直接判失败。
+  it('onImageError 收到空 event 时直接判失败，不尝试重试', async () => {
+    const h = mountManager({ maxRetry: 1 });
+
+    h.api.onImageError(undefined, 'no-event');
+
+    expect(h.api.isImageFailed('no-event')).toBe(true);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(h.api.isImageFailed('no-event')).toBe(true);
+  });
+
+  // 用户确认明文 HTTP 域名后要撤销失败态：判失败的前提变了，之前判死的图得给第二次机会。
+  it('clearFailed 撤销失败态并还原重试额度，但不动已加载缓存', async () => {
+    const h = mountManager({ maxRetry: 1 });
+    const img = makeImageTarget('https://example.com/a.jpg');
+
+    h.api.onImageLoad('ok');
+    h.api.onImageError(makeImageEvent(img), 'bad');
+    await vi.advanceTimersByTimeAsync(500);
+    h.api.onImageError(makeImageEvent(img), 'bad');
+    expect(h.api.isImageFailed('bad')).toBe(true);
+
+    h.api.clearFailed();
+
+    expect(h.api.isImageFailed('bad')).toBe(false);
+    // 已加载的没必要跟着重来
+    expect(h.api.isImageLoaded('ok')).toBe(true);
+    // 重试额度也回来了：不还原的话刚放回来再失败一次就直接判死
+    h.api.onImageError(makeImageEvent(img), 'bad');
+    expect(h.api.isImageFailed('bad')).toBe(false);
+  });
+
   it('clearAll 清空 loaded/failed 状态，并取消未触发的重试定时器', async () => {
     const h = mountManager({ maxRetry: 1 });
     const img = makeImageTarget('https://example.com/b.jpg');

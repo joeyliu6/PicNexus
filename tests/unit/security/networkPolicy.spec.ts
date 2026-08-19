@@ -3,6 +3,7 @@ import {
   assertAllowedExternalUrl,
   assertAllowedWebDAVUrl,
   assertAllowedWebDAVStorageUrl,
+  confirmedHttpHostsKey,
   getConfirmedHttpHosts,
   getConfirmedS3HttpHosts,
   getConfirmedWebdavHttpHosts,
@@ -274,5 +275,16 @@ describe('networkPolicy · 明文 HTTP 公开域名确认', () => {
     expect(hosts.size).toBe(3);
 
     expect(getConfirmedHttpHosts(null).size).toBe(0);
+  });
+
+  // 视图靠这个指纹判断"名单真的变了没"。配置保存广播极其频繁（填一个 S3 profile 会存 26 次），
+  // 而 getConfirmedHttpHosts 每次都产出新 Set——按引用比会让每次保存都白重试一轮死图。
+  it('名单指纹只认内容：同内容不同 Set / 不同顺序都算没变', () => {
+    const a = confirmedHttpHostsKey(new Set(['b.example.com', 'a.example.com']));
+    const b = confirmedHttpHostsKey(new Set(['a.example.com', 'b.example.com']));
+
+    expect(a).toBe(b);
+    expect(confirmedHttpHostsKey(new Set())).toBe('');
+    expect(confirmedHttpHostsKey(new Set(['a.example.com']))).not.toBe(a);
   });
 });
