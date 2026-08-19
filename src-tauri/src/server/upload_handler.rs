@@ -573,6 +573,13 @@ pub enum ServerUploadConfig {
         password: String,
         bucket: String,
         public_domain: String,
+        /// 存储路径前缀，对应设置页的「存储路径」
+        ///
+        /// `serde(default)` 是必须的，理由同下面 WebDAV 的 `unique_file_name`：
+        /// 升级前写下的 `cli-config.json` 里没有这个字段，没有默认值会让整份配置
+        /// 反序列化失败，Typora/Obsidian/CLI 三条链路一起罢工。
+        #[serde(default)]
+        path: String,
     },
     /// 自定义 S3 兼容存储
     CustomS3 {
@@ -994,8 +1001,8 @@ async fn dispatch_upload(
         ServerUploadConfig::Qiniu { access_key, secret_key, region, bucket, custom_domain, path } => {
             server_upload_qiniu(&canonical, access_key, secret_key, region, bucket, custom_domain, path).await
         }
-        ServerUploadConfig::Upyun { operator, password, bucket, public_domain } => {
-            server_upload_upyun(&canonical, operator, password, bucket, public_domain).await
+        ServerUploadConfig::Upyun { operator, password, bucket, public_domain, path } => {
+            server_upload_upyun(&canonical, operator, password, bucket, public_domain, path).await
         }
         ServerUploadConfig::CustomS3 { endpoint, access_key_id, secret_access_key, region, bucket, path, public_domain } => {
             server_upload_custom_s3(&canonical, endpoint, access_key_id, secret_access_key, region, bucket, path, public_domain).await
@@ -2124,17 +2131,25 @@ async fn server_upload_upyun(
     password: &str,
     bucket: &str,
     public_domain: &str,
+    upload_path: &str,
 ) -> Result<String, String> {
     let file_name = path
         .file_name()
         .and_then(|n| n.to_str())
         .ok_or("无法获取文件名")?;
+    // Why 走 build_upload_key：又拍云是五个私有存储里唯一不经 S3 SDK 的一条，
+    // 于是这条公共流水线（贴 path 前缀 + 文件名唯一化）它一直没吃到——直到 2026-08-19
+    // 实测坐实：往同一个 key 先后传 67 字节和 126 字节的图，回读拿到 126 字节，
+    // 第一张无声消失。Typora/Obsidian 粘出来的图恰恰永远叫 image.png / screenshot.png，
+    // 是最容易撞名的入口，撞上就是旧文章的配图被换掉且不可恢复。
+    // 又拍云 REST PUT 会自动创建父目录（同日实测确认），所以贴前缀不需要额外建目录。
+    let key = build_upload_key(upload_path, file_name);
     let buffer = tokio::fs::read(path)
         .await
         .map_err(|e| format!("读取文件失败: {}", e))?;
 
     let auth = STANDARD.encode(format!("{}:{}", operator, password));
-    let remote_path = format!("/{}/{}", bucket, file_name);
+    let remote_path = format!("/{}/{}", bucket, key);
     let upload_url = format!("https://v0.api.upyun.com{}", remote_path);
 
     let resp = shared_client()
@@ -2165,10 +2180,12 @@ async fn server_upload_upyun(
         };
     }
 
+    // 用 key 而不是 file_name：贴了 path 前缀后两者不再相等，
+    // 拿 file_name 拼出来的链接会指向根目录下一个不存在的对象。
     let url = if public_domain.is_empty() {
         format!("https://v0.api.upyun.com{}", remote_path)
     } else {
-        format!("{}/{}", public_domain.trim_end_matches('/'), file_name)
+        format!("{}/{}", public_domain.trim_end_matches('/'), key)
     };
     Ok(url)
 }
@@ -2562,6 +2579,82 @@ mod tests {
             assert!(
                 !has_hardcoded_image_content_type(src),
                 "{} 把写死的类型当响应 Content-Type 发出——改用 object_content_type(path) 按文件推断",
+                name,
+            );
+        }
+    }
+
+    /// 把源码切成 (函数名, 函数体) 若干段，只认顶格的 `async fn server_upload_` 定义
+    ///
+    /// 三处讲究，少一处这条测试就会失灵：
+    /// - **先把 CRLF 归一成 LF**：本仓库的 `.rs` 全是 CRLF，而 `include_str!` 原样保留。
+    ///   下面两个分隔符里的 `\n` 对 `\r\n}` 匹配不上，截断会失效——**但切分不会失效**
+    ///   （`\r\n` 里含 `\n`），于是表面一切正常，只有最后一个函数悄悄吃到文件尾。
+    /// - **分隔符带换行**：源码被 `include_str!` 读进来时**包含本测试自己**，
+    ///   不带换行会连正文里提到的同名字样一起切，切出「函数名」是段中文的假条目。
+    /// - **截到第一个顶格 `}`**：否则最后一个函数会把 `#[cfg(test)]` 整块吃进来，
+    ///   而本测试的断言里就写着 `build_upload_key(` 这串字面量，断言会自己把自己喂饱。
+    ///
+    /// 后两条都是 2026-08-19 真踩出来的：哨兵一度对着被撤销的修复报绿。
+    /// 改这个函数后**务必重做一次阴性对照**——把某条链路的 `build_upload_key` 去掉，
+    /// 确认这条测试会红。只跑正向用例证明不了哨兵还活着。
+    fn server_upload_fns(src: &str) -> Vec<(String, String)> {
+        let src = src.replace("\r\n", "\n");
+        src.split("\nasync fn server_upload_")
+            .skip(1)
+            .filter_map(|chunk| {
+                let name = chunk[..chunk.find('(')?].trim();
+                // 兜底：真函数名只可能是标识符，切歪了的段落在这里被挡掉
+                if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                    return None;
+                }
+                let body = chunk.split("\n}\n").next().unwrap_or(chunk).to_string();
+                Some((name.to_string(), body))
+            })
+            .collect()
+    }
+
+    /// 存储型图床的编辑器/CLI 链路必须走 `build_upload_key`（贴 path 前缀 + 文件名唯一化）
+    ///
+    /// Why 用白名单而不是「有 upload_path 参数才检查」：2026-08-19 之前又拍云**压根没有**
+    /// 这个参数，「按参数筛」的哨兵会直接把它跳过去，等于没设防。真正的失误形态是
+    /// 「新加一条存储链路时整个忘掉唯一化」，所以这里反过来——所有 server_upload_* 默认都要查，
+    /// 不需要唯一化的必须写进 NO_OBJECT_KEY 并留下理由。加新图床时这条测试会失败，
+    /// 逼你显式表态，而不是沉默地漏过去。
+    #[test]
+    fn storage_upload_paths_all_go_through_build_upload_key() {
+        // 这些图床由服务端自己决定文件名/路径，客户端给不了 key，不适用唯一化
+        const NO_OBJECT_KEY: &[&str] = &[
+            "jd",       // 京东：服务端返回固定 CDN 路径
+            "smms",     // SM.MS：服务端分配 hash 文件名
+            "imgur",    // Imgur：服务端分配 id
+            "weibo",    // 微博：服务端分配 pid
+            "bilibili", // B 站：服务端分配路径
+            "nowcoder", // 牛客：服务端分配路径
+            "chaoxing", // 超星：服务端分配路径
+            "zhihu",    // 知乎：服务端分配 token
+            "github",   // GitHub：走 Contents API，同名会 409 而不是静默覆盖
+            "webdav",   // WebDAV：用 suffix_unique_file_name，顺序与 S3 系刻意不同（见 upload-flow.md）
+        ];
+
+        let fns = server_upload_fns(include_str!("upload_handler.rs"));
+        // 阳性对照：切分器失灵时整条测试会静默通过，先钉住它确实切出了东西
+        assert!(
+            fns.len() >= 15,
+            "切分器只找到 {} 个 server_upload_* 函数，实现已变形，这条测试形同虚设",
+            fns.len(),
+        );
+
+        for (name, body) in fns {
+            if NO_OBJECT_KEY.contains(&name.as_str()) {
+                continue;
+            }
+            assert!(
+                body.contains("build_upload_key("),
+                "server_upload_{} 没走 build_upload_key：同名文件会静默覆盖旧图。\
+                 确实不需要唯一化就加进 NO_OBJECT_KEY 并写明理由。\
+                 （又拍云就是这么漏了两年——它不走 s3_put_object，\
+                 按调用方补齐时整条链路都没被扫到，详见 docs/audits/upyun-audit-2026-08-19.md）",
                 name,
             );
         }

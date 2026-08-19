@@ -174,7 +174,7 @@ export function buildServiceConfig(
     case 'qiniu':
       return { type: 'qiniu', access_key: fd.qiniu.accessKey, secret_key: fd.qiniu.secretKey, region: fd.qiniu.region, bucket: fd.qiniu.bucket, custom_domain: fd.qiniu.publicDomain, path: fd.qiniu.path };
     case 'upyun':
-      return { type: 'upyun', operator: fd.upyun.operator, password: fd.upyun.password, bucket: fd.upyun.bucket, public_domain: fd.upyun.publicDomain };
+      return { type: 'upyun', operator: fd.upyun.operator, password: fd.upyun.password, bucket: fd.upyun.bucket, public_domain: fd.upyun.publicDomain, path: fd.upyun.path };
     default: {
       const profile = findCustomS3Profile(service, fd);
       if (!profile) return null;
@@ -317,7 +317,7 @@ export function buildEditorCredentialSignature(service: ServerServiceType, fd: S
     case 'qiniu':
       return [fd.qiniu.accessKey, fd.qiniu.secretKey, fd.qiniu.region, fd.qiniu.bucket, fd.qiniu.publicDomain, fd.qiniu.path].join('|');
     case 'upyun':
-      return [fd.upyun.operator, fd.upyun.password, fd.upyun.bucket, fd.upyun.publicDomain].join('|');
+      return [fd.upyun.operator, fd.upyun.password, fd.upyun.bucket, fd.upyun.publicDomain, fd.upyun.path].join('|');
     default: {
       const profile = findCustomS3Profile(service, fd);
       if (profile) return [profile.endpoint, profile.accessKeyId, profile.secretAccessKey, profile.region, profile.bucket, profile.path, profile.publicDomain].join('|');
