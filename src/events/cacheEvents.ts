@@ -149,9 +149,3 @@ export async function emitHistoryCleared(): Promise<void> {
   await emitCacheEvent('history-cleared', { source: WINDOW_SESSION_ID });
 }
 
-/**
- * 快捷方法：发送配置更新事件
- */
-export async function emitConfigUpdated(): Promise<void> {
-  await emitCacheEvent('config-updated');
-}
