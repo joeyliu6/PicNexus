@@ -138,7 +138,12 @@ export function useSettingsForm() {
       tencent: !!(fd.tencent.secretId && fd.tencent.secretKey && fd.tencent.region && fd.tencent.bucket),
       aliyun: !!(fd.aliyun.accessKeyId && fd.aliyun.accessKeySecret && fd.aliyun.region && fd.aliyun.bucket && fd.aliyun.publicDomain),
       qiniu: !!(fd.qiniu.accessKey && fd.qiniu.secretKey && fd.qiniu.region && fd.qiniu.bucket && fd.qiniu.publicDomain),
-      upyun: !!(fd.upyun.operator && fd.upyun.password && fd.upyun.bucket && fd.upyun.publicDomain),
+      // 又拍云必须连 S3 凭证一起判：GUI 上传走 S3 端点，缺这一对是真的传不了。
+      // 漏掉它就会在设置页显示「已配置」而上传照样失败——正是这个图床的缺陷长期被
+      // 掩盖的那个形态（旧版「测试连接」也只验 REST 链路）。运行时口径见
+      // `SERVICE_REQUIRED_FIELDS.upyun`，两处必须同时改。
+      upyun: !!(fd.upyun.operator && fd.upyun.password && fd.upyun.bucket && fd.upyun.publicDomain
+        && fd.upyun.s3AccessKey && fd.upyun.s3SecretKey),
       weibo: !!fd.weiboCookie?.trim(),
       zhihu: !!fd.zhihu.cookie?.trim(),
       nowcoder: !!fd.nowcoder.cookie?.trim(),
