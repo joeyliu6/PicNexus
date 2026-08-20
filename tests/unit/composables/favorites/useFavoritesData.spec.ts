@@ -271,6 +271,62 @@ describe('useFavoritesData', () => {
     expect(harness.api().hasMore.value).toBe(false);
   });
 
+  /**
+   * 2026-08-20 真机验收发现：在历史页点收藏，切到收藏页看不到，得刷新才出来。
+   *
+   * 根因是下面那段增量逻辑只算「从当前页移走了几条」，新增时一条都没移走、
+   * `removedCount === 0` 直接 return，新收藏那条永远进不来。
+   */
+  it('在别处新增收藏后重查列表（不能只认「移走了几条」）', async () => {
+    getFavoritesMetaPageMock.mockResolvedValueOnce({
+      items: [makeMeta('alpha')],
+      total: 1,
+      hasMore: false,
+    });
+
+    const harness = mountHarness();
+    harness.favoriteSet.value = new Set(['alpha']);
+    await settleFirstPage(harness.api().loadFirstPage());
+    expect(getFavoritesMetaPageMock).toHaveBeenCalledTimes(1);
+
+    // 在历史页收藏了一张当前列表里没有的图
+    getFavoritesMetaPageMock.mockResolvedValueOnce({
+      items: [makeMeta('beta'), makeMeta('alpha')],
+      total: 2,
+      hasMore: false,
+    });
+    harness.favoriteSet.value = new Set(['alpha', 'beta']);
+    await settleFirstPage(Promise.resolve());
+
+    expect(getFavoritesMetaPageMock).toHaveBeenCalledTimes(2);
+    expect(harness.api().loadedMetas.value.map(meta => meta.id)).toEqual(['beta', 'alpha']);
+  });
+
+  /**
+   * 反向判据：内容没变、只是换了个 Set 引用，不该重查。
+   *
+   * 配置保存广播极其频繁，`favoriteSet` 每次都产出新 Set；按引用判断的话
+   * 每存一次配置就白查一遍收藏列表。
+   */
+  it('favoriteSet 换了引用但内容没变时不重查', async () => {
+    getFavoritesMetaPageMock.mockResolvedValueOnce({
+      items: [makeMeta('alpha'), makeMeta('beta')],
+      total: 2,
+      hasMore: false,
+    });
+
+    const harness = mountHarness();
+    harness.favoriteSet.value = new Set(['alpha', 'beta']);
+    await settleFirstPage(harness.api().loadFirstPage());
+    expect(getFavoritesMetaPageMock).toHaveBeenCalledTimes(1);
+
+    // 同一批 id 重新赋值（新 Set 引用，但内容没变化）
+    harness.favoriteSet.value = new Set(['alpha', 'beta']);
+    await nextTick();
+
+    expect(getFavoritesMetaPageMock).toHaveBeenCalledTimes(1);
+  });
+
   it('clears to the empty state immediately when all favorites are removed', async () => {
     getFavoritesMetaPageMock.mockResolvedValueOnce({
       items: [makeMeta('alpha'), makeMeta('beta')],

@@ -270,6 +270,23 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
       return;
     }
 
+    // 新增收藏：重查
+    //
+    // Why 不能就地插入：列表按时间倒序，收藏一张**旧图**时它落在中间甚至下一页，
+    // 光凭一个 id 算不出该插到哪儿——meta 也不在手上（这里只有 favoriteSet 里的 id）。
+    //
+    // Why 以前漏了：下面那段按「从当前页里移走了几条」算增量，而新增时一条都没移走，
+    // `removedCount === 0` 直接 return。表现是在历史页点了收藏、切到收藏页看不见，
+    // 非得刷新一次才出来（2026-08-20 真机验收发现）。
+    //
+    // Why 要挡住「加载在途」：`firstPageLoaded` 在 `loadFirstPage` 一进门就置真，
+    // 而 `favoriteSet` 往往在同一轮被 `loadStats` 填上。那趟查询本来就会带上新收藏，
+    // 这时再插一次 reload 纯属重复查一遍。
+    if (!isLoading.value && [...newSet].some(id => !oldSet?.has(id))) {
+      void reloadFromStart();
+      return;
+    }
+
     if (loadedMetas.value.length === 0) return;
 
     const filtered = loadedMetas.value.filter(m => newSet.has(m.id));
