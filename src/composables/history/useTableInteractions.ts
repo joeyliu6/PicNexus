@@ -7,13 +7,12 @@ import { ref, shallowRef, computed, watch, nextTick, onUnmounted, onDeactivated,
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type PopoverType from 'primevue/popover';
 import type { HistoryItem } from '../../config/types';
-import { getPrimaryImageUrl } from '../../utils/imageUrl';
 import { applyPrefixTemplate } from '../../utils/linkPrefixTemplate';
 import { applyZhihuSourceFromConfig } from '../../utils/zhihuSource';
 import { getServiceDisplayName } from '../../constants/serviceNames';
 import { useHistoryViewState } from '../useHistoryViewState';
 import { useHistoryManager } from '../useHistory';
-import { useThumbCache } from '../useThumbCache';
+import { useGatedImageUrls } from './useGatedImageUrls';
 import { useConfigManager } from '../useConfig';
 import { useToast } from '../useToast';
 import { makeCopyBadgeKey, useCopyBadgeFeedback } from '../useCopyBadgeFeedback';
@@ -72,7 +71,6 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
   const configManager = useConfigManager();
   const viewState = useHistoryViewState();
   const historyManager = useHistoryManager();
-  const thumbCache = useThumbCache();
   const {
     copiedKey: copiedServiceKey,
     markCopied: markServiceCopied,
@@ -189,7 +187,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     // 阻止悬浮预览在 Lightbox 打开动画期间消失，
     // 让 PhotoSwipe 能从预览元素做 FLIP 过渡
     isLightboxOpening.value = true;
-    warmImages([thumbCache.getMediumImageUrl(item), getItemImageUrl(item)]);
+    warmImages([getItemMediumUrl(item), getItemImageUrl(item)]);
     lightboxPageData.value = currentPageData.value;
     lightboxPage.value = currentPage.value;
     lightboxItem.value = item;
@@ -198,9 +196,15 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
     openingTimer = setTimeout(() => { isLightboxOpening.value = false; openingTimer = null; }, motionDuration(OPENING_DURATION));
   }
 
-  function getItemImageUrl(item: HistoryItem): string {
-    return getPrimaryImageUrl(item, configManager.config.value);
-  }
+  /**
+   * 取图地址统一过安全闸；被拦下返回空串
+   *
+   * 悬停预览和 ±1 预热是**直接 `new Image()` 发请求**的两条路，CSP 的 `img-src`
+   * 放开 `http:` 之后（见 2ab296af）它们身上一道闸都不剩。判据与缩略图同源，
+   * 详见 `useGatedImageUrls`。
+   */
+  const { getItemImageUrl, getItemMediumUrl } = useGatedImageUrls();
+
 
   // 双向 ±1 预加载交给 useLightboxPreloader 统一处理：监听 lightboxItem 变化、
   // 防抖 100ms 后并发预热前后两张大图。这里只需提供"按方向解析 URL"的同步逻辑。
@@ -408,7 +412,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
    */
   function syncHoverPreviewToItem(item: HistoryItem): void {
     const wrapper = findThumbWrapper(item.id);
-    const url = thumbCache.getMediumImageUrl(item);
+    const url = getItemMediumUrl(item);
     if (!wrapper || !url) {
       hoverPreview.value.visible = false;
       hoverPreview.value.closing = false;
@@ -507,7 +511,7 @@ export function useTableInteractions(options: UseTableInteractionsOptions) {
 
   function handlePreviewEnter(event: MouseEvent, item: HistoryItem): void {
     if (isLightboxOpening.value || isLightboxClosing.value) return;
-    const url = thumbCache.getMediumImageUrl(item);
+    const url = getItemMediumUrl(item);
     if (!url) return;
     warmImages([url, getItemImageUrl(item)]);
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();

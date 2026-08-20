@@ -356,6 +356,7 @@ function handleCheckboxToggle(id: string) {
       :item="lightboxItem"
       :has-prev="lightboxHasPrev"
       :has-next="lightboxHasNext"
+      :confirmed-http-hosts="confirmedHttpHosts"
       :resolve-close-target-mode="resolveLightboxCloseTargetMode"
       @delete="handleLightboxDelete"
       @navigate="handleLightboxNavigate"
