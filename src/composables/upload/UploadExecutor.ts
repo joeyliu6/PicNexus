@@ -18,6 +18,7 @@ import {
 } from '../../constants/serviceFormats';
 import { AUTH_CONFIG_ERROR_CODES } from '../../types/serviceHealth';
 import { createLogger } from '../../utils/logger';
+import { summarizeAllServicesFailed } from '../../utils/uploadFailureMessage';
 
 const log = createLogger('UploadExecutor');
 
@@ -346,8 +347,13 @@ export async function processUploadQueue(
           const serviceName = failedServices.length > 0 ? failedServices.join('、') : '图床';
           toast.showConfig('error', TOAST_MESSAGES.auth.connectionFailed(serviceName, '请检查 AK/SK 或 Token 配置是否正确'));
         } else if (errorMsg.includes('所有图床上传均失败')) {
-          // 所有图床都失败
-          toast.showConfig('error', TOAST_MESSAGES.upload.failed(`${fileName} 未能上传至任何图床`));
+          // 所有图床都失败。把每个图床的原因带上——这一支原先只弹「未能上传至任何图床」，
+          // 原因明明在 errorMsg 里却整段丢掉，用户看不出该去改哪儿。
+          // 解析不出来时才退回那句笼统的（比如错误格式变了）。
+          const reasons = summarizeAllServicesFailed(errorMsg);
+          toast.showConfig('error', TOAST_MESSAGES.upload.failed(
+            reasons ? `${fileName}：${reasons}` : `${fileName} 未能上传至任何图床`,
+          ));
         } else {
           // 通用错误
           toast.showConfig('error', TOAST_MESSAGES.upload.failed(`${fileName}: ${errorMsg}`));

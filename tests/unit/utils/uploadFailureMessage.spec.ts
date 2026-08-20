@@ -5,6 +5,7 @@ import {
   cleanMigrateError,
   formatMigrateFailureSummary,
   categorizeMigrateError,
+  summarizeAllServicesFailed,
 } from '@/utils/uploadFailureMessage';
 import type { MigrateFailureDetail } from '@/types/batchMigrate';
 
@@ -173,5 +174,84 @@ describe('categorizeMigrateError', () => {
   it('保留 raw 字段原文（trim 后）', () => {
     const result = categorizeMigrateError('upload', '  401 unauthorized  ');
     expect(result.raw).toBe('401 unauthorized');
+  });
+  /**
+   * 2026-08-20 真机验收：WebDAV 上传失败，界面只说「未能上传至任何图床」，
+   * 一个字没讲为什么，最后是靠命令行跑同一份配置才知道是「路径不存在」。
+   * 原因一直在这条聚合消息里，只是被整段丢掉了。
+   */
+  describe('summarizeAllServicesFailed', () => {
+    const single = [
+      '所有图床上传均失败：',
+      '  - webdav:msrlkrjz39xp49fzy: WebDAV 错误: 路径不存在，请检查远程路径配置',
+      '',
+      '请检查网络连接和服务配置',
+    ].join('\n');
+
+    it('单个图床失败时带出原因', () => {
+      expect(summarizeAllServicesFailed(single)).toContain('路径不存在，请检查远程路径配置');
+    });
+
+    it('不把尾注那行「请检查网络连接和服务配置」当成失败条目', () => {
+      expect(summarizeAllServicesFailed(single)).not.toContain('请检查网络连接和服务配置');
+    });
+
+    /**
+     * 条目必须是「缩进 + 短横线」那种形状。松掉这个要求的话，失败原因本身若含
+     * `- xxx: yyy` 就会被当成另一个图床，摘要里冒出个不存在的服务。
+     */
+    it('只认缩进条目，顶格的 - 行不算', () => {
+      const tricky = [
+        '所有图床上传均失败：',
+        '  - upyun: 认证失败',
+        '- 伪造: 这行顶格，不该被当成失败条目',
+      ].join('\n');
+
+      const summary = summarizeAllServicesFailed(tricky);
+      expect(summary).toContain('认证失败');
+      expect(summary).not.toContain('伪造');
+    });
+
+    /**
+     * 上传器抛的错常常自带「xx 上传失败:」前缀，直接拼上去会变成
+     * 「又拍云 · 又拍云上传失败: 认证失败」——同一个名字说两遍。
+     */
+    it('剥掉原因里重复的「xx 上传失败」前缀', () => {
+      const msg = ['所有图床上传均失败：', '  - upyun: 又拍云上传失败: 认证失败'].join('\n');
+
+      const summary = summarizeAllServicesFailed(msg);
+      expect(summary).toBe('又拍云 · 认证失败');
+    });
+
+    it('多个图床各报各的，用分号隔开', () => {
+      const many = [
+        '所有图床上传均失败：',
+        '  - upyun: 认证失败',
+        '  - r2: dispatch failure',
+        '',
+        '请检查网络连接和服务配置',
+      ].join('\n');
+
+      const summary = summarizeAllServicesFailed(many);
+      expect(summary).toContain('认证失败');
+      expect(summary).toContain('dispatch failure');
+      expect(summary).toContain('；');
+    });
+
+    it('已知图床用中文名而不是 serviceId', () => {
+      const msg = ['所有图床上传均失败：', '  - upyun: 认证失败'].join('\n');
+      expect(summarizeAllServicesFailed(msg)).toContain('又拍云');
+    });
+
+    /** 解析不出来要返回空串，让调用方退回那句笼统文案，而不是弹一句空的 */
+    it('格式对不上时返回空串', () => {
+      expect(summarizeAllServicesFailed('所有图床上传均失败：完全不是那个格式')).toBe('');
+      expect(summarizeAllServicesFailed('')).toBe('');
+    });
+
+    it('CRLF 的消息也能解析', () => {
+      const crlf = ['所有图床上传均失败：', '  - upyun: 认证失败'].join('\r\n');
+      expect(summarizeAllServicesFailed(crlf)).toContain('认证失败');
+    });
   });
 });
