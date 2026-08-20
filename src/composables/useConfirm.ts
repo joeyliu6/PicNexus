@@ -52,6 +52,15 @@ export interface ConfirmThreeWayOptions {
   rejectLabel?: string;
   /** 图标 */
   icon?: string;
+  /**
+   * 「本次运行内不再提示」勾选框的状态容器；不传就不显示这个勾选框
+   *
+   * 传的是**对象**而不是布尔值：对话框要把用户的选择写回来，
+   * 布尔值按值传过去就断了。渲染在 `App.vue` 的 `#message` slot 里。
+   *
+   * 目前只有清除已保存凭证用它，见 `useSecretClearConfirm`。
+   */
+  clearOptOut?: { checked: boolean };
 }
 
 /**
@@ -166,6 +175,9 @@ export function useConfirm() {
         icon: options.icon || confirmDefaults.icon,
         acceptLabel: options.acceptLabel || confirmDefaults.acceptLabel,
         rejectLabel: options.rejectLabel || confirmDefaults.rejectLabel,
+        // PrimeVue 4 会把整个 options 对象原样交给 #message slot（2026-08-20 实测），
+        // 所以自定义字段就是这么透传过去的
+        clearOptOut: options.clearOptOut,
         accept: () => {
           resolved = true;
           resolve('accept');

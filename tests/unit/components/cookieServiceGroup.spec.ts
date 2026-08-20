@@ -1,6 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import { mountWithDefaults } from '../helpers/vueMount';
+/**
+ * 清除已保存凭证前的确认框
+ *
+ * `clearSecretChoice` 可改写：默认 'accept'（同意清除），要验「点取消」的用例
+ * 自己改成 'reject'。改成 'dismiss' 模拟按 ESC / 点叉叉。
+ */
+const clearSecretChoice = { value: 'accept' as 'accept' | 'reject' | 'dismiss' };
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => ({
+    confirmDelete: vi.fn((_m: string, onConfirm: () => void) => onConfirm()),
+    confirmThreeWay: vi.fn(async () => clearSecretChoice.value),
+  }),
+}));
+
 import CookieServiceGroup from '@/components/settings/hosting/CookieServiceGroup.vue';
 import SensitiveField from '@/components/common/SensitiveField.vue';
 
@@ -80,6 +94,8 @@ function cookieField(wrapper: ReturnType<typeof mountGroup>['wrapper'], id: stri
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // 复位，免得上一条用例把选择留给下一条（vi.clearAllMocks 管不到这个普通对象）
+  clearSecretChoice.value = 'accept';
 });
 
 describe('CookieServiceGroup 敏感字段', () => {

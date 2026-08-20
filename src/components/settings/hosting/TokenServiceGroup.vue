@@ -7,6 +7,7 @@ import type { GithubCdnConfig } from '../../../config/types';
 import type { ServiceHealthStatus } from '../../../types/serviceHealth';
 import { hasNonEmptyFields } from '../../../utils/validators';
 import { useSensitiveDraft } from '../../../composables/settings/useSensitiveDraft';
+import { useSecretClearConfirm } from '../../../composables/settings/useSecretClearConfirm';
 
 interface TokenFormData {
   smms: { token: string };
@@ -73,13 +74,17 @@ const SECRET_FIELDS: Record<
   },
 };
 
+const confirmClearSecret = useSecretClearConfirm();
+
 const secrets = useSensitiveDraft({
   hasStored: key => !!SECRET_FIELDS[key]?.get(props.tokenFormData),
   reveal: key => Promise.resolve(SECRET_FIELDS[key]?.get(props.tokenFormData) ?? ''),
   commit: (key, draft) => {
+    // draft 为空串 = 清除；这些是明文字段，直接写空即可
     SECRET_FIELDS[key]?.set(props.tokenFormData, draft);
     emit('save');
   },
+  confirmClear: confirmClearSecret,
 });
 </script>
 

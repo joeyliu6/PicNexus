@@ -9,6 +9,7 @@ import { computed } from 'vue';
 import { hasNonEmptyFields } from '../../../utils/validators';
 import { extractNamiAuthToken } from '../../../utils/namiAuthToken';
 import { useSensitiveDraft } from '../../../composables/settings/useSensitiveDraft';
+import { useSecretClearConfirm } from '../../../composables/settings/useSecretClearConfirm';
 
 interface CookieFormData {
   weibo: { cookie: string };
@@ -75,13 +76,17 @@ function writeCookie(data: CookieFormData, id: CookieProviderId, value: string):
   data[id].cookie = value;
 }
 
+const confirmClearSecret = useSecretClearConfirm();
+
 const secrets = useSensitiveDraft({
   hasStored: id => !!props.cookieFormData[id as CookieProviderId]?.cookie,
   reveal: id => Promise.resolve(props.cookieFormData[id as CookieProviderId]?.cookie ?? ''),
   commit: (id, draft) => {
+    // draft 为空串 = 清除；Cookie 是明文字段，直接写空即可
     writeCookie(props.cookieFormData, id as CookieProviderId, draft);
     emit('save');
   },
+  confirmClear: confirmClearSecret,
 });
 
 /** 纳米的 Auth-Token 是从 Cookie 现算出来的展示值，不落库、也没有草稿可提交 */

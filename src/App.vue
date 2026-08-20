@@ -10,6 +10,7 @@ import type { BackupPasswordConfirmPayload } from './components/dialogs/backupPa
 import Toast from 'primevue/toast';
 import Button from 'primevue/button';
 import ConfirmDialog from 'primevue/confirmdialog';
+import Checkbox from 'primevue/checkbox';
 import { useUndoToast } from './composables/useUndoToast';
 import { useThemeManager } from './composables/useTheme';
 import { useToast } from './composables/useToast';
@@ -276,12 +277,52 @@ onUnmounted(() => {
       </template>
     </Toast>
 
-    <!-- 全局确认对话框 -->
-    <ConfirmDialog />
+    <!--
+      全局确认对话框
+
+      接管 #message slot 是为了给「清除已保存凭证」那一种确认挂一个勾选框。
+      **接管之后正文得自己渲染**——slot 一存在，PrimeVue 就不再画默认那行字了，
+      所有确认框（不止这一种）都走这里。
+
+      勾选框只在 confirmClearSecret 传了 clearOptOut 时出现；其余确认框拿不到这个
+      字段，渲染出来跟以前一模一样。字段能透传到 slot 是 2026-08-20 实测确认的
+      （PrimeVue 4 会把整个 require(options) 对象原样交给 slot）。
+    -->
+    <ConfirmDialog>
+      <template #message="slotProps">
+        <div class="confirm-message">
+          <span>{{ slotProps.message.message }}</span>
+          <label v-if="slotProps.message.clearOptOut" class="confirm-opt-out">
+            <Checkbox
+              :model-value="slotProps.message.clearOptOut.checked"
+              :binary="true"
+              @update:model-value="slotProps.message.clearOptOut.checked = $event as boolean"
+            />
+            <span>本次运行内不再提示（重启后恢复）</span>
+          </label>
+        </div>
+      </template>
+    </ConfirmDialog>
   </div>
 </template>
 
 <style>
+/* 确认框正文 + 「不再提示」勾选框（ConfirmDialog 的 #message slot） */
+.confirm-message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.confirm-opt-out {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
 /* 全局样式 - 不需要 scoped */
 #app {
   width: 100vw;

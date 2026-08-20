@@ -1,6 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { CLEAR_TO_DELETE_PLACEHOLDER } from '@/composables/settings/useSensitiveDraft';
 import { defineComponent, nextTick } from 'vue';
 import { mountWithDefaults } from '../helpers/vueMount';
+/**
+ * 清除已保存凭证前的确认框
+ *
+ * `clearSecretChoice` 可改写：默认 'accept'（同意清除），要验「点取消」的用例
+ * 自己改成 'reject'。改成 'dismiss' 模拟按 ESC / 点叉叉。
+ */
+const clearSecretChoice = { value: 'accept' as 'accept' | 'reject' | 'dismiss' };
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => ({
+    confirmDelete: vi.fn((_m: string, onConfirm: () => void) => onConfirm()),
+    confirmThreeWay: vi.fn(async () => clearSecretChoice.value),
+  }),
+}));
+
 
 // mock 的是真实存在的模块导出：secureStorage 单例的 encrypt / decrypt
 vi.mock('@/security/crypto', () => ({
@@ -111,11 +126,13 @@ function fieldsInCard(wrapper: ReturnType<typeof mountGroup>['wrapper'], cardId:
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // 复位，免得上一条用例把选择留给下一条（vi.clearAllMocks 管不到这个普通对象）
+  clearSecretChoice.value = 'accept';
 });
 
 // 这一组钉住的是 9267de7 已发布的行为，重构到共享 composable 时不得改变
 describe('PrivateStorageGroup · WebDAV 图床密码（已发布契约）', () => {
-  it('已保存密码时输入框为空、挂「已保存」芯片、占位文案为留空则不修改', () => {
+  it('已保存密码时输入框为空、挂「已保存」芯片、占位文案提示清空即删除', () => {
     const { wrapper } = mountGroup({
       webdavProfiles: [makeWebDAVProfile({ passwordEncrypted: 'cipher(nas-pw)' })],
     });
@@ -123,7 +140,7 @@ describe('PrivateStorageGroup · WebDAV 图床密码（已发布契约）', () =
     const [field] = fieldsInCard(wrapper, 'webdav:dav-1');
     expect(field.props('modelValue')).toBe('');
     expect(field.props('hasStoredValue')).toBe(true);
-    expect(field.props('placeholder')).toBe('留空则不修改');
+    expect(field.props('placeholder')).toBe(CLEAR_TO_DELETE_PLACEHOLDER);
     expect(wrapper.findAll('.saved-chip')).toHaveLength(1);
   });
 
@@ -239,7 +256,7 @@ describe('PrivateStorageGroup · 内置 S3 密钥', () => {
     expect(accessKeyId.props('modelValue')).toBe('');
     expect(accessKeyId.get('input').element.value).toBe('');
     expect(accessKeyId.props('hasStoredValue')).toBe(true);
-    expect(accessKeyId.props('placeholder')).toBe('留空则不修改');
+    expect(accessKeyId.props('placeholder')).toBe(CLEAR_TO_DELETE_PLACEHOLDER);
 
     // 没存过的那个不挂芯片，占位保持原文案
     expect(secretAccessKey.props('hasStoredValue')).toBe(false);
@@ -271,6 +288,62 @@ describe('PrivateStorageGroup · 内置 S3 密钥', () => {
     expect(privateFormData.r2.secretAccessKey).toBe('secret-new');
     expect(privateFormData.r2.accessKeyId).toBe('');
     expect(wrapper.emitted('save')).toHaveLength(1);
+  });
+
+  /**
+   * 从真实的输入框操作走一遍「清空即删除」，证明组件 → 草稿机 → 确认框 → 落盘整条线接通。
+   *
+   * 注意跟下面「留空失焦不改动」的区别：那条**没有先聚焦**，真值从没进过框，
+   * 所以不是删除意图。两条必须都在，少哪条都会让人以为另一条是 bug。
+   */
+  it('聚焦取出真值后清空再失焦 —— 确认后删掉已保存的密钥', async () => {
+    clearSecretChoice.value = 'accept';
+    const { wrapper, privateFormData } = mountGroup({}, fd => { fd.qiniu.accessKey = 'delete-me'; });
+
+    const [accessKey] = fieldsInCard(wrapper, 'qiniu');
+    await accessKey.get('input').trigger('focus');
+    await nextTick();
+    expect(accessKey.get('input').element.value).toBe('delete-me');
+
+    await accessKey.get('input').setValue('');
+    await accessKey.get('input').trigger('blur');
+    await nextTick();
+
+    expect(privateFormData.qiniu.accessKey).toBe('');
+    expect(wrapper.emitted('save')).toHaveLength(1);
+  });
+
+  it('确认框里点取消 —— 已保存的密钥一个字节都不动', async () => {
+    clearSecretChoice.value = 'reject';
+    const { wrapper, privateFormData } = mountGroup({}, fd => { fd.qiniu.accessKey = 'keep-me'; });
+
+    const [accessKey] = fieldsInCard(wrapper, 'qiniu');
+    await accessKey.get('input').trigger('focus');
+    await nextTick();
+    await accessKey.get('input').setValue('');
+    await accessKey.get('input').trigger('blur');
+    await nextTick();
+
+    expect(privateFormData.qiniu.accessKey).toBe('keep-me');
+    expect(wrapper.emitted('save')).toBeUndefined();
+  });
+
+  /**
+   * 按 ESC / 点叉叉关掉确认框，PrimeVue 既不走 accept 也不走 reject。
+   * 这条路径当成「删」的话，用户想取消反而删掉了——方向必须是不删。
+   */
+  it('确认框被 ESC 关掉 —— 同样不删', async () => {
+    clearSecretChoice.value = 'dismiss';
+    const { wrapper, privateFormData } = mountGroup({}, fd => { fd.qiniu.accessKey = 'keep-me'; });
+
+    const [accessKey] = fieldsInCard(wrapper, 'qiniu');
+    await accessKey.get('input').trigger('focus');
+    await nextTick();
+    await accessKey.get('input').setValue('');
+    await accessKey.get('input').trigger('blur');
+    await nextTick();
+
+    expect(privateFormData.qiniu.accessKey).toBe('keep-me');
   });
 
   it('留空失焦不改动已保存的密钥', async () => {
