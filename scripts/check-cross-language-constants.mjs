@@ -96,6 +96,34 @@ const PAIRS = [
       },
     ],
   },
+  {
+    name: 'UPYUN_S3_ENDPOINT',
+    why: '又拍云 S3 兼容端点。GUI 上传由前端把它传进 upload_to_s3_compatible，设置页「测试连接」由 Rust 自己拼；两边漂移会让测试连接验的不是上传真正会去的那台服务器，绿灯退化成没有意义的绿灯——那正是这个图床的缺陷长期潜伏的形态',
+    sources: [
+      {
+        file: 'src-tauri/src/commands/s3_compatible.rs',
+        pattern: /const\s+UPYUN_S3_ENDPOINT\s*:\s*&str\s*=\s*"((?:\\.|[^"\\])*)"/,
+      },
+      {
+        file: 'src/uploaders/upyun/UpyunUploader.ts',
+        pattern: /const\s+UPYUN_S3_ENDPOINT\s*=\s*'((?:\\.|[^'\\])*)'/,
+      },
+    ],
+  },
+  {
+    name: 'UPYUN_S3_REGION',
+    why: '又拍云 SigV4 签名用的 region。又拍云不校验它的取值，但它参与签名计算，两侧填的必须是同一个字符串，否则测试连接与真实上传签出来的不是同一个签名',
+    sources: [
+      {
+        file: 'src-tauri/src/commands/s3_compatible.rs',
+        pattern: /const\s+UPYUN_S3_REGION\s*:\s*&str\s*=\s*"((?:\\.|[^"\\])*)"/,
+      },
+      {
+        file: 'src/uploaders/upyun/UpyunUploader.ts',
+        pattern: /const\s+UPYUN_S3_REGION\s*=\s*'((?:\\.|[^'\\])*)'/,
+      },
+    ],
+  },
 ];
 
 for (const pair of PAIRS) {

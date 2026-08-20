@@ -24,9 +24,16 @@ export function needsHttpDomainConsent(config: Record<string, unknown>): boolean
 /**
  * 「测试连接」前的配置预校验
  *
- * 用 REST 口径而不是 GUI 口径：又拍云的 `test_upyun_connection` 打的是自家 REST API，
- * 只用得上 operator/password。拿 GUI 那对 S3 凭证卡这里，会让一个明明能跑的检测
- * 因为缺一把它用不到的钥匙而拒绝执行。其余图床两个口径完全一致，行为不变。
+ * 用 REST 口径而不是 GUI 口径。注意这**不是**说测试连接只验 REST——2026-08-20 起
+ * 又拍云的 `test_upyun_connection` 会 REST + S3 两条链路各验一次。这里之所以仍然
+ * 只卡 REST 那几个字段，是因为**缺 S3 凭证这件事交给 Rust 报更合适**：
+ *
+ * - Rust 的 `UPYUN_S3_CREDENTIAL_MISSING` 会告诉用户去「操作员授权 → S3 访问凭证」
+ *   生成，而这里只能吐一句 `s3AccessKey 格式无效（至少 2 个字符）`——用户读完
+ *   仍然不知道那把钥匙在哪个页面里。老用户升级后**必然**撞上这一句，措辞是关键。
+ * - 不存在多跑一趟网络的代价：Rust 侧取凭证在发任何请求之前，缺了就地返回。
+ *
+ * 其余图床两个口径完全一致，行为不变。
  */
 export function validateS3Config(serviceId: string, config: Record<string, unknown>): string | null {
   const fields = getRestChainRequiredFields(serviceId);
