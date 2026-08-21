@@ -446,13 +446,11 @@ jobs:
 
             console.log(`Uploaded ${checksumAssetName} for ${checksumTargets.length} assets`);
 
-      - name: Fix draft release tag and append checklist
+      - name: Fix draft release tag
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const fs = require('fs');
-            const checklist = fs.readFileSync('.github/RELEASE_CHECKLIST.md', 'utf8');
             const tag = context.ref.replace('refs/tags/', '');
 
             // 获取所有 release（包括 draft）
@@ -481,12 +479,6 @@ jobs:
               }
             }
 
-            // 追加 checklist
-            const newBody = (release.body || '') + '\n\n---\n\n' + checklist;
-            await github.rest.repos.updateRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: release.id,
-              body: newBody,
-            });
-            console.log('✅ Appended release checklist');
+      # 回归清单不进公开 release 描述，只写到本次运行的 Summary 页供维护者自查
+      - name: Publish regression checklist to run summary
+        run: cat .github/RELEASE_CHECKLIST.md >> "$GITHUB_STEP_SUMMARY"

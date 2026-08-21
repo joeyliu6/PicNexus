@@ -50,7 +50,7 @@ CI 会拒绝同一版本下发生变化的 `main.js`、`manifest.json` 或 `styl
 6. 新版本使用不带 `v` 的标签，并直接上传 `main.js`、`manifest.json`、`styles.css`。
 7. 独立仓库的 Release 事件下载三个运行资产，与标签内容逐一比较，并通过 GitHub artifact attestations 记录资产摘要和来源。
 8. 同一批运行文件打包为 `picnexus-obsidian-<version>.zip`，上传到桌面端 Draft Release。
-9. 最终任务生成包含插件 ZIP 的 `SHA256SUMS.txt` 并附加手动回归清单。
+9. 最终任务生成包含插件 ZIP 的 `SHA256SUMS.txt`，并把手动回归清单写入该次 Actions 运行的 Summary 页（不进公开 Release 描述）。
 
 插件任务失败时桌面端 Release 保持 Draft。修复原因后重新运行失败任务即可，工作流按远端实际状态恢复。
 
