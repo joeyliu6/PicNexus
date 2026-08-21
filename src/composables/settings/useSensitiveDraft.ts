@@ -3,6 +3,10 @@
 // 统一规则：存起来之后界面只显示「有没有」，不显示「是什么」；想看内容主动点眼睛，
 // 点开临时取明文、15 秒自动收回（收回由 SensitiveField 负责）。
 //
+// 删除走的是「把框清空再离开」——不是另设一个清除按钮。理由见
+// CLEAR_TO_DELETE_PLACEHOLDER：框一聚焦就填真值，所以清空本身就是明确的删除意图，
+// 再要求用户去别处找个按钮反而更绕。清空会先弹确认，见 confirmClear。
+//
 // 四个设置分组（Token / Cookie / S3 / WebDAV）需要的是同一套机械动作：
 // 一张草稿表、失焦提交、已保存判定、按需揭示。抄四遍不如收在一处。
 //
@@ -26,20 +30,45 @@ const log = createLogger('SensitiveDraft');
 const SAVED_FEEDBACK_HOLD_MS = 2000;
 
 /**
- * 已存过值时的占位文案——留空提交不会改动已保存的值
+ * 已存过值、且框被清空时的占位文案
  *
  * 只在输入框**聚焦时**可见：没聚焦时 SensitiveField 会用圆点盖住它，
  * 表示「里面有东西」。两条信息各自在最相关的时机出现。
+ *
+ * Why 不再写「留空则不修改」：那句话跟本组件的交互模型是矛盾的。框一聚焦就会
+ * 把真值填进来（见 {@link SensitiveDraft.beginEdit}），所以想「留空」必须**主动删**——
+ * 而主动删就是删的意思。旧文案等于在用户刚做完删除动作时告诉他「你这下不算」，
+ * 用户会以为凭证删不掉（事实上当时也确实删不掉）。
  */
-export const KEEP_STORED_PLACEHOLDER = '留空则不修改';
+export const CLEAR_TO_DELETE_PLACEHOLDER = '清空并离开即删除';
 
 export interface SensitiveDraftOptions {
   /** 该字段是否已存过值：决定「已保存」芯片是否出现、眼睛按钮是否可用 */
   hasStored: (key: string) => boolean;
   /** 按需取明文。明文字段直接返回，密文字段在这里解密 */
   reveal: (key: string) => Promise<string>;
-  /** 提交草稿。只在草稿非空时被调用，所以实现里无需再判空 */
+  /**
+   * 提交草稿
+   *
+   * ⚠️ `draft` 可能是**空串**，那表示「用户要清除这一项」。
+   * 加密类字段（WebDAV 密码那种）遇到空串必须**直接写空**，
+   * 不能 `encrypt('')`——那会存进一段非空密文，界面继续显示「已保存」，
+   * 用户看到的就是「删了但没删掉」。
+   */
   commit: (key: string, draft: string) => Promise<void> | void;
+  /**
+   * 清除已保存的值之前的确认，返回 true 才真删
+   *
+   * Why 必填而不是可选：漏接的后果是静默的——清除会变成什么也不做，
+   * 跟修好之前的表现一模一样，没有任何报错提醒你漏了。
+   * 做成必填，让类型检查在四个调用点上各拦一次。
+   *
+   * Why 要确认：「全选删掉准备重填」和「就是不要了」在事件上完全一样。
+   * 前者中途被打断（切窗口、被人叫走）就会丢掉一把钥匙，而很多服务商的
+   * SecretKey 只在生成时显示一次，丢了得重新生成，会连带搞挂别处在用它的程序。
+   * 用 {@link useSecretClearConfirm} 接上默认实现即可。
+   */
+  confirmClear: (key: string) => Promise<boolean>;
   onRevealError?: (error: unknown, key: string) => void;
   onCommitError?: (error: unknown, key: string) => void;
 }
@@ -169,9 +198,18 @@ export function useSensitiveDraft(options: SensitiveDraftOptions): SensitiveDraf
   async function commitDraft(key: string): Promise<void> {
     const draft = drafts.value[key];
 
-    // 留空则不修改。也兜住了「取值失败留下空框」——已存的值不会被清掉
     if (!draft) {
+      // 空框有三种来路，只有第一种是「用户要删」：
+      //   1. 真值填进框里过、用户把它删干净了     → originals 里有记录
+      //   2. 解密失败，值压根没进过框             → 没记录
+      //   3. 解密还在路上人就走了（此时框是只读的）→ 没记录
+      //
+      // originals 只在真值确实交到用户手上时才被记（见 beginEdit 两条路径），
+      // 拿它当凭据正好把三种来路分开。少了这个判断只剩两种坏结局：
+      // 一律不删（用户删不掉已存的凭证），或者一律删（解密抖一下就把好凭证抹了）。
+      const userClearedIt = originals.has(key);
       originals.delete(key);
+      if (userClearedIt) await clearStored(key);
       return;
     }
 
@@ -194,6 +232,34 @@ export function useSensitiveDraft(options: SensitiveDraftOptions): SensitiveDraf
         options.onCommitError(error, key);
       } else {
         log.error(`敏感字段提交失败：${key}`, error);
+      }
+    }
+  }
+
+  /**
+   * 清除已保存的值
+   *
+   * 破坏性且不可撤销（拿不回来只能去服务商控制台重新生成），所以先问一句。
+   *
+   * Why 不做「先删掉、再给个撤销提示条」：撤销要求在内存里攥着明文好几秒，
+   * 跟本模块一直守的「明文只在输入框里活一瞬」直接冲突。
+   */
+  async function clearStored(key: string): Promise<void> {
+    if (!(await options.confirmClear(key))) {
+      // 用户反悔。草稿保持空即可——已存的值一个字节都没动，圆点会自己回来
+      drafts.value[key] = '';
+      return;
+    }
+
+    try {
+      await options.commit(key, '');
+      drafts.value[key] = '';
+    } catch (error) {
+      // 清除失败就维持原状。这里**不**清草稿：让框继续空着，用户看得出这下没成
+      if (options.onCommitError) {
+        options.onCommitError(error, key);
+      } else {
+        log.error(`敏感字段清除失败：${key}`, error);
       }
     }
   }
@@ -227,7 +293,7 @@ export function useSensitiveDraft(options: SensitiveDraftOptions): SensitiveDraf
   }
 
   function placeholder(key: string, emptyHint: string): string {
-    return options.hasStored(key) ? KEEP_STORED_PLACEHOLDER : emptyHint;
+    return options.hasStored(key) ? CLEAR_TO_DELETE_PLACEHOLDER : emptyHint;
   }
 
   function bindingsFor(key: string, emptyHint: string): SensitiveFieldBindings {

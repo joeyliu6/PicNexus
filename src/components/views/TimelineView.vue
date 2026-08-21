@@ -396,6 +396,7 @@ function handleItemToggleSelect(id: string, event: MouseEvent): void {
       :item="lightboxItem"
       :has-prev="lightboxHasPrev"
       :has-next="lightboxHasNext"
+      :confirmed-http-hosts="confirmedHttpHosts"
       @delete="handleLightboxDelete"
       @navigate="handleLightboxNavigate"
       @toggle-favorite="handleToggleFavorite"

@@ -8,15 +8,18 @@ import { mountWithDefaults } from '../helpers/vueMount';
 import HistoryLightbox from '@/components/views/history/HistoryLightbox.vue';
 import type { HistoryItem } from '@/config/types';
 
-const { bridgeState, toastWarnMock } = vi.hoisted(() => ({
+const { bridgeState, toastWarnMock, primaryUrl } = vi.hoisted(() => ({
   bridgeState: {
     options: null as null | {
       onLoadError?: () => void;
       onLoadSuccess?: () => void;
+      imageSrc?: { value: string };
       mediumSrc?: { value: string };
     },
   },
   toastWarnMock: vi.fn(),
+  // 可改写：安全闸的用例要喂不同协议 / 主机的地址
+  primaryUrl: { value: 'https://example.com/image.jpg' },
 }));
 
 // ── Mock：PhotoSwipe 桥接（返回一个可 Teleport 的容器） ──
@@ -29,6 +32,7 @@ vi.mock('@/composables/history/usePhotoSwipeBridge', () => ({
   usePhotoSwipeBridge: (options: {
     onLoadError?: () => void;
     onLoadSuccess?: () => void;
+    imageSrc?: { value: string };
     mediumSrc?: { value: string };
   }) => {
     bridgeState.options = options;
@@ -75,7 +79,7 @@ vi.mock('@/composables/useConfirm', () => ({
 }));
 
 vi.mock('@/utils/imageUrl', () => ({
-  getPrimaryImageUrl: () => 'https://example.com/image.jpg',
+  getPrimaryImageUrl: () => primaryUrl.value,
 }));
 
 const tooltipDirective = {
@@ -110,11 +114,12 @@ function makeHistoryItem(results: HistoryItem['results']): HistoryItem {
   };
 }
 
-function mountLightbox(item: HistoryItem) {
+function mountLightbox(item: HistoryItem, confirmedHttpHosts?: ReadonlySet<string>) {
   return mountWithDefaults(HistoryLightbox, {
     props: {
       visible: true,
       item,
+      confirmedHttpHosts,
     },
     global: {
       directives: {
@@ -134,6 +139,7 @@ describe('HistoryLightbox', () => {
     mockPswpEl.innerHTML = '';
     bridgeState.options = null;
     toastWarnMock.mockClear();
+    primaryUrl.value = 'https://example.com/image.jpg';
   });
 
   /** 底栏通过 Teleport 渲染到 mockPswpEl，需在 DOM 中查找 */
@@ -312,6 +318,69 @@ describe('HistoryLightbox', () => {
       await nextTick();
 
       expect(bridgeState.options?.mediumSrc?.value).toBe('https://cdn.example.com/a.png');
+    });
+  });
+  /**
+   * CSP 的 `img-src` 放开 `http:` 之后（2ab296af），灯箱身上就没有闸了：
+   * 在那之前私网 / 云元数据 / 未确认明文 HTTP 全靠 CSP 挡。这组用例钉住
+   * 「灯箱与缩略图用同一份判据」，任何人把 safeImageUrl 摘掉都会红。
+   */
+  describe('URL 安全闸', () => {
+    const blockedItem = () => makeHistoryItem([
+      { serviceId: 'jd', status: 'success', result: { serviceId: 'jd', fileKey: 'k', url: 'x' } },
+    ]);
+
+    it('未确认的明文 HTTP 域名不进 PhotoSwipe，且给出可执行的解释', async () => {
+      primaryUrl.value = 'http://cdn.example.com/a.png';
+
+      mountLightbox(blockedItem());
+      await nextTick();
+
+      expect(bridgeState.options?.imageSrc?.value).toBe('');
+      expect(toastWarnMock).toHaveBeenCalledTimes(1);
+      // 只说「加载失败」等于没说；必须指向设置页的那一步操作
+      expect(String(toastWarnMock.mock.calls[0][1])).toContain('测试连接');
+    });
+
+    it('用户确认过的那个主机名照常放行', async () => {
+      primaryUrl.value = 'http://cdn.example.com/a.png';
+
+      mountLightbox(blockedItem(), new Set(['cdn.example.com']));
+      await nextTick();
+
+      expect(bridgeState.options?.imageSrc?.value).toBe('http://cdn.example.com/a.png');
+      expect(toastWarnMock).not.toHaveBeenCalled();
+    });
+
+    /**
+     * 确认名单是按主机名存的，所以它只能担保**那一个**主机。
+     * 拿它给云元数据地址开门是这道闸最不能出的错——169.254.169.254 上挂着密钥。
+     */
+    it('云元数据地址即使在确认名单里也照拦', async () => {
+      primaryUrl.value = 'http://169.254.169.254/latest/meta-data/';
+
+      mountLightbox(blockedItem(), new Set(['169.254.169.254']));
+      await nextTick();
+
+      expect(bridgeState.options?.imageSrc?.value).toBe('');
+      expect(toastWarnMock).toHaveBeenCalled();
+    });
+
+    it('局域网 HTTP 地址放行（NAS / 自建 WebDAV 图床的常见形态）', async () => {
+      primaryUrl.value = 'http://192.168.1.10:5244/pic.png';
+
+      mountLightbox(blockedItem());
+      await nextTick();
+
+      expect(bridgeState.options?.imageSrc?.value).toBe('http://192.168.1.10:5244/pic.png');
+      expect(toastWarnMock).not.toHaveBeenCalled();
+    });
+
+    it('地址正常时不弹解释（避免把安全提示变成背景噪音）', async () => {
+      mountLightbox(blockedItem());
+      await nextTick();
+
+      expect(toastWarnMock).not.toHaveBeenCalled();
     });
   });
 });

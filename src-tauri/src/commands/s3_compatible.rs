@@ -3,6 +3,7 @@
 // 支持腾讯云 COS、阿里云 OSS、七牛云、又拍云
 
 use aws_sdk_s3::config::{Credentials, Region};
+use aws_sdk_s3::error::{DisplayErrorContext, ProvideErrorMetadata};
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::{Client, Config};
 use serde::{Deserialize, Serialize};
@@ -17,6 +18,20 @@ use crate::log_utils::safe_path;
 
 /// S3 操作默认超时时间（秒）
 const S3_OPERATION_TIMEOUT_SECS: u64 = 30;
+
+/// 又拍云 S3 兼容端点
+///
+/// 与前端 `src/uploaders/upyun/UpyunUploader.ts` 的同名常量由
+/// `scripts/check-cross-language-constants.mjs` 钉住必须逐字一致：GUI 上传由前端把
+/// endpoint 传进 `upload_to_s3_compatible`，而「测试连接」由这里自己拼。两边一旦漂移，
+/// 测试连接验的就不是上传真正会去的那台服务器，绿灯重新退化成没有意义的绿灯。
+const UPYUN_S3_ENDPOINT: &str = "https://s3.api.upyun.com";
+
+/// 又拍云 SigV4 签名用的 region
+///
+/// 又拍云文档称不支持配置区域，但 region 仍参与签名计算，两侧必须填同一个值。
+/// 同样由跨语言常量守卫钉住，理由见 `UPYUN_S3_ENDPOINT`。
+const UPYUN_S3_REGION: &str = "upyun";
 
 /// S3 兼容上传结果
 #[derive(Debug, Serialize, Deserialize)]
@@ -185,7 +200,13 @@ pub async fn upload_to_s3_compatible(
             format!("上传超时 ({}秒)", S3_OPERATION_TIMEOUT_SECS * 2),
         )
     })?
-    .map_err(|e| AppError::upload("S3兼容", format!("上传失败: {}", e)))?;
+    // 同样要摊平错误链，不能直接 Display——否则每个图床上传失败都只说
+    // 「service error」，用户既不知道是密钥不对还是桶不存在。理由见 describe_sdk_error。
+    .map_err(|e| {
+        let described = describe_sdk_error(&e);
+        log::error!("[S3兼容] 上传失败: {}", described.full);
+        AppError::upload("S3兼容", format!("上传失败: {}", described.brief))
+    })?;
 
     log::info!("[S3兼容] 上传成功 - Key: {}", key);
 
@@ -218,6 +239,12 @@ pub struct S3TestConfig {
     pub secret_key: Option<String>,
     pub access_key_secret: Option<String>,
     pub password: Option<String>,
+    // 又拍云专用：控制台「操作员授权 → S3 访问凭证」单独生成的那一对
+    //
+    // Why 不并进上面的通用取值链：那条链是「同一把钥匙的不同叫法」，谁先命中都一样；
+    // 又拍云这两个字段是**另一把钥匙**，混进去会让 REST 链路拿到 S3 凭证去做 Basic Auth。
+    pub s3_access_key: Option<String>,
+    pub s3_secret_key: Option<String>,
     // bucket
     pub bucket_name: Option<String>,
     pub bucket: Option<String>,
@@ -249,6 +276,18 @@ impl S3TestConfig {
     }
 }
 
+/// 取出去掉首尾空白后仍非空的值
+///
+/// 单纯 `filter(|s| !s.is_empty())` 拦不住用户粘贴时带进来的空格：那样的凭证会原样
+/// 发出去，换回一个「认证失败」，用户盯着看起来填好的输入框只会怀疑是密码记错了。
+fn non_empty(value: &Option<String>) -> Option<String> {
+    value
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
 /// 测试 S3 兼容存储连接
 /// 根据 service_id 自动构建对应的 endpoint 进行验证
 /// 包含重试机制（最多 1 次）以快速反馈配置问题
@@ -258,6 +297,12 @@ pub async fn test_s3_connection(
     config: S3TestConfig,
 ) -> Result<String, AppError> {
     log::info!("[S3测试] 开始测试 {} 连接", service_id);
+
+    // 又拍云先分流：它有两套互不通用的凭证，下面那条通用取值链会把 operator 当成
+    // access key 取走，走完只验得到半条链路——那正是这个缺陷长期潜伏的形态。
+    if service_id == "upyun" {
+        return test_upyun_connection(&config).await;
+    }
 
     let access_key = config
         .get_access_key()
@@ -273,11 +318,6 @@ pub async fn test_s3_connection(
         .get_bucket()
         .filter(|s| !s.is_empty())
         .ok_or_else(|| AppError::config("Bucket 名称不能为空"))?;
-
-    // 又拍云使用 REST API，单独处理
-    if service_id == "upyun" {
-        return test_upyun_connection(&access_key, &secret_key, &bucket).await;
-    }
 
     // 构建 endpoint 和 region
     let (endpoint, region) = build_s3_endpoint(&service_id, &config, &bucket)?;
@@ -314,7 +354,11 @@ pub async fn test_s3_connection(
             Ok(format!("{} 连接成功！", get_service_name(&service_id)))
         }
         Ok(Err(e)) => {
-            let error_msg = e.to_string();
+            // 同样不能用 e.to_string()——理由见 describe_sdk_error。
+            // 这条路径上的 R2 / 腾讯 / 阿里 / 七牛 / 自定义 S3 此前也一直只显示
+            // 「连接失败: service error」，密钥填错了也看不出是密钥的问题。
+            let described = describe_sdk_error(&e);
+            let error_msg = described.full;
             log::error!("[S3测试] 连接失败: {}", error_msg);
 
             if error_msg.contains("NoSuchBucket") {
@@ -327,7 +371,8 @@ pub async fn test_s3_connection(
             } else if error_msg.contains("InvalidBucketName") {
                 Err(AppError::config(format!("无效的存储桶名称: {}", bucket)))
             } else {
-                Err(AppError::storage(format!("连接失败: {}", error_msg)))
+                // 兜底走短句：全文是整个 HTTP 响应，塞进 toast 就是一堵墙
+                Err(AppError::storage(format!("连接失败: {}", described.brief)))
             }
         }
         Err(_) => {
@@ -439,12 +484,53 @@ fn build_s3_endpoint(
     }
 }
 
-/// 测试又拍云连接（使用 REST API）
-async fn test_upyun_connection(
+/// 测试又拍云连接：REST 与 S3 两条链路各验一次
+///
+/// Why 两条都验：又拍云有两套**互不通用**的凭证。操作员账号密码走它自家 REST API
+/// （Typora / Obsidian / CLI 三条编辑器链路用），控制台「操作员授权 → S3 访问凭证」里
+/// 单独生成的 AK/SK 走 S3 兼容端点（软件内 GUI 上传用）。老实现只验 REST，于是在
+/// GUI 上传彻底不可用的那整段时间里「测试连接」一直亮绿灯——用户看到的是「配置明明
+/// 是好的、一传就失败」，唯一合理的结论就是软件坏了。绿灯必须意味着两条链路都能用。
+///
+/// Why 报错要点名是哪把钥匙：两套凭证长得一样、填在同一张卡片上，只说「认证失败」
+/// 会让用户去改那把本来没错的钥匙。
+async fn test_upyun_connection(config: &S3TestConfig) -> Result<String, AppError> {
+    let bucket = non_empty(&config.get_bucket())
+        .ok_or_else(|| AppError::config("服务空间名称不能为空"))?;
+
+    let operator = non_empty(&config.operator)
+        .ok_or_else(|| AppError::config(UPYUN_REST_CREDENTIAL_MISSING))?;
+    let password = non_empty(&config.password)
+        .ok_or_else(|| AppError::config(UPYUN_REST_CREDENTIAL_MISSING))?;
+    let s3_access_key = non_empty(&config.s3_access_key)
+        .ok_or_else(|| AppError::config(UPYUN_S3_CREDENTIAL_MISSING))?;
+    let s3_secret_key = non_empty(&config.s3_secret_key)
+        .ok_or_else(|| AppError::config(UPYUN_S3_CREDENTIAL_MISSING))?;
+
+    test_upyun_rest_chain(&operator, &password, &bucket).await?;
+    test_upyun_s3_chain(&s3_access_key, &s3_secret_key, &bucket).await?;
+
+    log::info!("[S3测试] 又拍云 REST + S3 两条链路均连接成功");
+    Ok("又拍云连接成功！编辑器（REST）与软件内上传（S3）两条链路均已验证".to_string())
+}
+
+/// 缺 S3 凭证时的提示
+///
+/// 老用户升级后必然撞上这一句：旧版本这两个字段压根不存在。所以它不能只说「不能为空」，
+/// 得把「去哪儿拿」一起讲了，否则用户只知道缺东西、不知道缺的是哪个页面里的东西。
+const UPYUN_S3_CREDENTIAL_MISSING: &str =
+    "缺少 S3 访问凭证：请在又拍云控制台「操作员授权 → S3 访问凭证」单独生成一对，填进「S3 AccessKey / S3 SecretKey」。软件内上传走这一对，与上面的操作员账号密码不是同一套。";
+
+/// 缺操作员凭证时的提示
+const UPYUN_REST_CREDENTIAL_MISSING: &str =
+    "缺少操作员账号或密码：这一对供 Typora / Obsidian / CLI 使用，与下面的 S3 访问凭证不是同一套。";
+
+/// REST 链路（Basic Auth，`v0.api.upyun.com`）——编辑器 / CLI 走这条
+async fn test_upyun_rest_chain(
     operator: &str,
     password: &str,
     bucket: &str,
-) -> Result<String, AppError> {
+) -> Result<(), AppError> {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
 
     let url = format!("https://v0.api.upyun.com/{}/", bucket);
@@ -459,26 +545,163 @@ async fn test_upyun_connection(
         .await
         .map_err(|e| {
             if e.is_timeout() {
-                AppError::storage("连接超时")
+                AppError::storage("REST 链路（编辑器 / CLI）连接超时")
             } else if e.is_connect() {
-                AppError::storage("无法连接到又拍云服务器")
+                AppError::storage("REST 链路（编辑器 / CLI）无法连接到又拍云服务器")
             } else {
-                AppError::storage(format!("请求失败: {}", e))
+                AppError::storage(format!("REST 链路（编辑器 / CLI）请求失败: {}", e))
             }
         })?;
 
     let status = response.status();
     if status.is_success() {
-        log::info!("[S3测试] 又拍云连接成功");
-        return Ok("又拍云连接成功！".to_string());
+        log::info!("[S3测试] 又拍云 REST 链路连接成功");
+        return Ok(());
     }
     if status == reqwest::StatusCode::UNAUTHORIZED {
-        return Err(AppError::auth("认证失败: 请检查操作员账号和密码"));
+        return Err(AppError::auth(
+            "操作员凭证认证失败：请检查「操作员账号」和「操作员密码」（这一对供 Typora / Obsidian / CLI 使用）",
+        ));
     }
     if status == reqwest::StatusCode::NOT_FOUND {
         return Err(AppError::storage(format!("服务空间不存在: {}", bucket)));
     }
-    Err(AppError::storage(format!("连接失败: HTTP {}", status)))
+    Err(AppError::storage(format!(
+        "REST 链路（编辑器 / CLI）连接失败: HTTP {}",
+        status
+    )))
+}
+
+/// S3 链路（SigV4，`s3.api.upyun.com`）——软件内 GUI 上传走这条
+///
+/// Why 探测动作用 ListObjectsV2 而不是 HeadBucket：又拍云官方 S3 兼容清单里**没有**
+/// HeadBucket（2026-08-20 核对 <https://help.upyun.com/knowledge-base/s3-api/>，
+/// 只列了 ListBuckets / ListObjectsV2 / Put / Get / Head / Delete / Copy / 分片几类）。
+/// 拿一个它不实现的动作去探测，会把好凭证判成坏的——比不测更糟。
+///
+/// Why 走 Rust 而不是前端自己发一次：GUI 上传本身就是把 endpoint/AK/SK 交给
+/// `upload_to_s3_compatible`，同一个 SDK、同一套签名。在这里探测才是「测的就是传的」。
+async fn test_upyun_s3_chain(
+    access_key: &str,
+    secret_key: &str,
+    bucket: &str,
+) -> Result<(), AppError> {
+    let client = create_s3_client(
+        UPYUN_S3_ENDPOINT,
+        access_key,
+        secret_key,
+        UPYUN_S3_REGION,
+    );
+
+    let result = timeout(Duration::from_secs(10), async {
+        client
+            .list_objects_v2()
+            .bucket(bucket)
+            .max_keys(1)
+            .send()
+            .await
+    })
+    .await;
+
+    match result {
+        Ok(Ok(_)) => {
+            log::info!("[S3测试] 又拍云 S3 链路连接成功");
+            Ok(())
+        }
+        Ok(Err(e)) => {
+            let described = describe_sdk_error(&e);
+            Err(classify_upyun_s3_error(&described.full, &described.brief, bucket))
+        }
+        Err(_) => Err(AppError::storage(
+            "S3 链路（软件内上传）连接超时，请检查网络",
+        )),
+    }
+}
+
+/// SDK 错误的两种说法
+///
+/// Why 要分两份：摊平后的错误链**极长**（整个 HTTP 响应 + 响应头 + XML 正文，
+/// 轻松上千字符）。日志里这是排查金矿，塞进 toast 就是一堵墙。
+/// 2026-08-20 真机验收时正是靠日志里那一大坨才定位到问题，所以两边都要，但不能混。
+struct SdkErrorText {
+    /// 完整错误链（含错误码）。用于分类匹配和写日志
+    full: String,
+    /// 短句。用于给用户看的提示——优先服务端错误码，没有就截断的概要
+    brief: String,
+}
+
+/// 摊平 SDK 错误，取出真正的错误码
+///
+/// ⚠️ 直接 `e.to_string()` 是不行的：SdkError 的 Display 只给一句概要，
+/// 服务端真正回的错误码在 source 链里。2026-08-20 真机实测，拿错误的又拍云 S3
+/// 凭证去连，`to_string()` 只有五个字 `service error`——于是所有靠
+/// `contains("...")` 的分类**一条都命中不了**，全落进兜底分支，用户看到的是
+/// 「连接失败: service error」，等于什么也没说。
+///
+/// 这个坑单测抓不到：喂给分类函数的是手写的字符串，那种字符串现实中不会出现。
+/// 守着它的是源码哨兵 `sdk_errors_never_go_through_plain_display`。
+///
+/// 两样都取：
+/// - `code()` 是服务端返回的错误码本身（`ErrInvalidAccessKeyID` 这种），最准
+/// - `DisplayErrorContext` 展开整条 source 链，覆盖连不上 / 超时这类没有错误码的情况
+fn describe_sdk_error<E, R>(error: &aws_sdk_s3::error::SdkError<E, R>) -> SdkErrorText
+where
+    aws_sdk_s3::error::SdkError<E, R>: ProvideErrorMetadata + std::error::Error,
+{
+    let code = error.code().unwrap_or_default();
+    let detail = DisplayErrorContext(error).to_string();
+
+    let full = if code.is_empty() {
+        detail.clone()
+    } else {
+        format!("{}: {}", code, detail)
+    };
+
+    let brief = if code.is_empty() {
+        truncate_chars(&detail, SDK_ERROR_BRIEF_MAX_CHARS)
+    } else {
+        code.to_string()
+    };
+
+    SdkErrorText { full, brief }
+}
+
+/// 给用户看的错误概要最长多少字符
+///
+/// 没有错误码时才会用到（连不上、超时这类）。取 120 是「一句话能读完、
+/// toast 里不超过三行」的经验值，不是精确排版。
+const SDK_ERROR_BRIEF_MAX_CHARS: usize = 120;
+
+/// 按**字符**截断，不是按字节——按字节切会把中文劈成乱码
+fn truncate_chars(text: &str, max: usize) -> String {
+    if text.chars().count() <= max {
+        return text.to_string();
+    }
+    let head: String = text.chars().take(max).collect();
+    format!("{}…", head)
+}
+
+/// 把 S3 链路的原始错误翻译成「用户该去动哪一格」
+///
+/// `ErrInvalidAccessKeyID` 是又拍云自己的拼法（不是 AWS 的 `InvalidAccessKeyId`），
+/// 2026-08-19 实测拿操作员账号去签 S3 请求收到的就是它。两种拼法都要认。
+fn classify_upyun_s3_error(error_msg: &str, brief: &str, bucket: &str) -> AppError {
+    log::error!("[S3测试] 又拍云 S3 链路失败: {}", error_msg);
+
+    if error_msg.contains("NoSuchBucket") {
+        return AppError::storage(format!("服务空间不存在: {}", bucket));
+    }
+    if error_msg.contains("ErrInvalidAccessKeyID")
+        || error_msg.contains("InvalidAccessKeyId")
+        || error_msg.contains("SignatureDoesNotMatch")
+        || error_msg.contains("AccessDenied")
+    {
+        return AppError::auth(
+            "S3 访问凭证认证失败：请确认填的是控制台「操作员授权 → S3 访问凭证」里生成的那一对，而不是上面的操作员账号密码（软件内上传走这一对）",
+        );
+    }
+    // 兜底走短句，理由同上：全文能有上千字符
+    AppError::storage(format!("S3 链路（软件内上传）连接失败: {}", brief))
 }
 
 /// 获取服务显示名称
@@ -509,11 +732,236 @@ mod tests {
             secret_key: None,
             access_key_secret: None,
             password: None,
+            s3_access_key: None,
+            s3_secret_key: None,
             bucket_name: None,
             bucket: Some("bucket".to_string()),
             region: Some("us-east-1".to_string()),
             endpoint: Some(endpoint.to_string()),
         }
+    }
+
+    /// 哨兵：本文件里 S3 SDK 的错误一律不许直接 Display
+    ///
+    /// 2026-08-20 真机踩到的：`SdkError` 的 Display 只有五个字 `service error`，
+    /// 真正的错误码在 source 链里。于是所有靠 `contains("...")` 的分类一条都命中不了，
+    /// 全落进兜底分支——「连接失败: service error」，等于什么也没说。
+    ///
+    /// **这个坑单测抓不到**：喂给分类函数的是手写字符串，那种字符串现实中不会出现。
+    /// 所以改成扫源码。三处都得走 `describe_sdk_error`：通用连接测试、又拍云 S3 链路、
+    /// 以及上传失败提示（那处用户看得最多）。
+    ///
+    /// 两个讲究，少一个哨兵就失灵：
+    /// - **在 `#[cfg(test)]` 处截断**：`include_str!` 把本测试自己也读进来了，
+    ///   下面那些违规字面量会自己把自己喂饱。
+    /// - **滤掉注释行**：上面那段说明里就写着违规写法。
+    #[test]
+    fn sdk_errors_never_go_through_plain_display() {
+        let raw = include_str!("s3_compatible.rs").replace("
+", "
+");
+        let code_only = raw
+            .split_once("
+#[cfg(test)]")
+            .map(|(before, _)| before)
+            .expect("找不到 #[cfg(test)]，截断失效——哨兵会自己触发自己")
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("
+");
+
+        // ⚠️ 不能直接 contains("e.to_string()")：`code.to_string()`、`source.to_string()`
+        // 这些正当写法都以 `e.to_string()` 结尾，会被误判。2026-08-20 这条哨兵上线
+        // 第一次就把自己抓了。只认**独立变量 e** ——前一个字符不是标识符的一部分。
+        assert!(
+            !has_bare_error_to_string(&code_only),
+            "发现把 SDK 错误直接 to_string() 的写法——改走 describe_sdk_error，             否则用户只会看到「service error」",
+        );
+        assert!(
+            !code_only.contains("上传失败: {}\", e)"),
+            "上传失败提示在直接 Display SDK 错误——改走 describe_sdk_error",
+        );
+
+        // 正向：三处都确实接上了。只查"没有违规写法"的话，把整段删掉也算通过。
+        assert!(
+            code_only.matches("describe_sdk_error(&").count() >= 3,
+            "describe_sdk_error 的调用点少于 3 处，是不是哪条链路漏接了？",
+        );
+    }
+
+    /// 又拍云拿操作员账号去签 S3 请求时，服务端回的是它自家拼法 `ErrInvalidAccessKeyID`，
+    /// 不是 AWS 的 `InvalidAccessKeyId`。只认 AWS 那个拼法的话，这条最常见的
+    /// 「填错了哪把钥匙」会掉进兜底分支，提示退回没有指向性的「连接失败」。
+    #[test]
+    fn upyun_s3_error_names_the_credential_for_both_spellings() {
+        for raw in [
+            "service error: ErrInvalidAccessKeyID: access key not found",
+            "service error: InvalidAccessKeyId",
+            "SignatureDoesNotMatch: signature mismatch",
+            "AccessDenied",
+        ] {
+            let message = classify_upyun_s3_error(raw, "brief", "bucket").to_string();
+            assert!(
+                message.contains("S3 访问凭证"),
+                "「{}」应指向 S3 访问凭证，实际: {}",
+                raw,
+                message
+            );
+            assert!(
+                message.contains("操作员授权"),
+                "「{}」应告诉用户去哪儿生成，实际: {}",
+                raw,
+                message
+            );
+        }
+    }
+
+    /// 找出「独立变量 `e` 直接 to_string()」的写法
+    ///
+    /// 只看 `e.to_string()` 前面那个字符：是字母 / 数字 / 下划线 / 点的话，
+    /// 说明这是 `code.to_string()` 这类正当写法的尾巴，不算。
+    fn has_bare_error_to_string(src: &str) -> bool {
+        let needle = "e.to_string()";
+        src.match_indices(needle).any(|(idx, _)| {
+            idx == 0
+                || !src[..idx]
+                    .chars()
+                    .next_back()
+                    .is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '.')
+        })
+    }
+
+    /// 哨兵的哨兵：上面那个收紧过的判断本身得既抓得住、又不误伤
+    #[test]
+    fn bare_error_to_string_detector_is_neither_blind_nor_trigger_happy() {
+        // 抓得住：这些都是要拦的
+        assert!(has_bare_error_to_string("let x = e.to_string();"));
+        assert!(has_bare_error_to_string("classify(&e.to_string(), b)"));
+        assert!(has_bare_error_to_string("foo(e.to_string())"));
+
+        // 不误伤：这些是正当写法
+        assert!(!has_bare_error_to_string("code.to_string()"));
+        assert!(!has_bare_error_to_string("let s = source.to_string();"));
+        assert!(!has_bare_error_to_string("self.value.to_string()"));
+    }
+
+    /// 真机形态的回归用例
+    ///
+    /// 2026-08-20 真机拿错误的又拍云 S3 凭证连出来的原文就长这样：错误码在最前，
+    /// 后面跟着一整坨 HTTP 响应。之前的用例喂的是手搓短字符串，**跟现实对不上**，
+    /// 所以 `to_string()` 只给 "service error" 那个缺陷一路绿灯到真机才暴露。
+    #[test]
+    fn upyun_s3_error_handles_the_real_world_shape() {
+        let real = "ErrInvalidAccessKeyID: service error: unhandled error (ErrInvalidAccessKeyID):                     Error { code: \"ErrInvalidAccessKeyID\", message: \"ErrInvalidAccessKeyID\",                     aws_request_id: \"18CD78639C718B77\" } (ServiceError(ServiceError { source: ...";
+
+        let message = classify_upyun_s3_error(real, "ErrInvalidAccessKeyID", "img-ypyp").to_string();
+
+        assert!(message.contains("S3 访问凭证"), "实得: {}", message);
+        // 分类命中时不该把原文抖出来
+        assert!(!message.contains("aws_request_id"), "实得: {}", message);
+    }
+
+    /// 兜底分支给用户的是**短句**，不是那一大坨错误链
+    ///
+    /// 摊平后的错误链是整个 HTTP 响应（响应头 + XML 正文），轻松上千字符。
+    /// 日志里要，toast 里塞进去就是一堵墙。
+    #[test]
+    fn unknown_upyun_s3_error_shows_the_brief_not_the_dump() {
+        let dump = format!("SomeUnknownCode: {}", "x".repeat(2000));
+
+        let message = classify_upyun_s3_error(&dump, "SomeUnknownCode", "bucket").to_string();
+
+        assert!(message.contains("SomeUnknownCode"), "实得: {}", message);
+        assert!(
+            message.chars().count() < 200,
+            "兜底提示不该把整坨错误链倒给用户，实测 {} 字符",
+            message.chars().count(),
+        );
+    }
+
+    /// 按字符截断而不是按字节：按字节切会把中文劈成乱码
+    #[test]
+    fn truncate_chars_never_splits_a_character() {
+        let cn = "中".repeat(200);
+        let cut = truncate_chars(&cn, 10);
+
+        assert_eq!(cut.chars().count(), 11);  // 10 个字 + 省略号
+        assert!(cut.ends_with('…'));
+        assert_eq!(truncate_chars("短", 10), "短");
+    }
+
+    /// 桶不存在与凭证不对必须分开报：混为一谈会让用户去改本来没错的那一格
+    #[test]
+    fn upyun_s3_error_separates_missing_bucket_from_bad_credential() {
+        let message = classify_upyun_s3_error("NoSuchBucket: the bucket is gone", "NoSuchBucket", "mybucket")
+            .to_string();
+
+        assert!(message.contains("mybucket"), "实际: {}", message);
+        assert!(!message.contains("S3 访问凭证"), "实际: {}", message);
+    }
+
+    /// 认不出来的错误照原样透出，不能悄悄吞成「凭证不对」——那会把网络故障
+    /// 误导成配置问题，用户会去反复重生成一对本来就没问题的凭证。
+    #[test]
+    fn upyun_s3_error_passes_through_unknown_failures() {
+        let message = classify_upyun_s3_error("dispatch failure: connection reset", "dispatch failure: connection reset", "bucket")
+            .to_string();
+
+        assert!(message.contains("connection reset"), "实际: {}", message);
+        assert!(!message.contains("认证失败"), "实际: {}", message);
+    }
+
+    /// 粘贴凭证时带进来的首尾空格必须当成「没填」，否则会换回一个认证失败，
+    /// 用户盯着看起来填好的输入框只会怀疑是密码记错了。
+    #[test]
+    fn non_empty_treats_whitespace_only_as_missing() {
+        assert_eq!(non_empty(&Some("  ".to_string())), None);
+        assert_eq!(non_empty(&Some(String::new())), None);
+        assert_eq!(non_empty(&None), None);
+        assert_eq!(
+            non_empty(&Some("  ak  ".to_string())),
+            Some("ak".to_string())
+        );
+    }
+
+    /// 又拍云的两套凭证不能混：通用取值链认得 operator/password，
+    /// 但**认不得** s3AccessKey/s3SecretKey——真混进去就会拿 S3 凭证去做 Basic Auth。
+    #[test]
+    fn upyun_s3_credentials_stay_out_of_the_generic_key_chain() {
+        let config = S3TestConfig {
+            account_id: None,
+            access_key_id: None,
+            secret_id: None,
+            access_key: None,
+            operator: Some("op".to_string()),
+            secret_access_key: None,
+            secret_key: None,
+            access_key_secret: None,
+            password: Some("pw".to_string()),
+            s3_access_key: Some("s3ak".to_string()),
+            s3_secret_key: Some("s3sk".to_string()),
+            bucket_name: None,
+            bucket: Some("bucket".to_string()),
+            region: None,
+            endpoint: None,
+        };
+
+        assert_eq!(config.get_access_key(), Some("op".to_string()));
+        assert_eq!(config.get_secret_key(), Some("pw".to_string()));
+    }
+
+    /// 前端传的是 camelCase 的 `s3AccessKey`；名字对不上会静默变成 None，
+    /// 表现为「明明填了却说缺少 S3 访问凭证」。
+    #[test]
+    fn upyun_s3_credentials_deserialize_from_camel_case() {
+        let config: S3TestConfig = serde_json::from_str(
+            r#"{"operator":"op","password":"pw","bucket":"b","s3AccessKey":"ak","s3SecretKey":"sk"}"#,
+        )
+        .expect("camelCase payload should deserialize");
+
+        assert_eq!(config.s3_access_key.as_deref(), Some("ak"));
+        assert_eq!(config.s3_secret_key.as_deref(), Some("sk"));
     }
 
     #[test]

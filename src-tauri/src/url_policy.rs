@@ -21,6 +21,15 @@ use crate::error::AppError;
 pub(crate) const FAKE_IP_HOST_MESSAGE: &str =
     "该地址属于代理软件的 fake-ip 地址池（198.18.x.x），无法确认它是局域网。请改填 NAS 的实际内网 IP（如 http://192.168.1.10:5005），或改用 HTTPS。";
 
+/// 公网明文 HTTP 被拒时的统一文案
+///
+/// 与前端 `src/security/networkPolicy.ts` 的 `PUBLIC_HTTP_DISABLED_MESSAGE` 保持
+/// 逐字一致：WebDAV 校验、链接检测和设置页拦的是同一件事的不同触点，说两种话
+/// 用户会以为是两个不同的问题。一致性由 `scripts/check-cross-language-constants.mjs`
+/// 在 `npm run lint` 阶段守着，改名或挪窝时同步更新那里的 `PAIRS`。
+pub(crate) const PUBLIC_HTTP_DISABLED_MESSAGE: &str =
+    "公网 HTTP 地址已禁用，请改用 HTTPS。局域网地址可使用 HTTP。";
+
 /// 私有地址放行策略
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PrivateHostPolicy {
@@ -363,9 +372,7 @@ pub fn validate_url_with_policy(raw_url: &str, policy: PrivateHostPolicy) -> Res
         }
         "http" if is_loopback_host(host) => Ok(parsed),
         "http" if allow_private && is_private_or_reserved_host(host) => Ok(parsed),
-        "http" if allow_private => Err(AppError::validation(
-            "公网 HTTP 地址已禁用，请改用 HTTPS。局域网地址可使用 HTTP。",
-        )),
+        "http" if allow_private => Err(AppError::validation(PUBLIC_HTTP_DISABLED_MESSAGE)),
         "http" => Err(AppError::validation(
             "外部 HTTP 地址已禁用，请改用 HTTPS。本机服务仅支持 http://localhost 或 http://127.0.0.1。",
         )),
@@ -419,9 +426,7 @@ pub async fn validate_webdav_url_for_request(
         "http" if is_private_or_reserved_host(host) => Ok(parsed),
         "http" => {
             if normalize_host(host).parse::<IpAddr>().is_ok() {
-                return Err(AppError::webdav(
-                    "公网 HTTP 地址已禁用，请改用 HTTPS。局域网地址可使用 HTTP。",
-                ));
+                return Err(AppError::webdav(PUBLIC_HTTP_DISABLED_MESSAGE));
             }
 
             let port = parsed.port_or_known_default().unwrap_or(80);
@@ -461,9 +466,7 @@ pub async fn validate_webdav_url_for_request(
                     }
                 },
                 Err(DnsDecisionError::Public) => {
-                    return Err(AppError::webdav(
-                        "公网 HTTP 地址已禁用，请改用 HTTPS。局域网地址可使用 HTTP。",
-                    ));
+                    return Err(AppError::webdav(PUBLIC_HTTP_DISABLED_MESSAGE));
                 }
             }
 

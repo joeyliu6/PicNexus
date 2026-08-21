@@ -1,6 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { CLEAR_TO_DELETE_PLACEHOLDER } from '@/composables/settings/useSensitiveDraft';
 import { defineComponent, nextTick } from 'vue';
 import { mountWithDefaults } from '../helpers/vueMount';
+/**
+ * 清除已保存凭证前的确认框
+ *
+ * `clearSecretChoice` 可改写：默认 'accept'（同意清除），要验「点取消」的用例
+ * 自己改成 'reject'。改成 'dismiss' 模拟按 ESC / 点叉叉。
+ */
+const clearSecretChoice = { value: 'accept' as 'accept' | 'reject' | 'dismiss' };
+vi.mock('@/composables/useConfirm', () => ({
+  useConfirm: () => ({
+    confirmDelete: vi.fn((_m: string, onConfirm: () => void) => onConfirm()),
+    confirmThreeWay: vi.fn(async () => clearSecretChoice.value),
+  }),
+}));
+
 import TokenServiceGroup from '@/components/settings/hosting/TokenServiceGroup.vue';
 import SensitiveField from '@/components/common/SensitiveField.vue';
 
@@ -70,6 +85,8 @@ function fieldAt(wrapper: ReturnType<typeof mountGroup>['wrapper'], index: numbe
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // 复位，免得上一条用例把选择留给下一条（vi.clearAllMocks 管不到这个普通对象）
+  clearSecretChoice.value = 'accept';
 });
 
 describe('TokenServiceGroup 敏感字段', () => {
@@ -88,7 +105,7 @@ describe('TokenServiceGroup 敏感字段', () => {
     expect(field.get('input').element.value).toBe('');
 
     expect(wrapper.findAll('.saved-chip')).toHaveLength(1);
-    expect(field.props('placeholder')).toBe('留空则不修改');
+    expect(field.props('placeholder')).toBe(CLEAR_TO_DELETE_PLACEHOLDER);
   });
 
   it('没存过的字段不显示芯片，眼睛按钮禁用', () => {

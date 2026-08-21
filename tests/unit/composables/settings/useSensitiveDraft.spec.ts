@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { effectScope, type EffectScope } from 'vue';
 import {
   useSensitiveDraft,
-  KEEP_STORED_PLACEHOLDER,
+  CLEAR_TO_DELETE_PLACEHOLDER,
   type SensitiveDraftOptions,
   type SensitiveDraft,
 } from '@/composables/settings/useSensitiveDraft';
@@ -32,14 +32,18 @@ function setup(over: Partial<SensitiveDraftOptions> = {}) {
   });
   const reveal = vi.fn(async (key: string) => stored[key] ?? '');
 
+  // 默认「同意清除」：绝大多数用例不关心确认框，关心的那几条自己覆盖
+  const confirmClear = vi.fn(async () => true);
+
   const options: SensitiveDraftOptions = {
     hasStored: (key: string) => !!stored[key],
     reveal,
     commit,
+    confirmClear,
     ...over,
   };
 
-  return { stored, commit, reveal, draft: inScope(() => useSensitiveDraft(options)) };
+  return { stored, commit, reveal, confirmClear, draft: inScope(() => useSensitiveDraft(options)) };
 }
 
 beforeEach(() => {
@@ -167,7 +171,7 @@ describe('useSensitiveDraft', () => {
     expect(draft.placeholder('smms.token', '从 SM.MS 官网获取')).toBe('从 SM.MS 官网获取');
 
     stored['smms.token'] = 'tok-123';
-    expect(draft.placeholder('smms.token', '从 SM.MS 官网获取')).toBe(KEEP_STORED_PLACEHOLDER);
+    expect(draft.placeholder('smms.token', '从 SM.MS 官网获取')).toBe(CLEAR_TO_DELETE_PLACEHOLDER);
   });
 
   describe('bindingsFor', () => {
@@ -180,7 +184,7 @@ describe('useSensitiveDraft', () => {
       expect(bound.modelValue).toBe('');
       expect(bound.hasStoredValue).toBe(true);
       expect(bound.revealStored).toBeTypeOf('function');
-      expect(bound.placeholder).toBe(KEEP_STORED_PLACEHOLDER);
+      expect(bound.placeholder).toBe(CLEAR_TO_DELETE_PLACEHOLDER);
     });
 
     it('绑定的监听器改的是同一份草稿', async () => {
@@ -398,5 +402,117 @@ describe('useSensitiveDraft', () => {
     expect(stored).toEqual({ a: 'value-a' });
     expect(draft.draftOf('a')).toBe('');
     expect(draft.draftOf('b')).toBe('value-b');
+  });
+  /**
+   * 「框是空的」有四种来路，四种结果各不相同。这一组把四种全钉住。
+   *
+   * 改这套逻辑之前先想清楚：一律不删 → 用户永远删不掉已存的凭证（这正是修改前的
+   * 表现）；一律删 → 解密抖一下就把好凭证抹了。中间那条线全靠 originals 这笔账。
+   */
+  describe('清空即删除', () => {
+    /** 模拟真实交互：点进框（取出真值）→ 全选删光 → 离开 */
+    async function focusThenClear(draft: SensitiveDraft, key: string) {
+      await draft.beginEdit(key);
+      draft.setDraft(key, '');
+      await draft.commitDraft(key);
+    }
+
+    it('看到真值后清空 → 确认后真的删掉', async () => {
+      const { draft, stored, commit, confirmClear } = setup();
+      stored['smms.token'] = 'tok-123';
+
+      await focusThenClear(draft, 'smms.token');
+
+      expect(confirmClear).toHaveBeenCalledTimes(1);
+      expect(commit).toHaveBeenCalledWith('smms.token', '');
+      expect(stored['smms.token']).toBe('');
+      expect(draft.hasStored('smms.token')).toBe(false);
+    });
+
+    it('确认框里点取消 → 原值一个字节都不动', async () => {
+      const { draft, stored, commit } = setup({ confirmClear: vi.fn(async () => false) });
+      stored['smms.token'] = 'tok-123';
+
+      await focusThenClear(draft, 'smms.token');
+
+      expect(commit).not.toHaveBeenCalled();
+      expect(stored['smms.token']).toBe('tok-123');
+      // 草稿留空，圆点会自己回来
+      expect(draft.draftOf('smms.token')).toBe('');
+    });
+
+    /**
+     * 解密失败时真值压根没进过框。这时的空框不是「用户删了」，
+     * 当成删除就会把一把解不开、但确实存在的钥匙抹掉——用户毫无察觉。
+     */
+    it('解密失败留下的空框 → 不删、也不问', async () => {
+      const onRevealError = vi.fn();
+      const { draft, stored, commit, confirmClear } = setup({
+        reveal: vi.fn(async () => { throw new Error('解不开'); }),
+        onRevealError,
+      });
+      stored['smms.token'] = 'tok-123';
+
+      await focusThenClear(draft, 'smms.token');
+
+      expect(onRevealError).toHaveBeenCalled();
+      expect(confirmClear).not.toHaveBeenCalled();
+      expect(commit).not.toHaveBeenCalled();
+      expect(stored['smms.token']).toBe('tok-123');
+    });
+
+    /**
+     * 在设置页一路 Tab 会大量制造这条路径：点进去、解密还没回来、焦点就走了。
+     * 这是最容易被误伤的一种，而且用户根本不知道自己"删"过东西。
+     */
+    it('解密还没回来人就走了 → 不删、也不问', async () => {
+      const { draft, stored, commit, confirmClear } = setup();
+      stored['smms.token'] = 'tok-123';
+
+      // 不 await beginEdit：模拟解密在途中就失焦
+      void draft.beginEdit('smms.token');
+      await draft.commitDraft('smms.token');
+
+      expect(confirmClear).not.toHaveBeenCalled();
+      expect(commit).not.toHaveBeenCalled();
+      expect(stored['smms.token']).toBe('tok-123');
+    });
+
+    it('从没存过值的空框 → 什么也不发生', async () => {
+      const { draft, commit, confirmClear } = setup();
+
+      await draft.beginEdit('smms.token');
+      await draft.commitDraft('smms.token');
+
+      expect(confirmClear).not.toHaveBeenCalled();
+      expect(commit).not.toHaveBeenCalled();
+    });
+
+    it('清除失败时草稿保持空着，让用户看得出这下没成', async () => {
+      const onCommitError = vi.fn();
+      const { draft, stored } = setup({
+        commit: vi.fn(() => Promise.reject(new Error('写盘失败'))),
+        onCommitError,
+      });
+      stored['smms.token'] = 'tok-123';
+
+      await focusThenClear(draft, 'smms.token');
+
+      expect(onCommitError).toHaveBeenCalled();
+      expect(draft.draftOf('smms.token')).toBe('');
+    });
+
+    /** 点眼睛看过之后再删，跟直接点进框里删是同一条路 */
+    it('点过眼睛拿到明文后清空 → 同样能删', async () => {
+      const { draft, stored, commit } = setup();
+      stored['smms.token'] = 'tok-123';
+
+      await draft.beginEdit('smms.token', 'tok-123');
+      draft.setDraft('smms.token', '');
+      await draft.commitDraft('smms.token');
+
+      expect(commit).toHaveBeenCalledWith('smms.token', '');
+      expect(stored['smms.token']).toBe('');
+    });
   });
 });

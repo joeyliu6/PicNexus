@@ -263,11 +263,11 @@ describe('SensitiveField', () => {
         expect(wrapper.emitted('update:modelValue')).toBeUndefined();
       });
 
-      it('聚焦时圆点让位给「留空则不修改」，失焦后回来', async () => {
+      it('聚焦时圆点让位给传入的占位文案，失焦后回来', async () => {
         const wrapper = mountSensitiveField({
           props: {
             modelValue: '',
-            placeholder: '留空则不修改',
+            placeholder: '清空并离开即删除',
             hasStoredValue: true,
             revealStored: () => Promise.resolve('secret'),
           },
@@ -276,7 +276,7 @@ describe('SensitiveField', () => {
         expect(dots(wrapper)).toBe('•'.repeat(32));
 
         await wrapper.get('input').trigger('focus');
-        expect(dots(wrapper)).toBe('留空则不修改');
+        expect(dots(wrapper)).toBe('清空并离开即删除');
 
         await wrapper.get('input').trigger('blur');
         expect(dots(wrapper)).toBe('•'.repeat(32));

@@ -18,9 +18,11 @@ import { historyDB } from '../../services/HistoryDatabase';
 import { recomputeLinkCheckSummary } from '../../types/linkCheckSummary';
 import { emitHistoryUpdated } from '../../events/cacheEvents';
 import { useHistoryManager } from '../useHistory';
+import { useConfigManager } from '../useConfig';
 import { useToast } from '../useToast';
 import { useConfirm } from '../useConfirm';
 import { createLogger } from '../../utils/logger';
+import { getConfirmedHttpHosts } from '../../security/networkPolicy';
 
 const log = createLogger('MirrorFallback');
 
@@ -38,6 +40,7 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
   const toast = useToast();
   const { confirmDelete } = useConfirm();
   const historyManager = useHistoryManager();
+  const { loadConfig } = useConfigManager();
 
   /** 正在检测的 serviceId 集合（UI 用来把 chip 切成 loading 态） */
   const checkingServices = ref<Set<string>>(new Set());
@@ -337,9 +340,12 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
     checkingServices.value = next;
 
     try {
+      // 名单用 loadConfig() 现取而非缓存的 config.value：灯箱可能早于配置加载打开，
+      // 拿空名单会让已确认的 http 主机名图床被误判「策略拦截」
       const result = await invoke<CheckLinkResult>('check_image_link', {
         link: target.url,
         fallbackUrl: null,
+        confirmedHttpHosts: [...getConfirmedHttpHosts(await loadConfig())],
       });
 
       const entry: LinkCheckEntry = {

@@ -75,6 +75,8 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
   // 版本号防止 filter/search 快速切换时老请求覆盖新结果
   let loadVersion = 0;
   let firstPageLoaded = false;
+  // 加载在途时收到新增收藏 → 记账，当前这轮结束后补查一次（见 favoriteSet watcher）
+  let pendingReload = false;
   let skeletonTimer: ReturnType<typeof setTimeout> | null = null;
   let resolveSkeletonTimer: (() => void) | null = null;
 
@@ -102,6 +104,7 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
 
   function resetToEmptyLoadedState(): void {
     loadVersion++;
+    pendingReload = false;
     clearSkeletonTimer();
     loadedMetas.value = [];
     totalCount.value = 0;
@@ -141,6 +144,13 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
       return;
     }
     await reloadFromStart();
+  }
+
+  /** 当前这轮加载收尾后，若期间有新增收藏被记账，补查一次 */
+  function flushPendingReload(): void {
+    if (!pendingReload) return;
+    pendingReload = false;
+    void reloadFromStart();
   }
 
   async function reloadFromStart(): Promise<void> {
@@ -184,6 +194,7 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
       if (version === loadVersion) {
         hasLoadedOnce.value = true;
         isLoading.value = false;
+        flushPendingReload();
       }
     }
   }
@@ -207,7 +218,10 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
       nextOffset += result.items.length;
       cacheServices(result.items);
     } finally {
-      if (version === loadVersion) isLoading.value = false;
+      if (version === loadVersion) {
+        isLoading.value = false;
+        flushPendingReload();
+      }
     }
   }
 
@@ -267,6 +281,28 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
 
     if (newSet.size === 0 && (oldSet?.size ?? 0) > 0) {
       resetToEmptyLoadedState();
+      return;
+    }
+
+    // 新增收藏：重查
+    //
+    // Why 不能就地插入：列表按时间倒序，收藏一张**旧图**时它落在中间甚至下一页，
+    // 光凭一个 id 算不出该插到哪儿——meta 也不在手上（这里只有 favoriteSet 里的 id）。
+    //
+    // Why 以前漏了：下面那段按「从当前页里移走了几条」算增量，而新增时一条都没移走，
+    // `removedCount === 0` 直接 return。表现是在历史页点了收藏、切到收藏页看不见，
+    // 非得刷新一次才出来（2026-08-20 真机验收发现）。
+    //
+    // Why 加载在途要记账而不是直接吞掉：在途那趟 SELECT 可能在这次写盘前就已发出，
+    // 查不回新收藏（读己之写只保证「还没发出的查询」等写盘）。记下 pendingReload，
+    // 等这轮结束后补查一次。冷启动首查例外（hasLoadedOnce=false）：那时的新增来自
+    // loadStats 读库回填，数据必然已提交，首查一定带得上，不必重复查。
+    if ([...newSet].some(id => !oldSet?.has(id))) {
+      if (!isLoading.value) {
+        void reloadFromStart();
+      } else if (hasLoadedOnce.value) {
+        pendingReload = true;
+      }
       return;
     }
 

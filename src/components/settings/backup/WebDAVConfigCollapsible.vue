@@ -6,6 +6,7 @@ import type { WebDAVConfig, WebDAVProfile } from '../../../config/types';
 import { useConfirm } from '../../../composables/useConfirm';
 import { useWebDAVProfileEditor } from '../../../composables/settings/useWebDAVProfileEditor';
 import { useSensitiveDraft } from '../../../composables/settings/useSensitiveDraft';
+import { useSecretClearConfirm } from '../../../composables/settings/useSecretClearConfirm';
 import { WebDAVClient } from '../../../utils/webdav';
 import { createLogger } from '../../../utils/logger';
 import SensitiveField from '../../common/SensitiveField.vue';
@@ -81,6 +82,8 @@ function profileOfKey(key: string): WebDAVProfile | null {
   return props.modelValue.profiles.find(p => p.id === profileIdOfKey(key)) ?? null;
 }
 
+const confirmClearSecret = useSecretClearConfirm();
+
 const passwordSecret = useSensitiveDraft({
   hasStored: (key) => {
     const profile = profileOfKey(key);
@@ -102,11 +105,14 @@ const passwordSecret = useSensitiveDraft({
   commit: async (key, draft) => {
     // 先记下目标再 await：加密期间 activeId 可能已经被切走
     const profileId = profileIdOfKey(key);
-    const passwordEncrypted = await WebDAVClient.encryptPassword(draft);
+    // 空串是「清除」的信号，直接写空而不是 encryptPassword('')：
+    // 后者会存进一段非空密文，hasStored 继续为真，界面上就是「删了但还显示已保存」
+    const passwordEncrypted = draft ? await WebDAVClient.encryptPassword(draft) : '';
     if (!setProfilePassword(profileId, passwordEncrypted)) return;
     emit('save');
   },
 
+  confirmClear: confirmClearSecret,
   onRevealError: error => log.error('WebDAV 备份密码解密失败，无法查看', error),
   onCommitError: error => log.error('WebDAV 备份密码加密失败', error),
 });

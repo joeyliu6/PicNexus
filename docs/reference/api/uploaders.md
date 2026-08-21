@@ -44,11 +44,19 @@
 > | 链路 | 凭证 | 入口 |
 > |------|------|------|
 > | GUI 上传（S3 端点，SigV4） | `s3AccessKey` / `s3SecretKey` | `UpyunUploader`（本表这一行） |
-> | 编辑器 / CLI / 测试连接（自家 REST，Basic Auth） | `operator` / `password` | `server_upload_upyun`、`test_upyun_connection` |
+> | 编辑器 / CLI（自家 REST，Basic Auth） | `operator` / `password` | `server_upload_upyun` |
+> | **设置页「测试连接」** | **两套都要** | `test_upyun_connection`（2026-08-20 起两条链路各验一次） |
 >
 > 拿操作员账密去签 S3 请求会回 `ErrInvalidAccessKeyID`——GUI 上传曾因此长期完全不可用，
-> 而设置页「测试连接」走 REST 一直亮绿灯，把问题盖住了。
-> 详见 [upyun-audit-2026-08-19.md](../../audits/upyun-audit-2026-08-19.md)。
+> 而设置页「测试连接」当时只走 REST 一直亮绿灯，把问题盖住了。**那正是测试连接改成
+> 双链路的原因**：只验半条链路的绿灯，和"能不能传"没有关系。
+>
+> 端点与 region（`UPYUN_S3_ENDPOINT` / `UPYUN_S3_REGION`）在 Rust 与 TS 各写一份，
+> 由 `scripts/check-cross-language-constants.mjs` 钉住必须一致——漂移会让测试连接
+> 验的不是上传真正会去的服务器，绿灯重新失去意义。
+>
+> 详见 [upyun-audit-2026-08-19.md](../../audits/upyun-audit-2026-08-19.md) 与
+> [lightbox-gate-and-upyun-dual-chain-2026-08-20.md](../../audits/lightbox-gate-and-upyun-dual-chain-2026-08-20.md)。
 
 ### 多实例（serviceId 由用户 profile 动态生成）
 

@@ -330,6 +330,9 @@ describe('useSettingsForm', () => {
       bucket: 'bucket',
       path: 'images/',
       publicDomain: 'https://upyun.example.com',
+      // GUI 上传走 S3 端点，缺这一对是真的传不了——「配置完整」必须连它一起算
+      s3AccessKey: 's3ak',
+      s3SecretKey: 's3sk',
     };
     api.formData.value.weiboCookie = ' SUB=abc ';
     api.formData.value.zhihu.cookie = ' z_c0=abc ';
@@ -389,6 +392,33 @@ describe('useSettingsForm', () => {
       [makeCustomS3Id('complete')]: true,
       [makeCustomS3Id('partial')]: false,
     });
+  });
+
+  /**
+   * 又拍云是唯一一个「两条链路两套凭证」的图床。只填操作员账号密码时编辑器链路能用，
+   * 但 GUI 上传必然失败——设置页此时**不能**显示「已配置」，否则又回到「看着正常、
+   * 一传就报 ErrInvalidAccessKeyID」那个形态。运行时口径见 SERVICE_REQUIRED_FIELDS.upyun。
+   */
+  it('又拍云缺 S3 凭证时不算配置完整（只有操作员账号密码不够）', () => {
+    const api = useSettingsForm();
+
+    api.formData.value.upyun = {
+      operator: 'operator',
+      password: 'password',
+      bucket: 'bucket',
+      path: 'images/',
+      publicDomain: 'https://upyun.example.com',
+      s3AccessKey: '',
+      s3SecretKey: '',
+    };
+
+    expect(api.serviceConfigStatus.value.upyun).toBe(false);
+
+    api.formData.value.upyun.s3AccessKey = 's3ak';
+    expect(api.serviceConfigStatus.value.upyun).toBe(false);
+
+    api.formData.value.upyun.s3SecretKey = 's3sk';
+    expect(api.serviceConfigStatus.value.upyun).toBe(true);
   });
 
   it('extracts message from structured Tauri errors without stringifying JSON', () => {

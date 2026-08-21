@@ -342,6 +342,29 @@ describe('useLinkCheckManager.checkUrls', () => {
     }));
   });
 
+  // invoke 参数名 lint 只核对顶层键，request 里的 snake_case 嵌套键靠这条兜底：
+  // 漏传/写错 confirmed_http_hosts 的直接后果是已确认的 http 主机名图床被误判「策略拦截」
+  it('把已确认明文 HTTP 主机名随请求传给 Rust', async () => {
+    loadConfigMock.mockResolvedValue({
+      webdav_profiles: [
+        { lanHttpConfirmed: true, publicDomain: 'http://nas.local:5244' },
+      ],
+    });
+    const m = await freshManager();
+    invokeMock.mockResolvedValueOnce({
+      results: [], total: 0, valid: 0, invalid: 0,
+      timeout: 0, suspicious: 0, elapsed_ms: 1, cancelled: false,
+    });
+
+    await m.checkUrls([{ url: 'http://nas.local:5244/1.jpg', history_id: 'h1', service_id: 'webdav' }]);
+
+    expect(invokeMock).toHaveBeenCalledWith('batch_check_links', expect.objectContaining({
+      request: expect.objectContaining({
+        confirmed_http_hosts: ['nas.local'],
+      }),
+    }));
+  });
+
   it('完成后释放 isChecking 锁（finally 分支）', async () => {
     const m = await freshManager();
     invokeMock.mockResolvedValueOnce({

@@ -34,6 +34,7 @@ import {
   exportCsv,
 } from './linkCheckPersistence';
 import { onCacheEvent, type HistoryEventData } from '../../events/cacheEvents';
+import { getConfirmedHttpHosts } from '../../security/networkPolicy';
 
 const log = createLogger('LinkCheck');
 
@@ -207,6 +208,18 @@ export function useLinkCheckManager() {
     progress.value = null;
     progressSource.value = null;
     lastBatchResult.value = null;
+  }
+
+  /**
+   * 已确认明文 HTTP 主机名名单，随检测请求传给 Rust
+   *
+   * Rust 的探测校验（validate_probe_url）是同步函数、查不了 DNS，认不出
+   * http://nas.local 这类主机名是不是局域网——放行只能靠这份用户在设置页
+   * fake-ip 逃生舱里显式确认过的名单。与 safeImageUrl 的 confirmedHttpHosts
+   * 同源；漏传的后果是这批图床在检测里被误判「策略拦截」。
+   */
+  async function loadConfirmedHttpHosts(): Promise<string[]> {
+    return [...getConfirmedHttpHosts(await loadConfig())];
   }
 
   function cloneResult(result: CheckLinkResult | undefined): CheckLinkResult | undefined {
@@ -454,6 +467,7 @@ export function useLinkCheckManager() {
         request: {
           links: requestItems,
           batch_id: myBatchId,
+          confirmed_http_hosts: await loadConfirmedHttpHosts(),
           ...DEFAULT_CHECK_PARAMS,
         },
       });
@@ -559,6 +573,7 @@ export function useLinkCheckManager() {
         request: {
           links: items,
           batch_id: myBatchId,
+          confirmed_http_hosts: await loadConfirmedHttpHosts(),
           ...DEFAULT_CHECK_PARAMS,
         },
       });
@@ -749,6 +764,7 @@ export function useLinkCheckManager() {
         request: {
           links: requestItems,
           batch_id: myBatchId,
+          confirmed_http_hosts: await loadConfirmedHttpHosts(),
           ...DEFAULT_CHECK_PARAMS,
         },
       });
@@ -963,6 +979,7 @@ export function useLinkCheckManager() {
       invoke<CheckLinkResult>('check_image_link', {
         link: row.url,
         fallbackUrl: row.fallbackUrl ?? null,
+        confirmedHttpHosts: await loadConfirmedHttpHosts(),
       }),
       new Promise<void>((resolve) => setTimeout(resolve, RECHECK_MS.SPIN_MIN)),
     ]);

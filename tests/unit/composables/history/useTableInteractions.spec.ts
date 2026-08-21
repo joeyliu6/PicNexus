@@ -16,6 +16,8 @@ const {
   toastSilentMock,
   lightboxPreloaderMock,
   isStatsLoadedRef,
+  mediumUrlRef,
+  fullUrlRef,
 } = vi.hoisted(() => ({
   warmImagesMock: vi.fn(),
   toggleFavoriteMock: vi.fn(),
@@ -27,6 +29,9 @@ const {
   toastSilentMock: vi.fn(),
   lightboxPreloaderMock: vi.fn(),
   isStatsLoadedRef: { value: true },
+  // 可改写：安全闸的用例要喂不同协议 / 主机的地址
+  mediumUrlRef: { value: 'https://example.com/medium.jpg' },
+  fullUrlRef: { value: 'https://example.com/full.jpg' },
 }));
 const writeTextMock = getClipboardMocks().writeText;
 type ServicePopoverRef = Ref<InstanceType<typeof PopoverType> | null>;
@@ -64,7 +69,7 @@ vi.mock('@/composables/useHistoryViewState', () => ({
 
 vi.mock('@/composables/useThumbCache', () => ({
   useThumbCache: () => ({
-    getMediumImageUrl: () => 'https://example.com/medium.jpg',
+    getMediumImageUrl: () => mediumUrlRef.value,
   }),
 }));
 
@@ -73,7 +78,7 @@ vi.mock('@/composables/useLightboxPreloader', () => ({
 }));
 
 vi.mock('@/utils/imageUrl', () => ({
-  getPrimaryImageUrl: () => 'https://example.com/full.jpg',
+  getPrimaryImageUrl: () => fullUrlRef.value,
 }));
 
 vi.mock('@/utils/imagePreload', () => ({
@@ -92,6 +97,8 @@ beforeEach(() => {
   writeTextMock.mockReset();
   writeTextMock.mockResolvedValue(undefined);
   isStatsLoadedRef.value = true;
+  mediumUrlRef.value = 'https://example.com/medium.jpg';
+  fullUrlRef.value = 'https://example.com/full.jpg';
 });
 
 function makeItem(id = 'item-1'): HistoryItem {
@@ -758,6 +765,68 @@ describe('useTableInteractions hover preview positioning', () => {
       left: '60px',
       width: '300px',
       height: '300px',
+    });
+  });
+  /**
+   * 悬停预览和 ±1 预热是**直接 `new Image()` 发请求**的两条路。CSP 的 `img-src`
+   * 放开 `http:` 之后（2ab296af）它们身上一道闸都不剩，而同一批地址在缩略图上
+   * 是被拦的——那会造成「缩略图裂了、悬停却看得见」这种自相矛盾的表现。
+   */
+  describe('URL 安全闸', () => {
+    it('未确认的明文 HTTP 域名不进悬停预览', () => {
+      mediumUrlRef.value = 'http://cdn.example.com/medium.jpg';
+      const item = makeItem();
+      const source = appendSourceThumb(item.id);
+      const harness = mountHarness(item);
+
+      harness.api().handlePreviewEnter({ currentTarget: source } as unknown as MouseEvent, item);
+
+      expect(harness.api().hoverPreview.value.visible).toBe(false);
+      expect(harness.api().hoverPreview.value.url).toBe('');
+    });
+
+    /**
+     * 预热比显示更该拦：`warmImage` 不挂在任何可见元素上，被拦下与否用户看不出来，
+     * 只有网络面板里会多出一条指向内网的请求。
+     */
+    it('被拦下的地址不会被预热', () => {
+      mediumUrlRef.value = 'http://cdn.example.com/medium.jpg';
+      fullUrlRef.value = 'http://cdn.example.com/full.jpg';
+      const item = makeItem();
+      const source = appendSourceThumb(item.id);
+      const harness = mountHarness(item);
+
+      harness.api().handlePreviewEnter({ currentTarget: source } as unknown as MouseEvent, item);
+      harness.api().openLightbox(item, { clientX: 12, clientY: 12 } as MouseEvent);
+
+      for (const call of warmImagesMock.mock.calls) {
+        for (const url of call[0] as Array<string | null | undefined>) {
+          expect(url).not.toContain('cdn.example.com');
+        }
+      }
+    });
+
+    it('局域网 HTTP 照常预览（NAS / 自建 WebDAV 图床的常见形态）', () => {
+      mediumUrlRef.value = 'http://192.168.1.10:5244/medium.jpg';
+      const item = makeItem();
+      const source = appendSourceThumb(item.id);
+      const harness = mountHarness(item);
+
+      harness.api().handlePreviewEnter({ currentTarget: source } as unknown as MouseEvent, item);
+
+      expect(harness.api().hoverPreview.value.visible).toBe(true);
+      expect(harness.api().hoverPreview.value.url).toBe('http://192.168.1.10:5244/medium.jpg');
+    });
+
+    it('云元数据地址照拦', () => {
+      mediumUrlRef.value = 'http://169.254.169.254/latest/meta-data/';
+      const item = makeItem();
+      const source = appendSourceThumb(item.id);
+      const harness = mountHarness(item);
+
+      harness.api().handlePreviewEnter({ currentTarget: source } as unknown as MouseEvent, item);
+
+      expect(harness.api().hoverPreview.value.visible).toBe(false);
     });
   });
 });

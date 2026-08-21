@@ -90,8 +90,25 @@ flowchart TD
 
 | 路径 | 命令 | 校验函数 | DNS 层裁决 | 理由 |
 |------|------|----------|-----------|------|
-| 只读探测 | `check_image_link` / `batch_check_links` | `validate_probe_url`（同步） | ❌ 不做 | 预解析结果并不绑定 reqwest 的实际连接（它会自己再解析一次），所以拦不住 DNS rebinding，只能拦「手滑粘了内网 URL」——而字面量 IP 判据已覆盖。批量上限 10 万条，每条还要多付一次 DNS 查询 |
-| 下载重传 | `download_image_from_url` / `download_url_image` | `validate_fetch_url`（async） | ✅ 做，但豁免 fake-ip 池 | 取回的字节会被重新上传到公网图床，误操作必须拦 |
+| 只读探测 | `check_image_link` / `batch_check_links` | `validate_probe_url`（同步）= `validate_url_with_policy(AllowPrivate)` + 前端传入的确认主机名名单 | ❌ 不做 | 预解析结果并不绑定 reqwest 的实际连接（它会自己再解析一次），所以拦不住 DNS rebinding，只能拦「手滑粘了内网 URL」——而字面量 IP 判据已覆盖。批量上限 10 万条，每条还要多付一次 DNS 查询 |
+| 下载重传 | `download_image_from_url` / `download_url_image` | `validate_fetch_url`（async）= `validate_external_url(Deny)` + DNS 裁决 | ✅ 做，但豁免 fake-ip 池 | 取回的字节会被重新上传到公网图床，误操作必须拦 |
+
+除 DNS 外，两条路径 2026-08-21 起还差一个 **scheme × 地址段** 维度（探测对齐了上传 / 渲染 /
+CSP 三处 2026-08 为局域网图床放开的判据，下载重传保持旧口径）：
+
+| URL 形态 | 只读探测 | 下载重传 |
+|----------|---------|---------|
+| `https://` 公网 | ✅ | ✅（DNS 裁决通过后） |
+| `http://` 回环 | ✅ | ✅ |
+| `http://192.168.x.x` 等局域网字面量 | ✅ | ❌（字节会重传公网） |
+| `https://` 内网字面量 | ✅ | ❌ |
+| `http://nas.local` 等**已确认**主机名（fake-ip 逃生舱，前端随请求传名单） | ✅ | ❌（fetch 没有名单入口） |
+| `http://` 公网 / 未确认主机名 | ❌ `PUBLIC_HTTP_DISABLED_MESSAGE` | ❌ |
+| 链路本地 / 云元数据 / 文档段 / fake-ip 字面量 / 带凭证 | ❌ 任何 scheme | ❌ |
+
+确认名单的语义与前端 `networkPolicy.ts` 的 `allowConfirmedHttp` 分支逐字对齐：命中名单仍复查
+always-blocked 与凭证。名单由 5 个 invoke 调用点传入（`useLinkCheck.ts` 四处 +
+`useMirrorFallback.ts` 一处），漏传的直接后果是已确认主机名图床被误判「策略拦截」。
 
 > 📌 「探测路径不查 DNS」换来的口子（内网主机名会被真的探测一次）、为什么接受、以及真要收紧该怎么做，记在 [docs/TODO.md 已知取舍](../TODO.md#只读探测路径不做-dns-裁决)。**不要**用「把 DNS 预检加回来」来收紧——那正是被 a83ca54 删掉的东西。
 
@@ -511,7 +528,8 @@ flowchart TD
 | 现象 | 可能原因 | 对照位置 |
 |------|---------|---------|
 | **所有链接都显示「网络不通」，浏览器却能正常打开** | 本机 TUN + fake-ip 把域名解析进 `198.18.0.0/15`，旧版 DNS 预检误判为内网。已由 `validate_probe_url` 去掉预检修复；若复现说明改动被回退 | 图 1 策略校验节点 + 出站策略校验小节 |
-| `http://` 开头的老链接一律失效 | 策略只允许 https 与回环 http，`error_type = blocked`，tooltip 会写明具体原因——这是设计行为，不是网络故障 | error_type 取值表 |
+| **公网** `http://` 链接一律失效 | 公网明文 HTTP 判 `error_type = blocked`（设计行为，tooltip 写明原因）；局域网字面量与已确认主机名 2026-08-21 起已放行 | error_type 取值表 / 出站策略校验小节 |
+| 局域网 / NAS 图床（`http://192.168.x.x` 或已确认的 `http://nas.local`）被判「策略拦截」 | 不应出现——字面量走 `AllowPrivate` 判据；主机名要查两件事：该 profile 是否已过 fake-ip 逃生舱确认、5 个 invoke 调用点是否漏传 `confirmed_http_hosts` 名单 | 出站策略校验小节的 scheme 矩阵 |
 | 「从 URL 下载图片」开代理时全失败 | `validate_fetch_url` 的 DNS 裁决未豁免 fake-ip 池。**注意 v4 和 v6 两个池都要豁免**——只盖 v4 时，双栈机器上 AAAA 记录仍是 `fdfe:dcba:9876::/64`，循环里照样被拒 | `dns_answer_is_forbidden` / `is_fake_ip_pool_ip` |
 | WebDAV 报「该地址属于代理软件的 fake-ip 地址池」 | 设计行为，不是故障：本机 TUN 让域名解析失真，程序无法确认它是不是局域网。改填 NAS 内网 IP 或改用 HTTPS | `url_policy.rs` / docs/TODO.md |
 | 微博/B站图片显示失效但浏览器能看 | 防盗链 403 + `hotlink_protected=true` → `browser_might_work` | 图 1 防盗链判定分支 |

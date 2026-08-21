@@ -11,6 +11,7 @@ import { hasNonEmptyFields } from '../../../utils/validators';
 import { secureStorage } from '../../../security/crypto';
 import { createLogger } from '../../../utils/logger';
 import { useSensitiveDraft } from '../../../composables/settings/useSensitiveDraft';
+import { useSecretClearConfirm } from '../../../composables/settings/useSecretClearConfirm';
 
 const log = createLogger('PrivateStorage');
 
@@ -273,6 +274,8 @@ function storedValueOf(target: SecretRef): string {
   return profile?.passwordEncrypted || '';
 }
 
+const confirmClearSecret = useSecretClearConfirm();
+
 const secrets = useSensitiveDraft({
   hasStored: key => {
     const target = parseSecretKey(key);
@@ -298,13 +301,17 @@ const secrets = useSensitiveDraft({
       const profile = props.webdavProfiles.find(p => p.id === target.profileId);
       if (!profile) return;
       // 明文只在输入框里活一瞬：加密后写 passwordEncrypted，明文不进 profile 也不落盘
-      const passwordEncrypted = await secureStorage.encrypt(draft);
+      //
+      // 空串是「清除」的信号，必须直接写空而不是 encrypt('')：后者会存进一段
+      // 非空密文，hasStored 继续为真，界面上就是「删了但还显示已保存」。
+      const passwordEncrypted = draft ? await secureStorage.encrypt(draft) : '';
       emit('updateWebdav', { ...profile, passwordEncrypted });
     }
 
     emit('save');
   },
 
+  confirmClear: confirmClearSecret,
   onRevealError: error => log.error('敏感字段解密失败，无法查看', error),
   onCommitError: error => log.error('敏感字段保存失败', error),
 });

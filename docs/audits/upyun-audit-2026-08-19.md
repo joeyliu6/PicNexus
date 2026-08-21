@@ -167,8 +167,21 @@ REST 凭证，而 S3 接口不认它。要修：`UpyunServiceConfig` 加 `s3Acce
 > （正是又拍云）悄悄吃到文件尾，把测试模块自己那行 `body.contains("build_upload_key(")`
 > 也算成了"函数体里有"。**只跑正向用例证明不了哨兵还活着。**
 
-**升级影响**：编辑器链路的新图从桶根目录改落 `path` 配置的目录下（默认 `images/`）。
+**升级影响**：编辑器链路的新图从桶根目录改落 `path` 配置的目录下。
 存量对象与历史链接不受影响（不动存量）。
+
+> ⚠️ **「默认 `images/`」这句原本写错了，2026-08-20 更正。** 两侧默认值不一致：
+> 前端 `defaults.ts` 的 `services.upyun.path` 是 `'images/'`，但 Rust 侧是
+> `#[serde(default)] path: String` ——**默认空串**，而 `build_upload_key` 遇到空
+> 前缀直接返回文件名（`upload_handler.rs:1040`）。
+>
+> 实际表现：应用内配过又拍云的用户，`cli-config.json` 里带着 `path`，Typora /
+> Obsidian 落 `images/`；而**升级前写下、字段本就不存在**的那份 `cli-config.json`
+> 缺这个键，CLI 新图仍落桶根。
+>
+> 这**不是回归**（升级前 CLI 也落桶根），只是别照着这句去推断 Rust 侧的行为。
+> 也刻意不改成 `#[serde(default = "…images/")]`：那会让老 CLI 用户的落盘位置
+> 在一次升级里无声改变，代价大于收益。
 
 ### Content-Type（2026-08-18）
 

@@ -4,7 +4,7 @@
 // v3.0: 新增批量检测引擎、服务感知请求头、并发控制
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -14,7 +14,8 @@ use tauri::Emitter;
 use crate::error::AppError;
 use crate::log_utils::{safe_path, safe_url};
 use crate::url_policy::{
-    is_fake_ip_pool_ip, is_loopback_host, is_private_or_reserved_host, is_private_or_reserved_ip,
+    is_always_blocked_host, is_fake_ip_pool_ip, is_private_or_reserved_ip, normalize_host,
+    validate_external_url, validate_url_with_policy, PrivateHostPolicy,
 };
 
 /// 最大允许下载的文件大小（50MB）
@@ -59,9 +60,10 @@ pub struct CheckLinkResult {
     pub error: Option<String>,
     /// "success" | "http_4xx" | "http_5xx" | "redirect" | "timeout" | "network" | "suspicious" | "blocked"
     ///
-    /// `blocked` = 请求根本没发出去，被本机出站策略拦下（空链接 / 非 https / 内网
-    /// 字面量 IP / 带凭证的 URL 等）。与 `network`（真的连不上对端）语义不同，
-    /// 具体原因在 `error` 字段里，前端负责展示出来。
+    /// `blocked` = 请求根本没发出去，被本机出站策略拦下（空链接 / 公网明文 HTTP /
+    /// 链路本地、云元数据、fake-ip 字面量 / 带凭证的 URL 等；局域网字面量与已确认
+    /// 主机名是放行的，见 `validate_probe_url`）。与 `network`（真的连不上对端）
+    /// 语义不同，具体原因在 `error` 字段里，前端负责展示出来。
     ///
     /// `redirect` = 对端返回 3xx。检测器出于 SSRF 防护刻意不跟随跳转（见
     /// `safe_no_redirect_client`），但浏览器会跟随——所以这**不是**「图挂了」。
@@ -255,44 +257,54 @@ fn dns_answer_is_forbidden(ip: IpAddr) -> bool {
 /// DNS 查询。收益不足以抵这个误伤率，故探测路径只保留同步判据。
 ///
 /// 需要把响应内容取回并重新上传的路径请改用 [`validate_fetch_url`]。
-fn validate_probe_url(raw_url: &str) -> Result<reqwest::Url, AppError> {
-    let parsed = reqwest::Url::parse(raw_url)
-        .map_err(|_| AppError::validation("请输入有效的 URL（以 https:// 开头，本机服务可用 http://localhost 或 http://127.0.0.1）"))?;
-
-    if !parsed.username().is_empty() || parsed.password().is_some() {
-        return Err(AppError::validation("地址不能包含用户名或密码"));
-    }
-
-    let host = parsed
-        .host_str()
-        .ok_or_else(|| AppError::validation("地址缺少主机名"))?;
-
-    match parsed.scheme() {
-        "https" => {
-            if is_private_or_reserved_host(host) {
-                return Err(AppError::validation("地址不能指向内网、链路本地或保留地址"));
+///
+/// 字面量判据委托 [`validate_url_with_policy`] 的 `AllowPrivate` 策略：局域网
+/// HTTP（`http://192.168.1.10:5244`）与内网 HTTPS 字面量放行，公网明文 HTTP、
+/// fake-ip 字面量、链路本地/云元数据、带凭证的 URL 仍拒。上传（`url_policy`）、
+/// 渲染（`networkPolicy.ts` 的 `safeImageUrl`）、CSP 三处 2026-08 已为局域网
+/// 图床放开明文 HTTP，探测继续只认回环会把 NAS 用户的图整批误判成「策略拦截」。
+///
+/// `confirmed_http_hosts`：用户在设置页 fake-ip 逃生舱显式确认过的明文 HTTP
+/// 主机名（如 `nas.local`），由前端随检测请求传入。探测是同步函数、查不了 DNS，
+/// 认不出主机名是不是局域网，只能靠这份名单放行。语义逐字对齐
+/// `networkPolicy.ts` 的 `allowConfirmedHttp` 分支：凭证仍拒、链路本地/云元数据
+/// 仍拒；不额外查 fake-ip 字面量——设置页确认不了 fake-ip 字面量（入口就被
+/// `FAKE_IP_HOST_MESSAGE` 拦下），两侧保持同构比多一道到不了的防线更重要。
+fn validate_probe_url(
+    raw_url: &str,
+    confirmed_http_hosts: &HashSet<String>,
+) -> Result<reqwest::Url, AppError> {
+    if !confirmed_http_hosts.is_empty() {
+        if let Ok(parsed) = reqwest::Url::parse(raw_url) {
+            if parsed.scheme() == "http"
+                && parsed.username().is_empty()
+                && parsed.password().is_none()
+            {
+                if let Some(host) = parsed.host_str() {
+                    if confirmed_http_hosts.contains(&normalize_host(host))
+                        && !is_always_blocked_host(host)
+                    {
+                        return Ok(parsed);
+                    }
+                }
             }
-            Ok(parsed)
         }
-        "http" if is_loopback_host(host) => Ok(parsed),
-        "http" => Err(AppError::validation(
-            "外部 HTTP 图片地址已禁用，请改用 HTTPS；HTTP 仅保留给本机回环服务。",
-        )),
-        _ => Err(AppError::validation(
-            "请输入有效的 URL（以 https:// 开头，本机服务可用 http://localhost 或 http://127.0.0.1）",
-        )),
     }
+    validate_url_with_policy(raw_url, PrivateHostPolicy::AllowPrivate)
 }
 
-/// 取回内容用的出站校验：在 [`validate_probe_url`] 之上追加 DNS 解析结果裁决
+/// 取回内容用的出站校验：`Deny` 策略字面量判据 + DNS 解析结果裁决
 ///
 /// 与只读探测的区别：这里拿到的字节会被重新上传到公网图床，所以"粘了内网 URL"
 /// 这类事故必须拦——即便预检拦不住 rebinding，拦住误操作本身也是有价值的。
+/// 因此探测放行的局域网 HTTP / 内网 HTTPS 字面量在这里**仍然拒绝**（走
+/// [`validate_external_url`] 的 `Deny` 策略，即放宽前的旧探测判据），确认主机名
+/// 名单也不适用于本路径。同步层就拦下，不依赖 resolver 对内网字面量的行为兜底。
 ///
 /// 注意 DNS 答案走的是 [`dns_answer_is_forbidden`] 而非 [`is_private_or_reserved_ip`]：
 /// 前者豁免了 fake-ip 池，否则开代理的用户"从 URL 下载图片"会全军覆没。
 async fn validate_fetch_url(raw_url: &str) -> Result<reqwest::Url, AppError> {
-    let parsed = validate_probe_url(raw_url)?;
+    let parsed = validate_external_url(raw_url)?;
     if parsed.scheme() == "https" {
         let host = parsed
             .host_str()
@@ -368,6 +380,7 @@ fn is_suspicious_image_response(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::url_policy::is_private_or_reserved_host;
 
     // ---------- classify_error ----------
 
@@ -607,11 +620,33 @@ mod tests {
         );
     }
 
+    /// 测试里"前端没传确认名单"的缺省形态
+    fn no_confirmed() -> HashSet<String> {
+        HashSet::new()
+    }
+
     #[test]
     fn probe_url_allows_loopback_http() {
-        assert!(validate_probe_url("http://localhost:1420/status").is_ok());
-        assert!(validate_probe_url("http://127.0.0.1:27123/status").is_ok());
-        assert!(validate_probe_url("http://[::1]:1420/status").is_ok());
+        assert!(validate_probe_url("http://localhost:1420/status", &no_confirmed()).is_ok());
+        assert!(validate_probe_url("http://127.0.0.1:27123/status", &no_confirmed()).is_ok());
+        assert!(validate_probe_url("http://[::1]:1420/status", &no_confirmed()).is_ok());
+    }
+
+    /// 对齐 2026-08 放开局域网图床的三处判据（上传 / 渲染 / CSP）：
+    /// NAS 用户的 `http://192.168.1.10:5244` 形态必须能被检测，不能判「策略拦截」
+    #[test]
+    fn probe_url_accepts_lan_http_literals() {
+        for url in [
+            "http://192.168.1.10:5244/a.png",
+            "http://10.0.0.5/a.png",
+            "http://172.16.3.4:8080/a.png",
+        ] {
+            assert!(
+                validate_probe_url(url, &no_confirmed()).is_ok(),
+                "{} is a LAN literal and must be probeable",
+                url
+            );
+        }
     }
 
     /// 回归护栏：这三个域名在开了 TUN + fake-ip 的机器上都会解析进 198.18.0.0/15，
@@ -626,7 +661,7 @@ mod tests {
             "https://raw.githubusercontent.com/user/repo/main/a.png",
         ] {
             assert!(
-                validate_probe_url(url).is_ok(),
+                validate_probe_url(url, &no_confirmed()).is_ok(),
                 "{} should be accepted without DNS lookup",
                 url
             );
@@ -635,41 +670,88 @@ mod tests {
 
     #[test]
     fn probe_url_rejects_external_http() {
-        let err = validate_probe_url("http://example.com/a.png")
-            .expect_err("external http should be rejected");
+        for url in ["http://example.com/a.png", "http://8.8.8.8/a.png"] {
+            let err = validate_probe_url(url, &no_confirmed())
+                .expect_err("public http should be rejected");
 
-        assert!(err.to_string().contains("外部 HTTP 图片地址已禁用"));
+            assert!(err.to_string().contains("公网 HTTP 地址已禁用"));
+        }
     }
 
     #[test]
     fn probe_url_rejects_credentials() {
-        let err = validate_probe_url("https://user:pass@example.com/a.png")
+        let err = validate_probe_url("https://user:pass@example.com/a.png", &no_confirmed())
             .expect_err("credential URLs should be rejected");
 
         assert!(err.to_string().contains("不能包含用户名或密码"));
     }
 
+    /// 与渲染层 `safeImageUrl` 对齐：内网 HTTPS 字面量放行（探测只读，赌注低）
     #[test]
-    fn probe_url_rejects_private_and_reserved_https_literals() {
+    fn probe_url_accepts_private_https_literals() {
         for url in [
             "https://192.168.1.10/a.png",
-            "https://169.254.1.10/a.png",
             "https://100.64.1.10/a.png",
             "https://[::ffff:192.168.1.10]/a.png",
-            "https://[fe80::1]/a.png",
             "https://[fc00::1]/a.png",
+        ] {
+            assert!(
+                validate_probe_url(url, &no_confirmed()).is_ok(),
+                "{} is a private literal and must be probeable",
+                url
+            );
+        }
+    }
+
+    /// AllowPrivate 策略下仍然硬拒的那批：链路本地 / 云元数据 / 文档段 / fake-ip
+    #[test]
+    fn probe_url_rejects_always_blocked_and_fake_ip_literals() {
+        for url in [
+            "https://169.254.1.10/a.png",
+            "http://169.254.169.254/latest/meta-data",
+            "https://[fe80::1]/a.png",
+            "http://[fe80::1]/a.png",
             // IPv6 文档段：判据合并进 url_policy 后本模块的结论必须原样保留
             "https://[2001:db8::1]/a.png",
             // fake-ip 池的字面量仍然拒绝：没有正常图床把域名指到基准测试段
             "https://198.18.1.1/a.png",
+            "http://198.18.1.1/a.png",
             "file:///tmp/a.png",
         ] {
             assert!(
-                validate_probe_url(url).is_err(),
+                validate_probe_url(url, &no_confirmed()).is_err(),
                 "{} should be rejected",
                 url
             );
         }
+    }
+
+    /// 确认主机名逃生舱：名单命中放行（大小写归一化），名单外 / 带凭证仍拒
+    #[test]
+    fn probe_url_allows_confirmed_http_hostname() {
+        let confirmed: HashSet<String> = ["nas.local".to_string()].into();
+
+        assert!(validate_probe_url("http://nas.local:5244/a.png", &confirmed).is_ok());
+        assert!(validate_probe_url("http://NAS.LOCAL/a.png", &confirmed).is_ok());
+        assert!(
+            validate_probe_url("http://other.example.com/a.png", &confirmed).is_err(),
+            "unconfirmed hostname must stay blocked"
+        );
+        assert!(
+            validate_probe_url("http://u:p@nas.local/a.png", &confirmed).is_err(),
+            "credentials must not be relaxed by confirmation"
+        );
+    }
+
+    /// 确认名单不放宽 always-blocked：语义对齐 networkPolicy.ts 确认分支的复查
+    #[test]
+    fn confirmed_host_does_not_relax_always_blocked() {
+        let confirmed: HashSet<String> = ["169.254.169.254".to_string()].into();
+
+        assert!(
+            validate_probe_url("http://169.254.169.254/latest/meta-data", &confirmed).is_err(),
+            "cloud metadata must stay blocked even if someone smuggles it into the list"
+        );
     }
 
     // Why 这里没有 fake-ip 池的边界测试：判据已搬到 `crate::url_policy`，
@@ -744,6 +826,9 @@ mod tests {
 
         for url in [
             "https://192.168.1.10/a.png",
+            // 核心护栏：探测放行的局域网 HTTP 在下载重传路径必须继续拒绝——
+            // 取回的字节会被重新上传到公网图床
+            "http://192.168.1.10/a.png",
             "http://example.com/a.png",
             "https://user:pass@example.com/a.png",
             "file:///tmp/a.png",
@@ -756,10 +841,22 @@ mod tests {
         }
     }
 
+    /// 下载重传没有确认名单入口：即使主机名被逃生舱确认过，fetch 仍然拒绝明文
+    #[tokio::test]
+    async fn fetch_url_ignores_confirmed_hosts() {
+        for url in ["http://192.168.1.10/a.png", "http://nas.local/a.png"] {
+            assert!(
+                validate_fetch_url(url).await.is_err(),
+                "{} must stay blocked on the fetch path",
+                url
+            );
+        }
+    }
+
     #[tokio::test]
     async fn check_single_link_marks_policy_rejection_as_blocked() {
         let client = safe_no_redirect_client().expect("client");
-        let result = check_single_link("http://example.com/a.png", &client, 5).await;
+        let result = check_single_link("http://example.com/a.png", &client, 5, &no_confirmed()).await;
 
         assert_eq!(result.error_type, "blocked");
         assert!(result.status_code.is_none());
@@ -770,7 +867,7 @@ mod tests {
     #[tokio::test]
     async fn check_single_link_marks_empty_link_as_blocked() {
         let client = safe_no_redirect_client().expect("client");
-        let result = check_single_link("   ", &client, 5).await;
+        let result = check_single_link("   ", &client, 5, &no_confirmed()).await;
 
         assert_eq!(result.error_type, "blocked");
         assert!(result.status_code.is_none());
@@ -991,6 +1088,7 @@ async fn check_single_link(
     link: &str,
     http_client: &reqwest::Client,
     timeout_secs: u64,
+    confirmed_http_hosts: &HashSet<String>,
 ) -> CheckLinkResult {
     let trimmed = link.trim();
     if trimmed.is_empty() {
@@ -1009,7 +1107,7 @@ async fn check_single_link(
         };
     }
 
-    let parsed_url = match validate_probe_url(trimmed) {
+    let parsed_url = match validate_probe_url(trimmed, confirmed_http_hosts) {
         Ok(parsed) => parsed,
         Err(err) => {
             let message = err.to_string();
@@ -1165,14 +1263,16 @@ async fn check_link_with_fallback(
     fallback_url: Option<&str>,
     http_client: &reqwest::Client,
     timeout_secs: u64,
+    confirmed_http_hosts: &HashSet<String>,
 ) -> CheckLinkResult {
-    let primary = check_single_link(url, http_client, timeout_secs).await;
+    let primary = check_single_link(url, http_client, timeout_secs, confirmed_http_hosts).await;
     if primary.is_valid {
         return primary;
     }
     if let Some(fb) = fallback_url {
         if fb != url {
-            let fallback = check_single_link(fb, http_client, timeout_secs).await;
+            let fallback =
+                check_single_link(fb, http_client, timeout_secs, confirmed_http_hosts).await;
             if fallback.is_valid {
                 // 保持 link 字段为原始 URL，其余采用 fallback 结果
                 return CheckLinkResult {
@@ -1195,11 +1295,20 @@ async fn check_link_with_fallback(
 pub async fn check_image_link(
     link: String,
     fallback_url: Option<String>,
+    confirmed_http_hosts: Option<Vec<String>>,
     _http_client: tauri::State<'_, crate::HttpClient>,
 ) -> Result<CheckLinkResult, AppError> {
     log::debug!("[链接检测] 检测链接: {}", link);
     let http_client = safe_no_redirect_client()?;
-    let result = check_link_with_fallback(&link, fallback_url.as_deref(), &http_client, 10).await;
+    // 防御性再归一化一次：前端传来的名单已 normalize，但判据以本侧为准
+    let confirmed: HashSet<String> = confirmed_http_hosts
+        .unwrap_or_default()
+        .iter()
+        .map(|h| normalize_host(h))
+        .collect();
+    let result =
+        check_link_with_fallback(&link, fallback_url.as_deref(), &http_client, 10, &confirmed)
+            .await;
     log::debug!(
         "[链接检测] {} - {:?} ({}ms)",
         if result.is_valid { "ok" } else { "fail" },
@@ -1808,6 +1917,8 @@ pub struct BatchCheckRequest {
     pub per_host_limit: Option<usize>,
     /// 单链接超时秒数（默认 10）
     pub timeout_secs: Option<u64>,
+    /// 用户在设置页 fake-ip 逃生舱确认过的明文 HTTP 主机名（见 [`validate_probe_url`]）
+    pub confirmed_http_hosts: Option<Vec<String>>,
 }
 
 /// 批量检测中的单个链接
@@ -1904,6 +2015,15 @@ pub async fn batch_check_links(
     let cancel_generation = cancel_flag.cancelled_generation.clone();
     let pause = pause_flag.0.clone();
     let client = safe_no_redirect_client()?;
+    // 名单是批次开始时的快照，整批共享一份（Arc 只读，任务里只查不改）
+    let confirmed_http_hosts: Arc<HashSet<String>> = Arc::new(
+        request
+            .confirmed_http_hosts
+            .unwrap_or_default()
+            .iter()
+            .map(|h| normalize_host(h))
+            .collect(),
+    );
 
     // 构建按域名分组的限速信号量
     let host_semaphores: Arc<tokio::sync::Mutex<HashMap<String, Arc<tokio::sync::Semaphore>>>> =
@@ -1930,6 +2050,7 @@ pub async fn batch_check_links(
         let pending = pending_results.clone();
         let total_count = total;
         let event_batch_id = batch_id.clone();
+        let confirmed = confirmed_http_hosts.clone();
 
         let handle = tokio::spawn(async move {
             // 检查取消 / 暂停标志（cancel 优先 pause）
@@ -1966,6 +2087,7 @@ pub async fn batch_check_links(
                 item.fallback_url.as_deref(),
                 &client,
                 timeout_secs,
+                &confirmed,
             )
             .await;
 

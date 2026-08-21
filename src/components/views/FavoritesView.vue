@@ -274,6 +274,7 @@ watch(() => props.visible, async (isVisible, wasVisible) => {
       :item="lightboxItem"
       :has-prev="lightboxHasPrev"
       :has-next="lightboxHasNext"
+      :confirmed-http-hosts="confirmedHttpHosts"
       @delete="handleLightboxDelete"
       @navigate="handleLightboxNavigate"
       @toggle-favorite="(item: HistoryItem) => handleToggleFavorite(item.id)"

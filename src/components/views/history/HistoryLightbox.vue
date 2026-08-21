@@ -17,6 +17,7 @@ import { useLightboxInfo } from '../../../composables/history/useLightboxInfo';
 import { useMirrorFallback } from '../../../composables/history/useMirrorFallback';
 import { useToast } from '../../../composables/useToast';
 import { getPrimaryImageUrl } from '../../../utils/imageUrl';
+import { safeImageUrl } from '../../../security/networkPolicy';
 import { useThumbCache } from '../../../composables/useThumbCache';
 import { getServiceDisplayName } from '../../../constants/serviceNames';
 import LightboxBottomBar from './LightboxBottomBar.vue';
@@ -27,6 +28,13 @@ const props = withDefaults(defineProps<{
   hasPrev?: boolean;
   hasNext?: boolean;
   resolveCloseTargetMode?: () => PhotoSwipeCloseTargetMode;
+  /**
+   * 已确认可走明文 HTTP 的主机名（父视图用 `getConfirmedHttpHosts` 算好传下来）
+   *
+   * 三个父视图（History / Favorites / Timeline）共用这一个灯箱，所以三边都得传，
+   * 漏一处就在那个页面留下一个没有闸门的入口。
+   */
+  confirmedHttpHosts?: ReadonlySet<string>;
 }>(), {
   hasPrev: false,
   hasNext: false,
@@ -53,10 +61,26 @@ watch(
 const itemRef = currentItem;
 
 // ── PhotoSwipe 桥接 ────────────────────────────
-const imageSrc = computed(() => {
+/**
+ * 未过闸的原始大图地址
+ *
+ * 单独留一个的用途是「区分没图和有图但被拦」：两者都让 `imageSrc` 变空串，
+ * 但只有后者需要告诉用户去设置页确认域名。
+ */
+const rawImageSrc = computed(() => {
   if (!currentItem.value) return '';
   return getPrimaryImageUrl(currentItem.value, configManager.config.value);
 });
+
+/**
+ * Why 要过 `safeImageUrl`：CSP 的 `img-src` 放开 `http:` 之前（见 2ab296af），
+ * 灯箱是靠 CSP 兜底挡住私网 / 云元数据 / 未确认的明文 HTTP 地址的。那道网撤掉之后，
+ * 这条路上**一道闸都没有**——同一批地址在收藏页缩略图上被拦、点开大图却照常请求。
+ *
+ * 判据与缩略图完全一致（同一个 `safeImageUrl` + 同一份 `confirmedHttpHosts`），
+ * 否则会出现「缩略图裂了但灯箱能看」这种自相矛盾的表现，用户只会以为某个页面坏了。
+ */
+const imageSrc = computed(() => safeImageUrl(rawImageSrc.value, props.confirmedHttpHosts) ?? '');
 
 /**
  * LQIP 中图：400-800px 缩略图，比原图小一两个数量级、加载秒到
@@ -65,10 +89,11 @@ const imageSrc = computed(() => {
 // 走 thumbCache.getMediumImageUrl 而不是直接调 generateMediumThumbnailUrl：
 // 后者不看会话降级状态，探测到代理不通后这里仍会请求代理死链，模糊占位和 PhotoSwipe 的
 // msrc 就白瞎了。所有取「单条 URL」的入口都必须从候选链取首条，见 data-persistence.md 图5。
+// 同样要过闸：模糊占位和 PhotoSwipe 的 msrc 都由它喂，漏了等于给同一批地址留了后门。
 const mediumSrc = computed(() => {
   const item = currentItem.value;
   if (!item) return '';
-  return thumbCache.getMediumImageUrl(item);
+  return safeImageUrl(thumbCache.getMediumImageUrl(item), props.confirmedHttpHosts) ?? '';
 });
 
 const itemId = computed(() => currentItem.value?.id);
@@ -90,6 +115,28 @@ function handleLoadError() {
 function handleLoadSuccess() {
   currentLoadFailedServiceId.value = null;
 }
+
+/**
+ * 地址被安全闸拦下时给一句解释
+ *
+ * Why 要弹：`usePhotoSwipeBridge.openPswp` 在 `imageSrc` 为空时直接 return，
+ * 于是用户点了缩略图**什么都不会发生**。缩略图上的「加载失败」只说了坏，
+ * 没说为什么坏、也没说去哪儿修；决策树里这属于「用户主动触发 + 结果有歧义」。
+ *
+ * Why 不会和 `handleLoadError` 重复：被拦下的地址压根没发出过请求，
+ * 走不到 PhotoSwipe 的 load 失败回调，两条提示互斥。
+ */
+watch(
+  () => (props.visible && rawImageSrc.value && !imageSrc.value ? rawImageSrc.value : null),
+  (blockedUrl) => {
+    if (!blockedUrl) return;
+    toast.warn(
+      '图片来源未确认',
+      '该链接是明文 HTTP 或指向内网地址，已拦下未请求。请到设置页对这个图床的公开域名「测试连接」并确认一次。',
+    );
+  },
+  { immediate: true },
+);
 
 const { pswpEl, blurSrc, isLoading, setSwitchDirection } = usePhotoSwipeBridge({
   visible: toRef(props, 'visible'),

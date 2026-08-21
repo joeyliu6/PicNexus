@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { CLEAR_TO_DELETE_PLACEHOLDER } from '@/composables/settings/useSensitiveDraft';
 import { defineComponent, nextTick, ref } from 'vue';
 import { mountWithDefaults } from '../helpers/vueMount';
 import type { WebDAVConfig, WebDAVProfile } from '@/config/types';
@@ -15,9 +16,12 @@ vi.mock('@/utils/webdav', () => ({
   },
 }));
 
+/** 清除已保存凭证前的确认框；改 clearSecretChoice 可模拟取消 / ESC */
+const clearSecretChoice = { value: 'accept' as 'accept' | 'reject' | 'dismiss' };
 vi.mock('@/composables/useConfirm', () => ({
   useConfirm: () => ({
     confirmDelete: vi.fn((_m: string, onConfirm: () => void) => onConfirm()),
+    confirmThreeWay: vi.fn(async () => clearSecretChoice.value),
   }),
 }));
 
@@ -83,6 +87,8 @@ function passwordField(wrapper: ReturnType<typeof mountConfig>['wrapper']) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // 复位，免得上一条用例把选择留给下一条（vi.clearAllMocks 管不到这个普通对象）
+  clearSecretChoice.value = 'accept';
 });
 
 describe('WebDAVConfigCollapsible 备份密码（密文常驻、明文按需）', () => {
@@ -94,7 +100,7 @@ describe('WebDAVConfigCollapsible 备份密码（密文常驻、明文按需）'
     const field = passwordField(wrapper);
     expect(field.props('modelValue')).toBe('');
     expect(field.props('hasStoredValue')).toBe(true);
-    expect(field.props('placeholder')).toBe('留空则不修改');
+    expect(field.props('placeholder')).toBe(CLEAR_TO_DELETE_PLACEHOLDER);
     expect(wrapper.findAll('.saved-chip')).toHaveLength(1);
   });
 
