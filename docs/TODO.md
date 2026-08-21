@@ -107,6 +107,35 @@
 
 ## 待处理
 
+### [ ] Tauri E2E 在 CI 跑手上建会话失败（暂设非阻断，待上游修复后恢复）
+
+- **来源**：2026-08-21 发版 v1.1.0 前触发 CI 加测，`Tauri desktop E2E smoke` 首次真正执行即失败
+- **症状**：`WebDriverError: session not created: DevToolsActivePort file doesn't exist`——
+  msedgedriver 拉起 `picnexus.exe` 后等 60 秒，WebView2 从未把调试端口文件写到任何目录
+  （全盘监视确认，见诊断第 4 轮）
+- **定性**：跑手环境问题，非应用缺陷。windows-2025 镜像 2026-08-18 更新把 WebView2 从 149
+  升到 151 后必现；v1.0.10（2026-07-14，WebView2 149）同一步骤是过的；本机 Windows 10 +
+  WebView2 151.0.4129.93 同套件 4/4 通过
+
+四轮诊断已排除的假设（分支 `diag/tauri-e2e-runner` 的 4 次 run，编号 32472333974 /
+32473518344 / 32474934108 / 32476368456）：
+
+| 假设 | 排除依据 |
+|------|---------|
+| 应用在跑手上起不来 | 裸启动 25 秒健康存活，webview 进程齐全，启动日志全绿 |
+| 驱动/运行时版本不匹配 | msedgedriver-tool 精确匹配 .86；升运行时到 .101 后仍挂 |
+| Edge 策略禁远程调试 | 三个策略键全部不存在；显式写 `RemoteDebuggingAllowed=1` 无效 |
+| 提权降权掐断握手 | `runas /trustlevel:0x20000` 去提权整套重跑，同样挂法 |
+| tauri-driver 的问题 | 绕开它直接驱动 msedgedriver（`--verbose`）同样复现 |
+
+**当前处置**：`ci.yml` 的 `tauri-e2e` job 与 `release.yml` 的 Windows E2E 步骤均
+`continue-on-error: true`。应用可运行性由 release 的安装包冒烟（`App running OK`）和
+发版清单里的本地 `npm run test:tauri:e2e` 兜底。
+
+**恢复条件**（满足其一）：跑手镜像后续更新后手动触发 `run_tauri_e2e=true` 转绿；
+或上游（actions/runner-images、MicrosoftEdge/EdgeWebDriver、tauri-apps/tauri-driver）
+出修复。恢复时删掉两处 `continue-on-error` 及注释即可。
+
 ### [ ] 设置页编辑时的 `config-updated` 广播过于频繁，消费方全量重算
 
 - **来源**：2026-08-16 修托盘缓存陈旧时，从 dev 日志里量出来的
