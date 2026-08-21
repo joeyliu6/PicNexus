@@ -55,6 +55,13 @@ vi.mock('@/composables/useHistory', () => ({
   }),
 }));
 
+// checkMirror 会带上已确认明文 HTTP 主机名名单；空配置 = 空名单
+vi.mock('@/composables/useConfig', () => ({
+  useConfigManager: () => ({
+    loadConfig: vi.fn().mockResolvedValue({}),
+  }),
+}));
+
 vi.mock('@/events/cacheEvents', () => ({
   emitHistoryUpdated: emitHistoryUpdatedMock,
 }));
@@ -374,6 +381,7 @@ describe('useMirrorFallback - checkMirror', () => {
     expect(invokeMock).toHaveBeenCalledWith('check_image_link', {
       link: 'https://qiyu.example/pic.png',
       fallbackUrl: null,
+      confirmedHttpHosts: [],
     });
     expect(dbUpdateMock).toHaveBeenCalledWith('hist-1', expect.objectContaining({
       linkCheckStatus: expect.objectContaining({
