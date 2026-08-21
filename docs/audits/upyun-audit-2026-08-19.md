@@ -276,8 +276,12 @@ Typora / Obsidian / CLI 三条链路不受影响。
 
 ## 下一次接手时怎么做（给 AI 的交接说明）
 
-**当前进度**：D1 / D2 / Q1 / Q2 全部收口，代码与文档已同步。剩下的只有**真机 GUI 验收**：
-在设置页填上两套凭证，从主界面拖一张图上传，确认成功——这一步只能人工点。
+**当前进度**：**全部收口，没有遗留项。** D1 / D2 / Q1 / Q2 代码与文档已同步，
+最后那步真机 GUI 验收也已于 2026-08-20 完成——两套凭证填齐、主界面上传成功，
+同批还验了两条链路的 Content-Type、同名不覆盖、路径前缀。结果见
+[lightbox-gate-and-upyun-dual-chain-2026-08-20.md](./lightbox-gate-and-upyun-dual-chain-2026-08-20.md)
+的「真机验收结果」。同一份文档还记了那次改动的另一半：「测试连接」不再只验 REST，
+改成 REST + S3 两条链路各验一次（`1ca9da33`），本文档里「绿灯不代表能传」那个坑已经堵上。
 
 凭证已存在 `scripts/.upyun.local`（gitignored），回归直接跑 `.\scripts\test-upyun-compat.ps1`，
 不必再找用户要账号。
@@ -287,9 +291,11 @@ Typora / Obsidian / CLI 三条链路不受影响。
 - **改了源码哨兵就必须重做阴性对照**（把某条链路的 `build_upload_key` 去掉，确认测试会红）。
   它假绿过一次，根因是 CRLF，细节见「已修」里那段警告。
 - **又拍云有两套凭证，别当成一套**。改任何跟又拍云凭证有关的东西之前，先确认你改的是哪条链路：
-  REST（operator/password，编辑器/CLI/测试连接）还是 S3（s3AccessKey/s3SecretKey，GUI 上传）。
-- **别把 A 和 C 的结论混用**。「测试连接」走 REST（Basic Auth）、GUI 上传走 S3（SigV4），
-  是两条独立链路，A 通过完全不能推出 C 通过。
+  REST（operator/password，编辑器/CLI）还是 S3（s3AccessKey/s3SecretKey，GUI 上传）。
+- **「测试连接」现在两条都验，别再退回只验一条**（`1ca9da33` 起）。本文档正文里
+  「测试连接走 REST，绿灯不代表能传」的描述是**改动前**的原貌，供追溯用，不是现状。
+  改 `test_upyun_connection` 时留意它现在依次调 `test_upyun_rest_chain` +
+  `test_upyun_s3_chain`——砍掉任何一条，绿灯就重新退化成没有意义的绿灯。
 - **又拍云不走 S3 SDK**，凡是改编辑器/CLI 公共上传逻辑，先确认它吃不吃得到（见开头那张对比表）。
 - **别凭空假设又拍云的 API**。本文档里凡是引用官方文档的地方都标了出处，
   要扩展结论请先查[又拍云文档中心](https://help.upyun.com/)确认签名/参数/返回值。
