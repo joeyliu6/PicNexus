@@ -1,6 +1,6 @@
 {
   "productName": "PicNexus",
-  "version": "1.0.10",
+  "version": "1.1.0",
   "identifier": "us.picnex.app",
   "build": {
     "beforeDevCommand": "npm run dev",
