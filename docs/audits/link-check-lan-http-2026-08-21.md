@@ -56,8 +56,25 @@ onebox、Slack unfurl、OWASP SSRF 指南）——共享服务器替人取链才
      不再是 0ms 同步拦截；恢复服务重检可翻回有效；
   4. 反向：文档修复扫描含两条链接的 md，局域网那条不进异常列表，
      `http://example.com` 那条带「拦截」标签落「需手动」。
-- 未真机验：确认主机名（`http://nas.local`）逃生舱链路——要改 hosts 且 TUN 开着会失真，
-  已由 6 条单测钉住（`probe_url_allows_confirmed_http_hostname` 等），留待 TUN 关闭时补。
+- 确认主机名（`http://nas.local`）逃生舱链路真机补验全过（2026-08-21，TUN 保持开启：
+  确认框靠 fake-ip 触发、探测策略层不查 DNS，连接层靠后置 hosts 条目落地；dufs 同上绑
+  192.168.31.173，WebDAV 端点填 IP 字面量、publicDomain 填 `http://nas.local:5244` 隔离变量）：
+  1. hosts 无条目时单项「测试连接」→ 弹 fake-ip「明文传输风险确认」；确认后自动重试**发出了
+     真实请求**（报 connection closed 网络错误而非策略错误）——证明 `lanHttpConfirmed`
+     已在重试前落盘；批量测试不弹，符合设计；
+  2. 加 hosts（`nas.local → 192.168.31.173`）后上传成功，批量检测 / 行内重检 / 灯箱 chip /
+     冷启动灯箱（重启后不进设置直接重检，验 `loadConfig()` 现取名单）四条路径均
+     「正常 · 200」，无一「策略拦截」（修复前该链路必拦）；
+  3. 反向护栏：同链接走「从 URL 下载」仍被拒（fetch 路径不吃名单，拒了才对）；
+  4. 作废等价链路（无显式撤销 UI，唯一途径是改地址自动重置）：publicDomain 改成
+     `nas2.local` 再改回 `nas.local`，两次重检**均**回「策略拦截」——改回原值也不恢复
+     确认，必须重走确认框，证实 `useStorageProfiles` 的改址作废逻辑。
+  口径修正：旧文「6 条单测」实为 Rust 2 条（`probe_url_allows_confirmed_http_hostname`
+  4 断言 + `confirmed_host_does_not_relax_always_blocked`）+ 前端传参断言 2 处
+  （`useLinkCheck.spec.ts`、`useMirrorFallback.spec.ts`）。
+  顺带发现（未修，与本修复无关）：「从 URL 下载」失败 toast 把策略错误对象渲染成
+  `[object Object]`——`useUrlDownload.ts` 的 catch 用 `String(error)` 兜底，没复用
+  `errorToString`，Tauri 抛回的对象型错误全会显示成这样。
 
 ## 教训
 
