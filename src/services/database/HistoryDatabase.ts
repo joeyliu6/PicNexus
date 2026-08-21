@@ -101,6 +101,29 @@ class HistoryDatabase {
   private static instance: HistoryDatabase | null = null;
   private readonly connection: ConnectionManager;
 
+  /**
+   * 在途收藏写入集合（读己之写保证）
+   *
+   * toggleFavorite 是「先乐观改内存、后写盘」，收藏页 watcher 在下一个微任务就会重查；
+   * 而 tauri-plugin-sql 的连接池对读写不排队（SQLite WAL 下 SELECT 读的是提交前快照），
+   * 收藏查询若不等在途写入，会静默拿到旧数据，且之后再无人触发重查（2026-08-20 真机缺陷）。
+   */
+  private readonly pendingFavoriteWrites = new Set<Promise<unknown>>();
+
+  /** 注册必须在写方法入口同步完成（任何 await 之前），watcher 触发的读才保证看得到在途写入 */
+  private trackFavoriteWrite<T>(write: Promise<T>): Promise<T> {
+    this.pendingFavoriteWrites.add(write);
+    const cleanup = () => this.pendingFavoriteWrites.delete(write);
+    write.then(cleanup, cleanup);
+    return write;
+  }
+
+  /** 等当前时点的在途收藏写入落盘。快照即可：快照后新来的写入会自己再触发一轮重查 */
+  private async awaitPendingFavoriteWrites(): Promise<void> {
+    if (this.pendingFavoriteWrites.size === 0) return;
+    await Promise.allSettled([...this.pendingFavoriteWrites]);
+  }
+
   private constructor() {
     this.connection = new ConnectionManager(DB_PATH, async (db) => {
       await createTablesAndIndexes(db);
@@ -152,22 +175,27 @@ class HistoryDatabase {
   // ============================================
 
   async setFavorite(id: string, favorited: boolean): Promise<void> {
-    const db = await this.connection.getDb();
-    await setFavoriteQuery(db, id, favorited, {
-      updatedAt: Date.now(),
-      updatedBy: await getSyncDeviceId(),
-    });
+    return this.trackFavoriteWrite((async () => {
+      const db = await this.connection.getDb();
+      await setFavoriteQuery(db, id, favorited, {
+        updatedAt: Date.now(),
+        updatedBy: await getSyncDeviceId(),
+      });
+    })());
   }
 
   async batchSetFavorite(ids: string[], favorited: boolean): Promise<void> {
-    const db = await this.connection.getDb();
-    await batchSetFavoriteQuery(db, ids, favorited, {
-      updatedAt: Date.now(),
-      updatedBy: await getSyncDeviceId(),
-    });
+    return this.trackFavoriteWrite((async () => {
+      const db = await this.connection.getDb();
+      await batchSetFavoriteQuery(db, ids, favorited, {
+        updatedAt: Date.now(),
+        updatedBy: await getSyncDeviceId(),
+      });
+    })());
   }
 
   async getFavoriteCount(): Promise<number> {
+    await this.awaitPendingFavoriteWrites();
     const db = await this.connection.getDb();
     return getFavoriteCountQuery(db);
   }
@@ -178,6 +206,7 @@ class HistoryDatabase {
    * 用于前端 favoriteSet 初始化
    */
   async getFavoriteIdList(): Promise<string[]> {
+    await this.awaitPendingFavoriteWrites();
     const db = await this.connection.getDb();
     return getFavoriteIdListQuery(db);
   }
@@ -740,6 +769,7 @@ class HistoryDatabase {
 
   /** 收藏元数据分页查询（服务端过滤 + LIMIT/OFFSET，避免前端全量加载） */
   async getFavoritesMetaPage(options: FavoritesMetaPageOptions): Promise<FavoritesMetaPageResult> {
+    await this.awaitPendingFavoriteWrites();
     const db = await this.connection.getDb();
     const { offset, limit, serviceFilter = 'all', searchTerm } = options;
 

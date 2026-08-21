@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HistoryItem } from '@/config/types';
 
 type Row = Record<string, unknown>;
@@ -200,6 +200,11 @@ vi.mock('@tauri-apps/plugin-sql', () => ({
   default: {
     load: vi.fn().mockImplementation(async () => mockDb),
   },
+}));
+
+// setFavorite 会 await 设备 ID（走 syncStatusStore）；本 suite 不关心它，mock 掉保持确定性
+vi.mock('@/utils/syncDeviceId', () => ({
+  getSyncDeviceId: vi.fn().mockResolvedValue('device-test'),
 }));
 
 function makeHistoryItem(overrides: Partial<HistoryItem> = {}): HistoryItem {
@@ -614,5 +619,78 @@ describe('HistoryDatabase', () => {
 
     const updated = await historyDB.getById('mirror-remove-no-summary');
     expect(updated?.linkCheckSummary).toBeUndefined();
+  });
+
+  // 复现 2026-08-20 真机缺陷：toggleFavorite 先乐观改内存、后写盘，收藏页 watcher
+  // 在下一个微任务就重查；tauri-plugin-sql 连接池对读写不排队（WAL 下 SELECT 读的
+  // 是提交前快照），查询若不等在途写入就会静默拿到旧数据，且再无人触发重查。
+  describe('收藏读写竞态（读己之写）', () => {
+    // 连接层缓存的是首次 load 的 MockDatabase 实例，patch 原型才能命中它
+    const originalExecute = MockDatabase.prototype.execute;
+
+    afterEach(() => {
+      MockDatabase.prototype.execute = originalExecute;
+    });
+
+    /** 给收藏 UPDATE 注入延迟/故障，模拟真实 IPC 写盘慢半拍 */
+    function interceptFavoriteUpdate(
+      hook: () => Promise<void>,
+    ): void {
+      MockDatabase.prototype.execute = async function (sql: string, params: unknown[] = []) {
+        if (/UPDATE\s+history_items\s+SET\s+is_favorited/i.test(sql)) {
+          await hook();
+        }
+        return originalExecute.call(this, sql, params);
+      };
+    }
+
+    it('setFavorite 在途时 getFavoritesMetaPage 等写盘完成再查（含新收藏）', async () => {
+      const { historyDB } = await import('@/services/HistoryDatabase');
+      // 本组断言依赖全局计数（total / 全量 id 列表），先清库与其他用例的数据隔离
+      await historyDB.clear();
+      await historyDB.insert(makeHistoryItem({ id: 'fav-race-a', timestamp: 1000 }));
+      await historyDB.insert(makeHistoryItem({ id: 'fav-race-b', timestamp: 2000 }));
+
+      interceptFavoriteUpdate(() => new Promise(resolve => setTimeout(resolve, 20)));
+
+      // 不 await：模拟乐观更新后 watcher 立刻重查的真实时序
+      const writePromise = historyDB.setFavorite('fav-race-b', true);
+      const page = await historyDB.getFavoritesMetaPage({ offset: 0, limit: 80 });
+      await writePromise;
+
+      expect(page.items.map(item => item.id)).toContain('fav-race-b');
+      expect(page.total).toBe(1);
+    });
+
+    it('setFavorite 在途时 getFavoriteIdList 同样等写盘完成', async () => {
+      const { historyDB } = await import('@/services/HistoryDatabase');
+      await historyDB.clear();
+      await historyDB.insert(makeHistoryItem({ id: 'fav-race-c', timestamp: 1000 }));
+
+      interceptFavoriteUpdate(() => new Promise(resolve => setTimeout(resolve, 20)));
+
+      const writePromise = historyDB.setFavorite('fav-race-c', true);
+      const ids = await historyDB.getFavoriteIdList();
+      await writePromise;
+
+      expect(ids).toContain('fav-race-c');
+    });
+
+    it('收藏写盘失败时读取不被卡死，返回写前状态', async () => {
+      const { historyDB } = await import('@/services/HistoryDatabase');
+      await historyDB.clear();
+      await historyDB.insert(makeHistoryItem({ id: 'fav-race-d', timestamp: 1000 }));
+
+      interceptFavoriteUpdate(async () => {
+        await new Promise(resolve => setTimeout(resolve, 10));
+        throw new Error('disk fail');
+      });
+
+      const writePromise = historyDB.setFavorite('fav-race-d', true);
+      const page = await historyDB.getFavoritesMetaPage({ offset: 0, limit: 80 });
+
+      expect(page.total).toBe(0);
+      await expect(writePromise).rejects.toThrow('disk fail');
+    });
   });
 });
