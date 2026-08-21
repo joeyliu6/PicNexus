@@ -258,6 +258,12 @@ source 链里。于是所有 `contains("ErrInvalidAccessKeyID")` 这类分类**�
 ⚠️ 这**不是** TODO「已知取舍」里那条「只读探测不做 DNS 裁决」。那条讲的是不查 DNS，
 这条是另一条判据。已交由独立会话出方案，**本次未改**。
 
+> ✅ **2026-08-21 已修**（独立会话，经 git 考古确认为遗漏而非有意保留）：
+> `validate_probe_url` 改为委托 `url_policy::validate_url_with_policy(AllowPrivate)` +
+> 前端传入的已确认明文 HTTP 主机名名单；`validate_fetch_url` 改走 `Deny` 策略保持
+> 下载重传不放宽。探测仍是同步函数、不查 DNS。详见
+> [link-check-flow.md 出站策略校验小节](../flows/link-check-flow.md#出站策略校验只读探测-vs-下载重传)。
+
 它还顺手坑了验收本身：2.2 的第一版场景「传 15 张到 dufs 再停掉 dufs」完全失效——
 那些链接在发请求之前就被判「拦截」了，停不停服务一个样。
 
@@ -269,5 +275,5 @@ source 链里。于是所有 `contains("ErrInvalidAccessKeyID")` 这类分类**�
    变异全红），但**真机上问题依旧**。怀疑是竞态：`toggleFavorite` 先乐观改 `favoriteSet`、
    后 `await historyDB.setFavorite`，watcher 在写盘落地前就去查了，拿回旧数据。**未验证。**
    改动留在工作区，下一手可以推翻重来。
-2. **链接检测拦掉局域网图床** —— 见上一节，只出方案不动代码。
+2. **链接检测拦掉局域网图床** —— 见上一节，只出方案不动代码。（2026-08-21 已在独立会话修复，见该节补记。）
 

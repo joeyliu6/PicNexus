@@ -41,6 +41,20 @@ const PAIRS = [
     ],
   },
   {
+    name: 'PUBLIC_HTTP_DISABLED_MESSAGE',
+    why: '公网明文 HTTP 被拒的提示。设置页由前端拦、WebDAV 请求与链接检测由 Rust 拦，是同一件事的多个拦截点；措辞分叉会让用户以为撞上了不同的故障',
+    sources: [
+      {
+        file: 'src-tauri/src/url_policy.rs',
+        pattern: /const\s+PUBLIC_HTTP_DISABLED_MESSAGE\s*:\s*&str\s*=\s*"((?:\\.|[^"\\])*)"/,
+      },
+      {
+        file: 'src/security/networkPolicy.ts',
+        pattern: /const\s+PUBLIC_HTTP_DISABLED_MESSAGE\s*=\s*'((?:\\.|[^'\\])*)'/,
+      },
+    ],
+  },
+  {
     name: 'WEBDAV_AUTH_FAILED_MESSAGE',
     why: 'WebDAV 认证失败的提示。图床链路由 Rust 在上传/测试时报，备份链路由前端在解析响应码时报，是同一件事的两个报点；措辞分叉会让用户以为撞上了两个不同的故障',
     sources: [
