@@ -255,6 +255,12 @@ jobs:
     name: Tauri desktop E2E smoke
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_tauri_e2e == 'true'
     runs-on: windows-latest
+    # ⚠️ 2026-08-21 起暂设为非阻断：windows-2025 镜像 2026-08-18 更新（WebView2 149→151）后，
+    # msedgedriver 拉起应用时 DevToolsActivePort 永远不落盘，会话必然建不起来。
+    # 四轮诊断已排除：驱动/运行时版本不匹配（.86/.93/.101 全试过）、Edge 策略、提权降权、
+    # tauri-driver（裸 msedgedriver 同样复现）。应用本身在跑手上裸启动健康；本机同套件 4/4 过。
+    # 恢复条件与证据链见 docs/TODO.md「Tauri E2E 在 CI 跑手上建会话失败」。
+    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v5
