@@ -88,7 +88,10 @@ if (page === 'dialogs' && state in onboardingStepIndex) {
 
 const image = (seed: string) => {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#60a5fa"/><stop offset="0.55" stop-color="#22c55e"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><rect width="640" height="420" fill="url(#g)"/><circle cx="486" cy="104" r="70" fill="rgba(255,255,255,.35)"/><path d="M0 330 150 190l92 78 86-112 312 174v90H0z" fill="rgba(15,23,42,.38)"/><text x="36" y="62" fill="white" font-family="Arial" font-size="30" font-weight="700">${seed}</text></svg>`;
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  // Why base64:收藏页 / 时间轴的缩略图会过 safeImageUrl 安全闸，
+  // 它只放行 base64 形式的 data:image URL（防止百分号编码里夹带脚本），
+  // URL-encoded 形式会被拦成空白卡片。
+  return `data:image/svg+xml;base64,${btoa(svg)}`;
 };
 
 const presets: CompressionPreset[] = [
