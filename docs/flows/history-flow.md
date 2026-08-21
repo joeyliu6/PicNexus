@@ -131,7 +131,8 @@ flowchart TD
 
 - 首页由视图可见性触发（`useLazyLoadOnVisible`），默认每批 80 条
 - 滚动至底部 300px 时累积加载下一批
-- `favoriteSet` 变化：少量取消（≤5）→ 本地过滤保留 leave 动画；批量（>5）→ 重载首页
+- `favoriteSet` 变化：新增 → 重载首页（无法就地插入：按时间倒序，旧图落点算不出）；少量取消（≤5）→ 本地过滤保留 leave 动画；批量（>5）→ 重载首页
+- **读己之写保证**：`toggleFavorite` 是先乐观改内存、后写盘，而 tauri-plugin-sql 连接池对读写不排队（WAL 下 SELECT 读提交前快照）。`HistoryDatabase` 的收藏查询（`getFavoritesMetaPage` / `getFavoriteIdList` / `getFavoriteCount`）入口会等待在途收藏写入（`pendingFavoriteWrites`）落盘后再查；加载在途时收到的新增收藏由 `useFavoritesData` 的 `pendingReload` 记账，本轮结束后补查
 - 跨窗口 `history-deleted` / `history-cleared` 事件 → 重载首页
 - 灯箱导航到倒数第 3 项时异步触发下一批加载
 - Header 徽章读 `totalCount`（SQL COUNT(*) OVER()）而非数组长度
@@ -164,6 +165,7 @@ flowchart TD
 | 时间线视图白屏 | 虚拟滚动的 itemHeight 计算返回 0 | 图1 节点 J |
 | 切换视图后数据丢失 | KeepAlive 缓存失效，触发重新加载但缓存已过期 | 图1 节点 B |
 | 收藏状态不同步 | `favoriteSet` 更新后未触发视图刷新 | 图1 节点 G |
+| 点收藏后收藏页不更新（刷新才出现） | 收藏查询没等在途写入（读写竞态），检查 `HistoryDatabase.pendingFavoriteWrites` 的注册是否在写方法入口同步完成 | 收藏视图小节 |
 
 ---
 

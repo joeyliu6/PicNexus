@@ -302,6 +302,48 @@ describe('useFavoritesData', () => {
     expect(harness.api().loadedMetas.value.map(meta => meta.id)).toEqual(['beta', 'alpha']);
   });
 
+  it('加载在途时新增收藏不吞掉：这轮结束后补查一次', async () => {
+    getFavoritesMetaPageMock.mockResolvedValueOnce({
+      items: [makeMeta('alpha')],
+      total: 1,
+      hasMore: false,
+    });
+
+    const harness = mountHarness();
+    harness.favoriteSet.value = new Set(['alpha']);
+    await settleFirstPage(harness.api().loadFirstPage());
+    expect(getFavoritesMetaPageMock).toHaveBeenCalledTimes(1);
+
+    // 第二次查询挂起：模拟一轮 reload 的 SELECT 已发出、尚未返回
+    let resolveInFlight!: (value: {
+      items: ReturnType<typeof makeMeta>[]; total: number; hasMore: boolean;
+    }) => void;
+    getFavoritesMetaPageMock.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveInFlight = resolve; }),
+    );
+    harness.searchTerm.value = 'a';
+    await flushPromises();
+    expect(harness.api().isLoading.value).toBe(true);
+
+    // 在途期间点了新收藏：不能立刻重查（在途 SELECT 早于写盘，查不回新收藏），也不能吞掉
+    getFavoritesMetaPageMock.mockResolvedValueOnce({
+      items: [makeMeta('beta'), makeMeta('alpha')],
+      total: 2,
+      hasMore: false,
+    });
+    harness.favoriteSet.value = new Set(['alpha', 'beta']);
+    await nextTick();
+    expect(getFavoritesMetaPageMock).toHaveBeenCalledTimes(2);
+
+    // 在途查询返回（不含 beta）→ 这轮收尾后应自动补查到 beta
+    resolveInFlight({ items: [makeMeta('alpha')], total: 1, hasMore: false });
+    await settleFirstPage(Promise.resolve());
+    await settleFirstPage(Promise.resolve());
+
+    expect(getFavoritesMetaPageMock).toHaveBeenCalledTimes(3);
+    expect(harness.api().loadedMetas.value.map(meta => meta.id)).toEqual(['beta', 'alpha']);
+  });
+
   /**
    * 反向判据：内容没变、只是换了个 Set 引用，不该重查。
    *

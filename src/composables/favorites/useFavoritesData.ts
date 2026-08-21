@@ -75,6 +75,8 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
   // 版本号防止 filter/search 快速切换时老请求覆盖新结果
   let loadVersion = 0;
   let firstPageLoaded = false;
+  // 加载在途时收到新增收藏 → 记账，当前这轮结束后补查一次（见 favoriteSet watcher）
+  let pendingReload = false;
   let skeletonTimer: ReturnType<typeof setTimeout> | null = null;
   let resolveSkeletonTimer: (() => void) | null = null;
 
@@ -102,6 +104,7 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
 
   function resetToEmptyLoadedState(): void {
     loadVersion++;
+    pendingReload = false;
     clearSkeletonTimer();
     loadedMetas.value = [];
     totalCount.value = 0;
@@ -141,6 +144,13 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
       return;
     }
     await reloadFromStart();
+  }
+
+  /** 当前这轮加载收尾后，若期间有新增收藏被记账，补查一次 */
+  function flushPendingReload(): void {
+    if (!pendingReload) return;
+    pendingReload = false;
+    void reloadFromStart();
   }
 
   async function reloadFromStart(): Promise<void> {
@@ -184,6 +194,7 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
       if (version === loadVersion) {
         hasLoadedOnce.value = true;
         isLoading.value = false;
+        flushPendingReload();
       }
     }
   }
@@ -207,7 +218,10 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
       nextOffset += result.items.length;
       cacheServices(result.items);
     } finally {
-      if (version === loadVersion) isLoading.value = false;
+      if (version === loadVersion) {
+        isLoading.value = false;
+        flushPendingReload();
+      }
     }
   }
 
@@ -279,11 +293,16 @@ export function useFavoritesData(params: UseFavoritesDataParams): UseFavoritesDa
     // `removedCount === 0` 直接 return。表现是在历史页点了收藏、切到收藏页看不见，
     // 非得刷新一次才出来（2026-08-20 真机验收发现）。
     //
-    // Why 要挡住「加载在途」：`firstPageLoaded` 在 `loadFirstPage` 一进门就置真，
-    // 而 `favoriteSet` 往往在同一轮被 `loadStats` 填上。那趟查询本来就会带上新收藏，
-    // 这时再插一次 reload 纯属重复查一遍。
-    if (!isLoading.value && [...newSet].some(id => !oldSet?.has(id))) {
-      void reloadFromStart();
+    // Why 加载在途要记账而不是直接吞掉：在途那趟 SELECT 可能在这次写盘前就已发出，
+    // 查不回新收藏（读己之写只保证「还没发出的查询」等写盘）。记下 pendingReload，
+    // 等这轮结束后补查一次。冷启动首查例外（hasLoadedOnce=false）：那时的新增来自
+    // loadStats 读库回填，数据必然已提交，首查一定带得上，不必重复查。
+    if ([...newSet].some(id => !oldSet?.has(id))) {
+      if (!isLoading.value) {
+        void reloadFromStart();
+      } else if (hasLoadedOnce.value) {
+        pendingReload = true;
+      }
       return;
     }
 
