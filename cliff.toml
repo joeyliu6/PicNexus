@@ -1,16 +1,16 @@
 [changelog]
 header = "# PicNexus 更新日志\n\n"
+# 扁平风格：不分组标题，一行一个点；分组名里的 <!-- N --> 只用来控制排序，不会显示
 body = """
 {% if version %}\
     ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
 {% else %}\
     ## [unreleased]
 {% endif %}\
-{% for group, commits in commits | group_by(attribute="group") %}
-    ### {{ group | upper_first }}
+{% for group, commits in commits | group_by(attribute="group") %}\
     {% for commit in commits %}
         - {{ commit.message | upper_first | split(pat="\\n") | first }}\
-    {% endfor %}
+    {% endfor %}\
 {% endfor %}\n
 """
 trim = true
@@ -19,19 +19,13 @@ footer = ""
 [git]
 conventional_commits = true
 filter_unconventional = true
+# 发版说明只保留用户可感知的变更；refactor/style/docs/test/ci/chore
+# 不匹配任何 parser，会被 filter_commits 过滤掉（想恢复某类就加回一行）
 commit_parsers = [
-  { message = "^feat", group = "✨ 新功能" },
-  { message = "^security", group = "🔒 安全" },
-  { message = "^fix", group = "🐛 Bug 修复" },
-  { message = "^perf", group = "⚡ 性能优化" },
-  { message = "^refactor", group = "♻️ 重构" },
-  { message = "^style", group = "💄 样式" },
-  { message = "^docs", group = "📝 文档" },
-  { message = "^test", group = "✅ 测试" },
-  { message = "^ci", group = "👷 CI" },
-  { message = "^chore\\(ci\\)", group = "👷 CI" },
-  { message = "^chore\\(release\\)", skip = true },
-  { message = "^chore", group = "🔧 杂项" },
+  { message = "^feat", group = "<!-- 0 -->✨ 新功能" },
+  { message = "^security", group = "<!-- 1 -->🔒 安全" },
+  { message = "^fix", group = "<!-- 2 -->🐛 Bug 修复" },
+  { message = "^perf", group = "<!-- 3 -->⚡ 性能优化" },
 ]
 filter_commits = true
 tag_pattern = "v[0-9].*"
