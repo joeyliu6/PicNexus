@@ -1,7 +1,8 @@
 import { test } from '@playwright/test';
 import { captureVisualState } from './helpers';
+import { VISUAL_STATES } from './states';
 
-const states = ['empty', 'populated', 'service-menu', 'bulk-select', 'lightbox'];
+const states = VISUAL_STATES.history;
 
 test.describe('history visual states', () => {
   for (const state of states) {

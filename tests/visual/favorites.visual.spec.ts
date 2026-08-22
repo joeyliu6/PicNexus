@@ -1,18 +1,8 @@
 import { test } from '@playwright/test';
 import { captureVisualState } from './helpers';
+import { VISUAL_STATES } from './states';
 
-const states = [
-  'empty',
-  'populated',
-  'bulk-select',
-  'lightbox',
-  'image-fallback',
-  'initial-loading',
-  'loading-more',
-  'no-results',
-  'scroll-middle',
-  'mixed-services',
-];
+const states = VISUAL_STATES.favorites;
 
 test.describe('favorites visual states', () => {
   for (const state of states) {

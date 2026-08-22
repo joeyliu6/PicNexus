@@ -97,7 +97,13 @@ async function openStatefulUi(page: Page, visualPage: string, state: string): Pr
   }
 }
 
-export async function captureVisualState(page: Page, visualPage: string, state: string): Promise<void> {
+/**
+ * 导航到某个 harness 状态并等到画面稳定。
+ *
+ * 像素截图与跨引擎结构断言共用这一条路径 —— 否则 openStatefulUi 里那些
+ * 「点开折叠面板 / 滚到某处 / 等弹窗可见」的状态特判要复制第二份。
+ */
+export async function gotoVisualState(page: Page, visualPage: string, state: string): Promise<void> {
   await prepareVisualPage(page);
   await page.goto(`/?page=${visualPage}&state=${state}`);
   const root = page.locator('[data-visual-root]');
@@ -105,8 +111,11 @@ export async function captureVisualState(page: Page, visualPage: string, state: 
   await expect(root).toHaveAttribute('data-visual-ready', 'true');
   await openStatefulUi(page, visualPage, state);
   await waitForVisualAssets(page);
-  // 弹窗被 Teleport 到 body，不在 [data-visual-root] 内，必须整页截图才能拍到
-  const screenshotTarget = (visualPage === 'markdown-repair' && state === 'repair-confirm-dialog')
+}
+
+/** 弹窗被 Teleport 到 body，不在 [data-visual-root] 内，这些状态必须整页处理 */
+export function isTeleportedDialogState(visualPage: string, state: string): boolean {
+  return (visualPage === 'markdown-repair' && state === 'repair-confirm-dialog')
     || visualPage === 'dialogs'
     || (visualPage === 'backup-sync' && [
       'password-dialog',
@@ -115,9 +124,14 @@ export async function captureVisualState(page: Page, visualPage: string, state: 
       'password-disable-dialog',
       'restore-password-error',
       'overwrite-confirm-dialog',
-    ].includes(state))
+    ].includes(state));
+}
+
+export async function captureVisualState(page: Page, visualPage: string, state: string): Promise<void> {
+  await gotoVisualState(page, visualPage, state);
+  const screenshotTarget = isTeleportedDialogState(visualPage, state)
     ? page
-    : root;
+    : page.locator('[data-visual-root]');
   await expect(screenshotTarget).toHaveScreenshot(`${visualPage}-${state}.png`, {
     animations: 'disabled',
     caret: 'hide',

@@ -1,15 +1,8 @@
 import { test } from '@playwright/test';
 import { captureVisualState } from './helpers';
+import { VISUAL_STATES } from './states';
 
-const states = [
-  'empty',
-  'scanning',
-  'bad-link-groups',
-  'repair-confirm-dialog',
-  'fixing',
-  'complete',
-  'partial-failed',
-];
+const states = VISUAL_STATES['markdown-repair'];
 
 test.describe('markdown repair visual states', () => {
   for (const state of states) {

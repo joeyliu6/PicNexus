@@ -1,25 +1,8 @@
 import { test } from '@playwright/test';
 import { captureVisualState } from './helpers';
+import { VISUAL_STATES } from './states';
 
-const states = [
-  'default',
-  'local-backing-up',
-  'local-success',
-  'cloud-syncing',
-  'webdav-unavailable',
-  'password-dialog',
-  'error',
-  'webdav-expanded',
-  'webdav-testing',
-  'overwrite-menu-open',
-  'overwrite-confirm-dialog',
-  'download-needs-refresh',
-  'password-set-dialog',
-  'password-change-dialog',
-  'password-disable-dialog',
-  'restore-password-error',
-  'operation-history-empty',
-];
+const states = VISUAL_STATES['backup-sync'];
 
 test.describe('backup sync visual states', () => {
   for (const state of states) {

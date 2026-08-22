@@ -1,5 +1,6 @@
 import { test } from '@playwright/test';
 import { captureVisualState } from './helpers';
+import { VISUAL_STATES } from './states';
 
 /**
  * 独立弹窗的视觉回归：这些弹窗不隶属于任何业务页面，
@@ -11,14 +12,7 @@ import { captureVisualState } from './helpers';
  * 未覆盖：CompressionPreviewDialog（打开即调用 Tauri 文件选择器，
  * 需要 e2e 那套 mock 才能驱动，见 tests/e2e/mocks/dialog.ts）。
  */
-const states = [
-  'url-download-idle',
-  'url-download-downloading',
-  'wechat-qr',
-  'onboarding-welcome',
-  'onboarding-upload',
-  'onboarding-services',
-];
+const states = VISUAL_STATES.dialogs;
 
 test.describe('dialog visual states', () => {
   for (const state of states) {

@@ -1,20 +1,8 @@
 import { test } from '@playwright/test';
 import { captureVisualState } from './helpers';
+import { VISUAL_STATES } from './states';
 
-const states = [
-  'loading',
-  'empty',
-  'populated',
-  'image-fallback',
-  'lightbox',
-  'scroll-restored',
-  'indicator-visible',
-  'fast-scroll',
-  'layout-calculating',
-  'favorites-only-empty',
-  'bulk-select',
-  'month-jump-skeleton',
-];
+const states = VISUAL_STATES.timeline;
 
 test.describe('timeline visual states', () => {
   for (const state of states) {
