@@ -20,8 +20,9 @@
 
   <!-- 加载骨架屏样式（Vue 挂载后骨架 DOM 被整体替换） -->
   <style>
-    /* 本文件独立于 Vue 入口，app.css 未加载，无法引用真实 token，
-       故在此定义同名局部变量。值必须与 src/theme/dark-theme.css / light-theme.css 保持一致。 */
+    /* 本文件独立于 Vue 入口，app.css 未加载，无法引用真实 token，故在此定义同名局部变量。
+       值与 src/theme/dark-theme.css / light-theme.css 的一致性由 scripts/check-theme-token-copies.mjs
+       在 npm run lint 时逐条比对——改这里的值会被门禁拦下，不要只改一边。 */
     :root {
       --bg-app: #131316;
       --bg-card: #1a1a1e;

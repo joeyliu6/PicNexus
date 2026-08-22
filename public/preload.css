@@ -7,14 +7,15 @@ body {
   overflow: hidden;
 }
 
-/* 色值必须与 src/theme/dark-theme.css 的 --bg-app / --text-main 保持一致 */
+/* 抄自 src/theme/dark-theme.css 的 --bg-app / --text-main；
+   一致性由 scripts/check-theme-token-copies.mjs 在 npm run lint 时比对 */
 html.dark-theme,
 html.dark-theme body {
   background-color: #131316;
   color: #f4f4f5;
 }
 
-/* 色值必须与 src/theme/light-theme.css 的 --bg-app / --text-main 保持一致 */
+/* 抄自 src/theme/light-theme.css 的 --bg-app / --text-main；同上由门禁比对 */
 html.light-theme,
 html.light-theme body {
   background-color: #f1f5f9;
