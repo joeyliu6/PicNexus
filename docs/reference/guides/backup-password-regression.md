@@ -1,7 +1,8 @@
 # 备份密码真机回归：怎么测
 
 > 改动 `config.webdav`（备份 WebDAV）密码链路后用来做真机回归。
-> 判据清单在 [TODO 待验收](../../TODO.md#待验收)，本文只讲**怎么操作**。
+> 判据清单与两轮结果见 [webdav-release-wrapup-acceptance.md](../../audits/webdav-release-wrapup-acceptance.md)
+> （TODO 待验收条目已归档），本文只讲**怎么操作**。
 >
 > 图床 WebDAV（`config.webdav_profiles`）是另一条链路，环境搭建见
 > [webdav-testing-environments.md](./webdav-testing-environments.md)。
