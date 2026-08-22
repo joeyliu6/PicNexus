@@ -67,64 +67,22 @@
 或上游（actions/runner-images、MicrosoftEdge/EdgeWebDriver、tauri-apps/tauri-driver）
 出修复。恢复时删掉两处 `continue-on-error` 及注释即可。
 
-### [ ] 设置页编辑时的 `config-updated` 广播过于频繁，消费方全量重算
+### [ ] 历史记录批量删除 / 镜像剥离的三处已确认缺陷
 
-- **来源**：2026-08-16 修托盘缓存陈旧时，从 dev 日志里量出来的
-- **优先级**：低——用户感知不到，但属于"用得越复杂越吵"的那类浪费
+- **来源**：2026-08-13 补 `useHistoryResultOps` 单测时固化现状、写明「待另立条目」，
+  但一直没登进本文件，只活在
+  [optimization-plan-2026-08-12.md 执行记录](./audits/optimization-plan-2026-08-12.md)里
+- **优先级**：低——都有单测钉住现状（用例里有行内注释标注），改行为时测试会提醒同步改
 
-实测数据（真机 dev 日志，见 `docs/flows/window-system-integration.md` 缓存契约一节）：
+| # | 现状 | 位置 |
+|---|------|------|
+| 1 | 「可用镜像」谓词两边不一致：`removeMirror` 用 `status === 'success'`，`stripServiceFromItem` 用 `status === 'success' && r.result?.url`。剥完只剩一条「success 但无 url」的镜像时，DB 侧保留记录、composable 侧整条删库 | `HistoryDatabase.ts:347` vs `useHistoryResultOps.ts:56`（行号 2026-08-22 复核过） |
+| 2 | `bulkDeleteHistoryResults` 成功 toast 报的是入参 `targets.length` 而非实际生效条数，有非法/不存在/未匹配 target 时会虚报 | `useHistoryResultOps.ts:232` |
+| 3 | 批量删除非原子：循环中途抛错时已落库的删除不会回滚，而 `applyChanges` 在循环之后才执行，内存态（`totalCount` / `dataVersion` / 事件广播）完全不跟进 | `useHistoryResultOps.ts:199-231` |
 
-| 时段 | 场景 | `[useConfig] ✓ 配置保存成功` | 下游全量刷新 |
-|------|------|------------------------------|--------------|
-| 08:34:46-48 | 托盘改勾选 | 4 次 | 4 次 |
-| 08:35:05-18 | 设置页填一个新 S3 profile | **26 次** | 26 次 |
-
-⚠️ 先澄清一个容易误判的点：**广播与处理是严格 1:1 的，没有重复放大、没有监听器泄漏**。
-受控实验（干净启动 + 只点一次）确认单次操作只触发一次刷新。26 次的来源是**26 次真实保存**——
-设置页在编辑过程中自动保存得太密。所以要治的是"保存/广播频率"，不是"重复处理"。
-
-两个自然切入点：
-
-1. **消费方加值比较短路**。`useGlobalShortcut` 已经这么做了（日志里 26 条
-   `配置未变化，跳过重新注册`），而 [useServiceSelector.loadServiceButtonStates](../src/composables/useServiceSelector.ts)
-   每次都全量读盘解密 + 重算按钮状态。同样的短路可以照搬。
-2. **源头降频**。设置页表单的自动保存防抖窗口偏小，值得确认是不是每个字段变更都独立触发了一次保存。
-
-注意别退化成"只广播不刷新"：托盘和主窗口互相依赖这个事件做跨 webview 同步（缓存契约见上文），
-砍广播必须同时保证两边仍能拿到最新配置。
-
-### [ ] SettingsView.vue 顶到 500 行硬指标，下一次改必撞
-
-- **来源**：2026-08-15 给它加一行事件监听（`@secrets-rekeyed`）直接报
-  `File has too many lines (501). Maximum allowed is 500`
-- **优先级**：中——不阻塞功能，但**任何**对设置页的改动都会先被 lint 拦下
-
-现状（`max-lines` 数的是**去掉空行与注释后**的有效行，不是物理行）：
-
-| 文件 | 物理行 | 门禁口径 |
-|------|--------|---------|
-| [SettingsView.vue](../src/components/views/SettingsView.vue) | 579 | **正好 500，一行不剩** |
-| [BackupPasswordDialog.vue](../src/components/dialogs/BackupPasswordDialog.vue) | 568 | 逼近上限 |
-
-2026-08-15 那次是把两个属性挤到同一行才过的关——**这种腾挪只剩这一次机会了**。
-
-自然切线（别做机械拆分）：`SettingsView` 按 tab 拆面板，`BackupPasswordDialog` 按 mode 拆子组件。
-两个文件都已经有单测覆盖（`settingsView.spec.ts` / `backupPasswordDialog.spec.ts`），
-拆分属于纯重构，靠现有单测兜住即可。
-
-### [ ] 上传队列缩略图的内层 wrapper 比裁切盒大 2px，右下各被削 1px
-
-- **来源**：2026-08-22 接入跨引擎布局哨兵时由 `layout-chromium` 报出
-- **优先级**：低——纯细节，肉眼几乎无差别
-- **位置**：`src/components/upload/QueueCard.vue` 的 `.thumbnail-wrapper`（40px、border-box、
-  含 1px 边框 → 内容区 38px），里面 `ThumbnailImage.vue` 自己的 `.thumbnail-wrapper`
-  算出 40px
-
-被削掉的是内层 wrapper 的边框像素，图片本身走 `object-fit: cover` 本来就是裁切的，
-所以看不出来。**Chromium 与 WebKit 表现一致，不是引擎差异**。
-
-已登记到 `tests/visual/cross-engine/exemptions.ts` 让哨兵放行（`upload` / `thumbnail-wrapper`
-的 x、y 两条）。修的时候把那两条豁免一起删掉，哨兵会替你确认修好了。
+第 1 条另有牵连项：`DataTransformer.deriveResultColumns` 算 `success_count` 时同样只看
+`status === 'success'`，缺 url 时 `success_count` 会与 `linkCheckSummary.totalLinks` 对不上。
+修第 1 条时先定谓词的统一口径，再把三处（DB / composable / DataTransformer）一起对齐。
 
 ### [ ] 类型检查盲区：`scripts/`、`tests/` 仍不在任何 tsconfig 覆盖内
 
@@ -252,6 +210,21 @@
 ---
 
 ## 已完成
+
+### [x] `config-updated` 广播的消费方全量重算
+
+`useServiceSelector` 加配置切片签名短路，真机两判据全过：无关字段 5 次保存全部跳过重算，托盘改勾选跨窗口同步正常。
+源头防抖排查后确认不用改。详见 [todo-cleanup-2026-08-22.md](./audits/todo-cleanup-2026-08-22.md)。
+
+### [x] 上传队列缩略图右下各被削 1px
+
+根因是内外两层 wrapper 同名，父组件 scoped 样式命中了子组件根元素；外层改名 `.thumbnail-box` 根治。
+删豁免后跨引擎哨兵 200/200 全绿。详见 [todo-cleanup-2026-08-22.md](./audits/todo-cleanup-2026-08-22.md)。
+
+### [x] SettingsView.vue 顶到 500 行硬指标
+
+副作用 handler 抽进新的 `useSettingsActions` composable，门禁口径 500 → 约 400，现有 18 条单测原样通过。
+`BackupPasswordDialog.vue`（568 物理行）未动，下次改它时按 mode 拆。详见 [todo-cleanup-2026-08-22.md](./audits/todo-cleanup-2026-08-22.md)。
 
 ### [x] 2026-08-13 修复计划批次 1 / 2 / 4 的手动验收
 
