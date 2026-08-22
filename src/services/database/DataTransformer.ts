@@ -1,5 +1,6 @@
 import type { HistoryItem, ServiceType } from '../../config/types';
 import { createLogger } from '../../utils/logger';
+import { isUsableMirror } from '../../utils/historyResults';
 
 const log = createLogger('DataTransformer');
 
@@ -99,11 +100,15 @@ function normalizeFavoriteUpdatedBy(item: HistoryItem, favoriteUpdatedAt: number
  *
  * 单独抽出来是为了让"整行写入"（itemToRow）和"只更新 results"（updateResults）
  * 共用同一份派生规则——这三列完全由 results 决定，两边各写一遍迟早会漂移。
+ *
+ * success_count / successful_service_ids 按 isUsableMirror（success 且有 url）
+ * 统计：这两列服务于批量迁移的 SQL 预筛选，而迁移内存侧（sourceSelection）
+ * 只认拿得到 url 的结果，口径不一致会让预筛选放进迁不动的记录。
  */
 export function deriveResultColumns(
   results: HistoryItem['results'],
 ): Pick<HistoryItemRow, 'results' | 'success_count' | 'successful_service_ids'> {
-  const successful = results.filter((result) => result.status === 'success');
+  const successful = results.filter(isUsableMirror);
 
   return {
     results: JSON.stringify(results),

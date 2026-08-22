@@ -22,6 +22,7 @@ import { useConfigManager } from '../useConfig';
 import { useToast } from '../useToast';
 import { useConfirm } from '../useConfirm';
 import { createLogger } from '../../utils/logger';
+import { isUsableMirror } from '../../utils/historyResults';
 import { getConfirmedHttpHosts } from '../../security/networkPolicy';
 
 const log = createLogger('MirrorFallback');
@@ -128,14 +129,14 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
     const overrides = localStatusOverride.value;
     // 乐观主图床仅在它确实存在于成功镜像中时生效（防止陈旧 ID 让所有行都不是主）
     const successIds = new Set(
-      cur.results.filter(r => r.status === 'success' && r.result?.url).map(r => r.serviceId),
+      cur.results.filter(isUsableMirror).map(r => r.serviceId),
     );
     const effectivePrimary = optimisticPrimary.value && successIds.has(optimisticPrimary.value)
       ? optimisticPrimary.value
       : cur.primaryService;
     const list: MirrorInfo[] = [];
     for (const r of cur.results) {
-      if (r.status !== 'success' || !r.result?.url) continue;
+      if (!isUsableMirror(r)) continue;
       const status = overrides[r.serviceId] ?? propsStatus[r.serviceId];
       const checkState: MirrorCheckState = status
         ? (status.isValid ? 'valid' : 'invalid')
@@ -189,7 +190,7 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
 
   function findSuccessResult(record: HistoryItem, serviceId: string) {
     return record.results.find(
-      r => r.serviceId === serviceId && r.status === 'success' && r.result?.url,
+      r => r.serviceId === serviceId && isUsableMirror(r),
     );
   }
 

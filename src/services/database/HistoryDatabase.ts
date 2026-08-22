@@ -13,6 +13,7 @@ import type { ImageMeta } from '../../types/image-meta';
 import { extractMirrorServices } from '../../types/image-meta';
 import { recomputeLinkCheckSummary } from '../../types/linkCheckSummary';
 import { getHistoryDbPath } from '../../utils/appPaths';
+import { isUsableMirror } from '../../utils/historyResults';
 import { createLogger } from '../../utils/logger';
 import { getSyncDeviceId } from '../../utils/syncDeviceId';
 
@@ -362,7 +363,9 @@ class HistoryDatabase {
    *
    * 边界：
    * - 镜像是当前主服务 → 抛错，调用方需先 switchPrimaryService
-   * - 删除后无剩余成功镜像 → 抛错，应改为删除整条记录
+   * - 删除后无剩余可用镜像（isUsableMirror 口径：success 且有 url）→ 抛错，
+   *   应改为删除整条记录。与 useHistoryResultOps.stripServiceFromItem 的
+   *   降级判断同一把尺子
    */
   async removeMirror(id: string, serviceId: string): Promise<void> {
     const existing = await this.getById(id);
@@ -380,9 +383,9 @@ class HistoryDatabase {
     }
 
     const newResults = existing.results.filter(r => r.serviceId !== serviceId);
-    const remainingSuccess = newResults.filter(r => r.status === 'success').length;
-    if (remainingSuccess === 0) {
-      throw new Error('至少需要保留一条成功镜像，如需全删请直接删除整条记录');
+    const remainingUsable = newResults.filter(isUsableMirror).length;
+    if (remainingUsable === 0) {
+      throw new Error('至少需要保留一条可用镜像，如需全删请直接删除整条记录');
     }
 
     const updates: Partial<HistoryItem> = { results: newResults };

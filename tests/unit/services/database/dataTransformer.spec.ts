@@ -85,6 +85,26 @@ describe('DataTransformer', () => {
     expect(JSON.parse(row.successful_service_ids)).toEqual(['weibo']);
   });
 
+  // success_count / successful_service_ids 按 isUsableMirror 口径（success 且有 url）派生：
+  // 「success 但无 url」的结果不计入——这两列服务于批量迁移 SQL 预筛选，
+  // 而迁移内存侧只认拿得到 url 的结果，口径必须一致（2026-08-22 对齐）
+  it('excludes successful results without a url from the derived success columns', () => {
+    const item = makeHistoryItem();
+    const results = [
+      ...item.results,
+      {
+        serviceId: 'r3',
+        status: 'success' as const,
+        result: { serviceId: 'r3', fileKey: 'k3', url: '', width: 1, height: 1, size: 1 },
+      },
+    ];
+
+    const row = itemToRow({ ...item, results } as never);
+
+    expect(row.success_count).toBe(1);
+    expect(JSON.parse(row.successful_service_ids)).toEqual(['weibo']);
+  });
+
   it('restores a database row back into a HistoryItem with parsed JSON and booleans', () => {
     const item = rowToItem({
       id: 'alpha',

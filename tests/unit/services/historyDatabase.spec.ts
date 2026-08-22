@@ -567,6 +567,33 @@ describe('HistoryDatabase', () => {
     expect(updated?.results.some(r => r.serviceId === 'jd')).toBe(false);
   });
 
+  // 「可用镜像」统一口径（isUsableMirror：success 且有 url，2026-08-22 对齐）：
+  // 剩下的镜像虽然 status 是 success，但没有 url 就撑不起这条记录
+  // （无法展示/复制/接任主服务），与 stripServiceFromItem 的整条删除降级同一把尺子。
+  it('removeMirror() 仅剩「success 但无 url」镜像时拒绝删除', async () => {
+    const { historyDB } = await import('@/services/HistoryDatabase');
+    await historyDB.insert(makeHistoryItem({
+      id: 'mirror-remove-no-url',
+      primaryService: 'weibo',
+      results: [
+        {
+          serviceId: 'weibo',
+          status: 'success',
+          result: { serviceId: 'weibo', fileKey: 'k-weibo', url: '' },
+        },
+        {
+          serviceId: 'r2',
+          status: 'success',
+          result: { serviceId: 'r2', fileKey: 'k-r2', url: 'https://example.com/r2.jpg' },
+        },
+      ],
+    }));
+
+    await expect(
+      historyDB.removeMirror('mirror-remove-no-url', 'r2'),
+    ).rejects.toThrow(/至少需要保留一条可用镜像/);
+  });
+
   it('removeMirror() 删除当前主服务时抛错', async () => {
     const { historyDB } = await import('@/services/HistoryDatabase');
     await historyDB.insert(makeMultiMirrorItem('mirror-remove-primary'));

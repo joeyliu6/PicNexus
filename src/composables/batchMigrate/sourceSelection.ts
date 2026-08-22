@@ -1,4 +1,5 @@
 import type { HistoryItem } from '../../config/types';
+import { isUsableMirror } from '../../utils/historyResults';
 
 export interface MigrateSourceCandidate {
   serviceId: string;
@@ -16,7 +17,7 @@ export interface RecoverableLinkInfo {
 function successfulResults(item: HistoryItem) {
   return item.results
     .map((result, order) => ({ result, order }))
-    .filter(({ result }) => result.status === 'success' && Boolean(result.result?.url));
+    .filter(({ result }) => isUsableMirror(result));
 }
 
 function sortSources(

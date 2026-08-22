@@ -13,6 +13,7 @@
  */
 
 import type { HistoryItem } from '../config/types';
+import { isUsableMirror } from '../utils/historyResults';
 
 export function recomputeLinkCheckSummary(
   results: HistoryItem['results'],
@@ -21,7 +22,7 @@ export function recomputeLinkCheckSummary(
 ): HistoryItem['linkCheckSummary'] {
   if (!previousSummary) return undefined;
 
-  const successResults = results.filter((r) => r.status === 'success' && r.result?.url);
+  const successResults = results.filter(isUsableMirror);
   const total = successResults.length;
   let valid = 0;
   let invalid = 0;

@@ -201,10 +201,12 @@ async function migrateAddSuccessCountColumn(db: Database): Promise<void> {
       // 回填：用 SQLite 原生 json_each 在 DB 层完成，不经过 JS
       // WHERE json_valid 防御：若某行 results 被第三方工具污染成非法 JSON，
       // json_each 会让整条 UPDATE 失败；过滤掉坏行后其他正常行仍能正确回填。
+      // 口径与 DataTransformer.isUsableMirror 一致：success 且 result.url 非空
       await db.execute(`
         UPDATE history_items SET success_count = (
           SELECT COUNT(*) FROM json_each(results) AS je
           WHERE je.value ->> 'status' = 'success'
+            AND COALESCE(je.value ->> '$.result.url', '') <> ''
         ) WHERE json_valid(results) = 1
       `);
 
@@ -235,11 +237,13 @@ async function migrateAddSuccessfulServiceIdsColumn(db: Database): Promise<void>
 
     // 回填：用 SQLite 原生 json_group_array 在 DB 层完成
     // WHERE json_valid 防御非法 JSON 行（详见 migrateAddSuccessCountColumn 注释）
+    // 口径与 DataTransformer.isUsableMirror 一致：success 且 result.url 非空
     await db.execute(`
       UPDATE history_items SET successful_service_ids = (
         SELECT COALESCE(json_group_array(je.value ->> 'serviceId'), '[]')
         FROM json_each(results) AS je
         WHERE je.value ->> 'status' = 'success'
+          AND COALESCE(je.value ->> '$.result.url', '') <> ''
       ) WHERE json_valid(results) = 1
     `);
 
