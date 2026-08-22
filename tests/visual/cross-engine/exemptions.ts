@@ -46,23 +46,6 @@ export const EXEMPTIONS: Exemption[] = [
     axis: 'y',
     reason: '同上，纵向那一半的视觉居中补偿。',
   },
-  {
-    page: 'upload',
-    state: '*',
-    pathIncludes: 'thumbnail-wrapper',
-    axis: 'x',
-    reason: 'QueueCard 的 40px 缩略图盒（border-box，含 1px 边框 → 内容区 38px）里，'
-      + 'ThumbnailImage 自己的 wrapper 算出 40px，右下各被削 1px。'
-      + '削掉的是内层 wrapper 的边框像素，图片本身是 object-fit: cover 裁切的，肉眼无差别。'
-      + '两个引擎表现一致，属既有细节问题而非引擎差异；已登记到 docs/TODO.md。',
-  },
-  {
-    page: 'upload',
-    state: '*',
-    pathIncludes: 'thumbnail-wrapper',
-    axis: 'y',
-    reason: '同上，纵向那 1px。',
-  },
 ];
 
 /**

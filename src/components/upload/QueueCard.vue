@@ -102,7 +102,7 @@ function handleCopy(payload: QueueCopyPayload) {
 <template>
   <div class="queue-card">
     <div class="card-header">
-      <div class="thumbnail-wrapper">
+      <div class="thumbnail-box">
         <ThumbnailImage
           :srcs="thumbnailSrcs"
           :alt="item.fileName"
@@ -180,7 +180,9 @@ function handleCopy(payload: QueueCopyPayload) {
   margin-bottom: var(--space-md);
 }
 
-.thumbnail-wrapper {
+/* 类名不能叫 thumbnail-wrapper：ThumbnailImage 的根元素同名，且子组件根元素会带上
+   本组件的 scoped 属性，这条 40px + 1px 边框的规则会同时命中内层，把它撑出内容区 2px */
+.thumbnail-box {
   width: 40px;
   height: 40px;
   border-radius: var(--radius-md);
