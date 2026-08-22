@@ -1,15 +1,18 @@
-# Auto detect text files and perform LF normalization
-* text=auto
-
-# Keep source and configuration files checked out with LF on every platform.
-.gitattributes text eol=lf
-*.css text eol=lf
-*.html text eol=lf
-*.js text eol=lf
-*.json text eol=lf
-*.md text eol=lf
-*.ts text eol=lf
-*.vue text eol=lf
-*.yml text eol=lf
-*.yaml text eol=lf
-.husky/* text eol=lf
+# 行尾统一策略：仓库里一律存 LF，检出到工作区也一律给 LF —— 包括 Windows。
+#
+# 为什么是 `text=auto eol=lf` 而不只是 `text=auto`：
+#   `text=auto` 只管「入库时转成 LF」，检出成什么留给每台机器的 core.autocrlf 决定。
+#   Git for Windows 默认 core.autocrlf=true，会把工作区文件写成 CRLF。一旦有工具
+#   （rustfmt、编辑器、生成脚本、AI 代理）按 LF 重写了同一个文件，git 索引里缓存的
+#   文件大小就对不上，该文件会被判定为「可能改了」——内容比对其实一致，但 GitHub Desktop
+#   带着 GIT_OPTIONAL_LOCKS=0 运行，刷新结果写不回索引，于是它在列表里永远显示为
+#   「已修改」而 diff 全空。`eol=lf` 把决定权从机器收回仓库，两边都是 LF，幽灵消失。
+#
+# 为什么不再逐个扩展名登记：
+#   这行之前是一张手写的扩展名清单（css/html/js/json/md/ts/vue/yml），漏掉了
+#   toml/rs/mjs/cjs/lock/ps1/svg/LICENSE —— `src-tauri/Cargo.toml` 长期显示为幽灵改动
+#   正是这么来的。清单靠人维护就一定会漏，所以改成默认全覆盖：新增文件类型无需登记。
+#
+# 二进制文件由 `text=auto` 自动识别并排除在转换之外，不需要额外声明；
+# 若将来出现误判（比如某个二进制被当成文本），在下面单独写一行 `<pattern> -text` 覆盖。
+* text=auto eol=lf
