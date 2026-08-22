@@ -112,9 +112,29 @@ jobs:
       # 下方安装包冒烟（App running OK）和本地 npm run test:tauri:e2e 兜底。
       # 恢复条件见 docs/TODO.md「Tauri E2E 在 CI 跑手上建会话失败」。
       - name: Run Tauri desktop E2E before release (Windows)
+        id: tauri_e2e
         if: matrix.platform == 'windows-latest'
         continue-on-error: true
         run: npm run test:tauri:e2e
+
+      # 非阻断 ≠ 静默：失败时留一条 warning 注解 + Summary 段落，
+      # 否则发版路径上的应用侧回归只会躺在 step 日志里，没人会翻。
+      - name: Report Tauri desktop E2E outcome
+        if: always() && steps.tauri_e2e.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "::warning title=Tauri desktop E2E failed (non-gating)::发版继续，但请人工判定：日志含 DevToolsActivePort 属已知跑手环境问题，否则按应用侧回归处理。"
+          {
+            echo "## ⚠️ Tauri desktop E2E 失败（非阻断，发版已继续）"
+            echo ""
+            echo "| 日志特征 | 判定 | 处理 |"
+            echo "| --- | --- | --- |"
+            echo "| 出现 \`DevToolsActivePort\` / 会话建不起来 | 已知跑手环境问题（WebView2 151） | 可忽略 |"
+            echo "| 用例内断言失败、超时 | 疑似应用侧回归 | 发版前必须人工确认 |"
+            echo ""
+            echo "兜底覆盖：下方安装包冒烟（App running OK）+ 本地 \`npm run test:tauri:e2e\`。"
+            echo "恢复条件见 \`docs/TODO.md\`「Tauri E2E 在 CI 跑手上建会话失败」。"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Generate changelog
         uses: orhun/git-cliff-action@v4

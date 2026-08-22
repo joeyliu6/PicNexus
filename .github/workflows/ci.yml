@@ -297,4 +297,26 @@ jobs:
           $PWD.Path | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Run Tauri desktop E2E smoke tests
+        id: tauri_e2e
         run: npm run test:tauri:e2e
+
+      # 非阻断 ≠ 静默：失败时把结论写进本次运行的 Summary 并打一条 warning 注解，
+      # 避免应用侧真回归被 continue-on-error 悄悄放过（只留在 step 日志里没人看）。
+      - name: Report Tauri desktop E2E outcome
+        if: always() && steps.tauri_e2e.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "::warning title=Tauri desktop E2E failed (non-gating)::日志含 DevToolsActivePort 属已知跑手环境问题；否则按应用侧回归处理。"
+          {
+            echo "## ⚠️ Tauri desktop E2E 失败（非阻断）"
+            echo ""
+            echo "该 job 自 2026-08-21 起 \`continue-on-error: true\`，失败不会挂掉工作流。"
+            echo "本条 Summary 是它唯一的失败出口，请人工判定属于哪一类："
+            echo ""
+            echo "| 日志特征 | 判定 | 处理 |"
+            echo "| --- | --- | --- |"
+            echo "| 出现 \`DevToolsActivePort\` / 会话建不起来 | 已知跑手环境问题（WebView2 151） | 可忽略 |"
+            echo "| 用例内断言失败、超时 | 疑似应用侧回归 | 必须人工确认 |"
+            echo ""
+            echo "恢复条件与四轮诊断证据链见 \`docs/TODO.md\`「Tauri E2E 在 CI 跑手上建会话失败」。"
+          } >> "$GITHUB_STEP_SUMMARY"
