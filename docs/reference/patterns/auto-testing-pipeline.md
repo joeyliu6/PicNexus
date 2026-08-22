@@ -20,8 +20,10 @@
 push 到 main 或开 PR 时自动跑全量测试 + 类型检查。
 
 - **配置文件**：`.github/workflows/ci.yml`
-- **PR / main 必跑**：typecheck、lint、build、unit、coverage（coverage 只在 Ubuntu 跑并上传 `coverage-report`）
-- **手动触发**：`run_visual=true` 跑 visual regression，`run_e2e=true` 跑 mocked Playwright E2E，`run_tauri_e2e=true` 跑 Windows 真实 Tauri 桌面冒烟
+- **PR / main 必跑**：typecheck、lint、build、unit、coverage（coverage 只在 Ubuntu 跑并上传 `coverage-report`）、mocked E2E（chromium）
+- **改到 UI 就跑**：`visual-impact` 的 paths-filter 命中时自动跑 visual job——像素快照 + 跨引擎布局哨兵（`layout-chromium` / `layout-webkit`），失败阻断
+- **非阻断观察中**：`e2e-webkit`（ubuntu，Playwright 的 Linux WebKit 最接近 Tauri 的 WebKitGTK）
+- **手动触发**：`run_visual=true` 强制跑 visual regression，`run_e2e=true` 跑 mocked Playwright E2E，`run_tauri_e2e=true` 跑 Windows 真实 Tauri 桌面冒烟
 
 ### 第三层：Release 门禁
 
@@ -91,8 +93,9 @@ git commit -m "feat: xxx"
 ```bash
 npm run test:run        # 跑一遍所有测试
 npm run test:coverage   # 跑测试 + 生成覆盖率报告（在 coverage/ 目录）
-npm run test:visual     # 跑 Playwright 视觉截图测试
-npm run test:e2e        # 跑 mocked Playwright E2E
+npm run test:visual     # 跑 Playwright 视觉截图 + 跨引擎布局哨兵
+npm run test:visual:webkit  # 只跑 WebKit 布局哨兵（替你看 macOS / Linux 的排版）
+npm run test:e2e        # 跑 mocked Playwright E2E（chromium + webkit）
 npm run test:tauri:e2e  # 跑真实 Tauri 桌面冒烟（需要平台 driver）
 npm test                # 监听模式，改一下文件自动重跑（开发时用）
 ```

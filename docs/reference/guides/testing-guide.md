@@ -98,10 +98,14 @@ vi.mock('@tauri-apps/plugin-sql', () => ({ ... }));
 | `npm run test:unit` | 跑全部 Vitest 测试 |
 | `npm run test:run` | `test:unit` 的别名，PR 模板里使用这个名字 |
 | `npm run test:coverage` | 跑 Vitest 并生成 `coverage/`，受 `vitest.config.ts` 阈值约束 |
-| `npm run test:visual` | 跑 Playwright 视觉截图测试，自动启动 `tests/visual` Vite harness |
-| `npm run test:visual:update` | 更新视觉快照，必须人工确认 diff |
-| `npm run test:e2e` | 跑 mocked Playwright E2E，自动启动 `tests/e2e` Vite harness |
+| `npm run test:visual` | 跑 Playwright 视觉截图 **+ 跨引擎布局哨兵**，自动启动 `tests/visual` Vite harness |
+| `npm run test:visual:update` | 更新视觉快照（只跑 `desktop-*` 两个 project），必须人工确认 diff |
+| `npm run test:visual:webkit` | 只跑 WebKit 布局哨兵，见下面「跨引擎层」 |
+| `npm run test:e2e` | 跑 mocked Playwright E2E（chromium + webkit 两个引擎），自动启动 `tests/e2e` Vite harness |
+| `npm run test:e2e:chromium` / `npm run test:e2e:webkit` | 只跑其中一个引擎 |
 | `npm run test:tauri:e2e` | 跑真实 Tauri 桌面冒烟，会检查 driver、构建 Vite、构建 Tauri debug binary |
+
+首次跑 WebKit 前需要装一次浏览器：`npx playwright install webkit`（约 50MB，独立于系统，不需要装 Safari）。
 
 真实 Tauri E2E 前置依赖：
 
@@ -109,6 +113,77 @@ vi.mock('@tauri-apps/plugin-sql', () => ({ ... }));
 - Windows：安装与 Edge 版本匹配的 `msedgedriver`，或设置 `TAURI_NATIVE_DRIVER`
 - Linux：安装 `WebKitWebDriver` / `webkit2gtk-driver`，无桌面时用 `xvfb`
 - macOS：当前不支持 `tauri-driver` 桌面 WebView，发版前走手动清单
+
+## 跨引擎（WebKit）层
+
+### 它解决什么
+
+Tauri 借用系统 WebView，三个平台不是同一个引擎：
+
+| 平台 | 引擎 |
+|------|------|
+| Windows | WebView2（Chromium） |
+| macOS | WKWebView（WebKit） |
+| Linux | WebKitGTK（WebKit） |
+
+所以 macOS / Linux 上的 UI 问题主要是 **WebKit 与 Chromium 的差异**，而 `test` job 的三平台矩阵只覆盖「编译得过、单测跑得过」，碰不到渲染层。Playwright 自带的 WebKit 构建能在 Windows 上跑，这一层就是拿它在本机提前把这类问题挖出来。
+
+### 为什么不给 WebKit 建像素基准
+
+**这是一个刻意的决定，不要"顺手"补上。**
+
+跨引擎的字体栅格化与抗锯齿差异必然超过 `playwright.config.ts` 里 `maxDiffPixelRatio: 0.01` 的容差，做成门禁只会持续误报直到被关掉；而把阈值放宽到能容忍差异之后，它又抓不到任何真实回归。更根本的是，像素比对回答的是「两张照片一样吗」，我们要问的是「排版会不会塌」。
+
+替代方案是断言**由 CSS 直接决定的绝对不变式**——裁切、溢出、越界、地标尺寸。这些换引擎不会变，所以零基准图、跨引擎稳定。范式来自 `tests/visual/dialog-consistency.visual.spec.ts`：直接量尺寸，不走像素比对。
+
+### 组成
+
+| Project | 引擎 | 收哪些文件 | 作用 |
+|---------|------|-----------|------|
+| `desktop-light` / `desktop-dark` | chromium | `*.visual.spec.ts` | 像素快照，172 张基准 |
+| `layout-chromium` | chromium | `*.probe.spec.ts` | **参照引擎**，保证豁免名单诚实 |
+| `layout-webkit` | webkit | `*.probe.spec.ts` | 目标，近似 WKWebView / WebKitGTK |
+
+project 级 `testMatch` 是**覆盖**语义，所以两类互不干扰，加 project 不会动到任何一张基准图。
+
+`tests/visual/cross-engine/` 下三份：
+
+- `layout-invariants.probe.spec.ts` — 86 个 harness 状态 × 7 条规则（运行时报错 / 外壳填满视口 / 无横滚 / 地标尺寸 / 横向裁切 / 越出视口 / 纵向裁切）
+- `dialog-shell.probe.spec.ts` — 11 个弹窗的外壳规格，只断言引擎无关量（长写 padding、按钮等高同行），常量与 `dialog-consistency` 共用 `tests/visual/dialogSpec.ts`
+- `probe-self-check.probe.spec.ts` — **探针自检**：注入已知塌陷验证能报出来，注入滚动容器 / 省略号 / 图片裁切盒验证不误报。一条从不报警的规则等于没有规则，有人为了消除误报去放宽规则时，这份会先失败
+
+### 哨兵报警了怎么办
+
+先看它在哪个 project 上红：
+
+| 情况 | 判断 |
+|------|------|
+| 只在 `layout-webkit` 红 | **高度可疑是真实的 macOS / Linux 缺陷**。看报告里的 `offenders` 和 `overflowBy` 定位到具体元素，重点查固定 `height` + `overflow:hidden` 的盒子、flex 的 `min-width/min-height: auto` 差异 |
+| 两个 project 都红 | 是既有缺陷或规则本身有问题，与引擎无关 |
+| 确认是引擎行为且 App 不该迎合 | 登记到 `tests/visual/cross-engine/exemptions.ts`，reason 写明差多少 px、为什么视觉上可接受 |
+
+分诊时用只报告不失败的模式，一次拿到全部数据：
+
+```bash
+PROBE_REPORT=1 npx playwright test -c playwright.config.ts --project=layout-chromium
+```
+
+⚠️ 豁免的 reason **不能写「WebKit 上就是这样」**——那正是这套哨兵要抓的东西。
+
+新增 harness 状态时把它加进 `tests/visual/states.ts`（像素快照与哨兵共用这一份），否则会出现「只加了截图、漏了哨兵」。
+
+### 局限：它抓不到什么
+
+不要因为这一层是绿的就认为 macOS 已被覆盖。
+
+- **字体完全不对（最大盲区）**。`src/styles/app.css` 的字体栈在真 macOS 上落到 SF Pro / 苹方，在 Windows 的 Playwright WebKit 上落到微软雅黑。所有由字体度量驱动的差异（换行位置、按钮实际高度、省略号截断点、CJK 与拉丁混排基线）一条都抓不到。这也正是不做像素基准、不做几何量 diff 的原因——那两样在这个盲区下产出的都是假信号。
+- **Playwright WebKit ≠ WKWebView，也 ≠ WebKitGTK**。Playwright 打包的是 WebKit trunk 构建，比任何已发布 Safari 都新。用户如果在老 macOS 上，那是更早的引擎，**Playwright WebKit 支持的特性它可能不支持**。典型例子：`src/` 里多处 `backdrop-filter` 没写 `-webkit-` 前缀，Playwright WebKit 渲染正常，老 mac 上会直接没有毛玻璃效果——这类问题不改变布局，哨兵抓不到，只能靠 code review。
+- **原生控件与窗口层**：titlebar、托盘、原生菜单、macOS 红绿灯按钮，Playwright 里根本没有窗口 chrome。
+- **DPI / 缩放**：哨兵固定 1280×800 @1x，Retina 2x 与 Linux 分数缩放下的 1px 边框消失、圆角走样抓不到。
+- **滚动条占位**：macOS 默认 overlay 滚动条不占宽度，Windows / Linux 传统滚动条占约 15px，本机量不到这个差。
+- **Tauri IPC / 权限 / 文件系统**：E2E 那套全是 `tests/e2e/mocks/*` 的假实现，只验前端时序。
+
+一句话：**它是「结构会不会塌」的哨兵，不是「mac 上长什么样」的替身。**
 
 ## CI 策略
 
@@ -121,17 +196,16 @@ PR / push 到 `main` 当前必跑 `.github/workflows/ci.yml` 的 `test` job：
 - Obsidian 插件：独立 `obsidian-plugin` job 执行依赖安装、`npm run ci:obsidian`，并确认构建后的 `plugins/obsidian/main.js` 已提交。
 - 覆盖率：只在 `ubuntu-latest` 跑 `npm run test:coverage`，并上传 `coverage-report` artifact。
 
-视觉测试当前手动触发：
+视觉测试（含跨引擎布局哨兵）由 `visual-impact` 的 paths-filter 决定是否触发：
 
-- GitHub Actions 运行 `CI` workflow。
-- 勾选 `run_visual=true`。
-- Windows runner 执行 `npm run test:visual`，上传 `playwright-visual-report`。
+- PR 改到 `playwright.config.ts` / `tests/visual/**` / `src/**` 的 UI 相关文件时自动跑；每日 schedule 与 `run_visual=true` 的手动触发也会跑。
+- Windows runner 先 `npx playwright install chromium webkit`，再执行 `npm run test:visual`——4 个 project 一起跑（2 个像素快照 + `layout-chromium` + `layout-webkit`），上传 `playwright-visual-report`。
+- **失败阻断**。布局哨兵断言的是绝对不变式，不存在像素测试那种渐进漂移——要么绿，要么是真差异。
 
-mocked E2E 当前手动触发：
+mocked E2E：
 
-- GitHub Actions 运行 `CI` workflow。
-- 勾选 `run_e2e=true`。
-- Windows runner 执行 `npm run test:e2e`，上传 `playwright-e2e-report`。
+- `e2e` job（ubuntu）跑 `npm run test:e2e:chromium`，上传 `playwright-e2e-report`，**失败阻断**。
+- `e2e-webkit` job（ubuntu）跑 `npm run test:e2e:webkit`，上传 `playwright-e2e-webkit-report`。跑在 ubuntu 是刻意的：Playwright 的 Linux WebKit 构建离 Tauri 的 WebKitGTK 最近。**刚接入，暂设 `continue-on-error: true` 观察两周**——它跑的是完整应用加异步时序，flake 面比布局哨兵大得多。
 
 真实 Tauri E2E 当前手动触发：
 
@@ -159,10 +233,9 @@ release 当前还会跑：
 - 如果 Windows driver 环境可用，打 tag 前手动触发 `run_tauri_e2e=true`，或本地运行 `npm run test:tauri:e2e` 做真实桌面冒烟。
 - tag 后的 `Release` workflow 会再次跑 mocked web smoke 和 Windows 真实 Tauri E2E，但 visual 仍保留为发版前手动门禁。
 
-未来稳定后适合进入 PR 必跑：
+未来稳定后适合收紧的：
 
-- `npm run test:e2e`：mocked E2E 已经隔离外网和原生能力，稳定后可以作为 PR 必跑的 smoke job。
-- `npm run test:visual`：截图基线稳定、字体和平台差异收敛后，可以先只在 Windows PR 必跑。
+- `e2e-webkit`：观察两周无 flake 后去掉 `continue-on-error`，与 chromium 那格同级阻断。
 - `npm run test:tauri:e2e`：成本高，更适合 release 或 nightly；除非 driver 环境足够稳定，不建议直接放入每个 PR。
 
 ## 视觉截图更新流程

@@ -181,6 +181,20 @@
 两个文件都已经有单测覆盖（`settingsView.spec.ts` / `backupPasswordDialog.spec.ts`），
 拆分属于纯重构，靠现有单测兜住即可。
 
+### [ ] 上传队列缩略图的内层 wrapper 比裁切盒大 2px，右下各被削 1px
+
+- **来源**：2026-08-22 接入跨引擎布局哨兵时由 `layout-chromium` 报出
+- **优先级**：低——纯细节，肉眼几乎无差别
+- **位置**：`src/components/upload/QueueCard.vue` 的 `.thumbnail-wrapper`（40px、border-box、
+  含 1px 边框 → 内容区 38px），里面 `ThumbnailImage.vue` 自己的 `.thumbnail-wrapper`
+  算出 40px
+
+被削掉的是内层 wrapper 的边框像素，图片本身走 `object-fit: cover` 本来就是裁切的，
+所以看不出来。**Chromium 与 WebKit 表现一致，不是引擎差异**。
+
+已登记到 `tests/visual/cross-engine/exemptions.ts` 让哨兵放行（`upload` / `thumbnail-wrapper`
+的 x、y 两条）。修的时候把那两条豁免一起删掉，哨兵会替你确认修好了。
+
 ### [ ] 类型检查盲区：`scripts/`、`tests/` 仍不在任何 tsconfig 覆盖内
 
 - **来源**：2026-08-22 优化 tsconfig 时补的 `tsconfig.node.json`（`typecheck` 第二段）
@@ -205,6 +219,31 @@
 ---
 
 ## 已知取舍
+
+### 不给 WebKit 建像素基准图
+
+- **状态**：故意如此，**不打算改**——看到这条之前请不要"顺手 `--update-snapshots` 补上"
+- **位置**：`playwright.config.ts` 的 `layout-chromium` / `layout-webkit` 两个 project，
+  它们只收 `*.probe.spec.ts`，永远不产生任何 PNG
+
+**为什么看着像缺陷**：既然已经把 WebKit 引擎接进来了，最直觉的做法就是让它也拍一套截图，
+和 Chromium 那 172 张一样做像素比对。跑一次 `test:visual:update` 就能生成，看起来白捡覆盖率。
+
+**为什么不做**：两条硬理由。
+
+1. **必然误报**。跨引擎的字体栅格化与抗锯齿差异必然超过 `maxDiffPixelRatio: 0.01`；
+   而把阈值放宽到能容忍差异（实测要 0.1+）之后，它就再也抓不到任何真实回归了——
+   两头都不成立。这种门禁的结局只有一个：被关掉。
+2. **问错了问题**。像素比对回答的是「两张照片一样吗」，我们要问的是「排版会不会塌」。
+   而且本机 Playwright WebKit 用的是微软雅黑，真 macOS 用苹方 / SF Pro，
+   字体压根不同——比出来的差异有一半是假信号。
+
+**替代方案**：`tests/visual/cross-engine/` 断言由 CSS 直接决定的绝对不变式（裁切 / 溢出 /
+越界 / 地标尺寸），换引擎不会变，零基准图。范式来自 `dialog-consistency.visual.spec.ts`。
+`probe-self-check.probe.spec.ts` 用注入的已知塌陷证明这套规则真有牙齿。
+
+**重新考虑的触发条件**：拿到能跑 macOS runner 的 CI 额度，且愿意为 mac 单独维护一套基准。
+届时也应该在 macOS 上生成、只与 macOS 自身的历史比对，而不是跨引擎比。
 
 ### 第三方图床 multipart 里的 `image/*` 不改
 
