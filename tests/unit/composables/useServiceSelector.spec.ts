@@ -38,7 +38,7 @@ vi.mock('@/composables/useToast', () => ({
   }),
 }));
 
-import { useServiceSelector } from '@/composables/useServiceSelector';
+import { useServiceSelector, resetServiceSelectorState } from '@/composables/useServiceSelector';
 import { DEFAULT_CONFIG, type UserConfig } from '@/config/types';
 
 function cloneDefault(): UserConfig {
@@ -269,5 +269,49 @@ describe('useServiceSelector - 跨窗口配置同步', () => {
 
     expect(storeMock.readFreshConfig).toHaveBeenCalled();
     expect(api.selectedServices.value).toEqual(['jd', 'qiyu']);
+  });
+});
+
+// config-updated 是全量广播：主题、压缩等任何字段的保存都会触发。本模块只消费
+// 少数字段，消费切片未变时应跳过全量重算（docs/TODO.md「广播过频」的消费方短路）。
+describe('useServiceSelector - 配置切片未变化时短路', () => {
+  beforeEach(() => {
+    storeMock.configGet.mockReset();
+    storeMock.readFreshConfig.mockReset();
+    resetServiceSelectorState();
+  });
+
+  it('切片内容相同的第二次加载被跳过，不重算按钮状态', async () => {
+    storeMock.readFreshConfig.mockResolvedValue(cloneDefault());
+
+    const api = useServiceSelector();
+    await api.loadServiceButtonStates();
+    expect(api.serviceConfigStatus.value.weibo).toBe(false);
+
+    // 人为翻转一个状态位当探针：若第二次加载真的重算了，会把它写回 false。
+    // 传入的是内容相同的新对象——证明比较的是内容而非引用。
+    api.serviceConfigStatus.value.weibo = true;
+    storeMock.readFreshConfig.mockResolvedValue(cloneDefault());
+    await api.loadServiceButtonStates();
+
+    expect(api.serviceConfigStatus.value.weibo).toBe(true);
+  });
+
+  it('消费切片变化时仍然重算', async () => {
+    storeMock.readFreshConfig.mockResolvedValue(cloneDefault());
+    const api = useServiceSelector();
+    await api.loadServiceButtonStates();
+
+    // 同一个探针位；这次切片真的变了（r2 配置齐全），重算必须发生
+    api.serviceConfigStatus.value.weibo = true;
+    const changed = cloneDefault();
+    changed.services.r2 = {
+      accountId: 'a', accessKeyId: 'b', secretAccessKey: 'c', bucketName: 'd', publicDomain: 'https://cdn.example.com',
+    } as any;
+    storeMock.readFreshConfig.mockResolvedValue(changed);
+    await api.loadServiceButtonStates();
+
+    expect(api.serviceConfigStatus.value.weibo).toBe(false);
+    expect(api.serviceConfigStatus.value.r2).toBe(true);
   });
 });

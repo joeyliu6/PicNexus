@@ -55,7 +55,24 @@ const serviceConfigStatus = ref<Record<string, boolean>>({
 });
 const activePrefix = ref<string | null>(null);
 
+// 上一次应用过的配置切片签名。config-updated 是全量广播（主题、压缩等任何字段的
+// 保存都会触发），但本模块只消费其中几个字段——切片没变就跳过重算，
+// 与 useGlobalShortcut 的「配置未变化，跳过重新注册」同一个思路。
+let lastAppliedConfigSignature: string | null = null;
+
 // ==================== 内部辅助函数 ====================
+
+/** 提取 loadServiceButtonStates 实际消费的配置切片，序列化成可比较的签名 */
+function computeConfigSignature(config: UserConfig): string {
+  return JSON.stringify({
+    availableServices: config.availableServices,
+    enabledServices: config.enabledServices,
+    services: config.services,
+    custom_s3_profiles: config.custom_s3_profiles,
+    webdav_profiles: config.webdav_profiles,
+    linkPrefixConfig: config.linkPrefixConfig,
+  });
+}
 
 /**
  * 返回当前选中前缀的模板字符串（供下游 applyPrefixTemplate 使用）
@@ -180,6 +197,14 @@ export function useServiceSelector(): UseServiceSelectorReturn {
       // 否则「从托盘点勾选，主界面纹丝不动」。
       const config = await readFreshConfig() || DEFAULT_CONFIG;
 
+      // 短路判据放在读盘之后：跨窗口场景必须先拿到最新配置才能知道「有没有变」。
+      // 省下的是后面的全量重算与派生保存，不是这次读盘。
+      const signature = computeConfigSignature(config);
+      if (signature === lastAppliedConfigSignature) {
+        log.info('配置未变化，跳过服务按钮状态刷新');
+        return;
+      }
+
       availableServices.value = config.availableServices || DEFAULT_CONFIG.availableServices || [];
 
       const savedEnabledServices = config.enabledServices || DEFAULT_CONFIG.enabledServices;
@@ -214,6 +239,9 @@ export function useServiceSelector(): UseServiceSelectorReturn {
       }
 
       activePrefix.value = getActivePrefixFromConfig(config);
+
+      // 全部应用成功才落签名；中途抛错走 catch，签名保持旧值，下次事件仍会重算
+      lastAppliedConfigSignature = signature;
 
       log.info('已加载状态:', selectedServices.value, '(可用:', availableServices.value, ')');
     } catch (error) {
@@ -284,6 +312,7 @@ export function useServiceSelector(): UseServiceSelectorReturn {
 export function resetServiceSelectorState(): void {
   selectedServices.value = [];
   availableServices.value = [];
+  lastAppliedConfigSignature = null;
   serviceConfigStatus.value = {
     weibo: false,
     r2: false,
