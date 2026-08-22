@@ -29,6 +29,8 @@
     "test:visual:update": "playwright test -c playwright.config.ts --project=desktop-light --project=desktop-dark --update-snapshots=all",
     "test:visual:webkit": "playwright test -c playwright.config.ts --project=layout-webkit",
     "test:e2e": "playwright test -c playwright.e2e.config.ts",
+    "test:e2e:chromium": "playwright test -c playwright.e2e.config.ts --project=chromium",
+    "test:e2e:webkit": "playwright test -c playwright.e2e.config.ts --project=webkit",
     "test:tauri:e2e": "node scripts/check-tauri-e2e-prereqs.cjs && wdio run wdio.tauri.e2e.conf.cjs",
     "lint": "node scripts/check-logging-guards.mjs && node scripts/check-cross-language-constants.mjs && node scripts/check-invoke-args.mjs && node scripts/check-e2e-mock-parity.mjs && node scripts/check-todo-hygiene.mjs && node scripts/check-css-deep.mjs && node scripts/check-theme-token-copies.mjs && eslint . && stylelint \"src/**/*.{css,vue}\"",
     "lint:fix": "eslint . --fix && stylelint \"src/**/*.{css,vue}\" --fix",

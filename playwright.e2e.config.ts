@@ -17,6 +17,13 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     viewport: { width: 1280, height: 800 },
   },
+  // 两个引擎跑同一套冒烟：Windows 的 WebView2 是 Chromium，
+  // macOS 的 WKWebView 与 Linux 的 WebKitGTK 都是 WebKit。
+  // 这里没有任何截图断言，所以加引擎不产生基准图，纯赚覆盖。
+  projects: [
+    { name: 'chromium', use: { browserName: 'chromium' } },
+    { name: 'webkit', use: { browserName: 'webkit' } },
+  ],
   webServer: {
     command: 'npx vite --config tests/e2e/vite.config.ts --host 127.0.0.1 --port 1422',
     url: e2eBaseUrl,
