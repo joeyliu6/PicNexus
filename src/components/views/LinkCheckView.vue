@@ -90,15 +90,20 @@ async function handleRecheckSingle(
 }
 
 async function deleteRowsByTargets(rows: LinkCheckRow[]): Promise<boolean> {
-  const ok = await bulkDeleteHistoryResults(
+  const report = await bulkDeleteHistoryResults(
     rows.map((r) => ({ historyId: r.historyId, serviceId: r.serviceId })),
   );
-  if (ok) {
-    setFadingOutRows(rows, true);
+  if (!report) return false;
+
+  // 只移除已处理完毕的行（真删除 + 目标本就不存在）；失败的记录保留供重试（toast 已提示）
+  const resolved = new Set(report.resolvedHistoryIds);
+  const removedRows = rows.filter((r) => resolved.has(r.historyId));
+  if (removedRows.length > 0) {
+    setFadingOutRows(removedRows, true);
     await new Promise((resolve) => setTimeout(resolve, 380));
-    removeRowsByKeys(rows);
+    removeRowsByKeys(removedRows);
   }
-  return ok;
+  return report.failedHistoryIds.length === 0;
 }
 
 async function handleDeleteRow(row: LinkCheckRow): Promise<void> {

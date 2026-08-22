@@ -328,12 +328,9 @@ describe('createResultOps - deleteHistoryResult 剥离与降级', () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
-  // ⚠️ 跨文件谓词分歧（已登记，待另立条目修）：
-  // 这里 useHistoryResultOps.ts:56 要求 `status === 'success' && r.result?.url`，
-  // 所以「success 但没有 url」的镜像不算接班人 → 整条删库；
-  // 而 HistoryDatabase.ts:354 的 removeMirror 只看 `status === 'success'`，
-  // 同样的数据会判定「还剩一条可用镜像」而保留记录。两把尺子不一致。
-  // 本用例只固化 composable 侧的现状，不代表这是正确行为。
+  // 「可用镜像」口径已统一为 isUsableMirror（success 且有 url，见 src/utils/historyResults.ts）：
+  // 「success 但没有 url」的镜像不算接班人 → 整条删库。
+  // HistoryDatabase.removeMirror 的保留判断自 2026-08-22 起用同一把尺子。
   it('treats a successful mirror without a URL as unusable and deletes the record', async () => {
     getByIdMock.mockResolvedValue(createHistoryItem({
       id: 'hist-no-url',
@@ -511,7 +508,11 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
       { historyId: 'hist-multi', serviceId: 'qiyu' },
     ]);
 
-    expect(result).toBe(true);
+    expect(result).toEqual({
+      removedCount: 2,
+      resolvedHistoryIds: ['hist-multi'],
+      failedHistoryIds: [],
+    });
     expect(getByIdMock).toHaveBeenCalledTimes(1);
     expect(updateMock).toHaveBeenCalledTimes(1);
 
@@ -547,12 +548,21 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
       { historyId: 'hist-multi', serviceId: 'qiyu' },
     ]);
 
-    expect(result).toBe(true);
+    // 查不到的记录不算失败也不计入生效条数（可能已被其他窗口删掉），
+    // 但行已无对应数据，进 resolvedHistoryIds 让视图把陈旧行一并移除
+    // （数组按"整条删除 → 部分剥离 → 陈旧目标"拼接，不是选中顺序）
+    expect(result).toEqual({
+      removedCount: 1,
+      resolvedHistoryIds: ['hist-multi', 'missing'],
+      failedHistoryIds: [],
+    });
     expect(updateMock).toHaveBeenCalledTimes(1);
     expect(updateMock).toHaveBeenCalledWith('hist-multi', expect.any(Object));
   });
 
-  it('skips a record whose services all fail to match', async () => {
+  // 选中的 serviceId 已不在记录上（比如别的窗口先剥掉了）：不写库、不计数、
+  // 静默处理，但记录进 resolvedHistoryIds 让视图移除这条陈旧行
+  it('resolves a record whose services all fail to match without writing anything', async () => {
     getByIdMock.mockResolvedValue(makeMultiServiceItem());
     const { ctx } = makeCtx();
     const { bulkDeleteHistoryResults } = createResultOps(ctx);
@@ -561,9 +571,14 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
       { historyId: 'hist-multi', serviceId: 'not-there' },
     ]);
 
-    expect(result).toBe(false);
+    expect(result).toEqual({
+      removedCount: 0,
+      resolvedHistoryIds: ['hist-multi'],
+      failedHistoryIds: [],
+    });
     expect(updateMock).not.toHaveBeenCalled();
     expect(deleteMock).not.toHaveBeenCalled();
+    expect(toastShowConfigMock).not.toHaveBeenCalled();
   });
 
   // 剥到 results 归零后 current 变 null，内层循环 break，剩下的 serviceId 不再处理
@@ -585,7 +600,12 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
       { historyId: 'hist-two', serviceId: 'weibo' },
     ]);
 
-    expect(result).toBe(true);
+    // weibo 不存在于该记录上，不计入生效条数；jd/qiyu 随整条删除一起消失，计 2
+    expect(result).toEqual({
+      removedCount: 2,
+      resolvedHistoryIds: ['hist-two'],
+      failedHistoryIds: [],
+    });
     expect(deleteMock).toHaveBeenCalledWith('hist-two');
     expect(updateMock).not.toHaveBeenCalled();
   });
@@ -604,7 +624,11 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
       { historyId: 'hist-multi', serviceId: 'jd' },
     ]);
 
-    expect(result).toBe(true);
+    expect(result).toEqual({
+      removedCount: 2,
+      resolvedHistoryIds: ['hist-single', 'hist-multi'],
+      failedHistoryIds: [],
+    });
     expect(deleteMock).toHaveBeenCalledWith('hist-single');
     expect(updateMock).toHaveBeenCalledWith('hist-multi', expect.any(Object));
     expect(emitHistoryDeletedMock).toHaveBeenCalledWith(['hist-single']);
@@ -616,20 +640,30 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
     expect(detailCache.removeDetail).toHaveBeenCalledWith('hist-multi');
   });
 
-  it('returns false without a toast when nothing ended up being touched', async () => {
+  // 目标记录全都已不存在：没有真删任何东西所以不弹 toast（行消失本身就是反馈），
+  // 但报告里标记为已处理，视图据此移除陈旧行——旧实现返回 false 会让这些行永远删不掉
+  it('stays silent but resolves the rows when every target record is already gone', async () => {
     getByIdMock.mockResolvedValue(null);
-    const { ctx } = makeCtx();
+    const { ctx, refreshServiceCounts } = makeCtx();
     const { bulkDeleteHistoryResults } = createResultOps(ctx);
 
     const result = await bulkDeleteHistoryResults([{ historyId: 'missing', serviceId: 'jd' }]);
 
-    expect(result).toBe(false);
+    expect(result).toEqual({
+      removedCount: 0,
+      resolvedHistoryIds: ['missing'],
+      failedHistoryIds: [],
+    });
     expect(toastShowConfigMock).not.toHaveBeenCalled();
+    // 没有写库就不动内存态、不广播事件
+    expect(ctx.totalCount.value).toBe(5);
+    expect(refreshServiceCounts).not.toHaveBeenCalled();
+    expect(emitHistoryDeletedMock).not.toHaveBeenCalled();
   });
 
-  // 成功 toast 报的是入参 targets 的原始条数，不是实际生效条数。
-  // 已知会虚报，本次只固化不修（登记在 optimization-plan-2026-08-12.md）。
-  it('reports the raw target count in the success toast even when some targets did nothing', async () => {
+  // 成功 toast 报实际生效条数：查不到的记录、未匹配的 serviceId 都不计入，
+  // 不再按入参 targets.length 虚报（2026-08-22 修复）。
+  it('reports the actually removed count in the success toast, not the raw target count', async () => {
     getByIdMock.mockImplementation(async (id: string) => (
       id === 'hist-multi' ? makeMultiServiceItem() : null
     ));
@@ -644,13 +678,14 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
 
     expect(toastShowConfigMock).toHaveBeenCalledWith(
       'success',
-      TOAST_MESSAGES.common.deleteSuccess(3),
+      TOAST_MESSAGES.common.deleteSuccess(1),
     );
   });
 
-  // 批量删除不是原子操作：循环中途抛错时，前面已提交的写库不会回滚，
-  // 而 applyChanges 在循环之后才执行，所以内存态（totalCount / dataVersion）完全没跟上。
-  it('leaves in-memory state stale when the loop throws midway', async () => {
+  // 部分失败契约（2026-08-22 修复，取代旧的「中途抛错→内存态全不跟进」现状）：
+  // 底层逐条写库、无法回滚，所以按记录隔离失败——一条抛错不拖累其余记录，
+  // applyChanges 只对真落库的部分生效，内存态与 DB 实际状态保持一致。
+  it('isolates per-record failures and applies changes for what actually landed', async () => {
     getByIdMock.mockImplementation(async (id: string) => (
       id === 'hist-single' ? makeSingleServiceItem() : makeMultiServiceItem()
     ));
@@ -663,13 +698,49 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
       { historyId: 'hist-multi', serviceId: 'jd' },
     ]);
 
-    expect(result).toBe(false);
-    // 第一条已经落库删除了，但内存计数没减、事件也没广播
+    // hist-single 整条删除成功；hist-multi 的 update 抛错被隔离
+    expect(result).toEqual({
+      removedCount: 1,
+      resolvedHistoryIds: ['hist-single'],
+      failedHistoryIds: ['hist-multi'],
+    });
     expect(deleteMock).toHaveBeenCalledWith('hist-single');
+    // 内存态跟上已落库的删除：计数减一、版本号推进、事件照常广播
+    expect(ctx.totalCount.value).toBe(4);
+    expect(ctx.dataVersion.value).toBe(2);
+    expect(refreshServiceCounts).toHaveBeenCalledTimes(1);
+    expect(emitHistoryDeletedMock).toHaveBeenCalledWith(['hist-single']);
+    expect(emitHistoryUpdatedMock).not.toHaveBeenCalled();
+    // 部分失败用 warn 报实际战果 + 可重试指引，而不是整体报错
+    expect(toastShowConfigMock).toHaveBeenCalledWith(
+      'warn',
+      TOAST_MESSAGES.common.deletePartial(1, 1),
+    );
+  });
+
+  // 全部记录都失败时没有任何落库，不动内存态，整体报错（口径与单条版一致）；
+  // 错误 detail 取第一条失败的信息，后续失败只计数不覆盖
+  it('reports a plain failure toast when every record fails and applies nothing', async () => {
+    getByIdMock.mockResolvedValue(makeMultiServiceItem());
+    updateMock
+      .mockRejectedValueOnce(new Error('db locked'))
+      .mockRejectedValueOnce(new Error('disk full'));
+    const { ctx, refreshServiceCounts } = makeCtx();
+    const { bulkDeleteHistoryResults } = createResultOps(ctx);
+
+    const result = await bulkDeleteHistoryResults([
+      { historyId: 'hist-a', serviceId: 'qiyu' },
+      { historyId: 'hist-b', serviceId: 'qiyu' },
+    ]);
+
+    expect(result).toEqual({
+      removedCount: 0,
+      resolvedHistoryIds: [],
+      failedHistoryIds: ['hist-a', 'hist-b'],
+    });
     expect(ctx.totalCount.value).toBe(5);
     expect(ctx.dataVersion.value).toBe(1);
     expect(refreshServiceCounts).not.toHaveBeenCalled();
-    expect(emitHistoryDeletedMock).not.toHaveBeenCalled();
     expect(toastShowConfigMock).toHaveBeenCalledWith(
       'error',
       TOAST_MESSAGES.common.deleteFailed('db locked'),
@@ -684,7 +755,12 @@ describe('createResultOps - bulkDeleteHistoryResults', () => {
 
     const result = await bulkDeleteHistoryResults([{ historyId: 'hist-multi', serviceId: 'jd' }]);
 
-    expect(result).toBe(false);
+    // getById 抛错被按记录隔离：该记录进 failedHistoryIds，整体仍返回报告
+    expect(result).toEqual({
+      removedCount: 0,
+      resolvedHistoryIds: [],
+      failedHistoryIds: ['hist-multi'],
+    });
     expect(toastShowConfigMock).toHaveBeenCalledWith(
       'error',
       TOAST_MESSAGES.common.deleteFailed('plain string failure'),

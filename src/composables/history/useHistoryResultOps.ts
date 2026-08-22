@@ -13,6 +13,7 @@ import {
   emitHistoryUpdated,
 } from '../../events/cacheEvents';
 import { createLogger } from '../../utils/logger';
+import { isUsableMirror } from '../../utils/historyResults';
 import { recomputeLinkCheckSummary } from '../../types/linkCheckSummary';
 import type { useImageDetailCache } from '../useImageDetailCache';
 
@@ -32,6 +33,20 @@ export interface ResultDeleteTarget {
 }
 
 export type ResultDeleteOutcome = 'deleted' | 'updated' | false;
+
+/** 批量删除的执行报告：只有走到执行阶段才会返回（未确认/空选/全非法时返回 false） */
+export interface BulkResultDeleteReport {
+  /** 实际从记录中抹除的选中链接条数（含随整条记录一起消失的）；已不存在的目标不计入 */
+  removedCount: number;
+  /**
+   * 选中行已处理完毕的记录 id，视图据此移除对应行。
+   * 包含三类：整条删除、部分剥离，以及"目标本就不存在"（记录已被别处删掉、
+   * 或该 serviceId 已不在记录上）——最后一类没有写库，但行已无对应数据，同样该消失。
+   */
+  resolvedHistoryIds: string[];
+  /** 处理中途抛错的记录 id——DB 未改动，对应行应保留供重试 */
+  failedHistoryIds: string[];
+}
 
 function stripServiceFromItem(
   item: HistoryItem,
@@ -53,13 +68,13 @@ function stripServiceFromItem(
   let nextPrimary = item.primaryService;
   let nextGeneratedLink = item.generatedLink;
   if (item.primaryService === serviceId) {
-    const nextPrimaryResult = nextResults.find((r) => r.status === 'success' && r.result?.url);
-    // 剥完没有任何可用的 success 镜像 → 整条删除，避免留下 generatedLink='' 的孤儿记录
+    const nextPrimaryResult = nextResults.find(isUsableMirror);
+    // 剥完没有任何可用镜像 → 整条删除，避免留下 generatedLink='' 的孤儿记录
     if (!nextPrimaryResult) {
       return { nextItem: null, matched: true };
     }
     nextPrimary = nextPrimaryResult.serviceId;
-    nextGeneratedLink = nextPrimaryResult.result!.url!;
+    nextGeneratedLink = nextPrimaryResult.result.url;
   }
 
   const nextItem: HistoryItem = {
@@ -165,9 +180,19 @@ export function createResultOps(ctx: ResultOpsContext) {
     }
   }
 
+  /**
+   * 批量删除图床链接（按记录隔离失败）
+   *
+   * 底层是逐条写库、无法回滚（tauri-plugin-sql 连接池不保证跨语句事务），
+   * 所以这里不追求原子性，而是把"部分失败"做成明确契约：
+   * - 每条记录独立 try/catch，一条抛错不拖累其余记录；
+   * - applyChanges 只对真落库的部分生效，内存计数/事件与 DB 实际状态一致；
+   * - toast 报实际抹除条数，部分失败时另给可重试提示；
+   * - 返回报告标明哪些记录动了、哪些失败，调用方据此只移除对应的行。
+   */
   async function bulkDeleteHistoryResults(
     targets: ResultDeleteTarget[],
-  ): Promise<boolean> {
+  ): Promise<BulkResultDeleteReport | false> {
     try {
       if (targets.length === 0) {
         toast.showConfig('warn', TOAST_MESSAGES.common.noSelection);
@@ -195,42 +220,82 @@ export function createResultOps(ctx: ResultOpsContext) {
 
       const deletedItemIds: string[] = [];
       const updatedItemIds: string[] = [];
+      const staleHistoryIds: string[] = [];
+      const failedHistoryIds: string[] = [];
+      let removedCount = 0;
+      let failedLinkCount = 0;
+      let firstErrorMsg = '';
 
       for (const [historyId, serviceSet] of grouped) {
-        const existing = await historyDB.getById(historyId);
-        if (!existing) continue;
+        try {
+          const existing = await historyDB.getById(historyId);
+          // 记录已被别处删掉：不算失败也不计数，但行已无对应数据，标记为可移除
+          if (!existing) {
+            staleHistoryIds.push(historyId);
+            continue;
+          }
 
-        let current: HistoryItem | null = existing;
-        let anyMatched = false;
-        for (const serviceId of serviceSet) {
-          if (!current) break;
-          const { nextItem, matched } = stripServiceFromItem(current, serviceId);
-          if (matched) anyMatched = true;
-          current = nextItem;
-        }
-        if (!anyMatched) continue;
+          // 实际生效条数 = 选中且真实存在于该记录上的 serviceId 数。
+          // 整条删除时未逐个剥到的选中链接也随记录一起消失，同样计入。
+          const presentIds = new Set(existing.results.map((r) => r.serviceId));
+          const effectiveCount = [...serviceSet].filter((id) => presentIds.has(id)).length;
+          // 选中的链接都已不在记录上（比如别的窗口先剥掉了）：同上，行可移除
+          if (effectiveCount === 0) {
+            staleHistoryIds.push(historyId);
+            continue;
+          }
 
-        if (current === null) {
-          await historyDB.delete(historyId);
-          deletedItemIds.push(historyId);
-        } else {
-          await historyDB.update(historyId, {
-            results: current.results,
-            linkCheckStatus: current.linkCheckStatus,
-            linkCheckSummary: current.linkCheckSummary,
-            primaryService: current.primaryService,
-            generatedLink: current.generatedLink,
-          });
-          updatedItemIds.push(historyId);
+          let current: HistoryItem | null = existing;
+          for (const serviceId of serviceSet) {
+            if (!current) break;
+            current = stripServiceFromItem(current, serviceId).nextItem;
+          }
+
+          if (current === null) {
+            await historyDB.delete(historyId);
+            deletedItemIds.push(historyId);
+          } else {
+            await historyDB.update(historyId, {
+              results: current.results,
+              linkCheckStatus: current.linkCheckStatus,
+              linkCheckSummary: current.linkCheckSummary,
+              primaryService: current.primaryService,
+              generatedLink: current.generatedLink,
+            });
+            updatedItemIds.push(historyId);
+          }
+          removedCount += effectiveCount;
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          if (!firstErrorMsg) firstErrorMsg = msg;
+          failedHistoryIds.push(historyId);
+          failedLinkCount += serviceSet.size;
+          log.error('[历史记录] 批量删除中单条记录处理失败:', { historyId, error });
         }
       }
 
-      const totalTouched = deletedItemIds.length + updatedItemIds.length;
-      if (totalTouched === 0) return false;
+      // applyChanges 只对真落库的部分生效；「目标本就不存在」的记录没有写库，
+      // 不减计数、不广播（真正删它的那次操作已经广播过了）
+      if (deletedItemIds.length + updatedItemIds.length > 0) {
+        await applyChanges(deletedItemIds, updatedItemIds);
+      }
 
-      await applyChanges(deletedItemIds, updatedItemIds);
-      toast.showConfig('success', TOAST_MESSAGES.common.deleteSuccess(targets.length));
-      return true;
+      if (failedHistoryIds.length === 0) {
+        // 全是陈旧目标时静默：没有真删任何东西，行消失本身就是反馈
+        if (removedCount > 0) {
+          toast.showConfig('success', TOAST_MESSAGES.common.deleteSuccess(removedCount));
+        }
+      } else if (removedCount > 0) {
+        toast.showConfig('warn', TOAST_MESSAGES.common.deletePartial(removedCount, failedLinkCount));
+      } else {
+        toast.showConfig('error', TOAST_MESSAGES.common.deleteFailed(firstErrorMsg));
+      }
+
+      return {
+        removedCount,
+        resolvedHistoryIds: [...deletedItemIds, ...updatedItemIds, ...staleHistoryIds],
+        failedHistoryIds,
+      };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       log.error('[历史记录] 批量删除图床结果失败:', error);

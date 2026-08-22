@@ -160,7 +160,12 @@ beforeEach(() => {
   mockState.recheckSingle.mockResolvedValue(undefined);
   mockState.exportCsv.mockImplementation((rows) => `file,url\n${rows.map((row: any) => `${row.fileName},${row.url}`).join('\n')}`);
   mockState.deleteHistoryResult.mockResolvedValue(true);
-  mockState.bulkDeleteHistoryResults.mockResolvedValue(true);
+  // bulkDeleteHistoryResults 现返回执行报告（BulkResultDeleteReport）而非布尔值
+  mockState.bulkDeleteHistoryResults.mockResolvedValue({
+    removedCount: 0,
+    resolvedHistoryIds: [],
+    failedHistoryIds: [],
+  });
   mockState.bulkRecheck.mockResolvedValue(undefined);
   mockState.bulkCopyUrls.mockResolvedValue(undefined);
   mockState.bulkDelete.mockResolvedValue(undefined);

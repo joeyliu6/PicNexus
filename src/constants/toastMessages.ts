@@ -30,6 +30,10 @@ export const TOAST_MESSAGES = {
       summary: '删除失败',
       detail: error
     }),
+    deletePartial: (removed: number, failed: number): ToastMessageConfig => ({
+      summary: '部分删除失败',
+      detail: `已删除 ${removed} 条，${failed} 条失败\n失败的行已保留在列表中，可重试`
+    }),
     clearSuccess: (target: string): ToastMessageConfig => ({
       summary: '已清空',
       detail: target
