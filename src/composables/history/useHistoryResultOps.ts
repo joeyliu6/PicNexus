@@ -25,6 +25,7 @@ export interface ResultOpsContext {
   detailCache: ReturnType<typeof useImageDetailCache>;
   removeFavoritesFromIds: (ids: string[]) => void;
   refreshServiceCounts: () => Promise<void>;
+  refreshTimePeriodStats: () => Promise<void>;
 }
 
 export interface ResultDeleteTarget {
@@ -107,6 +108,10 @@ export function createResultOps(ctx: ResultOpsContext) {
     if (deletedItemIds.length + updatedItemIds.length > 0) {
       await ctx.refreshServiceCounts();
       ctx.dataVersion.value += 1;
+    }
+    if (deletedItemIds.length > 0) {
+      // 整条记录被删会改变时间轴的月份统计；仅剥离镜像不动 timestamp，无需刷新
+      void ctx.refreshTimePeriodStats();
     }
 
     if (deletedItemIds.length > 0) {

@@ -30,8 +30,9 @@ const {
   historyDBSearchMock: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   historyDBSetFavoriteMock: vi.fn().mockResolvedValue(undefined),
   historyDBBatchSetFavoriteMock: vi.fn().mockResolvedValue(undefined),
-  historyDBDeleteMock: vi.fn().mockResolvedValue(undefined),
-  historyDBDeleteManyMock: vi.fn().mockResolvedValue(undefined),
+  // delete 返回「是否真删掉了行」，deleteMany 返回实际删除的 id 列表（默认回显入参 = 全部存在）
+  historyDBDeleteMock: vi.fn().mockResolvedValue(true),
+  historyDBDeleteManyMock: vi.fn().mockImplementation(async (ids: string[]) => ids),
   historyDBClearMock: vi.fn().mockResolvedValue(undefined),
   historyDBGetCountMock: vi.fn().mockResolvedValue(0),
   historyDBGetServiceCountsMock: vi.fn().mockResolvedValue([]),
@@ -340,6 +341,24 @@ describe('useHistoryManager', () => {
       expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.any(Object));
     });
 
+    it('陈旧目标（DB 已无此行）不计数、不弹 toast、不广播，但返回 true 让视图移除行', async () => {
+      historyDBGetCountMock.mockResolvedValue(2);
+      historyDBGetFavoriteIdListMock.mockResolvedValue([]);
+      historyDBDeleteMock.mockResolvedValueOnce(false);
+      confirmMock.mockResolvedValue(true);
+
+      const { loadStats, deleteHistoryItem, totalCount } = useHistoryManager();
+      await loadStats();
+
+      const result = await deleteHistoryItem('ghost');
+
+      expect(result).toBe(true);
+      expect(totalCount.value).toBe(2);
+      expect(toastShowConfigMock).not.toHaveBeenCalledWith('success', expect.any(Object));
+      expect(emitHistoryDeletedMock).not.toHaveBeenCalled();
+      expect(detailCacheRemoveDetailMock).toHaveBeenCalledWith('ghost');
+    });
+
     it('returns false and preserves local state when the database delete fails', async () => {
       historyDBGetCountMock.mockResolvedValue(1);
       historyDBGetFavoriteIdListMock.mockResolvedValue(['delete-fail']);
@@ -452,6 +471,40 @@ describe('useHistoryManager', () => {
 
       expect(result).toBe(false);
       expect(toastShowConfigMock).toHaveBeenCalledWith('warn', expect.any(Object));
+    });
+
+    it('部分目标陈旧时按实际删除数扣减，只广播真删掉的 id', async () => {
+      historyDBGetCountMock.mockResolvedValue(3);
+      historyDBGetFavoriteIdListMock.mockResolvedValue([]);
+      confirmMock.mockResolvedValue(true);
+      historyDBDeleteManyMock.mockResolvedValueOnce(['1']);
+
+      const { loadStats, bulkDeleteRecords, totalCount } = useHistoryManager();
+      await loadStats();
+
+      const result = await bulkDeleteRecords(['1', 'ghost']);
+
+      expect(result).toBe(true);
+      expect(totalCount.value).toBe(2);
+      expect(emitHistoryDeletedMock).toHaveBeenCalledWith(['1']);
+      expect(toastShowConfigMock).toHaveBeenCalledWith('success', expect.any(Object));
+    });
+
+    it('目标全部陈旧时静默：不扣减、不弹 toast、不广播，返回 true', async () => {
+      historyDBGetCountMock.mockResolvedValue(3);
+      historyDBGetFavoriteIdListMock.mockResolvedValue([]);
+      confirmMock.mockResolvedValue(true);
+      historyDBDeleteManyMock.mockResolvedValueOnce([]);
+
+      const { loadStats, bulkDeleteRecords, totalCount } = useHistoryManager();
+      await loadStats();
+
+      const result = await bulkDeleteRecords(['ghost-1', 'ghost-2']);
+
+      expect(result).toBe(true);
+      expect(totalCount.value).toBe(3);
+      expect(toastShowConfigMock).not.toHaveBeenCalledWith('success', expect.any(Object));
+      expect(emitHistoryDeletedMock).not.toHaveBeenCalled();
     });
   });
 

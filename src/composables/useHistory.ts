@@ -100,6 +100,20 @@ const sharedTimePeriodStats: Ref<TimePeriodStats[]> = shallowRef([]);
 const isTimePeriodStatsLoaded = ref(false);
 
 /**
+ * 删除路径专用：时间段统计只跟随 history-updated 事件刷新，而删除/清空广播的是
+ * history-deleted / history-cleared，不在这里主动重查会让时间轴侧边栏残留已删月份
+ * （幽灵月份可"跳转成功"却落在空处）。未加载过则不查：下次 loadTimePeriodStats 自然拿到新数据。
+ */
+async function refreshTimePeriodStats(): Promise<void> {
+  if (!isTimePeriodStatsLoaded.value) return;
+  try {
+    sharedTimePeriodStats.value = await historyDB.getTimePeriodStats();
+  } catch (e) {
+    log.warn('[历史记录] 刷新时间段统计失败:', e);
+  }
+}
+
+/**
  * 模块级别的数据重新加载函数（用于事件处理）
  *
  * 所有视图已转为服务端分页（表格/收藏）或按天分页（时间轴），模块级只需维护
@@ -154,6 +168,7 @@ function initCrossWindowListener(): void {
           removeFavoritesFromIds(data.ids);
           totalCount.value = Math.max(0, totalCount.value - data.ids.length);
           void refreshServiceCounts();
+          void refreshTimePeriodStats();
           dataVersion.value++;
         }
         break;
@@ -166,6 +181,7 @@ function initCrossWindowListener(): void {
         totalCount.value = 0;
         favoriteCount.value = 0;
         sharedServiceCounts.value = [];
+        sharedTimePeriodStats.value = [];
         dataVersion.value++;
         break;
 
@@ -264,7 +280,18 @@ export function useHistoryManager() {
         return false;
       }
 
-      await historyDB.delete(itemId);
+      const deleted = await historyDB.delete(itemId);
+
+      // 清除详情缓存：无论真删还是陈旧目标，这条记录都已不在库里
+      detailCache.removeDetail(itemId);
+
+      // 目标本就不存在（已被别处删除）：不计数、不弹 toast、不广播——
+      // 真正删它的那次操作已经做过这些，重播会让其他窗口重复扣减
+      // （与 bulkDeleteHistoryResults 的陈旧目标口径一致）
+      if (!deleted) {
+        log.warn('[历史记录] 删除目标已不存在，仅移除视图行:', itemId);
+        return true;
+      }
 
       toast.showConfig('success', TOAST_MESSAGES.common.deleteSuccess(1));
 
@@ -272,10 +299,8 @@ export function useHistoryManager() {
 
       removeFavoritesFromIds([itemId]);
       await refreshServiceCounts();
+      void refreshTimePeriodStats();
       dataVersion.value++;
-
-      // 清除详情缓存
-      detailCache.removeDetail(itemId);
 
       emitHistoryDeleted([itemId]).catch(e => {
         log.warn('[历史记录] 跨窗口通知失败:', e);
@@ -317,6 +342,7 @@ export function useHistoryManager() {
       favoriteCount.value = 0;
       sharedFavoriteSet.value = new Set();
       sharedServiceCounts.value = [];
+      sharedTimePeriodStats.value = [];
       dataVersion.value++;
 
       // 清除详情缓存
@@ -339,6 +365,7 @@ export function useHistoryManager() {
     detailCache,
     removeFavoritesFromIds,
     refreshServiceCounts,
+    refreshTimePeriodStats,
   });
 
   // 按图床结果粒度删除（链接检测专用）
@@ -348,6 +375,7 @@ export function useHistoryManager() {
     detailCache,
     removeFavoritesFromIds,
     refreshServiceCounts,
+    refreshTimePeriodStats,
   });
 
   /**

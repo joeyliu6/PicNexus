@@ -101,6 +101,13 @@ class MockDatabase {
         .map(row => ({ id: row.id })) as unknown as T;
     }
 
+    // deleteMany 的存在性预查：SELECT id FROM history_items WHERE id IN (...)
+    if (statement.startsWith('SELECT ID FROM HISTORY_ITEMS WHERE ID IN')) {
+      return this.rows
+        .filter((row) => params.includes(row.id))
+        .map((row) => ({ id: row.id })) as unknown as T;
+    }
+
     if (statement.includes('COUNT(*)') && statement.includes('WHERE ID IN')) {
       const result: Row[] = params
         .map((id) => ({
@@ -401,17 +408,33 @@ describe('HistoryDatabase', () => {
     expect(streamed).toEqual(['tie-c', 'tie-b', 'tie-a']);
   });
 
-  it('deleteMany() removes multiple rows', async () => {
+  it('deleteMany() removes multiple rows and returns the deleted ids', async () => {
     const { historyDB } = await import('@/services/HistoryDatabase');
     for (const id of ['d1', 'd2', 'd3']) {
       await historyDB.insert(makeHistoryItem({ id }));
     }
 
-    await historyDB.deleteMany(['d1', 'd2']);
+    const deletedIds = await historyDB.deleteMany(['d1', 'd2']);
 
+    expect([...deletedIds].sort()).toEqual(['d1', 'd2']);
     expect(await historyDB.getById('d1')).toBeNull();
     expect(await historyDB.getById('d2')).toBeNull();
     expect(await historyDB.getById('d3')).not.toBeNull();
+  });
+
+  // 报实际战果契约：入参里不存在的 id（已被别处删除的陈旧目标）不出现在返回值里，
+  // 调用方据此不虚报删除数、不对陈旧目标重复广播
+  it('deleteMany() excludes stale ids from the returned list', async () => {
+    const { historyDB } = await import('@/services/HistoryDatabase');
+    await historyDB.insert(makeHistoryItem({ id: 'real-1' }));
+
+    const deletedIds = await historyDB.deleteMany(['real-1', 'ghost-1', 'ghost-2']);
+
+    expect(deletedIds).toEqual(['real-1']);
+    expect(await historyDB.getById('real-1')).toBeNull();
+
+    const nothing = await historyDB.deleteMany(['ghost-3']);
+    expect(nothing).toEqual([]);
   });
 
   it('clear() removes all history', async () => {

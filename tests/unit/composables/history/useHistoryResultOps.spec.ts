@@ -99,6 +99,7 @@ function makeCtx(initialTotalCount = 5) {
     cacheStats: ref({ size: 0, maxSize: 200, hitCount: 0, missCount: 0, hitRate: 0 }),
   };
   const refreshServiceCounts = vi.fn().mockResolvedValue(undefined);
+  const refreshTimePeriodStats = vi.fn().mockResolvedValue(undefined);
 
   return {
     ctx: {
@@ -109,10 +110,12 @@ function makeCtx(initialTotalCount = 5) {
         removedFavoriteBatches.push(ids);
       },
       refreshServiceCounts,
+      refreshTimePeriodStats,
     } as unknown as Parameters<typeof createResultOps>[0],
     detailCache,
     removedFavoriteBatches,
     refreshServiceCounts,
+    refreshTimePeriodStats,
   };
 }
 

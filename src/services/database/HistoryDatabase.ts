@@ -423,24 +423,53 @@ class HistoryDatabase {
 
   /**
    * 删除一条历史记录
+   *
+   * @returns 是否真的删掉了行。false 表示目标本就不存在（已被别处删除）——
+   * 调用方据此不虚报删除数、不重复广播（报实际战果契约，见
+   * docs/audits/bulk-delete-predicate-fix-2026-08-22.md）
    */
-  async delete(id: string): Promise<void> {
+  async delete(id: string): Promise<boolean> {
     const db = await this.connection.getDb();
-    await db.execute('DELETE FROM history_items WHERE id = $1', [id]);
-    log.debug(`删除记录: ${id}`);
+    const result = await db.execute('DELETE FROM history_items WHERE id = $1', [id]);
+    const deleted = result.rowsAffected > 0;
+    if (deleted) {
+      log.debug(`删除记录: ${id}`);
+    } else {
+      log.warn(`删除目标不存在，跳过: ${id}`);
+    }
+    return deleted;
   }
 
   /**
    * 批量删除历史记录
+   *
+   * 先查实际存在的 id 再删这些 id：调用方需要「真删掉了哪些」来报实际条数，
+   * 且只对真删掉的 id 广播事件——陈旧目标的那次删除早已广播过，重播会让
+   * 其他窗口重复扣减计数。SELECT 与 DELETE 之间理论上有极小并发窗口，
+   * 但删的就是查到的这批 id，报告与实际操作自洽。
+   *
+   * @returns 实际删除的 id 列表（入参中不存在于 DB 的 id 不包含在内）
    */
-  async deleteMany(ids: string[]): Promise<void> {
-    if (ids.length === 0) return;
+  async deleteMany(ids: string[]): Promise<string[]> {
+    if (ids.length === 0) return [];
 
     const db = await this.connection.getDb();
     // 生成 $1, $2, $3... 占位符
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
-    await db.execute(`DELETE FROM history_items WHERE id IN (${placeholders})`, ids);
-    log.info(`批量删除 ${ids.length} 条记录`);
+    const rows = await db.select<{ id: string }[]>(
+      `SELECT id FROM history_items WHERE id IN (${placeholders})`,
+      ids
+    );
+    const existingIds = rows.map((row) => row.id);
+    if (existingIds.length === 0) {
+      log.warn(`批量删除目标全部不存在，跳过: ${ids.length} 条`);
+      return [];
+    }
+
+    const deletePlaceholders = existingIds.map((_, i) => `$${i + 1}`).join(',');
+    await db.execute(`DELETE FROM history_items WHERE id IN (${deletePlaceholders})`, existingIds);
+    log.info(`批量删除 ${existingIds.length} 条记录（入参 ${ids.length} 条）`);
+    return existingIds;
   }
 
   /**
