@@ -194,6 +194,12 @@
 
 ## 已完成
 
+### [x] history 模块扫描三缺陷（删除虚报战果 / timePeriodStats 失真 / 流程图失真）
+
+首次 `/scan-bugs history` 扫出：单条/整行批量删除对齐「报实际战果」契约、删除/清空后重查 timePeriodStats、
+history-flow.md 图 3 对齐实现；两条判据 2026-08-22 经 Tauri E2E（portable 隔离库）自动化验收全过。
+详见 [scan-history-fix-2026-08-22.md](./audits/scan-history-fix-2026-08-22.md)。
+
 ### [x] 历史记录批量删除 / 镜像剥离的三处已确认缺陷
 
 「可用镜像」谓词统一为 `isUsableMirror`（success 且有 url），批量删除改为按记录隔离失败、toast 报实际条数、

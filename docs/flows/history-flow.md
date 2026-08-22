@@ -108,10 +108,10 @@ flowchart TD
     B -- 删除记录 --> E[bulkDeleteRecords]
     E --> E1[确认对话框]
     E1 -- 取消 --> E2[中止]
-    E1 -- 确认 --> E3[逐条 historyDB.delete]
-    E3 --> E4[invalidateCache]
-    E4 --> E5["emit 'history-updated'"]
-    E5 --> E6[其他视图 debounced reload]
+    E1 -- 确认 --> E3["historyDB.deleteMany\n先查实际存在的 id 再删"]
+    E3 --> E4["按实际删除数报 toast / 扣减 totalCount\n陈旧目标不计数、不弹 toast、不广播"]
+    E4 --> E5["emit 'history-deleted'（仅真删掉的 id）"]
+    E5 --> E6["其他窗口按 ids 扣减 stats\n并重查 timePeriodStats"]
 
     %% 样式
     style A fill:#e3f2fd,stroke:#1976d2
@@ -145,7 +145,7 @@ flowchart TD
 
 | 层级 | 策略 | TTL | 失效条件 |
 |------|------|-----|---------|
-| 模块级 stats（useHistory） | totalCount + favoriteSet + timePeriodStats | 5 分钟 | `isStatsCacheValid()` 失败 / `history-updated` 事件 / `invalidateCache()` |
+| 模块级 stats（useHistory） | totalCount + favoriteSet + timePeriodStats | 5 分钟 | `isStatsCacheValid()` 失败 / `history-updated` 事件 / `invalidateCache()`；删除/清空路径不走事件重载，而是就地扣减计数并直接重查/清空 timePeriodStats（`refreshTimePeriodStats`） |
 | 详情缓存（useImageDetailCache） | 按条目 LRU | 无限制 | 收藏切换 / 删除 / 清空 |
 | 缩略图缓存（useThumbCache） | Blob URL | 会话级 | 组件卸载 |
 | 候选列表缓存 · HistoryItem 版（`thumbnailCandidatesCache`） | 按 `item.id` 的 Map，上限 500 | 会话级 | `history-updated/deleted/cleared` 事件 + 前缀/知乎配置 watch（**注册于 `useThumbCache()` 首次调用，目前只有历史表格视图会触发**） |
@@ -161,7 +161,9 @@ flowchart TD
 | 历史记录空白 | 缓存过期但 DB 重连失败 | 图1 节点 E → E1 |
 | 搜索无结果 | 搜索词匹配的是 `local_file_name_lower`，不包含 URL | 图2 节点 I |
 | 翻页后数据不变 | offset 计算错误或 pageSize 不一致 | 图2 节点 H |
-| 删除后列表未更新 | `history-updated` 事件监听未初始化 | 图3 节点 E5 → E6 |
+| 删除后列表未更新 | `history-deleted` 事件监听未初始化 | 图3 节点 E5 → E6 |
+| 删除后 toast 条数与预期不符 | 部分目标是陈旧行（已被别处删除），按实际删除数上报是契约行为 | 图3 节点 E4 |
+| `jumpToMonth` 对某月份的存在性判断与侧边栏不一致 | 侧边栏 periods 来自 `dayStats` 聚合，`jumpToMonth` 校验的是 `sharedTimePeriodStats`——两者失效路径不同；删除/清空路径需触发 `refreshTimePeriodStats` 保持后者与 DB 一致 | 图3 节点 E6 |
 | 时间线视图白屏 | 虚拟滚动的 itemHeight 计算返回 0 | 图1 节点 J |
 | 切换视图后数据丢失 | KeepAlive 缓存失效，触发重新加载但缓存已过期 | 图1 节点 B |
 | 收藏状态不同步 | `favoriteSet` 更新后未触发视图刷新 | 图1 节点 G |
