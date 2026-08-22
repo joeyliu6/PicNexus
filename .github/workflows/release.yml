@@ -28,7 +28,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run web smoke E2E before release
-        run: npm run test:e2e
+        run: npm run test:e2e:chromium
 
       - name: Upload web smoke E2E report
         if: always()

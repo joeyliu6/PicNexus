@@ -200,8 +200,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright browser
-        run: npx playwright install chromium
+      - name: Install Playwright browsers
+        run: npx playwright install chromium webkit
 
       - name: Run visual regression tests
         run: npm run test:visual
@@ -238,13 +238,51 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run E2E smoke tests
-        run: npm run test:e2e
+        run: npm run test:e2e:chromium
 
       - name: Upload E2E report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: playwright-e2e-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  e2e-webkit:
+    name: E2E smoke (WebKit)
+    # macOS 的 WKWebView 与 Linux 的 WebKitGTK 都是 WebKit，本机 Windows 摸不到。
+    # 跑在 ubuntu 是刻意的：Playwright 的 Linux WebKit 构建离 Tauri 的 WebKitGTK 最近。
+    # 刚接入，先非阻断观察两周（跑完整应用 + 异步时序，flake 面比布局哨兵大）。
+    continue-on-error: true
+    if: ${{ github.event_name != 'schedule' && (github.event_name != 'workflow_dispatch' || inputs.run_e2e) }}
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps webkit
+
+      - name: Run E2E smoke tests on WebKit
+        run: npm run test:e2e:webkit
+
+      - name: Upload WebKit E2E report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-e2e-webkit-report
           path: |
             playwright-report/
             test-results/
