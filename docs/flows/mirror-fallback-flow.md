@@ -161,9 +161,9 @@ flowchart TD
     Z -- 是 --> W{"serviceId === 当前 primary?"}
     W -- 是 --> WE["throw 无法删除当前主服务镜像"]
     W -- 否 --> V["newResults = filter out"]
-    V --> U{"newResults 里 status=success 数量 > 0?"}
-    U -- 否 --> UE["throw 至少保留一条成功镜像"]
-    U -- 是 --> T["update(id, { results: newResults,<br/>linkCheckStatus: 剔除该 sid })"]
+    V --> U{"newResults 里可用镜像数 > 0?<br/>（isUsableMirror：success 且有 url）"}
+    U -- 否 --> UE["throw 至少保留一条可用镜像"]
+    U -- 是 --> T["update(id, { results: newResults,<br/>linkCheckStatus: 剔除该 sid,<br/>linkCheckSummary: 重算 })"]
 
     style BE fill:#ffebee,stroke:#c62828
     style DE fill:#ffebee,stroke:#c62828
@@ -176,7 +176,7 @@ flowchart TD
     style T fill:#e8f5e9,stroke:#2e7d32
 ```
 
-### 为什么删除"最后一条成功镜像"抛错而非自动删整条记录？
+### 为什么删除"最后一条可用镜像"抛错而非自动删整条记录？
 
 让用户做显式选择。如果自动连锁删除整条历史记录：
 - 用户本意可能只是想清理某个失效链接
@@ -233,7 +233,7 @@ flowchart TD
 | 切主图床后其他视图图标没刷新 | `emitHistoryUpdated` 事件未被该视图监听 | `src/events/cacheEvents.ts`，检查各视图 `onCacheEventType('history-updated')` 注册 |
 | "主图床已失效"但图片实际能看 | link-check 误判（通常是防盗链 403）。点 chip 重新检测单条，或手动在浏览器验证 | [link-check-flow.md 图 1](./link-check-flow.md#图-1服务感知请求流程) 防盗链分支 |
 | 点"移除"主图床提示"请直接删整条记录" | 唯一剩余链接禁止移除（会丢整个历史）。从底栏垃圾桶删整条即可 | `useMirrorFallback.removeMirror` 主图床分支 |
-| 移除链接后 link-check 总计没变 | `linkCheckSummary` 汇总字段未自动重算 | `removeMirror` 只清理 `linkCheckStatus[sid]` 不动 `linkCheckSummary`，后续全量 link-check 会覆盖 |
+| 移除链接后 link-check 总计没变 | 该记录从未跑过 link-check（无 `previousSummary` 时不凭空造 summary），或改动被回退 | `removeMirror` 会经 `recomputeLinkCheckSummary` 重算总计，口径与 `stripServiceFromItem` 一致（`isUsableMirror`） |
 
 ---
 

@@ -67,23 +67,6 @@
 或上游（actions/runner-images、MicrosoftEdge/EdgeWebDriver、tauri-apps/tauri-driver）
 出修复。恢复时删掉两处 `continue-on-error` 及注释即可。
 
-### [ ] 历史记录批量删除 / 镜像剥离的三处已确认缺陷
-
-- **来源**：2026-08-13 补 `useHistoryResultOps` 单测时固化现状、写明「待另立条目」，
-  但一直没登进本文件，只活在
-  [optimization-plan-2026-08-12.md 执行记录](./audits/optimization-plan-2026-08-12.md)里
-- **优先级**：低——都有单测钉住现状（用例里有行内注释标注），改行为时测试会提醒同步改
-
-| # | 现状 | 位置 |
-|---|------|------|
-| 1 | 「可用镜像」谓词两边不一致：`removeMirror` 用 `status === 'success'`，`stripServiceFromItem` 用 `status === 'success' && r.result?.url`。剥完只剩一条「success 但无 url」的镜像时，DB 侧保留记录、composable 侧整条删库 | `HistoryDatabase.ts:347` vs `useHistoryResultOps.ts:56`（行号 2026-08-22 复核过） |
-| 2 | `bulkDeleteHistoryResults` 成功 toast 报的是入参 `targets.length` 而非实际生效条数，有非法/不存在/未匹配 target 时会虚报 | `useHistoryResultOps.ts:232` |
-| 3 | 批量删除非原子：循环中途抛错时已落库的删除不会回滚，而 `applyChanges` 在循环之后才执行，内存态（`totalCount` / `dataVersion` / 事件广播）完全不跟进 | `useHistoryResultOps.ts:199-231` |
-
-第 1 条另有牵连项：`DataTransformer.deriveResultColumns` 算 `success_count` 时同样只看
-`status === 'success'`，缺 url 时 `success_count` 会与 `linkCheckSummary.totalLinks` 对不上。
-修第 1 条时先定谓词的统一口径，再把三处（DB / composable / DataTransformer）一起对齐。
-
 ### [ ] 类型检查盲区：`scripts/`、`tests/` 仍不在任何 tsconfig 覆盖内
 
 - **来源**：2026-08-22 优化 tsconfig 时补的 `tsconfig.node.json`（`typecheck` 第二段）
@@ -210,6 +193,12 @@
 ---
 
 ## 已完成
+
+### [x] 历史记录批量删除 / 镜像剥离的三处已确认缺陷
+
+「可用镜像」谓词统一为 `isUsableMirror`（success 且有 url），批量删除改为按记录隔离失败、toast 报实际条数、
+视图只移除真处理掉的行；两条真机判据 2026-08-22 全过（判据②经 Tauri E2E 自动化）。
+详见 [bulk-delete-predicate-fix-2026-08-22.md](./audits/bulk-delete-predicate-fix-2026-08-22.md)。
 
 ### [x] `config-updated` 广播的消费方全量重算
 

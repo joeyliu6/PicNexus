@@ -94,8 +94,8 @@ flowchart TD
 |----------|--------|----------|------|
 | `migrateAddFavoriteColumn` | `is_favorited BOOLEAN DEFAULT 0` | 无需回填 | - |
 | `migrateAddFavoriteSyncColumns` | `favorite_updated_at INTEGER DEFAULT 0`、`favorite_updated_by TEXT` | 仅对已收藏旧记录回填 `timestamp` / `legacy`，未收藏旧记录保持无版本 | - |
-| `migrateAddSuccessCountColumn` | `success_count INTEGER DEFAULT 0` | `json_each(results)` 统计成功数 | - |
-| `migrateAddSuccessfulServiceIdsColumn` | `successful_service_ids TEXT` | `json_group_array` 从 results 提取 service_id | - |
+| `migrateAddSuccessCountColumn` | `success_count INTEGER DEFAULT 0` | `json_each(results)` 统计可用镜像数（success 且 `result.url` 非空，与 `isUsableMirror` 同口径） | - |
+| `migrateAddSuccessfulServiceIdsColumn` | `successful_service_ids TEXT` | `json_group_array` 从 results 提取 service_id（同上口径） | - |
 | `migrateAddMigrationSkipColumn` | `migration_skip INTEGER DEFAULT 0` | 无需回填 | - |
 | `migrateAddLinkCheckSkipColumn` | `link_check_skip INTEGER DEFAULT 0` | 无需回填 | - |
 
