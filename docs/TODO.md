@@ -181,6 +181,24 @@
 两个文件都已经有单测覆盖（`settingsView.spec.ts` / `backupPasswordDialog.spec.ts`），
 拆分属于纯重构，靠现有单测兜住即可。
 
+### [ ] 类型检查盲区：`scripts/`、`tests/` 仍不在任何 tsconfig 覆盖内
+
+- **来源**：2026-08-22 优化 tsconfig 时补的 `tsconfig.node.json`（`typecheck` 第二段）
+  只收编了 4 个根配置文件 + `eslint.config.mjs`——这些已零错误纳管
+- **优先级**：低——lint（eslint）仍覆盖这些文件，缺的只是类型层
+
+剩余盲区与试点数据：
+
+1. **`scripts/**/*.mjs`**：试点开 `checkJs` + strict 后报数百条隐式 any（纯 JS 无标注的
+   固有噪音，非真缺陷），全量补 JSDoc 成本失控，故降级移出。纳入前需评估
+   「按脚本逐个补 JSDoc」还是「对 scripts 单独放宽 `noImplicitAny`」。
+2. **`tests/`（269 个 .ts）**：vitest/playwright 运行时才会暴露类型错，存量未评估。
+3. **可选升级 `verbatimModuleSyntax`**：会大面积要求改 type-only import，收益是
+   import 语义完全显式，与 `isolatedModules` 配套；动它前先跑一次看报错量。
+4. **`login-titlebar.html` 主题 class 命名不一致**：内联样式用 `html.light`，
+   项目约定是 `html.light-theme`（`useLoginTheme.ts` / `preload-theme.js` / 本次改的
+   `login-webview.html` 均为后者）。它自成一体能工作，但下个人照约定改会踩空。
+
 ---
 
 ## 已知取舍
