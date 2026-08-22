@@ -6,8 +6,40 @@
   <meta name="referrer" content="no-referrer">
   <title>登录授权 - PicNexus</title>
 
-  <!-- 优雅的加载预览样式 -->
+  <!-- 首屏主题感知：读 URL ?theme= 参数（useConfig.ts 生成 contentUrl 时始终携带），
+       在首次绘制前给 <html> 挂主题 class，避免浅色主题用户先闪一屏深色。
+       class 名与 useLoginTheme.ts 保持一致（dark-theme / light-theme），Vue 挂载后由其接管。 -->
+  <script>
+    (function () {
+      var theme = new URLSearchParams(location.search).get('theme');
+      document.documentElement.classList.add(
+        theme === 'light' ? 'light-theme' : 'dark-theme'
+      );
+    })();
+  </script>
+
+  <!-- 加载骨架屏样式（Vue 挂载后骨架 DOM 被整体替换） -->
   <style>
+    /* 本文件独立于 Vue 入口，app.css 未加载，无法引用真实 token，
+       故在此定义同名局部变量。值必须与 src/theme/dark-theme.css / light-theme.css 保持一致。 */
+    :root {
+      --bg-app: #131316;
+      --bg-card: #1a1a1e;
+      --border-subtle: #27272a;
+      --text-main: #f4f4f5;
+      --state-info-bg: rgba(96, 165, 250, 0.15);
+      --primary-border: rgba(96, 165, 250, 0.4);
+    }
+
+    :root.light-theme {
+      --bg-app: #f1f5f9;
+      --bg-card: #ffffff;
+      --border-subtle: #cbd5e1;
+      --text-main: #0f172a;
+      --state-info-bg: rgba(59, 130, 246, 0.1);
+      --primary-border: rgba(59, 130, 246, 0.3);
+    }
+
     /* 立即设置背景色，避免白色闪烁 */
     html, body {
       margin: 0;
@@ -15,8 +47,8 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background-color: #0f172a; /* Slate 900 - 深色主题默认 */
-      color: #f8fafc;
+      background-color: var(--bg-app);
+      color: var(--text-main);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Microsoft YaHei", sans-serif;
     }
 
@@ -33,15 +65,7 @@
       height: 100%;
       display: flex;
       flex-direction: column;
-      opacity: 1;
-      transition: opacity 0.3s ease;
     }
-
-    .loading-skeleton.loaded {
-      opacity: 0;
-      pointer-events: none;
-    }
-
 
     .skeleton-content {
       flex: 1;
@@ -54,9 +78,9 @@
     .skeleton-card {
       width: 100%;
       max-width: 380px;
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px; /* ≈ --radius-lg */
       padding: 32px 24px;
       display: flex;
       flex-direction: column;
@@ -67,45 +91,44 @@
     .skeleton-circle {
       width: 80px;
       height: 80px;
-      background: #0f172a;
-      border: 2px solid #334155;
+      background: var(--bg-app);
+      border: 2px solid var(--border-subtle);
       border-radius: 50%;
-      animation: skeleton-pulse 1.5s ease-in-out infinite;
+      animation: skeleton-pulse 1.5s ease-in-out infinite; /* 1.5s ≈ --duration-shimmer */
     }
 
     .skeleton-title {
       width: 200px;
       height: 20px;
-      background: #334155;
-      border-radius: 4px;
+      background: var(--border-subtle);
+      border-radius: 4px; /* ≈ --radius-sm */
       animation: skeleton-pulse 1.5s ease-in-out 0.1s infinite;
     }
 
     .skeleton-desc {
       width: 280px;
       height: 14px;
-      background: #334155;
-      border-radius: 3px;
+      background: var(--border-subtle);
+      border-radius: 3px; /* ≈ --radius-xs-sm */
       animation: skeleton-pulse 1.5s ease-in-out 0.2s infinite;
     }
 
     .skeleton-message {
       width: 100%;
       height: 40px;
-      background: rgba(96, 165, 250, 0.08);
-      border: 1px solid rgba(96, 165, 250, 0.2);
-      border-radius: 8px;
+      background: var(--state-info-bg);
+      border: 1px solid var(--primary-border);
+      border-radius: 8px; /* ≈ --radius-md */
       animation: skeleton-pulse 1.5s ease-in-out 0.3s infinite;
     }
 
     .skeleton-button {
       width: 100%;
       height: 40px;
-      background: #334155;
-      border-radius: 8px;
+      background: var(--border-subtle);
+      border-radius: 8px; /* ≈ --radius-md */
       animation: skeleton-pulse 1.5s ease-in-out 0.4s infinite;
     }
-
 
     @keyframes skeleton-pulse {
       0%, 100% {
@@ -119,7 +142,7 @@
 </head>
 <body>
   <div id="app">
-    <!-- 加载骨架屏，Vue 挂载后自动消失 -->
+    <!-- 加载骨架屏，Vue 挂载时随 #app 内容整体替换 -->
     <div class="loading-skeleton">
       <div class="skeleton-content">
         <div class="skeleton-card">
@@ -137,4 +160,3 @@
   <script type="module" src="/src/login-webview.ts"></script>
 </body>
 </html>
-
