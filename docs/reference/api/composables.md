@@ -16,6 +16,7 @@
 | useTheme | 主题切换 | `src/composables/useTheme.ts` |
 | useSettingsForm | 设置页表单读写、保存防抖、恢复默认设置 | `src/composables/settings/useSettingsForm.ts` |
 | useSettingsReset | 设置页恢复默认设置编排 | `src/composables/settings/useSettingsReset.ts` |
+| useSettingsActions | 设置页副作用动作（主题/自启动/托盘/统计开关、清缓存、备份 WebDAV 测试），含失败回滚与提示 | `src/composables/settings/useSettingsActions.ts` |
 | useBackupSync | 备份与同步入口（本地/云端 × 配置/历史四条路径的编排） | `src/composables/backup-sync/useBackupSync.ts` |
 | createConfigSyncOps | 配置同步实现；上传前强制 `isPasswordMode` 门禁 + 整份加密 | `src/composables/backup-sync/ConfigSync.ts` |
 | createHistorySyncOps | 历史记录同步实现（增量 + 合并去重） | `src/composables/backup-sync/HistorySync.ts` |
