@@ -198,6 +198,9 @@
 4. **`login-titlebar.html` 主题 class 命名不一致**：内联样式用 `html.light`，
    项目约定是 `html.light-theme`（`useLoginTheme.ts` / `preload-theme.js` / 本次改的
    `login-webview.html` 均为后者）。它自成一体能工作，但下个人照约定改会踩空。
+   配色也另起一套（`#111827` / `#f8fafc`），不是主题令牌的副本，所以 2026-08-22 新增的
+   `scripts/check-theme-token-copies.mjs` 刻意没收编它——要收编得先把整套色值对到令牌上，
+   那是一次独立的视觉改动，需要真机看过标题栏与下方 WebView 的接缝再定。
 
 ---
 

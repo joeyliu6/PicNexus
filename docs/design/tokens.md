@@ -58,6 +58,23 @@
 | 尺寸、间距 | `styles/app.css` 的 `:root` | 不随主题变化的布局值 |
 | 动效变量 | `styles/motion.css` | duration、easing、transform 预设 |
 
+### 首屏副本（唯一允许抄写色值的地方）
+
+有两个文件跑在 Vue 挂载之前——`login-webview.html` 的 `<style>` 和 `public/preload.css`。
+那一刻 `src/theme/*.css` 还没加载，`var(--bg-app)` 解析不出来，只能把色值**手抄一份**写死。
+这是「禁止硬编码」的唯一例外：不抄的话用户会先看到一屏白（或一屏深色）再跳色。
+
+抄写必须满足两条：
+
+1. **同名**：局部变量沿用真实令牌名（`--bg-app` 而不是 `--login-bg`），一眼能对上真相源。
+2. **登记**：把副本写进 [`scripts/check-theme-token-copies.mjs`](../../scripts/check-theme-token-copies.mjs)
+   的 `COPIES`，由 `npm run lint` 逐条比对。只在注释里写「必须与 xxx 保持一致」拦不住任何东西——
+   改了主题色不会红、测试不会挂、CI 不会拦，用户也不会报障，他只会觉得这软件有点糙。
+
+> `login-titlebar.html` 不在其中：它自成一套配色（`#111827` 等），不是主题令牌的副本，
+> 硬塞进门禁只会逼出一堆假映射。它的遗留问题（含 `html.light` 类名不合 `light-theme` 约定）
+> 记在 `docs/TODO.md`。
+
 ---
 
 ## 动效变量体系
