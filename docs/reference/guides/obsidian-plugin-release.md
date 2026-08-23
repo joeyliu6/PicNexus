@@ -38,6 +38,8 @@ npm run ci:obsidian
 
 CI 会拒绝同一版本下发生变化的 `main.js`、`manifest.json` 或 `styles.css`。
 
+设置项必须写在 `PicNexusSettingTab.definitions()` 这一份定义里，由 `getSettingDefinitions()`（Obsidian 1.13+，同时供设置搜索建索引）和 `display()`（1.4.0–1.12 回退适配器）共用，不要绕过它单独 `new Setting(...)`。`obsidianmd/settings-tab/prefer-setting-definitions` 规则不得关闭——它曾被置为 `'off'`，导致本地 lint 全绿而问题只在社区插件扫描器暴露，详见 [obsidian-declarative-settings-2026-08-23.md](../../audits/obsidian-declarative-settings-2026-08-23.md)。
+
 ## 自动发布
 
 推送桌面端 `vX.Y.Z` 标签后：
