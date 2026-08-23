@@ -437,28 +437,17 @@ jobs:
               : Buffer.from(response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data);
             const manifest = JSON.parse(raw.toString('utf8'));
 
-            const platforms = manifest.platforms;
-            if (!platforms || typeof platforms !== 'object') {
-              throw new Error(`${manifestName} has no platforms object`);
-            }
+            // 改写逻辑住在 scripts/rewrite-updater-manifest.mjs，与
+            // scripts/test/updater-manifest-rewrite.test.mjs 共用同一份实现——
+            // 内联在这里的话，测试测的就是另一份拷贝，两者会悄悄漂移。
+            // 校验不过会抛错：静默降级比报错更糟，真跌回 MSI 时没人会发现，
+            // 只会再收到一次"更新好慢"的反馈。
+            const { pathToFileURL } = require('node:url');
+            const { join } = require('node:path');
+            const rewriteModulePath = join(process.env.GITHUB_WORKSPACE, 'scripts', 'rewrite-updater-manifest.mjs');
+            const { rewriteUpdaterManifest } = await import(pathToFileURL(rewriteModulePath).href);
 
-            // 静默降级比报错更糟：真跌回 MSI 时没人会发现，只会再收到一次"更新好慢"的反馈。
-            const nsis = platforms['windows-x86_64-nsis'];
-            if (!nsis) {
-              throw new Error('windows-x86_64-nsis missing — NSIS updater artifact was not produced');
-            }
-            if (typeof nsis.url !== 'string' || !nsis.url.endsWith('-setup.exe')) {
-              throw new Error(`windows-x86_64-nsis.url is not an NSIS installer: ${nsis.url}`);
-            }
-            if (typeof nsis.signature !== 'string' || nsis.signature.length === 0) {
-              throw new Error('windows-x86_64-nsis.signature is empty');
-            }
-
-            const previous = platforms['windows-x86_64'];
-            platforms['windows-x86_64'] = { ...nsis };
-            // 一并删掉 msi 键：将来 bundler 把打包戳修好后，MSI 安装的用户会先查
-            // windows-x86_64-msi；留着它等于给自己埋一颗"又跌回 MSI"的雷。
-            delete platforms['windows-x86_64-msi'];
+            const { manifest: rewritten, previousUrl, nextUrl } = rewriteUpdaterManifest(manifest);
 
             await github.rest.repos.deleteReleaseAsset({
               owner,
@@ -466,7 +455,8 @@ jobs:
               asset_id: manifestAsset.id,
             });
 
-            const data = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+            // rewriteUpdaterManifest 不修改入参，这里必须上传 rewritten 而不是 manifest
+            const data = Buffer.from(`${JSON.stringify(rewritten, null, 2)}\n`, 'utf8');
             await github.rest.repos.uploadReleaseAsset({
               owner,
               repo,
@@ -479,7 +469,7 @@ jobs:
               },
             });
 
-            console.log(`windows-x86_64: ${previous?.url ?? '(none)'} -> ${nsis.url}`);
+            console.log(`windows-x86_64: ${previousUrl ?? '(none)'} -> ${nextUrl}`);
 
       - name: Generate SHA256SUMS for draft release
         uses: actions/github-script@v7
