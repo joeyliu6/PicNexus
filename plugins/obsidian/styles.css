@@ -10,3 +10,8 @@
 .picnexus-disconnected {
   color: var(--text-muted);
 }
+
+.picnexus-setting-error {
+  color: var(--text-error);
+  font-size: var(--font-ui-smaller);
+}

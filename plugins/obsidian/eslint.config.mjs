@@ -17,7 +17,6 @@ export default defineConfig([
     rules: {
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-unsafe-assignment': 'error',
-      'obsidianmd/settings-tab/prefer-setting-definitions': 'off',
       'obsidianmd/ui/sentence-case': [
         'warn',
         {

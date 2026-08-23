@@ -129,6 +129,26 @@ test('keeps batch placeholders isolated while upload results arrive', () => {
   );
 });
 
+// 端口判据现在是设置面板 validate 回调与 normalizeSettings 的共用真相源。
+// 设置面板本身 import 了 obsidian、无法在这里打包，所以判据必须留在 types.ts 才测得到。
+test('validatePort accepts the allowed range and rejects everything else', () => {
+  assert.equal(settings.PORT_MIN, 1024);
+  assert.equal(settings.PORT_MAX, 65535);
+
+  for (const valid of [settings.PORT_MIN, settings.PORT_MAX, settings.DEFAULT_SETTINGS.port]) {
+    assert.equal(settings.validatePort(valid), undefined, `${valid} 应判为合法`);
+  }
+
+  for (const invalid of [1023, 65536, 0, -1, 36799.5, NaN, Infinity, -Infinity]) {
+    const message = settings.validatePort(invalid);
+    assert.equal(typeof message, 'string', `${invalid} 应被拒绝`);
+    assert.ok(message.length > 0, `${invalid} 应给出非空错误文案`);
+  }
+
+  // 非整数与越界要给出不同提示，用户才知道该怎么改
+  assert.notEqual(settings.validatePort(36799.5), settings.validatePort(80));
+});
+
 test('uses defaults when persisted plugin settings are missing or invalid', () => {
   assert.deepEqual(settings.normalizeSettings(null), settings.DEFAULT_SETTINGS);
   assert.deepEqual(settings.normalizeSettings([]), settings.DEFAULT_SETTINGS);
