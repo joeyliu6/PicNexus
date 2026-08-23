@@ -15,7 +15,9 @@ export type UpdateStatus =
   | 'available'
   | 'up-to-date'
   | 'downloading'
-  | 'ready'
+  // 下载完成、安装器已拉起。Windows 会停在这个状态直到进程被 exit(0) 杀掉；
+  // macOS / Linux 会继续走到 install-pending。见 downloadAndInstall 的注释。
+  | 'installing'
   | 'install-pending'
   | 'error';
 
@@ -100,7 +102,7 @@ async function checkForUpdate(): Promise<void> {
 
 async function downloadAndInstall(): Promise<void> {
   // Why: 收紧守卫——只允许从 available 进入。原守卫只挡 'downloading'，
-  // 漏过 'ready' / 'install-pending'，relaunch 失败后用户重复点击会触发同一 Update 的二次 downloadAndInstall。
+  // 漏过 'installing' / 'install-pending'，relaunch 失败后用户重复点击会触发同一 Update 的二次 downloadAndInstall。
   if (!pendingUpdate || status.value !== 'available') return;
 
   status.value = 'downloading';
@@ -121,10 +123,18 @@ async function downloadAndInstall(): Promise<void> {
         }
       } else if (event.event === 'Finished') {
         downloadProgress.value = 100;
+        // Why: Finished 触发于「下载完成、install() 尚未开始」之间
+        // （updater.rs download_and_install：download(...).await? 之后才 install()）。
+        // Windows 上 install() 末尾是 std::process::exit(0)，进程当场消失，下面那行
+        // install-pending 走不到——所以「正在安装」的提示必须在这里就立起来，
+        // 否则用户会对着一片空白干等安装器跑完（实测 MSI 79s）。
+        status.value = 'installing';
       }
     });
 
     // Why: 下载安装完成后不自动重启。让用户看到明确的完成态，再主动点击重启，避免应用突然退出。
+    // ⚠️ 仅 macOS / Linux 可达：Windows 的 install() 以 exit(0) 收尾，await 永远不会返回，
+    // UI 停在上面的 'installing'（这是预期行为，不是 bug）。
     status.value = 'install-pending';
   } catch (e) {
     // Why: 下载失败保留 pendingUpdate 供 retryDownload() 直接重试，避免强制走完整 check。

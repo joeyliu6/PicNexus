@@ -146,6 +146,17 @@ describe('UpdateCard', () => {
     expect(wrapper.emitted('save')).toHaveLength(1);
   });
 
+  it('explains the imminent shutdown while installing, with no actionable button', () => {
+    mocks.autoUpdate = makeAutoUpdate({ status: ref('installing') });
+
+    const wrapper = mountCard();
+    expect(wrapper.text()).toContain('正在安装更新');
+    // 这是 Windows 用户在进程被 exit(0) 杀掉前看到的最后一句话，两件事都得讲到
+    expect(wrapper.text()).toContain('应用会自动关闭，安装完成后自行重启');
+    // 进程即将退出，此时给按钮只会诱导无效点击
+    expect(wrapper.findAll('.button-stub')).toHaveLength(0);
+  });
+
   it('shows restart action when update is installed and waiting for relaunch', async () => {
     const retryRelaunch = vi.fn();
     mocks.autoUpdate = makeAutoUpdate({

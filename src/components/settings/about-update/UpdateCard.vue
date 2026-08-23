@@ -214,6 +214,19 @@ async function openManualDownload() {
       <span class="download-progress-percent" aria-live="polite">{{ downloadPercentText }}</span>
     </div>
 
+    <!-- installing: 安装器已拉起。Windows 上应用马上会被 exit(0) 杀掉，这段文案是用户在
+         窗口消失前看到的最后一句话，必须把"会自动关闭 + 会自己回来"两件事都讲明白。
+         此处刻意不放按钮：进程即将退出，点什么都没意义。 -->
+    <div v-else-if="status === 'installing'" class="update-status">
+      <div class="update-status-text">
+        <span class="download-spinner-ring" aria-hidden="true"></span>
+        <div class="update-status-info">
+          <span>正在安装更新</span>
+          <span class="last-check">应用会自动关闭，安装完成后自行重启</span>
+        </div>
+      </div>
+    </div>
+
     <!-- install-pending: 更新已安装，等待用户重启 -->
     <div v-else-if="status === 'install-pending'" class="update-status">
       <div class="update-status-text">

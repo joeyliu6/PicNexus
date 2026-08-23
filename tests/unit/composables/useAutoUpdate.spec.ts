@@ -152,6 +152,39 @@ describe('useAutoUpdate - downloadAndInstall', () => {
     expect(mockRelaunch).not.toHaveBeenCalled();
   });
 
+  it('Finished 事件当场进入 installing（Windows 上进程随后被 exit(0) 杀掉，停在这一态）', async () => {
+    const update = makeUpdate();
+    const api = useAutoUpdate();
+    // Why 快照而不是在回调里 expect：downloadAndInstall 的 await 包在 try/catch 里，
+    // 回调内断言失败会被当成下载异常吞掉，测试转而以 status='error' 的形式误报。
+    let statusAtFinished: string | undefined;
+    update.downloadAndInstall = vi.fn(async (cb: any) => {
+      cb({ event: 'Started', data: { contentLength: 100 } });
+      cb({ event: 'Finished' });
+      statusAtFinished = api.status.value;
+    });
+    mockCheck.mockResolvedValue(update);
+    await api.checkForUpdate();
+    await api.downloadAndInstall();
+
+    // Windows 走不到 await 之后，UI 就停在 installing —— 这是用户在窗口消失前看到的最后一态
+    expect(statusAtFinished).toBe('installing');
+    // macOS / Linux 的 install() 会正常返回，继续升级为 install-pending
+    expect(api.status.value).toBe('install-pending');
+  });
+
+  it('installing 时再次点下载按钮不会触发二次 downloadAndInstall', async () => {
+    const update = makeUpdate();
+    update.downloadAndInstall = vi.fn(async () => {});
+    mockCheck.mockResolvedValue(update);
+    const api = useAutoUpdate();
+    await api.checkForUpdate();
+
+    api.status.value = 'installing';
+    await api.downloadAndInstall();
+    expect(update.downloadAndInstall).not.toHaveBeenCalled();
+  });
+
   it('下载过程中按 contentLength 计算中途进度', async () => {
     const update = makeUpdate();
     const api = useAutoUpdate();
