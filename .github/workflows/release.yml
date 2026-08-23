@@ -375,6 +375,112 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ⚠️ 必须跑在 SHA256SUMS 之前：这一步会改写 latest.json，之后才能算出正确的校验和。
+      #
+      # 为什么需要它：tauri-action 把通用键 windows-x86_64 填成了 MSI（65.7MB，走 Windows
+      # Installer 事务，实测安装 79s），而 NSIS setup.exe 只有 42.7MB 且是自解压。客户端本该
+      # 先查 windows-x86_64-{installer}，但那依赖二进制里的 __TAURI_BUNDLE_TYPE 打包戳——实测
+      # 产物里它仍是未替换的 __TAURI_BUNDLE_TYPE_VAR_UNK，bundle_type() 返回 None，于是所有
+      # Windows 用户都落到通用键上拿 MSI。MSI 继续作为手动下载资产保留，只是不再参与自动更新。
+      - name: Point Windows updater at the NSIS installer
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = context.ref.replace('refs/tags/', '');
+            const manifestName = 'latest.json';
+
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner,
+              repo,
+              per_page: 100,
+            });
+
+            let release = releases.find(r => r.tag_name === tag);
+            if (!release) {
+              release = releases.find(r => r.draft && r.tag_name.startsWith('untagged-'));
+              if (release) {
+                await github.rest.repos.updateRelease({
+                  owner,
+                  repo,
+                  release_id: release.id,
+                  tag_name: tag,
+                });
+              }
+            }
+
+            if (!release) {
+              throw new Error(`No draft release found for tag ${tag}`);
+            }
+
+            const assets = await github.paginate(github.rest.repos.listReleaseAssets, {
+              owner,
+              repo,
+              release_id: release.id,
+              per_page: 100,
+            });
+            const manifestAsset = assets.find(asset => asset.name === manifestName);
+            if (!manifestAsset) {
+              throw new Error(`${manifestName} not found in release ${release.tag_name}`);
+            }
+
+            const response = await github.request('GET /repos/{owner}/{repo}/releases/assets/{asset_id}', {
+              owner,
+              repo,
+              asset_id: manifestAsset.id,
+              headers: { accept: 'application/octet-stream' },
+            });
+            const raw = Buffer.isBuffer(response.data)
+              ? response.data
+              : Buffer.from(response.data instanceof ArrayBuffer ? new Uint8Array(response.data) : response.data);
+            const manifest = JSON.parse(raw.toString('utf8'));
+
+            const platforms = manifest.platforms;
+            if (!platforms || typeof platforms !== 'object') {
+              throw new Error(`${manifestName} has no platforms object`);
+            }
+
+            // 静默降级比报错更糟：真跌回 MSI 时没人会发现，只会再收到一次"更新好慢"的反馈。
+            const nsis = platforms['windows-x86_64-nsis'];
+            if (!nsis) {
+              throw new Error('windows-x86_64-nsis missing — NSIS updater artifact was not produced');
+            }
+            if (typeof nsis.url !== 'string' || !nsis.url.endsWith('-setup.exe')) {
+              throw new Error(`windows-x86_64-nsis.url is not an NSIS installer: ${nsis.url}`);
+            }
+            if (typeof nsis.signature !== 'string' || nsis.signature.length === 0) {
+              throw new Error('windows-x86_64-nsis.signature is empty');
+            }
+
+            const previous = platforms['windows-x86_64'];
+            platforms['windows-x86_64'] = { ...nsis };
+            // 一并删掉 msi 键：将来 bundler 把打包戳修好后，MSI 安装的用户会先查
+            // windows-x86_64-msi；留着它等于给自己埋一颗"又跌回 MSI"的雷。
+            delete platforms['windows-x86_64-msi'];
+
+            await github.rest.repos.deleteReleaseAsset({
+              owner,
+              repo,
+              asset_id: manifestAsset.id,
+            });
+
+            const data = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+            await github.rest.repos.uploadReleaseAsset({
+              owner,
+              repo,
+              release_id: release.id,
+              name: manifestName,
+              data,
+              headers: {
+                'content-type': 'application/json',
+                'content-length': data.length,
+              },
+            });
+
+            console.log(`windows-x86_64: ${previous?.url ?? '(none)'} -> ${nsis.url}`);
+
       - name: Generate SHA256SUMS for draft release
         uses: actions/github-script@v7
         with:
