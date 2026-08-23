@@ -24,6 +24,11 @@ const IMAGE_CONTENT_TYPES: Record<string, string> = {
 
 const IMAGE_EXTS = Object.keys(IMAGE_CONTENT_TYPES);
 
+/** 状态栏兜底轮询间隔：应对 PicNexus 在后台崩掉或重启。 */
+const STATUS_POLL_INTERVAL_MS = 30_000;
+/** 窗口焦点刷新的最小间隔，避免频繁切窗口时狂发请求。 */
+const STATUS_REFRESH_THROTTLE_MS = 2_000;
+
 function getImageContentType(fileName: string): string {
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
   return IMAGE_CONTENT_TYPES[ext] || 'application/octet-stream';
@@ -33,6 +38,7 @@ export default class PicNexusPlugin extends Plugin {
   settings: PicNexusSettings = { ...DEFAULT_SETTINGS };
   uploader: PicNexusUploader = new PicNexusUploader(DEFAULT_SETTINGS.port);
   private statusBarEl: HTMLElement | null = null;
+  private lastStatusCheckAt = 0;
   private uploadPlaceholderCounter = 0;
   /**
    * 每次加载插件随机生成的短标签，拼进占位符 ID
@@ -54,10 +60,21 @@ export default class PicNexusPlugin extends Plugin {
     this.statusBarEl = this.addStatusBarItem();
     this.statusBarEl.setText('PicNexus: ...');
     this.statusBarEl.addClass('picnexus-status');
-    void this.checkConnection();
-    this.registerInterval(window.setInterval(() => {
+    // 样式里本来就写了 cursor: pointer，之前却没有任何点击处理，是个假的可点击提示。
+    // aria-label 而非 setTooltip()：后者标了 @since 1.4.4，而 minAppVersion 是 1.4.0。
+    this.statusBarEl.setAttribute('aria-label', '点击刷新 PicNexus 状态');
+    this.registerDomEvent(this.statusBarEl, 'click', () => {
+      void this.checkConnection(true);
+    });
+    // 在 PicNexus 里切换图床后必然要切回 Obsidian，focus 正是想看到新图床名的那一刻。
+    // 只靠轮询的话最坏要等满一整轮（30 秒）才更新。
+    this.registerDomEvent(window, 'focus', () => {
       void this.checkConnection();
-    }, 30_000));
+    });
+    void this.checkConnection(true);
+    this.registerInterval(window.setInterval(() => {
+      void this.checkConnection(true);
+    }, STATUS_POLL_INTERVAL_MS));
 
     // 粘贴事件
     this.registerEvent(
@@ -128,8 +145,12 @@ export default class PicNexusPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
-  private async checkConnection(): Promise<void> {
+  /** force=true 跳过节流：启动、点击刷新和兜底轮询都要必到。 */
+  private async checkConnection(force = false): Promise<void> {
     if (!this.statusBarEl) return;
+    const now = Date.now();
+    if (!force && now - this.lastStatusCheckAt < STATUS_REFRESH_THROTTLE_MS) return;
+    this.lastStatusCheckAt = now;
     try {
       const status = await this.uploader.checkStatus();
       this.statusBarEl.setText(status.ready
