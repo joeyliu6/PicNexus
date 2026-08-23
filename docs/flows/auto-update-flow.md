@@ -228,13 +228,51 @@ flowchart TD
 
 ---
 
+## 失败文案对照表
+
+`plugin-updater` 抛的是英文技术原文（如 `error sending request for url (https://...)`），**界面不直接渲染它**。
+`src/utils/updateFailureMessage.ts` 的 `formatUpdateFailure(phase, raw)` 把它翻成中文标题 + 可执行建议，
+英文原文移进副行的 tooltip（悬停可见），日志侧由 `log.error` 原样保留。
+
+> 规则来自 `tauri-plugin-updater-2.10.0/src/error.rs` 的 `#[error(...)]` 清单；
+> 透传变体（`Reqwest` / `Minisign` / `Io`）按底层库 Display 匹配。**改规则前先对一遍源码，别凭印象加正则。**
+
+用户报障时用这张表反查原始错误：
+
+| 用户看到的标题 | 对应的原始错误 | 真实含义 |
+|---------------|---------------|---------|
+| 连不上更新服务器 | `error sending request`（reqwest 透传）/ 超时 | DNS、TCP、TLS 层没通，国内访问 github.com 最常见 |
+| 更新包下载中断 | 同上，但发生在下载阶段 | 已找到新版本，下载中途断了 |
+| 暂时读不到更新信息 | `Could not fetch a valid release JSON from the remote`、JSON 解析失败 | **latest.json 返回 404 也走这里**——插件不把非 2xx 当错误，只 log 后落到 `ReleaseNotFound` |
+| 更新包校验未通过 | `The signature verification failed` 等 minisign 错误 | 签名不匹配，通常是 CI 换了私钥没同步 `pubkey`。**文案刻意不劝重试** |
+| 当前系统暂无更新包 | `the platform ... was not found in the response platforms object` | latest.json 里没有当前平台的条目 |
+| 更新包下载失败 | `Download request failed with status: {code}` | 服务器答了但不是文件，状态码会拼进提示 |
+| 没有权限完成更新安装 | `os error 5` / `拒绝访问` / `Authentication failed or was cancelled` | Windows 权限不足或用户取消提权 |
+| 更新安装失败 | `Failed to install package`、解压/临时目录类错误 | 包下来了装不进去 |
+| 更新功能未正确配置 | `Updater does not have any endpoints set.` 等 | 应用自身配置问题，**提示明说重试无效** |
+| 检查更新失败 / 下载更新失败 | 未命中任何规则 | 兜底文案 |
+
+**两个容易踩的坑**：
+
+- 规则**按声明顺序匹配，顺序即优先级**。权限必须排在安装前（`os error 5` 本身是 Io 错误），
+  HTTP 状态码必须排在网络前（`Error::Network` 是插件自己拼的串，不是连接失败）。
+- 签名规则**刻意不匹配裸 `signature`**：latest.json 少字段时 serde 报 `missing field \`signature\``，
+  那是发布配置漏了，不是包被篡改，必须落到"读不到更新信息"。
+
+错误卡片**不弹 toast**：卡片自己已渲染原因和「重试 / 手动下载」按钮，再弹同文案 toast 属于双重反馈，
+见 [notification-patterns.md](../design/notification-patterns.md) 通用原则 1 与 3。
+
+---
+
 ## 排查指南
 
 | 现象 | 可能原因 | 对照图表位置 |
 |------|---------|-------------|
 | 启动时完全不检查更新 | `config.autoUpdateEnabled = false` | 图1 B |
 | `checking` 卡住不动 | 网络无法访问 github.com / endpoints 失效 | 图1 F |
-| "检查更新"返回 `error` 无详情 | 签名验证失败(公钥不匹配) | 图1 J1 |
+| 用户报"更新包校验未通过" | 签名验证失败(公钥不匹配) | 图1 J1、失败文案对照表 |
+| 用户报"暂时读不到更新信息" | latest.json 404 / 未上传 / Release 仍是 draft | 图4 L3、失败文案对照表 |
+| 想看错误的英文原文 | 界面只显示中文，原文在副行 tooltip 里；日志中由 `log.error` 保留 | `updateFailureMessage.ts` |
 | 下载进度条不动 | Rust 侧事件发送失败或前端 callback 丢失 | 图2 loop |
 | 下载完成后无反应 | `install-pending` 状态未渲染,或 `process:allow-restart` 权限未配置导致点击重启失败 | 图2 PR |
 | 用户反馈"签名无效" | CI 换了私钥但没同步更新 `pubkey` | 图4 CV1 |
