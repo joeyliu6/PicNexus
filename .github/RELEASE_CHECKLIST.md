@@ -43,7 +43,10 @@
 - [ ] Release body 顶部已包含「推荐下载」表，Windows 普通用户指向 `x64-setup.exe`
 - [ ] `.sig` / `latest.json` 已标注为签名校验 / 自动更新文件，避免普通用户误下载
 - [ ] 应用内检查更新失败时，「手动下载」能打开最新 Release 页面
-- [ ] 更新下载完成后停留在「重启完成更新」，不会自动重启应用
+- [ ] Windows：更新下载完成后显示「正在安装更新」，应用自动关闭并在安装完成后自行重启
+      （plugin 拉起安装器后紧接 `exit(0)`，**「重启完成更新」按钮在此平台不会出现**，见 `docs/flows/auto-update-flow.md` 图 2）
+- [ ] macOS / Linux：更新下载完成后停留在「重启完成更新」，不会自动重启应用
+- [ ] Windows 更新实际下载的是 `x64-setup.exe` 而非 `.msi`（发版后可查 `latest.json` 的 `windows-x86_64`）
 - [ ] 如已接入 Windows Authenticode 证书，确认安装包签名与时间戳有效；未接入时在发布说明中接受 SmartScreen 风险
 - [ ] 如启用备用镜像，确认镜像资产、`latest.json` 与 minisign 签名和 GitHub Release 完全一致；未启用时保持 GitHub 官方下载入口
 

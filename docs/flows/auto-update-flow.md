@@ -9,8 +9,9 @@ PicNexus 采用 **Tauri 官方 `tauri-plugin-updater` + GitHub Releases + minisi
 - **更新源**:`https://github.com/joeyliu6/PicNexus/releases/latest/download/latest.json`
 - **签名**:minisign 公钥内嵌在 `tauri.conf.json`,私钥由 CI 的 GitHub Secrets 管理
 - **安装模式**:Windows 使用 `passive`(静默安装,用户可见进度但无需交互)
+- **Windows 更新包**:走 NSIS `x64-setup.exe`,由 CI 改写 `latest.json` 保证(见图 4);MSI 仅作手动下载资产
 - **触发方式**:启动时自动检查(由 `autoUpdateEnabled` 配置开关控制) + 手动点击
-- **状态机**:`idle → checking → (available | up-to-date | error) → downloading → install-pending → 用户点击重启`
+- **状态机**:`idle → checking → (available | up-to-date | error) → downloading → installing → install-pending(仅 macOS/Linux) → 用户点击重启`
 - **发布流程**:`git tag v*` → GitHub Actions `release.yml` → 桌面端签名产物 + Obsidian 插件产物 → 最终 `SHA256SUMS.txt`
 
 ---
@@ -113,21 +114,38 @@ sequenceDiagram
         H->>H: status = 'error'
         H-->>V: 错误提示
     else 签名有效
-        R->>R: 写入临时目录<br/>调用系统安装程序 passive 模式
         R-->>P: Event: Finished
         P->>H: callback Finished event
-        H->>H: status = 'install-pending'<br/>downloadProgress = 100
-        H-->>V: 显示"重启完成更新"
+        H->>H: status = 'installing'<br/>downloadProgress = 100
+        H-->>V: 显示"正在安装更新<br/>应用会自动关闭"
+
+        Note over R: install 开始<br/>Finished 发在它之前,不是之后
+        R->>R: 写入临时目录<br/>拉起 NSIS setup.exe passive 模式
+
+        alt Windows
+            R->>R: std::process::exit 0
+            Note over H,V: 进程当场消失,UI 停在 installing<br/>安装器装完后自行拉起新版<br/>install-pending 分支在此平台不可达
+        else macOS / Linux
+            R-->>P: install 返回
+            P-->>H: resolve
+            H->>H: status = 'install-pending'
+            H-->>V: 显示"重启完成更新"
+            U->>V: 点击"重启完成更新"
+            V->>H: retryRelaunch
+            H->>PR: relaunch
+            PR->>PR: 退出并重新启动进程
+        end
     end
 
     deactivate H
-
-    U->>V: 点击"重启完成更新"
-    V->>H: retryRelaunch
-    H->>PR: relaunch
-    PR->>PR: std::process::exit 0<br/>+ 重新启动进程
-    Note over PR: 用户看到应用重启<br/>新版本加载
 ```
+
+> ⚠️ **Windows 上"重启完成更新"按钮永远不会出现**:`tauri-plugin-updater` 的 `install_inner`
+> 在 `ShellExecuteW` 拉起安装器之后紧跟着 `std::process::exit(0)`,`downloadAndInstall()` 的
+> `await` 永不返回。[useAutoUpdate.ts](../../src/composables/useAutoUpdate.ts) 里 `install-pending`
+> 的赋值、`retryRelaunch()`、UpdateCard 的 `install-pending` 分支都只服务 macOS / Linux。
+> `installing` 态就是为了填补 Windows 这段"应用消失、安装器在跑"的空窗期(实测 NSIS 之前的
+> MSI 方案要 79 秒)。
 
 ---
 
@@ -147,8 +165,11 @@ stateDiagram-v2
     available --> downloading: 用户点下载
     available --> idle: 用户关闭面板<br/>下次再检查
 
-    downloading --> install_pending: 下载+签名验证成功
+    downloading --> installing: 下载完成+签名验证通过<br/>Finished 事件
     downloading --> error: 下载中断/签名失败
+
+    installing --> [*]: Windows:plugin 调 exit 0<br/>进程消失,安装器接管
+    installing --> install_pending: install 返回<br/>仅 macOS / Linux
 
     install_pending --> [*]: 用户点击重启<br/>relaunch 进程退出
 
@@ -166,6 +187,13 @@ stateDiagram-v2
     note right of downloading
       downloadProgress 从 0→100
       实时绑定 UI 进度条
+    end note
+
+    note right of installing
+      Windows 的终点态
+      文案要讲明"会自动关闭
+      + 装完自己回来"
+      此处刻意不放按钮
     end note
 ```
 
@@ -205,10 +233,11 @@ flowchart TD
     OP --> OP1[同步 plugins/obsidian 快照]
     OP1 --> OP2[独立仓库 Release<br/>标签不带 v]
     OP2 --> OP3[桌面端 Release<br/>picnexus-obsidian-*.zip]
-    L1 & L2 & L3 & OP3 --> SUM[生成最终 SHA256SUMS.txt]
+    L1 & L2 & L3 & OP3 --> FIX[改写 latest.json<br/>windows-x86_64 指向 NSIS<br/>删除 windows-x86_64-msi]
+    FIX --> SUM[生成最终 SHA256SUMS.txt]
 
     %% 客户端验证
-    L3 -.读取.-> CV[客户端 check]
+    FIX -.读取.-> CV[客户端 check]
     CV --> CV1[用 tauri.conf.json 的 pubkey<br/>验证 latest.json 中的 signature]
 
     style A fill:#e3f2fd,stroke:#1976d2
@@ -225,6 +254,15 @@ flowchart TD
 - **插件版本独立**:`plugins/obsidian/manifest.json` 决定插件标签；代码未变化时可以复用已有插件 Release
 - **跨仓库凭证**:`OBSIDIAN_PLUGIN_RELEASE_TOKEN` 只授予独立插件仓库 Contents 读写权限；目标仓库可由 `OBSIDIAN_PLUGIN_REPOSITORY` Repository Variable 覆盖
 - **发布顺序**:`release-checklist` 等待 Obsidian 插件 ZIP 上传完成后再生成 `SHA256SUMS.txt`
+- **Windows 更新包必须是 NSIS**:tauri-action 生成的 `latest.json` 会把通用键 `windows-x86_64`
+  填成 MSI(65.7MB,走 Windows Installer 事务,实测安装 79 秒),而 NSIS `x64-setup.exe` 只有
+  42.7MB 且是自解压。客户端本该先查 `windows-x86_64-{installer}`,但那依赖二进制里的
+  `__TAURI_BUNDLE_TYPE` 打包戳——实测产物里它仍是未替换的 `__TAURI_BUNDLE_TYPE_VAR_UNK`,
+  `bundle_type()` 返回 `None`,于是**所有** Windows 用户都落到通用键上拿 MSI。
+  CI 的改写步骤同时删掉 `windows-x86_64-msi`:将来打包戳修好后,MSI 安装的用户会优先查那个键,
+  留着它等于埋一颗"又跌回 MSI"的雷。
+- **改写必须早于校验和**:`Point Windows updater at the NSIS installer` 跑在
+  `Generate SHA256SUMS for draft release` 之前,否则 `SHA256SUMS.txt` 对不上改写后的 `latest.json`
 
 ---
 
@@ -275,6 +313,9 @@ flowchart TD
 | 想看错误的英文原文 | 界面只显示中文，原文在副行 tooltip 里；日志中由 `log.error` 保留 | `updateFailureMessage.ts` |
 | 下载进度条不动 | Rust 侧事件发送失败或前端 callback 丢失 | 图2 loop |
 | 下载完成后无反应 | `install-pending` 状态未渲染,或 `process:allow-restart` 权限未配置导致点击重启失败 | 图2 PR |
+| Windows 更新后没出现"重启完成更新"按钮 | **平台预期行为**,不是 bug:plugin 在拉起安装器后 `exit(0)`,UI 停在 `installing` | 图2 Windows 分支 |
+| Windows 更新下载量异常大 / 安装慢回一分多钟 | `latest.json` 的 `windows-x86_64` 又指回了 MSI——CI 改写步骤失败或被移除 | 图4 FIX |
+| Windows 安装期出现长时间空白无提示 | `installing` 分支未渲染,或 `Finished` 事件没设置该状态 | 图3 installing |
 | 用户反馈"签名无效" | CI 换了私钥但没同步更新 `pubkey` | 图4 CV1 |
 | Windows 上安装需要手动确认 | `installMode` 配成 `basicUi` 而非 `passive` | `tauri.conf.json` |
 | 老版本用户收不到更新 | `latest.json` 未正确上传或 Release 是 draft 状态 | 图4 L3 |
