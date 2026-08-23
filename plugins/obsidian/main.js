@@ -66,60 +66,6 @@ var PicNexusUploader = class {
 
 // src/settings.ts
 var import_obsidian2 = require("obsidian");
-var PicNexusSettingTab = class extends import_obsidian2.PluginSettingTab {
-  plugin;
-  constructor(app, plugin) {
-    super(app, plugin);
-    this.plugin = plugin;
-  }
-  display() {
-    const { containerEl } = this;
-    containerEl.empty();
-    new import_obsidian2.Setting(containerEl).setName("\u7AEF\u53E3").setDesc("PicNexus HTTP \u670D\u52A1\u7684\u76D1\u542C\u7AEF\u53E3\uFF08\u9ED8\u8BA4 36799\uFF09").addText(
-      (text) => text.setPlaceholder("36799").setValue(String(this.plugin.settings.port)).onChange(async (value) => {
-        const port = parseInt(value, 10);
-        if (!isNaN(port) && port >= 1024 && port <= 65535) {
-          this.plugin.settings.port = port;
-          this.plugin.uploader.updatePort(port);
-          await this.plugin.saveSettings();
-        }
-      })
-    );
-    new import_obsidian2.Setting(containerEl).setName("\u6D4B\u8BD5\u8FDE\u63A5").setDesc("\u68C0\u67E5 PicNexus \u670D\u52A1\u662F\u5426\u53EF\u7528").addButton(
-      (button) => button.setButtonText("\u6D4B\u8BD5").setCta().onClick(async () => {
-        try {
-          const status = await this.plugin.uploader.checkStatus();
-          if (status.ready) {
-            new import_obsidian2.Notice(`PicNexus \u5DF2\u8FDE\u63A5 (v${status.version})\uFF0C\u5F53\u524D\u56FE\u5E8A: ${status.serviceName || "\u672A\u914D\u7F6E"}`);
-          } else {
-            new import_obsidian2.Notice("PicNexus \u5DF2\u8FDE\u63A5\uFF0C\u4F46\u672A\u914D\u7F6E\u56FE\u5E8A");
-          }
-        } catch {
-          new import_obsidian2.Notice("\u65E0\u6CD5\u8FDE\u63A5 PicNexus\uFF0C\u8BF7\u786E\u8BA4\u670D\u52A1\u5DF2\u542F\u52A8");
-        }
-      })
-    );
-    new import_obsidian2.Setting(containerEl).setName("\u4E0A\u4F20\u884C\u4E3A").setHeading();
-    new import_obsidian2.Setting(containerEl).setName("\u7C98\u8D34\u65F6\u81EA\u52A8\u4E0A\u4F20").setDesc("\u7C98\u8D34\u56FE\u7247\u65F6\u81EA\u52A8\u4E0A\u4F20\u5230\u56FE\u5E8A").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.autoUploadOnPaste).onChange(async (value) => {
-        this.plugin.settings.autoUploadOnPaste = value;
-        await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian2.Setting(containerEl).setName("\u62D6\u62FD\u65F6\u81EA\u52A8\u4E0A\u4F20").setDesc("\u62D6\u62FD\u56FE\u7247\u5230\u7F16\u8F91\u5668\u65F6\u81EA\u52A8\u4E0A\u4F20").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.autoUploadOnDrop).onChange(async (value) => {
-        this.plugin.settings.autoUploadOnDrop = value;
-        await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian2.Setting(containerEl).setName("\u4E0A\u4F20\u901A\u77E5").setDesc("\u4E0A\u4F20\u6210\u529F\u6216\u5931\u8D25\u65F6\u663E\u793A\u901A\u77E5").addToggle(
-      (toggle) => toggle.setValue(this.plugin.settings.showNotifications).onChange(async (value) => {
-        this.plugin.settings.showNotifications = value;
-        await this.plugin.saveSettings();
-      })
-    );
-  }
-};
 
 // src/types.ts
 var DEFAULT_SETTINGS = {
@@ -128,6 +74,13 @@ var DEFAULT_SETTINGS = {
   autoUploadOnDrop: true,
   showNotifications: true
 };
+var PORT_MIN = 1024;
+var PORT_MAX = 65535;
+function validatePort(value) {
+  if (!Number.isInteger(value)) return "\u7AEF\u53E3\u5FC5\u987B\u662F\u6574\u6570";
+  if (value < PORT_MIN || value > PORT_MAX) return `\u7AEF\u53E3\u9700\u5728 ${PORT_MIN}\u2013${PORT_MAX} \u4E4B\u95F4`;
+  return void 0;
+}
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -137,7 +90,7 @@ function readBoolean(settings, key) {
 }
 function normalizeSettings(value) {
   if (!isRecord(value)) return { ...DEFAULT_SETTINGS };
-  const port = typeof value.port === "number" && Number.isInteger(value.port) && value.port >= 1024 && value.port <= 65535 ? value.port : DEFAULT_SETTINGS.port;
+  const port = typeof value.port === "number" && !validatePort(value.port) ? value.port : DEFAULT_SETTINGS.port;
   return {
     port,
     autoUploadOnPaste: readBoolean(value, "autoUploadOnPaste"),
@@ -145,6 +98,217 @@ function normalizeSettings(value) {
     showNotifications: readBoolean(value, "showNotifications")
   };
 }
+
+// src/settings.ts
+var TOGGLE_KEYS = ["autoUploadOnPaste", "autoUploadOnDrop", "showNotifications"];
+var SETTING_KEYS = ["port", ...TOGGLE_KEYS];
+var PORT_SAVE_DEBOUNCE_MS = 400;
+function isSettingKey(key) {
+  return SETTING_KEYS.includes(key);
+}
+function isToggleKey(key) {
+  return TOGGLE_KEYS.includes(key);
+}
+var PicNexusSettingTab = class extends import_obsidian2.PluginSettingTab {
+  plugin;
+  /** 端口已写入内存、尚未落盘。hide() 据此冲刷。 */
+  portSavePending = false;
+  flushPortSave = (0, import_obsidian2.debounce)(
+    () => {
+      this.portSavePending = false;
+      void this.plugin.saveSettings();
+    },
+    PORT_SAVE_DEBOUNCE_MS,
+    true
+  );
+  constructor(app, plugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+  // ---------------------------------------------------------------------------
+  // 声明式 API（Obsidian 1.13+）：设置项的唯一真相源，同时供设置搜索建立索引
+  // ---------------------------------------------------------------------------
+  getSettingDefinitions() {
+    return this.definitions();
+  }
+  definitions() {
+    return [
+      {
+        name: "\u7AEF\u53E3",
+        desc: `PicNexus HTTP \u670D\u52A1\u7684\u76D1\u542C\u7AEF\u53E3\uFF08\u9ED8\u8BA4 ${DEFAULT_SETTINGS.port}\uFF09`,
+        aliases: ["port", "http"],
+        control: {
+          type: "number",
+          key: "port",
+          defaultValue: DEFAULT_SETTINGS.port,
+          placeholder: String(DEFAULT_SETTINGS.port),
+          min: PORT_MIN,
+          max: PORT_MAX,
+          step: 1,
+          validate: validatePort
+        }
+      },
+      {
+        name: "\u6D4B\u8BD5\u8FDE\u63A5",
+        desc: "\u68C0\u67E5 PicNexus \u670D\u52A1\u662F\u5426\u53EF\u7528",
+        actionLabel: "\u6D4B\u8BD5",
+        action: () => {
+          void this.runConnectionTest();
+        }
+      },
+      {
+        type: "group",
+        heading: "\u4E0A\u4F20\u884C\u4E3A",
+        items: [
+          {
+            name: "\u7C98\u8D34\u65F6\u81EA\u52A8\u4E0A\u4F20",
+            desc: "\u7C98\u8D34\u56FE\u7247\u65F6\u81EA\u52A8\u4E0A\u4F20\u5230\u56FE\u5E8A",
+            control: {
+              type: "toggle",
+              key: "autoUploadOnPaste",
+              defaultValue: DEFAULT_SETTINGS.autoUploadOnPaste
+            }
+          },
+          {
+            name: "\u62D6\u62FD\u65F6\u81EA\u52A8\u4E0A\u4F20",
+            desc: "\u62D6\u62FD\u56FE\u7247\u5230\u7F16\u8F91\u5668\u65F6\u81EA\u52A8\u4E0A\u4F20",
+            control: {
+              type: "toggle",
+              key: "autoUploadOnDrop",
+              defaultValue: DEFAULT_SETTINGS.autoUploadOnDrop
+            }
+          },
+          {
+            // 文案只覆盖成功：失败通知在 main.ts 里无条件弹出，不受本开关约束。
+            name: "\u4E0A\u4F20\u901A\u77E5",
+            desc: "\u4E0A\u4F20\u6210\u529F\u65F6\u663E\u793A\u901A\u77E5",
+            control: {
+              type: "toggle",
+              key: "showNotifications",
+              defaultValue: DEFAULT_SETTINGS.showNotifications
+            }
+          }
+        ]
+      }
+    ];
+  }
+  // ---------------------------------------------------------------------------
+  // 读写：声明式路径与回退适配器共用，保证两条渲染路径的持久化语义完全一致
+  // ---------------------------------------------------------------------------
+  getControlValue(key) {
+    return isSettingKey(key) ? this.plugin.settings[key] : void 0;
+  }
+  setControlValue(key, value) {
+    if (key === "port") {
+      if (typeof value !== "number" || validatePort(value)) return;
+      this.plugin.settings.port = value;
+      this.plugin.uploader.updatePort(value);
+      this.portSavePending = true;
+      this.flushPortSave();
+      return;
+    }
+    if (isToggleKey(key) && typeof value === "boolean") {
+      this.plugin.settings[key] = value;
+      return this.plugin.saveSettings();
+    }
+  }
+  hide() {
+    this.flushPortSave.cancel();
+    if (this.portSavePending) {
+      this.portSavePending = false;
+      void this.plugin.saveSettings();
+    }
+    super.hide();
+  }
+  async runConnectionTest() {
+    try {
+      const status = await this.plugin.uploader.checkStatus();
+      if (status.ready) {
+        new import_obsidian2.Notice(`PicNexus \u5DF2\u8FDE\u63A5 (v${status.version})\uFF0C\u5F53\u524D\u56FE\u5E8A: ${status.serviceName || "\u672A\u914D\u7F6E"}`);
+      } else {
+        new import_obsidian2.Notice("PicNexus \u5DF2\u8FDE\u63A5\uFF0C\u4F46\u672A\u914D\u7F6E\u56FE\u5E8A");
+      }
+    } catch {
+      new import_obsidian2.Notice("\u65E0\u6CD5\u8FDE\u63A5 PicNexus\uFF0C\u8BF7\u786E\u8BA4\u670D\u52A1\u5DF2\u542F\u52A8");
+    }
+  }
+  // ---------------------------------------------------------------------------
+  // 回退渲染（Obsidian 1.4.0–1.12）
+  // 1.13+ 下 getSettingDefinitions() 返回非空数组时本方法不会被调用。
+  // 这里不手写任何设置项，只把上面那份定义翻译成命令式 Setting，避免两处漂移。
+  // ---------------------------------------------------------------------------
+  display() {
+    const { containerEl } = this;
+    containerEl.empty();
+    this.renderItems(containerEl, this.definitions());
+  }
+  renderItems(container, items) {
+    for (const item of items) {
+      if ("type" in item) {
+        new import_obsidian2.Setting(container).setName(item.heading).setHeading();
+        this.renderItems(container, item.items);
+        continue;
+      }
+      this.renderDefinition(container, item);
+    }
+  }
+  renderDefinition(container, def) {
+    const setting = new import_obsidian2.Setting(container).setName(def.name);
+    if (def.desc) setting.setDesc(def.desc);
+    if (def.action) {
+      const { action, actionLabel } = def;
+      setting.addButton(
+        (button) => button.setButtonText(actionLabel).setCta().onClick(() => {
+          action(button.buttonEl, 0);
+        })
+      );
+      return;
+    }
+    this.renderControl(setting, def.control);
+  }
+  renderControl(setting, control) {
+    switch (control.type) {
+      case "toggle": {
+        const current = this.getControlValue(control.key);
+        setting.addToggle(
+          (toggle) => toggle.setValue(typeof current === "boolean" ? current : control.defaultValue ?? false).onChange((value) => {
+            void this.setControlValue(control.key, value);
+          })
+        );
+        return;
+      }
+      case "number": {
+        const current = this.getControlValue(control.key);
+        const errorEl = setting.descEl.createDiv({ cls: "picnexus-setting-error" });
+        setting.addText((text) => {
+          text.inputEl.type = "number";
+          if (control.placeholder) text.setPlaceholder(control.placeholder);
+          if (control.min !== void 0) text.inputEl.min = String(control.min);
+          if (control.max !== void 0) text.inputEl.max = String(control.max);
+          if (control.step !== void 0) text.inputEl.step = String(control.step);
+          text.setValue(typeof current === "number" ? String(current) : "");
+          text.onChange((raw) => {
+            const error = this.validateNumberInput(control, raw);
+            errorEl.setText(error ?? "");
+            if (!error) void this.setControlValue(control.key, Number(raw));
+          });
+        });
+        return;
+      }
+      default: {
+        const unsupported = control;
+        throw new Error(`\u4E0D\u652F\u6301\u7684\u8BBE\u7F6E\u63A7\u4EF6\u7C7B\u578B: ${String(unsupported)}`);
+      }
+    }
+  }
+  /** 合法返回 undefined，非法返回错误文案。异步 validate 本插件用不到，一律按通过处理。 */
+  validateNumberInput(control, raw) {
+    const parsed = Number(raw);
+    if (raw.trim() === "" || Number.isNaN(parsed)) return "\u8BF7\u8F93\u5165\u6570\u5B57";
+    const result = control.validate?.(parsed);
+    return typeof result === "string" ? result : void 0;
+  }
+};
 
 // src/markdown.ts
 var PLACEHOLDER_PREFIX = "\u23F3";
@@ -186,6 +350,8 @@ var IMAGE_CONTENT_TYPES = {
   avif: "image/avif"
 };
 var IMAGE_EXTS = Object.keys(IMAGE_CONTENT_TYPES);
+var STATUS_POLL_INTERVAL_MS = 3e4;
+var STATUS_REFRESH_THROTTLE_MS = 2e3;
 function getImageContentType(fileName) {
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
   return IMAGE_CONTENT_TYPES[ext] || "application/octet-stream";
@@ -194,6 +360,7 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
   settings = { ...DEFAULT_SETTINGS };
   uploader = new PicNexusUploader(DEFAULT_SETTINGS.port);
   statusBarEl = null;
+  lastStatusCheckAt = 0;
   uploadPlaceholderCounter = 0;
   /**
    * 每次加载插件随机生成的短标签，拼进占位符 ID
@@ -211,10 +378,17 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
     this.statusBarEl = this.addStatusBarItem();
     this.statusBarEl.setText("PicNexus: ...");
     this.statusBarEl.addClass("picnexus-status");
-    void this.checkConnection();
-    this.registerInterval(window.setInterval(() => {
+    this.statusBarEl.setAttribute("aria-label", "\u70B9\u51FB\u5237\u65B0 PicNexus \u72B6\u6001");
+    this.registerDomEvent(this.statusBarEl, "click", () => {
+      void this.checkConnection(true);
+    });
+    this.registerDomEvent(window, "focus", () => {
       void this.checkConnection();
-    }, 3e4));
+    });
+    void this.checkConnection(true);
+    this.registerInterval(window.setInterval(() => {
+      void this.checkConnection(true);
+    }, STATUS_POLL_INTERVAL_MS));
     this.registerEvent(
       this.app.workspace.on("editor-paste", (evt, editor) => {
         if (evt.defaultPrevented || !this.settings.autoUploadOnPaste) return;
@@ -270,8 +444,12 @@ var PicNexusPlugin = class extends import_obsidian3.Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
   }
-  async checkConnection() {
+  /** force=true 跳过节流：启动、点击刷新和兜底轮询都要必到。 */
+  async checkConnection(force = false) {
     if (!this.statusBarEl) return;
+    const now = Date.now();
+    if (!force && now - this.lastStatusCheckAt < STATUS_REFRESH_THROTTLE_MS) return;
+    this.lastStatusCheckAt = now;
     try {
       const status = await this.uploader.checkStatus();
       this.statusBarEl.setText(status.ready ? `PicNexus: ${status.serviceName || "\u5DF2\u8FDE\u63A5"}` : "PicNexus: \u672A\u914D\u7F6E\u56FE\u5E8A");

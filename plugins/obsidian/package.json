@@ -1,6 +1,6 @@
 {
   "name": "picnexus-obsidian",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "PicNexus image upload plugin for Obsidian",
   "private": true,
   "license": "Apache-2.0",
