@@ -5,6 +5,7 @@ import ToggleSwitch from 'primevue/toggleswitch';
 import { useAutoUpdate } from '../../../composables/useAutoUpdate';
 import { useToast } from '../../../composables/useToast';
 import { openTrustedExternalUrl } from '../../../security/shellOpen';
+import { formatUpdateFailure } from '../../../utils/updateFailureMessage';
 
 const RELEASES_URL = 'https://github.com/joeyliu6/PicNexus/releases/latest';
 
@@ -29,11 +30,9 @@ const {
   retryDownload,
 } = useAutoUpdate();
 
-watch(status, (val) => {
-  if (val === 'error' && errorMessage.value) {
-    toast.error('检查更新失败', errorMessage.value);
-  }
-});
+// Why 这里没有 toast：错误卡片自己已经把原因和「重试 / 手动下载」按钮都渲染出来了，
+// 再飘一条同文案的 toast 属于双重反馈。见 docs/design/notification-patterns.md 通用原则
+// 1（UI 状态本身能传达的不要再弹）与 3（用户必须执行的下一步不要用 toast）。
 
 const lastCheckText = computed(() => {
   if (!lastCheckTime.value) return '';
@@ -116,7 +115,11 @@ const refreshLabel = computed(() => {
 
 // Why: 错误来源区分 — 有 pendingUpdate 说明是下载阶段失败，否则是检查阶段失败。
 // 原实现统一硬编码 "无法连接到更新服务器" 误导用户：签名失败 / 404 / 权限拒绝都被吞成"网络问题"。
-const errorTitle = computed(() => pendingUpdateAvailable.value ? '下载更新失败' : '检查更新失败');
+const errorPhase = computed(() => pendingUpdateAvailable.value ? 'download' as const : 'check' as const);
+
+// Why: plugin-updater 抛的是英文技术原文（`error sending request for url (https://...)`），
+// 直接渲染既看不懂又会把长 URL 折成三行撑高卡片。这里翻成人话，原文移到 tooltip 保留给排障。
+const failureText = computed(() => formatUpdateFailure(errorPhase.value, errorMessage.value));
 
 function onToggleAutoUpdate(v: boolean) {
   autoUpdateEnabled.value = v;
@@ -231,10 +234,13 @@ async function openManualDownload() {
     <div v-else-if="status === 'error' && !postCheckResult" class="update-status">
       <div class="update-status-text">
         <div class="update-status-info">
-          <span>{{ errorTitle }}</span>
-          <span class="last-check error-hint">
+          <span>{{ failureText.title }}</span>
+          <span
+            class="last-check error-hint"
+            v-tooltip.top="errorMessage || undefined"
+          >
             <template v-if="lastCheckText">上次检查：{{ lastCheckText }} · </template>
-            {{ errorMessage || '请检查网络连接后重试' }}
+            {{ failureText.hint }}
           </span>
         </div>
       </div>

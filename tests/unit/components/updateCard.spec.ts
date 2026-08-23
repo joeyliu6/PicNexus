@@ -169,7 +169,7 @@ describe('UpdateCard', () => {
     const checkForUpdate = vi.fn();
     mocks.autoUpdate = makeAutoUpdate({
       status: ref('error'),
-      errorMessage: ref('download failed'),
+      errorMessage: ref('error sending request for url (https://example.com/a.exe)'),
       lastCheckTime: ref(Date.now() - 120_000),
       pendingUpdateAvailable: ref(true),
       retryDownload,
@@ -183,7 +183,11 @@ describe('UpdateCard', () => {
     if (!retryDownloadButton) throw new Error('retry download button not found');
     if (!recheckButton) throw new Error('recheck button not found');
 
-    expect(wrapper.text()).toContain('download failed');
+    // 下载阶段的网络失败：显示人话，英文原文只留在 tooltip 里
+    expect(wrapper.text()).toContain('更新包下载中断');
+    expect(wrapper.text()).not.toContain('error sending request');
+    expect(wrapper.get('.error-hint').attributes('data-tooltip'))
+      .toBe('error sending request for url (https://example.com/a.exe)');
     expect(buttons.some(button => button.find('.pi-external-link').exists())).toBe(false);
 
     await retryDownloadButton.trigger('click');
@@ -191,6 +195,27 @@ describe('UpdateCard', () => {
 
     expect(retryDownload).toHaveBeenCalledTimes(1);
     expect(checkForUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('turns a raw check failure into plain Chinese and hides the URL in a tooltip', () => {
+    // 用户报障截图里的那条原文
+    const raw = 'error sending request for url (https://github.com/joeyliu6/PicNexus/releases/latest/download/latest.json)';
+    mocks.autoUpdate = makeAutoUpdate({
+      status: ref('error'),
+      errorMessage: ref(raw),
+      lastCheckTime: ref(Date.now() - 120_000),
+      pendingUpdateAvailable: ref(false),
+    });
+
+    const wrapper = mountCard();
+    const text = wrapper.text();
+
+    expect(text).toContain('连不上更新服务器');
+    expect(text).toContain('上次检查：2 分钟前');
+    // 英文原文和长 URL 都不再出现在界面上，只在 tooltip 里留给排障
+    expect(text).not.toContain('error sending request');
+    expect(text).not.toContain('https://');
+    expect(wrapper.get('.error-hint').attributes('data-tooltip')).toBe(raw);
   });
 
   it('opens latest release page from check error manual download action', async () => {
@@ -268,7 +293,8 @@ describe('UpdateCard', () => {
     await nextTick();
 
     expect(wrapper.get('.update-refresh').classes()).toContain('is-error');
-    expect(mocks.toastError).toHaveBeenCalledWith(expect.any(String), 'network');
+    // 卡片自己会渲染错误与操作按钮，不再额外弹 toast（notification-patterns 通用原则 1/3）
+    expect(mocks.toastError).not.toHaveBeenCalled();
 
     status.value = 'checking';
     await nextTick();
