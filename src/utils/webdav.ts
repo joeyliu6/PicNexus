@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { secureStorage } from '../security/crypto';
 import { assertAllowedWebDAVUrl } from '../security/networkPolicy';
+import { getErrorMessage } from '../types/errors';
 import { createLogger } from './logger';
 
 const log = createLogger('WebDAV');
@@ -186,7 +187,14 @@ export class WebDAVClient {
         timeoutMs: 30000,
       });
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
+      // Why 用 getErrorMessage 而不是 `String(error)`：`webdav_request` 是 Tauri command，
+      // 失败时 reject 的是 AppError 序列化后的**普通对象** `{type, data:{message}}`（见
+      // src-tauri/src/error.rs 的 `#[serde(tag="type", content="data")]`），它不是 Error 实例。
+      // `String(该对象)` 得到的是 `[object Object]`——Rust 侧写好的「无法连接到 WebDAV 服务器」
+      // 一类文案会在这里被整句吃掉，最终 toast、sync_log 表、持久化的同步状态三处全是
+      // `[object Object]`，用户和排障都拿不到任何信息。图床链路（WebDAVUploader.ts）一直走
+      // 的就是 getErrorMessage，这里补齐，两条 WebDAV 链路口径一致。
+      const errorMsg = getErrorMessage(error);
       log.error('上传文件失败', errorMsg);
       throw new Error(`WebDAV 上传失败: ${errorMsg}`);
     }
@@ -215,7 +223,8 @@ export class WebDAVClient {
         timeoutMs: 30000,
       });
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
+      // 同 putFile：AppError 是普通对象而非 Error 实例，必须走 getErrorMessage 解包。
+      const errorMsg = getErrorMessage(error);
       log.error('下载文件失败', errorMsg);
       throw new Error(`WebDAV 下载失败: ${errorMsg}`);
     }

@@ -159,6 +159,29 @@ describe('useCompressionTask', () => {
     expect(onError).toHaveBeenCalledTimes(1);
   });
 
+  // Rust 侧 AppError 用 #[serde(tag="type", content="data")] 序列化，invoke 失败时
+  // reject 的是这个**普通对象**而非 Error 实例。errorMsg 直接渲染在
+  // CompressionPreviewState.vue 的 {{ errorMsg }} 上，用 String(err) 处理会让用户
+  // 看到 "[object Object]"。
+  it('Tauri AppError 对象要解出真实文案，而不是 [object Object]', async () => {
+    dialogOpenMock.mockResolvedValue('C:/photos/bad.jpg');
+    setupInvokeHandler(async (cmd) => {
+      if (cmd === 'compress_image') {
+        throw { type: 'FILE_IO', data: { message: '文件不存在: C:/photos/bad.jpg' } };
+      }
+      if (cmd === 'read_image_as_base64') return 'original-b64';
+      throw new Error(`unexpected command: ${cmd}`);
+    });
+
+    const api = useCompressionTask(ref(makePreset()), {});
+
+    await expect(api.selectAndCompress()).resolves.toBe(true);
+
+    expect(api.status.value).toBe('error');
+    expect(api.errorMsg.value).toBe('文件不存在: C:/photos/bad.jpg');
+    expect(api.errorMsg.value).not.toContain('[object Object]');
+  });
+
   it('较早的压缩任务完成晚于新任务时，不覆盖新结果，并清理旧临时文件', async () => {
     dialogOpenMock
       .mockResolvedValueOnce('C:/photos/old.jpg')

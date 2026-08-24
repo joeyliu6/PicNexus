@@ -5,6 +5,7 @@ import { ref, type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open as dialogOpen } from '@tauri-apps/plugin-dialog';
 import type { CompressionPreset } from '../config/types';
+import { getErrorMessage } from '../types/errors';
 
 /** Tauri 返回的压缩结果 */
 export interface CompressResult {
@@ -143,7 +144,11 @@ export function useCompressionTask(
       options.onDone?.();
     } catch (err: unknown) {
       if (mySeq !== activeSeq) return true;
-      errorMsg.value = err instanceof Error ? err.message : String(err);
+      // Why getErrorMessage：这里 catch 到的多半是 `compress_image` / `read_image_as_base64`
+      // 等 Tauri command 的失败，reject 值是 AppError 序列化后的普通对象而非 Error 实例，
+      // `String(err)` 会直接渲染成 `[object Object]`（errorMsg 挂在 CompressionPreviewState.vue
+      // 的 {{ errorMsg }} 上，用户直接看得见）。
+      errorMsg.value = getErrorMessage(err);
       status.value = 'error';
       options.onError?.();
     }

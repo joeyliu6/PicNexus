@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { WebDAVClient, WEBDAV_FORBIDDEN_MESSAGE } from '@/utils/webdav';
-import { getHttpFetchMock, resetTauriMocks } from '../helpers/tauriMock';
+import { getHttpFetchMock, mockInvokeResponse, resetTauriMocks } from '../helpers/tauriMock';
 
 const loggerMock = vi.hoisted(() => ({
   debug: vi.fn(),
@@ -443,6 +443,54 @@ describe('WebDAVClient.getFile', () => {
     await client.getFile('/file.json');
     const init = mockedFetch.mock.calls[0][1] as { method: string };
     expect(init.method).toBe('GET');
+  });
+
+  it('200 + 空响应体 → 返回空字符串（与 404 的 null 区分开）', async () => {
+    // 这两种形态的语义完全不同：null 是「云端还没有这个文件」（首次同步的正常路径），
+    // 空串是「文件在、但是 0 字节」（多半是上次 PUT 中断留下的）。上层的防覆盖判定
+    // 依赖这个区分，所以这里把它钉死。
+    const client = makeClient();
+    mockedFetch.mockResolvedValueOnce(new Response('', { status: 200 }));
+    expect(await client.getFile('/empty.json')).toBe('');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// AppError 解包（Tauri command 的 reject 值是普通对象，不是 Error 实例）
+// ═══════════════════════════════════════════════════════════════
+
+describe('WebDAVClient 对 Tauri AppError 的解包', () => {
+  // Rust 侧 AppError 用 #[serde(tag="type", content="data")] 序列化，
+  // invoke 失败时 reject 的是这个**普通对象**。用 String(error) 处理会得到
+  // "[object Object]"，Rust 写好的中文文案一个字都到不了用户面前，
+  // 而这条正是「网络断了 / 服务器连不上 / 超时」的必经之路。
+  const appError = {
+    type: 'WEBDAV',
+    data: { message: '无法连接到 WebDAV 服务器，请检查 URL 或网络' },
+  };
+
+  it('getFile 把 AppError 的 message 带出来，而不是 [object Object]', async () => {
+    mockInvokeResponse('webdav_request', () => {
+      throw appError;
+    });
+    const client = makeClient();
+
+    const err = (await client.getFile('/file.json').catch((e: unknown) => e)) as Error;
+
+    expect(err.message).toContain('无法连接到 WebDAV 服务器');
+    expect(err.message).not.toContain('[object Object]');
+  });
+
+  it('putFile 同样解得开 AppError', async () => {
+    mockInvokeResponse('webdav_request', () => {
+      throw appError;
+    });
+    const client = makeClient();
+
+    const err = (await client.putFile('/file.json', '{}').catch((e: unknown) => e)) as Error;
+
+    expect(err.message).toContain('无法连接到 WebDAV 服务器');
+    expect(err.message).not.toContain('[object Object]');
   });
 });
 
