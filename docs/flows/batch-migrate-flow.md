@@ -15,7 +15,7 @@
 > - **首行**：文件名（mono）+ 状态 chip（失败 chip 的 `v-tooltip` 悬停显示 `errorTooltipText`）
 > - **次行**：`存在于 [existing chips] → [target chips]` + 右侧上下文操作按钮；其中：
 >   - `existing` chips 读 `MigrateItemStatus.existingServiceIds`（迁移前已成功的图床快照）
->   - `target` chips **始终按 `targetServiceIds` 渲染**（选了几个目标就显几个），`serviceResults[sid]` 只决定着色：`success → 'new'`（绿环）/ `failed → 'failed'`（红环）/ 未写入或 `pending → 'pending'`（蓝环）；未写入代表"取消前没轮到尝试"
+>   - `target` chips **按 `targetServiceIds` 中「不在 `existingServiceIds` 的目标」渲染**：迁移前已存在于该图床的目标会被过滤出 target 组（不重复显示），并在对应 `existing` chip 上以角标标注「你选了它但已在」（`also-target`）。`serviceResults[sid]` 只决定 target chip 着色：`success → 'new'`（绿环）/ `failed → 'failed'`（红环）/ 未写入或 `pending → 'pending'`（蓝环）；未写入代表"取消前没轮到尝试"
 >   - 右侧按钮随状态切换：成功态显示「复制新 URL」（调 `historyDB` 查新增 target 的 URL）；done + failed 态显示「重试」
 >
 > 底栏 `MigrateBottomBar` 左侧从左到右：**分页条**（`MigratePagination`，仅 `displayList.length > PAGE_SIZE` 时挂载）+ **运行状态 pill**（运行中/正在暂停/已暂停）；右侧是操作按钮组（done 态：导出报告 | 完成 | 【全部重试：有失败项或部分失败项才挂】| 重新发起迁移）。进入 done 态时若有完全失败或部分失败自动选中「失败」chip 并重置滚动。
@@ -383,7 +383,7 @@ flowchart TD
 
 ### 分页切片
 
-`displayList` 过滤 + 排序后由 `PAGE_SIZE=100` 切出 `visibleList`，仅当前页条目渲染为 DOM。`pageByFilter: Map<MigrateStatusFilter, number>` 保留每个 filter 的独立页码，切 chip 不丢上下文；`totalPages` 变小时自动 clamp。进入 done 态 / 切换 phase 时分页记忆清空。分页仅在 `displayList.length > PAGE_SIZE` 时挂载到 `MigrateBottomBar` 的 `#pagination` slot。
+`displayList` 过滤 + 排序后由 `PAGE_SIZE=100` 切出 `visibleList`，仅当前页条目渲染为 DOM。`pageByFilter: Map<MigrateStatusFilter, number>` 保留每个 filter 的独立页码，切 chip 不丢上下文；`totalPages` 变小时自动 clamp。进入 done 态 / 切换 phase 时分页记忆清空。分页条挂在 `MigrateBottomBar` 的 `#pagination` slot，挂载条件为 `effectiveTotalCount > 0`（migrating 且无搜索/图床筛选时取 `migrateStats.totalCount`——预加载前为上界估计；其余取 `displayList.length`），`totalPages = max(1, ceil(effectiveTotal / 100))`——不足一页时仍会渲染一个「第 1 / 1 页」的 1 页分页条，属轻微视觉噪音（无翻页可用）。
 
 chip 分桶映射（`displayList` 内部）：
 
@@ -436,7 +436,7 @@ chip 分桶映射（`displayList` 内部）：
 | 单条重试成功但其它视图不刷新 | `runRetry` 的返回值被吞掉，或 `retrySingleFailed` 没调 `notifyMigrationPersisted` | `batchMigrate/retryFailed.ts` |
 | 失败项显示的错误信息是英文 | 原始错误未命中 `categorizeMigrateError` 的映射规则，fallback 到"未知错误"，悬停 ⓘ 看 tooltip 原文 | `src/utils/uploadFailureMessage.ts` 的 `MIGRATE_ERROR_PATTERNS` |
 | 取消迁移后底栏仍显示「全部重试」| `canRetryAll = phase==='done' && failures.length>0`；取消只把在途条目转 skipped，取消前已落定的失败条目保留，按钮就挂出来——语义正确 | `MigrateProgressPhase.vue` `canRetryAll` / `MigrateBottomBar.vue` done 态按钮组 |
-| 目标 chip 只显示尝试过的那几个 | 旧行为；现改为始终按 `targetServiceIds` 渲染，`serviceResults` 只决定颜色。未写入的目标 = pending chip（取消前没轮到） | `MigrateItemRow.vue` `targetChips` computed |
+| 目标 chip 只显示尝试过的那几个 | 目标 chip 按 `targetServiceIds` 中「非 `existingServiceIds`」的目标渲染；已在图床的目标过滤出 target 组、在 existing chip 上加「你选了但已在」角标 | `MigrateItemRow.vue` `targetChips` / `alsoTargetSet` computed |
 | 目标 chip 没有一个一个变色，全部一起跳 | `onTargetSettled` 回调未触发或 `scheduleStatusUpdate` 没挂到批次状态 → 检查 `useBatchMigrate.startMigrate` 里 `processBatch` 的第 10 个参数 | 图 3 并行上传关键点 |
 
 ---
