@@ -248,13 +248,21 @@ export async function migrateOneItem(
       // 重读把读-改-写窗口从分钟级缩到毫秒级（彻底消除需 DB 层原子合并，见暂缓清单）。
       // 记录已被删除时退回旧快照，交给 historyDB.update 抛「记录不存在」走下面的失败分支。
       const base = (await historyDB.getById(item.id)) ?? item;
-      const updatedResults = [
-        ...base.results,
-        ...newResults.map(r => ({ serviceId: r.serviceId, result: r.result, status: r.status, error: r.error })),
-      ];
+      // 去重：base 是处理窗口内重读的最新记录，若某目标在预加载（快照）到上传之间已被别处补上
+      // （灯箱手动再传 / 同步合并），本次对该目标的追加结果不再重复写入，避免同 serviceId
+      // 出现两条 / success_count 虚增。判定只按「base 已含该目标成功镜像」：base 中只有失败
+      // 记录的目标仍允许本次补上成功结果。
+      const baseSuccessIds = new Set(
+        base.results.filter(r => r.status === 'success').map(r => r.serviceId),
+      );
+      const appendedNew = newResults
+        .filter(r => !baseSuccessIds.has(r.serviceId))
+        .map(r => ({ serviceId: r.serviceId, result: r.result, status: r.status, error: r.error }));
+      const updatedResults = [...base.results, ...appendedNew];
 
       // 同步 linkCheckSummary：新追加的成功图床尚未检测，计入 total 和 unchecked
-      const appendedSuccess = newResults.filter(r => r.status === 'success').length;
+      // （只在 base 中已存在的图床不属于本次迁移成果，不计入累加）
+      const appendedSuccess = appendedNew.filter(r => r.status === 'success').length;
       const updates: Partial<HistoryItem> = { results: updatedResults };
       if (appendedSuccess > 0 && base.linkCheckSummary) {
         updates.linkCheckSummary = {
