@@ -7,7 +7,7 @@ import { configStore } from '../../store/instances';
 import { secureStorage, isPasswordEncryptedData } from '../../security/crypto';
 import { TOAST_MESSAGES } from '../../constants';
 import { createLogger } from '../../utils/logger';
-import { writeSyncLog, extractErrorCode, getWebDAVClientAndPath, isWebDAVNotFoundError } from './backupSyncUtils';
+import { writeSyncLog, extractErrorCode, getWebDAVClientAndPath, isWebDAVNotFoundError, CLOUD_CONFIG_EMPTY_REASON } from './backupSyncUtils';
 import type { BackupCloudDeps } from './useBackupCloud';
 
 const log = createLogger('ConfigSync');
@@ -186,6 +186,8 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
     let stage: 'download' | 'upload' = 'download';
     // Why: 需要在外层 catch 里根据是否已合并云端数据来决定 toast 文案，所以声明挪到 try 之外
     let hasCloudData = false;
+    // 云端配置文件存在但读不出可用内容（0 字节）时的中止原因，见下方 Why
+    let cloudUnusable: string | null = null;
 
     try {
       syncConfigLoading.value = true;
@@ -195,7 +197,13 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
       // 步骤 1：拉取云端配置并合并到本地（保留本地 WebDAV 配置）
       try {
         const rawContent = await webdav.client.getFile(webdav.remotePath);
-        if (rawContent) {
+        // Why 用 `=== ''` 而不是 `!rawContent`：`getFile` 对 HTTP 404 返回 **null**（云端还没
+        // 这个文件，首次同步的正常路径，必须放行），对 200 + 空响应体返回 **空字符串**
+        // （文件在、但是 0 字节，多半是上次 PUT 中断留下的）。两者用 falsy 合并判断的话，
+        // 空文件会被当成「首次同步」，步骤 2 就拿本地配置把云端盖了。
+        if (rawContent === '') {
+          cloudUnusable = CLOUD_CONFIG_EMPTY_REASON;
+        } else if (rawContent) {
           let contentStr = rawContent;
           if (isPasswordEncryptedData(rawContent.trim())) {
             contentStr = await tryDecryptContent(rawContent.trim());
@@ -234,6 +242,16 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
           throw downloadError;
         }
         log.warn('云端配置文件不存在，将按首次同步处理');
+      }
+
+      // Why 抛在 catch 之外、且在 stage 改成 'upload' 之前：
+      // 1. 内层 catch 的 isWebDAVNotFoundError 是**子串匹配**，文案里只要出现「文件不存在」
+      //    /404/not found 就会被当成「云端没这个文件」吞掉，中止静默退化回覆盖云端；
+      // 2. 此刻 stage 仍是 'download'、hasCloudData 仍是 false，外层 catch 才会走
+      //    「同步失败：无法获取云端配置」，而不是误报「云端数据已合并到本地」。
+      if (cloudUnusable) {
+        log.error('云端配置数据不可用，已中止以避免覆盖云端数据:', cloudUnusable);
+        throw new Error(cloudUnusable);
       }
 
       // 步骤 2：将本地配置上传到云端

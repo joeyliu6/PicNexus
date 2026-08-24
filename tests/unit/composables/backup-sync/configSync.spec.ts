@@ -65,15 +65,20 @@ vi.mock('@/security/crypto', () => ({
   isPasswordEncryptedData: isPasswordEncryptedDataMock,
 }));
 
-vi.mock('@/composables/backup-sync/backupSyncUtils', () => ({
-  writeSyncLog: writeSyncLogMock,
-  extractErrorCode: extractErrorCodeMock,
-  getWebDAVClientAndPath: getWebDAVClientAndPathMock,
-  isWebDAVNotFoundError: (error: unknown) => {
-    const msg = error instanceof Error ? error.message : String(error);
-    return /\b404\b/.test(msg) || /not\s*found/i.test(msg) || msg.includes('文件不存在');
-  },
-}));
+// isWebDAVNotFoundError 用真实实现：它是纯函数，而「拉取云端失败该不该中止」这条防覆盖
+// 安全线正是本文件断言的对象。手抄副本会断言一段假逻辑——此前那份就已漏掉
+// /file.*not.*exist/i 分支。
+vi.mock('@/composables/backup-sync/backupSyncUtils', async () => {
+  const actual = await vi.importActual<typeof import('@/composables/backup-sync/backupSyncUtils')>(
+    '@/composables/backup-sync/backupSyncUtils',
+  );
+  return {
+    ...actual,
+    writeSyncLog: writeSyncLogMock,
+    extractErrorCode: extractErrorCodeMock,
+    getWebDAVClientAndPath: getWebDAVClientAndPathMock,
+  };
+});
 
 vi.mock('@/utils/logger', () => ({
   createLogger: () => ({
@@ -352,5 +357,38 @@ describe('createConfigSyncOps', () => {
     expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'failed', 'INVALID_CLOUD_CONFIG');
     expect(writeSyncLogMock).toHaveBeenCalledWith('sync_settings', 'failed', 'INVALID_CLOUD_CONFIG', profile);
     expect(toastErrorMock).toHaveBeenCalledTimes(1);
+  });
+
+  // 云端 settings.json 是 0 字节（多半是上次 PUT 中断留下的）：此前 `if (rawContent)`
+  // 把空串当成「首次同步」，步骤 2 直接拿本地配置盖掉云端。
+  it('stops syncConfig before upload when the cloud config file is empty', async () => {
+    clientGetFileMock.mockResolvedValueOnce('');
+
+    const deps = makeDeps();
+    const ops = createConfigSyncOps(deps);
+
+    await ops.syncConfig(profile);
+
+    expect(clientPutFileMock).not.toHaveBeenCalled();
+    expect(configStoreSetMock).not.toHaveBeenCalled();
+    expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'failed', 'SYNC_ERR');
+    // stage 仍是 'download'、hasCloudData 仍是 false → 不能误报「云端数据已合并到本地」，
+    // 也不能点亮需要重启的 banner。
+    expect(updateConfigSyncStatusMock).not.toHaveBeenCalledWith(profile, 'partial', expect.anything());
+    expect(deps.needsReload.value).toBe(false);
+  });
+
+  // 反向回归：云端**真的**还没有 settings.json（getFile 返回 null）是首次同步的正常路径，
+  // 必须照常上传。上面那条中止若写成 `!rawContent` 就会把首次同步一起堵死。
+  it('still uploads on first sync when the cloud config file does not exist', async () => {
+    clientGetFileMock.mockResolvedValueOnce(null);
+
+    const deps = makeDeps();
+    const ops = createConfigSyncOps(deps);
+
+    await ops.syncConfig(profile);
+
+    expect(clientPutFileMock).toHaveBeenCalledTimes(1);
+    expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'success');
   });
 });
