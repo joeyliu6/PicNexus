@@ -58,7 +58,12 @@ jobs:
     runs-on: ${{ matrix.platform }}
 
     steps:
+      # git-cliff 需要完整 git 历史。浅克隆下它只能看到 HEAD 那一个提交，
+      # 生成的 changelog 会静默残缺：v1.1.0 只捞到一条、v1.1.1 直接为空——
+      # HEAD 恰好是被 commit_parsers 过滤掉的类型时就什么都不剩。
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v5
         with:
@@ -143,6 +148,9 @@ jobs:
           config: cliff.toml
           args: --latest --strip header
 
+      # 这里只产出 git-cliff 的提交清单作为初稿。发布前 body 要人工重写成面向用户的
+      # 中文条目（一行一条、动词开头、相关修复合并成一句，参照 v1.1.0 与 v1.1.1 的写法），
+      # 所以不再拼装「推荐下载」表——它每次都得手工删掉，是纯负担。
       - name: Prepare release body
         id: release_body
         shell: bash
@@ -150,31 +158,8 @@ jobs:
           CHANGELOG: ${{ steps.changelog.outputs.content }}
         run: |
           {
-            cat <<'PICNEXUS_DOWNLOAD_GUIDE'
-          ## 推荐下载
-
-          | 使用场景 | 推荐文件 |
-          | --- | --- |
-          | Windows 普通用户 | `PicNexus_*_x64-setup.exe` |
-          | Windows 企业部署 / 批量安装 | `PicNexus_*_x64_*.msi` |
-          | Windows 免安装便携版 | `PicNexus_*_windows_x64_portable.zip` |
-          | macOS Apple Silicon | `PicNexus_*_aarch64.dmg` |
-          | macOS Intel | `PicNexus_*_x64.dmg` |
-          | Linux 通用运行 | `PicNexus_*_amd64.AppImage` |
-          | Debian / Ubuntu | `PicNexus_*_amd64.deb` |
-          | Fedora / RHEL / openSUSE | `PicNexus-*-1.x86_64.rpm` |
-          | Obsidian 手动安装 | `picnexus-obsidian-*.zip` |
-
-          `.sig` 和 `latest.json` 是签名校验 / 自动更新文件，普通手动安装通常不需要下载。
-
-          `SHA256SUMS.txt` contains SHA-256 checksums for installers, portable archives, and updater JSON. Windows portable builds also include a same-name `.sha256` file.
-          PICNEXUS_DOWNLOAD_GUIDE
-            printf '\n'
-            printf '%s\n' "$CHANGELOG"
-          } > release-body.md
-          {
             echo 'content<<PICNEXUS_RELEASE_BODY'
-            cat release-body.md
+            printf '%s\n' "$CHANGELOG"
             echo 'PICNEXUS_RELEASE_BODY'
           } >> "$GITHUB_OUTPUT"
 
