@@ -18,7 +18,7 @@
 >   - `target` chips **按 `targetServiceIds` 中「不在 `existingServiceIds` 的目标」渲染**：迁移前已存在于该图床的目标会被过滤出 target 组（不重复显示），并在对应 `existing` chip 上以角标标注「你选了它但已在」（`also-target`）。`serviceResults[sid]` 只决定 target chip 着色：`success → 'new'`（绿环）/ `failed → 'failed'`（红环）/ 未写入或 `pending → 'pending'`（蓝环）；未写入代表"取消前没轮到尝试"
 >   - 右侧按钮随状态切换：成功态显示「复制新 URL」（调 `historyDB` 查新增 target 的 URL）；done + failed 态显示「重试」
 >
-> 底栏 `MigrateBottomBar` 左侧从左到右：**分页条**（`MigratePagination`，仅 `displayList.length > PAGE_SIZE` 时挂载）+ **运行状态 pill**（运行中/正在暂停/已暂停）；右侧是操作按钮组（done 态：导出报告 | 完成 | 【全部重试：有失败项或部分失败项才挂】| 重新发起迁移）。进入 done 态时若有完全失败或部分失败自动选中「失败」chip 并重置滚动。
+> 底栏 `MigrateBottomBar` 左侧从左到右：**分页条**（`MigratePagination`，`effectiveTotalCount > 0` 时挂载——不足一页时也会渲染一个「第 1 / 1 页」分页条，挂载条件详见下文「分页切片」）+ **运行状态 pill**（运行中/正在暂停/已暂停）；右侧是操作按钮组（done 态：导出报告 | 完成 | 【全部重试：有失败项或部分失败项才挂】| 重新发起迁移）。进入 done 态时若有完全失败或部分失败自动选中「失败」chip 并重置滚动。
 >
 > **统计信息位置**：各状态数量由 `MigrateStatusFilterChips` 展示；已完成数、速率、剩余时间和并发数收进运行状态 pill 的 tooltip。
 
