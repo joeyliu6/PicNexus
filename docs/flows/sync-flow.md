@@ -99,10 +99,7 @@ flowchart TD
 
     G -- 覆盖 --> H[确认：本地历史将被替换]
     H --> H1[webdav.getFile 下载]
-    H1 --> H2{加密?}
-    H2 -- 是 --> H3[解密]
-    H2 -- 否 --> H4[直接解析]
-    H3 & H4 --> H5[validateHistoryItems 校验]
+    H1 --> H5["JSON.parse + Array.isArray 判定<br/>（历史文件是明文 JSON，不加密）"]
     H5 --> H6["DELETE FROM history_items（清空）"]
     H6 --> H7["批量 INSERT（500条/批）"]
 
@@ -168,6 +165,26 @@ flowchart TD
     style S1B fill:#e8f5e9,stroke:#2e7d32
 ```
 
+> **⚠️ 上传方向的「云端数据不可用」判定（防静默覆盖）**
+>
+> 三个会**覆盖云端**的入口（`uploadHistoryMerge` / `uploadHistoryIncremental` / `syncHistory` 第一步，
+> 以及配置侧的 `syncConfig`）在拉取云端后把结果分成三态，只有第一态允许继续上传：
+>
+> | `getFile` 返回 | 含义 | 处置 |
+> |---------------|------|------|
+> | `null`（HTTP 404） | 云端还没有这个文件 | **首次同步的正常路径**，继续全量上传 |
+> | `''`（200 + 空响应体） | 文件在，但是 0 字节 | **中止**，提示改用「强制覆盖云端」自愈 |
+> | 合法 JSON 但非数组 | 文件在，但读不出记录 | **中止** |
+>
+> 判定逻辑收在 `backupSyncUtils.parseCloudHistoryForUpload`，**只给上传方向用**。
+> 下载方向（`downloadHistoryOverwrite` / `downloadHistoryMerge`）不能复用：那边 `null` 的正确
+> 含义是「没东西可恢复，必须中止」，若当成空数组继续走，`importFromJSON(空, 'replace')`
+> 会把本地历史整库清空。
+>
+> 中止用的是「置标志位 → 在 `catch` 块**之外**抛出」，而不是直接在 `try` 里 throw：
+> 内层 catch 要过一道 `isWebDAVNotFoundError`，而它是**子串匹配**——错误文案里只要出现
+> 「文件不存在」/`404`/`not found`，中止就会被当成「云端没这个文件」吞掉，静默退化回覆盖云端。
+
 > **关键点**：
 > - 配置上传与配置双向同步必须先设置备份密码；UI 会打开密码设置对话框，`ConfigSync` 底层也会在联网和加锁前拒绝无密码调用
 > - 云端配置下载仍可独立使用；本地明文导出保留风险确认流程
@@ -204,8 +221,12 @@ flowchart TD
 | 远程路径不存在 (404) | WebDAV 路径配置错误或目录未创建 | 图1 节点 H / 图2 节点 D3 |
 | 存储空间不足 (507) | 云端空间满 | 图2 上传路径 |
 | 连接超时 | 网络问题或 WebDAV 服务器不可达 | 图1 节点 D |
-| 解密失败 | 备份密码不正确 | 图1 节点 M1 / 图2 节点 H3 |
+| 解密失败 | 备份密码不正确 | 图1 节点 M1（**仅配置同步**；历史文件是明文 JSON，不涉及解密） |
 | 合并后数据比预期少 | 远端文件缺少对应 ID，或旧备份没有收藏版本字段导致只能按已有版本合并 | 图2 合并分支 E1 / I3 |
+| 提示「云端历史文件为空，已中止」 | 云端 `history.json` 是 0 字节（多半是上次 PUT 中断留下的）。这是**防覆盖保护**不是故障：若确认云端本就无数据，用「强制覆盖云端」推上去即可 | 图3 上方「云端数据不可用」表 |
+| 提示「云端历史数据格式错误：期望数组格式」 | 远端路径下的 `history.json` 不是 PicNexus 导出的格式 | 图3 上方「云端数据不可用」表 |
+| 下载后提示「跳过 N 条格式无效记录」 | 云端文件里有记录缺必需字段（`timestamp` / `localFileName` / `primaryService` / `results`）。这些记录不入库，但本地同 id 的旧记录**会被保留**不删 | `ImportExportService.importHistoryFromJson` |
+| 同步失败但文案是 `[object Object]` | 已修（2026-08-24）：`webdav.ts` 未解包 Tauri `AppError` 对象。若再次出现，检查该处是否又改回了 `String(error)` | 图3 / `src/types/errors.ts` |
 | 下载后配置未生效 | 需要刷新页面应用新配置 | 图1 节点 O → P |
 | 历史记录下载后列表空 | `history-updated` 事件未触发视图刷新 | 图2 节点 J → K |
 | SSL 证书错误 | 自签名证书未被信任 | 图1 节点 D |
@@ -217,5 +238,5 @@ flowchart TD
 - [辅助功能流程](./auxiliary-flows.md) — WebDAV 同步在辅助功能中的位置
 - [数据持久化流程](./data-persistence.md) — 配置存储和历史数据库的底层机制
 - [历史查询流程](./history-flow.md) — 同步的历史数据来源与查询机制
-- [Composables API](../reference/api/composables.md) — useBackupSync / useAutoSync 接口索引
+- [Composables API](../reference/api/composables.md) — useBackupSync 接口索引
 - [休眠白屏修复](../reference/troubleshooting/sleep-resume-white-screen.md) — 休眠后 SQLite 连接丢失可能影响同步

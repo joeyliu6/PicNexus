@@ -69,7 +69,7 @@ flowchart TD
 
     %% 下载历史
     I[用户触发历史下载] --> J[下载云端历史 JSON]
-    J --> K["validateHistoryItems<br/>验证数据格式"]
+    J --> K["JSON.parse + Array.isArray<br/>逐条走 isImportableHistoryItem"]
     K --> L{下载模式}
     L -- merge --> M["基于 ID 去重合并<br/>写入 SQLite"]
     L -- overwrite --> N["清空本地 + 全量写入"]
@@ -257,7 +257,7 @@ flowchart TD
 
 ## 相关文档
 
-- [Composables API](../reference/api/composables.md) — useBackupSync / useAutoSync 接口索引
+- [Composables API](../reference/api/composables.md) — useBackupSync 接口索引
 - [链接检测性能优化](../reference/patterns/link-check-large-dataset.md) — 5 万条记录场景的优化方案
 - [同步流程](./sync-flow.md) — WebDAV 配置/历史同步的完整流程
 - [链接检测流程（深度展开）](./link-check-flow.md) — 服务感知请求、并发控制、动画状态机

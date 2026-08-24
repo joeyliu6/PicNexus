@@ -136,7 +136,7 @@ sequenceDiagram
 
 展示**后端错误 → 前端 Toast** 的完整映射。新增错误类型时,需要同时改 Rust `AppError` 枚举和前端的错误分支。
 
-> **关键源文件**:`src-tauri/src/error.rs`、`src/utils/errorHandler.ts`(或各 composable 的 try/catch)
+> **关键源文件**:`src-tauri/src/error.rs`、`src/types/errors.ts`(或各 composable 的 try/catch)
 
 ```mermaid
 flowchart LR
@@ -194,7 +194,7 @@ flowchart LR
 | 事件名 | Payload | 发送位置 | 订阅位置 |
 |--------|---------|----------|----------|
 | `upload://progress` | `{id, progress, total, step, step_index, total_steps}` | 各 upload_to_* 命令 | `useUpload.ts` |
-| `link-check://progress` | `{checked, total, current_url, current_result}` | `batch_check_links` | `useLinkCheck.ts` |
+| `link-check://progress` | `{batch_id?, checked, total, current_url, current_result?, recent_results}` | `batch_check_links` | `useLinkCheck.ts` |
 | `md-scan://progress` | `{scanned, total, current_file}` | `scan_md_folder` | `useMdScan.ts` |
 | `config-updated` | `{timestamp}` | `useConfig.saveConfig` | 所有需要响应配置变更的 composable |
 | `navigate-to` | `string` 或 `{view, tab?, section?}` | 托盘菜单 / macOS 菜单栏 / 前端跳转 | `MainLayout.vue` |

@@ -76,7 +76,6 @@ src/composables/
 ├── useToast.ts           # Toast 通知
 ├── useTheme.ts           # 主题切换
 ├── backup-sync/          # 备份与同步（useBackupSync 入口 + ConfigSync / HistorySync / backupSyncUtils）
-├── useAutoSync.ts        # 自动同步
 ├── useClipboardImage.ts  # 剪贴板图片
 ├── useConfirm.ts         # 确认对话框
 ├── useQueueState.ts      # 上传队列状态
