@@ -484,7 +484,9 @@ describe('HistoryDatabase', () => {
       'replace',
     );
 
-    expect(importedCount).toBe(1);
+    expect(importedCount.imported).toBe(1);
+    expect(importedCount.added).toBe(1);
+    expect(importedCount.skipped).toBe(0);
     expect(await historyDB.getById('old-1')).toBeNull();
     expect(await historyDB.getById('new-1')).not.toBeNull();
   });

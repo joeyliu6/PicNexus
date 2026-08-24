@@ -88,7 +88,7 @@ describe('ImportExportService', () => {
 
     const importedCount = await importHistoryFromJson(db as never, JSON.stringify(items), 'merge', onProgress);
 
-    expect(importedCount).toBe(599);
+    expect(importedCount.imported).toBe(599);
     expect(db.select).toHaveBeenCalledTimes(2);
     // merge 模式不触发事务和 DELETE，只做 INSERT OR REPLACE 批量
     const insertCalls = db.execute.mock.calls.filter(([sql]) => String(sql).startsWith('INSERT OR REPLACE'));
@@ -114,7 +114,7 @@ describe('ImportExportService', () => {
       'replace',
     );
 
-    expect(importedCount).toBe(1);
+    expect(importedCount.imported).toBe(1);
     // 第一个 execute 必须是 INSERT OR REPLACE（不是 DELETE 优先，避免丢数据）
     const sqlCalls = db.execute.mock.calls.map(([sql]) => String(sql));
     expect(sqlCalls[0]).toMatch(/^INSERT OR REPLACE/);
@@ -127,6 +127,69 @@ describe('ImportExportService', () => {
     expect(deleteParams).not.toContain('alpha');
     // 不再使用 BEGIN/COMMIT/ROLLBACK（连接池不支持）
     expect(sqlCalls.some((sql) => sql.includes('BEGIN') || sql.includes('COMMIT') || sql.includes('ROLLBACK'))).toBe(false);
+  });
+
+  // 云端一条记录格式不合法时，它同样说明「云端仍持有这个 id」。此前删除集是由**过滤后**的
+  // items 算出来的，于是本地那条完好的同 id 记录会被静默 DELETE——它既没被 INSERT 覆盖过，
+  // 也没有任何提示，是纯粹的数据丢失。这条路径此前零测试覆盖。
+  it('replace mode keeps the local row when its cloud counterpart fails validation', async () => {
+    db.select.mockResolvedValueOnce([
+      { id: 'good', timestamp: 1 },
+      { id: 'broken', timestamp: 1 },
+      { id: 'orphan', timestamp: 1 },
+    ]);
+
+    const result = await importHistoryFromJson(
+      db as never,
+      JSON.stringify([
+        makeHistoryItem('good'),
+        // 合法 JSON、带 id，但缺 localFileName / primaryService 等必需字段 → 过不了校验
+        { id: 'broken', timestamp: 5 },
+      ]),
+      'replace',
+    );
+
+    expect(result.skipped).toBe(1);
+    expect(result.imported).toBe(1);
+
+    const deleteCall = db.execute.mock.calls.find(([sql]) => String(sql).startsWith('DELETE'));
+    const deleteParams = (deleteCall?.[1] ?? []) as string[];
+    // 关键断言：坏记录对应的本地行必须保住
+    expect(deleteParams).not.toContain('broken');
+    // 云端整份数据里压根没出现过的 id 照删，replace 语义不变
+    expect(deleteParams).toContain('orphan');
+    expect(deleteParams).not.toContain('good');
+  });
+
+  // 同一 id 在载荷里出现多次：若不先去重，重复条目会被重复计进「新增/导入」，
+  // 而 INSERT OR REPLACE 最终只留一行；且 SQLite 对多行同 id 保留**最后一行**，
+  // 输入序「新后旧」会让旧记录覆盖新记录。按 timestamp 合并后与输入顺序无关。
+  it('dedupes records with duplicate ids before upsert and counts them once', async () => {
+    // 旧库不含 dupe（它是「新增」），另有两个将被 replace 语义清理的无头行
+    db.select.mockResolvedValueOnce([
+      { id: 'keep', timestamp: 1 },
+      { id: 'orphan', timestamp: 1 },
+    ]);
+
+    // 故意「新后旧」（先 timestamp 200，后 timestamp 100）：若真按「最后一行胜出」会是旧记录，
+    // merge 去重必须保留较新的 200。
+    const payload = [
+      makeHistoryItem('dupe', 200),
+      makeHistoryItem('dupe', 100),
+    ];
+
+    const result = await importHistoryFromJson(db as never, JSON.stringify(payload), 'replace');
+
+    expect(result.imported).toBe(1);
+    expect(result.added).toBe(1);
+    expect(result.skipped).toBe(0);
+
+    // 只 upsert 了一行，且落库的是较新的 timestamp 200
+    const insertCalls = db.execute.mock.calls.filter(([sql]) => String(sql).startsWith('INSERT OR REPLACE'));
+    expect(insertCalls).toHaveLength(1);
+    const insertParams = insertCalls[0][1] as unknown[];
+    expect(insertParams[0]).toBe('dupe'); // id（COLUMNS_SQL 第 1 列）
+    expect(insertParams[1]).toBe(200);    // timestamp（第 2 列）
   });
 
   it('imports same-timestamp records when only favorite metadata is newer', async () => {
@@ -144,7 +207,7 @@ describe('ImportExportService', () => {
 
     const importedCount = await importHistoryFromJson(db as never, JSON.stringify([incoming]), 'merge');
 
-    expect(importedCount).toBe(1);
+    expect(importedCount.imported).toBe(1);
     const insertParams = db.execute.mock.calls[0][1] as unknown[];
     expect(insertParams[18]).toBe(1);
     expect(insertParams[19]).toBe(2000);
@@ -167,7 +230,7 @@ describe('ImportExportService', () => {
 
     const importedCount = await importHistoryFromJson(db as never, JSON.stringify([incoming]), 'merge');
 
-    expect(importedCount).toBe(1);
+    expect(importedCount.imported).toBe(1);
     const insertParams = db.execute.mock.calls[0][1] as unknown[];
     expect(insertParams[1]).toBe(2000);
     expect(insertParams[7]).toBe('https://img.example.com/newer.png');
@@ -191,7 +254,7 @@ describe('ImportExportService', () => {
 
     const importedCount = await importHistoryFromJson(db as never, JSON.stringify([incoming]), 'merge');
 
-    expect(importedCount).toBe(0);
+    expect(importedCount.imported).toBe(0);
     expect(db.execute).not.toHaveBeenCalled();
   });
 

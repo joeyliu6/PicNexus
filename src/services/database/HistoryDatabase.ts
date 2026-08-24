@@ -50,7 +50,7 @@ import {
 } from './TimelineQueryService';
 import { createTablesAndIndexes, runMigrations } from './SchemaManager';
 import { ConnectionManager } from './ConnectionManager';
-import { exportHistoryToJson, importHistoryFromJson } from './ImportExportService';
+import { exportHistoryToJson, importHistoryFromJson, type HistoryImportResult } from './ImportExportService';
 
 // 类型重新导出
 import type {
@@ -78,6 +78,7 @@ export type {
   FavoritesMetaPageOptions, FavoritesMetaPageResult,
   SyncLogOperation, SyncLogEntry,
   DayStats, DayStatsFilter,
+  HistoryImportResult,
 };
 
 const log = createLogger('HistoryDB');
@@ -1036,13 +1037,13 @@ class HistoryDatabase {
    * @param json JSON 字符串
    * @param mergeStrategy 合并策略：replace 覆盖，merge 合并（相同 ID 保留较新的）
    * @param onProgress 可选的进度回调 (current, total) => void
-   * @returns 导入的记录数
+   * @returns 导入统计 `{ total, imported, added, updated, skipped }`，见 {@link HistoryImportResult}
    */
   async importFromJSON(
     json: string,
     mergeStrategy: 'replace' | 'merge',
     onProgress?: (current: number, total: number) => void,
-  ): Promise<number> {
+  ): Promise<HistoryImportResult> {
     const db = await this.connection.getDb();
     return importHistoryFromJson(db, json, mergeStrategy, onProgress);
   }

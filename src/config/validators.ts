@@ -197,8 +197,49 @@ function isValidUploadResultEntry(entry: unknown): boolean {
 }
 
 /**
- * 验证对象是否为有效的 HistoryItem
- * 用于导入历史记录时的数据验证
+ * 判断一条记录能否被导入历史库
+ *
+ * 这是导入链路的**唯一真相源**：本地文件导入（`useBackupLocal.importHistoryLocal`）与
+ * 云端下载（`ImportExportService.importHistoryFromJson`）都走它。此前两条路径各有一套谓词，
+ * 互有松紧——底层要求 `timestamp > 0`、`localFileName`/`primaryService` 非空却不查 `id`，
+ * 而 `isValidHistoryItem` 要求 `id` 非空却放行 `timestamp <= 0` 和空文件名——同一份文件
+ * 走两条路会得到不同结论。
+ *
+ * ⚠️ **刻意不要求 `id`**：`ImportExportService` 明确支持缺 id 的记录并会自动补一个
+ * （见该文件「预处理：确保所有记录都有 ID」）。把 id 列为必需会让那段兼容逻辑变成死代码，
+ * 手写或第三方导出的历史文件会被整份拒绝。
+ *
+ * ⚠️ **刻意不做 `results` 逐项深检**：导出侧（`exportHistoryToJson`）不做任何校验，
+ * 一旦这里比导出侧严，PicNexus 自己导出的文件就可能导不回来（无损往返被打破）；
+ * 更糟的是 replace 模式下被判无效的记录会连带删掉本地同 id 的行。深检留给
+ * {@link isValidHistoryItem}——那是「完整 HistoryItem 形状」的判据，用途不同。
+ */
+export function isImportableHistoryItem(obj: unknown): boolean {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
+
+  const item = obj as Record<string, unknown>;
+
+  if (typeof item.timestamp !== 'number' || !Number.isFinite(item.timestamp) || item.timestamp <= 0) return false;
+  if (typeof item.localFileName !== 'string' || !item.localFileName) return false;
+  if (typeof item.primaryService !== 'string' || !item.primaryService) return false;
+  if (typeof item.generatedLink !== 'string') return false;
+  if (!Array.isArray(item.results)) return false;
+  // results 条目必须是非空对象：`[null]`/`[5]` 这类脏数据会在 DataTransformer 派生存量列时
+  // 被 isUsableMirror(null) 访问 r.status 触发 TypeError——导入无事务包裹，超过一个批
+  // （500 条）就会先写几批再崩，留下部分导入的残局。
+  // ⚠️ 只拒非对象；不做 `{serviceId,status}` 的完整形状深检（那会打破导出/导入的无损往返）。
+  for (const entry of item.results) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+  }
+
+  return true;
+}
+
+/**
+ * 验证对象是否为**完整**的 HistoryItem（含 id 与 results 逐项深检）
+ *
+ * 与 {@link isImportableHistoryItem} 的分工：这里判的是「形状完整、可以当 HistoryItem 用」，
+ * 那里判的是「可以往历史库里写」。导入链路请用后者，不要用本函数——见其 doc 里的两条 ⚠️。
  */
 export function isValidHistoryItem(obj: unknown): obj is HistoryItem {
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {

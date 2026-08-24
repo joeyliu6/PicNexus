@@ -1,6 +1,6 @@
 import type { HistoryItem, ServiceType } from '../../config/types';
 import { createLogger } from '../../utils/logger';
-import { isUsableMirror } from '../../utils/historyResults';
+import { isUsableMirror, type UsableMirror } from '../../utils/historyResults';
 
 const log = createLogger('DataTransformer');
 
@@ -108,7 +108,12 @@ function normalizeFavoriteUpdatedBy(item: HistoryItem, favoriteUpdatedAt: number
 export function deriveResultColumns(
   results: HistoryItem['results'],
 ): Pick<HistoryItemRow, 'results' | 'success_count' | 'successful_service_ids'> {
-  const successful = results.filter(isUsableMirror);
+  // Why 运行时容错：导入谓词只拦得住「新入库的」脏数据；DB 里可能已经有第三方工具写坏的
+  // 行（SchemaManager 迁移注释自己承认 results 可被污染），rowToItem 把 `[null]` 原样读出来再
+  // 重存时，裸 `isUsableMirror(null)` 会访问 r.status 抛 TypeError。这里先剔除 null/非对象。
+  const successful: UsableMirror[] = results.filter(
+    (r): r is UsableMirror => r != null && typeof r === 'object' && isUsableMirror(r),
+  );
 
   return {
     results: JSON.stringify(results),

@@ -20,7 +20,6 @@ const {
   encryptMock,
   isPasswordEncryptedDataMock,
   isValidUserConfigMock,
-  isValidHistoryItemMock,
   writeSyncLogMock,
   toastShowConfigMock,
   confirmDialogMock,
@@ -39,7 +38,6 @@ const {
   encryptMock: vi.fn(),
   isPasswordEncryptedDataMock: vi.fn(),
   isValidUserConfigMock: vi.fn(),
-  isValidHistoryItemMock: vi.fn(),
   writeSyncLogMock: vi.fn(),
   toastShowConfigMock: vi.fn(),
   confirmDialogMock: vi.fn(),
@@ -84,7 +82,6 @@ vi.mock('@/config/types', async importOriginal => {
   return {
     ...actual,
     isValidUserConfig: isValidUserConfigMock,
-    isValidHistoryItem: isValidHistoryItemMock,
   };
 });
 
@@ -141,7 +138,7 @@ describe('createBackupLocalOps', () => {
     });
     historyGetCountMock.mockResolvedValue(2);
     historyExportToJSONMock.mockResolvedValue(JSON.stringify([createHistoryItem()]));
-    historyImportFromJSONMock.mockResolvedValue(1);
+    historyImportFromJSONMock.mockResolvedValue({ total: 1, imported: 1, added: 1, updated: 0, skipped: 0 });
     configStoreGetMock.mockResolvedValue(createConfig());
     configStoreSetMock.mockResolvedValue(undefined);
     configStoreSaveMock.mockResolvedValue(undefined);
@@ -149,7 +146,6 @@ describe('createBackupLocalOps', () => {
     encryptMock.mockResolvedValue('encrypted-content');
     isPasswordEncryptedDataMock.mockReturnValue(false);
     isValidUserConfigMock.mockReturnValue(true);
-    isValidHistoryItemMock.mockReturnValue(true);
     writeSyncLogMock.mockResolvedValue(undefined);
     confirmDialogMock.mockResolvedValue(true);
     confirmThreeWayMock.mockResolvedValue('accept');
@@ -294,26 +290,59 @@ describe('createBackupLocalOps', () => {
     expect(deps.exportHistoryLoading.value).toBe(false);
   });
 
-  it('rejects invalid history imports before touching the database or cache', async () => {
+  // 判定权已统一收归底层 importFromJSON（config/validators 的 isImportableHistoryItem），
+  // 此处不再有本地前置校验——整份无效时由底层抛错，失败路径的其余保证不变。
+  it('rejects fully invalid history imports without touching the cache', async () => {
     invokeMock.mockImplementation(async (command) => {
       if (command === 'import_text_file') return JSON.stringify([{ id: '' }]);
       if (command === 'export_text_file') return 'C:/backup.json';
       return undefined;
     });
-    isValidHistoryItemMock.mockReturnValueOnce(false);
+    historyImportFromJSONMock.mockRejectedValueOnce(
+      new Error('导入数据格式不匹配，请检查文件是否为 PicNexus 导出的历史记录'),
+    );
 
     const deps = makeDeps();
     const ops = createBackupLocalOps(deps);
 
     await ops.importHistoryLocal();
 
-    expect(historyImportFromJSONMock).not.toHaveBeenCalled();
     expect(invalidateCacheMock).not.toHaveBeenCalled();
     expect(emitHistoryUpdatedMock).not.toHaveBeenCalled();
     expect(writeSyncLogMock).toHaveBeenCalledWith('import_history_local', 'failed', expect.any(String));
     expect(toastShowConfigMock).toHaveBeenCalledWith('error', expect.any(Object));
     expect(deps.importHistoryLoading.value).toBe(false);
     expect(deps.importHistoryProgress.value).toBe(0);
+  });
+
+  // 回归：部分记录无效时不再整份失败，而是导入其余记录并把跳过条数报给用户。
+  // 这正是「本地导入」与「云端下载」此前结论不一致的那一格。
+  it('imports the remaining records and reports how many were skipped', async () => {
+    invokeMock.mockImplementation(async (command) => {
+      if (command === 'import_text_file') {
+        return JSON.stringify([createHistoryItem({ id: 'good' }), { id: 'bad' }]);
+      }
+      if (command === 'export_text_file') return 'C:/backup.json';
+      return undefined;
+    });
+    historyImportFromJSONMock.mockResolvedValueOnce({
+      total: 2, imported: 1, added: 1, updated: 0, skipped: 1,
+    });
+    historyGetCountMock.mockResolvedValue(1);
+
+    const deps = makeDeps();
+    const ops = createBackupLocalOps(deps);
+
+    await ops.importHistoryLocal();
+
+    expect(historyImportFromJSONMock).toHaveBeenCalled();
+    expect(invalidateCacheMock).toHaveBeenCalled();
+    expect(writeSyncLogMock).toHaveBeenCalledWith(
+      'import_history_local',
+      'success',
+      expect.stringContaining('跳过 1 条'),
+    );
+    expect(toastShowConfigMock).toHaveBeenCalledWith('success', expect.any(Object));
   });
 
   it('treats empty imported history files as invalid JSON instead of cancel', async () => {

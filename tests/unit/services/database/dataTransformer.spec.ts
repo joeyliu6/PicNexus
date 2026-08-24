@@ -105,6 +105,25 @@ describe('DataTransformer', () => {
     expect(JSON.parse(row.successful_service_ids)).toEqual(['weibo']);
   });
 
+  // 防御：DB 里可能有第三方工具写坏的 results（SchemaManager 迁移注释自认），rowToItem
+  // 会把 `[null]` 原样读出来。deriveResultColumns 必须跳过 null/非对象条目，
+  // 而不是让 isUsableMirror(null) 访问 r.status 抛 TypeError（无事务，批量导入先写几批再崩）。
+  it('tolerates null / primitive entries in results when deriving success columns', () => {
+    const item = makeHistoryItem();
+    const results = [
+      null,
+      5,
+      'nope',
+      ...item.results,
+    ] as never;
+
+    const row = itemToRow({ ...item, results } as never);
+
+    expect(row.success_count).toBe(1);
+    expect(JSON.parse(row.successful_service_ids)).toEqual(['weibo']);
+    expect(JSON.parse(row.results)).toContain(null);
+  });
+
   it('restores a database row back into a HistoryItem with parsed JSON and booleans', () => {
     const item = rowToItem({
       id: 'alpha',

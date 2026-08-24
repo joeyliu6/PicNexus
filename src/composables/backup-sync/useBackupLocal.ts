@@ -8,7 +8,7 @@ import { useToast } from '../useToast';
 import { TOAST_MESSAGES } from '../../constants';
 import { useConfirm } from '../useConfirm';
 import type { UserConfig } from '../../config/types';
-import { DEFAULT_CONFIG, isValidUserConfig, isValidHistoryItem } from '../../config/types';
+import { DEFAULT_CONFIG, isValidUserConfig } from '../../config/types';
 import { configStore } from '../../store/instances';
 import { secureStorage, isPasswordEncryptedData } from '../../security/crypto';
 import { createLogger } from '../../utils/logger';
@@ -209,15 +209,12 @@ export function createBackupLocalOps(deps: BackupLocalDeps) {
         throw new Error('JSON 格式错误：期望数组格式');
       }
 
-      // 验证每条记录的格式
-      const invalidIndex = parsed.findIndex(item => !isValidHistoryItem(item));
-      if (invalidIndex !== -1) {
-        throw new Error(`第 ${invalidIndex + 1} 条记录格式无效`);
-      }
-
-      const countBefore = await historyDB.getCount();
-
-      await historyDB.importFromJSON(
+      // Why 不再在这里用 isValidHistoryItem 逐条前置校验：那套判据与底层
+      // importFromJSON 的判据互有松紧（前者要求 id 非空却放行 timestamp<=0，后者反之），
+      // 同一份文件走本地导入和云端下载会得到不同结论。判定权统一收归底层
+      // （config/validators 的 isImportableHistoryItem），这里只保留「必须是数组」这层，
+      // 底层会跳过无效记录并把跳过条数回报给用户。
+      const imported = await historyDB.importFromJSON(
         content,
         'merge',
         (current, total) => {
@@ -230,10 +227,14 @@ export function createBackupLocalOps(deps: BackupLocalDeps) {
       invalidateCache();
       emitHistoryUpdated();
 
-      const addedCount = countAfter - countBefore;
-      await writeSyncLog('import_history_local', 'success', `新增 ${addedCount} 条，共 ${countAfter} 条`);
+      const skippedNote = imported.skipped > 0 ? `，跳过 ${imported.skipped} 条格式无效记录` : '';
+      await writeSyncLog(
+        'import_history_local',
+        'success',
+        `新增 ${imported.added} 条，共 ${countAfter} 条${skippedNote}`,
+      );
       toast.showConfig('success', TOAST_MESSAGES.common.importSuccess(
-        `共 ${countAfter} 条记录，新增 ${addedCount} 条`
+        `共 ${countAfter} 条记录，新增 ${imported.added} 条${skippedNote}`
       ));
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);

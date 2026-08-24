@@ -10,6 +10,7 @@
 
 import type Database from '@tauri-apps/plugin-sql';
 import type { HistoryItem } from '../../config/types';
+import { isImportableHistoryItem } from '../../config/types';
 import { createLogger } from '../../utils/logger';
 import {
   COLUMN_COUNT,
@@ -26,6 +27,27 @@ const log = createLogger('ImportExport');
 
 /** 每批处理的记录数（插入和查询都遵循这个批大小） */
 const BATCH_SIZE = 500;
+
+/**
+ * 导入结果
+ *
+ * Why 不再只回一个数字：调用方要报给用户的「新增 N 条 / 合并 M 条」此前是各算各的
+ * （`countAfter - countBefore` 的全表计数差、`cloudItems.length - addedCount` 的原始条数差），
+ * 既会把「更新」误报成「新增」，也会把「格式无效被跳过」的记录算进「已合并」。
+ * 这些数只有导入过程自己数得准，一次性回全。
+ */
+export interface HistoryImportResult {
+  /** 解析出的原始条数（含被跳过的） */
+  total: number;
+  /** 实际写库条数 = added + updated */
+  imported: number;
+  /** 其中本地原本没有的条数 */
+  added: number;
+  /** 其中覆盖了已有记录的条数 */
+  updated: number;
+  /** 因格式不合法被跳过的条数 */
+  skipped: number;
+}
 
 /**
  * 流式数据源：由调用方注入（通常绑定 HistoryDatabase.getAllStream），
@@ -58,14 +80,14 @@ export async function exportHistoryToJson(streamSource: StreamSource): Promise<s
  * @param json JSON 字符串
  * @param mergeStrategy 合并策略：replace 覆盖，merge 合并（相同 ID 保留较新的）
  * @param onProgress 可选的进度回调 (current, total) => void
- * @returns 导入的记录数
+ * @returns 导入统计，见 {@link HistoryImportResult}
  */
 export async function importHistoryFromJson(
   db: Database,
   json: string,
   mergeStrategy: 'replace' | 'merge',
   onProgress?: (current: number, total: number) => void,
-): Promise<number> {
+): Promise<HistoryImportResult> {
   const parsed = JSON.parse(json);
 
   if (!Array.isArray(parsed)) {
@@ -79,23 +101,39 @@ export async function importHistoryFromJson(
     throw new Error('云端数据为空数组，已拒绝覆盖本地（防止误清空）');
   }
 
-  // 校验每条记录的必需字段，过滤掉格式不合法的数据
-  const items = (parsed as HistoryItem[]).filter(item => {
-    if (!item || typeof item !== 'object') return false;
-    if (typeof item.timestamp !== 'number' || item.timestamp <= 0) return false;
-    if (typeof item.localFileName !== 'string' || !item.localFileName) return false;
-    if (typeof item.primaryService !== 'string' || !item.primaryService) return false;
-    if (typeof item.generatedLink !== 'string') return false;
-    if (!Array.isArray(item.results)) return false;
-    return true;
-  });
+  // 校验 + 去重一遍完成：
+  // - `isImportableHistoryItem` 过滤非法记录（含 results 里带 null 的脏条目）。
+  // - 同一 id 在载荷里出现多次（第三方手写/被合并过的文件）时，用内容合并折叠成一条——
+  //   否则重复条目会被重复计进 added/imported（撒谎），而 INSERT OR REPLACE 最终只留一行，
+  //   且 SQLite 对多行同 id 保留的是**最后一行**，输入序「新后旧」会让旧记录覆盖新记录。
+  //   按 timestamp/收藏版本合并后结果与输入顺序无关。
+  const items: HistoryItem[] = [];
+  const mergedById = new Map<string, HistoryItem>();
+  let invalidCount = 0;
+  for (const raw of parsed as unknown[]) {
+    if (!isImportableHistoryItem(raw)) {
+      invalidCount += 1;
+      continue;
+    }
+    const item = raw as HistoryItem;
+    if (item.id) {
+      const existing = mergedById.get(item.id);
+      if (existing) mergedById.set(item.id, mergeHistoryItem(existing, item));
+      else mergedById.set(item.id, item);
+    } else {
+      items.push(item);
+    }
+  }
+  for (const merged of mergedById.values()) {
+    items.push(merged);
+  }
 
   if (items.length === 0 && parsed.length > 0) {
     throw new Error('导入数据格式不匹配，请检查文件是否为 PicNexus 导出的历史记录');
   }
 
-  if (items.length < parsed.length) {
-    log.warn(`导入校验: ${parsed.length} 条中有 ${parsed.length - items.length} 条格式无效被跳过`);
+  if (invalidCount > 0) {
+    log.warn(`导入校验: ${parsed.length} 条中有 ${invalidCount} 条格式无效被跳过`);
   }
 
   // 预处理：确保所有记录都有 ID（在事务外，避免事务中途失败后污染入参）
@@ -107,6 +145,9 @@ export async function importHistoryFromJson(
 
   // 确定需要导入的记录
   let itemsToImport: HistoryItem[];
+  // 「新增」= 本地原本没有这个 id。只有导入过程数得准：调用方用
+  // `countAfter - countBefore` 的全表计数差会被同期的正常上传污染（云端同步锁不锁本地上传）。
+  let addedCount = 0;
 
   if (mergeStrategy === 'merge') {
     // merge 策略：一次性查询所有已存在的记录（消除 N+1 查询）
@@ -116,7 +157,10 @@ export async function importHistoryFromJson(
     // 过滤出需要导入的记录。历史内容按 timestamp 合并，收藏状态按独立版本合并。
     itemsToImport = items.flatMap((item) => {
       const existing = existingMap.get(item.id);
-      if (!existing) return [item];
+      if (!existing) {
+        addedCount += 1;
+        return [item];
+      }
 
       const merged = mergeHistoryItem(existing, item);
       return hasHistoryItemChanged(existing, merged) ? [merged] : [];
@@ -138,6 +182,11 @@ export async function importHistoryFromJson(
         )
       : null;
 
+  if (mergeStrategy === 'replace' && oldIdsSnapshot) {
+    // replace 模式下 itemsToImport 就是全部合法记录，「新增」= 快照里没有的那些
+    addedCount = items.reduce((n, item) => (oldIdsSnapshot.has(item.id) ? n : n + 1), 0);
+  }
+
   // 注意：tauri-plugin-sql 基于 sqlx 连接池，每次 execute 都借用不同连接，
   // BEGIN/COMMIT 无法跨调用生效（见 plugins-workspace #886），所以不能用事务包裹。
   //
@@ -153,13 +202,39 @@ export async function importHistoryFromJson(
   }
 
   if (mergeStrategy === 'replace' && oldIdsSnapshot) {
-    const importIdSet = new Set(items.map((item) => item.id));
+    // Why 认领范围要覆盖整份 parsed，而不只是过滤后的 items：
+    // 一条云端记录没通过上面的校验，只说明「这条读不懂」，不代表「云端已经删了它」。
+    // 若只认领 items 的 id，本地那条**完好**的同 id 记录会落进删除集被 DELETE 掉——
+    // 它既没被 INSERT 覆盖过（压根没进 itemsToImport），也没有任何提示，是纯粹的数据丢失。
+    // 只有「云端整份数据里彻底没出现过的 id」才该删，replace 语义照样成立。
+    const importIdSet = new Set<string>(items.map((item) => item.id));
+    for (const raw of parsed as unknown[]) {
+      if (!raw || typeof raw !== 'object') continue;
+      const rawId = (raw as { id?: unknown }).id;
+      // 归一化成字符串：本地 id 从 SQLite 出来恒为 string，云端若写成数字 123
+      // 而本地存的是 '123'，不归一化就仍会被误删。
+      if (typeof rawId === 'string' && rawId) importIdSet.add(rawId);
+      else if (typeof rawId === 'number' && Number.isFinite(rawId)) importIdSet.add(String(rawId));
+    }
     const toDelete = [...oldIdsSnapshot].filter((id) => !importIdSet.has(id));
     await deleteByIds(db, toDelete);
   }
 
-  log.info(`导入完成: ${importedCount}/${items.length} 条`);
-  return importedCount;
+  // skipped = 触犯谓词的条数。不能用 `parsed.length - items.length`——去重后合法同 id
+  // 记录合并成一条，那个差值会把重复也算成跳过。
+  const skippedCount = invalidCount;
+  const updatedCount = itemsToImport.length - addedCount;
+  log.info(
+    `导入完成: ${importedCount}/${items.length} 条（新增 ${addedCount}，更新 ${updatedCount}，跳过 ${skippedCount}）`,
+  );
+
+  return {
+    total: parsed.length,
+    imported: importedCount,
+    added: addedCount,
+    updated: updatedCount,
+    skipped: skippedCount,
+  };
 }
 
 /**
