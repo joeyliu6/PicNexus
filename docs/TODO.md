@@ -38,16 +38,6 @@
 
 ## 待处理
 
-### [ ] sync + ipc 扫描产出：代码已修完+真机已验收，待提交
-
-- **来源**：2026-08-24 `/scan-bugs` 存量扫描 + 修复 + 真机验收 + 二次审查，完整记录见
-  [scan-sync-ipc-2026-08-24.md](./audits/scan-sync-ipc-2026-08-24.md)（含执行记录、方案修正、验收表、二次审查修复）
-- **已过**：修复的 4 个真机场景全绿；二次审查发现的 2 条正确性问题（`results:[null]` 崩溃、重复 id 未合并）
-  已修并有回归测试；两个一次性探针测试已删。lint / typecheck / 全量单测（3059）全绿。
-- **剩余**：代码未提交（未获授权）。
-
-**当前处置**：待授权提交后归档。
-
 ### [ ] Tauri E2E 在 CI 跑手上建会话失败（暂设非阻断，待上游修复后恢复）
 
 - **来源**：2026-08-21 发版 v1.1.0 前触发 CI 加测，`Tauri desktop E2E smoke` 首次真正执行即失败
@@ -97,6 +87,45 @@
    配色也另起一套（`#111827` / `#f8fafc`），不是主题令牌的副本，所以 2026-08-22 新增的
    `scripts/check-theme-token-copies.mjs` 刻意没收编它——要收编得先把整套色值对到令牌上，
    那是一次独立的视觉改动，需要真机看过标题栏与下方 WebView 的接缝再定。
+
+### [ ] 文档修复：取消扫描后仍自动发起备用链接网络验证批次
+
+- **来源**：2026-08-25 `/scan-bugs md-rescue` 扫描
+- **症状**：[LinkChecker.ts:403](../../src/composables/md-rescue/LinkChecker.ts#L403) 的 cancelled 分支
+  对已检出备用链接再调 `verifyBackupLinks({ allowCancelled: true })` → 新起一批 `batch_check_links`
+  （[useLinkCheck.ts:572](../../src/composables/link-check/useLinkCheck.ts#L572)）——用户点「取消」后
+  网络检查仍在跑，跑完才落到 `cancelled`。与图 1「取消即停」语义相悖，且排查表「备用链接显示待验证
+  不更新」只对「Phase 2 中取消」成立，对「Phase 1 中取消」实际**会**更新，两者自相矛盾
+- **定性**：疑似缺陷 + 🟡（行为可逐行走通；是否算缺陷取决于「取消后按验证结果修复」是不是刻意设计）
+- **优先级**：中 —— 越晚取消已检出备用链接越多，取消后静默验证越久、越像「取消没停下」
+
+**当前处置**：待确认设计意图 → 若是刻意设计，写进图 4 / 排查表与代码注释；若否，取消分支改
+`allowCancelled: false` 即停。改前先真机验证：扫一个大文件夹到后半段再取消，观察网络是否仍在动。
+
+### [ ] 文档修复：修复确认对话框缺「替换摘要」，图 6 流程与实际不符
+
+- **来源**：2026-08-25 `/scan-bugs md-rescue` 扫描
+- **症状**：`autoSelectAndGetSummary` / `startFix` / `applyHostPreference` 三个函数生产代码零调用
+  （仅测试引用）；`MdRepairDialog` 底部只有「开始修复（N 张）」按钮，无文档图 6 承诺的逐文件替换摘要
+  / diff 预览；预选改由对话框 `onShow` 现算 `manualSelections`，确认走 `applyRepairStrategy + executeReplace`
+- **定性**：疑似缺陷 + 🟡（文档承诺环节缺失，无数据损坏面；策略选择逻辑本身与图 6 一致）
+- **优先级**：低 —— 倾向在确认对话框补摘要（复用 `autoSelectAndGetSummary` 返回值），顺手删死代码
+  并把图 5/图 6 改写为实际流程（图 3「关键源文件」指针也要从 `useMdRescue.ts` 更正到 `LinkChecker.ts`）
+
+**当前处置**：待排期（补摘要 or 删死代码 + 文档同步，二选一）
+
+### [ ] 扫描：NON_IMAGE_EXTENSIONS 跨语言双份无 lint 守卫
+
+- **来源**：2026-08-25 `/scan-bugs md-rescue` 扫描
+- **症状**：[mdParser.ts:263](../../src/utils/mdParser.ts#L263) 与
+  [md_scanner.rs:244](../../src-tauri/src/commands/md_scanner.rs#L244) 各有一份 50+ 条的图片扩展名
+  黑名单（文件夹模式走 Rust、单文件/拖放走 JS），当前逐条一致，但 `BACKUP_DIR_NAME` 已登记在
+  `check-cross-language-constants.mjs` 的 `PAIRS`，这个列表没有守卫——漂移会让文件夹与拖放模式
+  的提取结果静默分叉
+- **定性**：🟡 潜伏风险非现行缺陷
+- **优先级**：低 —— 一次性补守卫即可（两侧集合相等测试，或抽单一来源）
+
+**当前处置**：待排期
 
 ---
 
@@ -203,6 +232,12 @@
 ---
 
 ## 已完成
+
+### [x] sync + ipc 扫描产出已修复并真机验收
+
+2026-08-24 扫描 + 修复 + 真机验收（dufs @127.0.0.1:4919，4 场景全过）+ 二次审查 2 条正确性回归全绿。
+提交：`058f1cc7` / `343ca33e` / `e10b677f` / `0d25561a` / `2a16f8c1`。
+详见 [scan-sync-ipc-2026-08-24.md](./audits/scan-sync-ipc-2026-08-24.md)。
 
 ### [x] history 模块扫描三缺陷（删除虚报战果 / timePeriodStats 失真 / 流程图失真）
 
