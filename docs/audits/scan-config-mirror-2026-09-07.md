@@ -20,7 +20,7 @@
 | 1 | config | 换备份密码后托盘仍用旧钥匙回写配置，重启整份重置且无备份 | ✅ 3 条（主路径 / 轻症状 / 停用方向可救回） | ✅ 复现（主路径 2026-09-07）+ ✅ 修复复验（2026-09-07 同路径，见「真机复验结果」） |
 | 2 | config | `configStore.get` 递出缓存原件，保存失败后回滚空转 | ✅ 2 条 | ✅ 复现（2026-09-07）+ ✅ 修复复验（2026-09-07，见「P1-1」执行记录） |
 | 3 | mirror | 文档承诺切主/删镜像走「脏标记同步」，机制不存在 | ✅ 2 条（上传/下载两个方向） | ✅ 复现（2026-09-07，见「真机复现记录」）+ ✅ 文档已修正（同日，仅改文档，未动代码） |
-| 4 | mirror | 灯箱单条重检不重算 `linkCheckSummary` | ✅ 1 条 | ⬜ 待安排（影响极小，可与 #3 一起看） |
+| 4 | mirror | 灯箱单条重检不重算 `linkCheckSummary` | ✅ 1 条 | ✅ 复现（2026-09-07）+ ✅ 修复复验（2026-09-07，见「P1-3」执行记录） |
 
 ---
 
@@ -186,7 +186,7 @@
 | P0-1 停用方向 | 已有密码 → 「关闭加密」→ 关窗到托盘 → 托盘切主题 → 重启 | 弹密码框；输**旧**口令能进，配置完整，但备份密码又变回「已加密」 | ⬜ |
 | P1-1 | 设置页改微博 Cookie → 让保存失败（最省事：先把 `.settings.dat` 设为只读）→ 观察表单与「保存失败」提示 → 离开再回设置页 | 提示保存失败，但表单仍显示新 Cookie；回来还是新值；解除只读、重启后是旧值 | ✅ 真机完全复现（2026-09-07）+ ✅ 修复复验（2026-09-07，见下方执行记录） |
 | P1-2 | ~~一条多图床记录 → 灯箱移除一条镜像 → 「增量上传」~~（此判据里的"增量上传"按钮在界面上不存在，见执行记录；改用「同步」）一条多图床记录 → 灯箱移除一条镜像 → 「同步」 | toast「已同步」（不报错、也不是"无需上传"，因为走的入口不同）；云端 `history.json` 里被移除的镜像原样还在；「覆盖本地」后镜像回本地 DB | ✅ 复现，见「真机复现记录」 |
-| P1-3 | 链接检测跑一遍得到一条失效 → 灯箱 chip 重检判回可用 → 重进链接检测页 | 首屏（Phase 1）仍含这条，行状态显示可用 | ⬜ |
+| P1-3 | 链接检测跑一遍得到一条失效 → 灯箱 chip 重检判回可用 → 重进链接检测页 | 首屏（Phase 1）仍含这条，行状态显示可用 | ✅ 复现（2026-09-07）+ ✅ 修复复验（2026-09-07，见「P1-3」执行记录） |
 
 ## 执行记录
 
@@ -562,7 +562,76 @@ App：设置页配好 WebDAV 连接（`hasValidConfig` 要求用户名/密码非
 残留；scratchpad 下的临时 WebDAV 根目录、种子脚本、运行日志已清理。
 
 **下一步**：P1-2 到此闭环（真机复现 → 文档修正 → 新增回归测试，全部完成；因为这次修法是文档向的，
-没有"修复代码 → 真机复验"这一步）。改动尚未提交，等待用户确认。P1-3 仍未处理。
+没有"修复代码 → 真机复验"这一步）。改动尚未提交，等待用户确认。
+
+### 2026-09-07 P1-3 真机复现 + 修复 + 真机复验（真跑起来的 App，不是 vitest mock）
+
+**结论：坐实了，一次跑通，缺陷现象和修复效果都用真实数据在真机上核对过，没有走样。** 大白话说：
+灯箱里把一条已经判定失效的镜像链接点「重新检测」，如果这次判回可用，链接检测页那一行的状态确实
+会立刻显示对——但用来决定「这条记录要不要在首屏第一批就捞出来给你看」的那个统计摘要字段，
+修复前压根没跟着重算，还停在"有问题"那个旧结论上；修复后统计摘要跟着一起改对了。
+
+**怎么测的**：跟 P0-1/P1-1/P1-2 同一套 portable 隔离手法（`src-tauri/target/debug/data/portable.json`），
+但这次不需要吃真实 WebDAV，用本机 dufs（`C:\Users\Jiawei\.cargo\bin\dufs.exe`）在 `127.0.0.1:5057`
+起一个纯静态文件服务器，托管两张真实 PNG（`src-tauri/icons/128x128.png` 复制出来的，4066 字节，
+过了 Rust 侧 `is_suspicious_image_response` 要求的"content-type 是 image/* 且体积 ≥1024 字节"这道槛，
+确保「重新检测」发出的是一次不摆造型的真实 HTTP 请求、走真实判定逻辑，不是随手挂一个假 URL）。
+在 portable 库里直接用 Python sqlite3 按 `SchemaManager.ts` 最新 DDL 种了一条记录：主图床 jd
+（已判 valid）+ 镜像 qiyu（已判 invalid，`linkCheckSummary` 是 `{totalLinks:2,validLinks:1,invalidLinks:1,uncheckedLinks:0}`，
+模拟"上一次批量检测判定 qiyu 挂了"）。wdio + tauri-driver + msedgedriver 驱动真实编译出来的 debug
+App（`onPrepare` 钩子已用当前工作区代码——含还没提交的修复——重新跑过 `vite build` + `cargo build`）：
+进历史页 → 真实点开这条记录的灯箱 → 真实点开图床管理菜单 → 真实点 qiyu 那一行的状态 chip
+（触发 `useMirrorFallback.checkMirror`，真的发一次 `invoke('check_image_link')` 打到 dufs）→ 等 chip
+在真实 UI 上从「已失效」变绿。判据不看 toast 文案，直接读磁盘上 `history.db` 里这条记录的
+`link_check_status` / `link_check_summary` 两列，另外**直接跑一遍 `LinkCheckQuery.ts` 里 Phase 1
+首屏那句真实 SQL**（`link_check_summary IS NULL OR invalidLinks>0 OR uncheckedLinks>0`）核对这条
+记录会不会被捞出来——这比在链接检测页里干等分批加载更直接，且是同一句 SQL、同一份数据库文件，
+不存在"判据和代码实际用的不是一回事"的风险。临时脚本
+`tests/tauri-e2e/p1-3-mirror-summary-repro.tauri.e2e.cjs` 跑完已删除。
+
+**证据表格**（改代码前后各跑一遍完整流程，同一条种子记录）：
+
+| 阶段 | `link_check_status.qiyu` | `link_check_summary` | Phase 1 SQL 是否命中这条记录 |
+|------|--------------------------|----------------------|------------------------------|
+| 种子初始状态 | `isValid:false`（上次批量检测判失效） | `{invalidLinks:1,validLinks:1,uncheckedLinks:0}` | 是（`invalidLinks>0`） |
+| **修复前**：灯箱重检后 | `isValid:true`（chip 在 UI 上确实变绿了） | **原样不动**，仍是 `invalidLinks:1` | **仍然是**——这正是缺陷本体：行状态对，批次分类错 |
+| **修复后**：同样流程重跑一遍 | `isValid:true` | `{invalidLinks:0,validLinks:2,uncheckedLinks:0}`（正确重算，`lastCheckTime` 保留旧值，与 `removeMirror` 的既有口径一致——不凭空刷新时间戳） | **不再命中**——`json_extract` 三个条件全部不满足 |
+
+「修复前」那一行是本次新采集的真机证据，跟审计文档最初预判的现象完全对上：`linkCheckStatus`
+这个字段确实是对的（用户在灯箱里看到的 chip 颜色不会骗人），但 `linkCheckSummary` 这个只有
+Phase 1 查询会用到、没有任何 UI 直接展示的统计字段被漏更新了，后果就是这条记录在链接检测页里
+会被误判为"还有问题"多留在首屏一轮，等 Phase 2 补全查询扫到它才会被摘掉。「修复后」证明补上
+`recomputeLinkCheckSummary` 调用（口径抄 `removeMirror`：无 `previousSummary` 就不生成、
+有则原地重算四个计数）后这个错位消失。
+
+**改的代码**：`src/composables/history/useMirrorFallback.ts` 的 `checkMirror` 函数里，DB 写入队列
+原来只 `historyDB.update(cur.id, { linkCheckStatus })`；现在多算一步
+`recomputeLinkCheckSummary(latest.results, linkCheckStatus, latest.linkCheckSummary)`，
+非空才塞进 `updates.linkCheckSummary` 一并写入——和 `HistoryDatabase.removeMirror`（403 行）、
+`useHistoryResultOps.stripServiceFromItem`（67 行）用的是同一个函数、同一套"没有旧 summary 就不
+凭空造一个"的规则，不是照着这两处的逻辑另起一份新实现。
+
+**单元回归**（永久测试，取代审计附录里那份断言"缺陷点"的临时用例）：
+`tests/unit/composables/history/useMirrorFallback.spec.ts` 的 `checkMirror` describe 块新增两条：
+一条用带 `linkCheckSummary` 的种子数据验证重检后落库的 `updates.linkCheckSummary` 确实按新状态
+重算对（`invalidLinks:1→0`，其余字段没被检测覆盖到的服务归入 `uncheckedLinks`）；另一条验证
+`previousSummary` 本来就不存在时（`makeItem()` 默认不带这个字段）不会凭空生成一个，`updates` 里
+压根不出现 `linkCheckSummary` 这个 key——这是 `recomputeLinkCheckSummary` 自己文档注释里写的既有
+规则，`checkMirror` 这条新路径也必须守住，不能自己另开一套。原有 22 条 `checkMirror`/`removeMirror`/
+`switchPrimary` 用例全部保持通过（新增后共 24 条）。
+
+`npx vitest run`：223 个文件 / 3074 条用例全绿；`npm run typecheck`、`npm run lint` 均通过
+（lint 输出的"10 处 invoke 调用无法静态核对"是本仓库已知的动态派发盲区，跟这次改动无关，
+本次没有新增任何一条）。改动只涉及前端 TS，未碰 `src-tauri/`，未跑 `cargo check`/`cargo test`。
+
+**清理**：`tests/tauri-e2e/p1-3-mirror-summary-repro.tauri.e2e.cjs` 已删除；
+`src-tauri/target/debug/data/`（含本次生成的 `history.db`、`portable.json`）已整个删除；
+dufs 进程已停止、`127.0.0.1:5057` 端口释放；`picnexus.exe`/`msedgedriver`/`tauri-driver` 进程列表
+确认无残留；scratchpad 下的临时 webroot（两张测试用 PNG）与种子脚本已清理；`git status` 干净
+（只有本次改动）。
+
+**下一步**：P1-3 到此闭环（真机复现 → 修复 → 单元回归 → 真机复验，全部通过）。改动尚未提交，
+等待用户确认。至此 config + mirror 这批扫描的四条发现（P0-1/P1-1/P1-2/P1-3）全部处理完毕。
 
 ---
 
