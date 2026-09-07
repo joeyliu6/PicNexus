@@ -375,7 +375,14 @@ export function useMirrorFallback(item: Ref<HistoryItem | null>) {
         if (!latest) return false;
         const linkCheckStatus = { ...(latest.linkCheckStatus ?? {}) };
         linkCheckStatus[serviceId] = entry;
-        await historyDB.update(cur.id, { linkCheckStatus });
+        const updates: Partial<HistoryItem> = { linkCheckStatus };
+        // 与 removeMirror/stripServiceFromItem 保持一致：单条重检后同步重算 summary，
+        // 否则链接检测页 Phase 1 首屏查询会一直按旧摘要把这条记录错误归类
+        const nextSummary = recomputeLinkCheckSummary(latest.results, linkCheckStatus, latest.linkCheckSummary);
+        if (nextSummary) {
+          updates.linkCheckSummary = nextSummary;
+        }
+        await historyDB.update(cur.id, updates);
         return true;
       });
       dbWriteQueue = writeTask.catch(() => undefined);

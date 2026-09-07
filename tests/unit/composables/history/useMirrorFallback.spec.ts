@@ -397,6 +397,52 @@ describe('useMirrorFallback - checkMirror', () => {
     expect(harness.api().checkingServices.value.has('qiyu')).toBe(false);
   });
 
+  it('单条重检把 qiyu 判回 valid 后，落库同步重算 linkCheckSummary（与 removeMirror 口径一致）', async () => {
+    invokeMock.mockResolvedValueOnce({
+      link: 'https://qiyu.example/pic.png',
+      is_valid: true,
+      status_code: 200,
+      error_type: 'success',
+      browser_might_work: true,
+    });
+    // 上一次批量检测：qiyu 失效，summary 里 invalidLinks=1
+    const item = makeItem('jd', {
+      jd: { isValid: true, lastCheckTime: 1, errorType: 'success' },
+      qiyu: { isValid: false, lastCheckTime: 1, errorType: 'http_4xx' },
+    });
+    item.linkCheckSummary = { totalLinks: 3, validLinks: 2, invalidLinks: 1, uncheckedLinks: 0, lastCheckTime: 1 };
+    dbGetByIdMock.mockResolvedValueOnce(item);
+    const harness = mountHarness(item);
+
+    await harness.api().checkMirror('qiyu');
+
+    expect(dbUpdateMock).toHaveBeenCalledTimes(1);
+    const [, updates] = dbUpdateMock.mock.calls[0] as [string, Partial<HistoryItem>];
+    // weibo 未检测(unchecked)，jd 仍 valid，qiyu 这次判回 valid：重算后 invalidLinks 应清零
+    expect(updates.linkCheckSummary).toEqual({
+      totalLinks: 3, validLinks: 2, invalidLinks: 0, uncheckedLinks: 1, lastCheckTime: 1,
+    });
+  });
+
+  it('previousSummary 不存在时不凭空造 summary（与 recomputeLinkCheckSummary 的既有规则一致）', async () => {
+    invokeMock.mockResolvedValueOnce({
+      link: 'https://qiyu.example/pic.png',
+      is_valid: true,
+      status_code: 200,
+      error_type: 'success',
+      browser_might_work: true,
+    });
+    // makeItem 默认不带 linkCheckSummary
+    dbGetByIdMock.mockResolvedValueOnce(makeItem());
+    const harness = mountHarness();
+
+    await harness.api().checkMirror('qiyu');
+
+    expect(dbUpdateMock).toHaveBeenCalledTimes(1);
+    const [, updates] = dbUpdateMock.mock.calls[0] as [string, Partial<HistoryItem>];
+    expect('linkCheckSummary' in updates).toBe(false);
+  });
+
   it('失效：写 DB 标记 invalid + 本地 chip 立即变 invalid，且不弹 toast', async () => {
     invokeMock.mockResolvedValueOnce({
       link: 'https://qiyu.example/pic.png',
