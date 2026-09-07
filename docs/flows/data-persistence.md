@@ -30,7 +30,7 @@ flowchart TD
     J -- 成功 --> H
     J -- 失败 --> K{BackupPasswordRequiredError?}
     K -- 是 --> L[抛出异常 → 显示 BackupPasswordDialog]
-    K -- 否 --> M[降级为 DEFAULT_CONFIG + 错误提示]
+    K -- 否 --> M[main.ts ensureConfigSync 用 DEFAULT_CONFIG 覆写 .settings.dat]
 
     L --> N[用户输入备份密码]
     N --> O[secureStorage.initWithPassword]
@@ -48,6 +48,16 @@ flowchart TD
     style M fill:#ffebee,stroke:#c62828
     style S fill:#e8f5e9,stroke:#2e7d32
 ```
+
+> **节点 M 是磁盘覆写，不是内存降级**：真正执行的是 `main.ts` 的 `ensureConfigSync`（不是这张图本身画的那条链路），
+> 用 `configStore.setDirect({ config: DEFAULT_CONFIG })` 把 `.settings.dat` 整份重写成默认配置，旧配置的图床凭证、
+> profile 全部丢失，不是"这次启动先凑合用默认值、文件保持原样待下次再试"。
+> `EncryptedStore.loadForRead` 在抛出解密失败前会把原始密文备份成 `.settings.dat.corrupted.<时间戳>`，
+> 密钥本身还在的情况下（比如密码模式换回旧口令）这份备份可能救回数据，但密钥已被覆盖时仍不可恢复。
+> 最容易触发这条路径的场景是托盘常驻窗口拿着换密码前的旧密钥回写配置，详见
+> [scan-config-mirror-2026-09-07.md](../audits/scan-config-mirror-2026-09-07.md) P0-1；
+> 换密钥的三个入口（设置/修改/停用密码、新机器输入密码恢复）现在都会广播 `secure-key-rotated` 事件，
+> 托盘收到后 `secureStorage.forceReinit()` 重新取新密钥，不会再发生这种写反的情况。
 
 ### 配置保存
 
@@ -271,7 +281,7 @@ flowchart TD
 
 | 现象 | 可能原因 | 对照图表位置 |
 |------|---------|-------------|
-| 配置丢失/恢复默认 | .settings.dat 解密失败，降级为 DEFAULT_CONFIG | 图3 加载流节点 M |
+| 配置丢失/恢复默认 | .settings.dat 解密失败（常见根因：托盘常驻窗口拿旧密钥回写覆盖），main.ts 整份覆写为 DEFAULT_CONFIG；`.settings.dat.corrupted.*` 里有原始密文备份 | 图3 加载流节点 M |
 | 弹出密码输入框 | 更换设备或密钥丢失，触发 BackupPasswordRequired | 图3 加载流节点 L |
 | 设完备份密码后某个 WebDAV 密码解不开 | 内层字段密文没跟着换钥匙 → 孤儿密文，见 [排查](../reference/troubleshooting/orphan-field-ciphertext.md) | `rekeyFieldSecrets` |
 | 启动时提示「部分密码已失效」 | 存量孤儿被 `purgeOrphanFieldSecrets` 清空，按提示重填即可 | `main.ts` 启动流程 2.1 |
