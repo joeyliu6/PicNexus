@@ -4,6 +4,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow, LogicalSize, monitorFromPoint, PhysicalPosition } from '@tauri-apps/api/window';
 import { DEFAULT_CONFIG, isPublicRiskService, type UserConfig } from '../../config/types';
 import { readFreshConfig } from '../../store/instances';
+import { secureStorage, SECURE_KEY_ROTATED_EVENT } from '../../security/crypto';
 import { createLogger } from '../../utils/logger';
 import { useServiceHealth } from '../../composables/useServiceHealth';
 import {
@@ -48,6 +49,7 @@ let unlistenConfig: UnlistenFn | null = null;
 let unlistenFocus: UnlistenFn | null = null;
 let unlistenOpened: UnlistenFn | null = null;
 let unlistenHideRequested: UnlistenFn | null = null;
+let unlistenKeyRotated: UnlistenFn | null = null;
 
 const log = createLogger('TrayMenuWindow');
 const actions = createTrayMenuActions();
@@ -194,6 +196,23 @@ async function refreshTrayState(): Promise<void> {
   evaluateConfig(config.value);
 }
 
+/**
+ * 主窗口换了备份密码（设置/修改/停用）或用密码恢复了配置后触发。
+ *
+ * ⚠️ 必须先 forceReinit() 拿到新密钥，再走 refreshTrayState() → readFreshConfig()
+ * 触发一次真实解密：口令模式的 mode/passwordSalt 要靠这次解密成功才能回填
+ * （forceReinit() 本身只会把 mode 重置成 random），顺序不能反，否则下一次托盘写盘
+ * 会用对了密钥字节、却把文件错误标成 PNXENC 格式，丢失口令模式的可跨机恢复能力。
+ */
+async function handleSecureKeyRotated(): Promise<void> {
+  try {
+    await secureStorage.forceReinit();
+    await refreshTrayState();
+  } catch (error) {
+    log.warn('密钥轮换后刷新托盘状态失败:', error);
+  }
+}
+
 async function hideSelf(): Promise<void> {
   menuVisible.value = false;
   flyoutOpen.value = false;
@@ -303,6 +322,9 @@ onMounted(async () => {
   unlistenHideRequested = await listen('tray-menu-hide-requested', async () => {
     await hideSelf();
   });
+  unlistenKeyRotated = await listen(SECURE_KEY_ROTATED_EVENT, () => {
+    void handleSecureKeyRotated();
+  });
   unlistenFocus = await getCurrentWindow().onFocusChanged(({ payload: focused }) => {
     if (!focused) void hideSelf();
   });
@@ -314,6 +336,7 @@ onUnmounted(() => {
   unlistenFocus?.();
   unlistenOpened?.();
   unlistenHideRequested?.();
+  unlistenKeyRotated?.();
 });
 </script>
 

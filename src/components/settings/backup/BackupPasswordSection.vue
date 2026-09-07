@@ -2,10 +2,11 @@
 import { ref, onMounted } from 'vue';
 import Button from 'primevue/button';
 import { invoke } from '@tauri-apps/api/core';
+import { emit as emitTauriEvent } from '@tauri-apps/api/event';
 import { useToast } from '../../../composables/useToast';
 import { TOAST_MESSAGES } from '../../../constants';
 import type { ToastMessageConfig } from '../../../constants/toastMessages';
-import { secureStorage } from '../../../security/crypto';
+import { secureStorage, SECURE_KEY_ROTATED_EVENT } from '../../../security/crypto';
 import { rekeyFieldSecrets, type RekeyReport } from '../../../security/fieldSecrets';
 import { configStore, syncStatusStore } from '../../../store/instances';
 import type { UserConfig } from '../../../config/types';
@@ -162,6 +163,9 @@ async function handlePasswordConfirm(payload: BackupPasswordConfirmPayload) {
     // 三条分支都换过钥匙了（验证失败的那两条已提前 return）。
     // 磁盘上是新密文，父级内存里还是旧的，必须让它去刷一遍
     emit('secrets-rekeyed');
+    // 托盘是独立 webview，有自己一份 secureStorage 单例，Vue 组件事件过不去；
+    // 必须走 Tauri 跨窗口事件，否则托盘会拿旧钥匙把配置文件整份覆盖（P0-1）
+    await emitTauriEvent(SECURE_KEY_ROTATED_EVENT);
     passwordDialogRef.value?.onPasswordSuccess();
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);

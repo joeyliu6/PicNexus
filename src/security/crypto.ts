@@ -26,6 +26,16 @@ const SALT_LENGTH = 16;
 const IV_LENGTH = 12;
 
 /**
+ * 密钥已轮换事件（跨窗口广播）
+ *
+ * 设置/修改/停用备份密码、或用备份密码恢复配置后触发，通知其它 webview（目前只有托盘常驻窗口）
+ * 自己那份 secureStorage 单例手里的密钥已经过期，必须 forceReinit() 重新从钥匙串取一遍。
+ * 不发这个事件的后果：托盘窗口拿旧密钥重新加密整份配置文件覆盖写盘，主窗口下次用新密钥解不开，
+ * 详见 docs/audits/scan-config-mirror-2026-09-07.md P0-1。
+ */
+export const SECURE_KEY_ROTATED_EVENT = 'secure-key-rotated';
+
+/**
  * 备份密码必须解密的错误
  * 当检测到 PNXPWD 加密数据但无法解密时抛出
  */

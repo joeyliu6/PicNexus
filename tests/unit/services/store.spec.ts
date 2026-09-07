@@ -1,11 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Store, StoreError } from '@/store';
 import { readTextFile, writeTextFile, exists, mkdir } from '@tauri-apps/plugin-fs';
+import { secureStorage } from '@/security/crypto';
 
 const mockReadTextFile = vi.mocked(readTextFile);
 const mockWriteTextFile = vi.mocked(writeTextFile);
 const mockExists = vi.mocked(exists);
 const mockMkdir = vi.mocked(mkdir);
+
+vi.mock('@/security/crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/security/crypto')>();
+  return {
+    ...actual,
+    secureStorage: {
+      decrypt: vi.fn(),
+      encrypt: vi.fn(),
+      isPasswordMode: vi.fn().mockReturnValue(false),
+    },
+  };
+});
 
 describe('Store（非加密模式）', () => {
   let store: Store;
@@ -467,5 +480,35 @@ describe('Store（非加密模式）', () => {
       const result = await store.get('key');
       expect(result).toBeNull();
     });
+  });
+});
+
+/**
+ * P0-1 止损：main.ts 的 ensureConfigSync 在解密失败（密钥不匹配）时会用 setDirect
+ * 整份覆写为 DEFAULT_CONFIG。loadForWrite 早就会在覆写前备份原始密文，但 loadForRead
+ * （main.ts 最先调用的 configStore.get 走的正是这条路径）此前会直接抛错、跳过备份，
+ * 详见 docs/audits/scan-config-mirror-2026-09-07.md P0-1 修法第 3 点。
+ */
+describe('Store（加密模式）读取时解密失败的备份兜底', () => {
+  let store: Store;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockWriteTextFile.mockResolvedValue(undefined);
+    mockMkdir.mockResolvedValue(undefined);
+    vi.mocked(secureStorage.decrypt).mockReset();
+    store = new Store('secure.dat', { encrypted: true });
+  });
+
+  it('get() 遇到解密失败，先把原始密文备份成 .corrupted.<时间戳>，再抛出 StoreError', async () => {
+    mockExists.mockResolvedValue(true);
+    mockReadTextFile.mockResolvedValue('PNXENC:garbled-ciphertext');
+    vi.mocked(secureStorage.decrypt).mockRejectedValue(new Error('数据损坏或密钥不匹配'));
+
+    await expect(store.get('config')).rejects.toThrow(StoreError);
+
+    const backupCall = mockWriteTextFile.mock.calls.find(([path]) => String(path).includes('.corrupted.'));
+    expect(backupCall).toBeDefined();
+    expect(backupCall?.[1]).toBe('PNXENC:garbled-ciphertext');
   });
 });

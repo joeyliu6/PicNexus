@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { listen, emit as emitTauriEvent, type UnlistenFn } from '@tauri-apps/api/event';
 import MainLayout from './components/layout/MainLayout.vue';
 import OnboardingDialog from './components/onboarding/OnboardingDialog.vue';
 import BackupPasswordDialog from './components/dialogs/BackupPasswordDialog.vue';
@@ -20,7 +20,7 @@ import { useAutoUpdate } from './composables/useAutoUpdate';
 import { useServiceAvailability } from './composables/useServiceAvailability';
 import { TOAST_MESSAGES } from './constants';
 import { configStore, readFreshConfig } from './store/instances';
-import { BackupPasswordRequiredError, secureStorage } from './security/crypto';
+import { BackupPasswordRequiredError, secureStorage, SECURE_KEY_ROTATED_EVENT } from './security/crypto';
 import { startupFlags } from './store/startupFlags';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
@@ -115,6 +115,9 @@ async function handlePasswordConfirm(payload: BackupPasswordConfirmPayload) {
 
   try {
     await secureStorage.initWithPassword(pendingEncryptedContent, payload.password);
+    // 托盘是独立 webview，有自己一份 secureStorage 单例，这里换了密钥它感知不到；
+    // 必须广播出去，否则托盘会拿旧钥匙把配置文件整份覆盖（P0-1）
+    await emitTauriEvent(SECURE_KEY_ROTATED_EVENT);
   } catch (err) {
     if (err instanceof Error && err.message === '迁移密码不正确') {
       passwordDialogRef.value?.onPasswordFailed();

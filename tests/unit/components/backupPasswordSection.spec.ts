@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick } from 'vue';
 import { mountWithDefaults } from '../helpers/vueMount';
 import { flushPromisesAndTicks } from '../helpers/wait';
+import { getEmitMock } from '../helpers/tauriMock';
 import BackupPasswordSection from '@/components/settings/backup/BackupPasswordSection.vue';
 import type { BackupPasswordConfirmPayload } from '@/components/dialogs/backupPasswordDialogTypes';
+import { SECURE_KEY_ROTATED_EVENT } from '@/security/crypto';
 
 const toastShowConfigMock = vi.hoisted(() => vi.fn());
 const invokeMock = vi.hoisted(() => vi.fn());
@@ -391,6 +393,26 @@ describe('BackupPasswordSection 内层密文搬运', () => {
     expect(wrapper.emitted('secrets-rekeyed')).toHaveLength(1);
   });
 
+  /**
+   * P0-1 回归：换钥匙只发 Vue 组件事件 `secrets-rekeyed` 不够——托盘是独立 webview，
+   * 组件事件过不去它那边。必须再广播一次 Tauri 跨窗口事件，托盘收到后才会
+   * `secureStorage.forceReinit()` 换掉自己手里的旧钥匙，否则托盘下一次写配置会用旧钥匙
+   * 整份覆盖 .settings.dat，详见 docs/audits/scan-config-mirror-2026-09-07.md P0-1。
+   */
+  it('broadcasts a cross-window secure-key-rotated event after every successful swap', async () => {
+    secureStorageMock.isPasswordMode.mockReturnValue(false);
+    configStoreMock.readRawAll.mockResolvedValue(rawConfigWithSecrets());
+    secureStorageMock.setBackupPassword.mockImplementation(async () => swapToNewKey());
+
+    const wrapper = mountSection();
+    await nextTick();
+    await wrapper.find('[data-label="设置密码"]').trigger('click');
+    await wrapper.get('.confirm-set').trigger('click');
+    await flushPromisesAndTicks(3);
+
+    expect(getEmitMock()).toHaveBeenCalledWith(SECURE_KEY_ROTATED_EVENT);
+  });
+
   it('stays silent when the current password check fails, since no key was swapped', async () => {
     secureStorageMock.verifyBackupPassword.mockResolvedValueOnce(false);
     configStoreMock.readRawAll.mockResolvedValue(rawConfigWithSecrets());
@@ -402,6 +424,7 @@ describe('BackupPasswordSection 内层密文搬运', () => {
     await flushPromisesAndTicks(3);
 
     expect(wrapper.emitted('secrets-rekeyed')).toBeUndefined();
+    expect(getEmitMock()).not.toHaveBeenCalledWith(SECURE_KEY_ROTATED_EVENT);
   });
 
   it('rolls back to the old key and writes nothing when re-encryption fails', async () => {

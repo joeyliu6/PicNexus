@@ -91,9 +91,11 @@ async function ensureConfigSync() {
     }
   } catch (error) {
     log.error('配置同步失败:', error);
-    // 解密失败（密钥不匹配）→ 数据不可恢复，用 setDirect 覆写为默认配置
+    // 解密失败（密钥不匹配）→ 用 setDirect 覆写为默认配置。
+    // EncryptedStore.loadForRead 在抛出前已经把原始密文备份成 .corrupted.<时间戳>，
+    // 密钥本身若还在（比如密码模式换回旧口令能解开），原文件还有救；密钥已被覆盖的情况仍不可恢复。
     if (error instanceof StoreError) {
-      log.warn('检测到密钥不匹配，配置将重置为默认值（旧配置无法恢复）');
+      log.warn('检测到密钥不匹配，配置将重置为默认值（原始文件已备份，密钥仍在的情况下可能找回）');
       try {
         await configStore.setDirect({ config: DEFAULT_CONFIG });
         startupFlags.configResetDueToKeyMismatch = true;

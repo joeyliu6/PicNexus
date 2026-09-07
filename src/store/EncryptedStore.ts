@@ -226,6 +226,9 @@ export class EncryptedStore {
       if (decryptError instanceof StoreError) throw decryptError;
       const errorMsg = toErrorMessage(decryptError);
       log.error(`解密失败: ${errorMsg}`);
+      // 与 loadForWrite 对齐：真解不开时先留一份原始密文证据，
+      // 调用方（如 main.ts 的 ensureConfigSync）常见的下一步就是整份覆写重置
+      await this.backupCorrupted(dataPath, content);
       throw new StoreError(`加密数据解密失败: ${errorMsg}`, 'read', key);
     }
 

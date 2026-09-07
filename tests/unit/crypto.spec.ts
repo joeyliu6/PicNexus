@@ -340,3 +340,86 @@ describe('SecureStorage', () => {
     });
   });
 });
+
+/**
+ * P0-1 回归：主窗口（main）与托盘常驻窗口（tray）各有一份独立的 SecureStorage 单例，
+ * 但共享同一套系统钥匙串（这里用一个可写的 `keychain` 变量模拟 get_or_create_secure_key /
+ * set_secure_key 这对 IPC 命令的真实语义——谁调用 set_secure_key，钥匙串就变成谁写的那把）。
+ *
+ * 复现与修法见 docs/audits/scan-config-mirror-2026-09-07.md P0-1：
+ * 主窗口换密钥后，托盘手里还是旧的 CryptoKey，直到它自己也 forceReinit() 一次为止。
+ */
+describe('P0-1 回归：托盘常驻窗口的密钥轮换', () => {
+  function mockSharedKeychain(initial: string): { get current(): string } {
+    const state = { key: initial };
+    invokeMock.mockImplementation((cmd: string, args?: { key?: string }) => {
+      if (cmd === 'get_or_create_secure_key') return Promise.resolve(state.key);
+      if (cmd === 'set_secure_key') {
+        state.key = args!.key!;
+        return Promise.resolve(undefined);
+      }
+      return Promise.resolve(undefined);
+    });
+    return {
+      get current() { return state.key; },
+    };
+  }
+
+  it('复现前提：托盘不刷新的话，换密码后它仍会用旧密钥加密（PNXENC 而不是 PNXPWD）', async () => {
+    mockSharedKeychain(TEST_KEY_B64);
+    const main = new SecureStorage();
+    const tray = new SecureStorage();
+    await main.init();
+    await tray.init(); // 托盘启动时读了一次，缓存了旧的随机密钥
+
+    await main.setBackupPassword('Password123'); // 钥匙串 → 口令派生密钥
+
+    // 托盘还没收到任何通知，写盘用的还是旧密钥、旧格式
+    const staleWrite = await tray.encrypt('tray edit before fix');
+    expect(staleWrite.startsWith('PNXENC:')).toBe(true);
+  });
+
+  it('修法生效：托盘 forceReinit() + 一次真实解密后，写盘的格式和密钥都和主窗口一致', async () => {
+    mockSharedKeychain(TEST_KEY_B64);
+    const main = new SecureStorage();
+    const tray = new SecureStorage();
+    await main.init();
+    await tray.init();
+
+    await main.setBackupPassword('Password123');
+    const passwordEncryptedConfig = await main.encrypt('config after password'); // 换密钥后主窗口立刻重新加密写回
+
+    // 对应 TrayMenuWindow.handleSecureKeyRotated：先 forceReinit() 拿新密钥字节，
+    // 再靠 refreshTrayState() → readFreshConfig() 触发的这次真实解密回填 password 模式
+    await tray.forceReinit();
+    await tray.decrypt(passwordEncryptedConfig);
+
+    const trayWrite = await tray.encrypt('tray edit after fix');
+    expect(trayWrite.startsWith('PNXPWD:')).toBe(true);
+    // 不只是格式对了，密钥字节也确实一致——用主窗口能正常解开托盘写的内容
+    await expect(main.decrypt(trayWrite)).resolves.toBe('tray edit after fix');
+  });
+
+  it('顺序踩坑点：forceReinit() 本身不会回填 password 模式，必须紧接着一次真实解密才行', async () => {
+    mockSharedKeychain(TEST_KEY_B64);
+    const main = new SecureStorage();
+    const tray = new SecureStorage();
+    await main.init();
+    await tray.init();
+
+    await main.setBackupPassword('Password123');
+    const passwordEncrypted = await main.encrypt('config after password');
+
+    await tray.forceReinit();
+    // forceReinit() 内部把 mode 硬编码回 'random'——密钥字节已经对了，但标签还没跟上
+    expect(tray.isPasswordMode()).toBe(false);
+
+    // 对应 TrayMenuWindow.handleSecureKeyRotated 里紧接着的 refreshTrayState() → 一次真实解密
+    await expect(tray.decrypt(passwordEncrypted)).resolves.toBe('config after password');
+    expect(tray.isPasswordMode()).toBe(true);
+
+    // 顺序对了之后，托盘自己再写盘就会正确标成 PNXPWD，不会退化回 PNXENC
+    const trayWrite = await tray.encrypt('tray edit');
+    expect(trayWrite.startsWith('PNXPWD:')).toBe(true);
+  });
+});
