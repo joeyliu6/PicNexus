@@ -18,7 +18,7 @@
 | # | 模块 | 发现 | 单元级复现 | 真机复测 |
 |---|------|------|-----------|---------|
 | 1 | config | 换备份密码后托盘仍用旧钥匙回写配置，重启整份重置且无备份 | ✅ 3 条（主路径 / 轻症状 / 停用方向可救回） | ✅ 复现（主路径 2026-09-07）+ ✅ 修复复验（2026-09-07 同路径，见「真机复验结果」） |
-| 2 | config | `configStore.get` 递出缓存原件，保存失败后回滚空转 | ✅ 2 条 | ⬜ 待安排 |
+| 2 | config | `configStore.get` 递出缓存原件，保存失败后回滚空转 | ✅ 2 条 | ✅ 复现（2026-09-07）+ ✅ 修复复验（2026-09-07，见「P1-1」执行记录） |
 | 3 | mirror | 文档承诺切主/删镜像走「脏标记同步」，机制不存在 | ✅ 2 条（上传/下载两个方向） | ⬜ 待安排 |
 | 4 | mirror | 灯箱单条重检不重算 `linkCheckSummary` | ✅ 1 条 | ⬜ 待安排（影响极小，可与 #3 一起看） |
 
@@ -179,7 +179,7 @@
 | P0-1 主路径 | 无备份密码状态 → 设置页「设置密码」→ **不要**再改任何设置 → 关窗到托盘 → 托盘勾选一个图床 → 完全退出 → 重启 | 启动弹「密钥不匹配，配置已重置」，所有图床凭证消失；`%APPDATA%` 下无 `.settings.dat.corrupted.*` | ✅ 真机完全复现，见下方执行记录；已用于验证修复生效（见「真机复验结果」） |
 | P0-1 轻症状 | 设置密码 → 在设置页随便改一项让它保存 → 托盘勾选图床 | 托盘勾选无反应（日志有 `BackupPasswordRequiredError`），重启后恢复 | ⬜ |
 | P0-1 停用方向 | 已有密码 → 「关闭加密」→ 关窗到托盘 → 托盘切主题 → 重启 | 弹密码框；输**旧**口令能进，配置完整，但备份密码又变回「已加密」 | ⬜ |
-| P1-1 | 设置页改微博 Cookie → 让保存失败（最省事：先把 `.settings.dat` 设为只读）→ 观察表单与「保存失败」提示 → 离开再回设置页 | 提示保存失败，但表单仍显示新 Cookie；回来还是新值；解除只读、重启后是旧值 | ⬜ |
+| P1-1 | 设置页改微博 Cookie → 让保存失败（最省事：先把 `.settings.dat` 设为只读）→ 观察表单与「保存失败」提示 → 离开再回设置页 | 提示保存失败，但表单仍显示新 Cookie；回来还是新值；解除只读、重启后是旧值 | ✅ 真机完全复现（2026-09-07）+ ✅ 修复复验（2026-09-07，见下方执行记录） |
 | P1-2 | 一条多图床记录 → 灯箱移除一条镜像 → 「增量上传」 | toast「无需上传：本地没有新增或更新的记录」；「下载覆盖本地」后镜像回来 | ⬜ |
 | P1-3 | 链接检测跑一遍得到一条失效 → 灯箱 chip 重检判回可用 → 重进链接检测页 | 首屏（Phase 1）仍含这条，行状态显示可用 | ⬜ |
 
@@ -371,6 +371,122 @@
 **清理**：`tests/tauri-e2e/p0-1-tray-fix-verify.tauri.e2e.cjs`、`tests/tauri-e2e/p0-1-fix-verify-logs.txt`
 已删除；`src-tauri/target/debug/data/`（含本次生成的 `.settings.dat`、`logs/`、`portable.json`）已整个
 删除；复验结束后确认过一遍进程列表，没有残留的 `picnexus.exe`。
+
+### 2026-09-07 P1-1 真机复现（真跑起来的 App，不是 vitest mock）
+
+**结论：坐实了，一次跑通。** 现象跟本文预判完全一致：保存失败之后，表单/缓存里还留着那份没保存成功的
+新 Cookie 值，切标签页也救不回来；只有真正重启进程（清空 JS 内存里那份被涂改的缓存）之后，界面才变回
+磁盘上真正落盘的旧值。
+
+**怎么测的**：跟 P0-1 同一套手法——`src-tauri/target/debug/data/portable.json` 隔离数据目录，
+wdio + tauri-driver + msedgedriver 驱动真实编译出来的 debug App。临时脚本
+`tests/tauri-e2e/p1-1-config-aliasing-repro.tauri.e2e.cjs`（跑完已删除）流程：设置页微博 Cookie 填一个
+基线值 → 等真实保存成功日志 → 给 `.settings.dat` 拍 SHA-256 快照 → 从 App 外部用 Node `fs.chmodSync`
+把文件设只读 → 改成新值触发保存 → 等真实失败日志 → **重新聚焦 Cookie 框**（不是失焦后立刻读，见下方
+「意外发现」）读当前值 → 切标签页再切回读一次 → 解除只读、硬杀进程、冷启动、重新建立真实 WebDriver 会话，
+再读一次。
+
+**证据表格**：
+
+| 步骤 | 观察到的值 / 文件状态 / 日志 | 说明 |
+|---|---|---|
+| 基线保存 | 日志 `[useConfig] ✓ 配置保存成功`；`.settings.dat` 6383 字节，SHA-256=`4241ca48...` | 基线值真正落盘 |
+| 触发只读写入失败 | `[Store] 保存失败 (config): 写入文件失败: ... 拒绝访问。(os error 5)` | Windows 系统级真实拒绝，不是伪造的失败 |
+| 失败后文件字节 | SHA-256 与基线**完全一致** | 失败的写入一个字节都没碰到磁盘 |
+| **失败后重新聚焦读值（核心判据）** | `"SUB=edited-value-2-should-not-persist-after-rollback"` | 是编辑后的新值，不是基线值——"回滚到磁盘真值"确实是空转 |
+| 切标签页再切回后读值 | 仍是编辑值；`.settings.dat` 字节仍与失败写入后一致 | 不是瞬时界面残留，整个面板重挂载后读到的还是同一份被污染的缓存 |
+| 清除只读 + 硬杀进程 + 冷启动后读值 | `"SUB=baseline-value-1"` | 编辑值从未真正落盘，重启清空内存缓存，只能从磁盘读回基线值 |
+
+**意外发现（很重要，直接决定了判据怎么读值）**：微博 Cookie 框走的是 `useSensitiveDraft.ts` 那套"草稿机"
+逻辑——失焦提交是同步的，不等真正的防抖保存结果，草稿一律清空，框里只剩圆点占位符。若照直觉"失焦后立刻
+读 `textarea.value`"，不管保存成没成功都会读到空字符串，得出一个完全误导的"没问题"结论。正确做法是
+**重新聚焦这个框**，触发应用自己的"取回已存值"逻辑（`beginEdit` → `reveal` → 读
+`formData.value.weiboCookie`），这时读到的才是真正有意义的判据，也正好对应单元测试
+`storeAliasing.spec.ts` 断言的 `formData.value.weiboCookie` 这个层面。
+
+**清理**：临时脚本已删除；`src-tauri/target/debug/data/` 已整个删除；确认无残留 `picnexus.exe` 进程；
+`git status` 干净。
+
+### 2026-09-07 P1-1 修复实施（代码 + 单元回归，真机复验见下）
+
+**改法**：只改一处——`src/store/MutexStore.ts` 的私有方法 `_performRead`。原来两个返回点（缓存命中
+`return cached`、缓存刚从磁盘加载后首次读 `return value as T`）都是把 `CacheStore` 内部对象的引用直接
+递出去；现在统一经过 `cloneValue`（对象类型 `structuredClone`，基本类型原样返回）再返回。一处改动堵住
+所有调用方，不用逐个改 `useSettingsForm.ts` / `useAnalytics.ts`，与本文「修法」小节的预案一致。
+
+**`useConfig.ts` 的 `loadConfig` 没有额外改代码**——这是本文之前要求"一并核实"的第二个消费点。没有凭直觉
+下结论，而是先写了一条测试专门验证"`loadConfig()` 后就地改写 `config.value` 会不会污染 Store 缓存"，
+用 `git stash` 把 `MutexStore.ts` 的修复临时撤回、跑这条测试——**确实失败**，证明 `useConfig.ts` 在修复前
+也受这个别名 bug 影响；`git stash pop` 恢复修复后重跑——**通过**，证明 Store 层这一处改动已经连带把它
+修好了，不需要在 `useConfig.ts` 里再单独处理。这个"先撤回确认会红、再恢复确认转绿"的验证流程对
+`tests/unit/services/storeAliasing.spec.ts` 的全部 3 条用例都做了一遍，不是只测了这一条。
+
+**改之前的排查（用户要求的"先全仓 grep 有没有代码依赖这个别名"）**：全仓核对了 `configStore.get()` /
+`syncStatusStore.get()` 的全部约 27 个调用点，重点复查了本文点名的 `ConfigSync.ts`（`uploadSettingsCloud`
+只读不改；`downloadSettingsMerge` / `syncConfig` 只读一次 `currentConfig.webdav` 拼进一个全新对象，不依赖
+后续 `get()` 能读到这次"改写"）。结果与本文预判一致：**没有代码反过来依赖这个别名**——`trayMenu.ts` /
+`useServiceSelector.ts` / `useBackupLocal.ts` / `main.ts` 的 `purgeOrphanSecrets` 等处，凡是需要改写的都已经
+先 `structuredClone` 或 `JSON.parse(JSON.stringify(...))` 深拷贝再改，属于"恰好写对了"而不是"依赖了 bug"。
+唯一顺手发现的相似形态是 `src/theme/ThemeManager.ts`（`setTheme` 就地改 `this.config.theme` 再落盘、失败
+时手动回滚一个字段）——但它把 Store 读到的值长期私有持有在实例字段上、从不再调用 `get()` 重新读取，
+不依赖"每次 `get()` 返回同一引用"这个（错误的）特性，修复前后行为一致，不受这次改动影响，也不在 P1-1 范围
+内，这里如实记录、不处理。
+
+**测试**：
+
+- 新增 `tests/unit/services/storeAliasing.spec.ts`（永久回归测试，取代本文附录的临时复现用例，断言已反转
+  为"修复后应有的行为"），3 条用例：Store 本身两次 `get()` 返回不同引用且互不污染、`useSettingsForm`
+  保存失败后正确回滚到磁盘真值（含 toast/`advancedSaveState`/`availableServices` 一并核实）、
+  `useConfig.loadConfig` 塞进 `ref` 的值同样与缓存解耦。
+- `tests/unit/composables/settings/useSettingsForm.spec.ts` 原本第 184 行那条"保存失败后回滚"用例已删除
+  ——它把 `configStore.get` mock 成"每次返回新对象"，这个 mock 方式本身就把别名关系遮住了，测的是虚构
+  场景不是真实 Store 行为，改用真实 `Store` 实例的等价用例现在在 `storeAliasing.spec.ts` 里。
+- `npx vitest run`：222 个文件 / 3070 条用例全绿（3068 + 新增 3 − 删除 1）；`npm run typecheck`、
+  `npm run lint` 均通过。改动只涉及前端 TS，未碰 `src-tauri/`，未跑 `cargo check`/`cargo test`。
+
+**真机复验**：见下一条记录。
+
+### 2026-09-07 P1-1 真机复验结果（结论：修复生效）
+
+**结论用大白话说**：保存失败之后，这次表单**立刻**（不用等重启）就正确显示回磁盘上的旧值了，跟修复前
+那次"卡在编辑值上直到重启才恢复"完全不一样。
+
+**怎么测的**：跟真机复现同一套手法——portable 数据隔离 + wdio + tauri-driver，`onPrepare` 钩子用当前
+工作区代码（已包含修复）重新构建 vite + cargo。临时脚本
+`tests/tauri-e2e/p1-1-config-aliasing-fix-verify.tauri.e2e.cjs`（跑完已删除）复用复现阶段摸出来的全部
+技巧（"重新聚焦读值"避开草稿机制假阴性、`fs.chmodSync` 只读逼真实写入失败、SHA-256 字节比对），把预期
+断言在核心判据处反转过来。
+
+**过程中的一个插曲，如实记录**：第一次跑这份新脚本时卡在最开头——`#app .main-layout` 60 秒都没显示，
+但应用日志显示前端其实正常跑起来了。查了一下本机 wdio 真机测试的已知坑记录，命中了「多 webview 窗口
+会话可能连到非主窗口」这一条（`tests/tauri-e2e/scan-history-fix-acceptance.tauri.e2e.cjs` 里已经有现成的
+`switchToMainWindow`：轮询 `getWindowHandles()`，逐个 `switchToWindow` 找 `#app .main-layout`）——这份新
+脚本漏写了这一步，是脚本本身的问题，跟这次修复的正确性无关。补上同样的手法（适配了 step 8 用到的
+"重新建立一份独立 WebDriver 会话"场景，让 `switchToMainWindow` 接受显式 `client` 参数而不是只认全局
+`browser`）后，重新跑一遍，9 步全过。
+
+**关键证据表**（跟真机复现那次的表格对照着看，操作路径完全一样，核心那一行反过来了）：
+
+| 步骤 | 观察到的值 / 文件状态 / 日志 | 说明 |
+|---|---|---|
+| 基线保存 | `[useConfig] ✓ 配置保存成功`；`.settings.dat` 6387 字节，SHA-256=`cc89ebed...` | 跟复现阶段一致 |
+| 触发只读写入失败 | `[Store] 保存失败 (config): 写入文件失败: ... 拒绝访问。(os error 5)` | **同样的真实系统错误**——失败机制本身没变，改的只是失败后缓存要不要被污染 |
+| 失败后文件字节 | SHA-256 与基线完全一致 | 跟复现阶段一致，失败的写入没碰到磁盘 |
+| **失败后重新聚焦读值（核心判据，这次翻过来了）** | `"SUB=baseline-value-1"` | ✅ 正确回滚显示基线值，不再停在编辑值上——这是修复生效的直接证据 |
+| 切标签页再切回后读值 | 仍是 `"SUB=baseline-value-1"`；文件字节仍与失败写入后一致 | 不是瞬时巧合 |
+| 清除只读 + 硬杀进程 + 冷启动 + 重新建立 WebDriver 会话后读值 | `"SUB=baseline-value-1"` | 修复前后这一步都应该是基线值（问题只出在内存缓存层），交叉验证一致 |
+
+**没有验证到的部分**：跟真机复现阶段一致，只测了微博 Cookie 这一个字段；`useAnalytics.ts` 和
+`loadSettings` 里 legacy `custom_s3` 迁移分支这两处"同样的模式"没有单独在真机上过一遍——这两处的安全性
+是通过前面「改之前的排查」小节的静态核对 + `storeAliasing.spec.ts` 对 Store 层不变量的单元验证间接保证的，
+不是真机直接测出来的。
+
+**清理**：临时脚本 `tests/tauri-e2e/p1-1-config-aliasing-fix-verify.tauri.e2e.cjs` 已删除；
+`src-tauri/target/debug/data/` 已整个删除；确认无残留 `picnexus.exe` 进程；`git status` 干净（只有本次
+改动 + 会话开始前就存在的 `docs/TODO.md` 改动）。
+
+**下一步**：P1-1 到此闭环（真机复现 → 修复 → 单元回归 → 真机复验，全部通过）。改动尚未提交，等待用户
+确认后按仓库惯例拆成「修复代码 + 回归测试」「文档」两次原子提交。P1-2、P1-3 仍未处理。
 
 ---
 
