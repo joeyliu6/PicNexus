@@ -67,7 +67,7 @@ flowchart TD
 | 预加载仍只加载主服务 URL | `useImagePreload` 调的是 `getThumbnailUrl(meta)`（单条），fallback 只在可视区域的 `<img>` 真正失败时触发，避免浪费带宽 |
 | 列表失败态不反映到 DB | 层 1 完全是客户端兜底。真正的"失效"判定只走 link-check |
 | 同一 meta 对象 + 同一配置 → 候选数组引用稳定 | `getMetaThumbnailCandidates` 的 `WeakMap` 缓存**以 meta 对象本身为键**。时间轴/收藏页在模板里逐行调用它，引用抖动会让子组件全量 re-render |
-| 镜像变化必然产生新的 `ImageMeta` 对象 | 切主图床/移除链接/重试补齐都先写 DB，再经 `emitHistoryUpdated` 让视图重查，`rowToImageMeta` 产出新对象 → WeakMap 天然未命中。**所以该缓存不接 cacheEvent、也不进 `clearThumbCache()`**；配置维度由条目里的指纹（前缀模板 + 知乎 source 开关/值）兜底 |
+| 镜像变化必然产生新的 `ImageMeta` 对象 | 切主图床/移除链接/重试补齐都先写 DB，再经 `emitHistoryUpdated` 让视图重查，`rowToImageMeta` 产出新对象 → WeakMap 天然未命中。**所以该缓存不接 cacheEvent、也不进 `clearThumbCache()`**；配置维度由条目里的指纹兜底——指纹包含前缀模板、知乎 source 开关/值、R2 缩略图代理开关、**以及当前会话的代理可达性**（[useThumbCache.ts:243-251](../../src/composables/useThumbCache.ts#L243)：代理探测失败时候选链会少一条，时间轴/收藏页只认指纹，漏掉这项会停在"代理在前"的旧候选上不刷新） |
 
 ---
 
@@ -117,7 +117,7 @@ flowchart TD
     L -- 点击 pi-arrow-up（非主+非失效） --> M["switchPrimary(serviceId)"]
     M --> M1["historyDB.switchPrimaryService<br/>update primary_service + generated_link"]
     M1 --> M2["invalidateCache + emitHistoryUpdated"]
-    M2 --> M3["toast.success 已切换主图床"]
+    M2 --> M3["不弹 toast：圆点跳到新主图床行即反馈<br/>（notification-patterns「UI 状态本身能传达的不再弹」）"]
 
     L -- 点击 pi-trash --> N{"是主图床?"}
     N -- 否 --> N1["confirmDelete → historyDB.removeMirror<br/>toast: 链接已移除"]
@@ -216,7 +216,7 @@ flowchart TD
 | 9 | 撤销 | 第一版无撤销；切主/移除都带二次确认 |
 | 10 | linkCheckStatus 陈旧 | 菜单显示"未检测/可用/已失效"快照，用户可点 chip 重新检测刷新 |
 | 11 | `onerror` 触发后如何同步到 DB | 层 1 完全不同步。失效判定只通过 link-check 写入 `linkCheckStatus` |
-| 12 | WebDAV 同步 | `switchPrimaryService` / `removeMirror` 都走 `update()`，复用现有脏标记机制 |
+| 12 | WebDAV 同步 | `switchPrimaryService` / `removeMirror` 都走 `update()`，但**不写 `timestamp`**（[HistoryDatabase.ts:260](../../src/services/database/HistoryDatabase.ts#L260) 逐列门控，两个调用方都没传这一列），本项目**没有脏标记/版本列机制**。云端合并（[HistoryMerge.ts](../../src/services/database/HistoryMerge.ts) 的 `mergeHistoryCollections`/`hasHistoryItemChanged`）判断"要不要同步"只看 `timestamp` + 收藏签名，于是切主图床、移除镜像、灯箱重新检测这类内容层改动，**不会**被"同步"（双向）、合并上传等常规同步路径带上云端——这些路径要么判定"无需上传"直接跳过，要么像双向同步那样无条件弹成功提示却什么都没真正推上去。只有手动执行"更多 → 覆盖云端"（整份覆盖，不经过 merge 比较）才能真正把这类改动带上云端。反过来，"覆盖本地"或换机器用云端数据恢复，都可能把本地已经处理掉的旧镜像、旧主图床原样带回来 |
 | 13 | 批量操作多条记录 | 第一版不支持，仅单条。灯箱外（表格/时间轴/收藏）都不暴露切换/删除/检测 UI |
 
 ---
@@ -234,12 +234,14 @@ flowchart TD
 | "主图床已失效"但图片实际能看 | link-check 误判（通常是防盗链 403）。点 chip 重新检测单条，或手动在浏览器验证 | [link-check-flow.md 图 1](./link-check-flow.md#图-1服务感知请求流程) 防盗链分支 |
 | 点"移除"主图床提示"请直接删整条记录" | 唯一剩余链接禁止移除（会丢整个历史）。从底栏垃圾桶删整条即可 | `useMirrorFallback.removeMirror` 主图床分支 |
 | 移除链接后 link-check 总计没变 | 该记录从未跑过 link-check（无 `previousSummary` 时不凭空造 summary），或改动被回退 | `removeMirror` 会经 `recomputeLinkCheckSummary` 重算总计，口径与 `stripServiceFromItem` 一致（`isUsableMirror`） |
+| 切了主图床/删了镜像，点"同步"之后又变回去了 | 常规「同步」（双向）/合并上传只比较 `timestamp` + 收藏签名，镜像字段的改动不算数，云端那份还是旧的；之后再点「覆盖本地」或换机器用云端数据恢复，会把云端的旧镜像/旧主图床整份带回来 | 边界 12；[HistoryMerge.ts](../../src/services/database/HistoryMerge.ts) 的 `hasHistoryItemChanged`；真要把这类改动同步上云端，只能手动「更多 → 覆盖云端」 |
 
 ---
 
 ## 相关文档
 
 - [历史查询流程](./history-flow.md) — 历史记录 CRUD + 搜索，镜像管理是其上的扩展动作
+- [同步流程](./sync-flow.md) — 增量/合并/双向同步的判定逻辑（只看 timestamp + 收藏签名），边界 12 的同步限制即来自这里
 - [链接检测流程](./link-check-flow.md) — `linkCheckStatus` 的写入源，判定哪些镜像被标记失效
 - [辅助功能流程 图 11](./auxiliary-flows.md#图-11链接检测流程) — 链接检测主流程
 - [数据持久化流程](./data-persistence.md) — `results` JSON 字段的序列化位置
