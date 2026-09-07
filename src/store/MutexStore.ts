@@ -11,6 +11,9 @@
  *  - 原 _performRead 对损坏文件的恢复路径（写入 defaultValue）现在走 EncryptedStore.loadForRead 的 recovery 参数
  *  - BackupPasswordRequiredError 必须原样传播，不能被外层 catch 包装成 StoreError
  *  - setDirect / set 在写入前必须用 JSON.parse(JSON.stringify(...)) 做 roundtrip，剥离 Vue 响应式 Proxy
+ *  - get() 对象类型的返回值必须与 CacheStore 内部对象解耦（_performRead 用 structuredClone）：
+ *    调用方就地改写返回值不能污染缓存本体，否则"改写后不 set() 就指望回滚/下次 get() 读到旧值"
+ *    全部失真（P1-1，docs/audits/scan-config-mirror-2026-09-07.md）
  */
 
 import { Mutex } from '../utils/mutex';
@@ -77,20 +80,23 @@ export class MutexStore {
    * 执行实际的读取操作（在锁内调用）
    */
   private async _performRead<T>(key: string, defaultValue?: T): Promise<T | null> {
-    // Why: 调用方常传入 DEFAULT_CONFIG 作默认值，若原样返回则 Vue ref 会把模块级常量包成 Proxy，
-    //      后续任何 config.value.xxx = ... 会直接污染 DEFAULT_CONFIG。此处统一克隆一次。
+    // Why: 调用方拿到的值必须与缓存内部对象解耦，否则"就地改写 + 忘记 set()"会直接污染缓存本体——
+    //      这正是 P1-1（docs/audits/scan-config-mirror-2026-09-07.md）的根因：saveSettings 失败后
+    //      "回滚到磁盘真值"重新 get()，读到的其实是自己改写过的同一个对象，回滚变成空转。
+    //      调用方常传入 DEFAULT_CONFIG 作默认值，若原样返回则 Vue ref 会把模块级常量包成 Proxy，
+    //      后续任何 config.value.xxx = ... 会直接污染 DEFAULT_CONFIG，因此对象类型一律深拷贝。
+    const cloneValue = (value: T): T =>
+      typeof value === 'object' && value !== null ? structuredClone(value) : value;
     const cloneDefault = (): T | null => {
       if (defaultValue === undefined) return null;
-      return typeof defaultValue === 'object' && defaultValue !== null
-        ? structuredClone(defaultValue)
-        : defaultValue;
+      return cloneValue(defaultValue);
     };
 
     try {
       // 缓存命中：跳过文件 I/O 和解密
       if (this.cache.isLoaded()) {
         const cached = this.cache.get<T>(key);
-        if (cached !== undefined) return cached;
+        if (cached !== undefined) return cloneValue(cached);
         return cloneDefault();
       }
 
@@ -111,7 +117,7 @@ export class MutexStore {
         log.debug(`键 "${key}" 不存在于数据文件中`);
         return cloneDefault();
       }
-      return value as T;
+      return cloneValue(value as T);
     } catch (error) {
       // 备份密码需要输入：直接传播到 UI 层
       if (error instanceof BackupPasswordRequiredError) {

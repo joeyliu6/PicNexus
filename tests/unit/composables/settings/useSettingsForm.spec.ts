@@ -181,37 +181,12 @@ describe('useSettingsForm', () => {
     api.clearTimers();
   });
 
-  it('shows save errors and reloads disk state after saveConfig rejects', async () => {
-    const api = useSettingsForm();
-    const staleConfig = createConfig({
-      availableServices: ['jd'],
-      services: {
-        weibo: { enabled: true, cookie: 'SUB=on-disk' },
-      },
-    });
-    const editedConfig = createConfig({
-      availableServices: ['jd', 'weibo'],
-      services: {
-        weibo: { enabled: true, cookie: 'SUB=edited' },
-      },
-    });
-
-    mockState.configStoreGet
-      .mockResolvedValueOnce(editedConfig)
-      .mockResolvedValueOnce(staleConfig);
-    mockState.saveConfig.mockRejectedValueOnce(new Error('Disk full'));
-
-    api.formData.value.weiboCookie = 'SUB=edited';
-    api.availableServices.value = ['jd', 'weibo'];
-
-    await expect(api.saveSettings({ trackAdvancedStatus: true })).resolves.toBe(false);
-
-    expect(mockState.toastShowConfig).toHaveBeenCalledWith('error', expect.any(Object));
-    expect(api.advancedSaveState.value.status).toBe('error');
-    expect(api.advancedSaveState.value.message).toContain('Disk full');
-    expect(api.formData.value.weiboCookie).toBe('SUB=on-disk');
-    expect(api.availableServices.value).toEqual(['jd']);
-  });
+  // "保存失败后回滚到磁盘真值"的用例曾经放在这里，但这个文件把 configStore mock 成
+  // "每次 get() 返回一个新对象"（见上面 vi.mock('@/store/instances', ...)），这个 mock 方式
+  // 恰好把 P1-1 那个"get() 返回缓存对象本身，就地改写会污染缓存"的别名 bug 遮住了——用两个不同
+  // 对象模拟"保存前"和"回滚后"，测的是虚构场景，不是真实 Store 行为。真正暴露别名关系需要接一个
+  // 真实 Store 实例，这类用例现在统一放在 tests/unit/services/storeAliasing.spec.ts
+  // （P1-1 回归：useSettingsForm 保存失败后正确回滚到磁盘真值），别再在这个文件里补。
 
   it('restores DEFAULT_CONFIG without clearing history or cache state', async () => {
     const api = useSettingsForm();
