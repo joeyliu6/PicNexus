@@ -124,7 +124,9 @@ flowchart TD
 
 展示 `analyzeFile` 中「边检测边处理文件」的核心算法。这是本功能最复杂的部分。
 
-> **关键源文件**：`src/composables/md-rescue/useMdRescue.ts`（`analyzeFile`、`buildScanMappings`、`checkFileCompletion`、`onFileComplete`、`flushPending`）
+> **关键源文件**：`src/composables/md-rescue/useMdRescue.ts`（`analyzeFile`，调用下面这个）、
+> `src/composables/md-rescue/LinkChecker.ts`（`runLinkCheck`、`buildScanMappings`；
+> `checkFileCompletion`、`onFileComplete`、`flushPending` 是 `runLinkCheck` 内部的闭包函数）
 
 ```mermaid
 flowchart TD
@@ -187,7 +189,7 @@ flowchart TD
 
 展示 Phase 2 中统一验证备用链接可用性的流程，以及 `findBackupLinksRaw` 的 DB 查询逻辑。
 
-> **关键源文件**：`src/composables/md-rescue/useMdRescue.ts`（`analyzeFile` Phase 2 部分、`findBackupLinksRaw`、`buildUrlIndex`）
+> **关键源文件**：`src/composables/md-rescue/LinkChecker.ts`（`runLinkCheck` 的 Phase 2 部分、`findBackupLinksRaw`、`buildUrlIndex`）
 
 ```mermaid
 flowchart TD
@@ -242,8 +244,8 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["用户确认修复<br/>startFix(preference)"] --> B["applyHostPreference<br/>按偏好为每张图选最佳备用链接"]
-    B --> C["构建 fileReplacements Map<br/>file → Map&lt;oldUrl, newUrl&gt;"]
+    A["用户确认修复<br/>handleRepairConfirm(strategy)"] --> B["applyRepairStrategy(strategy)<br/>按策略为每张图写 link.selectedBackup（见图 6）"]
+    B --> C["构建 fileReplacements Map<br/>file → Map&lt;oldUrl, newUrl&gt;（读 link.selectedBackup）"]
     C --> D{有替换可做?}
     D -- 否 --> D1["直接进入 done<br/>repairReceipt 为空"]
     D -- 是 --> E["计算备份路径<br/>.picnexus-backup/{timestamp}/"]
@@ -338,36 +340,39 @@ setup 期间取好、当参数传进来**，由 `useMdRescueManager()` 里的四
 
 ## 图 6：修复策略决策
 
-展示三种修复策略如何为每张失效图片选择备用链接。
+展示三种修复策略如何为每张失效图片选择备用链接，以及确认对话框里的替换摘要预览如何跟点
+「开始修复」后实际发生的替换保持一致——两边共用同一份挑选逻辑（`pickBackupForLink`），
+不是各算一份。
 
-> **关键源文件**：`src/composables/md-rescue/useRepairStrategy.ts`（`applyRepairStrategy`、`applyHostPreference`、`autoSelectAndGetSummary`）
+> **关键源文件**：`src/composables/md-rescue/useRepairStrategy.ts`（`pickBackupForLink`、
+> `applyRepairStrategy`、`summarizeRepairStrategy`、`applyHostPreference`）、
+> `src/components/views/linkcheck/MdRepairDialog.vue`（`currentStrategy` 计算属性、摘要面板）
 
 ```mermaid
 flowchart TD
-    A["用户打开修复确认对话框"] --> B["autoSelectAndGetSummary()<br/>预选并生成替换摘要"]
+    A["用户打开修复确认对话框"] --> B["currentStrategy 计算属性<br/>随策略单选 / 优先级顺序 / 手动选择实时更新"]
+    B --> S["summarizeRepairStrategy(rescuableLinks, currentStrategy)<br/>纯函数，不写 imageLinks，仅供预览"]
+    S --> S1["替换摘要面板：N 个文件 · M 处替换<br/>展开可看每个文件改几处"]
+
     B --> C["遍历失效链接<br/>筛选有效备用链接"]
+    C --> D{"pickBackupForLink<br/>策略类型"}
 
-    C --> D{策略类型}
-
-    D -- "priority<br/>图床偏好优先级" --> E["按 hostPreference 排序<br/>选第一个有效的"]
+    D -- "priority<br/>图床偏好优先级" --> E["按 order 排序<br/>选第一个有效的"]
     D -- "fastest<br/>最快响应" --> F["按 response_time 升序<br/>选最快的"]
     D -- "manual<br/>手动选择" --> G["从 selections Map<br/>获取用户指定的 URL"]
 
-    E --> H["设置 link.selectedBackup"]
-    F --> H
-    G --> H
+    E --> J["用户点「开始修复」<br/>emit('confirm', currentStrategy)"]
+    F --> J
+    G --> J
 
-    H --> I["生成替换摘要"]
-    I --> I1["files: 按文件分组的替换列表"]
-    I --> I2["totalReplacements: 总替换数"]
-    I --> I3["totalFiles: 涉及文件数"]
-
-    I1 & I2 & I3 --> J["用户确认 → startFix"]
+    J --> K["applyRepairStrategy(strategy)<br/>用同一份 pickBackupForLink 写 link.selectedBackup"]
+    K --> L["executeReplace()（见图 5）"]
 
     style E fill:#e3f2fd,stroke:#1976d2
     style F fill:#e3f2fd,stroke:#1976d2
     style G fill:#e3f2fd,stroke:#1976d2
-    style J fill:#e8f5e9,stroke:#2e7d32
+    style S1 fill:#fff3e0,stroke:#e65100
+    style L fill:#e8f5e9,stroke:#2e7d32
 ```
 
 ### 策略类型说明

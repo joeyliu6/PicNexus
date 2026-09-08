@@ -19,7 +19,7 @@ import {
   applyRepairStrategy,
   loadHostPreference,
   saveHostPreference,
-  autoSelectAndGetSummary,
+  summarizeRepairStrategy,
   toggleExclude,
   excludeAll,
   includeAll,
@@ -165,11 +165,11 @@ describe('applyRepairStrategy', () => {
   });
 });
 
-describe('autoSelectAndGetSummary', () => {
+describe('summarizeRepairStrategy', () => {
   beforeEach(resetState);
 
-  it('自动选首个有效备份并构建摘要', () => {
-    imageLinks.value = [
+  it('priority 策略：按顺序选首个有效备份并构建摘要', () => {
+    const links = [
       makeLink('u1', { sourceFile: 'a.md', backups: [
         { url: 'b1', serviceId: 'weibo', valid: false },
         { url: 'b2', serviceId: 'r2', valid: true },
@@ -177,7 +177,7 @@ describe('autoSelectAndGetSummary', () => {
       makeLink('u2', { sourceFile: 'a.md', backups: [{ url: 'b3', serviceId: 'r2', valid: true }]}),
       makeLink('u3', { sourceFile: 'b.md', backups: [{ url: 'b4', serviceId: 'weibo', valid: true }]}),
     ];
-    const summary = autoSelectAndGetSummary();
+    const summary = summarizeRepairStrategy(links, { type: 'priority', order: [] });
     expect(summary.totalFiles).toBe(2);
     expect(summary.totalReplacements).toBe(3);
     const aFile = summary.files.find(f => f.path === 'a.md');
@@ -185,13 +185,48 @@ describe('autoSelectAndGetSummary', () => {
   });
 
   it('无备份 / 全无效 → 不计入', () => {
-    imageLinks.value = [
+    const links = [
       makeLink('u1'),
       makeLink('u2', { backups: [{ url: 'b', serviceId: 'a', valid: false }]}),
     ];
-    const summary = autoSelectAndGetSummary();
+    const summary = summarizeRepairStrategy(links, { type: 'priority', order: [] });
     expect(summary.totalReplacements).toBe(0);
     expect(summary.totalFiles).toBe(0);
+  });
+
+  it('摘要必须和 applyRepairStrategy 实际选出的备份一致（同一份策略）', () => {
+    const links = [
+      makeLink('u1', { sourceFile: 'a.md', backups: [
+        { url: 'slow', serviceId: 'a', valid: true, responseTime: 500 },
+        { url: 'fast', serviceId: 'b', valid: true, responseTime: 50 },
+      ]}),
+    ];
+    const strategy = { type: 'fastest' } as const;
+    const summary = summarizeRepairStrategy(links, strategy);
+    expect(summary.files[0]?.replacements[0]?.newUrl).toBe('fast');
+
+    imageLinks.value = links.map((l) => ({ ...l }));
+    applyRepairStrategy(strategy);
+    expect(imageLinks.value[0].selectedBackup).toBe('fast');
+  });
+
+  it('manual 策略：按 selections 里指定的链接生成摘要', () => {
+    const links = [
+      makeLink('u1', { sourceFile: 'a.md', backups: [
+        { url: 'b1', serviceId: 'a', valid: true },
+        { url: 'b2', serviceId: 'b', valid: true },
+      ]}),
+    ];
+    const summary = summarizeRepairStrategy(links, { type: 'manual', selections: new Map([['u1', 'b2']]) });
+    expect(summary.files[0]?.replacements[0]?.newUrl).toBe('b2');
+    expect(summary.files[0]?.replacements[0]?.serviceId).toBe('b');
+  });
+
+  it('不写 imageLinks / selectedBackup（纯函数，供实时预览用）', () => {
+    const links = [makeLink('u1', { sourceFile: 'a.md', backups: [{ url: 'b1', serviceId: 'a', valid: true }]})];
+    summarizeRepairStrategy(links, { type: 'priority', order: [] });
+    expect(links[0].selectedBackup).toBeUndefined();
+    expect(imageLinks.value).toEqual([]);
   });
 });
 

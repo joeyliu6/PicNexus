@@ -57,51 +57,57 @@ export async function saveHostPreference(configManager: ConfigManagerApi): Promi
 }
 
 /**
+ * 按策略为单张失效图片挑选备用链接（纯函数，不写 selectedBackup）
+ *
+ * `applyRepairStrategy`（真正应用）与确认对话框的替换摘要预览共用这份挑选逻辑——
+ * 预览必须跟点「开始修复」后实际发生的完全一致，不能各写一份而悄悄走样。
+ */
+export function pickBackupForLink(
+  link: MdImageLinkWithFile,
+  strategy: RepairStrategy,
+): string | undefined {
+  if (!link.checkResult || link.checkResult.is_valid) return undefined;
+  if (!link.backupLinks?.length) return undefined;
+
+  const validBackups = link.backupLinks.filter((b) => b.checkResult?.is_valid);
+  if (validBackups.length === 0) return undefined;
+
+  switch (strategy.type) {
+    case 'priority': {
+      const order = strategy.order;
+      const sorted = [...validBackups].sort((a, b) => {
+        const ai = order.indexOf(a.serviceId);
+        const bi = order.indexOf(b.serviceId);
+        return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
+      });
+      return sorted[0]?.url;
+    }
+    case 'fastest': {
+      const sorted = [...validBackups].sort(
+        (a, b) => (a.checkResult?.response_time ?? 99999) - (b.checkResult?.response_time ?? 99999),
+      );
+      return sorted[0]?.url;
+    }
+    case 'manual':
+      return strategy.selections.get(link.url);
+  }
+}
+
+/**
  * 根据修复策略为每张失效图片选择备用链接
  */
 export function applyRepairStrategy(strategy: RepairStrategy): void {
   const links = [...imageLinks.value];
 
   for (const link of links) {
-    if (!link.checkResult || link.checkResult.is_valid) continue;
-    if (!link.backupLinks?.length) continue;
-
-    const validBackups = link.backupLinks.filter((b) => b.checkResult?.is_valid);
-    if (validBackups.length === 0) continue;
-
-    switch (strategy.type) {
-      case 'priority': {
-        const order = strategy.order;
-        const sorted = [...validBackups].sort((a, b) => {
-          const ai = order.indexOf(a.serviceId);
-          const bi = order.indexOf(b.serviceId);
-          return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
-        });
-        link.selectedBackup = sorted[0]?.url;
-        break;
-      }
-      case 'fastest': {
-        const sorted = [...validBackups].sort(
-          (a, b) => (a.checkResult?.response_time ?? 99999) - (b.checkResult?.response_time ?? 99999),
-        );
-        link.selectedBackup = sorted[0]?.url;
-        break;
-      }
-      case 'manual': {
-        const selected = strategy.selections.get(link.url);
-        if (selected) link.selectedBackup = selected;
-        break;
-      }
-    }
+    const picked = pickBackupForLink(link, strategy);
+    if (picked) link.selectedBackup = picked;
   }
 
   imageLinks.value = links;
 }
 
-/**
- * 自动选择最佳备用链接并返回替换摘要
- */
-export function autoSelectAndGetSummary(): {
+export interface RepairSummary {
   files: Array<{
     path: string;
     fileName: string;
@@ -109,26 +115,24 @@ export function autoSelectAndGetSummary(): {
   }>;
   totalReplacements: number;
   totalFiles: number;
-} {
-  const links = [...imageLinks.value];
+}
+
+/**
+ * 按给定策略预览替换摘要（纯函数，不写 imageLinks/selectedBackup）
+ *
+ * 供确认对话框实时预览用：传入的 `strategy` 必须是用户当前选中的那个（含手动/优先级顺序），
+ * 否则摘要会跟点「开始修复」后 `applyRepairStrategy` 实际产生的结果对不上。
+ */
+export function summarizeRepairStrategy(
+  links: MdImageLinkWithFile[],
+  strategy: RepairStrategy,
+): RepairSummary {
+  const fileMap = new Map<string, RepairSummary['files'][number]>();
 
   for (const link of links) {
-    if (!link.checkResult?.is_valid && link.backupLinks && link.backupLinks.length > 0) {
-      const best = link.backupLinks.find((b) => b.checkResult?.is_valid);
-      if (best) link.selectedBackup = best.url;
-    }
-  }
-  imageLinks.value = links;
-
-  const fileMap = new Map<string, {
-    path: string;
-    fileName: string;
-    replacements: Array<{ lineNumber: number; oldUrl: string; newUrl: string; serviceId: string }>;
-  }>();
-
-  for (const link of links) {
-    if (!link.selectedBackup) continue;
-    const backup = link.backupLinks?.find((b) => b.url === link.selectedBackup);
+    const picked = pickBackupForLink(link, strategy);
+    if (!picked) continue;
+    const backup = link.backupLinks?.find((b) => b.url === picked);
     if (!backup) continue;
 
     let entry = fileMap.get(link.sourceFile);
@@ -139,7 +143,7 @@ export function autoSelectAndGetSummary(): {
     entry.replacements.push({
       lineNumber: link.lineNumber,
       oldUrl: link.url,
-      newUrl: link.selectedBackup,
+      newUrl: picked,
       serviceId: backup.serviceId,
     });
   }

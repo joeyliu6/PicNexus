@@ -6,6 +6,7 @@ import Dialog from 'primevue/dialog';
 import { getServiceDisplayName } from '../../../constants/serviceNames';
 import { serviceNameTooltip } from '../../../utils/serviceNameFit';
 import { smartTruncateUrl } from '../../../utils/mdParser';
+import { summarizeRepairStrategy } from '../../../composables/md-rescue/useRepairStrategy';
 import type { MdImageLinkWithFile, RepairStrategy } from '../../../composables/useMdRescue';
 
 const props = defineProps<{
@@ -28,6 +29,31 @@ const manualSelections = ref(new Map<string, string>());
 
 const MANUAL_LIST_LIMIT = 50;
 const showAllManualLinks = ref(false);
+
+/** 当前策略：与 confirm() 发出的完全一致，摘要预览必须用这同一份，不能各算各的 */
+const currentStrategy = computed<RepairStrategy>(() => {
+  switch (repairStrategyType.value) {
+    case 'priority':
+      return { type: 'priority', order: tempPreference.value };
+    case 'fastest':
+      return { type: 'fastest' };
+    case 'manual':
+    default:
+      return { type: 'manual', selections: manualSelections.value };
+  }
+});
+
+const repairSummary = computed(() => summarizeRepairStrategy(props.rescuableLinks, currentStrategy.value));
+
+const SUMMARY_FILE_LIMIT = 20;
+const showAllSummaryFiles = ref(false);
+const showSummary = ref(false);
+
+const visibleSummaryFiles = computed(() => {
+  const all = repairSummary.value.files;
+  if (showAllSummaryFiles.value || all.length <= SUMMARY_FILE_LIMIT) return all;
+  return all.slice(0, SUMMARY_FILE_LIMIT);
+});
 
 const visibleManualLinks = computed(() => {
   const all = props.rescuableLinks;
@@ -60,6 +86,8 @@ function onShow() {
   repairStrategyType.value = hasExistingSelection ? 'manual' : 'priority';
   showManualSection.value = hasExistingSelection;
   showAllManualLinks.value = false;
+  showSummary.value = false;
+  showAllSummaryFiles.value = false;
 }
 
 function moveServiceUp(i: number) {
@@ -70,19 +98,7 @@ function moveServiceUp(i: number) {
 }
 
 function confirm() {
-  let strategy: RepairStrategy;
-  switch (repairStrategyType.value) {
-    case 'priority':
-      strategy = { type: 'priority', order: tempPreference.value };
-      break;
-    case 'fastest':
-      strategy = { type: 'fastest' };
-      break;
-    case 'manual':
-      strategy = { type: 'manual', selections: manualSelections.value };
-      break;
-  }
-  emit('confirm', strategy, [...tempPreference.value]);
+  emit('confirm', currentStrategy.value, [...tempPreference.value]);
   emit('update:visible', false);
 }
 </script>
@@ -173,6 +189,30 @@ function confirm() {
             @click="showAllManualLinks = true"
           >
             显示全部 {{ rescuableLinks.length }} 条（当前仅显示前 {{ MANUAL_LIST_LIMIT }} 条）
+          </button>
+        </div>
+      </div>
+
+      <!-- 替换摘要：按当前策略实时预览会改哪些文件、改几处 -->
+      <div class="repair-summary" :class="{ active: showSummary }">
+        <div class="repair-summary-header" @click="showSummary = !showSummary">
+          <i class="pi pi-file-edit" />
+          <span class="repair-summary-title">替换摘要</span>
+          <span class="repair-summary-count">{{ repairSummary.totalFiles }} 个文件 · {{ repairSummary.totalReplacements }} 处替换</span>
+          <i class="pi" :class="showSummary ? 'pi-chevron-up' : 'pi-chevron-down'" />
+        </div>
+        <div v-if="showSummary" class="repair-summary-list">
+          <div v-for="file in visibleSummaryFiles" :key="file.path" class="repair-summary-item">
+            <i class="pi pi-file" />
+            <span class="repair-summary-file" v-tooltip.top="file.path">{{ file.fileName }}</span>
+            <span class="repair-summary-item-count">{{ file.replacements.length }} 处</span>
+          </div>
+          <button
+            v-if="!showAllSummaryFiles && repairSummary.files.length > SUMMARY_FILE_LIMIT"
+            class="repair-manual-show-all"
+            @click="showAllSummaryFiles = true"
+          >
+            显示全部 {{ repairSummary.files.length }} 个文件（当前仅显示前 {{ SUMMARY_FILE_LIMIT }} 个）
           </button>
         </div>
       </div>
@@ -329,6 +369,41 @@ function confirm() {
   transition: background var(--duration-fast), border-color var(--duration-fast);
 }
 .repair-manual-show-all:hover { background: var(--primary-alpha-5); border-color: var(--primary-alpha-30); }
+
+.repair-summary {
+  border-radius: var(--radius-lg); border: 1px solid var(--border-subtle);
+}
+.repair-summary.active { border-color: var(--primary-alpha-30); }
+
+.repair-summary-header {
+  display: flex; align-items: center; gap: var(--space-xs-sm); cursor: pointer;
+  padding: var(--space-sm-md) var(--space-md-lg);
+}
+.repair-summary-header > .pi-file-edit { font-size: var(--text-xs); color: var(--text-tertiary); }
+.repair-summary-title { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text-main); }
+.repair-summary-count { margin-left: auto; font-size: var(--text-xs); color: var(--text-tertiary); }
+
+.repair-summary-header > .pi-chevron-up,
+.repair-summary-header > .pi-chevron-down { font-size: var(--text-xs); color: var(--text-tertiary); }
+
+.repair-summary-list {
+  display: flex; flex-direction: column; gap: var(--space-xs);
+  padding: 0 var(--space-md-lg) var(--space-sm-md);
+  max-height: 200px; overflow-y: auto;
+}
+
+.repair-summary-item {
+  display: flex; align-items: center; gap: var(--space-xs-sm);
+  font-size: var(--text-xs); color: var(--text-muted);
+}
+.repair-summary-item > .pi-file { font-size: var(--text-xs); color: var(--text-tertiary); }
+
+.repair-summary-file {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+.repair-summary-item-count { margin-left: auto; flex-shrink: 0; color: var(--text-tertiary); }
 
 /* 底栏布局与按钮规格由 .app-dialog 统一提供，见 src/styles/app.css 第 3 节 */
 </style>
