@@ -90,25 +90,6 @@
    那是一次独立的视觉改动，需要真机看过标题栏与下方 WebView 的接缝再定。
    （主题 class 命名不一致那半条 2026-09-08 已修：`html.light` → `html.light-theme`。）
 
-### [ ] 设置页「备份与同步」缺少增量上传/合并下载入口，sync-flow.md 流程图与实际 UI 不符
-
-- **来源**：2026-09-07 处理 P1-2 真机复测时顺带发现，详见
-  [scan-config-mirror-2026-09-07.md](audits/scan-config-mirror-2026-09-07.md) P1-2 执行记录
-- **症状**：[HistorySync.ts](../src/composables/backup-sync/HistorySync.ts) 里
-  `uploadHistoryIncremental`（增量上传）/ `uploadHistoryMerge`（智能合并上传）/
-  `downloadHistoryMerge`（合并下载）三个函数已实现、有类型定义、有单元测试
-  （`historySync.spec.ts`），但全仓没有任何 `.vue` 组件调用它们——
-  [DataItemCard.vue](../src/components/settings/backup/DataItemCard.vue) 的「更多」下拉菜单
-  只有「覆盖云端」「覆盖本地」两项，「同步」按钮走的是双向 `syncHistory`，都不是这三个函数。
-  [sync-flow.md](flows/sync-flow.md) 图 1（136-141 行）画的流程图有 5 个分支（含"增量上传"
-  "下载合并到本地"），实际界面只有 3 个可点入口，图与实际 UI 不符
-- **定性**：疑似缺陷 🟡（要不要把这三个函数接回 UI 是产品决定；当死代码删掉、还是补上入口，
-  两条路线都成立）
-- **优先级**：低 —— 不影响已接线的三个入口（`uploadHistoryForce` / `downloadHistoryOverwrite` /
-  `syncHistory`）本身工作正常
-
-**当前处置**：待排期（补 UI 入口，或删死代码 + 改 sync-flow.md 流程图，二选一，需要产品判断）。
-
 ---
 
 ## 已知取舍
@@ -214,6 +195,12 @@
 ---
 
 ## 已完成
+
+### [x] 四个从未接进 UI 的同步入口已删除，「同步」补上如实反馈
+
+`uploadHistoryMerge` / `uploadHistoryIncremental` / `downloadHistoryMerge` / `downloadSettingsMerge`
+全仓零 `.vue` 调用点，连同 sync-flow.md 图 3 的虚构分支一并删除；「同步」不再无条件弹「已同步」。
+详见 [orphan-sync-entries-2026-09-08.md](audits/orphan-sync-entries-2026-09-08.md)。
 
 ### [x] `tests/` 与 `scripts/` 纳入类型检查门禁
 

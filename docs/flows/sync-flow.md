@@ -135,11 +135,9 @@ flowchart TD
 flowchart TD
     A[用户打开同步菜单] --> B{选择操作类型?}
 
-    B -- 上传到云端 --> U1[uploadSettingsCloud / uploadHistoryForce]
-    B -- 下载覆盖本地 --> D1[downloadSettingsOverwrite / downloadHistoryOverwrite]
-    B -- 下载合并到本地 --> D2[downloadSettingsMerge / downloadHistoryMerge]
-    B -- 增量上传 --> U2[uploadHistoryIncremental]
-    B -- 双向同步 --> S1[syncConfig / syncHistory]
+    B -- 覆盖云端 --> U1[uploadSettingsCloud / uploadHistoryForce]
+    B -- 覆盖本地 --> D1[downloadSettingsOverwrite / downloadHistoryOverwrite]
+    B -- 同步 --> S1[syncConfig / syncHistory]
 
     %% 覆盖类操作：二次确认
     U1 --> U1C{confirmDialog<br/>覆盖云端?}
@@ -149,25 +147,23 @@ flowchart TD
     U1C -- 确认 --> U1E[直接上传覆盖云端]
     D1C -- 确认 --> D1E[直接下载替换本地]
 
-    %% 合并类操作：无确认直接执行
-    D2 --> D2E["合并策略<br/>配置: 保留本地 WebDAV<br/>历史: 内容与收藏分开合并"]
-    U2 --> U2E["增量策略<br/>上传新增 id<br/>或收藏版本更新"]
-
-    %% 双向同步：先拉取合并 → 再上传合并
-    S1 --> S1A[步骤1: 拉取云端<br/>合并到本地]
-    S1A --> S1B[步骤2: 将本地<br/>合并上传到云端]
+    %% 同步：无确认直接执行，先拉取合并 → 再推送合并
+    S1 --> S1A["步骤1: 拉取云端合并到本地<br/>配置: 保留本地 WebDAV<br/>历史: 内容与收藏分开合并"]
+    S1A --> S1B[步骤2: 将本地<br/>合并推送到云端]
+    S1B --> S1C{两个方向<br/>都没变化?}
+    S1C -- 是 --> S1D["不写云端<br/>提示「已是最新」"]
+    S1C -- 否 --> S1E["写云端<br/>提示各方向实际条数"]
 
     %% 样式
     style A fill:#e3f2fd,stroke:#1976d2
     style X fill:#ffebee,stroke:#c62828
-    style D2E fill:#e8f5e9,stroke:#2e7d32
-    style U2E fill:#e8f5e9,stroke:#2e7d32
-    style S1B fill:#e8f5e9,stroke:#2e7d32
+    style S1D fill:#e8f5e9,stroke:#2e7d32
+    style S1E fill:#e8f5e9,stroke:#2e7d32
 ```
 
 > **⚠️ 上传方向的「云端数据不可用」判定（防静默覆盖）**
 >
-> 三个会**覆盖云端**的入口（`uploadHistoryMerge` / `uploadHistoryIncremental` / `syncHistory` 第一步，
+> 会**覆盖云端**的入口（`syncHistory` 第一步，
 > 以及配置侧的 `syncConfig`）在拉取云端后把结果分成三态，只有第一态允许继续上传：
 >
 > | `getFile` 返回 | 含义 | 处置 |
@@ -177,7 +173,7 @@ flowchart TD
 > | 合法 JSON 但非数组 | 文件在，但读不出记录 | **中止** |
 >
 > 判定逻辑收在 `backupSyncUtils.parseCloudHistoryForUpload`，**只给上传方向用**。
-> 下载方向（`downloadHistoryOverwrite` / `downloadHistoryMerge`）不能复用：那边 `null` 的正确
+> 下载方向（`downloadHistoryOverwrite`）不能复用：那边 `null` 的正确
 > 含义是「没东西可恢复，必须中止」，若当成空数组继续走，`importFromJSON(空, 'replace')`
 > 会把本地历史整库清空。
 >
@@ -190,9 +186,10 @@ flowchart TD
 > - 云端配置下载仍可独立使用；本地明文导出保留风险确认流程
 > - 代码中**没有** JSON 内容比对和三路冲突对话框，用户通过菜单选项预先声明意图
 > - 覆盖类操作（`downloadSettingsOverwrite` / `downloadHistoryOverwrite` / `uploadHistoryForce`）统一用 `confirmDialog` 做破坏性确认
-> - 合并类操作（`downloadSettingsMerge` / `downloadHistoryMerge` / `uploadHistoryMerge`）直接执行，合并策略见图 2 说明
+> - 合并语义**只由「同步」提供**，直接执行无需确认，合并策略见图 2 说明。曾另有 `downloadSettingsMerge` / `uploadHistoryMerge` / `uploadHistoryIncremental` / `downloadHistoryMerge` 四个入口，从未接进 UI，已于 2026-09-08 删除
 > - 历史记录内容与收藏状态分开裁决：上传内容仍按 `timestamp`，收藏状态按 `favoriteUpdatedAt`，同毫秒再用 `favoriteUpdatedBy` 稳定裁决
 > - 双向同步（`syncConfig` / `syncHistory`）本质是"拉取合并 → 推送合并"的自动化组合
+> - `syncHistory` 在两个方向都没有差异时**不写云端**，提示「已是最新」；有差异时按方向分别报出实际条数（拉取 N 条 / 推送 M 条），不再只报全表总数
 
 ---
 
