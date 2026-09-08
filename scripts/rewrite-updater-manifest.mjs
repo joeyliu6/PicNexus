@@ -29,7 +29,10 @@ export function rewriteUpdaterManifest(manifest) {
     throw new Error('latest.json is not an object');
   }
 
-  const platforms = manifest.platforms;
+  // 上面的 typeof 收窄把 unknown 变成 object，而 object 上取不到任何属性，
+  // 校验通过后转成可索引的记录类型再往下走
+  const parsed = /** @type {Record<string, any>} */ (manifest);
+  const platforms = /** @type {Record<string, any>} */ (parsed.platforms);
   if (!platforms || typeof platforms !== 'object' || Array.isArray(platforms)) {
     throw new Error('latest.json has no platforms object');
   }
@@ -55,7 +58,7 @@ export function rewriteUpdaterManifest(manifest) {
   delete nextPlatforms[MSI_KEY];
 
   return {
-    manifest: { ...manifest, platforms: nextPlatforms },
+    manifest: { ...parsed, platforms: nextPlatforms },
     previousUrl,
     nextUrl: nsis.url,
   };

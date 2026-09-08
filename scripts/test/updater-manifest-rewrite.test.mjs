@@ -29,6 +29,7 @@ test('points the generic Windows key at the NSIS installer', () => {
 
   assert.ok(manifest.platforms['windows-x86_64'].url.endsWith('-setup.exe'));
   assert.equal(manifest.platforms['windows-x86_64'].signature, 'sig-nsis');
+  assert.ok(previousUrl, 'previousUrl should be present when the generic key had a url');
   assert.match(previousUrl, /\.msi$/);
   assert.match(nextUrl, /-setup\.exe$/);
 });

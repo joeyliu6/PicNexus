@@ -25,7 +25,7 @@ function readJson(filePath, label, errors) {
   try {
     return JSON.parse(readFileSync(filePath, 'utf8'));
   } catch (error) {
-    errors.push(`${label} is not valid JSON: ${error.message}`);
+    errors.push(`${label} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
 }
@@ -191,7 +191,7 @@ function runCli() {
     const result = validateObsidianRelease(pluginDir);
     process.stdout.write(printVersion ? `${result.version}\n` : `${JSON.stringify(result)}\n`);
   } catch (error) {
-    process.stderr.write(`${error.message}\n`);
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;
   }
 }

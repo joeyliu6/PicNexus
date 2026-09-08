@@ -1,0 +1,24 @@
+{
+  // scripts/ 的类型门禁。纯 .mjs、没有类型标注，所以这里是**故意**关掉 noImplicitAny 的：
+  // 开着它会报出 273 条隐式 any（全是无标注 JS 的固有噪音，不是缺陷），
+  // 门禁一旦被噪音淹没就只有被关掉一个下场。关掉之后仍能抓到真错——
+  // 首次接入就抓出 5 条：never[] 推断、object 上取属性、string|null 传给要 string 的断言、
+  // 两处 catch 里直接 .message。
+  //
+  // 想再往上收紧的话，路子是「按脚本逐个补 JSDoc」，补完一个就把它挪进一个开着
+  // noImplicitAny 的更严格的 include 里，而不是在这里一把梭。
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "strict": true,
+    "noImplicitAny": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowJs": true,
+    "checkJs": true
+  },
+  "include": ["scripts"]
+}

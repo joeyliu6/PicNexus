@@ -59,6 +59,7 @@ function parseArgs(argv) {
   const options = {
     includeRegistry: false,
     json: false,
+    /** @type {string[]} */
     roots: [],
   };
 
