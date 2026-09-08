@@ -88,76 +88,6 @@
    `scripts/check-theme-token-copies.mjs` 刻意没收编它——要收编得先把整套色值对到令牌上，
    那是一次独立的视觉改动，需要真机看过标题栏与下方 WebView 的接缝再定。
 
-### [ ] 文档修复：取消扫描后仍自动发起备用链接网络验证批次
-
-- **来源**：2026-08-25 `/scan-bugs md-rescue` 扫描
-- **症状**：[LinkChecker.ts:403](../../src/composables/md-rescue/LinkChecker.ts#L403) 的 cancelled 分支
-  对已检出备用链接再调 `verifyBackupLinks({ allowCancelled: true })` → 新起一批 `batch_check_links`
-  （[useLinkCheck.ts:572](../../src/composables/link-check/useLinkCheck.ts#L572)）——用户点「取消」后
-  网络检查仍在跑，跑完才落到 `cancelled`。与图 1「取消即停」语义相悖，且排查表「备用链接显示待验证
-  不更新」只对「Phase 2 中取消」成立，对「Phase 1 中取消」实际**会**更新，两者自相矛盾
-- **定性**：疑似缺陷 + 🟡（行为可逐行走通；是否算缺陷取决于「取消后按验证结果修复」是不是刻意设计）
-- **优先级**：中 —— 越晚取消已检出备用链接越多，取消后静默验证越久、越像「取消没停下」
-
-**当前处置**：待确认设计意图 → 若是刻意设计，写进图 4 / 排查表与代码注释；若否，取消分支改
-`allowCancelled: false` 即停。改前先真机验证：扫一个大文件夹到后半段再取消，观察网络是否仍在动。
-
-### [ ] 文档修复：修复确认对话框缺「替换摘要」，图 6 流程与实际不符
-
-- **来源**：2026-08-25 `/scan-bugs md-rescue` 扫描
-- **症状**：`autoSelectAndGetSummary` / `startFix` / `applyHostPreference` 三个函数生产代码零调用
-  （仅测试引用）；`MdRepairDialog` 底部只有「开始修复（N 张）」按钮，无文档图 6 承诺的逐文件替换摘要
-  / diff 预览；预选改由对话框 `onShow` 现算 `manualSelections`，确认走 `applyRepairStrategy + executeReplace`
-- **定性**：疑似缺陷 + 🟡（文档承诺环节缺失，无数据损坏面；策略选择逻辑本身与图 6 一致）
-- **优先级**：低 —— 倾向在确认对话框补摘要（复用 `autoSelectAndGetSummary` 返回值），顺手删死代码
-  并把图 5/图 6 改写为实际流程（图 3「关键源文件」指针也要从 `useMdRescue.ts` 更正到 `LinkChecker.ts`）
-
-**当前处置**：待排期（补摘要 or 删死代码 + 文档同步，二选一）
-
-### [ ] 扫描：NON_IMAGE_EXTENSIONS 跨语言双份无 lint 守卫
-
-- **来源**：2026-08-25 `/scan-bugs md-rescue` 扫描
-- **症状**：[mdParser.ts:263](../../src/utils/mdParser.ts#L263) 与
-  [md_scanner.rs:244](../../src-tauri/src/commands/md_scanner.rs#L244) 各有一份 50+ 条的图片扩展名
-  黑名单（文件夹模式走 Rust、单文件/拖放走 JS），当前逐条一致，但 `BACKUP_DIR_NAME` 已登记在
-  `check-cross-language-constants.mjs` 的 `PAIRS`，这个列表没有守卫——漂移会让文件夹与拖放模式
-  的提取结果静默分叉
-- **定性**：🟡 潜伏风险非现行缺陷
-- **优先级**：低 —— 一次性补守卫即可（两侧集合相等测试，或抽单一来源）
-
-**当前处置**：待排期
-
-### [ ] config + mirror 扫描四条发现全部闭环，待提交
-
-- **来源**：2026-09-07 `/scan-bugs config` + `/scan-bugs mirror` 扫描，详见
-  [scan-config-mirror-2026-09-07.md](audits/scan-config-mirror-2026-09-07.md)
-- **定性**：四条（P0-1/P1-1/P1-2/P1-3）均已真机复测坐实并修复/修文档；🟡🔴 见各自记录
-- **优先级**：中 —— 无数据丢失风险，属状态错位/文档失真
-
-**当前处置**：四条全部闭环，P0-1/P1-1 已提交，P1-2/P1-3 待用户确认后提交。
-
-**P0-1（托盘旧钥匙回写毁配置）已闭环**：2026-09-07 真机复现 → 修复（`secure-key-rotated` 跨窗口事件 +
-`loadForRead` 解密失败备份兜底）→ 真机复验通过，提交 `9f91b7c8`（修复+回归测试）与 `745742c8`（文档），
-详见审计文档「执行记录」区。
-
-**P1-1（configStore 缓存对象别名，保存失败回滚空转）已闭环**：2026-09-07 真机复现 → 修复
-（`MutexStore._performRead` 两个返回点统一 `structuredClone`，`useConfig.ts` 经测试验证不需要
-额外改动）→ 真机复验通过，提交 `10dc2cfd`（修复+回归测试）与 `a295d55a`（文档），详见审计文档
-「执行记录」区。
-
-**P1-2（mirror 文档承诺"脏标记同步"，机制不存在）已闭环**：2026-09-07 真机复现（判据改用「同步」
-按钮——审计原判据"增量上传"按钮在界面上其实不存在，见下一条新发现）→ 修法是文档向的
-（`mirror-fallback-flow.md` 边界 12 + 两处顺带文档漂移改写为符合实际行为，未动 `src/` 任何代码
-逻辑）→ 详见审计文档「执行记录」区（改动尚未提交，待用户确认）。
-
-**P1-3（灯箱单条重检不重算 `linkCheckSummary`）已闭环**：2026-09-07 真机复现（portable 隔离库 +
-本机 dufs 服务两张真图片 + wdio 驱动真实 debug App：灯箱把一条已判失效的镜像点「重新检测」，
-`linkCheckStatus` 确实更新为 valid，但 `linkCheckSummary` 原样不动，链接检测页 Phase 1 的
-真实 SQL 查询证实这条记录仍会被捞进首屏）→ 修复（`useMirrorFallback.ts` 的 `checkMirror` 落库时
-补上 `recomputeLinkCheckSummary` 调用，口径与 `removeMirror` 一致）→ 同一套真机流程复验通过
-（`linkCheckSummary` 正确归零、Phase 1 查询不再命中这条记录）→ 详见审计文档「执行记录」区
-（改动尚未提交，待用户确认）。
-
 ### [ ] 设置页「备份与同步」缺少增量上传/合并下载入口，sync-flow.md 流程图与实际 UI 不符
 
 - **来源**：2026-09-07 处理 P1-2 真机复测时顺带发现，详见
@@ -282,6 +212,29 @@
 ---
 
 ## 已完成
+
+### [x] md-rescue 修复确认对话框补上「替换摘要」，图 5/图 6 文档改写为实际流程
+
+新增纯函数 `pickBackupForLink` + `summarizeRepairStrategy`，替换掉写状态又选错策略的
+`autoSelectAndGetSummary`，对话框摘要预览与实际修复结果保证一致，真机验证通过。详见
+[md-rescue-repair-summary-2026-09-08.md](audits/md-rescue-repair-summary-2026-09-08.md)。
+
+### [x] NON_IMAGE_EXTENSIONS 跨语言双份补上一致性守卫
+
+新增 `scripts/check-non-image-extensions.mjs`，正则各自抽出 `mdParser.ts` 与 `md_scanner.rs` 的
+黑名单集合做等值比较，已接入 `npm run lint`；改坏一侧验证过会报错并指出差集。
+
+### [x] md-rescue：取消扫描后仍联网验证备用链接
+
+真机复现坐实（真实应用日志时间线：取消请求 15:55:07 收到，15:55:16 仍单独起一批网络请求查备用链接）。
+修法：`LinkChecker.ts` 取消分支不再对 `verifyBackupLinks` 传 `allowCancelled: true`，取消后备用链接候选
+只查本地 DB、不再联网验证。详见 [md-rescue-cancel-backup-verify-2026-09-08.md](audits/md-rescue-cancel-backup-verify-2026-09-08.md)。
+
+### [x] config + mirror 扫描四条发现全部闭环
+
+2026-09-07 扫描出的 P0-1/P1-1/P1-2/P1-3（托盘旧钥匙回写毁配置 / configStore 缓存别名 /
+mirror 同步文档失真 / 灯箱重检不重算 linkCheckSummary）均已真机复测坐实并修复+提交。
+详见 [scan-config-mirror-2026-09-07.md](audits/scan-config-mirror-2026-09-07.md)。
 
 ### [x] sync + ipc 扫描产出已修复并真机验收
 
