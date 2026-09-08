@@ -67,26 +67,28 @@
 或上游（actions/runner-images、MicrosoftEdge/EdgeWebDriver、tauri-apps/tauri-driver）
 出修复。恢复时删掉两处 `continue-on-error` 及注释即可。
 
-### [ ] 类型检查盲区：`scripts/`、`tests/` 仍不在任何 tsconfig 覆盖内
+**2026-09-08 第一次复验：仍未修复**（[run 34179056938](https://github.com/joeyliu6/PicNexus/actions/runs/34179056938)，
+[issue #5](https://github.com/joeyliu6/PicNexus/issues/5) 已按处置关闭）。镜像换成
+`windows-2025-vs2026` / `20260824.214.3` 后报错一字不差，其余 job 全绿。
 
-- **来源**：2026-08-22 优化 tsconfig 时补的 `tsconfig.node.json`（`typecheck` 第二段）
-  只收编了 4 个根配置文件 + `eslint.config.mjs`——这些已零错误纳管
-- **优先级**：低——lint（eslint）仍覆盖这些文件，缺的只是类型层
+⚠️ 同时发现盯梢用的判据选错了谱系：`runs-on: windows-latest` 解析到的是
+**`windows-2025-vs2026`**（分支 `win25-vs2026`），不是云端例行任务盯的 `windows-2025`。
+本次验证仍有效（20260824 比出问题的 20260818 新），但下次要按 `win25-vs2026` 谱系判断，
+否则提醒会踩不准时点。
 
-剩余盲区与试点数据：
+### [ ] 类型检查残留两项：`verbatimModuleSyntax` 与 login-titlebar 的配色自成一套
 
-1. **`scripts/**/*.mjs`**：试点开 `checkJs` + strict 后报数百条隐式 any（纯 JS 无标注的
-   固有噪音，非真缺陷），全量补 JSDoc 成本失控，故降级移出。纳入前需评估
-   「按脚本逐个补 JSDoc」还是「对 scripts 单独放宽 `noImplicitAny`」。
-2. **`tests/`（269 个 .ts）**：vitest/playwright 运行时才会暴露类型错，存量未评估。
-3. **可选升级 `verbatimModuleSyntax`**：会大面积要求改 type-only import，收益是
+- **来源**：2026-08-22 优化 tsconfig 时留下的盲区清单，2026-09-08 已收掉其中三项
+  （`scripts/`、`tests/`、login-titlebar 的主题 class 命名），详见
+  [typecheck-blind-spots-2026-09-08.md](audits/typecheck-blind-spots-2026-09-08.md)
+- **优先级**：低——两项都是"可以更好"，不是缺陷
+
+1. **可选升级 `verbatimModuleSyntax`**：会大面积要求改 type-only import，收益是
    import 语义完全显式，与 `isolatedModules` 配套；动它前先跑一次看报错量。
-4. **`login-titlebar.html` 主题 class 命名不一致**：内联样式用 `html.light`，
-   项目约定是 `html.light-theme`（`useLoginTheme.ts` / `preload-theme.js` / 本次改的
-   `login-webview.html` 均为后者）。它自成一体能工作，但下个人照约定改会踩空。
-   配色也另起一套（`#111827` / `#f8fafc`），不是主题令牌的副本，所以 2026-08-22 新增的
-   `scripts/check-theme-token-copies.mjs` 刻意没收编它——要收编得先把整套色值对到令牌上，
+2. **`login-titlebar.html` 的配色自成一套**（`#111827` / `#f8fafc`），不是主题令牌的副本，
+   所以 `scripts/check-theme-token-copies.mjs` 刻意没收编它。要收编得先把整套色值对到令牌上，
    那是一次独立的视觉改动，需要真机看过标题栏与下方 WebView 的接缝再定。
+   （主题 class 命名不一致那半条 2026-09-08 已修：`html.light` → `html.light-theme`。）
 
 ### [ ] 设置页「备份与同步」缺少增量上传/合并下载入口，sync-flow.md 流程图与实际 UI 不符
 
@@ -212,6 +214,12 @@
 ---
 
 ## 已完成
+
+### [x] `tests/` 与 `scripts/` 纳入类型检查门禁
+
+`typecheck` 扩成四段（新增 `tsconfig.test.json` / `tsconfig.scripts.json`），首次接入的 38 条全部修完；
+抓出 `useSensitiveDraft` 三处漏接必填 `confirmClear`、视觉 harness 漏传必填 prop 两条真问题。
+详见 [typecheck-blind-spots-2026-09-08.md](audits/typecheck-blind-spots-2026-09-08.md)。
 
 ### [x] md-rescue 修复确认对话框补上「替换摘要」，图 5/图 6 文档改写为实际流程
 
