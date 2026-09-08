@@ -163,14 +163,14 @@ export function isCloudDataAbortReason(errorCode: string): boolean {
 /**
  * 解析「上传前拉取的云端历史」
  *
- * ⚠️ **只给上传方向用**（`uploadHistoryMerge` / `uploadHistoryIncremental` / `syncHistory` 第一步）。
- * 下载方向（`downloadHistoryOverwrite` / `downloadHistoryMerge`）**绝不能用**：那边 `absent`
+ * ⚠️ **只给上传方向用**（当前唯一调用点是 `syncHistory` 第一步）。
+ * 下载方向（`downloadHistoryOverwrite`）**绝不能用**：那边 `absent`
  * 的正确含义是「没东西可恢复，必须中止」，若照本函数把 `absent` 当成空数组继续走，
  * `importFromJSON(空, 'replace')` 会把本地历史整库清空——比原缺陷更致命。
  *
  * 本函数**不抛异常**（`JSON.parse` 失败除外，那属于真·解析错误，交由调用方的 catch 处理）。
- * 不可用状态以 `kind: 'unusable'` 返回，由调用方在 catch 块**之外**再抛——因为三个调用点的
- * 内层 catch 都要过一道 `isWebDAVNotFoundError`，而它是**子串匹配**：只要错误文案里出现
+ * 不可用状态以 `kind: 'unusable'` 返回，由调用方在 catch 块**之外**再抛——因为调用点的
+ * 内层 catch 要过一道 `isWebDAVNotFoundError`，而它是**子串匹配**：只要错误文案里出现
  * 「文件不存在」/`404`/`not found`，就会被当成「云端没这个文件」吞掉，中止逻辑静默退化成
  * 原来的覆盖行为。把 throw 挪出 catch 范围，这条路就与文案措辞彻底解耦了。
  */

@@ -43,12 +43,8 @@ export interface UseBackupSyncReturn {
   // 云端同步
   uploadSettingsCloud: (profile: WebDAVProfile | null) => Promise<void>;
   downloadSettingsOverwrite: (profile: WebDAVProfile | null) => Promise<void>;
-  downloadSettingsMerge: (profile: WebDAVProfile | null) => Promise<void>;
   uploadHistoryForce: (profile: WebDAVProfile | null) => Promise<void>;
-  uploadHistoryMerge: (profile: WebDAVProfile | null) => Promise<void>;
-  uploadHistoryIncremental: (profile: WebDAVProfile | null) => Promise<void>;
   downloadHistoryOverwrite: (profile: WebDAVProfile | null) => Promise<void>;
-  downloadHistoryMerge: (profile: WebDAVProfile | null) => Promise<void>;
 
   // 双向同步
   syncConfigLoading: Ref<boolean>;

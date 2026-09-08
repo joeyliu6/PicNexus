@@ -1,5 +1,5 @@
 // src/composables/backup-sync/HistorySync.ts
-// 云端历史记录同步：强制/合并/增量上传 + 覆盖/合并下载 + 双向同步
+// 云端历史记录同步：覆盖上传 + 覆盖下载 + 双向同步（合并语义只由「同步」提供）
 
 import { historyDB } from '../../services/HistoryDatabase';
 import { mergeHistoryCollections } from '../../services/database/HistoryMerge';
@@ -73,178 +73,6 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
     }
   }
 
-  async function uploadHistoryMerge(profile: WebDAVProfile | null): Promise<void> {
-    uploadHistoryMenuVisible.value = false;
-
-    const webdav = await getWebDAVClientAndPath(profile, 'history', toast);
-    if (!webdav) return;
-    if (!acquireCloudSync(toast)) return;
-
-    try {
-      uploadHistoryLoading.value = true;
-
-      const localCount = await historyDB.getCount();
-      if (localCount === 0) {
-        toast.warn('没有可上传的历史记录');
-        return;
-      }
-
-      // 直接取数组：exportToJSON() 再 JSON.parse 回来等于把整份历史多序列化+解析一轮
-      const localItems = await historyDB.getAllItems();
-
-      let cloudItems: HistoryItem[] = [];
-      let cloudUnusable: string | null = null;
-      try {
-        const content = await webdav.client.getFile(webdav.remotePath);
-        const payload = parseCloudHistoryForUpload(content);
-        if (payload.kind === 'items') {
-          cloudItems = payload.items;
-        } else if (payload.kind === 'unusable') {
-          cloudUnusable = payload.reason;
-        } else {
-          log.info('云端历史文件不存在，将进行全量上传');
-        }
-      } catch (downloadError) {
-        if (downloadError instanceof Error && downloadError.message === 'user_cancelled') {
-          throw downloadError;
-        }
-        if (!isWebDAVNotFoundError(downloadError)) {
-          log.error('拉取云端历史失败，已中止以避免覆盖云端数据:', downloadError);
-          throw downloadError;
-        }
-        log.info('云端历史文件不存在，将进行全量上传');
-      }
-
-      // Why 抛在 catch 之外：上面那道 isWebDAVNotFoundError 是**子串匹配**，只要文案里出现
-      // 「文件不存在」/404/not found 就会被当成「云端没这个文件」吞掉，中止逻辑会静默退化回
-      // 覆盖云端。放到 catch 范围外，这条中止路径就与文案措辞彻底解耦。
-      if (cloudUnusable) {
-        log.error('云端历史数据不可用，已中止以避免覆盖云端数据:', cloudUnusable);
-        throw new Error(cloudUnusable);
-      }
-
-      for (const item of localItems) {
-        if (!item.id) item.id = crypto.randomUUID();
-      }
-
-      const { items: mergedItems, addedCount, updatedCount } = mergeHistoryCollections(cloudItems, localItems);
-
-      const jsonContent = JSON.stringify(mergedItems, null, 2);
-      await webdav.client.putFile(webdav.remotePath, jsonContent);
-
-      updateHistorySyncStatus(profile, 'success');
-      await writeSyncLog('upload_history_cloud', 'success', `共 ${mergedItems.length} 条`, profile);
-      toast.success(
-        '已合并上传',
-        `共 ${mergedItems.length} 条记录，新增 ${addedCount} 条，更新 ${updatedCount} 条`
-      );
-    } catch (error) {
-      const errorCode = extractErrorCode(error);
-      log.error('智能合并上传失败:', error);
-      updateHistorySyncStatus(profile, 'failed', errorCode);
-      await writeSyncLog('upload_history_cloud', 'failed', errorCode, profile);
-      // 同 uploadHistoryForce：云端数据不可用类错误不拼网络/配置指引，避免误导
-      const detail = isCloudDataAbortReason(errorCode)
-        ? errorCode
-        : `${errorCode}\n请检查网络或 WebDAV 配置后重试`;
-      toast.error('上传失败', detail);
-    } finally {
-      uploadHistoryLoading.value = false;
-      releaseCloudSync();
-    }
-  }
-
-  async function uploadHistoryIncremental(profile: WebDAVProfile | null): Promise<void> {
-    uploadHistoryMenuVisible.value = false;
-
-    const webdav = await getWebDAVClientAndPath(profile, 'history', toast);
-    if (!webdav) return;
-    if (!acquireCloudSync(toast)) return;
-
-    try {
-      uploadHistoryLoading.value = true;
-
-      const localCount = await historyDB.getCount();
-      if (localCount === 0) {
-        toast.warn('没有可上传的历史记录');
-        return;
-      }
-
-      // 直接取数组：exportToJSON() 再 JSON.parse 回来等于把整份历史多序列化+解析一轮
-      const localItems = await historyDB.getAllItems();
-
-      let cloudItems: HistoryItem[] = [];
-      let cloudUnusable: string | null = null;
-
-      try {
-        const content = await webdav.client.getFile(webdav.remotePath);
-        const payload = parseCloudHistoryForUpload(content);
-        if (payload.kind === 'items') {
-          cloudItems = payload.items;
-        } else if (payload.kind === 'unusable') {
-          cloudUnusable = payload.reason;
-        } else {
-          log.info('云端历史文件不存在，将进行全量上传');
-        }
-      } catch (downloadError) {
-        if (downloadError instanceof Error && downloadError.message === 'user_cancelled') {
-          throw downloadError;
-        }
-        if (!isWebDAVNotFoundError(downloadError)) {
-          log.error('拉取云端历史失败，已中止以避免覆盖云端数据:', downloadError);
-          throw downloadError;
-        }
-        log.info('云端历史文件不存在，将进行全量上传');
-      }
-
-      // 同 uploadHistoryMerge：抛在 catch 之外，避开 isWebDAVNotFoundError 的子串匹配。
-      if (cloudUnusable) {
-        log.error('云端历史数据不可用，已中止以避免覆盖云端数据:', cloudUnusable);
-        throw new Error(cloudUnusable);
-      }
-
-      for (const item of localItems) {
-        if (!item.id) item.id = crypto.randomUUID();
-      }
-
-      const { items: mergedItems, addedCount, updatedCount } = mergeHistoryCollections(cloudItems, localItems);
-
-      if (addedCount === 0 && updatedCount === 0) {
-        updateHistorySyncStatus(profile, 'success');
-        toast.info('无需上传', '本地没有新增或更新的记录');
-        return;
-      }
-
-      const jsonContent = JSON.stringify(mergedItems, null, 2);
-      await webdav.client.putFile(webdav.remotePath, jsonContent);
-
-      updateHistorySyncStatus(profile, 'success');
-      await writeSyncLog(
-        'upload_history_cloud',
-        'success',
-        `新增 ${addedCount} 条，更新 ${updatedCount} 条`,
-        profile,
-      );
-      toast.success(
-        '已增量上传',
-        `新增 ${addedCount} 条、更新 ${updatedCount} 条记录到云端，共 ${mergedItems.length} 条`
-      );
-    } catch (error) {
-      const errorCode = extractErrorCode(error);
-      log.error('增量上传失败:', error);
-      updateHistorySyncStatus(profile, 'failed', errorCode);
-      await writeSyncLog('upload_history_cloud', 'failed', errorCode, profile);
-      // 同 uploadHistoryForce：云端数据不可用类错误不拼网络/配置指引，避免误导
-      const detail = isCloudDataAbortReason(errorCode)
-        ? errorCode
-        : `${errorCode}\n请检查网络或 WebDAV 配置后重试`;
-      toast.error('上传失败', detail);
-    } finally {
-      uploadHistoryLoading.value = false;
-      releaseCloudSync();
-    }
-  }
-
   async function downloadHistoryOverwrite(profile: WebDAVProfile | null): Promise<void> {
     downloadHistoryMenuVisible.value = false;
 
@@ -302,63 +130,6 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
     }
   }
 
-  async function downloadHistoryMerge(profile: WebDAVProfile | null): Promise<void> {
-    downloadHistoryMenuVisible.value = false;
-
-    const webdav = await getWebDAVClientAndPath(profile, 'history', toast);
-    if (!webdav) return;
-    if (!acquireCloudSync(toast)) return;
-
-    try {
-      downloadHistoryLoading.value = true;
-
-      const content = await webdav.client.getFile(webdav.remotePath);
-
-      if (!content) {
-        throw new Error('云端历史记录文件不存在');
-      }
-
-      const cloudItems = JSON.parse(content) as HistoryItem[];
-
-      if (!Array.isArray(cloudItems)) {
-        throw new Error('云端数据格式错误：期望数组格式');
-      }
-
-      // Why 新增数取自导入返回值而不是 `countAfter - countBefore`：全表计数差会把
-      // 同期主窗口正常上传的新图也算成「本次下载新增」——acquireCloudSync 只锁云端操作，
-      // 不锁本地上传。总数仍用 getCount()，那本来就该是全表口径。
-      const imported = await historyDB.importFromJSON(content, 'merge');
-      const countAfter = await historyDB.getCount();
-
-      invalidateCache();
-      emitHistoryUpdated();
-
-      // 「合并」只算真正被覆盖写入的记录。原先用 `cloudItems.length - addedCount`，
-      // 会把「id 已存在但内容没变、根本没写库」和「格式无效被跳过」的记录都算成已合并。
-      const skippedNote = imported.skipped > 0 ? `，跳过 ${imported.skipped} 条格式无效记录` : '';
-      updateHistorySyncStatus(profile, 'success');
-      await writeSyncLog(
-        'download_history_cloud',
-        'success',
-        `共 ${countAfter} 条，新增 ${imported.added} 条${skippedNote}`,
-        profile,
-      );
-      toast.success(
-        `下载完成：共 ${countAfter} 条记录`,
-        `新增 ${imported.added} 条，合并 ${imported.updated} 条${skippedNote}`
-      );
-    } catch (error) {
-      const errorCode = extractErrorCode(error);
-      log.error('下载历史记录失败:', error);
-      updateHistorySyncStatus(profile, 'failed', errorCode);
-      await writeSyncLog('download_history_cloud', 'failed', errorCode, profile);
-      toast.error('下载失败', `${errorCode}\n请检查网络或 WebDAV 配置后重试`);
-    } finally {
-      downloadHistoryLoading.value = false;
-      releaseCloudSync();
-    }
-  }
-
   async function syncHistory(profile: WebDAVProfile | null): Promise<void> {
     if (!profile) return;
     const webdav = await getWebDAVClientAndPath(profile, 'history', toast);
@@ -373,12 +144,16 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
       // 步骤 1：拉取云端数据合并到本地
       let cloudItems: HistoryItem[] = [];
       let cloudUnusable: string | null = null;
+      let pulledAdded = 0;
+      let pulledUpdated = 0;
       try {
         const content = await webdav.client.getFile(webdav.remotePath);
         const payload = parseCloudHistoryForUpload(content);
         if (payload.kind === 'items') {
           cloudItems = payload.items;
-          await historyDB.importFromJSON(content as string, 'merge');
+          const imported = await historyDB.importFromJSON(content as string, 'merge');
+          pulledAdded = imported.added;
+          pulledUpdated = imported.updated;
           invalidateCache();
           emitHistoryUpdated();
         } else if (payload.kind === 'unusable') {
@@ -425,14 +200,34 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
         if (!item.id) item.id = crypto.randomUUID();
       }
 
-      const { items: mergedItems } = mergeHistoryCollections(cloudItems, localItems);
+      const { items: mergedItems, addedCount, updatedCount } = mergeHistoryCollections(cloudItems, localItems);
 
-      const jsonContent = JSON.stringify(mergedItems, null, 2);
-      await webdav.client.putFile(webdav.remotePath, jsonContent);
+      // Why 分方向报数、且无变化时不写云端：此前这里无条件 putFile 并弹「已同步，共 N 条记录」，
+      // 一条没动也这么说。用户没法从提示里判断「真的同步过了」还是「其实什么都没发生」——
+      // 而这正是同步类操作最需要回答的问题。总条数是全表口径，不是本次变更量，单看它会误导。
+      const pushedAnything = addedCount > 0 || updatedCount > 0;
+      const pulledAnything = pulledAdded > 0 || pulledUpdated > 0;
+
+      if (pushedAnything) {
+        const jsonContent = JSON.stringify(mergedItems, null, 2);
+        await webdav.client.putFile(webdav.remotePath, jsonContent);
+      }
 
       updateHistorySyncStatus(profile, 'success');
-      await writeSyncLog('sync_history', 'success', `共 ${mergedItems.length} 条记录`, profile);
-      toast.success('已同步', `共 ${mergedItems.length} 条记录`);
+
+      if (!pushedAnything && !pulledAnything) {
+        await writeSyncLog('sync_history', 'success', `无变化，共 ${mergedItems.length} 条记录`, profile);
+        toast.info('已是最新', `本地与云端没有差异，共 ${mergedItems.length} 条记录`);
+        return;
+      }
+
+      const directions: string[] = [];
+      if (pulledAnything) directions.push(`拉取新增 ${pulledAdded} 条、更新 ${pulledUpdated} 条`);
+      if (pushedAnything) directions.push(`推送新增 ${addedCount} 条、更新 ${updatedCount} 条`);
+      const summary = `${directions.join('；')}，共 ${mergedItems.length} 条记录`;
+
+      await writeSyncLog('sync_history', 'success', summary, profile);
+      toast.success('已同步', summary);
     } catch (error) {
       const errorCode = extractErrorCode(error);
       log.error('历史记录同步失败:', error);
@@ -453,10 +248,7 @@ export function createHistorySyncOps(deps: BackupCloudDeps) {
 
   return {
     uploadHistoryForce,
-    uploadHistoryMerge,
-    uploadHistoryIncremental,
     downloadHistoryOverwrite,
-    downloadHistoryMerge,
     syncHistory,
   };
 }

@@ -78,12 +78,8 @@ vi.mock('@/composables/backup-sync/useBackupCloud', () => ({
     return {
       uploadSettingsCloud: vi.fn(),
       downloadSettingsOverwrite: vi.fn(),
-      downloadSettingsMerge: vi.fn(),
       uploadHistoryForce: vi.fn(),
-      uploadHistoryMerge: vi.fn(),
-      uploadHistoryIncremental: vi.fn(),
       downloadHistoryOverwrite: vi.fn(),
-      downloadHistoryMerge: vi.fn(),
       syncConfig: vi.fn(),
       syncHistory: vi.fn(),
     };

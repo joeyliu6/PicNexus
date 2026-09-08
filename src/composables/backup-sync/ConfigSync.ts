@@ -1,5 +1,5 @@
 // src/composables/backup-sync/ConfigSync.ts
-// 云端配置同步：上传 / 覆盖下载 / 合并下载 / 双向同步
+// 云端配置同步：上传 / 覆盖下载 / 双向同步（合并语义只由「同步」提供）
 
 import type { WebDAVProfile, UserConfig } from '../../config/types';
 import { isValidUserConfig } from '../../config/types';
@@ -110,62 +110,6 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
       updateConfigSyncStatus(profile, 'failed', errorCode);
       await writeSyncLog('download_settings_cloud', 'failed', errorCode, profile);
       toast.showConfig('error', TOAST_MESSAGES.sync.downloadFailed(errorCode));
-    } finally {
-      downloadSettingsLoading.value = false;
-      releaseCloudSync();
-    }
-  }
-
-  async function downloadSettingsMerge(profile: WebDAVProfile | null): Promise<void> {
-    downloadSettingsMenuVisible.value = false;
-
-    const webdav = await getWebDAVClientAndPath(profile, 'settings', toast);
-    if (!webdav) return;
-    if (!acquireCloudSync(toast)) return;
-
-    try {
-      downloadSettingsLoading.value = true;
-
-      const currentConfig = await configStore.get<UserConfig>('config');
-      const rawContent = await webdav.client.getFile(webdav.remotePath);
-
-      if (!rawContent) {
-        throw new Error('云端配置文件不存在');
-      }
-
-      let content = rawContent;
-      if (isPasswordEncryptedData(rawContent.trim())) {
-        content = await tryDecryptContent(rawContent.trim());
-      }
-
-      const importedConfig = JSON.parse(content) as unknown;
-
-      if (!isValidUserConfig(importedConfig)) {
-        updateConfigSyncStatus(profile, 'failed', '云端数据格式无效');
-        toast.error('下载失败', '云端配置文件内容格式无效，可能不是配置数据');
-        return;
-      }
-
-      const mergedConfig: UserConfig = {
-        ...importedConfig,
-        webdav: currentConfig?.webdav || importedConfig.webdav
-      };
-
-      await configStore.set('config', mergedConfig);
-      await configStore.save();
-
-      updateConfigSyncStatus(profile, 'success');
-      await writeSyncLog('download_settings_cloud', 'success', undefined, profile);
-      toast.success('配置已从云端恢复（保留本地 WebDAV）');
-
-      needsReload.value = true;
-    } catch (error) {
-      if (error instanceof Error && error.message === 'user_cancelled') return;
-      const errorCode = extractErrorCode(error);
-      log.error('合并下载配置失败:', error);
-      updateConfigSyncStatus(profile, 'failed', errorCode);
-      await writeSyncLog('download_settings_cloud', 'failed', errorCode, profile);
-      toast.error('下载失败', errorCode);
     } finally {
       downloadSettingsLoading.value = false;
       releaseCloudSync();
@@ -298,7 +242,6 @@ export function createConfigSyncOps(deps: BackupCloudDeps) {
   return {
     uploadSettingsCloud,
     downloadSettingsOverwrite,
-    downloadSettingsMerge,
     syncConfig,
   };
 }

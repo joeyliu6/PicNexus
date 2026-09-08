@@ -256,27 +256,28 @@ describe('createConfigSyncOps', () => {
     expect(deps.downloadSettingsLoading.value).toBe(false);
   });
 
-  it('merges downloaded settings while preserving the current WebDAV config', async () => {
-    configStoreGetMock.mockResolvedValueOnce({
-      webdav: { url: 'https://local.example.com' },
-      keepLocal: true,
-    });
+  // 合并时绝不能让云端的 webdav 段盖掉本地的——否则同步一次就把自己的图床凭据换成了别人的。
+  // 这条契约原本挂在 downloadSettingsMerge 上，那个入口从没接进 UI 已删除；
+  // syncConfig 第一步是同一套 `{...云端, webdav: 本地}` 逻辑，判据改挂到它上面。
+  it('preserves the local WebDAV config when syncConfig merges cloud settings', async () => {
     clientGetFileMock.mockResolvedValueOnce(JSON.stringify({
       webdav: { url: 'https://cloud.example.com' },
       fromCloud: true,
     }));
+    configStoreGetMock
+      .mockResolvedValueOnce({ webdav: { url: 'https://local.example.com' }, keepLocal: true })
+      .mockResolvedValueOnce({ webdav: { url: 'https://local.example.com' }, fromCloud: true });
 
     const deps = makeDeps();
     const ops = createConfigSyncOps(deps);
 
-    await ops.downloadSettingsMerge(profile);
+    await ops.syncConfig(profile);
 
     expect(configStoreSetMock).toHaveBeenCalledWith('config', {
       webdav: { url: 'https://local.example.com' },
       fromCloud: true,
     });
     expect(updateConfigSyncStatusMock).toHaveBeenCalledWith(profile, 'success');
-    expect(toastSuccessMock).toHaveBeenCalledTimes(1);
   });
 
   it('marks syncConfig as partial when upload fails after cloud data has already been merged locally', async () => {

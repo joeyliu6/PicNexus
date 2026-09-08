@@ -164,7 +164,7 @@ describe('createHistorySyncOps', () => {
     const deps = makeDeps();
     const ops = createHistorySyncOps(deps);
 
-    await ops.uploadHistoryMerge(profile);
+    await ops.syncHistory(profile);
 
     const [, uploadedJson] = clientPutFileMock.mock.calls[0];
     expect(JSON.parse(uploadedJson as string)).toEqual([
@@ -173,7 +173,7 @@ describe('createHistorySyncOps', () => {
       { id: 'b', timestamp: 100 },
     ]);
     expect(updateHistorySyncStatusMock).toHaveBeenCalledWith(profile, 'success');
-    expect(writeSyncLogMock).toHaveBeenCalledWith('upload_history_cloud', 'success', expect.any(String), profile);
+    expect(writeSyncLogMock).toHaveBeenCalledWith('sync_history', 'success', expect.any(String), profile);
     expect(toastSuccessMock).toHaveBeenCalledTimes(1);
   });
 
@@ -218,25 +218,59 @@ describe('createHistorySyncOps', () => {
     expect(updateHistorySyncStatusMock).not.toHaveBeenCalled();
   });
 
-  it('skips incremental upload when the cloud already has every local history id', async () => {
+  // 两个方向都没有差异时，「同步」必须说实话：不写云端，且提示是「已是最新」而不是「已同步」。
+  // 此前这里无条件 putFile 并弹「已同步，共 N 条记录」，一条没动也这么说——
+  // 用户没法从提示里分辨「真同步了」和「其实什么都没发生」。
+  it('reports 已是最新 and skips the cloud write when neither side changed', async () => {
     historyGetAllItemsMock.mockResolvedValueOnce([
       { id: 'a', timestamp: 200, isFavorited: false },
     ]);
     clientGetFileMock.mockResolvedValueOnce(JSON.stringify([
       { id: 'a', timestamp: 200, isFavorited: false },
     ]));
+    historyImportFromJSONMock.mockResolvedValueOnce({
+      total: 1, imported: 0, added: 0, updated: 0, skipped: 0,
+    });
 
     const deps = makeDeps();
     const ops = createHistorySyncOps(deps);
 
-    await ops.uploadHistoryIncremental(profile);
+    await ops.syncHistory(profile);
 
     expect(clientPutFileMock).not.toHaveBeenCalled();
     expect(updateHistorySyncStatusMock).toHaveBeenCalledWith(profile, 'success');
     expect(toastInfoMock).toHaveBeenCalledTimes(1);
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+    expect(writeSyncLogMock).toHaveBeenCalledWith(
+      'sync_history', 'success', expect.stringContaining('无变化'), profile,
+    );
   });
 
-  it('incremental upload includes records whose only change is newer favorite metadata', async () => {
+  // 只有拉取方向有变化：云端没有可推的新东西，所以不写云端，但提示必须说出「拉取」发生了什么
+  it('reports only the pull direction when the cloud had nothing new to receive', async () => {
+    historyGetAllItemsMock.mockResolvedValueOnce([
+      { id: 'a', timestamp: 200, isFavorited: false },
+    ]);
+    clientGetFileMock.mockResolvedValueOnce(JSON.stringify([
+      { id: 'a', timestamp: 200, isFavorited: false },
+    ]));
+    historyImportFromJSONMock.mockResolvedValueOnce({
+      total: 1, imported: 1, added: 1, updated: 0, skipped: 0,
+    });
+
+    const deps = makeDeps();
+    const ops = createHistorySyncOps(deps);
+
+    await ops.syncHistory(profile);
+
+    expect(clientPutFileMock).not.toHaveBeenCalled();
+    expect(toastSuccessMock).toHaveBeenCalledTimes(1);
+    const [, detail] = toastSuccessMock.mock.calls[0];
+    expect(detail).toContain('拉取新增 1 条');
+    expect(detail).not.toContain('推送');
+  });
+
+  it('sync upload includes records whose only change is newer favorite metadata', async () => {
     historyGetAllItemsMock.mockResolvedValueOnce([
       { id: 'a', timestamp: 200, isFavorited: true, favoriteUpdatedAt: 500, favoriteUpdatedBy: 'local' },
     ]);
@@ -247,49 +281,13 @@ describe('createHistorySyncOps', () => {
     const deps = makeDeps();
     const ops = createHistorySyncOps(deps);
 
-    await ops.uploadHistoryIncremental(profile);
+    await ops.syncHistory(profile);
 
     const [, uploadedJson] = clientPutFileMock.mock.calls[0];
     expect(JSON.parse(uploadedJson as string)).toEqual([
       { id: 'a', timestamp: 200, isFavorited: true, favoriteUpdatedAt: 500, favoriteUpdatedBy: 'local' },
     ]);
     expect(updateHistorySyncStatusMock).toHaveBeenCalledWith(profile, 'success');
-  });
-
-  it('stops merge upload when cloud history download fails with a non-404 WebDAV error', async () => {
-    historyGetAllItemsMock.mockResolvedValueOnce([
-      { id: 'local', timestamp: 200 },
-    ]);
-    clientGetFileMock.mockRejectedValueOnce(new Error('401 Unauthorized'));
-    extractErrorCodeMock.mockReturnValueOnce('AUTH_FAILED');
-
-    const deps = makeDeps();
-    const ops = createHistorySyncOps(deps);
-
-    await ops.uploadHistoryMerge(profile);
-
-    expect(clientPutFileMock).not.toHaveBeenCalled();
-    expect(updateHistorySyncStatusMock).toHaveBeenCalledWith(profile, 'failed', 'AUTH_FAILED');
-    expect(writeSyncLogMock).toHaveBeenCalledWith('upload_history_cloud', 'failed', 'AUTH_FAILED', profile);
-    expect(toastErrorMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('stops incremental upload when cloud history download fails with a non-404 WebDAV error', async () => {
-    historyGetAllItemsMock.mockResolvedValueOnce([
-      { id: 'local', timestamp: 200 },
-    ]);
-    clientGetFileMock.mockRejectedValueOnce(new Error('500 Server Error'));
-    extractErrorCodeMock.mockReturnValueOnce('SERVER_FAILED');
-
-    const deps = makeDeps();
-    const ops = createHistorySyncOps(deps);
-
-    await ops.uploadHistoryIncremental(profile);
-
-    expect(clientPutFileMock).not.toHaveBeenCalled();
-    expect(updateHistorySyncStatusMock).toHaveBeenCalledWith(profile, 'failed', 'SERVER_FAILED');
-    expect(writeSyncLogMock).toHaveBeenCalledWith('upload_history_cloud', 'failed', 'SERVER_FAILED', profile);
-    expect(toastErrorMock).toHaveBeenCalledTimes(1);
   });
 
   // ==================== 防「静默覆盖云端」回归 ====================
@@ -304,29 +302,6 @@ describe('createHistorySyncOps', () => {
   ])('拒绝在「%s」时覆盖云端', (_label, payload) => {
     beforeEach(() => {
       historyGetAllItemsMock.mockResolvedValue([{ id: 'local-only', timestamp: 200 }]);
-    });
-
-    it('uploadHistoryMerge 中止且不写云端', async () => {
-      clientGetFileMock.mockResolvedValueOnce(payload);
-      const ops = createHistorySyncOps(makeDeps());
-
-      await ops.uploadHistoryMerge(profile);
-
-      expect(clientPutFileMock).not.toHaveBeenCalled();
-      expect(updateHistorySyncStatusMock).toHaveBeenCalledWith(profile, 'failed', 'HISTORY_ERR');
-      expect(writeSyncLogMock).toHaveBeenCalledWith('upload_history_cloud', 'failed', 'HISTORY_ERR', profile);
-      expect(toastErrorMock).toHaveBeenCalledTimes(1);
-    });
-
-    it('uploadHistoryIncremental 中止且不写云端', async () => {
-      clientGetFileMock.mockResolvedValueOnce(payload);
-      const ops = createHistorySyncOps(makeDeps());
-
-      await ops.uploadHistoryIncremental(profile);
-
-      expect(clientPutFileMock).not.toHaveBeenCalled();
-      expect(updateHistorySyncStatusMock).toHaveBeenCalledWith(profile, 'failed', 'HISTORY_ERR');
-      expect(toastErrorMock).toHaveBeenCalledTimes(1);
     });
 
     it('syncHistory 中止，不写云端也不导入本地', async () => {
@@ -397,33 +372,6 @@ describe('createHistorySyncOps', () => {
     expect(writeSyncLogMock).toHaveBeenCalledWith(
       'download_history_cloud', 'success', expect.stringContaining('2 条记录'), profile);
     expect(toastSuccessMock).toHaveBeenCalledWith('已下载', expect.stringContaining('2 条记录'));
-  });
-
-  // downloadHistoryMerge 此前零测试覆盖，但本次被改成了用真实导入统计报数。
-  // 「新增」必须来自导入返回值（countAfter - countBefore 的全表计数差会被同步期间的
-  // 正常上传污染），「合并」只算真正被覆盖写入的记录。
-  it('reports real imported/new/updated counts for downloadHistoryMerge', async () => {
-    const cloudJson = JSON.stringify([
-      { id: 'cloud-new', timestamp: 300 },
-      { id: 'cloud-changed', timestamp: 200 },
-    ]);
-    clientGetFileMock.mockResolvedValueOnce(cloudJson);
-    // 2 条云端记录：1 新、1 覆盖（内容有变）
-    historyImportFromJSONMock.mockResolvedValueOnce({
-      total: 2, imported: 2, added: 1, updated: 1, skipped: 0,
-    });
-    historyGetCountMock.mockResolvedValueOnce(5);
-
-    const deps = makeDeps();
-    const ops = createHistorySyncOps(deps);
-
-    await ops.downloadHistoryMerge(profile);
-
-    expect(historyImportFromJSONMock).toHaveBeenCalledWith(cloudJson, 'merge');
-    expect(writeSyncLogMock).toHaveBeenCalledWith(
-      'download_history_cloud', 'success', '共 5 条，新增 1 条', profile);
-    expect(toastSuccessMock).toHaveBeenCalledWith(
-      '下载完成：共 5 条记录', '新增 1 条，合并 1 条');
   });
 
   // 云端有格式无效记录时，导入返回值会把跳过条数报给用户，而不是静默少报
