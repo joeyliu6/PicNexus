@@ -79,7 +79,7 @@ function migrateStatus(
   const id = `migrate-${index}`;
   const source = index % 2 === 0 ? 'weibo' : 'jd';
   const baseResults: MigrateItemStatus['serviceResults'] = { r2: 'pending', github: 'pending' };
-  const serviceResults = status === 'success'
+  const serviceResults: MigrateItemStatus['serviceResults'] = status === 'success'
     ? { r2: 'success', github: index % 2 === 0 ? 'success' : 'pending' }
     : status === 'failed'
       ? { r2: 'failed', github: 'pending' }

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { Window } from 'happy-dom';
+import { Window, type Element } from 'happy-dom';
 import { describe, expect, it, vi } from 'vitest';
 
 interface AnalyticsApi {
@@ -37,9 +37,11 @@ function createHarness(debugMode = false) {
   browser.fetch = fetchMock as typeof browser.fetch;
   browser.eval(bootstrapSource);
 
-  const tagScript = browser.document.querySelector<HTMLScriptElement>(
+  // happy-dom 的 querySelector 泛型约束是 keyof ISVGElementTagNameMap，不接受元素类型；
+  // 且这里派发的是 happy-dom 的 Event，断言成全局 HTMLScriptElement 会两套类型打架
+  const tagScript = browser.document.querySelector(
     'script[src^="https://www.googletagmanager.com/"]',
-  );
+  ) as Element | null;
   if (!tagScript) throw new Error('Expected bootstrap to append the Google tag script');
   tagScript.dispatchEvent(new browser.Event('load'));
 

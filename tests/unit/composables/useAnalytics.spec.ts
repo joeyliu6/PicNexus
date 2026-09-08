@@ -88,7 +88,7 @@ function getSentBatches(): SentBatch[] {
 function getHeartbeatStarts(): HeartbeatStart[] {
   return getInvokeMock().mock.calls
     .filter(([command]) => command === 'analytics_start_heartbeat')
-    .map(([, args]) => args as HeartbeatStart);
+    .map(([, args]) => args as unknown as HeartbeatStart);
 }
 
 function mockNavigatorPlatform(platform: string): void {

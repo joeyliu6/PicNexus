@@ -603,7 +603,7 @@ const healthMap = computed<Record<string, ServiceHealthStatus>>(() => ({
 }));
 const tooltipMap = Object.fromEntries(Object.keys(healthMap.value).map((id) => [id, null])) as Record<string, string | null>;
 const serviceNames = Object.fromEntries(Object.keys(healthMap.value).map((id) => [id, id.toUpperCase()]));
-const testingConnections = computed(() => state === 'connection-testing' ? { jd: true, qiyu: true } : {});
+const testingConnections = computed((): Record<string, boolean> => state === 'connection-testing' ? { jd: true, qiyu: true } : {});
 const serviceSession = computed<ServiceCheckSession | null>(() => {
   if (state !== 'connection-testing') return null;
   return {
@@ -1084,6 +1084,7 @@ const serviceSession = computed<ServiceCheckSession | null>(() => {
                 :is-checking-qiyu="state === 'connection-testing'"
                 :available-services="['jd', 'qiyu', 'weibo', 'r2', 'github']"
                 :service-names="serviceNames"
+                :public-service-risk-accepted="false"
               />
             </div>
           </div>

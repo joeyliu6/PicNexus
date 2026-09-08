@@ -303,6 +303,7 @@ describe('useSensitiveDraft', () => {
         hasStored: () => true,
         reveal: () => Promise.reject(failure),
         commit,
+        confirmClear: async () => true,
         onRevealError,
       }));
 
@@ -323,6 +324,7 @@ describe('useSensitiveDraft', () => {
         hasStored: () => true,
         reveal: () => new Promise<string>(resolve => { release = resolve; }),
         commit: vi.fn(),
+        confirmClear: async () => true,
       }));
 
       const pending = draft.beginEdit('webdav.pw');
@@ -339,6 +341,7 @@ describe('useSensitiveDraft', () => {
         hasStored: () => true,
         reveal: () => new Promise<string>(resolve => { release = resolve; }),
         commit: vi.fn(),
+        confirmClear: async () => true,
       }));
 
       expect(draft.isLoading('webdav.pw')).toBe(false);

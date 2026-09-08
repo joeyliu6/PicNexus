@@ -466,14 +466,20 @@ export function getFsMocks() {
   };
 }
 
-/** 把字符串编码成 `readFile` 返回的 UTF-8 字节；withBom=true 时前置 EF BB BF */
-export function utf8Bytes(text: string, withBom = false): Uint8Array {
+/**
+ * 把字符串编码成 `readFile` 返回的 UTF-8 字节；withBom=true 时前置 EF BB BF。
+ *
+ * 返回类型必须写死 `Uint8Array<ArrayBuffer>`：TS 5.7 起 `Uint8Array` 带缓冲区类型参数，
+ * 裸写 `Uint8Array` 会推成 `Uint8Array<ArrayBufferLike>`，赋给 `readFile` 的
+ * `Promise<Uint8Array<ArrayBuffer>>` 会被拒。
+ */
+export function utf8Bytes(text: string, withBom = false): Uint8Array<ArrayBuffer> {
   const body = new TextEncoder().encode(text);
-  if (!withBom) return body;
-  const withPrefix = new Uint8Array(body.length + 3);
-  withPrefix.set([0xef, 0xbb, 0xbf], 0);
-  withPrefix.set(body, 3);
-  return withPrefix;
+  const prefixLength = withBom ? 3 : 0;
+  const bytes = new Uint8Array(new ArrayBuffer(body.length + prefixLength));
+  if (withBom) bytes.set([0xef, 0xbb, 0xbf], 0);
+  bytes.set(body, prefixLength);
+  return bytes;
 }
 
 export function getClipboardMocks() {

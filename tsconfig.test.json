@@ -1,0 +1,14 @@
+{
+  // tests/ 的类型门禁。用 vue-tsc 跑（不是 tsc）——测试会 import .vue 组件与 .css，
+  // 只有 vue-tsc 解析得了；用 tsc 会刷出几十条假的 TS2307。
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "vite/client", "vitest/globals"],
+    // 测试里留个没用上的夹具/形参是常态，不值得为此拦住整条门禁
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  // src 下这两个 .d.ts 没有任何文件 import 它们，全靠 include 收进来。
+  // 漏掉的话 PrimeVue 的模块增强与 import.meta.env 都会失效，报出一堆指向 src/ 的假错。
+  "include": ["tests", "src/types/*.d.ts", "src/vite-env.d.ts"]
+}

@@ -21,7 +21,7 @@ function item(overrides: Partial<HistoryItem>): HistoryItem {
     generatedLink: 'https://jd.example/pic.png',
     results: [
       { serviceId: 'jd', status: 'success', result: { serviceId: 'jd', url: 'https://jd.example/pic.png' } },
-      { serviceId: 'qiyu', status: 'success', result: { serviceId: 'qiyu', url: 'https://qiyu.example/pic.png' } },
+      { serviceId: 'qiyu', status: 'success', result: { serviceId: 'qiyu', fileKey: 'qiyu/pic.png', url: 'https://qiyu.example/pic.png' } },
     ],
     ...overrides,
   } as HistoryItem;
@@ -34,7 +34,7 @@ describe('云端合并对镜像改动的处理', () => {
     primaryService: 'qiyu',
     generatedLink: 'https://qiyu.example/pic.png',
     results: [
-      { serviceId: 'qiyu', status: 'success', result: { serviceId: 'qiyu', url: 'https://qiyu.example/pic.png' } },
+      { serviceId: 'qiyu', status: 'success', result: { serviceId: 'qiyu', fileKey: 'qiyu/pic.png', url: 'https://qiyu.example/pic.png' } },
     ],
   });
 

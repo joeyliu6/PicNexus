@@ -84,7 +84,7 @@ function makeFormData(): SettingsFormShape {
     tencent: { secretId: '', secretKey: '', region: '', bucket: '', path: '', publicDomain: '' },
     aliyun: { accessKeyId: '', accessKeySecret: '', region: '', bucket: '', path: '', publicDomain: '' },
     qiniu: { accessKey: '', secretKey: '', region: '', bucket: '', publicDomain: '', path: '' },
-    upyun: { operator: '', password: '', bucket: '', publicDomain: '', path: '' },
+    upyun: { operator: '', password: '', bucket: '', publicDomain: '', path: '', s3AccessKey: '', s3SecretKey: '' },
     custom_s3_profiles: [{
       id: 'custom-1',
       name: 'Private S3',

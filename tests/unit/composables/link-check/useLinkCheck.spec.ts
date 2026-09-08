@@ -588,7 +588,7 @@ describe('useLinkCheckManager.checkSubset', () => {
     expect(await oldPromise).toBeNull();
 
     const persistedIds = historyDBBatchUpdateLinkCheckStatusMock.mock.calls
-      .flatMap(([updates]: [Array<{ id: string }>]) => updates.map((u) => u.id));
+      .flatMap((call) => (call[0] as Array<{ id: string }>).map((u) => u.id));
     expect(persistedIds).toContain('h-old');
     // 新批次已经接管了 h-new，旧批次更陈旧的结果必须避让
     expect(persistedIds).not.toContain('h-new');

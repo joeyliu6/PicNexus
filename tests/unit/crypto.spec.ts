@@ -352,10 +352,11 @@ describe('SecureStorage', () => {
 describe('P0-1 回归：托盘常驻窗口的密钥轮换', () => {
   function mockSharedKeychain(initial: string): { get current(): string } {
     const state = { key: initial };
-    invokeMock.mockImplementation((cmd: string, args?: { key?: string }) => {
+    // 形参不标注类型：invoke 的第二参是 InvokeArgs，写窄了会被 strictFunctionTypes 判为不兼容
+    invokeMock.mockImplementation((cmd, args) => {
       if (cmd === 'get_or_create_secure_key') return Promise.resolve(state.key);
       if (cmd === 'set_secure_key') {
-        state.key = args!.key!;
+        state.key = (args as { key: string }).key;
         return Promise.resolve(undefined);
       }
       return Promise.resolve(undefined);
