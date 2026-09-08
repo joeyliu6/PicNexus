@@ -395,12 +395,15 @@ export async function runLinkCheck(params: {
       }
       if (allDone) {
         completedFiles.add(file);
+        // 只查本地 DB（findBackupLinksRaw 不联网），取消后仍值得做，让用户看到候选
         partialBackupPromises.push(enqueueFileComplete(file, { allowCancelled: true }));
       }
     }
     await Promise.allSettled(partialBackupPromises);
 
-    await verifyBackupLinks({ allowCancelled: true });
+    // 不传 allowCancelled：取消后不再联网验证已找到的备用链接候选，
+    // 让它们保持「待验证」而不是在用户点了取消之后又偷偷发一轮请求
+    await verifyBackupLinks();
 
     scanStage.value = 'cancelled';
     log.info(`扫描已取消，已检测 ${result.results.length} 条链接`);

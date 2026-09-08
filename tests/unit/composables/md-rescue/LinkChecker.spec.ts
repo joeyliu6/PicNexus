@@ -238,7 +238,7 @@ describe('LinkChecker', () => {
     expect(checkUrls).toHaveBeenCalledTimes(1);
   });
 
-  it('runLinkCheck 取消后仍为已完整检测的坏链查找并验证备用链接', async () => {
+  it('runLinkCheck 取消后为已完整检测的坏链查出备用链接候选，但不再联网验证（取消即停）', async () => {
     const deadUrl = 'https://dead.example/a.png';
     const pendingUrl = 'https://pending.example/b.png';
     const backupUrl = 'https://cdn.example/a.png';
@@ -257,29 +257,21 @@ describe('LinkChecker', () => {
       items: BatchCheckRequestItem[],
       onProgress?: (prog: { current_url: string; current_result?: CheckLinkResult }) => void,
     ) => {
-      if (vi.mocked(checkUrls).mock.calls.length === 1) {
-        const result = makeResult(deadUrl, false);
-        onProgress?.({ current_url: deadUrl, current_result: result });
-        return makeBatch([result], true);
-      }
-
-      const results = items.map((item) => makeResult(item.url, true, item.url === backupUrl ? 20 : 50));
-      return makeBatch(results);
+      const result = makeResult(deadUrl, false);
+      onProgress?.({ current_url: deadUrl, current_result: result });
+      return makeBatch([result], true);
     }) as CheckUrlsFn;
 
     await runLinkCheck({ config, checkUrls });
 
     expect(scanStage.value).toBe('cancelled');
     expect(readyFiles.value).toEqual(new Set(['C:/docs/done.md']));
-    expect(checkUrls).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(checkUrls).mock.calls[1][0]).toEqual([{ url: backupUrl }]);
+    // 主检测那一轮之后不应该再为备用链接单独发一轮网络请求
+    expect(checkUrls).toHaveBeenCalledTimes(1);
     expect(imageLinks.value[0].backupLinks).toEqual([
-      {
-        url: backupUrl,
-        serviceId: 'mirror',
-        checkResult: makeResult(backupUrl, true, 20),
-      },
+      { url: backupUrl, serviceId: 'mirror' },
     ]);
+    expect(imageLinks.value[0].backupLinks?.[0].checkResult).toBeUndefined();
     expect(imageLinks.value[1].checkResult).toBeUndefined();
   });
 });
