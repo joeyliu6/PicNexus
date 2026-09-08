@@ -2,11 +2,12 @@
  * 重试服务 - 统一管理上传重试逻辑
  */
 
-import { MultiServiceUploader, MultiUploadResult } from '../core/MultiServiceUploader';
-import { UploadQueueManager, QueueItem } from '../core/UploadQueue';
-import { UserConfig } from '../config/types';
+import type { MultiUploadResult } from '../core/MultiServiceUploader';
+import { MultiServiceUploader } from '../core/MultiServiceUploader';
+import type { UploadQueueManager, QueueItem } from '../core/UploadQueue';
+import type { UserConfig } from '../config/types';
 import type { Store } from '../store';
-import { UploadResult } from '../uploaders/base/types';
+import type { UploadResult } from '../uploaders/base/types';
 import { checkNetworkConnectivity } from '../utils/network';
 import { invalidateCache } from '../composables/useHistory';
 import { withHistoryUpdateQueue } from '../composables/useHistorySaver';

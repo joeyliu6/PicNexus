@@ -1,6 +1,6 @@
 import { JDRateLimiter } from './JDRateLimiter';
 import { BaseUploader } from '../base/BaseUploader';
-import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
+import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
 import type { JDServiceConfig } from '../../config/types';
 
 /**

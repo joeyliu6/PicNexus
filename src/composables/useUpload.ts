@@ -5,13 +5,14 @@ import { isUploading } from './uploadState';
 import { configStore } from '../store/instances';
 import { filterValidFiles, selectFiles, MAX_FILES_PER_UPLOAD } from './upload/FileValidator';
 import { processUploadQueue } from './upload/UploadExecutor';
+import type {
+  UserConfig} from '../config/types';
 import {
-  UserConfig,
   DEFAULT_CONFIG,
   DEFAULT_COMPRESSION_PRESET,
   isPublicRiskService,
 } from '../config/types';
-import { UploadQueueManager } from '../core/UploadQueue';
+import type { UploadQueueManager } from '../core/UploadQueue';
 import { useToast } from './useToast';
 import { useCopyLink, type CopyLinkItem, type CopyLinkResult } from './useCopyLink';
 import { TOAST_MESSAGES } from '../constants';

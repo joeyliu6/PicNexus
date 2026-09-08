@@ -2,8 +2,10 @@
 // 上传执行器：并发调度 + 单文件多图床上传 + 历史记录联动
 
 import type { UserConfig, ServiceType } from '../../config/types';
-import { MultiServiceUploader, SingleServiceResult, MultiUploadResult } from '../../core/MultiServiceUploader';
-import { UploadQueueManager, type ServiceProgress } from '../../core/UploadQueue';
+import type { SingleServiceResult, MultiUploadResult } from '../../core/MultiServiceUploader';
+import { MultiServiceUploader } from '../../core/MultiServiceUploader';
+import type { UploadQueueManager} from '../../core/UploadQueue';
+import { type ServiceProgress } from '../../core/UploadQueue';
 import type { CopyLinkItem } from '../useCopyLink';
 import type { UploadSessionSummary } from '../../utils/uploadSummary';
 import { useServiceHealth } from '../useServiceHealth';

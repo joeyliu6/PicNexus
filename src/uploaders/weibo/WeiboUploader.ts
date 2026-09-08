@@ -1,8 +1,8 @@
 // 微博图床上传器实现
 
 import { BaseUploader } from '../base/BaseUploader';
-import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
-import { WeiboServiceConfig } from '../../config/types';
+import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
+import type { WeiboServiceConfig } from '../../config/types';
 import { convertToWeiboError } from './WeiboError';
 
 /**

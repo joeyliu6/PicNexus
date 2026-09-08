@@ -50,6 +50,14 @@ export default defineConfigWithVueTs(
 
       // === vueTsConfigs.recommended 里默认为 error 的严格规则：
       //     S6 子任务 6a 清零后全部升级为 error，锁死重建层成果 ===
+      // 与 tsconfig 的 verbatimModuleSyntax 配套：import 语义必须显式，
+      // 类型导入一律写 `import type`，编译器才不用猜哪些 import 该在产物里保留
+      // disallowTypeAnnotations 关掉：内联 `import('x').T` 是正当写法（常用来避开循环依赖），
+      // 而 verbatimModuleSyntax 只在意「顶层 import 有没有写 type」，管不着内联标注
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        { prefer: 'type-imports', fixStyle: 'separate-type-imports', disallowTypeAnnotations: false },
+      ],
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': [
         'error',

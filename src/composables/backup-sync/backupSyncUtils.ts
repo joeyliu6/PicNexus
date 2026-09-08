@@ -2,7 +2,7 @@
 
 import { WebDAVClient, WEBDAV_AUTH_FAILED_MESSAGE, WEBDAV_FORBIDDEN_MESSAGE } from '../../utils/webdav';
 import { historyDB, type SyncLogOperation } from '../../services/HistoryDatabase';
-import { useToast } from '../useToast';
+import type { useToast } from '../useToast';
 import { TOAST_MESSAGES } from '../../constants';
 import type { WebDAVProfile, HistoryItem } from '../../config/types';
 import { getErrorMessage } from '../../types/errors';

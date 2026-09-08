@@ -1,6 +1,6 @@
 // 历史记录和杂项类型定义
 
-import { UploadResult } from '../uploaders/base/types';
+import type { UploadResult } from '../uploaders/base/types';
 
 /**
  * 历史记录项（新架构）

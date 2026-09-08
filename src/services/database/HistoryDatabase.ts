@@ -6,7 +6,7 @@
  */
 
 /* eslint-disable max-lines -- central database facade intentionally groups delegated query APIs */
-import Database from '@tauri-apps/plugin-sql';
+import type Database from '@tauri-apps/plugin-sql';
 import type { HistoryItem, ServiceType } from '../../config/types';
 import type { MigrateScope } from '../../types/batchMigrate';
 import type { ImageMeta } from '../../types/image-meta';

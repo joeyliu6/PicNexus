@@ -1,6 +1,6 @@
 // 上传器工厂类，负责注册和创建上传器实例
 
-import { IUploader } from './IUploader';
+import type { IUploader } from './IUploader';
 import { createLogger } from '../../utils/logger';
 
 const log = createLogger('UploaderFactory');

@@ -10,17 +10,19 @@ import {
   requestPermission,
   sendNotification,
 } from '@tauri-apps/plugin-notification';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import type { UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from '@tauri-apps/api/event';
 import { basename, resolveResource } from '@tauri-apps/api/path';
 
 import { readFreshConfig } from '../store/instances';
 import {
-  UserConfig,
-  DEFAULT_CONFIG,
-  GlobalShortcutConfig,
+  DEFAULT_CONFIG
 } from '../config/types';
-import type { ServiceType } from '../config/types';
-import { MultiServiceUploader, SingleServiceResult } from '../core/MultiServiceUploader';
+import type { ServiceType ,
+  UserConfig,
+  GlobalShortcutConfig} from '../config/types';
+import type { SingleServiceResult } from '../core/MultiServiceUploader';
+import { MultiServiceUploader } from '../core/MultiServiceUploader';
 import { useHistorySaver } from './useHistorySaver';
 import { formatLinkWithConfig, getLinkFormatConfig } from './useCopyLink';
 import { filterValidFiles, MAX_FILES_PER_UPLOAD, VALID_IMAGE_EXTENSIONS } from './upload/FileValidator';

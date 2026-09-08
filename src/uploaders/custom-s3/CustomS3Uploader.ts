@@ -1,5 +1,5 @@
 import { BaseS3Uploader } from '../s3/BaseS3Uploader';
-import { UploadResult } from '../base/types';
+import type { UploadResult } from '../base/types';
 import type { CustomS3Profile } from '../../config/types';
 
 export class CustomS3Uploader extends BaseS3Uploader<CustomS3Profile> {

@@ -1,6 +1,7 @@
 // Cloudflare R2 上传错误处理
 
-import { UploadErrorCode, StructuredError, createStructuredError } from '../base/ErrorTypes';
+import type { StructuredError} from '../base/ErrorTypes';
+import { UploadErrorCode, createStructuredError } from '../base/ErrorTypes';
 import { getErrorMessage } from '../../types/errors';
 
 /**

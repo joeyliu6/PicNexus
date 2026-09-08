@@ -114,6 +114,26 @@ TS 5.7 起 `Uint8Array` 带缓冲区类型参数，裸写会推成 `Uint8Array<A
 所以 `check-theme-token-copies.mjs` 刻意没收编它。要收编得先把整套色值对到令牌上，
 那是一次独立的视觉改动，需要真机看过标题栏与下方 WebView 的接缝再定，已留在 `docs/TODO.md`。
 
+## 追加：`verbatimModuleSyntax` 也开了
+
+清单里原本留着「可选升级，动它前先跑一次看报错量」。跑出来是 **106 条，全部是同一种**
+（`TS1484: 类型必须用 import type 导入`）——机械且可自动修，没有需要判断的地方，于是直接做掉。
+
+做法：
+
+1. eslint 加 `@typescript-eslint/consistent-type-imports`（`fixStyle: 'separate-type-imports'`），
+   `eslint . --fix` 一把修完 `src/`（38 个文件）
+2. `disallowTypeAnnotations: false`——这个子规则会额外禁掉内联 `import('x').T`，全项目 11 处。
+   那是正当写法（常用来避开循环依赖），和 `verbatimModuleSyntax` 无关，强行改有风险
+3. tsconfig.json 打开 `verbatimModuleSyntax`
+4. **eslint 忽略 `tests/**`**，所以自动修没覆盖到那边——`tests/unit/helpers/vueMount.ts`
+   剩 3 条，手改一处 import 拆分解决。这条别忘：以后再加什么 `--fix` 类规则，tests 都得单独过一遍
+
+有了那条 eslint 规则，以后新写的类型导入会在提交前就被 `--fix` 纠正，不会再攒回来。
+
+验证：typecheck 四段全绿、lint 全绿、`npm run build` 通过、223 个测试文件全过。
+构建和测试都过说明改的只是 import 的编译期语义，产物行为没变。
+
 ## 验证
 
 - `npm run typecheck`：四段全绿

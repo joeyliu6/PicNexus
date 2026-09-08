@@ -1,6 +1,6 @@
 // 上传器核心接口定义
 
-import {
+import type {
   UploadResult,
   ValidationResult,
   UploadOptions,

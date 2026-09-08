@@ -1,7 +1,8 @@
 // 链接生成逻辑
 
-import { UploadResult } from '../uploaders/base/types';
-import { UserConfig, getActivePrefix } from '../config/types';
+import type { UploadResult } from '../uploaders/base/types';
+import type { UserConfig} from '../config/types';
+import { getActivePrefix } from '../config/types';
 import { applyPrefixTemplate } from '../utils/linkPrefixTemplate';
 
 /**

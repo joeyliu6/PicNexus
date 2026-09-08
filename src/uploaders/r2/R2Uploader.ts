@@ -2,8 +2,8 @@
 // 基于 S3 兼容协议，继承 BaseS3Uploader
 
 import { BaseS3Uploader } from '../s3/BaseS3Uploader';
-import { ValidationResult } from '../base/types';
-import { R2ServiceConfig } from '../../config/types';
+import type { ValidationResult } from '../base/types';
+import type { R2ServiceConfig } from '../../config/types';
 
 /**
  * Cloudflare R2 上传器

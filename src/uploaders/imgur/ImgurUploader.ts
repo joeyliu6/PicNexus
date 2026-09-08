@@ -1,5 +1,5 @@
 import { BaseUploader } from '../base/BaseUploader';
-import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
+import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
 import type { ImgurServiceConfig } from '../../config/types';
 import { getErrorMessage } from '../../types/errors';
 

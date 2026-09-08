@@ -4,7 +4,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { BaseUploader } from '../base/BaseUploader';
-import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
+import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
 import type { QiyuServiceConfig } from '../../config/types';
 import { createLogger } from '../../utils/logger';
 

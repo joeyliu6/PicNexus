@@ -17,7 +17,8 @@ import { initializeUploaders, syncCustomS3Uploaders, syncWebDAVUploaders } from 
 // 配置和 Store 导入
 import { configStore } from './store/instances';
 import { StoreError } from './store';
-import { DEFAULT_CONFIG, UserConfig } from './config/types';
+import type { UserConfig } from './config/types';
+import { DEFAULT_CONFIG } from './config/types';
 import { startupFlags } from './store/startupFlags';
 import { purgeOrphanFieldSecrets } from './security/fieldSecrets';
 import { createLogger } from './utils/logger';

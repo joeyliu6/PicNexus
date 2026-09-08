@@ -1,9 +1,11 @@
 // 多图床并行上传编排器
 
 import { UploaderFactory } from '../uploaders/base/UploaderFactory';
-import { UploadResult } from '../uploaders/base/types';
-import { UserConfig, ServiceType, isCustomS3Id, getCustomS3ProfileId, isWebDAVId, getWebDAVProfileId } from '../config/types';
-import { StructuredError, UploadErrorCode, createStructuredError } from '../uploaders/base/ErrorTypes';
+import type { UploadResult } from '../uploaders/base/types';
+import type { UserConfig, ServiceType} from '../config/types';
+import { isCustomS3Id, getCustomS3ProfileId, isWebDAVId, getWebDAVProfileId } from '../config/types';
+import type { StructuredError} from '../uploaders/base/ErrorTypes';
+import { UploadErrorCode, createStructuredError } from '../uploaders/base/ErrorTypes';
 import { convertToStructuredWeiboError } from '../uploaders/weibo/WeiboError';
 import { convertToStructuredR2Error } from '../uploaders/r2/R2Error';
 

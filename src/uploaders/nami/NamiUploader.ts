@@ -1,8 +1,8 @@
 // 纳米图床上传器实现
 
 import { BaseUploader } from '../base/BaseUploader';
-import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
-import { NamiServiceConfig } from '../../config/types';
+import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
+import type { NamiServiceConfig } from '../../config/types';
 import { invoke } from '@tauri-apps/api/core';
 import { getErrorMessage } from '../../types/errors';
 

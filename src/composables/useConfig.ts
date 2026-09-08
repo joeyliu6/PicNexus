@@ -1,18 +1,21 @@
 // 配置管理 Composable - 封装配置加载、保存、测试连接等功能
 
-import { ref, Ref } from 'vue';
+import type { Ref } from 'vue';
+import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { listen, UnlistenFn, emit } from '@tauri-apps/api/event';
+import type { UnlistenFn} from '@tauri-apps/api/event';
+import { listen, emit } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { configStore } from '../store/instances';
 import type { Store } from '../store';
 import { BackupPasswordRequiredError } from '../security/crypto';
-import {
+import type {
   UserConfig,
-  DEFAULT_CONFIG,
   ServiceType,
   LinkPrefixConfig,
-  LinkPrefixItem,
+  LinkPrefixItem} from '../config/types';
+import {
+  DEFAULT_CONFIG,
   DEFAULT_LINK_PREFIXES,
   cloneDefaultPrefixes,
 } from '../config/types';

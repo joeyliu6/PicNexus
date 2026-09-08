@@ -1,5 +1,5 @@
 import { BaseUploader } from '../base/BaseUploader';
-import { UploadResult, ValidationResult, UploadOptions, ProgressCallback, ConnectionTestResult } from '../base/types';
+import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback, ConnectionTestResult } from '../base/types';
 import type { WebDAVStorageProfile } from '../../config/types';
 import { DEFAULT_WEBDAV_URL_TEMPLATE } from '../../config/types';
 import { secureStorage } from '../../security/crypto';

@@ -1,8 +1,9 @@
 // Vue 组件测试挂载工具
 // 预配置 global stubs/plugins/directives，避免每个组件测试重复配置
 
-import { mount, shallowMount, MountingOptions, VueWrapper } from '@vue/test-utils';
-import { Component, DefineComponent } from 'vue';
+import { mount, shallowMount, VueWrapper } from '@vue/test-utils';
+import type { MountingOptions } from '@vue/test-utils';
+import type { Component, DefineComponent } from 'vue';
 
 /**
  * v-tooltip 指令的测试替身

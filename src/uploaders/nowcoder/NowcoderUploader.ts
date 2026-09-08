@@ -1,8 +1,8 @@
 // 牛客图床上传器实现
 
 import { BaseUploader } from '../base/BaseUploader';
-import { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
-import { NowcoderServiceConfig } from '../../config/types';
+import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
+import type { NowcoderServiceConfig } from '../../config/types';
 import { getErrorMessage } from '../../types/errors';
 
 /**

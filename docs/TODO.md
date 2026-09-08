@@ -76,19 +76,16 @@
 本次验证仍有效（20260824 比出问题的 20260818 新），但下次要按 `win25-vs2026` 谱系判断，
 否则提醒会踩不准时点。
 
-### [ ] 类型检查残留两项：`verbatimModuleSyntax` 与 login-titlebar 的配色自成一套
+### [ ] login-titlebar 的配色自成一套，未并进主题令牌
 
-- **来源**：2026-08-22 优化 tsconfig 时留下的盲区清单，2026-09-08 已收掉其中三项
-  （`scripts/`、`tests/`、login-titlebar 的主题 class 命名），详见
-  [typecheck-blind-spots-2026-09-08.md](audits/typecheck-blind-spots-2026-09-08.md)
-- **优先级**：低——两项都是"可以更好"，不是缺陷
+- **来源**：2026-08-22 tsconfig 盲区清单的最后一项；同条目的其余部分（`scripts/`、`tests/`、
+  主题 class 命名、`verbatimModuleSyntax`）已于 2026-09-08 全部收掉
+- **优先级**：低——它工作正常，不是缺陷
 
-1. **可选升级 `verbatimModuleSyntax`**：会大面积要求改 type-only import，收益是
-   import 语义完全显式，与 `isolatedModules` 配套；动它前先跑一次看报错量。
-2. **`login-titlebar.html` 的配色自成一套**（`#111827` / `#f8fafc`），不是主题令牌的副本，
-   所以 `scripts/check-theme-token-copies.mjs` 刻意没收编它。要收编得先把整套色值对到令牌上，
-   那是一次独立的视觉改动，需要真机看过标题栏与下方 WebView 的接缝再定。
-   （主题 class 命名不一致那半条 2026-09-08 已修：`html.light` → `html.light-theme`。）
+[login-titlebar.html](../login-titlebar.html) 用的 `#111827` / `#f8fafc` 是另起的一套配色，
+不是主题令牌的副本，所以 `scripts/check-theme-token-copies.mjs` 刻意没收编它。
+要收编得先把整套色值对到令牌上，**那是一次独立的视觉改动，必须真机看过标题栏与下方 WebView
+的接缝再定**——单看代码判断不了对不对。
 
 ---
 
@@ -195,6 +192,12 @@
 ---
 
 ## 已完成
+
+### [x] `verbatimModuleSyntax` 已开启
+
+106 条报错全是同一种（类型导入没写 `import type`），加 `consistent-type-imports` 规则后
+`eslint --fix` 一把修完；eslint 忽略 `tests/**`，那边的 1 处手改。
+详见 [typecheck-blind-spots-2026-09-08.md](audits/typecheck-blind-spots-2026-09-08.md)。
 
 ### [x] 四个从未接进 UI 的同步入口已删除，「同步」补上如实反馈
 
