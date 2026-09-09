@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue';
 import InputText from 'primevue/inputtext';
-import type { ServiceType } from '../../../config/types';
-import { getServiceDisplayName } from '../../../constants/serviceNames';
-import { debounce } from '../../../utils/debounce';
-import { serviceNameTooltip } from '../../../utils/serviceNameFit';
-import ServiceLogo from '../../common/ServiceLogo.vue';
+import type { ServiceType } from '@/config/types';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import { debounce } from '@/utils/debounce';
+import { serviceNameTooltip } from '@/utils/serviceNameFit';
+import ServiceLogo from '@/components/common/ServiceLogo.vue';
 
 export type ViewMode = 'table' | 'timeline' | 'favorites';
 

@@ -1,5 +1,5 @@
 import { computed, getCurrentScope, onScopeDispose, ref, watch, type ComputedRef, type Ref } from 'vue';
-import type { BatchCheckProgress, LinkCheckRow, StatusFilter } from '../../types/linkCheck';
+import type { BatchCheckProgress, LinkCheckRow, StatusFilter } from '@/types/linkCheck';
 
 /** 失速判定阈值：>N 毫秒无新结果即判定为"卡在慢域名"，向用户显式提示 */
 const STALL_THRESHOLD_MS = 10_000;

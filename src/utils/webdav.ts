@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
-import { secureStorage } from '../security/crypto';
-import { assertAllowedWebDAVUrl } from '../security/networkPolicy';
-import { getErrorMessage } from '../types/errors';
+import { secureStorage } from '@/security/crypto';
+import { assertAllowedWebDAVUrl } from '@/security/networkPolicy';
+import { getErrorMessage } from '@/types/errors';
 import { createLogger } from './logger';
 
 const log = createLogger('WebDAV');

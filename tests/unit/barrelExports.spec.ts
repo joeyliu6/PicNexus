@@ -3,10 +3,6 @@
 import { describe, it, expect } from 'vitest';
 
 describe('barrel exports', () => {
-  it('src/core/index.ts', async () => {
-    await expect(import('@/core/index')).resolves.toBeDefined();
-  });
-
   it('src/services/database/index.ts', async () => {
     await expect(import('@/services/database/index')).resolves.toBeDefined();
   });

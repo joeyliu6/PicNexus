@@ -1,9 +1,9 @@
 // 牛客图床上传器实现
 
-import { BaseUploader } from '../base/BaseUploader';
-import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
-import type { NowcoderServiceConfig } from '../../config/types';
-import { getErrorMessage } from '../../types/errors';
+import { BaseUploader } from '@/uploaders/base/BaseUploader';
+import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '@/uploaders/base/types';
+import type { NowcoderServiceConfig } from '@/config/types';
+import { getErrorMessage } from '@/types/errors';
 
 /**
  * Rust 返回的牛客上传结果

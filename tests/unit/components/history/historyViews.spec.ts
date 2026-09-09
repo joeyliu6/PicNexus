@@ -50,11 +50,11 @@ vi.mock('@/composables/useConfig', () => ({
   }),
 }));
 
-vi.mock('@/composables/useHistory', () => ({
+vi.mock('@/composables/history/useHistory', () => ({
   useHistoryManager: () => mockState.historyManager,
 }));
 
-vi.mock('@/composables/useHistoryViewState', () => ({
+vi.mock('@/composables/history/useHistoryViewState', () => ({
   useHistoryViewState: () => mockState.viewState,
 }));
 
@@ -70,7 +70,7 @@ vi.mock('@/composables/history/useHistoryBadgeLayout', () => ({
   }),
 }));
 
-vi.mock('@/composables/useThumbCache', () => ({
+vi.mock('@/composables/image/useThumbCache', () => ({
   getThumbnailCandidates: (item: any) => [item.generatedLink],
 }));
 

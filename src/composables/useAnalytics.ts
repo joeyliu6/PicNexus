@@ -3,9 +3,9 @@
 import { computed, ref } from 'vue';
 import { getVersion } from '@tauri-apps/api/app';
 import { invoke } from '@tauri-apps/api/core';
-import type { UserConfig } from '../config/types';
-import { configStore } from '../store/instances';
-import { createLogger } from '../utils/logger';
+import type { UserConfig } from '@/config/types';
+import { configStore } from '@/store/instances';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('Analytics');
 

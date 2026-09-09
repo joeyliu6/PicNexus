@@ -7,15 +7,15 @@
 
 /* eslint-disable max-lines -- central database facade intentionally groups delegated query APIs */
 import type Database from '@tauri-apps/plugin-sql';
-import type { HistoryItem, ServiceType } from '../../config/types';
-import type { MigrateScope } from '../../types/batchMigrate';
-import type { ImageMeta } from '../../types/image-meta';
-import { extractMirrorServices } from '../../types/image-meta';
-import { recomputeLinkCheckSummary } from '../../types/linkCheckSummary';
-import { getHistoryDbPath } from '../../utils/appPaths';
-import { isUsableMirror } from '../../utils/historyResults';
-import { createLogger } from '../../utils/logger';
-import { getSyncDeviceId } from '../../utils/syncDeviceId';
+import type { HistoryItem, ServiceType } from '@/config/types';
+import type { MigrateScope } from '@/types/batchMigrate';
+import type { ImageMeta } from '@/types/image-meta';
+import { extractMirrorServices } from '@/types/image-meta';
+import { recomputeLinkCheckSummary } from '@/types/linkCheckSummary';
+import { getHistoryDbPath } from '@/utils/appPaths';
+import { isUsableMirror } from '@/utils/historyResults';
+import { createLogger } from '@/utils/logger';
+import { getSyncDeviceId } from '@/utils/syncDeviceId';
 
 // 子模块导入
 import {
@@ -31,7 +31,6 @@ import {
   batchUpdateLinkCheckStatusQuery,
   getLinkCheckContextByIdsQuery,
 } from './LinkCheckQuery';
-import { batchUpdateDimensionsQuery, type DimensionUpdate } from './MetadataQuery';
 import { addSyncLogQuery, getSyncLogsQuery, clearSyncLogsQuery } from './SyncLogService';
 import {
   getItemsByBackupCountQuery,
@@ -967,19 +966,6 @@ class HistoryDatabase {
   ): AsyncGenerator<LinkCheckLiteRow[]> {
     const db = await this.connection.getDb();
     yield* getLinkCheckRestStreamQuery(db, loadedIds, batchSize);
-  }
-
-  /**
-   * 批量写回图片尺寸（宽/高/宽高比）
-   *
-   * 定向更新这三列，不走 update() 的"先读全行再合并"路径——尺寸修复动辄几千条，
-   * 逐条读改写会产生同等数量的 IPC 往返和整行 JSON 解析。
-   *
-   * @returns 实际提交的记录数
-   */
-  async batchUpdateDimensions(updates: DimensionUpdate[]): Promise<number> {
-    const db = await this.connection.getDb();
-    return batchUpdateDimensionsQuery(db, updates);
   }
 
   async batchUpdateLinkCheckStatus(

@@ -4,14 +4,14 @@ import type { VueWrapper } from '@vue/test-utils';
 import { mountWithDefaults } from '../../helpers/vueMount';
 import { flushPromisesAndTicks } from '../../helpers/wait';
 import type { ImageMeta } from '@/types/image-meta';
-import type { VisibleItem } from '@/composables/useVirtualTimeline';
+import type { VisibleItem } from '@/composables/timeline/useVirtualTimeline';
 
 const { reportFailedMock, reportLoadedMock } = vi.hoisted(() => ({
   reportFailedMock: vi.fn(),
   reportLoadedMock: vi.fn(),
 }));
 
-vi.mock('@/composables/useThumbCache', () => ({
+vi.mock('@/composables/image/useThumbCache', () => ({
   reportThumbnailUrlFailed: reportFailedMock,
   reportThumbnailUrlLoaded: reportLoadedMock,
 }));

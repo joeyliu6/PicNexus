@@ -2,7 +2,7 @@
 // 负责：图床偏好管理、修复策略应用、排除管理、底栏统计
 
 import { computed, type ComputedRef } from 'vue';
-import type { ConfigManagerApi } from '../useConfig';
+import type { ConfigManagerApi } from '@/composables/useConfig';
 import {
   type MdImageLinkWithFile,
   type RepairStrategy,

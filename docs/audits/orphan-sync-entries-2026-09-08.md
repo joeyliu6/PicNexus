@@ -10,7 +10,7 @@
 
 ## 事实核对
 
-设置页 [DataItemCard.vue](../../src/components/settings/backup/DataItemCard.vue) 实际只有 3 个入口，
+设置页 [DataItemCard.vue](../../src/components/settings/backup-sync/DataItemCard.vue) 实际只有 3 个入口，
 由 [BackupSyncPanel.vue](../../src/components/settings/BackupSyncPanel.vue) 接线：
 
 | 界面上的按钮 | 实际调用 |

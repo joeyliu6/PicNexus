@@ -1,12 +1,12 @@
-import type { HistoryItem, ServiceType, UserConfig } from '../../config/types';
-import type { LinkCheckLiteRow } from '../../services/HistoryDatabase';
+import type { HistoryItem, ServiceType, UserConfig } from '@/config/types';
+import type { LinkCheckLiteRow } from '@/services/database';
 import type {
   BatchCheckRequestItem,
   BatchCheckResult,
   CheckLinkResult,
   LinkCheckRow,
-} from '../../types/linkCheck';
-import { applyConfiguredUrlWithConfig } from '../useCopyLink';
+} from '@/types/linkCheck';
+import { applyConfiguredUrlWithConfig } from '@/composables/useCopyLink';
 
 export function linkCheckRowKey(row: Pick<LinkCheckRow, 'historyId' | 'serviceId'>): string {
   return `${row.historyId}::${row.serviceId}`;

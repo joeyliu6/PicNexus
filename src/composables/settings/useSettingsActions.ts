@@ -5,13 +5,13 @@
 import { ref, type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { useToast } from '../useToast';
-import { useThemeManager } from '../useTheme';
-import { useAnalytics } from '../useAnalytics';
-import { useConfigManager } from '../useConfig';
-import { TOAST_MESSAGES } from '../../constants';
-import { WebDAVClient } from '../../utils/webdav';
-import type { ThemeMode } from '../../config/types';
+import { useToast } from '@/composables/useToast';
+import { useThemeManager } from '@/composables/useTheme';
+import { useAnalytics } from '@/composables/useAnalytics';
+import { useConfigManager } from '@/composables/useConfig';
+import { TOAST_MESSAGES } from '@/constants';
+import { WebDAVClient } from '@/utils/webdav';
+import type { ThemeMode } from '@/config/types';
 import type { SettingsFormData } from './settingsFormTypes';
 
 interface UseSettingsActionsOptions {

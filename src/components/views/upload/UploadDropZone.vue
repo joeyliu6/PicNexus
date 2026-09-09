@@ -2,8 +2,8 @@
 import { ref, computed } from 'vue';
 import Popover from 'primevue/popover';
 import type PopoverType from 'primevue/popover';
-import type { CompressionPreset } from '../../../config/types';
-import { FORMAT_LABEL } from '../../../composables/settings/useCompressionPresets';
+import type { CompressionPreset } from '@/config/types';
+import { FORMAT_LABEL } from '@/composables/settings/useCompressionPresets';
 import CompressPopoverMenu from './CompressPopoverMenu.vue';
 
 interface Props {

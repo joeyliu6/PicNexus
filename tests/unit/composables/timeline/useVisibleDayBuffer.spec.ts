@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ref, computed, defineComponent, h, nextTick } from 'vue';
 import { mount } from '@vue/test-utils';
 import { useVisibleDayBuffer } from '@/composables/timeline/useVisibleDayBuffer';
-import type { DayStats } from '@/services/HistoryDatabase';
+import type { DayStats } from '@/services/database';
 
 function makeDayStats(n: number): DayStats[] {
   return Array.from({ length: n }, (_, i) => ({

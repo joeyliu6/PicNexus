@@ -10,7 +10,7 @@
 // ⚠️ 只服务于备份/同步的 `config.webdav`。WebDAV 图床（`config.webdav_profiles`）是另一套。
 
 import { computed, type ComputedRef } from 'vue';
-import type { WebDAVConfig, WebDAVProfile } from '../../config/types';
+import type { WebDAVConfig, WebDAVProfile } from '@/config/types';
 import { nextProfileName } from './profileNaming';
 
 /** 改动后需要作废「已连接」状态的字段——连接参数变了，上次的验证结果就不算数了 */

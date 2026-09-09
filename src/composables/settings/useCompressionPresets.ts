@@ -6,10 +6,10 @@ import type {
   ImageCompressionConfig,
   CompressionPreset,
   CompressionOutputFormat,
-} from '../../config/types';
-import { DEFAULT_COMPRESSION_PRESET } from '../../config/types';
-import { debounce } from '../../utils/debounce';
-import { useConfirm } from '../useConfirm';
+} from '@/config/types';
+import { DEFAULT_COMPRESSION_PRESET } from '@/config/types';
+import { debounce } from '@/utils/debounce';
+import { useConfirm } from '@/composables/useConfirm';
 
 /** 最大预设数量 */
 const MAX_PRESETS = 5;

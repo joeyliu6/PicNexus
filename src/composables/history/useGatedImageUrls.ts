@@ -26,11 +26,11 @@
  * 自己留一份未过闸的原值对比即可，见 `HistoryLightbox.vue` 的 `rawImageSrc`。
  */
 import { computed } from 'vue';
-import type { HistoryItem } from '../../config/types';
-import { getPrimaryImageUrl } from '../../utils/imageUrl';
-import { getConfirmedHttpHosts, safeImageUrl } from '../../security/networkPolicy';
-import { useConfigManager } from '../useConfig';
-import { useThumbCache } from '../useThumbCache';
+import type { HistoryItem } from '@/config/types';
+import { getPrimaryImageUrl } from '@/utils/imageUrl';
+import { getConfirmedHttpHosts, safeImageUrl } from '@/security/networkPolicy';
+import { useConfigManager } from '@/composables/useConfig';
+import { useThumbCache } from '@/composables/image/useThumbCache';
 
 export function useGatedImageUrls() {
   const configManager = useConfigManager();

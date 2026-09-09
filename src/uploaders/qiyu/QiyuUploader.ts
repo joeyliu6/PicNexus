@@ -3,10 +3,10 @@
 // Token 自动获取，需要系统安装 Chrome 浏览器
 
 import { invoke } from '@tauri-apps/api/core';
-import { BaseUploader } from '../base/BaseUploader';
-import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
-import type { QiyuServiceConfig } from '../../config/types';
-import { createLogger } from '../../utils/logger';
+import { BaseUploader } from '@/uploaders/base/BaseUploader';
+import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '@/uploaders/base/types';
+import type { QiyuServiceConfig } from '@/config/types';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('QiyuUploader');
 

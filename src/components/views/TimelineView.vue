@@ -1,26 +1,26 @@
 <script setup lang="ts">
 /** Timeline View — Google Photos 风格虚拟滚动图片浏览 */
 import { ref, computed, onUnmounted, watch } from 'vue';
-import { useHistoryViewState } from '../../composables/useHistoryViewState';
-import { useHistoryManager } from '../../composables/useHistory';
-import { useVirtualTimeline } from '../../composables/useVirtualTimeline';
-import { useConfigManager } from '../../composables/useConfig';
-import { useImageLoadManager } from '../../composables/useImageLoadManager';
-import { useTimelineSidebarControl } from '../../composables/useTimelineSidebarControl';
-import { useScrollRestore } from '../../composables/timeline/useScrollRestore';
-import { useImagePreload } from '../../composables/timeline/useImagePreload';
-import { useTimelineLightbox } from '../../composables/timeline/useTimelineLightbox';
-import { useTimelineDragAndSkeleton } from '../../composables/timeline/useTimelineDragAndSkeleton';
-import { useTimelineData } from '../../composables/timeline/useTimelineData';
-import { useTimelineDayPagination } from '../../composables/timeline/useTimelineDayPagination';
-import { useVisibleDayBuffer } from '../../composables/timeline/useVisibleDayBuffer';
-import { useScrollAnchor } from '../../composables/timeline/useScrollAnchor';
-import { useDebouncedTrue } from '../../composables/useDebouncedTrue';
-import { useToast } from '../../composables/useToast';
-import { type ServiceType } from '../../config/types';
-import { confirmedHttpHostsKey, getConfirmedHttpHosts } from '../../security/networkPolicy';
+import { useHistoryViewState } from '@/composables/history/useHistoryViewState';
+import { useHistoryManager } from '@/composables/history/useHistory';
+import { useVirtualTimeline } from '@/composables/timeline/useVirtualTimeline';
+import { useConfigManager } from '@/composables/useConfig';
+import { useImageLoadManager } from '@/composables/image/useImageLoadManager';
+import { useTimelineSidebarControl } from '@/composables/timeline/useTimelineSidebarControl';
+import { useScrollRestore } from '@/composables/timeline/useScrollRestore';
+import { useImagePreload } from '@/composables/timeline/useImagePreload';
+import { useTimelineLightbox } from '@/composables/timeline/useTimelineLightbox';
+import { useTimelineDragAndSkeleton } from '@/composables/timeline/useTimelineDragAndSkeleton';
+import { useTimelineData } from '@/composables/timeline/useTimelineData';
+import { useTimelineDayPagination } from '@/composables/timeline/useTimelineDayPagination';
+import { useVisibleDayBuffer } from '@/composables/timeline/useVisibleDayBuffer';
+import { useScrollAnchor } from '@/composables/timeline/useScrollAnchor';
+import { useDebouncedTrue } from '@/composables/useDebouncedTrue';
+import { useToast } from '@/composables/useToast';
+import { type ServiceType } from '@/config/types';
+import { confirmedHttpHostsKey, getConfirmedHttpHosts } from '@/security/networkPolicy';
 
-import EmptyState from '../common/EmptyState.vue';
+import EmptyState from '@/components/common/EmptyState.vue';
 import TimelineSkeleton from './timeline/TimelineSkeleton.vue';
 import TimelinePhotoGrid from './timeline/TimelinePhotoGrid.vue';
 import TimelineIndicator from './timeline/TimelineIndicator.vue';

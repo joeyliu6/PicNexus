@@ -4,7 +4,7 @@
  * 使用 Justified Layout 算法确保与实际内容布局一致
  */
 import Skeleton from 'primevue/skeleton';
-import type { SkeletonLayoutResult } from '../../../utils/justifiedLayout';
+import type { SkeletonLayoutResult } from '@/utils/justifiedLayout';
 
 defineProps<{
   layout: SkeletonLayoutResult;

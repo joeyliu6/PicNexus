@@ -52,7 +52,7 @@ vi.mock('@/composables/useConfig', () => ({
   }),
 }));
 
-vi.mock('@/composables/useHistory', () => ({
+vi.mock('@/composables/history/useHistory', () => ({
   useHistoryManager: () => ({
     favoriteSet: ref(new Set<string>()),
     isStatsLoaded: isStatsLoadedRef,
@@ -61,19 +61,19 @@ vi.mock('@/composables/useHistory', () => ({
   }),
 }));
 
-vi.mock('@/composables/useHistoryViewState', () => ({
+vi.mock('@/composables/history/useHistoryViewState', () => ({
   useHistoryViewState: () => ({
     deleteHistoryItem: deleteHistoryItemMock,
   }),
 }));
 
-vi.mock('@/composables/useThumbCache', () => ({
+vi.mock('@/composables/image/useThumbCache', () => ({
   useThumbCache: () => ({
     getMediumImageUrl: () => mediumUrlRef.value,
   }),
 }));
 
-vi.mock('@/composables/useLightboxPreloader', () => ({
+vi.mock('@/composables/image/useLightboxPreloader', () => ({
   useLightboxPreloader: lightboxPreloaderMock,
 }));
 

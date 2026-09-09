@@ -56,7 +56,7 @@ vi.mock('@/composables/useConfirm', () => ({
   }),
 }));
 
-vi.mock('@/composables/useServiceHealth', () => ({
+vi.mock('@/composables/service/useServiceHealth', () => ({
   useServiceHealth: () => ({
     loadHealthStatus: mockState.loadHealthStatus,
     evaluateConfig: mockState.evaluateConfig,

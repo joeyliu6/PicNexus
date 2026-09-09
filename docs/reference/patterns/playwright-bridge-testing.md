@@ -140,7 +140,7 @@ step6-reset-idle.png
 
 ### 桥接代码位置
 
-`src/components/views/linkcheck/MdRescueInline.vue` — `<script setup>` 末尾
+`src/components/views/link-check/MdRescueInline.vue` — `<script setup>` 末尾
 
 ### 需要暴露的状态
 

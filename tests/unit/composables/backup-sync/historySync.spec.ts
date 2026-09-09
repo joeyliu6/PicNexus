@@ -39,7 +39,7 @@ const {
   updateHistorySyncStatusMock: vi.fn(),
 }));
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     getCount: historyGetCountMock,
     exportToJSON: historyExportToJSONMock,
@@ -48,7 +48,7 @@ vi.mock('@/services/HistoryDatabase', () => ({
   },
 }));
 
-vi.mock('@/composables/useHistory', () => ({
+vi.mock('@/composables/history/useHistory', () => ({
   invalidateCache: invalidateCacheMock,
 }));
 

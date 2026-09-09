@@ -2,10 +2,10 @@
 import { computed, ref, watch, onUnmounted } from 'vue';
 import Button from 'primevue/button';
 import ToggleSwitch from 'primevue/toggleswitch';
-import { useAutoUpdate } from '../../../composables/useAutoUpdate';
-import { useToast } from '../../../composables/useToast';
-import { openTrustedExternalUrl } from '../../../security/shellOpen';
-import { formatUpdateFailure } from '../../../utils/updateFailureMessage';
+import { useAutoUpdate } from '@/composables/useAutoUpdate';
+import { useToast } from '@/composables/useToast';
+import { openTrustedExternalUrl } from '@/security/shellOpen';
+import { formatUpdateFailure } from '@/utils/updateFailureMessage';
 
 const RELEASES_URL = 'https://github.com/joeyliu6/PicNexus/releases/latest';
 

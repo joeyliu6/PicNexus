@@ -166,6 +166,6 @@ toast.showConfig('error', TOAST_MESSAGES.common.deleteFailed(errorMsg));
 - `src/constants/toastMessages.ts` - 消息配置
 - `src/constants/index.ts` - 统一导出
 - `src/composables/useToast.ts` - Toast Composable
-- `src/composables/useHistory.ts` - 使用示例
-- `src/composables/useUpload.ts` - 使用示例
+- `src/composables/history/useHistory.ts` - 使用示例
+- `src/composables/upload/useUpload.ts` - 使用示例
 - `src/composables/useConfig.ts` - 使用示例

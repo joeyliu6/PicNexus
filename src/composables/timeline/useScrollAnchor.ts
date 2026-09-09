@@ -10,7 +10,7 @@
  * - useScrollAnchor 负责运行期 layout 重算导致的高度突变补偿
  */
 import { ref, watch, type Ref } from 'vue';
-import type { TimelineLayoutResult } from '../../utils/justifiedLayout';
+import type { TimelineLayoutResult } from '@/utils/justifiedLayout';
 import type { VisibleItem } from './types';
 
 interface Anchor {

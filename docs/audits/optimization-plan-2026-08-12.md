@@ -429,7 +429,7 @@
 
 `branches` 分母从 1 涨到 83——上一批注释里预告的「假 100%」现形。这次 83 个分支全部覆盖，但阈值仍按既有约定取「当前值 − 5pp 向下取整」而非钉死 100，给后续文件长大留余量。该条目同时从「低覆盖核心文件」组移入「存量高覆盖文件」组。
 
-**为什么原来只有 8.42%**：不是没人测，而是唯一碰过它的 `tests/unit/components/linkcheck/linkCheckView.spec.ts:26-27` 把整个 `useHistoryManager` 用 `vi.fn()` mock 掉了，`deleteHistoryResult` / `bulkDeleteHistoryResults` 的真实实现一行都没跑过——8.42% 只是模块顶层求值的残留。属于第三批记录里 `useTimelineDragAndSkeleton` 那一类（「被 `vi.mock` 挡着」），所以本次**新开 spec 直连 `createResultOps`**，没有改动既有 spec。
+**为什么原来只有 8.42%**：不是没人测，而是唯一碰过它的 `tests/unit/components/link-check/linkCheckView.spec.ts:26-27` 把整个 `useHistoryManager` 用 `vi.fn()` mock 掉了，`deleteHistoryResult` / `bulkDeleteHistoryResults` 的真实实现一行都没跑过——8.42% 只是模块顶层求值的残留。属于第三批记录里 `useTimelineDragAndSkeleton` 那一类（「被 `vi.mock` 挡着」），所以本次**新开 spec 直连 `createResultOps`**，没有改动既有 spec。
 
 **新增** `tests/unit/composables/history/useHistoryResultOps.spec.ts`（40 条用例，按「`deleteHistoryResult` 前置校验 / `deleteHistoryResult` 剥离与降级 / `bulkDeleteHistoryResults` / `applyChanges` 副作用 / 跨文件约定：`linkCheckSummary` 重算」五组拆分）。
 

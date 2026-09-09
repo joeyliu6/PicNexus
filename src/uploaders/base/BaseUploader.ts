@@ -11,8 +11,8 @@ import type {
   ConnectionTestResult,
   ProgressCallback
 } from './types';
-import { getErrorMessage, isAuthError } from '../../types/errors';
-import { createLogger } from '../../utils/logger';
+import { getErrorMessage, isAuthError } from '@/types/errors';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('BaseUploader');
 

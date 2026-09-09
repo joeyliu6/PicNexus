@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue';
-import type { MigrateContext } from '@/components/views/linkcheck/migrate/keys';
+import type { MigrateContext } from '@/components/views/link-check/migrate/keys';
 import type {
   MigrateFailureDetail,
   MigrateFailureRecord,

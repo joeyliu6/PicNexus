@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { UploadQueueManager, type QueueItem } from '@/core/UploadQueue';
-import { useQueueState } from '@/composables/useQueueState';
+import { useQueueState } from '@/composables/upload/useQueueState';
 import { getInvokeMock, resetTauriMocks } from '../helpers/tauriMock';
 import {
   QUEUE_SERVICE_STATUS,

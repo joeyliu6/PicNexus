@@ -3,7 +3,7 @@
 // 只负责「渲染什么」，尺寸与颜色一律由父级 class 决定（单根组件，class 会 fallthrough 到根元素）
 
 import { computed } from 'vue';
-import { resolveServiceLogo } from '../../utils/icons';
+import { resolveServiceLogo } from '@/utils/icons';
 
 const props = defineProps<{
   /** 服务 ID，支持 custom_s3:xxx / webdav:xxx 复合 ID */

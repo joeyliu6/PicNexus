@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { onClickOutside, useElementBounding } from '@vueuse/core';
 import Button from 'primevue/button';
-import type { ServerServiceType } from '../../config/types';
+import type { ServerServiceType } from '@/config/types';
 
 interface ServiceOption {
   value: ServerServiceType;
@@ -107,7 +107,7 @@ function selectService(svc: ServerServiceType | null) {
 </template>
 
 <style scoped>
-@import url('../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 .service-selector {
   position: relative;

@@ -12,7 +12,7 @@ const copyLinkMocks = vi.hoisted(() => ({
   applyConfiguredUrlWithConfig: vi.fn((url: string) => url),
 }));
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: historyMocks,
 }));
 

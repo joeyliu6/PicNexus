@@ -1,9 +1,9 @@
 import { ref, watch, onUnmounted, type Ref } from 'vue';
-import type { HistoryItem, ServiceType } from '../../config/types';
-import { useToast } from '../useToast';
-import { useCopyLink } from '../useCopyLink';
-import { createLogger } from '../../utils/logger';
-import { openUserExternalUrl } from '../../security/shellOpen';
+import type { HistoryItem, ServiceType } from '@/config/types';
+import { useToast } from '@/composables/useToast';
+import { useCopyLink } from '@/composables/useCopyLink';
+import { createLogger } from '@/utils/logger';
+import { openUserExternalUrl } from '@/security/shellOpen';
 
 const logger = createLogger('LightboxActions');
 const COPY_FEEDBACK_DURATION = 2000;

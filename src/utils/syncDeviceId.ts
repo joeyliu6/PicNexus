@@ -1,4 +1,4 @@
-import { syncStatusStore } from '../store/instances';
+import { syncStatusStore } from '@/store/instances';
 import { createLogger } from './logger';
 
 const DEVICE_ID_KEY = 'deviceId';

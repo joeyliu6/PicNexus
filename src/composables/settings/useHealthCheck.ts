@@ -2,7 +2,7 @@
 // 从 HostingSettingsPanel.vue 提取的 composable
 
 import { ref, computed, watch, onUnmounted, shallowRef, triggerRef, type Ref, type ComputedRef } from 'vue';
-import type { BatchTestProgress } from '../../types/batchTest';
+import type { BatchTestProgress } from '@/types/batchTest';
 
 /** 停滞判定阈值（毫秒） */
 const STALL_MS = 1500;

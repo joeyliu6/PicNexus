@@ -2,7 +2,7 @@
 // 所有子模块通过导入此文件共享状态
 
 import { ref, shallowRef, type Ref } from 'vue';
-import type { MdImageLink } from '../../types/linkCheck';
+import type { MdImageLink } from '@/types/linkCheck';
 
 // ============================================
 // 导出类型

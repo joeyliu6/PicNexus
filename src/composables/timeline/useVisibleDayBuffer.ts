@@ -3,7 +3,7 @@
  * 目的：边滚边按需加载，避免用户快速滚动时频繁抖动请求
  */
 import { watch, onUnmounted, type Ref, type ComputedRef } from 'vue';
-import type { DayStats } from '../../services/HistoryDatabase';
+import type { DayStats } from '@/services/database';
 
 interface Options {
   /** 当前视口内可见的 dayKey 列表（格式 'year-month-day'） */

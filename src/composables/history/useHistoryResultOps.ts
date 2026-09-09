@@ -3,19 +3,19 @@
 // 被摘除者若恰为 primaryService，会从剩余 success 结果里补选；若结果数归零，则降级为整条删除。
 
 import type { Ref } from 'vue';
-import type { HistoryItem } from '../../config/types';
-import { historyDB } from '../../services/HistoryDatabase';
-import { useConfirm } from '../useConfirm';
-import { useToast } from '../useToast';
-import { TOAST_MESSAGES } from '../../constants';
+import type { HistoryItem } from '@/config/types';
+import { historyDB } from '@/services/database';
+import { useConfirm } from '@/composables/useConfirm';
+import { useToast } from '@/composables/useToast';
+import { TOAST_MESSAGES } from '@/constants';
 import {
   emitHistoryDeleted,
   emitHistoryUpdated,
-} from '../../events/cacheEvents';
-import { createLogger } from '../../utils/logger';
-import { isUsableMirror } from '../../utils/historyResults';
-import { recomputeLinkCheckSummary } from '../../types/linkCheckSummary';
-import type { useImageDetailCache } from '../useImageDetailCache';
+} from '@/events/cacheEvents';
+import { createLogger } from '@/utils/logger';
+import { isUsableMirror } from '@/utils/historyResults';
+import { recomputeLinkCheckSummary } from '@/types/linkCheckSummary';
+import type { useImageDetailCache } from '@/composables/image/useImageDetailCache';
 
 const log = createLogger('History');
 

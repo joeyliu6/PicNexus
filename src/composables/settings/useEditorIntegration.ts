@@ -3,11 +3,11 @@
 
 import { ref, computed, watch, type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { useToast } from '../useToast';
-import type { EditorServerConfig } from '../../config/types';
-import { isWebDAVId } from '../../config/types';
-import { createLogger } from '../../utils/logger';
-import { generateEditorServerAuthToken } from '../../utils/editorServerAuth';
+import { useToast } from '@/composables/useToast';
+import type { EditorServerConfig } from '@/config/types';
+import { isWebDAVId } from '@/config/types';
+import { createLogger } from '@/utils/logger';
+import { generateEditorServerAuthToken } from '@/utils/editorServerAuth';
 import type { SettingsFormShape } from './settingsFormTypes';
 import {
   buildCliServicesConfigJson,

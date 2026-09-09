@@ -1,24 +1,24 @@
 // 多图床并行上传编排器
 
-import { UploaderFactory } from '../uploaders/base/UploaderFactory';
-import type { UploadResult } from '../uploaders/base/types';
-import type { UserConfig, ServiceType} from '../config/types';
-import { isCustomS3Id, getCustomS3ProfileId, isWebDAVId, getWebDAVProfileId } from '../config/types';
-import type { StructuredError} from '../uploaders/base/ErrorTypes';
-import { UploadErrorCode, createStructuredError } from '../uploaders/base/ErrorTypes';
-import { convertToStructuredWeiboError } from '../uploaders/weibo/WeiboError';
-import { convertToStructuredR2Error } from '../uploaders/r2/R2Error';
+import { UploaderFactory } from '@/uploaders/base/UploaderFactory';
+import type { UploadResult } from '@/uploaders/base/types';
+import type { UserConfig, ServiceType} from '@/config/types';
+import { isCustomS3Id, getCustomS3ProfileId, isWebDAVId, getWebDAVProfileId } from '@/config/types';
+import type { StructuredError} from '@/uploaders/base/ErrorTypes';
+import { UploadErrorCode, createStructuredError } from '@/uploaders/base/ErrorTypes';
+import { convertToStructuredWeiboError } from '@/uploaders/weibo/WeiboError';
+import { convertToStructuredR2Error } from '@/uploaders/r2/R2Error';
 
-import { convertToJDError } from '../uploaders/jd/JDError';
-import { convertToNamiError } from '../uploaders/nami/NamiError';
-import { getServiceSemaphore } from '../utils/semaphore';
+import { convertToJDError } from '@/uploaders/jd/JDError';
+import { convertToNamiError } from '@/uploaders/nami/NamiError';
+import { getServiceSemaphore } from '@/utils/semaphore';
 import {
   SERVICE_REQUIRED_FIELDS,
   COOKIE_BASED_SERVICES,
   NO_CONFIG_SERVICES,
   getRequiredFields,
-} from '../constants/serviceRequiredFields';
-import { createLogger } from '../utils/logger';
+} from '@/constants/serviceRequiredFields';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('MultiUploader');
 

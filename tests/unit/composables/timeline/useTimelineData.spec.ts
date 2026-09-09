@@ -3,7 +3,7 @@ import { ref, computed } from 'vue';
 import type { ImageMeta } from '@/types/image-meta';
 import type { UserConfig } from '@/config/types';
 
-vi.mock('@/composables/useThumbCache', () => ({
+vi.mock('@/composables/image/useThumbCache', () => ({
   getMetaThumbnailUrl: (_meta: unknown, _config: unknown) => 'https://thumb.example.com/img.jpg',
   getMetaThumbnailCandidates: (_meta: unknown, _config: unknown) => ['https://thumb.example.com/img.jpg'],
 }));

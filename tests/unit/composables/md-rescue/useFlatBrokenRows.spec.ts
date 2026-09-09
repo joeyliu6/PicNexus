@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ref, shallowRef } from 'vue';
 import { useFlatBrokenRows } from '@/composables/md-rescue/useFlatBrokenRows';
-import type { MdImageLinkWithFile } from '@/composables/useMdRescue';
+import type { MdImageLinkWithFile } from '@/composables/md-rescue/shared';
 
 function makeLink(
   sourceFile: string,

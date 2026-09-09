@@ -4,7 +4,7 @@
  * 纯展示：背景轨道 + Google Photos 风格的月份点 + 年份分隔线；
  * 父组件 hover 时通过 hovered prop 点亮月份点
  */
-import type { FilteredPoint } from '../../../../utils/timelineFilter';
+import type { FilteredPoint } from '@/utils/timelineFilter';
 
 /** 年份区段（与父组件结构保持一致，本地复制定义） */
 interface YearSection {

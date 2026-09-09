@@ -4,7 +4,7 @@ import type { UserConfig, LinkPrefixItem } from './configInterface';
 import { DEFAULT_LINK_PREFIXES, cloneDefaultPrefixes } from './configInterface';
 import { DEFAULT_GITHUB_CDN_LIST } from './serviceTypes';
 import { DEFAULT_COMPRESSION_PRESET } from './compressionTypes';
-import { ZHIHU_SOURCE_DEFAULT_VALUE } from '../utils/zhihuSource';
+import { ZHIHU_SOURCE_DEFAULT_VALUE } from '@/utils/zhihuSource';
 
 /**
  * 默认配置

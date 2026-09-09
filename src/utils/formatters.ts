@@ -2,7 +2,7 @@
  * 通用格式化工具函数
  */
 
-import type { HistoryItem } from '../config/types';
+import type { HistoryItem } from '@/config/types';
 
 const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',

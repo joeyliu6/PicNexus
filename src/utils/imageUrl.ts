@@ -1,5 +1,5 @@
-import type { HistoryItem, UserConfig } from '../config/types';
-import { getActivePrefix } from '../config/types';
+import type { HistoryItem, UserConfig } from '@/config/types';
+import { getActivePrefix } from '@/config/types';
 import { applyPrefixTemplate } from './linkPrefixTemplate';
 
 /**

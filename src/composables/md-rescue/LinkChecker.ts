@@ -3,18 +3,18 @@
 // 从 useMdRescue.ts 抽取，负责：buildScanMappings / buildUrlIndex
 // / findBackupLinksRaw / runLinkCheck（包含 analyzeFile 的核心逻辑）
 
-import type { UserConfig, HistoryItem } from '../../config/types';
-import { applyConfiguredUrlWithConfig } from '../useCopyLink';
-import { historyDB } from '../../services/HistoryDatabase';
-import { createLogger } from '../../utils/logger';
-import { stripKnownPrefixes } from '../../utils/mdParser';
+import type { UserConfig, HistoryItem } from '@/config/types';
+import { applyConfiguredUrlWithConfig } from '@/composables/useCopyLink';
+import { historyDB } from '@/services/database';
+import { createLogger } from '@/utils/logger';
+import { stripKnownPrefixes } from '@/utils/mdParser';
 import type {
   MdBackupLink,
   BatchCheckRequestItem,
   BatchCheckResult,
   BatchCheckProgress,
   CheckLinkResult,
-} from '../../types/linkCheck';
+} from '@/types/linkCheck';
 
 import {
   type MdImageLinkWithFile,

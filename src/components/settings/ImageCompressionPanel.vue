@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, toRef, inject, watch, onMounted, type Ref } from 'vue';
 
-import type { ImageCompressionConfig } from '../../config/types';
-import { useCompressionPresets } from '../../composables/settings/useCompressionPresets';
-import CompressionPreviewDialog from '../dialogs/CompressionPreviewDialog.vue';
+import type { ImageCompressionConfig } from '@/config/types';
+import { useCompressionPresets } from '@/composables/settings/useCompressionPresets';
+import CompressionPreviewDialog from '@/components/dialogs/CompressionPreviewDialog.vue';
 import CollapsibleSettingsCard from './CollapsibleSettingsCard.vue';
 import CompressionPresetTabs from './image-compression/CompressionPresetTabs.vue';
 import CompressionSettingsForm from './image-compression/CompressionSettingsForm.vue';
@@ -149,7 +149,7 @@ function handleEditInputMount(el: HTMLInputElement | null) {
 </template>
 
 <style scoped>
-@import url('../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 /* --- Preset Actions --- */
 

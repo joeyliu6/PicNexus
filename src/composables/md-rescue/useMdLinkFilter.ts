@@ -3,8 +3,8 @@
 
 import { ref, computed, watch, type Ref } from 'vue';
 import { watchDebounced } from '@vueuse/core';
-import { replaceImageLinks } from '../../utils/mdParser';
-import { SEVERITY } from '../../types/linkCheck';
+import { replaceImageLinks } from '@/utils/mdParser';
+import { SEVERITY } from '@/types/linkCheck';
 import {
   type MdImageLinkWithFile,
   imageLinks,

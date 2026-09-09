@@ -4,9 +4,9 @@
  * 特性：年份标签、密度轨道、拖拽气泡、可见区域指示
  */
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
-import type { TimePeriodStats } from '../../../composables/useHistory';
-import { filterMonthPoints, type FilteredPoint } from '../../../utils/timelineFilter';
-import { createRafScheduler } from '../../../utils/rafScheduler';
+import type { TimePeriodStats } from '@/composables/history/useHistory';
+import { filterMonthPoints, type FilteredPoint } from '@/utils/timelineFilter';
+import { createRafScheduler } from '@/utils/rafScheduler';
 import TimelineYearLabels from './timeline-indicator/TimelineYearLabels.vue';
 import TimelineTrack from './timeline-indicator/TimelineTrack.vue';
 import TimelineScrubber from './timeline-indicator/TimelineScrubber.vue';

@@ -1,4 +1,4 @@
-import { isCustomS3Id, isWebDAVId } from '../config/types';
+import { isCustomS3Id, isWebDAVId } from '@/config/types';
 
 // 通用图标加载器工厂
 function createIconLoader<T extends string = string>(

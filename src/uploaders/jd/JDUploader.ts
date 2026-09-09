@@ -1,7 +1,7 @@
 import { JDRateLimiter } from './JDRateLimiter';
-import { BaseUploader } from '../base/BaseUploader';
-import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
-import type { JDServiceConfig } from '../../config/types';
+import { BaseUploader } from '@/uploaders/base/BaseUploader';
+import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '@/uploaders/base/types';
+import type { JDServiceConfig } from '@/config/types';
 
 /**
  * Rust 返回的京东上传结果

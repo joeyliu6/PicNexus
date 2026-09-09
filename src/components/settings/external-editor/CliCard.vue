@@ -2,9 +2,9 @@
 import { computed, onMounted, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import Button from 'primevue/button';
-import type { EditorServerConfig } from '../../../config/types';
-import { useToast } from '../../../composables/useToast';
-import CollapsibleSettingsCard from '../CollapsibleSettingsCard.vue';
+import type { EditorServerConfig } from '@/config/types';
+import { useToast } from '@/composables/useToast';
+import CollapsibleSettingsCard from '@/components/settings/CollapsibleSettingsCard.vue';
 
 interface Props {
   executablePath?: string;
@@ -308,11 +308,11 @@ onMounted(() => {
 </template>
 
 <style>
-@import url('../../../styles/editor-card.css');
+@import url('@/styles/editor-card.css');
 </style>
 
 <style scoped>
-@import url('../../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 .cli-card-content {
   display: flex;

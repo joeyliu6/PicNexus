@@ -1,6 +1,6 @@
 import type Database from '@tauri-apps/plugin-sql';
 import type { LinkCheckLiteRow } from './types';
-import { createLogger } from '../../utils/logger';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('LinkCheckQuery');
 

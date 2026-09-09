@@ -54,7 +54,7 @@ vi.mock('@/composables/useToast', () => ({
 vi.mock('@/composables/useConfirm', () => ({
   useConfirm: () => ({ confirm: vi.fn().mockResolvedValue(true) }),
 }));
-vi.mock('@/composables/useServiceHealth', () => ({
+vi.mock('@/composables/service/useServiceHealth', () => ({
   useServiceHealth: () => ({
     loadHealthStatus: vi.fn().mockResolvedValue(undefined),
     evaluateConfig: vi.fn(),

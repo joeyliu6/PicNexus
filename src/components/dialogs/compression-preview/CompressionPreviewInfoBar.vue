@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CompressResult } from '../../../composables/useCompressionTask';
+import type { CompressResult } from '@/composables/image/useCompressionTask';
 
 interface Props {
   /** 压缩结果（父侧 v-if 保证非空） */

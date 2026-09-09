@@ -43,7 +43,7 @@ vi.mock('@/core/MultiServiceUploader', () => ({
   },
 }));
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     getById: historyGetByIdMock,
     getByFilePath: historyGetByFilePathMock,
@@ -51,7 +51,7 @@ vi.mock('@/services/HistoryDatabase', () => ({
   },
 }));
 
-vi.mock('@/composables/useHistory', () => ({
+vi.mock('@/composables/history/useHistory', () => ({
   invalidateCache: invalidateCacheMock,
 }));
 

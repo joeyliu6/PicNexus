@@ -1,7 +1,7 @@
 import { computed } from 'vue';
-import { useConfigManager } from '../../../../composables/useConfig';
-import { createLogger } from '../../../../utils/logger';
-import { FORMAT_NAMES, type LinkFormat } from '../../../../utils/linkFormatter';
+import { useConfigManager } from '@/composables/useConfig';
+import { createLogger } from '@/utils/logger';
+import { FORMAT_NAMES, type LinkFormat } from '@/utils/linkFormatter';
 
 const log = createLogger('FabCopyFormat');
 

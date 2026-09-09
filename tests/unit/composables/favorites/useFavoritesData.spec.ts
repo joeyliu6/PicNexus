@@ -21,7 +21,7 @@ const {
   unlistenClearedMock: vi.fn(),
 }));
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     getFavoritesMetaPage: getFavoritesMetaPageMock,
   },
@@ -31,7 +31,7 @@ vi.mock('@/events/cacheEvents', () => ({
   onCacheEventType: onCacheEventTypeMock,
 }));
 
-vi.mock('@/composables/useThumbCache', () => ({
+vi.mock('@/composables/image/useThumbCache', () => ({
   getMetaThumbnailCandidates: getMetaCandidatesMock,
 }));
 

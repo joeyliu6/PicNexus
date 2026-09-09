@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TrayMenuItem } from '../../services/trayMenu';
+import type { TrayMenuItem } from '@/services/trayMenu';
 
 interface CommandEntry {
   id: string;

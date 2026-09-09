@@ -1,7 +1,7 @@
 // 历史记录 results 数组的共享谓词——「可用镜像」的唯一口径定义处。
 
-import type { HistoryItem } from '../config/types';
-import type { UploadResult } from '../uploaders/base/types';
+import type { HistoryItem } from '@/config/types';
+import type { UploadResult } from '@/uploaders/base/types';
 
 export type HistoryResultEntry = HistoryItem['results'][number];
 

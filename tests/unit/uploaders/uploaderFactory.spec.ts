@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { UploaderFactory } from '@/uploaders/base/UploaderFactory';
-import { createMockUploader } from '../helpers/factories';
+import { createMockUploader } from '../factories';
 
 describe('UploaderFactory', () => {
   beforeEach(() => {

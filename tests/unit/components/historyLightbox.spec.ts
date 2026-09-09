@@ -3,7 +3,7 @@ import { ref, nextTick } from 'vue';
 import {
   reportThumbnailUrlFailed,
   resetProxyReachabilityForTest,
-} from '@/composables/useThumbCache';
+} from '@/composables/image/useThumbCache';
 import { mountWithDefaults } from '../helpers/vueMount';
 import HistoryLightbox from '@/components/views/history/HistoryLightbox.vue';
 import type { HistoryItem } from '@/config/types';
@@ -58,7 +58,7 @@ vi.mock('@/composables/useConfig', () => ({
   }),
 }));
 
-vi.mock('@/composables/useHistory', () => ({
+vi.mock('@/composables/history/useHistory', () => ({
   useHistoryManager: () => ({
     favoriteSet: ref(new Set<string>()),
     invalidateCache: vi.fn(),

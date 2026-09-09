@@ -10,9 +10,9 @@
  * 语义与文档「取消只把在途/未尝试条目转 skipped」对齐。
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useBatchMigrateManager } from '@/composables/useBatchMigrate';
-import { processBatch } from '@/composables/batchMigrate/migrateCore';
-import { preloadAllPending, type PreloadedItem } from '@/composables/batchMigrate/preloadPending';
+import { useBatchMigrateManager } from '@/composables/batch-migrate/useBatchMigrate';
+import { processBatch } from '@/composables/batch-migrate/migrateCore';
+import { preloadAllPending, type PreloadedItem } from '@/composables/batch-migrate/preloadPending';
 import type { HistoryItem, UserConfig } from '@/config/types';
 import type { MigrateItemStatus } from '@/types/batchMigrate';
 
@@ -35,16 +35,16 @@ vi.mock('@/core/MultiServiceUploader', () => ({
   })),
 }));
 
-vi.mock('@/composables/batchMigrate/migrateCore', () => ({
+vi.mock('@/composables/batch-migrate/migrateCore', () => ({
   processBatch: mocks.processBatch,
   migrateOneItem: mocks.migrateOneItem,
 }));
 
-vi.mock('@/composables/batchMigrate/preloadPending', () => ({
+vi.mock('@/composables/batch-migrate/preloadPending', () => ({
   preloadAllPending: mocks.preloadAllPending,
 }));
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     getItemsByBackupCount: mocks.getItemsByBackupCount,
     getServiceDistribution: mocks.getServiceDistribution,
@@ -56,7 +56,7 @@ vi.mock('@/store/instances', () => ({
   configStore: { get: mocks.configGet },
 }));
 
-vi.mock('@/composables/useHistory', () => ({ invalidateCache: mocks.invalidateCache }));
+vi.mock('@/composables/history/useHistory', () => ({ invalidateCache: mocks.invalidateCache }));
 vi.mock('@/events/cacheEvents', () => ({ emitHistoryUpdated: mocks.emitHistoryUpdated }));
 
 function createConfig(): UserConfig {

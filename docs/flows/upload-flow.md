@@ -8,7 +8,7 @@
 
 展示从用户操作到最终结果的完整路径。重点关注**分批处理**和**多图床并行**两个关键设计。
 
-> **关键源文件**：`src/composables/useUpload.ts`、`src/core/MultiServiceUploader.ts`
+> **关键源文件**：`src/composables/upload/useUpload.ts`、`src/core/MultiServiceUploader.ts`
 
 ```mermaid
 flowchart TD

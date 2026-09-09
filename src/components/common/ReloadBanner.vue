@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UI_COPY } from '../../constants/uiCopy';
+import { UI_COPY } from '@/constants/uiCopy';
 
 defineProps<{
   visible: boolean;

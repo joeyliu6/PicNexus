@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import InputText from 'primevue/inputtext';
-import HostingCard from '../HostingCard.vue';
+import HostingCard from '@/components/settings/HostingCard.vue';
 import GithubProxySection from './GithubProxySection.vue';
-import SensitiveField from '../../common/SensitiveField.vue';
-import type { GithubCdnConfig } from '../../../config/types';
-import type { ServiceHealthStatus } from '../../../types/serviceHealth';
-import { hasNonEmptyFields } from '../../../utils/validators';
-import { useSensitiveDraft } from '../../../composables/settings/useSensitiveDraft';
-import { useSecretClearConfirm } from '../../../composables/settings/useSecretClearConfirm';
+import SensitiveField from '@/components/common/SensitiveField.vue';
+import type { GithubCdnConfig } from '@/config/types';
+import type { ServiceHealthStatus } from '@/types/serviceHealth';
+import { hasNonEmptyFields } from '@/utils/validators';
+import { useSensitiveDraft } from '@/composables/settings/useSensitiveDraft';
+import { useSecretClearConfirm } from '@/composables/settings/useSecretClearConfirm';
 
 interface TokenFormData {
   smms: { token: string };
@@ -212,5 +212,5 @@ const secrets = useSensitiveDraft({
 </template>
 
 <style scoped>
-@import url('../../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 </style>

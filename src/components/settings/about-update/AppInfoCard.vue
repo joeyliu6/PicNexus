@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import appIconUrl from '../../../assets/icons/app-icon.png';
+import appIconUrl from '@/assets/icons/app-icon.png';
 
 interface Props {
   appVersion: string;

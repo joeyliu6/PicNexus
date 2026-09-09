@@ -2,14 +2,14 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import Divider from 'primevue/divider';
 import { useConfirm } from 'primevue/useconfirm';
-import { useBackupSync } from '../../composables/useBackupSync';
-import type { WebDAVConfig } from '../../config/types';
+import { useBackupSync } from '@/composables/backup-sync/useBackupSync';
+import type { WebDAVConfig } from '@/config/types';
 
-import DataItemCard from './backup/DataItemCard.vue';
-import WebDAVConfigCollapsible from './backup/WebDAVConfigCollapsible.vue';
-import BackupPasswordSection from './backup/BackupPasswordSection.vue';
-import SyncHistoryLog from './backup/SyncHistoryLog.vue';
-import ReloadBanner from '../common/ReloadBanner.vue';
+import DataItemCard from './backup-sync/DataItemCard.vue';
+import WebDAVConfigCollapsible from './backup-sync/WebDAVConfigCollapsible.vue';
+import BackupPasswordSection from './backup-sync/BackupPasswordSection.vue';
+import SyncHistoryLog from './backup-sync/SyncHistoryLog.vue';
+import ReloadBanner from '@/components/common/ReloadBanner.vue';
 
 interface Props {
   webdavConfig: WebDAVConfig;
@@ -331,7 +331,7 @@ function handleRestoreCancel() {
 </template>
 
 <style scoped>
-@import url('../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 /* 数据管理区块 */
 .data-section {

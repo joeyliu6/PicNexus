@@ -1,7 +1,7 @@
-import { BaseUploader } from '../base/BaseUploader';
-import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
-import type { ImgurServiceConfig } from '../../config/types';
-import { getErrorMessage } from '../../types/errors';
+import { BaseUploader } from '@/uploaders/base/BaseUploader';
+import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '@/uploaders/base/types';
+import type { ImgurServiceConfig } from '@/config/types';
+import { getErrorMessage } from '@/types/errors';
 
 interface ImgurRustResult {
   url: string;
@@ -74,7 +74,7 @@ export class ImgurUploader extends BaseUploader<ImgurServiceConfig> {
     return url;
   }
 
-  async testConnection(config?: ImgurServiceConfig): Promise<import('../base/types').ConnectionTestResult> {
+  async testConnection(config?: ImgurServiceConfig): Promise<import('@/uploaders/base/types').ConnectionTestResult> {
     if (!config) {
       return { success: false, error: '缺少 Imgur 配置' };
     }

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import type { ServerServiceType } from '../../../config/types';
-import ServiceSelectorDropdown from '../ServiceSelectorDropdown.vue';
-import CollapsibleSettingsCard from '../CollapsibleSettingsCard.vue';
+import type { ServerServiceType } from '@/config/types';
+import ServiceSelectorDropdown from '@/components/settings/ServiceSelectorDropdown.vue';
+import CollapsibleSettingsCard from '@/components/settings/CollapsibleSettingsCard.vue';
 
 /**
  * 通用「外部编辑器服务卡片」骨架
@@ -85,9 +85,9 @@ watch(enabled, (curr, prev) => {
 </template>
 
 <style>
-@import url('../../../styles/editor-card.css');
+@import url('@/styles/editor-card.css');
 </style>
 
 <style scoped>
-@import url('../../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 </style>

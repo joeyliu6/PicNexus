@@ -9,9 +9,9 @@
  */
 import { ref, computed, watch } from 'vue';
 import { onClickOutside } from '@vueuse/core';
-import type { HistoryItem } from '../../../config/types';
-import { formatTime, formatFileSize } from '../../../composables/history/useLightboxInfo';
-import type { MirrorInfo } from '../../../composables/history/useMirrorFallback';
+import type { HistoryItem } from '@/config/types';
+import { formatTime, formatFileSize } from '@/composables/history/useLightboxInfo';
+import type { MirrorInfo } from '@/composables/history/useMirrorFallback';
 import LightboxMirrorMenu from './LightboxMirrorMenu.vue';
 
 const props = withDefaults(defineProps<{

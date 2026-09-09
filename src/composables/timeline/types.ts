@@ -2,7 +2,7 @@
  * 虚拟时间轴共享类型定义
  */
 
-import type { ImageMeta } from '../../types/image-meta';
+import type { ImageMeta } from '@/types/image-meta';
 
 /** 图片分组 */
 export interface PhotoGroup {

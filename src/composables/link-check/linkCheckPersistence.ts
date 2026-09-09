@@ -1,13 +1,13 @@
 // 链接检测持久化 —— DB 更新与 CSV 导出
 
-import type { HistoryItem } from '../../config/types';
-import { historyDB } from '../../services/HistoryDatabase';
-import { createLogger } from '../../utils/logger';
+import type { HistoryItem } from '@/config/types';
+import { historyDB } from '@/services/database';
+import { createLogger } from '@/utils/logger';
 import type {
   BatchCheckResult,
   CheckLinkResult,
   LinkCheckRow,
-} from '../../types/linkCheck';
+} from '@/types/linkCheck';
 
 const log = createLogger('LinkCheck');
 

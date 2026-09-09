@@ -49,7 +49,7 @@ vi.mock('@/composables/useConfirm', () => ({
   }),
 }));
 
-vi.mock('@/composables/useHistory', () => ({
+vi.mock('@/composables/history/useHistory', () => ({
   useHistoryManager: () => ({
     invalidateCache: invalidateCacheMock,
   }),
@@ -66,7 +66,7 @@ vi.mock('@/events/cacheEvents', () => ({
   emitHistoryUpdated: emitHistoryUpdatedMock,
 }));
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     switchPrimaryService: dbSwitchPrimaryMock,
     removeMirror: dbRemoveMirrorMock,

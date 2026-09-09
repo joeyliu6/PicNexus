@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { CustomS3Profile, EditorServerConfig, ServerServiceType, WebDAVStorageProfile } from '../../config/types';
-import { makeCustomS3Id, makeWebDAVId } from '../../config/types';
-import { useServiceHealth } from '../../composables/useServiceHealth';
-import { EDITOR_UNSUPPORTED_SERVICES } from '../../composables/settings/editorServiceConfig';
+import type { CustomS3Profile, EditorServerConfig, ServerServiceType, WebDAVStorageProfile } from '@/config/types';
+import { makeCustomS3Id, makeWebDAVId } from '@/config/types';
+import { useServiceHealth } from '@/composables/service/useServiceHealth';
+import { EDITOR_UNSUPPORTED_SERVICES } from '@/composables/settings/editorServiceConfig';
 import TyporaCard from './external-editor/TyporaCard.vue';
 import ObsidianCard from './external-editor/ObsidianCard.vue';
 
@@ -158,7 +158,7 @@ const summaryText = computed(() => {
 </template>
 
 <style scoped>
-@import url('../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 .editor-panel {
   display: flex;

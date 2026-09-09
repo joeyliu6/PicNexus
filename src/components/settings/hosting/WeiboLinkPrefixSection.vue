@@ -4,10 +4,10 @@ import InputText from 'primevue/inputtext';
 import ToggleSwitch from 'primevue/toggleswitch';
 import RadioButton from 'primevue/radiobutton';
 import Button from 'primevue/button';
-import type { LinkPrefixItem } from '../../../config/types';
-import { applyPrefixTemplate, findUnknownPlaceholders, KNOWN_PLACEHOLDERS } from '../../../utils/linkPrefixTemplate';
-import { useConfirm } from '../../../composables/useConfirm';
-import { useToast } from '../../../composables/useToast';
+import type { LinkPrefixItem } from '@/config/types';
+import { applyPrefixTemplate, findUnknownPlaceholders, KNOWN_PLACEHOLDERS } from '@/utils/linkPrefixTemplate';
+import { useConfirm } from '@/composables/useConfirm';
+import { useToast } from '@/composables/useToast';
 
 interface Props {
   linkPrefixEnabled: boolean;
@@ -279,7 +279,7 @@ function renderPreview(prefix: LinkPrefixItem): string {
 </template>
 
 <style scoped>
-@import url('../../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 .prefix-list {
   display: flex;

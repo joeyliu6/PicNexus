@@ -1,4 +1,4 @@
-// 聚合导出 - 所有外部导入路径 `from '../config/types'` 保持不变
+// 聚合导出 - 所有外部导入路径 `from '@/config/types'` 保持不变
 //
 // 拆分后的子模块：
 //   serviceTypes.ts     — 图床服务相关类型、常量、工具函数

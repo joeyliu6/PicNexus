@@ -2,8 +2,8 @@
 // 图床服务选择器组件
 
 import { computed } from 'vue';
-import EmptyState from '../../common/EmptyState.vue';
-import type { ServiceHealthStatus } from '../../../types/serviceHealth';
+import EmptyState from '@/components/common/EmptyState.vue';
+import type { ServiceHealthStatus } from '@/types/serviceHealth';
 
 // ==================== Props ====================
 

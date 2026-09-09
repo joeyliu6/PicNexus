@@ -9,7 +9,7 @@
 // （拖进窗口的、自己存进「最近打开」的），与对话框插件的既有行为一致。
 
 import { invoke } from '@tauri-apps/api/core';
-import { createLogger } from '../utils/logger';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('FsScope');
 

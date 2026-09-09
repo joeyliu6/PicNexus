@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import Dialog from 'primevue/dialog';
 import Button from 'primevue/button';
-import { useOnboarding } from '../../composables/useOnboarding';
+import { useOnboarding } from '@/composables/useOnboarding';
 import WelcomeStep from './steps/WelcomeStep.vue';
 import UploadStep from './steps/UploadStep.vue';
 import ServicesStep from './steps/ServicesStep.vue';

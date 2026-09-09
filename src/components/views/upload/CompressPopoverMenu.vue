@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { CompressionPreset } from '../../../config/types';
-import { FORMAT_LABEL } from '../../../composables/settings/useCompressionPresets';
+import type { CompressionPreset } from '@/config/types';
+import { FORMAT_LABEL } from '@/composables/settings/useCompressionPresets';
 
 interface Props {
   presets: CompressionPreset[];

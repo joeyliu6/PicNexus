@@ -5,15 +5,15 @@
  */
 import { ref, computed, watch, onUnmounted } from 'vue';
 import Skeleton from 'primevue/skeleton';
-import EmptyState from '../common/EmptyState.vue';
-import { useHistoryViewState } from '../../composables/useHistoryViewState';
-import { useHistoryManager } from '../../composables/useHistory';
-import { useLazyLoadOnVisible } from '../../composables/useLazyLoadOnVisible';
-import { useConfigManager } from '../../composables/useConfig';
-import { useFavoritesData } from '../../composables/favorites/useFavoritesData';
-import { useFavoritesLightbox } from '../../composables/favorites/useFavoritesLightbox';
-import type { HistoryItem, ServiceType } from '../../config/types';
-import { confirmedHttpHostsKey, getConfirmedHttpHosts } from '../../security/networkPolicy';
+import EmptyState from '@/components/common/EmptyState.vue';
+import { useHistoryViewState } from '@/composables/history/useHistoryViewState';
+import { useHistoryManager } from '@/composables/history/useHistory';
+import { useLazyLoadOnVisible } from '@/composables/useLazyLoadOnVisible';
+import { useConfigManager } from '@/composables/useConfig';
+import { useFavoritesData } from '@/composables/favorites/useFavoritesData';
+import { useFavoritesLightbox } from '@/composables/favorites/useFavoritesLightbox';
+import type { HistoryItem, ServiceType } from '@/config/types';
+import { confirmedHttpHostsKey, getConfirmedHttpHosts } from '@/security/networkPolicy';
 import HistoryLightbox from './history/HistoryLightbox.vue';
 import FloatingActionBar from './history/FloatingActionBar.vue';
 import FavoritePhotoItem from './favorites/FavoritePhotoItem.vue';

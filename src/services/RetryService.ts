@@ -2,20 +2,20 @@
  * 重试服务 - 统一管理上传重试逻辑
  */
 
-import type { MultiUploadResult } from '../core/MultiServiceUploader';
-import { MultiServiceUploader } from '../core/MultiServiceUploader';
-import type { UploadQueueManager, QueueItem } from '../core/UploadQueue';
-import type { UserConfig } from '../config/types';
-import type { Store } from '../store';
-import type { UploadResult } from '../uploaders/base/types';
-import { checkNetworkConnectivity } from '../utils/network';
-import { invalidateCache } from '../composables/useHistory';
-import { withHistoryUpdateQueue } from '../composables/useHistorySaver';
-import { emitHistoryUpdated } from '../events/cacheEvents';
-import { historyDB } from './HistoryDatabase';
-import { getServiceDisplayName } from '../constants/serviceNames';
-import { createLogger } from '../utils/logger';
-import { cleanupClipboardTempFile } from '../utils/clipboardTempFile';
+import type { MultiUploadResult } from '@/core/MultiServiceUploader';
+import { MultiServiceUploader } from '@/core/MultiServiceUploader';
+import type { UploadQueueManager, QueueItem } from '@/core/UploadQueue';
+import type { UserConfig } from '@/config/types';
+import type { Store } from '@/store';
+import type { UploadResult } from '@/uploaders/base/types';
+import { checkNetworkConnectivity } from '@/utils/network';
+import { invalidateCache } from '@/composables/history/useHistory';
+import { withHistoryUpdateQueue } from '@/composables/history/useHistorySaver';
+import { emitHistoryUpdated } from '@/events/cacheEvents';
+import { historyDB } from '@/services/database';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import { createLogger } from '@/utils/logger';
+import { cleanupClipboardTempFile } from '@/utils/clipboardTempFile';
 import {
   areAllEnabledServicesSuccessful,
   getFailedServices,

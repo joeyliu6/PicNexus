@@ -1,6 +1,6 @@
-import { getRestChainRequiredFields } from '../../constants/serviceRequiredFields';
-import { assertAllowedExternalUrl, isHttpDomainConfirmed, isLoopbackHost } from '../../security/networkPolicy';
-import type { HttpDomainConfirmable } from '../../config/types';
+import { getRestChainRequiredFields } from '@/constants/serviceRequiredFields';
+import { assertAllowedExternalUrl, isHttpDomainConfirmed, isLoopbackHost } from '@/security/networkPolicy';
+import type { HttpDomainConfirmable } from '@/config/types';
 
 /**
  * 这份配置是否正卡在「公开域名是明文 HTTP、但用户还没确认」这一档

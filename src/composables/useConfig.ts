@@ -6,26 +6,26 @@ import { invoke } from '@tauri-apps/api/core';
 import type { UnlistenFn} from '@tauri-apps/api/event';
 import { listen, emit } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { configStore } from '../store/instances';
-import type { Store } from '../store';
-import { BackupPasswordRequiredError } from '../security/crypto';
+import { configStore } from '@/store/instances';
+import type { Store } from '@/store';
+import { BackupPasswordRequiredError } from '@/security/crypto';
 import type {
   UserConfig,
   ServiceType,
   LinkPrefixConfig,
-  LinkPrefixItem} from '../config/types';
+  LinkPrefixItem} from '@/config/types';
 import {
   DEFAULT_CONFIG,
   DEFAULT_LINK_PREFIXES,
   cloneDefaultPrefixes,
-} from '../config/types';
-import { getCookieProvider, validateCookie, DEFAULT_LOGIN_WINDOW_SIZE } from '../config/cookieProviders';
-import { getErrorMessage } from '../types/errors';
+} from '@/config/types';
+import { getCookieProvider, validateCookie, DEFAULT_LOGIN_WINDOW_SIZE } from '@/config/cookieProviders';
+import { getErrorMessage } from '@/types/errors';
 import { useToast } from './useToast';
-import { TOAST_MESSAGES } from '../constants';
-import { registerProfileNameSource } from '../constants/serviceNames';
-import { createLogger } from '../utils/logger';
-import { extractNamiAuthToken } from '../utils/namiAuthToken';
+import { TOAST_MESSAGES } from '@/constants';
+import { registerProfileNameSource } from '@/constants/serviceNames';
+import { createLogger } from '@/utils/logger';
+import { extractNamiAuthToken } from '@/utils/namiAuthToken';
 
 const log = createLogger('useConfig');
 

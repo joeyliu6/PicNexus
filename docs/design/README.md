@@ -10,6 +10,8 @@
 | [主题与组件](./themes.md) | 深色/浅色主题适配、PrimeVue 组件覆盖 |
 | [UI 模式与实践](./ui-patterns.md) | 常见 UI 模式、最佳实践、新增变量流程 |
 | [设置页面排版](./settings-layout.md) | 设置面板标题/描述/容器/激活态/间距体系 |
+| [弹窗与通知规范](./notification-patterns.md) | 通知通道决策树、文案口径——新增 toast/confirm/banner 前必读 |
+| [产品文案规范](./product-copy.md) | 中文优先、短句优先，帮用户判断状态而不抢注意力 |
 
 ---
 

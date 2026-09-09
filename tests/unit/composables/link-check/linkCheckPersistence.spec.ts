@@ -6,7 +6,7 @@ const { batchUpdateMock, getContextMock } = vi.hoisted(() => ({
   getContextMock: vi.fn().mockResolvedValue(new Map()),
 }));
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     batchUpdateLinkCheckStatus: batchUpdateMock,
     getLinkCheckContextByIds: getContextMock,

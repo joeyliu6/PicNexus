@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import HostingCard from '../HostingCard.vue';
+import HostingCard from '@/components/settings/HostingCard.vue';
 
 defineProps<{
   jdAvailable: boolean;

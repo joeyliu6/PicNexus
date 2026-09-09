@@ -1,8 +1,8 @@
 // 各图床必填字段映射表
 // 供 useServiceHealth 和 MultiServiceUploader 共用
 
-import type { ServiceType } from '../config/types';
-import { isCustomS3Id, isWebDAVId } from '../config/types';
+import type { ServiceType } from '@/config/types';
+import { isCustomS3Id, isWebDAVId } from '@/config/types';
 
 /**
  * 各图床的必填字段列表

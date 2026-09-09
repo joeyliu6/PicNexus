@@ -2,9 +2,9 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import { useResizeObserver } from '@vueuse/core';
 import Button from 'primevue/button';
-import type { EditorServerConfig, ServerServiceType } from '../../../config/types';
-import { middleTruncate } from '../../../utils/pathUtils';
-import { useToast } from '../../../composables/useToast';
+import type { EditorServerConfig, ServerServiceType } from '@/config/types';
+import { middleTruncate } from '@/utils/pathUtils';
+import { useToast } from '@/composables/useToast';
 import EditorServiceCard from './EditorServiceCard.vue';
 
 interface Props {

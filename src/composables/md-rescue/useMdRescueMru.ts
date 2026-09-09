@@ -2,7 +2,7 @@
 // 数据存在 localStorage，最多保留 5 项，可丢失不影响功能
 
 import { ref, onMounted, onActivated } from 'vue';
-import { createLogger } from '../../utils/logger';
+import { createLogger } from '@/utils/logger';
 
 const log = createLogger('MdRescue:MRU');
 

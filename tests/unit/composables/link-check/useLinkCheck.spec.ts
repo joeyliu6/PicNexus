@@ -50,7 +50,7 @@ vi.mock('@/composables/useConfig', () => ({
   useConfigManager: () => ({ loadConfig: loadConfigMock }),
 }));
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     open: historyDBOpenMock,
     getById: historyDBGetByIdMock,

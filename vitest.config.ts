@@ -17,12 +17,11 @@ export default defineConfig({
       reportsDirectory: './coverage',
       include: [
         'src/utils/**',
+        'src/store/**',
         'src/services/**',
         'src/core/**',
         'src/composables/**',
         'src/uploaders/**',
-        'src/components/UploadQueue.vue',
-        'src/components/upload/**',
         'src/components/views/UploadView.vue',
         'src/components/views/upload/**',
         'src/components/views/SettingsView.vue',
@@ -30,7 +29,7 @@ export default defineConfig({
         'src/components/views/HistoryView.vue',
         'src/components/views/history/**',
         'src/components/views/LinkCheckView.vue',
-        'src/components/views/linkcheck/**',
+        'src/components/views/link-check/**',
       ],
       exclude: [
         'tests/unit/**',
@@ -48,7 +47,7 @@ export default defineConfig({
           branches: 80,
           statements: 70,
         },
-        'src/components/{UploadQueue.vue,upload/**,views/UploadView.vue,views/upload/**}': {
+        'src/components/{views/UploadView.vue,views/upload/**}': {
           lines: 80,
           functions: 60,
           branches: 70,
@@ -60,7 +59,7 @@ export default defineConfig({
           branches: 75,
           statements: 90,
         },
-        'src/components/settings/{BackupSyncPanel.vue,backup/**}': {
+        'src/components/settings/{BackupSyncPanel.vue,backup-sync/**}': {
           lines: 90,
           functions: 70,
           branches: 70,
@@ -72,7 +71,7 @@ export default defineConfig({
           branches: 80,
           statements: 80,
         },
-        'src/components/{views/LinkCheckView.vue,views/linkcheck/**}': {
+        'src/components/{views/LinkCheckView.vue,views/link-check/**}': {
           lines: 80,
           functions: 55,
           branches: 75,

@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed, inject, onActivated, onDeactivated, onMounted, ref, watch } from 'vue';
 import type { Ref } from 'vue';
-import { useHistoryManager } from '../../composables/useHistory';
-import { useLinkCheckBulkActions } from '../../composables/link-check/useLinkCheckBulkActions';
-import { useLinkCheckManager } from '../../composables/useLinkCheck';
-import { useToast } from '../../composables/useToast';
-import type { LinkCheckRow, StatusFilter } from '../../types/linkCheck';
-import BatchMigratePanel from './linkcheck/BatchMigratePanel.vue';
-import HistoryCheckPanel from './linkcheck/HistoryCheckPanel.vue';
-import MdRescueInline from './linkcheck/MdRescueInline.vue';
-import { exportTextFile } from '../../utils/userFiles';
+import { useHistoryManager } from '@/composables/history/useHistory';
+import { useLinkCheckBulkActions } from '@/composables/link-check/useLinkCheckBulkActions';
+import { useLinkCheckManager } from '@/composables/link-check/useLinkCheck';
+import { useToast } from '@/composables/useToast';
+import type { LinkCheckRow, StatusFilter } from '@/types/linkCheck';
+import BatchMigratePanel from './link-check/BatchMigratePanel.vue';
+import HistoryCheckPanel from './link-check/HistoryCheckPanel.vue';
+import MdRescueInline from './link-check/MdRescueInline.vue';
+import { exportTextFile } from '@/utils/userFiles';
 
 const toast = useToast();
 

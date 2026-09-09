@@ -1,12 +1,12 @@
 // src/composables/backup-sync/ConfigSync.ts
 // 云端配置同步：上传 / 覆盖下载 / 双向同步（合并语义只由「同步」提供）
 
-import type { WebDAVProfile, UserConfig } from '../../config/types';
-import { isValidUserConfig } from '../../config/types';
-import { configStore } from '../../store/instances';
-import { secureStorage, isPasswordEncryptedData } from '../../security/crypto';
-import { TOAST_MESSAGES } from '../../constants';
-import { createLogger } from '../../utils/logger';
+import type { WebDAVProfile, UserConfig } from '@/config/types';
+import { isValidUserConfig } from '@/config/types';
+import { configStore } from '@/store/instances';
+import { secureStorage, isPasswordEncryptedData } from '@/security/crypto';
+import { TOAST_MESSAGES } from '@/constants';
+import { createLogger } from '@/utils/logger';
 import { writeSyncLog, extractErrorCode, getWebDAVClientAndPath, isWebDAVNotFoundError, CLOUD_CONFIG_EMPTY_REASON } from './backupSyncUtils';
 import type { BackupCloudDeps } from './useBackupCloud';
 

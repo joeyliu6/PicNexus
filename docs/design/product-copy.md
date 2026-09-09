@@ -48,5 +48,5 @@
 - 2026-05-08 上传 Toast summary 对齐「已+动词 / 动作失败」句式：
   - `TOAST_MESSAGES.upload.success.summary`：`上传完成` → `已上传`
   - `TOAST_MESSAGES.upload.failed.summary`：`上传错误` → `上传失败`
-  - 影响调用点：`src/composables/useUpload.ts`、`src/composables/upload/UploadExecutor.ts`。
+  - 影响调用点：`src/composables/upload/useUpload.ts`、`src/composables/upload/UploadExecutor.ts`。
   - 不影响 `setProgress('..., '上传完成')` 这类状态串，它们由 `src/utils/uploadStatus.ts` 语义匹配，保留原文案。

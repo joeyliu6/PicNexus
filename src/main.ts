@@ -5,29 +5,29 @@ import App from './App.vue';
 
 // PrimeVue 相关导入
 import PrimeVue from 'primevue/config';
-import { PicNexusPreset } from './theme/preset';
+import { PicNexusPreset } from '@/theme/preset';
 import ToastService from 'primevue/toastservice';
 import ConfirmationService from 'primevue/confirmationservice';
 import Tooltip from 'primevue/tooltip';
 import Ripple from 'primevue/ripple';
 
 // 上传器初始化
-import { initializeUploaders, syncCustomS3Uploaders, syncWebDAVUploaders } from './uploaders';
+import { initializeUploaders, syncCustomS3Uploaders, syncWebDAVUploaders } from '@/uploaders';
 
 // 配置和 Store 导入
-import { configStore } from './store/instances';
-import { StoreError } from './store';
-import type { UserConfig } from './config/types';
-import { DEFAULT_CONFIG } from './config/types';
-import { startupFlags } from './store/startupFlags';
-import { purgeOrphanFieldSecrets } from './security/fieldSecrets';
-import { createLogger } from './utils/logger';
+import { configStore } from '@/store/instances';
+import { StoreError } from '@/store';
+import type { UserConfig } from '@/config/types';
+import { DEFAULT_CONFIG } from '@/config/types';
+import { startupFlags } from '@/store/startupFlags';
+import { purgeOrphanFieldSecrets } from '@/security/fieldSecrets';
+import { createLogger } from '@/utils/logger';
 
 // Analytics 服务
-import { useAnalytics } from './composables/useAnalytics';
+import { useAnalytics } from '@/composables/useAnalytics';
 
 // 备份文件清理
-import { cleanupStoreBackups } from './utils/storeCleanup';
+import { cleanupStoreBackups } from '@/store/storeCleanup';
 
 // PrimeVue 样式
 import 'primeicons/primeicons.css';

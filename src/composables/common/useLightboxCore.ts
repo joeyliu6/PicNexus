@@ -12,8 +12,8 @@
  */
 
 import { ref, type Ref } from 'vue';
-import { useToast } from '../useToast';
-import type { HistoryItem } from '../../config/types';
+import { useToast } from '@/composables/useToast';
+import type { HistoryItem } from '@/config/types';
 
 interface ToastLike {
   success: (msg: string, detail?: string) => void;

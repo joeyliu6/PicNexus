@@ -91,4 +91,31 @@ export default defineConfigWithVueTs(
       'vue/multi-word-component-names': 'off',
     },
   },
+  {
+    // 结构重构批次 1 的防退化闸门。
+    //
+    // src/ 下 1114 处向上相对路径已全部改写为 @/ 别名（最深的曾是六级 ../），
+    // 这条规则防止新代码把 ../ 写回来 —— 否则下次目录调整又得重算层级。
+    //
+    // 只拦「向上走」的：同目录的 './x' 不受限，它已经是最短写法，
+    // 且文件整体搬家时同目录关系不变，天然稳定。
+    //
+    // 例外：CSS 里 @font-face 的 url('../assets/fonts/...') 不归 ESLint 管，
+    // 那 5 处是资源引用而非模块 import，Vite 的解析路径不同，有意保留。
+    name: 'app/no-upward-relative-imports',
+    files: ['src/**/*.{ts,vue}'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['../**'],
+              message: '跨目录 import 请用 @/ 别名（例：@/utils/logger），不要用 ../。同目录的 ./ 不受限。',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );

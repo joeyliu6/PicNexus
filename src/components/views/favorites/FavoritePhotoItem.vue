@@ -5,8 +5,8 @@
  */
 import { ref } from 'vue';
 import Skeleton from 'primevue/skeleton';
-import type { ImageMeta } from '../../../types/image-meta';
-import { useThumbnailFallbackChain } from '../../../composables/useThumbnailFallbackChain';
+import type { ImageMeta } from '@/types/image-meta';
+import { useThumbnailFallbackChain } from '@/composables/image/useThumbnailFallbackChain';
 
 type ImageState = 'loading' | 'loaded' | 'failed' | undefined;
 

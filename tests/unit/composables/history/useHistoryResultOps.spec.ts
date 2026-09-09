@@ -46,7 +46,7 @@ const {
   emitHistoryUpdatedMock: vi.fn(),
 }));
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     getById: getByIdMock,
     update: updateMock,

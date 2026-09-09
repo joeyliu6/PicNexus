@@ -1,8 +1,8 @@
 import { computed, getCurrentScope, onScopeDispose, ref, shallowRef, watch, type Ref } from 'vue';
 import { watchDebounced } from '@vueuse/core';
-import type { LinkCheckRow, StatusFilter } from '../../types/linkCheck';
-import { SEVERITY } from '../../types/linkCheck';
-import { shiftSelect, type ShiftSelectAnchor } from '../../utils/shiftSelect';
+import type { LinkCheckRow, StatusFilter } from '@/types/linkCheck';
+import { SEVERITY } from '@/types/linkCheck';
+import { shiftSelect, type ShiftSelectAnchor } from '@/utils/shiftSelect';
 
 const PAGE_SIZE = 100;
 const HIGH_THROUGHPUT_COMMIT_MS = 400;

@@ -3,7 +3,7 @@ import Divider from 'primevue/divider';
 import ImageCompressionPanel from './ImageCompressionPanel.vue';
 import ExternalEditorPanel from './ExternalEditorPanel.vue';
 import CliCard from './external-editor/CliCard.vue';
-import type { CustomS3Profile, ImageCompressionConfig, EditorServerConfig, WebDAVStorageProfile } from '../../config/types';
+import type { CustomS3Profile, ImageCompressionConfig, EditorServerConfig, WebDAVStorageProfile } from '@/config/types';
 
 interface Props {
   imageCompression: ImageCompressionConfig;
@@ -66,7 +66,7 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-@import url('../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 .advanced-settings-panel {
   width: 100%;

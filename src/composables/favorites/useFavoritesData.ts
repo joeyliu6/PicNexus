@@ -8,12 +8,12 @@ import {
   ref, shallowRef, reactive, watch, onUnmounted, triggerRef,
   type Ref,
 } from 'vue';
-import { historyDB, type FavoritesMetaPageResult } from '../../services/HistoryDatabase';
-import { onCacheEventType, type CacheEventType } from '../../events/cacheEvents';
-import { getMetaThumbnailCandidates } from '../useThumbCache';
-import { createLogger } from '../../utils/logger';
-import type { ImageMeta } from '../../types/image-meta';
-import type { ServiceType, UserConfig } from '../../config/types';
+import { historyDB, type FavoritesMetaPageResult } from '@/services/database';
+import { onCacheEventType, type CacheEventType } from '@/events/cacheEvents';
+import { getMetaThumbnailCandidates } from '@/composables/image/useThumbCache';
+import { createLogger } from '@/utils/logger';
+import type { ImageMeta } from '@/types/image-meta';
+import type { ServiceType, UserConfig } from '@/config/types';
 
 const log = createLogger('FavoritesData');
 

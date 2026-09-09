@@ -1,5 +1,5 @@
-import type { HistoryItem, ServiceType } from '../../config/types';
-import type { ImageMeta } from '../../types/image-meta';
+import type { HistoryItem, ServiceType } from '@/config/types';
+import type { ImageMeta } from '@/types/image-meta';
 
 export interface LinkCheckLiteRow {
   id: string;

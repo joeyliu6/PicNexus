@@ -37,5 +37,5 @@ const localEnabled = computed({
 </template>
 
 <style scoped>
-@import url('../../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 </style>

@@ -3,9 +3,9 @@
  * 负责管理可视化的上传队列UI和上传进度
  */
 
-import { useQueueState } from '../composables/useQueueState';
-import { createLogger } from '../utils/logger';
-import { cleanupClipboardTempFile } from '../utils/clipboardTempFile';
+import { useQueueState } from '@/composables/upload/useQueueState';
+import { createLogger } from '@/utils/logger';
+import { cleanupClipboardTempFile } from '@/utils/clipboardTempFile';
 
 const log = createLogger('UploadQueue');
 

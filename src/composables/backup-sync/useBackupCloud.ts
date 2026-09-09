@@ -1,9 +1,9 @@
 // 备份与同步 - 云端同步操作（门面：聚合 ConfigSync + HistorySync）
 
 import type { Ref } from 'vue';
-import type { useToast } from '../useToast';
-import type { useConfirm } from '../useConfirm';
-import type { WebDAVProfile } from '../../config/types';
+import type { useToast } from '@/composables/useToast';
+import type { useConfirm } from '@/composables/useConfirm';
+import type { WebDAVProfile } from '@/config/types';
 import { createConfigSyncOps } from './ConfigSync';
 import { createHistorySyncOps } from './HistorySync';
 

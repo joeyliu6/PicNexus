@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref, nextTick } from 'vue';
 import { useConnectionTest } from '@/composables/settings/useConnectionTest';
 import { validateS3Config as realValidateS3Config } from '@/composables/settings/s3ConfigValidation';
-import { __resetServiceCheckRunnerForTests } from '@/composables/useServiceCheckRunner';
+import { __resetServiceCheckRunnerForTests } from '@/composables/service/useServiceCheckRunner';
 import type { SettingsFormShape } from '@/composables/settings/settingsFormTypes';
 import type { ServiceType, WebDAVStorageProfile } from '@/config/types';
 import { resetTauriMocks, setupInvokeHandler } from '../../helpers/tauriMock';
@@ -42,7 +42,7 @@ vi.mock('@/composables/useToast', () => ({
   suppressToasts: mockState.suppressToasts,
 }));
 
-vi.mock('@/composables/useServiceHealth', () => ({
+vi.mock('@/composables/service/useServiceHealth', () => ({
   useServiceHealth: () => ({
     healthStatusMap: mockState.healthStatusMap,
     markVerified: mockState.markVerified,
@@ -50,7 +50,7 @@ vi.mock('@/composables/useServiceHealth', () => ({
   }),
 }));
 
-vi.mock('@/composables/useServiceAvailability', () => ({
+vi.mock('@/composables/service/useServiceAvailability', () => ({
   useServiceAvailability: () => ({
     qiyuAvailable: mockState.qiyuAvailable,
     jdAvailable: mockState.jdAvailable,

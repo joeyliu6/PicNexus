@@ -1,8 +1,8 @@
-import { BaseUploader } from '../base/BaseUploader';
-import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '../base/types';
-import type { GithubCdnProvider, GithubServiceConfig } from '../../config/types';
-import { getErrorMessage } from '../../types/errors';
-import { assertAllowedExternalUrl } from '../../security/networkPolicy';
+import { BaseUploader } from '@/uploaders/base/BaseUploader';
+import type { UploadResult, ValidationResult, UploadOptions, ProgressCallback } from '@/uploaders/base/types';
+import type { GithubCdnProvider, GithubServiceConfig } from '@/config/types';
+import { getErrorMessage } from '@/types/errors';
+import { assertAllowedExternalUrl } from '@/security/networkPolicy';
 
 interface GithubRustResult {
   url: string;
@@ -144,7 +144,7 @@ export class GithubUploader extends BaseUploader<GithubServiceConfig> {
     return result.url;
   }
 
-  async testConnection(config?: GithubServiceConfig): Promise<import('../base/types').ConnectionTestResult> {
+  async testConnection(config?: GithubServiceConfig): Promise<import('@/uploaders/base/types').ConnectionTestResult> {
     if (!config) {
       return { success: false, error: '缺少 GitHub 配置' };
     }

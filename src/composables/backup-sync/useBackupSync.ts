@@ -1,9 +1,9 @@
 // 备份与同步 Composable - 主编排模块
 // 从子模块组合：工具函数 + 状态管理 + 本地备份 + 云端同步
 
-import { useToast } from '../useToast';
-import { useConfirm } from '../useConfirm';
-import { decryptWithPassword } from '../../security/crypto';
+import { useToast } from '@/composables/useToast';
+import { useConfirm } from '@/composables/useConfirm';
+import { decryptWithPassword } from '@/security/crypto';
 import { extractErrorCode, getFullTimestamp } from './backupSyncUtils';
 import { useBackupSyncState } from './useBackupSyncState';
 import { createBackupLocalOps } from './useBackupLocal';

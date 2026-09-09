@@ -27,7 +27,7 @@
 > - `src/types/image-meta.ts`（`extractMirrorServices`、`MirrorService`）
 > - `src/services/database/TimelineQueryService.ts`（`rowToImageMeta`）
 > - `src/services/database/HistoryDatabase.ts`（`rowToImageMeta`）
-> - `src/composables/useThumbCache.ts`（`getMetaThumbnailCandidates`）
+> - `src/composables/image/useThumbCache.ts`（`getMetaThumbnailCandidates`）
 > - `src/components/views/timeline/TimelinePhotoItem.vue`、`src/components/views/favorites/FavoritePhotoItem.vue`
 
 ```mermaid
@@ -67,7 +67,7 @@ flowchart TD
 | 预加载仍只加载主服务 URL | `useImagePreload` 调的是 `getThumbnailUrl(meta)`（单条），fallback 只在可视区域的 `<img>` 真正失败时触发，避免浪费带宽 |
 | 列表失败态不反映到 DB | 层 1 完全是客户端兜底。真正的"失效"判定只走 link-check |
 | 同一 meta 对象 + 同一配置 → 候选数组引用稳定 | `getMetaThumbnailCandidates` 的 `WeakMap` 缓存**以 meta 对象本身为键**。时间轴/收藏页在模板里逐行调用它，引用抖动会让子组件全量 re-render |
-| 镜像变化必然产生新的 `ImageMeta` 对象 | 切主图床/移除链接/重试补齐都先写 DB，再经 `emitHistoryUpdated` 让视图重查，`rowToImageMeta` 产出新对象 → WeakMap 天然未命中。**所以该缓存不接 cacheEvent、也不进 `clearThumbCache()`**；配置维度由条目里的指纹兜底——指纹包含前缀模板、知乎 source 开关/值、R2 缩略图代理开关、**以及当前会话的代理可达性**（[useThumbCache.ts:243-251](../../src/composables/useThumbCache.ts#L243)：代理探测失败时候选链会少一条，时间轴/收藏页只认指纹，漏掉这项会停在"代理在前"的旧候选上不刷新） |
+| 镜像变化必然产生新的 `ImageMeta` 对象 | 切主图床/移除链接/重试补齐都先写 DB，再经 `emitHistoryUpdated` 让视图重查，`rowToImageMeta` 产出新对象 → WeakMap 天然未命中。**所以该缓存不接 cacheEvent、也不进 `clearThumbCache()`**；配置维度由条目里的指纹兜底——指纹包含前缀模板、知乎 source 开关/值、R2 缩略图代理开关、**以及当前会话的代理可达性**（[useThumbCache.ts:243-251](../../src/composables/image/useThumbCache.ts#L243)：代理探测失败时候选链会少一条，时间轴/收藏页只认指纹，漏掉这项会停在"代理在前"的旧候选上不刷新） |
 
 ---
 

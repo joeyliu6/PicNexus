@@ -9,9 +9,9 @@
 | Composable | 职责 | 源文件 |
 |------------|------|--------|
 | useConfig | 配置加载/保存/连接测试 | `src/composables/useConfig.ts` |
-| useHistory | 历史记录 CRUD + 搜索 | `src/composables/useHistory.ts` |
-| useUpload | 上传流程编排 | `src/composables/useUpload.ts` |
-| useThumbCache | 缩略图缓存管理 | `src/composables/useThumbCache.ts` |
+| useHistory | 历史记录 CRUD + 搜索 | `src/composables/history/useHistory.ts` |
+| useUpload | 上传流程编排 | `src/composables/upload/useUpload.ts` |
+| useThumbCache | 缩略图缓存管理 | `src/composables/image/useThumbCache.ts` |
 | useToast | Toast 通知 | `src/composables/useToast.ts` |
 | useTheme | 主题切换 | `src/composables/useTheme.ts` |
 | useSettingsForm | 设置页表单读写、保存防抖、恢复默认设置 | `src/composables/settings/useSettingsForm.ts` |
@@ -21,10 +21,10 @@
 | createConfigSyncOps | 配置同步实现；上传前强制 `isPasswordMode` 门禁 + 整份加密 | `src/composables/backup-sync/ConfigSync.ts` |
 | createHistorySyncOps | 历史记录同步实现（增量 + 合并去重） | `src/composables/backup-sync/HistorySync.ts` |
 | `backupSyncUtils.ts`（模块） | WebDAV 建连与远程路径推导（解密密文密码就在这里）；导出 `getWebDAVClientAndPath` / `writeSyncLog` / `extractErrorCode` / `isWebDAVNotFoundError` | `src/composables/backup-sync/backupSyncUtils.ts` |
-| useClipboardImage | 剪贴板图片处理 | `src/composables/useClipboardImage.ts` |
+| useClipboardImage | 剪贴板图片处理 | `src/composables/upload/useClipboardImage.ts` |
 | useConfirm | 确认对话框 | `src/composables/useConfirm.ts` |
-| useQueueState | 上传队列状态 | `src/composables/useQueueState.ts` |
-| useVirtualTimeline | 虚拟滚动时间线 | `src/composables/useVirtualTimeline.ts` |
+| useQueueState | 上传队列状态 | `src/composables/upload/useQueueState.ts` |
+| useVirtualTimeline | 虚拟滚动时间线 | `src/composables/timeline/useVirtualTimeline.ts` |
 | useAnalytics | GA4 P0 生命周期统计 + 在线心跳 | `src/composables/useAnalytics.ts` |
 | useMirrorFallback | 灯箱多图床备份管理（切主图床 / 移除链接 / 重新检测） | `src/composables/history/useMirrorFallback.ts` |
 

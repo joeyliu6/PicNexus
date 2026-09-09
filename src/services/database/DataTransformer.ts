@@ -1,6 +1,6 @@
-import type { HistoryItem, ServiceType } from '../../config/types';
-import { createLogger } from '../../utils/logger';
-import { isUsableMirror, type UsableMirror } from '../../utils/historyResults';
+import type { HistoryItem, ServiceType } from '@/config/types';
+import { createLogger } from '@/utils/logger';
+import { isUsableMirror, type UsableMirror } from '@/utils/historyResults';
 
 const log = createLogger('DataTransformer');
 

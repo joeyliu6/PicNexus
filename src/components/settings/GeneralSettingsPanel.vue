@@ -5,8 +5,8 @@ import InputText from 'primevue/inputtext';
 import ToggleSwitch from 'primevue/toggleswitch';
 import Divider from 'primevue/divider';
 import ShortcutInput from './ShortcutInput.vue';
-import type { ThemeMode } from '../../config/types';
-import { LINK_FORMAT_OPTIONS, type LinkFormat } from '../../utils/linkFormatter';
+import type { ThemeMode } from '@/config/types';
+import { LINK_FORMAT_OPTIONS, type LinkFormat } from '@/utils/linkFormatter';
 
 // ==================== Props ====================
 
@@ -292,7 +292,7 @@ function handleTemplateChange(template: string | undefined) {
 </template>
 
 <style scoped>
-@import url('../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 /* 主题卡片 */
 .theme-options {

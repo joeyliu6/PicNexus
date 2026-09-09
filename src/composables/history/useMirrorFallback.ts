@@ -11,19 +11,19 @@
  */
 import { computed, ref, watch, type Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import type { HistoryItem } from '../../config/types';
-import type { CheckLinkResult } from '../../types/linkCheck';
-import { normalizeErrorType } from '../link-check/linkCheckPersistence';
-import { historyDB } from '../../services/HistoryDatabase';
-import { recomputeLinkCheckSummary } from '../../types/linkCheckSummary';
-import { emitHistoryUpdated } from '../../events/cacheEvents';
-import { useHistoryManager } from '../useHistory';
-import { useConfigManager } from '../useConfig';
-import { useToast } from '../useToast';
-import { useConfirm } from '../useConfirm';
-import { createLogger } from '../../utils/logger';
-import { isUsableMirror } from '../../utils/historyResults';
-import { getConfirmedHttpHosts } from '../../security/networkPolicy';
+import type { HistoryItem } from '@/config/types';
+import type { CheckLinkResult } from '@/types/linkCheck';
+import { normalizeErrorType } from '@/composables/link-check/linkCheckPersistence';
+import { historyDB } from '@/services/database';
+import { recomputeLinkCheckSummary } from '@/types/linkCheckSummary';
+import { emitHistoryUpdated } from '@/events/cacheEvents';
+import { useHistoryManager } from '@/composables/history/useHistory';
+import { useConfigManager } from '@/composables/useConfig';
+import { useToast } from '@/composables/useToast';
+import { useConfirm } from '@/composables/useConfirm';
+import { createLogger } from '@/utils/logger';
+import { isUsableMirror } from '@/utils/historyResults';
+import { getConfirmedHttpHosts } from '@/security/networkPolicy';
 
 const log = createLogger('MirrorFallback');
 

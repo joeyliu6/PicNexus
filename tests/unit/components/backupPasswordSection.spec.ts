@@ -3,7 +3,7 @@ import { defineComponent, h, nextTick } from 'vue';
 import { mountWithDefaults } from '../helpers/vueMount';
 import { flushPromisesAndTicks } from '../helpers/wait';
 import { getEmitMock } from '../helpers/tauriMock';
-import BackupPasswordSection from '@/components/settings/backup/BackupPasswordSection.vue';
+import BackupPasswordSection from '@/components/settings/backup-sync/BackupPasswordSection.vue';
 import type { BackupPasswordConfirmPayload } from '@/components/dialogs/backupPasswordDialogTypes';
 import { SECURE_KEY_ROTATED_EVENT } from '@/security/crypto';
 

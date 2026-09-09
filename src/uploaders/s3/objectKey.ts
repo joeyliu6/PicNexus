@@ -3,7 +3,7 @@
 // Why 单独成文件：key 的格式决定了每一条新上传记录的最终 URL，属于对外契约，
 // 抽出来才能被单测直接覆盖（BaseS3Uploader.upload 走 invoke，测起来要连带 mock 整条链路）。
 
-import { formatDateCompact } from '../../utils/formatters';
+import { formatDateCompact } from '@/utils/formatters';
 
 /**
  * 随机段长度（base36）。36^4 ≈ 168 万种组合——碰撞只在

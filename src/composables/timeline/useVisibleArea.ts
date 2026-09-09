@@ -8,8 +8,8 @@ import {
   getVisibleRowRange,
   getCurrentStickyHeader,
   type TimelineLayoutResult,
-} from '../../utils/justifiedLayout';
-import type { ImageMeta } from '../../types/image-meta';
+} from '@/utils/justifiedLayout';
+import type { ImageMeta } from '@/types/image-meta';
 import type { PhotoGroup, VisibleItem, VisibleHeader, VirtualTimelineOptions } from './types';
 import { DEFAULT_OPTIONS } from './types';
 

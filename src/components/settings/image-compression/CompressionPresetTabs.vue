@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ComponentPublicInstance } from 'vue';
-import type { CompressionPreset } from '../../../config/types';
+import type { CompressionPreset } from '@/config/types';
 
 interface Props {
   presets: CompressionPreset[];
@@ -72,7 +72,7 @@ function onEditInput(e: Event) {
 </template>
 
 <style scoped>
-@import url('../../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 .preset-tab-row {
   display: flex;

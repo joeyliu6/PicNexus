@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import Button from 'primevue/button';
-import type { ServiceHealthStatus } from '../../types/serviceHealth';
+import type { ServiceHealthStatus } from '@/types/serviceHealth';
 
 interface Props {
   id: string;
@@ -217,7 +217,7 @@ const statusTooltip = computed(() => {
 </template>
 
 <style scoped>
-@import url('../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 .hosting-card {
   background: var(--bg-card);

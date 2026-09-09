@@ -12,8 +12,8 @@
  *    summary"的语义，不凭空造 summary。
  */
 
-import type { HistoryItem } from '../config/types';
-import { isUsableMirror } from '../utils/historyResults';
+import type { HistoryItem } from '@/config/types';
+import { isUsableMirror } from '@/utils/historyResults';
 
 export function recomputeLinkCheckSummary(
   results: HistoryItem['results'],

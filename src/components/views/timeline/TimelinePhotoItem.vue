@@ -11,8 +11,8 @@
  * 时自动试下一条，全部失效后才向父视图 emit image-error。
  */
 import Skeleton from 'primevue/skeleton';
-import type { ImageMeta } from '../../../types/image-meta';
-import { useThumbnailFallbackChain } from '../../../composables/useThumbnailFallbackChain';
+import type { ImageMeta } from '@/types/image-meta';
+import { useThumbnailFallbackChain } from '@/composables/image/useThumbnailFallbackChain';
 
 const props = defineProps<{
   meta: ImageMeta;

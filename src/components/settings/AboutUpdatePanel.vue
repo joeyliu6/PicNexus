@@ -2,11 +2,11 @@
 import { computed, ref } from 'vue';
 import Divider from 'primevue/divider';
 import { invoke } from '@tauri-apps/api/core';
-import { useToast } from '../../composables/useToast';
+import { useToast } from '@/composables/useToast';
 import AppInfoCard from './about-update/AppInfoCard.vue';
 import UpdateCard from './about-update/UpdateCard.vue';
 import WechatQrDialog from './about-update/WechatQrDialog.vue';
-import { openTrustedExternalUrl } from '../../security/shellOpen';
+import { openTrustedExternalUrl } from '@/security/shellOpen';
 
 interface Props {
   appVersion: string;
@@ -137,7 +137,7 @@ async function openLogDir() {
 </template>
 
 <style scoped>
-@import url('../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 /* 链接网格 */
 .links-grid {

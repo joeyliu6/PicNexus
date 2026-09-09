@@ -1,6 +1,6 @@
-import { BaseS3Uploader } from '../s3/BaseS3Uploader';
-import type { UploadResult } from '../base/types';
-import type { CustomS3Profile } from '../../config/types';
+import { BaseS3Uploader } from '@/uploaders/s3/BaseS3Uploader';
+import type { UploadResult } from '@/uploaders/base/types';
+import type { CustomS3Profile } from '@/config/types';
 
 export class CustomS3Uploader extends BaseS3Uploader<CustomS3Profile> {
   readonly serviceId = 'custom_s3';

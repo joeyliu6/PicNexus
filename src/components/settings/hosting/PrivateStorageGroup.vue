@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import InputText from 'primevue/inputtext';
 import ToggleSwitch from 'primevue/toggleswitch';
-import HostingCard from '../HostingCard.vue';
-import SensitiveField from '../../common/SensitiveField.vue';
+import HostingCard from '@/components/settings/HostingCard.vue';
+import SensitiveField from '@/components/common/SensitiveField.vue';
 import R2ThumbnailProxySection from './R2ThumbnailProxySection.vue';
-import type { ServiceHealthStatus } from '../../../types/serviceHealth';
-import type { CustomS3Profile, WebDAVStorageProfile } from '../../../config/types';
-import { makeCustomS3Id, makeWebDAVId, DEFAULT_WEBDAV_URL_TEMPLATE } from '../../../config/types';
-import { hasNonEmptyFields } from '../../../utils/validators';
-import { secureStorage } from '../../../security/crypto';
-import { createLogger } from '../../../utils/logger';
-import { useSensitiveDraft } from '../../../composables/settings/useSensitiveDraft';
-import { useSecretClearConfirm } from '../../../composables/settings/useSecretClearConfirm';
+import type { ServiceHealthStatus } from '@/types/serviceHealth';
+import type { CustomS3Profile, WebDAVStorageProfile } from '@/config/types';
+import { makeCustomS3Id, makeWebDAVId, DEFAULT_WEBDAV_URL_TEMPLATE } from '@/config/types';
+import { hasNonEmptyFields } from '@/utils/validators';
+import { secureStorage } from '@/security/crypto';
+import { createLogger } from '@/utils/logger';
+import { useSensitiveDraft } from '@/composables/settings/useSensitiveDraft';
+import { useSecretClearConfirm } from '@/composables/settings/useSecretClearConfirm';
 
 const log = createLogger('PrivateStorage');
 
@@ -519,7 +519,7 @@ const secrets = useSensitiveDraft({
 </template>
 
 <style scoped>
-@import url('../../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 .delete-profile-btn {
   display: inline-flex;

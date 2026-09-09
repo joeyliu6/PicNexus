@@ -13,9 +13,9 @@
  * - 点 chip = 重新检测此链接的有效性（实时）
  */
 import { computed } from 'vue';
-import { getServiceDisplayName } from '../../../constants/serviceNames';
-import { serviceNameTooltip } from '../../../utils/serviceNameFit';
-import type { MirrorInfo } from '../../../composables/history/useMirrorFallback';
+import { getServiceDisplayName } from '@/constants/serviceNames';
+import { serviceNameTooltip } from '@/utils/serviceNameFit';
+import type { MirrorInfo } from '@/composables/history/useMirrorFallback';
 
 const props = defineProps<{
   mirrors: MirrorInfo[];

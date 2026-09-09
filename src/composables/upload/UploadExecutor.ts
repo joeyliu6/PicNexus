@@ -1,26 +1,26 @@
 // src/composables/upload/UploadExecutor.ts
 // 上传执行器：并发调度 + 单文件多图床上传 + 历史记录联动
 
-import type { UserConfig, ServiceType } from '../../config/types';
-import type { SingleServiceResult, MultiUploadResult } from '../../core/MultiServiceUploader';
-import { MultiServiceUploader } from '../../core/MultiServiceUploader';
-import type { UploadQueueManager} from '../../core/UploadQueue';
-import { type ServiceProgress } from '../../core/UploadQueue';
-import type { CopyLinkItem } from '../useCopyLink';
-import type { UploadSessionSummary } from '../../utils/uploadSummary';
-import { useServiceHealth } from '../useServiceHealth';
-import { useServiceAvailability } from '../useServiceAvailability';
-import type { useToast } from '../useToast';
-import { TOAST_MESSAGES } from '../../constants';
-import { SERVICE_DISPLAY_NAMES } from '../../constants/serviceNames';
+import type { UserConfig, ServiceType } from '@/config/types';
+import type { SingleServiceResult, MultiUploadResult } from '@/core/MultiServiceUploader';
+import { MultiServiceUploader } from '@/core/MultiServiceUploader';
+import type { UploadQueueManager} from '@/core/UploadQueue';
+import { type ServiceProgress } from '@/core/UploadQueue';
+import type { CopyLinkItem } from '@/composables/useCopyLink';
+import type { UploadSessionSummary } from '@/utils/uploadSummary';
+import { useServiceHealth } from '@/composables/service/useServiceHealth';
+import { useServiceAvailability } from '@/composables/service/useServiceAvailability';
+import type { useToast } from '@/composables/useToast';
+import { TOAST_MESSAGES } from '@/constants';
+import { SERVICE_DISPLAY_NAMES } from '@/constants/serviceNames';
 import {
   getFileExtension,
   getSupportedServicesForFormat,
   getUnsupportedServicesForFormat,
-} from '../../constants/serviceFormats';
-import { AUTH_CONFIG_ERROR_CODES } from '../../types/serviceHealth';
-import { createLogger } from '../../utils/logger';
-import { summarizeAllServicesFailed } from '../../utils/uploadFailureMessage';
+} from '@/constants/serviceFormats';
+import { AUTH_CONFIG_ERROR_CODES } from '@/types/serviceHealth';
+import { createLogger } from '@/utils/logger';
+import { summarizeAllServicesFailed } from '@/utils/uploadFailureMessage';
 
 const log = createLogger('UploadExecutor');
 

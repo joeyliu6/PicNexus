@@ -21,7 +21,7 @@
     6 条断言原样通过）
   - `autoSelectAndGetSummary` 删除，替换为 `summarizeRepairStrategy(links, strategy)`：纯函数，
     不写 `imageLinks`/`selectedBackup`，供确认对话框实时预览
-- `src/components/views/linkcheck/MdRepairDialog.vue`：新增 `currentStrategy` 计算属性（随策略单选/
+- `src/components/views/link-check/MdRepairDialog.vue`：新增 `currentStrategy` 计算属性（随策略单选/
   优先级顺序/手动选择实时更新，与 `confirm()` 发出的策略是同一个来源，保证一致），新增「替换摘要」
   折叠面板（复用 `.repair-manual-list` 的展开/「显示全部」交互模式），显示 `N 个文件 · M 处替换`，
   展开可看每个文件改几处

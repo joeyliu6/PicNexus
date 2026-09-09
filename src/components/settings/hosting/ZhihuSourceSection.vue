@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 import InputText from 'primevue/inputtext';
 import ToggleSwitch from 'primevue/toggleswitch';
 import Button from 'primevue/button';
-import { ZHIHU_SOURCE_DEFAULT_VALUE } from '../../../utils/zhihuSource';
+import { ZHIHU_SOURCE_DEFAULT_VALUE } from '@/utils/zhihuSource';
 
 interface Props {
   enabled: boolean;
@@ -99,7 +99,7 @@ function handleResetDefault() {
 </template>
 
 <style scoped>
-@import url('../../../styles/settings-shared.css');
+@import url('@/styles/settings-shared.css');
 
 .source-body {
   margin-top: var(--space-md);

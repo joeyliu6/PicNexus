@@ -3,7 +3,7 @@ import type { CopyLinkItem } from '@/composables/useCopyLink';
 import { processUploadQueue } from '@/composables/upload/UploadExecutor';
 import { DEFAULT_CONFIG, DEFAULT_LINK_PREFIXES, type UserConfig } from '@/config/types';
 import { formatLinkWithConfig } from '@/composables/useCopyLink';
-import { generateThumbnailUrl } from '@/composables/useThumbCache';
+import { generateThumbnailUrl } from '@/composables/image/useThumbCache';
 
 const uploadToMultipleServicesMock = vi.hoisted(() => vi.fn());
 
@@ -13,11 +13,11 @@ vi.mock('@/core/MultiServiceUploader', () => ({
   },
 }));
 
-vi.mock('@/composables/useServiceHealth', () => ({
+vi.mock('@/composables/service/useServiceHealth', () => ({
   useServiceHealth: () => ({ markUploadError: vi.fn() }),
 }));
 
-vi.mock('@/composables/useServiceAvailability', () => ({
+vi.mock('@/composables/service/useServiceAvailability', () => ({
   useServiceAvailability: () => ({ markServiceAvailable: vi.fn(async () => undefined) }),
 }));
 
