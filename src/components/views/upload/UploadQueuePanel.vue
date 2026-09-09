@@ -2,7 +2,7 @@
 // 上传队列面板组件
 
 import { ref } from 'vue';
-import UploadQueue from '@/components/UploadQueue.vue';
+import UploadQueue from './UploadQueue.vue';
 
 // ==================== Props ====================
 

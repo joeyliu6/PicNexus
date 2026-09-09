@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
-import { mountWithDefaults } from '../helpers/vueMount';
-import ChannelCard from '@/components/upload/ChannelCard.vue';
+import { mountWithDefaults } from '../../helpers/vueMount';
+import ChannelCard from '@/components/views/upload/ChannelCard.vue';
 
 vi.mock('@vueuse/core', () => ({
   onClickOutside: vi.fn(),

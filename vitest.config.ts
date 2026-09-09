@@ -22,7 +22,6 @@ export default defineConfig({
         'src/composables/**',
         'src/uploaders/**',
         'src/components/UploadQueue.vue',
-        'src/components/upload/**',
         'src/components/views/UploadView.vue',
         'src/components/views/upload/**',
         'src/components/views/SettingsView.vue',
@@ -48,7 +47,7 @@ export default defineConfig({
           branches: 80,
           statements: 70,
         },
-        'src/components/{UploadQueue.vue,upload/**,views/UploadView.vue,views/upload/**}': {
+        'src/components/{views/UploadView.vue,views/upload/**}': {
           lines: 80,
           functions: 60,
           branches: 70,

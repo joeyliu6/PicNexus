@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { shallowMountWithDefaults } from '../helpers/vueMount';
-import QueueCard from '@/components/upload/QueueCard.vue';
-import ChannelCard from '@/components/upload/ChannelCard.vue';
+import { shallowMountWithDefaults } from '../../helpers/vueMount';
+import QueueCard from '@/components/views/upload/QueueCard.vue';
+import ChannelCard from '@/components/views/upload/ChannelCard.vue';
 import { DEFAULT_CONFIG } from '@/config/types';
 
 describe('QueueCard', () => {

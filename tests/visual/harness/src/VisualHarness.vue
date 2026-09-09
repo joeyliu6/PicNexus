@@ -6,7 +6,7 @@ import { useConfirm as usePrimeConfirm } from 'primevue/useconfirm';
 import UploadDropZone from '@/components/views/upload/UploadDropZone.vue';
 import CompressPopoverMenu from '@/components/views/upload/CompressPopoverMenu.vue';
 import ServiceSelector from '@/components/views/upload/ServiceSelector.vue';
-import QueueCard from '@/components/upload/QueueCard.vue';
+import QueueCard from '@/components/views/upload/QueueCard.vue';
 import DashboardStrip from '@/components/views/history/DashboardStrip.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import ReloadBanner from '@/components/common/ReloadBanner.vue';

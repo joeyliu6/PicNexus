@@ -1,8 +1,8 @@
 import { flushPromises } from '@vue/test-utils';
 import { defineComponent, h, nextTick, type PropType } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mountWithDefaults, shallowMountWithDefaults } from '../helpers/vueMount';
-import UploadQueue from '@/components/UploadQueue.vue';
+import { mountWithDefaults, shallowMountWithDefaults } from '../../helpers/vueMount';
+import UploadQueue from '@/components/views/upload/UploadQueue.vue';
 import { useQueueState } from '@/composables/useQueueState';
 import type { QueueItem } from '@/core/UploadQueue';
 

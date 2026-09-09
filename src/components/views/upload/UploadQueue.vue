@@ -10,8 +10,8 @@ import { useCopyLink } from '@/composables/useCopyLink';
 import { makeCopyBadgeKey, useCopyBadgeFeedback } from '@/composables/useCopyBadgeFeedback';
 import type { LinkFormat } from '@/utils/linkFormatter';
 import { UI_COPY } from '@/constants/uiCopy';
-import InlineEmptyState from './common/InlineEmptyState.vue';
-import QueueCard from './upload/QueueCard.vue';
+import InlineEmptyState from '@/components/common/InlineEmptyState.vue';
+import QueueCard from './QueueCard.vue';
 
 const VIRTUAL_SCROLL_THRESHOLD = 20;
 
