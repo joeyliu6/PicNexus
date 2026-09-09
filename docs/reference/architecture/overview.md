@@ -45,7 +45,7 @@
 │  useUpload │ useHistory │ useConfig │ useThumbCache │ useToast │
 ├─────────────────────────────────────────────────────────────────┤
 │                        Core 层                                   │
-│  MultiServiceUploader │ LinkGenerator │ UploadQueueManager      │
+│  MultiServiceUploader │ UploadQueueManager                      │
 ├─────────────────────────────────────────────────────────────────┤
 │                      Uploaders 层                                │
 │  WeiboUploader │ R2Uploader │ JDUploader │ SmmsUploader │ ...  │
@@ -108,7 +108,6 @@ PicNexus/
 │   │
 │   ├── core/                     # 核心业务逻辑
 │   │   ├── MultiServiceUploader.ts  # 多服务并行上传
-│   │   ├── LinkGenerator.ts         # 链接生成器
 │   │   └── UploadQueue.ts           # 上传队列状态管理
 │   │
 │   ├── uploaders/                # 图床上传器
@@ -168,9 +167,8 @@ PicNexus/
 | 模块 | 文件 | 职责 |
 |------|------|------|
 | **MultiServiceUploader** | `core/MultiServiceUploader.ts` | 编排多图床并行上传，处理配置验证、错误转换、确定主服务 |
-| **LinkGenerator** | `core/LinkGenerator.ts` | 根据上传结果生成各格式链接 |
 | **UploaderFactory** | `uploaders/base/UploaderFactory.ts` | 注册和创建上传器实例 |
-| **HistoryDatabase** | `services/HistoryDatabase.ts` | SQLite 数据库操作，历史记录 CRUD |
+| **HistoryDatabase** | `services/database/` | SQLite 数据库操作，历史记录 CRUD |
 | **Store** | `store/index.ts` | AES-GCM 加密配置存储门面 |
 
 ### Rust 后端模块

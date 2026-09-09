@@ -48,7 +48,7 @@ push 到 main 或开 PR 时自动跑全量测试 + 类型检查。
 
 | 优先级 | 模块 | 原因 |
 |--------|------|------|
-| P0 | linkFormatter、mdParser、semaphore、renameUtils | 纯函数，投入最少回报最大 |
+| P0 | linkFormatter、mdParser、semaphore | 纯函数，投入最少回报最大 |
 | P1 | UploaderFactory、各图床 validateConfig | 需要 mock 但价值高 |
 | P2 | 复杂 composable 的辅助函数 | 中等难度，持续补充 |
 

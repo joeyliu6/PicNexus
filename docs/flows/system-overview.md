@@ -38,7 +38,6 @@ flowchart TD
 
     subgraph Core["核心层 (src/core/)"]
         K1[MultiServiceUploader<br/>多图床并行上传]
-        K2[LinkGenerator<br/>链接生成]
         K3[UploadQueueManager<br/>队列管理]
     end
 
