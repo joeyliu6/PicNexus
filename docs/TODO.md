@@ -38,6 +38,19 @@
 
 ## 待处理
 
+### [ ] `start_cookie_monitoring` 对前端暴露着，却没有任何前端调用点
+
+- **来源**：2026-09-09 Rust 命令归位后逐条核对执行证据时发现（不是本次引入，搬迁前就是这个状态）
+- **现状**：它挂在 `generate_handler!` 里当 Tauri 命令暴露，但全仓零前端 `invoke`。
+  唯一调用者是 `commands/cookie_login.rs` 内部——`setup_cookie_event_monitoring` 在
+  `with_webview` 调用失败时降级调它（见该文件 `[事件监控] with_webview 调用失败，降级到轮询模式`）
+- **风险**：低但不是零。①多暴露一个 IPC 面；②那条降级路径**既没有单测、真机也从未触发过**
+  （2026-09-09 那次真机验收走的是 `✓ NavigationCompleted 事件注册成功`，`[Cookie监控]` 日志命中 0 次），
+  所以它是这批搬迁里唯一「没有任何执行证据」的函数体
+- **两条可选路子**：去掉 `#[tauri::command]` 属性只留内部函数（同时从 `generate_handler!` 摘掉）；
+  或者保留命令、补一条覆盖降级路径的测试。**先确认没有外部调用方**（Typora / Obsidian / CLI 三条链路）再动
+- 背景见 [rust-command-relocation-2026-09-09.md](audits/rust-command-relocation-2026-09-09.md)
+
 ### [ ] Tauri E2E 在 CI 跑手上建会话失败（暂设非阻断，待上游修复后恢复）
 
 - **来源**：2026-08-21 发版 v1.1.0 前触发 CI 加测，`Tauri desktop E2E smoke` 首次真正执行即失败
