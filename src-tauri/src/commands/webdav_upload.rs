@@ -65,7 +65,7 @@ pub(crate) const WEBDAV_FORBIDDEN_MESSAGE: &str = "访问被拒绝，请检查�
 ///
 /// Why 不进跨语言配对：能不能说这句话，取决于拿不拿得到响应头。
 /// - 拿得到 → 图床三条链路 + 备份的「测试连接」（`webdav_backup::probe_webdav_connection`），共用本常量
-/// - 拿不到 → 同步过程中的 PUT/GET 走 `main.rs::webdav_request`，它只回 `{status, body}`，
+/// - 拿不到 → 同步过程中的 PUT/GET 走 `webdav_backup::webdav_request`，它只回 `{status, body}`，
 ///   前端判不了认证方案，只能说通用的那句
 ///
 /// 缺口分析见 `docs/reference/troubleshooting/webdav-image-host-issues.md`。
