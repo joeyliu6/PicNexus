@@ -166,21 +166,6 @@ fn show_tray_menu_window(
     let _ = window.emit("tray-menu-opened", ());
 }
 
-#[tauri::command]
-fn is_portable_mode() -> bool {
-    portable::is_portable()
-}
-
-#[tauri::command]
-fn get_user_data_dir(app: tauri::AppHandle) -> Result<String, AppError> {
-    Ok(portable::user_data_dir(&app)?.to_string_lossy().to_string())
-}
-
-#[tauri::command]
-fn get_history_db_path() -> String {
-    portable::history_db_url()
-}
-
 // 用于 R2 和 WebDAV 测试
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
@@ -326,9 +311,9 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             set_close_to_tray,
-            is_portable_mode,
-            get_user_data_dir,
-            get_history_db_path,
+            commands::app_paths::is_portable_mode,
+            commands::app_paths::get_user_data_dir,
+            commands::app_paths::get_history_db_path,
             analytics::analytics_send_batch,
             analytics::analytics_shutdown,
             analytics::heartbeat::analytics_start_heartbeat,
@@ -394,14 +379,14 @@ fn main() {
             commands::md_scanner::cancel_md_scan,
             get_or_create_secure_key,
             set_secure_key,
-            open_log_dir,
+            commands::system::open_log_dir,
             webdav_request,
             open_path,
-            check_port_free,
+            commands::system::check_port_free,
             check_editor_server_status,
             update_server_config,
             save_cli_config,
-            get_executable_path
+            commands::system::get_executable_path
         ])
         .setup(|app| {
             // 1. 创建原生菜单栏 (仅 macOS)
@@ -2346,16 +2331,6 @@ fn rescue_encrypted_config_at(
     }
 }
 
-/// 打开日志目录
-#[tauri::command]
-fn open_log_dir(app: tauri::AppHandle) -> Result<(), AppError> {
-    let log_dir = portable::log_dir(&app)?;
-    std::fs::create_dir_all(&log_dir)
-        .map_err(|e| AppError::file_io(format!("无法创建日志目录: {}", e)))?;
-    opener::open(&log_dir).map_err(|e| AppError::file_io(format!("无法打开日志目录: {}", e)))?;
-    Ok(())
-}
-
 /// 用系统默认程序打开受限路径（文件或文件夹）或安全 URL。
 /// 只允许已存在的绝对文件路径和明确白名单内的 URL scheme。
 enum OpenTarget {
@@ -2541,14 +2516,6 @@ fn open_path(path: String) -> Result<(), AppError> {
     Ok(())
 }
 
-/// 返回当前可执行文件的绝对路径（用于 Typora 自定义命令配置提示）
-#[tauri::command]
-fn get_executable_path() -> Result<String, AppError> {
-    std::env::current_exe()
-        .map(|p| p.to_string_lossy().to_string())
-        .map_err(|e| AppError::file_io(format!("无法获取可执行文件路径: {}", e)))
-}
-
 /// `save_cli_config` 的结果，用于把「有没有降级成明文」回传给设置页
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -2642,11 +2609,6 @@ async fn save_cli_config(
     Ok(SaveCliConfigOutcome {
         encrypted: mode == secure_key::ConfigWriteMode::Encrypted,
     })
-}
-
-#[tauri::command]
-async fn check_port_free(port: u16) -> bool {
-    server::is_port_free(port).await
 }
 
 /// 从 Rust 侧探测编辑器兼容 Server 的 `/status`，返回原始 JSON 文本

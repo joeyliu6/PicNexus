@@ -2,6 +2,7 @@ pub mod r2;
 pub mod upload;
 pub mod user_files;
 
+pub mod app_paths;
 pub mod bilibili;
 pub mod chaoxing;
 pub mod cli_path;
@@ -20,6 +21,7 @@ pub mod qiyu;
 pub mod qiyu_token;
 pub mod s3_compatible;
 pub mod smms;
+pub mod system;
 pub mod utils;
 pub mod webdav_upload;
 pub mod zhihu;
