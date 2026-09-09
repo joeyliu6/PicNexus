@@ -66,7 +66,7 @@ vi.mock('@/events/cacheEvents', () => ({
   emitHistoryUpdated: emitHistoryUpdatedMock,
 }));
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     switchPrimaryService: dbSwitchPrimaryMock,
     removeMirror: dbRemoveMirrorMock,

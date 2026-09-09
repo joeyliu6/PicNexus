@@ -2,7 +2,7 @@
 // 抽离自 RescueBrokenGroups.vue，让组件主文件保持在 500 行硬门禁内
 
 import { ref, computed, type Ref } from 'vue';
-import type { MdImageLinkWithFile } from '@/composables/useMdRescue';
+import type { MdImageLinkWithFile } from '@/composables/md-rescue/shared';
 
 export interface FlatRow {
   link: MdImageLinkWithFile;

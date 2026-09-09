@@ -3,7 +3,7 @@ import { computed, inject, onActivated, onDeactivated, onMounted, ref, watch } f
 import type { Ref } from 'vue';
 import { useHistoryManager } from '@/composables/useHistory';
 import { useLinkCheckBulkActions } from '@/composables/link-check/useLinkCheckBulkActions';
-import { useLinkCheckManager } from '@/composables/useLinkCheck';
+import { useLinkCheckManager } from '@/composables/link-check/useLinkCheck';
 import { useToast } from '@/composables/useToast';
 import type { LinkCheckRow, StatusFilter } from '@/types/linkCheck';
 import BatchMigratePanel from './linkcheck/BatchMigratePanel.vue';

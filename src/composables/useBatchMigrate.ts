@@ -10,7 +10,7 @@
 
 import { ref, computed, shallowRef } from 'vue';
 import { MultiServiceUploader } from '@/core/MultiServiceUploader';
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import { configStore } from '@/store/instances';
 import { getServiceDisplayName } from '@/constants/serviceNames';
 import { createLogger } from '@/utils/logger';

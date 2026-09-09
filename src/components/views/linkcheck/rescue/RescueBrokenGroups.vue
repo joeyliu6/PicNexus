@@ -11,7 +11,7 @@ import { useToast } from '@/composables/useToast';
 import { useConfigManager } from '@/composables/useConfig';
 import { applyConfiguredUrlWithConfig } from '@/composables/useCopyLink';
 import { getServiceDisplayName } from '@/constants/serviceNames';
-import type { MdImageLinkWithFile } from '@/composables/useMdRescue';
+import type { MdImageLinkWithFile } from '@/composables/md-rescue/shared';
 import { useFlatBrokenRows } from '@/composables/md-rescue/useFlatBrokenRows';
 import {
   getStatusDisplay, statusBadgeLabel, statusDotColor, statusTooltip,

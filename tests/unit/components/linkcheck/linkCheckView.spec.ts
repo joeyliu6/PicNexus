@@ -36,7 +36,7 @@ vi.mock('@/composables/useToast', () => ({
   }),
 }));
 
-vi.mock('@/composables/useLinkCheck', () => ({
+vi.mock('@/composables/link-check/useLinkCheck', () => ({
   useLinkCheckManager: () => ({
     isChecking: ref(false),
     isPaused: ref(false),

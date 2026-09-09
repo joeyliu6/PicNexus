@@ -12,7 +12,7 @@ import RescueBrokenGroups from '@/components/views/linkcheck/rescue/RescueBroken
 import RescueFixingCards from '@/components/views/linkcheck/rescue/RescueFixingCards.vue';
 import RescueLastRepairCard from '@/components/views/linkcheck/rescue/RescueLastRepairCard.vue';
 import MdRepairDialog from '@/components/views/linkcheck/MdRepairDialog.vue';
-import type { FileHealth, MdImageLinkWithFile } from '@/composables/useMdRescue';
+import type { FileHealth, MdImageLinkWithFile } from '@/composables/md-rescue/shared';
 import type { CheckLinkResult } from '@/types/linkCheck';
 
 const lastRepairMocks = vi.hoisted(() => ({

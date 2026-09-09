@@ -27,7 +27,7 @@ vi.mock('@/composables/useConfig', () => ({
   }),
 }));
 
-vi.mock('@/composables/useLinkCheck', () => ({
+vi.mock('@/composables/link-check/useLinkCheck', () => ({
   useLinkCheckManager: () => deps.linkManager,
 }));
 
@@ -43,7 +43,7 @@ vi.mock('@/composables/md-rescue/useMdRescueMru', () => ({
   recordMruEntry: vi.fn(),
 }));
 
-import { useMdRescueManager } from '@/composables/useMdRescue';
+import { useMdRescueManager } from '@/composables/md-rescue/useMdRescue';
 import {
   collectProgress,
   excludedUrls,

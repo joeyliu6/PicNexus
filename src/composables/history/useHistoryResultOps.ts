@@ -4,7 +4,7 @@
 
 import type { Ref } from 'vue';
 import type { HistoryItem } from '@/config/types';
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import { useConfirm } from '@/composables/useConfirm';
 import { useToast } from '@/composables/useToast';
 import { TOAST_MESSAGES } from '@/constants';

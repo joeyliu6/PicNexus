@@ -16,7 +16,7 @@ import { triggerRef } from 'vue';
 import type { Ref, ShallowRef } from 'vue';
 import type { HistoryItem } from '@/config/types';
 import type { MigrateItemStatus, MigrateScope } from '@/types/batchMigrate';
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import { getDefaultMigrateSource, getRecoverableLinkInfo } from './sourceSelection';
 
 /** 预加载的单条：只保留 id + MigrateItemStatus，HistoryItem 处理阶段再拉 */

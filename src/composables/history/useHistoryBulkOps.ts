@@ -2,7 +2,7 @@
 
 import type { Ref } from 'vue';
 import type { HistoryItem } from '@/config/types';
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import { useToast } from '@/composables/useToast';
 import { useConfirm } from '@/composables/useConfirm';
 import { TOAST_MESSAGES } from '@/constants';

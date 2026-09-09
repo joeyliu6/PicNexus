@@ -11,7 +11,7 @@ import {
   ref, shallowRef, computed, watch, onUnmounted,
   type Ref, type ComputedRef, type ShallowRef,
 } from 'vue';
-import { historyDB, type DayStats, type DayStatsFilter } from '@/services/HistoryDatabase';
+import { historyDB, type DayStats, type DayStatsFilter } from '@/services/database';
 import type { AspectRatioRow } from '@/services/database/TimelineQueryService';
 import { onCacheEventType, type HistoryEventData } from '@/events/cacheEvents';
 import { createLogger } from '@/utils/logger';

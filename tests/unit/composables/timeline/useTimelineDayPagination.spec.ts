@@ -5,7 +5,7 @@ import { mountWithDefaults } from '../../helpers/vueMount';
 import { flushPromisesAndTicks } from '../../helpers/wait';
 import type { ImageMeta } from '@/types/image-meta';
 import type { ServiceType } from '@/config/types';
-import type { DayStats } from '@/services/HistoryDatabase';
+import type { DayStats } from '@/services/database';
 
 const historyDbMock = vi.hoisted(() => ({
   getDayStats: vi.fn(),
@@ -18,7 +18,7 @@ const cacheEventMock = vi.hoisted(() => ({
   onCacheEventType: vi.fn(),
 }));
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: historyDbMock,
 }));
 

@@ -1,12 +1,12 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { ref } from 'vue';
 import { extractErrorMessage, markStatusFailed, MAX_CONCURRENT, migrateOneItem, processBatch } from '@/composables/batchMigrate/migrateCore';
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import type { MigrateItemStatus } from '@/types/batchMigrate';
 import type { HistoryItem, UserConfig } from '@/config/types';
 import { getInvokeMock } from '../../helpers/tauriMock';
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     update: vi.fn(),
     getById: vi.fn(),

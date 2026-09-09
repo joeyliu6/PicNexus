@@ -1,7 +1,7 @@
 // src/composables/backup-sync/HistorySync.ts
 // 云端历史记录同步：覆盖上传 + 覆盖下载 + 双向同步（合并语义只由「同步」提供）
 
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import { mergeHistoryCollections } from '@/services/database/HistoryMerge';
 import { invalidateCache } from '@/composables/useHistory';
 import { emitHistoryUpdated } from '@/events/cacheEvents';

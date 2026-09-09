@@ -14,7 +14,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { HistoryItem } from '@/config/types';
 import type { CheckLinkResult } from '@/types/linkCheck';
 import { normalizeErrorType } from '@/composables/link-check/linkCheckPersistence';
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import { recomputeLinkCheckSummary } from '@/types/linkCheckSummary';
 import { emitHistoryUpdated } from '@/events/cacheEvents';
 import { useHistoryManager } from '@/composables/useHistory';

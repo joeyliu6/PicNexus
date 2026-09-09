@@ -39,7 +39,7 @@ const {
   updateHistorySyncStatusMock: vi.fn(),
 }));
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     getCount: historyGetCountMock,
     exportToJSON: historyExportToJSONMock,

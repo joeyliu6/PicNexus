@@ -8,7 +8,7 @@ import {
   ref, shallowRef, reactive, watch, onUnmounted, triggerRef,
   type Ref,
 } from 'vue';
-import { historyDB, type FavoritesMetaPageResult } from '@/services/HistoryDatabase';
+import { historyDB, type FavoritesMetaPageResult } from '@/services/database';
 import { onCacheEventType, type CacheEventType } from '@/events/cacheEvents';
 import { getMetaThumbnailCandidates } from '@/composables/useThumbCache';
 import { createLogger } from '@/utils/logger';

@@ -3,7 +3,7 @@
 import { basename } from '@tauri-apps/api/path';
 import type { HistoryItem } from '@/config/types';
 import type { SingleServiceResult, MultiUploadResult } from '@/core/MultiServiceUploader';
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import { invalidateCache } from './useHistory';
 import { emitHistoryUpdated } from '@/events/cacheEvents';
 import { getImageMetadata, clearImageMetadataCache } from './useImageMetadata';

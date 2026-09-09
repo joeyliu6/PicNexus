@@ -9,7 +9,7 @@
 import type { Ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { MultiServiceUploader, SingleServiceResult } from '@/core/MultiServiceUploader';
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import { needsFormatConversion } from '@/constants/serviceFormats';
 import { Semaphore } from '@/utils/semaphore';
 import { createLogger } from '@/utils/logger';

@@ -12,7 +12,7 @@ import { checkNetworkConnectivity } from '@/utils/network';
 import { invalidateCache } from '@/composables/useHistory';
 import { withHistoryUpdateQueue } from '@/composables/useHistorySaver';
 import { emitHistoryUpdated } from '@/events/cacheEvents';
-import { historyDB } from './HistoryDatabase';
+import { historyDB } from '@/services/database';
 import { getServiceDisplayName } from '@/constants/serviceNames';
 import { createLogger } from '@/utils/logger';
 import { cleanupClipboardTempFile } from '@/utils/clipboardTempFile';

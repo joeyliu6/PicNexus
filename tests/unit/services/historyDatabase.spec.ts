@@ -241,12 +241,12 @@ function makeHistoryItem(overrides: Partial<HistoryItem> = {}): HistoryItem {
 describe('HistoryDatabase', () => {
   beforeEach(async () => {
     mockDb = new MockDatabase();
-    const { HistoryDatabase } = await import('@/services/HistoryDatabase');
+    const { HistoryDatabase } = await import('@/services/database');
     (HistoryDatabase as unknown as { instance: null }).instance = null;
   });
 
   it('insert() then getById() returns the stored item', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.insert(makeHistoryItem({ id: 'test-insert-1' }));
 
     const found = await historyDB.getById('test-insert-1');
@@ -256,7 +256,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('delete() removes the row', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.insert(makeHistoryItem({ id: 'test-delete-1' }));
     await historyDB.delete('test-delete-1');
 
@@ -264,7 +264,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('insertOrIgnore() ignores duplicate ids', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     const item = makeHistoryItem({ id: 'dup-1' });
 
     const first = await historyDB.insertOrIgnore(item);
@@ -275,7 +275,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('update() only writes requested columns and keeps concurrent favorite metadata intact', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     const item = makeHistoryItem({
       id: 'partial-update',
       isFavorited: true,
@@ -302,7 +302,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('updateResults() 写出与 update({ results }) 一致的行状态，且不碰其他列', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     const item = makeHistoryItem({
       id: 'direct-results',
       isFavorited: true,
@@ -332,13 +332,13 @@ describe('HistoryDatabase', () => {
   });
 
   it('updateResults() 记录不存在时抛错，与 update() 行为一致', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
 
     await expect(historyDB.updateResults('missing-id', [])).rejects.toThrow('记录不存在');
   });
 
   it('getAllItems() 返回与流式读取同序的完整数组', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.clear();
     for (const [id, timestamp] of [['x', 300], ['y', 200], ['z', 100]] as const) {
       await historyDB.insert(makeHistoryItem({ id, timestamp }));
@@ -350,7 +350,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('getByFilePath() returns the newest matching row deterministically', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.insert(makeHistoryItem({
       id: 'same-path-old',
       filePath: '/tmp/same.png',
@@ -370,7 +370,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('getByFilePath() uses id DESC as the tie-breaker for identical timestamps', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.insert(makeHistoryItem({ id: 'tie-a', filePath: '/tmp/tie.png', timestamp: 100 }));
     await historyDB.insert(makeHistoryItem({ id: 'tie-b', filePath: '/tmp/tie.png', timestamp: 100 }));
 
@@ -378,7 +378,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('keeps identical timestamps stable across main-list pages', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.clear();
     for (const id of ['tie-a', 'tie-c', 'tie-b']) {
       await historyDB.insert(makeHistoryItem({ id, timestamp: 100 }));
@@ -392,7 +392,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('uses the same stable order for favorite pages and full streams', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.clear();
     await historyDB.insert(makeHistoryItem({ id: 'tie-a', timestamp: 100, isFavorited: true }));
     await historyDB.insert(makeHistoryItem({ id: 'tie-c', timestamp: 100, isFavorited: true }));
@@ -409,7 +409,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('deleteMany() removes multiple rows and returns the deleted ids', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     for (const id of ['d1', 'd2', 'd3']) {
       await historyDB.insert(makeHistoryItem({ id }));
     }
@@ -425,7 +425,7 @@ describe('HistoryDatabase', () => {
   // 报实际战果契约：入参里不存在的 id（已被别处删除的陈旧目标）不出现在返回值里，
   // 调用方据此不虚报删除数、不对陈旧目标重复广播
   it('deleteMany() excludes stale ids from the returned list', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.insert(makeHistoryItem({ id: 'real-1' }));
 
     const deletedIds = await historyDB.deleteMany(['real-1', 'ghost-1', 'ghost-2']);
@@ -438,7 +438,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('clear() removes all history', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.insert(makeHistoryItem({ id: 'c1' }));
     await historyDB.insert(makeHistoryItem({ id: 'c2' }));
 
@@ -448,14 +448,14 @@ describe('HistoryDatabase', () => {
   });
 
   it('importFromJSON() throws on non-array json', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await expect(historyDB.importFromJSON('{"not":"array"}', 'replace')).rejects.toThrow(
       '无效的 JSON 格式：期望数组',
     );
   });
 
   it('importFromJSON() throws when every row is invalid', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     const invalidItems = [{ foo: 'bar' }, { timestamp: 'not-a-number' }];
     await expect(
       historyDB.importFromJSON(JSON.stringify(invalidItems), 'replace'),
@@ -463,7 +463,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('isInitialized() reflects connection lifecycle', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     // 先关一次，排除其它测试开过连接留下的状态
     await historyDB.close();
     expect(historyDB.isInitialized()).toBe(false);
@@ -476,7 +476,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('importFromJSON() replace strategy clears old data first', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.insert(makeHistoryItem({ id: 'old-1' }));
 
     const importedCount = await historyDB.importFromJSON(
@@ -523,7 +523,7 @@ describe('HistoryDatabase', () => {
   }
 
   it('switchPrimaryService() 切主服务到已成功上传的镜像', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.insert(makeMultiMirrorItem('mirror-switch-1'));
 
     await historyDB.switchPrimaryService('mirror-switch-1', 'r2');
@@ -534,7 +534,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('switchPrimaryService() 切到相同主服务时为 no-op', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.insert(makeMultiMirrorItem('mirror-switch-noop'));
 
     await expect(
@@ -546,7 +546,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('switchPrimaryService() 目标镜像未成功上传时抛错', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.insert(makeMultiMirrorItem('mirror-switch-fail'));
 
     await expect(
@@ -555,7 +555,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('switchPrimaryService() 目标镜像不存在时抛错', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.insert(makeMultiMirrorItem('mirror-switch-missing'));
 
     await expect(
@@ -564,14 +564,14 @@ describe('HistoryDatabase', () => {
   });
 
   it('switchPrimaryService() 记录不存在时抛错', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await expect(
       historyDB.switchPrimaryService('nope', 'r2'),
     ).rejects.toThrow(/记录不存在/);
   });
 
   it('removeMirror() 删除非主服务镜像并清理 linkCheckStatus', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.insert(makeMultiMirrorItem('mirror-remove-1'));
 
     await historyDB.removeMirror('mirror-remove-1', 'r2');
@@ -583,7 +583,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('removeMirror() 删除失败的镜像也允许', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.insert(makeMultiMirrorItem('mirror-remove-failed'));
 
     await historyDB.removeMirror('mirror-remove-failed', 'jd');
@@ -596,7 +596,7 @@ describe('HistoryDatabase', () => {
   // 剩下的镜像虽然 status 是 success，但没有 url 就撑不起这条记录
   // （无法展示/复制/接任主服务），与 stripServiceFromItem 的整条删除降级同一把尺子。
   it('removeMirror() 仅剩「success 但无 url」镜像时拒绝删除', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.insert(makeHistoryItem({
       id: 'mirror-remove-no-url',
       primaryService: 'weibo',
@@ -620,7 +620,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('removeMirror() 删除当前主服务时抛错', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.insert(makeMultiMirrorItem('mirror-remove-primary'));
 
     await expect(
@@ -629,7 +629,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('removeMirror() 镜像不存在时抛错', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     await historyDB.insert(makeMultiMirrorItem('mirror-remove-missing'));
 
     await expect(
@@ -638,7 +638,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('removeMirror() 删镜像后同步 linkCheckSummary（按 success 口径重算）', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     const item = makeMultiMirrorItem('mirror-remove-summary');
     // weibo: invalid, r2: valid；failed 的 jd 不计入 summary
     item.linkCheckSummary = {
@@ -663,7 +663,7 @@ describe('HistoryDatabase', () => {
   });
 
   it('removeMirror() 原本无 linkCheckSummary 时不凭空创建', async () => {
-    const { historyDB } = await import('@/services/HistoryDatabase');
+    const { historyDB } = await import('@/services/database');
     // makeMultiMirrorItem 默认不设 linkCheckSummary
     await historyDB.insert(makeMultiMirrorItem('mirror-remove-no-summary'));
 
@@ -697,7 +697,7 @@ describe('HistoryDatabase', () => {
     }
 
     it('setFavorite 在途时 getFavoritesMetaPage 等写盘完成再查（含新收藏）', async () => {
-      const { historyDB } = await import('@/services/HistoryDatabase');
+      const { historyDB } = await import('@/services/database');
       // 本组断言依赖全局计数（total / 全量 id 列表），先清库与其他用例的数据隔离
       await historyDB.clear();
       await historyDB.insert(makeHistoryItem({ id: 'fav-race-a', timestamp: 1000 }));
@@ -715,7 +715,7 @@ describe('HistoryDatabase', () => {
     });
 
     it('setFavorite 在途时 getFavoriteIdList 同样等写盘完成', async () => {
-      const { historyDB } = await import('@/services/HistoryDatabase');
+      const { historyDB } = await import('@/services/database');
       await historyDB.clear();
       await historyDB.insert(makeHistoryItem({ id: 'fav-race-c', timestamp: 1000 }));
 
@@ -729,7 +729,7 @@ describe('HistoryDatabase', () => {
     });
 
     it('收藏写盘失败时读取不被卡死，返回写前状态', async () => {
-      const { historyDB } = await import('@/services/HistoryDatabase');
+      const { historyDB } = await import('@/services/database');
       await historyDB.clear();
       await historyDB.insert(makeHistoryItem({ id: 'fav-race-d', timestamp: 1000 }));
 

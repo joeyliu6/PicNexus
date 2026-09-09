@@ -11,7 +11,7 @@ import {
   restoreCheckStatus,
   applyResultsToRows,
 } from '@/composables/link-check/linkCheckDataBuilder';
-import type { LinkCheckLiteRow } from '@/services/HistoryDatabase';
+import type { LinkCheckLiteRow } from '@/services/database';
 import type { HistoryItem, UserConfig } from '@/config/types';
 import type { LinkCheckRow } from '@/types/linkCheck';
 

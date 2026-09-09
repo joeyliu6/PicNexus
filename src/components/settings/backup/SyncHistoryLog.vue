@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { historyDB, type SyncLogEntry, type SyncLogOperation } from '@/services/HistoryDatabase';
+import { historyDB, type SyncLogEntry, type SyncLogOperation } from '@/services/database';
 import { useConfirm } from '@/composables/useConfirm';
 import InlineEmptyState from '@/components/common/InlineEmptyState.vue';
 

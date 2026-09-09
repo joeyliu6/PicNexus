@@ -4,7 +4,7 @@ import { useHistoryManager } from './useHistory';
 import { useToast } from './useToast';
 import { useCopyLink, type CopyLinkItem } from './useCopyLink';
 import { shiftSelect, type ShiftSelectAnchor } from '@/utils/shiftSelect';
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import { createLogger } from '@/utils/logger';
 export type { LinkFormat } from '@/utils/linkFormatter';
 

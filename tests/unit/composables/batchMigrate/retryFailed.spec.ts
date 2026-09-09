@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ref } from 'vue';
 import { createRetry } from '@/composables/batchMigrate/retryFailed';
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import { migrateOneItem } from '@/composables/batchMigrate/migrateCore';
 import type { MigrateResult } from '@/types/batchMigrate';
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     getItemsByIds: vi.fn(),
   },

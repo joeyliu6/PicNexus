@@ -8,7 +8,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { HistoryItem } from '@/config/types';
 import { useConfigManager } from '@/composables/useConfig';
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import { useToast } from '@/composables/useToast';
 import { createLogger } from '@/utils/logger';
 import {

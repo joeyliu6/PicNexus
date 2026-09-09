@@ -23,7 +23,7 @@ const {
 }));
 
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     insertOrIgnore: insertOrIgnoreMock,
     getById: getByIdMock,

@@ -44,7 +44,7 @@ vi.mock('@/composables/batchMigrate/preloadPending', () => ({
   preloadAllPending: mocks.preloadAllPending,
 }));
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     getItemsByBackupCount: mocks.getItemsByBackupCount,
     getServiceDistribution: mocks.getServiceDistribution,

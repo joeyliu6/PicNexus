@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
 import { useBatchMigrateManager } from '@/composables/useBatchMigrate';
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import { configStore } from '@/store/instances';
 import { processBatch } from '@/composables/batchMigrate/migrateCore';
 import { preloadAllPending, type PreloadedItem } from '@/composables/batchMigrate/preloadPending';
@@ -36,7 +36,7 @@ vi.mock('@/composables/batchMigrate/preloadPending', () => ({
   preloadAllPending: mocks.preloadAllPending,
 }));
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     getItemsByBackupCount: mocks.getItemsByBackupCount,
     getServiceDistribution: mocks.getServiceDistribution,

@@ -1,7 +1,7 @@
 // 备份与同步 - 本地导入导出操作
 
 import type { Ref } from 'vue';
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import { invalidateCache } from '@/composables/useHistory';
 import { emitHistoryUpdated } from '@/events/cacheEvents';
 import type { useToast } from '@/composables/useToast';

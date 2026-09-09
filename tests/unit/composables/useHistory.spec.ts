@@ -47,7 +47,7 @@ const {
   emitHistoryClearedMock: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     open: historyDBOpenMock,
     getFavoriteIdList: historyDBGetFavoriteIdListMock,

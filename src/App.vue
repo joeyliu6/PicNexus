@@ -25,7 +25,7 @@ import { startupFlags } from './store/startupFlags';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
 import type { UserConfig } from './config/types';
-import { historyDB } from './services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import { attachConsole } from '@tauri-apps/plugin-log';
 import { createLogger } from './utils/logger';
 import { getUserDataDir } from './utils/appPaths';

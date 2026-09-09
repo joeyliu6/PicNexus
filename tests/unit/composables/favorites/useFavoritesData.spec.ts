@@ -21,7 +21,7 @@ const {
   unlistenClearedMock: vi.fn(),
 }));
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     getFavoritesMetaPage: getFavoritesMetaPageMock,
   },

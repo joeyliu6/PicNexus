@@ -8,7 +8,7 @@ import {
   historyDB,
   type PageResult, type SearchResult, type SearchOptions,
   type TimePeriodStats,
-} from '@/services/HistoryDatabase';
+} from '@/services/database';
 import { useImageDetailCache } from './useImageDetailCache';
 import { useToast } from './useToast';
 import { TOAST_MESSAGES } from '@/constants';

@@ -34,7 +34,7 @@ vi.mock('primevue/useconfirm', () => ({
   }),
 }));
 
-vi.mock('@/composables/useBackupSync', async () => {
+vi.mock('@/composables/backup-sync/useBackupSync', async () => {
   const { ref } = await import('vue');
   backupRefs.passwordRequest = ref(null);
   backupRefs.needsReload = ref(false);

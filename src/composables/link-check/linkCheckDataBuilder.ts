@@ -1,5 +1,5 @@
 import type { HistoryItem, ServiceType, UserConfig } from '@/config/types';
-import type { LinkCheckLiteRow } from '@/services/HistoryDatabase';
+import type { LinkCheckLiteRow } from '@/services/database';
 import type {
   BatchCheckRequestItem,
   BatchCheckResult,

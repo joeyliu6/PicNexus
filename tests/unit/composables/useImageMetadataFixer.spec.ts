@@ -12,7 +12,7 @@ const {
 }));
 
 // Mock historyDB 动态导入
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     update: updateMock,
     batchUpdateDimensions: batchUpdateDimensionsMock,

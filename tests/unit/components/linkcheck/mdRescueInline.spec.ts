@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, ref } from 'vue';
 import { mountWithDefaults } from '../../helpers/vueMount';
 import MdRescueInline from '@/components/views/linkcheck/MdRescueInline.vue';
-import type { FileHealth, MdImageLinkWithFile } from '@/composables/useMdRescue';
+import type { FileHealth, MdImageLinkWithFile } from '@/composables/md-rescue/shared';
 
 const rescueMocks = vi.hoisted(() => ({
   manager: null as unknown,
@@ -13,7 +13,7 @@ const rescueMocks = vi.hoisted(() => ({
   removeMruEntry: vi.fn(),
 }));
 
-vi.mock('@/composables/useMdRescue', () => ({
+vi.mock('@/composables/md-rescue/useMdRescue', () => ({
   useMdRescueManager: () => rescueMocks.manager,
 }));
 

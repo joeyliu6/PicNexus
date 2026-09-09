@@ -29,7 +29,7 @@ const {
   detailCacheRemoveDetailMock: vi.fn(),
 }));
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     getMetasByIds: getMetasByIdsMock,
   },

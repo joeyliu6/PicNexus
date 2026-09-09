@@ -11,12 +11,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 import { migrateOneItem } from '@/composables/batchMigrate/migrateCore';
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import type { MigrateItemStatus } from '@/types/batchMigrate';
 import type { HistoryItem, UserConfig } from '@/config/types';
 import { getInvokeMock } from '../../helpers/tauriMock';
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: { update: vi.fn(), getById: vi.fn() },
 }));
 

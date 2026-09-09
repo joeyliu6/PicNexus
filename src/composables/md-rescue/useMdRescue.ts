@@ -6,7 +6,7 @@ import { computed } from 'vue';
 import { stat } from '@tauri-apps/plugin-fs';
 import { invoke } from '@tauri-apps/api/core';
 import { useConfigManager } from '@/composables/useConfig';
-import { useLinkCheckManager } from '@/composables/useLinkCheck';
+import { useLinkCheckManager } from '@/composables/link-check/useLinkCheck';
 import { useToast } from '@/composables/useToast';
 import { allowUserPaths } from '@/security/fsScope';
 import { createLogger } from '@/utils/logger';

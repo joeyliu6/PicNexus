@@ -7,7 +7,7 @@ import { getServiceDisplayName } from '@/constants/serviceNames';
 import { serviceNameTooltip } from '@/utils/serviceNameFit';
 import { smartTruncateUrl } from '@/utils/mdParser';
 import { summarizeRepairStrategy } from '@/composables/md-rescue/useRepairStrategy';
-import type { MdImageLinkWithFile, RepairStrategy } from '@/composables/useMdRescue';
+import type { MdImageLinkWithFile, RepairStrategy } from '@/composables/md-rescue/shared';
 
 const props = defineProps<{
   visible: boolean;

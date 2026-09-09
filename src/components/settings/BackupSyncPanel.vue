@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import Divider from 'primevue/divider';
 import { useConfirm } from 'primevue/useconfirm';
-import { useBackupSync } from '@/composables/useBackupSync';
+import { useBackupSync } from '@/composables/backup-sync/useBackupSync';
 import type { WebDAVConfig } from '@/config/types';
 
 import DataItemCard from './backup/DataItemCard.vue';

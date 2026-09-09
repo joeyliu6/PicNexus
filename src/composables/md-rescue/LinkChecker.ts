@@ -5,7 +5,7 @@
 
 import type { UserConfig, HistoryItem } from '@/config/types';
 import { applyConfiguredUrlWithConfig } from '@/composables/useCopyLink';
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import { createLogger } from '@/utils/logger';
 import { stripKnownPrefixes } from '@/utils/mdParser';
 import type {

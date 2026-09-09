@@ -16,7 +16,7 @@ const {
 
 const invokeMock = getInvokeMock();
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     deleteMany: historyDeleteManyMock,
   },

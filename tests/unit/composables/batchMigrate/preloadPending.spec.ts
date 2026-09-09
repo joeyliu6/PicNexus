@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ref, shallowRef } from 'vue';
 import type { HistoryItem } from '@/config/types';
 import { preloadAllPending } from '@/composables/batchMigrate/preloadPending';
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 
-vi.mock('@/services/HistoryDatabase', () => ({
+vi.mock('@/services/database', () => ({
   historyDB: {
     getItemsByBackupCount: vi.fn(),
   },

@@ -6,7 +6,7 @@
 
 import { shallowRef, type Ref } from 'vue';
 import type { HistoryItem } from '@/config/types';
-import { historyDB } from '@/services/HistoryDatabase';
+import { historyDB } from '@/services/database';
 import { onCacheEventType, type HistoryEventData } from '@/events/cacheEvents';
 import { createLogger } from '@/utils/logger';
 

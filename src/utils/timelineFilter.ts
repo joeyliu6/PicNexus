@@ -7,7 +7,7 @@
  * 4. 低密度过滤：数量过少的月份点隐藏
  */
 
-import type { TimePeriodStats } from '@/services/HistoryDatabase';
+import type { TimePeriodStats } from '@/services/database';
 
 // ==================== 类型定义 ====================
 
