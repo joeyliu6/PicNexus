@@ -33,7 +33,7 @@ vi.mock('@vueuse/core', async (importOriginal) => {
   };
 });
 
-vi.mock('@/composables/useServiceHealth', () => ({
+vi.mock('@/composables/service/useServiceHealth', () => ({
   useServiceHealth: () => ({
     healthStatusMap,
     healthTooltipMap,

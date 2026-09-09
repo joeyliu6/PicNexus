@@ -1,6 +1,6 @@
 import { computed, type ComputedRef, type Ref } from 'vue';
 import type { CheckLinkResult, LinkCheckRow, StatusFilter } from '@/types/linkCheck';
-import { statusTooltip as baseStatusTooltip } from '@/composables/useLinkStatusDisplay';
+import { statusTooltip as baseStatusTooltip } from '@/composables/link-check/useLinkStatusDisplay';
 import type { CheckStatsResult } from './useCheckStats';
 
 const CONTEXT_AWARE_FILTERS = new Set<StatusFilter>(['problems', 'invalid', 'suspicious', 'timeout', 'unchecked']);

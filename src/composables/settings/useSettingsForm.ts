@@ -6,7 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { configStore } from '@/store/instances';
 import { useToast } from '@/composables/useToast';
 import { useConfigManager } from '@/composables/useConfig';
-import { useServiceHealth } from '@/composables/useServiceHealth';
+import { useServiceHealth } from '@/composables/service/useServiceHealth';
 import { TOAST_MESSAGES } from '@/constants';
 import { SERVICE_DISPLAY_NAMES } from '@/constants/serviceNames';
 import { filterOrphanProfileServices, syncProfileUploaders } from './profileServiceSync';

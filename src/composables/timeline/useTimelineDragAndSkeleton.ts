@@ -5,7 +5,7 @@
 import { ref, computed, watch, nextTick, onUnmounted, type Ref, type ComputedRef } from 'vue';
 import { generateSkeletonLayout } from '@/utils/justifiedLayout';
 import { createLogger } from '@/utils/logger';
-import type { PhotoGroup } from '@/composables/useVirtualTimeline';
+import type { PhotoGroup } from '@/composables/timeline/useVirtualTimeline';
 
 const log = createLogger('TimelineJump');
 

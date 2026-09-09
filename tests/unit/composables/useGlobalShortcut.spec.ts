@@ -48,7 +48,7 @@ vi.mock('@/core/MultiServiceUploader', () => ({
   })),
 }));
 
-vi.mock('@/composables/useHistorySaver', () => ({
+vi.mock('@/composables/history/useHistorySaver', () => ({
   useHistorySaver: () => ({
     saveHistoryItemImmediate: saveHistoryItemImmediateMock,
     addResultToHistoryItem: addResultToHistoryItemMock,

@@ -10,7 +10,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { UI_COPY } from '@/constants/uiCopy';
 import { useThemeManager } from '@/composables/useTheme';
 import { useConfigManager } from '@/composables/useConfig';
-import { useHistoryManager } from '@/composables/useHistory';
+import { useHistoryManager } from '@/composables/history/useHistory';
 import { useOnboarding } from '@/composables/useOnboarding';
 import { useSettingsForm } from '@/composables/settings/useSettingsForm';
 import { useConnectionTest } from '@/composables/settings/useConnectionTest';

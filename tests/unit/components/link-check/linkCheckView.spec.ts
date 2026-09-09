@@ -62,7 +62,7 @@ vi.mock('@/composables/link-check/useLinkCheck', () => ({
   }),
 }));
 
-vi.mock('@/composables/useHistory', () => ({
+vi.mock('@/composables/history/useHistory', () => ({
   useHistoryManager: () => ({
     deleteHistoryResult: mockState.deleteHistoryResult,
     bulkDeleteHistoryResults: mockState.bulkDeleteHistoryResults,

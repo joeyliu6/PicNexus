@@ -18,9 +18,9 @@ const coveragePath = path.resolve('coverage/coverage-summary.json');
 const thresholds = {
   // 存量高覆盖文件：阈值 = 当前值 − 5pp（向下取整），锁住已有成果。
   'src/composables/useGlobalShortcut.ts': { lines: 81, statements: 81, functions: 95, branches: 56 },
-  'src/composables/useClipboardImage.ts': { lines: 92, statements: 92, functions: 95, branches: 77 },
-  'src/composables/useCompressionTask.ts': { lines: 95, statements: 95, functions: 95, branches: 62 },
-  'src/composables/useImageLoadManager.ts': { lines: 91, statements: 91, functions: 95, branches: 83 },
+  'src/composables/upload/useClipboardImage.ts': { lines: 92, statements: 92, functions: 95, branches: 77 },
+  'src/composables/image/useCompressionTask.ts': { lines: 95, statements: 95, functions: 95, branches: 62 },
+  'src/composables/image/useImageLoadManager.ts': { lines: 91, statements: 91, functions: 95, branches: 83 },
   'src/uploaders/nami/NamiUploader.ts': { lines: 92, statements: 92, functions: 95, branches: 83 },
   'src/uploaders/imgur/ImgurUploader.ts': { lines: 95, statements: 95, functions: 95, branches: 89 },
   // 2026-08-13 补完 UploadQueueManager 单测后从下面的「低覆盖」组毕业：

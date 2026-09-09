@@ -128,7 +128,7 @@ vi.mock('@/composables/favorites/useFavoritesLightbox', async () => {
   };
 });
 
-vi.mock('@/composables/useHistoryViewState', async () => {
+vi.mock('@/composables/history/useHistoryViewState', async () => {
   const { computed: vueComputed, ref } = await import('vue');
   mockRefs.viewState = {
     selectedIdList: ref<string[]>([]),
@@ -154,7 +154,7 @@ vi.mock('@/composables/useHistoryViewState', async () => {
   };
 });
 
-vi.mock('@/composables/useHistory', async () => {
+vi.mock('@/composables/history/useHistory', async () => {
   const { ref } = await import('vue');
   mockRefs.history = {
     favoriteSet: ref(new Set<string>()),

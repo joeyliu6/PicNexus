@@ -1,12 +1,12 @@
 <script setup lang="ts">
 /** Timeline View — Google Photos 风格虚拟滚动图片浏览 */
 import { ref, computed, onUnmounted, watch } from 'vue';
-import { useHistoryViewState } from '@/composables/useHistoryViewState';
-import { useHistoryManager } from '@/composables/useHistory';
-import { useVirtualTimeline } from '@/composables/useVirtualTimeline';
+import { useHistoryViewState } from '@/composables/history/useHistoryViewState';
+import { useHistoryManager } from '@/composables/history/useHistory';
+import { useVirtualTimeline } from '@/composables/timeline/useVirtualTimeline';
 import { useConfigManager } from '@/composables/useConfig';
-import { useImageLoadManager } from '@/composables/useImageLoadManager';
-import { useTimelineSidebarControl } from '@/composables/useTimelineSidebarControl';
+import { useImageLoadManager } from '@/composables/image/useImageLoadManager';
+import { useTimelineSidebarControl } from '@/composables/timeline/useTimelineSidebarControl';
 import { useScrollRestore } from '@/composables/timeline/useScrollRestore';
 import { useImagePreload } from '@/composables/timeline/useImagePreload';
 import { useTimelineLightbox } from '@/composables/timeline/useTimelineLightbox';

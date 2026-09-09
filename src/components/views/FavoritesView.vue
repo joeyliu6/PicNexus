@@ -6,8 +6,8 @@
 import { ref, computed, watch, onUnmounted } from 'vue';
 import Skeleton from 'primevue/skeleton';
 import EmptyState from '@/components/common/EmptyState.vue';
-import { useHistoryViewState } from '@/composables/useHistoryViewState';
-import { useHistoryManager } from '@/composables/useHistory';
+import { useHistoryViewState } from '@/composables/history/useHistoryViewState';
+import { useHistoryManager } from '@/composables/history/useHistory';
 import { useLazyLoadOnVisible } from '@/composables/useLazyLoadOnVisible';
 import { useConfigManager } from '@/composables/useConfig';
 import { useFavoritesData } from '@/composables/favorites/useFavoritesData';

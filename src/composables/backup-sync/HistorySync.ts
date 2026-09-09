@@ -3,7 +3,7 @@
 
 import { historyDB } from '@/services/database';
 import { mergeHistoryCollections } from '@/services/database/HistoryMerge';
-import { invalidateCache } from '@/composables/useHistory';
+import { invalidateCache } from '@/composables/history/useHistory';
 import { emitHistoryUpdated } from '@/events/cacheEvents';
 import type { WebDAVProfile, HistoryItem } from '@/config/types';
 import { createLogger } from '@/utils/logger';

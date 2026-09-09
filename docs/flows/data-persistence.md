@@ -91,7 +91,7 @@ flowchart TD
 
 展示上传历史的写入、读取和删除路径。排查**历史不显示**或**数据不同步**时重点查看。
 
-> **关键源文件**：`src/composables/useHistory.ts`、`src/composables/useHistorySaver.ts`、`src/services/database/HistoryDatabase.ts`
+> **关键源文件**：`src/composables/history/useHistory.ts`、`src/composables/history/useHistorySaver.ts`、`src/services/database/HistoryDatabase.ts`
 
 ```mermaid
 flowchart TD
@@ -147,7 +147,7 @@ flowchart TD
 
 展示缩略图 URL 的生成策略。排查**缩略图不显示**或**加载慢**时查看。
 
-> **关键源文件**：`src/composables/useThumbCache.ts`
+> **关键源文件**：`src/composables/image/useThumbCache.ts`
 
 ```mermaid
 flowchart TD
@@ -211,7 +211,7 @@ flowchart TD
 > 现在预加载失败**既不上报也不标记**，交给真实渲染时的候选链定性——它只试一条 URL，
 > 没有「下一条成功了」这个对照，无从判断是代理不通还是这张图本身没了（详见下方失败定性说明）。
 
-> **候选链的消费逻辑统一在 [useThumbnailFallbackChain.ts](../../src/composables/useThumbnailFallbackChain.ts)**
+> **候选链的消费逻辑统一在 [useThumbnailFallbackChain.ts](../../src/composables/image/useThumbnailFallbackChain.ts)**
 > （时间轴、收藏页共用）。此前两个视图各写一份逐字相同的翻页逻辑，结果超时兜底只补进了时间轴，
 > 收藏页在代理卡死时会一直停在骨架屏。新增消费方请复用它，别再抄第三份。
 
@@ -247,7 +247,7 @@ flowchart TD
 > 候选 0，而 `src` 根本没变 → 浏览器不再发 `load` 事件 → `isLoading` 永远停在 true，
 > 格子里骨架屏和图各占一半且不自愈。而待定的失败记录（`pendingFailure`）若不跟着候选链一起清，
 > 会在新链的候选加载成功时套用「前一条挂、这一条通」的判据，把上一张图的代理 URL 判死，
-> 整个会话误降级。判据实现是 [useThumbnailFallbackChain.ts](../../src/composables/useThumbnailFallbackChain.ts)
+> 整个会话误降级。判据实现是 [useThumbnailFallbackChain.ts](../../src/composables/image/useThumbnailFallbackChain.ts)
 > 顶层导出的 `hasUrlListChanged`，[ThumbnailImage.vue](../../src/components/common/ThumbnailImage.vue)
 > 直接 import 复用——它因为自持 loading/error 状态、视口判定也在自己手里，没法用整个 composable，
 > 但这条判据只有一份，不再靠「必须同步」的口头约定维系。

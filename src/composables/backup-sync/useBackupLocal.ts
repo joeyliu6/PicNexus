@@ -2,7 +2,7 @@
 
 import type { Ref } from 'vue';
 import { historyDB } from '@/services/database';
-import { invalidateCache } from '@/composables/useHistory';
+import { invalidateCache } from '@/composables/history/useHistory';
 import { emitHistoryUpdated } from '@/events/cacheEvents';
 import type { useToast } from '@/composables/useToast';
 import { TOAST_MESSAGES } from '@/constants';

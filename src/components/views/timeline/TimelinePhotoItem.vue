@@ -12,7 +12,7 @@
  */
 import Skeleton from 'primevue/skeleton';
 import type { ImageMeta } from '@/types/image-meta';
-import { useThumbnailFallbackChain } from '@/composables/useThumbnailFallbackChain';
+import { useThumbnailFallbackChain } from '@/composables/image/useThumbnailFallbackChain';
 
 const props = defineProps<{
   meta: ImageMeta;

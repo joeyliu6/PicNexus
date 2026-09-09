@@ -31,4 +31,4 @@
 ## 代码位置
 
 - 上传命令：`src-tauri/src/commands/` 下各 `*.rs`
-- 缩略图生成：`src/composables/useThumbCache.ts`（`generateThumbnailUrl` / `generateMediumThumbnailUrl`）
+- 缩略图生成：`src/composables/image/useThumbCache.ts`（`generateThumbnailUrl` / `generateMediumThumbnailUrl`）

@@ -3,7 +3,7 @@ import { defineComponent, h, nextTick, type PropType } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountWithDefaults, shallowMountWithDefaults } from '../../helpers/vueMount';
 import UploadQueue from '@/components/views/upload/UploadQueue.vue';
-import { useQueueState } from '@/composables/useQueueState';
+import { useQueueState } from '@/composables/upload/useQueueState';
 import type { QueueItem } from '@/core/UploadQueue';
 
 const copyLinkMock = vi.hoisted(() => vi.fn());

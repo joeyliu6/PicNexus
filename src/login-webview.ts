@@ -1,13 +1,13 @@
 // 登录窗口 Vue 应用入口
 import { createApp } from 'vue';
 import PrimeVue from 'primevue/config';
-import { PicNexusPreset } from './theme/preset';
-import LoginPanel from './components/login/LoginPanel.vue';
-import { COOKIE_PROVIDERS, type CookieProvider } from './config/cookieProviders';
+import { PicNexusPreset } from '@/theme/preset';
+import LoginPanel from '@/components/login/LoginPanel.vue';
+import { COOKIE_PROVIDERS, type CookieProvider } from '@/config/cookieProviders';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { initLoginTheme } from './composables/useLoginTheme';
-import { createLogger } from './utils/logger';
+import { initLoginTheme } from '@/composables/useLoginTheme';
+import { createLogger } from '@/utils/logger';
 
 const appWindow = getCurrentWindow();
 const log = createLogger('LoginWebview');

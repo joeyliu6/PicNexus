@@ -109,7 +109,7 @@ vi.mock('@/composables/timeline/useTimelineDayPagination', async () => {
   };
 });
 
-vi.mock('@/composables/useVirtualTimeline', async () => {
+vi.mock('@/composables/timeline/useVirtualTimeline', async () => {
   const { ref } = await import('vue');
   timelineRefs.virtual = {
     totalHeight: ref(800),
@@ -139,7 +139,7 @@ vi.mock('@/composables/useVirtualTimeline', async () => {
   };
 });
 
-vi.mock('@/composables/useImageLoadManager', async () => {
+vi.mock('@/composables/image/useImageLoadManager', async () => {
   const { ref } = await import('vue');
   timelineRefs.imageLoad = {
     loadedImages: ref(new Set<string>()),
@@ -220,7 +220,7 @@ vi.mock('@/composables/timeline/useTimelineDragAndSkeleton', async () => {
   };
 });
 
-vi.mock('@/composables/useTimelineSidebarControl', async () => {
+vi.mock('@/composables/timeline/useTimelineSidebarControl', async () => {
   const { ref } = await import('vue');
   return {
     useTimelineSidebarControl: () => ({
@@ -233,7 +233,7 @@ vi.mock('@/composables/useTimelineSidebarControl', async () => {
   };
 });
 
-vi.mock('@/composables/useHistoryViewState', async () => {
+vi.mock('@/composables/history/useHistoryViewState', async () => {
   const { computed, ref } = await import('vue');
   timelineRefs.viewState = {
     selectedIdList: ref<string[]>([]),
@@ -257,7 +257,7 @@ vi.mock('@/composables/useHistoryViewState', async () => {
   };
 });
 
-vi.mock('@/composables/useHistory', async () => {
+vi.mock('@/composables/history/useHistory', async () => {
   const { ref } = await import('vue');
   timelineRefs.history = {
     favoriteSet: ref(new Set<string>()),

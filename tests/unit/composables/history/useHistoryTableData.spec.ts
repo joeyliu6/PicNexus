@@ -28,7 +28,7 @@ const {
   historyTotalCount: { value: 0 },
 }));
 
-vi.mock('@/composables/useHistory', () => ({
+vi.mock('@/composables/history/useHistory', () => ({
   useHistoryManager: () => ({
     loadPageByNumber: loadPageByNumberMock,
     searchHistory: searchHistoryMock,
@@ -37,7 +37,7 @@ vi.mock('@/composables/useHistory', () => ({
   }),
 }));
 
-vi.mock('@/composables/useHistoryViewState', () => ({
+vi.mock('@/composables/history/useHistoryViewState', () => ({
   useHistoryViewState: () => ({
     selectedIdList: ref([]),
     clearSelection: vi.fn(),
@@ -106,7 +106,7 @@ function makeViewState(initialSelectedIds: string[] = []) {
     select,
     deselect,
     isSelected: (id: string) => selectedIds.value.has(id),
-  } as unknown as ReturnType<typeof import('@/composables/useHistoryViewState').useHistoryViewState>;
+  } as unknown as ReturnType<typeof import('@/composables/history/useHistoryViewState').useHistoryViewState>;
 }
 
 function mountHarness(options: Parameters<typeof useHistoryTableData>[0]) {

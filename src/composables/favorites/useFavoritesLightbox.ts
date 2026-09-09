@@ -9,7 +9,7 @@ import { createLogger } from '@/utils/logger';
 import { getPrimaryImageUrl } from '@/utils/imageUrl';
 import type { ImageMeta } from '@/types/image-meta';
 import type { HistoryItem, UserConfig } from '@/config/types';
-import { useLightboxPreloader } from '@/composables/useLightboxPreloader';
+import { useLightboxPreloader } from '@/composables/image/useLightboxPreloader';
 import { useLightboxCore, type LightboxCoreApi } from '@/composables/common/useLightboxCore';
 
 const log = createLogger('FavoritesLightbox');

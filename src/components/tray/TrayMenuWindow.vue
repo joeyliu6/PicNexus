@@ -6,7 +6,7 @@ import { DEFAULT_CONFIG, isPublicRiskService, type UserConfig } from '@/config/t
 import { readFreshConfig } from '@/store/instances';
 import { secureStorage, SECURE_KEY_ROTATED_EVENT } from '@/security/crypto';
 import { createLogger } from '@/utils/logger';
-import { useServiceHealth } from '@/composables/useServiceHealth';
+import { useServiceHealth } from '@/composables/service/useServiceHealth';
 import {
   applyTrayTheme,
   buildTrayMenuItems,

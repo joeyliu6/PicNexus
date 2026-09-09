@@ -49,7 +49,7 @@ vi.mock('@/composables/useConfirm', () => ({
   }),
 }));
 
-vi.mock('@/composables/useHistory', () => ({
+vi.mock('@/composables/history/useHistory', () => ({
   useHistoryManager: () => ({
     invalidateCache: invalidateCacheMock,
   }),

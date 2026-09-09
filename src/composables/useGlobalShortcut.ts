@@ -23,7 +23,7 @@ import type { ServiceType ,
   GlobalShortcutConfig} from '@/config/types';
 import type { SingleServiceResult } from '@/core/MultiServiceUploader';
 import { MultiServiceUploader } from '@/core/MultiServiceUploader';
-import { useHistorySaver } from './useHistorySaver';
+import { useHistorySaver } from '@/composables/history/useHistorySaver';
 import { formatLinkWithConfig, getLinkFormatConfig } from './useCopyLink';
 import { filterValidFiles, MAX_FILES_PER_UPLOAD, VALID_IMAGE_EXTENSIONS } from './upload/FileValidator';
 import { buildUploadSummaryToast, type UploadCopySummary } from '@/utils/uploadSummary';

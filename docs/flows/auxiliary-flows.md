@@ -141,7 +141,7 @@ flowchart TD
 
 展示上传前的图片压缩决策逻辑。排查**压缩不生效**或**输出文件异常**时查看。
 
-> **关键源文件**：`src/composables/useImageCompress.ts`
+> **关键源文件**：`src/composables/image/useImageCompress.ts`
 
 ```mermaid
 flowchart TD

@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import type { CustomS3Profile, EditorServerConfig, ServerServiceType, WebDAVStorageProfile } from '@/config/types';
 import { makeCustomS3Id, makeWebDAVId } from '@/config/types';
-import { useServiceHealth } from '@/composables/useServiceHealth';
+import { useServiceHealth } from '@/composables/service/useServiceHealth';
 import { EDITOR_UNSUPPORTED_SERVICES } from '@/composables/settings/editorServiceConfig';
 import TyporaCard from './external-editor/TyporaCard.vue';
 import ObsidianCard from './external-editor/ObsidianCard.vue';

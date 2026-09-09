@@ -4,7 +4,7 @@ import type { VueWrapper } from '@vue/test-utils';
 import { mountWithDefaults } from '../../helpers/vueMount';
 import { flushPromisesAndTicks } from '../../helpers/wait';
 import { useScrollRestore } from '@/composables/timeline/useScrollRestore';
-import type { VisibleItem } from '@/composables/useVirtualTimeline';
+import type { VisibleItem } from '@/composables/timeline/useVirtualTimeline';
 
 const NOOP_CALLBACKS = {
   restoreScrollTop: vi.fn().mockResolvedValue(undefined),

@@ -5,7 +5,7 @@
  */
 import { ref, computed, onMounted, onActivated, onDeactivated, watch, nextTick } from 'vue';
 import type { ServiceType } from '@/config/types';
-import { useHistoryManager } from '@/composables/useHistory';
+import { useHistoryManager } from '@/composables/history/useHistory';
 import HistoryTableView from './history/HistoryTableView.vue';
 import TimelineView from './TimelineView.vue';
 import FavoritesView from './FavoritesView.vue';

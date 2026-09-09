@@ -9,7 +9,7 @@ import { TOAST_MESSAGES } from '@/constants';
 import { emitHistoryDeleted } from '@/events/cacheEvents';
 import { createLogger } from '@/utils/logger';
 import { exportTextFile } from '@/utils/userFiles';
-import type { useImageDetailCache } from '@/composables/useImageDetailCache';
+import type { useImageDetailCache } from '@/composables/image/useImageDetailCache';
 
 const log = createLogger('History');
 

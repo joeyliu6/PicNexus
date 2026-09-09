@@ -9,7 +9,7 @@ import type { HistoryItem, ServiceType, UserConfig } from '@/config/types';
 
 const warmImagesMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@/composables/useLightboxPreloader', () => ({
+vi.mock('@/composables/image/useLightboxPreloader', () => ({
   useLightboxPreloader: vi.fn(),
 }));
 
@@ -21,7 +21,7 @@ vi.mock('@/utils/imageUrl', () => ({
   getPrimaryImageUrl: (item: HistoryItem) => item.generatedLink,
 }));
 
-vi.mock('@/composables/useThumbCache', () => ({
+vi.mock('@/composables/image/useThumbCache', () => ({
   getMetaThumbnailUrl: (meta: ImageMeta) => `https://thumb.example.com/${meta.id}.jpg`,
 }));
 

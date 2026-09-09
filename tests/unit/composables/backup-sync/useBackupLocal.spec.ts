@@ -53,7 +53,7 @@ vi.mock('@/services/database', () => ({
   },
 }));
 
-vi.mock('@/composables/useHistory', () => ({
+vi.mock('@/composables/history/useHistory', () => ({
   invalidateCache: invalidateCacheMock,
 }));
 

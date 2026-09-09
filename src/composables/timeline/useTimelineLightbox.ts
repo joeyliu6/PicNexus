@@ -11,10 +11,10 @@ import { getPrimaryImageUrl } from '@/utils/imageUrl';
 import { getDayKey } from '@/utils/formatters';
 import { type HistoryItem, type UserConfig } from '@/config/types';
 import type { ImageMeta } from '@/types/image-meta';
-import { useLightboxPreloader } from '@/composables/useLightboxPreloader';
+import { useLightboxPreloader } from '@/composables/image/useLightboxPreloader';
 import { useLightboxCore } from '@/composables/common/useLightboxCore';
 import { warmImages } from '@/utils/imagePreload';
-import { getMetaThumbnailUrl } from '@/composables/useThumbCache';
+import { getMetaThumbnailUrl } from '@/composables/image/useThumbCache';
 
 const logger = createLogger('TimelineLightbox');
 

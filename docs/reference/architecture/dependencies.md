@@ -12,7 +12,7 @@
 | 🔴 | `src/uploaders/base/IUploader.ts` | 上传器接口，被 17 个上传器实现 |
 | 🔴 | `src/services/HistoryDatabase.ts` | 历史数据库，被所有历史视图依赖 |
 | 🟠 | `src/core/MultiServiceUploader.ts` | 上传编排，被 useUpload 调用 |
-| 🟠 | `src/composables/useUpload.ts` | 上传管理，被 UploadView 依赖 |
+| 🟠 | `src/composables/upload/useUpload.ts` | 上传管理，被 UploadView 依赖 |
 | 🟠 | `src/composables/useConfig.ts` | 配置管理，被设置和上传依赖 |
 | 🟠 | `src/uploaders/base/UploaderFactory.ts` | 上传器工厂，被 MultiServiceUploader 依赖 |
 

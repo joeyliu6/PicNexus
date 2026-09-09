@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, onActivated, onDeactivated, onMounted, ref, watch } from 'vue';
 import type { Ref } from 'vue';
-import { useHistoryManager } from '@/composables/useHistory';
+import { useHistoryManager } from '@/composables/history/useHistory';
 import { useLinkCheckBulkActions } from '@/composables/link-check/useLinkCheckBulkActions';
 import { useLinkCheckManager } from '@/composables/link-check/useLinkCheck';
 import { useToast } from '@/composables/useToast';

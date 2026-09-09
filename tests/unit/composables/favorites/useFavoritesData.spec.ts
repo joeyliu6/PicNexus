@@ -31,7 +31,7 @@ vi.mock('@/events/cacheEvents', () => ({
   onCacheEventType: onCacheEventTypeMock,
 }));
 
-vi.mock('@/composables/useThumbCache', () => ({
+vi.mock('@/composables/image/useThumbCache', () => ({
   getMetaThumbnailCandidates: getMetaCandidatesMock,
 }));
 

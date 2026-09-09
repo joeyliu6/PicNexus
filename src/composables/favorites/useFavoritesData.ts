@@ -10,7 +10,7 @@ import {
 } from 'vue';
 import { historyDB, type FavoritesMetaPageResult } from '@/services/database';
 import { onCacheEventType, type CacheEventType } from '@/events/cacheEvents';
-import { getMetaThumbnailCandidates } from '@/composables/useThumbCache';
+import { getMetaThumbnailCandidates } from '@/composables/image/useThumbCache';
 import { createLogger } from '@/utils/logger';
 import type { ImageMeta } from '@/types/image-meta';
 import type { ServiceType, UserConfig } from '@/config/types';

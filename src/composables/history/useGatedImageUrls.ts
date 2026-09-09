@@ -30,7 +30,7 @@ import type { HistoryItem } from '@/config/types';
 import { getPrimaryImageUrl } from '@/utils/imageUrl';
 import { getConfirmedHttpHosts, safeImageUrl } from '@/security/networkPolicy';
 import { useConfigManager } from '@/composables/useConfig';
-import { useThumbCache } from '@/composables/useThumbCache';
+import { useThumbCache } from '@/composables/image/useThumbCache';
 
 export function useGatedImageUrls() {
   const configManager = useConfigManager();

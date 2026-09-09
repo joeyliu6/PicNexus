@@ -10,7 +10,7 @@
  * 语义与文档「取消只把在途/未尝试条目转 skipped」对齐。
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useBatchMigrateManager } from '@/composables/useBatchMigrate';
+import { useBatchMigrateManager } from '@/composables/batch-migrate/useBatchMigrate';
 import { processBatch } from '@/composables/batch-migrate/migrateCore';
 import { preloadAllPending, type PreloadedItem } from '@/composables/batch-migrate/preloadPending';
 import type { HistoryItem, UserConfig } from '@/config/types';
@@ -56,7 +56,7 @@ vi.mock('@/store/instances', () => ({
   configStore: { get: mocks.configGet },
 }));
 
-vi.mock('@/composables/useHistory', () => ({ invalidateCache: mocks.invalidateCache }));
+vi.mock('@/composables/history/useHistory', () => ({ invalidateCache: mocks.invalidateCache }));
 vi.mock('@/events/cacheEvents', () => ({ emitHistoryUpdated: mocks.emitHistoryUpdated }));
 
 function createConfig(): UserConfig {

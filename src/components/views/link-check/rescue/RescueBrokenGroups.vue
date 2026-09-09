@@ -16,7 +16,7 @@ import { useFlatBrokenRows } from '@/composables/md-rescue/useFlatBrokenRows';
 import {
   getStatusDisplay, statusBadgeLabel, statusDotColor, statusTooltip,
   extractHost, isDefunctHost, extractFilenameFromUrl,
-} from '@/composables/useLinkStatusDisplay';
+} from '@/composables/link-check/useLinkStatusDisplay';
 import { openUserExternalUrl } from '@/security/shellOpen';
 
 const props = defineProps<{

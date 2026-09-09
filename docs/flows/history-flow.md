@@ -14,7 +14,7 @@
 
 模块 stats 的 5 分钟 TTL 缓存用于表格/视图共用的轻量计数，`history-updated` 事件 / `invalidateCache()` 触发失效。
 
-> **关键源文件**：`src/composables/useHistory.ts`、`src/services/database/HistoryDatabase.ts`
+> **关键源文件**：`src/composables/history/useHistory.ts`、`src/services/database/HistoryDatabase.ts`
 
 ```mermaid
 flowchart TD
@@ -55,7 +55,7 @@ flowchart TD
 
 展示表格视图的服务端分页和搜索逻辑。排查**搜索无结果**或**分页异常**时查看。
 
-> **关键源文件**：`src/composables/useHistory.ts`、`src/services/database/HistoryDatabase.ts`
+> **关键源文件**：`src/composables/history/useHistory.ts`、`src/services/database/HistoryDatabase.ts`
 
 ```mermaid
 flowchart TD
@@ -89,7 +89,7 @@ flowchart TD
 
 展示批量复制链接、导出、删除的执行路径。
 
-> **关键源文件**：`src/composables/useHistory.ts`
+> **关键源文件**：`src/composables/history/useHistory.ts`
 
 ```mermaid
 flowchart TD

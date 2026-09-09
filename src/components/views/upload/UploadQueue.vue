@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import VirtualScroller from 'primevue/virtualscroller';
 import { useElementSize } from '@vueuse/core';
-import { useQueueState } from '@/composables/useQueueState';
+import { useQueueState } from '@/composables/upload/useQueueState';
 import type { QueueItem } from '@/core/UploadQueue';
 import { deepClone, deepMerge } from '@/utils/deepClone';
 import { useConfigManager } from '@/composables/useConfig';

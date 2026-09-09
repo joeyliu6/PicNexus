@@ -17,7 +17,7 @@ import { normalizeErrorType } from '@/composables/link-check/linkCheckPersistenc
 import { historyDB } from '@/services/database';
 import { recomputeLinkCheckSummary } from '@/types/linkCheckSummary';
 import { emitHistoryUpdated } from '@/events/cacheEvents';
-import { useHistoryManager } from '@/composables/useHistory';
+import { useHistoryManager } from '@/composables/history/useHistory';
 import { useConfigManager } from '@/composables/useConfig';
 import { useToast } from '@/composables/useToast';
 import { useConfirm } from '@/composables/useConfirm';

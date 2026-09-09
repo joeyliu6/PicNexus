@@ -4,8 +4,8 @@
  */
 import { watch, onUnmounted, type Ref } from 'vue';
 import type { ImageMeta } from '@/types/image-meta';
-import type { VisibleItem } from '@/composables/useVirtualTimeline';
-import { reportThumbnailUrlLoaded } from '@/composables/useThumbCache';
+import type { VisibleItem } from '@/composables/timeline/useVirtualTimeline';
+import { reportThumbnailUrlLoaded } from '@/composables/image/useThumbCache';
 
 /** 预加载配置 */
 const PRELOAD_CONFIG = {

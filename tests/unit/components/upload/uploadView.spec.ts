@@ -44,23 +44,23 @@ vi.mock('@/composables/useConfirm', () => ({
   useConfirm: () => ({ showConfirm: mockState.showConfirm }),
 }));
 
-vi.mock('@/composables/useServiceHealth', () => ({
+vi.mock('@/composables/service/useServiceHealth', () => ({
   useServiceHealth: () => mockState.serviceHealth,
 }));
 
-vi.mock('@/composables/useUpload', () => ({
+vi.mock('@/composables/upload/useUpload', () => ({
   useUploadManager: () => mockState.uploadManager,
 }));
 
-vi.mock('@/composables/useClipboardImage', () => ({
+vi.mock('@/composables/upload/useClipboardImage', () => ({
   useClipboardImage: () => mockState.clipboardImage,
 }));
 
-vi.mock('@/composables/useUrlDownload', () => ({
+vi.mock('@/composables/upload/useUrlDownload', () => ({
   useUrlDownload: () => mockState.urlDownload,
 }));
 
-vi.mock('@/composables/useQueueState', () => ({
+vi.mock('@/composables/upload/useQueueState', () => ({
   useQueueState: () => mockState.queueState,
 }));
 

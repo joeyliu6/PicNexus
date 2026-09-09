@@ -4,8 +4,8 @@
  */
 import { ref, shallowRef, computed, nextTick, onMounted, onUnmounted, watch, type Ref } from 'vue';
 import type { HistoryItem, ServiceType } from '@/config/types';
-import { useHistoryManager } from '@/composables/useHistory';
-import { useHistoryViewState } from '@/composables/useHistoryViewState';
+import { useHistoryManager } from '@/composables/history/useHistory';
+import { useHistoryViewState } from '@/composables/history/useHistoryViewState';
 import { useToast } from '@/composables/useToast';
 import { onCacheEventType } from '@/events/cacheEvents';
 import { createLogger } from '@/utils/logger';

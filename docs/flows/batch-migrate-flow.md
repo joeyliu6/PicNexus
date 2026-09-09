@@ -9,7 +9,7 @@
 
 展示从 configuring 到 done 的整体流程，以及各阶段间的状态转移。
 
-> **关键源文件**：`src/types/batchMigrate.ts`（`MigratePhase`）、`src/composables/useBatchMigrate.ts`（`useBatchMigrateManager`）
+> **关键源文件**：`src/types/batchMigrate.ts`（`MigratePhase`）、`src/composables/batch-migrate/useBatchMigrate.ts`（`useBatchMigrateManager`）
 >
 > **UI 组装**：`migrating` 与 `done` 阶段**共用同一个 `MigrateProgressPhase.vue` 面板**，结构统一为「状态 chip 过滤条（`MigrateStatusFilterChips`）+ 可滚动列表 + 底栏」。两态列表都用统一的 `MigrateItemRow`：
 > - **首行**：文件名（mono）+ 状态 chip（失败 chip 的 `v-tooltip` 悬停显示 `errorTooltipText`）
@@ -67,7 +67,7 @@ flowchart TD
 
 展示 `initConfiguring` 和 `applyFilter` 中双重分布查询的逻辑。解答「pendingCount 怎么算」。
 
-> **关键源文件**：`src/composables/useBatchMigrate.ts`（`initConfiguring`、`applyFilter`）
+> **关键源文件**：`src/composables/batch-migrate/useBatchMigrate.ts`（`initConfiguring`、`applyFilter`）
 
 ```mermaid
 flowchart TD
@@ -218,7 +218,7 @@ flowchart TD
 
 展示 `startMigrate` 的执行循环：预加载与处理**并发**跑，首批 100 条加载完就开始迁移。排查「漏处理」「进度卡住」「迁移完视图不刷新」。
 
-> **关键源文件**：`src/composables/useBatchMigrate.ts`（`startMigrate`）、`src/composables/batch-migrate/preloadPending.ts`（`preloadAllPending`）、`src/composables/batch-migrate/historyRefresh.ts`
+> **关键源文件**：`src/composables/batch-migrate/useBatchMigrate.ts`（`startMigrate`）、`src/composables/batch-migrate/preloadPending.ts`（`preloadAllPending`）、`src/composables/batch-migrate/historyRefresh.ts`
 >
 > ⚠️ **已废弃的旧机制**：`skipOffset` 翻页 + `processedIds` 去重（本图 2026-08-13 前的画法）早已被 **keyset 游标预加载 + processQueue 流水线**替换。去重责任前移到预加载：`makePreloaded` 直接剔除"所有勾选目标都已存在"的项，主循环只按 `cursor` 单向推进，天然不会重复处理同一条。
 
@@ -328,7 +328,7 @@ flowchart TD
 
 展示 `scheduleStatusUpdate` 中 requestAnimationFrame 节流和页面隐藏同步更新的机制。
 
-> **关键源文件**：`src/composables/useBatchMigrate.ts`（`scheduleStatusUpdate`、`flushStatusUpdate`、统计卡 computed）
+> **关键源文件**：`src/composables/batch-migrate/useBatchMigrate.ts`（`scheduleStatusUpdate`、`flushStatusUpdate`、统计卡 computed）
 
 ```mermaid
 flowchart TD

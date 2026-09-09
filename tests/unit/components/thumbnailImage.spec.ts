@@ -7,7 +7,7 @@ const { reportFailedMock, reportLoadedMock } = vi.hoisted(() => ({
   reportLoadedMock: vi.fn(),
 }));
 
-vi.mock('@/composables/useThumbCache', () => ({
+vi.mock('@/composables/image/useThumbCache', () => ({
   reportThumbnailUrlFailed: reportFailedMock,
   reportThumbnailUrlLoaded: reportLoadedMock,
 }));

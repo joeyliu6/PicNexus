@@ -8,7 +8,7 @@ import TokenServiceGroup from './hosting/TokenServiceGroup.vue';
 import BuiltinServiceGroup from './hosting/BuiltinServiceGroup.vue';
 import ServiceEnableSection from './hosting/ServiceEnableSection.vue';
 import type { BatchTestProgress } from '@/types/batchTest';
-import { useServiceHealth } from '@/composables/useServiceHealth';
+import { useServiceHealth } from '@/composables/service/useServiceHealth';
 import type { ServiceCheckSession } from '@/types/serviceCheck';
 
 const { healthStatusMap, healthTooltipMap } = useServiceHealth();

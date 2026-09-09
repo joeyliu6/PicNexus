@@ -15,7 +15,7 @@ import {
 import { createLogger } from '@/utils/logger';
 import { isUsableMirror } from '@/utils/historyResults';
 import { recomputeLinkCheckSummary } from '@/types/linkCheckSummary';
-import type { useImageDetailCache } from '@/composables/useImageDetailCache';
+import type { useImageDetailCache } from '@/composables/image/useImageDetailCache';
 
 const log = createLogger('History');
 

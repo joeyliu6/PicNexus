@@ -11,11 +11,11 @@ const mockState = vi.hoisted(() => ({
   healthTooltipMap: { value: {} as Record<string, string> },
 }));
 
-vi.mock('@/composables/useBatchMigrate', () => ({
+vi.mock('@/composables/batch-migrate/useBatchMigrate', () => ({
   useBatchMigrateManager: () => mockState.manager,
 }));
 
-vi.mock('@/composables/useServiceHealth', () => ({
+vi.mock('@/composables/service/useServiceHealth', () => ({
   useServiceHealth: () => ({
     healthStatusMap: mockState.healthStatusMap,
     healthTooltipMap: mockState.healthTooltipMap,
