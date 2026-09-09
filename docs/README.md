@@ -1,12 +1,15 @@
 # PicNexus 开发文档
 
-> 四件套：AGENTS.md（指挥中心，CLAUDE.md 只是它的引用）、flows/（流程图）、design/（设计规范）、reference/（知识库）
+> 四件套：flows/（流程图）、design/（设计规范）、reference/（知识库）、audits/（审查记录）
+>
+> 入口在仓库根的 AGENTS.md（指挥中心，CLAUDE.md 只是它的引用），它不算四件套之一。
 
 ## 目录结构
 
 ```
 docs/
 ├── TODO.md             # 开发待办
+├── audits/             # 🔍 审查记录（带日期的快照，描述当时的事实，不回头改）
 ├── flows/              # 📊 流程图（Mermaid 格式）
 │   ├── system-overview.md        # 系统总览
 │   ├── app-lifecycle.md          # 启动/白屏/Cookie 登录

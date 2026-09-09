@@ -206,7 +206,7 @@ flowchart TD
 | 下载文件格式不被目标支持 | `needsFormatConversion(targetId, ext)` 在循环内按 target 探测 | `status='converting'` → `compress_image` 转 jpeg（quality=92）→ `convertedFormat='jpeg'` → `status='uploading'` | **已转 JPEG**（由 `convertedFormat` 字段驱动） |
 | 目标图床无格式白名单（对象存储类） | `needsFormatConversion` 返回 false | 直接上传原文件 | **已完成** |
 
-> 状态 chip 映射集中在 `src/components/views/link-check/migrate/composables/useStatusChip.ts` 的 `getStatusChipMeta()`。原"三段管道（下载 → 适配 → 上传）"已由单个状态 chip 替代，过程态（`downloading/converting/uploading`）以 chip 文字切换呈现。
+> 行状态由 `MigrateItemRow.vue` 直接渲染，没有独立的状态映射函数：左侧圆点表状态（pending 灰 / active 蓝 / success 绿 / failed 红 / skipped 黄），右侧按图床显示服务徽章（已存在的 / 本次目标的 pending·new·failed），错误信息挂在红点的 tooltip 上（`useErrorPresentation`）。过程态 `downloading/converting/uploading` 统一显示为 active 蓝点，不逐段切文字。「已转 JPEG」这类终态信息由 `convertedFormat` 字段驱动。
 
 > 公共图床（有白名单）：京东、牛客、B 站、知乎、超星、SM.MS、Imgur、奇遇；对象存储（无限制）：R2、腾讯云、阿里云、七牛、又拍、GitHub、微博、纳米。详见 `src/constants/serviceFormats.ts`。
 
@@ -427,7 +427,7 @@ chip 分桶映射（`displayList` 内部）：
 | 高级筛选不生效 | `sourceServiceFilter` 为空数组表示「全部」，非「无」 | 图 2 `applyFilter` 参数 |
 | 列表空窗期没有任何条目显示 | 批次初始化时会对 `allItemStatuses` prepend，如果列表一直空——检查 `useBatchMigrate.startMigrate` 的 prepend 是否被跳过；或 `rawList` 的过滤条件把全部项都踢掉了 | 图 6 数据源表 |
 | 底栏状态 pill 一直是"正在暂停…" | `isPausing = isPaused && concurrentCount > 0`；concurrentCount 归零不及 → 检查下载是否卡在 HTTP 层（`download_url_image` 无 abort） | 图 1 暂停分支 |
-| 终态 chip 显示「已完成」但期望「已转 JPEG」 | `convertedFormat` 未写入 → 检查 `migrateCore` 里 `willConvert` 探测与 `status='converting'` 赋值顺序；chip 映射见 `useStatusChip.getStatusChipMeta` | 图 3 converting 分支 |
+| 终态显示「已完成」但期望「已转 JPEG」 | `convertedFormat` 未写入 → 检查 `migrateCore` 里 `willConvert` 探测与 `status='converting'` 赋值顺序；渲染见 `MigrateItemRow.vue` | 图 3 converting 分支 |
 | 暂停后按钮一直卡在"正在暂停..." | `isPausing` 依赖 `concurrentCount` 归零，若有条目卡在 downloading 下载本身无法中断必须等 HTTP 超时或完成 | 图 1 暂停分支 |
 | 恢复后已暂停的条目没重新迁移 | 暂停回退的条目靠 `status==='pending'` 被下一轮 `pendingChunk` 重新捡起——检查 `cursor` 是否被误推进（`allSettled` 判定） | 图 4 cursor 推进与去重策略 |
 | 迁移完成后历史表格「备份数」不变、灯箱看不到新链接 | 落库后没广播 `history-updated`——检查 `onItemDone` 里 `historyRefresh.add` 与 chunk 末尾的 `historyRefresh.flush()` | 图 4 落库后的视图刷新 |

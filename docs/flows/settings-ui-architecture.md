@@ -287,7 +287,7 @@ interface LinkPrefixItem { name: string; template: string }
 
 默认列表定义在 [src/config/configInterface.ts](../../src/config/configInterface.ts) 的 `DEFAULT_LINK_PREFIXES`，当前包含搜狗图片 / CDN JSON / Jetpack / IPFS Scan 四项。
 
-新增/编辑由 [LinkPrefixEditDialog.vue](../../src/components/settings/hosting/LinkPrefixEditDialog.vue) 弹窗承载，用户填写 `name` + `template`，保存后 emit 到 `useSettingsForm.addPrefix` / `updatePrefix`。
+新增/编辑在 [WeiboLinkPrefixSection.vue](../../src/components/settings/hosting/WeiboLinkPrefixSection.vue) 内联完成（`editingIndex` 标记正在编辑的行，`editingSnapshot` 保存进入编辑前的值以便取消时回滚），不弹独立对话框；用户填写 `name` + `template`，保存后 emit `addPrefix` / `updatePrefix` 到 `useSettingsForm`。
 
 反向解析（MD 解析器把带前缀的 URL 剥回原始 URL）由 `stripPrefixTemplate()` 完成，[mdParser.ts](../../src/utils/mdParser.ts) 的 `stripKnownPrefixes` 遍历 `prefixList` 尝试匹配。
 
