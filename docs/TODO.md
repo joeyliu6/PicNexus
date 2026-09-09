@@ -38,28 +38,18 @@
 
 ## 待处理
 
-### [ ] Rust 侧 main.rs 减重：22 个内联命令归位到 commands/
+### [ ] `start_cookie_monitoring` 对前端暴露着，却没有任何前端调用点
 
-- **来源**：2026-09-09 项目结构整理（前端六批已完成），这是唯一没做的一批
-- **现状**：`src-tauri/src/main.rs` 3050 行，是全项目最大的单文件。里面内联着
-  **22 个 `#[tauri::command]`**（占全部 77 个的 28.6%），而 `commands/` 目录
-  已有 25 个按域拆好的文件；另外还塞着 Cookie 校验的 8 个私有函数（1839–1985 行）、
-  4 个配置结构体（1984–2030 行），`fn main()` 本身跨 470 行
-- **为什么单独拆出来做**：前六批都是「移动文件 + 改路径」，编译器和测试能完全兜底；
-  Rust 侧要处理模块可见性，且 WebDAV/R2 连接命令的正确性只能真机验证。
-  混在同一个分支会让整体不好回滚
-- **已勘察的耦合度**（按建议顺序）：
-
-  | 分组 | 命令数 | 说明 |
-  |------|-------|------|
-  | WebDAV / R2 连接测试 | 3 | **最适合先做**——已确认不引用 main.rs 的任何私有辅助函数，只依赖四个结构体；`webdav_connection_tests`（2772 行）跟着搬 |
-  | 系统操作 / CLI / 编辑器服务 | 7 | 中等，需逐个查依赖 |
-  | 路径三兄弟 + 安全密钥 | 5 | 容易但只有约 25 行，收益小 |
-  | Cookie 登录 | 5 | **最难**——缠着 8 个私有辅助函数，多个命令共用 |
-
-- **顺带**：AGENTS.md 只对 `.vue` 定了 500 行硬指标，Rust 侧无规范——13 个 `.rs`
-  超过 500 行，占 Rust 总行数 71%，值得补一条（可以宽一些，比如 1500 行）
-- 背景与全部决策见 [structure-refactor-2026-09-09.md](audits/structure-refactor-2026-09-09.md)
+- **来源**：2026-09-09 Rust 命令归位后逐条核对执行证据时发现（不是本次引入，搬迁前就是这个状态）
+- **现状**：它挂在 `generate_handler!` 里当 Tauri 命令暴露，但全仓零前端 `invoke`。
+  唯一调用者是 `commands/cookie_login.rs` 内部——`setup_cookie_event_monitoring` 在
+  `with_webview` 调用失败时降级调它（见该文件 `[事件监控] with_webview 调用失败，降级到轮询模式`）
+- **风险**：低但不是零。①多暴露一个 IPC 面；②那条降级路径**既没有单测、真机也从未触发过**
+  （2026-09-09 那次真机验收走的是 `✓ NavigationCompleted 事件注册成功`，`[Cookie监控]` 日志命中 0 次），
+  所以它是这批搬迁里唯一「没有任何执行证据」的函数体
+- **两条可选路子**：去掉 `#[tauri::command]` 属性只留内部函数（同时从 `generate_handler!` 摘掉）；
+  或者保留命令、补一条覆盖降级路径的测试。**先确认没有外部调用方**（Typora / Obsidian / CLI 三条链路）再动
+- 背景见 [rust-command-relocation-2026-09-09.md](audits/rust-command-relocation-2026-09-09.md)
 
 ### [ ] Tauri E2E 在 CI 跑手上建会话失败（暂设非阻断，待上游修复后恢复）
 
@@ -215,6 +205,12 @@
 ---
 
 ## 已完成
+
+### [x] Rust 侧 main.rs 减重：21 个内联命令归位到 commands/
+
+`main.rs` 3050 → 644 行，只剩 `set_close_to_tray` 一个命令；新增 7 个 `commands/` 模块，
+全程 `cargo test` 348 通过数不变、clippy 警告数不变。
+详见 [rust-command-relocation-2026-09-09.md](audits/rust-command-relocation-2026-09-09.md)。
 
 ### [x] `verbatimModuleSyntax` 已开启
 

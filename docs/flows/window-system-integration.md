@@ -19,7 +19,7 @@ PicNexus 是**单窗口 + 系统托盘** 架构:
 
 展示应用启动后,主窗口如何创建、显示、最小化、关闭(到托盘)的完整状态机。
 
-> **关键源文件**:`src-tauri/tauri.conf.json`(L17~L33 windows 配置)、`src-tauri/src/main.rs`(L353~L390 自适应大小、L408~L417 on_window_event、L488 set_close_to_tray)
+> **关键源文件**:`src-tauri/tauri.conf.json`(L17~L33 windows 配置)、`src-tauri/src/main.rs`(L505~L550 自适应大小、L557~L569 on_window_event、L641~L643 set_close_to_tray)
 
 ```mermaid
 stateDiagram-v2
@@ -60,7 +60,7 @@ stateDiagram-v2
 
     note right of Visible
       Windows 高分屏:
-      main.rs L345~L350 替换
+      main.rs L495~L502 替换
       128×128@2x 任务栏图标
     end note
 ```
@@ -157,7 +157,7 @@ flowchart TD
 
 Obsidian 插件 ID 为 `picnexus`，手动安装目录为 `<vault>/.obsidian/plugins/picnexus/`。插件只连接 `http://127.0.0.1:<port>`，端口必须和桌面端设置一致；发布与上架流程见 [Obsidian 插件发布指南](../reference/guides/obsidian-plugin-release.md)。
 
-> **关键源文件**:`src-tauri/src/cli.rs`、`src-tauri/src/main.rs#save_cli_config`、`%APPDATA%/us.picnex.app/cli-config.json`
+> **关键源文件**:`src-tauri/src/cli.rs`、`src-tauri/src/commands/cli_config.rs#save_cli_config`、`%APPDATA%/us.picnex.app/cli-config.json`
 
 ```mermaid
 flowchart TD
@@ -224,7 +224,7 @@ flowchart TD
 flowchart LR
     subgraph R1[全局快捷键]
         R1A[✅ Cargo.toml:<br/>tauri-plugin-global-shortcut]
-        R1B[✅ main.rs L112:<br/>.plugin Builder::new .build]
+        R1B[✅ main.rs L241:<br/>.plugin Builder::new .build]
         R1C[❌ 未调用 register<br/>无快捷键生效]
         R1D[❌ 前端无消费代码]
     end

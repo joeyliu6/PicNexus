@@ -12,9 +12,11 @@ PicNexus 后端目前注册了 **73 个 `#[tauri::command]`**(上传器、Token 
 
 ## 图 1:命令注册与初始化链路
 
-展示 Tauri `Builder` 如何把「插件 → 全局状态 → 命令 → setup 回调」串成一条启动链。新增命令时重点关注 L145~L203 的 `generate_handler![]` 宏。
+展示 Tauri `Builder` 如何把「插件 → 全局状态 → 命令 → setup 回调」串成一条启动链。新增命令时重点关注 L279~L357 的 `generate_handler![]` 宏。
 
-> **关键源文件**:`src-tauri/src/main.rs`(L99~L315)、`src-tauri/Cargo.toml`、`src-tauri/capabilities/default.json`
+> **关键源文件**:`src-tauri/src/main.rs`(L220~L638)、`src-tauri/Cargo.toml`、`src-tauri/capabilities/default.json`
+>
+> 📌 命令实现**全部在 `src-tauri/src/commands/`**。2026-09-09 把最后 21 个内联命令搬出去之后,`main.rs` 里只剩 `set_close_to_tray` 一个命令(它和托盘构建代码同住),其余都以 `commands::<模块>::<命令名>` 的形式登记在 `generate_handler!` 里。
 
 ```mermaid
 flowchart TD
@@ -38,12 +40,12 @@ flowchart TD
     M4 --> M5[.manage MdScanCancelFlag]
 
     %% 命令注册
-    M5 --> H[.invoke_handler<br/>generate_handler! 73 个命令]
+    M5 --> H[.invoke_handler<br/>generate_handler! 77 个命令]
     H --> H1[上传系列<br/>upload_to_weibo/r2/jd/github/...]
     H --> H2[Token 获取<br/>fetch_qiyu_token/fetch_nami_token]
     H --> H3[检测类<br/>check_image_link/batch_check_links]
     H --> H4[工具类<br/>compress_image/scan_md_folder/clipboard_has_image]
-    H --> H5[系统类<br/>open_log_dir/open_path/get_or_create_secure_key]
+    H --> H5[系统类<br/>system::open_log_dir/open_target::open_path<br/>app_key::get_or_create_secure_key]
     H --> H6[Analytics<br/>analytics_send_batch/analytics_shutdown<br/>analytics_start_heartbeat/analytics_stop_heartbeat]
 
     %% Setup 回调

@@ -61,7 +61,7 @@ curl -sI https://你的服务器/dav/ | grep -i "www-authenticate"
 | 位置 | 有没有 Digest 提示 | 为什么 |
 |------|-------------------|--------|
 | 图床上传 / 图床连接测试 / 编辑器·CLI 上传 | ✅ 有 | `upload_to_webdav_core`、`test_webdav_storage`、`server_upload_webdav` 手里都有完整响应 |
-| 备份的「测试连接」按钮 | ✅ 有 | `main.rs::probe_webdav_connection` 与上面**共用同一个** `describe_status` |
+| 备份的「测试连接」按钮 | ✅ 有 | `webdav_backup::probe_webdav_connection` 与上面**共用同一个** `describe_status` |
 | 同步过程中的 PUT / GET | ❌ 无 | 走 `webdav_request`，它只回 `{status, body}`，响应头在 Rust 侧就丢了，前端判不了认证方案 |
 
 **为什么剩下那一档不补**：连接测试是同步的前置门槛，撞上 Digest 必然先在测试按钮上撞到，

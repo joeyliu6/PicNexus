@@ -71,4 +71,4 @@ Tauri 使用 tokio 作为异步运行时，`tokio::task::spawn` 会在同一个 
 
 ## 相关文件
 
-- `src-tauri/src/main.rs` — `update_server_config` 命令，使用此模式管理 HTTP Server 生命周期
+- `src-tauri/src/commands/system.rs` — `update_server_config` 命令，使用此模式管理 HTTP Server 生命周期

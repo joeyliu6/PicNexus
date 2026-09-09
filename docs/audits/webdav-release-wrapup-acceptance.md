@@ -201,11 +201,11 @@ Rust 抛 `AppError`，`#[serde(tag = "type", content = "data")]` 序列化后是
 
 | # | 覆盖什么 | 手段 | 落点 |
 |---|---------|------|------|
-| ① | 备份链路 Digest 判据（含 207/403 两条不该动的分支） | cargo · 真 TCP + 内联 axum | `main.rs::webdav_connection_tests` |
+| ① | 备份链路 Digest 判据（含 207/403 两条不该动的分支） | cargo · 真 TCP + 内联 axum | `commands/webdav_backup.rs::webdav_connection_tests` |
 | ② | `/upload/file` → WebDAV 全链路 + 免 token 豁免的边界 | cargo · `tower::oneshot` + 内联 axum | `server/mod.rs::tests` |
 | ③ | **真 AES-GCM / PBKDF2 换钥往返** | vitest · 真 `crypto.subtle` | `fieldSecretsRealCrypto.spec.ts` |
 | ④ | `getWebDAVClientAndPath`（每个同步 spec 都 mock 掉的那一环） | vitest · 真 client + 假 fetch | `backupSyncUtils.spec.ts` |
-| ⑤ | 换钥前抢救 `cli-config.json` | cargo · 真临时文件 + 真 GCM | `main.rs::cli_config_rescue_tests` |
+| ⑤ | 换钥前抢救 `cli-config.json` | cargo · 真临时文件 + 真 GCM | `commands/app_key.rs::cli_config_rescue_tests` |
 
 **③ 值得单独说**：此前所有 `rekeyFieldSecrets` 测试用的都是假密码机（字符串拼接），
 那种替身**永远不会失败**——哪怕「重新加密」是原样抄回去也照样绿。
