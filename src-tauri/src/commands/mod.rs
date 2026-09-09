@@ -8,6 +8,7 @@ pub mod bilibili;
 pub mod chaoxing;
 pub mod cli_path;
 pub mod cli_config;
+pub mod cookie_login;
 pub mod clipboard;
 pub mod github;
 pub mod image_compress;
