@@ -19,7 +19,7 @@ PicNexus 的日志系统采用 **前端 createLogger → @tauri-apps/plugin-log 
 
 展示一次 `logger.info('xxx')` 调用从 Vue 组件到 SQLite 同级目录日志文件的路径。
 
-> **关键源文件**:`src/utils/logger.ts` L3~L34、`src-tauri/src/main.rs` L116~L136(tauri_plugin_log builder)、`src-tauri/Cargo.toml` L58~L59
+> **关键源文件**:`src/utils/logger.ts` L3~L34、`src-tauri/src/main.rs` L244~L262(tauri_plugin_log builder)、`src-tauri/Cargo.toml` L58~L59
 
 ```mermaid
 flowchart TD
@@ -77,7 +77,7 @@ flowchart TD
 
 展示「谁的日志会被保留」的决策表。改调试级别时对照这张图。
 
-> **关键源文件**:`src-tauri/src/main.rs` L116~L136
+> **关键源文件**:`src-tauri/src/main.rs` L244~L262
 
 ```mermaid
 flowchart LR
@@ -120,7 +120,7 @@ flowchart LR
 
 展示 `AboutUpdatePanel.vue` 的「打开日志目录」按钮如何通过 IPC 打开平台特定文件夹。
 
-> **关键源文件**:`src/components/settings/AboutUpdatePanel.vue`、`src-tauri/src/main.rs` `open_log_dir`(L1865~L1876)
+> **关键源文件**:`src/components/settings/AboutUpdatePanel.vue`、`src-tauri/src/commands/system.rs` `open_log_dir`
 
 ```mermaid
 sequenceDiagram

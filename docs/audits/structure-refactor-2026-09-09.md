@@ -59,7 +59,11 @@
 - **`pre-commit` 在大批量提交时会杀死自己**：Windows 命令行 8191 字符上限让 lint-staged 把文件切成多个 chunk，默认并发执行会同时起多个 `vitest related`，被系统 SIGKILL，表现为"测试失败"实为资源耗尽。已改为 `--concurrent 1`。
 - **两处文档描述了从未落地的设计**：`batch-migrate-flow.md` 指向未被调用的 `getStatusChipMeta`，`settings-ui-architecture.md` 指向不存在的 `LinkPrefixEditDialog.vue`。两处都已改成描述真实实现。
 
-## 未完成：Rust 侧 main.rs 减重
+## 第七批：Rust 侧 main.rs 减重（本次未做，已于同日单独完成）
+
+> ✅ 已在独立分支完成，`main.rs` 3050 → 644 行，全程 348 个测试通过数不变。
+> 落点、四处计划调整与踩到的坑见 [rust-command-relocation-2026-09-09.md](rust-command-relocation-2026-09-09.md)。
+> 下面是当时的勘察结论，保留以对照。
 
 `src-tauri/src/main.rs` 3050 行，内联了 **22 个 `#[tauri::command]`**（占全部 77 个的 28.6%），而 `commands/` 目录已有 25 个按域拆好的文件。另外还塞着 Cookie 校验的 8 个私有函数、4 个配置结构体，`fn main()` 本身跨 470 行。
 
