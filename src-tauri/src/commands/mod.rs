@@ -17,6 +17,7 @@ pub mod md_scanner;
 pub mod nami;
 pub mod nami_token;
 pub mod nowcoder;
+pub mod open_target;
 pub mod qiyu;
 pub mod qiyu_token;
 pub mod s3_compatible;
