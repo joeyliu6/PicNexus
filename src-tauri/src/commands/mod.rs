@@ -2,10 +2,12 @@ pub mod r2;
 pub mod upload;
 pub mod user_files;
 
+pub mod app_key;
 pub mod app_paths;
 pub mod bilibili;
 pub mod chaoxing;
 pub mod cli_path;
+pub mod cli_config;
 pub mod clipboard;
 pub mod github;
 pub mod image_compress;
